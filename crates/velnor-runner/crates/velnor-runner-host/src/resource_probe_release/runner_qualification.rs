@@ -7,6 +7,7 @@ mod mutation_lifecycle;
 mod probes;
 mod resources;
 mod source;
+mod tool_versions;
 
 use std::future::Future;
 use std::path::Path;
@@ -208,11 +209,14 @@ pub(super) async fn qualify(
     let result = docker::qualify(&docker, &source, runner_id, dind_id).await?;
     source::revalidate(&source).await?;
     println!(
-        "runner_listener_version={} runner_docker_version={} dind_docker_version={} dind_daemon_version={}",
+        "runner_listener_version={} runner_docker_version={} dind_docker_version={} dind_daemon_version={} runner_buildx_version={} runner_compose_version={} runner_node_version={}",
         result.versions.runner_listener,
         result.versions.runner_docker,
         result.versions.dind_docker,
         result.versions.dind_daemon,
+        result.versions.runner_buildx,
+        result.versions.runner_compose,
+        result.versions.runner_node,
     );
     println!(
         "outer_docker_version={} outer_docker_id={} inner_docker_id={}",

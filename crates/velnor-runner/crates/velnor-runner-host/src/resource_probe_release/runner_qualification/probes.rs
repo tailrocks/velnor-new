@@ -14,7 +14,6 @@ use crate::error::HostError;
 
 use super::mutation_lifecycle::{self, MutationKind, MutationResult, MutationValue};
 use super::resources::OwnedResources;
-use super::source::SourceSnapshot;
 use super::{append, create_options, deadline, mount, read_logs, remaining, wait_success};
 
 const DOCKER_TIMEOUT: Duration = Duration::from_secs(5);
@@ -29,21 +28,13 @@ pub(super) struct DaemonIdentity {
     pub(super) version: String,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub(super) struct VersionEvidence {
-    pub(super) runner_listener: String,
-    pub(super) runner_docker: String,
-    pub(super) dind_docker: String,
-    pub(super) dind_daemon: String,
-}
-
-struct CommandSpec<'a> {
-    image_id: &'a str,
-    role: &'a str,
-    entrypoint: &'a str,
-    command: &'a [&'a str],
-    socket_volume: Option<&'a str>,
-    timeout: Duration,
+pub(super) struct CommandSpec<'a> {
+    pub(super) image_id: &'a str,
+    pub(super) role: &'a str,
+    pub(super) entrypoint: &'a str,
+    pub(super) command: &'a [&'a str],
+    pub(super) socket_volume: Option<&'a str>,
+    pub(super) timeout: Duration,
 }
 
 pub(super) async fn inspect_outer(docker: &Docker) -> Result<DaemonIdentity, HostError> {
@@ -56,88 +47,7 @@ pub(super) async fn inspect_outer(docker: &Docker) -> Result<DaemonIdentity, Hos
     daemon_identity(version.version.as_deref(), &info)
 }
 
-pub(super) async fn verify_versions(
-    docker: &Docker,
-    source: &SourceSnapshot,
-    runner_id: &str,
-    dind_id: &str,
-    resources: &mut OwnedResources,
-) -> Result<VersionEvidence, HostError> {
-    let listener = run_command(
-        docker,
-        resources,
-        CommandSpec {
-            image_id: runner_id,
-            role: "runner-listener",
-            entrypoint: "/home/runner/bin/Runner.Listener",
-            command: &["--version"],
-            socket_volume: None,
-            timeout: DOCKER_TIMEOUT,
-        },
-    )
-    .await?;
-    let runner_docker = docker_version_probe(
-        docker,
-        resources,
-        runner_id,
-        "runner-docker-cli",
-        "/usr/local/bin/docker",
-    )
-    .await?;
-    let dind_docker = docker_version_probe(
-        docker,
-        resources,
-        dind_id,
-        "dind-docker-cli",
-        "/usr/local/bin/docker",
-    )
-    .await?;
-    let dind_daemon = docker_version_probe(
-        docker,
-        resources,
-        dind_id,
-        "dind-dockerd",
-        "/usr/local/bin/dockerd",
-    )
-    .await?;
-    let listener = single_line(&listener)?;
-    if listener != source.runner_version {
-        return Err(HostError::Identity);
-    }
-    for version in [&runner_docker, &dind_docker, &dind_daemon] {
-        require_docker_version(version, &source.docker_version)?;
-    }
-    Ok(VersionEvidence {
-        runner_listener: listener,
-        runner_docker: single_line(&runner_docker)?,
-        dind_docker: single_line(&dind_docker)?,
-        dind_daemon: single_line(&dind_daemon)?,
-    })
-}
-
-async fn docker_version_probe(
-    docker: &Docker,
-    resources: &mut OwnedResources,
-    image_id: &str,
-    role: &str,
-    entrypoint: &str,
-) -> Result<Vec<u8>, HostError> {
-    run_command(
-        docker,
-        resources,
-        CommandSpec {
-            image_id,
-            role,
-            entrypoint,
-            command: &["--version"],
-            socket_volume: None,
-            timeout: DOCKER_TIMEOUT,
-        },
-    )
-    .await
-}
-
-async fn run_command(
+pub(super) async fn run_command(
     docker: &Docker,
     resources: &mut OwnedResources,
     command: CommandSpec<'_>,
@@ -370,16 +280,7 @@ fn daemon_identity(version: Option<&str>, info: &SystemInfo) -> Result<DaemonIde
     })
 }
 
-fn require_docker_version(actual: &[u8], expected: &str) -> Result<(), HostError> {
-    let actual = single_line(actual)?;
-    if actual.starts_with(&format!("Docker version {expected},")) {
-        Ok(())
-    } else {
-        Err(HostError::Identity)
-    }
-}
-
-fn single_line(bytes: &[u8]) -> Result<String, HostError> {
+pub(super) fn single_line(bytes: &[u8]) -> Result<String, HostError> {
     let line = single_line_optional(bytes)?;
     if line.is_empty() {
         return Err(HostError::Identity);

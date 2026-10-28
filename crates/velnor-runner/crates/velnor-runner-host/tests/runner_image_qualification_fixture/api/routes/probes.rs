@@ -29,11 +29,31 @@ pub(super) fn probe_output(container: &FakeContainer, state: &State) -> (Vec<u8>
             state.plan.docker_version
         )
     };
+    let buildx_version = if mismatch == Some(Probe::RunnerBuildx) {
+        "0.37.0"
+    } else {
+        state.plan.buildx_version.as_str()
+    };
+    let compose_version = if mismatch == Some(Probe::RunnerCompose) {
+        "5.5.0"
+    } else {
+        state.plan.compose_version.as_str()
+    };
+    let node_version = if mismatch == Some(Probe::RunnerNode) {
+        "26.11.0"
+    } else {
+        state.plan.node_version.as_str()
+    };
     let output = match role {
         "runner-listener" => format!("{runner_version}\n"),
         "runner-docker-cli" | "dind-docker-cli" | "dind-dockerd" => {
             format!("{docker_version}\n")
         }
+        "runner-buildx" => format!(
+            "github.com/docker/buildx v{buildx_version} 0dbe87f36ed472fe36b6796c3f70b4210a731fc5\n"
+        ),
+        "runner-compose" => format!("Docker Compose version v{compose_version}\n"),
+        "runner-node" => format!("v{node_version}\n"),
         "runner-socket-query" => {
             if state.plan.fault == Some(ApiFault::WrongRunnerSocketDaemon) {
                 format!("{}\n", state.plan.outer_id)
@@ -56,6 +76,9 @@ pub(super) fn probe_output(container: &FakeContainer, state: &State) -> (Vec<u8>
             | ("runner-docker-cli", Some(Probe::RunnerDocker))
             | ("dind-docker-cli", Some(Probe::DindDocker))
             | ("dind-dockerd", Some(Probe::DindDockerd))
+            | ("runner-buildx", Some(Probe::RunnerBuildx))
+            | ("runner-compose", Some(Probe::RunnerCompose))
+            | ("runner-node", Some(Probe::RunnerNode))
     ) || (role == "runner-socket-query"
         && state.plan.fault == Some(ApiFault::WrongRunnerSocketDaemon));
     (output.into_bytes(), fault_reached)
@@ -94,6 +117,21 @@ fn expected_probe(role: &str, state: &State) -> Option<(String, &'static str, Va
         "dind-dockerd" => Some((
             state.plan.dind_id.clone(),
             "/usr/local/bin/dockerd",
+            json!(["--version"]),
+        )),
+        "runner-buildx" => Some((
+            state.plan.runner_id.clone(),
+            "/usr/local/bin/docker",
+            json!(["buildx", "version"]),
+        )),
+        "runner-compose" => Some((
+            state.plan.runner_id.clone(),
+            "/usr/local/bin/docker",
+            json!(["compose", "version"]),
+        )),
+        "runner-node" => Some((
+            state.plan.runner_id.clone(),
+            "/usr/local/bin/node",
             json!(["--version"]),
         )),
         "runner-socket-query" => Some((

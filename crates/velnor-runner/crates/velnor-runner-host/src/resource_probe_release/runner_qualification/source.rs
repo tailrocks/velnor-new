@@ -22,12 +22,23 @@ pub(crate) struct SourceSnapshot {
     pub(crate) lock_bytes: Vec<u8>,
     pub(crate) runner_version: String,
     pub(crate) docker_version: String,
+    pub(crate) buildx_version: String,
+    pub(crate) compose_version: String,
+    pub(crate) node_version: String,
 }
 
 #[derive(Deserialize)]
 struct RunnerVersions {
-    runner_version: String,
-    docker_version: String,
+    #[serde(rename = "runner_version")]
+    runner: String,
+    #[serde(rename = "docker_version")]
+    docker: String,
+    #[serde(rename = "buildx_version")]
+    buildx: String,
+    #[serde(rename = "compose_version")]
+    compose: String,
+    #[serde(rename = "node_version")]
+    node: String,
 }
 
 struct CommandOutput {
@@ -51,8 +62,11 @@ pub(crate) async fn load(root: &Path, source_sha: &str) -> Result<SourceSnapshot
         root: canonical,
         source_sha: source_sha.to_owned(),
         lock_bytes,
-        runner_version: versions.runner_version,
-        docker_version: versions.docker_version,
+        runner_version: versions.runner,
+        docker_version: versions.docker,
+        buildx_version: versions.buildx,
+        compose_version: versions.compose,
+        node_version: versions.node,
     })
 }
 
@@ -245,10 +259,15 @@ fn read_lock(root: &Path) -> Result<Vec<u8>, HostError> {
 fn parse_versions(bytes: &[u8]) -> Result<RunnerVersions, HostError> {
     let text = std::str::from_utf8(bytes).map_err(|_| HostError::Identity)?;
     let versions: RunnerVersions = toml::from_str(text).map_err(|_| HostError::Identity)?;
-    if versions.runner_version.is_empty()
-        || versions.docker_version.is_empty()
-        || versions.runner_version.trim() != versions.runner_version
-        || versions.docker_version.trim() != versions.docker_version
+    if [
+        &versions.runner,
+        &versions.docker,
+        &versions.buildx,
+        &versions.compose,
+        &versions.node,
+    ]
+    .iter()
+    .any(|version| !velnor_actions_contract::config::is_exact_semver(version))
     {
         return Err(HostError::Identity);
     }

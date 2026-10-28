@@ -18,6 +18,9 @@ pub(crate) enum Probe {
     RunnerDocker,
     DindDocker,
     DindDockerd,
+    RunnerBuildx,
+    RunnerCompose,
+    RunnerNode,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -91,6 +94,9 @@ pub(crate) struct ApiPlan {
     pub(crate) dind_id: String,
     pub(crate) runner_version: String,
     pub(crate) docker_version: String,
+    pub(crate) buildx_version: String,
+    pub(crate) compose_version: String,
+    pub(crate) node_version: String,
     pub(crate) image_fault: Option<(ImageRole, ImageFault)>,
     pub(crate) version_mismatch: Option<Probe>,
     pub(crate) readiness_empty_first: bool,
@@ -119,6 +125,9 @@ impl ApiPlan {
             dind_id: digest_id('b'),
             runner_version: "2.338.0".to_owned(),
             docker_version: "29.9.1".to_owned(),
+            buildx_version: "0.38.0".to_owned(),
+            compose_version: "5.6.0".to_owned(),
+            node_version: "26.12.0".to_owned(),
             image_fault: None,
             version_mismatch: None,
             readiness_empty_first: true,

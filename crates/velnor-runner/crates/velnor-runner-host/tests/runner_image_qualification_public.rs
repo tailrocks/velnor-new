@@ -7,6 +7,8 @@ mod extended;
 mod fixture;
 #[path = "runner_image_qualification_public/support.rs"]
 mod support;
+#[path = "runner_image_qualification_public/tool_versions.rs"]
+mod tool_versions;
 #[path = "runner_image_qualification_public/uncertain_cleanup.rs"]
 mod uncertain_cleanup;
 
@@ -155,20 +157,35 @@ fn public_qualifier_rejects_wrong_image_kind_before_resources() -> TestResult<()
 }
 
 #[test]
-fn public_qualifier_rejects_each_locked_image_version_mismatch() -> TestResult<()> {
+fn public_qualifier_rejects_each_locked_image_version_mismatch() {
+    let mut failures = Vec::new();
+    let mut outcomes = Vec::new();
     for probe in [
         Probe::RunnerListener,
         Probe::RunnerDocker,
         Probe::DindDocker,
         Probe::DindDockerd,
+        Probe::RunnerBuildx,
+        Probe::RunnerCompose,
+        Probe::RunnerNode,
     ] {
-        let git = GitFixture::new()?;
-        let mut plan = ApiPlan::new(git.source_sha());
-        plan.version_mismatch = Some(probe);
-        let (output, state) = qualify(&git, git.source_sha(), plan)?;
-        assert_failed_and_cleaned(&output, &state);
+        match version_mismatch_outcome(probe) {
+            Ok((accepted, outcome)) => {
+                if !accepted {
+                    failures.push(format!("{probe:?}"));
+                }
+                outcomes.push(outcome);
+            }
+            Err(error) => {
+                failures.push(format!("{probe:?}: fixture or CLI error: {error}"));
+            }
+        }
     }
-    Ok(())
+    assert!(
+        failures.is_empty(),
+        "locked version mismatches were not rejected: {failures:?}; outcomes:\n{}",
+        outcomes.join("\n")
+    );
 }
 
 #[test]

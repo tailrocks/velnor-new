@@ -10,9 +10,10 @@ use bollard::models::ImageInspect;
 use crate::error::HostError;
 
 use super::deadline;
-use super::probes::{self, DaemonIdentity, VersionEvidence};
+use super::probes::{self, DaemonIdentity};
 use super::resources::OwnedResources;
 use super::source::SourceSnapshot;
+use super::tool_versions::{self, VersionEvidence};
 
 const IMAGE_TIMEOUT: Duration = Duration::from_secs(5);
 const SOURCE_LABEL: &str = "org.opencontainers.image.revision";
@@ -49,7 +50,8 @@ async fn qualify_with_resources(
     inspect_image(docker, source, runner_id, "runner").await?;
     inspect_image(docker, source, dind_id, "dind").await?;
     let outer = probes::inspect_outer(docker).await?;
-    let versions = probes::verify_versions(docker, source, runner_id, dind_id, resources).await?;
+    let versions =
+        tool_versions::verify_versions(docker, source, runner_id, dind_id, resources).await?;
     let socket_volume = resources.create_volume(docker, "socket").await?;
     let data_volume = resources.create_volume(docker, "data").await?;
     let dind_container = resources
