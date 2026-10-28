@@ -155,8 +155,10 @@ pub fn final_job(
     acquire: Option<Step>,
     catalog: &ToolCatalog,
 ) -> Result<Job, NativeJobBuilderError> {
+    let mut crate_job_ids = crate_job_ids.to_vec();
+    crate_job_ids.sort();
     let mut needs = vec![PLAN_JOB_ID.to_owned()];
-    needs.extend(crate_job_ids.iter().cloned());
+    needs.extend(crate_job_ids);
     needs.push(LINT_JOB_ID.to_owned());
     let mut steps = vec![checkout_history_action()?];
     steps.extend(acquire);

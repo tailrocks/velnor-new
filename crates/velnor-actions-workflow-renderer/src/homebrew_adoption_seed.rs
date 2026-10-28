@@ -210,7 +210,7 @@ fn render_caller_workflow(
         ("name".to_owned(), Yaml::str("CI")),
         (
             "on".to_owned(),
-            Yaml::Map(vec![("pull_request".to_owned(), Yaml::Null)]),
+            crate::workflow_timeout::pull_request_only(),
         ),
         (
             "permissions".to_owned(),
