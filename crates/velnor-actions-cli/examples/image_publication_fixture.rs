@@ -162,13 +162,20 @@ fn api_run_data(
     let path = route.split('?').next().ok_or("invalid route")?;
     let run = &state["producer"];
     let run_id = run["id"].as_u64().ok_or("invalid producer run state")?;
-    if path.ends_with(&format!("actions/runs/{run_id}/attempts/1")) {
+    let requested_attempt = state["requested_attempt"]
+        .as_u64()
+        .ok_or("invalid requested producer run attempt")?;
+    if path.ends_with(&format!(
+        "actions/runs/{run_id}/attempts/{requested_attempt}"
+    )) {
         return Ok(run.clone());
     }
     if path.ends_with(&format!("actions/runs/{run_id}/artifacts")) {
-        return Ok(serde_json::json!({"artifacts":[state["artifact"]]}));
+        return Ok(serde_json::json!({"artifacts":state["artifacts"]}));
     }
-    if path.ends_with(&format!("actions/runs/{run_id}/attempts/1/jobs")) {
+    if path.ends_with(&format!(
+        "actions/runs/{run_id}/attempts/{requested_attempt}/jobs"
+    )) {
         return Ok(serde_json::json!({"jobs":state["jobs"]}));
     }
     if path.contains("actions/workflows/ci.yml/runs") {

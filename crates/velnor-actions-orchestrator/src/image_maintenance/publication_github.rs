@@ -261,7 +261,7 @@ fn artifact_name(profile: ImagePublicationProfile, attempt: u32) -> String {
         ImagePublicationProfile::Job => format!("velnor-job-image-candidate-{attempt}"),
         ImagePublicationProfile::Runner
         | ImagePublicationProfile::Dind
-        | ImagePublicationProfile::ResourceProbe => "image-assets".to_owned(),
+        | ImagePublicationProfile::ResourceProbe => format!("image-assets-{attempt}"),
     }
 }
 

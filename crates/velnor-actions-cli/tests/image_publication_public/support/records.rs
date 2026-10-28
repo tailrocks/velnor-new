@@ -17,9 +17,20 @@ use velnor_actions_contract::{
 use super::{FixtureProfile, oci};
 
 const REPOSITORY: &str = "tailrocks/velnor-new";
-const RUN_ATTEMPT: u32 = 1;
 const CALLER_WORKFLOW: &str = ".github/workflows/product-release.yml";
 const CALLEE_WORKFLOW: &str = ".github/workflows/product-release-images.yml";
+
+#[derive(Clone, Copy)]
+pub(super) struct RecordInput<'a> {
+    pub(super) profile: FixtureProfile,
+    pub(super) source: &'a str,
+    pub(super) authority_sha: &'a str,
+    pub(super) inputs: &'a BTreeMap<String, String>,
+    pub(super) archive_sha: &'a str,
+    pub(super) image: &'a oci::Layout,
+    pub(super) source_files: &'a BTreeMap<String, Vec<u8>>,
+    pub(super) run_attempt: u32,
+}
 
 struct RunnerRecordInput<'a> {
     profile: FixtureProfile,
@@ -30,6 +41,7 @@ struct RunnerRecordInput<'a> {
     oci: ImageCandidateOci,
     workflow: ImageCandidateWorkflow,
     source_files: &'a BTreeMap<String, Vec<u8>>,
+    run_attempt: u32,
 }
 
 pub(super) fn source_files(
@@ -48,15 +60,17 @@ pub(super) fn source_files(
         .collect()
 }
 
-pub(super) fn make_record(
-    profile: FixtureProfile,
-    source: &str,
-    authority_sha: &str,
-    inputs: &BTreeMap<String, String>,
-    archive_sha: &str,
-    image: &oci::Layout,
-    source_files: &BTreeMap<String, Vec<u8>>,
-) -> Result<Vec<u8>, Box<dyn Error>> {
+pub(super) fn make_record(input: RecordInput<'_>) -> Result<Vec<u8>, Box<dyn Error>> {
+    let RecordInput {
+        profile,
+        source,
+        authority_sha,
+        inputs,
+        archive_sha,
+        image,
+        source_files,
+        run_attempt,
+    } = input;
     let archive = ImageCandidateArchive {
         sha256: archive_sha.to_owned(),
         size_bytes: image.archive.len() as u64,
@@ -68,7 +82,7 @@ pub(super) fn make_record(
         workflow_ref: format!("{REPOSITORY}/{}@refs/heads/main", profile.workflow_path()),
         authority_commit: authority_sha.to_owned(),
         run_id: profile.run_id(),
-        run_attempt: u64::from(RUN_ATTEMPT),
+        run_attempt: u64::from(run_attempt),
     };
     let oci = image.identity.clone();
     match profile {
@@ -106,6 +120,7 @@ pub(super) fn make_record(
                 oci,
                 workflow,
                 source_files,
+                run_attempt,
             })
         }
     }
@@ -121,6 +136,7 @@ fn runner_record(input: RunnerRecordInput<'_>) -> Result<Vec<u8>, Box<dyn Error>
         oci,
         workflow,
         source_files,
+        run_attempt,
     } = input;
     let lock_bytes = source_files
         .get(".velnor/runner.lock")
@@ -170,7 +186,7 @@ fn runner_record(input: RunnerRecordInput<'_>) -> Result<Vec<u8>, Box<dyn Error>
         qualification: RunnerImagePublicationQualification {
             job_id: "qualify-images".to_owned(),
             run_id: profile.run_id(),
-            run_attempt: RUN_ATTEMPT,
+            run_attempt,
             conclusion: "success".to_owned(),
         },
     };
@@ -183,6 +199,8 @@ pub(super) fn state_value(
     authority_sha: &str,
     source_files: BTreeMap<String, Vec<u8>>,
     attestation: &Value,
+    run_attempt: u32,
+    artifact_id: u64,
 ) -> Value {
     let run_id = profile.run_id();
     let main_sha = authority_sha;
@@ -200,15 +218,15 @@ pub(super) fn state_value(
             ]
         }
     };
-    let producer = json!({"id":run_id,"run_attempt":RUN_ATTEMPT,"event":"workflow_dispatch","path":producer_path,"head_branch":"main","head_sha":authority_sha,
+    let producer = json!({"id":run_id,"run_attempt":run_attempt,"event":"workflow_dispatch","path":producer_path,"head_branch":"main","head_sha":authority_sha,
         "head_repository":{"id":1_390_620_900,"full_name":REPOSITORY},"status":"completed","conclusion":"success","referenced_workflows":referenced_workflows});
     let artifact_name = match profile {
-        FixtureProfile::Job => "velnor-job-image-candidate-1",
+        FixtureProfile::Job => format!("velnor-job-image-candidate-{run_attempt}"),
         FixtureProfile::Runner | FixtureProfile::Dind | FixtureProfile::ResourceProbe => {
-            "image-assets"
+            format!("image-assets-{run_attempt}")
         }
     };
-    let artifact = json!({"id":profile.artifact_id(),"name":artifact_name,"expired":false,"size_in_bytes":4096,
+    let artifact = json!({"id":artifact_id,"name":artifact_name,"expired":false,"size_in_bytes":4096,
         "workflow_run":{"id":run_id,"head_sha":authority_sha,"head_branch":"main"}});
     let ci_run = json!({"id":profile.ci_run_id(),"run_number":23,"run_attempt":1,"path":".github/workflows/ci.yml","event":"push","head_branch":"main","head_sha":source,
         "head_repository":{"id":1_390_620_900,"full_name":REPOSITORY},"status":"completed","conclusion":"success"});
@@ -229,7 +247,7 @@ pub(super) fn state_value(
         .map(|(path, bytes)| (path, encode_base64(&bytes)))
         .collect::<BTreeMap<_, _>>();
     json!({"repository":{"id":1_390_620_900,"full_name":REPOSITORY,"default_branch":"main"},
-        "source_commit":source,"main_sha":main_sha,"source_files":source_files,"producer":producer,"artifact":artifact,
+        "source_commit":source,"main_sha":main_sha,"source_files":source_files,"producer":producer,"requested_attempt":run_attempt,"artifacts":[artifact],
         "jobs":jobs,"ci_run":ci_run,"attestation":attestation,
         "crane":{"tag_reference":tag_reference,"tag_digest":null,"manifest_reference":null,"remote":null,"fail_blob_readback":false,"corrupt_remote_blob":null,"remote_manifest_response_corruption":null}})
 }
@@ -240,6 +258,7 @@ pub(super) fn attestation(
     authority_sha: &str,
     archive_sha: &str,
     record_sha: &str,
+    run_attempt: u32,
 ) -> Value {
     let caller_path = profile.workflow_path();
     let signer_path = match profile {
@@ -251,8 +270,8 @@ pub(super) fn attestation(
     let caller_uri = workflow_uri(caller_path);
     let signer_uri = workflow_uri(signer_path);
     let invocation = format!(
-        "https://github.com/{REPOSITORY}/actions/runs/{}/attempts/{RUN_ATTEMPT}",
-        profile.run_id()
+        "https://github.com/{REPOSITORY}/actions/runs/{}/attempts/{run_attempt}",
+        profile.run_id(),
     );
     let mut subjects = BTreeMap::from([
         (profile.archive_name().to_owned(), archive_sha.to_owned()),

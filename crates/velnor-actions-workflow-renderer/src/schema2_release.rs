@@ -19,6 +19,7 @@ const RUNNER_TAR: &str = "velnor-runner-linux-amd64.tar";
 const DIND_TAR: &str = "velnor-dind-linux-amd64.tar";
 const RESOURCE_PROBE_TAR: &str = "velnor-resource-probe-linux-amd64.tar";
 const RESOURCE_PROBE_MANIFEST: &str = "RESOURCE_PROBE_MANIFEST.json";
+const IMAGE_ASSET_ARTIFACT: &str = "image-assets-${{ github.run_attempt }}";
 const HOST_BIN: &str = "velnor-host";
 const ATTESTATION_HELPER_BIN: &str = "velnor-runner-attestation-helper";
 const LICENSE: &str = "LICENSE";
@@ -88,21 +89,22 @@ pub(super) fn image_release(request: &Schema2WorkflowRequest) -> Result<Yaml, Re
     Ok(document(
         "Image release",
         vec![
-            build_job(
-                "build-images",
-                "Build runner images",
-                hosted.clone(),
-                JobTimeout::PRODUCT_IMAGE_BUILD,
-                build_steps,
-                "Upload image assets",
-                &files,
-            ),
+            build_job(BuildJob {
+                id: "build-images",
+                name: "Build runner images",
+                runs_on: hosted.clone(),
+                timeout: JobTimeout::PRODUCT_IMAGE_BUILD,
+                steps: build_steps,
+                upload_name: "Upload image assets",
+                artifact: IMAGE_ASSET_ARTIFACT,
+                files: &files,
+            }),
             attest_job(
                 "attest-images",
                 "Attest runner images",
                 hosted.clone(),
                 "build-images",
-                "image-assets",
+                IMAGE_ASSET_ARTIFACT,
                 &files,
             ),
             publish_job(
@@ -111,7 +113,7 @@ pub(super) fn image_release(request: &Schema2WorkflowRequest) -> Result<Yaml, Re
                     id: "publish-images",
                     name: "Publish runner images",
                     needs: "attest-images",
-                    artifact: "image-assets",
+                    artifact: IMAGE_ASSET_ARTIFACT,
                     prefix: "runner",
                     notes: "Runner image assets built from ${GITHUB_SHA}.",
                     files: &files,
@@ -137,12 +139,12 @@ pub(super) fn macos_binary_release(request: &Schema2WorkflowRequest) -> Result<Y
     Ok(document(
         "macOS binary release",
         vec![
-            build_job(
-                "build-binary",
-                "Build velnor-host",
-                macos.clone(),
-                JobTimeout::PRODUCT_COMPILER,
-                vec![
+            build_job(BuildJob {
+                id: "build-binary",
+                name: "Build velnor-host",
+                runs_on: macos.clone(),
+                timeout: JobTimeout::PRODUCT_COMPILER,
+                steps: vec![
                     generator_release::mise_setup_step(pins, ReleaseTarget::MacosArm64)?,
                     run_step("Install pinned Rust and MBX", &install),
                     generator_release::verify_rust_step(pins)?,
@@ -150,9 +152,10 @@ pub(super) fn macos_binary_release(request: &Schema2WorkflowRequest) -> Result<Y
                     run_step("Verify Mach-O architecture", BINARY_VERIFY),
                     run_step("Checksum built bytes", BINARY_SUM),
                 ],
-                "Upload binary asset",
-                &files,
-            ),
+                upload_name: "Upload binary asset",
+                artifact: "binary-assets",
+                files: &files,
+            }),
             attest_job(
                 "attest-binary",
                 "Attest velnor-host",
@@ -177,21 +180,27 @@ pub(super) fn macos_binary_release(request: &Schema2WorkflowRequest) -> Result<Y
     ))
 }
 
-fn build_job(
-    id: &str,
-    name: &str,
+struct BuildJob<'a> {
+    id: &'a str,
+    name: &'a str,
     runs_on: Yaml,
     timeout: JobTimeout,
-    mut steps: Vec<Yaml>,
-    upload_name: &str,
-    files: &[&str],
-) -> (String, Yaml) {
+    steps: Vec<Yaml>,
+    upload_name: &'a str,
+    artifact: &'a str,
+    files: &'a [&'a str],
+}
+
+fn build_job(spec: BuildJob<'_>) -> (String, Yaml) {
     let mut prefixed = vec![checkout_step()];
-    prefixed.append(&mut steps);
-    prefixed.push(upload_step(upload_name, artifact_name(id), files));
+    prefixed.extend(spec.steps);
+    prefixed.push(upload_step(spec.upload_name, spec.artifact, spec.files));
     finish(
-        id,
-        with_permissions(base(name, runs_on, timeout), build_permissions()),
+        spec.id,
+        with_permissions(
+            base(spec.name, spec.runs_on, spec.timeout),
+            build_permissions(),
+        ),
         prefixed,
     )
 }
@@ -246,14 +255,6 @@ fn publish_job(runs_on: Yaml, spec: &Publish<'_>) -> (String, Yaml) {
             ),
         ],
     )
-}
-
-fn artifact_name(build_id: &str) -> &'static str {
-    if build_id.ends_with("images") {
-        "image-assets"
-    } else {
-        "binary-assets"
-    }
 }
 
 fn checkout_step() -> Yaml {
