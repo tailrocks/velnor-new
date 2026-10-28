@@ -121,16 +121,18 @@ impl Drop for OwnedCheck {
 pub(crate) fn prepare_check(
     root: &Path,
     temp: &Path,
+    policy: velnor_actions_contract::WorkflowPolicy,
     check: &DiscoveredCheck,
     deadline: CheckDeadline,
 ) -> Result<OwnedCheck, OrchestratorError> {
     let group = RestoredGroupContext::resolve(temp)?;
-    prepare_check_with_context(root, &group, check, deadline)
+    prepare_check_with_context(root, &group, policy, check, deadline)
 }
 
 pub(crate) fn prepare_check_with_context(
     root: &Path,
     group: &RestoredGroupContext,
+    policy: velnor_actions_contract::WorkflowPolicy,
     check: &DiscoveredCheck,
     deadline: CheckDeadline,
 ) -> Result<OwnedCheck, OrchestratorError> {
@@ -143,7 +145,7 @@ pub(crate) fn prepare_check_with_context(
     if group.temp.starts_with(&root) {
         return Err(internal("check_temp_inside_repository"));
     }
-    let runtime = binary::resolve_mise_runtime(&root, check, deadline)?;
+    let runtime = binary::resolve_mise_runtime(&root, policy, check, deadline)?;
     let n = NEXT_HOME.fetch_add(1, Ordering::Relaxed);
     let home = group
         .temp

@@ -122,7 +122,8 @@ fn execute_preview_task(
 
     let started = Instant::now();
     progress.mark(progress::Phase::Qualification);
-    let owned = prepare_check_with_context(&root, group, &discovered, deadline)?;
+    let policy = crate::config::load_workflow_policy_until(&root, deadline)?;
+    let owned = prepare_check_with_context(&root, group, policy, &discovered, deadline)?;
     progress.mark(progress::Phase::QualificationComplete);
     let pairs = producer_handoff(&root, &output, &spec)?;
     let command = owned

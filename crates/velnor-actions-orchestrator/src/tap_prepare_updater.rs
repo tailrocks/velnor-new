@@ -128,7 +128,8 @@ pub(super) fn run_updater(run: &UpdaterRun<'_>) -> Result<(), OrchestratorError>
     {
         return Err(internal("tap_updater_host_platform"));
     }
-    let owned = prepare_check(root, temp, discovered, *deadline)?;
+    let policy = crate::config::load_workflow_policy_until(root, *deadline)?;
+    let owned = prepare_check(root, temp, policy, discovered, *deadline)?;
     let handoff = updater_environment(base_sha, formula, receipt_path, plan_path, release)?;
     let pairs: Vec<(OsString, OsString)> = handoff
         .into_iter()

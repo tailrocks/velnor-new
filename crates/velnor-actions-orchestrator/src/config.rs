@@ -71,6 +71,16 @@ pub(crate) fn load_config(root: &Path) -> Result<VelnorConfig, OrchestratorError
     load_config_from_text(&text)
 }
 
+pub(crate) fn load_workflow_policy_until(
+    root: &Path,
+    deadline: velnor_actions_mise::CheckDeadline,
+) -> Result<WorkflowPolicy, OrchestratorError> {
+    deadline
+        .remaining()
+        .map_err(|error| crate::internal::internal(&error.to_string()))?;
+    Ok(load_config(root)?.workflow.policy)
+}
+
 pub(crate) fn load_config_from_text(text: &str) -> Result<VelnorConfig, OrchestratorError> {
     if u64::try_from(text.len()).map_or(true, |length| {
         length > crate::safe_read::MAX_REPO_FILE_BYTES

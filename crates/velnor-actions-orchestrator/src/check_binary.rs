@@ -10,10 +10,10 @@ use velnor_actions_mise::CheckDeadline;
 
 pub(crate) fn resolve_mise_runtime(
     root: &Path,
+    policy: velnor_actions_contract::WorkflowPolicy,
     check: &velnor_actions_mise::DiscoveredCheck,
     deadline: CheckDeadline,
 ) -> Result<ApprovedMiseRuntime, OrchestratorError> {
-    let policy = crate::config::load_config(root)?.workflow.policy;
     let target = check.check.runner.platform.release_target();
     if let Some(approved) =
         crate::controller_approval::load_policy_approval_until(root, policy, deadline)?
@@ -129,6 +129,7 @@ fn read_deadline_checkpoint(deadline: Option<CheckDeadline>) -> Result<(), &'sta
 mod tests {
     use super::project_mise_binary;
     use std::path::Path;
+    use velnor_actions_contract::config::CheckPlatform;
     use velnor_actions_contract::ReleaseTarget;
     use velnor_actions_mise::catalog::lock::ApprovedMiseRuntime;
 
@@ -202,6 +203,123 @@ mod tests {
         )
         .expect("consumer policy must resolve");
         assert!(resolved.is_none());
+        std::fs::remove_dir(&dir).expect("temp dir must clean");
+    }
+
+    fn fixture_mise_check(
+        platform: CheckPlatform,
+    ) -> velnor_actions_contract::config::MiseCheck {
+        use velnor_actions_contract::config::{CheckExecutor, CheckRunner, MiseCheck};
+
+        MiseCheck {
+            id: "fixture".to_owned(),
+            task: "fixture".to_owned(),
+            directory: ".".to_owned(),
+            runner: CheckRunner {
+                label: "fixture".to_owned(),
+                platform,
+                executor: CheckExecutor::Hosted,
+                container: None,
+            },
+            inputs: Vec::new(),
+            tools: Vec::new(),
+            system_tools: Vec::new(),
+            evidence: None,
+            timeout_minutes: 10,
+        }
+    }
+
+    fn fixture_proposal() -> velnor_actions_contract::propose::ProposedTask {
+        use velnor_actions_contract::graph::{CachePolicy, ResourceClass, ResourceDemand};
+        use velnor_actions_contract::propose::{IdentityInputs, ProposedTask};
+
+        ProposedTask {
+            task_id: "fixture".to_owned(),
+            stack_id: String::new(),
+            component_id: String::new(),
+            task_kind: String::new(),
+            configuration: String::new(),
+            depends_on: Vec::new(),
+            gated_by: Vec::new(),
+            reads: Vec::new(),
+            writes: Vec::new(),
+            outputs: Vec::new(),
+            resource: ResourceDemand {
+                class: ResourceClass::Lightweight,
+                cpu_milli: None,
+                memory_mb: None,
+                needs_network: false,
+                service: None,
+            },
+            cache_policy: CachePolicy {
+                allow_compilation_reuse: false,
+                allow_task_reuse: false,
+            },
+            identity: IdentityInputs {
+                unit_id: String::new(),
+                unit_key: String::new(),
+                unit_path: String::new(),
+                project_root: String::new(),
+                target: String::new(),
+                features: Vec::new(),
+                flags: Vec::new(),
+                compile_driver: String::new(),
+                test_runner: String::new(),
+                environment: std::collections::BTreeMap::new(),
+                declared_inputs: Vec::new(),
+                undeclared_reads: false,
+            },
+            payload: Vec::new(),
+            display_name: String::new(),
+            uses_clock: false,
+            uses_random: false,
+            no_targets: false,
+            runner_profile: String::new(),
+        }
+    }
+
+    fn fixture_check(platform: CheckPlatform) -> velnor_actions_mise::DiscoveredCheck {
+        velnor_actions_mise::DiscoveredCheck {
+            check: fixture_mise_check(platform),
+            proposal: fixture_proposal(),
+            config_inputs: Vec::new(),
+            task_config: String::new(),
+            tool_specs: Vec::new(),
+            qualified_tools: Vec::new(),
+            qualification_digest: String::new(),
+            config_source: String::new(),
+        }
+    }
+
+    #[test]
+    fn runtime_resolution_uses_passed_policy_without_config_read() {
+        let dir = std::env::temp_dir().join(format!(
+            "velnor-no-config-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock must advance")
+                .as_nanos()
+        ));
+        std::fs::create_dir(&dir).expect("temp dir must build");
+        assert!(
+            !dir.join(".velnor/config.toml").is_file(),
+            "fixture must not contain a config file"
+        );
+        let check = fixture_check(CheckPlatform::LinuxX64);
+        let target = CheckPlatform::LinuxX64.release_target();
+        let runtime = super::resolve_mise_runtime(
+            &dir,
+            velnor_actions_contract::WorkflowPolicy::ConsumerV1,
+            &check,
+            velnor_actions_mise::CheckDeadline::after(std::time::Duration::from_secs(60))
+                .expect("test deadline must build"),
+        )
+        .expect("passed policy must resolve without a config read");
+        let pin = velnor_actions_mise::current_mise_binary(target);
+        assert_eq!(runtime.target, target);
+        assert_eq!(runtime.version, pin.version);
+        assert_eq!(runtime.sha256, pin.sha256);
         std::fs::remove_dir(&dir).expect("temp dir must clean");
     }
 
