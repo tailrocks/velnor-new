@@ -177,9 +177,13 @@ fn validate_producer_run(
     {
         return Err(internal("image_publication_producer_run_identity"));
     }
-    if (request.profile == ImagePublicationProfile::Job && run.head_sha != request.source_commit)
-        || (run.status == "completed" && run.conclusion.as_deref() != Some("success"))
-    {
+    if request.profile == ImagePublicationProfile::Job && run.head_sha != request.source_commit {
+        return Err(internal("image_publication_job_run_identity"));
+    }
+    if run.head_sha != request.source_commit {
+        return Err(internal("image_publication_producer_source_mismatch"));
+    }
+    if run.status == "completed" && run.conclusion.as_deref() != Some("success") {
         return Err(internal("image_publication_job_run_identity"));
     }
     if request.profile != ImagePublicationProfile::Job {

@@ -21,6 +21,13 @@ const CALLER_WORKFLOW: &str = ".github/workflows/product-release.yml";
 const CALLEE_WORKFLOW: &str = ".github/workflows/product-release-images.yml";
 
 #[derive(Clone, Copy)]
+pub(super) struct FixtureHeads<'a> {
+    pub(super) source: &'a str,
+    pub(super) authority_sha: &'a str,
+    pub(super) current_main_sha: &'a str,
+}
+
+#[derive(Clone, Copy)]
 pub(super) struct RecordInput<'a> {
     pub(super) profile: FixtureProfile,
     pub(super) source: &'a str,
@@ -195,15 +202,18 @@ fn runner_record(input: RunnerRecordInput<'_>) -> Result<Vec<u8>, Box<dyn Error>
 
 pub(super) fn state_value(
     profile: FixtureProfile,
-    source: &str,
-    authority_sha: &str,
+    heads: FixtureHeads<'_>,
     source_files: BTreeMap<String, Vec<u8>>,
     attestation: &Value,
     run_attempt: u32,
     artifact_id: u64,
 ) -> Value {
+    let FixtureHeads {
+        source,
+        authority_sha,
+        current_main_sha: main_sha,
+    } = heads;
     let run_id = profile.run_id();
-    let main_sha = authority_sha;
     let producer_path = match profile {
         FixtureProfile::Job => profile.workflow_path(),
         FixtureProfile::Runner | FixtureProfile::Dind | FixtureProfile::ResourceProbe => {

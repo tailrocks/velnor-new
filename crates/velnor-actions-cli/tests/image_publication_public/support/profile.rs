@@ -85,7 +85,7 @@ impl FixtureProfile {
         }
     }
 
-    pub(crate) fn authority_sha(self, source: &str) -> String {
+    pub(crate) fn current_main_sha(self, source: &str) -> String {
         match self {
             Self::Job => source.to_owned(),
             Self::Runner | Self::Dind | Self::ResourceProbe => "b".repeat(40),
