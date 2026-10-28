@@ -63,6 +63,20 @@ impl RejectionCase {
 }
 
 impl Fixture {
+    pub(crate) fn attestation_output(&self) -> Result<Value, Box<dyn Error>> {
+        let state = self.read_state()?;
+        state
+            .get("attestation")
+            .cloned()
+            .ok_or_else(|| "fixture has no attestation output".into())
+    }
+
+    pub(crate) fn set_attestation_output(&self, output: Value) -> Result<(), Box<dyn Error>> {
+        let mut state = self.read_state()?;
+        state["attestation_response"] = output;
+        self.write_state(&state)
+    }
+
     pub(crate) fn configure_attempt_two_artifacts(
         &mut self,
         case: AttemptArtifactCase,
@@ -314,4 +328,46 @@ fn hex(bytes: &[u8]) -> String {
             ]
         })
         .collect()
+}
+
+pub(crate) fn current_attestation(fixture: &Fixture) -> Result<Value, Box<dyn Error>> {
+    fixture
+        .attestation_output()?
+        .as_array()
+        .and_then(|entries| entries.first())
+        .cloned()
+        .ok_or_else(|| "fixture has no current attestation".into())
+}
+
+pub(crate) fn with_invocation(attestation: &Value, run_id: u64, run_attempt: u32) -> Value {
+    with_uri(
+        attestation,
+        &format!(
+            "https://github.com/tailrocks/velnor-new/actions/runs/{run_id}/attempts/{run_attempt}"
+        ),
+    )
+}
+
+pub(crate) fn with_uri(attestation: &Value, uri: &str) -> Value {
+    let mut historical = attestation.clone();
+    historical["verificationResult"]["signature"]["certificate"]["runInvocationURI"] = json!(uri);
+    historical
+}
+
+pub(crate) fn invalid_invocation_uri(fixture: &Fixture, case: &str) -> String {
+    let prefix = "https://github.com/tailrocks/velnor-new/actions/runs";
+    let older_run = fixture.producer_run_id - 1;
+    match case {
+        "foreign" => "https://github.com/other/repo/actions/runs/1/attempts/1".to_owned(),
+        "query" => format!("{prefix}/{older_run}/attempts/1?query=1"),
+        "fragment" => format!("{prefix}/{older_run}/attempts/1#fragment"),
+        "trailing_slash" => format!("{prefix}/{older_run}/attempts/1/"),
+        "zero_run" => format!("{prefix}/0/attempts/1"),
+        "zero_attempt" => format!("{prefix}/{older_run}/attempts/0"),
+        "leading_zero_run" => format!("{prefix}/0{older_run}/attempts/1"),
+        "leading_zero_attempt" => format!("{prefix}/{older_run}/attempts/01"),
+        "overflow_run" => format!("{prefix}/18446744073709551616/attempts/1"),
+        "overflow_attempt" => format!("{prefix}/{older_run}/attempts/4294967296"),
+        _ => String::new(),
+    }
 }

@@ -55,10 +55,6 @@ pub(crate) fn verify_image_file_attestation(
             .ok_or_else(|| internal("package_attestation_repository_invalid"))?
             .0
     );
-    let invocation_uri = format!(
-        "https://github.com/{}/actions/runs/{}/attempts/{}",
-        identity.repository, identity.run_id, identity.run_attempt
-    );
     let expectation = AttestationExpectation {
         repository_uri: &repository_uri,
         owner_uri: &owner_uri,
@@ -72,7 +68,6 @@ pub(crate) fn verify_image_file_attestation(
         run_attempt: identity.run_attempt,
         repository_id: identity.repository_id.to_string(),
         trigger: identity.event,
-        invocation_uri: &invocation_uri,
     };
     let command_identity = AttestationCommandIdentity {
         repository: identity.repository,
@@ -83,10 +78,11 @@ pub(crate) fn verify_image_file_attestation(
         source_token: &source_token,
     };
     let output = verify_one(path, &command_identity, deadline)?;
-    validate_output_with_additional_names(
+    let _ = validate_output_with_additional_names(
         &output,
         expected_subjects,
         additional_subject_names,
         &expectation,
-    )
+    )?;
+    Ok(())
 }

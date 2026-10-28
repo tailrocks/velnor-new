@@ -26,7 +26,10 @@ use tempfile::TempDir;
 pub(crate) use manifest_outcomes::{CapturedOutcome, ReplayMutation};
 pub(crate) use profile::FixtureProfile;
 pub(crate) use registry_state::{BlobFault, ExistingTag, MovedTag};
-pub(crate) use rejections::{AttemptArtifactCase, RejectionCase};
+pub(crate) use rejections::{
+    AttemptArtifactCase, RejectionCase, current_attestation, invalid_invocation_uri,
+    with_invocation, with_uri,
+};
 
 const RUN_ATTEMPT: u32 = 1;
 
