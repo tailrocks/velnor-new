@@ -10,7 +10,8 @@ pub use super::homebrew::authoring::{
     author_homebrew_adoption_seed,
 };
 pub use super::homebrew::source_policy::{
-    check_homebrew_source_policy, export_homebrew_source_policy,
+    check_homebrew_source_policy, check_homebrew_source_policy_with_operator_guard,
+    export_homebrew_source_policy, export_homebrew_source_policy_with_operator_guard,
 };
 
 #[path = "bun_assets_repository.rs"]
@@ -111,7 +112,8 @@ pub use super::owned_tool_preview::{SourceQualificationTrigger, preview_owned_to
 pub use super::pins::{acquire_script_argv, consumer_acquire_step_with_manifest};
 pub use super::plan::{plan_text, plan_text_checked};
 pub use super::plan_output_limits::{JOB_OUTPUTS_BUDGET_UTF16_BYTES, PlanOutputMode};
-pub use super::prepare::{GenerationPreparation, prepare};
+pub use super::prepare::{GenerationPreparation, prepare, prepare_with_operator_guard};
+pub use velnor_actions_mise::OperatorToolchainGuard;
 pub use super::preseed_manifest::{PRESEED_MANIFEST_OP, write_preseed_manifest};
 pub use super::preview_producer::{
     ACQUIRE_RELEASE_LEAVES_OP, ADMIT_RELEASE_AGGREGATE_OP, EXECUTE_RELEASE_PRODUCER_OP,

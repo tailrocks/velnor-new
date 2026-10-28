@@ -5,7 +5,8 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use velnor_actions_orchestrator::{
-    GenerateOptions, generate_dispatched, parse_dispatch_mode, prepare, resolve_root,
+    GenerateOptions, OperatorToolchainGuard, generate_dispatched, parse_dispatch_mode, prepare,
+    prepare_with_operator_guard, resolve_root,
 };
 
 use crate::dispatch::{fail_public, working_dir};
@@ -13,7 +14,11 @@ use crate::dispatch::{fail_public, working_dir};
 #[path = "dispatch_generate_warnings.rs"]
 mod warning_format;
 
-pub(crate) fn run_generate(output_dir: Option<PathBuf>, mode: Option<String>) -> ExitCode {
+pub(crate) fn run_generate(
+    output_dir: Option<PathBuf>,
+    mode: Option<String>,
+    guard: Option<&OperatorToolchainGuard>,
+) -> ExitCode {
     let Some(cwd) = working_dir() else {
         return ExitCode::from(1);
     };
@@ -22,7 +27,10 @@ pub(crate) fn run_generate(output_dir: Option<PathBuf>, mode: Option<String>) ->
         Ok(root) => root,
         Err(error) => return fail_public(&error),
     };
-    let preparation = match prepare(&root) {
+    let preparation = match match guard {
+        Some(guard) => prepare_with_operator_guard(&root, guard),
+        None => prepare(&root),
+    } {
         Ok(preparation) => preparation,
         Err(error) => return fail_public(&error),
     };

@@ -3,10 +3,10 @@
 
 use std::path::Path;
 
-use velnor_actions_mise::{MetadataQualification, ToolCatalog};
+use velnor_actions_mise::{MetadataQualification, OperatorToolchainGuard, ToolCatalog};
 use velnor_actions_rust::WorkspaceRecord;
 
-use super::require_rust_pin;
+use super::require_metadata_tools;
 use crate::OrchestratorError;
 use crate::discover::{PlannedWorkspace, workspace_lock, workspace_manifest};
 use crate::generate::ToolSnapshot;
@@ -40,14 +40,15 @@ fn lockless_graph(record: &WorkspaceRecord) -> Result<velnor_actions_rust::Resol
     })
 }
 
-pub(crate) fn qualify_workspaces(
+pub(crate) fn qualify_workspaces_with_guard(
     root: &Path,
     workspaces: &[PlannedWorkspace],
     catalog: &ToolCatalog,
+    guard: Option<&OperatorToolchainGuard>,
 ) -> Result<Vec<WorkspaceResolve>, OrchestratorError> {
     let tools = ToolSnapshot::capture(root);
     if !workspaces.is_empty() {
-        require_rust_pin(catalog)?;
+        require_metadata_tools(catalog, guard)?;
     }
     let mut resolves = Vec::with_capacity(workspaces.len());
     for workspace in workspaces {
@@ -67,9 +68,18 @@ pub(crate) fn qualify_workspaces(
                 problem: format!("bad_manifest_path:{err}"),
             }
         })?;
-        let json = match request.run(catalog) {
+        let result = match guard {
+            Some(guard) => request.run_with_operator_guard(catalog, guard),
+            None => request.run(catalog),
+        };
+        let json = match result {
             Ok(json) => json,
             Err(err) => {
+                if guard.is_some() {
+                    return Err(OrchestratorError::ToolchainGuard {
+                        problem: "operator toolchain guard rejected metadata".to_owned(),
+                    });
+                }
                 let text = err.to_string();
                 let first = text.lines().next().unwrap_or("metadata_offline");
                 let short: String = first.chars().take(160).collect();

@@ -54,6 +54,7 @@ impl super::IsolatedCommand {
             cwd: None,
             extra_env,
             policy: EnvPolicy::Verify,
+            operator_guarded: false,
         })
     }
 }

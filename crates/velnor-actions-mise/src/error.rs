@@ -81,6 +81,9 @@ pub enum MiseError {
         spec: String,
         installed: Vec<String>,
     },
+    OperatorToolchainGuard {
+        problem: String,
+    },
 }
 
 impl Display for MiseError {
@@ -144,11 +147,20 @@ impl Display for MiseError {
                     )
                 }
             }
+            Self::OperatorToolchainGuard { problem } => f.write_str(problem),
         }
     }
 }
 
 impl std::error::Error for MiseError {}
+
+impl MiseError {
+    pub(crate) fn operator_toolchain_guard(problem: impl Into<String>) -> Self {
+        Self::OperatorToolchainGuard {
+            problem: problem.into(),
+        }
+    }
+}
 
 impl From<MiseError> for ContractError {
     fn from(error: MiseError) -> Self {

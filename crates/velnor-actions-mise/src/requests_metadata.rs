@@ -5,6 +5,7 @@ use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
 use super::helpers::full_mise_argv;
+use crate::OperatorToolchainGuard;
 use crate::catalog::{PinnedTool, ToolCatalog};
 use crate::command::IsolatedCommand;
 use crate::error::MiseError;
@@ -55,10 +56,32 @@ impl MetadataDiscovery {
         IsolatedCommand::mise_exec(&specs, &self.cargo_argv())
     }
 
+    pub fn command_with_operator_guard(
+        &self,
+        catalog: &ToolCatalog,
+        guard: &OperatorToolchainGuard,
+    ) -> Result<IsolatedCommand, MiseError> {
+        let specs = metadata_tool_specs(catalog);
+        IsolatedCommand::mise_exec_with_operator_guard(
+            guard,
+            &specs,
+            &mbx_metadata_argv(&self.cargo_argv()),
+        )
+    }
+
     pub fn run(&self, catalog: &ToolCatalog) -> Result<String, MiseError> {
         let output = self.command(catalog)?.run()?;
         output.require_success("mise")?;
         output.stdout_text("mise")
+    }
+
+    pub fn run_with_operator_guard(
+        &self,
+        catalog: &ToolCatalog,
+        guard: &OperatorToolchainGuard,
+    ) -> Result<String, MiseError> {
+        let command = self.command_with_operator_guard(catalog, guard)?;
+        run_guarded(&command)
     }
 }
 
@@ -107,9 +130,57 @@ impl MetadataQualification {
         IsolatedCommand::mise_exec(&specs, &self.cargo_argv())
     }
 
+    pub fn command_with_operator_guard(
+        &self,
+        catalog: &ToolCatalog,
+        guard: &OperatorToolchainGuard,
+    ) -> Result<IsolatedCommand, MiseError> {
+        let specs = metadata_tool_specs(catalog);
+        IsolatedCommand::mise_exec_with_operator_guard(
+            guard,
+            &specs,
+            &mbx_metadata_argv(&self.cargo_argv()),
+        )
+    }
+
     pub fn run(&self, catalog: &ToolCatalog) -> Result<String, MiseError> {
         let output = self.command(catalog)?.run()?;
         output.require_success("mise")?;
         output.stdout_text("mise")
     }
+
+    pub fn run_with_operator_guard(
+        &self,
+        catalog: &ToolCatalog,
+        guard: &OperatorToolchainGuard,
+    ) -> Result<String, MiseError> {
+        let command = self.command_with_operator_guard(catalog, guard)?;
+        run_guarded(&command)
+    }
+}
+
+fn metadata_tool_specs(catalog: &ToolCatalog) -> Vec<String> {
+    catalog.tool_specs(&[PinnedTool::Rust, PinnedTool::MrBoxington])
+}
+
+fn mbx_metadata_argv(cargo_argv: &[OsString]) -> Vec<OsString> {
+    let mut argv = Vec::with_capacity(cargo_argv.len() + 2);
+    argv.push(OsString::from("mbx"));
+    argv.push(OsString::from("metadata"));
+    argv.extend(cargo_argv.iter().skip(2).cloned());
+    argv
+}
+
+fn run_guarded(command: &IsolatedCommand) -> Result<String, MiseError> {
+    let output = command.run().map_err(|_| {
+        MiseError::operator_toolchain_guard("operator toolchain guard rejected metadata")
+    })?;
+    if !output.success {
+        return Err(MiseError::operator_toolchain_guard(
+            "operator toolchain guard rejected metadata",
+        ));
+    }
+    output.stdout_text("mise").map_err(|_| {
+        MiseError::operator_toolchain_guard("operator toolchain guard rejected metadata")
+    })
 }

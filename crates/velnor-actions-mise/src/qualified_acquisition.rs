@@ -262,6 +262,7 @@ impl QualifiedCheck {
             cwd: Some(self.home.clone()),
             extra_env,
             policy: EnvPolicy::QualifiedAcquisition,
+            operator_guarded: false,
         })
     }
 }

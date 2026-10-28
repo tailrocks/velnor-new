@@ -59,6 +59,7 @@ use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::time::Duration;
 
+use crate::OperatorToolchainGuard;
 use crate::error::MiseError;
 
 fn cleared_parent_passthrough(
@@ -115,6 +116,7 @@ pub struct IsolatedCommand {
     cwd: Option<PathBuf>,
     extra_env: Vec<(OsString, OsString)>,
     policy: EnvPolicy,
+    operator_guarded: bool,
 }
 
 impl std::fmt::Debug for IsolatedCommand {
@@ -125,6 +127,7 @@ impl std::fmt::Debug for IsolatedCommand {
             .field("cwd", &self.cwd)
             .field("extra_env", &redact_env_for_debug(&self.extra_env))
             .field("policy", &self.policy)
+            .field("operator_guarded", &self.operator_guarded)
             .finish()
     }
 }
@@ -132,6 +135,25 @@ impl std::fmt::Debug for IsolatedCommand {
 impl IsolatedCommand {
     pub fn mise_exec(tool_specs: &[String], payload: &[OsString]) -> Result<Self, MiseError> {
         Self::mise_with_subcommand("exec", tool_specs, Some(payload), true)
+    }
+
+    pub fn mise_exec_with_operator_guard(
+        guard: &OperatorToolchainGuard,
+        tool_specs: &[String],
+        payload: &[OsString],
+    ) -> Result<Self, MiseError> {
+        let mut command = Self::mise_exec(tool_specs, payload)?;
+        let mut args = Vec::with_capacity(command.args.len() + 2);
+        args.push(OsString::from(TOOL_COMMAND_SEPARATOR));
+        args.push(OsString::from("mise"));
+        args.append(&mut command.args);
+        guard
+            .executable()
+            .as_os_str()
+            .clone_into(&mut command.program);
+        command.args = args;
+        command.operator_guarded = true;
+        Ok(command)
     }
 
     pub fn mise_install(tool_specs: &[String]) -> Result<Self, MiseError> {
@@ -152,6 +174,7 @@ impl IsolatedCommand {
             cwd: None,
             extra_env: pairs_of(&NO_AUTO_INSTALL_ENV),
             policy: EnvPolicy::Verify,
+            operator_guarded: false,
         }
     }
 
@@ -174,6 +197,7 @@ impl IsolatedCommand {
             cwd: None,
             extra_env: declared.to_vec(),
             policy: EnvPolicy::RepoTask,
+            operator_guarded: false,
         })
     }
 
@@ -261,7 +285,11 @@ impl IsolatedCommand {
 
     #[must_use]
     pub fn spawn_env(&self, parent: &[(OsString, OsString)]) -> Vec<(OsString, OsString)> {
-        self.policy.child_env(parent, &self.full_env())
+        let mut env = self.policy.child_env(parent, &self.full_env());
+        if self.operator_guarded {
+            env.retain(|(key, _)| !is_mbx_shim_env(key));
+        }
+        env
     }
 
     #[must_use]
@@ -296,6 +324,10 @@ impl IsolatedCommand {
         }
         for (key, value) in self.full_env() {
             command.env(key, value);
+        }
+        if self.operator_guarded {
+            command.env_remove("MBX_CARGO_SHIM_MODE");
+            command.env_remove("MBX_CARGO_SHIM_PATH");
         }
         if let Some(cwd) = &self.cwd {
             command.current_dir(cwd);
@@ -333,8 +365,13 @@ impl IsolatedCommand {
             cwd: None,
             extra_env,
             policy,
+            operator_guarded: false,
         })
     }
+}
+
+fn is_mbx_shim_env(key: &OsStr) -> bool {
+    key == "MBX_CARGO_SHIM_MODE" || key == "MBX_CARGO_SHIM_PATH"
 }
 
 pub(crate) fn mise_argv_tail(sub: &str, specs: &[String], payload: &[OsString]) -> Vec<OsString> {

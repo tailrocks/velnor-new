@@ -18,6 +18,7 @@ impl IsolatedCommand {
             cwd: None,
             extra_env: env,
             policy: EnvPolicy::QualifiedProbe,
+            operator_guarded: false,
         }
     }
     pub(crate) fn qualified_check_run(
@@ -55,6 +56,7 @@ impl IsolatedCommand {
             cwd: Some(owned.cwd.clone()),
             extra_env,
             policy: EnvPolicy::QualifiedCheck,
+            operator_guarded: false,
         })
     }
 }

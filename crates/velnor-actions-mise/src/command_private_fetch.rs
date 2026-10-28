@@ -111,6 +111,7 @@ impl IsolatedCommand {
             cwd: Some(cwd),
             extra_env,
             policy: EnvPolicy::PrivateFetch,
+            operator_guarded: false,
         })
     }
 }
