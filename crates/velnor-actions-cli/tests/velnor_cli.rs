@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod cache_no_explanatory_comments;
+#[path = "velnor_cli/cargo_artifact.rs"]
+mod cargo_artifact;
 mod gc1_t28;
 mod gc1_t29_common;
 mod gc1_t29_preserve;

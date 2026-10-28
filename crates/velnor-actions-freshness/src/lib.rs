@@ -21,6 +21,21 @@ use std::path::{Path, PathBuf};
 
 use crate::context::FreshnessContext;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CargoArtifactKind {
+    Bin,
+    Example,
+}
+
+impl CargoArtifactKind {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Bin => "bin",
+            Self::Example => "example",
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Operation {
     Freshness {
@@ -48,6 +63,16 @@ pub enum Operation {
 
         target_name: String,
     },
+
+    CargoArtifactExecutableForKind {
+        messages_path: PathBuf,
+
+        manifest_path: PathBuf,
+
+        target_name: String,
+
+        kind: CargoArtifactKind,
+    },
 }
 
 #[must_use]
@@ -74,6 +99,19 @@ pub fn run(root: &Path, operation: &Operation) -> i32 {
             messages_path,
             manifest_path,
             target_name,
+            CargoArtifactKind::Bin,
+        ),
+        Operation::CargoArtifactExecutableForKind {
+            messages_path,
+            manifest_path,
+            target_name,
+            kind,
+        } => release_support::print_cargo_artifact_executable(
+            root,
+            messages_path,
+            manifest_path,
+            target_name,
+            *kind,
         ),
     }
 }
