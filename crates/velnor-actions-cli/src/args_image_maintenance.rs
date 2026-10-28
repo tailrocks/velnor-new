@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use clap::Subcommand;
+use clap::ValueEnum;
 use std::path::PathBuf;
 
 #[derive(Debug, Subcommand)]
@@ -65,4 +66,33 @@ pub(crate) enum ImageMaintenanceCommand {
         #[arg(long)]
         descriptors_output: PathBuf,
     },
+    /// Verify publication custody and publish one admitted image by digest.
+    PublishImage {
+        #[arg(long, value_enum)]
+        profile: ImagePublicationProfileArg,
+        #[arg(long)]
+        source_commit: String,
+        #[arg(long)]
+        producer_run_id: u64,
+        #[arg(long)]
+        producer_run_attempt: u32,
+        #[arg(long)]
+        artifact_id: u64,
+        #[arg(long)]
+        archive_path: PathBuf,
+        #[arg(long)]
+        record_path: PathBuf,
+        #[arg(long)]
+        private_scratch: PathBuf,
+        #[arg(long)]
+        receipt_output: PathBuf,
+    },
+}
+
+#[derive(Debug, Clone, Copy, ValueEnum)]
+pub(crate) enum ImagePublicationProfileArg {
+    Job,
+    Runner,
+    Dind,
+    ResourceProbe,
 }

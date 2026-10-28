@@ -15,6 +15,11 @@ path = "src/main.rs"
 test = false
 
 [[example]]
+name = "image-publication-fixture"
+path = "examples/image_publication_fixture.rs"
+test = false
+
+[[example]]
 name = "qualification-diagnostics"
 path = "examples/qualification_diagnostics.rs"
 test = false
@@ -50,6 +55,10 @@ path = "tests/review_completion_public.rs"
 [[test]]
 name = "runner_image_admission_public"
 path = "tests/runner_image_admission_public.rs"
+
+[[test]]
+name = "image_publication_public"
+path = "tests/image_publication_public.rs"
 
 [dependencies]
 serde_json = { workspace = true }
