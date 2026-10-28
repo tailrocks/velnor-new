@@ -45,6 +45,10 @@ path = "tests/generator_release_prepare_public.rs"
 name = "product_release_binary_public"
 path = "tests/product_release_binary_public.rs"
 
+[[test]]
+name = "prune_tools"
+path = "tests/prune_tools.rs"
+
 [lints]
 workspace = true
 
