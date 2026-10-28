@@ -25,7 +25,8 @@ use velnor_actions_orchestrator::{
     plan_outputs, publish_final_report, publish_plan_files, resolve_task_execution,
     response_path_for, retrieve_reports, run_bun_registry_install, run_github_evidence_fetch,
     run_github_evidence_import, run_gradle_run, run_playwright_install, run_private_fetch,
-    run_private_revoke, write_preseed_manifest, write_request, write_task_report,
+    run_private_revoke, seed_parallel_targets_from_env, write_preseed_manifest, write_request,
+    write_task_report,
 };
 
 #[path = "dispatch/bun_assets.rs"]
@@ -34,6 +35,9 @@ mod bun_assets;
 mod cache;
 #[path = "dispatch/fileless.rs"]
 mod fileless;
+#[path = "dispatch/native_validator_tool_qualification.rs"]
+mod native_validator_tool_qualification;
+use native_validator_tool_qualification::run as qualify_validator_tools;
 #[path = "dispatch/cache/ledger_assemble.rs"]
 mod ledger_assemble;
 #[path = "dispatch/cache/ledger_emit.rs"]
@@ -180,8 +184,8 @@ fn gate_file_request(op: InternalOp, path: PathBuf) -> Option<InternalRequest> {
         | InternalOp::PlaywrightInstall
         | InternalOp::PrivateFetch
         | InternalOp::PrivateRevoke
-        | InternalOp::PreseedManifest
-        | InternalOp::RepoPolicy
+        | InternalOp::PreseedManifest | InternalOp::RepoPolicy
+        | InternalOp::NativeValidatorToolQualification
         | InternalOp::ExecuteCheck
         | InternalOp::ExecuteNativeHomebrewCheck
         | InternalOp::QualifyHomebrew
@@ -219,12 +223,11 @@ fn run_internal(request: &InternalRequest) -> ExitCode {
             velnor_actions_orchestrator::acquire_preview_source_from_env(),
         ),
         InternalOp::ExecuteCheck => unit_exit(execute_check().map(|_| ())),
-        InternalOp::SeedParallelTargets => {
-            unit_exit(velnor_actions_orchestrator::seed_parallel_targets_from_env())
-        }
+        InternalOp::SeedParallelTargets => unit_exit(seed_parallel_targets_from_env()),
         InternalOp::QualifyHomebrew => {
             unit_exit(velnor_actions_orchestrator::execute_homebrew_qualification_from_env())
         }
+        InternalOp::NativeValidatorToolQualification => qualify_validator_tools(),
         InternalOp::ExecuteNativeHomebrewCheck => unit_exit(
             velnor_actions_orchestrator::execute_native_homebrew_check_from_env().map(|_| ()),
         ),

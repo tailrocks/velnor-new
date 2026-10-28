@@ -198,6 +198,9 @@ pub use super::package_release_signer::{SIGN_PACKAGE_RELEASE_OP, sign_package_re
 pub const ORCHESTRATOR_VERSION: u32 = 0;
 
 pub use crate::qualification_candidate::qualify_tools;
+pub use crate::native_validator_tool_qualification::{
+    NATIVE_VALIDATOR_TOOL_QUALIFICATION_OP, run_native_validator_tool_qualification_from_env,
+};
 
 pub use super::homebrew::qualification::execute_homebrew_qualification_from_env;
 pub use super::homebrew::runtime::execute_native_homebrew_check_from_env;
