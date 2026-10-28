@@ -74,10 +74,10 @@ fn verified_mise_program(
     );
     let output = probe.run_until(64 * 1024, deadline)?;
     let version = String::from_utf8_lossy(&output.stdout);
-    if !output.success || version.split_whitespace().next() != Some(crate::MISE_VERSION) {
+    if !output.success || version.split_whitespace().next() != Some(owned.mise_version.as_str()) {
         return Err(invalid(
             "mise_binary",
-            format!("expected_version:{}", crate::MISE_VERSION),
+            format!("expected_version:{}", owned.mise_version),
         ));
     }
     Ok(program)

@@ -255,6 +255,7 @@ fn qualified_at(
         discovered(host_platform()?, tools),
         CheckCapabilityProof { container: None },
         &[],
+        velnor_actions_mise::MISE_VERSION.to_owned(),
     )?)
 }
 
