@@ -14,6 +14,7 @@ pub struct QualifiedCheck {
     pub(crate) cwd: PathBuf,
     pub(crate) check: DiscoveredCheck,
     pub(crate) capability_env: Vec<(OsString, OsString)>,
+    pub(crate) mise_version: String,
     restored_overlay: Vec<(OsString, OsString)>,
 }
 
@@ -24,6 +25,7 @@ impl QualifiedCheck {
         check: DiscoveredCheck,
         proof: super::CheckCapabilityProof,
         system_proofs: &[super::SystemToolProof],
+        mise_version: String,
     ) -> Result<Self, MiseError> {
         if !home.is_absolute()
             || !cwd.is_absolute()
@@ -79,6 +81,7 @@ impl QualifiedCheck {
             cwd,
             check,
             capability_env,
+            mise_version,
             restored_overlay: Vec::new(),
         };
         owned.bound_projection()?;

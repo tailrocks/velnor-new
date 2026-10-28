@@ -121,16 +121,18 @@ impl Drop for OwnedCheck {
 pub(crate) fn prepare_check(
     root: &Path,
     temp: &Path,
+    policy: velnor_actions_contract::WorkflowPolicy,
     check: &DiscoveredCheck,
     deadline: CheckDeadline,
 ) -> Result<OwnedCheck, OrchestratorError> {
     let group = RestoredGroupContext::resolve(temp)?;
-    prepare_check_with_context(root, &group, check, deadline)
+    prepare_check_with_context(root, &group, policy, check, deadline)
 }
 
 pub(crate) fn prepare_check_with_context(
     root: &Path,
     group: &RestoredGroupContext,
+    policy: velnor_actions_contract::WorkflowPolicy,
     check: &DiscoveredCheck,
     deadline: CheckDeadline,
 ) -> Result<OwnedCheck, OrchestratorError> {
@@ -143,6 +145,7 @@ pub(crate) fn prepare_check_with_context(
     if group.temp.starts_with(&root) {
         return Err(internal("check_temp_inside_repository"));
     }
+    let runtime = binary::resolve_mise_runtime(&root, policy, check, deadline)?;
     let n = NEXT_HOME.fetch_add(1, Ordering::Relaxed);
     let home = group
         .temp
@@ -160,7 +163,7 @@ pub(crate) fn prepare_check_with_context(
         &group.context_digest(),
     )
     .map_err(|error| internal(&error.to_string()))?;
-    let prepared = materialize(group, &home, cwd, check, deadline);
+    let prepared = materialize(group, &home, cwd, check, &runtime, deadline);
     match prepared {
         Ok(parts) => Ok(OwnedCheck {
             qualified: parts.qualified,
@@ -261,6 +264,7 @@ fn materialize(
     home: &Path,
     cwd: PathBuf,
     check: &DiscoveredCheck,
+    runtime: &velnor_actions_mise::catalog::lock::ApprovedMiseRuntime,
     deadline: CheckDeadline,
 ) -> Result<PreparedParts, OrchestratorError> {
     for name in [
@@ -277,7 +281,7 @@ fn materialize(
         std::fs::create_dir(home.join(name)).map_err(|_| internal("check_home_creation"))?;
         checkpoint(deadline)?;
     }
-    binary::project_mise_binary(home, check.check.runner.platform, deadline)?;
+    binary::project_mise_binary(home, check.check.runner.platform, runtime, deadline)?;
     crate::exclusive_write::write_exclusive_until(
         &home.join("empty.toml"),
         b"",
@@ -305,6 +309,7 @@ fn materialize(
         check.clone(),
         proof.proof,
         &system_tools,
+        runtime.version.clone(),
     )
     .map_err(|e| internal(&e.to_string()))?;
     qualified
