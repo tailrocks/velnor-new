@@ -47,3 +47,22 @@ Security terminal clock; later activity remains pending until the summary catche
 missing fields, silence and threshold-only signals never replace the summary.
 The retained wire fixture and parser tests establish this historical shape; they
 do not qualify automatic review of live writer-App PRs or activate unattended merge.
+
+Resolved human inline findings are feedback dispositions, not provider status.
+The previous classification rejected human replies together with unknown provider
+evidence. A reply is admissible only
+when REST and GraphQL identify the same human author, reply, parent and resolved
+thread, and the reply is bound to that authenticated provider thread. Its review
+container must be an empty-body `COMMENTED` review by the same author whose
+comments consist exclusively of admitted replies. Orphan replies, mixed or
+nonempty containers, and incomplete or inconsistent identity or parent data
+block completion. Authenticated provider-authored thread activity continues to
+follow the existing provider identity and receipt rules.
+
+The emitter authenticates the complete feedback and finding custody, including
+admitted human replies and their review containers, in its history digest. Both
+exact-head Code and Security terminal clocks must be later than the latest
+admitted reply or container activity as well as known finding edits and review
+restarts; later activity leaves completion pending until both summaries catch
+up. Unknown or malformed feedback remains blocked. This admission rule adds no
+standalone operator emitter or permissions.

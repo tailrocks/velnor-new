@@ -81,8 +81,21 @@ case "$route" in
        reply 200 review-editor.json ;;
      'query($id:ID!){node(id:$id){... on PullRequestReview{fullDatabaseId body submittedAt lastEditedAt commit{oid} author{__typename ... on Bot{databaseId}} editor{__typename ... on Bot{databaseId}}}}}')
        [ "$node_count" -eq 1 ] && [ "$owner_count" -eq 0 ] && [ "$name_count" -eq 0 ] && [ "$number_count" -eq 0 ] && [ "$cursor_count" -eq 0 ] || transport_error invalid-review-editor-query-shape
-       [ "$node" = PRR_codex_review ] || transport_error unmapped-graphql-node
-       reply 200 review-full-editor.json ;;
+       case "$node" in
+         PRR_codex_review) reply 200 review-full-editor.json ;;
+         PRR_codex_followup) reply 200 review-followup-editor.json ;;
+         *) transport_error unmapped-graphql-node ;;
+       esac ;;
+     'query($id:ID!){node(id:$id){... on PullRequestReview{fullDatabaseId body submittedAt lastEditedAt commit{oid} author{__typename ... on User{databaseId} ... on Bot{databaseId}} editor{__typename ... on User{databaseId} ... on Bot{databaseId}}}}}')
+       [ "$node_count" -eq 1 ] && [ "$owner_count" -eq 0 ] && [ "$name_count" -eq 0 ] && [ "$number_count" -eq 0 ] && [ "$cursor_count" -eq 0 ] || transport_error invalid-user-review-editor-query-shape
+       case "$node" in
+         PRR_codex_review) reply 200 review-full-editor.json ;;
+         PRR_codex_followup) reply 200 review-followup-editor.json ;;
+         PRR_human_reply_0) reply 200 review-human-0.json ;;
+         PRR_human_reply_1) reply 200 review-human-1.json ;;
+         PRR_human_reply_orphan) reply 200 review-human-0.json ;;
+         *) transport_error unmapped-graphql-node ;;
+       esac ;;
      'query($id:ID!,$cursor:String){node(id:$id){... on PullRequestReviewThread{id isResolved isOutdated pullRequest{number repository{nameWithOwner}} comments(first:100,after:$cursor){nodes{id databaseId body updatedAt lastEditedAt author{__typename ... on Bot{databaseId}} editor{__typename ... on Bot{databaseId}} pullRequestReview{databaseId}} pageInfo{hasNextPage endCursor}}}}')
        [ "$node_count" -eq 1 ] && [ "$owner_count" -eq 0 ] && [ "$name_count" -eq 0 ] && [ "$number_count" -eq 0 ] && [ "$cursor_count" -eq 0 ] || transport_error invalid-review-thread-query-shape
        [ "$node" = PRRT_codex_inline ] || transport_error unmapped-graphql-node
@@ -91,6 +104,14 @@ case "$route" in
        [ "$node_count" -eq 1 ] && [ "$owner_count" -eq 0 ] && [ "$name_count" -eq 0 ] && [ "$number_count" -eq 0 ] && [ "$cursor_count" -eq 0 ] || transport_error invalid-review-thread-query-shape
        [ "$node" = PRRT_codex_inline ] || transport_error unmapped-graphql-node
        reply 200 review-thread-full.json ;;
+     'query($id:ID!,$cursor:String){node(id:$id){... on PullRequestReviewThread{id isResolved isOutdated pullRequest{number repository{nameWithOwner}} comments(first:100,after:$cursor){nodes{id fullDatabaseId body createdAt updatedAt lastEditedAt author{__typename ... on User{databaseId} ... on Bot{databaseId}} editor{__typename ... on User{databaseId} ... on Bot{databaseId}} pullRequestReview{fullDatabaseId} replyTo{id fullDatabaseId author{__typename ... on User{databaseId} ... on Bot{databaseId}}}} pageInfo{hasNextPage endCursor}}}}}')
+       [ "$node_count" -eq 1 ] && [ "$owner_count" -eq 0 ] && [ "$name_count" -eq 0 ] && [ "$number_count" -eq 0 ] && [ "$cursor_count" -eq 0 ] || transport_error invalid-human-review-thread-query-shape
+       [ "$node" = PRRT_codex_inline ] || transport_error unmapped-graphql-node
+       if [ -f "$state/review-thread-human.json" ]; then
+         reply 200 review-thread-human.json
+       else
+         reply 200 review-thread-expanded.json
+       fi ;;
      'query($owner:String!,$name:String!,$number:Int!,$cursor:String){repository(owner:$owner,name:$name){pullRequest(number:$number){reviewThreads(first:100,after:$cursor){nodes{id isResolved isOutdated} pageInfo{hasNextPage endCursor}}}}}')
        [ "$node_count" -eq 0 ] && [ "$owner_count" -eq 1 ] && [ "$name_count" -eq 1 ] && [ "$number_count" -eq 1 ] && [ "$cursor_count" -eq 0 ] && [ "$owner" = jackin-project ] && [ "$name" = homebrew-tap ] && [ "$number" = 514 ] && [ -z "$cursor" ] || transport_error invalid-threads-query-shape
        reply 200 threads.json ;;
@@ -133,6 +154,10 @@ case "$route" in
      *) transport_error invalid-check-method ;;
    esac
    if [ "$method" = GET ]; then reply 200 completion-check.json; exit $?; fi
+   if [ "$method" = POST ] && [ -f "$state/mutate-on-check-post" ]; then
+     mv "$state/issue-comments-after-capture.json" "$state/issue-comments.json" || transport_error post-capture-fixture-change
+     rm "$state/mutate-on-check-post" || transport_error post-capture-fixture-change
+   fi
    if [ "$method" = PATCH ]; then head=$(cat "$state/completion-head"); fi
    [ -n "$head" ] && [ -n "$name" ] && [ -n "$status" ] && [ -n "$conclusion" ] || transport_error missing-check-fields
    printf '%s' "$head" > "$state/completion-head"
