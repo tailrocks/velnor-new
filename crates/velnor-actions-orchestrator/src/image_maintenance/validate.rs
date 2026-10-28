@@ -196,7 +196,7 @@ pub(super) fn validate_runner_lock(bytes: &[u8]) -> Result<(), OrchestratorError
         &lock.node,
     ]
     .iter()
-    .any(|version| version.is_empty() || version.trim() != version.as_str())
+    .any(|version| !velnor_actions_contract::config::is_exact_semver(version))
     {
         return Err(internal("runner_image_lock_version"));
     }

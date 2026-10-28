@@ -51,6 +51,7 @@ toml = { workspace = true }
 turso = { workspace = true }
 uuid = { version = "=1.28.0", features = ["v4"] }
 zeroize = { workspace = true }
+velnor-actions-contract = { version = "=0.1.68", path = "../../../velnor-actions-contract" }
 velnor-runner-core = { version = "=0.1.0", path = "../velnor-runner-core" }
 velnor-runner-github = { version = "=0.1.0", path = "../velnor-runner-github" }
 

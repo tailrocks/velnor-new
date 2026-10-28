@@ -299,6 +299,41 @@ fn public_write_runner_manifest_rejects_invalid_inputs_without_output() -> TestR
 }
 
 #[test]
+fn public_write_runner_manifest_rejects_non_exact_versions_without_mutating_inputs()
+-> TestResult<()> {
+    for (pin, version) in [
+        ("runner_version", "2.338.0"),
+        ("docker_version", "29.9.1"),
+        ("buildx_version", "0.38.0"),
+        ("compose_version", "5.6.0"),
+        ("node_version", "26.12.0"),
+    ] {
+        for malformed in ["latest", "1.2.3-beta"] {
+            let lock = LOCK.replace(
+                &format!("{pin} = \"{version}\""),
+                &format!("{pin} = \"{malformed}\""),
+            );
+            let descriptor_bytes = serde_json::to_vec(&descriptors_for_lock(&lock))?;
+            let temp = tempfile::tempdir()?;
+            let (output, manifest_path) =
+                invoke(&temp, &descriptor_bytes, &lock, SOURCE, SOURCE, None)?;
+            let error = String::from_utf8(output.stderr)?;
+            assert!(
+                !output.status.success() && error.contains("worker identity"),
+                "accepted {malformed} {pin}: {error}"
+            );
+            assert!(!manifest_path.exists());
+            assert_eq!(
+                fs::read(temp.path().join("descriptors.json"))?,
+                descriptor_bytes
+            );
+            assert_eq!(fs::read(temp.path().join("runner.lock"))?, lock.as_bytes());
+        }
+    }
+    Ok(())
+}
+
+#[test]
 fn public_write_runner_manifest_preserves_existing_output() -> TestResult<()> {
     let temp = tempfile::tempdir()?;
     let bytes = serde_json::to_vec(&descriptors())?;

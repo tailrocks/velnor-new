@@ -130,7 +130,7 @@ fn read_versions(bytes: &[u8]) -> Result<Versions, HostError> {
         &lock.node,
     ]
     .iter()
-    .any(|version| version.is_empty() || version.trim() != version.as_str())
+    .any(|version| !velnor_actions_contract::config::is_exact_semver(version))
     {
         return Err(HostError::Identity);
     }

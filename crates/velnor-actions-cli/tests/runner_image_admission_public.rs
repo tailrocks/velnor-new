@@ -217,6 +217,38 @@ fn all_locked_versions_must_be_present_string_and_trimmed() -> Result<(), Box<dy
 }
 
 #[test]
+fn locked_versions_must_be_exact_semver() -> Result<(), Box<dyn Error>> {
+    let mut fixture = AdmissionFixture::new()?;
+    for pin in [
+        "runner_version",
+        "docker_version",
+        "buildx_version",
+        "compose_version",
+        "node_version",
+    ] {
+        for malformed in ["latest", "malformed"] {
+            let lock = support::lock_with_mutation(pin, malformed);
+            fixture.commit_lock(&lock)?;
+            let expected_lock = fs::read(fixture.root.join(".velnor/runner.lock"))?;
+            let expected_archives = fixture.images.bytes()?;
+            let output = support::invoke(&fixture, &fixture.images)?;
+            let error = String::from_utf8(output.stderr)?;
+            assert!(
+                !output.status.success() && error.contains("runner_image_lock_version"),
+                "accepted {malformed} {pin}: {error}"
+            );
+            assert!(!fixture.output.exists());
+            assert_eq!(
+                fs::read(fixture.root.join(".velnor/runner.lock"))?,
+                expected_lock
+            );
+            assert_eq!(fixture.images.bytes()?, expected_archives);
+        }
+    }
+    Ok(())
+}
+
+#[test]
 fn each_image_must_match_source_platform_and_authenticated_graph() -> Result<(), Box<dyn Error>> {
     let fixture = AdmissionFixture::new()?;
     for (slot, name) in [(0, "runner"), (1, "dind"), (2, "resource_probe")] {

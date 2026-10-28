@@ -251,6 +251,8 @@ pub(super) fn lock_with_mutation(pin: &str, mutation: &str) -> Vec<u8> {
             match mutation {
                 "number" => "42".to_owned(),
                 "empty" => "\"\"".to_owned(),
+                "latest" => "\"latest\"".to_owned(),
+                "malformed" => "\"1.2.3-beta\"".to_owned(),
                 "leading_whitespace" => format!("\" {version}\""),
                 "trailing_whitespace" => format!("\"{version} \""),
                 _ => unreachable!("known lock mutation"),
