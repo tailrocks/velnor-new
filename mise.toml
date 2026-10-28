@@ -79,6 +79,11 @@ TEST_MEMBERS="$(VELNOR_INTERNAL_OP=repo-policy-v1 \
   VELNOR_REPO_POLICY_ROOT="$ROOT" \
   VELNOR_REPO_POLICY_MANIFEST_PATH='' \
   cargo --config build.jobs=2 run --quiet --locked --package velnor-actions-cli --bin velnor-actions)"
+cargo fetch --locked
+(
+  cd "$ROOT/crates/velnor-runner"
+  cargo fetch --locked
+)
 for package in velnor-actions-freshness velnor-archive-guard; do
   case " $TEST_MEMBERS " in
     *" $package "*)
