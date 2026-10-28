@@ -39,20 +39,32 @@ pub struct RustSuitesRenderSpec {
     pub export_rustup_toolchain: bool,
 }
 
-pub fn build_ci_suite_jobs(
-    spec: &RustSuitesRenderSpec,
-) -> Result<BTreeMap<String, Job>, RenderError> {
+#[derive(Debug, Clone)]
+pub struct RustSuiteCiJobs {
+    pub jobs: BTreeMap<String, Job>,
+    pub drivers: BTreeMap<String, CompileDriver>,
+}
+
+pub(super) struct SuiteJob {
+    pub(super) id: String,
+    pub(super) job: Job,
+    pub(super) driver: CompileDriver,
+}
+
+pub fn build_ci_suite_jobs(spec: &RustSuitesRenderSpec) -> Result<RustSuiteCiJobs, RenderError> {
     validate_spec(spec)?;
     let mut jobs = BTreeMap::new();
+    let mut drivers = BTreeMap::new();
     for suite in &spec.suites {
         if !suite.has_pr_or_push_trigger() {
             continue;
         }
-        for (job_id, job) in build_suite_jobs_for_entry(suite, spec, false)? {
-            jobs.insert(job_id, job);
+        for suite_job in build_suite_jobs_for_entry(suite, spec, false)? {
+            drivers.insert(suite_job.id.clone(), suite_job.driver);
+            jobs.insert(suite_job.id, suite_job.job);
         }
     }
-    Ok(jobs)
+    Ok(RustSuiteCiJobs { jobs, drivers })
 }
 
 pub fn render_suites_workflow(spec: &RustSuitesRenderSpec) -> Result<Option<String>, RenderError> {
@@ -144,7 +156,7 @@ pub(super) fn build_suite_jobs_for_entry(
     suite: &RustSuiteConfig,
     spec: &RustSuitesRenderSpec,
     standalone_workflow: bool,
-) -> Result<Vec<(String, Job)>, RenderError> {
+) -> Result<Vec<SuiteJob>, RenderError> {
     let name = &suite.id;
     let runs_on = suite
         .runner_label
@@ -157,7 +169,11 @@ pub(super) fn build_suite_jobs_for_entry(
         .flatten();
     let mut jobs = if suite.partitions == 1 {
         let job = build_single_suite_job(suite, runs_on, timeout, spec, standalone_workflow)?;
-        vec![(format!("suite-{name}"), job)]
+        vec![SuiteJob {
+            id: format!("suite-{name}"),
+            job,
+            driver: spec.compile_driver,
+        }]
     } else {
         match suite.build {
             RustSuiteBuildMode::Archive => {
@@ -166,13 +182,13 @@ pub(super) fn build_suite_jobs_for_entry(
             RustSuiteBuildMode::Inline => {
                 let job =
                     build_sharded_inline_job(suite, runs_on, timeout, spec, standalone_workflow)?;
-                vec![(format!("suite-{name}"), job)]
+                vec![job]
             }
         }
     };
     if ci_condition.is_some() {
-        for (_, job) in &mut jobs {
-            job.condition.clone_from(&ci_condition);
+        for suite_job in &mut jobs {
+            suite_job.job.condition.clone_from(&ci_condition);
         }
     }
     Ok(jobs)
@@ -226,7 +242,7 @@ fn build_sharded_archive_jobs(
     timeout: JobTimeout,
     spec: &RustSuitesRenderSpec,
     standalone_workflow: bool,
-) -> Result<Vec<(String, Job)>, RenderError> {
+) -> Result<Vec<SuiteJob>, RenderError> {
     let name = &suite.id;
     let build_id = format!("suite-build-{name}");
     let run_id = format!("suite-{name}");
@@ -275,7 +291,18 @@ fn build_sharded_archive_jobs(
         vec![build_id.clone()],
         run_steps,
     );
-    Ok(vec![(build_id, build_job), (run_id, run_job)])
+    Ok(vec![
+        SuiteJob {
+            id: build_id,
+            job: build_job,
+            driver: spec.compile_driver,
+        },
+        SuiteJob {
+            id: run_id,
+            job: run_job,
+            driver: CompileDriver::Cargo,
+        },
+    ])
 }
 
 fn build_sharded_inline_job(
@@ -284,7 +311,7 @@ fn build_sharded_inline_job(
     timeout: JobTimeout,
     spec: &RustSuitesRenderSpec,
     standalone_workflow: bool,
-) -> Result<Job, RenderError> {
+) -> Result<SuiteJob, RenderError> {
     let name = &suite.id;
     let mut job_steps = vec![
         steps::checkout_step(&spec.checkout_uses)?,
@@ -301,13 +328,17 @@ fn build_sharded_inline_job(
     )?);
     job_steps.extend(suite_steps::producer_mark_steps(spec)?);
     append_suite_artifact_uploads(&mut job_steps, suite, true)?;
-    Ok(suite_job_record(
-        format!("Suite ({name})"),
-        runs_on,
-        timeout,
-        Vec::new(),
-        job_steps,
-    ))
+    Ok(SuiteJob {
+        id: format!("suite-{name}"),
+        job: suite_job_record(
+            format!("Suite ({name})"),
+            runs_on,
+            timeout,
+            Vec::new(),
+            job_steps,
+        ),
+        driver: spec.compile_driver,
+    })
 }
 
 fn suite_job_record(

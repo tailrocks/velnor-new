@@ -148,6 +148,11 @@ other task kind. The generated job key is `task-{id}`. This native job remains
 a single hosted macOS 26 ARM64 job in every schema-2 execution mode; it checks out the same run source and
 does not accept a repository or ref override.
 
+The observed `task-{id}` job must match exactly one registered workflow-task
+owner and that owner's declared runner. Velnor admits the registered source
+before runner validation; unknown sources, ambiguous owners, runner mismatches,
+and missing `Required` fan-in still fail closed.
+
 The job checks for Xcode 26.6 build 17F113 and macOS SDK 26.5 under
 `/Applications/Xcode_26.6.app/Contents/Developer`. Checkout disables
 persisted credentials. The pinned Mise action sets up only Mise itself. The
@@ -168,14 +173,41 @@ execution. The declared task runs from the checked-out root with
 `CARGO_BUILD_JOBS` and `NEXTEST_TEST_THREADS` from the validated limits,
 Mise task and exec auto-install disabled, and the same Xcode developer
 directory. Every shell step clears credential variables; the job grants only
-`contents: read` and creates no cache, artifact, or downstream output. The consumer's own
-task must bound SwiftPM invocation in its explicit task argv; Velnor does not
-invent a SwiftPM environment alias.
+`contents: read` and creates no cache or job output. A build task may declare
+optional artifact uploads. Each entry has a literal `name`, exactly one `paths`
+entry, `retention_days` from 1 through 90, and an optional `when` value of
+`failure`, `success`, or `always` (default `failure`):
+
+```toml
+artifacts = [
+  { name = "native-evidence", paths = ["artifacts/native-evidence.json"], when = "always", retention_days = 7 },
+]
+```
+
+Velnor accepts at most 500 artifact entries for one build task and rejects any
+path pattern containing `$`. The task step has the stable ID
+`build-task-run`. A `success` upload uses
+`always() && steps.build-task-run.outcome == 'success'`; a `failure` upload uses
+`always() && steps.build-task-run.outcome == 'failure'`; `always` uses
+`always()`. Build-task uploads set `include-hidden-files: true`, so a declared
+hidden file follows the same required-file behavior as any other path. Rust
+Suite uploads keep their existing hidden-file and warn-on-missing behavior.
+
+The renderer appends one upload step after the task for each entry and sets
+`if-no-files-found: error`. An absent or empty `artifacts` list adds no upload
+step. The declared condition controls whether the step runs after task success
+or failure. When an upload step runs, a missing artifact fails that step; any upload
+failure fails the same task job and its required check. For required machine evidence, declare the exact result-file
+path and have the task validate the complete evidence manifest before it exits;
+a directory or glob does not prove that the required file exists or is complete.
+The consumer's own task must bound SwiftPM invocation in its explicit task argv;
+Velnor does not invent a SwiftPM environment alias.
 
 Each declared native job is reconstructed and compared exactly during strict
 rendering. Undeclared `task-*` jobs, alternate runner labels, checkout
-source overrides, extra permissions, caches, artifacts, or altered task steps
-fail closed. Every native job ID is added to `Required.needs`, so failure,
+source overrides, extra permissions, caches, undeclared artifacts, or altered
+task steps fail closed. Only upload steps reconstructed from the declared
+`artifacts` entries are accepted. Every native job ID is added to `Required.needs`, so failure,
 skip, or cancellation prevents the required check from succeeding. The
 compile-free `verification` variant remains separate in behavior and cannot
 acquire the native build capability by adding fields.

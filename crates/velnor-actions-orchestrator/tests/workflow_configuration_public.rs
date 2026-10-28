@@ -53,6 +53,14 @@ mod feature_toggles;
 mod final_fanin;
 #[path = "workflow_configuration_public/maintenance_features.rs"]
 mod maintenance_features;
+#[path = "workflow_configuration_public/native_artifacts.rs"]
+mod native_artifacts;
+#[path = "workflow_configuration_public/native_artifacts_fixture.rs"]
+mod native_artifacts_fixture;
+#[path = "workflow_configuration_public/native_artifacts_suite_gate.rs"]
+mod native_artifacts_suite_gate;
+#[path = "workflow_configuration_public/native_artifacts_suites.rs"]
+mod native_artifacts_suites;
 #[path = "workflow_configuration_public/parallel_owners.rs"]
 mod parallel_owners;
 #[path = "workflow_configuration_public/release_bun_prerequisite.rs"]

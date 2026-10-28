@@ -30,11 +30,28 @@ pub(crate) fn validate_task_suite_artifact(
     file: &str,
     prefix: &str,
 ) -> Result<(), ContractError> {
+    validate_task_artifact(artifact, file, prefix, "task_suite")
+}
+
+pub(crate) fn validate_build_task_artifact(
+    artifact: &RustSuiteArtifact,
+    file: &str,
+    prefix: &str,
+) -> Result<(), ContractError> {
+    validate_task_artifact(artifact, file, prefix, "build_task")
+}
+
+fn validate_task_artifact(
+    artifact: &RustSuiteArtifact,
+    file: &str,
+    prefix: &str,
+    kind: &str,
+) -> Result<(), ContractError> {
     if artifact.name.contains('{') || artifact.name.contains('}') {
         return Err(cfg_err(
             file,
             format!("{prefix}.name"),
-            format!("task_suite_artifact_name_must_be_literal:{}", artifact.name),
+            format!("{kind}_artifact_name_must_be_literal:{}", artifact.name),
         ));
     }
     rules::validate_suite_artifact(artifact, file, prefix)?;
@@ -42,7 +59,7 @@ pub(crate) fn validate_task_suite_artifact(
         return Err(cfg_err(
             file,
             format!("{prefix}.paths"),
-            "task_suite_artifact_requires_one_path_pattern",
+            format!("{kind}_artifact_requires_one_path_pattern"),
         ));
     }
     Ok(())
