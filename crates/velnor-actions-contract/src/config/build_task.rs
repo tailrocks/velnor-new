@@ -176,6 +176,13 @@ fn validate_build_task_artifacts(
     artifacts: &[RustSuiteArtifact],
     file: &str,
 ) -> Result<(), ContractError> {
+    if artifacts.len() > 500 {
+        return Err(ContractError::config(
+            file,
+            "workflow.tasks.artifacts",
+            "build_task_artifact_count_exceeds_job_limit",
+        ));
+    }
     let mut artifact_names = BTreeSet::new();
     for (index, artifact) in artifacts.iter().enumerate() {
         if !artifact_names.insert(artifact.name.as_str()) {
@@ -183,6 +190,13 @@ fn validate_build_task_artifacts(
                 file,
                 format!("workflow.tasks.artifacts[{index}].name"),
                 format!("duplicate_build_task_artifact:{}", artifact.name),
+            ));
+        }
+        if artifact.paths.iter().any(|path| path.contains('$')) {
+            return Err(ContractError::config(
+                file,
+                format!("workflow.tasks.artifacts[{index}].paths"),
+                "build_task_artifact_path_contains_dollar",
             ));
         }
         super::rust_suites_validate::validate_build_task_artifact(

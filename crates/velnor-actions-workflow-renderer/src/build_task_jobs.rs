@@ -5,7 +5,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_actions_contract::{
     BuildTask, BuildTaskXcodeCapability, Job, JobTimeout, PermissionLevel, Permissions, Step,
-    WORKFLOW_TASK_JOB_PREFIX,
+    StepId, StepRole, WORKFLOW_TASK_JOB_PREFIX,
 };
 
 use crate::verification_jobs::build_task_mise::{
@@ -141,6 +141,13 @@ fn build_task_steps(
         (CARGO_BINSTALL_ONLY_ENV.to_owned(), "1".to_owned()),
     ];
 
+    let mut run_task = shell_step(
+        RUN_BUILD_TASK_NAME,
+        bash_script(&run_build_task_script(policy)?),
+        resource_limits,
+    )?;
+    run_task.id = Some(StepId::BuildTaskRun);
+    run_task.role = Some(StepRole::BuildTaskRun);
     let mut job_steps = vec![
         steps::checkout_step(checkout_uses)?,
         shell_step(
@@ -159,11 +166,7 @@ fn build_task_steps(
             bash_script(&source_guard_script(policy)?),
             script_env.iter().cloned().collect(),
         )?,
-        shell_step(
-            RUN_BUILD_TASK_NAME,
-            bash_script(&run_build_task_script(policy)?),
-            resource_limits,
-        )?,
+        run_task,
     ];
     for artifact in &policy.task.artifacts {
         let Some(path) = artifact.paths.first() else {

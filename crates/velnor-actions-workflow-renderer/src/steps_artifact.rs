@@ -3,7 +3,7 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::{Step, StepRole};
+use velnor_actions_contract::{RustSuiteArtifactWhen, Step, StepId, StepRole};
 
 use super::steps::{
     ARTIFACT_RETENTION_DAYS, CRATE_REPORT_UPLOAD_NAME, DOWNLOAD_ARTIFACT_USES,
@@ -108,7 +108,15 @@ pub fn upload_suite_artifact_step(
     retention_days: u32,
     when: velnor_actions_contract::RustSuiteArtifactWhen,
 ) -> Result<Step, RenderError> {
-    upload_task_artifact_step(step_name, artifact_name, path, retention_days, when, "warn")
+    upload_task_artifact_step(
+        step_name,
+        artifact_name,
+        path,
+        retention_days,
+        when.github_condition(),
+        "warn",
+        false,
+    )
 }
 
 pub fn upload_build_task_artifact_step(
@@ -126,13 +134,25 @@ pub fn upload_build_task_artifact_step(
         task_id.len(),
         artifact_label.len(),
     );
+    let condition = match when {
+        RustSuiteArtifactWhen::Failure => format!(
+            "always() && steps.{}.outcome == 'failure'",
+            StepId::BuildTaskRun.as_str()
+        ),
+        RustSuiteArtifactWhen::Always => "always()".to_owned(),
+        RustSuiteArtifactWhen::Success => format!(
+            "always() && steps.{}.outcome == 'success'",
+            StepId::BuildTaskRun.as_str()
+        ),
+    };
     upload_task_artifact_step(
         "Upload build-task artifact",
         &artifact_name,
         path,
         u32::from(retention_days),
-        when,
+        &condition,
         "error",
+        true,
     )
 }
 
@@ -141,8 +161,9 @@ fn upload_task_artifact_step(
     artifact_name: &str,
     path: &str,
     retention_days: u32,
-    when: velnor_actions_contract::RustSuiteArtifactWhen,
+    condition: &str,
     if_no_files_found: &str,
+    include_hidden_files: bool,
 ) -> Result<Step, RenderError> {
     if artifact_name.trim().is_empty()
         || path.trim().is_empty()
@@ -153,17 +174,17 @@ fn upload_task_artifact_step(
     for entry in path.lines() {
         artifact_paths::check_artifact_path(entry)?;
     }
-    let mut step = action_step(
-        step_name,
-        UPLOAD_ARTIFACT_USES,
-        BTreeMap::from([
-            ("name".to_owned(), artifact_name.to_owned()),
-            ("path".to_owned(), path.to_owned()),
-            ("if-no-files-found".to_owned(), if_no_files_found.to_owned()),
-            ("retention-days".to_owned(), retention_days.to_string()),
-        ]),
-    )?;
-    step.condition = Some(when.github_condition().to_owned());
+    let mut with = BTreeMap::from([
+        ("name".to_owned(), artifact_name.to_owned()),
+        ("path".to_owned(), path.to_owned()),
+        ("if-no-files-found".to_owned(), if_no_files_found.to_owned()),
+        ("retention-days".to_owned(), retention_days.to_string()),
+    ]);
+    if include_hidden_files {
+        with.insert("include-hidden-files".to_owned(), "true".to_owned());
+    }
+    let mut step = action_step(step_name, UPLOAD_ARTIFACT_USES, with)?;
+    step.condition = Some(condition.to_owned());
     Ok(step)
 }
 

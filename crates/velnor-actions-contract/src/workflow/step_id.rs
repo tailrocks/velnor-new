@@ -10,6 +10,8 @@ pub const GRADLE_RUN_OPERATION: &str = "gradle-run-v1";
 pub enum StepId {
     Plan,
 
+    BuildTaskRun,
+
     ToolsCacheIdentity,
 
     TofuProviders,
@@ -50,6 +52,7 @@ impl StepId {
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Plan => "plan",
+            Self::BuildTaskRun => "build-task-run",
             Self::ToolsCacheIdentity => "v2",
             Self::TofuProviders => "tofu-providers",
             Self::MbxReady => "mbx-ready",
