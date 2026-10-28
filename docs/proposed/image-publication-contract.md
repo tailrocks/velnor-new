@@ -242,3 +242,13 @@ Not blocking: the Mise Linux arm64 digest is published in the upstream
 `SHASUMS256.txt` the source-build bootstrap already uses, and Mr. Boxington
 ships a Linux aarch64 asset (the bootstrap catalog pins it). Generalizing the
 four code points above and running the hosted qualification unblocks it.
+
+## Runner-family distribution
+
+The [Runner image release contract](runner-image-release.md) defines the
+owner-approved GHCR profile for Runner, DinD, and the resource probe. It reuses
+the existing fixed image-authority registry transport and exact-byte publisher,
+with explicit package scope and source-SHA tags. Its single-platform manifest
+and authenticated GitHub Release inventory are distinct from job-candidate
+evidence and the general multi-platform `[[images]]` promotion contract above.
+Neither existing publication path is duplicated or weakened for that profile.

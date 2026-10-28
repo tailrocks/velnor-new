@@ -2,9 +2,20 @@
 
 Platform: `linux/amd64`. ARM64 is not the baseline.
 
+Build with one standard command:
+
 ```sh
-docker build --platform linux/amd64 -t velnor-runner:ubuntu-26.04-2.338.0 images/runner/ubuntu-26.04
+docker build --platform linux/amd64 -t velnor-runner:2.338.0 images/runner/ubuntu-26.04
 ```
+
+Build and integration qualification are separate operations. Required checks
+cover the exact source and clean checkout before and after execution,
+immutable image identities, `linux/amd64`, and locked Runner and Docker
+versions. A Runner-image Docker client must reach its private DinD Unix socket
+and a daemon distinct from the outer daemon. Bounded cleanup must remove only
+the test's owned containers and volumes and preserve unrelated resources and
+both input images. See the
+[Runner image release contract](../../../docs/proposed/runner-image-release.md).
 
 Official [actions/runner `2.338.0` release](https://github.com/actions/runner/releases/tag/v2.338.0)
 linux-x64, SHA256

@@ -15,6 +15,13 @@ mod source;
 #[path = "image_maintenance/validate.rs"]
 mod validate;
 
+#[path = "image_maintenance/runner_admission.rs"]
+mod runner_admission;
+#[path = "image_maintenance/runner_profiles.rs"]
+mod runner_profiles;
+#[path = "image_maintenance/publication.rs"]
+mod publication;
+
 #[derive(Debug, Clone)]
 pub struct InstallBuildxRequest {
     pub root: PathBuf,
@@ -50,6 +57,39 @@ pub struct ValidateJobCandidateRequest {
     pub deadline: CheckDeadline,
 }
 
+#[derive(Debug, Clone)]
+pub struct AdmitRunnerImagesRequest {
+    pub root: PathBuf,
+    pub source_commit: String,
+    pub runner_archive: PathBuf,
+    pub dind_archive: PathBuf,
+    pub probe_archive: PathBuf,
+    pub descriptors_output: PathBuf,
+    pub deadline: CheckDeadline,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ImagePublicationProfile {
+    Job,
+    Runner,
+    Dind,
+    ResourceProbe,
+}
+
+#[derive(Debug, Clone)]
+pub struct PublishImageRequest {
+    pub profile: ImagePublicationProfile,
+    pub source_commit: String,
+    pub producer_run_id: u64,
+    pub producer_run_attempt: u32,
+    pub artifact_id: u64,
+    pub archive_path: PathBuf,
+    pub record_path: PathBuf,
+    pub private_scratch: PathBuf,
+    pub receipt_output: PathBuf,
+    pub deadline: CheckDeadline,
+}
+
 pub fn install_buildx(request: &InstallBuildxRequest) -> Result<(), OrchestratorError> {
     build::install_buildx(request)
 }
@@ -66,4 +106,14 @@ pub fn validate_job_candidate(
     request: &ValidateJobCandidateRequest,
 ) -> Result<(), OrchestratorError> {
     validate::validate_job_candidate(request)
+}
+
+pub fn admit_runner_images(
+    request: &AdmitRunnerImagesRequest,
+) -> Result<(), OrchestratorError> {
+    runner_admission::admit_runner_images(request)
+}
+
+pub fn publish_image(request: &PublishImageRequest) -> Result<(), OrchestratorError> {
+    publication::publish_image(request)
 }

@@ -22,6 +22,7 @@ use super::{
 const METADATA_LIMIT: usize = 1024 * 1024;
 const BLOB_LIMIT: usize = 64;
 
+#[derive(Clone, Copy)]
 pub(super) struct Blob {
     pub(super) offset: u64,
     pub(super) size: u64,
@@ -290,7 +291,7 @@ fn is_hex_digest(value: &str) -> bool {
             .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
 }
 
-fn hex(bytes: &[u8]) -> String {
+pub(super) fn hex(bytes: &[u8]) -> String {
     const DIGITS: &[u8; 16] = b"0123456789abcdef";
     let mut encoded = String::with_capacity(bytes.len() * 2);
     for byte in bytes {

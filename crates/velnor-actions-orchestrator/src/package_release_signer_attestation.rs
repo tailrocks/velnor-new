@@ -62,8 +62,10 @@ pub(super) fn verify_release_attestation(
     let expectation = AttestationExpectation {
         repository_uri: &repository_uri,
         owner_uri: &owner_uri,
-        workflow_uri: &workflow_uri,
-        workflow_sha: &expected.workflow_sha,
+        caller_workflow_uri: &workflow_uri,
+        caller_workflow_sha: &expected.workflow_sha,
+        signer_workflow_uri: &workflow_uri,
+        signer_workflow_sha: &expected.workflow_sha,
         source_sha: &expected.source_sha,
         source_ref: &expected.source_ref,
         run_id: expected.run_id,
@@ -255,8 +257,10 @@ struct Certificate {
 struct AttestationExpectation<'a> {
     repository_uri: &'a str,
     owner_uri: &'a str,
-    workflow_uri: &'a str,
-    workflow_sha: &'a str,
+    caller_workflow_uri: &'a str,
+    caller_workflow_sha: &'a str,
+    signer_workflow_uri: &'a str,
+    signer_workflow_sha: &'a str,
     source_sha: &'a str,
     source_ref: &'a str,
     run_id: u64,
@@ -273,54 +277,42 @@ fn validate_output(
     requested_name: &str,
     requested_digest: &str,
 ) -> Result<(), OrchestratorError> {
+    validate_output_with_additional_names(bytes, expected_subjects, &[], expected)?;
     let attestations: Vec<VerifiedAttestation> = serde_json::from_slice(bytes)
         .map_err(|_| internal("package_attestation_output_invalid"))?;
-    if attestations.len() != 1 {
-        return Err(internal("package_attestation_ambiguous"));
-    }
     let verified = &attestations[0].verification_result;
-    if verified.statement.predicate_type != PREDICATE {
-        return Err(internal("package_attestation_predicate_mismatch"));
-    }
-    if verified
+    let found = verified
         .statement
-        .predicate
-        .build_definition
-        .internal_parameters
-        .github
-        .event_name
-        != expected.trigger
-    {
-        return Err(internal("package_attestation_event_mismatch"));
-    }
-    let mut found = BTreeMap::new();
-    for subject in &verified.statement.subject {
-        let digest = subject
-            .digest
-            .get("sha256")
-            .ok_or_else(|| internal("package_attestation_subject_digest_invalid"))?;
-        if subject.digest.len() != 1 || found.insert(subject.name.clone(), digest.clone()).is_some()
-        {
-            return Err(internal("package_attestation_subject_inventory_invalid"));
-        }
-    }
-    if &found != expected_subjects
-        || found.get(requested_name).map(String::as_str) != Some(requested_digest)
-    {
+        .subject
+        .iter()
+        .filter_map(|subject| {
+            subject
+                .digest
+                .get("sha256")
+                .map(|digest| (subject.name.as_str(), digest.as_str()))
+        })
+        .collect::<BTreeMap<_, _>>();
+    if found.get(requested_name).copied() != Some(requested_digest) {
         return Err(internal("package_attestation_subject_inventory_mismatch"));
     }
-    let certificate = &verified.signature.certificate;
+    Ok(())
+}
+
+fn validate_certificate(
+    certificate: &Certificate,
+    expected: &AttestationExpectation<'_>,
+) -> Result<(), OrchestratorError> {
     if certificate.issuer != OIDC_ISSUER
-        || certificate.subject_alternative_name != expected.workflow_uri
+        || certificate.subject_alternative_name != expected.signer_workflow_uri
         || certificate.source_repository_uri != expected.repository_uri
         || certificate.source_repository_owner_uri != expected.owner_uri
         || certificate.source_repository_identifier != expected.repository_id
         || certificate.source_repository_digest != expected.source_sha
         || certificate.source_repository_ref != expected.source_ref
-        || certificate.build_signer_uri != expected.workflow_uri
-        || certificate.build_signer_digest != expected.workflow_sha
-        || certificate.build_config_uri != expected.workflow_uri
-        || certificate.build_config_digest != expected.workflow_sha
+        || certificate.build_signer_uri != expected.signer_workflow_uri
+        || certificate.build_signer_digest != expected.signer_workflow_sha
+        || certificate.build_config_uri != expected.caller_workflow_uri
+        || certificate.build_config_digest != expected.caller_workflow_sha
         || certificate.build_trigger != expected.trigger
         || certificate.run_invocation_uri != expected.invocation_uri
         || certificate.runner_environment != "github-hosted"
@@ -344,6 +336,13 @@ fn validate_output(
     Ok(())
 }
 
+fn is_sha256(value: &str) -> bool {
+    value.len() == 64
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+}
+
 fn sha256(bytes: &[u8]) -> String {
     const HEX: &[u8; 16] = b"0123456789abcdef";
     let mut output = String::with_capacity(64);
@@ -356,6 +355,12 @@ fn sha256(bytes: &[u8]) -> String {
 
 #[path = "package_release_signer_attestation_sdk.rs"]
 mod sdk;
+#[path = "package_release_signer_attestation_output.rs"]
+mod output;
+use output::validate_output_with_additional_names;
+#[path = "package_release_signer_attestation_image.rs"]
+mod image;
+pub(crate) use image::{ImageAttestationIdentity, verify_image_file_attestation};
 #[path = "package_release_signer_attestation_subjects.rs"]
 mod subjects;
 

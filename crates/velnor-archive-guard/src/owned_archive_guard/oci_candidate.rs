@@ -3,13 +3,16 @@
 
 mod archive;
 mod archive_tar_framing;
+mod config;
 mod graph;
 mod json;
 mod layer;
+mod materialize;
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use archive::load_archive;
+pub use config::OciImageConfiguration;
 use graph::inspect_graph;
 
 pub const MAX_OCI_CANDIDATE_ARCHIVE_BYTES: u64 = 4 * 1024 * 1024 * 1024;
@@ -32,6 +35,12 @@ pub struct OciCandidateEvidence {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OciCandidateInspection {
+    pub evidence: OciCandidateEvidence,
+    pub configuration: OciImageConfiguration,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OciCandidateError(&'static str);
 
 impl std::fmt::Display for OciCandidateError {
@@ -42,9 +51,54 @@ impl std::fmt::Display for OciCandidateError {
 
 impl std::error::Error for OciCandidateError {}
 
+#[derive(Debug)]
+pub enum OciMaterializeError {
+    Candidate(OciCandidateError),
+    CleanupFailure { destination: PathBuf },
+}
+
+impl std::fmt::Display for OciMaterializeError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Candidate(error) => std::fmt::Display::fmt(error, f),
+            Self::CleanupFailure { destination } => {
+                write!(f, "oci_projection_cleanup: {}", destination.display())
+            }
+        }
+    }
+}
+
+impl std::error::Error for OciMaterializeError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Candidate(error) => Some(error),
+            Self::CleanupFailure { .. } => None,
+        }
+    }
+}
+
+impl From<OciCandidateError> for OciMaterializeError {
+    fn from(error: OciCandidateError) -> Self {
+        Self::Candidate(error)
+    }
+}
+
 pub(crate) type Result<T> = std::result::Result<T, OciCandidateError>;
 
 pub fn inspect_oci_candidate(path: &Path) -> Result<OciCandidateEvidence> {
     let archive = load_archive(path)?;
     inspect_graph(archive)
+}
+
+pub fn inspect_oci_candidate_with_config(path: &Path) -> Result<OciCandidateInspection> {
+    let archive = load_archive(path)?;
+    graph::inspect_graph_with_config(archive)
+}
+
+pub fn materialize_oci_candidate(
+    archive: &Path,
+    destination: &Path,
+    expected: &OciCandidateEvidence,
+) -> std::result::Result<OciCandidateEvidence, OciMaterializeError> {
+    materialize::materialize_oci_candidate(archive, destination, expected)
 }

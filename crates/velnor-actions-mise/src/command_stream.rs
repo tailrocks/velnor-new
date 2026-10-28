@@ -71,6 +71,20 @@ pub(super) struct Streams<'a> {
 
 #[cfg(unix)]
 impl<'a> Streams<'a> {
+    pub(super) fn file(output: &'a mut std::fs::File, stdout_cap: u64, stderr_cap: usize) -> Self {
+        Self {
+            stdout: Sink::File(output),
+            stdout_cap,
+            stdout_bytes: 0,
+            stderr_cap,
+            progress: None,
+        }
+    }
+
+    pub(super) const fn stdout_bytes(&self) -> u64 {
+        self.stdout_bytes
+    }
+
     pub(super) fn memory(cap: usize) -> Self {
         Self {
             stdout: Sink::Memory(Vec::with_capacity(cap.min(64 * 1024))),

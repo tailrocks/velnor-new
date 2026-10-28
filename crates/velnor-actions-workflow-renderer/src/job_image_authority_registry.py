@@ -17,10 +17,88 @@ from urllib.parse import parse_qsl, unquote, urlencode, urljoin, urlsplit, urlun
 REGISTRY = "ghcr.io"
 DOWNLOAD_HOST = "pkg-containers.githubusercontent.com"
 PACKAGE = "tailrocks/velnor-job"
+ALLOWED_PACKAGES = frozenset(
+    {
+        "tailrocks/velnor-job",
+        "tailrocks/velnor-runner",
+        "tailrocks/velnor-dind",
+        "tailrocks/velnor-resource-probe",
+    }
+)
 
 
 class AuthorityError(ValueError):
     pass
+
+
+class PackageScope:
+    __slots__ = ("_package", "_source_sha")
+
+    def __init__(self, package, source_sha):
+        _validate_package(package)
+        if not isinstance(source_sha, str) or not re.fullmatch(r"[0-9a-f]{40}", source_sha):
+            raise AuthorityError("Registry source SHA is incorrect.")
+        object.__setattr__(self, "_package", package)
+        object.__setattr__(self, "_source_sha", source_sha)
+
+    def __setattr__(self, name, value):
+        raise AttributeError("Registry package scope is immutable.")
+
+    def __delattr__(self, name):
+        raise AttributeError("Registry package scope is immutable.")
+
+    @property
+    def PACKAGE(self):
+        return self._package
+
+    @property
+    def SOURCE_SHA(self):
+        return self._source_sha
+
+    @property
+    def REGISTRY(self):
+        return REGISTRY
+
+    @property
+    def DOWNLOAD_HOST(self):
+        return DOWNLOAD_HOST
+
+    def registry_url(self, path):
+        return registry_url(path, self._package)
+
+    def validate_upload_location(self, base, location):
+        return validate_upload_location(base, location, self._package)
+
+    def upload_target(self, location, digest):
+        return upload_target(location, digest)
+
+    def parse_auth_challenge(self, value):
+        return parse_auth_challenge(value)
+
+    def token_request_url(self, params):
+        return token_request_url(params, self._package)
+
+    def parse_token_payload(self, data):
+        return parse_token_payload(data)
+
+    def check_head_response(self, status, headers, digest, size):
+        return check_head_response(status, headers, digest, size)
+
+    def redirect_target(self, path, digest, status, location):
+        return redirect_target(path, digest, status, location, self._package)
+
+    def check_get_response(self, status, headers, body, digest, size, expected):
+        return check_get_response(status, headers, body, digest, size, expected)
+
+
+def package_scope(package, source_sha):
+    return PackageScope(package, source_sha)
+
+
+def _validate_package(package):
+    if not isinstance(package, str) or package not in ALLOWED_PACKAGES:
+        raise AuthorityError("Registry package is not admitted.")
+    return package
 
 
 def _unique_object(pairs):
@@ -43,8 +121,9 @@ def _token_json(data, label):
         raise AuthorityError(f"{label} has an incorrect format.") from error
 
 
-def registry_url(path):
-    return f"https://{REGISTRY}/v2/{PACKAGE}/{path}"
+def registry_url(path, package=PACKAGE):
+    _validate_package(package)
+    return f"https://{REGISTRY}/v2/{package}/{path}"
 
 
 def blob_download_location(location, digest):
@@ -70,7 +149,8 @@ def blob_download_location(location, digest):
     return urlunsplit(("", "", parts.path, parts.query, ""))
 
 
-def validate_upload_location(base, location):
+def validate_upload_location(base, location, package=PACKAGE):
+    _validate_package(package)
     if not location or len(location) > 4096 or "\\" in location or any(ord(char) < 32 or ord(char) == 127 for char in location):
         raise AuthorityError("Registry upload location is missing or too long.")
     try:
@@ -85,8 +165,8 @@ def validate_upload_location(base, location):
         raise AuthorityError("Registry upload location is outside the fixed HTTPS upload path.")
     decoded_path = unquote(parsed.path)
     expected_prefixes = (
-        f"/v2/{PACKAGE}/blobs/upload/",
-        f"/v2/{PACKAGE}/blobs/uploads/",
+        f"/v2/{package}/blobs/upload/",
+        f"/v2/{package}/blobs/uploads/",
     )
     query_values = parse_qsl(parsed.query, keep_blank_values=True)
     if (
@@ -147,10 +227,11 @@ def parse_auth_challenge(value):
     return params
 
 
-def token_request_url(params):
+def token_request_url(params, package=PACKAGE):
     if not isinstance(params, dict) or set(params) - {"realm", "service", "scope"}:
         raise AuthorityError("Registry authentication challenge has an incorrect format.")
-    query = urlencode({"service": "ghcr.io", "scope": f"repository:{PACKAGE}:pull,push"})
+    _validate_package(package)
+    query = urlencode({"service": "ghcr.io", "scope": f"repository:{package}:pull,push"})
     return f"https://{REGISTRY}/token?{query}"
 
 
@@ -172,10 +253,11 @@ def check_head_response(status, headers, digest, size):
     return True
 
 
-def redirect_target(path, digest, status, location):
+def redirect_target(path, digest, status, location, package=PACKAGE):
     if status not in (302, 307):
         return None
-    if path != f"/v2/{PACKAGE}/blobs/{digest}":
+    _validate_package(package)
+    if path != f"/v2/{package}/blobs/{digest}":
         raise AuthorityError("Registry manifest redirects are not permitted.")
     return blob_download_location(location, digest)
 

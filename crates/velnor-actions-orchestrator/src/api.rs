@@ -204,8 +204,9 @@ pub use super::homebrew::runtime::execute_native_homebrew_check_from_env;
 pub(crate) use super::package_release_publish::{release_policy_admission, stable_tag_origin};
 
 pub use super::image_maintenance::{
-    BuildJobCandidateRequest, CheckJobSourceRequest, InstallBuildxRequest,
-    ValidateJobCandidateRequest, build_job_candidate, check_job_source, install_buildx,
+    AdmitRunnerImagesRequest, BuildJobCandidateRequest, CheckJobSourceRequest,
+    ImagePublicationProfile, InstallBuildxRequest, PublishImageRequest, ValidateJobCandidateRequest,
+    admit_runner_images, build_job_candidate, check_job_source, install_buildx, publish_image,
     validate_job_candidate,
 };
 pub use velnor_actions_mise::CheckDeadline;

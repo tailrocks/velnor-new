@@ -26,6 +26,7 @@ Shared working agreement: keep this section byte-identical across projects. Proj
 
 ## This project (velnor-new)
 
+- Automation: use existing Rust owners for repository automation, qualification, release logic, and temporary orchestration. Do not add Python or JavaScript scripts, including embedded scripts. Limit Bash to small, simple helpers and tool-invocation glue. Use TypeScript only for scripts required by GitHub Actions workflows. Preserve useful behavior and checks when migrating existing scripts to Rust.
 - Hard decisions: read [`docs/hard-decisions.md`](docs/hard-decisions.md) first. Never silently change a hard decision; changing one requires the human owner's explicit approval.
 - Sources of truth for GitHub Actions: [actions/runner](https://github.com/actions/runner), [actions/scaleset](https://github.com/actions/scaleset), [actions/runner-images](https://github.com/actions/runner-images). Check the original source for compatibility and record it in [`docs/proposed/github-actions-reference.md`](docs/proposed/github-actions-reference.md). Never guess protocol contracts or operational semantics.
 - Requirements and adopted contracts: read `docs/reviews/pr-1.md`, `docs/reviews/pr-1-adoption.md`, and `docs/reviews/pr-1-disposition.md`. Specifications live in `docs/proposed/*` (OpenTofu: `docs/proposed/opentofu-contract.md`); procedures live in `docs/implemented/*`. Pins and exceptions: `.velnor/version-policy.toml` and `.velnor/freshness-inventory.json`.

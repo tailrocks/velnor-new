@@ -5,6 +5,8 @@
 mod image_candidate_closure;
 #[path = "image_candidate/record.rs"]
 mod image_candidate_record;
+#[path = "image_candidate/runner_publication.rs"]
+mod runner_publication;
 
 pub use image_candidate_closure::{
     IMAGE_NATIVE_CLOSURE_SCHEMA, ImageCandidateSourceClosure, NATIVE_IMAGE_CANDIDATE_INPUTS,
@@ -16,4 +18,10 @@ pub use image_candidate_record::{
     ImageCandidateArchive, ImageCandidateBuild, ImageCandidateOci, ImageCandidateRecord,
     ImageCandidateSource, ImageCandidateWorkflow, parse_image_candidate_record,
     serialize_image_candidate_record, validate_image_candidate_record,
+};
+pub use runner_publication::{
+    RUNNER_IMAGE_PUBLICATION_SCHEMA, RUNNER_PUBLICATION_SOURCE_INPUTS, RunnerImagePublicationLock,
+    RunnerImagePublicationQualification, RunnerImagePublicationRecord,
+    RunnerImagePublicationReferencedWorkflow, RunnerImagePublicationSource,
+    parse_runner_image_publication_record, validate_runner_image_publication_record,
 };
