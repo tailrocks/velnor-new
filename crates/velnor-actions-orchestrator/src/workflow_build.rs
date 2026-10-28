@@ -275,17 +275,17 @@ fn build_workflow_jobs(
         required_ids.push(id.clone());
         jobs.insert(id, job);
     }
-    let (suite_jobs, suite_required_ids) = crate::rust_suites_emit::build_ci_jobs(
+    let suite_build = crate::rust_suites_emit::build_ci_jobs(
         input.root,
         input.config,
         input.label,
         input.discovery,
         &prepared.catalog,
     )?;
-    for (id, job) in suite_jobs {
+    for (id, job) in suite_build.jobs {
         jobs.insert(id, job);
     }
-    required_ids.extend(suite_required_ids);
+    required_ids.extend(suite_build.required_ids);
     crate::workflow_task_jobs::insert_jobs(&mut jobs, &prepared.workflow_tasks)?;
     let (required_catalog, required_acquire) = if prepared.policy == WorkflowPolicy::VelnorRepositoryV1 {
         let target = velnor_actions_contract::ReleaseTarget::for_runner_label(input.label)
@@ -308,7 +308,9 @@ fn build_workflow_jobs(
         &prepared.catalog,
         &required_catalog,
     )?;
-    wire_w1::check_crate_mbx_gating(&jobs, &built.drivers)?;
+    let mut drivers = built.drivers;
+    drivers.extend(suite_build.drivers);
+    wire_w1::check_crate_mbx_gating(&jobs, &drivers)?;
     Ok(jobs)
 }
 
