@@ -21,6 +21,10 @@ struct BlobReadbackBarrier {
     digest: String,
 }
 
+struct ManifestLookupBarrier {
+    reference: String,
+}
+
 pub(super) fn run(
     args: &[OsString],
     state: &mut Value,
@@ -93,6 +97,7 @@ fn manifest(
 ) -> Result<ExitCode, Box<dyn Error>> {
     let is_tag = state["crane"]["tag_reference"].as_str() == Some(reference);
     if is_tag {
+        wait_at_manifest_lookup_barrier(reference, state, state_path)?;
         if state["crane"]["tag_digest"].is_null()
             && state["crane"]["tag_lookup_output_consumed"] != true
         {
@@ -137,6 +142,61 @@ fn manifest(
     }
     io::stdout().write_all(&bytes)?;
     Ok(ExitCode::SUCCESS)
+}
+
+fn wait_at_manifest_lookup_barrier(
+    reference: &str,
+    state: &mut Value,
+    state_path: &Path,
+) -> Result<(), Box<dyn Error>> {
+    let barrier = ManifestLookupBarrier::from_value(&state["crane"]["manifest_lookup_barrier"])?;
+    if barrier.is_none_or(|barrier| barrier.reference != reference) {
+        return Ok(());
+    }
+    state["crane"]["manifest_lookup_barrier"] = Value::Null;
+    fs::write(state_path, serde_json::to_vec(state)?)?;
+    let home = PathBuf::from(env::var_os("HOME").ok_or("missing fixture home")?);
+    let ready = home.join(".image-publication-manifest-ready");
+    let release = home.join(".image-publication-manifest-release");
+    let mut ready_file = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(ready)?;
+    ready_file.write_all(reference.as_bytes())?;
+    drop(ready_file);
+    let deadline = Instant::now() + Duration::from_secs(40);
+    loop {
+        match fs::symlink_metadata(&release) {
+            Ok(metadata) if metadata.is_file() && !metadata.file_type().is_symlink() => break,
+            Ok(_) => return Err("invalid Crane manifest barrier release marker".into()),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => return Err(error.into()),
+        }
+        if Instant::now() >= deadline {
+            return Err("Crane manifest lookup barrier timed out".into());
+        }
+        thread::sleep(Duration::from_millis(5));
+    }
+    *state = serde_json::from_slice(&fs::read(state_path)?)?;
+    Ok(())
+}
+
+impl ManifestLookupBarrier {
+    fn from_value(value: &Value) -> Result<Option<Self>, Box<dyn Error>> {
+        if value.is_null() {
+            return Ok(None);
+        }
+        let fields = value
+            .as_object()
+            .filter(|fields| fields.len() == 1)
+            .ok_or("invalid Crane manifest lookup barrier")?;
+        let reference = fields
+            .get("reference")
+            .and_then(Value::as_str)
+            .ok_or("Crane manifest barrier has no reference")?
+            .to_owned();
+        Ok(Some(Self { reference }))
+    }
 }
 
 fn blob(reference: &str, state: &mut Value, state_path: &Path) -> Result<ExitCode, Box<dyn Error>> {

@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+mod ci_publication;
 mod manifest_outcomes;
 mod oci;
 mod profile;
@@ -11,18 +12,13 @@ mod registry_state;
 mod rejections;
 mod runtime;
 
-use std::{
-    collections::BTreeMap,
-    error::Error,
-    fs,
-    path::PathBuf,
-    process::{Command, Output},
-};
+use std::{collections::BTreeMap, error::Error, fs, path::PathBuf, process::Output};
 
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use tempfile::TempDir;
 
+pub(crate) use ci_publication::PublicationProcess;
 pub(crate) use manifest_outcomes::{CapturedOutcome, ReplayMutation};
 pub(crate) use profile::FixtureProfile;
 pub(crate) use registry_state::{BlobFault, ExistingTag, MovedTag};
@@ -209,46 +205,7 @@ impl Fixture {
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
             Err(error) => return Err(error),
         }
-        let path = self
-            .mise_bin
-            .parent()
-            .ok_or_else(|| std::io::Error::other("fixture mise binary has no parent directory"))?;
-        let home = self
-            .state
-            .parent()
-            .ok_or_else(|| std::io::Error::other("fixture state has no parent directory"))?;
-        Command::new(env!("CARGO_BIN_EXE_velnor-actions"))
-            .env_clear()
-            .env("PATH", path)
-            .env("HOME", home)
-            .env("GH_TOKEN", "fixture-source-token")
-            .env("DOCKER_CONFIG", &self.docker_config)
-            .args([
-                "image-maintenance",
-                "publish-image",
-                "--profile",
-                self.profile.cli_name(),
-                "--source-commit",
-            ])
-            .arg(&self.source)
-            .args(["--producer-run-id", &self.producer_run_id.to_string()])
-            .args([
-                "--producer-run-attempt",
-                &self.producer_run_attempt.to_string(),
-            ])
-            .args([
-                "--artifact-id",
-                &self.artifact_id.to_string(),
-                "--archive-path",
-            ])
-            .arg(&self.archive)
-            .arg("--record-path")
-            .arg(&self.record)
-            .arg("--private-scratch")
-            .arg(&self.scratch)
-            .arg("--receipt-output")
-            .arg(&self.receipt)
-            .output()
+        runtime::publication_command(self)?.output()
     }
 
     pub(crate) fn registry_digest(&self) -> Result<Option<String>, Box<dyn Error>> {

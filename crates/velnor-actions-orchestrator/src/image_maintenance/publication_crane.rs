@@ -47,6 +47,7 @@ pub(super) fn publish(
     tag: &str,
     expected: &ImageCandidateOci,
     deadline: CheckDeadline,
+    mut revalidate: impl FnMut() -> Result<(), OrchestratorError>,
 ) -> Result<PublishedImage, OrchestratorError> {
     let docker_config = private_docker_config()?;
     let reference = format!("{repository}:{tag}");
@@ -54,6 +55,7 @@ pub(super) fn publish(
     let current = inspect_tag(&docker_config, &reference, deadline)?;
     let idempotent = match current {
         TagState::Missing => {
+            revalidate()?;
             crane_ok(
                 &docker_config,
                 vec![
@@ -66,7 +68,10 @@ pub(super) fn publish(
             )?;
             false
         }
-        TagState::Digest(digest) if digest == expected_digest => true,
+        TagState::Digest(digest) if digest == expected_digest => {
+            revalidate()?;
+            true
+        }
         TagState::Digest(_) => return Err(internal("image_publication_tag_conflict")),
     };
     let pushed = read_tag_digest(&docker_config, &reference, deadline)?;

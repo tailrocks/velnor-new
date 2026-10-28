@@ -1,11 +1,61 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{error::Error, fs, os::unix::fs::PermissionsExt, path::PathBuf};
+use std::{
+    error::Error, fs, os::unix::fs::PermissionsExt, path::PathBuf, process::Command, process::Stdio,
+};
 
 use serde_json::{Value, json};
 
-use super::{CapturedOutcome, FixtureProfile, FixtureRuntime, ReplayMutation, manifest_outcomes};
+use super::{
+    CapturedOutcome, Fixture, FixtureProfile, FixtureRuntime, ReplayMutation, manifest_outcomes,
+};
+
+pub(super) fn publication_command(fixture: &Fixture) -> Result<Command, std::io::Error> {
+    let path = fixture
+        .mise_bin
+        .parent()
+        .ok_or_else(|| std::io::Error::other("fixture mise binary has no parent directory"))?;
+    let home = fixture
+        .state
+        .parent()
+        .ok_or_else(|| std::io::Error::other("fixture state has no parent directory"))?;
+    let mut command = Command::new(env!("CARGO_BIN_EXE_velnor-actions"));
+    command
+        .env_clear()
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .env("PATH", path)
+        .env("HOME", home)
+        .env("GH_TOKEN", "fixture-source-token")
+        .env("DOCKER_CONFIG", &fixture.docker_config)
+        .args([
+            "image-maintenance",
+            "publish-image",
+            "--profile",
+            fixture.profile.cli_name(),
+            "--source-commit",
+        ])
+        .arg(&fixture.source)
+        .args(["--producer-run-id", &fixture.producer_run_id.to_string()])
+        .args([
+            "--producer-run-attempt",
+            &fixture.producer_run_attempt.to_string(),
+        ])
+        .args([
+            "--artifact-id",
+            &fixture.artifact_id.to_string(),
+            "--archive-path",
+        ])
+        .arg(&fixture.archive)
+        .arg("--record-path")
+        .arg(&fixture.record)
+        .arg("--private-scratch")
+        .arg(&fixture.scratch)
+        .arg("--receipt-output")
+        .arg(&fixture.receipt);
+    Ok(command)
+}
 
 pub(super) fn create_runtime(
     base: &std::path::Path,

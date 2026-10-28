@@ -90,6 +90,22 @@ pub(super) struct Job {
 }
 
 #[derive(Debug, Deserialize)]
+pub(super) struct CiJobList {
+    pub(super) total_count: usize,
+    pub(super) jobs: Vec<CiJob>,
+}
+
+#[derive(Debug, Deserialize)]
+pub(super) struct CiJob {
+    pub(super) id: Option<u64>,
+    pub(super) run_id: Option<u64>,
+    pub(super) name: Option<String>,
+    pub(super) head_sha: Option<String>,
+    pub(super) status: Option<String>,
+    pub(super) conclusion: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
 pub(super) struct WorkflowRuns {
     pub(super) workflow_runs: Vec<WorkflowRun>,
 }
