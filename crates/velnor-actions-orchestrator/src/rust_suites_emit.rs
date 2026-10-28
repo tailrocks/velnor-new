@@ -21,6 +21,12 @@ use crate::pins::resolve_mise_setup;
 use crate::prepare::GenerationPreparation;
 use crate::workflow::CHECKOUT_USES;
 
+pub(crate) struct OrchestratorCiSuiteBuild {
+    pub(crate) jobs: BTreeMap<String, Job>,
+    pub(crate) required_ids: Vec<String>,
+    pub(crate) drivers: BTreeMap<String, CompileDriver>,
+}
+
 pub(crate) fn validate_suites_against_repo(
     root: &Path,
     config: &VelnorConfig,
@@ -114,27 +120,35 @@ pub(crate) fn build_ci_jobs(
     label: &str,
     discovery: &Discovery,
     catalog: &ToolCatalog,
-) -> Result<(BTreeMap<String, Job>, Vec<String>), OrchestratorError> {
+) -> Result<OrchestratorCiSuiteBuild, OrchestratorError> {
     validate_suites_against_repo(root, config, discovery)?;
     let Some(spec) = build_render_spec(config, label, discovery, catalog)? else {
-        return Ok((BTreeMap::new(), Vec::new()));
+        return Ok(OrchestratorCiSuiteBuild {
+            jobs: BTreeMap::new(),
+            required_ids: Vec::new(),
+            drivers: BTreeMap::new(),
+        });
     };
-    let mut ci_jobs = build_ci_suite_jobs(&spec)?;
-    replace_ci_suite_verifiers(&mut ci_jobs, catalog)?;
+    let mut suite_jobs = build_ci_suite_jobs(&spec)?;
+    replace_ci_suite_verifiers(&mut suite_jobs.jobs, catalog)?;
     let mut required_ids = Vec::new();
     for suite in &spec.suites {
         if suite.has_pr_or_push_trigger() && suite.required {
             let build_id = format!("suite-build-{}", suite.id);
-            if ci_jobs.contains_key(&build_id) {
+            if suite_jobs.jobs.contains_key(&build_id) {
                 required_ids.push(build_id);
             }
             let run_id = format!("suite-{}", suite.id);
-            if ci_jobs.contains_key(&run_id) {
+            if suite_jobs.jobs.contains_key(&run_id) {
                 required_ids.push(run_id);
             }
         }
     }
-    Ok((ci_jobs, required_ids))
+    Ok(OrchestratorCiSuiteBuild {
+        jobs: suite_jobs.jobs,
+        required_ids,
+        drivers: suite_jobs.drivers,
+    })
 }
 
 fn replace_ci_suite_verifiers(

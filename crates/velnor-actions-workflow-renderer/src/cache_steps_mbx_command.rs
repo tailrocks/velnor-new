@@ -291,17 +291,54 @@ pub(super) fn uses_mbx_command(step: &Step) -> bool {
 }
 
 fn report_wrapped_command(script: &str) -> Option<&str> {
-    let script = script
-        .strip_prefix(&crate::toolchain_env::credential_unset_prelude())?
-        .strip_prefix(' ')?;
+    let script = strip_credential_unset_prelude(script)?;
     let body = script.strip_prefix(REPORT_WRAPPER_PREFIX)?;
     let (command, suffix) = body.split_once(REPORT_WRAPPER_SEPARATOR)?;
     suffix.starts_with(REPORT_WRAPPER_SUFFIX).then_some(command)
 }
 
 fn command_line_uses_mbx(command: &str) -> bool {
+    let command = strip_credential_unset_prelude(command).unwrap_or(command);
+    if archive_nextest_command_uses_mbx(command) {
+        return true;
+    }
     let argv: Vec<String> = command.split_whitespace().map(str::to_owned).collect();
     is_mbx_argv(&argv)
+}
+
+fn strip_credential_unset_prelude(script: &str) -> Option<&str> {
+    script
+        .strip_prefix(&crate::toolchain_env::credential_unset_prelude())?
+        .strip_prefix(' ')
+}
+
+fn archive_nextest_command_uses_mbx(script: &str) -> bool {
+    const ARCHIVE_DIRECTORY_PREFIX: &str = "mkdir -p \"$RUNNER_TEMP/velnor/suite-archive-";
+    let Some(suffix) = script.strip_prefix(ARCHIVE_DIRECTORY_PREFIX) else {
+        return false;
+    };
+    let Some((suite_id, command)) = suffix.split_once("\" && ") else {
+        return false;
+    };
+    if !is_valid_suite_id(suite_id) {
+        return false;
+    }
+    let argv: Vec<String> = command.split_whitespace().map(str::to_owned).collect();
+    let Some(separator) = argv.iter().position(|arg| arg == "--") else {
+        return false;
+    };
+    is_mbx_argv(&argv)
+        && argv.get(separator + 2).is_some_and(|arg| arg == "nextest")
+        && argv.get(separator + 3).is_some_and(|arg| arg == "archive")
+}
+
+fn is_valid_suite_id(id: &str) -> bool {
+    !id.is_empty()
+        && !id.starts_with('-')
+        && !id.ends_with('-')
+        && id
+            .bytes()
+            .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-')
 }
 
 fn is_mbx_argv(argv: &[String]) -> bool {
@@ -334,6 +371,9 @@ fn is_exact_rust_spec(spec: &str) -> bool {
     let Some(version) = spec.strip_prefix("rust@") else {
         return false;
     };
+    if version == "${VELNOR_TOOL_RUST}" {
+        return true;
+    }
     let mut parts = version.split('.');
     matches!(
         (parts.next(), parts.next(), parts.next(), parts.next()),

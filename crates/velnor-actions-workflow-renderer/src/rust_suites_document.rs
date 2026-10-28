@@ -8,7 +8,7 @@ use velnor_actions_contract::{
     WorkflowDispatchConfig,
 };
 
-use super::{RustSuitesRenderSpec, build_suite_jobs_for_entry};
+use super::{RustSuitesRenderSpec, SuiteJob, build_suite_jobs_for_entry};
 use crate::{
     RenderError,
     document_steps::{non_internal_step_to_yaml, string_map_yaml},
@@ -30,7 +30,12 @@ pub(super) fn render_workflow_for_slug(
         if suite.allow_failure {
             allow_failure_jobs.insert(format!("suite-{}", suite.id));
         }
-        for (job_id, mut job) in build_suite_jobs_for_entry(suite, spec, true)? {
+        for SuiteJob {
+            id: job_id,
+            mut job,
+            ..
+        } in build_suite_jobs_for_entry(suite, spec, true)?
+        {
             job.condition.clone_from(&condition);
             jobs.insert(job_id, job);
         }
