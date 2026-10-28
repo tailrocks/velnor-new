@@ -5,6 +5,7 @@ use std::{
     ffi::OsString,
     fs::{self, File, OpenOptions},
     io::{Read, Seek, SeekFrom},
+    os::unix::fs::MetadataExt,
     path::{Path, PathBuf},
 };
 
@@ -153,9 +154,10 @@ fn verify_blob(
     if !output.success || output.code != Some(0) || output.signal.is_some() {
         return Err(internal("image_publication_blob_process"));
     }
-    if output.stdout_bytes != descriptor.size
-        || readback.metadata().map(|value| value.len()).ok() != Some(descriptor.size)
-    {
+    let readback_identity = readback
+        .metadata()
+        .map_err(|_| internal("image_publication_blob_size"))?;
+    if output.stdout_bytes != descriptor.size || readback_identity.len() != descriptor.size {
         return Err(internal("image_publication_blob_size"));
     }
     compare_blob(
@@ -164,7 +166,26 @@ fn verify_blob(
         &descriptor.digest,
         descriptor.size,
         deadline,
-    )
+    )?;
+    drop(readback);
+    remove_verified_readback(&readback_path, &readback_identity)
+}
+
+fn remove_verified_readback(
+    path: &Path,
+    created: &fs::Metadata,
+) -> Result<(), OrchestratorError> {
+    let named = fs::symlink_metadata(path)
+        .map_err(|_| internal("image_publication_readback_identity"))?;
+    if !created.is_file()
+        || !named.is_file()
+        || named.file_type().is_symlink()
+        || created.dev() != named.dev()
+        || created.ino() != named.ino()
+    {
+        return Err(internal("image_publication_readback_identity"));
+    }
+    fs::remove_file(path).map_err(|_| internal("image_publication_readback_cleanup"))
 }
 
 fn compare_blob(
