@@ -15,6 +15,7 @@ QUALIFICATION_GUARD_READY=0
 QUALIFICATION_GUARD_SHA256=''
 QUALIFICATION_GUARD_IDENTITY=''
 QUALIFICATION_GUARD_FINGERPRINT=''
+OPERATOR_TOOLCHAIN_GUARD=''
 
 test_mise_rust_version() {
   local tool_version file_version
@@ -47,6 +48,22 @@ test_mise_rust_version() {
   printf '%s\n' "$tool_version"
 }
 
+test_mise_mbx_version() {
+  awk -F '"' '
+    /^\[tools\][[:space:]]*$/ { in_tools = 1; next }
+    /^\[/ { in_tools = 0 }
+    in_tools && /^[[:space:]]*mr-boxington[[:space:]]*=[[:space:]]*\{/ {
+      if (NF < 3 || $2 == "") { failed = 1; next }
+      version = $2
+      count++
+    }
+    END {
+      if (failed || count != 1) exit 1
+      print version
+    }
+  ' "$ROOT/mise.toml"
+}
+
 test_mise_resolve_cargo() {
   local real_mise="$1" rust_version="$2" prefix="$3" stub_cargo="$4"
   local rust_spec="rust@$rust_version" resolution_rc=0 cargo_path
@@ -75,7 +92,7 @@ test_mise_resolve_cargo() {
 }
 
 test_mise_adapter_create() {
-  local adapter_dir="$1" real_mise="$2" original_path="$3" guard="$4" rust_version="$5"
+  local adapter_dir="$1" real_mise="$2" original_path="$3" guard="$4" rust_version="$5" mbx_version="${6:-}"
   if [[ "$adapter_dir" != /* || "$real_mise" != /* || ! -x "$real_mise" \
     || -z "$original_path" || ! "$rust_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
     echo 'FATAL: test Mise adapter inputs are invalid' >&2
@@ -87,6 +104,13 @@ test_mise_adapter_create() {
   fi
   mkdir -p "$adapter_dir" || return 1
   adapter_dir="$(cd "$adapter_dir" && pwd -P)" || return 1
+  if [ -z "$mbx_version" ]; then
+    mbx_version="$(test_mise_mbx_version)" || return 1
+  fi
+  if [[ ! "$mbx_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    echo 'FATAL: test Mise adapter Mr. Boxington version is invalid' >&2
+    return 1
+  fi
   cat >"$adapter_dir/mise" <<'ADAPTER'
 #!/usr/bin/env bash
 set -uo pipefail
@@ -95,6 +119,8 @@ REAL_MISE="${VELNOR_TEST_REAL_MISE:-}"
 ORIGINAL_PATH="${VELNOR_TEST_ORIGINAL_PATH:-}"
 RUST_VERSION="${VELNOR_TEST_RUST_VERSION:-}"
 RUST_SPEC="rust@$RUST_VERSION"
+MBX_VERSION="${VELNOR_TEST_MBX_VERSION:-}"
+MBX_SPEC="mr-boxington@$MBX_VERSION"
 GUARD="${VELNOR_TEST_CARGO_GUARD:-}"
 RECEIPT="${VELNOR_TEST_MISE_RECEIPT:-}"
 CARGO_PATH="${VELNOR_TEST_MISE_CARGO_PATH:-}"
@@ -118,15 +144,22 @@ for ((arg_index = 0; arg_index < ${#arguments[@]}; arg_index++)); do
   fi
 done
 
-cargo_request=0
+metadata_request=0
+guarded_metadata=0
 if (( payload_index >= 0 && payload_index < ${#arguments[@]} )); then
   payload_program="${arguments[$payload_index]}"
-  [[ "${payload_program##*/}" == cargo ]] && cargo_request=1
+  if [[ "${payload_program##*/}" == cargo ]]; then
+    metadata_request=1
+  elif [[ "${payload_program##*/}" == mbx \
+    && "${arguments[$((payload_index + 1))]:-}" == metadata ]]; then
+    metadata_request=1
+    guarded_metadata=1
+  fi
 fi
 
 PATH="$ORIGINAL_PATH"
 export PATH
-if [ "$cargo_request" -eq 0 ]; then
+if [ "$metadata_request" -eq 0 ]; then
   exec "$REAL_MISE" "$@"
 fi
 
@@ -157,14 +190,32 @@ reject_request() {
   exit 78
 }
 
-if [[ "${arguments[0]:-}" != --no-config || "${arguments[1]:-}" != --no-env \
-  || "${arguments[2]:-}" != --no-hooks || "${arguments[3]:-}" != exec \
-  || "${arguments[5]:-}" != -- || "${arguments[6]:-}" != cargo ]]; then
+normal_fetch=0
+if [[ "${arguments[0]:-}" == --no-config && "${arguments[1]:-}" == --no-env \
+  && "${arguments[2]:-}" == --no-hooks && "${arguments[3]:-}" == exec ]]; then
+  rust_spec="${arguments[4]}"
+  if [ "${arguments[5]:-}" = "$MBX_SPEC" ] \
+    && [ "${arguments[6]:-}" = -- ] \
+    && [ "${arguments[7]:-}" = mbx ] \
+    && [ "${arguments[8]:-}" = metadata ]; then
+    guarded_metadata=1
+    request_kind=metadata
+  elif [ "${arguments[5]:-}" = -- ] && [ "${arguments[6]:-}" = cargo ]; then
+    request_kind="${arguments[7]:-}"
+  else
+    reject_request 'unsupported-mise-or-cargo-argv'
+  fi
+elif [ "${arguments[0]:-}" = exec ] \
+  && [ "${arguments[1]:-}" = -- ] \
+  && [ "${arguments[2]:-}" = cargo ] \
+  && [ "${arguments[3]:-}" = fetch ] \
+  && [ "${arguments[4]:-}" = --locked ]; then
+  normal_fetch=1
+  rust_spec="$RUST_SPEC"
+  request_kind=fetch
+else
   reject_request 'unsupported-mise-or-cargo-argv'
 fi
-
-rust_spec="${arguments[4]}"
-request_kind="${arguments[7]:-}"
 case "$request_kind" in
   metadata|fetch) ;;
   *) reject_request 'unsupported-cargo-command' ;;
@@ -174,28 +225,42 @@ printf 'request-kind pid=%s value=%s\n' "$request_pid" "$request_kind" >>"$RECEI
 manifest_path=""
 metadata_shape=""
 if [ "$request_kind" = fetch ]; then
-  if [ "$#" -ne 9 ] || [ "${arguments[8]:-}" != --locked ]; then
+  if { [ "$normal_fetch" -eq 1 ] && [ "$#" -ne 5 ]; } \
+    || { [ "$normal_fetch" -eq 0 ] && { [ "$#" -ne 9 ] || [ "${arguments[8]:-}" != --locked ]; }; }; then
     reject_request 'unsupported-fetch-argv'
   fi
 elif [ "$request_kind" = metadata ]; then
-  if [ "$#" -ne 13 ] && [ "$#" -ne 15 ]; then
-    reject_request 'unsupported-argv-count'
+  if [ "$guarded_metadata" -eq 1 ]; then
+    if [ "$#" -ne 14 ] && [ "$#" -ne 16 ]; then
+      reject_request 'unsupported-argv-count'
+    fi
+    metadata_index=8
+  else
+    if [ "$#" -ne 13 ] && [ "$#" -ne 15 ]; then
+      reject_request 'unsupported-argv-count'
+    fi
+    metadata_index=7
   fi
-  if [[ "${arguments[8]:-}" != --format-version || "${arguments[9]:-}" != 1 ]]; then
+  if [[ "${arguments[$((metadata_index + 1))]:-}" != --format-version \
+    || "${arguments[$((metadata_index + 2))]:-}" != 1 ]]; then
     reject_request 'unsupported-metadata-argv'
   fi
-  if [ "$#" -eq 13 ]; then
-    if [[ "${arguments[10]:-}" != --no-deps || "${arguments[11]:-}" != --manifest-path ]]; then
+  metadata_arg_count=$((${#arguments[@]} - metadata_index))
+  if [ "$metadata_arg_count" -eq 6 ]; then
+    if [[ "${arguments[$((metadata_index + 3))]:-}" != --no-deps \
+      || "${arguments[$((metadata_index + 4))]:-}" != --manifest-path ]]; then
       reject_request 'unsupported-metadata-options'
     fi
-    manifest_path="${arguments[12]}"
+    manifest_path="${arguments[$((metadata_index + 5))]}"
     metadata_shape=discovery
   else
-    if [[ "${arguments[10]:-}" != --locked || "${arguments[11]:-}" != --offline \
-      || "${arguments[12]:-}" != --all-features || "${arguments[13]:-}" != --manifest-path ]]; then
+    if [[ "${arguments[$((metadata_index + 3))]:-}" != --locked \
+      || "${arguments[$((metadata_index + 4))]:-}" != --offline \
+      || "${arguments[$((metadata_index + 5))]:-}" != --all-features \
+      || "${arguments[$((metadata_index + 6))]:-}" != --manifest-path ]]; then
       reject_request 'unsupported-metadata-options'
     fi
-    manifest_path="${arguments[14]}"
+    manifest_path="${arguments[$((metadata_index + 7))]}"
     metadata_shape=qualification
   fi
 else
@@ -204,6 +269,10 @@ fi
 
 if [[ ! "$rust_spec" =~ ^rust@[0-9]+\.[0-9]+\.[0-9]+$ || "$rust_spec" != "$RUST_SPEC" ]]; then
   reject_request 'rust-spec-mismatch'
+fi
+if [ "$guarded_metadata" -eq 1 ] \
+  && [[ "$rust_spec" != "$RUST_SPEC" || "${arguments[5]:-}" != "$MBX_SPEC" ]]; then
+  reject_request 'toolchain-spec-mismatch'
 fi
 printf 'rust-spec pid=%s value=%s\n' "$request_pid" "$rust_spec" >>"$RECEIPT"
 
@@ -296,8 +365,10 @@ ADAPTER
   TEST_MISE_REAL_MISE="$real_mise"
   TEST_MISE_ORIGINAL_PATH="$original_path"
   TEST_MISE_RUST_VERSION="$rust_version"
+  TEST_MISE_MBX_VERSION="$mbx_version"
   TEST_MISE_GUARD="$guard"
-  export TEST_MISE_ADAPTER_BIN TEST_MISE_REAL_MISE TEST_MISE_ORIGINAL_PATH TEST_MISE_RUST_VERSION TEST_MISE_GUARD
+  export TEST_MISE_ADAPTER_BIN TEST_MISE_REAL_MISE TEST_MISE_ORIGINAL_PATH TEST_MISE_RUST_VERSION
+  export TEST_MISE_MBX_VERSION TEST_MISE_GUARD
 }
 
 test_mise_adapter_verify() {
@@ -577,6 +648,24 @@ run_qualification_candidate() {
   return "$status"
 }
 
+run_qualification_metadata_candidate() {
+  local binary="$1"
+  shift
+  if [ -n "$OPERATOR_TOOLCHAIN_GUARD" ]; then
+    run_qualification_candidate "$binary" --toolchain-guard "$OPERATOR_TOOLCHAIN_GUARD" "$@"
+  else
+    run_qualification_candidate "$binary" "$@"
+  fi
+}
+
+fetch_qualification_cargo_sources() {
+  if [ -n "$OPERATOR_TOOLCHAIN_GUARD" ]; then
+    "$OPERATOR_TOOLCHAIN_GUARD" -- mise exec -- cargo fetch --locked
+  else
+    mise --no-config --no-env --no-hooks exec rust@1.99.1 -- cargo fetch --locked
+  fi
+}
+
 host_target() {
   case "$(uname -s):$(uname -m)" in
     Linux:x86_64|Linux:amd64) echo "x86_64-unknown-linux-gnu" ;;
@@ -760,7 +849,7 @@ stage_candidate_manifest() {
 capture_release_case() {
   local case="$1" repo="$2" out="$3" preview="$3/preview"
   mkdir -p "$out" "$preview"
-  (cd "$repo" && run_qualification_candidate "$BIN" generate --output-dir "$preview" >"$out/stdout.txt" 2>"$out/stderr.txt") \
+  (cd "$repo" && run_qualification_metadata_candidate "$BIN" generate --output-dir "$preview" >"$out/stdout.txt" 2>"$out/stderr.txt") \
     || {
       emit_candidate_stderr "$out/stderr.txt"
       echo "FATAL: release candidate generate failed for $case"
@@ -877,6 +966,13 @@ capture_release_dogfood() {
     echo "FATAL: could not stage indexed dogfood source"
     exit 2
   fi
+  if [ -n "$OPERATOR_TOOLCHAIN_GUARD" ]; then
+    if [ ! -f "$repo/mise.toml" ] || [ -L "$repo/mise.toml" ] \
+      || ! git -C "$ROOT" show "$candidate_tree:mise.toml" | cmp - "$repo/mise.toml"; then
+      echo "FATAL: staged dogfood Mise config differs from indexed source" >&2
+      exit 2
+    fi
+  fi
   stage_candidate_manifest "$repo" dogfood
   local git_log="$out/git-setup.log"
   (
@@ -894,12 +990,19 @@ capture_release_dogfood() {
   # Same HOME/mise environment as the candidate run below, so the same
   # cache is warmed. `--locked` keeps a lock rewrite from slipping in.
   for manifest in "$repo/Cargo.toml" "$repo/crates/velnor-runner/Cargo.toml"; do
-    if ! (cd "$(dirname "$manifest")" && mise --no-config --no-env --no-hooks exec rust@1.99.1 -- cargo fetch --locked); then
+    if ! (
+      cd "$(dirname "$manifest")" || exit 2
+      if [ -n "$OPERATOR_TOOLCHAIN_GUARD" ]; then
+        MISE_TRUSTED_CONFIG_PATHS="$repo/mise.toml" fetch_qualification_cargo_sources
+      else
+        fetch_qualification_cargo_sources
+      fi
+    ); then
       echo "FATAL: could not fetch dogfood cargo sources for $manifest"
       exit 2
     fi
   done
-  if ! (cd "$repo" && run_qualification_candidate "$BIN" generate --output-dir "$preview" >"$out/stdout.txt" 2>"$out/stderr.txt"); then
+  if ! (cd "$repo" && run_qualification_metadata_candidate "$BIN" generate --output-dir "$preview" >"$out/stdout.txt" 2>"$out/stderr.txt"); then
     echo "FATAL: release candidate dogfood generate failed"
     exit 2
   fi

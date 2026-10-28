@@ -11,3 +11,5 @@ mod gc1_t29_reject;
 mod gc1_t53;
 #[path = "velnor_cli/native_required_order.rs"]
 mod native_required_order;
+#[path = "velnor_cli/operator_toolchain_guard.rs"]
+mod operator_toolchain_guard;

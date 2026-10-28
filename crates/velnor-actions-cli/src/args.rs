@@ -13,6 +13,9 @@ pub(crate) use image_maintenance::{ImageMaintenanceCommand, ImagePublicationProf
 #[derive(Debug, Parser)]
 #[command(name = "velnor-actions", version, about)]
 pub(crate) struct Cli {
+    /// Delegate workspace metadata commands to an absolute operator guard.
+    #[arg(long, global = true, value_name = "ABSOLUTE_EXECUTABLE")]
+    pub toolchain_guard: Option<PathBuf>,
     /// Command to run.
     #[command(subcommand)]
     pub command: Command,

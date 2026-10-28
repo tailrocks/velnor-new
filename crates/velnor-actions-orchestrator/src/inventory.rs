@@ -6,7 +6,9 @@ use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 use velnor_actions_contract::{CandidateOutcome, Stack, StackCandidate};
-use velnor_actions_mise::{MetadataDiscovery, PinnedTool, ToolCatalog, ToolPresence};
+use velnor_actions_mise::{
+    MetadataDiscovery, OperatorToolchainGuard, ToolCatalog,
+};
 use velnor_actions_rust::{WorkspaceRecord, parse_metadata_json};
 
 use crate::OrchestratorError;
@@ -18,39 +20,22 @@ use crate::select_tofu::TofuSelectionUnit;
 #[path = "inventory_tofu.rs"]
 mod tofu;
 use self::tofu::analyze_tofu_unit;
+#[path = "inventory_guard.rs"]
+mod guard;
+pub(crate) use guard::require_metadata_tools;
 
 pub(crate) type Inventories = (Vec<CandidateOutcome>, Vec<(String, WorkspaceRecord)>);
 
 const MAX_METADATA_LANES: usize = 1;
 
-pub(crate) fn run_inventories(
-    root: &Path,
-    candidates: &[StackCandidate],
-    files: &[String],
-    reads: &mut velnor_actions_tofu::FileCache,
-    catalog: &ToolCatalog,
-) -> Result<(Inventories, Vec<TofuSelectionUnit>), OrchestratorError> {
-    run_inventories_inner(root, candidates, files, reads, None, catalog)
-}
-
-pub(crate) fn run_inventories_with_phase_timings(
-    root: &Path,
-    candidates: &[StackCandidate],
-    files: &[String],
-    reads: &mut velnor_actions_tofu::FileCache,
-    phases: &mut PlanPhaseTimings,
-    catalog: &ToolCatalog,
-) -> Result<(Inventories, Vec<TofuSelectionUnit>), OrchestratorError> {
-    run_inventories_inner(root, candidates, files, reads, Some(phases), catalog)
-}
-
-fn run_inventories_inner(
+pub(crate) fn run_inventories_with_options(
     root: &Path,
     candidates: &[StackCandidate],
     files: &[String],
     reads: &mut velnor_actions_tofu::FileCache,
     mut phases: Option<&mut PlanPhaseTimings>,
     catalog: &ToolCatalog,
+    guard: Option<&OperatorToolchainGuard>,
 ) -> Result<(Inventories, Vec<TofuSelectionUnit>), OrchestratorError> {
     let mut manifests = Vec::with_capacity(candidates.len());
     for candidate in candidates {
@@ -72,11 +57,19 @@ fn run_inventories_inner(
         }
     }
     if !rust_manifests.is_empty() {
-        require_rust_pin(catalog)?;
+        require_metadata_tools(catalog, guard)?;
     }
     let known: BTreeSet<String> = manifests.iter().cloned().collect();
-    let mut load =
-        |manifest: &str| fetch_inventory(root, manifest, catalog, &known, phases.as_deref_mut());
+    let mut load = |manifest: &str| {
+        fetch_inventory(
+            root,
+            manifest,
+            catalog,
+            &known,
+            phases.as_deref_mut(),
+            guard,
+        )
+    };
     let (rust_outcomes, inventories) = run_with(root, &rust_manifests, true, &mut load)?;
     let mut tofu_outcomes = BTreeMap::new();
     let mut tofu_selection = Vec::new();
@@ -182,6 +175,9 @@ fn run_with(
                 Err(FetchFailure::Incomplete(problem)) => {
                     return Err(OrchestratorError::PreparationIncomplete { manifest, problem });
                 }
+                Err(FetchFailure::Fatal(problem)) => {
+                    return Err(OrchestratorError::ToolchainGuard { problem });
+                }
             }
         }
     }
@@ -200,6 +196,7 @@ fn ok_outcome(manifest: String) -> CandidateOutcome {
 enum FetchFailure {
     Malformed(String),
     Incomplete(String),
+    Fatal(String),
 }
 
 fn classify_exit_failure(stderr: &str) -> FetchFailure {
@@ -223,13 +220,19 @@ fn fetch_inventory(
     catalog: &ToolCatalog,
     known: &BTreeSet<String>,
     mut phases: Option<&mut PlanPhaseTimings>,
+    guard: Option<&OperatorToolchainGuard>,
 ) -> Result<WorkspaceRecord, FetchFailure> {
     let path: PathBuf = root.join(manifest);
     let request = MetadataDiscovery::new(path)
         .map_err(|err| FetchFailure::Incomplete(format!("bad_manifest_path:{err}")))?;
-    let command = request
-        .command(catalog)
-        .map_err(|err| FetchFailure::Incomplete(err.to_string()))?;
+    let command = match guard {
+        Some(guard) => request.command_with_operator_guard(catalog, guard),
+        None => request.command(catalog),
+    }
+    .map_err(|err| match guard {
+        Some(_) => FetchFailure::Fatal(err.to_string()),
+        None => FetchFailure::Incomplete(err.to_string()),
+    })?;
     let auto_install_off = command.disables_auto_install();
     if let Some(phases) = phases.as_deref_mut() {
         phases.metadata_commands += 1;
@@ -239,8 +242,18 @@ fn fetch_inventory(
     if let (Some(phases), Some(started)) = (phases.as_deref_mut(), started) {
         phases.metadata_run_us += started.elapsed().as_micros();
     }
-    let output = output.map_err(|err| FetchFailure::Incomplete(err.to_string()))?;
+    let output = output.map_err(|err| match guard {
+        Some(_) => FetchFailure::Fatal(
+            "operator toolchain guard rejected metadata".to_owned(),
+        ),
+        None => FetchFailure::Incomplete(err.to_string()),
+    })?;
     if !output.success {
+        if guard.is_some() {
+            return Err(FetchFailure::Fatal(
+                "operator toolchain guard rejected metadata".to_owned(),
+            ));
+        }
         let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
         if auto_install_off && is_tool_missing(&stderr) {
             return Err(FetchFailure::Incomplete(format!(
@@ -254,7 +267,13 @@ fn fetch_inventory(
     let result = match output.stdout_text("mise") {
         Ok(json) => parse_metadata_json(&json, root, manifest, known)
             .map_err(|err| FetchFailure::Malformed(err.to_string())),
-        Err(err) => Err(FetchFailure::Incomplete(err.to_string())),
+        Err(err) => Err(if guard.is_some() {
+            FetchFailure::Fatal(
+                "operator toolchain guard rejected metadata".to_owned(),
+            )
+        } else {
+            FetchFailure::Incomplete(err.to_string())
+        }),
     };
     if let (Some(phases), Some(started)) = (phases.as_deref_mut(), started) {
         phases.metadata_parse_us += started.elapsed().as_micros();
@@ -271,24 +290,9 @@ fn is_tool_missing(stderr: &str) -> bool {
 }
 
 pub(crate) fn require_rust_pin(catalog: &ToolCatalog) -> Result<(), OrchestratorError> {
-    let presence =
-        ToolPresence::new(vec![PinnedTool::Rust]).map_err(|err| OrchestratorError::Inventory {
-            problem: err.to_string(),
-        })?;
-    presence
-        .run_with_observation(catalog)
-        .map_err(|failure| OrchestratorError::Inventory {
-            problem: match failure.observation {
-                Some(observation) => format!(
-                    "{}; mise_ls_observation={}",
-                    failure.error,
-                    observation.to_json_line()
-                ),
-                None => failure.error.to_string(),
-            },
-        })
+    require_metadata_tools(catalog, None)
 }
 
 #[path = "inventory_resolve.rs"]
 mod resolve;
-pub(crate) use resolve::{WorkspaceResolve, qualify_workspaces};
+pub(crate) use resolve::{WorkspaceResolve, qualify_workspaces_with_guard};

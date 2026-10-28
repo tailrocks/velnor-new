@@ -143,11 +143,8 @@ fn git_tag_config(
     release: &RustReleaseConfig,
     repository: &str,
 ) -> Result<RenderedFile, OrchestratorError> {
-    let json = crate::release_emit::release_metadata_json(
-        &prep.root,
-        release.manifest_path.as_str(),
-        &prep.catalog,
-    )?;
+    let json =
+        crate::release_emit::release_metadata_json(prep, release.manifest_path.as_str())?;
     let owner = repository.split('/').next().unwrap_or_default();
     let unpinned =
         unpinned_git_sources(&json, owner).map_err(|err| OrchestratorError::Contract {

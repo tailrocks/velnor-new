@@ -14,7 +14,7 @@ mod registry;
 pub(crate) use registry::detector_entries;
 use registry::{DETECTORS, detected_projects};
 
-use velnor_actions_mise::{ArchivePlan, ToolCatalog};
+use velnor_actions_mise::{ArchivePlan, OperatorToolchainGuard, ToolCatalog};
 use velnor_actions_rust::{
     Recommendation, RustExecutionProfile, WorkspaceRecord, dedupe_workspaces, propose_task,
 };
@@ -24,7 +24,6 @@ use crate::clippy_groups::{ClippyMemoryPlan, clippy_memory_groups};
 use crate::config::gradle_jobs;
 use crate::discover_index::build_file_index;
 use crate::internal::phase_timing::PlanPhaseTimings;
-use crate::inventory::{qualify_workspaces, run_inventories, run_inventories_with_phase_timings};
 use crate::recommendations::collect_recommendations;
 #[path = "consumer_manifest.rs"]
 mod consumer_manifest;
@@ -62,23 +61,6 @@ pub struct Discovery {
     pub(crate) ansible: crate::workflow_task_jobs::ansible_inventory::AnsibleInventory,
 }
 
-pub(crate) fn discover(
-    root: &Path,
-    config: &VelnorConfig,
-    catalog: &ToolCatalog,
-) -> Result<Discovery, OrchestratorError> {
-    discover_inner(root, config, catalog, None)
-}
-
-pub(crate) fn discover_with_phase_timings(
-    root: &Path,
-    config: &VelnorConfig,
-    catalog: &ToolCatalog,
-    phases: &mut PlanPhaseTimings,
-) -> Result<Discovery, OrchestratorError> {
-    discover_inner(root, config, catalog, Some(phases))
-}
-
 #[path = "discovery_inventories.rs"]
 mod task_inventory;
 use task_inventory::task_inventories;
@@ -95,11 +77,12 @@ fn detect_candidates(index: &FileIndex) -> Vec<velnor_actions_contract::StackCan
     candidates
 }
 
-fn discover_inner(
+pub(crate) fn discover_with_options(
     root: &Path,
     config: &VelnorConfig,
     catalog: &ToolCatalog,
-    mut phases: Option<&mut PlanPhaseTimings>,
+    phases: Option<&mut PlanPhaseTimings>,
+    guard: Option<&OperatorToolchainGuard>,
 ) -> Result<Discovery, OrchestratorError> {
     let (index, skipped_non_utf8) = build_file_index(root, &config.discovery.exclude)?;
     let mut candidates = detect_candidates(&index);
@@ -113,21 +96,15 @@ fn discover_inner(
         problem: err.to_string(),
     })?;
     let initial = apply_stack_ignores(projects, &config.stacks.ignore);
-    #[expect(
-        clippy::needless_option_as_deref,
-        reason = "the original Option must remain available after this branch"
-    )]
-    let inventory_result = match phases.as_deref_mut() {
-        Some(phases) => run_inventories_with_phase_timings(
-            root,
-            &candidates,
-            index.files(),
-            &mut reads,
-            phases,
-            catalog,
-        ),
-        None => run_inventories(root, &candidates, index.files(), &mut reads, catalog),
-    };
+    let inventory_result = crate::inventory::run_inventories_with_options(
+        root,
+        &candidates,
+        index.files(),
+        &mut reads,
+        phases,
+        catalog,
+        guard,
+    );
     let ((outcomes, inventories), tofu_units) = inventory_result?;
     let statuses = check_candidate_outcomes(initial, &outcomes).map_err(|err| {
         OrchestratorError::Detection {
@@ -135,7 +112,7 @@ fn discover_inner(
         }
     })?;
     let workspaces = plan_workspaces(root, &index, &statuses, inventories, config)?;
-    let resolves = qualify_workspaces(root, &workspaces, catalog)?;
+    let resolves = crate::inventory::qualify_workspaces_with_guard(root, &workspaces, catalog, guard)?;
     let rules =
         crate::affected_inputs::resolve_input_rules(config.stacks.rust.as_ref(), &workspaces)?;
     let (mut proposals, fallbacks) = derive_all(config, &index, &workspaces, &statuses)?;

@@ -30,6 +30,7 @@ pub mod nextest;
 pub mod nextest_config;
 pub mod nextest_plan;
 pub mod nextest_shapes;
+pub mod operator_toolchain_guard;
 pub mod package_release_tools;
 pub mod preflight;
 pub mod requests;
@@ -99,6 +100,7 @@ pub use nextest_plan::{
     count_inventory_tests, requires_archive_transfer,
 };
 pub use nextest_shapes::{NextestArchive, NextestList, NextestRun};
+pub use operator_toolchain_guard::OperatorToolchainGuard;
 pub use package_release_tools::{
     COSIGN_COMMAND_OUTPUT_LIMIT, COSIGN_COMMAND_TIMEOUT, COSIGN_LINUX_AMD64_SHA256,
     COSIGN_MAX_BYTES, COSIGN_VERSION, CosignArtifact, CosignCertificateIdentity, PinnedCosign,

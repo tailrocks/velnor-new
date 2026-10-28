@@ -196,6 +196,7 @@ pub fn fallback_for_error(error: &MiseError) -> Result<MissReason, MiseError> {
         | MiseError::InvalidNextestInput { .. }
         | MiseError::InvalidStepInput { .. }
         | MiseError::ArtifactEscapesRoot { .. } => MissReason::TASK_NOT_ELIGIBLE,
+        MiseError::OperatorToolchainGuard { .. } => return Err(error.clone()),
     })
 }
 
