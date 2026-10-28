@@ -108,6 +108,42 @@ pub fn upload_suite_artifact_step(
     retention_days: u32,
     when: velnor_actions_contract::RustSuiteArtifactWhen,
 ) -> Result<Step, RenderError> {
+    upload_task_artifact_step(step_name, artifact_name, path, retention_days, when, "warn")
+}
+
+pub fn upload_build_task_artifact_step(
+    task_id: &str,
+    artifact_label: &str,
+    path: &str,
+    retention_days: u16,
+    when: velnor_actions_contract::RustSuiteArtifactWhen,
+) -> Result<Step, RenderError> {
+    if task_id.trim().is_empty() || artifact_label.trim().is_empty() {
+        return Err(RenderError::BadActionRef("empty_artifact_io".to_owned()));
+    }
+    let artifact_name = format!(
+        "velnor-workflow-task-{}-{task_id}-artifact-{}-{artifact_label}-{RUN_KEY_EXPR}",
+        task_id.len(),
+        artifact_label.len(),
+    );
+    upload_task_artifact_step(
+        "Upload build-task artifact",
+        &artifact_name,
+        path,
+        u32::from(retention_days),
+        when,
+        "error",
+    )
+}
+
+fn upload_task_artifact_step(
+    step_name: &str,
+    artifact_name: &str,
+    path: &str,
+    retention_days: u32,
+    when: velnor_actions_contract::RustSuiteArtifactWhen,
+    if_no_files_found: &str,
+) -> Result<Step, RenderError> {
     if artifact_name.trim().is_empty()
         || path.trim().is_empty()
         || !(1..=90).contains(&retention_days)
@@ -123,7 +159,7 @@ pub fn upload_suite_artifact_step(
         BTreeMap::from([
             ("name".to_owned(), artifact_name.to_owned()),
             ("path".to_owned(), path.to_owned()),
-            ("if-no-files-found".to_owned(), "warn".to_owned()),
+            ("if-no-files-found".to_owned(), if_no_files_found.to_owned()),
             ("retention-days".to_owned(), retention_days.to_string()),
         ]),
     )?;

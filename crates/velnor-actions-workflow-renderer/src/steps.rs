@@ -35,8 +35,8 @@ pub use crate::steps_shell::{ambient_shell_step, jactionlint_verifier_step, shel
 pub use crate::action_ref::validate_uses;
 pub use crate::steps_artifact::{
     crate_job_report_upload_step, download_artifact_step, download_suite_archive_step,
-    matrix_report_upload_step, upload_artifact_step, upload_suite_archive_step,
-    upload_suite_artifact_step,
+    matrix_report_upload_step, upload_artifact_step, upload_build_task_artifact_step,
+    upload_suite_archive_step, upload_suite_artifact_step,
 };
 pub(crate) use crate::steps_internal::split_internal_operation;
 pub use crate::steps_internal::{internal_step, merge_step, plan_step, write_request_step};

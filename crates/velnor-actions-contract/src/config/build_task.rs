@@ -1,7 +1,10 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeSet;
+
 use super::MiseTaskSource;
+use super::rust_suites::RustSuiteArtifact;
 use crate::errors::ContractError;
 use crate::workflow::timeout::JobTimeout;
 
@@ -23,6 +26,9 @@ pub struct BuildTask {
     pub cargo_build_jobs: u8,
 
     pub nextest_test_threads: u8,
+
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub artifacts: Vec<RustSuiteArtifact>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -162,8 +168,30 @@ impl BuildTask {
                 ));
             }
         }
-        Ok(())
+        validate_build_task_artifacts(&self.artifacts, file)
     }
+}
+
+fn validate_build_task_artifacts(
+    artifacts: &[RustSuiteArtifact],
+    file: &str,
+) -> Result<(), ContractError> {
+    let mut artifact_names = BTreeSet::new();
+    for (index, artifact) in artifacts.iter().enumerate() {
+        if !artifact_names.insert(artifact.name.as_str()) {
+            return Err(ContractError::config(
+                file,
+                format!("workflow.tasks.artifacts[{index}].name"),
+                format!("duplicate_build_task_artifact:{}", artifact.name),
+            ));
+        }
+        super::rust_suites_validate::validate_build_task_artifact(
+            artifact,
+            file,
+            &format!("workflow.tasks.artifacts[{index}]"),
+        )?;
+    }
+    Ok(())
 }
 
 #[must_use]
