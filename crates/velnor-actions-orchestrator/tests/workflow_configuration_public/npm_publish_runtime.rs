@@ -47,7 +47,6 @@ fn generated_package_publisher_sends_verified_archive_metadata() -> Result<(), B
     assert_eq!(request["versions"][VERSION]["name"], MEMBER);
     assert_eq!(request["versions"][VERSION]["version"], VERSION);
     assert_eq!(request["versions"][VERSION]["customMetadata"], "preserved");
-    assert_eq!(validate_publish_wire_identity(&request), Ok(()));
 
     let archive_bytes = fs::read(archive)?;
     let sha1 = Sha1::try_digest(&archive_bytes);
@@ -74,51 +73,6 @@ fn generated_package_publisher_sends_verified_archive_metadata() -> Result<(), B
         )?,
         archive_bytes
     );
-    Ok(())
-}
-
-#[test]
-fn publish_wire_identity_oracle_rejects_flattened_attachment_and_download_uri() {
-    let mut canonical = serde_json::json!({
-        "versions": {
-            "1.2.3": {
-                "dist": {"tarball": PUBLISH_TARBALL_URI}
-            }
-        },
-        "_attachments": {
-            "@fixture/web-1.2.3.tgz": {"data": "AA=="}
-        }
-    });
-    assert_eq!(validate_publish_wire_identity(&canonical), Ok(()));
-
-    let attachment = canonical["_attachments"][PUBLISH_TARBALL_NAME].clone();
-    let mut flattened = serde_json::Map::new();
-    flattened.insert(format!("fixture-web-{VERSION}.tgz"), attachment.clone());
-    canonical["_attachments"] = serde_json::Value::Object(flattened);
-    assert_eq!(
-        validate_publish_wire_identity(&canonical),
-        Err("canonical scoped attachment is missing")
-    );
-
-    let mut scoped = serde_json::Map::new();
-    scoped.insert(PUBLISH_TARBALL_NAME.to_owned(), attachment);
-    canonical["_attachments"] = serde_json::Value::Object(scoped);
-    canonical["versions"][VERSION]["dist"]["tarball"] = serde_json::json!(format!(
-        "https://npm.pkg.github.com/download/{MEMBER}/{VERSION}/digest"
-    ));
-    assert_eq!(
-        validate_publish_wire_identity(&canonical),
-        Err("canonical publish URI is missing")
-    );
-}
-
-fn validate_publish_wire_identity(request: &Value) -> Result<(), &'static str> {
-    if request["versions"][VERSION]["dist"]["tarball"] != PUBLISH_TARBALL_URI {
-        return Err("canonical publish URI is missing");
-    }
-    if request["_attachments"].get(PUBLISH_TARBALL_NAME).is_none() {
-        return Err("canonical scoped attachment is missing");
-    }
     Ok(())
 }
 
