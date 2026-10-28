@@ -16,7 +16,7 @@ test = false
 workspace = true
 
 [dependencies]
-velnor-actions-contract = { version = "=0.1.61", path = "../velnor-actions-contract" }
+velnor-actions-contract = { version = "=0.1.63", path = "../velnor-actions-contract" }
 hcl = { version = "=0.19.9", package = "hcl-rs" }
 serde = { workspace = true }
 serde_json = { workspace = true }
