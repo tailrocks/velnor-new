@@ -243,6 +243,8 @@ impl HomebrewAdoptionTransition {
 fn allowed_deletion_path(path: &str) -> bool {
     path.starts_with("scripts/")
         || path == ".github/scripts/velnor-tools-cache-identity.sh"
+        || path == ".github/jactionlint.yaml"
+        || path == ".github/workflows/cache-prune.yml"
         || path
             .strip_prefix(".github/actions/")
             .and_then(|suffix| suffix.strip_suffix("/action.yml"))
