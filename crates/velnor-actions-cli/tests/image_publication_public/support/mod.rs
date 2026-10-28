@@ -4,6 +4,7 @@
 mod manifest_outcomes;
 mod oci;
 mod profile;
+pub(crate) mod readback_barrier;
 mod real_crane;
 mod records;
 mod registry_state;

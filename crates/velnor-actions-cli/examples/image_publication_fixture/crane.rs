@@ -2,17 +2,24 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
+    env,
     error::Error,
     ffi::OsString,
-    fs,
+    fs::{self, OpenOptions},
     io::{self, Write},
     path::{Path, PathBuf},
     process::ExitCode,
+    thread,
+    time::{Duration, Instant},
 };
 
 use serde_json::{Value, json};
 
 use super::registry;
+
+struct BlobReadbackBarrier {
+    digest: String,
+}
 
 pub(super) fn run(
     args: &[OsString],
@@ -156,6 +163,7 @@ fn blob(reference: &str, state: &mut Value, state_path: &Path) -> Result<ExitCod
         )?;
         return Ok(ExitCode::from(1));
     };
+    wait_at_readback_barrier(digest, state, state_path)?;
     io::stdout().write_all(&bytes)?;
     if state["crane"]["corrupt_remote_blob"]["mode"] == "nonzero"
         && registry::is_blob_fault_target(
@@ -176,6 +184,61 @@ fn blob(reference: &str, state: &mut Value, state_path: &Path) -> Result<ExitCod
     }
     advance_tag_movement(state, state_path)?;
     Ok(ExitCode::SUCCESS)
+}
+
+fn wait_at_readback_barrier(
+    digest: &str,
+    state: &mut Value,
+    state_path: &Path,
+) -> Result<(), Box<dyn Error>> {
+    let should_block = BlobReadbackBarrier::from_value(&state["crane"]["blob_readback_barrier"])?
+        .is_some_and(|barrier| barrier.digest == digest);
+    if !should_block {
+        return Ok(());
+    }
+    state["crane"]["blob_readback_barrier"] = Value::Null;
+    fs::write(state_path, serde_json::to_vec(state)?)?;
+    let home = PathBuf::from(env::var_os("HOME").ok_or("missing fixture home")?);
+    let ready = home.join(".image-publication-readback-ready");
+    let release = home.join(".image-publication-readback-release");
+    let mut ready_file = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(ready)?;
+    ready_file.write_all(digest.as_bytes())?;
+    drop(ready_file);
+    let deadline = Instant::now() + Duration::from_secs(40);
+    loop {
+        match fs::symlink_metadata(&release) {
+            Ok(metadata) if metadata.is_file() && !metadata.file_type().is_symlink() => break,
+            Ok(_) => return Err("invalid Crane readback release marker".into()),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => return Err(error.into()),
+        }
+        if Instant::now() >= deadline {
+            return Err("Crane readback barrier timed out".into());
+        }
+        thread::sleep(Duration::from_millis(5));
+    }
+    Ok(())
+}
+
+impl BlobReadbackBarrier {
+    fn from_value(value: &Value) -> Result<Option<Self>, Box<dyn Error>> {
+        if value.is_null() {
+            return Ok(None);
+        }
+        let fields = value
+            .as_object()
+            .filter(|fields| fields.len() == 1)
+            .ok_or("invalid Crane blob readback barrier")?;
+        let digest = fields
+            .get("digest")
+            .and_then(Value::as_str)
+            .ok_or("Crane blob readback barrier has no digest")?
+            .to_owned();
+        Ok(Some(Self { digest }))
+    }
 }
 
 fn advance_tag_movement(state: &mut Value, state_path: &Path) -> Result<(), Box<dyn Error>> {
