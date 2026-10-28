@@ -113,8 +113,19 @@ fn lower_hex(value: &str, length: usize) -> bool {
             .all(|byte| byte.is_ascii_digit() || matches!(byte, b'a'..=b'f'))
 }
 
-fn pull_request_only() -> Yaml {
-    Yaml::Map(vec![("pull_request".to_owned(), Yaml::Null)])
+pub(super) fn pull_request_only() -> Yaml {
+    Yaml::Map(vec![(
+        "pull_request".to_owned(),
+        Yaml::Map(vec![(
+            "types".to_owned(),
+            Yaml::Seq(
+                ["opened", "synchronize", "reopened", "ready_for_review"]
+                    .into_iter()
+                    .map(Yaml::str)
+                    .collect(),
+            ),
+        )]),
+    )])
 }
 
 fn caller_permissions() -> Yaml {
