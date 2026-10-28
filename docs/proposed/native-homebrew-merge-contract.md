@@ -102,8 +102,11 @@ instantaneous cross-repository latestness guarantee. A mutable URL changing afte
 formula validation produces a checksum failure, never permission to accept new
 bytes. Stable uses permanent version-tagged assets and cannot be downgraded.
 
-The protected Homebrew seed transition uses the closed version-three template
-and requires SDK 0.1.60 or newer. Its eight authored outputs include
+The generic protected Homebrew seed contract uses the closed version-three
+template, whose format floor remains SDK 0.1.60. Each compiled transition sets
+its own `minimum_sdk_version`, which determines the SDK required to author that
+transition. The current Jackin transition binds the first complete 19-deletion,
+27-path inventory and requires SDK 0.1.65. Its eight authored outputs include
 `.velnor/release-manifest.json`, rendered from the exact authenticated SDK manifest
 bytes used to qualify the seed, and `.github/workflows/review-completion.yml`,
 rendered through the ordinary review-completion renderer and authenticated SDK
