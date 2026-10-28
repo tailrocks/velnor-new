@@ -37,12 +37,14 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use velnor_actions_contract::digest_b3;
 use velnor_actions_mise::checks::SystemToolProof;
+use velnor_actions_mise::catalog::lock::ApprovedMiseRuntime;
 use velnor_actions_mise::{CheckDeadline, DiscoveredCheck, QualifiedCheck};
 
 #[path = "check_tool_acquire.rs"]
 pub(crate) mod acquisition;
 #[path = "check_binary.rs"]
 mod binary;
+pub(crate) use binary::{resolve_mise_runtime, resolve_mise_runtime_for_platform};
 pub(crate) mod cache_execution_context;
 #[path = "check_container.rs"]
 pub(crate) mod container;
@@ -136,6 +138,31 @@ pub(crate) fn prepare_check_with_context(
     check: &DiscoveredCheck,
     deadline: CheckDeadline,
 ) -> Result<OwnedCheck, OrchestratorError> {
+    let (root, cwd) = checked_check_context(root, group, check, deadline)?;
+    let runtime = binary::resolve_mise_runtime(&root, policy, check, deadline)?;
+    prepare_check_with_resolved_runtime(&root, group, check, cwd, &runtime, deadline)
+}
+
+pub(crate) fn prepare_check_with_runtime(
+    root: &Path,
+    group: &RestoredGroupContext,
+    check: &DiscoveredCheck,
+    runtime: &ApprovedMiseRuntime,
+    deadline: CheckDeadline,
+) -> Result<OwnedCheck, OrchestratorError> {
+    let (root, cwd) = checked_check_context(root, group, check, deadline)?;
+    if runtime.target != check.check.runner.platform.release_target() {
+        return Err(internal("mise_runtime_target_mismatch"));
+    }
+    prepare_check_with_resolved_runtime(&root, group, check, cwd, runtime, deadline)
+}
+
+fn checked_check_context(
+    root: &Path,
+    group: &RestoredGroupContext,
+    check: &DiscoveredCheck,
+    deadline: CheckDeadline,
+) -> Result<(PathBuf, PathBuf), OrchestratorError> {
     checkpoint(deadline)?;
     verify_source(root, check, deadline)?;
     checkpoint(deadline)?;
@@ -145,13 +172,23 @@ pub(crate) fn prepare_check_with_context(
     if group.temp.starts_with(&root) {
         return Err(internal("check_temp_inside_repository"));
     }
-    let runtime = binary::resolve_mise_runtime(&root, policy, check, deadline)?;
+    Ok((root, cwd))
+}
+
+fn prepare_check_with_resolved_runtime(
+    root: &Path,
+    group: &RestoredGroupContext,
+    check: &DiscoveredCheck,
+    cwd: PathBuf,
+    runtime: &ApprovedMiseRuntime,
+    deadline: CheckDeadline,
+) -> Result<OwnedCheck, OrchestratorError> {
     let n = NEXT_HOME.fetch_add(1, Ordering::Relaxed);
     let home = group
         .temp
         .join(format!("velnor-check-{}-{n}", std::process::id()));
     std::fs::create_dir(&home).map_err(|_| internal("check_home_creation"))?;
-    if let Err(error) = cache_execution_context::ensure_private_placement(&root, &group.temp, &home)
+    if let Err(error) = cache_execution_context::ensure_private_placement(root, &group.temp, &home)
     {
         cache_execution_context::discard_private_home(&home);
         return Err(error);
@@ -163,7 +200,7 @@ pub(crate) fn prepare_check_with_context(
         &group.context_digest(),
     )
     .map_err(|error| internal(&error.to_string()))?;
-    let prepared = materialize(group, &home, cwd, check, &runtime, deadline);
+    let prepared = materialize(group, &home, cwd, check, runtime, deadline);
     match prepared {
         Ok(parts) => Ok(OwnedCheck {
             qualified: parts.qualified,

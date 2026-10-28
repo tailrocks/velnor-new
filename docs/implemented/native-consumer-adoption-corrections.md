@@ -103,7 +103,27 @@ literal event list, so the two production policies cannot drift separately.
 After integrating the approved-runtime execution fix from PR #424, the
 workspace build, all 426 tests, Clippy, and Rustdoc checks passed. Two native
 generations matched the applied tree, and all five goldens matched, including
-the dogfood tree. The coordinated named-check planning-identity repair remains
-required before SDK66 release acceptance.
+the dogfood tree.
+
+Named checks now resolve the approved Mise runtime for their actual runner
+target during planning and share that typed runtime with staged-plan binding
+and execution. The toolchain identity retains the executable version selector
+and adds a canonical component fingerprint of target, version, SHA-256, and
+byte bound. Version alone was insufficient because valid approvals can change
+a target's SHA or byte bound without changing its version.
+
+Earlier coverage checked runtime acquisition and changed version and binary
+identity together. It did not compare plans at a fixed checkout or reject an
+old staged plan after one runtime field changed. Two public scenarios now
+cover version rotation, separate same-version SHA and byte-bound changes,
+unaffected runner targets, ConsumerV1 fallback, and fresh versus stale CLI
+execution. Both reproduced the compiled-pin defect and the version-only
+identity gap before passing with the complete runtime fingerprint. Their
+fixtures exclude unrelated Rust discovery while retaining the real declared
+input files. The combined workspace suite passes all 428 tests with no skips;
+strict Clippy and Rustdoc checks also pass. Two native generations match the
+applied workflow tree, and all five goldens match. The 18 golden metadata
+queries have matching guard admission and explicit MBX execution receipts.
+Immutable release acceptance remains a separate gate for this final repair.
 Protected merge, immutable SDK publication, Tap adoption, and binary
 installation remain separate acceptance gates.
