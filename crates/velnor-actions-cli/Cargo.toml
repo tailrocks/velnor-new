@@ -61,6 +61,10 @@ name = "runner_image_admission_public"
 path = "tests/runner_image_admission_public.rs"
 
 [[test]]
+name = "check_job_source_public"
+path = "tests/check_job_source_public.rs"
+
+[[test]]
 name = "image_publication_public"
 path = "tests/image_publication_public.rs"
 

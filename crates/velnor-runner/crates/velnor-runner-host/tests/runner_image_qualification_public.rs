@@ -10,8 +10,8 @@ mod support;
 #[path = "runner_image_qualification_public/uncertain_cleanup.rs"]
 mod uncertain_cleanup;
 
-use std::error::Error;
 use std::time::Duration;
+use std::{error::Error, fs};
 
 use fixture::{
     ApiFault, ApiPlan, ContainerRole, DockerApiFixture, GitFixture, ImageFault, ImageRole,
@@ -33,6 +33,30 @@ fn public_qualifier_success_keeps_images_and_cleans_private_resources() -> TestR
     assert_eq!(state.containers.len(), 1);
     assert_eq!(state.volumes, ["foreign-sentinel"]);
     assert_private_configs(&state)?;
+    Ok(())
+}
+
+#[test]
+fn replacement_ref_preserves_source_a_qualification() -> TestResult<()> {
+    let git = GitFixture::new()?;
+    let source = git.source_sha().to_owned();
+    let lock = fs::read(git.root().join(".velnor/runner.lock"))?;
+    git.add_replacement_ref(false)?;
+
+    let (output, state) = qualify(&git, &source, ApiPlan::new(&source))?;
+    assert_success(&output, &state);
+    assert_eq!(fs::read(git.root().join(".velnor/runner.lock"))?, lock);
+    Ok(())
+}
+
+#[test]
+fn replacement_ref_rejects_physical_source_b_before_docker() -> TestResult<()> {
+    let git = GitFixture::new()?;
+    let source = git.source_sha().to_owned();
+    git.add_replacement_ref(true)?;
+
+    let (output, state) = qualify(&git, &source, ApiPlan::new(&source))?;
+    assert_source_rejected_before_api(&output, &state);
     Ok(())
 }
 

@@ -28,6 +28,39 @@ impl GitFixture {
         Ok(fixture)
     }
 
+    pub(super) fn add_replacement_ref(
+        &self,
+        checkout_replacement: bool,
+    ) -> Result<(), Box<dyn Error>> {
+        let source = self.head()?;
+        fs::write(self.root.join("tracked.txt"), b"replacement source B\n")?;
+        let lock_path = self.root.join(".velnor/runner.lock");
+        let mut lock = fs::read(&lock_path)?;
+        lock.extend_from_slice(b"fixture_marker = \"replacement-b\"\n");
+        fs::write(lock_path, lock)?;
+        let manifest = self.root.join("Cargo.toml");
+        if manifest.is_file() {
+            fs::write(manifest, b"replacement source B\n")?;
+        }
+        self.git(&["add", "--all"])?;
+        let tree = String::from_utf8(self.git(&["write-tree"])?.stdout)?
+            .trim()
+            .to_owned();
+        let replacement = String::from_utf8(
+            self.git(&["commit-tree", &tree, "-m", "unrelated replacement source"])?
+                .stdout,
+        )?
+        .trim()
+        .to_owned();
+        self.git(&["checkout", "--quiet", &source, "--", "."])?;
+        if checkout_replacement {
+            self.git(&["checkout", "--quiet", "--detach", &replacement])?;
+            self.git(&["update-ref", "--no-deref", "HEAD", &source])?;
+        }
+        self.git(&["replace", &source, &replacement])?;
+        Ok(())
+    }
+
     pub(super) fn root(&self) -> &std::path::Path {
         &self.root
     }
@@ -190,6 +223,7 @@ impl GitFixture {
         Ok(Command::new("git")
             .env("GIT_CONFIG_GLOBAL", "/dev/null")
             .env("GIT_CONFIG_NOSYSTEM", "1")
+            .env("GIT_NO_REPLACE_OBJECTS", "1")
             .arg("-C")
             .arg(&self.root)
             .args(args)

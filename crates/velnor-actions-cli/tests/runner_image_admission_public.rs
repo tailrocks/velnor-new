@@ -109,6 +109,37 @@ fn source_admission_rejects_dirty_checkout_and_hidden_lock_changes() -> Result<(
 }
 
 #[test]
+fn replacement_ref_keeps_physical_source_a_admissible() -> Result<(), Box<dyn Error>> {
+    let fixture = AdmissionFixture::new()?;
+    let source = fixture.source.clone();
+    let lock = fs::read(fixture.root.join(".velnor/runner.lock"))?;
+    fixture.add_replacement_ref(false)?;
+
+    let output = support::invoke(&fixture, &fixture.images)?;
+    assert!(output.status.success(), "admission failed: {output:?}");
+    let value: serde_json::Value = serde_json::from_slice(&fs::read(&fixture.output)?)?;
+    assert_eq!(value["source_commit"], source);
+    assert_eq!(value["runner_lock_sha256"], lock_sha256(&lock));
+    for (name, image, _) in fixture.images.entries() {
+        let descriptor = &value["images"][name];
+        assert_eq!(descriptor["tag"], format!("sha-{source}"));
+        assert_eq!(descriptor["registry_digest"], image.manifest_digest);
+    }
+    Ok(())
+}
+
+#[test]
+fn replacement_ref_does_not_admit_physical_source_b_as_source_a() -> Result<(), Box<dyn Error>> {
+    let fixture = AdmissionFixture::new()?;
+    fixture.add_replacement_ref(true)?;
+
+    let output = support::invoke(&fixture, &fixture.images)?;
+    assert!(!output.status.success());
+    assert!(!fixture.output.exists());
+    Ok(())
+}
+
+#[test]
 fn source_admission_rejects_skip_worktree_runner_dockerfile_change() -> Result<(), Box<dyn Error>> {
     reject_hidden_runner_dockerfile_change("--skip-worktree")
 }

@@ -58,6 +58,13 @@ impl AdmissionFixture {
         self.repository.mutate_checkout(mutation)
     }
 
+    pub(crate) fn add_replacement_ref(
+        &self,
+        checkout_replacement: bool,
+    ) -> Result<(), Box<dyn Error>> {
+        self.repository.add_replacement_ref(checkout_replacement)
+    }
+
     pub(crate) fn hide_and_change_lock(&self, flag: &str) -> Result<(), Box<dyn Error>> {
         self.repository.hide_and_change_lock(flag)
     }

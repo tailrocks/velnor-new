@@ -118,6 +118,43 @@ impl GitFixture {
         Ok(())
     }
 
+    pub(crate) fn add_replacement_ref(
+        &self,
+        checkout_replacement: bool,
+    ) -> Result<(), Box<dyn Error>> {
+        fs::write(self.root().join("tracked.txt"), "replacement source B\n")?;
+        let lock_path = self.root().join(".velnor/runner.lock");
+        let mut lock = fs::read(&lock_path)?;
+        lock.extend_from_slice(b"fixture_marker = \"replacement-b\"\n");
+        fs::write(lock_path, lock)?;
+        run_git(self.root(), &["add", "--all"])?;
+        let tree = String::from_utf8(run_git_output(self.root(), &["write-tree"])?)?
+            .trim()
+            .to_owned();
+        let replacement = String::from_utf8(run_git_output(
+            self.root(),
+            &["commit-tree", &tree, "-m", "unrelated replacement source"],
+        )?)?
+        .trim()
+        .to_owned();
+        run_git(
+            self.root(),
+            &["checkout", "--quiet", &self.source_sha, "--", "."],
+        )?;
+        if checkout_replacement {
+            run_git(
+                self.root(),
+                &["checkout", "--quiet", "--detach", &replacement],
+            )?;
+            run_git(
+                self.root(),
+                &["update-ref", "--no-deref", "HEAD", &self.source_sha],
+            )?;
+        }
+        run_git(self.root(), &["replace", &self.source_sha, &replacement])?;
+        Ok(())
+    }
+
     pub(crate) fn hide_lock_change(&self, index_flag: &str) -> Result<(), Box<dyn Error>> {
         run_git(
             self.root(),
@@ -233,6 +270,7 @@ pub(crate) fn invoke(
     socket: &Path,
 ) -> Result<Output, Box<dyn Error>> {
     let child = Command::new(env!("CARGO_BIN_EXE_velnor-resource-probe-release"))
+        .env_remove("GIT_NO_REPLACE_OBJECTS")
         .args([
             "qualify-runner-images",
             root.to_str().ok_or("root path is not UTF-8")?,
@@ -269,6 +307,7 @@ pub(crate) fn invoke_with_timeout_timed(
 ) -> Result<(Output, Duration), Box<dyn Error>> {
     let started = Instant::now();
     let child = Command::new(env!("CARGO_BIN_EXE_velnor-resource-probe-release"))
+        .env_remove("GIT_NO_REPLACE_OBJECTS")
         .args([
             "qualify-runner-images",
             root.to_str().ok_or("root path is not UTF-8")?,
@@ -303,6 +342,7 @@ fn run_git(root: &Path, args: &[&str]) -> Result<(), Box<dyn Error>> {
     let output = Command::new("git")
         .arg("-C")
         .arg(root)
+        .env("GIT_NO_REPLACE_OBJECTS", "1")
         .args(args)
         .output()?;
     if output.status.success() {
@@ -320,6 +360,7 @@ fn run_git_output(root: &Path, args: &[&str]) -> Result<Vec<u8>, Box<dyn Error>>
     let output = Command::new("git")
         .arg("-C")
         .arg(root)
+        .env("GIT_NO_REPLACE_OBJECTS", "1")
         .args(args)
         .output()?;
     if output.status.success() {

@@ -153,6 +153,7 @@ async fn git(root: &Path, args: &[&str]) -> Result<CommandOutput, HostError> {
         .env("GIT_CONFIG_GLOBAL", "/dev/null")
         .env("GIT_TERMINAL_PROMPT", "0")
         .env("GIT_OPTIONAL_LOCKS", "0")
+        .env("GIT_NO_REPLACE_OBJECTS", "1")
         .args([
             "-c",
             "core.fsmonitor=false",
