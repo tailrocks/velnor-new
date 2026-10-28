@@ -9,6 +9,8 @@ mod attempt_identity;
 mod readback_retention;
 #[path = "image_publication_public/registry_cases.rs"]
 mod registry_cases;
+#[path = "image_publication_public/required_ci.rs"]
+mod required_ci;
 #[path = "image_publication_public/source_closure.rs"]
 mod source_closure;
 #[path = "image_publication_public/support/mod.rs"]

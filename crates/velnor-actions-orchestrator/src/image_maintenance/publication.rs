@@ -60,7 +60,14 @@ pub(super) fn publish_image(request: &PublishImageRequest) -> Result<(), Orchest
     let published = with_owned_directory(&request.private_scratch, |directory| {
         let layout = directory.join("oci");
         materialize(request, &evidence, &layout)?;
-        crane::publish(&layout, repository, &tag, &candidate.oci, request.deadline)
+        crane::publish(
+            &layout,
+            repository,
+            &tag,
+            &candidate.oci,
+            request.deadline,
+            || github::revalidate_before_publish(request, &producer, request.deadline),
+        )
     })?;
     let receipt = make_receipt(request, &candidate, &producer, repository, &tag, published);
     let bytes =

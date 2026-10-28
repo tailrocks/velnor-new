@@ -12,10 +12,13 @@ use crate::{OrchestratorError, internal::internal};
 mod read;
 use self::read::get_json;
 
+#[path = "publication_github/ci.rs"]
+mod ci;
+
 #[path = "publication_github_models.rs"]
 mod models;
 use models::{
-    ArtifactList, Branch, Comparison, ContentFile, JobList, Repository, Run, WorkflowRuns,
+    ArtifactList, Comparison, ContentFile, JobList, Run,
 };
 
 use super::{ImagePublicationProfile, PublishImageRequest, authority};
@@ -29,6 +32,7 @@ const CI_WORKFLOW: &str = ".github/workflows/ci.yml";
 pub(super) struct AuthenticatedProducer {
     pub head_sha: String,
     pub workflow_path: String,
+    pub main_sha: String,
     pub ci_run_id: u64,
     pub ci_run_attempt: u32,
 }
@@ -38,27 +42,14 @@ pub(super) fn authenticate(
     candidate: &authority::CandidateRecord,
     deadline: CheckDeadline,
 ) -> Result<(AuthenticatedProducer, BTreeMap<String, Vec<u8>>), OrchestratorError> {
-    let token = env::var("GH_TOKEN").map_err(|_| internal("image_publication_token_missing"))?;
-    if token.is_empty() {
-        return Err(internal("image_publication_token_missing"));
-    }
-    let repository: Repository = get_json("repos/tailrocks/velnor-new", &token, deadline)?;
-    if repository.id != authority::IMAGE_REPOSITORY_ID
-        || repository.full_name != authority::IMAGE_REPOSITORY
-        || repository.default_branch != "main"
-    {
-        return Err(internal("image_publication_repository_authority"));
-    }
-    let branch: Branch = get_json("repos/tailrocks/velnor-new/branches/main", &token, deadline)?;
-    if branch.name != "main" || !is_sha1(&branch.commit.sha) {
-        return Err(internal("image_publication_default_branch"));
-    }
-    verify_source_on_main(request, &token, &branch.commit.sha, deadline)?;
+    let token = github_token()?;
+    let main_sha = ci::main_sha(&token, deadline)?;
+    verify_source_on_main(request, &token, &main_sha, deadline)?;
     let run = load_producer_run(request, &token, deadline)?;
     validate_producer_run(request, candidate, &run)?;
     validate_artifact(request, candidate, &run, &token, deadline)?;
     validate_producer_jobs(request, &token, deadline)?;
-    let (ci_run_id, ci_run_attempt) = latest_successful_ci(request, &token, deadline)?;
+    let ci = ci::authenticate(request, &token, deadline)?;
     let source_files = source_files(request, candidate, &token, deadline)?;
     authority::verify_source_inputs(candidate, &source_files)?;
     let (signer_workflow_path, signer_workflow_sha) = match request.profile {
@@ -97,14 +88,32 @@ pub(super) fn authenticate(
         AuthenticatedProducer {
             head_sha: run.head_sha,
             workflow_path: run.path,
-            ci_run_id,
-            ci_run_attempt,
+            main_sha,
+            ci_run_id: ci.id,
+            ci_run_attempt: ci.attempt,
         },
         source_files,
     ))
 }
 
-fn verify_source_on_main(
+pub(super) fn revalidate_before_publish(
+    request: &PublishImageRequest,
+    producer: &AuthenticatedProducer,
+    deadline: CheckDeadline,
+) -> Result<(), OrchestratorError> {
+    let token = github_token()?;
+    ci::revalidate(request, producer, &token, deadline)
+}
+
+fn github_token() -> Result<String, OrchestratorError> {
+    let token = env::var("GH_TOKEN").map_err(|_| internal("image_publication_token_missing"))?;
+    if token.is_empty() {
+        return Err(internal("image_publication_token_missing"));
+    }
+    Ok(token)
+}
+
+pub(super) fn verify_source_on_main(
     request: &PublishImageRequest,
     token: &str,
     main_sha: &str,
@@ -306,48 +315,6 @@ fn producer_job_names(profile: ImagePublicationProfile) -> &'static [&'static st
             "Run runner images release graph / qualify-images",
         ],
     }
-}
-
-fn latest_successful_ci(
-    request: &PublishImageRequest,
-    token: &str,
-    deadline: CheckDeadline,
-) -> Result<(u64, u32), OrchestratorError> {
-    let route = format!(
-        "repos/tailrocks/velnor-new/actions/workflows/ci.yml/runs?branch=main&event=push&head_sha={}&per_page=100",
-        request.source_commit
-    );
-    let response: WorkflowRuns = get_json(&route, token, deadline)?;
-    let mut runs = response
-        .workflow_runs
-        .into_iter()
-        .filter(|run| {
-            run.path == CI_WORKFLOW
-                && run.event == "push"
-                && run.head_branch == "main"
-                && run.head_sha == request.source_commit
-                && run.head_repository.as_ref().is_some_and(|repo| {
-                    repo.id == authority::IMAGE_REPOSITORY_ID
-                        && repo.full_name == authority::IMAGE_REPOSITORY
-                })
-        })
-        .collect::<Vec<_>>();
-    runs.sort_by_key(|run| (run.run_number, run.id));
-    let latest = runs
-        .last()
-        .ok_or_else(|| internal("image_publication_ci_missing"))?;
-    if runs
-        .iter()
-        .filter(|run| run.run_number == latest.run_number)
-        .count()
-        != 1
-        || latest.status != "completed"
-        || latest.conclusion.as_deref() != Some("success")
-        || latest.run_attempt == 0
-    {
-        return Err(internal("image_publication_ci_latest_not_success"));
-    }
-    Ok((latest.id, latest.run_attempt))
 }
 
 fn source_files(

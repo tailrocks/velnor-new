@@ -181,6 +181,9 @@ fn api_run_data(
     )) {
         return Ok(serde_json::json!({"jobs":state["jobs"]}));
     }
+    if path.contains("/actions/runs/") && path.ends_with("/jobs") {
+        return ci_job_page(route, path, state);
+    }
     if path.contains("actions/workflows/ci.yml/runs") {
         let query = route
             .split_once('?')
@@ -213,4 +216,71 @@ fn api_run_data(
         return Ok(serde_json::json!({"workflow_runs":runs}));
     }
     Err(format!("unhandled GitHub API route: {path}").into())
+}
+
+fn ci_job_page(
+    route: &str,
+    path: &str,
+    state: &serde_json::Value,
+) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
+    let requested = path
+        .strip_prefix("repos/tailrocks/velnor-new/actions/runs/")
+        .and_then(|path| path.strip_suffix("/jobs"))
+        .ok_or("invalid CI job route")?;
+    let (run_id, attempt) = requested
+        .split_once("/attempts/")
+        .ok_or("CI job route has no attempt")?;
+    let run_id = run_id.parse::<u64>()?;
+    let attempt = attempt.parse::<u32>()?;
+    let selected_run = state["ci_runs"]
+        .as_array()
+        .and_then(|runs| {
+            runs.iter().max_by_key(|run| {
+                (
+                    run["run_number"].as_u64().unwrap_or_default(),
+                    run["id"].as_u64().unwrap_or_default(),
+                )
+            })
+        })
+        .unwrap_or(&state["ci_run"]);
+    let matches_run = selected_run["id"].as_u64() == Some(run_id)
+        && selected_run["run_attempt"].as_u64() == Some(u64::from(attempt));
+    let query = route
+        .split_once('?')
+        .map(|(_, query)| query)
+        .ok_or("CI job route has no query")?;
+    let fields = query.split('&').collect::<Vec<_>>();
+    let nonces = fields
+        .iter()
+        .filter_map(|field| field.strip_prefix("_velnor_read_nonce="))
+        .collect::<Vec<_>>();
+    let authority_query = fields
+        .iter()
+        .filter(|field| !field.starts_with("_velnor_read_nonce="))
+        .copied()
+        .collect::<Vec<_>>()
+        .join("&");
+    let page = fields
+        .iter()
+        .find_map(|field| field.strip_prefix("page="))
+        .and_then(|page| page.parse::<usize>().ok())
+        .ok_or("CI job route has no page")?;
+    if !matches_run
+        || page == 0
+        || authority_query != format!("per_page=100&page={page}")
+        || nonces.len() != 1
+        || nonces[0].is_empty()
+    {
+        return Err("CI job query did not match the selected run attempt".into());
+    }
+    if let Some(pages) = state["ci_job_pages"].as_array() {
+        return pages
+            .get(page - 1)
+            .cloned()
+            .ok_or_else(|| "unexpected CI jobs page".into());
+    }
+    let jobs = state["ci_jobs"]
+        .as_array()
+        .ok_or("CI job inventory is missing")?;
+    Ok(serde_json::json!({"total_count":jobs.len(),"jobs":jobs}))
 }

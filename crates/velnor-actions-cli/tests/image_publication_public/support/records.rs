@@ -230,6 +230,10 @@ pub(super) fn state_value(
         "workflow_run":{"id":run_id,"head_sha":authority_sha,"head_branch":"main"}});
     let ci_run = json!({"id":profile.ci_run_id(),"run_number":23,"run_attempt":1,"path":".github/workflows/ci.yml","event":"push","head_branch":"main","head_sha":source,
         "head_repository":{"id":1_390_620_900,"full_name":REPOSITORY},"status":"completed","conclusion":"success"});
+    let ci_jobs = json!([
+        {"id":profile.ci_run_id() + 1,"run_id":profile.ci_run_id(),"name":"Build","head_sha":source,"status":"completed","conclusion":"success"},
+        {"id":profile.ci_run_id() + 2,"run_id":profile.ci_run_id(),"name":"Required","head_sha":source,"status":"completed","conclusion":"success"}
+    ]);
     let jobs = match profile {
         FixtureProfile::Job => json!([
             {"name":"Build Linux job image candidate","status":"completed","conclusion":"success"},
@@ -248,7 +252,7 @@ pub(super) fn state_value(
         .collect::<BTreeMap<_, _>>();
     json!({"repository":{"id":1_390_620_900,"full_name":REPOSITORY,"default_branch":"main"},
         "source_commit":source,"main_sha":main_sha,"source_files":source_files,"producer":producer,"requested_attempt":run_attempt,"artifacts":[artifact],
-        "jobs":jobs,"ci_run":ci_run,"attestation":attestation,
+        "jobs":jobs,"ci_run":ci_run,"ci_jobs":ci_jobs,"ci_job_pages":null,"attestation":attestation,
         "crane":{"tag_reference":tag_reference,"tag_digest":null,"manifest_reference":null,"remote":null,"fail_blob_readback":false,"corrupt_remote_blob":null,"remote_manifest_response_corruption":null}})
 }
 
