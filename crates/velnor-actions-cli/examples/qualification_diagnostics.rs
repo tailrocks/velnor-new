@@ -18,6 +18,9 @@ enum DiagnosticsMode {
     Fail57,
     ReplaceCopiedGuard,
     ChangeCopiedSource,
+    ReplaceCopiedGuardThenSleep,
+    ChangeCopiedSourceThenStderrOverflow,
+    StdoutOverflow,
 }
 
 fn main() -> ExitCode {
@@ -37,6 +40,9 @@ fn main() -> ExitCode {
     if mutate_after_plan(mode).is_err() {
         return ExitCode::from(56);
     }
+    if let Err(exit) = run_after_plan(mode) {
+        return exit;
+    }
     outcome
 }
 
@@ -51,6 +57,11 @@ impl DiagnosticsMode {
             "fail57" => Some(Self::Fail57),
             "replace-copied-guard" => Some(Self::ReplaceCopiedGuard),
             "change-copied-source" => Some(Self::ChangeCopiedSource),
+            "replace-copied-guard-then-sleep" => Some(Self::ReplaceCopiedGuardThenSleep),
+            "change-copied-source-then-stderr-overflow" => {
+                Some(Self::ChangeCopiedSourceThenStderrOverflow)
+            }
+            "stdout-overflow" => Some(Self::StdoutOverflow),
             _ => None,
         }
     }
@@ -81,6 +92,14 @@ fn emit_plan_diagnostics(mode: DiagnosticsMode) -> Result<(), ExitCode> {
     else {
         return Err(ExitCode::from(56));
     };
+    if matches!(
+        mode,
+        DiagnosticsMode::ReplaceCopiedGuardThenSleep
+            | DiagnosticsMode::ChangeCopiedSourceThenStderrOverflow
+            | DiagnosticsMode::StdoutOverflow
+    ) {
+        write_success_marker()?;
+    }
     let is_nested = root.file_name() == Some(OsStr::new("nested"));
     let is_dogfood = root == source_root;
     eprintln!("Repository: {}", root.display());
@@ -97,7 +116,10 @@ fn emit_plan_diagnostics(mode: DiagnosticsMode) -> Result<(), ExitCode> {
         DiagnosticsMode::Quiet
         | DiagnosticsMode::Control
         | DiagnosticsMode::ReplaceCopiedGuard
-        | DiagnosticsMode::ChangeCopiedSource => false,
+        | DiagnosticsMode::ChangeCopiedSource
+        | DiagnosticsMode::ReplaceCopiedGuardThenSleep
+        | DiagnosticsMode::ChangeCopiedSourceThenStderrOverflow
+        | DiagnosticsMode::StdoutOverflow => false,
     };
     if emit_warning {
         eprintln!("warning: plan-diagnostic-regression");
@@ -114,7 +136,10 @@ fn mutate_after_plan(mode: DiagnosticsMode) -> std::io::Result<()> {
 
     if !matches!(
         mode,
-        DiagnosticsMode::ReplaceCopiedGuard | DiagnosticsMode::ChangeCopiedSource
+        DiagnosticsMode::ReplaceCopiedGuard
+            | DiagnosticsMode::ChangeCopiedSource
+            | DiagnosticsMode::ReplaceCopiedGuardThenSleep
+            | DiagnosticsMode::ChangeCopiedSourceThenStderrOverflow
     ) {
         return Ok(());
     }
@@ -128,7 +153,7 @@ fn mutate_after_plan(mode: DiagnosticsMode) -> std::io::Result<()> {
         .ok_or_else(|| std::io::Error::other("diagnostics source root is missing"))?
         .canonicalize()?;
     match mode {
-        DiagnosticsMode::ReplaceCopiedGuard => {
+        DiagnosticsMode::ReplaceCopiedGuard | DiagnosticsMode::ReplaceCopiedGuardThenSleep => {
             let expected_source = root.join("source").canonicalize()?;
             if source_root != expected_source {
                 return Err(std::io::Error::other(
@@ -137,7 +162,8 @@ fn mutate_after_plan(mode: DiagnosticsMode) -> std::io::Result<()> {
             }
             replace_copied_guard(&root.join("guard/archive-guard"), &root)
         }
-        DiagnosticsMode::ChangeCopiedSource => {
+        DiagnosticsMode::ChangeCopiedSource
+        | DiagnosticsMode::ChangeCopiedSourceThenStderrOverflow => {
             if source_root != root {
                 return Err(std::io::Error::other(
                     "source fault root is outside the owned fixture root",
@@ -147,6 +173,41 @@ fn mutate_after_plan(mode: DiagnosticsMode) -> std::io::Result<()> {
         }
         _ => Ok(()),
     }
+}
+
+fn write_success_marker() -> Result<(), ExitCode> {
+    use std::io::{self, Write};
+
+    let mut stdout = io::stdout().lock();
+    stdout
+        .write_all(b"qualification-diagnostics:run-entry-succeeded\n")
+        .and_then(|()| stdout.flush())
+        .map_err(|_| ExitCode::from(56))
+}
+
+fn run_after_plan(mode: DiagnosticsMode) -> Result<(), ExitCode> {
+    use std::io;
+    use std::time::Duration;
+
+    match mode {
+        DiagnosticsMode::ReplaceCopiedGuardThenSleep => {
+            std::thread::sleep(Duration::from_secs(30));
+            Ok(())
+        }
+        DiagnosticsMode::ChangeCopiedSourceThenStderrOverflow => {
+            write_overflow(io::stderr().lock())
+        }
+        DiagnosticsMode::StdoutOverflow => write_overflow(io::stdout().lock()),
+        _ => Ok(()),
+    }
+}
+
+fn write_overflow(mut output: impl std::io::Write) -> Result<(), ExitCode> {
+    let block = [b'x'; 8192];
+    for _ in 0..2048 {
+        output.write_all(&block).map_err(|_| ExitCode::from(56))?;
+    }
+    Ok(())
 }
 
 #[cfg(unix)]

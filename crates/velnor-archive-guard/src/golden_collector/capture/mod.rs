@@ -4,7 +4,9 @@
 mod case;
 mod dogfood;
 mod fixture_git;
+mod golden_manifest;
 mod manifest;
+mod output;
 
 use std::env;
 use std::fs;
@@ -51,7 +53,13 @@ pub(super) fn run(args: Arguments) -> Result<(), CollectorError> {
     let root = fs::canonicalize(args.root).map_err(CollectorError::operational)?;
     let cli = validate_cli(args.cli)?;
     let golden_dir = golden_dir(&root)?;
-    let guard = Guard::admit(args.guard, args.guard_sha256, &root)?;
+    let guard = Guard::admit(
+        args.guard,
+        args.guard_sha256,
+        &root,
+        args.command_timeout,
+        args.output_cap_bytes,
+    )?;
     let cli_sha256 = filesystem::sha256_file(&cli)?;
     let target = {
         let mut binary = fs::File::open(&cli).map_err(CollectorError::operational)?;
@@ -172,6 +180,7 @@ fn check_goldens(golden_dir: &Path, stage: &Path) -> Result<(), CollectorError> 
         }
         Err(error) => return Err(CollectorError::operational(error)),
     }
+    golden_manifest::verify(golden_dir, &cases_root)?;
     for name in FIXTURES.into_iter().chain(["dogfood"]) {
         let golden = cases_root.join(name);
         let actual = stage.join(name);
@@ -241,13 +250,14 @@ fn candidate_version(
 ) -> Result<String, CollectorError> {
     let raw = workspace.join("raw/version");
     fs::create_dir_all(&raw).map_err(CollectorError::operational)?;
-    let output = guard.run_candidate(root, Command::new(cli).arg("--version"), |output| {
-        save_command_output(&raw, output)
+    let output = guard.run_candidate(root, Command::new(cli).arg("--version"), |result| {
+        output::persist_result(&raw, "version", &raw, result)
     })?;
-    if !output.status.success() {
-        return Err(CollectorError::operational(
-            "candidate --version command failed",
-        ));
+    if output.status != velnor_actions_mise::BoundedCommandStatus::Exited(0) {
+        return Err(CollectorError::operational(format!(
+            "candidate --version command failed ({:?})",
+            output.status
+        )));
     }
     let text = std::str::from_utf8(&output.stdout).map_err(CollectorError::operational)?;
     let mut lines = text.lines();
@@ -265,17 +275,6 @@ fn candidate_version(
         ));
     }
     Ok(version.to_owned())
-}
-
-fn save_command_output(raw: &Path, output: &std::process::Output) -> Result<(), CollectorError> {
-    fs::write(raw.join("version.raw.txt"), &output.stdout).map_err(CollectorError::operational)?;
-    fs::write(raw.join("version.stderr.raw.txt"), &output.stderr)
-        .map_err(CollectorError::operational)?;
-    fs::write(
-        raw.join("version.exit"),
-        format!("{}\n", output.status.code().unwrap_or(128)),
-    )
-    .map_err(CollectorError::operational)
 }
 
 fn validate_cli(path: PathBuf) -> Result<PathBuf, CollectorError> {

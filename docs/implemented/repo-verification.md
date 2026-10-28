@@ -42,6 +42,13 @@ intentional filtered or partitioned subruns may allow an empty selection only
 when the generated plan selects the complete suite and execution evidence
 confirms its tasks ran. V1 has no permanent empty-suite exception.
 
+Before either root verification entry point runs `velnor-archive-guard` tests,
+it builds the `qualification-diagnostics` CLI example and resolves its Cargo
+compiler artifact through the repository-policy executable selector with kind
+`example`. It exports the absolute executable path in
+`VELNOR_QUALIFICATION_DIAGNOSTICS_FIXTURE`. A missing or invalid artifact fails
+the test scope; tests do not invoke Cargo to build it.
+
 ---
 
 ## The Verification Suite

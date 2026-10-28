@@ -242,8 +242,8 @@ if [ -z "$GEN_DIR" ]; then
   fail "generated-tree (mktemp failed; logs: $LOG_DIR)"
 else
   echo "--- verify-local: generated-tree"
-  if "${MISE_EXEC[@]}" cargo build --locked --message-format=json-render-diagnostics \
-    -p velnor-actions-cli --bin velnor-actions \
+  if "${MISE_EXEC[@]}" cargo build --locked --message-format=json \
+    -p velnor-actions-cli --bin velnor-actions --example qualification-diagnostics \
     >"$GENERATED_ARTIFACTS" \
     2>"$GENERATED_BUILD_LOG"; then
     BIN="$(VELNOR_REPO_POLICY_ACTION=artifact-executable \
@@ -251,9 +251,28 @@ else
       VELNOR_REPO_POLICY_MANIFEST=crates/velnor-actions-cli/Cargo.toml \
       VELNOR_REPO_POLICY_TARGET=velnor-actions \
       repo_policy artifact-executable 2>>"$GENERATED_BUILD_LOG")"
+    DIAGNOSTICS_FIXTURE="$(env \
+      VELNOR_INTERNAL_OP=repo-policy-v1 \
+      VELNOR_REPO_POLICY_ACTION=artifact-executable \
+      VELNOR_REPO_POLICY_ROOT="$ROOT" \
+      VELNOR_REPO_POLICY_MESSAGES="$GENERATED_ARTIFACTS" \
+      VELNOR_REPO_POLICY_MANIFEST=crates/velnor-actions-cli/Cargo.toml \
+      VELNOR_REPO_POLICY_TARGET=qualification-diagnostics \
+      VELNOR_REPO_POLICY_ARTIFACT_KIND=example \
+      "${MISE_EXEC[@]}" cargo run --quiet --locked -p velnor-actions-cli \
+        --bin velnor-actions 2>>"$GENERATED_BUILD_LOG")" || DIAGNOSTICS_FIXTURE=""
+    case "$DIAGNOSTICS_FIXTURE" in
+      /*) ;;
+      *) DIAGNOSTICS_FIXTURE="" ;;
+    esac
+    if [ ! -x "$DIAGNOSTICS_FIXTURE" ]; then
+      DIAGNOSTICS_FIXTURE=""
+    fi
+    export VELNOR_QUALIFICATION_DIAGNOSTICS_FIXTURE="$DIAGNOSTICS_FIXTURE"
     : >"$GENERATED_RUN_LOG"
     : >"$GENERATED_DIFF_LOG"
-    if [ -n "$BIN" ] && "$BIN" generate --output-dir "$GEN_DIR/tree" \
+    if [ -n "$BIN" ] && [ -x "$BIN" ] && [ -n "$DIAGNOSTICS_FIXTURE" ] && \
+      "$BIN" generate --output-dir "$GEN_DIR/tree" \
       >"$GENERATED_RUN_LOG" 2>&1 &&
       diff -r --brief .github "$GEN_DIR/tree/.github" \
         >"$GENERATED_DIFF_LOG" 2>&1; then

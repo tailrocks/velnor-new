@@ -9,13 +9,15 @@ use std::process::Command;
 use super::super::{CollectorError, filesystem};
 use super::Context;
 use super::fixture_git;
+use super::output;
+use velnor_actions_mise::{BoundedCommandOutput, BoundedCommandStatus};
 
 pub(super) fn capture(context: &Context<'_>, out: &Path) -> Result<bool, CollectorError> {
     let preview = out.join("preview");
     let raw = context.workspace.join("raw/dogfood");
     fs::create_dir_all(&preview).map_err(CollectorError::operational)?;
     fs::create_dir_all(&raw).map_err(CollectorError::operational)?;
-    let head = root_head(context.root)?;
+    let head = root_head(context)?;
     let plan = run_candidate(context, "plan", None, &raw, out, "plan")?;
     require_success("dogfood plan", &plan)?;
     let root_bytes = context.root.as_os_str().as_bytes();
@@ -79,8 +81,8 @@ pub(super) fn capture(context: &Context<'_>, out: &Path) -> Result<bool, Collect
     Ok(identical)
 }
 
-fn root_head(root: &Path) -> Result<String, CollectorError> {
-    let output = fixture_git::run(root, &["rev-parse", "HEAD"])?;
+fn root_head(context: &Context<'_>) -> Result<String, CollectorError> {
+    let output = fixture_git::run(context, "dogfood", context.root, &["rev-parse", "HEAD"])?;
     let value = String::from_utf8(output.stdout).map_err(CollectorError::operational)?;
     let value = value.trim_end();
     if value.len() != 40 || !value.bytes().all(|byte| byte.is_ascii_hexdigit()) {
@@ -98,7 +100,7 @@ fn run_candidate(
     raw: &Path,
     out: &Path,
     name: &str,
-) -> Result<std::process::Output, CollectorError> {
+) -> Result<BoundedCommandOutput, CollectorError> {
     let mut command = Command::new(context.cli);
     command.current_dir(context.root);
     if operation == "plan" {
@@ -112,36 +114,17 @@ fn run_candidate(
     context
         .guard
         .run_candidate(context.root, &mut command, |result| {
-            save_raw(raw, name, result)?;
-            save_status(out, name, result)
+            output::persist_result(raw, name, out, result)
         })
 }
 
-fn save_raw(raw: &Path, name: &str, output: &std::process::Output) -> Result<(), CollectorError> {
-    fs::write(raw.join(format!("{name}.raw.txt")), &output.stdout)
-        .map_err(CollectorError::operational)?;
-    fs::write(raw.join(format!("{name}.stderr.raw.txt")), &output.stderr)
-        .map_err(CollectorError::operational)
-}
-
-fn save_status(
-    out: &Path,
-    name: &str,
-    output: &std::process::Output,
-) -> Result<(), CollectorError> {
-    fs::write(
-        out.join(format!("{name}.exit")),
-        format!("{}\n", output.status.code().unwrap_or(128)),
-    )
-    .map_err(CollectorError::operational)
-}
-
-fn require_success(operation: &str, output: &std::process::Output) -> Result<(), CollectorError> {
-    if output.status.success() {
+fn require_success(operation: &str, output: &BoundedCommandOutput) -> Result<(), CollectorError> {
+    if output.status == BoundedCommandStatus::Exited(0) {
         return Ok(());
     }
     Err(CollectorError::operational(format!(
-        "{operation} failed: {}",
+        "{operation} failed ({:?}): {}",
+        output.status,
         String::from_utf8_lossy(&output.stderr).trim_end()
     )))
 }

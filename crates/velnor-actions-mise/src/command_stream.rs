@@ -27,6 +27,7 @@ impl IsolatedCommand {
                 stdout_cap,
                 stdout_bytes: 0,
                 stderr_cap,
+                stderr: Vec::with_capacity(stderr_cap.min(64 * 1024)),
                 progress: None,
             };
             let result = self.run_streams(
@@ -66,6 +67,7 @@ pub(super) struct Streams<'a> {
     stdout_cap: u64,
     stdout_bytes: u64,
     pub(super) stderr_cap: usize,
+    stderr: Vec<u8>,
     progress: Option<super::progress::ProgressSink<'a>>,
 }
 
@@ -77,6 +79,7 @@ impl<'a> Streams<'a> {
             stdout_cap,
             stdout_bytes: 0,
             stderr_cap,
+            stderr: Vec::with_capacity(stderr_cap.min(64 * 1024)),
             progress: None,
         }
     }
@@ -91,6 +94,7 @@ impl<'a> Streams<'a> {
             stdout_cap: u64::try_from(cap).unwrap_or(u64::MAX),
             stdout_bytes: 0,
             stderr_cap: cap,
+            stderr: Vec::with_capacity(cap.min(64 * 1024)),
             progress: None,
         }
     }
@@ -107,6 +111,18 @@ impl<'a> Streams<'a> {
         }
     }
 
+    pub(super) fn into_prefixes(self) -> (Vec<u8>, Vec<u8>) {
+        let stdout = match self.stdout {
+            Sink::Memory(bytes) => bytes,
+            Sink::File(_) => Vec::new(),
+        };
+        (stdout, self.stderr)
+    }
+
+    pub(super) fn take_stderr(&mut self) -> Vec<u8> {
+        std::mem::take(&mut self.stderr)
+    }
+
     pub(super) fn poll_stdout<Fd: std::os::fd::AsFd>(
         &mut self,
         pipe: &mut Option<Fd>,
@@ -116,18 +132,26 @@ impl<'a> Streams<'a> {
                 .stdout_bytes
                 .checked_add(u64::try_from(bytes.len()).map_err(|error| error.to_string())?)
                 .ok_or_else(|| "output_limit_exceeded".to_owned())?;
-            if next > self.stdout_cap {
-                return Err(format!("stdout_limit_exceeded:{}", self.stdout_cap));
-            }
+            let available = self.stdout_cap.saturating_sub(self.stdout_bytes);
+            let accepted = bytes
+                .len()
+                .min(usize::try_from(available).unwrap_or(usize::MAX));
+            let prefix = &bytes[..accepted];
             match &mut self.stdout {
-                Sink::Memory(output) => output.extend_from_slice(bytes),
+                Sink::Memory(output) => output.extend_from_slice(prefix),
                 Sink::File(output) => output
-                    .write_all(bytes)
+                    .write_all(prefix)
                     .map_err(|error| format!("stdout_sink_write_failed:{error}"))?,
             }
-            self.stdout_bytes = next;
+            self.stdout_bytes = self
+                .stdout_bytes
+                .checked_add(u64::try_from(accepted).map_err(|error| error.to_string())?)
+                .ok_or_else(|| "output_limit_exceeded".to_owned())?;
             if let Some(progress) = &mut self.progress {
-                progress.chunk("stdout", bytes)?;
+                progress.chunk("stdout", prefix)?;
+            }
+            if accepted < bytes.len() || next > self.stdout_cap {
+                return Err(format!("stdout_limit_exceeded:{}", self.stdout_cap));
             }
             Ok(())
         })
@@ -139,19 +163,23 @@ impl Streams<'_> {
     pub(super) fn poll_stderr<Fd: std::os::fd::AsFd>(
         &mut self,
         pipe: &mut Option<Fd>,
-        output: &mut Vec<u8>,
     ) -> Result<bool, String> {
         poll_chunk(pipe, |bytes| {
-            let next = output
+            let next = self
+                .stderr
                 .len()
                 .checked_add(bytes.len())
                 .ok_or_else(|| "output_limit_exceeded".to_owned())?;
-            if next > self.stderr_cap {
-                return Err(format!("stderr_limit_exceeded:{}", self.stderr_cap));
-            }
-            output.extend_from_slice(bytes);
+            let accepted = bytes
+                .len()
+                .min(self.stderr_cap.saturating_sub(self.stderr.len()));
+            let prefix = &bytes[..accepted];
+            self.stderr.extend_from_slice(prefix);
             if let Some(progress) = &mut self.progress {
-                progress.chunk("stderr", bytes)?;
+                progress.chunk("stderr", prefix)?;
+            }
+            if accepted < bytes.len() || next > self.stderr_cap {
+                return Err(format!("stderr_limit_exceeded:{}", self.stderr_cap));
             }
             Ok(())
         })

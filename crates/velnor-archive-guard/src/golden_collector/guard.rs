@@ -7,8 +7,10 @@ use std::os::unix::fs::MetadataExt;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::time::Duration;
 
 use sha2::{Digest, Sha256};
+use velnor_actions_mise::{BoundedCommandOutput, BoundedCommandStatus, run_command_bounded};
 
 use super::CollectorError;
 use super::filesystem;
@@ -38,6 +40,8 @@ pub(super) struct Guard {
     file_identity: Identity,
     parent_identity: Identity,
     owner: u32,
+    command_timeout: Duration,
+    output_cap_bytes: usize,
 }
 
 impl Guard {
@@ -45,6 +49,8 @@ impl Guard {
         path: PathBuf,
         expected: String,
         root: &Path,
+        command_timeout: Duration,
+        output_cap_bytes: usize,
     ) -> Result<Self, CollectorError> {
         if !path.is_absolute() || !is_sha256(&expected) {
             return Err(CollectorError::operational(
@@ -82,6 +88,8 @@ impl Guard {
             file_identity: Identity::from(&metadata),
             parent_identity: Identity::from(&parent_metadata),
             owner,
+            command_timeout,
+            output_cap_bytes,
         };
         let compiled = guard.guard_output(&["--fingerprint"])?;
         if !is_sha256(&compiled) {
@@ -125,14 +133,36 @@ impl Guard {
         &self,
         root: &Path,
         command: &mut Command,
-        persist: impl FnOnce(&std::process::Output) -> Result<(), CollectorError>,
-    ) -> Result<std::process::Output, CollectorError> {
+        persist: impl FnOnce(&BoundedCommandOutput) -> Result<(), CollectorError>,
+    ) -> Result<BoundedCommandOutput, CollectorError> {
         self.verify(root)?;
-        let output = command.output().map_err(CollectorError::operational)?;
-        let persisted = persist(&output);
+        let output = run_command_bounded(
+            command,
+            self.output_cap_bytes,
+            self.command_timeout,
+            super::COMMAND_CLEANUP_BUDGET,
+        );
+        let persisted = persist(&output).err();
         let verified = self.verify(root);
-        persisted?;
-        verified?;
+        let mut failures = Vec::new();
+        if let Some(error) = &output.execution_error {
+            failures.push(format!("execution {:?}: {error}", output.termination));
+        }
+        if let Some(error) = &output.cleanup_error {
+            failures.push(format!("cleanup: {error}"));
+        }
+        if let Some(error) = persisted {
+            failures.push(format!("persistence: {error}"));
+        }
+        if let Err(error) = verified {
+            failures.push(format!("post-execution verification: {error}"));
+        }
+        if !failures.is_empty() {
+            return Err(CollectorError::operational(format!(
+                "candidate command failed: {}",
+                failures.join("; ")
+            )));
+        }
         Ok(output)
     }
 
@@ -141,13 +171,24 @@ impl Guard {
     }
 
     fn guard_output(&self, args: &[&str]) -> Result<String, CollectorError> {
-        let output = Command::new(&self.path)
-            .args(args)
-            .output()
-            .map_err(CollectorError::operational)?;
-        if !output.status.success() {
+        let mut command = Command::new(&self.path);
+        command.args(args);
+        let output = run_command_bounded(
+            &mut command,
+            self.output_cap_bytes,
+            self.command_timeout,
+            super::COMMAND_CLEANUP_BUDGET,
+        );
+        if output.execution_error.is_some() || output.cleanup_error.is_some() {
             return Err(CollectorError::operational(format!(
-                "archive guard command failed: {}",
+                "archive guard command failed: execution={:?} cleanup={:?}",
+                output.execution_error, output.cleanup_error
+            )));
+        }
+        if output.status != BoundedCommandStatus::Exited(0) {
+            return Err(CollectorError::operational(format!(
+                "archive guard command failed ({:?}): {}",
+                output.status,
                 String::from_utf8_lossy(&output.stderr).trim_end()
             )));
         }

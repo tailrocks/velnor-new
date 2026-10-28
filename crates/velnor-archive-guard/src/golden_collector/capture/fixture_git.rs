@@ -2,12 +2,28 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::env;
+use std::fs;
 use std::path::Path;
-use std::process::{Command, Output};
+use std::process::Command;
 
 use super::super::CollectorError;
+use super::Context;
+use super::output;
+use velnor_actions_mise::{BoundedCommandOutput, BoundedCommandStatus};
 
-pub(super) fn run(root: &Path, args: &[&str]) -> Result<Output, CollectorError> {
+pub(super) fn run(
+    context: &Context<'_>,
+    fixture: &str,
+    root: &Path,
+    args: &[&str],
+) -> Result<BoundedCommandOutput, CollectorError> {
+    let raw = context.workspace.join("raw").join(fixture).join("git");
+    fs::create_dir_all(&raw).map_err(CollectorError::operational)?;
+    let operation = args
+        .first()
+        .copied()
+        .ok_or_else(|| CollectorError::operational("fixture git command has no operation"))?;
+    let artifact = format!("git-{operation}");
     let mut command = Command::new("git");
     command
         .current_dir(root)
@@ -29,11 +45,15 @@ pub(super) fn run(root: &Path, args: &[&str]) -> Result<Output, CollectorError> 
         ])
         .args(args);
     isolate_git_environment(&mut command);
-    let output = command.output().map_err(CollectorError::operational)?;
-    if !output.status.success() {
+    let output = context
+        .guard
+        .run_candidate(context.root, &mut command, |result| {
+            output::persist_result(&raw, &artifact, &raw, result)
+        })?;
+    if output.status != BoundedCommandStatus::Exited(0) {
         return Err(CollectorError::operational(format!(
             "fixture git command failed: {}",
-            String::from_utf8_lossy(&output.stderr).trim_end()
+            format_status(&output)
         )));
     }
     Ok(output)
@@ -55,11 +75,15 @@ pub(super) fn isolate_git_environment(command: &mut Command) {
     command.env("GIT_COMMITTER_DATE", "2026-01-01T00:00:00Z");
 }
 
-pub(super) fn setup(root: &Path) -> Result<String, CollectorError> {
-    run(root, &["init", "-q"])?;
-    run(root, &["add", "-A"])?;
-    run(root, &["commit", "-qm", "golden"])?;
-    let output = run(root, &["rev-parse", "HEAD"])?;
+pub(super) fn setup(
+    context: &Context<'_>,
+    fixture: &str,
+    root: &Path,
+) -> Result<String, CollectorError> {
+    run(context, fixture, root, &["init", "-q"])?;
+    run(context, fixture, root, &["add", "-A"])?;
+    run(context, fixture, root, &["commit", "-qm", "golden"])?;
+    let output = run(context, fixture, root, &["rev-parse", "HEAD"])?;
     let head = String::from_utf8(output.stdout).map_err(CollectorError::operational)?;
     let head = head.trim_end();
     if head.len() != 40 || !head.bytes().all(|byte| byte.is_ascii_hexdigit()) {
@@ -68,4 +92,19 @@ pub(super) fn setup(root: &Path) -> Result<String, CollectorError> {
         ));
     }
     Ok(head.to_owned())
+}
+
+fn format_status(output: &BoundedCommandOutput) -> String {
+    let mut details = vec![format!("status {:?}", output.status)];
+    if let Some(error) = &output.execution_error {
+        details.push(format!("execution error: {error}"));
+    }
+    if let Some(error) = &output.cleanup_error {
+        details.push(format!("cleanup error: {error}"));
+    }
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    if !stderr.trim().is_empty() {
+        details.push(format!("stderr: {}", stderr.trim_end()));
+    }
+    details.join("; ")
 }

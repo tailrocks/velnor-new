@@ -11,6 +11,8 @@ use super::super::{CollectorError, filesystem};
 use super::Context;
 use super::fixture_git;
 use super::manifest;
+use super::output;
+use velnor_actions_mise::{BoundedCommandOutput, BoundedCommandStatus};
 
 pub(super) fn setup(
     context: &Context<'_>,
@@ -20,7 +22,7 @@ pub(super) fn setup(
     fs::create_dir(repo).map_err(CollectorError::operational)?;
     filesystem::copy_contents(&context.root.join("fixtures").join(name), repo)?;
     manifest::prepare(context, repo)?;
-    fixture_git::setup(repo)
+    fixture_git::setup(context, name, repo)
 }
 
 pub(super) fn capture(
@@ -88,7 +90,7 @@ fn run_candidate(
     raw: &Path,
     out: &Path,
     name: &str,
-) -> Result<std::process::Output, CollectorError> {
+) -> Result<BoundedCommandOutput, CollectorError> {
     let mut command = Command::new(context.cli);
     command.current_dir(repo).args(args);
     if let Some(path) = final_arg {
@@ -98,8 +100,7 @@ fn run_candidate(
     context
         .guard
         .run_candidate(context.root, &mut command, |output| {
-            save_raw(raw, name, output)?;
-            save_status(out, name, output)
+            output::persist_result(raw, name, out, output)
         })
 }
 
@@ -115,16 +116,14 @@ fn validate_bindings(
             .arg("qualification-output-bindings")
             .arg(repo.join(".velnor/release-manifest.json"))
             .arg(github),
-        |output| {
-            save_raw(raw, "bindings", output)?;
-            save_status(raw, "bindings", output)
-        },
+        |output| output::persist_result(raw, "bindings", raw, output),
     )?;
-    if output.status.success() {
+    if output.status == BoundedCommandStatus::Exited(0) {
         Ok(())
     } else {
         Err(CollectorError::operational(format!(
-            "fixture output bindings failed: {}",
+            "fixture output bindings failed ({:?}): {}",
+            output.status,
             String::from_utf8_lossy(&output.stderr).trim_end()
         )))
     }
@@ -145,33 +144,17 @@ fn normalize_stderr(context: &Context<'_>, raw: &[u8], repo: &Path) -> Vec<u8> {
     filesystem::normalize_plan_stderr(raw, &mappings)
 }
 
-fn save_raw(raw: &Path, name: &str, output: &std::process::Output) -> Result<(), CollectorError> {
-    fs::write(raw.join(format!("{name}.raw.txt")), &output.stdout)
-        .map_err(CollectorError::operational)?;
-    fs::write(raw.join(format!("{name}.stderr.raw.txt")), &output.stderr)
-        .map_err(CollectorError::operational)
-}
-
-fn save_status(
-    out: &Path,
-    name: &str,
-    output: &std::process::Output,
-) -> Result<(), CollectorError> {
-    let status = output.status.code().unwrap_or(128).to_string();
-    fs::write(out.join(format!("{name}.exit")), format!("{status}\n"))
-        .map_err(CollectorError::operational)
-}
-
 fn require_success(
     operation: &str,
     fixture: &str,
-    output: &std::process::Output,
+    output: &BoundedCommandOutput,
 ) -> Result<(), CollectorError> {
-    if output.status.success() {
+    if output.status == BoundedCommandStatus::Exited(0) {
         return Ok(());
     }
     Err(CollectorError::operational(format!(
-        "{operation} failed for {fixture}: {}",
+        "{operation} failed for {fixture} ({:?}): {}",
+        output.status,
         String::from_utf8_lossy(&output.stderr).trim_end()
     )))
 }

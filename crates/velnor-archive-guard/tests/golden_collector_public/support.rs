@@ -1,9 +1,10 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::env;
 use std::error::Error;
 use std::fs;
-use std::os::unix::fs::PermissionsExt;
+use std::os::unix::fs::{PermissionsExt, symlink};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
@@ -37,7 +38,10 @@ impl Harness {
         let root = fs::canonicalize(root)?;
         let collector = PathBuf::from(env!("CARGO_BIN_EXE_velnor-golden-collector"));
         let guard_source = PathBuf::from(env!("CARGO_BIN_EXE_velnor-archive-guard"));
-        let archive_guard = directory.join("archive-guard");
+        let guard_directory = directory.join("guard");
+        fs::create_dir(&guard_directory)?;
+        fs::set_permissions(&guard_directory, fs::Permissions::from_mode(0o700))?;
+        let archive_guard = guard_directory.join("archive-guard");
         copy_executable(&guard_source, &archive_guard)?;
         let guard_sha256 = sha256(&fs::read(&archive_guard)?);
         Ok(Self {
@@ -73,6 +77,20 @@ impl Harness {
         guard_sha256: &str,
         golden_dir: Option<&Path>,
     ) -> Result<Output, Box<dyn Error>> {
+        Ok(self
+            .command(mode, root, candidate, guard, guard_sha256, golden_dir)
+            .output()?)
+    }
+
+    pub(super) fn command(
+        &self,
+        mode: &str,
+        root: &Path,
+        candidate: &Path,
+        guard: &Path,
+        guard_sha256: &str,
+        golden_dir: Option<&Path>,
+    ) -> Command {
         let mut command = Command::new(&self.collector);
         command
             .arg(mode)
@@ -84,13 +102,32 @@ impl Harness {
             .arg(guard)
             .arg("--archive-guard-sha256")
             .arg(guard_sha256)
+            .env("TMPDIR", &self.directory)
             .env_remove("VELNOR_GOLDEN_DIR")
-            .env_remove("VELNOR_GOLDEN_KEEP_WORK");
+            .env_remove("VELNOR_GOLDEN_KEEP_WORK")
+            .env_remove("VELNOR_PLAN_DIAGNOSTICS_MODE")
+            .env_remove("VELNOR_PLAN_DIAGNOSTICS_ROOT")
+            .env_remove("VELNOR_PLAN_DIAGNOSTICS_MUTATION_ROOT");
         if let Some(golden_dir) = golden_dir {
             command.env("VELNOR_GOLDEN_DIR", golden_dir);
         }
-        Ok(command.output()?)
+        command
     }
+}
+
+pub(super) fn diagnostics_candidate() -> Result<PathBuf, Box<dyn Error>> {
+    let path = env::var_os("VELNOR_QUALIFICATION_DIAGNOSTICS_FIXTURE")
+        .ok_or("qualification diagnostics fixture locator is missing")?;
+    let path = PathBuf::from(path);
+    let metadata = fs::symlink_metadata(&path)?;
+    if !path.is_absolute()
+        || !metadata.file_type().is_file()
+        || metadata.permissions().mode() & 0o111 == 0
+        || fs::canonicalize(&path)? != path
+    {
+        return Err("qualification diagnostics fixture is not an absolute executable file".into());
+    }
+    Ok(path)
 }
 
 pub(super) fn copy_fingerprint_inputs(
@@ -127,7 +164,7 @@ fn copy_file(source: &Path, destination: &Path) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn copy_tree(source: &Path, destination: &Path) -> Result<(), Box<dyn Error>> {
+pub(super) fn copy_tree(source: &Path, destination: &Path) -> Result<(), Box<dyn Error>> {
     fs::create_dir_all(destination)?;
     for entry in fs::read_dir(source)? {
         let entry = entry?;
@@ -138,6 +175,8 @@ fn copy_tree(source: &Path, destination: &Path) -> Result<(), Box<dyn Error>> {
             copy_tree(&from, &to)?;
         } else if metadata.file_type().is_file() {
             fs::copy(from, to)?;
+        } else if metadata.file_type().is_symlink() {
+            symlink(fs::read_link(from)?, to)?;
         } else {
             return Err("source fingerprint tree contains a special file".into());
         }
