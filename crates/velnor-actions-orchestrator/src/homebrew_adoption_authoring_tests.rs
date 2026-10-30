@@ -9,6 +9,9 @@ use velnor_actions_mise::CheckDeadline;
 
 use super::seed::{self, BaseTreeEntry};
 
+#[path = "homebrew_adoption_prepare_tests.rs"]
+mod prepare_tests;
+
 #[test]
 fn seed_agents_reader_uses_the_protected_source_file_ceiling() {
     assert_eq!(seed::MAX_SDK_MANIFEST_BYTES, 8 * 1024 * 1024);

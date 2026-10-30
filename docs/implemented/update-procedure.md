@@ -142,6 +142,10 @@ image identity only and does not claim the qualification matrix ran again.
 The [2026-10-04 evidence snapshot](freshness-evidence-2026-10-04.md)
 records this distinction. The [2026-10-05 evidence snapshot](freshness-evidence-2026-10-05.md)
 records two bounded release-metadata captures and a separate hosted-runner image observation.
+The [2026-10-25 evidence snapshot](freshness-evidence-2026-10-25.md)
+records agreeing source captures, the reviewed Mise 2026.10.19 update, and
+the actual image from a successful hosted CI job, while keeping hosted
+qualification pending separate from the runtime observation.
 
 ## Exceptions (≤14 days)
 

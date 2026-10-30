@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
 pub(super) const PINNED_BINARY_ENV: &str = "VELNOR_MISE_REGRESSION_BINARY";
-pub(super) const PINNED_MISE: &str = "2026.10.18";
+pub(super) const PINNED_MISE: &str = "2026.10.19";
 
 fn output_text(output: &Output) -> String {
     let mut text = String::from_utf8_lossy(&output.stdout).into_owned();
@@ -104,11 +104,11 @@ pub(super) fn find_on_path(program: &str) -> Result<PathBuf, String> {
 
 pub(super) fn official_release_digest(version: &str) -> Result<&'static str, String> {
     match (version, std::env::consts::OS, std::env::consts::ARCH) {
-        ("2026.10.18", "linux", "x86_64") => {
-            Ok("e97c38973336aa2ff350fea50f47b412b266fe263b102b7200ff1e9b118c6942")
+        ("2026.10.19", "linux", "x86_64") => {
+            Ok("3162760f40b6b5f706c60641e4ef5ee7322bc6c54f72fc26a7111b337aa18d9d")
         }
-        ("2026.10.18", "macos", "aarch64") => {
-            Ok("d40e2fcd96fed7c70b04af282c36534d87d0318bef89c16fa00c9f98e55ade88")
+        ("2026.10.19", "macos", "aarch64") => {
+            Ok("7dc61dfa71abbcda1c40d18440bc556b5d58b80e6042bc4f95fd106fa1bb3c66")
         }
         _ => Err(format!(
             "unqualified mise release/platform: {version} {}/{}",

@@ -47,12 +47,12 @@ Historical freshness evidence checked on 2026-10-17 records Mise 2026.10.13,
 Rust 1.98.1, Nextest 0.9.148, and release-plz 0.3.172. The workflow
 pins in that evidence were `jdx/mise-action` v5.2.0 and `asamarts/alint` v0.18.4. See
 [`freshness-evidence-2026-10-17.md`](docs/implemented/freshness-evidence-2026-10-17.md).
-The current catalog selects Mise 2026.10.18, ALint 0.20.0, Rust 1.99.1,
-MBX 1.27.0, Nextest 0.9.149, and release-plz 0.4.0.
+The current catalog selects Mise 2026.10.19, ALint 0.20.1, Rust 1.99.1,
+MBX 1.27.0, Nextest 0.9.149, and release-plz 0.4.1.
 The selected stable compiler and workspace MSRV are both Rust 1.99.1 and
 1.99, respectively. `mise.toml` remains a read-only local developer input.
-The workflow pins `jdx/mise-action` v5.2.0 to reviewed commit
-`9b200bcecbfd6303e69a4a261b2e09e3757440a7`; the action's
+The workflow pins `jdx/mise-action` v5.2.3 to reviewed commit
+`82a612c5ab8bcda7cc5db6b7e81a8e7584c3dc6e`; the action's
 `persist_github_token` default is false, and Velnor leaves it unset. This
 supersedes issue #6's earlier v5.0.1 target.
 

@@ -13,7 +13,7 @@ fn transition() -> HomebrewAdoptionTransition {
 
 fn manifest() -> Vec<u8> {
     format!(
-        r#"{{"schema":1,"version":"0.1.53","repository":"tailrocks/velnor-new","commit":"{SOURCE}","targets":[{{"target":"x86_64-unknown-linux-gnu","artifact":"https://github.com/tailrocks/velnor-new/releases/download/v0.1.53/velnor-actions-0.1.53-x86_64-unknown-linux-gnu","sha256":"{HOST_SHA}"}},{{"target":"aarch64-apple-darwin","artifact":"https://github.com/tailrocks/velnor-new/releases/download/v0.1.53/velnor-actions-0.1.53-aarch64-apple-darwin","sha256":"{HOST_SHA}"}},{{"target":"x86_64-apple-darwin","artifact":"https://github.com/tailrocks/velnor-new/releases/download/v0.1.53/velnor-actions-0.1.53-x86_64-apple-darwin","sha256":"{HOST_SHA}"}}]}}"#
+        r#"{{"schema":1,"version":"0.1.55","repository":"tailrocks/velnor-new","commit":"{SOURCE}","targets":[{{"target":"x86_64-unknown-linux-gnu","artifact":"https://github.com/tailrocks/velnor-new/releases/download/v0.1.55/velnor-actions-0.1.55-x86_64-unknown-linux-gnu","sha256":"{HOST_SHA}"}},{{"target":"aarch64-apple-darwin","artifact":"https://github.com/tailrocks/velnor-new/releases/download/v0.1.55/velnor-actions-0.1.55-aarch64-apple-darwin","sha256":"{HOST_SHA}"}},{{"target":"x86_64-apple-darwin","artifact":"https://github.com/tailrocks/velnor-new/releases/download/v0.1.55/velnor-actions-0.1.55-x86_64-apple-darwin","sha256":"{HOST_SHA}"}}]}}"#
     )
     .into_bytes()
 }
@@ -24,7 +24,7 @@ fn identity<'a>(
 ) -> HomebrewAdoptionSeedSdkIdentity<'a> {
     HomebrewAdoptionSeedSdkIdentity {
         source_sha: SOURCE,
-        version: "0.1.53",
+        version: "0.1.55",
         manifest_bytes,
         manifest_sha256,
         host_target_sha256: HOST_SHA,
@@ -41,6 +41,15 @@ fn exact_authenticated_seed_bundle_is_deterministic_and_closed() {
     let first = render_homebrew_adoption_seed(&transition, &sdk, &pins).expect("render");
     let second = render_homebrew_adoption_seed(&transition, &sdk, &pins).expect("render");
     assert_eq!(first, second);
+    assert_eq!(
+        first
+            .iter()
+            .find(|file| file.path == ".velnor/release-manifest.json")
+            .expect("authenticated manifest output")
+            .bytes
+            .as_bytes(),
+        manifest.as_slice()
+    );
     assert_eq!(
         first
             .iter()
@@ -93,9 +102,9 @@ fn exact_authenticated_seed_bundle_is_deterministic_and_closed() {
     );
     assert_eq!(review.reviewer_app_id_variable, "REVIEWER_APP_ID");
 
-    let mise: toml::Value = toml::from_str(&first[3].bytes).expect("mise config parses");
+    let mise: toml::Value = toml::from_str(&first[4].bytes).expect("mise config parses");
     assert_eq!(mise["settings"]["lockfile"].as_bool(), Some(true));
-    let lock = velnor_actions_mise::toolfiles::lockfile::parse_mise_lockfile(&first[2].bytes)
+    let lock = velnor_actions_mise::toolfiles::lockfile::parse_mise_lockfile(&first[3].bytes)
         .expect("empty generated lock parses");
     assert!(lock.tools.is_empty());
 }
@@ -115,12 +124,27 @@ fn renderer_rejects_manifest_source_hash_version_and_transition_drift() {
     assert!(render_homebrew_adoption_seed(&transition, &sdk, &pins).is_err());
 
     sdk = identity(&manifest, &digest);
-    sdk.version = "0.1.52";
+    sdk.version = "0.1.54";
     assert!(render_homebrew_adoption_seed(&transition, &sdk, &pins).is_err());
 
-    let mut altered = transition;
+    let mut altered = transition.clone();
     altered
         .generated_output_paths
         .push("scripts/attacker.sh".to_owned());
     assert!(render_homebrew_adoption_seed(&altered, &identity(&manifest, &digest), &pins).is_err());
+
+    let mut legacy = transition.clone();
+    legacy.template_version = 1;
+    legacy
+        .generated_output_paths
+        .retain(|path| path != ".velnor/release-manifest.json");
+    assert!(render_homebrew_adoption_seed(&legacy, &identity(&manifest, &digest), &pins).is_err());
+
+    let tampered_manifest = String::from_utf8(manifest.clone())
+        .expect("fixture manifest is UTF-8")
+        .replace("0.1.55", "0.1.54")
+        .into_bytes();
+    let tampered_digest = sha256(&tampered_manifest);
+    let tampered = identity(&tampered_manifest, &tampered_digest);
+    assert!(render_homebrew_adoption_seed(&transition, &tampered, &pins).is_err());
 }

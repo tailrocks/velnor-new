@@ -1,5 +1,8 @@
 use super::*;
 
+#[path = "homebrew_adoption_seed_v2_tests.rs"]
+mod seed_v2;
+
 fn locator() -> HomebrewSourceAuthorityLocator {
     HomebrewSourceAuthorityLocator {
         schema: crate::homebrew_authority::HOMEBREW_SOURCE_AUTHORITY_LOCATOR_SCHEMA_V1.to_owned(),
@@ -78,8 +81,8 @@ fn transition(base: &BTreeMap<String, (u32, Vec<u8>)>) -> HomebrewAdoptionTransi
         tap_repository_id: 43,
         base_sha: "a".repeat(40),
         base_tree: "b".repeat(40),
-        template_version: 1,
-        minimum_sdk_version: "0.1.53".to_owned(),
+        template_version: 2,
+        minimum_sdk_version: "0.1.55".to_owned(),
         required_sdk_capability: "homebrew-adoption-seed-v1".to_owned(),
         source_authority_locator: locator(),
         claude_source_path: "AGENTS.md".to_owned(),
@@ -89,6 +92,7 @@ fn transition(base: &BTreeMap<String, (u32, Vec<u8>)>) -> HomebrewAdoptionTransi
         generated_output_paths: vec![
             ".github/workflows/ci.yml".to_owned(),
             ".velnor/config.toml".to_owned(),
+            ".velnor/release-manifest.json".to_owned(),
             "mise.lock".to_owned(),
             "mise.toml".to_owned(),
         ],
@@ -111,6 +115,10 @@ fn base_inventory() -> BTreeMap<String, (u32, Vec<u8>)> {
         (
             ".velnor/config.toml".to_owned(),
             (0o100_644, b"old config\n".to_vec()),
+        ),
+        (
+            ".velnor/release-manifest.json".to_owned(),
+            (0o100_644, br#"{"schema":1,"version":"0.1.48"}"#.to_vec()),
         ),
         ("mise.lock".to_owned(), (0o100_644, b"old lock\n".to_vec())),
         ("mise.toml".to_owned(), (0o100_644, b"old mise\n".to_vec())),
@@ -171,6 +179,10 @@ fn fixture() -> AdoptionFixture {
             b"workflow\n".to_vec(),
         ),
         (".velnor/config.toml".to_owned(), b"config\n".to_vec()),
+        (
+            ".velnor/release-manifest.json".to_owned(),
+            br#"{"schema":1,"version":"0.1.55"}"#.to_vec(),
+        ),
         ("mise.lock".to_owned(), b"lock\n".to_vec()),
         ("mise.toml".to_owned(), b"mise\n".to_vec()),
     ]);
@@ -276,7 +288,7 @@ fn accepts_only_exact_seed_tree_and_renderer_bytes() {
         })
         .expect("valid seed");
     assert_eq!(evidence.transition_id, "initial-seed");
-    assert_eq!(evidence.changed_paths.len(), 15);
+    assert_eq!(evidence.changed_paths.len(), 16);
 }
 
 #[test]
@@ -354,33 +366,6 @@ fn rejects_changed_inert_formula() {
                 locator: bytes
                     .get(crate::homebrew_authority::HOMEBREW_SOURCE_AUTHORITY_LOCATOR_PATH)
                     .expect("locator"),
-                generated_files: &generated,
-                candidate_file_bytes: &bytes,
-            },)
-            .is_err()
-    );
-}
-
-#[test]
-fn protected_transition_rejects_generated_path_escape_and_base_shift() {
-    let (mut transition, ..) = fixture();
-    transition
-        .generated_output_paths
-        .push("scripts/evil.py".to_owned());
-    assert!(transition.validate().is_err());
-    let (transition, _, candidate, claude, generated, bytes) = fixture();
-    let locator = bytes
-        .get(crate::homebrew_authority::HOMEBREW_SOURCE_AUTHORITY_LOCATOR_PATH)
-        .expect("locator");
-    assert!(
-        transition
-            .validate_candidate_tree(HomebrewAdoptionCandidateInput {
-                base: (&"e".repeat(40), &transition.base_tree),
-                head: (&"c".repeat(40), &"d".repeat(40)),
-                changes: &changes(&transition, &generated, &claude, locator),
-                candidate_files: &candidate,
-                claude: (&claude, &claude),
-                locator,
                 generated_files: &generated,
                 candidate_file_bytes: &bytes,
             },)

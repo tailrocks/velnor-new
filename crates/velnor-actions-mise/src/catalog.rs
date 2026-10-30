@@ -71,11 +71,11 @@ pub use tool::PinnedTool;
 pub mod project;
 use versions::tool_source;
 
-/// Selected Mise release (tag `v2026.10.18`); official asset bytes and the signed
-/// checksums file were verified 2026-10-23. Runtime and hosted
+/// Selected Mise release (tag `v2026.10.19`); official asset bytes and the signed
+/// checksums file were verified 2026-10-26. Runtime and hosted
 /// qualification remain part of the release gates.
-/// Source: `https://api.github.com/repos/jdx/mise/releases/tags/v2026.10.18`.
-pub const MISE_VERSION: &str = "2026.10.18";
+/// Source: `https://api.github.com/repos/jdx/mise/releases/tags/v2026.10.19`.
+pub const MISE_VERSION: &str = "2026.10.19";
 /// Selected Rust stable toolchain (2026-10-15 official stable manifest).
 /// Source: `https://static.rust-lang.org/dist/channel-rust-stable.toml`; checked 2026-10-18.
 pub const RUST_VERSION: &str = "1.99.1";

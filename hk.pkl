@@ -16,41 +16,63 @@ local fixtureTrees = List("fixtures/**", "docs/proposed/opentofu-goldens/**")
 steps {
   ["mise"] = Builtins.mise
   ["gitleaks"] = Builtins.gitleaks
-  // `--all` formats every member of either workspace; the adapter enters the selected manifest's directory
-  // and lets Cargo discover the applicable workspace from there.
+  // `--all` formats every member of either workspace; native hk enters each selected workspace directory,
+  // where Cargo discovers that workspace without an adapter or explicit manifest path.
   ["cargo_fmt"] = (Builtins.cargo_fmt) {
     exclude = fixtureTrees
-    check { command = "bash \"$(git rev-parse --show-toplevel)/scripts/hk-cargo.sh\" \"$(pwd -P)/{{workspace_indicator}}\" fmt-check" }
-    check_list_files { command = "bash \"$(git rev-parse --show-toplevel)/scripts/hk-cargo.sh\" \"$(pwd -P)/{{workspace_indicator}}\" fmt-files" }
-    fix = new Config.CommandSpec {
-      command = "bash \"$(git rev-parse --show-toplevel)/scripts/hk-fix-write-guard.sh\" bash \"$(git rev-parse --show-toplevel)/scripts/hk-cargo.sh\" \"$(pwd -P)/{{workspace_indicator}}\" fmt-fix"
-      effect = "write"
+    workspace_indicator = "Cargo.toml"
+    dir = "{{workspace}}"
+    prefix = List("rust-build-guard", "--", "mise", "exec", "--")
+    check = (Builtins.cargo_fmt.check as Config.CommandSpec) {
+      command = new Config.Command {
+        argv = List("cargo", "fmt", "--all", "--check")
+      }
+    }
+    check_list_files = (Builtins.cargo_fmt.check_list_files as Config.CommandSpec) {
+      command = new Config.Command {
+        argv = List("cargo", "fmt", "--all", "--check", "--", "--files-with-diff")
+      }
+    }
+    fix = (Builtins.cargo_fmt.fix as Config.CommandSpec) {
+      command = new Config.Command {
+        argv = List("cargo", "fmt", "--all")
+      }
     }
   }
   ["cargo_check"] = (Builtins.cargo_check) {
     exclude = fixtureTrees
     workspace_indicator = "Cargo.toml"
-    check { command = "bash \"$(git rev-parse --show-toplevel)/scripts/hk-cargo.sh\" \"$(pwd -P)/{{workspace_indicator}}\" check" }
-    fix = new Config.CommandSpec {
-      command = "bash \"$(git rev-parse --show-toplevel)/scripts/hk-fix-write-guard.sh\" bash \"$(git rev-parse --show-toplevel)/scripts/hk-cargo.sh\" \"$(pwd -P)/{{workspace_indicator}}\" check-fix"
-      effect = "write"
+    dir = "{{workspace}}"
+    prefix = List("rust-build-guard", "--", "mise", "exec", "--")
+    check = (Builtins.cargo_check.check as Config.CommandSpec) {
+      command = new Config.Command {
+        argv = List("cargo", "check", "--locked", "--quiet")
+      }
+    }
+    fix = (Builtins.cargo_check.fix as Config.CommandSpec) {
+      command = new Config.Command {
+        argv = List("cargo", "fix", "--locked", "--allow-dirty", "--allow-staged", "--quiet")
+      }
     }
   }
   ["cargo_clippy"] = (Builtins.cargo_clippy) {
     exclude = fixtureTrees
-    check { command = "bash \"$(git rev-parse --show-toplevel)/scripts/hk-cargo.sh\" \"$(pwd -P)/{{workspace_indicator}}\" clippy" }
-    fix = new Config.CommandSpec {
-      command = "bash \"$(git rev-parse --show-toplevel)/scripts/hk-fix-write-guard.sh\" bash \"$(git rev-parse --show-toplevel)/scripts/hk-cargo.sh\" \"$(pwd -P)/{{workspace_indicator}}\" clippy-fix"
-      effect = "write"
+    workspace_indicator = "Cargo.toml"
+    dir = "{{workspace}}"
+    prefix = List("rust-build-guard", "--", "mise", "exec", "--")
+    check = (Builtins.cargo_clippy.check as Config.CommandSpec) {
+      command = new Config.Command {
+        argv = List("cargo", "clippy", "--locked", "--quiet")
+      }
+    }
+    fix = (Builtins.cargo_clippy.fix as Config.CommandSpec) {
+      command = new Config.Command {
+        argv = List("cargo", "clippy", "--fix", "--allow-dirty", "--allow-staged", "--locked", "--quiet")
+      }
     }
   }
   // Both deny.toml files (root and crates/velnor-runner) stay; each governs its own workspace.
-  ["cargo_deny"] = (Builtins.cargo_deny) {
-    exclude = fixtureTrees
-    dir = null
-    workspace_indicator = "Cargo.toml"
-    check { command = "bash \"$(git rev-parse --show-toplevel)/scripts/hk-cargo.sh\" \"$(pwd -P)/{{workspace_indicator}}\" deny" }
-  }
+  ["cargo_deny"] = (Builtins.cargo_deny) { exclude = fixtureTrees }
   ["rust-toolchain-mirror"] {
     glob = List("mise.toml", "rust-toolchain.toml")
     check = "sh scripts/check-rust-toolchain-mirror.sh"

@@ -18,7 +18,7 @@ fn spec() -> UpgradesSpec {
         checkout_uses: CHECKOUT.to_owned(),
         mise_setup: MiseSetup {
             uses: "jdx/mise-action@82a612c5ab8bcda7cc5db6b7e81a8e7584c3dc6e".to_owned(),
-            version: "2026.10.18".to_owned(),
+            version: "2026.10.19".to_owned(),
             sha256: crate::setup::MISE_BINARY_SHA256_LINUX_X64.to_owned(),
         },
         gh_version: "2.103.2".to_owned(),

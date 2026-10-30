@@ -85,6 +85,13 @@ checks are ambiguous and block promotion.
 
 ## Channel and committed-generation binding
 
+The protected Homebrew seed transition uses the closed version-two template.
+Its output inventory includes `.velnor/release-manifest.json`, rendered from
+the exact authenticated SDK manifest bytes used to qualify the seed. This keeps
+the Tap's committed SDK identity aligned with the SDK that produced its
+workflow and tool files. The transition rejects older template inventories and
+candidate evidence that omits or changes the manifest.
+
 The signed receipt channel selects one of the two closed configured formula
 paths and a channel-distinct deterministic branch. The shared W/O/C/R identities
 and exact-head feedback/protection requirements above apply independently to both
