@@ -58,6 +58,12 @@ pub enum DeclaredTestRunner {
     CargoNextest,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CrateTestTool {
+    Hk,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct RustStackConfig {
@@ -96,6 +102,9 @@ pub struct RustStackConfig {
 
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub crates: BTreeMap<String, RustCrateConfig>,
+
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub test_tools: BTreeMap<String, Vec<CrateTestTool>>,
 
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub inputs: Vec<RustInputRule>,
@@ -176,6 +185,7 @@ impl RustStackConfig {
             binary_release: RustBinaryReleaseConfig::default(),
             suites: Vec::new(),
             crates: BTreeMap::new(),
+            test_tools: BTreeMap::new(),
             inputs: Vec::new(),
         }
     }
@@ -313,7 +323,8 @@ impl RustStackConfig {
         self.binary_release.validate(file)?;
         validate_rust_suites(&self.suites, file)?;
         super::rust_inputs::validate_rust_inputs(&self.inputs, file)?;
-        self.validate_crates(file)
+        self.validate_crates(file)?;
+        self.validate_test_tools(file)
     }
 
     fn validate_crates(&self, file: &str) -> Result<(), ContractError> {
@@ -336,6 +347,39 @@ impl RustStackConfig {
                     format!("{path}.build_jobs"),
                     format!("must_be_between_1_and_{MAX_CRATE_BUILD_JOBS}"),
                 ));
+            }
+        }
+        Ok(())
+    }
+
+    fn validate_test_tools(&self, file: &str) -> Result<(), ContractError> {
+        for (package, tools) in &self.test_tools {
+            let path = format!("stacks.rust.test_tools.{package}");
+            if package.is_empty()
+                || !package
+                    .bytes()
+                    .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-'))
+            {
+                return Err(ContractError::config(
+                    file,
+                    "stacks.rust.test_tools",
+                    format!("bad_package_name:{package}"),
+                ));
+            }
+            if tools.is_empty() {
+                return Err(ContractError::config(file, path, "empty_test_tools"));
+            }
+            let mut sorted = tools.clone();
+            sorted.sort();
+            if sorted != *tools {
+                return Err(ContractError::config(
+                    file,
+                    path,
+                    "test_tools_must_be_sorted",
+                ));
+            }
+            if tools.windows(2).any(|pair| pair[0] == pair[1]) {
+                return Err(ContractError::config(file, path, "duplicate_test_tool"));
             }
         }
         Ok(())

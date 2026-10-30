@@ -65,7 +65,7 @@ pub enum StepKind {
 
         task_digest: String,
 
-        toolchain_inputs: crate::cachekey::ToolchainInputs,
+        toolchain_inputs: Box<crate::cachekey::ToolchainInputs>,
 
         matrix_id: String,
 

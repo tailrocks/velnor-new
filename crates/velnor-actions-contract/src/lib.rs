@@ -11,6 +11,7 @@
 )]
 pub mod archive;
 pub mod cachekey;
+mod cachekey_selected_tools;
 pub mod candidate_manifest;
 pub mod canonical;
 pub mod closure;

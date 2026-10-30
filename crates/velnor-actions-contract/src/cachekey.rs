@@ -68,7 +68,10 @@ pub fn validate_miss_reason(reason: &str) -> Result<(), ContractError> {
     }
 }
 
-pub fn validate_semantic_text(field: &'static str, value: &str) -> Result<(), ContractError> {
+pub(super) fn validate_semantic_text(
+    field: &'static str,
+    value: &str,
+) -> Result<(), ContractError> {
     if value.is_empty() || value.starts_with('/') || value.contains('\\') {
         return Err(ContractError::identity(field, "non_semantic_input"));
     }
@@ -114,7 +117,14 @@ pub struct ToolchainInputs {
     pub compile_driver: String,
 
     pub test_runner: String,
+
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub selected_test_tools: Vec<SelectedTestTool>,
 }
+
+pub use crate::cachekey_selected_tools::{
+    SelectedTestTool, SelectedTestToolSourceBinding, toolchain_id,
+};
 
 #[derive(Debug, Clone, Serialize)]
 pub struct FormatInputs {
@@ -143,23 +153,6 @@ pub fn lane_id(inputs: &LaneInputs) -> Result<String, ContractError> {
     ] {
         validate_semantic_text(field, value)?;
     }
-    Ok(digest_b3(&canonical_json_bytes(inputs)?))
-}
-
-pub fn toolchain_id(inputs: &ToolchainInputs) -> Result<String, ContractError> {
-    if inputs.tools.is_empty() {
-        return Err(ContractError::identity("toolchain", "no_pinned_tools"));
-    }
-    let mut tools = inputs.tools.clone();
-    tools.sort();
-    if inputs.tools != tools {
-        return Err(ContractError::identity("toolchain", "tools_must_be_sorted"));
-    }
-    for tool in &inputs.tools {
-        validate_semantic_text("toolchain.tool", tool)?;
-    }
-    validate_semantic_text("compile_driver", &inputs.compile_driver)?;
-    validate_semantic_text("test_runner", &inputs.test_runner)?;
     Ok(digest_b3(&canonical_json_bytes(inputs)?))
 }
 

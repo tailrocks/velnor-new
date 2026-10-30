@@ -167,8 +167,9 @@ pub use rust_suites_validate::{
 };
 pub use rust_toolchain_source::RustToolchainSource;
 pub use stacks::{
-    DeclaredCompileDriver, DeclaredTestRunner, MAX_CRATE_BUILD_JOBS, RustConfiguration,
-    RustCrateConfig, RustStackConfig, StacksConfig, is_valid_feature_name, is_valid_rust_target,
+    CrateTestTool, DeclaredCompileDriver, DeclaredTestRunner, MAX_CRATE_BUILD_JOBS,
+    RustConfiguration, RustCrateConfig, RustStackConfig, StacksConfig, is_valid_feature_name,
+    is_valid_rust_target,
 };
 pub use task_source::MiseTaskSource;
 pub use tofu::{RootProblem, TofuStackConfig, Utf8RepoRelDir};
