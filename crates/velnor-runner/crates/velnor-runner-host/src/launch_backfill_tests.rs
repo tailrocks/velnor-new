@@ -204,7 +204,7 @@ async fn uncertain_dind_only_recovery_keeps_reservation_and_owned_resources() ->
                     &images,
                     &selected_engine,
                     &guest_file,
-                    StageAdmission::test_fixture_for(&selected_engine),
+                    StageAdmission::test_fixture(),
                     &bind,
                 )
                 .await?;

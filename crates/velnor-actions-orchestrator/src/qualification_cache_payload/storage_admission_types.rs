@@ -1,3 +1,4 @@
+use super::storage_admission::RuntimeIdentityV1;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -8,6 +9,7 @@ pub(super) struct StorageCacheAdmissionV1 {
     pub(super) scope: ScopeV1,
     pub(super) reservation: ReservationV1,
     pub(super) runner: RunnerV1,
+    pub(super) runner_identity: RuntimeIdentityV1,
     pub(super) engine: EngineV1,
     pub(super) profile: ProfileV1,
     pub(super) sample: SampleV1,
@@ -167,6 +169,7 @@ pub(super) struct ProjectionPreimageV1<'a> {
     pub(super) scope: &'a ScopeV1,
     pub(super) reservation: &'a ReservationV1,
     pub(super) runner: &'a RunnerV1,
+    pub(super) runner_identity: &'a RuntimeIdentityV1,
     pub(super) engine: &'a EngineV1,
     pub(super) profile: &'a ProfileV1,
     pub(super) sample: &'a SampleV1,

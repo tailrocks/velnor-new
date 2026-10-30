@@ -64,7 +64,7 @@ async fn run_controller(
     mut current: HostConfig,
     state: &Path,
     daemon_lock: &DaemonLock,
-    release_read_secret: ReleaseReadSecret,
+    mut release_read_secret: ReleaseReadSecret,
 ) -> Result<(), ListenFault> {
     let state_root = std::fs::canonicalize(state).map_err(|_| HostError::Path)?;
     if !state_root.is_dir() {
@@ -125,7 +125,6 @@ async fn run_controller(
         .await?;
     let worker_images =
         prepare_worker_images(&docker, &journal, &selected_engine, &release_read_secret).await?;
-    drop(release_read_secret);
     let mut connection_sessions = prepare_active_connections(
         state,
         &journal,
@@ -135,14 +134,27 @@ async fn run_controller(
         &docker,
     )
     .await?;
-    let (_server, control_state) = ControlServer::start(state, journal.clone(), &current)?;
+    let (_server, control_state, mut doctor_probes) =
+        ControlServer::start(state, journal.clone(), &current)?;
     let mut pending_retirements = Vec::new();
     discover_retirements(state, &current, &mut pending_retirements);
 
     // Zero-header polling handles lifecycle messages only. Positive work
     // admission remains closed until every durable admission proof is wired.
     loop {
-        tokio::time::sleep(CONFIG_RELOAD_PAUSE).await;
+        tokio::select! {
+            Some(request) = doctor_probes.recv() => {
+                let report = crate::launch::doctor_probe_report(
+                    &docker,
+                    &journal,
+                    &selected_engine,
+                    &release_read_secret,
+                ).await;
+                request.respond(report);
+                continue;
+            }
+            _ = tokio::time::sleep(CONFIG_RELOAD_PAUSE) => {}
+        }
         if !daemon_lock.matches_path(&daemon_lock_path) {
             return Err(HostError::Lock.into());
         }
@@ -167,10 +179,11 @@ async fn run_controller(
             && next != current
         {
             match ReleaseReadSecret::load(&next) {
-                Ok(_next_secret) => {
+                Ok(next_secret) => {
                     match apply_config_transition(&current, &next, &mut effects).await {
                         Ok(removed) => {
                             current = next;
+                            release_read_secret = next_secret;
                             pending_retirements.extend(removed);
                         }
                         Err(error) => {

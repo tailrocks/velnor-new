@@ -38,6 +38,8 @@ pub struct CreateProjection {
     pub open_stdin: bool,
     /// `container:<id>` joins that container's network namespace. Runner only.
     pub network_mode: Option<String>,
+    /// True only when the verified runner projection uses its paired DinD loopback API.
+    pub(super) loopback_docker_host: bool,
     /// Validated CPU and memory budget required by every Docker create.
     pub(crate) resource_budget: ResourceBudget,
 }

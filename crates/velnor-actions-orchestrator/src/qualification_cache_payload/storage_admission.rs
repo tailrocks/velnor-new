@@ -29,6 +29,20 @@ const ROLE_NAMES: &[&str] = &[
     "engine-metadata",
 ];
 
+/// Image identity from the controller-mounted, read-only runtime identity file.
+#[cfg(any(target_os = "linux", test))]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub(super) struct RuntimeIdentityV1 {
+    pub(super) domain: String,
+    pub(super) schema_version: u32,
+    pub(super) runner_image_name: String,
+    pub(super) runner_source_revision: String,
+    pub(super) runner_manifest_digest: String,
+    pub(super) runner_config_digest: String,
+    pub(super) platform: String,
+}
+
 /// Opaque byte and inode authority from the immutable, read-only job facts.
 #[derive(Debug, Clone)]
 pub(super) struct VerifiedCacheBudget {
@@ -158,6 +172,8 @@ pub(super) fn read_verified_budget(
 ) -> Result<VerifiedCacheBudget, &'static str> {
     #[cfg(target_os = "linux")]
     {
+        let runtime_identity =
+            identity::read_runtime_identity()?.ok_or("cache_storage_runtime_identity_missing")?;
         let (bytes, mount) = mount::read_projection()?;
         if bytes.is_empty() || bytes.len() > MAX_DOCUMENT_BYTES {
             return Err("cache_storage_projection_size_invalid");
@@ -168,6 +184,9 @@ pub(super) fn read_verified_budget(
             return Err("cache_storage_projection_noncanonical");
         }
         validate_document(&document, runner_temp, runner_name)?;
+        if document.runner_identity != runtime_identity {
+            return Err("cache_storage_runtime_identity_mismatch");
+        }
         if !mount.agrees_with(&document.job_facts_mount) {
             return Err("cache_storage_mount_identity_mismatch");
         }
@@ -217,6 +236,14 @@ mod tests;
 #[cfg(target_os = "linux")]
 #[path = "storage_admission_mount.rs"]
 mod mount;
+
+#[cfg(any(target_os = "linux", test))]
+#[path = "storage_admission_mountinfo.rs"]
+mod mountinfo;
+
+#[cfg(any(target_os = "linux", test))]
+#[path = "storage_admission_identity.rs"]
+mod identity;
 
 #[path = "storage_admission_measure.rs"]
 mod measure;

@@ -38,12 +38,18 @@ That is progressive-distribution evidence, not evidence that `2.338.0` is
 rejected. Scale-set registration and a live job with this release are still
 required before qualification.
 
-The image is not privileged and has no Docker socket, host home, Keychain,
-SSH agent, or controller config. UID `1000` (`runner`), group `docker` GID `999`.
-In-container passwordless sudo is for job steps only. The entrypoint also
-removes `/.dockerenv` before the listener so Testcontainers reaches published
-ports as `localhost`, matching a GitHub-hosted VM. Certificate verification
-is unchanged. The image does not override Cargo's job count. Workflows may set
+The image is not privileged and has no host Docker socket, host home, Keychain,
+SSH agent, or controller config. UID `1000` (`runner`), group `docker` GID
+`999`. In-container passwordless sudo is for job steps only. The entrypoint
+keeps `/.dockerenv` and requires `DOCKER_HOST=tcp://127.0.0.1:2375` for its
+paired DinD network namespace. Testcontainers and Runner host processes use
+that per-job loopback endpoint for published ports. The DinD API is
+unauthenticated with `--tls=false`: any process that can reach this loopback
+endpoint controls this job's daemon. There is no process isolation inside one
+job. Container actions keep the private `/var/run/docker.sock` mount; do not
+pass the runner's loopback endpoint into containers with their own network
+namespace. No host port is published, and no host networking is used.
+Certificate verification is unchanged. The image does not override Cargo's job count. Workflows may set
 `CARGO_BUILD_JOBS` or pass Cargo's `-j` option according to their own resource
 budget; the runner does not infer compile parallelism from host `nproc`.
 

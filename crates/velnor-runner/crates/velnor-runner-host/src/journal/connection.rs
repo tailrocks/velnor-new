@@ -13,15 +13,21 @@ pub(super) mod storage;
 pub(crate) use completion::ConnectionCompletionInboxEntry;
 pub(crate) use identity::{AssignmentIdentity, AssignmentKey};
 pub(crate) use reservation::{
-    CapacityLimits, OperationalCapacityLimits, PhysicalRunnerJitState, PhysicalRunnerOwnership,
-    PhysicalRunnerReservation, ReservationRequest, ReservationResult, ReservationSnapshot,
-    ReservationState, StorageAdmission, StorageAdmissionSample, StorageCacheProjection,
+    BootstrapContainerCreateClaim, BootstrapStartClaim, CapacityLimits,
+    JobFactsPublicationClaim, ListenerDeliveryClaim, OperationalCapacityLimits,
+    PhysicalRunnerJitState, PhysicalRunnerOwnership, PhysicalRunnerReservation,
+    ReservationRequest, ReservationResult, ReservationSnapshot, ReservationState,
+    StorageAdmission, StorageAdmissionSample, StorageAttachmentContract, StorageCacheProjection,
     StorageFilesystemKind, StorageInodePolicy, StorageMedium, StorageMemoryObservation,
-    StoragePoolLimit, StoragePoolObservation, StorageProfile, StorageReservationPlan, StorageRole,
-    StorageRoleCharge, StorageRoleLimit, StorageSampleIdentity,
+    StorageObjectCreateClaim, StorageObserver, StoragePoolLimit, StoragePoolObservation,
+    StorageProfile, StorageProvisioningAdmission, StorageReservationPlan, StorageRole,
+    StorageRoleCharge, StorageRoleContract, StorageRoleLimit, StorageSampleIdentity,
 };
 #[cfg(test)]
-pub(crate) use reservation::{fixture_admission, fixture_profile};
+pub(crate) use reservation::{
+    fixture_admission, fixture_profile, fixture_provisioning_profile,
+    fixture_storage_provisioning_admission,
+};
 pub(crate) use runtime::{ConnectionScaleSet, EngineContext, SourceAuthorizationBinding};
 pub(crate) use session::{
     BoundConnectionSession, SessionCreateClaim, SessionCreateRecord, SessionCreateState,

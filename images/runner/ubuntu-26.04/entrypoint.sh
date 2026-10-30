@@ -8,6 +8,7 @@ root="/home/runner"
 work="${root}/_work"
 listener="${root}/bin/Runner.Listener"
 entrypoint_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+docker_host='tcp://127.0.0.1:2375'
 # Use the conservative 4-KiB-page Linux MAX_ARG_STRLEN of 131072 bytes. An env
 # entry includes its name, '=', and NUL, so reserve those bytes from the JIT.
 jit_env_name='ACTIONS_RUNNER_INPUT_JITCONFIG'
@@ -19,6 +20,13 @@ if [[ "${ACTIONS_RUNNER_INPUT_JITCONFIG+x}" ]]; then
   echo "jit must arrive on the private input channel" >&2
   exit 2
 fi
+
+if [[ "${DOCKER_HOST:-}" != "$docker_host" ]]; then
+  echo "runner requires its paired private DinD loopback endpoint" >&2
+  exit 2
+fi
+export DOCKER_HOST="$docker_host"
+unset DOCKER_CONTEXT
 
 if [[ ! -x "$listener" ]]; then
   echo "runner listener missing" >&2
@@ -64,8 +72,8 @@ cd "$root"
 # environment assignment for Runner.Listener only.
 # DinD links the public socket after dockerd is ready. Wait before the listener.
 /usr/local/bin/wait-docker-sock
-/usr/local/bin/clear-dockerenv
 # A present socket is not a serving API. Refuse to start on a stalled daemon.
-# (/var/run/docker.sock and /run/docker.sock are the same file.)
-"${entrypoint_dir}/velnor-wait-docker-api" "unix:///var/run/docker.sock"
+# Container actions keep using the private Unix socket mount. Runner processes
+# use this job's loopback endpoint for services and Testcontainers.
+"${entrypoint_dir}/velnor-wait-docker-api" "$docker_host"
 ACTIONS_RUNNER_INPUT_JITCONFIG="$payload" exec "$listener" run

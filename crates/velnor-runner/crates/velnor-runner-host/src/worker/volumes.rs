@@ -8,6 +8,8 @@ use bollard::errors::Error as DockerError;
 use bollard::models::{Volume, VolumeCreateRequest};
 use bollard::query_parameters::RemoveVolumeOptions;
 
+use super::names::WorkerIdentityNames;
+pub(crate) use super::names::WorkerVolumeRole;
 use crate::docker_client::docker_deadline;
 use crate::docker_spec::Mount as PlannedMount;
 use crate::error::HostError;
@@ -43,37 +45,6 @@ impl VerifiedWorkerVolume {
             Ok(WorkerVolumeRemoval::StillPresent)
         } else {
             Ok(WorkerVolumeRemoval::Removed)
-        }
-    }
-}
-
-/// One of the fixed volumes attached to a worker pair.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum WorkerVolumeRole {
-    /// Runner socket directory mounted at `/run`.
-    Socket,
-    /// Actions runner workspace mounted at `_work`.
-    Work,
-    /// Private Docker-in-Docker data mounted at `/var/lib/docker`.
-    DindData,
-}
-
-impl WorkerVolumeRole {
-    const ALL: [Self; 3] = [Self::Socket, Self::Work, Self::DindData];
-
-    fn label(self) -> &'static str {
-        match self {
-            Self::Socket => "socket",
-            Self::Work => "work",
-            Self::DindData => "dind-data",
-        }
-    }
-
-    fn suffix(self) -> &'static str {
-        match self {
-            Self::Socket => "",
-            Self::Work => "-work",
-            Self::DindData => "-docker",
         }
     }
 }
@@ -169,7 +140,7 @@ pub(crate) async fn verify_worker_volume(
     if !valid_worker(worker) {
         return Err(HostError::ForbiddenMount);
     }
-    let volume = worker_volume(worker, role);
+    let volume = worker_volume(worker, role)?;
     let Some(observed) = inspect_volume(docker, &volume.name).await? else {
         return Ok(WorkerVolumeVerification::Absent);
     };
@@ -203,15 +174,16 @@ async fn inspect_volume(docker: &Docker, name: &str) -> Result<Option<Volume>, H
     }
 }
 
-fn volumes(worker: &str) -> Result<[WorkerVolume; 3], HostError> {
+fn volumes(worker: &str) -> Result<[WorkerVolume; 4], HostError> {
     if !valid_worker(worker) {
         return Err(HostError::ForbiddenMount);
     }
-    Ok([
-        worker_volume(worker, WorkerVolumeRole::Socket),
-        worker_volume(worker, WorkerVolumeRole::Work),
-        worker_volume(worker, WorkerVolumeRole::DindData),
-    ])
+    WorkerVolumeRole::ALL
+        .map(|role| worker_volume(worker, role))
+        .into_iter()
+        .collect::<Result<Vec<_>, _>>()?
+        .try_into()
+        .map_err(|_| HostError::ForbiddenMount)
 }
 
 fn valid_worker(worker: &str) -> bool {
@@ -221,12 +193,13 @@ fn valid_worker(worker: &str) -> bool {
             .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'.' | b'-'))
 }
 
-fn worker_volume(worker: &str, role: WorkerVolumeRole) -> WorkerVolume {
-    WorkerVolume {
+fn worker_volume(worker: &str, role: WorkerVolumeRole) -> Result<WorkerVolume, HostError> {
+    let names = WorkerIdentityNames::from_private_volume(worker)?;
+    Ok(WorkerVolume {
         worker: worker.to_owned(),
-        name: format!("{worker}{}", role.suffix()),
+        name: names.volume_name(role),
         role,
-    }
+    })
 }
 
 fn labels(worker: &str, role: &str) -> HashMap<String, String> {
@@ -239,6 +212,7 @@ fn labels(worker: &str, role: &str) -> HashMap<String, String> {
 fn target(role: WorkerVolumeRole) -> String {
     match role {
         WorkerVolumeRole::Socket => "/run".to_owned(),
+        WorkerVolumeRole::Home => "/home/runner".to_owned(),
         WorkerVolumeRole::Work => runner_work_path(),
         WorkerVolumeRole::DindData => "/var/lib/docker".to_owned(),
     }

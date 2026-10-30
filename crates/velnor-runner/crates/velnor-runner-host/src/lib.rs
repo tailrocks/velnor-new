@@ -57,7 +57,10 @@ pub use keychain::{import_secret, load_secret, read_secret};
 pub use launch_blocking::ListenFault;
 pub use listen::queue_path;
 pub use plist::{keychain_import_argv, launch_agent_plist};
-pub use readiness::{Readiness, doctor_json, readiness_for_empty, status_json};
+pub use readiness::{
+    Readiness, ResourceProbeInodePolicy, ResourceProbeReport, doctor_json, doctor_json_with_probe,
+    readiness_for_empty, status_json,
+};
 pub use readiness_scan::{READINESS_BUDGET, controller_readiness};
 pub use reconcile::{
     IntentRow, LaunchPhase, Reconcile, ReleaseFact, before_advertise, occupies, release_permitted,

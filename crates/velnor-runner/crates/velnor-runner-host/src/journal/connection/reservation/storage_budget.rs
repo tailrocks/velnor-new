@@ -15,8 +15,14 @@ pub(crate) use observations::{
 pub(crate) use plan::StorageCacheProjection;
 pub(crate) use plan::{StorageReservationPlan, StorageRoleCharge};
 pub(crate) use profile::{StoragePoolLimit, StorageProfile, StorageRoleLimit};
-pub(crate) use role::{StorageFilesystemKind, StorageInodePolicy, StorageMedium, StorageRole};
-pub(crate) use sample::{StorageAdmission, StorageAdmissionSample};
+pub(crate) use role::{
+    StorageAttachmentContract, StorageFilesystemKind, StorageInodePolicy, StorageMedium,
+    StorageObserver, StorageRole, StorageRoleContract,
+};
+pub(crate) use sample::{
+    StorageAdmission, StorageAdmissionSample, StorageProvisioningAdmission,
+    StorageProvisioningMemoryObservation,
+};
 
 pub(super) async fn validate_schema(
     conn: &turso::Connection,
@@ -28,6 +34,13 @@ pub(super) async fn current_profile(
     conn: &turso::Connection,
 ) -> Result<Option<StorageProfile>, crate::error::HostError> {
     profile_store::current(conn).await
+}
+
+pub(super) async fn profile_generation(
+    conn: &turso::Connection,
+    generation_id: &str,
+) -> Result<Option<StorageProfile>, crate::error::HostError> {
+    profile_store::load(conn, generation_id).await
 }
 
 pub(super) async fn admission_fits(

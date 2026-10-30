@@ -6,6 +6,7 @@ rust = "1.99.1"
 # this file via `mise install`, never from a global install.
 mr-boxington = "1.24.1"
 "aqua:nextest-rs/nextest/cargo-nextest" = "0.9.148"
+hk = { version = "2.7.0", workflow = "release.yml" }
 
 [tasks.test-maintenance-helpers]
 description = "Run repository-only maintenance helper test suites"

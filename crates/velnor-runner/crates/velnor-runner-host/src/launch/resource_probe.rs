@@ -4,6 +4,7 @@ use bollard::{Docker, models::SystemInfo};
 
 use crate::journal::{Journal, ProbePhase, ProbeRow};
 use crate::launch::{SelectedEngineContext, VerifiedWorkerImages};
+use crate::readiness::ResourceProbeReport;
 use crate::scale_set::EnsureError;
 use crate::worker::ResourceBudget;
 
@@ -134,6 +135,31 @@ pub(crate) async fn prepare_worker_images(
 ) -> Result<VerifiedWorkerImages, crate::error::HostError> {
     let token = release_read_secret.as_provider_token()?;
     provider::prepare_worker_images(docker, journal, expected, token).await
+}
+
+/// Run one selected-engine probe and return facts only after owned cleanup.
+pub(crate) async fn doctor_probe_report(
+    docker: &Docker,
+    journal: &Journal,
+    expected: &SelectedEngineContext,
+    release_read_secret: &ReleaseReadSecret,
+) -> Option<ResourceProbeReport> {
+    let token = release_read_secret.as_provider_token().ok()?;
+    let provider = match ReleaseImageProvider::from_compiled_source(token) {
+        Ok(provider) => provider,
+        Err(error) => {
+            eprintln!("resource_probe=doctor_unavailable reason={}", error.code());
+            return None;
+        }
+    };
+    match Box::pin(lifecycle::collect(docker, journal, &provider)).await {
+        Ok(Some(observation)) => observation.doctor_report(expected),
+        Ok(None) => None,
+        Err(error) => {
+            eprintln!("resource_probe=doctor_unavailable reason={}", error.code());
+            None
+        }
+    }
 }
 
 #[cfg(test)]

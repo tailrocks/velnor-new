@@ -1,6 +1,11 @@
 #!/bin/sh
 # Start the private daemon before publishing its socket to the runner.
 set -eu
+
+if [ "$#" -ne 0 ]; then
+  printf >&2 'DinD entrypoint does not accept command overrides\n'
+  exit 64
+fi
 # The image ships the helper; the entrypoint test env does not.
 if [ -f /usr/local/libexec/velnor/cgroup-v2-delegation.sh ]; then
   . /usr/local/libexec/velnor/cgroup-v2-delegation.sh
@@ -11,7 +16,7 @@ real=/run/docker.sock.real
 public=/run/docker.sock
 rm -f "$public"
 # Do not publish a socket unless the daemon creates it within about 10 seconds.
-dockerd --host="unix://${real}" "$@" &
+dockerd --host="unix://${real}" --host=tcp://127.0.0.1:2375 --tls=false &
 pid=$!
 trap 'kill "$pid" 2>/dev/null || true; wait "$pid" || true; exit 0' TERM INT
 i=0

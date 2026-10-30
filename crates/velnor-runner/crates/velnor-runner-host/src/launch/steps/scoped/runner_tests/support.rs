@@ -11,7 +11,7 @@ use crate::config::{
 };
 use crate::journal::{
     AssignmentKey, CapacityLimits, ConnectionJournal, CreatedScaleSetResponse, Journal,
-    OperationalCapacityLimits, ScaleSetCreateRequest, StorageAdmission,
+    OperationalCapacityLimits, ScaleSetCreateRequest, StorageProvisioningAdmission,
 };
 use crate::launch::resource_probe::StartPermit;
 use crate::launch::steps::source::test_receipt;
@@ -40,7 +40,7 @@ impl Fixture {
             .await
             .map_err(|error| error.to_string())?;
         journal
-            .configure_storage_profile(crate::journal::fixture_profile())
+            .configure_storage_profile(crate::journal::fixture_provisioning_profile())
             .await
             .map_err(|error| error.to_string())?;
         journal
@@ -52,7 +52,7 @@ impl Fixture {
                 CapacityLimits {
                     jobs: 1,
                     cpu_millicores: 2_000,
-                    memory_bytes: 8_589_934_592,
+                    memory_bytes: 25_769_803_776,
                 },
                 OperationalCapacityLimits {
                     cpu_millicores: 1_000,
@@ -123,8 +123,11 @@ impl Fixture {
     }
 }
 
-pub(super) fn fixture_storage(permit: &StartPermit) -> Result<StorageAdmission, String> {
-    crate::journal::fixture_admission(permit).map_err(|error| error.to_string())
+pub(super) fn fixture_storage(
+    permit: &StartPermit,
+) -> Result<StorageProvisioningAdmission, String> {
+    crate::journal::fixture_storage_provisioning_admission(permit)
+        .map_err(|error| error.to_string())
 }
 
 struct Scratch(PathBuf);

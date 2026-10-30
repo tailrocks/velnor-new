@@ -6,7 +6,7 @@ use sha2::{Digest, Sha256};
 use velnor_runner_github::{Poll, Transport};
 
 use crate::error::HostError;
-use crate::journal::{AssignmentKey, ConnectionJournal, StorageAdmission};
+use crate::journal::{AssignmentKey, ConnectionJournal, StorageProvisioningAdmission};
 use crate::launch::{Drive, Lane};
 use crate::scale_set::EnsureError;
 use crate::worker::Started;
@@ -21,7 +21,7 @@ pub(in crate::launch) async fn launch_scoped<T, S, F>(
     ctx: &Drive,
     polled: &Poll,
     permit: crate::launch::StartPermit,
-    storage: Option<StorageAdmission>,
+    storage: Option<StorageProvisioningAdmission>,
     docker: &bollard::Docker,
     expected_engine: &crate::launch::SelectedEngineContext,
     images: &crate::launch::VerifiedWorkerImages,

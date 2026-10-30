@@ -16,7 +16,7 @@ async fn jit_stop_uses_verified_images_and_mounts_guest_metadata() -> Result<(),
         &input.images,
         &input.selected_engine,
         &input.file,
-        StageAdmission::test_fixture_for(&input.selected_engine),
+        StageAdmission::test_fixture(),
         &Forget,
     )
     .await?;
@@ -55,7 +55,7 @@ async fn invalid_verified_images_fail_before_recording_or_creating_resources()
             &invalid,
             &input.selected_engine,
             &input.file,
-            StageAdmission::test_fixture_for(&input.selected_engine),
+            StageAdmission::test_fixture(),
             &Forget,
         )
         .await,
@@ -82,7 +82,7 @@ async fn images_bound_to_another_engine_fail_before_any_effect() -> Result<(), H
             &other_engine,
             &input.selected_engine,
             &input.file,
-            StageAdmission::test_fixture_for(&input.selected_engine),
+            StageAdmission::test_fixture(),
             &Forget,
         )
         .await,

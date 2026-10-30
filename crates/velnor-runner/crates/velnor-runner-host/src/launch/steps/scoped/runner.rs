@@ -6,7 +6,8 @@ use velnor_runner_github::{RunnerReference, Transport, jit, jit_request};
 
 use crate::error::HostError;
 use crate::journal::{
-    AssignmentKey, ConnectionJournal, ReservationRequest, ReservationResult, StorageAdmission,
+    AssignmentKey, ConnectionJournal, ReservationRequest, ReservationResult,
+    StorageProvisioningAdmission,
 };
 use crate::launch::resource_probe::StartObservationWitness;
 use crate::launch::{Lane, SelectedEngineContext, VerifiedWorkerImages};
@@ -18,6 +19,7 @@ pub(super) struct PhysicalIntent {
     intent_id: i64,
     assignment: crate::journal::AssignmentIdentity,
     runner_name: String,
+    worker_volume: String,
     sample_generation_id: String,
     observation: StartObservationWitness,
 }
@@ -25,7 +27,7 @@ pub(super) struct PhysicalIntent {
 pub(super) async fn reserve(
     scoped: &ConnectionJournal,
     permit: crate::launch::StartPermit,
-    storage: StorageAdmission,
+    storage: StorageProvisioningAdmission,
 ) -> Result<PhysicalIntent, EnsureError> {
     let nonce = fresh_nonce()?;
     let observation = permit.observation_witness();
@@ -37,12 +39,17 @@ pub(super) async fn reserve(
         })
         .await
         .map_err(super::super::map_journal)?;
-    let runner_name = format!("v{nonce}");
+    let names = crate::worker::WorkerIdentityNames::from_nonce(&nonce)
+        .map_err(|_| EnsureError::Uncertain)?;
+    let runner_name = names
+        .remote_runner_name()
+        .map_err(|_| EnsureError::Uncertain)?;
+    let worker_volume = names.private_volume().to_owned();
     let (cpu_millicores, memory_bytes) = permit.charge();
     let engine_id = permit.engine_id().to_owned();
     let docker_root_digest = permit.docker_root_digest().to_owned();
     let reservation = scoped
-        .try_reserve_with_storage(
+        .try_reserve_with_provisioning(
             ReservationRequest {
                 assignment: &identity,
                 engine_id: &engine_id,
@@ -68,11 +75,14 @@ pub(super) async fn reserve(
         | ReservationResult::ReconcileRequired { .. }
         | ReservationResult::Released { .. } => return Err(EnsureError::Uncertain),
     };
-    let (intent_id, fresh) = scoped
+    // `Reserved` is returned only for the just-inserted v16 hold. `begin_launch`
+    // reports `fresh == false` for its intentional `provisioning_held` phase,
+    // because this is no longer the legacy unphased launch row.
+    let (intent_id, _fresh) = scoped
         .begin_launch(&identity)
         .await
         .map_err(super::super::map_journal)?;
-    if !fresh {
+    if intent_id <= 0 {
         return Err(EnsureError::Uncertain);
     }
     Ok(PhysicalIntent {
@@ -80,6 +90,7 @@ pub(super) async fn reserve(
         intent_id,
         assignment: identity,
         runner_name,
+        worker_volume,
         sample_generation_id,
         observation,
     })
@@ -182,9 +193,9 @@ where
     S: FnOnce(&str, &[u8], crate::launch::bind::Bind, crate::stage::StageAdmission) -> F,
     F: Future<Output = Result<Started, HostError>>,
 {
-    let volume = crate::worker::new_worker_volume().map_err(|_| EnsureError::Uncertain)?;
+    let volume = &physical.worker_volume;
     let claim = scoped
-        .claim_physical_runner_start(physical.intent_id, &volume)
+        .claim_physical_runner_start(physical.intent_id, volume)
         .await
         .map_err(super::super::map_journal)?
         .ok_or(EnsureError::Uncertain)?;
@@ -209,7 +220,7 @@ where
         &physical.observation,
         &physical.sample_generation_id,
     );
-    let started = match start(&volume, jit_config.as_bytes(), bind, admission).await {
+    let started = match start(volume, jit_config.as_bytes(), bind, admission).await {
         Ok(started) => started,
         Err(_) => {
             scoped

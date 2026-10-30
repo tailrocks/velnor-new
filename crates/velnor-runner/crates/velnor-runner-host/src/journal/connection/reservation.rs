@@ -4,6 +4,7 @@ mod admission;
 mod enumerate;
 mod lifecycle;
 mod limits;
+mod provisioning;
 mod read;
 mod storage;
 mod storage_budget;
@@ -25,16 +26,25 @@ pub(crate) use enumerate::{
     PhysicalRunnerJitState, PhysicalRunnerOwnership, PhysicalRunnerReservation,
 };
 pub(crate) use limits::{CapacityLimits, OperationalCapacityLimits};
+pub(crate) use provisioning::{
+    BootstrapContainerCreateClaim, BootstrapStartClaim, JobFactsPublicationClaim,
+    ListenerDeliveryClaim, StorageObjectCreateClaim,
+};
 pub(crate) use read::{ReservationSnapshot, ReservationState};
 pub(crate) use storage_budget::{
-    StorageAdmission, StorageAdmissionSample, StorageCacheProjection, StorageFilesystemKind,
-    StorageInodePolicy, StorageMedium, StorageMemoryObservation, StoragePoolLimit,
-    StoragePoolObservation, StorageProfile, StorageReservationPlan, StorageRole, StorageRoleCharge,
-    StorageRoleLimit, StorageSampleIdentity,
+    StorageAdmission, StorageAdmissionSample, StorageCacheProjection,
+    StorageAttachmentContract, StorageFilesystemKind, StorageInodePolicy, StorageMedium,
+    StorageMemoryObservation, StorageObserver, StorageProvisioningAdmission, StoragePoolLimit,
+    StoragePoolObservation, StorageProfile, StorageProvisioningMemoryObservation,
+    StorageReservationPlan, StorageRole, StorageRoleCharge, StorageRoleContract, StorageRoleLimit,
+    StorageSampleIdentity,
 };
 
 #[cfg(test)]
-pub(crate) use storage_budget_tests::{fixture_admission, fixture_profile};
+pub(crate) use storage_budget_tests::{
+    fixture_admission, fixture_profile, fixture_provisioning_profile,
+    fixture_storage_provisioning_admission,
+};
 
 pub(super) async fn validate_storage_budget_schema(
     connection: &turso::Connection,

@@ -70,8 +70,18 @@ impl ConnectionJournal {
             }
             let changed = connection
                 .execute(
-                    "UPDATE connection_intents SET jit_requested = 1, launch_phase = 'jit_requested' WHERE id = ?1 AND connection_id = ?2 AND scale_set_id = ?3 AND kind = 'launch' AND state = 'pending' AND cleanup_proven = 0 AND jit_requested = 0 AND acquire_attempted = 0 AND docker_id IS NULL AND dind_id IS NULL AND worker_volume IS NULL",
-                    (intent_id, connection_id.as_str(), set_id),
+                    "UPDATE connection_intents SET jit_requested = 1, launch_phase = 'jit_requested' WHERE id = ?1 AND connection_id = ?2 AND scale_set_id = ?3 AND kind = 'launch' AND state = 'pending' AND cleanup_proven = 0 AND jit_requested = 0 AND acquire_attempted = 0 AND runner_name = ?4 AND launch_phase = 'resources_bound' AND docker_id IS NULL AND dind_id IS NULL AND worker_volume IS NULL",
+                    (intent_id, connection_id.as_str(), set_id, requested_name.as_str()),
+                )
+                .await
+                .map_err(|_| HostError::Journal)?;
+            if changed != 1 {
+                return Err(HostError::Journal);
+            }
+            let changed = connection
+                .execute(
+                    "UPDATE capacity_reservation_provisioning_state SET jit_state = 'requested' WHERE reservation_id = (SELECT id FROM capacity_reservations WHERE intent_id = ?1 AND connection_id = ?2 AND state = 'reserved') AND resources_bound = 1 AND bootstrap_start_state = 'started' AND jit_state = 'not_requested' AND publication_state = 'not_requested' AND delivery_state = 'not_requested' AND storage_cleanup_proven = 0",
+                    (intent_id, connection_id.as_str()),
                 )
                 .await
                 .map_err(|_| HostError::Journal)?;
@@ -121,16 +131,22 @@ impl ConnectionJournal {
             }
             let changed = connection
                 .execute(
-                    "UPDATE connection_intents SET github_runner_id = ?1, runner_name = ?2, launch_phase = 'jit_bound' WHERE id = ?3 AND connection_id = ?4 AND scale_set_id = ?5 AND kind = 'launch' AND state = 'pending' AND cleanup_proven = 0 AND jit_requested = 1 AND github_runner_id IS NULL AND runner_name IS NULL AND docker_id IS NULL AND dind_id IS NULL AND worker_volume IS NULL",
+                    "UPDATE connection_intents SET github_runner_id = ?1, launch_phase = 'jit_bound' WHERE id = ?3 AND connection_id = ?4 AND scale_set_id = ?5 AND kind = 'launch' AND state = 'pending' AND cleanup_proven = 0 AND jit_requested = 1 AND github_runner_id IS NULL AND runner_name = ?2 AND launch_phase = 'jit_requested' AND docker_id IS NULL AND dind_id IS NULL AND worker_volume IS NULL",
                     (runner.id.to_string(), runner.name.as_str(), claim.intent_id, self.connection_id().as_str(), claim.scale_set_id),
                 )
                 .await
                 .map_err(|_| HostError::Journal)?;
-            if changed == 1 {
-                Ok(())
-            } else {
-                Err(HostError::Journal)
+            if changed != 1 {
+                return Err(HostError::Journal);
             }
+            let changed = connection
+                .execute(
+                    "UPDATE capacity_reservation_provisioning_state SET jit_state = 'bound', runner_id = ?1, runner_name = ?2, runner_scale_set_id = ?3 WHERE reservation_id = (SELECT id FROM capacity_reservations WHERE intent_id = ?4 AND connection_id = ?5 AND state = 'reserved') AND jit_state = 'requested' AND resources_bound = 1 AND publication_state = 'not_requested' AND delivery_state = 'not_requested' AND runner_id IS NULL AND runner_name IS NULL AND runner_scale_set_id IS NULL",
+                    (runner.id, runner.name.as_str(), runner.runner_scale_set_id, claim.intent_id, self.connection_id().as_str()),
+                )
+                .await
+                .map_err(|_| HostError::Journal)?;
+            if changed == 1 { Ok(()) } else { Err(HostError::Journal) }
         })
         .await
     }
@@ -147,6 +163,26 @@ impl ConnectionJournal {
                 .execute(
                     "UPDATE connection_runner_jits SET state = 'uncertain' WHERE intent_id = ?1 AND connection_id = ?2 AND scale_set_id = ?3 AND witness_request_id = ?4 AND requested_name = ?5 AND state = 'claimed' AND runner_id IS NULL AND runner_name IS NULL",
                     (claim.intent_id, self.connection_id().as_str(), claim.scale_set_id, claim.witness_request_id, claim.requested_name.as_str()),
+                )
+                .await
+                .map_err(|_| HostError::Journal)?;
+            if changed != 1 {
+                return Err(HostError::Journal);
+            }
+            let changed = connection
+                .execute(
+                    "UPDATE capacity_reservation_provisioning_state SET jit_state = 'uncertain' WHERE reservation_id = (SELECT id FROM capacity_reservations WHERE intent_id = ?1 AND connection_id = ?2 AND state = 'reserved') AND jit_state = 'requested' AND resources_bound = 1",
+                    (claim.intent_id, self.connection_id().as_str()),
+                )
+                .await
+                .map_err(|_| HostError::Journal)?;
+            if changed != 1 {
+                return Err(HostError::Journal);
+            }
+            let changed = connection
+                .execute(
+                    "UPDATE capacity_reservations SET state = 'uncertain' WHERE intent_id = ?1 AND connection_id = ?2 AND state = 'reserved'",
+                    (claim.intent_id, self.connection_id().as_str()),
                 )
                 .await
                 .map_err(|_| HostError::Journal)?;

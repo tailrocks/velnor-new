@@ -9,22 +9,27 @@ use bollard::query_parameters::{AttachContainerOptionsBuilder, StartContainerOpt
 use tokio::io::AsyncWriteExt;
 
 use crate::docker_client::docker_deadline;
-use crate::docker_spec::{ContainerPlan, Mount, audit_plan, runner_mounts, runner_plan};
+use crate::docker_spec::{
+    ContainerPlan, Mount, RUNNER_DOCKER_HOST_ENV, audit_plan, runner_mounts, runner_plan,
+};
 use crate::error::HostError;
 
+mod names;
 pub(crate) mod resources;
 mod volumes;
+pub(crate) use names::{WorkerContainerRole, WorkerIdentityNames, WorkerVolumeRole};
 #[cfg(test)]
 pub(crate) use volumes::remove_verified_worker_volume;
 pub(crate) use volumes::{
-    VerifiedWorkerVolume, WorkerVolumeRemoval, WorkerVolumeRole, WorkerVolumeVerification,
-    create_named_volumes, remove_worker_volumes, verify_worker_volume,
+    VerifiedWorkerVolume, WorkerVolumeRemoval, WorkerVolumeVerification, create_named_volumes,
+    remove_worker_volumes, verify_worker_volume,
 };
 pub(crate) mod guest_image;
 mod mounts;
 mod projection;
 mod projection_types;
 mod resource_budget;
+mod seccomp;
 #[cfg(all(test, unix))]
 mod volumes_tests;
 #[cfg(test)]
@@ -53,13 +58,18 @@ pub use projection_types::{BindMount, BollardCreate, CreateProjection, Started};
 pub(crate) fn new_worker_volume() -> Result<String, HostError> {
     let mut random = [0_u8; 16];
     getrandom::fill(&mut random).map_err(|_| HostError::Identity)?;
-    let mut name = String::with_capacity(33);
-    name.push('w');
+    let mut nonce = String::with_capacity(32);
     for byte in random {
-        push_nibble(&mut name, byte >> 4)?;
-        push_nibble(&mut name, byte & 0x0f)?;
+        push_nibble(&mut nonce, byte >> 4)?;
+        push_nibble(&mut nonce, byte & 0x0f)?;
     }
-    Ok(name)
+    worker_volume_for_nonce(&nonce)
+}
+
+fn worker_volume_for_nonce(nonce: &str) -> Result<String, HostError> {
+    Ok(WorkerIdentityNames::from_nonce(nonce)?
+        .private_volume()
+        .to_owned())
 }
 
 fn push_nibble(name: &mut String, nibble: u8) -> Result<(), HostError> {
@@ -103,6 +113,7 @@ pub fn runner_create(
         privileged: false,
         open_stdin: true,
         network_mode: None,
+        loopback_docker_host: false,
         resource_budget,
     })
 }
@@ -122,6 +133,8 @@ pub(crate) fn runner_create_verified(
     let mut projection = runner_create(plan, resource_budget)?;
     projection.image = images.runner().runtime_id().to_owned();
     projection.platform = images.platform().to_owned();
+    projection.env.push(RUNNER_DOCKER_HOST_ENV.to_owned());
+    projection.loopback_docker_host = true;
     projection.bind_mounts.push(metadata_mount);
     Ok(projection)
 }
@@ -167,8 +180,9 @@ pub fn dind_create(
     private_volume: &str,
     resource_budget: ResourceBudget,
 ) -> Result<CreateProjection, HostError> {
+    let names = WorkerIdentityNames::from_private_volume(private_volume)?;
     let runner = runner_plan(private_volume)?;
-    let mounts = dind_mounts_for(private_volume, runner.mounts);
+    let mounts = dind_mounts_for(&names, runner.mounts);
     let mut labels = vec![
         "velnor.role=dind".to_owned(),
         format!("velnor.volume={private_volume}"),
@@ -176,7 +190,7 @@ pub fn dind_create(
     ];
     labels.sort_unstable();
     Ok(CreateProjection {
-        name: format!("{private_volume}-dind"),
+        name: names.container_name(WorkerContainerRole::Dind),
         image: DIND_IMAGE.to_owned(),
         platform: runner.platform,
         env: Vec::new(),
@@ -190,6 +204,7 @@ pub fn dind_create(
         privileged: true,
         open_stdin: false,
         network_mode: None,
+        loopback_docker_host: false,
         resource_budget,
     })
 }
@@ -208,13 +223,14 @@ pub(crate) fn dind_create_verified(
 }
 
 pub(crate) fn dind_mounts(private_volume: &str) -> Result<Vec<Mount>, HostError> {
+    let names = WorkerIdentityNames::from_private_volume(private_volume)?;
     let runner = runner_plan(private_volume)?;
-    Ok(dind_mounts_for(private_volume, runner.mounts))
+    Ok(dind_mounts_for(&names, runner.mounts))
 }
 
-fn dind_mounts_for(private_volume: &str, mut mounts: Vec<Mount>) -> Vec<Mount> {
+fn dind_mounts_for(names: &WorkerIdentityNames, mut mounts: Vec<Mount>) -> Vec<Mount> {
     mounts.push(Mount {
-        source: format!("volume:{private_volume}-docker"),
+        source: format!("volume:{}", names.volume_name(WorkerVolumeRole::DindData)),
         target: "/var/lib/docker".to_owned(),
     });
     mounts
@@ -225,8 +241,9 @@ fn dind_mounts_for(private_volume: &str, mut mounts: Vec<Mount>) -> Vec<Mount> {
 /// This function does not use a resource budget.
 /// Cleanup does not use the current resource budget.
 pub(crate) fn dind_container_name(private_volume: &str) -> Result<String, HostError> {
+    let names = WorkerIdentityNames::from_private_volume(private_volume)?;
     runner_plan(private_volume)?;
-    Ok(format!("{private_volume}-dind"))
+    Ok(names.container_name(WorkerContainerRole::Dind))
 }
 
 /// Bollard config for [`bollard::Docker::create_container`]. No JIT parameter.
@@ -236,7 +253,7 @@ pub(crate) fn dind_container_name(private_volume: &str) -> Result<String, HostEr
 /// Gives [`HostError::ForbiddenMount`] when the platform is not `linux/amd64`
 /// or a mount or label cannot be sent.
 pub fn bollard_create(spec: &CreateProjection) -> Result<BollardCreate, HostError> {
-    if spec.platform != PLATFORM {
+    if spec.platform != PLATFORM || !network_mode_allowed(spec) {
         return Err(HostError::ForbiddenMount);
     }
     let config = ContainerCreateBody {
@@ -257,6 +274,25 @@ pub fn bollard_create(spec: &CreateProjection) -> Result<BollardCreate, HostErro
         },
         config,
     })
+}
+
+fn network_mode_allowed(spec: &CreateProjection) -> bool {
+    let Some(mode) = spec.network_mode.as_deref() else {
+        return true;
+    };
+    if spec.privileged
+        || !spec.open_stdin
+        || !spec
+            .labels
+            .iter()
+            .any(|label| label == "velnor.role=runner")
+    {
+        return false;
+    }
+    let Some(id) = mode.strip_prefix("container:") else {
+        return false;
+    };
+    id.len() == 64 && id.bytes().all(|byte| byte.is_ascii_hexdigit())
 }
 
 fn cmd_names_jit(item: &str) -> bool {

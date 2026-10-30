@@ -321,6 +321,112 @@ impl StorageProfile {
         }
         Ok(())
     }
+
+    /// Validate the fixed v16 production topology before creating a provisioning hold.
+    pub(crate) fn validate_provisioning_contract(&self) -> Result<(), HostError> {
+        let disk_roles = [
+            StorageRole::RunnerRoot,
+            StorageRole::DindRoot,
+            StorageRole::EngineMetadata,
+        ];
+        let tmpfs_roles = [
+            StorageRole::RunnerHome,
+            StorageRole::RunnerWork,
+            StorageRole::RunnerTmp,
+            StorageRole::RunnerShm,
+            StorageRole::SharedRun,
+            StorageRole::DindData,
+            StorageRole::DindTmp,
+            StorageRole::DindShm,
+        ];
+        let disk_pool_id = self.role_limit(StorageRole::RunnerRoot)?.pool_id();
+        if self.pools.len() != 9
+            || disk_roles
+                .iter()
+                .any(|role| self.role_limit(*role).is_err())
+            || tmpfs_roles
+                .iter()
+                .any(|role| self.role_limit(*role).is_err())
+        {
+            return Err(HostError::Journal);
+        }
+        for role in disk_roles {
+            let limit = self.role_limit(role)?;
+            let contract = role.contract().ok_or(HostError::Journal)?;
+            if limit.medium() != StorageMedium::Disk
+                || contract.medium != StorageMedium::Disk
+                || limit.pool_id() != disk_pool_id
+            {
+                return Err(HostError::Journal);
+            }
+        }
+        let disk_pool = self.pool_limit(disk_pool_id)?;
+        if disk_pool.medium() != StorageMedium::Disk
+            || disk_pool.inode_policy() == StorageInodePolicy::Unknown
+        {
+            return Err(HostError::Journal);
+        }
+        let mut tmpfs_pools = std::collections::BTreeSet::new();
+        for role in tmpfs_roles {
+            let limit = self.role_limit(role)?;
+            let contract = role.contract().ok_or(HostError::Journal)?;
+            let pool = self.pool_limit(limit.pool_id())?;
+            if limit.medium() != StorageMedium::Tmpfs
+                || contract.medium != StorageMedium::Tmpfs
+                || pool.medium() != StorageMedium::Tmpfs
+                || pool.inode_policy() != StorageInodePolicy::Finite
+                || !tmpfs_pools.insert(limit.pool_id())
+            {
+                return Err(HostError::Journal);
+            }
+        }
+        if self.pools.iter().filter(|pool| pool.medium() == StorageMedium::Disk).count() != 1
+            || self.pools.iter().filter(|pool| pool.medium() == StorageMedium::Tmpfs).count()
+                != 8
+        {
+            return Err(HostError::Journal);
+        }
+        let work = self.role_limit(StorageRole::RunnerWork)?;
+        for alias in [StorageRole::CacheLive, StorageRole::CacheStage] {
+            let limit = self.role_limit(alias)?;
+            if limit.alias_of() != Some(StorageRole::RunnerWork)
+                || limit.pool_id() != work.pool_id()
+                || limit.medium() != StorageMedium::Tmpfs
+                || limit.max_bytes() == 0
+                || limit.max_inodes() == 0
+                || limit.max_bytes() > work.max_bytes()
+                || limit.max_inodes() > work.max_inodes()
+            {
+                return Err(HostError::Journal);
+            }
+        }
+        for role in tmpfs_roles {
+            let role_limit = self.role_limit(role)?;
+            let pool = self.pool_limit(role_limit.pool_id())?;
+            if pool.max_bytes() != role_limit.max_bytes()
+                || pool.max_inodes() != role_limit.max_inodes()
+                || pool.reserve_bytes() != 0
+                || pool.reserve_inodes() != 0
+            {
+                return Err(HostError::Journal);
+            }
+        }
+        Ok(())
+    }
+
+    pub(crate) fn role_limit(&self, role: StorageRole) -> Result<&StorageRoleLimit, HostError> {
+        self.roles
+            .iter()
+            .find(|limit| limit.role() == role)
+            .ok_or(HostError::Journal)
+    }
+
+    pub(crate) fn pool_limit(&self, pool_id: &str) -> Result<&StoragePoolLimit, HostError> {
+        self.pools
+            .iter()
+            .find(|limit| limit.pool_id() == pool_id)
+            .ok_or(HostError::Journal)
+    }
 }
 
 fn validate_profile_shape(

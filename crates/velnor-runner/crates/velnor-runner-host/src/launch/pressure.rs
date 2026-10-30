@@ -56,7 +56,7 @@ pub(crate) fn advertise(ceiling: u32) -> u32 {
     advertise_allocated(floor_of(1, ceiling))
 }
 
-/// Preserve the host allocation, including zero for a connection with no target.
+/// Keep the host allocation, including zero for a connection with no target.
 #[must_use]
 pub(crate) const fn advertise_allocated(target: u32) -> u32 {
     target

@@ -66,6 +66,7 @@ pub(super) fn digest_open_directory(
 
 #[path = "payload_inventory.rs"]
 mod inventory;
+pub(crate) use inventory::digest_archive_entries;
 pub(crate) use inventory::{
     ArchiveEntry, ArchiveEntryKind, inventory_directory, open_inventory_file,
     validate_inventory_directory, validate_inventory_symlink,

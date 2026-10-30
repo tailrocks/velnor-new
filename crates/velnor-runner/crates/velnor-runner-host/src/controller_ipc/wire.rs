@@ -3,8 +3,10 @@
 use serde::{Deserialize, Serialize};
 
 use crate::config::{ConnectionId, RepositoryConnection};
+use crate::readiness::ResourceProbeReport;
 
 pub(super) const MAX_REQUEST_BYTES: usize = 65_536;
+pub(super) const MAX_RESPONSE_BYTES: usize = 4096;
 pub(super) const SOCKET_NAME: &str = "controller.sock";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -22,6 +24,7 @@ pub(super) enum Request {
         binding: RepositoryConnection,
         token: String,
     },
+    ResourceProbe,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -34,10 +37,29 @@ pub(super) enum Target {
     },
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(super) struct Response {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(super) value: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(super) resource_probe: Option<ResourceProbeReport>,
+}
+
+impl Response {
+    pub(super) const fn boolean(value: Option<bool>) -> Self {
+        Self {
+            value,
+            resource_probe: None,
+        }
+    }
+
+    pub(super) fn probe(report: Option<ResourceProbeReport>) -> Self {
+        Self {
+            value: None,
+            resource_probe: report,
+        }
+    }
 }
 
 impl Request {
@@ -52,11 +74,15 @@ impl Request {
 
 impl Response {
     pub(super) fn encode(self) -> Result<Vec<u8>, ()> {
-        serde_json::to_vec(&self).map_err(|_| ())
+        let bytes = serde_json::to_vec(&self).map_err(|_| ())?;
+        if bytes.len() > MAX_RESPONSE_BYTES {
+            return Err(());
+        }
+        Ok(bytes)
     }
 
     pub(super) fn decode(bytes: &[u8]) -> Result<Self, ()> {
-        if bytes.len() > 64 {
+        if bytes.len() > MAX_RESPONSE_BYTES {
             return Err(());
         }
         serde_json::from_slice(bytes).map_err(|_| ())

@@ -163,14 +163,19 @@ worker's private DinD engine. The runner container is not privileged. The job
 does not receive the outer Docker socket, host home, Keychain, SSH agent,
 controller config, or management tokens.
 
-Every host configuration must set four per-job budgets under
+Set four per-job limits and one operational memory reserve under
 `[host.resources]`: `runner_cpu_millicores`, `runner_memory_bytes`,
-`dind_cpu_millicores`, and `dind_memory_bytes`. CPU is millicores; memory is
-bytes. There are no resource defaults. The controller validates each Docker
-limit, checked pair totals, and the selected daemon's CPU count before it opens
-a job session. It applies the runner limits to the unprivileged runner
-container and the DinD limits to the private privileged DinD container. Swap is
-limited to each container's memory limit.
+`dind_cpu_millicores`, `dind_memory_bytes`, and
+`operational_memory_reserve_bytes`. Set CPU values in millicores. Set memory
+values in bytes. The controller has no defaults for these values. Set the
+reserve above measured peak guest memory use outside runner, DinD, and probe
+limits. Include a stated safety allowance in the reserve. Keep qualification
+incomplete until evidence supports this value.
+The controller validates each Docker limit, pair total, reserve range, and
+selected daemon CPU count before it opens a job session. It sets the runner
+limits on the unprivileged runner container. It sets the DinD
+limits on the private privileged DinD container. Swap is limited to each
+container's memory limit.
 
 The configured pair CPU and memory totals are the per-job admission costs.
 Admission must also account for already occupied jobs and measured guest CPU,
@@ -200,11 +205,17 @@ Controller API credentials never enter the runner.
 JIT `workFolder` is `_work`, relative to the official runner root at
 `/home/runner`, so the job work directory resolves to `/home/runner/_work`.
 Mount the same per-worker named work volume there in both containers. The
-runner and DinD images create that path as uid/gid `1000:1000`, mode `0755`,
-before the first empty-volume mount; DinD starts first and Docker initializes
-the volume from its image path. The entrypoint stages raw JIT in a
-container-local mode-`0600` `/tmp` file and removes it before starting the
-listener. It does not persist raw JIT in the named work volume. The official
+DinD work mount sets `NoCopy=true`. Docker does not copy image data into the
+volume when it creates the DinD container. If the volume is empty at runner
+creation, Docker's volume initialization copies the runner image's
+`/home/runner/_work` directory into the volume. This path has owner uid/gid
+`1000:1000` and mode `0755` in the verified runner image. The current
+controller does not prove that the volume is empty. Do not create the runner
+until a check proves that the work volume is empty. An ownership label does
+not prove that the volume is empty.
+The entrypoint stages raw JIT in a container-local mode-`0600` `/tmp` file and
+removes it before starting the listener. It does not persist raw JIT in the
+named work volume. The official
 runner treats `jitconfig` as a secret input.
 It removes the environment key from its managed environment while parsing it.
 It may then make its own one-job configuration and credential files under `/home/runner`. Those

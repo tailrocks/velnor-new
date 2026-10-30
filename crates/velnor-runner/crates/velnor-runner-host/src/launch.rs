@@ -17,6 +17,7 @@ use crate::worker::Started;
 
 mod admission_gate;
 mod bind;
+pub(crate) mod bootstrap;
 #[cfg(all(test, unix))]
 mod busy_slot_tests;
 mod capacity;
@@ -45,6 +46,7 @@ pub(crate) use resource_probe::StartObservationWitness;
 pub(crate) use resource_probe::StartPermit;
 pub(crate) use resource_probe::VerifiedProbeCleanup;
 pub(crate) use resource_probe::build_pin_status;
+pub(crate) use resource_probe::doctor_probe_report;
 pub(crate) use session::{
     CompletedHeaderPoll, DeletedSession204, ReturnedSessionRefreshTransportError,
     SessionDeleteOutcome, SessionRefreshStartupAuthority, VerifiedSessionRefresh,

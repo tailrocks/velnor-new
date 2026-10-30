@@ -10,10 +10,13 @@ const RUNNER_DOCKERFILE: &str =
     include_str!("../../../../../images/runner/ubuntu-26.04/Dockerfile");
 const RUNNER_ENTRYPOINT: &str =
     include_str!("../../../../../images/runner/ubuntu-26.04/entrypoint.sh");
+const RUNNER_WAIT_DOCKER_API: &str =
+    include_str!("../../../../../images/runner/ubuntu-26.04/wait-docker-api.sh");
 const RUNNER_README: &str = include_str!("../../../../../images/runner/ubuntu-26.04/README.md");
 const DIND_DOCKERFILE: &str = include_str!("../../../../../images/dind/Dockerfile");
 const DIND_README: &str = include_str!("../../../../../images/dind/README.md");
 const DIND_ENTRYPOINT: &str = include_str!("../../../../../images/dind/entrypoint.sh");
+const DIND_START_DOCKERD: &str = include_str!("../../../../../images/dind/start-dockerd.sh");
 
 #[test]
 fn jit_work_folder_resolves_to_both_worker_mounts() -> Result<(), String> {
@@ -168,6 +171,7 @@ fn assert_runner_artifact_matches_lock(lock: &toml::Value) {
     assert!(checksum_check < runner_extract);
     assert!(RUNNER_DOCKERFILE.contains("Does not patch Runner.Listener"));
     assert!(!RUNNER_DOCKERFILE.contains("externals/node24"));
+    assert!(!RUNNER_DOCKERFILE.contains("clear-dockerenv"));
 }
 
 fn assert_dind_artifact_matches_lock(lock: &toml::Value) -> Result<(), String> {
@@ -219,6 +223,12 @@ fn checked_in_images_prepare_the_shared_path_for_runner_uid_1000() {
     assert!(!RUNNER_DOCKERFILE.contains("runner-job-env"));
     assert!(!RUNNER_README.contains("half of `nproc`"));
     assert!(RUNNER_README.contains("The image does not override Cargo's job count."));
+    assert!(RUNNER_ENTRYPOINT.contains("docker_host='tcp://127.0.0.1:2375'"));
+    assert!(RUNNER_ENTRYPOINT.contains("unset DOCKER_CONTEXT"));
+    assert!(!RUNNER_ENTRYPOINT.contains("clear-dockerenv"));
+    assert!(RUNNER_WAIT_DOCKER_API.contains("PRIVATE_ENDPOINT='tcp://127.0.0.1:2375'"));
+    assert!(RUNNER_README.contains("`/.dockerenv` remains present"));
+    assert!(RUNNER_README.contains("`DOCKER_HOST=tcp://127.0.0.1:2375`"));
 
     assert!(DIND_DOCKERFILE.contains("mkdir -p /var/lib/docker /run /home/runner/_work"));
     assert!(DIND_DOCKERFILE.contains("chown 1000:1000 /home/runner/_work"));
@@ -238,5 +248,11 @@ fn dind_publishes_only_a_ready_daemon_without_pulling_workload_images() {
     assert!(DIND_ENTRYPOINT.contains("kill -KILL \"$pid\""));
     assert!(DIND_ENTRYPOINT.contains("exit 1"));
     assert!(DIND_ENTRYPOINT.contains("ln -sfn docker.sock.real \"$public\""));
+    assert!(DIND_ENTRYPOINT.contains("--host=tcp://127.0.0.1:2375 --tls=false"));
+    assert!(DIND_ENTRYPOINT.contains("does not accept command overrides"));
+    assert!(!DIND_ENTRYPOINT.contains("0.0.0.0"));
+    assert!(DIND_START_DOCKERD.contains("--host=tcp://127.0.0.1:2375 --tls=false"));
+    assert!(DIND_README.contains("Any process able to"));
+    assert!(DIND_README.contains("Do not publish a TCP port or use host networking."));
     assert!(DIND_README.contains("about 10 seconds"));
 }

@@ -64,15 +64,41 @@ fn runner_and_dind_project_distinct_owned_names_and_labels() -> Result<(), HostE
     let runner_create = bollard_create(&runner)?;
     let dind_create = bollard_create(&dind)?;
     for create in [&runner_create, &dind_create] {
+        let host = create
+            .config
+            .host_config
+            .as_ref()
+            .ok_or(HostError::Docker)?;
         assert_eq!(
-            create
-                .config
-                .host_config
-                .as_ref()
-                .and_then(|host| host.cgroupns_mode),
+            host.cgroupns_mode,
             Some(HostConfigCgroupnsModeEnum::PRIVATE)
         );
+        assert!(host.port_bindings.is_none());
     }
+    let runner_host = runner_create
+        .config
+        .host_config
+        .as_ref()
+        .ok_or(HostError::Docker)?;
+    assert_eq!(runner_host.readonly_rootfs, Some(true));
+    assert_eq!(runner_host.cap_drop, Some(vec!["ALL".to_owned()]));
+    assert_eq!(
+        runner_host.cap_add,
+        Some(vec!["SETGID".to_owned(), "SETUID".to_owned()])
+    );
+    assert_eq!(
+        runner_host.security_opt,
+        Some(vec![super::seccomp::runner_security_opt()])
+    );
+    let dind_host = dind_create
+        .config
+        .host_config
+        .as_ref()
+        .ok_or(HostError::Docker)?;
+    assert_eq!(dind_host.readonly_rootfs, Some(false));
+    assert!(dind_host.cap_drop.as_ref().is_none_or(Vec::is_empty));
+    assert!(dind_host.cap_add.as_ref().is_none_or(Vec::is_empty));
+    assert!(dind_host.security_opt.as_ref().is_none_or(Vec::is_empty));
     assert_eq!(
         runner_create.options.name.as_deref(),
         Some(runner.name.as_str())
@@ -81,6 +107,17 @@ fn runner_and_dind_project_distinct_owned_names_and_labels() -> Result<(), HostE
         dind_create.options.name.as_deref(),
         Some(dind.name.as_str())
     );
+    Ok(())
+}
+
+#[test]
+fn bollard_create_rejects_host_network() -> Result<(), HostError> {
+    let mut runner = super::runner_create(
+        &crate::runner_plan("worker_a")?,
+        crate::worker::test_resource_budget()?,
+    )?;
+    runner.network_mode = Some("host".to_owned());
+    assert_eq!(bollard_create(&runner), Err(HostError::ForbiddenMount));
     Ok(())
 }
 

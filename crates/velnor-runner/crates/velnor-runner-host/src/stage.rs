@@ -10,6 +10,8 @@ use crate::config::RepositoryConnection;
 use crate::docker_client::docker_deadline;
 use crate::docker_spec::{DeleteDecision, delete_decision, runner_plan};
 use crate::error::HostError;
+#[cfg(test)]
+use crate::launch::StartPermit;
 use crate::launch::{SelectedEngineContext, StartObservationWitness, VerifiedWorkerImages};
 use crate::worker::guest_image::GuestImageFile;
 use crate::worker::{
@@ -86,23 +88,18 @@ impl StageAdmission {
     }
 
     #[cfg(test)]
-    pub(crate) fn test_fixture_for(expected: &SelectedEngineContext) -> Self {
-        let (observation, generation) = StartObservationWitness::test_fixture_for(
-            expected.engine_id(),
-            expected.docker_root_digest(),
-            false,
-        );
-        Self::from_observation(&observation, &generation)
+    pub(crate) fn test_fixture() -> Self {
+        let permit = StartPermit::test_fixture();
+        Self::from_observation(&permit.observation_witness(), permit.sample_generation_id())
     }
 
     #[cfg(test)]
-    pub(crate) fn test_stale_fixture_for(expected: &SelectedEngineContext) -> Self {
-        let (observation, generation) = StartObservationWitness::test_fixture_for(
-            expected.engine_id(),
-            expected.docker_root_digest(),
-            true,
-        );
-        Self::from_observation(&observation, &generation)
+    pub(crate) fn test_stale_fixture() -> Self {
+        let permit = StartPermit::test_fixture();
+        Self::from_observation(
+            &permit.stale_observation_witness(),
+            permit.sample_generation_id(),
+        )
     }
 }
 
@@ -285,7 +282,6 @@ pub(crate) async fn drive<E: PairEngine, S: PairSink>(
     let plan = runner_plan(private_volume)?;
     let runner = runner_create_verified(&plan, resource_budget, connection, images, guest_image)?;
     let dind = dind_create_verified(private_volume, resource_budget, images)?;
-    admission.verify(engine, expected_engine, images).await?;
     sink.volume(private_volume).await?;
     admission.check_fresh(expected_engine)?;
     engine

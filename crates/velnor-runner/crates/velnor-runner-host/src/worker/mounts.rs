@@ -14,7 +14,7 @@ use bollard::models::{
 
 use super::CreateProjection;
 use super::projection_types::BindMountKind;
-use crate::docker_spec::Mount;
+use crate::docker_spec::{Mount, RUNNER_DOCKER_HOST_ENV};
 use crate::error::HostError;
 use velnor_runner_core::runner_work_path;
 
@@ -22,6 +22,7 @@ pub(super) fn host_config(spec: &CreateProjection) -> Result<HostConfig, HostErr
     let budget = spec.resource_budget;
     let mut mounts = docker_mounts(&spec.mounts, spec.privileged)?.unwrap_or_default();
     mounts.extend(bind_mounts(spec)?);
+    let runner = !spec.privileged;
     let limits = if spec.privileged {
         budget.dind()
     } else {
@@ -33,6 +34,10 @@ pub(super) fn host_config(spec: &CreateProjection) -> Result<HostConfig, HostErr
         memory_swap: Some(limits.memory_bytes),
         nano_cpus: Some(limits.nano_cpus),
         privileged: Some(spec.privileged),
+        readonly_rootfs: Some(runner),
+        cap_drop: runner.then(|| vec!["ALL".to_owned()]),
+        cap_add: runner.then(|| vec!["SETGID".to_owned(), "SETUID".to_owned()]),
+        security_opt: runner.then(|| vec![super::seccomp::runner_security_opt()]),
         mounts: if mounts.is_empty() {
             None
         } else {
@@ -66,12 +71,25 @@ fn bind_mounts(spec: &CreateProjection) -> Result<Vec<DockerMount>, HostError> {
         .iter()
         .filter(|mount| mount.kind == BindMountKind::GuestImage)
         .count();
+    let docker_host_envs = spec
+        .env
+        .iter()
+        .filter(|entry| entry.starts_with("DOCKER_HOST="))
+        .count();
+    let exact_docker_host_envs = spec
+        .env
+        .iter()
+        .filter(|entry| entry.as_str() == RUNNER_DOCKER_HOST_ENV)
+        .count();
     if spec.bind_mounts.len() > 2
         || archive_mounts > 1
         || guest_image_mounts > 1
         || archive_envs != archive_mounts
         || exact_archive_env != archive_envs
-        || spec.env.len() != archive_envs
+        || docker_host_envs != usize::from(spec.loopback_docker_host)
+        || exact_docker_host_envs != docker_host_envs
+        || spec.env.len() != archive_envs + docker_host_envs
+        || (spec.loopback_docker_host && !runner_loopback_is_private(spec))
     {
         return Err(HostError::ForbiddenMount);
     }
@@ -99,6 +117,26 @@ fn bind_mounts(spec: &CreateProjection) -> Result<Vec<DockerMount>, HostError> {
             ..Default::default()
         })
         .collect())
+}
+
+fn runner_loopback_is_private(spec: &CreateProjection) -> bool {
+    if spec.privileged
+        || !spec.open_stdin
+        || !spec
+            .labels
+            .iter()
+            .any(|label| label == "velnor.role=runner")
+    {
+        return false;
+    }
+    let Some(id) = spec
+        .network_mode
+        .as_deref()
+        .and_then(|mode| mode.strip_prefix("container:"))
+    else {
+        return false;
+    };
+    id.len() == 64 && id.bytes().all(|byte| byte.is_ascii_hexdigit())
 }
 
 fn docker_mounts(
@@ -169,12 +207,20 @@ mod tests {
     use bollard::models::MountType;
 
     use crate::docker_spec::runner_plan;
+    use crate::worker::join_dind_net;
     use crate::worker::{BindMount, runner_create, test_resource_budget};
 
     use super::*;
 
     fn runner() -> Result<CreateProjection, HostError> {
         runner_create(&runner_plan("worker_a")?, test_resource_budget()?)
+    }
+
+    fn paired_loopback_runner() -> Result<CreateProjection, HostError> {
+        let mut spec = runner()?;
+        spec.env.push(RUNNER_DOCKER_HOST_ENV.to_owned());
+        spec.loopback_docker_host = true;
+        join_dind_net(spec, &"a".repeat(64))
     }
 
     #[test]
@@ -221,6 +267,26 @@ mod tests {
         mount.target = "/home/runner/.ssh".to_owned();
         spec.bind_mounts.push(mount);
         assert_eq!(host_config(&spec), Err(HostError::ForbiddenMount));
+        Ok(())
+    }
+
+    #[test]
+    fn loopback_docker_host_requires_exact_runner_endpoint_and_private_dind_namespace()
+    -> Result<(), HostError> {
+        let valid = paired_loopback_runner()?;
+        assert!(host_config(&valid).is_ok());
+
+        let mut wrong_endpoint = valid.clone();
+        wrong_endpoint.env[0] = "DOCKER_HOST=tcp://0.0.0.0:2375".to_owned();
+        assert_eq!(host_config(&wrong_endpoint), Err(HostError::ForbiddenMount));
+
+        let mut public_network = valid.clone();
+        public_network.network_mode = Some("host".to_owned());
+        assert_eq!(host_config(&public_network), Err(HostError::ForbiddenMount));
+
+        let mut missing_join = valid;
+        missing_join.network_mode = None;
+        assert_eq!(host_config(&missing_join), Err(HostError::ForbiddenMount));
         Ok(())
     }
 }

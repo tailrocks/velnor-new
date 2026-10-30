@@ -51,6 +51,7 @@ pub(crate) fn dind_create_for_identity(
         privileged: true,
         open_stdin: false,
         network_mode: None,
+        loopback_docker_host: false,
         resource_budget,
     })
 }

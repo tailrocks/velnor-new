@@ -12,9 +12,9 @@ const HEADER_BYTES: u64 = 34;
 const _: () = assert!(MAGIC.len() == 26);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) struct RawTarRange {
-    pub(super) offset: u64,
-    pub(super) length: u64,
+pub(in crate::qualification_cache_payload) struct RawTarRange {
+    pub(in crate::qualification_cache_payload) offset: u64,
+    pub(in crate::qualification_cache_payload) length: u64,
 }
 
 pub(super) fn write_envelope<W, F>(

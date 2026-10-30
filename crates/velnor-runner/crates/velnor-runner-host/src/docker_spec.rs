@@ -1,6 +1,7 @@
 //! One Ubuntu 26.04 runner. Platform is `linux/amd64`. JIT stays off the plan.
 
 use crate::error::HostError;
+use crate::worker::{WorkerContainerRole, WorkerIdentityNames, WorkerVolumeRole};
 use velnor_runner_core::runner_work_path;
 
 /// One mount. `source` is `volume:<name>` or a bind path.
@@ -31,7 +32,7 @@ pub struct ContainerPlan {
     pub cmd: Vec<String>,
     /// Labels. Must not carry JIT.
     pub labels: Vec<String>,
-    /// Private volumes for this worker's socket and work tree.
+/// Private tmpfs-backed volumes shared with the paired DinD container.
     pub mounts: Vec<Mount>,
 }
 
@@ -48,6 +49,8 @@ pub enum DeleteDecision {
 
 pub(crate) const RUNNER_PLATFORM: &str = "linux/amd64";
 pub(crate) const RUNNER_IMAGE: &str = "velnor-runner:ubuntu-26.04-2.338.0";
+pub(crate) const RUNNER_DOCKER_HOST: &str = "tcp://127.0.0.1:2375";
+pub(crate) const RUNNER_DOCKER_HOST_ENV: &str = "DOCKER_HOST=tcp://127.0.0.1:2375";
 const ENTRYPOINT: &str = "/usr/local/bin/velnor-runner-entrypoint";
 const SOCKET_TARGET: &str = "/run";
 
@@ -75,9 +78,9 @@ pub fn runner_plan(private_volume: &str) -> Result<ContainerPlan, HostError> {
     if !private_volume_name(private_volume) {
         return Err(HostError::ForbiddenMount);
     }
-    let work = format!("{private_volume}-work");
+    let names = WorkerIdentityNames::from_private_volume(private_volume)?;
     Ok(ContainerPlan {
-        name: format!("{private_volume}-runner"),
+        name: names.container_name(WorkerContainerRole::Runner),
         privileged: false,
         platform: RUNNER_PLATFORM.to_owned(),
         image: RUNNER_IMAGE.to_owned(),
@@ -90,11 +93,15 @@ pub fn runner_plan(private_volume: &str) -> Result<ContainerPlan, HostError> {
         ],
         mounts: vec![
             Mount {
-                source: format!("volume:{private_volume}"),
+                source: format!("volume:{}", names.volume_name(WorkerVolumeRole::Socket)),
                 target: SOCKET_TARGET.to_owned(),
             },
             Mount {
-                source: format!("volume:{work}"),
+                source: format!("volume:{}", names.volume_name(WorkerVolumeRole::Home)),
+                target: "/home/runner".to_owned(),
+            },
+            Mount {
+                source: format!("volume:{}", names.volume_name(WorkerVolumeRole::Work)),
                 target: runner_work_path(),
             },
         ],

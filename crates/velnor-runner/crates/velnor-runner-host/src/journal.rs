@@ -40,19 +40,24 @@ pub(crate) use completion::{
     MAX_COMPLETION_BODY_BYTES, MAX_COMPLETION_INBOX_SCAN,
 };
 pub(crate) use connection::{
-    AssignmentIdentity, AssignmentKey, BoundConnectionSession, CapacityLimits,
-    ConnectionCompletionInboxEntry, ConnectionJournal, ConnectionScaleSet, EngineContext,
+    AssignmentIdentity, AssignmentKey, BoundConnectionSession, BootstrapContainerCreateClaim,
+    BootstrapStartClaim, CapacityLimits, ConnectionCompletionInboxEntry, ConnectionJournal,
+    ConnectionScaleSet, EngineContext, JobFactsPublicationClaim, ListenerDeliveryClaim,
     OperationalCapacityLimits, PhysicalRunnerJitState, PhysicalRunnerOwnership,
     PhysicalRunnerReservation, ReservationRequest, ReservationResult, ReservationSnapshot,
     ReservationState, SessionCreateClaim, SessionCreateRecord, SessionCreateState,
     SessionRefreshClaim, SessionRefreshRecord, SessionRefreshState, SourceAuthorizationBinding,
-    StorageAdmission, StorageAdmissionSample, StorageCacheProjection, StorageFilesystemKind,
-    StorageInodePolicy, StorageMedium, StorageMemoryObservation, StoragePoolLimit,
-    StoragePoolObservation, StorageProfile, StorageReservationPlan, StorageRole, StorageRoleCharge,
-    StorageRoleLimit, StorageSampleIdentity,
+    StorageAdmission, StorageAdmissionSample, StorageAttachmentContract, StorageCacheProjection,
+    StorageFilesystemKind, StorageInodePolicy, StorageMedium, StorageMemoryObservation,
+    StorageObjectCreateClaim, StorageObserver, StoragePoolLimit, StoragePoolObservation,
+    StorageProfile, StorageProvisioningAdmission, StorageReservationPlan, StorageRole,
+    StorageRoleCharge, StorageRoleContract, StorageRoleLimit, StorageSampleIdentity,
 };
 #[cfg(test)]
-pub(crate) use connection::{fixture_admission, fixture_profile};
+pub(crate) use connection::{
+    fixture_admission, fixture_profile, fixture_provisioning_profile,
+    fixture_storage_provisioning_admission,
+};
 pub(crate) use image_import::{
     ImageImportClaim, ImageImportDescriptor, ImageImportId, ImageImportIdentity,
     ImageImportInspection, ImageImportObservation, ImageImportRecord, ImageImportRequest,

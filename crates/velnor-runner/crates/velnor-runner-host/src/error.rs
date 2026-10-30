@@ -17,6 +17,17 @@ pub enum PreparationCause {
     DindStorage,
 }
 
+impl PreparationCause {
+    const fn code(self) -> &'static str {
+        match self {
+            Self::Docker => "docker",
+            Self::DockerTimeout => "docker_timeout",
+            Self::DindReadiness => "dind_readiness",
+            Self::DindStorage => "dind_storage",
+        }
+    }
+}
+
 /// Local controller failure.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
 pub enum HostError {
@@ -95,4 +106,37 @@ pub enum HostError {
     /// No token bytes were read.
     #[error("empty secret")]
     EmptySecret,
+}
+
+impl HostError {
+    /// Stable, bounded diagnostic label that excludes error contents.
+    pub(crate) const fn code(self) -> &'static str {
+        match self {
+            Self::Config => "config",
+            Self::Path => "path",
+            Self::Lock => "lock",
+            Self::Journal => "journal",
+            Self::ForbiddenMount => "forbidden_mount",
+            Self::PrivilegedRunner => "privileged_runner",
+            Self::Frame => "frame",
+            Self::Docker => "docker",
+            Self::DockerTimeout => "docker_timeout",
+            Self::DindReadiness => "dind_readiness",
+            Self::DindStorage => "dind_storage",
+            Self::PreparationFailedClean(cause) => cause.code(),
+            Self::Ownership => "ownership",
+            Self::RunnerActive => "runner_active",
+            Self::Cleanup => "cleanup",
+            Self::ContainerCreateUncertain => "container_create_uncertain",
+            Self::ContainerStartUncertain => "container_start_uncertain",
+            Self::JitDeliveryUncertain => "jit_delivery_uncertain",
+            Self::LaunchUncertain => "launch_uncertain",
+            Self::VolumeCreateUncertain => "volume_create_uncertain",
+            Self::Identity => "identity",
+            Self::EmptyJit => "empty_jit",
+            Self::Endpoint => "endpoint",
+            Self::Keychain => "keychain",
+            Self::EmptySecret => "empty_secret",
+        }
+    }
 }

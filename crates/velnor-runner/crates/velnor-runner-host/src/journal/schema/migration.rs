@@ -4,7 +4,7 @@ use crate::error::HostError;
 
 use super::{
     connection, image_import, remote, request_ledger, scale_set_create, session, session_refresh,
-    source_authorization, storage_budget,
+    source_authorization, provisioning, storage_budget,
 };
 
 pub(super) async fn from_version_zero(conn: &turso::Connection) -> Result<(), HostError> {
@@ -164,6 +164,14 @@ pub(super) async fn from_version_fourteen(conn: &turso::Connection) -> Result<()
     conn.execute("PRAGMA user_version = 15", ())
         .await
         .map(|_| ())
+        .map_err(|_| HostError::Journal)?;
+    from_version_fifteen(conn).await
+}
+
+pub(super) async fn from_version_fifteen(conn: &turso::Connection) -> Result<(), HostError> {
+    provisioning::bootstrap(conn).await?;
+    conn.execute("PRAGMA user_version = 16", ())
+        .await
         .map_err(|_| HostError::Journal)?;
     super::validate_persisted_schema(conn).await
 }

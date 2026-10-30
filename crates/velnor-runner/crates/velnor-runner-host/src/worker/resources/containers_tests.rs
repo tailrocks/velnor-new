@@ -1,7 +1,6 @@
 //! Docker inspect label tests, including image-inherited OCI labels.
 
 use std::collections::HashMap;
-use std::path::Path;
 
 use bollard::models::{
     ContainerConfig, ContainerInspectResponse, HostConfig, HostConfigCgroupnsModeEnum, MountPoint,
@@ -16,8 +15,12 @@ use super::{inspect_labels_match, same_launch, topology_matches, validate_existi
 
 #[path = "containers_cgroupns_tests.rs"]
 mod cgroupns;
+#[path = "containers_environment_tests.rs"]
+mod environment_tests;
 #[path = "containers_limits_tests.rs"]
 mod limits;
+#[path = "containers_security_tests.rs"]
+mod security;
 #[path = "containers_topology_tests.rs"]
 mod topology;
 
@@ -93,6 +96,12 @@ fn inspect_projection(spec: &CreateProjection) -> Result<ContainerInspectRespons
         host_config: Some(HostConfig {
             cgroupns_mode: Some(HostConfigCgroupnsModeEnum::PRIVATE),
             privileged: Some(spec.privileged),
+            readonly_rootfs: Some(!spec.privileged),
+            cap_drop: (!spec.privileged).then(|| vec!["ALL".to_owned()]),
+            cap_add: (!spec.privileged)
+                .then(|| vec!["SETGID".to_owned(), "SETUID".to_owned()]),
+            security_opt: (!spec.privileged)
+                .then(|| vec![super::super::super::seccomp::runner_security_opt()]),
             network_mode: spec.network_mode.clone(),
             nano_cpus: Some(limits.nano_cpus),
             memory: Some(limits.memory_bytes),
@@ -212,98 +221,6 @@ fn runner_topology_rejects_command_drift() -> Result<(), HostError> {
     let spec = runner_create_for_identity(&identity()?, None)?;
     let mut inspected = inspect_projection(&spec)?;
     inspected.config.as_mut().ok_or(HostError::Ownership)?.cmd = Some(vec!["/bin/sh".to_owned()]);
-
-    assert!(!topology_matches(&spec, &inspected)?);
-    Ok(())
-}
-
-#[test]
-fn runner_topology_matches_allowed_archive_environment() -> Result<(), HostError> {
-    let spec = runner_create_for_identity(
-        &identity()?,
-        Some(Path::new("/var/lib/velnor/action-archives")),
-    )?;
-    let inspected = inspect_projection(&spec)?;
-
-    assert!(topology_matches(&spec, &inspected)?);
-    Ok(())
-}
-
-#[test]
-fn runner_topology_rejects_archive_environment_drift() -> Result<(), HostError> {
-    let spec = runner_create_for_identity(
-        &identity()?,
-        Some(Path::new("/var/lib/velnor/action-archives")),
-    )?;
-    let mut inspected = inspect_projection(&spec)?;
-    let env = inspected
-        .config
-        .as_mut()
-        .ok_or(HostError::Ownership)?
-        .env
-        .as_mut()
-        .ok_or(HostError::Ownership)?;
-    let cache = env
-        .iter_mut()
-        .find(|entry| entry.starts_with("ACTIONS_RUNNER_ACTION_ARCHIVE_CACHE="))
-        .ok_or(HostError::Ownership)?;
-    *cache = "ACTIONS_RUNNER_ACTION_ARCHIVE_CACHE=/tmp/wrong".to_owned();
-
-    assert!(!topology_matches(&spec, &inspected)?);
-    Ok(())
-}
-
-#[test]
-fn runner_topology_rejects_unexpected_environment() -> Result<(), HostError> {
-    let spec = runner_create_for_identity(&identity()?, None)?;
-    let valid = inspect_projection(&spec)?;
-
-    let mut extra = valid.clone();
-    extra
-        .config
-        .as_mut()
-        .ok_or(HostError::Ownership)?
-        .env
-        .as_mut()
-        .ok_or(HostError::Ownership)?
-        .push("LD_PRELOAD=/tmp/override.so".to_owned());
-    assert!(!topology_matches(&spec, &extra)?);
-
-    let mut changed_path = valid.clone();
-    changed_path
-        .config
-        .as_mut()
-        .ok_or(HostError::Ownership)?
-        .env
-        .as_mut()
-        .ok_or(HostError::Ownership)?[0] = "PATH=/tmp".to_owned();
-    assert!(!topology_matches(&spec, &changed_path)?);
-
-    let mut missing_path = valid;
-    missing_path
-        .config
-        .as_mut()
-        .ok_or(HostError::Ownership)?
-        .env
-        .as_mut()
-        .ok_or(HostError::Ownership)?
-        .clear();
-    assert!(!topology_matches(&spec, &missing_path)?);
-    Ok(())
-}
-
-#[test]
-fn dind_topology_rejects_unexpected_environment() -> Result<(), HostError> {
-    let spec = dind_create_for_identity(&identity()?)?;
-    let mut inspected = inspect_projection(&spec)?;
-    inspected
-        .config
-        .as_mut()
-        .ok_or(HostError::Ownership)?
-        .env
-        .as_mut()
-        .ok_or(HostError::Ownership)?
-        .push("DOCKER_HOST=tcp://host.example:2375".to_owned());
 
     assert!(!topology_matches(&spec, &inspected)?);
     Ok(())

@@ -3,6 +3,7 @@ use super::super::storage_admission_types::{
     StorageRoleV1,
 };
 use super::ROLE_NAMES;
+use super::RuntimeIdentityV1;
 use sha2::{Digest, Sha256};
 use std::path::{Component, Path};
 
@@ -18,6 +19,7 @@ pub(super) fn validate_document(
         return Err("cache_storage_projection_schema_invalid");
     }
     validate_scope(document)?;
+    validate_runtime_identity(&document.runner_identity)?;
     validate_instance_binding(document)?;
     validate_cache_paths(document, runner_temp)?;
     validate_mount_shape(&document.job_facts_mount)?;
@@ -84,6 +86,33 @@ fn validate_instance_binding(document: &StorageCacheAdmissionV1) -> Result<(), &
         return Err("cache_storage_instance_binding_invalid");
     }
     Ok(())
+}
+
+pub(super) fn validate_runtime_identity(identity: &RuntimeIdentityV1) -> Result<(), &'static str> {
+    if identity.domain != "velnor.runtime-identity"
+        || identity.schema_version != 1
+        || identity.runner_image_name != "velnor-runner"
+        || identity.platform != "linux/amd64"
+        || !valid_lower_hex(&identity.runner_source_revision, 40)
+        || !sha256_digest(&identity.runner_manifest_digest)
+        || !sha256_digest(&identity.runner_config_digest)
+    {
+        return Err("cache_storage_runtime_identity_invalid");
+    }
+    Ok(())
+}
+
+fn valid_lower_hex(value: &str, length: usize) -> bool {
+    value.len() == length
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+}
+
+fn sha256_digest(value: &str) -> bool {
+    value
+        .strip_prefix("sha256:")
+        .is_some_and(|digest| valid_lower_hex(digest, 64))
 }
 
 fn validate_cache_paths(
@@ -289,6 +318,7 @@ pub(super) fn canonical_projection_digest(
         scope: &document.scope,
         reservation: &document.reservation,
         runner: &document.runner,
+        runner_identity: &document.runner_identity,
         engine: &document.engine,
         profile: &document.profile,
         sample: &document.sample,

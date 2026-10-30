@@ -4,6 +4,7 @@ use std::collections::HashMap;
 
 use bollard::models::ContainerConfig;
 
+use crate::docker_spec::RUNNER_DOCKER_HOST_ENV;
 use crate::error::HostError;
 use crate::worker::CreateProjection;
 
@@ -23,14 +24,28 @@ pub(super) fn environment_matches(
 
 fn expected_environment(spec: &CreateProjection) -> Result<HashMap<String, String>, HostError> {
     let mut entries = vec![UBUNTU_PATH.to_owned()];
-    match spec.open_stdin {
-        true => match spec.env.as_slice() {
-            [] => {}
-            [entry] if entry == ARCHIVE_CACHE_ENV => entries.push(entry.clone()),
-            _ => return Err(HostError::Ownership),
-        },
-        false if spec.env.is_empty() => {}
-        false => return Err(HostError::Ownership),
+    let mut archive_cache_seen = false;
+    let mut docker_host_seen = false;
+    if !spec.open_stdin && (spec.loopback_docker_host || !spec.env.is_empty()) {
+        return Err(HostError::Ownership);
+    }
+    for entry in &spec.env {
+        if entry == ARCHIVE_CACHE_ENV && !archive_cache_seen {
+            archive_cache_seen = true;
+            entries.push(entry.clone());
+        } else if entry == RUNNER_DOCKER_HOST_ENV && spec.loopback_docker_host && !docker_host_seen
+        {
+            docker_host_seen = true;
+            entries.push(entry.clone());
+        } else {
+            return Err(HostError::Ownership);
+        }
+    }
+    if spec.loopback_docker_host && !docker_host_seen {
+        return Err(HostError::Ownership);
+    }
+    if !spec.loopback_docker_host && docker_host_seen {
+        return Err(HostError::Ownership);
     }
     parse_environment(&entries)
 }

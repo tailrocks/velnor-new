@@ -1,3 +1,4 @@
+use super::identity::test_identity;
 use super::{
     ROLE_NAMES, VerifiedCacheBudget, canonical_instance_binding_digest,
     canonical_projection_digest, parse_projection,
@@ -122,6 +123,7 @@ pub(super) fn document() -> StorageCacheAdmissionV1 {
             container_id: "runner-container".to_owned(),
             dind_container_id: "dind-container".to_owned(),
         },
+        runner_identity: test_identity(),
         engine: EngineV1 {
             id: "engine-3".to_owned(),
             docker_root_digest: digest('c'),

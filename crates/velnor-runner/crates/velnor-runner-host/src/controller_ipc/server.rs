@@ -9,17 +9,28 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
+use tokio::sync::{mpsc, oneshot};
 
 use crate::config::{HostConfig, RepositoryConnection};
 use crate::daemon_lock::DaemonLock;
 use crate::error::HostError;
 use crate::ipc::{MAX_FRAME, encode_frame};
 use crate::journal::Journal;
+use crate::readiness::ResourceProbeReport;
 
 use super::wire::{MAX_REQUEST_BYTES, Request, Response, SOCKET_NAME, Target};
 
 const ACCEPT_PAUSE: Duration = Duration::from_millis(25);
 const IO_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// A doctor request waiting for the controller-owned probe authority.
+pub(crate) struct DoctorProbeRequest(oneshot::Sender<Option<ResourceProbeReport>>);
+
+impl DoctorProbeRequest {
+    pub(crate) fn respond(self, report: Option<ResourceProbeReport>) {
+        let _sent = self.0.send(report);
+    }
+}
 
 /// Live config bindings read by the private request listener.
 #[derive(Debug, Clone)]
@@ -61,7 +72,7 @@ impl ControlServer {
         state: &Path,
         journal: Journal,
         config: &HostConfig,
-    ) -> Result<(Self, ControlState), HostError> {
+    ) -> Result<(Self, ControlState, mpsc::Receiver<DoctorProbeRequest>), HostError> {
         let state_path = private_state_directory(state)?;
         let path = state_path.join(SOCKET_NAME);
         remove_stale_socket(&path)?;
@@ -74,6 +85,7 @@ impl ControlServer {
         let metadata = fs::symlink_metadata(&path).map_err(|_| HostError::Path)?;
         let identity = (metadata.dev(), metadata.ino());
         let state = ControlState::new(config);
+        let (probe_sender, probe_requests) = mpsc::channel(1);
         let stop = Arc::new(AtomicBool::new(false));
         let thread_stop = Arc::clone(&stop);
         let thread_state = state.clone();
@@ -87,6 +99,7 @@ impl ControlServer {
                     &thread_state,
                     &server_path,
                     &thread_stop,
+                    probe_sender,
                 );
             })
             .map_err(|_| HostError::Lock)?;
@@ -98,6 +111,7 @@ impl ControlServer {
                 thread: Some(handle),
             },
             state,
+            probe_requests,
         ))
     }
 }
@@ -119,6 +133,7 @@ fn serve(
     state: &ControlState,
     state_path: &Path,
     stop: &AtomicBool,
+    probe_sender: mpsc::Sender<DoctorProbeRequest>,
 ) {
     let Ok(runtime) = tokio::runtime::Builder::new_current_thread()
         .enable_all()
@@ -138,10 +153,15 @@ fn serve(
                         eprintln!("host control write timeout setup failed: {error}");
                         continue;
                     }
-                    let response = read_request(&mut stream).and_then(|request| {
-                        runtime.block_on(handle_request(journal, state, state_path, request))
+                    let response = read_request(&mut stream).and_then(|request| match request {
+                        Request::ResourceProbe => runtime
+                            .block_on(handle_doctor_probe(&probe_sender))
+                            .map_err(|_| HostError::Journal),
+                        request => {
+                            runtime.block_on(handle_request(journal, state, state_path, request))
+                        }
                     });
-                    let response = response.unwrap_or(Response { value: None });
+                    let response = response.unwrap_or_else(|_| Response::boolean(None));
                     if let Err(error) = write_response(&mut stream, response) {
                         eprintln!("host control response failed: {error}");
                     }
@@ -155,6 +175,17 @@ fn serve(
     }
 }
 
+async fn handle_doctor_probe(
+    probe_sender: &mpsc::Sender<DoctorProbeRequest>,
+) -> Result<Response, HostError> {
+    let (sender, receiver) = oneshot::channel();
+    probe_sender
+        .try_send(DoctorProbeRequest(sender))
+        .map_err(|_| HostError::Journal)?;
+    let report = receiver.await.map_err(|_| HostError::Journal)?;
+    Ok(Response::probe(report))
+}
+
 async fn handle_request(
     journal: &Journal,
     state: &ControlState,
@@ -166,7 +197,7 @@ async fn handle_request(
         Request::DrainStatus { target, token } => {
             let marker = target_marker(state_path, &target);
             if read_drain_token(&marker).as_deref() != Some(token.as_str()) {
-                return Ok(Response { value: Some(false) });
+                return Ok(Response::boolean(Some(false)));
             }
             let drained = match target {
                 Target::Host => journal.is_drained().await?,
@@ -177,7 +208,7 @@ async fn handle_request(
                     if connection_id != binding.connection_id
                         || !configured_exactly(state, &binding)?
                     {
-                        return Ok(Response { value: Some(false) });
+                        return Ok(Response::boolean(Some(false)));
                     }
                     journal
                         .connection_scope(&binding)
@@ -186,11 +217,9 @@ async fn handle_request(
                         .await?
                 }
             };
-            Ok(Response {
-                value: Some(
-                    drained && read_drain_token(&marker).as_deref() == Some(token.as_str()),
-                ),
-            })
+            Ok(Response::boolean(Some(
+                drained && read_drain_token(&marker).as_deref() == Some(token.as_str()),
+            )))
         }
         Request::Reactivate { binding, token } => {
             let marker = state_path
@@ -201,12 +230,10 @@ async fn handle_request(
                 || read_drain_token(&marker).as_deref() != Some(token.as_str())
                 || connection_id_present(state, &binding)?
             {
-                return Ok(Response { value: Some(false) });
+                return Ok(Response::boolean(Some(false)));
             }
             let reactivated = journal.reactivate_if_drained(&binding).await?;
-            Ok(Response {
-                value: Some(reactivated),
-            })
+            Ok(Response::boolean(Some(reactivated)))
         }
         Request::Detached { binding, token } => {
             let marker = state_path
@@ -215,15 +242,14 @@ async fn handle_request(
             if read_drain_token(&marker).as_deref() != Some(token.as_str())
                 || connection_id_present(state, &binding)?
             {
-                return Ok(Response { value: Some(false) });
+                return Ok(Response::boolean(Some(false)));
             }
             let detached = journal.is_retired_and_drained(&binding).await?;
-            Ok(Response {
-                value: Some(
-                    detached && read_drain_token(&marker).as_deref() == Some(token.as_str()),
-                ),
-            })
+            Ok(Response::boolean(Some(
+                detached && read_drain_token(&marker).as_deref() == Some(token.as_str()),
+            )))
         }
+        Request::ResourceProbe => Err(HostError::Frame),
     }
 }
 

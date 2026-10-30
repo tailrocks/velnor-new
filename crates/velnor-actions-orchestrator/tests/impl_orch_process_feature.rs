@@ -40,7 +40,7 @@ impl<'ast> Visit<'ast> for ProcessFeatureAudit {
     }
 
     fn visit_item_use(&mut self, item: &'ast syn::ItemUse) {
-        if forbidden_rustix_import(&item.tree, &[]) {
+        if forbidden_rustix_import(&item.tree, &[]) && !is_errno_import(&item.tree) {
             self.violations += 1;
         }
         visit::visit_item_use(self, item);
@@ -168,6 +168,26 @@ fn is_owner_check_source(path: &Path) -> bool {
     path == Path::new(OWNER_CHECK_SOURCE)
 }
 
+fn is_errno_import(tree: &UseTree) -> bool {
+    let UseTree::Path(root) = tree else {
+        return false;
+    };
+    if root.ident != "rustix" {
+        return false;
+    }
+    let UseTree::Path(io) = &*root.tree else {
+        return false;
+    };
+    if io.ident != "io" {
+        return false;
+    }
+    match &*io.tree {
+        UseTree::Name(errno) => errno.ident == "Errno",
+        UseTree::Rename(errno) => errno.ident == "Errno",
+        UseTree::Path(_) | UseTree::Group(_) | UseTree::Glob(_) => false,
+    }
+}
+
 #[test]
 fn orchestrator_process_feature_is_limited_to_exact_stage_uid_check() -> Result<(), Box<dyn Error>>
 {
@@ -210,12 +230,23 @@ fn process_feature_guard_rejects_import_aliases_and_other_apis() -> Result<(), B
         "use rustix::process::geteuid; fn owner() { geteuid(); }",
         "use rustix as rx; fn owner() { rx::process::geteuid(); }",
         "fn owner() { rustix::process::getuid(); }",
+        "use rustix::io::{Errno, dup};",
+        "use rustix::io::*;",
+        "use rustix::io as io;",
     ] {
         let audit = audit_source(source)?;
         assert!(
             audit.violations > 0,
             "accepted process-feature source: {source}"
         );
+    }
+
+    for source in [
+        "use rustix::io::Errno;",
+        "use rustix::io::Errno as IoError;",
+    ] {
+        let audit = audit_source(source)?;
+        assert_eq!(audit.violations, 0, "rejected typed errno import: {source}");
     }
     Ok(())
 }

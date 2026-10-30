@@ -219,7 +219,7 @@ async fn drive_test<E: PairEngine, S: PairSink>(
         &input.images,
         &input.selected_engine,
         &input.file,
-        StageAdmission::test_fixture_for(&input.selected_engine),
+        StageAdmission::test_fixture(),
         sink,
     )
     .await
@@ -239,7 +239,7 @@ async fn expired_admission_stops_before_the_first_docker_effect() -> Result<(), 
         &input.images,
         &input.selected_engine,
         &input.file,
-        StageAdmission::test_stale_fixture_for(&input.selected_engine),
+        StageAdmission::test_stale_fixture(),
         &Forget,
     )
     .await;

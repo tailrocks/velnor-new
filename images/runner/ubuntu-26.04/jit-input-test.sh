@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 unset ACTIONS_RUNNER_INPUT_JITCONFIG || true
+expected_docker_host='tcp://127.0.0.1:2375'
+export DOCKER_HOST="$expected_docker_host"
+export DOCKER_CONTEXT='runner-context-must-be-ignored'
 
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 fixture="$(mktemp -d "${TMPDIR:-/tmp}/velnor-jit-input.XXXXXX")"
@@ -19,7 +22,6 @@ sed \
   -e "s|root=\"/home/runner\"|root=\"$fixture/root\"|" \
   -e "s|/tmp/velnor-jit|$fixture/tmp/velnor-jit|" \
   -e "s|/usr/local/bin/wait-docker-sock|$fixture/bin/wait-docker-sock|" \
-  -e "s|/usr/local/bin/clear-dockerenv|$fixture/bin/clear-dockerenv|" \
   "$script_dir/entrypoint.sh" > "$fixture/entrypoint.sh"
 chmod 0755 "$fixture/entrypoint.sh"
 
@@ -27,16 +29,11 @@ cat > "$fixture/bin/wait-docker-sock" <<'EOF'
 #!/usr/bin/env bash
 exit 0
 EOF
-cat > "$fixture/bin/clear-dockerenv" <<'EOF'
-#!/usr/bin/env bash
-exit 0
-EOF
 cat > "$fixture/velnor-wait-docker-api" <<'EOF'
 #!/usr/bin/env bash
-[[ "$#" -eq 1 && "$1" == "unix:///var/run/docker.sock" ]]
+[[ "$#" -eq 1 && "$1" == "tcp://127.0.0.1:2375" ]]
 EOF
-chmod 0755 "$fixture/bin/wait-docker-sock" "$fixture/bin/clear-dockerenv" \
-  "$fixture/velnor-wait-docker-api"
+chmod 0755 "$fixture/bin/wait-docker-sock" "$fixture/velnor-wait-docker-api"
 
 # macOS and Linux use different `dd`/`stat` options. These fixture commands
 # provide only the exact interface used by entrypoint.sh.
@@ -68,6 +65,8 @@ cat > "$fixture/root/bin/Runner.Listener" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 [[ "$#" -eq 1 && "$1" == run ]] || exit 81
+[[ "${DOCKER_HOST:-}" == "tcp://127.0.0.1:2375" ]] || exit 88
+[[ -z "${DOCKER_CONTEXT:-}" ]] || exit 89
 env_name='ACTIONS_RUNNER_INPUT_JITCONFIG'
 env_entry_bytes=$((${#env_name} + 1 + ${#ACTIONS_RUNNER_INPUT_JITCONFIG} + 1))
 [[ "$env_entry_bytes" -le 131072 ]] || exit 86
@@ -157,11 +156,34 @@ run_rejection() {
   assert_clean_outputs "$payload_file"
 }
 
+run_transport_rejection() {
+  local mode="$1" status=0
+  rm -f "$fixture/listener-ran" "$fixture/stdout" "$fixture/stderr"
+  if [[ "$mode" == missing ]]; then
+    env -u DOCKER_HOST PATH="$fixture/bin:$PATH" \
+      FIXTURE_TMP="$fixture/tmp" RUNNER_ROOT="$fixture/root" \
+      LISTENER_MARKER="$fixture/listener-ran" \
+      "$BASH" "$fixture/entrypoint.sh" < "$fixture/input/canary" \
+      > "$fixture/stdout" 2> "$fixture/stderr" || status=$?
+  else
+    DOCKER_HOST='tcp://0.0.0.0:2375' PATH="$fixture/bin:$PATH" \
+      FIXTURE_TMP="$fixture/tmp" RUNNER_ROOT="$fixture/root" \
+      LISTENER_MARKER="$fixture/listener-ran" \
+      "$BASH" "$fixture/entrypoint.sh" < "$fixture/input/canary" \
+      > "$fixture/stdout" 2> "$fixture/stderr" || status=$?
+  fi
+  [[ "$status" -eq 2 && ! -e "$fixture/listener-ran" ]] \
+    || fail "${mode} or non-loopback Docker endpoint was not rejected"
+  assert_clean_outputs "$fixture/input/canary"
+}
+
 run_success "$fixture/input/canary" stdin "$canary"
 run_success "$fixture/input/fd3" fd3 "$canary"
 run_success "$fixture/input/max" length "$max_payload_bytes" "$linux_max_arg_strlen"
 run_rejection "$fixture/input/empty" 2
 run_rejection "$fixture/input/oversize" 2
+run_transport_rejection missing
+run_transport_rejection wildcard
 
 # JIT supplied through Docker Config.Env is outside the controller's private
 # pipe contract and must fail closed before Runner.Listener starts.

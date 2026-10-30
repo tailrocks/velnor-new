@@ -48,6 +48,7 @@ fn topology_matches(
         || !execution_matches(spec, config)
         || !environment_matches(spec, config)?
         || host.privileged != Some(spec.privileged)
+        || !security_matches(spec, host)
         || host.cgroupns_mode != Some(HostConfigCgroupnsModeEnum::PRIVATE)
         || !resource_limits_match(spec, host)
         || !network_matches(spec.network_mode.as_deref(), host.network_mode.as_deref())
@@ -55,6 +56,19 @@ fn topology_matches(
         return Ok(false);
     }
     Ok(expected_mounts(spec)? == observed_mounts(found)?)
+}
+
+fn security_matches(spec: &CreateProjection, host: &bollard::models::HostConfig) -> bool {
+    if spec.privileged {
+        return host.readonly_rootfs == Some(false)
+            && host.cap_drop.as_ref().is_none_or(Vec::is_empty)
+            && host.cap_add.as_ref().is_none_or(Vec::is_empty)
+            && host.security_opt.as_ref().is_none_or(Vec::is_empty);
+    }
+    host.readonly_rootfs == Some(true)
+        && host.cap_drop == Some(vec!["ALL".to_owned()])
+        && host.cap_add == Some(vec!["SETGID".to_owned(), "SETUID".to_owned()])
+        && host.security_opt == Some(vec![super::super::seccomp::runner_security_opt()])
 }
 
 fn execution_matches(spec: &CreateProjection, config: &bollard::models::ContainerConfig) -> bool {

@@ -5,6 +5,7 @@ mod correlation;
 mod event_source;
 mod helpers;
 mod phase_recovery;
+mod reservation_enumeration;
 mod review_counterexamples;
 mod review_migration;
 mod scope_exclusivity;

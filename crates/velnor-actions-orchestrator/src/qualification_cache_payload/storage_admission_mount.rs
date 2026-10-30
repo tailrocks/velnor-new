@@ -133,7 +133,13 @@ fn read_linux_projection() -> Result<(Vec<u8>, MountObservation), &'static str> 
     }
     let mountinfo =
         std::str::from_utf8(&mountinfo_bytes).map_err(|_| "cache_storage_mountinfo_invalid")?;
-    validate_mountinfo(mountinfo, observation)?;
+    super::mountinfo::validate_read_only_mountinfo(
+        mountinfo,
+        JOB_FACTS_DIRECTORY,
+        observation.mount_id,
+        observation.device_major,
+        observation.device_minor,
+    )?;
 
     let file_descriptor = openat(
         &directory,
@@ -176,119 +182,4 @@ fn read_linux_projection() -> Result<(Vec<u8>, MountObservation), &'static str> 
         return Err("cache_storage_projection_changed");
     }
     Ok((bytes, observation))
-}
-
-fn validate_mountinfo(mountinfo: &str, expected: MountObservation) -> Result<(), &'static str> {
-    let mut found = false;
-    for line in mountinfo.lines() {
-        let mut halves = line.splitn(2, " - ");
-        let left = halves.next().ok_or("cache_storage_mountinfo_invalid")?;
-        let right = halves.next().ok_or("cache_storage_mountinfo_invalid")?;
-        let fields = left.split_ascii_whitespace().collect::<Vec<_>>();
-        if fields.len() < 6 {
-            return Err("cache_storage_mountinfo_invalid");
-        }
-        if fields[4] != JOB_FACTS_DIRECTORY {
-            continue;
-        }
-        if found {
-            return Err("cache_storage_mount_ambiguous");
-        }
-        found = true;
-        let mount_id = fields[0]
-            .parse::<u64>()
-            .map_err(|_| "cache_storage_mountinfo_invalid")?;
-        let mut device = fields[2].split(':');
-        let major = device
-            .next()
-            .ok_or("cache_storage_mountinfo_invalid")?
-            .parse::<u32>()
-            .map_err(|_| "cache_storage_mountinfo_invalid")?;
-        let minor = device
-            .next()
-            .ok_or("cache_storage_mountinfo_invalid")?
-            .parse::<u32>()
-            .map_err(|_| "cache_storage_mountinfo_invalid")?;
-        if device.next().is_some() {
-            return Err("cache_storage_mountinfo_invalid");
-        }
-        let mount_options = fields[5].split(',').collect::<Vec<_>>();
-        if mount_id != expected.mount_id
-            || major != expected.device_major
-            || minor != expected.device_minor
-            || !mount_options.contains(&"ro")
-            || right.trim().is_empty()
-        {
-            return Err("cache_storage_mount_not_read_only_bind");
-        }
-    }
-    if found {
-        Ok(())
-    } else {
-        Err("cache_storage_mount_missing")
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{MountObservation, validate_mountinfo};
-
-    fn observation() -> MountObservation {
-        MountObservation {
-            mount_id: 42,
-            device_major: 0,
-            device_minor: 55,
-            directory_device: 55,
-            directory_inode: 77,
-        }
-    }
-
-    fn line(mount_id: u64, options: &str, target: &str) -> String {
-        format!("{mount_id} 25 0:55 / {target} {options} rw,relatime - tmpfs tmpfs rw\n")
-    }
-
-    #[test]
-    fn mountinfo_requires_one_exact_read_only_mount_identity() {
-        assert_eq!(
-            validate_mountinfo(
-                &line(42, "ro,nosuid,nodev", "/opt/velnor/job-facts"),
-                observation()
-            ),
-            Ok(())
-        );
-        assert_eq!(
-            validate_mountinfo(
-                &line(41, "ro,nosuid,nodev", "/opt/velnor/job-facts"),
-                observation()
-            ),
-            Err("cache_storage_mount_not_read_only_bind")
-        );
-        assert_eq!(
-            validate_mountinfo(
-                &line(42, "rw,nosuid,nodev", "/opt/velnor/job-facts"),
-                observation()
-            ),
-            Err("cache_storage_mount_not_read_only_bind")
-        );
-    }
-
-    #[test]
-    fn mountinfo_rejects_duplicate_targets_and_nonexact_paths() {
-        let duplicated = format!(
-            "{}{}",
-            line(42, "ro", "/opt/velnor/job-facts"),
-            line(42, "ro", "/opt/velnor/job-facts")
-        );
-        assert_eq!(
-            validate_mountinfo(&duplicated, observation()),
-            Err("cache_storage_mount_ambiguous")
-        );
-        assert_eq!(
-            validate_mountinfo(
-                &line(42, "ro", "/opt/velnor/job-facts/child"),
-                observation()
-            ),
-            Err("cache_storage_mount_missing")
-        );
-    }
 }

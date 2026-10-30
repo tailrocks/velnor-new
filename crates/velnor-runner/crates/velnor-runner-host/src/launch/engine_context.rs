@@ -17,7 +17,7 @@ pub(crate) struct SelectedEngineContext {
 }
 
 impl SelectedEngineContext {
-    /// Capture root and architecture from the independently selected Docker info.
+    /// Read root and architecture from the independently selected Docker info.
     pub(crate) fn capture(selected: &EngineContext, info: &SystemInfo) -> Result<Self, HostError> {
         let engine_id = info.id.as_deref().ok_or(HostError::Ownership)?;
         let docker_root = info

@@ -4,10 +4,12 @@
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
+use crate::launch::SelectedEngineContext;
 use crate::launch::pressure::Sample;
+use crate::readiness::{ResourceProbeInodePolicy, ResourceProbeReport};
 use crate::worker::ResourceBudget;
 
-use super::record::ProbeRecord;
+use super::record::{InodePolicy, ProbeRecord};
 
 const MAX_OBSERVATION_AGE: Duration = Duration::from_secs(30);
 
@@ -15,6 +17,7 @@ const MAX_OBSERVATION_AGE: Duration = Duration::from_secs(30);
 pub(super) struct Observation {
     record: ProbeRecord,
     cpus: u32,
+    memory_total_bytes: u64,
     engine_id: String,
     docker_root_digest: String,
     sample_generation_id: String,
@@ -39,6 +42,7 @@ impl Observation {
         .then_some(Self {
             record,
             cpus,
+            memory_total_bytes,
             engine_id,
             docker_root_digest,
             sample_generation_id,
@@ -62,6 +66,41 @@ impl Observation {
             ncpu: self.cpus,
             mem_available: self.record.memory_available_bytes,
             disk_free: self.record.docker_root_free_bytes,
+        })
+    }
+
+    pub(super) fn doctor_report(
+        self,
+        expected: &SelectedEngineContext,
+    ) -> Option<ResourceProbeReport> {
+        if !self.is_recent_at(Instant::now())
+            || self.engine_id != expected.engine_id()
+            || self.docker_root_digest != expected.docker_root_digest()
+        {
+            return None;
+        }
+        let record = self.record;
+        let inode_policy = match record.docker_root_inode_policy {
+            InodePolicy::Finite => ResourceProbeInodePolicy::Finite,
+            InodePolicy::DynamicBtrfs => ResourceProbeInodePolicy::DynamicBtrfs,
+            InodePolicy::Unknown => ResourceProbeInodePolicy::Unknown,
+        };
+        Some(ResourceProbeReport {
+            sample_generation_id: self.sample_generation_id,
+            guest_cpus: self.cpus,
+            memory_total_bytes: self.memory_total_bytes,
+            memory_available_bytes: record.memory_available_bytes,
+            load_milli: record.load_milli,
+            docker_root_total_bytes: record.docker_root_total_bytes,
+            docker_root_free_bytes: record.docker_root_free_bytes,
+            docker_root_available_bytes: record.docker_root_available_bytes,
+            docker_root_inode_total: record.docker_root_inode_total,
+            docker_root_inode_free: record.docker_root_inode_free,
+            docker_root_inode_available: record.docker_root_inode_available,
+            docker_root_inode_policy: inode_policy,
+            docker_root_fs_type_name: record.docker_root_fs_type_name,
+            docker_root_filesystem_id: record.docker_root_filesystem_id,
+            memory_psi_some_avg10_bps: record.memory_psi_some_avg10_bps,
         })
     }
 
@@ -159,7 +198,13 @@ impl StartPermit {
 
     #[cfg(test)]
     pub(crate) fn test_fixture_with_generation(generation: &str) -> Self {
+        Self::test_fixture_with_engine_id(generation, "test-engine")
+    }
+
+    #[cfg(test)]
+    pub(crate) fn test_fixture_with_engine_id(generation: &str, engine_id: &str) -> Self {
         assert!(valid_generation_id(generation));
+        assert!(!engine_id.is_empty() && engine_id.len() <= 128);
         let docker_root_digest = super::projection::DockerRoot::parse("/var/lib/docker")
             .map(|root| root.digest().to_owned())
             .unwrap_or_default();
@@ -167,7 +212,8 @@ impl StartPermit {
             observation: Observation {
                 record: super::record::fixture_record(),
                 cpus: 1,
-                engine_id: "test-engine".to_owned(),
+                memory_total_bytes: 8 * 1024 * 1024 * 1024,
+                engine_id: engine_id.to_owned(),
                 docker_root_digest,
                 sample_generation_id: generation.to_owned(),
                 observed_at: Instant::now(),
@@ -286,3 +332,7 @@ fn valid_generation_id(value: &str) -> bool {
             .bytes()
             .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
 }
+
+#[cfg(test)]
+#[path = "sample/report_tests.rs"]
+mod report_tests;

@@ -13,9 +13,10 @@ mod scale_set_create;
 mod session;
 mod session_refresh;
 mod source_authorization;
+mod provisioning;
 mod storage_budget;
 
-pub(super) const JOURNAL_VERSION: i64 = 15;
+pub(super) const JOURNAL_VERSION: i64 = 16;
 const CURRENT_COLUMNS: [ColumnShape; 23] = [
     ColumnShape::new("id", "INTEGER", false, None),
     ColumnShape::new("kind", "TEXT", true, None),
@@ -111,6 +112,7 @@ async fn bootstrap_transaction(conn: &turso::Connection) -> Result<(), HostError
             12 => migration::from_version_twelve(conn).await?,
             13 => migration::from_version_thirteen(conn).await?,
             14 => migration::from_version_fourteen(conn).await?,
+            15 => migration::from_version_fifteen(conn).await?,
             _ => return Err(HostError::Journal),
         }
     }
@@ -127,6 +129,7 @@ async fn validate_persisted_schema(conn: &turso::Connection) -> Result<(), HostE
     request_ledger::validate(conn).await?;
     crate::journal_schema::validate_probe_lease(conn).await?;
     crate::journal::capacity_header::validate_connection(conn).await?;
+    provisioning::validate(conn).await?;
     session::validate(conn).await?;
     session_refresh::validate(conn).await?;
     storage_budget::validate(conn).await

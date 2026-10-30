@@ -36,7 +36,7 @@ async fn empty_jit_does_not_create() -> Result<(), String> {
                 &input.images,
                 &input.selected_engine,
                 &input.file,
-                StageAdmission::test_fixture_for(&input.selected_engine),
+                StageAdmission::test_fixture(),
                 &Forget,
             )
             .await,

@@ -10,7 +10,8 @@ use crate::launch::verified_images::{
     TestWorkerImageMutation, test_worker_images, test_worker_images_with,
 };
 use crate::worker::{
-    bollard_create, dind_create_verified, runner_create_verified, test_resource_budget,
+    bollard_create, dind_create_verified, join_dind_net, runner_create_verified,
+    test_resource_budget,
 };
 use crate::{HostConfig, HostError, RepositoryConnection, runner_plan};
 
@@ -98,6 +99,7 @@ fn verified_immutable_image_ids_and_metadata_reach_runner_docker_config() -> Res
     let budget = test_resource_budget()?;
     let plan = runner_plan("worker_a")?;
     let runner = runner_create_verified(&plan, budget, &connection, &images, &guest_file)?;
+    let runner = join_dind_net(runner, &"a".repeat(64))?;
     let dind = dind_create_verified("worker_a", budget, &images)?;
     let runner = bollard_create(&runner)?;
     let dind = bollard_create(&dind)?;
@@ -110,7 +112,10 @@ fn verified_immutable_image_ids_and_metadata_reach_runner_docker_config() -> Res
         dind.config.image.as_deref(),
         Some(images.dind().runtime_id())
     );
-    assert!(runner.config.env.is_none());
+    assert_eq!(
+        runner.config.env.as_deref(),
+        Some(["DOCKER_HOST=tcp://127.0.0.1:2375".to_owned()].as_slice())
+    );
     let host = runner
         .config
         .host_config

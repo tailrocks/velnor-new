@@ -12,7 +12,7 @@ use crate::scale_set::EnsureError;
 
 const MAX_CONFIG_BYTES: u64 = 1_048_576;
 
-/// Lock admission while checking the exact active binding and drain markers.
+/// Lock admission during a check of the exact active binding and drain markers.
 pub(crate) fn lock_connection(
     state: &Path,
     binding: &RepositoryConnection,
