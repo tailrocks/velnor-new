@@ -199,6 +199,7 @@ fn build_workflow_jobs(
     let mut jobs = BTreeMap::new();
     jobs.insert(PLAN_JOB_ID.to_owned(), plan);
     let built = crate::crate_jobs::build_for_workflow(
+        input.root,
         input.config,
         input.label,
         input.discovery,

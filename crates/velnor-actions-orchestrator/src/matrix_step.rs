@@ -173,7 +173,7 @@ pub(crate) fn obligation_step(
                 env,
                 task_id: obligation.task_id.clone(),
                 task_digest: obligation.task_digest.clone(),
-                toolchain_inputs: obligation.toolchain_inputs.clone(),
+                toolchain_inputs: Box::new(obligation.toolchain_inputs.clone()),
                 matrix_id,
                 matrix_key: obligation.matrix_key.clone(),
                 report_helper_version: helper_version.to_owned(),

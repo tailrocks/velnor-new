@@ -187,5 +187,6 @@ pub fn toolchain_inputs_for_task(
         components,
         compile_driver: task.identity.compile_driver.clone(),
         test_runner: task.identity.test_runner.clone(),
+        selected_test_tools: Vec::new(),
     })
 }

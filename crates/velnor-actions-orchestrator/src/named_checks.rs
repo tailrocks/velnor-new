@@ -73,6 +73,7 @@ pub(crate) fn toolchain_inputs(
             .collect(),
         compile_driver: "mise".to_owned(),
         test_runner: "mise".to_owned(),
+        selected_test_tools: Vec::new(),
     })
 }
 pub(crate) fn resolve_closure(

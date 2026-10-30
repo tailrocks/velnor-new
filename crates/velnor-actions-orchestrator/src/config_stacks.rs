@@ -6,8 +6,8 @@ use velnor_actions_contract::config::{
     AnsibleStackConfig, BunStackConfig, DbtStackConfig, RustBinaryReleaseConfig, RustReleaseConfig,
 };
 use velnor_actions_contract::{
-    DeclaredCompileDriver, DeclaredTestRunner, RustConfiguration, RustStackConfig, StacksConfig,
-    TofuStackConfig, Utf8RepoRelDir,
+    CrateTestTool, DeclaredCompileDriver, DeclaredTestRunner, RustConfiguration, RustStackConfig,
+    StacksConfig, TofuStackConfig, Utf8RepoRelDir,
 };
 
 use crate::OrchestratorError;
@@ -46,6 +46,8 @@ pub(crate) struct PartialRustStack {
     #[serde(default)]
     crates: std::collections::BTreeMap<String, velnor_actions_contract::RustCrateConfig>,
     #[serde(default)]
+    test_tools: std::collections::BTreeMap<String, Vec<CrateTestTool>>,
+    #[serde(default)]
     inputs: Vec<velnor_actions_contract::RustInputRule>,
 }
 
@@ -72,6 +74,7 @@ impl PartialStacks {
                 toolchain: stack.toolchain,
                 toolchain_source: stack.toolchain_source,
                 crates: stack.crates,
+                test_tools: stack.test_tools,
                 inputs: stack.inputs,
             }
         });

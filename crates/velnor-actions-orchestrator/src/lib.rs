@@ -26,6 +26,7 @@ mod config_stacks;
 mod cover;
 mod crate_job_ids;
 mod crate_jobs;
+mod crate_test_tools;
 mod critical_path;
 pub mod decisions;
 mod derive_groups;

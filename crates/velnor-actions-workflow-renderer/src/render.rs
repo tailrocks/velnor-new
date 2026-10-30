@@ -165,6 +165,19 @@ fn merged_jobs(
             support::merge_support_jobs(&mut jobs, support, ctx, "velnor-repository-v1")?;
         }
     }
+    if jobs.values().flat_map(|job| &job.steps).any(|step| {
+        matches!(
+            &step.kind,
+            velnor_actions_contract::StepKind::TaskExecution {
+                toolchain_inputs,
+                ..
+            } if !toolchain_inputs.selected_test_tools.is_empty()
+        )
+    }) {
+        return Err(RenderError::InvalidWorkflow(
+            "selected_test_tool_preparation_unavailable".to_owned(),
+        ));
+    }
     let workflow_task_ids =
         crate::verification_jobs::workflow_task_jobs::validate_workflow_task_jobs(
             &jobs,

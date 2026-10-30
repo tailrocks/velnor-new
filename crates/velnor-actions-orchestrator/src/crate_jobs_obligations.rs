@@ -1,8 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
+use velnor_actions_contract::cachekey::SelectedTestTool;
 use velnor_actions_contract::{
     CrateObligation, ProposedTask, matrix_id_for_task_group, matrix_key_for_id,
 };
@@ -15,6 +16,7 @@ use crate::obligation_order::obligation_order_key;
 pub(super) fn obligations_for(
     tasks: &[&ProposedTask],
     catalog: &ToolCatalog,
+    test_tools: &BTreeMap<String, Vec<SelectedTestTool>>,
 ) -> Result<Vec<CrateObligation>, OrchestratorError> {
     let executed: BTreeSet<&str> = tasks.iter().map(|task| task.task_id.as_str()).collect();
     let producers: BTreeSet<&str> = if tasks.iter().any(|task| super::is_opentofu(task)) {
@@ -39,7 +41,7 @@ pub(super) fn obligations_for(
     });
     let mut obligations = Vec::with_capacity(ordered.len());
     for task in ordered {
-        obligations.push(obligation_for(task, &executed, catalog)?);
+        obligations.push(obligation_for(task, &executed, catalog, test_tools)?);
     }
     Ok(obligations)
 }
@@ -48,9 +50,16 @@ fn obligation_for(
     task: &ProposedTask,
     executed: &BTreeSet<&str>,
     catalog: &ToolCatalog,
+    test_tools: &BTreeMap<String, Vec<SelectedTestTool>>,
 ) -> Result<CrateObligation, OrchestratorError> {
     let argv = crate::vectors::task_argv(task, catalog)?;
-    let toolchain_inputs = crate::internal_plan::identities::toolchain_inputs_for(task, catalog)?;
+    let mut toolchain_inputs =
+        crate::internal_plan::identities::toolchain_inputs_for(task, catalog)?;
+    if crate::crate_test_tools::is_supported_test_task(task)
+        && let Some(selected) = test_tools.get(&task.display_name)
+    {
+        toolchain_inputs.selected_test_tools.clone_from(selected);
+    }
     let toolchain = velnor_actions_contract::cachekey::toolchain_id(&toolchain_inputs)?;
     let digest = crate::internal::plan_obligation::task_digest(&task.task_id, &argv, &toolchain)?;
     let matrix_id = matrix_id_for_task_group(&task.stack_id, &task.task_id)?;

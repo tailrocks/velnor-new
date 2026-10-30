@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::BTreeMap;
+use std::path::Path;
 
 use velnor_actions_contract::{
     CrateJob, Job, JobTimeout, ProposedTask, Stack, Step, VelnorConfig, WorkflowPolicy,
@@ -53,6 +54,7 @@ pub(crate) struct CrateBuild {
     reason = "one call site; the private-source wiring joins the existing inputs"
 )]
 pub(crate) fn build_for_workflow(
+    root: &Path,
     config: &VelnorConfig,
     label: &str,
     discovery: &Discovery,
@@ -63,11 +65,23 @@ pub(crate) fn build_for_workflow(
     private: Option<&PrivateWiring>,
 ) -> Result<CrateBuild, OrchestratorError> {
     let no_crates = BTreeMap::new();
+    let no_test_tools = BTreeMap::new();
     let crates = config
         .stacks
         .rust
         .as_ref()
         .map_or(&no_crates, |rust| &rust.crates);
+    let requested_test_tools = config
+        .stacks
+        .rust
+        .as_ref()
+        .map_or(&no_test_tools, |rust| &rust.test_tools);
+    let test_tools = crate::crate_test_tools::resolve_for_packages(
+        root,
+        label,
+        requested_test_tools,
+        discovery,
+    )?;
     reject_unknown_crates(crates, discovery)?;
     build_crate_jobs_with_seed_timeout(
         CrateJobInputs {
@@ -81,6 +95,7 @@ pub(crate) fn build_for_workflow(
             timeout: JobTimeout::new(config.workflow.crate_timeout_minutes)?,
             helper_version,
             crates,
+            test_tools: &test_tools,
             seed_parallel_targets: config
                 .stacks
                 .rust
@@ -137,7 +152,7 @@ fn build_crate_jobs_with_seed_timeout(
             package_id: key.package_id.clone(),
             manifest,
             configuration: key.configuration.clone(),
-            obligations: obligations_for(tasks, catalog)?,
+            obligations: obligations_for(tasks, catalog, input.test_tools)?,
         };
         model.validate()?;
         let needs = gates::external_needs(tasks, &owners, &job_id)?;

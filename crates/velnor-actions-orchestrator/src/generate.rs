@@ -109,6 +109,21 @@ pub fn render_staged_tree_with(
     dispatch: Option<ExecutionMode>,
 ) -> Result<RenderedTree, OrchestratorError> {
     let owned = owned_preparation(prep)?;
+    if owned.workflow.ir.jobs.values().any(|job| {
+        job.steps.iter().any(|step| {
+            matches!(
+                &step.kind,
+                velnor_actions_contract::StepKind::TaskExecution {
+                    toolchain_inputs,
+                    ..
+                } if !toolchain_inputs.selected_test_tools.is_empty()
+            )
+        })
+    }) {
+        return Err(OrchestratorError::Contract {
+            problem: "selected_test_tool_preparation_unavailable".to_owned(),
+        });
+    }
     let tree = render_all(&owned, dispatch)?;
     check_tree_paths(&tree)?;
     Ok(tree)

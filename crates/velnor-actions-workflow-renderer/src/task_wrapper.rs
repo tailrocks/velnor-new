@@ -163,7 +163,7 @@ fn prepare_task_execution<'a>(
         task_id: task_id.clone(),
         execution_digest: String::new(),
         task_digest: task_digest.clone(),
-        toolchain_inputs: toolchain_inputs.clone(),
+        toolchain_inputs: toolchain_inputs.as_ref().clone(),
         argv: argv.clone(),
         env: env.clone(),
         matrix_id: matrix_id.clone(),

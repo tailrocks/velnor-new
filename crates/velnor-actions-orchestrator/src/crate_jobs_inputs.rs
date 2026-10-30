@@ -3,6 +3,7 @@
 
 use std::collections::BTreeMap;
 
+use velnor_actions_contract::cachekey::SelectedTestTool;
 use velnor_actions_contract::{RustCrateConfig, Step, WorkflowPolicy};
 use velnor_actions_mise::ToolCatalog;
 
@@ -21,4 +22,5 @@ pub(crate) struct CrateJobInputs<'a> {
     pub(crate) helper_version: &'a str,
     pub(crate) seed_parallel_targets: bool,
     pub(crate) crates: &'a BTreeMap<String, RustCrateConfig>,
+    pub(crate) test_tools: &'a BTreeMap<String, Vec<SelectedTestTool>>,
 }
