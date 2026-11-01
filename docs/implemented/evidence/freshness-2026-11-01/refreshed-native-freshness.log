@@ -1,4 +1,3 @@
-mise WARN  missing: aqua:nextest-rs/nextest/cargo-nextest@0.9.150
 row: {"check":"policy-header","detail":"1","status":"pass","subject":"schema"}
 ok: policy-header schema 1
 row: {"check":"policy-header","detail":"\"stable\"","status":"pass","subject":"channel"}
@@ -11,16 +10,16 @@ row: {"check":"policy-header","detail":"https://github.com/rust-lang/crates.io-i
 ok: policy-header registry https://github.com/rust-lang/crates.io-index
 row: {"check":"policy-header","detail":"3 (default)","status":"pass","subject":"default_cooldown_days"}
 ok: policy-header default_cooldown_days 3 (default)
-row: {"check":"local-pin","detail":"2026.10.25","status":"pass","subject":"tool mise (crates/velnor-actions-mise/src/catalog.rs::MISE_VERSION)"}
-ok: local-pin tool mise (crates/velnor-actions-mise/src/catalog.rs::MISE_VERSION) 2026.10.25
+row: {"check":"local-pin","detail":"2026.10.21","status":"pass","subject":"tool mise (crates/velnor-actions-mise/src/catalog.rs::MISE_VERSION)"}
+ok: local-pin tool mise (crates/velnor-actions-mise/src/catalog.rs::MISE_VERSION) 2026.10.21
 row: {"check":"local-pin","detail":"1.99.1","status":"pass","subject":"tool rust (crates/velnor-actions-mise/src/catalog.rs::RUST_VERSION)"}
 ok: local-pin tool rust (crates/velnor-actions-mise/src/catalog.rs::RUST_VERSION) 1.99.1
-row: {"check":"local-pin","detail":"1.29.1","status":"pass","subject":"tool mr-boxington (crates/velnor-actions-mise/src/catalog.rs::MR_BOXINGTON_VERSION)"}
-ok: local-pin tool mr-boxington (crates/velnor-actions-mise/src/catalog.rs::MR_BOXINGTON_VERSION) 1.29.1
+row: {"check":"local-pin","detail":"1.28.0","status":"pass","subject":"tool mr-boxington (crates/velnor-actions-mise/src/catalog.rs::MR_BOXINGTON_VERSION)"}
+ok: local-pin tool mr-boxington (crates/velnor-actions-mise/src/catalog.rs::MR_BOXINGTON_VERSION) 1.28.0
 row: {"check":"local-pin","detail":"2.103.3","status":"pass","subject":"tool gh (crates/velnor-actions-mise/src/catalog.rs::GH_VERSION)"}
 ok: local-pin tool gh (crates/velnor-actions-mise/src/catalog.rs::GH_VERSION) 2.103.3
-row: {"check":"local-pin","detail":"2.4.0","status":"pass","subject":"tool jactionlint (crates/velnor-actions-contract/src/config/jactionlint_verifier.rs::JACTIONLINT_VERSION)"}
-ok: local-pin tool jactionlint (crates/velnor-actions-contract/src/config/jactionlint_verifier.rs::JACTIONLINT_VERSION) 2.4.0
+row: {"check":"local-pin","detail":"2.3.0","status":"pass","subject":"tool jactionlint (crates/velnor-actions-contract/src/config/jactionlint_verifier.rs::JACTIONLINT_VERSION)"}
+ok: local-pin tool jactionlint (crates/velnor-actions-contract/src/config/jactionlint_verifier.rs::JACTIONLINT_VERSION) 2.3.0
 row: {"check":"local-pin","detail":"0.11.0","status":"pass","subject":"tool shellcheck (crates/velnor-actions-mise/src/catalog.rs::SHELLCHECK_VERSION)"}
 ok: local-pin tool shellcheck (crates/velnor-actions-mise/src/catalog.rs::SHELLCHECK_VERSION) 0.11.0
 row: {"check":"local-pin","detail":"0.9.150","status":"pass","subject":"tool nextest (crates/velnor-actions-mise/src/catalog.rs::NEXTEST_VERSION)"}
@@ -87,16 +86,16 @@ row: {"check":"local-pin","detail":"v6.3.0","status":"pass","subject":"action aw
 ok: local-pin action aws-actions/configure-aws-credentials version (crates/velnor-actions-actionlint/src/actions.rs::AWS_CREDENTIALS_ACTION_VERSION) v6.3.0
 row: {"check":"local-pin","detail":"e1253824e5c10ff9df46874f81ed3ec929e19cfd","status":"pass","subject":"action aws-actions/configure-aws-credentials sha (crates/velnor-actions-actionlint/src/actions.rs::AWS_CREDENTIALS_ACTION_SHA)"}
 ok: local-pin action aws-actions/configure-aws-credentials sha (crates/velnor-actions-actionlint/src/actions.rs::AWS_CREDENTIALS_ACTION_SHA) e1253824e5c10ff9df46874f81ed3ec929e19cfd
-row: {"check":"local-pin","detail":"v5.2.5","status":"pass","subject":"action jdx/mise-action version (crates/velnor-actions-actionlint/src/actions.rs::MISE_ACTION_VERSION)"}
-ok: local-pin action jdx/mise-action version (crates/velnor-actions-actionlint/src/actions.rs::MISE_ACTION_VERSION) v5.2.5
-row: {"check":"local-pin","detail":"6612f0ef07ed2a736cd1e00a94a065522dd41195","status":"pass","subject":"action jdx/mise-action sha (crates/velnor-actions-actionlint/src/actions.rs::MISE_ACTION_SHA)"}
-ok: local-pin action jdx/mise-action sha (crates/velnor-actions-actionlint/src/actions.rs::MISE_ACTION_SHA) 6612f0ef07ed2a736cd1e00a94a065522dd41195
+row: {"check":"local-pin","detail":"v5.2.4","status":"pass","subject":"action jdx/mise-action version (crates/velnor-actions-actionlint/src/actions.rs::MISE_ACTION_VERSION)"}
+ok: local-pin action jdx/mise-action version (crates/velnor-actions-actionlint/src/actions.rs::MISE_ACTION_VERSION) v5.2.4
+row: {"check":"local-pin","detail":"6be3c7ed4c21d4f76b208d351d95aac273ebb76d","status":"pass","subject":"action jdx/mise-action sha (crates/velnor-actions-actionlint/src/actions.rs::MISE_ACTION_SHA)"}
+ok: local-pin action jdx/mise-action sha (crates/velnor-actions-actionlint/src/actions.rs::MISE_ACTION_SHA) 6be3c7ed4c21d4f76b208d351d95aac273ebb76d
 row: {"check":"local-pin","detail":"v1.7.3","status":"pass","subject":"action jdx/mr-boxington-action version (crates/velnor-actions-actionlint/src/actions.rs::MR_BOXINGTON_ACTION_VERSION)"}
 ok: local-pin action jdx/mr-boxington-action version (crates/velnor-actions-actionlint/src/actions.rs::MR_BOXINGTON_ACTION_VERSION) v1.7.3
 row: {"check":"local-pin","detail":"88acf2bb50552c7c508cbac13e5f8c576b95b1de","status":"pass","subject":"action jdx/mr-boxington-action sha (crates/velnor-actions-actionlint/src/actions.rs::MR_BOXINGTON_ACTION_SHA)"}
 ok: local-pin action jdx/mr-boxington-action sha (crates/velnor-actions-actionlint/src/actions.rs::MR_BOXINGTON_ACTION_SHA) 88acf2bb50552c7c508cbac13e5f8c576b95b1de
-row: {"check":"local-pin","detail":"2.4.0","status":"pass","subject":"tool jactionlint mirror (capabilities.rs)"}
-ok: local-pin tool jactionlint mirror (capabilities.rs) 2.4.0
+row: {"check":"local-pin","detail":"2.3.0","status":"pass","subject":"tool jactionlint mirror (capabilities.rs)"}
+ok: local-pin tool jactionlint mirror (capabilities.rs) 2.3.0
 row: {"check":"local-pin","detail":"0.11.0","status":"pass","subject":"tool shellcheck mirror (tools.rs)"}
 ok: local-pin tool shellcheck mirror (tools.rs) 0.11.0
 row: {"check":"local-pin","detail":"v0.20.1","status":"pass","subject":"action asamarts/alint binary mirror (render.rs)"}
@@ -117,12 +116,12 @@ row: {"check":"policy-mirror","detail":"0.22.1","status":"pass","subject":"tool 
 ok: policy-mirror tool crane 0.22.1
 row: {"check":"policy-mirror","detail":"2.103.3","status":"pass","subject":"tool gh"}
 ok: policy-mirror tool gh 2.103.3
-row: {"check":"policy-mirror","detail":"2.4.0","status":"pass","subject":"tool jactionlint"}
-ok: policy-mirror tool jactionlint 2.4.0
-row: {"check":"policy-mirror","detail":"2026.10.25","status":"pass","subject":"tool mise"}
-ok: policy-mirror tool mise 2026.10.25
-row: {"check":"policy-mirror","detail":"1.29.1","status":"pass","subject":"tool mr-boxington"}
-ok: policy-mirror tool mr-boxington 1.29.1
+row: {"check":"policy-mirror","detail":"2.3.0","status":"pass","subject":"tool jactionlint"}
+ok: policy-mirror tool jactionlint 2.3.0
+row: {"check":"policy-mirror","detail":"2026.10.21","status":"pass","subject":"tool mise"}
+ok: policy-mirror tool mise 2026.10.21
+row: {"check":"policy-mirror","detail":"1.28.0","status":"pass","subject":"tool mr-boxington"}
+ok: policy-mirror tool mr-boxington 1.28.0
 row: {"check":"policy-mirror","detail":"0.9.150","status":"pass","subject":"tool nextest"}
 ok: policy-mirror tool nextest 0.9.150
 row: {"check":"policy-mirror","detail":"1.13.2","status":"pass","subject":"tool opentofu"}
@@ -159,8 +158,8 @@ row: {"check":"policy-mirror","detail":"v0.20.1@265d9fdc720bb8f59d00b87e33e41498
 ok: policy-mirror action asamarts/alint v0.20.1@265d9fdc720bb8f59d00b87e33e4149869f77327
 row: {"check":"policy-mirror","detail":"v6.3.0@e1253824e5c10ff9df46874f81ed3ec929e19cfd","status":"pass","subject":"action aws-actions/configure-aws-credentials"}
 ok: policy-mirror action aws-actions/configure-aws-credentials v6.3.0@e1253824e5c10ff9df46874f81ed3ec929e19cfd
-row: {"check":"policy-mirror","detail":"v5.2.5@6612f0ef07ed2a736cd1e00a94a065522dd41195","status":"pass","subject":"action jdx/mise-action"}
-ok: policy-mirror action jdx/mise-action v5.2.5@6612f0ef07ed2a736cd1e00a94a065522dd41195
+row: {"check":"policy-mirror","detail":"v5.2.4@6be3c7ed4c21d4f76b208d351d95aac273ebb76d","status":"pass","subject":"action jdx/mise-action"}
+ok: policy-mirror action jdx/mise-action v5.2.4@6be3c7ed4c21d4f76b208d351d95aac273ebb76d
 row: {"check":"policy-mirror","detail":"v1.7.3@88acf2bb50552c7c508cbac13e5f8c576b95b1de","status":"pass","subject":"action jdx/mr-boxington-action"}
 ok: policy-mirror action jdx/mr-boxington-action v1.7.3@88acf2bb50552c7c508cbac13e5f8c576b95b1de
 row: {"check":"local-pin","detail":"27.1.0","status":"pass","subject":"validation-tools/cargo-mutants"}
@@ -561,116 +560,70 @@ ok: lock-staleness crates/velnor-runner/(lock-membership) 6 members
 row: {"check":"lock-staleness","detail":"442 locked packages reachable","status":"pass","subject":"crates/velnor-runner/(lock-graph)"}
 ok: lock-staleness crates/velnor-runner/(lock-graph) 442 locked packages reachable
 row: {"check":"lock-mtime","detail":"lock_is_newest=false","status":"info","subject":"crates/velnor-runner/Cargo.lock"}
-row: {"check":"upstream-freshness","detail":"current, evidence 2026-11-01T15:21:19.065Z","status":"pass","subject":"mise"}
-ok: upstream-freshness mise current, evidence 2026-11-01T15:21:19.065Z
-row: {"check":"upstream-freshness","detail":"current, evidence 2026-11-01T15:21:19.265Z","status":"pass","subject":"rust"}
-ok: upstream-freshness rust current, evidence 2026-11-01T15:21:19.265Z
-row: {"check":"upstream-freshness","detail":"current, evidence 2026-11-01T15:21:19.978Z","status":"pass","subject":"mr-boxington"}
-ok: upstream-freshness mr-boxington current, evidence 2026-11-01T15:21:19.978Z
-row: {"check":"upstream-freshness","detail":"current, evidence 2026-11-01T15:21:20.731Z","status":"pass","subject":"gh"}
-ok: upstream-freshness gh current, evidence 2026-11-01T15:21:20.731Z
-row: {"check":"upstream-freshness","detail":"current, evidence 2026-11-01T15:21:21.262Z","status":"pass","subject":"jactionlint"}
-ok: upstream-freshness jactionlint current, evidence 2026-11-01T15:21:21.262Z
-row: {"check":"upstream-freshness","detail":"current, evidence 2026-11-01T15:21:22.396Z","status":"pass","subject":"shellcheck"}
-ok: upstream-freshness shellcheck current, evidence 2026-11-01T15:21:22.396Z
-row: {"check":"upstream-freshness","detail":"current, evidence 2026-11-01T15:21:23.694Z","status":"pass","subject":"nextest"}
-ok: upstream-freshness nextest current, evidence 2026-11-01T15:21:23.694Z
-row: {"check":"upstream-freshness","detail":"current, evidence 2026-11-01T15:21:24.977Z","status":"pass","subject":"opentofu"}
-ok: upstream-freshness opentofu current, evidence 2026-11-01T15:21:24.977Z
-row: {"check":"upstream-freshness","detail":"current, evidence 2026-11-01T15:21:26.282Z","status":"pass","subject":"release-plz"}
-ok: upstream-freshness release-plz current, evidence 2026-11-01T15:21:26.282Z
-row: {"check":"upstream-freshness","detail":"current, evidence 2026-11-01T15:21:26.834Z","status":"pass","subject":"crane"}
-ok: upstream-freshness crane current, evidence 2026-11-01T15:21:26.834Z
-row: {"check":"upstream-freshness","detail":"current, evidence 2026-11-01T15:21:27.410Z","status":"pass","subject":"bun"}
-ok: upstream-freshness bun current, evidence 2026-11-01T15:21:27.410Z
-row: {"check":"upstream-freshness","detail":"current, evidence 2026-11-01T15:21:28.018Z","status":"pass","subject":"cosign"}
-ok: upstream-freshness cosign current, evidence 2026-11-01T15:21:28.018Z
-row: {"check":"upstream-freshness","detail":"current, evidence 2026-11-01T15:21:28.449Z","status":"pass","subject":"actions/attest"}
-ok: upstream-freshness actions/attest current, evidence 2026-11-01T15:21:28.449Z
-row: {"check":"upstream-freshness","detail":"current, evidence 2026-11-01T15:21:29.997Z","status":"pass","subject":"actions/attest-build-provenance"}
-ok: upstream-freshness actions/attest-build-provenance current, evidence 2026-11-01T15:21:29.997Z
-row: {"check":"upstream-freshness","detail":"current, evidence 2026-11-01T15:21:31.404Z","status":"pass","subject":"actions/cache/restore"}
-ok: upstream-freshness actions/cache/restore current, evidence 2026-11-01T15:21:31.404Z
-row: {"check":"upstream-freshness","detail":"current, evidence 2026-11-01T15:21:32.823Z","status":"pass","subject":"actions/cache/save"}
-ok: upstream-freshness actions/cache/save current, evidence 2026-11-01T15:21:32.823Z
-row: {"check":"upstream-freshness","detail":"current, evidence 2026-11-01T15:21:34.315Z","status":"pass","subject":"actions/checkout"}
-ok: upstream-freshness actions/checkout current, evidence 2026-11-01T15:21:34.315Z
-row: {"check":"upstream-freshness","detail":"current, evidence 2026-11-01T15:21:35.827Z","status":"pass","subject":"actions/create-github-app-token"}
-ok: upstream-freshness actions/create-github-app-token current, evidence 2026-11-01T15:21:35.827Z
-row: {"check":"upstream-freshness","detail":"current, evidence 2026-11-01T15:21:37.388Z","status":"pass","subject":"actions/download-artifact"}
-ok: upstream-freshness actions/download-artifact current, evidence 2026-11-01T15:21:37.388Z
-row: {"check":"upstream-freshness","detail":"current, evidence 2026-11-01T15:21:38.923Z","status":"pass","subject":"actions/github-script"}
-ok: upstream-freshness actions/github-script current, evidence 2026-11-01T15:21:38.923Z
-row: {"check":"upstream-freshness","detail":"current, evidence 2026-11-01T15:21:41.688Z","status":"pass","subject":"actions/upload-artifact"}
-ok: upstream-freshness actions/upload-artifact current, evidence 2026-11-01T15:21:41.688Z
-row: {"check":"upstream-freshness","detail":"current, evidence 2026-11-01T15:21:43.183Z","status":"pass","subject":"asamarts/alint"}
-ok: upstream-freshness asamarts/alint current, evidence 2026-11-01T15:21:43.183Z
-row: {"check":"upstream-freshness","detail":"current, evidence 2026-11-01T15:21:44.489Z","status":"pass","subject":"aws-actions/configure-aws-credentials"}
-ok: upstream-freshness aws-actions/configure-aws-credentials current, evidence 2026-11-01T15:21:44.489Z
-row: {"check":"upstream-freshness","detail":"current, evidence 2026-11-01T15:21:45.905Z","status":"pass","subject":"jdx/mise-action"}
-ok: upstream-freshness jdx/mise-action current, evidence 2026-11-01T15:21:45.905Z
-row: {"check":"upstream-freshness","detail":"current, evidence 2026-11-01T15:21:47.409Z","status":"pass","subject":"jdx/mr-boxington-action"}
-ok: upstream-freshness jdx/mr-boxington-action current, evidence 2026-11-01T15:21:47.409Z
+row: {"check":"upstream-freshness","detail":"held, evidence 2026-11-01T16:27:28.087Z","status":"pass","subject":"mise"}
+ok: upstream-freshness mise held, evidence 2026-11-01T16:27:28.087Z
+row: {"check":"upstream-freshness","detail":"current, evidence 2026-11-01T16:27:29.807Z","status":"pass","subject":"rust"}
+ok: upstream-freshness rust current, evidence 2026-11-01T16:27:29.807Z
+row: {"check":"upstream-freshness","detail":"held, evidence 2026-11-01T16:27:30.274Z","status":"pass","subject":"mr-boxington"}
+ok: upstream-freshness mr-boxington held, evidence 2026-11-01T16:27:30.274Z
+row: {"check":"upstream-freshness","detail":"current, evidence 2026-11-01T16:27:32.377Z","status":"pass","subject":"gh"}
+ok: upstream-freshness gh current, evidence 2026-11-01T16:27:32.377Z
+row: {"check":"upstream-freshness","detail":"held, evidence 2026-11-01T16:27:33.068Z","status":"pass","subject":"jactionlint"}
+ok: upstream-freshness jactionlint held, evidence 2026-11-01T16:27:33.068Z
+row: {"check":"upstream-freshness","detail":"current, evidence 2026-11-01T16:27:34.595Z","status":"pass","subject":"shellcheck"}
+ok: upstream-freshness shellcheck current, evidence 2026-11-01T16:27:34.595Z
+row: {"check":"upstream-freshness","detail":"current, evidence 2026-11-01T16:27:37.418Z","status":"pass","subject":"nextest"}
+ok: upstream-freshness nextest current, evidence 2026-11-01T16:27:37.418Z
+row: {"check":"upstream-freshness","detail":"current, evidence 2026-11-01T16:27:38.938Z","status":"pass","subject":"opentofu"}
+ok: upstream-freshness opentofu current, evidence 2026-11-01T16:27:38.938Z
+row: {"check":"upstream-freshness","detail":"current, evidence 2026-11-01T16:27:40.858Z","status":"pass","subject":"release-plz"}
+ok: upstream-freshness release-plz current, evidence 2026-11-01T16:27:40.858Z
+row: {"check":"upstream-freshness","detail":"current, evidence 2026-11-01T16:27:41.435Z","status":"pass","subject":"crane"}
+ok: upstream-freshness crane current, evidence 2026-11-01T16:27:41.435Z
+row: {"check":"upstream-freshness","detail":"current, evidence 2026-11-01T16:27:42.186Z","status":"pass","subject":"bun"}
+ok: upstream-freshness bun current, evidence 2026-11-01T16:27:42.186Z
+row: {"check":"upstream-freshness","detail":"current, evidence 2026-11-01T16:27:42.741Z","status":"pass","subject":"cosign"}
+ok: upstream-freshness cosign current, evidence 2026-11-01T16:27:42.741Z
+row: {"check":"upstream-freshness","detail":"current, evidence 2026-11-01T16:27:43.209Z","status":"pass","subject":"actions/attest"}
+ok: upstream-freshness actions/attest current, evidence 2026-11-01T16:27:43.209Z
+row: {"check":"upstream-freshness","detail":"current, evidence 2026-11-01T16:27:44.966Z","status":"pass","subject":"actions/attest-build-provenance"}
+ok: upstream-freshness actions/attest-build-provenance current, evidence 2026-11-01T16:27:44.966Z
+row: {"check":"upstream-freshness","detail":"current, evidence 2026-11-01T16:27:46.342Z","status":"pass","subject":"actions/cache/restore"}
+ok: upstream-freshness actions/cache/restore current, evidence 2026-11-01T16:27:46.342Z
+row: {"check":"upstream-freshness","detail":"current, evidence 2026-11-01T16:27:47.750Z","status":"pass","subject":"actions/cache/save"}
+ok: upstream-freshness actions/cache/save current, evidence 2026-11-01T16:27:47.750Z
+row: {"check":"upstream-freshness","detail":"current, evidence 2026-11-01T16:27:49.078Z","status":"pass","subject":"actions/checkout"}
+ok: upstream-freshness actions/checkout current, evidence 2026-11-01T16:27:49.078Z
+row: {"check":"upstream-freshness","detail":"current, evidence 2026-11-01T16:27:50.515Z","status":"pass","subject":"actions/create-github-app-token"}
+ok: upstream-freshness actions/create-github-app-token current, evidence 2026-11-01T16:27:50.515Z
+row: {"check":"upstream-freshness","detail":"current, evidence 2026-11-01T16:27:52.308Z","status":"pass","subject":"actions/download-artifact"}
+ok: upstream-freshness actions/download-artifact current, evidence 2026-11-01T16:27:52.308Z
+row: {"check":"upstream-freshness","detail":"current, evidence 2026-11-01T16:27:53.694Z","status":"pass","subject":"actions/github-script"}
+ok: upstream-freshness actions/github-script current, evidence 2026-11-01T16:27:53.694Z
+row: {"check":"upstream-freshness","detail":"current, evidence 2026-11-01T16:27:56.062Z","status":"pass","subject":"actions/upload-artifact"}
+ok: upstream-freshness actions/upload-artifact current, evidence 2026-11-01T16:27:56.062Z
+row: {"check":"upstream-freshness","detail":"current, evidence 2026-11-01T16:27:57.670Z","status":"pass","subject":"asamarts/alint"}
+ok: upstream-freshness asamarts/alint current, evidence 2026-11-01T16:27:57.670Z
+row: {"check":"upstream-freshness","detail":"current, evidence 2026-11-01T16:27:59.039Z","status":"pass","subject":"aws-actions/configure-aws-credentials"}
+ok: upstream-freshness aws-actions/configure-aws-credentials current, evidence 2026-11-01T16:27:59.039Z
+row: {"check":"upstream-freshness","detail":"held, evidence 2026-11-01T16:28:00.472Z","status":"pass","subject":"jdx/mise-action"}
+ok: upstream-freshness jdx/mise-action held, evidence 2026-11-01T16:28:00.472Z
+row: {"check":"upstream-freshness","detail":"current, evidence 2026-11-01T16:28:02.262Z","status":"pass","subject":"jdx/mr-boxington-action"}
+ok: upstream-freshness jdx/mr-boxington-action current, evidence 2026-11-01T16:28:02.262Z
 row: {"check":"upstream-freshness","detail":"current, evidence 2026-11-01T15:22:52Z","status":"pass","subject":"runner"}
 ok: upstream-freshness runner current, evidence 2026-11-01T15:22:52Z
-row: {"check":"exception-expiry","detail":"no temporary holds","status":"pass","subject":"(none)"}
-ok: exception-expiry (none) no temporary holds
+row: {"check":"exception-expiry","detail":"expires 2026-11-15","status":"pass","subject":"mr-boxington"}
+ok: exception-expiry mr-boxington expires 2026-11-15
+row: {"check":"exception-expiry","detail":"expires 2026-11-15","status":"pass","subject":"mise"}
+ok: exception-expiry mise expires 2026-11-15
+row: {"check":"exception-expiry","detail":"expires 2026-11-15","status":"pass","subject":"jactionlint"}
+ok: exception-expiry jactionlint expires 2026-11-15
+row: {"check":"exception-expiry","detail":"expires 2026-11-15","status":"pass","subject":"jdx/mise-action"}
+ok: exception-expiry jdx/mise-action expires 2026-11-15
 row: {"check":"advisories","detail":"empty","status":"pass","subject":"deny.toml ignore list"}
 ok: advisories deny.toml ignore list empty
 row: {"check":"advisories","detail":"empty","status":"pass","subject":"crates/velnor-runner/deny.toml ignore list"}
 ok: advisories crates/velnor-runner/deny.toml ignore list empty
 row: {"check":"advisories","detail":"runs as the CI Cargo Deny job; --with-advisories runs it here","status":"info","subject":"live scan"}
-row: {"check":"upstream-probe","detail":"lookup_failed (http status: 403); source https://api.github.com/repos/jdx/mise/releases/latest, checked 2026-11-01T15:52:08Z","status":"fail","subject":"mise"}
-row: {"check":"upstream-probe","detail":"pinned==latest 1.99.1; source https://static.rust-lang.org/dist/channel-rust-stable.toml, checked 2026-11-01T15:52:08Z","status":"pass","subject":"rust"}
-ok: upstream-probe rust pinned==latest 1.99.1; source https://static.rust-lang.org/dist/channel-rust-stable.toml, checked 2026-11-01T15:52:08Z
-row: {"check":"upstream-probe","detail":"lookup_failed (http status: 403); source https://api.github.com/repos/jdx/mr-boxington/releases/latest, checked 2026-11-01T15:52:08Z","status":"fail","subject":"mr-boxington"}
-row: {"check":"upstream-probe","detail":"lookup_failed (http status: 403); source https://api.github.com/repos/cli/cli/releases/latest, checked 2026-11-01T15:52:08Z","status":"fail","subject":"gh"}
-row: {"check":"upstream-probe","detail":"lookup_failed (http status: 403); source https://api.github.com/repos/jdx/jactionlint/releases/latest, checked 2026-11-01T15:52:08Z","status":"fail","subject":"jactionlint"}
-row: {"check":"upstream-probe","detail":"lookup_failed (http status: 403); source https://api.github.com/repos/koalaman/shellcheck/releases/latest, checked 2026-11-01T15:52:08Z","status":"fail","subject":"shellcheck"}
-row: {"check":"upstream-probe","detail":"pinned==latest 0.9.150; source https://crates.io/api/v1/crates/cargo-nextest, checked 2026-11-01T15:52:08Z","status":"pass","subject":"nextest"}
-ok: upstream-probe nextest pinned==latest 0.9.150; source https://crates.io/api/v1/crates/cargo-nextest, checked 2026-11-01T15:52:08Z
-row: {"check":"upstream-probe","detail":"lookup_failed (http status: 403); source https://api.github.com/repos/opentofu/opentofu/releases/latest, checked 2026-11-01T15:52:08Z","status":"fail","subject":"opentofu"}
-row: {"check":"upstream-probe","detail":"pinned==latest 0.4.2; source https://crates.io/api/v1/crates/release-plz, checked 2026-11-01T15:52:08Z","status":"pass","subject":"release-plz"}
-ok: upstream-probe release-plz pinned==latest 0.4.2; source https://crates.io/api/v1/crates/release-plz, checked 2026-11-01T15:52:08Z
-row: {"check":"upstream-probe","detail":"lookup_failed (http status: 403); source https://api.github.com/repos/google/go-containerregistry/releases/latest, checked 2026-11-01T15:52:08Z","status":"fail","subject":"crane"}
-row: {"check":"upstream-probe","detail":"lookup_failed (http status: 403); source https://api.github.com/repos/oven-sh/bun/releases/latest, checked 2026-11-01T15:52:08Z","status":"fail","subject":"bun"}
-row: {"check":"upstream-probe","detail":"lookup_failed (http status: 403); source https://api.github.com/repos/sigstore/cosign/releases/latest, checked 2026-11-01T15:52:08Z","status":"fail","subject":"cosign"}
-row: {"check":"upstream-probe","detail":"lookup_failed (http status: 403); source https://api.github.com/repos/actions/attest/releases/latest, checked 2026-11-01T15:52:08Z","status":"fail","subject":"actions/attest"}
-row: {"check":"upstream-probe","detail":"lookup_failed (http status: 403); source https://api.github.com/repos/actions/attest-build-provenance/releases/latest, checked 2026-11-01T15:52:08Z","status":"fail","subject":"actions/attest-build-provenance"}
-row: {"check":"upstream-probe","detail":"lookup_failed (http status: 403); source https://api.github.com/repos/actions/cache/releases/latest, checked 2026-11-01T15:52:08Z","status":"fail","subject":"actions/cache/restore"}
-row: {"check":"upstream-probe","detail":"lookup_failed (http status: 403); source https://api.github.com/repos/actions/cache/releases/latest, checked 2026-11-01T15:52:08Z","status":"fail","subject":"actions/cache/save"}
-row: {"check":"upstream-probe","detail":"lookup_failed (http status: 403); source https://api.github.com/repos/actions/checkout/releases/latest, checked 2026-11-01T15:52:08Z","status":"fail","subject":"actions/checkout"}
-row: {"check":"upstream-probe","detail":"lookup_failed (http status: 403); source https://api.github.com/repos/actions/create-github-app-token/releases/latest, checked 2026-11-01T15:52:08Z","status":"fail","subject":"actions/create-github-app-token"}
-row: {"check":"upstream-probe","detail":"lookup_failed (http status: 403); source https://api.github.com/repos/actions/download-artifact/releases/latest, checked 2026-11-01T15:52:08Z","status":"fail","subject":"actions/download-artifact"}
-row: {"check":"upstream-probe","detail":"lookup_failed (http status: 403); source https://api.github.com/repos/actions/github-script/releases/latest, checked 2026-11-01T15:52:08Z","status":"fail","subject":"actions/github-script"}
-row: {"check":"upstream-probe","detail":"lookup_failed (http status: 403); source https://api.github.com/repos/actions/upload-artifact/releases/latest, checked 2026-11-01T15:52:08Z","status":"fail","subject":"actions/upload-artifact"}
-row: {"check":"upstream-probe","detail":"lookup_failed (http status: 403); source https://api.github.com/repos/asamarts/alint/releases/latest, checked 2026-11-01T15:52:08Z","status":"fail","subject":"asamarts/alint"}
-row: {"check":"upstream-probe","detail":"lookup_failed (http status: 403); source https://api.github.com/repos/aws-actions/configure-aws-credentials/releases/latest, checked 2026-11-01T15:52:08Z","status":"fail","subject":"aws-actions/configure-aws-credentials"}
-row: {"check":"upstream-probe","detail":"lookup_failed (http status: 403); source https://api.github.com/repos/jdx/mise-action/releases/latest, checked 2026-11-01T15:52:08Z","status":"fail","subject":"jdx/mise-action"}
-row: {"check":"upstream-probe","detail":"lookup_failed (http status: 403); source https://api.github.com/repos/jdx/mr-boxington-action/releases, checked 2026-11-01T15:52:08Z","status":"fail","subject":"jdx/mr-boxington-action"}
-row: {"check":"upstream-probe","detail":"latest image family is platform-qualification evidence, not an API probe","status":"info","subject":"runner"}
-check-freshness: FAIL
-  - upstream-probe mise: lookup_failed (http status: 403); source https://api.github.com/repos/jdx/mise/releases/latest, checked 2026-11-01T15:52:08Z
-  - upstream-probe mr-boxington: lookup_failed (http status: 403); source https://api.github.com/repos/jdx/mr-boxington/releases/latest, checked 2026-11-01T15:52:08Z
-  - upstream-probe gh: lookup_failed (http status: 403); source https://api.github.com/repos/cli/cli/releases/latest, checked 2026-11-01T15:52:08Z
-  - upstream-probe jactionlint: lookup_failed (http status: 403); source https://api.github.com/repos/jdx/jactionlint/releases/latest, checked 2026-11-01T15:52:08Z
-  - upstream-probe shellcheck: lookup_failed (http status: 403); source https://api.github.com/repos/koalaman/shellcheck/releases/latest, checked 2026-11-01T15:52:08Z
-  - upstream-probe opentofu: lookup_failed (http status: 403); source https://api.github.com/repos/opentofu/opentofu/releases/latest, checked 2026-11-01T15:52:08Z
-  - upstream-probe crane: lookup_failed (http status: 403); source https://api.github.com/repos/google/go-containerregistry/releases/latest, checked 2026-11-01T15:52:08Z
-  - upstream-probe bun: lookup_failed (http status: 403); source https://api.github.com/repos/oven-sh/bun/releases/latest, checked 2026-11-01T15:52:08Z
-  - upstream-probe cosign: lookup_failed (http status: 403); source https://api.github.com/repos/sigstore/cosign/releases/latest, checked 2026-11-01T15:52:08Z
-  - upstream-probe actions/attest: lookup_failed (http status: 403); source https://api.github.com/repos/actions/attest/releases/latest, checked 2026-11-01T15:52:08Z
-  - upstream-probe actions/attest-build-provenance: lookup_failed (http status: 403); source https://api.github.com/repos/actions/attest-build-provenance/releases/latest, checked 2026-11-01T15:52:08Z
-  - upstream-probe actions/cache/restore: lookup_failed (http status: 403); source https://api.github.com/repos/actions/cache/releases/latest, checked 2026-11-01T15:52:08Z
-  - upstream-probe actions/cache/save: lookup_failed (http status: 403); source https://api.github.com/repos/actions/cache/releases/latest, checked 2026-11-01T15:52:08Z
-  - upstream-probe actions/checkout: lookup_failed (http status: 403); source https://api.github.com/repos/actions/checkout/releases/latest, checked 2026-11-01T15:52:08Z
-  - upstream-probe actions/create-github-app-token: lookup_failed (http status: 403); source https://api.github.com/repos/actions/create-github-app-token/releases/latest, checked 2026-11-01T15:52:08Z
-  - upstream-probe actions/download-artifact: lookup_failed (http status: 403); source https://api.github.com/repos/actions/download-artifact/releases/latest, checked 2026-11-01T15:52:08Z
-  - upstream-probe actions/github-script: lookup_failed (http status: 403); source https://api.github.com/repos/actions/github-script/releases/latest, checked 2026-11-01T15:52:08Z
-  - upstream-probe actions/upload-artifact: lookup_failed (http status: 403); source https://api.github.com/repos/actions/upload-artifact/releases/latest, checked 2026-11-01T15:52:08Z
-  - upstream-probe asamarts/alint: lookup_failed (http status: 403); source https://api.github.com/repos/asamarts/alint/releases/latest, checked 2026-11-01T15:52:08Z
-  - upstream-probe aws-actions/configure-aws-credentials: lookup_failed (http status: 403); source https://api.github.com/repos/aws-actions/configure-aws-credentials/releases/latest, checked 2026-11-01T15:52:08Z
-  - upstream-probe jdx/mise-action: lookup_failed (http status: 403); source https://api.github.com/repos/jdx/mise-action/releases/latest, checked 2026-11-01T15:52:08Z
-  - upstream-probe jdx/mr-boxington-action: lookup_failed (http status: 403); source https://api.github.com/repos/jdx/mr-boxington-action/releases, checked 2026-11-01T15:52:08Z
-mbx[gc]: removed 1 target directories (84.8 GiB logical, 0 abandoned and 1 live); 15.6 GiB logical remain, 84.8 GiB released on disk
-mbx[savings]: 84.8 GiB logical of build debris has left the building.
+check-freshness: PASS
+mbx[savings]: 84.8 GiB logical of target/ belonged to checkouts that no longer exist. neither does it.

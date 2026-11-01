@@ -49,7 +49,9 @@ at the main pins for all held tools; no toolchain or other tool pin
 changes.
 
 Gates: `scripts/check-freshness.sh` PASS (recapture re-run
-2026-11-01T16:27Z). `scripts/check-freshness.sh --check-upstream` exits 1
+2026-11-01T16:50Z against the held tree; output in
+`evidence/freshness-2026-11-01/refreshed-native-freshness.log`, showing
+the held pins and the four temporary holds expiring 2026-11-15). `scripts/check-freshness.sh --check-upstream` exits 1
 by design: its live probe reports exactly the four held rows as stale
 pins (mise `2026.10.21` vs `v2026.10.25`, mr-boxington `1.28.0` vs
 `v1.29.1`, jactionlint `2.3.0` vs `v2.4.0`, `jdx/mise-action` `v5.2.4`
