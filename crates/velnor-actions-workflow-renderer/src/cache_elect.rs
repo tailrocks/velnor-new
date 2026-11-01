@@ -28,9 +28,20 @@ pub fn elect_cache_writers_with_policy(
     jobs: &mut BTreeMap<String, Job>,
     policy: PullRequestCachePolicy,
 ) -> Result<(), RenderError> {
-    let mut planned = Vec::new();
-    planned.extend(plan_tools_saves(jobs, policy)?);
+    let mut planned = plan_tools_saves(jobs, policy)?;
     planned.extend(plan_provider_saves(jobs)?);
+    append_saves(jobs, planned)
+}
+
+pub fn elect_provider_cache_writers(jobs: &mut BTreeMap<String, Job>) -> Result<(), RenderError> {
+    let planned = plan_provider_saves(jobs)?;
+    append_saves(jobs, planned)
+}
+
+fn append_saves(
+    jobs: &mut BTreeMap<String, Job>,
+    planned: Vec<(String, Step)>,
+) -> Result<(), RenderError> {
     for (id, save) in planned {
         let Some(job) = jobs.get_mut(&id) else {
             return Err(RenderError::InvalidWorkflow(

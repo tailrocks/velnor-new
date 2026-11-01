@@ -17,7 +17,9 @@ mod save_policy;
 #[path = "cache_p08_setup.rs"]
 mod setup_pipeline;
 
-pub use crate::cache_elect::{elect_cache_writers, elect_cache_writers_with_policy};
+pub use crate::cache_elect::{
+    elect_cache_writers, elect_cache_writers_with_policy, elect_provider_cache_writers,
+};
 
 pub const RESTORE_SOURCES_NAME: &str = "Restore Cargo sources";
 pub const SAVE_SOURCES_NAME: &str = "Save Cargo sources";
@@ -32,10 +34,6 @@ pub(crate) fn tools_cache_save_condition(
     policy: velnor_actions_contract::PullRequestCachePolicy,
 ) -> String {
     save_policy::condition(policy)
-}
-
-pub(crate) fn tools_cache_scheduled_save_condition() -> String {
-    save_policy::scheduled_condition()
 }
 
 pub(crate) fn ensure_tools_cache_v2(

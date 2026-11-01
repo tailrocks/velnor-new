@@ -3,8 +3,9 @@
 
 use super::{BTreeMap, RenderError, commands, guard, marker, steps, validator_tools};
 use velnor_actions_contract::{
-    BunLanePlan, CI_WORKFLOW_PATH, PLAN_JOB_ID as CONTRACT_PLAN_JOB_ID, PullRequestCachePolicy,
-    REQUIRED_CONDITION as CONTRACT_REQUIRED_CONDITION, REQUIRED_JOB_ID as CONTRACT_REQUIRED_JOB_ID,
+    BunLanePlan, CI_WORKFLOW_PATH, Job, PLAN_JOB_ID as CONTRACT_PLAN_JOB_ID,
+    PullRequestCachePolicy, REQUIRED_CONDITION as CONTRACT_REQUIRED_CONDITION,
+    REQUIRED_JOB_ID as CONTRACT_REQUIRED_JOB_ID,
     REQUIRED_VERDICT_DISPLAY_NAME as CONTRACT_REQUIRED_VERDICT_DISPLAY_NAME, ScaleSetSelector,
     ValidatorKind,
 };
@@ -57,6 +58,7 @@ pub struct RenderContext {
     pub mise_quiet: bool,
     pub plan_consumer_env: BTreeMap<String, String>,
     pub tool_pins: Vec<String>,
+    pub standalone_tools_donors: BTreeMap<String, Job>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

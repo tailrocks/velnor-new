@@ -4,10 +4,10 @@
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::workflow::crate_job::TOOLS_PRODUCER_JOB_ID_PREFIX;
-use velnor_actions_contract::workflow::{JACTIONLINT_VERIFIER_USES, RUST_VERIFIER_USES};
 use velnor_actions_contract::workflow::{
-    ProducerScope, TOOLS_PRODUCER_INSTALL_CONDITION, validate_tools_producer,
+    DEPENDENCY_SEED_JOB_CONDITION, TOOLS_PRODUCER_INSTALL_CONDITION, validate_tools_producer,
 };
+use velnor_actions_contract::workflow::{JACTIONLINT_VERIFIER_USES, RUST_VERIFIER_USES};
 use velnor_actions_contract::{Job, PullRequestCachePolicy, Step, StepKind, StepRole};
 
 use crate::RenderError;
@@ -23,22 +23,19 @@ const RUST_SPEC_PREFIX: &str = "rust@";
 
 struct ToolsProducerPlan {
     id: String,
-    donor: String,
+    donor: Job,
     digest: ToolsDigest,
 }
 
 pub(crate) fn add_tools_producers(
     jobs: &mut BTreeMap<String, Job>,
     policy: PullRequestCachePolicy,
-    scope: ProducerScope,
+    standalone_donors: &BTreeMap<String, Job>,
 ) -> Result<(), RenderError> {
     let mut built = Vec::new();
-    for plan in plan(jobs)? {
-        let donor = jobs
-            .get(&plan.donor)
-            .ok_or_else(|| invalid("donor_missing"))?;
-        let job = build(&plan, donor, policy, scope)?;
-        validate_tools_producer(&job, &plan.id, scope).map_err(RenderError::Contract)?;
+    for plan in plan(jobs, standalone_donors)? {
+        let job = build(&plan, policy)?;
+        validate_tools_producer(&job, &plan.id).map_err(RenderError::Contract)?;
         built.push((plan.id.clone(), job));
     }
     for (id, job) in built {
@@ -49,14 +46,17 @@ pub(crate) fn add_tools_producers(
     Ok(())
 }
 
-fn plan(jobs: &BTreeMap<String, Job>) -> Result<Vec<ToolsProducerPlan>, RenderError> {
-    let mut donors: BTreeMap<ToolsDigest, &str> = BTreeMap::new();
-    for (id, job) in jobs {
+fn plan(
+    jobs: &BTreeMap<String, Job>,
+    standalone_donors: &BTreeMap<String, Job>,
+) -> Result<Vec<ToolsProducerPlan>, RenderError> {
+    let mut donors: BTreeMap<ToolsDigest, &Job> = BTreeMap::new();
+    for (id, job) in jobs.iter().chain(standalone_donors) {
         if job.producer_kind().is_some() {
             continue;
         }
         if let Some(digest) = tools_digest(id, job)? {
-            donors.entry(digest).or_insert(id.as_str());
+            donors.entry(digest).or_insert(job);
         }
     }
     let mut plans = Vec::with_capacity(donors.len());
@@ -70,19 +70,15 @@ fn plan(jobs: &BTreeMap<String, Job>) -> Result<Vec<ToolsProducerPlan>, RenderEr
         }
         plans.push(ToolsProducerPlan {
             id,
-            donor: donor.to_owned(),
+            donor: donor.clone(),
             digest,
         });
     }
     Ok(plans)
 }
 
-fn build(
-    plan: &ToolsProducerPlan,
-    donor: &Job,
-    policy: PullRequestCachePolicy,
-    scope: ProducerScope,
-) -> Result<Job, RenderError> {
+fn build(plan: &ToolsProducerPlan, policy: PullRequestCachePolicy) -> Result<Job, RenderError> {
+    let donor = &plan.donor;
     let mut steps = Vec::new();
     for role in [
         StepRole::Checkout,
@@ -100,10 +96,7 @@ fn build(
     steps.extend(install_steps(donor, &plan.id)?);
     steps.push(crate::cache_steps::tools_cache_save_step(
         crate::cache_p08::TOOLS_CACHE_KEY_EXPRESSION,
-        Some(match scope {
-            ProducerScope::Push => crate::cache_p08::tools_cache_save_condition(policy),
-            ProducerScope::Scheduled => crate::cache_p08::tools_cache_scheduled_save_condition(),
-        }),
+        Some(crate::cache_p08::tools_cache_save_condition(policy)),
     )?);
     Ok(Job {
         display_name: format!("{PRODUCER_DISPLAY_PREFIX}{}", plan.digest.short()),
@@ -111,7 +104,7 @@ fn build(
         check_runner: None,
         timeout_minutes: donor.timeout_minutes,
         needs: Vec::new(),
-        condition: Some(scope.job_condition().to_owned()),
+        condition: Some(DEPENDENCY_SEED_JOB_CONDITION.to_owned()),
         permissions: None,
         cache_mode: None,
         environment: None,

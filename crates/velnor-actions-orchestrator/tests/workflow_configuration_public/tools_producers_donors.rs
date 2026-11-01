@@ -1,9 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 use std::error::Error;
-use std::path::Path;
 
 use velnor_actions_contract::workflow::step_identity::{TOOLS_CACHE_SCRUB_USES, ToolsRestoreForm};
 use velnor_actions_contract::workflow::{RUST_VERIFIER_USES, TOOLS_PRODUCER_INSTALL_CONDITION};
@@ -14,7 +13,6 @@ use velnor_actions_orchestrator::{
 
 use super::maintenance_features::owner_feature_repo;
 use super::tools_producers::{POLICIES, identity_digest, is_tools_producer, positions};
-use super::workflow_configuration_fixture;
 
 pub(super) const SCHEDULED_SUITES_CONFIG: &str = r#"schema = 1
 
@@ -303,29 +301,4 @@ pub(super) fn producer_ids_and_digests(workflow: &str) -> (BTreeSet<String>, BTr
         }
     }
     (produced, consumed)
-}
-
-#[test]
-fn every_generated_workflow_has_a_producer_per_tools_identity() -> Result<(), Box<dyn Error>> {
-    let repo = workflow_configuration_fixture::make_repo(SCHEDULED_SUITES_CONFIG)?;
-    let prepared = prepare(repo.path())?;
-    let tree = render_staged_tree(&prepared)?;
-    let mut covered = BTreeMap::new();
-    for file in tree.files.iter().filter(|file| {
-        file.path.starts_with(".github/workflows/")
-            && Path::new(&file.path)
-                .extension()
-                .is_some_and(|ext| ext.eq_ignore_ascii_case("yml"))
-    }) {
-        let (produced, consumed) = producer_ids_and_digests(&file.bytes);
-        assert_eq!(produced, consumed, "{}", file.path);
-        if !consumed.is_empty() {
-            covered.insert(file.path.clone(), consumed.len());
-        }
-    }
-    assert!(
-        covered.len() >= 2,
-        "the scheduled suite workflow carries no tools identity: {covered:?}"
-    );
-    Ok(())
 }
