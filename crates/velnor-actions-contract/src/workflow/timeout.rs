@@ -22,7 +22,7 @@ impl JobTimeout {
 
     pub const CRATE: Self = Self::DEFAULT;
 
-    pub const REQUIRED: Self = Self::DEFAULT;
+    pub const REQUIRED: Self = Self(15);
 
     pub const VALIDATOR: Self = Self::DEFAULT;
 

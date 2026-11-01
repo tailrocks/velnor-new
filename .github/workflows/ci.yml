@@ -630,7 +630,7 @@ jobs:
   required:
     name: Required verdict
     runs-on: ubuntu-26.04
-    timeout-minutes: 5
+    timeout-minutes: 15
     env:
       CARGO_CACHE_AUTO_CLEAN_FREQUENCY: never
       RUSTUP_TOOLCHAIN: 1.99.1
@@ -732,7 +732,7 @@ jobs:
   required-gate:
     name: Required
     runs-on: ubuntu-26.04
-    timeout-minutes: 5
+    timeout-minutes: 15
     env: *m1
     needs:
       - required

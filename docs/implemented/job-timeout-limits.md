@@ -18,10 +18,13 @@ Crate jobs (the one job per Rust crate and each OpenTofu root job) use
 cold builds can exceed five minutes before every check finishes; raising this
 one value gives every crate job the same larger literal bound without changing
 the one-job-per-crate topology. Parallel check steps are linked to the job's
-cancellation, so the bound covers the whole job. Control jobs (plan, required,
+cancellation, so the bound covers the whole job. Control jobs (plan,
 validators, candidate, release and publish) keep the five-minute default except
 that `[workflow] plan_timeout_minutes` may set the planning job independently
 (default `5`, bounded `1..=360`). It does not change other control-job budgets.
+The required verdict and gate jobs instead use a fixed fifteen minutes: the
+verdict checks out the full history before merging reports, and on large
+histories that checkout alone can exceed five minutes.
 
 Dependency-seed jobs use `[workflow] dependency_seed_timeout_minutes` (default
 `30`, bounded `1..=360`) independently of crate and plan budgets. Each MBX
