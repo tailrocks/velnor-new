@@ -1,19 +1,20 @@
 # Freshness evidence — 2026-11-01
 
-VER-3.2 update set covering the stale pins found by the live probe on
-2026-11-01: mise `2026.10.21 -> 2026.10.25`,
-jactionlint `2.3.0 -> 2.4.0`, and `jdx/mise-action` `v5.2.4 -> v5.2.5`
-(tag commit `6612f0ef07ed2a736cd1e00a94a065522dd41195`).
+VER-3.2 probe of the stale pins found on 2026-11-01: mise
+`2026.10.21 -> 2026.10.25`, jactionlint `2.3.0 -> 2.4.0`, and
+`jdx/mise-action` `v5.2.4 -> v5.2.5` (tag commit
+`6612f0ef07ed2a736cd1e00a94a065522dd41195`). All three bumps are held
+(see below); no pin changes in this set.
 
 Two independent authenticated captures (`capture-1/`, `capture-2/` under
 [the evidence directory](evidence/freshness-2026-11-01/)) agree on all 25
 tool/action rows; `capture-agreement.json` binds both by SHA-256. Every
-pinned action tag resolves to the inventory SHA in both captures. Only the
-three bumped rows change pin/qualified/latest; mr-boxington is held at
-`1.28.0` (temporary hold in the inventory, granted 2026-11-01, expires
-2026-11-15) because the adopted controller 0.1.66 catalogues `1.28.0`;
-its `1.29.1` bump lands with controller adoption after the SDK 0.1.70
-release. All 25 `checked_at`
+pinned action tag resolves to the inventory SHA in both captures. No rows change pin/qualified; only `latest` reflects upstream.
+mr-boxington (`1.28.0`), mise (`2026.10.21`), jactionlint (`2.3.0`) and
+`jdx/mise-action` (`v5.2.4`) are held (temporary holds in the inventory,
+granted 2026-11-01, expires 2026-11-15) because the adopted controller
+0.1.66 catalogues those versions; their bumps land with controller
+adoption after the SDK 0.1.70 release. All 25 `checked_at`
 timestamps refresh from the capture-2 observations.
 
 Digest sources (all official upstream release assets, cross-checked two
@@ -35,11 +36,9 @@ observation, not formal qualification. See
 `evidence/freshness-2026-11-01/runner/runner-observation.json`.
 
 Repo-owned Mise mirrors (`mise.toml`, `mise.lock`, `.velnor/mise.toml`,
-`.velnor/mise.lock`) move only for mr-boxington and jactionlint, following
-the prior update-set pattern (the build-task tests bind the consumer
-fixture lock to the catalog pin); no toolchain or other tool pin changes.
-Generated workflows were regenerated with the generator only; a second
-run is byte-identical.
+`.velnor/mise.lock`), the compiled catalogs and generated workflows stay
+at the main pins for all held tools; no toolchain or other tool pin
+changes.
 
 Gates: `scripts/check-freshness.sh` PASS; `cargo fmt --all -- --check`
 PASS; focused nextest for mise/contract/actionlint (14), orchestrator +

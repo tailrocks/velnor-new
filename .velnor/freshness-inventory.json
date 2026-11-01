@@ -125,12 +125,12 @@
       "checked_at": "2026-11-01T15:21:45.905Z",
       "key": "jdx/mise-action",
       "latest": "v5.2.5",
-      "pinned_sha": "6612f0ef07ed2a736cd1e00a94a065522dd41195",
-      "pinned_version": "v5.2.5",
-      "qualified_sha": "6612f0ef07ed2a736cd1e00a94a065522dd41195",
-      "qualified_version": "v5.2.5",
+      "pinned_sha": "6be3c7ed4c21d4f76b208d351d95aac273ebb76d",
+      "pinned_version": "v5.2.4",
+      "qualified_sha": "6be3c7ed4c21d4f76b208d351d95aac273ebb76d",
+      "qualified_version": "v5.2.4",
       "source": "https://api.github.com/repos/jdx/mise-action/releases/latest",
-      "status": "current"
+      "status": "held"
     },
     {
       "checked_at": "2026-11-01T15:21:47.409Z",
@@ -170,6 +170,33 @@
       "reason": "adopted controller 0.1.66 catalogues mr-boxington 1.28.0; bump lands with controller adoption after SDK 0.1.70 release",
       "granted": "2026-11-01",
       "expires": "2026-11-15"
+    },
+    {
+      "key": "mise",
+      "held_version": "2026.10.21",
+      "owner": "Alexey Zhokhov",
+      "issue": "https://github.com/tailrocks/velnor-new/pull/451",
+      "reason": "adopted controller 0.1.66 catalogues mise 2026.10.21; bump lands with controller adoption after SDK 0.1.70 release",
+      "granted": "2026-11-01",
+      "expires": "2026-11-15"
+    },
+    {
+      "key": "jactionlint",
+      "held_version": "2.3.0",
+      "owner": "Alexey Zhokhov",
+      "issue": "https://github.com/tailrocks/velnor-new/pull/451",
+      "reason": "adopted controller 0.1.66 catalogues jactionlint 2.3.0; bump lands with controller adoption after SDK 0.1.70 release",
+      "granted": "2026-11-01",
+      "expires": "2026-11-15"
+    },
+    {
+      "key": "jdx/mise-action",
+      "held_version": "v5.2.4",
+      "owner": "Alexey Zhokhov",
+      "issue": "https://github.com/tailrocks/velnor-new/pull/451",
+      "reason": "adopted controller 0.1.66 catalogues jdx/mise-action v5.2.4; bump lands with controller adoption after SDK 0.1.70 release",
+      "granted": "2026-11-01",
+      "expires": "2026-11-15"
     }
   ],
   "tools": [
@@ -177,10 +204,10 @@
       "checked_at": "2026-11-01T15:21:19.065Z",
       "latest": "v2026.10.25",
       "name": "mise",
-      "pinned": "2026.10.25",
-      "qualified": "2026.10.25",
+      "pinned": "2026.10.21",
+      "qualified": "2026.10.21",
       "source": "https://api.github.com/repos/jdx/mise/releases/latest",
-      "status": "current"
+      "status": "held"
     },
     {
       "checked_at": "2026-11-01T15:21:19.265Z",
@@ -214,10 +241,10 @@
       "checked_at": "2026-11-01T15:21:21.262Z",
       "latest": "v2.4.0",
       "name": "jactionlint",
-      "pinned": "2.4.0",
-      "qualified": "2.4.0",
+      "pinned": "2.3.0",
+      "qualified": "2.3.0",
       "source": "https://api.github.com/repos/jdx/jactionlint/releases/latest",
-      "status": "current"
+      "status": "held"
     },
     {
       "checked_at": "2026-11-01T15:21:22.396Z",

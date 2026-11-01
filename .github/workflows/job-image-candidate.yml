@@ -25,10 +25,10 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
       - name: Setup Mise
-        uses: jdx/mise-action@6612f0ef07ed2a736cd1e00a94a065522dd41195
+        uses: jdx/mise-action@6be3c7ed4c21d4f76b208d351d95aac273ebb76d
         with:
-          version: 2026.10.25
-          sha256: 5d362ecc578dc7c146679b841dda949d6472cbf86ff5635db7afdca1b6b3fd87
+          version: 2026.10.21
+          sha256: ccfe12d7a62c6fb9def2a20db1f210f13a51de881f21fd8c85db4b6312405d07
           install: "false"
           env: "false"
           cache: "false"

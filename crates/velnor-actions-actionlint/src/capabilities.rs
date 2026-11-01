@@ -3,7 +3,7 @@
 
 use crate::ActionlintError;
 
-pub const JACTIONLINT_VERSION: &str = "2.4.0";
+pub const JACTIONLINT_VERSION: &str = "2.3.0";
 
 const KNOWN_HOSTED_LABELS: [&str; 13] = [
     "macos-14",

@@ -267,7 +267,7 @@ fn lock_for_version(version: &str, commit: &str) -> String {
     })
     .join("");
     format!(
-        "schema = 1\n\n[generator]\nbinary = \"velnor-actions\"\nversion = \"{version}\"\ncommit = \"{commit}\"\n{binaries}\n[mise-bootstrap]\nversion = \"2026.10.25\"\nartifact = \"https://github.com/jdx/mise/releases/download/v2026.10.25/mise-v2026.10.25-linux-x64\"\nsha256 = \"5d362ecc578dc7c146679b841dda949d6472cbf86ff5635db7afdca1b6b3fd87\"\n"
+        "schema = 1\n\n[generator]\nbinary = \"velnor-actions\"\nversion = \"{version}\"\ncommit = \"{commit}\"\n{binaries}\n[mise-bootstrap]\nversion = \"2026.10.21\"\nartifact = \"https://github.com/jdx/mise/releases/download/v2026.10.21/mise-v2026.10.21-linux-x64\"\nsha256 = \"ccfe12d7a62c6fb9def2a20db1f210f13a51de881f21fd8c85db4b6312405d07\"\n"
     )
 }
 
@@ -307,27 +307,27 @@ const ROTATED_MISE_SHA: &str = "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
 fn approvals_with_mise(version: &str, sha: &str) -> String {
     BASE_APPROVALS
         .replace(
-            "\"version\": \"2026.10.25\"",
+            "\"version\": \"2026.10.21\"",
             &format!("\"version\": \"{version}\""),
         )
         .replace(
-            "5d362ecc578dc7c146679b841dda949d6472cbf86ff5635db7afdca1b6b3fd87",
+            "ccfe12d7a62c6fb9def2a20db1f210f13a51de881f21fd8c85db4b6312405d07",
             sha,
         )
-        .replace("v2026.10.25", &format!("v{version}"))
+        .replace("v2026.10.21", &format!("v{version}"))
 }
 
 fn lock_with_mise_bootstrap(version: &str, sha: &str) -> String {
     BASE_LOCK
         .replace(
-            "version = \"2026.10.25\"",
+            "version = \"2026.10.21\"",
             &format!("version = \"{version}\""),
         )
         .replace(
-            "5d362ecc578dc7c146679b841dda949d6472cbf86ff5635db7afdca1b6b3fd87",
+            "ccfe12d7a62c6fb9def2a20db1f210f13a51de881f21fd8c85db4b6312405d07",
             sha,
         )
-        .replace("v2026.10.25", &format!("v{version}"))
+        .replace("v2026.10.21", &format!("v{version}"))
 }
 
 #[test]
