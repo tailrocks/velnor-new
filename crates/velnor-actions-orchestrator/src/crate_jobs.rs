@@ -340,6 +340,9 @@ fn render_job(
         "",
     )?);
     steps.extend(obligation_steps(input, model, use_opentofu)?);
+    steps.push(velnor_actions_workflow_renderer::crate_group_ledger_step(
+        policy,
+    ));
     steps.push(crate::matrix_step::crate_upload_step(&model.job_id)?);
     Ok(Job {
         services: Vec::new(),

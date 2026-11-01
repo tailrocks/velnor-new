@@ -49,6 +49,7 @@ pub(crate) mod gc1_t54_support {
     }
 
     struct Parts {
+        group: String,
         task_id: String,
         task_digest: String,
         input_digest: String,
@@ -63,10 +64,17 @@ pub(crate) mod gc1_t54_support {
     }
 
     pub(crate) fn build(status: JobStatus) -> Result<Fixture, OrchestratorError> {
+        build_in_group(status, GROUP)
+    }
+
+    pub(crate) fn build_in_group(
+        status: JobStatus,
+        group: &str,
+    ) -> Result<Fixture, OrchestratorError> {
         let tmp = tempfile::tempdir().map_err(|err| fail(&err.to_string()))?;
         let anchor = tmp.path().to_path_buf();
         let run_dir = anchor.join("velnor").join(RUN_KEY);
-        let parts = fixture_parts()?;
+        let parts = fixture_parts(group)?;
         let plan = fixture_plan(&parts)?;
         let report_id = task_report_id_for_task(RUN_KEY, &parts.matrix_key, &parts.task_digest)
             .map_err(|_| fail("report_id"))?;
@@ -82,7 +90,7 @@ pub(crate) mod gc1_t54_support {
             manifest_path,
             run_dir,
             emit_env: EmitEnv {
-                job_key: format!("{GROUP}-write"),
+                job_key: group.to_owned(),
                 run_id: 4242,
                 run_attempt: 1,
                 event: "pull_request".to_owned(),
@@ -99,7 +107,7 @@ pub(crate) mod gc1_t54_support {
         })
     }
 
-    fn fixture_parts() -> Result<Parts, OrchestratorError> {
+    fn fixture_parts(group: &str) -> Result<Parts, OrchestratorError> {
         let task_id = task_id_for_internal("lint", "dev").map_err(|_| fail("task_id"))?;
         let task_digest = digest_b3(b"gc1-t54-task-payload");
         let input_digest = digest_b3(b"gc1-t54-input");
@@ -118,11 +126,12 @@ pub(crate) mod gc1_t54_support {
             execute,
             &input_digest,
             RUN_KEY,
-            GROUP,
+            group,
             planned.clone(),
         )
         .map_err(|_| fail("matrix_entry"))?;
         Ok(Parts {
+            group: group.to_owned(),
             task_id,
             task_digest,
             input_digest,
@@ -160,14 +169,14 @@ pub(crate) mod gc1_t54_support {
                 task_digest: parts.task_digest.clone(),
                 input_digest: parts.input_digest.clone(),
                 closure_digest: parts.closure_digest.clone(),
-                job_id: GROUP.to_owned(),
+                job_id: parts.group.clone(),
             }],
             matrix: PlanMatrix {
                 include: vec![parts.entry.clone()],
             },
             task_ids: vec![parts.task_id.clone()],
             jobs: vec![PlanJob {
-                job_id: GROUP.to_owned(),
+                job_id: parts.group.clone(),
                 disposition: JobDisposition::Run,
             }],
             warnings: Vec::new(),

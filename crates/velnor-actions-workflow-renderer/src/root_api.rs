@@ -47,6 +47,7 @@ pub use crate::schema2::{
     MbxQualificationPins, MisePinQualificationPins, ProductReleasePins, Schema2WorkflowRequest,
     render_schema2_workflows,
 };
+pub use crate::steps_internal::group_ledger_steps::crate_group_ledger_step;
 pub use crate::setup::{MISE_ACTION_NAME, SETUP_MISE_NAME, mise_setup_step};
 pub use crate::steps::{
     ACQUIRE_NAME, ASSET_SHA_ENV, ASSET_URL_ENV, CRATE_REPORT_UPLOAD_NAME, CompileDriver,

@@ -134,7 +134,6 @@ fn finalize_suite_workflow_jobs(
         velnor_actions_contract::workflow::ProducerScope::Scheduled,
     )?;
     crate::cache_steps::append_bundle_postludes(jobs)?;
-    crate::steps_internal::group_ledger_steps::append_emit_ledger_steps(jobs);
     crate::cache_steps::append_workspace_cleanups(jobs)?;
     crate::cache_doctor::check(jobs)
 }

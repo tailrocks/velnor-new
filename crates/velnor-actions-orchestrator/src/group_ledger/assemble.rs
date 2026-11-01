@@ -162,8 +162,7 @@ mod gc1_t54 {
             RUN_KEY,
             &first.emit_env,
         )?;
-        let mut second = gc1_t54_support::build(JobStatus::Success)?;
-        second.emit_env.job_key = "t54-group-read".to_owned();
+        let second = gc1_t54_support::build_in_group(JobStatus::Success, "t54-other-group")?;
         let second_ledger = emit_group_ledger_to(
             &second.anchor,
             &second.manifest_path,
