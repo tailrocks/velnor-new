@@ -30,7 +30,7 @@ use crate::internal_plan::{default_generator_with_phase_timings, plan_packages};
 use crate::internal_request::{PlanRequest, checked_plan_request};
 
 pub use self::plan_response::validate_plan_response;
-use crate::prepare::{prepare, prepare_with_phase_timings};
+use crate::prepare::{prepare_for_controller, prepare_for_controller_with_phase_timings};
 use crate::select::{ChangeEvidence, classify_changed, select_universe};
 use crate::select_edges::plan_task_graph;
 
@@ -72,9 +72,9 @@ fn plan_internal_inner(
 ) -> Result<String, OrchestratorError> {
     let (mut request, root) = checked_plan_request(request_json)?;
     let prep = if let Some(phases) = timings.as_deref_mut() {
-        phases.measure_prepare(|phases| prepare_with_phase_timings(&root, phases))?
+        phases.measure_prepare(|phases| prepare_for_controller_with_phase_timings(&root, phases))?
     } else {
-        prepare(&root)?
+        prepare_for_controller(&root)?
     };
     validate_qualification_request(&request, &prep.default_branch)?;
     let named_check_lanes = named_lanes::resolve(&prep, request.named_check_lanes.take())?;

@@ -201,7 +201,7 @@ fn overlay_normal_renderer(
     config: &velnor_actions_contract::VelnorConfig,
     expected: &mut RegularTree,
 ) -> Result<(), OrchestratorError> {
-    let preparation = crate::prepare::prepare_with_config(root, config.clone())?;
+    let preparation = crate::prepare::prepare_for_candidate_with_config(root, config.clone())?;
     let rendered = crate::generate::render_staged_tree(&preparation)?;
     if !rendered.symlinks.is_empty() {
         return Err(internal("homebrew_cutover_generated_symlink"));
