@@ -21,6 +21,9 @@ Workflow to generate
     - required-gate (1 steps)
     - rust-empty-suite-read (17 steps)
     - rust-empty-suite-write (18 steps)
+    - tools-producer-083ce5ee (7 steps)
+    - tools-producer-a98c50f3 (9 steps)
+    - tools-producer-b1266833 (10 steps)
     - 2 Rust crate jobs
       Timeout: 5 minutes per crate job
       Obligations: Clippy -> build -> doc build -> format check
@@ -37,7 +40,8 @@ Workflow to generate
   Clippy memory groups: 1; barriers: 0
   Cache layers: Mise tools
   Jactionlint: 2.3.0 pinned, profile correctness
-  Action pins: 5
+  Action pins: 6
+    - actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
     - actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
     - actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
     - actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333

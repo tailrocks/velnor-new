@@ -24,6 +24,9 @@ Workflow to generate
     - required-gate (1 steps)
     - rust-app-read (26 steps)
     - rust-app-write (28 steps)
+    - tools-producer-083ce5ee (7 steps)
+    - tools-producer-25806b37 (10 steps)
+    - tools-producer-ffc502fa (9 steps)
     - 2 Rust crate jobs
       Timeout: 5 minutes per crate job
       Obligations: Clippy -> build -> run tests -> doctests -> doc build -> format check
