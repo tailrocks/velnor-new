@@ -13,9 +13,9 @@ use velnor_actions_contract::{
 };
 use velnor_actions_rust::SelectionBroadening;
 
-use crate::OrchestratorError;
 use crate::internal::internal_contract;
 use crate::workflow_task_jobs::stack_support::quote;
+use crate::{OrchestratorError, WarmRemedy};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MetadataFailure {
@@ -43,6 +43,7 @@ const TRANSIENT_LABEL: &str = "metadata_transient";
 const MALFORMED_LABEL: &str = "metadata_failed";
 const ERROR_PREFIX: &str = "error:";
 const CAUSE_HEADER: &str = "Caused by:";
+const CARGO_CONFIG_FILES: [&str; 2] = ["config", "config.toml"];
 
 #[must_use]
 pub fn classify_metadata_failure(stderr: &str) -> MetadataFailure {
@@ -103,20 +104,15 @@ pub(crate) fn transient_problem(stderr: &str) -> String {
 }
 
 pub(crate) fn metadata_failure_error(
+    root: &Path,
+    workspace_root: &str,
     manifest: String,
-    manifest_path: &Path,
     stderr: &str,
 ) -> OrchestratorError {
     let label = match classify_metadata_failure(stderr) {
         MetadataFailure::OfflineMiss => {
-            let warm_command = format!(
-                "cargo fetch --locked --manifest-path {}",
-                quote(&manifest_path.to_string_lossy())
-            );
-            return OrchestratorError::ColdRegistry {
-                manifest,
-                warm_command,
-            };
+            let remedy = warm_remedy(root, workspace_root, &manifest);
+            return OrchestratorError::ColdRegistry { manifest, remedy };
         }
         MetadataFailure::Transient => TRANSIENT_LABEL,
         MetadataFailure::Malformed => MALFORMED_LABEL,
@@ -124,6 +120,32 @@ pub(crate) fn metadata_failure_error(
     OrchestratorError::PreparationIncomplete {
         manifest,
         problem: metadata_problem(label, stderr),
+    }
+}
+
+fn warm_remedy(root: &Path, workspace_root: &str, manifest: &str) -> WarmRemedy {
+    let configs: Vec<String> = Path::new(workspace_root)
+        .ancestors()
+        .flat_map(|dir| CARGO_CONFIG_FILES.map(|name| dir.join(".cargo").join(name)))
+        .filter(|config| root.join(config).exists())
+        .map(|config| config.display().to_string())
+        .collect();
+    if configs.is_empty() {
+        WarmRemedy::Command {
+            workspace_dir: quote(
+                &root
+                    .join(workspace_root)
+                    .components()
+                    .collect::<PathBuf>()
+                    .to_string_lossy(),
+            ),
+            manifest_path: quote(&root.join(manifest).to_string_lossy()),
+        }
+    } else {
+        WarmRemedy::ReviewCargoConfig {
+            configs,
+            manifest: manifest.to_owned(),
+        }
     }
 }
 

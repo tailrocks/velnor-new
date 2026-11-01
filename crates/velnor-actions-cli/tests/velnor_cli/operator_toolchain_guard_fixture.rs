@@ -22,6 +22,7 @@ pub(super) struct Fixture {
     _temp: tempfile::TempDir,
     pub(super) root: PathBuf,
     pub(super) repo: PathBuf,
+    pub(super) workspace: PathBuf,
     pub(super) guard: PathBuf,
 }
 
@@ -31,21 +32,30 @@ impl Fixture {
     }
 
     pub(super) fn with_repo_dir(repo_dir: &str) -> Result<Self, Box<dyn Error>> {
+        Self::with_layout(repo_dir, "")
+    }
+
+    pub(super) fn with_workspace_dir(workspace_dir: &str) -> Result<Self, Box<dyn Error>> {
+        Self::with_layout("repo", workspace_dir)
+    }
+
+    fn with_layout(repo_dir: &str, workspace_dir: &str) -> Result<Self, Box<dyn Error>> {
         let temp = tempfile::tempdir()?;
         let root = temp.path().canonicalize()?;
         let repo = root.join(repo_dir);
+        let workspace = repo.join(workspace_dir);
         let guard = root.join("bin/guard");
         fs::create_dir_all(repo.join(".velnor"))?;
         fs::create_dir_all(root.join("bin"))?;
         fs::create_dir_all(root.join("home"))?;
-        fs::create_dir_all(repo.join("src"))?;
+        fs::create_dir_all(workspace.join("src"))?;
         fs::create_dir_all(repo.join("Formula"))?;
-        fs::write(repo.join("Cargo.toml"), CARGO_TOML)?;
+        fs::write(workspace.join("Cargo.toml"), CARGO_TOML)?;
         fs::write(
-            repo.join("Cargo.lock"),
+            workspace.join("Cargo.lock"),
             "version = 4\n\n[[package]]\nname = \"probe\"\nversion = \"0.1.0\"\n",
         )?;
-        fs::write(repo.join("src/main.rs"), "fn main() {}\n")?;
+        fs::write(workspace.join("src/main.rs"), "fn main() {}\n")?;
         fs::write(
             repo.join("mise.toml"),
             "[tasks.\"release:package\"]\nrun = \"true\"\n\n[tasks.\"tap:update\"]\nrun = \"true\"\n",
@@ -56,10 +66,16 @@ impl Fixture {
         )?;
         fs::write(
             repo.join(".velnor/config.toml"),
-            format!("{CONFIG}\n{QUALIFIED_RUST}"),
+            format!("{CONFIG}\n{QUALIFIED_RUST}").replace(
+                "\"Cargo.toml\"",
+                &format!(
+                    "\"{}\"",
+                    Path::new(workspace_dir).join("Cargo.toml").display()
+                ),
+            ),
         )?;
-        Self::write_metadata(&repo, &root)?;
-        mise::write(&root, &repo)?;
+        Self::write_metadata(&workspace, &root)?;
+        mise::write(&root, &workspace)?;
         Self::write_guard(&guard, "exec \"$@\"\n")?;
         git(&repo, &["init", "-b", "main"])?;
         git(
@@ -88,6 +104,7 @@ impl Fixture {
             _temp: temp,
             root,
             repo,
+            workspace,
             guard,
         })
     }

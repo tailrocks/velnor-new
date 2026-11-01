@@ -63,8 +63,7 @@ pub(crate) fn qualify_workspaces_with_guard(
             continue;
         }
         let manifest = workspace_manifest(&prefix);
-        let manifest_path = root.join(&manifest);
-        let request = MetadataQualification::new(manifest_path.clone()).map_err(|err| {
+        let request = MetadataQualification::new(root.join(&manifest)).map_err(|err| {
             OrchestratorError::PreparationIncomplete {
                 manifest: manifest.clone(),
                 problem: format!("bad_manifest_path:{err}"),
@@ -84,7 +83,7 @@ pub(crate) fn qualify_workspaces_with_guard(
                 }
                 return Err(match err {
                     MiseError::NonZeroExit { stderr, .. } => {
-                        metadata_failure_error(manifest, &manifest_path, &stderr)
+                        metadata_failure_error(root, &prefix, manifest, &stderr)
                     }
                     other => OrchestratorError::PreparationIncomplete {
                         manifest,

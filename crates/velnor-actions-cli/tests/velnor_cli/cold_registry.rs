@@ -54,7 +54,8 @@ fn cold_registry_generate_names_the_warm_command() -> Result<(), Box<dyn Error>>
         assert_eq!(generated.status.code(), Some(1), "{text}");
         assert!(
             text.contains(&format!(
-                "velnor-actions: cold_registry: Cargo.toml: dependency not in the local registry; run `cargo fetch --locked --manifest-path '{}'` (or the dependency does not exist)",
+                "velnor-actions: cold_registry: Cargo.toml: dependency not in the local registry (or the dependency does not exist); run `cd '{}' && cargo fetch --locked --manifest-path '{}'`",
+                fixture.repo.display(),
                 fixture.repo.join("Cargo.toml").display()
             )),
             "{text}"
@@ -74,13 +75,14 @@ fn cold_registry_warm_command_runs_from_a_nested_directory() -> Result<(), Box<d
     assert_eq!(
         argv,
         [
+            path_text(&fixture.repo)?,
             "fetch".to_owned(),
             "--locked".to_owned(),
             "--manifest-path".to_owned(),
             path_text(&fixture.repo.join("Cargo.toml"))?,
         ]
     );
-    assert!(Path::new(&argv[3]).is_file());
+    assert!(Path::new(&argv[4]).is_file());
     Ok(())
 }
 
@@ -90,9 +92,10 @@ fn cold_registry_warm_command_is_one_shell_word_for_a_hostile_path() -> Result<(
         let fixture = fixture::Fixture::with_repo_dir(repo_dir)?;
         fixture.fail_qualification(cargo_1_99_1::COLD_GIT_CHECKOUT)?;
         let argv = run_warm_command(&fixture, &fixture.repo)?;
-        assert_eq!(argv.len(), 4, "{argv:?}");
-        assert_eq!(argv[3], path_text(&fixture.repo.join("Cargo.toml"))?);
-        assert!(Path::new(&argv[3]).is_file());
+        assert_eq!(argv.len(), 5, "{argv:?}");
+        assert_eq!(argv[0], path_text(&fixture.repo)?);
+        assert_eq!(argv[4], path_text(&fixture.repo.join("Cargo.toml"))?);
+        assert!(Path::new(&argv[4]).is_file());
         assert!(!fixture.root.join("work/PWNED").exists());
     }
     Ok(())
@@ -111,16 +114,21 @@ fn run_warm_command(
     let text = fixture::stderr(&generated);
     assert_eq!(generated.status.code(), Some(1), "{text}");
     let (_, after) = text.split_once("run `").ok_or(text.as_str())?;
-    let (command, _) = after
-        .split_once("` (or the dependency does not exist)")
-        .ok_or(text.as_str())?;
+    let (command, _) = after.split_once('`').ok_or(text.as_str())?;
 
     let bin: PathBuf = fixture.root.join("warm-bin");
     let work = fixture.root.join("work");
     fs::create_dir_all(&bin)?;
     fs::create_dir_all(&work)?;
     let cargo = bin.join("cargo");
-    fs::write(&cargo, "#!/bin/sh\nprintf '%s\\n' \"$@\" > argv.txt\n")?;
+    let argv = work.join("argv.txt");
+    fs::write(
+        &cargo,
+        format!(
+            "#!/bin/sh\nprintf '%s\\n' \"$PWD\" \"$@\" > '{}'\n",
+            path_text(&argv)?
+        ),
+    )?;
     fs::set_permissions(&cargo, fs::Permissions::from_mode(0o700))?;
     let path = std::env::join_paths([bin, PathBuf::from("/usr/bin"), PathBuf::from("/bin")])?;
     let status = Command::new("/bin/sh")
@@ -130,10 +138,62 @@ fn run_warm_command(
         .env("PATH", path)
         .status()?;
     assert!(status.success(), "{command}");
-    Ok(fs::read_to_string(work.join("argv.txt"))?
+    Ok(fs::read_to_string(argv)?
         .lines()
         .map(str::to_owned)
         .collect())
+}
+
+fn cold_registry_text(fixture: &fixture::Fixture) -> Result<String, Box<dyn Error>> {
+    fixture.fail_qualification(cargo_1_99_1::COLD_HTTP_REQUEST)?;
+    let output = fixture.root.join("generated");
+    let generated = fixture.generate_unguarded(&output)?;
+    let text = fixture::stderr(&generated);
+    assert_eq!(generated.status.code(), Some(1), "{text}");
+    assert!(!output.exists());
+    Ok(text)
+}
+
+fn assert_review_guidance(text: &str, manifest: &str, configs: &str) {
+    assert!(
+        text.contains(&format!(
+            "velnor-actions: cold_registry: {manifest}: dependency not in the local registry (or the dependency does not exist); review the repository Cargo config {configs} first, because Cargo loads it when run from the workspace and can execute programs it names, then warm the registry with cargo fetch --locked for {manifest}"
+        )),
+        "{text}"
+    );
+    assert!(!text.contains("--manifest-path"), "{text}");
+    assert!(!text.contains("run `"), "{text}");
+}
+
+#[test]
+fn cold_registry_names_repo_root_cargo_config_instead_of_a_command() -> Result<(), Box<dyn Error>> {
+    let fixture = fixture::Fixture::new()?;
+    fs::create_dir_all(fixture.repo.join(".cargo"))?;
+    fs::write(fixture.repo.join(".cargo/config.toml"), "[net]\n")?;
+    let text = cold_registry_text(&fixture)?;
+    assert_review_guidance(&text, "Cargo.toml", ".cargo/config.toml");
+    Ok(())
+}
+
+#[test]
+fn cold_registry_names_cargo_config_in_a_parent_inside_the_repo() -> Result<(), Box<dyn Error>> {
+    let fixture = fixture::Fixture::with_workspace_dir("tools/probe")?;
+    fs::create_dir_all(fixture.repo.join("other/.cargo"))?;
+    fs::write(fixture.repo.join("other/.cargo/config.toml"), "[net]\n")?;
+    let text = cold_registry_text(&fixture)?;
+    assert!(
+        text.contains(&format!(
+            "run `cd '{}' && cargo fetch --locked --manifest-path '{}'`",
+            fixture.workspace.display(),
+            fixture.workspace.join("Cargo.toml").display()
+        )),
+        "{text}"
+    );
+    fs::create_dir_all(fixture.repo.join("tools/.cargo"))?;
+    fs::write(fixture.repo.join("tools/.cargo/config"), "[net]\n")?;
+    let text = cold_registry_text(&fixture)?;
+    assert_review_guidance(&text, "tools/probe/Cargo.toml", "tools/.cargo/config");
+    Ok(())
 }
 
 #[test]
