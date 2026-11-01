@@ -100,6 +100,63 @@ targets = ["aarch64-unknown-linux-gnu", "x86_64-unknown-linux-gnu"]
 - `mbx setup` is only needed for rust-analyzer. Choose "Create the shim
   without activating it"; do not pass `--yes`, `--global` or `--local`.
 
+### How `mr_boxington = true` and MBX 1.29.1 behave
+
+Checked 2026-11-02 against mise 2026.10.25 and MBX 1.29.1. velnor-new pins
+MBX 1.28.0 until the P1 pin bump lands, so the 1.29.1 behavior below applies
+only after that bump.
+
+- At mise 2026.10.25, `mr_boxington = true` on the `rust` tool adds a
+  `[wrappers.cargo]` entry with `command = "mbx"` and the environment
+  variable `MBX_CARGO_SHIM_MODE=1`. It needs `mr-boxington` in `[tools]` and
+  mise 2026.9.2 or newer. Sources: `add_rust_wrapper` in
+  [`src/config/command_wrapper.rs`](https://github.com/jdx/mise/blob/v2026.10.25/src/config/command_wrapper.rs)
+  and [`docs/lang/rust.md`](https://github.com/jdx/mise/blob/v2026.10.25/docs/lang/rust.md)
+  in jdx/mise v2026.10.25. The 2026.9.2 requirement comes from
+  [`docs/setup.md`](https://github.com/jdx/mr-boxington/blob/v1.29.1/docs/setup.md)
+  in jdx/mr-boxington v1.29.1 (lines 7, 13 and 26).
+- An explicit `[wrappers.cargo]` entry takes precedence over the option, so
+  the standard layout above does not wrap `cargo` twice. Sources: the same
+  `command_wrapper.rs` and
+  [`docs/setup.md`](https://github.com/jdx/mr-boxington/blob/v1.29.1/docs/setup.md)
+  in jdx/mr-boxington v1.29.1.
+- `MBX_CARGO_SHIM_MODE` selects what `mbx` does. `1` makes it act as the
+  cargo shim, `0` runs the normal `mbx` commands, and unset decides from the
+  stem of `argv[0]`. The shim removes the variable before it launches cargo.
+  The shim comment states that mise removes its wrapper directory before it
+  launches `mbx`, so `mbx` has no shim path to exclude. Source:
+  [`crates/mbx/src/cli/shim.rs`](https://github.com/jdx/mr-boxington/blob/v1.29.1/crates/mbx/src/cli/shim.rs)
+  in v1.29.1.
+- MBX 1.29.1 contains
+  [PR #873](https://github.com/jdx/mr-boxington/pull/873). After
+  `mbx cache import` restores workspace state, a grouped export keeps the
+  actions that Cargo reports as fresh. MBX releases before 1.29.1, including
+  1.28.0 (the current velnor-new pin), can export "0 actions and 0 objects"
+  in that case, as the before output in PR #873 shows. A grouped export needs
+  the group at both phases. Set `MBX_CACHE_EXPORT_GROUP=G` while the build
+  runs, so MBX records the actions under `G`. Then run
+  `mbx cache export --group G` at export time to select them. Without the
+  build-time variable, the export has nothing to select. In a direct MBX-action
+  integration, `--format directory` avoids archiving twice when `actions/cache`
+  also compresses the result. Velnor's generated flow sets
+  `MBX_CACHE_EXPORT_GROUP=velnor` for the build, exports with
+  `--group "$MBX_CACHE_EXPORT_GROUP" --format directory`, then the
+  `Publish state snapshot` step repacks that directory with `tar -czf` as
+  `payload.tar.gz`. `Save state snapshot` passes that file to `actions/cache`,
+  so Velnor keeps its own inner gzip envelope under the cache archive.
+  Sources: PR #873,
+  [`crates/mbx/CHANGELOG.md`](https://github.com/jdx/mr-boxington/blob/v1.29.1/crates/mbx/CHANGELOG.md),
+  [`docs/cli/cache/export.md`](https://github.com/jdx/mr-boxington/blob/v1.29.1/docs/cli/cache/export.md)
+  and [`docs/github-action.md`](https://github.com/jdx/mr-boxington/blob/v1.29.1/docs/github-action.md).
+- MBX sets `CARGO_INCREMENTAL=0` by default. `MBX_INCREMENTAL=1` opts in to
+  incremental compilation. Source:
+  [`docs/limits.md`](https://github.com/jdx/mr-boxington/blob/v1.29.1/docs/limits.md).
+- `MBX_STATS_REPORT` writes a JSON report (version 5) with lookups, hits,
+  misses, bypasses, compiler outcomes and downloaded bytes. It does not split
+  results into registry and workspace units, so the report alone cannot show
+  a registry hit rate. Source:
+  [`crates/mbx/src/session/stats.rs`](https://github.com/jdx/mr-boxington/blob/v1.29.1/crates/mbx/src/session/stats.rs).
+
 ### Optional: name `mise.toml` the authority
 
 The mirror check above is always on. `[stacks.rust] toolchain_source = "mise"`
