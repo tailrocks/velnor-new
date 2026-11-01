@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::BTreeSet;
+use std::fs;
+use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -13,33 +15,166 @@ use velnor_actions_contract::{
 };
 use velnor_actions_rust::SelectionBroadening;
 
-use crate::OrchestratorError;
 use crate::internal::internal_contract;
+use crate::workflow_task_jobs::stack_support::quote;
+use crate::{OrchestratorError, WarmRemedy};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MetadataFailure {
+    OfflineMiss,
+    Transient,
     Malformed,
-    Incomplete,
 }
 
-const OFFLINE_MARKERS: [&str; 8] = [
-    "offline",
+const TRANSIENT_MARKERS: [&str; 8] = [
     "network",
     "failed to download",
     "could not resolve",
     "connection",
+    "couldn't connect",
     "timed out",
     "timeout",
     "temporary failure",
 ];
 
+const OFFLINE_REFUSALS: [&str; 2] = ["--offline was specified", "you are in the offline mode"];
+const NO_MATCHING_PACKAGE: &str = "no matching package";
+const OFFLINE_NOTES: [&str; 2] = [
+    "note: offline mode (via",
+    "as a reminder, you're using offline mode (--offline)",
+];
+const MAX_PROBLEM_CHARS: usize = 160;
+const TRANSIENT_LABEL: &str = "metadata_transient";
+const MALFORMED_LABEL: &str = "metadata_failed";
+const ERROR_PREFIX: &str = "error:";
+const CAUSE_HEADER: &str = "Caused by:";
+const CARGO_CONFIG_FILES: [&str; 2] = ["config", "config.toml"];
+const RUSTUP_TOOLCHAIN_FILES: [&str; 2] = ["rust-toolchain", "rust-toolchain.toml"];
+
 #[must_use]
 pub fn classify_metadata_failure(stderr: &str) -> MetadataFailure {
-    let lower = stderr.to_lowercase();
-    if OFFLINE_MARKERS.iter().any(|mark| lower.contains(mark)) {
-        MetadataFailure::Incomplete
+    if is_offline_miss(stderr) {
+        MetadataFailure::OfflineMiss
+    } else if cause_lines(stderr)
+        .any(|line| TRANSIENT_MARKERS.iter().any(|mark| line.contains(mark)))
+    {
+        MetadataFailure::Transient
     } else {
         MetadataFailure::Malformed
+    }
+}
+
+fn is_offline_miss(stderr: &str) -> bool {
+    let causes: Vec<String> = cause_lines(stderr).collect();
+    let cause_has = |needle: &str| causes.iter().any(|line| line.contains(needle));
+    OFFLINE_REFUSALS.iter().any(|mark| cause_has(mark))
+        || (cause_has(NO_MATCHING_PACKAGE)
+            && stderr
+                .lines()
+                .map(|line| line.trim_start().to_lowercase())
+                .any(|line| OFFLINE_NOTES.iter().any(|note| line.starts_with(note))))
+}
+
+fn cause_lines(stderr: &str) -> impl Iterator<Item = String> + '_ {
+    let mut in_cause = false;
+    stderr.lines().filter_map(move |line| {
+        let text = line.trim();
+        if text.is_empty() {
+            in_cause = false;
+            return None;
+        }
+        if text == CAUSE_HEADER {
+            in_cause = true;
+            return None;
+        }
+        (in_cause || text.starts_with(ERROR_PREFIX)).then(|| {
+            text.split('`')
+                .step_by(2)
+                .collect::<String>()
+                .to_lowercase()
+        })
+    })
+}
+
+fn metadata_problem(label: &str, stderr: &str) -> String {
+    let lines = || stderr.lines().map(str::trim);
+    let line = lines()
+        .find(|line| line.starts_with(ERROR_PREFIX))
+        .or_else(|| lines().find(|line| !line.is_empty()))
+        .unwrap_or_default();
+    let short: String = line.chars().take(MAX_PROBLEM_CHARS).collect();
+    format!("{label}:{short}")
+}
+
+pub(crate) fn transient_problem(stderr: &str) -> String {
+    metadata_problem(TRANSIENT_LABEL, stderr)
+}
+
+pub(crate) fn metadata_failure_error(
+    root: &Path,
+    workspace_root: &str,
+    manifest: String,
+    stderr: &str,
+) -> OrchestratorError {
+    let label = match classify_metadata_failure(stderr) {
+        MetadataFailure::OfflineMiss => {
+            let remedy = warm_remedy(root, workspace_root, &manifest);
+            return OrchestratorError::ColdRegistry { manifest, remedy };
+        }
+        MetadataFailure::Transient => TRANSIENT_LABEL,
+        MetadataFailure::Malformed => MALFORMED_LABEL,
+    };
+    OrchestratorError::PreparationIncomplete {
+        manifest,
+        problem: metadata_problem(label, stderr),
+    }
+}
+
+fn warm_remedy(root: &Path, workspace_root: &str, manifest: &str) -> WarmRemedy {
+    let files: Vec<String> = Path::new(workspace_root)
+        .ancestors()
+        .flat_map(|dir| {
+            let cargo = CARGO_CONFIG_FILES
+                .map(|name| dir.join(".cargo").join(name))
+                .into_iter()
+                .filter(|config| root.join(config).exists());
+            let rustup = RUSTUP_TOOLCHAIN_FILES
+                .map(|name| dir.join(name))
+                .into_iter()
+                .filter(|file| names_custom_toolchain(&root.join(file)));
+            cargo.chain(rustup)
+        })
+        .map(|file| file.display().to_string())
+        .collect();
+    if files.is_empty() {
+        WarmRemedy::Command {
+            workspace_dir: quote(
+                &root
+                    .join(workspace_root)
+                    .components()
+                    .collect::<PathBuf>()
+                    .to_string_lossy(),
+            ),
+            manifest_path: quote(&root.join(manifest).to_string_lossy()),
+        }
+    } else {
+        WarmRemedy::ReviewRepoConfig {
+            files,
+            manifest: manifest.to_owned(),
+        }
+    }
+}
+
+fn names_custom_toolchain(file: &Path) -> bool {
+    match fs::read_to_string(file) {
+        Ok(text) => match toml::from_str::<toml::Table>(&text) {
+            Ok(table) => table
+                .get("toolchain")
+                .and_then(toml::Value::as_table)
+                .is_some_and(|toolchain| toolchain.contains_key("path")),
+            Err(_) => text.trim().contains(['/', '\\']),
+        },
+        Err(err) => err.kind() != ErrorKind::NotFound,
     }
 }
 

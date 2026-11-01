@@ -3,11 +3,12 @@
 
 use std::path::Path;
 
-use velnor_actions_mise::{MetadataQualification, OperatorToolchainGuard, ToolCatalog};
+use velnor_actions_mise::{MetadataQualification, MiseError, OperatorToolchainGuard, ToolCatalog};
 use velnor_actions_rust::WorkspaceRecord;
 
 use super::require_metadata_tools;
 use crate::OrchestratorError;
+use crate::decisions::{metadata_failure_error, transient_problem};
 use crate::discover::{PlannedWorkspace, workspace_lock, workspace_manifest};
 use crate::generate::ToolSnapshot;
 
@@ -80,12 +81,14 @@ pub(crate) fn qualify_workspaces_with_guard(
                         problem: "operator toolchain guard rejected metadata".to_owned(),
                     });
                 }
-                let text = err.to_string();
-                let first = text.lines().next().unwrap_or("metadata_offline");
-                let short: String = first.chars().take(160).collect();
-                return Err(OrchestratorError::PreparationIncomplete {
-                    manifest,
-                    problem: format!("metadata_offline:{short}"),
+                return Err(match err {
+                    MiseError::NonZeroExit { stderr, .. } => {
+                        metadata_failure_error(root, &prefix, manifest, &stderr)
+                    }
+                    other => OrchestratorError::PreparationIncomplete {
+                        manifest,
+                        problem: transient_problem(&other.to_string()),
+                    },
                 });
             }
         };

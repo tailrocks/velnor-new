@@ -264,16 +264,19 @@ For qualification of the selected feature/target resolution, after dependency so
 mise --no-config exec rust@<exact> -- cargo metadata --format-version 1 --locked --offline --manifest-path <workspace-root>/Cargo.toml
 ```
 
-This uses the same explicit tool pins and Cargo metadata command. Missing offline dependencies are `preparation_incomplete`, not a reason to fetch or produce a partial resolution. Velnor's own manifest-to-model adapter consumes the JSON; the `cargo_metadata` crate MAY deserialize it but MUST NOT execute Cargo. The plan job MUST NOT wait for full resolution merely to compute conservative local reverse dependencies.
+This uses the same explicit tool pins and Cargo metadata command. It runs only for a workspace that has a `Cargo.lock`. A `--locked --offline` qualification miss is reported as `cold_registry`, with the command `cd '<workspace root>' && cargo fetch --locked --manifest-path '<absolute manifest path>'`. Both paths are absolute and POSIX single-quoted. Velnor prints the command only when no `.cargo/config` or `.cargo/config.toml` exists, and no `rust-toolchain` or `rust-toolchain.toml` with a `path` key exists, from the workspace root up to the repo root. Otherwise the message names those files, tells you to review them before you run `cargo fetch --locked` for that manifest, and prints no command. Cargo and rustup load those files by working directory. A registry miss and a git-source miss (`you are in the offline mode`) are reported the same way. It is not a reason to fetch or produce a partial resolution. A transient metadata failure is `preparation_incomplete` with a `metadata_transient:<first error line>` reason, and a malformed manifest is `preparation_incomplete` with `metadata_failed:<first error line>`. Velnor's own manifest-to-model adapter consumes the JSON; the `cargo_metadata` crate MAY deserialize it but MUST NOT execute Cargo. The plan job MUST NOT wait for full resolution merely to compute conservative local reverse dependencies.
 
 When the workspace has no `Cargo.lock`, discovery still uses the
 `--no-deps` command above (which needs no lockfile). Resolution
-qualification MUST take an explicit unpinned path: run the qualification
-command without `--locked` but still with `--offline`, record
-`lockfile_absent_unpinned` in the plan, and MUST NOT fetch from the
-network. A missing lockfile MUST NOT silently enable network access; any
-offline resolution failure is `preparation_incomplete`. All metadata
-subprocesses keep the `--no-config` family; manifest paths are
+qualification does not run for that workspace, so it never produces
+`cold_registry` or `preparation_incomplete`. If the workspace has no
+external dependencies, `velnor-actions` builds the local graph from the
+discovery inventory. If it has any external dependency, the resolved graph
+is the error `lockless_workspace`. Selection then broadens to all changed
+paths and records the warning
+`comparison_unavailable:resolve_graph:<workspace-root>:lockless_workspace:all_changed`.
+No network access occurs, and a missing lockfile never enables it. All
+metadata subprocesses keep the `--no-config` family; manifest paths are
 canonicalized, escape fails closed, and no repository write occurs.
 
 The inventory MUST retain workspace root, Cargo package ID, repository-relative manifest path, package name/version, members/exclusions, target kind/name/test status, normal/build/dev/target-specific dependencies, local path edges, declared features, required features, doctests, build scripts, toolchain/config inputs, and declared external files.
@@ -375,7 +378,7 @@ Generated workflow and Mise task ownership, task naming, rendering, and atomic w
 | Repository with no registered stack | `velnor-actions generate` | Valid no-work workflow; no validation claim for unregistered stacks |
 | Rust detected but ignored | `velnor-actions generate` | Detection remains internally recorded as ignored; no Rust tasks are emitted |
 | Invalid/unknown config key | `velnor-actions generate` | Exit 1; key path on stderr; no output is replaced |
-| Missing Cargo metadata dependency after offline preparation | `velnor-actions generate` | Exit 1; `preparation_incomplete`; no network fetch |
+| Missing Cargo metadata dependency after offline preparation | `velnor-actions generate` | Exit 1; ``cold_registry: <manifest>: dependency not in the local registry (or the dependency does not exist); run `cd '<workspace root>' && cargo fetch --locked --manifest-path '<absolute manifest>'` ``; with a `.cargo/config(.toml)` or a `path` toolchain file in scope, the message names those files and gives no command; no network fetch |
 | Generated output and preview | `velnor-actions generate --output-dir <unique-temp-dir>` | Preview contains the complete `.github` tree; repository is byte-identical |
 | Generation or validation failure | `velnor-actions generate` | Previous `.github` tree remains byte-identical |
 | Successful default generation | `velnor-actions generate` | Entire root `.github` tree is replaced with generated output |

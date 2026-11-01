@@ -58,6 +58,7 @@ shift
 if [ "$1" = "@MBX_SPEC@" ]; then shift; fi
 [ "$1" = "--" ] || exit 95
 shift
+pwd >> "$(dirname "$0")/metadata-cwd"
 if [ "$1" = "cargo" ]; then
   shift
   [ "$1" = "metadata" ] || exit 96
@@ -76,6 +77,10 @@ if [ "$1" = "--no-deps" ]; then
 elif [ "$1" = "--locked" ]; then
   shift
   [ "$1" = "--offline" ] || exit 100
+  if [ -f "$(dirname "$0")/qualify-stderr" ]; then
+    cat "$(dirname "$0")/qualify-stderr" >&2
+    exit 101
+  fi
   shift
   [ "$1" = "--all-features" ] || exit 101
   shift

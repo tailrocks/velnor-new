@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::fmt;
+
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -30,6 +32,10 @@ pub enum OrchestratorError {
     Inventory { problem: String },
     #[error("{problem}")]
     ToolchainGuard { problem: String },
+    #[error(
+        "cold_registry: {manifest}: dependency not in the local registry (or the dependency does not exist); {remedy}"
+    )]
+    ColdRegistry { manifest: String, remedy: WarmRemedy },
     #[error("preparation_incomplete: {manifest}: {problem}")]
     PreparationIncomplete { manifest: String, problem: String },
     #[error("profile: {problem}")]
@@ -104,6 +110,37 @@ impl OrchestratorError {
     #[must_use]
     pub fn is_unsupported(&self) -> bool {
         matches!(self, Self::Unsupported { .. })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum WarmRemedy {
+    Command {
+        workspace_dir: String,
+        manifest_path: String,
+    },
+    ReviewRepoConfig {
+        files: Vec<String>,
+        manifest: String,
+    },
+}
+
+impl fmt::Display for WarmRemedy {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Command {
+                workspace_dir,
+                manifest_path,
+            } => write!(
+                f,
+                "run `cd {workspace_dir} && cargo fetch --locked --manifest-path {manifest_path}`"
+            ),
+            Self::ReviewRepoConfig { files, manifest } => write!(
+                f,
+                "review the repository config {} first, because Cargo and rustup load it when run from the workspace and can execute programs it names, then warm the registry with cargo fetch --locked for {manifest}",
+                files.join(", ")
+            ),
+        }
     }
 }
 
