@@ -3034,9 +3034,11 @@ jobs:
           lookup-only: "true"
           path: "~/.local/share/mise\n${{ runner.temp }}/velnor/rustup\n${{ runner.temp }}/velnor/cargo/.crates.toml\n${{ runner.temp }}/velnor/cargo/.crates2.json\n${{ runner.temp }}/velnor/cargo/bin"
       - &s92
-        name: Verify restored Rust toolchain
+        name: Scrub and verify Mise tools
         if: steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
-        uses: ./.github/actions/velnor-verify-restored-rust # zizmor: ignore[self-repository]
+        uses: ./.github/actions/velnor-tools-cache-scrub
+        with:
+          mise-sha256: ccfe12d7a62c6fb9def2a20db1f210f13a51de881f21fd8c85db4b6312405d07
       - name: Prepare pinned tools
         if: steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
         env: *m16
@@ -3066,6 +3068,7 @@ jobs:
       - *s3
       - *s9
       - *s91
+      - *s92
       - name: Prepare pinned tools
         if: steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
         run: *r4
@@ -3138,6 +3141,7 @@ jobs:
       - *s3
       - *s4
       - *s91
+      - *s92
       - name: Prepare pinned tools
         if: steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
         run: mise --no-config --no-env --no-hooks install cargo-deny@0.20.2
@@ -3158,6 +3162,7 @@ jobs:
       - *s39
       - *s40
       - *s91
+      - *s92
       - name: Prepare pinned tools
         if: steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
         run: *r19

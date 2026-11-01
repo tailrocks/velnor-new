@@ -21,7 +21,7 @@ Workflow to generate
     - required-gate (1 steps)
     - rust-empty-suite-read (17 steps)
     - rust-empty-suite-write (18 steps)
-    - tools-producer-083ce5ee (7 steps)
+    - tools-producer-083ce5ee (8 steps)
     - tools-producer-a98c50f3 (9 steps)
     - tools-producer-b1266833 (10 steps)
     - 2 Rust crate jobs

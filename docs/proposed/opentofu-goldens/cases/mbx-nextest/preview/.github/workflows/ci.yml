@@ -1052,6 +1052,11 @@ jobs:
           key: mise-tools-v2-${{steps.v2.outputs.identity}}
           lookup-only: "true"
           path: "~/.local/share/mise\n${{ runner.temp }}/velnor/rustup\n${{ runner.temp }}/velnor/cargo/.crates.toml\n${{ runner.temp }}/velnor/cargo/.crates2.json\n${{ runner.temp }}/velnor/cargo/bin"
+      - name: Scrub and verify Mise tools
+        if: steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
+        uses: ./.github/actions/velnor-tools-cache-scrub
+        with:
+          mise-sha256: ccfe12d7a62c6fb9def2a20db1f210f13a51de881f21fd8c85db4b6312405d07
       - name: Prepare pinned tools
         if: steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
         run: mise --no-config --no-env --no-hooks install jactionlint@2.3.0 shellcheck@0.11.0
@@ -1136,9 +1141,11 @@ jobs:
           key: mise-tools-v2-${{steps.v2.outputs.identity}}
           lookup-only: "true"
           path: "~/.local/share/mise\n${{ runner.temp }}/velnor/rustup\n${{ runner.temp }}/velnor/cargo/.crates.toml\n${{ runner.temp }}/velnor/cargo/.crates2.json\n${{ runner.temp }}/velnor/cargo/bin"
-      - name: Verify restored Rust toolchain
+      - name: Scrub and verify Mise tools
         if: steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
-        uses: ./.github/actions/velnor-verify-restored-rust # zizmor: ignore[self-repository]
+        uses: ./.github/actions/velnor-tools-cache-scrub
+        with:
+          mise-sha256: ccfe12d7a62c6fb9def2a20db1f210f13a51de881f21fd8c85db4b6312405d07
       - name: Prepare pinned tools
         if: steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
         env:
@@ -1240,9 +1247,11 @@ jobs:
           key: mise-tools-v2-${{steps.v2.outputs.identity}}
           lookup-only: "true"
           path: "~/.local/share/mise\n${{ runner.temp }}/velnor/rustup\n${{ runner.temp }}/velnor/cargo/.crates.toml\n${{ runner.temp }}/velnor/cargo/.crates2.json\n${{ runner.temp }}/velnor/cargo/bin"
-      - name: Verify restored Rust toolchain
+      - name: Scrub and verify Mise tools
         if: steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
-        uses: ./.github/actions/velnor-verify-restored-rust # zizmor: ignore[self-repository]
+        uses: ./.github/actions/velnor-tools-cache-scrub
+        with:
+          mise-sha256: ccfe12d7a62c6fb9def2a20db1f210f13a51de881f21fd8c85db4b6312405d07
       - name: Prepare pinned tools
         if: steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
         env:
