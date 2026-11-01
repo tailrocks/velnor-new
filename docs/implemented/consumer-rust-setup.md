@@ -132,9 +132,18 @@ only after that bump.
   `mbx cache import` restores workspace state, a grouped export keeps the
   actions that Cargo reports as fresh. MBX releases before 1.29.1, including
   1.28.0 (the current velnor-new pin), can export "0 actions and 0 objects"
-  in that case, as the before output in PR #873 shows. Select the group with `MBX_CACHE_EXPORT_GROUP` or
-  `mbx cache export --group G --format directory`. The `directory` format
-  avoids archiving twice when `actions/cache` also compresses the result.
+  in that case, as the before output in PR #873 shows. A grouped export needs
+  the group at both phases. Set `MBX_CACHE_EXPORT_GROUP=G` while the build
+  runs, so MBX records the actions under `G`. Then run
+  `mbx cache export --group G` at export time to select them. Without the
+  build-time variable, the export has nothing to select. In a direct MBX-action
+  integration, `--format directory` avoids archiving twice when `actions/cache`
+  also compresses the result. Velnor's generated flow sets
+  `MBX_CACHE_EXPORT_GROUP=velnor` for the build, exports with
+  `--group "$MBX_CACHE_EXPORT_GROUP" --format directory`, then the
+  `Publish state snapshot` step repacks that directory with `tar -czf` as
+  `payload.tar.gz`. `Save state snapshot` passes that file to `actions/cache`,
+  so Velnor keeps its own inner gzip envelope under the cache archive.
   Sources: PR #873,
   [`crates/mbx/CHANGELOG.md`](https://github.com/jdx/mr-boxington/blob/v1.29.1/crates/mbx/CHANGELOG.md),
   [`docs/cli/cache/export.md`](https://github.com/jdx/mr-boxington/blob/v1.29.1/docs/cli/cache/export.md)
