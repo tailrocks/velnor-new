@@ -6,105 +6,15 @@ use velnor_actions_contract::{JobTimeout, ReleaseTarget, RoutingWorkflow};
 use crate::yaml::Yaml;
 use crate::{ProductReleasePins, RenderError, Schema2WorkflowRequest};
 
-pub(super) const WORKFLOW_PATH: &str = ".github/workflows/source-qualification.yml";
+#[path = "schema2_generator_source_qualification_jobs.rs"]
+mod jobs;
 
-const PHASES: &[(&str, &str, bool)] = &[
-    (
-        "Prepare external evidence directories",
-        "prepare-external-evidence-directories",
-        true,
-    ),
-    (
-        "Verify exact clean source checkout",
-        "verify-exact-clean-source-checkout",
-        false,
-    ),
-    (
-        "Read and verify repository tool pins",
-        "read-and-verify-repository-tool-pins",
-        false,
-    ),
-    (
-        "Install pinned Rust and MBX",
-        "install-pinned-rust-and-mbx",
-        false,
-    ),
-    (
-        "Record installed tool identities",
-        "record-installed-tool-identities",
-        false,
-    ),
-    (
-        "Prefetch locked sources for qualification workspaces",
-        "prefetch-locked-sources-for-qualification-workspaces",
-        false,
-    ),
-    (
-        "Build runner-native archive guard from this checkout",
-        "build-runner-native-archive-guard-from-this-checkout",
-        false,
-    ),
-    (
-        "Install validator tools with native Mise checksums",
-        "install-validator-tools-with-native-mise-checksums",
-        false,
-    ),
-    (
-        "Test validator tool lock admission",
-        "test-validator-tool-lock-admission",
-        false,
-    ),
-    (
-        "Build source CLI with pinned MBX",
-        "build-source-cli-with-pinned-mbx",
-        false,
-    ),
-    (
-        "Capture all five external goldens",
-        "capture-all-five-external-goldens",
-        true,
-    ),
-    (
-        "Repeat check against external oracle",
-        "repeat-check-against-external-oracle",
-        true,
-    ),
-    (
-        "Run full golden shell harness against external oracle",
-        "run-full-golden-shell-harness-against-external-oracle",
-        true,
-    ),
-    (
-        "Run full golden shell harness with retained workspaces",
-        "run-full-golden-shell-harness-with-retained-workspaces",
-        true,
-    ),
-    (
-        "Preserve output-binding JSON proof files",
-        "preserve-output-binding-json-proof-files",
-        true,
-    ),
-    (
-        "Generate twice and retain root-to-preview identities",
-        "generate-twice-and-retain-root-to-preview-identities",
-        true,
-    ),
-    (
-        "Test generated Rust verifier transport and digest gate",
-        "test-generated-rust-verifier-transport-and-digest-gate",
-        true,
-    ),
-    (
-        "Check source output against checked-in repository goldens",
-        "check-source-output-against-checked-in-repository-goldens",
-        true,
-    ),
-    (
-        "Bundle selected qualification evidence",
-        "bundle-selected-qualification-evidence",
-        true,
-    ),
-];
+use jobs::{
+    GATHER_JOB_ID, GATHER_JOB_NAME, GATHER_PHASE, PRELUDE_AFTER_MISE, PRELUDE_BEFORE_MISE,
+    PRODUCER_JOBS, Phase, ProducerJob,
+};
+
+pub(super) const WORKFLOW_PATH: &str = ".github/workflows/source-qualification.yml";
 
 pub(super) fn render(request: &Schema2WorkflowRequest) -> Result<Yaml, RenderError> {
     let pins = request.product_release.as_ref().ok_or_else(|| {
@@ -119,40 +29,14 @@ pub(super) fn render(request: &Schema2WorkflowRequest) -> Result<Yaml, RenderErr
         ));
     }
     let runner = super::RunnerSpec::hosted(&request.hosted_label)?;
-    let mut steps = vec![checkout_step()];
-    steps.extend(
-        PHASES
-            .iter()
-            .take(2)
-            .map(|(name, phase, always)| phase_step(name, phase, *always)),
-    );
-    steps.push(mise_step(pins)?);
-    steps.extend(
-        PHASES
-            .iter()
-            .skip(2)
-            .map(|(name, phase, always)| phase_step(name, phase, *always)),
-    );
-    steps.push(upload_step());
-    let mut job = vec![
-        ("name".to_owned(), Yaml::str("Source qualification")),
-        ("runs-on".to_owned(), runner.runs_on.clone()),
-        (
-            "timeout-minutes".to_owned(),
-            Yaml::Int(i64::from(
-                JobTimeout::new(90)
-                    .map_err(|error| RenderError::InvalidWorkflow(error.to_string()))?
-                    .minutes(),
-            )),
-        ),
-        (
-            "permissions".to_owned(),
-            Yaml::Map(vec![("contents".to_owned(), Yaml::str("read"))]),
-        ),
-        ("env".to_owned(), job_env()),
-        ("steps".to_owned(), Yaml::Seq(steps)),
-    ];
-    runner.push_default_shell(&mut job, false);
+    let mut jobs = Vec::new();
+    for producer in PRODUCER_JOBS {
+        jobs.push((
+            producer.id.to_owned(),
+            producer_job(&runner, pins, producer)?,
+        ));
+    }
+    jobs.push((GATHER_JOB_ID.to_owned(), gather_job(&runner)?));
     Ok(Yaml::Map(vec![
         ("name".to_owned(), Yaml::str("Source qualification")),
         (
@@ -162,10 +46,7 @@ pub(super) fn render(request: &Schema2WorkflowRequest) -> Result<Yaml, RenderErr
                 ("workflow_dispatch".to_owned(), Yaml::Map(Vec::new())),
             ]),
         ),
-        (
-            "permissions".to_owned(),
-            Yaml::Map(vec![("contents".to_owned(), Yaml::str("read"))]),
-        ),
+        ("permissions".to_owned(), read_permissions()),
         (
             "concurrency".to_owned(),
             Yaml::Map(vec![
@@ -176,11 +57,84 @@ pub(super) fn render(request: &Schema2WorkflowRequest) -> Result<Yaml, RenderErr
                 ("cancel-in-progress".to_owned(), Yaml::Bool(false)),
             ]),
         ),
-        (
-            "jobs".to_owned(),
-            Yaml::Map(vec![("source-qualification".to_owned(), Yaml::Map(job))]),
-        ),
+        ("jobs".to_owned(), Yaml::Map(jobs)),
     ]))
+}
+
+fn read_permissions() -> Yaml {
+    Yaml::Map(vec![("contents".to_owned(), Yaml::str("read"))])
+}
+
+fn producer_job(
+    runner: &super::RunnerSpec,
+    pins: &ProductReleasePins,
+    producer: &ProducerJob,
+) -> Result<Yaml, RenderError> {
+    let mut steps = vec![checkout_step()];
+    steps.extend(phase_steps(PRELUDE_BEFORE_MISE));
+    steps.push(mise_step(pins)?);
+    steps.extend(phase_steps(PRELUDE_AFTER_MISE));
+    steps.extend(phase_steps(producer.phases));
+    steps.push(upload_step(&producer_artifact(producer.id)));
+    let mut fields = job_head(runner, producer.name)?;
+    fields.extend([
+        ("env".to_owned(), job_env()),
+        ("steps".to_owned(), Yaml::Seq(steps)),
+    ]);
+    runner.push_default_shell(&mut fields, false);
+    Ok(Yaml::Map(fields))
+}
+
+fn gather_job(runner: &super::RunnerSpec) -> Result<Yaml, RenderError> {
+    let mut steps = vec![checkout_step()];
+    steps.extend(
+        PRODUCER_JOBS
+            .iter()
+            .map(|producer| download_step(producer.id, &producer_artifact(producer.id))),
+    );
+    steps.extend(phase_steps(&[GATHER_PHASE]));
+    steps.push(upload_step(
+        "source-qualification-${{ github.run_id }}-${{ github.run_attempt }}",
+    ));
+    let mut fields = job_head(runner, GATHER_JOB_NAME)?;
+    fields.insert(
+        1,
+        (
+            "needs".to_owned(),
+            Yaml::Seq(PRODUCER_JOBS.iter().map(|job| Yaml::str(job.id)).collect()),
+        ),
+    );
+    fields.insert(2, ("if".to_owned(), Yaml::str("always()")));
+    fields.push(("steps".to_owned(), Yaml::Seq(steps)));
+    runner.push_default_shell(&mut fields, false);
+    Ok(Yaml::Map(fields))
+}
+
+fn job_head(runner: &super::RunnerSpec, name: &str) -> Result<Vec<(String, Yaml)>, RenderError> {
+    Ok(vec![
+        ("name".to_owned(), Yaml::str(name)),
+        ("runs-on".to_owned(), runner.runs_on.clone()),
+        (
+            "timeout-minutes".to_owned(),
+            Yaml::Int(i64::from(
+                JobTimeout::new(90)
+                    .map_err(|error| RenderError::InvalidWorkflow(error.to_string()))?
+                    .minutes(),
+            )),
+        ),
+        ("permissions".to_owned(), read_permissions()),
+    ])
+}
+
+fn producer_artifact(job_id: &str) -> String {
+    format!("source-qualification-{job_id}-${{{{ github.run_id }}}}-${{{{ github.run_attempt }}}}")
+}
+
+fn phase_steps(phases: &[Phase]) -> Vec<Yaml> {
+    phases
+        .iter()
+        .map(|(name, phase, always)| phase_step(name, phase, *always))
+        .collect()
 }
 
 fn job_env() -> Yaml {
@@ -249,7 +203,7 @@ fn phase_step(name: &str, phase: &str, always: bool) -> Yaml {
     Yaml::Map(fields)
 }
 
-fn upload_step() -> Yaml {
+fn upload_step(artifact: &str) -> Yaml {
     Yaml::Map(vec![
         (
             "name".to_owned(),
@@ -263,12 +217,7 @@ fn upload_step() -> Yaml {
         (
             "with".to_owned(),
             Yaml::Map(vec![
-                (
-                    "name".to_owned(),
-                    Yaml::str(
-                        "source-qualification-${{ github.run_id }}-${{ github.run_attempt }}",
-                    ),
-                ),
+                ("name".to_owned(), Yaml::str(artifact)),
                 (
                     "path".to_owned(),
                     Yaml::str("${{ runner.temp }}/source-qualification-artifacts/"),
@@ -276,6 +225,32 @@ fn upload_step() -> Yaml {
                 ("if-no-files-found".to_owned(), Yaml::str("error")),
                 ("include-hidden-files".to_owned(), Yaml::Bool(true)),
                 ("retention-days".to_owned(), Yaml::Int(14)),
+            ]),
+        ),
+    ])
+}
+
+fn download_step(job_id: &str, artifact: &str) -> Yaml {
+    Yaml::Map(vec![
+        (
+            "name".to_owned(),
+            Yaml::str(format!("Download {job_id} evidence")),
+        ),
+        ("if".to_owned(), Yaml::str("always()")),
+        (
+            "uses".to_owned(),
+            Yaml::str(crate::steps::DOWNLOAD_ARTIFACT_USES),
+        ),
+        (
+            "with".to_owned(),
+            Yaml::Map(vec![
+                ("name".to_owned(), Yaml::str(artifact)),
+                (
+                    "path".to_owned(),
+                    Yaml::str(format!(
+                        "${{{{ runner.temp }}}}/source-qualification-jobs/{job_id}"
+                    )),
+                ),
             ]),
         ),
     ])

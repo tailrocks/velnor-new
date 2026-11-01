@@ -55,6 +55,196 @@ preserve_plan_diagnostics() {
   done
 }
 
+build_archive_guard() {
+set -uo pipefail
+evidence="$RUNNER_TEMP/source-qualification-artifacts"
+log="$evidence/logs/archive-guard-build.log"
+receipt="$evidence/archive-guard-identity.txt"
+printf '%s\n' 'bash scripts/build-owned-archive-guard.sh' >"$evidence/logs/archive-guard-build.command"
+set +e
+bash scripts/build-owned-archive-guard.sh >"$log" 2>&1
+command_status=$?
+cat "$log"
+identity_status=0
+artifact_status=0
+guard="$GITHUB_WORKSPACE/.velnor/archive-guard/bin/velnor-archive-guard"
+fingerprint=unavailable
+source_fingerprint=unavailable
+digest=unavailable
+file_identity=unavailable
+if [ "$command_status" -ne 0 ]; then
+  identity_status=1
+  printf 'guard identity unavailable because the host-native build failed\n' >&2
+elif [ -L "$guard" ] || [ ! -f "$guard" ] || [ ! -x "$guard" ]; then
+  identity_status=1
+  printf 'FATAL: builder did not produce a regular executable guard in the checkout\n' >&2
+else
+  if ! fingerprint="$("$guard" --fingerprint)" \
+    || ! source_fingerprint="$("$guard" source-fingerprint "$GITHUB_WORKSPACE")" \
+    || [[ ! "$fingerprint" =~ ^[0-9a-f]{64}$ ]] \
+    || [ "$source_fingerprint" != "$fingerprint" ]; then
+    identity_status=1
+    printf 'FATAL: runner-native archive guard fingerprint does not match this checkout\n' >&2
+  fi
+  if ! digest="$(sha256sum "$guard" | awk 'NR == 1 { print $1; next } { exit 1 } END { if (NR != 1) exit 1 }')" \
+    || [[ ! "$digest" =~ ^[0-9a-f]{64}$ ]]; then
+    identity_status=1
+    digest=unavailable
+    printf 'FATAL: could not calculate the archive guard SHA-256\n' >&2
+  fi
+  if ! file_identity="$(stat -c '%u:%a:%h:%s' "$guard")"; then
+    identity_status=1
+    file_identity=unavailable
+    printf 'FATAL: could not inspect the archive guard identity\n' >&2
+  fi
+  owner="${file_identity%%:*}"
+  remainder="${file_identity#*:}"
+  mode="${remainder%%:*}"
+  remainder="${remainder#*:}"
+  links="${remainder%%:*}"
+  size="${remainder#*:}"
+  if [[ ! "$owner" =~ ^[0-9]+$ || "$owner" != "$(id -u)" \
+    || ! "$mode" =~ ^[0-7]+$ || ! "$links" =~ ^[0-9]+$ \
+    || "$links" != 1 || ! "$size" =~ ^[0-9]+$ ]] \
+    || (( (8#$mode & 022) != 0 || (8#$mode & 0111) == 0 )); then
+    identity_status=1
+    printf 'FATAL: archive guard file ownership or permissions are unsafe\n' >&2
+  fi
+  if ! {
+    printf 'source_head=%s\n' "$GITHUB_SHA"
+    printf 'host=%s/%s\n' "$RUNNER_OS" "$RUNNER_ARCH"
+    printf 'builder=scripts/build-owned-archive-guard.sh\n'
+    printf 'binary_path=%s\n' "$guard"
+    printf 'binary_sha256=%s\n' "$digest"
+    printf 'binary_identity=%s\n' "$file_identity"
+    printf 'source_fingerprint=%s\n' "$source_fingerprint"
+  } >"$receipt"; then
+    artifact_status=1
+    printf 'FATAL: could not write the archive guard identity receipt\n' >&2
+  fi
+fi
+printf '%s\n' "$command_status" >"$evidence/logs/archive-guard-build.command.exit" || artifact_status=1
+printf '%s\n' "$identity_status" >"$evidence/logs/archive-guard-build.identity.exit" || artifact_status=1
+printf '%s\n' "$artifact_status" >"$evidence/logs/archive-guard-build.artifact.exit" || artifact_status=1
+final_status=0
+if [ "$command_status" -ne 0 ] || [ "$identity_status" -ne 0 ] || [ "$artifact_status" -ne 0 ]; then
+  final_status=1
+fi
+if [ "$final_status" -eq 0 ]; then
+  {
+    printf 'VELNOR_QUALIFICATION_ARCHIVE_GUARD=%s\n' "$guard"
+    printf 'VELNOR_QUALIFICATION_ARCHIVE_GUARD_SHA256=%s\n' "$digest"
+  } >>"$GITHUB_ENV" || final_status=1
+fi
+printf '%s\n' "$final_status" >"$evidence/logs/archive-guard-build.exit" || exit 1
+if [ "$artifact_status" -ne 0 ]; then
+  printf 'artifact_status=1\n' >"$evidence/logs/archive-guard-build.artifact.exit" || true
+fi
+exit "$final_status"
+}
+
+build_source_cli() {
+set -uo pipefail
+evidence="$RUNNER_TEMP/source-qualification-artifacts"
+mise --no-config --no-env --no-hooks exec \
+  "rust@$VELNOR_RUST_VERSION" "mr-boxington@$VELNOR_MBX_VERSION" -- \
+  mbx build --locked --release --package velnor-actions-cli --bin velnor-actions \
+  --example qualification-diagnostics \
+  >"$evidence/logs/cli-build.log" 2>&1
+command_status=$?
+identity_status=0
+artifact_status=0
+binary="$CARGO_TARGET_DIR/release/velnor-actions"
+if ! cat "$evidence/logs/cli-build.log"; then artifact_status=1; fi
+version=unavailable
+digest=unavailable
+size=unavailable
+expected_version=unavailable
+if [ "$command_status" -ne 0 ]; then
+  identity_status=1
+  printf 'CLI identity unavailable because the build command failed\n' >&2
+elif [ ! -f "$binary" ] || [ -L "$binary" ] || [ ! -x "$binary" ]; then
+  identity_status=1
+  printf 'FATAL: successful build did not produce a regular executable CLI at %s\n' "$binary" >&2
+else
+  if ! expected_version="$(mise --no-config --no-env --no-hooks config get -f Cargo.toml workspace.package.version)"; then
+    identity_status=1
+    printf 'FATAL: could not read the workspace package version\n' >&2
+  fi
+  if ! version="$("$binary" --version)"; then
+    identity_status=1
+    version=unavailable
+    printf 'FATAL: built CLI version command failed\n' >&2
+  elif [ "$version" != "velnor-actions $expected_version" ]; then
+    identity_status=1
+    printf 'FATAL: built CLI version %s does not match expected velnor-actions %s\n' "$version" "$expected_version" >&2
+  fi
+  if ! digest="$(sha256sum "$binary" | awk 'NR == 1 { print $1; next } { exit 1 } END { if (NR != 1) exit 1 }')" \
+    || [[ ! "$digest" =~ ^[0-9a-f]{64}$ ]]; then
+    identity_status=1
+    digest=unavailable
+    printf 'FATAL: could not compute the built CLI SHA-256\n' >&2
+  fi
+  if ! size="$(stat -c '%s' "$binary")" || [[ ! "$size" =~ ^[0-9]+$ ]]; then
+    identity_status=1
+    size=unavailable
+    printf 'FATAL: could not read the built CLI size\n' >&2
+  fi
+  identity_tmp="$evidence/cli-identity.txt.tmp"
+  if ! {
+    printf 'source_head=%s\n' "$GITHUB_SHA"
+    printf 'expected_version=velnor-actions %s\n' "$expected_version"
+    printf 'binary_path=%s\n' "$binary"
+    printf 'binary_version=%s\n' "$version"
+    printf 'binary_sha256=%s\n' "$digest"
+    printf 'binary_size=%s\n' "$size"
+    printf 'mise=%s\n' "$VELNOR_MISE_VERSION"
+    printf 'rust=%s\n' "$VELNOR_RUST_VERSION"
+    printf 'mr_boxington=%s\n' "$VELNOR_MBX_VERSION"
+    printf 'nextest_pin=%s\n' "$VELNOR_NEXTEST_VERSION"
+  } >"$identity_tmp" || ! mv "$identity_tmp" "$evidence/cli-identity.txt"; then
+    artifact_status=1
+    printf 'FATAL: could not write CLI identity receipt\n' >&2
+  else
+    cat "$evidence/cli-identity.txt" || artifact_status=1
+  fi
+fi
+fixture="$CARGO_TARGET_DIR/release/examples/qualification-diagnostics"
+if [ "$command_status" -eq 0 ] && [ "$identity_status" -eq 0 ]; then
+  if [ -L "$fixture" ] || [ ! -f "$fixture" ] || [ ! -x "$fixture" ] \
+    || [ "$("$fixture" --version)" != "$version" ]; then
+    identity_status=1
+  else
+    fixture_digest="$(sha256sum "$fixture" | awk '{print $1}')"
+    if [[ ! "$fixture_digest" =~ ^[0-9a-f]{64}$ ]]; then
+      identity_status=1
+    elif ! {
+      printf 'diagnostics_fixture_path=%s\n' "$fixture"
+      printf 'diagnostics_fixture_sha256=%s\n' "$fixture_digest"
+    } >>"$evidence/cli-identity.txt"; then
+      artifact_status=1
+    elif ! {
+      printf 'VELNOR_QUALIFICATION_DIAGNOSTICS_FIXTURE=%s\n' "$fixture"
+      printf 'VELNOR_QUALIFICATION_DIAGNOSTICS_FIXTURE_SHA256=%s\n' "$fixture_digest"
+    } >>"$GITHUB_ENV"; then
+      artifact_status=1
+    fi
+  fi
+fi
+printf '%s\n' "$command_status" >"$evidence/logs/cli-build.command.exit" || artifact_status=1
+printf '%s\n' "$identity_status" >"$evidence/logs/cli-build.identity.exit" || artifact_status=1
+printf '%s\n' "$artifact_status" >"$evidence/logs/cli-build.artifact.exit" || artifact_status=1
+final_status=0
+if [ "$command_status" -ne 0 ] || [ "$identity_status" -ne 0 ] || [ "$artifact_status" -ne 0 ]; then
+  final_status=1
+fi
+printf '%s\n' "$final_status" >"$evidence/logs/cli-build.exit" || exit 1
+if [ "$artifact_status" -ne 0 ]; then
+  printf 'artifact_status=1\n' >"$evidence/logs/cli-build.artifact.exit" || true
+fi
+exit "$final_status"
+}
+
 case "$1" in
   prepare-external-evidence-directories)
 set -euo pipefail
@@ -329,93 +519,6 @@ printf '%s\n' "$final_status" >"$status_file" || exit 1
 cat "$log"
 exit "$final_status"
     ;;
-  build-runner-native-archive-guard-from-this-checkout)
-set -uo pipefail
-evidence="$RUNNER_TEMP/source-qualification-artifacts"
-log="$evidence/logs/archive-guard-build.log"
-receipt="$evidence/archive-guard-identity.txt"
-printf '%s\n' 'bash scripts/build-owned-archive-guard.sh' >"$evidence/logs/archive-guard-build.command"
-set +e
-bash scripts/build-owned-archive-guard.sh >"$log" 2>&1
-command_status=$?
-cat "$log"
-identity_status=0
-artifact_status=0
-guard="$GITHUB_WORKSPACE/.velnor/archive-guard/bin/velnor-archive-guard"
-fingerprint=unavailable
-source_fingerprint=unavailable
-digest=unavailable
-file_identity=unavailable
-if [ "$command_status" -ne 0 ]; then
-  identity_status=1
-  printf 'guard identity unavailable because the host-native build failed\n' >&2
-elif [ -L "$guard" ] || [ ! -f "$guard" ] || [ ! -x "$guard" ]; then
-  identity_status=1
-  printf 'FATAL: builder did not produce a regular executable guard in the checkout\n' >&2
-else
-  if ! fingerprint="$("$guard" --fingerprint)" \
-    || ! source_fingerprint="$("$guard" source-fingerprint "$GITHUB_WORKSPACE")" \
-    || [[ ! "$fingerprint" =~ ^[0-9a-f]{64}$ ]] \
-    || [ "$source_fingerprint" != "$fingerprint" ]; then
-    identity_status=1
-    printf 'FATAL: runner-native archive guard fingerprint does not match this checkout\n' >&2
-  fi
-  if ! digest="$(sha256sum "$guard" | awk 'NR == 1 { print $1; next } { exit 1 } END { if (NR != 1) exit 1 }')" \
-    || [[ ! "$digest" =~ ^[0-9a-f]{64}$ ]]; then
-    identity_status=1
-    digest=unavailable
-    printf 'FATAL: could not calculate the archive guard SHA-256\n' >&2
-  fi
-  if ! file_identity="$(stat -c '%u:%a:%h:%s' "$guard")"; then
-    identity_status=1
-    file_identity=unavailable
-    printf 'FATAL: could not inspect the archive guard identity\n' >&2
-  fi
-  owner="${file_identity%%:*}"
-  remainder="${file_identity#*:}"
-  mode="${remainder%%:*}"
-  remainder="${remainder#*:}"
-  links="${remainder%%:*}"
-  size="${remainder#*:}"
-  if [[ ! "$owner" =~ ^[0-9]+$ || "$owner" != "$(id -u)" \
-    || ! "$mode" =~ ^[0-7]+$ || ! "$links" =~ ^[0-9]+$ \
-    || "$links" != 1 || ! "$size" =~ ^[0-9]+$ ]] \
-    || (( (8#$mode & 022) != 0 || (8#$mode & 0111) == 0 )); then
-    identity_status=1
-    printf 'FATAL: archive guard file ownership or permissions are unsafe\n' >&2
-  fi
-  if ! {
-    printf 'source_head=%s\n' "$GITHUB_SHA"
-    printf 'host=%s/%s\n' "$RUNNER_OS" "$RUNNER_ARCH"
-    printf 'builder=scripts/build-owned-archive-guard.sh\n'
-    printf 'binary_path=%s\n' "$guard"
-    printf 'binary_sha256=%s\n' "$digest"
-    printf 'binary_identity=%s\n' "$file_identity"
-    printf 'source_fingerprint=%s\n' "$source_fingerprint"
-  } >"$receipt"; then
-    artifact_status=1
-    printf 'FATAL: could not write the archive guard identity receipt\n' >&2
-  fi
-fi
-printf '%s\n' "$command_status" >"$evidence/logs/archive-guard-build.command.exit" || artifact_status=1
-printf '%s\n' "$identity_status" >"$evidence/logs/archive-guard-build.identity.exit" || artifact_status=1
-printf '%s\n' "$artifact_status" >"$evidence/logs/archive-guard-build.artifact.exit" || artifact_status=1
-final_status=0
-if [ "$command_status" -ne 0 ] || [ "$identity_status" -ne 0 ] || [ "$artifact_status" -ne 0 ]; then
-  final_status=1
-fi
-if [ "$final_status" -eq 0 ]; then
-  {
-    printf 'VELNOR_QUALIFICATION_ARCHIVE_GUARD=%s\n' "$guard"
-    printf 'VELNOR_QUALIFICATION_ARCHIVE_GUARD_SHA256=%s\n' "$digest"
-  } >>"$GITHUB_ENV" || final_status=1
-fi
-printf '%s\n' "$final_status" >"$evidence/logs/archive-guard-build.exit" || exit 1
-if [ "$artifact_status" -ne 0 ]; then
-  printf 'artifact_status=1\n' >"$evidence/logs/archive-guard-build.artifact.exit" || true
-fi
-exit "$final_status"
-    ;;
   install-validator-tools-with-native-mise-checksums)
 set -uo pipefail
 export MISE_BACKENDS_JACTIONLINT=github:jdx/jactionlint
@@ -605,106 +708,18 @@ if [ "$command_status" -ne 0 ] || [ "$artifact_status" -ne 0 ]; then final_statu
 printf '%s\n' "$final_status" >"$evidence/logs/$name.exit" || exit 1
 exit "$final_status"
     ;;
-  build-source-cli-with-pinned-mbx)
+  build-source-cli-and-archive-guard-concurrently)
 set -uo pipefail
 evidence="$RUNNER_TEMP/source-qualification-artifacts"
-mise --no-config --no-env --no-hooks exec \
-  "rust@$VELNOR_RUST_VERSION" "mr-boxington@$VELNOR_MBX_VERSION" -- \
-  mbx build --locked --release --package velnor-actions-cli --bin velnor-actions \
-  --example qualification-diagnostics \
-  >"$evidence/logs/cli-build.log" 2>&1
-command_status=$?
-identity_status=0
-artifact_status=0
-binary="$CARGO_TARGET_DIR/release/velnor-actions"
-if ! cat "$evidence/logs/cli-build.log"; then artifact_status=1; fi
-version=unavailable
-digest=unavailable
-size=unavailable
-expected_version=unavailable
-if [ "$command_status" -ne 0 ]; then
-  identity_status=1
-  printf 'CLI identity unavailable because the build command failed\n' >&2
-elif [ ! -f "$binary" ] || [ -L "$binary" ] || [ ! -x "$binary" ]; then
-  identity_status=1
-  printf 'FATAL: successful build did not produce a regular executable CLI at %s\n' "$binary" >&2
-else
-  if ! expected_version="$(mise --no-config --no-env --no-hooks config get -f Cargo.toml workspace.package.version)"; then
-    identity_status=1
-    printf 'FATAL: could not read the workspace package version\n' >&2
-  fi
-  if ! version="$("$binary" --version)"; then
-    identity_status=1
-    version=unavailable
-    printf 'FATAL: built CLI version command failed\n' >&2
-  elif [ "$version" != "velnor-actions $expected_version" ]; then
-    identity_status=1
-    printf 'FATAL: built CLI version %s does not match expected velnor-actions %s\n' "$version" "$expected_version" >&2
-  fi
-  if ! digest="$(sha256sum "$binary" | awk 'NR == 1 { print $1; next } { exit 1 } END { if (NR != 1) exit 1 }')" \
-    || [[ ! "$digest" =~ ^[0-9a-f]{64}$ ]]; then
-    identity_status=1
-    digest=unavailable
-    printf 'FATAL: could not compute the built CLI SHA-256\n' >&2
-  fi
-  if ! size="$(stat -c '%s' "$binary")" || [[ ! "$size" =~ ^[0-9]+$ ]]; then
-    identity_status=1
-    size=unavailable
-    printf 'FATAL: could not read the built CLI size\n' >&2
-  fi
-  identity_tmp="$evidence/cli-identity.txt.tmp"
-  if ! {
-    printf 'source_head=%s\n' "$GITHUB_SHA"
-    printf 'expected_version=velnor-actions %s\n' "$expected_version"
-    printf 'binary_path=%s\n' "$binary"
-    printf 'binary_version=%s\n' "$version"
-    printf 'binary_sha256=%s\n' "$digest"
-    printf 'binary_size=%s\n' "$size"
-    printf 'mise=%s\n' "$VELNOR_MISE_VERSION"
-    printf 'rust=%s\n' "$VELNOR_RUST_VERSION"
-    printf 'mr_boxington=%s\n' "$VELNOR_MBX_VERSION"
-    printf 'nextest_pin=%s\n' "$VELNOR_NEXTEST_VERSION"
-  } >"$identity_tmp" || ! mv "$identity_tmp" "$evidence/cli-identity.txt"; then
-    artifact_status=1
-    printf 'FATAL: could not write CLI identity receipt\n' >&2
-  else
-    cat "$evidence/cli-identity.txt" || artifact_status=1
-  fi
-fi
-fixture="$CARGO_TARGET_DIR/release/examples/qualification-diagnostics"
-if [ "$command_status" -eq 0 ] && [ "$identity_status" -eq 0 ]; then
-  if [ -L "$fixture" ] || [ ! -f "$fixture" ] || [ ! -x "$fixture" ] \
-    || [ "$("$fixture" --version)" != "$version" ]; then
-    identity_status=1
-  else
-    fixture_digest="$(sha256sum "$fixture" | awk '{print $1}')"
-    if [[ ! "$fixture_digest" =~ ^[0-9a-f]{64}$ ]]; then
-      identity_status=1
-    elif ! {
-      printf 'diagnostics_fixture_path=%s\n' "$fixture"
-      printf 'diagnostics_fixture_sha256=%s\n' "$fixture_digest"
-    } >>"$evidence/cli-identity.txt"; then
-      artifact_status=1
-    elif ! {
-      printf 'VELNOR_QUALIFICATION_DIAGNOSTICS_FIXTURE=%s\n' "$fixture"
-      printf 'VELNOR_QUALIFICATION_DIAGNOSTICS_FIXTURE_SHA256=%s\n' "$fixture_digest"
-    } >>"$GITHUB_ENV"; then
-      artifact_status=1
-    fi
-  fi
-fi
-printf '%s\n' "$command_status" >"$evidence/logs/cli-build.command.exit" || artifact_status=1
-printf '%s\n' "$identity_status" >"$evidence/logs/cli-build.identity.exit" || artifact_status=1
-printf '%s\n' "$artifact_status" >"$evidence/logs/cli-build.artifact.exit" || artifact_status=1
-final_status=0
-if [ "$command_status" -ne 0 ] || [ "$identity_status" -ne 0 ] || [ "$artifact_status" -ne 0 ]; then
-  final_status=1
-fi
-printf '%s\n' "$final_status" >"$evidence/logs/cli-build.exit" || exit 1
-if [ "$artifact_status" -ne 0 ]; then
-  printf 'artifact_status=1\n' >"$evidence/logs/cli-build.artifact.exit" || true
-fi
-exit "$final_status"
+guard_console="$evidence/logs/archive-guard-build.console.log"
+( build_archive_guard ) >"$guard_console" 2>&1 &
+guard_pid=$!
+( build_source_cli )
+cli_status=$?
+wait "$guard_pid"
+guard_status=$?
+cat "$guard_console"
+if [ "$cli_status" -ne 0 ] || [ "$guard_status" -ne 0 ]; then exit 1; fi
     ;;
   capture-all-five-external-goldens)
 set -uo pipefail
@@ -954,11 +969,15 @@ printf '%s\n' "$artifact_status" >"$evidence/logs/$name.artifact.exit"
 printf '%s\n' "$final_status" >"$evidence/logs/$name.exit"
 exit "$final_status"
     ;;
-  preserve-output-binding-json-proof-files)
+  preserve-ordinary-output-binding-json-proof-files|preserve-keep-output-binding-json-proof-files)
 set -uo pipefail
 evidence="$RUNNER_TEMP/source-qualification-artifacts"
 tmp_root="$RUNNER_TEMP/velnor-source-qualification-tmp"
-name='external-shell-harness-json-proof'
+mode="${1#preserve-}"
+mode="${mode%-output-binding-json-proof-files}"
+harness='external-shell-harness'
+if [ "$mode" = keep ]; then harness="$harness-keep"; fi
+name="$harness-json-proof"
 proof_status=0
 
 preserve_mode_proofs() {
@@ -1096,14 +1115,10 @@ preserve_mode_proofs() {
   return 0
 }
 
-preserve_mode_proofs ordinary \
-  "$evidence/logs/external-shell-harness-workspace.txt" \
-  "$evidence/logs/external-shell-harness.command.exit" \
-  external-shell-harness-json-proof
-preserve_mode_proofs keep \
-  "$evidence/logs/external-shell-harness-keep-workspace.txt" \
-  "$evidence/logs/external-shell-harness-keep.command.exit" \
-  external-shell-harness-keep-json-proof
+preserve_mode_proofs "$mode" \
+  "$evidence/logs/$harness-workspace.txt" \
+  "$evidence/logs/$harness.command.exit" \
+  "$name"
 printf '%s\n' 0 >"$evidence/logs/$name.command.exit" || proof_status=1
 printf '%s\n' "$proof_status" >"$evidence/logs/$name.artifact.exit" || proof_status=1
 printf '%s\n' "$proof_status" >"$evidence/logs/$name.exit" || exit 1
@@ -1329,44 +1344,63 @@ exit "$final_status"
     ;;
   bundle-selected-qualification-evidence)
 set -uo pipefail
+jobs_root="$RUNNER_TEMP/source-qualification-jobs"
 evidence="$RUNNER_TEMP/source-qualification-artifacts"
 archive="$evidence/source-qualification-preserved.tar.gz"
 final_status=0
-for name in cargo-prefetch archive-guard-build validator-tool-install validator-tool-lock-admission cli-build external-capture external-check rust-verifier-retry \
-  external-shell-harness external-shell-harness-keep external-shell-harness-json-proof \
-  repository-oracle-check; do
-  status_file="$evidence/logs/$name.exit"
-  if [ ! -f "$status_file" ] || [ -L "$status_file" ] \
-    || ! grep -Eq '^0$' "$status_file"; then
+mkdir -p "$evidence/logs" || exit 1
+common_statuses=(cargo-prefetch archive-guard-build validator-tool-install validator-tool-lock-admission cli-build external-capture)
+preserved_paths=(logs previews external-oracle captured-stage captured-raw external-check-stage external-check-raw external-check-diff
+  external-shell-harness-logs external-shell-harness-keep-logs repository-oracle-diff repository-oracle-stage repository-oracle-raw
+  external-shell-harness-json-proof external-shell-harness-keep-json-proof
+  external-shell-harness-json-proof.receipt.txt external-shell-harness-keep-json-proof.receipt.txt
+  rust-verifier-retry.json archive-guard-identity.txt
+  checkout-status.txt source-identity.txt source-inputs.sha256 build-environment.txt
+  tool-pins.json validator-tool-config-identity.before.txt validator-tool-identity.txt
+  validator-tool-install-plan.json validator-tool-install-specs.txt validator-tool-lock-admission.txt
+  cargo-fetch-lock-identity.txt cargo-fetch-locks.before.txt cargo-fetch-locks.after.txt
+  mise-version.txt rustc-version.txt
+  mbx-version.txt jactionlint-version.txt shellcheck-version.txt bun-version.txt cli-identity.txt)
+members=()
+for job in ordinary-harness keep-harness generation-checks; do
+  case "$job" in
+    ordinary-harness) job_statuses=(external-shell-harness external-shell-harness-json-proof) ;;
+    keep-harness) job_statuses=(external-shell-harness-keep external-shell-harness-keep-json-proof) ;;
+    *) job_statuses=(external-check rust-verifier-retry repository-oracle-check) ;;
+  esac
+  job_dir="$jobs_root/$job"
+  if [ -L "$job_dir" ] || [ ! -d "$job_dir" ]; then
+    printf 'evidence for job %s is missing or unsafe\n' "$job" >&2
     final_status=1
+    continue
   fi
+  for name in "${common_statuses[@]}" "${job_statuses[@]}"; do
+    status_file="$job_dir/logs/$name.exit"
+    if [ ! -f "$status_file" ] || [ -L "$status_file" ] \
+      || ! grep -Eq '^0$' "$status_file"; then
+      printf 'job %s status %s is missing, unsafe, or not 0\n' "$job" "$name" >&2
+      final_status=1
+    fi
+  done
+  if [ "$job" = generation-checks ]; then
+    preview_status="$job_dir/logs/root-preview.exit"
+    if [ ! -f "$preview_status" ] || [ -L "$preview_status" ] \
+      || ! grep -Fxq 'generate_statuses=0,0 identity_status=0 diff_statuses=0,0' "$preview_status"; then
+      printf 'job %s status root-preview is missing, unsafe, or not 0\n' "$job" >&2
+      final_status=1
+    fi
+  fi
+  for path in "${preserved_paths[@]}"; do
+    if [ -e "$job_dir/$path" ] || [ -L "$job_dir/$path" ]; then
+      members+=("$job/$path")
+    fi
+  done
 done
-    if [ ! -f "$evidence/logs/root-preview.exit" ] || [ -L "$evidence/logs/root-preview.exit" ] \
-  || ! grep -Fxq 'generate_statuses=0,0 identity_status=0 diff_statuses=0,0' \
-    "$evidence/logs/root-preview.exit"; then
-  final_status=1
-fi
 if ! printf 'qualification_checks_status=%s\n' "$final_status" \
   >"$evidence/qualification-final-status.txt"; then final_status=1; fi
-paths=(logs previews)
-for path in external-oracle captured-stage captured-raw external-check-stage external-check-raw external-check-diff \
-  external-shell-harness-logs external-shell-harness-keep-logs repository-oracle-diff repository-oracle-stage repository-oracle-raw \
-  external-shell-harness-json-proof external-shell-harness-keep-json-proof \
-  external-shell-harness-json-proof.receipt.txt external-shell-harness-keep-json-proof.receipt.txt \
-  rust-verifier-retry.json \
-  archive-guard-identity.txt qualification-final-status.txt \
-  checkout-status.txt source-identity.txt source-inputs.sha256 build-environment.txt \
-  tool-pins.json validator-tool-config-identity.before.txt validator-tool-identity.txt \
-  validator-tool-install-plan.json validator-tool-install-specs.txt validator-tool-lock-admission.txt \
-  cargo-fetch-lock-identity.txt cargo-fetch-locks.before.txt cargo-fetch-locks.after.txt \
-  mise-version.txt rustc-version.txt \
-  mbx-version.txt jactionlint-version.txt shellcheck-version.txt bun-version.txt cli-identity.txt; do
-  if [ -e "$evidence/$path" ] || [ -L "$evidence/$path" ]; then
-    paths+=("$path")
-  fi
-done
 set +e
-tar -czf "$archive" -C "$evidence" -- "${paths[@]}" \
+tar -czf "$archive" -C "$jobs_root" ${members[@]+"${members[@]}"} \
+  -C "$evidence" qualification-final-status.txt \
   2>"$evidence/source-qualification-preserved.tar.stderr.log"
 status=$?
 if ! printf '%s\n' "$status" >"$evidence/logs/evidence-bundle.exit"; then final_status=1; fi
