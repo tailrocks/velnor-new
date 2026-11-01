@@ -3,6 +3,7 @@
 
 use velnor_actions_workflow_renderer::{render::RenderedFile, yaml::quote_scalar};
 
+use velnor_actions_contract::workflow::crate_job::TOOLS_PRODUCER_JOB_ID_PREFIX;
 use velnor_actions_contract::workflow::TOOLS_PRODUCER_INSTALL_CONDITION;
 
 use crate::OrchestratorError;
@@ -65,7 +66,7 @@ pub(crate) fn audit_with_verifiers(
                         "unresolved or malformed YAML anchor",
                     ));
                 }
-                if !is_verifier_step_valid(step, verifiers) {
+                if !is_verifier_step_valid(step, &owner, verifiers) {
                     return Err(unverified(
                         &format!("{}:{owner}", file.path),
                         &step.name,
@@ -73,7 +74,12 @@ pub(crate) fn audit_with_verifiers(
                     ));
                 }
             }
-            check_steps(&format!("{}:{owner}", file.path), &steps, verifiers)?;
+            check_steps(
+                &format!("{}:{owner}", file.path),
+                &owner,
+                &steps,
+                verifiers,
+            )?;
         }
     }
     Ok(())
@@ -126,11 +132,11 @@ fn check_verifier_files(
     Ok(())
 }
 
-fn is_verifier_step_valid(step: &StepText, verifiers: &VerifierActionSet) -> bool {
+fn is_verifier_step_valid(step: &StepText, owner: &str, verifiers: &VerifierActionSet) -> bool {
     if let Some(uses) = step.uses_value()
         && let Some(action) = verifiers.by_uses(uses)
     {
-        return canonical_action_call(step, action);
+        return canonical_action_call(step, action, owner, verifiers);
     }
     let known_inline_name = verifiers
         .inline_rust_templates
@@ -190,7 +196,16 @@ fn canonical_inline_shape(
     step.top_fields == expected_top && actual_env == expected_env
 }
 
-fn canonical_action_call(step: &StepText, action: &VerifierAction) -> bool {
+fn gated_call_allowed(action: &VerifierAction, owner: &str, verifiers: &VerifierActionSet) -> bool {
+    owner.starts_with(TOOLS_PRODUCER_JOB_ID_PREFIX) && action.uses != verifiers.restored_rust.uses
+}
+
+fn canonical_action_call(
+    step: &StepText,
+    action: &VerifierAction,
+    owner: &str,
+    verifiers: &VerifierActionSet,
+) -> bool {
     let uses = format!("{} # zizmor: ignore[self-repository]", action.uses);
     let shape_ok = match step.fields.as_slice() {
         [name, call] => name.0 == "name" && call.0 == "uses" && call.1 == uses,
@@ -200,6 +215,7 @@ fn canonical_action_call(step: &StepText, action: &VerifierAction) -> bool {
                 && condition.1 == TOOLS_PRODUCER_INSTALL_CONDITION
                 && call.0 == "uses"
                 && call.1 == uses
+                && gated_call_allowed(action, owner, verifiers)
         }
         _ => false,
     };
@@ -223,6 +239,7 @@ fn unverified(path: &str, step: &str, why: &str) -> OrchestratorError {
 
 fn check_steps(
     path: &str,
+    owner: &str,
     steps: &[StepText],
     verifiers: &VerifierActionSet,
 ) -> Result<(), OrchestratorError> {
@@ -245,17 +262,16 @@ fn check_steps(
                     "no verification follows the install",
                 ));
             };
-            if is_rust_verifier(step, verifiers) {
+            if is_rust_verifier(step, owner, verifiers) {
                 let gate = gate_of(step);
-                if gate.is_some()
-                    && steps[start..index]
-                        .iter()
-                        .any(|install| installs_rust(install) && gate_of(install) != gate)
+                if steps[start..index]
+                    .iter()
+                    .any(|install| installs_rust(install) && gate_of(install) != gate)
                 {
                     return Err(unverified(
                         path,
                         &step.name,
-                        "gated verification follows an install with another condition",
+                        "verification condition differs from an install condition",
                     ));
                 }
                 break;
@@ -298,12 +314,16 @@ fn installs_rust(step: &StepText) -> bool {
     INSTALLS.iter().any(|needle| step.text.contains(needle))
 }
 
-fn is_rust_verifier(step: &StepText, verifiers: &VerifierActionSet) -> bool {
+fn is_rust_verifier(step: &StepText, owner: &str, verifiers: &VerifierActionSet) -> bool {
     if step.uses_value() == Some(verifiers.installed_rust.uses) {
-        return canonical_action_call(step, &verifiers.installed_rust);
+        return canonical_action_call(step, &verifiers.installed_rust, owner, verifiers);
     }
     verifiers
         .inline_installed_rust_templates
         .iter()
         .any(|template| canonical_inline_shape(step, template))
 }
+
+#[cfg(test)]
+#[path = "rust_install_audit_tests.rs"]
+mod tests;

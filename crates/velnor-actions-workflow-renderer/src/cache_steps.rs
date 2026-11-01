@@ -54,9 +54,12 @@ pub use tools::{
     TOOLS_CACHE_PATH, TOOLS_CACHE_PATHS, TOOLS_RESTORE_ACTION_USES, TOOLS_RESTORE_NAME,
     TOOLS_RESTORE_USES, TOOLS_SAVE_NAME, TOOLS_SAVE_USES,
 };
-pub(crate) use tools::{TOOLS_SEED_ADMITTED_EXPRESSION, TOOLS_SEED_ADMITTED_INPUT};
+pub(crate) use tools::{
+    TOOLS_MISE_SHA256_INPUT, TOOLS_SEED_ADMITTED_EXPRESSION, TOOLS_SEED_ADMITTED_INPUT,
+};
 
 pub(crate) use tools::restore_action_file as tools_restore_action_file;
+pub(crate) use tools::scrub_action_file as tools_scrub_action_file;
 
 pub(crate) fn tools_cache_restore_step(
     key: &str,
@@ -68,6 +71,10 @@ pub(crate) fn tools_cache_restore_step(
 
 pub(crate) fn tools_cache_probe_step(key: &str) -> Result<Step, RenderError> {
     tools::probe_step(key)
+}
+
+pub(crate) fn tools_cache_scrub_step(mise_sha256: &str) -> Result<Step, RenderError> {
+    tools::scrub_step(mise_sha256)
 }
 
 pub(crate) fn tools_cache_save_step(

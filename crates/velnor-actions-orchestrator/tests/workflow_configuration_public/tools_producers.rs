@@ -7,22 +7,23 @@ use std::error::Error;
 use velnor_actions_contract::workflow::step_identity::{
     TOOLS_CACHE_IDENTITY_DIGEST_INPUT, ToolsRestoreForm,
 };
-use velnor_actions_contract::workflow::{DEPENDENCY_SEED_JOB_CONDITION, ProducerKind};
-use velnor_actions_contract::{
-    Job, PermissionLevel, Permissions, REQUIRED_JOB_ID, Step, StepKind, StepRole, WorkflowIr,
-    WorkflowPolicy,
+use velnor_actions_contract::workflow::{
+    DEPENDENCY_SEED_JOB_CONDITION, ProducerKind, RUST_VERIFIER_USES,
 };
-use velnor_actions_orchestrator::{finalized_jobs, prepare};
+use velnor_actions_contract::{
+    Job, REQUIRED_JOB_ID, Step, StepKind, StepRole, WorkflowIr, WorkflowPolicy,
+};
+use velnor_actions_orchestrator::{finalized_jobs, prepare, render_staged_tree};
 
 use super::maintenance_features::owner_feature_repo;
 
 const PROBE_MISS: &str = "steps.tools-restore.outputs.cache-hit != 'true'";
-const POLICIES: [WorkflowPolicy; 2] = [
+pub(super) const POLICIES: [WorkflowPolicy; 2] = [
     WorkflowPolicy::ConsumerV1,
     WorkflowPolicy::VelnorRepositoryV1,
 ];
 
-fn finalized(
+pub(super) fn finalized(
     policy: WorkflowPolicy,
 ) -> Result<(WorkflowIr, BTreeMap<String, Job>), Box<dyn Error>> {
     let repo = owner_feature_repo(policy, false, "default", "default")?;
@@ -31,11 +32,11 @@ fn finalized(
     Ok((prepared.workflow.ir.clone(), jobs))
 }
 
-fn is_tools_producer(job: &Job) -> bool {
+pub(super) fn is_tools_producer(job: &Job) -> bool {
     job.producer_kind() == Some(ProducerKind::ToolsIdentity)
 }
 
-fn identity_digest(job: &Job) -> Option<&str> {
+pub(super) fn identity_digest(job: &Job) -> Option<&str> {
     job.steps
         .iter()
         .find_map(|step| match (&step.role, &step.kind) {
@@ -46,7 +47,7 @@ fn identity_digest(job: &Job) -> Option<&str> {
         })
 }
 
-fn positions(job: &Job, role: StepRole) -> Vec<usize> {
+pub(super) fn positions(job: &Job, role: StepRole) -> Vec<usize> {
     job.steps
         .iter()
         .enumerate()
@@ -55,7 +56,7 @@ fn positions(job: &Job, role: StepRole) -> Vec<usize> {
         .collect()
 }
 
-fn is_upload(step: &Step) -> bool {
+pub(super) fn is_upload(step: &Step) -> bool {
     matches!(&step.kind, StepKind::Action { uses, .. } if uses.starts_with("actions/upload-artifact@"))
 }
 
@@ -89,10 +90,14 @@ fn assert_producer_shape(id: &str, job: &Job) {
         save_condition.contains(PROBE_MISS),
         "{id} save is not gated on a probe miss"
     );
-    let installs: Vec<&Step> = job
-        .steps
+    assert_producer_installs(id, job, restores[0], saves[0]);
+}
+
+fn install_positions(job: &Job) -> Vec<usize> {
+    job.steps
         .iter()
-        .filter(|step| {
+        .enumerate()
+        .filter(|(_, step)| {
             matches!(
                 step.role,
                 Some(
@@ -103,20 +108,42 @@ fn assert_producer_shape(id: &str, job: &Job) {
                 )
             )
         })
-        .collect();
+        .map(|(index, _)| index)
+        .collect()
+}
+
+fn assert_producer_installs(id: &str, job: &Job, probe: usize, save: usize) {
+    let scrubs = positions(job, StepRole::ToolsCacheScrub);
+    assert_eq!(scrubs.len(), 1, "{id}");
+    assert!(probe < scrubs[0], "{id} scrubs before its probe");
+    let installs = install_positions(job);
     assert!(
         installs
             .iter()
-            .any(|step| step.role == Some(StepRole::PreparePinnedTools)),
+            .any(|at| job.steps[*at].role == Some(StepRole::PreparePinnedTools)),
         "{id} installs nothing"
     );
-    for step in installs {
-        let condition = step.condition.as_deref().unwrap_or_default();
+    for at in installs.iter().chain(&scrubs) {
+        let step = &job.steps[*at];
         assert!(
-            condition.contains(PROBE_MISS),
+            step.condition
+                .as_deref()
+                .unwrap_or_default()
+                .contains(PROBE_MISS),
             "{id} runs {} on a probe hit",
             step.name
         );
+        assert!(
+            scrubs[0] <= *at && *at < save,
+            "{id} misplaces {}",
+            step.name
+        );
+    }
+    assert_eq!(save + 1, job.steps.len(), "{id} has steps after its save");
+    for step in &job.steps {
+        let verifies_restore =
+            matches!(&step.kind, StepKind::Action { uses, .. } if uses == RUST_VERIFIER_USES[0]);
+        assert!(!verifies_restore, "{id} verifies a restore it never made");
     }
 }
 
@@ -185,97 +212,19 @@ fn required_plan_and_crate_jobs_never_need_a_producer() -> Result<(), Box<dyn Er
     Ok(())
 }
 
-type Mutation = (&'static str, fn(&mut Job, &Donors));
-
-struct Donors {
-    task: Step,
-    upload: Step,
-    check: Step,
-    permissions: Permissions,
-}
-
-fn mutations() -> Vec<Mutation> {
-    vec![
-        ("needs_plan", |job, _| {
-            job.needs.push("plan".to_owned());
-        }),
-        ("task_execution_step", |job, donors| {
-            job.steps.push(donors.task.clone());
-        }),
-        ("upload_step", |job, donors| {
-            job.steps.push(donors.upload.clone());
-        }),
-        ("check_job_role_step", |job, donors| {
-            job.steps.push(donors.check.clone());
-        }),
-        ("contents_write", |job, donors| {
-            job.permissions = Some(donors.permissions.clone());
-        }),
-        ("environment", |job, _| {
-            job.environment = Some("production".to_owned());
-        }),
-        ("dropped_ref_protected", |job, _| {
-            job.condition = job
-                .condition
-                .as_ref()
-                .map(|condition| condition.replace(" && github.ref_protected == true", ""));
-        }),
-    ]
-}
-
-fn find_step(jobs: &BTreeMap<String, Job>, wanted: impl Fn(&Step) -> bool) -> Option<Step> {
-    jobs.values()
-        .flat_map(|job| &job.steps)
-        .find(|step| wanted(step))
-        .cloned()
-}
-
 #[test]
-fn producer_validation_rejects_each_mutation() -> Result<(), Box<dyn Error>> {
-    let (ir, jobs) = finalized(WorkflowPolicy::VelnorRepositoryV1)?;
-    let donors = Donors {
-        task: find_step(&jobs, |step| {
-            matches!(step.kind, StepKind::TaskExecution { .. })
-        })
-        .ok_or("no task step")?,
-        upload: find_step(&jobs, is_upload).ok_or("no upload step")?,
-        check: find_step(&jobs, |step| step.role == Some(StepRole::CargoDeny))
-            .ok_or("no check step")?,
-        permissions: Permissions {
-            contents: PermissionLevel::Write,
-            ..Permissions::default()
-        },
-    };
-    let producer_id = jobs
-        .iter()
-        .find(|(_, job)| is_tools_producer(job))
-        .map(|(id, _)| id.clone())
-        .ok_or("no producer")?;
-    let validate = |jobs: &BTreeMap<String, Job>| {
-        let mut candidate = ir.clone();
-        candidate.jobs.clone_from(jobs);
-        candidate.validate()
-    };
-    validate(&jobs).map_err(|error| format!("unmutated producer rejected: {error}"))?;
-    let mut accepted = Vec::new();
-    for (name, mutate) in mutations() {
-        let mut mutated = jobs.clone();
-        mutate(
-            mutated.get_mut(&producer_id).ok_or("producer vanished")?,
-            &donors,
+fn staged_tree_renders_producers_for_both_policies() -> Result<(), Box<dyn Error>> {
+    for policy in POLICIES {
+        let repo = owner_feature_repo(policy, false, "default", "default")?;
+        let prepared = prepare(repo.path())?;
+        let tree = render_staged_tree(&prepared)?;
+        let workflow = tree
+            .get(velnor_actions_workflow_renderer::render::WORKFLOW_PATH)
+            .ok_or("rendered workflow is missing")?;
+        assert!(
+            workflow.contains("  tools-producer-"),
+            "{policy:?}: no producer job rendered"
         );
-        match validate(&mutated) {
-            Ok(()) => accepted.push(name),
-            Err(error) => assert!(
-                error.to_string().contains("mixed_or_invalid_producer"),
-                "{name}: rejected for another reason: {error}"
-            ),
-        }
     }
-    assert_eq!(
-        accepted,
-        Vec::<&str>::new(),
-        "mutations accepted by the producer validator"
-    );
     Ok(())
 }

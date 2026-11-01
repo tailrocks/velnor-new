@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::crate_job::TOOLS_PRODUCER_JOB_ID_PREFIX;
-use super::step_identity::ToolsRestoreForm;
-use super::{Job, PermissionLevel, Permissions, StepRole};
+use super::step_identity::{RUST_VERIFIER_USES, ToolsRestoreForm};
+use super::{Job, PermissionLevel, Permissions, Step, StepKind, StepRole};
 use crate::ContractError;
 
 pub const DEPENDENCY_SEED_JOB_CONDITION: &str = "github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true";
@@ -105,9 +105,62 @@ impl ProducerKind {
                     && count(StepRole::MiseSetup) == 1
                     && count(StepRole::ToolsCacheIdentity) == 1
                     && count(StepRole::ToolsCacheRestore) == 1
+                    && count(StepRole::ToolsCacheScrub) == 1
                     && count(StepRole::ToolsCacheSave) == 1
+                    && count(StepRole::PreparePinnedTools) >= 1
+                    && tools_order_ok(&job.steps)
             }
         }
+    }
+}
+
+fn tools_order_ok(steps: &[Step]) -> bool {
+    let at = |role| steps.iter().position(|step| step.role == Some(role));
+    let (Some(checkout), Some(mise), Some(identity), Some(probe), Some(scrub), Some(save)) = (
+        at(StepRole::Checkout),
+        at(StepRole::MiseSetup),
+        at(StepRole::ToolsCacheIdentity),
+        at(StepRole::ToolsCacheRestore),
+        at(StepRole::ToolsCacheScrub),
+        at(StepRole::ToolsCacheSave),
+    ) else {
+        return false;
+    };
+    checkout < mise
+        && mise < identity
+        && identity < probe
+        && probe < scrub
+        && save + 1 == steps.len()
+        && steps.iter().enumerate().all(|(index, step)| {
+            if step.role == Some(StepRole::ToolsCacheScrub) || is_install_role(step.role) {
+                index >= scrub
+                    && index < save
+                    && step.condition.as_deref() == Some(TOOLS_PRODUCER_INSTALL_CONDITION)
+                    && installed_verifier_only(step)
+            } else {
+                true
+            }
+        })
+}
+
+fn is_install_role(role: Option<StepRole>) -> bool {
+    matches!(
+        role,
+        Some(
+            StepRole::PreparePinnedTools
+                | StepRole::PrepareRustComponents
+                | StepRole::VerifyRustManifest
+                | StepRole::VerifyJactionlint
+        )
+    )
+}
+
+fn installed_verifier_only(step: &Step) -> bool {
+    match (&step.role, &step.kind) {
+        (Some(StepRole::VerifyRustManifest), StepKind::Action { uses, .. }) => {
+            uses == RUST_VERIFIER_USES[1]
+        }
+        _ => true,
     }
 }
 
@@ -118,6 +171,7 @@ fn tools_role(role: StepRole) -> bool {
             | StepRole::MiseSetup
             | StepRole::ToolsCacheIdentity
             | StepRole::ToolsCacheRestore
+            | StepRole::ToolsCacheScrub
             | StepRole::PreparePinnedTools
             | StepRole::PrepareRustComponents
             | StepRole::VerifyRustManifest

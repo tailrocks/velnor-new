@@ -41,6 +41,11 @@ pub(super) fn render_workflow_for_slug(
         }
     }
     finalize_suite_workflow_jobs(&mut jobs, spec)?;
+    allow_failure_jobs.extend(
+        jobs.iter()
+            .filter(|(_, job)| job.producer_kind().is_some())
+            .map(|(id, _)| id.clone()),
+    );
     let suite_matrices = matrix::suites::suite_matrices_of(&jobs)?;
     let scrubbed = if suite_matrices.is_empty() {
         jobs
@@ -62,16 +67,7 @@ pub(super) fn render_workflow_for_slug(
             )?,
         ));
     }
-    let cancel_in_progress = entries
-        .iter()
-        .find_map(|suite| suite.cancel_in_progress)
-        .unwrap_or(false);
-    let cancel_yaml =
-        if cancel_in_progress && entries.iter().any(|suite| suite.has_schedule_trigger()) {
-            Yaml::str("${{ github.event_name != 'schedule' }}")
-        } else {
-            Yaml::Bool(cancel_in_progress)
-        };
+    let cancel_yaml = cancel_in_progress_yaml(entries);
     let top = vec![
         ("name".to_owned(), Yaml::str(workflow_display_name(slug))),
         (
@@ -132,10 +128,23 @@ fn finalize_suite_workflow_jobs(
         crate::cache_p08::check_mbx_before_fetch(id, job)?;
     }
     crate::cache_p08::elect_cache_writers_with_policy(jobs, spec.pull_request_cache_policy)?;
+    crate::tools_producer::add_tools_producers(jobs, spec.pull_request_cache_policy)?;
     crate::cache_steps::append_bundle_postludes(jobs)?;
     crate::steps_internal::group_ledger_steps::append_emit_ledger_steps(jobs);
     crate::cache_steps::append_workspace_cleanups(jobs)?;
     crate::cache_doctor::check(jobs)
+}
+
+fn cancel_in_progress_yaml(entries: &[&RustSuiteConfig]) -> Yaml {
+    let cancel_in_progress = entries
+        .iter()
+        .find_map(|suite| suite.cancel_in_progress)
+        .unwrap_or(false);
+    if cancel_in_progress && entries.iter().any(|suite| suite.has_schedule_trigger()) {
+        Yaml::str("${{ github.event_name != 'schedule' }}")
+    } else {
+        Yaml::Bool(cancel_in_progress)
+    }
 }
 
 fn workflow_display_name(slug: &str) -> String {

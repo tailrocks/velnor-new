@@ -7,23 +7,24 @@ use velnor_actions_contract::workflow::crate_job::TOOLS_PRODUCER_JOB_ID_PREFIX;
 use velnor_actions_contract::workflow::{
     DEPENDENCY_SEED_JOB_CONDITION, TOOLS_PRODUCER_INSTALL_CONDITION,
 };
-use velnor_actions_contract::{Job, PullRequestCachePolicy, Step, StepRole};
+use velnor_actions_contract::workflow::{JACTIONLINT_VERIFIER_USES, RUST_VERIFIER_USES};
+use velnor_actions_contract::{Job, PullRequestCachePolicy, Step, StepKind, StepRole};
 
 use crate::RenderError;
+use crate::native_verifiers::{
+    VERIFY_JACTIONLINT_STEP, VERIFY_RESTORED_RUST_STEP, verify_jactionlint_step,
+    verify_rust_manifest_step,
+};
 use crate::tools_identity::{ToolsDigest, tools_digest};
 
 const PRODUCER_DISPLAY_PREFIX: &str = "Tools producer / ";
 const PREPARE_STEP_NAME: &str = "Prepare pinned tools";
+const RUST_SPEC_PREFIX: &str = "rust@";
 
 struct ToolsProducerPlan {
     id: String,
     donor: String,
     digest: ToolsDigest,
-}
-
-enum ToolsInstall {
-    DonorSteps,
-    Specs(Vec<String>),
 }
 
 pub(crate) fn add_tools_producers(
@@ -89,6 +90,9 @@ fn build(
     steps.push(crate::cache_steps::tools_cache_probe_step(
         crate::cache_p08::TOOLS_CACHE_KEY_EXPRESSION,
     )?);
+    steps.push(gated(crate::cache_steps::tools_cache_scrub_step(
+        &donor_mise_sha256(donor, &plan.id)?,
+    )?));
     steps.extend(install_steps(donor, &plan.id)?);
     steps.push(crate::cache_steps::tools_cache_save_step(
         crate::cache_p08::TOOLS_CACHE_KEY_EXPRESSION,
@@ -118,24 +122,49 @@ fn donor_step<'a>(donor: &'a Job, role: StepRole, id: &str) -> Result<&'a Step, 
         .ok_or_else(|| invalid(&format!("donor_step_missing:{id}:{role:?}")))
 }
 
-fn install_steps(donor: &Job, id: &str) -> Result<Vec<Step>, RenderError> {
-    let install = if donor
-        .steps
-        .iter()
-        .any(|step| step.role == Some(StepRole::PreparePinnedTools))
-    {
-        ToolsInstall::DonorSteps
-    } else {
-        ToolsInstall::Specs(crate::cache_p08::infer_job_tools(donor))
-    };
-    let mut steps = match install {
-        ToolsInstall::DonorSteps => donor
-            .steps
-            .iter()
-            .filter(|step| is_install_role(step.role))
+fn donor_mise_sha256(donor: &Job, id: &str) -> Result<String, RenderError> {
+    match &donor_step(donor, StepRole::ToolsCacheRestore, id)?.kind {
+        StepKind::Action { with, .. } => with
+            .get(crate::cache_steps::TOOLS_MISE_SHA256_INPUT)
             .cloned()
-            .collect(),
-        ToolsInstall::Specs(specs) => vec![specs_step(&specs, id)?],
+            .ok_or_else(|| invalid(&format!("donor_mise_sha256_missing:{id}"))),
+        _ => Err(invalid(&format!("donor_mise_sha256_missing:{id}"))),
+    }
+}
+
+fn gated(mut step: Step) -> Step {
+    step.condition = Some(TOOLS_PRODUCER_INSTALL_CONDITION.to_owned());
+    step
+}
+
+fn install_steps(donor: &Job, id: &str) -> Result<Vec<Step>, RenderError> {
+    let mut role_steps = Vec::new();
+    for step in donor.steps.iter().filter(|step| is_install_role(step.role)) {
+        if let Some(step) = producer_form(step, id)? {
+            role_steps.push(step);
+        }
+    }
+    let digest_specs = crate::cache_p08::infer_job_tools(donor);
+    let has_role = |role| role_steps.iter().any(|step| step.role == Some(role));
+    let mut steps = if has_role(StepRole::PreparePinnedTools) {
+        let donor_role_steps = donor.steps.iter().filter(|step| is_install_role(step.role));
+        if crate::cache_p08::infer_steps_tools(donor_role_steps) != digest_specs {
+            return Err(invalid(&format!("donor_inline_install:{id}")));
+        }
+        role_steps
+    } else {
+        if has_role(StepRole::PrepareRustComponents) {
+            return Err(invalid(&format!("donor_components_without_prepare:{id}")));
+        }
+        let rust = digest_specs
+            .iter()
+            .any(|spec| spec.starts_with(RUST_SPEC_PREFIX));
+        if rust && !has_role(StepRole::VerifyRustManifest) {
+            return Err(invalid(&format!("donor_rust_without_verifier:{id}")));
+        }
+        let mut steps = vec![specs_step(&digest_specs, id)?];
+        steps.extend(role_steps);
+        steps
     };
     for step in &mut steps {
         if step.condition.is_some() {
@@ -144,6 +173,34 @@ fn install_steps(donor: &Job, id: &str) -> Result<Vec<Step>, RenderError> {
         step.condition = Some(TOOLS_PRODUCER_INSTALL_CONDITION.to_owned());
     }
     Ok(steps)
+}
+
+fn producer_form(step: &Step, id: &str) -> Result<Option<Step>, RenderError> {
+    let action =
+        |uses: &str| matches!(&step.kind, StepKind::Action { uses: have, .. } if have == uses);
+    match step.role {
+        Some(StepRole::VerifyRustManifest) => {
+            if action(RUST_VERIFIER_USES[0]) || step.name == VERIFY_RESTORED_RUST_STEP {
+                Ok(None)
+            } else if action(RUST_VERIFIER_USES[1]) {
+                Ok(Some(step.clone()))
+            } else if step.name == crate::VERIFY_RUST_TOOLCHAIN_STEP {
+                Ok(Some(verify_rust_manifest_step()))
+            } else {
+                Err(invalid(&format!("donor_unknown_verifier:{id}")))
+            }
+        }
+        Some(StepRole::VerifyJactionlint) => {
+            if action(JACTIONLINT_VERIFIER_USES) {
+                Ok(Some(step.clone()))
+            } else if step.name == VERIFY_JACTIONLINT_STEP {
+                Ok(Some(verify_jactionlint_step()))
+            } else {
+                Err(invalid(&format!("donor_unknown_verifier:{id}")))
+            }
+        }
+        _ => Ok(Some(step.clone())),
+    }
 }
 
 fn is_install_role(role: Option<StepRole>) -> bool {

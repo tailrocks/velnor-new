@@ -118,25 +118,11 @@ fn restore_step() -> Result<Yaml, RenderError> {
     ]))
 }
 
-fn admission_step() -> Yaml {
-    let env = [
-        ("TOOLS_CACHE_HIT", "steps.restore.outputs.cache-hit"),
-        ("TOOLS_EXPECTED_KEY", "inputs.key"),
-        (
-            "TOOLS_MATCHED_KEY",
-            "steps.restore.outputs.cache-matched-key",
-        ),
-        ("TOOLS_SEED_ADMITTED", "inputs.seed-admitted"),
-        ("TOOLS_MISE_SHA256", "inputs.mise-sha256"),
-    ]
-    .into_iter()
-    .map(|(key, value)| {
-        let mut expression = String::from("${{ ");
-        expression.push_str(value);
-        expression.push_str(" }}");
-        (key.to_owned(), Yaml::str(expression))
-    })
-    .collect();
+fn expression(value: &str) -> Yaml {
+    Yaml::str(format!("${{{{ {value} }}}}"))
+}
+
+fn admission_step(env: Vec<(String, Yaml)>) -> Yaml {
     Yaml::Map(vec![
         (
             "name".to_owned(),
@@ -145,6 +131,37 @@ fn admission_step() -> Yaml {
         ("shell".to_owned(), Yaml::str(crate::VERIFY_SHELL)),
         ("env".to_owned(), Yaml::Map(env)),
         ("run".to_owned(), Yaml::str(TOOLS_CACHE_ADMISSION_SCRIPT)),
+    ])
+}
+
+fn restore_admission_step() -> Yaml {
+    admission_step(
+        [
+            ("TOOLS_CACHE_HIT", "steps.restore.outputs.cache-hit"),
+            ("TOOLS_EXPECTED_KEY", "inputs.key"),
+            (
+                "TOOLS_MATCHED_KEY",
+                "steps.restore.outputs.cache-matched-key",
+            ),
+            ("TOOLS_SEED_ADMITTED", "inputs.seed-admitted"),
+            ("TOOLS_MISE_SHA256", "inputs.mise-sha256"),
+        ]
+        .into_iter()
+        .map(|(key, value)| (key.to_owned(), expression(value)))
+        .collect(),
+    )
+}
+
+fn scrub_admission_step() -> Yaml {
+    admission_step(vec![
+        ("TOOLS_CACHE_HIT".to_owned(), Yaml::quoted("false")),
+        ("TOOLS_EXPECTED_KEY".to_owned(), Yaml::quoted("")),
+        ("TOOLS_MATCHED_KEY".to_owned(), Yaml::quoted("")),
+        ("TOOLS_SEED_ADMITTED".to_owned(), Yaml::quoted("false")),
+        (
+            "TOOLS_MISE_SHA256".to_owned(),
+            expression("inputs.mise-sha256"),
+        ),
     ])
 }
 
@@ -278,7 +295,7 @@ fn action_body(tool_pins: &[String]) -> Result<Yaml, RenderError> {
                     "steps".to_owned(),
                     Yaml::Seq(vec![
                         restore_step()?,
-                        admission_step(),
+                        restore_admission_step(),
                         installs_verify_step(tool_pins)?,
                     ]),
                 ),
@@ -303,6 +320,53 @@ pub(crate) fn action_file(
     let action_directory = super::TOOLS_RESTORE_USES
         .strip_prefix("./")
         .ok_or_else(|| RenderError::InvalidWorkflow("tools_restore_action_path".to_owned()))?;
+    Ok(RenderedFile {
+        path: format!("{action_directory}/action.yml"),
+        bytes,
+    })
+}
+
+fn scrub_action_body() -> Yaml {
+    Yaml::Map(vec![
+        (
+            "name".to_owned(),
+            Yaml::str("Velnor Mise tools cache scrub"),
+        ),
+        (
+            "description".to_owned(),
+            Yaml::str(
+                "Scrub the Mise tools paths to the verified Setup Mise install before a producer installs and saves.",
+            ),
+        ),
+        (
+            "inputs".to_owned(),
+            Yaml::Map(vec![(
+                super::TOOLS_MISE_SHA256_INPUT.to_owned(),
+                Yaml::Map(vec![
+                    (
+                        "description".to_owned(),
+                        Yaml::str("Pinned SHA-256 of the Setup Mise binary."),
+                    ),
+                    ("required".to_owned(), Yaml::Bool(true)),
+                ]),
+            )]),
+        ),
+        (
+            "runs".to_owned(),
+            Yaml::Map(vec![
+                ("using".to_owned(), Yaml::str("composite")),
+                ("steps".to_owned(), Yaml::Seq(vec![scrub_admission_step()])),
+            ]),
+        ),
+    ])
+}
+
+pub(crate) fn scrub_action_file(version: &str) -> Result<RenderedFile, RenderError> {
+    let bytes = marker::with_marker(version, &crate::yaml::render_yaml(&scrub_action_body()))?;
+    steps::scan_for_private_subcommands(&bytes)?;
+    let action_directory = super::TOOLS_SCRUB_USES
+        .strip_prefix("./")
+        .ok_or_else(|| RenderError::InvalidWorkflow("tools_scrub_action_path".to_owned()))?;
     Ok(RenderedFile {
         path: format!("{action_directory}/action.yml"),
         bytes,

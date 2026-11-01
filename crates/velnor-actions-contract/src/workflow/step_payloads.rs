@@ -3,8 +3,9 @@
 
 use super::step::StepKind;
 use super::step_identity::{
-    TOOL_SEED_USES, TOOLS_CACHE_IDENTITY_DIGEST_INPUT, TOOLS_CACHE_PRELUDE_USES,
-    TOOLS_CACHE_RESTORE_USES,
+    TOOL_SEED_USES, TOOLS_CACHE_IDENTITY_DIGEST_INPUT, TOOLS_CACHE_PATHS, TOOLS_CACHE_PRELUDE_USES,
+    TOOLS_CACHE_RESTORE_ACTION_USES, TOOLS_CACHE_RESTORE_USES, TOOLS_CACHE_SCRUB_USES,
+    TOOLS_CACHE_V2_KEY_EXPRESSION,
 };
 
 pub const TOOLS_RESTORE_LOOKUP_ONLY_INPUT: &str = "lookup-only";
@@ -18,12 +19,16 @@ pub enum ToolsRestoreForm {
 impl ToolsRestoreForm {
     #[must_use]
     pub fn of(kind: &StepKind) -> Option<Self> {
-        let StepKind::Action { uses, with, .. } = kind else {
+        let StepKind::Action { uses, with, env } = kind else {
             return None;
         };
         if uses == TOOLS_CACHE_RESTORE_USES {
             Some(Self::Composite)
-        } else if uses.starts_with("actions/cache/restore@")
+        } else if uses == TOOLS_CACHE_RESTORE_ACTION_USES
+            && env.is_empty()
+            && with.len() == 3
+            && with.get("key").map(String::as_str) == Some(TOOLS_CACHE_V2_KEY_EXPRESSION)
+            && with.get("path") == Some(&TOOLS_CACHE_PATHS.join("\n"))
             && with
                 .get(TOOLS_RESTORE_LOOKUP_ONLY_INPUT)
                 .is_some_and(|value| value == "true")
@@ -33,6 +38,16 @@ impl ToolsRestoreForm {
             None
         }
     }
+}
+
+pub(super) fn valid_tools_cache_scrub(kind: &StepKind) -> bool {
+    matches!(kind, StepKind::Action { uses, with, env }
+        if uses == TOOLS_CACHE_SCRUB_USES
+            && with.len() == 1
+            && with
+                .get("mise-sha256")
+                .is_some_and(|sha| crate::ids::is_lower_hex_len(sha, 64))
+            && env.is_empty())
 }
 
 pub(super) fn valid_mise_setup(kind: &StepKind) -> bool {
