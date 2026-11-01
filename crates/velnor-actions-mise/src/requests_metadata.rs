@@ -54,6 +54,7 @@ impl MetadataDiscovery {
     pub fn command(&self, catalog: &ToolCatalog) -> Result<IsolatedCommand, MiseError> {
         let specs = catalog.tool_specs(&[PinnedTool::Rust]);
         IsolatedCommand::mise_exec(&specs, &self.cargo_argv())
+            .map(|command| in_workspace(command, &self.manifest))
     }
 
     pub fn command_with_operator_guard(
@@ -67,6 +68,7 @@ impl MetadataDiscovery {
             &specs,
             &mbx_metadata_argv(&self.cargo_argv()),
         )
+        .map(|command| in_workspace(command, &self.manifest))
     }
 
     pub fn run(&self, catalog: &ToolCatalog) -> Result<String, MiseError> {
@@ -128,6 +130,7 @@ impl MetadataQualification {
     pub fn command(&self, catalog: &ToolCatalog) -> Result<IsolatedCommand, MiseError> {
         let specs = catalog.tool_specs(&[PinnedTool::Rust]);
         IsolatedCommand::mise_exec(&specs, &self.cargo_argv())
+            .map(|command| in_workspace(command, &self.workspace_manifest))
     }
 
     pub fn command_with_operator_guard(
@@ -141,6 +144,7 @@ impl MetadataQualification {
             &specs,
             &mbx_metadata_argv(&self.cargo_argv()),
         )
+        .map(|command| in_workspace(command, &self.workspace_manifest))
     }
 
     pub fn run(&self, catalog: &ToolCatalog) -> Result<String, MiseError> {
@@ -156,6 +160,13 @@ impl MetadataQualification {
     ) -> Result<String, MiseError> {
         let command = self.command_with_operator_guard(catalog, guard)?;
         run_guarded(&command)
+    }
+}
+
+fn in_workspace(command: IsolatedCommand, manifest: &Path) -> IsolatedCommand {
+    match manifest.parent().filter(|dir| !dir.as_os_str().is_empty()) {
+        Some(dir) => command.with_cwd(dir.to_path_buf()),
+        None => command,
     }
 }
 

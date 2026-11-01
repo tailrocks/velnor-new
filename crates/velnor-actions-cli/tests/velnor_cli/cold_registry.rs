@@ -197,6 +197,32 @@ fn cold_registry_names_cargo_config_in_a_parent_inside_the_repo() -> Result<(), 
 }
 
 #[test]
+fn cold_registry_metadata_runs_in_the_workspace_not_the_caller_directory()
+-> Result<(), Box<dyn Error>> {
+    let fixture = fixture::Fixture::with_workspace_dir("tools/probe")?;
+    let caller = fixture.repo.join("other");
+    fs::create_dir_all(caller.join(".cargo"))?;
+    fs::write(caller.join(".cargo/config.toml"), "[net]\n")?;
+    fixture.fail_qualification(cargo_1_99_1::COLD_HTTP_REQUEST)?;
+    let output = fixture.root.join("generated");
+    let generated = fixture.generate_unguarded_from(&caller, &output)?;
+    let text = fixture::stderr(&generated);
+    assert_eq!(generated.status.code(), Some(1), "{text}");
+    assert!(
+        text.contains(&format!(
+            "run `cd '{}' && cargo fetch --locked --manifest-path '{}'`",
+            fixture.workspace.display(),
+            fixture.workspace.join("Cargo.toml").display()
+        )),
+        "{text}"
+    );
+    let cwds = fs::read_to_string(fixture.root.join("bin/metadata-cwd"))?;
+    let workspace = path_text(&fixture.workspace)?;
+    assert_eq!(cwds.lines().collect::<Vec<_>>(), [workspace.as_str(); 2]);
+    Ok(())
+}
+
+#[test]
 fn cold_registry_names_a_custom_path_toolchain_file_instead_of_a_command()
 -> Result<(), Box<dyn Error>> {
     let fixture = fixture::Fixture::with_workspace_dir("tools/probe")?;

@@ -58,6 +58,7 @@ shift
 if [ "$1" = "@MBX_SPEC@" ]; then shift; fi
 [ "$1" = "--" ] || exit 95
 shift
+pwd >> "$(dirname "$0")/metadata-cwd"
 if [ "$1" = "cargo" ]; then
   shift
   [ "$1" = "metadata" ] || exit 96
