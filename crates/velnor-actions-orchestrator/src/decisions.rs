@@ -15,6 +15,7 @@ use velnor_actions_rust::SelectionBroadening;
 
 use crate::OrchestratorError;
 use crate::internal::internal_contract;
+use crate::workflow_task_jobs::stack_support::quote;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MetadataFailure {
@@ -34,6 +35,9 @@ const TRANSIENT_MARKERS: [&str; 8] = [
     "temporary failure",
 ];
 
+const OFFLINE_REFUSALS: [&str; 2] = ["--offline was specified", "you are in the offline mode"];
+const NO_MATCHING_PACKAGE: &str = "no matching package";
+const OFFLINE_NOTE: &str = "note: offline mode (via";
 const MAX_PROBLEM_CHARS: usize = 160;
 const TRANSIENT_LABEL: &str = "metadata_transient";
 const MALFORMED_LABEL: &str = "metadata_failed";
@@ -42,10 +46,7 @@ const CAUSE_HEADER: &str = "Caused by:";
 
 #[must_use]
 pub fn classify_metadata_failure(stderr: &str) -> MetadataFailure {
-    let lower = stderr.to_lowercase();
-    if lower.contains("--offline was specified")
-        || (lower.contains("no matching package") && lower.contains("--offline"))
-    {
+    if is_offline_miss(stderr) {
         MetadataFailure::OfflineMiss
     } else if cause_lines(stderr)
         .any(|line| TRANSIENT_MARKERS.iter().any(|mark| line.contains(mark)))
@@ -54,6 +55,16 @@ pub fn classify_metadata_failure(stderr: &str) -> MetadataFailure {
     } else {
         MetadataFailure::Malformed
     }
+}
+
+fn is_offline_miss(stderr: &str) -> bool {
+    let causes: Vec<String> = cause_lines(stderr).collect();
+    let cause_has = |needle: &str| causes.iter().any(|line| line.contains(needle));
+    OFFLINE_REFUSALS.iter().any(|mark| cause_has(mark))
+        || (cause_has(NO_MATCHING_PACKAGE)
+            && stderr
+                .lines()
+                .any(|line| line.trim_start().to_lowercase().starts_with(OFFLINE_NOTE)))
 }
 
 fn cause_lines(stderr: &str) -> impl Iterator<Item = String> + '_ {
@@ -91,9 +102,22 @@ pub(crate) fn transient_problem(stderr: &str) -> String {
     metadata_problem(TRANSIENT_LABEL, stderr)
 }
 
-pub(crate) fn metadata_failure_error(manifest: String, stderr: &str) -> OrchestratorError {
+pub(crate) fn metadata_failure_error(
+    manifest: String,
+    manifest_path: &Path,
+    stderr: &str,
+) -> OrchestratorError {
     let label = match classify_metadata_failure(stderr) {
-        MetadataFailure::OfflineMiss => return OrchestratorError::ColdRegistry { manifest },
+        MetadataFailure::OfflineMiss => {
+            let warm_command = format!(
+                "cargo fetch --locked --manifest-path {}",
+                quote(&manifest_path.to_string_lossy())
+            );
+            return OrchestratorError::ColdRegistry {
+                manifest,
+                warm_command,
+            };
+        }
         MetadataFailure::Transient => TRANSIENT_LABEL,
         MetadataFailure::Malformed => MALFORMED_LABEL,
     };

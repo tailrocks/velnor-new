@@ -31,9 +31,12 @@ pub enum OrchestratorError {
     #[error("{problem}")]
     ToolchainGuard { problem: String },
     #[error(
-        "cold_registry: {manifest}: dependency not in the local registry; run `cargo fetch --locked --manifest-path {manifest}` (or the dependency does not exist)"
+        "cold_registry: {manifest}: dependency not in the local registry; run `{warm_command}` (or the dependency does not exist)"
     )]
-    ColdRegistry { manifest: String },
+    ColdRegistry {
+        manifest: String,
+        warm_command: String,
+    },
     #[error("preparation_incomplete: {manifest}: {problem}")]
     PreparationIncomplete { manifest: String, problem: String },
     #[error("profile: {problem}")]

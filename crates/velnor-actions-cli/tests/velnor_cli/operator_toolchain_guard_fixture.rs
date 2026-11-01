@@ -23,9 +23,13 @@ pub(super) struct Fixture {
 
 impl Fixture {
     pub(super) fn new() -> Result<Self, Box<dyn Error>> {
+        Self::with_repo_dir("repo")
+    }
+
+    pub(super) fn with_repo_dir(repo_dir: &str) -> Result<Self, Box<dyn Error>> {
         let temp = tempfile::tempdir()?;
         let root = temp.path().canonicalize()?;
-        let repo = root.join("repo");
+        let repo = root.join(repo_dir);
         let guard = root.join("bin/guard");
         fs::create_dir_all(repo.join(".velnor"))?;
         fs::create_dir_all(root.join("bin"))?;
@@ -93,6 +97,15 @@ impl Fixture {
         args: &[&str],
         require_guard: bool,
     ) -> Result<Output, Box<dyn Error>> {
+        self.invoke_in(&self.repo, args, require_guard)
+    }
+
+    pub(super) fn invoke_in(
+        &self,
+        cwd: &Path,
+        args: &[&str],
+        require_guard: bool,
+    ) -> Result<Output, Box<dyn Error>> {
         let path = std::env::join_paths([
             self.root.join("bin"),
             PathBuf::from("/usr/bin"),
@@ -101,7 +114,7 @@ impl Fixture {
         let mut command = Command::new(env!("CARGO_BIN_EXE_velnor-actions"));
         command
             .args(args)
-            .current_dir(&self.repo)
+            .current_dir(cwd)
             .env_clear()
             .env("PATH", path)
             .env("HOME", self.root.join("home"))
@@ -121,6 +134,22 @@ impl Fixture {
             "--output-dir",
             output.to_str().ok_or("non-UTF-8 output path")?,
         ])
+    }
+
+    pub(super) fn generate_unguarded_from(
+        &self,
+        cwd: &Path,
+        output: &Path,
+    ) -> Result<Output, Box<dyn Error>> {
+        self.invoke_in(
+            cwd,
+            &[
+                "generate",
+                "--output-dir",
+                output.to_str().ok_or("non-UTF-8 output path")?,
+            ],
+            false,
+        )
     }
 
     pub(super) fn generate_with_guard_policy(
