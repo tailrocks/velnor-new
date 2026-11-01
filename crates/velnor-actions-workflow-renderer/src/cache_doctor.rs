@@ -11,7 +11,6 @@ use velnor_actions_contract::workflow::cache_family::{
 };
 use velnor_actions_contract::workflow::cache_family_mbx::{
     MBX_BUNDLE_KEY_EXPR, MBX_BUNDLE_RESTORE_KEYS_EXPR, MBX_BUNDLE_SAVE_CONDITION,
-    is_mbx_bundle_key_needs_expr, is_mbx_bundle_restore_keys_needs_expr,
 };
 use velnor_actions_contract::workflow::cache_family_steps::{
     STACK_FAMILIES, family_key_expr, family_save_condition,
@@ -106,7 +105,7 @@ fn family_for_key(key: &str) -> Option<Family> {
     if key == SOURCES_KEY_STEP_EXPR || key == SOURCES_KEY_PLAN_EXPR {
         return Some(Family::Runtime(CacheFamily::Sources));
     }
-    if key == MBX_BUNDLE_KEY_EXPR || is_mbx_bundle_key_needs_expr(key) {
+    if key == MBX_BUNDLE_KEY_EXPR {
         return Some(Family::Runtime(CacheFamily::MbxBundle));
     }
     if let Some(family) = STACK_FAMILIES
@@ -287,9 +286,7 @@ fn mbx_bundle_restore_keys_ok(step: &Step, save: bool) -> bool {
     } else {
         with.get("restore-keys")
             .map(String::as_str)
-            .is_some_and(|keys| {
-                keys == MBX_BUNDLE_RESTORE_KEYS_EXPR || is_mbx_bundle_restore_keys_needs_expr(keys)
-            })
+            .is_some_and(|keys| keys == MBX_BUNDLE_RESTORE_KEYS_EXPR)
     }
 }
 

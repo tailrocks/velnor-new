@@ -9,12 +9,10 @@ use std::{
     process::{Command, Output},
 };
 
-const EXPECTED_NEEDS: [&str; 9] = [
+const EXPECTED_NEEDS: [&str; 7] = [
     "plan",
-    "rust-sample-agent-status-read",
-    "rust-sample-agent-status-write",
-    "rust-sample-read",
-    "rust-sample-write",
+    "rust-sample",
+    "rust-sample-agent-status",
     "jactionlint",
     "alint",
     "cargo-deny",

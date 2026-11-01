@@ -8,6 +8,7 @@ use velnor_actions_contract::{
     FinalStatus, JobConclusion, JobDisposition, ObligationDecision, PlanJob,
 };
 
+use super::fail;
 use super::fixtures_ledger::{
     branch_plan, group_entry, group_ledger_value, group_obligation, push_plan,
 };
@@ -15,7 +16,6 @@ use super::fixtures_merge::{
     branch_typed, merge_with_event, passed, push_report_value, required_jobs,
 };
 use super::fixtures_platform::{digests, planned_platform, task_id};
-use super::scheduling::fail;
 use super::{GROUP_ID, GROUP_READER_ID, GROUP_WRITER_ID};
 
 pub(super) fn check_push_warm_cache_hit_passes() -> Result<(), Box<dyn Error>> {

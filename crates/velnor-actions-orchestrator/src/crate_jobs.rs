@@ -4,7 +4,7 @@
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::{
-    CrateJob, Job, JobTimeout, ProposedTask, Stack, Step, VelnorConfig, WorkflowPolicy,
+    CacheMode, CrateJob, Job, JobTimeout, ProposedTask, Stack, Step, VelnorConfig, WorkflowPolicy,
     crate_display_name, tofu_display_name,
 };
 use velnor_actions_mise::{TaskCacheMode, ToolCatalog};
@@ -25,11 +25,6 @@ pub(crate) mod dependency_seed;
 
 #[path = "crate_jobs_stage.rs"]
 mod stage;
-use stage::combined_branch_for;
-
-#[path = "crate_jobs_branches.rs"]
-mod branches;
-use branches::finalize_group_branches;
 
 #[path = "crate_jobs_gates.rs"]
 mod gates;
@@ -109,24 +104,22 @@ fn build_crate_jobs_with_seed_timeout(
     } = input;
     let grouped = group_runnable(&discovery.proposals)?;
     let owners = JobOwners::from_grouped(&discovery.proposals, &grouped);
-    let mut jobs = Vec::with_capacity(stage::branch_job_count(grouped.len()));
+    let mut jobs = Vec::with_capacity(grouped.len());
     let mut drivers = BTreeMap::new();
-    let mut tofu_branches = Vec::new();
+    let mut tofu_jobs = Vec::new();
     let mut seed_workspaces: BTreeMap<String, bool> = BTreeMap::new();
     for (key, tasks) in &grouped {
         let output = build_group_job(&input, &owners, key, tasks, private)?;
         if let Some(seed) = output.seed {
             *seed_workspaces.entry(seed.root).or_default() |= seed.nextest;
         }
-        drivers.insert(output.branch.reader.clone(), output.driver);
-        drivers.insert(output.branch.writer.clone(), output.driver);
+        drivers.insert(output.job_id.clone(), output.driver);
         if output.tofu {
-            tofu_branches.push(output.branch.clone());
+            tofu_jobs.push(output.job_id.clone());
         }
-        jobs.push((output.branch.reader.clone(), output.reader));
-        jobs.push((output.branch.writer.clone(), output.writer));
+        jobs.push((output.job_id, output.job));
     }
-    stage::stage_tofu_root_jobs(&mut jobs, &tofu_branches, max_parallel_jobs);
+    stage::stage_tofu_root_jobs(&mut jobs, &tofu_jobs, max_parallel_jobs);
     jobs.sort_by(|left, right| left.0.cmp(&right.0));
     let workspaces: Vec<_> = seed_workspaces
         .into_iter()
@@ -144,9 +137,8 @@ fn build_crate_jobs_with_seed_timeout(
 }
 
 struct GroupOutput {
-    branch: stage::CombinedBranch,
-    reader: Job,
-    writer: Job,
+    job_id: String,
+    job: Job,
     driver: RenderDriver,
     seed: Option<dependency_seed::SeedWorkspace>,
     tofu: bool,
@@ -189,8 +181,7 @@ fn build_group_job(
     let workspace_root =
         crate::source_prep::workspace_root_for_manifest(&model.manifest, input.fetch_roots);
     let plan = group_plan_for(&model, workspace_root, input.label, input.timeout)?;
-    let branch = combined_branch_for(&job_id).map_err(|error| contract_problem(&error))?;
-    let base = render_job(
+    let job = render_job(
         input,
         &model,
         use_rust,
@@ -201,7 +192,6 @@ fn build_group_job(
         plan.timeout_minutes,
         private,
     )?;
-    let (reader, writer) = finalize_group_branches(base, &branch)?;
     let driver = if use_mbx {
         RenderDriver::Mbx
     } else {
@@ -212,19 +202,12 @@ fn build_group_job(
         nextest: use_nextest,
     });
     Ok(GroupOutput {
-        branch,
-        reader,
-        writer,
+        job_id,
+        job,
         driver,
         seed,
         tofu: use_opentofu,
     })
-}
-
-fn contract_problem(error: &velnor_actions_contract::ContractError) -> OrchestratorError {
-    OrchestratorError::Contract {
-        problem: error.to_string(),
-    }
 }
 
 pub(crate) fn is_runnable(task: &ProposedTask) -> bool {
@@ -260,6 +243,33 @@ fn rust_source_steps(
         &scoped_roots,
         all_features,
     )?);
+    Ok(steps)
+}
+
+fn stack_cache_steps(
+    input: &CrateJobInputs<'_>,
+    model: &CrateJob,
+    use_mbx: bool,
+    use_opentofu: bool,
+) -> Result<Vec<Step>, OrchestratorError> {
+    let mut steps = Vec::new();
+    if use_opentofu {
+        let root = crate::tofu_cache::tofu_root_for_obligations(&model.obligations)?;
+        let roots = crate::tofu_cache::tofu_cache_roots(input.discovery)?;
+        steps.extend(crate::tofu_cache::provider_cache_step_for_tofu_root(
+            &root, &roots,
+        )?);
+    }
+    if use_mbx {
+        let root =
+            crate::source_prep::workspace_root_for_manifest(&model.manifest, input.fetch_roots);
+        let working_dir = (!root.is_empty()).then_some(root);
+        steps.extend(crate::mbx_preflight::steps_for_catalog(
+            input.catalog,
+            velnor_actions_workflow_renderer::steps::MbxTransport::SeedRead,
+            working_dir,
+        )?);
+    }
     Ok(steps)
 }
 
@@ -315,22 +325,7 @@ fn render_job(
         fetch_roots,
         use_rust,
     )?);
-    if use_opentofu {
-        let root = crate::tofu_cache::tofu_root_for_obligations(&model.obligations)?;
-        let roots = crate::tofu_cache::tofu_cache_roots(input.discovery)?;
-        steps.extend(crate::tofu_cache::provider_cache_step_for_tofu_root(
-            &root, &roots,
-        )?);
-    }
-    if use_mbx {
-        let root = crate::source_prep::workspace_root_for_manifest(&model.manifest, fetch_roots);
-        let working_dir = (!root.is_empty()).then_some(root);
-        steps.extend(crate::mbx_preflight::steps_for_catalog(
-            catalog,
-            velnor_actions_workflow_renderer::steps::MbxTransport::SeedRead,
-            working_dir,
-        )?);
-    }
+    steps.extend(stack_cache_steps(input, model, use_mbx, use_opentofu)?);
     if use_rust {
         steps.extend(rust_source_steps(input, model, needs_validators, private)?);
     }
@@ -357,6 +352,10 @@ fn render_job(
         permissions: None,
         environment: None,
         steps,
-        cache_mode: None,
+        cache_mode: Some(if use_opentofu {
+            CacheMode::push_write_expression()
+        } else {
+            CacheMode::explicit_read()
+        }),
     })
 }

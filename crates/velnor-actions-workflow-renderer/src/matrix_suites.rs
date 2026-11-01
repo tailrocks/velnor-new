@@ -20,18 +20,6 @@ pub(crate) struct SuiteMatrix {
     pub(crate) fail_fast: bool,
 }
 
-pub(crate) fn has_suite_matrix(job: &Job) -> bool {
-    job.steps.iter().any(|step| {
-        matches!(
-            &step.kind,
-            StepKind::Shell { env, .. }
-                if env.contains_key(SUITE_SHARDS_ENV)
-                    || env.contains_key(SUITE_MAX_PARALLEL_ENV)
-                    || env.contains_key(SUITE_FAIL_FAST_ENV)
-        )
-    })
-}
-
 pub(crate) fn suite_allow_failure_jobs_of(jobs: &BTreeMap<String, Job>) -> BTreeSet<String> {
     jobs.iter()
         .filter(|(_, job)| {

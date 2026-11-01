@@ -10,10 +10,9 @@ use velnor_actions_contract::ids::{
     matrix_id_for_task_group, matrix_key_for_id, task_id_for_internal,
 };
 use velnor_actions_contract::workflow::crate_job::{
-    CrateGroupPlan, CrateJob, CrateObligation, GROUP_READER_SUFFIX, GROUP_WRITER_SUFFIX,
-    MAX_GROUP_UNITS, SEED_JOB_ID_PREFIX, TOOLS_PRODUCER_JOB_ID_PREFIX, group_timeout_for,
-    is_seed_job_id, reader_job_id_for, task_digest_for_execution, validate_group_needs,
-    writer_job_id_for,
+    CrateGroupPlan, CrateJob, CrateObligation, MAX_GROUP_UNITS, SEED_JOB_ID_PREFIX,
+    TOOLS_PRODUCER_JOB_ID_PREFIX, group_timeout_for, is_seed_job_id, task_digest_for_execution,
+    validate_group_needs,
 };
 use velnor_actions_contract::workflow::jobs::crate_display_name;
 
@@ -103,17 +102,8 @@ fn check_same_units_and_commands() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn check_static_reader_writer() -> Result<(), Box<dyn Error>> {
+fn check_group_needs() -> Result<(), Box<dyn Error>> {
     let job = fixture_job()?;
-    let plan = fixture_plan(&job, JobTimeout::new(30)?)?;
-    if plan.reader_job_id() != format!("{}{GROUP_READER_SUFFIX}", job.job_id)
-        || plan.writer_job_id() != format!("{}{GROUP_WRITER_SUFFIX}", job.job_id)
-        || reader_job_id_for(&job.job_id) != plan.reader_job_id()
-        || writer_job_id_for(&job.job_id) != plan.writer_job_id()
-        || plan.reader_job_id() == plan.writer_job_id()
-    {
-        return Err(io::Error::other("static branch ids drifted").into());
-    }
     validate_group_needs(&["plan".to_owned(), job.job_id.clone()], &job.job_id)?;
     Ok(())
 }
@@ -137,7 +127,7 @@ fn check_grouped_deadlines() -> Result<(), Box<dyn Error>> {
 #[test]
 fn gc1_t08_preserves_contract() -> Result<(), Box<dyn Error>> {
     check_same_units_and_commands()?;
-    check_static_reader_writer()?;
+    check_group_needs()?;
     check_grouped_deadlines()?;
     if !is_seed_job_id(SEED_JOB_ID_PREFIX)
         || !is_seed_job_id("dependency-seed-workspace")

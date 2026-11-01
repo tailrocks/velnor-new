@@ -47,7 +47,6 @@ pub use crate::schema2::{
     MbxQualificationPins, MisePinQualificationPins, ProductReleasePins, Schema2WorkflowRequest,
     render_schema2_workflows,
 };
-pub use crate::steps_internal::group_ledger_steps::crate_group_ledger_step;
 pub use crate::setup::{MISE_ACTION_NAME, SETUP_MISE_NAME, mise_setup_step};
 pub use crate::steps::{
     ACQUIRE_NAME, ASSET_SHA_ENV, ASSET_URL_ENV, CRATE_REPORT_UPLOAD_NAME, CompileDriver,
@@ -61,6 +60,7 @@ pub use crate::steps::{
     mbx_steps_for_driver, merge_step, plan_step, scan_for_private_subcommands, shell_step,
     upload_suite_archive_step, upload_suite_artifact_step, validate_uses, write_request_step,
 };
+pub use crate::steps_internal::group_ledger_steps::crate_group_ledger_step;
 pub use crate::tofu_apply::{
     AWS_CREDENTIALS_STEP_ID, AWS_CREDENTIALS_USES, AWS_CREDENTIALS_VERSION,
     TOFU_APPLY_CONCURRENCY_GROUP, TOFU_APPLY_JOB_ID, TOFU_APPLY_TIMEOUT_MINUTES,

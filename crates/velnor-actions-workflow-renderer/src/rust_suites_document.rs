@@ -127,7 +127,7 @@ fn finalize_suite_workflow_jobs(
         crate::cache_p08::check_no_legacy_rust_cache(id, job)?;
         crate::cache_p08::check_mbx_before_fetch(id, job)?;
     }
-    crate::cache_p08::elect_cache_writers_with_policy(jobs, spec.pull_request_cache_policy)?;
+    crate::cache_p08::elect_cache_writers(jobs)?;
     crate::tools_producer::add_tools_producers(
         jobs,
         spec.pull_request_cache_policy,

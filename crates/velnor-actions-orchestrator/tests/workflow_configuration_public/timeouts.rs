@@ -105,20 +105,10 @@ fn assert_rendered_timeouts_are_independent(
     let reduced_plan_yaml = rendered_job_block(reduced_yaml, plan_id)?;
     let expanded_plan_timeout = "    timeout-minutes: 15\n";
     let reduced_plan_timeout = "    timeout-minutes: 5\n";
-    let expanded_cache_seconds = "VELNOR_CACHE_JOB_SECONDS: \"900\"";
-    let reduced_cache_seconds = "VELNOR_CACHE_JOB_SECONDS: \"300\"";
     assert_eq!(expanded_plan_yaml.matches(expanded_plan_timeout).count(), 1);
     assert_eq!(reduced_plan_yaml.matches(reduced_plan_timeout).count(), 1);
-    assert!(expanded_plan_yaml.contains(expanded_cache_seconds));
-    assert!(reduced_plan_yaml.contains(reduced_cache_seconds));
     assert_eq!(
-        expanded_plan_yaml.matches(expanded_cache_seconds).count(),
-        reduced_plan_yaml.matches(reduced_cache_seconds).count()
-    );
-    assert_eq!(
-        expanded_plan_yaml
-            .replacen(expanded_plan_timeout, reduced_plan_timeout, 1)
-            .replace(expanded_cache_seconds, reduced_cache_seconds),
+        expanded_plan_yaml.replacen(expanded_plan_timeout, reduced_plan_timeout, 1),
         reduced_plan_yaml
     );
     for job_id in expanded_plan

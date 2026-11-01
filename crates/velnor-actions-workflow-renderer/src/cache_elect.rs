@@ -3,10 +3,9 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::{CacheMode, Job, PullRequestCachePolicy, Step, StepKind, StepRole};
+use velnor_actions_contract::{CacheMode, Job, Step, StepKind, StepRole};
 
 use crate::RenderError;
-use crate::tools_identity::{ToolsDigest, tools_digest};
 
 /// Explicit-read (reader) branches must never be elected as cache writers.
 /// Their saves would be suppressed to `false` by `dispatch_cache_boundary`
@@ -21,144 +20,13 @@ fn is_cache_writer_eligible(jobs: &BTreeMap<String, Job>, id: &str) -> bool {
 }
 
 pub fn elect_cache_writers(jobs: &mut BTreeMap<String, Job>) -> Result<(), RenderError> {
-    elect_cache_writers_with_policy(jobs, PullRequestCachePolicy::ReadOnly)
-}
-
-pub fn elect_cache_writers_with_policy(
-    jobs: &mut BTreeMap<String, Job>,
-    policy: PullRequestCachePolicy,
-) -> Result<(), RenderError> {
-    let mut planned = Vec::new();
-    planned.extend(plan_tools_saves(jobs, policy)?);
-    planned.extend(plan_provider_saves(jobs)?);
-    for (id, save) in planned {
+    for (id, save) in plan_provider_saves(jobs)? {
         let Some(job) = jobs.get_mut(&id) else {
             return Err(RenderError::InvalidWorkflow(
                 "cache_writer_missing".to_owned(),
             ));
         };
         job.steps.push(save);
-    }
-    Ok(())
-}
-
-fn plan_tools_saves(
-    jobs: &BTreeMap<String, Job>,
-    policy: PullRequestCachePolicy,
-) -> Result<Vec<(String, Step)>, RenderError> {
-    let mut by_identity: BTreeMap<ToolsDigest, Vec<String>> = BTreeMap::new();
-    for (id, job) in jobs {
-        let identity = tools_digest(id, job)?;
-        if identity.is_none() && has_tools_save(job) {
-            return Err(RenderError::InvalidWorkflow(format!(
-                "tools_cache_save_orphan:{id}"
-            )));
-        }
-        if let Some(identity) = identity {
-            by_identity.entry(identity).or_default().push(id.clone());
-        }
-    }
-    let mut elected = BTreeMap::new();
-    for (digest, owners) in &by_identity {
-        let trusted: Vec<&str> = owners
-            .iter()
-            .map(String::as_str)
-            .filter(|id| is_cache_writer_eligible(jobs, id))
-            .collect();
-        if trusted.is_empty() {
-            continue;
-        }
-        let winner = trusted
-            .iter()
-            .find(|id| **id == crate::render::PLAN_JOB_ID)
-            .or_else(|| {
-                trusted
-                    .iter()
-                    .filter(|id| {
-                        jobs.get(**id).is_some_and(|job| {
-                            !crate::matrix::suites::has_suite_matrix(job)
-                                && !crate::matrix::bun::has_bun_matrix(job)
-                                && !job.is_dependency_seed()
-                        })
-                    })
-                    .min()
-            })
-            .or_else(|| trusted.iter().min())
-            .copied()
-            .unwrap_or_default();
-        if elected.insert(winner.to_owned(), digest.clone()).is_some() {
-            return Err(RenderError::InvalidWorkflow(
-                "tools_cache_multiple_winner_keys".to_owned(),
-            ));
-        }
-    }
-    for (id, job) in jobs {
-        let saves = tools_save_steps(job);
-        if elected.contains_key(id) {
-            validate_existing_tools_save(job, policy)?;
-        } else if !saves.is_empty() {
-            let kind = if has_tools_restore(job) {
-                "tools_cache_save_not_elected"
-            } else {
-                "tools_cache_save_orphan"
-            };
-            return Err(RenderError::InvalidWorkflow(format!("{kind}:{id}")));
-        }
-    }
-    let mut planned = Vec::new();
-    for id in elected.into_keys() {
-        let Some(job) = jobs.get(&id) else {
-            return Err(RenderError::InvalidWorkflow(
-                "tools_cache_winner_missing".to_owned(),
-            ));
-        };
-        if tools_save_steps(job).is_empty() {
-            planned.push((id, expected_tools_save(policy)?));
-        }
-    }
-    Ok(planned)
-}
-
-fn has_tools_restore(job: &Job) -> bool {
-    job.steps
-        .iter()
-        .any(|step| step.role == Some(StepRole::ToolsCacheRestore))
-}
-
-fn has_tools_save(job: &Job) -> bool {
-    job.steps
-        .iter()
-        .any(|step| step.role == Some(StepRole::ToolsCacheSave))
-}
-
-fn tools_save_steps(job: &Job) -> Vec<&Step> {
-    job.steps
-        .iter()
-        .filter(|step| step.role == Some(StepRole::ToolsCacheSave))
-        .collect()
-}
-
-fn expected_tools_save(policy: PullRequestCachePolicy) -> Result<Step, RenderError> {
-    crate::steps::tools_cache_save_step(
-        crate::cache_p08::TOOLS_CACHE_KEY_EXPRESSION,
-        Some(crate::cache_p08::tools_cache_save_condition(policy)),
-    )
-}
-
-fn validate_existing_tools_save(
-    job: &Job,
-    policy: PullRequestCachePolicy,
-) -> Result<(), RenderError> {
-    let expected = expected_tools_save(policy)?;
-    let saves = tools_save_steps(job);
-    if saves.len() > 1
-        || saves
-            .first()
-            .is_some_and(|step| !crate::cache_p08::same_step_semantics(step, &expected))
-    {
-        return Err(RenderError::InvalidWorkflow(
-            "tools_cache_save_shape".to_owned(),
-        ));
     }
     Ok(())
 }

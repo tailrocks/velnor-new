@@ -209,39 +209,8 @@ impl CrateGroupPlan {
         for unit_id in &self.unit_ids {
             validate_task_id(unit_id)?;
         }
-        self.timeout_minutes.validate()?;
-        let reader = self.reader_job_id();
-        let writer = self.writer_job_id();
-        validate_job_id(&reader)?;
-        validate_job_id(&writer)?;
-        if reader == self.group_job_id || writer == self.group_job_id || reader == writer {
-            return Err(ContractError::identity(
-                "crate_group.branches",
-                "branch_collision",
-            ));
-        }
-        Ok(())
+        self.timeout_minutes.validate()
     }
-
-    #[must_use]
-    pub fn reader_job_id(&self) -> String {
-        reader_job_id_for(&self.group_job_id)
-    }
-
-    #[must_use]
-    pub fn writer_job_id(&self) -> String {
-        writer_job_id_for(&self.group_job_id)
-    }
-}
-
-#[must_use]
-pub fn reader_job_id_for(group_job_id: &str) -> String {
-    format!("{group_job_id}{GROUP_READER_SUFFIX}")
-}
-
-#[must_use]
-pub fn writer_job_id_for(group_job_id: &str) -> String {
-    format!("{group_job_id}{GROUP_WRITER_SUFFIX}")
 }
 
 #[must_use]

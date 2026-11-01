@@ -111,7 +111,7 @@ impl Fixture {
             .env("GITHUB_RUN_ID", RUN_ID.to_string())
             .env("GITHUB_RUN_ATTEMPT", RUN_ATTEMPT.to_string())
             .env("GITHUB_REPOSITORY", REPOSITORY)
-            .env("GITHUB_JOB", format!("{GROUP}-write"))
+            .env("GITHUB_JOB", GROUP)
             .env("GITHUB_WORKFLOW_SHA", workflow_sha)
             .env(
                 "GITHUB_WORKFLOW_REF",
