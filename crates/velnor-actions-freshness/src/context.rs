@@ -2,13 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::fs::File;
-use std::io::Read;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde_json::{Map, Value, json};
 use syn::{Item, Lit, Type};
+
+use crate::repo_file::read_regular;
 
 pub(crate) const RUST_SOURCE_CAP: usize = 256 * 1024;
 pub(crate) const FETCH_CAP: usize = 512 * 1024;
@@ -112,26 +112,49 @@ impl FreshnessContext {
     }
 
     pub(crate) fn rust_const(&mut self, path: &str, name: &str) -> Option<String> {
-        let relative = format!("{path}::{name}");
-        match read_capped(&self.path(path), RUST_SOURCE_CAP)
-            .and_then(|source| parse_rust_const(&source, name))
-        {
-            Ok(value) => Some(value),
-            Err(error) => {
-                self.fail_row("local-pin", &relative, &error);
-                None
-            }
-        }
+        self.rust_source(path, name, |file| {
+            find_const(file, name).and_then(|item| extract_const_literal(item, name))
+        })
     }
 
     pub(crate) fn rust_usize_const(&mut self, path: &str, name: &str) -> Option<String> {
-        let relative = format!("{path}::{name}");
-        match read_capped(&self.path(path), RUST_SOURCE_CAP)
-            .and_then(|source| parse_rust_usize_const(&source, name))
+        self.rust_source(path, name, |file| {
+            find_const(file, name).and_then(|item| extract_usize_literal(item, name))
+        })
+    }
+
+    pub(crate) fn rust_str_array_const(&mut self, path: &str, name: &str) -> Option<Vec<String>> {
+        self.rust_source(path, name, |file| {
+            find_const(file, name).and_then(|item| extract_str_array(item, name))
+        })
+    }
+
+    pub(crate) fn rust_const_names(&mut self, path: &str) -> Option<Vec<String>> {
+        self.rust_source(path, "*", |file| {
+            Ok(file
+                .items
+                .iter()
+                .filter_map(|item| match item {
+                    Item::Const(item) => Some(item.ident.to_string()),
+                    _ => None,
+                })
+                .collect())
+        })
+    }
+
+    fn rust_source<T>(
+        &mut self,
+        path: &str,
+        name: &str,
+        read: impl FnOnce(&syn::File) -> Result<T, String>,
+    ) -> Option<T> {
+        match read_regular(&self.root, path, RUST_SOURCE_CAP)
+            .and_then(|source| parse_source(&source))
+            .and_then(|file| read(&file))
         {
             Ok(value) => Some(value),
             Err(error) => {
-                self.fail_row("local-pin", &relative, &error);
+                self.fail_row("local-pin", &format!("{path}::{name}"), &error);
                 None
             }
         }
@@ -152,22 +175,7 @@ impl FreshnessContext {
     }
 }
 
-fn parse_rust_const(source: &[u8], name: &str) -> Result<String, String> {
-    parse_const(source, name, extract_const_literal)
-}
-
-fn parse_rust_usize_const(source: &[u8], name: &str) -> Result<String, String> {
-    parse_const(source, name, extract_usize_literal)
-}
-
-fn parse_const<T>(
-    source: &[u8],
-    name: &str,
-    extract: impl FnOnce(&syn::ItemConst, &str) -> Result<T, String>,
-) -> Result<T, String> {
-    if source.len() > RUST_SOURCE_CAP {
-        return Err(format!("source exceeds {RUST_SOURCE_CAP} bytes"));
-    }
+fn parse_source(source: &[u8]) -> Result<syn::File, String> {
     let text = std::str::from_utf8(source)
         .map_err(|error| format!("unsupported Rust source ({error})"))?;
     let file =
@@ -175,6 +183,10 @@ fn parse_const<T>(
     if file.attrs.iter().any(is_conditional_attribute) {
         return Err("unsupported Rust source (conditional crate attribute)".to_owned());
     }
+    Ok(file)
+}
+
+fn find_const<'a>(file: &'a syn::File, name: &str) -> Result<&'a syn::ItemConst, String> {
     let mut constants = file.items.iter().filter_map(|item| match item {
         Item::Const(item) if item.ident == name => Some(item),
         _ => None,
@@ -185,10 +197,10 @@ fn parse_const<T>(
     if constants.next().is_some() {
         return Err(format!("duplicate const {name}"));
     }
-    extract(item, name)
+    Ok(item)
 }
 
-fn extract_const_literal(item: &syn::ItemConst, name: &str) -> Result<String, String> {
+fn check_authority(item: &syn::ItemConst, name: &str) -> Result<(), String> {
     if !matches!(&item.vis, syn::Visibility::Public(_)) {
         return Err(format!("unsupported const {name} visibility"));
     }
@@ -199,10 +211,39 @@ fn extract_const_literal(item: &syn::ItemConst, name: &str) -> Result<String, St
     {
         return Err("unsupported authority attribute".to_owned());
     }
+    Ok(())
+}
+
+fn extract_const_literal(item: &syn::ItemConst, name: &str) -> Result<String, String> {
+    check_authority(item, name)?;
     if !is_str_reference(item.ty.as_ref()) {
         return Err(format!("unsupported const {name} declaration"));
     }
-    plain_string_literal(item, name)
+    let syn::Expr::Lit(expression) = item.expr.as_ref() else {
+        return Err(format!("const {name} must use one string literal"));
+    };
+    plain_string_literal(expression, name)
+}
+
+fn extract_str_array(item: &syn::ItemConst, name: &str) -> Result<Vec<String>, String> {
+    check_authority(item, name)?;
+    let Type::Array(array) = item.ty.as_ref() else {
+        return Err(format!("unsupported const {name} declaration"));
+    };
+    if !is_str_reference(array.elem.as_ref()) {
+        return Err(format!("unsupported const {name} declaration"));
+    }
+    let syn::Expr::Array(elements) = item.expr.as_ref() else {
+        return Err(format!("const {name} must be an array of string literals"));
+    };
+    elements
+        .elems
+        .iter()
+        .map(|element| match element {
+            syn::Expr::Lit(expression) => plain_string_literal(expression, name),
+            _ => Err(format!("const {name} must be an array of string literals")),
+        })
+        .collect()
 }
 
 fn is_str_reference(ty: &Type) -> bool {
@@ -218,13 +259,9 @@ fn is_str_reference(ty: &Type) -> bool {
     path.qself.is_none() && path.path.segments.len() == 1 && path.path.is_ident("str")
 }
 
-fn plain_string_literal(item: &syn::ItemConst, name: &str) -> Result<String, String> {
-    let invalid = || format!("const {name} must use one string literal");
-    let syn::Expr::Lit(expression) = item.expr.as_ref() else {
-        return Err(invalid());
-    };
+fn plain_string_literal(expression: &syn::ExprLit, name: &str) -> Result<String, String> {
     let Lit::Str(value) = &expression.lit else {
-        return Err(invalid());
+        return Err(format!("const {name} must use string literals"));
     };
     Ok(value.value())
 }
@@ -270,16 +307,6 @@ fn is_conditional_attribute(attribute: &syn::Attribute) -> bool {
         let name = segment.ident.to_string();
         matches!(name.trim_start_matches("r#"), "cfg" | "cfg_attr")
     })
-}
-
-fn read_capped(path: &Path, cap: usize) -> Result<Vec<u8>, String> {
-    let file = File::open(path).map_err(|error| format!("unreadable ({error})"))?;
-    let limit = u64::try_from(cap).unwrap_or(u64::MAX).saturating_add(1);
-    let mut bytes = Vec::new();
-    file.take(limit)
-        .read_to_end(&mut bytes)
-        .map_err(|error| format!("unreadable ({error})"))?;
-    Ok(bytes)
 }
 
 pub(crate) use crate::time::{

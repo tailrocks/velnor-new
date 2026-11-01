@@ -15,13 +15,14 @@ use velnor_actions_mise::{COSIGN_VERSION, MISE_VERSION, PinnedTool, ToolCatalog}
 pub(crate) const POLICY: &str = ".velnor/version-policy.toml";
 pub(crate) const INVENTORY: &str = ".velnor/freshness-inventory.json";
 pub(crate) const CATALOG: &str = "crates/velnor-actions-mise/src/catalog.rs";
+pub(crate) const RUNNER_SOURCE: &str = "crates/velnor-actions-contract/src/config/workflow.rs";
 const CONST_SOURCES: [&str; 8] = [
     CATALOG,
     "crates/velnor-actions-contract/src/config/jactionlint_verifier.rs",
     "crates/velnor-actions-actionlint/src/actions.rs",
     "crates/velnor-actions-actionlint/src/tools.rs",
     "crates/velnor-actions-actionlint/src/capabilities.rs",
-    "crates/velnor-actions-contract/src/config/workflow.rs",
+    RUNNER_SOURCE,
     "crates/velnor-actions-workflow-renderer/src/render.rs",
     "crates/velnor-actions-workflow-renderer/src/steps.rs",
 ];

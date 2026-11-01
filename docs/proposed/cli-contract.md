@@ -86,7 +86,12 @@ Repository-maintenance checks use the separate private operation
 `test-members`, and `artifact-executable`.
 The `VELNOR_REPO_POLICY_ROOT` variable must name an existing directory.
 The `pin-mirror` action checks the pin mirrors offline and runs no
-evidence-age, exception, advisory, or upstream check. When
+evidence-age, exception, advisory, or upstream check. It requires the
+compiled constants, the inventory, and the policy to agree: every cosign
+artifact pin in the catalog has one inventory `artifacts` record, and the
+supported runner labels equal the x64 labels of `RUNNER_LABEL_CATALOG`. It
+reads the head inventory, policy, and constant sources only as regular files
+whose parent directories inside the root are not symlinks. When
 `VELNOR_REPO_POLICY_BASE_REF` is set, it also reports the pin changes against
 that Git ref. The ref is resolved once to a commit id, the base files are read
 by that id, and an unresolvable ref fails the action. The ref accepts only 1 to

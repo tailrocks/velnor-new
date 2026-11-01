@@ -10,7 +10,7 @@ use serde_json::Value;
 use toml::Value as TomlValue;
 
 use crate::context::FreshnessContext;
-use crate::inventory::{COSIGN_ASSETS, INVENTORY_REL, POLICY_REL, parse_inventory, parse_policy};
+use crate::inventory::{INVENTORY_REL, POLICY_REL, parse_inventory, parse_policy};
 
 use git::Blob;
 
@@ -171,12 +171,17 @@ fn project_inventory_tools(pins: &mut BTreeMap<String, String>, inventory: &Valu
         if name != "cosign" {
             continue;
         }
-        for asset in &COSIGN_ASSETS {
-            for field in [asset.bytes_field, asset.digest_field] {
-                if entry.get(field).is_some() {
+        for (platform, record) in entry
+            .get("artifacts")
+            .and_then(Value::as_object)
+            .into_iter()
+            .flatten()
+        {
+            for field in ["bytes", "sha256"] {
+                if record.get(field).is_some() {
                     pins.insert(
-                        format!("inventory tool cosign {field}"),
-                        json_text(entry, field),
+                        format!("inventory tool cosign {platform} {field}"),
+                        json_text(record, field),
                     );
                 }
             }

@@ -16,6 +16,7 @@ use serde_json::Value;
 use toml::Value as TomlValue;
 
 use crate::context::FreshnessContext;
+use crate::repo_file::read_regular;
 
 const CATALOG: &str = "crates/velnor-actions-mise/src/catalog.rs";
 const JACTIONLINT_VERIFIER: &str =
@@ -67,34 +68,11 @@ pub(crate) const EXPECTED_ACTIONS: &[(&str, &str)] = &[
     ("actions/github-script", "GITHUB_SCRIPT_ACTION"),
 ];
 
-pub(crate) struct CosignAsset {
-    pub(crate) platform: &'static str,
-    pub(crate) bytes_constant: &'static str,
-    pub(crate) bytes_field: &'static str,
-    pub(crate) digest_constant: &'static str,
-    pub(crate) digest_field: &'static str,
-}
-
-pub(crate) const COSIGN_ASSETS: [CosignAsset; 2] = [
-    CosignAsset {
-        platform: "Linux x86_64",
-        bytes_constant: "COSIGN_LINUX_AMD64_BYTES",
-        bytes_field: "bytes",
-        digest_constant: "COSIGN_LINUX_AMD64_SHA256",
-        digest_field: "sha256",
-    },
-    CosignAsset {
-        platform: "Linux arm64",
-        bytes_constant: "COSIGN_LINUX_ARM64_BYTES",
-        bytes_field: "arm64_bytes",
-        digest_constant: "COSIGN_LINUX_ARM64_SHA256",
-        digest_field: "arm64_sha256",
-    },
-];
-
 pub(crate) const INVENTORY_REL: &str = ".velnor/freshness-inventory.json";
 
 pub(crate) const POLICY_REL: &str = ".velnor/version-policy.toml";
+
+const MIRROR_FILE_CAP: usize = 512 * 1024;
 
 pub(crate) fn parse_inventory(data: &[u8]) -> Result<Value, String> {
     let inventory: Value =
@@ -111,8 +89,7 @@ pub(crate) fn parse_policy(text: &str) -> Result<TomlValue, String> {
 }
 
 pub(crate) fn load_inventory(ctx: &mut FreshnessContext) -> bool {
-    let parsed = fs::read(ctx.path(INVENTORY_REL))
-        .map_err(|error| format!("unreadable ({error})"))
+    let parsed = read_regular(&ctx.root, INVENTORY_REL, MIRROR_FILE_CAP)
         .and_then(|data| parse_inventory(&data));
     match parsed {
         Ok(inventory) => {
@@ -128,8 +105,8 @@ pub(crate) fn load_inventory(ctx: &mut FreshnessContext) -> bool {
 }
 
 fn load_policy(ctx: &mut FreshnessContext) {
-    let parsed = fs::read_to_string(ctx.path(POLICY_REL))
-        .map_err(|error| format!("unreadable ({error})"))
+    let parsed = read_regular(&ctx.root, POLICY_REL, MIRROR_FILE_CAP)
+        .and_then(|data| String::from_utf8(data).map_err(|_| "not UTF-8".to_owned()))
         .and_then(|text| parse_policy(&text));
     match parsed {
         Ok(policy) => ctx.policy = Some(policy),

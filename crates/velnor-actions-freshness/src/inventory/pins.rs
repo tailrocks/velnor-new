@@ -3,11 +3,11 @@
 
 use std::collections::BTreeSet;
 
-use serde_json::Value;
+use serde_json::{Map, Value};
 
 use crate::context::FreshnessContext;
 
-use super::{ACTIONS, CATALOG, COSIGN_ASSETS, EXPECTED_ACTIONS, EXPECTED_TOOLS, RUNNER_DEFAULT};
+use super::{ACTIONS, CATALOG, EXPECTED_ACTIONS, EXPECTED_TOOLS, RUNNER_DEFAULT, display_json};
 
 #[path = "pins_mirrors.rs"]
 mod mirrors;
@@ -97,7 +97,7 @@ fn check_tool_pins(ctx: &mut FreshnessContext) {
             tool.get("pinned").and_then(Value::as_str),
         );
         if name == "cosign" {
-            check_cosign_asset_pins(ctx, &tool);
+            check_cosign_artifact_pins(ctx, &tool);
         }
     }
     for (name, _, _) in EXPECTED_TOOLS
@@ -112,12 +112,30 @@ fn check_tool_pins(ctx: &mut FreshnessContext) {
     }
 }
 
-fn check_cosign_asset_pins(ctx: &mut FreshnessContext, tool: &Value) {
-    for asset in &COSIGN_ASSETS {
-        let platform = asset.platform;
-        let bytes = ctx.rust_usize_const(CATALOG, asset.bytes_constant);
-        let inventory_bytes = tool
-            .get(asset.bytes_field)
+fn check_cosign_artifact_pins(ctx: &mut FreshnessContext, tool: &Value) {
+    let Some(platforms) = compiled_cosign_platforms(ctx) else {
+        return;
+    };
+    let records = match tool.get("artifacts") {
+        Some(Value::Object(records)) => records.clone(),
+        other => {
+            ctx.fail_row(
+                "local-pin",
+                "tool cosign artifacts",
+                &format!(
+                    "must be an object keyed by platform, got {}",
+                    display_json(other)
+                ),
+            );
+            Map::new()
+        }
+    };
+    for platform in &platforms {
+        let record = records.get(platform);
+        let constant = platform.to_ascii_uppercase().replace('-', "_");
+        let bytes = ctx.rust_usize_const(CATALOG, &format!("COSIGN_{constant}_BYTES"));
+        let inventory_bytes = record
+            .and_then(|record| record.get("bytes"))
             .and_then(Value::as_u64)
             .map(|value| value.to_string());
         compare_pin(
@@ -126,15 +144,47 @@ fn check_cosign_asset_pins(ctx: &mut FreshnessContext, tool: &Value) {
             bytes.as_deref(),
             inventory_bytes.as_deref(),
         );
-
-        let digest = ctx.rust_const(CATALOG, asset.digest_constant);
+        let digest = ctx.rust_const(CATALOG, &format!("COSIGN_{constant}_SHA256"));
         compare_pin(
             ctx,
             &format!("tool cosign {platform} release digest"),
             digest.as_deref(),
-            tool.get(asset.digest_field).and_then(Value::as_str),
+            record
+                .and_then(|record| record.get("sha256"))
+                .and_then(Value::as_str),
         );
     }
+    for extra in records.keys().filter(|key| !platforms.contains(*key)) {
+        ctx.fail_row(
+            "local-pin",
+            &format!("tool cosign {extra}"),
+            "inventory artifact outside the compiled cosign artifact set",
+        );
+    }
+}
+
+fn compiled_cosign_platforms(ctx: &mut FreshnessContext) -> Option<BTreeSet<String>> {
+    let platforms = ctx
+        .rust_const_names(CATALOG)?
+        .iter()
+        .filter_map(|name| {
+            let middle = name.strip_prefix("COSIGN_")?;
+            middle
+                .strip_suffix("_SHA256")
+                .or_else(|| middle.strip_suffix("_BYTES"))
+                .filter(|platform| !platform.is_empty())
+                .map(|platform| platform.to_ascii_lowercase().replace('_', "-"))
+        })
+        .collect::<BTreeSet<_>>();
+    if platforms.is_empty() {
+        ctx.fail_row(
+            "local-pin",
+            "tool cosign artifacts",
+            &format!("{CATALOG} declares no cosign artifact pins"),
+        );
+        return None;
+    }
+    Some(platforms)
 }
 
 fn check_action_pins(ctx: &mut FreshnessContext) {
@@ -261,6 +311,7 @@ fn check_runner_pins(ctx: &mut FreshnessContext) {
             ),
         }
     }
+    check_runner_catalog(ctx);
     if default
         .as_ref()
         .is_some_and(|value| ctx.supported.iter().any(|label| label == value))
@@ -276,4 +327,23 @@ fn check_runner_pins(ctx: &mut FreshnessContext) {
             ),
         );
     }
+}
+
+fn check_runner_catalog(ctx: &mut FreshnessContext) {
+    let Some(catalog) = ctx.rust_str_array_const(RUNNER_DEFAULT, "RUNNER_LABEL_CATALOG") else {
+        return;
+    };
+    let mut compiled = catalog
+        .into_iter()
+        .filter(|label| !label.ends_with("-arm"))
+        .collect::<Vec<_>>();
+    compiled.sort();
+    let mut listed = ctx.supported.clone();
+    listed.sort();
+    compare_pin(
+        ctx,
+        "runner catalog x64 labels (workflow.rs::RUNNER_LABEL_CATALOG)",
+        Some(&compiled.join(",")),
+        Some(&listed.join(",")),
+    );
 }

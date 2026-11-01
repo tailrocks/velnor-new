@@ -10,9 +10,12 @@ use velnor_actions_mise::{ToolCatalog, catalog::lock::verify_version_policy};
 #[path = "pin_mirror_public_fixture.rs"]
 mod fixture;
 
+#[path = "pin_mirror_public_sources.rs"]
+mod sources;
+
 use fixture::{
-    CATALOG, Fixture, INVENTORY, POLICY, TestResult, age_all_evidence, compiled_crane,
-    compiled_tool_pins, set_first_line, set_policy_tool,
+    CATALOG, Fixture, INVENTORY, POLICY, RUNNER_SOURCE, TestResult, age_all_evidence,
+    compiled_crane, compiled_tool_pins, set_first_line, set_policy_tool,
 };
 
 #[test]
@@ -262,23 +265,27 @@ fn pin_diff_reports_cosign_digest_and_runner_label_changes() -> TestResult {
         .flatten()
         .find(|tool| tool["name"] == "cosign")
         .ok_or("cosign inventory row missing")?;
-    let old_digest = cosign["sha256"]
+    let old_digest = cosign["artifacts"]["linux-amd64"]["sha256"]
         .as_str()
-        .ok_or("cosign sha256 missing")?
+        .ok_or("cosign linux-amd64 sha256 missing")?
         .to_owned();
     let new_digest = "ab".repeat(32);
     fixture.rewrite(CATALOG, |text| text.replacen(&old_digest, &new_digest, 1))?;
     fixture.edit_inventory(|inventory| {
         for tool in inventory["tools"].as_array_mut().into_iter().flatten() {
             if tool["name"] == "cosign" {
-                tool["sha256"] = Value::String(new_digest.clone());
+                tool["artifacts"]["linux-amd64"]["sha256"] = Value::String(new_digest.clone());
             }
         }
     })?;
     let digest = fixture.run(Some("HEAD"))?;
     assert!(digest.success, "consistent digest change rejected");
     let row = digest
-        .row("pin-diff", "info", "inventory tool cosign sha256")
+        .row(
+            "pin-diff",
+            "info",
+            "inventory tool cosign linux-amd64 sha256",
+        )
         .ok_or_else(|| io::Error::other(format!("digest change unreported: {:?}", digest.rows)))?;
     assert_eq!(
         row["detail"],
@@ -292,6 +299,10 @@ fn pin_diff_reports_cosign_digest_and_runner_label_changes() -> TestResult {
         if let Some(labels) = inventory["runner"]["supported"].as_array_mut() {
             labels.retain(|label| label != "ubuntu-22.04");
         }
+    })?;
+    fixture.rewrite(RUNNER_SOURCE, |text| {
+        text.replacen("[&str; 6]", "[&str; 5]", 1)
+            .replacen("    \"ubuntu-22.04\",\n", "", 1)
     })?;
     let labels = fixture.run(Some("HEAD"))?;
     assert!(labels.success, "consistent label change rejected");

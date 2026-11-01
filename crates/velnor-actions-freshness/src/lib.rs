@@ -17,6 +17,7 @@ mod pin_mirror;
 mod probe;
 mod process;
 mod release_support;
+mod repo_file;
 mod time;
 mod validation;
 
