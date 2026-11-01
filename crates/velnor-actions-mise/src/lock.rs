@@ -6,8 +6,7 @@ use std::fmt::{Display, Formatter, Result as FmtResult};
 use std::path::Path;
 
 use velnor_actions_contract::{
-    ActionPin, GeneratorBinary, GeneratorLock, GithubRunnerImages, LockedGenerator, MiseBootstrap,
-    ReleaseManifest, RunnerInventory, VersionPolicy,
+    ActionPin, GeneratorBinary, GeneratorLock, LockedGenerator, MiseBootstrap, ReleaseManifest,
 };
 
 use super::{MISE_VERSION, PinnedTool, ToolCatalog};
@@ -100,64 +99,12 @@ pub fn verify_version_policy(text: &str, catalog: &ToolCatalog) -> Result<(), Lo
     Ok(())
 }
 
-pub fn parse_version_policy(text: &str) -> Result<VersionPolicy, LockError> {
-    let doc = parse_toml(text)?;
-    check_schema(&doc, VersionPolicy::SCHEMA)?;
-    let top = section(&doc, "")?;
-    let inventory =
-        section(&doc, "runner").or_else(|_| section(&doc, "github_runner_images.linux_x64"))?;
-    Ok(VersionPolicy {
-        schema: VersionPolicy::SCHEMA,
-        channel: entry(&top, "channel")?,
-        registry: entry(&top, "registry")?,
-        check_interval_hours: entry_int(&top, "check_interval_hours")?,
-        max_exception_days: entry_int(&top, "max_exception_days")?,
-        github_runner_images: GithubRunnerImages {
-            linux_x64: RunnerInventory {
-                default: entry(&inventory, "default")?,
-                supported: parse_string_list(&entry(&inventory, "supported")?)?,
-            },
-        },
-    })
-}
-
-pub fn verify_policy_header(text: &str) -> Result<(), LockError> {
-    parse_version_policy(text)?
-        .validate("version-policy.toml")
-        .map_err(|err| invalid(err.to_string()))
-}
-
 pub(crate) fn mismatch(problem: String) -> LockError {
     LockError::Mismatch { problem }
 }
 
 fn invalid(problem: String) -> LockError {
     LockError::Invalid { problem }
-}
-
-fn entry_int(entries: &BTreeMap<String, String>, key: &str) -> Result<u32, LockError> {
-    let value = entries.get(key).and_then(|entry| entry.parse::<u32>().ok());
-    value.ok_or_else(|| invalid(format!("missing_key:{key}")))
-}
-
-fn parse_string_list(raw: &str) -> Result<Vec<String>, LockError> {
-    let inner = raw
-        .strip_prefix('[')
-        .and_then(|rest| rest.strip_suffix(']'))
-        .ok_or_else(|| malformed(format!("bad_list:{raw}")))?;
-    let mut items = Vec::new();
-    for item in inner.split(',') {
-        let item = item.trim();
-        if item.is_empty() {
-            continue;
-        }
-        let unquoted = item
-            .strip_prefix('"')
-            .and_then(|rest| rest.strip_suffix('"'))
-            .ok_or_else(|| malformed(format!("bad_list:{raw}")))?;
-        items.push(unescape(unquoted)?);
-    }
-    Ok(items)
 }
 
 type TomlDoc = Vec<(String, BTreeMap<String, String>)>;
