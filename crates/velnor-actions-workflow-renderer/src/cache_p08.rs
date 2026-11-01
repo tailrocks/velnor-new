@@ -17,13 +17,16 @@ mod save_policy;
 #[path = "cache_p08_setup.rs"]
 mod setup_pipeline;
 
-pub use crate::cache_elect::{elect_cache_writers, elect_cache_writers_with_policy};
+pub use crate::cache_elect::{
+    elect_cache_writers, elect_cache_writers_with_policy, elect_provider_cache_writers,
+};
 
 pub const RESTORE_SOURCES_NAME: &str = "Restore Cargo sources";
 pub const SAVE_SOURCES_NAME: &str = "Save Cargo sources";
 pub const TOOLS_CACHE_IDENTITY_NAME: &str = "V2 identity";
 pub const TOOLS_CACHE_IDENTITY_STEP_ID: &str = "v2";
-pub(crate) const TOOLS_CACHE_KEY_EXPRESSION: &str = "mise-tools-v2-${{steps.v2.outputs.identity}}";
+pub(crate) const TOOLS_CACHE_KEY_EXPRESSION: &str =
+    velnor_actions_contract::workflow::step_identity::TOOLS_CACHE_V2_KEY_EXPRESSION;
 pub(crate) const TOOLS_CACHE_IDENTITY_DIGEST_INPUT: &str =
     velnor_actions_contract::workflow::step_identity::TOOLS_CACHE_IDENTITY_DIGEST_INPUT;
 pub const TOOLS_CACHE_RESTORE_CONDITION: &str = "steps.v2.outputs.enabled == 'true'";
@@ -83,8 +86,12 @@ pub fn check_mbx_before_fetch(job_id: &str, job: &Job) -> Result<(), RenderError
 
 #[must_use]
 pub fn infer_job_tools(job: &Job) -> Vec<String> {
+    infer_steps_tools(&job.steps)
+}
+
+pub(crate) fn infer_steps_tools<'a>(steps: impl IntoIterator<Item = &'a Step>) -> Vec<String> {
     let mut specs = std::collections::BTreeSet::new();
-    for step in &job.steps {
+    for step in steps {
         let StepKind::Shell { run, .. } = &step.kind else {
             continue;
         };

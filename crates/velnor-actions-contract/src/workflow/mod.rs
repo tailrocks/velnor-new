@@ -10,9 +10,7 @@ pub mod cache_identity;
 pub mod cache_ids;
 pub mod cache_policy;
 pub mod crate_job;
-mod dependency_seed;
 pub mod dispatch;
-pub use dependency_seed::DEPENDENCY_SEED_JOB_CONDITION;
 pub mod execute;
 pub mod ir;
 pub mod jobs;
@@ -24,6 +22,11 @@ pub mod permissions;
 pub mod plan;
 mod plan_jobs;
 pub mod platform;
+mod producer;
+pub use producer::{
+    DEPENDENCY_SEED_JOB_CONDITION, ProducerKind, TOOLS_PRODUCER_INSTALL_CONDITION,
+    validate_tools_producer,
+};
 pub mod qualification;
 pub mod qualification_cache_lineage;
 pub mod qualification_dispatch;

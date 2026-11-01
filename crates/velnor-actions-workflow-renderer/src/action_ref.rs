@@ -3,7 +3,7 @@
 
 use crate::RenderError;
 use velnor_actions_contract::workflow::step_identity::{
-    TOOL_SEED_USES, TOOLS_CACHE_PRELUDE_USES, TOOLS_CACHE_RESTORE_USES,
+    TOOL_SEED_USES, TOOLS_CACHE_PRELUDE_USES, TOOLS_CACHE_RESTORE_USES, TOOLS_CACHE_SCRUB_USES,
 };
 use velnor_actions_contract::workflow::{
     JACTIONLINT_VERIFIER_USES, RUST_VERIFIER_USES, Step, StepKind, StepRole,
@@ -20,6 +20,7 @@ pub fn validate_uses(uses: &str) -> Result<(), RenderError> {
             uses,
             TOOL_SEED_USES
                 | TOOLS_CACHE_RESTORE_USES
+                | TOOLS_CACHE_SCRUB_USES
                 | crate::tofu_cache::TOFU_PROVIDER_ADMISSION_USES
         )
         || TOOLS_CACHE_PRELUDE_USES.contains(&uses)

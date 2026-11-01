@@ -572,3 +572,248 @@ jobs:
       - name: Report optional cache save failure
         if: always() && !cancelled() && steps.velnor-optional-tools-save.outcome == 'failure'
         run: "printf '%s\\n' '::warning::cache_unavailable: optional save failed or timed out'"
+  tools-producer-083ce5ee:
+    name: Tools producer / 083ce5ee
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    continue-on-error: true
+    env:
+      VELNOR_RUN_KEY_ATTEMPT: ${{ github.run_attempt }}
+    if: github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true
+    steps:
+      - name: Record optional cache budget
+        id: velnor-cache-clock
+        run: "set -eu\nunavailable() { printf '%s\\n' '::warning::cache_unavailable: invalid first-step clock or output'; }\noutput=${GITHUB_OUTPUT-}\nseconds=${VELNOR_CACHE_JOB_SECONDS-}\nnow=$(date +%s) || now=\nfor value in \"$now\" \"$seconds\"; do\n  case \"$value\" in ''|*[!0-9]*) unavailable; exit 0 ;; esac\n  case \"$value\" in 0|[1-9]*) ;; *) unavailable; exit 0 ;; esac\n  [ \"${#value}\" -le 10 ] || { unavailable; exit 0; }\ndone\nif [ -z \"$output\" ] || ! printf 'started=%s\\ndeadline=%s\\n' \"$now\" \"$((now + seconds))\" 2>/dev/null >> \"$output\"; then\n  unavailable\nfi\n"
+        env:
+          VELNOR_CACHE_JOB_SECONDS: "300"
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: "false"
+      - name: Setup Mise
+        uses: jdx/mise-action@6be3c7ed4c21d4f76b208d351d95aac273ebb76d
+        with:
+          cache: "false"
+          cache_save: "false"
+          env: "false"
+          install: "false"
+          sha256: ccfe12d7a62c6fb9def2a20db1f210f13a51de881f21fd8c85db4b6312405d07
+          version: 2026.10.21
+      - name: V2 identity
+        id: v2
+        uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
+        with:
+          d: 083ce5ee20bf5789b3227765b86c11bbb3ed5755262546e127cd82b4729267a4
+      - name: Probe Mise tools
+        id: tools-restore
+        if: steps.v2.outputs.enabled == 'true'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          key: mise-tools-v2-${{steps.v2.outputs.identity}}
+          lookup-only: "true"
+          path: "~/.local/share/mise\n${{ runner.temp }}/velnor/rustup\n${{ runner.temp }}/velnor/cargo/.crates.toml\n${{ runner.temp }}/velnor/cargo/.crates2.json\n${{ runner.temp }}/velnor/cargo/bin"
+      - name: Scrub and verify Mise tools
+        if: steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
+        uses: ./.github/actions/velnor-tools-cache-scrub
+        with:
+          mise-sha256: ccfe12d7a62c6fb9def2a20db1f210f13a51de881f21fd8c85db4b6312405d07
+      - name: Prepare pinned tools
+        if: steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
+        run: mise --no-config --no-env --no-hooks install jactionlint@2.3.0 shellcheck@0.11.0
+      - name: Verify jactionlint
+        if: steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
+        uses: ./.github/actions/velnor-verify-jactionlint # zizmor: ignore[self-repository]
+      - name: Admit optional cache save
+        id: velnor-optional-tools-save-budget
+        if: success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
+        run: "set -eu\noutput=${GITHUB_OUTPUT-}\nemit() { [ -n \"$output\" ] && printf '%s\\n' \"$1\" 2>/dev/null >> \"$output\"; }\nrefuse() {\n  emit 'admitted=false' || :\n  printf '%s\\n' '::warning::cache_unavailable: optional save has no safe remaining job budget or output'\n}\nstarted=${VELNOR_CACHE_STARTED-}\ndeadline=${VELNOR_CACHE_DEADLINE-}\nseconds=${VELNOR_CACHE_JOB_SECONDS-}\nrequired=${VELNOR_CACHE_REQUIRED_SECONDS-}\nnow=$(date +%s) || now=\nfor value in \"$started\" \"$deadline\" \"$now\" \"$seconds\" \"$required\"; do\n  case \"$value\" in ''|*[!0-9]*) refuse; exit 0 ;; esac\n  case \"$value\" in 0|[1-9]*) ;; *) refuse; exit 0 ;; esac\n  [ \"${#value}\" -le 10 ] || { refuse; exit 0; }\ndone\nif [ \"$now\" -lt \"$started\" ] || [ \"$deadline\" -lt \"$started\" ] ||\n   [ \"$((deadline - started))\" -ne \"$seconds\" ] ||\n   [ \"$((deadline - now))\" -lt \"$required\" ]; then\n  refuse\nelif ! emit 'admitted=true'; then\n  refuse\nfi\n"
+        env:
+          VELNOR_CACHE_JOB_SECONDS: "300"
+          VELNOR_CACHE_STARTED: ${{ steps.velnor-cache-clock.outputs.started }}
+          VELNOR_CACHE_DEADLINE: ${{ steps.velnor-cache-clock.outputs.deadline }}
+          VELNOR_CACHE_REQUIRED_SECONDS: "90"
+      - name: Save Mise tools
+        if: (success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true') && steps.velnor-optional-tools-save-budget.outputs.admitted == 'true'
+        id: velnor-optional-tools-save
+        timeout-minutes: 1
+        continue-on-error: true
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          key: mise-tools-v2-${{steps.v2.outputs.identity}}
+          path: "~/.local/share/mise\n${{ runner.temp }}/velnor/rustup\n${{ runner.temp }}/velnor/cargo/.crates.toml\n${{ runner.temp }}/velnor/cargo/.crates2.json\n${{ runner.temp }}/velnor/cargo/bin"
+      - name: Report optional cache save failure
+        if: always() && !cancelled() && steps.velnor-optional-tools-save.outcome == 'failure'
+        run: "printf '%s\\n' '::warning::cache_unavailable: optional save failed or timed out'"
+  tools-producer-a98c50f3:
+    name: Tools producer / a98c50f3
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    continue-on-error: true
+    env:
+      CARGO_CACHE_AUTO_CLEAN_FREQUENCY: never
+      RUSTUP_TOOLCHAIN: 1.99.1
+      VELNOR_RUN_KEY_ATTEMPT: ${{ github.run_attempt }}
+    if: github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true
+    steps:
+      - name: Record optional cache budget
+        id: velnor-cache-clock
+        run: "set -eu\nunavailable() { printf '%s\\n' '::warning::cache_unavailable: invalid first-step clock or output'; }\noutput=${GITHUB_OUTPUT-}\nseconds=${VELNOR_CACHE_JOB_SECONDS-}\nnow=$(date +%s) || now=\nfor value in \"$now\" \"$seconds\"; do\n  case \"$value\" in ''|*[!0-9]*) unavailable; exit 0 ;; esac\n  case \"$value\" in 0|[1-9]*) ;; *) unavailable; exit 0 ;; esac\n  [ \"${#value}\" -le 10 ] || { unavailable; exit 0; }\ndone\nif [ -z \"$output\" ] || ! printf 'started=%s\\ndeadline=%s\\n' \"$now\" \"$((now + seconds))\" 2>/dev/null >> \"$output\"; then\n  unavailable\nfi\n"
+        env:
+          VELNOR_CACHE_JOB_SECONDS: "300"
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: "0"
+          persist-credentials: "false"
+      - name: Setup Mise
+        uses: jdx/mise-action@6be3c7ed4c21d4f76b208d351d95aac273ebb76d
+        with:
+          cache: "false"
+          cache_save: "false"
+          env: "false"
+          install: "false"
+          sha256: ccfe12d7a62c6fb9def2a20db1f210f13a51de881f21fd8c85db4b6312405d07
+          version: 2026.10.21
+      - name: V2 identity
+        id: v2
+        uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
+        with:
+          d: a98c50f391b791726edadf3512eb90e02e5695ba322c46aa08c4fbce137b3b91
+      - name: Probe Mise tools
+        id: tools-restore
+        if: steps.v2.outputs.enabled == 'true'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          key: mise-tools-v2-${{steps.v2.outputs.identity}}
+          lookup-only: "true"
+          path: "~/.local/share/mise\n${{ runner.temp }}/velnor/rustup\n${{ runner.temp }}/velnor/cargo/.crates.toml\n${{ runner.temp }}/velnor/cargo/.crates2.json\n${{ runner.temp }}/velnor/cargo/bin"
+      - name: Scrub and verify Mise tools
+        if: steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
+        uses: ./.github/actions/velnor-tools-cache-scrub
+        with:
+          mise-sha256: ccfe12d7a62c6fb9def2a20db1f210f13a51de881f21fd8c85db4b6312405d07
+      - name: Prepare pinned tools
+        if: steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
+        env:
+          CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+          MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+          MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+          RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+        run: mise --no-config --no-env --no-hooks install rust@1.99.1 jactionlint@2.3.0 shellcheck@0.11.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.150
+      - name: Verify jactionlint
+        if: steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
+        uses: ./.github/actions/velnor-verify-jactionlint # zizmor: ignore[self-repository]
+      - name: Verify Rust channel manifest
+        if: steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
+        uses: ./.github/actions/velnor-verify-rust-manifest # zizmor: ignore[self-repository]
+      - name: Admit optional cache save
+        id: velnor-optional-tools-save-budget
+        if: success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
+        run: "set -eu\noutput=${GITHUB_OUTPUT-}\nemit() { [ -n \"$output\" ] && printf '%s\\n' \"$1\" 2>/dev/null >> \"$output\"; }\nrefuse() {\n  emit 'admitted=false' || :\n  printf '%s\\n' '::warning::cache_unavailable: optional save has no safe remaining job budget or output'\n}\nstarted=${VELNOR_CACHE_STARTED-}\ndeadline=${VELNOR_CACHE_DEADLINE-}\nseconds=${VELNOR_CACHE_JOB_SECONDS-}\nrequired=${VELNOR_CACHE_REQUIRED_SECONDS-}\nnow=$(date +%s) || now=\nfor value in \"$started\" \"$deadline\" \"$now\" \"$seconds\" \"$required\"; do\n  case \"$value\" in ''|*[!0-9]*) refuse; exit 0 ;; esac\n  case \"$value\" in 0|[1-9]*) ;; *) refuse; exit 0 ;; esac\n  [ \"${#value}\" -le 10 ] || { refuse; exit 0; }\ndone\nif [ \"$now\" -lt \"$started\" ] || [ \"$deadline\" -lt \"$started\" ] ||\n   [ \"$((deadline - started))\" -ne \"$seconds\" ] ||\n   [ \"$((deadline - now))\" -lt \"$required\" ]; then\n  refuse\nelif ! emit 'admitted=true'; then\n  refuse\nfi\n"
+        env:
+          VELNOR_CACHE_JOB_SECONDS: "300"
+          VELNOR_CACHE_STARTED: ${{ steps.velnor-cache-clock.outputs.started }}
+          VELNOR_CACHE_DEADLINE: ${{ steps.velnor-cache-clock.outputs.deadline }}
+          VELNOR_CACHE_REQUIRED_SECONDS: "90"
+      - name: Save Mise tools
+        if: (success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true') && steps.velnor-optional-tools-save-budget.outputs.admitted == 'true'
+        id: velnor-optional-tools-save
+        timeout-minutes: 1
+        continue-on-error: true
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          key: mise-tools-v2-${{steps.v2.outputs.identity}}
+          path: "~/.local/share/mise\n${{ runner.temp }}/velnor/rustup\n${{ runner.temp }}/velnor/cargo/.crates.toml\n${{ runner.temp }}/velnor/cargo/.crates2.json\n${{ runner.temp }}/velnor/cargo/bin"
+      - name: Report optional cache save failure
+        if: always() && !cancelled() && steps.velnor-optional-tools-save.outcome == 'failure'
+        run: "printf '%s\\n' '::warning::cache_unavailable: optional save failed or timed out'"
+  tools-producer-b1266833:
+    name: Tools producer / b1266833
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    continue-on-error: true
+    env:
+      CARGO_CACHE_AUTO_CLEAN_FREQUENCY: never
+      RUSTUP_TOOLCHAIN: 1.99.1
+      VELNOR_RUN_KEY_ATTEMPT: ${{ github.run_attempt }}
+    if: github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true
+    steps:
+      - name: Record optional cache budget
+        id: velnor-cache-clock
+        run: "set -eu\nunavailable() { printf '%s\\n' '::warning::cache_unavailable: invalid first-step clock or output'; }\noutput=${GITHUB_OUTPUT-}\nseconds=${VELNOR_CACHE_JOB_SECONDS-}\nnow=$(date +%s) || now=\nfor value in \"$now\" \"$seconds\"; do\n  case \"$value\" in ''|*[!0-9]*) unavailable; exit 0 ;; esac\n  case \"$value\" in 0|[1-9]*) ;; *) unavailable; exit 0 ;; esac\n  [ \"${#value}\" -le 10 ] || { unavailable; exit 0; }\ndone\nif [ -z \"$output\" ] || ! printf 'started=%s\\ndeadline=%s\\n' \"$now\" \"$((now + seconds))\" 2>/dev/null >> \"$output\"; then\n  unavailable\nfi\n"
+        env:
+          VELNOR_CACHE_JOB_SECONDS: "300"
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: "false"
+      - name: Setup Mise
+        uses: jdx/mise-action@6be3c7ed4c21d4f76b208d351d95aac273ebb76d
+        with:
+          cache: "false"
+          cache_save: "false"
+          env: "false"
+          install: "false"
+          sha256: ccfe12d7a62c6fb9def2a20db1f210f13a51de881f21fd8c85db4b6312405d07
+          version: 2026.10.21
+      - name: V2 identity
+        id: v2
+        uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
+        with:
+          d: b1266833958dce455d5ef856b2ff399d27f0fb210dbdc17058e1c17726253785
+      - name: Probe Mise tools
+        id: tools-restore
+        if: steps.v2.outputs.enabled == 'true'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          key: mise-tools-v2-${{steps.v2.outputs.identity}}
+          lookup-only: "true"
+          path: "~/.local/share/mise\n${{ runner.temp }}/velnor/rustup\n${{ runner.temp }}/velnor/cargo/.crates.toml\n${{ runner.temp }}/velnor/cargo/.crates2.json\n${{ runner.temp }}/velnor/cargo/bin"
+      - name: Scrub and verify Mise tools
+        if: steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
+        uses: ./.github/actions/velnor-tools-cache-scrub
+        with:
+          mise-sha256: ccfe12d7a62c6fb9def2a20db1f210f13a51de881f21fd8c85db4b6312405d07
+      - name: Prepare pinned tools
+        if: steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
+        env:
+          CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+          MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+          MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+          RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+        run: mise --no-config --no-env --no-hooks install rust@1.99.1 jactionlint@2.3.0 shellcheck@0.11.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.150
+      - name: Verify jactionlint
+        if: steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
+        uses: ./.github/actions/velnor-verify-jactionlint # zizmor: ignore[self-repository]
+      - name: Prepare Rust components
+        if: steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
+        env:
+          CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+          MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+          MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+          RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+        run: mise --no-config --no-env --no-hooks exec rust@1.99.1 -- rustup component add --toolchain 1.99.1-x86_64-unknown-linux-gnu clippy rustfmt
+      - name: Verify Rust channel manifest
+        if: steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
+        uses: ./.github/actions/velnor-verify-rust-manifest # zizmor: ignore[self-repository]
+      - name: Admit optional cache save
+        id: velnor-optional-tools-save-budget
+        if: success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
+        run: "set -eu\noutput=${GITHUB_OUTPUT-}\nemit() { [ -n \"$output\" ] && printf '%s\\n' \"$1\" 2>/dev/null >> \"$output\"; }\nrefuse() {\n  emit 'admitted=false' || :\n  printf '%s\\n' '::warning::cache_unavailable: optional save has no safe remaining job budget or output'\n}\nstarted=${VELNOR_CACHE_STARTED-}\ndeadline=${VELNOR_CACHE_DEADLINE-}\nseconds=${VELNOR_CACHE_JOB_SECONDS-}\nrequired=${VELNOR_CACHE_REQUIRED_SECONDS-}\nnow=$(date +%s) || now=\nfor value in \"$started\" \"$deadline\" \"$now\" \"$seconds\" \"$required\"; do\n  case \"$value\" in ''|*[!0-9]*) refuse; exit 0 ;; esac\n  case \"$value\" in 0|[1-9]*) ;; *) refuse; exit 0 ;; esac\n  [ \"${#value}\" -le 10 ] || { refuse; exit 0; }\ndone\nif [ \"$now\" -lt \"$started\" ] || [ \"$deadline\" -lt \"$started\" ] ||\n   [ \"$((deadline - started))\" -ne \"$seconds\" ] ||\n   [ \"$((deadline - now))\" -lt \"$required\" ]; then\n  refuse\nelif ! emit 'admitted=true'; then\n  refuse\nfi\n"
+        env:
+          VELNOR_CACHE_JOB_SECONDS: "300"
+          VELNOR_CACHE_STARTED: ${{ steps.velnor-cache-clock.outputs.started }}
+          VELNOR_CACHE_DEADLINE: ${{ steps.velnor-cache-clock.outputs.deadline }}
+          VELNOR_CACHE_REQUIRED_SECONDS: "90"
+      - name: Save Mise tools
+        if: (success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true') && steps.velnor-optional-tools-save-budget.outputs.admitted == 'true'
+        id: velnor-optional-tools-save
+        timeout-minutes: 1
+        continue-on-error: true
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          key: mise-tools-v2-${{steps.v2.outputs.identity}}
+          path: "~/.local/share/mise\n${{ runner.temp }}/velnor/rustup\n${{ runner.temp }}/velnor/cargo/.crates.toml\n${{ runner.temp }}/velnor/cargo/.crates2.json\n${{ runner.temp }}/velnor/cargo/bin"
+      - name: Report optional cache save failure
+        if: always() && !cancelled() && steps.velnor-optional-tools-save.outcome == 'failure'
+        run: "printf '%s\\n' '::warning::cache_unavailable: optional save failed or timed out'"

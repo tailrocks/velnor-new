@@ -5,10 +5,12 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_actions_contract::{
     DEFAULT_SUITE_WORKFLOW_SLUG, Job, PermissionLevel, RunsOn, RustSuiteConfig, StepKind,
-    WorkflowDispatchConfig,
 };
 
-use super::{RustSuitesRenderSpec, SuiteJob, build_suite_jobs_for_entry};
+use super::{
+    RustSuitesRenderSpec, SuiteJob, build_suite_jobs_for_entry,
+    triggers::{suite_job_condition, triggers_yaml},
+};
 use crate::{
     RenderError,
     document_steps::{non_internal_step_to_yaml, string_map_yaml},
@@ -23,23 +25,12 @@ pub(super) fn render_workflow_for_slug(
     entries: &[&RustSuiteConfig],
     spec: &RustSuitesRenderSpec,
 ) -> Result<String, RenderError> {
-    let mut jobs = BTreeMap::new();
-    let mut allow_failure_jobs = BTreeSet::new();
-    for suite in entries {
-        let condition = suite_job_condition(suite);
-        if suite.allow_failure {
-            allow_failure_jobs.insert(format!("suite-{}", suite.id));
-        }
-        for SuiteJob {
-            id: job_id,
-            mut job,
-            ..
-        } in build_suite_jobs_for_entry(suite, spec, true)?
-        {
-            job.condition.clone_from(&condition);
-            jobs.insert(job_id, job);
-        }
-    }
+    let mut jobs = standalone_suite_jobs(entries, spec)?;
+    let allow_failure_jobs: BTreeSet<String> = entries
+        .iter()
+        .filter(|suite| suite.allow_failure)
+        .map(|suite| format!("suite-{}", suite.id))
+        .collect();
     finalize_suite_workflow_jobs(&mut jobs, spec)?;
     let suite_matrices = matrix::suites::suite_matrices_of(&jobs)?;
     let scrubbed = if suite_matrices.is_empty() {
@@ -62,16 +53,7 @@ pub(super) fn render_workflow_for_slug(
             )?,
         ));
     }
-    let cancel_in_progress = entries
-        .iter()
-        .find_map(|suite| suite.cancel_in_progress)
-        .unwrap_or(false);
-    let cancel_yaml =
-        if cancel_in_progress && entries.iter().any(|suite| suite.has_schedule_trigger()) {
-            Yaml::str("${{ github.event_name != 'schedule' }}")
-        } else {
-            Yaml::Bool(cancel_in_progress)
-        };
+    let cancel_yaml = cancel_in_progress_yaml(entries);
     let top = vec![
         ("name".to_owned(), Yaml::str(workflow_display_name(slug))),
         (
@@ -105,7 +87,36 @@ pub(super) fn render_workflow_for_slug(
     Ok(text)
 }
 
-fn finalize_suite_workflow_jobs(
+fn standalone_suite_jobs(
+    entries: &[&RustSuiteConfig],
+    spec: &RustSuitesRenderSpec,
+) -> Result<BTreeMap<String, Job>, RenderError> {
+    let mut jobs = BTreeMap::new();
+    for suite in entries {
+        let condition = suite_job_condition(suite);
+        for SuiteJob {
+            id: job_id,
+            mut job,
+            ..
+        } in build_suite_jobs_for_entry(suite, spec, true)?
+        {
+            job.condition.clone_from(&condition);
+            jobs.insert(job_id, job);
+        }
+    }
+    Ok(jobs)
+}
+
+pub(super) fn standalone_tools_donors(
+    entries: &[&RustSuiteConfig],
+    spec: &RustSuitesRenderSpec,
+) -> Result<BTreeMap<String, Job>, RenderError> {
+    let mut jobs = standalone_suite_jobs(entries, spec)?;
+    prepare_suite_tools(&mut jobs, spec)?;
+    Ok(jobs)
+}
+
+fn prepare_suite_tools(
     jobs: &mut BTreeMap<String, Job>,
     spec: &RustSuitesRenderSpec,
 ) -> Result<(), RenderError> {
@@ -131,11 +142,31 @@ fn finalize_suite_workflow_jobs(
         crate::cache_p08::check_no_legacy_rust_cache(id, job)?;
         crate::cache_p08::check_mbx_before_fetch(id, job)?;
     }
-    crate::cache_p08::elect_cache_writers_with_policy(jobs, spec.pull_request_cache_policy)?;
+    Ok(())
+}
+
+fn finalize_suite_workflow_jobs(
+    jobs: &mut BTreeMap<String, Job>,
+    spec: &RustSuitesRenderSpec,
+) -> Result<(), RenderError> {
+    prepare_suite_tools(jobs, spec)?;
+    crate::cache_p08::elect_provider_cache_writers(jobs)?;
     crate::cache_steps::append_bundle_postludes(jobs)?;
     crate::steps_internal::group_ledger_steps::append_emit_ledger_steps(jobs);
     crate::cache_steps::append_workspace_cleanups(jobs)?;
     crate::cache_doctor::check(jobs)
+}
+
+fn cancel_in_progress_yaml(entries: &[&RustSuiteConfig]) -> Yaml {
+    let cancel_in_progress = entries
+        .iter()
+        .find_map(|suite| suite.cancel_in_progress)
+        .unwrap_or(false);
+    if cancel_in_progress && entries.iter().any(|suite| suite.has_schedule_trigger()) {
+        Yaml::str("${{ github.event_name != 'schedule' }}")
+    } else {
+        Yaml::Bool(cancel_in_progress)
+    }
 }
 
 fn workflow_display_name(slug: &str) -> String {
@@ -144,144 +175,6 @@ fn workflow_display_name(slug: &str) -> String {
     } else {
         format!("Suites ({slug})")
     }
-}
-
-fn suite_job_condition(suite: &RustSuiteConfig) -> Option<String> {
-    let name = &suite.id;
-    let dispatch_expr = if suite.has_workflow_dispatch_trigger() {
-        let mut clauses = vec!["github.event_name == 'workflow_dispatch'".to_owned()];
-        if suite.dispatch_inputs.is_empty() {
-            clauses.push(format!(
-                "(inputs.suite == 'all' || inputs.suite == '{name}')"
-            ));
-        } else {
-            for (input_name, values) in &suite.dispatch_inputs {
-                let value_ors: Vec<String> = values
-                    .iter()
-                    .map(|val| format!("inputs.{input_name} == '{val}'"))
-                    .collect();
-                clauses.push(if value_ors.len() == 1 {
-                    value_ors[0].clone()
-                } else {
-                    format!("({})", value_ors.join(" || "))
-                });
-            }
-        }
-        Some(clauses.join(" && "))
-    } else {
-        None
-    };
-    let schedule_expr = if suite.has_schedule_trigger() {
-        let cron_ors: Vec<String> = suite
-            .schedule
-            .iter()
-            .map(|cron| format!("github.event.schedule == '{cron}'"))
-            .collect();
-        let cron_clause = match cron_ors.as_slice() {
-            [] => None,
-            [single] => Some(single.clone()),
-            many => Some(format!("({})", many.join(" || "))),
-        };
-        Some(match cron_clause {
-            Some(clause) => format!("github.event_name == 'schedule' && {clause}"),
-            None => "github.event_name == 'schedule'".to_owned(),
-        })
-    } else {
-        None
-    };
-    match (dispatch_expr, schedule_expr) {
-        (Some(d), Some(s)) => Some(format!("({d}) || ({s})")),
-        (Some(d), None) => Some(d),
-        (None, Some(s)) => Some(s),
-        (None, None) => None,
-    }
-}
-
-fn triggers_yaml(
-    entries: &[&RustSuiteConfig],
-    workflow_dispatch: Option<&WorkflowDispatchConfig>,
-) -> Yaml {
-    let dispatch_suites: Vec<&str> = entries
-        .iter()
-        .filter(|suite| suite.has_workflow_dispatch_trigger())
-        .map(|suite| suite.id.as_str())
-        .collect();
-    let needs_auto_suite_input = entries
-        .iter()
-        .any(|suite| suite.has_workflow_dispatch_trigger() && suite.dispatch_inputs.is_empty());
-    let mut crons = BTreeSet::new();
-    for suite in entries {
-        if suite.has_schedule_trigger() {
-            for cron in &suite.schedule {
-                crons.insert(cron.clone());
-            }
-        }
-    }
-    let mut triggers = Vec::new();
-    if !dispatch_suites.is_empty() {
-        triggers.push((
-            "workflow_dispatch".to_owned(),
-            Yaml::Map(vec![(
-                "inputs".to_owned(),
-                dispatch_inputs_yaml(&dispatch_suites, needs_auto_suite_input, workflow_dispatch),
-            )]),
-        ));
-    }
-    if !crons.is_empty() {
-        let schedule_seq: Vec<Yaml> = crons
-            .into_iter()
-            .map(|cron| Yaml::Map(vec![("cron".to_owned(), Yaml::str(cron))]))
-            .collect();
-        triggers.push(("schedule".to_owned(), Yaml::Seq(schedule_seq)));
-    }
-    Yaml::Map(triggers)
-}
-
-fn dispatch_inputs_yaml(
-    dispatch_suites: &[&str],
-    needs_auto_suite_input: bool,
-    workflow_dispatch: Option<&WorkflowDispatchConfig>,
-) -> Yaml {
-    let mut inputs = Vec::new();
-    if needs_auto_suite_input {
-        let mut options = Vec::with_capacity(dispatch_suites.len() + 1);
-        options.push(Yaml::str("all"));
-        for name in dispatch_suites {
-            options.push(Yaml::str((*name).to_owned()));
-        }
-        let suite_input = Yaml::Map(vec![
-            (
-                "description".to_owned(),
-                Yaml::str("Test suite to run ('all' runs every dispatchable suite)"),
-            ),
-            ("required".to_owned(), Yaml::Bool(false)),
-            ("type".to_owned(), Yaml::str("choice")),
-            ("default".to_owned(), Yaml::str("all")),
-            ("options".to_owned(), Yaml::Seq(options)),
-        ]);
-        inputs.push(("suite".to_owned(), suite_input));
-    }
-    if let Some(dispatch) = workflow_dispatch {
-        for (name, cfg) in &dispatch.inputs {
-            let mut fields = Vec::new();
-            if let Some(description) = &cfg.description {
-                fields.push(("description".to_owned(), Yaml::str(description.clone())));
-            }
-            fields.push(("required".to_owned(), Yaml::Bool(cfg.required)));
-            fields.push(("type".to_owned(), Yaml::str(cfg.kind.as_str().to_owned())));
-            if let Some(default) = &cfg.default {
-                fields.push(("default".to_owned(), Yaml::str(default.clone())));
-            }
-            if !cfg.options.is_empty() {
-                fields.push((
-                    "options".to_owned(),
-                    Yaml::Seq(cfg.options.iter().cloned().map(Yaml::str).collect()),
-                ));
-            }
-            inputs.push((name.clone(), Yaml::Map(fields)));
-        }
-    }
-    Yaml::Map(inputs)
 }
 
 fn suite_job_to_yaml(

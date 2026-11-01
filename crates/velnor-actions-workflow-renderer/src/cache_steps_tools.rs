@@ -9,23 +9,22 @@ mod restore_action;
 use crate::RenderError;
 
 pub const TOOLS_RESTORE_ACTION_USES: &str =
-    "actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9";
+    velnor_actions_contract::workflow::step_identity::TOOLS_CACHE_RESTORE_ACTION_USES;
+pub(super) const TOOLS_SCRUB_USES: &str =
+    velnor_actions_contract::workflow::step_identity::TOOLS_CACHE_SCRUB_USES;
 pub const TOOLS_RESTORE_USES: &str =
     velnor_actions_contract::workflow::step_identity::TOOLS_CACHE_RESTORE_USES;
 pub const TOOLS_SAVE_USES: &str = "actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9";
 pub const TOOLS_RESTORE_NAME: &str = "Restore Mise tools";
 pub const TOOLS_SAVE_NAME: &str = "Save Mise tools";
+const TOOLS_PROBE_NAME: &str = "Probe Mise tools";
+const TOOLS_SCRUB_NAME: &str = "Scrub and verify Mise tools";
 pub(crate) const TOOLS_SEED_ADMITTED_INPUT: &str = "seed-admitted";
 pub(crate) const TOOLS_MISE_SHA256_INPUT: &str = "mise-sha256";
 pub(crate) const TOOLS_SEED_ADMITTED_EXPRESSION: &str = "${{ steps.v2.outputs.seed_admitted }}";
-pub const TOOLS_CACHE_PATH: &str = "~/.local/share/mise";
-pub const TOOLS_CACHE_PATHS: [&str; 5] = [
-    TOOLS_CACHE_PATH,
-    "${{ runner.temp }}/velnor/rustup",
-    "${{ runner.temp }}/velnor/cargo/.crates.toml",
-    "${{ runner.temp }}/velnor/cargo/.crates2.json",
-    "${{ runner.temp }}/velnor/cargo/bin",
-];
+pub const TOOLS_CACHE_PATH: &str = TOOLS_CACHE_PATHS[0];
+pub const TOOLS_CACHE_PATHS: [&str; 5] =
+    velnor_actions_contract::workflow::step_identity::TOOLS_CACHE_PATHS;
 pub(super) fn tools_cache_path_ok(path: &str) -> bool {
     TOOLS_CACHE_PATHS.contains(&path)
 }
@@ -65,6 +64,53 @@ pub(super) fn restore_step(
     step.id = Some(velnor_actions_contract::StepId::ToolsRestore);
     step.role = Some(StepRole::ToolsCacheRestore);
     Ok(step)
+}
+
+pub(super) fn probe_step(key: &str) -> Result<Step, RenderError> {
+    if !crate::cache_p08::is_v2_cache_key_expression(key) {
+        return Err(RenderError::InvalidWorkflow(
+            "bad_tools_cache_probe_key".to_owned(),
+        ));
+    }
+    let mut step = crate::steps::action_step(
+        TOOLS_PROBE_NAME,
+        TOOLS_RESTORE_ACTION_USES,
+        std::collections::BTreeMap::from([
+            ("key".to_owned(), key.to_owned()),
+            ("path".to_owned(), TOOLS_CACHE_PATHS.join("\n")),
+            (
+                velnor_actions_contract::workflow::step_identity::TOOLS_RESTORE_LOOKUP_ONLY_INPUT
+                    .to_owned(),
+                "true".to_owned(),
+            ),
+        ]),
+    )?;
+    step.condition = Some(crate::cache_p08::TOOLS_CACHE_RESTORE_CONDITION.to_owned());
+    step.id = Some(velnor_actions_contract::StepId::ToolsRestore);
+    step.role = Some(StepRole::ToolsCacheRestore);
+    Ok(step)
+}
+
+pub(super) fn scrub_step(mise_sha256: &str) -> Result<Step, RenderError> {
+    if !restore_action::is_mise_sha256(mise_sha256) {
+        return Err(RenderError::InvalidWorkflow(
+            "bad_tools_cache_scrub_mise_sha256".to_owned(),
+        ));
+    }
+    let mut step = crate::steps::action_step(
+        TOOLS_SCRUB_NAME,
+        TOOLS_SCRUB_USES,
+        std::collections::BTreeMap::from([(
+            TOOLS_MISE_SHA256_INPUT.to_owned(),
+            mise_sha256.to_owned(),
+        )]),
+    )?;
+    step.role = Some(StepRole::ToolsCacheScrub);
+    Ok(step)
+}
+
+pub(crate) fn scrub_action_file(version: &str) -> Result<crate::tree::RenderedFile, RenderError> {
+    restore_action::scrub_action_file(version)
 }
 
 pub(super) fn save_step(key: &str, condition: Option<String>) -> Result<Step, RenderError> {

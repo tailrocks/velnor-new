@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::step::{Step, StepKind};
-pub(super) use super::step_payloads::valid_tools_cache_identity;
+pub use super::step_payloads::{TOOLS_RESTORE_LOOKUP_ONLY_INPUT, ToolsRestoreForm};
 use super::step_payloads::{valid_checkout_payload, valid_mise_setup, valid_tool_seed_payload};
+pub(super) use super::step_payloads::{valid_tools_cache_identity, valid_tools_cache_scrub};
 use crate::errors::ContractError;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
@@ -21,6 +22,21 @@ pub const TOFU_PROVIDER_ADMISSION_USES: &str = "./.github/actions/tofu-provider-
 pub const TOOL_SEED_USES: &str = "./.github/actions/velnor-tool-seed";
 
 pub const TOOLS_CACHE_RESTORE_USES: &str = "./.github/actions/velnor-tools-cache-restore";
+
+pub const TOOLS_CACHE_SCRUB_USES: &str = "./.github/actions/velnor-tools-cache-scrub";
+
+pub const TOOLS_CACHE_RESTORE_ACTION_USES: &str =
+    "actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9";
+
+pub const TOOLS_CACHE_V2_KEY_EXPRESSION: &str = "mise-tools-v2-${{steps.v2.outputs.identity}}";
+
+pub const TOOLS_CACHE_PATHS: [&str; 5] = [
+    "~/.local/share/mise",
+    "${{ runner.temp }}/velnor/rustup",
+    "${{ runner.temp }}/velnor/cargo/.crates.toml",
+    "${{ runner.temp }}/velnor/cargo/.crates2.json",
+    "${{ runner.temp }}/velnor/cargo/bin",
+];
 
 pub const TOOLS_CACHE_PRELUDE_USES: [&str; 3] = [
     "./.github/actions/velnor-tools-prelude-u22",
@@ -129,6 +145,8 @@ pub enum StepRole {
     ToolsCacheIdentity,
 
     ToolsCacheRestore,
+
+    ToolsCacheScrub,
 
     CargoSourcesRestore,
 
@@ -248,10 +266,8 @@ impl StepRole {
             | Self::MbxBundleSave
             | Self::FamilySave => action_has_prefix_for_kind(kind, "actions/cache/save@"),
             Self::ToolsCacheIdentity => valid_tools_cache_identity(kind),
-            Self::ToolsCacheRestore => matches!(
-                kind,
-                StepKind::Action { uses, .. } if uses == TOOLS_CACHE_RESTORE_USES
-            ),
+            Self::ToolsCacheRestore => ToolsRestoreForm::of(kind).is_some(),
+            Self::ToolsCacheScrub => valid_tools_cache_scrub(kind),
             Self::CargoSourcesRestore | Self::MbxBundleRestore | Self::FamilyRestore => {
                 action_has_prefix_for_kind(kind, "actions/cache/restore@")
             }

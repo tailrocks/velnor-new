@@ -96,6 +96,13 @@ Workflow to generate
     - rust-velnor-runner-github-write (27 steps)
     - rust-velnor-runner-host-read (27 steps)
     - rust-velnor-runner-host-write (28 steps)
+    - tools-producer-06ecef7d (9 steps)
+    - tools-producer-1853a637 (7 steps)
+    - tools-producer-56e9622e (10 steps)
+    - tools-producer-5a83b914 (10 steps)
+    - tools-producer-c9d059bd (7 steps)
+    - tools-producer-d8003bf6 (8 steps)
+    - tools-producer-ef875df4 (9 steps)
     - 36 Rust crate jobs
       Timeout: 15 minutes per crate job
       Obligations: Clippy -> build -> run tests -> doctests -> doc build -> format check

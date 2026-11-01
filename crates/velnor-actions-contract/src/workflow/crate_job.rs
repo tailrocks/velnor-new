@@ -22,6 +22,8 @@ pub const GROUP_WRITER_SUFFIX: &str = "-write";
 
 pub const SEED_JOB_ID_PREFIX: &str = "dependency-seed";
 
+pub const TOOLS_PRODUCER_JOB_ID_PREFIX: &str = "tools-producer-";
+
 pub const MAX_GROUP_UNITS: usize = 64;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -250,10 +252,15 @@ pub fn is_seed_job_id(job_id: &str) -> bool {
             .is_some_and(|rest| rest.starts_with('-') || rest.starts_with('_'))
 }
 
+#[must_use]
+pub fn is_producer_job_id(job_id: &str) -> bool {
+    is_seed_job_id(job_id) || job_id.starts_with(TOOLS_PRODUCER_JOB_ID_PREFIX)
+}
+
 pub fn validate_group_needs(needs: &[String], group_job_id: &str) -> Result<(), ContractError> {
     for need in needs {
         validate_job_id(need)?;
-        if is_seed_job_id(need) {
+        if is_producer_job_id(need) {
             return Err(ContractError::identity(
                 "crate_group.needs",
                 format!("seed_dependency:{group_job_id}"),
