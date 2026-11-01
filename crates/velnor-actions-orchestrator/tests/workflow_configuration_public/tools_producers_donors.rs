@@ -16,7 +16,7 @@ use super::maintenance_features::owner_feature_repo;
 use super::tools_producers::{POLICIES, identity_digest, is_tools_producer, positions};
 use super::workflow_configuration_fixture;
 
-const SCHEDULED_SUITES_CONFIG: &str = r#"schema = 1
+pub(super) const SCHEDULED_SUITES_CONFIG: &str = r#"schema = 1
 
 [workflow]
 name = "CI"
@@ -285,7 +285,7 @@ fn producers_scrub_and_verify_mise_before_installing() -> Result<(), Box<dyn Err
     Ok(())
 }
 
-fn producer_ids_and_digests(workflow: &str) -> (BTreeSet<String>, BTreeSet<String>) {
+pub(super) fn producer_ids_and_digests(workflow: &str) -> (BTreeSet<String>, BTreeSet<String>) {
     let mut produced = BTreeSet::new();
     let mut consumed = BTreeSet::new();
     let mut owner = String::new();

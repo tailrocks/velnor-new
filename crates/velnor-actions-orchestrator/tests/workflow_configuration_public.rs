@@ -79,6 +79,8 @@ mod tools_producers;
 mod tools_producers_donors;
 #[path = "workflow_configuration_public/tools_producers_mutations.rs"]
 mod tools_producers_mutations;
+#[path = "workflow_configuration_public/tools_producers_scope.rs"]
+mod tools_producers_scope;
 #[path = "workflow_configuration_public/verification_tools.rs"]
 mod verification_tools;
 #[path = "workflow_configuration_public/workspace_format.rs"]

@@ -144,7 +144,11 @@ pub fn finalize_jobs(
         closure::check_internal_staged(id, job, ctx.preseed)?;
     }
     cache_p08::elect_cache_writers_with_policy(&mut jobs, ctx.pull_request_cache_policy)?;
-    crate::tools_producer::add_tools_producers(&mut jobs, ctx.pull_request_cache_policy)?;
+    crate::tools_producer::add_tools_producers(
+        &mut jobs,
+        ctx.pull_request_cache_policy,
+        velnor_actions_contract::workflow::ProducerScope::Push,
+    )?;
     closure::check_plan_anchor(&jobs)?;
     preseed_closure::check_preseed_closure(&jobs, ctx.preseed)?;
     closure::insert_plan_closure(&mut jobs, ctx, policy)?;

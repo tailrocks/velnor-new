@@ -4,10 +4,10 @@
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::workflow::crate_job::TOOLS_PRODUCER_JOB_ID_PREFIX;
-use velnor_actions_contract::workflow::{
-    DEPENDENCY_SEED_JOB_CONDITION, TOOLS_PRODUCER_INSTALL_CONDITION,
-};
 use velnor_actions_contract::workflow::{JACTIONLINT_VERIFIER_USES, RUST_VERIFIER_USES};
+use velnor_actions_contract::workflow::{
+    ProducerScope, TOOLS_PRODUCER_INSTALL_CONDITION, validate_tools_producer,
+};
 use velnor_actions_contract::{Job, PullRequestCachePolicy, Step, StepKind, StepRole};
 
 use crate::RenderError;
@@ -30,13 +30,16 @@ struct ToolsProducerPlan {
 pub(crate) fn add_tools_producers(
     jobs: &mut BTreeMap<String, Job>,
     policy: PullRequestCachePolicy,
+    scope: ProducerScope,
 ) -> Result<(), RenderError> {
     let mut built = Vec::new();
     for plan in plan(jobs)? {
         let donor = jobs
             .get(&plan.donor)
             .ok_or_else(|| invalid("donor_missing"))?;
-        built.push((plan.id.clone(), build(&plan, donor, policy)?));
+        let job = build(&plan, donor, policy, scope)?;
+        validate_tools_producer(&job, &plan.id, scope).map_err(RenderError::Contract)?;
+        built.push((plan.id.clone(), job));
     }
     for (id, job) in built {
         if jobs.insert(id.clone(), job).is_some() {
@@ -78,6 +81,7 @@ fn build(
     plan: &ToolsProducerPlan,
     donor: &Job,
     policy: PullRequestCachePolicy,
+    scope: ProducerScope,
 ) -> Result<Job, RenderError> {
     let mut steps = Vec::new();
     for role in [
@@ -96,7 +100,10 @@ fn build(
     steps.extend(install_steps(donor, &plan.id)?);
     steps.push(crate::cache_steps::tools_cache_save_step(
         crate::cache_p08::TOOLS_CACHE_KEY_EXPRESSION,
-        Some(crate::cache_p08::tools_cache_save_condition(policy)),
+        Some(match scope {
+            ProducerScope::Push => crate::cache_p08::tools_cache_save_condition(policy),
+            ProducerScope::Scheduled => crate::cache_p08::tools_cache_scheduled_save_condition(),
+        }),
     )?);
     Ok(Job {
         display_name: format!("{PRODUCER_DISPLAY_PREFIX}{}", plan.digest.short()),
@@ -104,7 +111,7 @@ fn build(
         check_runner: None,
         timeout_minutes: donor.timeout_minutes,
         needs: Vec::new(),
-        condition: Some(DEPENDENCY_SEED_JOB_CONDITION.to_owned()),
+        condition: Some(scope.job_condition().to_owned()),
         permissions: None,
         cache_mode: None,
         environment: None,
