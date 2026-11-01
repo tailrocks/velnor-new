@@ -11,6 +11,7 @@ use velnor_actions_workflow_renderer::render::RenderedTree;
 
 use crate::OrchestratorError;
 use crate::generate::write_tree;
+use crate::prepare::AdmissionLeg;
 use crate::validate_shell::{run_shellcheck_bodies, run_shellcheck_probe};
 
 const GENERATOR_LOCK_REL: &str = ".velnor/generator.lock";
@@ -49,13 +50,25 @@ pub(crate) fn validate_staged(tree: &RenderedTree) -> Result<Vec<String>, Orches
 
 pub(crate) fn verify_velnor_repository_files(
     root: &Path,
+    leg: AdmissionLeg,
 ) -> Result<Option<GeneratorLock>, OrchestratorError> {
-    let catalog = ToolCatalog::pinned();
-    let policy = root.join(VERSION_POLICY_REL);
-    if policy.is_file() {
-        let text = load_text(&policy).map_err(contract_of)?;
-        verify_version_policy(&text, &catalog).map_err(contract_of)?;
+    match leg {
+        AdmissionLeg::Candidate => verify_policy_matches_catalog(root)?,
+        AdmissionLeg::Controller => {}
     }
+    read_generator_lock(root)
+}
+
+fn verify_policy_matches_catalog(root: &Path) -> Result<(), OrchestratorError> {
+    let policy = root.join(VERSION_POLICY_REL);
+    if !policy.is_file() {
+        return Ok(());
+    }
+    let text = load_text(&policy).map_err(contract_of)?;
+    verify_version_policy(&text, &ToolCatalog::pinned()).map_err(contract_of)
+}
+
+fn read_generator_lock(root: &Path) -> Result<Option<GeneratorLock>, OrchestratorError> {
     let lock_path = root.join(GENERATOR_LOCK_REL);
     if !lock_path.is_file() {
         return Ok(None);

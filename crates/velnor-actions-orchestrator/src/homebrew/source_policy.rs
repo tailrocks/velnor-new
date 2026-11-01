@@ -12,7 +12,7 @@ use velnor_actions_mise::OperatorToolchainGuard;
 use crate::{
     OrchestratorError,
     internal::internal,
-    prepare::{GenerationPreparation, prepare, prepare_with_operator_guard},
+    prepare::{GenerationPreparation, prepare_for_candidate, prepare_for_candidate_with_operator_guard},
     safe_read::{MAX_REPO_FILE_BYTES, RepoBytes, read_repo_bytes},
 };
 
@@ -36,7 +36,7 @@ fn export_homebrew_source_policy_inner(
     if !output.is_absolute() {
         return Err(internal("homebrew_source_policy_output_must_be_absolute"));
     }
-    let prep = prepare_with_guard(root, guard)?;
+    let prep = prepare_candidate_with_guard(root, guard)?;
     require_enabled_tap(&prep)?;
     let bytes = source_policy_bytes(&prep)?;
     crate::exclusive_write::write_exclusive(output, &bytes, "homebrew_source_policy")
@@ -57,18 +57,18 @@ fn check_homebrew_source_policy_inner(
     root: &Path,
     guard: Option<&OperatorToolchainGuard>,
 ) -> Result<(), OrchestratorError> {
-    let prep = prepare_with_guard(root, guard)?;
+    let prep = prepare_candidate_with_guard(root, guard)?;
     require_enabled_tap(&prep)?;
     check_preparation(&prep)
 }
 
-fn prepare_with_guard(
+fn prepare_candidate_with_guard(
     root: &Path,
     guard: Option<&OperatorToolchainGuard>,
 ) -> Result<GenerationPreparation, OrchestratorError> {
     match guard {
-        Some(guard) => prepare_with_operator_guard(root, guard),
-        None => prepare(root),
+        Some(guard) => prepare_for_candidate_with_operator_guard(root, guard),
+        None => prepare_for_candidate(root),
     }
 }
 

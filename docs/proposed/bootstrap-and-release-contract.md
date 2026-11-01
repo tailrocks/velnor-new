@@ -25,6 +25,14 @@ MUST fail when the mirror differs from the catalog. Consumer repositories do
 not need this file. The generator MUST NOT create it or read it during
 consumer generation.
 
+The mirror check runs on two admission legs. The Candidate leg, used by the
+public `plan` and `generate` commands, fails when the mirror differs from the
+catalog. The Controller leg, used by the internal plan operation that the
+controller runs on a pull request head, does not check the mirror, so a pin
+bump can pass admission. The required `pin-mirror` action in
+`maintenance-helpers` enforces the mirror on the PR head, and the Candidate leg
+enforces it again before a candidate is built.
+
 ## 2. Consumer workflow bootstrap identity
 
 Every official Velnor release MUST publish:
@@ -226,7 +234,10 @@ NOT decide the graph that builds or promotes itself.
    these obligations.
 3. Build the candidate with a fixed Cargo/MBX argument vector through Mise,
    using the compiled version catalog. Dogfood CI first checks the repository
-   version-policy mirror. Do not load or modify project tool files.
+   version-policy mirror with the `pin-mirror` action (Required-gated
+   `maintenance-helpers`) and with the Candidate leg of `plan` and `generate`.
+   The Controller leg skips this check. Do not load or modify project tool
+   files.
 4. Upload the candidate once with its digest, source commit, target triple,
    and toolchain identity. Qualification downloads this artifact and MUST NOT
    rebuild it in another job.

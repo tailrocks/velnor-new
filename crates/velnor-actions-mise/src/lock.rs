@@ -6,8 +6,7 @@ use std::fmt::{Display, Formatter, Result as FmtResult};
 use std::path::Path;
 
 use velnor_actions_contract::{
-    ActionPin, GeneratorBinary, GeneratorLock, GithubRunnerImages, LockedGenerator, MiseBootstrap,
-    ReleaseManifest, RunnerInventory, VersionPolicy,
+    ActionPin, GeneratorBinary, GeneratorLock, LockedGenerator, MiseBootstrap, ReleaseManifest,
 };
 
 use super::{MISE_VERSION, PinnedTool, ToolCatalog};
@@ -72,54 +71,32 @@ pub fn parse_release_manifest(text: &str) -> Result<ReleaseManifest, LockError> 
 }
 
 pub fn verify_version_policy(text: &str, catalog: &ToolCatalog) -> Result<(), LockError> {
-    let doc = parse_toml(text)?;
-    check_schema(&doc, 1)?;
-    let tools = section(&doc, "tools")?;
-    for tool in PinnedTool::ALL {
-        let pinned = catalog.version(tool);
-        match tools.get(tool.tool_name()) {
-            Some(found) if found == pinned => {}
+    let doc: toml::Table =
+        toml::from_str(text).map_err(|err| malformed(err.message().to_owned()))?;
+    if doc.get("schema").and_then(toml::Value::as_integer) != Some(1) {
+        return Err(invalid("bad_schema".to_owned()));
+    }
+    let tools = doc
+        .get("tools")
+        .and_then(toml::Value::as_table)
+        .ok_or_else(|| invalid("missing_section:tools".to_owned()))?;
+    let pins = PinnedTool::ALL
+        .into_iter()
+        .map(|tool| (tool.tool_name(), catalog.version(tool)))
+        .chain([("mise", MISE_VERSION)]);
+    for (name, pinned) in pins {
+        match tools.get(name) {
+            Some(toml::Value::String(found)) if found == pinned => {}
             Some(found) => {
-                return Err(mismatch(format!(
-                    "tool:{}:{found}:{pinned}",
-                    tool.tool_name()
-                )));
+                let found = found
+                    .as_str()
+                    .map_or_else(|| found.to_string(), str::to_owned);
+                return Err(mismatch(format!("tool:{name}:{found}:{pinned}")));
             }
-            None => return Err(mismatch(format!("tool_missing:{}", tool.tool_name()))),
+            None => return Err(mismatch(format!("tool_missing:{name}"))),
         }
     }
-    match tools.get("mise") {
-        Some(found) if found == MISE_VERSION => Ok(()),
-        Some(found) => Err(mismatch(format!("tool:mise:{found}:{MISE_VERSION}"))),
-        None => Err(mismatch("tool_missing:mise".to_owned())),
-    }
-}
-
-pub fn parse_version_policy(text: &str) -> Result<VersionPolicy, LockError> {
-    let doc = parse_toml(text)?;
-    check_schema(&doc, VersionPolicy::SCHEMA)?;
-    let top = section(&doc, "")?;
-    let inventory =
-        section(&doc, "runner").or_else(|_| section(&doc, "github_runner_images.linux_x64"))?;
-    Ok(VersionPolicy {
-        schema: VersionPolicy::SCHEMA,
-        channel: entry(&top, "channel")?,
-        registry: entry(&top, "registry")?,
-        check_interval_hours: entry_int(&top, "check_interval_hours")?,
-        max_exception_days: entry_int(&top, "max_exception_days")?,
-        github_runner_images: GithubRunnerImages {
-            linux_x64: RunnerInventory {
-                default: entry(&inventory, "default")?,
-                supported: parse_string_list(&entry(&inventory, "supported")?)?,
-            },
-        },
-    })
-}
-
-pub fn verify_policy_header(text: &str) -> Result<(), LockError> {
-    parse_version_policy(text)?
-        .validate("version-policy.toml")
-        .map_err(|err| invalid(err.to_string()))
+    Ok(())
 }
 
 pub(crate) fn mismatch(problem: String) -> LockError {
@@ -128,31 +105,6 @@ pub(crate) fn mismatch(problem: String) -> LockError {
 
 fn invalid(problem: String) -> LockError {
     LockError::Invalid { problem }
-}
-
-fn entry_int(entries: &BTreeMap<String, String>, key: &str) -> Result<u32, LockError> {
-    let value = entries.get(key).and_then(|entry| entry.parse::<u32>().ok());
-    value.ok_or_else(|| invalid(format!("missing_key:{key}")))
-}
-
-fn parse_string_list(raw: &str) -> Result<Vec<String>, LockError> {
-    let inner = raw
-        .strip_prefix('[')
-        .and_then(|rest| rest.strip_suffix(']'))
-        .ok_or_else(|| malformed(format!("bad_list:{raw}")))?;
-    let mut items = Vec::new();
-    for item in inner.split(',') {
-        let item = item.trim();
-        if item.is_empty() {
-            continue;
-        }
-        let unquoted = item
-            .strip_prefix('"')
-            .and_then(|rest| rest.strip_suffix('"'))
-            .ok_or_else(|| malformed(format!("bad_list:{raw}")))?;
-        items.push(unescape(unquoted)?);
-    }
-    Ok(items)
 }
 
 type TomlDoc = Vec<(String, BTreeMap<String, String>)>;

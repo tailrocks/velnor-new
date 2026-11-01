@@ -19,6 +19,12 @@ use crate::workflow::{DEFAULT_RUNNER_LABEL, WorkflowPlan};
 
 const VELNOR_IDENTITY: &str = "tailrocks/velnor-new";
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum AdmissionLeg {
+    Controller,
+    Candidate,
+}
+
 #[derive(Debug, Clone)]
 pub struct GenerationPreparation {
     pub root: PathBuf,
@@ -45,18 +51,24 @@ impl GenerationPreparation {
     }
 }
 
-pub fn prepare(root: &Path) -> Result<GenerationPreparation, OrchestratorError> {
-    prepare_inner(root, None, None, None)
+pub fn prepare_for_candidate(root: &Path) -> Result<GenerationPreparation, OrchestratorError> {
+    prepare_inner(root, AdmissionLeg::Candidate, None, None, None)
 }
 
-pub fn prepare_with_operator_guard(
+pub(crate) fn prepare_for_controller(
+    root: &Path,
+) -> Result<GenerationPreparation, OrchestratorError> {
+    prepare_inner(root, AdmissionLeg::Controller, None, None, None)
+}
+
+pub fn prepare_for_candidate_with_operator_guard(
     root: &Path,
     guard: &OperatorToolchainGuard,
 ) -> Result<GenerationPreparation, OrchestratorError> {
-    prepare_inner(root, None, None, Some(guard))
+    prepare_inner(root, AdmissionLeg::Candidate, None, None, Some(guard))
 }
 
-pub(crate) fn prepare_with_config(
+pub(crate) fn prepare_for_candidate_with_config(
     root: &Path,
     config: VelnorConfig,
 ) -> Result<GenerationPreparation, OrchestratorError> {
@@ -64,18 +76,19 @@ pub(crate) fn prepare_with_config(
         .validate(crate::config::CONFIG_REL)
         .map_err(crate::config::config_error)?;
     crate::config::check_policy_mode(&config)?;
-    prepare_inner(root, None, Some(config), None)
+    prepare_inner(root, AdmissionLeg::Candidate, None, Some(config), None)
 }
 
-pub(crate) fn prepare_with_phase_timings(
+pub(crate) fn prepare_for_controller_with_phase_timings(
     root: &Path,
     phases: &mut PlanPhaseTimings,
 ) -> Result<GenerationPreparation, OrchestratorError> {
-    prepare_inner(root, Some(phases), None, None)
+    prepare_inner(root, AdmissionLeg::Controller, Some(phases), None, None)
 }
 
 fn prepare_inner(
     root: &Path,
+    leg: AdmissionLeg,
     phases: Option<&mut PlanPhaseTimings>,
     admitted_config: Option<VelnorConfig>,
     guard: Option<&OperatorToolchainGuard>,
@@ -94,7 +107,7 @@ fn prepare_inner(
     };
     check_velnor_identity(&canonical, &config)?;
     let (published_generator_lock, approved_release) =
-        load_generator_admission(&canonical, config.workflow.policy)?;
+        load_generator_admission(&canonical, leg, config.workflow.policy)?;
     let catalog = crate::tool_catalog_resolve::resolve_tool_catalog(&canonical, &config)?;
     let default_branch = resolve_default_branch(&canonical, &config)?;
     validate_verification_branch(&config, &default_branch)?;
@@ -160,6 +173,7 @@ fn prepare_inner(
 
 fn load_generator_admission(
     root: &Path,
+    leg: AdmissionLeg,
     policy: WorkflowPolicy,
 ) -> Result<
     (
@@ -169,19 +183,20 @@ fn load_generator_admission(
     OrchestratorError,
 > {
     let approved = crate::controller_approval::load_policy_approval(root, policy)?;
-    let lock = load_published_generator_lock(root, policy, approved.as_ref())?;
+    let lock = load_published_generator_lock(root, leg, policy, approved.as_ref())?;
     Ok((lock, approved))
 }
 
 fn load_published_generator_lock(
     root: &Path,
+    leg: AdmissionLeg,
     policy: WorkflowPolicy,
     approved: Option<&crate::controller_approval::ControllerApprovedRelease>,
 ) -> Result<Option<GeneratorLock>, OrchestratorError> {
     if policy != WorkflowPolicy::VelnorRepositoryV1 {
         return Ok(None);
     }
-    let lock = crate::validate::verify_velnor_repository_files(root)?.ok_or_else(|| {
+    let lock = crate::validate::verify_velnor_repository_files(root, leg)?.ok_or_else(|| {
         OrchestratorError::Contract {
             problem: "required_verdict_requires_published_generator_lock".to_owned(),
         }
