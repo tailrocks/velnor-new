@@ -36,6 +36,41 @@ fn public_mbx_gate_accepts_generated_run_and_archive_commands() -> Result<(), Bo
 }
 
 #[test]
+fn cold_cache_mbx_suite_stays_runnable() -> Result<(), Box<dyn Error>> {
+    for (partitions, build) in [
+        (1, RustSuiteBuildMode::Inline),
+        (2, RustSuiteBuildMode::Inline),
+        (2, RustSuiteBuildMode::Archive),
+    ] {
+        let built = build_ci_suite_jobs(&renderer_spec(CompileDriver::Mbx, partitions, build))?;
+        let mut saw_preflight = false;
+        for (id, job) in &built.jobs {
+            let install_at = job
+                .steps
+                .iter()
+                .position(|step| step.name == "Install suite tools");
+            let Some(preflight_at) = job
+                .steps
+                .iter()
+                .position(|step| step.name == "Verify Rust before MBX action")
+            else {
+                continue;
+            };
+            saw_preflight = true;
+            let install_at =
+                install_at.ok_or_else(|| format!("{id} lost its Install suite tools step"))?;
+            assert!(
+                install_at < preflight_at,
+                "{id}: Install suite tools (step {install_at}) must precede \
+                 Verify Rust before MBX action (step {preflight_at})"
+            );
+        }
+        assert!(saw_preflight, "no MBX preflight step rendered");
+    }
+    Ok(())
+}
+
+#[test]
 fn public_mbx_gate_accepts_exact_resolver_rust_token() -> Result<(), Box<dyn Error>> {
     let built = build_ci_suite_jobs(&renderer_spec(
         CompileDriver::Mbx,
