@@ -4,7 +4,7 @@
 use std::{error::Error, path::PathBuf};
 
 use velnor_actions_mise::{
-    IsolatedCommand, MetadataDiscovery, MetadataQualification, ToolCatalog, ToolHomes,
+    IsolatedCommand, MetadataDiscovery, MetadataQualification, MiseError, ToolCatalog, ToolHomes,
     VerifyPreparedInputs,
 };
 
@@ -33,4 +33,23 @@ fn relative_nested_manifest_resolves_once_from_the_metadata_cwd() -> Result<(), 
         assert_eq!(command.cwd(), expected.parent().map(PathBuf::from).as_ref());
     }
     Ok(())
+}
+
+#[test]
+fn empty_manifest_path_is_rejected_by_every_metadata_constructor() {
+    let rejected = MiseError::InvalidManifestPath {
+        path: String::new(),
+    };
+    assert_eq!(
+        MetadataDiscovery::new(PathBuf::new()),
+        Err(rejected.clone())
+    );
+    assert_eq!(
+        MetadataQualification::new(PathBuf::new()),
+        Err(rejected.clone())
+    );
+    assert_eq!(
+        VerifyPreparedInputs::new(PathBuf::new(), ToolHomes::runner_temp()),
+        Err(rejected)
+    );
 }
