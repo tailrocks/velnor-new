@@ -1,0 +1,14 @@
+{
+  "run_id": 41318649363,
+  "job_id": 124883983115,
+  "source_sha": "7bbb80f06628fc95363d113ad4cdde253d83f057",
+  "checked_at": "2026-11-01T15:22:52Z",
+  "labels": [
+    "ubuntu-26.04",
+    "ubuntu-24.04",
+    "ubuntu-22.04"
+  ],
+  "default": "ubuntu-26.04",
+  "doc_sha256": "19e119a46a3694e351e9c9cbd12c90253e50d8bfb5a22ec6c98c062366116f1f",
+  "log_sha256": "5b6ede64bacd9995d46f32ac525c4b07dcece49f5cade6552de4bbf53871a150"
+}
