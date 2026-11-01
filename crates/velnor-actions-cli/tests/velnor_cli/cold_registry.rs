@@ -16,10 +16,16 @@ mod cargo_1_99_1 {
         "error: unclosed table, expected `]`\n --> Cargo.toml:5:5\n  |\n5 | [lib\n  |     ^\n";
 
     pub(super) const MALFORMED_MANIFEST: &str = "error: failed to parse manifest at `/work/probe/Cargo.toml`\n\nCaused by:\n  feature `x` includes `y` which is neither a dependency nor another feature\n\n  help: a feature with a similar name exists: `x`\n";
+
+    pub(super) const MALFORMED_MANIFEST_NETWORK_PATH: &str = "error: failed to parse manifest at `/work/network/Cargo.toml`\n\nCaused by:\n  feature `timeout` includes `connection` which is neither a dependency nor another feature\n";
+
+    pub(super) const MALFORMED_AFTER_WARNING: &str = "warning: unused manifest key: package.foo\nerror: unclosed table, expected `]`\n --> Cargo.toml:5:5\n";
 }
 
 const TRANSIENT_TIMEOUT: &str = "error: operation timed out\n";
 const TRANSIENT_UNREACHABLE: &str = "error: network unreachable\n";
+const TRANSIENT_AFTER_WARNING: &str =
+    "warning: unused manifest key: package.foo\nerror: operation timed out\n";
 
 #[test]
 fn cold_registry_generate_names_the_warm_command() -> Result<(), Box<dyn Error>> {
@@ -35,7 +41,7 @@ fn cold_registry_generate_names_the_warm_command() -> Result<(), Box<dyn Error>>
         assert_eq!(generated.status.code(), Some(1), "{text}");
         assert!(
             text.contains(
-                "velnor-actions: cold_registry: Cargo.toml: run `cargo fetch --locked --manifest-path Cargo.toml`"
+                "velnor-actions: cold_registry: Cargo.toml: dependency not in the local registry; run `cargo fetch --locked --manifest-path Cargo.toml` (or the dependency does not exist)"
             ),
             "{text}"
         );
@@ -47,10 +53,14 @@ fn cold_registry_generate_names_the_warm_command() -> Result<(), Box<dyn Error>>
 
 #[test]
 fn transient_metadata_failure_is_not_reported_as_cold_registry() -> Result<(), Box<dyn Error>> {
-    for stderr in [
-        TRANSIENT_TIMEOUT,
-        TRANSIENT_UNREACHABLE,
-        cargo_1_99_1::TRANSIENT_CONNECT,
+    for (stderr, cause) in [
+        (TRANSIENT_TIMEOUT, "operation timed out"),
+        (TRANSIENT_UNREACHABLE, "network unreachable"),
+        (
+            cargo_1_99_1::TRANSIENT_CONNECT,
+            "failed to get `itoa` as a dependency of package",
+        ),
+        (TRANSIENT_AFTER_WARNING, "operation timed out"),
     ] {
         let fixture = fixture::Fixture::new()?;
         fixture.fail_qualification(stderr)?;
@@ -59,9 +69,13 @@ fn transient_metadata_failure_is_not_reported_as_cold_registry() -> Result<(), B
         let text = fixture::stderr(&generated);
         assert_eq!(generated.status.code(), Some(1), "{text}");
         assert!(
-            text.contains("preparation_incomplete: Cargo.toml: metadata_transient:"),
+            text.contains(&format!(
+                "preparation_incomplete: Cargo.toml: metadata_transient:error: {cause}"
+            )),
             "{text}"
         );
+        assert!(!text.contains("Updating crates.io index"), "{text}");
+        assert!(!text.contains("unused manifest key"), "{text}");
         assert!(!text.contains("cold_registry"), "{text}");
         assert!(!text.contains("cargo fetch"), "{text}");
         assert!(!output.exists());
@@ -77,6 +91,14 @@ fn malformed_manifest_failure_is_not_reported_as_cold_registry() -> Result<(), B
             cargo_1_99_1::MALFORMED_MANIFEST,
             "failed to parse manifest at",
         ),
+        (
+            cargo_1_99_1::MALFORMED_MANIFEST_NETWORK_PATH,
+            "failed to parse manifest at `/work/network/Cargo.toml`",
+        ),
+        (
+            cargo_1_99_1::MALFORMED_AFTER_WARNING,
+            "metadata_failed:error: unclosed table, expected `]`",
+        ),
     ] {
         let fixture = fixture::Fixture::new()?;
         fixture.fail_qualification(stderr)?;
@@ -87,6 +109,7 @@ fn malformed_manifest_failure_is_not_reported_as_cold_registry() -> Result<(), B
         assert!(text.contains(diagnostic), "{text}");
         assert!(!text.contains("cold_registry"), "{text}");
         assert!(!text.contains("metadata_offline"), "{text}");
+        assert!(!text.contains("metadata_transient"), "{text}");
         assert!(!output.exists());
     }
     Ok(())

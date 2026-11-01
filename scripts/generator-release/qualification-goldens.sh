@@ -986,7 +986,7 @@ capture_release_dogfood() {
   # Warm the cargo cache for both lockful dogfood workspaces ahead of the
   # candidate's locked/offline discovery (Gate 1): the qualify runner
   # starts with a virgin cache, so without this fetch the candidate's
-  # `cargo metadata --locked --offline` fails with preparation_incomplete.
+  # `cargo metadata --locked --offline` fails with cold_registry.
   # Same HOME/mise environment as the candidate run below, so the same
   # cache is warmed. `--locked` keeps a lock rewrite from slipping in.
   for manifest in "$repo/Cargo.toml" "$repo/crates/velnor-runner/Cargo.toml"; do

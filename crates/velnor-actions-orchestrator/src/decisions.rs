@@ -35,8 +35,10 @@ const TRANSIENT_MARKERS: [&str; 8] = [
 ];
 
 const MAX_PROBLEM_CHARS: usize = 160;
-pub(crate) const TRANSIENT_LABEL: &str = "metadata_transient";
+const TRANSIENT_LABEL: &str = "metadata_transient";
 const MALFORMED_LABEL: &str = "metadata_failed";
+const ERROR_PREFIX: &str = "error:";
+const CAUSE_HEADER: &str = "Caused by:";
 
 #[must_use]
 pub fn classify_metadata_failure(stderr: &str) -> MetadataFailure {
@@ -45,17 +47,48 @@ pub fn classify_metadata_failure(stderr: &str) -> MetadataFailure {
         || (lower.contains("no matching package") && lower.contains("--offline"))
     {
         MetadataFailure::OfflineMiss
-    } else if TRANSIENT_MARKERS.iter().any(|mark| lower.contains(mark)) {
+    } else if cause_lines(stderr)
+        .any(|line| TRANSIENT_MARKERS.iter().any(|mark| line.contains(mark)))
+    {
         MetadataFailure::Transient
     } else {
         MetadataFailure::Malformed
     }
 }
 
-pub(crate) fn metadata_problem(label: &str, stderr: &str) -> String {
-    let first = stderr.lines().next().unwrap_or_default().trim();
-    let short: String = first.chars().take(MAX_PROBLEM_CHARS).collect();
+fn cause_lines(stderr: &str) -> impl Iterator<Item = String> + '_ {
+    let mut in_cause = false;
+    stderr.lines().filter_map(move |line| {
+        let text = line.trim();
+        if text.is_empty() {
+            in_cause = false;
+            return None;
+        }
+        if text == CAUSE_HEADER {
+            in_cause = true;
+            return None;
+        }
+        (in_cause || text.starts_with(ERROR_PREFIX)).then(|| {
+            text.split('`')
+                .step_by(2)
+                .collect::<String>()
+                .to_lowercase()
+        })
+    })
+}
+
+fn metadata_problem(label: &str, stderr: &str) -> String {
+    let lines = || stderr.lines().map(str::trim);
+    let line = lines()
+        .find(|line| line.starts_with(ERROR_PREFIX))
+        .or_else(|| lines().find(|line| !line.is_empty()))
+        .unwrap_or_default();
+    let short: String = line.chars().take(MAX_PROBLEM_CHARS).collect();
     format!("{label}:{short}")
+}
+
+pub(crate) fn transient_problem(stderr: &str) -> String {
+    metadata_problem(TRANSIENT_LABEL, stderr)
 }
 
 pub(crate) fn metadata_failure_error(manifest: String, stderr: &str) -> OrchestratorError {

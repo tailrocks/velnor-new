@@ -12,9 +12,7 @@ use velnor_actions_mise::{
 use velnor_actions_rust::{WorkspaceRecord, parse_metadata_json};
 
 use crate::OrchestratorError;
-use crate::decisions::{
-    MetadataFailure, TRANSIENT_LABEL, classify_metadata_failure, metadata_problem,
-};
+use crate::decisions::{MetadataFailure, classify_metadata_failure, transient_problem};
 use crate::generate::ToolSnapshot;
 use crate::internal::phase_timing::PlanPhaseTimings;
 use crate::inventory_reuse::MemberIndex;
@@ -177,9 +175,6 @@ fn run_with(
                 Err(FetchFailure::Incomplete(problem)) => {
                     return Err(OrchestratorError::PreparationIncomplete { manifest, problem });
                 }
-                Err(FetchFailure::ColdRegistry) => {
-                    return Err(OrchestratorError::ColdRegistry { manifest });
-                }
                 Err(FetchFailure::Fatal(problem)) => {
                     return Err(OrchestratorError::ToolchainGuard { problem });
                 }
@@ -201,17 +196,15 @@ fn ok_outcome(manifest: String) -> CandidateOutcome {
 enum FetchFailure {
     Malformed(String),
     Incomplete(String),
-    ColdRegistry,
     Fatal(String),
 }
 
 fn classify_exit_failure(stderr: &str) -> FetchFailure {
     match classify_metadata_failure(stderr) {
-        MetadataFailure::OfflineMiss => FetchFailure::ColdRegistry,
-        MetadataFailure::Transient => {
-            FetchFailure::Incomplete(metadata_problem(TRANSIENT_LABEL, stderr))
+        MetadataFailure::Transient => FetchFailure::Incomplete(transient_problem(stderr)),
+        MetadataFailure::OfflineMiss | MetadataFailure::Malformed => {
+            FetchFailure::Malformed(stderr.to_owned())
         }
-        MetadataFailure::Malformed => FetchFailure::Malformed(stderr.to_owned()),
     }
 }
 

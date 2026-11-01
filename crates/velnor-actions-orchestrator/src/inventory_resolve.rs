@@ -3,12 +3,12 @@
 
 use std::path::Path;
 
-use velnor_actions_mise::{MetadataQualification, OperatorToolchainGuard, ToolCatalog};
+use velnor_actions_mise::{MetadataQualification, MiseError, OperatorToolchainGuard, ToolCatalog};
 use velnor_actions_rust::WorkspaceRecord;
 
 use super::require_metadata_tools;
 use crate::OrchestratorError;
-use crate::decisions::metadata_failure_error;
+use crate::decisions::{metadata_failure_error, transient_problem};
 use crate::discover::{PlannedWorkspace, workspace_lock, workspace_manifest};
 use crate::generate::ToolSnapshot;
 
@@ -81,7 +81,15 @@ pub(crate) fn qualify_workspaces_with_guard(
                         problem: "operator toolchain guard rejected metadata".to_owned(),
                     });
                 }
-                return Err(metadata_failure_error(manifest, &err.to_string()));
+                return Err(match err {
+                    MiseError::NonZeroExit { stderr, .. } => {
+                        metadata_failure_error(manifest, &stderr)
+                    }
+                    other => OrchestratorError::PreparationIncomplete {
+                        manifest,
+                        problem: transient_problem(&other.to_string()),
+                    },
+                });
             }
         };
         let graph = velnor_actions_rust::parse_resolved_graph(&json, root, &manifest)
