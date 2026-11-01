@@ -81,13 +81,13 @@ fn assert_ir_timeouts_are_independent(
         expanded_plan.workflow.ir.jobs[REQUIRED_JOB_ID]
             .timeout_minutes
             .minutes(),
-        5
+        15
     );
     assert_eq!(
         reduced_plan.workflow.ir.jobs[REQUIRED_JOB_ID]
             .timeout_minutes
             .minutes(),
-        5
+        15
     );
     assert_eq!(
         timeouts_without_plan(expanded_plan),
