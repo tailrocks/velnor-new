@@ -8,6 +8,7 @@ use velnor_actions_rust::WorkspaceRecord;
 
 use super::require_metadata_tools;
 use crate::OrchestratorError;
+use crate::decisions::metadata_failure_error;
 use crate::discover::{PlannedWorkspace, workspace_lock, workspace_manifest};
 use crate::generate::ToolSnapshot;
 
@@ -80,13 +81,7 @@ pub(crate) fn qualify_workspaces_with_guard(
                         problem: "operator toolchain guard rejected metadata".to_owned(),
                     });
                 }
-                let text = err.to_string();
-                let first = text.lines().next().unwrap_or("metadata_offline");
-                let short: String = first.chars().take(160).collect();
-                return Err(OrchestratorError::PreparationIncomplete {
-                    manifest,
-                    problem: format!("metadata_offline:{short}"),
-                });
+                return Err(metadata_failure_error(manifest, &err.to_string()));
             }
         };
         let graph = velnor_actions_rust::parse_resolved_graph(&json, root, &manifest)

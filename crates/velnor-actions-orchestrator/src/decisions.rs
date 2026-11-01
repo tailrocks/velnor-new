@@ -18,28 +18,55 @@ use crate::internal::internal_contract;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MetadataFailure {
+    OfflineMiss,
+    Transient,
     Malformed,
-    Incomplete,
 }
 
-const OFFLINE_MARKERS: [&str; 8] = [
-    "offline",
+const TRANSIENT_MARKERS: [&str; 8] = [
     "network",
     "failed to download",
     "could not resolve",
     "connection",
+    "couldn't connect",
     "timed out",
     "timeout",
     "temporary failure",
 ];
 
+const MAX_PROBLEM_CHARS: usize = 160;
+pub(crate) const TRANSIENT_LABEL: &str = "metadata_transient";
+const MALFORMED_LABEL: &str = "metadata_failed";
+
 #[must_use]
 pub fn classify_metadata_failure(stderr: &str) -> MetadataFailure {
     let lower = stderr.to_lowercase();
-    if OFFLINE_MARKERS.iter().any(|mark| lower.contains(mark)) {
-        MetadataFailure::Incomplete
+    if lower.contains("--offline was specified")
+        || (lower.contains("no matching package") && lower.contains("--offline"))
+    {
+        MetadataFailure::OfflineMiss
+    } else if TRANSIENT_MARKERS.iter().any(|mark| lower.contains(mark)) {
+        MetadataFailure::Transient
     } else {
         MetadataFailure::Malformed
+    }
+}
+
+pub(crate) fn metadata_problem(label: &str, stderr: &str) -> String {
+    let first = stderr.lines().next().unwrap_or_default().trim();
+    let short: String = first.chars().take(MAX_PROBLEM_CHARS).collect();
+    format!("{label}:{short}")
+}
+
+pub(crate) fn metadata_failure_error(manifest: String, stderr: &str) -> OrchestratorError {
+    let label = match classify_metadata_failure(stderr) {
+        MetadataFailure::OfflineMiss => return OrchestratorError::ColdRegistry { manifest },
+        MetadataFailure::Transient => TRANSIENT_LABEL,
+        MetadataFailure::Malformed => MALFORMED_LABEL,
+    };
+    OrchestratorError::PreparationIncomplete {
+        manifest,
+        problem: metadata_problem(label, stderr),
     }
 }
 

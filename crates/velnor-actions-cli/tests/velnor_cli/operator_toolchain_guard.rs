@@ -1,10 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-#[path = "operator_toolchain_guard_fixture.rs"]
-mod fixture;
-
 use std::{error::Error, fs};
+
+use super::fixture;
 
 #[test]
 fn unguarded_cli_fixture_qualifies_before_guard_tests() -> Result<(), Box<dyn Error>> {

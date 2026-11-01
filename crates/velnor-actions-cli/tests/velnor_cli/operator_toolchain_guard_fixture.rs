@@ -141,6 +141,11 @@ impl Fixture {
         )
     }
 
+    pub(super) fn fail_qualification(&self, stderr: &str) -> Result<(), Box<dyn Error>> {
+        fs::write(self.root.join("bin/qualify-stderr"), stderr)?;
+        Ok(())
+    }
+
     pub(super) fn enable_release(&self, registry: &str) -> Result<(), Box<dyn Error>> {
         let config = self.repo.join(".velnor/config.toml");
         let mut contents = fs::read_to_string(&config)?;
