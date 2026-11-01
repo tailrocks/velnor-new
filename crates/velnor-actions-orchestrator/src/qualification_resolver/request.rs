@@ -9,7 +9,7 @@ use velnor_actions_contract::{QualificationDispatch, WorkflowEvent, parse_strict
 
 use crate::OrchestratorError;
 use crate::internal::{check_schema, internal};
-use crate::prepare::prepare;
+use crate::prepare::prepare_for_controller;
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -35,7 +35,7 @@ impl QualificationRequest {
         if self.repository != self.context.repository {
             return Err(internal("qualification_repository_mismatch"));
         }
-        let prepared = prepare(root)?;
+        let prepared = prepare_for_controller(root)?;
         self.context
             .validate_for(&prepared.default_branch, &self.repository, &self.head)
             .map_err(crate::internal::internal_contract)?;

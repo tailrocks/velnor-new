@@ -5,13 +5,14 @@ use std::env;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
-use velnor_actions_freshness::Operation;
+use velnor_actions_freshness::{BaseRef, Operation};
 
 const ACTION_ENV: &str = "VELNOR_REPO_POLICY_ACTION";
 const ROOT_ENV: &str = "VELNOR_REPO_POLICY_ROOT";
 const UPSTREAM_ENV: &str = "VELNOR_REPO_POLICY_CHECK_UPSTREAM";
 const ADVISORIES_ENV: &str = "VELNOR_REPO_POLICY_WITH_ADVISORIES";
 const MANIFEST_PATH_ENV: &str = "VELNOR_REPO_POLICY_MANIFEST_PATH";
+const BASE_REF_ENV: &str = "VELNOR_REPO_POLICY_BASE_REF";
 
 pub(crate) fn gate_root() -> Option<PathBuf> {
     let action = env::var(ACTION_ENV).ok()?;
@@ -20,6 +21,7 @@ pub(crate) fn gate_root() -> Option<PathBuf> {
         "freshness"
             | "toolchain-specs"
             | "mise-version"
+            | "pin-mirror"
             | "workspace-members"
             | "library-members"
             | "test-members"
@@ -53,6 +55,9 @@ fn operation_from_environment() -> Result<Operation, String> {
         }),
         Ok("toolchain-specs") => Ok(Operation::ToolchainSpecs),
         Ok("mise-version") => Ok(Operation::MiseVersion),
+        Ok("pin-mirror") => Ok(Operation::PinMirror {
+            base: optional_base_ref(BASE_REF_ENV)?,
+        }),
         Ok("workspace-members") => Ok(Operation::WorkspaceMembers {
             libraries_only: false,
         }),
@@ -79,6 +84,17 @@ fn optional_manifest_path(name: &str) -> Result<Option<PathBuf>, String> {
         Ok(_) | Err(env::VarError::NotUnicode(_)) => Err(format!(
             "{name} must be a repository-relative Cargo.toml path"
         )),
+    }
+}
+
+fn optional_base_ref(name: &str) -> Result<Option<BaseRef>, String> {
+    match env::var(name) {
+        Err(env::VarError::NotPresent) => Ok(None),
+        Ok(value) if value.is_empty() => Ok(None),
+        Ok(value) => BaseRef::parse(&value)
+            .map(Some)
+            .map_err(|error| format!("{name}: {error}")),
+        Err(env::VarError::NotUnicode(_)) => Err(format!("{name} must be ASCII")),
     }
 }
 

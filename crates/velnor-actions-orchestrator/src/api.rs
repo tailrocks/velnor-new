@@ -85,7 +85,7 @@ pub use super::critical_path::{
 };
 pub use super::derive_groups::FeatureFallback;
 pub use super::discover::{Discovery, PlannedWorkspace};
-pub use super::error::OrchestratorError;
+pub use super::error::{OrchestratorError, WarmRemedy};
 pub use super::extension_schemas::{
     extension_schema_for_stack, reuse_eligible_for_schema, task_key_segment, task_kind_segment,
     task_stack_segment,
@@ -112,7 +112,10 @@ pub use super::owned_tool_preview::{SourceQualificationTrigger, preview_owned_to
 pub use super::pins::{acquire_script_argv, consumer_acquire_step_with_manifest};
 pub use super::plan::{plan_text, plan_text_checked};
 pub use super::plan_output_limits::{JOB_OUTPUTS_BUDGET_UTF16_BYTES, PlanOutputMode};
-pub use super::prepare::{GenerationPreparation, prepare, prepare_with_operator_guard};
+pub use super::prepare::{
+    GenerationPreparation, prepare_for_candidate as prepare,
+    prepare_for_candidate_with_operator_guard as prepare_with_operator_guard,
+};
 pub use velnor_actions_mise::OperatorToolchainGuard;
 pub use super::preseed_manifest::{PRESEED_MANIFEST_OP, write_preseed_manifest};
 pub use super::preview_producer::{

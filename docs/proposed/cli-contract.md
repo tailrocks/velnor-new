@@ -82,8 +82,21 @@ rules are in §6 and [workflow §3](workflow-contract.md).
 Repository-maintenance checks use the separate private operation
 `VELNOR_INTERNAL_OP=repo-policy-v1` and the allowlisted
 `VELNOR_REPO_POLICY_ACTION` values `freshness`, `toolchain-specs`,
-`mise-version`, `workspace-members`, and `library-members`.
+`mise-version`, `pin-mirror`, `workspace-members`, `library-members`,
+`test-members`, and `artifact-executable`.
 The `VELNOR_REPO_POLICY_ROOT` variable must name an existing directory.
+The `pin-mirror` action checks the pin mirrors offline and runs no
+evidence-age, exception, advisory, or upstream check. It requires the
+compiled constants, the inventory, and the policy to agree: every cosign
+artifact pin in the catalog has one inventory `artifacts` record, and the
+supported runner labels equal the x64 labels of `RUNNER_LABEL_CATALOG`. It
+reads the head inventory, policy, and constant sources only as regular files
+whose parent directories inside the root are not symlinks. When
+`VELNOR_REPO_POLICY_BASE_REF` is set, it also reports the pin changes against
+that Git ref. The ref is resolved once to a commit id, the base files are read
+by that id, and an unresolvable ref fails the action. The ref accepts only 1 to
+200 ASCII letters, digits, `.`, `_`, `/`, and `-`, with no leading `-` and no
+`..`.
 Optional upstream and advisory flags accept only absent, `0`, or `1`. Unknown actions and malformed flags fail closed. The gate transports
 read-only operations to the repository-only `velnor-actions-freshness`
 support crate; the orchestrator, public command tree, V1 product task graph,

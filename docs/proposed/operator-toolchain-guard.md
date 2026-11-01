@@ -62,6 +62,8 @@ User-facing diagnostics distinguish the following conditions:
 | Unsupported operation | `operator toolchain guard is unsupported for this command` |
 | Metadata execution denied | `operator toolchain guard rejected metadata` |
 
+The guard keeps this diagnostic opaque for every metadata failure, including a cold registry. This is a deliberate exception to the `cold_registry` report that `generate` prints without the guard. To get the warm command (`cargo fetch --locked --manifest-path '<absolute path>'`), run the same `generate` without `--toolchain-guard`.
+
 ## Local guard compatibility
 
 The golden collector also accepts an explicit `--toolchain-guard` option with

@@ -12,7 +12,7 @@ use velnor_actions_mise::{
 use velnor_actions_rust::{WorkspaceRecord, parse_metadata_json};
 
 use crate::OrchestratorError;
-use crate::decisions::{MetadataFailure, classify_metadata_failure};
+use crate::decisions::{MetadataFailure, classify_metadata_failure, transient_problem};
 use crate::generate::ToolSnapshot;
 use crate::internal::phase_timing::PlanPhaseTimings;
 use crate::inventory_reuse::MemberIndex;
@@ -201,12 +201,10 @@ enum FetchFailure {
 
 fn classify_exit_failure(stderr: &str) -> FetchFailure {
     match classify_metadata_failure(stderr) {
-        MetadataFailure::Incomplete => {
-            let first = stderr.lines().next().unwrap_or("metadata_offline").trim();
-            let short: String = first.chars().take(160).collect();
-            FetchFailure::Incomplete(format!("metadata_offline:{short}"))
+        MetadataFailure::Transient => FetchFailure::Incomplete(transient_problem(stderr)),
+        MetadataFailure::OfflineMiss | MetadataFailure::Malformed => {
+            FetchFailure::Malformed(stderr.to_owned())
         }
-        MetadataFailure::Malformed => FetchFailure::Malformed(stderr.to_owned()),
     }
 }
 

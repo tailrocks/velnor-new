@@ -20,12 +20,9 @@ pub struct MetadataDiscovery {
 
 impl MetadataDiscovery {
     pub fn new(manifest: PathBuf) -> Result<Self, MiseError> {
-        if manifest.as_os_str().is_empty() {
-            return Err(MiseError::InvalidManifestPath {
-                path: String::new(),
-            });
-        }
-        Ok(Self { manifest })
+        Ok(Self {
+            manifest: absolute_manifest(manifest)?,
+        })
     }
 
     #[must_use]
@@ -54,6 +51,7 @@ impl MetadataDiscovery {
     pub fn command(&self, catalog: &ToolCatalog) -> Result<IsolatedCommand, MiseError> {
         let specs = catalog.tool_specs(&[PinnedTool::Rust]);
         IsolatedCommand::mise_exec(&specs, &self.cargo_argv())
+            .map(|command| in_workspace(command, &self.manifest))
     }
 
     pub fn command_with_operator_guard(
@@ -67,6 +65,7 @@ impl MetadataDiscovery {
             &specs,
             &mbx_metadata_argv(&self.cargo_argv()),
         )
+        .map(|command| in_workspace(command, &self.manifest))
     }
 
     pub fn run(&self, catalog: &ToolCatalog) -> Result<String, MiseError> {
@@ -92,12 +91,9 @@ pub struct MetadataQualification {
 
 impl MetadataQualification {
     pub fn new(workspace_manifest: PathBuf) -> Result<Self, MiseError> {
-        if workspace_manifest.as_os_str().is_empty() {
-            return Err(MiseError::InvalidManifestPath {
-                path: String::new(),
-            });
-        }
-        Ok(Self { workspace_manifest })
+        Ok(Self {
+            workspace_manifest: absolute_manifest(workspace_manifest)?,
+        })
     }
 
     #[must_use]
@@ -128,6 +124,7 @@ impl MetadataQualification {
     pub fn command(&self, catalog: &ToolCatalog) -> Result<IsolatedCommand, MiseError> {
         let specs = catalog.tool_specs(&[PinnedTool::Rust]);
         IsolatedCommand::mise_exec(&specs, &self.cargo_argv())
+            .map(|command| in_workspace(command, &self.workspace_manifest))
     }
 
     pub fn command_with_operator_guard(
@@ -141,6 +138,7 @@ impl MetadataQualification {
             &specs,
             &mbx_metadata_argv(&self.cargo_argv()),
         )
+        .map(|command| in_workspace(command, &self.workspace_manifest))
     }
 
     pub fn run(&self, catalog: &ToolCatalog) -> Result<String, MiseError> {
@@ -156,6 +154,22 @@ impl MetadataQualification {
     ) -> Result<String, MiseError> {
         let command = self.command_with_operator_guard(catalog, guard)?;
         run_guarded(&command)
+    }
+}
+
+fn absolute_manifest(manifest: PathBuf) -> Result<PathBuf, MiseError> {
+    if manifest.is_absolute() {
+        return Ok(manifest);
+    }
+    std::path::absolute(&manifest).map_err(|_| MiseError::InvalidManifestPath {
+        path: manifest.display().to_string(),
+    })
+}
+
+fn in_workspace(command: IsolatedCommand, manifest: &Path) -> IsolatedCommand {
+    match manifest.parent() {
+        Some(dir) => command.with_cwd(dir.to_path_buf()),
+        None => command,
     }
 }
 

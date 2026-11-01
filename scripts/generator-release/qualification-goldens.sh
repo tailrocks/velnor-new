@@ -983,12 +983,6 @@ capture_release_dogfood() {
       && fixture_git commit -qm "golden"
   ) >"$git_log" 2>&1 || { cat "$git_log" >&2; echo "FATAL: dogfood git setup failed"; exit 2; }
   rm -f "$git_log"
-  # Warm the cargo cache for both lockful dogfood workspaces ahead of the
-  # candidate's locked/offline discovery (Gate 1): the qualify runner
-  # starts with a virgin cache, so without this fetch the candidate's
-  # `cargo metadata --locked --offline` fails with preparation_incomplete.
-  # Same HOME/mise environment as the candidate run below, so the same
-  # cache is warmed. `--locked` keeps a lock rewrite from slipping in.
   for manifest in "$repo/Cargo.toml" "$repo/crates/velnor-runner/Cargo.toml"; do
     if ! (
       cd "$(dirname "$manifest")" || exit 2
