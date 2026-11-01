@@ -10,7 +10,7 @@ use serde_json::Value;
 use toml::Value as TomlValue;
 
 use crate::context::FreshnessContext;
-use crate::inventory::{INVENTORY_REL, POLICY_REL, parse_inventory, parse_policy};
+use crate::inventory::{COSIGN_ASSETS, INVENTORY_REL, POLICY_REL, parse_inventory, parse_policy};
 
 use git::Blob;
 
@@ -82,42 +82,9 @@ impl PinChange {
 impl PinSet {
     fn project(policy: Option<&TomlValue>, inventory: &Value) -> Self {
         let mut pins = BTreeMap::new();
-        let text = |value: &TomlValue| {
-            value
-                .as_str()
-                .map_or_else(|| value.to_string(), str::to_owned)
-        };
-        if let Some(tools) = policy
-            .and_then(|policy| policy.get("tools"))
-            .and_then(TomlValue::as_table)
-        {
-            for (name, value) in tools {
-                pins.insert(format!("policy tool {name}"), text(value));
-            }
-        }
-        for entry in policy
-            .and_then(|policy| policy.get("actions"))
-            .and_then(TomlValue::as_array)
-            .into_iter()
-            .flatten()
-        {
-            let field = |key: &str| entry.get(key).and_then(TomlValue::as_str).unwrap_or("");
-            pins.insert(
-                format!("policy action {}", field("name")),
-                format!("{}@{}", field("version"), field("sha")),
-            );
-        }
-        if let Some(default) = policy
-            .and_then(|policy| policy.get("github_runner_images"))
-            .and_then(|images| images.get("linux_x64"))
-            .and_then(|linux| linux.get("default"))
-        {
-            pins.insert("policy runner default".to_owned(), text(default));
-        }
-        for entry in json_entries(inventory, "tools") {
-            let name = json_text(entry, "name");
-            pins.insert(format!("inventory tool {name}"), json_text(entry, "pinned"));
-        }
+        project_policy(&mut pins, policy);
+        project_inventory_tools(&mut pins, inventory);
+        project_inventory_runner(&mut pins, inventory);
         for entry in json_entries(inventory, "actions") {
             pins.insert(
                 format!("inventory action {}", json_text(entry, "key")),
@@ -152,6 +119,91 @@ impl PinSet {
                 _ => None,
             })
             .collect()
+    }
+}
+
+fn toml_text(value: &TomlValue) -> String {
+    value
+        .as_str()
+        .map_or_else(|| value.to_string(), str::to_owned)
+}
+
+fn project_policy(pins: &mut BTreeMap<String, String>, policy: Option<&TomlValue>) {
+    if let Some(tools) = policy
+        .and_then(|policy| policy.get("tools"))
+        .and_then(TomlValue::as_table)
+    {
+        for (name, value) in tools {
+            pins.insert(format!("policy tool {name}"), toml_text(value));
+        }
+    }
+    for entry in policy
+        .and_then(|policy| policy.get("actions"))
+        .and_then(TomlValue::as_array)
+        .into_iter()
+        .flatten()
+    {
+        let field = |key: &str| entry.get(key).and_then(TomlValue::as_str).unwrap_or("");
+        pins.insert(
+            format!("policy action {}", field("name")),
+            format!("{}@{}", field("version"), field("sha")),
+        );
+    }
+    let runner = policy
+        .and_then(|policy| policy.get("github_runner_images"))
+        .and_then(|images| images.get("linux_x64"));
+    if let Some(default) = runner.and_then(|linux| linux.get("default")) {
+        pins.insert("policy runner default".to_owned(), toml_text(default));
+    }
+    if let Some(labels) = runner
+        .and_then(|linux| linux.get("supported"))
+        .and_then(TomlValue::as_array)
+    {
+        let labels = labels.iter().map(toml_text).collect::<Vec<_>>();
+        pins.insert("policy runner supported".to_owned(), labels.join(","));
+    }
+}
+
+fn project_inventory_tools(pins: &mut BTreeMap<String, String>, inventory: &Value) {
+    for entry in json_entries(inventory, "tools") {
+        let name = json_text(entry, "name");
+        pins.insert(format!("inventory tool {name}"), json_text(entry, "pinned"));
+        if name != "cosign" {
+            continue;
+        }
+        for asset in &COSIGN_ASSETS {
+            for field in [asset.bytes_field, asset.digest_field] {
+                if entry.get(field).is_some() {
+                    pins.insert(
+                        format!("inventory tool cosign {field}"),
+                        json_text(entry, field),
+                    );
+                }
+            }
+        }
+    }
+}
+
+fn project_inventory_runner(pins: &mut BTreeMap<String, String>, inventory: &Value) {
+    let Some(runner) = inventory.get("runner") else {
+        return;
+    };
+    if runner.get("default").is_some() {
+        pins.insert(
+            "inventory runner default".to_owned(),
+            json_text(runner, "default"),
+        );
+    }
+    if let Some(labels) = runner.get("supported").and_then(Value::as_array) {
+        let labels = labels
+            .iter()
+            .map(|label| {
+                label
+                    .as_str()
+                    .map_or_else(|| label.to_string(), str::to_owned)
+            })
+            .collect::<Vec<_>>();
+        pins.insert("inventory runner supported".to_owned(), labels.join(","));
     }
 }
 

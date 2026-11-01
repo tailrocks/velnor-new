@@ -7,7 +7,7 @@ use serde_json::Value;
 
 use crate::context::FreshnessContext;
 
-use super::{ACTIONS, CATALOG, EXPECTED_ACTIONS, EXPECTED_TOOLS, RUNNER_DEFAULT};
+use super::{ACTIONS, CATALOG, COSIGN_ASSETS, EXPECTED_ACTIONS, EXPECTED_TOOLS, RUNNER_DEFAULT};
 
 #[path = "pins_mirrors.rs"]
 mod mirrors;
@@ -113,25 +113,11 @@ fn check_tool_pins(ctx: &mut FreshnessContext) {
 }
 
 fn check_cosign_asset_pins(ctx: &mut FreshnessContext, tool: &Value) {
-    for (platform, bytes_constant, size_field, digest_constant, digest_field) in [
-        (
-            "Linux x86_64",
-            "COSIGN_LINUX_AMD64_BYTES",
-            "bytes",
-            "COSIGN_LINUX_AMD64_SHA256",
-            "sha256",
-        ),
-        (
-            "Linux arm64",
-            "COSIGN_LINUX_ARM64_BYTES",
-            "arm64_bytes",
-            "COSIGN_LINUX_ARM64_SHA256",
-            "arm64_sha256",
-        ),
-    ] {
-        let bytes = ctx.rust_usize_const(CATALOG, bytes_constant);
+    for asset in &COSIGN_ASSETS {
+        let platform = asset.platform;
+        let bytes = ctx.rust_usize_const(CATALOG, asset.bytes_constant);
         let inventory_bytes = tool
-            .get(size_field)
+            .get(asset.bytes_field)
             .and_then(Value::as_u64)
             .map(|value| value.to_string());
         compare_pin(
@@ -141,12 +127,12 @@ fn check_cosign_asset_pins(ctx: &mut FreshnessContext, tool: &Value) {
             inventory_bytes.as_deref(),
         );
 
-        let digest = ctx.rust_const(CATALOG, digest_constant);
+        let digest = ctx.rust_const(CATALOG, asset.digest_constant);
         compare_pin(
             ctx,
             &format!("tool cosign {platform} release digest"),
             digest.as_deref(),
-            tool.get(digest_field).and_then(Value::as_str),
+            tool.get(asset.digest_field).and_then(Value::as_str),
         );
     }
 }

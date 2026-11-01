@@ -5,13 +5,14 @@ use std::{fs, io, path::Path};
 
 use serde_json::Value;
 use velnor_actions_freshness::BaseRef;
+use velnor_actions_mise::{ToolCatalog, catalog::lock::verify_version_policy};
 
 #[path = "pin_mirror_public_fixture.rs"]
 mod fixture;
 
 use fixture::{
-    CATALOG, Fixture, POLICY, TestResult, age_all_evidence, compiled_crane, compiled_tool_pins,
-    set_first_line, set_policy_tool,
+    CATALOG, Fixture, INVENTORY, POLICY, TestResult, age_all_evidence, compiled_crane,
+    compiled_tool_pins, set_first_line, set_policy_tool,
 };
 
 #[test]
@@ -222,5 +223,101 @@ fn base_ref_parse_rejects_unsafe_refs() -> TestResult {
     let empty = fixture.run(Some(""))?;
     assert!(empty.success);
     assert_eq!(empty.rows_of("pin-diff", "info").len(), 0);
+    Ok(())
+}
+
+#[test]
+fn pin_mirror_and_candidate_agree_on_which_policy_files_are_valid() -> TestResult {
+    let gh = compiled_tool_pins()
+        .into_iter()
+        .find_map(|(name, version)| (name == "gh").then_some(version))
+        .ok_or("gh pin missing")?;
+    let cases = [
+        ("shipped", format!("gh = \"{gh}\""), true),
+        ("quoted key", format!("\"gh\" = \"{gh}\""), true),
+        ("literal string", format!("gh = '{gh}'"), true),
+        ("drifted value", "gh = \"999.0.0\"".to_owned(), false),
+        ("malformed", "gh = = broken".to_owned(), false),
+    ];
+    for (label, line, valid) in cases {
+        let fixture = Fixture::new()?;
+        let text = set_first_line(&fs::read_to_string(fixture.path(POLICY))?, "gh = ", &line);
+        fs::write(fixture.path(POLICY), &text)?;
+        let mirror = fixture.run(None)?.success;
+        let candidate = verify_version_policy(&text, &ToolCatalog::pinned()).is_ok();
+        assert_eq!(mirror, valid, "pin-mirror verdict for {label}");
+        assert_eq!(candidate, valid, "candidate verdict for {label}");
+    }
+    Ok(())
+}
+
+#[test]
+fn pin_diff_reports_cosign_digest_and_runner_label_changes() -> TestResult {
+    let fixture = Fixture::new()?;
+    fixture.commit_all()?;
+    let inventory: Value = serde_json::from_slice(&fs::read(fixture.path(INVENTORY))?)?;
+    let cosign = inventory["tools"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .find(|tool| tool["name"] == "cosign")
+        .ok_or("cosign inventory row missing")?;
+    let old_digest = cosign["sha256"]
+        .as_str()
+        .ok_or("cosign sha256 missing")?
+        .to_owned();
+    let new_digest = "ab".repeat(32);
+    fixture.rewrite(CATALOG, |text| text.replacen(&old_digest, &new_digest, 1))?;
+    fixture.edit_inventory(|inventory| {
+        for tool in inventory["tools"].as_array_mut().into_iter().flatten() {
+            if tool["name"] == "cosign" {
+                tool["sha256"] = Value::String(new_digest.clone());
+            }
+        }
+    })?;
+    let digest = fixture.run(Some("HEAD"))?;
+    assert!(digest.success, "consistent digest change rejected");
+    let row = digest
+        .row("pin-diff", "info", "inventory tool cosign sha256")
+        .ok_or_else(|| io::Error::other(format!("digest change unreported: {:?}", digest.rows)))?;
+    assert_eq!(
+        row["detail"],
+        format!("base={old_digest} head={new_digest}").as_str()
+    );
+
+    let fixture = Fixture::new()?;
+    fixture.commit_all()?;
+    fixture.rewrite(POLICY, |text| text.replacen(", \"ubuntu-22.04\"", "", 1))?;
+    fixture.edit_inventory(|inventory| {
+        if let Some(labels) = inventory["runner"]["supported"].as_array_mut() {
+            labels.retain(|label| label != "ubuntu-22.04");
+        }
+    })?;
+    let labels = fixture.run(Some("HEAD"))?;
+    assert!(labels.success, "consistent label change rejected");
+    for subject in ["policy runner supported", "inventory runner supported"] {
+        let row = labels
+            .row("pin-diff", "info", subject)
+            .ok_or_else(|| io::Error::other(format!("{subject} unreported: {:?}", labels.rows)))?;
+        assert_eq!(
+            row["detail"],
+            "base=ubuntu-26.04,ubuntu-24.04,ubuntu-22.04 head=ubuntu-26.04,ubuntu-24.04"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn pin_diff_fails_closed_when_a_base_parent_directory_is_a_symlink() -> TestResult {
+    let fixture = Fixture::new()?;
+    fs::rename(fixture.path(".velnor"), fixture.path("held-velnor"))?;
+    std::os::unix::fs::symlink("held-velnor", fixture.path(".velnor"))?;
+    fixture.commit_all()?;
+    fs::remove_file(fixture.path(".velnor"))?;
+    fs::rename(fixture.path("held-velnor"), fixture.path(".velnor"))?;
+    let outcome = fixture.run(Some("HEAD"))?;
+    assert!(!outcome.success, "symlinked base parent accepted");
+    assert!(outcome.row("pin-diff", "fail", "HEAD").is_some());
+    assert_eq!(outcome.rows_of("pin-diff", "info").len(), 0);
     Ok(())
 }

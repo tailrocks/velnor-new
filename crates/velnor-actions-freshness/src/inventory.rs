@@ -67,6 +67,31 @@ pub(crate) const EXPECTED_ACTIONS: &[(&str, &str)] = &[
     ("actions/github-script", "GITHUB_SCRIPT_ACTION"),
 ];
 
+pub(crate) struct CosignAsset {
+    pub(crate) platform: &'static str,
+    pub(crate) bytes_constant: &'static str,
+    pub(crate) bytes_field: &'static str,
+    pub(crate) digest_constant: &'static str,
+    pub(crate) digest_field: &'static str,
+}
+
+pub(crate) const COSIGN_ASSETS: [CosignAsset; 2] = [
+    CosignAsset {
+        platform: "Linux x86_64",
+        bytes_constant: "COSIGN_LINUX_AMD64_BYTES",
+        bytes_field: "bytes",
+        digest_constant: "COSIGN_LINUX_AMD64_SHA256",
+        digest_field: "sha256",
+    },
+    CosignAsset {
+        platform: "Linux arm64",
+        bytes_constant: "COSIGN_LINUX_ARM64_BYTES",
+        bytes_field: "arm64_bytes",
+        digest_constant: "COSIGN_LINUX_ARM64_SHA256",
+        digest_field: "arm64_sha256",
+    },
+];
+
 pub(crate) const INVENTORY_REL: &str = ".velnor/freshness-inventory.json";
 
 pub(crate) const POLICY_REL: &str = ".velnor/version-policy.toml";

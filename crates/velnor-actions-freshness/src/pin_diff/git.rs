@@ -48,16 +48,38 @@ pub(super) fn read_blob(root: &Path, oid: &str, path: &str) -> Result<Blob, Stri
     if !is_object_id(oid) {
         return Err("commit id is not an object id".to_owned());
     }
-    let listing = run_git(root, &["ls-tree", "-z", "--full-tree", oid, "--", path])?;
-    if listing.is_empty() {
-        return Ok(Blob::Absent);
+    for (index, _) in path.match_indices('/') {
+        let Some(parent) = path.get(..index) else {
+            return Err(format!("{path} is not a valid path"));
+        };
+        match tree_entry(root, oid, parent)? {
+            None => return Ok(Blob::Absent),
+            Some(EntryKind::Tree) => {}
+            Some(_) => return Err(format!("{parent} is not a directory in the base commit")),
+        }
     }
-    check_regular_blob_entry(&listing, path)?;
-    run_git(root, &["cat-file", "blob", &format!("{oid}:{path}")]).map(Blob::Present)
+    match tree_entry(root, oid, path)? {
+        None => Ok(Blob::Absent),
+        Some(EntryKind::RegularFile) => {
+            run_git(root, &["cat-file", "blob", &format!("{oid}:{path}")]).map(Blob::Present)
+        }
+        Some(_) => Err(format!("{path} is not a regular file in the base commit")),
+    }
 }
 
-fn check_regular_blob_entry(listing: &[u8], path: &str) -> Result<(), String> {
-    let text = std::str::from_utf8(listing)
+#[derive(Debug, PartialEq, Eq)]
+enum EntryKind {
+    Tree,
+    RegularFile,
+    Other,
+}
+
+fn tree_entry(root: &Path, oid: &str, path: &str) -> Result<Option<EntryKind>, String> {
+    let listing = run_git(root, &["ls-tree", "-z", "--full-tree", oid, "--", path])?;
+    if listing.is_empty() {
+        return Ok(None);
+    }
+    let text = std::str::from_utf8(&listing)
         .map_err(|_| format!("ls-tree entry for {path} is not UTF-8"))?;
     let entry = text
         .strip_suffix('\0')
@@ -65,16 +87,16 @@ fn check_regular_blob_entry(listing: &[u8], path: &str) -> Result<(), String> {
     let (meta, name) = entry
         .split_once('\t')
         .ok_or_else(|| format!("ls-tree entry for {path} is malformed"))?;
-    let mut fields = meta.split(' ');
-    let regular = matches!(
-        (fields.next(), fields.next()),
-        (Some("100644" | "100755"), Some("blob"))
-    );
-    if name == path && regular {
-        Ok(())
-    } else {
-        Err(format!("{path} is not a regular file in the base commit"))
+    if name != path {
+        return Err(format!("ls-tree entry for {path} names {name}"));
     }
+    let mut fields = meta.split(' ');
+    let kind = match (fields.next(), fields.next()) {
+        (Some("040000"), Some("tree")) => EntryKind::Tree,
+        (Some("100644" | "100755"), Some("blob")) => EntryKind::RegularFile,
+        _ => EntryKind::Other,
+    };
+    Ok(Some(kind))
 }
 
 fn is_object_id(value: &str) -> bool {
