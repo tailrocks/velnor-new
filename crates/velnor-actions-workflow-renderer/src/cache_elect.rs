@@ -7,10 +7,6 @@ use velnor_actions_contract::{CacheMode, Job, Step, StepKind, StepRole};
 
 use crate::RenderError;
 
-/// Explicit-read (reader) branches must never be elected as cache writers.
-/// Their saves would be suppressed to `false` by `dispatch_cache_boundary`
-/// and then rejected by `cache_doctor`, and an untrusted job must not write
-/// caches.
 fn is_cache_writer_eligible(jobs: &BTreeMap<String, Job>, id: &str) -> bool {
     jobs.get(id).is_none_or(|job| {
         !job.cache_mode

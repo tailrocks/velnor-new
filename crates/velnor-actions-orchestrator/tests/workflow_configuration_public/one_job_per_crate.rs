@@ -211,3 +211,26 @@ fn tofu_group_stays_one_job_and_keeps_provider_save() -> Result<(), Box<dyn Erro
     assert_eq!(saves, 1, "{id} provider saves");
     Ok(())
 }
+
+#[test]
+fn group_ids_ending_in_a_controller_branch_suffix_are_rejected() -> Result<(), Box<dyn Error>> {
+    for suffix in [GROUP_READER_SUFFIX, GROUP_WRITER_SUFFIX] {
+        let name = format!("kv{suffix}");
+        let repo = workflow_configuration_fixture::make_repo(&config_with_timeouts(15, None)?)?;
+        workflow_configuration_fixture::add_independent_mbx_package(
+            repo.path(),
+            &format!("crates/{name}"),
+            &name,
+        )?;
+        let message = prepare(repo.path())
+            .and_then(|prepared| finalized_jobs(&prepared).map(|_| ()))
+            .err()
+            .ok_or_else(|| format!("{name} planned a job id the controller misreads"))?
+            .to_string();
+        assert!(
+            message.contains(&format!("group_id_reserved_suffix:rust-{name}")),
+            "{name}: wrong error: {message}"
+        );
+    }
+    Ok(())
+}

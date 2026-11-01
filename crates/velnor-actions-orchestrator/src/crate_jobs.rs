@@ -103,7 +103,7 @@ fn build_crate_jobs_with_seed_timeout(
         ..
     } = input;
     let grouped = group_runnable(&discovery.proposals)?;
-    let owners = JobOwners::from_grouped(&discovery.proposals, &grouped);
+    let owners = JobOwners::from_grouped(&discovery.proposals, &grouped)?;
     let mut jobs = Vec::with_capacity(grouped.len());
     let mut drivers = BTreeMap::new();
     let mut tofu_jobs = Vec::new();
