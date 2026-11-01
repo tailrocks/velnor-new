@@ -32,6 +32,14 @@ mod cargo_1_99_1 {
     pub(super) const MALFORMED_AFTER_WARNING: &str = "warning: unused manifest key: package.foo\nerror: unclosed table, expected `]`\n --> Cargo.toml:5:5\n";
 }
 
+mod cargo_1_85_0 {
+    pub(super) const COLD_NO_MATCHING_PACKAGE: &str = "error: no matching package named `itoa` found\nlocation searched: crates.io index\nrequired by package `probe v0.1.0 (/work/probe)`\nAs a reminder, you're using offline mode (--offline) which can sometimes cause surprising resolution failures, if this error is too confusing you may wish to retry without the offline flag.\n";
+}
+
+mod cargo_1_95_0 {
+    pub(super) const COLD_NO_MATCHING_PACKAGE: &str = "error: no matching package named `itoa` found\nlocation searched: crates.io index\nrequired by package `probe v0.1.0 (/work/probe)`\nAs a reminder, you're using offline mode (--offline) which can sometimes cause surprising resolution failures, if this error is too confusing you may wish to retry without `--offline`.\n";
+}
+
 const HOSTILE_REPO_DIRS: [&str; 2] = ["evil;touch PWNED;#", "evil';touch PWNED;#"];
 
 const TRANSIENT_TIMEOUT: &str = "error: operation timed out\n";
@@ -45,6 +53,8 @@ fn cold_registry_generate_names_the_warm_command() -> Result<(), Box<dyn Error>>
         cargo_1_99_1::COLD_NO_MATCHING_PACKAGE,
         cargo_1_99_1::COLD_HTTP_REQUEST,
         cargo_1_99_1::COLD_GIT_CHECKOUT,
+        cargo_1_85_0::COLD_NO_MATCHING_PACKAGE,
+        cargo_1_95_0::COLD_NO_MATCHING_PACKAGE,
     ] {
         let fixture = fixture::Fixture::new()?;
         fixture.fail_qualification(stderr)?;

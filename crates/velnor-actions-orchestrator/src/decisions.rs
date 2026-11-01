@@ -39,7 +39,10 @@ const TRANSIENT_MARKERS: [&str; 8] = [
 
 const OFFLINE_REFUSALS: [&str; 2] = ["--offline was specified", "you are in the offline mode"];
 const NO_MATCHING_PACKAGE: &str = "no matching package";
-const OFFLINE_NOTE: &str = "note: offline mode (via";
+const OFFLINE_NOTES: [&str; 2] = [
+    "note: offline mode (via",
+    "as a reminder, you're using offline mode (--offline)",
+];
 const MAX_PROBLEM_CHARS: usize = 160;
 const TRANSIENT_LABEL: &str = "metadata_transient";
 const MALFORMED_LABEL: &str = "metadata_failed";
@@ -68,7 +71,8 @@ fn is_offline_miss(stderr: &str) -> bool {
         || (cause_has(NO_MATCHING_PACKAGE)
             && stderr
                 .lines()
-                .any(|line| line.trim_start().to_lowercase().starts_with(OFFLINE_NOTE)))
+                .map(|line| line.trim_start().to_lowercase())
+                .any(|line| OFFLINE_NOTES.iter().any(|note| line.starts_with(note))))
 }
 
 fn cause_lines(stderr: &str) -> impl Iterator<Item = String> + '_ {

@@ -20,12 +20,9 @@ pub struct MetadataDiscovery {
 
 impl MetadataDiscovery {
     pub fn new(manifest: PathBuf) -> Result<Self, MiseError> {
-        if manifest.as_os_str().is_empty() {
-            return Err(MiseError::InvalidManifestPath {
-                path: String::new(),
-            });
-        }
-        Ok(Self { manifest })
+        Ok(Self {
+            manifest: absolute_manifest(manifest)?,
+        })
     }
 
     #[must_use]
@@ -94,12 +91,9 @@ pub struct MetadataQualification {
 
 impl MetadataQualification {
     pub fn new(workspace_manifest: PathBuf) -> Result<Self, MiseError> {
-        if workspace_manifest.as_os_str().is_empty() {
-            return Err(MiseError::InvalidManifestPath {
-                path: String::new(),
-            });
-        }
-        Ok(Self { workspace_manifest })
+        Ok(Self {
+            workspace_manifest: absolute_manifest(workspace_manifest)?,
+        })
     }
 
     #[must_use]
@@ -163,8 +157,17 @@ impl MetadataQualification {
     }
 }
 
+fn absolute_manifest(manifest: PathBuf) -> Result<PathBuf, MiseError> {
+    if manifest.is_absolute() {
+        return Ok(manifest);
+    }
+    std::path::absolute(&manifest).map_err(|_| MiseError::InvalidManifestPath {
+        path: manifest.display().to_string(),
+    })
+}
+
 fn in_workspace(command: IsolatedCommand, manifest: &Path) -> IsolatedCommand {
-    match manifest.parent().filter(|dir| !dir.as_os_str().is_empty()) {
+    match manifest.parent() {
         Some(dir) => command.with_cwd(dir.to_path_buf()),
         None => command,
     }
