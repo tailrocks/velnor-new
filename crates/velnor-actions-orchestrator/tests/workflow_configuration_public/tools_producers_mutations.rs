@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 use std::error::Error;
 
 use velnor_actions_contract::config::{CheckExecutor, CheckPlatform, CheckRunner};
-use velnor_actions_contract::workflow::{RUST_VERIFIER_USES, SUITE_PRODUCER_JOB_CONDITION};
+use velnor_actions_contract::workflow::RUST_VERIFIER_USES;
 use velnor_actions_contract::{
     Job, PermissionLevel, Permissions, ServiceContainer, Step, StepKind, StepRole, WorkflowPolicy,
 };
@@ -135,14 +135,6 @@ fn job_shape_mutations() -> Vec<Mutation> {
             );
             Ok(())
         }),
-        mutation(
-            "scheduled_condition_in_ci_workflow",
-            INVALID_PRODUCER,
-            |jobs, id, _| {
-                producer(jobs, id)?.condition = Some(SUITE_PRODUCER_JOB_CONDITION.to_owned());
-                Ok(())
-            },
-        ),
         mutation("dropped_ref_protected", INVALID_PRODUCER, |jobs, id, _| {
             let job = producer(jobs, id)?;
             job.condition = job

@@ -58,6 +58,12 @@ pub(super) fn render_context(
         pull_request_cache_policy: input.config.workflow.pull_request_cache_policy,
         mise_quiet: input.config.workflow.mise_quiet,
         plan_consumer_env: runtime.plan_consumer_env().clone(),
+        standalone_tools_donors: crate::rust_suites_emit::standalone_suite_tools_donors(
+            input.config,
+            input.label,
+            input.discovery,
+            input.catalog,
+        )?,
     })
 }
 

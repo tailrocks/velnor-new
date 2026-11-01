@@ -23,29 +23,13 @@ pub(super) fn render_workflow_for_slug(
     entries: &[&RustSuiteConfig],
     spec: &RustSuitesRenderSpec,
 ) -> Result<String, RenderError> {
-    let mut jobs = BTreeMap::new();
-    let mut allow_failure_jobs = BTreeSet::new();
-    for suite in entries {
-        let condition = suite_job_condition(suite);
-        if suite.allow_failure {
-            allow_failure_jobs.insert(format!("suite-{}", suite.id));
-        }
-        for SuiteJob {
-            id: job_id,
-            mut job,
-            ..
-        } in build_suite_jobs_for_entry(suite, spec, true)?
-        {
-            job.condition.clone_from(&condition);
-            jobs.insert(job_id, job);
-        }
-    }
+    let mut jobs = standalone_suite_jobs(entries, spec)?;
+    let allow_failure_jobs: BTreeSet<String> = entries
+        .iter()
+        .filter(|suite| suite.allow_failure)
+        .map(|suite| format!("suite-{}", suite.id))
+        .collect();
     finalize_suite_workflow_jobs(&mut jobs, spec)?;
-    allow_failure_jobs.extend(
-        jobs.iter()
-            .filter(|(_, job)| job.producer_kind().is_some())
-            .map(|(id, _)| id.clone()),
-    );
     let suite_matrices = matrix::suites::suite_matrices_of(&jobs)?;
     let scrubbed = if suite_matrices.is_empty() {
         jobs
@@ -101,7 +85,36 @@ pub(super) fn render_workflow_for_slug(
     Ok(text)
 }
 
-fn finalize_suite_workflow_jobs(
+fn standalone_suite_jobs(
+    entries: &[&RustSuiteConfig],
+    spec: &RustSuitesRenderSpec,
+) -> Result<BTreeMap<String, Job>, RenderError> {
+    let mut jobs = BTreeMap::new();
+    for suite in entries {
+        let condition = suite_job_condition(suite);
+        for SuiteJob {
+            id: job_id,
+            mut job,
+            ..
+        } in build_suite_jobs_for_entry(suite, spec, true)?
+        {
+            job.condition.clone_from(&condition);
+            jobs.insert(job_id, job);
+        }
+    }
+    Ok(jobs)
+}
+
+pub(super) fn standalone_tools_donors(
+    entries: &[&RustSuiteConfig],
+    spec: &RustSuitesRenderSpec,
+) -> Result<BTreeMap<String, Job>, RenderError> {
+    let mut jobs = standalone_suite_jobs(entries, spec)?;
+    prepare_suite_tools(&mut jobs, spec)?;
+    Ok(jobs)
+}
+
+fn prepare_suite_tools(
     jobs: &mut BTreeMap<String, Job>,
     spec: &RustSuitesRenderSpec,
 ) -> Result<(), RenderError> {
@@ -127,12 +140,15 @@ fn finalize_suite_workflow_jobs(
         crate::cache_p08::check_no_legacy_rust_cache(id, job)?;
         crate::cache_p08::check_mbx_before_fetch(id, job)?;
     }
+    Ok(())
+}
+
+fn finalize_suite_workflow_jobs(
+    jobs: &mut BTreeMap<String, Job>,
+    spec: &RustSuitesRenderSpec,
+) -> Result<(), RenderError> {
+    prepare_suite_tools(jobs, spec)?;
     crate::cache_p08::elect_cache_writers(jobs)?;
-    crate::tools_producer::add_tools_producers(
-        jobs,
-        spec.pull_request_cache_policy,
-        velnor_actions_contract::workflow::ProducerScope::Scheduled,
-    )?;
     crate::cache_steps::append_bundle_postludes(jobs)?;
     crate::cache_steps::append_workspace_cleanups(jobs)?;
     crate::cache_doctor::check(jobs)

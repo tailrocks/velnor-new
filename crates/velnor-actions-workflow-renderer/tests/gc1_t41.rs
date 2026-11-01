@@ -118,6 +118,7 @@ fn context(jobs: &BTreeMap<String, Job>) -> Result<RenderContext, Box<dyn Error>
         mise_quiet: config.workflow.mise_quiet,
         plan_consumer_env: plan_env(),
         tool_pins: Vec::new(),
+        standalone_tools_donors: std::collections::BTreeMap::new(),
     })
 }
 

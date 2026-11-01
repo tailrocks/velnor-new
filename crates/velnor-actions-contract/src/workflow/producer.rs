@@ -8,26 +8,8 @@ use crate::ContractError;
 
 pub const DEPENDENCY_SEED_JOB_CONDITION: &str = "github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true";
 
-pub const SUITE_PRODUCER_JOB_CONDITION: &str = "(github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true";
-
 pub const TOOLS_PRODUCER_INSTALL_CONDITION: &str =
     "steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'";
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ProducerScope {
-    Push,
-    Scheduled,
-}
-
-impl ProducerScope {
-    #[must_use]
-    pub const fn job_condition(self) -> &'static str {
-        match self {
-            Self::Push => DEPENDENCY_SEED_JOB_CONDITION,
-            Self::Scheduled => SUITE_PRODUCER_JOB_CONDITION,
-        }
-    }
-}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ProducerKind {
@@ -58,19 +40,7 @@ impl Job {
     }
 }
 
-pub(super) fn validate_job(
-    job: &Job,
-    id: &str,
-    effective: &Permissions,
-) -> Result<(), ContractError> {
-    validate_scoped(job, id, effective, ProducerScope::Push)
-}
-
-pub fn validate_tools_producer(
-    job: &Job,
-    id: &str,
-    scope: ProducerScope,
-) -> Result<(), ContractError> {
+pub fn validate_tools_producer(job: &Job, id: &str) -> Result<(), ContractError> {
     if job.producer_kind() != Some(ProducerKind::ToolsIdentity) {
         return Err(invalid(id));
     }
@@ -78,19 +48,13 @@ pub fn validate_tools_producer(
         contents: PermissionLevel::Read,
         ..Permissions::default()
     };
-    validate_scoped(
-        job,
-        id,
-        job.permissions.as_ref().unwrap_or(&read_only),
-        scope,
-    )
+    validate_job(job, id, job.permissions.as_ref().unwrap_or(&read_only))
 }
 
-fn validate_scoped(
+pub(super) fn validate_job(
     job: &Job,
     id: &str,
     effective: &Permissions,
-    scope: ProducerScope,
 ) -> Result<(), ContractError> {
     let kind = job.producer_kind();
     if id.starts_with(TOOLS_PRODUCER_JOB_ID_PREFIX) != (kind == Some(ProducerKind::ToolsIdentity)) {
@@ -99,9 +63,7 @@ fn validate_scoped(
     let Some(kind) = kind else {
         return Ok(());
     };
-    let scoped = scope == ProducerScope::Push || kind == ProducerKind::ToolsIdentity;
-    let cache_only = scoped
-        && job.condition.as_deref() == Some(scope.job_condition())
+    let cache_only = job.condition.as_deref() == Some(DEPENDENCY_SEED_JOB_CONDITION)
         && job.environment.is_none()
         && job.check_runner.is_none()
         && job.services.is_empty()

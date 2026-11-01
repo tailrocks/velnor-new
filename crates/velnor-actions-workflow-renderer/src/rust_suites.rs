@@ -67,6 +67,21 @@ pub fn build_ci_suite_jobs(spec: &RustSuitesRenderSpec) -> Result<RustSuiteCiJob
     Ok(RustSuiteCiJobs { jobs, drivers })
 }
 
+pub fn standalone_tools_donors(
+    spec: &RustSuitesRenderSpec,
+) -> Result<BTreeMap<String, Job>, RenderError> {
+    validate_spec(spec)?;
+    let entries: Vec<&RustSuiteConfig> = spec
+        .suites
+        .iter()
+        .filter(|suite| has_standalone_trigger(suite))
+        .collect();
+    if entries.is_empty() {
+        return Ok(BTreeMap::new());
+    }
+    document::standalone_tools_donors(&entries, spec)
+}
+
 pub fn render_suites_workflow(spec: &RustSuitesRenderSpec) -> Result<Option<String>, RenderError> {
     validate_spec(spec)?;
     let entries: Vec<&RustSuiteConfig> = spec

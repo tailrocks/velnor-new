@@ -147,7 +147,7 @@ pub fn finalize_jobs(
     crate::tools_producer::add_tools_producers(
         &mut jobs,
         ctx.pull_request_cache_policy,
-        velnor_actions_contract::workflow::ProducerScope::Push,
+        &ctx.standalone_tools_donors,
     )?;
     closure::check_plan_anchor(&jobs)?;
     preseed_closure::check_preseed_closure(&jobs, ctx.preseed)?;

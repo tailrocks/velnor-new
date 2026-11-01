@@ -24,8 +24,8 @@ mod plan_jobs;
 pub mod platform;
 mod producer;
 pub use producer::{
-    DEPENDENCY_SEED_JOB_CONDITION, ProducerKind, ProducerScope, SUITE_PRODUCER_JOB_CONDITION,
-    TOOLS_PRODUCER_INSTALL_CONDITION, validate_tools_producer,
+    DEPENDENCY_SEED_JOB_CONDITION, ProducerKind, TOOLS_PRODUCER_INSTALL_CONDITION,
+    validate_tools_producer,
 };
 pub mod qualification;
 pub mod qualification_cache_lineage;

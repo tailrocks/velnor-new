@@ -54,7 +54,7 @@ pub(crate) fn check(jobs: &BTreeMap<String, Job>) -> Result<(), RenderError> {
             let cache = CacheUse { family, save, path };
             check_paths(id, step, &cache)?;
             if cache.save {
-                check_save(id, job.condition.as_deref(), step, cache.family)?;
+                check_save(id, step, cache.family)?;
             }
             if let Some(path) = cache.path {
                 for line in path.lines() {
@@ -300,16 +300,8 @@ fn tofu_slug(path: &str) -> Option<&str> {
         })
 }
 
-fn check_save(
-    job: &str,
-    job_condition: Option<&str>,
-    step: &Step,
-    family: Family,
-) -> Result<(), RenderError> {
+fn check_save(job: &str, step: &Step, family: Family) -> Result<(), RenderError> {
     let condition = step.condition.as_deref().unwrap_or_default();
-    let scheduled_producer = job
-        .starts_with(velnor_actions_contract::workflow::crate_job::TOOLS_PRODUCER_JOB_ID_PREFIX)
-        && job_condition == Some(velnor_actions_contract::workflow::SUITE_PRODUCER_JOB_CONDITION);
     let ok = match family {
         Family::Runtime(CacheFamily::Sources) => {
             condition == SOURCES_SAVE_CONDITION && job == crate::render::PLAN_JOB_ID
@@ -323,9 +315,6 @@ fn check_save(
             | CacheFamily::PythonVenv
             | CacheFamily::AnsibleCollections),
         ) => condition == family_save_condition(family),
-        Family::Tools if scheduled_producer => {
-            condition == crate::cache_p08::tools_cache_scheduled_save_condition()
-        }
         Family::Tools => [
             PullRequestCachePolicy::ReadOnly,
             PullRequestCachePolicy::SameRepositoryScoped,

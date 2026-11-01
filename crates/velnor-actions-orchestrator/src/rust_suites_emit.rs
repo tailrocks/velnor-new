@@ -10,7 +10,7 @@ use velnor_actions_contract::{Job, RustSuiteConfig, StepRole, VelnorConfig};
 use velnor_actions_mise::{PinnedTool, ToolCatalog};
 use velnor_actions_rust::CompileDriver as RustCompileDriver;
 use velnor_actions_workflow_renderer::rust_suites::{
-    RustSuitesRenderSpec, build_ci_suite_jobs, render_suites_workflows,
+    RustSuitesRenderSpec, build_ci_suite_jobs, render_suites_workflows, standalone_tools_donors,
 };
 use velnor_actions_workflow_renderer::{CompileDriver, RenderedFile};
 
@@ -149,6 +149,18 @@ pub(crate) fn build_ci_jobs(
         required_ids,
         drivers: suite_jobs.drivers,
     })
+}
+
+pub(crate) fn standalone_suite_tools_donors(
+    config: &VelnorConfig,
+    label: &str,
+    discovery: &Discovery,
+    catalog: &ToolCatalog,
+) -> Result<BTreeMap<String, Job>, OrchestratorError> {
+    let Some(spec) = build_render_spec(config, label, discovery, catalog)? else {
+        return Ok(BTreeMap::new());
+    };
+    Ok(standalone_tools_donors(&spec)?)
 }
 
 fn replace_ci_suite_verifiers(

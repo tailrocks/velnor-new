@@ -34,10 +34,6 @@ pub(crate) fn tools_cache_save_condition(
     save_policy::condition(policy)
 }
 
-pub(crate) fn tools_cache_scheduled_save_condition() -> String {
-    save_policy::scheduled_condition()
-}
-
 pub(crate) fn ensure_tools_cache_v2(
     job_id: &str,
     job: &mut Job,
