@@ -17,14 +17,14 @@ rust = { version = "1.99.1", profile = "minimal", components = [
   "aarch64-unknown-linux-gnu",
   "x86_64-unknown-linux-gnu",
 ], mr_boxington = true }
-mr-boxington = { version = "1.28.0", workflow = "release.yml@refs/heads/main" }
+mr-boxington = { version = "1.29.1", workflow = "release.yml@refs/heads/main" }
 bun = "1.4.4"
 hk = "2.8.0"
 cargo-binstall = "1.26.0"
 "aqua:nextest-rs/nextest/cargo-nextest" = "0.9.150"
 # Workflow linting (hard decision 10): CI reads these versions at run time,
 # and hk's check-only jactionlint step runs the same binaries locally.
-jactionlint = "2.3.0"
+jactionlint = "2.4.0"
 shellcheck = "0.11.0"
 # Owner hk standard (hk.pkl): secret scanners for the pre-commit, pre-push and
 # security-audit hooks, and the tools behind the stack builtins.

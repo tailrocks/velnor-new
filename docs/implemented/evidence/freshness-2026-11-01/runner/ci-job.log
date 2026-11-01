@@ -1,0 +1,38 @@
+Prune superseded cache entries	Set up job	﻿2026-11-01T14:56:26.0926182Z Current runner version: '2.338.2'
+Prune superseded cache entries	Set up job	2026-11-01T14:56:26.0953270Z ##[group]Runner Image Provisioner
+Prune superseded cache entries	Set up job	2026-11-01T14:56:26.0954202Z Hosted Compute Agent
+Prune superseded cache entries	Set up job	2026-11-01T14:56:26.0954911Z Version: 20261021.618
+Prune superseded cache entries	Set up job	2026-11-01T14:56:26.0955568Z Commit: 21505ad2541d5be6135ed84fc33697146cf75b8e
+Prune superseded cache entries	Set up job	2026-11-01T14:56:26.0956394Z Build Date: 2026-10-21T00:45:21Z
+Prune superseded cache entries	Set up job	2026-11-01T14:56:26.0957090Z Worker ID: {7a78e287-ee15-473e-9072-2d1f1276eadd}
+Prune superseded cache entries	Set up job	2026-11-01T14:56:26.0957822Z Region: centralus
+Prune superseded cache entries	Set up job	2026-11-01T14:56:26.0958433Z Cloud: Azure
+Prune superseded cache entries	Set up job	2026-11-01T14:56:26.0958983Z ##[endgroup]
+Prune superseded cache entries	Set up job	2026-11-01T14:56:26.0961357Z ##[group]Operating System
+Prune superseded cache entries	Set up job	2026-11-01T14:56:26.0962070Z Ubuntu
+Prune superseded cache entries	Set up job	2026-11-01T14:56:26.0962634Z 26.04.1
+Prune superseded cache entries	Set up job	2026-11-01T14:56:26.0963199Z LTS
+Prune superseded cache entries	Set up job	2026-11-01T14:56:26.0963712Z ##[endgroup]
+Prune superseded cache entries	Set up job	2026-11-01T14:56:26.0964249Z ##[group]Runner Image
+Prune superseded cache entries	Set up job	2026-11-01T14:56:26.0964941Z Image: ubuntu-26.04
+Prune superseded cache entries	Set up job	2026-11-01T14:56:26.0965546Z Version: 20261025.179.1
+Prune superseded cache entries	Set up job	2026-11-01T14:56:26.0966676Z Included Software: https://github.com/actions/runner-images/blob/ubuntu26/20261025.179/images/ubuntu/Ubuntu2604-Readme.md
+Prune superseded cache entries	Set up job	2026-11-01T14:56:26.0968555Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu26%2F20261025.179
+Prune superseded cache entries	Set up job	2026-11-01T14:56:26.0969776Z ##[endgroup]
+Prune superseded cache entries	Set up job	2026-11-01T14:56:26.0971377Z ##[group]GITHUB_TOKEN Permissions
+Prune superseded cache entries	Set up job	2026-11-01T14:56:26.0973610Z Actions: write
+Prune superseded cache entries	Set up job	2026-11-01T14:56:26.0974236Z Metadata: read
+Prune superseded cache entries	Set up job	2026-11-01T14:56:26.0974898Z ##[endgroup]
+Prune superseded cache entries	Set up job	2026-11-01T14:56:26.0977978Z Secret source: Actions
+Prune superseded cache entries	Set up job	2026-11-01T14:56:26.0979291Z Cache mode: write
+Prune superseded cache entries	Set up job	2026-11-01T14:56:26.0980873Z Prepare workflow directory
+Prune superseded cache entries	Set up job	2026-11-01T14:56:26.1330453Z Prepare all required actions
+Prune superseded cache entries	Set up job	2026-11-01T14:56:26.1445177Z Complete job name: Prune superseded cache entries
+Prune superseded cache entries	Prune superseded cache entries	﻿2026-11-01T14:56:26.2566992Z ##[group]Run set -eu; ref="$GITHUB_REF"; d="$RUNNER_TEMP/velnor-cache-prune"; rm -rf "$d"; mkdir -p "$d"; warn() { printf '%s\n' "::warning::cache_unavailable: $1"; }; prune() { if gh cache list --key "$1" --ref "$ref" --limit 1000 --sort created_at --order desc --json id,key --jq '.[] | [.id, .key] | @tsv' > "$d/list"; then :; else warn "could not list $1"; return 0; fi; awk -v keep="$2" '{ if ($2 ~ /^mise-tools-v2-/) g = "mise-tools-v2"; else { g = $2; sub(/-s256-[0-9a-f]+$/, "", g) }; n[g]++; if (n[g] > keep) print $1 }' "$d/list" > "$d/doomed"; while read -r id; do if gh cache delete "$id"; then printf 'velnor: pruned superseded entry %s of %s\n' "$id" "$1"; else warn "could not delete $id"; fi; done < "$d/doomed"; }; prune 'velnor-v2-sources-trusted-' 2; prune 'velnor-v2-tofu-providers-trusted-' 2; prune 'velnor-v1-bun-install-trusted-' 2; prune 'velnor-v1-playwright-browsers-trusted-' 2; prune 'velnor-v1-dbt-packages-trusted-' 2; prune 'velnor-v1-python-venv-trusted-' 2; prune 'velnor-v1-ansible-collections-trusted-' 2; prune 'velnor-v1-state-trusted-' 1; prune 'mise-tools-v2-' 8
+Prune superseded cache entries	Prune superseded cache entries	2026-11-01T14:56:26.2580031Z ^[[36;1mset -eu; ref="$GITHUB_REF"; d="$RUNNER_TEMP/velnor-cache-prune"; rm -rf "$d"; mkdir -p "$d"; warn() { printf '%s\n' "::warning::cache_unavailable: $1"; }; prune() { if gh cache list --key "$1" --ref "$ref" --limit 1000 --sort created_at --order desc --json id,key --jq '.[] | [.id, .key] | @tsv' > "$d/list"; then :; else warn "could not list $1"; return 0; fi; awk -v keep="$2" '{ if ($2 ~ /^mise-tools-v2-/) g = "mise-tools-v2"; else { g = $2; sub(/-s256-[0-9a-f]+$/, "", g) }; n[g]++; if (n[g] > keep) print $1 }' "$d/list" > "$d/doomed"; while read -r id; do if gh cache delete "$id"; then printf 'velnor: pruned superseded entry %s of %s\n' "$id" "$1"; else warn "could not delete $id"; fi; done < "$d/doomed"; }; prune 'velnor-v2-sources-trusted-' 2; prune 'velnor-v2-tofu-providers-trusted-' 2; prune 'velnor-v1-bun-install-trusted-' 2; prune 'velnor-v1-playwright-browsers-trusted-' 2; prune 'velnor-v1-dbt-packages-trusted-' 2; prune 'velnor-v1-python-venv-trusted-' 2; prune 'velnor-v1-ansible-collections-trusted-' 2; prune 'velnor-v1-state-trusted-' 1; prune 'mise-tools-v2-' 8^[[0m
+Prune superseded cache entries	Prune superseded cache entries	2026-11-01T14:56:26.3208377Z shell: /usr/bin/bash -e {0}
+Prune superseded cache entries	Prune superseded cache entries	2026-11-01T14:56:26.3209810Z env:
+Prune superseded cache entries	Prune superseded cache entries	2026-11-01T14:56:26.3214264Z   GH_TOKEN: ***
+Prune superseded cache entries	Prune superseded cache entries	2026-11-01T14:56:26.3215278Z   GH_REPO: tailrocks/velnor-new
+Prune superseded cache entries	Prune superseded cache entries	2026-11-01T14:56:26.3215988Z ##[endgroup]
+Prune superseded cache entries	Complete job	﻿2026-11-01T14:56:28.7820913Z Cleaning up orphan processes

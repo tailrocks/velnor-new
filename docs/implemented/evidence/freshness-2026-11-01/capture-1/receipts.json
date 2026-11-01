@@ -1,0 +1,732 @@
+{
+  "schema": 1,
+  "capture": "capture-1",
+  "source_responses": [
+    {
+      "subject": "mise",
+      "source": "https://api.github.com/repos/jdx/mise/releases/latest",
+      "requested_at": "2026-11-01T15:20:47.238Z",
+      "observed_at": "2026-11-01T15:20:47.798Z",
+      "body_file": "mise.body",
+      "bytes": 91558,
+      "sha256": "8b15e037ef62bd65a84c7f968845267e82169fd8aaab6e8288ed33b91b99135b",
+      "observed": {
+        "version": "v2026.10.25",
+        "release_id": 429861984,
+        "published_at": "2026-10-31T10:24:21Z",
+        "prerelease": false,
+        "draft": false
+      }
+    },
+    {
+      "subject": "rust",
+      "source": "https://static.rust-lang.org/dist/channel-rust-stable.toml",
+      "requested_at": "2026-11-01T15:20:47.799Z",
+      "observed_at": "2026-11-01T15:20:47.998Z",
+      "body_file": "rust.body",
+      "bytes": 131072,
+      "sha256": "131880574a2de9d40db0a035774169281b0fd55a1e94752b0c8f0e9a4c75421a",
+      "observed": {
+        "version": "1.99.1"
+      }
+    },
+    {
+      "subject": "mr-boxington",
+      "source": "https://api.github.com/repos/jdx/mr-boxington/releases/latest",
+      "requested_at": "2026-11-01T15:20:47.998Z",
+      "observed_at": "2026-11-01T15:20:48.460Z",
+      "body_file": "mr-boxington.body",
+      "bytes": 28721,
+      "sha256": "9a5487db147f811c0076b0fec9c5f635024e357aed4b9b271463e37a583f4518",
+      "observed": {
+        "version": "v1.29.1",
+        "release_id": 430499399,
+        "published_at": "2026-11-01T10:29:02Z",
+        "prerelease": false,
+        "draft": false
+      }
+    },
+    {
+      "subject": "gh",
+      "source": "https://api.github.com/repos/cli/cli/releases/latest",
+      "requested_at": "2026-11-01T15:20:48.460Z",
+      "observed_at": "2026-11-01T15:20:49.096Z",
+      "body_file": "gh.body",
+      "bytes": 39109,
+      "sha256": "579bafe45741be13c489e4370ebc21b512c60196add4c41dc50cf953a91e699d",
+      "observed": {
+        "version": "v2.103.3",
+        "release_id": 424663522,
+        "published_at": "2026-10-26T19:20:08Z",
+        "prerelease": false,
+        "draft": false
+      }
+    },
+    {
+      "subject": "jactionlint",
+      "source": "https://api.github.com/repos/jdx/jactionlint/releases/latest",
+      "requested_at": "2026-11-01T15:20:49.097Z",
+      "observed_at": "2026-11-01T15:20:49.602Z",
+      "body_file": "jactionlint.body",
+      "bytes": 25994,
+      "sha256": "4a6dc5ceb3a769297a7cc8910f392dbf9b4b94e9510fbf127ab99ea1498e9053",
+      "observed": {
+        "version": "v2.4.0",
+        "release_id": 427704383,
+        "published_at": "2026-10-29T10:12:07Z",
+        "prerelease": false,
+        "draft": false
+      }
+    },
+    {
+      "subject": "shellcheck",
+      "source": "https://api.github.com/repos/koalaman/shellcheck/releases/latest",
+      "requested_at": "2026-11-01T15:20:49.602Z",
+      "observed_at": "2026-11-01T15:20:50.170Z",
+      "body_file": "shellcheck.body",
+      "bytes": 24736,
+      "sha256": "9829364c9ff184fe3e9cce1432402785d929acf1e526a497082a992e69625c69",
+      "observed": {
+        "version": "v0.11.0",
+        "release_id": 237202770,
+        "published_at": "2025-08-04T00:27:19Z",
+        "prerelease": false,
+        "draft": false
+      }
+    },
+    {
+      "subject": "nextest",
+      "source": "https://crates.io/api/v1/crates/cargo-nextest",
+      "requested_at": "2026-11-01T15:20:50.170Z",
+      "observed_at": "2026-11-01T15:20:51.461Z",
+      "body_file": "nextest.body",
+      "bytes": 312919,
+      "sha256": "01850dbbfce97ea5592e0b1bac33082a17d5cf2479c43b124a4a2bd82ff205f0",
+      "observed": {
+        "version": "0.9.150"
+      }
+    },
+    {
+      "subject": "opentofu",
+      "source": "https://api.github.com/repos/opentofu/opentofu/releases/latest",
+      "requested_at": "2026-11-01T15:20:51.462Z",
+      "observed_at": "2026-11-01T15:20:52.968Z",
+      "body_file": "opentofu.body",
+      "bytes": 289236,
+      "sha256": "eb1b9080b4268d829b7cf0057264ce70137304e8f699fca33f8d2df8b35e686f",
+      "observed": {
+        "version": "v1.13.2",
+        "release_id": 419647825,
+        "published_at": "2026-10-21T14:36:09Z",
+        "prerelease": false,
+        "draft": false
+      }
+    },
+    {
+      "subject": "release-plz",
+      "source": "https://crates.io/api/v1/crates/release-plz",
+      "requested_at": "2026-11-01T15:20:52.969Z",
+      "observed_at": "2026-11-01T15:20:54.783Z",
+      "body_file": "release-plz.body",
+      "bytes": 407337,
+      "sha256": "6a4985bb9c529e36f00df2e2cc3d4458bc6f45efa1687f9334f741f308c59e4b",
+      "observed": {
+        "version": "0.4.2"
+      }
+    },
+    {
+      "subject": "crane",
+      "source": "https://api.github.com/repos/google/go-containerregistry/releases/latest",
+      "requested_at": "2026-11-01T15:20:54.784Z",
+      "observed_at": "2026-11-01T15:20:55.515Z",
+      "body_file": "crane.body",
+      "bytes": 30526,
+      "sha256": "e0757709327a0bd57235c8ba327832a858966cd3d7ee1531814097a1c0b7c2ea",
+      "observed": {
+        "version": "v0.22.1",
+        "release_id": 382402591,
+        "published_at": "2026-09-04T00:17:00Z",
+        "prerelease": false,
+        "draft": false
+      }
+    },
+    {
+      "subject": "bun",
+      "source": "https://api.github.com/repos/oven-sh/bun/releases/latest",
+      "requested_at": "2026-11-01T15:20:55.516Z",
+      "observed_at": "2026-11-01T15:20:56.281Z",
+      "body_file": "bun.body",
+      "bytes": 62721,
+      "sha256": "9c8ff85f6ce7dacf340b79463920724fd0d1d4435db77f8a601fd3de9c389ac7",
+      "observed": {
+        "version": "bun-v1.4.4",
+        "release_id": 420500253,
+        "published_at": "2026-10-22T10:11:32Z",
+        "prerelease": false,
+        "draft": false
+      }
+    },
+    {
+      "subject": "cosign",
+      "source": "https://api.github.com/repos/sigstore/cosign/releases/latest",
+      "requested_at": "2026-11-01T15:20:56.282Z",
+      "observed_at": "2026-11-01T15:20:56.894Z",
+      "body_file": "cosign.body",
+      "bytes": 133960,
+      "sha256": "4a2dabc362c95415dab21e634227e9c7dc3efd3a0d3c9328fbcbe683cf94a6a3",
+      "observed": {
+        "version": "v3.1.4",
+        "release_id": 418705647,
+        "published_at": "2026-10-20T18:27:42Z",
+        "prerelease": false,
+        "draft": false
+      }
+    },
+    {
+      "subject": "actions/attest",
+      "source": "https://api.github.com/repos/actions/attest/releases/latest",
+      "requested_at": "2026-11-01T15:20:56.895Z",
+      "observed_at": "2026-11-01T15:20:57.451Z",
+      "body_file": "actions_attest.body",
+      "bytes": 2120,
+      "sha256": "34ca5c40511edbd0ab78811f74eeb58026bd72362647986592f9a0097cef6840",
+      "observed": {
+        "version": "v4.2.2",
+        "release_id": 365138776,
+        "published_at": "2026-08-04T20:36:29Z",
+        "prerelease": false,
+        "draft": false
+      }
+    },
+    {
+      "subject": "actions/attest pinned tag",
+      "source": "https://api.github.com/repos/actions/attest/git/ref/tags/v4.2.2",
+      "requested_at": "2026-11-01T15:20:57.963Z",
+      "observed_at": "2026-11-01T15:20:57.963Z",
+      "body_file": "pinned-actions_attest-tag-0.body",
+      "bytes": 68,
+      "sha256": "603fdcea93d7330aca97796e6cf66df476d9cd99efc20ef6ff47b78c86367afb",
+      "observed": {
+        "version": "v4.2.2",
+        "sha": "1e69f48acb82d1966a394da916b4c1698aa569d6"
+      }
+    },
+    {
+      "subject": "actions/attest latest tag",
+      "source": "https://api.github.com/repos/actions/attest/git/ref/tags/v4.2.2",
+      "requested_at": "2026-11-01T15:20:58.474Z",
+      "observed_at": "2026-11-01T15:20:58.474Z",
+      "body_file": "latest-actions_attest-tag-0.body",
+      "bytes": 68,
+      "sha256": "603fdcea93d7330aca97796e6cf66df476d9cd99efc20ef6ff47b78c86367afb",
+      "observed": {
+        "version": "v4.2.2",
+        "sha": "1e69f48acb82d1966a394da916b4c1698aa569d6"
+      }
+    },
+    {
+      "subject": "actions/attest-build-provenance",
+      "source": "https://api.github.com/repos/actions/attest-build-provenance/releases/latest",
+      "requested_at": "2026-11-01T15:20:58.474Z",
+      "observed_at": "2026-11-01T15:20:58.952Z",
+      "body_file": "actions_attest-build-provenance.body",
+      "bytes": 2414,
+      "sha256": "6c8a2cddbabf63c4034ee023330703fa0da67d976f3d18cd741cafcf4edea923",
+      "observed": {
+        "version": "v4.2.2",
+        "release_id": 366387834,
+        "published_at": "2026-08-06T19:59:04Z",
+        "prerelease": false,
+        "draft": false
+      }
+    },
+    {
+      "subject": "actions/attest-build-provenance pinned tag",
+      "source": "https://api.github.com/repos/actions/attest-build-provenance/git/ref/tags/v4.2.2",
+      "requested_at": "2026-11-01T15:20:59.498Z",
+      "observed_at": "2026-11-01T15:20:59.498Z",
+      "body_file": "pinned-actions_attest-build-provenance-tag-0.body",
+      "bytes": 68,
+      "sha256": "ea962ca62b28cb30a83fdea6765607f4b143ceb2fbcc25cd85fa51186ef47f40",
+      "observed": {
+        "version": "v4.2.2",
+        "sha": "4d101475d8b20a2381f78447822ac1eab6504dd8"
+      }
+    },
+    {
+      "subject": "actions/attest-build-provenance latest tag",
+      "source": "https://api.github.com/repos/actions/attest-build-provenance/git/ref/tags/v4.2.2",
+      "requested_at": "2026-11-01T15:20:59.945Z",
+      "observed_at": "2026-11-01T15:20:59.945Z",
+      "body_file": "latest-actions_attest-build-provenance-tag-0.body",
+      "bytes": 68,
+      "sha256": "ea962ca62b28cb30a83fdea6765607f4b143ceb2fbcc25cd85fa51186ef47f40",
+      "observed": {
+        "version": "v4.2.2",
+        "sha": "4d101475d8b20a2381f78447822ac1eab6504dd8"
+      }
+    },
+    {
+      "subject": "actions/cache/restore",
+      "source": "https://api.github.com/repos/actions/cache/releases/latest",
+      "requested_at": "2026-11-01T15:20:59.945Z",
+      "observed_at": "2026-11-01T15:21:00.966Z",
+      "body_file": "actions_cache_restore.body",
+      "bytes": 2171,
+      "sha256": "fab1cd173714779bcd8cf67c96c3a29f04323b5a5389ad404afcd17abfb36e53",
+      "observed": {
+        "version": "v6.1.0",
+        "release_id": 345492415,
+        "published_at": "2026-06-26T19:17:06Z",
+        "prerelease": false,
+        "draft": false
+      }
+    },
+    {
+      "subject": "actions/cache/restore pinned tag",
+      "source": "https://api.github.com/repos/actions/cache/restore/git/ref/tags/v6.1.0",
+      "requested_at": "2026-11-01T15:21:01.461Z",
+      "observed_at": "2026-11-01T15:21:01.462Z",
+      "body_file": "pinned-actions_cache_restore-tag-0.body",
+      "bytes": 68,
+      "sha256": "29d33dae968d9893c6146b33bb83245a6da4aea4bdf05ce0b918f0b2de2f5ee0",
+      "observed": {
+        "version": "v6.1.0",
+        "sha": "55cc8345863c7cc4c66a329aec7e433d2d1c52a9"
+      }
+    },
+    {
+      "subject": "actions/cache/restore latest tag",
+      "source": "https://api.github.com/repos/actions/cache/restore/git/ref/tags/v6.1.0",
+      "requested_at": "2026-11-01T15:21:01.880Z",
+      "observed_at": "2026-11-01T15:21:01.880Z",
+      "body_file": "latest-actions_cache_restore-tag-0.body",
+      "bytes": 68,
+      "sha256": "29d33dae968d9893c6146b33bb83245a6da4aea4bdf05ce0b918f0b2de2f5ee0",
+      "observed": {
+        "version": "v6.1.0",
+        "sha": "55cc8345863c7cc4c66a329aec7e433d2d1c52a9"
+      }
+    },
+    {
+      "subject": "actions/cache/save",
+      "source": "https://api.github.com/repos/actions/cache/releases/latest",
+      "requested_at": "2026-11-01T15:21:01.880Z",
+      "observed_at": "2026-11-01T15:21:02.392Z",
+      "body_file": "actions_cache_save.body",
+      "bytes": 2171,
+      "sha256": "fab1cd173714779bcd8cf67c96c3a29f04323b5a5389ad404afcd17abfb36e53",
+      "observed": {
+        "version": "v6.1.0",
+        "release_id": 345492415,
+        "published_at": "2026-06-26T19:17:06Z",
+        "prerelease": false,
+        "draft": false
+      }
+    },
+    {
+      "subject": "actions/cache/save pinned tag",
+      "source": "https://api.github.com/repos/actions/cache/save/git/ref/tags/v6.1.0",
+      "requested_at": "2026-11-01T15:21:02.849Z",
+      "observed_at": "2026-11-01T15:21:02.849Z",
+      "body_file": "pinned-actions_cache_save-tag-0.body",
+      "bytes": 68,
+      "sha256": "29d33dae968d9893c6146b33bb83245a6da4aea4bdf05ce0b918f0b2de2f5ee0",
+      "observed": {
+        "version": "v6.1.0",
+        "sha": "55cc8345863c7cc4c66a329aec7e433d2d1c52a9"
+      }
+    },
+    {
+      "subject": "actions/cache/save latest tag",
+      "source": "https://api.github.com/repos/actions/cache/save/git/ref/tags/v6.1.0",
+      "requested_at": "2026-11-01T15:21:03.332Z",
+      "observed_at": "2026-11-01T15:21:03.332Z",
+      "body_file": "latest-actions_cache_save-tag-0.body",
+      "bytes": 68,
+      "sha256": "29d33dae968d9893c6146b33bb83245a6da4aea4bdf05ce0b918f0b2de2f5ee0",
+      "observed": {
+        "version": "v6.1.0",
+        "sha": "55cc8345863c7cc4c66a329aec7e433d2d1c52a9"
+      }
+    },
+    {
+      "subject": "actions/checkout",
+      "source": "https://api.github.com/repos/actions/checkout/releases/latest",
+      "requested_at": "2026-11-01T15:21:03.332Z",
+      "observed_at": "2026-11-01T15:21:03.877Z",
+      "body_file": "actions_checkout.body",
+      "bytes": 2372,
+      "sha256": "8c81e64dda90d1f337e87d30fab6804b818d155630587358ebaa531b27f2d659",
+      "observed": {
+        "version": "v7.0.1",
+        "release_id": 356804776,
+        "published_at": "2026-07-20T15:10:05Z",
+        "prerelease": false,
+        "draft": false
+      }
+    },
+    {
+      "subject": "actions/checkout pinned tag",
+      "source": "https://api.github.com/repos/actions/checkout/git/ref/tags/v7.0.1",
+      "requested_at": "2026-11-01T15:21:04.413Z",
+      "observed_at": "2026-11-01T15:21:04.413Z",
+      "body_file": "pinned-actions_checkout-tag-0.body",
+      "bytes": 68,
+      "sha256": "2171de76059b58105dd66f40da5bebaa9bd2ec107745dd142a4fb7eb90880b20",
+      "observed": {
+        "version": "v7.0.1",
+        "sha": "3d3c42e5aac5ba805825da76410c181273ba90b1"
+      }
+    },
+    {
+      "subject": "actions/checkout latest tag",
+      "source": "https://api.github.com/repos/actions/checkout/git/ref/tags/v7.0.1",
+      "requested_at": "2026-11-01T15:21:04.901Z",
+      "observed_at": "2026-11-01T15:21:04.901Z",
+      "body_file": "latest-actions_checkout-tag-0.body",
+      "bytes": 68,
+      "sha256": "2171de76059b58105dd66f40da5bebaa9bd2ec107745dd142a4fb7eb90880b20",
+      "observed": {
+        "version": "v7.0.1",
+        "sha": "3d3c42e5aac5ba805825da76410c181273ba90b1"
+      }
+    },
+    {
+      "subject": "actions/create-github-app-token",
+      "source": "https://api.github.com/repos/actions/create-github-app-token/releases/latest",
+      "requested_at": "2026-11-01T15:21:04.901Z",
+      "observed_at": "2026-11-01T15:21:05.511Z",
+      "body_file": "actions_create-github-app-token.body",
+      "bytes": 3089,
+      "sha256": "60b29c1da192509a18d12e3e57efd22a6c5554da68ed7434d3d244675667253b",
+      "observed": {
+        "version": "v3.3.0",
+        "release_id": 411079712,
+        "published_at": "2026-10-12T23:42:23Z",
+        "prerelease": false,
+        "draft": false
+      }
+    },
+    {
+      "subject": "actions/create-github-app-token pinned tag",
+      "source": "https://api.github.com/repos/actions/create-github-app-token/git/ref/tags/v3.3.0",
+      "requested_at": "2026-11-01T15:21:05.991Z",
+      "observed_at": "2026-11-01T15:21:05.991Z",
+      "body_file": "pinned-actions_create-github-app-token-tag-0.body",
+      "bytes": 68,
+      "sha256": "3e7249d45a4d052be23c242a8a7e7e0e81840bb55a6fa44e5815f05c4f786a3e",
+      "observed": {
+        "version": "v3.3.0",
+        "sha": "64ab729a6294000f5aa4a4bc0b73d1f32bc45510"
+      }
+    },
+    {
+      "subject": "actions/create-github-app-token latest tag",
+      "source": "https://api.github.com/repos/actions/create-github-app-token/git/ref/tags/v3.3.0",
+      "requested_at": "2026-11-01T15:21:06.470Z",
+      "observed_at": "2026-11-01T15:21:06.470Z",
+      "body_file": "latest-actions_create-github-app-token-tag-0.body",
+      "bytes": 68,
+      "sha256": "3e7249d45a4d052be23c242a8a7e7e0e81840bb55a6fa44e5815f05c4f786a3e",
+      "observed": {
+        "version": "v3.3.0",
+        "sha": "64ab729a6294000f5aa4a4bc0b73d1f32bc45510"
+      }
+    },
+    {
+      "subject": "actions/download-artifact",
+      "source": "https://api.github.com/repos/actions/download-artifact/releases/latest",
+      "requested_at": "2026-11-01T15:21:06.470Z",
+      "observed_at": "2026-11-01T15:21:07.076Z",
+      "body_file": "actions_download-artifact.body",
+      "bytes": 2457,
+      "sha256": "5b670503b60f455daaf7a3ad99622f6b408e490747fd6deb79402e0e3585673c",
+      "observed": {
+        "version": "v8.0.2",
+        "release_id": 405628511,
+        "published_at": "2026-10-07T10:09:51Z",
+        "prerelease": false,
+        "draft": false
+      }
+    },
+    {
+      "subject": "actions/download-artifact pinned tag",
+      "source": "https://api.github.com/repos/actions/download-artifact/git/ref/tags/v8.0.2",
+      "requested_at": "2026-11-01T15:21:07.555Z",
+      "observed_at": "2026-11-01T15:21:07.555Z",
+      "body_file": "pinned-actions_download-artifact-tag-0.body",
+      "bytes": 68,
+      "sha256": "8c13c651b6ddb5469837cf9ca3a419fb38f59420b410b4f06c4ced7ba4c71d8f",
+      "observed": {
+        "version": "v8.0.2",
+        "sha": "9000827ccba6bdab643e8b6fd33ac0654aef8333"
+      }
+    },
+    {
+      "subject": "actions/download-artifact latest tag",
+      "source": "https://api.github.com/repos/actions/download-artifact/git/ref/tags/v8.0.2",
+      "requested_at": "2026-11-01T15:21:08.008Z",
+      "observed_at": "2026-11-01T15:21:08.008Z",
+      "body_file": "latest-actions_download-artifact-tag-0.body",
+      "bytes": 68,
+      "sha256": "8c13c651b6ddb5469837cf9ca3a419fb38f59420b410b4f06c4ced7ba4c71d8f",
+      "observed": {
+        "version": "v8.0.2",
+        "sha": "9000827ccba6bdab643e8b6fd33ac0654aef8333"
+      }
+    },
+    {
+      "subject": "actions/github-script",
+      "source": "https://api.github.com/repos/actions/github-script/releases/latest",
+      "requested_at": "2026-11-01T15:21:08.008Z",
+      "observed_at": "2026-11-01T15:21:08.508Z",
+      "body_file": "actions_github-script.body",
+      "bytes": 4189,
+      "sha256": "ece1bb204fd8c668ab3f71e3e77fa201cbd41f670095f9f4d91a7219b8397417",
+      "observed": {
+        "version": "v9.0.0",
+        "release_id": 307308602,
+        "published_at": "2026-04-09T22:57:15Z",
+        "prerelease": false,
+        "draft": false
+      }
+    },
+    {
+      "subject": "actions/github-script pinned tag",
+      "source": "https://api.github.com/repos/actions/github-script/git/ref/tags/v9.0.0",
+      "requested_at": "2026-11-01T15:21:09.416Z",
+      "observed_at": "2026-11-01T15:21:09.416Z",
+      "body_file": "pinned-actions_github-script-tag-0.body",
+      "bytes": 68,
+      "sha256": "5e3dbf7072e23ee1599c41cf518e65fa18977b7e4876a774131a7085a7194bdb",
+      "observed": {
+        "version": "v9.0.0",
+        "sha": "3a2844b7e9c422d3c10d287c895573f7108da1b3"
+      }
+    },
+    {
+      "subject": "actions/github-script latest tag",
+      "source": "https://api.github.com/repos/actions/github-script/git/ref/tags/v9.0.0",
+      "requested_at": "2026-11-01T15:21:10.302Z",
+      "observed_at": "2026-11-01T15:21:10.302Z",
+      "body_file": "latest-actions_github-script-tag-0.body",
+      "bytes": 68,
+      "sha256": "5e3dbf7072e23ee1599c41cf518e65fa18977b7e4876a774131a7085a7194bdb",
+      "observed": {
+        "version": "v9.0.0",
+        "sha": "3a2844b7e9c422d3c10d287c895573f7108da1b3"
+      }
+    },
+    {
+      "subject": "actions/upload-artifact",
+      "source": "https://api.github.com/repos/actions/upload-artifact/releases/latest",
+      "requested_at": "2026-11-01T15:21:10.302Z",
+      "observed_at": "2026-11-01T15:21:10.802Z",
+      "body_file": "actions_upload-artifact.body",
+      "bytes": 2376,
+      "sha256": "1cd4b7da146610d5396bc37b83b7bf1ed46e0bbedfec232cd330e9d238baa05a",
+      "observed": {
+        "version": "v7.0.2",
+        "release_id": 405627178,
+        "published_at": "2026-10-07T10:08:14Z",
+        "prerelease": false,
+        "draft": false
+      }
+    },
+    {
+      "subject": "actions/upload-artifact pinned tag",
+      "source": "https://api.github.com/repos/actions/upload-artifact/git/ref/tags/v7.0.2",
+      "requested_at": "2026-11-01T15:21:11.330Z",
+      "observed_at": "2026-11-01T15:21:11.330Z",
+      "body_file": "pinned-actions_upload-artifact-tag-0.body",
+      "bytes": 68,
+      "sha256": "5eb8bae9965dc331070b29aa091b0e65deab9e8239eeb019463af5c16ef19f91",
+      "observed": {
+        "version": "v7.0.2",
+        "sha": "cf430e030ddbb5b0abf93d22962f4752f3646cd9"
+      }
+    },
+    {
+      "subject": "actions/upload-artifact latest tag",
+      "source": "https://api.github.com/repos/actions/upload-artifact/git/ref/tags/v7.0.2",
+      "requested_at": "2026-11-01T15:21:11.786Z",
+      "observed_at": "2026-11-01T15:21:11.786Z",
+      "body_file": "latest-actions_upload-artifact-tag-0.body",
+      "bytes": 68,
+      "sha256": "5eb8bae9965dc331070b29aa091b0e65deab9e8239eeb019463af5c16ef19f91",
+      "observed": {
+        "version": "v7.0.2",
+        "sha": "cf430e030ddbb5b0abf93d22962f4752f3646cd9"
+      }
+    },
+    {
+      "subject": "asamarts/alint",
+      "source": "https://api.github.com/repos/asamarts/alint/releases/latest",
+      "requested_at": "2026-11-01T15:21:11.787Z",
+      "observed_at": "2026-11-01T15:21:12.478Z",
+      "body_file": "asamarts_alint.body",
+      "bytes": 28127,
+      "sha256": "14b8042c34c1e1f74221e7117bb15425c1e520b6322b4910cb415ae53f1eea32",
+      "observed": {
+        "version": "v0.20.1",
+        "release_id": 422375834,
+        "published_at": "2026-10-23T22:51:16Z",
+        "prerelease": false,
+        "draft": false
+      }
+    },
+    {
+      "subject": "asamarts/alint pinned tag",
+      "source": "https://api.github.com/repos/asamarts/alint/git/ref/tags/v0.20.1",
+      "requested_at": "2026-11-01T15:21:12.975Z",
+      "observed_at": "2026-11-01T15:21:12.975Z",
+      "body_file": "pinned-asamarts_alint-tag-0.body",
+      "bytes": 69,
+      "sha256": "d59a539da6e5779dd217eea73b21ef141c413a3ec1beea23f69421d528c4c84e",
+      "observed": {
+        "version": "v0.20.1",
+        "sha": "265d9fdc720bb8f59d00b87e33e4149869f77327"
+      }
+    },
+    {
+      "subject": "asamarts/alint latest tag",
+      "source": "https://api.github.com/repos/asamarts/alint/git/ref/tags/v0.20.1",
+      "requested_at": "2026-11-01T15:21:13.408Z",
+      "observed_at": "2026-11-01T15:21:13.408Z",
+      "body_file": "latest-asamarts_alint-tag-0.body",
+      "bytes": 69,
+      "sha256": "d59a539da6e5779dd217eea73b21ef141c413a3ec1beea23f69421d528c4c84e",
+      "observed": {
+        "version": "v0.20.1",
+        "sha": "265d9fdc720bb8f59d00b87e33e4149869f77327"
+      }
+    },
+    {
+      "subject": "aws-actions/configure-aws-credentials",
+      "source": "https://api.github.com/repos/aws-actions/configure-aws-credentials/releases/latest",
+      "requested_at": "2026-11-01T15:21:13.408Z",
+      "observed_at": "2026-11-01T15:21:13.912Z",
+      "body_file": "aws-actions_configure-aws-credentials.body",
+      "bytes": 2303,
+      "sha256": "161850ffcd42ba5f7f6fd1a11172d788093d760eafa3794872a71165460db92f",
+      "observed": {
+        "version": "v6.3.0",
+        "release_id": 388882044,
+        "published_at": "2026-09-15T05:13:09Z",
+        "prerelease": false,
+        "draft": false
+      }
+    },
+    {
+      "subject": "aws-actions/configure-aws-credentials pinned tag",
+      "source": "https://api.github.com/repos/aws-actions/configure-aws-credentials/git/ref/tags/v6.3.0",
+      "requested_at": "2026-11-01T15:21:14.403Z",
+      "observed_at": "2026-11-01T15:21:14.403Z",
+      "body_file": "pinned-aws-actions_configure-aws-credentials-tag-0.body",
+      "bytes": 68,
+      "sha256": "44459fe65e6107e79bd098772f8aad89c90eca66dcaa91b5e36bb18ac81a6454",
+      "observed": {
+        "version": "v6.3.0",
+        "sha": "e1253824e5c10ff9df46874f81ed3ec929e19cfd"
+      }
+    },
+    {
+      "subject": "aws-actions/configure-aws-credentials latest tag",
+      "source": "https://api.github.com/repos/aws-actions/configure-aws-credentials/git/ref/tags/v6.3.0",
+      "requested_at": "2026-11-01T15:21:14.871Z",
+      "observed_at": "2026-11-01T15:21:14.871Z",
+      "body_file": "latest-aws-actions_configure-aws-credentials-tag-0.body",
+      "bytes": 68,
+      "sha256": "44459fe65e6107e79bd098772f8aad89c90eca66dcaa91b5e36bb18ac81a6454",
+      "observed": {
+        "version": "v6.3.0",
+        "sha": "e1253824e5c10ff9df46874f81ed3ec929e19cfd"
+      }
+    },
+    {
+      "subject": "jdx/mise-action",
+      "source": "https://api.github.com/repos/jdx/mise-action/releases/latest",
+      "requested_at": "2026-11-01T15:21:14.872Z",
+      "observed_at": "2026-11-01T15:21:15.371Z",
+      "body_file": "jdx_mise-action.body",
+      "bytes": 3008,
+      "sha256": "a217491e7600b97bd5ced2cd2f0ae8a818c011e2d0c0639937664b5fbfdac9c3",
+      "observed": {
+        "version": "v5.2.5",
+        "release_id": 429855428,
+        "published_at": "2026-10-31T10:04:11Z",
+        "prerelease": false,
+        "draft": false
+      }
+    },
+    {
+      "subject": "jdx/mise-action pinned tag",
+      "source": "https://api.github.com/repos/jdx/mise-action/git/ref/tags/v5.2.5",
+      "requested_at": "2026-11-01T15:21:15.803Z",
+      "observed_at": "2026-11-01T15:21:15.803Z",
+      "body_file": "pinned-jdx_mise-action-tag-0.body",
+      "bytes": 68,
+      "sha256": "bc549af1e927db4ef740374a1ca110c8feefffc28c3c6f8373e9399cb6083f7a",
+      "observed": {
+        "version": "v5.2.5",
+        "sha": "6612f0ef07ed2a736cd1e00a94a065522dd41195"
+      }
+    },
+    {
+      "subject": "jdx/mise-action latest tag",
+      "source": "https://api.github.com/repos/jdx/mise-action/git/ref/tags/v5.2.5",
+      "requested_at": "2026-11-01T15:21:16.236Z",
+      "observed_at": "2026-11-01T15:21:16.236Z",
+      "body_file": "latest-jdx_mise-action-tag-0.body",
+      "bytes": 68,
+      "sha256": "bc549af1e927db4ef740374a1ca110c8feefffc28c3c6f8373e9399cb6083f7a",
+      "observed": {
+        "version": "v5.2.5",
+        "sha": "6612f0ef07ed2a736cd1e00a94a065522dd41195"
+      }
+    },
+    {
+      "subject": "jdx/mr-boxington-action",
+      "source": "https://api.github.com/repos/jdx/mr-boxington-action/releases",
+      "requested_at": "2026-11-01T15:21:16.236Z",
+      "observed_at": "2026-11-01T15:21:16.804Z",
+      "body_file": "jdx_mr-boxington-action.body",
+      "bytes": 51181,
+      "sha256": "1a1ca26acb51a7bc7b48efaa0bbb6d65f50de5de8afa3406be0de4eab528fd73",
+      "observed": {
+        "version": "v1.7.3",
+        "release_id": 424088566,
+        "published_at": "2026-10-26T10:05:33Z",
+        "prerelease": false,
+        "draft": false
+      }
+    },
+    {
+      "subject": "jdx/mr-boxington-action pinned tag",
+      "source": "https://api.github.com/repos/jdx/mr-boxington-action/git/ref/tags/v1.7.3",
+      "requested_at": "2026-11-01T15:21:17.598Z",
+      "observed_at": "2026-11-01T15:21:17.598Z",
+      "body_file": "pinned-jdx_mr-boxington-action-tag-0.body",
+      "bytes": 68,
+      "sha256": "d2e42a8667b6c0874a64c42475f6d04605109c926b4f59628f40a1894c12a886",
+      "observed": {
+        "version": "v1.7.3",
+        "sha": "88acf2bb50552c7c508cbac13e5f8c576b95b1de"
+      }
+    },
+    {
+      "subject": "jdx/mr-boxington-action latest tag",
+      "source": "https://api.github.com/repos/jdx/mr-boxington-action/git/ref/tags/v1.7.3",
+      "requested_at": "2026-11-01T15:21:18.014Z",
+      "observed_at": "2026-11-01T15:21:18.014Z",
+      "body_file": "latest-jdx_mr-boxington-action-tag-0.body",
+      "bytes": 68,
+      "sha256": "d2e42a8667b6c0874a64c42475f6d04605109c926b4f59628f40a1894c12a886",
+      "observed": {
+        "version": "v1.7.3",
+        "sha": "88acf2bb50552c7c508cbac13e5f8c576b95b1de"
+      }
+    }
+  ]
+}
