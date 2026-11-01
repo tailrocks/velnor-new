@@ -15,6 +15,8 @@ use crate::{CompileDriver, MiseSetup, RenderError, RenderedFile, steps};
 mod document;
 #[path = "rust_suites_steps.rs"]
 mod suite_steps;
+#[path = "rust_suites_triggers.rs"]
+mod triggers;
 
 use suite_steps::{
     append_suite_artifact_uploads, compile_driver_steps, install_suite_tools_steps,
