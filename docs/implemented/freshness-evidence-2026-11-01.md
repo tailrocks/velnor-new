@@ -1,7 +1,7 @@
 # Freshness evidence — 2026-11-01
 
-VER-3.2 update set covering all four stale pins found by the live probe on
-2026-11-01: mise `2026.10.21 -> 2026.10.25`, mr-boxington `1.28.0 -> 1.29.1`,
+VER-3.2 update set covering the stale pins found by the live probe on
+2026-11-01: mise `2026.10.21 -> 2026.10.25`,
 jactionlint `2.3.0 -> 2.4.0`, and `jdx/mise-action` `v5.2.4 -> v5.2.5`
 (tag commit `6612f0ef07ed2a736cd1e00a94a065522dd41195`).
 
@@ -9,7 +9,11 @@ Two independent authenticated captures (`capture-1/`, `capture-2/` under
 [the evidence directory](evidence/freshness-2026-11-01/)) agree on all 25
 tool/action rows; `capture-agreement.json` binds both by SHA-256. Every
 pinned action tag resolves to the inventory SHA in both captures. Only the
-four bumped rows change pin/qualified/latest; all 25 `checked_at`
+three bumped rows change pin/qualified/latest; mr-boxington is held at
+`1.28.0` (temporary hold in the inventory, granted 2026-11-01, expires
+2026-11-15) because the adopted controller 0.1.66 catalogues `1.28.0`;
+its `1.29.1` bump lands with controller adoption after the SDK 0.1.70
+release. All 25 `checked_at`
 timestamps refresh from the capture-2 observations.
 
 Digest sources (all official upstream release assets, cross-checked two

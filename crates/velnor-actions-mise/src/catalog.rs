@@ -59,7 +59,7 @@ pub const MISE_VERSION: &str = "2026.10.25";
 pub const MISE_BINARY_SHA256_LINUX_X64: &str =
     "5d362ecc578dc7c146679b841dda949d6472cbf86ff5635db7afdca1b6b3fd87";
 pub const RUST_VERSION: &str = "1.99.1";
-pub const MR_BOXINGTON_VERSION: &str = "1.29.1";
+pub const MR_BOXINGTON_VERSION: &str = "1.28.0";
 pub const GH_VERSION: &str = "2.103.3";
 pub use velnor_actions_contract::config::jactionlint_verifier::JACTIONLINT_VERSION;
 pub const SHELLCHECK_VERSION: &str = "0.11.0";
