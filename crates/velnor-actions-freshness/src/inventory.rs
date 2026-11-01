@@ -67,57 +67,56 @@ pub(crate) const EXPECTED_ACTIONS: &[(&str, &str)] = &[
     ("actions/github-script", "GITHUB_SCRIPT_ACTION"),
 ];
 
-pub(crate) fn load_inventory(ctx: &mut FreshnessContext) -> bool {
-    let path = ctx.path(".velnor/freshness-inventory.json");
-    let data = match fs::read(&path) {
-        Ok(data) => data,
-        Err(error) => {
-            ctx.fail_row(
-                "inventory-shape",
-                ".velnor/freshness-inventory.json",
-                &format!("unreadable ({error})"),
-            );
-            return false;
-        }
-    };
-    let inventory: Value = match serde_json::from_slice(&data) {
-        Ok(inventory) => inventory,
-        Err(error) => {
-            ctx.fail_row(
-                "inventory-shape",
-                ".velnor/freshness-inventory.json",
-                &format!("unreadable ({error})"),
-            );
-            return false;
-        }
-    };
-    if !inventory.is_object() {
-        ctx.fail_row(
-            "inventory-shape",
-            "root",
-            "inventory root must be an object",
-        );
-        return false;
+pub(crate) const INVENTORY_REL: &str = ".velnor/freshness-inventory.json";
+
+pub(crate) const POLICY_REL: &str = ".velnor/version-policy.toml";
+
+pub(crate) fn parse_inventory(data: &[u8]) -> Result<Value, String> {
+    let inventory: Value =
+        serde_json::from_slice(data).map_err(|error| format!("unreadable ({error})"))?;
+    if inventory.is_object() {
+        Ok(inventory)
+    } else {
+        Err("inventory root must be an object".to_owned())
     }
-    ctx.inv = inventory;
-    check_inventory_shape(ctx);
-    true
 }
 
-pub(crate) fn load_policy(ctx: &mut FreshnessContext) {
-    let relative = ".velnor/version-policy.toml";
-    match fs::read_to_string(ctx.path(relative))
-        .map_err(|error| error.to_string())
-        .and_then(|text| toml::from_str::<TomlValue>(&text).map_err(|error| error.to_string()))
-    {
-        Ok(policy) if policy.is_table() => ctx.policy = Some(policy),
-        Ok(_) => ctx.fail_row("policy-header", relative, "root must be a table"),
-        Err(error) => ctx.fail_row(
-            "policy-header",
-            "version-policy.toml",
-            &format!("unreadable ({error})"),
-        ),
+pub(crate) fn parse_policy(text: &str) -> Result<TomlValue, String> {
+    toml::from_str::<TomlValue>(text).map_err(|error| format!("unreadable ({error})"))
+}
+
+pub(crate) fn load_inventory(ctx: &mut FreshnessContext) -> bool {
+    let parsed = fs::read(ctx.path(INVENTORY_REL))
+        .map_err(|error| format!("unreadable ({error})"))
+        .and_then(|data| parse_inventory(&data));
+    match parsed {
+        Ok(inventory) => {
+            ctx.inv = inventory;
+            check_inventory_shape(ctx);
+            true
+        }
+        Err(error) => {
+            ctx.fail_row("inventory-shape", INVENTORY_REL, &error);
+            false
+        }
     }
+}
+
+fn load_policy(ctx: &mut FreshnessContext) {
+    let parsed = fs::read_to_string(ctx.path(POLICY_REL))
+        .map_err(|error| format!("unreadable ({error})"))
+        .and_then(|text| parse_policy(&text));
+    match parsed {
+        Ok(policy) => ctx.policy = Some(policy),
+        Err(error) => ctx.fail_row("policy-header", "version-policy.toml", &error),
+    }
+}
+
+pub(crate) fn check_pin_consistency(ctx: &mut FreshnessContext) {
+    load_policy(ctx);
+    check_policy_header(ctx);
+    check_local_pins(ctx);
+    check_policy_mirror(ctx);
 }
 
 pub(crate) const DEFAULT_COOLDOWN_DAYS: i64 = 3;
@@ -126,7 +125,7 @@ pub(crate) const MIN_COOLDOWN_DAYS: i64 = 1;
 
 pub(crate) const MAX_COOLDOWN_DAYS: i64 = 90;
 
-pub(crate) fn check_policy_header(ctx: &mut FreshnessContext) {
+fn check_policy_header(ctx: &mut FreshnessContext) {
     let Some(policy) = ctx.policy.clone() else {
         return;
     };
@@ -256,16 +255,16 @@ fn check_registry(ctx: &mut FreshnessContext, policy: &TomlValue) {
     }
 }
 
-pub(crate) fn check_local_pins(ctx: &mut FreshnessContext) {
+fn check_local_pins(ctx: &mut FreshnessContext) {
     pins::check_local_pins(ctx);
 }
 
-pub(crate) fn check_policy_mirror(ctx: &mut FreshnessContext) {
+fn check_policy_mirror(ctx: &mut FreshnessContext) {
     mirror::check_policy_mirror(ctx);
 }
 
 pub(crate) fn toolchain_specs(root: &Path) -> Result<Vec<String>, String> {
-    let policy = read_toml(root.join(".velnor/version-policy.toml"))?;
+    let policy = read_toml(root.join(POLICY_REL))?;
     let policy_tools = policy
         .get("tools")
         .and_then(TomlValue::as_table)
@@ -288,7 +287,7 @@ pub(crate) fn toolchain_specs(root: &Path) -> Result<Vec<String>, String> {
 }
 
 pub(crate) fn policy_mise_version(root: &Path) -> Result<String, String> {
-    let policy = read_toml(root.join(".velnor/version-policy.toml"))?;
+    let policy = read_toml(root.join(POLICY_REL))?;
     policy
         .get("tools")
         .and_then(|tools| tools.get("mise"))

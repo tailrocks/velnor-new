@@ -33,8 +33,9 @@ root workspace runs per-package and workspace-wide Nextest scopes with
 keeps its existing workspace-wide scope, guarded by its own manifest's
 metadata result and `--no-tests fail`. The required
 `test-maintenance-helpers` task applies the same metadata rule to its two named
-package scopes. Each invoked Nextest scope fails when its selected suite is
-empty. The task generator separately uses `--no-tests warn` for
+package scopes and first runs the `pin-mirror` repository-policy action against
+the PR head with `refs/remotes/origin/main` as the base ref. Each invoked
+Nextest scope fails when its selected suite is empty. The task generator separately uses `--no-tests warn` for
 hash-partitioned selections so an individual empty shard is allowed; that does
 not prove complete suite coverage. As suites return, generated verification
 must enforce fail-on-empty at each declared required-suite scope, while

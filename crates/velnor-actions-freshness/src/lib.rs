@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #![allow(
+    clippy::missing_errors_doc,
     missing_docs,
     reason = "documentation comments are intentionally absent from this codebase"
 )]
@@ -11,6 +12,8 @@ mod evidence;
 mod inventory;
 mod members;
 mod patterns;
+mod pin_diff;
+mod pin_mirror;
 mod probe;
 mod process;
 mod release_support;
@@ -20,6 +23,8 @@ mod validation;
 use std::path::{Path, PathBuf};
 
 use crate::context::FreshnessContext;
+
+pub use crate::pin_diff::BaseRef;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Operation {
@@ -32,6 +37,10 @@ pub enum Operation {
     ToolchainSpecs,
 
     MiseVersion,
+
+    PinMirror {
+        base: Option<BaseRef>,
+    },
 
     WorkspaceMembers {
         libraries_only: bool,
@@ -59,6 +68,7 @@ pub fn run(root: &Path, operation: &Operation) -> i32 {
         } => run_freshness(root.to_path_buf(), *check_upstream, *with_advisories),
         Operation::ToolchainSpecs => print_toolchain_specs(root),
         Operation::MiseVersion => print_mise_version(root),
+        Operation::PinMirror { base } => pin_mirror::run(root.to_path_buf(), base.as_ref()),
         Operation::WorkspaceMembers { libraries_only } => {
             members::print_workspace_members(root, *libraries_only)
         }
@@ -83,10 +93,7 @@ fn run_freshness(root: PathBuf, check_upstream: bool, with_advisories: bool) -> 
     if !inventory::load_inventory(&mut ctx) {
         return ctx.finish();
     }
-    inventory::load_policy(&mut ctx);
-    inventory::check_policy_header(&mut ctx);
-    inventory::check_local_pins(&mut ctx);
-    inventory::check_policy_mirror(&mut ctx);
+    inventory::check_pin_consistency(&mut ctx);
     validation::check_validation_tool_pins(&mut ctx);
     dependencies::check_effective_identity(&mut ctx);
     evidence::check_recorded_freshness(&mut ctx);
