@@ -57,6 +57,8 @@ mod native_artifacts_fixture;
 mod native_artifacts_suite_gate;
 #[path = "workflow_configuration_public/native_artifacts_suites.rs"]
 mod native_artifacts_suites;
+#[path = "workflow_configuration_public/one_job_per_crate.rs"]
+mod one_job_per_crate;
 #[path = "workflow_configuration_public/parallel_owners.rs"]
 mod parallel_owners;
 #[path = "workflow_configuration_public/release_bun_prerequisite.rs"]
@@ -83,5 +85,7 @@ mod tools_producers_mutations;
 mod tools_producers_scope;
 #[path = "workflow_configuration_public/verification_tools.rs"]
 mod verification_tools;
+#[path = "workflow_configuration_public/waste_rules.rs"]
+mod waste_rules;
 #[path = "workflow_configuration_public/workspace_format.rs"]
 mod workspace_format;

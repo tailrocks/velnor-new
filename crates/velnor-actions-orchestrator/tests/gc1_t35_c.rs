@@ -39,6 +39,35 @@ fn check_branch_reader_ledger_passes() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+fn check_unsuffixed_reader_ledger_passes() -> Result<(), Box<dyn Error>> {
+    let task = task_id()?;
+    let (plan, matrix, report) = branch_evidence(&task, GROUP_ID)?;
+    let ledger = group_ledger_value(
+        &task,
+        GROUP_ID,
+        HEAD_SHA,
+        "pull_request",
+        ExecutionBranch::Reader,
+        UnitOutcome::Executed,
+        Some(0),
+    )?;
+    let final_report = merge(
+        &plan,
+        std::slice::from_ref(&matrix),
+        std::slice::from_ref(&report),
+        &[GROUP_ID],
+        &required_jobs(&[(GROUP_ID, JobConclusion::Success)]),
+        RUN_KEY,
+        Some(std::slice::from_ref(&ledger)),
+    )?;
+    if final_report.status != FinalStatus::Passed || !final_report.miss_reasons.is_empty() {
+        return Err(fail(
+            "unsuffixed reader ledger did not preserve Required pass",
+        ));
+    }
+    Ok(())
+}
+
 fn check_branch_writer_ledger_passes() -> Result<(), Box<dyn Error>> {
     let task = task_id()?;
     let (plan, matrix, report) = branch_evidence(&task, GROUP_ID)?;
@@ -290,6 +319,7 @@ fn check_branch_unaffected_ledger_rejected() -> Result<(), Box<dyn Error>> {
 #[test]
 fn gc1_t35_branch_ledgers() -> Result<(), Box<dyn Error>> {
     check_branch_reader_ledger_passes()?;
+    check_unsuffixed_reader_ledger_passes()?;
     check_branch_writer_ledger_passes()?;
     check_branch_both_ledgers_rejected()?;
     check_branch_mismatch_rejected()?;
