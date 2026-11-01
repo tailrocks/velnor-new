@@ -3,6 +3,8 @@
 
 use velnor_actions_workflow_renderer::{render::RenderedFile, yaml::quote_scalar};
 
+use velnor_actions_contract::workflow::TOOLS_PRODUCER_INSTALL_CONDITION;
+
 use crate::OrchestratorError;
 use crate::workflow::verifier_actions::{VerifierAction, VerifierActionSet};
 
@@ -189,13 +191,28 @@ fn canonical_inline_shape(
 }
 
 fn canonical_action_call(step: &StepText, action: &VerifierAction) -> bool {
+    let uses = format!("{} # zizmor: ignore[self-repository]", action.uses);
+    let shape_ok = match step.fields.as_slice() {
+        [name, call] => name.0 == "name" && call.0 == "uses" && call.1 == uses,
+        [name, condition, call] => {
+            name.0 == "name"
+                && condition.0 == "if"
+                && condition.1 == TOOLS_PRODUCER_INSTALL_CONDITION
+                && call.0 == "uses"
+                && call.1 == uses
+        }
+        _ => false,
+    };
     !step.unexpected_nested
-        && step.fields.len() == 2
-        && step.fields[0].0 == "name"
+        && shape_ok
         && !step.fields[0].1.trim().is_empty()
         && step.fields[0].1 == step.name
-        && step.fields[1].0 == "uses"
-        && step.fields[1].1 == format!("{} # zizmor: ignore[self-repository]", action.uses)
+}
+
+fn gate_of(step: &StepText) -> Option<&str> {
+    step.fields
+        .iter()
+        .find_map(|(key, value)| (key == "if").then_some(value.as_str()))
 }
 
 fn unverified(path: &str, step: &str, why: &str) -> OrchestratorError {
@@ -229,6 +246,18 @@ fn check_steps(
                 ));
             };
             if is_rust_verifier(step, verifiers) {
+                let gate = gate_of(step);
+                if gate.is_some()
+                    && steps[start..index]
+                        .iter()
+                        .any(|install| installs_rust(install) && gate_of(install) != gate)
+                {
+                    return Err(unverified(
+                        path,
+                        &step.name,
+                        "gated verification follows an install with another condition",
+                    ));
+                }
                 break;
             }
             if USES.iter().any(|needle| step.text.contains(needle)) && !installs_rust(step)

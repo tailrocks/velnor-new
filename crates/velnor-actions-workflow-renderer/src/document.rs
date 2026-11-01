@@ -306,7 +306,7 @@ pub(super) fn append_job_options(
             crate::runs_on::SCALE_SET_RUN_SHELL,
         ));
     }
-    if job.is_dependency_seed() {
+    if job.producer_kind().is_some() {
         entries.push(("continue-on-error".to_owned(), Yaml::Bool(true)));
     }
     let job_env = crate::document_env::exclude_inherited(job_env, workflow_env);

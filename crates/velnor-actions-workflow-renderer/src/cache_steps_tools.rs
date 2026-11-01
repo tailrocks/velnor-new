@@ -15,6 +15,7 @@ pub const TOOLS_RESTORE_USES: &str =
 pub const TOOLS_SAVE_USES: &str = "actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9";
 pub const TOOLS_RESTORE_NAME: &str = "Restore Mise tools";
 pub const TOOLS_SAVE_NAME: &str = "Save Mise tools";
+const TOOLS_PROBE_NAME: &str = "Probe Mise tools";
 pub(crate) const TOOLS_SEED_ADMITTED_INPUT: &str = "seed-admitted";
 pub(crate) const TOOLS_MISE_SHA256_INPUT: &str = "mise-sha256";
 pub(crate) const TOOLS_SEED_ADMITTED_EXPRESSION: &str = "${{ steps.v2.outputs.seed_admitted }}";
@@ -62,6 +63,31 @@ pub(super) fn restore_step(
         ]),
     )?;
     step.condition = condition;
+    step.id = Some(velnor_actions_contract::StepId::ToolsRestore);
+    step.role = Some(StepRole::ToolsCacheRestore);
+    Ok(step)
+}
+
+pub(super) fn probe_step(key: &str) -> Result<Step, RenderError> {
+    if !crate::cache_p08::is_v2_cache_key_expression(key) {
+        return Err(RenderError::InvalidWorkflow(
+            "bad_tools_cache_probe_key".to_owned(),
+        ));
+    }
+    let mut step = crate::steps::action_step(
+        TOOLS_PROBE_NAME,
+        TOOLS_RESTORE_ACTION_USES,
+        std::collections::BTreeMap::from([
+            ("key".to_owned(), key.to_owned()),
+            ("path".to_owned(), TOOLS_CACHE_PATHS.join("\n")),
+            (
+                velnor_actions_contract::workflow::step_identity::TOOLS_RESTORE_LOOKUP_ONLY_INPUT
+                    .to_owned(),
+                "true".to_owned(),
+            ),
+        ]),
+    )?;
+    step.condition = Some(crate::cache_p08::TOOLS_CACHE_RESTORE_CONDITION.to_owned());
     step.id = Some(velnor_actions_contract::StepId::ToolsRestore);
     step.role = Some(StepRole::ToolsCacheRestore);
     Ok(step)

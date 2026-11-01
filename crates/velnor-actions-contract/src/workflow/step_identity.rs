@@ -3,6 +3,7 @@
 
 use super::step::{Step, StepKind};
 pub(super) use super::step_payloads::valid_tools_cache_identity;
+pub use super::step_payloads::{TOOLS_RESTORE_LOOKUP_ONLY_INPUT, ToolsRestoreForm};
 use super::step_payloads::{valid_checkout_payload, valid_mise_setup, valid_tool_seed_payload};
 use crate::errors::ContractError;
 use serde::{Deserialize, Serialize};
@@ -248,10 +249,7 @@ impl StepRole {
             | Self::MbxBundleSave
             | Self::FamilySave => action_has_prefix_for_kind(kind, "actions/cache/save@"),
             Self::ToolsCacheIdentity => valid_tools_cache_identity(kind),
-            Self::ToolsCacheRestore => matches!(
-                kind,
-                StepKind::Action { uses, .. } if uses == TOOLS_CACHE_RESTORE_USES
-            ),
+            Self::ToolsCacheRestore => ToolsRestoreForm::of(kind).is_some(),
             Self::CargoSourcesRestore | Self::MbxBundleRestore | Self::FamilyRestore => {
                 action_has_prefix_for_kind(kind, "actions/cache/restore@")
             }

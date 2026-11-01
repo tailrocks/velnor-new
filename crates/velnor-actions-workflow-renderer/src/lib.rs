@@ -107,6 +107,8 @@ mod tofu_apply_steps;
 pub mod tofu_cache;
 mod tool_seed;
 mod tool_seed_admission;
+mod tools_identity;
+mod tools_producer;
 
 mod native_verifiers;
 pub mod toolchain_env;

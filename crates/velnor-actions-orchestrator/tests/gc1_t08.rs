@@ -11,8 +11,9 @@ use velnor_actions_contract::ids::{
 };
 use velnor_actions_contract::workflow::crate_job::{
     CrateGroupPlan, CrateJob, CrateObligation, GROUP_READER_SUFFIX, GROUP_WRITER_SUFFIX,
-    MAX_GROUP_UNITS, SEED_JOB_ID_PREFIX, group_timeout_for, is_seed_job_id, reader_job_id_for,
-    task_digest_for_execution, validate_group_needs, writer_job_id_for,
+    MAX_GROUP_UNITS, SEED_JOB_ID_PREFIX, TOOLS_PRODUCER_JOB_ID_PREFIX, group_timeout_for,
+    is_seed_job_id, reader_job_id_for, task_digest_for_execution, validate_group_needs,
+    writer_job_id_for,
 };
 use velnor_actions_contract::workflow::jobs::crate_display_name;
 
@@ -254,6 +255,7 @@ fn check_rejects_seed_race() -> Result<(), Box<dyn Error>> {
     for seed in [
         SEED_JOB_ID_PREFIX.to_owned(),
         "dependency-seed-workspace".to_owned(),
+        format!("{TOOLS_PRODUCER_JOB_ID_PREFIX}0123abcd"),
     ] {
         if validate_group_needs(&["plan".to_owned(), seed.clone()], &job.job_id).is_ok() {
             return Err(io::Error::other(format!("seed need accepted: {seed}")).into());

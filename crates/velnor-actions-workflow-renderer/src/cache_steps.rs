@@ -66,6 +66,10 @@ pub(crate) fn tools_cache_restore_step(
     tools::restore_step(key, mise_sha256, condition)
 }
 
+pub(crate) fn tools_cache_probe_step(key: &str) -> Result<Step, RenderError> {
+    tools::probe_step(key)
+}
+
 pub(crate) fn tools_cache_save_step(
     key: &str,
     condition: Option<String>,

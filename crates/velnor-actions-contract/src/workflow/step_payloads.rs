@@ -4,7 +4,36 @@
 use super::step::StepKind;
 use super::step_identity::{
     TOOL_SEED_USES, TOOLS_CACHE_IDENTITY_DIGEST_INPUT, TOOLS_CACHE_PRELUDE_USES,
+    TOOLS_CACHE_RESTORE_USES,
 };
+
+pub const TOOLS_RESTORE_LOOKUP_ONLY_INPUT: &str = "lookup-only";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ToolsRestoreForm {
+    Composite,
+    LookupOnly,
+}
+
+impl ToolsRestoreForm {
+    #[must_use]
+    pub fn of(kind: &StepKind) -> Option<Self> {
+        let StepKind::Action { uses, with, .. } = kind else {
+            return None;
+        };
+        if uses == TOOLS_CACHE_RESTORE_USES {
+            Some(Self::Composite)
+        } else if uses.starts_with("actions/cache/restore@")
+            && with
+                .get(TOOLS_RESTORE_LOOKUP_ONLY_INPUT)
+                .is_some_and(|value| value == "true")
+        {
+            Some(Self::LookupOnly)
+        } else {
+            None
+        }
+    }
+}
 
 pub(super) fn valid_mise_setup(kind: &StepKind) -> bool {
     matches!(kind, StepKind::Action { uses, with, .. }
