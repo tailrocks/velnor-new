@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::BTreeSet;
+use std::fs;
+use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -44,6 +46,7 @@ const MALFORMED_LABEL: &str = "metadata_failed";
 const ERROR_PREFIX: &str = "error:";
 const CAUSE_HEADER: &str = "Caused by:";
 const CARGO_CONFIG_FILES: [&str; 2] = ["config", "config.toml"];
+const RUSTUP_TOOLCHAIN_FILES: [&str; 2] = ["rust-toolchain", "rust-toolchain.toml"];
 
 #[must_use]
 pub fn classify_metadata_failure(stderr: &str) -> MetadataFailure {
@@ -124,13 +127,22 @@ pub(crate) fn metadata_failure_error(
 }
 
 fn warm_remedy(root: &Path, workspace_root: &str, manifest: &str) -> WarmRemedy {
-    let configs: Vec<String> = Path::new(workspace_root)
+    let files: Vec<String> = Path::new(workspace_root)
         .ancestors()
-        .flat_map(|dir| CARGO_CONFIG_FILES.map(|name| dir.join(".cargo").join(name)))
-        .filter(|config| root.join(config).exists())
-        .map(|config| config.display().to_string())
+        .flat_map(|dir| {
+            let cargo = CARGO_CONFIG_FILES
+                .map(|name| dir.join(".cargo").join(name))
+                .into_iter()
+                .filter(|config| root.join(config).exists());
+            let rustup = RUSTUP_TOOLCHAIN_FILES
+                .map(|name| dir.join(name))
+                .into_iter()
+                .filter(|file| names_custom_toolchain(&root.join(file)));
+            cargo.chain(rustup)
+        })
+        .map(|file| file.display().to_string())
         .collect();
-    if configs.is_empty() {
+    if files.is_empty() {
         WarmRemedy::Command {
             workspace_dir: quote(
                 &root
@@ -142,10 +154,23 @@ fn warm_remedy(root: &Path, workspace_root: &str, manifest: &str) -> WarmRemedy 
             manifest_path: quote(&root.join(manifest).to_string_lossy()),
         }
     } else {
-        WarmRemedy::ReviewCargoConfig {
-            configs,
+        WarmRemedy::ReviewRepoConfig {
+            files,
             manifest: manifest.to_owned(),
         }
+    }
+}
+
+fn names_custom_toolchain(file: &Path) -> bool {
+    match fs::read_to_string(file) {
+        Ok(text) => match toml::from_str::<toml::Table>(&text) {
+            Ok(table) => table
+                .get("toolchain")
+                .and_then(toml::Value::as_table)
+                .is_some_and(|toolchain| toolchain.contains_key("path")),
+            Err(_) => text.trim().contains(['/', '\\']),
+        },
+        Err(err) => err.kind() != ErrorKind::NotFound,
     }
 }
 

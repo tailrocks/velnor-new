@@ -119,8 +119,8 @@ pub enum WarmRemedy {
         workspace_dir: String,
         manifest_path: String,
     },
-    ReviewCargoConfig {
-        configs: Vec<String>,
+    ReviewRepoConfig {
+        files: Vec<String>,
         manifest: String,
     },
 }
@@ -135,10 +135,10 @@ impl fmt::Display for WarmRemedy {
                 f,
                 "run `cd {workspace_dir} && cargo fetch --locked --manifest-path {manifest_path}`"
             ),
-            Self::ReviewCargoConfig { configs, manifest } => write!(
+            Self::ReviewRepoConfig { files, manifest } => write!(
                 f,
-                "review the repository Cargo config {} first, because Cargo loads it when run from the workspace and can execute programs it names, then warm the registry with cargo fetch --locked for {manifest}",
-                configs.join(", ")
+                "review the repository config {} first, because Cargo and rustup load it when run from the workspace and can execute programs it names, then warm the registry with cargo fetch --locked for {manifest}",
+                files.join(", ")
             ),
         }
     }

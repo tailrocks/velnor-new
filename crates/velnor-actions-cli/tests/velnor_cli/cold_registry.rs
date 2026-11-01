@@ -157,7 +157,7 @@ fn cold_registry_text(fixture: &fixture::Fixture) -> Result<String, Box<dyn Erro
 fn assert_review_guidance(text: &str, manifest: &str, configs: &str) {
     assert!(
         text.contains(&format!(
-            "velnor-actions: cold_registry: {manifest}: dependency not in the local registry (or the dependency does not exist); review the repository Cargo config {configs} first, because Cargo loads it when run from the workspace and can execute programs it names, then warm the registry with cargo fetch --locked for {manifest}"
+            "velnor-actions: cold_registry: {manifest}: dependency not in the local registry (or the dependency does not exist); review the repository config {configs} first, because Cargo and rustup load it when run from the workspace and can execute programs it names, then warm the registry with cargo fetch --locked for {manifest}"
         )),
         "{text}"
     );
@@ -193,6 +193,34 @@ fn cold_registry_names_cargo_config_in_a_parent_inside_the_repo() -> Result<(), 
     fs::write(fixture.repo.join("tools/.cargo/config"), "[net]\n")?;
     let text = cold_registry_text(&fixture)?;
     assert_review_guidance(&text, "tools/probe/Cargo.toml", "tools/.cargo/config");
+    Ok(())
+}
+
+#[test]
+fn cold_registry_names_a_custom_path_toolchain_file_instead_of_a_command()
+-> Result<(), Box<dyn Error>> {
+    let fixture = fixture::Fixture::with_workspace_dir("tools/probe")?;
+    fs::write(
+        fixture.repo.join("rust-toolchain.toml"),
+        "[toolchain]\nchannel = \"1.99.1\"\n",
+    )?;
+    let text = cold_registry_text(&fixture)?;
+    assert!(
+        text.contains(&format!(
+            "run `cd '{}' && cargo fetch --locked --manifest-path '{}'`",
+            fixture.workspace.display(),
+            fixture.workspace.join("Cargo.toml").display()
+        )),
+        "{text}"
+    );
+    let toolchain = fixture.workspace.join("rust-toolchain.toml");
+    fs::write(&toolchain, "[toolchain]\npath = \"/tmp/x\"\n")?;
+    let text = cold_registry_text(&fixture)?;
+    assert_review_guidance(
+        &text,
+        "tools/probe/Cargo.toml",
+        "tools/probe/rust-toolchain.toml",
+    );
     Ok(())
 }
 
