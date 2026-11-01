@@ -3,14 +3,14 @@
   "captures": [
     {
       "name": "capture-1",
-      "comparison_sha256": "7564d8a8f697e5883bb04e02847dd2618a237b47ae08d4ce10f4be8809472439",
-      "receipts_sha256": "5e80df4d953417d0a24604e93805e98257dbcba0a29d4ca7f498ad6754bf0de3",
+      "comparison_sha256": "6af74ad4c11a953b80e017f9f459e730e9d7887086a4e3783c5da43e1088eab8",
+      "receipts_sha256": "5cdb9cb90f4a5d4d5a3412f8066ed454d30e2d9f02f302631a912db21fdaa67c",
       "rows": [
         {
           "subject": "mise",
-          "pinned": "2026.10.25",
+          "pinned": "2026.10.21",
           "observed": "v2026.10.25",
-          "match": true
+          "match": false
         },
         {
           "subject": "rust",
@@ -20,9 +20,9 @@
         },
         {
           "subject": "mr-boxington",
-          "pinned": "1.29.1",
+          "pinned": "1.28.0",
           "observed": "v1.29.1",
-          "match": true
+          "match": false
         },
         {
           "subject": "gh",
@@ -32,9 +32,9 @@
         },
         {
           "subject": "jactionlint",
-          "pinned": "2.4.0",
+          "pinned": "2.3.0",
           "observed": "v2.4.0",
-          "match": true
+          "match": false
         },
         {
           "subject": "shellcheck",
@@ -146,9 +146,9 @@
         },
         {
           "subject": "jdx/mise-action",
-          "pinned": "v5.2.5",
+          "pinned": "v5.2.4",
           "observed": "v5.2.5",
-          "match": true
+          "match": false
         },
         {
           "subject": "jdx/mr-boxington-action",
@@ -160,14 +160,14 @@
     },
     {
       "name": "capture-2",
-      "comparison_sha256": "7564d8a8f697e5883bb04e02847dd2618a237b47ae08d4ce10f4be8809472439",
-      "receipts_sha256": "45c8a9f6abff5f1aefbd8b96adb39840b37aa0f33373389111f0a662fbabe324",
+      "comparison_sha256": "6af74ad4c11a953b80e017f9f459e730e9d7887086a4e3783c5da43e1088eab8",
+      "receipts_sha256": "f2f83a0a59080a8de1a026ee94ae11a4a2a6f0e907a94ebb8e923c7bd7cb13c9",
       "rows": [
         {
           "subject": "mise",
-          "pinned": "2026.10.25",
+          "pinned": "2026.10.21",
           "observed": "v2026.10.25",
-          "match": true
+          "match": false
         },
         {
           "subject": "rust",
@@ -177,9 +177,9 @@
         },
         {
           "subject": "mr-boxington",
-          "pinned": "1.29.1",
+          "pinned": "1.28.0",
           "observed": "v1.29.1",
-          "match": true
+          "match": false
         },
         {
           "subject": "gh",
@@ -189,9 +189,9 @@
         },
         {
           "subject": "jactionlint",
-          "pinned": "2.4.0",
+          "pinned": "2.3.0",
           "observed": "v2.4.0",
-          "match": true
+          "match": false
         },
         {
           "subject": "shellcheck",
@@ -303,9 +303,9 @@
         },
         {
           "subject": "jdx/mise-action",
-          "pinned": "v5.2.5",
+          "pinned": "v5.2.4",
           "observed": "v5.2.5",
-          "match": true
+          "match": false
         },
         {
           "subject": "jdx/mr-boxington-action",

@@ -1,9 +1,9 @@
 [
   {
     "subject": "mise",
-    "pinned": "2026.10.25",
+    "pinned": "2026.10.21",
     "observed": "v2026.10.25",
-    "match": true
+    "match": false
   },
   {
     "subject": "rust",
@@ -13,9 +13,9 @@
   },
   {
     "subject": "mr-boxington",
-    "pinned": "1.29.1",
+    "pinned": "1.28.0",
     "observed": "v1.29.1",
-    "match": true
+    "match": false
   },
   {
     "subject": "gh",
@@ -25,9 +25,9 @@
   },
   {
     "subject": "jactionlint",
-    "pinned": "2.4.0",
+    "pinned": "2.3.0",
     "observed": "v2.4.0",
-    "match": true
+    "match": false
   },
   {
     "subject": "shellcheck",
@@ -139,9 +139,9 @@
   },
   {
     "subject": "jdx/mise-action",
-    "pinned": "v5.2.5",
+    "pinned": "v5.2.4",
     "observed": "v5.2.5",
-    "match": true
+    "match": false
   },
   {
     "subject": "jdx/mr-boxington-action",
