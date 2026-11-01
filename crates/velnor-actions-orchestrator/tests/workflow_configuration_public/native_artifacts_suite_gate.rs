@@ -36,7 +36,7 @@ fn public_mbx_gate_accepts_generated_run_and_archive_commands() -> Result<(), Bo
 }
 
 #[test]
-fn suite_installs_tools_before_mbx_preflight() -> Result<(), Box<dyn Error>> {
+fn cold_cache_mbx_suite_stays_runnable() -> Result<(), Box<dyn Error>> {
     for (partitions, build) in [
         (1, RustSuiteBuildMode::Inline),
         (2, RustSuiteBuildMode::Inline),
