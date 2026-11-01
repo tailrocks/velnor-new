@@ -137,13 +137,13 @@ impl FreshnessContext {
         }
     }
 
-    pub(crate) fn finish(self) -> i32 {
+    pub(crate) fn finish(self, label: &str) -> i32 {
         print!("{}", self.output);
         if self.failures.is_empty() {
-            println!("check-freshness: PASS");
+            println!("{label}: PASS");
             0
         } else {
-            eprintln!("check-freshness: FAIL");
+            eprintln!("{label}: FAIL");
             for failure in self.failures {
                 eprintln!("  - {failure}");
             }

@@ -35,13 +35,13 @@ metadata result and `--no-tests fail`. The required
 `test-maintenance-helpers` task applies the same metadata rule to its two named
 package scopes and first runs the `pin-mirror` repository-policy action against
 the PR head with `refs/remotes/origin/main` as the base ref. Each invoked
-Nextest scope fails when its selected suite is empty. The task generator separately uses `--no-tests warn` for
-hash-partitioned selections so an individual empty shard is allowed; that does
-not prove complete suite coverage. As suites return, generated verification
-must enforce fail-on-empty at each declared required-suite scope, while
-intentional filtered or partitioned subruns may allow an empty selection only
-when the generated plan selects the complete suite and execution evidence
-confirms its tasks ran. V1 has no permanent empty-suite exception.
+Nextest scope fails when its selected suite is empty. The task generator
+separately uses `--no-tests warn` for hash-partitioned selections so an
+individual empty shard is allowed; that does not prove complete suite coverage.
+As suites return, generated verification must enforce fail-on-empty at each
+declared required-suite scope, while intentional filtered or partitioned subruns
+may allow an empty selection only when the generated plan selects the complete
+suite and execution evidence confirms its tasks ran. V1 has no permanent empty-suite exception.
 
 ---
 

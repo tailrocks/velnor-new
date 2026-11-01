@@ -3,7 +3,7 @@
 
 mod git;
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 use serde_json::Value;
@@ -132,31 +132,24 @@ impl PinSet {
     }
 
     fn changes_from(&self, base: &Self) -> Vec<PinChange> {
-        let subjects = self
-            .0
-            .keys()
-            .chain(base.0.keys())
-            .collect::<std::collections::BTreeSet<_>>();
+        let subjects = self.0.keys().chain(base.0.keys()).collect::<BTreeSet<_>>();
         subjects
             .into_iter()
-            .filter_map(|subject| {
-                let subject = subject.clone();
-                match (base.0.get(&subject), self.0.get(&subject)) {
-                    (None, Some(head)) => Some(PinChange::Added {
-                        subject,
-                        head: head.clone(),
-                    }),
-                    (Some(base), None) => Some(PinChange::Removed {
-                        subject,
-                        base: base.clone(),
-                    }),
-                    (Some(base), Some(head)) if base != head => Some(PinChange::Changed {
-                        subject,
-                        base: base.clone(),
-                        head: head.clone(),
-                    }),
-                    _ => None,
-                }
+            .filter_map(|subject| match (base.0.get(subject), self.0.get(subject)) {
+                (None, Some(head)) => Some(PinChange::Added {
+                    subject: subject.clone(),
+                    head: head.clone(),
+                }),
+                (Some(base), None) => Some(PinChange::Removed {
+                    subject: subject.clone(),
+                    base: base.clone(),
+                }),
+                (Some(base), Some(head)) if base != head => Some(PinChange::Changed {
+                    subject: subject.clone(),
+                    base: base.clone(),
+                    head: head.clone(),
+                }),
+                _ => None,
             })
             .collect()
     }

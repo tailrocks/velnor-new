@@ -1,12 +1,15 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{error::Error, fs, io, path::Path, process::Command};
+use std::{error::Error, fs, io, os::unix::fs::PermissionsExt, path::Path, process::Command};
 
 use serde_json::{Value, json};
 use velnor_actions_contract::ReleaseTarget;
 use velnor_actions_mise::{MISE_VERSION, PinnedTool, ToolCatalog};
-use velnor_actions_orchestrator::{plan_internal, plan_internal_with_phase_timings, prepare};
+use velnor_actions_orchestrator::{
+    OperatorToolchainGuard, plan_internal, plan_internal_with_phase_timings, prepare,
+    prepare_with_operator_guard,
+};
 
 #[test]
 fn public_plan_identity_uses_effective_runtime_for_runner_target() -> Result<(), Box<dyn Error>> {
@@ -95,6 +98,34 @@ fn controller_plan_accepts_policy_drift_that_candidate_rejects() -> Result<(), B
     let (response, _) = plan_internal_with_phase_timings(&request)?;
     let timed: Value = serde_json::from_str(&response)?;
     assert_eq!(timed["plan"]["obligations"], baseline);
+    Ok(())
+}
+
+#[test]
+fn guarded_prepare_rejects_policy_drift_like_prepare() -> Result<(), Box<dyn Error>> {
+    let temp = plan_fixture(Some(super::super::BASE_APPROVALS))?;
+    let root = temp.path();
+    let guard_dir = tempfile::tempdir()?;
+    let executable = guard_dir.path().canonicalize()?.join("operator-mise");
+    fs::write(&executable, "#!/bin/sh\nexit 0\n")?;
+    fs::set_permissions(&executable, fs::Permissions::from_mode(0o755))?;
+    let guard = OperatorToolchainGuard::new(&executable)?;
+    let policy = root.join(".velnor/version-policy.toml");
+
+    fs::write(&policy, version_policy(None))?;
+    prepare_with_operator_guard(root, &guard)
+        .map_err(|error| io::Error::other(format!("aligned policy rejected: {error}")))?;
+
+    let drifted = PinnedTool::Crane;
+    fs::write(&policy, version_policy(Some(drifted)))?;
+    let rejection = match prepare_with_operator_guard(root, &guard) {
+        Ok(_) => return Err(io::Error::other("guarded prepare accepted policy drift").into()),
+        Err(error) => error.to_string(),
+    };
+    assert!(
+        rejection.contains(&format!("tool:{}:", drifted.tool_name())),
+        "unexpected rejection: {rejection}"
+    );
     Ok(())
 }
 

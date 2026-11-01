@@ -51,7 +51,7 @@ impl GenerationPreparation {
     }
 }
 
-pub fn prepare(root: &Path) -> Result<GenerationPreparation, OrchestratorError> {
+pub fn prepare_for_candidate(root: &Path) -> Result<GenerationPreparation, OrchestratorError> {
     prepare_inner(root, AdmissionLeg::Candidate, None, None, None)
 }
 
@@ -61,14 +61,14 @@ pub(crate) fn prepare_for_controller(
     prepare_inner(root, AdmissionLeg::Controller, None, None, None)
 }
 
-pub fn prepare_with_operator_guard(
+pub fn prepare_for_candidate_with_operator_guard(
     root: &Path,
     guard: &OperatorToolchainGuard,
 ) -> Result<GenerationPreparation, OrchestratorError> {
     prepare_inner(root, AdmissionLeg::Candidate, None, None, Some(guard))
 }
 
-pub(crate) fn prepare_with_config(
+pub(crate) fn prepare_for_candidate_with_config(
     root: &Path,
     config: VelnorConfig,
 ) -> Result<GenerationPreparation, OrchestratorError> {
@@ -76,10 +76,10 @@ pub(crate) fn prepare_with_config(
         .validate(crate::config::CONFIG_REL)
         .map_err(crate::config::config_error)?;
     crate::config::check_policy_mode(&config)?;
-    prepare_inner(root, AdmissionLeg::Controller, None, Some(config), None)
+    prepare_inner(root, AdmissionLeg::Candidate, None, Some(config), None)
 }
 
-pub(crate) fn prepare_with_phase_timings(
+pub(crate) fn prepare_for_controller_with_phase_timings(
     root: &Path,
     phases: &mut PlanPhaseTimings,
 ) -> Result<GenerationPreparation, OrchestratorError> {

@@ -10,11 +10,11 @@ use crate::pin_diff::{self, BaseRef};
 pub(crate) fn run(root: PathBuf, base: Option<&BaseRef>) -> i32 {
     let mut ctx = FreshnessContext::new(root, false, false);
     if !inventory::load_inventory(&mut ctx) {
-        return ctx.finish();
+        return ctx.finish("pin-mirror");
     }
     inventory::check_pin_consistency(&mut ctx);
     if let Some(base) = base {
         pin_diff::report(&mut ctx, base);
     }
-    ctx.finish()
+    ctx.finish("pin-mirror")
 }

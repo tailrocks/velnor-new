@@ -4,7 +4,7 @@
 use super::PreviewProducerProof;
 use crate::{
     OrchestratorError, exclusive_write::create_dir_no_symlink, internal::internal,
-    prepare::prepare_with_config,
+    prepare::prepare_for_candidate_with_config,
 };
 use std::{
     path::{Path, PathBuf},
@@ -89,7 +89,7 @@ pub fn execute_release_producer() -> Result<(), OrchestratorError> {
                                 )
                             }
                             PackageReleaseChannel::Stable => {
-                                let prep = prepare_with_config(&workspace, config)?;
+                                let prep = prepare_for_candidate_with_config(&workspace, config)?;
                                 let preview = source_preview(&prep, &policy, &plan)?;
                                 let request = context::derive(&prep.root, &policy, plan, deadline)?;
                                 execution::execute(

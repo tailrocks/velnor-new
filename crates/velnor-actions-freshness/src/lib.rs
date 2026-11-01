@@ -91,7 +91,7 @@ pub fn run(root: &Path, operation: &Operation) -> i32 {
 fn run_freshness(root: PathBuf, check_upstream: bool, with_advisories: bool) -> i32 {
     let mut ctx = FreshnessContext::new(root, check_upstream, with_advisories);
     if !inventory::load_inventory(&mut ctx) {
-        return ctx.finish();
+        return ctx.finish("check-freshness");
     }
     inventory::check_pin_consistency(&mut ctx);
     validation::check_validation_tool_pins(&mut ctx);
@@ -102,7 +102,7 @@ fn run_freshness(root: PathBuf, check_upstream: bool, with_advisories: bool) -> 
     if ctx.check_upstream {
         probe::check_upstream_probe(&mut ctx);
     }
-    ctx.finish()
+    ctx.finish("check-freshness")
 }
 
 fn print_toolchain_specs(root: &Path) -> i32 {
