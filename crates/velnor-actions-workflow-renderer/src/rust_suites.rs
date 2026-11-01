@@ -216,8 +216,8 @@ fn build_single_suite_job(
         steps::checkout_step(&spec.checkout_uses)?,
         restored_rust_step(spec)?,
     ];
-    job_steps.extend(compile_driver_steps(spec)?);
     job_steps.extend(install_suite_tools_steps(spec)?);
+    job_steps.extend(compile_driver_steps(spec)?);
     job_steps.push(nextest_run_step(
         suite,
         spec,
@@ -254,8 +254,8 @@ fn build_sharded_archive_jobs(
         steps::checkout_step(&spec.checkout_uses)?,
         restored_rust_step(spec)?,
     ];
-    build_steps.extend(compile_driver_steps(spec)?);
     build_steps.extend(install_suite_tools_steps(spec)?);
+    build_steps.extend(compile_driver_steps(spec)?);
     build_steps.push(nextest_archive_step(suite, spec)?);
     build_steps.extend(suite_steps::producer_mark_steps(spec)?);
     build_steps.push(steps::upload_suite_archive_step(
@@ -317,8 +317,8 @@ fn build_sharded_inline_job(
         steps::checkout_step(&spec.checkout_uses)?,
         restored_rust_step(spec)?,
     ];
-    job_steps.extend(compile_driver_steps(spec)?);
     job_steps.extend(install_suite_tools_steps(spec)?);
+    job_steps.extend(compile_driver_steps(spec)?);
     job_steps.push(nextest_run_step(
         suite,
         spec,
