@@ -22,8 +22,6 @@ impl JobTimeout {
 
     pub const CRATE: Self = Self::DEFAULT;
 
-    // The verdict job checks out full history before merging reports;
-    // on large histories that alone can exceed the 5-minute default.
     pub const REQUIRED: Self = Self(15);
 
     pub const VALIDATOR: Self = Self::DEFAULT;

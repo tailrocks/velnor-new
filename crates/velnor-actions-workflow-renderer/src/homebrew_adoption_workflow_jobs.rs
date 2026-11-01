@@ -192,7 +192,12 @@ pub(super) fn required_job(
     let fields = vec![
         ("name", Yaml::str("Native check verdict")),
         ("runs-on", Yaml::str(RUNNER)),
-        ("timeout-minutes", Yaml::Int(5)),
+        (
+            "timeout-minutes",
+            Yaml::Int(i64::from(
+                velnor_actions_contract::JobTimeout::REQUIRED.minutes(),
+            )),
+        ),
         ("permissions", readonly_permissions()),
         ("env", plan_consumer_env(common_env)),
         (

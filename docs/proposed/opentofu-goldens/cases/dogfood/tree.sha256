@@ -23,7 +23,7 @@ a72786e075591d5175ed5070ddccd8608fab8f5dbcf8134e46e057fabf714aae  ./.github/veln
 a4908f75bec0c287fa0eafb3592936982d547fa096d1d69621ab43d6467f4cc7  ./.github/workflows/cache-prune.yml
 80837e99a64871b90fb97173e1219c9fe1797c71e24bb375727782c23d50e68f  ./.github/workflows/ci.yml
 42aa5de24975c633f921b772a45206d4ce8ada6983b26512696fc4222655a2fa  ./.github/workflows/freshness.yml
-b39702c93f55bf4ee7a865549ec8ac6dacd1ebdc215384dd62f7c511fa6edb24  ./.github/workflows/homebrew-adoption.yml
+d2b7697fa5bc9f228530120c31b3fec23bebf763861cbc8d6afd69987d98b989  ./.github/workflows/homebrew-adoption.yml
 18c9fc822a1717cbb9e011f9b82ea28acdeba940e1e52163acfde79f7987175b  ./.github/workflows/job-image-candidate.yml
 2efa307ae380a231af51be878cb85deb0b60b8f794766dc7cdefc9e674b80ae4  ./.github/workflows/product-release-binary.yml
 3d7860d56d0e92d5d9a6a526c3e614a270697adf75342b922e5ee188b5169368  ./.github/workflows/product-release-generator.yml
