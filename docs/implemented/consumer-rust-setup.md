@@ -257,9 +257,13 @@ mbx gc --dry-run && mbx doctor
 - Resolve dependencies once, then build with `--locked --offline`, so
   concurrent builds hold the `$CARGO_HOME` package lock only briefly. Use the
   form that `velnor-actions generate` prints for `cold_registry`:
-  `cargo fetch --locked --manifest-path '<absolute path to Cargo.toml>'`. If
-  you export `MISE_CARGO_HOME`, run it with that variable set, because it
-  warms that home and not `~/.cargo`.
+  `cd '<workspace root>' && cargo fetch --locked --manifest-path '<absolute path to Cargo.toml>'`.
+  If a `.cargo/config` or `.cargo/config.toml` file, or a `rust-toolchain`
+  file with a `path` key, exists from the workspace root up to the repo root,
+  `generate` prints no command. It names those files instead. Review them,
+  because Cargo and rustup load them by working directory. Then run
+  `cargo fetch --locked` for that manifest. If you export `MISE_CARGO_HOME`, run it with that variable
+  set, because it warms that home and not `~/.cargo`.
 - `mbx adopt --recursive <dir>` moves existing unmanaged `target/`
   directories under management; `mbx clean --under <dir>` drops records of
   deleted checkouts.
