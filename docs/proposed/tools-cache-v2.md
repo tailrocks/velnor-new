@@ -24,8 +24,11 @@ sources, credentials, Cargo targets, MBX objects, or task artifacts. The source 
 Restored Rust is never trusted as restored. In every job that installs Rust, `Verify restored Rust
 toolchain` runs right after the restore (before `Prepare pinned tools`, which already runs `rustup` and
 `rustc` on a hit): it deletes the restored `cargo/bin` (rustup and its proxies; Mise reinstalls a fresh
-rustup) and verifies the restored toolchain file by file against the component tarballs of its pinned
-channel manifest, failing the job on any difference. See
+rustup). It then compares the restored toolchain with a pinned installed-tree digest (type, path, mode and
+SHA-256 of every entry, derived from the component tarballs of its pinned channel manifest) before any
+network access. A missing pin or a mismatch prints `pin_mismatch` and falls back to the file-by-file check
+against the channel manifest, which fails the job on any difference. The cache payload holds no memo of a
+passed check. See
 [verified Rust installs](../implemented/rust-channel-manifest.md).
 
 ## Re-verification after restore

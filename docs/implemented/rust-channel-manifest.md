@@ -1,6 +1,6 @@
 # Verified Rust installs (channel-manifest digest)
 
-- State: implemented (this pull request)
+- State: implemented (this pull request); the pinned tree digest is implemented in fci/p3-tree-digest
 - Specification: [hard decision 4](../hard-decisions.md#4-tool-versions-come-from-the-projects-mise-config)
   (Trade-offs: `core:rust` lock entries carry no checksum),
   [consumer Rust setup](consumer-rust-setup.md)
@@ -84,8 +84,15 @@ first version of this step did exactly that.
      rustup touches the toolchain (on a cache hit `mise install` already runs
      `rustup` and `rustc`). It deletes the restored
      `$CARGO_HOME/bin` (rustup and its proxies), so Mise reinstalls a fresh
-     rustup instead of running a cached one, and verifies a restored
-     toolchain; with nothing restored it does nothing;
+     rustup instead of running a cached one. It then compares a restored
+     toolchain with a pinned installed-tree digest (type, path, mode and
+     SHA-256 of every entry, derived from the component tarballs of the
+     pinned channel manifest; the stored `multirust-channel-manifest.toml` is
+     bound to the pinned channel manifest by its `url` and `hash` lines)
+     before any network access. A missing pin or a mismatch prints
+     `pin_mismatch` and falls back to the file-by-file check in step 2, which
+     fails the job on any difference. The cache payload holds no memo of a
+     passed check. With nothing restored the step does nothing;
    - `Verify Rust channel manifest`, after `Prepare pinned tools` and
      `Prepare Rust components`, on the toolchain the job will use.
    A poisoned cache entry therefore fails the job before any restored Rust
