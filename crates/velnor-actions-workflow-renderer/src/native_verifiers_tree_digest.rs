@@ -9,7 +9,20 @@ pub struct TreeDigestPin {
     tree_sha256: &'static str,
 }
 
-pub const RUST_TREE_DIGESTS: &[TreeDigestPin] = &[];
+pub const RUST_TREE_DIGESTS: &[TreeDigestPin] = &[
+    TreeDigestPin::new(
+        "1.99.1",
+        "x86_64-unknown-linux-gnu",
+        "e3808a4c78c316b41a42ed88010c6bbf24ae24a348a5a22b8e3bc62328db1981",
+        "9a9cbe7c31582c6141cf25ba6bf0f0b52053983401fdaf38c7a7f670388a3709",
+    ),
+    TreeDigestPin::new(
+        "1.99.1",
+        "x86_64-unknown-linux-gnu",
+        "a13769c18a7a74ea492ab633b644d6c238ae81e536d30d3f168eddb57e86000e",
+        "680b75bfa6ab6474f0b02865f8cb89b7bf9076a7666a78990b37eda0d9bc4652",
+    ),
+];
 
 impl TreeDigestPin {
     #[must_use]
