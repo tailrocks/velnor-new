@@ -32,10 +32,10 @@ pub fn unique_dependency_seed_job_ids(roots: &[String]) -> Vec<String> {
 }
 
 pub(super) fn roots(input: &NativeAuthorityInput<'_>) -> Result<Vec<String>, NativeAuthorityError> {
+    let fetch = fetch_roots(input.cargo_workspaces)?;
     if input.config.stacks.dependency_seed() == DependencySeedMode::Off {
         return Ok(Vec::new());
     }
-    let fetch = fetch_roots(input.cargo_workspaces)?;
     let mut roots = BTreeSet::new();
     for fact in input.logical_jobs {
         if let LogicalJobSource::Task(task) = &fact.source
