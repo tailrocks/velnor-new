@@ -1,6 +1,6 @@
 # Verified Rust installs (channel-manifest digest)
 
-- State: implemented (this pull request); the pinned tree digest is implemented in fci/p3-tree-digest
+- State: implemented (this pull request); the pinned tree digest is implemented in fci/p3-tree-digest; the channel-manifest normal form was removed in favour of the overwrite (owner standing grant 2026-11-02, velnor-fast-ci GOAL.md; decisions.tsv row X44)
 - Specification: [hard decision 4](../hard-decisions.md#4-tool-versions-come-from-the-projects-mise-config)
   (Trade-offs: `core:rust` lock entries carry no checksum),
   [consumer Rust setup](consumer-rust-setup.md)
@@ -52,7 +52,14 @@ first version of this step did exactly that.
    helper (`sha256sum`, `curl`, `tar`, `find`) comes from root-owned system
    directories and never from the restored Mise `bin/` or `shims/` that Setup
    Mise put on `PATH` first
-   ([hermetic checks](../proposed/tools-cache-v2.md#the-checks-run-hermetically)):
+   ([hermetic checks](../proposed/tools-cache-v2.md#the-checks-run-hermetically)).
+   Every helper also runs under `/usr/bin/env -i` with an allowlist (`PATH`,
+   `LC_ALL=C`, `HOME`, `RUNNER_TEMP`, `RUSTUP_HOME`, `MISE_RUSTUP_HOME`,
+   `CARGO_HOME`, `VELNOR_TOOL_RUST`, `HTTPS_PROXY`, `HTTP_PROXY`, `NO_PROXY`,
+   `ALL_PROXY` and their lowercase forms, `SSL_CERT_FILE`, `SSL_CERT_DIR`,
+   `CURL_CA_BUNDLE`), so caller variables such as `TAR_OPTIONS`,
+   `XZ_DEFAULTS` or `QUOTING_STYLE` change no verdict, and `curl` runs with
+   `-q`:
    - it looks up the run-time `${VELNOR_TOOL_RUST}` in the digest table
      embedded in the step (the generated text stays version-free, hard
      decision 4), fetches the manifest over HTTPS (`--proto =https
@@ -62,21 +69,26 @@ first version of this step did exactly that.
      takes the `xz_url` and `xz_hash` from the verified manifest, downloads
      the tarball (only from `https://static.rust-lang.org/dist/`), checks its
      SHA-256 and hashes every file the tarball installs;
-   - it requires `lib/rustlib/multirust-channel-manifest.toml`, which
-     `rustup component add` reads to pick download URLs, hashes, renames and
-     profiles, to have the same normal form as the verified manifest. rustup
-     rewrites the file, so the bytes differ. The normal form keeps every
-     table header and every plain `key = value` line, sorted, and drops only
-     what the rewrite changes: `git_commit_hash` in `[pkg.*]`, the
-     `[[artifacts.*]]` tables, empty `components` and `extensions` in
-     `[pkg.*.target.*]`, and `is_extension` in component lists. Any other
-     line form fails, so no line can hide from the comparison. The verifier
-     and `scripts/derive-rust-tree-digest` run the same `normal_form`
-     definition (the derive reads it from `native_verifiers_tree_digest.rs`);
+   - it replaces `lib/rustlib/multirust-channel-manifest.toml`, which
+     `rustup component add` and `rustup target add` read to pick download
+     URLs, hashes, renames and profiles, with the verified
+     `channel-rust-<version>.toml` bytes. rustup rewrites the file on install,
+     so its bytes differ, and no parser compares the two forms. The bytes
+     come from `$RUNNER_TEMP/velnor/rust-verified/channel-rust-<version>.toml`
+     when its SHA-256 equals the catalog row, else from the download above
+     (a download that is not the catalogued SHA-256 fails the step before
+     anything is written and is not kept). The write goes to a temporary file
+     in the same directory, mode 0644, then a rename, so a hard link is never
+     written through; the symlink and special-file scan runs first, and a
+     directory at that path fails the step. A missing manifest is recreated.
+     The verified bytes also bind the downloads the job's later
+     `rustup component add` and `rustup target add` take from the installed
+     manifest (decisions.tsv X44, SEC-6);
    - it requires the toolchain directory to hold exactly those files with
      exactly those bytes, apart from rustup's own bookkeeping regular files
      directly under `lib/rustlib` (`components`, `manifest-*`, `multirust-*`,
-     `rust-installer-version`), and no symlink or special file. A file below
+     `rust-installer-version`), and no symlink or special file; the channel
+     manifest is replaced as above in both phases of this fallback. A file below
      a `manifest-*` directory is not bookkeeping and is compared. A replaced
      `rustc`, a planted or deleted file, or a component dropped from the list
      (its files become unexpected) all fail.
@@ -94,8 +106,11 @@ first version of this step did exactly that.
      toolchain with a pinned installed-tree digest (type, path, mode and
      SHA-256 of every entry, derived from the component tarballs of the
      pinned channel manifest; the stored `multirust-channel-manifest.toml` is
-     bound to the pinned channel manifest by the normal form in step 2)
-     before any network access. The pin is selected by the job's expected
+     an ordinary entry bound by its SHA-256, and this phase never repairs it:
+     a changed or missing manifest is a `rust_tree_digest_mismatch`) before
+     any network access. A match copies the verified manifest into
+     `$RUNNER_TEMP/velnor/rust-verified`, so the installed phase below stays
+     offline. The pin is selected by the job's expected
      Rust version and target, never by the restored `components` file or the
      toolchain directory name. The owned-home steps render the target
      `x86_64-unknown-linux-gnu`. ARM targets have no pin row yet (owner standing
@@ -118,11 +133,22 @@ first version of this step did exactly that.
      payload holds no memo of a passed check. With nothing restored the step
      does nothing;
    - `Verify Rust channel manifest`, after `Prepare pinned tools` and
-     `Prepare Rust components`, on the toolchain the job will use.
-   Residual risks (cache decision 10, decisions.tsv X35): the content of
-   `multirust-config.toml` is unbound (denial of service only); for a
+     `Prepare Rust components`, on the toolchain the job will use. It first
+     replaces the manifest rustup rewrote with the verified channel bytes
+     (step 2), then runs the same pinned comparison, and falls back to the
+     file-by-file check only when no pin row exists.
+   The pinned listing is built with `find -printf` and runs on Linux only (the
+   pins are `x86_64-unknown-linux-gnu`); a runner without GNU `find` takes the
+   file-by-file path, which needs no `-printf`. `scripts/derive-rust-tree-digest`
+   derives a pin row, runs under `env -i` with the same allowlist, writes only
+   to stdout (digests, the pin row and the listing) and stages the downloaded
+   channel manifest as the manifest entry. A manifest-form token in the
+   tools-cache static digest keeps entries stored before this change, whose
+   manifest holds rustup's rewritten bytes, from being restored.
+   Residual risks (cache decision 10, decisions.tsv X35 and X44): the content
+   of `multirust-config.toml` is unbound (denial of service only); for a
    version and target with no pin row, and for an ARM toolchain directory,
-   the file-by-file fallback leaves the
+   the file-by-file fallback overwrites the channel manifest but leaves the
    `manifest-*` bytes, the `multirust-config.toml` content and all file modes
    unbound, which affects consumer repos that pin a Rust other than the
    pinned 1.99.1 in owned-home jobs (the default-home jobs always use that
@@ -135,8 +161,7 @@ first version of this step did exactly that.
 4. The step fails the job with a stable code:
    `rust_channel_manifest_not_catalogued` (a Rust version the catalog does
    not know), `rust_channel_manifest_digest_mismatch`,
-   `rust_channel_manifest_unreadable`, `rust_bookkeeping_manifest_unreadable`,
-   `rust_bookkeeping_manifest_mismatch`,
+   `rust_installed_manifest_unwritable`,
    `rust_toolchain_missing`, `rust_installed_manifest_missing`,
    `rust_installed_manifest_empty`, `rust_toolchain_file_unexpected`,
    `rust_tree_digest_mismatch`,
