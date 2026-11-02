@@ -263,6 +263,10 @@ jobs:
     permissions:
       contents: read
     steps:
+      - name: Require every producer job to succeed
+        if: needs.ordinary-harness.result != 'success' || needs.keep-harness.result != 'success' || needs.generation-checks.result != 'success'
+        shell: bash
+        run: printf 'a producer job did not succeed\n' >&2; exit 1
       - name: Checkout exact event source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
