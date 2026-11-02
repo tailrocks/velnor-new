@@ -50,7 +50,7 @@ pub(super) fn mbx_repo(tofu: bool) -> Result<TempDir, Box<dyn Error>> {
     mbx_repo_for(tofu, WorkflowPolicy::ConsumerV1)
 }
 
-fn mbx_repo_for(tofu: bool, policy: WorkflowPolicy) -> Result<TempDir, Box<dyn Error>> {
+pub(super) fn mbx_repo_for(tofu: bool, policy: WorkflowPolicy) -> Result<TempDir, Box<dyn Error>> {
     let mut config = config_with_timeouts(15, None)?;
     if policy == WorkflowPolicy::VelnorRepositoryV1 {
         config = config.replacen(
@@ -96,7 +96,7 @@ fn mbx_repo_for(tofu: bool, policy: WorkflowPolicy) -> Result<TempDir, Box<dyn E
             root.join(".velnor/controller-approvals.json"),
             include_str!("../../../../.velnor/controller-approvals.json"),
         )?;
-        workflow_configuration_fixture::write_root_cargo_lock(root, &[])?;
+        workflow_configuration_fixture::write_root_cargo_lock(root, &["demo"])?;
     }
     Ok(repo)
 }

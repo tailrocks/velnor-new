@@ -117,7 +117,7 @@ pub(super) fn owner_feature_repo(
             root.join(".velnor/controller-approvals.json"),
             include_str!("../../../../.velnor/controller-approvals.json"),
         )?;
-        workflow_configuration_fixture::write_root_cargo_lock(root, &["maintenance"])?;
+        workflow_configuration_fixture::write_root_cargo_lock(root, &["demo", "maintenance"])?;
     }
     let mut root_manifest = fs::read_to_string(root.join("Cargo.toml"))?;
     root_manifest.push_str("\n[workspace]\nmembers = [\"crates/maintenance\"]\nresolver = \"2\"\n");

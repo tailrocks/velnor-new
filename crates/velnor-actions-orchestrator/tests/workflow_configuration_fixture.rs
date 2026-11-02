@@ -11,6 +11,10 @@ use velnor_actions_contract::SUPPORTED_TARGETS;
 
 #[path = "../src/git_fixture.rs"]
 pub(crate) mod git_fixture;
+#[path = "../../test_support/root_cargo_lock.rs"]
+mod root_cargo_lock;
+
+pub(crate) use root_cargo_lock::write_root_cargo_lock;
 
 pub(crate) fn make_repo(config: &str) -> Result<TempDir, Box<dyn Error>> {
     let dir = tempfile::tempdir()?;
@@ -62,20 +66,6 @@ pub(crate) fn add_independent_mbx_package(
         package_root.join("mise.toml"),
         "wrappers = { cargo = { command = \"mbx\", env = { MBX_CARGO_SHIM_MODE = \"1\" } } }\n",
     )?;
-    Ok(())
-}
-
-pub(crate) fn write_root_cargo_lock(root: &Path, members: &[&str]) -> Result<(), Box<dyn Error>> {
-    let mut lock = vec!["version = 4\n".to_owned()];
-    lock.extend(["demo"].iter().chain(members).map(|name| {
-        [
-            "[[package]]",
-            &format!("name = \"{name}\""),
-            "version = \"0.1.0\"\n",
-        ]
-        .join("\n")
-    }));
-    fs::write(root.join("Cargo.lock"), lock.join("\n"))?;
     Ok(())
 }
 

@@ -3,6 +3,7 @@
 
 use std::collections::BTreeSet;
 use std::error::Error;
+use std::fs;
 
 use velnor_actions_contract::workflow::ledger_cli::LEDGER_CLI_JOB_ID;
 use velnor_actions_contract::{
@@ -10,8 +11,10 @@ use velnor_actions_contract::{
     WorkflowPolicy,
 };
 
+use velnor_actions_orchestrator::prepare;
+
 use super::one_job_per_crate::{
-    Rendered, crate_jobs, is_emit, rust_fixtures, tofu_fixture, tofu_fixture_for,
+    Rendered, crate_jobs, is_emit, mbx_repo_for, rust_fixtures, tofu_fixture, tofu_fixture_for,
 };
 use super::tools_producers::is_upload;
 
@@ -269,5 +272,21 @@ fn ledger_cli_restores_sources_read_only_before_an_offline_build() -> Result<(),
             "{name}"
         );
     }
+    Ok(())
+}
+
+#[test]
+fn velnor_repository_without_root_cargo_lock_cannot_build_the_ledger_cli()
+-> Result<(), Box<dyn Error>> {
+    let repo = mbx_repo_for(false, WorkflowPolicy::VelnorRepositoryV1)?;
+    fs::remove_file(repo.path().join("Cargo.lock"))?;
+    let error = prepare(repo.path())
+        .err()
+        .ok_or("prepared without a root Cargo.lock")?
+        .to_string();
+    assert!(
+        error.contains("ledger_cli_requires_root_cargo_lock"),
+        "unexpected error: {error}"
+    );
     Ok(())
 }
