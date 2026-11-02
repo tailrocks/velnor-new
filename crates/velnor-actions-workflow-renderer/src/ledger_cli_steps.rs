@@ -6,14 +6,15 @@ use std::collections::BTreeMap;
 use velnor_actions_contract::workflow::ledger_cli::{
     LEDGER_CLI_ARTIFACT_NAME, LEDGER_CLI_ARTIFACT_NAME_EXPR, LEDGER_CLI_AUTO_INSTALL_ENV,
     LEDGER_CLI_BUILD_STEP, LEDGER_CLI_CONSUME_CONDITION, LEDGER_CLI_DOWNLOAD_STEP,
-    LEDGER_CLI_OFFLINE_FLAG, LEDGER_CLI_PUBLISH_STEP, LEDGER_CLI_RETENTION_DAYS,
-    LEDGER_CLI_SHA256_ENV, LEDGER_CLI_SHA256_EXPR, LEDGER_CLI_SOURCE_SHA_ENV,
-    LEDGER_CLI_SOURCE_SHA_EXPR, LEDGER_CLI_UPLOAD_STEP, LEDGER_CLI_VERIFY_STEP,
+    LEDGER_CLI_OFFLINE_FLAG, LEDGER_CLI_PUBLISH_STEP, LEDGER_CLI_SHA256_ENV,
+    LEDGER_CLI_SHA256_EXPR, LEDGER_CLI_SOURCE_SHA_ENV, LEDGER_CLI_SOURCE_SHA_EXPR,
+    LEDGER_CLI_UPLOAD_STEP, LEDGER_CLI_VERIFY_STEP,
 };
 use velnor_actions_contract::{Step, StepId, StepRole};
 use velnor_actions_mise::{PinnedTool, ToolCatalog};
 
-use crate::{RenderError, steps};
+use crate::yaml::Yaml;
+use crate::{RenderError, commands, steps};
 
 pub const LEDGER_CLI_TARGET_DIR: &str = "${{ runner.temp }}/velnor/ledger-cli-target";
 
@@ -25,15 +26,20 @@ const UPLOAD_PATH: &str = "${{ runner.temp }}/velnor/ledger-cli-out/velnor-actio
 
 const TARGET_ENV: &str = "CARGO_TARGET_DIR";
 
-const VERIFY_SCRIPT: &str = concat!(
-    "set -eu; ",
-    "f=\"$RUNNER_TEMP/velnor/ledger-cli/velnor-actions\"; ",
-    "[ -f \"$f\" ] && [ ! -L \"$f\" ]; ",
-    "if command -v sha256sum >/dev/null 2>&1; then sha256sum \"$f\"; else shasum -a 256 \"$f\"; fi | ",
-    "{ read -r actual _; [ -n \"$VELNOR_LEDGER_CLI_SHA256\" ] && [ \"$actual\" = \"$VELNOR_LEDGER_CLI_SHA256\" ]; }; ",
-    "git rev-parse HEAD | { read -r head; [ -n \"$VELNOR_LEDGER_CLI_SOURCE_SHA\" ] && [ \"$head\" = \"$VELNOR_LEDGER_CLI_SOURCE_SHA\" ]; }; ",
-    "chmod +x \"$f\"",
-);
+fn verify_script() -> String {
+    format!(
+        concat!(
+            "set -eu; PATH=\"{}\"; export PATH; ",
+            "f=\"$RUNNER_TEMP/velnor/ledger-cli/velnor-actions\"; ",
+            "[ -f \"$f\" ] && [ ! -L \"$f\" ]; ",
+            "if command -v sha256sum >/dev/null 2>&1; then sha256sum \"$f\"; else shasum -a 256 \"$f\"; fi | ",
+            "{{ read -r actual _; [ -n \"$VELNOR_LEDGER_CLI_SHA256\" ] && [ \"$actual\" = \"$VELNOR_LEDGER_CLI_SHA256\" ]; }}; ",
+            "git rev-parse HEAD | {{ read -r head; [ -n \"$VELNOR_LEDGER_CLI_SOURCE_SHA\" ] && [ \"$head\" = \"$VELNOR_LEDGER_CLI_SOURCE_SHA\" ]; }}; ",
+            "chmod +x \"$f\"",
+        ),
+        crate::VERIFY_PATH,
+    )
+}
 
 const PUBLISH_SCRIPT: &str = concat!(
     "set -eu; ",
@@ -121,7 +127,7 @@ pub fn ledger_cli_upload_step() -> Result<Step, RenderError> {
             ("if-no-files-found".to_owned(), "error".to_owned()),
             (
                 "retention-days".to_owned(),
-                LEDGER_CLI_RETENTION_DAYS.to_owned(),
+                steps::ARTIFACT_RETENTION_DAYS.to_string(),
             ),
         ]),
     )?;
@@ -146,7 +152,7 @@ pub fn ledger_cli_download_step() -> Result<Step, RenderError> {
 pub fn ledger_cli_verify_step() -> Result<Step, RenderError> {
     let mut step = sh_step(
         LEDGER_CLI_VERIFY_STEP,
-        VERIFY_SCRIPT,
+        &verify_script(),
         BTreeMap::from([
             (
                 LEDGER_CLI_SHA256_ENV.to_owned(),
@@ -162,4 +168,39 @@ pub fn ledger_cli_verify_step() -> Result<Step, RenderError> {
     )?;
     step.condition = Some(LEDGER_CLI_CONSUME_CONDITION.to_owned());
     Ok(step)
+}
+
+pub(crate) fn render_verify_step(
+    step: &Step,
+    run: &[String],
+    env: &BTreeMap<String, String>,
+    job_env: &BTreeMap<String, String>,
+) -> Result<Yaml, RenderError> {
+    commands::validate_command_argv(run)?;
+    commands::validate_env(env)?;
+    let script = match run {
+        [sh, flag, script] if sh == "sh" && flag == "-c" => script,
+        _ => {
+            return Err(RenderError::InvalidWorkflow(
+                "ledger_cli_verify_shape".to_owned(),
+            ));
+        }
+    };
+    let mut entries = vec![("name".to_owned(), Yaml::str(step.name.clone()))];
+    crate::step_ids::push_step_id(&mut entries, step);
+    if let Some(condition) = &step.condition {
+        steps::scan_for_private_subcommands(condition)?;
+        entries.push(("if".to_owned(), Yaml::str(condition.clone())));
+    }
+    let step_env: Vec<(String, Yaml)> = env
+        .iter()
+        .filter(|(key, value)| job_env.get(*key) != Some(*value))
+        .map(|(key, value)| (key.clone(), Yaml::str(value.clone())))
+        .collect();
+    if !step_env.is_empty() {
+        entries.push(("env".to_owned(), Yaml::Map(step_env)));
+    }
+    entries.push(("shell".to_owned(), Yaml::str(crate::VERIFY_SHELL)));
+    entries.push(("run".to_owned(), Yaml::str(script.clone())));
+    Ok(Yaml::Map(entries))
 }

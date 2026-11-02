@@ -8,7 +8,7 @@ use velnor_actions_contract::workflow::ledger_cli::{
     LEDGER_CLI_SHA256_OUTPUT, LEDGER_CLI_SHA256_SOURCE, LEDGER_CLI_SOURCE_SHA_OUTPUT,
     LEDGER_CLI_SOURCE_SHA_SOURCE,
 };
-use velnor_actions_contract::{CacheMode, Job, Permissions};
+use velnor_actions_contract::{CacheMode, Job, JobTimeout, Permissions};
 
 use super::CrateJobInputs;
 use crate::OrchestratorError;
@@ -75,7 +75,7 @@ pub(super) fn ledger_cli_job(
         display_name: LEDGER_CLI_DISPLAY_NAME.to_owned(),
         runs_on: label.to_owned(),
         check_runner: None,
-        timeout_minutes: input.timeout,
+        timeout_minutes: JobTimeout::PRODUCT_COMPILER,
         needs: Vec::new(),
         condition: None,
         permissions: Some(Permissions::default()),

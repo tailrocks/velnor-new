@@ -459,7 +459,7 @@ jobs:
   ledger-cli:
     name: Ledger CLI
     runs-on: ubuntu-26.04
-    timeout-minutes: 15
+    timeout-minutes: 10
     env: &m24
       VELNOR_ASSET_SHA256: fe7cc33aae28b9be2fe9a0561e148c666516f30e53d65a069a6f3f5575a53298
       VELNOR_ASSET_URL: https://github.com/tailrocks/velnor-new/releases/download/v0.1.66/velnor-actions-0.1.66-x86_64-unknown-linux-gnu
@@ -530,7 +530,7 @@ jobs:
           if-no-files-found: error
           name: velnor-ledger-cli-r${{ github.run_id }}-a${{ github.run_attempt }}
           path: ${{ runner.temp }}/velnor/ledger-cli-out/velnor-actions
-          retention-days: "1"
+          retention-days: "30"
   plan:
     name: Plan
     runs-on: ubuntu-26.04
@@ -826,7 +826,8 @@ jobs:
         env:
           VELNOR_LEDGER_CLI_SHA256: ${{ needs.ledger-cli.outputs.sha256 }}
           VELNOR_LEDGER_CLI_SOURCE_SHA: ${{ needs.ledger-cli.outputs.source_sha }}
-        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; f=\"$RUNNER_TEMP/velnor/ledger-cli/velnor-actions\"; [ -f \"$f\" ] && [ ! -L \"$f\" ]; if command -v sha256sum >/dev/null 2>&1; then sha256sum \"$f\"; else shasum -a 256 \"$f\"; fi | { read -r actual _; [ -n \"$VELNOR_LEDGER_CLI_SHA256\" ] && [ \"$actual\" = \"$VELNOR_LEDGER_CLI_SHA256\" ]; }; git rev-parse HEAD | { read -r head; [ -n \"$VELNOR_LEDGER_CLI_SOURCE_SHA\" ] && [ \"$head\" = \"$VELNOR_LEDGER_CLI_SOURCE_SHA\" ]; }; chmod +x \"$f\"'"
+        shell: /bin/bash --noprofile --norc -e -o pipefail {0}
+        run: "unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; PATH=\"/usr/bin:/bin:/usr/sbin:/sbin\"; export PATH; f=\"$RUNNER_TEMP/velnor/ledger-cli/velnor-actions\"; [ -f \"$f\" ] && [ ! -L \"$f\" ]; if command -v sha256sum >/dev/null 2>&1; then sha256sum \"$f\"; else shasum -a 256 \"$f\"; fi | { read -r actual _; [ -n \"$VELNOR_LEDGER_CLI_SHA256\" ] && [ \"$actual\" = \"$VELNOR_LEDGER_CLI_SHA256\" ]; }; git rev-parse HEAD | { read -r head; [ -n \"$VELNOR_LEDGER_CLI_SOURCE_SHA\" ] && [ \"$head\" = \"$VELNOR_LEDGER_CLI_SOURCE_SHA\" ]; }; chmod +x \"$f\""
       - &s44
         name: Emit group ledger
         if: always() && steps.verify-ledger-cli.outcome == 'success'
@@ -2087,12 +2088,16 @@ jobs:
   tools-producer-6250606a:
     name: Tools producer / 6250606a
     runs-on: ubuntu-26.04
-    timeout-minutes: 15
+    timeout-minutes: 10
     continue-on-error: true
     env: *m1
     if: github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true
     steps:
-      - *s41
+      - name: Record optional cache budget
+        id: velnor-cache-clock
+        run: *r3
+        env:
+          VELNOR_CACHE_JOB_SECONDS: "600"
       - *s1
       - *s2
       - *s38
@@ -2105,7 +2110,15 @@ jobs:
         run: *r20
       - *s53
       - *s54
-      - *s55
+      - name: Admit optional cache save
+        id: velnor-optional-tools-save-budget
+        if: success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
+        run: *r13
+        env:
+          VELNOR_CACHE_JOB_SECONDS: "600"
+          VELNOR_CACHE_STARTED: ${{ steps.velnor-cache-clock.outputs.started }}
+          VELNOR_CACHE_DEADLINE: ${{ steps.velnor-cache-clock.outputs.deadline }}
+          VELNOR_CACHE_REQUIRED_SECONDS: "90"
       - *s56
       - *s57
   tools-producer-8e50e7bb:

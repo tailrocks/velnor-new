@@ -6,6 +6,8 @@ use crate::errors::ContractError;
 use crate::strict_json::{MAX_UNTRUSTED_DOCUMENT_BYTES, parse_strict_json_bytes};
 use crate::workflow::plan::{Plan, PlanMatrix};
 
+pub const ARTIFACT_RETENTION_DAYS: u32 = 30;
+
 pub const PLAN_JSON_FILENAME: &str = "plan.json";
 
 pub const MATRIX_JSON_FILENAME: &str = "matrix.json";

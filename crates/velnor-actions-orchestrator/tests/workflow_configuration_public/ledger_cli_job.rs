@@ -14,7 +14,8 @@ use velnor_actions_contract::{
 use velnor_actions_orchestrator::prepare;
 
 use super::one_job_per_crate::{
-    Rendered, crate_jobs, is_emit, mbx_repo_for, rust_fixtures, tofu_fixture, tofu_fixture_for,
+    Rendered, crate_jobs, is_emit, mbx_repo_for, mbx_repo_with_crate_timeout, render,
+    rust_fixtures, tofu_fixture, tofu_fixture_for,
 };
 use super::tools_producers::is_upload;
 
@@ -107,7 +108,34 @@ fn velnor_repository_has_one_ledger_cli_job() -> Result<(), Box<dyn Error>> {
             "{name}: upload overwrites"
         );
         assert_eq!(with(upload, "if-no-files-found"), Some("error"), "{name}");
-        assert_eq!(with(upload, "retention-days"), Some("1"), "{name}");
+        let retention = |step: &Step| with(step, "retention-days")?.parse::<u32>().ok();
+        let (_, plan_upload) = one(&jobs["plan"], "Publish plan")?;
+        let ledger_days = retention(upload).ok_or("ledger upload retention")?;
+        assert!(
+            ledger_days >= 30 && Some(ledger_days) >= retention(plan_upload),
+            "{name}: ledger retention {ledger_days} days does not cover the re-run window"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn ledger_cli_build_budget_ignores_a_one_minute_crate_timeout() -> Result<(), Box<dyn Error>> {
+    let repo = mbx_repo_with_crate_timeout(false, WorkflowPolicy::VelnorRepositoryV1, Some(1))?;
+    let Rendered { jobs, .. } = render(
+        "one-minute-crates",
+        &repo,
+        WorkflowPolicy::VelnorRepositoryV1,
+    )?;
+    let budget = jobs[LEDGER_CLI_JOB_ID].timeout_minutes.minutes();
+    assert!(
+        budget >= 10,
+        "ledger-cli budget {budget} minutes cannot hold the measured 105 s build"
+    );
+    let crates = crate_jobs(&jobs);
+    assert!(!crates.is_empty());
+    for (id, job) in crates {
+        assert_eq!(job.timeout_minutes.minutes(), 1, "{id} timeout widened");
     }
     Ok(())
 }

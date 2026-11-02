@@ -37,6 +37,9 @@ pub(crate) fn render_typed_step(
     job_env: &BTreeMap<String, String>,
     composite: bool,
 ) -> Result<Option<Yaml>, RenderError> {
+    if step.role == Some(StepRole::LedgerCliVerify) {
+        return crate::ledger_cli_steps::render_verify_step(step, run, env, job_env).map(Some);
+    }
     let is_rust_name = matches!(
         step.name.as_str(),
         crate::VERIFY_RUST_TOOLCHAIN_STEP | VERIFY_RESTORED_RUST_STEP

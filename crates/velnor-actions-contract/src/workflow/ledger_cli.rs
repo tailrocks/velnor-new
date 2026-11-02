@@ -3,9 +3,11 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use super::artifacts::ARTIFACT_RETENTION_DAYS;
 use super::cache_family::SOURCES_KEY_STEP_EXPR;
 use super::ir::Job;
 use super::jobs::{PLAN_JOB_ID, REQUIRED_JOB_ID};
+use super::ledger_cli_artifacts::validate_artifact_boundary;
 use super::permissions::Permissions;
 use super::step::{Step, StepKind};
 use super::step_identity::{StepId, StepRole};
@@ -62,8 +64,6 @@ pub const LEDGER_CLI_AUTO_INSTALL_ENV: &str = "RUSTUP_AUTO_INSTALL";
 
 pub const LEDGER_CLI_OFFLINE_FLAG: &str = "--offline";
 
-pub const LEDGER_CLI_RETENTION_DAYS: &str = "1";
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LedgerCliSource {
     Installed,
@@ -80,7 +80,7 @@ impl LedgerCliSource {
     }
 }
 
-fn invalid(id: &str, problem: &str) -> ContractError {
+pub(super) fn invalid(id: &str, problem: &str) -> ContractError {
     ContractError::identity("job.ledger_cli", format!("{problem}:{id}"))
 }
 
@@ -97,7 +97,7 @@ fn role_positions(job: &Job, role: StepRole) -> Vec<usize> {
     positions(job, |step| step.role == Some(role))
 }
 
-fn with_value<'a>(step: &'a Step, key: &str) -> Option<&'a str> {
+pub(super) fn with_value<'a>(step: &'a Step, key: &str) -> Option<&'a str> {
     match &step.kind {
         StepKind::Action { with, .. } => with.get(key).map(String::as_str),
         _ => None,
@@ -200,7 +200,7 @@ fn validate_ledger_cli_steps(job: &Job) -> Result<(), ContractError> {
     let step = &job.steps[upload];
     let upload_ok = with_value(step, "name") == Some(LEDGER_CLI_ARTIFACT_NAME)
         && with_value(step, "if-no-files-found") == Some("error")
-        && with_value(step, "retention-days") == Some(LEDGER_CLI_RETENTION_DAYS)
+        && with_value(step, "retention-days") == Some(ARTIFACT_RETENTION_DAYS.to_string().as_str())
         && matches!(with_value(step, "overwrite"), None | Some("false"));
     let secret_free = job.steps.iter().all(|step| {
         step_values(step)
@@ -321,6 +321,7 @@ pub fn validate_ledger_cli_jobs(
     }
     for id in emitters {
         validate_crate_ledger_steps(&jobs[id], id, source)?;
+        validate_artifact_boundary(&jobs[id], id)?;
     }
     Ok(())
 }

@@ -26,7 +26,11 @@ pub(super) struct Rendered {
     pub(super) rust_groups: usize,
 }
 
-fn render(name: &str, repo: &TempDir, policy: WorkflowPolicy) -> Result<Rendered, Box<dyn Error>> {
+pub(super) fn render(
+    name: &str,
+    repo: &TempDir,
+    policy: WorkflowPolicy,
+) -> Result<Rendered, Box<dyn Error>> {
     let prepared = prepare(repo.path())?;
     let rust_groups = prepared
         .discovery
@@ -51,7 +55,15 @@ pub(super) fn mbx_repo(tofu: bool) -> Result<TempDir, Box<dyn Error>> {
 }
 
 pub(super) fn mbx_repo_for(tofu: bool, policy: WorkflowPolicy) -> Result<TempDir, Box<dyn Error>> {
-    let mut config = config_with_timeouts(15, None)?;
+    mbx_repo_with_crate_timeout(tofu, policy, None)
+}
+
+pub(super) fn mbx_repo_with_crate_timeout(
+    tofu: bool,
+    policy: WorkflowPolicy,
+    crate_timeout: Option<u16>,
+) -> Result<TempDir, Box<dyn Error>> {
+    let mut config = config_with_timeouts(15, crate_timeout)?;
     if policy == WorkflowPolicy::VelnorRepositoryV1 {
         config = config.replacen(
             "name = \"CI\"\n",
