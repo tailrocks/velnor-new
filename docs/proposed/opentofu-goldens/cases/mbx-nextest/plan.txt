@@ -23,9 +23,9 @@ Workflow to generate
     - required (10 steps)
     - required-gate (1 steps)
     - rust-app (26 steps)
-    - tools-producer-083ce5ee (8 steps)
-    - tools-producer-6bf4fcf7 (10 steps)
-    - tools-producer-819a636c (9 steps)
+    - tools-producer-18b94054 (9 steps)
+    - tools-producer-c13255f9 (8 steps)
+    - tools-producer-eec3666c (10 steps)
     - 1 Rust crate job
       Timeout: 5 minutes per crate job
       Obligations: Clippy -> build -> run tests -> doctests -> doc build -> format check
@@ -42,14 +42,14 @@ Workflow to generate
   Critical path: stack/rust/crates/app/build/default -> stack/rust/crates/app/nextest/default (2 tasks)
   Clippy memory groups: 1; barriers: 0
   Cache layers: Mise tools, MBX compilation objects
-  Jactionlint: 2.3.0 pinned, profile correctness
+  Jactionlint: 2.4.0 pinned, profile correctness
   Action pins: 7
     - actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
     - actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
     - actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
     - actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
     - actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
-    - jdx/mise-action@6be3c7ed4c21d4f76b208d351d95aac273ebb76d
+    - jdx/mise-action@6612f0ef07ed2a736cd1e00a94a065522dd41195
     - jdx/mr-boxington-action@88acf2bb50552c7c508cbac13e5f8c576b95b1de
   Pull-request execution narrows crate obligations through its event-time affected-work plan.
 

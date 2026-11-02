@@ -64,14 +64,14 @@ jobs:
         with:
           persist-credentials: "false"
       - name: Setup Mise
-        uses: jdx/mise-action@6be3c7ed4c21d4f76b208d351d95aac273ebb76d
+        uses: jdx/mise-action@6612f0ef07ed2a736cd1e00a94a065522dd41195
         with:
           cache: "false"
           cache_save: "false"
           env: "false"
           install: "false"
-          sha256: ccfe12d7a62c6fb9def2a20db1f210f13a51de881f21fd8c85db4b6312405d07
-          version: 2026.10.21
+          sha256: 5d362ecc578dc7c146679b841dda949d6472cbf86ff5635db7afdca1b6b3fd87
+          version: 2026.10.25
       - name: Resolve project tool versions
         env:
           ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
@@ -92,14 +92,14 @@ jobs:
         id: v2
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: 2e96f07ee0a56416424196f5920f3e182b46df75a0bb447509bebf07fd6f2774-${{ env.VELNOR_TOOL_RUST }}-${{ env.VELNOR_TOOL_RUST_LOCK }}
+          d: c3c919b44df9e08a6c4956af84839999f57325e9c79aeed16097d14c12404e0f-${{ env.VELNOR_TOOL_RUST }}-${{ env.VELNOR_TOOL_RUST_LOCK }}
       - name: Restore Mise tools
         id: tools-restore
         if: steps.v2.outputs.enabled == 'true'
         uses: ./.github/actions/velnor-tools-cache-restore # zizmor: ignore[self-repository]
         with:
           key: mise-tools-v2-${{steps.v2.outputs.identity}}
-          mise-sha256: ccfe12d7a62c6fb9def2a20db1f210f13a51de881f21fd8c85db4b6312405d07
+          mise-sha256: 5d362ecc578dc7c146679b841dda949d6472cbf86ff5635db7afdca1b6b3fd87
           seed-admitted: ${{ steps.v2.outputs.seed_admitted }}
       - name: Verify restored Rust toolchain
         uses: ./.github/actions/velnor-verify-restored-rust # zizmor: ignore[self-repository]
@@ -132,7 +132,7 @@ jobs:
         with:
           backend: local
           toolchain: ${{ env.VELNOR_TOOL_RUST }}
-          version: 1.28.0
+          version: 1.29.1
         env:
           CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MBX_CACHE_DIR: ${{ runner.temp }}/velnor/mbx
@@ -147,14 +147,14 @@ jobs:
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
-        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; case \"$RUNNER_TEMP\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''RUNNER_TEMP must be absolute'\\'' >&2; exit 1 ;; esac; check_no_symlink() { path=$1; while [ \"$path\" != / ]; do [ ! -L \"$path\" ] || return 1; path=${path%/*}; [ -n \"$path\" ] || path=/; done; return 0; }; [ -d \"$RUNNER_TEMP\" ] && check_no_symlink \"$RUNNER_TEMP\" || { printf '\\''%s\\n'\\'' '\\''RUNNER_TEMP must be a real directory'\\'' >&2; exit 1; }; [ \"${MBX_CACHE_DIR:-}\" = \"$RUNNER_TEMP/velnor/mbx\" ] || { printf '\\''%s\\n'\\'' '\\''MBX_CACHE_DIR changed from its stable runner-temp path'\\'' >&2; exit 1; }; [ -d \"$RUNNER_TEMP/velnor\" ] && [ -d \"$MBX_CACHE_DIR\" ] && [ -d \"$MBX_CACHE_DIR/actions\" ] || { printf '\\''%s\\n'\\'' '\\''MBX store directories are missing'\\'' >&2; exit 1; }; check_no_symlink \"$RUNNER_TEMP/velnor\" && check_no_symlink \"$MBX_CACHE_DIR/actions\" || { printf '\\''%s\\n'\\'' '\\''MBX store path contains a symlink'\\'' >&2; exit 1; }; case \"$GITHUB_RUN_ID\" in '\\'''\\''|*[!0-9]*) printf '\\''%s\\n'\\'' '\\''run id must be numeric'\\'' >&2; exit 1 ;; esac; case \"$GITHUB_RUN_ATTEMPT\" in '\\'''\\''|*[!0-9]*) printf '\\''%s\\n'\\'' '\\''run attempt must be numeric'\\'' >&2; exit 1 ;; esac; probe_dir=\"$RUNNER_TEMP/velnor-mbx-verify-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT\"; [ ! -e \"$probe_dir\" ] && [ ! -L \"$probe_dir\" ] || { printf '\\''%s\\n'\\'' '\\''verification scratch already exists'\\'' >&2; exit 1; }; (umask 077 && mkdir -m 700 \"$probe_dir\") || { printf '\\''%s\\n'\\'' '\\''could not reserve verification scratch'\\'' >&2; exit 1; }; cleanup() { rm -f \"$probe_dir/version\" \"$probe_dir/cache-dir\" \"$probe_dir/rustc-path\" \"$probe_dir/rustc-vv\" \"$probe_dir/mbx-rustc-vv\" \"$probe_dir/mbx-rustc\"; rmdir \"$probe_dir\"; }; trap cleanup EXIT; trap '\\''exit 1'\\'' HUP INT TERM; if ! mbx_bin=$(command -v mbx); then printf '\\''%s\\n'\\'' '\\''action-owned MBX is not on PATH'\\'' >&2; exit 1; fi; case \"$mbx_bin\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''action-owned MBX path must be absolute'\\'' >&2; exit 1 ;; esac; if [ ! -f \"$mbx_bin\" ] || [ ! -x \"$mbx_bin\" ]; then printf '\\''%s\\n'\\'' '\\''action-owned MBX path must be an executable file'\\'' >&2; exit 1; fi; mise --no-config --no-env --no-hooks exec rust@'\"${VELNOR_TOOL_RUST}\"' -- \"$mbx_bin\" --version > \"$probe_dir/version\"; exec 3< \"$probe_dir/version\"; IFS= read -r version_line <&3 || { printf '\\''%s\\n'\\'' '\\''MBX version output is empty or unterminated'\\'' >&2; exit 1; }; extra=; if IFS= read -r extra <&3 || [ -n \"$extra\" ]; then printf '\\''%s\\n'\\'' '\\''MBX version output has extra data'\\'' >&2; exit 1; fi; exec 3<&-; [ \"$version_line\" = '\\''mbx 1.28.0'\\'' ] || { printf '\\''%s\\n'\\'' '\\''MBX on PATH does not match the pinned action version'\\'' >&2; exit 1; }; mise --no-config --no-env --no-hooks exec rust@'\"${VELNOR_TOOL_RUST}\"' -- \"$mbx_bin\" cache dir > \"$probe_dir/cache-dir\"; exec 3< \"$probe_dir/cache-dir\"; IFS= read -r cache_dir <&3 || { printf '\\''%s\\n'\\'' '\\''MBX cache dir output is empty or unterminated'\\'' >&2; exit 1; }; extra=; if IFS= read -r extra <&3 || [ -n \"$extra\" ]; then printf '\\''%s\\n'\\'' '\\''MBX cache dir output has extra data'\\'' >&2; exit 1; fi; exec 3<&-; [ \"$cache_dir\" = \"$MBX_CACHE_DIR/actions\" ] || { printf '\\''%s\\n'\\'' '\\''MBX reported an unexpected object store path'\\'' >&2; exit 1; }; ln -s \"$mbx_bin\" \"$probe_dir/mbx-rustc\"; mise --no-config --no-env --no-hooks exec rust@'\"${VELNOR_TOOL_RUST}\"' -- rustup which --toolchain '\\'''\"${VELNOR_TOOL_RUST}\"''\\'' rustc > \"$probe_dir/rustc-path\"; exec 3< \"$probe_dir/rustc-path\"; IFS= read -r rustc_path <&3 || { printf '\\''%s\\n'\\'' '\\''rustup returned no rustc path'\\'' >&2; exit 1; }; exec 3<&-; case \"$rustc_path\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''rustc path must be absolute'\\'' >&2; exit 1 ;; esac; \"$rustc_path\" -vV > \"$probe_dir/rustc-vv\"; mise --no-config --no-env --no-hooks exec rust@'\"${VELNOR_TOOL_RUST}\"' -- \"$probe_dir/mbx-rustc\" \"$rustc_path\" -vV > \"$probe_dir/mbx-rustc-vv\"; cmp -s \"$probe_dir/rustc-vv\" \"$probe_dir/mbx-rustc-vv\" || { printf '\\''%s\\n'\\'' '\\''mbx-rustc -vV differs from rustc -vV'\\'' >&2; exit 1; }; mbx_disk_sample() { boundary=$1; case \"${RUNNER_TEMP:-}\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''MBX_DISK_SAMPLE_ERROR runner_temp_not_absolute'\\'' >&2; return 0 ;; esac; if [ -d \"$RUNNER_TEMP\" ] && [ ! -L \"$RUNNER_TEMP\" ]; then printf '\\''MBX_DISK_SAMPLE boundary=%s volume=runner_temp blocks_kib\\n'\\'' \"$boundary\"; if df -Pk \"$RUNNER_TEMP\"; then :; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s command=df_blocks\\n'\\'' \"$boundary\" >&2; fi; printf '\\''MBX_DISK_SAMPLE boundary=%s volume=runner_temp inodes\\n'\\'' \"$boundary\"; if df -Pi \"$RUNNER_TEMP\"; then :; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s command=df_inodes\\n'\\'' \"$boundary\" >&2; fi; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s runner_temp_not_real_directory\\n'\\'' \"$boundary\" >&2; return 0; fi; store_path=\"$RUNNER_TEMP/velnor/mbx\"; if [ \"${MBX_CACHE_DIR:-}\" = \"$store_path\" ] && [ -d \"$store_path\" ] && [ ! -L \"$store_path\" ]; then printf '\\''MBX_DISK_ALLOCATED_KIB boundary=%s root=mbx_store\\n'\\'' \"$boundary\"; if du -sk \"$store_path\"; then :; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s path=mbx_store command=du\\n'\\'' \"$boundary\" >&2; fi; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s path=mbx_store_unavailable\\n'\\'' \"$boundary\" >&2; fi; target_path=\"${target_dir:-target}\"; if [ ! -d \"$target_path\" ]; then for candidate in */target crates/*/target \"$RUNNER_TEMP/velnor/target\"; do if [ -d \"$candidate\" ]; then target_path=\"$candidate\"; break; fi; done; fi; if [ -L \"$target_path\" ]; then printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s path=target_is_symlink\\n'\\'' \"$boundary\" >&2; elif [ -d \"$target_path\" ]; then printf '\\''MBX_DISK_ALLOCATED_KIB boundary=%s root=target\\n'\\'' \"$boundary\"; if du -sk \"$target_path\"; then :; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s path=target command=du\\n'\\'' \"$boundary\" >&2; fi; else printf '\\''MBX_DISK_ALLOCATED_KIB boundary=%s root=target state=absent\\n'\\'' \"$boundary\"; fi; }; mbx_disk_sample after-cache-restore'"
+        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; case \"$RUNNER_TEMP\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''RUNNER_TEMP must be absolute'\\'' >&2; exit 1 ;; esac; check_no_symlink() { path=$1; while [ \"$path\" != / ]; do [ ! -L \"$path\" ] || return 1; path=${path%/*}; [ -n \"$path\" ] || path=/; done; return 0; }; [ -d \"$RUNNER_TEMP\" ] && check_no_symlink \"$RUNNER_TEMP\" || { printf '\\''%s\\n'\\'' '\\''RUNNER_TEMP must be a real directory'\\'' >&2; exit 1; }; [ \"${MBX_CACHE_DIR:-}\" = \"$RUNNER_TEMP/velnor/mbx\" ] || { printf '\\''%s\\n'\\'' '\\''MBX_CACHE_DIR changed from its stable runner-temp path'\\'' >&2; exit 1; }; [ -d \"$RUNNER_TEMP/velnor\" ] && [ -d \"$MBX_CACHE_DIR\" ] && [ -d \"$MBX_CACHE_DIR/actions\" ] || { printf '\\''%s\\n'\\'' '\\''MBX store directories are missing'\\'' >&2; exit 1; }; check_no_symlink \"$RUNNER_TEMP/velnor\" && check_no_symlink \"$MBX_CACHE_DIR/actions\" || { printf '\\''%s\\n'\\'' '\\''MBX store path contains a symlink'\\'' >&2; exit 1; }; case \"$GITHUB_RUN_ID\" in '\\'''\\''|*[!0-9]*) printf '\\''%s\\n'\\'' '\\''run id must be numeric'\\'' >&2; exit 1 ;; esac; case \"$GITHUB_RUN_ATTEMPT\" in '\\'''\\''|*[!0-9]*) printf '\\''%s\\n'\\'' '\\''run attempt must be numeric'\\'' >&2; exit 1 ;; esac; probe_dir=\"$RUNNER_TEMP/velnor-mbx-verify-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT\"; [ ! -e \"$probe_dir\" ] && [ ! -L \"$probe_dir\" ] || { printf '\\''%s\\n'\\'' '\\''verification scratch already exists'\\'' >&2; exit 1; }; (umask 077 && mkdir -m 700 \"$probe_dir\") || { printf '\\''%s\\n'\\'' '\\''could not reserve verification scratch'\\'' >&2; exit 1; }; cleanup() { rm -f \"$probe_dir/version\" \"$probe_dir/cache-dir\" \"$probe_dir/rustc-path\" \"$probe_dir/rustc-vv\" \"$probe_dir/mbx-rustc-vv\" \"$probe_dir/mbx-rustc\"; rmdir \"$probe_dir\"; }; trap cleanup EXIT; trap '\\''exit 1'\\'' HUP INT TERM; if ! mbx_bin=$(command -v mbx); then printf '\\''%s\\n'\\'' '\\''action-owned MBX is not on PATH'\\'' >&2; exit 1; fi; case \"$mbx_bin\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''action-owned MBX path must be absolute'\\'' >&2; exit 1 ;; esac; if [ ! -f \"$mbx_bin\" ] || [ ! -x \"$mbx_bin\" ]; then printf '\\''%s\\n'\\'' '\\''action-owned MBX path must be an executable file'\\'' >&2; exit 1; fi; mise --no-config --no-env --no-hooks exec rust@'\"${VELNOR_TOOL_RUST}\"' -- \"$mbx_bin\" --version > \"$probe_dir/version\"; exec 3< \"$probe_dir/version\"; IFS= read -r version_line <&3 || { printf '\\''%s\\n'\\'' '\\''MBX version output is empty or unterminated'\\'' >&2; exit 1; }; extra=; if IFS= read -r extra <&3 || [ -n \"$extra\" ]; then printf '\\''%s\\n'\\'' '\\''MBX version output has extra data'\\'' >&2; exit 1; fi; exec 3<&-; [ \"$version_line\" = '\\''mbx 1.29.1'\\'' ] || { printf '\\''%s\\n'\\'' '\\''MBX on PATH does not match the pinned action version'\\'' >&2; exit 1; }; mise --no-config --no-env --no-hooks exec rust@'\"${VELNOR_TOOL_RUST}\"' -- \"$mbx_bin\" cache dir > \"$probe_dir/cache-dir\"; exec 3< \"$probe_dir/cache-dir\"; IFS= read -r cache_dir <&3 || { printf '\\''%s\\n'\\'' '\\''MBX cache dir output is empty or unterminated'\\'' >&2; exit 1; }; extra=; if IFS= read -r extra <&3 || [ -n \"$extra\" ]; then printf '\\''%s\\n'\\'' '\\''MBX cache dir output has extra data'\\'' >&2; exit 1; fi; exec 3<&-; [ \"$cache_dir\" = \"$MBX_CACHE_DIR/actions\" ] || { printf '\\''%s\\n'\\'' '\\''MBX reported an unexpected object store path'\\'' >&2; exit 1; }; ln -s \"$mbx_bin\" \"$probe_dir/mbx-rustc\"; mise --no-config --no-env --no-hooks exec rust@'\"${VELNOR_TOOL_RUST}\"' -- rustup which --toolchain '\\'''\"${VELNOR_TOOL_RUST}\"''\\'' rustc > \"$probe_dir/rustc-path\"; exec 3< \"$probe_dir/rustc-path\"; IFS= read -r rustc_path <&3 || { printf '\\''%s\\n'\\'' '\\''rustup returned no rustc path'\\'' >&2; exit 1; }; exec 3<&-; case \"$rustc_path\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''rustc path must be absolute'\\'' >&2; exit 1 ;; esac; \"$rustc_path\" -vV > \"$probe_dir/rustc-vv\"; mise --no-config --no-env --no-hooks exec rust@'\"${VELNOR_TOOL_RUST}\"' -- \"$probe_dir/mbx-rustc\" \"$rustc_path\" -vV > \"$probe_dir/mbx-rustc-vv\"; cmp -s \"$probe_dir/rustc-vv\" \"$probe_dir/mbx-rustc-vv\" || { printf '\\''%s\\n'\\'' '\\''mbx-rustc -vV differs from rustc -vV'\\'' >&2; exit 1; }; mbx_disk_sample() { boundary=$1; case \"${RUNNER_TEMP:-}\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''MBX_DISK_SAMPLE_ERROR runner_temp_not_absolute'\\'' >&2; return 0 ;; esac; if [ -d \"$RUNNER_TEMP\" ] && [ ! -L \"$RUNNER_TEMP\" ]; then printf '\\''MBX_DISK_SAMPLE boundary=%s volume=runner_temp blocks_kib\\n'\\'' \"$boundary\"; if df -Pk \"$RUNNER_TEMP\"; then :; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s command=df_blocks\\n'\\'' \"$boundary\" >&2; fi; printf '\\''MBX_DISK_SAMPLE boundary=%s volume=runner_temp inodes\\n'\\'' \"$boundary\"; if df -Pi \"$RUNNER_TEMP\"; then :; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s command=df_inodes\\n'\\'' \"$boundary\" >&2; fi; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s runner_temp_not_real_directory\\n'\\'' \"$boundary\" >&2; return 0; fi; store_path=\"$RUNNER_TEMP/velnor/mbx\"; if [ \"${MBX_CACHE_DIR:-}\" = \"$store_path\" ] && [ -d \"$store_path\" ] && [ ! -L \"$store_path\" ]; then printf '\\''MBX_DISK_ALLOCATED_KIB boundary=%s root=mbx_store\\n'\\'' \"$boundary\"; if du -sk \"$store_path\"; then :; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s path=mbx_store command=du\\n'\\'' \"$boundary\" >&2; fi; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s path=mbx_store_unavailable\\n'\\'' \"$boundary\" >&2; fi; target_path=\"${target_dir:-target}\"; if [ ! -d \"$target_path\" ]; then for candidate in */target crates/*/target \"$RUNNER_TEMP/velnor/target\"; do if [ -d \"$candidate\" ]; then target_path=\"$candidate\"; break; fi; done; fi; if [ -L \"$target_path\" ]; then printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s path=target_is_symlink\\n'\\'' \"$boundary\" >&2; elif [ -d \"$target_path\" ]; then printf '\\''MBX_DISK_ALLOCATED_KIB boundary=%s root=target\\n'\\'' \"$boundary\"; if du -sk \"$target_path\"; then :; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s path=target command=du\\n'\\'' \"$boundary\" >&2; fi; else printf '\\''MBX_DISK_ALLOCATED_KIB boundary=%s root=target state=absent\\n'\\'' \"$boundary\"; fi; }; mbx_disk_sample after-cache-restore'"
       - name: Compute state snapshot key
         id: mbx-bundle-key
         env:
           VELNOR_DEFAULT_REF: ${{ format('refs/heads/{0}', github.event.repository.default_branch) }}
           VELNOR_MBX_BUNDLE_ROOT: .
           VELNOR_MBX_BUNDLE_TOOLCHAIN: ${{ env.VELNOR_TOOL_RUST }}
-          VELNOR_MBX_BUNDLE_VERSION: 1.28.0
+          VELNOR_MBX_BUNDLE_VERSION: 1.29.1
           VELNOR_PR_HEAD_FORK: ${{ github.event.pull_request.head.repo.fork }}
         run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; case \"$RUNNER_TEMP\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''RUNNER_TEMP must be absolute'\\'' >&2; exit 1 ;; esac; d=\"$RUNNER_TEMP/velnor/state-snapshot-key\"; rm -rf \"$d\"; mkdir -p \"$d\"; s256() { sha256sum \"$1\" > \"$d/sum\"; h=; rest=; read -r h rest < \"$d/sum\" || [ -n \"$h\" ]; case \"$h\" in '\\'''\\''|*[!0-9a-f]*) printf '\\''%s\\n'\\'' '\\''sha256sum returned no digest'\\'' >&2; exit 1 ;; esac; [ \"${#h}\" -eq 64 ] || exit 1; }; default_ref=\"${VELNOR_DEFAULT_REF:-}\"; trust=none; if [ \"${GITHUB_EVENT_NAME:-}\" = push ] && [ -n \"${default_ref#refs/heads/}\" ] && [ \"${GITHUB_REF:-}\" = \"$default_ref\" ] && [ \"${GITHUB_REF_PROTECTED:-}\" = true ]; then trust=trusted; fi; printf '\\''%s\\n'\\'' '\\''family=state'\\'' '\\''schema=1'\\'' '\\''$RUNNER_TEMP/velnor-gc1/state'\\'' '\\''unit=seed'\\'' \"mbx=${VELNOR_MBX_BUNDLE_VERSION}\" \"toolchain=${VELNOR_MBX_BUNDLE_TOOLCHAIN}\" \"root=${VELNOR_MBX_BUNDLE_ROOT}\" '\\''ceiling=402653184'\\'' > \"$d/compat\"; uname -s >> \"$d/compat\"; uname -m >> \"$d/compat\"; s256 \"$d/compat\"; compat=\"s256-$h\"; lock=\"$GITHUB_WORKSPACE/${VELNOR_MBX_BUNDLE_ROOT}/Cargo.lock\"; if [ -f \"$lock\" ] && [ ! -L \"$lock\" ]; then s256 \"$lock\"; else printf '\\''%s\\n'\\'' absent > \"$d/absent\"; s256 \"$d/absent\"; fi; snap=\"s256-$h\"; trusted=\"velnor-v1-state-trusted-$compat-\"; key=\"$trusted$snap\"; [ \"${#key}\" -le 512 ] || { printf '\\''cache key exceeds the GitHub cap: %s\\n'\\'' \"$key\" >&2; exit 1; }; save=false; [ \"$trust\" != trusted ] || save=true; if [ \"$trust\" = trusted ]; then provenance=trusted; decision=admitted; else case \"${GITHUB_EVENT_NAME:-}\" in pull_request) provenance=untrusted ;; *) provenance=ambiguous ;; esac; decision=restore-only; fi; printf '\\''%s\\n'\\'' \"key=$key\" \"restore_keys=$trusted\" \"save=$save\" \"provenance=$provenance\" \"decision=$decision\" >> \"$GITHUB_OUTPUT\"; record=\"$RUNNER_TEMP/velnor/state-discovery.record\"; printf '\\''%s\\n'\\'' \"key=$key\" \"restore_prefix=$trusted\" \"compat=$compat\" \"provenance=$provenance\" \"decision=$decision\" \"ceiling=402653184\" \"save=$save\" \"unit=seed\" \"mbx_version=${VELNOR_MBX_BUNDLE_VERSION}\" \"toolchain=${VELNOR_MBX_BUNDLE_TOOLCHAIN}\" \"root=${VELNOR_MBX_BUNDLE_ROOT}\" > \"$record\"; printf '\\''velnor: state snapshot trust=%s key=%s save=%s provenance=%s decision=%s\\n'\\'' \"$trust\" \"$key\" \"$save\" \"$provenance\" \"$decision\"'"
       - name: Restore state snapshot
@@ -259,33 +259,33 @@ jobs:
         with:
           persist-credentials: "false"
       - name: Setup Mise
-        uses: jdx/mise-action@6be3c7ed4c21d4f76b208d351d95aac273ebb76d
+        uses: jdx/mise-action@6612f0ef07ed2a736cd1e00a94a065522dd41195
         with:
           cache: "false"
           cache_save: "false"
           env: "false"
           install: "false"
-          sha256: ccfe12d7a62c6fb9def2a20db1f210f13a51de881f21fd8c85db4b6312405d07
-          version: 2026.10.21
+          sha256: 5d362ecc578dc7c146679b841dda949d6472cbf86ff5635db7afdca1b6b3fd87
+          version: 2026.10.25
       - name: V2 identity
         id: v2
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: 083ce5ee20bf5789b3227765b86c11bbb3ed5755262546e127cd82b4729267a4
+          d: c13255f9e3eb1ba841033fbf209d4d31712d67422e274f4068cf232af4342785
       - name: Restore Mise tools
         id: tools-restore
         if: steps.v2.outputs.enabled == 'true'
         uses: ./.github/actions/velnor-tools-cache-restore # zizmor: ignore[self-repository]
         with:
           key: mise-tools-v2-${{steps.v2.outputs.identity}}
-          mise-sha256: ccfe12d7a62c6fb9def2a20db1f210f13a51de881f21fd8c85db4b6312405d07
+          mise-sha256: 5d362ecc578dc7c146679b841dda949d6472cbf86ff5635db7afdca1b6b3fd87
           seed-admitted: ${{ steps.v2.outputs.seed_admitted }}
       - name: Prepare pinned tools
-        run: mise --no-config --no-env --no-hooks install jactionlint@2.3.0 shellcheck@0.11.0
+        run: mise --no-config --no-env --no-hooks install jactionlint@2.4.0 shellcheck@0.11.0
       - name: Verify jactionlint
         uses: ./.github/actions/velnor-verify-jactionlint # zizmor: ignore[self-repository]
       - name: Run jactionlint
-        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; files=(); while IFS= read -r file; do files+=(\"$file\"); done < <({ find .github/workflows -maxdepth 1 -type f -name \"*.y*ml\"; find .github/actions -type f -name \"action.y*ml\"; find .github -maxdepth 1 -type f -name \"dependabot.y*ml\"; } 2>/dev/null | LC_ALL=C sort); if [ \"${#files[@]}\" -eq 0 ]; then echo \"jactionlint: no workflow files matched\" >&2; exit 3; fi; exec mise --no-config --no-env --no-hooks exec jactionlint@2.3.0 shellcheck@0.11.0 -- jactionlint --config-file .github/jactionlint.yaml --format github --strict-exit --no-online --shellcheck=shellcheck --pyflakes= --no-color \"${files[@]}\"'"
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; files=(); while IFS= read -r file; do files+=(\"$file\"); done < <({ find .github/workflows -maxdepth 1 -type f -name \"*.y*ml\"; find .github/actions -type f -name \"action.y*ml\"; find .github -maxdepth 1 -type f -name \"dependabot.y*ml\"; } 2>/dev/null | LC_ALL=C sort); if [ \"${#files[@]}\" -eq 0 ]; then echo \"jactionlint: no workflow files matched\" >&2; exit 3; fi; exec mise --no-config --no-env --no-hooks exec jactionlint@2.4.0 shellcheck@0.11.0 -- jactionlint --config-file .github/jactionlint.yaml --format github --strict-exit --no-online --shellcheck=shellcheck --pyflakes= --no-color \"${files[@]}\"'"
   plan:
     name: Plan
     runs-on: ubuntu-26.04
@@ -311,14 +311,14 @@ jobs:
           fetch-depth: "0"
           persist-credentials: "false"
       - name: Setup Mise
-        uses: jdx/mise-action@6be3c7ed4c21d4f76b208d351d95aac273ebb76d
+        uses: jdx/mise-action@6612f0ef07ed2a736cd1e00a94a065522dd41195
         with:
           cache: "false"
           cache_save: "false"
           env: "false"
           install: "false"
-          sha256: ccfe12d7a62c6fb9def2a20db1f210f13a51de881f21fd8c85db4b6312405d07
-          version: 2026.10.21
+          sha256: 5d362ecc578dc7c146679b841dda949d6472cbf86ff5635db7afdca1b6b3fd87
+          version: 2026.10.25
       - name: Resolve project tool versions
         env:
           ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
@@ -339,14 +339,14 @@ jobs:
         id: v2
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: 819a636c04d34ddba94655492ff779f464c60bb34a13c444ec95bad6158c9c66-${{ env.VELNOR_TOOL_RUST }}-${{ env.VELNOR_TOOL_RUST_LOCK }}
+          d: 18b9405472daa0e6c6651a73173fd66c9d5c7afa0c96b690fb5834fcb3b65d30-${{ env.VELNOR_TOOL_RUST }}-${{ env.VELNOR_TOOL_RUST_LOCK }}
       - name: Restore Mise tools
         id: tools-restore
         if: steps.v2.outputs.enabled == 'true'
         uses: ./.github/actions/velnor-tools-cache-restore # zizmor: ignore[self-repository]
         with:
           key: mise-tools-v2-${{steps.v2.outputs.identity}}
-          mise-sha256: ccfe12d7a62c6fb9def2a20db1f210f13a51de881f21fd8c85db4b6312405d07
+          mise-sha256: 5d362ecc578dc7c146679b841dda949d6472cbf86ff5635db7afdca1b6b3fd87
           seed-admitted: ${{ steps.v2.outputs.seed_admitted }}
       - name: Verify restored Rust toolchain
         uses: ./.github/actions/velnor-verify-restored-rust # zizmor: ignore[self-repository]
@@ -356,7 +356,7 @@ jobs:
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
-        run: "mise --no-config --no-env --no-hooks install 'rust[profile=minimal]@'\"${VELNOR_TOOL_RUST}\" jactionlint@2.3.0 shellcheck@0.11.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.150"
+        run: "mise --no-config --no-env --no-hooks install 'rust[profile=minimal]@'\"${VELNOR_TOOL_RUST}\" jactionlint@2.4.0 shellcheck@0.11.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.150"
       - name: Verify jactionlint
         uses: ./.github/actions/velnor-verify-jactionlint # zizmor: ignore[self-repository]
       - name: Verify Rust channel manifest
@@ -421,14 +421,14 @@ jobs:
           fetch-depth: "0"
           persist-credentials: "false"
       - name: Setup Mise
-        uses: jdx/mise-action@6be3c7ed4c21d4f76b208d351d95aac273ebb76d
+        uses: jdx/mise-action@6612f0ef07ed2a736cd1e00a94a065522dd41195
         with:
           cache: "false"
           cache_save: "false"
           env: "false"
           install: "false"
-          sha256: ccfe12d7a62c6fb9def2a20db1f210f13a51de881f21fd8c85db4b6312405d07
-          version: 2026.10.21
+          sha256: 5d362ecc578dc7c146679b841dda949d6472cbf86ff5635db7afdca1b6b3fd87
+          version: 2026.10.25
       - name: Acquire Velnor
         timeout-minutes: 6
         run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; d=\"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.72\"&&mkdir -p \"${d%/*}\"&&s=\"/opt/velnor/seed/generator/${d##*/}\"&&p=\"$VELNOR_ASSET_SHA256  \"&&if [ -f \"$s\" ]&&echo \"$p$s\"|sha256sum -c -;then cp \"$s\" \"$d\";else curl -fsSL --connect-timeout 15 --max-time 120 --retry 5 --retry-all-errors --retry-max-time 180 --proto '\\''=https'\\'' --tlsv1.2 \"$VELNOR_ASSET_URL\" -o \"$d\"&&echo \"$p$d\"|sha256sum -c -;fi&&chmod +x \"$d\"'"
@@ -516,14 +516,14 @@ jobs:
         with:
           persist-credentials: "false"
       - name: Setup Mise
-        uses: jdx/mise-action@6be3c7ed4c21d4f76b208d351d95aac273ebb76d
+        uses: jdx/mise-action@6612f0ef07ed2a736cd1e00a94a065522dd41195
         with:
           cache: "false"
           cache_save: "false"
           env: "false"
           install: "false"
-          sha256: ccfe12d7a62c6fb9def2a20db1f210f13a51de881f21fd8c85db4b6312405d07
-          version: 2026.10.21
+          sha256: 5d362ecc578dc7c146679b841dda949d6472cbf86ff5635db7afdca1b6b3fd87
+          version: 2026.10.25
       - name: Resolve project tool versions
         env:
           ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
@@ -544,14 +544,14 @@ jobs:
         id: v2
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: 6bf4fcf7467a006bc3e9695cde05c53cd5f6f8aa3599c75b00421fb46205bd6c-${{ env.VELNOR_TOOL_RUST }}-${{ env.VELNOR_TOOL_RUST_LOCK }}
+          d: eec3666c54fd4df62f3819d1ca9193ab828ce14bbf3162245207e0f358bc4799-${{ env.VELNOR_TOOL_RUST }}-${{ env.VELNOR_TOOL_RUST_LOCK }}
       - name: Restore Mise tools
         id: tools-restore
         if: steps.v2.outputs.enabled == 'true'
         uses: ./.github/actions/velnor-tools-cache-restore # zizmor: ignore[self-repository]
         with:
           key: mise-tools-v2-${{steps.v2.outputs.identity}}
-          mise-sha256: ccfe12d7a62c6fb9def2a20db1f210f13a51de881f21fd8c85db4b6312405d07
+          mise-sha256: 5d362ecc578dc7c146679b841dda949d6472cbf86ff5635db7afdca1b6b3fd87
           seed-admitted: ${{ steps.v2.outputs.seed_admitted }}
       - name: Acquire Velnor
         timeout-minutes: 6
@@ -569,7 +569,7 @@ jobs:
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
-        run: "mise --no-config --no-env --no-hooks install 'rust[profile=minimal]@'\"${VELNOR_TOOL_RUST}\" jactionlint@2.3.0 shellcheck@0.11.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.150"
+        run: "mise --no-config --no-env --no-hooks install 'rust[profile=minimal]@'\"${VELNOR_TOOL_RUST}\" jactionlint@2.4.0 shellcheck@0.11.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.150"
       - name: Verify jactionlint
         uses: ./.github/actions/velnor-verify-jactionlint # zizmor: ignore[self-repository]
       - name: Prepare Rust components
@@ -594,7 +594,7 @@ jobs:
         with:
           backend: local
           toolchain: ${{ env.VELNOR_TOOL_RUST }}
-          version: 1.28.0
+          version: 1.29.1
         env:
           CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MBX_CACHE_DIR: ${{ runner.temp }}/velnor/mbx
@@ -609,14 +609,14 @@ jobs:
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
-        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; case \"$RUNNER_TEMP\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''RUNNER_TEMP must be absolute'\\'' >&2; exit 1 ;; esac; check_no_symlink() { path=$1; while [ \"$path\" != / ]; do [ ! -L \"$path\" ] || return 1; path=${path%/*}; [ -n \"$path\" ] || path=/; done; return 0; }; [ -d \"$RUNNER_TEMP\" ] && check_no_symlink \"$RUNNER_TEMP\" || { printf '\\''%s\\n'\\'' '\\''RUNNER_TEMP must be a real directory'\\'' >&2; exit 1; }; [ \"${MBX_CACHE_DIR:-}\" = \"$RUNNER_TEMP/velnor/mbx\" ] || { printf '\\''%s\\n'\\'' '\\''MBX_CACHE_DIR changed from its stable runner-temp path'\\'' >&2; exit 1; }; [ -d \"$RUNNER_TEMP/velnor\" ] && [ -d \"$MBX_CACHE_DIR\" ] && [ -d \"$MBX_CACHE_DIR/actions\" ] || { printf '\\''%s\\n'\\'' '\\''MBX store directories are missing'\\'' >&2; exit 1; }; check_no_symlink \"$RUNNER_TEMP/velnor\" && check_no_symlink \"$MBX_CACHE_DIR/actions\" || { printf '\\''%s\\n'\\'' '\\''MBX store path contains a symlink'\\'' >&2; exit 1; }; case \"$GITHUB_RUN_ID\" in '\\'''\\''|*[!0-9]*) printf '\\''%s\\n'\\'' '\\''run id must be numeric'\\'' >&2; exit 1 ;; esac; case \"$GITHUB_RUN_ATTEMPT\" in '\\'''\\''|*[!0-9]*) printf '\\''%s\\n'\\'' '\\''run attempt must be numeric'\\'' >&2; exit 1 ;; esac; probe_dir=\"$RUNNER_TEMP/velnor-mbx-verify-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT\"; [ ! -e \"$probe_dir\" ] && [ ! -L \"$probe_dir\" ] || { printf '\\''%s\\n'\\'' '\\''verification scratch already exists'\\'' >&2; exit 1; }; (umask 077 && mkdir -m 700 \"$probe_dir\") || { printf '\\''%s\\n'\\'' '\\''could not reserve verification scratch'\\'' >&2; exit 1; }; cleanup() { rm -f \"$probe_dir/version\" \"$probe_dir/cache-dir\" \"$probe_dir/rustc-path\" \"$probe_dir/rustc-vv\" \"$probe_dir/mbx-rustc-vv\" \"$probe_dir/mbx-rustc\"; rmdir \"$probe_dir\"; }; trap cleanup EXIT; trap '\\''exit 1'\\'' HUP INT TERM; if ! mbx_bin=$(command -v mbx); then printf '\\''%s\\n'\\'' '\\''action-owned MBX is not on PATH'\\'' >&2; exit 1; fi; case \"$mbx_bin\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''action-owned MBX path must be absolute'\\'' >&2; exit 1 ;; esac; if [ ! -f \"$mbx_bin\" ] || [ ! -x \"$mbx_bin\" ]; then printf '\\''%s\\n'\\'' '\\''action-owned MBX path must be an executable file'\\'' >&2; exit 1; fi; mise --no-config --no-env --no-hooks exec rust@'\"${VELNOR_TOOL_RUST}\"' -- \"$mbx_bin\" --version > \"$probe_dir/version\"; exec 3< \"$probe_dir/version\"; IFS= read -r version_line <&3 || { printf '\\''%s\\n'\\'' '\\''MBX version output is empty or unterminated'\\'' >&2; exit 1; }; extra=; if IFS= read -r extra <&3 || [ -n \"$extra\" ]; then printf '\\''%s\\n'\\'' '\\''MBX version output has extra data'\\'' >&2; exit 1; fi; exec 3<&-; [ \"$version_line\" = '\\''mbx 1.28.0'\\'' ] || { printf '\\''%s\\n'\\'' '\\''MBX on PATH does not match the pinned action version'\\'' >&2; exit 1; }; mise --no-config --no-env --no-hooks exec rust@'\"${VELNOR_TOOL_RUST}\"' -- \"$mbx_bin\" cache dir > \"$probe_dir/cache-dir\"; exec 3< \"$probe_dir/cache-dir\"; IFS= read -r cache_dir <&3 || { printf '\\''%s\\n'\\'' '\\''MBX cache dir output is empty or unterminated'\\'' >&2; exit 1; }; extra=; if IFS= read -r extra <&3 || [ -n \"$extra\" ]; then printf '\\''%s\\n'\\'' '\\''MBX cache dir output has extra data'\\'' >&2; exit 1; fi; exec 3<&-; [ \"$cache_dir\" = \"$MBX_CACHE_DIR/actions\" ] || { printf '\\''%s\\n'\\'' '\\''MBX reported an unexpected object store path'\\'' >&2; exit 1; }; ln -s \"$mbx_bin\" \"$probe_dir/mbx-rustc\"; mise --no-config --no-env --no-hooks exec rust@'\"${VELNOR_TOOL_RUST}\"' -- rustup which --toolchain '\\'''\"${VELNOR_TOOL_RUST}\"''\\'' rustc > \"$probe_dir/rustc-path\"; exec 3< \"$probe_dir/rustc-path\"; IFS= read -r rustc_path <&3 || { printf '\\''%s\\n'\\'' '\\''rustup returned no rustc path'\\'' >&2; exit 1; }; exec 3<&-; case \"$rustc_path\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''rustc path must be absolute'\\'' >&2; exit 1 ;; esac; \"$rustc_path\" -vV > \"$probe_dir/rustc-vv\"; mise --no-config --no-env --no-hooks exec rust@'\"${VELNOR_TOOL_RUST}\"' -- \"$probe_dir/mbx-rustc\" \"$rustc_path\" -vV > \"$probe_dir/mbx-rustc-vv\"; cmp -s \"$probe_dir/rustc-vv\" \"$probe_dir/mbx-rustc-vv\" || { printf '\\''%s\\n'\\'' '\\''mbx-rustc -vV differs from rustc -vV'\\'' >&2; exit 1; }; mbx_disk_sample() { boundary=$1; case \"${RUNNER_TEMP:-}\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''MBX_DISK_SAMPLE_ERROR runner_temp_not_absolute'\\'' >&2; return 0 ;; esac; if [ -d \"$RUNNER_TEMP\" ] && [ ! -L \"$RUNNER_TEMP\" ]; then printf '\\''MBX_DISK_SAMPLE boundary=%s volume=runner_temp blocks_kib\\n'\\'' \"$boundary\"; if df -Pk \"$RUNNER_TEMP\"; then :; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s command=df_blocks\\n'\\'' \"$boundary\" >&2; fi; printf '\\''MBX_DISK_SAMPLE boundary=%s volume=runner_temp inodes\\n'\\'' \"$boundary\"; if df -Pi \"$RUNNER_TEMP\"; then :; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s command=df_inodes\\n'\\'' \"$boundary\" >&2; fi; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s runner_temp_not_real_directory\\n'\\'' \"$boundary\" >&2; return 0; fi; store_path=\"$RUNNER_TEMP/velnor/mbx\"; if [ \"${MBX_CACHE_DIR:-}\" = \"$store_path\" ] && [ -d \"$store_path\" ] && [ ! -L \"$store_path\" ]; then printf '\\''MBX_DISK_ALLOCATED_KIB boundary=%s root=mbx_store\\n'\\'' \"$boundary\"; if du -sk \"$store_path\"; then :; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s path=mbx_store command=du\\n'\\'' \"$boundary\" >&2; fi; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s path=mbx_store_unavailable\\n'\\'' \"$boundary\" >&2; fi; target_path=\"${target_dir:-target}\"; if [ ! -d \"$target_path\" ]; then for candidate in */target crates/*/target \"$RUNNER_TEMP/velnor/target\"; do if [ -d \"$candidate\" ]; then target_path=\"$candidate\"; break; fi; done; fi; if [ -L \"$target_path\" ]; then printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s path=target_is_symlink\\n'\\'' \"$boundary\" >&2; elif [ -d \"$target_path\" ]; then printf '\\''MBX_DISK_ALLOCATED_KIB boundary=%s root=target\\n'\\'' \"$boundary\"; if du -sk \"$target_path\"; then :; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s path=target command=du\\n'\\'' \"$boundary\" >&2; fi; else printf '\\''MBX_DISK_ALLOCATED_KIB boundary=%s root=target state=absent\\n'\\'' \"$boundary\"; fi; }; mbx_disk_sample after-cache-restore'"
+        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; case \"$RUNNER_TEMP\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''RUNNER_TEMP must be absolute'\\'' >&2; exit 1 ;; esac; check_no_symlink() { path=$1; while [ \"$path\" != / ]; do [ ! -L \"$path\" ] || return 1; path=${path%/*}; [ -n \"$path\" ] || path=/; done; return 0; }; [ -d \"$RUNNER_TEMP\" ] && check_no_symlink \"$RUNNER_TEMP\" || { printf '\\''%s\\n'\\'' '\\''RUNNER_TEMP must be a real directory'\\'' >&2; exit 1; }; [ \"${MBX_CACHE_DIR:-}\" = \"$RUNNER_TEMP/velnor/mbx\" ] || { printf '\\''%s\\n'\\'' '\\''MBX_CACHE_DIR changed from its stable runner-temp path'\\'' >&2; exit 1; }; [ -d \"$RUNNER_TEMP/velnor\" ] && [ -d \"$MBX_CACHE_DIR\" ] && [ -d \"$MBX_CACHE_DIR/actions\" ] || { printf '\\''%s\\n'\\'' '\\''MBX store directories are missing'\\'' >&2; exit 1; }; check_no_symlink \"$RUNNER_TEMP/velnor\" && check_no_symlink \"$MBX_CACHE_DIR/actions\" || { printf '\\''%s\\n'\\'' '\\''MBX store path contains a symlink'\\'' >&2; exit 1; }; case \"$GITHUB_RUN_ID\" in '\\'''\\''|*[!0-9]*) printf '\\''%s\\n'\\'' '\\''run id must be numeric'\\'' >&2; exit 1 ;; esac; case \"$GITHUB_RUN_ATTEMPT\" in '\\'''\\''|*[!0-9]*) printf '\\''%s\\n'\\'' '\\''run attempt must be numeric'\\'' >&2; exit 1 ;; esac; probe_dir=\"$RUNNER_TEMP/velnor-mbx-verify-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT\"; [ ! -e \"$probe_dir\" ] && [ ! -L \"$probe_dir\" ] || { printf '\\''%s\\n'\\'' '\\''verification scratch already exists'\\'' >&2; exit 1; }; (umask 077 && mkdir -m 700 \"$probe_dir\") || { printf '\\''%s\\n'\\'' '\\''could not reserve verification scratch'\\'' >&2; exit 1; }; cleanup() { rm -f \"$probe_dir/version\" \"$probe_dir/cache-dir\" \"$probe_dir/rustc-path\" \"$probe_dir/rustc-vv\" \"$probe_dir/mbx-rustc-vv\" \"$probe_dir/mbx-rustc\"; rmdir \"$probe_dir\"; }; trap cleanup EXIT; trap '\\''exit 1'\\'' HUP INT TERM; if ! mbx_bin=$(command -v mbx); then printf '\\''%s\\n'\\'' '\\''action-owned MBX is not on PATH'\\'' >&2; exit 1; fi; case \"$mbx_bin\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''action-owned MBX path must be absolute'\\'' >&2; exit 1 ;; esac; if [ ! -f \"$mbx_bin\" ] || [ ! -x \"$mbx_bin\" ]; then printf '\\''%s\\n'\\'' '\\''action-owned MBX path must be an executable file'\\'' >&2; exit 1; fi; mise --no-config --no-env --no-hooks exec rust@'\"${VELNOR_TOOL_RUST}\"' -- \"$mbx_bin\" --version > \"$probe_dir/version\"; exec 3< \"$probe_dir/version\"; IFS= read -r version_line <&3 || { printf '\\''%s\\n'\\'' '\\''MBX version output is empty or unterminated'\\'' >&2; exit 1; }; extra=; if IFS= read -r extra <&3 || [ -n \"$extra\" ]; then printf '\\''%s\\n'\\'' '\\''MBX version output has extra data'\\'' >&2; exit 1; fi; exec 3<&-; [ \"$version_line\" = '\\''mbx 1.29.1'\\'' ] || { printf '\\''%s\\n'\\'' '\\''MBX on PATH does not match the pinned action version'\\'' >&2; exit 1; }; mise --no-config --no-env --no-hooks exec rust@'\"${VELNOR_TOOL_RUST}\"' -- \"$mbx_bin\" cache dir > \"$probe_dir/cache-dir\"; exec 3< \"$probe_dir/cache-dir\"; IFS= read -r cache_dir <&3 || { printf '\\''%s\\n'\\'' '\\''MBX cache dir output is empty or unterminated'\\'' >&2; exit 1; }; extra=; if IFS= read -r extra <&3 || [ -n \"$extra\" ]; then printf '\\''%s\\n'\\'' '\\''MBX cache dir output has extra data'\\'' >&2; exit 1; fi; exec 3<&-; [ \"$cache_dir\" = \"$MBX_CACHE_DIR/actions\" ] || { printf '\\''%s\\n'\\'' '\\''MBX reported an unexpected object store path'\\'' >&2; exit 1; }; ln -s \"$mbx_bin\" \"$probe_dir/mbx-rustc\"; mise --no-config --no-env --no-hooks exec rust@'\"${VELNOR_TOOL_RUST}\"' -- rustup which --toolchain '\\'''\"${VELNOR_TOOL_RUST}\"''\\'' rustc > \"$probe_dir/rustc-path\"; exec 3< \"$probe_dir/rustc-path\"; IFS= read -r rustc_path <&3 || { printf '\\''%s\\n'\\'' '\\''rustup returned no rustc path'\\'' >&2; exit 1; }; exec 3<&-; case \"$rustc_path\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''rustc path must be absolute'\\'' >&2; exit 1 ;; esac; \"$rustc_path\" -vV > \"$probe_dir/rustc-vv\"; mise --no-config --no-env --no-hooks exec rust@'\"${VELNOR_TOOL_RUST}\"' -- \"$probe_dir/mbx-rustc\" \"$rustc_path\" -vV > \"$probe_dir/mbx-rustc-vv\"; cmp -s \"$probe_dir/rustc-vv\" \"$probe_dir/mbx-rustc-vv\" || { printf '\\''%s\\n'\\'' '\\''mbx-rustc -vV differs from rustc -vV'\\'' >&2; exit 1; }; mbx_disk_sample() { boundary=$1; case \"${RUNNER_TEMP:-}\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''MBX_DISK_SAMPLE_ERROR runner_temp_not_absolute'\\'' >&2; return 0 ;; esac; if [ -d \"$RUNNER_TEMP\" ] && [ ! -L \"$RUNNER_TEMP\" ]; then printf '\\''MBX_DISK_SAMPLE boundary=%s volume=runner_temp blocks_kib\\n'\\'' \"$boundary\"; if df -Pk \"$RUNNER_TEMP\"; then :; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s command=df_blocks\\n'\\'' \"$boundary\" >&2; fi; printf '\\''MBX_DISK_SAMPLE boundary=%s volume=runner_temp inodes\\n'\\'' \"$boundary\"; if df -Pi \"$RUNNER_TEMP\"; then :; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s command=df_inodes\\n'\\'' \"$boundary\" >&2; fi; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s runner_temp_not_real_directory\\n'\\'' \"$boundary\" >&2; return 0; fi; store_path=\"$RUNNER_TEMP/velnor/mbx\"; if [ \"${MBX_CACHE_DIR:-}\" = \"$store_path\" ] && [ -d \"$store_path\" ] && [ ! -L \"$store_path\" ]; then printf '\\''MBX_DISK_ALLOCATED_KIB boundary=%s root=mbx_store\\n'\\'' \"$boundary\"; if du -sk \"$store_path\"; then :; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s path=mbx_store command=du\\n'\\'' \"$boundary\" >&2; fi; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s path=mbx_store_unavailable\\n'\\'' \"$boundary\" >&2; fi; target_path=\"${target_dir:-target}\"; if [ ! -d \"$target_path\" ]; then for candidate in */target crates/*/target \"$RUNNER_TEMP/velnor/target\"; do if [ -d \"$candidate\" ]; then target_path=\"$candidate\"; break; fi; done; fi; if [ -L \"$target_path\" ]; then printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s path=target_is_symlink\\n'\\'' \"$boundary\" >&2; elif [ -d \"$target_path\" ]; then printf '\\''MBX_DISK_ALLOCATED_KIB boundary=%s root=target\\n'\\'' \"$boundary\"; if du -sk \"$target_path\"; then :; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s path=target command=du\\n'\\'' \"$boundary\" >&2; fi; else printf '\\''MBX_DISK_ALLOCATED_KIB boundary=%s root=target state=absent\\n'\\'' \"$boundary\"; fi; }; mbx_disk_sample after-cache-restore'"
       - name: Compute state snapshot key
         id: mbx-bundle-key
         env:
           VELNOR_DEFAULT_REF: ${{ format('refs/heads/{0}', github.event.repository.default_branch) }}
           VELNOR_MBX_BUNDLE_ROOT: .
           VELNOR_MBX_BUNDLE_TOOLCHAIN: ${{ env.VELNOR_TOOL_RUST }}
-          VELNOR_MBX_BUNDLE_VERSION: 1.28.0
+          VELNOR_MBX_BUNDLE_VERSION: 1.29.1
           VELNOR_PR_HEAD_FORK: ${{ github.event.pull_request.head.repo.fork }}
         run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; case \"$RUNNER_TEMP\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''RUNNER_TEMP must be absolute'\\'' >&2; exit 1 ;; esac; d=\"$RUNNER_TEMP/velnor/state-snapshot-key\"; rm -rf \"$d\"; mkdir -p \"$d\"; s256() { sha256sum \"$1\" > \"$d/sum\"; h=; rest=; read -r h rest < \"$d/sum\" || [ -n \"$h\" ]; case \"$h\" in '\\'''\\''|*[!0-9a-f]*) printf '\\''%s\\n'\\'' '\\''sha256sum returned no digest'\\'' >&2; exit 1 ;; esac; [ \"${#h}\" -eq 64 ] || exit 1; }; default_ref=\"${VELNOR_DEFAULT_REF:-}\"; trust=none; if [ \"${GITHUB_EVENT_NAME:-}\" = push ] && [ -n \"${default_ref#refs/heads/}\" ] && [ \"${GITHUB_REF:-}\" = \"$default_ref\" ] && [ \"${GITHUB_REF_PROTECTED:-}\" = true ]; then trust=trusted; fi; printf '\\''%s\\n'\\'' '\\''family=state'\\'' '\\''schema=1'\\'' '\\''$RUNNER_TEMP/velnor-gc1/state'\\'' '\\''unit=seed'\\'' \"mbx=${VELNOR_MBX_BUNDLE_VERSION}\" \"toolchain=${VELNOR_MBX_BUNDLE_TOOLCHAIN}\" \"root=${VELNOR_MBX_BUNDLE_ROOT}\" '\\''ceiling=402653184'\\'' > \"$d/compat\"; uname -s >> \"$d/compat\"; uname -m >> \"$d/compat\"; s256 \"$d/compat\"; compat=\"s256-$h\"; lock=\"$GITHUB_WORKSPACE/${VELNOR_MBX_BUNDLE_ROOT}/Cargo.lock\"; if [ -f \"$lock\" ] && [ ! -L \"$lock\" ]; then s256 \"$lock\"; else printf '\\''%s\\n'\\'' absent > \"$d/absent\"; s256 \"$d/absent\"; fi; snap=\"s256-$h\"; trusted=\"velnor-v1-state-trusted-$compat-\"; key=\"$trusted$snap\"; [ \"${#key}\" -le 512 ] || { printf '\\''cache key exceeds the GitHub cap: %s\\n'\\'' \"$key\" >&2; exit 1; }; save=false; [ \"$trust\" != trusted ] || save=true; if [ \"$trust\" = trusted ]; then provenance=trusted; decision=admitted; else case \"${GITHUB_EVENT_NAME:-}\" in pull_request) provenance=untrusted ;; *) provenance=ambiguous ;; esac; decision=restore-only; fi; printf '\\''%s\\n'\\'' \"key=$key\" \"restore_keys=$trusted\" \"save=$save\" \"provenance=$provenance\" \"decision=$decision\" >> \"$GITHUB_OUTPUT\"; record=\"$RUNNER_TEMP/velnor/state-discovery.record\"; printf '\\''%s\\n'\\'' \"key=$key\" \"restore_prefix=$trusted\" \"compat=$compat\" \"provenance=$provenance\" \"decision=$decision\" \"ceiling=402653184\" \"save=$save\" \"unit=seed\" \"mbx_version=${VELNOR_MBX_BUNDLE_VERSION}\" \"toolchain=${VELNOR_MBX_BUNDLE_TOOLCHAIN}\" \"root=${VELNOR_MBX_BUNDLE_ROOT}\" > \"$record\"; printf '\\''velnor: state snapshot trust=%s key=%s save=%s provenance=%s decision=%s\\n'\\'' \"$trust\" \"$key\" \"$save\" \"$provenance\" \"$decision\"'"
       - name: Restore state snapshot
@@ -638,27 +638,27 @@ jobs:
         run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; case \"$RUNNER_TEMP\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''RUNNER_TEMP must be absolute'\\'' >&2; exit 1 ;; esac; payload=\"$RUNNER_TEMP/velnor-gc1/transport/state/payload.tar.gz\"; root=\"$RUNNER_TEMP/velnor-gc1/state\"; parent=\"$RUNNER_TEMP/velnor-gc1\"; base=\"state\"; record=\"$RUNNER_TEMP/velnor/state-discovery.record\"; expected=\"${{steps.mbx-bundle-key.outputs.key}}\"; matched=\"${{steps.mbx-bundle-restore.outputs.cache-matched-key}}\"; d=\"$RUNNER_TEMP/velnor/state-recover\"; rm -rf \"$d\"; mkdir -p \"$d\"; s256() { sha256sum \"$1\" > \"$d/sum\"; h=; rest=; read -r h rest < \"$d/sum\" || [ -n \"$h\" ]; case \"$h\" in '\\'''\\''|*[!0-9a-f]*) printf '\\''%s\\n'\\'' '\\''sha256sum returned no digest'\\'' >&2; exit 1 ;; esac; [ \"${#h}\" -eq 64 ] || exit 1; }; cold() { printf '\\''%s\\n'\\'' \"velnor: state snapshot no_entry ($1)\"; exit 0; }; corrupt() { printf '\\''%s\\n'\\'' \"::warning::cache_corrupt: state snapshot $1; building cold\"; rm -rf \"$root\"; rm -f \"$payload\"; exit 0; }; refused() { printf '\\''%s\\n'\\'' \"::warning::cache_corrupt: state snapshot refused ($1); building cold\"; rm -rf \"$root\"; rm -f \"$payload\"; exit 0; }; if [ ! -f \"$payload\" ] || [ -L \"$payload\" ]; then cold no_entry; fi; if [ ! -s \"$payload\" ]; then printf '\\''%s\\n'\\'' '\\''::warning::cache_corrupt: state payload empty; building cold'\\''; rm -f \"$payload\"; exit 0; fi; if [ -L \"$root\" ]; then printf '\\''%s\\n'\\'' '\\''::warning::cache_corrupt: state root is a symlink; building cold'\\''; exit 0; fi; if [ -z \"$matched\" ]; then cold cold-missing; fi; if [ ! -f \"$record\" ] || [ -L \"$record\" ]; then refused refused-provenance; fi; expected_prefix=\"\"; compat=\"\"; provenance=\"\"; ceiling=\"\"; rec_unit=\"\"; rec_mbx=\"\"; rec_toolchain=\"\"; rec_root=\"\"; line=; while IFS= read -r line || [ -n \"$line\" ]; do case \"$line\" in restore_prefix=*) expected_prefix=${line#restore_prefix=} ;; compat=*) compat=${line#compat=} ;; provenance=*) provenance=${line#provenance=} ;; ceiling=*) ceiling=${line#ceiling=} ;; unit=*) rec_unit=${line#unit=} ;; mbx_version=*) rec_mbx=${line#mbx_version=} ;; toolchain=*) rec_toolchain=${line#toolchain=} ;; root=*) rec_root=${line#root=} ;; esac; done < \"$record\"; case \"$ceiling\" in '\\'''\\''|*[!0-9]*) refused refused-provenance ;; esac; if [ -z \"$expected_prefix\" ] || [ -z \"$compat\" ] || [ -z \"$provenance\" ] || [ -z \"$rec_unit\" ] || [ -z \"$rec_mbx\" ] || [ -z \"$rec_toolchain\" ] || [ -z \"$rec_root\" ]; then refused refused-provenance; fi; if [ -n \"$expected\" ] && [ \"$matched\" = \"$expected\" ]; then decision=exact-hit; elif [ -n \"$matched\" ] && [ -n \"$expected_prefix\" ]; then case \"$matched\" in \"$expected_prefix\"*) decision=predecessor-fallback ;; *) refused refused-provenance ;; esac; else refused refused-provenance; fi; printf '\\''%s\\n'\\'' '\\''family=state'\\'' '\\''schema=1'\\'' '\\''$RUNNER_TEMP/velnor-gc1/state'\\'' \"unit=$rec_unit\" \"mbx=$rec_mbx\" \"toolchain=$rec_toolchain\" \"root=$rec_root\" '\\''ceiling=402653184'\\'' > \"$d/compat\"; uname -s >> \"$d/compat\"; uname -m >> \"$d/compat\"; s256 \"$d/compat\"; compat_now=\"s256-$h\"; if [ \"$compat_now\" != \"$compat\" ]; then corrupt \"coverage drift\"; fi; if tar -tzf \"$payload\" > \"$d/members\"; then :; else corrupt \"payload unreadable\"; fi; members_n=; members_rest=; wc -l < \"$d/members\" > \"$d/count\"; read -r members_n members_rest < \"$d/count\" || [ -n \"$members_n\" ]; case \"$members_n\" in '\\'''\\''|*[!0-9]*) corrupt \"member count unreadable\" ;; esac; if [ \"$members_n\" -gt 100000 ]; then refused refused-shadow; fi; m=; while IFS= read -r m || [ -n \"$m\" ]; do case \"$m\" in \"\") ;; \"$base\"|\"$base\"/*) ;; /*) refused refused-shadow ;; ..|../*|*/..|*/../*) refused refused-shadow ;; *) refused refused-shadow ;; esac; done < \"$d/members\"; if [ -z \"${MBX_CACHE_DIR:-}\" ] || [ \"$MBX_CACHE_DIR\" != \"$RUNNER_TEMP/velnor/mbx\" ] || [ ! -d \"$MBX_CACHE_DIR/actions\" ]; then corrupt import_unavailable; fi; command -v mise >/dev/null 2>&1 || corrupt import_unavailable; command -v mbx >/dev/null 2>&1 || corrupt import_unavailable; if mise --no-config --no-env --no-hooks exec rust@'\"${VELNOR_TOOL_RUST}\"' -- mbx cache import \"$payload\"; then :; else corrupt import_failed; fi; stage=\"$RUNNER_TEMP/velnor/state-stage\"; rm -rf \"$stage\"; mkdir -p \"$stage\"; if tar -xzf \"$payload\" -C \"$stage\"; then :; else rm -rf \"$stage\"; corrupt \"payload unreadable\"; fi; if [ -d \"$stage/$base\" ] && [ ! -L \"$stage/$base\" ]; then :; else rm -rf \"$stage\"; corrupt \"payload missed the state root\"; fi; find \"$stage/$base\" -type l > \"$d/links\"; if [ -s \"$d/links\" ]; then rm -rf \"$stage\"; refused refused-shadow; fi; find \"$stage/$base\" \\( -type p -o -type s \\) > \"$d/special\"; if [ -s \"$d/special\" ]; then rm -rf \"$stage\"; refused refused-shadow; fi; rm -rf \"$root\"; mkdir -p \"$parent\"; if mv \"$stage/$base\" \"$root\"; then :; else rm -rf \"$stage\"; corrupt \"state root handoff failed\"; fi; rmdir \"$stage\" 2>/dev/null || true; size=; size_rest=; wc -c < \"$payload\" > \"$d/size\"; read -r size size_rest < \"$d/size\" || [ -n \"$size\" ]; case \"$size\" in '\\'''\\''|*[!0-9]*) corrupt \"size unreadable\" ;; esac; if [ \"$size\" -gt 402653184 ]; then corrupt \"over ceiling\"; fi; if du -sb \"$root\" > \"$d/uncompressed\"; then usize=; usize_rest=; read -r usize usize_rest < \"$d/uncompressed\" || [ -n \"$usize\" ]; case \"$usize\" in '\\'''\\''|*[!0-9]*) corrupt \"uncompressed size unreadable\" ;; esac; if [ \"$usize\" -gt 402653184 ]; then corrupt \"over ceiling\"; fi; elif du -sk \"$root\" > \"$d/uncompressed_kb\"; then usize_kb=; usize_kb_rest=; read -r usize_kb usize_kb_rest < \"$d/uncompressed_kb\" || [ -n \"$usize_kb\" ]; case \"$usize_kb\" in '\\'''\\''|*[!0-9]*) corrupt \"uncompressed size unreadable\" ;; esac; if [ \"$usize_kb\" -gt 393216 ]; then corrupt \"over ceiling\"; fi; else corrupt \"uncompressed size unreadable\"; fi; find \"$root\" -type f | sort > \"$d/files\"; if command -v sha256sum >/dev/null 2>&1; then while IFS= read -r f || [ -n \"$f\" ]; do sha256sum \"$f\"; done < \"$d/files\" > \"$d/manifest\"; else while IFS= read -r f || [ -n \"$f\" ]; do shasum -a 256 \"$f\"; done < \"$d/files\" > \"$d/manifest\"; fi; if [ ! -s \"$d/manifest\" ]; then corrupt \"empty manifest\"; fi; s256 \"$d/manifest\"; manifest=\"$h\"; s256 \"$payload\"; digest_one=\"$h\"; s256 \"$payload\"; digest_two=\"$h\"; if [ \"$digest_one\" != \"$digest_two\" ]; then corrupt \"readback mismatch\"; fi; printf '\\''%s\\n'\\'' \"decision=$decision\" \"matched=$matched\" \"manifest=$manifest\" \"payload=$digest_one\" \"size=$size\" > \"$RUNNER_TEMP/velnor/state-recovery.record\"; printf '\\''velnor: state snapshot recovered (decision=%s manifest=%s)\\n'\\'' \"$decision\" \"$manifest\"'"
       - name: Build test executables
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-64cc121e0bafa95f472d693e349870c5bbb660ebc3dfae43e018a3c78eb28b07"}
+        with: {"digest": "b3-587a0a1d44a8d0961dc08df491a6a5d878276f3dffbbd2bae73fdc393442b3cf"}
       - name: Format
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-2f71d0aa8df4fae6e365bda910de31a62608a3e9ad1b2c94b7c08ffc89d8b6d8"}
+        with: {"digest": "b3-008db3179636a61036c0e1891cfb2fb5c6534020d896dfadcbb3deae4d74b3a5"}
       - name: Clippy
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-521b816f1f7e8b333f9bfb46e48bebceb77ea2f2902d544a29219992a56ea86d"}
+        with: {"digest": "b3-bdad411e8cbfe1372ca114741724857bbb704d952bd676ec3d60eeb4fdda9dd9"}
       - name: Unit and integration tests
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-ddfb54279c6411755c6118516954d9add9937bf889aa84f4e507334cea3636a9"}
+        with: {"digest": "b3-71df006b17d7916c0a420c65f908e880824ed79a02bfc7d8e6782fe76fae3bf8"}
       - name: Doctests
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-756d947ed3cc2425eac3dca0f9e5c63834f4ba1abaf85f026955c73aa31efee6"}
+        with: {"digest": "b3-7fbb02198e9ae68adf0ba25975f8ab87b0305a669801c6bf48f22b1372a220f4"}
       - name: Documentation
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-c375e44485782e6564e0768925f3b20e750ede36007dadd6b146869b3f4aa25e"}
+        with: {"digest": "b3-0e8b93a105e04b72e7fe029ea95ee4784e497af16bd9da11b389c9a6de3cf5c8"}
       - name: Wait for parallel checks
         wait-all:
       - name: Emit group ledger
@@ -696,80 +696,8 @@ jobs:
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
         run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; check_no_symlink() { path=$1; while [ \"$path\" != / ]; do [ ! -L \"$path\" ] || return 1; path=${path%/*}; [ -n \"$path\" ] || path=/; done; return 0; }; case \"$RUNNER_TEMP\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''RUNNER_TEMP must be absolute'\\'' >&2; exit 1 ;; esac; [ -d \"$RUNNER_TEMP\" ] && check_no_symlink \"$RUNNER_TEMP\" || { printf '\\''%s\\n'\\'' '\\''RUNNER_TEMP must be a real directory'\\'' >&2; exit 1; }; [ \"${MBX_CACHE_DIR:-}\" = \"$RUNNER_TEMP/velnor/mbx\" ] && [ -d \"$RUNNER_TEMP/velnor\" ] && [ -d \"$MBX_CACHE_DIR/actions\" ] && check_no_symlink \"$RUNNER_TEMP/velnor\" && check_no_symlink \"$MBX_CACHE_DIR/actions\" || { printf '\\''%s\\n'\\'' '\\''MBX store path changed before cleanup'\\'' >&2; exit 1; }; mbx_disk_sample() { boundary=$1; case \"${RUNNER_TEMP:-}\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''MBX_DISK_SAMPLE_ERROR runner_temp_not_absolute'\\'' >&2; return 0 ;; esac; if [ -d \"$RUNNER_TEMP\" ] && [ ! -L \"$RUNNER_TEMP\" ]; then printf '\\''MBX_DISK_SAMPLE boundary=%s volume=runner_temp blocks_kib\\n'\\'' \"$boundary\"; if df -Pk \"$RUNNER_TEMP\"; then :; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s command=df_blocks\\n'\\'' \"$boundary\" >&2; fi; printf '\\''MBX_DISK_SAMPLE boundary=%s volume=runner_temp inodes\\n'\\'' \"$boundary\"; if df -Pi \"$RUNNER_TEMP\"; then :; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s command=df_inodes\\n'\\'' \"$boundary\" >&2; fi; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s runner_temp_not_real_directory\\n'\\'' \"$boundary\" >&2; return 0; fi; store_path=\"$RUNNER_TEMP/velnor/mbx\"; if [ \"${MBX_CACHE_DIR:-}\" = \"$store_path\" ] && [ -d \"$store_path\" ] && [ ! -L \"$store_path\" ]; then printf '\\''MBX_DISK_ALLOCATED_KIB boundary=%s root=mbx_store\\n'\\'' \"$boundary\"; if du -sk \"$store_path\"; then :; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s path=mbx_store command=du\\n'\\'' \"$boundary\" >&2; fi; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s path=mbx_store_unavailable\\n'\\'' \"$boundary\" >&2; fi; target_path=\"${target_dir:-target}\"; if [ ! -d \"$target_path\" ]; then for candidate in */target crates/*/target \"$RUNNER_TEMP/velnor/target\"; do if [ -d \"$candidate\" ]; then target_path=\"$candidate\"; break; fi; done; fi; if [ -L \"$target_path\" ]; then printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s path=target_is_symlink\\n'\\'' \"$boundary\" >&2; elif [ -d \"$target_path\" ]; then printf '\\''MBX_DISK_ALLOCATED_KIB boundary=%s root=target\\n'\\'' \"$boundary\"; if du -sk \"$target_path\"; then :; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s path=target command=du\\n'\\'' \"$boundary\" >&2; fi; else printf '\\''MBX_DISK_ALLOCATED_KIB boundary=%s root=target state=absent\\n'\\'' \"$boundary\"; fi; }; target_dir=\"target\"; mbx_disk_sample before-final-clean; if ! mbx_bin=$(command -v mbx); then printf '\\''%s\\n'\\'' '\\''action-owned MBX is not on PATH'\\'' >&2; exit 1; fi; case \"$mbx_bin\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''action-owned MBX path must be absolute'\\'' >&2; exit 1 ;; esac; if [ ! -f \"$mbx_bin\" ] || [ ! -x \"$mbx_bin\" ]; then printf '\\''%s\\n'\\'' '\\''action-owned MBX path must be an executable file'\\'' >&2; exit 1; fi; clean_status=0; if mise --no-config --no-env --no-hooks exec rust@'\"${VELNOR_TOOL_RUST}\"' -- \"$mbx_bin\" clean; then clean_status=0; else clean_status=$?; fi; mbx_disk_sample after-final-clean; exit \"$clean_status\"'"
-  tools-producer-083ce5ee:
-    name: Tools producer / 083ce5ee
-    runs-on: ubuntu-26.04
-    timeout-minutes: 5
-    continue-on-error: true
-    env:
-      VELNOR_RUN_KEY_ATTEMPT: ${{ github.run_attempt }}
-    if: github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true
-    steps:
-      - name: Record optional cache budget
-        id: velnor-cache-clock
-        run: "set -eu\nunavailable() { printf '%s\\n' '::warning::cache_unavailable: invalid first-step clock or output'; }\noutput=${GITHUB_OUTPUT-}\nseconds=${VELNOR_CACHE_JOB_SECONDS-}\nnow=$(date +%s) || now=\nfor value in \"$now\" \"$seconds\"; do\n  case \"$value\" in ''|*[!0-9]*) unavailable; exit 0 ;; esac\n  case \"$value\" in 0|[1-9]*) ;; *) unavailable; exit 0 ;; esac\n  [ \"${#value}\" -le 10 ] || { unavailable; exit 0; }\ndone\nif [ -z \"$output\" ] || ! printf 'started=%s\\ndeadline=%s\\n' \"$now\" \"$((now + seconds))\" 2>/dev/null >> \"$output\"; then\n  unavailable\nfi\n"
-        env:
-          VELNOR_CACHE_JOB_SECONDS: "300"
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          persist-credentials: "false"
-      - name: Setup Mise
-        uses: jdx/mise-action@6be3c7ed4c21d4f76b208d351d95aac273ebb76d
-        with:
-          cache: "false"
-          cache_save: "false"
-          env: "false"
-          install: "false"
-          sha256: ccfe12d7a62c6fb9def2a20db1f210f13a51de881f21fd8c85db4b6312405d07
-          version: 2026.10.21
-      - name: V2 identity
-        id: v2
-        uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
-        with:
-          d: 083ce5ee20bf5789b3227765b86c11bbb3ed5755262546e127cd82b4729267a4
-      - name: Probe Mise tools
-        id: tools-restore
-        if: steps.v2.outputs.enabled == 'true'
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
-        with:
-          key: mise-tools-v2-${{steps.v2.outputs.identity}}
-          lookup-only: "true"
-          path: "~/.local/share/mise\n${{ runner.temp }}/velnor/rustup\n${{ runner.temp }}/velnor/cargo/.crates.toml\n${{ runner.temp }}/velnor/cargo/.crates2.json\n${{ runner.temp }}/velnor/cargo/bin"
-      - name: Scrub and verify Mise tools
-        if: steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
-        uses: ./.github/actions/velnor-tools-cache-scrub
-        with:
-          mise-sha256: ccfe12d7a62c6fb9def2a20db1f210f13a51de881f21fd8c85db4b6312405d07
-      - name: Prepare pinned tools
-        if: steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
-        run: mise --no-config --no-env --no-hooks install jactionlint@2.3.0 shellcheck@0.11.0
-      - name: Verify jactionlint
-        if: steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
-        uses: ./.github/actions/velnor-verify-jactionlint # zizmor: ignore[self-repository]
-      - name: Admit optional cache save
-        id: velnor-optional-tools-save-budget
-        if: success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
-        run: "set -eu\noutput=${GITHUB_OUTPUT-}\nemit() { [ -n \"$output\" ] && printf '%s\\n' \"$1\" 2>/dev/null >> \"$output\"; }\nrefuse() {\n  emit 'admitted=false' || :\n  printf '%s\\n' '::warning::cache_unavailable: optional save has no safe remaining job budget or output'\n}\nstarted=${VELNOR_CACHE_STARTED-}\ndeadline=${VELNOR_CACHE_DEADLINE-}\nseconds=${VELNOR_CACHE_JOB_SECONDS-}\nrequired=${VELNOR_CACHE_REQUIRED_SECONDS-}\nnow=$(date +%s) || now=\nfor value in \"$started\" \"$deadline\" \"$now\" \"$seconds\" \"$required\"; do\n  case \"$value\" in ''|*[!0-9]*) refuse; exit 0 ;; esac\n  case \"$value\" in 0|[1-9]*) ;; *) refuse; exit 0 ;; esac\n  [ \"${#value}\" -le 10 ] || { refuse; exit 0; }\ndone\nif [ \"$now\" -lt \"$started\" ] || [ \"$deadline\" -lt \"$started\" ] ||\n   [ \"$((deadline - started))\" -ne \"$seconds\" ] ||\n   [ \"$((deadline - now))\" -lt \"$required\" ]; then\n  refuse\nelif ! emit 'admitted=true'; then\n  refuse\nfi\n"
-        env:
-          VELNOR_CACHE_JOB_SECONDS: "300"
-          VELNOR_CACHE_STARTED: ${{ steps.velnor-cache-clock.outputs.started }}
-          VELNOR_CACHE_DEADLINE: ${{ steps.velnor-cache-clock.outputs.deadline }}
-          VELNOR_CACHE_REQUIRED_SECONDS: "90"
-      - name: Save Mise tools
-        if: (success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true') && steps.velnor-optional-tools-save-budget.outputs.admitted == 'true'
-        id: velnor-optional-tools-save
-        timeout-minutes: 1
-        continue-on-error: true
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
-        with:
-          key: mise-tools-v2-${{steps.v2.outputs.identity}}
-          path: "~/.local/share/mise\n${{ runner.temp }}/velnor/rustup\n${{ runner.temp }}/velnor/cargo/.crates.toml\n${{ runner.temp }}/velnor/cargo/.crates2.json\n${{ runner.temp }}/velnor/cargo/bin"
-      - name: Report optional cache save failure
-        if: always() && !cancelled() && steps.velnor-optional-tools-save.outcome == 'failure'
-        run: "printf '%s\\n' '::warning::cache_unavailable: optional save failed or timed out'"
-  tools-producer-6bf4fcf7:
-    name: Tools producer / 6bf4fcf7
+  tools-producer-18b94054:
+    name: Tools producer / 18b94054
     runs-on: ubuntu-26.04
     timeout-minutes: 5
     continue-on-error: true
@@ -786,16 +714,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
+          fetch-depth: "0"
           persist-credentials: "false"
       - name: Setup Mise
-        uses: jdx/mise-action@6be3c7ed4c21d4f76b208d351d95aac273ebb76d
+        uses: jdx/mise-action@6612f0ef07ed2a736cd1e00a94a065522dd41195
         with:
           cache: "false"
           cache_save: "false"
           env: "false"
           install: "false"
-          sha256: ccfe12d7a62c6fb9def2a20db1f210f13a51de881f21fd8c85db4b6312405d07
-          version: 2026.10.21
+          sha256: 5d362ecc578dc7c146679b841dda949d6472cbf86ff5635db7afdca1b6b3fd87
+          version: 2026.10.25
       - name: Resolve project tool versions
         env:
           ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
@@ -816,7 +745,7 @@ jobs:
         id: v2
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: 6bf4fcf7467a006bc3e9695cde05c53cd5f6f8aa3599c75b00421fb46205bd6c-${{ env.VELNOR_TOOL_RUST }}-${{ env.VELNOR_TOOL_RUST_LOCK }}
+          d: 18b9405472daa0e6c6651a73173fd66c9d5c7afa0c96b690fb5834fcb3b65d30-${{ env.VELNOR_TOOL_RUST }}-${{ env.VELNOR_TOOL_RUST_LOCK }}
       - name: Probe Mise tools
         id: tools-restore
         if: steps.v2.outputs.enabled == 'true'
@@ -829,7 +758,7 @@ jobs:
         if: steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
         uses: ./.github/actions/velnor-tools-cache-scrub
         with:
-          mise-sha256: ccfe12d7a62c6fb9def2a20db1f210f13a51de881f21fd8c85db4b6312405d07
+          mise-sha256: 5d362ecc578dc7c146679b841dda949d6472cbf86ff5635db7afdca1b6b3fd87
       - name: Prepare pinned tools
         if: steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
         env:
@@ -837,18 +766,10 @@ jobs:
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
-        run: "mise --no-config --no-env --no-hooks install 'rust[profile=minimal]@'\"${VELNOR_TOOL_RUST}\" jactionlint@2.3.0 shellcheck@0.11.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.150"
+        run: "mise --no-config --no-env --no-hooks install 'rust[profile=minimal]@'\"${VELNOR_TOOL_RUST}\" jactionlint@2.4.0 shellcheck@0.11.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.150"
       - name: Verify jactionlint
         if: steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
         uses: ./.github/actions/velnor-verify-jactionlint # zizmor: ignore[self-repository]
-      - name: Prepare Rust components
-        if: steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
-        env:
-          CARGO_HOME: ${{ runner.temp }}/velnor/cargo
-          MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
-          MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
-          RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
-        run: "mise --no-config --no-env --no-hooks exec 'rust@'\"${VELNOR_TOOL_RUST}\" -- rustup component add --toolchain \"${VELNOR_TOOL_RUST}\"'-x86_64-unknown-linux-gnu' clippy rustfmt"
       - name: Verify Rust channel manifest
         if: steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
         uses: ./.github/actions/velnor-verify-rust-manifest # zizmor: ignore[self-repository]
@@ -873,8 +794,80 @@ jobs:
       - name: Report optional cache save failure
         if: always() && !cancelled() && steps.velnor-optional-tools-save.outcome == 'failure'
         run: "printf '%s\\n' '::warning::cache_unavailable: optional save failed or timed out'"
-  tools-producer-819a636c:
-    name: Tools producer / 819a636c
+  tools-producer-c13255f9:
+    name: Tools producer / c13255f9
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    continue-on-error: true
+    env:
+      VELNOR_RUN_KEY_ATTEMPT: ${{ github.run_attempt }}
+    if: github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true
+    steps:
+      - name: Record optional cache budget
+        id: velnor-cache-clock
+        run: "set -eu\nunavailable() { printf '%s\\n' '::warning::cache_unavailable: invalid first-step clock or output'; }\noutput=${GITHUB_OUTPUT-}\nseconds=${VELNOR_CACHE_JOB_SECONDS-}\nnow=$(date +%s) || now=\nfor value in \"$now\" \"$seconds\"; do\n  case \"$value\" in ''|*[!0-9]*) unavailable; exit 0 ;; esac\n  case \"$value\" in 0|[1-9]*) ;; *) unavailable; exit 0 ;; esac\n  [ \"${#value}\" -le 10 ] || { unavailable; exit 0; }\ndone\nif [ -z \"$output\" ] || ! printf 'started=%s\\ndeadline=%s\\n' \"$now\" \"$((now + seconds))\" 2>/dev/null >> \"$output\"; then\n  unavailable\nfi\n"
+        env:
+          VELNOR_CACHE_JOB_SECONDS: "300"
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: "false"
+      - name: Setup Mise
+        uses: jdx/mise-action@6612f0ef07ed2a736cd1e00a94a065522dd41195
+        with:
+          cache: "false"
+          cache_save: "false"
+          env: "false"
+          install: "false"
+          sha256: 5d362ecc578dc7c146679b841dda949d6472cbf86ff5635db7afdca1b6b3fd87
+          version: 2026.10.25
+      - name: V2 identity
+        id: v2
+        uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
+        with:
+          d: c13255f9e3eb1ba841033fbf209d4d31712d67422e274f4068cf232af4342785
+      - name: Probe Mise tools
+        id: tools-restore
+        if: steps.v2.outputs.enabled == 'true'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          key: mise-tools-v2-${{steps.v2.outputs.identity}}
+          lookup-only: "true"
+          path: "~/.local/share/mise\n${{ runner.temp }}/velnor/rustup\n${{ runner.temp }}/velnor/cargo/.crates.toml\n${{ runner.temp }}/velnor/cargo/.crates2.json\n${{ runner.temp }}/velnor/cargo/bin"
+      - name: Scrub and verify Mise tools
+        if: steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
+        uses: ./.github/actions/velnor-tools-cache-scrub
+        with:
+          mise-sha256: 5d362ecc578dc7c146679b841dda949d6472cbf86ff5635db7afdca1b6b3fd87
+      - name: Prepare pinned tools
+        if: steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
+        run: mise --no-config --no-env --no-hooks install jactionlint@2.4.0 shellcheck@0.11.0
+      - name: Verify jactionlint
+        if: steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
+        uses: ./.github/actions/velnor-verify-jactionlint # zizmor: ignore[self-repository]
+      - name: Admit optional cache save
+        id: velnor-optional-tools-save-budget
+        if: success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
+        run: "set -eu\noutput=${GITHUB_OUTPUT-}\nemit() { [ -n \"$output\" ] && printf '%s\\n' \"$1\" 2>/dev/null >> \"$output\"; }\nrefuse() {\n  emit 'admitted=false' || :\n  printf '%s\\n' '::warning::cache_unavailable: optional save has no safe remaining job budget or output'\n}\nstarted=${VELNOR_CACHE_STARTED-}\ndeadline=${VELNOR_CACHE_DEADLINE-}\nseconds=${VELNOR_CACHE_JOB_SECONDS-}\nrequired=${VELNOR_CACHE_REQUIRED_SECONDS-}\nnow=$(date +%s) || now=\nfor value in \"$started\" \"$deadline\" \"$now\" \"$seconds\" \"$required\"; do\n  case \"$value\" in ''|*[!0-9]*) refuse; exit 0 ;; esac\n  case \"$value\" in 0|[1-9]*) ;; *) refuse; exit 0 ;; esac\n  [ \"${#value}\" -le 10 ] || { refuse; exit 0; }\ndone\nif [ \"$now\" -lt \"$started\" ] || [ \"$deadline\" -lt \"$started\" ] ||\n   [ \"$((deadline - started))\" -ne \"$seconds\" ] ||\n   [ \"$((deadline - now))\" -lt \"$required\" ]; then\n  refuse\nelif ! emit 'admitted=true'; then\n  refuse\nfi\n"
+        env:
+          VELNOR_CACHE_JOB_SECONDS: "300"
+          VELNOR_CACHE_STARTED: ${{ steps.velnor-cache-clock.outputs.started }}
+          VELNOR_CACHE_DEADLINE: ${{ steps.velnor-cache-clock.outputs.deadline }}
+          VELNOR_CACHE_REQUIRED_SECONDS: "90"
+      - name: Save Mise tools
+        if: (success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true') && steps.velnor-optional-tools-save-budget.outputs.admitted == 'true'
+        id: velnor-optional-tools-save
+        timeout-minutes: 1
+        continue-on-error: true
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          key: mise-tools-v2-${{steps.v2.outputs.identity}}
+          path: "~/.local/share/mise\n${{ runner.temp }}/velnor/rustup\n${{ runner.temp }}/velnor/cargo/.crates.toml\n${{ runner.temp }}/velnor/cargo/.crates2.json\n${{ runner.temp }}/velnor/cargo/bin"
+      - name: Report optional cache save failure
+        if: always() && !cancelled() && steps.velnor-optional-tools-save.outcome == 'failure'
+        run: "printf '%s\\n' '::warning::cache_unavailable: optional save failed or timed out'"
+  tools-producer-eec3666c:
+    name: Tools producer / eec3666c
     runs-on: ubuntu-26.04
     timeout-minutes: 5
     continue-on-error: true
@@ -891,17 +884,16 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          fetch-depth: "0"
           persist-credentials: "false"
       - name: Setup Mise
-        uses: jdx/mise-action@6be3c7ed4c21d4f76b208d351d95aac273ebb76d
+        uses: jdx/mise-action@6612f0ef07ed2a736cd1e00a94a065522dd41195
         with:
           cache: "false"
           cache_save: "false"
           env: "false"
           install: "false"
-          sha256: ccfe12d7a62c6fb9def2a20db1f210f13a51de881f21fd8c85db4b6312405d07
-          version: 2026.10.21
+          sha256: 5d362ecc578dc7c146679b841dda949d6472cbf86ff5635db7afdca1b6b3fd87
+          version: 2026.10.25
       - name: Resolve project tool versions
         env:
           ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
@@ -922,7 +914,7 @@ jobs:
         id: v2
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: 819a636c04d34ddba94655492ff779f464c60bb34a13c444ec95bad6158c9c66-${{ env.VELNOR_TOOL_RUST }}-${{ env.VELNOR_TOOL_RUST_LOCK }}
+          d: eec3666c54fd4df62f3819d1ca9193ab828ce14bbf3162245207e0f358bc4799-${{ env.VELNOR_TOOL_RUST }}-${{ env.VELNOR_TOOL_RUST_LOCK }}
       - name: Probe Mise tools
         id: tools-restore
         if: steps.v2.outputs.enabled == 'true'
@@ -935,7 +927,7 @@ jobs:
         if: steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
         uses: ./.github/actions/velnor-tools-cache-scrub
         with:
-          mise-sha256: ccfe12d7a62c6fb9def2a20db1f210f13a51de881f21fd8c85db4b6312405d07
+          mise-sha256: 5d362ecc578dc7c146679b841dda949d6472cbf86ff5635db7afdca1b6b3fd87
       - name: Prepare pinned tools
         if: steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
         env:
@@ -943,10 +935,18 @@ jobs:
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
-        run: "mise --no-config --no-env --no-hooks install 'rust[profile=minimal]@'\"${VELNOR_TOOL_RUST}\" jactionlint@2.3.0 shellcheck@0.11.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.150"
+        run: "mise --no-config --no-env --no-hooks install 'rust[profile=minimal]@'\"${VELNOR_TOOL_RUST}\" jactionlint@2.4.0 shellcheck@0.11.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.150"
       - name: Verify jactionlint
         if: steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
         uses: ./.github/actions/velnor-verify-jactionlint # zizmor: ignore[self-repository]
+      - name: Prepare Rust components
+        if: steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
+        env:
+          CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+          MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+          MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+          RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+        run: "mise --no-config --no-env --no-hooks exec 'rust@'\"${VELNOR_TOOL_RUST}\" -- rustup component add --toolchain \"${VELNOR_TOOL_RUST}\"'-x86_64-unknown-linux-gnu' clippy rustfmt"
       - name: Verify Rust channel manifest
         if: steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
         uses: ./.github/actions/velnor-verify-rust-manifest # zizmor: ignore[self-repository]
