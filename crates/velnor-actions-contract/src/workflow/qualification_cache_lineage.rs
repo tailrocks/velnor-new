@@ -57,7 +57,7 @@ pub fn validate_qualification_cache_generation(
             "invalid_or_too_long",
         ));
     }
-    let expected = crate::cachekey::mbx_cache_generation(mbx_version);
+    let expected = crate::cachekey::mbx_qualification_cache_generation(mbx_version);
     if generation != expected {
         return Err(ContractError::identity(
             "qualification.cache_generation",

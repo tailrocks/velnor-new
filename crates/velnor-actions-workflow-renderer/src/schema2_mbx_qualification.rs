@@ -7,7 +7,7 @@ use crate::cache_steps::MBX_ACTION_NAME;
 use crate::yaml::Yaml;
 use crate::{RenderError, steps::validate_uses};
 use velnor_actions_contract::JobTimeout;
-use velnor_actions_contract::cachekey::mbx_cache_generation;
+use velnor_actions_contract::cachekey::mbx_qualification_cache_generation;
 use velnor_actions_contract::workflow::MBX_WORKSPACE_CLEAN_CONDITION;
 use velnor_actions_contract::workflow::qualification_cache_lineage::validate_qualification_cache_generation;
 
@@ -179,13 +179,13 @@ fn expose_rust_step(request: &MbxQualificationPins) -> Yaml {
 }
 
 fn validate_bounded_generation(mbx_version: &str) -> Result<(), RenderError> {
-    let generation = mbx_cache_generation(mbx_version);
+    let generation = mbx_qualification_cache_generation(mbx_version);
     validate_qualification_cache_generation(&generation, mbx_version)
         .map_err(|error| RenderError::BadCommand(format!("qualification_cache_generation:{error}")))
 }
 
 fn mbx_action_step(request: &MbxQualificationPins, writer: bool) -> Yaml {
-    let generation = mbx_cache_generation(&request.mbx_version);
+    let generation = mbx_qualification_cache_generation(&request.mbx_version);
     Yaml::Map(vec![
         ("name".to_owned(), Yaml::str("Restore MBX objects")),
         (

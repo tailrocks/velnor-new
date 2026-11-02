@@ -7,7 +7,7 @@ use std::io;
 
 use velnor_actions_actionlint::actions::MISE_ACTION_SHA;
 use velnor_actions_contract::RoutingWorkflow;
-use velnor_actions_contract::cachekey::mbx_cache_generation;
+use velnor_actions_contract::cachekey::{mbx_cache_generation, mbx_qualification_cache_generation};
 use velnor_actions_contract::workflow::cache_family::GC1_MAX_GENERATION_SLOTS;
 use velnor_actions_contract::workflow::qualification_cache_lineage::{
     QUALIFICATION_CACHE_MAX_GENERATIONS, validate_qualification_cache_generation,
@@ -181,9 +181,12 @@ fn check_budget_binding() -> Result<(), Box<dyn Error>> {
     {
         return Err(fail("qualification writer left the shared budget"));
     }
-    validate_qualification_cache_generation(&mbx_cache_generation(MBX_VERSION), MBX_VERSION)
-        .map_err(|error| fail(&format!("bounded generation rejected:{error}")))?;
-    if mbx_cache_generation(MBX_VERSION) != BOUNDED_GENERATION {
+    validate_qualification_cache_generation(
+        &mbx_qualification_cache_generation(MBX_VERSION),
+        MBX_VERSION,
+    )
+    .map_err(|error| fail(&format!("bounded generation rejected:{error}")))?;
+    if mbx_qualification_cache_generation(MBX_VERSION) != BOUNDED_GENERATION {
         return Err(fail("shared generation drifted from its owned slot"));
     }
     Ok(())
@@ -229,7 +232,7 @@ fn check_snapshot_observation(section: &str) -> Result<(), Box<dyn Error>> {
     for marker in [
         "github-cache-mode: objects",
         "isolate-objects-cache",
-        "MBX_SHARE_OUT_DIR",
+        "MBX_SHARE_OUT_DIR: \"0\"",
         "MBX_GC_AUTO",
         "mbx clean",
         "mbx cache stats",
@@ -296,6 +299,11 @@ fn gc1_t50_rejects_invalid_state() -> Result<(), Box<dyn Error>> {
         ),
         MBX_VERSION,
         "run_specific_generation",
+    )?;
+    check_rejects_generation(
+        &mbx_cache_generation(MBX_VERSION),
+        MBX_VERSION,
+        "production_slot_in_qualification",
     )?;
     check_rejects_generation("", MBX_VERSION, "empty_generation")?;
     check_rejects_generation(BOUNDED_GENERATION, "9.9.9", "foreign_version")?;
