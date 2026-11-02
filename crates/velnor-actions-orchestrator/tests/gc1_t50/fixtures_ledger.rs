@@ -21,7 +21,6 @@ pub(super) fn group_ledger_value(
     task: &str,
     job_key: &str,
     event: &str,
-    branch: ExecutionBranch,
     outcome: UnitOutcome,
     exit_code: Option<i32>,
 ) -> Result<Value, Box<dyn Error>> {
@@ -29,7 +28,7 @@ pub(super) fn group_ledger_value(
         schema: 1,
         job: job_binding(job_key, event)?,
         group_digest: digest(b"gc1-t50-group")?,
-        execution_branch: branch,
+        execution_branch: ExecutionBranch::Reader,
         selected_unit_ids: vec![task.to_owned()],
         ordered_results: vec![unit_result(task, outcome, exit_code)?],
         observation_digest: digest(b"gc1-t50-observation")?,
