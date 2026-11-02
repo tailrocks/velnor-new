@@ -96,6 +96,7 @@ fn mbx_repo_for(tofu: bool, policy: WorkflowPolicy) -> Result<TempDir, Box<dyn E
             root.join(".velnor/controller-approvals.json"),
             include_str!("../../../../.velnor/controller-approvals.json"),
         )?;
+        workflow_configuration_fixture::write_root_cargo_lock(root, &[])?;
     }
     Ok(repo)
 }

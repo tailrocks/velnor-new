@@ -6,7 +6,8 @@ use std::error::Error;
 
 use velnor_actions_contract::workflow::ledger_cli::LEDGER_CLI_JOB_ID;
 use velnor_actions_contract::{
-    Job, PermissionLevel, Permissions, REQUIRED_JOB_ID, Step, StepId, StepKind, WorkflowPolicy,
+    Job, PermissionLevel, Permissions, REQUIRED_JOB_ID, Step, StepId, StepKind, StepRole,
+    WorkflowPolicy,
 };
 
 use super::one_job_per_crate::{
@@ -210,6 +211,63 @@ fn consumer_policy_has_no_ledger_cli_job() -> Result<(), Box<dyn Error>> {
                 "{name}: {id}"
             );
         }
+    }
+    Ok(())
+}
+
+fn role_at(job: &Job, role: StepRole) -> Vec<usize> {
+    job.steps
+        .iter()
+        .enumerate()
+        .filter(|(_, step)| step.role == Some(role))
+        .map(|(at, _)| at)
+        .collect()
+}
+
+#[test]
+fn ledger_cli_restores_sources_read_only_before_an_offline_build() -> Result<(), Box<dyn Error>> {
+    for Rendered { name, jobs, .. } in velnor_fixtures()? {
+        let job = &jobs[LEDGER_CLI_JOB_ID];
+        let [keys] = role_at(job, StepRole::CacheKeys)[..] else {
+            return Err(format!("{name}: expected one cache-keys step").into());
+        };
+        let [restore] = role_at(job, StepRole::CargoSourcesRestore)[..] else {
+            return Err(format!("{name}: expected one sources restore").into());
+        };
+        let fetches = role_at(job, StepRole::CargoSourcesFetch);
+        let [build] = role_at(job, StepRole::LedgerCliBuild)[..] else {
+            return Err(format!("{name}: expected one build").into());
+        };
+        assert!(
+            fetches
+                .first()
+                .is_some_and(|fetch| keys < restore && restore < *fetch)
+                && fetches.iter().all(|fetch| *fetch < build),
+            "{name}: order keys {keys} restore {restore} fetch {fetches:?} build {build}"
+        );
+        assert!(
+            role_at(job, StepRole::CargoSourcesSave).is_empty()
+                && !job.steps.iter().any(|step| matches!(&step.kind,
+                    StepKind::Action { uses, .. } if uses.starts_with("actions/cache/save@"))),
+            "{name}: ledger-cli saves sources"
+        );
+        assert_eq!(
+            with(&job.steps[restore], "key"),
+            Some("${{steps.cache-keys.outputs.sources_key}}"),
+            "{name}"
+        );
+        let StepKind::Shell { run, env, .. } = &job.steps[build].kind else {
+            return Err(format!("{name}: build is not a shell step").into());
+        };
+        assert!(
+            run.iter().any(|arg| arg == "--locked") && run.iter().any(|arg| arg == "--offline"),
+            "{name}: build is not locked and offline: {run:?}"
+        );
+        assert_eq!(
+            env.get("RUSTUP_AUTO_INSTALL").map(String::as_str),
+            Some("0"),
+            "{name}"
+        );
     }
     Ok(())
 }

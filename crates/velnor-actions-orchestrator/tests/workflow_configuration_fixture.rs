@@ -65,6 +65,20 @@ pub(crate) fn add_independent_mbx_package(
     Ok(())
 }
 
+pub(crate) fn write_root_cargo_lock(root: &Path, members: &[&str]) -> Result<(), Box<dyn Error>> {
+    let mut lock = vec!["version = 4\n".to_owned()];
+    lock.extend(["demo"].iter().chain(members).map(|name| {
+        [
+            "[[package]]",
+            &format!("name = \"{name}\""),
+            "version = \"0.1.0\"\n",
+        ]
+        .join("\n")
+    }));
+    fs::write(root.join("Cargo.lock"), lock.join("\n"))?;
+    Ok(())
+}
+
 pub(crate) fn write_nextest_task(root: &Path) -> Result<(), Box<dyn Error>> {
     fs::create_dir_all(root.join(".mise/tasks"))?;
     let task = root.join(".mise/tasks/test");

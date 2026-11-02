@@ -3,6 +3,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use super::cache_family::SOURCES_KEY_STEP_EXPR;
 use super::ir::Job;
 use super::jobs::{PLAN_JOB_ID, REQUIRED_JOB_ID};
 use super::permissions::Permissions;
@@ -52,10 +53,14 @@ pub const LEDGER_CLI_SOURCE_SHA_ENV: &str = "VELNOR_LEDGER_CLI_SOURCE_SHA";
 
 pub const LEDGER_CLI_BINARY_PATH: &str = "$RUNNER_TEMP/velnor/ledger-cli/velnor-actions";
 
-pub const LEDGER_CLI_VERIFY_CONDITION: &str = "always()";
+pub const LEDGER_CLI_CONSUME_CONDITION: &str = "always()";
 
 pub const LEDGER_CLI_EMIT_CONDITION: &str =
     "always() && steps.verify-ledger-cli.outcome == 'success'";
+
+pub const LEDGER_CLI_AUTO_INSTALL_ENV: &str = "RUSTUP_AUTO_INSTALL";
+
+pub const LEDGER_CLI_OFFLINE_FLAG: &str = "--offline";
 
 pub const LEDGER_CLI_RETENTION_DAYS: &str = "1";
 
@@ -155,6 +160,33 @@ fn single(job: &Job, role: StepRole, id: &str, problem: &str) -> Result<usize, C
     }
 }
 
+fn sources_cached_before_offline_build(job: &Job, build: usize) -> bool {
+    let restore = role_positions(job, StepRole::CargoSourcesRestore);
+    let keys = role_positions(job, StepRole::CacheKeys);
+    let fetches = role_positions(job, StepRole::CargoSourcesFetch);
+    let [restore] = restore[..] else {
+        return false;
+    };
+    let [keys] = keys[..] else {
+        return false;
+    };
+    keys < restore
+        && with_value(&job.steps[restore], "key") == Some(SOURCES_KEY_STEP_EXPR)
+        && !fetches.is_empty()
+        && fetches
+            .iter()
+            .all(|&fetch| restore < fetch && fetch < build)
+        && role_positions(job, StepRole::CargoSourcesSave).is_empty()
+}
+
+fn offline_build_ok(step: &Step) -> bool {
+    let StepKind::Shell { run, env, .. } = &step.kind else {
+        return false;
+    };
+    run.iter().any(|arg| arg == LEDGER_CLI_OFFLINE_FLAG)
+        && env.get(LEDGER_CLI_AUTO_INSTALL_ENV).map(String::as_str) == Some("0")
+}
+
 fn validate_ledger_cli_steps(job: &Job) -> Result<(), ContractError> {
     let id = LEDGER_CLI_JOB_ID;
     let checkout = single(job, StepRole::Checkout, id, "checkout_count")?;
@@ -174,7 +206,13 @@ fn validate_ledger_cli_steps(job: &Job) -> Result<(), ContractError> {
         step_values(step)
             .all(|value| !value.contains("secrets.") && !value.contains("github.token"))
     });
-    if ordered && unconditional && upload_ok && secret_free {
+    if ordered
+        && unconditional
+        && upload_ok
+        && secret_free
+        && offline_build_ok(&job.steps[build])
+        && sources_cached_before_offline_build(job, build)
+    {
         Ok(())
     } else {
         Err(invalid(id, "step_shape"))
@@ -227,14 +265,14 @@ fn expected_emit_condition(source: LedgerCliSource) -> &'static str {
 fn download_ok(step: &Step) -> bool {
     matches!(&step.kind, StepKind::Action { uses, .. } if uses.starts_with("actions/download-artifact@"))
         && step.name == LEDGER_CLI_DOWNLOAD_STEP
-        && step.condition.as_deref() == Some(LEDGER_CLI_VERIFY_CONDITION)
+        && step.condition.as_deref() == Some(LEDGER_CLI_CONSUME_CONDITION)
         && with_value(step, "name") == Some(LEDGER_CLI_ARTIFACT_NAME_EXPR)
 }
 
 fn verify_ok(step: &Step) -> bool {
     step.name == LEDGER_CLI_VERIFY_STEP
         && step.id == Some(StepId::LedgerCliVerify)
-        && step.condition.as_deref() == Some(LEDGER_CLI_VERIFY_CONDITION)
+        && step.condition.as_deref() == Some(LEDGER_CLI_CONSUME_CONDITION)
         && env_value(step, LEDGER_CLI_SHA256_ENV) == Some(LEDGER_CLI_SHA256_EXPR)
         && env_value(step, LEDGER_CLI_SOURCE_SHA_ENV) == Some(LEDGER_CLI_SOURCE_SHA_EXPR)
 }

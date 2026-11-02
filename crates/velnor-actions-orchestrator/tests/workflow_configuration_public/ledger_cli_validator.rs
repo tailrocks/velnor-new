@@ -11,6 +11,8 @@ use velnor_actions_contract::{
     Job, PermissionLevel, Permissions, REQUIRED_JOB_ID, StepKind, StepRole,
 };
 
+use velnor_actions_workflow_renderer::plan_sources::source_cache::plan_sources_steps;
+
 use super::ledger_cli_job::velnor_fixtures;
 use super::one_job_per_crate::{Rendered, crate_jobs};
 
@@ -40,7 +42,7 @@ fn emit_at(job: &Job) -> Result<usize, Box<dyn Error>> {
 type Mutation = fn(&mut Jobs, &str) -> Result<(), Box<dyn Error>>;
 
 fn mutations() -> Vec<(&'static str, Mutation)> {
-    vec![
+    let mut all: Vec<(&'static str, Mutation)> = vec![
         ("second build job", |jobs, _| {
             let clone = jobs[LEDGER_CLI_JOB_ID].clone();
             jobs.insert("ledger-cli-second".to_owned(), clone);
@@ -106,6 +108,52 @@ fn mutations() -> Vec<(&'static str, Mutation)> {
         ("required waits on ledger-cli", |jobs, _| {
             let required = jobs.get_mut(REQUIRED_JOB_ID).ok_or("required")?;
             required.needs.push(LEDGER_CLI_JOB_ID.to_owned());
+            Ok(())
+        }),
+    ];
+    all.extend(sources_mutations());
+    all
+}
+
+fn sources_mutations() -> Vec<(&'static str, Mutation)> {
+    vec![
+        ("missing sources restore", |jobs, _| {
+            let job = jobs.get_mut(LEDGER_CLI_JOB_ID).ok_or("job")?;
+            let at = step_at(job, StepRole::CargoSourcesRestore)?;
+            job.steps.remove(at);
+            Ok(())
+        }),
+        ("sources restore after fetch", |jobs, _| {
+            let job = jobs.get_mut(LEDGER_CLI_JOB_ID).ok_or("job")?;
+            let at = step_at(job, StepRole::CargoSourcesRestore)?;
+            let restore = job.steps.remove(at);
+            let fetch = step_at(job, StepRole::CargoSourcesFetch)?;
+            job.steps.insert(fetch + 1, restore);
+            Ok(())
+        }),
+        ("sources save", |jobs, _| {
+            let job = jobs.get_mut(LEDGER_CLI_JOB_ID).ok_or("job")?;
+            let (_, save) = plan_sources_steps().map_err(|err| format!("{err:?}"))?;
+            let build = step_at(job, StepRole::LedgerCliBuild)?;
+            job.steps.insert(build + 1, save);
+            Ok(())
+        }),
+        ("online build", |jobs, _| {
+            let job = jobs.get_mut(LEDGER_CLI_JOB_ID).ok_or("job")?;
+            let at = step_at(job, StepRole::LedgerCliBuild)?;
+            let StepKind::Shell { run, .. } = &mut job.steps[at].kind else {
+                return Err("build is not a shell step".into());
+            };
+            run.retain(|arg| arg != "--offline");
+            Ok(())
+        }),
+        ("rustup auto install", |jobs, _| {
+            let job = jobs.get_mut(LEDGER_CLI_JOB_ID).ok_or("job")?;
+            let at = step_at(job, StepRole::LedgerCliBuild)?;
+            let StepKind::Shell { env, .. } = &mut job.steps[at].kind else {
+                return Err("build is not a shell step".into());
+            };
+            env.remove("RUSTUP_AUTO_INSTALL");
             Ok(())
         }),
     ]

@@ -14,10 +14,6 @@ use super::CrateJobInputs;
 use crate::OrchestratorError;
 use crate::config::private_wiring::PrivateWiring;
 
-fn render_error(error: velnor_actions_workflow_renderer::RenderError) -> OrchestratorError {
-    OrchestratorError::from(error)
-}
-
 pub(super) fn ledger_cli_job(
     input: &CrateJobInputs<'_>,
     private: Option<&PrivateWiring>,
@@ -27,6 +23,11 @@ pub(super) fn ledger_cli_job(
     } = input;
     let catalog = &input.catalog.clone().with_rust_mr_boxington(false);
     let roots = crate::source_prep::crate_fetch_roots("", fetch_roots, false);
+    if roots.is_empty() {
+        return Err(OrchestratorError::Contract {
+            problem: "ledger_cli_requires_root_cargo_lock".to_owned(),
+        });
+    }
     let mut steps = vec![crate::workflow::wire_w1::checkout_step()?];
     steps.extend(input.acquire.cloned());
     steps.push(crate::workflow::verify_restored_rust_step(catalog));
@@ -35,6 +36,7 @@ pub(super) fn ledger_cli_job(
     )?);
     steps.push(crate::workflow::prepare_rust_components_step(catalog)?);
     steps.push(crate::workflow::verify_rust_manifest_step(catalog));
+    steps.extend(crate::source_cache::keyed_restore_steps(catalog, &roots)?);
     if let Some(private) = private {
         steps.extend(private.steps_for_roots(&roots)?);
     }
@@ -44,10 +46,16 @@ pub(super) fn ledger_cli_job(
     let env = crate::matrix_step::task_step_env(catalog, &BTreeMap::new(), true)?;
     steps.push(
         velnor_actions_workflow_renderer::ledger_cli_build_step(catalog, &env)
-            .map_err(render_error)?,
+            .map_err(OrchestratorError::from)?,
     );
-    steps.push(velnor_actions_workflow_renderer::ledger_cli_publish_step().map_err(render_error)?);
-    steps.push(velnor_actions_workflow_renderer::ledger_cli_upload_step().map_err(render_error)?);
+    steps.push(
+        velnor_actions_workflow_renderer::ledger_cli_publish_step()
+            .map_err(OrchestratorError::from)?,
+    );
+    steps.push(
+        velnor_actions_workflow_renderer::ledger_cli_upload_step()
+            .map_err(OrchestratorError::from)?,
+    );
     Ok(Job {
         services: Vec::new(),
         outputs: BTreeMap::from([
