@@ -75,6 +75,23 @@ fn job_ids(workflow: &str) -> Vec<&str> {
         .collect()
 }
 
+fn assert_installers_off(workflow: &str, label: &str) -> Result<(), Box<dyn Error>> {
+    let installing: Vec<&str> = job_ids(workflow)
+        .into_iter()
+        .filter(|id| {
+            rendered_job_block(workflow, id).is_ok_and(|block| {
+                block.contains(" install 'rust[") || block.contains(" install rust@")
+            })
+        })
+        .collect();
+    assert!(!installing.is_empty(), "{label}: no job installs rust");
+    for id in &installing {
+        let entries = job_env_entries(workflow, rendered_job_block(workflow, id)?)?;
+        assert!(auto_install_off(&entries), "{label} {id}: {entries:?}");
+    }
+    Ok(())
+}
+
 fn bound_ids(jobs: &BTreeMap<String, Job>) -> Vec<&str> {
     jobs.iter()
         .filter(|(_, job)| job.env != JobEnv::Unset)
@@ -92,6 +109,7 @@ fn rust_bearing_jobs_render_auto_install_off_at_job_level() -> Result<(), Box<dy
         let ci = tree.get(WORKFLOW_PATH).ok_or("CI workflow is missing")?;
         let bound = bound_ids(&jobs);
         assert!(bound.len() >= 3, "{policy:?}: only {bound:?} are bound");
+        assert_installers_off(ci, &format!("{policy:?}"))?;
         for id in job_ids(ci) {
             let entries = job_env_entries(ci, rendered_job_block(ci, id)?)?;
             assert_eq!(
@@ -119,20 +137,7 @@ fn suites_jobs_that_install_rust_render_auto_install_off_at_job_level() -> Resul
     let prepared = prepare(repo.path())?;
     let tree = render_staged_tree(&prepared)?;
     let suites = tree.get(SUITES_PATH).ok_or("suites workflow is missing")?;
-    let installing: Vec<&str> = job_ids(suites)
-        .into_iter()
-        .filter(|id| {
-            rendered_job_block(suites, id).is_ok_and(|block| {
-                block.contains(" install 'rust[") || block.contains(" install rust@")
-            })
-        })
-        .collect();
-    assert!(!installing.is_empty(), "no suites job installs rust");
-    for id in installing {
-        let entries = job_env_entries(suites, rendered_job_block(suites, id)?)?;
-        assert!(auto_install_off(&entries), "{id}: {entries:?}");
-    }
-    Ok(())
+    assert_installers_off(suites, "suites")
 }
 
 fn home_env(step: &mut velnor_actions_contract::Step) -> Option<&mut BTreeMap<String, String>> {
@@ -156,6 +161,37 @@ fn toolchain_step(jobs: &BTreeMap<String, Job>) -> Result<(String, usize), Box<d
                 .map(|at| (id.clone(), at))
         })
         .ok_or_else(|| "no bound job has a toolchain step carrying the homes".into())
+}
+
+fn other_shell_step(
+    jobs: &BTreeMap<String, Job>,
+    id: &str,
+    skip: usize,
+) -> Result<usize, Box<dyn Error>> {
+    jobs[id]
+        .steps
+        .iter()
+        .enumerate()
+        .position(|(at, step)| at != skip && matches!(step.kind, StepKind::Shell { .. }))
+        .ok_or_else(|| "the bound job has no second shell step".into())
+}
+
+fn run_without_homes(
+    jobs: &mut BTreeMap<String, Job>,
+    id: &str,
+    at: usize,
+    command: &[&str],
+) -> Result<(), Box<dyn Error>> {
+    let StepKind::Shell { run, env, .. } =
+        &mut jobs.get_mut(id).ok_or("job vanished")?.steps[at].kind
+    else {
+        return Err("not a shell step".into());
+    };
+    *run = command.iter().map(|word| (*word).to_owned()).collect();
+    for key in HomeKey::ALL {
+        env.remove(key.env_name());
+    }
+    Ok(())
 }
 
 fn step_name(jobs: &BTreeMap<String, Job>, id: &str, at: usize) -> String {
@@ -191,13 +227,28 @@ fn w2_names_a_toolchain_step_without_the_homes_and_a_wrong_home() -> Result<(), 
         assert_eq!(
             waste_findings(&jobs),
             vec![WasteFinding::MissingHome {
-                job: id,
+                job: id.clone(),
                 step: name,
                 word: ExecWord::Mise,
                 missing: HomeKey::ALL.to_vec(),
             }],
             "{policy:?}"
         );
+        let before = waste_findings(&jobs);
+        let other = other_shell_step(&jobs, &id, at)?;
+        let other_name = step_name(&jobs, &id, other);
+        run_without_homes(&mut jobs, &id, other, &["echo", "ready"])?;
+        assert_eq!(waste_findings(&jobs), before, "{policy:?}");
+        run_without_homes(&mut jobs, &id, other, &["cargo", "build"])?;
+        let mut expected = before;
+        expected.push(WasteFinding::MissingHome {
+            job: id,
+            step: other_name,
+            word: ExecWord::Cargo,
+            missing: HomeKey::ALL.to_vec(),
+        });
+        expected.sort();
+        assert_eq!(waste_findings(&jobs), expected, "{policy:?}");
     }
     Ok(())
 }
