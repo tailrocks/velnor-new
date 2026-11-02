@@ -1,0 +1,36 @@
+Plan	Set up job	﻿2026-11-02T10:48:58.4043440Z Current runner version: '2.338.2'
+Plan	Set up job	2026-11-02T10:48:58.4070820Z ##[group]Runner Image Provisioner
+Plan	Set up job	2026-11-02T10:48:58.4072298Z Hosted Compute Agent
+Plan	Set up job	2026-11-02T10:48:58.4073275Z Version: 20261021.618
+Plan	Set up job	2026-11-02T10:48:58.4074323Z Commit: 21505ad2541d5be6135ed84fc33697146cf75b8e
+Plan	Set up job	2026-11-02T10:48:58.4075985Z Build Date: 2026-10-21T00:45:21Z
+Plan	Set up job	2026-11-02T10:48:58.4077276Z Worker ID: {3c9323fc-ebf4-4787-a564-87fa6e0fb106}
+Plan	Set up job	2026-11-02T10:48:58.4078595Z Region: westcentralus
+Plan	Set up job	2026-11-02T10:48:58.4079891Z Cloud: Azure
+Plan	Set up job	2026-11-02T10:48:58.4080837Z ##[endgroup]
+Plan	Set up job	2026-11-02T10:48:58.4083376Z ##[group]Operating System
+Plan	Set up job	2026-11-02T10:48:58.4084510Z Ubuntu
+Plan	Set up job	2026-11-02T10:48:58.4085721Z 26.04.1
+Plan	Set up job	2026-11-02T10:48:58.4086799Z LTS
+Plan	Set up job	2026-11-02T10:48:58.4087692Z ##[endgroup]
+Plan	Set up job	2026-11-02T10:48:58.4088688Z ##[group]Runner Image
+Plan	Set up job	2026-11-02T10:48:58.4089750Z Image: ubuntu-26.04
+Plan	Set up job	2026-11-02T10:48:58.4090820Z Version: 20261025.179.1
+Plan	Set up job	2026-11-02T10:48:58.4092905Z Included Software: https://github.com/actions/runner-images/blob/ubuntu26/20261025.179/images/ubuntu/Ubuntu2604-Readme.md
+Plan	Set up job	2026-11-02T10:48:58.4096076Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu26%2F20261025.179
+Plan	Set up job	2026-11-02T10:48:58.4097789Z ##[endgroup]
+Plan	Set up job	2026-11-02T10:48:58.4100014Z ##[group]GITHUB_TOKEN Permissions
+Plan	Set up job	2026-11-02T10:48:58.4103166Z Actions: read
+Plan	Set up job	2026-11-02T10:48:58.4104134Z Contents: read
+Plan	Set up job	2026-11-02T10:48:58.4105524Z Metadata: read
+Plan	Set up job	2026-11-02T10:48:58.4106507Z ##[endgroup]
+Plan	Set up job	2026-11-02T10:48:58.4110111Z Secret source: Actions
+Plan	Set up job	2026-11-02T10:48:58.4111745Z Cache mode: write
+Plan	Set up job	2026-11-02T10:48:58.4113307Z Prepare workflow directory
+Plan	Set up job	2026-11-02T10:48:58.4727025Z Prepare all required actions
+Plan	Set up job	2026-11-02T10:48:58.4802018Z Getting action download info
+Plan	Set up job	2026-11-02T10:48:58.7917822Z Download action repository 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1' (SHA:3d3c42e5aac5ba805825da76410c181273ba90b1)
+Plan	Set up job	2026-11-02T10:48:58.9733782Z Download action repository 'jdx/mise-action@6be3c7ed4c21d4f76b208d351d95aac273ebb76d' (SHA:6be3c7ed4c21d4f76b208d351d95aac273ebb76d)
+Plan	Set up job	2026-11-02T10:48:59.5675053Z Download action repository 'actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9' (SHA:55cc8345863c7cc4c66a329aec7e433d2d1c52a9)
+Plan	Set up job	2026-11-02T10:48:59.6987212Z Download action repository 'actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9' (SHA:cf430e030ddbb5b0abf93d22962f4752f3646cd9)
+Plan	Set up job	2026-11-02T10:48:59.8977169Z Complete job name: Plan
