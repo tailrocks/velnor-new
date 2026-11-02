@@ -4,7 +4,6 @@
 use std::error::Error;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Output};
 
 use tempfile::TempDir;
 use velnor_actions_contract::{
@@ -16,7 +15,7 @@ use velnor_actions_workflow_renderer::MARKER_PREFIX;
 
 use super::workflow_configuration_fixture;
 
-const WORKFLOW_PATH: &str = ".github/workflows/source-qualification.yml";
+pub(super) const WORKFLOW_PATH: &str = ".github/workflows/source-qualification.yml";
 const UNRELATED_PATH: &str = ".github/ISSUE_TEMPLATE/config.yml";
 const UNRELATED_CONTENT: &str = "name: preserved user content\n";
 
@@ -139,7 +138,7 @@ fn source_qualification_reservations_reject_collisions_and_allow_unrelated_entri
         .expect("unrelated suite workflow slug must remain valid");
 }
 
-fn generator_repo(enabled: bool) -> Result<TempDir, Box<dyn Error>> {
+pub(super) fn generator_repo(enabled: bool) -> Result<TempDir, Box<dyn Error>> {
     let repo = workflow_configuration_fixture::make_repo(&generator_config(enabled))?;
     Ok(repo)
 }
@@ -166,171 +165,4 @@ fn preview_generation(
         },
     )?;
     Ok(destination)
-}
-
-const REQUIRED_STATUSES: &[&str] = &[
-    "cargo-prefetch",
-    "archive-guard-build",
-    "validator-tool-install",
-    "validator-tool-lock-admission",
-    "cli-build",
-    "external-capture",
-    "external-check",
-    "rust-verifier-retry",
-    "external-shell-harness",
-    "external-shell-harness-keep",
-    "external-shell-harness-json-proof",
-    "repository-oracle-check",
-];
-
-#[test]
-fn phase_dispatch_rejects_unknown_and_extra_arguments_before_side_effects()
--> Result<(), Box<dyn Error>> {
-    let temporary = tempfile::tempdir()?;
-    let unknown = run_phase(temporary.path(), &["unknown-phase"])?;
-    assert_eq!(unknown.status.code(), Some(64));
-    assert!(
-        String::from_utf8_lossy(&unknown.stderr).contains("unknown source qualification phase")
-    );
-    assert!(
-        !temporary
-            .path()
-            .join("source-qualification-artifacts")
-            .exists()
-    );
-
-    let extra = run_phase(
-        temporary.path(),
-        &["prepare-external-evidence-directories", "unexpected"],
-    )?;
-    assert_eq!(extra.status.code(), Some(64));
-    assert!(String::from_utf8_lossy(&extra.stderr).contains("usage:"));
-    assert!(
-        !temporary
-            .path()
-            .join("source-qualification-artifacts")
-            .exists()
-    );
-    Ok(())
-}
-
-#[test]
-fn aggregation_accepts_complete_success_receipts_and_retains_result() -> Result<(), Box<dyn Error>>
-{
-    let temporary = tempfile::tempdir()?;
-    write_receipts(temporary.path(), None, None)?;
-    let output = run_phase(
-        temporary.path(),
-        &["bundle-selected-qualification-evidence"],
-    )?;
-    assert!(
-        output.status.success(),
-        "{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    let evidence = evidence_dir(temporary.path());
-    assert_eq!(
-        fs::read_to_string(evidence.join("qualification-final-status.txt"))?,
-        "qualification_checks_status=0\n"
-    );
-    assert_eq!(
-        fs::read_to_string(evidence.join("logs/evidence-bundle.exit"))?,
-        "0\n"
-    );
-    assert!(
-        evidence
-            .join("source-qualification-preserved.tar.gz")
-            .is_file()
-    );
-    Ok(())
-}
-
-#[test]
-fn aggregation_fails_and_retains_status_for_missing_failed_or_unsafe_receipts()
--> Result<(), Box<dyn Error>> {
-    for (failed, missing, unsafe_receipt) in [
-        (None, Some("external-check"), None),
-        (Some("validator-tool-install"), None, None),
-        (None, Some("validator-tool-lock-admission"), None),
-        (Some("validator-tool-lock-admission"), None, None),
-        (
-            None,
-            Some("validator-tool-lock-admission"),
-            Some("validator-tool-lock-admission"),
-        ),
-        (None, Some("root-preview"), Some("root-preview")),
-    ] {
-        let temporary = tempfile::tempdir()?;
-        write_receipts(temporary.path(), failed, missing)?;
-        if let Some(name) = unsafe_receipt {
-            let logs = evidence_dir(temporary.path()).join("logs");
-            #[cfg(unix)]
-            std::os::unix::fs::symlink("../missing", logs.join(format!("{name}.exit")))?;
-            #[cfg(not(unix))]
-            return Err("unsafe receipt test requires symlink support".into());
-        }
-        let output = run_phase(
-            temporary.path(),
-            &["bundle-selected-qualification-evidence"],
-        )?;
-        assert_eq!(
-            output.status.code(),
-            Some(1),
-            "failed={failed:?} missing={missing:?} unsafe={unsafe_receipt:?}: {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-        let evidence = evidence_dir(temporary.path());
-        assert_eq!(
-            fs::read_to_string(evidence.join("qualification-final-status.txt"))?,
-            "qualification_checks_status=1\n"
-        );
-        assert_eq!(
-            fs::read_to_string(evidence.join("logs/evidence-bundle.exit"))?,
-            "0\n"
-        );
-        assert!(
-            evidence
-                .join("source-qualification-preserved.tar.gz")
-                .is_file()
-        );
-    }
-    Ok(())
-}
-
-fn write_receipts(
-    root: &Path,
-    failed: Option<&str>,
-    missing: Option<&str>,
-) -> Result<(), Box<dyn Error>> {
-    let logs = evidence_dir(root).join("logs");
-    fs::create_dir_all(&logs)?;
-    fs::create_dir_all(evidence_dir(root).join("previews"))?;
-    for name in REQUIRED_STATUSES {
-        if Some(*name) == missing {
-            continue;
-        }
-        let status = if Some(*name) == failed { "1\n" } else { "0\n" };
-        fs::write(logs.join(format!("{name}.exit")), status)?;
-    }
-    if Some("root-preview") != missing {
-        fs::write(
-            logs.join("root-preview.exit"),
-            "generate_statuses=0,0 identity_status=0 diff_statuses=0,0\n",
-        )?;
-    }
-    Ok(())
-}
-
-fn evidence_dir(root: &Path) -> PathBuf {
-    root.join("source-qualification-artifacts")
-}
-
-fn run_phase(root: &Path, args: &[&str]) -> Result<Output, Box<dyn Error>> {
-    let script = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../scripts/generator-release/source-qualification.sh");
-    Ok(Command::new("bash")
-        .arg(script)
-        .args(args)
-        .env("RUNNER_TEMP", root)
-        .output()?)
 }
