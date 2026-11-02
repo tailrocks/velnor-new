@@ -1,0 +1,1170 @@
+{
+  "schema": 1,
+  "capture": "capture-2",
+  "source_responses": [
+    {
+      "subject": "mise",
+      "source": "https://api.github.com/repos/jdx/mise/releases/latest",
+      "requested_at": "2026-11-02T11:28:48.865Z",
+      "observed_at": "2026-11-02T11:28:49.589Z",
+      "body_file": "mise.body",
+      "bytes": 91571,
+      "sha256": "6cc8dc121816baad8baa4c95093fdbf51f86559a4173b9ed630fa3570a080edb",
+      "observed": {
+        "version": "v2026.10.25",
+        "release_id": 429861984,
+        "published_at": "2026-10-31T10:24:21Z",
+        "prerelease": false,
+        "draft": false
+      }
+    },
+    {
+      "subject": "mise pinned release",
+      "source": "https://api.github.com/repos/jdx/mise/releases/tags/v2026.10.21",
+      "requested_at": "2026-11-02T11:28:49.590Z",
+      "observed_at": "2026-11-02T11:28:50.375Z",
+      "body_file": "pinned-mise.body",
+      "bytes": 92539,
+      "sha256": "b1ff301e57c969478615e01cd55763d917397214f88449b3ba3c34293ec1110a",
+      "observed": {
+        "version": "v2026.10.21",
+        "release_id": 425293168,
+        "published_at": "2026-10-27T10:23:17Z",
+        "prerelease": false,
+        "draft": false
+      }
+    },
+    {
+      "subject": "mise pinned tag-ref",
+      "source": "https://api.github.com/repos/jdx/mise/git/ref/tags/v2026.10.21",
+      "requested_at": "2026-11-02T11:28:50.376Z",
+      "observed_at": "2026-11-02T11:28:51.040Z",
+      "body_file": "pinned-mise-ref-raw.body",
+      "bytes": 328,
+      "sha256": "d5ddd436cd81808eb5f4f1fb106868f399c8e75c8d380c30c775d61edc91854f",
+      "observed": {
+        "ref": "refs/tags/v2026.10.21",
+        "node_id": "REF_kwDOIvux3rVyZWZzL3RhZ3MvdjIwMjYuMTAuMjE",
+        "url": "https://api.github.com/repos/jdx/mise/git/refs/tags/v2026.10.21",
+        "object": {
+          "sha": "304fe58f56808e0050e9b9cc0bd9e30cb92b5015",
+          "type": "tag",
+          "url": "https://api.github.com/repos/jdx/mise/git/tags/304fe58f56808e0050e9b9cc0bd9e30cb92b5015"
+        }
+      }
+    },
+    {
+      "subject": "mise pinned tag-tagobj",
+      "source": "https://api.github.com/repos/jdx/mise/git/tags/304fe58f56808e0050e9b9cc0bd9e30cb92b5015",
+      "requested_at": "2026-11-02T11:28:51.041Z",
+      "observed_at": "2026-11-02T11:28:51.700Z",
+      "body_file": "pinned-mise-tagobj-raw.body",
+      "bytes": 7262,
+      "sha256": "d878e059fd7774695afbe0a6cfc1c243d0b56b80e92174bd3748786552a4454a",
+      "observed": {
+        "node_id": "TA_kwDOIvux3toAKDMwNGZlNThmNTY4MDhlMDA1MGU5YjljYzBiZDllMzBjYjkyYjUwMTU",
+        "sha": "304fe58f56808e0050e9b9cc0bd9e30cb92b5015",
+        "url": "https://api.github.com/repos/jdx/mise/git/tags/304fe58f56808e0050e9b9cc0bd9e30cb92b5015",
+        "tagger": {
+          "name": "mise-en-dev",
+          "email": "release@mise.jdx.dev",
+          "date": "2026-10-27T08:40:58Z"
+        },
+        "object": {
+          "sha": "61eb04dbc806cb646821e342b7abbbdaf1581e84",
+          "type": "commit",
+          "url": "https://api.github.com/repos/jdx/mise/git/commits/61eb04dbc806cb646821e342b7abbbdaf1581e84"
+        },
+        "tag": "v2026.10.21",
+        "message": "- **(bootstrap)** add `--force` to remove casks prune cannot prove unchanged by @jacobbednarz in [#14985](https://github.com/jdx/mise/pull/14985)\n- **(dotfiles)** warn when apply overwrites an edited template target by @jdx in [#15020](https://github.com/jdx/mise/pull/15020)\n- **(dotfiles)** set up from a dotfiles checkout or Stow packages with less config by @jdx in [#15025](https://github.com/jdx/mise/pull/15025)\n\n- **(aqua)** preserve smolvm guest rootfs links by @jdx in [#15015](https://github.com/jdx/mise/pull/15015)\n- **(ci)** stop ci overrides from killing tests on the shared macOS profile by @jdx in [#15026](https://github.com/jdx/mise/pull/15026)\n- **(config)** keep root tool inheritance for monorepo children when \".\" is a config root by @jdx in [#15023](https://github.com/jdx/mise/pull/15023)\n- **(config)** use the sub-project lockfile for idiomatic files in monorepo task runs by @jdx in [#15021](https://github.com/jdx/mise/pull/15021)\n- **(config)** keep a skipped version-file link from hiding the file it points at by @jdx in [#15006](https://github.com/jdx/mise/pull/15006)\n- **(doctor)** don't report uninstalled lazy tools as problems by @jdx in [#15024](https://github.com/jdx/mise/pull/15024)\n- **(dotfiles)** refuse mise dot add on a template entry by @jdx in [#15019](https://github.com/jdx/mise/pull/15019)\n- **(lock)** refresh platform entries whose URL belongs to another release by @jdx in [#15010](https://github.com/jdx/mise/pull/15010)\n- **(lock)** degrade to version-only for pypi tools with uvx_args during a lock sweep by @jdx in [#15030](https://github.com/jdx/mise/pull/15030)\n- **(packslip)** read a repository's release list from mise-versions first by @jdx in [#15032](https://github.com/jdx/mise/pull/15032)\n- **(pypi)** fall back to version-only locks when a uv graph can't install by @jdx in [#15031](https://github.com/jdx/mise/pull/15031)\n\n- update jdx crates to v7.1.3 by @renovate[bot] in [#14996](https://github.com/jdx/mise/pull/14996)\n\n- add tuios ([aqua:Gaurav-Gosain/tuios](https://github.com/Gaurav-Gosain/tuios)) by @Gaurav-Gosain in [#14990](https://github.com/jdx/mise/pull/14990)\n\n- **(release)** leave room to retry a hung tarball build by @jdx in [#15022](https://github.com/jdx/mise/pull/15022)\n\n- @Gaurav-Gosain made their first contribution in [#14990](https://github.com/jdx/mise/pull/14990)\n-----BEGIN PGP SIGNATURE-----\n\niQIzBAABCgAdFiEEJIU+yfZVzoC0jmw6i4HJ0XQToG0FAmrgY5oACgkQi4HJ0XQT\noG3UTQ//enqhFVDdGqMBpLD0gtm3GdS+v27hjWbF2EwC0QDVdqFo8g0g9rt739BF\nTn0puaiJREdZtOtuFpzuIINOjOiNTVrt0KIA4JJw1WdrSFBpwDSpv+0VLS0vCtno\no8ERN1+DcFWD6+atFxK/zjGVb3Jcds6DMLMFxZUafXIYpi/DI6f3IAuOY4QMlfus\npQ2H2/VnmkdOJ0/LBhuxGnupX8CoIuY8Nu5F9zKitVipGyQsXcOkt5nY3BIO8MQs\nJfnxrLRoWRZlkIz0G3ymLkKnmQETxc6u4HULbLJsjMavKXTt0Vj/1lmByPYHsHQY\naHjv9a5JsKkgoXeUiXsv75IWUz5BicGYDrs2yc0ke9pzjx0jpu2kFerIluxKEnyh\njRh2fvO9eDziRJPpEsk5LGszpXnovauC+MP7W0HGLUyvlueHfV749P9ieWrSWOnH\nhki5Nxcg73i0gWHo7DJyQBJdbHE71FZizvy60TN3R1w0a33bMg31gG/4whlzAnHy\nuGy0zi/tqlv+oy6SjFtPwf6wGpszvYhHh9hYhFOil4IVvadecIaMmxCX3nOUIW9L\nQXKMnFUFkKulWeDoKpSdT63jBdTKuG7HLB8z74XYIiUKcgRQMhaxJhE3AGFFEaY4\nh8/sh4CBpF4Iv7uZXwfWfZ+xqLqJg67OlFa4h1phcKNYcdKpmJ8=\n=qGe3\n-----END PGP SIGNATURE-----\n",
+        "verification": {
+          "verified": true,
+          "reason": "valid",
+          "signature": "-----BEGIN PGP SIGNATURE-----\n\niQIzBAABCgAdFiEEJIU+yfZVzoC0jmw6i4HJ0XQToG0FAmrgY5oACgkQi4HJ0XQT\noG3UTQ//enqhFVDdGqMBpLD0gtm3GdS+v27hjWbF2EwC0QDVdqFo8g0g9rt739BF\nTn0puaiJREdZtOtuFpzuIINOjOiNTVrt0KIA4JJw1WdrSFBpwDSpv+0VLS0vCtno\no8ERN1+DcFWD6+atFxK/zjGVb3Jcds6DMLMFxZUafXIYpi/DI6f3IAuOY4QMlfus\npQ2H2/VnmkdOJ0/LBhuxGnupX8CoIuY8Nu5F9zKitVipGyQsXcOkt5nY3BIO8MQs\nJfnxrLRoWRZlkIz0G3ymLkKnmQETxc6u4HULbLJsjMavKXTt0Vj/1lmByPYHsHQY\naHjv9a5JsKkgoXeUiXsv75IWUz5BicGYDrs2yc0ke9pzjx0jpu2kFerIluxKEnyh\njRh2fvO9eDziRJPpEsk5LGszpXnovauC+MP7W0HGLUyvlueHfV749P9ieWrSWOnH\nhki5Nxcg73i0gWHo7DJyQBJdbHE71FZizvy60TN3R1w0a33bMg31gG/4whlzAnHy\nuGy0zi/tqlv+oy6SjFtPwf6wGpszvYhHh9hYhFOil4IVvadecIaMmxCX3nOUIW9L\nQXKMnFUFkKulWeDoKpSdT63jBdTKuG7HLB8z74XYIiUKcgRQMhaxJhE3AGFFEaY4\nh8/sh4CBpF4Iv7uZXwfWfZ+xqLqJg67OlFa4h1phcKNYcdKpmJ8=\n=qGe3\n-----END PGP SIGNATURE-----\n",
+          "payload": "object 61eb04dbc806cb646821e342b7abbbdaf1581e84\ntype commit\ntag v2026.10.21\ntagger mise-en-dev <release@mise.jdx.dev> 1793090458 +0000\n\n- **(bootstrap)** add `--force` to remove casks prune cannot prove unchanged by @jacobbednarz in [#14985](https://github.com/jdx/mise/pull/14985)\n- **(dotfiles)** warn when apply overwrites an edited template target by @jdx in [#15020](https://github.com/jdx/mise/pull/15020)\n- **(dotfiles)** set up from a dotfiles checkout or Stow packages with less config by @jdx in [#15025](https://github.com/jdx/mise/pull/15025)\n\n- **(aqua)** preserve smolvm guest rootfs links by @jdx in [#15015](https://github.com/jdx/mise/pull/15015)\n- **(ci)** stop ci overrides from killing tests on the shared macOS profile by @jdx in [#15026](https://github.com/jdx/mise/pull/15026)\n- **(config)** keep root tool inheritance for monorepo children when \".\" is a config root by @jdx in [#15023](https://github.com/jdx/mise/pull/15023)\n- **(config)** use the sub-project lockfile for idiomatic files in monorepo task runs by @jdx in [#15021](https://github.com/jdx/mise/pull/15021)\n- **(config)** keep a skipped version-file link from hiding the file it points at by @jdx in [#15006](https://github.com/jdx/mise/pull/15006)\n- **(doctor)** don't report uninstalled lazy tools as problems by @jdx in [#15024](https://github.com/jdx/mise/pull/15024)\n- **(dotfiles)** refuse mise dot add on a template entry by @jdx in [#15019](https://github.com/jdx/mise/pull/15019)\n- **(lock)** refresh platform entries whose URL belongs to another release by @jdx in [#15010](https://github.com/jdx/mise/pull/15010)\n- **(lock)** degrade to version-only for pypi tools with uvx_args during a lock sweep by @jdx in [#15030](https://github.com/jdx/mise/pull/15030)\n- **(packslip)** read a repository's release list from mise-versions first by @jdx in [#15032](https://github.com/jdx/mise/pull/15032)\n- **(pypi)** fall back to version-only locks when a uv graph can't install by @jdx in [#15031](https://github.com/jdx/mise/pull/15031)\n\n- update jdx crates to v7.1.3 by @renovate[bot] in [#14996](https://github.com/jdx/mise/pull/14996)\n\n- add tuios ([aqua:Gaurav-Gosain/tuios](https://github.com/Gaurav-Gosain/tuios)) by @Gaurav-Gosain in [#14990](https://github.com/jdx/mise/pull/14990)\n\n- **(release)** leave room to retry a hung tarball build by @jdx in [#15022](https://github.com/jdx/mise/pull/15022)\n\n- @Gaurav-Gosain made their first contribution in [#14990](https://github.com/jdx/mise/pull/14990)\n",
+          "verified_at": "2026-10-27T08:41:02Z"
+        }
+      }
+    },
+    {
+      "subject": "mise pinned tag",
+      "source": "https://api.github.com/repos/jdx/mise/git/ref/tags/v2026.10.21",
+      "requested_at": "2026-11-02T11:28:51.701Z",
+      "observed_at": "2026-11-02T11:28:51.701Z",
+      "body_file": "pinned-mise-tag-0.body",
+      "bytes": 73,
+      "sha256": "a4a17def962559103e7ad1b6015b6997b6ceeb69588aa90c3846edee37cccfea",
+      "observed": {
+        "version": "v2026.10.21",
+        "sha": "61eb04dbc806cb646821e342b7abbbdaf1581e84"
+      }
+    },
+    {
+      "subject": "mise latest tag-ref",
+      "source": "https://api.github.com/repos/jdx/mise/git/ref/tags/v2026.10.25",
+      "requested_at": "2026-11-02T11:28:51.701Z",
+      "observed_at": "2026-11-02T11:28:52.312Z",
+      "body_file": "latest-mise-ref-raw.body",
+      "bytes": 328,
+      "sha256": "1623628587f070c07f9e2b74574a8dd48753e6206a054a752e30e918c2fc884e",
+      "observed": {
+        "ref": "refs/tags/v2026.10.25",
+        "node_id": "REF_kwDOIvux3rVyZWZzL3RhZ3MvdjIwMjYuMTAuMjU",
+        "url": "https://api.github.com/repos/jdx/mise/git/refs/tags/v2026.10.25",
+        "object": {
+          "sha": "3f2e3632cf450a8c67120b6aa03860dc13308b44",
+          "type": "tag",
+          "url": "https://api.github.com/repos/jdx/mise/git/tags/3f2e3632cf450a8c67120b6aa03860dc13308b44"
+        }
+      }
+    },
+    {
+      "subject": "mise latest tag-tagobj",
+      "source": "https://api.github.com/repos/jdx/mise/git/tags/3f2e3632cf450a8c67120b6aa03860dc13308b44",
+      "requested_at": "2026-11-02T11:28:52.313Z",
+      "observed_at": "2026-11-02T11:28:52.985Z",
+      "body_file": "latest-mise-tagobj-raw.body",
+      "bytes": 6120,
+      "sha256": "2b07b7c2069fd89cf3f0ef3e28151137826eed031c9e55d9137a0bd3cae056ec",
+      "observed": {
+        "node_id": "TA_kwDOIvux3toAKDNmMmUzNjMyY2Y0NTBhOGM2NzEyMGI2YWEwMzg2MGRjMTMzMDhiNDQ",
+        "sha": "3f2e3632cf450a8c67120b6aa03860dc13308b44",
+        "url": "https://api.github.com/repos/jdx/mise/git/tags/3f2e3632cf450a8c67120b6aa03860dc13308b44",
+        "tagger": {
+          "name": "mise-en-dev",
+          "email": "release@mise.jdx.dev",
+          "date": "2026-10-31T08:26:09Z"
+        },
+        "object": {
+          "sha": "3c78bbb2d58c0b668fe8d5bebf4a8cb66194e1aa",
+          "type": "commit",
+          "url": "https://api.github.com/repos/jdx/mise/git/commits/3c78bbb2d58c0b668fe8d5bebf4a8cb66194e1aa"
+        },
+        "tag": "v2026.10.25",
+        "message": "- **(bootstrap)** report which tool manages each installed cask in status --json by @jdx in [#15198](https://github.com/jdx/mise/pull/15198)\n- **(env)** add env_cache_redacted to cache environments with redacted values by @jdx in [#15200](https://github.com/jdx/mise/pull/15200)\n- **(tasks)** add tasks set and rm, choose the file, and report changes as JSON by @jdx in [#15213](https://github.com/jdx/mise/pull/15213)\n- **(watch)** add --once to wait for a change, run the tasks, and exit by @jdx in [#15212](https://github.com/jdx/mise/pull/15212)\n\n- **(bootstrap)** report an annotated tag ref as current once checked out by @jdx in [#15199](https://github.com/jdx/mise/pull/15199)\n- **(core)** fold AppleDouble sidecars into their files when extracting tars on macOS by @jdx in [#15211](https://github.com/jdx/mise/pull/15211)\n- **(dotfiles)** keep saving a directory tracked in place of narrower paths by @jdx in [#15187](https://github.com/jdx/mise/pull/15187)\n- **(dotfiles)** don't drop earlier tracking when a later untrack path fails by @jdx in [#15208](https://github.com/jdx/mise/pull/15208)\n- **(install)** stop concurrent installs from reading a half-created install as complete by @jdx in [#15196](https://github.com/jdx/mise/pull/15196)\n- **(lock)** write a symlinked config dir's lockfile as one target by @jdx in [#15197](https://github.com/jdx/mise/pull/15197)\n- **(shim)** stop reshim from scaling quadratically with tracked configs by @jdx in [#15203](https://github.com/jdx/mise/pull/15203)\n\n- update jdx crates to v7.1.4 by @renovate[bot] in [#15194](https://github.com/jdx/mise/pull/15194)\n- update rust crate aube-registry to v2.8.5 by @renovate[bot] in [#15205](https://github.com/jdx/mise/pull/15205)\n\n- add jouet by @jdx in [#15201](https://github.com/jdx/mise/pull/15201)\n-----BEGIN PGP SIGNATURE-----\n\niQIzBAABCgAdFiEEJIU+yfZVzoC0jmw6i4HJ0XQToG0FAmrlpiEACgkQi4HJ0XQT\noG1rwBAAsHkhPppT1Svye/08WdNyNPOR3a1s8tYE6rqaTlLrjyM96vzWoW7qmzcJ\nIPlJGSy3SS8YRR+MlPoFOJzKQ8sgF01IaP6Ln8RqkDeNkSeL/K2kwDGaNKAohNwB\nZth4MSXMteG8S0OpzdpJCVSsYCofDN5iC9Hhi7ptO/EKogMn148vYUdeupAXLkrC\nRplgHrmKCj28F3gbsJOjUi6QvTeDe0xGdFVJCI2yoGt39d/dpyCACD+mjBUuGYlE\nxQiBaROnuB+5/OXaRKIWTHiQCmUa1dRm7GOkwRw0dJ6nYa2rEFmWvpbj2WSQ+VUt\nSEQ0SH/ECFvRVfKMsDCelUcnFHBAnshjGjTWBSwIfnx9cxiEwq5kd1UtDDN1/vWE\nXKGr5F+5p3pNF+zOOb8w6kT1o16hBI6APkfaf5yTnKTTyNWrg6Nreha6+vD51NM2\nllTtRwkqfVwfmjHnThHfIZfDhls6Q09611r7Am1sAy0mYx+75Se75yeFT141IvtR\n/cdqHANbJVgEHXbKLo1DbAdS83MFptwB7KlwN+L9i0CHIdZmj9FQYfute614h/JM\nL+zopUe2nLBCY/5eYISKjy/3ZdEXwqwoSg92UsOYaQ5Pcnn9pFAjNEgmvWbLqWHg\nJCtEl+yfDcsLmK8MJsK+uHjJv3bU+OwrDgXwNA2ZCd6kLddrFLY=\n=HZXy\n-----END PGP SIGNATURE-----\n",
+        "verification": {
+          "verified": true,
+          "reason": "valid",
+          "signature": "-----BEGIN PGP SIGNATURE-----\n\niQIzBAABCgAdFiEEJIU+yfZVzoC0jmw6i4HJ0XQToG0FAmrlpiEACgkQi4HJ0XQT\noG1rwBAAsHkhPppT1Svye/08WdNyNPOR3a1s8tYE6rqaTlLrjyM96vzWoW7qmzcJ\nIPlJGSy3SS8YRR+MlPoFOJzKQ8sgF01IaP6Ln8RqkDeNkSeL/K2kwDGaNKAohNwB\nZth4MSXMteG8S0OpzdpJCVSsYCofDN5iC9Hhi7ptO/EKogMn148vYUdeupAXLkrC\nRplgHrmKCj28F3gbsJOjUi6QvTeDe0xGdFVJCI2yoGt39d/dpyCACD+mjBUuGYlE\nxQiBaROnuB+5/OXaRKIWTHiQCmUa1dRm7GOkwRw0dJ6nYa2rEFmWvpbj2WSQ+VUt\nSEQ0SH/ECFvRVfKMsDCelUcnFHBAnshjGjTWBSwIfnx9cxiEwq5kd1UtDDN1/vWE\nXKGr5F+5p3pNF+zOOb8w6kT1o16hBI6APkfaf5yTnKTTyNWrg6Nreha6+vD51NM2\nllTtRwkqfVwfmjHnThHfIZfDhls6Q09611r7Am1sAy0mYx+75Se75yeFT141IvtR\n/cdqHANbJVgEHXbKLo1DbAdS83MFptwB7KlwN+L9i0CHIdZmj9FQYfute614h/JM\nL+zopUe2nLBCY/5eYISKjy/3ZdEXwqwoSg92UsOYaQ5Pcnn9pFAjNEgmvWbLqWHg\nJCtEl+yfDcsLmK8MJsK+uHjJv3bU+OwrDgXwNA2ZCd6kLddrFLY=\n=HZXy\n-----END PGP SIGNATURE-----\n",
+          "payload": "object 3c78bbb2d58c0b668fe8d5bebf4a8cb66194e1aa\ntype commit\ntag v2026.10.25\ntagger mise-en-dev <release@mise.jdx.dev> 1793435169 +0000\n\n- **(bootstrap)** report which tool manages each installed cask in status --json by @jdx in [#15198](https://github.com/jdx/mise/pull/15198)\n- **(env)** add env_cache_redacted to cache environments with redacted values by @jdx in [#15200](https://github.com/jdx/mise/pull/15200)\n- **(tasks)** add tasks set and rm, choose the file, and report changes as JSON by @jdx in [#15213](https://github.com/jdx/mise/pull/15213)\n- **(watch)** add --once to wait for a change, run the tasks, and exit by @jdx in [#15212](https://github.com/jdx/mise/pull/15212)\n\n- **(bootstrap)** report an annotated tag ref as current once checked out by @jdx in [#15199](https://github.com/jdx/mise/pull/15199)\n- **(core)** fold AppleDouble sidecars into their files when extracting tars on macOS by @jdx in [#15211](https://github.com/jdx/mise/pull/15211)\n- **(dotfiles)** keep saving a directory tracked in place of narrower paths by @jdx in [#15187](https://github.com/jdx/mise/pull/15187)\n- **(dotfiles)** don't drop earlier tracking when a later untrack path fails by @jdx in [#15208](https://github.com/jdx/mise/pull/15208)\n- **(install)** stop concurrent installs from reading a half-created install as complete by @jdx in [#15196](https://github.com/jdx/mise/pull/15196)\n- **(lock)** write a symlinked config dir's lockfile as one target by @jdx in [#15197](https://github.com/jdx/mise/pull/15197)\n- **(shim)** stop reshim from scaling quadratically with tracked configs by @jdx in [#15203](https://github.com/jdx/mise/pull/15203)\n\n- update jdx crates to v7.1.4 by @renovate[bot] in [#15194](https://github.com/jdx/mise/pull/15194)\n- update rust crate aube-registry to v2.8.5 by @renovate[bot] in [#15205](https://github.com/jdx/mise/pull/15205)\n\n- add jouet by @jdx in [#15201](https://github.com/jdx/mise/pull/15201)\n",
+          "verified_at": "2026-10-31T08:26:22Z"
+        }
+      }
+    },
+    {
+      "subject": "mise latest tag",
+      "source": "https://api.github.com/repos/jdx/mise/git/ref/tags/v2026.10.25",
+      "requested_at": "2026-11-02T11:28:52.985Z",
+      "observed_at": "2026-11-02T11:28:52.985Z",
+      "body_file": "latest-mise-tag-0.body",
+      "bytes": 73,
+      "sha256": "6d5d7b60f5ecac7acc1bfd7cab1aa780cea012026addf5acff1c3486719c5ec1",
+      "observed": {
+        "version": "v2026.10.25",
+        "sha": "3c78bbb2d58c0b668fe8d5bebf4a8cb66194e1aa"
+      }
+    },
+    {
+      "subject": "rust",
+      "source": "https://static.rust-lang.org/dist/channel-rust-stable.toml",
+      "requested_at": "2026-11-02T11:28:52.986Z",
+      "observed_at": "2026-11-02T11:28:53.182Z",
+      "body_file": "rust.body",
+      "bytes": 131072,
+      "sha256": "131880574a2de9d40db0a035774169281b0fd55a1e94752b0c8f0e9a4c75421a",
+      "observed": {
+        "version": "1.99.1"
+      }
+    },
+    {
+      "subject": "mr-boxington",
+      "source": "https://api.github.com/repos/jdx/mr-boxington/releases/latest",
+      "requested_at": "2026-11-02T11:28:53.184Z",
+      "observed_at": "2026-11-02T11:28:53.880Z",
+      "body_file": "mr-boxington.body",
+      "bytes": 28732,
+      "sha256": "5e906d304cf7056f4fd7acabc58d1c9d7f80a58427e17c359072c63500c76e28",
+      "observed": {
+        "version": "v1.29.1",
+        "release_id": 430499399,
+        "published_at": "2026-11-01T10:29:02Z",
+        "prerelease": false,
+        "draft": false
+      }
+    },
+    {
+      "subject": "mr-boxington pinned release",
+      "source": "https://api.github.com/repos/jdx/mr-boxington/releases/tags/v1.28.0",
+      "requested_at": "2026-11-02T11:28:53.880Z",
+      "observed_at": "2026-11-02T11:28:54.559Z",
+      "body_file": "pinned-mr-boxington.body",
+      "bytes": 35266,
+      "sha256": "db26d895a0d6f36aa3d70592d687b9452dc7b5078b9d38853f1fcbf5d34f8cc0",
+      "observed": {
+        "version": "v1.28.0",
+        "release_id": 424106281,
+        "published_at": "2026-10-26T10:41:25Z",
+        "prerelease": false,
+        "draft": false
+      }
+    },
+    {
+      "subject": "mr-boxington pinned tag-ref",
+      "source": "https://api.github.com/repos/jdx/mr-boxington/git/ref/tags/v1.28.0",
+      "requested_at": "2026-11-02T11:28:54.560Z",
+      "observed_at": "2026-11-02T11:28:55.198Z",
+      "body_file": "pinned-mr-boxington-ref-raw.body",
+      "bytes": 331,
+      "sha256": "2d7a13ece11d192ddbae8ee9194aae088e8dff019da539c76189347276090ad7",
+      "observed": {
+        "ref": "refs/tags/v1.28.0",
+        "node_id": "REF_kwDOT-nLJbFyZWZzL3RhZ3MvdjEuMjguMA",
+        "url": "https://api.github.com/repos/jdx/mr-boxington/git/refs/tags/v1.28.0",
+        "object": {
+          "sha": "69b93b3ba3763aab5a6f272fba1077fa7338445d",
+          "type": "tag",
+          "url": "https://api.github.com/repos/jdx/mr-boxington/git/tags/69b93b3ba3763aab5a6f272fba1077fa7338445d"
+        }
+      }
+    },
+    {
+      "subject": "mr-boxington pinned tag-tagobj",
+      "source": "https://api.github.com/repos/jdx/mr-boxington/git/tags/69b93b3ba3763aab5a6f272fba1077fa7338445d",
+      "requested_at": "2026-11-02T11:28:55.199Z",
+      "observed_at": "2026-11-02T11:28:55.835Z",
+      "body_file": "pinned-mr-boxington-tagobj-raw.body",
+      "bytes": 695,
+      "sha256": "c94272d88e36b16cc98a4ea256fd35deaf5fbec079ebd4640944797f8a2234a6",
+      "observed": {
+        "node_id": "TA_kwDOT-nLJdoAKDY5YjkzYjNiYTM3NjNhYWI1YTZmMjcyZmJhMTA3N2ZhNzMzODQ0NWQ",
+        "sha": "69b93b3ba3763aab5a6f272fba1077fa7338445d",
+        "url": "https://api.github.com/repos/jdx/mr-boxington/git/tags/69b93b3ba3763aab5a6f272fba1077fa7338445d",
+        "tagger": {
+          "name": "jdx",
+          "email": "216188+jdx@users.noreply.github.com",
+          "date": "2026-10-26T10:23:25Z"
+        },
+        "object": {
+          "sha": "44f50c329a83dedd012e1e49cf9f265f79226a83",
+          "type": "commit",
+          "url": "https://api.github.com/repos/jdx/mr-boxington/git/commits/44f50c329a83dedd012e1e49cf9f265f79226a83"
+        },
+        "tag": "v1.28.0",
+        "message": "chore: Release package mbx version 1.28.0",
+        "verification": {
+          "verified": false,
+          "reason": "unsigned",
+          "signature": null,
+          "payload": null,
+          "verified_at": null
+        }
+      }
+    },
+    {
+      "subject": "mr-boxington pinned tag",
+      "source": "https://api.github.com/repos/jdx/mr-boxington/git/ref/tags/v1.28.0",
+      "requested_at": "2026-11-02T11:28:55.835Z",
+      "observed_at": "2026-11-02T11:28:55.835Z",
+      "body_file": "pinned-mr-boxington-tag-0.body",
+      "bytes": 69,
+      "sha256": "f01320c2c402f6ed65a7076cf40c42731f098efe73bbeb6435b29560198abfb3",
+      "observed": {
+        "version": "v1.28.0",
+        "sha": "44f50c329a83dedd012e1e49cf9f265f79226a83"
+      }
+    },
+    {
+      "subject": "mr-boxington latest tag-ref",
+      "source": "https://api.github.com/repos/jdx/mr-boxington/git/ref/tags/v1.29.1",
+      "requested_at": "2026-11-02T11:28:55.836Z",
+      "observed_at": "2026-11-02T11:28:56.494Z",
+      "body_file": "latest-mr-boxington-ref-raw.body",
+      "bytes": 331,
+      "sha256": "cf52aeb26fdd8b04f13895a521bef9ab39c51f6d976d35b8269ed7b45c61399a",
+      "observed": {
+        "ref": "refs/tags/v1.29.1",
+        "node_id": "REF_kwDOT-nLJbFyZWZzL3RhZ3MvdjEuMjkuMQ",
+        "url": "https://api.github.com/repos/jdx/mr-boxington/git/refs/tags/v1.29.1",
+        "object": {
+          "sha": "ea035d68c1f470ac4fa130d94d6866e68fb92c8a",
+          "type": "tag",
+          "url": "https://api.github.com/repos/jdx/mr-boxington/git/tags/ea035d68c1f470ac4fa130d94d6866e68fb92c8a"
+        }
+      }
+    },
+    {
+      "subject": "mr-boxington latest tag-tagobj",
+      "source": "https://api.github.com/repos/jdx/mr-boxington/git/tags/ea035d68c1f470ac4fa130d94d6866e68fb92c8a",
+      "requested_at": "2026-11-02T11:28:56.494Z",
+      "observed_at": "2026-11-02T11:28:57.428Z",
+      "body_file": "latest-mr-boxington-tagobj-raw.body",
+      "bytes": 695,
+      "sha256": "664af1a314f491e36c72ebee225961f8d57fa59877dc5510d4e328ee3f19f13d",
+      "observed": {
+        "node_id": "TA_kwDOT-nLJdoAKGVhMDM1ZDY4YzFmNDcwYWM0ZmExMzBkOTRkNjg2NmU2OGZiOTJjOGE",
+        "sha": "ea035d68c1f470ac4fa130d94d6866e68fb92c8a",
+        "url": "https://api.github.com/repos/jdx/mr-boxington/git/tags/ea035d68c1f470ac4fa130d94d6866e68fb92c8a",
+        "tagger": {
+          "name": "jdx",
+          "email": "216188+jdx@users.noreply.github.com",
+          "date": "2026-11-01T10:12:06Z"
+        },
+        "object": {
+          "sha": "b0b67184f01c1de02082296d093af547ecf4c2ab",
+          "type": "commit",
+          "url": "https://api.github.com/repos/jdx/mr-boxington/git/commits/b0b67184f01c1de02082296d093af547ecf4c2ab"
+        },
+        "tag": "v1.29.1",
+        "message": "chore: Release package mbx version 1.29.1",
+        "verification": {
+          "verified": false,
+          "reason": "unsigned",
+          "signature": null,
+          "payload": null,
+          "verified_at": null
+        }
+      }
+    },
+    {
+      "subject": "mr-boxington latest tag",
+      "source": "https://api.github.com/repos/jdx/mr-boxington/git/ref/tags/v1.29.1",
+      "requested_at": "2026-11-02T11:28:57.433Z",
+      "observed_at": "2026-11-02T11:28:57.433Z",
+      "body_file": "latest-mr-boxington-tag-0.body",
+      "bytes": 69,
+      "sha256": "5dbf9754cd34fc5cf68a7e40a12550420b7dd0f5bf0ff8bd08fffecbeba64fc4",
+      "observed": {
+        "version": "v1.29.1",
+        "sha": "b0b67184f01c1de02082296d093af547ecf4c2ab"
+      }
+    },
+    {
+      "subject": "gh",
+      "source": "https://api.github.com/repos/cli/cli/releases/latest",
+      "requested_at": "2026-11-02T11:28:57.434Z",
+      "observed_at": "2026-11-02T11:28:58.199Z",
+      "body_file": "gh.body",
+      "bytes": 39109,
+      "sha256": "2a6898b5eaa13e8896e765fe147fc577cc937b696eef80587c3afbf01a640da2",
+      "observed": {
+        "version": "v2.103.3",
+        "release_id": 424663522,
+        "published_at": "2026-10-26T19:20:08Z",
+        "prerelease": false,
+        "draft": false
+      }
+    },
+    {
+      "subject": "jactionlint",
+      "source": "https://api.github.com/repos/jdx/jactionlint/releases/latest",
+      "requested_at": "2026-11-02T11:28:58.200Z",
+      "observed_at": "2026-11-02T11:28:58.944Z",
+      "body_file": "jactionlint.body",
+      "bytes": 25995,
+      "sha256": "5c4bd870892a1b734d036591435389be85e72393b76f5e5e08013249ce159ca1",
+      "observed": {
+        "version": "v2.4.0",
+        "release_id": 427704383,
+        "published_at": "2026-10-29T10:12:07Z",
+        "prerelease": false,
+        "draft": false
+      }
+    },
+    {
+      "subject": "jactionlint pinned release",
+      "source": "https://api.github.com/repos/jdx/jactionlint/releases/tags/v2.3.0",
+      "requested_at": "2026-11-02T11:28:58.945Z",
+      "observed_at": "2026-11-02T11:28:59.726Z",
+      "body_file": "pinned-jactionlint.body",
+      "bytes": 25549,
+      "sha256": "dfa21147c430c8590bf6753389538660d4467db3d28d330aa89985710dc9a722",
+      "observed": {
+        "version": "v2.3.0",
+        "release_id": 419447948,
+        "published_at": "2026-10-21T11:01:34Z",
+        "prerelease": false,
+        "draft": false
+      }
+    },
+    {
+      "subject": "jactionlint pinned tag",
+      "source": "https://api.github.com/repos/jdx/jactionlint/git/ref/tags/v2.3.0",
+      "requested_at": "2026-11-02T11:28:59.727Z",
+      "observed_at": "2026-11-02T11:29:00.395Z",
+      "body_file": "pinned-jactionlint-tag-0.body",
+      "bytes": 68,
+      "sha256": "46cd9c83dc8abdde8c392c4c2fa4de00fe41dd376423ae3c0a9a1f97f3fd8823",
+      "observed": {
+        "version": "v2.3.0",
+        "sha": "a65ab044e916760429068fe5794b8306abdfcbb9"
+      }
+    },
+    {
+      "subject": "jactionlint latest tag",
+      "source": "https://api.github.com/repos/jdx/jactionlint/git/ref/tags/v2.4.0",
+      "requested_at": "2026-11-02T11:29:00.395Z",
+      "observed_at": "2026-11-02T11:29:01.095Z",
+      "body_file": "latest-jactionlint-tag-0.body",
+      "bytes": 68,
+      "sha256": "a6c4b5da698e90056c4d087215b5f7fbf008d3db5730eedbf842d4da0d6f82f6",
+      "observed": {
+        "version": "v2.4.0",
+        "sha": "baa8d685e2b27ff5821558c9eeabb2051c1da61b"
+      }
+    },
+    {
+      "subject": "shellcheck",
+      "source": "https://api.github.com/repos/koalaman/shellcheck/releases/latest",
+      "requested_at": "2026-11-02T11:29:01.096Z",
+      "observed_at": "2026-11-02T11:29:01.787Z",
+      "body_file": "shellcheck.body",
+      "bytes": 24736,
+      "sha256": "be84f03f261071804115308ade329fd2acca6527d9fd0c75aeb24e976c567006",
+      "observed": {
+        "version": "v0.11.0",
+        "release_id": 237202770,
+        "published_at": "2025-08-04T00:27:19Z",
+        "prerelease": false,
+        "draft": false
+      }
+    },
+    {
+      "subject": "nextest",
+      "source": "https://crates.io/api/v1/crates/cargo-nextest",
+      "requested_at": "2026-11-02T11:29:01.788Z",
+      "observed_at": "2026-11-02T11:29:04.508Z",
+      "body_file": "nextest.body",
+      "bytes": 312919,
+      "sha256": "e1a85d4b6a1b8f4ee38627f6fbcfee4645f21a8341a4dd68b3df7b40bcc72e9e",
+      "observed": {
+        "version": "0.9.150"
+      }
+    },
+    {
+      "subject": "opentofu",
+      "source": "https://api.github.com/repos/opentofu/opentofu/releases/latest",
+      "requested_at": "2026-11-02T11:29:04.511Z",
+      "observed_at": "2026-11-02T11:29:05.518Z",
+      "body_file": "opentofu.body",
+      "bytes": 289237,
+      "sha256": "b748f4c8ce92e963a2102c428453603531790b1e84a6533d663f42ea4f3b74c8",
+      "observed": {
+        "version": "v1.13.2",
+        "release_id": 419647825,
+        "published_at": "2026-10-21T14:36:09Z",
+        "prerelease": false,
+        "draft": false
+      }
+    },
+    {
+      "subject": "release-plz",
+      "source": "https://crates.io/api/v1/crates/release-plz",
+      "requested_at": "2026-11-02T11:29:05.542Z",
+      "observed_at": "2026-11-02T11:29:06.826Z",
+      "body_file": "release-plz.body",
+      "bytes": 408713,
+      "sha256": "ccb4147517c23dab5aae66f6ef3c1a73e6f95c3f7f32eea4f7bfe148a644d3cd",
+      "observed": {
+        "version": "0.4.3"
+      }
+    },
+    {
+      "subject": "crane",
+      "source": "https://api.github.com/repos/google/go-containerregistry/releases/latest",
+      "requested_at": "2026-11-02T11:29:06.829Z",
+      "observed_at": "2026-11-02T11:29:07.634Z",
+      "body_file": "crane.body",
+      "bytes": 30526,
+      "sha256": "cae5658f968730da4e792a2689bbf2dc684f0653873c9f45e7c4525bb2a0d0df",
+      "observed": {
+        "version": "v0.22.1",
+        "release_id": 382402591,
+        "published_at": "2026-09-04T00:17:00Z",
+        "prerelease": false,
+        "draft": false
+      }
+    },
+    {
+      "subject": "bun",
+      "source": "https://api.github.com/repos/oven-sh/bun/releases/latest",
+      "requested_at": "2026-11-02T11:29:07.635Z",
+      "observed_at": "2026-11-02T11:29:08.551Z",
+      "body_file": "bun.body",
+      "bytes": 62721,
+      "sha256": "ff77a27eb987f7706461d4c3e048b92d372dc73040c92992525ffa482d599065",
+      "observed": {
+        "version": "bun-v1.4.4",
+        "release_id": 420500253,
+        "published_at": "2026-10-22T10:11:32Z",
+        "prerelease": false,
+        "draft": false
+      }
+    },
+    {
+      "subject": "cosign",
+      "source": "https://api.github.com/repos/sigstore/cosign/releases/latest",
+      "requested_at": "2026-11-02T11:29:08.552Z",
+      "observed_at": "2026-11-02T11:29:09.780Z",
+      "body_file": "cosign.body",
+      "bytes": 133961,
+      "sha256": "4b1c3019ec178df009a8e9e501d9d1e62aa3525f39896ace74a5a03bd1613ce1",
+      "observed": {
+        "version": "v3.1.4",
+        "release_id": 418705647,
+        "published_at": "2026-10-20T18:27:42Z",
+        "prerelease": false,
+        "draft": false
+      }
+    },
+    {
+      "subject": "actions/attest",
+      "source": "https://api.github.com/repos/actions/attest/releases/latest",
+      "requested_at": "2026-11-02T11:29:09.782Z",
+      "observed_at": "2026-11-02T11:29:10.642Z",
+      "body_file": "actions_attest.body",
+      "bytes": 2120,
+      "sha256": "34ca5c40511edbd0ab78811f74eeb58026bd72362647986592f9a0097cef6840",
+      "observed": {
+        "version": "v4.2.2",
+        "release_id": 365138776,
+        "published_at": "2026-08-04T20:36:29Z",
+        "prerelease": false,
+        "draft": false
+      }
+    },
+    {
+      "subject": "actions/attest pinned tag",
+      "source": "https://api.github.com/repos/actions/attest/git/ref/tags/v4.2.2",
+      "requested_at": "2026-11-02T11:29:10.642Z",
+      "observed_at": "2026-11-02T11:29:11.498Z",
+      "body_file": "pinned-actions_attest-tag-0.body",
+      "bytes": 68,
+      "sha256": "603fdcea93d7330aca97796e6cf66df476d9cd99efc20ef6ff47b78c86367afb",
+      "observed": {
+        "version": "v4.2.2",
+        "sha": "1e69f48acb82d1966a394da916b4c1698aa569d6"
+      }
+    },
+    {
+      "subject": "actions/attest latest tag",
+      "source": "https://api.github.com/repos/actions/attest/git/ref/tags/v4.2.2",
+      "requested_at": "2026-11-02T11:29:11.498Z",
+      "observed_at": "2026-11-02T11:29:12.385Z",
+      "body_file": "latest-actions_attest-tag-0.body",
+      "bytes": 68,
+      "sha256": "603fdcea93d7330aca97796e6cf66df476d9cd99efc20ef6ff47b78c86367afb",
+      "observed": {
+        "version": "v4.2.2",
+        "sha": "1e69f48acb82d1966a394da916b4c1698aa569d6"
+      }
+    },
+    {
+      "subject": "actions/attest-build-provenance",
+      "source": "https://api.github.com/repos/actions/attest-build-provenance/releases/latest",
+      "requested_at": "2026-11-02T11:29:12.385Z",
+      "observed_at": "2026-11-02T11:29:13.505Z",
+      "body_file": "actions_attest-build-provenance.body",
+      "bytes": 2414,
+      "sha256": "6c8a2cddbabf63c4034ee023330703fa0da67d976f3d18cd741cafcf4edea923",
+      "observed": {
+        "version": "v4.2.2",
+        "release_id": 366387834,
+        "published_at": "2026-08-06T19:59:04Z",
+        "prerelease": false,
+        "draft": false
+      }
+    },
+    {
+      "subject": "actions/attest-build-provenance pinned tag",
+      "source": "https://api.github.com/repos/actions/attest-build-provenance/git/ref/tags/v4.2.2",
+      "requested_at": "2026-11-02T11:29:13.506Z",
+      "observed_at": "2026-11-02T11:29:14.207Z",
+      "body_file": "pinned-actions_attest-build-provenance-tag-0.body",
+      "bytes": 68,
+      "sha256": "ea962ca62b28cb30a83fdea6765607f4b143ceb2fbcc25cd85fa51186ef47f40",
+      "observed": {
+        "version": "v4.2.2",
+        "sha": "4d101475d8b20a2381f78447822ac1eab6504dd8"
+      }
+    },
+    {
+      "subject": "actions/attest-build-provenance latest tag",
+      "source": "https://api.github.com/repos/actions/attest-build-provenance/git/ref/tags/v4.2.2",
+      "requested_at": "2026-11-02T11:29:14.208Z",
+      "observed_at": "2026-11-02T11:29:14.960Z",
+      "body_file": "latest-actions_attest-build-provenance-tag-0.body",
+      "bytes": 68,
+      "sha256": "ea962ca62b28cb30a83fdea6765607f4b143ceb2fbcc25cd85fa51186ef47f40",
+      "observed": {
+        "version": "v4.2.2",
+        "sha": "4d101475d8b20a2381f78447822ac1eab6504dd8"
+      }
+    },
+    {
+      "subject": "actions/cache/restore",
+      "source": "https://api.github.com/repos/actions/cache/releases/latest",
+      "requested_at": "2026-11-02T11:29:14.961Z",
+      "observed_at": "2026-11-02T11:29:15.660Z",
+      "body_file": "actions_cache_restore.body",
+      "bytes": 2171,
+      "sha256": "fab1cd173714779bcd8cf67c96c3a29f04323b5a5389ad404afcd17abfb36e53",
+      "observed": {
+        "version": "v6.1.0",
+        "release_id": 345492415,
+        "published_at": "2026-06-26T19:17:06Z",
+        "prerelease": false,
+        "draft": false
+      }
+    },
+    {
+      "subject": "actions/cache/restore pinned tag",
+      "source": "https://api.github.com/repos/actions/cache/git/ref/tags/v6.1.0",
+      "requested_at": "2026-11-02T11:29:15.660Z",
+      "observed_at": "2026-11-02T11:29:16.330Z",
+      "body_file": "pinned-actions_cache_restore-tag-0.body",
+      "bytes": 68,
+      "sha256": "29d33dae968d9893c6146b33bb83245a6da4aea4bdf05ce0b918f0b2de2f5ee0",
+      "observed": {
+        "version": "v6.1.0",
+        "sha": "55cc8345863c7cc4c66a329aec7e433d2d1c52a9"
+      }
+    },
+    {
+      "subject": "actions/cache/restore latest tag",
+      "source": "https://api.github.com/repos/actions/cache/git/ref/tags/v6.1.0",
+      "requested_at": "2026-11-02T11:29:16.330Z",
+      "observed_at": "2026-11-02T11:29:16.987Z",
+      "body_file": "latest-actions_cache_restore-tag-0.body",
+      "bytes": 68,
+      "sha256": "29d33dae968d9893c6146b33bb83245a6da4aea4bdf05ce0b918f0b2de2f5ee0",
+      "observed": {
+        "version": "v6.1.0",
+        "sha": "55cc8345863c7cc4c66a329aec7e433d2d1c52a9"
+      }
+    },
+    {
+      "subject": "actions/cache/save",
+      "source": "https://api.github.com/repos/actions/cache/releases/latest",
+      "requested_at": "2026-11-02T11:29:16.988Z",
+      "observed_at": "2026-11-02T11:29:17.679Z",
+      "body_file": "actions_cache_save.body",
+      "bytes": 2171,
+      "sha256": "fab1cd173714779bcd8cf67c96c3a29f04323b5a5389ad404afcd17abfb36e53",
+      "observed": {
+        "version": "v6.1.0",
+        "release_id": 345492415,
+        "published_at": "2026-06-26T19:17:06Z",
+        "prerelease": false,
+        "draft": false
+      }
+    },
+    {
+      "subject": "actions/cache/save pinned tag",
+      "source": "https://api.github.com/repos/actions/cache/git/ref/tags/v6.1.0",
+      "requested_at": "2026-11-02T11:29:17.679Z",
+      "observed_at": "2026-11-02T11:29:18.325Z",
+      "body_file": "pinned-actions_cache_save-tag-0.body",
+      "bytes": 68,
+      "sha256": "29d33dae968d9893c6146b33bb83245a6da4aea4bdf05ce0b918f0b2de2f5ee0",
+      "observed": {
+        "version": "v6.1.0",
+        "sha": "55cc8345863c7cc4c66a329aec7e433d2d1c52a9"
+      }
+    },
+    {
+      "subject": "actions/cache/save latest tag",
+      "source": "https://api.github.com/repos/actions/cache/git/ref/tags/v6.1.0",
+      "requested_at": "2026-11-02T11:29:18.325Z",
+      "observed_at": "2026-11-02T11:29:19.028Z",
+      "body_file": "latest-actions_cache_save-tag-0.body",
+      "bytes": 68,
+      "sha256": "29d33dae968d9893c6146b33bb83245a6da4aea4bdf05ce0b918f0b2de2f5ee0",
+      "observed": {
+        "version": "v6.1.0",
+        "sha": "55cc8345863c7cc4c66a329aec7e433d2d1c52a9"
+      }
+    },
+    {
+      "subject": "actions/checkout",
+      "source": "https://api.github.com/repos/actions/checkout/releases/latest",
+      "requested_at": "2026-11-02T11:29:19.028Z",
+      "observed_at": "2026-11-02T11:29:19.670Z",
+      "body_file": "actions_checkout.body",
+      "bytes": 2372,
+      "sha256": "8c81e64dda90d1f337e87d30fab6804b818d155630587358ebaa531b27f2d659",
+      "observed": {
+        "version": "v7.0.1",
+        "release_id": 356804776,
+        "published_at": "2026-07-20T15:10:05Z",
+        "prerelease": false,
+        "draft": false
+      }
+    },
+    {
+      "subject": "actions/checkout pinned tag",
+      "source": "https://api.github.com/repos/actions/checkout/git/ref/tags/v7.0.1",
+      "requested_at": "2026-11-02T11:29:19.670Z",
+      "observed_at": "2026-11-02T11:29:20.247Z",
+      "body_file": "pinned-actions_checkout-tag-0.body",
+      "bytes": 68,
+      "sha256": "2171de76059b58105dd66f40da5bebaa9bd2ec107745dd142a4fb7eb90880b20",
+      "observed": {
+        "version": "v7.0.1",
+        "sha": "3d3c42e5aac5ba805825da76410c181273ba90b1"
+      }
+    },
+    {
+      "subject": "actions/checkout latest tag",
+      "source": "https://api.github.com/repos/actions/checkout/git/ref/tags/v7.0.1",
+      "requested_at": "2026-11-02T11:29:20.248Z",
+      "observed_at": "2026-11-02T11:29:20.864Z",
+      "body_file": "latest-actions_checkout-tag-0.body",
+      "bytes": 68,
+      "sha256": "2171de76059b58105dd66f40da5bebaa9bd2ec107745dd142a4fb7eb90880b20",
+      "observed": {
+        "version": "v7.0.1",
+        "sha": "3d3c42e5aac5ba805825da76410c181273ba90b1"
+      }
+    },
+    {
+      "subject": "actions/create-github-app-token",
+      "source": "https://api.github.com/repos/actions/create-github-app-token/releases/latest",
+      "requested_at": "2026-11-02T11:29:20.865Z",
+      "observed_at": "2026-11-02T11:29:21.488Z",
+      "body_file": "actions_create-github-app-token.body",
+      "bytes": 3089,
+      "sha256": "60b29c1da192509a18d12e3e57efd22a6c5554da68ed7434d3d244675667253b",
+      "observed": {
+        "version": "v3.3.0",
+        "release_id": 411079712,
+        "published_at": "2026-10-12T23:42:23Z",
+        "prerelease": false,
+        "draft": false
+      }
+    },
+    {
+      "subject": "actions/create-github-app-token pinned tag",
+      "source": "https://api.github.com/repos/actions/create-github-app-token/git/ref/tags/v3.3.0",
+      "requested_at": "2026-11-02T11:29:21.488Z",
+      "observed_at": "2026-11-02T11:29:22.083Z",
+      "body_file": "pinned-actions_create-github-app-token-tag-0.body",
+      "bytes": 68,
+      "sha256": "3e7249d45a4d052be23c242a8a7e7e0e81840bb55a6fa44e5815f05c4f786a3e",
+      "observed": {
+        "version": "v3.3.0",
+        "sha": "64ab729a6294000f5aa4a4bc0b73d1f32bc45510"
+      }
+    },
+    {
+      "subject": "actions/create-github-app-token latest tag",
+      "source": "https://api.github.com/repos/actions/create-github-app-token/git/ref/tags/v3.3.0",
+      "requested_at": "2026-11-02T11:29:22.084Z",
+      "observed_at": "2026-11-02T11:29:22.680Z",
+      "body_file": "latest-actions_create-github-app-token-tag-0.body",
+      "bytes": 68,
+      "sha256": "3e7249d45a4d052be23c242a8a7e7e0e81840bb55a6fa44e5815f05c4f786a3e",
+      "observed": {
+        "version": "v3.3.0",
+        "sha": "64ab729a6294000f5aa4a4bc0b73d1f32bc45510"
+      }
+    },
+    {
+      "subject": "actions/download-artifact",
+      "source": "https://api.github.com/repos/actions/download-artifact/releases/latest",
+      "requested_at": "2026-11-02T11:29:22.680Z",
+      "observed_at": "2026-11-02T11:29:23.405Z",
+      "body_file": "actions_download-artifact.body",
+      "bytes": 2457,
+      "sha256": "5b670503b60f455daaf7a3ad99622f6b408e490747fd6deb79402e0e3585673c",
+      "observed": {
+        "version": "v8.0.2",
+        "release_id": 405628511,
+        "published_at": "2026-10-07T10:09:51Z",
+        "prerelease": false,
+        "draft": false
+      }
+    },
+    {
+      "subject": "actions/download-artifact pinned tag",
+      "source": "https://api.github.com/repos/actions/download-artifact/git/ref/tags/v8.0.2",
+      "requested_at": "2026-11-02T11:29:23.405Z",
+      "observed_at": "2026-11-02T11:29:24.043Z",
+      "body_file": "pinned-actions_download-artifact-tag-0.body",
+      "bytes": 68,
+      "sha256": "8c13c651b6ddb5469837cf9ca3a419fb38f59420b410b4f06c4ced7ba4c71d8f",
+      "observed": {
+        "version": "v8.0.2",
+        "sha": "9000827ccba6bdab643e8b6fd33ac0654aef8333"
+      }
+    },
+    {
+      "subject": "actions/download-artifact latest tag",
+      "source": "https://api.github.com/repos/actions/download-artifact/git/ref/tags/v8.0.2",
+      "requested_at": "2026-11-02T11:29:24.043Z",
+      "observed_at": "2026-11-02T11:29:24.674Z",
+      "body_file": "latest-actions_download-artifact-tag-0.body",
+      "bytes": 68,
+      "sha256": "8c13c651b6ddb5469837cf9ca3a419fb38f59420b410b4f06c4ced7ba4c71d8f",
+      "observed": {
+        "version": "v8.0.2",
+        "sha": "9000827ccba6bdab643e8b6fd33ac0654aef8333"
+      }
+    },
+    {
+      "subject": "actions/github-script",
+      "source": "https://api.github.com/repos/actions/github-script/releases/latest",
+      "requested_at": "2026-11-02T11:29:24.674Z",
+      "observed_at": "2026-11-02T11:29:25.351Z",
+      "body_file": "actions_github-script.body",
+      "bytes": 4189,
+      "sha256": "ece1bb204fd8c668ab3f71e3e77fa201cbd41f670095f9f4d91a7219b8397417",
+      "observed": {
+        "version": "v9.0.0",
+        "release_id": 307308602,
+        "published_at": "2026-04-09T22:57:15Z",
+        "prerelease": false,
+        "draft": false
+      }
+    },
+    {
+      "subject": "actions/github-script pinned tag-ref",
+      "source": "https://api.github.com/repos/actions/github-script/git/ref/tags/v9.0.0",
+      "requested_at": "2026-11-02T11:29:25.352Z",
+      "observed_at": "2026-11-02T11:29:25.936Z",
+      "body_file": "pinned-actions_github-script-ref-raw.body",
+      "bytes": 345,
+      "sha256": "43701e20a88e5ceb8fc48384bafe2f177348b7ac3e3c97cf50e920132ac46efb",
+      "observed": {
+        "ref": "refs/tags/v9.0.0",
+        "node_id": "MDM6UmVmMjA1MjYyNzYwOnJlZnMvdGFncy92OS4wLjA=",
+        "url": "https://api.github.com/repos/actions/github-script/git/refs/tags/v9.0.0",
+        "object": {
+          "sha": "d746ffe35508b1917358783b479e04febd2b8f71",
+          "type": "tag",
+          "url": "https://api.github.com/repos/actions/github-script/git/tags/d746ffe35508b1917358783b479e04febd2b8f71"
+        }
+      }
+    },
+    {
+      "subject": "actions/github-script pinned tag-tagobj",
+      "source": "https://api.github.com/repos/actions/github-script/git/tags/d746ffe35508b1917358783b479e04febd2b8f71",
+      "requested_at": "2026-11-02T11:29:25.936Z",
+      "observed_at": "2026-11-02T11:29:26.516Z",
+      "body_file": "pinned-actions_github-script-tagobj-raw.body",
+      "bytes": 679,
+      "sha256": "228b5cc74b573b7de2b39e09ef019a450008b55f4e99868fdddf5cef95a03731",
+      "observed": {
+        "node_id": "TA_kwDODDwPqNoAKGQ3NDZmZmUzNTUwOGIxOTE3MzU4NzgzYjQ3OWUwNGZlYmQyYjhmNzE",
+        "sha": "d746ffe35508b1917358783b479e04febd2b8f71",
+        "url": "https://api.github.com/repos/actions/github-script/git/tags/d746ffe35508b1917358783b479e04febd2b8f71",
+        "tagger": {
+          "name": "Salman Muin Kayser Chishti",
+          "email": "salmanmkc@github.com",
+          "date": "2026-04-09T22:44:58Z"
+        },
+        "object": {
+          "sha": "3a2844b7e9c422d3c10d287c895573f7108da1b3",
+          "type": "commit",
+          "url": "https://api.github.com/repos/actions/github-script/git/commits/3a2844b7e9c422d3c10d287c895573f7108da1b3"
+        },
+        "tag": "v9.0.0",
+        "message": "v9.0.0\n",
+        "verification": {
+          "verified": false,
+          "reason": "unsigned",
+          "signature": null,
+          "payload": null,
+          "verified_at": null
+        }
+      }
+    },
+    {
+      "subject": "actions/github-script pinned tag",
+      "source": "https://api.github.com/repos/actions/github-script/git/ref/tags/v9.0.0",
+      "requested_at": "2026-11-02T11:29:26.516Z",
+      "observed_at": "2026-11-02T11:29:26.516Z",
+      "body_file": "pinned-actions_github-script-tag-0.body",
+      "bytes": 68,
+      "sha256": "5e3dbf7072e23ee1599c41cf518e65fa18977b7e4876a774131a7085a7194bdb",
+      "observed": {
+        "version": "v9.0.0",
+        "sha": "3a2844b7e9c422d3c10d287c895573f7108da1b3"
+      }
+    },
+    {
+      "subject": "actions/github-script latest tag-ref",
+      "source": "https://api.github.com/repos/actions/github-script/git/ref/tags/v9.0.0",
+      "requested_at": "2026-11-02T11:29:26.517Z",
+      "observed_at": "2026-11-02T11:29:27.129Z",
+      "body_file": "latest-actions_github-script-ref-raw.body",
+      "bytes": 345,
+      "sha256": "43701e20a88e5ceb8fc48384bafe2f177348b7ac3e3c97cf50e920132ac46efb",
+      "observed": {
+        "ref": "refs/tags/v9.0.0",
+        "node_id": "MDM6UmVmMjA1MjYyNzYwOnJlZnMvdGFncy92OS4wLjA=",
+        "url": "https://api.github.com/repos/actions/github-script/git/refs/tags/v9.0.0",
+        "object": {
+          "sha": "d746ffe35508b1917358783b479e04febd2b8f71",
+          "type": "tag",
+          "url": "https://api.github.com/repos/actions/github-script/git/tags/d746ffe35508b1917358783b479e04febd2b8f71"
+        }
+      }
+    },
+    {
+      "subject": "actions/github-script latest tag-tagobj",
+      "source": "https://api.github.com/repos/actions/github-script/git/tags/d746ffe35508b1917358783b479e04febd2b8f71",
+      "requested_at": "2026-11-02T11:29:27.129Z",
+      "observed_at": "2026-11-02T11:29:27.747Z",
+      "body_file": "latest-actions_github-script-tagobj-raw.body",
+      "bytes": 679,
+      "sha256": "228b5cc74b573b7de2b39e09ef019a450008b55f4e99868fdddf5cef95a03731",
+      "observed": {
+        "node_id": "TA_kwDODDwPqNoAKGQ3NDZmZmUzNTUwOGIxOTE3MzU4NzgzYjQ3OWUwNGZlYmQyYjhmNzE",
+        "sha": "d746ffe35508b1917358783b479e04febd2b8f71",
+        "url": "https://api.github.com/repos/actions/github-script/git/tags/d746ffe35508b1917358783b479e04febd2b8f71",
+        "tagger": {
+          "name": "Salman Muin Kayser Chishti",
+          "email": "salmanmkc@github.com",
+          "date": "2026-04-09T22:44:58Z"
+        },
+        "object": {
+          "sha": "3a2844b7e9c422d3c10d287c895573f7108da1b3",
+          "type": "commit",
+          "url": "https://api.github.com/repos/actions/github-script/git/commits/3a2844b7e9c422d3c10d287c895573f7108da1b3"
+        },
+        "tag": "v9.0.0",
+        "message": "v9.0.0\n",
+        "verification": {
+          "verified": false,
+          "reason": "unsigned",
+          "signature": null,
+          "payload": null,
+          "verified_at": null
+        }
+      }
+    },
+    {
+      "subject": "actions/github-script latest tag",
+      "source": "https://api.github.com/repos/actions/github-script/git/ref/tags/v9.0.0",
+      "requested_at": "2026-11-02T11:29:27.747Z",
+      "observed_at": "2026-11-02T11:29:27.747Z",
+      "body_file": "latest-actions_github-script-tag-0.body",
+      "bytes": 68,
+      "sha256": "5e3dbf7072e23ee1599c41cf518e65fa18977b7e4876a774131a7085a7194bdb",
+      "observed": {
+        "version": "v9.0.0",
+        "sha": "3a2844b7e9c422d3c10d287c895573f7108da1b3"
+      }
+    },
+    {
+      "subject": "actions/upload-artifact",
+      "source": "https://api.github.com/repos/actions/upload-artifact/releases/latest",
+      "requested_at": "2026-11-02T11:29:27.747Z",
+      "observed_at": "2026-11-02T11:29:28.461Z",
+      "body_file": "actions_upload-artifact.body",
+      "bytes": 2376,
+      "sha256": "1cd4b7da146610d5396bc37b83b7bf1ed46e0bbedfec232cd330e9d238baa05a",
+      "observed": {
+        "version": "v7.0.2",
+        "release_id": 405627178,
+        "published_at": "2026-10-07T10:08:14Z",
+        "prerelease": false,
+        "draft": false
+      }
+    },
+    {
+      "subject": "actions/upload-artifact pinned tag",
+      "source": "https://api.github.com/repos/actions/upload-artifact/git/ref/tags/v7.0.2",
+      "requested_at": "2026-11-02T11:29:28.462Z",
+      "observed_at": "2026-11-02T11:29:29.147Z",
+      "body_file": "pinned-actions_upload-artifact-tag-0.body",
+      "bytes": 68,
+      "sha256": "5eb8bae9965dc331070b29aa091b0e65deab9e8239eeb019463af5c16ef19f91",
+      "observed": {
+        "version": "v7.0.2",
+        "sha": "cf430e030ddbb5b0abf93d22962f4752f3646cd9"
+      }
+    },
+    {
+      "subject": "actions/upload-artifact latest tag",
+      "source": "https://api.github.com/repos/actions/upload-artifact/git/ref/tags/v7.0.2",
+      "requested_at": "2026-11-02T11:29:29.147Z",
+      "observed_at": "2026-11-02T11:29:29.876Z",
+      "body_file": "latest-actions_upload-artifact-tag-0.body",
+      "bytes": 68,
+      "sha256": "5eb8bae9965dc331070b29aa091b0e65deab9e8239eeb019463af5c16ef19f91",
+      "observed": {
+        "version": "v7.0.2",
+        "sha": "cf430e030ddbb5b0abf93d22962f4752f3646cd9"
+      }
+    },
+    {
+      "subject": "asamarts/alint",
+      "source": "https://api.github.com/repos/asamarts/alint/releases/latest",
+      "requested_at": "2026-11-02T11:29:29.879Z",
+      "observed_at": "2026-11-02T11:29:30.732Z",
+      "body_file": "asamarts_alint.body",
+      "bytes": 35159,
+      "sha256": "acfeeea4c1fd2df081e6ebac9e719386eafc922154f2480149a6cafb6667410a",
+      "observed": {
+        "version": "v0.21.0",
+        "release_id": 430765880,
+        "published_at": "2026-11-01T18:15:45Z",
+        "prerelease": false,
+        "draft": false
+      }
+    },
+    {
+      "subject": "asamarts/alint pinned tag",
+      "source": "https://api.github.com/repos/asamarts/alint/git/ref/tags/v0.20.1",
+      "requested_at": "2026-11-02T11:29:30.733Z",
+      "observed_at": "2026-11-02T11:29:31.412Z",
+      "body_file": "pinned-asamarts_alint-tag-0.body",
+      "bytes": 69,
+      "sha256": "d59a539da6e5779dd217eea73b21ef141c413a3ec1beea23f69421d528c4c84e",
+      "observed": {
+        "version": "v0.20.1",
+        "sha": "265d9fdc720bb8f59d00b87e33e4149869f77327"
+      }
+    },
+    {
+      "subject": "asamarts/alint latest tag",
+      "source": "https://api.github.com/repos/asamarts/alint/git/ref/tags/v0.21.0",
+      "requested_at": "2026-11-02T11:29:31.412Z",
+      "observed_at": "2026-11-02T11:29:32.027Z",
+      "body_file": "latest-asamarts_alint-tag-0.body",
+      "bytes": 69,
+      "sha256": "6a77d616d7057693d132ef2eb81fb1aceea10be35d9aff0409b43187dce5d14b",
+      "observed": {
+        "version": "v0.21.0",
+        "sha": "d61e4c802b02ac811224b35c59a62cfe5176f4d0"
+      }
+    },
+    {
+      "subject": "aws-actions/configure-aws-credentials",
+      "source": "https://api.github.com/repos/aws-actions/configure-aws-credentials/releases/latest",
+      "requested_at": "2026-11-02T11:29:32.027Z",
+      "observed_at": "2026-11-02T11:29:32.690Z",
+      "body_file": "aws-actions_configure-aws-credentials.body",
+      "bytes": 2303,
+      "sha256": "161850ffcd42ba5f7f6fd1a11172d788093d760eafa3794872a71165460db92f",
+      "observed": {
+        "version": "v6.3.0",
+        "release_id": 388882044,
+        "published_at": "2026-09-15T05:13:09Z",
+        "prerelease": false,
+        "draft": false
+      }
+    },
+    {
+      "subject": "aws-actions/configure-aws-credentials pinned tag",
+      "source": "https://api.github.com/repos/aws-actions/configure-aws-credentials/git/ref/tags/v6.3.0",
+      "requested_at": "2026-11-02T11:29:32.691Z",
+      "observed_at": "2026-11-02T11:29:33.306Z",
+      "body_file": "pinned-aws-actions_configure-aws-credentials-tag-0.body",
+      "bytes": 68,
+      "sha256": "44459fe65e6107e79bd098772f8aad89c90eca66dcaa91b5e36bb18ac81a6454",
+      "observed": {
+        "version": "v6.3.0",
+        "sha": "e1253824e5c10ff9df46874f81ed3ec929e19cfd"
+      }
+    },
+    {
+      "subject": "aws-actions/configure-aws-credentials latest tag",
+      "source": "https://api.github.com/repos/aws-actions/configure-aws-credentials/git/ref/tags/v6.3.0",
+      "requested_at": "2026-11-02T11:29:33.306Z",
+      "observed_at": "2026-11-02T11:29:33.927Z",
+      "body_file": "latest-aws-actions_configure-aws-credentials-tag-0.body",
+      "bytes": 68,
+      "sha256": "44459fe65e6107e79bd098772f8aad89c90eca66dcaa91b5e36bb18ac81a6454",
+      "observed": {
+        "version": "v6.3.0",
+        "sha": "e1253824e5c10ff9df46874f81ed3ec929e19cfd"
+      }
+    },
+    {
+      "subject": "jdx/mise-action",
+      "source": "https://api.github.com/repos/jdx/mise-action/releases/latest",
+      "requested_at": "2026-11-02T11:29:33.927Z",
+      "observed_at": "2026-11-02T11:29:34.506Z",
+      "body_file": "jdx_mise-action.body",
+      "bytes": 3008,
+      "sha256": "a217491e7600b97bd5ced2cd2f0ae8a818c011e2d0c0639937664b5fbfdac9c3",
+      "observed": {
+        "version": "v5.2.5",
+        "release_id": 429855428,
+        "published_at": "2026-10-31T10:04:11Z",
+        "prerelease": false,
+        "draft": false
+      }
+    },
+    {
+      "subject": "jdx/mise-action pinned tag",
+      "source": "https://api.github.com/repos/jdx/mise-action/git/ref/tags/v5.2.4",
+      "requested_at": "2026-11-02T11:29:34.506Z",
+      "observed_at": "2026-11-02T11:29:35.080Z",
+      "body_file": "pinned-jdx_mise-action-tag-0.body",
+      "bytes": 68,
+      "sha256": "7dbf590a0fe2ef8bab0d148d54c313bbda4b60cfb5ab821ddab5be7cf5d72d21",
+      "observed": {
+        "version": "v5.2.4",
+        "sha": "6be3c7ed4c21d4f76b208d351d95aac273ebb76d"
+      }
+    },
+    {
+      "subject": "jdx/mise-action latest tag",
+      "source": "https://api.github.com/repos/jdx/mise-action/git/ref/tags/v5.2.5",
+      "requested_at": "2026-11-02T11:29:35.080Z",
+      "observed_at": "2026-11-02T11:29:35.671Z",
+      "body_file": "latest-jdx_mise-action-tag-0.body",
+      "bytes": 68,
+      "sha256": "bc549af1e927db4ef740374a1ca110c8feefffc28c3c6f8373e9399cb6083f7a",
+      "observed": {
+        "version": "v5.2.5",
+        "sha": "6612f0ef07ed2a736cd1e00a94a065522dd41195"
+      }
+    },
+    {
+      "subject": "jdx/mr-boxington-action",
+      "source": "https://api.github.com/repos/jdx/mr-boxington-action/releases",
+      "requested_at": "2026-11-02T11:29:35.671Z",
+      "observed_at": "2026-11-02T11:29:36.397Z",
+      "body_file": "jdx_mr-boxington-action.body",
+      "bytes": 51181,
+      "sha256": "1a1ca26acb51a7bc7b48efaa0bbb6d65f50de5de8afa3406be0de4eab528fd73",
+      "observed": {
+        "version": "v1.7.3",
+        "release_id": 424088566,
+        "published_at": "2026-10-26T10:05:33Z",
+        "prerelease": false,
+        "draft": false
+      }
+    },
+    {
+      "subject": "jdx/mr-boxington-action pinned tag",
+      "source": "https://api.github.com/repos/jdx/mr-boxington-action/git/ref/tags/v1.7.3",
+      "requested_at": "2026-11-02T11:29:36.398Z",
+      "observed_at": "2026-11-02T11:29:36.971Z",
+      "body_file": "pinned-jdx_mr-boxington-action-tag-0.body",
+      "bytes": 68,
+      "sha256": "d2e42a8667b6c0874a64c42475f6d04605109c926b4f59628f40a1894c12a886",
+      "observed": {
+        "version": "v1.7.3",
+        "sha": "88acf2bb50552c7c508cbac13e5f8c576b95b1de"
+      }
+    },
+    {
+      "subject": "jdx/mr-boxington-action latest tag",
+      "source": "https://api.github.com/repos/jdx/mr-boxington-action/git/ref/tags/v1.7.3",
+      "requested_at": "2026-11-02T11:29:36.971Z",
+      "observed_at": "2026-11-02T11:29:37.477Z",
+      "body_file": "latest-jdx_mr-boxington-action-tag-0.body",
+      "bytes": 68,
+      "sha256": "d2e42a8667b6c0874a64c42475f6d04605109c926b4f59628f40a1894c12a886",
+      "observed": {
+        "version": "v1.7.3",
+        "sha": "88acf2bb50552c7c508cbac13e5f8c576b95b1de"
+      }
+    }
+  ]
+}
