@@ -9,7 +9,7 @@ and the specification is the [workflow lint contract](../proposed/workflow-lint-
 - `.velnor/config.toml` sets `[workflow.lint] profile = "default"`, which
   turns on the security and policy rules. velnor-new is the first repository
   on that profile.
-- `mise.toml` declares `jactionlint = "2.3.0"` and `shellcheck = "0.11.0"`.
+- `mise.toml` declares `jactionlint = "2.4.0"` and `shellcheck = "0.11.0"`.
   Generated CI reads both at run time (hard decision 4), so CI, the release
   gates and a local `hk` run use one binary. `mise.lock` carries their
   checksums for `linux-x64`, `macos-arm64` and `macos-x64` (from
@@ -20,21 +20,21 @@ and the specification is the [workflow lint contract](../proposed/workflow-lint-
 
 ## Pinned release provenance
 
-The pinned release is `jdx/jactionlint` tag `v2.3.0`, published as a stable
-release on 2026-10-21. The latest-release API was checked on 2026-10-22. At
-this bump, both provenance checks below passed on 2026-10-22 for the four
+The pinned release is `jdx/jactionlint` tag `v2.4.0`, published as a stable
+release on 2026-10-29. The latest-release API was checked on 2026-11-02. At
+this bump, both provenance checks below passed on 2026-11-02 for the four
 archives covered by the current
 [`JACTIONLINT_DIGESTS` table](../../crates/velnor-actions-contract/src/config/jactionlint_verifier.rs#L18):
 
 - `cosign verify-blob-attestation` on `packslip.sigstore.json`, with type
   `https://packslip.dev/release/v1`, signer identity
-  `https://github.com/jdx/jactionlint/.github/workflows/release.yaml@refs/tags/v2.3.0`,
+  `https://github.com/jdx/jactionlint/.github/workflows/release.yaml@refs/tags/v2.4.0`,
   and issuer `https://token.actions.githubusercontent.com`;
 - `gh attestation verify -R jdx/jactionlint --signer-workflow
   jdx/jactionlint/.github/workflows/release.yaml`.
 
 The checks covered the Linux amd64 and arm64 archives and the Darwin amd64 and
-arm64 archives. This records the v2.3.0 bump only. For each future version
+arm64 archives. This records the v2.4.0 bump only. For each future version
 bump, repeat both checks for every table platform and record that version's
 source tag, check date, and outcomes here; the current release's evidence does
 not qualify a later version. The bump-time procedure is specified in the

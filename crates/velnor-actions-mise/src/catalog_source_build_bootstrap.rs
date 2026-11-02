@@ -126,23 +126,23 @@ pub const fn official(
 const fn mise(host: SourceBuildBootstrapHost) -> SourceBuildBootstrapAsset {
     let (asset_url, archive_sha256, binary_sha256, asset_format, binary_member) = match host {
         SourceBuildBootstrapHost::LinuxAmd64 => (
-            "https://github.com/jdx/mise/releases/download/v2026.10.21/mise-v2026.10.21-linux-x64",
+            "https://github.com/jdx/mise/releases/download/v2026.10.25/mise-v2026.10.25-linux-x64",
             MISE_BINARY_SHA256_LINUX_X64,
             MISE_BINARY_SHA256_LINUX_X64,
             SourceBuildBootstrapFormat::Binary,
             "",
         ),
         SourceBuildBootstrapHost::LinuxArm64 => (
-            "https://github.com/jdx/mise/releases/download/v2026.10.21/mise-v2026.10.21-linux-arm64.tar.gz",
-            "1c05e4d4baaf1b4a9bf929e9c39b3512deb937c8d4c1bd52927499624018834f",
-            "a7c96627e56c075543fe1c1aafeb289d2588d6ddfd4d705fce4ae140c57e190c",
+            "https://github.com/jdx/mise/releases/download/v2026.10.25/mise-v2026.10.25-linux-arm64.tar.gz",
+            "a7d1e2add53441ff76e7e971e7a3fb15c117741836ce51c026f5fb7eebe7dbcf",
+            "bb09e88b13164ca90691a5cc042726d079f0ba26ab55527344cb173c2e83c998",
             SourceBuildBootstrapFormat::TarGzip,
             "mise/bin/mise",
         ),
         SourceBuildBootstrapHost::MacosArm64 => (
-            "https://github.com/jdx/mise/releases/download/v2026.10.21/mise-v2026.10.21-macos-arm64.tar.gz",
-            "d67b6006cb1144131910ce80d6cf52134f55b9c7da55648bd717df36b3f238d6",
-            "b20d30788a819fade398a1cb92aee56c383e3c34324162ec39fb8567dee79ba6",
+            "https://github.com/jdx/mise/releases/download/v2026.10.25/mise-v2026.10.25-macos-arm64.tar.gz",
+            "774236e3247e48d78078c0bce79e5327d4e4479f1a94c8487827f178197ee39b",
+            "8a3ef00765b009278197aba627ac00d6e9c63f6aeb04d4f4b2cfe0e59ddc2fd6",
             SourceBuildBootstrapFormat::TarGzip,
             "mise/bin/mise",
         ),
@@ -150,53 +150,53 @@ const fn mise(host: SourceBuildBootstrapHost) -> SourceBuildBootstrapAsset {
     SourceBuildBootstrapAsset {
         tool: SourceBuildBootstrapTool::Mise,
         host,
-        selector: "github:jdx/mise@2026.10.21",
+        selector: "github:jdx/mise@2026.10.25",
         asset_url,
         archive_sha256,
         binary_sha256,
         asset_format,
         binary_member,
         source_repository: "https://github.com/jdx/mise",
-        source_commit: "61eb04dbc806cb646821e342b7abbbdaf1581e84",
-        source_tree: "65c7692f05c45170f6a42352a9ada4c0f667e48d",
+        source_commit: "3c78bbb2d58c0b668fe8d5bebf4a8cb66194e1aa",
+        source_tree: "210ff139381d56299eff55059066ce456fdea622",
         owner: "jdx/mise",
-        version: "2026.10.21",
-        abi: "mise-cli-v2026.10.21",
+        version: "2026.10.25",
+        abi: "mise-cli-v2026.10.25",
     }
 }
 
 const fn mbx(host: SourceBuildBootstrapHost) -> SourceBuildBootstrapAsset {
     let (asset_url, archive_sha256, binary_sha256) = match host {
         SourceBuildBootstrapHost::LinuxAmd64 => (
-            "https://github.com/jdx/mr-boxington/releases/download/v1.28.0/mbx-x86_64-unknown-linux-gnu.tar.gz",
-            "50ce9360221d9274a73d70c9d2d5285dc2d8353a101de0845e3da5bb0083bcfb",
-            "6d3e1afe2a91f83aeed762a576d0a2b3c990a82f7e3e45926e1cd4b922f0df1b",
+            "https://github.com/jdx/mr-boxington/releases/download/v1.29.1/mbx-x86_64-unknown-linux-gnu.tar.gz",
+            "ca95f28c77711845c0455839792ca3f3070bdf007979ab75bf7e10c03b07fe3f",
+            "4b0c0fcfc9329a9d76fd6bdefc1ee34822580864f5f5ba2f0b47dcbbffce2eca",
         ),
         SourceBuildBootstrapHost::LinuxArm64 => (
-            "https://github.com/jdx/mr-boxington/releases/download/v1.28.0/mbx-aarch64-unknown-linux-gnu.tar.gz",
-            "9056d34520991f80c9f708d36008fcc732e500d735591a8649029d476cb566bd",
-            "bc9d537789f16da1e37b9ca64fde107246a902f916b989fe3f84b0a4d4bbd2a5",
+            "https://github.com/jdx/mr-boxington/releases/download/v1.29.1/mbx-aarch64-unknown-linux-gnu.tar.gz",
+            "92e5554096a9b0c083aaf3d461262d31e3f7a0aa3d38ed2972c62c2b9a953c41",
+            "495e2a1cf1595f45d540bd09d8034ef322142356859dced99b0254d9e9028c0e",
         ),
         SourceBuildBootstrapHost::MacosArm64 => (
-            "https://github.com/jdx/mr-boxington/releases/download/v1.28.0/mbx-aarch64-apple-darwin.tar.gz",
-            "ac73ba0637a443ba9c43354008f6bcd5d9e8a84b703e46f23202025c1f849472",
-            "068cf7b41d58b5dd630e56b4980650a4f57f5e3267abc6d16a614088f499cebf",
+            "https://github.com/jdx/mr-boxington/releases/download/v1.29.1/mbx-aarch64-apple-darwin.tar.gz",
+            "2c19baafcda87ad948f071c571f57b2cf9eaeee2c971c5536b93ae3a036d5e75",
+            "1c6e342a341e567fd752dea8b665c57c92ba2e65c0bfb13e7555c2051097ec88",
         ),
     };
     SourceBuildBootstrapAsset {
         tool: SourceBuildBootstrapTool::Mbx,
         host,
-        selector: "github:jdx/mr-boxington@1.28.0",
+        selector: "github:jdx/mr-boxington@1.29.1",
         asset_url,
         archive_sha256,
         binary_sha256,
         asset_format: SourceBuildBootstrapFormat::TarGzip,
         binary_member: "mbx",
         source_repository: "https://github.com/jdx/mr-boxington",
-        source_commit: "44f50c329a83dedd012e1e49cf9f265f79226a83",
-        source_tree: "ccfdb5978fb74a7bd854a0cd9eeafa635619c50f",
+        source_commit: "b0b67184f01c1de02082296d093af547ecf4c2ab",
+        source_tree: "44535809652e19ffa6c26231ba9f03e141189b97",
         owner: "jdx/mr-boxington",
-        version: "1.28.0",
-        abi: "mbx-cli-v1.28.0",
+        version: "1.29.1",
+        abi: "mbx-cli-v1.29.1",
     }
 }

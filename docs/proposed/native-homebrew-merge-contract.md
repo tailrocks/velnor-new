@@ -141,7 +141,7 @@ For Velnor's current workflow, `.velnor/generator.lock`, the Plan bootstrap,
 and the Required controller use authenticated SDK 0.1.66 from source commit
 `ecee0521d8631315790662107231dabf2ba6b1ec`. Controller approvals and the lock
 bind its published manifest and platform hashes. The Setup Mise step keeps
-the default 2026.10.21 pin.
+the default 2026.10.25 pin.
 
 The candidate workflow establishes no pre-merge authority. The protected
 default-branch review-completion workflow remains authoritative until the seed
