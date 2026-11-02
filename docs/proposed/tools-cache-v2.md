@@ -67,7 +67,10 @@ because the runner resolves a bare `shell: bash` through that `PATH`
 shell path as given. So:
 
 - the admission and re-verification steps use the shell
-  `/bin/bash --noprofile --norc -e -o pipefail {0}` (`VERIFY_SHELL`);
+  `/bin/bash --noprofile --norc -p -e -o pipefail {0}`
+  (`VERIFY_VERIFIER_SHELL`). `-p` makes bash ignore `BASH_ENV` and `ENV` and
+  import no exported functions, so an earlier step cannot inject code or
+  forge a digest tool into the check;
 - each of them, and the Rust toolchain check
   ([Rust channel manifest](../implemented/rust-channel-manifest.md)), assigns
   `PATH=/usr/bin:/bin:/usr/sbin:/sbin` (`VERIFY_PATH`, root-owned system

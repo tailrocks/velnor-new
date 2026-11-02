@@ -19,9 +19,10 @@ use super::workflow_configuration_fixture;
 const RUNNER_DEFAULT_PATH: &str = "/usr/bin:/bin:/usr/sbin:/sbin";
 const RUNNER_DEFAULT_SHELL: &str = "bash -e {0}";
 
-const BYTES: &[u8] = b"velnor ledger cli fixture\n";
-const BYTES_SHA256: &str = "6d57cceb8ae05f9a71cc4a0efa99f8940bb72dcd713b56fc89be7ed6e411cb63";
-const TAMPERED: &[u8] = b"velnor ledger cli fixture!\n";
+pub(super) const BYTES: &[u8] = b"velnor ledger cli fixture\n";
+pub(super) const BYTES_SHA256: &str =
+    "6d57cceb8ae05f9a71cc4a0efa99f8940bb72dcd713b56fc89be7ed6e411cb63";
+pub(super) const TAMPERED: &[u8] = b"velnor ledger cli fixture!\n";
 const OTHER_SHA256: &str = "1b8e733ab0bf5f7b7e7836a65a2a0fa6d36cdfb8de75e3ac3ab211f29a431453";
 const WRONG_SOURCE: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 
@@ -141,9 +142,9 @@ fn missing_binary_fails() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-struct RenderedVerify {
-    shell: String,
-    run: String,
+pub(super) struct RenderedVerify {
+    pub(super) shell: String,
+    pub(super) run: String,
 }
 
 fn scalar(value: &str) -> Result<String, Box<dyn Error>> {
@@ -158,12 +159,16 @@ fn rendered_verify() -> Result<RenderedVerify, Box<dyn Error>> {
     let repo = mbx_repo_for(false, WorkflowPolicy::VelnorRepositoryV1)?;
     let tree = render_staged_tree(&prepare(repo.path())?)?;
     let workflow = tree.get(WORKFLOW_PATH).ok_or("no ci workflow")?;
-    let mut lines = workflow
-        .lines()
-        .skip_while(|line| !line.contains("name: Verify ledger CLI"));
-    lines.next().ok_or("no verify step")?;
+    rendered_step(workflow, "Verify ledger CLI")
+}
+
+pub(super) fn rendered_step(text: &str, name: &str) -> Result<RenderedVerify, Box<dyn Error>> {
+    let marker = format!("name: {name}");
+    let mut lines = text.lines().skip_while(|line| !line.contains(&marker));
+    let header = lines.next().ok_or("no verify step")?;
+    let next_step = format!("{}- ", &header[..header.len() - header.trim_start().len()]);
     let (mut shell, mut run) = (None, None);
-    for line in lines.take_while(|line| !line.starts_with("      - ")) {
+    for line in lines.take_while(|line| !line.starts_with(&next_step)) {
         let line = line.trim();
         shell = line
             .strip_prefix("shell: ")
@@ -178,13 +183,13 @@ fn rendered_verify() -> Result<RenderedVerify, Box<dyn Error>> {
     })
 }
 
-struct Planted {
+pub(super) struct Planted {
     bin: TempDir,
     logs: TempDir,
 }
 
 impl Planted {
-    fn new(tools: &[(&str, &str)]) -> Result<Self, Box<dyn Error>> {
+    pub(super) fn new(tools: &[(&str, &str)]) -> Result<Self, Box<dyn Error>> {
         let planted = Self {
             bin: tempfile::tempdir()?,
             logs: tempfile::tempdir()?,
@@ -201,16 +206,25 @@ impl Planted {
         Ok(planted)
     }
 
-    fn log(&self) -> PathBuf {
+    pub(super) fn log(&self) -> PathBuf {
         self.logs.path().join("calls")
     }
 
-    fn calls(&self) -> String {
+    pub(super) fn calls(&self) -> String {
         fs::read_to_string(self.log()).unwrap_or_default()
+    }
+
+    pub(super) fn hook(&self) -> Result<PathBuf, Box<dyn Error>> {
+        let hook = self.logs.path().join("hook.sh");
+        fs::write(
+            &hook,
+            format!("echo hook >> \"{}\"\nexit 0\n", self.log().display()),
+        )?;
+        Ok(hook)
     }
 }
 
-fn resolve_on(program: &str, path: &str) -> Result<PathBuf, Box<dyn Error>> {
+pub(super) fn resolve_on(program: &str, path: &str) -> Result<PathBuf, Box<dyn Error>> {
     if program.starts_with('/') {
         return Ok(PathBuf::from(program));
     }
@@ -317,11 +331,7 @@ fn hostile_failing_tools_do_not_break_a_genuine_binary() -> Result<(), Box<dyn E
 fn env_hook_cannot_forge_verification() -> Result<(), Box<dyn Error>> {
     let step = rendered_verify()?;
     let planted = Planted::new(&[])?;
-    let hook = planted.logs.path().join("hook.sh");
-    fs::write(
-        &hook,
-        format!("echo hook >> \"{}\"\nexit 0\n", planted.log().display()),
-    )?;
+    let hook = planted.hook()?;
     let checkout = Checkout::new(Some(TAMPERED))?;
     let env = [("BASH_ENV", hook.as_path()), ("ENV", hook.as_path())];
     assert!(

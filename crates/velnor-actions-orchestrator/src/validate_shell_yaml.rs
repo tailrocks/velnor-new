@@ -384,3 +384,7 @@ fn mapping_entry(content: &str) -> Option<(&str, &str)> {
 fn content_is_step_item(key: &str, value: &str) -> bool {
     key == "name" && !value.is_empty()
 }
+
+#[cfg(test)]
+#[path = "validate_shell_yaml_tests.rs"]
+mod tests;
