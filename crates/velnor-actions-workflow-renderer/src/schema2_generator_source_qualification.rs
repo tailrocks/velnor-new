@@ -86,7 +86,7 @@ fn producer_job(
 }
 
 fn gather_job(runner: &super::RunnerSpec) -> Result<Yaml, RenderError> {
-    let mut steps = vec![producers_succeeded_step(), checkout_step()];
+    let mut steps = vec![checkout_step()];
     steps.extend(
         PRODUCER_JOBS
             .iter()
@@ -96,6 +96,7 @@ fn gather_job(runner: &super::RunnerSpec) -> Result<Yaml, RenderError> {
     steps.push(upload_step(
         "source-qualification-${{ github.run_id }}-${{ github.run_attempt }}",
     ));
+    steps.push(producers_succeeded_step());
     let gate = vec![
         (
             "needs".to_owned(),

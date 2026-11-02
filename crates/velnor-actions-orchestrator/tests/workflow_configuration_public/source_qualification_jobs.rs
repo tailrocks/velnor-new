@@ -210,10 +210,8 @@ fn assert_producer_gate(gather_block: &str, producers: &[String]) -> Result<(), 
         producers.iter().map(String::as_str).collect::<Vec<_>>()
     );
     assert!(gather_block.contains("\n    if: always()\n"));
-    let guard = steps(gather_block)
-        .into_iter()
-        .next()
-        .ok_or("gather job has no steps")?;
+    let gather_steps = steps(gather_block);
+    let guard = *gather_steps.last().ok_or("gather job has no steps")?;
     let expected_condition = producers
         .iter()
         .map(|id| format!("needs.{id}.result != 'success'"))
@@ -222,7 +220,33 @@ fn assert_producer_gate(gather_block: &str, producers: &[String]) -> Result<(), 
     assert_eq!(step_field(guard, "if"), Some(expected_condition.as_str()));
     assert!(
         guard.contains("exit 1"),
-        "first gather step does not fail: {guard}"
+        "last gather step does not fail: {guard}"
+    );
+    let position =
+        |predicate: &dyn Fn(&str) -> bool| gather_steps.iter().position(|s| predicate(s));
+    let checkout = position(&|step| {
+        step_field(step, "uses").is_some_and(|uses| uses.starts_with("actions/checkout@"))
+    })
+    .ok_or("gather job has no checkout")?;
+    let first_download = position(&|step| {
+        step_field(step, "uses").is_some_and(|uses| uses.starts_with("actions/download-artifact@"))
+    })
+    .ok_or("gather job has no download")?;
+    let bundle =
+        position(&|step| step_field(step, "run").is_some_and(|run| run.ends_with(BUNDLE_PHASE)))
+            .ok_or("gather job has no bundle step")?;
+    assert!(
+        checkout < first_download && checkout < bundle,
+        "checkout must precede download and bundle: {gather_steps:?}"
+    );
+    assert!(
+        step_field(gather_steps[checkout], "if").is_none(),
+        "checkout is conditional: {}",
+        gather_steps[checkout]
+    );
+    assert!(
+        bundle < gather_steps.len() - 1,
+        "guard must follow the bundle: {gather_steps:?}"
     );
     Ok(())
 }
