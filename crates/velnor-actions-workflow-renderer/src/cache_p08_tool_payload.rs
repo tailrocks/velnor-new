@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_actions_contract::{RunsOn, Step};
+use velnor_actions_mise::{RustSpecKind, rust_spec_kind};
 
 use crate::{MiseSetup, RenderError, cache_p08, steps};
 
@@ -200,6 +201,15 @@ fn validate_inputs(inputs: &ToolsCacheInputs<'_>) -> Result<(), RenderError> {
 }
 
 fn validate_rust_inputs(inputs: &ToolsCacheInputs<'_>) -> Result<(), RenderError> {
+    if let Some(spec) = inputs
+        .tool_specs
+        .iter()
+        .find(|spec| rust_spec_kind(spec) == RustSpecKind::UnsupportedRust)
+    {
+        return Err(RenderError::BadCommand(format!(
+            "bad_tools_cache_rust_spec:{spec}"
+        )));
+    }
     let rust = inputs
         .tool_specs
         .iter()

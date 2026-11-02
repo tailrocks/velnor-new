@@ -6,3 +6,4 @@ mod gc1_t17;
 mod gc1_t18;
 mod install_spec_subject;
 mod metadata_cwd;
+mod rust_spec_kind;

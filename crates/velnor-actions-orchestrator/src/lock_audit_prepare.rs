@@ -3,7 +3,7 @@
 
 use velnor_actions_contract::{Step, StepKind, StepRole, WorkflowPolicy};
 use velnor_actions_mise::toolfiles::lockfile::{InstallSubject, subject_for_install_spec};
-use velnor_actions_mise::{PinnedTool, ToolCatalog};
+use velnor_actions_mise::{PinnedTool, RustSpecKind, ToolCatalog, rust_spec_kind};
 use velnor_actions_workflow_renderer::render::ValidatorCommand;
 
 use crate::workflow::verifier_actions::VerifierActionSet;
@@ -116,7 +116,7 @@ pub(super) fn jactionlint_verifier_sequence_valid(
 }
 
 pub(super) fn check_rust_profile(id: &str, spec: &str, blocking: &mut Vec<String>) {
-    if spec.starts_with("rust@") {
+    if matches!(rust_spec_kind(spec), RustSpecKind::Plain(_)) {
         let finding = format!("rust_profile_not_minimal:{id}");
         if !blocking.contains(&finding) {
             blocking.push(finding);

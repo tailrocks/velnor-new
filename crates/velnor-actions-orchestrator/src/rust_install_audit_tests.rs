@@ -340,3 +340,23 @@ fn install_audit_recognises_bracket_form_rust_installs_in_every_quoting()
     }
     Ok(())
 }
+
+#[test]
+fn install_audit_rejects_a_noncanonical_rust_install_option_in_every_quoting()
+-> Result<(), Box<dyn Error>> {
+    let rendered = rendered()?;
+    for option in ["profile=complete", "profile=minimal,components=rust-docs"] {
+        for quoting in ["'rust[", "rust[", "\"rust[", "\\\"rust["] {
+            let files = edited(
+                &rendered,
+                "plan",
+                "install 'rust[profile=minimal]",
+                &format!("install {quoting}{option}]"),
+            )?;
+            let result = audit_with_verifiers(&files, &rendered.verifiers);
+            assert_rejected(result, "plan")
+                .map_err(|error| format!("{option} in {quoting}: {error}"))?;
+        }
+    }
+    Ok(())
+}

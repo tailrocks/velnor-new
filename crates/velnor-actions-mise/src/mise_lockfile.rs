@@ -3,7 +3,7 @@
 
 use std::collections::BTreeMap;
 
-use crate::catalog::{PinnedTool, RUST_INSTALL_OPTIONS, ToolCatalog};
+use crate::catalog::{PinnedTool, RustSpecKind, ToolCatalog, rust_spec_kind};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LockEntry {
@@ -270,13 +270,13 @@ pub fn subject_for_install_spec(spec: &str, catalog: &ToolCatalog) -> Option<Ins
 }
 
 fn install_key_and_version(spec: &str) -> Option<(&str, &str)> {
-    let (key, version) = spec.split_once('@')?;
-    match key.split_once('[') {
-        None => Some((key, version)),
-        Some(("rust", options)) if options.strip_suffix(']') == Some(RUST_INSTALL_OPTIONS) => {
-            Some(("rust", version))
+    match rust_spec_kind(spec) {
+        RustSpecKind::Plain(version) | RustSpecKind::Minimal(version) => Some(("rust", version)),
+        RustSpecKind::UnsupportedRust => None,
+        RustSpecKind::NotRust => {
+            let (key, version) = spec.split_once('@')?;
+            (!key.contains('[')).then_some((key, version))
         }
-        Some(_) => None,
     }
 }
 

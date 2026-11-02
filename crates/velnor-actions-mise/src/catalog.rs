@@ -98,13 +98,40 @@ pub fn rust_install_spec(version: &str) -> String {
     format!("rust[{RUST_INSTALL_OPTIONS}]@{version}")
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RustSpecKind<'a> {
+    Plain(&'a str),
+    Minimal(&'a str),
+    NotRust,
+    UnsupportedRust,
+}
+
+#[must_use]
+pub fn rust_spec_kind(spec: &str) -> RustSpecKind<'_> {
+    let name_end = spec.find(['@', '[']).unwrap_or(spec.len());
+    if !matches!(&spec[..name_end], "rust" | "core:rust") {
+        return RustSpecKind::NotRust;
+    }
+    if let Some(version) = spec.strip_prefix("rust@") {
+        return if version.is_empty() {
+            RustSpecKind::UnsupportedRust
+        } else {
+            RustSpecKind::Plain(version)
+        };
+    }
+    spec.strip_prefix("rust[")
+        .and_then(|rest| rest.strip_prefix(RUST_INSTALL_OPTIONS))
+        .and_then(|rest| rest.strip_prefix("]@"))
+        .filter(|version| !version.is_empty())
+        .map_or(RustSpecKind::UnsupportedRust, RustSpecKind::Minimal)
+}
+
 #[must_use]
 pub fn rust_spec_version(spec: &str) -> Option<&str> {
-    if let Some(version) = spec.strip_prefix("rust@") {
-        return Some(version);
+    match rust_spec_kind(spec) {
+        RustSpecKind::Plain(version) | RustSpecKind::Minimal(version) => Some(version),
+        RustSpecKind::NotRust | RustSpecKind::UnsupportedRust => None,
     }
-    let (options, version) = spec.strip_prefix("rust[")?.split_once("]@")?;
-    (options == RUST_INSTALL_OPTIONS).then_some(version)
 }
 
 pub const RUST_TARGET_TRIPLE: &str = "x86_64-unknown-linux-gnu";

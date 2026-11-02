@@ -6,6 +6,8 @@ use velnor_actions_workflow_renderer::{render::RenderedFile, yaml::quote_scalar}
 use velnor_actions_contract::workflow::TOOLS_PRODUCER_INSTALL_CONDITION;
 use velnor_actions_contract::workflow::crate_job::TOOLS_PRODUCER_JOB_ID_PREFIX;
 
+use velnor_actions_mise::RUST_INSTALL_OPTIONS;
+
 use crate::OrchestratorError;
 use crate::workflow::verifier_actions::{VerifierAction, VerifierActionSet};
 
@@ -242,6 +244,16 @@ fn check_steps(
     steps: &[StepText],
     verifiers: &VerifierActionSet,
 ) -> Result<(), OrchestratorError> {
+    if let Some(step) = steps
+        .iter()
+        .find(|step| installs_rust(step) && has_noncanonical_rust_option(&step.text))
+    {
+        return Err(unverified(
+            path,
+            &step.name,
+            "noncanonical rust install option",
+        ));
+    }
     let mut index = 0;
     while index < steps.len() {
         if !installs_rust(&steps[index]) {
@@ -289,6 +301,13 @@ fn check_steps(
         index += 1;
     }
     Ok(())
+}
+
+fn has_noncanonical_rust_option(text: &str) -> bool {
+    let canonical = format!("{RUST_INSTALL_OPTIONS}]@");
+    text.split("rust[")
+        .skip(1)
+        .any(|rest| !rest.starts_with(&canonical))
 }
 
 fn self_verified(step: &StepText) -> bool {
