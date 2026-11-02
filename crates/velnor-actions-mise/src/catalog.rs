@@ -91,6 +91,21 @@ pub const COSIGN_DARWIN_ARM64_SHA256: &str =
     "9f9b8cd557cf2e5b3df3373a00baa005a86b02391e3e06dd0ce37b3a1533d3a4";
 
 const NEXTEST_TOOL_SPEC_PREFIX: &str = "aqua:nextest-rs/nextest/cargo-nextest";
+pub const RUST_INSTALL_OPTIONS: &str = "profile=minimal";
+
+#[must_use]
+pub fn rust_install_spec(version: &str) -> String {
+    format!("rust[{RUST_INSTALL_OPTIONS}]@{version}")
+}
+
+#[must_use]
+pub fn rust_spec_version(spec: &str) -> Option<&str> {
+    if let Some(version) = spec.strip_prefix("rust@") {
+        return Some(version);
+    }
+    let (options, version) = spec.strip_prefix("rust[")?.split_once("]@")?;
+    (options == RUST_INSTALL_OPTIONS).then_some(version)
+}
 
 pub const RUST_TARGET_TRIPLE: &str = "x86_64-unknown-linux-gnu";
 
@@ -199,6 +214,19 @@ impl ToolCatalog {
             }
             _ => format!("{}@{}", tool.tool_name(), self.version(tool)),
         }
+    }
+
+    #[must_use]
+    pub fn install_spec(&self, tool: PinnedTool) -> String {
+        match tool {
+            PinnedTool::Rust => rust_install_spec(self.version(tool)),
+            _ => self.tool_spec(tool),
+        }
+    }
+
+    #[must_use]
+    pub fn install_specs(&self, tools: &[PinnedTool]) -> Vec<String> {
+        tools.iter().map(|tool| self.install_spec(*tool)).collect()
     }
 
     #[must_use]

@@ -4,4 +4,5 @@
 mod gc1_t11;
 mod gc1_t17;
 mod gc1_t18;
+mod install_spec_subject;
 mod metadata_cwd;

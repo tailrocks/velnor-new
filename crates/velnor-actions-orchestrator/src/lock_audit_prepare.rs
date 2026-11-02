@@ -115,6 +115,15 @@ pub(super) fn jactionlint_verifier_sequence_valid(
     )
 }
 
+pub(super) fn check_rust_profile(id: &str, spec: &str, blocking: &mut Vec<String>) {
+    if spec.starts_with("rust@") {
+        let finding = format!("rust_profile_not_minimal:{id}");
+        if !blocking.contains(&finding) {
+            blocking.push(finding);
+        }
+    }
+}
+
 pub(super) fn bare_install(id: &str) -> String {
     format!(
         "bare_install_step:{id} installs zero specs (versions would come from mise.toml); emit explicit specs"

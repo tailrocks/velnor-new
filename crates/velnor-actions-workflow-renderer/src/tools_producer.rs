@@ -156,9 +156,15 @@ fn install_steps(donor: &Job, id: &str) -> Result<Vec<Step>, RenderError> {
         if has_role(StepRole::PrepareRustComponents) {
             return Err(invalid(&format!("donor_components_without_prepare:{id}")));
         }
+        if digest_specs
+            .iter()
+            .any(|spec| spec.starts_with(RUST_SPEC_PREFIX))
+        {
+            return Err(invalid(&format!("donor_rust_install_not_minimal:{id}")));
+        }
         let rust = digest_specs
             .iter()
-            .any(|spec| spec.starts_with(RUST_SPEC_PREFIX));
+            .any(|spec| velnor_actions_mise::rust_spec_version(spec).is_some());
         if rust && !has_role(StepRole::VerifyRustManifest) {
             return Err(invalid(&format!("donor_rust_without_verifier:{id}")));
         }

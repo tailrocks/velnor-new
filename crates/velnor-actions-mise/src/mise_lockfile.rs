@@ -3,7 +3,7 @@
 
 use std::collections::BTreeMap;
 
-use crate::catalog::{PinnedTool, ToolCatalog};
+use crate::catalog::{PinnedTool, RUST_INSTALL_OPTIONS, ToolCatalog};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LockEntry {
@@ -250,7 +250,7 @@ pub struct InstallSubject {
 
 #[must_use]
 pub fn subject_for_install_spec(spec: &str, catalog: &ToolCatalog) -> Option<InstallSubject> {
-    let (key, version) = spec.split_once('@')?;
+    let (key, version) = install_key_and_version(spec)?;
     if key.is_empty() || version.is_empty() {
         return None;
     }
@@ -267,6 +267,17 @@ pub fn subject_for_install_spec(spec: &str, catalog: &ToolCatalog) -> Option<Ins
         expected_version: catalog.version(*tool).to_owned(),
         lock_key: key.to_owned(),
     })
+}
+
+fn install_key_and_version(spec: &str) -> Option<(&str, &str)> {
+    let (key, version) = spec.split_once('@')?;
+    match key.split_once('[') {
+        None => Some((key, version)),
+        Some(("rust", options)) if options.strip_suffix(']') == Some(RUST_INSTALL_OPTIONS) => {
+            Some(("rust", version))
+        }
+        Some(_) => None,
+    }
 }
 
 fn is_enforceable_checksum(value: &str) -> bool {

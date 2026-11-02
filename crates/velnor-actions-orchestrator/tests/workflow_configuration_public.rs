@@ -47,6 +47,8 @@ mod bun_runtime;
 mod empty_suite;
 #[path = "workflow_configuration_public/feature_toggles.rs"]
 mod feature_toggles;
+#[path = "workflow_configuration_public/install_profile.rs"]
+mod install_profile;
 #[path = "workflow_configuration_public/maintenance_features.rs"]
 mod maintenance_features;
 #[path = "workflow_configuration_public/native_artifacts.rs"]

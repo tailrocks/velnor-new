@@ -65,9 +65,10 @@ pub use catalog::{
     JACTIONLINT_DIGESTS, JACTIONLINT_VERSION, JactionlintDigest, MISE_BINARY_SHA256_LINUX_X64,
     MISE_VERSION, MR_BOXINGTON_VERSION, MiseBinaryIdentity, OPENTOFU_SHA256_DARWIN_AMD64,
     OPENTOFU_SHA256_DARWIN_ARM64, OPENTOFU_SHA256_LINUX_AMD64, OPENTOFU_SHA256_LINUX_ARM64,
-    OPENTOFU_VERSION, PinnedTool, RUST_TARGET_TRIPLE, RUST_VERSION, SHELLCHECK_VERSION,
-    ToolCatalog, check_freshness_requirements, current_mise_binary, jactionlint_archive_sha256,
-    jactionlint_executable_sha256, validate_concrete_exact_version, validate_exact_version,
+    OPENTOFU_VERSION, PinnedTool, RUST_INSTALL_OPTIONS, RUST_TARGET_TRIPLE, RUST_VERSION,
+    SHELLCHECK_VERSION, ToolCatalog, check_freshness_requirements, current_mise_binary,
+    jactionlint_archive_sha256, jactionlint_executable_sha256, rust_install_spec,
+    rust_spec_version, validate_concrete_exact_version, validate_exact_version,
 };
 pub use check_deadline::CheckDeadline;
 pub use checks::{

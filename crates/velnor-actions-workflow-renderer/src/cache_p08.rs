@@ -110,7 +110,15 @@ pub(crate) fn infer_steps_tools<'a>(steps: impl IntoIterator<Item = &'a Step>) -
             }
         }
     }
+    let optioned: Vec<String> = specs.iter().filter_map(|spec| plain_twin(spec)).collect();
+    specs.retain(|spec| !optioned.contains(spec));
     specs.into_iter().collect()
+}
+
+fn plain_twin(spec: &str) -> Option<String> {
+    let (tool, version) = spec.split_once('@')?;
+    let (name, _) = tool.split_once('[')?;
+    Some(format!("{name}@{version}"))
 }
 
 pub(crate) fn is_catalog_version(value: &str) -> bool {

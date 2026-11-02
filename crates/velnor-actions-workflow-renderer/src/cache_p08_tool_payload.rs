@@ -180,10 +180,14 @@ fn validate_inputs(inputs: &ToolsCacheInputs<'_>) -> Result<(), RenderError> {
                 "bad_tools_cache_spec:{spec}"
             )));
         }
+        let name = tool.split_once('[').map_or(tool, |(name, _)| name);
         if inputs
             .tool_specs
             .iter()
-            .filter(|candidate| candidate.starts_with(&format!("{tool}@")))
+            .filter(|candidate| {
+                candidate.starts_with(&format!("{name}@"))
+                    || candidate.starts_with(&format!("{name}["))
+            })
             .any(|candidate| candidate != spec)
         {
             return Err(RenderError::BadCommand(format!(
@@ -199,7 +203,7 @@ fn validate_rust_inputs(inputs: &ToolsCacheInputs<'_>) -> Result<(), RenderError
     let rust = inputs
         .tool_specs
         .iter()
-        .find_map(|spec| spec.strip_prefix("rust@"));
+        .find_map(|spec| velnor_actions_mise::rust_spec_version(spec));
     match (rust, inputs.rustup_toolchain) {
         (Some(version), Some(toolchain)) if version == toolchain => {}
         (None, None) if inputs.rustup_components.is_empty() => return Ok(()),

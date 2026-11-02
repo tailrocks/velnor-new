@@ -3,8 +3,8 @@
 
 use velnor_actions_workflow_renderer::{render::RenderedFile, yaml::quote_scalar};
 
-use velnor_actions_contract::workflow::crate_job::TOOLS_PRODUCER_JOB_ID_PREFIX;
 use velnor_actions_contract::workflow::TOOLS_PRODUCER_INSTALL_CONDITION;
+use velnor_actions_contract::workflow::crate_job::TOOLS_PRODUCER_JOB_ID_PREFIX;
 
 use crate::OrchestratorError;
 use crate::workflow::verifier_actions::{VerifierAction, VerifierActionSet};
@@ -13,11 +13,15 @@ use crate::workflow::verifier_actions::{VerifierAction, VerifierActionSet};
 mod parse;
 use parse::{StepText, step_lists};
 
-const INSTALLS: [&str; 9] = [
+const INSTALLS: [&str; 13] = [
     " install 'rust@",
     " install rust@",
     " install \"rust@",
     " install \\\"rust@",
+    " install 'rust[",
+    " install rust[",
+    " install \"rust[",
+    " install \\\"rust[",
     "rustup toolchain install",
     "rustup component add",
     "rustup target add",
@@ -74,12 +78,7 @@ pub(crate) fn audit_with_verifiers(
                     ));
                 }
             }
-            check_steps(
-                &format!("{}:{owner}", file.path),
-                &owner,
-                &steps,
-                verifiers,
-            )?;
+            check_steps(&format!("{}:{owner}", file.path), &owner, &steps, verifiers)?;
         }
     }
     Ok(())
@@ -326,4 +325,4 @@ fn is_rust_verifier(step: &StepText, owner: &str, verifiers: &VerifierActionSet)
 
 #[cfg(test)]
 #[path = "rust_install_audit_tests.rs"]
-mod tests;
+pub(crate) mod tests;
