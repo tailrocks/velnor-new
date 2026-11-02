@@ -250,7 +250,7 @@ Workflow to generate
     - actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
     - actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
     - actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
-    - asamarts/alint@265d9fdc720bb8f59d00b87e33e4149869f77327
+    - asamarts/alint@d61e4c802b02ac811224b35c59a62cfe5176f4d0
     - jdx/mise-action@6be3c7ed4c21d4f76b208d351d95aac273ebb76d
     - jdx/mr-boxington-action@88acf2bb50552c7c508cbac13e5f8c576b95b1de
   Ineligible: stack/rust/crates/velnor-actions-actionlint/nextest/default has no test targets; no test command emitted
