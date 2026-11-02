@@ -1,12 +1,14 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_actions_workflow_renderer::verifier_builders::TreeDigestPin;
+use velnor_actions_workflow_renderer::verifier_builders::{ToolchainPhase, TreeDigestPin};
+
+use std::path::Path;
 
 use crate::fixture::{
     CAP, CHANNEL_MANIFEST, FIXTURE_BOOKKEEPING, FIXTURE_COMPONENTS, FIXTURE_COMPONENTS_SHA256,
     Fixture, INSTALLER_VERSION, MANIFEST_CARGO, MANIFEST_RUSTC, MISMATCH, MULTIRUST_CONFIG,
-    Outcome, Row, TARGET, VERSION, row, run_rows,
+    Outcome, PHASES, Row, TARGET, VERSION, fixture_pin, row, run_rows, script,
 };
 
 const COMPONENTS: &str = "lib/rustlib/components";
@@ -163,4 +165,57 @@ fn n2_unsafe_path_characters_fail_the_job_under_a_pinned_components_set() {
         })
         .collect::<Vec<_>>();
     run_rows(&rows, &hard_failed);
+}
+
+const ARTIFACTS_BODY: &str = "url = \"https://attacker.example/x\"\n";
+
+#[test]
+fn n1d_a_malformed_section_header_is_unreadable_while_a_well_formed_artifacts_header_is_skipped() {
+    let well_formed = format!("{FIXTURE_BOOKKEEPING}\n[[artifacts.foo]]\n{ARTIFACTS_BODY}");
+    let malformed = format!("{FIXTURE_BOOKKEEPING}\n[[artifacts.foo]\n{ARTIFACTS_BODY}");
+    for phase in PHASES {
+        let accepted = Fixture::standard();
+        accepted.put(CHANNEL_MANIFEST, well_formed.as_bytes(), 0o644);
+        let outcome = accepted.run(&script(phase, &[fixture_pin()]));
+        assert!(outcome.is_pinned(), "well-formed {phase:?}: {outcome:?}");
+        let rejected = Fixture::standard();
+        rejected.put(CHANNEL_MANIFEST, malformed.as_bytes(), 0o644);
+        let outcome = rejected.run(&script(phase, &[fixture_pin()]));
+        assert!(
+            hard_failed(&outcome) && outcome.stdout.contains("bookkeeping_manifest_unreadable"),
+            "malformed {phase:?}: {outcome:?}"
+        );
+    }
+}
+
+fn config_with(bytes: usize) -> Fixture {
+    let fx = Fixture::standard();
+    fx.put(MULTIRUST_CONFIG, &vec![b'x'; bytes], 0o644);
+    fx
+}
+
+fn run_env(fx: &Fixture, phase: ToolchainPhase, env: (&str, &str)) -> Outcome {
+    fx.run_with_env(
+        &script(phase, &[fixture_pin()]),
+        Path::new("/usr/bin"),
+        &[env],
+    )
+}
+
+#[test]
+fn n10_the_size_cap_holds_under_gnu_block_size_variables() {
+    for env in [("BLOCK_SIZE", "1M"), ("LS_BLOCK_SIZE", "1M")] {
+        for phase in PHASES {
+            let over = run_env(&config_with(CAP + 1), phase, env);
+            assert!(
+                hard_failed(&over) && over.stdout.contains("listing_failed"),
+                "{env:?} {phase:?} over the cap: {over:?}"
+            );
+            let at_cap = run_env(&config_with(CAP), phase, env);
+            assert!(
+                at_cap.is_pinned(),
+                "{env:?} {phase:?} at the cap: {at_cap:?}"
+            );
+        }
+    }
 }

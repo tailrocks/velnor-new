@@ -20,6 +20,10 @@ mod bookkeeping;
 mod derive;
 
 #[cfg(test)]
+#[path = "rust_tree_digest_pin/derive_listing.rs"]
+mod derive_listing;
+
+#[cfg(test)]
 #[path = "rust_tree_digest_pin/hard_fail.rs"]
 mod hard_fail;
 

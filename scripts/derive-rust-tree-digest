@@ -7,6 +7,7 @@ set -eu
 
 LC_ALL=C
 export LC_ALL
+unset BLOCK_SIZE LS_BLOCK_SIZE
 
 root=$(cd "$(dirname "$0")/.." && pwd)
 catalog="$root/crates/velnor-actions-mise/src/catalog_rust_manifests.rs"
@@ -131,8 +132,18 @@ print_digests() {
   printf 'tree_sha256=%s\n' "$2"
 }
 
+refuse_listing_inside() {
+  [ -n "$listing_out" ] || return 0
+  tree_real=$(cd "$1" && pwd -P) || die "cannot resolve $1"
+  listing_real=$(cd "$(dirname "$listing_out")" && pwd -P) || die "cannot resolve the directory of $listing_out"
+  case "$listing_real/" in
+    "$tree_real"/*) die "listing $listing_out is inside the tree $1" ;;
+  esac
+}
+
 run_tree() {
   [ -f "$1/lib/rustlib/components" ] || die "$1/lib/rustlib/components is missing"
+  refuse_listing_inside "$1"
   comp_sha=$(components_sha "$1/lib/rustlib/components")
   normal_digest=$(manifest_sha "$1/lib/rustlib/multirust-channel-manifest.toml")
   tree_sha=$(canonical_listing "$1" "$comp_sha" "$normal_digest")

@@ -93,7 +93,9 @@ impl TreeDigestPin {
     }
 }
 
-pub(crate) const NORMAL_FORM_FUNCTION: &str = r##"normal_form() { awk '/^$/ { next } /^\[\[?[A-Za-z0-9._"*+-]*\]\]?$/ { n[$0]++; sec = $0 "#" n[$0]; skip = ($0 ~ /^\[\[artifacts\./); if (!skip) print sec; next } /^[a-z0-9_-]+ = ("[^"]*"|true|false|\[[^]]*\])$/ { val = substr($0, index($0, " = ") + 3); if (skip || ($1 == "git_commit_hash" && sec ~ /^\[pkg\.[^].]*\]#/) || (($1 == "components" || $1 == "extensions") && val == "[]" && sec ~ /^\[pkg\.[^]]*\.target\.[^]]*\]#/) || ($1 == "is_extension" && (val == "true" || val == "false") && sec ~ /^\[\[pkg\.[^]]*\.(components|extensions)\]\]#/)) next; print sec, $0; next } { bad = 1 } END { exit bad }' "$1" > "$2.raw" && LC_ALL=C sort "$2.raw" > "$2"; }"##;
+pub(crate) const NORMAL_FORM_FUNCTION: &str = r##"normal_form() { awk '/^$/ { next } /^(\[\[[A-Za-z0-9._"*+-]+\]\]|\[[A-Za-z0-9._"*+-]+\])$/ { n[$0]++; sec = $0 "#" n[$0]; skip = ($0 ~ /^\[\[artifacts\./); if (!skip) print sec; next } /^[a-z0-9_-]+ = ("[^"]*"|true|false|\[[^]]*\])$/ { val = substr($0, index($0, " = ") + 3); if (skip || ($1 == "git_commit_hash" && sec ~ /^\[pkg\.[^].]*\]#/) || (($1 == "components" || $1 == "extensions") && val == "[]" && sec ~ /^\[pkg\.[^]]*\.target\.[^]]*\]#/) || ($1 == "is_extension" && (val == "true" || val == "false") && sec ~ /^\[\[pkg\.[^]]*\.(components|extensions)\]\]#/)) next; print sec, $0; next } { bad = 1 } END { exit bad }' "$1" > "$2.raw" && LC_ALL=C sort "$2.raw" > "$2"; }"##;
+
+const FOREIGN_TARGET: &str = "aarch64-unknown-linux-gnu";
 
 const NOTICE: &str = r#"pm() { printf "%s\n" "::notice::pin_mismatch: $1"; }"#;
 
@@ -126,11 +128,21 @@ pub(crate) fn pin_scope_statements(check: TreeCheck<'_>) -> Vec<String> {
         return vec![NOTICE.to_owned(), "pinned=0".to_owned()];
     }
     let versions = versions.into_iter().collect::<Vec<_>>().join("|");
+    let strict = format!(
+        r#"[ "$#" -eq 0 ] || {{ [ "$#" -eq 1 ] && [ "$1" = "$rh/toolchains/$v-{target}" ]; }} || {{ pm toolchains_differ; fail "rust_tree_digest_mismatch: $rh/toolchains holds an entry other than the pinned Rust $v-{target} toolchain; the pin_mismatch notice above names the check that failed"; }}"#
+    );
+    let entries = if target == FOREIGN_TARGET {
+        strict
+    } else {
+        format!(
+            r#"if [ "$#" -eq 1 ] && [ "$1" = "$rh/toolchains/$v-{FOREIGN_TARGET}" ]; then pinned=0; else {strict}; fi"#
+        )
+    };
     vec![
         NOTICE.to_owned(),
         format!("pinned=0; case \"$v\" in {versions}) pinned=1;; esac"),
         format!(
-            r#"[ "$pinned" = 0 ] || {{ set --; for e in "$rh/toolchains"/* "$rh/toolchains"/.[!.]* "$rh/toolchains"/..?*; do if [ -e "$e" ] || [ -L "$e" ]; then set -- "$@" "$e"; fi; done; [ "$#" -eq 0 ] || {{ [ "$#" -eq 1 ] && [ "$1" = "$rh/toolchains/$v-{target}" ]; }} || {{ pm toolchains_differ; fail "rust_tree_digest_mismatch: $rh/toolchains holds an entry other than the pinned Rust $v-{target} toolchain; the pin_mismatch notice above names the check that failed"; }}; }}"#
+            r#"[ "$pinned" = 0 ] || {{ set --; for e in "$rh/toolchains"/* "$rh/toolchains"/.[!.]* "$rh/toolchains"/..?*; do if [ -e "$e" ] || [ -L "$e" ]; then set -- "$@" "$e"; fi; done; {entries}; }}"#
         ),
     ]
 }
@@ -146,7 +158,7 @@ pub(crate) fn pin_check_statements(check: TreeCheck<'_>) -> Vec<String> {
         "pin=\"\"; case \"$v:$cs\" in {rows}*) ;; esac; [ -n \"$pin\" ] || {{ pm \"components_not_pinned components=$cs\"; return 2; }}"
     );
     let body = [
-        "LC_ALL=C; export LC_ALL",
+        "LC_ALL=C; export LC_ALL; unset BLOCK_SIZE LS_BLOCK_SIZE",
         COMPONENTS_HASH,
         NO_PIN,
         &select,

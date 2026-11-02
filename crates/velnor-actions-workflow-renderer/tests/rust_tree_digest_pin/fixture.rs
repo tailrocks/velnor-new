@@ -212,6 +212,15 @@ impl Fixture {
     }
 
     pub(crate) fn run_with_path(&self, script: &str, path_dir: &Path) -> Outcome {
+        self.run_with_env(script, path_dir, &[])
+    }
+
+    pub(crate) fn run_with_env(
+        &self,
+        script: &str,
+        path_dir: &Path,
+        extra: &[(&str, &str)],
+    ) -> Outcome {
         let runner_temp = self.home.path().join("runner");
         let output = Command::new("/bin/sh")
             .arg("-c")
@@ -227,6 +236,7 @@ impl Fixture {
             .env("https_proxy", PROXY)
             .env("ALL_PROXY", PROXY)
             .env("all_proxy", PROXY)
+            .envs(extra.iter().copied())
             .output()
             .expect("spawn sh");
         Outcome {

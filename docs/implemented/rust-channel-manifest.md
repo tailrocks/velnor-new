@@ -98,7 +98,12 @@ first version of this step did exactly that.
      before any network access. The pin is selected by the job's expected
      Rust version and target, never by the restored `components` file or the
      toolchain directory name. The owned-home steps render the target
-     `x86_64-unknown-linux-gnu`. A match passes. If a pin row exists for that
+     `x86_64-unknown-linux-gnu`. ARM targets have no pin row yet (owner standing
+     grant 2026-11-02, velnor-fast-ci GOAL.md; decisions.tsv X35): a
+     `toolchains/` directory that is exactly
+     `<version>-aarch64-unknown-linux-gnu` is treated as unpinned and takes the
+     file-by-file check, while any other entry, or an x86_64 entry beside it,
+     fails. A match passes. If a pin row exists for that
      version and target, only the pinned path runs: a components set no row
      pins, a `toolchains/` entry other than exactly `<version>-<target>`, a
      tree or listing difference, or a bookkeeping file over the size cap
@@ -116,7 +121,8 @@ first version of this step did exactly that.
      `Prepare Rust components`, on the toolchain the job will use.
    Residual risks (cache decision 10, decisions.tsv X35): the content of
    `multirust-config.toml` is unbound (denial of service only); for a
-   version and target with no pin row, the file-by-file fallback leaves the
+   version and target with no pin row, and for an ARM toolchain directory,
+   the file-by-file fallback leaves the
    `manifest-*` bytes, the `multirust-config.toml` content and all file modes
    unbound, which affects consumer repos that pin a Rust other than the
    pinned 1.99.1 in owned-home jobs (the default-home jobs always use that

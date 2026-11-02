@@ -225,3 +225,29 @@ fn b5_the_full_path_hashes_files_below_a_manifest_named_directory() {
         }
     }
 }
+
+#[test]
+fn b7_a_lone_arm_toolchain_is_verified_file_by_file_not_hard_failed_by_the_x86_pin() {
+    for phase in PHASES {
+        let (fx, release) = fixture_with(&Release::installed);
+        fx.rename_root("1.99.1-aarch64-unknown-linux-gnu");
+        let outcome = release.run_pinned(&fx, phase, &[fixture_pin()]);
+        assert!(
+            outcome.code == Some(0)
+                && outcome.stdout.contains("verified file by file")
+                && !outcome.combined().contains(MISMATCH)
+                && !outcome.combined().contains("toolchains_differ"),
+            "{phase:?}: {outcome:?}"
+        );
+        let (tampered, release) = fixture_with(&Release::installed);
+        tampered.put("lib/x.so", b"sO\n", 0o644);
+        tampered.rename_root("1.99.1-aarch64-unknown-linux-gnu");
+        let flipped = release.run_pinned(&tampered, phase, &[fixture_pin()]);
+        assert!(
+            flipped.code != Some(0)
+                && flipped.stderr.contains("rust_toolchain_bytes_mismatch")
+                && !flipped.stdout.contains("verified file by file"),
+            "{phase:?}: {flipped:?}"
+        );
+    }
+}

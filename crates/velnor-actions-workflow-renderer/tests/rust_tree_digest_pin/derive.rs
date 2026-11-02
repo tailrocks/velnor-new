@@ -10,8 +10,8 @@ use tempfile::TempDir;
 use velnor_actions_workflow_renderer::verifier_builders::{ToolchainPhase, TreeDigestPin};
 
 use crate::fixture::{
-    CAP, CHANNEL_MANIFEST, FIXTURE_BOOKKEEPING, Fixture, INSTALLER_VERSION, MANIFEST_CARGO,
-    MANIFEST_RUSTC, MISMATCH, MULTIRUST_CONFIG, Outcome, TARGET, VERSION, script,
+    CHANNEL_MANIFEST, Fixture, INSTALLER_VERSION, MANIFEST_CARGO, MANIFEST_RUSTC, MISMATCH,
+    MULTIRUST_CONFIG, Outcome, TARGET, VERSION, script,
 };
 use crate::release::{
     CHANNEL_URL, COMPONENT, TARBALL_URL, channel_manifest, rustup_bookkeeping, sha256_hex,
@@ -34,7 +34,7 @@ fn rustup_tree() -> Fixture {
     fx
 }
 
-fn list_files(dir: &Path, rel: &str, out: &mut Vec<String>) {
+pub(crate) fn list_files(dir: &Path, rel: &str, out: &mut Vec<String>) {
     for entry in fs::read_dir(dir).expect("read dir") {
         let entry = entry.expect("dir entry");
         let name = format!("{rel}{}", entry.file_name().to_string_lossy());
@@ -163,7 +163,7 @@ impl Bundle {
     }
 }
 
-fn outcome(output: &Output) -> Outcome {
+pub(crate) fn outcome(output: &Output) -> Outcome {
     Outcome {
         code: output.status.code(),
         stdout: String::from_utf8_lossy(&output.stdout).into_owned(),
@@ -271,50 +271,4 @@ fn p5_the_derived_pin_binds_the_bookkeeping_bytes_it_reproduces() {
         bundle.installed.put(path, &original, 0o644);
         run().assert_pinned();
     }
-}
-
-fn derive_tree(fx: &Fixture, listing: &Path) -> Outcome {
-    let output = Command::new(crate::derive_tool())
-        .arg("--listing")
-        .arg(listing)
-        .arg("--tree")
-        .arg(fx.root())
-        .output()
-        .expect("run derive tool");
-    outcome(&output)
-}
-
-fn tree_with(path: &str, bytes: &[u8]) -> Fixture {
-    let fx = Fixture::standard();
-    fx.put(path, bytes, 0o644);
-    fx
-}
-
-#[test]
-fn n9_an_over_cap_bookkeeping_file_fails_closed_without_a_partial_listing() {
-    let dir = tempfile::tempdir().expect("listing dir");
-    let listing = dir.path().join("listing");
-    let control = derive_tree(&tree_with(MULTIRUST_CONFIG, &vec![b'x'; CAP]), &listing);
-    assert_eq!(control.code, Some(0), "{control:?}");
-    assert!(control.stdout.contains("tree_sha256="), "{control:?}");
-    assert!(listing.exists());
-    fs::remove_file(&listing).expect("remove listing");
-    let mut padded = FIXTURE_BOOKKEEPING.to_owned();
-    padded.push_str(&"\n".repeat(CAP + 1 - padded.len()));
-    let rows = [
-        ("multirust config", MULTIRUST_CONFIG, vec![b'x'; CAP + 1]),
-        ("channel manifest", CHANNEL_MANIFEST, padded.into_bytes()),
-    ];
-    let failures = rows
-        .into_iter()
-        .filter_map(|(name, path, bytes)| {
-            let outcome = derive_tree(&tree_with(path, &bytes), &listing);
-            let failed_closed = outcome.code.is_some_and(|code| code != 0)
-                && !outcome.stdout.contains("tree_sha256=")
-                && outcome.stderr.starts_with("derive-rust-tree-digest:")
-                && !listing.exists();
-            (!failed_closed).then(|| format!("{name}: {outcome:?}"))
-        })
-        .collect::<Vec<_>>();
-    assert!(failures.is_empty(), "{failures:#?}");
 }
