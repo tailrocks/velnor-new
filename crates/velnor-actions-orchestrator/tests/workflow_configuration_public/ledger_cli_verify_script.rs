@@ -261,7 +261,11 @@ fn planted_bash_cannot_verify_or_run() -> Result<(), Box<dyn Error>> {
     let step = rendered_verify()?;
     let planted = Planted::new(&[("bash", "exit 0"), ("sh", "exit 0")])?;
     let checkout = Checkout::new(Some(TAMPERED))?;
-    assert!(!checkout.verify_rendered(&step, &planted, BYTES_SHA256)?);
+    assert!(
+        !checkout.verify_rendered(&step, &planted, BYTES_SHA256)?,
+        "planted calls: {:?}",
+        planted.calls()
+    );
     assert_eq!(checkout.mode()?, 0o644);
     assert_eq!(planted.calls(), "");
     Ok(())
@@ -279,7 +283,11 @@ fn planted_tools_cannot_forge_a_verified_binary() -> Result<(), Box<dyn Error>> 
         ("git", head.as_str()),
         ("chmod", "exit 0"),
     ])?;
-    assert!(!checkout.verify_rendered(&step, &planted, BYTES_SHA256)?);
+    assert!(
+        !checkout.verify_rendered(&step, &planted, BYTES_SHA256)?,
+        "planted calls: {:?}",
+        planted.calls()
+    );
     assert_eq!(checkout.mode()?, 0o644);
     assert_eq!(planted.calls(), "");
     Ok(())
@@ -295,7 +303,11 @@ fn hostile_failing_tools_do_not_break_a_genuine_binary() -> Result<(), Box<dyn E
         ("chmod", "exit 1"),
     ])?;
     let checkout = Checkout::new(Some(BYTES))?;
-    assert!(checkout.verify_rendered(&step, &planted, BYTES_SHA256)?);
+    assert!(
+        checkout.verify_rendered(&step, &planted, BYTES_SHA256)?,
+        "planted calls: {:?}",
+        planted.calls()
+    );
     assert_eq!(checkout.mode()? & 0o111, 0o111);
     assert_eq!(planted.calls(), "");
     Ok(())
@@ -312,7 +324,11 @@ fn env_hook_cannot_forge_verification() -> Result<(), Box<dyn Error>> {
     )?;
     let checkout = Checkout::new(Some(TAMPERED))?;
     let env = [("BASH_ENV", hook.as_path()), ("ENV", hook.as_path())];
-    assert!(!checkout.verify_rendered_with_env(&step, &planted, BYTES_SHA256, &env)?);
+    assert!(
+        !checkout.verify_rendered_with_env(&step, &planted, BYTES_SHA256, &env)?,
+        "planted calls: {:?}",
+        planted.calls()
+    );
     assert_eq!(checkout.mode()?, 0o644);
     assert_eq!(planted.calls(), "");
     Ok(())

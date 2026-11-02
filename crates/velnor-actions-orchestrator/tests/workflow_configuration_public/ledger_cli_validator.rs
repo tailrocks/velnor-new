@@ -169,11 +169,32 @@ fn artifact_mutations() -> Vec<(&'static str, Mutation)> {
         }),
         ("downloaded artifact executed in crate job", |jobs, id| {
             let job = jobs.get_mut(id).ok_or("job")?;
-            let mut extra = untagged_download(job)?;
-            extra.role = Some(StepRole::DownloadPlan);
+            let at = step_at(job, StepRole::DownloadPlan)?;
+            let StepKind::Action { with, .. } = &mut job.steps[at].kind else {
+                return Err("download is not an action step".into());
+            };
+            with.insert(
+                "path".to_owned(),
+                "${{ runner.temp }}/velnor/bins".to_owned(),
+            );
             let emit = emit_at(job)?;
             job.steps.insert(emit, run_downloaded());
-            job.steps.insert(emit, extra);
+            Ok(())
+        }),
+        ("plan download of another artifact", |jobs, id| {
+            let job = jobs.get_mut(id).ok_or("job")?;
+            let at = step_at(job, StepRole::DownloadPlan)?;
+            let StepKind::Action { with, .. } = &mut job.steps[at].kind else {
+                return Err("download is not an action step".into());
+            };
+            with.insert("name".to_owned(), "velnor-extra".to_owned());
+            Ok(())
+        }),
+        ("plan downloaded twice", |jobs, id| {
+            let job = jobs.get_mut(id).ok_or("job")?;
+            let repeat = cloned_step(job, StepRole::DownloadPlan)?;
+            let emit = emit_at(job)?;
+            job.steps.insert(emit, repeat);
             Ok(())
         }),
         ("crate job uploads compiled output", |jobs, id| {

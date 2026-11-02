@@ -8,6 +8,9 @@ use crate::workflow::plan::{Plan, PlanMatrix};
 
 pub const ARTIFACT_RETENTION_DAYS: u32 = 30;
 
+pub const PLAN_ARTIFACT_NAME: &str =
+    "velnor-plan-r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}";
+
 pub const PLAN_JSON_FILENAME: &str = "plan.json";
 
 pub const MATRIX_JSON_FILENAME: &str = "matrix.json";
