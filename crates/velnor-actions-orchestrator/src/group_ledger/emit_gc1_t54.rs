@@ -5,7 +5,7 @@
 // ledger whose every digest recomputes from the staged inputs, a missing
 // report on success is a loud error (red first), a missing report on
 // failure records NeedsPrepare, and a failed unit on success is refused.
-use velnor_actions_contract::workflow::{UnitLedgerV1, UnitOutcome, UnitResultV1};
+use velnor_actions_contract::workflow::{ExecutionBranch, UnitLedgerV1, UnitOutcome, UnitResultV1};
 
 use super::super::gc1_t54_support::{self, RUN_KEY};
 use super::{JobStatus, emit_group_ledger_to};
@@ -140,5 +140,45 @@ fn missing_report_on_failure_defers() -> Result<(), crate::OrchestratorError> {
         ledger.ordered_results[0].report_digest.as_str(),
         UnitResultV1::missing_report_digest().as_str(),
     );
+    Ok(())
+}
+
+#[test]
+fn unsuffixed_job_key_emits_a_reader_ledger_for_that_group() -> Result<(), crate::OrchestratorError> {
+    let fixture = gc1_t54_support::build(JobStatus::Success)?;
+    assert_eq!(fixture.emit_env.job_key, gc1_t54_support::GROUP);
+    let out = emit_group_ledger_to(
+        &fixture.anchor,
+        &fixture.manifest_path,
+        &fixture.run_dir,
+        RUN_KEY,
+        &fixture.emit_env,
+    )?;
+    let text = std::fs::read_to_string(&out).map_err(|err| fail(&err.to_string()))?;
+    let ledger = UnitLedgerV1::parse_json(&text).map_err(|_| fail("ledger_parse"))?;
+    assert_eq!(ledger.job.job_key, gc1_t54_support::GROUP);
+    assert_eq!(ledger.execution_branch, ExecutionBranch::Reader);
+    Ok(())
+}
+
+#[test]
+fn branch_suffixed_job_key_is_not_a_selected_group() -> Result<(), crate::OrchestratorError> {
+    for suffix in ["-write", "-read"] {
+        let mut fixture = gc1_t54_support::build(JobStatus::Success)?;
+        fixture.emit_env.job_key = format!("{}{suffix}", gc1_t54_support::GROUP);
+        match emit_group_ledger_to(
+            &fixture.anchor,
+            &fixture.manifest_path,
+            &fixture.run_dir,
+            RUN_KEY,
+            &fixture.emit_env,
+        ) {
+            Ok(_) => return Err(fail("suffixed job key must not select the group")),
+            Err(err) => assert!(
+                err.to_string().contains("ledger_group_not_selected"),
+                "unexpected error: {err}"
+            ),
+        }
+    }
     Ok(())
 }

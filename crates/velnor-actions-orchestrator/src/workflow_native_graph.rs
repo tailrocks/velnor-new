@@ -4,7 +4,6 @@
 use super::{PreparedWorkflow, WorkflowBuildInput, problem};
 use crate::OrchestratorError;
 use std::collections::{BTreeMap, BTreeSet};
-use velnor_actions_contract::workflow::crate_job::{reader_job_id_for, writer_job_id_for};
 use velnor_actions_contract::{Job, Stack};
 use velnor_actions_workflow_renderer::native_authority::{
     GeneratedWorkflowKind, LogicalJobFact, LogicalJobSource, NativeTaskFact, SuitePhase,
@@ -35,15 +34,6 @@ pub(super) fn graph(
         if jobs.contains_key(id) {
             sources.insert(id.clone(), source);
             ordered.push(id.clone());
-            continue;
-        }
-        // A split group leaves reader/writer branches in its place: they take
-        // the group's slot so logical order still matches build order.
-        for branch in [reader_job_id_for(id), writer_job_id_for(id)] {
-            if jobs.contains_key(branch.as_str()) {
-                sources.insert(branch.clone(), source.clone());
-                ordered.push(branch);
-            }
         }
     }
     insert_named_checks(input, &mut sources, &mut ordered);

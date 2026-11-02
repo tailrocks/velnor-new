@@ -1,10 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use super::step_identity::{
-    MBX_WORKSPACE_CLEAN_CONDITION, StepId, StepRole, TOFU_PROVIDER_ADMISSION_USES,
-    verifier_action_role,
-};
+use super::step_identity::{MBX_WORKSPACE_CLEAN_CONDITION, StepId, StepRole, verifier_action_role};
 use crate::errors::ContractError;
 use serde::{Deserialize, Serialize};
 
@@ -200,9 +197,7 @@ fn validate_id_kind(id: Option<StepId>, kind: &StepKind, job: &str) -> Result<()
         }
         StepId::BuildTaskRun => matches!(kind, StepKind::Shell { .. }),
         StepId::ToolsCacheIdentity => super::step_identity::valid_tools_cache_identity(kind),
-        StepId::TofuProviders => {
-            matches!(kind, StepKind::Action { uses, .. } if uses == TOFU_PROVIDER_ADMISSION_USES)
-        }
+        StepId::TofuProviders => super::step_protocol::valid_provider_restore(kind),
         StepId::MbxReady
         | StepId::CacheKeys
         | StepId::SourcesFetch

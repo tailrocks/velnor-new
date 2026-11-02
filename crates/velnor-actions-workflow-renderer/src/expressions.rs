@@ -52,7 +52,7 @@ const ENV_EXPRESSIONS: [&str; 15] = [
     "steps.aws-credentials.outputs.aws-session-token",
 ];
 
-const WITH_EXPRESSIONS: [&str; 18] = [
+const WITH_EXPRESSIONS: [&str; 16] = [
     "runner.temp",
     "github.run_id",
     "github.run_attempt",
@@ -63,8 +63,6 @@ const WITH_EXPRESSIONS: [&str; 18] = [
     "steps.v2.outputs.seed_admitted",
     "runner.environment",
     "github.job",
-    "steps.tofu-providers.outputs.cache-key",
-    "steps.tofu-providers.outputs.cache-path",
     "steps.cache-keys.outputs.sources_key",
     "steps.cache-keys.outputs.sources_restore_keys",
     "needs.plan.outputs.sources_key",
@@ -88,13 +86,6 @@ fn is_family_key_output(inner: &str) -> bool {
                 .or_else(|| name.strip_suffix("_key"))
         })
         .is_some_and(|stem| family_for_stem(stem).is_some())
-}
-
-fn is_mbx_bundle_reader_key(inner: &str) -> bool {
-    use velnor_actions_contract::workflow::cache_family_mbx::{
-        is_mbx_bundle_key_needs_inner, is_mbx_bundle_restore_keys_needs_inner,
-    };
-    is_mbx_bundle_key_needs_inner(inner) || is_mbx_bundle_restore_keys_needs_inner(inner)
 }
 
 fn is_tofu_providers_plan_key(inner: &str) -> bool {
@@ -241,7 +232,6 @@ pub(crate) fn check_with_value(key: &str, value: &str) -> Result<(), RenderError
             && !is_matrix_field(inner)
             && !is_hash_files(inner)
             && !is_tofu_providers_plan_key(inner)
-            && !is_mbx_bundle_reader_key(inner)
             && !is_private_mint_input(key, inner)
             && !is_image_publish_output(inner)
             && !is_family_key_output(inner)

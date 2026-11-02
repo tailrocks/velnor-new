@@ -143,12 +143,13 @@ pub fn finalize_jobs(
         cache_p08::check_mbx_before_fetch(id, job)?;
         closure::check_internal_staged(id, job, ctx.preseed)?;
     }
-    cache_p08::elect_cache_writers_with_policy(&mut jobs, ctx.pull_request_cache_policy)?;
     crate::tools_producer::add_tools_producers(
         &mut jobs,
         ctx.pull_request_cache_policy,
         &ctx.standalone_tools_donors,
     )?;
+    crate::tofu_producer::add_tofu_providers_producers(&mut jobs)?;
+    crate::tofu_stage::stage_tofu_jobs(&mut jobs, ctx.max_parallel_jobs);
     closure::check_plan_anchor(&jobs)?;
     preseed_closure::check_preseed_closure(&jobs, ctx.preseed)?;
     closure::insert_plan_closure(&mut jobs, ctx, policy)?;
@@ -170,7 +171,6 @@ fn validate_final_jobs(
     ctx: &RenderContext,
 ) -> Result<(), RenderError> {
     crate::cache_steps::append_bundle_postludes(jobs)?;
-    crate::crate_group_ledger_steps::append(jobs, policy);
     crate::cache_steps::append_workspace_cleanups(jobs)?;
     execution_boundaries::validate_required_verdict(jobs, phase, &ctx.authority_steps)?;
     execution_boundaries::validate_trusted_plan(jobs, policy, phase, &ctx.authority_steps)?;

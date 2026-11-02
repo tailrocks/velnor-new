@@ -1,16 +1,27 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-pub use velnor_actions_contract::workflow::step_identity::{
-    TOFU_PROVIDER_ADMISSION_USES, TOFU_PROVIDER_CACHE_BASE_EXPR, TOFU_PROVIDERS_KEY_OUTPUT_EXPR,
-    TOFU_PROVIDERS_PATH_OUTPUT_EXPR,
+use std::collections::BTreeMap;
+use velnor_actions_contract::workflow::cache_family::{
+    TOFU_PROVIDERS_PROBE_MISS_CONDITION, TOFU_PROVIDERS_SAVE_CONDITION,
 };
-use velnor_actions_contract::{Step, StepRole};
+pub use velnor_actions_contract::workflow::step_identity::{
+    TOFU_PROVIDER_ADMISSION_USES, TOFU_PROVIDER_CACHE_BASE_EXPR,
+};
+use velnor_actions_contract::workflow::step_identity::{
+    TOOLS_CACHE_RESTORE_ACTION_USES, TOOLS_RESTORE_LOOKUP_ONLY_INPUT,
+};
+use velnor_actions_contract::workflow::step_tofu_prepare::{
+    TOFU_PROVIDER_CACHE_PATH_ENV, TOFU_PROVIDERS_PREPARE_SCRIPT,
+};
+use velnor_actions_contract::{Step, StepId, StepRole};
 
 use crate::{RenderError, marker, steps, yaml};
 
 pub const TOFU_PROVIDERS_RESTORE_NAME: &str = "Restore Tofu providers";
 pub const TOFU_PROVIDERS_SAVE_NAME: &str = "Save Tofu providers";
+pub const TOFU_PROVIDERS_PROBE_NAME: &str = "Probe Tofu providers";
+pub const TOFU_PROVIDERS_PREPARE_NAME: &str = "Prepare Tofu provider cache";
 pub const TOFU_PROVIDERS_SAVE_USES: &str =
     "actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9";
 pub const TOFU_PROVIDER_ADMISSION_SCRIPT: &str = r#"set -eu
@@ -173,19 +184,50 @@ fn provider_admission_step() -> yaml::Yaml {
     ])
 }
 
-pub fn tofu_providers_save_step() -> Result<Step, RenderError> {
-    let step = steps::action_step(
-        TOFU_PROVIDERS_SAVE_NAME,
-        TOFU_PROVIDERS_SAVE_USES,
-        std::collections::BTreeMap::from([
-            ("key".to_owned(), TOFU_PROVIDERS_KEY_OUTPUT_EXPR.to_owned()),
+pub fn tofu_providers_probe_step(key: &str, path: &str) -> Result<Step, RenderError> {
+    let mut step = steps::action_step(
+        TOFU_PROVIDERS_PROBE_NAME,
+        TOOLS_CACHE_RESTORE_ACTION_USES,
+        BTreeMap::from([
+            ("key".to_owned(), key.to_owned()),
+            ("path".to_owned(), path.to_owned()),
             (
-                "path".to_owned(),
-                TOFU_PROVIDERS_PATH_OUTPUT_EXPR.to_owned(),
+                TOOLS_RESTORE_LOOKUP_ONLY_INPUT.to_owned(),
+                "true".to_owned(),
             ),
         ]),
     )?;
+    step.id = Some(StepId::TofuProviders);
+    step.role = Some(StepRole::TofuProvidersRestore);
+    Ok(step)
+}
+
+pub fn tofu_providers_prepare_step(path: &str) -> Result<Step, RenderError> {
+    let mut step = steps::shell_step(
+        TOFU_PROVIDERS_PREPARE_NAME,
+        vec![
+            "sh".to_owned(),
+            "-c".to_owned(),
+            TOFU_PROVIDERS_PREPARE_SCRIPT.to_owned(),
+        ],
+        BTreeMap::from([(TOFU_PROVIDER_CACHE_PATH_ENV.to_owned(), path.to_owned())]),
+    )?;
+    step.condition = Some(TOFU_PROVIDERS_PROBE_MISS_CONDITION.to_owned());
+    step.role = Some(StepRole::TofuProvidersPrepare);
+    Ok(step)
+}
+
+pub fn tofu_providers_save_step(key: &str, path: &str) -> Result<Step, RenderError> {
+    let step = steps::action_step(
+        TOFU_PROVIDERS_SAVE_NAME,
+        TOFU_PROVIDERS_SAVE_USES,
+        BTreeMap::from([
+            ("key".to_owned(), key.to_owned()),
+            ("path".to_owned(), path.to_owned()),
+        ]),
+    )?;
     let mut step = rename_step(step, TOFU_PROVIDERS_SAVE_NAME)?;
+    step.condition = Some(TOFU_PROVIDERS_SAVE_CONDITION.to_owned());
     step.role = Some(StepRole::TofuProvidersSave);
     Ok(step)
 }

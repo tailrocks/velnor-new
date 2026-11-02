@@ -20,13 +20,8 @@ use velnor_actions_contract::{
 use velnor_actions_orchestrator::{MergeContext, merge_internal_with_context};
 
 const RUN_KEY: &str = "r4242-a1";
-const JOB_ID: &str = "unit-job";
-const GROUP_ID: &str = "rust-unit-job";
-const GROUP_READER_ID: &str = "rust-unit-job-read";
-const GROUP_WRITER_ID: &str = "rust-unit-job-write";
-const SIDE_GROUP_ID: &str = "rust-side-job";
-const SIDE_READER_ID: &str = "rust-side-job-read";
-const SIDE_WRITER_ID: &str = "rust-side-job-write";
+const JOB_ID: &str = "rust-unit-job";
+const SIDE_JOB_ID: &str = "rust-side-job";
 const HEAD_SHA: &str = "0123456789abcdef0123456789abcdef01234567";
 const OTHER_SHA: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 
@@ -127,74 +122,8 @@ fn group_obligation(
     }
 }
 
-fn branch_plan(
-    task: &str,
-    entry: MatrixEntry,
-    obligation: PlanObligation,
-    group: &str,
-) -> Result<Plan, Box<dyn Error>> {
-    let mut plan = plan_with(task, Some(entry), obligation, JobDisposition::Run)?;
-    plan.jobs = vec![PlanJob {
-        job_id: group.to_owned(),
-        disposition: JobDisposition::Run,
-    }];
-    Ok(plan)
-}
-
 fn second_task() -> Result<String, Box<dyn Error>> {
     Ok(task_id_for_internal("lint", "warm")?)
-}
-
-fn branch_typed(
-    task: &str,
-    group: &str,
-) -> Result<(Plan, MatrixReport, TaskReport, MatrixEntry), Box<dyn Error>> {
-    let (digest, input_digest, closure_digest) = digests();
-    let planned = planned_platform()?;
-    let entry = group_run_entry(task, &digest, &input_digest, &planned, group)?;
-    let plan = branch_plan(
-        task,
-        entry.clone(),
-        group_obligation(
-            task,
-            &digest,
-            &input_digest,
-            &closure_digest,
-            ObligationDecision::Execute,
-            group,
-        ),
-        group,
-    )?;
-    plan.validate()?;
-    let report = task_report(task, &digest, &entry, &planned)?;
-    report.validate()?;
-    let matrix = matrix_report(task, &report, &entry);
-    matrix.validate()?;
-    Ok((plan, matrix, report, entry))
-}
-
-fn branch_evidence(task: &str, group: &str) -> Result<(Plan, Value, Value), Box<dyn Error>> {
-    let (plan, matrix, report, _) = branch_typed(task, group)?;
-    Ok((
-        plan,
-        serde_json::to_value(&matrix)?,
-        serde_json::to_value(&report)?,
-    ))
-}
-
-fn push_plan(plan: &Plan) -> Plan {
-    let mut pushed = plan.clone();
-    pushed.event = WorkflowEvent::Push;
-    pushed.trust = trust_for_event(WorkflowEvent::Push);
-    pushed
-}
-
-fn push_report(report: &TaskReport) -> Result<Value, Box<dyn Error>> {
-    let mut pushed = report.clone();
-    pushed.event = WorkflowEvent::Push;
-    pushed.trust = trust_for_event(WorkflowEvent::Push);
-    pushed.validate()?;
-    Ok(serde_json::to_value(&pushed)?)
 }
 
 fn plan_with(
@@ -319,36 +248,10 @@ fn merge(
     run_key: &str,
     ledgers: Option<&[Value]>,
 ) -> Result<FinalReport, Box<dyn Error>> {
-    merge_with_event(
-        plan,
-        matrix_reports,
-        task_reports,
-        job_ids,
-        jobs,
-        run_key,
-        ledgers,
-        "pull_request",
-    )
-}
-
-#[expect(
-    clippy::too_many_arguments,
-    reason = "merge fixture mirrors the request envelope plus the observed event"
-)]
-fn merge_with_event(
-    plan: &Plan,
-    matrix_reports: &[Value],
-    task_reports: &[Value],
-    job_ids: &[&str],
-    jobs: &Value,
-    run_key: &str,
-    ledgers: Option<&[Value]>,
-    event: &str,
-) -> Result<FinalReport, Box<dyn Error>> {
     let mut request = json!({
         "schema": 1,
         "run_key": run_key,
-        "actual_event": event,
+        "actual_event": "pull_request",
         "plan": plan,
         "matrix": plan.matrix,
         "matrix_reports": matrix_reports,

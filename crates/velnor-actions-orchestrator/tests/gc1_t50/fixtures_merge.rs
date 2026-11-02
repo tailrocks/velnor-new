@@ -13,9 +13,9 @@ use velnor_actions_contract::{
 use velnor_actions_orchestrator::{MergeContext, merge_internal_with_context};
 
 use super::RUN_KEY;
+use super::fail;
 use super::fixtures_ledger::{branch_plan, group_entry, group_obligation};
 use super::fixtures_platform::{digests, observed_binding, planned_platform};
-use super::scheduling::fail;
 
 pub(super) fn task_report(
     task: &str,

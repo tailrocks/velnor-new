@@ -3,6 +3,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use velnor_actions_contract::workflow::crate_job::{GROUP_READER_SUFFIX, GROUP_WRITER_SUFFIX};
 use velnor_actions_contract::{
     CRATE_JOB_ID_PREFIX, ContractError, ProposedTask, Stack, TOFU_JOB_ID_PREFIX,
     assign_crate_job_ids,
@@ -33,20 +34,24 @@ pub(crate) struct JobOwners<'a> {
 impl<'a> JobOwners<'a> {
     pub(crate) fn new(tasks: &'a [ProposedTask]) -> Result<Self, ContractError> {
         let grouped = group_runnable(tasks)?;
-        Ok(Self::from_grouped(tasks, &grouped))
+        Self::from_grouped(tasks, &grouped)
     }
     pub(crate) fn from_grouped(
         tasks: &'a [ProposedTask],
         grouped: &BTreeMap<CrateGroupKey, Vec<&ProposedTask>>,
-    ) -> Self {
-        Self {
-            assigned: assign_group_ids(grouped),
+    ) -> Result<Self, ContractError> {
+        let assigned = assign_group_ids(grouped);
+        for id in assigned.values() {
+            reject_reserved_suffix(id)?;
+        }
+        Ok(Self {
+            assigned,
             runnable: tasks
                 .iter()
                 .filter(|task| crate::crate_jobs::is_runnable(task))
                 .map(|task| (task.task_id.as_str(), task))
                 .collect(),
-        }
+        })
     }
     pub(crate) fn group_id(&self, key: &CrateGroupKey) -> Option<&String> {
         self.assigned.get(key)
@@ -75,6 +80,16 @@ impl<'a> JobOwners<'a> {
             .get(&CrateGroupKey::for_member(member)?)
             .cloned())
     }
+}
+
+fn reject_reserved_suffix(id: &str) -> Result<(), ContractError> {
+    if id.ends_with(GROUP_READER_SUFFIX) || id.ends_with(GROUP_WRITER_SUFFIX) {
+        return Err(ContractError::identity(
+            "crate_job.job_id",
+            format!("group_id_reserved_suffix:{id}"),
+        ));
+    }
+    Ok(())
 }
 
 pub(crate) fn assign_group_ids(

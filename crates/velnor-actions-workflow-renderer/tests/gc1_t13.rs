@@ -1,12 +1,10 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
 use std::error::Error;
 use std::io;
 
-use velnor_actions_contract::{Job, JobTimeout, StepId, StepKind, StepRole};
-use velnor_actions_workflow_renderer::cache_elect::elect_cache_writers;
+use velnor_actions_contract::{StepId, StepRole};
 use velnor_actions_workflow_renderer::cache_p08::{ToolsCacheInputs, ToolsCachePayload};
 use velnor_actions_workflow_renderer::setup::{MISE_BINARY_SHA256_LINUX_X64, MiseSetup};
 
@@ -57,32 +55,6 @@ fn base_payload(setup: &MiseSetup) -> Result<ToolsCachePayload, Box<dyn Error>> 
         None,
         &[],
     )
-}
-
-fn job(payload: &ToolsCachePayload) -> Result<Job, Box<dyn Error>> {
-    Ok(Job {
-        display_name: "gc1-t13".to_owned(),
-        runs_on: "ubuntu-24.04".to_owned(),
-        check_runner: None,
-        timeout_minutes: JobTimeout::DEFAULT,
-        needs: Vec::new(),
-        condition: None,
-        permissions: None,
-        cache_mode: None,
-        environment: None,
-        services: Vec::new(),
-        outputs: BTreeMap::new(),
-        steps: vec![payload.runtime_prelude_step()?, payload.restore_step()?],
-    })
-}
-
-fn save_steps(job: &Job) -> Vec<usize> {
-    job.steps
-        .iter()
-        .enumerate()
-        .filter(|(_, step)| step.role == Some(StepRole::ToolsCacheSave))
-        .map(|(index, _)| index)
-        .collect()
 }
 
 fn check_union_and_determinism(setup: &MiseSetup) -> Result<(), Box<dyn Error>> {
@@ -184,63 +156,12 @@ fn check_host_distinctions_survive(setup: &MiseSetup) -> Result<(), Box<dyn Erro
     Ok(())
 }
 
-fn check_common_policy_save(setup: &MiseSetup) -> Result<(), Box<dyn Error>> {
-    let owned = base_payload(setup)?;
-    let mut jobs: BTreeMap<String, Job> = BTreeMap::from([("worker-b".to_owned(), job(&owned)?)]);
-    jobs.insert("worker-a".to_owned(), job(&owned)?);
-    elect_cache_writers(&mut jobs)?;
-    let saves: Vec<(String, Vec<usize>)> = jobs
-        .iter()
-        .map(|(id, job)| (id.clone(), save_steps(job)))
-        .collect();
-    if saves.iter().map(|(_, steps)| steps.len()).sum::<usize>() != 1 {
-        return Err(fail("compatible jobs did not elect one common save"));
-    }
-    let winner = jobs
-        .get("worker-a")
-        .ok_or_else(|| fail("winner job missing"))?;
-    let winner_saves = save_steps(winner);
-    if winner_saves.len() != 1 {
-        return Err(fail("common save landed outside the elected job"));
-    }
-    let save = &winner.steps[winner_saves[0]];
-    if save.role != Some(StepRole::ToolsCacheSave) {
-        return Err(fail("elected save lost its tools role"));
-    }
-    let StepKind::Action { with, .. } = &save.kind else {
-        return Err(fail("elected save is not an action step"));
-    };
-    if with.get("key").map(String::as_str) != Some(owned.key_expression().as_str()) {
-        return Err(fail("elected save left the shared host key"));
-    }
-    let condition = save
-        .condition
-        .as_deref()
-        .ok_or_else(|| fail("save lost its gate"))?;
-    if !condition.contains("success()")
-        || !condition.contains("steps.tools-restore.outputs.cache-hit != 'true'")
-    {
-        return Err(fail("elected save bypassed the common policy gate"));
-    }
-    elect_cache_writers(&mut jobs)?;
-    if saves.iter().map(|(_, steps)| steps.len()).sum::<usize>()
-        != jobs
-            .values()
-            .map(|job| save_steps(job).len())
-            .sum::<usize>()
-    {
-        return Err(fail("common save was not stable under re-election"));
-    }
-    Ok(())
-}
-
 #[test]
 fn gc1_t13_preserves_contract() -> Result<(), Box<dyn Error>> {
     let setup = mise_setup();
     setup.validate()?;
     check_union_and_determinism(&setup)?;
     check_host_distinctions_survive(&setup)?;
-    check_common_policy_save(&setup)?;
     Ok(())
 }
 

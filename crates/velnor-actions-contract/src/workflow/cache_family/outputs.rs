@@ -54,8 +54,10 @@ pub const SOURCES_RESTORE_KEYS_PLAN_EXPR: &str = "${{needs.plan.outputs.sources_
 
 pub const SOURCES_SAVE_CONDITION: &str = "always() && !cancelled() && steps.sources-fetch.outcome == 'success' && steps.cache-keys.outputs.sources_save == 'true' && steps.sources-restore.outputs.cache-hit != 'true' && !endsWith(steps.sources-restore.outputs.cache-matched-key, steps.cache-keys.outputs.sources_snapshot)";
 
-pub const TOFU_PROVIDERS_SAVE_CONDITION: &str =
-    "success() && needs.plan.outputs.cache_trust == 'trusted'";
+pub const TOFU_PROVIDERS_PROBE_MISS_CONDITION: &str =
+    "steps.tofu-providers.outputs.cache-hit != 'true'";
+
+pub const TOFU_PROVIDERS_SAVE_CONDITION: &str = "success() && needs.plan.outputs.cache_trust == 'trusted' && steps.tofu-providers.outputs.cache-hit != 'true'";
 
 pub const PLAN_CACHE_OUTPUTS: [(&str, &str); 3] = [
     (PLAN_CACHE_TRUST_OUTPUT, TRUST_OUTPUT),
