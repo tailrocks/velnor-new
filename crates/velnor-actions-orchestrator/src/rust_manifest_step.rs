@@ -19,7 +19,12 @@ pub(crate) fn toolchain_script(
     phase: ToolchainPhase,
     manifests: &[(&str, &str, &str)],
 ) -> String {
-    verifier_builders::toolchain_script(version, phase, manifests)
+    verifier_builders::toolchain_script(
+        version,
+        phase,
+        manifests,
+        verifier_builders::RUST_TREE_DIGESTS,
+    )
 }
 
 pub(crate) fn verifier_shell_step(

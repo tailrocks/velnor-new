@@ -1,0 +1,269 @@
+#!/bin/sh
+
+# SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+# SPDX-License-Identifier: Apache-2.0
+
+set -eu
+
+LC_ALL=C
+export LC_ALL
+
+root=$(cd "$(dirname "$0")/.." && pwd)
+catalog="$root/crates/velnor-actions-mise/src/catalog_rust_manifests.rs"
+dist="https://static.rust-lang.org/dist"
+size_cap=4194304
+listing_out=""
+work=""
+
+die() {
+  printf '%s\n' "derive-rust-tree-digest: $1" >&2
+  exit 1
+}
+
+usage() {
+  printf '%s\n' "usage: derive-rust-tree-digest [--listing FILE] --tree DIR" >&2
+  printf '%s\n' "       derive-rust-tree-digest [--listing FILE] --from-manifest VERSION TARGET COMPONENT[,COMPONENT...]" >&2
+  exit 2
+}
+
+cleanup() {
+  [ -z "$work" ] || rm -rf "$work"
+}
+
+sha256_file() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1"
+  else
+    shasum -a 256 "$1"
+  fi | awk '{ print $1 }'
+}
+
+sha256_stdin() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum
+  else
+    shasum -a 256
+  fi | awk '{ print $1 }'
+}
+
+get() {
+  curl --proto '=https' --proto-redir '=https' --tlsv1.2 --fail --silent --show-error --location --retry 3 --retry-all-errors --connect-timeout 20 --max-time 600 --output "$1" "$2"
+}
+
+no_unsafe_names() {
+  (cd "$1" && find . -name '*[!A-Za-z0-9._+-]*') > "$work/unsafe"
+  [ ! -s "$work/unsafe" ] || die "unsafe path character under $1"
+  (cd "$1" && find . ! -type f ! -type d) > "$work/special"
+  [ ! -s "$work/special" ] || die "symlink or special file under $1"
+}
+
+components_sha() {
+  sort "$1" | sha256_stdin
+}
+
+canonical_listing() {
+  tree=$1
+  comp_sha=$2
+  no_unsafe_names "$tree"
+  (cd "$tree" && find . -type f) > "$work/files"
+  (
+    cd "$tree"
+    while IFS= read -r f; do
+      printf '%s  %s\n' "$(sha256_file "$f")" "$f"
+    done < "$work/files"
+  ) > "$work/sums"
+  (cd "$tree" && find . -exec ls -ldn {} +) > "$work/modes"
+  awk -v cs="$comp_sha" -v cap="$size_cap" '
+    function triple(r, w, x) {
+      return (r == "r" ? 4 : 0) + (w == "w" ? 2 : 0) + (x == "x" || x == "s" || x == "t" ? 1 : 0)
+    }
+    function flag(x, s, t) {
+      return (x == s || x == t) ? 1 : 0
+    }
+    NR == FNR { digest[$2] = $1; next }
+    {
+      m = $1
+      kind = substr(m, 1, 1)
+      path = $NF
+      if (kind != "-" && kind != "d") exit 2
+      special = 4 * flag(substr(m, 4, 1), "s", "S") + 2 * flag(substr(m, 7, 1), "s", "S") + flag(substr(m, 10, 1), "t", "T")
+      mode = sprintf("%d%d%d%d", special, triple(substr(m, 2, 1), substr(m, 3, 1), substr(m, 4, 1)), triple(substr(m, 5, 1), substr(m, 6, 1), substr(m, 7, 1)), triple(substr(m, 8, 1), substr(m, 9, 1), substr(m, 10, 1)))
+      rel = (path == ".") ? "." : substr(path, 3)
+      if (kind == "d") { print "d", mode, "-", rel; next }
+      if (rel ~ /^lib\/rustlib\/(manifest-[A-Za-z0-9._+-]+|multirust-channel-manifest\.toml|multirust-config\.toml|rust-installer-version)$/) {
+        if ($5 + 0 > cap + 0) exit 3
+        print "b", mode, "-", rel
+        next
+      }
+      if (rel == "lib/rustlib/components") { print "f", mode, cs, rel; next }
+      if (!(path in digest)) exit 4
+      print "f", mode, digest[path], rel
+    }
+  ' "$work/sums" "$work/modes" | sort -k4,4 > "$work/listing"
+  [ -s "$work/listing" ] || die "empty listing for $tree"
+  if [ -n "$listing_out" ]; then
+    cp "$work/listing" "$listing_out"
+  fi
+  tr '\n' '\000' < "$work/listing" | sha256_stdin
+}
+
+print_digests() {
+  printf 'components_sha256=%s\n' "$1"
+  printf 'tree_sha256=%s\n' "$2"
+}
+
+run_tree() {
+  [ -f "$1/lib/rustlib/components" ] || die "$1/lib/rustlib/components is missing"
+  comp_sha=$(components_sha "$1/lib/rustlib/components")
+  tree_sha=$(canonical_listing "$1" "$comp_sha")
+  print_digests "$comp_sha" "$tree_sha"
+}
+
+manifest_digest() {
+  awk -v v="$1" '
+    { s = $0; gsub(/[ ",]/, "", s) }
+    s == v { getline s; gsub(/[ ",]/, "", s); print s; exit }
+  ' "$catalog"
+}
+
+component_tarballs() {
+  awk -v comps="$1" '
+    BEGIN { while ((getline line < comps) > 0) if (line != "") want[line] = 1 }
+    /^\[/ {
+      key = ""
+      if ($0 ~ /^\[pkg\.[^]]*\.target\.[^]]*\]$/) {
+        s = substr($0, 6, length($0) - 6)
+        p = index(s, ".target.")
+        k = substr(s, 1, p - 1) "-" substr(s, p + 8)
+        if (k in want) key = k
+      }
+      next
+    }
+    key != "" && $1 == "xz_url" { u = $3; gsub(/"/, "", u); url[key] = u }
+    key != "" && $1 == "xz_hash" { h = $3; gsub(/"/, "", h); hash[key] = h }
+    END {
+      for (k in want) {
+        if (!(k in url) || !(k in hash)) exit 1
+        print k, url[k], hash[k]
+      }
+    }
+  ' "$2"
+}
+
+stage_file() {
+  [ ! -e "$2" ] || die "two components install $2"
+  cp "$1" "$2"
+  if [ -n "$(find "$1" \( -perm -100 -o -perm -010 -o -perm -001 \) -print)" ]; then
+    chmod 755 "$2"
+  else
+    chmod 644 "$2"
+  fi
+}
+
+stage_component() {
+  comp=$1
+  url=$2
+  hash=$3
+  stage=$4
+  case "$url" in
+    https://static.rust-lang.org/dist/*.tar.xz) ;;
+    *) die "untrusted component url $url" ;;
+  esac
+  get "$work/c.tar.xz" "$url"
+  [ "$(sha256_file "$work/c.tar.xz")" = "$hash" ] || die "tarball digest mismatch for $comp"
+  rm -rf "$work/x"
+  mkdir "$work/x"
+  tar -xJf "$work/c.tar.xz" -C "$work/x" --strip-components=1
+  rm -f "$work/c.tar.xz"
+  while read -r sub; do
+    case "$sub" in
+      *[!A-Za-z0-9._-]* | "" | . | ..) die "invalid sub-component name $sub" ;;
+    esac
+    src="$work/x/$sub"
+    no_unsafe_names "$src"
+    (cd "$src" && find . -type d ! -path .) > "$work/dirs"
+    while IFS= read -r dir; do
+      mkdir -p "$stage/$dir"
+    done < "$work/dirs"
+    (cd "$src" && find . -type f ! -path ./manifest.in) > "$work/srcfiles"
+    while IFS= read -r file; do
+      stage_file "$src/$file" "$stage/$file"
+    done < "$work/srcfiles"
+  done < "$work/x/components"
+}
+
+normalise_modes() {
+  find "$1" -type d -exec chmod 755 {} +
+  find "$1/lib/rustlib" -maxdepth 1 -type f -exec chmod 644 {} +
+}
+
+write_bookkeeping() {
+  stage=$1
+  mkdir -p "$stage/lib/rustlib"
+  while read -r comp; do
+    : > "$stage/lib/rustlib/manifest-$comp"
+  done < "$work/components"
+  : > "$stage/lib/rustlib/multirust-channel-manifest.toml"
+  : > "$stage/lib/rustlib/multirust-config.toml"
+  : > "$stage/lib/rustlib/rust-installer-version"
+  cp "$work/components" "$stage/lib/rustlib/components"
+}
+
+run_manifest() {
+  version=$1
+  target=$2
+  case "$version$target" in
+    *[!A-Za-z0-9._-]* | "") die "invalid version or target" ;;
+  esac
+  want=$(manifest_digest "$version")
+  case "$want" in
+    *[!0-9a-f]* | "") die "rust $version has no channel manifest digest in $catalog" ;;
+  esac
+  [ "${#want}" -eq 64 ] || die "malformed channel manifest digest for $version"
+  printf '%s\n' "$3" | tr ',' '\n' | sort > "$work/components"
+  while read -r comp; do
+    case "$comp" in
+      *[!A-Za-z0-9._-]* | "") die "invalid component name $comp" ;;
+    esac
+  done < "$work/components"
+  get "$work/channel.toml" "$dist/channel-rust-$version.toml"
+  [ "$(sha256_file "$work/channel.toml")" = "$want" ] || die "channel-rust-$version.toml is not SHA-256 $want"
+  component_tarballs "$work/components" "$work/channel.toml" > "$work/tarballs" || die "a listed component is not in channel-rust-$version.toml"
+  stage="$work/stage"
+  mkdir "$stage"
+  while read -r comp url hash; do
+    stage_component "$comp" "$url" "$hash" "$stage"
+  done < "$work/tarballs"
+  write_bookkeeping "$stage"
+  normalise_modes "$stage"
+  comp_sha=$(components_sha "$work/components")
+  tree_sha=$(canonical_listing "$stage" "$comp_sha")
+  print_digests "$comp_sha" "$tree_sha"
+  printf 'TreeDigestPin::new("%s", "%s", "%s", "%s"),\n' "$version" "$target" "$comp_sha" "$tree_sha"
+}
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --listing)
+      [ "$#" -ge 2 ] || usage
+      listing_out=$2
+      shift 2
+      ;;
+    *) break ;;
+  esac
+done
+
+trap cleanup EXIT
+work=$(mktemp -d)
+
+case "${1:-}" in
+  --tree)
+    [ "$#" -eq 2 ] || usage
+    run_tree "$2"
+    ;;
+  --from-manifest)
+    [ "$#" -eq 4 ] || usage
+    run_manifest "$2" "$3" "$4"
+    ;;
+  *) usage ;;
+esac

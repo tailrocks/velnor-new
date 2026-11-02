@@ -111,6 +111,7 @@ mod tools_identity;
 mod tools_producer;
 
 mod native_verifiers;
+mod native_verifiers_tree_digest;
 pub mod toolchain_env;
 pub mod tree;
 pub mod upgrades;

@@ -9,6 +9,7 @@ use velnor_actions_mise::catalog::RUST_CHANNEL_MANIFESTS;
 use velnor_actions_mise::{PinnedTool, ToolCatalog, ToolHomes};
 
 use crate::VERIFY_PATH;
+use crate::native_verifiers_tree_digest::{RUST_TREE_DIGESTS, TreeDigestPin, pin_statements};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ToolchainPhase {
@@ -30,6 +31,7 @@ pub fn toolchain_script(
     version: &str,
     phase: ToolchainPhase,
     manifests: &[(&str, &str, &str)],
+    pins: &[TreeDigestPin],
 ) -> String {
     let cases = manifests
         .iter()
@@ -68,12 +70,15 @@ pub fn toolchain_script(
         "t=\"$1\"".to_owned(),
         "if command -v sha256sum >/dev/null 2>&1; then h=\"sha256sum\"; else h=\"shasum -a 256\"; fi".to_owned(),
         "get() { curl --proto \"=https\" --proto-redir \"=https\" --tlsv1.2 --fail --silent --show-error --location --retry 3 --retry-all-errors --connect-timeout 20 --max-time 120 --retry-max-time 180 --output \"$1\" \"$2\"; }".to_owned(),
-        format!("get \"$d/channel.toml\" \"{DIST}$v.toml\""),
-        "printf \"%s  %s\\n\" \"$want\" \"$d/channel.toml\" > \"$d/channel.sha256\"".to_owned(),
-        "$h -c \"$d/channel.sha256\" >/dev/null || fail \"rust_channel_manifest_digest_mismatch: channel-rust-$v.toml is not SHA-256 $want\"".to_owned(),
         "test -f \"$t/lib/rustlib/components\" || fail \"rust_installed_manifest_missing: $t/lib/rustlib/components\"".to_owned(),
         "find \"$t\" ! -type f ! -type d > \"$d/special\"".to_owned(),
         "test ! -s \"$d/special\" || fail \"rust_toolchain_file_unexpected: $t holds a symlink or a special file\"".to_owned(),
+    ]);
+    lines.extend(pin_statements(pins));
+    lines.extend([
+        format!("get \"$d/channel.toml\" \"{DIST}$v.toml\""),
+        "printf \"%s  %s\\n\" \"$want\" \"$d/channel.toml\" > \"$d/channel.sha256\"".to_owned(),
+        "$h -c \"$d/channel.sha256\" >/dev/null || fail \"rust_channel_manifest_digest_mismatch: channel-rust-$v.toml is not SHA-256 $want\"".to_owned(),
         format!("{COMPONENT_TARBALLS_AWK} || fail \"rust_component_not_in_manifest: $t lists a component the verified channel-rust-$v.toml does not ship\""),
         "test -s \"$d/tarballs\" || fail \"rust_installed_manifest_empty: $t lists no component\"".to_owned(),
         ": > \"$d/expected\"".to_owned(),
@@ -104,6 +109,7 @@ pub fn rust_verifier_shell_step(
         catalog.version(PinnedTool::Rust),
         phase,
         RUST_CHANNEL_MANIFESTS,
+        RUST_TREE_DIGESTS,
     );
     crate::verifier_composite::verifier_shell_step(
         StepRole::VerifyRustManifest,
@@ -122,6 +128,7 @@ pub fn verify_rust_owned_argv(catalog: &ToolCatalog, phase: ToolchainPhase) -> V
             catalog.version(PinnedTool::Rust),
             phase,
             RUST_CHANNEL_MANIFESTS,
+            RUST_TREE_DIGESTS,
         ),
     ]
 }
