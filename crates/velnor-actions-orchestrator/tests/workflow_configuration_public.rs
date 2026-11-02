@@ -117,6 +117,8 @@ mod tools_producers_scope;
 mod verification_tools;
 #[path = "workflow_configuration_public/waste_lint.rs"]
 mod waste_lint;
+#[path = "workflow_configuration_public/waste_oracle.rs"]
+mod waste_oracle;
 #[path = "workflow_configuration_public/waste_rules.rs"]
 mod waste_rules;
 #[path = "workflow_configuration_public/workspace_format.rs"]

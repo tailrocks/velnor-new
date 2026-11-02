@@ -11,6 +11,35 @@ use velnor_actions_orchestrator::{finalized_jobs, prepare, render_staged_tree};
 #[path = "verification_tools_fixture.rs"]
 mod fixture;
 
+use super::waste_oracle as oracle;
+
+const HOOK_CLOSURE_ACTION: &str = ".github/actions/task-hook-closure/action.yml";
+
+#[test]
+fn verification_task_jobs_render_auto_install_off() -> Result<(), Box<dyn Error>> {
+    let repo = fixture::repo(fixture::REGEX, fixture::LOCK)?;
+    let prepared = prepare(repo.path())?;
+    let files = oracle::files_of(&render_staged_tree(&prepared)?)?;
+    let action = oracle::file_tokens(&files, HOOK_CLOSURE_ACTION)?;
+    for token in ["install", "--locked"] {
+        assert!(
+            action.contains(token),
+            "{HOOK_CLOSURE_ACTION} lacks {token}"
+        );
+    }
+    let jobs = oracle::scan(&files, |_| true)?;
+    for suffix in [HOSTED_SUFFIX, SCALE_SUFFIX] {
+        let id = format!("task-hook-closure{suffix}");
+        assert!(
+            oracle::find(&jobs, &id)?.is_user(),
+            "{id} is not a toolchain job"
+        );
+    }
+    let found = oracle::violations(&jobs);
+    assert!(found.is_empty(), "{found:#?}");
+    Ok(())
+}
+
 #[test]
 fn verification_task_preserves_seven_tool_hook_closure_and_required_fan_in()
 -> Result<(), Box<dyn Error>> {

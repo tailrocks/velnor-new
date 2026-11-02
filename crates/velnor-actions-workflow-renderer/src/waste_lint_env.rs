@@ -9,10 +9,6 @@ use velnor_actions_contract::{
 
 use crate::waste_lint::{ExecWord, WasteFinding};
 
-fn applies(job: &Job) -> bool {
-    crate::rust_job_env::is_rust_bearing(job)
-}
-
 fn step_env(step: &Step) -> Option<&BTreeMap<String, String>> {
     match &step.kind {
         StepKind::Shell { env, .. }
@@ -23,16 +19,15 @@ fn step_env(step: &Step) -> Option<&BTreeMap<String, String>> {
 }
 
 fn exec_word(step: &Step) -> Option<ExecWord> {
-    let StepKind::Shell { run, .. } = &step.kind else {
+    let StepKind::Shell { .. } = &step.kind else {
         return None;
     };
-    let words = crate::cache_p08_detect::detector_words(run);
-    let names_rust = words
+    let tokens = crate::rust_job_env::step_tokens(step);
+    let names_rust = tokens
         .iter()
-        .any(|word| velnor_actions_mise::rust_spec_version(word).is_some());
-    words
-        .iter()
-        .filter_map(|word| ExecWord::from_word(word))
+        .any(|token| velnor_actions_mise::rust_spec_version(token).is_some());
+    crate::rust_job_env::exec_words(&tokens)
+        .into_iter()
         .filter(|word| *word != ExecWord::Mise || names_rust)
         .min()
 }
@@ -70,7 +65,7 @@ fn home_findings(id: &str, step: &Step, word: ExecWord) -> Vec<WasteFinding> {
 
 pub(crate) fn w2(jobs: &BTreeMap<String, Job>) -> Vec<WasteFinding> {
     jobs.iter()
-        .filter(|(_, job)| applies(job))
+        .filter(|(_, job)| crate::rust_job_env::installs_rust(job))
         .flat_map(|(id, job)| {
             job.steps.iter().flat_map(move |step| {
                 exec_word(step)
@@ -84,7 +79,7 @@ pub(crate) fn w2(jobs: &BTreeMap<String, Job>) -> Vec<WasteFinding> {
 pub(crate) fn w3(jobs: &BTreeMap<String, Job>) -> Vec<WasteFinding> {
     let mut findings = Vec::new();
     for (id, job) in jobs {
-        if applies(job)
+        if crate::rust_job_env::is_rust_bearing(job)
             && job.env.get(RUSTUP_AUTO_INSTALL_ENV) != Some(RUSTUP_AUTO_INSTALL_DISABLED)
         {
             findings.push(WasteFinding::AutoInstallNotDisabled {

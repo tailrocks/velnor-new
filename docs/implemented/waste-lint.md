@@ -9,20 +9,38 @@ workflow render, after the cache doctor.
 
 ## Scope
 
-A rule applies to a rust-bearing job. A job is rust-bearing when its inferred
-tools include a `rust@` or `rust[profile=minimal]@` spec. The scope is the one
-function `is_rust_bearing` in `rust_job_env.rs`.
+Two predicates in `rust_job_env.rs` define the scope.
+
+- A job installs rust when its inferred tools include a `rust@` or
+  `rust[profile=minimal]@` spec.
+- A job is rust-bearing when it installs rust, or when any of its shell or task
+  steps runs a toolchain word. The command text is tokenized on whitespace and
+  on `; & | ( ) ' " \ < >`. A token equal to `cargo`, `rustup`, `rustc` or
+  `mbx` is a toolchain word, so `cargo-machete` and `$CARGO_HOME` are not. A
+  `mise` command with `--locked` before `install` also counts, because it
+  installs whatever the lockfile selects, including rust.
+
+W2 applies to jobs that install rust. W3 applies to every rust-bearing job. The
+W3 step-override half applies to every job, rust-bearing or not.
 
 The binder `rust_job_env::bind` sets `Job.env` to `JobEnv::RustToolchain` on
 every rust-bearing job. `JobEnv::RustToolchain` renders `RUSTUP_AUTO_INSTALL: "0"`
-at job level. It renders in the CI workflow and in the suites workflows.
+at job level. It renders in the CI workflow, in the suites workflows and in
+`freshness.yml`. The freshness render binds and lints its single job through
+`waste_lint::bind_and_check_standalone`.
+
+A job that runs the rustup `cargo` proxy at the repository root without
+installing rust auto-installs the toolchain named by `rust-toolchain.toml`.
+Such a job is either bound to the job env, or it calls a binary directly.
+`cargo-machete` does the second: it runs `cargo-machete <paths>` and never
+starts the proxy.
 
 ## Rules
 
 | Rule | Finding | Fix |
 |---|---|---|
-| W2 `job_context_env` | A shell step runs `cargo`, `rustup`, `rustc`, `mise` or `mbx` without all four toolchain homes. Or a home differs from its standard value. | Set `CARGO_HOME`, `MISE_CARGO_HOME`, `MISE_RUSTUP_HOME` and `RUSTUP_HOME` to the standard values in the step. |
-| W3 `rustup_auto_install` | A rust-bearing job has no job-level `RUSTUP_AUTO_INSTALL=0`. Or a step sets `RUSTUP_AUTO_INSTALL` to another value. | Bind the job to the rust toolchain job env. Do not set the value per step. |
+| W2 `job_context_env` | A shell step of a job that installs rust runs `cargo`, `rustup`, `rustc`, `mbx`, or `mise` with a rust spec, without all four toolchain homes. Or a home differs from its standard value. A `mise` command without a rust spec is not counted. | Set `CARGO_HOME`, `MISE_CARGO_HOME`, `MISE_RUSTUP_HOME` and `RUSTUP_HOME` to the standard values in the step. |
+| W3 `rustup_auto_install` | A rust-bearing job has no job-level `RUSTUP_AUTO_INSTALL=0`. Or a step of any job sets `RUSTUP_AUTO_INSTALL` to another value. | Bind the job to the rust toolchain job env. Do not set the value per step. |
 
 The four homes stay in the step env. GitHub does not allow the `runner`
 context in a job-level `env`, so `${{ runner.temp }}/velnor/cargo` cannot be a
@@ -31,10 +49,21 @@ job-level value.
 ## Not covered
 
 - Steps of kind `Action`, `TaskExecution`, `NativeCheckExecution` and `Internal`
-  are not checked for W2. The task helper owns the task environment.
+  are not checked for W2. The task helper owns the task environment. The
+  verification task bootstrap exports its own private `CARGO_HOME` and
+  `RUSTUP_HOME`, so W2 does not apply to jobs that only run lockfile installs
+  or `mbx`.
 - Under `consumer-v1`, the group ledger step is an `Internal` step. W2 does not
   check it.
-- Workflows from `mise_task_suites_emit`, release and qualification do not use
-  the job graph. The lint does not cover them.
-- Jobs that run an exec word but install no Rust, such as `cargo-machete`, are
-  out of scope.
+- Workflows from `mise_task_suites_emit` do not use the job graph. The lint
+  does not cover them.
+- Release and qualification workflows do not use the job graph. The lint does
+  not cover them. The test
+  `committed_generated_workflows_have_auto_install_off_or_are_listed_uncovered`
+  lists them in `UNCOVERED_WORKFLOWS`: `job-image-candidate.yml`,
+  `product-release-binary.yml`, `product-release-generator.yml`,
+  `product-release-images.yml`, `product-release.yml` and `qualification.yml`.
+  The list can only shrink. T5 is measured on main-push CI, and covering these
+  workflows is a tracked follow-up.
+- `ci.yml` is excluded from that committed-file test because it uses YAML
+  aliases. The tests that render the CI workflow cover it.

@@ -3,6 +3,7 @@
 
 use std::collections::BTreeMap;
 use velnor_actions_contract::JobTimeout;
+use velnor_actions_contract::workflow::cache_family::{CARGO_HOME_EXPR, RUSTUP_HOME_EXPR};
 
 use velnor_actions_contract::{FRESHNESS_WORKFLOW_PATH, ScheduleTrigger, Step, StepRole};
 
@@ -64,6 +65,12 @@ pub fn render_freshness_workflow(spec: &FreshnessSpec) -> Result<RenderedFile, R
     )?;
     checkout.role = Some(StepRole::Checkout);
     let setup_mise = mise_setup_step(&spec.mise_setup)?;
+    let homes = crate::toolchain_env::with_toolchain_homes(
+        &BTreeMap::new(),
+        RUSTUP_HOME_EXPR,
+        CARGO_HOME_EXPR,
+        "",
+    );
     let install_rust = shell_step(
         "Install Rust toolchain",
         vec![
@@ -74,7 +81,7 @@ pub fn render_freshness_workflow(spec: &FreshnessSpec) -> Result<RenderedFile, R
             "install".to_owned(),
             format!("rust@{}", spec.rust_version),
         ],
-        BTreeMap::new(),
+        homes.clone(),
     )?;
     let verify_rust = crate::verifier_composite::verifier_shell_step(
         velnor_actions_contract::StepRole::VerifyRustManifest,
@@ -96,7 +103,7 @@ pub fn render_freshness_workflow(spec: &FreshnessSpec) -> Result<RenderedFile, R
             FRESHNESS_SCRIPT.to_owned(),
             FRESHNESS_PROBE_FLAG.to_owned(),
         ],
-        BTreeMap::new(),
+        homes,
     )?;
     let document = freshness_document(
         spec,
@@ -132,19 +139,30 @@ fn freshness_document(
         FRESHNESS_JOB_ID,
     )
     .map_err(RenderError::Contract)?;
+    let job_env = crate::waste_lint::bind_and_check_standalone(FRESHNESS_JOB_ID, &sequence)?;
     let crons: Vec<Yaml> = spec
         .schedule
         .cron
         .iter()
         .map(|cron| Yaml::Map(vec![("cron".to_owned(), Yaml::str(cron.clone()))]))
         .collect();
-    let job = Yaml::Map(vec![
+    let mut job_fields = vec![
         ("name".to_owned(), Yaml::str(FRESHNESS_JOB_NAME)),
         ("runs-on".to_owned(), Yaml::str(spec.runs_on.clone())),
         (
             "timeout-minutes".to_owned(),
             Yaml::Int(i64::from(FRESHNESS_TIMEOUT_MINUTES)),
         ),
+    ];
+    let mut env = BTreeMap::new();
+    crate::rust_job_env::extend_env(&mut env, job_env);
+    if !env.is_empty() {
+        job_fields.push((
+            "env".to_owned(),
+            crate::document_steps::string_map_yaml(&env),
+        ));
+    }
+    job_fields.extend([
         ("permissions".to_owned(), read_only_permissions()),
         (
             "steps".to_owned(),
@@ -156,6 +174,7 @@ fn freshness_document(
             ),
         ),
     ]);
+    let job = Yaml::Map(job_fields);
     Ok(Yaml::Map(vec![
         ("name".to_owned(), Yaml::str(FRESHNESS_WORKFLOW_NAME)),
         (

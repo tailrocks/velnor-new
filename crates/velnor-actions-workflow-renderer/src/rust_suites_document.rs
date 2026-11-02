@@ -190,7 +190,7 @@ fn suite_job_to_yaml(
         RunsOn::ScaleSet(selector) => Yaml::Flow(selector.labels().to_vec()),
     };
     let mut job_env = extract_suite_job_env(job, native_mbx);
-    crate::rust_job_env::extend_env(&mut job_env, job);
+    crate::rust_job_env::extend_env(&mut job_env, job.env);
     let mut entries = vec![
         ("name".to_owned(), Yaml::str(job.display_name.clone())),
         ("runs-on".to_owned(), runs_on),
