@@ -11,21 +11,28 @@ use crate::fixture::{
 
 const COMPONENTS: &str = "lib/rustlib/components";
 
-const UNSAFE_NAMES: [(&str, &str); 4] = [
+const LISTING_GUARD: &str = "listing guard";
+const UNSAFE_NAME_CHECK: &str = "unsafe-name check";
+
+const UNSAFE_NAMES: [(&str, &str, &str); 4] = [
     (
         "a b",
+        LISTING_GUARD,
         "e103c304a93bba11dbfe7cb9608f3b6039ce28ff807aa4ed29759435ad07c3ef",
     ),
     (
         "a$b",
-        "afb2a2c8cbf712c2dbf6f4573cbe77ef4fc347fe359e644c16e13a18a92df66a",
+        UNSAFE_NAME_CHECK,
+        "8d9288872dbb19602babe083849419080568ca0c7516a7cea114e997240084d0",
     ),
     (
         "a*b",
-        "5626c79bf93b91b4a01de84fc520d426bfcc843375ff1921b4fee8384f372a18",
+        UNSAFE_NAME_CHECK,
+        "7d1b42cab88c8754aa08a8ccc1d6c7459fb2ac3de95933667cbd211942fbd6e0",
     ),
     (
         "a\nb",
+        LISTING_GUARD,
         "0515b57e2fa3843d16787185cfbc0149d5f2c00872c93ef3d64c40b3835ef3a0",
     ),
 ];
@@ -141,7 +148,7 @@ fn n1c_a_changed_selection_input_under_the_matching_pin_fails_the_job() {
 
 #[test]
 fn n2_unsafe_path_characters_fail_the_job_under_a_pinned_components_set() {
-    let mutations = UNSAFE_NAMES.map(|(name, _)| {
+    let mutations = UNSAFE_NAMES.map(|(name, _, _)| {
         move |fx: &Fixture| {
             fx.put(&format!("lib/{name}"), b"x", 0o644);
         }
@@ -149,8 +156,8 @@ fn n2_unsafe_path_characters_fail_the_job_under_a_pinned_components_set() {
     let rows = UNSAFE_NAMES
         .iter()
         .zip(&mutations)
-        .map(|((name, literal), mutate)| Row {
-            name: format!("{name:?}"),
+        .map(|((name, guard, literal), mutate)| Row {
+            name: format!("{name:?} ({guard})"),
             mutate,
             pin: TreeDigestPin::new(VERSION, TARGET, FIXTURE_COMPONENTS_SHA256, literal),
         })

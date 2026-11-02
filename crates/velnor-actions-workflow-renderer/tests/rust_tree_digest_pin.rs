@@ -37,7 +37,7 @@ use velnor_actions_contract::StepKind;
 use velnor_actions_mise::catalog::RUST_CHANNEL_MANIFESTS;
 use velnor_actions_mise::{PinnedTool, RUST_VERSION, ToolCatalog};
 use velnor_actions_workflow_renderer::verifier_builders::{
-    RUST_TREE_DIGESTS, ToolchainPhase, TreeDigestPin, rust_verifier_shell_step,
+    RUST_TREE_DIGESTS, ToolchainPhase, TreeDigestPin, rust_verifier_shell_step, verify_rust_argv,
     verify_rust_owned_argv,
 };
 
@@ -107,6 +107,23 @@ fn p3_live_emitters_select_the_production_pin() {
             assert!(outcome.stdout.contains("tree_differs"), "{outcome:?}");
             Fixture::standard().run(script).assert_hard_failed(MISMATCH);
         }
+    }
+}
+
+#[test]
+fn p7_default_home_verifier_never_applies_the_owned_home_pins() {
+    let argv = verify_rust_argv(&ToolCatalog::pinned());
+    let script = argv.last().expect("script");
+    for components in [FIXTURE_COMPONENTS, REAL_COMPONENTS] {
+        let outcome = Fixture::with_components(components).run(script);
+        let combined = outcome.combined();
+        assert!(
+            !combined.contains(MISMATCH)
+                && !combined.contains("pin_mismatch")
+                && !combined.contains("matches pinned")
+                && outcome.stderr.contains("curl: (7)"),
+            "{outcome:?}"
+        );
     }
 }
 

@@ -49,6 +49,29 @@ fn b1_rustup_rewritten_manifest_of_the_verified_release_passes_the_full_path() {
 }
 
 #[test]
+fn b6_a_file_by_file_script_verifies_the_release_without_any_pin() {
+    for phase in PHASES {
+        let (fx, release) = fixture_with(&Release::installed);
+        let outcome = release.run_file_by_file(&fx, phase);
+        assert!(
+            outcome.code == Some(0)
+                && outcome.stdout.contains("verified file by file")
+                && !outcome.combined().contains("pin_mismatch")
+                && !outcome.combined().contains(MISMATCH),
+            "{phase:?}: {outcome:?}"
+        );
+        fx.put("lib/x.so", b"sO\n", 0o644);
+        let flipped = release.run_file_by_file(&fx, phase);
+        assert!(
+            flipped.code == Some(1)
+                && flipped.stderr.contains("rust_toolchain_bytes_mismatch")
+                && !flipped.stdout.contains("verified file by file"),
+            "{phase:?}: {flipped:?}"
+        );
+    }
+}
+
+#[test]
 fn b2_a_rewritten_bookkeeping_manifest_fails_the_full_path_by_name() {
     let evil_url = |release: &Release| {
         release

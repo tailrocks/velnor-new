@@ -49,3 +49,7 @@ pub(crate) fn verify_rust_manifest_step(_catalog: &ToolCatalog) -> Step {
 pub(crate) fn verify_restored_rust_step(_catalog: &ToolCatalog) -> Step {
     verifier_builders::verify_restored_rust_step()
 }
+
+#[cfg(test)]
+#[path = "rust_manifest_step_tests.rs"]
+mod tests;

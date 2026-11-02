@@ -128,15 +128,12 @@ impl Release {
         }
     }
 
-    fn script(&self, phase: ToolchainPhase, pins: &[TreeDigestPin]) -> String {
+    fn script(&self, phase: ToolchainPhase, trees: TreeCheck<'_>) -> String {
         let script = toolchain_script(
             VERSION,
             phase,
             &[(VERSION, &self.channel_sha256, "2026-10-15")],
-            TreeCheck::Pinned {
-                target: TARGET,
-                pins,
-            },
+            trees,
         );
         let start = script.find("get() {").expect("get definition");
         let end = start + script[start..].find("; }").expect("get end") + 3;
@@ -162,7 +159,17 @@ impl Release {
         phase: ToolchainPhase,
         pins: &[TreeDigestPin],
     ) -> Outcome {
-        fx.run(&self.script(phase, pins))
+        fx.run(&self.script(
+            phase,
+            TreeCheck::Pinned {
+                target: TARGET,
+                pins,
+            },
+        ))
+    }
+
+    pub(crate) fn run_file_by_file(&self, fx: &Fixture, phase: ToolchainPhase) -> Outcome {
+        fx.run(&self.script(phase, TreeCheck::FileByFile))
     }
 }
 
