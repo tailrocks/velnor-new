@@ -4,8 +4,8 @@
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::{
-    CrateJob, Job, JobTimeout, ProposedTask, Stack, Step, VelnorConfig, WorkflowPolicy,
-    crate_display_name, tofu_display_name,
+    CrateJob, DependencySeedMode, Job, JobTimeout, ProposedTask, Stack, Step, VelnorConfig,
+    WorkflowPolicy, crate_display_name, tofu_display_name,
 };
 use velnor_actions_mise::{TaskCacheMode, ToolCatalog};
 use velnor_actions_workflow_renderer::steps::CompileDriver as RenderDriver;
@@ -86,6 +86,7 @@ pub(crate) fn build_for_workflow(
             timeout: JobTimeout::new(config.workflow.crate_timeout_minutes)?,
             helper_version,
             crates,
+            dependency_seed: config.stacks.dependency_seed(),
             seed_parallel_targets: config
                 .stacks
                 .rust
@@ -132,7 +133,12 @@ fn build_crate_jobs_with_seed_timeout(
         .into_iter()
         .map(|(root, nextest)| dependency_seed::SeedWorkspace { root, nextest })
         .collect();
-    let seeds = dependency_seed::seed_jobs(&input, &workspaces, private, seed_timeout)?;
+    let seeds = match input.dependency_seed {
+        DependencySeedMode::Produce => {
+            dependency_seed::seed_jobs(&input, &workspaces, private, seed_timeout)?
+        }
+        DependencySeedMode::Off => Vec::new(),
+    };
     for (id, _) in &seeds {
         drivers.insert(id.clone(), RenderDriver::Mbx);
     }

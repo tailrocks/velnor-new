@@ -65,6 +65,8 @@ mod release_bun_prerequisite;
 mod report_upload;
 #[path = "workflow_configuration_public/seed_ids.rs"]
 mod seed_ids;
+#[path = "workflow_configuration_public/seed_off.rs"]
+mod seed_off;
 #[path = "workflow_configuration_public/source_qualification.rs"]
 mod source_qualification;
 #[path = "workflow_configuration_public/source_qualification_aggregation.rs"]
