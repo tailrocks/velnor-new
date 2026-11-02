@@ -1,0 +1,207 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
+use std::collections::BTreeSet;
+use std::error::Error;
+
+use sha2::{Digest, Sha256};
+use velnor_actions_contract::config::UPGRADES_WORKFLOW_PATH;
+use velnor_actions_contract::workflow::RUST_VERIFIER_USES;
+use velnor_actions_contract::{Job, Step, StepKind, StepRole};
+use velnor_actions_mise::{RUST_TARGET_TRIPLE, RUST_VERSION};
+use velnor_actions_orchestrator::{prepare, render_staged_tree};
+use velnor_actions_workflow_renderer::verifier_builders::RUST_TREE_DIGESTS;
+
+use super::tools_producers::{POLICIES, finalized, positions};
+use super::workflow_configuration_fixture::make_repo;
+
+const MINIMAL_COMPONENTS: [&str; 3] = ["cargo", "rust-std", "rustc"];
+
+const UPGRADES_CONFIG: &str = "schema = 1\n[workflow]\nname = \"CI\"\ndefault_branch = \"testmain\"\n\n[upgrades]\nenabled = true\n";
+
+fn is_restored_form(step: &Step) -> bool {
+    matches!(&step.kind, StepKind::Action { uses, .. } if uses == RUST_VERIFIER_USES[0])
+}
+
+fn installed_verifiers(job: &Job) -> Vec<usize> {
+    let Some(install) = positions(job, StepRole::PreparePinnedTools)
+        .first()
+        .copied()
+    else {
+        return Vec::new();
+    };
+    positions(job, StepRole::VerifyRustManifest)
+        .into_iter()
+        .filter(|at| *at > install && !is_restored_form(&job.steps[*at]))
+        .collect()
+}
+
+fn added_components(step: &Step) -> Vec<String> {
+    let StepKind::Shell { run, .. } = &step.kind else {
+        return Vec::new();
+    };
+    run.iter()
+        .skip_while(|token| token.as_str() != "--toolchain")
+        .skip(2)
+        .cloned()
+        .collect()
+}
+
+fn final_components_sha256(job: &Job) -> String {
+    let mut names = MINIMAL_COMPONENTS
+        .iter()
+        .map(|name| (*name).to_owned())
+        .chain(
+            positions(job, StepRole::PrepareRustComponents)
+                .into_iter()
+                .flat_map(|at| added_components(&job.steps[at]))
+                .map(|name| format!("{name}-preview")),
+        )
+        .map(|name| format!("{name}-{RUST_TARGET_TRIPLE}\n"))
+        .collect::<Vec<_>>();
+    names.sort();
+    Sha256::digest(names.concat().as_bytes())
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect::<Vec<_>>()
+        .concat()
+}
+
+fn final_tree_is_reverified(job: &Job) -> bool {
+    let Some(last_add) = positions(job, StepRole::PrepareRustComponents)
+        .into_iter()
+        .max()
+    else {
+        return true;
+    };
+    let first_cargo = job
+        .steps
+        .iter()
+        .position(|step| matches!(step.kind, StepKind::TaskExecution { .. }))
+        .unwrap_or(job.steps.len());
+    installed_verifiers(job)
+        .into_iter()
+        .any(|at| at > last_add && at < first_cargo)
+}
+
+fn rendered_rust_jobs() -> Result<Vec<(String, Job)>, Box<dyn Error>> {
+    let mut jobs = Vec::new();
+    for policy in POLICIES {
+        let (_, finalized) = finalized(policy)?;
+        jobs.extend(
+            finalized
+                .into_iter()
+                .filter(|(_, job)| !installed_verifiers(job).is_empty()),
+        );
+    }
+    Ok(jobs)
+}
+
+#[test]
+fn pinned_component_sets_match_the_sets_generated_jobs_install() -> Result<(), Box<dyn Error>> {
+    let produced = rendered_rust_jobs()?
+        .iter()
+        .map(|(_, job)| final_components_sha256(job))
+        .collect::<BTreeSet<_>>();
+    let pinned = RUST_TREE_DIGESTS
+        .iter()
+        .filter(|pin| pin.version() == RUST_VERSION && pin.target() == RUST_TARGET_TRIPLE)
+        .map(|pin| pin.components_sha256().to_owned())
+        .collect::<BTreeSet<_>>();
+    assert_eq!(produced.len(), 2, "{produced:?}");
+    assert_eq!(produced, pinned);
+    Ok(())
+}
+
+#[test]
+fn installed_verifier_follows_the_last_component_add_before_any_cargo_use()
+-> Result<(), Box<dyn Error>> {
+    let jobs = rendered_rust_jobs()?;
+    let with_adds = jobs
+        .iter()
+        .filter(|(_, job)| !positions(job, StepRole::PrepareRustComponents).is_empty())
+        .collect::<Vec<_>>();
+    assert!(with_adds.iter().any(|(_, job)| {
+        job.steps
+            .iter()
+            .any(|s| matches!(s.kind, StepKind::TaskExecution { .. }))
+    }));
+    for (id, job) in &jobs {
+        assert!(final_tree_is_reverified(job), "{id}");
+    }
+    Ok(())
+}
+
+type Mutate = fn(&mut Job, usize, usize);
+
+fn mutations() -> [(&'static str, Mutate); 4] {
+    [
+        ("verifier removed", |job, _, verify| {
+            job.steps.remove(verify);
+        }),
+        ("verifier before the add", |job, add, verify| {
+            let step = job.steps.remove(verify);
+            job.steps.insert(add, step);
+        }),
+        ("verifier is the restored form", |job, _, verify| {
+            job.steps[verify].kind = StepKind::Action {
+                uses: RUST_VERIFIER_USES[0].to_owned(),
+                with: std::collections::BTreeMap::new(),
+                env: std::collections::BTreeMap::new(),
+            };
+        }),
+        ("verifier after cargo use", |job, _, verify| {
+            let step = job.steps.remove(verify);
+            let cargo = job
+                .steps
+                .iter()
+                .position(|s| matches!(s.kind, StepKind::TaskExecution { .. }))
+                .unwrap_or(job.steps.len());
+            job.steps.insert(cargo + 1, step);
+        }),
+    ]
+}
+
+#[test]
+fn a_job_without_a_reverified_final_tree_is_detected() -> Result<(), Box<dyn Error>> {
+    let (id, job) = rendered_rust_jobs()?
+        .into_iter()
+        .find(|(_, job)| {
+            !positions(job, StepRole::PrepareRustComponents).is_empty()
+                && job
+                    .steps
+                    .iter()
+                    .any(|s| matches!(s.kind, StepKind::TaskExecution { .. }))
+        })
+        .ok_or("no rendered crate job installs components")?;
+    assert!(final_tree_is_reverified(&job), "{id}");
+    let add = positions(&job, StepRole::PrepareRustComponents)[0];
+    let verify = installed_verifiers(&job)[0];
+    for (name, mutate) in mutations() {
+        let mut broken = job.clone();
+        mutate(&mut broken, add, verify);
+        assert!(!final_tree_is_reverified(&broken), "{id}: {name}");
+    }
+    Ok(())
+}
+
+#[test]
+fn upgrades_workflow_embeds_every_tree_pin() -> Result<(), Box<dyn Error>> {
+    let repo = make_repo(UPGRADES_CONFIG)?;
+    let tree = render_staged_tree(&prepare(repo.path())?)?;
+    let upgrades = tree
+        .get(UPGRADES_WORKFLOW_PATH)
+        .ok_or("upgrades workflow is missing")?;
+    assert_ne!(RUST_TREE_DIGESTS.len(), 0);
+    for pin in RUST_TREE_DIGESTS {
+        let row = format!(
+            "{}:{}:{}) pin={};;",
+            pin.version(),
+            pin.target(),
+            pin.components_sha256(),
+            pin.tree_sha256()
+        );
+        assert!(upgrades.contains(&row), "{row}");
+    }
+    Ok(())
+}
