@@ -193,12 +193,13 @@ stage_component() {
     esac
     src="$work/x/$sub"
     no_unsafe_names "$src"
-    (cd "$src" && find . -type d ! -path .) > "$work/dirs"
-    while IFS= read -r dir; do
-      mkdir -p "$stage/$dir"
-    done < "$work/dirs"
-    (cd "$src" && find . -type f ! -path ./manifest.in) > "$work/srcfiles"
+    [ -f "$src/manifest.in" ] || die "$comp/$sub has no manifest.in"
+    ! grep -qv '^file:' "$src/manifest.in" || die "$comp/$sub manifest.in has an entry that is not a file"
+    sed 's/^file://' "$src/manifest.in" | sort > "$work/manifest-files"
+    (cd "$src" && find . -type f ! -path ./manifest.in) | sed 's|^\./||' | sort > "$work/srcfiles"
+    cmp -s "$work/manifest-files" "$work/srcfiles" || die "$comp/$sub manifest.in does not list exactly the tarball files"
     while IFS= read -r file; do
+      mkdir -p "$(dirname "$stage/$file")"
       stage_file "$src/$file" "$stage/$file"
     done < "$work/srcfiles"
   done < "$work/x/components"
