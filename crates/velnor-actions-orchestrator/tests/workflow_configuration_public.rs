@@ -105,6 +105,10 @@ mod tofu_providers_producer_condition;
 mod tofu_providers_producer_timeout;
 #[path = "workflow_configuration_public/tofu_providers_producers.rs"]
 mod tofu_providers_producers;
+#[path = "workflow_configuration_public/tools_cache_forged_outputs.rs"]
+mod tools_cache_forged_outputs;
+#[path = "workflow_configuration_public/tools_cache_verify_hook.rs"]
+mod tools_cache_verify_hook;
 #[path = "workflow_configuration_public/tools_producers.rs"]
 mod tools_producers;
 #[path = "workflow_configuration_public/tools_producers_donor_rust.rs"]

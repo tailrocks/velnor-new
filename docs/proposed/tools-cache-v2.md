@@ -72,7 +72,19 @@ because the runner resolves a bare `shell: bash` through that `PATH`
 shell path as given. So:
 
 - the admission and re-verification steps use the shell
-  `/bin/bash --noprofile --norc -e -o pipefail {0}` (`VERIFY_SHELL`);
+  `/bin/bash --noprofile --norc -p -e -o pipefail {0}`
+  (`VERIFY_VERIFIER_SHELL`). `-p` makes bash ignore `BASH_ENV` and `ENV` and
+  import no exported functions, so a startup hook or an exported function set
+  by an earlier step cannot forge a digest tool into the check (see the
+  [threat model](#threat-model) for what this does not cover);
+- the tool-seed copy step and the V2 identity steps (`u22`, `u24`, `u26`) run
+  their bodies through the same hermetic wrapper as the Rust toolchain check:
+  the absolute `-p` shell, an unset of every `BASH_FUNC_*` entry, `env -u
+  BASH_ENV -u ENV`, and `PATH=VERIFY_PATH` assigned on that same `env`
+  command. The step `env:` carries the same `PATH`, but the runner puts every
+  `addPath` entry ahead of it, so only the assignment inside the wrapper keeps
+  a planted `sha256sum` or `mkdir` out of the body. The shell flag alone is not
+  enough for them, because their bodies start a fresh `bash -c`;
 - each of them, and the Rust toolchain check
   ([Rust channel manifest](../implemented/rust-channel-manifest.md)), assigns
   `PATH=/usr/bin:/bin:/usr/sbin:/sbin` (`VERIFY_PATH`, root-owned system
@@ -101,6 +113,32 @@ with the qualified hosted image and validated absolute cache roots. The canonica
 `mise-tools-v2-${{steps.v2.outputs.identity}}`; the output already binds both static and runtime dimensions,
 so the static digest is not repeated in the key. A missing, unsupported, or mismatched runtime identity
 disables seed import, workflow restore, and save; pinned tool setup continues cold.
+
+## Threat model
+
+Decision X42 (`decisions.tsv` in the velnor-fast-ci ledger) fixes what the
+checks in this contract defend against.
+
+1. Poisoned cache bytes are in scope. Anything the restore places under
+   `~/.local/share/mise`, the rustup tree or the cargo `bin` directory is
+   untrusted until the checks above pass.
+2. Environment injection by a trusted step is closed by construction. Setup
+   Mise runs with `env: "false"`, and Resolve validates the values it exports.
+   The hermetic shell additionally ignores `BASH_ENV`, `ENV` and exported
+   functions, so a hook-style injection does not change a verdict.
+3. Arbitrary code in an earlier step of the same job is out of scope for an
+   in-job verifier. Such a step can set `LD_PRELOAD` (it reaches the first
+   `exec` under any shell line), or swap a file after the verdict. No check
+   that runs in the same job can detect that.
+
+Accepted gaps that only matter in class 3:
+
+- `TAR_OPTIONS` is read by GNU tar and changes how an archive is extracted.
+- `LD_PRELOAD` loads code into every dynamically linked command the verifier
+  starts.
+- `POSIXLY_CORRECT` changes the behavior of macOS bash 3.2 (`/bin/bash`).
+
+None of these is reachable by class 1 or class 2.
 
 ## Workflow lifecycle
 

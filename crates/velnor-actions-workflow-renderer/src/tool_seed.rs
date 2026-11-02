@@ -107,15 +107,14 @@ pub(crate) fn any_job_has_seed(
 
 pub(crate) fn action_file(version: &str) -> Result<crate::tree::RenderedFile, RenderError> {
     let script = tool_seed_action_script(SEED_ROOT)?;
-    let step = crate::steps::shell_step(
+    let env = BTreeMap::from([("SEED_KEY".to_owned(), "${{ inputs.cache_key }}".to_owned())]);
+    let step = crate::verifier_shell::render_composite_script(
         "Copy matching tool seed",
-        vec!["bash".to_owned(), "-c".to_owned(), script],
-        BTreeMap::from([("SEED_KEY".to_owned(), "${{ inputs.cache_key }}".to_owned())]),
+        "copy",
+        &script,
+        &env,
     )?;
-    let StepKind::Shell { run, env } = &step.kind else {
-        return Err(RenderError::InvalidWorkflow("tool_seed_step".to_owned()));
-    };
-    let body = action_yaml(&step.name, env, &crate::commands::join_argv_for_run(run)?);
+    let body = action_yaml(step);
     let bytes = crate::marker::with_marker(version, &crate::yaml::render_yaml(&body))?;
     crate::steps::scan_for_private_subcommands(&bytes)?;
     Ok(crate::tree::RenderedFile {
@@ -124,7 +123,7 @@ pub(crate) fn action_file(version: &str) -> Result<crate::tree::RenderedFile, Re
     })
 }
 
-fn action_yaml(step_name: &str, env: &BTreeMap<String, String>, run: &str) -> Yaml {
+fn action_yaml(step: Yaml) -> Yaml {
     Yaml::Map(vec![
         ("name".to_owned(), Yaml::str(TOOL_SEED_NAME.to_owned())),
         (
@@ -164,19 +163,7 @@ fn action_yaml(step_name: &str, env: &BTreeMap<String, String>, run: &str) -> Ya
             "runs".to_owned(),
             Yaml::Map(vec![
                 ("using".to_owned(), Yaml::str("composite".to_owned())),
-                (
-                    "steps".to_owned(),
-                    Yaml::Seq(vec![Yaml::Map(vec![
-                        ("id".to_owned(), Yaml::str("copy".to_owned())),
-                        ("name".to_owned(), Yaml::str(step_name.to_owned())),
-                        (
-                            "env".to_owned(),
-                            crate::document_steps::string_map_yaml(env),
-                        ),
-                        ("shell".to_owned(), Yaml::str("bash".to_owned())),
-                        ("run".to_owned(), Yaml::str(run.to_owned())),
-                    ])]),
-                ),
+                ("steps".to_owned(), Yaml::Seq(vec![step])),
             ]),
         ),
     ])

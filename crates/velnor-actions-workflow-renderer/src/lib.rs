@@ -122,8 +122,6 @@ pub const VERIFY_RUST_TOOLCHAIN_STEP: &str = "Verify Rust channel manifest";
 
 pub const VERIFY_PATH: &str = "/usr/bin:/bin:/usr/sbin:/sbin";
 
-pub const VERIFY_SHELL: &str = "/bin/bash --noprofile --norc -e -o pipefail {0}";
-
 pub const VERIFY_VERIFIER_SHELL: &str = "/bin/bash --noprofile --norc -p -e -o pipefail {0}";
 
 #[must_use]
