@@ -1,13 +1,21 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::fs;
+use std::os::unix::fs::symlink;
+
 use velnor_actions_workflow_renderer::verifier_builders::TreeDigestPin;
 
-use crate::fixture::{
-    CHANNEL_MANIFEST, FIXTURE_COMPONENTS_SHA256, FIXTURE_TREE_SHA256, Fixture, MANIFEST_CARGO,
-    MISMATCH, Mutation, PHASES, TARBALL_URL, VERSION, fixture_pin,
+use velnor_actions_workflow_renderer::verifier_builders::{
+    ToolchainPhase, TreeCheck, toolchain_script,
 };
-use crate::release::{Bookkeeping, Release, fixture_with};
+
+use crate::fixture::{
+    CHANNEL_MANIFEST, CHANNEL_URL, FIXTURE_CHANNEL, FIXTURE_COMPONENTS, FIXTURE_COMPONENTS_SHA256,
+    FIXTURE_TREE_SHA256, Fixture, MANIFEST_CARGO, MISMATCH, Mutation, Outcome, PHASES, TARBALL_URL,
+    VERSION, fixture_pin, script, script_with, sha256_hex,
+};
+use crate::release::{Bookkeeping, COMPONENT, Release, fixture_with};
 
 fn evil_rename(release: &Release) -> String {
     format!(
@@ -204,27 +212,163 @@ fn b5_the_full_path_hashes_files_below_a_manifest_named_directory() {
 }
 
 #[test]
-fn b7_a_lone_arm_toolchain_is_verified_file_by_file_not_hard_failed_by_the_x86_pin() {
-    for phase in PHASES {
+fn b7_a_lone_toolchain_of_another_host_triple_is_verified_file_by_file_not_hard_failed_by_the_pin()
+{
+    for triple in [
+        "aarch64-unknown-linux-gnu",
+        "aarch64-apple-darwin",
+        "x86_64-apple-darwin",
+        "x86_64-unknown-linux-musl",
+    ] {
+        for phase in PHASES {
+            let (fx, release) = fixture_with(&Release::installed);
+            fx.rename_root(&format!("{VERSION}-{triple}"));
+            let outcome = release.run_pinned(&fx, phase, &[fixture_pin()]);
+            assert!(
+                outcome.code == Some(0)
+                    && outcome.stdout.contains("verified file by file")
+                    && !outcome.combined().contains(MISMATCH)
+                    && !outcome.combined().contains("toolchains_differ")
+                    && !outcome.combined().contains("tree_unreadable"),
+                "{triple} {phase:?}: {outcome:?}"
+            );
+            let (tampered, release) = fixture_with(&Release::installed);
+            tampered.put("lib/x.so", b"sO\n", 0o644);
+            tampered.rename_root(&format!("{VERSION}-{triple}"));
+            let flipped = release.run_pinned(&tampered, phase, &[fixture_pin()]);
+            assert!(
+                flipped.code != Some(0)
+                    && flipped.stderr.contains("rust_toolchain_bytes_mismatch")
+                    && !flipped.stdout.contains("verified file by file"),
+                "{triple} {phase:?}: {flipped:?}"
+            );
+        }
+    }
+}
+
+const EVIL_RUSTC: &[u8] = b"evil rustc\n";
+
+fn forge_sums_for_the_tampered_rustc(fx: &Fixture, release: &Release, through_link: bool) {
+    let sums = fx
+        .verified_dir()
+        .join(format!("{COMPONENT}.{}", release.tarball_sha256));
+    let honest = fs::read_to_string(&sums).expect("sums stored by the honest run");
+    let forged = honest
+        .lines()
+        .map(|line| match line.strip_suffix("  ./bin/rustc") {
+            Some(_) => format!("{}  ./bin/rustc", sha256_hex(EVIL_RUSTC)),
+            None => line.to_owned(),
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert_ne!(forged.trim_end(), honest.trim_end());
+    fs::write(&sums, format!("{forged}\n")).expect("plant forged sums");
+    if through_link {
+        let outside = fx.runner_temp().join("outside");
+        fs::rename(fx.verified_dir(), &outside).expect("move verified dir");
+        symlink(&outside, fx.verified_dir()).expect("link verified dir");
+    }
+    fx.put("bin/rustc", EVIL_RUSTC, 0o755);
+}
+
+#[test]
+fn c1_the_restored_phase_never_trusts_component_sums_it_did_not_compute() {
+    for through_link in [false, true] {
         let (fx, release) = fixture_with(&Release::installed);
-        fx.rename_root("1.99.1-aarch64-unknown-linux-gnu");
-        let outcome = release.run_pinned(&fx, phase, &[fixture_pin()]);
+        release
+            .run(&fx, ToolchainPhase::Restored)
+            .assert_fallback_passed();
+        forge_sums_for_the_tampered_rustc(&fx, &release, through_link);
+        let outcome = release.run(&fx, ToolchainPhase::Restored);
         assert!(
-            outcome.code == Some(0)
-                && outcome.stdout.contains("verified file by file")
-                && !outcome.combined().contains(MISMATCH)
-                && !outcome.combined().contains("toolchains_differ"),
-            "{phase:?}: {outcome:?}"
+            outcome.code == Some(1)
+                && outcome.stderr.contains("rust_toolchain_bytes_mismatch")
+                && !outcome.stdout.contains("verified file by file"),
+            "through_link={through_link}: {outcome:?}"
         );
-        let (tampered, release) = fixture_with(&Release::installed);
-        tampered.put("lib/x.so", b"sO\n", 0o644);
-        tampered.rename_root("1.99.1-aarch64-unknown-linux-gnu");
-        let flipped = release.run_pinned(&tampered, phase, &[fixture_pin()]);
+    }
+
+    let (pristine, release) = fixture_with(&Release::installed);
+    let sums = pristine
+        .verified_dir()
+        .join(format!("{COMPONENT}.{}", release.tarball_sha256));
+    fs::create_dir_all(pristine.verified_dir()).expect("plant dir");
+    fs::write(&sums, format!("{}  ./bin/rustc\n", "0".repeat(64))).expect("plant junk sums");
+    release
+        .run(&pristine, ToolchainPhase::Restored)
+        .assert_fallback_passed();
+}
+
+#[test]
+fn c2_the_installed_phase_reuses_what_the_restored_phase_verified_without_the_network() {
+    let (fx, release) = fixture_with(&Release::installed);
+    release
+        .run(&fx, ToolchainPhase::Restored)
+        .assert_fallback_passed();
+    let outcome = release.run(&fx, ToolchainPhase::Installed);
+    assert!(
+        outcome.code == Some(0)
+            && outcome.stdout.contains("verified file by file")
+            && outcome.requests == [CHANNEL_URL, TARBALL_URL],
+        "{outcome:?}"
+    );
+}
+
+fn fail_closed(outcome: &Outcome, code: &str) -> bool {
+    outcome.code == Some(1)
+        && outcome.stderr.contains(code)
+        && !outcome.stdout.contains("verified file by file")
+}
+
+#[test]
+fn r1_the_fallback_refuses_a_release_whose_sources_are_not_the_catalogued_ones() {
+    for phase in PHASES {
+        let (substituted, release) = fixture_with(&Release::installed);
+        substituted.put("bin/rustc", EVIL_RUSTC, 0o755);
+        Release::of(&substituted);
+        substituted.serve_channel(release.channel());
+        let outcome = release.run(&substituted, phase);
         assert!(
-            flipped.code != Some(0)
-                && flipped.stderr.contains("rust_toolchain_bytes_mismatch")
-                && !flipped.stdout.contains("verified file by file"),
-            "{phase:?}: {flipped:?}"
+            fail_closed(&outcome, "rust_component_tarball_digest_mismatch"),
+            "substituted tarball {phase:?}: {outcome:?}"
+        );
+        let stored = substituted
+            .verified_dir()
+            .join(format!("{COMPONENT}.{}", release.tarball_sha256));
+        assert!(!stored.exists(), "substituted tarball {phase:?}");
+
+        let offsite = FIXTURE_CHANNEL.replace(
+            "https://static.rust-lang.org/dist/2026-10-15/cargo-1.99.1-x86_64-unknown-linux-gnu.tar.xz",
+            "https://attacker.example/cargo.tar.xz",
+        );
+        let fx = Fixture::with_components(&format!("{COMPONENT}\n"));
+        fx.serve_channel(offsite.as_bytes());
+        let outcome = fx.run(&script_with(offsite.as_bytes(), phase, &[]));
+        assert!(
+            fail_closed(&outcome, "rust_component_url_untrusted")
+                && outcome.requests == [CHANNEL_URL],
+            "off-site component url {phase:?}: {outcome:?}"
+        );
+
+        let fx = Fixture::standard();
+        let uncatalogued = toolchain_script(
+            VERSION,
+            phase,
+            &[("1.98.0", &"0".repeat(64), "2026-01-01")],
+            TreeCheck::FileByFile,
+        );
+        let outcome = fx.run(&uncatalogued);
+        assert!(
+            fail_closed(&outcome, "rust_channel_manifest_not_catalogued")
+                && outcome.requests.is_empty(),
+            "uncatalogued version {phase:?}: {outcome:?}"
+        );
+
+        let fx = Fixture::with_components(&format!("{FIXTURE_COMPONENTS}rust-docs-x\n"));
+        let outcome = fx.run(&script(phase, &[]));
+        assert!(
+            fail_closed(&outcome, "rust_component_not_in_manifest"),
+            "component the channel does not ship {phase:?}: {outcome:?}"
         );
     }
 }

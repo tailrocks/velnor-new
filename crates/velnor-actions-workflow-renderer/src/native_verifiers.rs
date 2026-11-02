@@ -101,8 +101,11 @@ pub fn toolchain_script(
         "r=\"$RUNNER_TEMP/velnor/rust-verified\"".to_owned(),
         "d=\"$RUNNER_TEMP/velnor/rust-manifest\"".to_owned(),
         "ev rm -rf \"$d\"".to_owned(),
-        "ev mkdir -p \"$d\" \"$r\"".to_owned(),
     ];
+    if phase == ToolchainPhase::Restored {
+        lines.push("ev rm -rf \"$r\"".to_owned());
+    }
+    lines.push("ev mkdir -p \"$d\" \"$r\"".to_owned());
     if phase == ToolchainPhase::Restored {
         lines.push("ev rm -rf \"${CARGO_HOME:?}/bin\"".to_owned());
     }

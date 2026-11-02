@@ -95,8 +95,6 @@ impl TreeDigestPin {
     }
 }
 
-const FOREIGN_TARGET: &str = "aarch64-unknown-linux-gnu";
-
 const NOTICE: &str = r#"pm() { printf "%s\n" "::notice::pin_mismatch: $1"; }"#;
 
 const COMPONENTS_HASH: &str = r#"ev sort "$t/lib/rustlib/components" | $h > "$d/pin.cs"; read -r cs rest < "$d/pin.cs" || cs=unreadable"#;
@@ -141,13 +139,9 @@ pub(crate) fn pin_scope_statements(check: TreeCheck<'_>) -> Vec<String> {
     let strict = format!(
         r#"[ "$#" -eq 0 ] || {{ [ "$#" -eq 1 ] && [ "$1" = "$rh/toolchains/$v-{target}" ]; }} || {{ pm toolchains_differ; fail "rust_tree_digest_mismatch: $rh/toolchains holds an entry other than the pinned Rust $v-{target} toolchain; the pin_mismatch notice above names the check that failed"; }}"#
     );
-    let entries = if target == FOREIGN_TARGET {
-        strict
-    } else {
-        format!(
-            r#"if [ "$#" -eq 1 ] && [ "$1" = "$rh/toolchains/$v-{FOREIGN_TARGET}" ]; then pinned=0; else {strict}; fi"#
-        )
-    };
+    let entries = format!(
+        r#"if [ "$#" -eq 1 ] && case "$1" in "$rh/toolchains/$v-{target}") false;; "$rh/toolchains/$v-"*-*-*) true;; *) false;; esac; then pinned=0; else {strict}; fi"#
+    );
     vec![
         NOTICE.to_owned(),
         format!("pinned=0; case \"$v\" in {versions}) pinned=1;; esac"),

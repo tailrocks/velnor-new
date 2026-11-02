@@ -69,6 +69,13 @@ impl Outcome {
         assert!(self.hard_failed(code), "{self:?}");
     }
 
+    pub(crate) fn assert_fallback_passed(&self) {
+        assert!(
+            self.code == Some(0) && self.stdout.contains("verified file by file"),
+            "{self:?}"
+        );
+    }
+
     pub(crate) fn assert_offline_pinned(&self) {
         assert!(self.is_pinned() && self.requests.is_empty(), "{self:?}");
     }
