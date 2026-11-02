@@ -14,6 +14,8 @@ jobs:
     name: Freshness
     runs-on: ubuntu-26.04
     timeout-minutes: 5
+    env:
+      RUSTUP_AUTO_INSTALL: "0"
     permissions:
       contents: read
     steps:
@@ -52,14 +54,18 @@ jobs:
           ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
           ACTIONS_ID_TOKEN_REQUEST_URL: ""
           ACTIONS_RUNTIME_TOKEN: ""
+          CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           CARGO_REGISTRY_TOKEN: ""
           GH_CONFIG_DIR: ""
           GH_HOST: ""
           GH_TOKEN: ""
           GITHUB_TOKEN: ""
+          MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_GITHUB_TOKEN: ""
+          MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           NODE_AUTH_TOKEN: ""
           NPM_TOKEN: ""
+          RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
         run: "env -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR mise --no-config --no-env --no-hooks install 'rust@'\"${VELNOR_TOOL_RUST}\""
       - name: Verify Rust channel manifest
         env:
@@ -82,12 +88,16 @@ jobs:
           ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
           ACTIONS_ID_TOKEN_REQUEST_URL: ""
           ACTIONS_RUNTIME_TOKEN: ""
+          CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           CARGO_REGISTRY_TOKEN: ""
           GH_CONFIG_DIR: ""
           GH_HOST: ""
           GH_TOKEN: ""
           GITHUB_TOKEN: ""
+          MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_GITHUB_TOKEN: ""
+          MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           NODE_AUTH_TOKEN: ""
           NPM_TOKEN: ""
+          RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
         run: "env -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR mise --no-config --no-env --no-hooks exec 'rust@'\"${VELNOR_TOOL_RUST}\" -- bash scripts/check-freshness.sh --check-upstream"
