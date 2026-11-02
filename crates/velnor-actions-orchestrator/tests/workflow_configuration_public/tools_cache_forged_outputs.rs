@@ -155,6 +155,60 @@ fn identity_of(output: &str) -> Option<&str> {
         .find_map(|line| line.strip_prefix("identity="))
 }
 
+fn identity_shadow() -> Result<Attack, Box<dyn Error>> {
+    let forged_sum = format!("echo {ZERO_DIGEST}  -");
+    Attack::shadowing(&[
+        ("sha256sum", &forged_sum),
+        ("shasum", &forged_sum),
+        ("mkdir", "exec /bin/mkdir \"$@\""),
+        ("rm", "exec /bin/rm \"$@\""),
+    ])
+}
+
+fn assert_prepended_path_is_ignored(
+    host: &IdentityLane,
+    step: &RenderedVerify,
+    product: &str,
+    genuine: &Captured,
+    action: &str,
+) -> Result<(), Box<dyn Error>> {
+    let shadow = identity_shadow()?;
+    let mut shadowed = host.env(true)?;
+    shadowed.extend(shadow.path_env(step));
+    let bare = format!(
+        "/bin/bash {}",
+        host.layout.path().join(IDENTITY_SCRIPT).display()
+    );
+    let planted_run = host.runner.run_with_output(RUNNER_BASH, &bare, &shadowed)?;
+    assert_eq!(
+        identity_of(&planted_run.github_output),
+        Some(ZERO_DIGEST),
+        "{action}: prepended PATH entry changed the cache identity: plant is not effective"
+    );
+    assert!(
+        planted_run.github_output.contains("enabled=true\n"),
+        "{action}: prepended PATH entry changed the cache identity: plant is not effective"
+    );
+    let planted_calls = shadow.calls();
+    assert!(
+        planted_calls.contains("sha256sum") && planted_calls.contains("mkdir"),
+        "{action}: {planted_calls:?}"
+    );
+
+    let shadow = identity_shadow()?;
+    let pathed = host.run(product, step, true, &shadow.path_env(step))?;
+    assert_eq!(
+        pathed.github_output, genuine.github_output,
+        "{action}: prepended PATH entry changed the cache identity"
+    );
+    assert_eq!(
+        (pathed.code, shadow.calls().as_str()),
+        (Some(0), ""),
+        "{action}: prepended PATH entry changed the cache identity"
+    );
+    Ok(())
+}
+
 #[test]
 fn cache_identity_ignores_env_hooks_and_exported_functions() -> Result<(), Box<dyn Error>> {
     let (_repo, prepared) = prepared_for(WorkflowPolicy::VelnorRepositoryV1)?;
@@ -209,6 +263,8 @@ fn cache_identity_ignores_env_hooks_and_exported_functions() -> Result<(), Box<d
             (Some(0), ""),
             "{action}"
         );
+
+        assert_prepended_path_is_ignored(&host, &step, &product, &genuine, &action)?;
 
         let attack = Attack::new()?;
         let functions = host.run(&product, &step, true, &attack.function_env(ZERO_DIGEST))?;

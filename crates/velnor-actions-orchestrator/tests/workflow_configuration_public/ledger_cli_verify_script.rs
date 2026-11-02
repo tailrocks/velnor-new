@@ -145,6 +145,7 @@ fn missing_binary_fails() -> Result<(), Box<dyn Error>> {
 pub(super) struct RenderedVerify {
     pub(super) shell: String,
     pub(super) run: String,
+    pub(super) path: Option<String>,
 }
 
 fn scalar(value: &str) -> Result<String, Box<dyn Error>> {
@@ -167,7 +168,7 @@ pub(super) fn rendered_step(text: &str, name: &str) -> Result<RenderedVerify, Bo
     let mut lines = text.lines().skip_while(|line| !line.contains(&marker));
     let header = lines.next().ok_or("no verify step")?;
     let next_step = format!("{}- ", &header[..header.len() - header.trim_start().len()]);
-    let (mut shell, mut run) = (None, None);
+    let (mut shell, mut run, mut path) = (None, None, None);
     for line in lines.take_while(|line| !line.starts_with(&next_step)) {
         let line = line.trim();
         shell = line
@@ -176,10 +177,16 @@ pub(super) fn rendered_step(text: &str, name: &str) -> Result<RenderedVerify, Bo
             .transpose()?
             .or(shell);
         run = line.strip_prefix("run: ").map(scalar).transpose()?.or(run);
+        path = line
+            .strip_prefix("PATH: ")
+            .map(scalar)
+            .transpose()?
+            .or(path);
     }
     Ok(RenderedVerify {
         shell: shell.unwrap_or_else(|| RUNNER_DEFAULT_SHELL.to_owned()),
         run: run.ok_or("verify step has no run")?,
+        path,
     })
 }
 
@@ -204,6 +211,10 @@ impl Planted {
             fs::set_permissions(&path, fs::Permissions::from_mode(0o755))?;
         }
         Ok(planted)
+    }
+
+    pub(super) fn bin_dir(&self) -> &Path {
+        self.bin.path()
     }
 
     pub(super) fn log(&self) -> PathBuf {

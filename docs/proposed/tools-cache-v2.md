@@ -75,8 +75,11 @@ shell path as given. So:
 - the tool-seed copy step and the V2 identity steps (`u22`, `u24`, `u26`) run
   their bodies through the same hermetic wrapper as the Rust toolchain check:
   the absolute `-p` shell, an unset of every `BASH_FUNC_*` entry, `env -u
-  BASH_ENV -u ENV`, and `PATH=VERIFY_PATH`. The shell flag alone is not enough
-  for them, because their bodies start a fresh `bash -c`;
+  BASH_ENV -u ENV`, and `PATH=VERIFY_PATH` assigned on that same `env`
+  command. The step `env:` carries the same `PATH`, but the runner puts every
+  `addPath` entry ahead of it, so only the assignment inside the wrapper keeps
+  a planted `sha256sum` or `mkdir` out of the body. The shell flag alone is not
+  enough for them, because their bodies start a fresh `bash -c`;
 - each of them, and the Rust toolchain check
   ([Rust channel manifest](../implemented/rust-channel-manifest.md)), assigns
   `PATH=/usr/bin:/bin:/usr/sbin:/sbin` (`VERIFY_PATH`, root-owned system

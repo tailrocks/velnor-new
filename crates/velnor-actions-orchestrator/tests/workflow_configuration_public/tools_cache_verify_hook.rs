@@ -144,6 +144,18 @@ impl Attack {
         Ok(Self { planted, hook })
     }
 
+    pub(super) fn shadowing(tools: &[(&str, &str)]) -> Result<Self, Box<dyn Error>> {
+        let planted = Planted::new(tools)?;
+        let hook = planted.hook()?;
+        Ok(Self { planted, hook })
+    }
+
+    pub(super) fn path_env(&self, step: &RenderedVerify) -> Env {
+        let tail = step.path.as_deref().unwrap_or(SYSTEM_PATH);
+        let path = format!("{}:{tail}", self.planted.bin_dir().display());
+        vec![pair("PATH", &path)]
+    }
+
     pub(super) fn startup_env(&self) -> Env {
         let hook = self.hook.display().to_string();
         vec![pair("BASH_ENV", &hook), pair("ENV", &hook)]
@@ -208,6 +220,10 @@ fn admission_ignores_env_hooks_and_exported_functions() -> Result<(), Box<dyn Er
         env.extend(attack.function_env(BYTES_SHA256));
         let exit = admission_exit(&step, TAMPERED, &env)?;
         assert_eq!((exit, attack.calls().as_str()), (Some(1), ""), "{action}");
+        let digest = format!("echo {BYTES_SHA256}  -");
+        let shadow = Attack::shadowing(&[("sha256sum", &digest), ("shasum", &digest)])?;
+        let exit = admission_exit(&step, TAMPERED, &shadow.path_env(&step))?;
+        assert_eq!((exit, shadow.calls().as_str()), (Some(1), ""), "{action}");
     }
     Ok(())
 }
@@ -247,5 +263,12 @@ fn reverify_discards_a_tampered_install_despite_env_hooks() -> Result<(), Box<dy
     assert_eq!((outcome, attack.calls().as_str()), ((Some(0), false), ""));
     let outcome = install_outcome(&step, BYTES, &hooked)?;
     assert_eq!((outcome, attack.calls().as_str()), ((Some(0), true), ""));
+    let digest = format!("echo {BYTES_SHA256}  -");
+    let shadow = Attack::shadowing(&[("sha256sum", &digest), ("shasum", &digest)])?;
+    let shadowed = shadow.path_env(&step);
+    let outcome = install_outcome(&step, TAMPERED, &shadowed)?;
+    assert_eq!((outcome, shadow.calls().as_str()), ((Some(0), false), ""));
+    let outcome = install_outcome(&step, BYTES, &shadowed)?;
+    assert_eq!((outcome, shadow.calls().as_str()), ((Some(0), true), ""));
     Ok(())
 }

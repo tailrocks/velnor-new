@@ -179,6 +179,7 @@ fn render_script(
     env.extend(crate::toolchain_env::credential_scrub());
 
     let mut inner_argv = crate::toolchain_env::with_env_unset_argv(&[]);
+    inner_argv.push(format!("PATH={VERIFY_PATH}"));
     inner_argv.extend(INNER_SHELL.iter().map(|arg| (*arg).to_owned()));
     inner_argv.push("-c".to_owned());
     let inner_argv = commands::join_argv_for_run(&inner_argv)?;
