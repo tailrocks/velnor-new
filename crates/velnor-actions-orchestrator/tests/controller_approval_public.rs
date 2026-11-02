@@ -168,8 +168,8 @@ fn foreign_repository_approval_is_rejected() -> Result<(), Box<dyn Error>> {
 #[test]
 fn tampered_active_commit_is_rejected() -> Result<(), Box<dyn Error>> {
     let tampered = BASE_APPROVALS.replacen(
-        "ecee0521d8631315790662107231dabf2ba6b1ec",
-        "fcee0521d8631315790662107231dabf2ba6b1ec",
+        "ba363080a7707684fe8f2094851fa513687de73b",
+        "ca363080a7707684fe8f2094851fa513687de73b",
         1,
     );
     let temp = fixture(Some(&tampered), BASE_LOCK)?;
@@ -183,23 +183,23 @@ fn tampered_active_commit_is_rejected() -> Result<(), Box<dyn Error>> {
 
 const STAGED_ENTRY: &str = r#"{
     "repository": "tailrocks/velnor-new",
-    "version": "0.1.67",
+    "version": "0.1.73",
     "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-    "manifest_digest": "sha256:7233a849f7eb3132c12fa4b645182db606f24f04161fa74d2c41c2879e15cbe1",
+    "manifest_digest": "sha256:3fec4618f38975261e04b098dd6736aa64bdb086ced006043e0ec83c4ce90323",
     "binaries": [
       {
         "target": "x86_64-unknown-linux-gnu",
-        "artifact": "https://github.com/tailrocks/velnor-new/releases/download/v0.1.67/velnor-actions-0.1.67-x86_64-unknown-linux-gnu",
+        "artifact": "https://github.com/tailrocks/velnor-new/releases/download/v0.1.73/velnor-actions-0.1.73-x86_64-unknown-linux-gnu",
         "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
       },
       {
         "target": "aarch64-apple-darwin",
-        "artifact": "https://github.com/tailrocks/velnor-new/releases/download/v0.1.67/velnor-actions-0.1.67-aarch64-apple-darwin",
+        "artifact": "https://github.com/tailrocks/velnor-new/releases/download/v0.1.73/velnor-actions-0.1.73-aarch64-apple-darwin",
         "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
       },
       {
         "target": "x86_64-apple-darwin",
-        "artifact": "https://github.com/tailrocks/velnor-new/releases/download/v0.1.67/velnor-actions-0.1.67-x86_64-apple-darwin",
+        "artifact": "https://github.com/tailrocks/velnor-new/releases/download/v0.1.73/velnor-actions-0.1.73-x86_64-apple-darwin",
         "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
       }
     ],
@@ -231,28 +231,28 @@ const ROTATED_SHA: &str = "fffffffffffffffffffffffffffffffffffffffffffffffffffff
 
 fn rotated_approvals() -> String {
     BASE_APPROVALS
-        .replacen("\"version\": \"0.1.66\"", "\"version\": \"0.1.67\"", 1)
+        .replacen("\"version\": \"0.1.72\"", "\"version\": \"0.1.73\"", 1)
         .replacen(
-            "ecee0521d8631315790662107231dabf2ba6b1ec",
+            "ba363080a7707684fe8f2094851fa513687de73b",
             "dddddddddddddddddddddddddddddddddddddddd",
             1,
         )
         .replace(
-            "sha256:0f443790db618e731684cdf53b3cca70ba484d3826ddacd49071c70e107ba097",
-            "sha256:14047b4401de848f6c7fb25eb9c47e32900d38e822a3440b1688ff08efa3193c",
+            "sha256:7c7d071da787e59450835409c579afaded201a624a0de6353688ab78d465089d",
+            "sha256:ffe37543c62fe827728ccc7eb184470af24db5e300b4c2353b266724aa3ffe7f",
         )
-        .replace("v0.1.66", "v0.1.67")
-        .replace("0.1.66-", "0.1.67-")
+        .replace("v0.1.72", "v0.1.73")
+        .replace("0.1.72-", "0.1.73-")
         .replace(
-            "fe7cc33aae28b9be2fe9a0561e148c666516f30e53d65a069a6f3f5575a53298",
+            "ae9b45357917fb3dd279b2fb1d0f6df527ca1a3403fb4af3baf2043c56be4559",
             ROTATED_SHA,
         )
         .replace(
-            "a319646c4c92bfdfc9abd623883338c2d18ef7e5549e00633dcba178fdd45e9d",
+            "ee13d875454f340daa73812a456c9624b755a2a8267bf923d81e97cc467e2b38",
             ROTATED_SHA,
         )
         .replace(
-            "8193c279607c971da1d599e53b8ba6a1c87ba01f4ddc9c2fe993f8512ef852cf",
+            "6f9c6706b959c708e3c9804d5eed48c811dacf2e1b7afe241289ad27c4c546c5",
             ROTATED_SHA,
         )
 }
@@ -293,9 +293,9 @@ fn non_controller_workflow_is_rejected() -> Result<(), Box<dyn Error>> {
 #[test]
 fn stale_manifest_digest_is_rejected() -> Result<(), Box<dyn Error>> {
     let tampered = BASE_APPROVALS
-        .replacen("\"version\": \"0.1.66\"", "\"version\": \"0.1.67\"", 1)
-        .replace("v0.1.66", "v0.1.67")
-        .replace("0.1.66-", "0.1.67-");
+        .replacen("\"version\": \"0.1.72\"", "\"version\": \"0.1.73\"", 1)
+        .replace("v0.1.72", "v0.1.73")
+        .replace("0.1.72-", "0.1.73-");
     let temp = fixture(Some(&tampered), BASE_LOCK)?;
     let error = prepare_error(temp.path())?;
     assert!(
@@ -359,7 +359,7 @@ fn rotated_mise_identity_governs_lock() -> Result<(), Box<dyn Error>> {
 fn rotated_authority_accepts_new_and_rejects_old() -> Result<(), Box<dyn Error>> {
     let commit = "dddddddddddddddddddddddddddddddddddddddd";
     let approvals = rotated_approvals();
-    let new_lock = lock_for_version("0.1.67", commit);
+    let new_lock = lock_for_version("0.1.73", commit);
     let temp = fixture(Some(&approvals), &new_lock)?;
     prepare(temp.path()).map_err(|error| {
         io::Error::other(format!(

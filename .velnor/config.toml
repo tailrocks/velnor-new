@@ -37,6 +37,7 @@ ignore = []
 [stacks.rust]
 compile_driver = "mbx"
 test_runner = "cargo_nextest"
+dependency_seed = "off"
 
 # velnor-actions-cli's repository-policy tests read every package's manifest,
 # sources, and tests in both workspaces (MSRV parity with

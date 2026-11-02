@@ -48,6 +48,10 @@ and overlaps the independent checks.
   Required, so this decision governs crate jobs only. Crate jobs restore
   compiled caches read-only. See the
   [cache decisions](proposed/cache-decisions.md) (owner-approved 2026-10-20).
+- Dependency seeds are off on main (`[stacks.rust] dependency_seed = "off"`): no
+  dependency-seed job is generated. Note recorded under owner standing grant
+  2026-11-02, velnor-fast-ci GOAL.md, and decisions.tsv row U-SEED. Setting
+  `produce` restores the job.
 
 **Must not be reintroduced without owner approval:** per-phase crate jobs
 (`-lint`, `-tests`, `-docs` or any other split of one crate's checks across
