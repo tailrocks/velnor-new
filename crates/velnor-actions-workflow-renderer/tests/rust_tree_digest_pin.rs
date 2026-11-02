@@ -33,10 +33,10 @@ use velnor_actions_workflow_renderer::verifier_builders::{
     verify_rust_owned_argv,
 };
 
-const REAL_COMPONENTS: &str = "cargo-x86_64-unknown-linux-gnu\nclippy-preview-x86_64-unknown-linux-gnu\nrust-std-aarch64-unknown-linux-gnu\nrust-std-x86_64-unknown-linux-gnu\nrustc-x86_64-unknown-linux-gnu\nrustfmt-preview-x86_64-unknown-linux-gnu\n";
+const REAL_COMPONENTS: &str = "cargo-x86_64-unknown-linux-gnu\nclippy-preview-x86_64-unknown-linux-gnu\nrust-std-x86_64-unknown-linux-gnu\nrustc-x86_64-unknown-linux-gnu\nrustfmt-preview-x86_64-unknown-linux-gnu\n";
 
 const REAL_COMPONENTS_SHA256: &str =
-    "eb99c307118212e62e5f64b2ab14797d3557102b2696b1bb6a2c1faca34c53e3";
+    "e3808a4c78c316b41a42ed88010c6bbf24ae24a348a5a22b8e3bc62328db1981";
 
 const MANIFEST: &str = "lib/rustlib/multirust-channel-manifest.toml";
 

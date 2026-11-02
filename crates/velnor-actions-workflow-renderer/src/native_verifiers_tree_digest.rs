@@ -13,14 +13,14 @@ pub const RUST_TREE_DIGESTS: &[TreeDigestPin] = &[
     TreeDigestPin::new(
         "1.99.1",
         "x86_64-unknown-linux-gnu",
-        "eb99c307118212e62e5f64b2ab14797d3557102b2696b1bb6a2c1faca34c53e3",
-        "b5052dcfbb9dd0f5ae8a70f188de0cdb3df876b709699a1ebe67af301cf557fa",
+        "e3808a4c78c316b41a42ed88010c6bbf24ae24a348a5a22b8e3bc62328db1981",
+        "3bb018a6b34185f448c7c6f8938380630b8e392828de27a3455a9365e6539c72",
     ),
     TreeDigestPin::new(
         "1.99.1",
         "x86_64-unknown-linux-gnu",
-        "57b9d3651b1114b220e2a8dafadad18139a83e4516f3a98638d4b6f0bcdbd4c6",
-        "5cc6993f7bc724d4351809d62af19ee05fa473e676acfd61014b7032b3d2e8de",
+        "a13769c18a7a74ea492ab633b644d6c238ae81e536d30d3f168eddb57e86000e",
+        "0ef9a8c2010819da9932d2db1e72de0e0677762be90c698c6f962ed5c08bbbcc",
     ),
 ];
 

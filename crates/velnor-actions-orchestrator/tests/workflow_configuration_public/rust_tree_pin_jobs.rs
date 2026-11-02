@@ -12,10 +12,9 @@ use velnor_actions_mise::{RUST_TARGET_TRIPLE, RUST_VERSION};
 use velnor_actions_orchestrator::{prepare, render_staged_tree};
 use velnor_actions_workflow_renderer::verifier_builders::RUST_TREE_DIGESTS;
 
+use super::install_profile::rust_install_profile;
 use super::tools_producers::{POLICIES, finalized, positions};
 use super::workflow_configuration_fixture::make_repo;
-
-const TOOLCHAIN_FILE: &str = include_str!("../../../../rust-toolchain.toml");
 
 const UPGRADES_CONFIG: &str = "schema = 1\n[workflow]\nname = \"CI\"\ndefault_branch = \"testmain\"\n\n[upgrades]\nenabled = true\n";
 
@@ -47,37 +46,23 @@ fn added_components(step: &Step) -> Vec<String> {
         .collect()
 }
 
-fn configured_targets() -> Result<Vec<String>, Box<dyn Error>> {
-    let toolchain = toml::from_str::<toml::Table>(TOOLCHAIN_FILE)?;
-    toolchain
-        .get("toolchain")
-        .and_then(|table| table.get("targets"))
-        .and_then(toml::Value::as_array)
-        .ok_or("rust-toolchain.toml declares no targets")?
-        .iter()
-        .map(|target| {
-            target
-                .as_str()
-                .map(str::to_owned)
-                .ok_or_else(|| "rust-toolchain.toml target is not a string".into())
-        })
-        .collect()
+fn profile_components(job: &Job) -> Result<[&'static str; 3], Box<dyn Error>> {
+    match rust_install_profile(job).as_deref() {
+        Some("minimal") => Ok(["cargo", "rustc", "rust-std"]),
+        other => Err(format!("unknown Rust install profile {other:?}").into()),
+    }
 }
 
 fn final_component_names(job: &Job) -> Result<Vec<String>, Box<dyn Error>> {
-    let host_components = ["cargo".to_owned(), "rustc".to_owned()]
+    let added = positions(job, StepRole::PrepareRustComponents)
         .into_iter()
-        .chain(
-            positions(job, StepRole::PrepareRustComponents)
-                .into_iter()
-                .flat_map(|at| added_components(&job.steps[at]))
-                .map(|name| format!("{name}-preview")),
-        )
-        .map(|name| format!("{name}-{RUST_TARGET_TRIPLE}\n"));
-    let mut names = configured_targets()?
+        .flat_map(|at| added_components(&job.steps[at]))
+        .map(|name| format!("{name}-preview"));
+    let mut names = profile_components(job)?
         .into_iter()
-        .map(|target| format!("rust-std-{target}\n"))
-        .chain(host_components)
+        .map(str::to_owned)
+        .chain(added)
+        .map(|name| format!("{name}-{RUST_TARGET_TRIPLE}\n"))
         .collect::<Vec<_>>();
     names.sort();
     Ok(names)
