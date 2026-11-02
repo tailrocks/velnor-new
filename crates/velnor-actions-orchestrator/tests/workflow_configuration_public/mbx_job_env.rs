@@ -11,6 +11,12 @@ use super::one_job_per_crate::mbx_repo;
 
 type Env = BTreeMap<String, String>;
 
+struct RenderedJob {
+    id: String,
+    runs_mbx: bool,
+    env: Env,
+}
+
 struct JobBlock<'a> {
     id: &'a str,
     lines: Vec<&'a str>,
@@ -92,7 +98,7 @@ fn job_env(block: &JobBlock<'_>, anchors: &BTreeMap<String, Env>) -> Result<Env,
     Ok(Env::new())
 }
 
-fn rendered_jobs() -> Result<Vec<(String, bool, Env)>, Box<dyn Error>> {
+fn rendered_jobs() -> Result<Vec<RenderedJob>, Box<dyn Error>> {
     let repo = mbx_repo(false)?;
     let prepared = prepare(repo.path())?;
     let tree = render_staged_tree(&prepared)?;
@@ -108,7 +114,11 @@ fn rendered_jobs() -> Result<Vec<(String, bool, Env)>, Box<dyn Error>> {
             .lines
             .iter()
             .any(|line| line.contains("mbx cache import"));
-        jobs.push((block.id.to_owned(), runs_mbx, job_env(block, &anchors)?));
+        jobs.push(RenderedJob {
+            id: block.id.to_owned(),
+            runs_mbx,
+            env: job_env(block, &anchors)?,
+        });
     }
     Ok(jobs)
 }
@@ -117,7 +127,7 @@ fn rendered_jobs() -> Result<Vec<(String, bool, Env)>, Box<dyn Error>> {
 fn mbx_jobs_run_the_compiler_with_shared_out_dirs_and_build_script_execution()
 -> Result<(), Box<dyn Error>> {
     let jobs = rendered_jobs()?;
-    let mbx_jobs: Vec<_> = jobs.iter().filter(|(_, runs_mbx, _)| *runs_mbx).collect();
+    let mbx_jobs: Vec<_> = jobs.iter().filter(|job| job.runs_mbx).collect();
     if mbx_jobs.len() < 2 {
         return Err(format!(
             "expected a seed job and a crate job, got {}",
@@ -125,7 +135,7 @@ fn mbx_jobs_run_the_compiler_with_shared_out_dirs_and_build_script_execution()
         )
         .into());
     }
-    for (id, _, env) in mbx_jobs {
+    for RenderedJob { id, env, .. } in mbx_jobs {
         for (key, expected) in [
             ("MBX_SHARE_OUT_DIR", "1"),
             ("MBX_BUILD_SCRIPT_EXECUTION", "1"),
@@ -149,13 +159,13 @@ fn jobs_without_mbx_get_no_mbx_environment() -> Result<(), Box<dyn Error>> {
     let jobs = rendered_jobs()?;
     let cargo_job = jobs
         .iter()
-        .find(|(id, _, _)| id == "rust-demo")
+        .find(|job| job.id == "rust-demo")
         .ok_or("cargo crate job is missing")?;
     let plan_job = jobs
         .iter()
-        .find(|(id, _, _)| id == "plan")
+        .find(|job| job.id == "plan")
         .ok_or("plan job is missing")?;
-    for (id, runs_mbx, env) in [cargo_job, plan_job] {
+    for RenderedJob { id, runs_mbx, env } in [cargo_job, plan_job] {
         if *runs_mbx {
             return Err(format!("job {id} unexpectedly runs mbx").into());
         }
