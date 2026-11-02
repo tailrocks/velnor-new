@@ -30,9 +30,12 @@
   installed (`manifest::px3`); a renamed toolchain directory and every
   mutation under a matching pin fail (`hard_fail::n1a`, `n1b`, `n1c`).
 - Deviations: none
-- Follow-up: add each new stable Rust release (and its digest) to the
-  catalog when `RUST_VERSION` moves; the catalog test requires the newest row
-  to be the pin.
+- Follow-up: when `RUST_VERSION` moves, add a row for the new stable Rust
+  release to `RUST_CHANNEL_MANIFESTS` in
+  `crates/velnor-actions-mise/src/catalog_rust_manifests.rs`. Then run
+  `scripts/derive-rust-tree-digest` for that release and add its tree pin to
+  `RUST_TREE_DIGESTS` in
+  `crates/velnor-actions-workflow-renderer/src/native_verifiers_tree_digest.rs`.
 
 ## The gap
 
