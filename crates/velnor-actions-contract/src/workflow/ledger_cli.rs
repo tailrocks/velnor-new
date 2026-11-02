@@ -6,6 +6,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use super::artifacts::ARTIFACT_RETENTION_DAYS;
 use super::cache_family::SOURCES_KEY_STEP_EXPR;
 use super::ir::Job;
+use super::job_env::{RUSTUP_AUTO_INSTALL_DISABLED, RUSTUP_AUTO_INSTALL_ENV};
 use super::jobs::{PLAN_JOB_ID, REQUIRED_JOB_ID};
 use super::ledger_cli_artifacts::validate_artifact_boundary;
 use super::permissions::Permissions;
@@ -59,8 +60,6 @@ pub const LEDGER_CLI_CONSUME_CONDITION: &str = "always()";
 
 pub const LEDGER_CLI_EMIT_CONDITION: &str =
     "always() && steps.verify-ledger-cli.outcome == 'success'";
-
-pub const LEDGER_CLI_AUTO_INSTALL_ENV: &str = "RUSTUP_AUTO_INSTALL";
 
 pub const LEDGER_CLI_OFFLINE_FLAG: &str = "--offline";
 
@@ -184,7 +183,8 @@ fn offline_build_ok(step: &Step) -> bool {
         return false;
     };
     run.iter().any(|arg| arg == LEDGER_CLI_OFFLINE_FLAG)
-        && env.get(LEDGER_CLI_AUTO_INSTALL_ENV).map(String::as_str) == Some("0")
+        && env.get(RUSTUP_AUTO_INSTALL_ENV).map(String::as_str)
+            == Some(RUSTUP_AUTO_INSTALL_DISABLED)
 }
 
 fn validate_ledger_cli_steps(job: &Job) -> Result<(), ContractError> {

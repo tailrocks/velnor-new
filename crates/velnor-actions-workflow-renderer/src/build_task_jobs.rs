@@ -78,6 +78,7 @@ pub fn build_build_task_job(
         permissions: Some(build_task_permissions()),
         cache_mode: None,
         environment: None,
+        env: velnor_actions_contract::JobEnv::Unset,
         steps: build_task_steps(policy, checkout_uses)?,
         check_runner: None,
     })

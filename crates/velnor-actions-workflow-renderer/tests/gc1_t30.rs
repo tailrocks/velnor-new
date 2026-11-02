@@ -103,6 +103,7 @@ fn job_with(steps: Vec<Step>) -> Job {
         environment: None,
         services: Vec::new(),
         outputs: BTreeMap::new(),
+        env: velnor_actions_contract::JobEnv::Unset,
         steps,
     }
 }

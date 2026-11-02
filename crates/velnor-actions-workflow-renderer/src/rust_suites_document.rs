@@ -152,7 +152,7 @@ fn finalize_suite_workflow_jobs(
     prepare_suite_tools(jobs, spec)?;
     crate::cache_steps::append_bundle_postludes(jobs)?;
     crate::cache_steps::append_workspace_cleanups(jobs)?;
-    crate::cache_doctor::check(jobs)
+    crate::waste_lint::bind_and_check(jobs)
 }
 
 fn cancel_in_progress_yaml(entries: &[&RustSuiteConfig]) -> Yaml {
@@ -189,7 +189,8 @@ fn suite_job_to_yaml(
         RunsOn::Hosted(label) => Yaml::str(label),
         RunsOn::ScaleSet(selector) => Yaml::Flow(selector.labels().to_vec()),
     };
-    let job_env = extract_suite_job_env(job, native_mbx);
+    let mut job_env = extract_suite_job_env(job, native_mbx);
+    crate::rust_job_env::extend_env(&mut job_env, job.env);
     let mut entries = vec![
         ("name".to_owned(), Yaml::str(job.display_name.clone())),
         ("runs-on".to_owned(), runs_on),

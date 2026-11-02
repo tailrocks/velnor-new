@@ -11,6 +11,7 @@ use crate::command::{
 };
 use crate::error::MiseError;
 use crate::requests::{MetadataQualification, MiseInstall};
+use crate::runtime_paths::{CARGO_HOME_EXPR, RUSTUP_HOME_EXPR};
 
 pub const PREPARE_PINNED_TOOLS_STEP: &str = "Prepare pinned tools";
 
@@ -24,8 +25,8 @@ impl ToolHomes {
     #[must_use]
     pub fn runner_temp() -> Self {
         Self {
-            rustup_home: "${{ runner.temp }}/velnor/rustup".to_owned(),
-            cargo_home: "${{ runner.temp }}/velnor/cargo".to_owned(),
+            rustup_home: RUSTUP_HOME_EXPR.to_owned(),
+            cargo_home: CARGO_HOME_EXPR.to_owned(),
         }
     }
 

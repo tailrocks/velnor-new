@@ -365,6 +365,7 @@ fn render_job(
             .then(|| velnor_actions_workflow_renderer::not_affected_gate(&model.job_id)),
         permissions: None,
         environment: None,
+        env: velnor_actions_contract::JobEnv::Unset,
         steps,
         cache_mode: Some(CacheMode::explicit_read()),
     })

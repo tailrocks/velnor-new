@@ -4,6 +4,7 @@
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::RunsOn;
+use velnor_actions_contract::workflow::cache_family::{CARGO_HOME_EXPR, RUSTUP_HOME_EXPR};
 
 use crate::{RenderError, cache_p08, marker, steps, tree::RenderedFile, yaml::Yaml};
 
@@ -194,8 +195,8 @@ fn output_entries() -> Yaml {
 }
 
 fn identity_env(runs_on: &str) -> BTreeMap<String, String> {
-    let cargo = "${{ runner.temp }}/velnor/cargo";
-    let rustup = "${{ runner.temp }}/velnor/rustup";
+    let cargo = CARGO_HOME_EXPR;
+    let rustup = RUSTUP_HOME_EXPR;
     BTreeMap::from([
         ("CARGO_HOME".to_owned(), cargo.to_owned()),
         ("MISE_CARGO_HOME".to_owned(), cargo.to_owned()),

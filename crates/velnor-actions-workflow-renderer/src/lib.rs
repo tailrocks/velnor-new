@@ -86,6 +86,7 @@ pub mod render;
 mod render_cache_files;
 mod required_gate;
 mod runs_on;
+mod rust_job_env;
 pub mod rust_suites;
 pub mod schema2;
 mod selected_mise_verifier;
@@ -116,6 +117,8 @@ pub mod toolchain_env;
 pub mod tree;
 pub mod upgrades;
 mod verifier_shell;
+mod waste_lint;
+mod waste_lint_env;
 
 pub const VERIFY_RUST_TOOLCHAIN_STEP: &str = "Verify Rust channel manifest";
 

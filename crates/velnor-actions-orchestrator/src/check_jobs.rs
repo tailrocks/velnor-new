@@ -117,6 +117,7 @@ fn native_check_job(
         condition: None,
         permissions: Some(crate::workflow_jobs::read_actions_permissions()),
         environment: None,
+        env: velnor_actions_contract::JobEnv::Unset,
         steps,
         cache_mode: None,
     })
@@ -153,6 +154,7 @@ fn check_job(
             .then(|| EPHEMERAL_CHECK_ADMISSION_CONDITION.to_owned()),
         permissions: Some(Permissions::default()),
         environment: None,
+        env: velnor_actions_contract::JobEnv::Unset,
         steps,
         cache_mode: None,
     })
