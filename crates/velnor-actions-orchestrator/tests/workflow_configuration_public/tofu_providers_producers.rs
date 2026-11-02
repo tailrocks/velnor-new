@@ -23,15 +23,16 @@ use super::support::{config_with_timeouts, rendered_job_block};
 use super::workflow_configuration_fixture;
 
 const PRODUCER_PREFIX: &str = "providers-producer-";
+pub(super) const TOFU_LIMIT: usize = 2;
 const LOCK: &str = "provider \"registry.opentofu.org/hashicorp/random\" {\n  version = \"3.6.0\"\n  hashes = [\"h1:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\"]\n}\n";
 const MAIN: &str = "terraform {\n  required_providers {\n    random = {\n      source = \"hashicorp/random\"\n      version = \"3.6.0\"\n    }\n  }\n}\n";
 
-type Jobs = BTreeMap<String, Job>;
+pub(super) type Jobs = BTreeMap<String, Job>;
 
-fn tofu_repo(roots: &[&str]) -> Result<TempDir, Box<dyn Error>> {
+pub(super) fn tofu_repo(roots: &[&str]) -> Result<TempDir, Box<dyn Error>> {
     let quoted: Vec<String> = roots.iter().map(|root| format!("\"{root}\"")).collect();
     let config = format!(
-        "{}\n[stacks.tofu]\nroots = [{}]\n",
+        "{}max_parallel_jobs = {TOFU_LIMIT}\n\n[stacks.tofu]\nroots = [{}]\n",
         config_with_timeouts(15, None)?,
         quoted.join(", ")
     );
@@ -44,17 +45,17 @@ fn tofu_repo(roots: &[&str]) -> Result<TempDir, Box<dyn Error>> {
     Ok(repo)
 }
 
-fn finalized(repo: &TempDir) -> Result<Jobs, Box<dyn Error>> {
+pub(super) fn finalized(repo: &TempDir) -> Result<Jobs, Box<dyn Error>> {
     Ok(finalized_jobs(&prepare(repo.path())?)?)
 }
 
-fn producers(jobs: &Jobs) -> Vec<(&String, &Job)> {
+pub(super) fn producers(jobs: &Jobs) -> Vec<(&String, &Job)> {
     jobs.iter()
         .filter(|(_, job)| job.producer_kind() == Some(ProducerKind::TofuProviders))
         .collect()
 }
 
-fn tofu_crate_jobs(jobs: &Jobs) -> Vec<(&String, &Job)> {
+pub(super) fn tofu_crate_jobs(jobs: &Jobs) -> Vec<(&String, &Job)> {
     jobs.iter()
         .filter(|(id, _)| id.starts_with("tofu-"))
         .collect()
@@ -112,14 +113,18 @@ fn producer_binding(job: &Job) -> Result<(String, String), Box<dyn Error>> {
     ))
 }
 
-fn assert_producer_shape(id: &str, job: &Job, jobs: &Jobs) -> Result<(), Box<dyn Error>> {
+pub(super) fn assert_producer_shape(
+    id: &str,
+    job: &Job,
+    jobs: &Jobs,
+) -> Result<(), Box<dyn Error>> {
     assert!(id.starts_with(PRODUCER_PREFIX), "{id}");
     validate_tofu_providers_producer(job, id)?;
     assert_eq!(
         job.condition.as_deref(),
         Some(DEPENDENCY_SEED_JOB_CONDITION)
     );
-    assert_eq!(job.needs, ["plan"]);
+    assert!(job.needs.iter().any(|need| need == "plan"), "{id}");
     assert!(job.permissions.is_none() && job.cache_mode.is_none());
     let required = jobs.get(REQUIRED_JOB_ID).ok_or("no required job")?;
     assert!(
@@ -128,7 +133,9 @@ fn assert_producer_shape(id: &str, job: &Job, jobs: &Jobs) -> Result<(), Box<dyn
     );
     assert!(
         jobs.values()
-            .all(|other| !other.needs.contains(&id.to_owned()))
+            .filter(|other| other.producer_kind().is_none())
+            .all(|other| !other.needs.contains(&id.to_owned())),
+        "a consumer waits for {id}"
     );
     let save = step_of(job, StepRole::TofuProvidersSave)?;
     assert_eq!(
@@ -222,6 +229,9 @@ fn mutation(name: &'static str, apply: Apply) -> Mutation {
 fn job_mutations() -> Vec<Mutation> {
     vec![
         mutation("drops_needs_plan", |job, _| job.needs.clear()),
+        mutation("foreign_need", |job, _| {
+            job.needs.push("rust-app".to_owned());
+        }),
         mutation("untrusted_condition", |job, _| {
             job.condition = Some("github.event_name == 'push'".to_owned());
         }),

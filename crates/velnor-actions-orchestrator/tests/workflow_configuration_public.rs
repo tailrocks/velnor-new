@@ -83,6 +83,8 @@ mod source_qualification_proof;
 mod support;
 #[path = "workflow_configuration_public/timeouts.rs"]
 mod timeouts;
+#[path = "workflow_configuration_public/tofu_parallel_limit.rs"]
+mod tofu_parallel_limit;
 #[path = "workflow_configuration_public/tofu_prepare_script.rs"]
 mod tofu_prepare_script;
 #[path = "workflow_configuration_public/tofu_providers_producers.rs"]

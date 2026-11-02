@@ -59,6 +59,7 @@ pub struct RenderContext {
     pub plan_consumer_env: BTreeMap<String, String>,
     pub tool_pins: Vec<String>,
     pub standalone_tools_donors: BTreeMap<String, Job>,
+    pub max_parallel_jobs: u32,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

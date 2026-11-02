@@ -97,16 +97,11 @@ fn build_crate_jobs_with_seed_timeout(
     private: Option<&PrivateWiring>,
     seed_timeout: JobTimeout,
 ) -> Result<CrateBuild, OrchestratorError> {
-    let CrateJobInputs {
-        discovery,
-        max_parallel_jobs,
-        ..
-    } = input;
+    let CrateJobInputs { discovery, .. } = input;
     let grouped = group_runnable(&discovery.proposals)?;
     let owners = JobOwners::from_grouped(&discovery.proposals, &grouped)?;
     let mut jobs = Vec::with_capacity(grouped.len());
     let mut drivers = BTreeMap::new();
-    let mut tofu_jobs = Vec::new();
     let mut seed_workspaces: BTreeMap<String, bool> = BTreeMap::new();
     for (key, tasks) in &grouped {
         let output = build_group_job(&input, &owners, key, tasks, private)?;
@@ -114,12 +109,8 @@ fn build_crate_jobs_with_seed_timeout(
             *seed_workspaces.entry(seed.root).or_default() |= seed.nextest;
         }
         drivers.insert(output.job_id.clone(), output.driver);
-        if output.tofu {
-            tofu_jobs.push(output.job_id.clone());
-        }
         jobs.push((output.job_id, output.job));
     }
-    stage::stage_tofu_root_jobs(&mut jobs, &tofu_jobs, max_parallel_jobs);
     jobs.sort_by(|left, right| left.0.cmp(&right.0));
     let workspaces: Vec<_> = seed_workspaces
         .into_iter()
@@ -141,7 +132,6 @@ struct GroupOutput {
     job: Job,
     driver: RenderDriver,
     seed: Option<dependency_seed::SeedWorkspace>,
-    tofu: bool,
 }
 
 fn build_group_job(
@@ -206,7 +196,6 @@ fn build_group_job(
         job,
         driver,
         seed,
-        tofu: use_opentofu,
     })
 }
 

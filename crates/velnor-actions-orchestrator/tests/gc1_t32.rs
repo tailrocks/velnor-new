@@ -10,13 +10,10 @@ use std::ffi::OsString;
 use std::io;
 
 use velnor_actions_contract::{
-    CachePolicy, IdentityInputs, Job, JobTimeout, ProposedTask, ResourceClass, ResourceDemand,
+    CachePolicy, IdentityInputs, ProposedTask, ResourceClass, ResourceDemand,
 };
 
-use self::crate_jobs_stage::{
-    STAGED_TOFU_JOB_CONDITION, is_mbx, is_nextest, is_opentofu, is_rust, needs,
-    stage_tofu_root_jobs,
-};
+use self::crate_jobs_stage::{is_mbx, is_nextest, is_opentofu, is_rust, needs};
 
 fn fail(message: &str) -> Box<dyn Error> {
     io::Error::other(message).into()
@@ -90,61 +87,8 @@ fn check_group_classification() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn tofu_job(gate: &str) -> Result<Job, Box<dyn Error>> {
-    Ok(Job {
-        display_name: "OpenTofu / demo".to_owned(),
-        runs_on: "ubuntu-24.04".to_owned(),
-        check_runner: None,
-        timeout_minutes: JobTimeout::new(10).map_err(|_| fail("bad fixture timeout"))?,
-        needs: vec!["plan".to_owned()],
-        condition: Some(gate.to_owned()),
-        permissions: None,
-        cache_mode: Some(velnor_actions_contract::CacheMode::push_write_expression()),
-        environment: None,
-        services: Vec::new(),
-        outputs: BTreeMap::new(),
-        steps: Vec::new(),
-    })
-}
-
-fn check_tofu_jobs_count_against_limits() -> Result<(), Box<dyn Error>> {
-    let gate_a = "!contains(needs.plan.outputs.not_affected_jobs, ',tofu-a,')";
-    let gate_b = "!contains(needs.plan.outputs.not_affected_jobs, ',tofu-b,')";
-    let mut jobs = vec![
-        ("tofu-a".to_owned(), tofu_job(gate_a)?),
-        ("tofu-b".to_owned(), tofu_job(gate_b)?),
-    ];
-    stage_tofu_root_jobs(&mut jobs, &["tofu-a".to_owned(), "tofu-b".to_owned()], 1);
-    let by_id: BTreeMap<&str, &Job> = jobs.iter().map(|(id, job)| (id.as_str(), job)).collect();
-    let first = by_id.get("tofu-a").ok_or_else(|| fail("first lost"))?;
-    let second = by_id.get("tofu-b").ok_or_else(|| fail("second lost"))?;
-    if first.needs != ["plan"] || first.condition.as_deref() != Some(gate_a) {
-        return Err(fail("unchained lane changed"));
-    }
-    if second.needs != ["plan", "tofu-a"] {
-        return Err(fail("lane ignores platform limits"));
-    }
-    let condition = second
-        .condition
-        .as_deref()
-        .ok_or_else(|| fail("lane dropped gate"))?;
-    if !condition.contains(gate_b) || !condition.contains(STAGED_TOFU_JOB_CONDITION) {
-        return Err(fail("chained lane lost its gate or queue signal"));
-    }
-    let mut wide = vec![
-        ("tofu-a".to_owned(), tofu_job(gate_a)?),
-        ("tofu-b".to_owned(), tofu_job(gate_b)?),
-    ];
-    stage_tofu_root_jobs(&mut wide, &["tofu-a".to_owned(), "tofu-b".to_owned()], 2);
-    if wide.iter().any(|(_, job)| job.needs != ["plan"]) {
-        return Err(fail("lane chained within the platform limit"));
-    }
-    Ok(())
-}
-
 #[test]
 fn gc1_t32_preserves_contract() -> Result<(), Box<dyn Error>> {
     check_group_classification()?;
-    check_tofu_jobs_count_against_limits()?;
     Ok(())
 }

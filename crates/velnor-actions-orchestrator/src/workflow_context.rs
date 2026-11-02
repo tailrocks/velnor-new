@@ -64,6 +64,7 @@ pub(super) fn render_context(
             input.discovery,
             input.catalog,
         )?,
+        max_parallel_jobs: input.config.workflow.max_parallel_jobs,
     })
 }
 

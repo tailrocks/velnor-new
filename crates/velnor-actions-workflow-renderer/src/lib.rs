@@ -104,6 +104,7 @@ mod tofu_apply_policy;
 mod tofu_apply_steps;
 pub mod tofu_cache;
 mod tofu_producer;
+mod tofu_stage;
 mod tool_seed;
 mod tool_seed_admission;
 mod tools_identity;

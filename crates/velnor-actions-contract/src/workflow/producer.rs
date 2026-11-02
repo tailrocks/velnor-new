@@ -6,7 +6,7 @@ use super::crate_job::{TOFU_PROVIDERS_PRODUCER_JOB_ID_PREFIX, TOOLS_PRODUCER_JOB
 use super::step_identity::{RUST_VERIFIER_USES, ToolsRestoreForm};
 use super::step_protocol::ProviderRestoreForm;
 use super::step_tofu_prepare::valid_provider_prepare;
-use super::{Job, PermissionLevel, Permissions, Step, StepKind, StepRole};
+use super::{Job, PermissionLevel, Permissions, Step, StepKind, StepRole, TOFU_JOB_ID_PREFIX};
 use crate::ContractError;
 
 pub const DEPENDENCY_SEED_JOB_CONDITION: &str = "github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true";
@@ -147,7 +147,7 @@ impl ProducerKind {
                     && tools_order_ok(&job.steps)
             }
             Self::TofuProviders => {
-                job.needs == ["plan"]
+                tofu_lane_needs_ok(&job.needs)
                     && count(StepRole::Checkout) == 1
                     && count(StepRole::MiseSetup) == 1
                     && count(StepRole::PreparePinnedTools) == 1
@@ -158,6 +158,18 @@ impl ProducerKind {
                     && tofu_order_ok(&job.steps)
             }
         }
+    }
+}
+
+fn tofu_lane_needs_ok(needs: &[String]) -> bool {
+    match needs {
+        [plan] => plan == "plan",
+        [plan, previous] => {
+            plan == "plan"
+                && (previous.starts_with(TOFU_JOB_ID_PREFIX)
+                    || previous.starts_with(TOFU_PROVIDERS_PRODUCER_JOB_ID_PREFIX))
+        }
+        _ => false,
     }
 }
 

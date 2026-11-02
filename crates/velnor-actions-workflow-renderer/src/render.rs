@@ -149,6 +149,7 @@ pub fn finalize_jobs(
         &ctx.standalone_tools_donors,
     )?;
     crate::tofu_producer::add_tofu_providers_producers(&mut jobs)?;
+    crate::tofu_stage::stage_tofu_jobs(&mut jobs, ctx.max_parallel_jobs);
     closure::check_plan_anchor(&jobs)?;
     preseed_closure::check_preseed_closure(&jobs, ctx.preseed)?;
     closure::insert_plan_closure(&mut jobs, ctx, policy)?;
