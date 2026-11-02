@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::errors::ContractError;
+use crate::workflow::cache_family::{CARGO_HOME_EXPR, RUSTUP_HOME_EXPR};
 
 use super::TaskExecutionValidation;
 
@@ -12,10 +13,10 @@ const FIXED_ENV: [(&str, &str); 10] = [
     ("MISE_LOCKFILE", "0"),
     ("MISE_AUTO_INSTALL", "false"),
     ("MISE_EXEC_AUTO_INSTALL", "false"),
-    ("MISE_RUSTUP_HOME", "${{ runner.temp }}/velnor/rustup"),
-    ("MISE_CARGO_HOME", "${{ runner.temp }}/velnor/cargo"),
-    ("RUSTUP_HOME", "${{ runner.temp }}/velnor/rustup"),
-    ("CARGO_HOME", "${{ runner.temp }}/velnor/cargo"),
+    ("MISE_RUSTUP_HOME", RUSTUP_HOME_EXPR),
+    ("MISE_CARGO_HOME", CARGO_HOME_EXPR),
+    ("RUSTUP_HOME", RUSTUP_HOME_EXPR),
+    ("CARGO_HOME", CARGO_HOME_EXPR),
 ];
 
 pub(super) fn validate_environment(

@@ -105,6 +105,7 @@ pub fn build_image_build_job(
         permissions: Some(image_build_permissions()),
         cache_mode: None,
         environment: None,
+        env: velnor_actions_contract::JobEnv::Unset,
         steps: image_build_steps(policy, platform, checkout_uses)?,
         check_runner: None,
     })

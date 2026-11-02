@@ -13,6 +13,7 @@ fn authority_job(condition: Option<&str>, cache_mode: Option<CacheMode>) -> Job 
         environment: None,
         services: Vec::new(),
         outputs: BTreeMap::new(),
+        env: velnor_actions_contract::JobEnv::Unset,
         steps: Vec::new(),
     }
 }

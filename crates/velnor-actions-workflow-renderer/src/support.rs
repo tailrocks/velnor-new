@@ -170,6 +170,7 @@ pub(crate) fn alint_job(ctx: &RenderContext) -> Result<Job, RenderError> {
         permissions: None,
         cache_mode: None,
         environment: None,
+        env: velnor_actions_contract::JobEnv::Unset,
         steps: vec![
             checkout,
             Step {
@@ -232,6 +233,7 @@ pub(crate) fn validator_job(
         permissions: None,
         cache_mode: None,
         environment: None,
+        env: velnor_actions_contract::JobEnv::Unset,
         steps: job_steps,
     })
 }

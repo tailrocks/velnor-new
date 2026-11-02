@@ -16,6 +16,7 @@ pub(crate) mod gc1_t54_support {
     use std::path::PathBuf;
 
     use velnor_actions_contract::cachekey::{ToolchainInputs, toolchain_id};
+    use velnor_actions_contract::workflow::cache_family::{CARGO_HOME_EXPR, RUSTUP_HOME_EXPR};
     use velnor_actions_contract::workflow::crate_job::task_digest_for_execution;
     use velnor_actions_contract::workflow::{
         TASK_EXECUTION_MANIFEST_SCHEMA, TaskExecutionManifestEntryV1, TaskExecutionManifestV1,
@@ -266,19 +267,19 @@ pub(crate) mod gc1_t54_support {
                 ("MISE_EXEC_AUTO_INSTALL".to_owned(), "false".to_owned()),
                 (
                     "MISE_RUSTUP_HOME".to_owned(),
-                    "${{ runner.temp }}/velnor/rustup".to_owned(),
+                    RUSTUP_HOME_EXPR.to_owned(),
                 ),
                 (
                     "MISE_CARGO_HOME".to_owned(),
-                    "${{ runner.temp }}/velnor/cargo".to_owned(),
+                    CARGO_HOME_EXPR.to_owned(),
                 ),
                 (
                     "RUSTUP_HOME".to_owned(),
-                    "${{ runner.temp }}/velnor/rustup".to_owned(),
+                    RUSTUP_HOME_EXPR.to_owned(),
                 ),
                 (
                     "CARGO_HOME".to_owned(),
-                    "${{ runner.temp }}/velnor/cargo".to_owned(),
+                    CARGO_HOME_EXPR.to_owned(),
                 ),
             ]),
             matrix_id,

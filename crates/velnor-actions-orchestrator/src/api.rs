@@ -91,6 +91,9 @@ pub use super::extension_schemas::{
     task_stack_segment,
 };
 pub use super::finalized::finalized_jobs;
+pub use velnor_actions_workflow_renderer::{
+    ExecWord, WasteFinding, WasteFindings, WasteRule, waste_findings,
+};
 pub use super::generate::unmanaged::{UnmanagedReport, unmanaged_report};
 pub use super::generate::{
     GenerateOptions, GenerateReport, ToolSnapshot, generate, generate_dispatched,

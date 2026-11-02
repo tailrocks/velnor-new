@@ -102,13 +102,11 @@ fn join_quoted_argv(argv: &[String]) -> Result<String, SupportCommandError> {
 }
 
 pub fn machete_argv() -> Result<Vec<String>, SupportCommandError> {
-    let mut args = vec!["machete"];
-    args.extend(MACHETE_SCAN_CRATES);
     validator_argv(
         CARGO_MACHETE_TOOL_SPEC,
         CARGO_MACHETE_VERSION,
-        "cargo",
-        &args,
+        "cargo-machete",
+        &MACHETE_SCAN_CRATES,
     )
 }
 

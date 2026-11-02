@@ -1,12 +1,12 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+pub use velnor_actions_contract::workflow::cache_family::{CARGO_HOME_EXPR, RUSTUP_HOME_EXPR};
+
 use crate::error::MiseError;
 
 pub const MISE_DATA_DIR: &str = "~/.local/share/mise";
 pub const MISE_INSTALLS_SUFFIX: &str = "installs";
-pub const RUSTUP_HOME_EXPR: &str = "${{ runner.temp }}/velnor/rustup";
-pub const CARGO_HOME_EXPR: &str = "${{ runner.temp }}/velnor/cargo";
 pub const CARGO_HOME_SHELL: &str = "$RUNNER_TEMP/velnor/cargo";
 pub const CARGO_REGISTRY_SUFFIX: &str = "registry";
 pub const CARGO_GIT_SUFFIX: &str = "git";
