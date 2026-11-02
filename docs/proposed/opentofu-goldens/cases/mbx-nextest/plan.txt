@@ -1,4 +1,4 @@
-Velnor Actions plan 0.1.71
+Velnor Actions plan 0.1.72
 Repository: <repo>
 
 Detected stacks
@@ -24,8 +24,8 @@ Workflow to generate
     - required-gate (1 steps)
     - rust-app (26 steps)
     - tools-producer-083ce5ee (8 steps)
-    - tools-producer-25806b37 (10 steps)
-    - tools-producer-ffc502fa (9 steps)
+    - tools-producer-6bf4fcf7 (10 steps)
+    - tools-producer-819a636c (9 steps)
     - 1 Rust crate job
       Timeout: 5 minutes per crate job
       Obligations: Clippy -> build -> run tests -> doctests -> doc build -> format check

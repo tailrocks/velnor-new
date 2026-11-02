@@ -47,6 +47,8 @@ mod bun_runtime;
 mod empty_suite;
 #[path = "workflow_configuration_public/feature_toggles.rs"]
 mod feature_toggles;
+#[path = "workflow_configuration_public/install_profile.rs"]
+mod install_profile;
 #[path = "workflow_configuration_public/ledger_cli_job.rs"]
 mod ledger_cli_job;
 #[path = "workflow_configuration_public/ledger_cli_validator.rs"]
@@ -73,6 +75,8 @@ mod release_bun_prerequisite;
 mod report_upload;
 #[path = "workflow_configuration_public/seed_ids.rs"]
 mod seed_ids;
+#[path = "workflow_configuration_public/seed_off.rs"]
+mod seed_off;
 #[path = "workflow_configuration_public/source_qualification.rs"]
 mod source_qualification;
 #[path = "workflow_configuration_public/source_qualification_aggregation.rs"]
@@ -93,10 +97,16 @@ mod timeouts;
 mod tofu_parallel_limit;
 #[path = "workflow_configuration_public/tofu_prepare_script.rs"]
 mod tofu_prepare_script;
+#[path = "workflow_configuration_public/tofu_providers_producer_condition.rs"]
+mod tofu_providers_producer_condition;
+#[path = "workflow_configuration_public/tofu_providers_producer_timeout.rs"]
+mod tofu_providers_producer_timeout;
 #[path = "workflow_configuration_public/tofu_providers_producers.rs"]
 mod tofu_providers_producers;
 #[path = "workflow_configuration_public/tools_producers.rs"]
 mod tools_producers;
+#[path = "workflow_configuration_public/tools_producers_donor_rust.rs"]
+mod tools_producers_donor_rust;
 #[path = "workflow_configuration_public/tools_producers_donors.rs"]
 mod tools_producers_donors;
 #[path = "workflow_configuration_public/tools_producers_mutations.rs"]

@@ -80,8 +80,8 @@ After the composite, `shims/` is gone and `bin/` holds only the verified
 binary, so later steps that resolve bare names through `PATH` see no restored
 code.
 
-The generator derives the static digest from exact Mise action and binary pins, selected tool versions, Rust
-toolchain and components, target, runner lane, and the owned paths. A tool the project's Mise config declares
+The generator derives the static digest from exact Mise action and binary pins, selected tool versions, the Rust
+install option (`profile=minimal`), Rust toolchain and components, target, runner lane, and the owned paths. A tool the project's Mise config declares
 ([hard decision 5](../hard-decisions.md)) enters the static digest only as its `${VELNOR_TOOL_<NAME>}`
 reference, so the identity step's `d` input appends, for exactly the project-declared tools the job installs
 (sorted), the resolved version and that tool's lock digest: `<static>-${{ env.VELNOR_TOOL_<NAME> }}-${{

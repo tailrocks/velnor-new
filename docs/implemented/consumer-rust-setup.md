@@ -64,6 +64,7 @@ targets = ["aarch64-unknown-linux-gnu", "x86_64-unknown-linux-gnu"]
   `channel`/`version`, `components`, `targets` or `profile` fails with
   `rust_toolchain_mirror_mismatch:<key>:<toolchain file>=[...],<mise file>=[...]`.
   Set `profile` in both or in neither; `minimal` skips rust-docs.
+  Generated CI always installs the minimal profile plus `clippy` and `rustfmt` and no extra targets.
   - The Mise side is every config Mise reads (`mise.toml`, `.mise.toml`,
     `mise.<env>.toml`, `.config/mise.toml`, `.config/mise/config.toml`,
     `.config/mise/conf.d/*.toml`, `mise/config.toml`, `.mise/config.toml`

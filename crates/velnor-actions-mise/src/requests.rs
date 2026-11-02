@@ -133,6 +133,12 @@ fn reject_forbidden_payload(program: &OsStr, args: &[OsString]) -> Result<(), Mi
     Ok(())
 }
 
+fn argv_for(specs: &[String]) -> Vec<OsString> {
+    let mut argv = vec![OsString::from("mise")];
+    argv.extend(mise_install_argv_tail(specs));
+    argv
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MiseInstall {
     tools: Vec<PinnedTool>,
@@ -153,15 +159,23 @@ impl MiseInstall {
 
     #[must_use]
     pub fn argv(&self, catalog: &ToolCatalog) -> Vec<OsString> {
-        let specs = catalog.tool_specs(&self.tools);
-        let mut argv = vec![OsString::from("mise")];
-        argv.extend(mise_install_argv_tail(&specs));
-        argv
+        argv_for(&catalog.tool_specs(&self.tools))
+    }
+
+    #[must_use]
+    pub fn argv_with_install_profile(&self, catalog: &ToolCatalog) -> Vec<OsString> {
+        argv_for(&catalog.install_specs(&self.tools))
     }
 
     pub fn command(&self, catalog: &ToolCatalog) -> Result<IsolatedCommand, MiseError> {
-        let specs = catalog.tool_specs(&self.tools);
-        IsolatedCommand::mise_install(&specs)
+        IsolatedCommand::mise_install(&catalog.tool_specs(&self.tools))
+    }
+
+    pub fn command_with_install_profile(
+        &self,
+        catalog: &ToolCatalog,
+    ) -> Result<IsolatedCommand, MiseError> {
+        IsolatedCommand::mise_install(&catalog.install_specs(&self.tools))
     }
 
     pub fn run(&self, catalog: &ToolCatalog) -> Result<ProcessOutput, MiseError> {

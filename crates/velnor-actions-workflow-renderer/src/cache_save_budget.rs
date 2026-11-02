@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use velnor_actions_contract::workflow::JobTimeout;
 use velnor_actions_contract::{Step, StepKind, StepRole};
 
 use crate::{RenderError, yaml::Yaml};
@@ -14,6 +15,12 @@ const MBX_BUNDLE_ID: &str = "velnor-optional-mbx-bundle-save";
 const RESERVE_SECONDS: u32 = 30;
 const WRITE_SECONDS: u32 = 60;
 const BUNDLE_WRITE_SECONDS: u32 = 180;
+const SECONDS_PER_MINUTE: u32 = 60;
+
+pub(crate) fn lift_to_save_budget(timeout: JobTimeout) -> Result<JobTimeout, RenderError> {
+    let floor = (WRITE_SECONDS + RESERVE_SECONDS).div_ceil(SECONDS_PER_MINUTE);
+    JobTimeout::try_from(u32::from(timeout.minutes()).max(floor)).map_err(RenderError::Contract)
+}
 
 fn write_seconds(id: &str) -> u32 {
     if id == MBX_BUNDLE_ID {
@@ -90,7 +97,7 @@ pub(crate) fn decorate(
         ("id".to_owned(), Yaml::str(id.as_str())),
         (
             "timeout-minutes".to_owned(),
-            Yaml::Int(i64::from(write_seconds(&id) / 60)),
+            Yaml::Int(i64::from(write_seconds(&id) / SECONDS_PER_MINUTE)),
         ),
         ("continue-on-error".to_owned(), Yaml::Bool(true)),
     ]);
@@ -190,7 +197,7 @@ fn clock(minutes: u16) -> Yaml {
 fn job_seconds(minutes: u16) -> Vec<(String, Yaml)> {
     vec![(
         "VELNOR_CACHE_JOB_SECONDS".to_owned(),
-        Yaml::str((u32::from(minutes) * 60).to_string()),
+        Yaml::str((u32::from(minutes) * SECONDS_PER_MINUTE).to_string()),
     )]
 }
 
