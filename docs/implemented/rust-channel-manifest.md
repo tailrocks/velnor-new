@@ -6,19 +6,29 @@
   [consumer Rust setup](consumer-rust-setup.md)
 - Delivered: `RUST_CHANNEL_MANIFESTS` in `velnor-actions-mise`
   (`catalog_rust_manifests.rs`); the file-by-file toolchain check
-  (`rust_toolchain_script.rs`) behind the generated
+  (`toolchain_script` in `native_verifiers.rs` of
+  `velnor-actions-workflow-renderer`) behind the generated
   `Verify restored Rust toolchain` and `Verify Rust channel manifest` steps in
   every plan, crate and dependency-seed job that installs Rust
   (`rust_manifest_step.rs`); and the lock-audit change that treats such an
   install as verified.
 - Acceptance evidence: `rust_install_audit::tests` (the all-workflow
-  coverage audit), `rust_toolchain_script::tests` (the script executed
-  against a fixture release: a replaced `rustc`, an extra, missing or
-  symlinked file, an unlisted component, a substituted tarball, a wrong
-  manifest digest and a poisoned cache each fail),
-  `rust_manifest_step::tests`, `catalog::rust_manifests::tests`,
-  `impl_orch_lock_audit`
-  (`full_lock_leaves_nothing_unverifiable`), `lock_audit::rust::tests`.
+  coverage audit), `lock_audit_tests`
+  (`a_bare_rust_install_is_a_blocking_lock_audit_finding`), and the
+  `rust_tree_digest_pin` target of `velnor-actions-workflow-renderer`, which
+  runs the rendered script against a fixture release: a replaced `rustc`, a
+  planted or missing file, a file below a `manifest-*` directory and a
+  tampered foreign-triple toolchain each fail with
+  `rust_toolchain_bytes_mismatch` (`bookkeeping::b5`, `b6`, `b7`); component
+  sums forged in the cache, also through a symlinked `rust-verified`, are
+  discarded and the check fails (`bookkeeping::c1`); the installed phase
+  reuses what the restored phase verified without the network
+  (`bookkeeping::c2`); a substituted tarball, an off-site component URL, an
+  uncatalogued version and a component the channel does not ship each fail
+  with their code (`bookkeeping::r1`); a wrong channel digest is refused and
+  not kept (`manifest::w1`), a poisoned job-local channel copy is never
+  installed (`manifest::px3`); a renamed toolchain directory and every
+  mutation under a matching pin fail (`hard_fail::n1a`, `n1b`, `n1c`).
 - Deviations: none
 - Follow-up: add each new stable Rust release (and its digest) to the
   catalog when `RUST_VERSION` moves; the catalog test requires the newest row
@@ -47,14 +57,14 @@ first version of this step did exactly that.
    was produced by hashing the downloaded manifest and comparing it with the
    published `channel-rust-<version>.toml.sha256`; the rows cover every
    stable release from 1.85.0 to the catalog pin.
-2. One script (`rust_toolchain_script.rs`) verifies a toolchain file by file.
+2. One script (`toolchain_script` in `native_verifiers.rs`) verifies a toolchain file by file.
    Its first command sets `PATH=/usr/bin:/bin:/usr/sbin:/sbin`, so every
    helper (`sha256sum`, `curl`, `tar`, `find`) comes from root-owned system
    directories and never from the restored Mise `bin/` or `shims/` that Setup
    Mise put on `PATH` first
    ([hermetic checks](../proposed/tools-cache-v2.md#the-checks-run-hermetically)).
-   Every helper also runs under `/usr/bin/env -i` with an allowlist (`PATH`,
-   `LC_ALL=C`, `HOME`, `RUNNER_TEMP`, `RUSTUP_HOME`, `MISE_RUSTUP_HOME`,
+   Every helper this script runs also runs under `/usr/bin/env -i` with an
+   allowlist (`PATH`, `LC_ALL=C`, `HOME`, `RUNNER_TEMP`, `RUSTUP_HOME`, `MISE_RUSTUP_HOME`,
    `CARGO_HOME`, `VELNOR_TOOL_RUST`, `HTTPS_PROXY`, `HTTP_PROXY`, `NO_PROXY`,
    `ALL_PROXY` and their lowercase forms, `SSL_CERT_FILE`, `SSL_CERT_DIR`,
    `CURL_CA_BUNDLE`), so caller variables such as `TAR_OPTIONS`,
@@ -93,8 +103,9 @@ first version of this step did exactly that.
      `rustc`, a planted or deleted file, or a component dropped from the list
      (its files become unexpected) all fail.
    Expected sums are kept per component tarball in
-   `$RUNNER_TEMP/velnor/rust-verified` for the rest of the job, so the second
-   run in a job downloads nothing it already checked. The step runs
+   `$RUNNER_TEMP/velnor/rust-verified` after the restored phase has wiped the
+   directory and recomputed them, so the installed phase downloads nothing the
+   restored phase already checked. The step runs
    credential-scrubbed and needs no token.
 3. Every owned-home job runs it twice:
    - `Verify restored Rust toolchain`, right before `Prepare pinned tools`
@@ -102,7 +113,10 @@ first version of this step did exactly that.
      rustup touches the toolchain (on a cache hit `mise install` already runs
      `rustup` and `rustc`). It deletes the restored
      `$CARGO_HOME/bin` (rustup and its proxies), so Mise reinstalls a fresh
-     rustup instead of running a cached one. It then compares a restored
+     rustup instead of running a cached one. It also deletes
+     `$RUNNER_TEMP/velnor/rust-verified`, so a sums file planted by a
+     poisoned cache or a left-over earlier step cannot stand in for the
+     tarball check. It then compares a restored
      toolchain with a pinned installed-tree digest (type, path, mode and
      SHA-256 of every entry, derived from the component tarballs of the
      pinned channel manifest; the stored `multirust-channel-manifest.toml` is
@@ -113,11 +127,15 @@ first version of this step did exactly that.
      offline. The pin is selected by the job's expected
      Rust version and target, never by the restored `components` file or the
      toolchain directory name. The owned-home steps render the target
-     `x86_64-unknown-linux-gnu`. ARM targets have no pin row yet (owner standing
-     grant 2026-11-02, velnor-fast-ci GOAL.md; decisions.tsv X35): a
-     `toolchains/` directory that is exactly
-     `<version>-aarch64-unknown-linux-gnu` is treated as unpinned and takes the
-     file-by-file check, while any other entry, or an x86_64 entry beside it,
+     `x86_64-unknown-linux-gnu`. Other host triples have no pin row yet (owner
+     standing grant 2026-11-02, velnor-fast-ci GOAL.md; decisions.tsv X35): a
+     `toolchains/` directory holding exactly one entry named
+     `<version>-<a>-<b>-<c>` that is not `<version>-<target>` (for example
+     `aarch64-unknown-linux-gnu`, `aarch64-apple-darwin`,
+     `x86_64-apple-darwin` or `x86_64-unknown-linux-musl`) is treated as
+     unpinned and takes the file-by-file check in both phases, which is blind
+     to modes and bookkeeping bytes but still fails a tampered tree. Any other entry, a lone entry that is not
+     triple-shaped (`<version>-evil`), or a foreign entry beside another,
      fails. A match passes. If a pin row exists for that
      version and target, only the pinned path runs: a components set no row
      pins, a `toolchains/` entry other than exactly `<version>-<target>`, a
@@ -137,17 +155,20 @@ first version of this step did exactly that.
      replaces the manifest rustup rewrote with the verified channel bytes
      (step 2), then runs the same pinned comparison, and falls back to the
      file-by-file check only when no pin row exists.
-   The pinned listing is built with `find -printf` and runs on Linux only (the
-   pins are `x86_64-unknown-linux-gnu`); a runner without GNU `find` takes the
-   file-by-file path, which needs no `-printf`. `scripts/derive-rust-tree-digest`
-   derives a pin row, runs under `env -i` with the same allowlist, writes only
-   to stdout (digests, the pin row and the listing) and stages the downloaded
+   The pinned listing is built with `find -printf` (GNU `find`), which the
+   file-by-file path does not need; a toolchain directory of another host
+   triple (macOS, ARM or musl Linux) never reaches the pinned listing.
+   `scripts/derive-rust-tree-digest` derives a pin row, re-executes itself
+   under `env -i` with the same allowlist unless the caller already set its
+   `VELNOR_DERIVE_CLEAN` marker, writes only to stdout (digests, the pin row and
+   the listing) and stages the downloaded
    channel manifest as the manifest entry. A manifest-form token in the
    tools-cache static digest keeps entries stored before this change, whose
    manifest holds rustup's rewritten bytes, from being restored.
    Residual risks (cache decision 10, decisions.tsv X35 and X44): the content
    of `multirust-config.toml` is unbound (denial of service only); for a
-   version and target with no pin row, and for an ARM toolchain directory,
+   version and target with no pin row, and for a toolchain directory of
+   another host triple,
    the file-by-file fallback overwrites the channel manifest but leaves the
    `manifest-*` bytes, the `multirust-config.toml` content and all file modes
    unbound, which affects consumer repos that pin a Rust other than the
