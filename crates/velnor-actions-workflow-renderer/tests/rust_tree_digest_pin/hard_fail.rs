@@ -4,10 +4,12 @@
 use velnor_actions_workflow_renderer::verifier_builders::TreeDigestPin;
 
 use crate::fixture::{
-    CAP, CHANNEL_MANIFEST, FIXTURE_BOOKKEEPING, FIXTURE_COMPONENTS_SHA256, Fixture,
-    INSTALLER_VERSION, MANIFEST_CARGO, MANIFEST_RUSTC, MISMATCH, MULTIRUST_CONFIG, Outcome, Row,
-    TARGET, VERSION, row, run_rows,
+    CAP, CHANNEL_MANIFEST, FIXTURE_BOOKKEEPING, FIXTURE_COMPONENTS, FIXTURE_COMPONENTS_SHA256,
+    Fixture, INSTALLER_VERSION, MANIFEST_CARGO, MANIFEST_RUSTC, MISMATCH, MULTIRUST_CONFIG,
+    Outcome, Row, TARGET, VERSION, row, run_rows,
 };
+
+const COMPONENTS: &str = "lib/rustlib/components";
 
 const UNSAFE_NAMES: [(&str, &str); 4] = [
     (
@@ -87,6 +89,51 @@ fn n1b_any_bookkeeping_mutation_under_the_matching_pin_fails_the_job() {
         }),
         row("multirust config over the cap", &|fx| {
             fx.put(MULTIRUST_CONFIG, &vec![b'x'; CAP + 1], 0o644);
+        }),
+        row("rename appended to the channel manifest", &|fx| {
+            let evil =
+                format!("{FIXTURE_BOOKKEEPING}\n[renames.rustc]\nto = \"rustfmt-preview\"\n");
+            fx.put(CHANNEL_MANIFEST, evil.as_bytes(), 0o644);
+        }),
+        row("rename target changed in the channel manifest", &|fx| {
+            let evil =
+                FIXTURE_BOOKKEEPING.replace("to = \"clippy-preview\"", "to = \"rustfmt-preview\"");
+            fx.put(CHANNEL_MANIFEST, evil.as_bytes(), 0o644);
+        }),
+        row("unknown key in a package target table", &|fx| {
+            let evil = FIXTURE_BOOKKEEPING.replacen(
+                "available = true\n",
+                "available = true\nsource = \"https://attacker.example/\"\n",
+                1,
+            );
+            fx.put(CHANNEL_MANIFEST, evil.as_bytes(), 0o644);
+        }),
+        row("unknown table appended to the channel manifest", &|fx| {
+            let evil = format!("{FIXTURE_BOOKKEEPING}\n[mirrors]\n");
+            fx.put(CHANNEL_MANIFEST, evil.as_bytes(), 0o644);
+        }),
+    ];
+    run_rows(&rows, &hard_failed);
+}
+
+#[test]
+fn n1c_a_changed_selection_input_under_the_matching_pin_fails_the_job() {
+    let rows = [
+        row("extra empty toolchains entry", &|fx| fx.sibling("zz")),
+        row("second same-version toolchain", &|fx| {
+            fx.sibling("1.99.1-aarch64-unknown-linux-gnu");
+        }),
+        row("dot toolchains entry", &|fx| fx.sibling(".hidden")),
+        row("toolchain dir renamed", &|fx| fx.rename_root("1.99.1-evil")),
+        row("components cut to an unpinned set", &|fx| {
+            fx.put(COMPONENTS, b"cargo-x86_64-unknown-linux-gnu\n", 0o644);
+        }),
+        row("components line duplicated", &|fx| {
+            let doubled = format!("{FIXTURE_COMPONENTS}rustc-x86_64-unknown-linux-gnu\n");
+            fx.put(COMPONENTS, doubled.as_bytes(), 0o644);
+        }),
+        row("components file empty", &|fx| {
+            fx.put(COMPONENTS, b"", 0o644);
         }),
     ];
     run_rows(&rows, &hard_failed);

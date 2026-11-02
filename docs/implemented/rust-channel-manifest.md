@@ -63,15 +63,21 @@ first version of this step did exactly that.
      the tarball (only from `https://static.rust-lang.org/dist/`), checks its
      SHA-256 and hashes every file the tarball installs;
    - it requires `lib/rustlib/multirust-channel-manifest.toml`, which
-     `rustup component add` reads to pick download URLs and hashes, to name
-     exactly the `url`, `hash`, `xz_url` and `xz_hash` of every
-     `[pkg.*.target.*]` table of the verified manifest (rustup rewrites the
-     file, so the bytes differ; the download lines do not) and to use only
-     plain `key = value` lines, so no line can hide from the comparison;
+     `rustup component add` reads to pick download URLs, hashes, renames and
+     profiles, to have the same normal form as the verified manifest. rustup
+     rewrites the file, so the bytes differ. The normal form keeps every
+     table header and every plain `key = value` line, sorted, and drops only
+     what the rewrite changes: `git_commit_hash` in `[pkg.*]`, the
+     `[[artifacts.*]]` tables, empty `components` and `extensions` in
+     `[pkg.*.target.*]`, and `is_extension` in component lists. Any other
+     line form fails, so no line can hide from the comparison. The verifier
+     and `scripts/derive-rust-tree-digest` run the same `normal_form`
+     definition (the derive reads it from `native_verifiers_tree_digest.rs`);
    - it requires the toolchain directory to hold exactly those files with
-     exactly those bytes, apart from rustup's own bookkeeping
-     (`lib/rustlib/components`, `manifest-*`, `multirust-*`,
-     `rust-installer-version`), and no symlink or special file. A replaced
+     exactly those bytes, apart from rustup's own bookkeeping regular files
+     directly under `lib/rustlib` (`components`, `manifest-*`, `multirust-*`,
+     `rust-installer-version`), and no symlink or special file. A file below
+     a `manifest-*` directory is not bookkeeping and is compared. A replaced
      `rustc`, a planted or deleted file, or a component dropped from the list
      (its files become unexpected) all fail.
    Expected sums are kept per component tarball in
@@ -88,19 +94,31 @@ first version of this step did exactly that.
      toolchain with a pinned installed-tree digest (type, path, mode and
      SHA-256 of every entry, derived from the component tarballs of the
      pinned channel manifest; the stored `multirust-channel-manifest.toml` is
-     bound to the pinned channel manifest by its `url` and `hash` lines)
-     before any network access. A match passes. A components set with no pin
-     row prints `pin_mismatch: no_pin` and falls back to the file-by-file
-     check in step 2, which does not see modes or bookkeeping bytes. A
-     components set with a pin row whose tree differs, whose listing fails or
-     whose bookkeeping file is over the size cap fails the job with
-     `rust_tree_digest_mismatch`; it never falls back. The pin covers
+     bound to the pinned channel manifest by the normal form in step 2)
+     before any network access. The pin is selected by the job's expected
+     Rust version and target, never by the restored `components` file or the
+     toolchain directory name. The owned-home steps render the target
+     `x86_64-unknown-linux-gnu`. A match passes. If a pin row exists for that
+     version and target, only the pinned path runs: a components set no row
+     pins, a `toolchains/` entry other than exactly `<version>-<target>`, a
+     tree or listing difference, or a bookkeeping file over the size cap
+     fails the job with `rust_tree_digest_mismatch` and the
+     `pin_mismatch` notice names the check (`components_not_pinned`,
+     `toolchains_differ`, `tree_differs`, and so on). Only if no pin row
+     exists for that version and target does the step print
+     `pin_mismatch: no_pin` and fall back to the file-by-file check in step 2,
+     which does not see modes or bookkeeping bytes. The pin covers
      `manifest-<component>` and `rust-installer-version` byte for byte;
      `multirust-config.toml` is a size-capped regular-file entry. The cache
      payload holds no memo of a passed check. With nothing restored the step
      does nothing;
    - `Verify Rust channel manifest`, after `Prepare pinned tools` and
      `Prepare Rust components`, on the toolchain the job will use.
+   Residual risks (cache decision 10, decisions.tsv X35): the content of
+   `multirust-config.toml` is unbound (denial of service only); the
+   file-by-file fallback, reachable only for a version and target with no
+   pin row and in the default-home jobs, stays mode-blind; a reordered
+   `components` file is accepted, because it is hashed sorted.
    A poisoned cache entry therefore fails the job before any restored Rust
    byte runs; delete the entry (`gh cache delete <key>`) to recover.
 4. The step fails the job with a stable code:
@@ -140,6 +158,9 @@ directly after the Rust install in every other generated job:
 | `freshness.yml` | `freshness` |
 | `binary-release.yml`, `binary-preview.yml` | every payload producer, after `Install pinned Cargo metadata toolchain` and before `Fetch Cargo sources` |
 | `upgrades.yml` | `prepare` and `verify`, inside the regeneration prerequisites: right after the fresh `rust@<pin>` install and before `cargo fetch` (`VELNOR_VERIFY_RUST_SCRIPT`) |
+
+These default-home steps carry no tree pin. They restore no cache and install
+the default profile, so they always run the file-by-file check.
 
 Two more job kinds run on the owned homes with the tools cache, so they also
 get `Verify restored Rust toolchain` before their install:

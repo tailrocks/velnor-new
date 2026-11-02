@@ -6,11 +6,11 @@ use std::collections::BTreeMap;
 use velnor_actions_contract::workflow::{JACTIONLINT_VERIFIER_USES, RUST_VERIFIER_USES};
 use velnor_actions_contract::{Step, StepKind, StepRole};
 use velnor_actions_mise::catalog::RUST_CHANNEL_MANIFESTS;
-use velnor_actions_mise::{PinnedTool, ToolCatalog, ToolHomes};
+use velnor_actions_mise::{PinnedTool, RUST_TARGET_TRIPLE, ToolCatalog, ToolHomes};
 
 use crate::VERIFY_PATH;
 use crate::native_verifiers_tree_digest::{
-    RUST_TREE_DIGESTS, TreeDigestPin, URLS_FUNCTION, pin_statements,
+    NORMAL_FORM_FUNCTION, RUST_TREE_DIGESTS, TreeCheck, pin_check_statements, pin_scope_statements,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -26,6 +26,11 @@ pub const VERIFY_JACTIONLINT_STEP: &str = "Verify jactionlint";
 
 const DIST: &str = "https://static.rust-lang.org/dist/channel-rust-";
 
+const OWNED_HOME_TREES: TreeCheck<'static> = TreeCheck::Pinned {
+    target: RUST_TARGET_TRIPLE,
+    pins: RUST_TREE_DIGESTS,
+};
+
 const COMPONENT_TARBALLS_AWK: &str = r#"awk -v comps="$t/lib/rustlib/components" 'BEGIN { while ((getline line < comps) > 0) if (line != "") want[line] = 1 } /^\[/ { key = ""; if ($0 ~ /^\[pkg\.[^]]*\.target\.[^]]*\]$/) { s = substr($0, 6, length($0) - 6); p = index(s, ".target."); k = substr(s, 1, p - 1) "-" substr(s, p + 8); if (k in want) key = k } next } key != "" && $1 == "xz_url" { u = $3; gsub(/"/, "", u); url[key] = u } key != "" && $1 == "xz_hash" { h = $3; gsub(/"/, "", h); hash[key] = h } END { for (k in want) { if (!(k in url) || !(k in hash)) exit 1; print k, url[k], hash[k] } }' "$d/channel.toml" > "$d/tarballs""#;
 
 #[must_use]
@@ -33,7 +38,7 @@ pub fn toolchain_script(
     version: &str,
     phase: ToolchainPhase,
     manifests: &[(&str, &str, &str)],
-    pins: &[TreeDigestPin],
+    trees: TreeCheck<'_>,
 ) -> String {
     let cases = manifests
         .iter()
@@ -60,6 +65,7 @@ pub fn toolchain_script(
     if phase == ToolchainPhase::Restored {
         lines.push("rm -rf \"${CARGO_HOME:?}/bin\"".to_owned());
     }
+    lines.extend(pin_scope_statements(trees));
     lines.push("set -- \"$rh/toolchains/$v\"-*".to_owned());
     if phase == ToolchainPhase::Restored {
         lines.push(
@@ -75,21 +81,21 @@ pub fn toolchain_script(
         "find \"$t\" ! -type f ! -type d > \"$d/special\"".to_owned(),
         "test ! -s \"$d/special\" || fail \"rust_toolchain_file_unexpected: $t holds a symlink or a special file\"".to_owned(),
     ]);
-    lines.push(URLS_FUNCTION.to_owned());
-    lines.extend(pin_statements(pins));
+    lines.push(NORMAL_FORM_FUNCTION.to_owned());
+    lines.extend(pin_check_statements(trees));
     lines.extend([
         "get() { curl --proto \"=https\" --proto-redir \"=https\" --tlsv1.2 --fail --silent --show-error --location --retry 3 --retry-all-errors --connect-timeout 20 --max-time 120 --retry-max-time 180 --output \"$1\" \"$2\"; }".to_owned(),
         format!("get \"$d/channel.toml\" \"{DIST}$v.toml\""),
         "printf \"%s  %s\\n\" \"$want\" \"$d/channel.toml\" > \"$d/channel.sha256\"".to_owned(),
         "$h -c \"$d/channel.sha256\" >/dev/null || fail \"rust_channel_manifest_digest_mismatch: channel-rust-$v.toml is not SHA-256 $want\"".to_owned(),
-        "urls \"$d/channel.toml\" \"$d/channel.urls\" || fail \"rust_channel_manifest_unreadable: channel-rust-$v.toml\"".to_owned(),
-        "urls \"$t/lib/rustlib/multirust-channel-manifest.toml\" \"$d/installed.urls\" || fail \"rust_bookkeeping_manifest_unreadable: $t/lib/rustlib/multirust-channel-manifest.toml\"".to_owned(),
-        "cmp -s \"$d/channel.urls\" \"$d/installed.urls\" || fail \"rust_bookkeeping_manifest_mismatch: $t/lib/rustlib/multirust-channel-manifest.toml names a download the verified channel-rust-$v.toml does not\"".to_owned(),
+        "normal_form \"$d/channel.toml\" \"$d/channel.nf\" || fail \"rust_channel_manifest_unreadable: channel-rust-$v.toml\"".to_owned(),
+        "normal_form \"$t/lib/rustlib/multirust-channel-manifest.toml\" \"$d/installed.nf\" || fail \"rust_bookkeeping_manifest_unreadable: $t/lib/rustlib/multirust-channel-manifest.toml\"".to_owned(),
+        "cmp -s \"$d/channel.nf\" \"$d/installed.nf\" || fail \"rust_bookkeeping_manifest_mismatch: $t/lib/rustlib/multirust-channel-manifest.toml differs from the verified channel-rust-$v.toml\"".to_owned(),
         format!("{COMPONENT_TARBALLS_AWK} || fail \"rust_component_not_in_manifest: $t lists a component the verified channel-rust-$v.toml does not ship\""),
         "test -s \"$d/tarballs\" || fail \"rust_installed_manifest_empty: $t lists no component\"".to_owned(),
         ": > \"$d/expected\"".to_owned(),
         "while read -r comp url hash; do case \"$comp\" in *[!A-Za-z0-9._-]*|\"\") fail \"rust_component_name_invalid: $comp\";; esac; case \"$url\" in https://static.rust-lang.org/dist/*.tar.xz) ;; *) fail \"rust_component_url_untrusted: $url\";; esac; if [ ! -f \"$r/$comp.$hash\" ]; then get \"$d/c.tar.xz\" \"$url\"; printf \"%s  %s\\n\" \"$hash\" \"$d/c.tar.xz\" > \"$d/c.sha256\"; $h -c \"$d/c.sha256\" >/dev/null || fail \"rust_component_tarball_digest_mismatch: $comp\"; rm -rf \"$d/x\"; mkdir \"$d/x\"; tar -xJf \"$d/c.tar.xz\" -C \"$d/x\" --strip-components=1; rm -f \"$d/c.tar.xz\"; : > \"$d/c.sums\"; while read -r sub; do case \"$sub\" in *[!A-Za-z0-9._-]*|\"\"|.|..) fail \"rust_component_name_invalid: $sub\";; esac; (cd \"$d/x/$sub\" && find . -type f ! -path ./manifest.in -exec $h {} +) >> \"$d/c.sums\"; done < \"$d/x/components\"; mv \"$d/c.sums\" \"$r/$comp.$hash\"; fi; cat \"$r/$comp.$hash\" >> \"$d/expected\"; done < \"$d/tarballs\"".to_owned(),
-        "(cd \"$t\" && find . -type f ! -path ./lib/rustlib/components ! -path \"./lib/rustlib/manifest-*\" ! -path ./lib/rustlib/multirust-channel-manifest.toml ! -path ./lib/rustlib/multirust-config.toml ! -path ./lib/rustlib/rust-installer-version -exec $h {} +) > \"$d/installed\"".to_owned(),
+        "(cd \"$t\" && find . -type f ! -path ./lib/rustlib/components ! \\( -path \"./lib/rustlib/manifest-*\" ! -path \"./lib/rustlib/manifest-*/*\" \\) ! -path ./lib/rustlib/multirust-channel-manifest.toml ! -path ./lib/rustlib/multirust-config.toml ! -path ./lib/rustlib/rust-installer-version -exec $h {} +) > \"$d/installed\"".to_owned(),
         "LC_ALL=C sort -k2 \"$d/expected\" > \"$d/expected.sorted\"".to_owned(),
         "LC_ALL=C sort -k2 \"$d/installed\" > \"$d/installed.sorted\"".to_owned(),
         "if ! cmp -s \"$d/expected.sorted\" \"$d/installed.sorted\"; then LC_ALL=C diff \"$d/expected.sorted\" \"$d/installed.sorted\" | head -n 20 >&2 || true; fail \"rust_toolchain_bytes_mismatch: $t differs from the component tarballs of the verified channel-rust-$v.toml\"; fi".to_owned(),
@@ -115,7 +121,7 @@ pub fn rust_verifier_shell_step(
         catalog.version(PinnedTool::Rust),
         phase,
         RUST_CHANNEL_MANIFESTS,
-        RUST_TREE_DIGESTS,
+        OWNED_HOME_TREES,
     );
     crate::verifier_composite::verifier_shell_step(
         StepRole::VerifyRustManifest,
@@ -134,14 +140,23 @@ pub fn verify_rust_owned_argv(catalog: &ToolCatalog, phase: ToolchainPhase) -> V
             catalog.version(PinnedTool::Rust),
             phase,
             RUST_CHANNEL_MANIFESTS,
-            RUST_TREE_DIGESTS,
+            OWNED_HOME_TREES,
         ),
     ]
 }
 
 #[must_use]
 pub fn verify_rust_argv(catalog: &ToolCatalog) -> Vec<String> {
-    verify_rust_owned_argv(catalog, ToolchainPhase::Installed)
+    vec![
+        "sh".to_owned(),
+        "-c".to_owned(),
+        toolchain_script(
+            catalog.version(PinnedTool::Rust),
+            ToolchainPhase::Installed,
+            RUST_CHANNEL_MANIFESTS,
+            TreeCheck::FileByFile,
+        ),
+    ]
 }
 
 #[must_use]

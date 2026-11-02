@@ -23,7 +23,7 @@ pub(crate) fn toolchain_script(
         version,
         phase,
         manifests,
-        verifier_builders::RUST_TREE_DIGESTS,
+        verifier_builders::TreeCheck::FileByFile,
     )
 }
 

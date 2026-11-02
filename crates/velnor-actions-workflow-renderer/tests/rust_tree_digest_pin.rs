@@ -30,7 +30,7 @@ use std::process::Command;
 
 use fixture::{
     FIXTURE_COMPONENTS, FIXTURE_COMPONENTS_SHA256, FIXTURE_TREE_SHA256, Fixture, HELPERS, MISMATCH,
-    Outcome, PHASES, Row, TARGET, VERSION, fixture_pin, row, run_rows, script,
+    Outcome, PHASES, Row, TARGET, VERSION, fixture_pin, run_rows, script,
 };
 use sha2::{Digest, Sha256};
 use velnor_actions_contract::StepKind;
@@ -45,6 +45,8 @@ const REAL_COMPONENTS: &str = "cargo-x86_64-unknown-linux-gnu\nclippy-preview-x8
 
 const REAL_COMPONENTS_SHA256: &str =
     "e3808a4c78c316b41a42ed88010c6bbf24ae24a348a5a22b8e3bc62328db1981";
+
+const DECOY_TREE_SHA256: &str = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
 
 fn sha256_hex(text: &str) -> String {
     Sha256::digest(text.as_bytes())
@@ -103,6 +105,23 @@ fn p3_live_emitters_select_the_production_pin() {
             let outcome = fx.run(script);
             outcome.assert_hard_failed(MISMATCH);
             assert!(outcome.stdout.contains("tree_differs"), "{outcome:?}");
+            Fixture::standard().run(script).assert_hard_failed(MISMATCH);
+        }
+    }
+}
+
+#[test]
+fn p6_a_target_with_several_rows_selects_by_the_components_digest() {
+    let decoy = TreeDigestPin::new(VERSION, TARGET, REAL_COMPONENTS_SHA256, DECOY_TREE_SHA256);
+    let widened = format!("{FIXTURE_COMPONENTS}rust-src-x86_64-unknown-linux-gnu\n");
+    for pins in [[decoy, fixture_pin()], [fixture_pin(), decoy]] {
+        for phase in PHASES {
+            Fixture::standard()
+                .run(&script(phase, &pins))
+                .assert_pinned();
+            let fx = Fixture::standard();
+            fx.put("lib/rustlib/components", widened.as_bytes(), 0o644);
+            fx.run(&script(phase, &pins)).assert_hard_failed(MISMATCH);
         }
     }
 }
@@ -188,23 +207,7 @@ fn n3_symlinks_are_refused_before_the_pin() {
 }
 
 #[test]
-fn n4_toolchains_must_hold_exactly_one_entry() {
-    let rows = [
-        row("second same-version dir", &|fx| {
-            fx.sibling("1.99.1-aarch64-unknown-linux-gnu");
-        }),
-        row("different name", &|fx| {
-            fx.sibling("nightly-x86_64-unknown-linux-gnu");
-        }),
-        row("dot entry", &|fx| fx.sibling(".hidden")),
-    ];
-    run_rows(&rows, &Outcome::is_not_pinned);
-}
-
-#[test]
-fn n5_a_pin_for_another_version_target_or_components_is_not_used() {
-    let widened = format!("{FIXTURE_COMPONENTS}rust-src-x86_64-unknown-linux-gnu\n").into_bytes();
-    let widen = |fx: &Fixture| fx.put("lib/rustlib/components", &widened, 0o644);
+fn n5_a_pin_for_another_version_or_target_is_not_used() {
     let rows = [
         Row {
             name: "other version".to_owned(),
@@ -226,7 +229,6 @@ fn n5_a_pin_for_another_version_target_or_components_is_not_used() {
                 FIXTURE_TREE_SHA256,
             ),
         },
-        row("altered components", &widen),
     ];
     run_rows(&rows, &Outcome::no_pin);
 }

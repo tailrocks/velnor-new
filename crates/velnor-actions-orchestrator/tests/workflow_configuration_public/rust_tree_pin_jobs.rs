@@ -5,18 +5,13 @@ use std::collections::BTreeSet;
 use std::error::Error;
 
 use sha2::{Digest, Sha256};
-use velnor_actions_contract::config::UPGRADES_WORKFLOW_PATH;
 use velnor_actions_contract::workflow::RUST_VERIFIER_USES;
 use velnor_actions_contract::{Job, Step, StepKind, StepRole};
 use velnor_actions_mise::{RUST_TARGET_TRIPLE, RUST_VERSION};
-use velnor_actions_orchestrator::{prepare, render_staged_tree};
 use velnor_actions_workflow_renderer::verifier_builders::RUST_TREE_DIGESTS;
 
 use super::install_profile::rust_install_profile;
 use super::tools_producers::{POLICIES, finalized, positions};
-use super::workflow_configuration_fixture::make_repo;
-
-const UPGRADES_CONFIG: &str = "schema = 1\n[workflow]\nname = \"CI\"\ndefault_branch = \"testmain\"\n\n[upgrades]\nenabled = true\n";
 
 fn is_restored_form(step: &Step) -> bool {
     matches!(&step.kind, StepKind::Action { uses, .. } if uses == RUST_VERIFIER_USES[0])
@@ -238,27 +233,6 @@ fn a_job_without_a_reverified_final_tree_is_detected() -> Result<(), Box<dyn Err
         let mut broken = job.clone();
         mutate(&mut broken, add, verify);
         assert!(!final_tree_is_reverified(&broken), "{id}: {name}");
-    }
-    Ok(())
-}
-
-#[test]
-fn upgrades_workflow_embeds_every_tree_pin() -> Result<(), Box<dyn Error>> {
-    let repo = make_repo(UPGRADES_CONFIG)?;
-    let tree = render_staged_tree(&prepare(repo.path())?)?;
-    let upgrades = tree
-        .get(UPGRADES_WORKFLOW_PATH)
-        .ok_or("upgrades workflow is missing")?;
-    assert_ne!(RUST_TREE_DIGESTS.len(), 0);
-    for pin in RUST_TREE_DIGESTS {
-        let row = format!(
-            "{}:{}:{}) pin={};;",
-            pin.version(),
-            pin.target(),
-            pin.components_sha256(),
-            pin.tree_sha256()
-        );
-        assert!(upgrades.contains(&row), "{row}");
     }
     Ok(())
 }

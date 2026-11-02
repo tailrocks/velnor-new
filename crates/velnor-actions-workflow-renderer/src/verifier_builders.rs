@@ -7,4 +7,4 @@ pub use crate::native_verifiers::{
     rust_verifier_shell_step, toolchain_script, verify_jactionlint_step, verify_restored_rust_step,
     verify_rust_argv, verify_rust_manifest_step, verify_rust_owned_argv,
 };
-pub use crate::native_verifiers_tree_digest::{RUST_TREE_DIGESTS, TreeDigestPin};
+pub use crate::native_verifiers_tree_digest::{RUST_TREE_DIGESTS, TreeCheck, TreeDigestPin};

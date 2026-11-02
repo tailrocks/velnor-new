@@ -10,6 +10,7 @@ export LC_ALL
 
 root=$(cd "$(dirname "$0")/.." && pwd)
 catalog="$root/crates/velnor-actions-mise/src/catalog_rust_manifests.rs"
+normal_form_source="$root/crates/velnor-actions-workflow-renderer/src/native_verifiers_tree_digest.rs"
 dist="https://static.rust-lang.org/dist"
 size_cap=4194304
 listing_out=""
@@ -61,15 +62,21 @@ components_sha() {
   sort "$1" | sha256_stdin
 }
 
-urls_sha() {
-  awk '/^$/ { next } /^\[\[?[A-Za-z0-9._"*+-]*\]\]?$/ { sec = ""; if ($0 ~ /^\[pkg\.[^]]*\.target\.[^]]*\]$/) sec = $0; next } /^[a-z0-9_-]+ = ("[^"]*"|true|false|\[[^]]*\])$/ { if (sec != "" && $1 ~ /(^|_)(url|hash)$/) print sec, $1, substr($0, index($0, " = ") + 3); next } { bad = 1 } END { exit bad }' "$1" > "$work/urls.raw" || die "unreadable manifest $1"
-  LC_ALL=C sort "$work/urls.raw" | sha256_stdin
+load_normal_form() {
+  definition=$(sed -n 's/^pub(crate) const NORMAL_FORM_FUNCTION: &str = r##"\(.*\)"##;$/\1/p' "$normal_form_source")
+  [ -n "$definition" ] || die "no NORMAL_FORM_FUNCTION in $normal_form_source"
+  eval "$definition"
+}
+
+manifest_sha() {
+  normal_form "$1" "$work/nf" || die "unreadable manifest $1"
+  sha256_stdin < "$work/nf"
 }
 
 canonical_listing() {
   tree=$1
   comp_sha=$2
-  urls_digest=$3
+  normal_digest=$3
   no_unsafe_names "$tree"
   (cd "$tree" && find . -type f) > "$work/files"
   (
@@ -79,7 +86,7 @@ canonical_listing() {
     done < "$work/files"
   ) > "$work/sums"
   (cd "$tree" && find . -exec ls -ldn {} +) > "$work/modes"
-  awk -v cs="$comp_sha" -v ms="$urls_digest" -v cap="$size_cap" '
+  awk -v cs="$comp_sha" -v ms="$normal_digest" -v cap="$size_cap" '
     function triple(r, w, x) {
       return (r == "r" ? 4 : 0) + (w == "w" ? 2 : 0) + (x == "x" || x == "s" || x == "t" ? 1 : 0)
     }
@@ -127,8 +134,8 @@ print_digests() {
 run_tree() {
   [ -f "$1/lib/rustlib/components" ] || die "$1/lib/rustlib/components is missing"
   comp_sha=$(components_sha "$1/lib/rustlib/components")
-  urls_digest=$(urls_sha "$1/lib/rustlib/multirust-channel-manifest.toml")
-  tree_sha=$(canonical_listing "$1" "$comp_sha" "$urls_digest")
+  normal_digest=$(manifest_sha "$1/lib/rustlib/multirust-channel-manifest.toml")
+  tree_sha=$(canonical_listing "$1" "$comp_sha" "$normal_digest")
   print_digests "$comp_sha" "$tree_sha"
 }
 
@@ -255,8 +262,8 @@ run_manifest() {
   write_bookkeeping "$stage"
   normalise_modes "$stage"
   comp_sha=$(components_sha "$work/components")
-  urls_digest=$(urls_sha "$work/channel.toml")
-  tree_sha=$(canonical_listing "$stage" "$comp_sha" "$urls_digest")
+  normal_digest=$(manifest_sha "$work/channel.toml")
+  tree_sha=$(canonical_listing "$stage" "$comp_sha" "$normal_digest")
   print_digests "$comp_sha" "$tree_sha"
   printf 'TreeDigestPin::new("%s", "%s", "%s", "%s"),\n' "$version" "$target" "$comp_sha" "$tree_sha"
 }
@@ -274,6 +281,7 @@ done
 
 trap cleanup EXIT
 work=$(mktemp -d)
+load_normal_form
 
 case "${1:-}" in
   --tree)

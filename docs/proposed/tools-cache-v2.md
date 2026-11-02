@@ -26,10 +26,11 @@ toolchain` runs right after the restore (before `Prepare pinned tools`, which al
 `rustc` on a hit): it deletes the restored `cargo/bin` (rustup and its proxies; Mise reinstalls a fresh
 rustup). It then compares the restored toolchain with a pinned installed-tree digest (type, path, mode and
 SHA-256 of every entry, derived from the component tarballs of its pinned channel manifest) before any
-network access. A match passes. A components set with no pin row prints `pin_mismatch: no_pin` and falls back
-to the file-by-file check against the channel manifest, which does not see modes or bookkeeping bytes. A
-components set with a pin row whose tree differs fails the job with `rust_tree_digest_mismatch`; it never falls
-back. The cache payload holds no memo of a passed check. See
+network access. The pin is selected by the job's Rust version and the rendered target, never by restored
+bytes. A match passes. If a pin row exists for that version and target, any difference (an unpinned components
+set, an extra or renamed `toolchains/` entry, a tree difference) fails the job with `rust_tree_digest_mismatch`;
+it never falls back. Only a version and target with no pin row prints `pin_mismatch: no_pin` and falls back to
+the file-by-file check against the channel manifest, which does not see modes or bookkeeping bytes. The cache payload holds no memo of a passed check. See
 [verified Rust installs](../implemented/rust-channel-manifest.md).
 
 ## Re-verification after restore

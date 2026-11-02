@@ -7,11 +7,11 @@ use std::process::Command;
 
 use crate::fixture::{
     CHANNEL_MANIFEST, Fixture, INSTALLER_VERSION, MANIFEST_CARGO, MANIFEST_RUSTC, MULTIRUST_CONFIG,
-    Outcome, VERSION,
+    Outcome, TARGET, VERSION,
 };
 use sha2::{Digest, Sha256};
 use velnor_actions_workflow_renderer::verifier_builders::{
-    ToolchainPhase, TreeDigestPin, toolchain_script,
+    ToolchainPhase, TreeCheck, TreeDigestPin, toolchain_script,
 };
 
 pub(crate) const COMPONENT: &str = "cargo-x86_64-unknown-linux-gnu";
@@ -28,25 +28,46 @@ pub(crate) fn sha256_hex(bytes: &[u8]) -> String {
         .concat()
 }
 
-fn packages(tarball_sha256: &str) -> String {
+const RENAMES: &str = "[renames.clippy]\nto = \"clippy-preview\"\n";
+const MINIMAL: &str = "minimal = [\"rustc\", \"cargo\", \"rust-std\"]\n";
+const DEFAULT: &str =
+    "default = [\"rustc\", \"cargo\", \"rust-std\", \"rustfmt-preview\", \"clippy-preview\"]\n";
+const COMPLETE: &str = "complete = [\"rustc\", \"cargo\", \"rust-std\", \"rustfmt-preview\", \"clippy-preview\", \"rust-src\"]\n";
+
+fn packages(
+    tarball_sha256: &str,
+    pkg_extra: &str,
+    target_extra: &str,
+    element_extra: &str,
+) -> String {
     format!(
-        "[pkg.cargo]\nversion = \"0.100.0\"\n\n[pkg.cargo.target.x86_64-unknown-linux-gnu]\navailable = true\nurl = \"{DIST}/2026-10-15/cargo-1.99.1-x86_64-unknown-linux-gnu.tar.gz\"\nhash = \"{h}\"\nxz_url = \"{TARBALL_URL}\"\nxz_hash = \"{tarball_sha256}\"\n",
+        "[pkg.cargo]\nversion = \"0.100.0\"\n{pkg_extra}\n[pkg.cargo.target.x86_64-unknown-linux-gnu]\navailable = true\nurl = \"{DIST}/2026-10-15/cargo-1.99.1-x86_64-unknown-linux-gnu.tar.gz\"\nhash = \"{h}\"\nxz_url = \"{TARBALL_URL}\"\nxz_hash = \"{tarball_sha256}\"\n{target_extra}\n[pkg.rust]\nversion = \"1.99.1\"\n{pkg_extra}\n[pkg.rust.target.x86_64-unknown-linux-gnu]\navailable = true\n\n[[pkg.rust.target.x86_64-unknown-linux-gnu.components]]\npkg = \"cargo\"\ntarget = \"x86_64-unknown-linux-gnu\"\n{element_extra}",
         h = "3".repeat(64)
     )
 }
 
 pub(crate) fn channel_manifest(tarball_sha256: &str) -> String {
     format!(
-        "manifest-version = \"2\"\ndate = \"2026-10-15\"\ngit_commit_hash = \"abc\"\n\n{}\n[[artifacts.source-code.target.\"*\"]]\nurl = \"{DIST}/2026-10-15/rustc-1.99.1-src.tar.gz\"\nhash-sha256 = \"{}\"\n",
-        packages(tarball_sha256),
+        "manifest-version = \"2\"\ndate = \"2026-10-15\"\n\n{}\n[[artifacts.source-code.target.\"*\"]]\nurl = \"{DIST}/2026-10-15/rustc-1.99.1-src.tar.gz\"\nhash-sha256 = \"{}\"\n\n{RENAMES}\n[profiles]\n{COMPLETE}{DEFAULT}{MINIMAL}",
+        packages(
+            tarball_sha256,
+            "git_commit_hash = \"58cf8f9c35b355199727627d07ae34a4e2846d67\"\n",
+            "",
+            ""
+        ),
         "4".repeat(64)
     )
 }
 
 pub(crate) fn rustup_bookkeeping(tarball_sha256: &str) -> String {
     format!(
-        "manifest-version = \"2\"\ndate = \"2026-10-15\"\n\n{}components = []\nextensions = []\n",
-        packages(tarball_sha256)
+        "manifest-version = \"2\"\ndate = \"2026-10-15\"\n\n{}\n{RENAMES}\n[profiles]\n{MINIMAL}{DEFAULT}{COMPLETE}",
+        packages(
+            tarball_sha256,
+            "",
+            "components = []\nextensions = []\n",
+            "is_extension = false\n"
+        )
     )
 }
 
@@ -112,7 +133,10 @@ impl Release {
             VERSION,
             phase,
             &[(VERSION, &self.channel_sha256, "2026-10-15")],
-            pins,
+            TreeCheck::Pinned {
+                target: TARGET,
+                pins,
+            },
         );
         let start = script.find("get() {").expect("get definition");
         let end = start + script[start..].find("; }").expect("get end") + 3;

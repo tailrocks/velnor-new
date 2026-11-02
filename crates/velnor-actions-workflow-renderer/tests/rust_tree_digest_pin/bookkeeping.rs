@@ -1,8 +1,26 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::fixture::{PHASES, fixture_pin};
+use velnor_actions_workflow_renderer::verifier_builders::TreeDigestPin;
+
+use crate::fixture::{
+    FIXTURE_COMPONENTS_SHA256, FIXTURE_TREE_SHA256, Fixture, MANIFEST_CARGO, MISMATCH, Mutation,
+    PHASES, VERSION, fixture_pin,
+};
 use crate::release::{Bookkeeping, Release, TARBALL_URL, fixture_with};
+
+fn evil_rename(release: &Release) -> String {
+    format!(
+        "{}\n[renames.rustc]\nto = \"rustfmt-preview\"\n",
+        release.installed()
+    )
+}
+
+fn evil_rename_target(release: &Release) -> String {
+    release
+        .installed()
+        .replace("to = \"clippy-preview\"", "to = \"rustfmt-preview\"")
+}
 
 #[test]
 fn b1_rustup_rewritten_manifest_of_the_verified_release_passes_the_full_path() {
@@ -13,7 +31,13 @@ fn b1_rustup_rewritten_manifest_of_the_verified_release_passes_the_full_path() {
             outcome.code == Some(0) && outcome.stdout.contains("verified file by file"),
             "{phase:?}: {outcome:?}"
         );
-        let decoy = release.run_pinned(&fx, phase, &[fixture_pin()]);
+        let other_target = TreeDigestPin::new(
+            VERSION,
+            "aarch64-unknown-linux-gnu",
+            FIXTURE_COMPONENTS_SHA256,
+            FIXTURE_TREE_SHA256,
+        );
+        let decoy = release.run_pinned(&fx, phase, &[other_target]);
         assert!(
             decoy.code == Some(0)
                 && decoy.stdout.contains("verified file by file")
@@ -55,7 +79,7 @@ fn b2_a_rewritten_bookkeeping_manifest_fails_the_full_path_by_name() {
             release.installed()
         )
     };
-    let cases: [(&str, Bookkeeping<'_>, &str); 5] = [
+    let cases: [(&str, Bookkeeping<'_>, &str); 7] = [
         ("other url", &evil_url, "rust_bookkeeping_manifest_mismatch"),
         (
             "other hash",
@@ -76,6 +100,16 @@ fn b2_a_rewritten_bookkeeping_manifest_fails_the_full_path_by_name() {
             "multi-line string",
             &evil_multiline,
             "rust_bookkeeping_manifest_unreadable",
+        ),
+        (
+            "added rename",
+            &evil_rename,
+            "rust_bookkeeping_manifest_mismatch",
+        ),
+        (
+            "changed rename target",
+            &evil_rename_target,
+            "rust_bookkeeping_manifest_mismatch",
         ),
     ];
     for (name, bookkeeping, code) in cases {
@@ -105,5 +139,66 @@ fn b3_a_missing_bookkeeping_manifest_fails_the_full_path() {
                     .contains("rust_bookkeeping_manifest_unreadable"),
             "{phase:?}: {outcome:?}"
         );
+    }
+}
+
+#[test]
+fn b4_a_pinned_target_never_falls_back_to_the_mode_blind_full_path() {
+    let tamper = |fx: &Fixture| {
+        fx.put(
+            MANIFEST_CARGO,
+            b"file:lib/x.so\nfile:../../../victim\n",
+            0o644,
+        );
+        fx.chmod("bin/rustc", 0o4777);
+    };
+    let unpinned_components = |_: &Fixture| ();
+    let extra_toolchain = |fx: &Fixture| fx.sibling("zz");
+    let rows: [(&str, Mutation<'_>); 2] = [
+        ("unpinned components", &unpinned_components),
+        ("extra toolchains entry", &extra_toolchain),
+    ];
+    for phase in PHASES {
+        let (control, release) = fixture_with(&Release::installed);
+        let accepted = release.run(&control, phase);
+        assert!(
+            accepted.code == Some(0) && accepted.stdout.contains("verified file by file"),
+            "control {phase:?}: {accepted:?}"
+        );
+        for (name, select) in rows {
+            let (fx, release) = fixture_with(&Release::installed);
+            tamper(&fx);
+            select(&fx);
+            let outcome = release.run_pinned(&fx, phase, &[fixture_pin()]);
+            assert!(
+                outcome.hard_failed(MISMATCH),
+                "{name} {phase:?}: {outcome:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn b5_the_full_path_hashes_files_below_a_manifest_named_directory() {
+    let rows = [
+        ("lib/rustlib/manifest-x", "lib/rustlib/manifest-x/payload"),
+        (
+            "lib/rustlib/manifest-x/deep",
+            "lib/rustlib/manifest-x/deep/payload",
+        ),
+    ];
+    for (dir, file) in rows {
+        for phase in PHASES {
+            let (fx, release) = fixture_with(&Release::installed);
+            fx.dir(dir, 0o755);
+            fx.put(file, b"evil\n", 0o644);
+            let outcome = release.run(&fx, phase);
+            assert!(
+                outcome.code != Some(0)
+                    && outcome.stderr.contains("rust_toolchain_bytes_mismatch")
+                    && !outcome.stdout.contains("verified file by file"),
+                "{file} {phase:?}: {outcome:?}"
+            );
+        }
     }
 }

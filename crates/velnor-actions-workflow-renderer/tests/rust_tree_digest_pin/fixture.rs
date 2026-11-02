@@ -10,7 +10,7 @@ use std::thread;
 use tempfile::TempDir;
 use velnor_actions_mise::catalog::RUST_CHANNEL_MANIFESTS;
 use velnor_actions_workflow_renderer::verifier_builders::{
-    ToolchainPhase, TreeDigestPin, toolchain_script,
+    ToolchainPhase, TreeCheck, TreeDigestPin, toolchain_script,
 };
 
 pub(crate) const VERSION: &str = "1.99.1";
@@ -21,7 +21,7 @@ pub(crate) const FIXTURE_COMPONENTS: &str =
 pub(crate) const FIXTURE_COMPONENTS_SHA256: &str =
     "adfc9d0f163c22aaf13170f015d8fc332bf8254fe1c1541fc1d0497e730621a2";
 pub(crate) const FIXTURE_TREE_SHA256: &str =
-    "5c7befbb525f104b00a35be16a59dfd960e07945c61654338943543eca45e5ac";
+    "13ea5dc3d0a456346c7aba5620922270667df38e73ac05484638dcef2c1265f9";
 
 pub(crate) const MANIFEST_CARGO: &str = "lib/rustlib/manifest-cargo-x86_64-unknown-linux-gnu";
 pub(crate) const MANIFEST_RUSTC: &str = "lib/rustlib/manifest-rustc-x86_64-unknown-linux-gnu";
@@ -31,7 +31,7 @@ pub(crate) const CHANNEL_MANIFEST: &str = "lib/rustlib/multirust-channel-manifes
 pub(crate) const MISMATCH: &str = "rust_tree_digest_mismatch";
 pub(crate) const CAP: usize = 4_194_304;
 
-pub(crate) const FIXTURE_BOOKKEEPING: &str = "manifest-version = \"2\"\ndate = \"2026-10-15\"\n\n[pkg.cargo.target.x86_64-unknown-linux-gnu]\navailable = true\nurl = \"https://static.rust-lang.org/dist/2026-10-15/cargo-1.99.1-x86_64-unknown-linux-gnu.tar.gz\"\nhash = \"1111111111111111111111111111111111111111111111111111111111111111\"\nxz_url = \"https://static.rust-lang.org/dist/2026-10-15/cargo-1.99.1-x86_64-unknown-linux-gnu.tar.xz\"\nxz_hash = \"2222222222222222222222222222222222222222222222222222222222222222\"\ncomponents = []\nextensions = []\n";
+pub(crate) const FIXTURE_BOOKKEEPING: &str = "manifest-version = \"2\"\ndate = \"2026-10-15\"\n\n[pkg.cargo.target.x86_64-unknown-linux-gnu]\navailable = true\nurl = \"https://static.rust-lang.org/dist/2026-10-15/cargo-1.99.1-x86_64-unknown-linux-gnu.tar.gz\"\nhash = \"1111111111111111111111111111111111111111111111111111111111111111\"\nxz_url = \"https://static.rust-lang.org/dist/2026-10-15/cargo-1.99.1-x86_64-unknown-linux-gnu.tar.xz\"\nxz_hash = \"2222222222222222222222222222222222222222222222222222222222222222\"\ncomponents = []\nextensions = []\n\n[renames.clippy]\nto = \"clippy-preview\"\n\n[profiles]\nminimal = [\"rustc\", \"cargo\", \"rust-std\"]\ndefault = [\"rustc\", \"cargo\", \"rust-std\", \"rustfmt-preview\", \"clippy-preview\"]\ncomplete = [\"rustc\", \"cargo\", \"rust-std\", \"rustfmt-preview\", \"clippy-preview\", \"rust-src\"]\n";
 
 pub(crate) const PHASES: [ToolchainPhase; 2] =
     [ToolchainPhase::Restored, ToolchainPhase::Installed];
@@ -197,6 +197,10 @@ impl Fixture {
         fs::create_dir_all(&path).expect("sibling dir");
     }
 
+    pub(crate) fn rename_root(&self, name: &str) {
+        fs::rename(self.root(), self.toolchains().join(name)).expect("rename root");
+    }
+
     pub(crate) fn symlink_root(&self) {
         let real = self.home.path().join("real");
         fs::rename(self.root(), &real).expect("move root");
@@ -259,7 +263,15 @@ pub(crate) fn fixture_pin() -> TreeDigestPin {
 }
 
 pub(crate) fn script(phase: ToolchainPhase, pins: &[TreeDigestPin]) -> String {
-    toolchain_script(VERSION, phase, RUST_CHANNEL_MANIFESTS, pins)
+    toolchain_script(
+        VERSION,
+        phase,
+        RUST_CHANNEL_MANIFESTS,
+        TreeCheck::Pinned {
+            target: TARGET,
+            pins,
+        },
+    )
 }
 
 pub(crate) fn run_rows(rows: &[Row<'_>], accepts: &(dyn Fn(&Outcome) -> bool + Sync)) {

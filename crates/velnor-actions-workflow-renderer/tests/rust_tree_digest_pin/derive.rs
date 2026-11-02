@@ -130,6 +130,13 @@ impl Bundle {
             root.join("scripts/derive-rust-tree-digest"),
         )
         .expect("copy script");
+        let renderer = root.join("crates/velnor-actions-workflow-renderer/src");
+        fs::create_dir_all(&renderer).expect("renderer dir");
+        fs::copy(
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("src/native_verifiers_tree_digest.rs"),
+            renderer.join("native_verifiers_tree_digest.rs"),
+        )
+        .expect("copy normal form source");
         fs::create_dir_all(root.join("shim")).expect("shim dir");
         let curl = root.join("shim/curl");
         fs::write(&curl, SHIM).expect("curl shim");
