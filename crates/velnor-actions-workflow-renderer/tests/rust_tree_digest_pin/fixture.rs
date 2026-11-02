@@ -1,14 +1,22 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+#![cfg_attr(
+    not(target_os = "linux"),
+    expect(
+        dead_code,
+        reason = "the pinned-listing helpers serve Linux-only tests"
+    )
+)]
+
 use std::fs;
-use std::os::unix::fs::{PermissionsExt, symlink};
+use std::os::unix::fs::{MetadataExt, PermissionsExt, symlink};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::thread;
 
+use sha2::{Digest, Sha256};
 use tempfile::TempDir;
-use velnor_actions_mise::catalog::RUST_CHANNEL_MANIFESTS;
 use velnor_actions_workflow_renderer::verifier_builders::{
     ToolchainPhase, TreeCheck, TreeDigestPin, toolchain_script,
 };
@@ -21,7 +29,7 @@ pub(crate) const FIXTURE_COMPONENTS: &str =
 pub(crate) const FIXTURE_COMPONENTS_SHA256: &str =
     "adfc9d0f163c22aaf13170f015d8fc332bf8254fe1c1541fc1d0497e730621a2";
 pub(crate) const FIXTURE_TREE_SHA256: &str =
-    "13ea5dc3d0a456346c7aba5620922270667df38e73ac05484638dcef2c1265f9";
+    "4f96956fc551ac385a0abe0f989d2c70a6103aa64d4d802ed70e346040dc28de";
 
 pub(crate) const MANIFEST_CARGO: &str = "lib/rustlib/manifest-cargo-x86_64-unknown-linux-gnu";
 pub(crate) const MANIFEST_RUSTC: &str = "lib/rustlib/manifest-rustc-x86_64-unknown-linux-gnu";
@@ -31,70 +39,33 @@ pub(crate) const CHANNEL_MANIFEST: &str = "lib/rustlib/multirust-channel-manifes
 pub(crate) const MISMATCH: &str = "rust_tree_digest_mismatch";
 pub(crate) const CAP: usize = 4_194_304;
 
-pub(crate) const FIXTURE_BOOKKEEPING: &str = "manifest-version = \"2\"\ndate = \"2026-10-15\"\n\n[pkg.cargo.target.x86_64-unknown-linux-gnu]\navailable = true\nurl = \"https://static.rust-lang.org/dist/2026-10-15/cargo-1.99.1-x86_64-unknown-linux-gnu.tar.gz\"\nhash = \"1111111111111111111111111111111111111111111111111111111111111111\"\nxz_url = \"https://static.rust-lang.org/dist/2026-10-15/cargo-1.99.1-x86_64-unknown-linux-gnu.tar.xz\"\nxz_hash = \"2222222222222222222222222222222222222222222222222222222222222222\"\ncomponents = []\nextensions = []\n\n[renames.clippy]\nto = \"clippy-preview\"\n\n[profiles]\nminimal = [\"rustc\", \"cargo\", \"rust-std\"]\ndefault = [\"rustc\", \"cargo\", \"rust-std\", \"rustfmt-preview\", \"clippy-preview\"]\ncomplete = [\"rustc\", \"cargo\", \"rust-std\", \"rustfmt-preview\", \"clippy-preview\", \"rust-src\"]\n";
+pub(crate) const FIXTURE_CHANNEL: &str = "manifest-version = \"2\"\ndate = \"2026-10-15\"\n\n[pkg.cargo.target.x86_64-unknown-linux-gnu]\navailable = true\nurl = \"https://static.rust-lang.org/dist/2026-10-15/cargo-1.99.1-x86_64-unknown-linux-gnu.tar.gz\"\nhash = \"1111111111111111111111111111111111111111111111111111111111111111\"\nxz_url = \"https://static.rust-lang.org/dist/2026-10-15/cargo-1.99.1-x86_64-unknown-linux-gnu.tar.xz\"\nxz_hash = \"2222222222222222222222222222222222222222222222222222222222222222\"\ncomponents = []\nextensions = []\n\n[renames.clippy]\nto = \"clippy-preview\"\n\n[profiles]\nminimal = [\"rustc\", \"cargo\", \"rust-std\"]\ndefault = [\"rustc\", \"cargo\", \"rust-std\", \"rustfmt-preview\", \"clippy-preview\"]\ncomplete = [\"rustc\", \"cargo\", \"rust-std\", \"rustfmt-preview\", \"clippy-preview\", \"rust-src\"]\n";
+
+pub(crate) use crate::outcome::{Node, Outcome};
 
 pub(crate) const PHASES: [ToolchainPhase; 2] =
     [ToolchainPhase::Restored, ToolchainPhase::Installed];
 
-pub(crate) const HELPERS: [&str; 5] = ["sha256sum", "shasum", "find", "sort", "curl"];
+pub(crate) const HELPERS: [&str; 7] = ["sha256sum", "shasum", "find", "sort", "curl", "env", "awk"];
 
-const PROXY: &str = "http://127.0.0.1:9";
+pub(crate) const CHANNEL_URL: &str = "https://static.rust-lang.org/dist/channel-rust-1.99.1.toml";
+pub(crate) const TARBALL_URL: &str =
+    "https://static.rust-lang.org/dist/2026-10-15/cargo-1.99.1-x86_64-unknown-linux-gnu.tar.xz";
 
-#[derive(Debug)]
-pub(crate) struct Outcome {
-    pub(crate) code: Option<i32>,
-    pub(crate) stdout: String,
-    pub(crate) stderr: String,
+const SERVER: &str = "get() { printf '%s\\n' \"$2\" >> \"$VELNOR_TEST_REQUESTS\"; case \"$2\" in https://static.rust-lang.org/dist/channel-rust-1.99.1.toml) cp \"$VELNOR_TEST_CHANNEL\" \"$1\";; https://static.rust-lang.org/dist/2026-10-15/cargo-1.99.1-x86_64-unknown-linux-gnu.tar.xz) cp \"$VELNOR_TEST_TARBALL\" \"$1\";; *) exit 22;; esac; }";
+
+pub(crate) fn sha256_hex(bytes: &[u8]) -> String {
+    Sha256::digest(bytes)
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect::<Vec<_>>()
+        .concat()
 }
 
-impl Outcome {
-    pub(crate) fn combined(&self) -> String {
-        format!("{}\n{}", self.stdout, self.stderr)
-    }
-
-    pub(crate) fn is_pinned(&self) -> bool {
-        self.code == Some(0)
-            && self.stdout.contains("matches pinned")
-            && !self.stderr.contains("curl: (")
-    }
-
-    pub(crate) fn is_not_pinned(&self) -> bool {
-        self.code != Some(0) && !self.combined().contains("matches pinned")
-    }
-
-    pub(crate) fn fell_through(&self) -> bool {
-        self.is_not_pinned()
-            && self.combined().contains("pin_mismatch")
-            && self.stderr.contains("curl: (7)")
-    }
-
-    pub(crate) fn hard_failed(&self, code: &str) -> bool {
-        let combined = self.combined();
-        self.code.is_some_and(|status| status != 0)
-            && self.stderr.contains(code)
-            && !combined.contains("matches pinned")
-            && !combined.contains("verified file by file")
-            && !combined.contains("curl: (")
-    }
-
-    pub(crate) fn no_pin(&self) -> bool {
-        self.fell_through()
-            && self
-                .stdout
-                .contains("::notice::pin_mismatch: no_pin components=")
-    }
-
-    pub(crate) fn assert_pinned(&self) {
-        assert!(self.is_pinned(), "{self:?}");
-    }
-
-    pub(crate) fn assert_fell_through(&self) {
-        assert!(self.fell_through(), "{self:?}");
-    }
-
-    pub(crate) fn assert_hard_failed(&self, code: &str) {
-        assert!(self.hard_failed(code), "{self:?}");
-    }
+pub(crate) fn serve(script: &str) -> String {
+    let start = script.find("get() {").expect("get definition");
+    let end = start + script[start..].find("; }").expect("get end") + 3;
+    format!("{}{SERVER}{}", &script[..start], &script[end..])
 }
 
 #[derive(Debug)]
@@ -107,6 +78,8 @@ impl Fixture {
         let fixture = Self {
             home: tempfile::tempdir().expect("tempdir"),
         };
+        fs::create_dir_all(fixture.served()).expect("served dir");
+        fixture.serve_channel(FIXTURE_CHANNEL.as_bytes());
         fixture.dir("", 0o755);
         fixture.dir("bin", 0o755);
         fixture.put("bin/rustc", b"rustc\n", 0o755);
@@ -129,7 +102,7 @@ impl Fixture {
             b"config_version = \"1\"\n\n[[components]]\npkg = \"cargo\"\ntarget = \"x86_64-unknown-linux-gnu\"\nis_extension = false\n",
             0o644,
         );
-        fixture.put(CHANNEL_MANIFEST, FIXTURE_BOOKKEEPING.as_bytes(), 0o644);
+        fixture.put(CHANNEL_MANIFEST, FIXTURE_CHANNEL.as_bytes(), 0o644);
         fixture.dir("share", 0o755);
         fixture.put("share/.dot", b"dot\n", 0o644);
         fixture
@@ -153,6 +126,47 @@ impl Fixture {
 
     pub(crate) fn marker(&self) -> PathBuf {
         self.home.path().join("marker")
+    }
+
+    pub(crate) fn runner_temp(&self) -> PathBuf {
+        self.home.path().join("runner")
+    }
+
+    pub(crate) fn verified_dir(&self) -> PathBuf {
+        self.runner_temp().join("velnor/rust-verified")
+    }
+
+    fn served(&self) -> PathBuf {
+        self.home.path().join("served")
+    }
+
+    pub(crate) fn serve_channel(&self, bytes: &[u8]) {
+        fs::write(self.served().join("channel.toml"), bytes).expect("serve channel");
+    }
+
+    pub(crate) fn serve_tarball(&self, tarball: &Path) {
+        fs::copy(tarball, self.served().join("tarball.tar.xz")).expect("serve tarball");
+    }
+
+    pub(crate) fn requests(&self) -> Vec<String> {
+        fs::read_to_string(self.home.path().join("requests"))
+            .map(|log| log.lines().map(str::to_owned).collect())
+            .unwrap_or_default()
+    }
+
+    pub(crate) fn read(&self, rel: &str) -> Vec<u8> {
+        fs::read(self.at(rel)).expect("read tree file")
+    }
+
+    pub(crate) fn mode(&self, rel: &str) -> u32 {
+        fs::metadata(self.at(rel)).expect("stat").mode() & 0o7777
+    }
+
+    pub(crate) fn snapshot(&self) -> Vec<Node> {
+        let mut nodes = Vec::new();
+        crate::outcome::collect(&self.root(), &self.root(), &mut nodes);
+        nodes.sort_by(|a, b| a.path().cmp(b.path()));
+        nodes
     }
 
     fn at(&self, rel: &str) -> PathBuf {
@@ -221,21 +235,19 @@ impl Fixture {
         path_dir: &Path,
         extra: &[(&str, &str)],
     ) -> Outcome {
-        let runner_temp = self.home.path().join("runner");
         let output = Command::new("/bin/sh")
             .arg("-c")
-            .arg(script)
+            .arg(serve(script))
             .env_clear()
             .env("PATH", path_dir)
             .env("HOME", self.home.path())
-            .env("RUNNER_TEMP", &runner_temp)
+            .env("RUNNER_TEMP", self.runner_temp())
             .env("RUSTUP_HOME", self.rustup_home())
             .env("CARGO_HOME", self.home.path().join("cargo"))
             .env("VELNOR_TEST_MARKER", self.marker())
-            .env("HTTPS_PROXY", PROXY)
-            .env("https_proxy", PROXY)
-            .env("ALL_PROXY", PROXY)
-            .env("all_proxy", PROXY)
+            .env("VELNOR_TEST_REQUESTS", self.home.path().join("requests"))
+            .env("VELNOR_TEST_CHANNEL", self.served().join("channel.toml"))
+            .env("VELNOR_TEST_TARBALL", self.served().join("tarball.tar.xz"))
             .envs(extra.iter().copied())
             .output()
             .expect("spawn sh");
@@ -243,6 +255,7 @@ impl Fixture {
             code: output.status.code(),
             stdout: String::from_utf8_lossy(&output.stdout).into_owned(),
             stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
+            requests: self.requests(),
         }
     }
 }
@@ -273,10 +286,14 @@ pub(crate) fn fixture_pin() -> TreeDigestPin {
 }
 
 pub(crate) fn script(phase: ToolchainPhase, pins: &[TreeDigestPin]) -> String {
+    script_with(FIXTURE_CHANNEL.as_bytes(), phase, pins)
+}
+
+pub(crate) fn script_with(channel: &[u8], phase: ToolchainPhase, pins: &[TreeDigestPin]) -> String {
     toolchain_script(
         VERSION,
         phase,
-        RUST_CHANNEL_MANIFESTS,
+        &[(VERSION, &sha256_hex(channel), "2026-10-15")],
         TreeCheck::Pinned {
             target: TARGET,
             pins,
@@ -305,14 +322,3 @@ pub(crate) fn run_rows(rows: &[Row<'_>], accepts: &(dyn Fn(&Outcome) -> bool + S
     });
     assert!(failures.is_empty(), "{failures:#?}");
 }
-
-pub(crate) const MALFORMED_HEADERS: [&str; 8] = [
-    "[[artifacts..foo]]",
-    "[[artifacts.]]",
-    "[[.artifacts]]",
-    "[[artifacts. foo]]",
-    "[[artifacts.foo+bar]]",
-    "[[artifacts.target.*]]",
-    "[[artifacts.\"foo]]",
-    "[pkg..cargo]",
-];

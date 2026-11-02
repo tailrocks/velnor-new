@@ -3,6 +3,8 @@
 
 use std::collections::BTreeSet;
 
+use crate::native_verifiers::ToolchainPhase;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TreeCheck<'a> {
     Pinned {
@@ -25,13 +27,13 @@ pub const RUST_TREE_DIGESTS: &[TreeDigestPin] = &[
         "1.99.1",
         "x86_64-unknown-linux-gnu",
         "e3808a4c78c316b41a42ed88010c6bbf24ae24a348a5a22b8e3bc62328db1981",
-        "c3428f142cda85a7e4c6fe2b5bc1ed7a13ec0bc1dde16e2b30500e5f6b0e39ac",
+        "f9eeeb78948257bc3c861d018ecf4d22f16e38fbc8ba4a97c1126a1a1c45bb25",
     ),
     TreeDigestPin::new(
         "1.99.1",
         "x86_64-unknown-linux-gnu",
         "a13769c18a7a74ea492ab633b644d6c238ae81e536d30d3f168eddb57e86000e",
-        "7bc3bc5c95e33eee9017f1554f29024662a678dc0db6c9d241f5338a5506625b",
+        "56452430d3faa33fd43083ef5dc0d3fb5da905f35515e6f174e46ecd3a607dea",
     ),
 ];
 
@@ -93,24 +95,32 @@ impl TreeDigestPin {
     }
 }
 
-pub(crate) const NORMAL_FORM_FUNCTION: &str = r##"normal_form() { awk '/^$/ { next } /^(\[\[([A-Za-z0-9_-]+|"[A-Za-z0-9._*-]+")(\.([A-Za-z0-9_-]+|"[A-Za-z0-9._*-]+"))*\]\]|\[([A-Za-z0-9_-]+|"[A-Za-z0-9._*-]+")(\.([A-Za-z0-9_-]+|"[A-Za-z0-9._*-]+"))*\])$/ { n[$0]++; sec = $0 "#" n[$0]; skip = ($0 ~ /^\[\[artifacts\./); if (!skip) print sec; next } /^[a-z0-9_-]+ = ("[^"]*"|true|false|\[[^]]*\])$/ { val = substr($0, index($0, " = ") + 3); if (skip || ($1 == "git_commit_hash" && sec ~ /^\[pkg\.[^].]*\]#/) || (($1 == "components" || $1 == "extensions") && val == "[]" && sec ~ /^\[pkg\.[^]]*\.target\.[^]]*\]#/) || ($1 == "is_extension" && (val == "true" || val == "false") && sec ~ /^\[\[pkg\.[^]]*\.(components|extensions)\]\]#/)) next; print sec, $0; next } { bad = 1 } END { exit bad }' "$1" > "$2.raw" && LC_ALL=C sort "$2.raw" > "$2"; }"##;
-
 const FOREIGN_TARGET: &str = "aarch64-unknown-linux-gnu";
 
 const NOTICE: &str = r#"pm() { printf "%s\n" "::notice::pin_mismatch: $1"; }"#;
 
-const COMPONENTS_HASH: &str = r#"sort "$t/lib/rustlib/components" | $h > "$d/pin.cs"; read -r cs rest < "$d/pin.cs" || cs=unreadable"#;
+const COMPONENTS_HASH: &str = r#"ev sort "$t/lib/rustlib/components" | $h > "$d/pin.cs"; read -r cs rest < "$d/pin.cs" || cs=unreadable"#;
 
 const NO_PIN: &str = r#"[ "$pinned" = 1 ] || { pm "no_pin components=$cs"; return 1; }"#;
 
-const BOOKKEEPING: &str = r#"normal_form "$t/lib/rustlib/multirust-channel-manifest.toml" "$d/pin.nf" || { pm bookkeeping_manifest_unreadable; return 2; }; $h < "$d/pin.nf" > "$d/pin.ms"; read -r ms rest < "$d/pin.ms" || { pm bookkeeping_manifest_unreadable; return 2; }"#;
+const SCAN: &str = r#"(cd "$t" && ev find . -name "*[!A-Za-z0-9._+-]*") > "$d/pin.unsafe" || { pm tree_unreadable; return 2; }; [ ! -s "$d/pin.unsafe" ] || { pm unsafe_name; return 2; }; (cd "$t" && ev find . -type f -exec $hb {} +) > "$d/pin.sums" || { pm tree_unreadable; return 2; }; (cd "$t" && ev find . -printf "%y %#m %s %p\n") > "$d/pin.modes" || { pm tree_unreadable; return 2; }"#;
 
-const SCAN: &str = r#"(cd "$t" && find . -name "*[!A-Za-z0-9._+-]*") > "$d/pin.unsafe" || { pm tree_unreadable; return 2; }; [ ! -s "$d/pin.unsafe" ] || { pm unsafe_name; return 2; }; (cd "$t" && find . -type f -exec $h {} +) > "$d/pin.sums" || { pm tree_unreadable; return 2; }; (cd "$t" && find . -exec ls -ldn {} +) > "$d/pin.modes" || { pm tree_unreadable; return 2; }"#;
-const LISTING_AWK: &str = r#"awk -v cs="$cs" -v ms="$ms" -v cap=4194304 'function bits(r, w, x, v) { v = 0; if (r == "r") v += 4; if (w == "w") v += 2; if (x == "x" || x == "s" || x == "t") v += 1; return v } function sp(x, a) { return (x == "s" || x == "S" || x == "t" || x == "T") ? a : 0 } NR == FNR { dg[$2] = $1; next } { m = $1; k = substr(m, 1, 1); p = $NF; if (k != "-" && k != "d") exit 2; mode = sprintf("%d%d%d%d", sp(substr(m, 4, 1), 4) + sp(substr(m, 7, 1), 2) + sp(substr(m, 10, 1), 1), bits(substr(m, 2, 1), substr(m, 3, 1), substr(m, 4, 1)), bits(substr(m, 5, 1), substr(m, 6, 1), substr(m, 7, 1)), bits(substr(m, 8, 1), substr(m, 9, 1), substr(m, 10, 1))); r = (p == ".") ? "." : substr(p, 3); if (k == "d") { print "d", mode, "-", r; next } if (r == "lib/rustlib/multirust-config.toml") { if ($5 + 0 > cap + 0) exit 3; print "b", mode, "-", r; next } if (r == "lib/rustlib/multirust-channel-manifest.toml") { if ($5 + 0 > cap + 0) exit 3; print "f", mode, ms, r; next } if (r == "lib/rustlib/components") { print "f", mode, cs, r; next } if (!(p in dg)) exit 4; print "f", mode, dg[p], r }' "$d/pin.sums" "$d/pin.modes" > "$d/pin.list" || { pm listing_failed; return 2; }"#;
+const LISTING_AWK: &str = r#"ev awk -v cs="$cs" -v cap=4194304 'NR == FNR { dg[$2] = $1; next } { k = $1; mode = $2; p = $4; if (k != "f" && k != "d") exit 2; r = (p == ".") ? "." : substr(p, 3); if (k == "d") { print "d", mode, "-", r; next } if (r == "lib/rustlib/multirust-config.toml") { if ($3 + 0 > cap + 0) exit 3; print "b", mode, "-", r; next } if (r == "lib/rustlib/components") { print "f", mode, cs, r; next } if (!(p in dg)) exit 4; print "f", mode, dg[p], r }' "$d/pin.sums" "$d/pin.modes" > "$d/pin.list" || { pm listing_failed; return 2; }"#;
 
-const COMPARE: &str = r#"sort -k4,4 "$d/pin.list" | tr "\n" "\000" | $h > "$d/pin.got"; read -r got rest < "$d/pin.got" || { pm tree_unreadable; return 2; }; [ "$got" = "$pin" ] || { pm tree_differs; return 2; }"#;
+const COMPARE: &str = r#"ev sort -k4,4 "$d/pin.list" | ev tr "\n" "\000" | $h > "$d/pin.got"; read -r got rest < "$d/pin.got" || { pm tree_unreadable; return 2; }; [ "$got" = "$pin" ] || { pm tree_differs; return 2; }"#;
 
-const DISPATCH: &str = r#"rc=0; pin_check || rc=$?; case "$rc" in 0) printf "%s\n" "velnor: Rust $v toolchain matches pinned tree digest"; exit 0;; 1) ;; *) fail "rust_tree_digest_mismatch: $t differs from the pinned tree digest of Rust $v; the pin_mismatch notice above names the check that failed" ;; esac"#;
+const STASH_VERIFIED_MANIFEST: &str = r#"put "$m" "$r/channel-rust-$v.toml" || :; "#;
+
+fn dispatch(phase: ToolchainPhase) -> String {
+    let stash = if phase == ToolchainPhase::Restored {
+        STASH_VERIFIED_MANIFEST
+    } else {
+        ""
+    };
+    format!(
+        r#"rc=0; pin_check || rc=$?; case "$rc" in 0) {stash}printf "%s\n" "velnor: Rust $v toolchain matches pinned tree digest"; exit 0;; 1) ;; *) fail "rust_tree_digest_mismatch: $t differs from the pinned tree digest of Rust $v; the pin_mismatch notice above names the check that failed" ;; esac"#
+    )
+}
 
 fn rows<'a>(target: &'a str, pins: &'a [TreeDigestPin]) -> impl Iterator<Item = &'a TreeDigestPin> {
     pins.iter()
@@ -147,7 +157,7 @@ pub(crate) fn pin_scope_statements(check: TreeCheck<'_>) -> Vec<String> {
     ]
 }
 
-pub(crate) fn pin_check_statements(check: TreeCheck<'_>) -> Vec<String> {
+pub(crate) fn pin_check_statements(check: TreeCheck<'_>, phase: ToolchainPhase) -> Vec<String> {
     let TreeCheck::Pinned { target, pins } = check else {
         return Vec::new();
     };
@@ -157,16 +167,6 @@ pub(crate) fn pin_check_statements(check: TreeCheck<'_>) -> Vec<String> {
     let select = format!(
         "pin=\"\"; case \"$v:$cs\" in {rows}*) ;; esac; [ -n \"$pin\" ] || {{ pm \"components_not_pinned components=$cs\"; return 2; }}"
     );
-    let body = [
-        "LC_ALL=C; export LC_ALL; unset BLOCK_SIZE LS_BLOCK_SIZE",
-        COMPONENTS_HASH,
-        NO_PIN,
-        &select,
-        BOOKKEEPING,
-        SCAN,
-        LISTING_AWK,
-        COMPARE,
-    ]
-    .join("; ");
-    vec![format!("pin_check() ( {body} )"), DISPATCH.to_owned()]
+    let body = [COMPONENTS_HASH, NO_PIN, &select, SCAN, LISTING_AWK, COMPARE].join("; ");
+    vec![format!("pin_check() ( {body} )"), dispatch(phase)]
 }

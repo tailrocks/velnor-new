@@ -4,10 +4,10 @@
 use velnor_actions_workflow_renderer::verifier_builders::TreeDigestPin;
 
 use crate::fixture::{
-    FIXTURE_COMPONENTS_SHA256, FIXTURE_TREE_SHA256, Fixture, MANIFEST_CARGO, MISMATCH, Mutation,
-    PHASES, VERSION, fixture_pin,
+    CHANNEL_MANIFEST, FIXTURE_COMPONENTS_SHA256, FIXTURE_TREE_SHA256, Fixture, MANIFEST_CARGO,
+    MISMATCH, Mutation, PHASES, TARBALL_URL, VERSION, fixture_pin,
 };
-use crate::release::{Bookkeeping, Release, TARBALL_URL, fixture_with};
+use crate::release::{Bookkeeping, Release, fixture_with};
 
 fn evil_rename(release: &Release) -> String {
     format!(
@@ -16,14 +16,13 @@ fn evil_rename(release: &Release) -> String {
     )
 }
 
-fn evil_rename_target(release: &Release) -> String {
-    release
-        .installed()
-        .replace("to = \"clippy-preview\"", "to = \"rustfmt-preview\"")
+fn assert_bound(fx: &Fixture, release: &Release) {
+    assert_eq!(fx.read(CHANNEL_MANIFEST), release.channel());
+    assert_eq!(fx.mode(CHANNEL_MANIFEST), 0o644);
 }
 
 #[test]
-fn b1_rustup_rewritten_manifest_of_the_verified_release_passes_the_full_path() {
+fn b1_rustup_rewritten_manifest_of_the_verified_release_passes_and_is_bound() {
     for phase in PHASES {
         let (fx, release) = fixture_with(&Release::installed);
         let outcome = release.run(&fx, phase);
@@ -31,6 +30,7 @@ fn b1_rustup_rewritten_manifest_of_the_verified_release_passes_the_full_path() {
             outcome.code == Some(0) && outcome.stdout.contains("verified file by file"),
             "{phase:?}: {outcome:?}"
         );
+        assert_bound(&fx, &release);
         let other_target = TreeDigestPin::new(
             VERSION,
             "aarch64-unknown-linux-gnu",
@@ -60,6 +60,7 @@ fn b6_a_file_by_file_script_verifies_the_release_without_any_pin() {
                 && !outcome.combined().contains(MISMATCH),
             "{phase:?}: {outcome:?}"
         );
+        assert_bound(&fx, &release);
         fx.put("lib/x.so", b"sO\n", 0o644);
         let flipped = release.run_file_by_file(&fx, phase);
         assert!(
@@ -72,7 +73,7 @@ fn b6_a_file_by_file_script_verifies_the_release_without_any_pin() {
 }
 
 #[test]
-fn b2_a_rewritten_bookkeeping_manifest_fails_the_full_path_by_name() {
+fn b2_any_installed_manifest_is_replaced_by_the_verified_channel_in_the_fallback() {
     let evil_url = |release: &Release| {
         release
             .installed()
@@ -102,66 +103,42 @@ fn b2_a_rewritten_bookkeeping_manifest_fails_the_full_path_by_name() {
             release.installed()
         )
     };
-    let cases: [(&str, Bookkeeping<'_>, &str); 7] = [
-        ("other url", &evil_url, "rust_bookkeeping_manifest_mismatch"),
-        (
-            "other hash",
-            &evil_hash,
-            "rust_bookkeeping_manifest_mismatch",
-        ),
-        (
-            "added package",
-            &evil_extra_package,
-            "rust_bookkeeping_manifest_mismatch",
-        ),
-        (
-            "unspaced assignment",
-            &evil_unspaced,
-            "rust_bookkeeping_manifest_unreadable",
-        ),
-        (
-            "multi-line string",
-            &evil_multiline,
-            "rust_bookkeeping_manifest_unreadable",
-        ),
-        (
-            "added rename",
-            &evil_rename,
-            "rust_bookkeeping_manifest_mismatch",
-        ),
-        (
-            "changed rename target",
-            &evil_rename_target,
-            "rust_bookkeeping_manifest_mismatch",
-        ),
+    let garbage = |_: &Release| "\u{0}\u{1}[[[ = = \"\"\"\n\u{7f}".to_owned();
+    let empty = |_: &Release| String::new();
+    let cases: [(&str, Bookkeeping<'_>); 8] = [
+        ("other url", &evil_url),
+        ("other hash", &evil_hash),
+        ("added package", &evil_extra_package),
+        ("unspaced assignment", &evil_unspaced),
+        ("multi-line string", &evil_multiline),
+        ("added rename", &evil_rename),
+        ("binary garbage", &garbage),
+        ("empty", &empty),
     ];
-    for (name, bookkeeping, code) in cases {
+    for (name, bookkeeping) in cases {
         for phase in PHASES {
             let (fx, release) = fixture_with(bookkeeping);
             let outcome = release.run(&fx, phase);
             assert!(
-                outcome.is_not_pinned()
-                    && outcome.stderr.contains(code)
-                    && !outcome.stdout.contains("verified file by file"),
+                outcome.code == Some(0) && outcome.stdout.contains("verified file by file"),
                 "{name} {phase:?}: {outcome:?}"
             );
+            assert_bound(&fx, &release);
         }
     }
 }
 
 #[test]
-fn b3_a_missing_bookkeeping_manifest_fails_the_full_path() {
+fn b3_a_missing_manifest_is_recreated_by_the_fallback() {
     for phase in PHASES {
         let (fx, release) = fixture_with(&Release::installed);
-        fx.remove("lib/rustlib/multirust-channel-manifest.toml");
+        fx.remove(CHANNEL_MANIFEST);
         let outcome = release.run(&fx, phase);
         assert!(
-            outcome.is_not_pinned()
-                && outcome
-                    .stderr
-                    .contains("rust_bookkeeping_manifest_unreadable"),
+            outcome.code == Some(0) && outcome.stdout.contains("verified file by file"),
             "{phase:?}: {outcome:?}"
         );
+        assert_bound(&fx, &release);
     }
 }
 
@@ -248,6 +225,23 @@ fn b7_a_lone_arm_toolchain_is_verified_file_by_file_not_hard_failed_by_the_x86_p
                 && flipped.stderr.contains("rust_toolchain_bytes_mismatch")
                 && !flipped.stdout.contains("verified file by file"),
             "{phase:?}: {flipped:?}"
+        );
+    }
+}
+
+#[test]
+#[cfg(target_os = "linux")]
+fn g2_the_fallback_ignores_tar_and_xz_environment_options() {
+    let poison = [
+        ("XZ_DEFAULTS", "--memlimit=1B"),
+        ("TAR_OPTIONS", "--exclude=*"),
+    ];
+    for phase in PHASES {
+        let (fx, release) = fixture_with(&Release::installed);
+        let outcome = release.run_file_by_file_with_env(&fx, phase, &poison);
+        assert!(
+            outcome.code == Some(0) && outcome.stdout.contains("verified file by file"),
+            "{phase:?}: {outcome:?}"
         );
     }
 }

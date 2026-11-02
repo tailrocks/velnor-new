@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+#![cfg(target_os = "linux")]
+
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
@@ -10,19 +12,17 @@ use tempfile::TempDir;
 use velnor_actions_workflow_renderer::verifier_builders::{ToolchainPhase, TreeDigestPin};
 
 use crate::fixture::{
-    CHANNEL_MANIFEST, Fixture, INSTALLER_VERSION, MANIFEST_CARGO, MANIFEST_RUSTC, MISMATCH,
-    MULTIRUST_CONFIG, Outcome, TARGET, VERSION, script,
+    CHANNEL_MANIFEST, CHANNEL_URL, Fixture, INSTALLER_VERSION, MANIFEST_CARGO, MANIFEST_RUSTC,
+    MISMATCH, MULTIRUST_CONFIG, Outcome, TARBALL_URL, TARGET, VERSION, script_with, sha256_hex,
 };
-use crate::release::{
-    CHANNEL_URL, COMPONENT, TARBALL_URL, channel_manifest, rustup_bookkeeping, sha256_hex,
-};
+use crate::release::{COMPONENT, channel_manifest, rustup_bookkeeping};
 
 type Tweak<'a> = &'a dyn Fn(&Path);
 
 const STD_LIB: &str = "lib/rustlib/x86_64-unknown-linux-gnu/lib/libstd.rlib";
 const SELF_CONTAINED: &str = "lib/rustlib/x86_64-unknown-linux-gnu/lib/self-contained";
 const MANIFEST_IN: &str = "manifest.in";
-const SHIM: &str = "#!/bin/sh\nwhile [ \"$#\" -gt 1 ]; do\n  if [ \"$1\" = --output ]; then out=$2; fi\n  shift\ndone\ncase \"$1\" in\n  \"$VELNOR_TEST_CHANNEL_URL\") cp \"$VELNOR_TEST_CHANNEL\" \"$out\" ;;\n  \"$VELNOR_TEST_TARBALL_URL\") cp \"$VELNOR_TEST_TARBALL\" \"$out\" ;;\n  *) exit 22 ;;\nesac\n";
+const SHIM: &str = "#!/bin/sh\nwhile [ \"$#\" -gt 1 ]; do\n  if [ \"$1\" = --output ]; then out=$2; fi\n  shift\ndone\ncase \"$1\" in\n  CHANNEL_URL) cp CHANNEL_FILE \"$out\" ;;\n  TARBALL_URL) cp TARBALL_FILE \"$out\" ;;\n  *) exit 22 ;;\nesac\n";
 
 fn rustup_tree() -> Fixture {
     let fx = Fixture::with_components(&format!("{COMPONENT}\n"));
@@ -77,6 +77,7 @@ fn pack_sub(fx: &Fixture, sub: &Path, tweak: Tweak<'_>) {
 struct Bundle {
     work: TempDir,
     installed: Fixture,
+    channel: String,
 }
 
 impl Bundle {
@@ -105,14 +106,28 @@ impl Bundle {
         let tarball_sha256 = sha256_hex(&fs::read(&tarball).expect("read tarball"));
         let channel = channel_manifest(&tarball_sha256);
         fs::write(work.path().join("channel.toml"), &channel).expect("channel");
-        installed.put(
-            CHANNEL_MANIFEST,
-            rustup_bookkeeping(&tarball_sha256).as_bytes(),
-            0o644,
-        );
-        let bundle = Self { work, installed };
-        bundle.install_tool(&sha256_hex(channel.as_bytes()));
+        installed.put(CHANNEL_MANIFEST, channel.as_bytes(), 0o644);
+        installed.serve_channel(channel.as_bytes());
+        let bundle = Self {
+            work,
+            installed,
+            channel,
+        };
+        bundle.install_tool(&sha256_hex(bundle.channel.as_bytes()));
         bundle
+    }
+
+    fn script(&self, phase: ToolchainPhase, pin: TreeDigestPin) -> String {
+        script_with(self.channel.as_bytes(), phase, &[pin])
+    }
+
+    fn pin(derived: &Outcome) -> TreeDigestPin {
+        TreeDigestPin::new(
+            VERSION,
+            TARGET,
+            printed(derived, "components_sha256"),
+            printed(derived, "tree_sha256"),
+        )
     }
 
     fn install_tool(&self, channel_sha256: &str) {
@@ -126,37 +141,41 @@ impl Bundle {
         .expect("catalog");
         fs::create_dir_all(root.join("scripts")).expect("scripts dir");
         fs::copy(
-            crate::derive_tool(),
+            crate::pinned::derive_tool(),
             root.join("scripts/derive-rust-tree-digest"),
         )
         .expect("copy script");
-        let renderer = root.join("crates/velnor-actions-workflow-renderer/src");
-        fs::create_dir_all(&renderer).expect("renderer dir");
-        fs::copy(
-            Path::new(env!("CARGO_MANIFEST_DIR")).join("src/native_verifiers_tree_digest.rs"),
-            renderer.join("native_verifiers_tree_digest.rs"),
-        )
-        .expect("copy normal form source");
         fs::create_dir_all(root.join("shim")).expect("shim dir");
         let curl = root.join("shim/curl");
-        fs::write(&curl, SHIM).expect("curl shim");
+        let shim = SHIM
+            .replace("CHANNEL_URL", CHANNEL_URL)
+            .replace(
+                "CHANNEL_FILE",
+                &root.join("channel.toml").display().to_string(),
+            )
+            .replace("TARBALL_URL", TARBALL_URL)
+            .replace(
+                "TARBALL_FILE",
+                &root.join("cargo.tar.xz").display().to_string(),
+            );
+        fs::write(&curl, shim).expect("curl shim");
         fs::set_permissions(&curl, fs::Permissions::from_mode(0o755)).expect("chmod shim");
     }
 
     fn derive(&self) -> Outcome {
+        self.derive_with_env(&[])
+    }
+
+    fn derive_with_env(&self, extra: &[(&str, &str)]) -> Outcome {
         let root = self.work.path();
         let output = Command::new(root.join("scripts/derive-rust-tree-digest"))
             .args(["--from-manifest", VERSION, TARGET, COMPONENT])
             .env_clear()
+            .envs(extra.iter().copied())
             .env(
                 "PATH",
                 format!("{}:/usr/bin:/bin", root.join("shim").display()),
             )
-            .env("TMPDIR", root)
-            .env("VELNOR_TEST_CHANNEL_URL", CHANNEL_URL)
-            .env("VELNOR_TEST_CHANNEL", root.join("channel.toml"))
-            .env("VELNOR_TEST_TARBALL_URL", TARBALL_URL)
-            .env("VELNOR_TEST_TARBALL", root.join("cargo.tar.xz"))
             .output()
             .expect("run derive tool");
         outcome(&output)
@@ -168,6 +187,7 @@ pub(crate) fn outcome(output: &Output) -> Outcome {
         code: output.status.code(),
         stdout: String::from_utf8_lossy(&output.stdout).into_owned(),
         stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
+        requests: Vec::new(),
     }
 }
 
@@ -187,20 +207,63 @@ fn append(path: &Path, text: &str) {
 }
 
 #[test]
-fn p4_derived_digests_are_accepted_by_the_verifier_over_an_undeclared_empty_dir() {
+fn p4_derived_digests_are_accepted_by_the_verifier_in_both_phases() {
     let bundle = Bundle::new(&|_| {});
     let derived = bundle.derive();
     assert_eq!(derived.code, Some(0), "{derived:?}");
-    let pin = TreeDigestPin::new(
-        VERSION,
-        TARGET,
-        printed(&derived, "components_sha256"),
-        printed(&derived, "tree_sha256"),
+    let pin = Bundle::pin(&derived);
+    bundle
+        .installed
+        .run(&bundle.script(ToolchainPhase::Restored, pin))
+        .assert_offline_pinned();
+    bundle.installed.put(
+        CHANNEL_MANIFEST,
+        rustup_bookkeeping(&"5".repeat(64)).as_bytes(),
+        0o644,
     );
     bundle
         .installed
-        .run(&script(ToolchainPhase::Installed, &[pin]))
-        .assert_pinned();
+        .run(&bundle.script(ToolchainPhase::Installed, pin))
+        .assert_offline_pinned();
+}
+
+#[test]
+fn d2_derive_prints_the_listing_and_ignores_the_caller_environment() {
+    let bundle = Bundle::new(&|_| {});
+    let clean = bundle.derive();
+    assert_eq!(clean.code, Some(0), "{clean:?}");
+    let manifest_line = format!(
+        "listing f 0644 {} lib/rustlib/multirust-channel-manifest.toml\n",
+        sha256_hex(bundle.channel.as_bytes())
+    );
+    assert!(clean.stdout.contains(&manifest_line), "{clean:?}");
+    assert!(clean.stdout.contains("TreeDigestPin::new("), "{clean:?}");
+    for env in [
+        ("QUOTING_STYLE", "c"),
+        ("BLOCK_SIZE", "1M"),
+        ("LC_ALL", "en_US.UTF-8"),
+        ("XZ_DEFAULTS", "--memlimit=1B"),
+        ("TAR_OPTIONS", "--exclude=*"),
+        ("POSIXLY_CORRECT", "1"),
+    ] {
+        let poisoned = bundle.derive_with_env(&[env]);
+        assert_eq!(poisoned.stdout, clean.stdout, "{env:?}: {poisoned:?}");
+    }
+    let fx = Fixture::standard();
+    let output = Command::new(crate::pinned::derive_tool())
+        .arg("--tree")
+        .arg(fx.root())
+        .env("QUOTING_STYLE", "c")
+        .output()
+        .expect("run derive tool");
+    let tree = outcome(&output);
+    assert!(
+        tree.stdout.contains(&format!(
+            "listing f 0644 {} lib/rustlib/multirust-channel-manifest.toml\n",
+            sha256_hex(crate::fixture::FIXTURE_CHANNEL.as_bytes())
+        )),
+        "{tree:?}"
+    );
 }
 
 #[test]
@@ -250,25 +313,20 @@ fn p5_the_derived_pin_binds_the_bookkeeping_bytes_it_reproduces() {
     let bundle = Bundle::new(&|_| {});
     let derived = bundle.derive();
     assert_eq!(derived.code, Some(0), "{derived:?}");
-    let pin = TreeDigestPin::new(
-        VERSION,
-        TARGET,
-        printed(&derived, "components_sha256"),
-        printed(&derived, "tree_sha256"),
-    );
+    let pin = Bundle::pin(&derived);
     let run = || {
         bundle
             .installed
-            .run(&script(ToolchainPhase::Installed, &[pin]))
+            .run(&bundle.script(ToolchainPhase::Restored, pin))
     };
-    run().assert_pinned();
-    for path in [MANIFEST_CARGO, INSTALLER_VERSION] {
-        let original = fs::read(bundle.installed.root().join(path)).expect("read bookkeeping");
+    run().assert_offline_pinned();
+    for path in [MANIFEST_CARGO, INSTALLER_VERSION, CHANNEL_MANIFEST] {
+        let original = bundle.installed.read(path);
         let mut changed = original.clone();
         changed[0] ^= 1;
         bundle.installed.put(path, &changed, 0o644);
         run().assert_hard_failed(MISMATCH);
         bundle.installed.put(path, &original, 0o644);
-        run().assert_pinned();
+        run().assert_offline_pinned();
     }
 }

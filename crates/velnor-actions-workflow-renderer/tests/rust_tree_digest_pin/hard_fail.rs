@@ -1,43 +1,18 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_actions_workflow_renderer::verifier_builders::{ToolchainPhase, TreeDigestPin};
+#![cfg(target_os = "linux")]
 
 use std::path::Path;
 
+use velnor_actions_workflow_renderer::verifier_builders::ToolchainPhase;
+
 use crate::fixture::{
-    CAP, CHANNEL_MANIFEST, FIXTURE_BOOKKEEPING, FIXTURE_COMPONENTS, FIXTURE_COMPONENTS_SHA256,
-    Fixture, INSTALLER_VERSION, MALFORMED_HEADERS, MANIFEST_CARGO, MANIFEST_RUSTC, MISMATCH,
-    MULTIRUST_CONFIG, Outcome, PHASES, Row, TARGET, VERSION, fixture_pin, row, run_rows, script,
+    CAP, FIXTURE_COMPONENTS, Fixture, INSTALLER_VERSION, MANIFEST_CARGO, MANIFEST_RUSTC, MISMATCH,
+    MULTIRUST_CONFIG, Outcome, PHASES, Row, fixture_pin, row, run_rows, script,
 };
 
 const COMPONENTS: &str = "lib/rustlib/components";
-
-const LISTING_GUARD: &str = "listing guard";
-const UNSAFE_NAME_CHECK: &str = "unsafe-name check";
-
-const UNSAFE_NAMES: [(&str, &str, &str); 4] = [
-    (
-        "a b",
-        LISTING_GUARD,
-        "e103c304a93bba11dbfe7cb9608f3b6039ce28ff807aa4ed29759435ad07c3ef",
-    ),
-    (
-        "a$b",
-        UNSAFE_NAME_CHECK,
-        "8d9288872dbb19602babe083849419080568ca0c7516a7cea114e997240084d0",
-    ),
-    (
-        "a*b",
-        UNSAFE_NAME_CHECK,
-        "7d1b42cab88c8754aa08a8ccc1d6c7459fb2ac3de95933667cbd211942fbd6e0",
-    ),
-    (
-        "a\nb",
-        LISTING_GUARD,
-        "0515b57e2fa3843d16787185cfbc0149d5f2c00872c93ef3d64c40b3835ef3a0",
-    ),
-];
 
 fn hard_failed(outcome: &Outcome) -> bool {
     outcome.hard_failed(MISMATCH)
@@ -66,20 +41,6 @@ fn n1a_any_entry_mutation_under_the_matching_pin_fails_the_job() {
 #[test]
 fn n1b_any_bookkeeping_mutation_under_the_matching_pin_fails_the_job() {
     let rows = [
-        row("poisoned bookkeeping manifest", &|fx| {
-            let evil = FIXTURE_BOOKKEEPING.replace(
-                "cargo-1.99.1-x86_64-unknown-linux-gnu.tar.xz",
-                "evil.tar.xz",
-            );
-            fx.put(CHANNEL_MANIFEST, evil.as_bytes(), 0o644);
-        }),
-        row("unspaced bookkeeping assignment", &|fx| {
-            let evil = format!("{FIXTURE_BOOKKEEPING}xz_url=\"https://attacker.example/x\"\n");
-            fx.put(CHANNEL_MANIFEST, evil.as_bytes(), 0o644);
-        }),
-        row("missing bookkeeping manifest", &|fx| {
-            fx.remove(CHANNEL_MANIFEST);
-        }),
         row("cargo manifest bytes changed", &|fx| {
             fx.put(MANIFEST_CARGO, b"file:lib/x.sO\nfile:share/.dot\n", 0o644);
         }),
@@ -98,28 +59,6 @@ fn n1b_any_bookkeeping_mutation_under_the_matching_pin_fails_the_job() {
         }),
         row("multirust config over the cap", &|fx| {
             fx.put(MULTIRUST_CONFIG, &vec![b'x'; CAP + 1], 0o644);
-        }),
-        row("rename appended to the channel manifest", &|fx| {
-            let evil =
-                format!("{FIXTURE_BOOKKEEPING}\n[renames.rustc]\nto = \"rustfmt-preview\"\n");
-            fx.put(CHANNEL_MANIFEST, evil.as_bytes(), 0o644);
-        }),
-        row("rename target changed in the channel manifest", &|fx| {
-            let evil =
-                FIXTURE_BOOKKEEPING.replace("to = \"clippy-preview\"", "to = \"rustfmt-preview\"");
-            fx.put(CHANNEL_MANIFEST, evil.as_bytes(), 0o644);
-        }),
-        row("unknown key in a package target table", &|fx| {
-            let evil = FIXTURE_BOOKKEEPING.replacen(
-                "available = true\n",
-                "available = true\nsource = \"https://attacker.example/\"\n",
-                1,
-            );
-            fx.put(CHANNEL_MANIFEST, evil.as_bytes(), 0o644);
-        }),
-        row("unknown table appended to the channel manifest", &|fx| {
-            let evil = format!("{FIXTURE_BOOKKEEPING}\n[mirrors]\n");
-            fx.put(CHANNEL_MANIFEST, evil.as_bytes(), 0o644);
         }),
     ];
     run_rows(&rows, &hard_failed);
@@ -150,61 +89,38 @@ fn n1c_a_changed_selection_input_under_the_matching_pin_fails_the_job() {
 
 #[test]
 fn n2_unsafe_path_characters_fail_the_job_under_a_pinned_components_set() {
-    let mutations = UNSAFE_NAMES.map(|(name, _, _)| {
+    let names = ["a b", "a$b", "a*b", "a\nb"];
+    let mutations = names.map(|name| {
         move |fx: &Fixture| {
             fx.put(&format!("lib/{name}"), b"x", 0o644);
         }
     });
-    let rows = UNSAFE_NAMES
+    let rows = names
         .iter()
         .zip(&mutations)
-        .map(|((name, guard, literal), mutate)| Row {
-            name: format!("{name:?} ({guard})"),
+        .map(|(name, mutate)| Row {
+            name: format!("{name:?}"),
             mutate,
-            pin: TreeDigestPin::new(VERSION, TARGET, FIXTURE_COMPONENTS_SHA256, literal),
+            pin: fixture_pin(),
         })
         .collect::<Vec<_>>();
-    run_rows(&rows, &hard_failed);
+    let accepts =
+        |outcome: &Outcome| hard_failed(outcome) && outcome.stdout.contains("unsafe_name");
+    run_rows(&rows, &accepts);
 }
 
-const ARTIFACTS_BODY: &str = "url = \"https://attacker.example/x\"\n";
+const POISON: [(&str, &str); 7] = [
+    ("QUOTING_STYLE", "c"),
+    ("QUOTING_STYLE", "locale"),
+    ("BLOCK_SIZE", "1M"),
+    ("LS_BLOCK_SIZE", "1M"),
+    ("TIME_STYLE", "long-iso"),
+    ("POSIXLY_CORRECT", "1"),
+    ("LC_ALL", "en_US.UTF-8"),
+];
 
-#[test]
-fn n1d_a_malformed_section_header_is_unreadable_while_a_well_formed_artifacts_header_is_skipped() {
-    let well_formed = format!("{FIXTURE_BOOKKEEPING}\n[[artifacts.foo]]\n{ARTIFACTS_BODY}");
-    let malformed = format!("{FIXTURE_BOOKKEEPING}\n[[artifacts.foo]\n{ARTIFACTS_BODY}");
-    for phase in PHASES {
-        let accepted = Fixture::standard();
-        accepted.put(CHANNEL_MANIFEST, well_formed.as_bytes(), 0o644);
-        let outcome = accepted.run(&script(phase, &[fixture_pin()]));
-        assert!(outcome.is_pinned(), "well-formed {phase:?}: {outcome:?}");
-        let rejected = Fixture::standard();
-        rejected.put(CHANNEL_MANIFEST, malformed.as_bytes(), 0o644);
-        let outcome = rejected.run(&script(phase, &[fixture_pin()]));
-        assert!(
-            hard_failed(&outcome) && outcome.stdout.contains("bookkeeping_manifest_unreadable"),
-            "malformed {phase:?}: {outcome:?}"
-        );
-    }
-}
-
-#[test]
-fn n1e_a_section_header_outside_the_dotted_key_grammar_is_unreadable_in_both_phases() {
-    let mut failures = Vec::new();
-    for header in MALFORMED_HEADERS {
-        let manifest = format!("{FIXTURE_BOOKKEEPING}\n{header}\n{ARTIFACTS_BODY}");
-        for phase in PHASES {
-            let fx = Fixture::standard();
-            fx.put(CHANNEL_MANIFEST, manifest.as_bytes(), 0o644);
-            let outcome = fx.run(&script(phase, &[fixture_pin()]));
-            if !(hard_failed(&outcome)
-                && outcome.stdout.contains("bookkeeping_manifest_unreadable"))
-            {
-                failures.push(format!("{header} {phase:?}: {outcome:?}"));
-            }
-        }
-    }
-    assert!(failures.is_empty(), "{failures:#?}");
+fn run_env(fx: &Fixture, phase: ToolchainPhase, env: &[(&str, &str)]) -> Outcome {
+    fx.run_with_env(&script(phase, &[fixture_pin()]), Path::new("/usr/bin"), env)
 }
 
 fn config_with(bytes: usize) -> Fixture {
@@ -213,28 +129,30 @@ fn config_with(bytes: usize) -> Fixture {
     fx
 }
 
-fn run_env(fx: &Fixture, phase: ToolchainPhase, env: (&str, &str)) -> Outcome {
-    fx.run_with_env(
-        &script(phase, &[fixture_pin()]),
-        Path::new("/usr/bin"),
-        &[env],
-    )
-}
-
 #[test]
-fn n10_the_size_cap_holds_under_gnu_block_size_variables() {
-    for env in [("BLOCK_SIZE", "1M"), ("LS_BLOCK_SIZE", "1M")] {
-        for phase in PHASES {
-            let over = run_env(&config_with(CAP + 1), phase, env);
+fn g1_the_verdict_does_not_depend_on_the_caller_environment() {
+    let baseline = PHASES.map(|phase| {
+        let outcome = run_env(&Fixture::standard(), phase, &[]);
+        outcome.assert_pinned();
+        outcome.stdout
+    });
+    for env in POISON {
+        let fx = Fixture::standard();
+        for (phase, expected) in PHASES.into_iter().zip(&baseline) {
+            let outcome = run_env(&fx, phase, &[env]);
             assert!(
-                hard_failed(&over) && over.stdout.contains("listing_failed"),
-                "{env:?} {phase:?} over the cap: {over:?}"
-            );
-            let at_cap = run_env(&config_with(CAP), phase, env);
-            assert!(
-                at_cap.is_pinned(),
-                "{env:?} {phase:?} at the cap: {at_cap:?}"
+                outcome.is_pinned() && &outcome.stdout == expected,
+                "{env:?} {phase:?}: {outcome:?}"
             );
         }
+    }
+    for phase in PHASES {
+        let at_cap = run_env(&config_with(CAP), phase, &[("BLOCK_SIZE", "1M")]);
+        assert!(at_cap.is_pinned(), "{phase:?} at the cap: {at_cap:?}");
+        let over = run_env(&config_with(CAP + 1), phase, &[("BLOCK_SIZE", "1M")]);
+        assert!(
+            hard_failed(&over) && over.stdout.contains("listing_failed"),
+            "{phase:?} over the cap: {over:?}"
+        );
     }
 }

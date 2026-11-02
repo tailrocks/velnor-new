@@ -5,16 +5,24 @@
 
 set -eu
 
-LC_ALL=C
-export LC_ALL
-unset BLOCK_SIZE LS_BLOCK_SIZE
+if [ -z "${VELNOR_DERIVE_CLEAN-}" ]; then
+  exec /usr/bin/env -i VELNOR_DERIVE_CLEAN=1 LC_ALL=C \
+    ${PATH+PATH="$PATH"} ${HOME+HOME="$HOME"} ${RUNNER_TEMP+RUNNER_TEMP="$RUNNER_TEMP"} \
+    ${RUSTUP_HOME+RUSTUP_HOME="$RUSTUP_HOME"} ${MISE_RUSTUP_HOME+MISE_RUSTUP_HOME="$MISE_RUSTUP_HOME"} \
+    ${CARGO_HOME+CARGO_HOME="$CARGO_HOME"} ${VELNOR_TOOL_RUST+VELNOR_TOOL_RUST="$VELNOR_TOOL_RUST"} \
+    ${HTTPS_PROXY+HTTPS_PROXY="$HTTPS_PROXY"} ${https_proxy+https_proxy="$https_proxy"} \
+    ${HTTP_PROXY+HTTP_PROXY="$HTTP_PROXY"} ${http_proxy+http_proxy="$http_proxy"} \
+    ${NO_PROXY+NO_PROXY="$NO_PROXY"} ${no_proxy+no_proxy="$no_proxy"} \
+    ${ALL_PROXY+ALL_PROXY="$ALL_PROXY"} ${all_proxy+all_proxy="$all_proxy"} \
+    ${SSL_CERT_FILE+SSL_CERT_FILE="$SSL_CERT_FILE"} ${SSL_CERT_DIR+SSL_CERT_DIR="$SSL_CERT_DIR"} \
+    ${CURL_CA_BUNDLE+CURL_CA_BUNDLE="$CURL_CA_BUNDLE"} \
+    /bin/sh "$0" "$@"
+fi
 
 root=$(cd "$(dirname "$0")/.." && pwd)
 catalog="$root/crates/velnor-actions-mise/src/catalog_rust_manifests.rs"
-normal_form_source="$root/crates/velnor-actions-workflow-renderer/src/native_verifiers_tree_digest.rs"
 dist="https://static.rust-lang.org/dist"
 size_cap=4194304
-listing_out=""
 work=""
 
 die() {
@@ -23,8 +31,8 @@ die() {
 }
 
 usage() {
-  printf '%s\n' "usage: derive-rust-tree-digest [--listing FILE] --tree DIR" >&2
-  printf '%s\n' "       derive-rust-tree-digest [--listing FILE] --from-manifest VERSION TARGET COMPONENT[,COMPONENT...]" >&2
+  printf '%s\n' "usage: derive-rust-tree-digest --tree DIR" >&2
+  printf '%s\n' "       derive-rust-tree-digest --from-manifest VERSION TARGET COMPONENT[,COMPONENT...]" >&2
   exit 2
 }
 
@@ -49,7 +57,7 @@ sha256_stdin() {
 }
 
 get() {
-  curl --proto '=https' --proto-redir '=https' --tlsv1.2 --fail --silent --show-error --location --retry 3 --retry-all-errors --connect-timeout 20 --max-time 600 --output "$1" "$2"
+  curl -q --proto '=https' --proto-redir '=https' --tlsv1.2 --fail --silent --show-error --location --retry 3 --retry-all-errors --connect-timeout 20 --max-time 600 --output "$1" "$2"
 }
 
 no_unsafe_names() {
@@ -63,21 +71,9 @@ components_sha() {
   sort "$1" | sha256_stdin
 }
 
-load_normal_form() {
-  definition=$(sed -n 's/^pub(crate) const NORMAL_FORM_FUNCTION: &str = r##"\(.*\)"##;$/\1/p' "$normal_form_source")
-  [ -n "$definition" ] || die "no NORMAL_FORM_FUNCTION in $normal_form_source"
-  eval "$definition"
-}
-
-manifest_sha() {
-  normal_form "$1" "$work/nf" || die "unreadable manifest $1"
-  sha256_stdin < "$work/nf"
-}
-
 canonical_listing() {
   tree=$1
   comp_sha=$2
-  normal_digest=$3
   no_unsafe_names "$tree"
   (cd "$tree" && find . -type f) > "$work/files"
   (
@@ -86,44 +82,28 @@ canonical_listing() {
       printf '%s  %s\n' "$(sha256_file "$f")" "$f"
     done < "$work/files"
   ) > "$work/sums"
-  (cd "$tree" && find . -exec ls -ldn {} +) > "$work/modes"
-  awk -v cs="$comp_sha" -v ms="$normal_digest" -v cap="$size_cap" '
-    function triple(r, w, x) {
-      return (r == "r" ? 4 : 0) + (w == "w" ? 2 : 0) + (x == "x" || x == "s" || x == "t" ? 1 : 0)
-    }
-    function flag(x, s, t) {
-      return (x == s || x == t) ? 1 : 0
-    }
+  (cd "$tree" && find . -printf '%y %#m %s %p\n') > "$work/modes" || die "cannot list $tree with find -printf; GNU find is required"
+  awk -v cs="$comp_sha" -v cap="$size_cap" '
     NR == FNR { digest[$2] = $1; next }
     {
-      m = $1
-      kind = substr(m, 1, 1)
-      path = $NF
-      if (kind != "-" && kind != "d") exit 2
-      special = 4 * flag(substr(m, 4, 1), "s", "S") + 2 * flag(substr(m, 7, 1), "s", "S") + flag(substr(m, 10, 1), "t", "T")
-      mode = sprintf("%d%d%d%d", special, triple(substr(m, 2, 1), substr(m, 3, 1), substr(m, 4, 1)), triple(substr(m, 5, 1), substr(m, 6, 1), substr(m, 7, 1)), triple(substr(m, 8, 1), substr(m, 9, 1), substr(m, 10, 1)))
+      kind = $1
+      mode = $2
+      path = $4
+      if (kind != "f" && kind != "d") exit 2
       rel = (path == ".") ? "." : substr(path, 3)
       if (kind == "d") { print "d", mode, "-", rel; next }
       if (rel == "lib/rustlib/multirust-config.toml") {
-        if ($5 + 0 > cap + 0) exit 3
+        if ($3 + 0 > cap + 0) exit 3
         print "b", mode, "-", rel
-        next
-      }
-      if (rel == "lib/rustlib/multirust-channel-manifest.toml") {
-        if ($5 + 0 > cap + 0) exit 3
-        print "f", mode, ms, rel
         next
       }
       if (rel == "lib/rustlib/components") { print "f", mode, cs, rel; next }
       if (!(path in digest)) exit 4
       print "f", mode, digest[path], rel
     }
-  ' "$work/sums" "$work/modes" > "$work/listing.raw" || die "listing failed for $tree: an entry has an unsupported type, a bookkeeping file is over $size_cap bytes, or a file has no digest"
+  ' "$work/sums" "$work/modes" > "$work/listing.raw" || die "listing failed for $tree: an entry has an unsupported type, multirust-config.toml is over $size_cap bytes, or a file has no digest"
   sort -k4,4 "$work/listing.raw" > "$work/listing"
   [ -s "$work/listing" ] || die "empty listing for $tree"
-  if [ -n "$listing_out" ]; then
-    cp "$work/listing" "$listing_out"
-  fi
   tr '\n' '\000' < "$work/listing" | sha256_stdin
 }
 
@@ -132,24 +112,16 @@ print_digests() {
   printf 'tree_sha256=%s\n' "$2"
 }
 
-refuse_listing_inside() {
-  [ -n "$listing_out" ] || return 0
-  [ ! -d "$listing_out" ] || die "listing $listing_out is a directory"
-  [ ! -L "$listing_out" ] || die "listing $listing_out is a symlink"
-  tree_real=$(cd "$1" && pwd -P) || die "cannot resolve $1"
-  listing_real=$(cd "$(dirname "$listing_out")" && pwd -P) || die "cannot resolve the directory of $listing_out"
-  case "$listing_real/" in
-    "$tree_real"/*) die "listing $listing_out is inside the tree $1" ;;
-  esac
+print_listing() {
+  sed 's/^/listing /' "$work/listing"
 }
 
 run_tree() {
   [ -f "$1/lib/rustlib/components" ] || die "$1/lib/rustlib/components is missing"
-  refuse_listing_inside "$1"
   comp_sha=$(components_sha "$1/lib/rustlib/components")
-  normal_digest=$(manifest_sha "$1/lib/rustlib/multirust-channel-manifest.toml")
-  tree_sha=$(canonical_listing "$1" "$comp_sha" "$normal_digest")
+  tree_sha=$(canonical_listing "$1" "$comp_sha")
   print_digests "$comp_sha" "$tree_sha"
+  print_listing
 }
 
 manifest_digest() {
@@ -241,7 +213,7 @@ normalise_modes() {
 write_bookkeeping() {
   stage=$1
   mkdir -p "$stage/lib/rustlib"
-  : > "$stage/lib/rustlib/multirust-channel-manifest.toml"
+  cp "$work/channel.toml" "$stage/lib/rustlib/multirust-channel-manifest.toml"
   : > "$stage/lib/rustlib/multirust-config.toml"
   printf 3 > "$stage/lib/rustlib/rust-installer-version"
   cp "$work/components" "$stage/lib/rustlib/components"
@@ -275,26 +247,14 @@ run_manifest() {
   write_bookkeeping "$stage"
   normalise_modes "$stage"
   comp_sha=$(components_sha "$work/components")
-  normal_digest=$(manifest_sha "$work/channel.toml")
-  tree_sha=$(canonical_listing "$stage" "$comp_sha" "$normal_digest")
+  tree_sha=$(canonical_listing "$stage" "$comp_sha")
   print_digests "$comp_sha" "$tree_sha"
   printf 'TreeDigestPin::new("%s", "%s", "%s", "%s"),\n' "$version" "$target" "$comp_sha" "$tree_sha"
+  print_listing
 }
-
-while [ "$#" -gt 0 ]; do
-  case "$1" in
-    --listing)
-      [ "$#" -ge 2 ] || usage
-      listing_out=$2
-      shift 2
-      ;;
-    *) break ;;
-  esac
-done
 
 trap cleanup EXIT
 work=$(mktemp -d)
-load_normal_form
 
 case "${1:-}" in
   --tree)
