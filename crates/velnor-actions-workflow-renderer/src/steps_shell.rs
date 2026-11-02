@@ -37,20 +37,6 @@ pub fn jactionlint_verifier_step(
     Ok(step)
 }
 
-pub(crate) fn composite_shell_step(
-    name: &str,
-    argv: Vec<String>,
-    env: BTreeMap<String, String>,
-) -> Result<Step, RenderError> {
-    shell_step_with_env_validation(
-        name,
-        argv,
-        env,
-        commands::validate_composite_env,
-        commands::validate_command_argv,
-    )
-}
-
 pub(crate) fn action_owned_mbx_shell_step(
     name: &str,
     argv: Vec<String>,

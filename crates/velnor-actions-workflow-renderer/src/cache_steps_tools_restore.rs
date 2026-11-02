@@ -128,7 +128,7 @@ fn admission_step(env: Vec<(String, Yaml)>) -> Yaml {
             "name".to_owned(),
             Yaml::str("Keep only an exact cache hit or validated seed on a miss"),
         ),
-        ("shell".to_owned(), Yaml::str(crate::VERIFY_SHELL)),
+        ("shell".to_owned(), Yaml::str(crate::VERIFY_VERIFIER_SHELL)),
         ("env".to_owned(), Yaml::Map(env)),
         ("run".to_owned(), Yaml::str(TOOLS_CACHE_ADMISSION_SCRIPT)),
     ])
@@ -188,7 +188,7 @@ fn installs_verify_step(tool_pins: &[String]) -> Result<Yaml, RenderError> {
     Ok(Yaml::Map(vec![
         ("name".to_owned(), Yaml::str(INSTALLS_VERIFY_NAME)),
         ("id".to_owned(), Yaml::str("verify")),
-        ("shell".to_owned(), Yaml::str(crate::VERIFY_SHELL)),
+        ("shell".to_owned(), Yaml::str(crate::VERIFY_VERIFIER_SHELL)),
         (
             "env".to_owned(),
             Yaml::Map(vec![(

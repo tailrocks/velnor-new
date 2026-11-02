@@ -9,7 +9,7 @@ runs:
   using: composite
   steps:
     - name: Keep only an exact cache hit or validated seed on a miss
-      shell: /bin/bash --noprofile --norc -e -o pipefail {0}
+      shell: /bin/bash --noprofile --norc -p -e -o pipefail {0}
       env:
         TOOLS_CACHE_HIT: "false"
         TOOLS_EXPECTED_KEY: ""

@@ -25,7 +25,7 @@ const FUNCTION_ENV_UNSET_PRELUDE: &str = r#"function_env_unset=(); function_env_
 
 #[derive(Clone, Copy)]
 struct ScriptMetadata<'a> {
-    id: Option<velnor_actions_contract::StepId>,
+    id: Option<&'a str>,
     condition: Option<&'a str>,
     run_comment: Option<&'a str>,
 }
@@ -88,7 +88,7 @@ pub(crate) fn render_typed_step(
         job_env,
         composite,
         ScriptMetadata {
-            id: step.id,
+            id: step.id.map(velnor_actions_contract::StepId::as_str),
             condition: step.condition.as_deref(),
             run_comment: None,
         },
@@ -139,6 +139,27 @@ pub(crate) fn render_project_tool_resolver(
     )
 }
 
+pub(crate) fn render_composite_script(
+    name: &str,
+    id: &str,
+    script: &str,
+    env: &BTreeMap<String, String>,
+) -> Result<Yaml, RenderError> {
+    commands::validate_command_argv(&[script.to_owned()])?;
+    render_script(
+        name,
+        script,
+        env,
+        &BTreeMap::new(),
+        true,
+        ScriptMetadata {
+            id: Some(id),
+            condition: None,
+            run_comment: None,
+        },
+    )
+}
+
 fn render_script(
     name: &str,
     script: &str,
@@ -158,6 +179,7 @@ fn render_script(
     env.extend(crate::toolchain_env::credential_scrub());
 
     let mut inner_argv = crate::toolchain_env::with_env_unset_argv(&[]);
+    inner_argv.push(format!("PATH={VERIFY_PATH}"));
     inner_argv.extend(INNER_SHELL.iter().map(|arg| (*arg).to_owned()));
     inner_argv.push("-c".to_owned());
     let inner_argv = commands::join_argv_for_run(&inner_argv)?;
@@ -172,7 +194,7 @@ fn render_script(
 
     let mut entries = vec![("name".to_owned(), Yaml::str(name.to_owned()))];
     if let Some(id) = metadata.id {
-        crate::step_ids::push_explicit_step_id(&mut entries, id.as_str());
+        crate::step_ids::push_explicit_step_id(&mut entries, id);
     }
     if let Some(condition) = metadata.condition {
         crate::steps::scan_for_private_subcommands(condition)?;
