@@ -102,11 +102,11 @@
     {
       "checked_at": "2026-11-01T16:27:57.670Z",
       "key": "asamarts/alint",
-      "latest": "v0.20.1",
-      "pinned_sha": "265d9fdc720bb8f59d00b87e33e4149869f77327",
-      "pinned_version": "v0.20.1",
-      "qualified_sha": "265d9fdc720bb8f59d00b87e33e4149869f77327",
-      "qualified_version": "v0.20.1",
+      "latest": "v0.21.0",
+      "pinned_sha": "d61e4c802b02ac811224b35c59a62cfe5176f4d0",
+      "pinned_version": "v0.21.0",
+      "qualified_sha": "d61e4c802b02ac811224b35c59a62cfe5176f4d0",
+      "qualified_version": "v0.21.0",
       "source": "https://api.github.com/repos/asamarts/alint/releases/latest",
       "status": "current"
     },
@@ -275,10 +275,10 @@
     },
     {
       "checked_at": "2026-11-01T16:27:40.858Z",
-      "latest": "0.4.2",
+      "latest": "0.4.3",
       "name": "release-plz",
-      "pinned": "0.4.2",
-      "qualified": "0.4.2",
+      "pinned": "0.4.3",
+      "qualified": "0.4.3",
       "source": "https://crates.io/api/v1/crates/release-plz",
       "status": "current"
     },

@@ -29,7 +29,7 @@ jactionlint = "2.3.0"
 shellcheck = "0.11.0"
 nextest = "0.9.150"
 opentofu = "1.13.2"
-release-plz = "0.4.2"
+release-plz = "0.4.3"
 crane = "0.22.1"
 bun = "1.4.4"
 cosign = "3.1.4"
@@ -82,9 +82,9 @@ reviewed = "2026-10-26"
 
 [[actions]]
 name = "asamarts/alint"
-version = "v0.20.1"
-sha = "265d9fdc720bb8f59d00b87e33e4149869f77327"
-reviewed = "2026-10-24"
+version = "v0.21.0"
+sha = "d61e4c802b02ac811224b35c59a62cfe5176f4d0"
+reviewed = "2026-11-02"
 
 [[actions]]
 name = "aws-actions/configure-aws-credentials"
