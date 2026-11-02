@@ -244,10 +244,12 @@ fn repository_orchestrator_repo(sharded: bool) -> Result<tempfile::TempDir, Box<
 fn rename_root_package(root: &Path, name: &str) -> Result<(), Box<dyn Error>> {
     let manifest = root.join("Cargo.toml");
     let contents = fs::read_to_string(&manifest)?;
-    fs::write(
-        manifest,
-        contents.replacen("name = \"demo\"", &format!("name = \"{name}\""), 1),
-    )?;
+    let renamed = |text: &str| text.replacen("name = \"demo\"", &format!("name = \"{name}\""), 1);
+    fs::write(manifest, renamed(&contents))?;
+    let lock = root.join("Cargo.lock");
+    if lock.is_file() {
+        fs::write(&lock, renamed(&fs::read_to_string(&lock)?))?;
+    }
     Ok(())
 }
 

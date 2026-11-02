@@ -15,6 +15,8 @@ pub mod execute;
 pub mod ir;
 pub mod jobs;
 pub mod lanes;
+pub mod ledger_cli;
+mod ledger_cli_artifacts;
 pub mod matrix_entry;
 pub mod named_check_lanes;
 pub mod needs;

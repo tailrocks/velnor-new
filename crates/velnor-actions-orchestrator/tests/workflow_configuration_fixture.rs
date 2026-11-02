@@ -11,6 +11,10 @@ use velnor_actions_contract::SUPPORTED_TARGETS;
 
 #[path = "../src/git_fixture.rs"]
 pub(crate) mod git_fixture;
+#[path = "../../test_support/root_cargo_lock.rs"]
+mod root_cargo_lock;
+
+pub(crate) use root_cargo_lock::write_root_cargo_lock;
 
 pub(crate) fn make_repo(config: &str) -> Result<TempDir, Box<dyn Error>> {
     let dir = tempfile::tempdir()?;

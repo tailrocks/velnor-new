@@ -21,8 +21,7 @@ pub const PUBLISH_PLAN_NAME: &str = "Publish plan";
 pub const DOWNLOAD_PLAN_NAME: &str = "Download plan";
 pub const FRESHNESS_OUTDIR: &str =
     "$RUNNER_TEMP/velnor-actions-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}";
-pub const PLAN_ARTIFACT_NAME: &str =
-    "velnor-plan-r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}";
+pub use velnor_actions_contract::workflow::artifacts::PLAN_ARTIFACT_NAME;
 pub const PLAN_ARTIFACT_PATH: &str =
     "${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}";
 pub const SEED_REMEDIATION: &str = "seed_required:publish the bootstrap release (manual pinned-Mise+MBX seed build), record it in .velnor/generator.lock, then regenerate";

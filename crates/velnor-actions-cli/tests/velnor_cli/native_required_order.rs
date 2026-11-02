@@ -9,6 +9,9 @@ use std::{
     process::{Command, Output},
 };
 
+#[path = "../../../test_support/root_cargo_lock.rs"]
+mod root_cargo_lock;
+
 const EXPECTED_NEEDS: [&str; 7] = [
     "plan",
     "rust-sample",
@@ -60,6 +63,7 @@ fn public_plan_and_generation_preserve_native_required_order() -> Result<(), Box
 fn create_fixture(repo: &Path) -> Result<(), Box<dyn Error>> {
     fs::create_dir_all(repo.join(".velnor"))?;
     fs::write(repo.join("Cargo.toml"), CARGO_WORKSPACE)?;
+    root_cargo_lock::write_root_cargo_lock(repo, &["sample", "sample-agent-status"])?;
     for (name, manifest) in [
         ("sample", SAMPLE_MANIFEST),
         ("sample-agent-status", SAMPLE_AGENT_STATUS_MANIFEST),
@@ -190,6 +194,20 @@ fn write_tool_transport(repo: &Path) -> Result<(), Box<dyn Error>> {
         "packages": packages,
     });
     fs::write(bin.join("metadata.json"), serde_json::to_vec(&metadata)?)?;
+    let resolved = json!({
+        "version": 1,
+        "workspace_root": repo,
+        "workspace_members": members,
+        "packages": packages,
+        "resolve": {
+            "nodes": members
+                .iter()
+                .map(|id| json!({"id": id, "dependencies": []}))
+                .collect::<Vec<_>>(),
+            "root": null,
+        },
+    });
+    fs::write(bin.join("resolved.json"), serde_json::to_vec(&resolved)?)?;
     let catalog = ToolCatalog::pinned();
     let script = TOOL_TRANSPORT
         .replace("@RUST_VERSION@", catalog.version(PinnedTool::Rust))
@@ -226,10 +244,17 @@ fi
 shift
 if [ "$1" = "@RUST_SPEC@" ]; then
   shift
-  [ "$#" -eq 8 ] && [ "$1" = "--" ] && [ "$2" = "cargo" ] && [ "$3" = "metadata" ] || exit 94
-  [ "$4" = "--format-version" ] && [ "$5" = "1" ] && [ "$6" = "--no-deps" ] && [ "$7" = "--manifest-path" ] || exit 95
-  [ "$8" = "$(pwd -P)/Cargo.toml" ] || exit 96
-  cat "$(dirname "$0")/metadata.json"
+  [ "$1" = "--" ] && [ "$2" = "cargo" ] && [ "$3" = "metadata" ] || exit 94
+  [ "$4" = "--format-version" ] && [ "$5" = "1" ] || exit 95
+  if [ "$#" -eq 8 ]; then
+    [ "$6" = "--no-deps" ] && [ "$7" = "--manifest-path" ] && [ "$8" = "$(pwd -P)/Cargo.toml" ] || exit 96
+    cat "$(dirname "$0")/metadata.json"
+    exit 0
+  fi
+  [ "$#" -eq 10 ] || exit 109
+  [ "$6" = "--locked" ] && [ "$7" = "--offline" ] && [ "$8" = "--all-features" ] || exit 110
+  [ "$9" = "--manifest-path" ] && [ "${10}" = "$(pwd -P)/Cargo.toml" ] || exit 111
+  cat "$(dirname "$0")/resolved.json"
   exit 0
 fi
 if [ "$1" = "@JACTIONLINT_SPEC@" ]; then
