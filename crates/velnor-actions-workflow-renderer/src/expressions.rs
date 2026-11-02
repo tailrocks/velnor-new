@@ -34,7 +34,9 @@ fn expression_spans(text: &str) -> Option<Vec<&str>> {
     Some(spans)
 }
 
-const ENV_EXPRESSIONS: [&str; 15] = [
+const ENV_EXPRESSIONS: [&str; 17] = [
+    "needs.ledger-cli.outputs.sha256",
+    "needs.ledger-cli.outputs.source_sha",
     "job.status",
     "runner.temp",
     "format('refs/heads/{0}', github.event.repository.default_branch)",
@@ -52,7 +54,8 @@ const ENV_EXPRESSIONS: [&str; 15] = [
     "steps.aws-credentials.outputs.aws-session-token",
 ];
 
-const WITH_EXPRESSIONS: [&str; 16] = [
+const WITH_EXPRESSIONS: [&str; 17] = [
+    "needs.ledger-cli.outputs.artifact_name",
     "runner.temp",
     "github.run_id",
     "github.run_attempt",

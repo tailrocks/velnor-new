@@ -4,6 +4,7 @@
 use super::{PreparedWorkflow, WorkflowBuildInput, problem};
 use crate::OrchestratorError;
 use std::collections::{BTreeMap, BTreeSet};
+use velnor_actions_contract::workflow::ledger_cli::LEDGER_CLI_JOB_ID;
 use velnor_actions_contract::{Job, Stack};
 use velnor_actions_workflow_renderer::native_authority::{
     GeneratedWorkflowKind, LogicalJobFact, LogicalJobSource, NativeTaskFact, SuitePhase,
@@ -43,6 +44,9 @@ pub(super) fn graph(
         sources.insert(id, LogicalJobSource::DependencySeed { root });
     }
     insert_workflow_tasks(prepared, jobs, &mut sources);
+    if jobs.contains_key(LEDGER_CLI_JOB_ID) {
+        sources.insert(LEDGER_CLI_JOB_ID.to_owned(), LogicalJobSource::LedgerCli);
+    }
     ordered.extend(
         sources
             .keys()

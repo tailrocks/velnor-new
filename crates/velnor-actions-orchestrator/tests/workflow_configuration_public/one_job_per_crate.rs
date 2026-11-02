@@ -8,7 +8,8 @@ use std::fs;
 use tempfile::TempDir;
 use velnor_actions_contract::workflow::crate_job::{GROUP_READER_SUFFIX, GROUP_WRITER_SUFFIX};
 use velnor_actions_contract::{
-    CacheMode, Job, REQUIRED_JOB_ID, Step, StepKind, StepRole, TOFU_JOB_ID_PREFIX, WorkflowPolicy,
+    CacheMode, Job, REQUIRED_JOB_ID, Step, StepId, StepKind, StepRole, TOFU_JOB_ID_PREFIX,
+    WorkflowPolicy,
 };
 use velnor_actions_orchestrator::{EMIT_GROUP_LEDGER_OP, finalized_jobs, prepare};
 use velnor_actions_workflow_renderer::{INTERNAL_OP_ENV, not_affected_gate};
@@ -46,7 +47,18 @@ fn render(name: &str, repo: &TempDir, policy: WorkflowPolicy) -> Result<Rendered
 }
 
 pub(super) fn mbx_repo(tofu: bool) -> Result<TempDir, Box<dyn Error>> {
+    mbx_repo_for(tofu, WorkflowPolicy::ConsumerV1)
+}
+
+fn mbx_repo_for(tofu: bool, policy: WorkflowPolicy) -> Result<TempDir, Box<dyn Error>> {
     let mut config = config_with_timeouts(15, None)?;
+    if policy == WorkflowPolicy::VelnorRepositoryV1 {
+        config = config.replacen(
+            "name = \"CI\"\n",
+            "name = \"CI\"\npolicy = \"velnor-repository-v1\"\n",
+            1,
+        );
+    }
     if tofu {
         config.push_str("\n[stacks.tofu]\nroots = [\"infra\"]\n");
     }
@@ -66,6 +78,25 @@ pub(super) fn mbx_repo(tofu: bool) -> Result<TempDir, Box<dyn Error>> {
             "provider \"registry.opentofu.org/hashicorp/random\" {\n  version = \"3.6.0\"\n  hashes = [\"h1:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\"]\n}\n",
         )?;
     }
+    if policy == WorkflowPolicy::VelnorRepositoryV1 {
+        workflow_configuration_fixture::git(
+            &[
+                "remote",
+                "add",
+                "origin",
+                "https://github.com/tailrocks/velnor-new.git",
+            ],
+            root,
+        )?;
+        fs::write(
+            root.join(".velnor/generator.lock"),
+            include_str!("../../../../.velnor/generator.lock"),
+        )?;
+        fs::write(
+            root.join(".velnor/controller-approvals.json"),
+            include_str!("../../../../.velnor/controller-approvals.json"),
+        )?;
+    }
     Ok(repo)
 }
 
@@ -83,7 +114,15 @@ pub(super) fn rust_fixtures() -> Result<Vec<Rendered>, Box<dyn Error>> {
 }
 
 pub(super) fn tofu_fixture() -> Result<Rendered, Box<dyn Error>> {
-    render("tofu", &mbx_repo(true)?, WorkflowPolicy::ConsumerV1)
+    tofu_fixture_for(WorkflowPolicy::ConsumerV1)
+}
+
+pub(super) fn tofu_fixture_for(policy: WorkflowPolicy) -> Result<Rendered, Box<dyn Error>> {
+    render(
+        &format!("tofu-{policy:?}"),
+        &mbx_repo_for(true, policy)?,
+        policy,
+    )
 }
 
 pub(super) fn crate_jobs(jobs: &BTreeMap<String, Job>) -> Vec<(&String, &Job)> {
@@ -99,7 +138,7 @@ pub(super) fn crate_jobs(jobs: &BTreeMap<String, Job>) -> Vec<(&String, &Job)> {
         .collect()
 }
 
-fn is_emit(step: &Step) -> bool {
+pub(super) fn is_emit(step: &Step) -> bool {
     match &step.kind {
         StepKind::Internal { operation, .. } => operation == EMIT_GROUP_LEDGER_OP,
         StepKind::Shell { env, .. } => env
@@ -175,7 +214,18 @@ fn assert_emits_once_before_upload(fixture: &Rendered) {
             *policy == WorkflowPolicy::ConsumerV1,
             "{name}: {id} emit form"
         );
-        assert_eq!(job.steps[emits[0]].condition.as_deref(), Some("always()"));
+        let expected_condition = match policy {
+            WorkflowPolicy::ConsumerV1 => "always()".to_owned(),
+            WorkflowPolicy::VelnorRepositoryV1 => format!(
+                "always() && steps.{}.outcome == 'success'",
+                StepId::LedgerCliVerify.as_str()
+            ),
+        };
+        assert_eq!(
+            job.steps[emits[0]].condition.as_deref(),
+            Some(expected_condition.as_str()),
+            "{name}: {id} emit condition"
+        );
         assert_eq!(job.steps[emits[0]].role, None::<StepRole>);
     }
 }
@@ -186,6 +236,7 @@ fn each_crate_job_emits_one_group_ledger_before_upload() -> Result<(), Box<dyn E
         assert_emits_once_before_upload(&fixture);
     }
     assert_emits_once_before_upload(&tofu_fixture()?);
+    assert_emits_once_before_upload(&tofu_fixture_for(WorkflowPolicy::VelnorRepositoryV1)?);
     Ok(())
 }
 

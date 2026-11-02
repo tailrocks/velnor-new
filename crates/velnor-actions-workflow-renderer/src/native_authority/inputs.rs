@@ -84,6 +84,7 @@ pub enum LogicalJobSource {
     DependencySeed {
         root: String,
     },
+    LedgerCli,
 }
 #[derive(Debug, Clone)]
 pub struct LogicalJobFact {

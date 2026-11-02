@@ -4,6 +4,7 @@
 use std::collections::BTreeSet;
 
 use velnor_actions_contract::ProposedTask;
+use velnor_actions_contract::workflow::ledger_cli::{LEDGER_CLI_JOB_ID, LedgerCliSource};
 use velnor_actions_workflow_renderer::render::PLAN_JOB_ID;
 
 use crate::OrchestratorError;
@@ -14,8 +15,12 @@ pub(super) fn external_needs(
     tasks: &[&ProposedTask],
     owners: &JobOwners<'_>,
     current_job: &str,
+    ledger_cli: LedgerCliSource,
 ) -> Result<Vec<String>, OrchestratorError> {
     let mut needs = BTreeSet::from([PLAN_JOB_ID.to_owned()]);
+    if ledger_cli == LedgerCliSource::SameRunBuild {
+        needs.insert(LEDGER_CLI_JOB_ID.to_owned());
+    }
     for task in tasks {
         for gate in task.gated_by.iter().chain(&task.depends_on) {
             let Some(member) = owners.runnable_member(gate.as_str()) else {

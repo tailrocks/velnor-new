@@ -47,6 +47,12 @@ mod bun_runtime;
 mod empty_suite;
 #[path = "workflow_configuration_public/feature_toggles.rs"]
 mod feature_toggles;
+#[path = "workflow_configuration_public/ledger_cli_job.rs"]
+mod ledger_cli_job;
+#[path = "workflow_configuration_public/ledger_cli_validator.rs"]
+mod ledger_cli_validator;
+#[path = "workflow_configuration_public/ledger_cli_verify_script.rs"]
+mod ledger_cli_verify_script;
 #[path = "workflow_configuration_public/maintenance_features.rs"]
 mod maintenance_features;
 #[path = "workflow_configuration_public/native_artifacts.rs"]
