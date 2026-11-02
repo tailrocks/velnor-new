@@ -25,13 +25,13 @@ pub const RUST_TREE_DIGESTS: &[TreeDigestPin] = &[
         "1.99.1",
         "x86_64-unknown-linux-gnu",
         "e3808a4c78c316b41a42ed88010c6bbf24ae24a348a5a22b8e3bc62328db1981",
-        "4e04ef08846d5545de6eae7492e7c71e330616da65313274d6a8a28769e5510e",
+        "c3428f142cda85a7e4c6fe2b5bc1ed7a13ec0bc1dde16e2b30500e5f6b0e39ac",
     ),
     TreeDigestPin::new(
         "1.99.1",
         "x86_64-unknown-linux-gnu",
         "a13769c18a7a74ea492ab633b644d6c238ae81e536d30d3f168eddb57e86000e",
-        "a02e015075bdd2b5ea02cce7828c2bb806e1aabf5e26696e8bbad54f162b092e",
+        "7bc3bc5c95e33eee9017f1554f29024662a678dc0db6c9d241f5338a5506625b",
     ),
 ];
 
