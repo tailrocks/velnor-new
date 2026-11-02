@@ -91,6 +91,10 @@ mod timeouts;
 mod tofu_parallel_limit;
 #[path = "workflow_configuration_public/tofu_prepare_script.rs"]
 mod tofu_prepare_script;
+#[path = "workflow_configuration_public/tofu_providers_producer_condition.rs"]
+mod tofu_providers_producer_condition;
+#[path = "workflow_configuration_public/tofu_providers_producer_timeout.rs"]
+mod tofu_providers_producer_timeout;
 #[path = "workflow_configuration_public/tofu_providers_producers.rs"]
 mod tofu_providers_producers;
 #[path = "workflow_configuration_public/tools_producers.rs"]

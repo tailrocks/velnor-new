@@ -103,7 +103,7 @@ fn build(plan: &ToolsProducerPlan, policy: PullRequestCachePolicy) -> Result<Job
         display_name: format!("{PRODUCER_DISPLAY_PREFIX}{}", plan.digest.short()),
         runs_on: donor.runs_on.clone(),
         check_runner: None,
-        timeout_minutes: donor.timeout_minutes,
+        timeout_minutes: crate::cache_save_budget::lift_to_save_budget(donor.timeout_minutes)?,
         needs: Vec::new(),
         condition: Some(DEPENDENCY_SEED_JOB_CONDITION.to_owned()),
         permissions: None,

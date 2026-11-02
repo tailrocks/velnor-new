@@ -134,7 +134,7 @@ fn build(plan: &ProviderProducerPlan<'_>) -> Result<Job, RenderError> {
         ),
         runs_on: donor.runs_on.clone(),
         check_runner: None,
-        timeout_minutes: donor.timeout_minutes,
+        timeout_minutes: crate::cache_save_budget::lift_to_save_budget(donor.timeout_minutes)?,
         needs: vec![crate::render::PLAN_JOB_ID.to_owned()],
         condition: Some(DEPENDENCY_SEED_JOB_CONDITION.to_owned()),
         permissions: None,

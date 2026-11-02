@@ -11,6 +11,8 @@ use crate::ContractError;
 
 pub const DEPENDENCY_SEED_JOB_CONDITION: &str = "github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true";
 
+pub const LANE_SURVIVAL_CONDITION: &str = "always()";
+
 pub const TOOLS_PRODUCER_INSTALL_CONDITION: &str =
     "steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'";
 
@@ -87,7 +89,7 @@ pub(super) fn validate_job(
     let Some(kind) = kind else {
         return Ok(());
     };
-    let cache_only = job.condition.as_deref() == Some(DEPENDENCY_SEED_JOB_CONDITION)
+    let cache_only = kind.condition_ok(job.condition.as_deref())
         && job.environment.is_none()
         && job.check_runner.is_none()
         && job.services.is_empty()
@@ -120,6 +122,15 @@ impl ProducerKind {
             Self::ToolsIdentity => tools_role(role),
             Self::TofuProviders => tofu_role(role),
         }
+    }
+
+    fn condition_ok(self, condition: Option<&str>) -> bool {
+        condition == Some(DEPENDENCY_SEED_JOB_CONDITION)
+            || (self == Self::TofuProviders
+                && condition
+                    == Some(&format!(
+                        "{LANE_SURVIVAL_CONDITION} && ({DEPENDENCY_SEED_JOB_CONDITION})"
+                    )))
     }
 
     fn shape_ok(self, job: &Job) -> bool {

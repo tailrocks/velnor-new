@@ -20,6 +20,7 @@ use velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
 use velnor_actions_workflow_renderer::tofu_cache::tofu_providers_save_step;
 
 use super::support::{config_with_timeouts, rendered_job_block};
+use super::tofu_providers_producer_condition::gate_or_survival;
 use super::workflow_configuration_fixture;
 
 const PRODUCER_PREFIX: &str = "providers-producer-";
@@ -30,10 +31,17 @@ const MAIN: &str = "terraform {\n  required_providers {\n    random = {\n      s
 pub(super) type Jobs = BTreeMap<String, Job>;
 
 pub(super) fn tofu_repo(roots: &[&str]) -> Result<TempDir, Box<dyn Error>> {
+    tofu_repo_with(roots, None)
+}
+
+pub(super) fn tofu_repo_with(
+    roots: &[&str],
+    crate_timeout: Option<u16>,
+) -> Result<TempDir, Box<dyn Error>> {
     let quoted: Vec<String> = roots.iter().map(|root| format!("\"{root}\"")).collect();
     let config = format!(
         "{}max_parallel_jobs = {TOFU_LIMIT}\n\n[stacks.tofu]\nroots = [{}]\n",
-        config_with_timeouts(15, None)?,
+        config_with_timeouts(15, crate_timeout)?,
         quoted.join(", ")
     );
     let repo = workflow_configuration_fixture::make_repo(&config)?;
@@ -120,10 +128,7 @@ pub(super) fn assert_producer_shape(
 ) -> Result<(), Box<dyn Error>> {
     assert!(id.starts_with(PRODUCER_PREFIX), "{id}");
     validate_tofu_providers_producer(job, id)?;
-    assert_eq!(
-        job.condition.as_deref(),
-        Some(DEPENDENCY_SEED_JOB_CONDITION)
-    );
+    assert!(gate_or_survival(job), "{id}: {:?}", job.condition);
     assert!(job.needs.iter().any(|need| need == "plan"), "{id}");
     assert!(job.permissions.is_none() && job.cache_mode.is_none());
     let required = jobs.get(REQUIRED_JOB_ID).ok_or("no required job")?;
