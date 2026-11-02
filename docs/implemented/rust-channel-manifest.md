@@ -62,6 +62,12 @@ first version of this step did exactly that.
      takes the `xz_url` and `xz_hash` from the verified manifest, downloads
      the tarball (only from `https://static.rust-lang.org/dist/`), checks its
      SHA-256 and hashes every file the tarball installs;
+   - it requires `lib/rustlib/multirust-channel-manifest.toml`, which
+     `rustup component add` reads to pick download URLs and hashes, to name
+     exactly the `url`, `hash`, `xz_url` and `xz_hash` of every
+     `[pkg.*.target.*]` table of the verified manifest (rustup rewrites the
+     file, so the bytes differ; the download lines do not) and to use only
+     plain `key = value` lines, so no line can hide from the comparison;
    - it requires the toolchain directory to hold exactly those files with
      exactly those bytes, apart from rustup's own bookkeeping
      (`lib/rustlib/components`, `manifest-*`, `multirust-*`,
@@ -87,6 +93,8 @@ first version of this step did exactly that.
 4. The step fails the job with a stable code:
    `rust_channel_manifest_not_catalogued` (a Rust version the catalog does
    not know), `rust_channel_manifest_digest_mismatch`,
+   `rust_channel_manifest_unreadable`, `rust_bookkeeping_manifest_unreadable`,
+   `rust_bookkeeping_manifest_mismatch`,
    `rust_toolchain_missing`, `rust_installed_manifest_missing`,
    `rust_installed_manifest_empty`, `rust_toolchain_file_unexpected`,
    `rust_component_not_in_manifest`, `rust_component_name_invalid`,

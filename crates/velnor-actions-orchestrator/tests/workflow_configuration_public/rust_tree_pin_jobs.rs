@@ -84,17 +84,36 @@ fn final_tree_is_reverified(job: &Job) -> bool {
         .any(|at| at > last_add && at < first_cargo)
 }
 
-fn rendered_rust_jobs() -> Result<Vec<(String, Job)>, Box<dyn Error>> {
+fn finalized_jobs() -> Result<Vec<(String, Job)>, Box<dyn Error>> {
     let mut jobs = Vec::new();
     for policy in POLICIES {
         let (_, finalized) = finalized(policy)?;
-        jobs.extend(
-            finalized
-                .into_iter()
-                .filter(|(_, job)| !installed_verifiers(job).is_empty()),
-        );
+        jobs.extend(finalized);
     }
     Ok(jobs)
+}
+
+fn installs_rust(job: &Job) -> bool {
+    !installed_verifiers(job).is_empty()
+        || !positions(job, StepRole::PrepareRustComponents).is_empty()
+}
+
+fn rust_jobs(jobs: Vec<(String, Job)>) -> Vec<(String, Job)> {
+    jobs.into_iter()
+        .filter(|(_, job)| installs_rust(job))
+        .collect()
+}
+
+fn rendered_rust_jobs() -> Result<Vec<(String, Job)>, Box<dyn Error>> {
+    Ok(rust_jobs(finalized_jobs()?))
+}
+
+fn not_reverified(jobs: &[(String, Job)]) -> Vec<usize> {
+    jobs.iter()
+        .enumerate()
+        .filter(|(_, (_, job))| !final_tree_is_reverified(job))
+        .map(|(at, _)| at)
+        .collect()
 }
 
 #[test]
@@ -126,9 +145,36 @@ fn installed_verifier_follows_the_last_component_add_before_any_cargo_use()
             .iter()
             .any(|s| matches!(s.kind, StepKind::TaskExecution { .. }))
     }));
-    for (id, job) in &jobs {
-        assert!(final_tree_is_reverified(job), "{id}");
+    let broken = not_reverified(&jobs)
+        .into_iter()
+        .map(|at| jobs[at].0.as_str())
+        .collect::<Vec<_>>();
+    assert!(broken.is_empty(), "{broken:?}");
+    Ok(())
+}
+
+#[test]
+fn a_component_adding_job_without_any_installed_verifier_is_checked() -> Result<(), Box<dyn Error>>
+{
+    let mut jobs = finalized_jobs()?;
+    let victim = jobs
+        .iter()
+        .position(|(_, job)| {
+            !installed_verifiers(job).is_empty()
+                && !positions(job, StepRole::PrepareRustComponents).is_empty()
+        })
+        .ok_or("no rendered job adds components after an installed verifier")?;
+    let before = not_reverified(&rust_jobs(jobs.clone()));
+    assert!(before.is_empty(), "{before:?}");
+    for at in installed_verifiers(&jobs[victim].1).into_iter().rev() {
+        jobs[victim].1.steps.remove(at);
     }
+    let broken = rust_jobs(jobs);
+    let flagged = not_reverified(&broken)
+        .into_iter()
+        .map(|at| broken[at].0.clone())
+        .collect::<Vec<_>>();
+    assert_eq!(flagged.len(), 1, "{flagged:?}");
     Ok(())
 }
 

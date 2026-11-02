@@ -14,13 +14,13 @@ pub const RUST_TREE_DIGESTS: &[TreeDigestPin] = &[
         "1.99.1",
         "x86_64-unknown-linux-gnu",
         "e3808a4c78c316b41a42ed88010c6bbf24ae24a348a5a22b8e3bc62328db1981",
-        "9a9cbe7c31582c6141cf25ba6bf0f0b52053983401fdaf38c7a7f670388a3709",
+        "3bb018a6b34185f448c7c6f8938380630b8e392828de27a3455a9365e6539c72",
     ),
     TreeDigestPin::new(
         "1.99.1",
         "x86_64-unknown-linux-gnu",
         "a13769c18a7a74ea492ab633b644d6c238ae81e536d30d3f168eddb57e86000e",
-        "680b75bfa6ab6474f0b02865f8cb89b7bf9076a7666a78990b37eda0d9bc4652",
+        "0ef9a8c2010819da9932d2db1e72de0e0677762be90c698c6f962ed5c08bbbcc",
     ),
 ];
 
@@ -82,15 +82,19 @@ impl TreeDigestPin {
     }
 }
 
+pub(crate) const URLS_FUNCTION: &str = r#"urls() { awk '/^$/ { next } /^\[\[?[A-Za-z0-9._"*+-]*\]\]?$/ { sec = ""; if ($0 ~ /^\[pkg\.[^]]*\.target\.[^]]*\]$/) sec = $0; next } /^[a-z0-9_-]+ = ("[^"]*"|true|false|\[[^]]*\])$/ { if (sec != "" && $1 ~ /(^|_)(url|hash)$/) print sec, $1, substr($0, index($0, " = ") + 3); next } { bad = 1 } END { exit bad }' "$1" > "$2.raw" && LC_ALL=C sort "$2.raw" > "$2"; }"#;
+
 const NOTICE: &str = r#"pm() { printf "%s\n" "::notice::pin_mismatch: $1"; }"#;
 
 const TOOLCHAINS_SINGLE: &str = r#"set --; for e in "$rh/toolchains"/* "$rh/toolchains"/.[!.]* "$rh/toolchains"/..?*; do if [ -e "$e" ] || [ -L "$e" ]; then set -- "$@" "$e"; fi; done; [ "$#" -eq 1 ] || { pm toolchains_not_single; return 1; }"#;
 
 const COMPONENTS_HASH: &str = r#"sort "$t/lib/rustlib/components" | $h > "$d/pin.cs"; read -r cs rest < "$d/pin.cs" || { pm components_unreadable; return 1; }"#;
 
+const BOOKKEEPING: &str = r#"urls "$t/lib/rustlib/multirust-channel-manifest.toml" "$d/pin.urls" || { pm bookkeeping_manifest_unreadable; return 1; }; $h < "$d/pin.urls" > "$d/pin.ms"; read -r ms rest < "$d/pin.ms" || { pm bookkeeping_manifest_unreadable; return 1; }"#;
+
 const SCAN: &str = r#"(cd "$t" && find . -name "*[!A-Za-z0-9._+-]*") > "$d/pin.unsafe" || { pm tree_unreadable; return 1; }; [ ! -s "$d/pin.unsafe" ] || { pm unsafe_name; return 1; }; (cd "$t" && find . -type f -exec $h {} +) > "$d/pin.sums" || { pm tree_unreadable; return 1; }; (cd "$t" && find . -exec ls -ldn {} +) > "$d/pin.modes" || { pm tree_unreadable; return 1; }"#;
 
-const LISTING_AWK: &str = r#"awk -v cs="$cs" -v cap=4194304 'function bits(r, w, x, v) { v = 0; if (r == "r") v += 4; if (w == "w") v += 2; if (x == "x" || x == "s" || x == "t") v += 1; return v } function sp(x, a) { return (x == "s" || x == "S" || x == "t" || x == "T") ? a : 0 } NR == FNR { dg[$2] = $1; next } { m = $1; k = substr(m, 1, 1); p = $NF; if (k != "-" && k != "d") exit 2; mode = sprintf("%d%d%d%d", sp(substr(m, 4, 1), 4) + sp(substr(m, 7, 1), 2) + sp(substr(m, 10, 1), 1), bits(substr(m, 2, 1), substr(m, 3, 1), substr(m, 4, 1)), bits(substr(m, 5, 1), substr(m, 6, 1), substr(m, 7, 1)), bits(substr(m, 8, 1), substr(m, 9, 1), substr(m, 10, 1))); r = (p == ".") ? "." : substr(p, 3); if (k == "d") { print "d", mode, "-", r; next } if (r ~ /^lib\/rustlib\/(manifest-[A-Za-z0-9._+-]+|multirust-channel-manifest\.toml|multirust-config\.toml|rust-installer-version)$/) { if ($5 + 0 > cap + 0) exit 3; print "b", mode, "-", r; next } if (r == "lib/rustlib/components") { print "f", mode, cs, r; next } if (!(p in dg)) exit 4; print "f", mode, dg[p], r }' "$d/pin.sums" "$d/pin.modes" > "$d/pin.list" || { pm listing_failed; return 1; }"#;
+const LISTING_AWK: &str = r#"awk -v cs="$cs" -v ms="$ms" -v cap=4194304 'function bits(r, w, x, v) { v = 0; if (r == "r") v += 4; if (w == "w") v += 2; if (x == "x" || x == "s" || x == "t") v += 1; return v } function sp(x, a) { return (x == "s" || x == "S" || x == "t" || x == "T") ? a : 0 } NR == FNR { dg[$2] = $1; next } { m = $1; k = substr(m, 1, 1); p = $NF; if (k != "-" && k != "d") exit 2; mode = sprintf("%d%d%d%d", sp(substr(m, 4, 1), 4) + sp(substr(m, 7, 1), 2) + sp(substr(m, 10, 1), 1), bits(substr(m, 2, 1), substr(m, 3, 1), substr(m, 4, 1)), bits(substr(m, 5, 1), substr(m, 6, 1), substr(m, 7, 1)), bits(substr(m, 8, 1), substr(m, 9, 1), substr(m, 10, 1))); r = (p == ".") ? "." : substr(p, 3); if (k == "d") { print "d", mode, "-", r; next } if (r ~ /^lib\/rustlib\/(manifest-[A-Za-z0-9._+-]+|multirust-config\.toml|rust-installer-version)$/) { if ($5 + 0 > cap + 0) exit 3; print "b", mode, "-", r; next } if (r == "lib/rustlib/multirust-channel-manifest.toml") { if ($5 + 0 > cap + 0) exit 3; print "f", mode, ms, r; next } if (r == "lib/rustlib/components") { print "f", mode, cs, r; next } if (!(p in dg)) exit 4; print "f", mode, dg[p], r }' "$d/pin.sums" "$d/pin.modes" > "$d/pin.list" || { pm listing_failed; return 1; }"#;
 
 const COMPARE: &str = r#"sort -k4,4 "$d/pin.list" | tr "\n" "\000" | $h > "$d/pin.got"; read -r got rest < "$d/pin.got" || { pm tree_unreadable; return 1; }; [ "$got" = "$pin" ] || { pm tree_differs; return 1; }"#;
 
@@ -109,6 +113,7 @@ pub(crate) fn pin_statements(pins: &[TreeDigestPin]) -> Vec<String> {
         r#"tgt="${t##*/}"; tgt="${tgt#"$v"-}""#,
         COMPONENTS_HASH,
         &select,
+        BOOKKEEPING,
         SCAN,
         LISTING_AWK,
         COMPARE,

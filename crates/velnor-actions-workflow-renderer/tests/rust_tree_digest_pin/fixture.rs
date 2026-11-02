@@ -21,7 +21,9 @@ pub(crate) const FIXTURE_COMPONENTS: &str =
 pub(crate) const FIXTURE_COMPONENTS_SHA256: &str =
     "adfc9d0f163c22aaf13170f015d8fc332bf8254fe1c1541fc1d0497e730621a2";
 pub(crate) const FIXTURE_TREE_SHA256: &str =
-    "3d87fa4b854321a140416d7f3f0ce6836fc231ad664b73dfc44896978b9bf640";
+    "ab15cb46e27e8a8a4f4910b2a6a26ac694cfcb7fadf4ae4371b78936e5a22c36";
+
+pub(crate) const FIXTURE_BOOKKEEPING: &str = "manifest-version = \"2\"\ndate = \"2026-10-15\"\n\n[pkg.cargo.target.x86_64-unknown-linux-gnu]\navailable = true\nurl = \"https://static.rust-lang.org/dist/2026-10-15/cargo-1.99.1-x86_64-unknown-linux-gnu.tar.gz\"\nhash = \"1111111111111111111111111111111111111111111111111111111111111111\"\nxz_url = \"https://static.rust-lang.org/dist/2026-10-15/cargo-1.99.1-x86_64-unknown-linux-gnu.tar.xz\"\nxz_hash = \"2222222222222222222222222222222222222222222222222222222222222222\"\ncomponents = []\nextensions = []\n";
 
 pub(crate) const PHASES: [ToolchainPhase; 2] =
     [ToolchainPhase::Restored, ToolchainPhase::Installed];
@@ -92,6 +94,11 @@ impl Fixture {
         fixture.put("lib/x.so", b"so\n", 0o644);
         fixture.put("lib/rustlib/components", components.as_bytes(), 0o644);
         fixture.put("lib/rustlib/rust-installer-version", b"3", 0o644);
+        fixture.put(
+            "lib/rustlib/multirust-channel-manifest.toml",
+            FIXTURE_BOOKKEEPING.as_bytes(),
+            0o644,
+        );
         fixture.dir("share", 0o755);
         fixture.put("share/.dot", b"dot\n", 0o644);
         fixture

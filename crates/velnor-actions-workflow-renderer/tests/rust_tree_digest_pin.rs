@@ -7,14 +7,22 @@
 #[path = "rust_tree_digest_pin/fixture.rs"]
 mod fixture;
 
+#[cfg(test)]
+#[path = "rust_tree_digest_pin/release.rs"]
+mod release;
+
+#[cfg(test)]
+#[path = "rust_tree_digest_pin/bookkeeping.rs"]
+mod bookkeeping;
+
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::process::Command;
 
 use fixture::{
-    FIXTURE_COMPONENTS, FIXTURE_COMPONENTS_SHA256, FIXTURE_TREE_SHA256, Fixture, HELPERS, PHASES,
-    Row, TARGET, VERSION, fixture_pin, run_rows, script,
+    FIXTURE_BOOKKEEPING, FIXTURE_COMPONENTS, FIXTURE_COMPONENTS_SHA256, FIXTURE_TREE_SHA256,
+    Fixture, HELPERS, PHASES, Row, TARGET, VERSION, fixture_pin, run_rows, script,
 };
 use sha2::{Digest, Sha256};
 use velnor_actions_contract::StepKind;
@@ -29,6 +37,8 @@ const REAL_COMPONENTS: &str = "cargo-x86_64-unknown-linux-gnu\nclippy-preview-x8
 
 const REAL_COMPONENTS_SHA256: &str =
     "e3808a4c78c316b41a42ed88010c6bbf24ae24a348a5a22b8e3bc62328db1981";
+
+const MANIFEST: &str = "lib/rustlib/multirust-channel-manifest.toml";
 
 const UNSAFE_NAMES: [(&str, &str); 4] = [
     (
@@ -181,6 +191,18 @@ fn n1_any_tree_mutation_falls_through_to_the_full_path() {
         row("sticky dir", &|fx| fx.chmod("lib", 0o1755)),
         row("world writable file", &|fx| fx.chmod("lib/x.so", 0o666)),
         row("altered components", &widen),
+        row("poisoned bookkeeping manifest", &|fx| {
+            let evil = FIXTURE_BOOKKEEPING.replace(
+                "cargo-1.99.1-x86_64-unknown-linux-gnu.tar.xz",
+                "evil.tar.xz",
+            );
+            fx.put(MANIFEST, evil.as_bytes(), 0o644);
+        }),
+        row("unspaced bookkeeping assignment", &|fx| {
+            let evil = format!("{FIXTURE_BOOKKEEPING}xz_url=\"https://attacker.example/x\"\n");
+            fx.put(MANIFEST, evil.as_bytes(), 0o644);
+        }),
+        row("missing bookkeeping manifest", &|fx| fx.remove(MANIFEST)),
     ];
     run_rows(&rows, fixture::Outcome::fell_through);
 }

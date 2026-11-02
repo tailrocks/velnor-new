@@ -61,9 +61,15 @@ components_sha() {
   sort "$1" | sha256_stdin
 }
 
+urls_sha() {
+  awk '/^$/ { next } /^\[\[?[A-Za-z0-9._"*+-]*\]\]?$/ { sec = ""; if ($0 ~ /^\[pkg\.[^]]*\.target\.[^]]*\]$/) sec = $0; next } /^[a-z0-9_-]+ = ("[^"]*"|true|false|\[[^]]*\])$/ { if (sec != "" && $1 ~ /(^|_)(url|hash)$/) print sec, $1, substr($0, index($0, " = ") + 3); next } { bad = 1 } END { exit bad }' "$1" > "$work/urls.raw" || die "unreadable manifest $1"
+  LC_ALL=C sort "$work/urls.raw" | sha256_stdin
+}
+
 canonical_listing() {
   tree=$1
   comp_sha=$2
+  urls_digest=$3
   no_unsafe_names "$tree"
   (cd "$tree" && find . -type f) > "$work/files"
   (
@@ -73,7 +79,7 @@ canonical_listing() {
     done < "$work/files"
   ) > "$work/sums"
   (cd "$tree" && find . -exec ls -ldn {} +) > "$work/modes"
-  awk -v cs="$comp_sha" -v cap="$size_cap" '
+  awk -v cs="$comp_sha" -v ms="$urls_digest" -v cap="$size_cap" '
     function triple(r, w, x) {
       return (r == "r" ? 4 : 0) + (w == "w" ? 2 : 0) + (x == "x" || x == "s" || x == "t" ? 1 : 0)
     }
@@ -90,9 +96,14 @@ canonical_listing() {
       mode = sprintf("%d%d%d%d", special, triple(substr(m, 2, 1), substr(m, 3, 1), substr(m, 4, 1)), triple(substr(m, 5, 1), substr(m, 6, 1), substr(m, 7, 1)), triple(substr(m, 8, 1), substr(m, 9, 1), substr(m, 10, 1)))
       rel = (path == ".") ? "." : substr(path, 3)
       if (kind == "d") { print "d", mode, "-", rel; next }
-      if (rel ~ /^lib\/rustlib\/(manifest-[A-Za-z0-9._+-]+|multirust-channel-manifest\.toml|multirust-config\.toml|rust-installer-version)$/) {
+      if (rel ~ /^lib\/rustlib\/(manifest-[A-Za-z0-9._+-]+|multirust-config\.toml|rust-installer-version)$/) {
         if ($5 + 0 > cap + 0) exit 3
         print "b", mode, "-", rel
+        next
+      }
+      if (rel == "lib/rustlib/multirust-channel-manifest.toml") {
+        if ($5 + 0 > cap + 0) exit 3
+        print "f", mode, ms, rel
         next
       }
       if (rel == "lib/rustlib/components") { print "f", mode, cs, rel; next }
@@ -115,7 +126,8 @@ print_digests() {
 run_tree() {
   [ -f "$1/lib/rustlib/components" ] || die "$1/lib/rustlib/components is missing"
   comp_sha=$(components_sha "$1/lib/rustlib/components")
-  tree_sha=$(canonical_listing "$1" "$comp_sha")
+  urls_digest=$(urls_sha "$1/lib/rustlib/multirust-channel-manifest.toml")
+  tree_sha=$(canonical_listing "$1" "$comp_sha" "$urls_digest")
   print_digests "$comp_sha" "$tree_sha"
 }
 
@@ -237,7 +249,8 @@ run_manifest() {
   write_bookkeeping "$stage"
   normalise_modes "$stage"
   comp_sha=$(components_sha "$work/components")
-  tree_sha=$(canonical_listing "$stage" "$comp_sha")
+  urls_digest=$(urls_sha "$work/channel.toml")
+  tree_sha=$(canonical_listing "$stage" "$comp_sha" "$urls_digest")
   print_digests "$comp_sha" "$tree_sha"
   printf 'TreeDigestPin::new("%s", "%s", "%s", "%s"),\n' "$version" "$target" "$comp_sha" "$tree_sha"
 }
