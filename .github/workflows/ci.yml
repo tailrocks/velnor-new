@@ -230,6 +230,7 @@ jobs:
     runs-on: ubuntu-26.04
     timeout-minutes: 10
     env: &m11
+      RUSTUP_AUTO_INSTALL: "0"
       VELNOR_ASSET_SHA256: ae9b45357917fb3dd279b2fb1d0f6df527ca1a3403fb4af3baf2043c56be4559
       VELNOR_ASSET_URL: https://github.com/tailrocks/velnor-new/releases/download/v0.1.72/velnor-actions-0.1.72-x86_64-unknown-linux-gnu
       VELNOR_RELEASE_COMMIT: ba363080a7707684fe8f2094851fa513687de73b
@@ -298,7 +299,6 @@ jobs:
           CARGO_TARGET_DIR: ${{ runner.temp }}/velnor/ledger-cli-target
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
-          RUSTUP_AUTO_INSTALL: "0"
           RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
         run: "env -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR mise --no-config --no-env --no-hooks exec 'rust@'\"${VELNOR_TOOL_RUST}\" -- cargo build --locked --offline -p velnor-actions-cli --bin velnor-actions"
       - name: Publish ledger CLI outputs
@@ -545,6 +545,7 @@ jobs:
       MBX_CC: "0"
       MBX_GC_AUTO: "0"
       MBX_SHARE_OUT_DIR: "0"
+      RUSTUP_AUTO_INSTALL: "0"
       VELNOR_ASSET_SHA256: ae9b45357917fb3dd279b2fb1d0f6df527ca1a3403fb4af3baf2043c56be4559
       VELNOR_ASSET_URL: https://github.com/tailrocks/velnor-new/releases/download/v0.1.72/velnor-actions-0.1.72-x86_64-unknown-linux-gnu
       VELNOR_RELEASE_COMMIT: ba363080a7707684fe8f2094851fa513687de73b
@@ -1865,7 +1866,9 @@ jobs:
     runs-on: ubuntu-26.04
     timeout-minutes: 15
     continue-on-error: true
-    env: *m1
+    env: &m34
+      RUSTUP_AUTO_INSTALL: "0"
+      VELNOR_RUN_KEY_ATTEMPT: ${{ github.run_attempt }}
     if: github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true
     steps:
       - *s19
@@ -1926,7 +1929,7 @@ jobs:
     runs-on: ubuntu-26.04
     timeout-minutes: 15
     continue-on-error: true
-    env: *m1
+    env: *m34
     if: github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true
     steps:
       - *s19
@@ -1950,7 +1953,7 @@ jobs:
     runs-on: ubuntu-26.04
     timeout-minutes: 10
     continue-on-error: true
-    env: *m1
+    env: *m34
     if: github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true
     steps:
       - name: Record optional cache budget
@@ -2040,7 +2043,7 @@ jobs:
     runs-on: ubuntu-26.04
     timeout-minutes: 15
     continue-on-error: true
-    env: *m1
+    env: *m34
     if: github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true
     steps:
       - *s19
@@ -2090,7 +2093,7 @@ jobs:
     runs-on: ubuntu-26.04
     timeout-minutes: 15
     continue-on-error: true
-    env: *m1
+    env: *m34
     if: github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true
     steps:
       - *s19

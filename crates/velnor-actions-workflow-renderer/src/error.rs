@@ -15,6 +15,7 @@ pub enum RenderError {
     BadCommand(String),
     PrivateSubcommand(String),
     UnsafePath(String),
+    WasteLint(crate::waste_lint::WasteFindings),
 }
 
 impl Display for RenderError {
@@ -35,6 +36,7 @@ impl Display for RenderError {
                 write!(f, "private subcommand token: {token}")
             }
             Self::UnsafePath(problem) => write!(f, "unsafe path: {problem}"),
+            Self::WasteLint(findings) => write!(f, "waste_lint:\n{findings}"),
         }
     }
 }

@@ -234,7 +234,18 @@ pub(crate) fn specs_step(specs: &[String], id: &str) -> Result<Step, RenderError
         .map(std::ffi::OsString::into_string)
         .collect::<Result<Vec<_>, _>>()
         .map_err(|_| invalid(&format!("install_argv_encoding:{id}")))?;
-    let mut step = crate::steps::ambient_shell_step(PREPARE_STEP_NAME, argv, BTreeMap::new())?;
+    let env = if specs
+        .iter()
+        .any(|spec| velnor_actions_mise::rust_spec_version(spec).is_some())
+    {
+        velnor_actions_contract::HomeKey::ALL
+            .iter()
+            .map(|key| (key.env_name().to_owned(), key.standard_value().to_owned()))
+            .collect()
+    } else {
+        BTreeMap::new()
+    };
+    let mut step = crate::steps::ambient_shell_step(PREPARE_STEP_NAME, argv, env)?;
     step.role = Some(StepRole::PreparePinnedTools);
     Ok(step)
 }

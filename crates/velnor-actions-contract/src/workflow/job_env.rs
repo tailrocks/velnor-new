@@ -42,11 +42,6 @@ impl HomeKey {
             Self::RustupHome | Self::MiseRustupHome => RUSTUP_HOME_EXPR,
         }
     }
-
-    #[must_use]
-    pub fn from_env_name(name: &str) -> Option<Self> {
-        Self::ALL.into_iter().find(|key| key.env_name() == name)
-    }
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -67,11 +62,7 @@ impl JobEnv {
     pub fn pairs(self) -> Vec<(&'static str, &'static str)> {
         match self {
             Self::Unset => Vec::new(),
-            Self::RustToolchain => HomeKey::ALL
-                .into_iter()
-                .map(|key| (key.env_name(), key.standard_value()))
-                .chain([(RUSTUP_AUTO_INSTALL_ENV, RUSTUP_AUTO_INSTALL_DISABLED)])
-                .collect(),
+            Self::RustToolchain => vec![(RUSTUP_AUTO_INSTALL_ENV, RUSTUP_AUTO_INSTALL_DISABLED)],
         }
     }
 
