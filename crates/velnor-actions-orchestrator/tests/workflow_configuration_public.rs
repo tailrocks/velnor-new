@@ -87,6 +87,8 @@ mod support;
 mod timeouts;
 #[path = "workflow_configuration_public/tools_producers.rs"]
 mod tools_producers;
+#[path = "workflow_configuration_public/tools_producers_donor_rust.rs"]
+mod tools_producers_donor_rust;
 #[path = "workflow_configuration_public/tools_producers_donors.rs"]
 mod tools_producers_donors;
 #[path = "workflow_configuration_public/tools_producers_mutations.rs"]
