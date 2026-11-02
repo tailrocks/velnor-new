@@ -219,21 +219,22 @@ fn check_unit_claims<'a>(
     miss_reasons: &mut BTreeSet<String>,
 ) -> BTreeSet<&'a str> {
     let mut claimed = BTreeSet::new();
-    for result in ledgers.iter().flat_map(|ledger| &ledger.ordered_results) {
-        if !plan.task_ids.contains(&result.unit_id) {
-            signals.planning_failed = true;
-            miss_reasons.insert("cache_corrupt".to_owned());
-        }
-        if !claimed.insert(result.unit_id.as_str()) {
-            signals.planning_failed = true;
-            miss_reasons.insert("cache_corrupt".to_owned());
-        }
-        if plan.obligations.iter().any(|obligation| {
-            obligation.task_id == result.unit_id
-                && obligation.decision != ObligationDecision::Execute
-        }) {
-            signals.planning_failed = true;
-            miss_reasons.insert("gate_mismatch".to_owned());
+    for ledger in ledgers {
+        for result in &ledger.ordered_results {
+            claimed.insert(result.unit_id.as_str());
+            let obligation = plan
+                .obligations
+                .iter()
+                .find(|obligation| obligation.task_id == result.unit_id);
+            if obligation.is_none_or(|obligation| obligation.job_id != ledger.job.job_key) {
+                signals.planning_failed = true;
+                miss_reasons.insert("cache_corrupt".to_owned());
+            }
+            if obligation.is_some_and(|obligation| obligation.decision != ObligationDecision::Execute)
+            {
+                signals.planning_failed = true;
+                miss_reasons.insert("gate_mismatch".to_owned());
+            }
         }
     }
     claimed

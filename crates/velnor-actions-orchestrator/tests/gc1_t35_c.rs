@@ -97,7 +97,8 @@ fn merge_units(
     )
 }
 
-fn check_foreign_group_rejected() -> Result<(), Box<dyn Error>> {
+#[test]
+fn foreign_group_rejected() -> Result<(), Box<dyn Error>> {
     let task = task_id()?;
     let (plan, matrix, report, _) = check_run_fixture()?;
     let covering = ledger(&task, JOB_ID)?;
@@ -121,7 +122,8 @@ fn check_foreign_group_rejected() -> Result<(), Box<dyn Error>> {
     )
 }
 
-fn check_missing_group_ledger_rejected() -> Result<(), Box<dyn Error>> {
+#[test]
+fn missing_group_ledger_rejected() -> Result<(), Box<dyn Error>> {
     let units = two_units(JOB_ID, SIDE_JOB_ID)?;
     let final_report = merge_units(
         &units,
@@ -135,7 +137,8 @@ fn check_missing_group_ledger_rejected() -> Result<(), Box<dyn Error>> {
     )
 }
 
-fn check_unclaimed_tofu_unit_rejected() -> Result<(), Box<dyn Error>> {
+#[test]
+fn unclaimed_tofu_unit_rejected() -> Result<(), Box<dyn Error>> {
     let units = two_units("tofu-unit-root", "tofu-unit-root")?;
     let final_report = merge_units(
         &units,
@@ -149,7 +152,8 @@ fn check_unclaimed_tofu_unit_rejected() -> Result<(), Box<dyn Error>> {
     )
 }
 
-fn check_check_group_without_ledger_passes() -> Result<(), Box<dyn Error>> {
+#[test]
+fn check_group_without_ledger_passes() -> Result<(), Box<dyn Error>> {
     let units = two_units(JOB_ID, "check-side")?;
     let final_report = merge_units(
         &units,
@@ -164,7 +168,8 @@ fn check_check_group_without_ledger_passes() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn check_check_group_ledger_rejected() -> Result<(), Box<dyn Error>> {
+#[test]
+fn check_group_ledger_rejected() -> Result<(), Box<dyn Error>> {
     let units = two_units(JOB_ID, "check-side")?;
     let final_report = merge_units(
         &units,
@@ -181,7 +186,8 @@ fn check_check_group_ledger_rejected() -> Result<(), Box<dyn Error>> {
     )
 }
 
-fn check_duplicate_unit_claim_rejected() -> Result<(), Box<dyn Error>> {
+#[test]
+fn duplicate_unit_claim_rejected() -> Result<(), Box<dyn Error>> {
     let units = two_units(JOB_ID, SIDE_JOB_ID)?;
     let final_report = merge_units(
         &units,
@@ -199,12 +205,30 @@ fn check_duplicate_unit_claim_rejected() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
-fn gc1_t35_crate_group_coverage() -> Result<(), Box<dyn Error>> {
-    check_foreign_group_rejected()?;
-    check_missing_group_ledger_rejected()?;
-    check_unclaimed_tofu_unit_rejected()?;
-    check_check_group_without_ledger_passes()?;
-    check_check_group_ledger_rejected()?;
-    check_duplicate_unit_claim_rejected()?;
-    Ok(())
+fn crate_job_left_out_of_the_request_rejected() -> Result<(), Box<dyn Error>> {
+    let units = two_units(JOB_ID, SIDE_JOB_ID)?;
+    let final_report = merge_units(&units, &[JOB_ID], &[ledger(&units.first, JOB_ID)?])?;
+    planning_failed(
+        &final_report,
+        "no_entry",
+        "Run crate job left out of the request dodged ledger coverage",
+    )
+}
+
+#[test]
+fn cross_group_claims_rejected() -> Result<(), Box<dyn Error>> {
+    let units = two_units(JOB_ID, SIDE_JOB_ID)?;
+    let final_report = merge_units(
+        &units,
+        &[JOB_ID, SIDE_JOB_ID],
+        &[
+            ledger(&units.second, JOB_ID)?,
+            ledger(&units.first, SIDE_JOB_ID)?,
+        ],
+    )?;
+    planning_failed(
+        &final_report,
+        "cache_corrupt",
+        "ledgers claiming units of another crate job did not fail Required",
+    )
 }
