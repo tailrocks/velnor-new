@@ -7,9 +7,12 @@ use std::os::unix::fs::symlink;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use crate::derive::{list_files, outcome};
+use velnor_actions_workflow_renderer::verifier_builders::TreeDigestPin;
+
+use crate::derive::{list_files, outcome, printed};
 use crate::fixture::{
-    CAP, CHANNEL_MANIFEST, FIXTURE_BOOKKEEPING, Fixture, MULTIRUST_CONFIG, Outcome,
+    CAP, CHANNEL_MANIFEST, FIXTURE_BOOKKEEPING, Fixture, MALFORMED_HEADERS, MULTIRUST_CONFIG,
+    Outcome, PHASES, TARGET, VERSION, script,
 };
 
 type Env<'a> = &'a [(&'a str, &'a str)];
@@ -88,6 +91,42 @@ fn n1d_derive_rejects_a_malformed_section_header_and_writes_no_listing() {
     );
     assert!(failed_closed(&outcome) && !listing.exists(), "{outcome:?}");
 }
+
+#[test]
+fn n1e_derive_rejects_a_header_outside_the_dotted_key_grammar_and_accepts_every_real_header_form() {
+    let dir = tempfile::tempdir().expect("listing dir");
+    let mut failures = Vec::new();
+    for (index, header) in MALFORMED_HEADERS.iter().enumerate() {
+        let listing = dir.path().join(format!("listing-{index}"));
+        let manifest =
+            format!("{FIXTURE_BOOKKEEPING}\n{header}\nurl = \"https://attacker.example/x\"\n");
+        let outcome = derive_tree(
+            &tree_with(CHANNEL_MANIFEST, manifest.as_bytes()),
+            &listing,
+            NO_ENV,
+        );
+        if !failed_closed(&outcome) || listing.exists() {
+            failures.push(format!("{header}: {outcome:?}"));
+        }
+    }
+    assert!(failures.is_empty(), "{failures:#?}");
+
+    let real = format!("{FIXTURE_BOOKKEEPING}\n{REAL_HEADER_FORMS}");
+    let fx = tree_with(CHANNEL_MANIFEST, real.as_bytes());
+    let derived = derive_tree(&fx, &dir.path().join("real-listing"), NO_ENV);
+    assert_eq!(derived.code, Some(0), "{derived:?}");
+    let pin = TreeDigestPin::new(
+        VERSION,
+        TARGET,
+        printed(&derived, "components_sha256"),
+        printed(&derived, "tree_sha256"),
+    );
+    for phase in PHASES {
+        fx.run(&script(phase, &[pin])).assert_pinned();
+    }
+}
+
+const REAL_HEADER_FORMS: &str = "[[artifacts.installer-msi.target.aarch64-pc-windows-gnullvm]]\nurl = \"https://static.rust-lang.org/dist/x.msi\"\n\n[[artifacts.source-code.target.\"*\"]]\nurl = \"https://static.rust-lang.org/dist/x.tar.gz\"\n\n[pkg.rust-src.target.\"*\"]\navailable = true\n\n[pkg.rust-std.target.\"thumbv8m.base-none-eabi\"]\navailable = false\n\n[[pkg.rust.target.aarch64-apple-darwin.components]]\npkg = \"rust-std\"\ntarget = \"aarch64-apple-darwin\"\n";
 
 #[test]
 fn n9_an_over_cap_bookkeeping_file_fails_closed_without_a_partial_listing() {
@@ -182,6 +221,52 @@ fn n11_a_listing_path_inside_the_tree_is_refused_before_anything_is_scanned_or_w
             );
             (!failed_closed(&outcome) || snapshot(&root) != before)
                 .then(|| format!("{}: {outcome:?}", row.name))
+        })
+        .collect::<Vec<_>>();
+    assert!(failures.is_empty(), "{failures:#?}");
+}
+
+#[test]
+fn n11b_a_listing_path_that_resolves_into_the_tree_is_refused_and_leaves_the_tree_and_its_digest_unchanged()
+ {
+    type Aim = fn(&Path, &Path) -> PathBuf;
+    let rows: [(&str, Aim); 4] = [
+        ("tree itself", |root, _| root.to_path_buf()),
+        ("tree with trailing slash", |root, _| {
+            PathBuf::from(format!("{}/", root.display()))
+        }),
+        ("outside symlink to a file in the tree", |root, outside| {
+            let link = outside.join("link");
+            symlink(root.join("lib/prior.listing"), &link).expect("file link");
+            link
+        }),
+        ("outside symlink to the tree", |root, outside| {
+            let link = outside.join("link");
+            symlink(root, &link).expect("tree link");
+            link
+        }),
+    ];
+    let failures = rows
+        .iter()
+        .filter_map(|(name, aim)| {
+            let fx = Fixture::standard();
+            fx.put("lib/prior.listing", b"earlier run\n", 0o644);
+            let root = fx.root();
+            let outside = tempfile::tempdir().expect("outside dir");
+            let listing = aim(&root, outside.path());
+            let before = snapshot(&root);
+            let plain = derive(&fx.toolchains(), root.as_os_str(), None, NO_ENV);
+            let outcome = derive(
+                &fx.toolchains(),
+                root.as_os_str(),
+                Some(listing.as_os_str()),
+                NO_ENV,
+            );
+            let after = derive(&fx.toolchains(), root.as_os_str(), None, NO_ENV);
+            (!failed_closed(&outcome)
+                || snapshot(&root) != before
+                || tree_digest(&after) != tree_digest(&plain))
+            .then(|| format!("{name}: {outcome:?}"))
         })
         .collect::<Vec<_>>();
     assert!(failures.is_empty(), "{failures:#?}");

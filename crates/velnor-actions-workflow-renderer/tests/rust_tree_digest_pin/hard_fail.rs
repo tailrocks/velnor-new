@@ -7,8 +7,8 @@ use std::path::Path;
 
 use crate::fixture::{
     CAP, CHANNEL_MANIFEST, FIXTURE_BOOKKEEPING, FIXTURE_COMPONENTS, FIXTURE_COMPONENTS_SHA256,
-    Fixture, INSTALLER_VERSION, MANIFEST_CARGO, MANIFEST_RUSTC, MISMATCH, MULTIRUST_CONFIG,
-    Outcome, PHASES, Row, TARGET, VERSION, fixture_pin, row, run_rows, script,
+    Fixture, INSTALLER_VERSION, MALFORMED_HEADERS, MANIFEST_CARGO, MANIFEST_RUSTC, MISMATCH,
+    MULTIRUST_CONFIG, Outcome, PHASES, Row, TARGET, VERSION, fixture_pin, row, run_rows, script,
 };
 
 const COMPONENTS: &str = "lib/rustlib/components";
@@ -186,6 +186,25 @@ fn n1d_a_malformed_section_header_is_unreadable_while_a_well_formed_artifacts_he
             "malformed {phase:?}: {outcome:?}"
         );
     }
+}
+
+#[test]
+fn n1e_a_section_header_outside_the_dotted_key_grammar_is_unreadable_in_both_phases() {
+    let mut failures = Vec::new();
+    for header in MALFORMED_HEADERS {
+        let manifest = format!("{FIXTURE_BOOKKEEPING}\n{header}\n{ARTIFACTS_BODY}");
+        for phase in PHASES {
+            let fx = Fixture::standard();
+            fx.put(CHANNEL_MANIFEST, manifest.as_bytes(), 0o644);
+            let outcome = fx.run(&script(phase, &[fixture_pin()]));
+            if !(hard_failed(&outcome)
+                && outcome.stdout.contains("bookkeeping_manifest_unreadable"))
+            {
+                failures.push(format!("{header} {phase:?}: {outcome:?}"));
+            }
+        }
+    }
+    assert!(failures.is_empty(), "{failures:#?}");
 }
 
 fn config_with(bytes: usize) -> Fixture {

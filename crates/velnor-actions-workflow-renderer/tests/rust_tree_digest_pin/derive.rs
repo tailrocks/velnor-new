@@ -171,7 +171,7 @@ pub(crate) fn outcome(output: &Output) -> Outcome {
     }
 }
 
-fn printed(outcome: &Outcome, key: &str) -> &'static str {
+pub(crate) fn printed(outcome: &Outcome, key: &str) -> &'static str {
     let value = outcome
         .stdout
         .lines()

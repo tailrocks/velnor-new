@@ -305,3 +305,14 @@ pub(crate) fn run_rows(rows: &[Row<'_>], accepts: &(dyn Fn(&Outcome) -> bool + S
     });
     assert!(failures.is_empty(), "{failures:#?}");
 }
+
+pub(crate) const MALFORMED_HEADERS: [&str; 8] = [
+    "[[artifacts..foo]]",
+    "[[artifacts.]]",
+    "[[.artifacts]]",
+    "[[artifacts. foo]]",
+    "[[artifacts.foo+bar]]",
+    "[[artifacts.target.*]]",
+    "[[artifacts.\"foo]]",
+    "[pkg..cargo]",
+];

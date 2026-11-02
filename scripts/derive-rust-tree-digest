@@ -134,6 +134,8 @@ print_digests() {
 
 refuse_listing_inside() {
   [ -n "$listing_out" ] || return 0
+  [ ! -d "$listing_out" ] || die "listing $listing_out is a directory"
+  [ ! -L "$listing_out" ] || die "listing $listing_out is a symlink"
   tree_real=$(cd "$1" && pwd -P) || die "cannot resolve $1"
   listing_real=$(cd "$(dirname "$listing_out")" && pwd -P) || die "cannot resolve the directory of $listing_out"
   case "$listing_real/" in

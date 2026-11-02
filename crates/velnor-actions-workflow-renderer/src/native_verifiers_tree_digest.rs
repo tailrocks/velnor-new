@@ -93,7 +93,7 @@ impl TreeDigestPin {
     }
 }
 
-pub(crate) const NORMAL_FORM_FUNCTION: &str = r##"normal_form() { awk '/^$/ { next } /^(\[\[[A-Za-z0-9._"*+-]+\]\]|\[[A-Za-z0-9._"*+-]+\])$/ { n[$0]++; sec = $0 "#" n[$0]; skip = ($0 ~ /^\[\[artifacts\./); if (!skip) print sec; next } /^[a-z0-9_-]+ = ("[^"]*"|true|false|\[[^]]*\])$/ { val = substr($0, index($0, " = ") + 3); if (skip || ($1 == "git_commit_hash" && sec ~ /^\[pkg\.[^].]*\]#/) || (($1 == "components" || $1 == "extensions") && val == "[]" && sec ~ /^\[pkg\.[^]]*\.target\.[^]]*\]#/) || ($1 == "is_extension" && (val == "true" || val == "false") && sec ~ /^\[\[pkg\.[^]]*\.(components|extensions)\]\]#/)) next; print sec, $0; next } { bad = 1 } END { exit bad }' "$1" > "$2.raw" && LC_ALL=C sort "$2.raw" > "$2"; }"##;
+pub(crate) const NORMAL_FORM_FUNCTION: &str = r##"normal_form() { awk '/^$/ { next } /^(\[\[([A-Za-z0-9_-]+|"[A-Za-z0-9._*-]+")(\.([A-Za-z0-9_-]+|"[A-Za-z0-9._*-]+"))*\]\]|\[([A-Za-z0-9_-]+|"[A-Za-z0-9._*-]+")(\.([A-Za-z0-9_-]+|"[A-Za-z0-9._*-]+"))*\])$/ { n[$0]++; sec = $0 "#" n[$0]; skip = ($0 ~ /^\[\[artifacts\./); if (!skip) print sec; next } /^[a-z0-9_-]+ = ("[^"]*"|true|false|\[[^]]*\])$/ { val = substr($0, index($0, " = ") + 3); if (skip || ($1 == "git_commit_hash" && sec ~ /^\[pkg\.[^].]*\]#/) || (($1 == "components" || $1 == "extensions") && val == "[]" && sec ~ /^\[pkg\.[^]]*\.target\.[^]]*\]#/) || ($1 == "is_extension" && (val == "true" || val == "false") && sec ~ /^\[\[pkg\.[^]]*\.(components|extensions)\]\]#/)) next; print sec, $0; next } { bad = 1 } END { exit bad }' "$1" > "$2.raw" && LC_ALL=C sort "$2.raw" > "$2"; }"##;
 
 const FOREIGN_TARGET: &str = "aarch64-unknown-linux-gnu";
 
