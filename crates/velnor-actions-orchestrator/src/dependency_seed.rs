@@ -98,6 +98,7 @@ fn seed_job(
         ),
         permissions: None,
         environment: None,
+        env: velnor_actions_contract::JobEnv::Unset,
         steps,
         cache_mode: None,
     })

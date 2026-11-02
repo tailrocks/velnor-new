@@ -220,6 +220,7 @@ pub(crate) fn build_jobs(
                     condition: None,
                     permissions: Some(Permissions::default()),
                     environment: None,
+                    env: velnor_actions_contract::JobEnv::Unset,
                     steps,
                     cache_mode: None,
                 },

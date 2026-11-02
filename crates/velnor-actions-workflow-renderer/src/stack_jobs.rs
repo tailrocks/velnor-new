@@ -98,6 +98,7 @@ pub fn build_stack_job(policy: &StackJobPolicy, checkout_uses: &str) -> Result<J
         }),
         cache_mode: None,
         environment: None,
+        env: velnor_actions_contract::JobEnv::Unset,
         steps: all,
         check_runner: None,
     })

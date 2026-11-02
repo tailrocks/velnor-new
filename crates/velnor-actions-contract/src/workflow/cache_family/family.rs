@@ -9,6 +9,8 @@ use super::{CacheTrust, S256_DIGEST_BYTES};
 
 pub const CARGO_HOME_EXPR: &str = "${{ runner.temp }}/velnor/cargo";
 
+pub const RUSTUP_HOME_EXPR: &str = "${{ runner.temp }}/velnor/rustup";
+
 pub const RUNNER_TEMP_EXPR: &str = "${{ runner.temp }}";
 
 pub const RUNNER_TEMP_SHELL: &str = "$RUNNER_TEMP";

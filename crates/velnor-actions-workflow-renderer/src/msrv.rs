@@ -88,6 +88,7 @@ pub fn msrv_job(
         permissions: None,
         cache_mode: None,
         environment: None,
+        env: velnor_actions_contract::JobEnv::Unset,
         steps: vec![
             steps::checkout_step(checkout_uses)?,
             msrv_step(spec, argv, env)?,

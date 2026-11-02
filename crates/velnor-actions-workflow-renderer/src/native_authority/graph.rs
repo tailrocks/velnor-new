@@ -374,6 +374,7 @@ fn metadata(runner: &str) -> Job {
         condition: None,
         permissions: None,
         environment: None,
+        env: velnor_actions_contract::JobEnv::Unset,
         steps: Vec::new(),
         cache_mode: None,
     }

@@ -3,6 +3,7 @@
 
 use std::collections::BTreeMap;
 
+use velnor_actions_contract::workflow::cache_family::{CARGO_HOME_EXPR, RUSTUP_HOME_EXPR};
 use velnor_actions_contract::{NextestRunIgnored, RustSuiteConfig, Step};
 
 use super::RustSuitesRenderSpec;
@@ -19,8 +20,8 @@ fn nextest_tool_spec(version: &str) -> String {
 pub(super) fn base_suite_env(spec: &RustSuitesRenderSpec) -> BTreeMap<String, String> {
     crate::toolchain_env::with_toolchain_homes(
         &BTreeMap::new(),
-        "${{ runner.temp }}/velnor/rustup",
-        "${{ runner.temp }}/velnor/cargo",
+        RUSTUP_HOME_EXPR,
+        CARGO_HOME_EXPR,
         if spec.export_rustup_toolchain {
             &spec.rust_version
         } else {
@@ -55,14 +56,8 @@ pub(super) fn producer_mark_steps(spec: &RustSuitesRenderSpec) -> Result<Vec<Ste
 
 fn verify_env() -> BTreeMap<String, String> {
     BTreeMap::from([
-        (
-            "RUSTUP_HOME".to_owned(),
-            "${{ runner.temp }}/velnor/rustup".to_owned(),
-        ),
-        (
-            "CARGO_HOME".to_owned(),
-            "${{ runner.temp }}/velnor/cargo".to_owned(),
-        ),
+        ("RUSTUP_HOME".to_owned(), RUSTUP_HOME_EXPR.to_owned()),
+        ("CARGO_HOME".to_owned(), CARGO_HOME_EXPR.to_owned()),
     ])
 }
 

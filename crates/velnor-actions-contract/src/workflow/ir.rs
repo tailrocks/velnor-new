@@ -81,6 +81,9 @@ pub struct Job {
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub outputs: BTreeMap<String, String>,
 
+    #[serde(default, skip_serializing_if = "super::job_env::JobEnv::is_unset")]
+    pub env: super::job_env::JobEnv,
+
     pub steps: Vec<Step>,
 }
 

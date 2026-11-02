@@ -4,13 +4,15 @@
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::workflow::ledger_cli::{
-    LEDGER_CLI_ARTIFACT_NAME, LEDGER_CLI_ARTIFACT_NAME_EXPR, LEDGER_CLI_AUTO_INSTALL_ENV,
-    LEDGER_CLI_BUILD_STEP, LEDGER_CLI_CONSUME_CONDITION, LEDGER_CLI_DOWNLOAD_STEP,
-    LEDGER_CLI_OFFLINE_FLAG, LEDGER_CLI_PUBLISH_STEP, LEDGER_CLI_SHA256_ENV,
-    LEDGER_CLI_SHA256_EXPR, LEDGER_CLI_SOURCE_SHA_ENV, LEDGER_CLI_SOURCE_SHA_EXPR,
-    LEDGER_CLI_UPLOAD_STEP, LEDGER_CLI_VERIFY_STEP,
+    LEDGER_CLI_ARTIFACT_NAME, LEDGER_CLI_ARTIFACT_NAME_EXPR, LEDGER_CLI_BUILD_STEP,
+    LEDGER_CLI_CONSUME_CONDITION, LEDGER_CLI_DOWNLOAD_STEP, LEDGER_CLI_OFFLINE_FLAG,
+    LEDGER_CLI_PUBLISH_STEP, LEDGER_CLI_SHA256_ENV, LEDGER_CLI_SHA256_EXPR,
+    LEDGER_CLI_SOURCE_SHA_ENV, LEDGER_CLI_SOURCE_SHA_EXPR, LEDGER_CLI_UPLOAD_STEP,
+    LEDGER_CLI_VERIFY_STEP,
 };
-use velnor_actions_contract::{Step, StepId, StepRole};
+use velnor_actions_contract::{
+    RUSTUP_AUTO_INSTALL_DISABLED, RUSTUP_AUTO_INSTALL_ENV, Step, StepId, StepRole,
+};
 use velnor_actions_mise::{PinnedTool, ToolCatalog};
 
 use crate::yaml::Yaml;
@@ -101,7 +103,10 @@ pub fn ledger_cli_build_step(
     .to_vec();
     let mut env = env.clone();
     env.insert(TARGET_ENV.to_owned(), LEDGER_CLI_TARGET_DIR.to_owned());
-    env.insert(LEDGER_CLI_AUTO_INSTALL_ENV.to_owned(), "0".to_owned());
+    env.insert(
+        RUSTUP_AUTO_INSTALL_ENV.to_owned(),
+        RUSTUP_AUTO_INSTALL_DISABLED.to_owned(),
+    );
     let mut step = steps::shell_step(LEDGER_CLI_BUILD_STEP, argv, env)?;
     step.role = Some(StepRole::LedgerCliBuild);
     Ok(step)

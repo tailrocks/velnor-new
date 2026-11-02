@@ -49,6 +49,7 @@ jobs:
       MBX_CC: "0"
       MBX_GC_AUTO: "0"
       MBX_SHARE_OUT_DIR: "0"
+      RUSTUP_AUTO_INSTALL: "0"
       VELNOR_RUN_KEY_ATTEMPT: ${{ needs.plan.outputs.plan_attempt || github.run_attempt }}
     needs:
       - plan
@@ -292,6 +293,7 @@ jobs:
     timeout-minutes: 5
     env:
       CARGO_CACHE_AUTO_CLEAN_FREQUENCY: never
+      RUSTUP_AUTO_INSTALL: "0"
       VELNOR_ASSET_SHA256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
       VELNOR_ASSET_URL: https://github.com/tailrocks/velnor-new/releases/download/v0.1.72/velnor-actions-0.1.72-x86_64-unknown-linux-gnu
       VELNOR_RELEASE_COMMIT: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
@@ -502,6 +504,7 @@ jobs:
       MBX_CC: "0"
       MBX_GC_AUTO: "0"
       MBX_SHARE_OUT_DIR: "0"
+      RUSTUP_AUTO_INSTALL: "0"
       VELNOR_ASSET_SHA256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
       VELNOR_ASSET_URL: https://github.com/tailrocks/velnor-new/releases/download/v0.1.72/velnor-actions-0.1.72-x86_64-unknown-linux-gnu
       VELNOR_RELEASE_COMMIT: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
@@ -703,6 +706,7 @@ jobs:
     continue-on-error: true
     env:
       CARGO_CACHE_AUTO_CLEAN_FREQUENCY: never
+      RUSTUP_AUTO_INSTALL: "0"
       VELNOR_RUN_KEY_ATTEMPT: ${{ github.run_attempt }}
     if: github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true
     steps:
@@ -873,6 +877,7 @@ jobs:
     continue-on-error: true
     env:
       CARGO_CACHE_AUTO_CLEAN_FREQUENCY: never
+      RUSTUP_AUTO_INSTALL: "0"
       VELNOR_RUN_KEY_ATTEMPT: ${{ github.run_attempt }}
     if: github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true
     steps:

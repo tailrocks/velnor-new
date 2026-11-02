@@ -38,6 +38,7 @@ fn required_gate_job(runs_on: &str) -> Result<Job, RenderError> {
         permissions: None,
         cache_mode: None,
         environment: None,
+        env: velnor_actions_contract::JobEnv::Unset,
         steps: vec![step],
     })
 }
@@ -56,6 +57,7 @@ pub(crate) fn required_gate_job_yaml(runs_on: &str) -> Result<(String, Yaml), Re
         permissions: None,
         cache_mode: None,
         environment: None,
+        env: velnor_actions_contract::JobEnv::Unset,
         steps: Vec::new(),
     };
     let jobs = BTreeMap::from([

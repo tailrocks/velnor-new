@@ -163,6 +163,7 @@ pub fn build_verification_task_job(
         permissions: Some(verification_permissions()),
         cache_mode: None,
         environment: None,
+        env: velnor_actions_contract::JobEnv::Unset,
         steps,
     })
 }

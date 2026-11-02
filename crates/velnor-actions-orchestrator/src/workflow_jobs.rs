@@ -65,6 +65,7 @@ pub(crate) fn lint_job(label: &str, catalog: &ToolCatalog) -> Result<Job, Orches
         condition: None,
         permissions: None,
         environment: None,
+        env: velnor_actions_contract::JobEnv::Unset,
         steps: vec![checkout_action()?, prepare, verify, lint],
         cache_mode: None,
     })

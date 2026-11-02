@@ -65,6 +65,7 @@ fn job_with(
         environment: None,
         services: Vec::new(),
         outputs: BTreeMap::new(),
+        env: velnor_actions_contract::JobEnv::Unset,
         steps,
     }
 }

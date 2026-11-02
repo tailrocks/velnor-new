@@ -159,7 +159,7 @@ pub fn finalize_jobs(
     final_steps::insert_final_fanin(&mut jobs, ctx)?;
     crate::dispatch_cache_boundary::suppress_unvalidated_cache_access(&mut jobs);
     validate_final_jobs(ir, &mut jobs, policy, ValidationPhase::Finalized, ctx)?;
-    crate::cache_doctor::check(&jobs)?;
+    crate::waste_lint::bind_and_check(&mut jobs)?;
     Ok(jobs)
 }
 
