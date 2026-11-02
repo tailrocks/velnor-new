@@ -32,7 +32,7 @@ generator if Velnor wrote them; there is no ignore.
 
    ```toml
    [tools]
-   jactionlint = "2.3.0"
+   jactionlint = "2.4.0"
    shellcheck = "0.11.0"
    ```
 

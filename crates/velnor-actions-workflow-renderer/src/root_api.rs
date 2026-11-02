@@ -15,6 +15,10 @@ pub use crate::commands::{
 };
 pub use crate::error::RenderError;
 pub use crate::guard::{SafeTreePath, check_no_symlink, join_within_root, validate_tree_path};
+pub use crate::ledger_cli_steps::{
+    LEDGER_CLI_TARGET_DIR, ledger_cli_build_step, ledger_cli_download_step,
+    ledger_cli_publish_step, ledger_cli_upload_step, ledger_cli_verify_step,
+};
 pub use crate::marker::{
     MARKER_PREFIX, MARKER_SUFFIX, check_first_line, marker_for_version, validate_version,
     with_marker,
@@ -60,7 +64,7 @@ pub use crate::steps::{
     mbx_steps_for_driver, merge_step, plan_step, scan_for_private_subcommands, shell_step,
     upload_suite_archive_step, upload_suite_artifact_step, validate_uses, write_request_step,
 };
-pub use crate::steps_internal::group_ledger_steps::crate_group_ledger_step;
+pub use crate::steps_internal::group_ledger_steps::crate_group_ledger_steps;
 pub use crate::tofu_apply::{
     AWS_CREDENTIALS_STEP_ID, AWS_CREDENTIALS_USES, AWS_CREDENTIALS_VERSION,
     TOFU_APPLY_CONCURRENCY_GROUP, TOFU_APPLY_JOB_ID, TOFU_APPLY_TIMEOUT_MINUTES,

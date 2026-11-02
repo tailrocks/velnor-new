@@ -45,6 +45,10 @@ pub enum StepId {
     FamilySizePythonVenv,
 
     FamilySizeAnsibleCollections,
+
+    LedgerCliPublish,
+
+    LedgerCliVerify,
 }
 
 impl StepId {
@@ -70,6 +74,8 @@ impl StepId {
             Self::FamilySizeDbtPackages => "family-size-dbt-packages",
             Self::FamilySizePythonVenv => "family-size-python-venv",
             Self::FamilySizeAnsibleCollections => "family-size-ansible-collections",
+            Self::LedgerCliPublish => "ledger-cli",
+            Self::LedgerCliVerify => "verify-ledger-cli",
         }
     }
 }

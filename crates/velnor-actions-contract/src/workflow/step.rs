@@ -208,7 +208,9 @@ fn validate_id_kind(id: Option<StepId>, kind: &StepKind, job: &str) -> Result<()
         | StepId::FamilySizePlaywrightBrowsers
         | StepId::FamilySizeDbtPackages
         | StepId::FamilySizePythonVenv
-        | StepId::FamilySizeAnsibleCollections => {
+        | StepId::FamilySizeAnsibleCollections
+        | StepId::LedgerCliPublish
+        | StepId::LedgerCliVerify => {
             matches!(kind, StepKind::Shell { .. })
         }
         StepId::SourcesRestore | StepId::MbxBundleRestore => {

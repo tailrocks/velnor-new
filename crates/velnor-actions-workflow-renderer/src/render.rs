@@ -38,7 +38,7 @@ pub use action_pins_impl::action_pins;
 #[path = "validator_tools.rs"]
 mod validator_tools;
 
-pub const ALINT_BINARY_VERSION: &str = "v0.20.1";
+pub const ALINT_BINARY_VERSION: &str = "v0.21.0";
 
 #[path = "render_context.rs"]
 mod context;
@@ -174,6 +174,11 @@ fn validate_final_jobs(
     crate::cache_steps::append_workspace_cleanups(jobs)?;
     execution_boundaries::validate_required_verdict(jobs, phase, &ctx.authority_steps)?;
     execution_boundaries::validate_trusted_plan(jobs, policy, phase, &ctx.authority_steps)?;
+    velnor_actions_contract::workflow::ledger_cli::validate_ledger_cli_jobs(
+        jobs,
+        velnor_actions_contract::workflow::ledger_cli::LedgerCliSource::for_policy(policy),
+    )
+    .map_err(RenderError::Contract)?;
     let mut finalized = ir.clone();
     finalized.jobs.clone_from(jobs);
     finalized.validate().map_err(RenderError::Contract)

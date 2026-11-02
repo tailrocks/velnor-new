@@ -824,10 +824,10 @@ jobs:
         with:
           persist-credentials: "false"
       - name: Set up Mise
-        uses: jdx/mise-action@6be3c7ed4c21d4f76b208d351d95aac273ebb76d
+        uses: jdx/mise-action@6612f0ef07ed2a736cd1e00a94a065522dd41195
         with:
-          version: 2026.10.21
-          sha256: ccfe12d7a62c6fb9def2a20db1f210f13a51de881f21fd8c85db4b6312405d07
+          version: 2026.10.25
+          sha256: 5d362ecc578dc7c146679b841dda949d6472cbf86ff5635db7afdca1b6b3fd87
           install: "false"
           env: "false"
           cache: "false"
@@ -923,10 +923,10 @@ jobs:
         with:
           persist-credentials: "false"
       - name: Set up Mise
-        uses: jdx/mise-action@6be3c7ed4c21d4f76b208d351d95aac273ebb76d
+        uses: jdx/mise-action@6612f0ef07ed2a736cd1e00a94a065522dd41195
         with:
-          version: 2026.10.21
-          sha256: ccfe12d7a62c6fb9def2a20db1f210f13a51de881f21fd8c85db4b6312405d07
+          version: 2026.10.25
+          sha256: 5d362ecc578dc7c146679b841dda949d6472cbf86ff5635db7afdca1b6b3fd87
           install: "false"
           env: "false"
           cache: "false"
@@ -1008,19 +1008,19 @@ jobs:
           ref: ${{ github.sha }}
           persist-credentials: "false"
       - name: Setup Mise
-        uses: jdx/mise-action@6be3c7ed4c21d4f76b208d351d95aac273ebb76d
+        uses: jdx/mise-action@6612f0ef07ed2a736cd1e00a94a065522dd41195
         with:
           cache: "false"
           cache_save: "false"
           env: "false"
           install: "false"
-          sha256: ccfe12d7a62c6fb9def2a20db1f210f13a51de881f21fd8c85db4b6312405d07
-          version: 2026.10.21
+          sha256: 5d362ecc578dc7c146679b841dda949d6472cbf86ff5635db7afdca1b6b3fd87
+          version: 2026.10.25
       - name: Verify selected ref, version, and binary digest
         shell: bash
         env:
-          MISE_VERSION: 2026.10.21
-          MISE_SHA256: ccfe12d7a62c6fb9def2a20db1f210f13a51de881f21fd8c85db4b6312405d07
+          MISE_VERSION: 2026.10.25
+          MISE_SHA256: 5d362ecc578dc7c146679b841dda949d6472cbf86ff5635db7afdca1b6b3fd87
         run: "set -euo pipefail\ntest \"$(git rev-parse HEAD)\" = \"$GITHUB_SHA\"\nversion=\"$(mise --version)\"\ncase \"$version\" in \"$MISE_VERSION linux-x64 (\"[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]\")\") ;; *) echo \"unexpected Mise version: $version\" >&2; exit 1 ;; esac\nbinary=\"$(command -v mise)\"\nactual=\"$(sha256sum \"$binary\" | awk '{print $1}')\"\ntest \"$actual\" = \"$MISE_SHA256\""
   mise-pin-macos-x64:
     name: Mise pin / hosted / macOS x64
@@ -1036,17 +1036,17 @@ jobs:
           ref: ${{ github.sha }}
           persist-credentials: "false"
       - name: Setup Mise
-        uses: jdx/mise-action@6be3c7ed4c21d4f76b208d351d95aac273ebb76d
+        uses: jdx/mise-action@6612f0ef07ed2a736cd1e00a94a065522dd41195
         with:
           cache: "false"
           cache_save: "false"
           env: "false"
           install: "false"
-          sha256: 5dde6e3fcda4d8a68b95cc2180dacd58e7b940f86e4579991e13540a5d009055
-          version: 2026.10.21
+          sha256: e06eb3f0311dedbf65952ec2c0247398848653b302e6aad99d7371ad9ba33301
+          version: 2026.10.25
       - name: Verify selected ref, version, and binary digest
         shell: bash
         env:
-          MISE_VERSION: 2026.10.21
-          MISE_SHA256: 5dde6e3fcda4d8a68b95cc2180dacd58e7b940f86e4579991e13540a5d009055
+          MISE_VERSION: 2026.10.25
+          MISE_SHA256: e06eb3f0311dedbf65952ec2c0247398848653b302e6aad99d7371ad9ba33301
         run: "set -euo pipefail\ntest \"$(git rev-parse HEAD)\" = \"$GITHUB_SHA\"\nversion=\"$(mise --version)\"\ncase \"$version\" in \"$MISE_VERSION macos-x64 (\"[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]\")\") ;; *) echo \"unexpected Mise version: $version\" >&2; exit 1 ;; esac\nbinary=\"$(command -v mise)\"\nactual=\"$(shasum -a 256 \"$binary\" | awk '{print $1}')\"\ntest \"$actual\" = \"$MISE_SHA256\""

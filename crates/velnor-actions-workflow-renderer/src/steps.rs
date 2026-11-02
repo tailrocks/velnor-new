@@ -57,7 +57,7 @@ pub const RELEASE_COMMIT_ENV: &str = "VELNOR_RELEASE_COMMIT";
 pub const FORBIDDEN_TOKENS: &[&str] = &["__internal", "velnor-actions __", "velnor-actions run"];
 pub const UPLOAD_ARTIFACT_USES: &str = UPLOAD_ARTIFACT_ACTION_USES;
 pub const CHECKOUT_USES: &str = CHECKOUT_ACTION_USES;
-pub const ARTIFACT_RETENTION_DAYS: u32 = 30;
+pub use velnor_actions_contract::workflow::artifacts::ARTIFACT_RETENTION_DAYS;
 pub const DOWNLOAD_ARTIFACT_USES: &str = DOWNLOAD_ARTIFACT_ACTION_USES;
 pub const ACQUIRE_NAME: &str = "Acquire Velnor";
 

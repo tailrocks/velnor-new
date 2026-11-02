@@ -321,7 +321,7 @@ fn pins() -> ProductReleasePins {
                 velnor_actions_workflow_renderer::toolchain_env::credential_unset_prelude()
             ),
         ],
-        mr_boxington_version: "1.28.0".to_owned(),
+        mr_boxington_version: "1.29.1".to_owned(),
         gh_version: "2.83.1".to_owned(),
     }
 }
