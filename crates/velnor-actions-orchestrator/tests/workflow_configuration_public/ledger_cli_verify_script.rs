@@ -17,7 +17,7 @@ use super::one_job_per_crate::mbx_repo_for;
 use super::workflow_configuration_fixture;
 
 const RUNNER_DEFAULT_PATH: &str = "/usr/bin:/bin:/usr/sbin:/sbin";
-const RUNNER_DEFAULT_SHELL: &str = "bash -e {0}";
+pub(super) const RUNNER_DEFAULT_SHELL: &str = "bash -e {0}";
 
 pub(super) const BYTES: &[u8] = b"velnor ledger cli fixture\n";
 pub(super) const BYTES_SHA256: &str =
@@ -219,6 +219,18 @@ impl Planted {
         fs::write(
             &hook,
             format!("echo hook >> \"{}\"\nexit 0\n", self.log().display()),
+        )?;
+        Ok(hook)
+    }
+
+    pub(super) fn forging_hook(&self, payload: &str) -> Result<PathBuf, Box<dyn Error>> {
+        let hook = self.logs.path().join("forging_hook.sh");
+        fs::write(
+            &hook,
+            format!(
+                "echo hook >> \"{}\"\ncat >> \"$GITHUB_OUTPUT\" <<'PAYLOAD'\n{payload}PAYLOAD\nexit 0\n",
+                self.log().display()
+            ),
         )?;
         Ok(hook)
     }

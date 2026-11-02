@@ -20,21 +20,22 @@ const SCRUB_ACTION: &str = ".github/actions/velnor-tools-cache-scrub/action.yml"
 const ADMISSION_STEP: &str = "Keep only an exact cache hit or validated seed on a miss";
 const REVERIFY_STEP: &str = "Re-verify restored Mise installs";
 const SYSTEM_PATH: &str = "/usr/bin:/bin";
+pub(super) const RUNNER_BASH: &str = "bash --noprofile --norc -e -o pipefail {0}";
 
-type Env = Vec<(String, String)>;
+pub(super) type Env = Vec<(String, String)>;
 
-fn pair(name: &str, value: &str) -> (String, String) {
+pub(super) fn pair(name: &str, value: &str) -> (String, String) {
     (name.to_owned(), value.to_owned())
 }
 
-struct Sandbox {
-    home: TempDir,
-    runner_temp: TempDir,
+pub(super) struct Sandbox {
+    pub(super) home: TempDir,
+    pub(super) runner_temp: TempDir,
     workspace: TempDir,
 }
 
 impl Sandbox {
-    fn new() -> Result<Self, Box<dyn Error>> {
+    pub(super) fn new() -> Result<Self, Box<dyn Error>> {
         Ok(Self {
             home: tempfile::tempdir()?,
             runner_temp: tempfile::tempdir()?,
@@ -65,40 +66,90 @@ impl Sandbox {
         step: &RenderedVerify,
         extra: &[(String, String)],
     ) -> Result<Option<i32>, Box<dyn Error>> {
+        Ok(self
+            .spawn(&expand_shell(&step.shell), &step.run, extra)?
+            .code)
+    }
+
+    pub(super) fn run_with_output(
+        &self,
+        shell: &str,
+        run: &str,
+        extra: &[(String, String)],
+    ) -> Result<Captured, Box<dyn Error>> {
+        let output = self.workspace.path().join("github_output");
+        fs::write(&output, "")?;
+        let mut env = vec![pair("GITHUB_OUTPUT", &output.display().to_string())];
+        env.extend_from_slice(extra);
+        let mut captured = self.spawn(shell, run, &env)?;
+        captured.github_output = fs::read_to_string(&output)?;
+        Ok(captured)
+    }
+
+    fn spawn(
+        &self,
+        shell: &str,
+        run: &str,
+        extra: &[(String, String)],
+    ) -> Result<Captured, Box<dyn Error>> {
         let script = self.workspace.path().join("step.sh");
-        fs::write(&script, &step.run)?;
-        let mut words = step.shell.split_whitespace();
+        fs::write(&script, run)?;
+        let mut words = shell.split_whitespace();
         let program = resolve_on(words.next().ok_or("empty shell")?, SYSTEM_PATH)?;
-        let status = Command::new(program)
+        let output = Command::new(program)
             .args(words.map(|word| word.replace("{0}", &script.display().to_string())))
             .env_clear()
             .env("PATH", SYSTEM_PATH)
             .envs(self.base_env())
             .envs(extra.iter().map(|(name, value)| (name, value)))
             .current_dir(self.workspace.path())
-            .status()?;
-        Ok(status.code())
+            .output()?;
+        Ok(Captured {
+            code: output.status.code(),
+            stdout: String::from_utf8(output.stdout)?,
+            github_output: String::new(),
+        })
     }
 }
 
-struct Attack {
+pub(super) struct Captured {
+    pub(super) code: Option<i32>,
+    pub(super) stdout: String,
+    pub(super) github_output: String,
+}
+
+pub(super) fn expand_shell(shell: &str) -> String {
+    if shell == "bash" {
+        RUNNER_BASH.to_owned()
+    } else {
+        shell.to_owned()
+    }
+}
+
+pub(super) struct Attack {
     planted: Planted,
     hook: PathBuf,
 }
 
 impl Attack {
-    fn new() -> Result<Self, Box<dyn Error>> {
+    pub(super) fn new() -> Result<Self, Box<dyn Error>> {
         let planted = Planted::new(&[])?;
         let hook = planted.hook()?;
         Ok(Self { planted, hook })
     }
 
-    fn startup_env(&self) -> Env {
+    pub(super) fn forging(payload: &str) -> Result<Self, Box<dyn Error>> {
+        let planted = Planted::new(&[])?;
+        let hook = planted.forging_hook(payload)?;
+        Ok(Self { planted, hook })
+    }
+
+    pub(super) fn startup_env(&self) -> Env {
         let hook = self.hook.display().to_string();
         vec![pair("BASH_ENV", &hook), pair("ENV", &hook)]
     }
 
-    fn function_env(&self, digest: &str) -> Env {
+    pub(super) fn function_env(&self, digest: &str) -> Env {
         let function = format!(
             "() {{ echo hook >> \"{}\"; echo {digest}  forged; }}",
             self.planted.log().display()
@@ -114,12 +165,12 @@ impl Attack {
             .collect()
     }
 
-    fn calls(&self) -> String {
+    pub(super) fn calls(&self) -> String {
         self.planted.calls()
     }
 }
 
-fn step_in(action: &str, name: &str) -> Result<RenderedVerify, Box<dyn Error>> {
+pub(super) fn step_in(action: &str, name: &str) -> Result<RenderedVerify, Box<dyn Error>> {
     let (_repo, prepared) = prepared_for(WorkflowPolicy::VelnorRepositoryV1)?;
     let tree = render_staged_tree(&prepared)?;
     rendered_step(tree.get(action).ok_or("action is missing")?, name)
