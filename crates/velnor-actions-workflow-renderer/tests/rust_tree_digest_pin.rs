@@ -33,10 +33,10 @@ use velnor_actions_workflow_renderer::verifier_builders::{
     verify_rust_owned_argv,
 };
 
-const REAL_COMPONENTS: &str = "cargo-x86_64-unknown-linux-gnu\nclippy-preview-x86_64-unknown-linux-gnu\nrust-std-x86_64-unknown-linux-gnu\nrustc-x86_64-unknown-linux-gnu\nrustfmt-preview-x86_64-unknown-linux-gnu\n";
+const REAL_COMPONENTS: &str = "cargo-x86_64-unknown-linux-gnu\nclippy-preview-x86_64-unknown-linux-gnu\nrust-std-aarch64-unknown-linux-gnu\nrust-std-x86_64-unknown-linux-gnu\nrustc-x86_64-unknown-linux-gnu\nrustfmt-preview-x86_64-unknown-linux-gnu\n";
 
 const REAL_COMPONENTS_SHA256: &str =
-    "e3808a4c78c316b41a42ed88010c6bbf24ae24a348a5a22b8e3bc62328db1981";
+    "eb99c307118212e62e5f64b2ab14797d3557102b2696b1bb6a2c1faca34c53e3";
 
 const MANIFEST: &str = "lib/rustlib/multirust-channel-manifest.toml";
 
@@ -323,5 +323,19 @@ fn n6_hostile_helpers_on_path_and_in_the_tree_are_never_run() {
             .run_with_path(&script(phase, &[fixture_pin()]), hostile.path())
             .assert_fell_through();
         assert!(!flipped.marker().exists());
+    }
+}
+
+#[test]
+fn n7_a_missing_pin_reports_the_observed_components_digest() {
+    for phase in PHASES {
+        let outcome = Fixture::standard().run(&script(phase, &[]));
+        outcome.assert_fell_through();
+        assert!(
+            outcome.stdout.contains(&format!(
+                "::notice::pin_mismatch: no_pin components={FIXTURE_COMPONENTS_SHA256}\n"
+            )),
+            "{outcome:?}"
+        );
     }
 }

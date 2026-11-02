@@ -15,7 +15,7 @@ use velnor_actions_workflow_renderer::verifier_builders::RUST_TREE_DIGESTS;
 use super::tools_producers::{POLICIES, finalized, positions};
 use super::workflow_configuration_fixture::make_repo;
 
-const MINIMAL_COMPONENTS: [&str; 3] = ["cargo", "rust-std", "rustc"];
+const TOOLCHAIN_FILE: &str = include_str!("../../../../rust-toolchain.toml");
 
 const UPGRADES_CONFIG: &str = "schema = 1\n[workflow]\nname = \"CI\"\ndefault_branch = \"testmain\"\n\n[upgrades]\nenabled = true\n";
 
@@ -47,24 +47,50 @@ fn added_components(step: &Step) -> Vec<String> {
         .collect()
 }
 
-fn final_components_sha256(job: &Job) -> String {
-    let mut names = MINIMAL_COMPONENTS
+fn configured_targets() -> Result<Vec<String>, Box<dyn Error>> {
+    let toolchain = toml::from_str::<toml::Table>(TOOLCHAIN_FILE)?;
+    toolchain
+        .get("toolchain")
+        .and_then(|table| table.get("targets"))
+        .and_then(toml::Value::as_array)
+        .ok_or("rust-toolchain.toml declares no targets")?
         .iter()
-        .map(|name| (*name).to_owned())
+        .map(|target| {
+            target
+                .as_str()
+                .map(str::to_owned)
+                .ok_or_else(|| "rust-toolchain.toml target is not a string".into())
+        })
+        .collect()
+}
+
+fn final_component_names(job: &Job) -> Result<Vec<String>, Box<dyn Error>> {
+    let host_components = ["cargo".to_owned(), "rustc".to_owned()]
+        .into_iter()
         .chain(
             positions(job, StepRole::PrepareRustComponents)
                 .into_iter()
                 .flat_map(|at| added_components(&job.steps[at]))
                 .map(|name| format!("{name}-preview")),
         )
-        .map(|name| format!("{name}-{RUST_TARGET_TRIPLE}\n"))
+        .map(|name| format!("{name}-{RUST_TARGET_TRIPLE}\n"));
+    let mut names = configured_targets()?
+        .into_iter()
+        .map(|target| format!("rust-std-{target}\n"))
+        .chain(host_components)
         .collect::<Vec<_>>();
     names.sort();
-    Sha256::digest(names.concat().as_bytes())
-        .iter()
-        .map(|byte| format!("{byte:02x}"))
-        .collect::<Vec<_>>()
-        .concat()
+    Ok(names)
+}
+
+fn final_components_sha256(job: &Job) -> Result<String, Box<dyn Error>> {
+    Ok(
+        Sha256::digest(final_component_names(job)?.concat().as_bytes())
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect::<Vec<_>>()
+            .concat(),
+    )
 }
 
 fn final_tree_is_reverified(job: &Job) -> bool {
@@ -121,7 +147,7 @@ fn pinned_component_sets_match_the_sets_generated_jobs_install() -> Result<(), B
     let produced = rendered_rust_jobs()?
         .iter()
         .map(|(_, job)| final_components_sha256(job))
-        .collect::<BTreeSet<_>>();
+        .collect::<Result<BTreeSet<_>, _>>()?;
     let pinned = RUST_TREE_DIGESTS
         .iter()
         .filter(|pin| pin.version() == RUST_VERSION && pin.target() == RUST_TARGET_TRIPLE)
