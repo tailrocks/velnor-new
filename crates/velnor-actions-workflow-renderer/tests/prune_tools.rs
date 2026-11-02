@@ -37,17 +37,17 @@ fn snapshot_keys_group_by_unit_without_digest() {
     );
     assert_eq!(
         prune_group_key(
-            "velnor-v1-state-trusted-s256-0d58c66670730fc3af7f9579c097b5b947410057122dc7bddc2482c60f929886"
+            "velnor-v2-state-trusted-s256-0d58c66670730fc3af7f9579c097b5b947410057122dc7bddc2482c60f929886"
         ),
-        "velnor-v1-state-trusted"
+        "velnor-v2-state-trusted"
     );
 }
 
 #[test]
 fn keys_without_snapshot_suffix_keep_identity() {
     assert_eq!(
-        prune_group_key("velnor-v1-state-trusted"),
-        "velnor-v1-state-trusted"
+        prune_group_key("velnor-v2-state-trusted"),
+        "velnor-v2-state-trusted"
     );
 }
 

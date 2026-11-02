@@ -78,9 +78,7 @@ fn publish_discover(setup: &PublishSetup) -> Result<(), Box<dyn Error>> {
     )?
     .ok_or_else(|| fail("mbx driver produced no steps"))?;
     let discover = shell_script_of(&steps[3])?;
-    let status = std::process::Command::new("sh")
-        .arg("-c")
-        .arg(&discover)
+    let status = production_state_env(std::process::Command::new("sh").arg("-c").arg(&discover))
         .env("RUNNER_TEMP", &setup.runner)
         .env("GITHUB_WORKSPACE", &setup.workspace)
         .env("GITHUB_OUTPUT", &setup.github_output)
@@ -132,15 +130,17 @@ fn write_over_ceiling_state(setup: &PublishSetup) -> Result<(), Box<dyn Error>> 
 }
 
 fn run_export(setup: &PublishSetup) -> Result<String, Box<dyn Error>> {
-    let output = std::process::Command::new("sh")
-        .arg("-c")
-        .arg(&setup.export)
-        .env("RUNNER_TEMP", &setup.runner)
-        .env("GITHUB_WORKSPACE", &setup.workspace)
-        .env("GITHUB_OUTPUT", &setup.github_output)
-        .env("MBX_CACHE_EXPORT_GROUP", "velnor")
-        .output()
-        .map_err(|error| fail(&format!("export failed to run: {error}")))?;
+    let output = production_state_env(
+        std::process::Command::new("sh")
+            .arg("-c")
+            .arg(&setup.export),
+    )
+    .env("RUNNER_TEMP", &setup.runner)
+    .env("GITHUB_WORKSPACE", &setup.workspace)
+    .env("GITHUB_OUTPUT", &setup.github_output)
+    .env("MBX_CACHE_EXPORT_GROUP", "velnor")
+    .output()
+    .map_err(|error| fail(&format!("export failed to run: {error}")))?;
     if !output.status.success() {
         return Err(fail(&format!(
             "export script failed the step: {}",

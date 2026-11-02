@@ -136,6 +136,9 @@ fn compat_head_lines(
         ),
         format!("uname -s >> \"{dir}/compat\""),
         format!("uname -m >> \"{dir}/compat\""),
+        format!(
+            "printf '%s\\n' \"MBX_SHARE_OUT_DIR=${{MBX_SHARE_OUT_DIR-}}\" \"MBX_BUILD_SCRIPT_EXECUTION=${{MBX_BUILD_SCRIPT_EXECUTION-}}\" \"ImageOS=${{ImageOS-}}\" >> \"{dir}/compat\""
+        ),
         format!("s256 \"{dir}/compat\""),
     ]
 }

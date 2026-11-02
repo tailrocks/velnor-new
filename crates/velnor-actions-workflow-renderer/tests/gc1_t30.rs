@@ -124,6 +124,15 @@ fn setup_step(with: BTreeMap<String, String>) -> Step {
     }
 }
 
+const PRODUCTION_IMAGE_OS: &str = "ubuntu26";
+
+fn production_state_env(command: &mut std::process::Command) -> &mut std::process::Command {
+    command
+        .env("MBX_SHARE_OUT_DIR", "1")
+        .env("MBX_BUILD_SCRIPT_EXECUTION", "1")
+        .env("ImageOS", PRODUCTION_IMAGE_OS)
+}
+
 #[path = "gc1_t30_behave.rs"]
 mod gc1_t30_behave;
 #[path = "gc1_t30_checks.rs"]
