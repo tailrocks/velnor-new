@@ -10,6 +10,9 @@ mod homebrew_adoption_seed_public_deletions;
 
 use std::{error::Error, fs, io, path::Path, process::Command};
 
+#[path = "../../test_support/root_cargo_lock.rs"]
+mod root_cargo_lock;
+
 use sha2::{Digest, Sha256};
 use tempfile::TempDir;
 use velnor_actions_contract::{GeneratorLock, ReleaseTarget, Step, StepKind, StepRole};
@@ -241,6 +244,7 @@ fn repository_with_origin(origin: Option<&str>) -> Result<TempDir, Box<dyn Error
         "[package]\nname = \"seed-fixture\"\nversion = \"0.1.0\"\nedition = \"2024\"\n",
     )?;
     fs::write(temp.path().join("src/lib.rs"), "pub fn fixture() {}\n")?;
+    root_cargo_lock::write_root_cargo_lock(temp.path(), &["seed-fixture"])?;
     let git = |args: &[&str]| -> Result<(), Box<dyn Error>> {
         let path =
             std::env::var_os("PATH").ok_or_else(|| io::Error::other("host PATH is unset"))?;
@@ -280,7 +284,7 @@ fn repository_with_origin(origin: Option<&str>) -> Result<TempDir, Box<dyn Error
     git(&["config", "--local", "commit.gpgsign", "false"])?;
     git(&["config", "user.name", "Fixture"])?;
     git(&["config", "user.email", "fixture@example.invalid"])?;
-    git(&["add", "Cargo.toml", "src/lib.rs"])?;
+    git(&["add", "Cargo.toml", "Cargo.lock", "src/lib.rs"])?;
     git(&["commit", "-m", "fixture base"])?;
     Ok(temp)
 }
