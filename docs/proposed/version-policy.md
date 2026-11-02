@@ -116,7 +116,7 @@ completed local update-set checks. Required pull-request and protected-main
 hosted checks remain separate publication gates:
 
 ```yaml
-uses: jdx/mise-action@6be3c7ed4c21d4f76b208d351d95aac273ebb76d # v5.2.4
+uses: jdx/mise-action@6612f0ef07ed2a736cd1e00a94a065522dd41195 # v5.2.5
 uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
 uses: jdx/mr-boxington-action@88acf2bb50552c7c508cbac13e5f8c576b95b1de # v1.7.3
@@ -141,15 +141,15 @@ exact-path `actions/cache` layer in every Rust mode. All references come from th
 `asamarts/alint` pin is emitted only by the separate Velnor
 repository-policy job.
 `taiki-e/install-action`, `actions/setup-*`, branch refs, unapproved tag refs,
-and floating action refs are forbidden. jactionlint v2.3.0 and ShellCheck
+and floating action refs are forbidden. jactionlint v2.4.0 and ShellCheck
 v0.11.0 are the verified stable tool defaults. Both are installed through
 Mise. `taiki-e/install-action` and other tool-installer actions are
 forbidden. V1 emits no Python run steps, so it does not install Pyflakes, and
 every jactionlint run passes `--pyflakes=` so no other `PATH` binary runs.
 
-jactionlint v2.3.0 (`jdx/jactionlint`, published 2026-10-21) is the catalog
+jactionlint v2.4.0 (`jdx/jactionlint`, published 2026-10-29) is the catalog
 pin for the workflow, composite action and Dependabot linter (checked
-2026-10-22). It installs through the Mise registry name `jactionlint`
+2026-11-02). It installs through the Mise registry name `jactionlint`
 (backend `github:jdx/jactionlint`), so the lock key, the project
 `[tools]` key and the CI install spec share one spelling; the
 `github:jdx/jactionlint` and `packslip:github.com/jdx/jactionlint` keys

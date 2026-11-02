@@ -38,46 +38,46 @@ BUILD = {
 }
 ABI = {"mise": "mise-owned-cargo-wrapper-v1", "mbx": None}
 
-OFFICIAL_MISE_VERSION = "2026.10.18"
-OFFICIAL_MISE_SOURCE_COMMIT = "8369bc78dc4761660337a2518b1445447438159d"
-OFFICIAL_MISE_SOURCE_TREE = "f6484ac76553c3dca10c7ea690d01e359dac098b"
-OFFICIAL_MISE_BASE = "https://github.com/jdx/mise/releases/download/v2026.10.18/mise-v2026.10.18-"
+OFFICIAL_MISE_VERSION = "2026.10.25"
+OFFICIAL_MISE_SOURCE_COMMIT = "3c78bbb2d58c0b668fe8d5bebf4a8cb66194e1aa"
+OFFICIAL_MISE_SOURCE_TREE = "210ff139381d56299eff55059066ce456fdea622"
+OFFICIAL_MISE_BASE = "https://github.com/jdx/mise/releases/download/v2026.10.25/mise-v2026.10.25-"
 OFFICIAL_MISE_PINS = {
-    "linux-x64": ("standalone", "e97c38973336aa2ff350fea50f47b412b266fe263b102b7200ff1e9b118c6942",
-                  "e97c38973336aa2ff350fea50f47b412b266fe263b102b7200ff1e9b118c6942"),
-    "linux-arm64.tar.gz": ("tar.gz", "c5a49a47f8184f5649f3d8685b408bd72325a823f41cf618c60f3ffc303090a1",
-                           "3a3c72376687ba21a588d0f5a2c88c76f483fb6cdece7b0fc43d5e3132b08a52"),
-    "macos-arm64.tar.gz": ("tar.gz", "1b1cd6ad4a6176db5ddaf03bf71e131b26324af09cfcf14d7d7038bee60be85d",
-                           "d40e2fcd96fed7c70b04af282c36534d87d0318bef89c16fa00c9f98e55ade88"),
+    "linux-x64": ("standalone", "5d362ecc578dc7c146679b841dda949d6472cbf86ff5635db7afdca1b6b3fd87",
+                  "5d362ecc578dc7c146679b841dda949d6472cbf86ff5635db7afdca1b6b3fd87"),
+    "linux-arm64.tar.gz": ("tar.gz", "a7d1e2add53441ff76e7e971e7a3fb15c117741836ce51c026f5fb7eebe7dbcf",
+                           "bb09e88b13164ca90691a5cc042726d079f0ba26ab55527344cb173c2e83c998"),
+    "macos-arm64.tar.gz": ("tar.gz", "774236e3247e48d78078c0bce79e5327d4e4479f1a94c8487827f178197ee39b",
+                           "8a3ef00765b009278197aba627ac00d6e9c63f6aeb04d4f4b2cfe0e59ddc2fd6"),
 }
 OFFICIAL_MISE_HOSTS = {"x86_64-unknown-linux-gnu": "linux-x64",
                       "aarch64-unknown-linux-gnu": "linux-arm64.tar.gz",
                       "aarch64-apple-darwin": "macos-arm64.tar.gz"}
 
-OFFICIAL_MBX_VERSION = "1.28.0"
-OFFICIAL_MBX_SOURCE_COMMIT = "44f50c329a83dedd012e1e49cf9f265f79226a83"
-OFFICIAL_MBX_SOURCE_TREE = "ccfdb5978fb74a7bd854a0cd9eeafa635619c50f"
+OFFICIAL_MBX_VERSION = "1.29.1"
+OFFICIAL_MBX_SOURCE_COMMIT = "b0b67184f01c1de02082296d093af547ecf4c2ab"
+OFFICIAL_MBX_SOURCE_TREE = "44535809652e19ffa6c26231ba9f03e141189b97"
 OFFICIAL_MBX_ASSETS = {
     "x86_64-unknown-linux-gnu": {
-        "url": "https://github.com/jdx/mr-boxington/releases/download/v1.28.0/mbx-x86_64-unknown-linux-gnu.tar.gz",
-        "archive_sha256": "50ce9360221d9274a73d70c9d2d5285dc2d8353a101de0845e3da5bb0083bcfb",
-        "binary_sha256": "6d3e1afe2a91f83aeed762a576d0a2b3c990a82f7e3e45926e1cd4b922f0df1b",
+        "url": "https://github.com/jdx/mr-boxington/releases/download/v1.29.1/mbx-x86_64-unknown-linux-gnu.tar.gz",
+        "archive_sha256": "ca95f28c77711845c0455839792ca3f3070bdf007979ab75bf7e10c03b07fe3f",
+        "binary_sha256": "4b0c0fcfc9329a9d76fd6bdefc1ee34822580864f5f5ba2f0b47dcbbffce2eca",
         "format": "tar.gz", "binary_member": "mbx", "version": OFFICIAL_MBX_VERSION,
         "source_repository": "https://github.com/jdx/mr-boxington",
         "source_commit": OFFICIAL_MBX_SOURCE_COMMIT,
         "source_tree": OFFICIAL_MBX_SOURCE_TREE},
     "aarch64-unknown-linux-gnu": {
-        "url": "https://github.com/jdx/mr-boxington/releases/download/v1.28.0/mbx-aarch64-unknown-linux-gnu.tar.gz",
-        "archive_sha256": "9056d34520991f80c9f708d36008fcc732e500d735591a8649029d476cb566bd",
-        "binary_sha256": "bc9d537789f16da1e37b9ca64fde107246a902f916b989fe3f84b0a4d4bbd2a5",
+        "url": "https://github.com/jdx/mr-boxington/releases/download/v1.29.1/mbx-aarch64-unknown-linux-gnu.tar.gz",
+        "archive_sha256": "92e5554096a9b0c083aaf3d461262d31e3f7a0aa3d38ed2972c62c2b9a953c41",
+        "binary_sha256": "495e2a1cf1595f45d540bd09d8034ef322142356859dced99b0254d9e9028c0e",
         "format": "tar.gz", "binary_member": "mbx", "version": OFFICIAL_MBX_VERSION,
         "source_repository": "https://github.com/jdx/mr-boxington",
         "source_commit": OFFICIAL_MBX_SOURCE_COMMIT,
         "source_tree": OFFICIAL_MBX_SOURCE_TREE},
     "aarch64-apple-darwin": {
-        "url": "https://github.com/jdx/mr-boxington/releases/download/v1.28.0/mbx-aarch64-apple-darwin.tar.gz",
-        "archive_sha256": "ac73ba0637a443ba9c43354008f6bcd5d9e8a84b703e46f23202025c1f849472",
-        "binary_sha256": "068cf7b41d58b5dd630e56b4980650a4f57f5e3267abc6d16a614088f499cebf",
+        "url": "https://github.com/jdx/mr-boxington/releases/download/v1.29.1/mbx-aarch64-apple-darwin.tar.gz",
+        "archive_sha256": "2c19baafcda87ad948f071c571f57b2cf9eaeee2c971c5536b93ae3a036d5e75",
+        "binary_sha256": "1c6e342a341e567fd752dea8b665c57c92ba2e65c0bfb13e7555c2051097ec88",
         "format": "tar.gz", "binary_member": "mbx", "version": OFFICIAL_MBX_VERSION,
         "source_repository": "https://github.com/jdx/mr-boxington",
         "source_commit": OFFICIAL_MBX_SOURCE_COMMIT,

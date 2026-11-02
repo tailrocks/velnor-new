@@ -30,7 +30,7 @@ and tool output that does not match the declared probes fail closed.
 The Cargo backend is not admitted by this authoring request.
 
 The generic Aqua authoring path covers package/version examples such as
-`jdx/jactionlint` 2.3.0, `koalaman/shellcheck` 0.11.0, and
+`jdx/jactionlint` 2.4.0, `koalaman/shellcheck` 0.11.0, and
 `jdx/mr-boxington` 1.27.0. These examples describe authoring scope; they are
 not measured or live-qualified pins.
 

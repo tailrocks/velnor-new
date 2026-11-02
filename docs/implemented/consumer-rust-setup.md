@@ -104,8 +104,7 @@ targets = ["aarch64-unknown-linux-gnu", "x86_64-unknown-linux-gnu"]
 ### How `mr_boxington = true` and MBX 1.29.1 behave
 
 Checked 2026-11-02 against mise 2026.10.25 and MBX 1.29.1. velnor-new pins
-MBX 1.28.0 until the P1 pin bump lands, so the 1.29.1 behavior below applies
-only after that bump.
+MBX 1.29.1, so the 1.29.1 behavior below applies to it.
 
 - At mise 2026.10.25, `mr_boxington = true` on the `rust` tool adds a
   `[wrappers.cargo]` entry with `command = "mbx"` and the environment
@@ -132,7 +131,7 @@ only after that bump.
   [PR #873](https://github.com/jdx/mr-boxington/pull/873). After
   `mbx cache import` restores workspace state, a grouped export keeps the
   actions that Cargo reports as fresh. MBX releases before 1.29.1, including
-  1.28.0 (the current velnor-new pin), can export "0 actions and 0 objects"
+  1.28.0 (the former velnor-new pin), can export "0 actions and 0 objects"
   in that case, as the before output in PR #873 shows. A grouped export needs
   the group at both phases. Set `MBX_CACHE_EXPORT_GROUP=G` while the build
   runs, so MBX records the actions under `G`. Then run

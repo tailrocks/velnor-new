@@ -38,7 +38,7 @@ pub use action_pins_impl::action_pins;
 #[path = "validator_tools.rs"]
 mod validator_tools;
 
-pub const ALINT_BINARY_VERSION: &str = "v0.20.1";
+pub const ALINT_BINARY_VERSION: &str = "v0.21.0";
 
 #[path = "render_context.rs"]
 mod context;
