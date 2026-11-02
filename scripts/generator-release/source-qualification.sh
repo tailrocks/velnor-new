@@ -425,7 +425,7 @@ grep -Fx "$bun_version" "$evidence/bun-version.txt"
     `VELNOR_BUN_VERSION=${bun}\n`);
 JS
 mise --version | tee "$evidence/mise-version.txt"
-grep -Eq "(^|[[:space:]])2026\.10\.21([[:space:]]|$)" "$evidence/mise-version.txt"
+[ "$(awk '{print $1}' "$evidence/mise-version.txt")" = "$expected_mise" ]
     ;;
   install-pinned-rust-and-mbx)
 set -euo pipefail
