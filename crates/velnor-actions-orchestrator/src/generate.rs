@@ -4,7 +4,7 @@
 use std::path::{Path, PathBuf};
 
 #[path = "rust_install_audit.rs"]
-mod rust_install_audit;
+pub(crate) mod rust_install_audit;
 
 #[path = "mise_task_suites_emit.rs"]
 mod mise_task_suites_emit;

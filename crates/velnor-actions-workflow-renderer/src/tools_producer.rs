@@ -10,6 +10,8 @@ use velnor_actions_contract::workflow::{
 use velnor_actions_contract::workflow::{JACTIONLINT_VERIFIER_USES, RUST_VERIFIER_USES};
 use velnor_actions_contract::{Job, PullRequestCachePolicy, Step, StepKind, StepRole};
 
+use velnor_actions_mise::{RustSpecKind, rust_spec_kind};
+
 use crate::RenderError;
 use crate::native_verifiers::{
     VERIFY_JACTIONLINT_STEP, VERIFY_RESTORED_RUST_STEP, verify_jactionlint_step,
@@ -19,7 +21,6 @@ use crate::tools_identity::{ToolsDigest, tools_digest};
 
 const PRODUCER_DISPLAY_PREFIX: &str = "Tools producer / ";
 const PREPARE_STEP_NAME: &str = "Prepare pinned tools";
-const RUST_SPEC_PREFIX: &str = "rust@";
 
 struct ToolsProducerPlan {
     id: String,
@@ -145,6 +146,14 @@ fn install_steps(donor: &Job, id: &str) -> Result<Vec<Step>, RenderError> {
         }
     }
     let digest_specs = crate::cache_p08::infer_job_tools(donor);
+    if digest_specs.iter().any(|spec| {
+        matches!(
+            rust_spec_kind(spec),
+            RustSpecKind::Plain(_) | RustSpecKind::UnsupportedRust
+        )
+    }) {
+        return Err(invalid(&format!("donor_rust_install_not_minimal:{id}")));
+    }
     let has_role = |role| role_steps.iter().any(|step| step.role == Some(role));
     let mut steps = if has_role(StepRole::PreparePinnedTools) {
         let donor_role_steps = donor.steps.iter().filter(|step| is_install_role(step.role));
@@ -158,7 +167,7 @@ fn install_steps(donor: &Job, id: &str) -> Result<Vec<Step>, RenderError> {
         }
         let rust = digest_specs
             .iter()
-            .any(|spec| spec.starts_with(RUST_SPEC_PREFIX));
+            .any(|spec| velnor_actions_mise::rust_spec_version(spec).is_some());
         if rust && !has_role(StepRole::VerifyRustManifest) {
             return Err(invalid(&format!("donor_rust_without_verifier:{id}")));
         }

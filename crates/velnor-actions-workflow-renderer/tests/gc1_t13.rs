@@ -165,5 +165,31 @@ fn gc1_t13_preserves_contract() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+#[test]
+fn tools_identity_separates_rust_install_profiles() -> Result<(), Box<dyn Error>> {
+    let setup = mise_setup();
+    let digest = |spec: &str| -> Result<String, Box<dyn Error>> {
+        Ok(payload(
+            &setup,
+            "ubuntu-24.04",
+            "x86_64-unknown-linux-gnu",
+            &[spec],
+            Some("1.99.1"),
+            &["clippy", "rustfmt"],
+        )?
+        .static_digest()
+        .to_owned())
+    };
+    let minimal = digest("rust[profile=minimal]@1.99.1")?;
+    let unset = digest("rust@1.99.1")?;
+    if minimal == unset {
+        return Err(fail("install profile did not reach the tools identity"));
+    }
+    if minimal != digest("rust[profile=minimal]@1.99.1")? {
+        return Err(fail("identical inputs gave different identities"));
+    }
+    Ok(())
+}
+
 #[path = "gc1_t13_reject.rs"]
 mod gc1_t13_reject;

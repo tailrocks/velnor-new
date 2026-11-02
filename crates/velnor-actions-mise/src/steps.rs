@@ -124,7 +124,7 @@ impl PreparePinnedTools {
 
     #[must_use]
     pub fn argv(&self, catalog: &ToolCatalog) -> Vec<OsString> {
-        self.install.argv(catalog)
+        self.install.argv_with_install_profile(catalog)
     }
 
     #[must_use]
@@ -141,7 +141,7 @@ impl PreparePinnedTools {
 
     pub fn command(&self, catalog: &ToolCatalog) -> Result<IsolatedCommand, MiseError> {
         self.install
-            .command(catalog)?
+            .command_with_install_profile(catalog)?
             .with_env(&self.homes.env(catalog))
     }
 }

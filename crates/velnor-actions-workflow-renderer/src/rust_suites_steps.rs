@@ -97,7 +97,7 @@ fn install_suite_tools_step(spec: &RustSuitesRenderSpec) -> Result<Step, RenderE
             "--no-env".to_owned(),
             "--no-hooks".to_owned(),
             "install".to_owned(),
-            format!("rust@{}", spec.rust_version),
+            velnor_actions_mise::rust_install_spec(&spec.rust_version),
             nextest_tool_spec(&spec.cargo_nextest_version),
         ],
         base_suite_env(spec),

@@ -91,6 +91,48 @@ pub const COSIGN_DARWIN_ARM64_SHA256: &str =
     "9f9b8cd557cf2e5b3df3373a00baa005a86b02391e3e06dd0ce37b3a1533d3a4";
 
 const NEXTEST_TOOL_SPEC_PREFIX: &str = "aqua:nextest-rs/nextest/cargo-nextest";
+pub const RUST_INSTALL_OPTIONS: &str = "profile=minimal";
+
+#[must_use]
+pub fn rust_install_spec(version: &str) -> String {
+    format!("rust[{RUST_INSTALL_OPTIONS}]@{version}")
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RustSpecKind<'a> {
+    Plain(&'a str),
+    Minimal(&'a str),
+    NotRust,
+    UnsupportedRust,
+}
+
+#[must_use]
+pub fn rust_spec_kind(spec: &str) -> RustSpecKind<'_> {
+    let name_end = spec.find(['@', '[']).unwrap_or(spec.len());
+    if !matches!(&spec[..name_end], "rust" | "core:rust") {
+        return RustSpecKind::NotRust;
+    }
+    if let Some(version) = spec.strip_prefix("rust@") {
+        return if version.is_empty() {
+            RustSpecKind::UnsupportedRust
+        } else {
+            RustSpecKind::Plain(version)
+        };
+    }
+    spec.strip_prefix("rust[")
+        .and_then(|rest| rest.strip_prefix(RUST_INSTALL_OPTIONS))
+        .and_then(|rest| rest.strip_prefix("]@"))
+        .filter(|version| !version.is_empty())
+        .map_or(RustSpecKind::UnsupportedRust, RustSpecKind::Minimal)
+}
+
+#[must_use]
+pub fn rust_spec_version(spec: &str) -> Option<&str> {
+    match rust_spec_kind(spec) {
+        RustSpecKind::Plain(version) | RustSpecKind::Minimal(version) => Some(version),
+        RustSpecKind::NotRust | RustSpecKind::UnsupportedRust => None,
+    }
+}
 
 pub const RUST_TARGET_TRIPLE: &str = "x86_64-unknown-linux-gnu";
 
@@ -199,6 +241,19 @@ impl ToolCatalog {
             }
             _ => format!("{}@{}", tool.tool_name(), self.version(tool)),
         }
+    }
+
+    #[must_use]
+    pub fn install_spec(&self, tool: PinnedTool) -> String {
+        match tool {
+            PinnedTool::Rust => rust_install_spec(self.version(tool)),
+            _ => self.tool_spec(tool),
+        }
+    }
+
+    #[must_use]
+    pub fn install_specs(&self, tools: &[PinnedTool]) -> Vec<String> {
+        tools.iter().map(|tool| self.install_spec(*tool)).collect()
     }
 
     #[must_use]

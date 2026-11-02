@@ -57,14 +57,14 @@ fn donor_installs(job: &Job) -> Vec<&Step> {
         .collect()
 }
 
-fn run_text(step: &Step) -> Option<String> {
+pub(super) fn run_text(step: &Step) -> Option<String> {
     match &step.kind {
         StepKind::Shell { run, .. } => Some(run.join(" ")),
         _ => None,
     }
 }
 
-fn prepared_for(
+pub(super) fn prepared_for(
     policy: WorkflowPolicy,
 ) -> Result<(tempfile::TempDir, GenerationPreparation), Box<dyn Error>> {
     let repo = owner_feature_repo(policy, false, "default", "default")?;
@@ -72,7 +72,7 @@ fn prepared_for(
     Ok((repo, prepared))
 }
 
-fn finalized_after(
+pub(super) fn finalized_after(
     prepared: &mut GenerationPreparation,
     edit: impl Fn(&mut Job),
 ) -> Result<(), OrchestratorError> {
@@ -80,13 +80,13 @@ fn finalized_after(
     finalized_jobs(prepared).map(|_| ())
 }
 
-fn scrub_env(step: &mut Step) {
+pub(super) fn scrub_env(step: &mut Step) {
     if let StepKind::Shell { env, .. } = &mut step.kind {
         env.extend(velnor_actions_workflow_renderer::toolchain_env::credential_scrub());
     }
 }
 
-fn assert_hard_error(
+pub(super) fn assert_hard_error(
     result: Result<(), OrchestratorError>,
     code: &str,
 ) -> Result<(), Box<dyn Error>> {

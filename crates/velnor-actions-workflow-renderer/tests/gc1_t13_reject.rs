@@ -116,6 +116,36 @@ pub(crate) fn check_rejects_bad_specs(setup: &MiseSetup) -> Result<(), Box<dyn E
     Ok(())
 }
 
+pub(crate) fn check_rejects_decorated_rust_specs(setup: &MiseSetup) -> Result<(), Box<dyn Error>> {
+    let rows = [
+        (
+            "decorated rust without toolchain",
+            "rust[profile=complete]@1.99.1",
+        ),
+        (
+            "decorated rust with extra components",
+            "rust[profile=minimal,components=rust-docs]@1.99.1",
+        ),
+        (
+            "backend-qualified rust",
+            "core:rust[profile=complete]@1.99.1",
+        ),
+        ("backend-qualified plain rust", "core:rust@1.99.1"),
+    ];
+    for (label, spec) in rows {
+        reject_payload(
+            setup,
+            label,
+            "ubuntu-24.04",
+            "x86_64-unknown-linux-gnu",
+            &[spec],
+            None,
+            &[],
+        )?;
+    }
+    Ok(())
+}
+
 pub(crate) fn check_rejects_bad_setup_and_identity(
     setup: &MiseSetup,
 ) -> Result<(), Box<dyn Error>> {
@@ -158,6 +188,7 @@ fn gc1_t13_rejects_invalid_state() -> Result<(), Box<dyn Error>> {
     let setup = mise_setup();
     check_rejects_bad_lanes_and_targets(&setup)?;
     check_rejects_bad_specs(&setup)?;
+    check_rejects_decorated_rust_specs(&setup)?;
     check_rejects_bad_setup_and_identity(&setup)?;
     Ok(())
 }

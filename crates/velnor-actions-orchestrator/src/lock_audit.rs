@@ -27,8 +27,9 @@ use vectors::classify_mise_vectors;
 #[path = "lock_audit_prepare.rs"]
 mod prepare_sequence;
 use prepare_sequence::{
-    audit_validator_command, bare_install, install_subject, jactionlint_verifier_sequence_valid,
-    prepare_specs, published_helper_catalog, rust_verifier_sequence_valid, verifier_positions,
+    audit_validator_command, bare_install, check_rust_profile, install_subject,
+    jactionlint_verifier_sequence_valid, prepare_specs, published_helper_catalog,
+    rust_verifier_sequence_valid, verifier_positions,
 };
 
 #[derive(Clone, Copy)]
@@ -88,6 +89,7 @@ pub(crate) fn audit_prepare_installs_with_catalog_and_verifiers(
                 let spec = catalog.materialize(&spec);
                 match install_subject(id, step.role, &spec, catalog, helper_catalog.as_ref()) {
                     Some(subject) if is_rust(&subject) => {
+                        check_rust_profile(id, &spec, &mut blocking);
                         if rust_verifier_sequence_valid(job, &positions, Some(step_index)) {
                             rust_manifest_coverage(&subject, &mut blocking);
                         } else {
@@ -273,3 +275,7 @@ fn audit_against_lock(
         blocking,
     }
 }
+
+#[cfg(test)]
+#[path = "lock_audit_tests.rs"]
+mod tests;
