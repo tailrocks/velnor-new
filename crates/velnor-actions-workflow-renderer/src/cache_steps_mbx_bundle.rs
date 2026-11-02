@@ -7,7 +7,7 @@ use velnor_actions_contract::workflow::cache_family::{
     COMPLETE_STATE_TRANSPORT_EXPR, CacheFamily, RUNNER_TEMP_EXPR, RUNNER_TEMP_SHELL,
 };
 use velnor_actions_contract::workflow::cache_family_mbx::{
-    MBX_BUNDLE_KEY_EXPR, MBX_BUNDLE_RESTORE_KEYS_EXPR,
+    MBX_BUNDLE_KEY_EXPR, MBX_BUNDLE_RESTORE_CONDITION, MBX_BUNDLE_RESTORE_KEYS_EXPR,
 };
 use velnor_actions_contract::{Step, StepId, StepRole};
 
@@ -137,7 +137,7 @@ fn compat_head_lines(
         format!("uname -s >> \"{dir}/compat\""),
         format!("uname -m >> \"{dir}/compat\""),
         format!(
-            "printf '%s\\n' \"MBX_SHARE_OUT_DIR=${{MBX_SHARE_OUT_DIR-}}\" \"MBX_BUILD_SCRIPT_EXECUTION=${{MBX_BUILD_SCRIPT_EXECUTION-}}\" \"ImageOS=${{ImageOS-}}\" >> \"{dir}/compat\""
+            "printf '%s\\n' \"MBX_SHARE_OUT_DIR=${{MBX_SHARE_OUT_DIR-}}\" \"MBX_BUILD_SCRIPT_EXECUTION=${{MBX_BUILD_SCRIPT_EXECUTION-}}\" \"MBX_CC=${{MBX_CC-}}\" \"ImageOS=${{ImageOS-}}\" >> \"{dir}/compat\""
         ),
         format!("s256 \"{dir}/compat\""),
     ]
@@ -170,6 +170,7 @@ fn discover_step(
         "mkdir -p \"$d\"".to_owned(),
         S256_FN.to_owned(),
         format!("default_ref=\"${{{DEFAULT_REF_ENV}:-}}\""),
+        format!("if [ -z \"${{ImageOS-}}\" ]; then rm -f \"{DISCOVERY_RECORD}\"; printf '%s\\n' 'reason=image_os_missing' 'save=false' 'restore=false' >> \"$GITHUB_OUTPUT\"; printf '%s\\n' 'velnor: state snapshot disabled reason=image_os_missing'; exit 0; fi"),
         "trust=none".to_owned(),
         "if [ \"${GITHUB_EVENT_NAME:-}\" = push ] && [ -n \"${default_ref#refs/heads/}\" ] && [ \"${GITHUB_REF:-}\" = \"$default_ref\" ] && [ \"${GITHUB_REF_PROTECTED:-}\" = true ]; then trust=trusted; fi".to_owned(),
     ];
@@ -193,7 +194,7 @@ fn discover_step(
             "save=false".to_owned(),
             "[ \"$trust\" != trusted ] || save=true".to_owned(),
             "if [ \"$trust\" = trusted ]; then provenance=trusted; decision=admitted; else case \"${GITHUB_EVENT_NAME:-}\" in pull_request) provenance=untrusted ;; *) provenance=ambiguous ;; esac; decision=restore-only; fi".to_owned(),
-            "printf '%s\\n' \"key=$key\" \"restore_keys=$trusted\" \"save=$save\" \"provenance=$provenance\" \"decision=$decision\" >> \"$GITHUB_OUTPUT\"".to_owned(),
+            "printf '%s\\n' \"key=$key\" \"restore_keys=$trusted\" \"save=$save\" \"restore=true\" \"provenance=$provenance\" \"decision=$decision\" >> \"$GITHUB_OUTPUT\"".to_owned(),
             format!("record=\"{DISCOVERY_RECORD}\""),
             format!("printf '%s\\n' \"key=$key\" \"restore_prefix=$trusted\" \"compat=$compat\" \"provenance=$provenance\" \"decision=$decision\" \"ceiling={ceiling}\" \"save=$save\" \"unit={unit}\" \"mbx_version=${{{VERSION_ENV}}}\" \"toolchain=${{{TOOLCHAIN_ENV}}}\" \"root=${{{ROOT_ENV}}}\" > \"$record\""),
             "printf 'velnor: state snapshot trust=%s key=%s save=%s provenance=%s decision=%s\\n' \"$trust\" \"$key\" \"$save\" \"$provenance\" \"$decision\"".to_owned(),
@@ -227,6 +228,7 @@ fn restore_step() -> Result<Step, RenderError> {
         &[COMPLETE_STATE_TRANSPORT_EXPR.to_owned()],
     )?;
     MBX_BUNDLE_RESTORE_NAME.clone_into(&mut step.name);
+    step.condition = Some(MBX_BUNDLE_RESTORE_CONDITION.to_owned());
     step.id = Some(StepId::MbxBundleRestore);
     step.role = Some(StepRole::MbxBundleRestore);
     Ok(step)

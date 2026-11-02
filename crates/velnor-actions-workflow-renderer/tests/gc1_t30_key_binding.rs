@@ -9,6 +9,7 @@ use velnor_actions_contract::cachekey::MAX_CACHE_KEY_BYTES;
 struct Inputs {
     share_out_dir: Option<&'static str>,
     build_script_execution: Option<&'static str>,
+    mbx_cc: Option<&'static str>,
     image_os: Option<&'static str>,
     run_id: &'static str,
     run_attempt: &'static str,
@@ -18,16 +19,23 @@ struct Inputs {
 const BASELINE: Inputs = Inputs {
     share_out_dir: Some("1"),
     build_script_execution: Some("1"),
+    mbx_cc: Some("0"),
     image_os: Some("ubuntu26"),
     run_id: "1001",
     run_attempt: "1",
     runner_name: "runner-a",
 };
 
-fn cell(share: &'static str, build: &'static str, image_os: &'static str) -> Inputs {
+fn cell(
+    share: &'static str,
+    build: &'static str,
+    mbx_cc: &'static str,
+    image_os: &'static str,
+) -> Inputs {
     Inputs {
         share_out_dir: Some(share),
         build_script_execution: Some(build),
+        mbx_cc: Some(mbx_cc),
         image_os: Some(image_os),
         ..BASELINE
     }
@@ -37,8 +45,10 @@ fn matrix() -> Vec<Inputs> {
     let mut cells = Vec::new();
     for share in ["0", "1"] {
         for build in ["0", "1"] {
-            for image_os in ["ubuntu24", "ubuntu26"] {
-                cells.push(cell(share, build, image_os));
+            for mbx_cc in ["0", "1"] {
+                for image_os in ["ubuntu24", "ubuntu26"] {
+                    cells.push(cell(share, build, mbx_cc, image_os));
+                }
             }
         }
     }
@@ -52,7 +62,10 @@ fn set_or_remove(command: &mut std::process::Command, name: &str, value: Option<
     };
 }
 
-fn discover_with(setup: &BehaveSetup, inputs: Inputs) -> Result<(String, String), Box<dyn Error>> {
+fn discover_raw(
+    setup: &BehaveSetup,
+    inputs: Inputs,
+) -> Result<(std::process::ExitStatus, String), Box<dyn Error>> {
     std::fs::remove_file(&setup.github_output).ok();
     let mut command = std::process::Command::new("sh");
     command
@@ -78,10 +91,17 @@ fn discover_with(setup: &BehaveSetup, inputs: Inputs) -> Result<(String, String)
         "MBX_BUILD_SCRIPT_EXECUTION",
         inputs.build_script_execution,
     );
+    set_or_remove(&mut command, "MBX_CC", inputs.mbx_cc);
     set_or_remove(&mut command, "ImageOS", inputs.image_os);
     let status = command
         .status()
         .map_err(|error| fail(&format!("discover failed to run: {error}")))?;
+    let outputs = std::fs::read_to_string(&setup.github_output).unwrap_or_default();
+    Ok((status, outputs))
+}
+
+fn discover_with(setup: &BehaveSetup, inputs: Inputs) -> Result<(String, String), Box<dyn Error>> {
+    let (status, _) = discover_raw(setup, inputs)?;
     if !status.success() {
         return Err(fail("discover script failed on trusted push"));
     }
@@ -132,8 +152,8 @@ fn gc1_t30_key_never_aliases_across_flags_or_image() -> Result<(), Box<dyn Error
     for inputs in matrix() {
         let (key, restore) = discover_with(&setup, inputs)?;
         let label = format!(
-            "share={:?} build={:?} image={:?}",
-            inputs.share_out_dir, inputs.build_script_execution, inputs.image_os
+            "share={:?} build={:?} cc={:?} image={:?}",
+            inputs.share_out_dir, inputs.build_script_execution, inputs.mbx_cc, inputs.image_os
         );
         if let Some(previous) = seen.insert(key.clone(), label.clone()) {
             return Err(fail(&format!("keys collide: {previous} and {label}")));
@@ -147,15 +167,71 @@ fn gc1_t30_key_never_aliases_across_flags_or_image() -> Result<(), Box<dyn Error
             )));
         }
     }
-    let unset = Inputs {
-        share_out_dir: None,
-        build_script_execution: None,
-        image_os: None,
-        ..BASELINE
-    };
-    let (unset_key, _) = discover_with(&setup, unset)?;
-    if seen.contains_key(&unset_key) {
-        return Err(fail("unset flags alias a set configuration"));
+    for unset in [
+        Inputs {
+            share_out_dir: None,
+            build_script_execution: None,
+            mbx_cc: None,
+            ..BASELINE
+        },
+        Inputs {
+            mbx_cc: None,
+            ..BASELINE
+        },
+    ] {
+        let (unset_key, _) = discover_with(&setup, unset)?;
+        if seen.contains_key(&unset_key) {
+            return Err(fail("unset inputs alias a set configuration"));
+        }
+    }
+    std::fs::remove_dir_all(&setup.scratch)
+        .map_err(|error| fail(&format!("scratch stuck: {error}")))?;
+    Ok(())
+}
+
+#[test]
+#[cfg(unix)]
+fn gc1_t30_missing_image_os_goes_cold() -> Result<(), Box<dyn Error>> {
+    let setup = behave_setup()?;
+    let (status, baseline) = discover_raw(&setup, BASELINE)?;
+    if !status.success()
+        || !baseline.lines().any(|line| line == "restore=true")
+        || !baseline.lines().any(|line| line == "save=true")
+        || baseline.lines().any(|line| line.starts_with("reason="))
+    {
+        return Err(fail(&format!(
+            "baseline lost its warm outputs: {baseline:?}"
+        )));
+    }
+    for image_os in [None, Some("")] {
+        let (status, outputs) = discover_raw(
+            &setup,
+            Inputs {
+                image_os,
+                ..BASELINE
+            },
+        )?;
+        if !status.success() {
+            return Err(fail(&format!(
+                "image_os={image_os:?}: discover failed the job"
+            )));
+        }
+        for expected in ["reason=image_os_missing", "save=false", "restore=false"] {
+            if !outputs.lines().any(|line| line == expected) {
+                return Err(fail(&format!(
+                    "image_os={image_os:?}: missing {expected}; outputs: {outputs:?}"
+                )));
+            }
+        }
+        if outputs.lines().any(|line| line.starts_with("key=")) {
+            return Err(fail(&format!(
+                "image_os={image_os:?}: cold discover still published a key"
+            )));
+        }
+    }
+    let steps = transport_steps()?;
+    if steps[4].condition.as_deref() != Some(MBX_BUNDLE_RESTORE_CONDITION) {
+        return Err(fail("restore step not gated on the restore output"));
     }
     std::fs::remove_dir_all(&setup.scratch)
         .map_err(|error| fail(&format!("scratch stuck: {error}")))?;

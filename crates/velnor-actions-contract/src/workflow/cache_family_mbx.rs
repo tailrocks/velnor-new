@@ -15,6 +15,8 @@ pub const MBX_BUNDLE_SAVE_OUTPUT: &str = "save";
 
 pub const MBX_BUNDLE_EXPORTED_OUTPUT: &str = "exported";
 
+pub const MBX_BUNDLE_RESTORE_CONDITION: &str = "steps.mbx-bundle-key.outputs.restore == 'true'";
+
 pub const MBX_BUNDLE_IMPORT_CONDITION: &str =
     "steps.mbx-bundle-restore.outputs.cache-matched-key != ''";
 

@@ -7,7 +7,7 @@ use std::io;
 
 use velnor_actions_actionlint::actions::MISE_ACTION_SHA;
 use velnor_actions_contract::RoutingWorkflow;
-use velnor_actions_contract::cachekey::{mbx_cache_generation, mbx_qualification_cache_generation};
+use velnor_actions_contract::cachekey::mbx_qualification_cache_generation;
 use velnor_actions_contract::workflow::cache_family::GC1_MAX_GENERATION_SLOTS;
 use velnor_actions_contract::workflow::qualification_cache_lineage::{
     QUALIFICATION_CACHE_MAX_GENERATIONS, validate_qualification_cache_generation,
@@ -301,9 +301,9 @@ fn gc1_t50_rejects_invalid_state() -> Result<(), Box<dyn Error>> {
         "run_specific_generation",
     )?;
     check_rejects_generation(
-        &mbx_cache_generation(MBX_VERSION),
+        "velnor-mbx-1.91.0-share-out-dir-build-scripts-enabled-v1",
         MBX_VERSION,
-        "production_slot_in_qualification",
+        "flags_enabled_slot_in_qualification",
     )?;
     check_rejects_generation("", MBX_VERSION, "empty_generation")?;
     check_rejects_generation(BOUNDED_GENERATION, "9.9.9", "foreign_version")?;

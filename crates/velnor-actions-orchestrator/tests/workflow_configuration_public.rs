@@ -59,6 +59,8 @@ mod ledger_cli_verify_script;
 mod maintenance_features;
 #[path = "workflow_configuration_public/mbx_job_env.rs"]
 mod mbx_job_env;
+#[path = "workflow_configuration_public/mbx_lineage_format.rs"]
+mod mbx_lineage_format;
 #[path = "workflow_configuration_public/native_artifacts.rs"]
 mod native_artifacts;
 #[path = "workflow_configuration_public/native_artifacts_fixture.rs"]
