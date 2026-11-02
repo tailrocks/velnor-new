@@ -115,9 +115,14 @@ first version of this step did exactly that.
    - `Verify Rust channel manifest`, after `Prepare pinned tools` and
      `Prepare Rust components`, on the toolchain the job will use.
    Residual risks (cache decision 10, decisions.tsv X35): the content of
-   `multirust-config.toml` is unbound (denial of service only); the
-   file-by-file fallback, reachable only for a version and target with no
-   pin row and in the default-home jobs, stays mode-blind; a reordered
+   `multirust-config.toml` is unbound (denial of service only); for a
+   version and target with no pin row, the file-by-file fallback leaves the
+   `manifest-*` bytes, the `multirust-config.toml` content and all file modes
+   unbound, which affects consumer repos that pin a Rust other than the
+   pinned 1.99.1 in owned-home jobs (the default-home jobs always use that
+   fallback); the pin binds only `toolchains/`, while the tools cache also
+   restores the rest of `$RUNNER_TEMP/velnor/rustup` (`settings.toml`,
+   `update-hashes`, `downloads`), which no check binds (info); a reordered
    `components` file is accepted, because it is hashed sorted.
    A poisoned cache entry therefore fails the job before any restored Rust
    byte runs; delete the entry (`gh cache delete <key>`) to recover.
