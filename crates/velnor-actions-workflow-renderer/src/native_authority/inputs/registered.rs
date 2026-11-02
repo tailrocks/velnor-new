@@ -16,6 +16,7 @@ pub(super) struct RegisteredSources {
     generated: BTreeMap<String, super::generated::GeneratedOwner>,
     seen_generated: BTreeSet<String>,
     seen_workflow: BTreeSet<String>,
+    seen_ledger_cli: bool,
 }
 
 impl RegisteredSources {
@@ -36,6 +37,7 @@ impl RegisteredSources {
             seen_gradle: BTreeSet::new(),
             seen_suites: BTreeSet::new(),
             seen_workflow: BTreeSet::new(),
+            seen_ledger_cli: false,
         })
     }
 
@@ -111,6 +113,14 @@ impl RegisteredSources {
                     || self.seed_ids.get(root) != Some(&fact.id)
                 {
                     return Err(invalid("native_seed_job_identity"));
+                }
+                Ok(false)
+            }
+            LogicalJobSource::LedgerCli => {
+                if fact.id != velnor_actions_contract::workflow::ledger_cli::LEDGER_CLI_JOB_ID
+                    || std::mem::replace(&mut self.seen_ledger_cli, true)
+                {
+                    return Err(invalid("native_ledger_cli_job_identity"));
                 }
                 Ok(false)
             }

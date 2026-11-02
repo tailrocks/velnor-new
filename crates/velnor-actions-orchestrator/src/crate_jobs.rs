@@ -7,6 +7,7 @@ use velnor_actions_contract::{
     CacheMode, CrateJob, DependencySeedMode, Job, JobTimeout, ProposedTask, Stack, Step,
     VelnorConfig, WorkflowPolicy, crate_display_name, tofu_display_name,
 };
+use velnor_actions_contract::workflow::ledger_cli::{LEDGER_CLI_JOB_ID, LedgerCliSource};
 use velnor_actions_mise::{TaskCacheMode, ToolCatalog};
 use velnor_actions_workflow_renderer::steps::CompileDriver as RenderDriver;
 
@@ -33,6 +34,9 @@ mod gates;
 mod build_jobs;
 use build_jobs::{group_plan_for, reject_seed_needs, reject_unknown_crates};
 
+#[path = "crate_jobs_ledger_cli.rs"]
+mod ledger_cli;
+
 #[path = "crate_jobs_steps.rs"]
 mod job_steps;
 #[path = "crate_jobs_obligations.rs"]
@@ -43,6 +47,7 @@ use obligations::obligations_for;
 pub(crate) use stage::{is_mbx, is_nextest, is_opentofu, is_rust};
 
 pub(crate) struct CrateBuild {
+    pub(crate) ledger_cli: Option<(String, Job)>,
     pub(crate) seeds: Vec<(String, Job)>,
     pub(crate) jobs: Vec<(String, Job)>,
     pub(crate) drivers: BTreeMap<String, RenderDriver>,
@@ -117,6 +122,14 @@ fn build_crate_jobs_with_seed_timeout(
         .into_iter()
         .map(|(root, nextest)| dependency_seed::SeedWorkspace { root, nextest })
         .collect();
+    let ledger_cli = (LedgerCliSource::for_policy(input.policy) == LedgerCliSource::SameRunBuild
+        && !jobs.is_empty())
+    .then(|| ledger_cli::ledger_cli_job(&input, private))
+    .transpose()?
+    .map(|job| (LEDGER_CLI_JOB_ID.to_owned(), job));
+    if let Some((id, _)) = &ledger_cli {
+        drivers.insert(id.clone(), RenderDriver::Cargo);
+    }
     let seeds = match input.dependency_seed {
         DependencySeedMode::Produce => {
             dependency_seed::seed_jobs(&input, &workspaces, private, seed_timeout)?
@@ -127,6 +140,7 @@ fn build_crate_jobs_with_seed_timeout(
         drivers.insert(id.clone(), RenderDriver::Mbx);
     }
     Ok(CrateBuild {
+        ledger_cli,
         seeds,
         jobs,
         drivers,
@@ -172,7 +186,12 @@ fn build_group_job(
         obligations: obligations_for(tasks, input.catalog)?,
     };
     model.validate()?;
-    let needs = gates::external_needs(tasks, owners, &job_id)?;
+    let needs = gates::external_needs(
+        tasks,
+        owners,
+        &job_id,
+        LedgerCliSource::for_policy(input.policy),
+    )?;
     reject_seed_needs(&needs, &job_id)?;
     let workspace_root =
         crate::source_prep::workspace_root_for_manifest(&model.manifest, input.fetch_roots);
@@ -330,9 +349,9 @@ fn render_job(
         "",
     )?);
     steps.extend(obligation_steps(input, model, use_opentofu)?);
-    steps.push(velnor_actions_workflow_renderer::crate_group_ledger_step(
+    steps.extend(velnor_actions_workflow_renderer::crate_group_ledger_steps(
         policy,
-    ));
+    )?);
     steps.push(crate::matrix_step::crate_upload_step(&model.job_id)?);
     Ok(Job {
         services: Vec::new(),

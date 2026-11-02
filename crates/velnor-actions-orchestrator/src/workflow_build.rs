@@ -253,7 +253,7 @@ fn build_workflow_jobs(
     for (id, job) in built.jobs {
         jobs.insert(id, job);
     }
-    for (id, job) in built.seeds {
+    for (id, job) in built.seeds.into_iter().chain(built.ledger_cli) {
         jobs.insert(id, job);
     }
     for (id, job) in check_jobs::build_check_jobs(

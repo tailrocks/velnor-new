@@ -11,6 +11,8 @@ use std::collections::BTreeSet;
 
 #[path = "step_identity_payload.rs"]
 mod payload;
+#[path = "step_identity_shell_roles.rs"]
+mod shell_roles;
 use payload::{
     action_has_prefix_for_kind, internal_operation, valid_jactionlint_verifier_payload,
     valid_rust_verifier_payload,
@@ -219,6 +221,16 @@ pub enum StepRole {
     GitHubEvidenceFetch,
 
     GitHubEvidenceImport,
+
+    LedgerCliBuild,
+
+    LedgerCliPublish,
+
+    LedgerCliUpload,
+
+    LedgerCliDownload,
+
+    LedgerCliVerify,
 }
 
 fn valid_bun_assets_handoff(kind: &StepKind) -> bool {
@@ -252,13 +264,17 @@ impl StepRole {
             Self::TofuProviderUse => super::step_protocol::valid_provider_use(kind),
             Self::PlanProducer => internal_operation(kind, "plan-v1"),
             Self::FetchReports => internal_operation(kind, "fetch-reports-v1"),
-            Self::DownloadPlan | Self::AttestationDownload | Self::PreseedDownload => {
+            Self::DownloadPlan
+            | Self::AttestationDownload
+            | Self::PreseedDownload
+            | Self::LedgerCliDownload => {
                 action_has_prefix_for_kind(kind, "actions/download-artifact@")
             }
             Self::PublishPlan
             | Self::MatrixReportUpload
             | Self::PublishFinal
-            | Self::PreseedUpload => action_has_prefix_for_kind(kind, "actions/upload-artifact@"),
+            | Self::PreseedUpload
+            | Self::LedgerCliUpload => action_has_prefix_for_kind(kind, "actions/upload-artifact@"),
             Self::ToolsCacheSave
             | Self::CargoSourcesSave
             | Self::MbxBundleSave
@@ -286,39 +302,7 @@ impl StepRole {
             Self::PlaywrightInstall => super::step_protocol::valid_playwright_install(kind),
             Self::VerifyRustManifest => valid_rust_verifier_payload(kind),
             Self::VerifyJactionlint => valid_jactionlint_verifier_payload(kind),
-            Self::PreparePinnedTools
-            | Self::MbxVersionCheck
-            | Self::MbxWorkspaceCleanup
-            | Self::MbxBundleKey
-            | Self::FamilyKeys
-            | Self::FamilySizeCheck
-            | Self::MbxBundleImport
-            | Self::MbxProducerMark
-            | Self::MbxSeedBuild
-            | Self::MbxBundleExport
-            | Self::MbxBundleRecord
-            | Self::PrepareRustComponents
-            | Self::CargoDeny
-            | Self::CargoMachete
-            | Self::Jactionlint
-            | Self::Markdownlint
-            | Self::StrictJson
-            | Self::FrontmatterId
-            | Self::LinkCheck
-            | Self::NativeValidators
-            | Self::AcquireVelnor
-            | Self::BuildTaskRun
-            | Self::PreseedStage
-            | Self::CheckGenerated
-            | Self::PlanFormat
-            | Self::MsrvQualification
-            | Self::CargoSourcesFetch
-            | Self::CacheKeys
-            | Self::PreseedBuild
-            | Self::PreseedManifest
-            | Self::PreseedVerifyBuild
-            | Self::PreseedVerifyManifest
-            | Self::MbxPreflight => matches!(kind, StepKind::Shell { .. }),
+            shell_only => shell_only.is_shell_only() && matches!(kind, StepKind::Shell { .. }),
         }
     }
 
@@ -338,6 +322,8 @@ impl StepRole {
             // restore id), like the other restore roles below.
             Self::MbxBundleExport => Some(StepId::MbxBundleExport),
             Self::FamilyKeys => Some(StepId::FamilyKeys),
+            Self::LedgerCliPublish => Some(StepId::LedgerCliPublish),
+            Self::LedgerCliVerify => Some(StepId::LedgerCliVerify),
             _ => None,
         }
     }
@@ -358,6 +344,8 @@ impl StepRole {
             StepId::MbxBundleRestore => Self::MbxBundleRestore,
             StepId::MbxBundleExport => Self::MbxBundleExport,
             StepId::FamilyKeys => Self::FamilyKeys,
+            StepId::LedgerCliPublish => Self::LedgerCliPublish,
+            StepId::LedgerCliVerify => Self::LedgerCliVerify,
             StepId::FamilySizeBunInstall
             | StepId::FamilySizePlaywrightBrowsers
             | StepId::FamilySizeDbtPackages

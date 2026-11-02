@@ -6,6 +6,9 @@ use std::{error::Error, fs, io, path::Path, process::Command};
 use tempfile::TempDir;
 use velnor_actions_orchestrator::prepare;
 
+#[path = "../../test_support/root_cargo_lock.rs"]
+mod root_cargo_lock;
+
 const CONFIG: &str = r#"schema = 2
 [workflow]
 policy = "velnor-repository-v1"
@@ -74,6 +77,7 @@ fn fixture(approvals: Option<&str>, lock: &str) -> Result<TempDir, Box<dyn Error
         "[package]\nname = \"approval-fixture\"\nversion = \"0.1.0\"\nedition = \"2024\"\n",
     )?;
     fs::write(root.join("src/lib.rs"), "pub fn fixture() {}\n")?;
+    root_cargo_lock::write_root_cargo_lock(root, &["approval-fixture"])?;
     git(&["init", "-b", "main"], root)?;
     git(
         &[
@@ -87,7 +91,7 @@ fn fixture(approvals: Option<&str>, lock: &str) -> Result<TempDir, Box<dyn Error
     git(&["config", "--local", "commit.gpgsign", "false"], root)?;
     git(&["config", "user.name", "Fixture"], root)?;
     git(&["config", "user.email", "fixture@example.invalid"], root)?;
-    git(&["add", "Cargo.toml", "src/lib.rs"], root)?;
+    git(&["add", "Cargo.toml", "Cargo.lock", "src/lib.rs"], root)?;
     git(&["commit", "-m", "fixture base"], root)?;
     fs::create_dir_all(root.join(".velnor"))?;
     fs::write(root.join(".velnor/config.toml"), CONFIG)?;

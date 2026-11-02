@@ -55,34 +55,36 @@ Workflow to generate
     - cargo-machete (6 steps)
     - check-maintenance-helpers (6 steps)
     - jactionlint (7 steps)
+    - ledger-cli (15 steps)
     - plan (16 steps)
     - required (10 steps)
     - required-gate (1 steps)
-    - rust-velnor-actions-actionlint (26 steps)
-    - rust-velnor-actions-ansible (26 steps)
-    - rust-velnor-actions-bun (26 steps)
-    - rust-velnor-actions-cli (28 steps)
-    - rust-velnor-actions-contract (27 steps)
-    - rust-velnor-actions-dbt (26 steps)
-    - rust-velnor-actions-gradle (26 steps)
-    - rust-velnor-actions-mise (27 steps)
-    - rust-velnor-actions-orchestrator (29 steps)
-    - rust-velnor-actions-rust (27 steps)
-    - rust-velnor-actions-tofu (26 steps)
-    - rust-velnor-actions-workflow-renderer (27 steps)
-    - rust-velnor-resource-probe (26 steps)
-    - rust-velnor-runner-attestation (25 steps)
-    - rust-velnor-runner-cli (26 steps)
-    - rust-velnor-runner-core (26 steps)
-    - rust-velnor-runner-github (26 steps)
-    - rust-velnor-runner-host (27 steps)
-    - tools-producer-09b41582 (9 steps)
-    - tools-producer-2b13d6ad (9 steps)
-    - tools-producer-4dbd9827 (7 steps)
-    - tools-producer-931fd289 (7 steps)
-    - tools-producer-9b4a9a14 (10 steps)
-    - tools-producer-b17125c3 (8 steps)
-    - tools-producer-fd6bad0b (10 steps)
+    - rust-velnor-actions-actionlint (28 steps)
+    - rust-velnor-actions-ansible (28 steps)
+    - rust-velnor-actions-bun (28 steps)
+    - rust-velnor-actions-cli (30 steps)
+    - rust-velnor-actions-contract (29 steps)
+    - rust-velnor-actions-dbt (28 steps)
+    - rust-velnor-actions-gradle (28 steps)
+    - rust-velnor-actions-mise (29 steps)
+    - rust-velnor-actions-orchestrator (31 steps)
+    - rust-velnor-actions-rust (29 steps)
+    - rust-velnor-actions-tofu (28 steps)
+    - rust-velnor-actions-workflow-renderer (29 steps)
+    - rust-velnor-resource-probe (28 steps)
+    - rust-velnor-runner-attestation (27 steps)
+    - rust-velnor-runner-cli (28 steps)
+    - rust-velnor-runner-core (28 steps)
+    - rust-velnor-runner-github (28 steps)
+    - rust-velnor-runner-host (29 steps)
+    - tools-producer-16ff3186 (9 steps)
+    - tools-producer-1853a637 (7 steps)
+    - tools-producer-6250606a (9 steps)
+    - tools-producer-8e50e7bb (10 steps)
+    - tools-producer-a15c1f1a (10 steps)
+    - tools-producer-c738ce75 (9 steps)
+    - tools-producer-c9d059bd (7 steps)
+    - tools-producer-d8003bf6 (8 steps)
     - 18 Rust crate jobs
       Timeout: 15 minutes per crate job
       Obligations: Clippy -> build -> run tests -> doctests -> doc build -> format check
@@ -205,15 +207,15 @@ Workflow to generate
   Critical path: stack/rust/crates/velnor-actions-cli/build/default -> stack/rust/crates/velnor-actions-cli/nextest/default (2 tasks)
   Clippy memory groups: 1; barriers: 0
   Cache layers: Mise tools, Cargo sources, MBX compilation objects
-  Jactionlint: 2.4.0 pinned, profile default
+  Jactionlint: 2.3.0 pinned, profile default
   Action pins: 8
     - actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
     - actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
     - actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
     - actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
     - actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
-    - asamarts/alint@d61e4c802b02ac811224b35c59a62cfe5176f4d0
-    - jdx/mise-action@6612f0ef07ed2a736cd1e00a94a065522dd41195
+    - asamarts/alint@265d9fdc720bb8f59d00b87e33e4149869f77327
+    - jdx/mise-action@6be3c7ed4c21d4f76b208d351d95aac273ebb76d
     - jdx/mr-boxington-action@88acf2bb50552c7c508cbac13e5f8c576b95b1de
   Ineligible: stack/rust/crates/velnor-actions-actionlint/nextest/default has no test targets; no test command emitted
   Ineligible: stack/rust/crates/velnor-actions-ansible/nextest/default has no test targets; no test command emitted
