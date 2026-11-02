@@ -144,6 +144,7 @@ pub fn plan_job(
         condition: None,
         permissions: None,
         environment: None,
+        env: velnor_actions_contract::JobEnv::Unset,
         steps,
         cache_mode: None,
     })
@@ -181,6 +182,7 @@ pub fn final_job(
         condition: Some(FINAL_CONDITION.to_owned()),
         permissions: Some(read_actions_permissions()),
         environment: None,
+        env: velnor_actions_contract::JobEnv::Unset,
         steps,
         cache_mode: None,
     })

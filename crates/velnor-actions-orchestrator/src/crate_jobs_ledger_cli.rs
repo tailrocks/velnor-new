@@ -80,6 +80,7 @@ pub(super) fn ledger_cli_job(
         condition: None,
         permissions: Some(Permissions::default()),
         environment: None,
+        env: velnor_actions_contract::JobEnv::Unset,
         steps,
         cache_mode: Some(CacheMode::explicit_read()),
     })

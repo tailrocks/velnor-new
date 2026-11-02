@@ -267,6 +267,7 @@ pub fn build_bun_member_job(
         permissions: Some(bun_permissions(&policy.steps)),
         cache_mode: None,
         environment: None,
+        env: velnor_actions_contract::JobEnv::Unset,
         steps: all,
         check_runner: None,
     })

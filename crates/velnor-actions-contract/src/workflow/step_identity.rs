@@ -34,7 +34,7 @@ pub const TOOLS_CACHE_V2_KEY_EXPRESSION: &str = "mise-tools-v2-${{steps.v2.outpu
 
 pub const TOOLS_CACHE_PATHS: [&str; 5] = [
     "~/.local/share/mise",
-    "${{ runner.temp }}/velnor/rustup",
+    super::cache_family::RUSTUP_HOME_EXPR,
     "${{ runner.temp }}/velnor/cargo/.crates.toml",
     "${{ runner.temp }}/velnor/cargo/.crates2.json",
     "${{ runner.temp }}/velnor/cargo/bin",

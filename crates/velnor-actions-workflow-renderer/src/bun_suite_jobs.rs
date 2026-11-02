@@ -140,6 +140,7 @@ pub fn build_bun_suite_job(
         permissions: Some(bun_permissions(&policy.steps)),
         cache_mode: None,
         environment: None,
+        env: velnor_actions_contract::JobEnv::Unset,
         steps: all,
         check_runner: None,
     })
@@ -186,6 +187,7 @@ pub fn build_bun_report_job(
         permissions: Some(bun_permissions(&report.steps)),
         cache_mode: None,
         environment: None,
+        env: velnor_actions_contract::JobEnv::Unset,
         steps: all,
         check_runner: None,
     })

@@ -3,6 +3,7 @@
 
 use std::collections::BTreeMap;
 
+use velnor_actions_contract::workflow::cache_family::{CARGO_HOME_EXPR, RUSTUP_HOME_EXPR};
 use velnor_actions_contract::{RunsOn, Step, StepKind};
 
 use crate::{RenderError, cache_p08, commands, marker, steps, tree::RenderedFile, yaml::Yaml};
@@ -207,8 +208,8 @@ fn output_entries() -> Yaml {
 }
 
 fn inner_step(runs_on: &str) -> Result<Step, RenderError> {
-    let cargo = "${{ runner.temp }}/velnor/cargo";
-    let rustup = "${{ runner.temp }}/velnor/rustup";
+    let cargo = CARGO_HOME_EXPR;
+    let rustup = RUSTUP_HOME_EXPR;
     let env = BTreeMap::from([
         ("CARGO_HOME".to_owned(), cargo.to_owned()),
         ("MISE_CARGO_HOME".to_owned(), cargo.to_owned()),

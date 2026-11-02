@@ -162,6 +162,7 @@ mod gc1_t56 {
             environment: None,
             services: Vec::new(),
             outputs: std::collections::BTreeMap::new(),
+            env: velnor_actions_contract::JobEnv::Unset,
             steps,
         }
     }

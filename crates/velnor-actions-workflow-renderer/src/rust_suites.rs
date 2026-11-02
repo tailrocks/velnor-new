@@ -383,6 +383,7 @@ fn suite_job_record(
         }),
         cache_mode: None,
         environment: None,
+        env: velnor_actions_contract::JobEnv::Unset,
         steps,
     }
 }

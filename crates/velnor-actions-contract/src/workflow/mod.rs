@@ -13,6 +13,7 @@ pub mod crate_job;
 pub mod dispatch;
 pub mod execute;
 pub mod ir;
+pub mod job_env;
 pub mod jobs;
 pub mod lanes;
 pub mod ledger_cli;
@@ -71,6 +72,7 @@ pub use execute::{ExecuteTaskIds, ExecuteTaskRef};
 pub use ir::{
     CACHE_MODE_PUSH_WRITE_EXPR, CacheMode, Concurrency, Job, ScheduleTrigger, Trigger, WorkflowIr,
 };
+pub use job_env::{HomeKey, JobEnv, RUSTUP_AUTO_INSTALL_DISABLED, RUSTUP_AUTO_INSTALL_ENV};
 pub use jobs::{
     CI_WORKFLOW_PATH, CRATE_JOB_ID_PREFIX, FRESHNESS_CRON_WEEKLY, FRESHNESS_WORKFLOW_PATH,
     PLAN_DISPLAY_NAME, PLAN_JOB_ID, REQUIRED_CONDITION, REQUIRED_DISPLAY_NAME,
