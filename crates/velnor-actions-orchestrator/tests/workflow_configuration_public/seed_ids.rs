@@ -10,7 +10,6 @@ use velnor_actions_contract::{Job, REQUIRED_JOB_ID, StepKind, StepRole, validate
 use velnor_actions_orchestrator::{GenerationPreparation, prepare, render_staged_tree};
 use velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
 
-use super::support::logical_owner_id;
 use super::workflow_configuration_fixture;
 
 #[test]
@@ -226,24 +225,7 @@ fn assert_rendered_seed_routing(
                         .any(|env| env.get(root_env).map(String::as_str) == Some(relative_root))
             })
             .collect();
-        // Reader/writer branches run on mutually exclusive events, so a seed
-        // root is consumed by one logical owner (a branch pair), not one job.
-        assert!(
-            !consumers.is_empty(),
-            "missing MBX consumer for {relative_root}"
-        );
-        let all: BTreeSet<&str> = prepared
-            .workflow
-            .ir
-            .jobs
-            .keys()
-            .map(String::as_str)
-            .collect();
-        let logical: BTreeSet<&str> = consumers
-            .iter()
-            .map(|(id, _)| logical_owner_id(&all, id.as_str()))
-            .collect();
-        assert_eq!(logical.len(), 1);
+        assert_eq!(consumers.len(), 1, "one MBX consumer for {relative_root}");
         for (consumer_id, consumer) in consumers {
             let consumer_keys = mbx_bundle_key_envs(consumer);
             assert_eq!(consumer_keys.len(), 1);

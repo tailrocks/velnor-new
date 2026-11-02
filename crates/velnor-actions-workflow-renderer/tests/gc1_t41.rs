@@ -119,6 +119,7 @@ fn context(jobs: &BTreeMap<String, Job>) -> Result<RenderContext, Box<dyn Error>
         plan_consumer_env: plan_env(),
         tool_pins: Vec::new(),
         standalone_tools_donors: std::collections::BTreeMap::new(),
+        max_parallel_jobs: config.workflow.max_parallel_jobs,
     })
 }
 

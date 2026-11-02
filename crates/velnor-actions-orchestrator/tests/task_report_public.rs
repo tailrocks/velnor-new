@@ -7,10 +7,11 @@ mod fixture;
 mod process;
 #[path = "task_report_public/report_files.rs"]
 mod report_files;
+#[path = "task_report_public/tofu_job.rs"]
+mod tofu_job;
 
 use velnor_actions_contract::{EdgeKind, FinalStatus, NotSelectedReason, TaskStatus};
 
-use sha2::{Digest, Sha256};
 use std::fs;
 use std::io;
 
@@ -310,8 +311,9 @@ fn provider_hit_does_not_reclassify_executed_task() -> TestResult<()> {
         );
     }
     report_files::stage_all(&scenario)?;
+    tofu_job::stage_crate_job_ledger(&scenario)?;
     let lockfile = fs::read(scenario.root().join("infra/.terraform.lock.hcl"))?;
-    let cache_key = tofu_provider_key(&lockfile)?;
+    let cache_key = tofu_job::tofu_provider_key(&lockfile)?;
     report_files::stage_provider_hit(&scenario, &validate_task_id, &cache_key)?;
     let jobs = [(scenario.plan.jobs[0].job_id.as_str(), "success")];
     let request = report_files::assemble(&scenario, PROVIDER_HIT_TEST, "provider-merge", &jobs)?;
@@ -350,51 +352,4 @@ fn provider_hit_does_not_reclassify_executed_task() -> TestResult<()> {
         [scenario.plan.matrix.include[0].artifact_id.clone()]
     );
     Ok(())
-}
-
-fn digest_hex(digest: impl AsRef<[u8]>) -> String {
-    const HEX: &[u8; 16] = b"0123456789abcdef";
-    let bytes = digest.as_ref();
-    let mut encoded = String::with_capacity(bytes.len() * 2);
-    for byte in bytes {
-        let value = *byte;
-        encoded.push(char::from(HEX[usize::from(value >> 4)]));
-        encoded.push(char::from(HEX[usize::from(value & 0x0f)]));
-    }
-    encoded
-}
-
-fn tofu_provider_key(lockfile: &[u8]) -> TestResult<String> {
-    let family = velnor_actions_contract::workflow::cache_family::CacheFamily::TofuProviders;
-    let locator = velnor_actions_tofu::tofu_root_locator("infra")?;
-    let compatibility =
-        Sha256::digest(format!("{locator}\n{}", velnor_actions_mise::OPENTOFU_VERSION).as_bytes());
-    let snapshot = Sha256::digest(lockfile);
-    let key = format!(
-        "{}trusted-s256-{}-s256-{}",
-        family.key_prefix(),
-        digest_hex(compatibility),
-        digest_hex(snapshot)
-    );
-    let payload = key
-        .strip_prefix(&format!("{}trusted-s256-", family.key_prefix()))
-        .ok_or_else(|| io::Error::other("provider key prefix mismatch"))?;
-    let (compatibility, snapshot) = payload
-        .split_once("-s256-")
-        .ok_or_else(|| io::Error::other("provider key snapshot missing"))?;
-    for digest in [compatibility, snapshot] {
-        assert_eq!(digest.len(), 64);
-        assert!(
-            digest
-                .bytes()
-                .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
-        );
-    }
-    assert_eq!(
-        velnor_actions_contract::workflow::cache_family::CacheFamily::for_key(&key),
-        Some(family)
-    );
-    assert!(key.len() <= family.max_key_bytes());
-    assert!(key.len() <= velnor_actions_contract::cachekey::MAX_CACHE_KEY_BYTES);
-    Ok(key)
 }

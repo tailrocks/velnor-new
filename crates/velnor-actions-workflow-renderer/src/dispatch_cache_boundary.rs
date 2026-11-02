@@ -95,6 +95,9 @@ fn suppress_dispatch(step: &mut Step) {
     {
         return;
     }
+    if step.role == Some(velnor_actions_contract::StepRole::TofuProvidersRestore) {
+        return;
+    }
     if step.condition.as_deref() == Some(DISPATCH_DENY) {
         return;
     }

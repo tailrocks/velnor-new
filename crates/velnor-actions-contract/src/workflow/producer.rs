@@ -1,12 +1,17 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use super::crate_job::TOOLS_PRODUCER_JOB_ID_PREFIX;
+use super::cache_family::{TOFU_PROVIDERS_PROBE_MISS_CONDITION, TOFU_PROVIDERS_SAVE_CONDITION};
+use super::crate_job::{TOFU_PROVIDERS_PRODUCER_JOB_ID_PREFIX, TOOLS_PRODUCER_JOB_ID_PREFIX};
 use super::step_identity::{RUST_VERIFIER_USES, ToolsRestoreForm};
-use super::{Job, PermissionLevel, Permissions, Step, StepKind, StepRole};
+use super::step_protocol::ProviderRestoreForm;
+use super::step_tofu_prepare::valid_provider_prepare;
+use super::{Job, PermissionLevel, Permissions, Step, StepKind, StepRole, TOFU_JOB_ID_PREFIX};
 use crate::ContractError;
 
 pub const DEPENDENCY_SEED_JOB_CONDITION: &str = "github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true";
+
+pub const LANE_SURVIVAL_CONDITION: &str = "always()";
 
 pub const TOOLS_PRODUCER_INSTALL_CONDITION: &str =
     "steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'";
@@ -15,6 +20,7 @@ pub const TOOLS_PRODUCER_INSTALL_CONDITION: &str =
 pub enum ProducerKind {
     DependencySeed,
     ToolsIdentity,
+    TofuProviders,
 }
 
 impl Job {
@@ -34,10 +40,27 @@ impl Job {
                 && ToolsRestoreForm::of(&step.kind) == Some(ToolsRestoreForm::LookupOnly)
         }) {
             Some(ProducerKind::ToolsIdentity)
+        } else if self.steps.iter().any(|step| {
+            step.role == Some(StepRole::TofuProvidersSave)
+                || (step.role == Some(StepRole::TofuProvidersRestore)
+                    && ProviderRestoreForm::of(&step.kind) == Some(ProviderRestoreForm::LookupOnly))
+        }) {
+            Some(ProducerKind::TofuProviders)
         } else {
             None
         }
     }
+}
+
+pub fn validate_tofu_providers_producer(job: &Job, id: &str) -> Result<(), ContractError> {
+    if job.producer_kind() != Some(ProducerKind::TofuProviders) {
+        return Err(invalid(id));
+    }
+    let read_only = Permissions {
+        contents: PermissionLevel::Read,
+        ..Permissions::default()
+    };
+    validate_job(job, id, job.permissions.as_ref().unwrap_or(&read_only))
 }
 
 pub fn validate_tools_producer(job: &Job, id: &str) -> Result<(), ContractError> {
@@ -57,13 +80,16 @@ pub(super) fn validate_job(
     effective: &Permissions,
 ) -> Result<(), ContractError> {
     let kind = job.producer_kind();
-    if id.starts_with(TOOLS_PRODUCER_JOB_ID_PREFIX) != (kind == Some(ProducerKind::ToolsIdentity)) {
+    if id.starts_with(TOOLS_PRODUCER_JOB_ID_PREFIX) != (kind == Some(ProducerKind::ToolsIdentity))
+        || id.starts_with(TOFU_PROVIDERS_PRODUCER_JOB_ID_PREFIX)
+            != (kind == Some(ProducerKind::TofuProviders))
+    {
         return Err(invalid(id));
     }
     let Some(kind) = kind else {
         return Ok(());
     };
-    let cache_only = job.condition.as_deref() == Some(DEPENDENCY_SEED_JOB_CONDITION)
+    let cache_only = kind.condition_ok(job.condition.as_deref())
         && job.environment.is_none()
         && job.check_runner.is_none()
         && job.services.is_empty()
@@ -94,7 +120,17 @@ impl ProducerKind {
         match self {
             Self::DependencySeed => seed_role(role),
             Self::ToolsIdentity => tools_role(role),
+            Self::TofuProviders => tofu_role(role),
         }
+    }
+
+    fn condition_ok(self, condition: Option<&str>) -> bool {
+        condition == Some(DEPENDENCY_SEED_JOB_CONDITION)
+            || (self == Self::TofuProviders
+                && condition
+                    == Some(&format!(
+                        "{LANE_SURVIVAL_CONDITION} && ({DEPENDENCY_SEED_JOB_CONDITION})"
+                    )))
     }
 
     fn shape_ok(self, job: &Job) -> bool {
@@ -121,8 +157,75 @@ impl ProducerKind {
                     && count(StepRole::PreparePinnedTools) >= 1
                     && tools_order_ok(&job.steps)
             }
+            Self::TofuProviders => {
+                tofu_lane_needs_ok(&job.needs)
+                    && count(StepRole::Checkout) == 1
+                    && count(StepRole::MiseSetup) == 1
+                    && count(StepRole::PreparePinnedTools) == 1
+                    && count(StepRole::TofuProvidersRestore) == 1
+                    && count(StepRole::TofuProvidersPrepare) == 1
+                    && count(StepRole::TofuProviderUse) == 1
+                    && count(StepRole::TofuProvidersSave) == 1
+                    && tofu_order_ok(&job.steps)
+            }
         }
     }
+}
+
+fn tofu_lane_needs_ok(needs: &[String]) -> bool {
+    match needs {
+        [plan] => plan == "plan",
+        [plan, previous] => {
+            plan == "plan"
+                && (previous.starts_with(TOFU_JOB_ID_PREFIX)
+                    || previous.starts_with(TOFU_PROVIDERS_PRODUCER_JOB_ID_PREFIX))
+        }
+        _ => false,
+    }
+}
+
+fn tofu_order_ok(steps: &[Step]) -> bool {
+    let at = |role| steps.iter().position(|step| step.role == Some(role));
+    let (Some(mise), Some(probe), Some(tools), Some(prepare), Some(init), Some(save)) = (
+        at(StepRole::MiseSetup),
+        at(StepRole::TofuProvidersRestore),
+        at(StepRole::PreparePinnedTools),
+        at(StepRole::TofuProvidersPrepare),
+        at(StepRole::TofuProviderUse),
+        at(StepRole::TofuProvidersSave),
+    ) else {
+        return false;
+    };
+    let gated = |index: usize| {
+        steps[index].condition.as_deref() == Some(TOFU_PROVIDERS_PROBE_MISS_CONDITION)
+    };
+    mise < probe
+        && probe < tools
+        && tools < prepare
+        && prepare < init
+        && init + 1 == save
+        && save + 1 == steps.len()
+        && gated(tools)
+        && gated(prepare)
+        && gated(init)
+        && steps[probe].condition.is_none()
+        && steps[save].condition.as_deref() == Some(TOFU_PROVIDERS_SAVE_CONDITION)
+        && ProviderRestoreForm::of(&steps[probe].kind) == Some(ProviderRestoreForm::LookupOnly)
+        && matches!(&steps[probe].kind, StepKind::Action { with, .. }
+            if with.get("path").is_some_and(|path| valid_provider_prepare(&steps[prepare].kind, path)))
+}
+
+fn tofu_role(role: StepRole) -> bool {
+    matches!(
+        role,
+        StepRole::Checkout
+            | StepRole::MiseSetup
+            | StepRole::PreparePinnedTools
+            | StepRole::TofuProvidersRestore
+            | StepRole::TofuProvidersPrepare
+            | StepRole::TofuProviderUse
+            | StepRole::TofuProvidersSave
+    )
 }
 
 fn tools_order_ok(steps: &[Step]) -> bool {

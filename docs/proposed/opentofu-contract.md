@@ -274,8 +274,11 @@ holds via exact-key restore, push-gated saves, and runner branch
 scoping, and every tofu hit still faces lock-verified readonly init
 plus mandatory validate; transport = plugin-cache dir
 only (job-private `$RUNNER_TEMP/velnor/tofu-cache/<root-locator>`), restore before
-init; per-root job saves only its own root-scoped key (plan never inits so
-never saves); push-gated trusted save; restore still faces readonly init;
+init; crate jobs restore read-only and never save; one push-only providers
+producer job per root-scoped key (default-branch push, `needs: plan`, no write
+permissions, outside `Required`) probes the key with a lookup-only restore and,
+only on a miss, installs OpenTofu, recreates the plugin-cache leaf, runs
+readonly init and saves under the trusted-plan gate; restore still faces readonly init;
 hit MUST still run init+validate (T23). State, plans, and credentials remain
 outside the provider cache. Compiler reuse stays under
 `rust-quality-contract.md` §3 (MBX profiles); this layer caches provider

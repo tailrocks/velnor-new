@@ -24,8 +24,8 @@ mod plan_jobs;
 pub mod platform;
 mod producer;
 pub use producer::{
-    DEPENDENCY_SEED_JOB_CONDITION, ProducerKind, TOOLS_PRODUCER_INSTALL_CONDITION,
-    validate_tools_producer,
+    DEPENDENCY_SEED_JOB_CONDITION, LANE_SURVIVAL_CONDITION, ProducerKind,
+    TOOLS_PRODUCER_INSTALL_CONDITION, validate_tofu_providers_producer, validate_tools_producer,
 };
 pub mod qualification;
 pub mod qualification_cache_lineage;
@@ -42,6 +42,7 @@ pub use step_id::GRADLE_RUN_OPERATION;
 pub mod step_identity;
 mod step_mbx_lifecycle;
 mod step_protocol;
+pub mod step_tofu_prepare;
 pub mod task_execution_manifest;
 pub mod timeout;
 pub mod trust;

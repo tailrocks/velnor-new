@@ -183,68 +183,6 @@ pub(crate) fn check_rejects_bad_setup_and_identity(
     Ok(())
 }
 
-pub(crate) fn check_rejects_bad_saves(setup: &MiseSetup) -> Result<(), Box<dyn Error>> {
-    let owned = base_payload(setup)?;
-    let mut elected: BTreeMap<String, Job> = BTreeMap::from([("a".to_owned(), job(&owned)?)]);
-    elect_cache_writers(&mut elected)?;
-    let save = elected
-        .get("a")
-        .and_then(|job| {
-            job.steps
-                .iter()
-                .find(|step| step.role == Some(StepRole::ToolsCacheSave))
-        })
-        .cloned()
-        .ok_or_else(|| fail("common save missing"))?;
-    let mut orphan: BTreeMap<String, Job> = BTreeMap::new();
-    orphan.insert(
-        "c".to_owned(),
-        Job {
-            steps: vec![save.clone()],
-            ..job(&owned)?
-        },
-    );
-    if elect_cache_writers(&mut orphan).is_ok() {
-        return Err(fail("orphan tools save accepted"));
-    }
-    let mut crowded: BTreeMap<String, Job> = BTreeMap::from([
-        ("a".to_owned(), job(&owned)?),
-        ("b".to_owned(), job(&owned)?),
-    ]);
-    crowded
-        .get_mut("b")
-        .ok_or_else(|| fail("crowded job missing"))?
-        .steps
-        .push(save.clone());
-    if elect_cache_writers(&mut crowded).is_ok() {
-        return Err(fail("unelected tools save accepted"));
-    }
-    let mut tampered: BTreeMap<String, Job> = BTreeMap::from([("a".to_owned(), job(&owned)?)]);
-    elect_cache_writers(&mut tampered)?;
-    let tampered_job = tampered
-        .get_mut("a")
-        .ok_or_else(|| fail("tampered job missing"))?;
-    let index = save_steps(tampered_job)
-        .into_iter()
-        .next()
-        .ok_or_else(|| fail("tampered save missing"))?;
-    tampered_job.steps[index].condition = Some("always()".to_owned());
-    if elect_cache_writers(&mut tampered).is_ok() {
-        return Err(fail("independent tools save accepted"));
-    }
-    let mut doubled: BTreeMap<String, Job> = BTreeMap::from([("a".to_owned(), job(&owned)?)]);
-    let extra = owned.restore_step()?;
-    doubled
-        .get_mut("a")
-        .ok_or_else(|| fail("doubled job missing"))?
-        .steps
-        .push(extra);
-    if elect_cache_writers(&mut doubled).is_ok() {
-        return Err(fail("duplicate tools restore accepted"));
-    }
-    Ok(())
-}
-
 #[test]
 fn gc1_t13_rejects_invalid_state() -> Result<(), Box<dyn Error>> {
     let setup = mise_setup();
@@ -252,6 +190,5 @@ fn gc1_t13_rejects_invalid_state() -> Result<(), Box<dyn Error>> {
     check_rejects_bad_specs(&setup)?;
     check_rejects_decorated_rust_specs(&setup)?;
     check_rejects_bad_setup_and_identity(&setup)?;
-    check_rejects_bad_saves(&setup)?;
     Ok(())
 }

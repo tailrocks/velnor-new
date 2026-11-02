@@ -60,48 +60,14 @@ fn check_grouped_success_preserved() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn check_grouped_reader_branch_preserved() -> Result<(), Box<dyn Error>> {
-    let task = task_id()?;
+fn check_absent_ledgers_rejected() -> Result<(), Box<dyn Error>> {
     let (plan, matrix, report, _) = check_run_fixture()?;
-    let ledger = group_ledger_value(
-        &task,
-        JOB_ID,
-        HEAD_SHA,
-        "pull_request",
-        ExecutionBranch::Reader,
-        UnitOutcome::Executed,
-        Some(0),
-    )?;
     let final_report = merge(
         &plan,
         std::slice::from_ref(&matrix),
         std::slice::from_ref(&report),
         &[JOB_ID],
         &required_jobs(&[(JOB_ID, JobConclusion::Success)]),
-        RUN_KEY,
-        Some(std::slice::from_ref(&ledger)),
-    )?;
-    if final_report.status != FinalStatus::Passed {
-        return Err(fail("reader ledger did not preserve Required pass"));
-    }
-    if conclusion_of(&final_report, JOB_ID)? != JobConclusion::Success {
-        return Err(fail("reader ledger lost the successful unit conclusion"));
-    }
-    Ok(())
-}
-
-fn check_absent_ledgers_rejected() -> Result<(), Box<dyn Error>> {
-    let task = task_id()?;
-    let (plan, matrix, report) = branch_evidence(&task, GROUP_ID)?;
-    let final_report = merge(
-        &plan,
-        std::slice::from_ref(&matrix),
-        std::slice::from_ref(&report),
-        &[GROUP_READER_ID, GROUP_WRITER_ID],
-        &required_jobs(&[
-            (GROUP_READER_ID, JobConclusion::Success),
-            (GROUP_WRITER_ID, JobConclusion::Success),
-        ]),
         RUN_KEY,
         None,
     )?;
@@ -115,7 +81,6 @@ fn check_absent_ledgers_rejected() -> Result<(), Box<dyn Error>> {
 #[test]
 fn gc1_t35_preserves_contract() -> Result<(), Box<dyn Error>> {
     check_grouped_success_preserved()?;
-    check_grouped_reader_branch_preserved()?;
     check_absent_ledgers_rejected()?;
     Ok(())
 }
@@ -142,7 +107,6 @@ pub(crate) fn check_cross_source_ledger_rejected() -> Result<(), Box<dyn Error>>
         JOB_ID,
         OTHER_SHA,
         "pull_request",
-        ExecutionBranch::Writer,
         UnitOutcome::Executed,
         Some(0),
     )?;
@@ -170,7 +134,6 @@ pub(crate) fn check_cross_event_ledger_rejected() -> Result<(), Box<dyn Error>> 
         JOB_ID,
         HEAD_SHA,
         "push",
-        ExecutionBranch::Writer,
         UnitOutcome::Executed,
         Some(0),
     )?;
@@ -198,7 +161,6 @@ pub(crate) fn check_unplanned_job_ledger_rejected() -> Result<(), Box<dyn Error>
         "ghost-job",
         HEAD_SHA,
         "pull_request",
-        ExecutionBranch::Writer,
         UnitOutcome::Executed,
         Some(0),
     )?;

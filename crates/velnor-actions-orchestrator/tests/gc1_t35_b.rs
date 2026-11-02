@@ -30,7 +30,6 @@ fn check_unknown_unit_ledger_rejected() -> Result<(), Box<dyn Error>> {
         JOB_ID,
         HEAD_SHA,
         "pull_request",
-        ExecutionBranch::Writer,
         UnitOutcome::Executed,
         Some(0),
     )?;
@@ -58,7 +57,6 @@ fn check_success_contradiction_rejected() -> Result<(), Box<dyn Error>> {
         JOB_ID,
         HEAD_SHA,
         "pull_request",
-        ExecutionBranch::Writer,
         UnitOutcome::Failed,
         Some(1),
     )?;

@@ -294,15 +294,11 @@ fn assert_emitted_owner_tasks(
     proposal_paths: &BTreeMap<String, String>,
     include_member: bool,
 ) -> Result<(), Box<dyn Error>> {
-    use super::support::logical_owner_id;
     use std::collections::btree_map::Entry;
-    // Reader/writer branches run on mutually exclusive events, so each branch
-    // carries its owner's task executions and both belong to one logical owner.
-    let all: BTreeSet<&str> = owner_jobs.iter().map(|(id, _)| *id).collect();
     let mut emitted: BTreeMap<String, &str> = BTreeMap::new();
     let mut owners_by_manifest: BTreeMap<&str, BTreeSet<&str>> = BTreeMap::new();
     for (owner_id, job) in owner_jobs {
-        let owner = logical_owner_id(&all, owner_id);
+        let owner = *owner_id;
         let task_ids: Vec<_> = task_execution_ids(job).collect();
         assert!(!task_ids.is_empty(), "{owner_id} owns no task execution");
         for task_id in task_ids {

@@ -24,6 +24,8 @@ pub const SEED_JOB_ID_PREFIX: &str = "dependency-seed";
 
 pub const TOOLS_PRODUCER_JOB_ID_PREFIX: &str = "tools-producer-";
 
+pub const TOFU_PROVIDERS_PRODUCER_JOB_ID_PREFIX: &str = "providers-producer-";
+
 pub const MAX_GROUP_UNITS: usize = 64;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -209,39 +211,8 @@ impl CrateGroupPlan {
         for unit_id in &self.unit_ids {
             validate_task_id(unit_id)?;
         }
-        self.timeout_minutes.validate()?;
-        let reader = self.reader_job_id();
-        let writer = self.writer_job_id();
-        validate_job_id(&reader)?;
-        validate_job_id(&writer)?;
-        if reader == self.group_job_id || writer == self.group_job_id || reader == writer {
-            return Err(ContractError::identity(
-                "crate_group.branches",
-                "branch_collision",
-            ));
-        }
-        Ok(())
+        self.timeout_minutes.validate()
     }
-
-    #[must_use]
-    pub fn reader_job_id(&self) -> String {
-        reader_job_id_for(&self.group_job_id)
-    }
-
-    #[must_use]
-    pub fn writer_job_id(&self) -> String {
-        writer_job_id_for(&self.group_job_id)
-    }
-}
-
-#[must_use]
-pub fn reader_job_id_for(group_job_id: &str) -> String {
-    format!("{group_job_id}{GROUP_READER_SUFFIX}")
-}
-
-#[must_use]
-pub fn writer_job_id_for(group_job_id: &str) -> String {
-    format!("{group_job_id}{GROUP_WRITER_SUFFIX}")
 }
 
 #[must_use]
@@ -254,7 +225,9 @@ pub fn is_seed_job_id(job_id: &str) -> bool {
 
 #[must_use]
 pub fn is_producer_job_id(job_id: &str) -> bool {
-    is_seed_job_id(job_id) || job_id.starts_with(TOOLS_PRODUCER_JOB_ID_PREFIX)
+    is_seed_job_id(job_id)
+        || job_id.starts_with(TOOLS_PRODUCER_JOB_ID_PREFIX)
+        || job_id.starts_with(TOFU_PROVIDERS_PRODUCER_JOB_ID_PREFIX)
 }
 
 pub fn validate_group_needs(needs: &[String], group_job_id: &str) -> Result<(), ContractError> {

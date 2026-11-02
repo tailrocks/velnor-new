@@ -255,23 +255,10 @@ fn obligation_digest<'a>(plan: &'a Plan, unit_id: &str) -> Result<&'a str, Orche
 }
 
 fn split_job_key(job_key: &str) -> Result<(&str, ExecutionBranch), OrchestratorError> {
-    if let Some(group) =
-        job_key.strip_suffix(velnor_actions_contract::workflow::crate_job::GROUP_READER_SUFFIX)
-    {
-        if group.is_empty() {
-            return Err(internal("job_key_without_group"));
-        }
-        return Ok((group, ExecutionBranch::Reader));
+    if job_key.is_empty() {
+        return Err(internal("job_key_without_group"));
     }
-    if let Some(group) =
-        job_key.strip_suffix(velnor_actions_contract::workflow::crate_job::GROUP_WRITER_SUFFIX)
-    {
-        if group.is_empty() {
-            return Err(internal("job_key_without_group"));
-        }
-        return Ok((group, ExecutionBranch::Writer));
-    }
-    Err(internal("job_key_without_branch_suffix"))
+    Ok((job_key, ExecutionBranch::Reader))
 }
 
 fn clock_secs() -> Result<u64, OrchestratorError> {
