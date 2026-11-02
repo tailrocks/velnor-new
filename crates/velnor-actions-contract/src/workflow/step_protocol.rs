@@ -10,7 +10,7 @@ use super::{
     step::{Step, StepKind},
     step_identity::{
         StepId, StepRole, TOFU_PROVIDER_ADMISSION_USES, TOFU_PROVIDER_CACHE_BASE_EXPR,
-        TOFU_PROVIDERS_KEY_OUTPUT_EXPR, TOFU_PROVIDERS_PATH_OUTPUT_EXPR,
+        TOOLS_CACHE_RESTORE_ACTION_USES, TOOLS_RESTORE_LOOKUP_ONLY_INPUT,
     },
 };
 use crate::errors::ContractError;
@@ -18,6 +18,7 @@ use crate::errors::ContractError;
 #[derive(Default)]
 struct ProtocolSteps {
     restores: Vec<usize>,
+    prepares: Vec<usize>,
     consumers: Vec<usize>,
     saves: Vec<usize>,
 }
@@ -26,7 +27,51 @@ struct ProviderBinding<'a> {
     key: &'a str,
     path: &'a str,
     restore_index: usize,
+    form: ProviderRestoreForm,
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum ProviderRestoreForm {
+    Admission,
+    LookupOnly,
+}
+
+impl ProviderRestoreForm {
+    pub(super) fn of(kind: &StepKind) -> Option<Self> {
+        let StepKind::Action { uses, with, env } = kind else {
+            return None;
+        };
+        if !env.is_empty() {
+            return None;
+        }
+        if uses == TOFU_PROVIDER_ADMISSION_USES {
+            let (key, path) = (with.get("cache-key")?, with.get("cache-path")?);
+            (with.len() == 2 && provider_path_slug(path).is_some() && valid_provider_cache_key(key))
+                .then_some(Self::Admission)
+        } else if uses == TOFU_PROVIDER_PROBE_USES {
+            let (key, path) = (with.get("key")?, with.get("path")?);
+            (with.len() == 3
+                && with
+                    .get(TOOLS_RESTORE_LOOKUP_ONLY_INPUT)
+                    .is_some_and(|value| value == "true")
+                && provider_path_slug(path).is_some()
+                && valid_provider_cache_key(key))
+            .then_some(Self::LookupOnly)
+        } else {
+            None
+        }
+    }
+
+    fn inputs(self, with: &BTreeMap<String, String>) -> Option<(&str, &str)> {
+        let (key, path) = match self {
+            Self::Admission => ("cache-key", "cache-path"),
+            Self::LookupOnly => ("key", "path"),
+        };
+        Some((with.get(key)?.as_str(), with.get(path)?.as_str()))
+    }
+}
+
+const TOFU_PROVIDER_PROBE_USES: &str = TOOLS_CACHE_RESTORE_ACTION_USES;
 
 pub(super) fn validate_tofu_provider_sequence(
     steps: &[Step],
@@ -37,6 +82,7 @@ pub(super) fn validate_tofu_provider_sequence(
         return Ok(());
     }
     let binding = validate_restore_admission(steps, &roles, scope)?;
+    validate_provider_prepares(&roles.prepares, &binding, scope)?;
     validate_provider_consumers(steps, &roles.consumers, &binding, scope)?;
     validate_provider_save(steps, &roles, &binding, scope)
 }
@@ -46,6 +92,7 @@ fn classify_protocol_steps(steps: &[Step], scope: &str) -> Result<ProtocolSteps,
     for (index, step) in steps.iter().enumerate() {
         match step.role {
             Some(StepRole::TofuProvidersRestore) => roles.restores.push(index),
+            Some(StepRole::TofuProvidersPrepare) => roles.prepares.push(index),
             Some(StepRole::TofuProviderUse) => roles.consumers.push(index),
             Some(StepRole::TofuProvidersSave) => roles.saves.push(index),
             _ => {}
@@ -68,7 +115,10 @@ fn classify_protocol_steps(steps: &[Step], scope: &str) -> Result<ProtocolSteps,
 
 impl ProtocolSteps {
     fn present(&self) -> bool {
-        !self.restores.is_empty() || !self.consumers.is_empty() || !self.saves.is_empty()
+        !self.restores.is_empty()
+            || !self.prepares.is_empty()
+            || !self.consumers.is_empty()
+            || !self.saves.is_empty()
     }
 }
 
@@ -85,24 +135,35 @@ fn validate_restore_admission<'a>(
     if restore.condition.is_some() {
         return Err(invalid(scope, "tofu_provider_restore_conditional"));
     }
+    let form = ProviderRestoreForm::of(&restore.kind)
+        .ok_or_else(|| invalid(scope, "tofu_restore_shape"))?;
     let restore_with = action_with(restore).ok_or_else(|| invalid(scope, "tofu_restore_shape"))?;
-    let key = restore_with
-        .get("cache-key")
-        .map(String::as_str)
-        .ok_or_else(|| invalid(scope, "tofu_restore_key_missing"))?;
-    let path = restore_with
-        .get("cache-path")
-        .map(String::as_str)
-        .ok_or_else(|| invalid(scope, "tofu_restore_path_missing"))?;
-    provider_path_slug(path).ok_or_else(|| invalid(scope, "tofu_provider_path_invalid"))?;
-    if !valid_provider_cache_key(key) {
-        return Err(invalid(scope, "tofu_provider_key_invalid"));
-    }
+    let (key, path) = form
+        .inputs(restore_with)
+        .ok_or_else(|| invalid(scope, "tofu_restore_shape"))?;
     Ok(ProviderBinding {
         key,
         path,
         restore_index,
+        form,
     })
+}
+
+fn validate_provider_prepares(
+    prepares: &[usize],
+    binding: &ProviderBinding<'_>,
+    scope: &str,
+) -> Result<(), ContractError> {
+    if prepares.is_empty() {
+        return Ok(());
+    }
+    if binding.form != ProviderRestoreForm::LookupOnly || prepares.len() != 1 {
+        return Err(invalid(scope, "tofu_provider_prepare_shape"));
+    }
+    if prepares[0] <= binding.restore_index {
+        return Err(invalid(scope, "tofu_provider_prepare_before_probe"));
+    }
+    Ok(())
 }
 
 fn validate_provider_consumers(
@@ -139,25 +200,16 @@ fn validate_provider_save(
         return Err(invalid(scope, "tofu_provider_save_count"));
     }
     if let Some(index) = roles.saves.first().copied() {
+        if binding.form != ProviderRestoreForm::LookupOnly {
+            return Err(invalid(scope, "tofu_provider_save_without_probe"));
+        }
         if index <= binding.restore_index {
             return Err(invalid(scope, "tofu_provider_save_before_restore"));
         }
         let save = &steps[index];
         let save_with = action_with(save).ok_or_else(|| invalid(scope, "tofu_save_shape"))?;
-        let restore = &steps[binding.restore_index];
-        let restore_with =
-            action_with(restore).ok_or_else(|| invalid(scope, "tofu_restore_shape"))?;
-        if restore_with.get("cache-key").map(String::as_str) != Some(binding.key)
-            || restore_with.get("cache-path").map(String::as_str) != Some(binding.path)
-        {
-            return Err(invalid(scope, "tofu_provider_save_binding_mismatch"));
-        }
-        let expected_key = output_reference(restore, "cache-key")
-            .ok_or_else(|| invalid(scope, "tofu_provider_restore_id_missing"))?;
-        let expected_path = output_reference(restore, "cache-path")
-            .ok_or_else(|| invalid(scope, "tofu_provider_restore_id_missing"))?;
-        if save_with.get("key") != Some(&expected_key)
-            || save_with.get("path") != Some(&expected_path)
+        if save_with.get("key").map(String::as_str) != Some(binding.key)
+            || save_with.get("path").map(String::as_str) != Some(binding.path)
         {
             return Err(invalid(scope, "tofu_provider_save_binding_mismatch"));
         }
@@ -171,43 +223,22 @@ fn validate_provider_save(
     Ok(())
 }
 
-fn output_reference(step: &Step, output: &str) -> Option<String> {
-    let id = step.id?;
-    Some(format!("${{{{ steps.{}.outputs.{output} }}}}", id.as_str()))
-}
-
 pub(crate) fn valid_provider_restore(kind: &StepKind) -> bool {
-    let StepKind::Action { uses, with, env } = kind else {
-        return false;
-    };
-    let Some(key) = with.get("cache-key") else {
-        return false;
-    };
-    let Some(path) = with.get("cache-path") else {
-        return false;
-    };
-    with.len() == 2
-        && uses == TOFU_PROVIDER_ADMISSION_USES
-        && env.is_empty()
-        && provider_path_slug(path).is_some()
-        && valid_provider_cache_key(key)
+    ProviderRestoreForm::of(kind).is_some()
 }
 
 pub(crate) fn valid_provider_save(kind: &StepKind) -> bool {
     let StepKind::Action { uses, with, env } = kind else {
         return false;
     };
-    let Some(key) = with.get("key") else {
-        return false;
-    };
-    let Some(path) = with.get("path") else {
+    let (Some(key), Some(path)) = (with.get("key"), with.get("path")) else {
         return false;
     };
     with.len() == 2
         && uses.starts_with("actions/cache/save@")
         && env.is_empty()
-        && key == TOFU_PROVIDERS_KEY_OUTPUT_EXPR
-        && path == TOFU_PROVIDERS_PATH_OUTPUT_EXPR
+        && provider_path_slug(path).is_some()
+        && valid_provider_cache_key(key)
 }
 
 pub(crate) fn valid_provider_use(kind: &StepKind) -> bool {

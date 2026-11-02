@@ -352,10 +352,6 @@ fn render_job(
         permissions: None,
         environment: None,
         steps,
-        cache_mode: Some(if use_opentofu {
-            CacheMode::push_write_expression()
-        } else {
-            CacheMode::explicit_read()
-        }),
+        cache_mode: Some(CacheMode::explicit_read()),
     })
 }

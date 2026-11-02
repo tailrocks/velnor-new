@@ -215,7 +215,7 @@ fn is_install_role(role: Option<StepRole>) -> bool {
     )
 }
 
-fn specs_step(specs: &[String], id: &str) -> Result<Step, RenderError> {
+pub(crate) fn specs_step(specs: &[String], id: &str) -> Result<Step, RenderError> {
     let command = velnor_actions_mise::IsolatedCommand::mise_install(specs)
         .map_err(|_| invalid(&format!("install_specs_missing:{id}")))?;
     let argv = command

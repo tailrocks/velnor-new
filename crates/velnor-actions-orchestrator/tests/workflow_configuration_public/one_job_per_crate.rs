@@ -190,7 +190,7 @@ fn each_crate_job_emits_one_group_ledger_before_upload() -> Result<(), Box<dyn E
 }
 
 #[test]
-fn tofu_group_stays_one_job_and_keeps_provider_save() -> Result<(), Box<dyn Error>> {
+fn tofu_group_stays_one_literal_read_job_without_a_provider_save() -> Result<(), Box<dyn Error>> {
     let Rendered { jobs, .. } = tofu_fixture()?;
     let tofu: Vec<(&String, &Job)> = jobs
         .iter()
@@ -200,15 +200,18 @@ fn tofu_group_stays_one_job_and_keeps_provider_save() -> Result<(), Box<dyn Erro
     let (id, job) = tofu[0];
     assert!(!id.ends_with(GROUP_READER_SUFFIX) && !id.ends_with(GROUP_WRITER_SUFFIX));
     assert!(
-        job.cache_mode.as_ref().is_some_and(CacheMode::grants_write),
-        "{id} lost its cache write grant"
+        job.cache_mode
+            .as_ref()
+            .is_some_and(CacheMode::is_explicit_read),
+        "{id} is not literal cache-mode read: {:?}",
+        job.cache_mode
     );
-    let saves = job
-        .steps
-        .iter()
-        .filter(|step| step.role == Some(StepRole::TofuProvidersSave))
-        .count();
-    assert_eq!(saves, 1, "{id} provider saves");
+    assert!(
+        job.steps
+            .iter()
+            .all(|step| step.role != Some(StepRole::TofuProvidersSave)),
+        "{id} saves providers"
+    );
     Ok(())
 }
 

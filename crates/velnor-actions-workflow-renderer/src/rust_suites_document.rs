@@ -150,7 +150,6 @@ fn finalize_suite_workflow_jobs(
     spec: &RustSuitesRenderSpec,
 ) -> Result<(), RenderError> {
     prepare_suite_tools(jobs, spec)?;
-    crate::cache_p08::elect_cache_writers(jobs)?;
     crate::cache_steps::append_bundle_postludes(jobs)?;
     crate::cache_steps::append_workspace_cleanups(jobs)?;
     crate::cache_doctor::check(jobs)

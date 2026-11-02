@@ -17,8 +17,6 @@ mod save_policy;
 #[path = "cache_p08_setup.rs"]
 mod setup_pipeline;
 
-pub use crate::cache_elect::elect_cache_writers;
-
 pub const RESTORE_SOURCES_NAME: &str = "Restore Cargo sources";
 pub const SAVE_SOURCES_NAME: &str = "Save Cargo sources";
 pub const TOOLS_CACHE_IDENTITY_NAME: &str = "V2 identity";

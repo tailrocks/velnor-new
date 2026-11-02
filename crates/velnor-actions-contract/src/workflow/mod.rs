@@ -25,7 +25,7 @@ pub mod platform;
 mod producer;
 pub use producer::{
     DEPENDENCY_SEED_JOB_CONDITION, ProducerKind, TOOLS_PRODUCER_INSTALL_CONDITION,
-    validate_tools_producer,
+    validate_tofu_providers_producer, validate_tools_producer,
 };
 pub mod qualification;
 pub mod qualification_cache_lineage;

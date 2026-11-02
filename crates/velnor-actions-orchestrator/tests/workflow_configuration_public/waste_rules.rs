@@ -4,8 +4,10 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
 
-use velnor_actions_contract::workflow::ProducerKind;
 use velnor_actions_contract::workflow::cache_family::SOURCES_SAVE_CONDITION;
+use velnor_actions_contract::workflow::{
+    validate_tofu_providers_producer, validate_tools_producer,
+};
 use velnor_actions_contract::{CacheMode, Job, Step, StepKind, StepRole};
 
 use velnor_actions_orchestrator::{finalized_jobs, prepare};
@@ -79,20 +81,28 @@ pub(super) fn w4(jobs: &BTreeMap<String, Job>) -> Vec<Violation> {
 
 pub(super) fn w5(jobs: &BTreeMap<String, Job>) -> Vec<Violation> {
     jobs.iter()
-        .filter(|(_, job)| job.producer_kind() != Some(ProducerKind::ToolsIdentity))
         .flat_map(|(id, job)| {
             job.steps
                 .iter()
-                .filter(|step| step.role == Some(StepRole::ToolsCacheSave))
+                .filter(move |step| match step.role {
+                    Some(StepRole::ToolsCacheSave) => validate_tools_producer(job, id).is_err(),
+                    Some(StepRole::TofuProvidersSave) => {
+                        validate_tofu_providers_producer(job, id).is_err()
+                    }
+                    _ => false,
+                })
                 .map(move |step| violation("w5", id, &step.name))
         })
         .collect()
 }
 
 fn producer_step(jobs: &BTreeMap<String, Job>, role: StepRole) -> Result<Step, Box<dyn Error>> {
-    jobs.values()
-        .filter(|job| job.producer_kind() == Some(ProducerKind::ToolsIdentity))
-        .flat_map(|job| job.steps.iter())
+    jobs.iter()
+        .filter(|(id, job)| match role {
+            StepRole::TofuProvidersSave => validate_tofu_providers_producer(job, id).is_ok(),
+            _ => validate_tools_producer(job, id).is_ok(),
+        })
+        .flat_map(|(_, job)| job.steps.iter())
         .find(|step| step.role == Some(role))
         .cloned()
         .ok_or_else(|| format!("no producer step with role {role:?}").into())
@@ -174,7 +184,7 @@ fn w4_no_job_restores_the_same_key_twice() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
-fn w5_tools_cache_save_lives_only_in_a_producer() -> Result<(), Box<dyn Error>> {
+fn w5_producer_saves_live_only_in_a_producer() -> Result<(), Box<dyn Error>> {
     let mut fixtures = rust_fixtures()?;
     for fixture in &fixtures {
         assert_eq!(w5(&fixture.jobs), Vec::new(), "{}", fixture.name);
@@ -191,15 +201,25 @@ fn w5_tools_cache_save_lives_only_in_a_producer() -> Result<(), Box<dyn Error>> 
     let flagged = w5(&jobs);
     assert_eq!(flagged.len(), 1, "{flagged:?}");
     assert_eq!(flagged[0].job, id);
-    let tofu = tofu_fixture()?.jobs;
+    let mut tofu = tofu_fixture()?.jobs;
     assert_eq!(w5(&tofu), Vec::new());
-    assert!(
-        tofu.values()
-            .flat_map(|job| job.steps.iter())
-            .any(|step| step.role == Some(StepRole::TofuProvidersSave)),
-        "the provider save exception is not exercised"
-    );
+    let provider_save = producer_step(&tofu, StepRole::TofuProvidersSave)?;
+    let tofu_id = tofu
+        .iter()
+        .find(|(_, job)| job.producer_kind().is_none() && has_provider_restore(job))
+        .map(|(id, _)| id.clone())
+        .ok_or("no tofu crate job")?;
+    mutable(&mut tofu, &tofu_id)?.steps.push(provider_save);
+    let flagged = w5(&tofu);
+    assert_eq!(flagged.len(), 1, "{flagged:?}");
+    assert_eq!(flagged[0].job, tofu_id);
     Ok(())
+}
+
+fn has_provider_restore(job: &Job) -> bool {
+    job.steps
+        .iter()
+        .any(|step| step.role == Some(StepRole::TofuProvidersRestore))
 }
 
 fn prepared_with_extra_step(
@@ -331,7 +351,9 @@ fn every_non_read_job_saves_caches_only_for_trusted_runs() -> Result<(), Box<dyn
         })
         .map(|(id, _)| id.clone())
         .ok_or("no tofu provider save")?;
-    for step in &mut mutable(&mut jobs, &tofu_id)?.steps {
+    let producer = mutable(&mut jobs, &tofu_id)?;
+    producer.condition = None;
+    for step in &mut producer.steps {
         if step.role == Some(StepRole::TofuProvidersSave) {
             step.condition = Some("success()".to_owned());
         }

@@ -65,10 +65,6 @@ pub const TOOLS_CACHE_IDENTITY_DIGEST_INPUT: &str = "d";
 
 pub const TOFU_PROVIDER_CACHE_BASE_EXPR: &str = super::cache_family::TOFU_PROVIDER_CACHE_BASE_EXPR;
 
-pub const TOFU_PROVIDERS_KEY_OUTPUT_EXPR: &str = "${{ steps.tofu-providers.outputs.cache-key }}";
-
-pub const TOFU_PROVIDERS_PATH_OUTPUT_EXPR: &str = "${{ steps.tofu-providers.outputs.cache-path }}";
-
 pub const MBX_WORKSPACE_CLEAN_CONDITION: &str = "always() && steps.mbx-ready.outcome == 'success'";
 pub use super::step_private::{
     BUN_ASSETS_EXPORT_OPERATION, BUN_ASSETS_IMPORT_OPERATION, BUN_ASSETS_PREPARE_OPERATION,
@@ -159,6 +155,8 @@ pub enum StepRole {
     TofuProvidersSave,
 
     TofuProvidersRestore,
+
+    TofuProvidersPrepare,
 
     TofuProviderUse,
 
@@ -273,6 +271,7 @@ impl StepRole {
             }
             Self::TofuProvidersRestore => super::step_protocol::valid_provider_restore(kind),
             Self::TofuProvidersSave => super::step_protocol::valid_provider_save(kind),
+            Self::TofuProvidersPrepare => matches!(kind, StepKind::Shell { .. }),
             Self::PrivateTokenMint => matches!(kind,
                 StepKind::Action { uses, .. } if uses.starts_with(PRIVATE_TOKEN_MINT_ACTION_PREFIX)),
             Self::PrivateFetch => internal_operation(kind, PRIVATE_FETCH_OPERATION),

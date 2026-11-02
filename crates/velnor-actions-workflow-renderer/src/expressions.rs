@@ -52,7 +52,7 @@ const ENV_EXPRESSIONS: [&str; 15] = [
     "steps.aws-credentials.outputs.aws-session-token",
 ];
 
-const WITH_EXPRESSIONS: [&str; 18] = [
+const WITH_EXPRESSIONS: [&str; 16] = [
     "runner.temp",
     "github.run_id",
     "github.run_attempt",
@@ -63,8 +63,6 @@ const WITH_EXPRESSIONS: [&str; 18] = [
     "steps.v2.outputs.seed_admitted",
     "runner.environment",
     "github.job",
-    "steps.tofu-providers.outputs.cache-key",
-    "steps.tofu-providers.outputs.cache-path",
     "steps.cache-keys.outputs.sources_key",
     "steps.cache-keys.outputs.sources_restore_keys",
     "needs.plan.outputs.sources_key",
