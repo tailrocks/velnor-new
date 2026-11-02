@@ -9,8 +9,8 @@ f09c8c077e4be0a8eaf04e4c09004048cc05b8428350eed90c4a10af2b8ec2ab  ./.github/acti
 bceb00cf2855d757f250bf994385f5124e6faeacb96ddd2a748de768e426d4a9  ./.github/actions/generator-release-qualify-linux/action.yml
 7505eaee55ab8d0f9305fe54dce9a3b60f6d69e427964ba746cecc95fce42659  ./.github/actions/generator-release-qualify-macos-intel/action.yml
 749dd1cbab0c60a052587e3a71b84839bdac04c6319490bf4005c1c41e45bb68  ./.github/actions/generator-release-qualify-macos/action.yml
-a94e8018d719410e8f7803c3da6cedb1ee852003bf551e3f7aa9cc139e288e5e  ./.github/actions/u26/action.yml
-6201d4d3fa4a1a8e5ed662b40fd4b71e22155fb5d3de52e43e38b5599573568c  ./.github/actions/velnor-tool-seed/action.yml
+40fd192e57b5fb169ee53c9ea5bf7e9e856d1ca9f4cf70fdffddf1754dae95c1  ./.github/actions/u26/action.yml
+085956fbe05afd65d2f6c5e91c40de39025a457129e6f1056db1927e3f8a1742  ./.github/actions/velnor-tool-seed/action.yml
 41c2c491dc48b2620e1110cc9c6fe2d5aaf6fd10a48282b56b8fcb76d7d73781  ./.github/actions/velnor-tools-cache-restore/action.yml
 02cf42b7c32e5dad5055b53f6d933aa73af073f9f152af4fe124b0451791a49b  ./.github/actions/velnor-tools-cache-scrub/action.yml
 052d2d72983695fb74b8ae481ae0e9e9953e00364714a182840d2d1b41c7bc20  ./.github/actions/velnor-tools-prelude-u26/action.yml
