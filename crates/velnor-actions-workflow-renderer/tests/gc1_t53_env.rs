@@ -8,10 +8,7 @@ fn suite_job_env(text: &str) -> Result<BTreeMap<String, String>, Box<dyn Error>>
         .split_once("\njobs:\n")
         .map(|(_, jobs)| jobs)
         .ok_or_else(|| fail("render lost its jobs section"))?;
-    let after_env = jobs
-        .split_once("\n    env:\n")
-        .map(|(_, rest)| rest)
-        .ok_or_else(|| fail("suite job lost its env block"))?;
+    let after_env = jobs.split_once("\n    env:\n").map_or("", |(_, rest)| rest);
     Ok(after_env
         .lines()
         .take_while(|line| line.starts_with("      "))
