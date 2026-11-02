@@ -3,6 +3,7 @@
 
 use std::collections::BTreeMap;
 
+use super::step_tofu_prepare::valid_provider_prepare;
 use super::{
     cache_family::{
         TOFU_PROVIDERS_KEY_OUTPUT_PREFIX, TOFU_PROVIDERS_SAVE_CONDITION, is_plan_cache_output,
@@ -82,7 +83,7 @@ pub(super) fn validate_tofu_provider_sequence(
         return Ok(());
     }
     let binding = validate_restore_admission(steps, &roles, scope)?;
-    validate_provider_prepares(&roles.prepares, &binding, scope)?;
+    validate_provider_prepares(steps, &roles.prepares, &binding, scope)?;
     validate_provider_consumers(steps, &roles.consumers, &binding, scope)?;
     validate_provider_save(steps, &roles, &binding, scope)
 }
@@ -150,6 +151,7 @@ fn validate_restore_admission<'a>(
 }
 
 fn validate_provider_prepares(
+    steps: &[Step],
     prepares: &[usize],
     binding: &ProviderBinding<'_>,
     scope: &str,
@@ -162,6 +164,9 @@ fn validate_provider_prepares(
     }
     if prepares[0] <= binding.restore_index {
         return Err(invalid(scope, "tofu_provider_prepare_before_probe"));
+    }
+    if !valid_provider_prepare(&steps[prepares[0]].kind, binding.path) {
+        return Err(invalid(scope, "tofu_provider_prepare_script"));
     }
     Ok(())
 }

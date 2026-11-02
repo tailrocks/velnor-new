@@ -270,6 +270,41 @@ fn step_mutations() -> Vec<Mutation> {
                 step.condition = None;
             });
         }),
+        mutation("prepare_script_weakened", |job, _| {
+            edit_step(job, StepRole::TofuProvidersPrepare, |step| {
+                if let StepKind::Shell { run, .. } = &mut step.kind {
+                    "rm -rf -- \"$TOFU_PROVIDER_CACHE_PATH\"".clone_into(&mut run[2]);
+                }
+            });
+        }),
+        mutation("prepare_path_rebound", |job, _| {
+            edit_step(job, StepRole::TofuProvidersPrepare, |step| {
+                if let StepKind::Shell { env, .. } = &mut step.kind {
+                    env.insert("TOFU_PROVIDER_CACHE_PATH".to_owned(), "/".to_owned());
+                }
+            });
+        }),
+        mutation("prepare_extra_env", |job, _| {
+            edit_step(job, StepRole::TofuProvidersPrepare, |step| {
+                if let StepKind::Shell { env, .. } = &mut step.kind {
+                    env.insert("IFS".to_owned(), "x".to_owned());
+                }
+            });
+        }),
+        mutation("prepare_trailing_command", |job, _| {
+            edit_step(job, StepRole::TofuProvidersPrepare, |step| {
+                if let StepKind::Shell { run, .. } = &mut step.kind {
+                    run[2].push_str("; touch /tmp/x");
+                }
+            });
+        }),
+        mutation("prepare_not_inline_shell", |job, _| {
+            edit_step(job, StepRole::TofuProvidersPrepare, |step| {
+                if let StepKind::Shell { run, .. } = &mut step.kind {
+                    run.insert(0, "env".to_owned());
+                }
+            });
+        }),
         mutation("install_ungated", |job, _| {
             edit_step(job, StepRole::PreparePinnedTools, |step| {
                 step.condition = None;

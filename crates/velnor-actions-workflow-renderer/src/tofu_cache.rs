@@ -11,6 +11,9 @@ pub use velnor_actions_contract::workflow::step_identity::{
 use velnor_actions_contract::workflow::step_identity::{
     TOOLS_CACHE_RESTORE_ACTION_USES, TOOLS_RESTORE_LOOKUP_ONLY_INPUT,
 };
+use velnor_actions_contract::workflow::step_tofu_prepare::{
+    TOFU_PROVIDER_CACHE_PATH_ENV, TOFU_PROVIDERS_PREPARE_SCRIPT,
+};
 use velnor_actions_contract::{Step, StepId, StepRole};
 
 use crate::{RenderError, marker, steps, yaml};
@@ -21,8 +24,6 @@ pub const TOFU_PROVIDERS_PROBE_NAME: &str = "Probe Tofu providers";
 pub const TOFU_PROVIDERS_PREPARE_NAME: &str = "Prepare Tofu provider cache";
 pub const TOFU_PROVIDERS_SAVE_USES: &str =
     "actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9";
-const TOFU_PROVIDERS_PREPARE_SCRIPT: &str =
-    "rm -rf -- \"$TOFU_PROVIDER_CACHE_PATH\" && mkdir -p -m 700 -- \"$TOFU_PROVIDER_CACHE_PATH\"";
 pub const TOFU_PROVIDER_ADMISSION_SCRIPT: &str = r#"set -eu
 cd -P "$RUNNER_TEMP"
 rt=$PWD
@@ -209,7 +210,7 @@ pub fn tofu_providers_prepare_step(path: &str) -> Result<Step, RenderError> {
             "-c".to_owned(),
             TOFU_PROVIDERS_PREPARE_SCRIPT.to_owned(),
         ],
-        BTreeMap::from([("TOFU_PROVIDER_CACHE_PATH".to_owned(), path.to_owned())]),
+        BTreeMap::from([(TOFU_PROVIDER_CACHE_PATH_ENV.to_owned(), path.to_owned())]),
     )?;
     step.condition = Some(TOFU_PROVIDERS_PROBE_MISS_CONDITION.to_owned());
     step.role = Some(StepRole::TofuProvidersPrepare);

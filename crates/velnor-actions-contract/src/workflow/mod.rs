@@ -42,6 +42,7 @@ pub use step_id::GRADLE_RUN_OPERATION;
 pub mod step_identity;
 mod step_mbx_lifecycle;
 mod step_protocol;
+pub mod step_tofu_prepare;
 pub mod task_execution_manifest;
 pub mod timeout;
 pub mod trust;

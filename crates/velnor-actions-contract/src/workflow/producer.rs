@@ -5,6 +5,7 @@ use super::cache_family::{TOFU_PROVIDERS_PROBE_MISS_CONDITION, TOFU_PROVIDERS_SA
 use super::crate_job::{TOFU_PROVIDERS_PRODUCER_JOB_ID_PREFIX, TOOLS_PRODUCER_JOB_ID_PREFIX};
 use super::step_identity::{RUST_VERIFIER_USES, ToolsRestoreForm};
 use super::step_protocol::ProviderRestoreForm;
+use super::step_tofu_prepare::valid_provider_prepare;
 use super::{Job, PermissionLevel, Permissions, Step, StepKind, StepRole};
 use crate::ContractError;
 
@@ -187,6 +188,8 @@ fn tofu_order_ok(steps: &[Step]) -> bool {
         && steps[probe].condition.is_none()
         && steps[save].condition.as_deref() == Some(TOFU_PROVIDERS_SAVE_CONDITION)
         && ProviderRestoreForm::of(&steps[probe].kind) == Some(ProviderRestoreForm::LookupOnly)
+        && matches!(&steps[probe].kind, StepKind::Action { with, .. }
+            if with.get("path").is_some_and(|path| valid_provider_prepare(&steps[prepare].kind, path)))
 }
 
 fn tofu_role(role: StepRole) -> bool {

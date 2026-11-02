@@ -75,6 +75,8 @@ mod source_qualification_checkout;
 mod support;
 #[path = "workflow_configuration_public/timeouts.rs"]
 mod timeouts;
+#[path = "workflow_configuration_public/tofu_prepare_script.rs"]
+mod tofu_prepare_script;
 #[path = "workflow_configuration_public/tofu_providers_producers.rs"]
 mod tofu_providers_producers;
 #[path = "workflow_configuration_public/tools_producers.rs"]
