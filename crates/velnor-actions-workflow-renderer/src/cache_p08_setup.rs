@@ -78,7 +78,9 @@ fn insert_tools_prelude(
     if specs.is_empty() {
         return Ok(());
     }
-    let rust_version = specs.iter().find_map(|spec| spec.strip_prefix("rust@"));
+    let rust_version = specs
+        .iter()
+        .find_map(|spec| velnor_actions_mise::rust_spec_version(spec));
     let components =
         if let Some(version) = rust_version {
             job.steps

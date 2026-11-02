@@ -28,7 +28,7 @@ struct Rendered {
     verifiers: VerifierActionSet,
 }
 
-fn make_repo() -> Result<tempfile::TempDir, Box<dyn Error>> {
+pub(crate) fn make_repo() -> Result<tempfile::TempDir, Box<dyn Error>> {
     let dir = tempfile::tempdir()?;
     let root = dir.path();
     let init = git_fixture::sterile_command()
@@ -64,8 +64,7 @@ fn rendered() -> Result<Rendered, Box<dyn Error>> {
     let repo = make_repo()?;
     let prep = prepare(repo.path())?;
     let tree = crate::generate::render_staged_tree(&prep)?;
-    let verifiers =
-        VerifierActionSet::build(&prep.emission_catalog(), env!("CARGO_PKG_VERSION"))?;
+    let verifiers = VerifierActionSet::build(&prep.emission_catalog(), env!("CARGO_PKG_VERSION"))?;
     Ok(Rendered {
         files: tree.files,
         verifiers,
@@ -86,7 +85,10 @@ fn job_blocks(text: &str) -> Vec<JobBlock> {
         let bare = line.trim_end();
         if bare == "jobs:" {
             in_jobs = true;
-        } else if in_jobs && !bare.starts_with("   ") && bare.starts_with("  ") && bare.ends_with(':')
+        } else if in_jobs
+            && !bare.starts_with("   ")
+            && bare.starts_with("  ")
+            && bare.ends_with(':')
         {
             if let Some(last) = blocks.last_mut() {
                 last.end = offset;
@@ -117,22 +119,30 @@ fn edited(
     from: &str,
     to: &str,
 ) -> Result<Vec<RenderedFile>, Box<dyn Error>> {
+    edited_all(rendered, job_id, &[(from, to)])
+}
+
+fn edited_all(
+    rendered: &Rendered,
+    job_id: &str,
+    edits: &[(&str, &str)],
+) -> Result<Vec<RenderedFile>, Box<dyn Error>> {
     let text = workflow_text(rendered)?;
     let block = job_blocks(text)
         .into_iter()
         .find(|block| block.id == job_id)
         .ok_or_else(|| format!("no job block {job_id}"))?;
-    let body = &text[block.start..block.end];
-    let hits = body.matches(from).count();
-    if hits != 1 {
-        return Err(format!("{job_id}: expected one occurrence of {from:?}, found {hits}").into());
+    let mut body = text[block.start..block.end].to_owned();
+    for (from, to) in edits {
+        let hits = body.matches(from).count();
+        if hits != 1 {
+            return Err(
+                format!("{job_id}: expected one occurrence of {from:?}, found {hits}").into(),
+            );
+        }
+        body = body.replacen(from, to, 1);
     }
-    let changed = format!(
-        "{}{}{}",
-        &text[..block.start],
-        body.replacen(from, to, 1),
-        &text[block.end..]
-    );
+    let changed = format!("{}{}{}", &text[..block.start], body, &text[block.end..]);
     Ok(rendered
         .files
         .iter()
@@ -294,7 +304,10 @@ fn audit_rejects_gated_restored_verifier_everywhere() -> Result<(), Box<dyn Erro
             "name: {RESTORED_NAME}\n{INDENT}if: {TOOLS_PRODUCER_INSTALL_CONDITION}\n{INDENT}uses: {RESTORED_VERIFIER}"
         ),
     )?;
-    assert_rejected(audit_with_verifiers(&files, &rendered.verifiers), &crate_job)?;
+    assert_rejected(
+        audit_with_verifiers(&files, &rendered.verifiers),
+        &crate_job,
+    )?;
     let producer = producer_with_gated_verifier(&rendered)?;
     let files = edited(
         &rendered,
@@ -305,4 +318,45 @@ fn audit_rejects_gated_restored_verifier_everywhere() -> Result<(), Box<dyn Erro
         ),
     )?;
     assert_rejected(audit_with_verifiers(&files, &rendered.verifiers), &producer)
+}
+
+#[test]
+fn install_audit_recognises_bracket_form_rust_installs_in_every_quoting()
+-> Result<(), Box<dyn Error>> {
+    let rendered = rendered()?;
+    let verifier_step = format!(
+        "      - name: {VERIFIER_NAME}\n{INDENT}uses: {INSTALLED_VERIFIER} # zizmor: ignore[self-repository]\n"
+    );
+    for quoting in ["'rust[", "rust[", "\"rust[", "\\\"rust["] {
+        let files = edited_all(
+            &rendered,
+            "plan",
+            &[
+                ("install 'rust[", &format!("install {quoting}")),
+                (&verifier_step, ""),
+            ],
+        )?;
+        assert_rejected(audit_with_verifiers(&files, &rendered.verifiers), "plan")?;
+    }
+    Ok(())
+}
+
+#[test]
+fn install_audit_rejects_a_noncanonical_rust_install_option_in_every_quoting()
+-> Result<(), Box<dyn Error>> {
+    let rendered = rendered()?;
+    for option in ["profile=complete", "profile=minimal,components=rust-docs"] {
+        for quoting in ["'rust[", "rust[", "\"rust[", "\\\"rust["] {
+            let files = edited(
+                &rendered,
+                "plan",
+                "install 'rust[profile=minimal]",
+                &format!("install {quoting}{option}]"),
+            )?;
+            let result = audit_with_verifiers(&files, &rendered.verifiers);
+            assert_rejected(result, "plan")
+                .map_err(|error| format!("{option} in {quoting}: {error}"))?;
+        }
+    }
+    Ok(())
 }

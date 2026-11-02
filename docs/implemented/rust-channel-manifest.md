@@ -152,12 +152,14 @@ Generation enforces the coverage (`rust_install_audit.rs`): after rendering,
 it reads every generated `.github/**/*.yml` (workflows and composite actions,
 `ci.yml` step anchors resolved) and fails with
 `rust_install_unverified:<file>:<step>:<why>` when a run of steps that
-installs or changes Rust (`install rust@`, `rustup toolchain install`,
+installs or changes Rust (`install rust@`, `install rust[`, `rustup toolchain install`,
 `rustup component add`, `rustup target add`, `rustup-init`) is not followed
 by the verification before a step runs Rust, Cargo or MBX, or already runs
 `rustc`, Cargo or MBX itself. A step may verify its own install only by
 calling `$VELNOR_VERIFY_RUST_SCRIPT` after every install and before every use
-in its text (the `upgrades.yml` scripts). Removing
+in its text (the `upgrades.yml` scripts). The same audit fails the step when any
+`rust[` option is not exactly `profile=minimal]@`; the bare `rust@` form stays
+allowed for release installs. Removing
 the step from the resource-probe build makes `generate` fail with
 `rust_install_unverified:.github/workflows/product-release-images.yml:Install pinned Rust for the resource probe:no verification directly follows the install`.
 

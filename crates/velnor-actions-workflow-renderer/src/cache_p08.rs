@@ -91,26 +91,39 @@ pub fn infer_job_tools(job: &Job) -> Vec<String> {
 
 pub(crate) fn infer_steps_tools<'a>(steps: impl IntoIterator<Item = &'a Step>) -> Vec<String> {
     let mut specs = std::collections::BTreeSet::new();
+    let mut installed = std::collections::BTreeSet::new();
     for step in steps {
         let StepKind::Shell { run, .. } = &step.kind else {
             continue;
         };
-        let mut take = false;
+        let mut take = None;
         for word in crate::cache_p08_detect::detector_words(run) {
-            if word == "install" || word == "exec" {
-                take = true;
-                continue;
-            }
-            if word == "--" {
-                take = false;
-                continue;
-            }
-            if take && is_tool_spec(&word) {
-                specs.insert(word);
+            match word.as_str() {
+                "install" => take = Some(true),
+                "exec" => take = Some(false),
+                "--" => take = None,
+                _ => {
+                    if let Some(from_install) = take
+                        && is_tool_spec(&word)
+                    {
+                        if from_install {
+                            installed.insert(word.clone());
+                        }
+                        specs.insert(word);
+                    }
+                }
             }
         }
     }
+    let optioned: Vec<String> = specs.iter().filter_map(|spec| plain_twin(spec)).collect();
+    specs.retain(|spec| installed.contains(spec) || !optioned.contains(spec));
     specs.into_iter().collect()
+}
+
+fn plain_twin(spec: &str) -> Option<String> {
+    let (tool, version) = spec.split_once('@')?;
+    let (name, _) = tool.split_once('[')?;
+    Some(format!("{name}@{version}"))
 }
 
 pub(crate) fn is_catalog_version(value: &str) -> bool {

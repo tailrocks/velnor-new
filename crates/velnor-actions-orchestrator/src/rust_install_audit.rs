@@ -3,8 +3,10 @@
 
 use velnor_actions_workflow_renderer::{render::RenderedFile, yaml::quote_scalar};
 
-use velnor_actions_contract::workflow::crate_job::TOOLS_PRODUCER_JOB_ID_PREFIX;
 use velnor_actions_contract::workflow::TOOLS_PRODUCER_INSTALL_CONDITION;
+use velnor_actions_contract::workflow::crate_job::TOOLS_PRODUCER_JOB_ID_PREFIX;
+
+use velnor_actions_mise::RUST_INSTALL_OPTIONS;
 
 use crate::OrchestratorError;
 use crate::workflow::verifier_actions::{VerifierAction, VerifierActionSet};
@@ -13,11 +15,15 @@ use crate::workflow::verifier_actions::{VerifierAction, VerifierActionSet};
 mod parse;
 use parse::{StepText, step_lists};
 
-const INSTALLS: [&str; 9] = [
+const INSTALLS: [&str; 13] = [
     " install 'rust@",
     " install rust@",
     " install \"rust@",
     " install \\\"rust@",
+    " install 'rust[",
+    " install rust[",
+    " install \"rust[",
+    " install \\\"rust[",
     "rustup toolchain install",
     "rustup component add",
     "rustup target add",
@@ -74,12 +80,7 @@ pub(crate) fn audit_with_verifiers(
                     ));
                 }
             }
-            check_steps(
-                &format!("{}:{owner}", file.path),
-                &owner,
-                &steps,
-                verifiers,
-            )?;
+            check_steps(&format!("{}:{owner}", file.path), &owner, &steps, verifiers)?;
         }
     }
     Ok(())
@@ -243,6 +244,16 @@ fn check_steps(
     steps: &[StepText],
     verifiers: &VerifierActionSet,
 ) -> Result<(), OrchestratorError> {
+    if let Some(step) = steps
+        .iter()
+        .find(|step| installs_rust(step) && has_noncanonical_rust_option(&step.text))
+    {
+        return Err(unverified(
+            path,
+            &step.name,
+            "noncanonical rust install option",
+        ));
+    }
     let mut index = 0;
     while index < steps.len() {
         if !installs_rust(&steps[index]) {
@@ -292,6 +303,13 @@ fn check_steps(
     Ok(())
 }
 
+fn has_noncanonical_rust_option(text: &str) -> bool {
+    let canonical = format!("{RUST_INSTALL_OPTIONS}]@");
+    text.split("rust[")
+        .skip(1)
+        .any(|rest| !rest.starts_with(&canonical))
+}
+
 fn self_verified(step: &StepText) -> bool {
     let text = step.run_scalar.as_deref().unwrap_or(&step.text);
     let Some(check) = text.find(SELF_VERIFY) else {
@@ -326,4 +344,4 @@ fn is_rust_verifier(step: &StepText, owner: &str, verifiers: &VerifierActionSet)
 
 #[cfg(test)]
 #[path = "rust_install_audit_tests.rs"]
-mod tests;
+pub(crate) mod tests;

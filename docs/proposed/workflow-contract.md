@@ -130,6 +130,7 @@ ignore = []
 [stacks.rust]
 toolchain = "1.98.1" # optional exact X.Y.Z override; must agree with rust-toolchain.toml / rust-toolchain when present
 configurations = [{ name = "default", features = ["default"], target = "host" }]
+# dependency_seed = "off" # default "produce"; "off" emits no Dependency seed jobs
 # seed_parallel_targets = true # default false; see ../implemented/parallel-target-seeding.md
 # clippy_all_features = true # default false; Clippy alone runs --all-features
 # allow_empty_test_suite = true # default false; unsharded nextest tasks emit --no-tests warn; see task-execution-contract.md
