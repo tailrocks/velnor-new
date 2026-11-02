@@ -22,8 +22,8 @@ Workflow to generate
     - rust-empty-suite-read (17 steps)
     - rust-empty-suite-write (18 steps)
     - tools-producer-083ce5ee (8 steps)
-    - tools-producer-a98c50f3 (9 steps)
-    - tools-producer-b1266833 (10 steps)
+    - tools-producer-34295a97 (9 steps)
+    - tools-producer-d805a3a2 (10 steps)
     - 2 Rust crate jobs
       Timeout: 5 minutes per crate job
       Obligations: Clippy -> build -> doc build -> format check

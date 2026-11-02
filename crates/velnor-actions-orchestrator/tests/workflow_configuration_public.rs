@@ -47,6 +47,8 @@ mod bun_runtime;
 mod empty_suite;
 #[path = "workflow_configuration_public/feature_toggles.rs"]
 mod feature_toggles;
+#[path = "workflow_configuration_public/install_profile.rs"]
+mod install_profile;
 #[path = "workflow_configuration_public/maintenance_features.rs"]
 mod maintenance_features;
 #[path = "workflow_configuration_public/native_artifacts.rs"]
@@ -85,6 +87,8 @@ mod support;
 mod timeouts;
 #[path = "workflow_configuration_public/tools_producers.rs"]
 mod tools_producers;
+#[path = "workflow_configuration_public/tools_producers_donor_rust.rs"]
+mod tools_producers_donor_rust;
 #[path = "workflow_configuration_public/tools_producers_donors.rs"]
 mod tools_producers_donors;
 #[path = "workflow_configuration_public/tools_producers_mutations.rs"]
