@@ -88,6 +88,14 @@ fn aggregation_accepts_complete_success_receipts_and_retains_result() -> Result<
 {
     let temporary = tempfile::tempdir()?;
     write_receipts(temporary.path(), None, None)?;
+    for (job, _) in JOB_STATUSES {
+        fs::write(
+            jobs_dir(temporary.path())
+                .join(job)
+                .join("cli-identity.txt"),
+            "x\n",
+        )?;
+    }
     let output = run_phase(
         temporary.path(),
         &["bundle-selected-qualification-evidence"],
@@ -106,10 +114,29 @@ fn aggregation_accepts_complete_success_receipts_and_retains_result() -> Result<
         fs::read_to_string(evidence.join("logs/evidence-bundle.exit"))?,
         "0\n"
     );
+    let archive = evidence.join("source-qualification-preserved.tar.gz");
+    let members = archive_members(&archive)?;
+    for (job, _) in JOB_STATUSES {
+        for path in [format!("{job}/logs/"), format!("{job}/cli-identity.txt")] {
+            assert!(
+                members.iter().any(|member| member == &path),
+                "archive has no member {path}: {members:?}"
+            );
+        }
+    }
     assert!(
-        evidence
-            .join("source-qualification-preserved.tar.gz")
-            .is_file()
+        members
+            .iter()
+            .any(|member| member == "qualification-final-status.txt")
+    );
+    assert!(
+        members
+            .iter()
+            .all(|member| member == "qualification-final-status.txt"
+                || JOB_STATUSES
+                    .iter()
+                    .any(|(job, _)| member.starts_with(&format!("{job}/")))),
+        "archive has an unprefixed member: {members:?}"
     );
     Ok(())
 }
@@ -156,6 +183,23 @@ fn aggregation_fails_for_unsafe_receipts_and_missing_job_evidence() -> Result<()
         "job generation-checks status root-preview ",
     )?;
 
+    for failing in [
+        "generate_statuses=1,0 identity_status=0 diff_statuses=0,0\n",
+        "generate_statuses=0,0 identity_status=1 diff_statuses=0,0\n",
+        "generate_statuses=0,0 identity_status=0 diff_statuses=0,1\n",
+    ] {
+        let temporary = tempfile::tempdir()?;
+        write_receipts(temporary.path(), None, None)?;
+        fs::write(
+            jobs_dir(temporary.path()).join("generation-checks/logs/root-preview.exit"),
+            failing,
+        )?;
+        assert_aggregation_failed(
+            temporary.path(),
+            "job generation-checks status root-preview ",
+        )?;
+    }
+
     let temporary = tempfile::tempdir()?;
     write_receipts(temporary.path(), None, None)?;
     let logs = jobs_dir(temporary.path()).join("keep-harness/logs");
@@ -167,10 +211,14 @@ fn aggregation_fails_for_unsafe_receipts_and_missing_job_evidence() -> Result<()
     let temporary = tempfile::tempdir()?;
     write_receipts(temporary.path(), None, None)?;
     fs::remove_dir_all(jobs_dir(temporary.path()).join("ordinary-harness"))?;
-    assert_aggregation_failed(
+    let stderr = assert_aggregation_failed(
         temporary.path(),
         "evidence for job ordinary-harness is missing or unsafe",
     )?;
+    assert!(
+        stderr.contains("Re-run all jobs"),
+        "a partial re-run is not told to re-run all jobs: {stderr}"
+    );
     Ok(())
 }
 
@@ -243,6 +291,15 @@ fn write_receipts(
         )?;
     }
     Ok(())
+}
+
+fn archive_members(archive: &Path) -> Result<Vec<String>, Box<dyn Error>> {
+    let output = Command::new("tar").arg("-tzf").arg(archive).output()?;
+    assert!(output.status.success());
+    Ok(String::from_utf8(output.stdout)?
+        .lines()
+        .map(str::to_owned)
+        .collect())
 }
 
 fn jobs_dir(root: &Path) -> PathBuf {

@@ -76,7 +76,7 @@ fn producer_job(
     steps.extend(phase_steps(PRELUDE_AFTER_MISE));
     steps.extend(phase_steps(producer.phases));
     steps.push(upload_step(&producer_artifact(producer.id)));
-    let mut fields = job_head(runner, producer.name)?;
+    let mut fields = job_head(runner, producer.name, Vec::new())?;
     fields.extend([
         ("env".to_owned(), job_env()),
         ("steps".to_owned(), Yaml::Seq(steps)),
@@ -86,7 +86,7 @@ fn producer_job(
 }
 
 fn gather_job(runner: &super::RunnerSpec) -> Result<Yaml, RenderError> {
-    let mut steps = vec![checkout_step()];
+    let mut steps = vec![producers_succeeded_step(), checkout_step()];
     steps.extend(
         PRODUCER_JOBS
             .iter()
@@ -96,23 +96,47 @@ fn gather_job(runner: &super::RunnerSpec) -> Result<Yaml, RenderError> {
     steps.push(upload_step(
         "source-qualification-${{ github.run_id }}-${{ github.run_attempt }}",
     ));
-    let mut fields = job_head(runner, GATHER_JOB_NAME)?;
-    fields.insert(
-        1,
+    let gate = vec![
         (
             "needs".to_owned(),
             Yaml::Seq(PRODUCER_JOBS.iter().map(|job| Yaml::str(job.id)).collect()),
         ),
-    );
-    fields.insert(2, ("if".to_owned(), Yaml::str("always()")));
+        ("if".to_owned(), Yaml::str("always()")),
+    ];
+    let mut fields = job_head(runner, GATHER_JOB_NAME, gate)?;
     fields.push(("steps".to_owned(), Yaml::Seq(steps)));
     runner.push_default_shell(&mut fields, false);
     Ok(Yaml::Map(fields))
 }
 
-fn job_head(runner: &super::RunnerSpec, name: &str) -> Result<Vec<(String, Yaml)>, RenderError> {
-    Ok(vec![
-        ("name".to_owned(), Yaml::str(name)),
+fn producers_succeeded_step() -> Yaml {
+    let condition = PRODUCER_JOBS
+        .iter()
+        .map(|job| format!("needs.{}.result != 'success'", job.id))
+        .collect::<Vec<_>>()
+        .join(" || ");
+    Yaml::Map(vec![
+        (
+            "name".to_owned(),
+            Yaml::str("Require every producer job to succeed"),
+        ),
+        ("if".to_owned(), Yaml::str(condition)),
+        ("shell".to_owned(), Yaml::str("bash")),
+        (
+            "run".to_owned(),
+            Yaml::str("printf 'a producer job did not succeed\\n' >&2; exit 1"),
+        ),
+    ])
+}
+
+fn job_head(
+    runner: &super::RunnerSpec,
+    name: &str,
+    gate: Vec<(String, Yaml)>,
+) -> Result<Vec<(String, Yaml)>, RenderError> {
+    let mut fields = vec![("name".to_owned(), Yaml::str(name))];
+    fields.extend(gate);
+    fields.extend([
         ("runs-on".to_owned(), runner.runs_on.clone()),
         (
             "timeout-minutes".to_owned(),
@@ -123,7 +147,8 @@ fn job_head(runner: &super::RunnerSpec, name: &str) -> Result<Vec<(String, Yaml)
             )),
         ),
         ("permissions".to_owned(), read_permissions()),
-    ])
+    ]);
+    Ok(fields)
 }
 
 fn producer_artifact(job_id: &str) -> String {

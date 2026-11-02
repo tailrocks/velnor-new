@@ -145,6 +145,7 @@ exit "$final_status"
 
 build_source_cli() {
 set -uo pipefail
+set +e
 evidence="$RUNNER_TEMP/source-qualification-artifacts"
 mise --no-config --no-env --no-hooks exec \
   "rust@$VELNOR_RUST_VERSION" "mr-boxington@$VELNOR_MBX_VERSION" -- \
@@ -710,6 +711,7 @@ exit "$final_status"
     ;;
   build-source-cli-and-archive-guard-concurrently)
 set -uo pipefail
+set +e
 evidence="$RUNNER_TEMP/source-qualification-artifacts"
 guard_console="$evidence/logs/archive-guard-build.console.log"
 ( build_archive_guard ) >"$guard_console" 2>&1 &
@@ -1370,7 +1372,7 @@ for job in ordinary-harness keep-harness generation-checks; do
   esac
   job_dir="$jobs_root/$job"
   if [ -L "$job_dir" ] || [ ! -d "$job_dir" ]; then
-    printf 'evidence for job %s is missing or unsafe\n' "$job" >&2
+    printf 'evidence for job %s is missing or unsafe; evidence is scoped to one run attempt, so use Re-run all jobs instead of Re-run failed jobs\n' "$job" >&2
     final_status=1
     continue
   fi

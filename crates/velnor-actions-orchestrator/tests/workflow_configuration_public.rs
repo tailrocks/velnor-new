@@ -69,6 +69,8 @@ mod seed_ids;
 mod source_qualification;
 #[path = "workflow_configuration_public/source_qualification_aggregation.rs"]
 mod source_qualification_aggregation;
+#[path = "workflow_configuration_public/source_qualification_build.rs"]
+mod source_qualification_build;
 #[path = "workflow_configuration_public/source_qualification_checkout.rs"]
 mod source_qualification_checkout;
 #[path = "workflow_configuration_public/source_qualification_jobs.rs"]

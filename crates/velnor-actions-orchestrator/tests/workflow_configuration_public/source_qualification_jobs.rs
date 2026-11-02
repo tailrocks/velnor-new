@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
 use std::fs;
 use std::path::Path;
@@ -13,6 +13,18 @@ use super::support::rendered_job_block;
 
 const GATHER_NAME_LINE: &str = "    name: Source qualification\n";
 const BUNDLE_PHASE: &str = "bundle-selected-qualification-evidence";
+const ALWAYS_PHASES: &[&str] = &[
+    "prepare-external-evidence-directories",
+    "capture-all-five-external-goldens",
+    "run-full-golden-shell-harness-against-external-oracle",
+    "preserve-ordinary-output-binding-json-proof-files",
+    "run-full-golden-shell-harness-with-retained-workspaces",
+    "preserve-keep-output-binding-json-proof-files",
+    "repeat-check-against-external-oracle",
+    "generate-twice-and-retain-root-to-preview-identities",
+    "test-generated-rust-verifier-transport-and-digest-gate",
+    "check-source-output-against-checked-in-repository-goldens",
+];
 const LAST_PRELUDE_PHASE: &str = "capture-all-five-external-goldens";
 
 fn rendered_workflow() -> Result<String, Box<dyn Error>> {
@@ -86,6 +98,9 @@ fn gather_id(workflow: &str) -> Result<String, Box<dyn Error>> {
 }
 
 fn steps(block: &str) -> Vec<&str> {
+    let block = block
+        .split_once("\n    steps:")
+        .map_or("", |(_, steps)| steps);
     let starts: Vec<usize> = block
         .match_indices("\n      - ")
         .map(|(index, _)| index + 1)
@@ -106,14 +121,22 @@ fn step_field<'a>(step: &'a str, key: &str) -> Option<&'a str> {
         .find_map(|line| line.trim().trim_start_matches("- ").strip_prefix(&marker))
 }
 
-fn artifact_names(block: &str, action: &str) -> Vec<String> {
+fn with_field<'a>(step: &'a str, key: &str) -> Option<&'a str> {
+    let marker = format!("          {key}: ");
+    step.lines().find_map(|line| line.strip_prefix(&marker))
+}
+
+fn action_steps<'a>(block: &'a str, action: &str) -> Vec<&'a str> {
     steps(block)
         .into_iter()
         .filter(|step| step_field(step, "uses").is_some_and(|uses| uses.starts_with(action)))
-        .filter_map(|step| {
-            step.lines()
-                .find_map(|line| line.strip_prefix("          name: "))
-        })
+        .collect()
+}
+
+fn artifact_names(block: &str, action: &str) -> Vec<String> {
+    action_steps(block, action)
+        .into_iter()
+        .filter_map(|step| with_field(step, "name"))
         .map(str::to_owned)
         .collect()
 }
@@ -129,7 +152,7 @@ fn source_qualification_phases_are_all_scheduled_across_jobs() -> Result<(), Box
         .ok_or("script has no capture phase")?;
     let prelude = &script[..=prelude_end];
     let mut rendered = BTreeSet::new();
-    let mut counts = std::collections::BTreeMap::<String, usize>::new();
+    let mut counts = BTreeMap::<String, usize>::new();
     for id in job_ids(&workflow) {
         let phases = job_phases(rendered_job_block(&workflow, &id)?);
         if id == gather {
@@ -156,7 +179,13 @@ fn source_qualification_phases_are_all_scheduled_across_jobs() -> Result<(), Box
         }
     }
     rendered.insert(BUNDLE_PHASE.to_owned());
-    assert_eq!(rendered, script.iter().cloned().collect::<BTreeSet<_>>());
+    let scripted: BTreeSet<String> = script.iter().cloned().collect();
+    let unscheduled: Vec<&String> = scripted.difference(&rendered).collect();
+    let unknown: Vec<&String> = rendered.difference(&scripted).collect();
+    assert!(
+        unscheduled.is_empty() && unknown.is_empty(),
+        "phases in the script but in no job: {unscheduled:?}; phases in a job but not in the script: {unknown:?}"
+    );
     for phase in &script[prelude_end + 1..] {
         if phase != BUNDLE_PHASE {
             assert_eq!(
@@ -165,6 +194,66 @@ fn source_qualification_phases_are_all_scheduled_across_jobs() -> Result<(), Box
                 "phase {phase} must run in exactly one job"
             );
         }
+    }
+    Ok(())
+}
+
+fn assert_producer_gate(gather_block: &str, producers: &[String]) -> Result<(), Box<dyn Error>> {
+    let needs: Vec<&str> = gather_block
+        .lines()
+        .skip_while(|line| *line != "    needs:")
+        .skip(1)
+        .map_while(|line| line.strip_prefix("      - "))
+        .collect();
+    assert_eq!(
+        needs,
+        producers.iter().map(String::as_str).collect::<Vec<_>>()
+    );
+    assert!(gather_block.contains("\n    if: always()\n"));
+    let guard = steps(gather_block)
+        .into_iter()
+        .next()
+        .ok_or("gather job has no steps")?;
+    let expected_condition = producers
+        .iter()
+        .map(|id| format!("needs.{id}.result != 'success'"))
+        .collect::<Vec<_>>()
+        .join(" || ");
+    assert_eq!(step_field(guard, "if"), Some(expected_condition.as_str()));
+    assert!(
+        guard.contains("exit 1"),
+        "first gather step does not fail: {guard}"
+    );
+    Ok(())
+}
+
+fn assert_download_paths(
+    workflow: &str,
+    gather_block: &str,
+    producers: &[String],
+) -> Result<(), Box<dyn Error>> {
+    let downloads = action_steps(gather_block, "actions/download-artifact@");
+    let mut paths = BTreeSet::new();
+    for id in producers {
+        let upload_name = artifact_names(
+            rendered_job_block(workflow, id)?,
+            "actions/upload-artifact@",
+        )
+        .pop()
+        .ok_or("producer upload missing")?;
+        let paired: Vec<&&str> = downloads
+            .iter()
+            .filter(|step| with_field(step, "name") == Some(upload_name.as_str()))
+            .collect();
+        let [download] = paired.as_slice() else {
+            return Err(format!("producer {id} needs exactly one download: {paired:?}").into());
+        };
+        let path = with_field(download, "path").ok_or("download has no path")?;
+        assert!(
+            path.ends_with(&format!("/source-qualification-jobs/{id}")),
+            "download of {upload_name} lands in {path}"
+        );
+        assert!(paths.insert(path), "download path {path} is shared");
     }
     Ok(())
 }
@@ -185,17 +274,7 @@ fn source_qualification_gather_job_keeps_the_check_name_and_needs_every_producer
     );
 
     let gather_block = rendered_job_block(&workflow, &gather)?;
-    let needs: Vec<&str> = gather_block
-        .lines()
-        .skip_while(|line| *line != "    needs:")
-        .skip(1)
-        .map_while(|line| line.strip_prefix("      - "))
-        .collect();
-    assert_eq!(
-        needs,
-        producers.iter().map(String::as_str).collect::<Vec<_>>()
-    );
-    assert!(gather_block.contains("\n    if: always()\n"));
+    assert_producer_gate(gather_block, &producers)?;
 
     let mut uploaded = BTreeSet::new();
     for id in &producers {
@@ -230,6 +309,42 @@ fn source_qualification_gather_job_keeps_the_check_name_and_needs_every_producer
         .into_iter()
         .collect();
     assert_eq!(downloaded, uploaded);
+
+    assert_download_paths(&workflow, gather_block, &producers)
+}
+
+#[test]
+fn source_qualification_harness_and_check_phases_keep_running_after_a_failure()
+-> Result<(), Box<dyn Error>> {
+    let workflow = rendered_workflow()?;
+    let gather = gather_id(&workflow)?;
+    for id in job_ids(&workflow).into_iter().filter(|id| *id != gather) {
+        let block = rendered_job_block(&workflow, &id)?;
+        let mut always_phases = BTreeSet::new();
+        for step in steps(block) {
+            let Some(phase) = step_field(step, "run").and_then(|run| {
+                run.strip_prefix("bash scripts/generator-release/source-qualification.sh ")
+            }) else {
+                continue;
+            };
+            let always = step_field(step, "if") == Some("always()");
+            if ALWAYS_PHASES.contains(&phase) {
+                assert!(always, "job {id} phase {phase} lost if: always()");
+                always_phases.insert(phase);
+            } else {
+                assert!(!always, "job {id} phase {phase} must stop after a failure");
+            }
+        }
+        let job_phases = job_phases(block);
+        assert!(
+            job_phases.len() > always_phases.len(),
+            "job {id} runs no gating phase"
+        );
+        assert!(
+            always_phases.contains("capture-all-five-external-goldens"),
+            "job {id} lost its capture phase"
+        );
+    }
     Ok(())
 }
 
