@@ -3,10 +3,10 @@
 
 use std::collections::BTreeMap;
 
+use velnor_actions_contract::RunsOn;
 use velnor_actions_contract::workflow::cache_family::{CARGO_HOME_EXPR, RUSTUP_HOME_EXPR};
-use velnor_actions_contract::{RunsOn, Step, StepKind};
 
-use crate::{RenderError, cache_p08, commands, marker, steps, tree::RenderedFile, yaml::Yaml};
+use crate::{RenderError, cache_p08, marker, steps, tree::RenderedFile, yaml::Yaml};
 
 const SCRIPT: &str = concat!(
     "export LC_ALL=C; set -eu; umask 077; ",
@@ -119,25 +119,12 @@ pub(super) fn action_file(runs_on: &str, version: &str) -> Result<RenderedFile, 
     let action_path = action_path(runs_on).ok_or_else(|| {
         RenderError::BadCommand("unsupported_tools_cache_identity_lane".to_owned())
     })?;
-    let inner = inner_step(runs_on)?;
-    let StepKind::Shell { run, env } = inner.kind else {
-        return Err(RenderError::InvalidWorkflow(
-            "tools_cache_identity_inner_step_not_shell".to_owned(),
-        ));
-    };
-    let mut entries = vec![("name".to_owned(), Yaml::str(inner.name))];
-    crate::step_ids::push_explicit_step_id(&mut entries, cache_p08::TOOLS_CACHE_IDENTITY_STEP_ID);
-    entries.extend([
-        (
-            "env".to_owned(),
-            crate::document_steps::string_map_yaml(&env),
-        ),
-        ("shell".to_owned(), Yaml::str("bash")),
-        (
-            "run".to_owned(),
-            Yaml::str(commands::join_argv_for_run(&run)?),
-        ),
-    ]);
+    let step = crate::verifier_shell::render_composite_script(
+        cache_p08::TOOLS_CACHE_IDENTITY_NAME,
+        cache_p08::TOOLS_CACHE_IDENTITY_STEP_ID,
+        &format!("/bin/bash \"$GITHUB_ACTION_PATH/../../scripts/{SCRIPT_FILE_NAME}\""),
+        &identity_env(runs_on),
+    )?;
     let outputs = output_entries();
     let body = Yaml::Map(vec![
         ("name".to_owned(), Yaml::str("Velnor Mise cache identity")),
@@ -151,7 +138,7 @@ pub(super) fn action_file(runs_on: &str, version: &str) -> Result<RenderedFile, 
             "runs".to_owned(),
             Yaml::Map(vec![
                 ("using".to_owned(), Yaml::str("composite")),
-                ("steps".to_owned(), Yaml::Seq(vec![Yaml::Map(entries)])),
+                ("steps".to_owned(), Yaml::Seq(vec![step])),
             ]),
         ),
     ]);
@@ -207,10 +194,10 @@ fn output_entries() -> Yaml {
     ])
 }
 
-fn inner_step(runs_on: &str) -> Result<Step, RenderError> {
+fn identity_env(runs_on: &str) -> BTreeMap<String, String> {
     let cargo = CARGO_HOME_EXPR;
     let rustup = RUSTUP_HOME_EXPR;
-    let env = BTreeMap::from([
+    BTreeMap::from([
         ("CARGO_HOME".to_owned(), cargo.to_owned()),
         ("MISE_CARGO_HOME".to_owned(), cargo.to_owned()),
         ("MISE_RUSTUP_HOME".to_owned(), rustup.to_owned()),
@@ -224,13 +211,7 @@ fn inner_step(runs_on: &str) -> Result<Step, RenderError> {
                 cache_p08::TOOLS_CACHE_IDENTITY_DIGEST_INPUT
             ),
         ),
-    ]);
-    let run = vec![
-        "bash".to_owned(),
-        "-c".to_owned(),
-        format!("bash \"$GITHUB_ACTION_PATH/../../scripts/{SCRIPT_FILE_NAME}\""),
-    ];
-    steps::composite_shell_step(cache_p08::TOOLS_CACHE_IDENTITY_NAME, run, env)
+    ])
 }
 
 pub(super) fn action_uses(runs_on: &str) -> Option<&'static str> {
