@@ -15,6 +15,10 @@ mod release;
 #[path = "rust_tree_digest_pin/bookkeeping.rs"]
 mod bookkeeping;
 
+#[cfg(test)]
+#[path = "rust_tree_digest_pin/derive.rs"]
+mod derive;
+
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;

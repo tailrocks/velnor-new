@@ -15,7 +15,7 @@ pub(crate) const CHANNEL_URL: &str = "https://static.rust-lang.org/dist/channel-
 pub(crate) const TARBALL_URL: &str =
     "https://static.rust-lang.org/dist/2026-10-15/cargo-1.99.1-x86_64-unknown-linux-gnu.tar.xz";
 
-fn sha256_hex(bytes: &[u8]) -> String {
+pub(crate) fn sha256_hex(bytes: &[u8]) -> String {
     Sha256::digest(bytes)
         .iter()
         .map(|byte| format!("{byte:02x}"))
@@ -30,7 +30,7 @@ fn packages(tarball_sha256: &str) -> String {
     )
 }
 
-fn channel_manifest(tarball_sha256: &str) -> String {
+pub(crate) fn channel_manifest(tarball_sha256: &str) -> String {
     format!(
         "manifest-version = \"2\"\ndate = \"2026-10-15\"\ngit_commit_hash = \"abc\"\n\n{}\n[[artifacts.source-code.target.\"*\"]]\nurl = \"{DIST}/2026-10-15/rustc-1.99.1-src.tar.gz\"\nhash-sha256 = \"{}\"\n",
         packages(tarball_sha256),
@@ -38,7 +38,7 @@ fn channel_manifest(tarball_sha256: &str) -> String {
     )
 }
 
-fn rustup_bookkeeping(tarball_sha256: &str) -> String {
+pub(crate) fn rustup_bookkeeping(tarball_sha256: &str) -> String {
     format!(
         "manifest-version = \"2\"\ndate = \"2026-10-15\"\n\n{}components = []\nextensions = []\n",
         packages(tarball_sha256)
