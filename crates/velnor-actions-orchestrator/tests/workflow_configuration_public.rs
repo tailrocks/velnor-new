@@ -123,9 +123,13 @@ mod verification_tools;
 mod waste_lint;
 #[path = "workflow_configuration_public/waste_lint_scope.rs"]
 mod waste_lint_scope;
+#[path = "workflow_configuration_public/waste_lint_verifier.rs"]
+mod waste_lint_verifier;
 #[path = "workflow_configuration_public/waste_oracle.rs"]
 mod waste_oracle;
 #[path = "workflow_configuration_public/waste_rules.rs"]
 mod waste_rules;
+#[path = "workflow_configuration_public/waste_verifier_oracle.rs"]
+mod waste_verifier_oracle;
 #[path = "workflow_configuration_public/workspace_format.rs"]
 mod workspace_format;

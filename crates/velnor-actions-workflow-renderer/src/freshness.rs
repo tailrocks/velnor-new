@@ -87,7 +87,10 @@ pub fn render_freshness_workflow(spec: &FreshnessSpec) -> Result<RenderedFile, R
         velnor_actions_contract::StepRole::VerifyRustManifest,
         crate::VERIFY_RUST_TOOLCHAIN_STEP,
         spec.verify_rust_argv.clone(),
-        BTreeMap::new(),
+        BTreeMap::from([
+            ("RUSTUP_HOME".to_owned(), RUSTUP_HOME_EXPR.to_owned()),
+            ("CARGO_HOME".to_owned(), CARGO_HOME_EXPR.to_owned()),
+        ]),
     )?;
     let probe = shell_step(
         "Check upstream freshness",

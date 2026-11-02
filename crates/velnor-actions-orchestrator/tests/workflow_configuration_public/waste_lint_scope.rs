@@ -12,6 +12,7 @@ use super::tools_producers::{POLICIES, finalized};
 use super::tools_producers_donors::SCHEDULED_SUITES_CONFIG;
 use super::waste_lint::{CI_PATH, plain_shell_step, run_without_homes};
 use super::waste_oracle::{self as oracle, Files, JobUse, files_of, files_of_repo};
+use super::waste_verifier_oracle::{VerifierScan, verifier_homes};
 use super::workflow_configuration_fixture;
 
 const FRESHNESS_PATH: &str = ".github/workflows/freshness.yml";
@@ -81,6 +82,48 @@ fn every_toolchain_job_in_the_rendered_trees_has_auto_install_off() -> Result<()
     let repo = workflow_configuration_fixture::make_repo(SCHEDULED_SUITES_CONFIG)?;
     let files = files_of(&render_staged_tree(&prepare(repo.path())?)?)?;
     assert_no_violations("suites", &oracle::scan(&files, |_| true)?);
+    Ok(())
+}
+
+fn assert_verifiers_read_the_installed_homes(
+    label: &str,
+    files: &Files,
+) -> Result<VerifierScan, Box<dyn Error>> {
+    let scan = verifier_homes(files)?;
+    assert!(!scan.checked.is_empty(), "{label}: no Rust verifier found");
+    assert_eq!(scan.skipped, Vec::<String>::new(), "{label}");
+    assert_eq!(scan.violations, Vec::<String>::new(), "{label}");
+    Ok(scan)
+}
+
+#[test]
+fn every_rust_verifier_reads_the_toolchain_home_its_job_installs_into() -> Result<(), Box<dyn Error>>
+{
+    for policy in POLICIES {
+        let repo = owner_feature_repo(policy, false, "default", "default")?;
+        let files = files_of(&render_staged_tree(&prepare(repo.path())?)?)?;
+        let scan = assert_verifiers_read_the_installed_homes(&format!("{policy:?}"), &files)?;
+        if policy == WorkflowPolicy::VelnorRepositoryV1 {
+            let has = |file: &str, job: &str| {
+                scan.checked
+                    .iter()
+                    .any(|checked| checked.file == file && checked.job == job)
+            };
+            assert!(has(FRESHNESS_PATH, "freshness"), "{:?}", scan.checked);
+            assert!(has(CI_PATH, PLAN_JOB_ID), "{:?}", scan.checked);
+            assert!(
+                scan.checked
+                    .iter()
+                    .any(|checked| checked.via_composite
+                        && checked.job.starts_with(CRATE_JOB_ID_PREFIX)),
+                "{:?}",
+                scan.checked
+            );
+        }
+    }
+    let repo = workflow_configuration_fixture::make_repo(SCHEDULED_SUITES_CONFIG)?;
+    let files = files_of(&render_staged_tree(&prepare(repo.path())?)?)?;
+    assert_verifiers_read_the_installed_homes("suites", &files)?;
     Ok(())
 }
 

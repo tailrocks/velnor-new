@@ -18,6 +18,7 @@ use super::maintenance_features::owner_feature_repo;
 use super::support::rendered_job_block;
 use super::tools_producers::{POLICIES, finalized};
 use super::tools_producers_donors::prepared_for;
+use super::waste_lint_verifier as verifier;
 use super::waste_oracle::{AUTO_INSTALL_ENV, files_of, job_env_entries, job_ids};
 
 pub(super) const CI_PATH: &str = ".github/workflows/ci.yml";
@@ -65,7 +66,9 @@ fn rust_bearing_jobs_render_auto_install_off_at_job_level() -> Result<(), Box<dy
     Ok(())
 }
 
-fn home_env(step: &mut velnor_actions_contract::Step) -> Option<&mut BTreeMap<String, String>> {
+pub(super) fn home_env(
+    step: &mut velnor_actions_contract::Step,
+) -> Option<&mut BTreeMap<String, String>> {
     match &mut step.kind {
         StepKind::Shell { env, .. } => Some(env),
         _ => None,
@@ -119,7 +122,7 @@ pub(super) fn run_without_homes(
     Ok(())
 }
 
-fn step_name(jobs: &BTreeMap<String, Job>, id: &str, at: usize) -> String {
+pub(super) fn step_name(jobs: &BTreeMap<String, Job>, id: &str, at: usize) -> String {
     jobs[id].steps[at].name.clone()
 }
 
@@ -174,6 +177,11 @@ fn w2_names_a_toolchain_step_without_the_homes_and_a_wrong_home() -> Result<(), 
         });
         expected.sort();
         assert_eq!(waste_findings(&jobs), expected, "{policy:?}");
+        if policy == WorkflowPolicy::VelnorRepositoryV1 {
+            let (_, mut fresh) = finalized(policy)?;
+            verifier::assert_homes_are_enforced(&mut fresh, policy)?;
+            verifier::assert_rule_stays_in_scope(&mut fresh, policy)?;
+        }
     }
     Ok(())
 }

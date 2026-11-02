@@ -74,7 +74,7 @@ pub(super) fn files_of_repo(root: &Path) -> Result<Files, Box<dyn Error>> {
     Ok(files)
 }
 
-fn children(text: &str) -> Vec<(String, String)> {
+pub(super) fn children(text: &str) -> Vec<(String, String)> {
     let mut lines = text.lines();
     let head = lines
         .next()
@@ -160,7 +160,7 @@ fn double_quoted_body(value: &str) -> Result<&str, Box<dyn Error>> {
     Err("run scalar spans several lines".into())
 }
 
-fn run_scalar(
+pub(super) fn run_scalar(
     lines: &[&str],
     at: usize,
     value: &str,
@@ -263,7 +263,7 @@ fn installs_lockfile(words: &[&str]) -> bool {
     })
 }
 
-fn installs_toolchain(scalar: &str) -> bool {
+pub(super) fn installs_toolchain(scalar: &str) -> bool {
     let words: Vec<&str> = tokens(scalar).collect();
     words
         .iter()

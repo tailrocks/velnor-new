@@ -29,7 +29,7 @@ impl WasteRule {
     pub const fn fix(self) -> &'static str {
         match self {
             Self::JobContextEnv => {
-                "set all four toolchain homes to their standard values in every step that runs a toolchain command."
+                "set all four toolchain homes to their standard values in every step that runs a toolchain command, and RUSTUP_HOME and CARGO_HOME in every Rust verifier step."
             }
             Self::RustupAutoInstall => {
                 "bind the job to the rust toolchain job env; do not override RUSTUP_AUTO_INSTALL per step."
@@ -86,6 +86,11 @@ pub enum WasteFinding {
         word: ExecWord,
         missing: Vec<HomeKey>,
     },
+    MissingVerifierHome {
+        job: String,
+        step: String,
+        missing: Vec<HomeKey>,
+    },
     ConflictingHome {
         job: String,
         step: String,
@@ -104,7 +109,9 @@ impl WasteFinding {
     #[must_use]
     pub const fn rule(&self) -> WasteRule {
         match self {
-            Self::MissingHome { .. } | Self::ConflictingHome { .. } => WasteRule::JobContextEnv,
+            Self::MissingHome { .. }
+            | Self::MissingVerifierHome { .. }
+            | Self::ConflictingHome { .. } => WasteRule::JobContextEnv,
             Self::AutoInstallNotDisabled { .. } => WasteRule::RustupAutoInstall,
         }
     }
@@ -125,6 +132,14 @@ impl Display for WasteFinding {
                     f,
                     "job {job} step {step:?} runs {} without {}",
                     word.word(),
+                    names.join(", ")
+                )?;
+            }
+            Self::MissingVerifierHome { job, step, missing } => {
+                let names: Vec<&str> = missing.iter().map(|key| key.env_name()).collect();
+                write!(
+                    f,
+                    "job {job} verifier step {step:?} reads the toolchain without {}",
                     names.join(", ")
                 )?;
             }

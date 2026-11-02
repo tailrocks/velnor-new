@@ -4,10 +4,31 @@
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::{
-    HomeKey, Job, RUSTUP_AUTO_INSTALL_DISABLED, RUSTUP_AUTO_INSTALL_ENV, Step, StepKind,
+    HomeKey, Job, RUSTUP_AUTO_INSTALL_DISABLED, RUSTUP_AUTO_INSTALL_ENV, Step, StepKind, StepRole,
 };
 
 use crate::waste_lint::{ExecWord, WasteFinding};
+
+const VERIFIER_HOMES: [HomeKey; 2] = [HomeKey::CargoHome, HomeKey::RustupHome];
+
+#[derive(Clone, Copy)]
+enum HomeSubject {
+    Exec(ExecWord),
+    RustVerifier,
+}
+
+impl HomeSubject {
+    fn keys(self) -> &'static [HomeKey] {
+        match self {
+            Self::Exec(_) => &HomeKey::ALL,
+            Self::RustVerifier => &VERIFIER_HOMES,
+        }
+    }
+}
+
+fn is_rust_verifier(step: &Step) -> bool {
+    step.role == Some(StepRole::VerifyRustManifest) && matches!(step.kind, StepKind::Shell { .. })
+}
 
 fn step_env(step: &Step) -> Option<&BTreeMap<String, String>> {
     match &step.kind {
@@ -32,22 +53,31 @@ fn exec_word(step: &Step) -> Option<ExecWord> {
         .min()
 }
 
-fn home_findings(id: &str, step: &Step, word: ExecWord) -> Vec<WasteFinding> {
+fn home_findings(id: &str, step: &Step, subject: HomeSubject) -> Vec<WasteFinding> {
     let env = step_env(step).cloned().unwrap_or_default();
-    let missing: Vec<HomeKey> = HomeKey::ALL
-        .into_iter()
+    let missing: Vec<HomeKey> = subject
+        .keys()
+        .iter()
+        .copied()
         .filter(|key| !env.contains_key(key.env_name()))
         .collect();
     let mut findings = Vec::new();
     if !missing.is_empty() {
-        findings.push(WasteFinding::MissingHome {
-            job: id.to_owned(),
-            step: step.name.clone(),
-            word,
-            missing,
+        findings.push(match subject {
+            HomeSubject::Exec(word) => WasteFinding::MissingHome {
+                job: id.to_owned(),
+                step: step.name.clone(),
+                word,
+                missing,
+            },
+            HomeSubject::RustVerifier => WasteFinding::MissingVerifierHome {
+                job: id.to_owned(),
+                step: step.name.clone(),
+                missing,
+            },
         });
     }
-    for key in HomeKey::ALL {
+    for key in subject.keys().iter().copied() {
         if let Some(step_value) = env.get(key.env_name())
             && step_value != key.standard_value()
         {
@@ -68,8 +98,13 @@ pub(crate) fn w2(jobs: &BTreeMap<String, Job>) -> Vec<WasteFinding> {
         .filter(|(_, job)| crate::rust_job_env::installs_rust(job))
         .flat_map(|(id, job)| {
             job.steps.iter().flat_map(move |step| {
-                exec_word(step)
-                    .map(|word| home_findings(id, step, word))
+                let subject = if is_rust_verifier(step) {
+                    Some(HomeSubject::RustVerifier)
+                } else {
+                    exec_word(step).map(HomeSubject::Exec)
+                };
+                subject
+                    .map(|subject| home_findings(id, step, subject))
                     .unwrap_or_default()
             })
         })
