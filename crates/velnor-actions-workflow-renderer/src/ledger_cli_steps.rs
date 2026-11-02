@@ -200,7 +200,7 @@ pub(crate) fn render_verify_step(
     if !step_env.is_empty() {
         entries.push(("env".to_owned(), Yaml::Map(step_env)));
     }
-    entries.push(("shell".to_owned(), Yaml::str(crate::VERIFY_SHELL)));
+    entries.push(("shell".to_owned(), Yaml::str(crate::VERIFY_VERIFIER_SHELL)));
     entries.push(("run".to_owned(), Yaml::str(script.clone())));
     Ok(Yaml::Map(entries))
 }

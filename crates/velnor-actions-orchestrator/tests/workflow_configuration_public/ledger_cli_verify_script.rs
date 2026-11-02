@@ -227,6 +227,16 @@ impl Checkout {
         planted: &Planted,
         sha256: &str,
     ) -> Result<bool, Box<dyn Error>> {
+        self.verify_rendered_with_env(step, planted, sha256, &[])
+    }
+
+    fn verify_rendered_with_env(
+        &self,
+        step: &RenderedVerify,
+        planted: &Planted,
+        sha256: &str,
+        extra_env: &[(&str, &Path)],
+    ) -> Result<bool, Box<dyn Error>> {
         let path = format!("{}:{RUNNER_DEFAULT_PATH}", planted.bin.path().display());
         let script = self.runner_temp.path().join("step.sh");
         fs::write(&script, &step.run)?;
@@ -239,6 +249,7 @@ impl Checkout {
             .env("RUNNER_TEMP", canonical(self.runner_temp.path())?)
             .env("VELNOR_LEDGER_CLI_SHA256", sha256)
             .env("VELNOR_LEDGER_CLI_SOURCE_SHA", &self.head)
+            .envs(extra_env.iter().copied())
             .current_dir(self.workspace.path())
             .status()?;
         Ok(status.success())
@@ -286,6 +297,23 @@ fn hostile_failing_tools_do_not_break_a_genuine_binary() -> Result<(), Box<dyn E
     let checkout = Checkout::new(Some(BYTES))?;
     assert!(checkout.verify_rendered(&step, &planted, BYTES_SHA256)?);
     assert_eq!(checkout.mode()? & 0o111, 0o111);
+    assert_eq!(planted.calls(), "");
+    Ok(())
+}
+
+#[test]
+fn env_hook_cannot_forge_verification() -> Result<(), Box<dyn Error>> {
+    let step = rendered_verify()?;
+    let planted = Planted::new(&[])?;
+    let hook = planted.logs.path().join("hook.sh");
+    fs::write(
+        &hook,
+        format!("echo hook >> \"{}\"\nexit 0\n", planted.log().display()),
+    )?;
+    let checkout = Checkout::new(Some(TAMPERED))?;
+    let env = [("BASH_ENV", hook.as_path()), ("ENV", hook.as_path())];
+    assert!(!checkout.verify_rendered_with_env(&step, &planted, BYTES_SHA256, &env)?);
+    assert_eq!(checkout.mode()?, 0o644);
     assert_eq!(planted.calls(), "");
     Ok(())
 }

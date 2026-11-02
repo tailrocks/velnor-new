@@ -826,7 +826,7 @@ jobs:
         env:
           VELNOR_LEDGER_CLI_SHA256: ${{ needs.ledger-cli.outputs.sha256 }}
           VELNOR_LEDGER_CLI_SOURCE_SHA: ${{ needs.ledger-cli.outputs.source_sha }}
-        shell: /bin/bash --noprofile --norc -e -o pipefail {0}
+        shell: /bin/bash --noprofile --norc -p -e -o pipefail {0}
         run: "unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; PATH=\"/usr/bin:/bin:/usr/sbin:/sbin\"; export PATH; f=\"$RUNNER_TEMP/velnor/ledger-cli/velnor-actions\"; [ -f \"$f\" ] && [ ! -L \"$f\" ]; if command -v sha256sum >/dev/null 2>&1; then sha256sum \"$f\"; else shasum -a 256 \"$f\"; fi | { read -r actual _; [ -n \"$VELNOR_LEDGER_CLI_SHA256\" ] && [ \"$actual\" = \"$VELNOR_LEDGER_CLI_SHA256\" ]; }; git rev-parse HEAD | { read -r head; [ -n \"$VELNOR_LEDGER_CLI_SOURCE_SHA\" ] && [ \"$head\" = \"$VELNOR_LEDGER_CLI_SOURCE_SHA\" ]; }; chmod +x \"$f\""
       - &s44
         name: Emit group ledger
