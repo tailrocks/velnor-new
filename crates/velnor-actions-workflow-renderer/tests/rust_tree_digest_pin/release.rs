@@ -5,9 +5,14 @@ use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
 
-use crate::fixture::{Fixture, Outcome, VERSION};
+use crate::fixture::{
+    CHANNEL_MANIFEST, Fixture, INSTALLER_VERSION, MANIFEST_CARGO, MANIFEST_RUSTC, MULTIRUST_CONFIG,
+    Outcome, VERSION,
+};
 use sha2::{Digest, Sha256};
-use velnor_actions_workflow_renderer::verifier_builders::{ToolchainPhase, toolchain_script};
+use velnor_actions_workflow_renderer::verifier_builders::{
+    ToolchainPhase, TreeDigestPin, toolchain_script,
+};
 
 pub(crate) const COMPONENT: &str = "cargo-x86_64-unknown-linux-gnu";
 pub(crate) const DIST: &str = "https://static.rust-lang.org/dist";
@@ -70,8 +75,11 @@ impl Release {
         assert!(copied.success());
         for bookkeeping in [
             "lib/rustlib/components",
-            "lib/rustlib/rust-installer-version",
-            "lib/rustlib/multirust-channel-manifest.toml",
+            INSTALLER_VERSION,
+            CHANNEL_MANIFEST,
+            MANIFEST_CARGO,
+            MANIFEST_RUSTC,
+            MULTIRUST_CONFIG,
         ] {
             fs::remove_file(sub.join(bookkeeping)).expect("drop bookkeeping");
         }
@@ -99,12 +107,12 @@ impl Release {
         }
     }
 
-    fn script(&self, phase: ToolchainPhase) -> String {
+    fn script(&self, phase: ToolchainPhase, pins: &[TreeDigestPin]) -> String {
         let script = toolchain_script(
             VERSION,
             phase,
             &[(VERSION, &self.channel_sha256, "2026-10-15")],
-            &[],
+            pins,
         );
         let start = script.find("get() {").expect("get definition");
         let end = start + script[start..].find("; }").expect("get end") + 3;
@@ -121,17 +129,22 @@ impl Release {
     }
 
     pub(crate) fn run(&self, fx: &Fixture, phase: ToolchainPhase) -> Outcome {
-        fx.run(&self.script(phase))
+        self.run_pinned(fx, phase, &[])
+    }
+
+    pub(crate) fn run_pinned(
+        &self,
+        fx: &Fixture,
+        phase: ToolchainPhase,
+        pins: &[TreeDigestPin],
+    ) -> Outcome {
+        fx.run(&self.script(phase, pins))
     }
 }
 
 pub(crate) fn fixture_with(bookkeeping: Bookkeeping<'_>) -> (Fixture, Release) {
     let fx = Fixture::with_components(&format!("{COMPONENT}\n"));
     let release = Release::of(&fx);
-    fx.put(
-        "lib/rustlib/multirust-channel-manifest.toml",
-        bookkeeping(&release).as_bytes(),
-        0o644,
-    );
+    fx.put(CHANNEL_MANIFEST, bookkeeping(&release).as_bytes(), 0o644);
     (fx, release)
 }

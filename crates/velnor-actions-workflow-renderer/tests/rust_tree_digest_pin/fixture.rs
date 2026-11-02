@@ -21,7 +21,15 @@ pub(crate) const FIXTURE_COMPONENTS: &str =
 pub(crate) const FIXTURE_COMPONENTS_SHA256: &str =
     "adfc9d0f163c22aaf13170f015d8fc332bf8254fe1c1541fc1d0497e730621a2";
 pub(crate) const FIXTURE_TREE_SHA256: &str =
-    "ab15cb46e27e8a8a4f4910b2a6a26ac694cfcb7fadf4ae4371b78936e5a22c36";
+    "5c7befbb525f104b00a35be16a59dfd960e07945c61654338943543eca45e5ac";
+
+pub(crate) const MANIFEST_CARGO: &str = "lib/rustlib/manifest-cargo-x86_64-unknown-linux-gnu";
+pub(crate) const MANIFEST_RUSTC: &str = "lib/rustlib/manifest-rustc-x86_64-unknown-linux-gnu";
+pub(crate) const INSTALLER_VERSION: &str = "lib/rustlib/rust-installer-version";
+pub(crate) const MULTIRUST_CONFIG: &str = "lib/rustlib/multirust-config.toml";
+pub(crate) const CHANNEL_MANIFEST: &str = "lib/rustlib/multirust-channel-manifest.toml";
+pub(crate) const MISMATCH: &str = "rust_tree_digest_mismatch";
+pub(crate) const CAP: usize = 4_194_304;
 
 pub(crate) const FIXTURE_BOOKKEEPING: &str = "manifest-version = \"2\"\ndate = \"2026-10-15\"\n\n[pkg.cargo.target.x86_64-unknown-linux-gnu]\navailable = true\nurl = \"https://static.rust-lang.org/dist/2026-10-15/cargo-1.99.1-x86_64-unknown-linux-gnu.tar.gz\"\nhash = \"1111111111111111111111111111111111111111111111111111111111111111\"\nxz_url = \"https://static.rust-lang.org/dist/2026-10-15/cargo-1.99.1-x86_64-unknown-linux-gnu.tar.xz\"\nxz_hash = \"2222222222222222222222222222222222222222222222222222222222222222\"\ncomponents = []\nextensions = []\n";
 
@@ -60,12 +68,32 @@ impl Outcome {
             && self.stderr.contains("curl: (7)")
     }
 
+    pub(crate) fn hard_failed(&self, code: &str) -> bool {
+        let combined = self.combined();
+        self.code.is_some_and(|status| status != 0)
+            && self.stderr.contains(code)
+            && !combined.contains("matches pinned")
+            && !combined.contains("verified file by file")
+            && !combined.contains("curl: (")
+    }
+
+    pub(crate) fn no_pin(&self) -> bool {
+        self.fell_through()
+            && self
+                .stdout
+                .contains("::notice::pin_mismatch: no_pin components=")
+    }
+
     pub(crate) fn assert_pinned(&self) {
         assert!(self.is_pinned(), "{self:?}");
     }
 
     pub(crate) fn assert_fell_through(&self) {
         assert!(self.fell_through(), "{self:?}");
+    }
+
+    pub(crate) fn assert_hard_failed(&self, code: &str) {
+        assert!(self.hard_failed(code), "{self:?}");
     }
 }
 
@@ -93,12 +121,15 @@ impl Fixture {
         fixture.dir("lib/rustlib", 0o755);
         fixture.put("lib/x.so", b"so\n", 0o644);
         fixture.put("lib/rustlib/components", components.as_bytes(), 0o644);
-        fixture.put("lib/rustlib/rust-installer-version", b"3", 0o644);
+        fixture.put(INSTALLER_VERSION, b"3", 0o644);
+        fixture.put(MANIFEST_CARGO, b"file:lib/x.so\nfile:share/.dot\n", 0o644);
+        fixture.put(MANIFEST_RUSTC, b"file:bin/rustc\n", 0o644);
         fixture.put(
-            "lib/rustlib/multirust-channel-manifest.toml",
-            FIXTURE_BOOKKEEPING.as_bytes(),
+            MULTIRUST_CONFIG,
+            b"config_version = \"1\"\n\n[[components]]\npkg = \"cargo\"\ntarget = \"x86_64-unknown-linux-gnu\"\nis_extension = false\n",
             0o644,
         );
+        fixture.put(CHANNEL_MANIFEST, FIXTURE_BOOKKEEPING.as_bytes(), 0o644);
         fixture.dir("share", 0o755);
         fixture.put("share/.dot", b"dot\n", 0o644);
         fixture
@@ -210,6 +241,14 @@ pub(crate) struct Row<'a> {
     pub(crate) pin: TreeDigestPin,
 }
 
+pub(crate) fn row<'a>(name: &str, mutate: Mutation<'a>) -> Row<'a> {
+    Row {
+        name: name.to_owned(),
+        mutate,
+        pin: fixture_pin(),
+    }
+}
+
 pub(crate) fn fixture_pin() -> TreeDigestPin {
     TreeDigestPin::new(
         VERSION,
@@ -223,7 +262,7 @@ pub(crate) fn script(phase: ToolchainPhase, pins: &[TreeDigestPin]) -> String {
     toolchain_script(VERSION, phase, RUST_CHANNEL_MANIFESTS, pins)
 }
 
-pub(crate) fn run_rows(rows: &[Row<'_>], accepts: fn(&Outcome) -> bool) {
+pub(crate) fn run_rows(rows: &[Row<'_>], accepts: &(dyn Fn(&Outcome) -> bool + Sync)) {
     let failures = thread::scope(|scope| {
         let handles = rows
             .iter()

@@ -19,14 +19,18 @@ mod bookkeeping;
 #[path = "rust_tree_digest_pin/derive.rs"]
 mod derive;
 
+#[cfg(test)]
+#[path = "rust_tree_digest_pin/hard_fail.rs"]
+mod hard_fail;
+
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::process::Command;
 
 use fixture::{
-    FIXTURE_BOOKKEEPING, FIXTURE_COMPONENTS, FIXTURE_COMPONENTS_SHA256, FIXTURE_TREE_SHA256,
-    Fixture, HELPERS, PHASES, Row, TARGET, VERSION, fixture_pin, run_rows, script,
+    FIXTURE_COMPONENTS, FIXTURE_COMPONENTS_SHA256, FIXTURE_TREE_SHA256, Fixture, HELPERS, MISMATCH,
+    Outcome, PHASES, Row, TARGET, VERSION, fixture_pin, row, run_rows, script,
 };
 use sha2::{Digest, Sha256};
 use velnor_actions_contract::StepKind;
@@ -41,27 +45,6 @@ const REAL_COMPONENTS: &str = "cargo-x86_64-unknown-linux-gnu\nclippy-preview-x8
 
 const REAL_COMPONENTS_SHA256: &str =
     "e3808a4c78c316b41a42ed88010c6bbf24ae24a348a5a22b8e3bc62328db1981";
-
-const MANIFEST: &str = "lib/rustlib/multirust-channel-manifest.toml";
-
-const UNSAFE_NAMES: [(&str, &str); 4] = [
-    (
-        "a b",
-        "e103c304a93bba11dbfe7cb9608f3b6039ce28ff807aa4ed29759435ad07c3ef",
-    ),
-    (
-        "a$b",
-        "afb2a2c8cbf712c2dbf6f4573cbe77ef4fc347fe359e644c16e13a18a92df66a",
-    ),
-    (
-        "a*b",
-        "5626c79bf93b91b4a01de84fc520d426bfcc843375ff1921b4fee8384f372a18",
-    ),
-    (
-        "a\nb",
-        "0515b57e2fa3843d16787185cfbc0149d5f2c00872c93ef3d64c40b3835ef3a0",
-    ),
-];
 
 fn sha256_hex(text: &str) -> String {
     Sha256::digest(text.as_bytes())
@@ -118,7 +101,7 @@ fn p3_live_emitters_select_the_production_pin() {
         for script in [owned.last().expect("script"), run.last().expect("script")] {
             let fx = Fixture::with_components(REAL_COMPONENTS);
             let outcome = fx.run(script);
-            outcome.assert_fell_through();
+            outcome.assert_hard_failed(MISMATCH);
             assert!(outcome.stdout.contains("tree_differs"), "{outcome:?}");
         }
     }
@@ -171,65 +154,6 @@ fn u3_committed_components_literal_matches_the_current_pin() {
 
 type Case<'a> = (&'a str, fixture::Mutation<'a>, &'a str);
 
-fn row<'a>(name: &str, mutate: fixture::Mutation<'a>) -> Row<'a> {
-    Row {
-        name: name.to_owned(),
-        mutate,
-        pin: fixture_pin(),
-    }
-}
-
-#[test]
-fn n1_any_tree_mutation_falls_through_to_the_full_path() {
-    let widened = format!("{FIXTURE_COMPONENTS}rust-src-x86_64-unknown-linux-gnu\n").into_bytes();
-    let widen = |fx: &Fixture| fx.put("lib/rustlib/components", &widened, 0o644);
-    let rows = [
-        row("flipped byte", &|fx| fx.put("lib/x.so", b"sO\n", 0o644)),
-        row("extra file", &|fx| fx.put("lib/extra.so", b"e", 0o644)),
-        row("extra dot file", &|fx| fx.put("share/.extra", b"e", 0o644)),
-        row("missing file", &|fx| fx.remove("lib/x.so")),
-        row("empty dir added", &|fx| fx.dir("lib/emptyb", 0o755)),
-        row("empty dir removed", &|fx| fx.remove("etc/empty")),
-        row("setuid file", &|fx| fx.chmod("bin/rustc", 0o4755)),
-        row("setgid dir", &|fx| fx.chmod("share", 0o2755)),
-        row("sticky dir", &|fx| fx.chmod("lib", 0o1755)),
-        row("world writable file", &|fx| fx.chmod("lib/x.so", 0o666)),
-        row("altered components", &widen),
-        row("poisoned bookkeeping manifest", &|fx| {
-            let evil = FIXTURE_BOOKKEEPING.replace(
-                "cargo-1.99.1-x86_64-unknown-linux-gnu.tar.xz",
-                "evil.tar.xz",
-            );
-            fx.put(MANIFEST, evil.as_bytes(), 0o644);
-        }),
-        row("unspaced bookkeeping assignment", &|fx| {
-            let evil = format!("{FIXTURE_BOOKKEEPING}xz_url=\"https://attacker.example/x\"\n");
-            fx.put(MANIFEST, evil.as_bytes(), 0o644);
-        }),
-        row("missing bookkeeping manifest", &|fx| fx.remove(MANIFEST)),
-    ];
-    run_rows(&rows, fixture::Outcome::fell_through);
-}
-
-#[test]
-fn n2_unsafe_path_characters_are_never_pinned() {
-    let mutations = UNSAFE_NAMES.map(|(name, _)| {
-        move |fx: &Fixture| {
-            fx.put(&format!("lib/{name}"), b"x", 0o644);
-        }
-    });
-    let rows = UNSAFE_NAMES
-        .iter()
-        .zip(&mutations)
-        .map(|((name, literal), mutate)| Row {
-            name: format!("{name:?}"),
-            mutate,
-            pin: TreeDigestPin::new(VERSION, TARGET, FIXTURE_COMPONENTS_SHA256, literal),
-        })
-        .collect::<Vec<_>>();
-    run_rows(&rows, fixture::Outcome::fell_through);
-}
-
 #[test]
 fn n3_symlinks_are_refused_before_the_pin() {
     let file_link = |fx: &Fixture| fx.link("lib/l", "x.so");
@@ -274,11 +198,13 @@ fn n4_toolchains_must_hold_exactly_one_entry() {
         }),
         row("dot entry", &|fx| fx.sibling(".hidden")),
     ];
-    run_rows(&rows, fixture::Outcome::is_not_pinned);
+    run_rows(&rows, &Outcome::is_not_pinned);
 }
 
 #[test]
-fn n5_a_pin_for_another_version_or_target_is_not_used() {
+fn n5_a_pin_for_another_version_target_or_components_is_not_used() {
+    let widened = format!("{FIXTURE_COMPONENTS}rust-src-x86_64-unknown-linux-gnu\n").into_bytes();
+    let widen = |fx: &Fixture| fx.put("lib/rustlib/components", &widened, 0o644);
     let rows = [
         Row {
             name: "other version".to_owned(),
@@ -300,8 +226,9 @@ fn n5_a_pin_for_another_version_or_target_is_not_used() {
                 FIXTURE_TREE_SHA256,
             ),
         },
+        row("altered components", &widen),
     ];
-    run_rows(&rows, fixture::Outcome::fell_through);
+    run_rows(&rows, &Outcome::no_pin);
 }
 
 #[test]
@@ -325,7 +252,7 @@ fn n6_hostile_helpers_on_path_and_in_the_tree_are_never_run() {
         flipped.put("lib/x.so", b"sO\n", 0o644);
         flipped
             .run_with_path(&script(phase, &[fixture_pin()]), hostile.path())
-            .assert_fell_through();
+            .assert_hard_failed(MISMATCH);
         assert!(!flipped.marker().exists());
     }
 }

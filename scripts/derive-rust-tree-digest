@@ -96,7 +96,7 @@ canonical_listing() {
       mode = sprintf("%d%d%d%d", special, triple(substr(m, 2, 1), substr(m, 3, 1), substr(m, 4, 1)), triple(substr(m, 5, 1), substr(m, 6, 1), substr(m, 7, 1)), triple(substr(m, 8, 1), substr(m, 9, 1), substr(m, 10, 1)))
       rel = (path == ".") ? "." : substr(path, 3)
       if (kind == "d") { print "d", mode, "-", rel; next }
-      if (rel ~ /^lib\/rustlib\/(manifest-[A-Za-z0-9._+-]+|multirust-config\.toml|rust-installer-version)$/) {
+      if (rel == "lib/rustlib/multirust-config.toml") {
         if ($5 + 0 > cap + 0) exit 3
         print "b", mode, "-", rel
         next
@@ -110,7 +110,8 @@ canonical_listing() {
       if (!(path in digest)) exit 4
       print "f", mode, digest[path], rel
     }
-  ' "$work/sums" "$work/modes" | sort -k4,4 > "$work/listing"
+  ' "$work/sums" "$work/modes" > "$work/listing.raw" || die "listing failed for $tree: an entry has an unsupported type, a bookkeeping file is over $size_cap bytes, or a file has no digest"
+  sort -k4,4 "$work/listing.raw" > "$work/listing"
   [ -s "$work/listing" ] || die "empty listing for $tree"
   if [ -n "$listing_out" ]; then
     cp "$work/listing" "$listing_out"
@@ -199,9 +200,16 @@ stage_component() {
     (cd "$src" && find . -type f ! -path ./manifest.in) | sed 's|^\./||' | sort > "$work/srcfiles"
     cmp -s "$work/manifest-files" "$work/srcfiles" || die "$comp/$sub manifest.in does not list exactly the tarball files"
     while IFS= read -r file; do
+      case "$file" in
+        lib/rustlib/components | lib/rustlib/manifest-* | lib/rustlib/multirust-* | lib/rustlib/rust-installer-version)
+          die "$comp/$sub ships $file, which the installer writes"
+          ;;
+      esac
       mkdir -p "$(dirname "$stage/$file")"
       stage_file "$src/$file" "$stage/$file"
     done < "$work/srcfiles"
+    mkdir -p "$stage/lib/rustlib"
+    stage_file "$src/manifest.in" "$stage/lib/rustlib/manifest-$comp"
   done < "$work/x/components"
 }
 
@@ -213,12 +221,9 @@ normalise_modes() {
 write_bookkeeping() {
   stage=$1
   mkdir -p "$stage/lib/rustlib"
-  while read -r comp; do
-    : > "$stage/lib/rustlib/manifest-$comp"
-  done < "$work/components"
   : > "$stage/lib/rustlib/multirust-channel-manifest.toml"
   : > "$stage/lib/rustlib/multirust-config.toml"
-  : > "$stage/lib/rustlib/rust-installer-version"
+  printf 3 > "$stage/lib/rustlib/rust-installer-version"
   cp "$work/components" "$stage/lib/rustlib/components"
 }
 

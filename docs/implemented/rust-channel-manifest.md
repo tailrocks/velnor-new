@@ -89,10 +89,16 @@ first version of this step did exactly that.
      SHA-256 of every entry, derived from the component tarballs of the
      pinned channel manifest; the stored `multirust-channel-manifest.toml` is
      bound to the pinned channel manifest by its `url` and `hash` lines)
-     before any network access. A missing pin or a mismatch prints
-     `pin_mismatch` and falls back to the file-by-file check in step 2, which
-     fails the job on any difference. The cache payload holds no memo of a
-     passed check. With nothing restored the step does nothing;
+     before any network access. A match passes. A components set with no pin
+     row prints `pin_mismatch: no_pin` and falls back to the file-by-file
+     check in step 2, which does not see modes or bookkeeping bytes. A
+     components set with a pin row whose tree differs, whose listing fails or
+     whose bookkeeping file is over the size cap fails the job with
+     `rust_tree_digest_mismatch`; it never falls back. The pin covers
+     `manifest-<component>` and `rust-installer-version` byte for byte;
+     `multirust-config.toml` is a size-capped regular-file entry. The cache
+     payload holds no memo of a passed check. With nothing restored the step
+     does nothing;
    - `Verify Rust channel manifest`, after `Prepare pinned tools` and
      `Prepare Rust components`, on the toolchain the job will use.
    A poisoned cache entry therefore fails the job before any restored Rust
@@ -104,6 +110,7 @@ first version of this step did exactly that.
    `rust_bookkeeping_manifest_mismatch`,
    `rust_toolchain_missing`, `rust_installed_manifest_missing`,
    `rust_installed_manifest_empty`, `rust_toolchain_file_unexpected`,
+   `rust_tree_digest_mismatch`,
    `rust_component_not_in_manifest`, `rust_component_name_invalid`,
    `rust_component_url_untrusted`, `rust_component_tarball_digest_mismatch`
    or `rust_toolchain_bytes_mismatch`.

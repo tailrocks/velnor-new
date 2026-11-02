@@ -90,13 +90,15 @@ const TOOLCHAINS_SINGLE: &str = r#"set --; for e in "$rh/toolchains"/* "$rh/tool
 
 const COMPONENTS_HASH: &str = r#"sort "$t/lib/rustlib/components" | $h > "$d/pin.cs"; read -r cs rest < "$d/pin.cs" || { pm components_unreadable; return 1; }"#;
 
-const BOOKKEEPING: &str = r#"urls "$t/lib/rustlib/multirust-channel-manifest.toml" "$d/pin.urls" || { pm bookkeeping_manifest_unreadable; return 1; }; $h < "$d/pin.urls" > "$d/pin.ms"; read -r ms rest < "$d/pin.ms" || { pm bookkeeping_manifest_unreadable; return 1; }"#;
+const BOOKKEEPING: &str = r#"urls "$t/lib/rustlib/multirust-channel-manifest.toml" "$d/pin.urls" || { pm bookkeeping_manifest_unreadable; return 2; }; $h < "$d/pin.urls" > "$d/pin.ms"; read -r ms rest < "$d/pin.ms" || { pm bookkeeping_manifest_unreadable; return 2; }"#;
 
-const SCAN: &str = r#"(cd "$t" && find . -name "*[!A-Za-z0-9._+-]*") > "$d/pin.unsafe" || { pm tree_unreadable; return 1; }; [ ! -s "$d/pin.unsafe" ] || { pm unsafe_name; return 1; }; (cd "$t" && find . -type f -exec $h {} +) > "$d/pin.sums" || { pm tree_unreadable; return 1; }; (cd "$t" && find . -exec ls -ldn {} +) > "$d/pin.modes" || { pm tree_unreadable; return 1; }"#;
+const SCAN: &str = r#"(cd "$t" && find . -name "*[!A-Za-z0-9._+-]*") > "$d/pin.unsafe" || { pm tree_unreadable; return 2; }; [ ! -s "$d/pin.unsafe" ] || { pm unsafe_name; return 2; }; (cd "$t" && find . -type f -exec $h {} +) > "$d/pin.sums" || { pm tree_unreadable; return 2; }; (cd "$t" && find . -exec ls -ldn {} +) > "$d/pin.modes" || { pm tree_unreadable; return 2; }"#;
 
-const LISTING_AWK: &str = r#"awk -v cs="$cs" -v ms="$ms" -v cap=4194304 'function bits(r, w, x, v) { v = 0; if (r == "r") v += 4; if (w == "w") v += 2; if (x == "x" || x == "s" || x == "t") v += 1; return v } function sp(x, a) { return (x == "s" || x == "S" || x == "t" || x == "T") ? a : 0 } NR == FNR { dg[$2] = $1; next } { m = $1; k = substr(m, 1, 1); p = $NF; if (k != "-" && k != "d") exit 2; mode = sprintf("%d%d%d%d", sp(substr(m, 4, 1), 4) + sp(substr(m, 7, 1), 2) + sp(substr(m, 10, 1), 1), bits(substr(m, 2, 1), substr(m, 3, 1), substr(m, 4, 1)), bits(substr(m, 5, 1), substr(m, 6, 1), substr(m, 7, 1)), bits(substr(m, 8, 1), substr(m, 9, 1), substr(m, 10, 1))); r = (p == ".") ? "." : substr(p, 3); if (k == "d") { print "d", mode, "-", r; next } if (r ~ /^lib\/rustlib\/(manifest-[A-Za-z0-9._+-]+|multirust-config\.toml|rust-installer-version)$/) { if ($5 + 0 > cap + 0) exit 3; print "b", mode, "-", r; next } if (r == "lib/rustlib/multirust-channel-manifest.toml") { if ($5 + 0 > cap + 0) exit 3; print "f", mode, ms, r; next } if (r == "lib/rustlib/components") { print "f", mode, cs, r; next } if (!(p in dg)) exit 4; print "f", mode, dg[p], r }' "$d/pin.sums" "$d/pin.modes" > "$d/pin.list" || { pm listing_failed; return 1; }"#;
+const LISTING_AWK: &str = r#"awk -v cs="$cs" -v ms="$ms" -v cap=4194304 'function bits(r, w, x, v) { v = 0; if (r == "r") v += 4; if (w == "w") v += 2; if (x == "x" || x == "s" || x == "t") v += 1; return v } function sp(x, a) { return (x == "s" || x == "S" || x == "t" || x == "T") ? a : 0 } NR == FNR { dg[$2] = $1; next } { m = $1; k = substr(m, 1, 1); p = $NF; if (k != "-" && k != "d") exit 2; mode = sprintf("%d%d%d%d", sp(substr(m, 4, 1), 4) + sp(substr(m, 7, 1), 2) + sp(substr(m, 10, 1), 1), bits(substr(m, 2, 1), substr(m, 3, 1), substr(m, 4, 1)), bits(substr(m, 5, 1), substr(m, 6, 1), substr(m, 7, 1)), bits(substr(m, 8, 1), substr(m, 9, 1), substr(m, 10, 1))); r = (p == ".") ? "." : substr(p, 3); if (k == "d") { print "d", mode, "-", r; next } if (r == "lib/rustlib/multirust-config.toml") { if ($5 + 0 > cap + 0) exit 3; print "b", mode, "-", r; next } if (r == "lib/rustlib/multirust-channel-manifest.toml") { if ($5 + 0 > cap + 0) exit 3; print "f", mode, ms, r; next } if (r == "lib/rustlib/components") { print "f", mode, cs, r; next } if (!(p in dg)) exit 4; print "f", mode, dg[p], r }' "$d/pin.sums" "$d/pin.modes" > "$d/pin.list" || { pm listing_failed; return 2; }"#;
 
-const COMPARE: &str = r#"sort -k4,4 "$d/pin.list" | tr "\n" "\000" | $h > "$d/pin.got"; read -r got rest < "$d/pin.got" || { pm tree_unreadable; return 1; }; [ "$got" = "$pin" ] || { pm tree_differs; return 1; }"#;
+const COMPARE: &str = r#"sort -k4,4 "$d/pin.list" | tr "\n" "\000" | $h > "$d/pin.got"; read -r got rest < "$d/pin.got" || { pm tree_unreadable; return 2; }; [ "$got" = "$pin" ] || { pm tree_differs; return 2; }"#;
+
+const DISPATCH: &str = r#"rc=0; pin_check || rc=$?; case "$rc" in 0) printf "%s\n" "velnor: Rust $v toolchain matches pinned tree digest"; exit 0;; 1) ;; *) fail "rust_tree_digest_mismatch: $t differs from the pinned tree digest of Rust $v; the pin_mismatch notice above names the check that failed" ;; esac"#;
 
 pub(crate) fn pin_statements(pins: &[TreeDigestPin]) -> Vec<String> {
     let rows = pins
@@ -122,6 +124,6 @@ pub(crate) fn pin_statements(pins: &[TreeDigestPin]) -> Vec<String> {
     vec![
         NOTICE.to_owned(),
         format!("pin_check() ( {body} )"),
-        "if pin_check; then printf \"%s\\n\" \"velnor: Rust $v toolchain matches pinned tree digest\"; exit 0; fi".to_owned(),
+        DISPATCH.to_owned(),
     ]
 }
