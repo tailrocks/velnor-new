@@ -117,6 +117,8 @@ mod tofu_providers_producers;
 mod tools_cache_forged_outputs;
 #[path = "workflow_configuration_public/tools_cache_install_run.rs"]
 mod tools_cache_install_run;
+#[path = "workflow_configuration_public/tools_cache_name_attacks.rs"]
+mod tools_cache_name_attacks;
 #[path = "workflow_configuration_public/tools_cache_pin_fixture.rs"]
 mod tools_cache_pin_fixture;
 #[path = "workflow_configuration_public/tools_cache_pin_precedence.rs"]

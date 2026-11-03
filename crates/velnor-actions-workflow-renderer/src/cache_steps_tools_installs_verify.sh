@@ -52,6 +52,7 @@ if [ -n "$platform" ] && [ -f "$lock" ] && [ ! -L "$lock" ]; then lock_pins >> "
 discard() { printf 'velnor: discarding restored %s: %s; Prepare pinned tools reinstalls it\n' "$1" "$2"; rm -rf "$3"; }
 verify_install() {
   local dir=$1 tool=$2 version=$3 url sum line archive x link target stored size n
+  case "$tool$version" in *[!A-Za-z0-9._+-]*) echo "unsafe name"; return 1 ;; esac
   line=$(awk -v t="$tool" -v v="$version" '$1 == t && $2 == v { print $3, $4; exit }' "$work/pins")
   [ -n "$line" ] || { echo "no mise.lock or catalog pin for ${platform:-this runner}"; return 1; }
   url=${line%% *}; sum=${line#* }
@@ -88,18 +89,18 @@ verify_install() {
   esac || { echo "archive does not extract"; return 1; }
   (cd "$work/x" && find . -type f -exec "${h[@]}" {} +) | cut -d' ' -f1 | LC_ALL=C sort -u > "$work/archive.sums"
   if [ -n "$(find "$dir" ! -type f ! -type d ! -type l -print -quit)" ]; then echo "special file"; return 1; fi
-  while IFS= read -r link; do
-    target=$(readlink "$link")
+  while IFS= read -r -d '' link; do
+    target=$(readlink "$link") || { echo "unreadable symlink"; return 1; }
     case "$target" in
       ..|../*|*/../*|*/..) echo "symlink ${link#"$dir"/} leaves the install"; return 1 ;;
       "$dir"/*) ;;
       /*) echo "symlink ${link#"$dir"/} leaves the install"; return 1 ;;
     esac
-  done < <(find "$dir" -type l)
+  done < <(find "$dir" -type l -print0)
   # Mise's own bookkeeping under `.mise-*` (the packslip statement, shell
   # completions, `.mise-bins` links checked above) is data that CI never runs;
   # it may hold no executable file.
-  if [ -n "$(find "$dir" -path "$dir/.mise-*" -type f -perm -u+x -print -quit)" ]; then
+  if [ -n "$(cd "$dir" && find . -path './.mise-*' -type f -perm -u+x -print -quit)" ]; then
     echo "executable file in Mise bookkeeping"; return 1
   fi
   (cd "$dir" && find . -type f ! -path './.mise-*' -exec "${h[@]}" {} +) \
