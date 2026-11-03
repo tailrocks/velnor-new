@@ -143,7 +143,7 @@ fn compat_head_lines(
     ]
 }
 
-const S256_FN: &str = "s256() { sha256sum \"$1\" > \"$d/sum\"; h=; rest=; read -r h rest < \"$d/sum\" || [ -n \"$h\" ]; case \"$h\" in ''|*[!0-9a-f]*) printf '%s\\n' 'sha256sum returned no digest' >&2; exit 1 ;; esac; [ \"${#h}\" -eq 64 ] || exit 1; }";
+const S256_FN: &str = "s256() { sha256sum \"$1\" > \"$d/sum\" || return 1; h=; rest=; read -r h rest < \"$d/sum\" || [ -n \"$h\" ]; case \"$h\" in ''|*[!0-9a-f]*) printf '%s\\n' 'sha256sum returned no digest' >&2; return 1 ;; esac; [ \"${#h}\" -eq 64 ] || return 1; }";
 
 /// Discover the restore candidate and record its provenance.
 ///

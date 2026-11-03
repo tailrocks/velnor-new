@@ -91,42 +91,50 @@ pub(crate) fn recover_step(
 
 fn read_number(var: &str, source: &str, tmp: &str, failure: &str) -> String {
     format!(
-        "{var}=; {var}_rest=; {source} > \"$d/{tmp}\"; read -r {var} {var}_rest < \"$d/{tmp}\" || [ -n \"${var}\" ]; case \"${var}\" in ''|*[!0-9]*) corrupt \"{failure}\" ;; esac"
+        "{var}=; {var}_rest=; {source} > \"$d/{tmp}\"; read -r {var} {var}_rest < \"$d/{tmp}\" || :; case \"${var}\" in ''|*[!0-9]*) corrupt \"{failure}\" ;; esac"
     )
 }
 
+fn inflate_cap(ceiling: u64) -> u64 {
+    ceiling + MAX_ARCHIVE_MEMBERS * 1024 + 10_240
+}
+
 fn admission_lines(ceiling: u64) -> Vec<String> {
-    let cap_plus = ceiling + 1;
+    let cap = inflate_cap(ceiling);
+    let cap_plus = cap + 1;
     vec![
         read_number("size", "wc -c < \"$payload\"", "size", "size unreadable"),
         format!("if [ \"$size\" -gt {ceiling} ]; then refused refused-oversize; fi"),
         "if [ -z \"${MBX_CACHE_DIR:-}\" ] || [ \"$MBX_CACHE_DIR\" != \"$RUNNER_TEMP/velnor/mbx\" ] || [ ! -d \"$MBX_CACHE_DIR/actions\" ]; then corrupt import_unavailable; fi".to_owned(),
         "for tool in gzip tar head tail wc find du sort mise mbx; do command -v \"$tool\" >/dev/null 2>&1 || corrupt import_unavailable; done".to_owned(),
+        "ws=${GITHUB_WORKSPACE:-}; ws=${ws%/}; if [ -z \"$ws\" ]; then corrupt import_unavailable; fi".to_owned(),
+        "case \"$RUNNER_TEMP/velnor\" in \"$ws\"|\"$ws\"/*) corrupt import_in_workspace ;; esac".to_owned(),
         format!("if {{ gzip -dc \"$payload\" && : > \"$d/inflated\"; }} | head -c {cap_plus} > \"$plain\"; then :; else corrupt \"payload unreadable\"; fi"),
         read_number("plain_n", "wc -c < \"$plain\"", "plain_size", "payload unreadable"),
-        format!("if [ \"$plain_n\" -gt {ceiling} ]; then refused refused-oversize; fi"),
+        format!("if [ \"$plain_n\" -gt {cap} ]; then refused refused-oversize; fi"),
         "if [ ! -f \"$d/inflated\" ]; then corrupt \"payload unreadable\"; fi".to_owned(),
-        "head -c 262 \"$plain\" | tail -c 5 > \"$d/magic\"; magic=; read -r magic < \"$d/magic\" || [ -n \"$magic\" ]; if [ \"$magic\" != ustar ]; then refused refused-shadow; fi".to_owned(),
+        "head -c 262 \"$plain\" | tail -c 5 > \"$d/magic\"; magic=; read -r magic < \"$d/magic\" || :; if [ \"$magic\" != ustar ]; then refused refused-shadow; fi".to_owned(),
+        "prefix=\"$base/\"; head -c \"${#prefix}\" \"$plain\" > \"$d/first\"; first=; read -r first < \"$d/first\" || :; if [ \"$first\" != \"$prefix\" ]; then refused refused-shadow; fi".to_owned(),
     ]
 }
 
 fn screen_lines() -> Vec<String> {
     vec![
-        "if tar -tf \"$plain\" > \"$d/members\"; then :; else corrupt \"payload unreadable\"; fi".to_owned(),
-        "if tar -tvf \"$plain\" > \"$d/verbose\"; then :; else corrupt \"payload unreadable\"; fi".to_owned(),
+        "if tar -tf - < \"$plain\" > \"$d/members\"; then :; else corrupt \"payload unreadable\"; fi".to_owned(),
+        "if tar -tvf - < \"$plain\" > \"$d/verbose\"; then :; else corrupt \"payload unreadable\"; fi".to_owned(),
         read_number("members_n", "wc -l < \"$d/members\"", "count", "member count unreadable"),
         read_number("verbose_n", "wc -l < \"$d/verbose\"", "vcount", "member count unreadable"),
         "if [ \"$members_n\" != \"$verbose_n\" ]; then refused refused-shadow; fi".to_owned(),
         format!("if [ \"$members_n\" -gt {MAX_ARCHIVE_MEMBERS} ]; then refused refused-shadow; fi"),
         "v=; while IFS= read -r v || [ -n \"$v\" ]; do case \"$v\" in -*|d*) ;; *) refused refused-shadow ;; esac; done < \"$d/verbose\"".to_owned(),
-        "m=; while IFS= read -r m || [ -n \"$m\" ]; do case \"$m\" in /*|..|../*|*/..|*/../*) refused refused-shadow ;; \"$base\"|\"$base\"/*) ;; *) refused refused-shadow ;; esac; done < \"$d/members\"".to_owned(),
+        "m=; while IFS= read -r m || [ -n \"$m\" ]; do case \"$m\" in /*|..|../*|*/..|*/../*|*\\\\*) refused refused-shadow ;; \"$base\"|\"$base\"/*) ;; *) refused refused-shadow ;; esac; done < \"$d/members\"".to_owned(),
     ]
 }
 
 fn extract_lines() -> Vec<String> {
     vec![
-        "mkdir -m 700 \"$stage\"".to_owned(),
-        "if tar -xf \"$plain\" -C \"$stage\" --no-same-owner; then :; else corrupt \"payload unreadable\"; fi".to_owned(),
+        "if mkdir -m 700 \"$stage\"; then :; else corrupt \"payload unreadable\"; fi".to_owned(),
+        "if tar -xf - -C \"$stage\" --no-same-owner < \"$plain\"; then :; else corrupt \"payload unreadable\"; fi".to_owned(),
         "rm -f \"$plain\"; unlock".to_owned(),
         "if [ -d \"$stage/$base\" ] && [ ! -L \"$stage/$base\" ]; then :; else refused refused-shadow; fi".to_owned(),
         "if find \"$stage\" ! -type f ! -type d > \"$d/special\"; then :; else corrupt \"payload unreadable\"; fi; if [ -s \"$d/special\" ]; then refused refused-shadow; fi".to_owned(),
@@ -137,23 +145,21 @@ fn extract_lines() -> Vec<String> {
 
 fn measure_lines(ceiling: u64, ceiling_kb: u64) -> Vec<String> {
     vec![
-        format!("if du -sb \"$stage/$base\" > \"$d/uncompressed\"; then usize=; usize_rest=; read -r usize usize_rest < \"$d/uncompressed\" || [ -n \"$usize\" ]; case \"$usize\" in ''|*[!0-9]*) corrupt \"uncompressed size unreadable\" ;; esac; if [ \"$usize\" -gt {ceiling} ]; then corrupt \"over ceiling\"; fi; elif du -sk \"$stage/$base\" > \"$d/uncompressed_kb\"; then usize_kb=; usize_kb_rest=; read -r usize_kb usize_kb_rest < \"$d/uncompressed_kb\" || [ -n \"$usize_kb\" ]; case \"$usize_kb\" in ''|*[!0-9]*) corrupt \"uncompressed size unreadable\" ;; esac; if [ \"$usize_kb\" -gt {ceiling_kb} ]; then corrupt \"over ceiling\"; fi; else corrupt \"uncompressed size unreadable\"; fi"),
-        "if find \"$stage/$base\" -type f > \"$d/found\"; then :; else corrupt \"payload unreadable\"; fi; sort \"$d/found\" > \"$d/files\"".to_owned(),
-        "if command -v sha256sum >/dev/null 2>&1; then while IFS= read -r f || [ -n \"$f\" ]; do sha256sum \"$f\"; done < \"$d/files\" > \"$d/manifest\"; else while IFS= read -r f || [ -n \"$f\" ]; do shasum -a 256 \"$f\"; done < \"$d/files\" > \"$d/manifest\"; fi".to_owned(),
+        format!("if du -sb \"$stage/$base\" > \"$d/uncompressed\"; then usize=; usize_rest=; read -r usize usize_rest < \"$d/uncompressed\" || :; case \"$usize\" in ''|*[!0-9]*) corrupt \"uncompressed size unreadable\" ;; esac; if [ \"$usize\" -gt {ceiling} ]; then corrupt \"over ceiling\"; fi; elif du -sk \"$stage/$base\" > \"$d/uncompressed_kb\"; then usize_kb=; usize_kb_rest=; read -r usize_kb usize_kb_rest < \"$d/uncompressed_kb\" || :; case \"$usize_kb\" in ''|*[!0-9]*) corrupt \"uncompressed size unreadable\" ;; esac; if [ \"$usize_kb\" -gt {ceiling_kb} ]; then corrupt \"over ceiling\"; fi; else corrupt \"uncompressed size unreadable\"; fi"),
+        "if command -v sha256sum >/dev/null 2>&1; then if find \"$stage/$base\" -type f -exec sha256sum {} + > \"$d/found\"; then :; else corrupt \"payload unreadable\"; fi; else if find \"$stage/$base\" -type f -exec shasum -a 256 {} + > \"$d/found\"; then :; else corrupt \"payload unreadable\"; fi; fi".to_owned(),
+        "if sort \"$d/found\" > \"$d/manifest\"; then :; else corrupt \"payload unreadable\"; fi".to_owned(),
         "if [ ! -s \"$d/manifest\" ]; then corrupt \"empty manifest\"; fi".to_owned(),
-        "s256 \"$d/manifest\"; manifest=\"$h\"".to_owned(),
-        "s256 \"$payload\"; digest_one=\"$h\"".to_owned(),
-        "s256 \"$payload\"; digest_two=\"$h\"".to_owned(),
-        "if [ \"$digest_one\" != \"$digest_two\" ]; then corrupt \"readback mismatch\"; fi".to_owned(),
+        "if s256 \"$d/manifest\"; then manifest=\"$h\"; else corrupt \"digest unreadable\"; fi".to_owned(),
+        "if s256 \"$payload\"; then digest=\"$h\"; else corrupt \"digest unreadable\"; fi".to_owned(),
     ]
 }
 
 fn import_lines(rust_toolchain: &str) -> Vec<String> {
     vec![
-        "cd \"$RUNNER_TEMP/velnor\"".to_owned(),
+        "if cd \"$RUNNER_TEMP/velnor\"; then :; else corrupt import_unavailable; fi".to_owned(),
         format!("if mise --no-config --no-env --no-hooks exec rust@{rust_toolchain} -- mbx cache import \"$stage/$base\"; then :; else corrupt import_failed; fi"),
-        "rm -rf \"$stage\" \"$root\"".to_owned(),
-        format!("printf '%s\\n' \"decision=$decision\" \"matched=$matched\" \"manifest=$manifest\" \"payload=$digest_one\" \"size=$size\" > \"{RECOVERY_RECORD}\""),
+        "if rm -rf \"$stage\" \"$root\"; then :; else corrupt import_failed; fi".to_owned(),
+        format!("if printf '%s\\n' \"decision=$decision\" \"matched=$matched\" \"manifest=$manifest\" \"payload=$digest\" \"size=$size\" > \"{RECOVERY_RECORD}\"; then :; else corrupt import_failed; fi"),
         "printf 'velnor: state snapshot recovered (decision=%s manifest=%s)\\n' \"$decision\" \"$manifest\"".to_owned(),
     ]
 }
