@@ -122,7 +122,7 @@ and fails when it exceeds 85 % of the 10 GiB quota.
 | `python-venv` | 384 MiB | 2 | requirements file | 1 | 768 MiB | not measured; ceiling is a placeholder to revise with data |
 | `ansible-collections` | 128 MiB | 2 | collection set | 1 | 256 MiB | not measured; ceiling is a placeholder to revise with data |
 | `playwright-browsers` | 512 MiB | 2 | Playwright version | 1 | 1 GiB | 328 MB of Chromium archives (Chromium, headless shell, ffmpeg; Playwright 1.64.1) |
-| `mbx-bundle` | 384 MiB | 1 | Cargo workspace and unit | 2 (seed, suite) | 768 MiB | 63.7 MiB (root workspace) and 12.8 MiB (nested runner workspace) stored, first main push after #278 (run 39575862041); later seed exports measured 5.9 GiB and 3.5 GiB uncompressed and were refused (issue #437); the former `target` payload was 770 MiB |
+| `mbx-bundle` | 384 MiB | 1 | Cargo workspace and unit | 2 (seed, suite) | 768 MiB | 63.7 MiB (root workspace) and 12.8 MiB (nested runner workspace) stored, first main push after #278 (run 39575862041); later seed exports reported (author-quoted, #437) at 5.9 GiB and 3.5 GiB uncompressed and were refused; the former `target` payload was 770 MiB |
 
 The reference total with the tools allowance is about 7.63 GiB against the
 8.5 GiB budget (85 % of 10 GiB). A real Bun root that stores more than 256 MiB is
