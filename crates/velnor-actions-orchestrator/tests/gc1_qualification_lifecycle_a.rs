@@ -5,11 +5,11 @@ use super::*;
 
 /// C07: PR runs never publish, even with a complete candidate.
 pub(crate) fn check_pr_runs_never_publish() -> Result<(), Box<dyn Error>> {
-    let mode = CacheMode::explicit_read();
-    if !mode.is_explicit_read() {
+    let access = CacheAccess::Read;
+    if !access.is_read() {
         return Err(invalid("PR consumer lost its explicit read mode"));
     }
-    if mode.grants_write() {
+    if access.writer().is_some() {
         return Err(invalid("PR read mode grants cache writes"));
     }
     let denied = lifecycle_save(
@@ -209,8 +209,7 @@ pub(crate) fn check_fork_event_restricted() -> Result<(), Box<dyn Error>> {
 /// C08: fork consumers are read-only; origin credentials and private cache
 /// contents stay outside unauthorized exposure.
 pub(crate) fn check_fork_cache_read_only() -> Result<(), Box<dyn Error>> {
-    let mode = CacheMode::explicit_read();
-    if mode.grants_write() || mode.grants_unconditional_write() {
+    if CacheAccess::Read.writer().is_some() {
         return Err(invalid("fork read mode grants cache writes"));
     }
     let denied = lifecycle_save(

@@ -200,7 +200,6 @@ fn validate_id_kind(id: Option<StepId>, kind: &StepKind, job: &str) -> Result<()
         StepId::TofuProviders => super::step_protocol::valid_provider_restore(kind),
         StepId::MbxReady
         | StepId::CacheKeys
-        | StepId::SourcesFetch
         | StepId::MbxBundleKey
         | StepId::MbxBundleExport
         | StepId::FamilyKeys

@@ -1,18 +1,17 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use super::cache_access::CacheAccess;
 use super::dispatch::WorkflowDispatch;
 use super::jobs::is_safe_display_name;
 use super::permissions::{PermissionLevel, Permissions};
 pub use super::step::{Step, StepKind};
-mod cache_mode;
 mod concurrency;
 #[path = "job_validation.rs"]
 mod job_validation;
 mod schedule;
 use super::timeout::JobTimeout;
 use crate::errors::ContractError;
-pub use cache_mode::CacheMode;
 pub use concurrency::{Concurrency, WRITER_QUEUE_CANCEL_IN_PROGRESS};
 pub use schedule::ScheduleTrigger;
 use serde::{Deserialize, Serialize};
@@ -25,9 +24,6 @@ pub struct WorkflowIr {
     pub triggers: Trigger,
 
     pub permissions: Permissions,
-
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub cache_mode: Option<CacheMode>,
 
     pub concurrency: Concurrency,
 
@@ -69,8 +65,7 @@ pub struct Job {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub permissions: Option<Permissions>,
 
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub cache_mode: Option<CacheMode>,
+    pub cache_access: CacheAccess,
 
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub environment: Option<String>,
@@ -88,9 +83,6 @@ pub struct Job {
 }
 
 pub const CACHE_SAVE_CONDITION: &str = "success() && github.event_name == 'push'";
-
-pub const CACHE_MODE_PUSH_WRITE_EXPR: &str =
-    "${{ github.event_name == 'push' && 'write' || 'read' }}";
 
 impl Job {
     #[must_use]
@@ -112,22 +104,21 @@ impl WorkflowIr {
             let job = self.jobs.get(*id).ok_or_else(|| {
                 ContractError::identity("job.authority", format!("unknown_reader:{id}"))
             })?;
-            if !job
-                .cache_mode
-                .as_ref()
-                .is_some_and(CacheMode::is_explicit_read)
-            {
+            if !job.cache_access.is_read() {
                 return Err(ContractError::identity(
-                    "job.cache_mode",
+                    "job.cache_access",
                     format!("reader_requires_explicit_read:{id}"),
                 ));
             }
         }
         for id in writers {
-            if !self.jobs.contains_key(*id) {
+            let job = self.jobs.get(*id).ok_or_else(|| {
+                ContractError::identity("job.authority", format!("unknown_writer:{id}"))
+            })?;
+            if job.cache_access.is_read() {
                 return Err(ContractError::identity(
-                    "job.authority",
-                    format!("unknown_writer:{id}"),
+                    "job.cache_access",
+                    format!("writer_without_write:{id}"),
                 ));
             }
         }
@@ -135,9 +126,9 @@ impl WorkflowIr {
             if writers.contains(id.as_str()) {
                 continue;
             }
-            if job.cache_mode.as_ref().is_some_and(CacheMode::grants_write) {
+            if !job.cache_access.is_read() {
                 return Err(ContractError::identity(
-                    "job.cache_mode",
+                    "job.cache_access",
                     format!("cache_write_outside_trusted_writer:{id}"),
                 ));
             }
@@ -182,9 +173,6 @@ impl WorkflowIr {
         if self.permissions.is_write_all() {
             return Err(ContractError::identity("workflow.permissions", "write_all"));
         }
-        if let Some(cache_mode) = &self.cache_mode {
-            cache_mode.validate("workflow.cache_mode")?;
-        }
         self.triggers.validate()?;
         if self.concurrency.group.trim().is_empty() {
             return Err(ContractError::identity(
@@ -197,20 +185,8 @@ impl WorkflowIr {
         }
         let ids: BTreeSet<&str> = self.jobs.keys().map(String::as_str).collect();
         let pr_triggered = !self.triggers.pull_request_types.is_empty();
-        let untrusted = pr_triggered || self.triggers.merge_group;
         for (id, job) in &self.jobs {
             job.validate(id, &ids, &self.permissions, pr_triggered)?;
-            if untrusted
-                && job
-                    .cache_mode
-                    .as_ref()
-                    .is_some_and(CacheMode::grants_unconditional_write)
-            {
-                return Err(ContractError::identity(
-                    "job.cache_mode",
-                    format!("cache_write_outside_trusted_writer:{id}"),
-                ));
-            }
             let effective = job.permissions.as_ref().unwrap_or(&self.permissions);
             if matches!(effective.actions, PermissionLevel::Write) && job.uses_checkout() {
                 return Err(ContractError::identity(
@@ -218,17 +194,6 @@ impl WorkflowIr {
                     format!("actions_write_requires_checkout_free:{id}"),
                 ));
             }
-        }
-        if untrusted
-            && self
-                .cache_mode
-                .as_ref()
-                .is_some_and(CacheMode::grants_unconditional_write)
-        {
-            return Err(ContractError::identity(
-                "workflow.cache_mode",
-                "cache_write_outside_trusted_writer",
-            ));
         }
         Ok(())
     }

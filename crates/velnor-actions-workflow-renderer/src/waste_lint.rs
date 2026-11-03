@@ -232,7 +232,7 @@ pub(crate) fn bind_and_check_standalone(id: &str, steps: &[Step]) -> Result<JobE
         needs: Vec::new(),
         condition: None,
         permissions: None,
-        cache_mode: None,
+        cache_access: velnor_actions_contract::CacheAccess::Read,
         environment: None,
         services: Vec::new(),
         outputs: BTreeMap::new(),

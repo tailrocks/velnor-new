@@ -147,13 +147,13 @@ change; Velnor emits no new aliases into composite `action.yml` files.
 
 ### 3. Cache Access Control (`cache-mode`) — `2026-09-10`
 
-- **Upstream Contract** ([Changelog](https://github.blog/changelog/2026-09-10-actions-control-cache-access-in-workflows-with-cache-mode/)):
+- **Upstream Contract** ([Changelog](https://github.blog/changelog/2026-09-10-control-github-actions-cache-access-with-cache-mode)):
   - Workflows and jobs can declare `cache-mode` at the workflow root or per job (`jobs.<job_id>.cache-mode`) to enforce runtime-level GitHub Actions cache service permissions:
     - `write`: read and write cache entries (default on standard events).
     - `read`: read-only cache access; cache writes are skipped/ignored without failing the job.
     - `write-only`: write cache entries without restoring existing entries.
     - `none`: disable all cache reads and writes.
-    - Dynamic expressions (for example, `${{ github.event_name == 'pull_request' && 'read' || 'write' }}`).
+  - Whether `cache-mode` accepts `${{ }}` expressions is UNCONFIRMED: the workflow-syntax and dependency-caching pages list only the four literals. Details and the enforcement and default rules are in entry 5 below.
 - **Velnor Implementation**:
   - `velnor-actions-contract` defines `CacheMode` (`Read`, `Write`, `WriteOnly`, `None`, `Expression(String)`) and optional `cache_mode: Option<CacheMode>` on both `WorkflowIr` and `Job`, with `CacheMode::for_pull_request_policy(PullRequestCachePolicy)` mapping `PullRequestCachePolicy::ReadOnly` to `CacheMode::Expression("${{ github.event_name == 'pull_request' && 'read' || 'write' }}")` and `PullRequestCachePolicy::SharedSeed` to `CacheMode::Write`.
   - `velnor-actions-workflow-renderer` emits top-level and job-level `cache-mode:` when `cache_mode` is `Some(...)` and omits it when `None`.
@@ -167,6 +167,115 @@ change; Velnor emits no new aliases into composite `action.yml` files.
   - `velnor-actions-freshness` supports an optional `default_cooldown_days` integer header key in `.velnor/version-policy.toml` (`DEFAULT_COOLDOWN_DAYS = 3`, bounded `MIN_COOLDOWN_DAYS = 1` to `MAX_COOLDOWN_DAYS = 90`).
   - When `default_cooldown_days` is omitted from `.velnor/version-policy.toml`, the freshness policy header check defaults to `3` days; values outside `1..=90` or non-integers fail the `policy-header` gate.
   - Security advisory scanning via `cargo-deny` remains immediate and is never delayed by `default_cooldown_days`.
+
+#### 5.5 Cache rules verified against original sources (checked 2026-11-04)
+
+Pinned action: `actions/cache` `55cc8345863c7cc4c66a329aec7e433d2d1c52a9` (tag `v6`, `package.json` 6.1.0, line 3), which bundles `@actions/cache` 6.1.0
+(`package-lock.json:41-42`). Toolkit source read at `actions/toolkit@0786132e6a1a4451c2d392bbbf481c2b172d4312` (commit "Bump cache package to v6.1.0"),
+paths `packages/cache/src/...`. Docs read from `github/docs@main` (raw Markdown, fetched 2026-11-04):
+`content/actions/reference/workflows-and-actions/dependency-caching.md` (call it DC), `.../workflow-syntax.md` (WS), `content/actions/reference/limits.md` (LIM).
+Line numbers for DC, WS, LIM are into those files as fetched; they drift. Cited docs pages:
+[dependency caching](https://docs.github.com/en/actions/reference/workflows-and-actions/dependency-caching),
+[limits](https://docs.github.com/en/actions/reference/limits), [REST cache API](https://docs.github.com/en/rest/actions/cache).
+
+Verdict key: TRUE, FALSE, PARTIAL (true with a stated correction or gap).
+
+#### 5.1 Size limit, eviction, 7-day expiry: PARTIAL (the 10 GB figure is a default, not a hard limit)
+
+- DC:356 "GitHub will remove any cache entries that have not been accessed in over 7 days. There is no limit on the number of caches you can store, but the total size of all caches in a repository is limited. By default, the limit is 10 GB per repository, but this limit can be increased by enterprise owners, organization owners, or repository administrators. Any usage beyond 10 GB is billed to your account."
+- Eviction: reusable `cache-eviction-policy.md` "the cache eviction policy will create space by deleting the caches in order of last access date, from oldest to most recent." and "If you exceed the limit, GitHub will save the new cache but will begin evicting caches until the total size is less than the repository limit." (`github/docs@main:data/reusables/actions/cache-eviction-policy.md`, `cache-eviction-process.md`). So LRU by last access, and the over-limit save still succeeds first.
+- 2025-2026 change: [changelog 2025-11-20](https://github.blog/changelog/2025-11-20-github-actions-cache-size-can-now-exceed-10-gb-per-repository/) (summarised by fetch, not verbatim): admins can raise the size limit past 10 GB, pay as you go; every repository keeps 10 GB free; defaults are 10 GB and 7 days; a retention limit (days) is now configurable and cascades enterprise to organization to repository.
+- DC:367 "Repositories owned by users can configure up to 10 TB per repository. ... Increasing the limit beyond the default 10 GB will incur additional costs, if that storage is used."
+- DC:374 "If you have limits configured, and you exceed a budget, your cache will become read-only until your billing status is resolved, or your usage goes beneath the free limit of 10GB". So a Velnor design must not assume 10 GB is fixed, and a repository above 10 GB can be read-only under a budget.
+- REST has repository cache storage-limit and retention-limit get/set endpoints (page lists "Gets GitHub Actions cache storage limit for a repository" and "Sets ... retention limit"). Exact endpoint paths not recorded; see Not verified.
+- The 7-day rule is the default retention, not a constant: a configured retention limit changes it.
+
+#### 5.2 Key immutability: TRUE (client behavior inferred for the refusal path)
+
+- DC:34 "You cannot change the contents of an existing cache. Instead, you can create a new cache with a new key."
+- `actions/cache@55cc834:tips-and-workarounds.md:11` "A cache today is immutable and cannot be updated."
+- Client: `toolkit@0786132e:packages/cache/src/cache.ts:513-515` (v1) and `:649-651` / `cache.ts` v2 `CreateCacheEntry` failure: `Unable to reserve cache with key ${key}, another job may be creating this cache.` The save is logged at info level (`cache.ts:529-531`, `core.info('Failed to save: ...')`) and the step succeeds. The server decision (reserve refused because key+version+scope exists) is server-side and not in client source; the client treats any non-ok reservation as a refused save.
+- `actions/cache@55cc834:src/saveImpl.ts:50-54` skips saving when the restore step reported an exact primary-key hit: "Cache hit occurred on the primary key ${primaryKey}, not saving cache."
+- Uniqueness is key plus version plus scope (`cacheUtils.ts:136-158` version hash of paths, compression, `windows-only`, salt; docs DC:170 scope). The same key can exist once per ref and per version.
+
+#### 5.3 Restore order: PARTIAL (the stated order omits key-prefix matching and the branch-outer loop)
+
+- DC:28-30 "First, it searches for an exact match to your provided `key`. If no exact match is found, it will search for partial matches of the `key`. If there is still no match found, and you've provided `restore-keys`, these keys will be checked sequentially for partial matches."
+- DC:174 "The `cache` action searches the `restore-keys` in sequential order. When a key doesn't match directly, the action searches for keys prefixed with the restore key. If there are multiple partial matches for a restore key, the action returns the most recently created cache." Newest means most recently created, not most recently accessed.
+- DC:170 "searches for cache hits for `key` and the cache version in the branch containing the workflow run ... If there are still no hits in the current branch, the `cache` action retries the same steps on the default branch." DC example "Example of search priority" lists all of key, prefix 1, prefix 2 on the feature branch before the same list on `main`.
+- Client passes `key` and `restoreKeys` unchanged to the server: `cache.ts:312-320` (`GetCacheEntryDownloadURLRequest {key, restoreKeys, version}`); proto comment `generated/results/api/v1/cache.ts:127` "Restore keys used for prefix searching". Ordering logic is server-side, so only the docs prove it.
+- Limits (client): at most 10 keys in total (`cache.ts:181-185`, `:293-297`), key length at most 512 and no commas (`cache.ts:81-93`). A hit needs the same `version` (paths plus compression method), so a Gzip entry never serves a zstd restore and the reverse.
+- `cache-hit` is true only for an exact `key` match (`action.yml` output description "an exact match was found for the primary key").
+
+#### 5.4 Scope: PARTIAL (each clause below; the last point is inferred, not documented)
+
+- DC:243 "Workflow runs can restore caches created in either the current branch or the default branch (usually `main`). If a workflow run is triggered for a pull request, it can also restore caches created in the base branch, including base branches of forked repositories."
+- DC:245 "Workflow runs cannot restore caches created for child branches or sibling branches." Tags are likewise isolated from other tags.
+- DC:247 "When a cache is created by a workflow run triggered on a pull request, the cache is created for the merge ref (`refs/pull/.../merge`). Because of this, the cache will have a limited scope and can only be restored by re-runs of the pull request. It cannot be restored by the base branch or other pull requests targeting that base branch." So "main cannot read it" is TRUE.
+- DC:279 "Caches created by a `pull_request` run are already scoped to the merge ref (`refs/pull/.../merge`) and cannot be written to the default branch's scope."
+- `actions/cache@55cc834:README.md:113` "The cache is scoped to the key, version, and branch. The default branch cache is available to other branches."
+- A later push to the same PR: NOT stated by any official source. The docs say only "re-runs of the pull request". Evidence for restore: scope is the ref name (`cacheHttpClient.ts:134` prints `scope ${process.env['GITHUB_REF']}`; REST docs: "To reference a pull request use refs/pull/<number>/merge"), and the ref name `refs/pull/N/merge` does not change between pushes while only the merge SHA does. By that mechanism a later push can restore an earlier push's entry. Verdict: INFERRED TRUE, not proven. Live check on `tailrocks/velnor-new`: one entry `refs/pull/414/merge` created 2026-10-27T17:37:07Z, last accessed 17:38:58Z (`gh api repos/tailrocks/velnor-new/actions/caches`), too close to separate a same-run read from a later-push read. Settling it needs two pushes to one PR with a restore log; no such run was made for this entry.
+- Fork PR runs also use `refs/pull/N/merge` and can read the base and default branch scope; DC:69 warns that anyone who can open a PR can read base-branch caches.
+
+#### 5.5 `cache-mode`: PARTIAL (values and precedence TRUE; the pinned client does not read the variable)
+
+- DC:289-300 "Use the `cache-mode` workflow key to grant jobs the least amount of cache access they need. You can set `cache-mode` at the workflow level, at the job level, or both. A job-level value overrides the workflow-level value for that job." WS:521 "A value set here overrides any workflow-level `cache-mode` for this job only."
+- Values (DC:293-298, WS:415-420): `read` restore yes, save no; `write` yes, yes; `write-only` restore no, save yes; `none` no, no. WS:523 "The accepted values are `read`, `write`, `write-only`, and `none`".
+- Default when omitted (DC:306-307): trusted trigger `write`, low-trust trigger `read`. Trusted triggers (DC:268-275): `push`, `workflow_dispatch`, `repository_dispatch`, `delete`, `registry_package`, `page_build`, `schedule`. `pull_request` is "not affected" (DC:279) and is not placed in either column; its effective default is not stated (a PR run does write to its merge-ref scope today).
+- Enforcement is server-side: WS:413 "Access is enforced with scoped cache tokens, so a job cannot restore or save caches beyond the mode it is granted." DC:315 "The runner exposes the effective mode in the `ACTIONS_CACHE_MODE` environment variable, and the `actions/cache` action and the `@actions/cache` toolkit honor it."
+- Pinned-version gap: `ACTIONS_CACHE_MODE` handling arrived in `@actions/cache` 6.2.0 (`toolkit@main:packages/cache/RELEASES.md` "6.2.0 - Honor the `ACTIONS_CACHE_MODE` environment variable"). Pinned 6.1.0 has only the write-denied handling: `cache.ts:42` `CACHE_WRITE_DENIED_PREFIX = 'cache write denied:'`, `:502-512` surfaced as `core.warning` (`:74`). `grep -c ACTIONS_CACHE_MODE` on `dist/save/index.js` and `dist/restore/index.js` at the pinned SHA returns 0. Under `read`, a save at the pinned SHA still attempts a reserve, is denied by the service, and logs a warning, not an informational skip. Under `write-only` or `none`, restore handling at 6.1.0 is a service-side read denial, surfaced by 6.2.0+ code as a "cache read denied:" warning; at 6.1.0 it falls into the generic `Failed to restore:` warning path (`cache.ts` catch at `:236-251`).
+- Reusable workflows (DC:318-324): a caller's explicit mode caps the called workflow; over-request fails validation; with no explicit caller mode the callee can request `write`.
+- A write-capable mode on a low-trust trigger overrides the read-only default (DC "Bypassing the default untrusted-trigger cache restriction") and reintroduces poisoning risk.
+- Expressions: no official page read documents `${{ }}` in `cache-mode`. WS and DC list only the four literals. Expressions in `cache-mode` are UNCONFIRMED, and the pinned `jactionlint` rejects them (see entry 3). The earlier changelog URL returned HTTP 404 on 2026-11-04; the live page is the [cache-mode changelog](https://github.blog/changelog/2026-09-10-control-github-actions-cache-access-with-cache-mode) (found by search, content not fetched).
+
+#### 5.6 Compression: PARTIAL (zstd default; the `--long=30` flag is NOT used for saves in the pinned version)
+
+- `cacheUtils.ts:102-112` `getCompressionMethod`: runs `zstd --quiet` for the version; empty output returns `CompressionMethod.Gzip`, otherwise returns `CompressionMethod.ZstdWithoutLong`. It never returns `CompressionMethod.Zstd` (the `--long` variant), though the enum and code paths exist (`constants.ts:6-12`). Same logic in `actions/cache@55cc834:dist/save/index.js:43381-43392`.
+- Create command (`tar.ts:225-241`): non-Windows `--use-compress-program 'zstdmt'` for `ZstdWithoutLong`; Windows `"zstd -T0"`; with the (unused) `Zstd` variant `zstdmt --long=30`. Comment at `tar.ts:208-212` "zstdmt is equivalent to 'zstd -T0' ... --long=# ... Maximum is 30 (1GB) on 32-bit OS and 31 (2GB) on 64-bit. Using 30 here because we also support 32-bit self-hosted runners."
+- Level: no `-#` flag is passed anywhere in `tar.ts`, so zstd's own default level applies (3 per zstd's manual; not re-fetched, see Not verified). Threads: `-T0`.
+- Decompress (`tar.ts:175-203`): `unzstd` (non-Windows, `ZstdWithoutLong`) or `unzstd --long=30` for the `Zstd` variant. A reader must handle both; a `--long=30` entry needs window up to 1 GB.
+- Fallback when zstd is absent: gzip via tar `-z`, file `cache.tgz` (`tar.ts:202-204`, `:242-244`; `constants.ts:1-4`). Archive names: `cache.tzst` or `cache.tgz`. Compression method is hashed into the cache version, so the two do not cross-restore.
+- Tar create flags (`tar.ts:73-88`): `--posix -cf <cache.tzst> --exclude <cache.tzst> -P -C <GITHUB_WORKSPACE|cwd> --files-from manifest.txt`; darwin adds `--delay-directory-restore`, Windows GNU tar `--force-local`. Archive entries therefore keep the path forms given in the manifest, including absolute paths.
+
+#### 5.7 Extraction: TRUE for "extracted in the restore step, no inspection point"; no size limit found
+
+- Extract command (`tar.ts:90-99`): `tar -xf <archive> -P -C <workingDirectory>` plus the decompress program (`--use-compress-program unzstd`) and the platform extras (`--delay-directory-restore` on darwin). `-P` (`--absolute-names`) keeps absolute names and leading `/`, so an entry can write outside the workspace; `-C` is `GITHUB_WORKSPACE` (`tar.ts:165`). No `--no-same-owner`, `--no-overwrite-dir`, `--keep-old-files`, or `--exclude` is passed, so existing files are overwritten.
+- Order in `restoreCacheV2` (`cache.ts:344-364` of the 6.1.0 source): download to a temp dir, then `extractTar(archivePath, compressionMethod)` inside the same action step, then `core.info('Cache restored successfully')`. `listTar` runs only when `core.isDebug()` and only after download, before extract; it prints names, it does not filter. The restore step is a single process: no user step runs between download and extraction. Inspection is only possible after extraction, by a later user step.
+- Size during extraction: `grep` of `tar.ts`, `cache.ts`, `downloadUtils.ts` finds no check of uncompressed size, entry count, or free space. The only size figures are the compressed archive size log line (`cache.ts:225-230`) and a download completeness check (`downloadUtils.ts:187-196`, "Incomplete download. Expected file size: ..."). A zstd bomb is bounded only by the runner disk.
+- Cache contents are not signed (DC "Best practices": "Cache contents are not signed or verified, and any workflow run that can read a cache may extract its contents. Extracted caches may modify files that are subsequently executed in a workflow run").
+- Failure handling: any restore error, including a `tar` failure, is a warning (or `core.error` for HTTP 5xx) and the step returns a miss (`cache.ts:236-251`). The partial extraction is not rolled back.
+
+#### 5.8 Per-entry size and rate limits: PARTIAL (a 10 GiB per-archive check exists only in the legacy v1 client path; rates TRUE)
+
+- Per-archive limit: `cache.ts:467` (inside `saveCacheV1`, which starts at `:435`; `saveCacheV2` at `:564` has no such check) `const fileSizeLimit = 10 * 1024 * 1024 * 1024 // 10GB per repo limit` and `:472-477` "Cache size of ~N MB (B B) is over the 10GB limit, not saving cache." skipped when `isGhes()`. `constants.ts:40` `CacheFileSizeLimit = 10 * Math.pow(1024, 3) // 10GiB per repository`. This is a 10 GiB cap on one compressed archive, only on the v1 service path (the v1 client is chosen by `getCacheServiceVersion()`). The v2 save path has no client check; any per-entry limit in the v2 service is not documented, and the docs state only the per-repository limit. A server 400 on reserve is reported as "is over the data cap limit, not saving cache" (`cache.ts:496-498`).
+- Rates: LIM:52-54 "Each repository is limited to 200 cache entry uploads per minute. If this limit is exceeded, subsequent cache upload attempts will fail until the rate limit resets." "Each repository is limited to 1500 cache entry downloads per minute." "Each repository is limited to 400 cache delete operations per minute." Same figures at DC:363. Only new-entry uploads count, not job-run downloads for upload ([changelog 2026-01-16](https://github.blog/changelog/2026-01-16-rate-limiting-for-actions-cache-entries/), page shows "Retired"; fetched summary).
+- Client on 429: `internal/shared/cacheTwirpClient.ts:115-127` reads `retry-after`, logs "You've hit a rate limit, your rate limit will reset in N seconds", and throws `RateLimitError` without retry. Retryable statuses are 502/503/504 (`requestUtils.ts:24-34`); defaults 2 retries, 5000 ms (`constants.ts:20-23`). A failed save is a warning, so a 429 never fails the job.
+- Key limits: 512 characters, no commas, at most 10 keys per restore (`cache.ts:81-93`, `:181-185`).
+
+#### 5.9 Which runs can save: PARTIAL (the answer depends on the scope the run writes to)
+
+- Default-branch scope (DC:268-277): only `push`, `workflow_dispatch`, `repository_dispatch`, `delete`, `registry_package`, `page_build`, `schedule` can create or overwrite. "Runs triggered by any other event that resolves to the default branch are given read-only access ... such as `pull_request_target`, `issue_comment`, and `workflow_run`." So `workflow_run` saving to the default-branch scope: FALSE by default; TRUE only with an explicit write-capable `cache-mode` (DC "Bypassing" section).
+- `schedule` and `workflow_dispatch`: TRUE (listed as trusted). A `workflow_dispatch` on a non-default ref writes to that ref's scope.
+- `pull_request`: writes to `refs/pull/N/merge` only (DC:247, :279).
+- Fork `pull_request`: `actions/cache@55cc834:README.md:119-121` "A common case is a workflow triggered by a pull request from a fork: such runs can restore existing caches but may not be permitted to save new ones." and "the save step does not fail the job ... reports the denial once as a warning". No official page states the fork-PR rule as always-denied or always-allowed; do not assume either. Treat fork-PR saves as unproven.
+- `merge_group`: not covered by the docs read. Not in the trusted list; its ref is `refs/heads/gh-readonly-queue/...`, so scope would be that ref (inferred). Velnor's cache-decisions row 5 already assumes merge groups never write.
+- Client gate: `actions/cache@55cc834:src/utils/actionUtils.ts:35-37` `isValidEvent()` is only `GITHUB_REF` being set, so the action itself imposes no event limit; denial comes from the service token.
+
+#### Version notes
+
+- Pinned `@actions/cache` 6.1.0; latest at `toolkit@main` is 6.3.0 (`packages/cache/RELEASES.md`): 6.2.0 adds `ACTIONS_CACHE_MODE` honoring and a "cache read denied:" warning; 6.3.0 isolates Windows BSD tar scratch files. Neither changes tar flags or compression selection in the files read.
+- `actions/cache` v6 default `post-if: success()` and `save-always` deprecated (`action.yml`), unrelated to the rules above.
+
+#### Not verified
+
+- Server-side matching order and "newest wins" were verified from docs only; the service source is not public.
+- Zstd default level 3 comes from zstd's manual, not re-fetched here.
+- Exact REST paths for repository cache storage and retention limits; DC and the REST page confirm they exist.
+- Whether the service rejects an entry over 10 GiB on a repository with a raised limit.
+- Later push to the same PR restoring an earlier push's entry: inferred from the ref-keyed scope, no direct experiment (no run was made).
+- Fork `pull_request` save behavior, `merge_group` save behavior, and `pull_request` default `cache-mode` value are not documented.
+- The 2025-11-20 and 2026-01-16 changelogs were read through a summarizing fetch, not verbatim; the 2026-09-10 changelog was not read (only its search snippet).
+- Did not run live a restore on the pinned SHA to see the `read`-mode warning text.
 
 ## Native preview publication API boundaries (2026-10-18)
 

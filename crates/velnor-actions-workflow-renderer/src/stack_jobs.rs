@@ -96,7 +96,7 @@ pub fn build_stack_job(policy: &StackJobPolicy, checkout_uses: &str) -> Result<J
             actions: PermissionLevel::None,
             packages: PermissionLevel::None,
         }),
-        cache_mode: None,
+        cache_access: velnor_actions_contract::CacheAccess::Read,
         environment: None,
         env: velnor_actions_contract::JobEnv::Unset,
         steps: all,

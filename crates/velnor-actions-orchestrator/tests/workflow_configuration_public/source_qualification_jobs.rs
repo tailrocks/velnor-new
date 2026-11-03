@@ -376,7 +376,7 @@ fn source_qualification_harness_and_check_phases_keep_running_after_a_failure()
 fn source_qualification_keeps_triggers_permissions_and_concurrency() -> Result<(), Box<dyn Error>> {
     let workflow = rendered_workflow()?;
     assert!(workflow.contains(
-        "\"on\":\n  pull_request: {}\n  workflow_dispatch: {}\npermissions:\n  contents: read\nconcurrency:\n  group: source-qualification-${{ github.ref }}\n  cancel-in-progress: false\njobs:\n"
+        "\"on\":\n  pull_request: {}\n  workflow_dispatch: {}\npermissions:\n  contents: read\ncache-mode: read\nconcurrency:\n  group: source-qualification-${{ github.ref }}\n  cancel-in-progress: false\njobs:\n"
     ));
     let ids = job_ids(&workflow);
     assert_eq!(workflow.matches("concurrency:").count(), 1);

@@ -146,9 +146,9 @@ pub fn plan_job(
     }
     let cached = plan_sources::cache_steps_for_plan(catalog, fetch_roots, tofu_roots, &[])
         .map_err(NativeJobBuilderError::PlanSources)?;
-    steps.extend(cached.restore);
+    steps.extend(cached);
     let env = plan_fetch_env(catalog)?;
-    let mut source_steps = plan_sources::cargo_fetch::fetch_steps_with(
+    let source_steps = plan_sources::cargo_fetch::fetch_steps_with(
         catalog,
         fetch_roots,
         &env,
@@ -156,7 +156,6 @@ pub fn plan_job(
         needs.all_features,
     )
     .map_err(NativeJobBuilderError::PlanSources)?;
-    plan_sources::mark_writer_gate(&mut source_steps);
     steps.extend(source_steps);
     steps.extend(acquire);
     steps.push(request_step(PLAN_OPERATION)?);
@@ -170,7 +169,6 @@ pub fn plan_job(
         steps.push(resolve);
     }
     steps.push(plan_step());
-    steps.extend(cached.save);
     Ok(Job {
         services: Vec::new(),
         outputs: BTreeMap::new(),
@@ -184,7 +182,7 @@ pub fn plan_job(
         environment: None,
         env: velnor_actions_contract::JobEnv::Unset,
         steps,
-        cache_mode: None,
+        cache_access: velnor_actions_contract::CacheAccess::Read,
     })
 }
 
@@ -222,7 +220,7 @@ pub fn final_job(
         environment: None,
         env: velnor_actions_contract::JobEnv::Unset,
         steps,
-        cache_mode: None,
+        cache_access: velnor_actions_contract::CacheAccess::Read,
     })
 }
 

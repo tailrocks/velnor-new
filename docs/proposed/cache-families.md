@@ -10,8 +10,7 @@ save-on-producer-success, pruning).
 Every family key is
 `velnor-v<schema>-<layer>-<trust>-<compat>-<snapshot>` (`compat` and `snapshot`
 are `s256-<64 hex>` digests). `trust` is `trusted` (protected default-branch
-push), `pr` (same-repository pull request, PR-scoped writes only) or `none`
-(forks, merge groups, dispatches: never writes). A family changes its paths or
+push), `none` (pull requests, forks, merge groups, dispatches: never writes). A family changes its paths or
 digest inputs only with a schema bump.
 
 | Family (schema) | Paths | Compat hashes | Snapshot | Writers | Generated |
@@ -97,6 +96,10 @@ output across trust scopes.
 - Compat does not name a job: every reader of a workspace shares the entry,
   and the key changes only when the lock, toolchain, MBX version or platform
   changes. The `unit` keeps the dependency seed and suite bundles apart.
+- velnor-new sets `dependency_seed = "off"` (`.velnor/config.toml:40`, PR
+  #466), so no job writes this family there and no `velnor-v2-state-` entry
+  exists. Crate-job restores miss. The design that would restore this
+  persistence is [compiled-state persistence](compiled-state-persistence.md).
 - Units are the key schema of decision 2. `seed` is written only by the
   non-crate `Dependency seed` job (one per MBX Cargo workspace, protected
   default-branch pushes only, outside `Required`); crate jobs restore it
@@ -105,8 +108,10 @@ output across trust scopes.
 - A restore may fall back to any snapshot of the same compat (the newest
   trusted entry), which `mbx cache import` then reuses object by object.
 - The size check reads the on-disk bytes of the exported directory
-  (`du -sk`), a conservative upper bound of the compressed entry. Over the
-  ceiling the export is deleted and the save refused (`over_ceiling`).
+  (`du -sb`, falling back to `du -sk`), then the packed `payload.tar.gz`,
+  against the same ceiling. The first check measures uncompressed bytes, not
+  the compressed entry. Over the ceiling the save is refused
+  (`over_ceiling`).
   The publish step always exports fresh; it never republishes a state root that
   already exists on the runner.
 - The bundle save has its own three-minute optional-save budget; the other
@@ -131,7 +136,7 @@ and fails when it exceeds 85 % of the 10 GiB quota.
 | `python-venv` | 384 MiB | 2 | requirements file | 1 | 768 MiB | not measured; ceiling is a placeholder to revise with data |
 | `ansible-collections` | 128 MiB | 2 | collection set | 1 | 256 MiB | not measured; ceiling is a placeholder to revise with data |
 | `playwright-browsers` | 512 MiB | 2 | Playwright version | 1 | 1 GiB | 328 MB of Chromium archives (Chromium, headless shell, ffmpeg; Playwright 1.64.1) |
-| `mbx-bundle` | 384 MiB | 1 | Cargo workspace and unit | 2 (union, suite) | 768 MiB | 63.7 MiB (root workspace) and 12.8 MiB (nested runner workspace) stored, first main push after #278 (run 39575862041); the former `target` payload was 770 MiB |
+| `mbx-bundle` | 384 MiB | 1 | Cargo workspace and unit | 2 (union, suite) | 768 MiB | 63.7 MiB (root workspace) and 12.8 MiB (nested runner workspace) stored, first main push after #278 (run 39575862041); later seed exports reported (author-quoted, #437) at 5.9 GiB and 3.5 GiB uncompressed and were refused; the former `target` payload was 770 MiB |
 
 The reference total with the tools allowance is about 7.63 GiB against the
 8.5 GiB budget (85 % of 10 GiB). A real Bun root that stores more than 256 MiB is
@@ -162,4 +167,4 @@ a key step whose env is the default-branch ref plus, in a Bun leg matrix only,
 ## Remaining
 
 `tofu-providers` still saves without a size admission; the same stored-size
-check follows. Its ceiling was re-measured (see the table).
+check follows. Its ceiling was re-measured (see the table). ¶
