@@ -43,6 +43,10 @@ mod hard_fail;
 #[path = "rust_tree_digest_pin/manifest.rs"]
 mod manifest;
 
+#[cfg(test)]
+#[path = "rust_tree_digest_pin/ancestors.rs"]
+mod ancestors;
+
 use fixture::{
     CHANNEL_URL, FIXTURE_COMPONENTS, FIXTURE_COMPONENTS_SHA256, FIXTURE_TREE_SHA256, Fixture,
     MISMATCH, Outcome, PHASES, Row, TARGET, VERSION, fixture_pin, run_rows, script, sha256_hex,

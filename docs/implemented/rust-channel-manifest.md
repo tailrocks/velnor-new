@@ -189,13 +189,20 @@ first version of this step did exactly that.
    restores the rest of `$RUNNER_TEMP/velnor/rustup` (`settings.toml`,
    `update-hashes`, `downloads`), which no check binds (info); a reordered
    `components` file is accepted, because it is hashed sorted.
+   Before the first read of `$RUSTUP_HOME/toolchains`, in both phases and on
+   both paths, the step requires `toolchains` (an absent one is a fresh
+   restore) to be a real directory and, once the toolchain is selected, `lib`
+   and `lib/rustlib` too (a linked toolchain directory is
+   `rust_toolchain_missing`), never symlinks, so no read or write leaves the owned
+   toolchain tree.
    A poisoned cache entry therefore fails the job before any restored Rust
    byte runs; delete the entry (`gh cache delete <key>`) to recover.
 4. The step fails the job with a stable code:
    `rust_channel_manifest_not_catalogued` (a Rust version the catalog does
    not know), `rust_channel_manifest_digest_mismatch`,
    `rust_installed_manifest_unwritable`,
-   `rust_toolchain_missing`, `rust_installed_manifest_missing`,
+   `rust_toolchain_missing`, `rust_toolchain_path_unexpected` (`toolchains`, `lib` or
+   `lib/rustlib` is not a real directory), `rust_installed_manifest_missing`,
    `rust_installed_manifest_empty`, `rust_toolchain_file_unexpected`,
    `rust_tree_digest_mismatch`,
    `rust_component_not_in_manifest`, `rust_component_name_invalid`,

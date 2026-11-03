@@ -63,6 +63,8 @@ fn helper_runner() -> String {
 
 const COMPONENT_TARBALLS_AWK: &str = r#"ev awk -v comps="$t/lib/rustlib/components" 'BEGIN { while ((getline line < comps) > 0) if (line != "") want[line] = 1 } /^\[/ { key = ""; if ($0 ~ /^\[pkg\.[^]]*\.target\.[^]]*\]$/) { s = substr($0, 6, length($0) - 6); p = index(s, ".target."); k = substr(s, 1, p - 1) "-" substr(s, p + 8); if (k in want) key = k } next } key != "" && $1 == "xz_url" { u = $3; gsub(/"/, "", u); url[key] = u } key != "" && $1 == "xz_hash" { h = $3; gsub(/"/, "", h); hash[key] = h } END { for (k in want) { if (!(k in url) || !(k in hash)) exit 1; print k, url[k], hash[k] } }' "$d/channel.toml" > "$d/tarballs""#;
 
+const REAL_DIR: &str = "real() { if [ -e \"$1\" ] || [ -L \"$1\" ]; then { [ -d \"$1\" ] && [ ! -L \"$1\" ]; } || fail \"rust_toolchain_path_unexpected: $1 is not a real directory\"; fi; }";
+
 const GET: &str = "get() { ev curl -q --proto \"=https\" --proto-redir \"=https\" --tlsv1.2 --fail --silent --show-error --location --retry 3 --retry-all-errors --connect-timeout 20 --max-time 120 --retry-max-time 180 --output \"$1\" \"$2\"; }";
 
 const PUT: &str = "put() { [ ! -d \"$2\" ] && ev rm -f \"$2.new\" && ev cp \"$1\" \"$2.new\" && ev chmod 0644 \"$2.new\" && ev mv -f \"$2.new\" \"$2\" || { ev rm -f \"$2.new\"; return 1; }; }";
@@ -109,6 +111,8 @@ pub fn toolchain_script(
     if phase == ToolchainPhase::Restored {
         lines.push("ev rm -rf \"${CARGO_HOME:?}/bin\"".to_owned());
     }
+    lines.push(REAL_DIR.to_owned());
+    lines.push("real \"$rh/toolchains\"".to_owned());
     lines.extend(pin_scope_statements(trees));
     lines.push("set -- \"$rh/toolchains/$v\"-*".to_owned());
     if phase == ToolchainPhase::Restored {
@@ -120,6 +124,7 @@ pub fn toolchain_script(
     lines.extend([
         "{ [ \"$#\" -eq 1 ] && [ -d \"$1\" ] && [ ! -L \"$1\" ]; } || fail \"rust_toolchain_missing: $rh/toolchains holds no single real Rust $v toolchain directory\"".to_owned(),
         "t=\"$1\"".to_owned(),
+        "real \"$t/lib\"; real \"$t/lib/rustlib\"".to_owned(),
         "m=\"$t/lib/rustlib/multirust-channel-manifest.toml\"".to_owned(),
         "if command -v sha256sum >/dev/null 2>&1; then hb=\"sha256sum\"; else hb=\"shasum -a 256\"; fi".to_owned(),
         "h=\"ev $hb\"".to_owned(),
