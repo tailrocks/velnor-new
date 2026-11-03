@@ -189,7 +189,7 @@ superseded exact keys is not global pruning; decision 4), or restore one cache l
 restorable. The default branch MUST produce warm snapshots through ordinary CI; no unconditional warm-up
 workflow is allowed.
 Family pruning runs only in the push-only `cache-prune.yml` workflow, whose one job alone holds `actions: write` (never
-the Plan job or a pull request), and keeps the newest `retained_entries` per unit of a family's `trusted` entries. It also deletes every entry of the retired `velnor-v2-state-trusted-` prefix (retained count 0).
+the Plan job or a pull request), and keeps the newest `retained_entries` per unit of a family's `trusted` entries. It also deletes every entry of every retired state schema in the accumulating `RETIRED_STATE_PRUNE_PREFIXES` collection in `crates/velnor-actions-workflow-renderer/src/cache_prune.rs`, which lists `velnor-v1-state-trusted-` and `velnor-v2-state-trusted-` (retained count 0). Each later state schema adds its retired prefix to that collection and never replaces it.
 
 ## 3. Miss reasons, artifacts, and report schema
 
