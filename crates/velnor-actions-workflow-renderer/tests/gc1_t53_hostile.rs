@@ -198,8 +198,13 @@ fn check_row(row: Row) -> Result<(), Box<dyn Error>> {
 #[test]
 #[cfg(unix)]
 fn gc1_t53_recover_refuses_hostile_archives() -> Result<(), Box<dyn Error>> {
-    for row in ROWS {
-        check_row(row)?;
+    let failures: Vec<String> = ROWS
+        .into_iter()
+        .filter_map(|row| check_row(row).err().map(|error| error.to_string()))
+        .collect();
+    if failures.is_empty() {
+        Ok(())
+    } else {
+        Err(fail(&failures.join(" | ")))
     }
-    Ok(())
 }
