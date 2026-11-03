@@ -45,6 +45,10 @@ mod bun_routing;
 mod bun_runtime;
 #[path = "workflow_configuration_public/cache_authority.rs"]
 mod cache_authority;
+#[path = "workflow_configuration_public/checkout_history.rs"]
+mod checkout_history;
+#[path = "workflow_configuration_public/checkout_history_plan.rs"]
+mod checkout_history_plan;
 #[path = "workflow_configuration_public/empty_suite.rs"]
 mod empty_suite;
 #[path = "workflow_configuration_public/family_save_suppression.rs"]

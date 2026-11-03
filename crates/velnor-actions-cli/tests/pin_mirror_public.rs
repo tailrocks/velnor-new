@@ -332,3 +332,48 @@ fn pin_diff_fails_closed_when_a_base_parent_directory_is_a_symlink() -> TestResu
     assert_eq!(outcome.rows_of("pin-diff", "info").len(), 0);
     Ok(())
 }
+
+#[test]
+fn pin_diff_reads_the_same_base_from_a_depth_one_checkout() -> TestResult {
+    let source = Fixture::new()?;
+    source.commit_all()?;
+    fs::write(source.path("notes.txt"), "second commit\n")?;
+    source.git(&["add", "-A"])?;
+    source.git(&["commit", "-q", "-m", "second"])?;
+    let head = source.git_stdout(&["rev-parse", "HEAD"])?;
+    let base = "refs/remotes/origin/main";
+
+    let full = source.checkout_of_head(None)?;
+    let shallow = source.checkout_of_head(Some("--depth=1"))?;
+    assert_eq!(
+        full.git_stdout(&["rev-parse", "--is-shallow-repository"])?,
+        "false"
+    );
+    assert_eq!(
+        shallow.git_stdout(&["rev-parse", "--is-shallow-repository"])?,
+        "true"
+    );
+    assert!(
+        full.git_stdout(&["rev-parse", "--verify", "--quiet", "HEAD^"])
+            .is_ok()
+    );
+    assert!(
+        shallow
+            .git_stdout(&["rev-parse", "--verify", "--quiet", "HEAD^"])
+            .is_err()
+    );
+
+    let expected = format!("unchanged vs {base} ({head})");
+    for (label, checkout) in [("depth-1", &shallow), ("full", &full)] {
+        let outcome = checkout.run(Some(base))?;
+        assert!(
+            outcome.success,
+            "{label} checkout rejected: {:?}",
+            outcome.rows
+        );
+        let rows = outcome.rows_of("pin-diff", "info");
+        assert_eq!(rows.len(), 1, "{label}: unexpected rows: {rows:?}");
+        assert_eq!(rows[0]["detail"], expected.as_str(), "{label}");
+    }
+    Ok(())
+}

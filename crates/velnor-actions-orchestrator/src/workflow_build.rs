@@ -67,6 +67,7 @@ pub(crate) fn build_workflow_for_consumer_release(
         wire_w1::apply_checkout_lfs(&mut jobs);
     }
     let mut ir = workflow_ir(input.config, input.branch, jobs, prepared.policy);
+    check_jobs::require_history_push_branches(input.discovery, &ir.triggers.push_branches)?;
     let native = native_authority::build(input, &prepared, &mut ir.jobs)?;
     let runtime = native.runtime();
     let authority_steps = native.authority();

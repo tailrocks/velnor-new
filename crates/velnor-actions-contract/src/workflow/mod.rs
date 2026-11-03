@@ -10,6 +10,8 @@ pub mod cache_family_steps;
 pub mod cache_identity;
 pub mod cache_ids;
 pub mod cache_policy;
+mod checkout_history;
+pub use checkout_history::CheckoutHistory;
 pub mod crate_job;
 pub mod dispatch;
 pub mod execute;

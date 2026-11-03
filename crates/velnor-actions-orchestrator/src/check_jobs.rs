@@ -7,7 +7,7 @@ use velnor_actions_contract::config::{
     CheckExecutor, EPHEMERAL_CHECK_ADMISSION_CONDITION, NativeHomebrewCheck,
 };
 use velnor_actions_contract::{
-    Job, JobTimeout, NAMED_CHECK_JOB_ID_ENV, NAMED_CHECK_LANE_VARIANT_ENV, Permissions, Step,
+    CheckoutHistory, Job, JobTimeout, NAMED_CHECK_JOB_ID_ENV, NAMED_CHECK_LANE_VARIANT_ENV, Permissions, Step,
     WorkflowPolicy,
 };
 use velnor_actions_mise::{DiscoveredCheck, ToolCatalog};
@@ -68,6 +68,23 @@ pub(crate) fn build_check_jobs(
     Ok(jobs)
 }
 
+pub(crate) fn require_history_push_branches(
+    discovery: &Discovery,
+    push_branches: &[String],
+) -> Result<(), OrchestratorError> {
+    for discovered in &discovery.mise_checks {
+        let check = &discovered.check;
+        if !check.history.permits_push_branches(push_branches) {
+            return Err(OrchestratorError::config(
+                crate::config::CONFIG_REL,
+                format!("checks.{}.history", check.id),
+                "shallow_on_push_requires_push_branch_main",
+            ));
+        }
+    }
+    Ok(())
+}
+
 fn native_check_job(
     check: &NativeHomebrewCheck,
     job_id: &str,
@@ -94,7 +111,7 @@ fn native_check_job(
         vec![velnor_actions_mise::PinnedTool::Gh],
         false,
     )?;
-    let mut steps = vec![crate::workflow::wire_w1::checkout_step_full()?];
+    let mut steps = vec![crate::workflow::wire_w1::checkout_step_for(CheckoutHistory::Full)?];
     steps.extend(acquire);
     steps.push(crate::matrix_step::download_plan_step()?);
     steps.push(prepare_gh);
@@ -131,7 +148,7 @@ fn check_job(
     helper_version: &str,
 ) -> Result<Job, OrchestratorError> {
     let check = &discovered.check;
-    let mut steps = vec![crate::workflow::wire_w1::checkout_step_full()?];
+    let mut steps = vec![crate::workflow::wire_w1::checkout_step_for(check.history)?];
     steps.extend(acquire);
     steps.push(crate::matrix_step::download_plan_step()?);
     steps.push(execute_check_step(discovered, catalog, helper_version)?);

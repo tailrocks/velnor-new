@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::RenderError;
+use velnor_actions_contract::CheckoutHistory;
 
 pub(crate) fn check_name_content(name: &str) -> Result<(), RenderError> {
     if name.contains("${{") {
@@ -271,7 +272,10 @@ pub(crate) fn check_with_action_value(
     key: &str,
     value: &str,
 ) -> Result<(), RenderError> {
-    if uses.starts_with("actions/checkout@") && key == "ref" && value == "${{ github.sha }}" {
+    if uses.starts_with("actions/checkout@")
+        && ((key == "ref" && value == "${{ github.sha }}")
+            || (key == "fetch-depth" && CheckoutHistory::parse_fetch_depth(value).is_some()))
+    {
         return Ok(());
     }
     check_with_value(key, value)
