@@ -48,8 +48,7 @@ pub fn matches_glob(pattern: &str, path: &str) -> bool {
         .any(|expanded| match_segments(&expanded.split('/').collect::<Vec<_>>(), &segments))
 }
 
-#[must_use]
-pub fn expand_braces(pattern: &str) -> Vec<String> {
+fn expand_braces(pattern: &str) -> Vec<String> {
     let Some(open) = pattern.find('{') else {
         return vec![pattern.to_owned()];
     };

@@ -9,7 +9,8 @@ use velnor_actions_contract::config::project_tool_refs::{
     is_declaration_source, is_project_tool_lock,
 };
 use velnor_actions_contract::{
-    NON_INPUTS_FIELD, VelnorConfig, glob_may_overlap, glob_may_reach_tree, matches_glob,
+    NON_INPUTS_FIELD, NonInputs, VelnorConfig, glob_may_overlap, non_input_covers,
+    non_input_may_overlap, non_input_may_reach_tree,
 };
 use velnor_actions_mise::GitRequest;
 use velnor_actions_rust::{SelectionBroadening, is_known_toolfile, selection_broadening};
@@ -19,7 +20,7 @@ use crate::config::CONFIG_REL;
 use crate::discover::Discovery;
 use crate::git_paths::split_nul_paths;
 use crate::select_affected::Ownership;
-use crate::select_reads::read_target_paths;
+use crate::select_reads::{UnverifiedKind, read_summary};
 use crate::select_symlinks::tracked_links;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -52,8 +53,10 @@ impl Overlap {
 struct Claims<'a> {
     tracked: BTreeSet<String>,
     ownership: Ownership<'a>,
+    rule_globs: Vec<String>,
     declared: Vec<String>,
     read_targets: BTreeSet<String>,
+    unverified: BTreeSet<(String, UnverifiedKind)>,
     linked: Vec<LinkedPath>,
 }
 
@@ -78,6 +81,9 @@ pub(crate) fn validate(
             format!("non_input_scan_failed:{problem}"),
         )
     })?;
+    if claims.ownership.owner_dirs().any(str::is_empty) {
+        return Err(unsupported("root_package"));
+    }
     for glob in non_inputs.globs() {
         if let Some(kind) = claims.overlap(glob) {
             return Err(OrchestratorError::config(
@@ -87,7 +93,28 @@ pub(crate) fn validate(
             ));
         }
     }
+    if let Some((package, kind)) = claims.unverified.first() {
+        return Err(unsupported(&format!("{}:{package}", kind.token())));
+    }
+    if let Some(check) = config
+        .checks
+        .iter()
+        .find(|check| !claims.is_rust_input(&check.inputs))
+    {
+        return Err(unsupported(&format!("non_rust_check:{}", check.id)));
+    }
+    if let Some(path) = claims.case_conflation(non_inputs) {
+        return Err(unsupported(&format!("case_conflation:{path}")));
+    }
     Ok(())
+}
+
+fn unsupported(reason: &str) -> OrchestratorError {
+    OrchestratorError::config(
+        CONFIG_REL,
+        NON_INPUTS_FIELD,
+        format!("non_inputs_unsupported:{reason}"),
+    )
 }
 
 impl<'a> Claims<'a> {
@@ -104,14 +131,15 @@ impl<'a> Claims<'a> {
             .map_err(|err| err.to_string())?;
         let tracked: BTreeSet<String> = split_nul_paths(&output.stdout)?;
         let ownership = Ownership::new(discovery);
-        let mut declared: Vec<String> = discovery
+        let rule_globs: Vec<String> = discovery
             .affected
             .rules
             .iter()
             .flat_map(|rule| rule.globs.iter().cloned())
             .collect();
+        let mut declared = rule_globs.clone();
         declared.extend(config.checks.iter().flat_map(|check| check.inputs.clone()));
-        let read_targets = read_target_paths(root, &ownership)?;
+        let reads = read_summary(root, &ownership)?;
         let mut linked = Vec::new();
         for outcome in tracked_links(root)? {
             match outcome {
@@ -135,8 +163,10 @@ impl<'a> Claims<'a> {
         Ok(Self {
             tracked,
             ownership,
+            rule_globs,
             declared,
-            read_targets,
+            read_targets: reads.targets,
+            unverified: reads.unverified,
             linked,
         })
     }
@@ -145,29 +175,32 @@ impl<'a> Claims<'a> {
         let tracked_hit = |claim: &dyn Fn(&str) -> bool| {
             self.tracked
                 .iter()
-                .any(|file| matches_glob(glob, file) && claim(file))
+                .any(|file| non_input_covers(glob, file) && claim(file))
         };
         let reaches = |path: &str, tree: bool| {
-            matches_glob(glob, path)
+            non_input_covers(glob, path)
                 || (tree
                     && tracked_hit(&|file| {
-                        path.is_empty() || file.strip_prefix(path).is_some_and(|rest| rest.starts_with('/'))
+                        path.is_empty()
+                            || file
+                                .strip_prefix(path)
+                                .is_some_and(|rest| rest.starts_with('/'))
                     }))
         };
-        if glob_may_reach_tree(glob, ".github") {
+        if non_input_may_reach_tree(glob, ".github") {
             Some(Overlap::Github)
-        } else if glob_may_reach_tree(glob, ".velnor") {
+        } else if non_input_may_reach_tree(glob, ".velnor") {
             Some(Overlap::Velnor)
         } else if self
             .ownership
             .owner_dirs()
-            .any(|dir| glob_may_reach_tree(glob, dir))
+            .any(|dir| non_input_may_reach_tree(glob, dir))
         {
             Some(Overlap::PackageDir)
         } else if self
             .declared
             .iter()
-            .any(|declared| glob_may_overlap(glob, declared))
+            .any(|declared| non_input_may_overlap(glob, declared))
         {
             Some(Overlap::DeclaredInput)
         } else if self.read_targets.iter().any(|target| reaches(target, true)) {
@@ -189,5 +222,24 @@ impl<'a> Claims<'a> {
         } else {
             None
         }
+    }
+
+    fn is_rust_input(&self, inputs: &[String]) -> bool {
+        inputs.iter().any(|input| {
+            self.ownership
+                .owner_dirs()
+                .any(|dir| glob_may_overlap(input, &format!("{dir}/**")))
+                || self
+                    .rule_globs
+                    .iter()
+                    .any(|rule| glob_may_overlap(input, rule))
+        })
+    }
+
+    fn case_conflation(&self, non_inputs: &NonInputs) -> Option<&str> {
+        self.tracked
+            .iter()
+            .find(|path| non_inputs.contains(path) != non_inputs.contains_ignoring_case(path))
+            .map(String::as_str)
     }
 }

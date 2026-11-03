@@ -38,17 +38,46 @@ pub(crate) fn forced_packages(
     Ok(forced)
 }
 
-pub(crate) fn read_target_paths(
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub(crate) enum UnverifiedKind {
+    Unbounded,
+    Outside,
+}
+
+impl UnverifiedKind {
+    pub(crate) const fn token(self) -> &'static str {
+        match self {
+            Self::Unbounded => "unbounded_read",
+            Self::Outside => "outside_read",
+        }
+    }
+}
+
+#[derive(Debug, Default)]
+pub(crate) struct ReadSummary {
+    pub(crate) targets: BTreeSet<String>,
+    pub(crate) unverified: BTreeSet<(String, UnverifiedKind)>,
+}
+
+pub(crate) fn read_summary(
     root: &Path,
     ownership: &Ownership<'_>,
-) -> Result<BTreeSet<String>, String> {
-    Ok(source_reads(root, ownership)?
-        .into_iter()
-        .filter_map(|(_, read)| match read.target {
-            ReadTarget::Path(path) => Some(path),
-            ReadTarget::Outside | ReadTarget::Unbounded(_) => None,
-        })
-        .collect())
+) -> Result<ReadSummary, String> {
+    let mut summary = ReadSummary::default();
+    for (id, read) in source_reads(root, ownership)? {
+        let kind = match read.target {
+            ReadTarget::Path(path) => {
+                summary.targets.insert(path);
+                continue;
+            }
+            ReadTarget::Outside => UnverifiedKind::Outside,
+            ReadTarget::Unbounded(_) => UnverifiedKind::Unbounded,
+        };
+        if !ownership.declares_complete_inputs(&id) {
+            summary.unverified.insert((ownership.name_of(&id), kind));
+        }
+    }
+    Ok(summary)
 }
 
 pub(crate) fn forced_warnings(ownership: &Ownership<'_>, forced: &Forced) -> Vec<String> {

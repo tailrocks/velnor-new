@@ -156,7 +156,8 @@ pub use runs_on::{
 };
 pub use rust_inputs::RustInputRule;
 pub use rust_non_inputs::{
-    NON_INPUTS_FIELD, NonInputs, glob_may_reach_tree, is_sparse_checkout_exclusion,
+    NON_INPUTS_FIELD, NonInputs, is_sparse_checkout_exclusion, non_input_covers,
+    non_input_may_overlap, non_input_may_reach_tree,
 };
 pub use rust_suites::{
     DEFAULT_SUITE_PARTITIONS, DEFAULT_SUITE_RETENTION_DAYS, DEFAULT_SUITE_TIMEOUT_MINUTES,
