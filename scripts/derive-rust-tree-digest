@@ -8,20 +8,42 @@ set -eu
 PATH=/usr/bin:/bin:/usr/sbin:/sbin
 export PATH
 
-if [ "${1-}" != "--velnor-clean-reexec" ]; then
-  exec /usr/bin/env -i LC_ALL=C \
-    ${HOME+HOME="$HOME"} ${RUNNER_TEMP+RUNNER_TEMP="$RUNNER_TEMP"} \
-    ${RUSTUP_HOME+RUSTUP_HOME="$RUSTUP_HOME"} ${MISE_RUSTUP_HOME+MISE_RUSTUP_HOME="$MISE_RUSTUP_HOME"} \
-    ${CARGO_HOME+CARGO_HOME="$CARGO_HOME"} ${VELNOR_TOOL_RUST+VELNOR_TOOL_RUST="$VELNOR_TOOL_RUST"} \
-    ${HTTPS_PROXY+HTTPS_PROXY="$HTTPS_PROXY"} ${https_proxy+https_proxy="$https_proxy"} \
-    ${HTTP_PROXY+HTTP_PROXY="$HTTP_PROXY"} ${http_proxy+http_proxy="$http_proxy"} \
-    ${NO_PROXY+NO_PROXY="$NO_PROXY"} ${no_proxy+no_proxy="$no_proxy"} \
-    ${ALL_PROXY+ALL_PROXY="$ALL_PROXY"} ${all_proxy+all_proxy="$all_proxy"} \
-    ${SSL_CERT_FILE+SSL_CERT_FILE="$SSL_CERT_FILE"} ${SSL_CERT_DIR+SSL_CERT_DIR="$SSL_CERT_DIR"} \
-    ${CURL_CA_BUNDLE+CURL_CA_BUNDLE="$CURL_CA_BUNDLE"} \
-    /bin/sh -- "$0" --velnor-clean-reexec "$@"
-fi
-shift
+forwarded="HOME RUNNER_TEMP RUSTUP_HOME MISE_RUSTUP_HOME CARGO_HOME VELNOR_TOOL_RUST HTTPS_PROXY https_proxy HTTP_PROXY http_proxy NO_PROXY no_proxy ALL_PROXY all_proxy SSL_CERT_FILE SSL_CERT_DIR CURL_CA_BUNDLE"
+
+env_status=0
+awk -v forwarded="$forwarded" '
+  BEGIN {
+    n = split(forwarded "  PATH PWD SHLVL _", names, " ")
+    for (i = 1; i <= n; i++) known[names[i]] = 1
+    for (name in ENVIRON) {
+      if (name == "LC_ALL") { if (ENVIRON[name] != "C") exit 1; continue }
+      if (!(name in known)) exit 1
+    }
+  }
+' || env_status=$?
+case "$env_status" in
+  0) ;;
+  1)
+    argc=$#
+    for name in $forwarded; do
+      eval "name_set=\${$name+set}"
+      if [ -n "$name_set" ]; then
+        eval "set -- \"\$@\" \"$name=\$$name\""
+      fi
+    done
+    set -- "$@" /bin/sh -- "$0"
+    while [ "$argc" -gt 0 ]; do
+      set -- "$@" "$1"
+      shift
+      argc=$((argc - 1))
+    done
+    exec /usr/bin/env -i LC_ALL=C "$@"
+    ;;
+  *)
+    printf '%s\n' "derive-rust-tree-digest: cannot inspect the environment" >&2
+    exit 1
+    ;;
+esac
 
 dist="https://static.rust-lang.org/dist"
 size_cap=4194304

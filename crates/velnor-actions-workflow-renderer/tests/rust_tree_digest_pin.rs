@@ -32,6 +32,10 @@ mod derive;
 mod derive_cli;
 
 #[cfg(test)]
+#[path = "rust_tree_digest_pin/derive_reexec.rs"]
+mod derive_reexec;
+
+#[cfg(test)]
 #[path = "rust_tree_digest_pin/hard_fail.rs"]
 mod hard_fail;
 

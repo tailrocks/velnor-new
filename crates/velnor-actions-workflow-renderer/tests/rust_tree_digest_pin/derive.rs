@@ -22,6 +22,9 @@ type Tweak<'a> = &'a dyn Fn(&Path);
 const STD_LIB: &str = "lib/rustlib/x86_64-unknown-linux-gnu/lib/libstd.rlib";
 const SELF_CONTAINED: &str = "lib/rustlib/x86_64-unknown-linux-gnu/lib/self-contained";
 const MANIFEST_IN: &str = "manifest.in";
+const TOOL: &str = "scripts/derive-rust-tree-digest";
+pub(crate) const TIMEOUT_SECONDS: &str = "60";
+pub(crate) const TIMED_OUT: i32 = 124;
 const SERVE: &str = "get() {\n  printf '%s\\n' \"$2\" >> REQUESTS_FILE\n  case \"$2\" in\n    CHANNEL_URL) cp CHANNEL_FILE \"$1\" ;;\n    TARBALL_URL) cp TARBALL_FILE \"$1\" ;;\n    *) exit 22 ;;\n  esac\n}\n";
 
 fn rustup_tree() -> Fixture {
@@ -158,7 +161,7 @@ impl Bundle {
                 "TARBALL_FILE",
                 &root.join("cargo.tar.xz").display().to_string(),
             );
-        let tool_path = root.join("scripts/derive-rust-tree-digest");
+        let tool_path = root.join(TOOL);
         fs::write(
             &tool_path,
             format!("{}{serve}{}", &tool[..start], &tool[end..]),
@@ -179,10 +182,21 @@ impl Bundle {
         self.run_derive(&["--from-manifest", VERSION, TARGET, COMPONENT], extra)
     }
 
-    fn run_derive(&self, args: &[&str], extra: &[(&str, &str)]) -> Outcome {
+    pub(crate) fn run_derive(&self, args: &[&str], extra: &[(&str, &str)]) -> Outcome {
+        self.run_at(&self.work.path().join(TOOL), args, extra)
+    }
+
+    pub(crate) fn run_relative(&self, args: &[&str], extra: &[(&str, &str)]) -> Outcome {
+        self.run_at(Path::new(TOOL), args, extra)
+    }
+
+    fn run_at(&self, program: &Path, args: &[&str], extra: &[(&str, &str)]) -> Outcome {
         let root = self.work.path();
-        let output = Command::new(root.join("scripts/derive-rust-tree-digest"))
+        let output = Command::new("/usr/bin/timeout")
+            .arg(TIMEOUT_SECONDS)
+            .arg(program)
             .args(args)
+            .current_dir(root)
             .env_clear()
             .envs(extra.iter().copied())
             .env("PATH", "/usr/bin:/bin")
