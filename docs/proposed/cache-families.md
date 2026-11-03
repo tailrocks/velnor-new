@@ -105,8 +105,12 @@ output across trust scopes.
   default-branch pushes only, outside `Required`); crate jobs restore it
   read-only and never mark a producer, export or save. `suite` is written by
   the suite job that compiled it.
-- A restore may fall back to any snapshot of the same compat (the newest
-  trusted entry), which `mbx cache import` then reuses object by object.
+- A restore may fall back to any snapshot of the same compat, but only to an
+  entry whose key the trusted A job attested (the newest such entry), which
+  `mbx cache import` then reuses object by object. The restore step carries no
+  `restore-keys`: it restores the one key the Plan job selected. The suite
+  workflow has no Plan job and no sealing job, so a `suite` job selects no
+  entry and restores nothing until it has one.
 - Two bounds apply: the stored payload (`zstd -3 --long=30` over `tar`, read
   with `wc -c`, at most 1.5 GiB, refused as `over_stored`) and the extracted
   tree (`du -sb`, at most 12 GiB, refused as `over_extracted`). Both refusals

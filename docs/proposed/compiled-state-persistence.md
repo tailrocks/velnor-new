@@ -251,10 +251,10 @@ The attestation closes that gap with the P and A split:
 - P compiles with cache read access and no `id-token` permission, packs the single file, and uploads it as one artifact with `retention-days: 1`.
 - A checks out nothing, downloads the artifact, attests the file, builds the v4 key whose payload segment is the file's SHA-256, and saves with `write-only`. After the save is sealed, A deletes the artifact by its artifact ID. If the save fails or is refused, A does not delete it, and it still expires after 1 day.
 - Artifact storage is billed separately and sits outside the cache budget. The handoff file is at most the stored ceiling (1.5 GiB per root) for at most 1 day, and it does not count against the 8e9 admission total. Placing the ceiling and 8e9 total checks in A is inferred from the split.
-- Plan selects only an attested, newest entry.
+- Plan selects only an attested, newest entry. The attested subject is a file holding the exact v4 key plus one line feed. The key's last segment is the SHA-256 of the stored file, so Plan can rebuild the subject from a cache listing and verify it before it downloads 1.5 GiB. Recover then proves that the downloaded bytes hash to the key's segment. A pre-download bound on the bytes `actions/cache` writes is not claimed (SEC-4).
 - Recover verifies the payload's SHA-256 against the key's payload segment before it runs `zstd -dc --long=30` or imports. A mismatch is a cold run.
 
-The record format for the attestation and its trust root are in the attestation unit (SEC-7), which has not landed.
+The attestation unit (SEC-7) ships the P and A split with a throwaway canary pair (`state-canary-producer` and `state-canary-seal`) because no state producer exists yet: on a protected main push whose Plan did not verify a canary, P uploads a 1 KiB file and A attests and saves it under the `canary` unit. The next push's Plan logs `velnor: state seal canary verified` and skips both jobs. The producer unit deletes the canary in the same change that adds the real P and A jobs. The signer is the workflow file that runs the jobs (`ci.yml`): the runner overwrites the workflow-level blanks of `ACTIONS_RUNTIME_TOKEN` and `ACTIONS_ID_TOKEN_REQUEST_*` for every JavaScript action step (`src/Runner.Worker/Handlers/NodeScriptActionHandler.cs`, actions/runner main, read 2026-11-04), so A needs no workflow file of its own.
 
 ## Pull-request-scoped state: last
 
