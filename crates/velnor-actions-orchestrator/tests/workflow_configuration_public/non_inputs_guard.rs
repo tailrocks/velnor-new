@@ -1,7 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::error::Error;
 use std::fs;
+use std::path::Path;
 use std::process::Output;
 
 use super::non_inputs_checkout_support::{
@@ -48,10 +50,11 @@ fn rendered_exclusion_removes_non_inputs_on_a_real_git_tree() -> TestResult {
 
 #[test]
 fn absence_guard_fails_when_a_non_input_is_present() -> TestResult {
+    let runner_temp = tempfile::tempdir()?;
     for (glob, gone, kept) in GLOBS {
         let tree = tracked_tree()?;
         let root = tree.path();
-        let present = guard_run(glob, root)?;
+        let present = guard_run(glob, root, runner_temp.path())?;
         assert!(
             !present.status.success(),
             "{glob}: guard passed with the non-input present"
@@ -69,7 +72,7 @@ fn absence_guard_fails_when_a_non_input_is_present() -> TestResult {
             );
         }
         apply_exclusion(root, &rendered_patterns(glob)?)?;
-        let absent = guard_run(glob, root)?;
+        let absent = guard_run(glob, root, runner_temp.path())?;
         assert!(
             absent.status.success(),
             "{glob}: {}",
@@ -82,7 +85,12 @@ fn absence_guard_fails_when_a_non_input_is_present() -> TestResult {
         fs::write(lookalikes.join("docsx/c.md"), "c\n")?;
         git(&["add", "-A"], lookalikes)?;
         git(&["commit", "-m", "lookalike"], lookalikes)?;
-        assert!(guard_run(glob, lookalikes)?.status.success(), "{glob}");
+        assert!(
+            guard_run(glob, lookalikes, runner_temp.path())?
+                .status
+                .success(),
+            "{glob}"
+        );
     }
     Ok(())
 }
@@ -98,12 +106,21 @@ fn assert_loud_failure(label: &str, output: &Output) {
     );
 }
 
+fn leftovers(dir: &Path) -> Result<Vec<String>, Box<dyn Error>> {
+    let mut names = Vec::new();
+    for entry in fs::read_dir(dir)? {
+        names.push(entry?.file_name().to_string_lossy().into_owned());
+    }
+    Ok(names)
+}
+
 #[test]
 fn absence_guard_fails_loudly_when_git_cannot_list_files() -> TestResult {
     let glob = "docs/**";
+    let runner_temp = tempfile::tempdir()?;
     let outside = tempfile::tempdir()?;
     let parent = outside.path().parent().ok_or("tempdir has no parent")?;
-    let not_a_repository = guard_command(glob)?
+    let not_a_repository = guard_command(glob, runner_temp.path())?
         .current_dir(outside.path())
         .env("GIT_CEILING_DIRECTORIES", parent)
         .output()?;
@@ -111,14 +128,21 @@ fn absence_guard_fails_loudly_when_git_cannot_list_files() -> TestResult {
 
     let tree = tracked_tree()?;
     let root = tree.path();
+    let present = guard_run(glob, root, runner_temp.path())?;
+    assert!(!present.status.success(), "control: non-input present");
     apply_exclusion(root, &rendered_patterns(glob)?)?;
-    let healthy = guard_run(glob, root)?;
+    let healthy = guard_run(glob, root, runner_temp.path())?;
     assert!(
         healthy.status.success(),
         "control: {}",
         String::from_utf8_lossy(&healthy.stderr)
     );
     fs::write(root.join(".git/index"), "not an index\n")?;
-    assert_loud_failure("corrupt index", &guard_run(glob, root)?);
+    assert_loud_failure("corrupt index", &guard_run(glob, root, runner_temp.path())?);
+    assert_eq!(
+        leftovers(runner_temp.path())?,
+        Vec::<String>::new(),
+        "guard leaked its path list after failing runs"
+    );
     Ok(())
 }

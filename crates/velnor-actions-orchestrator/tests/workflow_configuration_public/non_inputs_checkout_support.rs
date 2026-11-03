@@ -100,7 +100,7 @@ pub(super) fn rendered_patterns(glob: &str) -> Result<String, Box<dyn Error>> {
         .to_owned())
 }
 
-pub(super) fn guard_command(glob: &str) -> Result<Command, Box<dyn Error>> {
+pub(super) fn guard_command(glob: &str, runner_temp: &Path) -> Result<Command, Box<dyn Error>> {
     let job = rendered_rust_job(glob)?;
     let guard = job
         .steps
@@ -115,12 +115,18 @@ pub(super) fn guard_command(glob: &str) -> Result<Command, Box<dyn Error>> {
     };
     let (program, args) = run.split_first().ok_or("empty guard command")?;
     let mut command = Command::new(program);
-    command.args(args);
+    command.args(args).env("RUNNER_TEMP", runner_temp);
     Ok(command)
 }
 
-pub(super) fn guard_run(glob: &str, root: &Path) -> Result<Output, Box<dyn Error>> {
-    Ok(guard_command(glob)?.current_dir(root).output()?)
+pub(super) fn guard_run(
+    glob: &str,
+    root: &Path,
+    runner_temp: &Path,
+) -> Result<Output, Box<dyn Error>> {
+    Ok(guard_command(glob, runner_temp)?
+        .current_dir(root)
+        .output()?)
 }
 
 pub(super) fn tracked_tree() -> Result<TempDir, Box<dyn Error>> {
