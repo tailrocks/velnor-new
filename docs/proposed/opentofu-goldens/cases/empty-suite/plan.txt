@@ -20,9 +20,9 @@ Workflow to generate
     - required (10 steps)
     - required-gate (1 steps)
     - rust-empty-suite (17 steps)
-    - tools-producer-bcf8e0dd (9 steps)
-    - tools-producer-cda86b5b (8 steps)
-    - tools-producer-f74e2f66 (10 steps)
+    - tools-producer-18fa7d95 (8 steps)
+    - tools-producer-41c45df3 (10 steps)
+    - tools-producer-c69e2be0 (9 steps)
     - 1 Rust crate job
       Timeout: 5 minutes per crate job
       Obligations: Clippy -> build -> doc build -> format check

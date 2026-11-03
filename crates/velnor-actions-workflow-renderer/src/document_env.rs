@@ -27,24 +27,29 @@ pub(super) fn plan_attempt_value(
     }
 }
 
+pub(crate) fn mbx_job_env() -> BTreeMap<String, String> {
+    [
+        (MBX_GC_AUTO_ENV, MBX_GC_AUTO_VALUE),
+        (MBX_EXPORT_GROUP_ENV, MBX_EXPORT_GROUP_VALUE),
+        (MBX_SHARE_OUT_DIR_ENV, MBX_SHARE_OUT_DIR_VALUE),
+        (MBX_CC_ENV, MBX_CC_VALUE),
+        (
+            MBX_BUILD_SCRIPT_EXECUTION_ENV,
+            MBX_BUILD_SCRIPT_EXECUTION_VALUE,
+        ),
+    ]
+    .into_iter()
+    .map(|(key, value)| (key.to_owned(), value.to_owned()))
+    .collect()
+}
+
 pub(super) fn extend_job_env(
     job_env: &mut BTreeMap<String, String>,
     native_mbx: bool,
     plan_attempt: Option<&str>,
 ) {
     if native_mbx {
-        for (key, val) in [
-            (MBX_GC_AUTO_ENV, MBX_GC_AUTO_VALUE),
-            (MBX_EXPORT_GROUP_ENV, MBX_EXPORT_GROUP_VALUE),
-            (MBX_SHARE_OUT_DIR_ENV, MBX_SHARE_OUT_DIR_VALUE),
-            (MBX_CC_ENV, MBX_CC_VALUE),
-            (
-                MBX_BUILD_SCRIPT_EXECUTION_ENV,
-                MBX_BUILD_SCRIPT_EXECUTION_VALUE,
-            ),
-        ] {
-            job_env.insert(key.to_owned(), val.to_owned());
-        }
+        job_env.extend(mbx_job_env());
     }
     if let Some(value) = plan_attempt {
         job_env.insert(PLAN_ATTEMPT_ENV.to_owned(), value.to_owned());

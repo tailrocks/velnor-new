@@ -22,9 +22,10 @@ const HOME_ENVS: [&str; 2] = ["RUSTUP_HOME", "CARGO_HOME"];
 type Env = BTreeMap<String, String>;
 
 #[derive(Debug)]
-struct StepText {
-    name: String,
-    uses: Option<String>,
+pub(super) struct StepText {
+    pub(super) name: String,
+    pub(super) uses: Option<String>,
+    pub(super) run: Option<String>,
     env: Env,
     installs_rust: bool,
 }
@@ -47,7 +48,7 @@ fn indent(line: &str) -> usize {
     line.len() - line.trim_start().len()
 }
 
-fn steps_of(text: &str, label: &str) -> Result<Vec<StepText>, Box<dyn Error>> {
+pub(super) fn steps_of(text: &str, label: &str) -> Result<Vec<StepText>, Box<dyn Error>> {
     let lines: Vec<&str> = text.lines().collect();
     let Some(head) = lines
         .iter()
@@ -75,6 +76,7 @@ fn step_of(body: &[&str], field: usize, label: &str) -> Result<StepText, Box<dyn
     let mut step = StepText {
         name: String::new(),
         uses: None,
+        run: None,
         env: Env::new(),
         installs_rust: false,
     };
@@ -95,6 +97,7 @@ fn step_of(body: &[&str], field: usize, label: &str) -> Result<StepText, Box<dyn
         } else if let Some(value) = trimmed.strip_prefix("run:") {
             let scalar = run_scalar(body, at, value.trim(), label)?;
             step.installs_rust = installs_toolchain(&scalar);
+            step.run = Some(scalar);
         }
     }
     Ok(step)

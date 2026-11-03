@@ -59,6 +59,10 @@ mod ledger_cli_validator;
 mod ledger_cli_verify_script;
 #[path = "workflow_configuration_public/maintenance_features.rs"]
 mod maintenance_features;
+#[path = "workflow_configuration_public/mbx_job_env.rs"]
+mod mbx_job_env;
+#[path = "workflow_configuration_public/mbx_lineage_format.rs"]
+mod mbx_lineage_format;
 #[path = "workflow_configuration_public/native_artifacts.rs"]
 mod native_artifacts;
 #[path = "workflow_configuration_public/native_artifacts_fixture.rs"]
@@ -75,6 +79,10 @@ mod parallel_owners;
 mod release_bun_prerequisite;
 #[path = "workflow_configuration_public/report_upload.rs"]
 mod report_upload;
+#[path = "workflow_configuration_public/rust_tree_pin_jobs.rs"]
+mod rust_tree_pin_jobs;
+#[path = "workflow_configuration_public/rust_tree_pin_rendered.rs"]
+mod rust_tree_pin_rendered;
 #[path = "workflow_configuration_public/seed_ids.rs"]
 mod seed_ids;
 #[path = "workflow_configuration_public/seed_off.rs"]

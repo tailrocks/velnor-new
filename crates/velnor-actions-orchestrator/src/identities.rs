@@ -3,7 +3,7 @@
 
 use serde::{Deserialize, Serialize};
 use velnor_actions_contract::cachekey::{
-    FormatInputs, LaneInputs, ToolchainInputs, cache_format_id, lane_id, mbx_cache_generation,
+    FormatInputs, LaneInputs, ToolchainInputs, cache_format_id, lane_id, mbx_qualification_cache_generation,
     toolchain_id,
 };
 use velnor_actions_contract::{
@@ -304,7 +304,7 @@ pub(crate) fn toolchain_digest_for(
 pub(crate) fn cache_format_id_for(driver: CompileDriver, mbx_version: &str) -> String {
     let generation = match driver {
         CompileDriver::Cargo => "1".to_owned(),
-        CompileDriver::Mbx => mbx_cache_generation(mbx_version),
+        CompileDriver::Mbx => mbx_qualification_cache_generation(mbx_version),
     };
     if let Ok(id) = cache_format_id(&FormatInputs {
         adapter: driver.as_str().to_owned(),

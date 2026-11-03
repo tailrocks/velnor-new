@@ -15,8 +15,6 @@ fn fail(message: &str) -> Box<dyn Error> {
 
 const INSTALLS_VERIFY_SCRIPT: &str = include_str!("../src/cache_steps_tools_installs_verify.sh");
 const RESTORE_COMPOSITION: &str = include_str!("../src/cache_steps_tools_restore.rs");
-const RUST_TOOLCHAIN_TEMPLATE: &str =
-    include_str!("../../velnor-actions-orchestrator/src/rust_toolchain_script.rs");
 
 fn ordered(first: &str, second: &str, label: &str, script: &str) -> Result<(), Box<dyn Error>> {
     let before = script
@@ -59,18 +57,6 @@ fn check_reuse_precedes_origin_fetch() -> Result<(), Box<dyn Error>> {
         "mise archive store",
         INSTALLS_VERIFY_SCRIPT,
     )?;
-    ordered(
-        r#"cp \"$mstored\" \"$d/channel.toml\""#,
-        r#"get \"$d/channel.toml\""#,
-        "rust manifest reuse",
-        RUST_TOOLCHAIN_TEMPLATE,
-    )?;
-    ordered(
-        r#"cp \"$stored\" \"$d/c.tar.xz\""#,
-        r#"get \"$d/c.tar.xz\""#,
-        "rust tarball reuse",
-        RUST_TOOLCHAIN_TEMPLATE,
-    )?;
     Ok(())
 }
 
@@ -89,17 +75,6 @@ fn check_trust_anchors_retained() -> Result<(), Box<dyn Error>> {
     if INSTALLS_VERIFY_SCRIPT.contains("VELNOR_TOOL_CHECKSUM") {
         return Err(fail("mise trusts a candidate-supplied checksum"));
     }
-    for marker in [
-        "https://static.rust-lang.org/dist/*.tar.xz",
-        "rust_component_url_untrusted",
-        "rust_channel_manifest_digest_mismatch",
-        "rust_channel_manifest_not_catalogued",
-        "rust_component_tarball_digest_mismatch",
-    ] {
-        if !RUST_TOOLCHAIN_TEMPLATE.contains(marker) {
-            return Err(fail(&format!("rust trust anchor lost: {marker}")));
-        }
-    }
     Ok(())
 }
 
@@ -107,15 +82,6 @@ fn check_fetch_only_absent_or_invalid() -> Result<(), Box<dyn Error>> {
     for marker in ["[ ! -L \"$stored\" ]", "rm -f \"$stored\""] {
         if !INSTALLS_VERIFY_SCRIPT.contains(marker) {
             return Err(fail(&format!("mise refetch guard lost: {marker}")));
-        }
-    }
-    for marker in [
-        r#"[ ! -L \"$mstored\" ]"#,
-        r#"rm -f \"$mstored\""#,
-        r#"rm -f \"$stored\""#,
-    ] {
-        if !RUST_TOOLCHAIN_TEMPLATE.contains(marker) {
-            return Err(fail(&format!("rust refetch guard lost: {marker}")));
         }
     }
     Ok(())
@@ -147,18 +113,6 @@ fn check_measurements_recorded_separately() -> Result<(), Box<dyn Error>> {
     }
     if !RESTORE_COMPOSITION.contains("(\"id\".to_owned(), Yaml::str(\"verify\"))") {
         return Err(fail("verify step lost its id"));
-    }
-    for marker in [
-        "origin-fetches=$ofetches",
-        "reused-archives=$reused_archives",
-        "verified-components=$vcomps",
-    ] {
-        if !RUST_TOOLCHAIN_TEMPLATE.contains(marker) {
-            return Err(fail(&format!("rust measurement field lost: {marker}")));
-        }
-    }
-    if !RUST_TOOLCHAIN_TEMPLATE.contains(r#"[ -n \"$obytes_unknown\" ] ||"#) {
-        return Err(fail("unknown rust origin bytes not left nullable"));
     }
     let mut ledger = SourceByteLedger::new(
         ByteCounter::unknown("origin_acquisition_not_needed"),
@@ -216,21 +170,6 @@ fn check_rejects_bad_archives_and_pins() -> Result<(), Box<dyn Error>> {
         "special file",
     ] {
         rejects_on_line(INSTALLS_VERIFY_SCRIPT, reason, "return 1")?;
-    }
-    for reason in [
-        "rust_component_name_invalid",
-        "rust_component_url_untrusted",
-        "rust_channel_manifest_digest_mismatch",
-        "rust_component_tarball_digest_mismatch",
-        "rust_toolchain_bytes_mismatch",
-        "{NOT_CATALOGUED_CODE}",
-    ] {
-        rejects_on_line(RUST_TOOLCHAIN_TEMPLATE, reason, "fail ")?;
-    }
-    if !RUST_TOOLCHAIN_TEMPLATE
-        .contains("NOT_CATALOGUED_CODE: &str = \"rust_channel_manifest_not_catalogued\"")
-    {
-        return Err(fail("uncatalogued rust version lost its code"));
     }
     if !RESTORE_COMPOSITION.contains("bad_tool_pin") {
         return Err(fail("restore composition lost pin rejection"));

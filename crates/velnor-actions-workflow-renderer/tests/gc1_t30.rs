@@ -8,7 +8,8 @@ use std::io;
 use velnor_actions_contract::workflow::cache_family::COMPLETE_STATE_TRANSPORT_EXPR;
 use velnor_actions_contract::workflow::cache_family_mbx::{
     MBX_BUNDLE_EXPORT_CONDITION, MBX_BUNDLE_IMPORT_CONDITION, MBX_BUNDLE_KEY_EXPR,
-    MBX_BUNDLE_PATH_EXPR, MBX_BUNDLE_RESTORE_KEYS_EXPR, MBX_BUNDLE_SAVE_CONDITION,
+    MBX_BUNDLE_PATH_EXPR, MBX_BUNDLE_RESTORE_CONDITION, MBX_BUNDLE_RESTORE_KEYS_EXPR,
+    MBX_BUNDLE_SAVE_CONDITION,
 };
 use velnor_actions_contract::{Job, JobTimeout, Step, StepKind, StepRole};
 use velnor_actions_workflow_renderer::steps::{
@@ -123,6 +124,16 @@ fn setup_step(with: BTreeMap<String, String>) -> Step {
             env: BTreeMap::new(),
         },
     }
+}
+
+const PRODUCTION_IMAGE_OS: &str = "ubuntu26";
+
+fn production_state_env(command: &mut std::process::Command) -> &mut std::process::Command {
+    command
+        .env("MBX_SHARE_OUT_DIR", "1")
+        .env("MBX_BUILD_SCRIPT_EXECUTION", "0")
+        .env("MBX_CC", "0")
+        .env("ImageOS", PRODUCTION_IMAGE_OS)
 }
 
 #[path = "gc1_t30_behave.rs"]

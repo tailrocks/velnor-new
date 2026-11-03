@@ -106,9 +106,7 @@ fn cold_discover(setup: &ColdSetup) -> Result<(), Box<dyn Error>> {
     )?
     .ok_or_else(|| fail("mbx driver produced no steps"))?;
     let discover = shell_script_of(&steps[3])?;
-    let status = std::process::Command::new("sh")
-        .arg("-c")
-        .arg(&discover)
+    let status = production_state_env(std::process::Command::new("sh").arg("-c").arg(&discover))
         .env("RUNNER_TEMP", &setup.runner)
         .env("GITHUB_WORKSPACE", &setup.workspace)
         .env("GITHUB_OUTPUT", &setup.github_output)
@@ -134,7 +132,7 @@ fn cold_discover(setup: &ColdSetup) -> Result<(), Box<dyn Error>> {
 
 fn mbx_env(setup: &ColdSetup, command: &mut std::process::Command) -> Result<(), Box<dyn Error>> {
     let path = stub_path(setup)?;
-    command
+    production_state_env(command)
         .env("RUNNER_TEMP", &setup.runner)
         .env("GITHUB_WORKSPACE", &setup.workspace)
         .env("GITHUB_OUTPUT", &setup.github_output)
