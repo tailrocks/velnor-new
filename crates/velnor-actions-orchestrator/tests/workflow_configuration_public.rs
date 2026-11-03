@@ -43,6 +43,10 @@ mod bun_request_lanes;
 mod bun_routing;
 #[path = "workflow_configuration_public/bun_runtime.rs"]
 mod bun_runtime;
+#[path = "workflow_configuration_public/checkout_history.rs"]
+mod checkout_history;
+#[path = "workflow_configuration_public/checkout_history_plan.rs"]
+mod checkout_history_plan;
 #[path = "workflow_configuration_public/empty_suite.rs"]
 mod empty_suite;
 #[path = "workflow_configuration_public/feature_toggles.rs"]
