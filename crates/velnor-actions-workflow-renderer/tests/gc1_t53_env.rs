@@ -22,7 +22,7 @@ fn gc1_t53_suite_jobs_run_the_compiler_with_shared_out_dirs() -> Result<(), Box<
     let env = suite_job_env(&render_text()?)?;
     for (key, expected) in [
         ("MBX_SHARE_OUT_DIR", "1"),
-        ("MBX_BUILD_SCRIPT_EXECUTION", "1"),
+        ("MBX_BUILD_SCRIPT_EXECUTION", "0"),
         ("MBX_CC", "0"),
         ("MBX_GC_AUTO", "0"),
         ("MBX_CACHE_EXPORT_GROUP", "velnor"),

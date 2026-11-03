@@ -286,7 +286,7 @@ const PRODUCTION_IMAGE_OS: &str = "ubuntu26";
 fn production_state_env(command: &mut std::process::Command) -> &mut std::process::Command {
     command
         .env("MBX_SHARE_OUT_DIR", "1")
-        .env("MBX_BUILD_SCRIPT_EXECUTION", "1")
+        .env("MBX_BUILD_SCRIPT_EXECUTION", "0")
         .env("MBX_CC", "0")
         .env("ImageOS", PRODUCTION_IMAGE_OS)
 }

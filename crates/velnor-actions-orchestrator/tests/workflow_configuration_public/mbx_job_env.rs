@@ -124,7 +124,7 @@ fn rendered_jobs() -> Result<Vec<RenderedJob>, Box<dyn Error>> {
 }
 
 #[test]
-fn mbx_jobs_run_the_compiler_with_shared_out_dirs_and_build_script_execution()
+fn mbx_jobs_run_the_compiler_with_shared_out_dirs_and_build_script_execution_disabled()
 -> Result<(), Box<dyn Error>> {
     let jobs = rendered_jobs()?;
     let mbx_jobs: Vec<_> = jobs.iter().filter(|job| job.runs_mbx).collect();
@@ -138,7 +138,7 @@ fn mbx_jobs_run_the_compiler_with_shared_out_dirs_and_build_script_execution()
     for RenderedJob { id, env, .. } in mbx_jobs {
         for (key, expected) in [
             ("MBX_SHARE_OUT_DIR", "1"),
-            ("MBX_BUILD_SCRIPT_EXECUTION", "1"),
+            ("MBX_BUILD_SCRIPT_EXECUTION", "0"),
             ("MBX_CC", "0"),
             ("MBX_GC_AUTO", "0"),
             ("MBX_CACHE_EXPORT_GROUP", "velnor"),

@@ -18,7 +18,7 @@ struct Inputs {
 
 const BASELINE: Inputs = Inputs {
     share_out_dir: Some("1"),
-    build_script_execution: Some("1"),
+    build_script_execution: Some("0"),
     mbx_cc: Some("0"),
     image_os: Some("ubuntu26"),
     run_id: "1001",
