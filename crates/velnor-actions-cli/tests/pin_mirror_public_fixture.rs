@@ -115,6 +115,38 @@ impl Fixture {
         }
     }
 
+    pub(crate) fn git_stdout(&self, args: &[&str]) -> Result<String, Box<dyn Error>> {
+        let output = clean_command("git")
+            .args(args)
+            .current_dir(self.dir.path())
+            .output()?;
+        if output.status.success() {
+            Ok(String::from_utf8(output.stdout)?.trim().to_owned())
+        } else {
+            Err(io::Error::other(format!(
+                "git {args:?} failed: {}",
+                String::from_utf8_lossy(&output.stderr)
+            ))
+            .into())
+        }
+    }
+
+    pub(crate) fn checkout_of_head(&self, depth: Option<&str>) -> Result<Self, Box<dyn Error>> {
+        let head = self.git_stdout(&["rev-parse", "HEAD"])?;
+        let clone = Self {
+            dir: tempfile::tempdir()?,
+        };
+        clone.git(&["init", "-q", "-b", "main"])?;
+        let url = format!("file://{}", self.dir.path().display());
+        let refspec = format!("+{head}:refs/remotes/origin/main");
+        let mut fetch = vec!["fetch", "-q", "--no-tags"];
+        fetch.extend(depth);
+        fetch.extend([url.as_str(), refspec.as_str()]);
+        clone.git(&fetch)?;
+        clone.git(&["checkout", "-q", "--detach", &head])?;
+        Ok(clone)
+    }
+
     pub(crate) fn commit_all(&self) -> TestResult {
         self.git(&["init", "-b", "main"])?;
         self.git(&["add", "-A"])?;
