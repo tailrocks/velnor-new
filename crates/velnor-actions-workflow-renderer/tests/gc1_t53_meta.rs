@@ -152,14 +152,6 @@ enum Object {
     DanglingLink,
 }
 
-const OBJECTS: [Object; 5] = [
-    Object::Directory,
-    Object::LockedSubdirectory,
-    Object::Fifo,
-    Object::LinkToValid,
-    Object::DanglingLink,
-];
-
 fn plant(scene: &Scene, object: Object) -> Result<Option<PathBuf>, Box<dyn Error>> {
     let payload = scene.payload();
     let valid = scene.scratch.join("valid.tar.gz");
@@ -220,12 +212,33 @@ fn check_object(object: Object) -> Result<(), Box<dyn Error>> {
 
 #[test]
 #[cfg(unix)]
-fn gc1_t53_recover_removes_payload_objects_that_are_not_regular_files() -> Result<(), Box<dyn Error>>
-{
-    for object in OBJECTS {
-        check_object(object)?;
-    }
-    Ok(())
+fn gc1_t53_recover_removes_a_directory_payload() -> Result<(), Box<dyn Error>> {
+    check_object(Object::Directory)
+}
+
+#[test]
+#[cfg(unix)]
+fn gc1_t53_recover_removes_a_directory_payload_with_a_locked_subdirectory()
+-> Result<(), Box<dyn Error>> {
+    check_object(Object::LockedSubdirectory)
+}
+
+#[test]
+#[cfg(unix)]
+fn gc1_t53_recover_removes_a_fifo_payload() -> Result<(), Box<dyn Error>> {
+    check_object(Object::Fifo)
+}
+
+#[test]
+#[cfg(unix)]
+fn gc1_t53_recover_removes_a_symlink_payload_and_keeps_its_target() -> Result<(), Box<dyn Error>> {
+    check_object(Object::LinkToValid)
+}
+
+#[test]
+#[cfg(unix)]
+fn gc1_t53_recover_removes_a_dangling_symlink_payload() -> Result<(), Box<dyn Error>> {
+    check_object(Object::DanglingLink)
 }
 
 #[test]

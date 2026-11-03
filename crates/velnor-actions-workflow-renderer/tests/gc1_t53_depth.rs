@@ -136,12 +136,24 @@ fn gc1_t53_recover_accepts_a_member_path_at_the_depth_limit() -> Result<(), Box<
 
 #[test]
 #[cfg(unix)]
-fn gc1_t53_recover_refuses_a_member_path_one_past_the_depth_limit() -> Result<(), Box<dyn Error>> {
-    let past = DEPTH_LIMIT + 1;
-    check_refused("file", past, "d", 0o755, Bottom::File, "refused-depth")?;
+fn gc1_t53_recover_refuses_a_member_file_one_past_the_depth_limit() -> Result<(), Box<dyn Error>> {
+    check_refused(
+        "file",
+        DEPTH_LIMIT + 1,
+        "d",
+        0o755,
+        Bottom::File,
+        "refused-depth",
+    )
+}
+
+#[test]
+#[cfg(unix)]
+fn gc1_t53_recover_refuses_a_directory_chain_one_past_the_depth_limit() -> Result<(), Box<dyn Error>>
+{
     check_refused(
         "directory",
-        past,
+        DEPTH_LIMIT + 1,
         "d",
         0o755,
         Bottom::Directory,
