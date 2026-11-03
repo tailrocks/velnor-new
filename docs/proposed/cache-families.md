@@ -87,7 +87,7 @@ output across trust scopes.
   producer is `mbx cache export --group velnor --format directory` and the only
   consumer is `mbx cache import`, which moves the objects into the store and
   removes the restored directory. The recover step imports a staged directory
-  that it first screened and measured, never the downloaded `.tar.gz`, and
+  that it first screened and measured, never the downloaded `payload.tar.zst`, and
   runs the import from a working directory outside any checkout; a working
   directory inside the workspace, or any hostile, unreadable or non-regular
   payload (including file modes and links set by the cache restore), ends cold
@@ -104,9 +104,11 @@ output across trust scopes.
   the suite job that compiled it.
 - A restore may fall back to any snapshot of the same compat (the newest
   trusted entry), which `mbx cache import` then reuses object by object.
-- The size check reads the on-disk bytes of the exported directory
-  (`du -sk`), a conservative upper bound of the compressed entry. Over the
-  ceiling the export is deleted and the save refused (`over_ceiling`).
+- Two bounds apply: the stored payload (`zstd -3 --long=30` over `tar`, read
+  with `wc -c`, at most 1.5 GiB, refused as `over_stored`) and the extracted
+  tree (`du -sb`, at most 12 GiB, refused as `over_extracted`). Both refusals
+  print the measured and the ceiling bytes, and the export is deleted. Only the
+  stored bound counts against the cache quota.
   The publish step always exports fresh; it never republishes a state root that
   already exists on the runner.
 - The bundle save has its own three-minute optional-save budget; the other
@@ -115,7 +117,7 @@ output across trust scopes.
 ## Size ceilings and the budget rule
 
 Each spec carries `ceiling_bytes` (largest stored entry; a save that would
-exceed it is refused and reported as `over_ceiling`) and `retained_entries`
+exceed it is refused and reported as `over_ceiling`; the state family reports `over_stored` or `over_extracted`) and `retained_entries`
 (newest entries kept per unit; older exact keys are pruned per family by the
 `Cache prune` workflow, [decision 4](cache-decisions.md)). `worst_case_bytes(units)` multiplies them.
 A test sums the reference repository (ChainArgos: four Bun roots, two OpenTofu
@@ -131,10 +133,12 @@ and fails when it exceeds 85 % of the 10 GiB quota.
 | `python-venv` | 384 MiB | 2 | requirements file | 1 | 768 MiB | not measured; ceiling is a placeholder to revise with data |
 | `ansible-collections` | 128 MiB | 2 | collection set | 1 | 256 MiB | not measured; ceiling is a placeholder to revise with data |
 | `playwright-browsers` | 512 MiB | 2 | Playwright version | 1 | 1 GiB | 328 MB of Chromium archives (Chromium, headless shell, ffmpeg; Playwright 1.64.1) |
-| `mbx-bundle` | 384 MiB | 1 | Cargo workspace and unit | 2 (union, suite) | 768 MiB | 63.7 MiB (root workspace) and 12.8 MiB (nested runner workspace) stored, first main push after #278 (run 39575862041); the former `target` payload was 770 MiB |
+| `mbx-bundle` | 1.5 GiB stored, 12 GiB extracted | 1 | Cargo workspace and unit | 2 (union, suite) | 3 GiB stored | 63.7 MiB (root workspace) and 12.8 MiB (nested runner workspace) stored, first main push after #278 (run 39575862041); the former `target` payload was 770 MiB |
 
-The reference total with the tools allowance is about 7.63 GiB against the
-8.5 GiB budget (85 % of 10 GiB). A real Bun root that stores more than 256 MiB is
+The reference total with the tools allowance is about 9.88 GiB (the state family
+counts its 1.5 GiB stored bound twice and its 12 GiB extracted bound not at
+all), so the static 85 % sum no longer holds for a full reference repository;
+the producer admits each save against the live quota instead. A real Bun root that stores more than 256 MiB is
 refused at save time and reported, never silently truncated; the owner raises
 that ceiling with a measurement.
 
