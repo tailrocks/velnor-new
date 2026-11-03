@@ -173,4 +173,4 @@ a key step whose env is the default-branch ref plus, in a Bun leg matrix only,
 ## Remaining
 
 `tofu-providers` still saves without a size admission; the same stored-size
-check follows. Its ceiling was re-measured (see the table).
+check follows. Its ceiling was re-measured (see the table). ¶

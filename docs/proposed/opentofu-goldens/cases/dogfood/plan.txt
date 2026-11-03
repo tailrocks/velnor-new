@@ -56,7 +56,7 @@ Workflow to generate
     - check-maintenance-helpers (6 steps)
     - jactionlint (7 steps)
     - ledger-cli (15 steps)
-    - plan (15 steps)
+    - plan (16 steps)
     - required (10 steps)
     - required-gate (1 steps)
     - rust-velnor-actions-actionlint (28 steps)
@@ -78,6 +78,8 @@ Workflow to generate
     - rust-velnor-runner-github (28 steps)
     - rust-velnor-runner-host (29 steps)
     - sources-producer (11 steps)
+    - state-canary-producer (2 steps)
+    - state-canary-seal (5 steps)
     - tools-producer-2d8ab338 (8 steps)
     - tools-producer-69a47f7a (10 steps)
     - tools-producer-70705458 (7 steps)
@@ -209,7 +211,8 @@ Workflow to generate
   Clippy memory groups: 1; barriers: 0
   Cache layers: Mise tools, Cargo sources, MBX compilation objects
   Jactionlint: 2.4.0 pinned, profile default
-  Action pins: 8
+  Action pins: 9
+    - actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6
     - actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
     - actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
     - actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
