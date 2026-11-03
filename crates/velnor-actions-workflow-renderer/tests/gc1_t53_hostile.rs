@@ -4,12 +4,15 @@
 use std::path::Path;
 
 use crate::gc1_scene::Scene;
-use crate::gc1_ustar::{Archive, gzip_again, polyglot};
+use crate::gc1_ustar::{
+    Archive, long_window_frame, skippable_only, skippable_prefix, truncate_to, wrap_zstd,
+};
 
 use super::*;
 
 const SHADOW: &str = "refused-shadow";
 const UNREADABLE: &str = "payload unreadable";
+const FORMAT: &str = "refused-format";
 const MEMBER_BOUND: u32 = 100_000;
 const ZERO_TAR: u64 = 10 * 1024;
 
@@ -19,36 +22,47 @@ enum Row {
     ParentTraversal,
     SymlinkWriteThrough,
     HardLink,
-    NestedCompression,
+    NestedGzipInZstd,
+    NestedZstdInZstd,
     EmptyTar,
     ZeroTar,
     NewlineName,
     AbsoluteName,
     Fifo,
-    NotGzip,
-    Polyglot,
+    NotZstd,
+    PolyglotSkippable,
+    SkippableOnly,
+    TruncatedFrame,
+    LongWindow31,
+    OuterGzip,
     TooManyMembers,
 }
 
-const ROWS: [Row; 13] = [
+const ROWS: [Row; 18] = [
     Row::SiblingFamily,
     Row::ParentTraversal,
     Row::SymlinkWriteThrough,
     Row::HardLink,
-    Row::NestedCompression,
+    Row::NestedGzipInZstd,
+    Row::NestedZstdInZstd,
     Row::EmptyTar,
     Row::ZeroTar,
     Row::NewlineName,
     Row::AbsoluteName,
     Row::Fifo,
-    Row::NotGzip,
-    Row::Polyglot,
+    Row::NotZstd,
+    Row::PolyglotSkippable,
+    Row::SkippableOnly,
+    Row::TruncatedFrame,
+    Row::LongWindow31,
+    Row::OuterGzip,
     Row::TooManyMembers,
 ];
 
 fn token(row: Row) -> &'static str {
     match row {
-        Row::NotGzip => UNREADABLE,
+        Row::NotZstd | Row::SkippableOnly | Row::OuterGzip => FORMAT,
+        Row::TruncatedFrame | Row::LongWindow31 => UNREADABLE,
         _ => SHADOW,
     }
 }
@@ -59,16 +73,46 @@ fn absolute_target() -> String {
 
 fn build_wrapped(row: Row, scene: &Scene) -> Result<(), Box<dyn Error>> {
     let payload = scene.payload();
-    let inner = scene.scratch.join("inner.tgz");
-    let mut archive = Archive::create(&inner)?;
+    let inner = scene.scratch.join("inner");
+    let mut archive = match row {
+        Row::NestedGzipInZstd => Archive::create_gzip(&inner)?,
+        _ => Archive::create(&inner)?,
+    };
     archive.state_layout("nested")?;
     archive.finish()?;
-    if let Row::Polyglot = row {
-        let patched = scene.scratch.join("patched.tgz");
-        polyglot(&inner, &patched)?;
-        return gzip_again(&patched, &payload);
+    if let Row::PolyglotSkippable = row {
+        let patched = scene.scratch.join("patched");
+        skippable_prefix(&inner, &patched)?;
+        return wrap_zstd(&patched, &payload);
     }
-    gzip_again(&inner, &payload)
+    wrap_zstd(&inner, &payload)
+}
+
+fn build_raw(row: Row, scene: &Scene) -> Result<(), Box<dyn Error>> {
+    let payload = scene.payload();
+    match row {
+        Row::NotZstd => Ok(std::fs::write(
+            &payload,
+            b"this payload was never a zstd stream\n",
+        )?),
+        Row::SkippableOnly => skippable_only(&payload),
+        Row::LongWindow31 => long_window_frame(&payload),
+        Row::OuterGzip => {
+            let mut archive = Archive::create_gzip(&payload)?;
+            archive.state_layout("old")?;
+            archive.finish()?;
+            Ok(())
+        }
+        Row::TruncatedFrame => {
+            let whole = scene.scratch.join("whole");
+            let mut archive = Archive::create(&whole)?;
+            archive.state_layout("old")?;
+            archive.finish()?;
+            let half = usize::try_from(std::fs::metadata(&whole)?.len() / 2)?;
+            truncate_to(&whole, &payload, half)
+        }
+        _ => Err(fail("row is not a raw payload")),
+    }
 }
 
 fn build_bare(row: Row, scene: &Scene) -> Result<(), Box<dyn Error>> {
@@ -116,12 +160,15 @@ fn build_members(row: Row, scene: &Scene, outside: &Path) -> Result<(), Box<dyn 
 fn build(row: Row, scene: &Scene, outside: &Path) -> Result<(), Box<dyn Error>> {
     std::fs::create_dir_all(scene.payload().parent().ok_or_else(|| fail("no parent"))?)?;
     match row {
-        Row::NestedCompression | Row::Polyglot => build_wrapped(row, scene),
+        Row::NestedGzipInZstd | Row::NestedZstdInZstd | Row::PolyglotSkippable => {
+            build_wrapped(row, scene)
+        }
         Row::EmptyTar | Row::ZeroTar => build_bare(row, scene),
-        Row::NotGzip => Ok(std::fs::write(
-            scene.payload(),
-            b"this payload was never a gzip stream\n",
-        )?),
+        Row::NotZstd
+        | Row::SkippableOnly
+        | Row::TruncatedFrame
+        | Row::LongWindow31
+        | Row::OuterGzip => build_raw(row, scene),
         _ => build_members(row, scene, outside),
     }
 }

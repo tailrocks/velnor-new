@@ -51,11 +51,11 @@ fn gc1_t53_recover_goes_cold_in_a_read_only_transport_directory() -> Result<(), 
     let key = scene.discover()?;
     let parent = payload_dir(&scene)?;
     std::fs::create_dir_all(&parent)?;
-    std::fs::write(scene.payload(), b"never a gzip stream\n")?;
+    std::fs::write(scene.payload(), b"never a zstd stream\n")?;
     set_mode(&parent, 0o555)?;
     let before = scene.tree()?;
     let output = scene.recover(&key.exact(), &[], None)?;
-    scene.assert_cold(&output, "payload unreadable")?;
+    scene.assert_cold(&output, "refused-format")?;
     scene.assert_confined_beyond(&before, &[parent])?;
     scene.finish()
 }
@@ -94,13 +94,13 @@ fn gc1_t53_recover_stays_cold_when_the_state_root_cannot_be_purged() -> Result<(
     let key = scene.discover()?;
     let parent = payload_dir(&scene)?;
     std::fs::create_dir_all(&parent)?;
-    std::fs::write(scene.payload(), b"never a gzip stream\n")?;
+    std::fs::write(scene.payload(), b"never a zstd stream\n")?;
     let locked = scene.state_root().join("locked");
     std::fs::create_dir_all(&locked)?;
     std::fs::write(locked.join("object"), b"previous state")?;
     set_mode(&locked, 0)?;
     let output = scene.recover(&key.exact(), &[], None)?;
-    for needle in ["::warning::cache_corrupt", "payload unreadable"] {
+    for needle in ["::warning::cache_corrupt", "refused-format"] {
         if !output.contains(needle) {
             return Err(fail(&format!("recover output lost {needle}: {output}")));
         }
@@ -189,7 +189,7 @@ enum Object {
 
 fn plant(scene: &Scene, object: Object) -> Result<Option<PathBuf>, Box<dyn Error>> {
     let payload = scene.payload();
-    let valid = scene.scratch.join("valid.tar.gz");
+    let valid = scene.scratch.join("valid.tar.zst");
     match object {
         Object::Directory | Object::LockedSubdirectory => {
             let nested = payload.join("nested");
@@ -277,7 +277,7 @@ fn gc1_t53_recover_removes_a_dangling_symlink_payload() -> Result<(), Box<dyn Er
 }
 
 #[test]
-#[cfg(unix)]
+#[cfg(target_os = "linux")]
 fn gc1_t53_recover_restores_a_read_only_payload_in_a_read_only_directory()
 -> Result<(), Box<dyn Error>> {
     let scene = Scene::new("meta-read-only-twin", crate::gc1_t53::scripts()?)?;

@@ -9,9 +9,9 @@ use std::process::{Child, ChildStdin, Command, Stdio};
 const BLOCK: usize = 512;
 const ZERO_CHUNK: usize = 1024 * 1024;
 
-const GZIP_FLAGS: usize = 3;
-const GZIP_HEADER: usize = 10;
-const GZIP_COMMENT: u8 = 0x10;
+const SKIPPABLE_MAGIC: [u8; 4] = [0x50, 0x2a, 0x4d, 0x18];
+const SKIPPABLE_HEADER: usize = 8;
+const LONG_WINDOW_FRAME: [u8; 9] = [0x28, 0xb5, 0x2f, 0xfd, 0x00, 0xa8, 0x01, 0x00, 0x00];
 const USTAR_OFFSET: usize = 257;
 const NAME_FIELD: usize = 100;
 const LINK_FIELD: usize = 100;
@@ -21,7 +21,6 @@ pub(crate) struct Archive {
     child: Child,
     stdin: ChildStdin,
     plain_bytes: u64,
-    content_bytes: u64,
 }
 
 fn octal(field: &mut [u8], value: u64) {
@@ -64,27 +63,47 @@ fn header(
     Ok(block)
 }
 
+#[derive(Clone, Copy)]
+enum Codec {
+    Zstd,
+    Gzip,
+}
+
 impl Archive {
     pub(crate) fn create(out: &Path) -> Result<Self, Box<dyn Error>> {
-        let mut child = Command::new("gzip")
-            .arg("-c")
+        Self::spawn(out, Codec::Zstd)
+    }
+
+    pub(crate) fn create_gzip(out: &Path) -> Result<Self, Box<dyn Error>> {
+        Self::spawn(out, Codec::Gzip)
+    }
+
+    fn spawn(out: &Path, codec: Codec) -> Result<Self, Box<dyn Error>> {
+        let mut command = match codec {
+            Codec::Zstd => {
+                let mut command = Command::new("zstd");
+                command.args(["-3", "--long=30", "-q", "-c"]);
+                command
+            }
+            Codec::Gzip => {
+                let mut command = Command::new("gzip");
+                command.arg("-c");
+                command
+            }
+        };
+        let mut child = command
             .stdin(Stdio::piped())
             .stdout(std::fs::File::create(out)?)
             .spawn()?;
         let stdin = child
             .stdin
             .take()
-            .ok_or_else(|| std::io::Error::other("gzip stdin unavailable"))?;
+            .ok_or_else(|| std::io::Error::other("compressor stdin unavailable"))?;
         Ok(Self {
             child,
             stdin,
             plain_bytes: 0,
-            content_bytes: 0,
         })
-    }
-
-    pub(crate) fn content_bytes(&self) -> u64 {
-        self.content_bytes
     }
 
     fn put(&mut self, bytes: &[u8]) -> Result<(), Box<dyn Error>> {
@@ -146,7 +165,6 @@ impl Archive {
             0u8;
             content.len().next_multiple_of(BLOCK) - content.len()
         ])?;
-        self.content_bytes += content.len() as u64;
         Ok(())
     }
 
@@ -171,7 +189,6 @@ impl Archive {
             self.put(&chunk[..take])?;
             left -= u64::try_from(take)?;
         }
-        self.content_bytes += size;
         Ok(())
     }
 
@@ -211,33 +228,98 @@ impl Archive {
         if child.wait()?.success() {
             Ok(plain_bytes)
         } else {
-            Err(std::io::Error::other("gzip failed").into())
+            Err(std::io::Error::other("compressor failed").into())
         }
     }
 }
 
-pub(crate) fn polyglot(from: &Path, to: &Path) -> Result<(), Box<dyn Error>> {
-    let mut bytes = std::fs::read(from)?;
-    if bytes.get(GZIP_FLAGS) != Some(&0) {
-        return Err(std::io::Error::other("fixture gzip already carries header fields").into());
-    }
-    bytes[GZIP_FLAGS] = GZIP_COMMENT;
-    let mut comment = vec![b'A'; USTAR_OFFSET - GZIP_HEADER];
-    comment.extend_from_slice(b"ustar\0");
-    bytes.splice(GZIP_HEADER..GZIP_HEADER, comment);
+fn skippable_frame(data: &[u8]) -> Result<Vec<u8>, Box<dyn Error>> {
+    let mut frame = SKIPPABLE_MAGIC.to_vec();
+    frame.extend_from_slice(&u32::try_from(data.len())?.to_le_bytes());
+    frame.extend_from_slice(data);
+    Ok(frame)
+}
+
+fn ustar_bait() -> Vec<u8> {
+    let mut data = vec![b'A'; USTAR_OFFSET - SKIPPABLE_HEADER];
+    data.extend_from_slice(b"ustar\0");
+    data
+}
+
+pub(crate) fn skippable_prefix(from: &Path, to: &Path) -> Result<(), Box<dyn Error>> {
+    let mut bytes = skippable_frame(&ustar_bait())?;
+    bytes.extend(std::fs::read(from)?);
     std::fs::write(to, bytes)?;
     Ok(())
 }
 
-pub(crate) fn gzip_again(from: &Path, to: &Path) -> Result<(), Box<dyn Error>> {
-    let status = Command::new("gzip")
-        .arg("-c")
-        .arg(from)
+pub(crate) fn skippable_only(to: &Path) -> Result<(), Box<dyn Error>> {
+    std::fs::write(to, skippable_frame(&ustar_bait())?)?;
+    Ok(())
+}
+
+pub(crate) fn long_window_frame(to: &Path) -> Result<(), Box<dyn Error>> {
+    std::fs::write(to, LONG_WINDOW_FRAME)?;
+    Ok(())
+}
+
+pub(crate) fn truncate_to(from: &Path, to: &Path, keep: usize) -> Result<(), Box<dyn Error>> {
+    let bytes = std::fs::read(from)?;
+    std::fs::write(to, &bytes[..keep.min(bytes.len())])?;
+    Ok(())
+}
+
+pub(crate) fn pad_to(file: &Path, exact_len: u64) -> Result<(), Box<dyn Error>> {
+    let current = std::fs::metadata(file)?.len();
+    if current == exact_len {
+        return Ok(());
+    }
+    let room = exact_len
+        .checked_sub(current + SKIPPABLE_HEADER as u64)
+        .ok_or_else(|| std::io::Error::other("payload cannot be padded to that length"))?;
+    let frame = skippable_frame(&vec![0u8; usize::try_from(room)?])?;
+    let mut out = std::fs::OpenOptions::new().append(true).open(file)?;
+    out.write_all(&frame)?;
+    Ok(())
+}
+
+fn pipe_through(
+    program: &str,
+    args: &[&str],
+    from: &Path,
+    to: &Path,
+) -> Result<(), Box<dyn Error>> {
+    let status = Command::new(program)
+        .args(args)
+        .stdin(std::fs::File::open(from)?)
         .stdout(std::fs::File::create(to)?)
         .status()?;
     if status.success() {
         Ok(())
     } else {
-        Err(std::io::Error::other("gzip failed").into())
+        Err(std::io::Error::other(format!("{program} failed")).into())
     }
+}
+
+pub(crate) fn wrap_zstd(from: &Path, to: &Path) -> Result<(), Box<dyn Error>> {
+    pipe_through("zstd", &["-3", "--long=30", "-q", "-c"], from, to)
+}
+
+pub(crate) fn decode_zstd(payload: &Path, to: &Path) -> Result<(), Box<dyn Error>> {
+    pipe_through("zstd", &["-dc", "--long=30", "-q"], payload, to)
+}
+
+pub(crate) fn list_members(payload: &Path) -> Result<String, Box<dyn Error>> {
+    let plain = payload.with_extension("plain-list");
+    decode_zstd(payload, &plain)?;
+    let output = Command::new("tar")
+        .arg("-tf")
+        .arg("-")
+        .stdin(std::fs::File::open(&plain)?)
+        .output()?;
+    std::fs::remove_file(&plain)?;
+    if !output.status.success() {
+        return Err(std::io::Error::other("the system tar cannot list the fixture").into());
+    }
+    Ok(String::from_utf8(output.stdout)?)
 }

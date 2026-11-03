@@ -1,10 +1,20 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+#![cfg_attr(
+    not(target_os = "linux"),
+    expect(
+        dead_code,
+        reason = "the state scenes need GNU tar, du -sb and Linux zstd and run only on Linux"
+    )
+)]
+
 mod gc1_cache_service;
 mod gc1_mbx_stub;
 mod gc1_scene;
 mod gc1_scene_assert;
+#[cfg(target_os = "linux")]
+mod gc1_scene_bounded;
 mod gc1_scene_key;
 mod gc1_scene_tree;
 mod gc1_t13;
@@ -27,7 +37,11 @@ mod gc1_ustar;
 mod gc1_workflow_cases_common;
 mod gc1_workflow_cases_preserve;
 mod gc1_workflow_cases_reject;
+#[cfg(target_os = "linux")]
+mod state_v4_bounds;
 mod state_v4_key;
 mod state_v4_pack;
+#[cfg(target_os = "linux")]
+mod state_v4_packer;
 mod state_v4_restore;
 mod state_v4_snapshot;

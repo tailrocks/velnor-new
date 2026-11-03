@@ -195,7 +195,7 @@ fn skip_of(scene: &Scene, matched: &str) -> Result<(String, String), Box<dyn Err
 }
 
 #[test]
-#[cfg(unix)]
+#[cfg(target_os = "linux")]
 fn recover_sets_producer_skip_only_on_exact_snapshot() -> Result<(), Box<dyn Error>> {
     let scene = Scene::new("v4-skip", crate::gc1_t53::scripts()?)?;
     let key = scene.discover()?;

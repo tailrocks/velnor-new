@@ -2,10 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::path::Path;
-use std::process::Command;
 
-use crate::gc1_scene::{Scene, files_under};
-use crate::gc1_ustar::Archive;
+use crate::gc1_scene::Scene;
+#[cfg(target_os = "linux")]
+use crate::gc1_scene::files_under;
+use crate::gc1_ustar::{Archive, list_members};
 
 use super::*;
 
@@ -53,11 +54,7 @@ fn build(
 }
 
 fn listed(payload: &Path) -> Result<Shape, Box<dyn Error>> {
-    let output = Command::new("tar").arg("-tzf").arg(payload).output()?;
-    if !output.status.success() {
-        return Err(fail("the system tar cannot list the fixture"));
-    }
-    let text = String::from_utf8(output.stdout)?;
+    let text = list_members(payload)?;
     let mut shape = Shape {
         components: 0,
         longest: 0,
@@ -109,7 +106,7 @@ fn check_refused(
 }
 
 #[test]
-#[cfg(unix)]
+#[cfg(target_os = "linux")]
 fn gc1_t53_recover_accepts_a_member_path_at_the_depth_limit() -> Result<(), Box<dyn Error>> {
     let scene = Scene::new("depth-accepted", crate::gc1_t53::scripts()?)?;
     let key = scene.discover()?;
@@ -183,7 +180,7 @@ fn gc1_t53_recover_refuses_a_member_name_past_the_name_limit() -> Result<(), Box
 }
 
 #[test]
-#[cfg(unix)]
+#[cfg(target_os = "linux")]
 fn gc1_t53_recover_accepts_a_member_name_at_the_name_limit() -> Result<(), Box<dyn Error>> {
     let name = "n".repeat(NAME_LIMIT);
     let scene = Scene::new("depth-name-accepted", crate::gc1_t53::scripts()?)?;
