@@ -12,7 +12,7 @@ use velnor_actions_contract::workflow::cache_family_mbx::{
 };
 
 use crate::gc1_mbx_stub;
-pub(crate) use crate::gc1_scene_tree::Tree;
+pub(crate) use crate::gc1_scene_tree::{Tree, files_under};
 use crate::gc1_scene_tree::{tree_of, unlock_tree};
 
 const RECOVERY_RECORD: &str = "velnor/state-recovery.record";
@@ -48,23 +48,6 @@ pub(crate) struct Scene {
 
 pub(crate) fn fail(message: &str) -> Box<dyn Error> {
     std::io::Error::other(message.to_owned()).into()
-}
-
-pub(crate) fn files_under(root: &Path) -> Result<Vec<PathBuf>, Box<dyn Error>> {
-    let mut found = Vec::new();
-    let mut pending = vec![root.to_path_buf()];
-    while let Some(dir) = pending.pop() {
-        for entry in std::fs::read_dir(&dir)? {
-            let entry = entry?;
-            let kind = entry.file_type()?;
-            if kind.is_dir() {
-                pending.push(entry.path());
-            } else {
-                found.push(entry.path());
-            }
-        }
-    }
-    Ok(found)
 }
 
 fn drain<R: std::io::Read + Send + 'static>(
@@ -146,6 +129,16 @@ impl Scene {
         env: &[(&str, &str)],
         fsize_blocks: Option<u64>,
     ) -> Result<String, Box<dyn Error>> {
+        self.run_script_unset(script, env, &[], fsize_blocks)
+    }
+
+    fn run_script_unset(
+        &self,
+        script: &str,
+        env: &[(&str, &str)],
+        unset: &[&str],
+        fsize_blocks: Option<u64>,
+    ) -> Result<String, Box<dyn Error>> {
         let path = format!("{}:{}", self.bin.display(), std::env::var("PATH")?);
         let mut command = Command::new("sh");
         match fsize_blocks {
@@ -173,11 +166,15 @@ impl Scene {
             .env("MBX_SHARE_OUT_DIR", "1")
             .env("MBX_BUILD_SCRIPT_EXECUTION", "0")
             .env("MBX_CC", "0")
+            .env("SOURCE_DATE_EPOCH", "0")
             .env("ImageOS", "ubuntu26")
             .env("MBX_CACHE_EXPORT_GROUP", "velnor")
             .env("MBX_CACHE_DIR", self.store());
         for (name, value) in env {
             command.env(name, value);
+        }
+        for name in unset {
+            command.env_remove(name);
         }
         let mut child = command
             .process_group(0)
@@ -233,7 +230,33 @@ impl Scene {
     }
 
     pub(crate) fn discover(&self) -> Result<Key, Box<dyn Error>> {
-        self.run_script(&self.scripts.discover, &[], None)?;
+        self.discover_with(&[])
+    }
+
+    pub(crate) fn discover_with(&self, env: &[(&str, &str)]) -> Result<Key, Box<dyn Error>> {
+        self.discover_unset(env, &[])
+    }
+
+    pub(crate) fn discover_outputs(
+        &self,
+        env: &[(&str, &str)],
+        unset: &[&str],
+    ) -> Result<String, Box<dyn Error>> {
+        if let Err(error) = std::fs::remove_file(&self.github_output)
+            && error.kind() != std::io::ErrorKind::NotFound
+        {
+            return Err(error.into());
+        }
+        self.run_script_unset(&self.scripts.discover, env, unset, None)?;
+        Ok(std::fs::read_to_string(&self.github_output)?)
+    }
+
+    pub(crate) fn discover_unset(
+        &self,
+        env: &[(&str, &str)],
+        unset: &[&str],
+    ) -> Result<Key, Box<dyn Error>> {
+        self.discover_outputs(env, unset)?;
         if self.output_value("provenance")? != "trusted" {
             return Err(fail("discover misclassified a trusted push"));
         }
