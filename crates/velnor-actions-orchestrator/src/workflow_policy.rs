@@ -59,7 +59,7 @@ pub(crate) fn plan_uses_rust(discovery: &Discovery, policy: WorkflowPolicy) -> b
     reason = "T31 stages event authority here; the IR builder wires it next"
 )]
 mod authority {
-    use velnor_actions_contract::{CacheMode, Concurrency, Job, PermissionLevel};
+    use velnor_actions_contract::{Concurrency, Job, PermissionLevel};
 
     use crate::OrchestratorError;
 
@@ -68,11 +68,6 @@ mod authority {
         Reader,
         TrustedWriter,
         Cleanup,
-    }
-
-    #[must_use]
-    pub fn explicit_reader_cache_mode() -> CacheMode {
-        CacheMode::explicit_read()
     }
 
     #[must_use]
@@ -92,18 +87,14 @@ mod authority {
     ) -> Result<(), OrchestratorError> {
         match authority {
             JobAuthority::Reader => {
-                if job.cache_mode.as_ref() != Some(&explicit_reader_cache_mode()) {
+                if !job.cache_access.is_read() {
                     return Err(OrchestratorError::Contract {
                         problem: format!("reader_requires_explicit_read:{id}"),
                     });
                 }
             }
             JobAuthority::TrustedWriter => {
-                if job
-                    .cache_mode
-                    .as_ref()
-                    .is_none_or(|mode| !mode.grants_write())
-                {
+                if job.cache_access.is_read() {
                     return Err(OrchestratorError::Contract {
                         problem: format!("trusted_writer_requires_cache_write:{id}"),
                     });

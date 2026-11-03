@@ -8,7 +8,7 @@ use std::fs;
 use tempfile::TempDir;
 use velnor_actions_contract::workflow::crate_job::{GROUP_READER_SUFFIX, GROUP_WRITER_SUFFIX};
 use velnor_actions_contract::{
-    CacheMode, Job, REQUIRED_JOB_ID, Step, StepId, StepKind, StepRole, TOFU_JOB_ID_PREFIX,
+    CacheAccess, Job, REQUIRED_JOB_ID, Step, StepId, StepKind, StepRole, TOFU_JOB_ID_PREFIX,
     WorkflowPolicy,
 };
 use velnor_actions_orchestrator::{EMIT_GROUP_LEDGER_OP, finalized_jobs, prepare};
@@ -190,11 +190,10 @@ fn crate_groups_render_as_one_job_each() -> Result<(), Box<dyn Error>> {
                 "{name}: {id} keeps a branch display suffix"
             );
             assert!(required.needs.contains(id), "{name}: required skips {id}");
-            assert!(
-                job.cache_mode
-                    .as_ref()
-                    .is_some_and(CacheMode::is_explicit_read),
-                "{name} {policy:?}: {id} is not literal cache-mode read"
+            assert_eq!(
+                job.cache_access,
+                CacheAccess::Read,
+                "{name} {policy:?}: {id} is not cache-mode read"
             );
             assert_eq!(
                 job.condition.as_deref(),
@@ -263,12 +262,10 @@ fn tofu_group_stays_one_literal_read_job_without_a_provider_save() -> Result<(),
     assert_eq!(tofu.len(), 1, "{:?}", jobs.keys().collect::<Vec<_>>());
     let (id, job) = tofu[0];
     assert!(!id.ends_with(GROUP_READER_SUFFIX) && !id.ends_with(GROUP_WRITER_SUFFIX));
-    assert!(
-        job.cache_mode
-            .as_ref()
-            .is_some_and(CacheMode::is_explicit_read),
-        "{id} is not literal cache-mode read: {:?}",
-        job.cache_mode
+    assert_eq!(
+        job.cache_access,
+        CacheAccess::Read,
+        "{id} is not cache-mode read"
     );
     assert!(
         job.steps

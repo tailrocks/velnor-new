@@ -5,7 +5,8 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_actions_contract::workflow::cache_family::{
     PLAN_CACHE_OUTPUTS, PLAN_CACHE_OUTPUTS_RESERVE_UTF16_BYTES, PLAN_CACHE_TRUST_OUTPUT,
-    cache_output_reserve_utf16_bytes, is_plan_cache_output, is_state_snapshot_output,
+    SOURCES_PRODUCE_OUTPUT, SOURCES_PRODUCE_STEP_EXPR, cache_output_reserve_utf16_bytes,
+    is_plan_cache_output, is_state_snapshot_output,
 };
 use velnor_actions_contract::{Job, Step, StepId, StepKind};
 
@@ -17,17 +18,19 @@ static EMPTY_ENV: std::sync::LazyLock<BTreeMap<String, String>> =
 
 pub(crate) fn consumed(jobs: &BTreeMap<String, Job>) -> Result<Vec<(String, String)>, RenderError> {
     let mut names = BTreeSet::new();
-    for step in jobs.values().flat_map(|job| &job.steps) {
-        for text in step_texts(step) {
-            let mut rest = text;
-            while let Some(at) = rest.find(NEEDS_PLAN) {
-                rest = &rest[at + NEEDS_PLAN.len()..];
-                let end = rest
-                    .find(|ch: char| !(ch.is_ascii_alphanumeric() || ch == '_'))
-                    .unwrap_or(rest.len());
-                if is_plan_cache_output(&rest[..end]) {
-                    names.insert(rest[..end].to_owned());
-                }
+    let texts = jobs.values().flat_map(|job| {
+        let steps = job.steps.iter().flat_map(step_texts);
+        job.condition.as_deref().into_iter().chain(steps)
+    });
+    for text in texts {
+        let mut rest = text;
+        while let Some(at) = rest.find(NEEDS_PLAN) {
+            rest = &rest[at + NEEDS_PLAN.len()..];
+            let end = rest
+                .find(|ch: char| !(ch.is_ascii_alphanumeric() || ch == '_'))
+                .unwrap_or(rest.len());
+            if is_plan_cache_output(&rest[..end]) {
+                names.insert(rest[..end].to_owned());
             }
         }
     }
@@ -51,7 +54,10 @@ pub(crate) fn consumed(jobs: &BTreeMap<String, Job>) -> Result<Vec<(String, Stri
         .count();
     let tofu = names
         .iter()
-        .filter(|name| !PLAN_CACHE_OUTPUTS.iter().any(|(output, _)| output == name))
+        .filter(|name| {
+            *name != SOURCES_PRODUCE_OUTPUT
+                && !PLAN_CACHE_OUTPUTS.iter().any(|(output, _)| output == name)
+        })
         .count()
         - state;
     if cache_output_reserve_utf16_bytes(tofu, state) > PLAN_CACHE_OUTPUTS_RESERVE_UTF16_BYTES {
@@ -62,11 +68,19 @@ pub(crate) fn consumed(jobs: &BTreeMap<String, Job>) -> Result<Vec<(String, Stri
     Ok(names
         .into_iter()
         .map(|name| {
-            let step_output = PLAN_CACHE_OUTPUTS
-                .iter()
-                .find(|(output, _)| *output == name)
-                .map_or_else(|| name.clone(), |(_, step)| (*step).to_owned());
-            (name, step_output)
+            let expression = if name == SOURCES_PRODUCE_OUTPUT {
+                SOURCES_PRODUCE_STEP_EXPR.to_owned()
+            } else {
+                let step_output = PLAN_CACHE_OUTPUTS
+                    .iter()
+                    .find(|(output, _)| *output == name)
+                    .map_or_else(|| name.clone(), |(_, step)| (*step).to_owned());
+                format!(
+                    "${{{{ steps.{}.outputs.{step_output} }}}}",
+                    StepId::CacheKeys.as_str()
+                )
+            };
+            (name, expression)
         })
         .collect())
 }
@@ -98,14 +112,6 @@ fn step_texts(step: &Step) -> Vec<&str> {
 pub(crate) fn output_entries(cache: &[(String, String)]) -> Vec<(String, crate::yaml::Yaml)> {
     cache
         .iter()
-        .map(|(name, step_output)| {
-            (
-                name.clone(),
-                crate::yaml::Yaml::str(format!(
-                    "${{{{ steps.{}.outputs.{step_output} }}}}",
-                    StepId::CacheKeys.as_str()
-                )),
-            )
-        })
+        .map(|(name, expression)| (name.clone(), crate::yaml::Yaml::str(expression.clone())))
         .collect()
 }

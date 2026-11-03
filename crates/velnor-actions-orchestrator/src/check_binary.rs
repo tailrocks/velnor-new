@@ -249,6 +249,7 @@ mod tests {
             system_tools: Vec::new(),
             evidence: None,
             timeout_minutes: 10,
+            history: velnor_actions_contract::CheckoutHistory::Full,
         }
     }
 

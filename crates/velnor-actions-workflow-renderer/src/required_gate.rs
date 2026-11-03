@@ -36,7 +36,7 @@ fn required_gate_job(runs_on: &str) -> Result<Job, RenderError> {
         needs: vec![FINAL_JOB_ID.to_owned()],
         condition: Some(REQUIRED_GATE_CONDITION.to_owned()),
         permissions: None,
-        cache_mode: None,
+        cache_access: velnor_actions_contract::CacheAccess::Read,
         environment: None,
         env: velnor_actions_contract::JobEnv::Unset,
         steps: vec![step],
@@ -55,7 +55,7 @@ pub(crate) fn required_gate_job_yaml(runs_on: &str) -> Result<(String, Yaml), Re
         needs: Vec::new(),
         condition: Some(REQUIRED_CONDITION.to_owned()),
         permissions: None,
-        cache_mode: None,
+        cache_access: velnor_actions_contract::CacheAccess::Read,
         environment: None,
         env: velnor_actions_contract::JobEnv::Unset,
         steps: Vec::new(),
@@ -67,7 +67,7 @@ pub(crate) fn required_gate_job_yaml(runs_on: &str) -> Result<(String, Yaml), Re
     check_required_gate(&jobs)?;
     if job.check_runner.is_some()
         || job.permissions.is_some()
-        || job.cache_mode.is_some()
+        || !job.cache_access.is_read()
         || job.environment.is_some()
         || !job.services.is_empty()
     {
@@ -133,7 +133,7 @@ pub(crate) fn check_required_gate(jobs: &BTreeMap<String, Job>) -> Result<(), Re
     }
     if gate.check_runner.is_some()
         || gate.permissions.is_some()
-        || gate.cache_mode.is_some()
+        || !gate.cache_access.is_read()
         || gate.environment.is_some()
         || !gate.services.is_empty()
     {

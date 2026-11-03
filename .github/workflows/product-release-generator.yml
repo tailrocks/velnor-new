@@ -26,6 +26,7 @@ name: velnor-actions generator release jobs
         required: true
 permissions:
   contents: read
+cache-mode: read
 env:
   VELNOR_SOURCE_SHA: ${{ inputs.source_sha }}
   VELNOR_WORKFLOW_AUTHORITY_SHA: ${{ inputs.workflow_authority_sha }}

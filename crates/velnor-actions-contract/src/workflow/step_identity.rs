@@ -337,7 +337,6 @@ impl StepRole {
             StepId::MbxReady => Self::MbxVersionCheck,
             StepId::CacheKeys => Self::CacheKeys,
             StepId::SourcesRestore => Self::CargoSourcesRestore,
-            StepId::SourcesFetch => Self::CargoSourcesFetch,
             StepId::ToolsRestore => Self::ToolsCacheRestore,
             StepId::DepsToken => Self::PrivateTokenMint,
             StepId::MbxBundleKey => Self::MbxBundleKey,

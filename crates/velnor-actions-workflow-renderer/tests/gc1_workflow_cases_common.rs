@@ -6,7 +6,7 @@ use std::error::Error;
 use std::io;
 
 use velnor_actions_contract::{
-    CacheMode, Concurrency, DispatchInput, DispatchInputType, Job, JobTimeout, PermissionLevel,
+    CacheAccess, Concurrency, DispatchInput, DispatchInputType, Job, JobTimeout, PermissionLevel,
     Permissions, REQUIRED_CONDITION, REQUIRED_JOB_ID, ScheduleTrigger, Step, StepKind, Trigger,
     WorkflowDispatch, WorkflowIr,
 };
@@ -50,7 +50,7 @@ pub(crate) fn shell_step(name: &str) -> Step {
 
 pub(crate) fn job_with(
     display: &str,
-    cache_mode: Option<CacheMode>,
+    cache_access: CacheAccess,
     permissions: Option<Permissions>,
     needs: Vec<String>,
     condition: Option<String>,
@@ -63,7 +63,7 @@ pub(crate) fn job_with(
         needs,
         condition,
         permissions,
-        cache_mode,
+        cache_access,
         environment: None,
         services: Vec::new(),
         outputs: BTreeMap::new(),
@@ -82,27 +82,21 @@ pub(crate) fn cleanup_permissions() -> Permissions {
     }
 }
 
-pub(crate) fn mode_jobs(writer_mode: Option<CacheMode>) -> BTreeMap<String, Job> {
+pub(crate) fn mode_jobs() -> BTreeMap<String, Job> {
     BTreeMap::from([
         (
             "reader".to_owned(),
-            job_with(
-                "Reader",
-                Some(CacheMode::explicit_read()),
-                None,
-                Vec::new(),
-                None,
-            ),
+            job_with("Reader", CacheAccess::Read, None, Vec::new(), None),
         ),
         (
-            "writer".to_owned(),
-            job_with("Writer", writer_mode, None, Vec::new(), None),
+            "build".to_owned(),
+            job_with("Build", CacheAccess::Read, None, Vec::new(), None),
         ),
         (
             "cleanup".to_owned(),
             job_with(
                 "Cleanup",
-                None,
+                CacheAccess::Read,
                 Some(cleanup_permissions()),
                 Vec::new(),
                 None,
@@ -112,26 +106,25 @@ pub(crate) fn mode_jobs(writer_mode: Option<CacheMode>) -> BTreeMap<String, Job>
             REQUIRED_JOB_ID.to_owned(),
             job_with(
                 "Required",
+                CacheAccess::Read,
                 None,
-                None,
-                vec!["writer".to_owned(), "reader".to_owned()],
+                vec!["build".to_owned(), "reader".to_owned()],
                 Some(REQUIRED_CONDITION.to_owned()),
             ),
         ),
     ])
 }
 
-pub(crate) fn mode_workflow(trigger: Trigger, writer_mode: Option<CacheMode>) -> WorkflowIr {
+pub(crate) fn mode_workflow(trigger: Trigger) -> WorkflowIr {
     WorkflowIr {
         name: "CI".to_owned(),
         triggers: trigger,
         permissions: Permissions::default(),
-        cache_mode: None,
         concurrency: Concurrency {
             group: "velnor-${{ github.workflow }}-${{ github.ref }}".to_owned(),
             cancel_in_progress: "${{ github.event_name == 'pull_request' }}".to_owned(),
         },
-        jobs: mode_jobs(writer_mode),
+        jobs: mode_jobs(),
     }
 }
 
@@ -201,17 +194,17 @@ pub(crate) fn branch_jobs() -> BTreeMap<String, Job> {
     BTreeMap::from([
         (
             "download".to_owned(),
-            job_with("Download", None, None, Vec::new(), None),
+            job_with("Download", CacheAccess::Read, None, Vec::new(), None),
         ),
         (
             "image".to_owned(),
-            job_with("Image", None, None, Vec::new(), None),
+            job_with("Image", CacheAccess::Read, None, Vec::new(), None),
         ),
         (
             "join".to_owned(),
             job_with(
                 "Join",
-                None,
+                CacheAccess::Read,
                 None,
                 Vec::new(),
                 Some(REQUIRED_CONDITION.to_owned()),

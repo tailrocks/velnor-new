@@ -3,7 +3,7 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::{CacheMode, Job, Step, StepKind};
+use velnor_actions_contract::{Job, Step, StepKind};
 
 pub(crate) const DISPATCH_DENY: &str = "github.event_name != 'workflow_dispatch'";
 
@@ -11,10 +11,7 @@ pub(crate) const SAVE_DENY: &str = "false";
 
 pub(crate) fn suppress_unvalidated_cache_access(jobs: &mut BTreeMap<String, Job>) {
     for job in jobs.values_mut() {
-        let reader = job
-            .cache_mode
-            .as_ref()
-            .is_some_and(CacheMode::is_explicit_read);
+        let reader = job.cache_access.is_read();
         for step in &mut job.steps {
             if is_mise_setup_cache(step) {
                 disable_mise_cache(step);

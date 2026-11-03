@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 use velnor_actions_contract::workflow::cache_family::TOFU_PROVIDERS_PROBE_MISS_CONDITION;
 use velnor_actions_contract::workflow::crate_job::TOFU_PROVIDERS_PRODUCER_JOB_ID_PREFIX;
 use velnor_actions_contract::workflow::{
-    DEPENDENCY_SEED_JOB_CONDITION, validate_tofu_providers_producer,
+    CacheAccess, CacheWriter, validate_tofu_providers_producer,
 };
 use velnor_actions_contract::{Job, Step, StepKind, StepRole};
 use velnor_actions_tofu::TofuTaskKind;
@@ -136,9 +136,9 @@ fn build(plan: &ProviderProducerPlan<'_>) -> Result<Job, RenderError> {
         check_runner: None,
         timeout_minutes: crate::cache_save_budget::lift_to_save_budget(donor.timeout_minutes)?,
         needs: vec![crate::render::PLAN_JOB_ID.to_owned()],
-        condition: Some(DEPENDENCY_SEED_JOB_CONDITION.to_owned()),
+        condition: Some(CacheWriter::TofuProvidersProducer.condition()),
         permissions: None,
-        cache_mode: None,
+        cache_access: CacheAccess::Writer(CacheWriter::TofuProvidersProducer),
         environment: None,
         services: Vec::new(),
         outputs: BTreeMap::new(),

@@ -49,7 +49,10 @@ pub(super) fn validate_homebrew_adoption_caller(
         return Err(invalid(path, "seed_caller_path"));
     }
     let top = mapping(document, path)?;
-    if top.len() != 4
+    if top.len() != 5
+        || !top
+            .iter()
+            .any(|(key, value)| key == "cache-mode" && value == &Yaml::str("read"))
         || !top
             .iter()
             .any(|(key, value)| key == "name" && value == &Yaml::str("CI"))
