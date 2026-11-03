@@ -298,6 +298,9 @@ jobs:
       - name: Build ledger CLI
         env:
           CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+          CARGO_INCREMENTAL: "0"
+          CARGO_PROFILE_DEV_DEBUG: "0"
+          CARGO_PROFILE_DEV_STRIP: symbols
           CARGO_TARGET_DIR: ${{ runner.temp }}/velnor/ledger-cli-target
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup

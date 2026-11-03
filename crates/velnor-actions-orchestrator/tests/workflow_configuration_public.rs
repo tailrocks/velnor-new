@@ -49,6 +49,8 @@ mod empty_suite;
 mod feature_toggles;
 #[path = "workflow_configuration_public/install_profile.rs"]
 mod install_profile;
+#[path = "workflow_configuration_public/ledger_cli_build_env.rs"]
+mod ledger_cli_build_env;
 #[path = "workflow_configuration_public/ledger_cli_job.rs"]
 mod ledger_cli_job;
 #[path = "workflow_configuration_public/ledger_cli_validator.rs"]
