@@ -66,7 +66,7 @@ const GH_SHIM: &str = "#!/bin/sh\ncase \"$1 $2\" in\n\"cache list\") shift 2; ke
 
 #[test]
 #[cfg(unix)]
-fn retired_state_entries_are_all_pruned_and_current_ones_kept()
+fn retired_state_entries_of_every_schema_are_all_pruned_and_current_ones_kept()
 -> Result<(), Box<dyn std::error::Error>> {
     use std::os::unix::fs::PermissionsExt as _;
     let dir = std::env::temp_dir().join(format!("velnor-prune-retired-{}", std::process::id()));
@@ -75,7 +75,7 @@ fn retired_state_entries_are_all_pruned_and_current_ones_kept()
     let hash = |c: char| c.to_string().repeat(64);
     let (a, b, c) = (hash('a'), hash('b'), hash('c'));
     let fixture = format!(
-        "11\tvelnor-v2-state-trusted-s256-{a}-s256-{b}\n12\tvelnor-v2-state-trusted-s256-{a}-s256-{c}\n13\tvelnor-v2-state-trusted-s256-{c}-s256-{b}\n21\tvelnor-v3-state-trusted-s256-{a}-s256-{b}\n"
+        "11\tvelnor-v2-state-trusted-s256-{a}-s256-{b}\n12\tvelnor-v2-state-trusted-s256-{a}-s256-{c}\n13\tvelnor-v2-state-trusted-s256-{c}-s256-{b}\n21\tvelnor-v3-state-trusted-s256-{a}-s256-{b}\n31\tvelnor-v1-state-trusted-s256-{a}-s256-{b}\n32\tvelnor-v1-state-trusted-s256-{c}-s256-{b}\n"
     );
     std::fs::write(dir.join("fixture"), fixture)?;
     let shim = dir.join("gh");
@@ -99,8 +99,8 @@ fn retired_state_entries_are_all_pruned_and_current_ones_kept()
     deleted.sort();
     assert_eq!(
         deleted,
-        ["11", "12", "13"],
-        "retired v2 state entries must all be deleted and v3 kept"
+        ["11", "12", "13", "31", "32"],
+        "retired v1 and v2 state entries must all be deleted and v3 kept"
     );
     std::fs::remove_dir_all(&dir)?;
     Ok(())
