@@ -38,25 +38,34 @@ function readGeneratedVerifier(actionPath) {
   const quotedRun = runLines[0].trim().slice("run: ".length);
   const run = JSON.parse(quotedRun);
 
-  const getMatch = requireMatch(run, /get\(\) \{ curl [^}]*; \}/g, "generated curl get function");
-  const getFunction = getMatch[0];
-  const betweenGetAndDigest = run.slice(getMatch.index + getFunction.length,
-    requireMatch(run, /printf "%s  %s\\n" "\$want" "\$d\/channel\.toml" > "\$d\/channel\.sha256"; \$h -c "\$d\/channel\.sha256" >\/dev\/null \|\| fail "[^"]+"/g,
-      "generated channel SHA-256 gate").index);
-  assert.match(betweenGetAndDigest,
-    /^; get "\$d\/channel\.toml" "https:\/\/static\.rust-lang\.org\/dist\/channel-rust-\$v\.toml";\s*$/,
-    "generated channel SHA-256 gate must immediately follow the same channel download");
-  const digestMatch = requireMatch(run,
-    /printf "%s  %s\\n" "\$want" "\$d\/channel\.toml" > "\$d\/channel\.sha256"; \$h -c "\$d\/channel\.sha256" >\/dev\/null \|\| fail "[^"]+"/g,
-    "generated channel SHA-256 gate");
+  const envEntry = String.raw`(?:\$\{[A-Za-z_]+\+[A-Za-z_]+="\$[A-Za-z_]+"\}|'"\$\{[A-Za-z_]+\+[A-Za-z_]+="\$[A-Za-z_]+"\}"') `;
+  const evFunction = requireMatch(run,
+    new RegExp(String.raw`ev\(\) \{ \/usr\/bin\/env -i LC_ALL=C (?:${envEntry})+"\$@"; \}`, "g"),
+    "generated helper environment function")[0];
+  const getFunction = requireMatch(run, /get\(\) \{ ev curl [^}]*; \}/g, "generated curl get function")[0];
+  const channelOkFunction = requireMatch(run,
+    /channel_ok\(\) \{ printf "%s  %s\\n" "\$want" "\$d\/channel\.toml" > "\$d\/channel\.sha256"; \$h -c "\$d\/channel\.sha256" >\/dev\/null 2>&1; \}/g,
+    "generated channel SHA-256 check function")[0];
+  const digestCheck = requireMatch(run,
+    /get "\$d\/channel\.toml" "https:\/\/static\.rust-lang\.org\/dist\/channel-rust-\$v\.toml"; (channel_ok \|\| fail "[^"]+");/g,
+    "generated channel SHA-256 gate following the channel download")[1];
+  const sha256 = (text) => crypto.createHash("sha256").update(text).digest("hex");
 
   return {
     actionSha256: crypto.createHash("sha256").update(actionBytes).digest("hex"),
     actionPath,
-    digestCheck: digestMatch[0],
+    channelOkFunction,
+    digestCheck,
+    digestGateSha256: sha256(`${channelOkFunction}\n${digestCheck}`),
+    evFunction,
+    evFunctionSha256: sha256(evFunction),
     getFunction,
-    getFunctionSha256: crypto.createHash("sha256").update(getFunction).digest("hex"),
+    getFunctionSha256: sha256(getFunction),
   };
+}
+
+function outerShellQuoted(text) {
+  return `eval '${text}'`;
 }
 
 function executableVersion(executable, args) {
@@ -104,8 +113,8 @@ async function processGroupHasExited(processGroupId, timeoutMs) {
 }
 
 async function runCase({
-  area, caPath, deadlineAt, digestCheck, expectTimeout = false, getFunction,
-  mode, name, timeoutMs = null, trustCertificate,
+  area, caPath, channelOkFunction, deadlineAt, digestCheck, evFunction, expectTimeout = false,
+  getFunction, mode, name, timeoutMs = null, trustCertificate,
 }) {
   const liveSockets = new Set();
   const upstreamSockets = new Set();
@@ -182,11 +191,13 @@ async function runCase({
     const requestUrl = `https://localhost:${tcpProxy.address().port}/channel.toml`;
     const shellScript = [
       "set -euo pipefail",
-      getFunction,
+      outerShellQuoted(evFunction),
+      outerShellQuoted(getFunction),
       'out="$1"; url="$2"; want="$3"; d="$4"; v=fixture; fail() { printf "%s\\n" "$1" >&2; return 1; }',
       'if command -v sha256sum >/dev/null 2>&1; then h=sha256sum; else h="shasum -a 256"; fi',
+      outerShellQuoted(channelOkFunction),
       'get "$out" "$url"',
-      digestCheck,
+      outerShellQuoted(digestCheck),
     ].join("\n");
     const env = {
       CURL_HOME: area,
@@ -373,7 +384,8 @@ async function main() {
       action_path: generated.actionPath,
       action_sha256: generated.actionSha256,
       curl: curlVersion,
-      digest_gate_sha256: crypto.createHash("sha256").update(generated.digestCheck).digest("hex"),
+      digest_gate_sha256: generated.digestGateSha256,
+      ev_function_sha256: generated.evFunctionSha256,
       fixture_sha256: fixtureSha256,
       get_function_sha256: generated.getFunctionSha256,
       bun: Bun.version,

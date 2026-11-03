@@ -79,7 +79,7 @@ pub fn render_freshness_workflow(spec: &FreshnessSpec) -> Result<RenderedFile, R
             "--no-env".to_owned(),
             "--no-hooks".to_owned(),
             "install".to_owned(),
-            format!("rust@{}", spec.rust_version),
+            velnor_actions_mise::rust_install_spec(&spec.rust_version),
         ],
         homes.clone(),
     )?;

@@ -49,6 +49,8 @@ pub(crate) fn runtime_prelude_action_uses(runs_on: &str) -> Option<&'static str>
     runtime_prelude::action_uses(runs_on)
 }
 
+const RUST_CHANNEL_MANIFEST_FORM: &str = "channel-bytes-v1";
+
 #[derive(Debug, Clone, Copy)]
 pub struct ToolsCacheInputs<'a> {
     pub runs_on: &'a str,
@@ -255,6 +257,8 @@ fn identity_preimage(
     fields.extend(components.iter().cloned());
     fields.push("paths".to_owned());
     fields.extend(paths.iter().cloned());
+    fields.push("rust-channel-manifest-form".to_owned());
+    fields.push(RUST_CHANNEL_MANIFEST_FORM.to_owned());
     let mut preimage = String::new();
     for field in fields {
         preimage.push_str(&field.len().to_string());

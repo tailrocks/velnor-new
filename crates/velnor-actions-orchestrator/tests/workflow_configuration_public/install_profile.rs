@@ -30,7 +30,7 @@ fn rust_token(token: &str) -> bool {
     token.starts_with("rust@") || token.starts_with("rust[")
 }
 
-pub(super) fn rust_install_profile(job: &Job) -> Option<String> {
+fn rust_install_profile(job: &Job) -> Option<String> {
     prepare_tokens(job)
         .into_iter()
         .filter(|token| rust_token(token))
