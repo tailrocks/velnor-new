@@ -187,21 +187,21 @@ executor = "hosted"
 [[qualified_tools]]
 id = "cargo-nextest"
 backend = { kind = "aqua", package = "nextest-rs/nextest/cargo-nextest" }
-version = "0.9.150"
+version = "0.9.151"
 options = { kind = "default" }
 depends_on = ["rust"]
 [[qualified_tools.platforms]]
 platform = "linux_x64"
 artifacts = [
-  { url = "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.150/cargo-nextest-0.9.150-x86_64-unknown-linux-gnu.tar.gz", sha256 = "b0959bc64232974224cf9fb22c915845398c0e8668fa7831eb5b43fb1eef781f" },
+  { url = "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.151/cargo-nextest-0.9.151-x86_64-unknown-linux-gnu.tar.gz", sha256 = "1d4ce302b820c41f4b89c5fb9bce45f0f0c94882c1cf08fc360caf08be6e7df4" },
 ]
 dependency_artifacts = []
-install_tree_sha256 = "3f62f104025b5bbdb1bc2f8d6bba90c03b3fcedc85b6fc3ce1ec06d48e926ed2"
+install_tree_sha256 = "95db46f8610586abf450013b4f4afd869e86f4bf4fcf713fc3e85eabeab1bedc"
 [[qualified_tools.platforms.executables]]
 name = "cargo-nextest"
 path = "cargo-nextest"
-sha256 = "62dcc4348e189f5fbd5881f6b753c59d62f2e664b28c6357898644288d703c02"
-probe = { kind = "cargo_nextest_version", expected = "cargo-nextest 0.9.150 (d225b1daf 2026-10-26)" }
+sha256 = "f746a548e01a5ec9f50d209ff3188fbf934a4969bddb1cd84a17af087912219b"
+probe = { kind = "cargo_nextest_version", expected = "cargo-nextest 0.9.151 (6b3f99457 2026-11-02)" }
 
 [[qualified_tools]]
 id = "rust"

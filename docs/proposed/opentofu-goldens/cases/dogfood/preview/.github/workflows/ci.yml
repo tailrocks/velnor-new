@@ -88,7 +88,7 @@ jobs:
       - *s1
       - &s2
         name: Setup Mise
-        uses: jdx/mise-action@6612f0ef07ed2a736cd1e00a94a065522dd41195
+        uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
           cache: "false"
           cache_save: "false"
@@ -101,7 +101,7 @@ jobs:
         id: v2
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: f30e7036a32403e287645f3fc9f310257597ee59de3ba1c06856fdfe7ccd6b0e
+          d: 7070545845debcfe0b655060af212a1ce43656449867a9d89aa9db8e9e5dd895
       - &s4
         name: Restore Mise tools
         id: tools-restore
@@ -126,7 +126,7 @@ jobs:
         id: v2
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: 2d27f744bc37817008486f1e92a6f907a3ab3a07f3621a40d5503c20c490a769
+          d: f00f54f8470308497502e7c6a108b48fba8504a919755dc8ffd4fc273e667bbb
       - *s4
       - name: Prepare pinned tools
         run: &r1 mise --no-config --no-env --no-hooks install 'http:cargo-machete[url=https://github.com/bnjbvr/cargo-machete/releases/download/v0.9.2/cargo-machete-v0.9.2-x86_64-unknown-linux-musl.tar.gz,checksum=sha256:48200087f54c55aabcd4db4af1e25742b49846c02a1b1bfa134711945b35b2e9]@0.9.2'
@@ -153,7 +153,7 @@ jobs:
           fetch-depth: "0"
           persist-credentials: "false"
       - name: Setup Mise
-        uses: jdx/mise-action@6612f0ef07ed2a736cd1e00a94a065522dd41195
+        uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
           cache: "false"
           cache_save: "false"
@@ -218,7 +218,7 @@ jobs:
         id: v2
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: f43493252a94755749b784008755f84133ec1fa8b8ec3e98ccef2f9aa4853d9a-${{ env.VELNOR_TOOL_JACTIONLINT }}-${{ env.VELNOR_TOOL_JACTIONLINT_LOCK }}-${{ env.VELNOR_TOOL_SHELLCHECK }}-${{ env.VELNOR_TOOL_SHELLCHECK_LOCK }}
+          d: 2d8ab338033af8bc09a7a26dd858d38bfe57ce09ab751bfa5f1504a9705a889d-${{ env.VELNOR_TOOL_JACTIONLINT }}-${{ env.VELNOR_TOOL_JACTIONLINT_LOCK }}-${{ env.VELNOR_TOOL_SHELLCHECK }}-${{ env.VELNOR_TOOL_SHELLCHECK_LOCK }}
       - *s4
       - name: Prepare pinned tools
         run: &r3 "mise --no-config --no-env --no-hooks install 'jactionlint@'\"${VELNOR_TOOL_JACTIONLINT}\" 'shellcheck@'\"${VELNOR_TOOL_SHELLCHECK}\""
@@ -257,7 +257,7 @@ jobs:
         id: v2
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: 994b09928afe576701b2d65fa1839a14e328fd175d8d21da1bf79dc1fa42c942-${{ env.VELNOR_TOOL_RUST }}-${{ env.VELNOR_TOOL_RUST_LOCK }}
+          d: e3a3419bd6c2ea89ce4a76d51f9969123c7fbc4044461f5643f94183904fdd47-${{ env.VELNOR_TOOL_RUST }}-${{ env.VELNOR_TOOL_RUST_LOCK }}
       - *s4
       - *s7
       - &s14
@@ -573,7 +573,7 @@ jobs:
         id: v2
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: 438eb26a4a480acfae528c68eefa99a3850beec45527d6caff94fc67fcf758ed-${{ env.VELNOR_TOOL_MR_BOXINGTON }}-${{ env.VELNOR_TOOL_MR_BOXINGTON_LOCK }}-${{ env.VELNOR_TOOL_NEXTEST }}-${{ env.VELNOR_TOOL_NEXTEST_LOCK }}-${{ env.VELNOR_TOOL_RUST }}-${{ env.VELNOR_TOOL_RUST_LOCK }}
+          d: f2006033d65c04359260cec7efb6734e9f877de90fc14555ecec48210ffdefc6-${{ env.VELNOR_TOOL_MR_BOXINGTON }}-${{ env.VELNOR_TOOL_MR_BOXINGTON_LOCK }}-${{ env.VELNOR_TOOL_NEXTEST }}-${{ env.VELNOR_TOOL_NEXTEST_LOCK }}-${{ env.VELNOR_TOOL_RUST }}-${{ env.VELNOR_TOOL_RUST_LOCK }}
       - *s4
       - *s7
       - *s8
@@ -637,7 +637,7 @@ jobs:
         name: Recover state snapshot
         if: steps.mbx-bundle-restore.outputs.cache-matched-key != ''
         env: *m23
-        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; case \"$RUNNER_TEMP\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''RUNNER_TEMP must be absolute'\\'' >&2; exit 1 ;; esac; payload=\"$RUNNER_TEMP/velnor-gc1/transport/state/payload.tar.gz\"; root=\"$RUNNER_TEMP/velnor-gc1/state\"; base=\"state\"; record=\"$RUNNER_TEMP/velnor/state-discovery.record\"; expected=\"${{steps.mbx-bundle-key.outputs.key}}\"; matched=\"${{steps.mbx-bundle-restore.outputs.cache-matched-key}}\"; d=\"$RUNNER_TEMP/velnor/state-recover\"; stage=\"$RUNNER_TEMP/velnor/state-stage\"; plain=\"$d/plain.tar\"; unlock() { chmod -R u+rwX \"$stage\" 2>/dev/null || :; }; unlock; rm -rf \"$d\" \"$stage\"; mkdir -p \"$d\"; s256() { sha256sum \"$1\" > \"$d/sum\"; h=; rest=; read -r h rest < \"$d/sum\" || [ -n \"$h\" ]; case \"$h\" in '\\'''\\''|*[!0-9a-f]*) printf '\\''%s\\n'\\'' '\\''sha256sum returned no digest'\\'' >&2; exit 1 ;; esac; [ \"${#h}\" -eq 64 ] || exit 1; }; cold() { printf '\\''%s\\n'\\'' \"velnor: state snapshot no_entry ($1)\"; exit 0; }; corrupt() { printf '\\''%s\\n'\\'' \"::warning::cache_corrupt: state snapshot $1; building cold\"; unlock; rm -rf \"$root\" \"$stage\"; rm -f \"$payload\" \"$plain\"; exit 0; }; refused() { printf '\\''%s\\n'\\'' \"::warning::cache_corrupt: state snapshot refused ($1); building cold\"; unlock; rm -rf \"$root\" \"$stage\"; rm -f \"$payload\" \"$plain\"; exit 0; }; if [ ! -f \"$payload\" ] || [ -L \"$payload\" ]; then cold no_entry; fi; if [ ! -s \"$payload\" ]; then printf '\\''%s\\n'\\'' '\\''::warning::cache_corrupt: state payload empty; building cold'\\''; rm -f \"$payload\"; exit 0; fi; if [ -L \"$root\" ]; then printf '\\''%s\\n'\\'' '\\''::warning::cache_corrupt: state root is a symlink; building cold'\\''; exit 0; fi; if [ -z \"$matched\" ]; then cold cold-missing; fi; if [ ! -f \"$record\" ] || [ -L \"$record\" ]; then refused refused-provenance; fi; expected_prefix=\"\"; compat=\"\"; provenance=\"\"; ceiling=\"\"; rec_unit=\"\"; rec_mbx=\"\"; rec_toolchain=\"\"; rec_root=\"\"; line=; while IFS= read -r line || [ -n \"$line\" ]; do case \"$line\" in restore_prefix=*) expected_prefix=${line#restore_prefix=} ;; compat=*) compat=${line#compat=} ;; provenance=*) provenance=${line#provenance=} ;; ceiling=*) ceiling=${line#ceiling=} ;; unit=*) rec_unit=${line#unit=} ;; mbx_version=*) rec_mbx=${line#mbx_version=} ;; toolchain=*) rec_toolchain=${line#toolchain=} ;; root=*) rec_root=${line#root=} ;; esac; done < \"$record\"; case \"$ceiling\" in '\\'''\\''|*[!0-9]*) refused refused-provenance ;; esac; if [ -z \"$expected_prefix\" ] || [ -z \"$compat\" ] || [ -z \"$provenance\" ] || [ -z \"$rec_unit\" ] || [ -z \"$rec_mbx\" ] || [ -z \"$rec_toolchain\" ] || [ -z \"$rec_root\" ]; then refused refused-provenance; fi; if [ -n \"$expected\" ] && [ \"$matched\" = \"$expected\" ]; then decision=exact-hit; elif [ -n \"$matched\" ] && [ -n \"$expected_prefix\" ]; then case \"$matched\" in \"$expected_prefix\"*) decision=predecessor-fallback ;; *) refused refused-provenance ;; esac; else refused refused-provenance; fi; printf '\\''%s\\n'\\'' '\\''family=state'\\'' '\\''schema=2'\\'' '\\''$RUNNER_TEMP/velnor-gc1/state'\\'' \"unit=$rec_unit\" \"mbx=$rec_mbx\" \"toolchain=$rec_toolchain\" \"root=$rec_root\" '\\''ceiling=402653184'\\'' > \"$d/compat\"; uname -s >> \"$d/compat\"; uname -m >> \"$d/compat\"; printf '\\''%s\\n'\\'' \"MBX_SHARE_OUT_DIR=${MBX_SHARE_OUT_DIR-}\" \"MBX_BUILD_SCRIPT_EXECUTION=${MBX_BUILD_SCRIPT_EXECUTION-}\" \"MBX_CC=${MBX_CC-}\" \"ImageOS=${ImageOS-}\" >> \"$d/compat\"; s256 \"$d/compat\"; compat_now=\"s256-$h\"; if [ \"$compat_now\" != \"$compat\" ]; then corrupt \"coverage drift\"; fi; size=; size_rest=; wc -c < \"$payload\" > \"$d/size\"; read -r size size_rest < \"$d/size\" || [ -n \"$size\" ]; case \"$size\" in '\\'''\\''|*[!0-9]*) corrupt \"size unreadable\" ;; esac; if [ \"$size\" -gt 402653184 ]; then refused refused-oversize; fi; if [ -z \"${MBX_CACHE_DIR:-}\" ] || [ \"$MBX_CACHE_DIR\" != \"$RUNNER_TEMP/velnor/mbx\" ] || [ ! -d \"$MBX_CACHE_DIR/actions\" ]; then corrupt import_unavailable; fi; for tool in gzip tar head tail wc find du sort mise mbx; do command -v \"$tool\" >/dev/null 2>&1 || corrupt import_unavailable; done; if { gzip -dc \"$payload\" && : > \"$d/inflated\"; } | head -c 402653185 > \"$plain\"; then :; else corrupt \"payload unreadable\"; fi; plain_n=; plain_n_rest=; wc -c < \"$plain\" > \"$d/plain_size\"; read -r plain_n plain_n_rest < \"$d/plain_size\" || [ -n \"$plain_n\" ]; case \"$plain_n\" in '\\'''\\''|*[!0-9]*) corrupt \"payload unreadable\" ;; esac; if [ \"$plain_n\" -gt 402653184 ]; then refused refused-oversize; fi; if [ ! -f \"$d/inflated\" ]; then corrupt \"payload unreadable\"; fi; head -c 262 \"$plain\" | tail -c 5 > \"$d/magic\"; magic=; read -r magic < \"$d/magic\" || [ -n \"$magic\" ]; if [ \"$magic\" != ustar ]; then refused refused-shadow; fi; if tar -tf \"$plain\" > \"$d/members\"; then :; else corrupt \"payload unreadable\"; fi; if tar -tvf \"$plain\" > \"$d/verbose\"; then :; else corrupt \"payload unreadable\"; fi; members_n=; members_n_rest=; wc -l < \"$d/members\" > \"$d/count\"; read -r members_n members_n_rest < \"$d/count\" || [ -n \"$members_n\" ]; case \"$members_n\" in '\\'''\\''|*[!0-9]*) corrupt \"member count unreadable\" ;; esac; verbose_n=; verbose_n_rest=; wc -l < \"$d/verbose\" > \"$d/vcount\"; read -r verbose_n verbose_n_rest < \"$d/vcount\" || [ -n \"$verbose_n\" ]; case \"$verbose_n\" in '\\'''\\''|*[!0-9]*) corrupt \"member count unreadable\" ;; esac; if [ \"$members_n\" != \"$verbose_n\" ]; then refused refused-shadow; fi; if [ \"$members_n\" -gt 100000 ]; then refused refused-shadow; fi; v=; while IFS= read -r v || [ -n \"$v\" ]; do case \"$v\" in -*|d*) ;; *) refused refused-shadow ;; esac; done < \"$d/verbose\"; m=; while IFS= read -r m || [ -n \"$m\" ]; do case \"$m\" in /*|..|../*|*/..|*/../*) refused refused-shadow ;; \"$base\"|\"$base\"/*) ;; *) refused refused-shadow ;; esac; done < \"$d/members\"; mkdir -m 700 \"$stage\"; if tar -xf \"$plain\" -C \"$stage\" --no-same-owner; then :; else corrupt \"payload unreadable\"; fi; rm -f \"$plain\"; unlock; if [ -d \"$stage/$base\" ] && [ ! -L \"$stage/$base\" ]; then :; else refused refused-shadow; fi; if find \"$stage\" ! -type f ! -type d > \"$d/special\"; then :; else corrupt \"payload unreadable\"; fi; if [ -s \"$d/special\" ]; then refused refused-shadow; fi; if find \"$stage\" -type f -links +1 > \"$d/linked\"; then :; else corrupt \"payload unreadable\"; fi; if [ -s \"$d/linked\" ]; then refused refused-shadow; fi; if find \"$stage\" -mindepth 1 -maxdepth 1 ! -name \"$base\" > \"$d/beside\"; then :; else corrupt \"payload unreadable\"; fi; if [ -s \"$d/beside\" ]; then refused refused-shadow; fi; if du -sb \"$stage/$base\" > \"$d/uncompressed\"; then usize=; usize_rest=; read -r usize usize_rest < \"$d/uncompressed\" || [ -n \"$usize\" ]; case \"$usize\" in '\\'''\\''|*[!0-9]*) corrupt \"uncompressed size unreadable\" ;; esac; if [ \"$usize\" -gt 402653184 ]; then corrupt \"over ceiling\"; fi; elif du -sk \"$stage/$base\" > \"$d/uncompressed_kb\"; then usize_kb=; usize_kb_rest=; read -r usize_kb usize_kb_rest < \"$d/uncompressed_kb\" || [ -n \"$usize_kb\" ]; case \"$usize_kb\" in '\\'''\\''|*[!0-9]*) corrupt \"uncompressed size unreadable\" ;; esac; if [ \"$usize_kb\" -gt 393216 ]; then corrupt \"over ceiling\"; fi; else corrupt \"uncompressed size unreadable\"; fi; if find \"$stage/$base\" -type f > \"$d/found\"; then :; else corrupt \"payload unreadable\"; fi; sort \"$d/found\" > \"$d/files\"; if command -v sha256sum >/dev/null 2>&1; then while IFS= read -r f || [ -n \"$f\" ]; do sha256sum \"$f\"; done < \"$d/files\" > \"$d/manifest\"; else while IFS= read -r f || [ -n \"$f\" ]; do shasum -a 256 \"$f\"; done < \"$d/files\" > \"$d/manifest\"; fi; if [ ! -s \"$d/manifest\" ]; then corrupt \"empty manifest\"; fi; s256 \"$d/manifest\"; manifest=\"$h\"; s256 \"$payload\"; digest_one=\"$h\"; s256 \"$payload\"; digest_two=\"$h\"; if [ \"$digest_one\" != \"$digest_two\" ]; then corrupt \"readback mismatch\"; fi; cd \"$RUNNER_TEMP/velnor\"; if mise --no-config --no-env --no-hooks exec rust@'\"${VELNOR_TOOL_RUST}\"' -- mbx cache import \"$stage/$base\"; then :; else corrupt import_failed; fi; rm -rf \"$stage\" \"$root\"; printf '\\''%s\\n'\\'' \"decision=$decision\" \"matched=$matched\" \"manifest=$manifest\" \"payload=$digest_one\" \"size=$size\" > \"$RUNNER_TEMP/velnor/state-recovery.record\"; printf '\\''velnor: state snapshot recovered (decision=%s manifest=%s)\\n'\\'' \"$decision\" \"$manifest\"'"
+        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; case \"$RUNNER_TEMP\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''RUNNER_TEMP must be absolute'\\'' >&2; exit 1 ;; esac; payload=\"$RUNNER_TEMP/velnor-gc1/transport/state/payload.tar.gz\"; root=\"$RUNNER_TEMP/velnor-gc1/state\"; parent=\"$RUNNER_TEMP/velnor-gc1\"; base=\"state\"; record=\"$RUNNER_TEMP/velnor/state-discovery.record\"; expected=\"${{steps.mbx-bundle-key.outputs.key}}\"; matched=\"${{steps.mbx-bundle-restore.outputs.cache-matched-key}}\"; d=\"$RUNNER_TEMP/velnor/state-recover\"; rm -rf \"$d\"; mkdir -p \"$d\"; s256() { sha256sum \"$1\" > \"$d/sum\"; h=; rest=; read -r h rest < \"$d/sum\" || [ -n \"$h\" ]; case \"$h\" in '\\'''\\''|*[!0-9a-f]*) printf '\\''%s\\n'\\'' '\\''sha256sum returned no digest'\\'' >&2; exit 1 ;; esac; [ \"${#h}\" -eq 64 ] || exit 1; }; cold() { printf '\\''%s\\n'\\'' \"velnor: state snapshot no_entry ($1)\"; exit 0; }; corrupt() { printf '\\''%s\\n'\\'' \"::warning::cache_corrupt: state snapshot $1; building cold\"; rm -rf \"$root\"; rm -f \"$payload\"; exit 0; }; refused() { printf '\\''%s\\n'\\'' \"::warning::cache_corrupt: state snapshot refused ($1); building cold\"; rm -rf \"$root\"; rm -f \"$payload\"; exit 0; }; if [ ! -f \"$payload\" ] || [ -L \"$payload\" ]; then cold no_entry; fi; if [ ! -s \"$payload\" ]; then printf '\\''%s\\n'\\'' '\\''::warning::cache_corrupt: state payload empty; building cold'\\''; rm -f \"$payload\"; exit 0; fi; if [ -L \"$root\" ]; then printf '\\''%s\\n'\\'' '\\''::warning::cache_corrupt: state root is a symlink; building cold'\\''; exit 0; fi; if [ -z \"$matched\" ]; then cold cold-missing; fi; if [ ! -f \"$record\" ] || [ -L \"$record\" ]; then refused refused-provenance; fi; expected_prefix=\"\"; compat=\"\"; provenance=\"\"; ceiling=\"\"; rec_unit=\"\"; rec_mbx=\"\"; rec_toolchain=\"\"; rec_root=\"\"; line=; while IFS= read -r line || [ -n \"$line\" ]; do case \"$line\" in restore_prefix=*) expected_prefix=${line#restore_prefix=} ;; compat=*) compat=${line#compat=} ;; provenance=*) provenance=${line#provenance=} ;; ceiling=*) ceiling=${line#ceiling=} ;; unit=*) rec_unit=${line#unit=} ;; mbx_version=*) rec_mbx=${line#mbx_version=} ;; toolchain=*) rec_toolchain=${line#toolchain=} ;; root=*) rec_root=${line#root=} ;; esac; done < \"$record\"; case \"$ceiling\" in '\\'''\\''|*[!0-9]*) refused refused-provenance ;; esac; if [ -z \"$expected_prefix\" ] || [ -z \"$compat\" ] || [ -z \"$provenance\" ] || [ -z \"$rec_unit\" ] || [ -z \"$rec_mbx\" ] || [ -z \"$rec_toolchain\" ] || [ -z \"$rec_root\" ]; then refused refused-provenance; fi; if [ -n \"$expected\" ] && [ \"$matched\" = \"$expected\" ]; then decision=exact-hit; elif [ -n \"$matched\" ] && [ -n \"$expected_prefix\" ]; then case \"$matched\" in \"$expected_prefix\"*) decision=predecessor-fallback ;; *) refused refused-provenance ;; esac; else refused refused-provenance; fi; printf '\\''%s\\n'\\'' '\\''family=state'\\'' '\\''schema=2'\\'' '\\''$RUNNER_TEMP/velnor-gc1/state'\\'' \"unit=$rec_unit\" \"mbx=$rec_mbx\" \"toolchain=$rec_toolchain\" \"root=$rec_root\" '\\''ceiling=402653184'\\'' > \"$d/compat\"; uname -s >> \"$d/compat\"; uname -m >> \"$d/compat\"; printf '\\''%s\\n'\\'' \"MBX_SHARE_OUT_DIR=${MBX_SHARE_OUT_DIR-}\" \"MBX_BUILD_SCRIPT_EXECUTION=${MBX_BUILD_SCRIPT_EXECUTION-}\" \"MBX_CC=${MBX_CC-}\" \"ImageOS=${ImageOS-}\" >> \"$d/compat\"; s256 \"$d/compat\"; compat_now=\"s256-$h\"; if [ \"$compat_now\" != \"$compat\" ]; then corrupt \"coverage drift\"; fi; if tar -tzf \"$payload\" > \"$d/members\"; then :; else corrupt \"payload unreadable\"; fi; members_n=; members_rest=; wc -l < \"$d/members\" > \"$d/count\"; read -r members_n members_rest < \"$d/count\" || [ -n \"$members_n\" ]; case \"$members_n\" in '\\'''\\''|*[!0-9]*) corrupt \"member count unreadable\" ;; esac; if [ \"$members_n\" -gt 100000 ]; then refused refused-shadow; fi; m=; while IFS= read -r m || [ -n \"$m\" ]; do case \"$m\" in \"\") ;; \"$base\"|\"$base\"/*) ;; /*) refused refused-shadow ;; ..|../*|*/..|*/../*) refused refused-shadow ;; *) refused refused-shadow ;; esac; done < \"$d/members\"; if [ -z \"${MBX_CACHE_DIR:-}\" ] || [ \"$MBX_CACHE_DIR\" != \"$RUNNER_TEMP/velnor/mbx\" ] || [ ! -d \"$MBX_CACHE_DIR/actions\" ]; then corrupt import_unavailable; fi; command -v mise >/dev/null 2>&1 || corrupt import_unavailable; command -v mbx >/dev/null 2>&1 || corrupt import_unavailable; if mise --no-config --no-env --no-hooks exec rust@'\"${VELNOR_TOOL_RUST}\"' -- mbx cache import \"$payload\"; then :; else corrupt import_failed; fi; stage=\"$RUNNER_TEMP/velnor/state-stage\"; rm -rf \"$stage\"; mkdir -p \"$stage\"; if tar -xzf \"$payload\" -C \"$stage\"; then :; else rm -rf \"$stage\"; corrupt \"payload unreadable\"; fi; if [ -d \"$stage/$base\" ] && [ ! -L \"$stage/$base\" ]; then :; else rm -rf \"$stage\"; corrupt \"payload missed the state root\"; fi; find \"$stage/$base\" -type l > \"$d/links\"; if [ -s \"$d/links\" ]; then rm -rf \"$stage\"; refused refused-shadow; fi; find \"$stage/$base\" \\( -type p -o -type s \\) > \"$d/special\"; if [ -s \"$d/special\" ]; then rm -rf \"$stage\"; refused refused-shadow; fi; rm -rf \"$root\"; mkdir -p \"$parent\"; if mv \"$stage/$base\" \"$root\"; then :; else rm -rf \"$stage\"; corrupt \"state root handoff failed\"; fi; rmdir \"$stage\" 2>/dev/null || true; size=; size_rest=; wc -c < \"$payload\" > \"$d/size\"; read -r size size_rest < \"$d/size\" || [ -n \"$size\" ]; case \"$size\" in '\\'''\\''|*[!0-9]*) corrupt \"size unreadable\" ;; esac; if [ \"$size\" -gt 402653184 ]; then corrupt \"over ceiling\"; fi; if du -sb \"$root\" > \"$d/uncompressed\"; then usize=; usize_rest=; read -r usize usize_rest < \"$d/uncompressed\" || [ -n \"$usize\" ]; case \"$usize\" in '\\'''\\''|*[!0-9]*) corrupt \"uncompressed size unreadable\" ;; esac; if [ \"$usize\" -gt 402653184 ]; then corrupt \"over ceiling\"; fi; elif du -sk \"$root\" > \"$d/uncompressed_kb\"; then usize_kb=; usize_kb_rest=; read -r usize_kb usize_kb_rest < \"$d/uncompressed_kb\" || [ -n \"$usize_kb\" ]; case \"$usize_kb\" in '\\'''\\''|*[!0-9]*) corrupt \"uncompressed size unreadable\" ;; esac; if [ \"$usize_kb\" -gt 393216 ]; then corrupt \"over ceiling\"; fi; else corrupt \"uncompressed size unreadable\"; fi; find \"$root\" -type f | sort > \"$d/files\"; if command -v sha256sum >/dev/null 2>&1; then while IFS= read -r f || [ -n \"$f\" ]; do sha256sum \"$f\"; done < \"$d/files\" > \"$d/manifest\"; else while IFS= read -r f || [ -n \"$f\" ]; do shasum -a 256 \"$f\"; done < \"$d/files\" > \"$d/manifest\"; fi; if [ ! -s \"$d/manifest\" ]; then corrupt \"empty manifest\"; fi; s256 \"$d/manifest\"; manifest=\"$h\"; s256 \"$payload\"; digest_one=\"$h\"; s256 \"$payload\"; digest_two=\"$h\"; if [ \"$digest_one\" != \"$digest_two\" ]; then corrupt \"readback mismatch\"; fi; printf '\\''%s\\n'\\'' \"decision=$decision\" \"matched=$matched\" \"manifest=$manifest\" \"payload=$digest_one\" \"size=$size\" > \"$RUNNER_TEMP/velnor/state-recovery.record\"; printf '\\''velnor: state snapshot recovered (decision=%s manifest=%s)\\n'\\'' \"$decision\" \"$manifest\"'"
       - *s18
       - name: Build test executables
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
@@ -848,7 +848,7 @@ jobs:
         id: v2
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: aa4bdb852991573dbf38f3ef215947a9cad522226bb9e397bab5ca283a6368d8-${{ env.VELNOR_TOOL_JACTIONLINT }}-${{ env.VELNOR_TOOL_JACTIONLINT_LOCK }}-${{ env.VELNOR_TOOL_MR_BOXINGTON }}-${{ env.VELNOR_TOOL_MR_BOXINGTON_LOCK }}-${{ env.VELNOR_TOOL_NEXTEST }}-${{ env.VELNOR_TOOL_NEXTEST_LOCK }}-${{ env.VELNOR_TOOL_RUST }}-${{ env.VELNOR_TOOL_RUST_LOCK }}-${{ env.VELNOR_TOOL_SHELLCHECK }}-${{ env.VELNOR_TOOL_SHELLCHECK_LOCK }}
+          d: cb619945713e5e819ed1a922119746e409cc3b864af51f531d6b5297269c79ac-${{ env.VELNOR_TOOL_JACTIONLINT }}-${{ env.VELNOR_TOOL_JACTIONLINT_LOCK }}-${{ env.VELNOR_TOOL_MR_BOXINGTON }}-${{ env.VELNOR_TOOL_MR_BOXINGTON_LOCK }}-${{ env.VELNOR_TOOL_NEXTEST }}-${{ env.VELNOR_TOOL_NEXTEST_LOCK }}-${{ env.VELNOR_TOOL_RUST }}-${{ env.VELNOR_TOOL_RUST_LOCK }}-${{ env.VELNOR_TOOL_SHELLCHECK }}-${{ env.VELNOR_TOOL_SHELLCHECK_LOCK }}
       - *s4
       - *s7
       - *s8
@@ -1124,7 +1124,7 @@ jobs:
         id: v2
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: 0226b8c37c18073308fd566f7ceb5033d8a40fdd8f916914ef18e75666cfd091-${{ env.VELNOR_TOOL_MR_BOXINGTON }}-${{ env.VELNOR_TOOL_MR_BOXINGTON_LOCK }}-${{ env.VELNOR_TOOL_NEXTEST }}-${{ env.VELNOR_TOOL_NEXTEST_LOCK }}-${{ env.VELNOR_TOOL_OPENTOFU }}-${{ env.VELNOR_TOOL_OPENTOFU_LOCK }}-${{ env.VELNOR_TOOL_RUST }}-${{ env.VELNOR_TOOL_RUST_LOCK }}
+          d: cf2ddc686b5e8be5165b3dc73a9a382fa23e154a8aff95b460e07eeacc136700-${{ env.VELNOR_TOOL_MR_BOXINGTON }}-${{ env.VELNOR_TOOL_MR_BOXINGTON_LOCK }}-${{ env.VELNOR_TOOL_NEXTEST }}-${{ env.VELNOR_TOOL_NEXTEST_LOCK }}-${{ env.VELNOR_TOOL_OPENTOFU }}-${{ env.VELNOR_TOOL_OPENTOFU_LOCK }}-${{ env.VELNOR_TOOL_RUST }}-${{ env.VELNOR_TOOL_RUST_LOCK }}
       - *s4
       - *s7
       - *s8
@@ -1203,7 +1203,7 @@ jobs:
         id: v2
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: 331b0a9ab49a3811ae890bb19c7c6b74370cd7a50c3cb44e31769391eced9d17-${{ env.VELNOR_TOOL_BUN }}-${{ env.VELNOR_TOOL_BUN_LOCK }}-${{ env.VELNOR_TOOL_JACTIONLINT }}-${{ env.VELNOR_TOOL_JACTIONLINT_LOCK }}-${{ env.VELNOR_TOOL_MR_BOXINGTON }}-${{ env.VELNOR_TOOL_MR_BOXINGTON_LOCK }}-${{ env.VELNOR_TOOL_NEXTEST }}-${{ env.VELNOR_TOOL_NEXTEST_LOCK }}-${{ env.VELNOR_TOOL_RUST }}-${{ env.VELNOR_TOOL_RUST_LOCK }}-${{ env.VELNOR_TOOL_SHELLCHECK }}-${{ env.VELNOR_TOOL_SHELLCHECK_LOCK }}
+          d: 69a47f7a913a9283994080c0806f1dfb438091318dabc9919585a8ee9da7378e-${{ env.VELNOR_TOOL_BUN }}-${{ env.VELNOR_TOOL_BUN_LOCK }}-${{ env.VELNOR_TOOL_JACTIONLINT }}-${{ env.VELNOR_TOOL_JACTIONLINT_LOCK }}-${{ env.VELNOR_TOOL_MR_BOXINGTON }}-${{ env.VELNOR_TOOL_MR_BOXINGTON_LOCK }}-${{ env.VELNOR_TOOL_NEXTEST }}-${{ env.VELNOR_TOOL_NEXTEST_LOCK }}-${{ env.VELNOR_TOOL_RUST }}-${{ env.VELNOR_TOOL_RUST_LOCK }}-${{ env.VELNOR_TOOL_SHELLCHECK }}-${{ env.VELNOR_TOOL_SHELLCHECK_LOCK }}
       - *s4
       - *s7
       - *s8
@@ -1866,20 +1866,25 @@ jobs:
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
           retention-days: "30"
       - *s43
-  tools-producer-0226b8c3:
-    name: Tools producer / 0226b8c3
+  tools-producer-2d8ab338:
+    name: Tools producer / 2d8ab338
     runs-on: ubuntu-26.04
-    timeout-minutes: 15
+    timeout-minutes: 5
     continue-on-error: true
-    env: *m3
+    env: *m1
     if: github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true
     steps:
-      - *s19
+      - &s44
+        name: Record optional cache budget
+        id: velnor-cache-clock
+        run: *r7
+        env:
+          VELNOR_CACHE_JOB_SECONDS: "300"
       - *s1
       - *s2
-      - *s37
-      - *s38
-      - &s44
+      - *s9
+      - *s10
+      - &s45
         name: Probe Mise tools
         id: tools-restore
         if: steps.v2.outputs.enabled == 'true'
@@ -1888,7 +1893,7 @@ jobs:
           key: mise-tools-v2-${{steps.v2.outputs.identity}}
           lookup-only: "true"
           path: "~/.local/share/mise\n${{ runner.temp }}/velnor/rustup\n${{ runner.temp }}/velnor/cargo/.crates.toml\n${{ runner.temp }}/velnor/cargo/.crates2.json\n${{ runner.temp }}/velnor/cargo/bin"
-      - &s45
+      - &s46
         name: Scrub and verify Mise tools
         if: steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
         uses: ./.github/actions/velnor-tools-cache-scrub
@@ -1896,23 +1901,21 @@ jobs:
           mise-sha256: 5d362ecc578dc7c146679b841dda949d6472cbf86ff5635db7afdca1b6b3fd87
       - name: Prepare pinned tools
         if: steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
-        env: *m14
-        run: *r21
-      - &s46
-        name: Prepare Rust components
-        if: steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
-        env: *m14
-        run: *r5
+        run: *r3
       - &s47
-        name: Verify Rust channel manifest
+        name: Verify jactionlint
         if: steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
-        uses: ./.github/actions/velnor-verify-rust-manifest # zizmor: ignore[self-repository]
+        uses: ./.github/actions/velnor-verify-jactionlint # zizmor: ignore[self-repository]
       - &s48
         name: Admit optional cache save
         id: velnor-optional-tools-save-budget
         if: success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
         run: *r10
-        env: *m19
+        env:
+          VELNOR_CACHE_JOB_SECONDS: "300"
+          VELNOR_CACHE_STARTED: ${{ steps.velnor-cache-clock.outputs.started }}
+          VELNOR_CACHE_DEADLINE: ${{ steps.velnor-cache-clock.outputs.deadline }}
+          VELNOR_CACHE_REQUIRED_SECONDS: "90"
       - &s49
         name: Save Mise tools
         if: (success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true') && steps.velnor-optional-tools-save-budget.outputs.admitted == 'true'
@@ -1927,42 +1930,8 @@ jobs:
         name: Report optional cache save failure
         if: always() && !cancelled() && steps.velnor-optional-tools-save.outcome == 'failure'
         run: *r11
-  tools-producer-2d27f744:
-    name: Tools producer / 2d27f744
-    runs-on: ubuntu-26.04
-    timeout-minutes: 5
-    continue-on-error: true
-    env: *m1
-    if: github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true
-    steps:
-      - &s51
-        name: Record optional cache budget
-        id: velnor-cache-clock
-        run: *r7
-        env:
-          VELNOR_CACHE_JOB_SECONDS: "300"
-      - *s1
-      - *s2
-      - *s5
-      - *s44
-      - *s45
-      - name: Prepare pinned tools
-        if: steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
-        run: *r1
-      - &s52
-        name: Admit optional cache save
-        id: velnor-optional-tools-save-budget
-        if: success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
-        run: *r10
-        env:
-          VELNOR_CACHE_JOB_SECONDS: "300"
-          VELNOR_CACHE_STARTED: ${{ steps.velnor-cache-clock.outputs.started }}
-          VELNOR_CACHE_DEADLINE: ${{ steps.velnor-cache-clock.outputs.deadline }}
-          VELNOR_CACHE_REQUIRED_SECONDS: "90"
-      - *s49
-      - *s50
-  tools-producer-331b0a9a:
-    name: Tools producer / 331b0a9a
+  tools-producer-69a47f7a:
+    name: Tools producer / 69a47f7a
     runs-on: ubuntu-26.04
     timeout-minutes: 15
     continue-on-error: true
@@ -1974,23 +1943,52 @@ jobs:
       - *s2
       - *s39
       - *s40
-      - *s44
       - *s45
+      - *s46
       - name: Prepare pinned tools
         if: steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
         env: *m14
         run: *r22
-      - &s53
-        name: Verify jactionlint
-        if: steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
-        uses: ./.github/actions/velnor-verify-jactionlint # zizmor: ignore[self-repository]
-      - *s46
       - *s47
+      - &s51
+        name: Prepare Rust components
+        if: steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
+        env: *m14
+        run: *r5
+      - &s52
+        name: Verify Rust channel manifest
+        if: steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
+        uses: ./.github/actions/velnor-verify-rust-manifest # zizmor: ignore[self-repository]
+      - &s53
+        name: Admit optional cache save
+        id: velnor-optional-tools-save-budget
+        if: success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
+        run: *r10
+        env: *m19
+      - *s49
+      - *s50
+  tools-producer-70705458:
+    name: Tools producer / 70705458
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    continue-on-error: true
+    env: *m1
+    if: github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true
+    steps:
+      - *s44
+      - *s1
+      - *s2
+      - *s3
+      - *s45
+      - *s46
+      - name: Prepare pinned tools
+        if: steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
+        run: mise --no-config --no-env --no-hooks install cargo-deny@0.20.2
       - *s48
       - *s49
       - *s50
-  tools-producer-438eb26a:
-    name: Tools producer / 438eb26a
+  tools-producer-cb619945:
+    name: Tools producer / cb619945
     runs-on: ubuntu-26.04
     timeout-minutes: 15
     continue-on-error: true
@@ -2000,21 +1998,46 @@ jobs:
       - *s19
       - *s1
       - *s2
-      - *s20
-      - *s21
-      - *s44
+      - *s34
+      - *s35
       - *s45
+      - *s46
       - name: Prepare pinned tools
         if: steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
         env: *m14
-        run: *r12
-      - *s46
+        run: *r20
       - *s47
-      - *s48
+      - *s51
+      - *s52
+      - *s53
       - *s49
       - *s50
-  tools-producer-994b0992:
-    name: Tools producer / 994b0992
+  tools-producer-cf2ddc68:
+    name: Tools producer / cf2ddc68
+    runs-on: ubuntu-26.04
+    timeout-minutes: 15
+    continue-on-error: true
+    env: *m3
+    if: github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true
+    steps:
+      - *s19
+      - *s1
+      - *s2
+      - *s37
+      - *s38
+      - *s45
+      - *s46
+      - name: Prepare pinned tools
+        if: steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
+        env: *m14
+        run: *r21
+      - *s51
+      - *s52
+      - *s53
+      - *s49
+      - *s50
+  tools-producer-e3a3419b:
+    name: Tools producer / e3a3419b
     runs-on: ubuntu-26.04
     timeout-minutes: 10
     continue-on-error: true
@@ -2030,14 +2053,14 @@ jobs:
       - *s2
       - *s12
       - *s13
-      - *s44
       - *s45
+      - *s46
       - name: Prepare pinned tools
         if: steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
         env: *m14
         run: *r4
-      - *s46
-      - *s47
+      - *s51
+      - *s52
       - name: Admit optional cache save
         id: velnor-optional-tools-save-budget
         if: success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
@@ -2049,8 +2072,28 @@ jobs:
           VELNOR_CACHE_REQUIRED_SECONDS: "90"
       - *s49
       - *s50
-  tools-producer-aa4bdb85:
-    name: Tools producer / aa4bdb85
+  tools-producer-f00f54f8:
+    name: Tools producer / f00f54f8
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    continue-on-error: true
+    env: *m1
+    if: github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true
+    steps:
+      - *s44
+      - *s1
+      - *s2
+      - *s5
+      - *s45
+      - *s46
+      - name: Prepare pinned tools
+        if: steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
+        run: *r1
+      - *s48
+      - *s49
+      - *s50
+  tools-producer-f2006033:
+    name: Tools producer / f2006033
     runs-on: ubuntu-26.04
     timeout-minutes: 15
     continue-on-error: true
@@ -2060,59 +2103,16 @@ jobs:
       - *s19
       - *s1
       - *s2
-      - *s34
-      - *s35
-      - *s44
+      - *s20
+      - *s21
       - *s45
+      - *s46
       - name: Prepare pinned tools
         if: steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
         env: *m14
-        run: *r20
-      - *s53
-      - *s46
-      - *s47
-      - *s48
-      - *s49
-      - *s50
-  tools-producer-f30e7036:
-    name: Tools producer / f30e7036
-    runs-on: ubuntu-26.04
-    timeout-minutes: 5
-    continue-on-error: true
-    env: *m1
-    if: github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true
-    steps:
+        run: *r12
       - *s51
-      - *s1
-      - *s2
-      - *s3
-      - *s44
-      - *s45
-      - name: Prepare pinned tools
-        if: steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
-        run: mise --no-config --no-env --no-hooks install cargo-deny@0.20.2
       - *s52
-      - *s49
-      - *s50
-  tools-producer-f4349325:
-    name: Tools producer / f4349325
-    runs-on: ubuntu-26.04
-    timeout-minutes: 5
-    continue-on-error: true
-    env: *m1
-    if: github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true
-    steps:
-      - *s51
-      - *s1
-      - *s2
-      - *s9
-      - *s10
-      - *s44
-      - *s45
-      - name: Prepare pinned tools
-        if: steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
-        run: *r3
       - *s53
-      - *s52
       - *s49
       - *s50

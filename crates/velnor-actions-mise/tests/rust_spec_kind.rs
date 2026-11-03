@@ -32,7 +32,7 @@ fn rust_spec_kind_accepts_only_the_plain_and_minimal_specs() {
         ),
         ("gh@2.103.2", RustSpecKind::NotRust),
         (
-            "aqua:nextest-rs/nextest/cargo-nextest@0.9.150",
+            "aqua:nextest-rs/nextest/cargo-nextest@0.9.151",
             RustSpecKind::NotRust,
         ),
         ("rust-analyzer@1.0.0", RustSpecKind::NotRust),

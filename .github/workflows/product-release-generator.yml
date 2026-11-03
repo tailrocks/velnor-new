@@ -62,7 +62,7 @@ jobs:
           persist-credentials: "false"
           ref: ${{ inputs.source_sha }}
       - name: Setup Mise
-        uses: jdx/mise-action@6612f0ef07ed2a736cd1e00a94a065522dd41195
+        uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
           version: 2026.10.25
           sha256: 5d362ecc578dc7c146679b841dda949d6472cbf86ff5635db7afdca1b6b3fd87
@@ -196,7 +196,7 @@ jobs:
       VELNOR_RELEASE_GH_VERSION: ${{ needs.candidate-manifest.outputs.gh_version }}
     steps:
       - name: Setup Mise
-        uses: jdx/mise-action@6612f0ef07ed2a736cd1e00a94a065522dd41195
+        uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
           version: 2026.10.25
           sha256: 5d362ecc578dc7c146679b841dda949d6472cbf86ff5635db7afdca1b6b3fd87
@@ -349,7 +349,7 @@ jobs:
       VELNOR_RELEASE_GH_VERSION: ${{ needs.candidate-manifest.outputs.gh_version }}
     steps:
       - name: Setup Mise
-        uses: jdx/mise-action@6612f0ef07ed2a736cd1e00a94a065522dd41195
+        uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
           version: 2026.10.25
           sha256: 8a3ef00765b009278197aba627ac00d6e9c63f6aeb04d4f4b2cfe0e59ddc2fd6
@@ -472,7 +472,7 @@ jobs:
       VELNOR_RELEASE_GH_VERSION: ${{ needs.candidate-manifest.outputs.gh_version }}
     steps:
       - name: Setup Mise
-        uses: jdx/mise-action@6612f0ef07ed2a736cd1e00a94a065522dd41195
+        uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
           version: 2026.10.25
           sha256: e06eb3f0311dedbf65952ec2c0247398848653b302e6aad99d7371ad9ba33301
@@ -547,7 +547,7 @@ jobs:
           persist-credentials: "false"
           ref: ${{ inputs.source_sha }}
       - name: Setup Mise
-        uses: jdx/mise-action@6612f0ef07ed2a736cd1e00a94a065522dd41195
+        uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
           version: 2026.10.25
           sha256: 5d362ecc578dc7c146679b841dda949d6472cbf86ff5635db7afdca1b6b3fd87
@@ -651,7 +651,7 @@ jobs:
       VELNOR_RELEASE_GH_VERSION: ${{ needs.candidate-manifest.outputs.gh_version }}
     steps:
       - name: Setup Mise
-        uses: jdx/mise-action@6612f0ef07ed2a736cd1e00a94a065522dd41195
+        uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
           version: 2026.10.25
           sha256: 5d362ecc578dc7c146679b841dda949d6472cbf86ff5635db7afdca1b6b3fd87
@@ -762,7 +762,7 @@ jobs:
       VELNOR_RELEASE_GH_VERSION: ${{ needs.candidate-manifest.outputs.gh_version }}
     steps:
       - name: Setup Mise
-        uses: jdx/mise-action@6612f0ef07ed2a736cd1e00a94a065522dd41195
+        uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
           version: 2026.10.25
           sha256: 5d362ecc578dc7c146679b841dda949d6472cbf86ff5635db7afdca1b6b3fd87
