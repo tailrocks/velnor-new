@@ -20,25 +20,6 @@ use super::{
     shell_literal, split_shell,
 };
 
-/// Recover the complete-state snapshot through the verified pipeline.
-///
-/// This replaces the old raw `tar -xzf` recovery with the staged repair:
-/// discovery (provenance comes from the discovery record) + provenance
-/// gating + restore-observation check (exact hit versus predecessor
-/// fallback, anything else is refused) + coverage replay (the compat digest
-/// is recomputed and must match discovery time) + safe extraction (every
-/// member is screened: only the state root family may land, so a hostile
-/// `tools/` member or symlink is refused before anything is written) +
-/// admission (payload size against the family ceiling, then the extracted
-/// state root's uncompressed bytes against the same ceiling so a highly
-/// compressible archive cannot exhaust the runner disk) + publication of
-/// the recovery record + exact readback (the payload digest must be stable
-/// across extraction and the manifest must verify).
-///
-/// This is a common snapshot operation over fixed literals: unpack the
-/// frozen payload into the fixed state root. It never invokes the build
-/// tool and never selects an action ref; policy arrives through the typed
-/// key and cache-hit outputs consumed by the step condition.
 pub(crate) fn recover_step(
     rust_toolchain: &str,
     _working_directory: Option<&str>,
@@ -47,7 +28,7 @@ pub(crate) fn recover_step(
     super::super::mbx_preflight::validate_rust_toolchain(rust_toolchain)?;
     let payload = shell_literal(COMPLETE_STATE_TRANSPORT_EXPR)?;
     let root = shell_literal(COMPLETE_STATE_ROOT_EXPR)?;
-    let (parent, base) = split_shell(&root)?;
+    let (_, base) = split_shell(&root)?;
     let ceiling = CacheFamily::MbxBundle.spec().ceiling_bytes;
     let ceiling_kb = ceiling.div_ceil(1024);
     let mut script = vec![
@@ -55,18 +36,20 @@ pub(crate) fn recover_step(
         RUNNER_TEMP_GUARD.to_owned(),
         format!("payload=\"{payload}\""),
         format!("root=\"{root}\""),
-        format!("parent=\"{parent}\""),
         format!("base=\"{base}\""),
         format!("record=\"{DISCOVERY_RECORD}\""),
         format!("expected=\"{MBX_BUNDLE_KEY_EXPR}\""),
         format!("matched=\"{MATCHED_KEY_EXPR}\""),
         "d=\"$RUNNER_TEMP/velnor/state-recover\"".to_owned(),
-        "rm -rf \"$d\"".to_owned(),
+        "stage=\"$RUNNER_TEMP/velnor/state-stage\"".to_owned(),
+        "plain=\"$d/plain.tar\"".to_owned(),
+        "unlock() { chmod -R u+rwX \"$stage\" 2>/dev/null || :; }".to_owned(),
+        "unlock; rm -rf \"$d\" \"$stage\"".to_owned(),
         "mkdir -p \"$d\"".to_owned(),
         S256_FN.to_owned(),
         "cold() { printf '%s\\n' \"velnor: state snapshot no_entry ($1)\"; exit 0; }".to_owned(),
-        "corrupt() { printf '%s\\n' \"::warning::cache_corrupt: state snapshot $1; building cold\"; rm -rf \"$root\"; rm -f \"$payload\"; exit 0; }".to_owned(),
-        "refused() { printf '%s\\n' \"::warning::cache_corrupt: state snapshot refused ($1); building cold\"; rm -rf \"$root\"; rm -f \"$payload\"; exit 0; }".to_owned(),
+        "corrupt() { printf '%s\\n' \"::warning::cache_corrupt: state snapshot $1; building cold\"; unlock; rm -rf \"$root\" \"$stage\"; rm -f \"$payload\" \"$plain\"; exit 0; }".to_owned(),
+        "refused() { printf '%s\\n' \"::warning::cache_corrupt: state snapshot refused ($1); building cold\"; unlock; rm -rf \"$root\" \"$stage\"; rm -f \"$payload\" \"$plain\"; exit 0; }".to_owned(),
         "if [ ! -f \"$payload\" ] || [ -L \"$payload\" ]; then cold no_entry; fi".to_owned(),
         "if [ ! -s \"$payload\" ]; then printf '%s\\n' '::warning::cache_corrupt: state payload empty; building cold'; rm -f \"$payload\"; exit 0; fi".to_owned(),
         "if [ -L \"$root\" ]; then printf '%s\\n' '::warning::cache_corrupt: state root is a symlink; building cold'; exit 0; fi".to_owned(),
@@ -86,45 +69,15 @@ pub(crate) fn recover_step(
         "$rec_unit",
         false,
     ));
-    script.extend(
-        [
-            "compat_now=\"s256-$h\"".to_owned(),
-            "if [ \"$compat_now\" != \"$compat\" ]; then corrupt \"coverage drift\"; fi".to_owned(),
-            "if tar -tzf \"$payload\" > \"$d/members\"; then :; else corrupt \"payload unreadable\"; fi".to_owned(),
-            "members_n=; members_rest=; wc -l < \"$d/members\" > \"$d/count\"; read -r members_n members_rest < \"$d/count\" || [ -n \"$members_n\" ]".to_owned(),
-            "case \"$members_n\" in ''|*[!0-9]*) corrupt \"member count unreadable\" ;; esac".to_owned(),
-            format!("if [ \"$members_n\" -gt {MAX_ARCHIVE_MEMBERS} ]; then refused refused-shadow; fi"),
-            "m=; while IFS= read -r m || [ -n \"$m\" ]; do case \"$m\" in \"\") ;; \"$base\"|\"$base\"/*) ;; /*) refused refused-shadow ;; ..|../*|*/..|*/../*) refused refused-shadow ;; *) refused refused-shadow ;; esac; done < \"$d/members\"".to_owned(),
-            "if [ -z \"${MBX_CACHE_DIR:-}\" ] || [ \"$MBX_CACHE_DIR\" != \"$RUNNER_TEMP/velnor/mbx\" ] || [ ! -d \"$MBX_CACHE_DIR/actions\" ]; then corrupt import_unavailable; fi".to_owned(),
-            "command -v mise >/dev/null 2>&1 || corrupt import_unavailable".to_owned(),
-            "command -v mbx >/dev/null 2>&1 || corrupt import_unavailable".to_owned(),
-            format!("if mise --no-config --no-env --no-hooks exec rust@{rust_toolchain} -- mbx cache import \"$payload\"; then :; else corrupt import_failed; fi"),
-            "stage=\"$RUNNER_TEMP/velnor/state-stage\"".to_owned(),
-            "rm -rf \"$stage\"".to_owned(),
-            "mkdir -p \"$stage\"".to_owned(),
-            "if tar -xzf \"$payload\" -C \"$stage\"; then :; else rm -rf \"$stage\"; corrupt \"payload unreadable\"; fi".to_owned(),
-            "if [ -d \"$stage/$base\" ] && [ ! -L \"$stage/$base\" ]; then :; else rm -rf \"$stage\"; corrupt \"payload missed the state root\"; fi".to_owned(),
-            "find \"$stage/$base\" -type l > \"$d/links\"; if [ -s \"$d/links\" ]; then rm -rf \"$stage\"; refused refused-shadow; fi".to_owned(),
-            "find \"$stage/$base\" \\( -type p -o -type s \\) > \"$d/special\"; if [ -s \"$d/special\" ]; then rm -rf \"$stage\"; refused refused-shadow; fi".to_owned(),
-            "rm -rf \"$root\"".to_owned(),
-            "mkdir -p \"$parent\"".to_owned(),
-            "if mv \"$stage/$base\" \"$root\"; then :; else rm -rf \"$stage\"; corrupt \"state root handoff failed\"; fi".to_owned(),
-            "rmdir \"$stage\" 2>/dev/null || true".to_owned(),
-            "size=; size_rest=; wc -c < \"$payload\" > \"$d/size\"; read -r size size_rest < \"$d/size\" || [ -n \"$size\" ]".to_owned(),
-            "case \"$size\" in ''|*[!0-9]*) corrupt \"size unreadable\" ;; esac".to_owned(),
-            format!("if [ \"$size\" -gt {ceiling} ]; then corrupt \"over ceiling\"; fi"),
-            format!("if du -sb \"$root\" > \"$d/uncompressed\"; then usize=; usize_rest=; read -r usize usize_rest < \"$d/uncompressed\" || [ -n \"$usize\" ]; case \"$usize\" in ''|*[!0-9]*) corrupt \"uncompressed size unreadable\" ;; esac; if [ \"$usize\" -gt {ceiling} ]; then corrupt \"over ceiling\"; fi; elif du -sk \"$root\" > \"$d/uncompressed_kb\"; then usize_kb=; usize_kb_rest=; read -r usize_kb usize_kb_rest < \"$d/uncompressed_kb\" || [ -n \"$usize_kb\" ]; case \"$usize_kb\" in ''|*[!0-9]*) corrupt \"uncompressed size unreadable\" ;; esac; if [ \"$usize_kb\" -gt {ceiling_kb} ]; then corrupt \"over ceiling\"; fi; else corrupt \"uncompressed size unreadable\"; fi"),
-            "find \"$root\" -type f | sort > \"$d/files\"".to_owned(),
-            "if command -v sha256sum >/dev/null 2>&1; then while IFS= read -r f || [ -n \"$f\" ]; do sha256sum \"$f\"; done < \"$d/files\" > \"$d/manifest\"; else while IFS= read -r f || [ -n \"$f\" ]; do shasum -a 256 \"$f\"; done < \"$d/files\" > \"$d/manifest\"; fi".to_owned(),
-            "if [ ! -s \"$d/manifest\" ]; then corrupt \"empty manifest\"; fi".to_owned(),
-            "s256 \"$d/manifest\"; manifest=\"$h\"".to_owned(),
-            "s256 \"$payload\"; digest_one=\"$h\"".to_owned(),
-            "s256 \"$payload\"; digest_two=\"$h\"".to_owned(),
-            "if [ \"$digest_one\" != \"$digest_two\" ]; then corrupt \"readback mismatch\"; fi".to_owned(),
-            format!("printf '%s\\n' \"decision=$decision\" \"matched=$matched\" \"manifest=$manifest\" \"payload=$digest_one\" \"size=$size\" > \"{RECOVERY_RECORD}\""),
-            "printf 'velnor: state snapshot recovered (decision=%s manifest=%s)\\n' \"$decision\" \"$manifest\"".to_owned(),
-        ],
-    );
+    script.extend([
+        "compat_now=\"s256-$h\"".to_owned(),
+        "if [ \"$compat_now\" != \"$compat\" ]; then corrupt \"coverage drift\"; fi".to_owned(),
+    ]);
+    script.extend(admission_lines(ceiling));
+    script.extend(screen_lines());
+    script.extend(extract_lines());
+    script.extend(measure_lines(ceiling, ceiling_kb));
+    script.extend(import_lines(rust_toolchain));
     let script = script.join("; ");
     let mut step = shell_step(
         MBX_BUNDLE_IMPORT_NAME,
@@ -134,6 +87,75 @@ pub(crate) fn recover_step(
     step.condition = Some(MBX_BUNDLE_IMPORT_CONDITION.to_owned());
     step.role = Some(StepRole::MbxBundleImport);
     Ok(step)
+}
+
+fn read_number(var: &str, source: &str, tmp: &str, failure: &str) -> String {
+    format!(
+        "{var}=; {var}_rest=; {source} > \"$d/{tmp}\"; read -r {var} {var}_rest < \"$d/{tmp}\" || [ -n \"${var}\" ]; case \"${var}\" in ''|*[!0-9]*) corrupt \"{failure}\" ;; esac"
+    )
+}
+
+fn admission_lines(ceiling: u64) -> Vec<String> {
+    let cap_plus = ceiling + 1;
+    vec![
+        read_number("size", "wc -c < \"$payload\"", "size", "size unreadable"),
+        format!("if [ \"$size\" -gt {ceiling} ]; then refused refused-oversize; fi"),
+        "if [ -z \"${MBX_CACHE_DIR:-}\" ] || [ \"$MBX_CACHE_DIR\" != \"$RUNNER_TEMP/velnor/mbx\" ] || [ ! -d \"$MBX_CACHE_DIR/actions\" ]; then corrupt import_unavailable; fi".to_owned(),
+        "for tool in gzip tar head tail wc find du sort mise mbx; do command -v \"$tool\" >/dev/null 2>&1 || corrupt import_unavailable; done".to_owned(),
+        format!("if {{ gzip -dc \"$payload\" && : > \"$d/inflated\"; }} | head -c {cap_plus} > \"$plain\"; then :; else corrupt \"payload unreadable\"; fi"),
+        read_number("plain_n", "wc -c < \"$plain\"", "plain_size", "payload unreadable"),
+        format!("if [ \"$plain_n\" -gt {ceiling} ]; then refused refused-oversize; fi"),
+        "if [ ! -f \"$d/inflated\" ]; then corrupt \"payload unreadable\"; fi".to_owned(),
+        "head -c 262 \"$plain\" | tail -c 5 > \"$d/magic\"; magic=; read -r magic < \"$d/magic\" || [ -n \"$magic\" ]; if [ \"$magic\" != ustar ]; then refused refused-shadow; fi".to_owned(),
+    ]
+}
+
+fn screen_lines() -> Vec<String> {
+    vec![
+        "if tar -tf \"$plain\" > \"$d/members\"; then :; else corrupt \"payload unreadable\"; fi".to_owned(),
+        "if tar -tvf \"$plain\" > \"$d/verbose\"; then :; else corrupt \"payload unreadable\"; fi".to_owned(),
+        read_number("members_n", "wc -l < \"$d/members\"", "count", "member count unreadable"),
+        read_number("verbose_n", "wc -l < \"$d/verbose\"", "vcount", "member count unreadable"),
+        "if [ \"$members_n\" != \"$verbose_n\" ]; then refused refused-shadow; fi".to_owned(),
+        format!("if [ \"$members_n\" -gt {MAX_ARCHIVE_MEMBERS} ]; then refused refused-shadow; fi"),
+        "v=; while IFS= read -r v || [ -n \"$v\" ]; do case \"$v\" in -*|d*) ;; *) refused refused-shadow ;; esac; done < \"$d/verbose\"".to_owned(),
+        "m=; while IFS= read -r m || [ -n \"$m\" ]; do case \"$m\" in /*|..|../*|*/..|*/../*) refused refused-shadow ;; \"$base\"|\"$base\"/*) ;; *) refused refused-shadow ;; esac; done < \"$d/members\"".to_owned(),
+    ]
+}
+
+fn extract_lines() -> Vec<String> {
+    vec![
+        "mkdir -m 700 \"$stage\"".to_owned(),
+        "if tar -xf \"$plain\" -C \"$stage\" --no-same-owner; then :; else corrupt \"payload unreadable\"; fi".to_owned(),
+        "rm -f \"$plain\"; unlock".to_owned(),
+        "if [ -d \"$stage/$base\" ] && [ ! -L \"$stage/$base\" ]; then :; else refused refused-shadow; fi".to_owned(),
+        "if find \"$stage\" ! -type f ! -type d > \"$d/special\"; then :; else corrupt \"payload unreadable\"; fi; if [ -s \"$d/special\" ]; then refused refused-shadow; fi".to_owned(),
+        "if find \"$stage\" -type f -links +1 > \"$d/linked\"; then :; else corrupt \"payload unreadable\"; fi; if [ -s \"$d/linked\" ]; then refused refused-shadow; fi".to_owned(),
+        "if find \"$stage\" -mindepth 1 -maxdepth 1 ! -name \"$base\" > \"$d/beside\"; then :; else corrupt \"payload unreadable\"; fi; if [ -s \"$d/beside\" ]; then refused refused-shadow; fi".to_owned(),
+    ]
+}
+
+fn measure_lines(ceiling: u64, ceiling_kb: u64) -> Vec<String> {
+    vec![
+        format!("if du -sb \"$stage/$base\" > \"$d/uncompressed\"; then usize=; usize_rest=; read -r usize usize_rest < \"$d/uncompressed\" || [ -n \"$usize\" ]; case \"$usize\" in ''|*[!0-9]*) corrupt \"uncompressed size unreadable\" ;; esac; if [ \"$usize\" -gt {ceiling} ]; then corrupt \"over ceiling\"; fi; elif du -sk \"$stage/$base\" > \"$d/uncompressed_kb\"; then usize_kb=; usize_kb_rest=; read -r usize_kb usize_kb_rest < \"$d/uncompressed_kb\" || [ -n \"$usize_kb\" ]; case \"$usize_kb\" in ''|*[!0-9]*) corrupt \"uncompressed size unreadable\" ;; esac; if [ \"$usize_kb\" -gt {ceiling_kb} ]; then corrupt \"over ceiling\"; fi; else corrupt \"uncompressed size unreadable\"; fi"),
+        "if find \"$stage/$base\" -type f > \"$d/found\"; then :; else corrupt \"payload unreadable\"; fi; sort \"$d/found\" > \"$d/files\"".to_owned(),
+        "if command -v sha256sum >/dev/null 2>&1; then while IFS= read -r f || [ -n \"$f\" ]; do sha256sum \"$f\"; done < \"$d/files\" > \"$d/manifest\"; else while IFS= read -r f || [ -n \"$f\" ]; do shasum -a 256 \"$f\"; done < \"$d/files\" > \"$d/manifest\"; fi".to_owned(),
+        "if [ ! -s \"$d/manifest\" ]; then corrupt \"empty manifest\"; fi".to_owned(),
+        "s256 \"$d/manifest\"; manifest=\"$h\"".to_owned(),
+        "s256 \"$payload\"; digest_one=\"$h\"".to_owned(),
+        "s256 \"$payload\"; digest_two=\"$h\"".to_owned(),
+        "if [ \"$digest_one\" != \"$digest_two\" ]; then corrupt \"readback mismatch\"; fi".to_owned(),
+    ]
+}
+
+fn import_lines(rust_toolchain: &str) -> Vec<String> {
+    vec![
+        "cd \"$RUNNER_TEMP/velnor\"".to_owned(),
+        format!("if mise --no-config --no-env --no-hooks exec rust@{rust_toolchain} -- mbx cache import \"$stage/$base\"; then :; else corrupt import_failed; fi"),
+        "rm -rf \"$stage\" \"$root\"".to_owned(),
+        format!("printf '%s\\n' \"decision=$decision\" \"matched=$matched\" \"manifest=$manifest\" \"payload=$digest_one\" \"size=$size\" > \"{RECOVERY_RECORD}\""),
+        "printf 'velnor: state snapshot recovered (decision=%s manifest=%s)\\n' \"$decision\" \"$manifest\"".to_owned(),
+    ]
 }
 
 pub fn mbx_producer_mark_step() -> Result<Step, RenderError> {

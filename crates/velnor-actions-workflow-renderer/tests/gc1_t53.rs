@@ -12,7 +12,6 @@
 use std::collections::BTreeMap;
 use std::error::Error;
 use std::io;
-use std::io::Write as _;
 
 use velnor_actions_actionlint::actions::MISE_ACTION_SHA;
 use velnor_actions_contract::{
@@ -35,8 +34,7 @@ const RECORD_STEP: &str = "Record state publication";
 const SAVE_OUTCOME_GATE: &str = "steps.velnor-optional-mbx-bundle-save.outcome == 'success'";
 const RECORD_CONDITION: &str =
     "always() && !cancelled() && steps.velnor-optional-mbx-bundle-save.outcome == 'success'";
-/// 400 MiB of real bytes: over the 384 MiB family ceiling with margin.
-const OVER_CEILING_BYTES: u64 = 400 * 1024 * 1024;
+const OVER_CEILING_MIB: u64 = 400;
 
 fn fail(message: &str) -> Box<dyn Error> {
     io::Error::other(message).into()
@@ -281,20 +279,32 @@ fn gc1_t53_recover_bounds_uncompressed() -> Result<(), Box<dyn Error>> {
     check_recover_bounds_uncompressed()
 }
 
-const PRODUCTION_IMAGE_OS: &str = "ubuntu26";
-
-fn production_state_env(command: &mut std::process::Command) -> &mut std::process::Command {
-    command
-        .env("MBX_SHARE_OUT_DIR", "1")
-        .env("MBX_BUILD_SCRIPT_EXECUTION", "0")
-        .env("MBX_CC", "0")
-        .env("ImageOS", PRODUCTION_IMAGE_OS)
+pub(crate) fn scripts() -> Result<crate::gc1_scene::Scripts, Box<dyn Error>> {
+    let text = render_text()?;
+    let steps = mbx_steps_for_driver(
+        &format!("jdx/mr-boxington-action@{}", "a".repeat(40)),
+        CompileDriver::Mbx,
+        "1.2.3",
+        "1.89.0",
+        driver_env()?,
+        MbxTransport::SeedRead,
+        None,
+    )?
+    .ok_or_else(|| fail("mbx driver produced no steps"))?;
+    Ok(crate::gc1_scene::Scripts {
+        discover: shell_script_of(&steps[3])?,
+        recover: shell_script_of(&steps[5])?,
+        export: extract_run(step_section(&text, EXPORT_STEP)?, "export")?,
+        record: extract_run(step_section(&text, RECORD_STEP)?, "record")?,
+    })
 }
 
 #[path = "gc1_t53_cold.rs"]
 mod gc1_t53_cold;
 #[path = "gc1_t53_env.rs"]
 mod gc1_t53_env;
+#[path = "gc1_t53_hostile.rs"]
+mod gc1_t53_hostile;
 #[path = "gc1_t53_publish.rs"]
 mod gc1_t53_publish;
 #[path = "gc1_t53_recover.rs"]
