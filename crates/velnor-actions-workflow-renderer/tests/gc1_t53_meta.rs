@@ -65,7 +65,7 @@ fn gc1_t53_recover_goes_cold_in_a_read_only_transport_directory() -> Result<(), 
 fn gc1_t53_recover_stays_cold_when_removal_is_refused() -> Result<(), Box<dyn Error>> {
     let scene = Scene::new("meta-refused-removal", crate::gc1_t53::scripts()?)?;
     scene.probe_modes()?;
-    scene.shim_chmod_failure()?;
+    scene.shim_failure("chmod")?;
     let key = scene.discover()?;
     std::fs::create_dir_all(payload_dir(&scene)?)?;
     let mut archive = Archive::create(&scene.payload())?;
@@ -81,6 +81,41 @@ fn gc1_t53_recover_stays_cold_when_removal_is_refused() -> Result<(), Box<dyn Er
     let output = scene.recover(&key.key, &key.key, &[(FAIL_ENV, "import")], None)?;
     if !output.contains("::warning::cache_corrupt") {
         return Err(fail(&format!("recover lost its cold warning: {output}")));
+    }
+    scene.finish()
+}
+
+#[test]
+#[cfg(unix)]
+fn gc1_t53_recover_stays_cold_when_the_state_root_cannot_be_purged() -> Result<(), Box<dyn Error>> {
+    let scene = Scene::new("meta-purge-refused", crate::gc1_t53::scripts()?)?;
+    scene.probe_modes()?;
+    scene.shim_failure("chmod")?;
+    let key = scene.discover()?;
+    let parent = payload_dir(&scene)?;
+    std::fs::create_dir_all(&parent)?;
+    std::fs::write(scene.payload(), b"never a gzip stream\n")?;
+    let locked = scene.state_root().join("locked");
+    std::fs::create_dir_all(&locked)?;
+    std::fs::write(locked.join("object"), b"previous state")?;
+    set_mode(&locked, 0)?;
+    let output = scene.recover(&key.key, &key.key, &[], None)?;
+    for needle in ["::warning::cache_corrupt", "payload unreadable"] {
+        if !output.contains(needle) {
+            return Err(fail(&format!("recover output lost {needle}: {output}")));
+        }
+    }
+    if !scene.state_root().is_dir() {
+        return Err(fail("the purge did not fail, the row is vacuous"));
+    }
+    for (path, what) in [
+        (scene.stage(), "stage"),
+        (scene.scratch_dir(), "recover scratch"),
+        (scene.recovery_record(), "recovery record"),
+    ] {
+        if !Scene::gone(&path) {
+            return Err(fail(&format!("recover left the {what}")));
+        }
     }
     scene.finish()
 }

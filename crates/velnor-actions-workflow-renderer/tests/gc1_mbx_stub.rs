@@ -66,6 +66,6 @@ pub(crate) fn install(bin: &Path) -> Result<(), Box<dyn Error>> {
     write_executable(&bin.join("mise"), MISE)
 }
 
-pub(crate) fn install_chmod_failure(bin: &Path) -> Result<(), Box<dyn Error>> {
-    write_executable(&bin.join("chmod"), "#!/bin/sh\nexit 1\n")
+pub(crate) fn install_failure(bin: &Path, tool: &str) -> Result<(), Box<dyn Error>> {
+    write_executable(&bin.join(tool), "#!/bin/sh\nexit 1\n")
 }

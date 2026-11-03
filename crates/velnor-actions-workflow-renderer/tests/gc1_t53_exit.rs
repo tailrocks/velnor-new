@@ -5,6 +5,7 @@ use crate::gc1_scene::Scene;
 
 use super::*;
 
+const RECOVERY_FAILED: &str = "state snapshot recovery failed";
 const OTHER_KEY: &str = "velnor-v2-unrelated-key";
 
 #[test]
@@ -70,6 +71,22 @@ fn gc1_t53_recover_refuses_a_key_outside_the_restore_prefix() -> Result<(), Box<
     let before = scene.tree()?;
     let output = scene.recover(&key.key, OTHER_KEY, &[], None)?;
     scene.assert_cold(&output, "refused-provenance")?;
+    scene.assert_confined(&before)?;
+    scene.finish()
+}
+
+#[test]
+#[cfg(unix)]
+fn gc1_t53_recover_survives_an_unguarded_tool_failure() -> Result<(), Box<dyn Error>> {
+    let scene = Scene::new("exit-catch-all", crate::gc1_t53::scripts()?)?;
+    let key = scene.discover()?;
+    scene.pack_export("old")?;
+    std::fs::create_dir_all(scene.state_root())?;
+    std::fs::write(scene.state_root().join("leftover"), b"previous state")?;
+    scene.shim_failure("mkdir")?;
+    let before = scene.tree()?;
+    let output = scene.recover(&key.key, &key.key, &[], None)?;
+    scene.assert_cold(&output, RECOVERY_FAILED)?;
     scene.assert_confined(&before)?;
     scene.finish()
 }

@@ -314,8 +314,8 @@ impl Scene {
         tree_of(&self.scratch)
     }
 
-    pub(crate) fn shim_chmod_failure(&self) -> Result<(), Box<dyn Error>> {
-        gc1_mbx_stub::install_chmod_failure(&self.bin)
+    pub(crate) fn shim_failure(&self, tool: &str) -> Result<(), Box<dyn Error>> {
+        gc1_mbx_stub::install_failure(&self.bin, tool)
     }
 
     pub(crate) fn finish(self) -> Result<(), Box<dyn Error>> {

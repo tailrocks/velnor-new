@@ -181,3 +181,24 @@ fn gc1_t53_recover_refuses_a_member_name_past_the_name_limit() -> Result<(), Box
     let name = "n".repeat(NAME_LIMIT + 1);
     check_refused("long name", 4, &name, 0o755, Bottom::File, "refused-name")
 }
+
+#[test]
+#[cfg(unix)]
+fn gc1_t53_recover_accepts_a_member_name_at_the_name_limit() -> Result<(), Box<dyn Error>> {
+    let name = "n".repeat(NAME_LIMIT);
+    let scene = Scene::new("depth-name-accepted", crate::gc1_t53::scripts()?)?;
+    let key = scene.discover()?;
+    build(&scene, 4, &name, 0o755, Bottom::File)?;
+    expect_shape(&scene, 4, NAME_LIMIT)?;
+    let before = scene.tree()?;
+    let output = scene.recover(&key.key, &key.key, &[], None)?;
+    if output.contains("::warning::") || !output.contains("decision=exact-hit") {
+        return Err(fail(&format!("recover refused a legal name: {output}")));
+    }
+    if !scene.store().join("cas").join(&name).join("f").is_file() {
+        return Err(fail("the store lost the longest member"));
+    }
+    scene.assert_clean_exit()?;
+    scene.assert_confined_recovered(&before)?;
+    scene.finish()
+}
