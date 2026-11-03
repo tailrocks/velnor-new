@@ -34,6 +34,9 @@ fn outcome_with_link(link: &str, target: &str) -> Result<Outcome, Box<dyn Error>
             extra_archives: &[],
             file: MACHETE_BINARY,
             links: &[(link, target)],
+            workspace_links: &[],
+            files: &[],
+            home_prefix: "",
         },
         &[],
     )

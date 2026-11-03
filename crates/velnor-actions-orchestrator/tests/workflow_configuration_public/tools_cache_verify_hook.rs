@@ -41,8 +41,12 @@ pub(super) struct Sandbox {
 
 impl Sandbox {
     pub(super) fn new() -> Result<Self, Box<dyn Error>> {
+        Self::with_home_prefix(".tmp")
+    }
+
+    pub(super) fn with_home_prefix(prefix: &str) -> Result<Self, Box<dyn Error>> {
         Ok(Self {
-            home: tempfile::tempdir()?,
+            home: tempfile::Builder::new().prefix(prefix).tempdir()?,
             runner_temp: tempfile::tempdir()?,
             workspace: tempfile::tempdir()?,
         })
@@ -251,6 +255,9 @@ fn install_outcome(
             extra_archives: &[],
             file: install,
             links: &[],
+            workspace_links: &[],
+            files: &[],
+            home_prefix: "",
         },
         extra,
     )?;
@@ -325,6 +332,9 @@ fn restored_cargo_machete_install_is_kept_when_it_matches_its_pinned_archive()
                 extra_archives: &[],
                 file,
                 links: &[],
+                workspace_links: &[],
+                files: &[],
+                home_prefix: "",
             },
             &[],
         )

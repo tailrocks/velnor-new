@@ -3,7 +3,7 @@
 
 use std::error::Error;
 use std::fs;
-use std::os::unix::fs::symlink;
+use std::os::unix::fs::{PermissionsExt, symlink};
 
 use super::ledger_cli_verify_script::RenderedVerify;
 use super::tools_cache_verify_hook::{Sandbox, expand_shell, pair};
@@ -18,6 +18,9 @@ pub(super) struct Install<'a> {
     pub(super) extra_archives: &'a [(&'a str, &'a [u8])],
     pub(super) file: &'a [u8],
     pub(super) links: &'a [(&'a str, &'a str)],
+    pub(super) workspace_links: &'a [(&'a str, &'a str)],
+    pub(super) files: &'a [(&'a str, &'a [u8], bool)],
+    pub(super) home_prefix: &'a str,
 }
 
 pub(super) struct Outcome {
@@ -31,7 +34,7 @@ pub(super) fn run_install(
     install: &Install<'_>,
     extra: &[(String, String)],
 ) -> Result<Outcome, Box<dyn Error>> {
-    let runner = Sandbox::new()?;
+    let runner = Sandbox::with_home_prefix(install.home_prefix)?;
     let installs = runner.mise_root().join("installs");
     let archives = installs.join(".velnor-verified-archives");
     let version = installs.join(install.dir).join(install.version);
@@ -52,6 +55,23 @@ pub(super) fn run_install(
             fs::create_dir_all(parent)?;
         }
         symlink(target.replace("{dir}", &dir), path)?;
+    }
+    for (name, bytes, executable) in install.files {
+        let path = version.join(name);
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        fs::write(&path, bytes)?;
+        if *executable {
+            fs::set_permissions(&path, fs::Permissions::from_mode(0o755))?;
+        }
+    }
+    for (link, target) in install.workspace_links {
+        let path = runner.workspace.path().join(link);
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        symlink(target, path)?;
     }
     let mut env = vec![
         pair("VELNOR_TOOL_PINS", install.pins),
