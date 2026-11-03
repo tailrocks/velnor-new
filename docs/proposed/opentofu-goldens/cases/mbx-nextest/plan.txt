@@ -1,4 +1,4 @@
-Velnor Actions plan 0.1.72
+Velnor Actions plan 0.1.73
 Repository: <repo>
 
 Detected stacks
