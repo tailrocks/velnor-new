@@ -82,7 +82,9 @@ output across trust scopes.
   consumer is `mbx cache import`, which moves the objects into the store and
   removes the restored directory. The recover step imports a staged directory
   that it first screened and measured, never the downloaded `.tar.gz`, and
-  runs the import from a working directory outside any checkout.
+  runs the import from a working directory outside any checkout; a working
+  directory inside the workspace, or any hostile or unreadable payload, ends
+  cold with exit 0, no stage and no write outside the stage.
 - Compat does not name a job: every reader of a workspace shares the entry,
   and the key changes only when the lock, toolchain, MBX version or platform
   changes. The `unit` keeps the dependency seed and suite bundles apart.
