@@ -1,12 +1,12 @@
 # Compiled-state persistence across CI runs
 
-Status: proposed; decisions pending; Linux measurements pending. This page is not an implementation claim, except that the restore hardening landed in #477. It records why compiled state does not carry from one run to the next today, and the design that would carry it.
+Status: proposed; the design is decided in the Velnor fast CI decision record, and hosted Linux measurements are pending. This page is not an implementation claim, except that the restore hardening landed in #477. It records why compiled state does not carry from one run to the next today, and the design that would carry it.
 
-Labels used for numbers: **measured** (read from a log, `gh` output or source in this repository, or measured with `mbx` 1.29.1 on a local macOS arm64 machine), **reported** (taken from a pull request or issue body, not re-measured), **inferred** (arithmetic or a ratio from other numbers). Every size on Linux hosted runners is inferred or unmeasured, except hosted-log lines quoted as measured, until the measurements in [Open measurements](#open-measurements) land.
+Labels used for numbers: **measured** (read from a log, `gh` output or source in this repository, or measured with `mbx` 1.29.1 on a local macOS arm64 machine), **reported** (taken from a pull request or issue body, not re-measured), **inferred** (arithmetic or a ratio from other numbers). Sizes labelled "Linux harness" were measured by the Velnor fast CI decision record on a Linux arm64 Docker harness, which is not a hosted runner. Every other size on Linux hosted runners is inferred or unmeasured, except hosted-log lines quoted as measured, until the measurements in [Open measurements](#open-measurements) land.
 
 ## Goal
 
-Every sequential CI run reuses the compiled state of the previous run, the same way a second local `cargo` command through `mbx` does. That covers successive pushes to `main` and successive pushes to one pull request. The state must fit GitHub's 10 GB repository cache limit and must not store the same bytes once per crate job.
+Every sequential CI run reuses the compiled state of the previous run, the same way a second local `cargo` command through `mbx` does. That covers successive pushes to `main`. A pull request reuses the units that `main` already produced, and sequential reuse of a pull request's own output waits for pull-request-scoped state (see [Pull-request-scoped state: last](#pull-request-scoped-state-last)). The state must fit GitHub's default 10 GB repository cache limit and must not store the same bytes once per crate job.
 
 ## Why compiled state does not carry today
 
@@ -57,16 +57,34 @@ Reuse inside a job works; reuse across jobs and runs does not exist.
 
 ## GitHub cache rules that bind
 
-Read from GitHub's documentation on 2026-11-03: the dependency-caching page, the REST cache API, the `actions/cache` README and the 2025-11-20 changelog entry. These pages were read through summaries, so check the exact wording before quoting.
+Each rule below was checked on 2026-11-04 against the original sources, and [the cache entry in the GitHub Actions reference](github-actions-reference.md#5-cache-rules-verified-against-original-sources-checked-2026-11-04) holds the full evidence with file and line citations. The sources are the GitHub docs pages `dependency-caching`, `workflow-syntax` and `limits`, the REST cache API page, `actions/cache` at the pinned commit `55cc834` (tag `v6`, bundling `@actions/cache` 6.1.0), and the `actions/toolkit` source for that package (commit `0786132e`, `packages/cache/src`). The numbers in brackets point to entries 5.1 to 5.9 of the reference.
 
-- An entry is immutable. A new save needs a new key, and an identical key can never add units.
-- `restore-keys` is a prefix match and returns the most recently created match, not the highest generation.
-- A run reads caches from its own ref and the default branch. A `pull_request` run writes to `refs/pull/N/merge`, which the default branch and other pull requests cannot read.
-- Any run that can read a cache restores its bytes as-is. GitHub does not validate them.
-- Entries not accessed for 7 days are evicted. At the repository limit, eviction is least-recently-accessed first, whatever the key.
-- The default limit is 10 GB per repository. Paid accounts may raise it since 2025-11-20. This project does not plan that, and raising it needs an owner decision.
-- `actions/cache` compresses the archive with `zstdmt --long=30` on Linux (read from `packages/cache/src/internal/tar.ts` in actions/toolkit, @actions/cache 6.3.0, on 2026-11-03; the level is not set there, so zstd's default applies). A gzip file inside the archive gets no benefit from it.
-- Not found in the pages read: a per-entry size cap, download rate limits, and whether a fine-grained token with `actions: write` can delete entries. Treat all three as unconfirmed.
+- An entry is immutable. A new save needs a new key, and a save to an existing key is refused and logged at info level while the step succeeds [5.2].
+- `restore-keys` is a prefix match and returns the most recently created match, not the highest generation. The server does the matching, so only the docs prove the order [5.3].
+- A run reads caches from its own ref and the default branch. A `pull_request` run writes to `refs/pull/N/merge`, which the default branch and other pull requests cannot read [5.4]. Whether a later push to the same pull request restores an earlier push's entry is inferred from the ref-keyed scope and not proven.
+- Only some events write the default-branch scope. `push`, `workflow_dispatch`, `schedule` and a few others do. `workflow_run` is read-only by default and writes only with an explicit write-capable `cache-mode` [5.9].
+- `cache-mode` takes `read`, `write`, `write-only` or `none`, at workflow or job level, and the job value wins. The service enforces it with scoped tokens [5.5].
+- The pinned client does not read `ACTIONS_CACHE_MODE`. A save under `read` still tries to reserve, is denied by the service, and logs a warning [5.5].
+- Any run that can read a cache restores its bytes as-is. Contents are not signed, and `actions/cache` extracts with `tar -xf -P` inside the restore step, so nothing can inspect the archive before extraction. It checks no uncompressed size [5.7].
+- Entries not accessed for 7 days are evicted by default, and at the repository limit the eviction is least-recently-accessed first, whatever the key. The 7-day period and the 10 GB size are defaults that owners can change [5.1].
+- The default limit is 10 GB per repository. Owners can raise it since 2025-11-20 at a cost, and a repository over its budget can turn read-only. This project does not plan to raise it, and raising it needs an owner decision [5.1].
+- `actions/cache` 6.1.0 compresses with `zstdmt` on Linux and does not pass `--long=30` for saves, because `getCompressionMethod` returns the without-long variant. It passes no level, so zstd's default applies [5.6]. A file that is already compressed gains nothing from this outer pass.
+- There is no per-entry size check in the version 2 save path. A 10 GiB per-archive check exists only in the legacy version 1 path [5.8]. The service may have its own limit, which GitHub does not document.
+- The repository limits are 200 new-entry uploads per minute and 1,500 downloads per minute. A 429 response fails nothing, because a failed save is a warning [5.8].
+
+## Decided design
+
+The Velnor fast CI decision record fixes the following design. It replaces the earlier proposal on this page. Items marked open are not decided.
+
+1. One union producer per Cargo root. It builds the real workspace members with `MBX_BUILD_SCRIPT_EXECUTION=0` and runs the same per-crate lane commands as the crate jobs, not one `--workspace` build. A registry-only skeleton producer was rejected by measurement.
+2. A split into job P (compile) and job A (attest and save).
+3. A workflow-level `cache-mode: read` with named writers.
+4. Key version 4.
+5. A Velnor zstd single-file packer, because the pinned `actions/cache` compresses with `zstdmt` and without `--long=30`.
+6. Two-bound ceilings: 1.5 GiB stored and 12 GiB extracted.
+7. Retention of 1 generation per root, with prune on `workflow_run` after CI.
+8. `SOURCE_DATE_EPOCH=0` in every mbx task environment and in the compatibility key.
+9. Pull-request-scoped state last.
 
 ## Budget
 
@@ -78,170 +96,198 @@ The cache policy constants are in `crates/velnor-actions-contract/src/config/wor
 | Operating budget | 8,000,000,000 |
 | Minimum reserve | 2,000,000,000 |
 
-Inventory at 2026-11-03 14:11 UTC: 3,684,271,824 B, of which `mise-tools-v2` is 3,461,236,524 B in 16 entries (measured). Prune keeps 8 per group (`cache_prune.rs:15`), so until it runs the entries are doubled. Headroom under 8e9 B is 4,315,728,176 B now (arithmetic). After prune it is about 6.05e9 B, using the newer set of 8 entries (1,730,612,999 B) plus sources (223,035,300 B) (inferred). The 384 MiB family ceiling is enforced per family, and the renderer's save admission checks elapsed time, not the 8e9 total (`cache_save_budget.rs:48-72`). Because eviction ignores the project's own budget, the proposal is to check the 8e9 total on every state save, so that a burst of large entries cannot evict the default branch's state first.
+Inventory at 2026-11-03 14:11 UTC: 3,684,271,824 B, of which `mise-tools-v2` is 3,461,236,524 B in 16 entries (measured). Prune keeps 8 per group (`cache_prune.rs:15`), and it runs before saves today, which leaves two generations and doubles the tools entries. After prune the tools entries are 1,730,612,999 B and the sources entries are 223,035,300 B, 1,953,648,299 B together (inferred from the two creation times). The renderer's save admission checks elapsed time, not the 8e9 total (`cache_save_budget.rs:48-72`). Because eviction ignores the project's own budget, every state save checks the 8e9 total, so that a burst of large entries cannot evict the default branch's state first. Admission is serialized across all state producers in one push: the A jobs of every root share one concurrency group with `cancel-in-progress: false`, so each admission check reads the inventory that the previous save left. Without that, two roots can pass the same check against the same inventory and together exceed it. The decision record fixes the 8e9 total admission and the split of P and A. It does not state the concurrency group, so treat the group as a design requirement of this page.
 
 ## Storage layout
 
-Six layouts were compared for 18 crate jobs over two Cargo roots (a root workspace with 12 jobs and a nested runner workspace with 6 jobs). Registry crates compile about 5.2 times across the root jobs and 2.25 times across the runner jobs (inferred from crate counts per job). mbx's behavior bounds the options:
+Six layouts were compared for 18 crate jobs over two Cargo roots (a root workspace with 12 jobs and a nested runner workspace with 6 jobs). mbx's behavior bounds the options:
 
 - The store is content-addressed, so importing two stores that share units leaves the object union (measured: two 109.6 and 109.9 MiB exports became a 135.2 MiB union).
 - An export is the closure of what its builds used, including hits. It is not a delta (measured).
-- A bundle whose shared objects were removed is refused at import with `cache export is incomplete or corrupt` (measured). A layered base plus delta therefore cannot be built from mbx exports.
+- A bundle whose shared objects were removed is refused at import with `cache export is incomplete or corrupt` (measured). A layered base plus delta therefore cannot be built from mbx exports. A gzip file passed to `mbx cache import` fails with exit code 1 (measured).
 - An import creates no exportable build, so a merge job must replay the lanes in the imported store to export a union (measured: 22 of 24 and 23 of 25 units hit on replay).
 - `--group` selects whole builds. mbx 1.29.1 has no per-unit filter and no delta export.
 
 | Layout | Bytes per generation | Verdict |
 |---|---|---|
-| One entry per job | About 3.0 times one union per root (inferred) and 18 writers | Not preferred: duplicates registry units, and 18 writers conflict with the read-only crate job rule |
-| Shared base plus per-job delta layers | At least the per-job sum, because each delta export includes the base objects it used | Not preferred: impossible with mbx 1.29.1 (measured) |
-| Crate jobs upload exports, one job merges | One union stored, plus about 1.7 GB of transient artifacts per run (inferred) | Not preferred: crate jobs would export, and the merge must replay lanes |
-| One producer per Cargo root, one union entry per generation | One union per root | Proposed |
-| Per-crate export groups | Sum of closures, like per job | Only if a measured gap remains; about 3 times the bytes |
+| One entry per job | Sum of per-job exports, 3.46e9 B zstd -3 (measured, Linux harness) and 18 writers | Not preferred: about 72 percent of the bytes duplicate, and 18 writers conflict with the read-only crate job rule |
+| Shared base plus per-job delta layers | At least the per-job sum, because each delta export includes the base objects it used | Not preferred: impossible with mbx 1.29.1 |
+| Crate jobs upload exports, one job merges | One union stored, plus transient artifacts per run | Not preferred: adds 18 uploads to the required path, and the merge must replay lanes |
+| One producer per Cargo root, one union entry per generation | Union of all, 2.24e9 B zstd -3 (measured, Linux harness) | Decided |
+| Per-crate export groups | Sum of closures, like per job | Not preferred |
 | mbx remote cache on an object store | Object-level dedupe, no 10 GB cap | Not preferred for now: needs an external service, and the project uses GitHub caches only |
 
-### Proposal
+### Decision
 
-Store one union entry per Cargo root and generation. One non-crate producer job per root writes it. Crate jobs and the producer restore it read-only before their own work, and crate jobs never export, save or mark. Zero bytes duplicate across the 18 jobs. Each job downloads the whole union for its root, which costs seconds, not quota (inferred: about 77 MB for a root job and 215 MB for a runner job after the size levers below; 0.8 to 3.6 s at the measured 59 to 94 MB/s download rate). Caveat: those sizes come from a macOS skeleton of registry crates only. A Linux datum says per-job stores with workspace members are far larger. In main push run 41639002674, job 125928117424 (Rust / velnor-actions-cli), the build lane logged `object cache: 0 hits, 0 misses, 151 not looked up, 4 bypassed; 0 B downloaded, 0 B uploaded, 3.3 GiB stored locally` (measured). Full-workspace per-job stores are GiB-scale raw on Linux, so the 77 MB figure holds only for a registry-only producer.
+Store one union entry per Cargo root and generation. One non-crate producer per root writes it, and crate jobs restore it read-only and never export, save or mark. The producer runs inside the CI run beside the crate jobs. It needs only the plan job, runs with `continue-on-error`, sits outside the required jobs, and is skipped on an exact key hit. It runs the crate jobs' lane records by digest without uploading task reports, with the same environment, checkout path and store path. A probe showed that foreign-lane resolution works. If the producer pushes measurement T1 above 450 s, the fallback is a separate push-triggered workflow, and T2 counts producer runner-seconds.
+
+Measured on a Linux arm64 Docker harness (source `ced5d482b0`, the CI environment, 18 crate jobs, full debuginfo; not a hosted runner):
+
+| Quantity | Value |
+|---|---:|
+| Sum of per-job exports, raw / zstd -3 | 17.66e9 B / 3.46e9 B |
+| Union of all, raw / zstd -3 / zstd -19 | 12.44e9 B / 2.24e9 B / 1.72e9 B |
+| Root union, raw / zstd -3 | 8.31e9 B / 1.39e9 B |
+| Runner union, zstd -3 | 0.92e9 B |
+| Duplication factor (sum over union) | 1.54 |
+| Warm run with no change, restored from the union | 98.3 percent hit, 0 registry misses (bypassed units aside) |
+| One-line leaf change | 98.2 percent hit |
+| Core-crate change | 94.6 percent hit |
+| Registry-only skeleton consumer | 80.2 percent hit, 909 units not looked up across 18 jobs |
+
+The harness stored sizes omit `--long=30`, so they are upper bounds. The decision record corrected an earlier aggregation error that reported 3,636 skeleton units not looked up; the correct count is 909. In the harness, `velnor-runner-cli` and `velnor-runner-host` each showed 19 registry misses in every warm scenario. The harness did not set `SOURCE_DATE_EPOCH`, so this is consistent with the `__DATE__` and `__TIME__` expansion in mimalloc's `options.c` (inferred), which `SOURCE_DATE_EPOCH=0` removes. A local probe with `SOURCE_DATE_EPOCH=0` gave 1,062 hits and 2 misses for `velnor-runner-cli`, and 15.5 s warm against 72.5 s cold (measured, macOS).
 
 A generation export contains only what that generation's builds used, so units no longer used drop out without any `mbx gc` (measured).
 
+Earlier download-time estimates of 77 MB and 215 MB came from a registry-only macOS skeleton and no longer apply. The measured roots are 1.39e9 B and 0.92e9 B stored.
+
 ## Size levers
 
-Ranked by effect. Measurements come from a local macOS arm64 probe on small registry crates, so every Linux effect is inferred.
+The first three rows are decided or measured on Linux. The other rows come from a local macOS arm64 probe on small registry crates, so their Linux effect is inferred.
 
 | Rank | Lever | Effect | Status |
 |---|---|---|---|
-| 1 | Hand a plain tar, not a `tar.gz`, to `actions/cache`, so its zstd long-range matching applies | Stored bytes about halve: 40.4 MB to 20.5 MB on a 137.5 MB export | Measured on macOS; Linux ratio unmeasured. Touches the restore extraction path and needs security review |
-| 2 | `[profile.dev.package."*"] debug = 0` (registry dependencies only) | A further 27 percent stored (20.5 to 15.0 MB) | Measured on macOS. Repository policy, not generator code. Changes every unit key once and removes dependency line numbers from backtraces |
-| 3 | `debug = "line-tables-only"` everywhere, instead of 2 | 17 percent stored | Measured on macOS |
-| 4 | One producer and one store for build, clippy and doc | The union of the three lanes is 149.9 MiB against 207.4 MiB separately (28 percent less); clippy and doc add 14 percent to the build lane | Measured; inherent to one producer per root |
-| 5 | Keep the clippy and doc lanes in the state | Saves 14 percent of bytes if dropped, but loses the registry check phase in those lanes | Not preferred |
-| 6 | Exclude workspace-member links and test executables from the producer | Largest lever by bytes if the producer builds members: the old seed exports were 5.9 and 3.5 GiB uncompressed (reported) | Not measured as an export; one hosted build lane logged 3.3 GiB stored locally (see the Proposal) |
-| 7 | `MBX_CACHE_LINKS=0` | Larger, not smaller (raw 131.6 to 142.7 MiB) | Measured; do not use |
-| 8 | `split-debuginfo = "off"` | No gain after zstd (1 percent) | Measured on macOS; the Linux default is already off |
-| 9 | Exclude incremental state | Nothing to gain: exports never carry incremental state | Source and docs |
-| 10 | `mbx gc` before export | Nothing to gain: the export is already the closure | Measured |
-| 11 | Higher zstd level | About 25 percent more at 36 s per 137 MB | Not controllable: `actions/cache` picks the level |
-
-Estimated stored bytes per generation for both roots, from a measured skeleton export in a gzip tar (152 MB root, 424 MB runner; a dependency-only skeleton export from a local prototype):
-
-| Scenario | Root | Runner | Both roots |
-|---|---:|---:|---:|
-| Today's packer | 152 MB (measured) | 424 MB (measured) | 576 MB |
-| Plain tar (lever 1) | 77 MB (inferred) | 215 MB (inferred) | 291 MB |
-| Levers 1 and 2 | 56 MB (inferred) | 157 MB (inferred) | 213 MB |
-
-The skeleton figures describe an export of registry crates only. A producer that also builds workspace members is larger, and its size is unmeasured.
+| 1 | Velnor packer: one `tar` piped to `zstd -3 --long=30`, saved as a single file | Admission checks the exact stored bytes. A plain tar roughly halved stored bytes on macOS (40.4 MB to 20.5 MB on a 137.5 MB export) | Decided. Touches the restore path and needs security review |
+| 2 | Debuginfo policy: `debug = 0` for dependencies | About 43 percent fewer stored bytes | Decided, ships after measured main pushes and before pull request state. Changes every unit key once and removes dependency line numbers from backtraces |
+| 3 | `zstd -19` instead of `-3` | 23 percent smaller on the union, at 64 to 76 times the wall time | Rejected |
+| 4 | One producer and one store for build, clippy and doc | The union of the three lanes is 149.9 MiB against 207.4 MiB separately (28 percent less) | Measured on macOS; inherent to one producer per root |
+| 5 | `debug = "line-tables-only"` everywhere, instead of 2 | 17 percent stored | Measured on macOS |
+| 6 | `MBX_CACHE_LINKS=0` | Larger, not smaller (raw 131.6 to 142.7 MiB) | Measured; do not use |
+| 7 | `split-debuginfo = "off"` | No gain after zstd (1 percent) | Measured on macOS; the Linux default is already off |
+| 8 | Exclude incremental state, or run `mbx gc` before export | Nothing to gain: exports never carry incremental state and are already the closure | Source and measurement |
 
 ## Key, retention and prune
 
 Three structural problems sit in the current key and prune rules:
 
 1. The snapshot is the SHA-256 of `Cargo.lock` alone (`cache_steps_mbx_bundle.rs`, `compat` and `snapshot` in the discover step). One lock gives one generation forever, because keys are immutable. New workspace-crate units from code edits are never saved while the lock is unchanged.
-2. Prune groups entries by the key minus the final `-s256-<hex>` (`cache_prune.rs`), and compatibility is part of the key. A retired compatibility digest is a different group and keeps its entries until GitHub evicts them after 7 unused days (inferred from the grouping code).
+2. Prune groups entries by the key minus the final `-s256-<hex>` (`cache_prune.rs`), and compatibility is part of the key. A retired compatibility digest is a different group and keeps its entries until GitHub evicts them (inferred from the grouping code).
 3. The ceiling bytes are part of the compatibility digest, so any ceiling change orphans every entry.
 
-Proposed key, version 3:
+Decided key, schema 4 (schema 3 is taken by the `SOURCE_DATE_EPOCH` change):
 
 ```text
-velnor-v3-state-trusted-<root-slug>-s256-<compat>-s256-<generation>
+velnor-v4-state-<trust>-<unit>-<root>-s256-<compat>-s256-<snapshot>-s256-<payload>
 ```
 
-- `root-slug` is a validated, readable name for the Cargo root. It lets prune group by root across compatibility digests.
-- `compat` covers family, schema, mbx version, toolchain, root, `uname -s` and `-m`, `MBX_SHARE_OUT_DIR`, the bundle's `MBX_BUILD_SCRIPT_EXECUTION` value, `MBX_CC`, `MBX_CACHE_DIR` and `ImageOS`. It does not cover ceilings, because bounds are admission policy and not compatibility. `MBX_CACHE_DIR` is in the key because, with `MBX_SHARE_OUT_DIR=1`, the absolute store path enters the action key of every crate that reads `OUT_DIR` (`serde_core`, `serde`, `thiserror`). A local probe showed a consumer with a different store path missing `serde_core`, and a consumer with the producer's path hitting. On hosted Linux the path is constant by construction (`cache_steps_mbx_preflight.rs:104-108`).
-- `generation` is the SHA-256 of the lock digest, a producer-scope digest, and, only when the scope includes workspace units, the root tree identifier. A commit SHA alone is not an identity (`cache-contract.md`).
-- Restore uses the prefix up to and including `compat`, so the newest generation of that compatibility wins. A lock change finds the previous generation by prefix, and mbx borrows predictions from earlier lock states, so unchanged crates still hit (UNCONFIRMED: no source or log read for this claim).
-- Retention is 2 generations per root across all compatibility digests (today 1 per unit, `family.rs:136`). A concurrent job may still be downloading generation N-1 when generation N is saved, and N-1 is the rollback if N is bad. Prune groups by family and root slug, so a retired compatibility digest dies on the next main push instead of after 7 days.
+- `trust` is the trust class of the writer, and `unit` is the state unit (for example compiled state). `root` is a validated, readable name for the Cargo root, so prune groups by trust, unit and root across compatibility digests.
+- `compat` covers family, schema, mbx version, toolchain, root, `uname -s` and `-m`, `MBX_SHARE_OUT_DIR`, a literal `MBX_BUILD_SCRIPT_EXECUTION=0` line, `MBX_CC`, the resolved store path, the checkout path, `SOURCE_DATE_EPOCH` and `ImageOS`. It does not cover ceilings, because bounds are admission policy and not compatibility. The store path is in the key because, with `MBX_SHARE_OUT_DIR=1`, the absolute store path enters the action key of every crate that reads `OUT_DIR` (`serde_core`, `serde`, `thiserror`). A local probe showed a consumer with a different store path missing `serde_core`, and a consumer with the producer's path hitting. The checkout path is in the key because compile paths can enter unit keys (see open measurement 10).
+- `snapshot` hashes `Cargo.lock`, the root's Rust inputs and the producer task set. An exact hit on the key skips the producer. A commit SHA alone is not an identity (`cache-contract.md`).
+- `payload` is the SHA-256 of the stored file. Job A computes it from the file P produced, so the key binds the bytes (see [Restore hardening](#restore-hardening-and-attestation)).
+- Plan selects only an attested, newest entry by prefix, so the newest generation of one compatibility wins. A lock change finds the previous generation by prefix, and mbx borrows predictions from earlier lock states, so unchanged crates still hit (UNCONFIRMED: no source or log read for this claim).
+- Retention is 1 generation per root. Today prune runs before saves, which leaves 2 generations and explains the 3.68e9 B inventory. Prune moves to a `workflow_run` handler after CI completes, grouped by trust, unit and root, with explicit checks of the event, the branch and the repository. A reader that loses a race with prune sees a miss and builds cold, because a failed restore is a miss.
 - The old `velnor-v2-state-trusted-` prefix joins the retired prefixes pruned to zero (`cache_prune.rs:16`). No state entry exists, so this costs nothing.
 
-Save only when the generation holds new units. The producer reads `mbx cache stats --json` before and after its lanes and saves when `object_bytes` grew by at least 1 MiB, or when no entry exists for the compatibility digest. Noise on an all-hit rerun was about 9.7 KB and a real new unit about 25.8 MB (measured, macOS).
+A save happens whenever the snapshot changes, which means whenever `Cargo.lock`, the root's Rust inputs, or the producer's task set changes, and the exact key is absent. The save does not depend on byte growth. A change in the closure or the action set can leave the object bytes equal or smaller and still needs a new generation, because the old one is keyed to a different snapshot. The earlier rule of saving only when `object_bytes` grew by 1 MiB is dropped.
 
 ## Two-bound ceilings
 
 The one raw-byte gate hid the packer problem. Two bounds limit two different resources:
 
-- A stored bound: the compressed bytes GitHub counts against the quota.
-- An extracted bound: the uncompressed bytes the restore writes to the runner's disk, which also caps a decompression bomb.
+- A stored bound: the bytes of the packed single file, which is what the cache counts against the quota.
+- An extracted bound: the uncompressed bytes that Velnor's recover step writes to the runner's disk, which also caps a decompression bomb in that step.
 
-Over either bound, the publish step refuses the save, prints both measured byte counts in the warning, and the run stays cold. The warning `over_ceiling` splits into `over_stored` and `over_extracted`. The stored bound is measured as `zstd -T0 -3 --long=30` over the tar, the codec `actions/cache` uses (equal to the stored size within a few percent, inferred).
+Decided values: stored 1.5 GiB and extracted 12 GiB now. After the debuginfo policy they drop to 1 GiB and 6 GiB. The measured maxima are 1.05e9 B stored and 8.27e9 B raw for the root (Linux harness). Over either bound, the publish step refuses the save, prints both measured byte counts in the warning, and the run stays cold. The warning `over_ceiling` splits into `over_stored` and `over_extracted`. Because Velnor writes one `tar | zstd -3 --long=30` file, admission measures the exact stored bytes, with no estimate of what `actions/cache` would produce.
 
-Interim values, to be replaced from hosted measurements: stored 128 MiB (root) and 320 MiB (runner); extracted 768 MiB and 2 GiB. Proposed rule: stored bound is 1.5 times the median stored size of the chosen variant, rounded up to 16 MiB; extracted bound is 1.4 times the raw size. A packed runner skeleton at 424 MB exceeds the current 384 MiB family bound by about 5 percent, so the runner root cannot be stored under today's single bound.
+The extracted bound does not cap what `actions/cache` extracts. The outer restore step runs `tar -xf -P` on the entry before any Velnor code runs, with no size check [5.7 in the reference]. The extracted bound limits Velnor's own recover extraction only. The outer extraction is a separate tracked risk (SEC-4), and a full pre-extraction guarantee waits on it. The payload digest in the key narrows it: recover compares the payload's SHA-256 with the key before it runs `zstd -dc` or imports anything.
 
-Worst-case budget with these bounds: 2 roots times 2 retained generations times 2 compatibility digests times (128 + 320) MiB is about 1.88 GB. State per generation for both roots is 213 to 576 MB, so main-only state with 2 retained generations and one superseded digest (4 generations) costs 0.85 to 2.3 GB beside the 1.95 GB already stored. That leaves 2.0 to 3.5 GB under the 8e9 budget while `mise-tools-v2` entries are doubled (4,315,728,176 B headroom now), and 3.7 to 5.2 GB after prune (about 6.05e9 B headroom) (arithmetic from the figures above; inferred).
+Budget with these ceilings. A ceiling is per entry, and each root has one entry. The earlier version of this section multiplied by the root count twice. Recomputed:
+
+- Both roots at the stored ceiling: 2 times 1.5 GiB is 3.00 GiB, which is 3,221,225,472 B.
+- A save writes the new generation before prune removes the old one, so for one root the peak adds one more entry: 3.00 GiB plus 1.5 GiB is 4.50 GiB, which is 4,831,838,208 B.
+- Add the pruned tools and sources entries, 1,953,648,299 B, and the worst case is 6,785,486,507 B. That is under the 8e9 B budget with 1,214,513,493 B of headroom.
+- After the debuginfo policy, with 1 GiB ceilings, the worst case is 2 GiB plus 1 GiB plus 1,953,648,299 B, which is 5,174,873,771 B.
+- The harness measured a steady total of 4.26e9 B and a peak of 6.57e9 B, both upper bounds because they omit `--long=30`. Both fall under the worst case above, as they should.
+
+All figures are arithmetic from the decided ceilings and the measured entry sizes (inferred for the worst case, measured for the harness totals).
 
 ## The build-script rule
 
-Every writer compiles with `MBX_BUILD_SCRIPT_EXECUTION=0`. A bundle written under `1` and restored in a different job replayed a workspace member's stale build-script output: the consumer exited 100 where a cold build exited 0 (reported from a local reproduction recorded by the maintainers). mbx 1.29.1 has no per-package scope for this setting. The rule is therefore:
+Every writer compiles with `MBX_BUILD_SCRIPT_EXECUTION=0` and `SOURCE_DATE_EPOCH=0`. A bundle written under `1` and restored in a different job replayed a workspace member's stale build-script output: the consumer exited 100 where a cold build exited 0 (reported from a local reproduction recorded by the maintainers). mbx 1.29.1 has no per-package scope for this setting. The rule is therefore:
 
 - A job that exports a bundle runs with `MBX_BUILD_SCRIPT_EXECUTION=0`, set by role and not by a free constant, so no code path builds a producer environment with `1`.
 - The publish step refuses to export unless the variable is `0`, and the renderer rejects a producer job whose environment says otherwise.
 - The compatibility digest carries the bundle's value as a literal, so writer and reader keys match whatever the consumers use.
-- Consumers keep `0` until a bundle exists that cannot replay stale output. Measured on one root, a `1` consumer over a `0` bundle gets the same registry hits and 23 more "not looked up" units in the build lane (52 against 29), with no wall-time gain.
+- Consumers keep `0`. A consumer at `1` over a `0` bundle (rule K) is rejected: it adds 8 uncached compiles, and on one root it showed the same registry hits and 23 more "not looked up" units (52 against 29) with no wall-time gain.
+- `SOURCE_DATE_EPOCH=0` goes in every mbx task environment and in the compatibility key. Without it the `velnor-runner-cli` chain always misses, because `mimalloc` expands `__DATE__` and `__TIME__`.
 
-A side effect of `0`: crates with build scripts may keep recompiling in the consumer.
+A side effect of `0`: warm runs bypass about 4 registry units per job, which are build-script executions. Item 7 of the decision record leaves this open: the confirmation measured the bypassed units as real `rustc` runs of 5 registry crates, so they fail an acceptance that counts every registry unit that is not a hit. A hybrid bundle (dependency skeleton at `1` plus real members at `0`) reached 0 bypassed units with exit code 0 on macOS. It needs a Linux measurement and an amendment to the build-script decision (open). Until then, bypassed units are reported separately from misses.
 
-## Restore hardening
+## Workflow-level cache-mode
 
-PR #477 landed the restore hardening. At class level, the restore now treats the payload as untrusted bytes: it bounds the inflated and extracted size, rejects archives whose members are not plain files and directories under the expected family directory, extracts into a private stage, imports from the staged directory instead of the gzip file, runs the import from a working directory outside any checkout, and goes cold with exit 0 on every refusal or failure. The save side still packs `payload.tar.gz`; the packer change is step 3 of the sequence below. Persistence still needs a writer, because no job saves the bundle today.
+Today ten jobs write the main cache scope: Plan, alint, deny, machete, jactionlint, maintenance-helpers, both Required jobs, and the tools producers, plus the freshness and job-image-candidate jobs. Most of them run third-party code, and an entry from such a job can be poisoned. The design sets `cache-mode: read` at workflow level and grants write only to jobs that run no third-party code: the sources and tools producers and job A. Job A uses `write-only`, since it checks out nothing and restores nothing.
 
-The restore checks detect corruption but do not prove that a trusted writer produced the payload. The class of finding is a store that passes the self-consistency checks without a trusted writer. No further detail is recorded here.
+Two limits from [the reference entry](github-actions-reference.md#5-cache-rules-verified-against-original-sources-checked-2026-11-04) apply. The pinned `actions/cache` does not read `ACTIONS_CACHE_MODE` [5.5], so the denial for a `read` job is a service response, logged as a warning, not an informational skip. A reusable workflow cannot raise its caller's explicit mode [5.5]. Whether `cache-mode` accepts expressions is unconfirmed, so the workflow uses literals.
 
-## Future work: bind the payload digest to the trusted writer
+## Restore hardening and attestation
 
-Record the payload digest and the compatibility digest at save time in a place that only the trusted producer job can write, and have the restore compare the restored payload against that record before import. Until this exists, restored state relies on GitHub's rule that only runs of the default branch write the entry a pull request can read. The record format, its storage location and its trust root are not designed yet.
+PR #477 landed the restore hardening. At class level, the restore treats the payload as untrusted bytes: it bounds the inflated and extracted size, rejects archives whose members are not plain files and directories under the expected family directory, extracts into a private stage, imports from the staged directory, runs the import from a working directory outside any checkout, and goes cold with exit 0 on every refusal or failure (`cache_steps_mbx_bundle_recover.rs:154-203`). The save side still packs `payload.tar.gz` and no hosted run has exercised the restore, because no entry exists.
 
-## Pull-request-scoped state: open option
+The decided design moves the screen from gzip to `zstd -dc` under the same bounds. These checks detect corruption but do not prove that a trusted writer produced the payload. The class of finding is a store that passes the self-consistency checks without a trusted writer. No further detail is recorded here.
 
-After a producer exists, a pull request run restores the trusted entry that `main` last saved (the pull request reads the default branch). Successive pushes to a pull request then never recompile registry crates, unless the pull request changes `Cargo.lock`. What no run reuses is workspace-member compile output between sequential runs.
+The attestation closes that gap with the P and A split:
 
-Sequential reuse of that output needs state written by pull request runs. A pull request entry is readable only from `refs/pull/N/merge`, so `main` can never read it. It is a new writer class, because the contract allows pull request writes for sources only (`cache-contract.md`, `cache-decisions.md` row 5), and it needs:
+- P compiles with cache read access and no `id-token` permission, packs the single file, and uploads it as one artifact.
+- A checks out nothing, attests the file, builds the v4 key whose payload segment is the file's SHA-256, and saves with `write-only`. Placing the ceiling and 8e9 total checks in A is inferred from the split.
+- Plan selects only an attested, newest entry.
+- Recover verifies the payload's SHA-256 against the key's payload segment before it runs `zstd -dc` or imports. A mismatch is a cold run.
 
-- a per-push prune of the pull request's superseded entries, run in a separate workflow that holds `actions: write` (pull request jobs hold none), because today only the `pull_request: closed` handler removes pull request entries (`cache_cleanup.rs`);
+The record format for the attestation and its trust root are in the attestation unit (SEC-7), which has not landed.
+
+## Pull-request-scoped state: last
+
+After the producer exists, a pull request run restores the trusted entry that `main` last saved, because a pull request reads the default branch's scope. Reuse for a pull request is therefore limited to units that `main` already produced. A pull request that changes a workspace crate recompiles that crate and everything that depends on it on every push, and a pull request that changes `Cargo.lock` misses the changed units. This page does not promise sequential reuse across pushes to one pull request until pull-request-scoped state lands.
+
+Sequential reuse of a pull request's own output needs state that pull request runs write. Such an entry is readable only from `refs/pull/N/merge`, so `main` never reads it. It is a new writer class, because the contract allows pull request writes for sources only (`cache-contract.md`, `cache-decisions.md` row 5). It needs:
+
+- same-repository pull request writers only, writing in pull request scope;
+- a per-push prune of the pull request's superseded entries, run from a trusted handler after CI that holds `actions: write` (pull request jobs hold none), because today only the `pull_request: closed` handler removes pull request entries (`cache_cleanup.rs`);
 - a per-pull-request cap;
-- admission against the live inventory total before each save, refusing above 8e9 B;
-- verification of restored bytes, because a poisoned entry still runs inside that pull request's later jobs.
+- admission against the live inventory total before each save, refusing above 8e9 B, serialized as described under [Budget](#budget);
+- verification of restored bytes, because a poisoned entry still runs inside that pull request's later jobs;
+- a hosted two-push pull request run that confirms a later push restores the earlier push's entry, which no official page states [5.4].
 
-Budget. A full pull request state costs as much as one main generation, since an export is a closure and no delta exists. At 213 to 576 MB per generation of registry-only state, with 2.0 to 3.5 GB of headroom after main's retained generations while `mise-tools-v2` entries are doubled, or 3.7 to 5.2 GB after prune (inferred), 3 to 16 open pull requests fit now and 6 to 24 after prune (inferred). These counts are upper bounds: they assume no other growth and a fresh admission check on every save. A smaller overlay made from only the crates a pull request changed is cheaper, but its size is the closure of those crates, which for the largest crates is most of the registry union, so its saving is unmeasured. Writes limited to the first push per lock digest avoid the pruning requirement but give no rolling reuse.
-
-Proposal: leave pull-request-scoped state off. A pull request reads main's state. Revisit after hosted data shows how often pull requests change `Cargo.lock`, and after a measurement of member-only bytes and time per root. This needs a recorded owner decision before any implementation.
+Budget. A full pull request state costs as much as one main generation, since an export is a closure and no delta exists. The harness union is up to 2.24e9 B stored. With 8e9 B minus the steady 4.26e9 B, the headroom is 3.74e9 B, which fits one pull request state now (arithmetic, 3.74e9 over 2.24e9 is 1.7). The count rises after the debuginfo policy cuts every entry, and the per-pull-request cap and total admission decide the real limit. This is the last unit in the order, after the debuginfo policy, and the work needs a recorded owner decision before any implementation.
 
 ## Alternatives not preferred
 
-- **sccache with the GitHub cache backend.** It cannot cache binary, proc-macro or incremental units. It stores one entry per object, which runs into the 200-uploads-per-minute repository limit, and it has no trust gate of its own.
+- **sccache with the GitHub cache backend.** It cannot cache binary, proc-macro or incremental units. It stores one entry per object, which runs into the 200-uploads-per-minute repository limit [5.8], and it has no trust gate of its own.
 - **`Swatinem/rust-cache`.** It rebuilds workspace crates by design and has no trust gate.
 - **A persistent self-hosted runner.** It would give local-like reuse, but the workflow contract says "V1 emits no self-hosted labels" (`docs/proposed/workflow-contract.md:205`), and the project uses GitHub caches only.
 - **Target mode (a `target/` cache per run).** It already produced 4.4 GB of churn per run against the 10 GB quota (issue #157), and a restored `target/` rebuilds workspace crates because source mtimes change on checkout.
 - **Raising the 384 MiB ceiling alone.** Issue #436 withdrew that proposal: a raise cannot produce working reuse without a writer and a readable payload.
 - **Turning `dependency_seed` back to `produce` unchanged.** The old shape cost 535 to 547 runner-seconds per push and exported 5.9 and 3.5 GiB uncompressed (reported).
+- **A registry-only skeleton producer.** Rejected by measurement: a skeleton consumer hit 80.2 percent with 909 units not looked up.
+- **Plain tar handed to `actions/cache`.** Not preferred: it leaves compression to `zstdmt` without `--long=30` and hides the stored size from admission.
 
 ## Sequenced plan
 
 Each unit ends in a check that a reviewer can run. Gate commands come from [repository verification](../implemented/repo-verification.md). Hosted proof uses ordinary pull request and main-push runs only. A pull request run cannot exercise the producer, which runs on a protected push, so producer proof is the first main push after merge.
 
 1. **Restore hardening** (done, #477): import from a staged directory, working directory outside any checkout, bounded extraction.
-2. **Measurements** on a Linux runner, with no code in `main` (see below).
-3. **Packer and two-bound admission**: plain tar, `over_stored` and `over_extracted`, schema 3.
-4. **Key version 3, retention 2 and root-aware prune**, with the generated prune workflow regenerated.
-5. **Producer per root**: a dependency-only skeleton export built with `MBX_BUILD_SCRIPT_EXECUTION=0`, one writer per root, gated by a lookup-only probe so a warm push skips it. The save tail adds the new-unit predicate, a head check (the pushed commit equals the default branch tip), a per-root concurrency group with `cancel-in-progress: false`, and a lint that rejects any export or save step in a crate job.
-6. **Debug-info policy** in the Cargo manifests, after Linux compile-time numbers.
-7. **Acceptance**: a main push after a warm save shows 0 registry-unit misses in the build, clippy and doc lanes of every crate job, and the cache total stays under 8e9 B with the 2e9 B reserve.
-8. **Decisions** before the pull-request option or any change to the hard decisions or the cache decisions page: this page does not edit either.
+2. **`SOURCE_DATE_EPOCH=0`** in every mbx task environment and in the compatibility key. Acceptance: a warm run shows 0 registry misses for `velnor-runner-cli` and `velnor-runner-host`.
+3. **Workflow-level `cache-mode: read`** with the named writers.
+4. **Key v4, the Velnor zstd packer, two-bound ceilings and post-CI prune.** The recover screen moves to `zstd -dc`, and the generated prune workflow is regenerated. This amends cache decisions 2, 4 and 5 and `cache-contract.md`, citing the decision record.
+5. **Attestation (SEC-7)** with the P and A split.
+6. **Producer** inside the CI run, with `dependency_seed` renamed to `compiled_state` and no alias, together with the `ci-audit` categories. The save tail adds a head check (the pushed commit equals the default branch tip), serialized admission across producers, and a lint that rejects any export or save step in a crate job. The `ci-audit` qualification changes: a per-push state generation save does not disqualify a push, and only sources, tools, or cold or failed state saves do.
+7. **Measured main pushes.** Acceptance: a main push after a warm save shows 0 registry units missed or not looked up in the build, clippy and doc lanes of every crate job, and the cache total stays under 8e9 B with the 2e9 B reserve. Bypassed units are reported and decided separately (open item, see [The build-script rule](#the-build-script-rule)).
+8. **Debuginfo policy** in the Cargo manifests, with ceilings dropping to 1 GiB and 6 GiB.
+9. **Pull-request-scoped state**, after a recorded owner decision.
 
-A failed hit that reaches `import_failed` or `over_ceiling` must become a measurable signal (a stats line or an audit field) instead of a warning that exits 0, and an end-to-end round trip check must run before step 7.
+A failed hit that reaches `import_failed`, `over_stored` or `over_extracted` must become a measurable signal (a stats line or an audit field) instead of a warning that exits 0, and an end-to-end round trip check must run before step 7.
 
 ## Open measurements
 
-All on a hosted Linux runner, per Cargo root, lanes build, clippy and doc in one store, `MBX_BUILD_SCRIPT_EXECUTION=0`, `MBX_SHARE_OUT_DIR=1`:
+The Linux harness answered the layout, ceiling, retention, packer-level and hit-rate questions. These remain, on a hosted Linux runner, per Cargo root, lanes build, clippy and doc in one store, `MBX_BUILD_SCRIPT_EXECUTION=0`, `MBX_SHARE_OUT_DIR=1`, `SOURCE_DATE_EPOCH=0`:
 
-1. Raw bytes (`du -sb`), object count and action count of the export, for a registry-only skeleton, a skeleton replaying each crate job's exact arguments, members without links, and members with links.
-2. Stored bytes under today's gzip packer and under `zstd -3 --long=30`. The plain-tar lever is worth its security review only if the ratio is 0.6 or lower; above 0.8, drop it.
-3. Per crate job: closure raw and stored bytes, and the duplication factor across jobs for each root. This replaces the 3.0 times estimate.
-4. Hit rate per job when restoring the union, with registry misses by cause (`mbx explain`).
-5. Share of linked outputs in a member export.
-6. The debug-info lever matrix and cold compile seconds per lane.
-7. New object bytes and producer wall time after a one-crate lock bump.
-8. Restore time per job on a 4-core runner: download, extraction and `mbx cache import`.
-9. Compression CPU time for `zstd -3 --long=30` over the export.
-10. A real hosted round trip: save, restore, import, hit counters. Compile-path sensitivity is untested on Linux, although the checkout path is stable (`/home/runner/work/<repo>/<repo>`).
-11. A per-entry size limit and a fine-grained-token delete, which the GitHub pages read do not state.
-12. Whether a warm import on the runner host still fails with exit 101 (`missing out/compile_identity.rs`) after an import from a matching checkout, which one local run showed.
+1. Stored bytes with `--long=30`, which the harness omitted, and compression CPU time for `zstd -3 --long=30` over the export.
+2. Restore time per job on a 4-core runner: download, extraction and `mbx cache import`.
+3. A real hosted round trip: save, restore, import, hit counters.
+4. The hybrid bundle (dependency skeleton at `1`, real members at `0`) on Linux, to decide the bypassed units.
+5. Producer wall time and new object bytes after a one-crate lock bump, and whether the in-run producer keeps T1 under 450 s.
+6. The debuginfo lever matrix and cold compile seconds per lane on Linux.
+7. A hosted two-push pull request run, to confirm cross-push restore.
+8. A per-entry size limit in the version 2 service and a fine-grained-token delete, which the GitHub pages read do not state.
+9. The behavior of `read` mode on the pinned `actions/cache` (the warning text), which no run has shown.
+10. Compile-path sensitivity on Linux, although the checkout path is stable (`/home/runner/work/<repo>/<repo>`).
+11. Whether a warm import on the runner host still fails with exit 101 (`missing out/compile_identity.rs`) after an import from a matching checkout, which one local run showed.
