@@ -12,7 +12,7 @@ use super::scoped_workspace::{PlanRun, TestResult, commit, generate_lockfile, pl
 use super::topology_e797385c74::{Dep, Forcing, PACKAGES, RUNNER_WORKSPACE, RealPackage};
 use super::workflow_configuration_fixture::make_repo;
 
-const RUN_WITH_DOCS_CONFIG: &str = "\n[stacks.rust]\nnon_inputs = [\"docs/**\"]\n";
+const DOCS_NON_INPUTS: &str = "\n[stacks.rust]\nnon_inputs = [\"docs/**\"]\n";
 
 const PR_473: [&str; 6] = [
     "docs/implemented/consumer-rust-setup.md",
@@ -193,8 +193,29 @@ fn real_topology(extra_config: &str) -> Result<(TempDir, String), Box<dyn Error>
     Ok((repo, base))
 }
 
-fn replay(paths: &[&str]) -> Result<PlanRun, Box<dyn Error>> {
-    let (repo, base) = real_topology(RUN_WITH_DOCS_CONFIG)?;
+fn complete_rules() -> String {
+    PACKAGES
+        .iter()
+        .filter(|package| package.forcing == Forcing::ManifestDirEscape)
+        .map(|package| {
+            [
+                "\n[[stacks.rust.inputs]]\nglobs = [\"",
+                package.dir,
+                "/**\"]\npackages = [\"",
+                package.name,
+                "\"]\ncomplete = true\n",
+            ]
+            .concat()
+        })
+        .collect()
+}
+
+fn adopted_config() -> String {
+    format!("{DOCS_NON_INPUTS}{}", complete_rules())
+}
+
+fn replay(paths: &[&str], config: &str) -> Result<PlanRun, Box<dyn Error>> {
+    let (repo, base) = real_topology(config)?;
     for path in paths {
         put(repo.path(), path, "// replayed change\n")?;
     }
@@ -204,7 +225,7 @@ fn replay(paths: &[&str]) -> Result<PlanRun, Box<dyn Error>> {
 
 #[test]
 fn replay_pr473_docs_only_hosted_inputs() -> TestResult {
-    let run = replay(&PR_473)?;
+    let run = replay(&PR_473, &adopted_config())?;
     let idle: BTreeSet<String> = run.with_disposition("not_affected")?.into_iter().collect();
     assert_eq!(idle, all_jobs(), "all crate jobs must be not_affected");
     assert!(run.with_disposition("run")?.is_empty());
@@ -219,7 +240,7 @@ fn replay_pr473_docs_only_hosted_inputs() -> TestResult {
 #[test]
 fn replay_narrow_hosted_inputs_stay_narrow() -> TestResult {
     for (name, paths) in [("449", PR_449.to_vec()), ("424", PR_424.to_vec())] {
-        let run = replay(&paths)?;
+        let run = replay(&paths, "")?;
         assert_eq!(
             run.with_disposition("run")?,
             names(&RUN_HOSTED),
@@ -231,31 +252,26 @@ fn replay_narrow_hosted_inputs_stay_narrow() -> TestResult {
             "PR {name}"
         );
     }
+    Ok(())
+}
+
+#[test]
+fn replay_docs_plus_dbt_runs_the_closure_and_the_remaining_forcing() -> TestResult {
     let mut paths = PR_473.to_vec();
     paths.push("crates/velnor-actions-dbt/src/lib.rs");
-    let run = replay(&paths)?;
-    let expected: BTreeSet<String> = names(&[
+    let run = replay(&paths, &adopted_config())?;
+    let expected = names(&[
         "velnor-actions-dbt",
         "velnor-actions-orchestrator",
         "velnor-actions-workflow-renderer",
         "velnor-actions-cli",
-    ])
-    .union(&names(&[
-        "velnor-actions-freshness",
-        "velnor-archive-guard",
-        "velnor-actions-mise",
         "velnor-actions-tofu",
-        "velnor-runner-attestation",
-        "velnor-runner-cli",
+        "velnor-actions-mise",
         "velnor-runner-host",
-    ]))
-    .cloned()
-    .collect();
+        "velnor-runner-cli",
+    ]);
     assert_eq!(run.with_disposition("run")?, expected, "docs plus dbt");
-    assert_eq!(
-        run.with_disposition("not_affected")?.len(),
-        9,
-        "docs plus dbt"
-    );
+    let idle: BTreeSet<String> = all_jobs().difference(&expected).cloned().collect();
+    assert_eq!(run.with_disposition("not_affected")?, idle, "docs plus dbt");
     Ok(())
 }

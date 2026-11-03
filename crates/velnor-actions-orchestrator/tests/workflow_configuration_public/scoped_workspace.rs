@@ -22,11 +22,22 @@ pub(super) const PACKAGES: [&str; 10] = [
     "a1", "a2", "a3", "a4", "a5", "a6", "a7", "a8", "core", "util",
 ];
 
-pub(super) const FORCED_AND_DEPENDENTS: [&str; 4] = ["a2", "a5", "a7", "util"];
+pub(super) const FORCED_AND_DEPENDENTS: [&str; 3] = ["a2", "a7", "util"];
 
 pub(super) const CORE_CLOSURE: [&str; 6] = ["a1", "a3", "a4", "a5", "a6", "core"];
 
-pub(super) const DOCS_CONFIG: &str = "\n[stacks.rust]\nnon_inputs = [\"docs/**\"]\n";
+macro_rules! a5_complete_rule {
+    () => {
+        "\n[[stacks.rust.inputs]]\nglobs = [\"apps/a5/**\"]\npackages = [\"a5\"]\ncomplete = true\n"
+    };
+}
+
+pub(super) const A5_COMPLETE_RULE: &str = a5_complete_rule!();
+
+pub(super) const DOCS_CONFIG: &str = concat!(
+    "\n[stacks.rust]\nnon_inputs = [\"docs/**\"]\n",
+    a5_complete_rule!()
+);
 
 pub(super) struct ScopedRepo {
     pub(super) dir: TempDir,

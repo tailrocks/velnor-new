@@ -4,28 +4,18 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
 use std::fs;
-use std::path::Path;
-use std::process::Command;
 
-use tempfile::TempDir;
-use velnor_actions_contract::{Job, Step, StepKind, WorkflowPolicy};
+use velnor_actions_contract::{Job, StepKind};
 use velnor_actions_orchestrator::{finalized_jobs, prepare, render_staged_tree};
 use velnor_actions_workflow_renderer::non_input_checkout::{
     NON_INPUT_GUARD_STEP, SPARSE_CHECKOUT_KEY, SPARSE_CONE_MODE_KEY,
 };
 
-use super::one_job_per_crate::mbx_repo_for;
+use super::non_inputs_checkout_support::{checkout_steps, rust_repo, with_value};
 use super::scoped_workspace::TestResult;
 use super::tools_producers::POLICIES;
-use super::workflow_configuration_fixture::{self, git};
 
 const EXCLUSION: &str = "/*\n!/docs/**";
-
-const RUST_SUITE: &str = "\n[[stacks.rust.suites]]\nid = \"proof-suite\"\nprofile = \"default\"\ntriggers = [\"pull_request\", \"push\"]\nrequired = true\npackage = \"demo\"\nmanifest_path = \"crates/demo/Cargo.toml\"\n";
-
-const STANDALONE_SUITE: &str = "\n[[stacks.rust.suites]]\nid = \"nightly-suite\"\nprofile = \"default\"\ntriggers = [\"workflow_dispatch\"]\npackage = \"demo\"\nmanifest_path = \"crates/demo/Cargo.toml\"\n";
-
-const NAMED_CHECK: &str = "\n[[checks]]\nid = \"unit\"\ntask = \"fixture-check\"\ninputs = [\"crates/demo/Cargo.toml\"]\ntools = []\n[checks.runner]\nlabel = \"ubuntu-26.04\"\nplatform = \"linux_x64\"\nexecutor = \"hosted\"\n";
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Kind {
@@ -74,23 +64,6 @@ fn kind_label(id: &str) -> String {
                 .map(|prefix| (*prefix).to_owned())
         })
         .unwrap_or_else(|| id.to_owned())
-}
-
-fn checkout_steps(job: &Job) -> Vec<(usize, &Step)> {
-    job.steps
-        .iter()
-        .enumerate()
-        .filter(|(_, step)| {
-            matches!(&step.kind, StepKind::Action { uses, .. } if uses.starts_with("actions/checkout@"))
-        })
-        .collect()
-}
-
-fn with_value<'a>(step: &'a Step, key: &str) -> Option<&'a str> {
-    match &step.kind {
-        StepKind::Action { with, .. } => with.get(key).map(String::as_str),
-        _ => None,
-    }
 }
 
 fn assert_job_checkout(label: &str, id: &str, job: &Job, expected: Kind) -> TestResult {
@@ -153,44 +126,11 @@ fn assert_jobs(
     Ok(())
 }
 
-fn rust_repo(policy: WorkflowPolicy, non_inputs: bool) -> Result<TempDir, Box<dyn Error>> {
-    let repo = mbx_repo_for(true, policy)?;
-    let root = repo.path();
-    fs::remove_dir_all(root.join("src"))?;
-    fs::write(
-        root.join("Cargo.toml"),
-        "[workspace]\nmembers = [\"crates/demo\"]\nresolver = \"2\"\n",
-    )?;
-    fs::create_dir_all(root.join("crates/demo/src"))?;
-    fs::write(
-        root.join("crates/demo/Cargo.toml"),
-        "[package]\nname = \"demo\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
-    )?;
-    fs::write(root.join("crates/demo/src/lib.rs"), "pub fn f() {}\n")?;
-    let config_path = repo.path().join(".velnor/config.toml");
-    let mut config = fs::read_to_string(&config_path)?;
-    config.push_str("\n[stacks.rust]\n");
-    if non_inputs {
-        config.push_str("non_inputs = [\"docs/**\"]\n");
-    }
-    config.push_str(RUST_SUITE);
-    config.push_str(STANDALONE_SUITE);
-    config.push_str(NAMED_CHECK);
-    fs::write(
-        root.join("mise.toml"),
-        "[tasks.fixture-check]\nrun = \"true\"\n",
-    )?;
-    fs::write(&config_path, config)?;
-    fs::create_dir_all(repo.path().join("docs"))?;
-    fs::write(repo.path().join("docs/a.md"), "a\n")?;
-    Ok(repo)
-}
-
 #[test]
 fn every_rust_job_checkout_excludes_non_inputs_and_other_jobs_do_not() -> TestResult {
     let mut seen = BTreeSet::new();
     for policy in POLICIES {
-        let repo = rust_repo(policy, true)?;
+        let repo = rust_repo(policy, Some("docs/**"))?;
         let jobs = finalized_jobs(&prepare(repo.path())?)?;
         assert_jobs(&format!("{policy:?}"), &jobs, &mut seen)?;
         let tree = render_staged_tree(&prepare(repo.path())?)?;
@@ -230,8 +170,8 @@ fn every_rust_job_checkout_excludes_non_inputs_and_other_jobs_do_not() -> TestRe
 #[test]
 fn default_non_inputs_is_empty_and_changes_nothing() -> TestResult {
     for policy in POLICIES {
-        let omitted = rust_repo(policy, false)?;
-        let explicit = rust_repo(policy, false)?;
+        let omitted = rust_repo(policy, None)?;
+        let explicit = rust_repo(policy, None)?;
         let config_path = explicit.path().join(".velnor/config.toml");
         let config = fs::read_to_string(&config_path)?;
         fs::write(
@@ -256,122 +196,5 @@ fn default_non_inputs_is_empty_and_changes_nothing() -> TestResult {
             );
         }
     }
-    Ok(())
-}
-
-fn rendered_rust_job() -> Result<Job, Box<dyn Error>> {
-    let repo = rust_repo(WorkflowPolicy::ConsumerV1, true)?;
-    let jobs = finalized_jobs(&prepare(repo.path())?)?;
-    jobs.into_iter()
-        .find(|(id, _)| id.starts_with("rust-"))
-        .map(|(_, job)| job)
-        .ok_or_else(|| "no rendered crate job".into())
-}
-
-fn rendered_patterns() -> Result<String, Box<dyn Error>> {
-    let job = rendered_rust_job()?;
-    let (_, checkout) = checkout_steps(&job)
-        .into_iter()
-        .next()
-        .ok_or("crate job has no checkout")?;
-    Ok(with_value(checkout, SPARSE_CHECKOUT_KEY)
-        .ok_or("crate job checkout has no sparse-checkout input")?
-        .to_owned())
-}
-
-fn guard_run(root: &Path) -> Result<std::process::Output, Box<dyn Error>> {
-    let job = rendered_rust_job()?;
-    let guard = job
-        .steps
-        .iter()
-        .find(|step| step.name == NON_INPUT_GUARD_STEP);
-    assert!(
-        guard.is_some(),
-        "the rendered crate job has no absence guard"
-    );
-    let StepKind::Shell { run, .. } = &guard.ok_or("guard step missing")?.kind else {
-        return Err("guard is not a shell step".into());
-    };
-    let (program, args) = run.split_first().ok_or("empty guard command")?;
-    Ok(Command::new(program)
-        .args(args)
-        .current_dir(root)
-        .output()?)
-}
-
-fn tracked_tree() -> Result<TempDir, Box<dyn Error>> {
-    let tree = tempfile::tempdir()?;
-    let root = tree.path();
-    git(&["init", "-b", "testmain"], root)?;
-    for (path, body) in [
-        ("docs/a.md", "a\n"),
-        ("docs/sub/b.md", "b\n"),
-        ("docsx/c.md", "c\n"),
-        ("apps/a1/docs/d.md", "d\n"),
-        ("crates/x/src/lib.rs", "pub fn f() {}\n"),
-    ] {
-        let file = root.join(path);
-        fs::create_dir_all(file.parent().ok_or("no parent")?)?;
-        fs::write(file, body)?;
-    }
-    git(&["add", "-A"], root)?;
-    git(&["commit", "-m", "tree"], root)?;
-    Ok(tree)
-}
-
-fn git_output(root: &Path, args: &[&str]) -> Result<String, Box<dyn Error>> {
-    let output = workflow_configuration_fixture::git_fixture::command(root)?
-        .args(args)
-        .output()?;
-    Ok(String::from_utf8(output.stdout)?)
-}
-
-fn apply_exclusion(root: &Path, patterns: &str) -> TestResult {
-    git(&["config", "core.sparseCheckout", "true"], root)?;
-    let info = git_output(root, &["rev-parse", "--git-path", "info/sparse-checkout"])?;
-    fs::create_dir_all(root.join(info.trim()).parent().ok_or("no parent")?)?;
-    fs::write(root.join(info.trim()), format!("{patterns}\n"))?;
-    git(&["read-tree", "-mu", "HEAD"], root)?;
-    Ok(())
-}
-
-#[test]
-fn rendered_exclusion_removes_non_inputs_on_a_real_git_tree() -> TestResult {
-    let tree = tracked_tree()?;
-    let root = tree.path();
-    apply_exclusion(root, &rendered_patterns()?)?;
-    for gone in ["docs/a.md", "docs/sub/b.md"] {
-        assert!(!root.join(gone).exists(), "{gone} survived the exclusion");
-    }
-    for kept in ["docsx/c.md", "apps/a1/docs/d.md", "crates/x/src/lib.rs"] {
-        assert!(root.join(kept).exists(), "{kept} was over-matched");
-    }
-    assert_eq!(git_output(root, &["status", "--porcelain"])?, "");
-    Ok(())
-}
-
-#[test]
-fn absence_guard_fails_when_a_non_input_is_present() -> TestResult {
-    let tree = tracked_tree()?;
-    let root = tree.path();
-    let present = guard_run(root)?;
-    assert!(!present.status.success(), "guard passed with docs present");
-    let stderr = String::from_utf8(present.stderr)?;
-    assert!(stderr.contains("non_input_present:docs/"), "{stderr}");
-    apply_exclusion(root, &rendered_patterns()?)?;
-    let absent = guard_run(root)?;
-    assert!(
-        absent.status.success(),
-        "{}",
-        String::from_utf8_lossy(&absent.stderr)
-    );
-    let only_lookalikes = tempfile::tempdir()?;
-    let lookalikes = only_lookalikes.path();
-    git(&["init", "-b", "testmain"], lookalikes)?;
-    fs::create_dir_all(lookalikes.join("docsx"))?;
-    fs::write(lookalikes.join("docsx/c.md"), "c\n")?;
-    git(&["add", "-A"], lookalikes)?;
-    git(&["commit", "-m", "lookalike"], lookalikes)?;
-    assert!(guard_run(lookalikes)?.status.success());
     Ok(())
 }

@@ -166,19 +166,6 @@ fn empty_diff_runs_no_forced_package() -> TestResult {
             .any(|w| w == "no_affected_files:all_unchanged")
     );
     assert!(!run.reasons().contains("undeclared_reads"));
-
-    let repo = scoped_workspace(DOCS_CONFIG)?;
-    put(repo.root(), "mise.toml", "# fixture\n")?;
-    let first = commit(repo.root(), "add mise.toml")?;
-    put(repo.root(), "mise.toml", "# fixture, edited\n")?;
-    let second = commit(repo.root(), "comment only")?;
-    let run = plan(repo.root(), "pull_request", Some(&first), &second)?;
-    assert_eq!(run.with_disposition("not_affected")?, set(&PACKAGES));
-    assert!(
-        run.warnings()
-            .iter()
-            .any(|w| w == "toolfiles_only:all_unchanged")
-    );
     Ok(())
 }
 

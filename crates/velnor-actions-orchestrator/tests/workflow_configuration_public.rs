@@ -73,8 +73,24 @@ mod native_artifacts_suite_gate;
 mod native_artifacts_suites;
 #[path = "workflow_configuration_public/non_inputs_checkout.rs"]
 mod non_inputs_checkout;
+#[path = "workflow_configuration_public/non_inputs_checkout_support.rs"]
+mod non_inputs_checkout_support;
 #[path = "workflow_configuration_public/non_inputs_config.rs"]
 mod non_inputs_config;
+#[cfg(unix)]
+#[path = "workflow_configuration_public/non_inputs_differential.rs"]
+mod non_inputs_differential;
+#[path = "workflow_configuration_public/non_inputs_forcing.rs"]
+mod non_inputs_forcing;
+#[path = "workflow_configuration_public/non_inputs_grammar.rs"]
+mod non_inputs_grammar;
+#[path = "workflow_configuration_public/non_inputs_guard.rs"]
+mod non_inputs_guard;
+#[cfg(unix)]
+#[path = "workflow_configuration_public/non_inputs_overlap_git.rs"]
+mod non_inputs_overlap_git;
+#[path = "workflow_configuration_public/non_inputs_release.rs"]
+mod non_inputs_release;
 #[path = "workflow_configuration_public/non_inputs_replay.rs"]
 mod non_inputs_replay;
 #[path = "workflow_configuration_public/non_inputs_selection.rs"]
