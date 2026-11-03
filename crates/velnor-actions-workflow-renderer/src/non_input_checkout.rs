@@ -92,9 +92,12 @@ pub(crate) fn guard_script(non_inputs: &NonInputs) -> String {
         .join(" ");
     format!(
         concat!(
-            "set -eu; git ls-files -z -- {} | xargs -0 sh -c ",
+            "set -euC; list=\"${{RUNNER_TEMP:-${{TMPDIR:-/tmp}}}}/non-input-paths.$$\"; ",
+            "git ls-files -z -- {} > \"$list\"; ",
+            "xargs -0 sh -c ",
             "'for p; do if [ -e \"$p\" ] || [ -L \"$p\" ]; then ",
-            "printf \"non_input_present:%s\\n\" \"$p\" >&2; exit 1; fi; done' sh",
+            "printf \"non_input_present:%s\\n\" \"$p\" >&2; exit 1; fi; done' sh ",
+            "< \"$list\"; rm -f \"$list\"",
         ),
         specs
     )
