@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use super::cache_access::{CacheAccess, CacheWriter, SOURCES_PRODUCER_JOB_ID};
 use super::cache_family::{TOFU_PROVIDERS_PROBE_MISS_CONDITION, TOFU_PROVIDERS_SAVE_CONDITION};
 use super::crate_job::{TOFU_PROVIDERS_PRODUCER_JOB_ID_PREFIX, TOOLS_PRODUCER_JOB_ID_PREFIX};
 use super::step_identity::{RUST_VERIFIER_USES, ToolsRestoreForm};
@@ -21,6 +22,7 @@ pub enum ProducerKind {
     DependencySeed,
     ToolsIdentity,
     TofuProviders,
+    SourcesProducer,
 }
 
 impl Job {
@@ -46,6 +48,12 @@ impl Job {
                     && ProviderRestoreForm::of(&step.kind) == Some(ProviderRestoreForm::LookupOnly))
         }) {
             Some(ProducerKind::TofuProviders)
+        } else if self
+            .steps
+            .iter()
+            .any(|step| step.role == Some(StepRole::CargoSourcesSave))
+        {
+            Some(ProducerKind::SourcesProducer)
         } else {
             None
         }
@@ -54,6 +62,17 @@ impl Job {
 
 pub fn validate_tofu_providers_producer(job: &Job, id: &str) -> Result<(), ContractError> {
     if job.producer_kind() != Some(ProducerKind::TofuProviders) {
+        return Err(invalid(id));
+    }
+    let read_only = Permissions {
+        contents: PermissionLevel::Read,
+        ..Permissions::default()
+    };
+    validate_job(job, id, job.permissions.as_ref().unwrap_or(&read_only))
+}
+
+pub fn validate_sources_producer(job: &Job, id: &str) -> Result<(), ContractError> {
+    if job.producer_kind() != Some(ProducerKind::SourcesProducer) {
         return Err(invalid(id));
     }
     let read_only = Permissions {
@@ -81,13 +100,14 @@ pub(super) fn validate_job(
 ) -> Result<(), ContractError> {
     let kind = job.producer_kind();
     if id.starts_with(TOOLS_PRODUCER_JOB_ID_PREFIX) != (kind == Some(ProducerKind::ToolsIdentity))
+        || (id == SOURCES_PRODUCER_JOB_ID) != (kind == Some(ProducerKind::SourcesProducer))
         || id.starts_with(TOFU_PROVIDERS_PRODUCER_JOB_ID_PREFIX)
             != (kind == Some(ProducerKind::TofuProviders))
     {
         return Err(invalid(id));
     }
     let Some(kind) = kind else {
-        return Ok(());
+        return job.cache_access.validate(id, job);
     };
     let cache_only = kind.condition_ok(job.condition.as_deref())
         && job.environment.is_none()
@@ -108,7 +128,10 @@ pub(super) fn validate_job(
             .iter()
             .all(|step| !step.parallel && step.role.is_some_and(|role| kind.allows(role)))
         && kind.shape_ok(job);
-    if cache_only { Ok(()) } else { Err(invalid(id)) }
+    if !cache_only {
+        return Err(invalid(id));
+    }
+    job.cache_access.validate(id, job)
 }
 
 fn invalid(id: &str) -> ContractError {
@@ -116,21 +139,33 @@ fn invalid(id: &str) -> ContractError {
 }
 
 impl ProducerKind {
+    #[must_use]
+    pub(super) const fn cache_access(self) -> CacheAccess {
+        match self {
+            Self::DependencySeed => CacheAccess::Read,
+            Self::ToolsIdentity => CacheAccess::Writer(CacheWriter::ToolsProducer),
+            Self::TofuProviders => CacheAccess::Writer(CacheWriter::TofuProvidersProducer),
+            Self::SourcesProducer => CacheAccess::Writer(CacheWriter::SourcesProducer),
+        }
+    }
+
     fn allows(self, role: StepRole) -> bool {
         match self {
             Self::DependencySeed => seed_role(role),
             Self::ToolsIdentity => tools_role(role),
             Self::TofuProviders => tofu_role(role),
+            Self::SourcesProducer => sources_role(role),
         }
     }
 
     fn condition_ok(self, condition: Option<&str>) -> bool {
-        condition == Some(DEPENDENCY_SEED_JOB_CONDITION)
-            || (self == Self::TofuProviders
-                && condition
-                    == Some(&format!(
-                        "{LANE_SURVIVAL_CONDITION} && ({DEPENDENCY_SEED_JOB_CONDITION})"
-                    )))
+        match self {
+            Self::SourcesProducer => CacheWriter::SourcesProducer.admits(condition),
+            Self::TofuProviders => CacheWriter::TofuProvidersProducer.admits(condition),
+            Self::DependencySeed | Self::ToolsIdentity => {
+                condition == Some(DEPENDENCY_SEED_JOB_CONDITION)
+            }
+        }
     }
 
     fn shape_ok(self, job: &Job) -> bool {
@@ -156,6 +191,13 @@ impl ProducerKind {
                     && count(StepRole::ToolsCacheSave) == 1
                     && count(StepRole::PreparePinnedTools) >= 1
                     && tools_order_ok(&job.steps)
+            }
+            Self::SourcesProducer => {
+                job.needs == [crate::workflow::PLAN_JOB_ID]
+                    && count(StepRole::Checkout) == 1
+                    && count(StepRole::CargoSourcesSave) == 1
+                    && count(StepRole::CargoSourcesFetch) >= 1
+                    && sources_order_ok(&job.steps)
             }
             Self::TofuProviders => {
                 tofu_lane_needs_ok(&job.needs)
@@ -213,6 +255,34 @@ fn tofu_order_ok(steps: &[Step]) -> bool {
         && ProviderRestoreForm::of(&steps[probe].kind) == Some(ProviderRestoreForm::LookupOnly)
         && matches!(&steps[probe].kind, StepKind::Action { with, .. }
             if with.get("path").is_some_and(|path| valid_provider_prepare(&steps[prepare].kind, path)))
+}
+
+fn sources_order_ok(steps: &[Step]) -> bool {
+    let last_fetch = steps
+        .iter()
+        .rposition(|step| step.role == Some(StepRole::CargoSourcesFetch));
+    let save = steps
+        .iter()
+        .position(|step| step.role == Some(StepRole::CargoSourcesSave));
+    matches!((last_fetch, save), (Some(fetch), Some(save)) if fetch < save && save + 1 == steps.len())
+}
+
+fn sources_role(role: StepRole) -> bool {
+    matches!(
+        role,
+        StepRole::Checkout
+            | StepRole::AcquireVelnor
+            | StepRole::MiseSetup
+            | StepRole::ToolsCacheIdentity
+            | StepRole::ToolsCacheRestore
+            | StepRole::PreparePinnedTools
+            | StepRole::PrepareRustComponents
+            | StepRole::VerifyRustManifest
+            | StepRole::VerifyJactionlint
+            | StepRole::CargoSourcesRestore
+            | StepRole::CargoSourcesFetch
+            | StepRole::CargoSourcesSave
+    )
 }
 
 fn tofu_role(role: StepRole) -> bool {

@@ -7,18 +7,17 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
-use velnor_actions_contract::workflow::cache_family_mbx::{
-    MBX_BUNDLE_KEY_EXPR, MBX_BUNDLE_MATCHED_KEY_EXPR,
-};
+use velnor_actions_contract::workflow::cache_family_mbx::MBX_BUNDLE_MATCHED_KEY_EXPR;
 
 use crate::gc1_mbx_stub;
-pub(crate) use crate::gc1_scene_tree::Tree;
+pub(crate) use crate::gc1_scene_key::{DEFAULT_SNAPSHOT, Key};
+pub(crate) use crate::gc1_scene_tree::{Tree, files_under};
 use crate::gc1_scene_tree::{tree_of, unlock_tree};
 
 const RECOVERY_RECORD: &str = "velnor/state-recovery.record";
 const RUN_DEADLINE: Duration = Duration::from_secs(300);
 const POLL: Duration = Duration::from_millis(25);
-const PAYLOAD: &str = "velnor-gc1/transport/state/payload.tar.gz";
+const PAYLOAD: &str = "velnor-gc1/transport/state/payload.tar.zst";
 
 pub(crate) struct Rendered {
     pub(crate) run: String,
@@ -32,39 +31,17 @@ pub(crate) struct Scripts {
     pub(crate) record: String,
 }
 
-pub(crate) struct Key {
-    pub(crate) key: String,
-    pub(crate) restore_prefix: String,
-}
-
 pub(crate) struct Scene {
     pub(crate) scratch: PathBuf,
     pub(crate) runner: PathBuf,
     pub(crate) workspace: PathBuf,
     bin: PathBuf,
     pub(crate) github_output: PathBuf,
-    scripts: Scripts,
+    pub(crate) scripts: Scripts,
 }
 
 pub(crate) fn fail(message: &str) -> Box<dyn Error> {
     std::io::Error::other(message.to_owned()).into()
-}
-
-pub(crate) fn files_under(root: &Path) -> Result<Vec<PathBuf>, Box<dyn Error>> {
-    let mut found = Vec::new();
-    let mut pending = vec![root.to_path_buf()];
-    while let Some(dir) = pending.pop() {
-        for entry in std::fs::read_dir(&dir)? {
-            let entry = entry?;
-            let kind = entry.file_type()?;
-            if kind.is_dir() {
-                pending.push(entry.path());
-            } else {
-                found.push(entry.path());
-            }
-        }
-    }
-    Ok(found)
 }
 
 fn drain<R: std::io::Read + Send + 'static>(
@@ -146,6 +123,16 @@ impl Scene {
         env: &[(&str, &str)],
         fsize_blocks: Option<u64>,
     ) -> Result<String, Box<dyn Error>> {
+        self.run_script_unset(script, env, &[], fsize_blocks)
+    }
+
+    pub(crate) fn run_script_unset(
+        &self,
+        script: &str,
+        env: &[(&str, &str)],
+        unset: &[&str],
+        fsize_blocks: Option<u64>,
+    ) -> Result<String, Box<dyn Error>> {
         let path = format!("{}:{}", self.bin.display(), std::env::var("PATH")?);
         let mut command = Command::new("sh");
         match fsize_blocks {
@@ -157,6 +144,22 @@ impl Scene {
                 .arg(script),
             None => command.arg("-c").arg(script),
         };
+        self.base_env(&mut command, &path);
+        for (name, value) in env {
+            command.env(name, value);
+        }
+        for name in unset {
+            command.env_remove(name);
+        }
+        let mut child = command
+            .process_group(0)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()?;
+        Self::collect(&mut child)
+    }
+
+    fn base_env(&self, command: &mut Command, path: &str) {
         command
             .current_dir(&self.workspace)
             .env("PATH", path)
@@ -170,20 +173,17 @@ impl Scene {
             .env("VELNOR_MBX_BUNDLE_VERSION", "1.2.3")
             .env("VELNOR_MBX_BUNDLE_TOOLCHAIN", "1.89.0")
             .env("VELNOR_MBX_BUNDLE_ROOT", ".")
+            .env("VELNOR_STATE_SNAPSHOT", DEFAULT_SNAPSHOT)
             .env("MBX_SHARE_OUT_DIR", "1")
             .env("MBX_BUILD_SCRIPT_EXECUTION", "0")
             .env("MBX_CC", "0")
+            .env("SOURCE_DATE_EPOCH", "0")
             .env("ImageOS", "ubuntu26")
             .env("MBX_CACHE_EXPORT_GROUP", "velnor")
             .env("MBX_CACHE_DIR", self.store());
-        for (name, value) in env {
-            command.env(name, value);
-        }
-        let mut child = command
-            .process_group(0)
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()?;
+    }
+
+    fn collect(child: &mut std::process::Child) -> Result<String, Box<dyn Error>> {
         let stdout = drain(
             child
                 .stdout
@@ -224,25 +224,6 @@ impl Scene {
         }
     }
 
-    pub(crate) fn output_value(&self, key: &str) -> Result<String, Box<dyn Error>> {
-        let text = std::fs::read_to_string(&self.github_output)?;
-        text.lines()
-            .find_map(|line| line.strip_prefix(&format!("{key}=")))
-            .map(str::to_owned)
-            .ok_or_else(|| fail(&format!("github output lost: {key}")))
-    }
-
-    pub(crate) fn discover(&self) -> Result<Key, Box<dyn Error>> {
-        self.run_script(&self.scripts.discover, &[], None)?;
-        if self.output_value("provenance")? != "trusted" {
-            return Err(fail("discover misclassified a trusted push"));
-        }
-        Ok(Key {
-            key: self.output_value("key")?,
-            restore_prefix: self.output_value("restore_keys")?,
-        })
-    }
-
     pub(crate) fn mark_producer(&self) -> Result<(), Box<dyn Error>> {
         std::fs::write(self.runner.join("velnor/state-producer-ok"), "")?;
         Ok(())
@@ -250,16 +231,16 @@ impl Scene {
 
     pub(crate) fn recover(
         &self,
-        key: &str,
         matched: &str,
         env: &[(&str, &str)],
         fsize_blocks: Option<u64>,
     ) -> Result<String, Box<dyn Error>> {
+        self.fresh_outputs()?;
         let step = &self.scripts.recover;
-        let run = resolve(&step.run, key, matched, &self.runner)?;
+        let run = resolve(&step.run, matched, &self.runner)?;
         let mut resolved = Vec::new();
         for (name, value) in &step.env {
-            resolved.push((name.clone(), resolve(value, key, matched, &self.runner)?));
+            resolved.push((name.clone(), resolve(value, matched, &self.runner)?));
         }
         let mut pairs: Vec<(&str, &str)> = resolved
             .iter()
@@ -269,7 +250,15 @@ impl Scene {
         self.run_script(&run, &pairs, fsize_blocks)
     }
 
+    fn fresh_outputs(&self) -> Result<(), Box<dyn Error>> {
+        match std::fs::remove_file(&self.github_output) {
+            Err(error) if error.kind() != std::io::ErrorKind::NotFound => Err(error.into()),
+            _ => Ok(()),
+        }
+    }
+
     pub(crate) fn export(&self, env: &[(&str, &str)]) -> Result<String, Box<dyn Error>> {
+        self.fresh_outputs()?;
         self.run_script(&self.scripts.export, env, None)
     }
 
@@ -277,10 +266,12 @@ impl Scene {
         self.run_script(&self.scripts.record, &[], None)
     }
 
-    pub(crate) fn pack_export(&self, mark: &str) -> Result<(), Box<dyn Error>> {
-        let parent = self.scratch.join("pack");
-        std::fs::create_dir_all(self.payload().parent().ok_or_else(|| fail("no parent"))?)?;
-        let exported = Command::new(self.bin.join("mbx"))
+    pub(crate) fn stub_export(
+        &self,
+        dir: &Path,
+        env: &[(&str, &str)],
+    ) -> Result<(), Box<dyn Error>> {
+        let status = Command::new(self.bin.join("mbx"))
             .args([
                 "cache",
                 "export",
@@ -289,17 +280,40 @@ impl Scene {
                 "--format",
                 "directory",
             ])
-            .arg(parent.join("state"))
-            .env(gc1_mbx_stub::EXPORT_MARK_ENV, mark)
+            .arg(dir)
+            .envs(env.iter().copied())
             .status()?;
-        let packed = Command::new("tar")
-            .arg("-czf")
-            .arg(self.payload())
-            .arg("-C")
+        if status.success() {
+            Ok(())
+        } else {
+            Err(fail("fixture export failed"))
+        }
+    }
+
+    pub(crate) fn pack_export(&self, mark: &str) -> Result<(), Box<dyn Error>> {
+        let parent = self.scratch.join("pack");
+        std::fs::create_dir_all(self.payload().parent().ok_or_else(|| fail("no parent"))?)?;
+        self.stub_export(
+            &parent.join("state"),
+            &[(gc1_mbx_stub::EXPORT_MARK_ENV, mark)],
+        )?;
+        let mut tar = Command::new("tar")
+            .args(["-cf", "-", "-C"])
             .arg(&parent)
             .arg("state")
+            .stdout(Stdio::piped())
+            .spawn()?;
+        let tar_out = tar
+            .stdout
+            .take()
+            .ok_or_else(|| fail("tar stdout unavailable"))?;
+        let compressed = Command::new("zstd")
+            .args(["-3", "--long=30", "-q", "-f", "-o"])
+            .arg(self.payload())
+            .stdin(tar_out)
             .status()?;
-        if exported.success() && packed.success() {
+        let packed = tar.wait()?;
+        if packed.success() && compressed.success() {
             Ok(())
         } else {
             Err(fail("fixture pack failed"))
@@ -312,6 +326,14 @@ impl Scene {
 
     pub(crate) fn tree(&self) -> Result<Tree, Box<dyn Error>> {
         tree_of(&self.scratch)
+    }
+
+    pub(crate) fn install_shim(&self, tool: &str, body: &str) -> Result<(), Box<dyn Error>> {
+        gc1_mbx_stub::write_executable(&self.bin.join(tool), body)
+    }
+
+    pub(crate) fn install_zstd_pad(&self) -> Result<(), Box<dyn Error>> {
+        gc1_mbx_stub::install_zstd_pad(&self.bin)
     }
 
     pub(crate) fn shim_failure(&self, tool: &str) -> Result<(), Box<dyn Error>> {
@@ -332,7 +354,7 @@ impl Drop for Scene {
     }
 }
 
-fn resolve(text: &str, key: &str, matched: &str, runner: &Path) -> Result<String, Box<dyn Error>> {
+fn resolve(text: &str, matched: &str, runner: &Path) -> Result<String, Box<dyn Error>> {
     let strip = |expr: &str| -> String {
         expr.strip_prefix("${{")
             .and_then(|rest| rest.strip_suffix("}}"))
@@ -340,7 +362,6 @@ fn resolve(text: &str, key: &str, matched: &str, runner: &Path) -> Result<String
             .trim()
             .to_owned()
     };
-    let key_expr = strip(MBX_BUNDLE_KEY_EXPR);
     let matched_expr = strip(MBX_BUNDLE_MATCHED_KEY_EXPR);
     let mut out = String::new();
     let mut rest = text;
@@ -351,9 +372,7 @@ fn resolve(text: &str, key: &str, matched: &str, runner: &Path) -> Result<String
             .find("}}")
             .ok_or_else(|| fail("unterminated expression"))?;
         let inner = after[..end].trim();
-        if inner == key_expr {
-            out.push_str(key);
-        } else if inner == matched_expr {
+        if inner == matched_expr {
             out.push_str(matched);
         } else if inner == "runner.temp" {
             out.push_str(&runner.display().to_string());

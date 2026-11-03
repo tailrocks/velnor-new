@@ -20,12 +20,13 @@ pub use crate::cache_steps::{
     FamilySnapshot, MBX_ACTION_NAME, MBX_BUNDLE_EXPORT_NAME, MBX_BUNDLE_IMPORT_NAME,
     MBX_BUNDLE_KEY_NAME, MBX_BUNDLE_RESTORE_NAME, MBX_BUNDLE_SAVE_NAME, MBX_EXPORT_GROUP_ENV,
     MBX_EXPORT_GROUP_VALUE, MBX_PREFLIGHT_NAME, MBX_PRODUCER_MARK_NAME, MBX_RESTORE_NAME,
-    MBX_VERSION_CHECK_NAME, MbxTransport, NEVER_ARCHIVE_MARKERS, TASK_ARTIFACTS_DIR,
+    MBX_VERSION_CHECK_NAME, MbxTransport, NEVER_ARCHIVE_MARKERS, StateCeilings, TASK_ARTIFACTS_DIR,
     TOOLS_CACHE_PATH, TOOLS_CACHE_PATHS, TOOLS_RESTORE_ACTION_USES, TOOLS_RESTORE_NAME,
     TOOLS_RESTORE_USES, TOOLS_SAVE_NAME, TOOLS_SAVE_USES, cache_action_step,
     check_cache_step_order, check_mbx_gating, family_keys_step, family_keys_step_single_writer,
     family_restore_step, family_save_step, family_size_step, is_never_archive_path,
-    mbx_producer_mark_step, mbx_steps_for_driver,
+    mbx_bundle_postlude_bounded, mbx_producer_mark_step, mbx_steps_for_driver,
+    mbx_steps_for_driver_bounded,
 };
 pub use crate::parallel_target_seed::seed_parallel_targets_step;
 pub(crate) use crate::steps_shell::action_owned_mbx_shell_step;
@@ -111,7 +112,7 @@ pub fn action_step_with_env(
     scan_for_private_subcommands(uses)?;
     for (key, value) in &with {
         crate::expressions::check_with_key(key)?;
-        crate::expressions::check_with_value(key, value)?;
+        crate::expressions::check_with_action_value(uses, key, value)?;
         scan_for_private_subcommands(key)?;
         scan_for_private_subcommands(value)?;
     }

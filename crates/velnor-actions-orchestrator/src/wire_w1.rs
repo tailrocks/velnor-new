@@ -8,7 +8,9 @@ use velnor_actions_actionlint::{
     actions::{CACHE_ACTION_SHA, CACHE_ACTION_VERSION},
     checkout_inputs_schema, validate_action_inputs,
 };
-use velnor_actions_contract::{Job, ProposedTask, Step, StepKind, StepRole, VelnorConfig};
+use velnor_actions_contract::{
+    CheckoutHistory, Job, ProposedTask, Step, StepKind, StepRole, VelnorConfig,
+};
 use velnor_actions_mise::{Gate6Fixture, TaskCacheMode, ToolCatalog, ToolHomes};
 use velnor_actions_rust::is_workspace_fmt_task;
 use velnor_actions_workflow_renderer::plan_format;
@@ -85,10 +87,13 @@ pub(crate) fn apply_checkout_lfs(jobs: &mut BTreeMap<String, Job>) {
     }
 }
 
-pub(crate) fn checkout_step_full() -> Result<Step, OrchestratorError> {
+pub(crate) fn checkout_step_for(history: CheckoutHistory) -> Result<Step, OrchestratorError> {
     let with = BTreeMap::from([
         ("persist-credentials".to_owned(), "false".to_owned()),
-        ("fetch-depth".to_owned(), "0".to_owned()),
+        (
+            "fetch-depth".to_owned(),
+            history.fetch_depth_input().to_owned(),
+        ),
     ]);
     validate_action_inputs(&checkout_inputs_schema(), &with).map_err(|err| {
         OrchestratorError::Contract {

@@ -20,8 +20,8 @@ preserves other repository-owned entries as specified in §3:
     ├── binary-preview.yml         # consumer-v1 only, rolling preview channel enabled
     ├── preview-tap-reconcile.yml  # preview Homebrew destination configured
     ├── stable-tap-reconcile.yml   # stable Homebrew destination configured
-    ├── cache-prune.yml             # push to the default branch: prunes superseded cache entries per family
-    ├── cache-cleanup.yml           # `pull_request_cache_policy = "same-repository-scoped"`: deletes a closed PR's cache entries
+    ├── cache-prune.yml             # workflow_run of CI after a default-branch push: prunes superseded cache entries per family
+    ├── cache-cleanup.yml           # emitted only for a `same-repository-scoped` PR cache policy, which the config rejects as `obsolete_pr_write_policy`
     ├── ci.yml                      # both policies; Velnor policy adds campaign inputs
     ├── publish.yml                 # consumer-v1 only, `[[publish.bundles]]` or `registry = "git-tag"`
     ├── qualification.yml           # optional schema 2 workflow selected by configuration
@@ -35,6 +35,8 @@ This optional workflow is distinct from Velnor's five-phase hosted cache
 campaign ([contract](hosted-cache-qualification-contract.md)): the campaign's
 dispatch inputs and predecessor resolver are part of generated `ci.yml`
 under `velnor-repository-v1`, not a separate workflow file.
+
+Every generated workflow file declares top-level `cache-mode: read`. Job-level `cache-mode: write` appears only on the named cache writers (`tools-producer-*`, `providers-producer-*`, `sources-producer`, and the four `qualification.yml` cache jobs that run only when dispatched from a non-default branch); `generate` fails on any other job-level write, on a writer without its trusted gate, and on a writer that runs task code or a `uses:` outside the writer allowlist.
 
 `publish.yml` is the tag-driven publication workflow (see the
 [package publication contract](package-publication-contract.md)); it is absent

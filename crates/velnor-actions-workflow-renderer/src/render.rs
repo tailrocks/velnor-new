@@ -148,6 +148,7 @@ pub fn finalize_jobs(
         ctx.pull_request_cache_policy,
         &ctx.standalone_tools_donors,
     )?;
+    crate::sources_producer::add_sources_producer(&mut jobs)?;
     crate::tofu_producer::add_tofu_providers_producers(&mut jobs)?;
     crate::tofu_stage::stage_tofu_jobs(&mut jobs, ctx.max_parallel_jobs);
     closure::check_plan_anchor(&jobs)?;

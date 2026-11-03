@@ -10,8 +10,7 @@ save-on-producer-success, pruning).
 Every family key is
 `velnor-v<schema>-<layer>-<trust>-<compat>-<snapshot>` (`compat` and `snapshot`
 are `s256-<64 hex>` digests). `trust` is `trusted` (protected default-branch
-push), `pr` (same-repository pull request, PR-scoped writes only) or `none`
-(forks, merge groups, dispatches: never writes). A family changes its paths or
+push), `none` (pull requests, forks, merge groups, dispatches: never writes). A family changes its paths or
 digest inputs only with a schema bump.
 
 | Family (schema) | Paths | Compat hashes | Snapshot | Writers | Generated |
@@ -23,7 +22,13 @@ digest inputs only with a schema bump.
 | `dbt-packages` (1) | `$RUNNER_TEMP/velnor/dbt-packages/{root}` (one directory per dbt project) | family, schema, `uname -sm`, resolved `dbt-fusion` version | sha256 of the project's `package-lock.yml` | the project's own job, `trusted` only, right after `dbt deps` | yes |
 | `python-venv` (1) | `$RUNNER_TEMP/velnor/uv-cache` (`UV_CACHE_DIR`) | family, schema, `uname -sm`, resolved `uv` and `python` versions | sha256 of the hash-pinned requirements file | the Ansible job, `trusted` only, right after the environment step | yes |
 | `ansible-collections` (1) | `$RUNNER_TEMP/velnor/ansible-collections` (verified tarballs) | family, schema, `uname -sm` | sorted `name\tversion\tsha256` lines of `[[stacks.ansible.collections]]` | the Ansible job, `trusted` only, right after the collections install | yes |
-| `mbx-bundle` (2) | `$RUNNER_TEMP/velnor/mbx-bundle` (the directory `mbx cache export --format directory` writes) | family, schema, path, `unit` (`seed` or `suite`), MBX version, Rust toolchain, workspace root, `uname -sm`, `MBX_SHARE_OUT_DIR`, `MBX_BUILD_SCRIPT_EXECUTION`, `MBX_CC`, `ImageOS` (an empty or unset `ImageOS` goes cold with `reason=image_os_missing`), ceiling | sha256 of the workspace `Cargo.lock` | the `Dependency seed` job (unit `seed`) and suite jobs (unit `suite`), `trusted` only; crate jobs read `seed`; computed in the job (`Compute MBX bundle key`), not in the Plan job | yes |
+| `mbx-bundle` (4) | `$RUNNER_TEMP/velnor/mbx-bundle` (the directory `mbx cache export --format directory` writes) | family, schema, path, `unit` (`union` or `suite`), workspace root, MBX version, Rust toolchain, `uname -s`, `uname -m`, `ImageOS` (an empty or unset `ImageOS` goes cold with `reason=image_os_missing`), the resolved store path, the resolved checkout path and the literals `MBX_SHARE_OUT_DIR=1`, `MBX_BUILD_SCRIPT_EXECUTION=0`, `MBX_CC=0`, `SOURCE_DATE_EPOCH=0` (never read from the env; publish refuses a job env that differs); no ceiling line | sha256 over the root `Cargo.lock`, the root's Rust inputs and the producer task set (suite jobs have no plan and use the lock only) | the `Dependency seed` job (unit `union`) and suite jobs (unit `suite`), `trusted` only; crate jobs read `union`; the key is `velnor-v4-state-<trust>-<unit>-<root>-s256-<compat>-s256-<snapshot>-s256-<payload>` with the payload digest taken from the stored file at save time; the snapshot of a `union` job is computed in the Plan job (`Compute cache keys`) and the key in the job (`Compute state snapshot key`); amended under owner standing grant 2026-11-02, velnor-fast-ci GOAL.md, decisions X53 and X57 | yes |
+
+The MBX qualification job is deliberately off the shared MBX job env that
+the crate, seed and suite jobs use. Its own `qualification_env` sets
+`MBX_GC_AUTO=0` and `MBX_SHARE_OUT_DIR=0` only and leaves
+`SOURCE_DATE_EPOCH` unset, because that job runs the action's objects-mode
+post step on protected main under its own cache generation label.
 
 `node_modules` is never cached: the isolated linker rebuilds it from the Bun
 cache in seconds, and a cached `node_modules` would carry lifecycle-script
@@ -81,7 +86,7 @@ output across trust scopes.
   producer is `mbx cache export --group velnor --format directory` and the only
   consumer is `mbx cache import`, which moves the objects into the store and
   removes the restored directory. The recover step imports a staged directory
-  that it first screened and measured, never the downloaded `.tar.gz`, and
+  that it first screened and measured, never the downloaded `payload.tar.zst`, and
   runs the import from a working directory outside any checkout; a working
   directory inside the workspace, or any hostile, unreadable or non-regular
   payload (including file modes and links set by the cache restore), ends cold
@@ -91,6 +96,10 @@ output across trust scopes.
 - Compat does not name a job: every reader of a workspace shares the entry,
   and the key changes only when the lock, toolchain, MBX version or platform
   changes. The `unit` keeps the dependency seed and suite bundles apart.
+- velnor-new sets `dependency_seed = "off"` (`.velnor/config.toml:40`, PR
+  #466), so no job writes this family there and no `velnor-v2-state-` entry
+  exists. Crate-job restores miss. The design that would restore this
+  persistence is [compiled-state persistence](compiled-state-persistence.md).
 - Units are the key schema of decision 2. `seed` is written only by the
   non-crate `Dependency seed` job (one per MBX Cargo workspace, protected
   default-branch pushes only, outside `Required`); crate jobs restore it
@@ -98,9 +107,11 @@ output across trust scopes.
   the suite job that compiled it.
 - A restore may fall back to any snapshot of the same compat (the newest
   trusted entry), which `mbx cache import` then reuses object by object.
-- The size check reads the on-disk bytes of the exported directory
-  (`du -sk`), a conservative upper bound of the compressed entry. Over the
-  ceiling the export is deleted and the save refused (`over_ceiling`).
+- Two bounds apply: the stored payload (`zstd -3 --long=30` over `tar`, read
+  with `wc -c`, at most 1.5 GiB, refused as `over_stored`) and the extracted
+  tree (`du -sb`, at most 12 GiB, refused as `over_extracted`). Both refusals
+  print the measured and the ceiling bytes, and the export is deleted. Only the
+  stored bound counts against the cache quota.
   The publish step always exports fresh; it never republishes a state root that
   already exists on the runner.
 - The bundle save has its own three-minute optional-save budget; the other
@@ -109,7 +120,7 @@ output across trust scopes.
 ## Size ceilings and the budget rule
 
 Each spec carries `ceiling_bytes` (largest stored entry; a save that would
-exceed it is refused and reported as `over_ceiling`) and `retained_entries`
+exceed it is refused and reported as `over_ceiling`; the state family reports `over_stored` or `over_extracted`) and `retained_entries`
 (newest entries kept per unit; older exact keys are pruned per family by the
 `Cache prune` workflow, [decision 4](cache-decisions.md)). `worst_case_bytes(units)` multiplies them.
 A test sums the reference repository (ChainArgos: four Bun roots, two OpenTofu
@@ -125,10 +136,12 @@ and fails when it exceeds 85 % of the 10 GiB quota.
 | `python-venv` | 384 MiB | 2 | requirements file | 1 | 768 MiB | not measured; ceiling is a placeholder to revise with data |
 | `ansible-collections` | 128 MiB | 2 | collection set | 1 | 256 MiB | not measured; ceiling is a placeholder to revise with data |
 | `playwright-browsers` | 512 MiB | 2 | Playwright version | 1 | 1 GiB | 328 MB of Chromium archives (Chromium, headless shell, ffmpeg; Playwright 1.64.1) |
-| `mbx-bundle` | 384 MiB | 1 | Cargo workspace and unit | 2 (seed, suite) | 768 MiB | 63.7 MiB (root workspace) and 12.8 MiB (nested runner workspace) stored, first main push after #278 (run 39575862041); the former `target` payload was 770 MiB |
+| `mbx-bundle` | 1.5 GiB stored, 12 GiB extracted | 1 | Cargo workspace and unit | 2 (union, suite) | 3 GiB stored | 63.7 MiB (root workspace) and 12.8 MiB (nested runner workspace) stored, first main push after #278 (run 39575862041); later seed exports reported (author-quoted, #437) at 5.9 GiB and 3.5 GiB uncompressed and were refused; the former `target` payload was 770 MiB |
 
-The reference total with the tools allowance is about 7.63 GiB against the
-8.5 GiB budget (85 % of 10 GiB). A real Bun root that stores more than 256 MiB is
+The reference total with the tools allowance is about 9.88 GiB (the state family
+counts its 1.5 GiB stored bound twice and its 12 GiB extracted bound not at
+all), so the static 85 % sum no longer holds for a full reference repository;
+the producer admits each save against the live quota instead. A real Bun root that stores more than 256 MiB is
 refused at save time and reported, never silently truncated; the owner raises
 that ceiling with a measurement.
 
@@ -156,4 +169,4 @@ a key step whose env is the default-branch ref plus, in a Bun leg matrix only,
 ## Remaining
 
 `tofu-providers` still saves without a size admission; the same stored-size
-check follows. Its ceiling was re-measured (see the table).
+check follows. Its ceiling was re-measured (see the table). ¶

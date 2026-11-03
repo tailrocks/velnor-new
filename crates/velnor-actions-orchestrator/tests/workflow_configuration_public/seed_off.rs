@@ -29,7 +29,7 @@ fn seed_repo(extra: &str) -> Result<tempfile::TempDir, Box<dyn Error>> {
             velnor_actions_mise::RUST_VERSION
         ),
     )?;
-    for (relative_root, package_name) in [("crates/a-b", "a-b"), ("crates/a/b", "b")] {
+    for (relative_root, package_name) in [("crates/a-b", "a-b"), ("crates/a/c", "c")] {
         workflow_configuration_fixture::add_independent_mbx_package(
             root,
             relative_root,

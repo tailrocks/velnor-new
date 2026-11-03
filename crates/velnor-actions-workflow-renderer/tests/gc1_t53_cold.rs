@@ -7,7 +7,7 @@ use crate::gc1_scene::Scene;
 use super::*;
 
 #[test]
-#[cfg(unix)]
+#[cfg(target_os = "linux")]
 fn gc1_t53_cold_trusted_push_publishes_first_entry() -> Result<(), Box<dyn Error>> {
     let scene = Scene::new("cold-first", crate::gc1_t53::scripts()?)?;
     scene.discover()?;
@@ -51,7 +51,7 @@ fn gc1_t53_cold_trusted_push_publishes_first_entry() -> Result<(), Box<dyn Error
 }
 
 #[test]
-#[cfg(unix)]
+#[cfg(target_os = "linux")]
 fn gc1_t53_cold_export_failure_skips_clean() -> Result<(), Box<dyn Error>> {
     let scene = Scene::new("cold-export-fail", crate::gc1_t53::scripts()?)?;
     scene.discover()?;
@@ -77,12 +77,12 @@ fn gc1_t53_cold_export_failure_skips_clean() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
-#[cfg(unix)]
+#[cfg(target_os = "linux")]
 fn gc1_t53_recover_import_failure_goes_cold() -> Result<(), Box<dyn Error>> {
     let scene = Scene::new("cold-recover-fail", crate::gc1_t53::scripts()?)?;
     let key = scene.discover()?;
     scene.pack_export("old")?;
-    let output = scene.recover(&key.key, &key.key, &[(FAIL_ENV, "import")], None)?;
+    let output = scene.recover(&key.exact(), &[(FAIL_ENV, "import")], None)?;
     if scene.recovery_record().exists() {
         return Err(fail("failed import must leave no recovery record"));
     }

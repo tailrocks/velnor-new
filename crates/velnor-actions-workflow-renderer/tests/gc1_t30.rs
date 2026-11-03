@@ -9,7 +9,7 @@ use velnor_actions_contract::workflow::cache_family::COMPLETE_STATE_TRANSPORT_EX
 use velnor_actions_contract::workflow::cache_family_mbx::{
     MBX_BUNDLE_EXPORT_CONDITION, MBX_BUNDLE_IMPORT_CONDITION, MBX_BUNDLE_KEY_EXPR,
     MBX_BUNDLE_PATH_EXPR, MBX_BUNDLE_RESTORE_CONDITION, MBX_BUNDLE_RESTORE_KEYS_EXPR,
-    MBX_BUNDLE_SAVE_CONDITION,
+    MBX_BUNDLE_SAVE_CONDITION, MBX_BUNDLE_SAVE_KEY_EXPR,
 };
 use velnor_actions_contract::{Job, JobTimeout, Step, StepKind, StepRole};
 use velnor_actions_workflow_renderer::steps::{
@@ -97,7 +97,7 @@ fn job_with(steps: Vec<Step>) -> Job {
         needs: Vec::new(),
         condition: None,
         permissions: None,
-        cache_mode: None,
+        cache_access: velnor_actions_contract::CacheAccess::Read,
         environment: None,
         services: Vec::new(),
         outputs: BTreeMap::new(),

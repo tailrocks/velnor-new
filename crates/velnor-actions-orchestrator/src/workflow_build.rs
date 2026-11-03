@@ -67,6 +67,7 @@ pub(crate) fn build_workflow_for_consumer_release(
         wire_w1::apply_checkout_lfs(&mut jobs);
     }
     let mut ir = workflow_ir(input.config, input.branch, jobs, prepared.policy);
+    check_jobs::require_history_push_branches(input.discovery, &ir.triggers.push_branches)?;
     let native = native_authority::build(input, &prepared, &mut ir.jobs)?;
     let runtime = native.runtime();
     let authority_steps = native.authority();
@@ -232,6 +233,31 @@ fn build_workflow_plan(
     Ok(plan)
 }
 
+fn attach_state_roots(
+    input: &WorkflowBuildInput<'_>,
+    prepared: &PreparedWorkflow,
+    jobs: &mut BTreeMap<String, Job>,
+) -> Result<(), OrchestratorError> {
+    let state_roots = crate::state_roots::plans(input.discovery, jobs)?;
+    if state_roots.is_empty() {
+        return Ok(());
+    }
+    let tofu_roots = crate::tofu_cache::tofu_cache_roots(input.discovery)?;
+    let plan = jobs
+        .get_mut(PLAN_JOB_ID)
+        .ok_or_else(|| OrchestratorError::Contract {
+            problem: "plan_job_missing".to_owned(),
+        })?;
+    velnor_actions_workflow_renderer::native_job_builders::plan_state_roots(
+        plan,
+        &prepared.helper_catalog,
+        input.fetch_roots,
+        &tofu_roots,
+        &state_roots,
+    )
+    .map_err(crate::workflow_jobs::map_native_job_builder_error)
+}
+
 fn build_workflow_jobs(
     input: &WorkflowBuildInput<'_>,
     prepared: &mut PreparedWorkflow,
@@ -286,6 +312,7 @@ fn build_workflow_jobs(
         jobs.insert(id, job);
     }
     required_ids.extend(suite_build.required_ids);
+    attach_state_roots(input, prepared, &mut jobs)?;
     crate::workflow_task_jobs::insert_jobs(&mut jobs, &prepared.workflow_tasks)?;
     let (required_catalog, required_acquire) = if prepared.policy == WorkflowPolicy::VelnorRepositoryV1 {
         let target = velnor_actions_contract::ReleaseTarget::for_runner_label(input.label)

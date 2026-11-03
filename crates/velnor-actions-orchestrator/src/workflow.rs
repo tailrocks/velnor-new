@@ -91,7 +91,6 @@ fn workflow_ir(
             cancel_in_progress: CONCURRENCY_CANCEL.to_owned(),
         },
         jobs,
-        cache_mode: None,
     }
 }
 

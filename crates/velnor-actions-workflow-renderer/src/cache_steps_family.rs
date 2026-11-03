@@ -225,7 +225,7 @@ pub fn family_restore_step(plan: &FamilyCachePlan) -> Result<Step, RenderError> 
 
 pub fn family_size_step(plan: &FamilyCachePlan) -> Result<Step, RenderError> {
     plan.check()?;
-    let ceiling = plan.family.spec().ceiling_bytes;
+    let ceiling = plan.family.spec().ceiling.stored();
     let layer = plan.family.spec().layer;
     let output_stem = family_output_stem(plan.family);
     let script = [

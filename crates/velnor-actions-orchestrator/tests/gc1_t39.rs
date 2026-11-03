@@ -45,6 +45,7 @@ fn discovered() -> DiscoveredCheck {
         system_tools: Vec::new(),
         evidence: None,
         timeout_minutes: 10,
+        history: velnor_actions_contract::CheckoutHistory::Full,
     };
     let proposal = ProposedTask {
         task_id: "internal/lint/dev".to_owned(),

@@ -205,8 +205,13 @@ fn check_bounded_generations(text: &str) -> Result<(), Box<dyn Error>> {
 fn check_hosted_admission(writer: &str, reader: &str) -> Result<(), Box<dyn Error>> {
     for section in [writer, reader] {
         require(section, "runs-on: ubuntu-26.04", "hosted writer")?;
-        require(section, "github.ref_protected == true", "hosted writer")?;
-        require(section, "refs/heads/main", "hosted writer")?;
+        require(
+            section,
+            "github.ref != format('refs/heads/{0}', github.event.repository.default_branch)",
+            "hosted writer",
+        )?;
+        forbid(section, "refs/heads/main", "hosted writer")?;
+        forbid(section, "github.ref_protected", "hosted writer")?;
         forbid(section, "self-hosted", "hosted writer")?;
     }
     require_order(writer, WRITER_JOB, "actions: write", "writer policy")?;
@@ -342,3 +347,6 @@ fn gc1_t50_rejects_invalid_state() -> Result<(), Box<dyn Error>> {
     )?;
     Ok(())
 }
+
+#[path = "gc1_t50_guard.rs"]
+mod gc1_t50_guard;

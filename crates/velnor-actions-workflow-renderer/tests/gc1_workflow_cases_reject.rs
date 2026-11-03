@@ -3,29 +3,28 @@
 
 use std::error::Error;
 
-use velnor_actions_contract::{CacheMode, NeedsConclusions, REQUIRED_JOB_ID, RunsOn};
+use velnor_actions_contract::{
+    CacheAccess, CacheWriter, NeedsConclusions, REQUIRED_JOB_ID, RunsOn,
+};
 use velnor_actions_workflow_renderer::overlap::{PrepOverlap, wire_prep_join};
 use velnor_actions_workflow_renderer::steps::bootstrap_bridge_step;
 
 use super::gc1_workflow_cases_common::*;
 
 fn check_rejects_untrusted_event_writes() -> Result<(), Box<dyn Error>> {
-    if mode_workflow(pr_trigger(), Some(CacheMode::Write))
-        .validate()
-        .is_ok()
-    {
-        return Err(fail("untrusted event path accepted an unconditional write"));
+    let mut workflow = mode_workflow(pr_trigger());
+    if let Some(build) = workflow.jobs.get_mut("build") {
+        build.cache_access = CacheAccess::Writer(CacheWriter::ToolsProducer);
     }
-    let mut workflow = mode_workflow(pr_trigger(), None);
+    if workflow.validate().is_ok() {
+        return Err(fail("untrusted event path accepted a cache write"));
+    }
+    let mut workflow = mode_workflow(pr_trigger());
     if let Some(reader) = workflow.jobs.get_mut("reader") {
-        reader.cache_mode = None;
+        reader.cache_access = CacheAccess::Writer(CacheWriter::ToolsProducer);
     }
     if workflow
-        .validate_event_authority(
-            &names(&["reader"]),
-            &names(&["writer"]),
-            &names(&["cleanup"]),
-        )
+        .validate_event_authority(&names(&["reader"]), &names(&[]), &names(&["cleanup"]))
         .is_ok()
     {
         return Err(fail(
@@ -36,37 +35,35 @@ fn check_rejects_untrusted_event_writes() -> Result<(), Box<dyn Error>> {
 }
 
 fn check_rejects_authority_mismatch() -> Result<(), Box<dyn Error>> {
-    let mut jobs = mode_jobs(None);
+    let mut jobs = mode_jobs();
     if let Some(cleanup) = jobs.get_mut("cleanup") {
         cleanup.steps.insert(0, checkout_step());
     }
-    let mut workflow = mode_workflow(pr_trigger(), None);
+    let mut workflow = mode_workflow(pr_trigger());
     workflow.jobs = jobs;
     if workflow
-        .validate_event_authority(
-            &names(&["reader"]),
-            &names(&["writer"]),
-            &names(&["cleanup"]),
-        )
+        .validate_event_authority(&names(&["reader"]), &names(&[]), &names(&["cleanup"]))
         .is_ok()
     {
         return Err(fail(
             "authority check let cleanup hold an application checkout",
         ));
     }
-    let mut jobs = mode_jobs(None);
+    let mut jobs = mode_jobs();
     jobs.insert(
         "extra".to_owned(),
-        job_with("Extra", None, Some(cleanup_permissions()), Vec::new(), None),
+        job_with(
+            "Extra",
+            CacheAccess::Read,
+            Some(cleanup_permissions()),
+            Vec::new(),
+            None,
+        ),
     );
-    let mut workflow = mode_workflow(pr_trigger(), None);
+    let mut workflow = mode_workflow(pr_trigger());
     workflow.jobs = jobs;
     if workflow
-        .validate_event_authority(
-            &names(&["reader"]),
-            &names(&["writer"]),
-            &names(&["cleanup"]),
-        )
+        .validate_event_authority(&names(&["reader"]), &names(&[]), &names(&["cleanup"]))
         .is_ok()
     {
         return Err(fail(
@@ -75,7 +72,7 @@ fn check_rejects_authority_mismatch() -> Result<(), Box<dyn Error>> {
     }
     let mut restricted = pr_trigger();
     restricted.pull_request_types = vec!["pull_request_target".to_owned()];
-    if mode_workflow(restricted, None).validate().is_ok() {
+    if mode_workflow(restricted).validate().is_ok() {
         return Err(fail(
             "event path accepted a restricted untrusted actor event",
         ));
@@ -84,7 +81,7 @@ fn check_rejects_authority_mismatch() -> Result<(), Box<dyn Error>> {
     scheduled.schedule = Some(velnor_actions_contract::ScheduleTrigger::single(
         "not-a-cron",
     ));
-    if mode_workflow(scheduled, None).validate().is_ok() {
+    if mode_workflow(scheduled).validate().is_ok() {
         return Err(fail("event path accepted a malformed schedule"));
     }
     Ok(())
@@ -157,22 +154,21 @@ fn check_rejects_shadow_confusion() -> Result<(), Box<dyn Error>> {
 }
 
 fn check_rejects_ledger_drift() -> Result<(), Box<dyn Error>> {
-    let mut jobs = mode_jobs(None);
+    let mut jobs = mode_jobs();
     if let Some(required) = jobs.get_mut(REQUIRED_JOB_ID) {
         required.needs = Vec::new();
     }
     if NeedsConclusions::from_finalized_jobs(REQUIRED_JOB_ID, &jobs).is_ok() {
         return Err(fail("ledger check accepted an empty required inventory"));
     }
-    if NeedsConclusions::from_finalized_jobs("ghost-gate", &mode_jobs(None)).is_ok() {
+    if NeedsConclusions::from_finalized_jobs("ghost-gate", &mode_jobs()).is_ok() {
         return Err(fail("ledger check accepted a missing required gate"));
     }
-    let conclusions = match NeedsConclusions::from_finalized_jobs(REQUIRED_JOB_ID, &mode_jobs(None))
-    {
+    let conclusions = match NeedsConclusions::from_finalized_jobs(REQUIRED_JOB_ID, &mode_jobs()) {
         Ok(conclusions) => conclusions,
         Err(error) => return Err(fail(&format!("ledger check lost its baseline:{error}"))),
     };
-    let mut drifted = mode_jobs(None);
+    let mut drifted = mode_jobs();
     if let Some(required) = drifted.get_mut(REQUIRED_JOB_ID) {
         required.needs = vec!["reader".to_owned()];
     }

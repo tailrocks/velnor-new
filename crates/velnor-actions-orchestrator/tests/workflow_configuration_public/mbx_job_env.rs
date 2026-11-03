@@ -15,6 +15,7 @@ struct RenderedJob {
     id: String,
     runs_mbx: bool,
     env: Env,
+    text: String,
 }
 
 struct JobBlock<'a> {
@@ -80,6 +81,15 @@ fn collect_anchors(lines: &[&str], anchors: &mut BTreeMap<String, Env>) {
     }
 }
 
+fn workflow_env(text: &str) -> Env {
+    let lines: Vec<&str> = text.lines().collect();
+    lines
+        .iter()
+        .position(|line| *line == "env:")
+        .map(|index| env_entries(&lines, index + 1, 0))
+        .unwrap_or_default()
+}
+
 fn job_env(block: &JobBlock<'_>, anchors: &BTreeMap<String, Env>) -> Result<Env, Box<dyn Error>> {
     for (index, line) in block.lines.iter().enumerate() {
         if indent_of(line) != 4 {
@@ -106,6 +116,7 @@ fn rendered_jobs() -> Result<Vec<RenderedJob>, Box<dyn Error>> {
         .get(WORKFLOW_PATH)
         .ok_or("rendered workflow is missing")?;
     let blocks = job_blocks(text);
+    let inherited = workflow_env(text);
     let mut anchors = BTreeMap::new();
     let mut jobs = Vec::new();
     for block in &blocks {
@@ -117,7 +128,12 @@ fn rendered_jobs() -> Result<Vec<RenderedJob>, Box<dyn Error>> {
         jobs.push(RenderedJob {
             id: block.id.to_owned(),
             runs_mbx,
-            env: job_env(block, &anchors)?,
+            text: block.lines.join("\n"),
+            env: {
+                let mut env = inherited.clone();
+                env.extend(job_env(block, &anchors)?);
+                env
+            },
         });
     }
     Ok(jobs)
@@ -142,6 +158,7 @@ fn mbx_jobs_run_the_compiler_with_shared_out_dirs_and_build_script_execution_dis
             ("MBX_CC", "0"),
             ("MBX_GC_AUTO", "0"),
             ("MBX_CACHE_EXPORT_GROUP", "velnor"),
+            ("SOURCE_DATE_EPOCH", "0"),
         ] {
             let actual = env.get(key).map(String::as_str);
             if actual != Some(expected) {
@@ -165,13 +182,54 @@ fn jobs_without_mbx_get_no_mbx_environment() -> Result<(), Box<dyn Error>> {
         .iter()
         .find(|job| job.id == "plan")
         .ok_or("plan job is missing")?;
-    for RenderedJob { id, runs_mbx, env } in [cargo_job, plan_job] {
+    for RenderedJob {
+        id, runs_mbx, env, ..
+    } in [cargo_job, plan_job]
+    {
         if *runs_mbx {
             return Err(format!("job {id} unexpectedly runs mbx").into());
         }
-        if let Some(key) = env.keys().find(|key| key.starts_with("MBX_")) {
+        if let Some(key) = env
+            .keys()
+            .find(|key| key.starts_with("MBX_") || *key == "SOURCE_DATE_EPOCH")
+        {
             return Err(format!("job {id} leaked {key}").into());
         }
+    }
+    Ok(())
+}
+
+const NON_COMPILE_ENV: [&str; 2] = ["MBX_GC_AUTO", "MBX_CACHE_EXPORT_GROUP"];
+
+#[test]
+fn every_mbx_job_env_key_outside_the_non_compile_set_binds_the_state_key()
+-> Result<(), Box<dyn Error>> {
+    let jobs = rendered_jobs()?;
+    let cargo_job = jobs
+        .iter()
+        .find(|job| job.id == "rust-demo")
+        .ok_or("cargo crate job is missing")?;
+    let mut checked = 0;
+    for job in jobs.iter().filter(|job| job.runs_mbx) {
+        for (key, value) in &job.env {
+            if cargo_job.env.contains_key(key) || NON_COMPILE_ENV.contains(&key.as_str()) {
+                continue;
+            }
+            let literal = format!("{key}={value}");
+            let gate = format!("${{{key}-}}");
+            let gated = !job.text.contains("Publish state snapshot") || job.text.contains(&gate);
+            if !job.text.contains(&literal) || !gated {
+                return Err(format!(
+                    "job {}: env {key} reaches the compiler but not the state key",
+                    job.id
+                )
+                .into());
+            }
+            checked += 1;
+        }
+    }
+    if checked < 4 {
+        return Err(format!("only {checked} compile env bindings were checked").into());
     }
     Ok(())
 }

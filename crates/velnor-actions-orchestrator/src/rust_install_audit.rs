@@ -12,7 +12,7 @@ use crate::OrchestratorError;
 use crate::workflow::verifier_actions::{VerifierAction, VerifierActionSet};
 
 #[path = "rust_install_audit_parse.rs"]
-mod parse;
+pub(crate) mod parse;
 use parse::{StepText, step_lists};
 
 const INSTALLS: [&str; 13] = [

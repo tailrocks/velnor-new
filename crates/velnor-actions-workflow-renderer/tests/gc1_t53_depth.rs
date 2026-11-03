@@ -2,10 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::path::Path;
-use std::process::Command;
 
-use crate::gc1_scene::{Scene, files_under};
-use crate::gc1_ustar::Archive;
+use crate::gc1_scene::Scene;
+#[cfg(target_os = "linux")]
+use crate::gc1_scene::files_under;
+use crate::gc1_ustar::{Archive, list_members};
 
 use super::*;
 
@@ -53,11 +54,7 @@ fn build(
 }
 
 fn listed(payload: &Path) -> Result<Shape, Box<dyn Error>> {
-    let output = Command::new("tar").arg("-tzf").arg(payload).output()?;
-    if !output.status.success() {
-        return Err(fail("the system tar cannot list the fixture"));
-    }
-    let text = String::from_utf8(output.stdout)?;
+    let text = list_members(payload)?;
     let mut shape = Shape {
         components: 0,
         longest: 0,
@@ -97,7 +94,7 @@ fn check_refused(
     expect_shape(&scene, components, name.len())?;
     let before = scene.tree()?;
     let output = scene
-        .recover(&key.key, &key.key, &[], None)
+        .recover(&key.exact(), &[], None)
         .map_err(|error| fail(&format!("{label}: {error}")))?;
     scene
         .assert_cold(&output, token)
@@ -109,14 +106,14 @@ fn check_refused(
 }
 
 #[test]
-#[cfg(unix)]
+#[cfg(target_os = "linux")]
 fn gc1_t53_recover_accepts_a_member_path_at_the_depth_limit() -> Result<(), Box<dyn Error>> {
     let scene = Scene::new("depth-accepted", crate::gc1_t53::scripts()?)?;
     let key = scene.discover()?;
     build(&scene, DEPTH_LIMIT, "d", 0o755, Bottom::File)?;
     expect_shape(&scene, DEPTH_LIMIT, 1)?;
     let before = scene.tree()?;
-    let output = scene.recover(&key.key, &key.key, &[], None)?;
+    let output = scene.recover(&key.exact(), &[], None)?;
     if output.contains("::warning::") || !output.contains("recovered") {
         return Err(fail(&format!("recover refused a legal depth: {output}")));
     }
@@ -183,7 +180,7 @@ fn gc1_t53_recover_refuses_a_member_name_past_the_name_limit() -> Result<(), Box
 }
 
 #[test]
-#[cfg(unix)]
+#[cfg(target_os = "linux")]
 fn gc1_t53_recover_accepts_a_member_name_at_the_name_limit() -> Result<(), Box<dyn Error>> {
     let name = "n".repeat(NAME_LIMIT);
     let scene = Scene::new("depth-name-accepted", crate::gc1_t53::scripts()?)?;
@@ -191,7 +188,7 @@ fn gc1_t53_recover_accepts_a_member_name_at_the_name_limit() -> Result<(), Box<d
     build(&scene, 4, &name, 0o755, Bottom::File)?;
     expect_shape(&scene, 4, NAME_LIMIT)?;
     let before = scene.tree()?;
-    let output = scene.recover(&key.key, &key.key, &[], None)?;
+    let output = scene.recover(&key.exact(), &[], None)?;
     if output.contains("::warning::") || !output.contains("decision=exact-hit") {
         return Err(fail(&format!("recover refused a legal name: {output}")));
     }

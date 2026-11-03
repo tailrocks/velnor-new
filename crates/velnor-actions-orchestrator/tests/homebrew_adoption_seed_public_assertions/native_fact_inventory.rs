@@ -49,6 +49,7 @@ pub(crate) fn assert_tofu_inventory_rejected(
             ..PlanJobToolNeeds::default()
         },
         rust_detected: false,
+        state_roots: &[],
     };
     NativeAuthority::build(input)
         .map_err(|error| io::Error::other(format!("valid ToFu inventory rejected: {error:?}")))?;

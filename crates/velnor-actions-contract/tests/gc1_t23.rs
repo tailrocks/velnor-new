@@ -5,10 +5,10 @@ use std::error::Error;
 use std::io;
 
 use velnor_actions_contract::workflow::cache_family::{
-    CacheFamily, FAMILY_BLOCKED_EXCEEDS_HARD_CEILING, FAMILY_BLOCKED_UNKNOWN_BOUND,
-    FAMILY_BLOCKED_UNKNOWN_INVENTORY, FamilyAdmission, GC1_HARD_CEILING_BYTES,
+    CacheFamily, Ceiling, FAMILY_BLOCKED_EXCEEDS_HARD_CEILING, FAMILY_BLOCKED_UNKNOWN_BOUND,
+    FAMILY_BLOCKED_UNKNOWN_INVENTORY, FamilyAdmission, FamilySpec, GC1_HARD_CEILING_BYTES,
     GC1_MAX_GENERATION_SLOTS, InventoryKeyClass, admit_family_candidate, classify_inventory_key,
-    family_contract_policy,
+    family_contract_policy, outer_entry_bound, outer_tar_bytes, zstd_compress_bound,
 };
 use velnor_actions_contract::workflow::cache_family_steps::validate_stack_family_plan;
 use velnor_actions_contract::workflow::cache_identity::Gc1Family;
@@ -43,17 +43,95 @@ fn check_complete_state_binding() -> Result<(), Box<dyn Error>> {
             return Err(fail("persisted MBX path survived"));
         }
     }
-    if CacheFamily::MbxBundle.key_prefix() != "velnor-v2-state-" {
+    if CacheFamily::MbxBundle.key_prefix() != "velnor-v4-state-" {
         return Err(fail("complete-state key prefix drifted"));
     }
     if CacheFamily::MbxBundle.gc1_family() != Some(Gc1Family::State) {
         return Err(fail("complete-state family lost its contract identity"));
     }
-    if CacheFamily::for_key("velnor-v2-state-trusted-aabb-r0") != Some(CacheFamily::MbxBundle) {
+    if CacheFamily::for_key("velnor-v4-state-trusted-aabb-r0") != Some(CacheFamily::MbxBundle) {
         return Err(fail("complete-state discovery drifted"));
     }
-    if CacheFamily::for_key("velnor-v1-state-trusted-aabb-r0").is_some() {
-        return Err(fail("complete-state discovery claimed the retired schema"));
+    for retired in [
+        "velnor-v1-state-trusted-aabb-r0",
+        "velnor-v2-state-trusted-aabb-r0",
+        "velnor-v3-state-trusted-aabb-r0",
+    ] {
+        if CacheFamily::for_key(retired).is_some() {
+            return Err(fail("complete-state discovery claimed a retired schema"));
+        }
+    }
+    Ok(())
+}
+
+fn check_two_bound_ceiling() -> Result<(), Box<dyn Error>> {
+    const GIB: u64 = 1024 * 1024 * 1024;
+    let spec = |ceiling| FamilySpec {
+        layer: "state",
+        schema: 4,
+        paths: &[],
+        ceiling,
+        retained_entries: 1,
+    };
+    let two_bound = Ceiling::StoredAndExtracted {
+        stored: GIB * 3 / 2,
+        extracted: 12 * GIB,
+    };
+    if two_bound.extracted() <= GC1_HARD_CEILING_BYTES {
+        return Err(fail(
+            "fixture must exceed the hard ceiling on the extracted side",
+        ));
+    }
+    spec(two_bound).check_subordinate_to_common_ceiling()?;
+    let over_stored = Ceiling::StoredAndExtracted {
+        stored: GC1_HARD_CEILING_BYTES + 1,
+        extracted: 12 * GIB,
+    };
+    if spec(over_stored)
+        .check_subordinate_to_common_ceiling()
+        .is_ok()
+    {
+        return Err(fail("a stored bound over the hard ceiling was admitted"));
+    }
+    Ok(())
+}
+
+fn check_shipped_state_ceiling() -> Result<(), Box<dyn Error>> {
+    let ceiling = CacheFamily::MbxBundle.spec().ceiling;
+    if ceiling
+        != (Ceiling::StoredAndExtracted {
+            stored: 1_610_612_736,
+            extracted: 12_884_901_888,
+        })
+    {
+        return Err(fail(
+            "complete-state ceiling drifted from 1.5 GiB and 12 GiB",
+        ));
+    }
+    if ceiling.stored() > GC1_HARD_CEILING_BYTES || ceiling.extracted() <= GC1_HARD_CEILING_BYTES {
+        return Err(fail("quota accounting must see the stored bound only"));
+    }
+    Ok(())
+}
+
+fn check_outer_entry_bound() -> Result<(), Box<dyn Error>> {
+    let stored = CacheFamily::MbxBundle.spec().ceiling.stored();
+    if outer_tar_bytes(stored) != Some(1_610_629_120) {
+        return Err(fail("outer tar framing drifted at 1.5 GiB"));
+    }
+    if outer_entry_bound(stored) != Some(1_616_920_640) {
+        return Err(fail("outer entry bound drifted at 1.5 GiB"));
+    }
+    if outer_entry_bound(stored + 10_240) <= outer_entry_bound(stored) {
+        return Err(fail(
+            "outer entry bound is not increasing with the inner size",
+        ));
+    }
+    if zstd_compress_bound(0) != Some(64) || zstd_compress_bound(131_072) != Some(131_584) {
+        return Err(fail("zstd compress bound left the documented formula"));
+    }
+    if outer_entry_bound(u64::MAX).is_some() {
+        return Err(fail("an unbounded inner size was given a bound"));
     }
     Ok(())
 }
@@ -166,6 +244,9 @@ fn gc1_t23_preserves_contract() -> Result<(), Box<dyn Error>> {
     check_decimal_ceiling()?;
     check_complete_state_binding()?;
     check_retained_distinctions()?;
+    check_two_bound_ceiling()?;
+    check_shipped_state_ceiling()?;
+    check_outer_entry_bound()?;
     check_common_admission_outcome()?;
     check_stack_binding()?;
     check_inventory_images_stay_unmanaged()?;

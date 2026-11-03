@@ -47,19 +47,58 @@ fn check_restored(
 }
 
 #[test]
-#[cfg(unix)]
+#[cfg(target_os = "linux")]
 fn gc1_t30_scripts_behave() -> Result<(), Box<dyn Error>> {
     let scene = Scene::new("behave", crate::gc1_t53::scripts()?)?;
     let key = scene.discover()?;
     let fallback = format!("{}oldsnap-0", key.restore_prefix);
+    let exact = key.exact();
     for (matched, decision, mark) in [
-        (key.key.as_str(), "exact-hit", "mark-exact"),
+        (exact.as_str(), "exact-hit", "mark-exact"),
         (fallback.as_str(), "predecessor-fallback", "mark-fallback"),
     ] {
         scene.pack_export(mark)?;
-        let output = scene.recover(&key.key, matched, &[], None)?;
+        let output = scene.recover(matched, &[], None)?;
         check_restored(&scene, &output, mark, decision)?;
         std::fs::remove_file(scene.recovery_record())?;
+    }
+    scene.finish()
+}
+
+fn image_os_outputs(scene: &Scene, image_os: Option<&str>) -> Result<String, Box<dyn Error>> {
+    match image_os {
+        Some(value) => scene.discover_outputs(&[("ImageOS", value)], &[]),
+        None => scene.discover_outputs(&[], &["ImageOS"]),
+    }
+}
+
+#[test]
+#[cfg(unix)]
+fn gc1_t30_missing_image_os_goes_cold() -> Result<(), Box<dyn Error>> {
+    let scene = Scene::new("image-os-cold", crate::gc1_t53::scripts()?)?;
+    let baseline = image_os_outputs(&scene, Some("ubuntu26"))?;
+    for expected in ["restore=true", "save=true"] {
+        if !baseline.lines().any(|line| line == expected) {
+            return Err(fail(&format!("baseline lost {expected}: {baseline:?}")));
+        }
+    }
+    if baseline.lines().any(|line| line.starts_with("reason=")) {
+        return Err(fail(&format!("baseline went cold: {baseline:?}")));
+    }
+    for image_os in [None, Some("")] {
+        let outputs = image_os_outputs(&scene, image_os)?;
+        for expected in ["reason=image_os_missing", "save=false", "restore=false"] {
+            if !outputs.lines().any(|line| line == expected) {
+                return Err(fail(&format!(
+                    "image_os={image_os:?}: missing {expected}; outputs: {outputs:?}"
+                )));
+            }
+        }
+        if outputs.lines().any(|line| line.starts_with("key=")) {
+            return Err(fail(&format!(
+                "image_os={image_os:?}: cold discover still published a key"
+            )));
+        }
     }
     scene.finish()
 }

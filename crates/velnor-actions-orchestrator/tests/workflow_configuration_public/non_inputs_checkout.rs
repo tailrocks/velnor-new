@@ -37,7 +37,14 @@ const OTHER_PREFIXES: [&str; 7] = [
     "task-",
 ];
 
-const OTHER_IDS: [&str; 5] = ["plan", "required", "required-gate", "alint", "jactionlint"];
+const OTHER_IDS: [&str; 6] = [
+    "plan",
+    "required",
+    "required-gate",
+    "alint",
+    "jactionlint",
+    "sources-producer",
+];
 
 fn classify(id: &str) -> Result<Kind, Box<dyn Error>> {
     if RUST_IDS.contains(&id) || RUST_PREFIXES.iter().any(|prefix| id.starts_with(prefix)) {

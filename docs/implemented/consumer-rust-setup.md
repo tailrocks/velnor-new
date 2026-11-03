@@ -141,9 +141,10 @@ MBX 1.29.1, so the 1.29.1 behavior below applies to it.
   also compresses the result. Velnor's generated flow sets
   `MBX_CACHE_EXPORT_GROUP=velnor` for the build, exports with
   `--group "$MBX_CACHE_EXPORT_GROUP" --format directory`, then the
-  `Publish state snapshot` step repacks that directory with `tar -czf` as
-  `payload.tar.gz`. `Save state snapshot` passes that file to `actions/cache`,
-  so Velnor keeps its own inner gzip envelope under the cache archive.
+  `Publish state snapshot` step repacks that directory with GNU
+  `tar | zstd -3 --long=30` as `payload.tar.zst`. `Save state snapshot` passes
+  that file to `actions/cache`, so Velnor keeps its own inner zstd envelope
+  under the cache archive.
   Sources: PR #873,
   [`crates/mbx/CHANGELOG.md`](https://github.com/jdx/mr-boxington/blob/v1.29.1/crates/mbx/CHANGELOG.md),
   [`docs/cli/cache/export.md`](https://github.com/jdx/mr-boxington/blob/v1.29.1/docs/cli/cache/export.md)
@@ -173,10 +174,15 @@ Nothing needs to be declared in `.velnor/config.toml`. `mr_boxington = true`
 in `mise.toml` is durable evidence for `compile_driver = mbx`, so generation
 selects:
 
-- the MBX compile driver in every crate job and in the dependency-seed job;
-- the seed-only bundle writer: only the `Dependency seed` job runs
-  `Record MBX producer success`, `Export MBX bundle` and `Save MBX bundle`,
-  on trusted pushes; crate jobs restore and import read-only;
+- the MBX compile driver in every crate job, and in the dependency-seed job
+  when `[stacks.rust] dependency_seed` is not `"off"`;
+- the seed-only bundle writer: when the seed job is generated, only that job
+  runs `Record MBX producer success`, `Export MBX bundle` and
+  `Save MBX bundle`, on trusted pushes; crate jobs restore and import
+  read-only. velnor-new sets `dependency_seed = "off"`
+  (`.velnor/config.toml:40`, PR #466), so no job writes compiled state there
+  and every crate-job restore misses; see
+  [compiled-state persistence](../proposed/compiled-state-persistence.md);
 - the opaque bundle transport: `mbx cache export --group velnor --format
   directory` and `mbx cache import`, never a Cargo `target/` cache (the MBX
   action is install-only, no `github-cache-mode`).

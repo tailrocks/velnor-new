@@ -13,11 +13,15 @@ use crate::steps::{
 use crate::verifier_builders::{self, ToolchainPhase};
 use velnor_actions_actionlint::{PinnedActionRef, checkout_inputs_schema, validate_action_inputs};
 use velnor_actions_contract::workflow::permissions::PermissionLevel;
-use velnor_actions_contract::{Job, JobTimeout, Permissions, Step, StepRole, WorkflowPolicy};
+use velnor_actions_contract::{
+    CheckoutHistory, Job, JobTimeout, Permissions, Step, StepRole, WorkflowPolicy,
+};
 use velnor_actions_mise::{
     ISOLATION_ENV, NO_AUTO_INSTALL_ENV, PREPARE_PINNED_TOOLS_STEP, PinnedTool, PreparePinnedTools,
     PrepareRustComponents, ToolCatalog, ToolHomes,
 };
+
+pub const VERDICT_CHECKOUT_HISTORY: CheckoutHistory = CheckoutHistory::ShallowOnPush;
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum PlanRustNeed {
@@ -61,6 +65,44 @@ pub enum NativeJobBuilderError {
 
 pub const LINT_JOB_ID: &str = "jactionlint";
 
+pub fn plan_state_roots(
+    plan: &mut Job,
+    catalog: &ToolCatalog,
+    fetch_roots: &[String],
+    tofu_roots: &[String],
+    state_roots: &[plan_sources::cache_keys::StateRootPlan],
+) -> Result<(), NativeJobBuilderError> {
+    let rebuilt =
+        plan_sources::cache_keys::cache_keys_step(catalog, fetch_roots, tofu_roots, state_roots)
+            .map_err(NativeJobBuilderError::PlanSources)?
+            .ok_or(NativeJobBuilderError::Render(
+                crate::RenderError::InvalidWorkflow(
+                    "state_roots_without_cache_keys_step".to_owned(),
+                ),
+            ))?;
+    let existing = plan
+        .steps
+        .iter()
+        .position(|step| step.id == Some(velnor_actions_contract::StepId::CacheKeys));
+    let at = match existing {
+        Some(at) => {
+            plan.steps.remove(at);
+            at
+        }
+        None => plan
+            .steps
+            .iter()
+            .position(|step| {
+                matches!(&step.kind, velnor_actions_contract::StepKind::Internal { operation, .. } if operation == PLAN_OPERATION)
+            })
+            .ok_or(NativeJobBuilderError::Render(
+                crate::RenderError::InvalidWorkflow("plan_job_lost_plan_step".to_owned()),
+            ))?,
+    };
+    plan.steps.insert(at, rebuilt);
+    Ok(())
+}
+
 pub fn plan_job(
     label: &str,
     acquire: Option<Step>,
@@ -71,7 +113,7 @@ pub fn plan_job(
     policy: WorkflowPolicy,
 ) -> Result<Job, NativeJobBuilderError> {
     let source_free = policy == WorkflowPolicy::VelnorRepositoryV1;
-    let mut steps = vec![checkout_history_action()?];
+    let mut steps = vec![checkout_history_action(VERDICT_CHECKOUT_HISTORY)?];
     let mut acquire = acquire;
     if source_free {
         steps.extend(acquire.take());
@@ -106,11 +148,11 @@ pub fn plan_job(
             verifier_builders::verify_rust_manifest_step()
         });
     }
-    let cached = plan_sources::cache_steps_for_plan(catalog, fetch_roots, tofu_roots)
+    let cached = plan_sources::cache_steps_for_plan(catalog, fetch_roots, tofu_roots, &[])
         .map_err(NativeJobBuilderError::PlanSources)?;
-    steps.extend(cached.restore);
+    steps.extend(cached);
     let env = plan_fetch_env(catalog)?;
-    let mut source_steps = plan_sources::cargo_fetch::fetch_steps_with(
+    let source_steps = plan_sources::cargo_fetch::fetch_steps_with(
         catalog,
         fetch_roots,
         &env,
@@ -118,7 +160,6 @@ pub fn plan_job(
         needs.all_features,
     )
     .map_err(NativeJobBuilderError::PlanSources)?;
-    plan_sources::mark_writer_gate(&mut source_steps);
     steps.extend(source_steps);
     steps.extend(acquire);
     steps.push(request_step(PLAN_OPERATION)?);
@@ -132,7 +173,6 @@ pub fn plan_job(
         steps.push(resolve);
     }
     steps.push(plan_step());
-    steps.extend(cached.save);
     Ok(Job {
         services: Vec::new(),
         outputs: BTreeMap::new(),
@@ -146,7 +186,7 @@ pub fn plan_job(
         environment: None,
         env: velnor_actions_contract::JobEnv::Unset,
         steps,
-        cache_mode: None,
+        cache_access: velnor_actions_contract::CacheAccess::Read,
     })
 }
 
@@ -161,7 +201,7 @@ pub fn final_job(
     let mut needs = vec![PLAN_JOB_ID.to_owned()];
     needs.extend(crate_job_ids);
     needs.push(LINT_JOB_ID.to_owned());
-    let mut steps = vec![checkout_history_action()?];
+    let mut steps = vec![checkout_history_action(VERDICT_CHECKOUT_HISTORY)?];
     steps.extend(acquire);
     steps.push(prepare_pinned_tools_step(
         catalog,
@@ -184,7 +224,7 @@ pub fn final_job(
         environment: None,
         env: velnor_actions_contract::JobEnv::Unset,
         steps,
-        cache_mode: None,
+        cache_access: velnor_actions_contract::CacheAccess::Read,
     })
 }
 
@@ -262,10 +302,13 @@ fn request_step(target: &str) -> Result<Step, NativeJobBuilderError> {
     write_request_step(target).map_err(|error| NativeJobBuilderError::Contract(error.to_string()))
 }
 
-fn checkout_history_action() -> Result<Step, NativeJobBuilderError> {
+fn checkout_history_action(history: CheckoutHistory) -> Result<Step, NativeJobBuilderError> {
     let with = BTreeMap::from([
         ("persist-credentials".to_owned(), "false".to_owned()),
-        ("fetch-depth".to_owned(), "0".to_owned()),
+        (
+            "fetch-depth".to_owned(),
+            history.fetch_depth_input().to_owned(),
+        ),
     ]);
     validate_action_inputs(&checkout_inputs_schema(), &with)
         .map_err(|error| NativeJobBuilderError::Contract(error.to_string()))?;

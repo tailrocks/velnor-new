@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use super::checkout_history::CheckoutHistory;
 use super::step::StepKind;
 use super::step_identity::{
     TOOL_SEED_USES, TOOLS_CACHE_IDENTITY_DIGEST_INPUT, TOOLS_CACHE_PATHS, TOOLS_CACHE_PRELUDE_USES,
@@ -90,7 +91,7 @@ pub(super) fn valid_configured_checkout_payload(kind: &StepKind) -> bool {
         if valid_checkout_payload(kind)
             && with.iter().all(|(key, value)| match key.as_str() {
                 "persist-credentials" | "sparse-checkout-cone-mode" => value == "false",
-                "fetch-depth" => value == "0",
+                "fetch-depth" => CheckoutHistory::parse_fetch_depth(value).is_some(),
                 "lfs" => value == "true",
                 "sparse-checkout" => crate::config::is_sparse_checkout_exclusion(value),
                 _ => false,

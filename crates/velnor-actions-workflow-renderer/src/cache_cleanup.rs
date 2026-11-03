@@ -16,6 +16,7 @@ const BODY: &str = r#"name: Cache cleanup
     types:
       - closed
 permissions: {}
+cache-mode: read
 concurrency:
   group: velnor-cache-cleanup-${{ github.event.pull_request.number }}
   cancel-in-progress: false

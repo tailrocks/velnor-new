@@ -54,11 +54,14 @@ so each compiles in its own lane through `CARGO_TARGET_DIR`:
 The lanes live inside the workspace `target/`. Compiled state reaches the next
 run as the opaque `mbx cache export` bundle, not as a `target/` payload. A crate
 job restores the dependency-seed bundle read-only and imports it; it never
-exports or saves. The non-crate `Dependency seed` job (one per MBX Cargo
-workspace; protected default-branch pushes only; not part of `Required`)
-compiles the three lanes for `--workspace` under the job's
-`MBX_CACHE_EXPORT_GROUP`, records the producer marker, and exports and saves the
-bundle ([cache decisions](../proposed/cache-decisions.md) 1 to 3). MBX shares
+exports or saves. When `dependency_seed` is not `"off"`, the non-crate
+`Dependency seed` job (one per MBX Cargo workspace; protected default-branch
+pushes only; not part of `Required`) compiles the three lanes for `--workspace`
+under the job's `MBX_CACHE_EXPORT_GROUP`, records the producer marker, and
+exports and saves the bundle ([cache decisions](../proposed/cache-decisions.md)
+1 to 3). velnor-new sets `dependency_seed = "off"` (`.velnor/config.toml:40`),
+so nothing saves compiled state there today; see
+[compiled-state persistence](../proposed/compiled-state-persistence.md). MBX shares
 one compiler CPU/memory budget and deduplicates identical in-flight
 compilations across target directories (upstream "Parallel Cargo steps"
 guidance).

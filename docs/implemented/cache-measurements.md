@@ -202,7 +202,7 @@ per-action PR-save verdict: gate-4 doc R13 bullet.
 ## Hosted MBX object-cache round-trip
 
 `qualification.yml` mode `mbx-cache-roundtrip` runs two hosted jobs in one
-dispatch. The protected-main writer builds a probe crate and its post step
+dispatch, from a non-default branch only (workflow-level `cache-mode: read` leaves the writer job as the one writer). The branch writer builds a probe crate and its post step
 must export and save the MBX objects before the dependent reader starts. The
 reader has only `actions: read`, requires an imported object set, and checks
 that MBX reuses a cached compilation. A run-and-attempt-specific generation
@@ -226,8 +226,11 @@ action route. Neither those measurements nor this `GC_AUTO=1` probe measure
 the current native lifecycle's post-export peak disk use. The probe uses a
 separate candidate action ref, so its result does not qualify the production
 action pin, current lifecycle, or either typed production lane. Dispatch once
-from protected `main` with mode `mbx-cache-roundtrip`; the writer and reader
-run in order at the same SHA.
+from a non-default branch with mode `mbx-cache-roundtrip`; the writer and reader
+run in order at the same SHA. A dispatch from the default branch fails the
+`cache-default-branch-guard` job with
+`cache_qualification_requires_non_default_branch`, because every cache job is
+skipped there.
 
 This is a small end-to-end action and cache round-trip probe. The writer
 samples `df -B1 -P` and `df -i -P` on `$RUNNER_TEMP` after the probe build.

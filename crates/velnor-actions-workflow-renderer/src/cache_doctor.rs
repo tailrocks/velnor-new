@@ -3,6 +3,7 @@
 
 use std::collections::BTreeMap;
 
+use velnor_actions_contract::workflow::SOURCES_PRODUCER_JOB_ID;
 use velnor_actions_contract::workflow::cache_family::{
     COMPLETE_STATE_ROOT_EXPR, COMPLETE_STATE_TRANSPORT_EXPR, CacheFamily, SOURCES_KEY_PLAN_EXPR,
     SOURCES_KEY_STEP_EXPR, SOURCES_RESTORE_KEYS_PLAN_EXPR, SOURCES_RESTORE_KEYS_STEP_EXPR,
@@ -11,7 +12,7 @@ use velnor_actions_contract::workflow::cache_family::{
 };
 use velnor_actions_contract::workflow::cache_family_mbx::{
     MBX_BUNDLE_KEY_EXPR, MBX_BUNDLE_RESTORE_CONDITION, MBX_BUNDLE_RESTORE_KEYS_EXPR,
-    MBX_BUNDLE_SAVE_CONDITION,
+    MBX_BUNDLE_SAVE_CONDITION, MBX_BUNDLE_SAVE_KEY_EXPR,
 };
 use velnor_actions_contract::workflow::cache_family_steps::{
     STACK_FAMILIES, family_key_expr, family_save_condition,
@@ -104,7 +105,7 @@ fn family_for_key(key: &str) -> Option<Family> {
     if key == SOURCES_KEY_STEP_EXPR || key == SOURCES_KEY_PLAN_EXPR {
         return Some(Family::Runtime(CacheFamily::Sources));
     }
-    if key == MBX_BUNDLE_KEY_EXPR {
+    if key == MBX_BUNDLE_KEY_EXPR || key == MBX_BUNDLE_SAVE_KEY_EXPR {
         return Some(Family::Runtime(CacheFamily::MbxBundle));
     }
     if let Some(family) = STACK_FAMILIES
@@ -309,9 +310,12 @@ fn tofu_slug(path: &str) -> Option<&str> {
 
 fn check_save(job: &str, step: &Step, family: Family) -> Result<(), RenderError> {
     let condition = step.condition.as_deref().unwrap_or_default();
+    if condition == crate::dispatch_cache_boundary::SAVE_DENY {
+        return Ok(());
+    }
     let ok = match family {
         Family::Runtime(CacheFamily::Sources) => {
-            condition == SOURCES_SAVE_CONDITION && job == crate::render::PLAN_JOB_ID
+            condition == SOURCES_SAVE_CONDITION && job == SOURCES_PRODUCER_JOB_ID
         }
         Family::Runtime(CacheFamily::TofuProviders) => condition == TOFU_PROVIDERS_SAVE_CONDITION,
         Family::Runtime(CacheFamily::MbxBundle) => condition == MBX_BUNDLE_SAVE_CONDITION,
