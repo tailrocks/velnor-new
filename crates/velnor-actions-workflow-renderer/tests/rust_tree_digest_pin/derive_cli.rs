@@ -4,6 +4,7 @@
 #![cfg(target_os = "linux")]
 
 use std::os::unix::fs::{PermissionsExt, symlink};
+use std::os::unix::process::CommandExt;
 use std::process::Command;
 
 use crate::derive::{Bundle, outcome};
@@ -294,4 +295,97 @@ fn h2_a_preset_marker_does_not_let_the_callers_environment_reach_the_tools() {
                 .contains(&format!("tree_sha256={FIXTURE_TREE_SHA256}\n")),
         "{tree:?}"
     );
+}
+
+const EMPTY_INPUT_SHA256: &str = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
+const NOBODY: u32 = 65534;
+
+fn derived_fixture(outcome: &Outcome) -> bool {
+    outcome.code == Some(0)
+        && outcome
+            .stdout
+            .contains(&format!("components_sha256={FIXTURE_COMPONENTS_SHA256}\n"))
+        && outcome
+            .stdout
+            .contains(&format!("tree_sha256={FIXTURE_TREE_SHA256}\n"))
+}
+
+fn faithful(outcome: &Outcome) -> bool {
+    !outcome.stdout.contains(EMPTY_INPUT_SHA256)
+        && (derived_fixture(outcome) || failed_closed(outcome))
+}
+
+fn relative_tree(fx: &Fixture, name: &str, home: &Fixture) -> Outcome {
+    outcome(
+        &Command::new(crate::pinned::derive_tool())
+            .current_dir(fx.toolchains())
+            .env("HOME", home.root())
+            .args(["--tree", name])
+            .output()
+            .expect("run derive tool"),
+    )
+}
+
+#[test]
+fn r9a_a_dash_named_relative_tree_is_the_tree_named_or_refused() {
+    let decoy = Fixture::standard();
+    decoy.put("lib/decoy", b"decoy\n", 0o644);
+    let mut unfaithful = Vec::new();
+    for name in ["plain", "-P", "--x"] {
+        let fx = Fixture::standard();
+        fx.rename_root(name);
+        let control = derive(&["--tree".as_ref(), fx.toolchains().join(name).as_os_str()]);
+        assert!(derived_fixture(&control), "{name}: {control:?}");
+        let relative = relative_tree(&fx, name, &decoy);
+        if !faithful(&relative) {
+            unfaithful.push(format!("{name}: {relative:?}"));
+        }
+    }
+    let absent = Fixture::standard();
+    let missing = relative_tree(&absent, "-P", &decoy);
+    if !failed_closed(&missing) || missing.stdout.contains(EMPTY_INPUT_SHA256) {
+        unfaithful.push(format!("absent -P: {missing:?}"));
+    }
+    assert!(unfaithful.is_empty(), "{unfaithful:#?}");
+}
+
+fn running_privileged() -> bool {
+    let probe = tempfile::tempdir().expect("probe dir");
+    let file = probe.path().join("sealed");
+    std::fs::write(&file, b"sealed").expect("write probe");
+    std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o000)).expect("seal probe");
+    std::fs::File::open(&file).is_ok()
+}
+
+fn derive_tree_as_unprivileged_reader(fx: &Fixture) -> Outcome {
+    let mut command = Command::new(crate::pinned::derive_tool());
+    command.args(["--tree".as_ref(), fx.root().as_os_str()]);
+    if running_privileged() {
+        let toolchains = fx.toolchains();
+        let rustup = fx.rustup_home();
+        let home = rustup.parent().expect("fixture home");
+        for dir in [home, rustup.as_path(), toolchains.as_path()] {
+            std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o755))
+                .expect("open ancestor");
+        }
+        command.uid(NOBODY).gid(NOBODY);
+    }
+    outcome(&command.output().expect("run derive tool"))
+}
+
+#[test]
+fn r9b_an_unreadable_input_fails_closed_never_the_empty_input_digest() {
+    let control = derive_tree_as_unprivileged_reader(&Fixture::standard());
+    assert!(derived_fixture(&control), "{control:?}");
+    let unreadable = ["lib/rustlib/components", "lib/x.so"]
+        .into_iter()
+        .filter_map(|path| {
+            let fx = Fixture::standard();
+            fx.chmod(path, 0o000);
+            let outcome = derive_tree_as_unprivileged_reader(&fx);
+            let closed = failed_closed(&outcome) && !outcome.stdout.contains(EMPTY_INPUT_SHA256);
+            (!closed).then(|| format!("{path}: {outcome:?}"))
+        })
+        .collect::<Vec<_>>();
+    assert!(unreadable.is_empty(), "{unreadable:#?}");
 }
