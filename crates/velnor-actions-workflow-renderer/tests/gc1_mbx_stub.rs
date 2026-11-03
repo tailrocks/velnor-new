@@ -24,6 +24,7 @@ if [ "$op" = export ]; then
   printf '{"version":1}\n' > "$dir/mbx-cache-export-v1.json" || exit 1
   bulk="${MBX_STUB_EXPORT_BULK_MIB:-0}"
   if [ "$bulk" -gt 0 ]; then dd if=/dev/zero of="$dir/cas/bulk" bs=1048576 count="$bulk" 2>/dev/null || exit 1; fi
+  find "$dir" -exec touch -t 200001010000 {} + || exit 1
   exit 0
 fi
 [ "$#" -eq 3 ] || exit 1

@@ -27,7 +27,8 @@ fn payload_len(scene: &Scene) -> Result<u64, Box<dyn Error>> {
 fn fallback_scene(name: &str) -> Result<(Scene, Key, String, u64), Box<dyn Error>> {
     let scene = Scene::new(name, crate::gc1_t53::scripts()?)?;
     let key = scene.discover()?;
-    scene.pack_export(PREDECESSOR_MARK)?;
+    scene.mark_producer()?;
+    scene.export(&[(EXPORT_MARK_ENV, PREDECESSOR_MARK)])?;
     let predecessor_len = payload_len(&scene)?;
     let matched = format!("{}oldsnap-0", key.restore_prefix);
     scene.recover(&matched, &[], None)?;
@@ -41,26 +42,35 @@ fn export_saves_every_new_generation_regardless_of_bytes() -> Result<(), Box<dyn
     let grown: String = (0..255_u8)
         .map(|n| char::from(b'a' + n.wrapping_mul(7) % 26))
         .collect();
-    for (label, mark, shape) in [
-        ("fewer", "x".to_owned(), std::cmp::Ordering::Less),
-        (
-            "equal",
-            "b".repeat(PREDECESSOR_MARK.len()),
-            std::cmp::Ordering::Equal,
-        ),
-        ("more", grown, std::cmp::Ordering::Greater),
+    for (label, shape) in [
+        ("fewer", std::cmp::Ordering::Less),
+        ("equal", std::cmp::Ordering::Equal),
+        ("more", std::cmp::Ordering::Greater),
     ] {
         let (scene, key, matched, predecessor_len) = fallback_scene(&format!("v4-pack-{label}"))?;
-        let output = scene.export(&[(EXPORT_MARK_ENV, mark.as_str())])?;
-        if scene.output_value("exported")? != "true" {
-            return Err(fail(&format!(
-                "{label}: export refused a new generation: {output}"
-            )));
+        let candidates: Vec<String> = match shape {
+            std::cmp::Ordering::Less => vec!["x".to_owned()],
+            std::cmp::Ordering::Greater => vec![grown.clone()],
+            std::cmp::Ordering::Equal => ('b'..='z')
+                .map(|c| c.to_string().repeat(PREDECESSOR_MARK.len()))
+                .collect(),
+        };
+        let mut size = 0;
+        for mark in &candidates {
+            let output = scene.export(&[(EXPORT_MARK_ENV, mark.as_str())])?;
+            if scene.output_value("exported")? != "true" {
+                return Err(fail(&format!(
+                    "{label}: export refused a new generation: {output}"
+                )));
+            }
+            size = payload_len(&scene)?;
+            if size.cmp(&predecessor_len) == shape {
+                break;
+            }
         }
-        let size = payload_len(&scene)?;
         if size.cmp(&predecessor_len) != shape {
             return Err(fail(&format!(
-                "{label}: fixture sizes {size} vs {predecessor_len} do not have the intended order"
+                "{label}: no fixture reached the intended order ({size} vs {predecessor_len})"
             )));
         }
         let saved = scene.output_value("key")?;
