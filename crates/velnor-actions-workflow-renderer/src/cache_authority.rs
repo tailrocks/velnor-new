@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_actions_contract::workflow::{
-    QUALIFICATION_WRITER_GATE, WORKFLOW_CACHE_MODE, WRITER_CACHE_MODE,
+    QUALIFICATION_CACHE_MODES, QUALIFICATION_DEFAULT_BRANCH_GATE, QUALIFICATION_WRITER_GATE,
+    WORKFLOW_CACHE_MODE, WRITER_CACHE_MODE, WRITER_MISE_ENV,
 };
 
 use crate::{RenderError, yaml::Yaml};
@@ -52,4 +53,25 @@ pub(crate) fn qualification_writer_field() -> (String, Yaml) {
 
 pub(crate) fn qualification_branch_gate(mode_condition: &str) -> String {
     format!("{mode_condition} && {QUALIFICATION_WRITER_GATE}")
+}
+
+pub(crate) fn qualification_writer_env() -> (String, Yaml) {
+    (
+        "env".to_owned(),
+        Yaml::Map(
+            WRITER_MISE_ENV
+                .iter()
+                .map(|(key, value)| ((*key).to_owned(), Yaml::str(*value)))
+                .collect(),
+        ),
+    )
+}
+
+pub(crate) fn qualification_default_branch_condition() -> String {
+    let modes = QUALIFICATION_CACHE_MODES
+        .iter()
+        .map(|mode| format!("inputs.mode == '{mode}'"))
+        .collect::<Vec<_>>()
+        .join(" || ");
+    format!("({modes}) && {QUALIFICATION_DEFAULT_BRANCH_GATE}")
 }

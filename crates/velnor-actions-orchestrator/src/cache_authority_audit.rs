@@ -6,10 +6,12 @@ use velnor_actions_contract::workflow::crate_job::{
 };
 use velnor_actions_contract::workflow::{
     CacheWriter, QUALIFICATION_CACHE_WRITER_IDS, QUALIFICATION_WRITER_GATE,
-    SOURCES_PRODUCER_JOB_ID, WORKFLOW_CACHE_MODE, WRITER_CACHE_MODE,
+    SOURCES_PRODUCER_JOB_ID, WORKFLOW_CACHE_MODE, WRITER_CACHE_MODE, WRITER_MISE_ENV,
 };
 use velnor_actions_workflow_renderer::render::RenderedFile;
 use velnor_actions_workflow_renderer::schema2::QUALIFICATION_WORKFLOW;
+
+use std::collections::BTreeMap;
 
 use crate::OrchestratorError;
 use super::rust_install_audit::parse::step_lists;
@@ -19,15 +21,18 @@ const CACHE_MODE_KEY: &str = "cache-mode:";
 const CONDITION_KEY: &str = "if:";
 const BACKGROUND_KEY: &str = "background";
 const JOBS_KEY: &str = "jobs:";
+const ENV_KEY: &str = "env:";
 
 struct JobHeader {
     id: String,
     cache_mode: Option<String>,
     condition: Option<String>,
+    env: BTreeMap<String, String>,
 }
 
 struct Scan {
     workflow_modes: Vec<String>,
+    workflow_env: BTreeMap<String, String>,
     jobs: Vec<JobHeader>,
 }
 
@@ -57,6 +62,7 @@ pub(crate) fn audit(files: &[RenderedFile]) -> Result<(), OrchestratorError> {
                 continue;
             }
             check_writer(file, job, mode)?;
+            check_mise_env(job, &scan.workflow_env)?;
         }
     }
     Ok(())
@@ -86,6 +92,24 @@ fn check_writer(file: &RenderedFile, job: &JobHeader, mode: &str) -> Result<(), 
         }
     }
     Ok(())
+}
+
+fn check_mise_env(
+    job: &JobHeader,
+    workflow_env: &BTreeMap<String, String>,
+) -> Result<(), OrchestratorError> {
+    let pinned = WRITER_MISE_ENV.iter().all(|(key, value)| {
+        job.env
+            .get(*key)
+            .or_else(|| workflow_env.get(*key))
+            .is_some_and(|actual| actual == value)
+    });
+    if pinned {
+        return Ok(());
+    }
+    Err(OrchestratorError::Contract {
+        problem: format!("cache_writer_mise_config_enabled:{}", job.id),
+    })
 }
 
 fn check_producer_steps(
@@ -134,39 +158,60 @@ fn role_of(path: &str, id: &str) -> Option<Role> {
 fn scan(text: &str) -> Scan {
     let mut scan = Scan {
         workflow_modes: Vec::new(),
+        workflow_env: BTreeMap::new(),
         jobs: Vec::new(),
     };
     let mut in_jobs = false;
+    let mut in_workflow_env = false;
+    let mut in_job_env = false;
     for line in text.lines() {
         let indent = line.len() - line.trim_start().len();
         let content = line.trim();
         if indent == 0 {
             in_jobs = content == JOBS_KEY;
+            in_workflow_env = content == ENV_KEY;
             if let Some(value) = content.strip_prefix(CACHE_MODE_KEY) {
                 scan.workflow_modes.push(scalar(value));
             }
             continue;
         }
         if !in_jobs {
+            if in_workflow_env && indent == 2 {
+                insert_entry(&mut scan.workflow_env, content);
+            }
             continue;
         }
         if indent == 2 && content.contains(':') {
+            in_job_env = false;
             scan.jobs.push(JobHeader {
                 id: content.split(':').next().unwrap_or_default().to_owned(),
                 cache_mode: None,
                 condition: None,
+                env: BTreeMap::new(),
             });
         } else if indent == 4
             && let Some(job) = scan.jobs.last_mut()
         {
+            in_job_env = content == ENV_KEY;
             if let Some(value) = content.strip_prefix(CACHE_MODE_KEY) {
                 job.cache_mode = Some(scalar(value));
             } else if let Some(value) = content.strip_prefix(CONDITION_KEY) {
                 job.condition = Some(scalar(value));
             }
+        } else if indent == 6
+            && in_job_env
+            && let Some(job) = scan.jobs.last_mut()
+        {
+            insert_entry(&mut job.env, content);
         }
     }
     scan
+}
+
+fn insert_entry(env: &mut BTreeMap<String, String>, content: &str) {
+    if let Some((key, value)) = content.split_once(':') {
+        env.insert(scalar(key), scalar(value));
+    }
 }
 
 fn scalar(value: &str) -> String {
@@ -183,3 +228,7 @@ fn violation(path: &str, subject: &str, rule: &str) -> OrchestratorError {
         problem: format!("{rule}:{path}:{subject}"),
     }
 }
+
+#[cfg(test)]
+#[path = "cache_authority_audit_tests.rs"]
+mod tests;

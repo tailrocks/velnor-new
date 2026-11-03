@@ -10,6 +10,8 @@ use crate::yaml::Yaml;
 use velnor_actions_actionlint::GITHUB_SCRIPT_ACTION_USES;
 use velnor_actions_contract::JobTimeout;
 
+#[path = "schema2_cache_jobs.rs"]
+mod cache_jobs;
 #[path = "schema2_empty_cache.rs"]
 mod empty_cache;
 #[path = "schema2_more.rs"]
@@ -18,11 +20,9 @@ mod more;
 mod steps;
 
 const GITHUB_SCRIPT: &str = GITHUB_SCRIPT_ACTION_USES;
-const CACHE_USES: &str = "actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9";
 const COMPOSITE_ACTION: &str = "./qualification/actions/composite";
 const DOCKER_ACTION: &str = "./qualification/actions/docker";
 const POST_FAIL_ACTION: &str = "./qualification/actions/post-fail";
-const CACHE_KEY: &str = "g4-cache-${{ github.run_id }}";
 const WRITE_OUTPUTS: &str = "mkdir -p \"$RUNNER_TEMP/g4-bin\" && printf '%s\\n' '#!/bin/sh' 'echo path-ok' > \"$RUNNER_TEMP/g4-bin/g4-path-ok\" && chmod +x \"$RUNNER_TEMP/g4-bin/g4-path-ok\" && echo proof=outputs-ok >> \"$GITHUB_OUTPUT\" && echo G4_ENV=outputs-ok >> \"$GITHUB_ENV\" && echo \"$RUNNER_TEMP/g4-bin\" >> \"$GITHUB_PATH\"";
 const CHECK_ENV_PATH: &str = "test \"$G4_ENV\" = outputs-ok && g4-path-ok | grep -qx path-ok";
 const MASK_CANARY: &str = "echo \"::add-mask::g4-mask-canary\" && echo g4-mask-canary";
@@ -52,6 +52,7 @@ pub(super) fn class_jobs(hosted: &RunnerSpec, scale: &RunnerSpec) -> Vec<(String
     let mut jobs = action_classes(hosted, scale);
     jobs.extend(state_classes(hosted, scale));
     jobs.extend(more::jobs(hosted, scale));
+    jobs.push(cache_jobs::default_branch_guard(hosted));
     jobs
 }
 
@@ -103,7 +104,7 @@ fn state_classes(hosted: &RunnerSpec, scale: &RunnerSpec) -> Vec<(String, Yaml)>
         mask_steps(),
         Extras::default(),
     ));
-    jobs.extend(cache_jobs(hosted, scale));
+    jobs.extend(cache_jobs::jobs(hosted, scale));
     jobs.extend(empty_cache::jobs(hosted, scale));
     jobs.extend(both(
         "oidc",
@@ -210,49 +211,6 @@ fn output_jobs(hosted: &RunnerSpec, scale: &RunnerSpec) -> Vec<(String, Yaml)> {
     ]
 }
 
-fn cache_jobs(hosted: &RunnerSpec, scale: &RunnerSpec) -> Vec<(String, Yaml)> {
-    let perms = cache_permissions();
-    vec![
-        emit(
-            lane(
-                "cache",
-                "Cache",
-                "scale-set",
-                "Velnor Scale Set",
-                scale,
-                &[],
-                vec![
-                    run_step("Write cache file", "echo cache-ok > g4-cache.txt"),
-                    cache_step("Save cache", false),
-                ],
-            ),
-            Extras {
-                permissions: Some(perms.clone()),
-                cache_writer: true,
-                ..Extras::default()
-            },
-        ),
-        emit(
-            lane(
-                "cache",
-                "Cache",
-                "hosted",
-                "GitHub hosted",
-                hosted,
-                &["cache-scale-set"],
-                vec![
-                    cache_step("Restore cache", true),
-                    run_step("Check restore", "grep -qx cache-ok g4-cache.txt"),
-                ],
-            ),
-            Extras {
-                permissions: Some(perms),
-                ..Extras::default()
-            },
-        ),
-    ]
-}
-
 fn lane<'a>(
     mode: &'a str,
     title: &'a str,
@@ -284,6 +242,7 @@ fn emit(job: Lane<'_>, extras: Extras) -> (String, Yaml) {
     push_opt(&mut fields, "permissions", extras.permissions);
     if extras.cache_writer {
         fields.push(crate::cache_authority::qualification_writer_field());
+        fields.push(crate::cache_authority::qualification_writer_env());
     }
     push_opt(&mut fields, "container", extras.container);
     push_opt(&mut fields, "services", extras.services);
@@ -343,10 +302,6 @@ fn oidc_extras() -> Extras {
     }
 }
 
-fn cache_permissions() -> Yaml {
-    steps::mapping(&[("contents", "read"), ("actions", "write")])
-}
-
 fn composite_steps() -> Vec<Yaml> {
     vec![
         checkout_step(),
@@ -390,12 +345,4 @@ fn post_fail_steps() -> Vec<Yaml> {
 
 fn cancel_steps() -> Vec<Yaml> {
     vec![run_step("Sleep until cancelled", "sleep 180")]
-}
-
-fn cache_step(name: &str, fail_on_miss: bool) -> Yaml {
-    let mut with = vec![("path", "g4-cache.txt"), ("key", CACHE_KEY)];
-    if fail_on_miss {
-        with.push(("fail-on-cache-miss", "true"));
-    }
-    steps::uses_with(name, CACHE_USES, &with)
 }

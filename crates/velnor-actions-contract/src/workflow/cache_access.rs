@@ -24,6 +24,17 @@ pub const QUALIFICATION_CACHE_WRITER_IDS: [&str; 4] = [
 pub const QUALIFICATION_WRITER_GATE: &str =
     "github.ref != format('refs/heads/{0}', github.event.repository.default_branch)";
 
+pub const QUALIFICATION_DEFAULT_BRANCH_GATE: &str =
+    "github.ref == format('refs/heads/{0}', github.event.repository.default_branch)";
+
+pub const QUALIFICATION_CACHE_MODES: [&str; 3] = ["cache", "empty-cache", "mbx-cache-roundtrip"];
+
+pub const QUALIFICATION_CACHE_GUARD_ID: &str = "cache-default-branch-guard";
+
+pub const QUALIFICATION_CACHE_GUARD_ERROR: &str = "cache_qualification_requires_non_default_branch";
+
+pub const WRITER_MISE_ENV: [(&str, &str); 2] = [("MISE_NO_CONFIG", "1"), ("MISE_NO_ENV", "1")];
+
 const OWNED_ACTION_PREFIX: &str = "./.github/actions/velnor-";
 
 const WRITER_USES: [&str; 4] = [

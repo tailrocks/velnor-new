@@ -347,3 +347,6 @@ fn gc1_t50_rejects_invalid_state() -> Result<(), Box<dyn Error>> {
     )?;
     Ok(())
 }
+
+#[path = "gc1_t50_guard.rs"]
+mod gc1_t50_guard;
