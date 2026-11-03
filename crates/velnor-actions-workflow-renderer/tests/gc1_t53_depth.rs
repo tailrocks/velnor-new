@@ -97,7 +97,7 @@ fn check_refused(
     expect_shape(&scene, components, name.len())?;
     let before = scene.tree()?;
     let output = scene
-        .recover(&key.key, &key.key, &[], None)
+        .recover(&key.exact(), &[], None)
         .map_err(|error| fail(&format!("{label}: {error}")))?;
     scene
         .assert_cold(&output, token)
@@ -116,7 +116,7 @@ fn gc1_t53_recover_accepts_a_member_path_at_the_depth_limit() -> Result<(), Box<
     build(&scene, DEPTH_LIMIT, "d", 0o755, Bottom::File)?;
     expect_shape(&scene, DEPTH_LIMIT, 1)?;
     let before = scene.tree()?;
-    let output = scene.recover(&key.key, &key.key, &[], None)?;
+    let output = scene.recover(&key.exact(), &[], None)?;
     if output.contains("::warning::") || !output.contains("recovered") {
         return Err(fail(&format!("recover refused a legal depth: {output}")));
     }
@@ -191,7 +191,7 @@ fn gc1_t53_recover_accepts_a_member_name_at_the_name_limit() -> Result<(), Box<d
     build(&scene, 4, &name, 0o755, Bottom::File)?;
     expect_shape(&scene, 4, NAME_LIMIT)?;
     let before = scene.tree()?;
-    let output = scene.recover(&key.key, &key.key, &[], None)?;
+    let output = scene.recover(&key.exact(), &[], None)?;
     if output.contains("::warning::") || !output.contains("decision=exact-hit") {
         return Err(fail(&format!("recover refused a legal name: {output}")));
     }

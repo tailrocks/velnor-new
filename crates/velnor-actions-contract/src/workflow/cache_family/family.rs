@@ -65,6 +65,32 @@ pub enum CacheFamily {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Ceiling {
+    Single(u64),
+
+    StoredAndExtracted { stored: u64, extracted: u64 },
+}
+
+impl Ceiling {
+    #[must_use]
+    pub const fn stored(self) -> u64 {
+        match self {
+            Self::Single(bytes) | Self::StoredAndExtracted { stored: bytes, .. } => bytes,
+        }
+    }
+
+    #[must_use]
+    pub const fn extracted(self) -> u64 {
+        match self {
+            Self::Single(bytes)
+            | Self::StoredAndExtracted {
+                extracted: bytes, ..
+            } => bytes,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct FamilySpec {
     pub layer: &'static str,
 
@@ -72,7 +98,7 @@ pub struct FamilySpec {
 
     pub paths: &'static [&'static str],
 
-    pub ceiling_bytes: u64,
+    pub ceiling: Ceiling,
 
     pub retained_entries: u64,
 }
@@ -81,28 +107,28 @@ const SOURCES: FamilySpec = FamilySpec {
     layer: "sources",
     schema: 2,
     paths: &SOURCES_PATHS,
-    ceiling_bytes: 128 * MIB,
+    ceiling: Ceiling::Single(128 * MIB),
     retained_entries: 2,
 };
 const TOFU_PROVIDERS: FamilySpec = FamilySpec {
     layer: "tofu-providers",
     schema: 2,
     paths: &TOFU_PROVIDERS_PATHS,
-    ceiling_bytes: 256 * MIB,
+    ceiling: Ceiling::Single(256 * MIB),
     retained_entries: 2,
 };
 const BUN_INSTALL: FamilySpec = FamilySpec {
     layer: "bun-install",
     schema: 1,
     paths: &BUN_INSTALL_PATHS,
-    ceiling_bytes: 256 * MIB,
+    ceiling: Ceiling::Single(256 * MIB),
     retained_entries: 2,
 };
 const PLAYWRIGHT_BROWSERS: FamilySpec = FamilySpec {
     layer: "playwright-browsers",
     schema: 1,
     paths: &PLAYWRIGHT_BROWSERS_PATHS,
-    ceiling_bytes: 512 * MIB,
+    ceiling: Ceiling::Single(512 * MIB),
     retained_entries: 2,
 };
 
@@ -110,29 +136,29 @@ const DBT_PACKAGES: FamilySpec = FamilySpec {
     layer: "dbt-packages",
     schema: 1,
     paths: &DBT_PACKAGES_PATHS,
-    ceiling_bytes: 64 * MIB,
+    ceiling: Ceiling::Single(64 * MIB),
     retained_entries: 2,
 };
 const PYTHON_VENV: FamilySpec = FamilySpec {
     layer: "python-venv",
     schema: 1,
     paths: &PYTHON_VENV_PATHS,
-    ceiling_bytes: 384 * MIB,
+    ceiling: Ceiling::Single(384 * MIB),
     retained_entries: 2,
 };
 const ANSIBLE_COLLECTIONS: FamilySpec = FamilySpec {
     layer: "ansible-collections",
     schema: 1,
     paths: &ANSIBLE_COLLECTIONS_PATHS,
-    ceiling_bytes: 128 * MIB,
+    ceiling: Ceiling::Single(128 * MIB),
     retained_entries: 2,
 };
 
 const MBX_BUNDLE: FamilySpec = FamilySpec {
     layer: "state",
-    schema: 3,
+    schema: 4,
     paths: &STATE_PATHS,
-    ceiling_bytes: 384 * MIB,
+    ceiling: Ceiling::Single(384 * MIB),
     retained_entries: 1,
 };
 
@@ -182,7 +208,10 @@ impl CacheFamily {
             .map(|trust| trust.as_str().len())
             .max()
             .unwrap_or(0);
-        self.key_prefix().len() + trust + 1 + S256_DIGEST_BYTES + 1 + S256_DIGEST_BYTES
+        match self {
+            Self::MbxBundle => super::state::widest_entry_key_bytes(),
+            _ => self.key_prefix().len() + trust + 1 + S256_DIGEST_BYTES + 1 + S256_DIGEST_BYTES,
+        }
     }
 
     pub fn validate_key_bound(self) -> Result<(), ContractError> {

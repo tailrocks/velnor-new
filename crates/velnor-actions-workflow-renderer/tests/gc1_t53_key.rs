@@ -19,7 +19,7 @@ fn check_key(name: &str, build: fn(&str, &str) -> String) -> Result<(), Box<dyn 
     scene.pack_export("old")?;
     let matched = build(&key.restore_prefix, &injection(&scene));
     let before = scene.tree()?;
-    let output = scene.recover(&key.key, &matched, &[], None)?;
+    let output = scene.recover(&matched, &[], None)?;
     if scene.scratch.join("INJECTED").exists() {
         return Err(fail("the matched key ran as shell code"));
     }

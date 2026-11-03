@@ -301,7 +301,34 @@ fn extract_env(section: &str, label: &str) -> Result<Vec<(String, String)>, Box<
     Ok(env)
 }
 
+pub(crate) fn restore_with(
+    transport: MbxTransport,
+    working_directory: Option<&str>,
+) -> Result<BTreeMap<String, String>, Box<dyn Error>> {
+    let steps = mbx_steps_for_driver(
+        &format!("jdx/mr-boxington-action@{}", "a".repeat(40)),
+        CompileDriver::Mbx,
+        "1.2.3",
+        "1.89.0",
+        driver_env()?,
+        transport,
+        working_directory,
+    )?
+    .ok_or_else(|| fail("mbx driver produced no steps"))?;
+    match &steps[4].kind {
+        StepKind::Action { with, .. } => Ok(with.clone()),
+        _ => Err(fail("restore step left its action form")),
+    }
+}
+
 pub(crate) fn scripts() -> Result<crate::gc1_scene::Scripts, Box<dyn Error>> {
+    scripts_for(MbxTransport::SeedRead, None)
+}
+
+pub(crate) fn scripts_for(
+    transport: MbxTransport,
+    working_directory: Option<&str>,
+) -> Result<crate::gc1_scene::Scripts, Box<dyn Error>> {
     let text = render_text()?;
     let steps = mbx_steps_for_driver(
         &format!("jdx/mr-boxington-action@{}", "a".repeat(40)),
@@ -309,8 +336,8 @@ pub(crate) fn scripts() -> Result<crate::gc1_scene::Scripts, Box<dyn Error>> {
         "1.2.3",
         "1.89.0",
         driver_env()?,
-        MbxTransport::SeedRead,
-        None,
+        transport,
+        working_directory,
     )?
     .ok_or_else(|| fail("mbx driver produced no steps"))?;
     Ok(crate::gc1_scene::Scripts {

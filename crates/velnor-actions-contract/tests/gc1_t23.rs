@@ -5,8 +5,8 @@ use std::error::Error;
 use std::io;
 
 use velnor_actions_contract::workflow::cache_family::{
-    CacheFamily, FAMILY_BLOCKED_EXCEEDS_HARD_CEILING, FAMILY_BLOCKED_UNKNOWN_BOUND,
-    FAMILY_BLOCKED_UNKNOWN_INVENTORY, FamilyAdmission, GC1_HARD_CEILING_BYTES,
+    CacheFamily, Ceiling, FAMILY_BLOCKED_EXCEEDS_HARD_CEILING, FAMILY_BLOCKED_UNKNOWN_BOUND,
+    FAMILY_BLOCKED_UNKNOWN_INVENTORY, FamilyAdmission, FamilySpec, GC1_HARD_CEILING_BYTES,
     GC1_MAX_GENERATION_SLOTS, InventoryKeyClass, admit_family_candidate, classify_inventory_key,
     family_contract_policy,
 };
@@ -43,22 +43,55 @@ fn check_complete_state_binding() -> Result<(), Box<dyn Error>> {
             return Err(fail("persisted MBX path survived"));
         }
     }
-    if CacheFamily::MbxBundle.key_prefix() != "velnor-v3-state-" {
+    if CacheFamily::MbxBundle.key_prefix() != "velnor-v4-state-" {
         return Err(fail("complete-state key prefix drifted"));
     }
     if CacheFamily::MbxBundle.gc1_family() != Some(Gc1Family::State) {
         return Err(fail("complete-state family lost its contract identity"));
     }
-    if CacheFamily::for_key("velnor-v3-state-trusted-aabb-r0") != Some(CacheFamily::MbxBundle) {
+    if CacheFamily::for_key("velnor-v4-state-trusted-aabb-r0") != Some(CacheFamily::MbxBundle) {
         return Err(fail("complete-state discovery drifted"));
     }
     for retired in [
         "velnor-v1-state-trusted-aabb-r0",
         "velnor-v2-state-trusted-aabb-r0",
+        "velnor-v3-state-trusted-aabb-r0",
     ] {
         if CacheFamily::for_key(retired).is_some() {
             return Err(fail("complete-state discovery claimed a retired schema"));
         }
+    }
+    Ok(())
+}
+
+fn check_two_bound_ceiling() -> Result<(), Box<dyn Error>> {
+    const GIB: u64 = 1024 * 1024 * 1024;
+    let spec = |ceiling| FamilySpec {
+        layer: "state",
+        schema: 4,
+        paths: &[],
+        ceiling,
+        retained_entries: 1,
+    };
+    let two_bound = Ceiling::StoredAndExtracted {
+        stored: GIB * 3 / 2,
+        extracted: 12 * GIB,
+    };
+    if two_bound.extracted() <= GC1_HARD_CEILING_BYTES {
+        return Err(fail(
+            "fixture must exceed the hard ceiling on the extracted side",
+        ));
+    }
+    spec(two_bound).check_subordinate_to_common_ceiling()?;
+    let over_stored = Ceiling::StoredAndExtracted {
+        stored: GC1_HARD_CEILING_BYTES + 1,
+        extracted: 12 * GIB,
+    };
+    if spec(over_stored)
+        .check_subordinate_to_common_ceiling()
+        .is_ok()
+    {
+        return Err(fail("a stored bound over the hard ceiling was admitted"));
     }
     Ok(())
 }
@@ -171,6 +204,7 @@ fn gc1_t23_preserves_contract() -> Result<(), Box<dyn Error>> {
     check_decimal_ceiling()?;
     check_complete_state_binding()?;
     check_retained_distinctions()?;
+    check_two_bound_ceiling()?;
     check_common_admission_outcome()?;
     check_stack_binding()?;
     check_inventory_images_stay_unmanaged()?;

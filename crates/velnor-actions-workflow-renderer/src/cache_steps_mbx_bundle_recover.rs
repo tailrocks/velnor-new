@@ -7,17 +7,18 @@ use velnor_actions_contract::workflow::cache_family::{
     COMPLETE_STATE_ROOT_EXPR, COMPLETE_STATE_TRANSPORT_EXPR, CacheFamily, RUNNER_TEMP_SHELL,
 };
 use velnor_actions_contract::workflow::cache_family_mbx::{
-    MBX_BUNDLE_EXPECTED_KEY_ENV, MBX_BUNDLE_IMPORT_CONDITION, MBX_BUNDLE_KEY_EXPR,
-    MBX_BUNDLE_MATCHED_KEY_ENV, MBX_BUNDLE_MATCHED_KEY_EXPR,
+    MBX_BUNDLE_IMPORT_CONDITION, MBX_BUNDLE_MATCHED_KEY_ENV, MBX_BUNDLE_MATCHED_KEY_EXPR,
+    MBX_BUNDLE_PRODUCER_SKIP_OUTPUT,
 };
 use velnor_actions_contract::{Step, StepRole};
 
 use crate::RenderError;
+use crate::state_fragments::S256_FN;
 use crate::steps::shell_step;
 
 use super::{
     DISCOVERY_RECORD, MARK_FILE, MAX_ARCHIVE_MEMBERS, MAX_COMPONENT_BYTES, MAX_MEMBER_DEPTH,
-    MBX_BUNDLE_IMPORT_NAME, MBX_PRODUCER_MARK_NAME, RECOVERY_RECORD, RUNNER_TEMP_GUARD, S256_FN,
+    MBX_BUNDLE_IMPORT_NAME, MBX_PRODUCER_MARK_NAME, RECOVERY_RECORD, RUNNER_TEMP_GUARD,
     compat_head_lines, shell_literal, split_shell,
 };
 
@@ -41,9 +42,10 @@ fn ancestors(payload: &str) -> Result<Vec<String>, RenderError> {
 fn cleanup_lines(payload_parent: &str, ancestors: &[String]) -> Vec<String> {
     vec![
         "mode=keep".to_owned(),
+        "skip=false".to_owned(),
         "unlock() { for t in \"$@\"; do if [ -d \"$t\" ] && [ ! -L \"$t\" ]; then chmod -R u+rwX \"$t\" 2>/dev/null || :; fi; done; }".to_owned(),
         format!("chain() {{ for a in {}; do if [ -L \"$a\" ]; then rm -f \"$a\" || :; return 1; fi; done; return 0; }}", ancestors.join(" ")),
-        format!("finish() {{ rc=$?; if [ \"$rc\" -ne 0 ]; then printf '%s\\n' '::warning::cache_corrupt: state snapshot recovery failed; building cold'; mode=purge; fi; if [ \"$mode\" = purge ] && chain; then unlock \"$root\" \"$payload\"; chmod u+rwx \"{payload_parent}\" 2>/dev/null || :; rm -rf \"$root\" \"$payload\" || :; fi; unlock \"$stage\"; rm -rf \"$stage\" \"$d\" || :; exit 0; }}"),
+        format!("finish() {{ rc=$?; if [ \"$rc\" -ne 0 ]; then printf '%s\\n' '::warning::cache_corrupt: state snapshot recovery failed; building cold'; mode=purge; fi; if [ \"$mode\" = purge ] && chain; then unlock \"$root\" \"$payload\"; chmod u+rwx \"{payload_parent}\" 2>/dev/null || :; rm -rf \"$root\" \"$payload\" || :; fi; unlock \"$stage\"; rm -rf \"$stage\" \"$d\" || :; if [ -n \"${{GITHUB_OUTPUT-}}\" ]; then printf '%s\\n' \"{MBX_BUNDLE_PRODUCER_SKIP_OUTPUT}=$skip\" >> \"$GITHUB_OUTPUT\" || :; fi; exit 0; }}"),
         "trap finish EXIT".to_owned(),
     ]
 }
@@ -55,10 +57,6 @@ pub(crate) fn recover_step(
 ) -> Result<Step, RenderError> {
     super::super::mbx_preflight::validate_rust_toolchain(rust_toolchain)?;
     env.insert(
-        MBX_BUNDLE_EXPECTED_KEY_ENV.to_owned(),
-        MBX_BUNDLE_KEY_EXPR.to_owned(),
-    );
-    env.insert(
         MBX_BUNDLE_MATCHED_KEY_ENV.to_owned(),
         MBX_BUNDLE_MATCHED_KEY_EXPR.to_owned(),
     );
@@ -66,7 +64,7 @@ pub(crate) fn recover_step(
     let root = shell_literal(COMPLETE_STATE_ROOT_EXPR)?;
     let (_, base) = split_shell(&root)?;
     let (payload_parent, _) = split_shell(&payload)?;
-    let ceiling = CacheFamily::MbxBundle.spec().ceiling_bytes;
+    let ceiling = CacheFamily::MbxBundle.spec().ceiling.stored();
     let ceiling_kb = ceiling.div_ceil(1024);
     let mut script = vec![
         "set -eu".to_owned(),
@@ -75,7 +73,6 @@ pub(crate) fn recover_step(
         format!("root=\"{root}\""),
         format!("base=\"{base}\""),
         format!("record=\"{DISCOVERY_RECORD}\""),
-        format!("expected=\"${{{MBX_BUNDLE_EXPECTED_KEY_ENV}:-}}\""),
         format!("matched=\"${{{MBX_BUNDLE_MATCHED_KEY_ENV}:-}}\""),
         "d=\"$RUNNER_TEMP/velnor/state-recover\"".to_owned(),
         "stage=\"$RUNNER_TEMP/velnor/state-stage\"".to_owned(),
@@ -97,11 +94,10 @@ pub(crate) fn recover_step(
         "if [ -z \"$matched\" ]; then cold cold-missing; fi".to_owned(),
         "case \"$matched\" in *[!A-Za-z0-9._-]*) refused refused-provenance ;; esac".to_owned(),
         "if [ ! -f \"$record\" ] || [ -L \"$record\" ]; then refused refused-provenance; fi".to_owned(),
-        "expected_prefix=\"\"; compat=\"\"; provenance=\"\"; ceiling=\"\"; rec_unit=\"\"; rec_mbx=\"\"; rec_toolchain=\"\"; rec_root=\"\"".to_owned(),
-        "line=; while IFS= read -r line || [ -n \"$line\" ]; do case \"$line\" in restore_prefix=*) expected_prefix=${line#restore_prefix=} ;; compat=*) compat=${line#compat=} ;; provenance=*) provenance=${line#provenance=} ;; ceiling=*) ceiling=${line#ceiling=} ;; unit=*) rec_unit=${line#unit=} ;; mbx_version=*) rec_mbx=${line#mbx_version=} ;; toolchain=*) rec_toolchain=${line#toolchain=} ;; root=*) rec_root=${line#root=} ;; esac; done < \"$record\"".to_owned(),
-        "case \"$ceiling\" in ''|*[!0-9]*) refused refused-provenance ;; esac".to_owned(),
-        "if [ -z \"$expected_prefix\" ] || [ -z \"$compat\" ] || [ -z \"$provenance\" ] || [ -z \"$rec_unit\" ] || [ -z \"$rec_mbx\" ] || [ -z \"$rec_toolchain\" ] || [ -z \"$rec_root\" ]; then refused refused-provenance; fi".to_owned(),
-        "if [ -n \"$expected\" ] && [ \"$matched\" = \"$expected\" ]; then decision=exact-hit; elif [ -n \"$matched\" ] && [ -n \"$expected_prefix\" ]; then case \"$matched\" in \"$expected_prefix\"*) decision=predecessor-fallback ;; *) refused refused-provenance ;; esac; else refused refused-provenance; fi".to_owned(),
+        "snapshot_prefix=\"\"; expected_prefix=\"\"; compat=\"\"; provenance=\"\"; rec_unit=\"\"; rec_mbx=\"\"; rec_toolchain=\"\"; rec_root=\"\"".to_owned(),
+        "line=; while IFS= read -r line || [ -n \"$line\" ]; do case \"$line\" in snapshot_prefix=*) snapshot_prefix=${line#snapshot_prefix=} ;; restore_prefix=*) expected_prefix=${line#restore_prefix=} ;; compat=*) compat=${line#compat=} ;; provenance=*) provenance=${line#provenance=} ;; unit=*) rec_unit=${line#unit=} ;; mbx_version=*) rec_mbx=${line#mbx_version=} ;; toolchain=*) rec_toolchain=${line#toolchain=} ;; root=*) rec_root=${line#root=} ;; esac; done < \"$record\"".to_owned(),
+        "if [ -z \"$snapshot_prefix\" ] || [ -z \"$expected_prefix\" ] || [ -z \"$compat\" ] || [ -z \"$provenance\" ] || [ -z \"$rec_unit\" ] || [ -z \"$rec_mbx\" ] || [ -z \"$rec_toolchain\" ] || [ -z \"$rec_root\" ]; then refused refused-provenance; fi".to_owned(),
+        "case \"$matched\" in \"$snapshot_prefix\"?*) decision=exact-hit ;; \"$expected_prefix\"?*) decision=predecessor-fallback ;; *) refused refused-provenance ;; esac".to_owned(),
     ]);
     script.extend(compat_head_lines(
         "$d",
@@ -109,7 +105,6 @@ pub(crate) fn recover_step(
         "$rec_toolchain",
         "$rec_root",
         "$rec_unit",
-        false,
     ));
     script.extend([
         "compat_now=\"s256-$h\"".to_owned(),
@@ -204,6 +199,7 @@ fn import_lines(rust_toolchain: &str) -> Vec<String> {
         "if rm -rf \"$stage\" \"$root\"; then :; else corrupt import_failed; fi".to_owned(),
         format!("if printf '%s\\n' \"decision=$decision\" \"matched=$matched\" \"manifest=$manifest\" \"payload=$digest\" \"size=$size\" > \"{RECOVERY_RECORD}\"; then :; else corrupt import_failed; fi"),
         "printf 'velnor: state snapshot recovered (decision=%s manifest=%s)\\n' \"$decision\" \"$manifest\"".to_owned(),
+        "if [ \"$decision\" = exact-hit ]; then skip=true; fi".to_owned(),
     ]
 }
 

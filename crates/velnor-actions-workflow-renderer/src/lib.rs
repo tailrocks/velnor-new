@@ -91,6 +91,7 @@ pub mod rust_suites;
 pub mod schema2;
 mod selected_mise_verifier;
 pub mod setup;
+mod state_fragments;
 mod step_ids;
 pub mod steps;
 mod steps_artifact;

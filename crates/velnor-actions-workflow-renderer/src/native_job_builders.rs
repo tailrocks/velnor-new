@@ -61,6 +61,44 @@ pub enum NativeJobBuilderError {
 
 pub const LINT_JOB_ID: &str = "jactionlint";
 
+pub fn plan_state_roots(
+    plan: &mut Job,
+    catalog: &ToolCatalog,
+    fetch_roots: &[String],
+    tofu_roots: &[String],
+    state_roots: &[plan_sources::cache_keys::StateRootPlan],
+) -> Result<(), NativeJobBuilderError> {
+    let rebuilt =
+        plan_sources::cache_keys::cache_keys_step(catalog, fetch_roots, tofu_roots, state_roots)
+            .map_err(NativeJobBuilderError::PlanSources)?
+            .ok_or(NativeJobBuilderError::Render(
+                crate::RenderError::InvalidWorkflow(
+                    "state_roots_without_cache_keys_step".to_owned(),
+                ),
+            ))?;
+    let existing = plan
+        .steps
+        .iter()
+        .position(|step| step.id == Some(velnor_actions_contract::StepId::CacheKeys));
+    let at = match existing {
+        Some(at) => {
+            plan.steps.remove(at);
+            at
+        }
+        None => plan
+            .steps
+            .iter()
+            .position(|step| {
+                matches!(&step.kind, velnor_actions_contract::StepKind::Internal { operation, .. } if operation == PLAN_OPERATION)
+            })
+            .ok_or(NativeJobBuilderError::Render(
+                crate::RenderError::InvalidWorkflow("plan_job_lost_plan_step".to_owned()),
+            ))?,
+    };
+    plan.steps.insert(at, rebuilt);
+    Ok(())
+}
+
 pub fn plan_job(
     label: &str,
     acquire: Option<Step>,
@@ -106,7 +144,7 @@ pub fn plan_job(
             verifier_builders::verify_rust_manifest_step()
         });
     }
-    let cached = plan_sources::cache_steps_for_plan(catalog, fetch_roots, tofu_roots)
+    let cached = plan_sources::cache_steps_for_plan(catalog, fetch_roots, tofu_roots, &[])
         .map_err(NativeJobBuilderError::PlanSources)?;
     steps.extend(cached.restore);
     let env = plan_fetch_env(catalog)?;

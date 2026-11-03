@@ -29,12 +29,14 @@ pub fn cache_steps_for_plan(
     catalog: &ToolCatalog,
     fetch_roots: &[String],
     tofu_roots: &[String],
+    state_roots: &[cache_keys::StateRootPlan],
 ) -> Result<PlanCache, PlanSourcesError> {
     let mut restore = Vec::new();
     restore.extend(cache_keys::cache_keys_step(
         catalog,
         fetch_roots,
         tofu_roots,
+        state_roots,
     )?);
     let mut save = Vec::new();
     if !fetch_roots.is_empty() {

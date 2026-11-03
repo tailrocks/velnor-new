@@ -27,7 +27,7 @@ fn gc1_t53_export_publishes_fresh_export() -> Result<(), Box<dyn Error>> {
     let scene = Scene::new("publish-fresh", crate::gc1_t53::scripts()?)?;
     let key = scene.discover()?;
     scene.pack_export("old")?;
-    scene.recover(&key.key, &key.key, &[], None)?;
+    scene.recover(&format!("{}oldsnap-0", key.restore_prefix), &[], None)?;
     scene.assert_clean_exit()?;
     scene.mark_producer()?;
     std::fs::create_dir_all(scene.state_root())?;

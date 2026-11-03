@@ -11,7 +11,7 @@ use velnor_actions_contract::workflow::cache_family::{
 };
 use velnor_actions_contract::workflow::cache_family_mbx::{
     MBX_BUNDLE_KEY_EXPR, MBX_BUNDLE_RESTORE_CONDITION, MBX_BUNDLE_RESTORE_KEYS_EXPR,
-    MBX_BUNDLE_SAVE_CONDITION,
+    MBX_BUNDLE_SAVE_CONDITION, MBX_BUNDLE_SAVE_KEY_EXPR,
 };
 use velnor_actions_contract::workflow::cache_family_steps::{
     STACK_FAMILIES, family_key_expr, family_save_condition,
@@ -104,7 +104,7 @@ fn family_for_key(key: &str) -> Option<Family> {
     if key == SOURCES_KEY_STEP_EXPR || key == SOURCES_KEY_PLAN_EXPR {
         return Some(Family::Runtime(CacheFamily::Sources));
     }
-    if key == MBX_BUNDLE_KEY_EXPR {
+    if key == MBX_BUNDLE_KEY_EXPR || key == MBX_BUNDLE_SAVE_KEY_EXPR {
         return Some(Family::Runtime(CacheFamily::MbxBundle));
     }
     if let Some(family) = STACK_FAMILIES
