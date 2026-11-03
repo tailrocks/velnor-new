@@ -32,7 +32,7 @@ pub fn action_step_with_env(
     for (key, value) in &with {
         crate::expressions::check_with_key(key)?;
         if !crate::tool_seed::is_guarded_seed_key_input(uses, &with, key, value) {
-            crate::expressions::check_with_value(key, value)?;
+            crate::expressions::check_with_action_value(uses, key, value)?;
         }
         steps::scan_for_private_subcommands(key)?;
         steps::scan_for_private_subcommands(value)?;
