@@ -13,11 +13,15 @@ use crate::steps::{
 use crate::verifier_builders::{self, ToolchainPhase};
 use velnor_actions_actionlint::{PinnedActionRef, checkout_inputs_schema, validate_action_inputs};
 use velnor_actions_contract::workflow::permissions::PermissionLevel;
-use velnor_actions_contract::{Job, JobTimeout, Permissions, Step, StepRole, WorkflowPolicy};
+use velnor_actions_contract::{
+    CheckoutHistory, Job, JobTimeout, Permissions, Step, StepRole, WorkflowPolicy,
+};
 use velnor_actions_mise::{
     ISOLATION_ENV, NO_AUTO_INSTALL_ENV, PREPARE_PINNED_TOOLS_STEP, PinnedTool, PreparePinnedTools,
     PrepareRustComponents, ToolCatalog, ToolHomes,
 };
+
+pub const VERDICT_CHECKOUT_HISTORY: CheckoutHistory = CheckoutHistory::ShallowOnPush;
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum PlanRustNeed {
@@ -71,7 +75,7 @@ pub fn plan_job(
     policy: WorkflowPolicy,
 ) -> Result<Job, NativeJobBuilderError> {
     let source_free = policy == WorkflowPolicy::VelnorRepositoryV1;
-    let mut steps = vec![checkout_history_action()?];
+    let mut steps = vec![checkout_history_action(VERDICT_CHECKOUT_HISTORY)?];
     let mut acquire = acquire;
     if source_free {
         steps.extend(acquire.take());
@@ -159,7 +163,7 @@ pub fn final_job(
     let mut needs = vec![PLAN_JOB_ID.to_owned()];
     needs.extend(crate_job_ids);
     needs.push(LINT_JOB_ID.to_owned());
-    let mut steps = vec![checkout_history_action()?];
+    let mut steps = vec![checkout_history_action(VERDICT_CHECKOUT_HISTORY)?];
     steps.extend(acquire);
     steps.push(prepare_pinned_tools_step(
         catalog,
@@ -260,10 +264,13 @@ fn request_step(target: &str) -> Result<Step, NativeJobBuilderError> {
     write_request_step(target).map_err(|error| NativeJobBuilderError::Contract(error.to_string()))
 }
 
-fn checkout_history_action() -> Result<Step, NativeJobBuilderError> {
+fn checkout_history_action(history: CheckoutHistory) -> Result<Step, NativeJobBuilderError> {
     let with = BTreeMap::from([
         ("persist-credentials".to_owned(), "false".to_owned()),
-        ("fetch-depth".to_owned(), "0".to_owned()),
+        (
+            "fetch-depth".to_owned(),
+            history.fetch_depth_input().to_owned(),
+        ),
     ]);
     validate_action_inputs(&checkout_inputs_schema(), &with)
         .map_err(|error| NativeJobBuilderError::Contract(error.to_string()))?;
