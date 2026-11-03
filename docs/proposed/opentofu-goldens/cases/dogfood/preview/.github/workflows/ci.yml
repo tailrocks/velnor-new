@@ -88,7 +88,7 @@ jobs:
       - *s1
       - &s2
         name: Setup Mise
-        uses: jdx/mise-action@6612f0ef07ed2a736cd1e00a94a065522dd41195
+        uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
           cache: "false"
           cache_save: "false"
@@ -101,7 +101,7 @@ jobs:
         id: v2
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: 931fd2899bbf95a7c815227f3408a287ed4954f3d94ea7cbf2d2f8b7f9e32cfd
+          d: cef524884293ae11aafc1fbc63fa280366a472510fe4a52f0ad717f46b363b2b
       - &s4
         name: Restore Mise tools
         id: tools-restore
@@ -126,7 +126,7 @@ jobs:
         id: v2
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: 4dbd98278dfa641fe30b270fbfa6c39267839cb9d1768ee10d2073115de66dfb
+          d: f60a7b90d96affe6848c6f4dbb1f5fe2e74ce18416357b8703c19ce4c1a94ed0
       - *s4
       - name: Prepare pinned tools
         run: &r1 mise --no-config --no-env --no-hooks install 'http:cargo-machete[url=https://github.com/bnjbvr/cargo-machete/releases/download/v0.9.2/cargo-machete-v0.9.2-x86_64-unknown-linux-musl.tar.gz,checksum=sha256:48200087f54c55aabcd4db4af1e25742b49846c02a1b1bfa134711945b35b2e9]@0.9.2'
@@ -153,7 +153,7 @@ jobs:
           fetch-depth: "0"
           persist-credentials: "false"
       - name: Setup Mise
-        uses: jdx/mise-action@6612f0ef07ed2a736cd1e00a94a065522dd41195
+        uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
           cache: "false"
           cache_save: "false"
@@ -218,7 +218,7 @@ jobs:
         id: v2
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: b17125c343f2407c30b9b06c2c3b8e32d32bb575f87b5d45237c2f42da67d9da-${{ env.VELNOR_TOOL_JACTIONLINT }}-${{ env.VELNOR_TOOL_JACTIONLINT_LOCK }}-${{ env.VELNOR_TOOL_SHELLCHECK }}-${{ env.VELNOR_TOOL_SHELLCHECK_LOCK }}
+          d: eea692f47dfdad29d046951c5a0af5f636d0cecff1e8e8b8c2b909f835dad226-${{ env.VELNOR_TOOL_JACTIONLINT }}-${{ env.VELNOR_TOOL_JACTIONLINT_LOCK }}-${{ env.VELNOR_TOOL_SHELLCHECK }}-${{ env.VELNOR_TOOL_SHELLCHECK_LOCK }}
       - *s4
       - name: Prepare pinned tools
         run: &r3 "mise --no-config --no-env --no-hooks install 'jactionlint@'\"${VELNOR_TOOL_JACTIONLINT}\" 'shellcheck@'\"${VELNOR_TOOL_SHELLCHECK}\""
@@ -257,7 +257,7 @@ jobs:
         id: v2
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: 4d46152f4eabad22c3c35eae47edba52cba9427ea723dfe2bedc9d9e5fd4871b-${{ env.VELNOR_TOOL_RUST }}-${{ env.VELNOR_TOOL_RUST_LOCK }}
+          d: 3f68b4653f4d47bafbbba928820d3bf416e6a36be433c132c9695dc776e27695-${{ env.VELNOR_TOOL_RUST }}-${{ env.VELNOR_TOOL_RUST_LOCK }}
       - *s4
       - *s7
       - &s14
@@ -573,7 +573,7 @@ jobs:
         id: v2
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: 2b13d6adeee43b9e998646245ee753e72b3cb3a24b61d161fe9a743076ce8376-${{ env.VELNOR_TOOL_MR_BOXINGTON }}-${{ env.VELNOR_TOOL_MR_BOXINGTON_LOCK }}-${{ env.VELNOR_TOOL_NEXTEST }}-${{ env.VELNOR_TOOL_NEXTEST_LOCK }}-${{ env.VELNOR_TOOL_RUST }}-${{ env.VELNOR_TOOL_RUST_LOCK }}
+          d: 206fded2802f1f69e029a030593d6f80c4161ef8aeb810e7e5caf8481e60c2c5-${{ env.VELNOR_TOOL_MR_BOXINGTON }}-${{ env.VELNOR_TOOL_MR_BOXINGTON_LOCK }}-${{ env.VELNOR_TOOL_NEXTEST }}-${{ env.VELNOR_TOOL_NEXTEST_LOCK }}-${{ env.VELNOR_TOOL_RUST }}-${{ env.VELNOR_TOOL_RUST_LOCK }}
       - *s4
       - *s7
       - *s8
@@ -848,7 +848,7 @@ jobs:
         id: v2
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: fd6bad0b45c1bb064eb4108d3110e8d1d08374d8e8263859daedbf79c9c4b0ff-${{ env.VELNOR_TOOL_JACTIONLINT }}-${{ env.VELNOR_TOOL_JACTIONLINT_LOCK }}-${{ env.VELNOR_TOOL_MR_BOXINGTON }}-${{ env.VELNOR_TOOL_MR_BOXINGTON_LOCK }}-${{ env.VELNOR_TOOL_NEXTEST }}-${{ env.VELNOR_TOOL_NEXTEST_LOCK }}-${{ env.VELNOR_TOOL_RUST }}-${{ env.VELNOR_TOOL_RUST_LOCK }}-${{ env.VELNOR_TOOL_SHELLCHECK }}-${{ env.VELNOR_TOOL_SHELLCHECK_LOCK }}
+          d: 5427644c0bee4f3e89ed0d51010bd9fd8ab40d1374ba80d61463c2d682f35b6d-${{ env.VELNOR_TOOL_JACTIONLINT }}-${{ env.VELNOR_TOOL_JACTIONLINT_LOCK }}-${{ env.VELNOR_TOOL_MR_BOXINGTON }}-${{ env.VELNOR_TOOL_MR_BOXINGTON_LOCK }}-${{ env.VELNOR_TOOL_NEXTEST }}-${{ env.VELNOR_TOOL_NEXTEST_LOCK }}-${{ env.VELNOR_TOOL_RUST }}-${{ env.VELNOR_TOOL_RUST_LOCK }}-${{ env.VELNOR_TOOL_SHELLCHECK }}-${{ env.VELNOR_TOOL_SHELLCHECK_LOCK }}
       - *s4
       - *s7
       - *s8
@@ -1124,7 +1124,7 @@ jobs:
         id: v2
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: 09b41582beffec13cf4b9e5783af3de596a054420894cf320e6220a231a21ec3-${{ env.VELNOR_TOOL_MR_BOXINGTON }}-${{ env.VELNOR_TOOL_MR_BOXINGTON_LOCK }}-${{ env.VELNOR_TOOL_NEXTEST }}-${{ env.VELNOR_TOOL_NEXTEST_LOCK }}-${{ env.VELNOR_TOOL_OPENTOFU }}-${{ env.VELNOR_TOOL_OPENTOFU_LOCK }}-${{ env.VELNOR_TOOL_RUST }}-${{ env.VELNOR_TOOL_RUST_LOCK }}
+          d: 6b1cf1d7960bfd7c7c9ee18037367b64ea706906381c50a5724628a754d49ad4-${{ env.VELNOR_TOOL_MR_BOXINGTON }}-${{ env.VELNOR_TOOL_MR_BOXINGTON_LOCK }}-${{ env.VELNOR_TOOL_NEXTEST }}-${{ env.VELNOR_TOOL_NEXTEST_LOCK }}-${{ env.VELNOR_TOOL_OPENTOFU }}-${{ env.VELNOR_TOOL_OPENTOFU_LOCK }}-${{ env.VELNOR_TOOL_RUST }}-${{ env.VELNOR_TOOL_RUST_LOCK }}
       - *s4
       - *s7
       - *s8
@@ -1203,7 +1203,7 @@ jobs:
         id: v2
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: 9b4a9a14443a252a34126afbc77c0a90d135ec2c9c04be0d47af37249d6dd0ac-${{ env.VELNOR_TOOL_BUN }}-${{ env.VELNOR_TOOL_BUN_LOCK }}-${{ env.VELNOR_TOOL_JACTIONLINT }}-${{ env.VELNOR_TOOL_JACTIONLINT_LOCK }}-${{ env.VELNOR_TOOL_MR_BOXINGTON }}-${{ env.VELNOR_TOOL_MR_BOXINGTON_LOCK }}-${{ env.VELNOR_TOOL_NEXTEST }}-${{ env.VELNOR_TOOL_NEXTEST_LOCK }}-${{ env.VELNOR_TOOL_RUST }}-${{ env.VELNOR_TOOL_RUST_LOCK }}-${{ env.VELNOR_TOOL_SHELLCHECK }}-${{ env.VELNOR_TOOL_SHELLCHECK_LOCK }}
+          d: 2813651cb00c808eea72f3e87ad29e53d2e6266e0daceafeadacbd5470d1337f-${{ env.VELNOR_TOOL_BUN }}-${{ env.VELNOR_TOOL_BUN_LOCK }}-${{ env.VELNOR_TOOL_JACTIONLINT }}-${{ env.VELNOR_TOOL_JACTIONLINT_LOCK }}-${{ env.VELNOR_TOOL_MR_BOXINGTON }}-${{ env.VELNOR_TOOL_MR_BOXINGTON_LOCK }}-${{ env.VELNOR_TOOL_NEXTEST }}-${{ env.VELNOR_TOOL_NEXTEST_LOCK }}-${{ env.VELNOR_TOOL_RUST }}-${{ env.VELNOR_TOOL_RUST_LOCK }}-${{ env.VELNOR_TOOL_SHELLCHECK }}-${{ env.VELNOR_TOOL_SHELLCHECK_LOCK }}
       - *s4
       - *s7
       - *s8
@@ -1866,8 +1866,8 @@ jobs:
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
           retention-days: "30"
       - *s43
-  tools-producer-09b41582:
-    name: Tools producer / 09b41582
+  tools-producer-206fded2:
+    name: Tools producer / 206fded2
     runs-on: ubuntu-26.04
     timeout-minutes: 15
     continue-on-error: true
@@ -1877,8 +1877,8 @@ jobs:
       - *s19
       - *s1
       - *s2
-      - *s37
-      - *s38
+      - *s20
+      - *s21
       - &s44
         name: Probe Mise tools
         id: tools-restore
@@ -1897,7 +1897,7 @@ jobs:
       - name: Prepare pinned tools
         if: steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
         env: *m14
-        run: *r21
+        run: *r12
       - &s46
         name: Prepare Rust components
         if: steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
@@ -1927,8 +1927,8 @@ jobs:
         name: Report optional cache save failure
         if: always() && !cancelled() && steps.velnor-optional-tools-save.outcome == 'failure'
         run: *r11
-  tools-producer-2b13d6ad:
-    name: Tools producer / 2b13d6ad
+  tools-producer-2813651c:
+    name: Tools producer / 2813651c
     runs-on: ubuntu-26.04
     timeout-minutes: 15
     continue-on-error: true
@@ -1938,21 +1938,25 @@ jobs:
       - *s19
       - *s1
       - *s2
-      - *s20
-      - *s21
+      - *s39
+      - *s40
       - *s44
       - *s45
       - name: Prepare pinned tools
         if: steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
         env: *m14
-        run: *r12
+        run: *r22
+      - &s51
+        name: Verify jactionlint
+        if: steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
+        uses: ./.github/actions/velnor-verify-jactionlint # zizmor: ignore[self-repository]
       - *s46
       - *s47
       - *s48
       - *s49
       - *s50
-  tools-producer-4d46152f:
-    name: Tools producer / 4d46152f
+  tools-producer-3f68b465:
+    name: Tools producer / 3f68b465
     runs-on: ubuntu-26.04
     timeout-minutes: 10
     continue-on-error: true
@@ -1987,112 +1991,8 @@ jobs:
           VELNOR_CACHE_REQUIRED_SECONDS: "90"
       - *s49
       - *s50
-  tools-producer-4dbd9827:
-    name: Tools producer / 4dbd9827
-    runs-on: ubuntu-26.04
-    timeout-minutes: 5
-    continue-on-error: true
-    env: *m1
-    if: github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true
-    steps:
-      - &s51
-        name: Record optional cache budget
-        id: velnor-cache-clock
-        run: *r7
-        env:
-          VELNOR_CACHE_JOB_SECONDS: "300"
-      - *s1
-      - *s2
-      - *s5
-      - *s44
-      - *s45
-      - name: Prepare pinned tools
-        if: steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
-        run: *r1
-      - &s52
-        name: Admit optional cache save
-        id: velnor-optional-tools-save-budget
-        if: success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
-        run: *r10
-        env:
-          VELNOR_CACHE_JOB_SECONDS: "300"
-          VELNOR_CACHE_STARTED: ${{ steps.velnor-cache-clock.outputs.started }}
-          VELNOR_CACHE_DEADLINE: ${{ steps.velnor-cache-clock.outputs.deadline }}
-          VELNOR_CACHE_REQUIRED_SECONDS: "90"
-      - *s49
-      - *s50
-  tools-producer-931fd289:
-    name: Tools producer / 931fd289
-    runs-on: ubuntu-26.04
-    timeout-minutes: 5
-    continue-on-error: true
-    env: *m1
-    if: github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true
-    steps:
-      - *s51
-      - *s1
-      - *s2
-      - *s3
-      - *s44
-      - *s45
-      - name: Prepare pinned tools
-        if: steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
-        run: mise --no-config --no-env --no-hooks install cargo-deny@0.20.2
-      - *s52
-      - *s49
-      - *s50
-  tools-producer-9b4a9a14:
-    name: Tools producer / 9b4a9a14
-    runs-on: ubuntu-26.04
-    timeout-minutes: 15
-    continue-on-error: true
-    env: *m3
-    if: github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true
-    steps:
-      - *s19
-      - *s1
-      - *s2
-      - *s39
-      - *s40
-      - *s44
-      - *s45
-      - name: Prepare pinned tools
-        if: steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
-        env: *m14
-        run: *r22
-      - &s53
-        name: Verify jactionlint
-        if: steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
-        uses: ./.github/actions/velnor-verify-jactionlint # zizmor: ignore[self-repository]
-      - *s46
-      - *s47
-      - *s48
-      - *s49
-      - *s50
-  tools-producer-b17125c3:
-    name: Tools producer / b17125c3
-    runs-on: ubuntu-26.04
-    timeout-minutes: 5
-    continue-on-error: true
-    env: *m1
-    if: github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true
-    steps:
-      - *s51
-      - *s1
-      - *s2
-      - *s9
-      - *s10
-      - *s44
-      - *s45
-      - name: Prepare pinned tools
-        if: steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
-        run: *r3
-      - *s53
-      - *s52
-      - *s49
-      - *s50
-  tools-producer-fd6bad0b:
-    name: Tools producer / fd6bad0b
+  tools-producer-5427644c:
+    name: Tools producer / 5427644c
     runs-on: ubuntu-26.04
     timeout-minutes: 15
     continue-on-error: true
@@ -2110,9 +2010,109 @@ jobs:
         if: steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
         env: *m14
         run: *r20
-      - *s53
+      - *s51
       - *s46
       - *s47
       - *s48
+      - *s49
+      - *s50
+  tools-producer-6b1cf1d7:
+    name: Tools producer / 6b1cf1d7
+    runs-on: ubuntu-26.04
+    timeout-minutes: 15
+    continue-on-error: true
+    env: *m3
+    if: github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true
+    steps:
+      - *s19
+      - *s1
+      - *s2
+      - *s37
+      - *s38
+      - *s44
+      - *s45
+      - name: Prepare pinned tools
+        if: steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
+        env: *m14
+        run: *r21
+      - *s46
+      - *s47
+      - *s48
+      - *s49
+      - *s50
+  tools-producer-cef52488:
+    name: Tools producer / cef52488
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    continue-on-error: true
+    env: *m1
+    if: github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true
+    steps:
+      - &s52
+        name: Record optional cache budget
+        id: velnor-cache-clock
+        run: *r7
+        env:
+          VELNOR_CACHE_JOB_SECONDS: "300"
+      - *s1
+      - *s2
+      - *s3
+      - *s44
+      - *s45
+      - name: Prepare pinned tools
+        if: steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
+        run: mise --no-config --no-env --no-hooks install cargo-deny@0.20.2
+      - &s53
+        name: Admit optional cache save
+        id: velnor-optional-tools-save-budget
+        if: success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
+        run: *r10
+        env:
+          VELNOR_CACHE_JOB_SECONDS: "300"
+          VELNOR_CACHE_STARTED: ${{ steps.velnor-cache-clock.outputs.started }}
+          VELNOR_CACHE_DEADLINE: ${{ steps.velnor-cache-clock.outputs.deadline }}
+          VELNOR_CACHE_REQUIRED_SECONDS: "90"
+      - *s49
+      - *s50
+  tools-producer-eea692f4:
+    name: Tools producer / eea692f4
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    continue-on-error: true
+    env: *m1
+    if: github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true
+    steps:
+      - *s52
+      - *s1
+      - *s2
+      - *s9
+      - *s10
+      - *s44
+      - *s45
+      - name: Prepare pinned tools
+        if: steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
+        run: *r3
+      - *s51
+      - *s53
+      - *s49
+      - *s50
+  tools-producer-f60a7b90:
+    name: Tools producer / f60a7b90
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    continue-on-error: true
+    env: *m1
+    if: github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true
+    steps:
+      - *s52
+      - *s1
+      - *s2
+      - *s5
+      - *s44
+      - *s45
+      - name: Prepare pinned tools
+        if: steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
+        run: *r1
+      - *s53
       - *s49
       - *s50

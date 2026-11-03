@@ -28,7 +28,7 @@ use velnor_actions_workflow_renderer::toolchain_env::{checked_task_env, credenti
 
 const MBX_VERSION: &str = "1.91.0";
 const RUST_VERSION: &str = "1.89.0";
-const NEXTEST_VERSION: &str = "0.9.150";
+const NEXTEST_VERSION: &str = "0.9.151";
 const EXPORT_STEP: &str = "Publish state snapshot";
 const SAVE_STEP: &str = "Save state snapshot";
 const RECORD_STEP: &str = "Record state publication";

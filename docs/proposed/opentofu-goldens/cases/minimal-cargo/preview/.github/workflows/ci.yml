@@ -49,7 +49,7 @@ jobs:
         with:
           persist-credentials: "false"
       - name: Setup Mise
-        uses: jdx/mise-action@6612f0ef07ed2a736cd1e00a94a065522dd41195
+        uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
           cache: "false"
           cache_save: "false"
@@ -61,7 +61,7 @@ jobs:
         id: v2
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: c13255f9e3eb1ba841033fbf209d4d31712d67422e274f4068cf232af4342785
+          d: cda86b5b27705403276170df8953648106ee42f0a832fefd0ca2241aea663f10
       - name: Restore Mise tools
         id: tools-restore
         if: steps.v2.outputs.enabled == 'true'
@@ -103,7 +103,7 @@ jobs:
           fetch-depth: "0"
           persist-credentials: "false"
       - name: Setup Mise
-        uses: jdx/mise-action@6612f0ef07ed2a736cd1e00a94a065522dd41195
+        uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
           cache: "false"
           cache_save: "false"
@@ -115,7 +115,7 @@ jobs:
         id: v2
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: 52807972ac740d496a028af32f075c8e7fb6ba540dffb4b0cb63ec70463e13f9
+          d: 67e6afc5b2bb57e27d7b192c6ffabebc2421d0858a277a7cba7c96d818df8c9e
       - name: Restore Mise tools
         id: tools-restore
         if: steps.v2.outputs.enabled == 'true'
@@ -197,7 +197,7 @@ jobs:
           fetch-depth: "0"
           persist-credentials: "false"
       - name: Setup Mise
-        uses: jdx/mise-action@6612f0ef07ed2a736cd1e00a94a065522dd41195
+        uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
           cache: "false"
           cache_save: "false"
@@ -289,7 +289,7 @@ jobs:
         with:
           persist-credentials: "false"
       - name: Setup Mise
-        uses: jdx/mise-action@6612f0ef07ed2a736cd1e00a94a065522dd41195
+        uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
           cache: "false"
           cache_save: "false"
@@ -301,7 +301,7 @@ jobs:
         id: v2
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: 8bd6d82cfc4ce89f325a14f2299d4c399b184470b598b3c259b4411631f4bdc4
+          d: a9d59c032cd70329b6aa1171956932bc73e9d89c646bdde524f2903f9fa90869
       - name: Restore Mise tools
         id: tools-restore
         if: steps.v2.outputs.enabled == 'true'
@@ -386,8 +386,8 @@ jobs:
           overwrite: "true"
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
           retention-days: "30"
-  tools-producer-52807972:
-    name: Tools producer / 52807972
+  tools-producer-67e6afc5:
+    name: Tools producer / 67e6afc5
     runs-on: ubuntu-26.04
     timeout-minutes: 5
     continue-on-error: true
@@ -409,7 +409,7 @@ jobs:
           fetch-depth: "0"
           persist-credentials: "false"
       - name: Setup Mise
-        uses: jdx/mise-action@6612f0ef07ed2a736cd1e00a94a065522dd41195
+        uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
           cache: "false"
           cache_save: "false"
@@ -421,7 +421,7 @@ jobs:
         id: v2
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: 52807972ac740d496a028af32f075c8e7fb6ba540dffb4b0cb63ec70463e13f9
+          d: 67e6afc5b2bb57e27d7b192c6ffabebc2421d0858a277a7cba7c96d818df8c9e
       - name: Probe Mise tools
         id: tools-restore
         if: steps.v2.outputs.enabled == 'true'
@@ -470,8 +470,8 @@ jobs:
       - name: Report optional cache save failure
         if: always() && !cancelled() && steps.velnor-optional-tools-save.outcome == 'failure'
         run: "printf '%s\\n' '::warning::cache_unavailable: optional save failed or timed out'"
-  tools-producer-8bd6d82c:
-    name: Tools producer / 8bd6d82c
+  tools-producer-a9d59c03:
+    name: Tools producer / a9d59c03
     runs-on: ubuntu-26.04
     timeout-minutes: 5
     continue-on-error: true
@@ -492,7 +492,7 @@ jobs:
         with:
           persist-credentials: "false"
       - name: Setup Mise
-        uses: jdx/mise-action@6612f0ef07ed2a736cd1e00a94a065522dd41195
+        uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
           cache: "false"
           cache_save: "false"
@@ -504,7 +504,7 @@ jobs:
         id: v2
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: 8bd6d82cfc4ce89f325a14f2299d4c399b184470b598b3c259b4411631f4bdc4
+          d: a9d59c032cd70329b6aa1171956932bc73e9d89c646bdde524f2903f9fa90869
       - name: Probe Mise tools
         id: tools-restore
         if: steps.v2.outputs.enabled == 'true'
@@ -561,8 +561,8 @@ jobs:
       - name: Report optional cache save failure
         if: always() && !cancelled() && steps.velnor-optional-tools-save.outcome == 'failure'
         run: "printf '%s\\n' '::warning::cache_unavailable: optional save failed or timed out'"
-  tools-producer-c13255f9:
-    name: Tools producer / c13255f9
+  tools-producer-cda86b5b:
+    name: Tools producer / cda86b5b
     runs-on: ubuntu-26.04
     timeout-minutes: 5
     continue-on-error: true
@@ -580,7 +580,7 @@ jobs:
         with:
           persist-credentials: "false"
       - name: Setup Mise
-        uses: jdx/mise-action@6612f0ef07ed2a736cd1e00a94a065522dd41195
+        uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
           cache: "false"
           cache_save: "false"
@@ -592,7 +592,7 @@ jobs:
         id: v2
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: c13255f9e3eb1ba841033fbf209d4d31712d67422e274f4068cf232af4342785
+          d: cda86b5b27705403276170df8953648106ee42f0a832fefd0ca2241aea663f10
       - name: Probe Mise tools
         id: tools-restore
         if: steps.v2.outputs.enabled == 'true'

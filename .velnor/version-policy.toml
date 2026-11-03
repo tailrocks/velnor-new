@@ -27,7 +27,7 @@ mr-boxington = "1.29.1"
 gh = "2.103.3"
 jactionlint = "2.4.0"
 shellcheck = "0.11.0"
-nextest = "0.9.150"
+nextest = "0.9.151"
 opentofu = "1.13.2"
 release-plz = "0.4.3"
 crane = "0.22.1"
@@ -40,9 +40,9 @@ supported = ["ubuntu-26.04", "ubuntu-24.04", "ubuntu-22.04"]
 
 [[actions]]
 name = "jdx/mise-action"
-version = "v5.2.5"
-sha = "6612f0ef07ed2a736cd1e00a94a065522dd41195"
-reviewed = "2026-11-02"
+version = "v5.2.6"
+sha = "f5be966e4a917d54244728e6a5fdcd1d93a35e6c"
+reviewed = "2026-11-03"
 
 [[actions]]
 name = "actions/checkout"

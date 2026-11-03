@@ -77,14 +77,14 @@ Workflow to generate
     - rust-velnor-runner-core (28 steps)
     - rust-velnor-runner-github (28 steps)
     - rust-velnor-runner-host (29 steps)
-    - tools-producer-09b41582 (9 steps)
-    - tools-producer-2b13d6ad (9 steps)
-    - tools-producer-4d46152f (9 steps)
-    - tools-producer-4dbd9827 (7 steps)
-    - tools-producer-931fd289 (7 steps)
-    - tools-producer-9b4a9a14 (10 steps)
-    - tools-producer-b17125c3 (8 steps)
-    - tools-producer-fd6bad0b (10 steps)
+    - tools-producer-206fded2 (9 steps)
+    - tools-producer-2813651c (10 steps)
+    - tools-producer-3f68b465 (9 steps)
+    - tools-producer-5427644c (10 steps)
+    - tools-producer-6b1cf1d7 (9 steps)
+    - tools-producer-cef52488 (7 steps)
+    - tools-producer-eea692f4 (8 steps)
+    - tools-producer-f60a7b90 (7 steps)
     - 18 Rust crate jobs
       Timeout: 15 minutes per crate job
       Obligations: Clippy -> build -> run tests -> doctests -> doc build -> format check
@@ -215,7 +215,7 @@ Workflow to generate
     - actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
     - actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
     - asamarts/alint@d61e4c802b02ac811224b35c59a62cfe5176f4d0
-    - jdx/mise-action@6612f0ef07ed2a736cd1e00a94a065522dd41195
+    - jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
     - jdx/mr-boxington-action@88acf2bb50552c7c508cbac13e5f8c576b95b1de
   Ineligible: stack/rust/crates/velnor-actions-actionlint/nextest/default has no test targets; no test command emitted
   Ineligible: stack/rust/crates/velnor-actions-ansible/nextest/default has no test targets; no test command emitted
