@@ -50,6 +50,10 @@ name = "prune_tools"
 path = "tests/prune_tools.rs"
 
 [[test]]
+name = "prune_state"
+path = "tests/prune_state.rs"
+
+[[test]]
 name = "rust_tree_digest_pin"
 path = "tests/rust_tree_digest_pin.rs"
 
