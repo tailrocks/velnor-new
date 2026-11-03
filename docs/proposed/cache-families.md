@@ -80,7 +80,14 @@ output across trust scopes.
 - The bundle is opaque. Velnor never lists, parses or rewrites it; the only
   producer is `mbx cache export --group velnor --format directory` and the only
   consumer is `mbx cache import`, which moves the objects into the store and
-  removes the restored directory.
+  removes the restored directory. The recover step imports a staged directory
+  that it first screened and measured, never the downloaded `.tar.gz`, and
+  runs the import from a working directory outside any checkout; a working
+  directory inside the workspace, or any hostile, unreadable or non-regular
+  payload (including file modes and links set by the cache restore), ends cold
+  with exit 0, a `cache_corrupt` warning, no stage, no scratch directory and no
+  write outside the stage. A single cleanup on every exit path removes the
+  payload, never follows a symlink and cannot fail the step.
 - Compat does not name a job: every reader of a workspace shares the entry,
   and the key changes only when the lock, toolchain, MBX version or platform
   changes. The `unit` keeps the dependency seed and suite bundles apart.
@@ -100,6 +107,8 @@ output across trust scopes.
   against the same ceiling. The first check measures uncompressed bytes, not
   the compressed entry. Over the ceiling the save is refused
   (`over_ceiling`).
+  The publish step always exports fresh; it never republishes a state root that
+  already exists on the runner.
 - The bundle save has its own three-minute optional-save budget; the other
   families keep one minute.
 

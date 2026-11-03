@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use super::support_commands::vectors::HTTP_VALIDATOR_PINS;
 use super::{NativeAuthorityError, NativeAuthorityInput, invalid};
 use std::collections::{BTreeMap, BTreeSet};
 use velnor_actions_contract::{ReleaseTarget, VelnorConfig};
@@ -191,5 +192,10 @@ pub fn catalog_tool_pins(catalog: &ToolCatalog) -> Vec<String> {
             ));
         }
     }
+    pins.extend(
+        HTTP_VALIDATOR_PINS
+            .iter()
+            .map(|pin| pin.catalog_row("linux-x64")),
+    );
     pins
 }

@@ -1,6 +1,6 @@
 # Compiled-state persistence across CI runs
 
-Status: proposed; decisions pending; Linux measurements pending. This page is not an implementation claim. It records why compiled state does not carry from one run to the next today, and the design that would carry it.
+Status: proposed; decisions pending; Linux measurements pending. This page is not an implementation claim, except that the restore hardening landed in #477. It records why compiled state does not carry from one run to the next today, and the design that would carry it.
 
 Labels used for numbers: **measured** (read from a log, `gh` output or source in this repository, or measured with `mbx` 1.29.1 on a local macOS arm64 machine), **reported** (taken from a pull request or issue body, not re-measured), **inferred** (arithmetic or a ratio from other numbers). Every size on Linux hosted runners is inferred or unmeasured, except hosted-log lines quoted as measured, until the measurements in [Open measurements](#open-measurements) land.
 
@@ -29,9 +29,11 @@ The seed jobs exported 5.9 GiB (root workspace) and 3.5 GiB (nested runner works
 
 The two figures are not comparable. PR #279 recorded stored (gzip) sizes of 63.7 MiB (root) and 12.8 MiB (nested). Run 40712054296 recorded uncompressed bytes. No stored size exists for the later exports, so this page makes no growth claim.
 
-### 3. A restored payload would not import
+### 3. A restored payload did not import (fixed in #477)
 
-`Recover state snapshot` runs `mbx cache import "$payload"` on `payload.tar.gz` (`cache_steps_mbx_bundle_recover.rs:101`). mbx 1.29.1 reads an archive argument as an uncompressed tar, so a gzip file fails to import. On failure the script calls `corrupt import_failed`, which prints a warning and exits 0, so the job builds cold and passes. PR #407 introduced the `tar -czf` wrapper and this call together; at PR #278 the import took the directory. The defect has never run on a hosted runner, because the restore always misses first (source-confirmed, tracked in issue #440).
+Before PR #477, `Recover state snapshot` ran `mbx cache import` on `payload.tar.gz`. mbx 1.29.1 reads an archive argument as an uncompressed tar, so a gzip file failed to import. On failure the script called `corrupt import_failed`, which prints a warning and exits 0, so the job built cold and passed. PR #407 introduced the `tar -czf` wrapper and that call together; at PR #278 the import took the directory. The defect never ran on a hosted runner, because the restore always missed first (tracked in issue #440).
+
+PR #477 changed the restore. It inflates the payload once, screens the plain tar, extracts it into a private stage, and runs `mbx cache import` on the staged directory (`cache_steps_mbx_bundle_recover.rs:154-203`). No hosted run has exercised this path, because no entry exists to restore.
 
 ### 4. MBX settings missed registry units inside one run
 
@@ -39,7 +41,7 @@ Velnor ran `MBX_SHARE_OUT_DIR=0`, which keys `OUT_DIR` into each unit, so `serde
 
 ### Why this stayed hidden
 
-No stage tests the whole chain of export, pack, save, restore, import and hit. Layers 1 to 3 coexisted because the failure path of the restore is silent: it exits 0 with a warning. A cache-key change also starts every run cold, so each of #471, an mbx bump and a runner-image change (`ImageOS`) produces one cold run by design.
+No stage tests the whole chain of export, pack, save, restore, import and hit. Layers 1 to 3 coexisted until #477 fixed layer 3 because the failure path of the restore is silent: it exits 0 with a warning. A cache-key change also starts every run cold, so each of #471, an mbx bump and a runner-image change (`ImageOS`) produces one cold run by design.
 
 ## Local compared with CI
 
@@ -180,9 +182,9 @@ A side effect of `0`: crates with build scripts may keep recompiling in the cons
 
 ## Restore hardening
 
-A separate change, in progress and not described here as done, repairs the restore path: it imports from a directory or a plain tar instead of a gzip file, runs the import from a working directory outside any checkout, and bounds extraction. Persistence depends on it. A writer without it would produce entries that restore as `import_failed` and go cold with exit 0.
+PR #477 landed the restore hardening. At class level, the restore now treats the payload as untrusted bytes: it bounds the inflated and extracted size, rejects archives whose members are not plain files and directories under the expected family directory, extracts into a private stage, imports from the staged directory instead of the gzip file, runs the import from a working directory outside any checkout, and goes cold with exit 0 on every refusal or failure. The save side still packs `payload.tar.gz`; the packer change is step 3 of the sequence below. Persistence still needs a writer, because no job saves the bundle today.
 
-The restore checks today detect corruption but do not prove that a trusted writer produced the payload. The class of finding is a store that passes the self-consistency checks without a trusted writer. No further detail is recorded here until the hardening lands.
+The restore checks detect corruption but do not prove that a trusted writer produced the payload. The class of finding is a store that passes the self-consistency checks without a trusted writer. No further detail is recorded here.
 
 ## Future work: bind the payload digest to the trusted writer
 
@@ -216,7 +218,7 @@ Proposal: leave pull-request-scoped state off. A pull request reads main's state
 
 Each unit ends in a check that a reviewer can run. Gate commands come from [repository verification](../implemented/repo-verification.md). Hosted proof uses ordinary pull request and main-push runs only. A pull request run cannot exercise the producer, which runs on a protected push, so producer proof is the first main push after merge.
 
-1. **Restore hardening** (separate change, in progress): import format, working directory, bounded extraction.
+1. **Restore hardening** (done, #477): import from a staged directory, working directory outside any checkout, bounded extraction.
 2. **Measurements** on a Linux runner, with no code in `main` (see below).
 3. **Packer and two-bound admission**: plain tar, `over_stored` and `over_extracted`, schema 3.
 4. **Key version 3, retention 2 and root-aware prune**, with the generated prune workflow regenerated.
