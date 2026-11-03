@@ -21,9 +21,9 @@ Workflow to generate
     - required-gate (1 steps)
     - rust-a (20 steps)
     - rust-lib (20 steps)
-    - tools-producer-0d994f24 (8 steps)
-    - tools-producer-a14ec6ec (10 steps)
-    - tools-producer-bda3e7c8 (9 steps)
+    - tools-producer-0ee4a3f5 (10 steps)
+    - tools-producer-18fa7d95 (8 steps)
+    - tools-producer-7d71ebb6 (9 steps)
     - 2 Rust crate jobs
       Timeout: 5 minutes per crate job
       Obligations: Clippy -> run tests -> doctests -> doc build -> format check
@@ -52,7 +52,7 @@ Workflow to generate
     - actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
     - actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
     - actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
-    - jdx/mise-action@6612f0ef07ed2a736cd1e00a94a065522dd41195
+    - jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
   Pull-request execution narrows crate obligations through its event-time affected-work plan.
 
 Required-check migration

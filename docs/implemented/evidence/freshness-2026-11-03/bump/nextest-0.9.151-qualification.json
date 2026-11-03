@@ -1,0 +1,27 @@
+{
+  "schema": 1,
+  "subject": "cargo-nextest 0.9.151",
+  "recorded_at": "2026-11-03T12:30:00Z",
+  "release_api": "nextest-0.9.151-release.json",
+  "tag_commit": "6b3f994577a98874a2e0ea5bef77fbbab3434044",
+  "linux_x86_64": {
+    "archive": "cargo-nextest-0.9.151-x86_64-unknown-linux-gnu.tar.gz",
+    "archive_sha256": "1d4ce302b820c41f4b89c5fb9bce45f0f0c94882c1cf08fc360caf08be6e7df4",
+    "release_api_digest_matches": true,
+    "sidecar_matches": true,
+    "executable_sha256": "f746a548e01a5ec9f50d209ff3188fbf934a4969bddb1cd84a17af087912219b",
+    "install_tree_sha256": "95db46f8610586abf450013b4f4afd869e86f4bf4fcf713fc3e85eabeab1bedc",
+    "install_tree_method": "sha256 of canonical JSON [{executable:true,kind:file,path:cargo-nextest,sha256:<executable>}], the algorithm in check_tool_tree.rs; the same method reproduces the 0.9.150 digest 3f62f104... from its executable digest 62dcc434...",
+    "version_output": "cargo-nextest 0.9.151 (6b3f99457 2026-11-02)",
+    "executed_on": "ubuntu:26.04 under linux/amd64 emulation, --read-only --network none --cap-drop ALL, binary mounted read-only"
+  },
+  "macos_universal": {
+    "archive": "cargo-nextest-0.9.151-universal-apple-darwin.tar.gz",
+    "archive_sha256": "d1d7d025d4bfc9fb154cd76aea3949bd78534829a0589abefa6e5dd4edb135dd",
+    "release_api_digest_matches": true,
+    "sidecar_matches": true,
+    "version_output": "cargo-nextest 0.9.151 (6b3f99457 2026-11-02)",
+    "executed_on": "aarch64-apple-darwin"
+  },
+  "tag_signature": "reported bad_cert by the GitHub tag-object API (nextest-0.9.151-tag-object.json); no valid tag signature or artifact attestation is claimed"
+}

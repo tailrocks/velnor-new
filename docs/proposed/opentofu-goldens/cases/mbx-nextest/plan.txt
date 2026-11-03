@@ -23,9 +23,9 @@ Workflow to generate
     - required (10 steps)
     - required-gate (1 steps)
     - rust-app (26 steps)
-    - tools-producer-0d994f24 (8 steps)
-    - tools-producer-4fdd31d9 (10 steps)
-    - tools-producer-e0e45997 (9 steps)
+    - tools-producer-18fa7d95 (8 steps)
+    - tools-producer-693100f7 (9 steps)
+    - tools-producer-bcdf7cdd (10 steps)
     - 1 Rust crate job
       Timeout: 5 minutes per crate job
       Obligations: Clippy -> build -> run tests -> doctests -> doc build -> format check
@@ -49,7 +49,7 @@ Workflow to generate
     - actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
     - actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
     - actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
-    - jdx/mise-action@6612f0ef07ed2a736cd1e00a94a065522dd41195
+    - jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
     - jdx/mr-boxington-action@88acf2bb50552c7c508cbac13e5f8c576b95b1de
   Pull-request execution narrows crate obligations through its event-time affected-work plan.
 
@@ -64,4 +64,4 @@ Recommendations
   mise.lock not found; Velnor will not create or refresh it
   mise.toml is read-only input; Velnor never modifies it
   rust-toolchain.toml not found; Velnor will not create it
-  tool_install_unverified:3 installs skip verification (no mise.lock): gh@2.103.3, nextest@0.9.150, shellcheck@0.11.0; install on the CI platform and commit the resulting lock
+  tool_install_unverified:3 installs skip verification (no mise.lock): gh@2.103.3, nextest@0.9.151, shellcheck@0.11.0; install on the CI platform and commit the resulting lock
