@@ -88,8 +88,6 @@ fn check_shell_syntax(step: &Step, label: &str) -> Result<(), Box<dyn Error>> {
     }
 }
 
-const MATCHED_KEY_BAKE: &str = "${{steps.mbx-bundle-restore.outputs.cache-matched-key}}";
-
 fn job_with(steps: Vec<Step>) -> Job {
     Job {
         display_name: "gc1-t30".to_owned(),
@@ -124,16 +122,6 @@ fn setup_step(with: BTreeMap<String, String>) -> Step {
             env: BTreeMap::new(),
         },
     }
-}
-
-const PRODUCTION_IMAGE_OS: &str = "ubuntu26";
-
-fn production_state_env(command: &mut std::process::Command) -> &mut std::process::Command {
-    command
-        .env("MBX_SHARE_OUT_DIR", "1")
-        .env("MBX_BUILD_SCRIPT_EXECUTION", "0")
-        .env("MBX_CC", "0")
-        .env("ImageOS", PRODUCTION_IMAGE_OS)
 }
 
 #[path = "gc1_t30_behave.rs"]

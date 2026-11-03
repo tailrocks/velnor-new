@@ -12,7 +12,6 @@
 use std::collections::BTreeMap;
 use std::error::Error;
 use std::io;
-use std::io::Write as _;
 
 use velnor_actions_actionlint::actions::MISE_ACTION_SHA;
 use velnor_actions_contract::{
@@ -29,14 +28,14 @@ use velnor_actions_workflow_renderer::toolchain_env::{checked_task_env, credenti
 const MBX_VERSION: &str = "1.91.0";
 const RUST_VERSION: &str = "1.89.0";
 const NEXTEST_VERSION: &str = "0.9.151";
+const RECOVER_STEP: &str = "Recover state snapshot";
 const EXPORT_STEP: &str = "Publish state snapshot";
 const SAVE_STEP: &str = "Save state snapshot";
 const RECORD_STEP: &str = "Record state publication";
 const SAVE_OUTCOME_GATE: &str = "steps.velnor-optional-mbx-bundle-save.outcome == 'success'";
 const RECORD_CONDITION: &str =
     "always() && !cancelled() && steps.velnor-optional-mbx-bundle-save.outcome == 'success'";
-/// 400 MiB of real bytes: over the 384 MiB family ceiling with margin.
-const OVER_CEILING_BYTES: u64 = 400 * 1024 * 1024;
+const OVER_CEILING_MIB: u64 = 400;
 
 fn fail(message: &str) -> Box<dyn Error> {
     io::Error::other(message).into()
@@ -282,20 +281,68 @@ fn gc1_t53_recover_bounds_uncompressed() -> Result<(), Box<dyn Error>> {
     check_recover_bounds_uncompressed()
 }
 
-const PRODUCTION_IMAGE_OS: &str = "ubuntu26";
+fn extract_env(section: &str, label: &str) -> Result<Vec<(String, String)>, Box<dyn Error>> {
+    let mut lines = section.lines().skip_while(|line| line.trim() != "env:");
+    lines
+        .next()
+        .ok_or_else(|| fail(&format!("{label} lost its env block")))?;
+    let mut env = Vec::new();
+    for line in lines {
+        let Some(entry) = line.strip_prefix("          ") else {
+            break;
+        };
+        let (name, value) = entry
+            .split_once(": ")
+            .ok_or_else(|| fail(&format!("{label} left an unreadable env line")))?;
+        if value.starts_with(['"', '\'']) {
+            return Err(fail(&format!("{label} left a quoted env value")));
+        }
+        env.push((name.to_owned(), value.to_owned()));
+    }
+    Ok(env)
+}
 
-fn production_state_env(command: &mut std::process::Command) -> &mut std::process::Command {
-    command
-        .env("MBX_SHARE_OUT_DIR", "1")
-        .env("MBX_BUILD_SCRIPT_EXECUTION", "0")
-        .env("MBX_CC", "0")
-        .env("ImageOS", PRODUCTION_IMAGE_OS)
+pub(crate) fn scripts() -> Result<crate::gc1_scene::Scripts, Box<dyn Error>> {
+    let text = render_text()?;
+    let steps = mbx_steps_for_driver(
+        &format!("jdx/mr-boxington-action@{}", "a".repeat(40)),
+        CompileDriver::Mbx,
+        "1.2.3",
+        "1.89.0",
+        driver_env()?,
+        MbxTransport::SeedRead,
+        None,
+    )?
+    .ok_or_else(|| fail("mbx driver produced no steps"))?;
+    Ok(crate::gc1_scene::Scripts {
+        discover: shell_script_of(&steps[3])?,
+        recover: crate::gc1_scene::Rendered {
+            run: extract_run(step_section(&text, RECOVER_STEP)?, "recover")?,
+            env: extract_env(step_section(&text, RECOVER_STEP)?, "recover")?,
+        },
+        export: extract_run(step_section(&text, EXPORT_STEP)?, "export")?,
+        record: extract_run(step_section(&text, RECORD_STEP)?, "record")?,
+    })
 }
 
 #[path = "gc1_t53_cold.rs"]
 mod gc1_t53_cold;
+#[path = "gc1_t53_depth.rs"]
+mod gc1_t53_depth;
 #[path = "gc1_t53_env.rs"]
 mod gc1_t53_env;
+#[path = "gc1_t53_exit.rs"]
+mod gc1_t53_exit;
+#[path = "gc1_t53_expr.rs"]
+mod gc1_t53_expr;
+#[path = "gc1_t53_hostile.rs"]
+mod gc1_t53_hostile;
+#[path = "gc1_t53_import.rs"]
+mod gc1_t53_import;
+#[path = "gc1_t53_key.rs"]
+mod gc1_t53_key;
+#[path = "gc1_t53_meta.rs"]
+mod gc1_t53_meta;
 #[path = "gc1_t53_publish.rs"]
 mod gc1_t53_publish;
 #[path = "gc1_t53_recover.rs"]

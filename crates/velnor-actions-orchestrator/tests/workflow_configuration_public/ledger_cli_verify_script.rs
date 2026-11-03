@@ -146,6 +146,7 @@ pub(super) struct RenderedVerify {
     pub(super) shell: String,
     pub(super) run: String,
     pub(super) path: Option<String>,
+    pub(super) tool_pins: Option<String>,
 }
 
 fn scalar(value: &str) -> Result<String, Box<dyn Error>> {
@@ -168,7 +169,7 @@ pub(super) fn rendered_step(text: &str, name: &str) -> Result<RenderedVerify, Bo
     let mut lines = text.lines().skip_while(|line| !line.contains(&marker));
     let header = lines.next().ok_or("no verify step")?;
     let next_step = format!("{}- ", &header[..header.len() - header.trim_start().len()]);
-    let (mut shell, mut run, mut path) = (None, None, None);
+    let (mut shell, mut run, mut path, mut tool_pins) = (None, None, None, None);
     for line in lines.take_while(|line| !line.starts_with(&next_step)) {
         let line = line.trim();
         shell = line
@@ -182,11 +183,17 @@ pub(super) fn rendered_step(text: &str, name: &str) -> Result<RenderedVerify, Bo
             .map(scalar)
             .transpose()?
             .or(path);
+        tool_pins = line
+            .strip_prefix("VELNOR_TOOL_PINS: ")
+            .map(scalar)
+            .transpose()?
+            .or(tool_pins);
     }
     Ok(RenderedVerify {
         shell: shell.unwrap_or_else(|| RUNNER_DEFAULT_SHELL.to_owned()),
         run: run.ok_or("verify step has no run")?,
         path,
+        tool_pins,
     })
 }
 

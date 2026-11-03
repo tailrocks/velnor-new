@@ -156,6 +156,7 @@ fn check_env_value_with_scope(key: &str, value: &str, composite: bool) -> Result
             && !workflow_input
             && !is_github_token_secret(inner)
             && !is_private_env_binding(key, inner)
+            && !is_mbx_bundle_key_binding(key, inner)
         {
             return Err(RenderError::BadCommand(format!("bad_env_expression:{key}")));
         }
@@ -167,6 +168,20 @@ fn is_private_env_binding(key: &str, inner: &str) -> bool {
     (key == velnor_actions_contract::PRIVATE_FETCH_TOKEN_ENV
         && inner == "steps.deps-token.outputs.token")
         || (key == velnor_actions_contract::PRIVATE_NPM_READ_TOKEN_ENV && inner == "github.token")
+}
+
+fn is_mbx_bundle_key_binding(key: &str, inner: &str) -> bool {
+    use velnor_actions_contract::workflow::cache_family_mbx::{
+        MBX_BUNDLE_EXPECTED_KEY_ENV, MBX_BUNDLE_KEY_EXPR, MBX_BUNDLE_MATCHED_KEY_ENV,
+        MBX_BUNDLE_MATCHED_KEY_EXPR,
+    };
+    let bound = |expr: &str| {
+        expr.strip_prefix("${{")
+            .and_then(|rest| rest.strip_suffix("}}"))
+            == Some(inner)
+    };
+    (key == MBX_BUNDLE_EXPECTED_KEY_ENV && bound(MBX_BUNDLE_KEY_EXPR))
+        || (key == MBX_BUNDLE_MATCHED_KEY_ENV && bound(MBX_BUNDLE_MATCHED_KEY_EXPR))
 }
 
 fn is_private_mint_input(key: &str, inner: &str) -> bool {

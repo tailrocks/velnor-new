@@ -2,17 +2,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
 set -euo pipefail
-# Re-verify every Mise install the tools cache restored, before anything runs
-# one. A cached install is kept only when every file in it is byte-identical
-# to a file of the release archive `mise.lock` (or, for a tool without a lock
-# entry, the Velnor catalog) pins for this platform (a verified local copy
-# of the archive is reused when its bytes still match the pinned SHA-256,
-# else the archive is downloaded and its SHA-256 checked first) and every
-# symlink in it stays inside it. Anything else (no lock entry, another checksum
-# algorithm, a changed or planted file, an escaping symlink) is discarded, so
-# `Prepare pinned tools` reinstalls it from the lock. Rust is checked by its
-# own step (`Verify restored Rust toolchain`).
-#
 # Setup Mise already put the restored `bin/` and `shims/` on PATH ahead of
 # the system directories, so every helper comes from root-owned system
 # directories only (the step's shell is an absolute path for the same reason).
@@ -44,7 +33,8 @@ reused_archives=0
 verified_files=0
 # `<install dir name> <version> <url> <checksum>` for this platform.
 : > "$work/pins"
-if [ -n "$platform" ] && [ -f "$lock" ] && [ ! -L "$lock" ]; then
+catalog_pins() { printf '%s\n' "${VELNOR_TOOL_PINS:-}" | awk -v p="$platform" 'NF == 5 && $3 == p { print $1, $2, $4, "sha256:" $5 }'; }
+lock_pins() {
   awk -v want="platforms.$platform" '
     function unq(s) { gsub(/^"|"$/, "", s); return s }
     function flush() { if (section && url != "" && sum != "") print dir, version, url, sum; section = 0; url = ""; sum = "" }
@@ -55,16 +45,14 @@ if [ -n "$platform" ] && [ -f "$lock" ] && [ ! -L "$lock" ]; then
     section && $1 == "url" { url = unq($3) }
     section && $1 == "checksum" { sum = unq($3) }
     END { flush() }
-  ' "$lock" > "$work/pins"
-fi
-# Velnor catalog pins (`<dir> <version> <platform> <url> <sha256>`) for tools
-# Velnor installs itself, used when `mise.lock` has no entry.
-if [ -n "$platform" ]; then
-  printf '%s\n' "${VELNOR_TOOL_PINS:-}" | awk -v p="$platform" 'NF == 5 && $3 == p { print $1, $2, $4, "sha256:" $5 }' >> "$work/pins"
-fi
+  ' "$lock"
+}
+[ -z "$platform" ] || catalog_pins > "$work/pins"
+if [ -n "$platform" ] && [ -f "$lock" ] && [ ! -L "$lock" ]; then lock_pins >> "$work/pins"; fi
 discard() { printf 'velnor: discarding restored %s: %s; Prepare pinned tools reinstalls it\n' "$1" "$2"; rm -rf "$3"; }
 verify_install() {
   local dir=$1 tool=$2 version=$3 url sum line archive x link target stored size n
+  case "$tool$version" in *[!A-Za-z0-9._+-]*) echo "unsafe name"; return 1 ;; esac
   line=$(awk -v t="$tool" -v v="$version" '$1 == t && $2 == v { print $3, $4; exit }' "$work/pins")
   [ -n "$line" ] || { echo "no mise.lock or catalog pin for ${platform:-this runner}"; return 1; }
   url=${line%% *}; sum=${line#* }
@@ -101,17 +89,18 @@ verify_install() {
   esac || { echo "archive does not extract"; return 1; }
   (cd "$work/x" && find . -type f -exec "${h[@]}" {} +) | cut -d' ' -f1 | LC_ALL=C sort -u > "$work/archive.sums"
   if [ -n "$(find "$dir" ! -type f ! -type d ! -type l -print -quit)" ]; then echo "special file"; return 1; fi
-  while IFS= read -r link; do
-    target=$(readlink "$link")
+  while IFS= read -r -d '' link; do
+    target=$(readlink "$link") || { echo "unreadable symlink"; return 1; }
     case "$target" in
+      ..|../*|*/../*|*/..) echo "symlink ${link#"$dir"/} leaves the install"; return 1 ;;
       "$dir"/*) ;;
-      /*|..|../*|*/../*|*/..) echo "symlink ${link#"$dir"/} leaves the install"; return 1 ;;
+      /*) echo "symlink ${link#"$dir"/} leaves the install"; return 1 ;;
     esac
-  done < <(find "$dir" -type l)
+  done < <(find "$dir" -type l -print0)
   # Mise's own bookkeeping under `.mise-*` (the packslip statement, shell
   # completions, `.mise-bins` links checked above) is data that CI never runs;
   # it may hold no executable file.
-  if [ -n "$(find "$dir" -path "$dir/.mise-*" -type f -perm -u+x -print -quit)" ]; then
+  if [ -n "$(cd "$dir" && find . -path './.mise-*' -type f -perm -u+x -print -quit)" ]; then
     echo "executable file in Mise bookkeeping"; return 1
   fi
   (cd "$dir" && find . -type f ! -path './.mise-*' -exec "${h[@]}" {} +) \

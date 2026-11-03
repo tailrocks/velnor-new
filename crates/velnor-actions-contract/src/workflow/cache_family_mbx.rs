@@ -5,6 +5,13 @@ pub const MBX_BUNDLE_PATH_EXPR: &str = "${{ runner.temp }}/velnor/mbx-bundle";
 
 pub const MBX_BUNDLE_KEY_EXPR: &str = "${{steps.mbx-bundle-key.outputs.key}}";
 
+pub const MBX_BUNDLE_MATCHED_KEY_EXPR: &str =
+    "${{steps.mbx-bundle-restore.outputs.cache-matched-key}}";
+
+pub const MBX_BUNDLE_EXPECTED_KEY_ENV: &str = "VELNOR_MBX_BUNDLE_EXPECTED_KEY";
+
+pub const MBX_BUNDLE_MATCHED_KEY_ENV: &str = "VELNOR_MBX_BUNDLE_MATCHED_KEY";
+
 pub const MBX_BUNDLE_RESTORE_KEYS_EXPR: &str = "${{steps.mbx-bundle-key.outputs.restore_keys}}";
 
 pub const MBX_BUNDLE_KEY_OUTPUT: &str = "key";
