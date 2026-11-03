@@ -50,14 +50,6 @@ fn at(key: &Key, snapshot: &str, payload: &str) -> String {
     format!("{}{snapshot}-{payload}", key.restore_prefix)
 }
 
-fn corrupt_compat(prefix: &str) -> String {
-    let marker = "-s256-";
-    let at = prefix.find(marker).map_or(0, |at| at + marker.len());
-    let mut bytes = prefix.as_bytes().to_vec();
-    bytes[at] = if bytes[at] == b'0' { b'1' } else { b'0' };
-    String::from_utf8_lossy(&bytes).into_owned()
-}
-
 fn expect(got: Option<String>, want: &str, label: &str) -> Result<(), Box<dyn Error>> {
     match got {
         Some(picked) if picked == want => Ok(()),
@@ -69,6 +61,7 @@ fn expect(got: Option<String>, want: &str, label: &str) -> Result<(), Box<dyn Er
 #[cfg(unix)]
 fn restore_picks_exact_snapshot_else_newest_same_compat() -> Result<(), Box<dyn Error>> {
     let scene = Scene::new("v4-restore", crate::gc1_t53::scripts()?)?;
+    let other_compat = discover(&scene, &[("ImageOS", "ubuntu24")])?;
     let key = discover(&scene, &[])?;
     let current = key.snapshot_prefix.trim_end_matches('-');
     let current_snapshot = current
@@ -113,7 +106,7 @@ fn restore_picks_exact_snapshot_else_newest_same_compat() -> Result<(), Box<dyn 
         key.restore_prefix.replacen("-trusted-", "-pr-", 1),
         key.restore_prefix.replacen("-union-", "-suite-", 1),
         key.restore_prefix.replacen("-root-", "-other-", 1),
-        corrupt_compat(&key.restore_prefix),
+        other_compat.restore_prefix.clone(),
         key.restore_prefix.replacen("velnor-v4-", "velnor-v3-", 1),
         key.restore_prefix.replacen("velnor-v4-", "velnor-v2-", 1),
         format!("zz-{}", key.restore_prefix),

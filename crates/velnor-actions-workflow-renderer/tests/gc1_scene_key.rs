@@ -53,6 +53,16 @@ impl Scene {
         self.discover_unset(env, &[])
     }
 
+    pub(crate) fn discover_script(&self, script: &str) -> Result<Key, Box<dyn Error>> {
+        if let Err(error) = std::fs::remove_file(&self.github_output)
+            && error.kind() != std::io::ErrorKind::NotFound
+        {
+            return Err(error.into());
+        }
+        self.run_script_unset(script, &[], &[], None)?;
+        self.key_from_outputs()
+    }
+
     pub(crate) fn discover_outputs(
         &self,
         env: &[(&str, &str)],

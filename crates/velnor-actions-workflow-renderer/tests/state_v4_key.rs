@@ -102,11 +102,8 @@ fn state_key_is_stable_and_binds_every_input() -> Result<(), Box<dyn Error>> {
             return Err(fail(&format!("compat ignored {label}")));
         }
     }
-    let suite = Scene::new(
-        "v4-key-suite",
-        crate::gc1_t53::scripts_for(MbxTransport::SuiteBundle, None)?,
-    )?;
-    let suite_key = keyed(&suite, &[])?;
+    let suite_script = crate::gc1_t53::scripts_for(MbxTransport::SuiteBundle, None)?.discover;
+    let suite_key = scene.discover_script(&suite_script)?;
     if !suite_key
         .snapshot_prefix
         .starts_with("velnor-v4-state-trusted-suite-root-")
@@ -119,7 +116,6 @@ fn state_key_is_stable_and_binds_every_input() -> Result<(), Box<dyn Error>> {
         return Err(fail("compat ignored the store and checkout paths"));
     }
     second.finish()?;
-    suite.finish()?;
     scene.finish()
 }
 
