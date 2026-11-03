@@ -103,7 +103,7 @@ pub fn build_image_build_job(
             &policy.image.build_job_id(platform),
         )),
         permissions: Some(image_build_permissions()),
-        cache_mode: None,
+        cache_access: velnor_actions_contract::CacheAccess::Read,
         environment: None,
         env: velnor_actions_contract::JobEnv::Unset,
         steps: image_build_steps(policy, platform, checkout_uses)?,

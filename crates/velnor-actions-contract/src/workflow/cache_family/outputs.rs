@@ -39,6 +39,12 @@ pub const SOURCES_SAVE_OUTPUT: &str = "sources_save";
 
 pub const SOURCES_SNAPSHOT_OUTPUT: &str = "sources_snapshot";
 
+pub const SOURCES_PRODUCE_OUTPUT: &str = "sources_produce";
+
+pub const SOURCES_PRODUCE_PLAN_TEST: &str = "needs.plan.outputs.sources_produce == 'true'";
+
+pub const SOURCES_PRODUCE_STEP_EXPR: &str = "${{ steps.cache-keys.outputs.sources_save == 'true' && steps.sources-restore.outputs.cache-hit != 'true' && !endsWith(steps.sources-restore.outputs.cache-matched-key, steps.cache-keys.outputs.sources_snapshot) }}";
+
 pub const PLAN_CACHE_TRUST_OUTPUT: &str = "cache_trust";
 
 pub const TOFU_PROVIDERS_KEY_OUTPUT_PREFIX: &str = "tofu_providers_key_";
@@ -52,7 +58,8 @@ pub const SOURCES_KEY_PLAN_EXPR: &str = "${{needs.plan.outputs.sources_key}}";
 
 pub const SOURCES_RESTORE_KEYS_PLAN_EXPR: &str = "${{needs.plan.outputs.sources_restore_keys}}";
 
-pub const SOURCES_SAVE_CONDITION: &str = "always() && !cancelled() && steps.sources-fetch.outcome == 'success' && steps.cache-keys.outputs.sources_save == 'true' && steps.sources-restore.outputs.cache-hit != 'true' && !endsWith(steps.sources-restore.outputs.cache-matched-key, steps.cache-keys.outputs.sources_snapshot)";
+pub const SOURCES_SAVE_CONDITION: &str =
+    "success() && steps.sources-restore.outputs.cache-hit != 'true'";
 
 pub const TOFU_PROVIDERS_PROBE_MISS_CONDITION: &str =
     "steps.tofu-providers.outputs.cache-hit != 'true'";
@@ -81,6 +88,7 @@ pub fn tofu_providers_key_plan_expr(ordinal: usize) -> String {
 #[must_use]
 pub fn is_plan_cache_output(name: &str) -> bool {
     PLAN_CACHE_OUTPUTS.iter().any(|(output, _)| *output == name)
+        || name == SOURCES_PRODUCE_OUTPUT
         || name
             .strip_prefix(TOFU_PROVIDERS_KEY_OUTPUT_PREFIX)
             .is_some_and(|ordinal| {

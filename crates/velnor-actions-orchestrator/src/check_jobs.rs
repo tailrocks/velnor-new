@@ -119,7 +119,7 @@ fn native_check_job(
         environment: None,
         env: velnor_actions_contract::JobEnv::Unset,
         steps,
-        cache_mode: None,
+        cache_access: velnor_actions_contract::CacheAccess::Read,
     })
 }
 
@@ -156,7 +156,7 @@ fn check_job(
         environment: None,
         env: velnor_actions_contract::JobEnv::Unset,
         steps,
-        cache_mode: None,
+        cache_access: velnor_actions_contract::CacheAccess::Read,
     })
 }
 

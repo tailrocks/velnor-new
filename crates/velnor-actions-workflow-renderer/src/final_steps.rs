@@ -158,7 +158,7 @@ mod gc1_t56 {
             needs: Vec::new(),
             condition: None,
             permissions: None,
-            cache_mode: None,
+            cache_access: velnor_actions_contract::CacheAccess::Read,
             environment: None,
             services: Vec::new(),
             outputs: std::collections::BTreeMap::new(),

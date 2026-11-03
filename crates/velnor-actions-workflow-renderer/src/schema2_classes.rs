@@ -45,6 +45,7 @@ struct Extras {
     container: Option<Yaml>,
     services: Option<Yaml>,
     outputs: Option<Yaml>,
+    cache_writer: bool,
 }
 
 pub(super) fn class_jobs(hosted: &RunnerSpec, scale: &RunnerSpec) -> Vec<(String, Yaml)> {
@@ -227,6 +228,7 @@ fn cache_jobs(hosted: &RunnerSpec, scale: &RunnerSpec) -> Vec<(String, Yaml)> {
             ),
             Extras {
                 permissions: Some(perms.clone()),
+                cache_writer: true,
                 ..Extras::default()
             },
         ),
@@ -280,10 +282,18 @@ fn emit(job: Lane<'_>, extras: Extras) -> (String, Yaml) {
     );
     push_needs(&mut fields, job.needs);
     push_opt(&mut fields, "permissions", extras.permissions);
+    if extras.cache_writer {
+        fields.push(crate::cache_authority::qualification_writer_field());
+    }
     push_opt(&mut fields, "container", extras.container);
     push_opt(&mut fields, "services", extras.services);
     push_opt(&mut fields, "outputs", extras.outputs);
     let when = format!("inputs.mode == '{}'", job.mode);
+    let when = if extras.cache_writer {
+        crate::cache_authority::qualification_branch_gate(&when)
+    } else {
+        when
+    };
     gated(finish(&job.id(), fields, job.steps), &when)
 }
 
