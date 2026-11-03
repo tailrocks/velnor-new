@@ -130,3 +130,17 @@ pub(super) fn pins_with_fixture_sha(pins: &str, sha256: &str) -> String {
         .collect::<Vec<_>>()
         .join("\n")
 }
+
+pub(super) fn assert_urls_carry_pinned_version(rows: &[&str]) -> Result<(), Box<dyn Error>> {
+    for row in rows {
+        let fields: Vec<&str> = row.split(' ').collect();
+        let [name, version, _, url, _] = fields[..] else {
+            return Err(format!("malformed pin row: {row}").into());
+        };
+        assert!(
+            url.contains(&format!("/v{version}/")) && url.contains(&format!("v{version}")),
+            "{name} pins version {version} but its url is {url}"
+        );
+    }
+    Ok(())
+}

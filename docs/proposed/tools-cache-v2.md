@@ -47,7 +47,7 @@ every hit or seed:
 - for each `installs/<tool>/<version>` except Rust, it looks up the archive URL
   and SHA-256 for the runner platform in the workspace `mise.lock`, or else in
   the Velnor catalog pins the generator embeds (`VELNOR_TOOL_PINS`: jactionlint,
-  OpenTofu), downloads the archive over HTTPS, checks its SHA-256, extracts it,
+  OpenTofu, and the http validators cargo-machete 0.9.2 and lychee 0.15.1), downloads the archive over HTTPS, checks its SHA-256, extracts it,
   and requires every file of the install to be byte-identical to a file of the
   archive. Mise's own `.mise-*` bookkeeping (the packslip statement, shell
   completions) is data and may hold no executable file; every symlink must stay

@@ -14,8 +14,8 @@ use super::ledger_cli_verify_script::{
     BYTES, BYTES_SHA256, Planted, RenderedVerify, TAMPERED, rendered_step, resolve_on,
 };
 use super::tools_cache_pin_fixture::{
-    HttpSpec, MACHETE_BINARY, MACHETE_DIR, MACHETE_VERSION, machete_archive, pins_with_fixture_sha,
-    rendered_http_specs,
+    HttpSpec, MACHETE_BINARY, MACHETE_DIR, MACHETE_VERSION, assert_urls_carry_pinned_version,
+    machete_archive, pins_with_fixture_sha, rendered_http_specs,
 };
 use super::tools_producers_donors::prepared_for;
 
@@ -336,7 +336,7 @@ fn catalog_pins_match_every_installed_http_validator() -> Result<(), Box<dyn Err
         );
     }
     assert_eq!(rows, expected);
-    Ok(())
+    assert_urls_carry_pinned_version(&rows)
 }
 
 #[test]
