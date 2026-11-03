@@ -26,8 +26,7 @@ mod publish;
 #[path = "cache_steps_mbx_bundle_recover.rs"]
 mod recover;
 
-pub(crate) use publish::append_bundle_postludes;
-pub use publish::mbx_bundle_postlude_bounded;
+pub use publish::mbx_bundle_publish_bounded;
 pub use recover::mbx_producer_mark_step;
 
 pub const MBX_BUNDLE_KEY_NAME: &str = "Compute state snapshot key";
@@ -35,7 +34,6 @@ pub const MBX_BUNDLE_RESTORE_NAME: &str = "Restore state snapshot";
 pub const MBX_BUNDLE_IMPORT_NAME: &str = "Recover state snapshot";
 pub const MBX_PRODUCER_MARK_NAME: &str = "Record state producer success";
 pub const MBX_BUNDLE_EXPORT_NAME: &str = "Publish state snapshot";
-pub const MBX_BUNDLE_SAVE_NAME: &str = "Save state snapshot";
 pub const MBX_EXPORT_GROUP_ENV: &str = "MBX_CACHE_EXPORT_GROUP";
 pub const MBX_EXPORT_GROUP_VALUE: &str = "velnor";
 
@@ -52,7 +50,6 @@ const SIZE_FILE: &str = "$RUNNER_TEMP/velnor/state-payload.size";
 
 const DISCOVERY_RECORD: &str = "$RUNNER_TEMP/velnor/state-discovery.record";
 const RECOVERY_RECORD: &str = "$RUNNER_TEMP/velnor/state-recovery.record";
-const PUBLICATION_RECORD: &str = "$RUNNER_TEMP/velnor/state-publication.record";
 
 /// Cap for the number of archive members the recover and publish scripts
 /// accept. Mirrors the orchestrator snapshot archive entry budget so a

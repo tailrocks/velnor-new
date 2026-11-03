@@ -40,6 +40,11 @@ fn violation(rule: &'static str, job: &str, detail: &str) -> Violation {
 pub(super) fn w1(jobs: &BTreeMap<String, Job>) -> Vec<Violation> {
     let mut owners: BTreeMap<&str, BTreeSet<&str>> = BTreeMap::new();
     for (id, job) in jobs {
+        if job.producer_kind()
+            == Some(velnor_actions_contract::workflow::ProducerKind::StateProducer)
+        {
+            continue;
+        }
         for step in &job.steps {
             if let StepKind::TaskExecution { task_digest, .. } = &step.kind {
                 owners.entry(task_digest).or_default().insert(id);
@@ -245,7 +250,11 @@ fn prepared_with_extra_step(
         .ir
         .jobs
         .iter()
-        .find(|(id, job)| id.starts_with("rust-") && !job.is_dependency_seed())
+        .find(|(id, job)| {
+            id.starts_with("rust-")
+                && job.producer_kind()
+                    != Some(velnor_actions_contract::workflow::ProducerKind::StateProducer)
+        })
         .map(|(id, _)| id.clone())
         .ok_or("no crate job in the prepared workflow")?;
     prepared

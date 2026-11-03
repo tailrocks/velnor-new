@@ -5,7 +5,7 @@ use std::error::Error;
 
 use velnor_actions_contract::StepKind;
 use velnor_actions_workflow_renderer::steps::{
-    CompileDriver, MbxTransport, StateCeilings, mbx_bundle_postlude_bounded,
+    CompileDriver, MbxTransport, StateCeilings, mbx_bundle_publish_bounded,
     mbx_steps_for_driver_bounded,
 };
 
@@ -31,8 +31,7 @@ pub(crate) fn scripts_with(ceilings: StateCeilings) -> Result<Scripts, Box<dyn E
     let StepKind::Shell { env, .. } = &recover.kind else {
         return Err(fail("recover step left its shell form"));
     };
-    let [export, _save, record] =
-        mbx_bundle_postlude_bounded(RUST_VERSION, driver_env()?, ceilings)?;
+    let export = mbx_bundle_publish_bounded(RUST_VERSION, driver_env()?, ceilings)?;
     Ok(Scripts {
         discover: shell_script_of(&steps[3])?,
         recover: Rendered {
@@ -40,6 +39,5 @@ pub(crate) fn scripts_with(ceilings: StateCeilings) -> Result<Scripts, Box<dyn E
             env: env.clone().into_iter().collect(),
         },
         export: shell_script_of(&export)?,
-        record: shell_script_of(&record)?,
     })
 }

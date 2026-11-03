@@ -190,8 +190,6 @@ pub enum StepRole {
 
     MbxProducerMark,
 
-    MbxSeedBuild,
-
     MbxBundleExport,
 
     MbxBundleSave,
@@ -234,8 +232,6 @@ pub enum StepRole {
 
     StateSelect,
 
-    StateSealBuild,
-
     StateSealUpload,
 
     StateSealDownload,
@@ -245,6 +241,16 @@ pub enum StepRole {
     StateSealAttest,
 
     StateSealSave,
+
+    StateSealAdmit,
+
+    StateSealRetire,
+
+    StateProduced,
+
+    StateSkeleton,
+
+    StateSkeletonRestore,
 }
 
 fn valid_bun_assets_handoff(kind: &StepKind) -> bool {
@@ -338,6 +344,7 @@ impl StepRole {
             // No pinned id: the writer's queue-slot recheck re-runs the
             // bundle restore without an id (a job carries one canonical
             // restore id), like the other restore roles below.
+            Self::MbxBundleImport => Some(StepId::MbxBundleImport),
             Self::MbxBundleExport => Some(StepId::MbxBundleExport),
             Self::FamilyKeys => Some(StepId::FamilyKeys),
             Self::LedgerCliPublish => Some(StepId::LedgerCliPublish),
@@ -345,6 +352,9 @@ impl StepRole {
             Self::StateSelect => Some(StepId::StateSelect),
             Self::StateSealSubject => Some(StepId::StateSealSubject),
             Self::StateSealUpload => Some(StepId::StateSealUpload),
+            Self::StateSealAdmit => Some(StepId::StateSealAdmit),
+            Self::StateSealSave => Some(StepId::StateSealSave),
+            Self::StateProduced => Some(StepId::StateProduced),
             _ => None,
         }
     }
@@ -362,6 +372,7 @@ impl StepRole {
             StepId::DepsToken => Self::PrivateTokenMint,
             StepId::MbxBundleKey => Self::MbxBundleKey,
             StepId::MbxBundleRestore => Self::MbxBundleRestore,
+            StepId::MbxBundleImport => Self::MbxBundleImport,
             StepId::MbxBundleExport => Self::MbxBundleExport,
             StepId::FamilyKeys => Self::FamilyKeys,
             StepId::LedgerCliPublish => Self::LedgerCliPublish,
@@ -369,6 +380,9 @@ impl StepRole {
             StepId::StateSelect => Self::StateSelect,
             StepId::StateSealSubject => Self::StateSealSubject,
             StepId::StateSealUpload => Self::StateSealUpload,
+            StepId::StateSealAdmit => Self::StateSealAdmit,
+            StepId::StateSealSave => Self::StateSealSave,
+            StepId::StateProduced => Self::StateProduced,
             StepId::FamilySizeBunInstall
             | StepId::FamilySizePlaywrightBrowsers
             | StepId::FamilySizeDbtPackages

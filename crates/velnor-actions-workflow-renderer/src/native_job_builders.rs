@@ -73,7 +73,7 @@ pub fn plan_state_roots(
     state_roots: &[plan_sources::cache_keys::StateRootPlan],
     seal: &plan_sources::state_select::StateSealPlan,
 ) -> Result<(), NativeJobBuilderError> {
-    let selecting = !seal.roots.is_empty() || seal.canary;
+    let selecting = !seal.roots.is_empty();
     let rebuilt =
         plan_sources::cache_keys::cache_keys_step(catalog, fetch_roots, tofu_roots, state_roots)
             .map_err(NativeJobBuilderError::PlanSources)?;
@@ -109,7 +109,7 @@ pub fn plan_state_roots(
     };
     plan.steps.insert(at, rebuilt);
     if selecting {
-        let select = plan_sources::state_select::state_select_step(&seal.roots, seal.canary)
+        let select = plan_sources::state_select::state_select_step(&seal.roots)
             .map_err(NativeJobBuilderError::Render)?;
         plan.steps.insert(at + 1, select);
     }

@@ -6,7 +6,7 @@ use velnor_actions_contract::config::{
     AnsibleStackConfig, BunStackConfig, DbtStackConfig, RustBinaryReleaseConfig, RustReleaseConfig,
 };
 use velnor_actions_contract::{
-    DeclaredCompileDriver, DeclaredTestRunner, DependencySeedMode, RustConfiguration,
+    DeclaredCompileDriver, DeclaredTestRunner, CompiledStateMode, RustConfiguration,
     RustStackConfig, StacksConfig, TofuStackConfig, Utf8RepoRelDir,
 };
 
@@ -33,7 +33,7 @@ pub(crate) struct PartialRustStack {
     compile_driver: Option<DeclaredCompileDriver>,
     test_runner: Option<DeclaredTestRunner>,
     run_ignored: Option<String>,
-    dependency_seed: Option<DependencySeedMode>,
+    compiled_state: Option<CompiledStateMode>,
     seed_parallel_targets: Option<bool>,
     clippy_all_features: Option<bool>,
     allow_empty_test_suite: Option<bool>,
@@ -66,7 +66,7 @@ impl PartialStacks {
                 compile_driver: stack.compile_driver,
                 test_runner: stack.test_runner,
                 run_ignored: stack.run_ignored,
-                dependency_seed: stack.dependency_seed.unwrap_or_default(),
+                compiled_state: stack.compiled_state.unwrap_or_default(),
                 seed_parallel_targets: stack.seed_parallel_targets.unwrap_or(false),
                 clippy_all_features: stack.clippy_all_features.unwrap_or(false),
                 allow_empty_test_suite: stack.allow_empty_test_suite.unwrap_or(false),

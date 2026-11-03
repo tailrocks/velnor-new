@@ -5,11 +5,11 @@ use super::rust_suites::WorkflowDispatchConfig;
 use super::rust_suites_validate::validate_preserve_workflows;
 use super::workflow_flags::{default_true, is_false, is_true};
 pub use super::workflow_timeouts::{
-    default_crate_timeout_minutes, default_dependency_seed_timeout_minutes,
-    default_plan_timeout_minutes,
+    default_crate_timeout_minutes, default_plan_timeout_minutes,
+    default_state_producer_timeout_minutes,
 };
 use super::workflow_timeouts::{
-    is_default_crate_timeout, is_default_dependency_seed_timeout, is_default_plan_timeout,
+    is_default_crate_timeout, is_default_plan_timeout, is_default_state_producer_timeout,
 };
 use crate::config::{TofuApplyConfig, WorkflowLintConfig, WorkflowTask};
 use crate::errors::ContractError;
@@ -57,10 +57,10 @@ pub struct WorkflowConfig {
     pub crate_timeout_minutes: u16,
 
     #[serde(
-        default = "default_dependency_seed_timeout_minutes",
-        skip_serializing_if = "is_default_dependency_seed_timeout"
+        default = "default_state_producer_timeout_minutes",
+        skip_serializing_if = "is_default_state_producer_timeout"
     )]
-    pub dependency_seed_timeout_minutes: u16,
+    pub state_producer_timeout_minutes: u16,
 
     #[serde(default = "default_true", skip_serializing_if = "is_true")]
     pub mise_quiet: bool,
@@ -190,9 +190,9 @@ impl WorkflowConfig {
             "workflow.plan_timeout_minutes",
         )?;
         crate::workflow::timeout::JobTimeout::check_config(
-            u32::from(self.dependency_seed_timeout_minutes),
+            u32::from(self.state_producer_timeout_minutes),
             file,
-            "workflow.dependency_seed_timeout_minutes",
+            "workflow.state_producer_timeout_minutes",
         )?;
         if let Some(branch) = &self.default_branch
             && !crate::is_valid_branch_name(branch)

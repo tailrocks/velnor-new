@@ -62,7 +62,7 @@ fn plan(
             .map(|key| Attestation::signed(key))
             .collect::<Vec<_>>(),
     )?;
-    run_select(scene, gh, root, false, &[])?;
+    run_select(scene, gh, root, &[])?;
     selected(scene, root)
 }
 

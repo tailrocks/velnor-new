@@ -50,7 +50,7 @@ pub(super) fn tools_role(role: StepRole) -> bool {
     )
 }
 
-pub(super) fn seed_role(role: StepRole) -> bool {
+pub(super) fn state_producer_role(role: StepRole) -> bool {
     matches!(
         role,
         StepRole::Checkout
@@ -59,6 +59,7 @@ pub(super) fn seed_role(role: StepRole) -> bool {
             | StepRole::PrepareRustComponents
             | StepRole::VerifyRustManifest
             | StepRole::AcquireVelnor
+            | StepRole::DownloadPlan
             | StepRole::CargoSourcesRestore
             | StepRole::CargoSourcesFetch
             | StepRole::MbxPreflight
@@ -68,11 +69,12 @@ pub(super) fn seed_role(role: StepRole) -> bool {
             | StepRole::MbxBundleKey
             | StepRole::MbxBundleRestore
             | StepRole::MbxBundleImport
+            | StepRole::StateSkeleton
+            | StepRole::StateSkeletonRestore
             | StepRole::MbxProducerMark
-            | StepRole::MbxSeedBuild
             | StepRole::MbxBundleExport
-            | StepRole::MbxBundleSave
-            | StepRole::MbxBundleRecord
+            | StepRole::StateSealUpload
+            | StepRole::StateProduced
             | StepRole::PrivateTokenMint
             | StepRole::PrivateFetch
             | StepRole::PrivateRevoke
@@ -82,16 +84,14 @@ pub(super) fn seed_role(role: StepRole) -> bool {
     )
 }
 
-pub(super) fn state_seal_build_role(role: StepRole) -> bool {
-    matches!(role, StepRole::StateSealBuild | StepRole::StateSealUpload)
-}
-
 pub(super) fn state_seal_role(role: StepRole) -> bool {
     matches!(
         role,
         StepRole::StateSealDownload
             | StepRole::StateSealSubject
+            | StepRole::StateSealAdmit
             | StepRole::StateSealAttest
             | StepRole::StateSealSave
+            | StepRole::StateSealRetire
     )
 }

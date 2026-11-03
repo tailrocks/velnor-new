@@ -6,27 +6,44 @@ use std::error::Error;
 use std::path::Path;
 
 use velnor_actions_contract::workflow::cache_family::{
-    COMPLETE_STATE_TRANSPORT_EXPR, CacheFamily, S256,
+    COMPLETE_STATE_TRANSPORT_EXPR, CacheFamily, RootSlug, S256,
 };
 use velnor_actions_contract::workflow::state_seal::{
-    STATE_CANARY_SEAL_JOB_ID, STATE_SEAL_KEY_EXPR, STATE_SEAL_PREFIX_ENV, STATE_SEAL_SUBJECT_REL,
-    state_canary_identity_prefix,
+    STATE_SEAL_KEY_EXPR, STATE_SEAL_PREFIX_ENV, STATE_SEAL_SUBJECT_REL, state_compat_plan_expr,
+    state_producer_job_id, state_seal_job_id,
 };
-use velnor_actions_contract::{CacheAccess, Job, JobEnv, JobTimeout, Step, StepKind, StepRole};
-use velnor_actions_workflow_renderer::plan_sources::state_select::state_select_step;
-use velnor_actions_workflow_renderer::state_seal::add_state_seal_canary;
+use velnor_actions_contract::{
+    CacheAccess, Job, JobEnv, JobTimeout, Step, StepId, StepKind, StepRole,
+};
+use velnor_actions_workflow_renderer::state_seal::add_state_seal_jobs;
 
 use crate::gc1_scene::{Scene, fail};
+use crate::gc1_seal_support::scope_of;
 
 const FIXTURE: &[u8] = b"sealed state payload fixture";
+const ROOT: &str = ".";
 
-fn plan_job() -> Result<Job, Box<dyn Error>> {
-    Ok(Job {
-        display_name: "Plan".to_owned(),
+fn shell_step(role: StepRole, id: StepId, env: BTreeMap<String, String>) -> Step {
+    Step {
+        parallel: false,
+        name: "fixture".to_owned(),
+        id: Some(id),
+        role: Some(role),
+        condition: None,
+        kind: StepKind::Shell {
+            run: vec!["sh".to_owned(), "-c".to_owned(), "true".to_owned()],
+            env,
+        },
+    }
+}
+
+fn producer_fixture() -> Job {
+    Job {
+        display_name: "producer".to_owned(),
         runs_on: "ubuntu-26.04".to_owned(),
         check_runner: None,
         timeout_minutes: JobTimeout::PLAN,
-        needs: Vec::new(),
+        needs: vec!["plan".to_owned()],
         condition: None,
         permissions: None,
         cache_access: CacheAccess::Read,
@@ -34,15 +51,57 @@ fn plan_job() -> Result<Job, Box<dyn Error>> {
         services: Vec::new(),
         outputs: BTreeMap::new(),
         env: JobEnv::Unset,
-        steps: vec![state_select_step(&[], true)?],
-    })
+        steps: vec![
+            shell_step(
+                StepRole::MbxBundleKey,
+                StepId::MbxBundleKey,
+                BTreeMap::from([("VELNOR_MBX_BUNDLE_ROOT".to_owned(), ROOT.to_owned())]),
+            ),
+            shell_step(
+                StepRole::StateProduced,
+                StepId::StateProduced,
+                BTreeMap::new(),
+            ),
+        ],
+    }
+}
+
+pub(crate) fn seal_jobs(roots: &[&str]) -> Result<BTreeMap<String, Job>, Box<dyn Error>> {
+    let mut jobs = BTreeMap::new();
+    for root in roots {
+        let slug = RootSlug::from_root(root)?;
+        let mut producer = producer_fixture();
+        for step in &mut producer.steps {
+            if let StepKind::Shell { env, .. } = &mut step.kind
+                && env.contains_key("VELNOR_MBX_BUNDLE_ROOT")
+            {
+                env.insert("VELNOR_MBX_BUNDLE_ROOT".to_owned(), (*root).to_owned());
+            }
+        }
+        jobs.insert(state_producer_job_id(&slug), producer);
+    }
+    add_state_seal_jobs(&mut jobs)?;
+    Ok(jobs)
 }
 
 fn seal_job() -> Result<Job, Box<dyn Error>> {
-    let mut jobs = BTreeMap::from([("plan".to_owned(), plan_job()?)]);
-    add_state_seal_canary(&mut jobs)?;
-    jobs.remove(STATE_CANARY_SEAL_JOB_ID)
+    let mut jobs = seal_jobs(&[ROOT])?;
+    jobs.remove(&state_seal_job_id(&RootSlug::from_root(ROOT)?))
         .ok_or_else(|| fail("the seal job was not generated"))
+}
+
+fn resolved_prefix(expression: &str) -> String {
+    expression
+        .replace(
+            &state_compat_plan_expr("root"),
+            &S256::of(b"compat").to_string(),
+        )
+        .replace(
+            &velnor_actions_contract::workflow::cache_family::state_snapshot_plan_expr(
+                &RootSlug::from_root(ROOT).expect("root slug"),
+            ),
+            &S256::of(b"snapshot").to_string(),
+        )
 }
 
 fn step_of(job: &Job, role: StepRole) -> Result<&Step, Box<dyn Error>> {
@@ -72,7 +131,11 @@ fn run_subject(scene: &Scene, job: &Job) -> Result<String, Box<dyn Error>> {
         Err(error) if error.kind() != std::io::ErrorKind::NotFound => return Err(error.into()),
         _ => {}
     }
-    let pairs: Vec<(&str, &str)> = env
+    let resolved: Vec<(String, String)> = env
+        .iter()
+        .map(|(name, value)| (name.clone(), resolved_prefix(value)))
+        .collect();
+    let pairs: Vec<(&str, &str)> = resolved
         .iter()
         .map(|(name, value)| (name.as_str(), value.as_str()))
         .collect();
@@ -114,7 +177,8 @@ fn attest_job_binds_key_to_stored_file() -> Result<(), Box<dyn Error>> {
     let prefix = env
         .get(STATE_SEAL_PREFIX_ENV)
         .ok_or_else(|| fail("the subject step lost its identity prefix"))?;
-    if *prefix != state_canary_identity_prefix() {
+    let prefix = &resolved_prefix(prefix);
+    if !prefix.starts_with(&scope_of(ROOT)?.prefix()) || prefix.contains("${{") {
         return Err(fail(
             "the key identity does not come from the planned constants",
         ));

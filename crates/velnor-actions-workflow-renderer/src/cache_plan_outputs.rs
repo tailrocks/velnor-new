@@ -9,7 +9,7 @@ use velnor_actions_contract::workflow::cache_family::{
     is_plan_cache_output, is_state_snapshot_output,
 };
 use velnor_actions_contract::workflow::state_seal::{
-    STATE_CANARY_VERIFIED_OUTPUT, is_state_attested_output,
+    is_state_attested_output, is_state_compat_output, is_state_produce_output,
 };
 use velnor_actions_contract::{Job, Step, StepId, StepKind};
 
@@ -53,7 +53,11 @@ pub(crate) fn consumed(jobs: &BTreeMap<String, Job>) -> Result<Vec<(String, Stri
     }
     let state = names
         .iter()
-        .filter(|name| is_state_snapshot_output(name))
+        .filter(|name| {
+            is_state_snapshot_output(name)
+                || is_state_compat_output(name)
+                || is_state_produce_output(name)
+        })
         .count();
     let attested = names
         .iter()
@@ -63,7 +67,6 @@ pub(crate) fn consumed(jobs: &BTreeMap<String, Job>) -> Result<Vec<(String, Stri
         .iter()
         .filter(|name| {
             *name != SOURCES_PRODUCE_OUTPUT
-                && *name != STATE_CANARY_VERIFIED_OUTPUT
                 && !PLAN_CACHE_OUTPUTS.iter().any(|(output, _)| output == name)
         })
         .count()
@@ -81,7 +84,7 @@ pub(crate) fn consumed(jobs: &BTreeMap<String, Job>) -> Result<Vec<(String, Stri
         .map(|name| {
             let expression = if name == SOURCES_PRODUCE_OUTPUT {
                 SOURCES_PRODUCE_STEP_EXPR.to_owned()
-            } else if is_state_attested_output(&name) || name == STATE_CANARY_VERIFIED_OUTPUT {
+            } else if is_state_attested_output(&name) || is_state_produce_output(&name) {
                 format!(
                     "${{{{ steps.{}.outputs.{name} }}}}",
                     velnor_actions_contract::StepId::StateSelect.as_str()

@@ -81,7 +81,7 @@ pub enum LogicalJobSource {
         owner: String,
         kind: GeneratedWorkflowKind,
     },
-    DependencySeed {
+    StateProducer {
         root: String,
     },
     LedgerCli,
@@ -173,4 +173,4 @@ mod tool_needs;
 
 pub use generated::GeneratedSourceFact;
 pub(super) use graph::validate_graph;
-pub use seeds::unique_dependency_seed_job_ids;
+pub use seeds::state_producer_job_ids;

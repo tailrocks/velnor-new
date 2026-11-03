@@ -55,38 +55,20 @@ fn gc1_t53_export_publishes_fresh_export() -> Result<(), Box<dyn Error>> {
     if scene.output_value("exported")? != "true" {
         return Err(fail("export must admit a small snapshot"));
     }
-    if !scene
-        .runner
-        .join("velnor/state-publication.staged")
-        .is_file()
-    {
-        return Err(fail("export must stage its attestation"));
-    }
     if scene
         .runner
-        .join("velnor/state-publication.record")
+        .join("velnor/state-publication.staged")
         .exists()
+        || scene
+            .runner
+            .join("velnor/state-publication.record")
+            .exists()
     {
-        return Err(fail("export must not write the publication record"));
-    }
-    require(
-        &scene.record()?,
-        "state snapshot published (",
-        "record behavior",
-    )?;
-    if !scene
-        .runner
-        .join("velnor/state-publication.record")
-        .is_file()
-    {
-        return Err(fail("record must write the publication record"));
+        return Err(fail("export must leave no publication evidence"));
     }
     check_published_payload(&scene)?;
-    let saved = scene.output_value("key")?;
     let digest = payload_sha256(&scene)?;
-    if saved.rsplit('-').next() != Some(digest.as_str()) {
-        return Err(fail(&format!("save key {saved} does not end in {digest}")));
-    }
+    let saved = format!("{}s256-{digest}", key.snapshot_prefix);
     scene.recover(&saved, &[], None)?;
     let record = std::fs::read_to_string(scene.recovery_record())?;
     if !record.contains("decision=exact-hit") {
@@ -102,23 +84,6 @@ fn gc1_t53_export_publishes_fresh_export() -> Result<(), Box<dyn Error>> {
         return Err(fail(&format!(
             "recovered store holds {object:?}, not the fresh export"
         )));
-    }
-    scene.finish()
-}
-
-#[test]
-#[cfg(unix)]
-fn gc1_t53_record_without_save_writes_nothing() -> Result<(), Box<dyn Error>> {
-    let scene = Scene::new("publish-nosave", crate::gc1_t53::scripts()?)?;
-    scene.discover()?;
-    let output = scene.record()?;
-    forbid(&output, "state snapshot published (", "record behavior")?;
-    if scene
-        .runner
-        .join("velnor/state-publication.record")
-        .exists()
-    {
-        return Err(fail("record must not publish without a save"));
     }
     scene.finish()
 }

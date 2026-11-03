@@ -1,133 +1,164 @@
-// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
-// SPDX-License-Identifier: Apache-2.0
-
 use std::collections::BTreeMap;
 
 use velnor_actions_actionlint::actions::ATTEST_USES;
-use velnor_actions_contract::workflow::DEPENDENCY_SEED_JOB_CONDITION;
+use velnor_actions_contract::workflow::cache_family::state_snapshot_plan_expr;
 use velnor_actions_contract::workflow::cache_family::{
-    COMPLETE_STATE_TRANSPORT_EXPR, CacheFamily, RUNNER_TEMP_EXPR, RUNNER_TEMP_SHELL,
+    COMPLETE_STATE_TRANSPORT_EXPR, CacheFamily, RUNNER_TEMP_EXPR, RUNNER_TEMP_SHELL, RootSlug,
+    StateScope, StateTrust, StateUnit, outer_entry_bound,
 };
+use velnor_actions_contract::workflow::cache_family_mbx::MBX_BUNDLE_ROOT_ENV;
 use velnor_actions_contract::workflow::state_seal::{
-    STATE_CANARY_ARTIFACT_OUTPUT, STATE_CANARY_PRODUCER_JOB_ID, STATE_CANARY_SEAL_JOB_ID,
-    STATE_CANARY_UNVERIFIED_TEST, STATE_SEAL_ARTIFACT_RETENTION_DAYS, STATE_SEAL_KEY_EXPR,
-    STATE_SEAL_PREDICATE, STATE_SEAL_PREDICATE_TYPE, STATE_SEAL_PREFIX_ENV,
-    STATE_SEAL_SAVE_CONDITION, STATE_SEAL_SUBJECT_EXPR, STATE_SEAL_SUBJECT_REL,
-    state_canary_identity_prefix,
+    STATE_PRODUCER_ARTIFACT_OUTPUT, STATE_SEAL_PREDICATE, STATE_SEAL_PREDICATE_TYPE,
+    STATE_SEAL_PREFIX_ENV, STATE_SEAL_SAVE_CONDITION, STATE_SEAL_SUBJECT_EXPR,
+    STATE_SEAL_SUBJECT_REL, state_compat_plan_expr, state_produce_plan_expr, state_producer_job_id,
+    state_seal_condition, state_seal_job_id,
 };
+use velnor_actions_contract::workflow::{ProducerKind, SOURCES_PRODUCER_JOB_ID};
 use velnor_actions_contract::{
     CacheAccess, CacheWriter, Job, JobEnv, JobTimeout, PermissionLevel, Permissions, Step, StepId,
-    StepRole,
+    StepKind, StepRole,
 };
 
 use crate::RenderError;
 use crate::render::PLAN_JOB_ID;
-use crate::steps::{
-    DOWNLOAD_ARTIFACT_USES, TOOLS_SAVE_USES, UPLOAD_ARTIFACT_USES, action_step, shell_step,
-};
+use crate::steps::{DOWNLOAD_ARTIFACT_USES, TOOLS_SAVE_USES, action_step, shell_step};
 
-const BUILD_DISPLAY_NAME: &str = "State canary build";
-const SEAL_DISPLAY_NAME: &str = "State canary seal";
-const JOB_MINUTES: u32 = 10;
-const CANARY_FILE_EXPR: &str = "${{ runner.temp }}/velnor/state-seal/out/payload.tar.zst";
-const CANARY_FILE: &str = "$RUNNER_TEMP/velnor/state-seal/out/payload.tar.zst";
-const CANARY_BYTES: usize = 1024;
+const SEAL_DISPLAY_PREFIX: &str = "State seal / ";
+const JOB_MINUTES: u32 = 15;
 const SEALED_OUTPUT: &str = "sealed";
 const GUARD: &str = "case \"$RUNNER_TEMP\" in /*) ;; *) printf '%s\\n' 'RUNNER_TEMP must be absolute' >&2; exit 1 ;; esac";
 
-pub fn add_state_seal_canary(jobs: &mut BTreeMap<String, Job>) -> Result<(), RenderError> {
-    let Some(plan) = jobs.get(PLAN_JOB_ID) else {
-        return Ok(());
-    };
-    if !plan
-        .steps
-        .iter()
-        .any(|step| step.role == Some(StepRole::StateSelect))
-    {
+struct ProducerRoot {
+    slug: RootSlug,
+    producer_id: String,
+    runs_on: String,
+}
+
+pub fn add_state_seal_jobs(jobs: &mut BTreeMap<String, Job>) -> Result<(), RenderError> {
+    let roots = producer_roots(jobs)?;
+    if roots.is_empty() {
         return Ok(());
     }
-    let build = canary_build_job(&plan.runs_on)?;
-    let seal = canary_seal_job(&plan.runs_on)?;
-    for (id, job) in [
-        (STATE_CANARY_PRODUCER_JOB_ID, build),
-        (STATE_CANARY_SEAL_JOB_ID, seal),
-    ] {
-        velnor_actions_contract::workflow::validate_job_id(id).map_err(RenderError::Contract)?;
-        if jobs.insert(id.to_owned(), job).is_some() {
+    let writers: Vec<String> = jobs
+        .iter()
+        .filter(|(id, job)| {
+            matches!(
+                job.producer_kind(),
+                Some(
+                    ProducerKind::SourcesProducer
+                        | ProducerKind::ToolsIdentity
+                        | ProducerKind::TofuProviders
+                )
+            ) && !id.is_empty()
+        })
+        .map(|(id, _)| id.clone())
+        .collect();
+    chain_tools_after_sources(jobs);
+    let mut previous: Option<String> = None;
+    let unit_bound = outer_entry_bound(CacheFamily::MbxBundle.spec().ceiling.stored())
+        .ok_or_else(|| invalid("outer_bound_unbounded"))?;
+    for (index, root) in roots.iter().enumerate() {
+        let pending: Vec<String> = roots[index + 1..]
+            .iter()
+            .map(|later| state_produce_plan_expr("union", later.slug.as_str()))
+            .collect();
+        let seal_id = state_seal_job_id(&root.slug);
+        let mut needs = vec![PLAN_JOB_ID.to_owned(), root.producer_id.clone()];
+        match &previous {
+            Some(earlier) => needs.push(earlier.clone()),
+            None => needs.extend(writers.iter().cloned()),
+        }
+        let job = seal_job(root, needs, &pending, unit_bound)?;
+        velnor_actions_contract::workflow::validate_job_id(&seal_id)
+            .map_err(RenderError::Contract)?;
+        if jobs.insert(seal_id.clone(), job).is_some() {
             return Err(invalid("id_collision"));
         }
+        previous = Some(seal_id);
     }
     Ok(())
 }
 
-fn canary_build_job(runs_on: &str) -> Result<Job, RenderError> {
-    let mut build = shell_step(
-        "Write canary payload",
-        vec!["sh".to_owned(), "-c".to_owned(), canary_script()],
-        BTreeMap::new(),
-    )?;
-    build.role = Some(StepRole::StateSealBuild);
-    let mut upload = action_step(
-        "Upload canary payload",
-        UPLOAD_ARTIFACT_USES,
-        BTreeMap::from([
-            (
-                "name".to_owned(),
-                "velnor-state-seal-canary-r${{ github.run_id }}-a${{ github.run_attempt }}"
-                    .to_owned(),
-            ),
-            ("path".to_owned(), CANARY_FILE_EXPR.to_owned()),
-            ("if-no-files-found".to_owned(), "error".to_owned()),
-            (
-                "retention-days".to_owned(),
-                STATE_SEAL_ARTIFACT_RETENTION_DAYS.to_string(),
-            ),
-        ]),
-    )?;
-    upload.id = Some(StepId::StateSealUpload);
-    upload.role = Some(StepRole::StateSealUpload);
-    Ok(Job {
-        display_name: BUILD_DISPLAY_NAME.to_owned(),
-        runs_on: runs_on.to_owned(),
-        check_runner: None,
-        timeout_minutes: JobTimeout::try_from(JOB_MINUTES).map_err(RenderError::Contract)?,
-        needs: vec![PLAN_JOB_ID.to_owned()],
-        condition: Some(format!(
-            "{DEPENDENCY_SEED_JOB_CONDITION} && {STATE_CANARY_UNVERIFIED_TEST}"
-        )),
-        permissions: None,
-        cache_access: CacheAccess::Read,
-        environment: None,
-        services: Vec::new(),
-        outputs: BTreeMap::from([(
-            STATE_CANARY_ARTIFACT_OUTPUT.to_owned(),
-            format!(
-                "${{{{ steps.{}.outputs.artifact-id }}}}",
-                StepId::StateSealUpload.as_str()
-            ),
-        )]),
-        env: JobEnv::Unset,
-        steps: vec![build, upload],
-    })
+fn chain_tools_after_sources(jobs: &mut BTreeMap<String, Job>) {
+    if !jobs.contains_key(SOURCES_PRODUCER_JOB_ID) {
+        return;
+    }
+    for job in jobs.values_mut() {
+        if job.producer_kind() == Some(ProducerKind::ToolsIdentity) {
+            job.needs = vec![SOURCES_PRODUCER_JOB_ID.to_owned()];
+        }
+    }
 }
 
-fn canary_seal_job(runs_on: &str) -> Result<Job, RenderError> {
+fn producer_roots(jobs: &BTreeMap<String, Job>) -> Result<Vec<ProducerRoot>, RenderError> {
+    let mut roots = Vec::new();
+    for (id, job) in jobs {
+        if job.producer_kind() != Some(ProducerKind::StateProducer) {
+            continue;
+        }
+        let root = job
+            .steps
+            .iter()
+            .find_map(|step| match (&step.role, &step.kind) {
+                (Some(StepRole::MbxBundleKey), StepKind::Shell { env, .. }) => {
+                    env.get(MBX_BUNDLE_ROOT_ENV).cloned()
+                }
+                _ => None,
+            })
+            .ok_or_else(|| invalid("producer_without_root"))?;
+        let slug = RootSlug::from_root(&root).map_err(RenderError::Contract)?;
+        if state_producer_job_id(&slug) != *id {
+            return Err(invalid("producer_id_root_mismatch"));
+        }
+        roots.push(ProducerRoot {
+            slug,
+            producer_id: id.clone(),
+            runs_on: job.runs_on.clone(),
+        });
+    }
+    Ok(roots)
+}
+
+fn scope_prefix(slug: &RootSlug) -> String {
+    StateScope {
+        trust: StateTrust::Trusted,
+        unit: StateUnit::Union,
+        root: slug.clone(),
+    }
+    .prefix()
+}
+
+fn identity_prefix(slug: &RootSlug) -> String {
+    format!(
+        "{}{}-{}-",
+        scope_prefix(slug),
+        state_compat_plan_expr(slug.as_str()),
+        state_snapshot_plan_expr(slug)
+    )
+}
+
+fn seal_job(
+    root: &ProducerRoot,
+    needs: Vec<String>,
+    pending: &[String],
+    unit_bound: u64,
+) -> Result<Job, RenderError> {
+    let artifact = format!(
+        "${{{{ needs.{}.outputs.{STATE_PRODUCER_ARTIFACT_OUTPUT} }}}}",
+        root.producer_id
+    );
     let mut download = action_step(
         "Download sealed payload",
         DOWNLOAD_ARTIFACT_USES,
         BTreeMap::from([
-            (
-                "artifact-ids".to_owned(),
-                format!(
-                    "${{{{ needs.{STATE_CANARY_PRODUCER_JOB_ID}.outputs.{STATE_CANARY_ARTIFACT_OUTPUT} }}}}"
-                ),
-            ),
+            ("artifact-ids".to_owned(), artifact.clone()),
             ("merge-multiple".to_owned(), "true".to_owned()),
             ("path".to_owned(), transport_dir()?),
         ]),
     )?;
     download.role = Some(StepRole::StateSealDownload);
-    let subject = state_seal_subject_step(&state_canary_identity_prefix())?;
+    let subject = state_seal_subject_step(&scope_prefix(&root.slug), &identity_prefix(&root.slug))?;
+    let admit = crate::state_seal_save::state_seal_admit_step(pending, unit_bound)?;
     let mut attest = action_step(
         "Attest state seal",
         ATTEST_USES,
@@ -149,27 +180,30 @@ fn canary_seal_job(runs_on: &str) -> Result<Job, RenderError> {
         "Save sealed payload",
         TOOLS_SAVE_USES,
         BTreeMap::from([
-            ("key".to_owned(), STATE_SEAL_KEY_EXPR.to_owned()),
+            (
+                "key".to_owned(),
+                velnor_actions_contract::workflow::state_seal::STATE_SEAL_KEY_EXPR.to_owned(),
+            ),
             ("path".to_owned(), COMPLETE_STATE_TRANSPORT_EXPR.to_owned()),
         ]),
     )?;
+    save.id = Some(StepId::StateSealSave);
     save.role = Some(StepRole::StateSealSave);
     save.condition = Some(STATE_SEAL_SAVE_CONDITION.to_owned());
+    let retire =
+        crate::state_seal_save::state_seal_retire_step(&scope_prefix(&root.slug), &artifact)?;
     Ok(Job {
-        display_name: SEAL_DISPLAY_NAME.to_owned(),
-        runs_on: runs_on.to_owned(),
+        display_name: format!("{SEAL_DISPLAY_PREFIX}{}", root.slug),
+        runs_on: root.runs_on.clone(),
         check_runner: None,
         timeout_minutes: JobTimeout::try_from(JOB_MINUTES).map_err(RenderError::Contract)?,
-        needs: vec![
-            PLAN_JOB_ID.to_owned(),
-            STATE_CANARY_PRODUCER_JOB_ID.to_owned(),
-        ],
-        condition: Some(CacheWriter::StateSeal.condition()),
+        needs,
+        condition: Some(state_seal_condition(&root.producer_id)),
         permissions: Some(Permissions {
             contents: PermissionLevel::None,
             pull_requests: PermissionLevel::None,
             id_token: PermissionLevel::Write,
-            actions: PermissionLevel::None,
+            actions: PermissionLevel::Write,
             packages: PermissionLevel::None,
             attest: PermissionLevel::Write,
         }),
@@ -178,7 +212,7 @@ fn canary_seal_job(runs_on: &str) -> Result<Job, RenderError> {
         services: Vec::new(),
         outputs: BTreeMap::new(),
         env: JobEnv::Unset,
-        steps: vec![download, subject, attest, save],
+        steps: vec![download, subject, admit, attest, save, retire],
     })
 }
 
@@ -196,20 +230,7 @@ fn transport_file() -> Result<String, RenderError> {
         .ok_or_else(|| invalid("transport_not_runner_temp"))
 }
 
-fn canary_script() -> String {
-    [
-        "set -eu".to_owned(),
-        GUARD.to_owned(),
-        format!("file=\"{CANARY_FILE}\""),
-        "mkdir -p \"${file%/*}\"".to_owned(),
-        format!(
-            "{{ printf 'velnor state seal canary run %s attempt %s\\n' \"${{GITHUB_RUN_ID-}}\" \"${{GITHUB_RUN_ATTEMPT-}}\"; head -c {CANARY_BYTES} /dev/zero | tr '\\0' x; }} > \"$file\""
-        ),
-    ]
-    .join("; ")
-}
-
-pub fn state_seal_subject_step(prefix: &str) -> Result<Step, RenderError> {
+pub fn state_seal_subject_step(scope: &str, prefix: &str) -> Result<Step, RenderError> {
     let stored = CacheFamily::MbxBundle.spec().ceiling.stored();
     let script = format!(
         r#"set -eu
@@ -222,7 +243,10 @@ mkdir -p "$d"
 refuse() {{ printf '%s\n' "::warning::cache_unavailable: state seal refused ($1)"; printf '%s\n' '{sealed}=false' >> "$GITHUB_OUTPUT"; exit 0; }}
 s256() {{ sha256sum "$1" > "$d/sum" || return 1; h=; rest=; read -r h rest < "$d/sum" || [ -n "$h" ]; case "$h" in ''|*[!0-9a-f]*) return 1 ;; esac; [ "${{#h}}" -eq 64 ] || return 1; }}
 prefix="${{{prefix_env}-}}"
-[ -n "$prefix" ] || refuse prefix_missing
+scope="${{{scope_env}-}}"
+[ -n "$prefix" ] && [ -n "$scope" ] || refuse prefix_missing
+case "$prefix" in "$scope"?*) ;; *) refuse prefix_scope ;; esac
+printf '%s\n' "${{prefix#"$scope"}}" | grep -Eq '^s256-[0-9a-f]{{64}}-s256-[0-9a-f]{{64}}-$' || refuse prefix_shape
 if [ -L "$payload" ] || [ ! -f "$payload" ]; then refuse payload_not_regular; fi
 size=; wc -c < "$payload" > "$d/size" || refuse size_unreadable
 read -r size < "$d/size" || :
@@ -243,6 +267,7 @@ printf 'velnor: state seal subject %s\n' "$key"
         rel = STATE_SEAL_SUBJECT_REL,
         sealed = SEALED_OUTPUT,
         prefix_env = STATE_SEAL_PREFIX_ENV,
+        scope_env = velnor_actions_contract::workflow::state_seal::STATE_SEAL_SCOPE_ENV,
         max_key = velnor_actions_contract::cachekey::MAX_CACHE_KEY_BYTES,
     );
     let mut step = shell_step(
@@ -252,7 +277,13 @@ printf 'velnor: state seal subject %s\n' "$key"
             "-c".to_owned(),
             crate::state_script::one_line(&script),
         ],
-        BTreeMap::from([(STATE_SEAL_PREFIX_ENV.to_owned(), prefix.to_owned())]),
+        BTreeMap::from([
+            (STATE_SEAL_PREFIX_ENV.to_owned(), prefix.to_owned()),
+            (
+                velnor_actions_contract::workflow::state_seal::STATE_SEAL_SCOPE_ENV.to_owned(),
+                scope.to_owned(),
+            ),
+        ]),
     )?;
     step.id = Some(StepId::StateSealSubject);
     step.role = Some(StepRole::StateSealSubject);

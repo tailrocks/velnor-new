@@ -3,37 +3,24 @@
 
 use super::{LogicalJobSource, NativeAuthorityError, NativeAuthorityInput, fetch_roots, invalid};
 use std::collections::BTreeSet;
-use velnor_actions_contract::DependencySeedMode;
+use velnor_actions_contract::CompiledStateMode;
+use velnor_actions_contract::workflow::cache_family::RootSlug;
+use velnor_actions_contract::workflow::state_seal::state_producer_job_id;
 
-#[must_use]
-pub fn unique_dependency_seed_job_ids(roots: &[String]) -> Vec<String> {
-    let normal = |root: &str| {
-        if root.is_empty() {
-            "dependency-seed".to_owned()
-        } else {
-            format!("dependency-seed-{}", root.replace('/', "-"))
-        }
-    };
-    let ids = roots.iter().map(|root| normal(root)).collect::<Vec<_>>();
-    let simple = ids.iter().collect::<BTreeSet<_>>().len() == ids.len()
-        && ids
-            .iter()
-            .all(|id| velnor_actions_contract::validate_job_id(id).is_ok());
+pub fn state_producer_job_ids(roots: &[String]) -> Result<Vec<String>, NativeAuthorityError> {
     roots
         .iter()
         .map(|root| {
-            if simple || root.is_empty() {
-                normal(root)
-            } else {
-                format!("dependency-seed-{}", encode_seed_root(root))
-            }
+            RootSlug::from_root(root)
+                .map(|slug| state_producer_job_id(&slug))
+                .map_err(|_| invalid("native_state_root_slug"))
         })
         .collect()
 }
 
 pub(super) fn roots(input: &NativeAuthorityInput<'_>) -> Result<Vec<String>, NativeAuthorityError> {
     let fetch = fetch_roots(input.cargo_workspaces)?;
-    if input.config.stacks.dependency_seed() == DependencySeedMode::Off {
+    if input.config.stacks.compiled_state() == CompiledStateMode::Off {
         return Ok(Vec::new());
     }
     let mut roots = BTreeSet::new();
@@ -57,14 +44,4 @@ pub(super) fn roots(input: &NativeAuthorityInput<'_>) -> Result<Vec<String>, Nat
         }
     }
     Ok(roots.into_iter().collect())
-}
-
-fn encode_seed_root(root: &str) -> String {
-    const HEX: &[u8; 16] = b"0123456789abcdef";
-    let mut encoded = String::with_capacity(root.len().saturating_mul(2));
-    for byte in root.bytes() {
-        encoded.push(char::from(HEX[usize::from(byte >> 4)]));
-        encoded.push(char::from(HEX[usize::from(byte & 0x0f)]));
-    }
-    encoded
 }

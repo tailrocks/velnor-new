@@ -43,6 +43,7 @@ fn fixture_package(manifest: &str) -> PackageRecord {
             TargetRecord {
                 kind: "lib".to_owned(),
                 name: "demo".to_owned(),
+                src_path: "src/lib.rs".to_owned(),
                 test: true,
                 doctest: true,
                 required_features: Vec::new(),
@@ -50,6 +51,7 @@ fn fixture_package(manifest: &str) -> PackageRecord {
             TargetRecord {
                 kind: "test".to_owned(),
                 name: "integ".to_owned(),
+                src_path: "tests/it.rs".to_owned(),
                 test: true,
                 doctest: false,
                 required_features: Vec::new(),

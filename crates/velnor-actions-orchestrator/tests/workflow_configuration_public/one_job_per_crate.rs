@@ -142,7 +142,8 @@ pub(super) fn crate_jobs(jobs: &BTreeMap<String, Job>) -> Vec<(&String, &Job)> {
     jobs.iter()
         .filter(|(id, job)| {
             (id.starts_with("rust-") || id.starts_with(TOFU_JOB_ID_PREFIX))
-                && !job.is_dependency_seed()
+                && job.producer_kind()
+                    != Some(velnor_actions_contract::workflow::ProducerKind::StateProducer)
                 && job
                     .steps
                     .iter()

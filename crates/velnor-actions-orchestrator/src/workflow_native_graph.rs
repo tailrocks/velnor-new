@@ -41,7 +41,7 @@ pub(super) fn graph(
     insert_gradle(input, &mut sources, &mut ordered);
     insert_suites(input, jobs, &mut sources, &mut ordered);
     for (id, root) in seed_ids {
-        sources.insert(id, LogicalJobSource::DependencySeed { root });
+        sources.insert(id, LogicalJobSource::StateProducer { root });
     }
     insert_workflow_tasks(prepared, jobs, &mut sources);
     if jobs.contains_key(LEDGER_CLI_JOB_ID) {
@@ -99,17 +99,10 @@ fn task_inventory<'a>(
             tasks.entry(id).or_default().push(task);
         }
     }
-    let seed_workspaces = seed_roots
+    let roots: Vec<String> = seed_roots.into_iter().collect();
+    let seed_ids = crate::crate_jobs::state_producer::producer_job_ids(&roots)?
         .into_iter()
-        .map(|root| crate::crate_jobs::dependency_seed::SeedWorkspace {
-            root,
-            nextest: false,
-        })
-        .collect::<Vec<_>>();
-    let seed_ids = crate::crate_jobs::dependency_seed::unique_seed_job_ids(&seed_workspaces)
-        .into_iter()
-        .zip(seed_workspaces)
-        .map(|(id, workspace)| (id, workspace.root))
+        .zip(roots)
         .collect::<BTreeMap<_, _>>();
     Ok(TaskInventory {
         groups: tasks,

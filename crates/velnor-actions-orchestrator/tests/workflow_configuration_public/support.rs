@@ -52,7 +52,11 @@ pub(super) fn rust_owner_jobs(prepared: &GenerationPreparation) -> Vec<(&str, &J
         .ir
         .jobs
         .iter()
-        .filter(|(id, job)| id.starts_with("rust-") && !job.is_dependency_seed())
+        .filter(|(id, job)| {
+            id.starts_with("rust-")
+                && job.producer_kind()
+                    != Some(velnor_actions_contract::workflow::ProducerKind::StateProducer)
+        })
         .map(|(id, job)| (id.as_str(), job))
         .collect()
 }

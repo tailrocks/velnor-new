@@ -136,7 +136,10 @@ fn seed_ids_by_root<'a>(
         .ir
         .jobs
         .iter()
-        .filter(|(_, job)| job.is_dependency_seed())
+        .filter(|(_, job)| {
+            job.producer_kind()
+                == Some(velnor_actions_contract::workflow::ProducerKind::StateProducer)
+        })
         .collect();
     assert_eq!(seeds.len(), expected_roots.len());
     let unique_seed_ids: BTreeSet<_> = seeds.iter().map(|(id, _)| id.as_str()).collect();
@@ -220,7 +223,8 @@ fn assert_rendered_seed_routing(
             .jobs
             .iter()
             .filter(|(_, job)| {
-                !job.is_dependency_seed()
+                job.producer_kind()
+                    != Some(velnor_actions_contract::workflow::ProducerKind::StateProducer)
                     && mbx_bundle_key_envs(job)
                         .iter()
                         .any(|env| env.get(root_env).map(String::as_str) == Some(relative_root))

@@ -72,7 +72,7 @@ fn check_restore_uses_fixed_transport(restore: &Step) -> Result<(), Box<dyn Erro
 
 fn check_recovery_is_verified_operation(import: &Step) -> Result<(), Box<dyn Error>> {
     if import.name != MBX_BUNDLE_IMPORT_NAME
-        || import.id.is_some()
+        || import.id != Some(velnor_actions_contract::StepId::MbxBundleImport)
         || import.role != Some(StepRole::MbxBundleImport)
         || import.condition.as_deref() != Some(MBX_BUNDLE_IMPORT_CONDITION)
     {
@@ -95,37 +95,14 @@ fn check_producer_mark(mark: &Step) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn check_save_shape() -> Result<(), Box<dyn Error>> {
-    let mut save = cache_action_step(
-        false,
-        TOOLS_SAVE_USES,
-        "mbx-bundle",
-        MBX_BUNDLE_SAVE_KEY_EXPR,
-        &[],
-        &[COMPLETE_STATE_TRANSPORT_EXPR.to_owned()],
-    )?;
-    if !matches!(&save.kind, StepKind::Action { uses, .. } if uses == TOOLS_SAVE_USES) {
-        return Err(fail("save step left its pinned save action"));
-    }
-    let with = action_with(&save)?;
-    if with.get("key").map(String::as_str) != Some(MBX_BUNDLE_SAVE_KEY_EXPR) {
-        return Err(fail("save step left its selected key"));
-    }
-    if with.contains_key("restore-keys") {
-        return Err(fail("save step carried restore keys"));
-    }
-    if with.get("path").map(String::as_str) != Some(COMPLETE_STATE_TRANSPORT_EXPR) {
-        return Err(fail("save step left its fixed transport path"));
-    }
-    save.condition = Some(MBX_BUNDLE_SAVE_CONDITION.to_owned());
-    if save.condition.as_deref() != Some(MBX_BUNDLE_SAVE_CONDITION) {
-        return Err(fail("save step left its typed admission gate"));
-    }
-    if !MBX_BUNDLE_SAVE_CONDITION.contains("steps.mbx-bundle-export.outputs.exported") {
-        return Err(fail("save gate left its typed publish output"));
-    }
-    if !MBX_BUNDLE_EXPORT_CONDITION.contains("steps.mbx-bundle-key.outputs.save") {
-        return Err(fail("publish gate left its typed policy output"));
+fn check_export_gate() -> Result<(), Box<dyn Error>> {
+    for marker in [
+        "steps.mbx-bundle-key.outputs.save",
+        "producer_skip != 'true'",
+    ] {
+        if !MBX_BUNDLE_EXPORT_CONDITION.contains(marker) {
+            return Err(fail("publish gate left its typed policy output"));
+        }
     }
     Ok(())
 }
@@ -173,7 +150,7 @@ fn gc1_t30_preserves_contract() -> Result<(), Box<dyn Error>> {
     check_recovery_is_verified_operation(&steps[5])?;
     check_shell_syntax(&steps[5], "recovery")?;
     check_producer_mark(&mbx_producer_mark_step()?)?;
-    check_save_shape()?;
+    check_export_gate()?;
     check_inventory_install_accepted()?;
     Ok(())
 }

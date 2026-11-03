@@ -149,8 +149,8 @@ pub fn finalize_jobs(
         &ctx.standalone_tools_donors,
     )?;
     crate::sources_producer::add_sources_producer(&mut jobs)?;
-    crate::state_seal::add_state_seal_canary(&mut jobs)?;
     crate::tofu_producer::add_tofu_providers_producers(&mut jobs)?;
+    crate::state_seal::add_state_seal_jobs(&mut jobs)?;
     crate::tofu_stage::stage_tofu_jobs(&mut jobs, ctx.max_parallel_jobs);
     closure::check_plan_anchor(&jobs)?;
     preseed_closure::check_preseed_closure(&jobs, ctx.preseed)?;
@@ -172,7 +172,6 @@ fn validate_final_jobs(
     phase: ValidationPhase,
     ctx: &RenderContext,
 ) -> Result<(), RenderError> {
-    crate::cache_steps::append_bundle_postludes(jobs)?;
     crate::cache_steps::append_workspace_cleanups(jobs)?;
     execution_boundaries::validate_required_verdict(jobs, phase, &ctx.authority_steps)?;
     execution_boundaries::validate_trusted_plan(jobs, policy, phase, &ctx.authority_steps)?;

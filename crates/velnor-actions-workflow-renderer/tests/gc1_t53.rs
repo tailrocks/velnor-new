@@ -21,7 +21,8 @@ use velnor_actions_mise::MISE_VERSION;
 use velnor_actions_workflow_renderer::rust_suites::{RustSuitesRenderSpec, render_suites_workflow};
 use velnor_actions_workflow_renderer::setup::{MISE_BINARY_SHA256_LINUX_X64, MiseSetup};
 use velnor_actions_workflow_renderer::steps::{
-    CHECKOUT_USES, CompileDriver, MbxTransport, mbx_steps_for_driver,
+    CHECKOUT_USES, CompileDriver, MbxTransport, StateCeilings, mbx_bundle_publish_bounded,
+    mbx_steps_for_driver,
 };
 use velnor_actions_workflow_renderer::toolchain_env::{checked_task_env, credential_unset_prelude};
 
@@ -30,11 +31,6 @@ const RUST_VERSION: &str = "1.89.0";
 const NEXTEST_VERSION: &str = "0.9.151";
 const RECOVER_STEP: &str = "Recover state snapshot";
 const EXPORT_STEP: &str = "Publish state snapshot";
-const SAVE_STEP: &str = "Save state snapshot";
-const RECORD_STEP: &str = "Record state publication";
-const SAVE_OUTCOME_GATE: &str = "steps.velnor-optional-mbx-bundle-save.outcome == 'success'";
-const RECORD_CONDITION: &str =
-    "always() && !cancelled() && steps.velnor-optional-mbx-bundle-save.outcome == 'success'";
 
 fn fail(message: &str) -> Box<dyn Error> {
     io::Error::other(message).into()
@@ -196,46 +192,21 @@ fn check_export_bounds_uncompressed(export: &str) -> Result<(), Box<dyn Error>> 
         "zstd -3 --long=30",
         "mbx cache export",
         "$d/export",
-        "state-publication.staged",
         "exported=true",
         "readback verified",
     ] {
         require(export, marker, "export step")?;
     }
-    // The publication record and the `published` print must not be emitted
-    // before the save outcome is known.
-    forbid(export, "state-publication.record", "export step")?;
+    forbid(export, "state-publication", "export step")?;
     forbid(export, "state snapshot published (", "export step")?;
     Ok(())
 }
 
-fn check_record_after_save(text: &str, record: &str) -> Result<(), Box<dyn Error>> {
-    require_order(text, EXPORT_STEP, SAVE_STEP, "postlude order")?;
-    require_order(text, SAVE_STEP, RECORD_STEP, "postlude order")?;
-    require(record, RECORD_CONDITION, "record gate")?;
-    for marker in [
-        SAVE_OUTCOME_GATE,
-        "state-publication.record",
-        "state snapshot published (",
-        "state-publication.staged",
-    ] {
-        require(record, marker, "record step")?;
-    }
-    Ok(())
-}
-
 #[test]
-fn gc1_t53_publish_binds_evidence_to_save() -> Result<(), Box<dyn Error>> {
-    let text = render_text()?;
-    require(&text, EXPORT_STEP, "postlude")?;
-    require(&text, SAVE_STEP, "postlude")?;
-    require(&text, RECORD_STEP, "postlude")?;
-    let export = step_section(&text, EXPORT_STEP)?.to_owned();
-    let record = step_section(&text, RECORD_STEP)?.to_owned();
+fn gc1_t53_publish_checks_bounds_and_syntax() -> Result<(), Box<dyn Error>> {
+    let export = crate::gc1_t53::scripts()?.export;
     check_export_bounds_uncompressed(&export)?;
-    check_record_after_save(&text, &record)?;
-    check_shell_syntax(&extract_run(&export, "export")?, "export")?;
-    check_shell_syntax(&extract_run(&record, "record")?, "record")?;
+    check_shell_syntax(&export, "export")?;
     Ok(())
 }
 
@@ -324,6 +295,14 @@ pub(crate) fn restore_with(
     }
 }
 
+fn publish_step() -> Result<velnor_actions_contract::Step, Box<dyn Error>> {
+    Ok(mbx_bundle_publish_bounded(
+        "1.89.0",
+        driver_env()?,
+        StateCeilings::V3,
+    )?)
+}
+
 pub(crate) fn scripts() -> Result<crate::gc1_scene::Scripts, Box<dyn Error>> {
     scripts_for(MbxTransport::SeedRead, None)
 }
@@ -349,8 +328,7 @@ pub(crate) fn scripts_for(
             run: extract_run(step_section(&text, RECOVER_STEP)?, "recover")?,
             env: extract_env(step_section(&text, RECOVER_STEP)?, "recover")?,
         },
-        export: extract_run(step_section(&text, EXPORT_STEP)?, "export")?,
-        record: extract_run(step_section(&text, RECORD_STEP)?, "record")?,
+        export: shell_script_of(&publish_step()?)?,
     })
 }
 

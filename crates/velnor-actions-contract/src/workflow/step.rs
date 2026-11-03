@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use super::state_seal::STATE_PRODUCER_LANE_CONDITION;
 use super::step_identity::{MBX_WORKSPACE_CLEAN_CONDITION, StepId, StepRole, verifier_action_role};
 use crate::errors::ContractError;
 use serde::{Deserialize, Serialize};
@@ -109,7 +110,12 @@ impl Step {
             ));
         }
         if matches!(&self.kind, StepKind::TaskExecution { .. })
-            && (self.id.is_some() || self.role.is_some() || self.condition.is_some())
+            && (self.id.is_some()
+                || self.role.is_some()
+                || self
+                    .condition
+                    .as_deref()
+                    .is_some_and(|condition| condition != STATE_PRODUCER_LANE_CONDITION))
         {
             return Err(ContractError::identity(
                 "step.task",
@@ -211,11 +217,17 @@ fn validate_id_kind(id: Option<StepId>, kind: &StepKind, job: &str) -> Result<()
         | StepId::LedgerCliPublish
         | StepId::LedgerCliVerify
         | StepId::StateSelect
-        | StepId::StateSealSubject => {
+        | StepId::StateSealSubject
+        | StepId::MbxBundleImport
+        | StepId::StateSealAdmit
+        | StepId::StateProduced => {
             matches!(kind, StepKind::Shell { .. })
         }
         StepId::StateSealUpload => {
             matches!(kind, StepKind::Action { uses, .. } if uses.starts_with("actions/upload-artifact@"))
+        }
+        StepId::StateSealSave => {
+            matches!(kind, StepKind::Action { uses, .. } if uses.starts_with("actions/cache/save@"))
         }
         StepId::SourcesRestore | StepId::MbxBundleRestore => {
             matches!(kind, StepKind::Action { uses, .. } if uses.starts_with("actions/cache/restore@"))

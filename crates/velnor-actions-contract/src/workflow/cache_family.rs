@@ -35,6 +35,7 @@ pub use outputs::{
     state_snapshot_plan_expr, tofu_providers_key_output, tofu_providers_key_plan_expr,
 };
 pub use state::{
+    MBX_BSE_COMPAT, MBX_BSE_CONSUMER, MBX_BSE_ENV, MBX_BSE_PRODUCER, MBX_BSE_SKELETON,
     MBX_COMPILE_ENV, ROOT_SLUG_MAX_BYTES, RootSlug, S256, StateCompat, StateEntryKey,
     StateIdentity, StateScope, StateSnapshot, StateTrust, StateUnit,
 };

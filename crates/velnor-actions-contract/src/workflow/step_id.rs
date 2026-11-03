@@ -30,6 +30,8 @@ pub enum StepId {
 
     MbxBundleRestore,
 
+    MbxBundleImport,
+
     MbxBundleExport,
 
     FamilyKeys,
@@ -53,6 +55,12 @@ pub enum StepId {
     StateSealSubject,
 
     StateSealUpload,
+
+    StateSealAdmit,
+
+    StateSealSave,
+
+    StateProduced,
 }
 
 impl StepId {
@@ -70,6 +78,7 @@ impl StepId {
             Self::DepsToken => "deps-token",
             Self::MbxBundleKey => "mbx-bundle-key",
             Self::MbxBundleRestore => "mbx-bundle-restore",
+            Self::MbxBundleImport => "mbx-bundle-import",
             Self::MbxBundleExport => "mbx-bundle-export",
             Self::FamilyKeys => "family-keys",
             Self::FamilySizeBunInstall => "family-size-bun-install",
@@ -82,6 +91,9 @@ impl StepId {
             Self::StateSelect => "state-select",
             Self::StateSealSubject => "state-seal-subject",
             Self::StateSealUpload => "state-seal-upload",
+            Self::StateSealAdmit => "state-seal-admit",
+            Self::StateSealSave => "state-seal-save",
+            Self::StateProduced => "state-produced",
         }
     }
 }
