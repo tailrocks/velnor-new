@@ -165,7 +165,14 @@ fn guard_set(origin: &Path, non_inputs: &NonInputs) -> Result<BTreeSet<String>, 
         .args(["-c", "core.ignorecase=false", "ls-files", "-z", "--"])
         .args(non_inputs.pathspecs())
         .output()?;
-    assert!(output.status.success());
+    if !output.status.success() {
+        return Err(format!(
+            "git rejected {:?}: {}",
+            non_inputs.pathspecs(),
+            String::from_utf8_lossy(&output.stderr)
+        )
+        .into());
+    }
     Ok(paths_of(&output.stdout))
 }
 
