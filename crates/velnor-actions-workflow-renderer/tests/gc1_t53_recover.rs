@@ -35,9 +35,9 @@ fn gc1_t53_recover_refuses_oversize_inflate() -> Result<(), Box<dyn Error>> {
     std::fs::create_dir_all(scene.payload().parent().ok_or_else(|| fail("no parent"))?)?;
     let mut archive = Archive::create(&scene.payload())?;
     archive.state_layout("old")?;
-    archive.zeros("state/bomb", ceiling() + 64 * MIB)?;
+    archive.zeros("state/bomb", ceiling() + 160 * MIB)?;
     archive.finish()?;
-    let limit = (ceiling() + MIB) / FSIZE_BLOCK;
+    let limit = (ceiling() + 128 * MIB) / FSIZE_BLOCK;
     let output = scene.recover(&key.key, &key.key, &[], Some(limit))?;
     scene.assert_cold(&output, "refused-oversize")?;
     check_no_inflate_residue(&scene)?;

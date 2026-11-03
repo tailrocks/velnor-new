@@ -1,9 +1,12 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeMap;
 use std::error::Error;
+use std::os::unix::process::CommandExt as _;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
+use std::time::{Duration, Instant};
 
 use velnor_actions_contract::workflow::cache_family_mbx::MBX_BUNDLE_KEY_EXPR;
 
@@ -11,7 +14,19 @@ use crate::gc1_mbx_stub;
 
 const MATCHED_KEY_BAKE: &str = "${{steps.mbx-bundle-restore.outputs.cache-matched-key}}";
 const RECOVERY_RECORD: &str = "velnor/state-recovery.record";
+const RUN_DEADLINE: Duration = Duration::from_secs(300);
+const POLL: Duration = Duration::from_millis(25);
 const PAYLOAD: &str = "velnor-gc1/transport/state/payload.tar.gz";
+
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum Entry {
+    Dir,
+    File(u64),
+    Link,
+    Other,
+}
+
+pub(crate) type Tree = BTreeMap<PathBuf, Entry>;
 
 pub(crate) struct Scripts {
     pub(crate) discover: String,
@@ -55,15 +70,63 @@ pub(crate) fn files_under(root: &Path) -> Result<Vec<PathBuf>, Box<dyn Error>> {
     Ok(found)
 }
 
+pub(crate) fn tree_of(root: &Path) -> Result<Tree, Box<dyn Error>> {
+    let mut found = Tree::new();
+    let mut pending = vec![root.to_path_buf()];
+    while let Some(dir) = pending.pop() {
+        for entry in std::fs::read_dir(&dir)? {
+            let entry = entry?;
+            let meta = std::fs::symlink_metadata(entry.path())?;
+            let kind = if meta.is_dir() {
+                pending.push(entry.path());
+                Entry::Dir
+            } else if meta.is_file() {
+                Entry::File(meta.len())
+            } else if meta.file_type().is_symlink() {
+                Entry::Link
+            } else {
+                Entry::Other
+            };
+            found.insert(entry.path(), kind);
+        }
+    }
+    Ok(found)
+}
+
+fn drain<R: std::io::Read + Send + 'static>(
+    mut source: R,
+) -> std::thread::JoinHandle<std::io::Result<Vec<u8>>> {
+    std::thread::spawn(move || {
+        let mut bytes = Vec::new();
+        source.read_to_end(&mut bytes)?;
+        Ok(bytes)
+    })
+}
+
 impl Scene {
     pub(crate) fn new(name: &str, scripts: Scripts) -> Result<Self, Box<dyn Error>> {
+        Self::build(name, scripts, false)
+    }
+
+    pub(crate) fn runner_in_workspace(
+        name: &str,
+        scripts: Scripts,
+    ) -> Result<Self, Box<dyn Error>> {
+        Self::build(name, scripts, true)
+    }
+
+    fn build(name: &str, scripts: Scripts, nested: bool) -> Result<Self, Box<dyn Error>> {
         let nanos = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)?
             .as_nanos();
         let scratch =
             std::env::temp_dir().join(format!("velnor-gc1-{}-{nanos}-{name}", std::process::id()));
-        let runner = scratch.join("runner");
         let workspace = scratch.join("workspace");
+        let runner = if nested {
+            workspace.join("runner")
+        } else {
+            scratch.join("runner")
+        };
         let bin = scratch.join("bin");
         std::fs::create_dir_all(runner.join("velnor/mbx/actions"))?;
         std::fs::create_dir_all(&workspace)?;
@@ -142,16 +205,48 @@ impl Scene {
         for (name, value) in env {
             command.env(name, value);
         }
-        let output = command.output()?;
+        let mut child = command
+            .process_group(0)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()?;
+        let stdout = drain(
+            child
+                .stdout
+                .take()
+                .ok_or_else(|| fail("stdout unavailable"))?,
+        );
+        let stderr = drain(
+            child
+                .stderr
+                .take()
+                .ok_or_else(|| fail("stderr unavailable"))?,
+        );
+        let started = Instant::now();
+        let status = loop {
+            if let Some(status) = child.try_wait()? {
+                break Some(status);
+            }
+            if started.elapsed() > RUN_DEADLINE {
+                Command::new("kill")
+                    .arg("-KILL")
+                    .arg("--")
+                    .arg(format!("-{}", child.id()))
+                    .status()?;
+                child.wait()?;
+                break None;
+            }
+            std::thread::sleep(POLL);
+        };
         let text = format!(
             "{}{}",
-            String::from_utf8_lossy(&output.stdout),
-            String::from_utf8_lossy(&output.stderr)
+            String::from_utf8_lossy(&stdout.join().map_err(|_| fail("stdout reader died"))??),
+            String::from_utf8_lossy(&stderr.join().map_err(|_| fail("stderr reader died"))??)
         );
-        if output.status.success() {
-            Ok(text)
-        } else {
-            Err(fail(&format!("script failed the step: {text}")))
+        match status {
+            Some(status) if status.success() => Ok(text),
+            Some(_) => Err(fail(&format!("script failed the step: {text}"))),
+            None => Err(fail(&format!("script hung past the deadline: {text}"))),
         }
     }
 
@@ -249,6 +344,30 @@ impl Scene {
         }
         if !self.store_files()?.is_empty() {
             return Err(fail("refused archive reached the store"));
+        }
+        Ok(())
+    }
+
+    pub(crate) fn tree(&self) -> Result<Tree, Box<dyn Error>> {
+        tree_of(&self.scratch)
+    }
+
+    pub(crate) fn assert_confined(&self, before: &Tree) -> Result<(), Box<dyn Error>> {
+        let after = self.tree()?;
+        let writable = self.runner.join("velnor/state-recover");
+        for (path, entry) in &after {
+            if before.get(path) != Some(entry)
+                && !path.starts_with(&writable)
+                && *path != self.github_output
+            {
+                return Err(fail(&format!("recover wrote {}", path.display())));
+            }
+        }
+        let consumed = [self.payload(), self.state_root(), self.stage()];
+        for path in before.keys() {
+            if !after.contains_key(path) && !consumed.iter().any(|root| path.starts_with(root)) {
+                return Err(fail(&format!("recover removed {}", path.display())));
+            }
         }
         Ok(())
     }

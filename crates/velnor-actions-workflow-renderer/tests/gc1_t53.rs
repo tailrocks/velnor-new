@@ -305,6 +305,8 @@ mod gc1_t53_cold;
 mod gc1_t53_env;
 #[path = "gc1_t53_hostile.rs"]
 mod gc1_t53_hostile;
+#[path = "gc1_t53_import.rs"]
+mod gc1_t53_import;
 #[path = "gc1_t53_publish.rs"]
 mod gc1_t53_publish;
 #[path = "gc1_t53_recover.rs"]

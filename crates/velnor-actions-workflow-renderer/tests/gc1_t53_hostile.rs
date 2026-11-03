@@ -3,12 +3,15 @@
 
 use std::path::Path;
 
-use crate::gc1_scene::{Scene, files_under};
-use crate::gc1_ustar::{Archive, gzip_again};
+use crate::gc1_scene::Scene;
+use crate::gc1_ustar::{Archive, gzip_again, polyglot};
 
 use super::*;
 
-const PLANTED: [&str; 3] = ["escape", "pwn", "sentinel"];
+const SHADOW: &str = "refused-shadow";
+const UNREADABLE: &str = "payload unreadable";
+const MEMBER_BOUND: u32 = 100_000;
+const ZERO_TAR: u64 = 10 * 1024;
 
 #[derive(Clone, Copy, Debug)]
 enum Row {
@@ -17,19 +20,70 @@ enum Row {
     SymlinkWriteThrough,
     HardLink,
     NestedCompression,
+    EmptyTar,
+    ZeroTar,
+    NewlineName,
+    AbsoluteName,
+    Fifo,
+    NotGzip,
+    Polyglot,
+    TooManyMembers,
 }
 
-fn build(row: Row, scene: &Scene, outside: &Path) -> Result<(), Box<dyn Error>> {
-    let payload = scene.payload();
-    std::fs::create_dir_all(payload.parent().ok_or_else(|| fail("no parent"))?)?;
-    if let Row::NestedCompression = row {
-        let inner = scene.scratch.join("inner.tgz");
-        let mut archive = Archive::create(&inner)?;
-        archive.state_layout("nested")?;
-        archive.finish()?;
-        return gzip_again(&inner, &payload);
+const ROWS: [Row; 13] = [
+    Row::SiblingFamily,
+    Row::ParentTraversal,
+    Row::SymlinkWriteThrough,
+    Row::HardLink,
+    Row::NestedCompression,
+    Row::EmptyTar,
+    Row::ZeroTar,
+    Row::NewlineName,
+    Row::AbsoluteName,
+    Row::Fifo,
+    Row::NotGzip,
+    Row::Polyglot,
+    Row::TooManyMembers,
+];
+
+fn token(row: Row) -> &'static str {
+    match row {
+        Row::NotGzip => UNREADABLE,
+        _ => SHADOW,
     }
-    let mut archive = Archive::create(&payload)?;
+}
+
+fn absolute_target() -> String {
+    format!("/tmp/velnor-gc1-absolute-{}/pwn", std::process::id())
+}
+
+fn build_wrapped(row: Row, scene: &Scene) -> Result<(), Box<dyn Error>> {
+    let payload = scene.payload();
+    let inner = scene.scratch.join("inner.tgz");
+    let mut archive = Archive::create(&inner)?;
+    archive.state_layout("nested")?;
+    archive.finish()?;
+    if let Row::Polyglot = row {
+        let patched = scene.scratch.join("patched.tgz");
+        polyglot(&inner, &patched)?;
+        return gzip_again(&patched, &payload);
+    }
+    gzip_again(&inner, &payload)
+}
+
+fn build_bare(row: Row, scene: &Scene) -> Result<(), Box<dyn Error>> {
+    let mut archive = Archive::create(&scene.payload())?;
+    match row {
+        Row::EmptyTar => {}
+        Row::ZeroTar => archive.raw_zeros(ZERO_TAR)?,
+        _ => return Err(fail("row is not a bare stream")),
+    }
+    archive.finish_untrailed()?;
+    Ok(())
+}
+
+fn build_members(row: Row, scene: &Scene, outside: &Path) -> Result<(), Box<dyn Error>> {
+    let mut archive = Archive::create(&scene.payload())?;
     archive.state_layout("old")?;
     match row {
         Row::SiblingFamily => {
@@ -45,9 +99,31 @@ fn build(row: Row, scene: &Scene, outside: &Path) -> Result<(), Box<dyn Error>> 
             archive.file("state/obj", b"linked")?;
             archive.hardlink("state/hl", "state/obj")?;
         }
-        Row::NestedCompression => {}
+        Row::NewlineName => archive.file("state/a\nb", b"must never land")?,
+        Row::AbsoluteName => archive.file(&absolute_target(), b"must never land")?,
+        Row::Fifo => archive.fifo("state/pipe")?,
+        Row::TooManyMembers => {
+            for index in 0..=MEMBER_BOUND {
+                archive.file(&format!("state/cas/f{index}"), b"")?;
+            }
+        }
+        _ => return Err(fail("row is not a member stream")),
     }
-    archive.finish()
+    archive.finish()?;
+    Ok(())
+}
+
+fn build(row: Row, scene: &Scene, outside: &Path) -> Result<(), Box<dyn Error>> {
+    std::fs::create_dir_all(scene.payload().parent().ok_or_else(|| fail("no parent"))?)?;
+    match row {
+        Row::NestedCompression | Row::Polyglot => build_wrapped(row, scene),
+        Row::EmptyTar | Row::ZeroTar => build_bare(row, scene),
+        Row::NotGzip => Ok(std::fs::write(
+            scene.payload(),
+            b"this payload was never a gzip stream\n",
+        )?),
+        _ => build_members(row, scene, outside),
+    }
 }
 
 fn check_row(row: Row) -> Result<(), Box<dyn Error>> {
@@ -56,21 +132,16 @@ fn check_row(row: Row) -> Result<(), Box<dyn Error>> {
     std::fs::create_dir_all(&outside)?;
     let key = scene.discover()?;
     build(row, &scene, &outside)?;
+    let before = scene.tree()?;
     let output = scene.recover(&key.key, &key.key, &[], None)?;
     scene
-        .assert_cold(&output, "refused-shadow")
+        .assert_cold(&output, token(row))
         .map_err(|error| fail(&format!("{row:?}: {error}")))?;
-    if std::fs::read_dir(&outside)?.next().is_some() {
-        return Err(fail(&format!("{row:?}: wrote outside the stage")));
-    }
-    for file in files_under(&scene.scratch)? {
-        let name = file.file_name().and_then(|name| name.to_str());
-        if name.is_some_and(|name| PLANTED.contains(&name)) {
-            return Err(fail(&format!(
-                "{row:?}: planted file landed at {}",
-                file.display()
-            )));
-        }
+    scene
+        .assert_confined(&before)
+        .map_err(|error| fail(&format!("{row:?}: {error}")))?;
+    if Path::new(&absolute_target()).exists() {
+        return Err(fail(&format!("{row:?}: wrote to an absolute path")));
     }
     scene.finish()
 }
@@ -78,13 +149,7 @@ fn check_row(row: Row) -> Result<(), Box<dyn Error>> {
 #[test]
 #[cfg(unix)]
 fn gc1_t53_recover_refuses_hostile_archives() -> Result<(), Box<dyn Error>> {
-    for row in [
-        Row::SiblingFamily,
-        Row::ParentTraversal,
-        Row::SymlinkWriteThrough,
-        Row::HardLink,
-        Row::NestedCompression,
-    ] {
+    for row in ROWS {
         check_row(row)?;
     }
     Ok(())

@@ -35,10 +35,18 @@ dir="$3"
 [ -z "$(find "$dir" -type f -links +1)" ] || exit 1
 [ -n "${MBX_CACHE_DIR:-}" ] || exit 1
 mkdir -p "$MBX_CACHE_DIR/cas" "$MBX_CACHE_DIR/action-results" || exit 1
-cp -R "$dir/cas/." "$MBX_CACHE_DIR/cas/" || exit 1
-cp -R "$dir/action-results/." "$MBX_CACHE_DIR/action-results/" || exit 1
+for part in cas action-results; do
+  if [ -e "$MBX_CACHE_DIR/$part" ]; then cp -R "$dir/$part/." "$MBX_CACHE_DIR/$part/" || exit 1; else mv "$dir/$part" "$MBX_CACHE_DIR/$part" || exit 1; fi
+done
 rm -rf "$dir"
-if [ -f Cargo.lock ] && { [ ! -e target ] || [ -z "$(ls -A target)" ]; }; then mkdir -p target/debug; fi
+here="$PWD"
+while [ -n "$here" ]; do
+  if [ -f "$here/Cargo.lock" ]; then
+    if [ ! -e "$here/target" ] || [ -z "$(ls -A "$here/target")" ]; then mkdir -p "$here/target/debug"; fi
+    break
+  fi
+  here="${here%/*}"
+done
 exit 0
 "#;
 
