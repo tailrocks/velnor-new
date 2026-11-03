@@ -13,6 +13,9 @@ const GZIP_FLAGS: usize = 3;
 const GZIP_HEADER: usize = 10;
 const GZIP_COMMENT: u8 = 0x10;
 const USTAR_OFFSET: usize = 257;
+const NAME_FIELD: usize = 100;
+const LINK_FIELD: usize = 100;
+const LONG_NAME_ENTRY: &str = "././@LongLink";
 
 pub(crate) struct Archive {
     child: Child,
@@ -26,7 +29,21 @@ fn octal(field: &mut [u8], value: u64) {
     field[..digits.len()].copy_from_slice(digits.as_bytes());
 }
 
-fn header(name: &str, typeflag: u8, size: u64, link: &str, mode: u64) -> [u8; BLOCK] {
+fn header(
+    name: &str,
+    typeflag: u8,
+    size: u64,
+    link: &str,
+    mode: u64,
+) -> Result<[u8; BLOCK], Box<dyn Error>> {
+    if name.len() > NAME_FIELD || link.len() > LINK_FIELD {
+        return Err(std::io::Error::other(format!(
+            "tar header field over its limit: {} name bytes, {} link bytes",
+            name.len(),
+            link.len()
+        ))
+        .into());
+    }
     let mut block = [0u8; BLOCK];
     block[..name.len()].copy_from_slice(name.as_bytes());
     octal(&mut block[100..108], mode);
@@ -44,7 +61,7 @@ fn header(name: &str, typeflag: u8, size: u64, link: &str, mode: u64) -> [u8; BL
     block[148..154].copy_from_slice(digits.as_bytes());
     block[154] = 0;
     block[155] = b' ';
-    block
+    Ok(block)
 }
 
 impl Archive {
@@ -76,16 +93,54 @@ impl Archive {
         Ok(())
     }
 
+    fn entry(
+        &mut self,
+        name: &str,
+        typeflag: u8,
+        size: u64,
+        link: &str,
+        mode: u64,
+    ) -> Result<(), Box<dyn Error>> {
+        if name.len() > NAME_FIELD {
+            self.long_record(b'L', name)?;
+        }
+        if link.len() > LINK_FIELD {
+            self.long_record(b'K', link)?;
+        }
+        let short_name = &name[..name.len().min(NAME_FIELD)];
+        let short_link = &link[..link.len().min(LINK_FIELD)];
+        self.put(&header(short_name, typeflag, size, short_link, mode)?)
+    }
+
+    fn long_record(&mut self, typeflag: u8, text: &str) -> Result<(), Box<dyn Error>> {
+        let mut record = text.as_bytes().to_vec();
+        record.push(0);
+        let padded = record.len().next_multiple_of(BLOCK) - record.len();
+        self.put(&header(
+            LONG_NAME_ENTRY,
+            typeflag,
+            record.len() as u64,
+            "",
+            0,
+        )?)?;
+        self.put(&record)?;
+        self.put(&vec![0u8; padded])
+    }
+
     pub(crate) fn dir(&mut self, name: &str) -> Result<(), Box<dyn Error>> {
-        self.put(&header(name, b'5', 0, "", 0o755))
+        self.dir_mode(name, 0o755)
     }
 
     pub(crate) fn locked_dir(&mut self, name: &str) -> Result<(), Box<dyn Error>> {
-        self.put(&header(name, b'5', 0, "", 0))
+        self.dir_mode(name, 0)
+    }
+
+    pub(crate) fn dir_mode(&mut self, name: &str, mode: u64) -> Result<(), Box<dyn Error>> {
+        self.entry(name, b'5', 0, "", mode)
     }
 
     pub(crate) fn file(&mut self, name: &str, content: &[u8]) -> Result<(), Box<dyn Error>> {
-        self.put(&header(name, b'0', content.len() as u64, "", 0o644))?;
+        self.entry(name, b'0', content.len() as u64, "", 0o644)?;
         self.put(content)?;
         self.put(&vec![
             0u8;
@@ -96,19 +151,19 @@ impl Archive {
     }
 
     pub(crate) fn symlink(&mut self, name: &str, target: &str) -> Result<(), Box<dyn Error>> {
-        self.put(&header(name, b'2', 0, target, 0o644))
+        self.entry(name, b'2', 0, target, 0o644)
     }
 
     pub(crate) fn hardlink(&mut self, name: &str, target: &str) -> Result<(), Box<dyn Error>> {
-        self.put(&header(name, b'1', 0, target, 0o644))
+        self.entry(name, b'1', 0, target, 0o644)
     }
 
     pub(crate) fn fifo(&mut self, name: &str) -> Result<(), Box<dyn Error>> {
-        self.put(&header(name, b'6', 0, "", 0o644))
+        self.entry(name, b'6', 0, "", 0o644)
     }
 
     pub(crate) fn zeros(&mut self, name: &str, size: u64) -> Result<(), Box<dyn Error>> {
-        self.put(&header(name, b'0', size, "", 0o644))?;
+        self.entry(name, b'0', size, "", 0o644)?;
         let chunk = vec![0u8; ZERO_CHUNK];
         let mut left = size.next_multiple_of(BLOCK as u64);
         while left > 0 {

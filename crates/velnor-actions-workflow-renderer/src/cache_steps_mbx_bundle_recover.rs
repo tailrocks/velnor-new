@@ -4,10 +4,11 @@
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::workflow::cache_family::{
-    COMPLETE_STATE_ROOT_EXPR, COMPLETE_STATE_TRANSPORT_EXPR, CacheFamily,
+    COMPLETE_STATE_ROOT_EXPR, COMPLETE_STATE_TRANSPORT_EXPR, CacheFamily, RUNNER_TEMP_SHELL,
 };
 use velnor_actions_contract::workflow::cache_family_mbx::{
-    MBX_BUNDLE_IMPORT_CONDITION, MBX_BUNDLE_KEY_EXPR,
+    MBX_BUNDLE_EXPECTED_KEY_ENV, MBX_BUNDLE_IMPORT_CONDITION, MBX_BUNDLE_KEY_EXPR,
+    MBX_BUNDLE_MATCHED_KEY_ENV, MBX_BUNDLE_MATCHED_KEY_EXPR,
 };
 use velnor_actions_contract::{Step, StepRole};
 
@@ -15,20 +16,56 @@ use crate::RenderError;
 use crate::steps::shell_step;
 
 use super::{
-    DISCOVERY_RECORD, MARK_FILE, MATCHED_KEY_EXPR, MAX_ARCHIVE_MEMBERS, MBX_BUNDLE_IMPORT_NAME,
-    MBX_PRODUCER_MARK_NAME, RECOVERY_RECORD, RUNNER_TEMP_GUARD, S256_FN, compat_head_lines,
-    shell_literal, split_shell,
+    DISCOVERY_RECORD, MARK_FILE, MAX_ARCHIVE_MEMBERS, MAX_COMPONENT_BYTES, MAX_MEMBER_DEPTH,
+    MBX_BUNDLE_IMPORT_NAME, MBX_PRODUCER_MARK_NAME, RECOVERY_RECORD, RUNNER_TEMP_GUARD, S256_FN,
+    compat_head_lines, shell_literal, split_shell,
 };
+
+fn ancestors(payload: &str) -> Result<Vec<String>, RenderError> {
+    let (parent, _) = split_shell(payload)?;
+    let relative = parent
+        .strip_prefix(&format!("{RUNNER_TEMP_SHELL}/"))
+        .ok_or_else(|| {
+            RenderError::InvalidWorkflow("state_transport_not_runner_temp".to_owned())
+        })?;
+    let mut walked = RUNNER_TEMP_SHELL.to_owned();
+    Ok(relative
+        .split('/')
+        .map(|part| {
+            walked = format!("{walked}/{part}");
+            format!("\"{walked}\"")
+        })
+        .collect())
+}
+
+fn cleanup_lines(payload_parent: &str, ancestors: &[String]) -> Vec<String> {
+    vec![
+        "mode=keep".to_owned(),
+        "unlock() { for t in \"$@\"; do if [ -d \"$t\" ] && [ ! -L \"$t\" ]; then chmod -R u+rwX \"$t\" 2>/dev/null || :; fi; done; }".to_owned(),
+        format!("chain() {{ for a in {}; do if [ -L \"$a\" ]; then rm -f \"$a\" || :; return 1; fi; done; return 0; }}", ancestors.join(" ")),
+        format!("finish() {{ rc=$?; if [ \"$rc\" -ne 0 ]; then printf '%s\\n' '::warning::cache_corrupt: state snapshot recovery failed; building cold'; mode=purge; fi; if [ \"$mode\" = purge ] && chain; then unlock \"$root\" \"$payload\"; chmod u+rwx \"{payload_parent}\" 2>/dev/null || :; rm -rf \"$root\" \"$payload\" || :; fi; unlock \"$stage\"; rm -rf \"$stage\" \"$d\" || :; exit 0; }}"),
+        "trap finish EXIT".to_owned(),
+    ]
+}
 
 pub(crate) fn recover_step(
     rust_toolchain: &str,
     _working_directory: Option<&str>,
-    env: BTreeMap<String, String>,
+    mut env: BTreeMap<String, String>,
 ) -> Result<Step, RenderError> {
     super::super::mbx_preflight::validate_rust_toolchain(rust_toolchain)?;
+    env.insert(
+        MBX_BUNDLE_EXPECTED_KEY_ENV.to_owned(),
+        MBX_BUNDLE_KEY_EXPR.to_owned(),
+    );
+    env.insert(
+        MBX_BUNDLE_MATCHED_KEY_ENV.to_owned(),
+        MBX_BUNDLE_MATCHED_KEY_EXPR.to_owned(),
+    );
     let payload = shell_literal(COMPLETE_STATE_TRANSPORT_EXPR)?;
     let root = shell_literal(COMPLETE_STATE_ROOT_EXPR)?;
     let (_, base) = split_shell(&root)?;
+    let (payload_parent, _) = split_shell(&payload)?;
     let ceiling = CacheFamily::MbxBundle.spec().ceiling_bytes;
     let ceiling_kb = ceiling.div_ceil(1024);
     let mut script = vec![
@@ -38,29 +75,34 @@ pub(crate) fn recover_step(
         format!("root=\"{root}\""),
         format!("base=\"{base}\""),
         format!("record=\"{DISCOVERY_RECORD}\""),
-        format!("expected=\"{MBX_BUNDLE_KEY_EXPR}\""),
-        format!("matched=\"{MATCHED_KEY_EXPR}\""),
+        format!("expected=\"${{{MBX_BUNDLE_EXPECTED_KEY_ENV}:-}}\""),
+        format!("matched=\"${{{MBX_BUNDLE_MATCHED_KEY_ENV}:-}}\""),
         "d=\"$RUNNER_TEMP/velnor/state-recover\"".to_owned(),
         "stage=\"$RUNNER_TEMP/velnor/state-stage\"".to_owned(),
         "plain=\"$d/plain.tar\"".to_owned(),
-        "unlock() { chmod -R u+rwX \"$stage\" 2>/dev/null || :; }".to_owned(),
-        "unlock; rm -rf \"$d\" \"$stage\"".to_owned(),
+    ];
+    script.extend(cleanup_lines(&payload_parent, &ancestors(&payload)?));
+    script.extend([
+        "unlock \"$stage\"; rm -rf \"$d\" \"$stage\" || :".to_owned(),
         "mkdir -p \"$d\"".to_owned(),
         S256_FN.to_owned(),
         "cold() { printf '%s\\n' \"velnor: state snapshot no_entry ($1)\"; exit 0; }".to_owned(),
-        "corrupt() { printf '%s\\n' \"::warning::cache_corrupt: state snapshot $1; building cold\"; unlock; rm -rf \"$root\" \"$stage\"; rm -f \"$payload\" \"$plain\"; exit 0; }".to_owned(),
-        "refused() { printf '%s\\n' \"::warning::cache_corrupt: state snapshot refused ($1); building cold\"; unlock; rm -rf \"$root\" \"$stage\"; rm -f \"$payload\" \"$plain\"; exit 0; }".to_owned(),
-        "if [ ! -f \"$payload\" ] || [ -L \"$payload\" ]; then cold no_entry; fi".to_owned(),
-        "if [ ! -s \"$payload\" ]; then printf '%s\\n' '::warning::cache_corrupt: state payload empty; building cold'; rm -f \"$payload\"; exit 0; fi".to_owned(),
-        "if [ -L \"$root\" ]; then printf '%s\\n' '::warning::cache_corrupt: state root is a symlink; building cold'; exit 0; fi".to_owned(),
+        "corrupt() { printf '%s\\n' \"::warning::cache_corrupt: state snapshot $1; building cold\"; mode=purge; exit 0; }".to_owned(),
+        "refused() { printf '%s\\n' \"::warning::cache_corrupt: state snapshot refused ($1); building cold\"; mode=purge; exit 0; }".to_owned(),
+        "if chain; then :; else corrupt \"payload path is a symlink\"; fi".to_owned(),
+        "if [ ! -e \"$payload\" ] && [ ! -L \"$payload\" ]; then cold no_entry; fi".to_owned(),
+        "if [ ! -f \"$payload\" ] || [ -L \"$payload\" ]; then corrupt \"payload is not a regular file\"; fi".to_owned(),
+        "if [ ! -s \"$payload\" ]; then corrupt \"payload empty\"; fi".to_owned(),
+        "if [ -L \"$root\" ]; then corrupt \"state root is a symlink\"; fi".to_owned(),
         "if [ -z \"$matched\" ]; then cold cold-missing; fi".to_owned(),
+        "case \"$matched\" in *[!A-Za-z0-9._-]*) refused refused-provenance ;; esac".to_owned(),
         "if [ ! -f \"$record\" ] || [ -L \"$record\" ]; then refused refused-provenance; fi".to_owned(),
         "expected_prefix=\"\"; compat=\"\"; provenance=\"\"; ceiling=\"\"; rec_unit=\"\"; rec_mbx=\"\"; rec_toolchain=\"\"; rec_root=\"\"".to_owned(),
         "line=; while IFS= read -r line || [ -n \"$line\" ]; do case \"$line\" in restore_prefix=*) expected_prefix=${line#restore_prefix=} ;; compat=*) compat=${line#compat=} ;; provenance=*) provenance=${line#provenance=} ;; ceiling=*) ceiling=${line#ceiling=} ;; unit=*) rec_unit=${line#unit=} ;; mbx_version=*) rec_mbx=${line#mbx_version=} ;; toolchain=*) rec_toolchain=${line#toolchain=} ;; root=*) rec_root=${line#root=} ;; esac; done < \"$record\"".to_owned(),
         "case \"$ceiling\" in ''|*[!0-9]*) refused refused-provenance ;; esac".to_owned(),
         "if [ -z \"$expected_prefix\" ] || [ -z \"$compat\" ] || [ -z \"$provenance\" ] || [ -z \"$rec_unit\" ] || [ -z \"$rec_mbx\" ] || [ -z \"$rec_toolchain\" ] || [ -z \"$rec_root\" ]; then refused refused-provenance; fi".to_owned(),
         "if [ -n \"$expected\" ] && [ \"$matched\" = \"$expected\" ]; then decision=exact-hit; elif [ -n \"$matched\" ] && [ -n \"$expected_prefix\" ]; then case \"$matched\" in \"$expected_prefix\"*) decision=predecessor-fallback ;; *) refused refused-provenance ;; esac; else refused refused-provenance; fi".to_owned(),
-    ];
+    ]);
     script.extend(compat_head_lines(
         "$d",
         "$rec_mbx",
@@ -91,7 +133,7 @@ pub(crate) fn recover_step(
 
 fn read_number(var: &str, source: &str, tmp: &str, failure: &str) -> String {
     format!(
-        "{var}=; {var}_rest=; {source} > \"$d/{tmp}\"; read -r {var} {var}_rest < \"$d/{tmp}\" || :; case \"${var}\" in ''|*[!0-9]*) corrupt \"{failure}\" ;; esac"
+        "{var}=; {var}_rest=; if {source} > \"$d/{tmp}\"; then :; else corrupt \"{failure}\"; fi; read -r {var} {var}_rest < \"$d/{tmp}\" || :; case \"${var}\" in ''|*[!0-9]*) corrupt \"{failure}\" ;; esac"
     )
 }
 
@@ -127,7 +169,8 @@ fn screen_lines() -> Vec<String> {
         "if [ \"$members_n\" != \"$verbose_n\" ]; then refused refused-shadow; fi".to_owned(),
         format!("if [ \"$members_n\" -gt {MAX_ARCHIVE_MEMBERS} ]; then refused refused-shadow; fi"),
         "v=; while IFS= read -r v || [ -n \"$v\" ]; do case \"$v\" in -*|d*) ;; *) refused refused-shadow ;; esac; done < \"$d/verbose\"".to_owned(),
-        "m=; while IFS= read -r m || [ -n \"$m\" ]; do case \"$m\" in /*|..|../*|*/..|*/../*|*\\\\*) refused refused-shadow ;; \"$base\"|\"$base\"/*) ;; *) refused refused-shadow ;; esac; done < \"$d/members\"".to_owned(),
+        format!("shape() {{ rest=$1; n=; while [ -n \"$rest\" ]; do c=${{rest%%/*}}; if [ \"${{#c}}\" -gt {MAX_COMPONENT_BYTES} ]; then refused refused-name; fi; n=\"$n.\"; if [ \"${{#n}}\" -gt {MAX_MEMBER_DEPTH} ]; then refused refused-depth; fi; case \"$rest\" in */*) rest=${{rest#*/}} ;; *) rest= ;; esac; done; }}"),
+        "m=; while IFS= read -r m || [ -n \"$m\" ]; do case \"$m\" in /*|..|../*|*/..|*/../*|*\\\\*) refused refused-shadow ;; \"$base\"|\"$base\"/*) ;; *) refused refused-shadow ;; esac; shape \"$m\"; done < \"$d/members\"".to_owned(),
     ]
 }
 
@@ -135,7 +178,7 @@ fn extract_lines() -> Vec<String> {
     vec![
         "if mkdir -m 700 \"$stage\"; then :; else corrupt \"payload unreadable\"; fi".to_owned(),
         "if tar -xf - -C \"$stage\" --no-same-owner < \"$plain\"; then :; else corrupt \"payload unreadable\"; fi".to_owned(),
-        "rm -f \"$plain\"; unlock".to_owned(),
+        "rm -f \"$plain\"; unlock \"$stage\"".to_owned(),
         "if [ -d \"$stage/$base\" ] && [ ! -L \"$stage/$base\" ]; then :; else refused refused-shadow; fi".to_owned(),
         "if find \"$stage\" ! -type f ! -type d > \"$d/special\"; then :; else corrupt \"payload unreadable\"; fi; if [ -s \"$d/special\" ]; then refused refused-shadow; fi".to_owned(),
         "if find \"$stage\" -type f -links +1 > \"$d/linked\"; then :; else corrupt \"payload unreadable\"; fi; if [ -s \"$d/linked\" ]; then refused refused-shadow; fi".to_owned(),

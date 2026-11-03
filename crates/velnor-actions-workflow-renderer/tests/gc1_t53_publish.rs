@@ -28,6 +28,7 @@ fn gc1_t53_export_publishes_fresh_export() -> Result<(), Box<dyn Error>> {
     let key = scene.discover()?;
     scene.pack_export("old")?;
     scene.recover(&key.key, &key.key, &[], None)?;
+    scene.assert_clean_exit()?;
     scene.mark_producer()?;
     std::fs::create_dir_all(scene.state_root())?;
     std::fs::write(scene.state_root().join("stale-leftover"), "residue")?;

@@ -52,7 +52,7 @@ exit 0
 
 const MISE: &str = "#!/bin/sh\nwhile [ $# -gt 0 ]; do case \"$1\" in --) shift; break ;; *) shift ;; esac; done\nexec \"$@\"\n";
 
-fn write_executable(path: &Path, body: &str) -> Result<(), Box<dyn Error>> {
+pub(crate) fn write_executable(path: &Path, body: &str) -> Result<(), Box<dyn Error>> {
     std::fs::write(path, body)?;
     let mut permissions = std::fs::metadata(path)?.permissions();
     std::os::unix::fs::PermissionsExt::set_mode(&mut permissions, 0o755);
@@ -64,4 +64,8 @@ pub(crate) fn install(bin: &Path) -> Result<(), Box<dyn Error>> {
     std::fs::create_dir_all(bin)?;
     write_executable(&bin.join("mbx"), MBX)?;
     write_executable(&bin.join("mise"), MISE)
+}
+
+pub(crate) fn install_chmod_failure(bin: &Path) -> Result<(), Box<dyn Error>> {
+    write_executable(&bin.join("chmod"), "#!/bin/sh\nexit 1\n")
 }

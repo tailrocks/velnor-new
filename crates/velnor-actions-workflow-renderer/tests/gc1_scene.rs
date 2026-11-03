@@ -1,36 +1,33 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
 use std::error::Error;
 use std::os::unix::process::CommandExt as _;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
-use velnor_actions_contract::workflow::cache_family_mbx::MBX_BUNDLE_KEY_EXPR;
+use velnor_actions_contract::workflow::cache_family_mbx::{
+    MBX_BUNDLE_KEY_EXPR, MBX_BUNDLE_MATCHED_KEY_EXPR,
+};
 
 use crate::gc1_mbx_stub;
+pub(crate) use crate::gc1_scene_tree::Tree;
+use crate::gc1_scene_tree::{tree_of, unlock_tree};
 
-const MATCHED_KEY_BAKE: &str = "${{steps.mbx-bundle-restore.outputs.cache-matched-key}}";
 const RECOVERY_RECORD: &str = "velnor/state-recovery.record";
 const RUN_DEADLINE: Duration = Duration::from_secs(300);
 const POLL: Duration = Duration::from_millis(25);
 const PAYLOAD: &str = "velnor-gc1/transport/state/payload.tar.gz";
 
-#[derive(Debug, PartialEq, Eq)]
-pub(crate) enum Entry {
-    Dir,
-    File(u64),
-    Link,
-    Other,
+pub(crate) struct Rendered {
+    pub(crate) run: String,
+    pub(crate) env: Vec<(String, String)>,
 }
-
-pub(crate) type Tree = BTreeMap<PathBuf, Entry>;
 
 pub(crate) struct Scripts {
     pub(crate) discover: String,
-    pub(crate) recover: String,
+    pub(crate) recover: Rendered,
     pub(crate) export: String,
     pub(crate) record: String,
 }
@@ -45,7 +42,7 @@ pub(crate) struct Scene {
     pub(crate) runner: PathBuf,
     pub(crate) workspace: PathBuf,
     bin: PathBuf,
-    github_output: PathBuf,
+    pub(crate) github_output: PathBuf,
     scripts: Scripts,
 }
 
@@ -65,29 +62,6 @@ pub(crate) fn files_under(root: &Path) -> Result<Vec<PathBuf>, Box<dyn Error>> {
             } else {
                 found.push(entry.path());
             }
-        }
-    }
-    Ok(found)
-}
-
-pub(crate) fn tree_of(root: &Path) -> Result<Tree, Box<dyn Error>> {
-    let mut found = Tree::new();
-    let mut pending = vec![root.to_path_buf()];
-    while let Some(dir) = pending.pop() {
-        for entry in std::fs::read_dir(&dir)? {
-            let entry = entry?;
-            let meta = std::fs::symlink_metadata(entry.path())?;
-            let kind = if meta.is_dir() {
-                pending.push(entry.path());
-                Entry::Dir
-            } else if meta.is_file() {
-                Entry::File(meta.len())
-            } else if meta.file_type().is_symlink() {
-                Entry::Link
-            } else {
-                Entry::Other
-            };
-            found.insert(entry.path(), kind);
         }
     }
     Ok(found)
@@ -281,12 +255,18 @@ impl Scene {
         env: &[(&str, &str)],
         fsize_blocks: Option<u64>,
     ) -> Result<String, Box<dyn Error>> {
-        let script = self
-            .scripts
-            .recover
-            .replace(MBX_BUNDLE_KEY_EXPR, key)
-            .replace(MATCHED_KEY_BAKE, matched);
-        self.run_script(&script, env, fsize_blocks)
+        let step = &self.scripts.recover;
+        let run = resolve(&step.run, key, matched, &self.runner)?;
+        let mut resolved = Vec::new();
+        for (name, value) in &step.env {
+            resolved.push((name.clone(), resolve(value, key, matched, &self.runner)?));
+        }
+        let mut pairs: Vec<(&str, &str)> = resolved
+            .iter()
+            .map(|(name, value)| (name.as_str(), value.as_str()))
+            .collect();
+        pairs.extend_from_slice(env);
+        self.run_script(&run, &pairs, fsize_blocks)
     }
 
     pub(crate) fn export(&self, env: &[(&str, &str)]) -> Result<String, Box<dyn Error>> {
@@ -326,54 +306,62 @@ impl Scene {
         }
     }
 
-    pub(crate) fn assert_cold(&self, output: &str, token: &str) -> Result<(), Box<dyn Error>> {
-        for needle in ["::warning::cache_corrupt", token] {
-            if !output.contains(needle) {
-                return Err(fail(&format!("recover output lost {needle}: {output}")));
-            }
-        }
-        for (path, what) in [
-            (self.recovery_record(), "recovery record"),
-            (self.state_root(), "state root"),
-            (self.stage(), "stage"),
-            (self.payload(), "payload"),
-        ] {
-            if path.exists() {
-                return Err(fail(&format!("refused archive left the {what}")));
-            }
-        }
-        if !self.store_files()?.is_empty() {
-            return Err(fail("refused archive reached the store"));
-        }
-        Ok(())
+    pub(crate) fn scratch_dir(&self) -> PathBuf {
+        self.runner.join("velnor/state-recover")
     }
 
     pub(crate) fn tree(&self) -> Result<Tree, Box<dyn Error>> {
         tree_of(&self.scratch)
     }
 
-    pub(crate) fn assert_confined(&self, before: &Tree) -> Result<(), Box<dyn Error>> {
-        let after = self.tree()?;
-        let writable = self.runner.join("velnor/state-recover");
-        for (path, entry) in &after {
-            if before.get(path) != Some(entry)
-                && !path.starts_with(&writable)
-                && *path != self.github_output
-            {
-                return Err(fail(&format!("recover wrote {}", path.display())));
-            }
-        }
-        let consumed = [self.payload(), self.state_root(), self.stage()];
-        for path in before.keys() {
-            if !after.contains_key(path) && !consumed.iter().any(|root| path.starts_with(root)) {
-                return Err(fail(&format!("recover removed {}", path.display())));
-            }
-        }
-        Ok(())
+    pub(crate) fn shim_chmod_failure(&self) -> Result<(), Box<dyn Error>> {
+        gc1_mbx_stub::install_chmod_failure(&self.bin)
     }
 
     pub(crate) fn finish(self) -> Result<(), Box<dyn Error>> {
+        unlock_tree(&self.scratch);
         std::fs::remove_dir_all(&self.scratch)?;
         Ok(())
     }
+}
+
+impl Drop for Scene {
+    fn drop(&mut self) {
+        unlock_tree(&self.scratch);
+        drop(std::fs::remove_dir_all(&self.scratch));
+    }
+}
+
+fn resolve(text: &str, key: &str, matched: &str, runner: &Path) -> Result<String, Box<dyn Error>> {
+    let strip = |expr: &str| -> String {
+        expr.strip_prefix("${{")
+            .and_then(|rest| rest.strip_suffix("}}"))
+            .unwrap_or(expr)
+            .trim()
+            .to_owned()
+    };
+    let key_expr = strip(MBX_BUNDLE_KEY_EXPR);
+    let matched_expr = strip(MBX_BUNDLE_MATCHED_KEY_EXPR);
+    let mut out = String::new();
+    let mut rest = text;
+    while let Some(at) = rest.find("${{") {
+        out.push_str(&rest[..at]);
+        let after = &rest[at + 3..];
+        let end = after
+            .find("}}")
+            .ok_or_else(|| fail("unterminated expression"))?;
+        let inner = after[..end].trim();
+        if inner == key_expr {
+            out.push_str(key);
+        } else if inner == matched_expr {
+            out.push_str(matched);
+        } else if inner == "runner.temp" {
+            out.push_str(&runner.display().to_string());
+        } else {
+            return Err(fail(&format!("unresolved expression {inner}")));
+        }
+        rest = &after[end + 2..];
+    }
+    out.push_str(rest);
+    Ok(out)
 }

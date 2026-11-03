@@ -86,9 +86,7 @@ fn gc1_t53_recover_import_failure_goes_cold() -> Result<(), Box<dyn Error>> {
     if scene.recovery_record().exists() {
         return Err(fail("failed import must leave no recovery record"));
     }
-    if scene.state_root().exists() || scene.stage().exists() {
-        return Err(fail("failed import must leave no state root or stage"));
-    }
+    scene.assert_clean_exit()?;
     require(&output, "import_failed", "failed import")?;
     require(&output, "cache_corrupt", "failed import")?;
     scene.finish()

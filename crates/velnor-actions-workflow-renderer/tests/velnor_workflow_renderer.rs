@@ -3,6 +3,8 @@
 
 mod gc1_mbx_stub;
 mod gc1_scene;
+mod gc1_scene_assert;
+mod gc1_scene_tree;
 mod gc1_t13;
 mod gc1_t14;
 mod gc1_t16;

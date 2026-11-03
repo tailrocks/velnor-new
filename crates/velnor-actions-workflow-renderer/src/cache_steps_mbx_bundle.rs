@@ -46,18 +46,14 @@ const DISCOVERY_RECORD: &str = "$RUNNER_TEMP/velnor/state-discovery.record";
 const RECOVERY_RECORD: &str = "$RUNNER_TEMP/velnor/state-recovery.record";
 const PUBLICATION_RECORD: &str = "$RUNNER_TEMP/velnor/state-publication.record";
 
-/// Baked expression for the cache-matched key published by the restore step.
-///
-/// The recover script classifies the restore observation (exact hit versus
-/// predecessor fallback) against the intended key at runtime, so both sides
-/// are baked as literal workflow expressions here rather than passed through
-/// step env (the env expression allowlist does not cover step outputs).
-const MATCHED_KEY_EXPR: &str = "${{steps.mbx-bundle-restore.outputs.cache-matched-key}}";
-
 /// Cap for the number of archive members the recover and publish scripts
 /// accept. Mirrors the orchestrator snapshot archive entry budget so a
 /// hostile or degenerate payload is refused before extraction.
 const MAX_ARCHIVE_MEMBERS: u64 = 100_000;
+
+const MAX_MEMBER_DEPTH: u64 = 64;
+
+const MAX_COMPONENT_BYTES: u64 = 255;
 
 const RUNNER_TEMP_GUARD: &str = "case \"$RUNNER_TEMP\" in /*) ;; *) printf '%s\\n' 'RUNNER_TEMP must be absolute' >&2; exit 1 ;; esac";
 

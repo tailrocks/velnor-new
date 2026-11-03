@@ -75,8 +75,6 @@ fn gc1_t53_recover_restores_locked_directories() -> Result<(), Box<dyn Error>> {
     if object != "locked" {
         return Err(fail("store lost the object behind a locked directory"));
     }
-    if scene.stage().exists() {
-        return Err(fail("recover left the stage"));
-    }
+    scene.assert_clean_exit()?;
     scene.finish()
 }

@@ -64,9 +64,7 @@ fn gc1_t53_recover_restores_export_near_the_ceiling() -> Result<(), Box<dyn Erro
             return Err(fail(&format!("store lost {path}")));
         }
     }
-    if scene.stage().exists() || scene.state_root().exists() {
-        return Err(fail("recover left the stage or state root"));
-    }
+    scene.assert_clean_exit()?;
     scene.finish()
 }
 
