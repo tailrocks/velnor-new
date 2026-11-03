@@ -71,6 +71,14 @@ mod native_artifacts_fixture;
 mod native_artifacts_suite_gate;
 #[path = "workflow_configuration_public/native_artifacts_suites.rs"]
 mod native_artifacts_suites;
+#[path = "workflow_configuration_public/non_inputs_checkout.rs"]
+mod non_inputs_checkout;
+#[path = "workflow_configuration_public/non_inputs_config.rs"]
+mod non_inputs_config;
+#[path = "workflow_configuration_public/non_inputs_replay.rs"]
+mod non_inputs_replay;
+#[path = "workflow_configuration_public/non_inputs_selection.rs"]
+mod non_inputs_selection;
 #[path = "workflow_configuration_public/one_job_per_crate.rs"]
 mod one_job_per_crate;
 #[path = "workflow_configuration_public/parallel_owners.rs"]
@@ -83,6 +91,8 @@ mod report_upload;
 mod rust_tree_pin_jobs;
 #[path = "workflow_configuration_public/rust_tree_pin_rendered.rs"]
 mod rust_tree_pin_rendered;
+#[path = "workflow_configuration_public/scoped_workspace.rs"]
+mod scoped_workspace;
 #[path = "workflow_configuration_public/seed_ids.rs"]
 mod seed_ids;
 #[path = "workflow_configuration_public/seed_off.rs"]
@@ -127,6 +137,8 @@ mod tools_producers_donors;
 mod tools_producers_mutations;
 #[path = "workflow_configuration_public/tools_producers_scope.rs"]
 mod tools_producers_scope;
+#[path = "workflow_configuration_public/topology_e797385c74.rs"]
+mod topology_e797385c74;
 #[path = "workflow_configuration_public/verification_tools.rs"]
 mod verification_tools;
 #[path = "workflow_configuration_public/waste_lint.rs"]
