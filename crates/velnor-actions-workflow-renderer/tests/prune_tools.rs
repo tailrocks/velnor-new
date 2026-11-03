@@ -37,17 +37,17 @@ fn snapshot_keys_group_by_unit_without_digest() {
     );
     assert_eq!(
         prune_group_key(
-            "velnor-v2-state-trusted-s256-0d58c66670730fc3af7f9579c097b5b947410057122dc7bddc2482c60f929886"
+            "velnor-v3-state-trusted-s256-0d58c66670730fc3af7f9579c097b5b947410057122dc7bddc2482c60f929886"
         ),
-        "velnor-v2-state-trusted"
+        "velnor-v3-state-trusted"
     );
 }
 
 #[test]
 fn keys_without_snapshot_suffix_keep_identity() {
     assert_eq!(
-        prune_group_key("velnor-v2-state-trusted"),
-        "velnor-v2-state-trusted"
+        prune_group_key("velnor-v3-state-trusted"),
+        "velnor-v3-state-trusted"
     );
 }
 
@@ -75,7 +75,7 @@ fn retired_state_entries_are_all_pruned_and_current_ones_kept()
     let hash = |c: char| c.to_string().repeat(64);
     let (a, b, c) = (hash('a'), hash('b'), hash('c'));
     let fixture = format!(
-        "11\tvelnor-v1-state-trusted-s256-{a}-s256-{b}\n12\tvelnor-v1-state-trusted-s256-{a}-s256-{c}\n13\tvelnor-v1-state-trusted-s256-{c}-s256-{b}\n21\tvelnor-v2-state-trusted-s256-{a}-s256-{b}\n"
+        "11\tvelnor-v2-state-trusted-s256-{a}-s256-{b}\n12\tvelnor-v2-state-trusted-s256-{a}-s256-{c}\n13\tvelnor-v2-state-trusted-s256-{c}-s256-{b}\n21\tvelnor-v3-state-trusted-s256-{a}-s256-{b}\n"
     );
     std::fs::write(dir.join("fixture"), fixture)?;
     let shim = dir.join("gh");
@@ -100,7 +100,7 @@ fn retired_state_entries_are_all_pruned_and_current_ones_kept()
     assert_eq!(
         deleted,
         ["11", "12", "13"],
-        "retired v1 state entries must all be deleted and v2 kept"
+        "retired v2 state entries must all be deleted and v3 kept"
     );
     std::fs::remove_dir_all(&dir)?;
     Ok(())
