@@ -83,6 +83,15 @@ pub(crate) const MBX_BUILD_SCRIPT_EXECUTION_ENV: &str = "MBX_BUILD_SCRIPT_EXECUT
 pub(crate) const MBX_BUILD_SCRIPT_EXECUTION_VALUE: &str = "0";
 pub(crate) const SOURCE_DATE_EPOCH_ENV: &str = "SOURCE_DATE_EPOCH";
 pub(crate) const SOURCE_DATE_EPOCH_VALUE: &str = "0";
+pub(crate) const MBX_COMPILE_ENV: [(&str, &str); 4] = [
+    (MBX_SHARE_OUT_DIR_ENV, MBX_SHARE_OUT_DIR_VALUE),
+    (
+        MBX_BUILD_SCRIPT_EXECUTION_ENV,
+        MBX_BUILD_SCRIPT_EXECUTION_VALUE,
+    ),
+    (MBX_CC_ENV, MBX_CC_VALUE),
+    (SOURCE_DATE_EPOCH_ENV, SOURCE_DATE_EPOCH_VALUE),
+];
 pub(crate) const MBX_CACHE_DIR_ENV: &str = "MBX_CACHE_DIR";
 pub(crate) const MBX_CACHE_DIR_VALUE: &str = "${{ runner.temp }}/velnor/mbx";
 
