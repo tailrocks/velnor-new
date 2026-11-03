@@ -10,8 +10,7 @@ save-on-producer-success, pruning).
 Every family key is
 `velnor-v<schema>-<layer>-<trust>-<compat>-<snapshot>` (`compat` and `snapshot`
 are `s256-<64 hex>` digests). `trust` is `trusted` (protected default-branch
-push), `pr` (same-repository pull request, PR-scoped writes only) or `none`
-(forks, merge groups, dispatches: never writes). A family changes its paths or
+push), `none` (pull requests, forks, merge groups, dispatches: never writes). A family changes its paths or
 digest inputs only with a schema bump.
 
 | Family (schema) | Paths | Compat hashes | Snapshot | Writers | Generated |
@@ -97,6 +96,10 @@ output across trust scopes.
 - Compat does not name a job: every reader of a workspace shares the entry,
   and the key changes only when the lock, toolchain, MBX version or platform
   changes. The `unit` keeps the dependency seed and suite bundles apart.
+- velnor-new sets `dependency_seed = "off"` (`.velnor/config.toml:40`, PR
+  #466), so no job writes this family there and no `velnor-v2-state-` entry
+  exists. Crate-job restores miss. The design that would restore this
+  persistence is [compiled-state persistence](compiled-state-persistence.md).
 - Units are the key schema of decision 2. `seed` is written only by the
   non-crate `Dependency seed` job (one per MBX Cargo workspace, protected
   default-branch pushes only, outside `Required`); crate jobs restore it
@@ -133,7 +136,7 @@ and fails when it exceeds 85 % of the 10 GiB quota.
 | `python-venv` | 384 MiB | 2 | requirements file | 1 | 768 MiB | not measured; ceiling is a placeholder to revise with data |
 | `ansible-collections` | 128 MiB | 2 | collection set | 1 | 256 MiB | not measured; ceiling is a placeholder to revise with data |
 | `playwright-browsers` | 512 MiB | 2 | Playwright version | 1 | 1 GiB | 328 MB of Chromium archives (Chromium, headless shell, ffmpeg; Playwright 1.64.1) |
-| `mbx-bundle` | 1.5 GiB stored, 12 GiB extracted | 1 | Cargo workspace and unit | 2 (union, suite) | 3 GiB stored | 63.7 MiB (root workspace) and 12.8 MiB (nested runner workspace) stored, first main push after #278 (run 39575862041); the former `target` payload was 770 MiB |
+| `mbx-bundle` | 1.5 GiB stored, 12 GiB extracted | 1 | Cargo workspace and unit | 2 (union, suite) | 3 GiB stored | 63.7 MiB (root workspace) and 12.8 MiB (nested runner workspace) stored, first main push after #278 (run 39575862041); later seed exports reported (author-quoted, #437) at 5.9 GiB and 3.5 GiB uncompressed and were refused; the former `target` payload was 770 MiB |
 
 The reference total with the tools allowance is about 9.88 GiB (the state family
 counts its 1.5 GiB stored bound twice and its 12 GiB extracted bound not at

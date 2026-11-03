@@ -8,7 +8,7 @@ use velnor_actions_contract::workflow::cache_family::SOURCES_SAVE_CONDITION;
 use velnor_actions_contract::workflow::{
     validate_tofu_providers_producer, validate_tools_producer,
 };
-use velnor_actions_contract::{CacheMode, Job, Step, StepKind, StepRole};
+use velnor_actions_contract::{Job, Step, StepKind, StepRole};
 
 use velnor_actions_orchestrator::{finalized_jobs, prepare};
 
@@ -290,11 +290,7 @@ const PUSH_CONDITION: &str = "github.event_name == 'push'";
 
 pub(super) fn untrusted_saves(jobs: &BTreeMap<String, Job>) -> Vec<Violation> {
     jobs.iter()
-        .filter(|(_, job)| {
-            !job.cache_mode
-                .as_ref()
-                .is_some_and(CacheMode::is_explicit_read)
-        })
+        .filter(|(_, job)| !job.cache_access.is_read())
         .flat_map(|(id, job)| {
             job.steps
                 .iter()

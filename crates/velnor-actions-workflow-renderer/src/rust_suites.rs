@@ -381,7 +381,7 @@ fn suite_job_record(
             actions: PermissionLevel::None,
             packages: PermissionLevel::None,
         }),
-        cache_mode: None,
+        cache_access: velnor_actions_contract::CacheAccess::Read,
         environment: None,
         env: velnor_actions_contract::JobEnv::Unset,
         steps,

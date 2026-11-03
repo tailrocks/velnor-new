@@ -19,6 +19,7 @@ permissions:
   contents: read
   actions: read
   attestations: read
+cache-mode: read
 env:
   VELNOR_RUN_KEY_ATTEMPT: ${{ github.run_attempt }}
   VELNOR_HOMEBREW_ADOPTION_TRANSITION_ID: ${{ inputs.transition_id }}

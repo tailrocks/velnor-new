@@ -93,9 +93,6 @@ impl Job {
                 format!("write_all:{id}"),
             ));
         }
-        if let Some(cache_mode) = &self.cache_mode {
-            cache_mode.validate("job.cache_mode")?;
-        }
         let mut service_ids = BTreeSet::new();
         for service in &self.services {
             service.validate()?;

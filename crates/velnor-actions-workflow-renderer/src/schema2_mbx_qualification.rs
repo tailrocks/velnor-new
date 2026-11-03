@@ -11,7 +11,6 @@ use velnor_actions_contract::cachekey::mbx_qualification_cache_generation;
 use velnor_actions_contract::workflow::MBX_WORKSPACE_CLEAN_CONDITION;
 use velnor_actions_contract::workflow::qualification_cache_lineage::validate_qualification_cache_generation;
 
-const MAIN_REF: &str = "github.ref == 'refs/heads/main' && github.ref_protected == true";
 const SMOKE_CRATE: &str = r#"set -eu
 root="$GITHUB_WORKSPACE/.velnor-mbx-cache-qualification"
 mkdir -p "$root/src"
@@ -76,7 +75,7 @@ fn job(
     let (id, title, mode) = if writer {
         (
             "mbx-cache-write-hosted",
-            "MBX objects cache / protected-main writer",
+            "MBX objects cache / branch writer",
             "mbx-cache-roundtrip",
         )
     } else {
@@ -100,6 +99,9 @@ fn job(
             ("actions", if writer { "write" } else { "read" }),
         ]),
     ));
+    if writer {
+        fields.push(crate::cache_authority::qualification_writer_field());
+    }
     fields.push(("env".to_owned(), qualification_env(request, writer)));
 
     let mut steps = vec![
@@ -123,7 +125,8 @@ fn job(
         steps.push(run_step("Sample runner disk after cleanup", DISK_SAMPLE));
     }
 
-    let when = format!("inputs.mode == '{mode}' && {MAIN_REF}");
+    let when =
+        crate::cache_authority::qualification_branch_gate(&format!("inputs.mode == '{mode}'"));
     gated(finish(id, fields, steps), &when)
 }
 

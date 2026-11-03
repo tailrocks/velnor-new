@@ -6,6 +6,7 @@ name: Upstream Freshness
   workflow_dispatch: {}
 permissions:
   contents: read
+cache-mode: read
 concurrency:
   group: freshness
   cancel-in-progress: false

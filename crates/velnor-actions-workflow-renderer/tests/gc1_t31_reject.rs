@@ -34,30 +34,24 @@ pub(crate) fn check_rejects_writer_queue_shapes() -> Result<(), Box<dyn Error>> 
 }
 
 pub(crate) fn check_rejects_untrusted_writes() -> Result<(), Box<dyn Error>> {
-    let mut jobs = authority_jobs();
-    jobs.insert(
-        "writer".to_owned(),
-        job_with(
-            "Writer",
-            Some(CacheMode::Write),
-            None,
-            vec![shell_step("Build")],
-        ),
-    );
-    if event_workflow(jobs).validate().is_ok() {
-        return Err(fail("untrusted event path accepted an unconditional write"));
-    }
-    let mut jobs = authority_jobs();
-    if let Some(job) = jobs.get_mut("writer") {
-        job.cache_mode = Some(CacheMode::push_write_expression());
-    }
-    let mut workflow = event_workflow(jobs);
-    workflow.cache_mode = Some(CacheMode::WriteOnly);
-    if workflow.validate().is_ok() {
-        return Err(fail("untrusted event path accepted a workflow write"));
-    }
-    if CacheMode::parse("write-always").is_ok() || CacheMode::parse("").is_ok() {
-        return Err(fail("cache mode accepted an unknown grant"));
+    for writer in [
+        CacheWriter::ToolsProducer,
+        CacheWriter::TofuProvidersProducer,
+        CacheWriter::SourcesProducer,
+    ] {
+        let mut jobs = authority_jobs();
+        jobs.insert(
+            "build".to_owned(),
+            job_with(
+                "Build",
+                CacheAccess::Writer(writer),
+                None,
+                vec![shell_step("Build")],
+            ),
+        );
+        if event_workflow(jobs).validate().is_ok() {
+            return Err(fail("untrusted event path accepted a cache write"));
+        }
     }
     Ok(())
 }
@@ -68,7 +62,7 @@ pub(crate) fn check_rejects_token_confusion() -> Result<(), Box<dyn Error>> {
         "cleanup".to_owned(),
         job_with(
             "Cleanup",
-            None,
+            CacheAccess::Read,
             Some(cleanup_permissions()),
             vec![checkout_step(), shell_step("Delete")],
         ),
@@ -103,12 +97,12 @@ pub(crate) fn check_authority_rejected(
 pub(crate) fn check_rejects_authority_mismatch() -> Result<(), Box<dyn Error>> {
     let ir = event_workflow(authority_jobs());
     let valid_reader = ["reader"];
-    let valid_writer = ["writer"];
+    let no_writers: [&str; 0] = [];
     let valid_cleanup = ["cleanup"];
     check_authority_rejected(
         &ir,
         &["ghost"],
-        &valid_writer,
+        &no_writers,
         &valid_cleanup,
         "authority check accepted an unknown reader",
     )?;
@@ -122,7 +116,14 @@ pub(crate) fn check_rejects_authority_mismatch() -> Result<(), Box<dyn Error>> {
     check_authority_rejected(
         &ir,
         &valid_reader,
-        &valid_writer,
+        &["build"],
+        &valid_cleanup,
+        "authority check accepted a writer without a write grant",
+    )?;
+    check_authority_rejected(
+        &ir,
+        &valid_reader,
+        &no_writers,
         &["ghost"],
         "authority check accepted an unknown cleanup",
     )?;
@@ -131,7 +132,7 @@ pub(crate) fn check_rejects_authority_mismatch() -> Result<(), Box<dyn Error>> {
         "reader".to_owned(),
         job_with(
             "Reader",
-            Some(CacheMode::Write),
+            CacheAccess::Writer(CacheWriter::ToolsProducer),
             None,
             vec![shell_step("Check")],
         ),
@@ -139,7 +140,7 @@ pub(crate) fn check_rejects_authority_mismatch() -> Result<(), Box<dyn Error>> {
     check_authority_rejected(
         &event_workflow(jobs),
         &valid_reader,
-        &valid_writer,
+        &no_writers,
         &valid_cleanup,
         "authority check let a reader publish",
     )?;
@@ -150,7 +151,7 @@ pub(crate) fn check_rejects_authority_mismatch() -> Result<(), Box<dyn Error>> {
     check_authority_rejected(
         &event_workflow(jobs),
         &valid_reader,
-        &valid_writer,
+        &no_writers,
         &valid_cleanup,
         "authority check let cleanup run without actions write",
     )?;
@@ -159,7 +160,7 @@ pub(crate) fn check_rejects_authority_mismatch() -> Result<(), Box<dyn Error>> {
         "extra".to_owned(),
         job_with(
             "Extra",
-            None,
+            CacheAccess::Read,
             Some(cleanup_permissions()),
             vec![shell_step("Extra")],
         ),
@@ -167,7 +168,7 @@ pub(crate) fn check_rejects_authority_mismatch() -> Result<(), Box<dyn Error>> {
     check_authority_rejected(
         &event_workflow(jobs),
         &valid_reader,
-        &valid_writer,
+        &no_writers,
         &valid_cleanup,
         "authority check let a non-cleanup job hold actions write",
     )?;

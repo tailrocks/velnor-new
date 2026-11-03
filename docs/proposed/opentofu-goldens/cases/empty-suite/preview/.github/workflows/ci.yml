@@ -14,6 +14,7 @@ name: CI
   merge_group:
 permissions:
   contents: read
+cache-mode: read
 env:
   ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
   ACTIONS_ID_TOKEN_REQUEST_URL: ""
@@ -100,7 +101,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          fetch-depth: "0"
+          fetch-depth: ${{ github.event_name == 'push' && '1' || '0' }}
           persist-credentials: "false"
       - name: Setup Mise
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
@@ -194,7 +195,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          fetch-depth: "0"
+          fetch-depth: ${{ github.event_name == 'push' && '1' || '0' }}
           persist-credentials: "false"
       - name: Setup Mise
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
@@ -279,7 +280,6 @@ jobs:
       VELNOR_ASSET_URL: https://github.com/tailrocks/velnor-new/releases/download/v0.1.72/velnor-actions-0.1.72-x86_64-unknown-linux-gnu
       VELNOR_RELEASE_COMMIT: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
       VELNOR_RUN_KEY_ATTEMPT: ${{ needs.plan.outputs.plan_attempt || github.run_attempt }}
-    cache-mode: read
     needs:
       - plan
     if: "!contains(needs.plan.outputs.not_affected_jobs, ',rust-empty-suite,')"
@@ -388,6 +388,7 @@ jobs:
     continue-on-error: true
     env:
       VELNOR_RUN_KEY_ATTEMPT: ${{ github.run_attempt }}
+    cache-mode: write
     if: github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true
     steps:
       - name: Record optional cache budget
@@ -463,6 +464,7 @@ jobs:
       RUSTUP_AUTO_INSTALL: "0"
       RUSTUP_TOOLCHAIN: 1.99.1
       VELNOR_RUN_KEY_ATTEMPT: ${{ github.run_attempt }}
+    cache-mode: write
     if: github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true
     steps:
       - name: Record optional cache budget
@@ -554,6 +556,7 @@ jobs:
       RUSTUP_AUTO_INSTALL: "0"
       RUSTUP_TOOLCHAIN: 1.99.1
       VELNOR_RUN_KEY_ATTEMPT: ${{ github.run_attempt }}
+    cache-mode: write
     if: github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true
     steps:
       - name: Record optional cache budget
@@ -564,7 +567,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          fetch-depth: "0"
+          fetch-depth: ${{ github.event_name == 'push' && '1' || '0' }}
           persist-credentials: "false"
       - name: Setup Mise
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c

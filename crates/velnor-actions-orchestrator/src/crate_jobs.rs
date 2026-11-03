@@ -4,7 +4,7 @@
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::{
-    CacheMode, CrateJob, DependencySeedMode, Job, JobTimeout, ProposedTask, Stack, Step,
+    CacheAccess, CrateJob, DependencySeedMode, Job, JobTimeout, ProposedTask, Stack, Step,
     VelnorConfig, WorkflowPolicy, crate_display_name, tofu_display_name,
 };
 use velnor_actions_contract::workflow::ledger_cli::{LEDGER_CLI_JOB_ID, LedgerCliSource};
@@ -367,6 +367,6 @@ fn render_job(
         environment: None,
         env: velnor_actions_contract::JobEnv::Unset,
         steps,
-        cache_mode: Some(CacheMode::explicit_read()),
+        cache_access: CacheAccess::Read,
     })
 }

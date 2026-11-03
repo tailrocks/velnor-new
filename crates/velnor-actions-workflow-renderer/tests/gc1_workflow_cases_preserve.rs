@@ -7,7 +7,7 @@ use std::error::Error;
 use velnor_actions_contract::workflow::ir::WRITER_QUEUE_CANCEL_IN_PROGRESS;
 use velnor_actions_contract::workflow::{LaneClass, lane_class};
 use velnor_actions_contract::{
-    CacheMode, Concurrency, Job, JobDisposition, NEEDS_CHANNEL_ENV, NEEDS_CHANNEL_EXPRESSION,
+    Concurrency, Job, JobDisposition, NEEDS_CHANNEL_ENV, NEEDS_CHANNEL_EXPRESSION,
     NEEDS_EXPECTED_ENV, NeedsConclusions, ObligationDecision, Plan, PlanGenerator, PlanJob,
     PlanMatrix, PlanObligation, PlanRunner, REQUIRED_CONDITION, REQUIRED_GATE_CONDITION,
     REQUIRED_GATE_FAIL_CONDITION, REQUIRED_JOB_ID, RunnerSelection, RunsOn, StepKind, Trust,
@@ -34,7 +34,7 @@ fn check_required_inventory(
 ) -> Result<(), Box<dyn Error>> {
     let conclusions = NeedsConclusions::from_finalized_jobs(REQUIRED_JOB_ID, jobs)
         .map_err(|error| fail(&format!("{label} lost its required inventory:{error}")))?;
-    if conclusions.inventory != vec!["reader".to_owned(), "writer".to_owned()] {
+    if conclusions.inventory != vec!["build".to_owned(), "reader".to_owned()] {
         return Err(fail(&format!(
             "{label} dropped a selected unit from required:{:?}",
             conclusions.inventory
@@ -50,7 +50,7 @@ fn check_required_inventory(
         return Err(fail(&format!("{label} lost its needs channel")));
     }
     let (expected_key, expected_value) = conclusions.expected_env();
-    if expected_key != NEEDS_EXPECTED_ENV || expected_value != "[\"reader\",\"writer\"]" {
+    if expected_key != NEEDS_EXPECTED_ENV || expected_value != "[\"build\",\"reader\"]" {
         return Err(fail(&format!(
             "{label} lost its expected ledger:{expected_key}:{expected_value}"
         )));
@@ -64,7 +64,6 @@ fn check_mode(
     selects: bool,
     trusted: bool,
     trigger: velnor_actions_contract::Trigger,
-    writer_mode: Option<CacheMode>,
 ) -> Result<(), Box<dyn Error>> {
     if selects_affected_work(event) != selects {
         return Err(fail(&format!("{label} left its affected-work selection")));
@@ -72,69 +71,35 @@ fn check_mode(
     if trust_for_event(event) != if trusted { Trust::Trusted } else { Trust::Pr } {
         return Err(fail(&format!("{label} left its event trust")));
     }
-    let workflow = mode_workflow(trigger, writer_mode);
+    let workflow = mode_workflow(trigger);
     workflow
         .validate()
         .map_err(|error| fail(&format!("{label} rejected its event workflow:{error}")))?;
     workflow
-        .validate_event_authority(
-            &names(&["reader"]),
-            &names(&["writer"]),
-            &names(&["cleanup"]),
-        )
+        .validate_event_authority(&names(&["reader"]), &names(&[]), &names(&["cleanup"]))
         .map_err(|error| fail(&format!("{label} rejected its event authority:{error}")))?;
     check_required_inventory(&workflow.jobs, label)?;
     Ok(())
 }
 
 fn check_event_modes() -> Result<(), Box<dyn Error>> {
-    check_mode(
-        "pr",
-        WorkflowEvent::PullRequest,
-        true,
-        false,
-        pr_trigger(),
-        Some(CacheMode::push_write_expression()),
-    )?;
-    check_mode(
-        "fork",
-        WorkflowEvent::Fork,
-        true,
-        false,
-        pr_trigger(),
-        Some(CacheMode::push_write_expression()),
-    )?;
-    check_mode(
-        "main",
-        WorkflowEvent::Push,
-        false,
-        true,
-        push_trigger(),
-        Some(CacheMode::push_write_expression()),
-    )?;
+    check_mode("pr", WorkflowEvent::PullRequest, true, false, pr_trigger())?;
+    check_mode("fork", WorkflowEvent::Fork, true, false, pr_trigger())?;
+    check_mode("main", WorkflowEvent::Push, false, true, push_trigger())?;
     check_mode(
         "merge-queue",
         WorkflowEvent::MergeGroup,
         false,
         false,
         merge_trigger(),
-        Some(CacheMode::push_write_expression()),
     )?;
-    check_mode(
-        "tag",
-        WorkflowEvent::Push,
-        false,
-        true,
-        push_trigger(),
-        None,
-    )?;
+    check_mode("tag", WorkflowEvent::Push, false, true, push_trigger())?;
     check_mode(
         "preview",
         WorkflowEvent::Local,
         true,
         false,
         dispatch_trigger(),
-        None,
     )?;
     check_mode(
         "release",
@@ -142,7 +107,6 @@ fn check_event_modes() -> Result<(), Box<dyn Error>> {
         false,
         false,
         schedule_trigger(),
-        None,
     )?;
     Ok(())
 }
@@ -225,7 +189,7 @@ fn check_hard_writer_failures() -> Result<(), Box<dyn Error>> {
 }
 
 fn check_mixed_attempt_ledgers() -> Result<(), Box<dyn Error>> {
-    let mut jobs = mode_jobs(Some(CacheMode::push_write_expression()));
+    let mut jobs = mode_jobs();
     check_required_inventory(&jobs, "mixed-attempt")?;
     if let Some(required) = jobs.get_mut(REQUIRED_JOB_ID) {
         required.needs = vec!["reader".to_owned()];
@@ -235,7 +199,7 @@ fn check_mixed_attempt_ledgers() -> Result<(), Box<dyn Error>> {
     if narrowed.inventory != vec!["reader".to_owned()] {
         return Err(fail("rerun ledger kept a superseded producer"));
     }
-    if narrowed.gate_matches(&mode_jobs(Some(CacheMode::push_write_expression()))) {
+    if narrowed.gate_matches(&mode_jobs()) {
         return Err(fail("rerun ledger matched a stale producer set"));
     }
     Ok(())
