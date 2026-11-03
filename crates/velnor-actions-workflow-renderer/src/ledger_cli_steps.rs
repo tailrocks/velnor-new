@@ -28,6 +28,12 @@ const UPLOAD_PATH: &str = "${{ runner.temp }}/velnor/ledger-cli-out/velnor-actio
 
 const TARGET_ENV: &str = "CARGO_TARGET_DIR";
 
+const LEAN_BUILD_ENV: [(&str, &str); 3] = [
+    ("CARGO_INCREMENTAL", "0"),
+    ("CARGO_PROFILE_DEV_DEBUG", "0"),
+    ("CARGO_PROFILE_DEV_STRIP", "symbols"),
+];
+
 fn verify_script() -> String {
     format!(
         concat!(
@@ -103,6 +109,7 @@ pub fn ledger_cli_build_step(
     .to_vec();
     let mut env = env.clone();
     env.insert(TARGET_ENV.to_owned(), LEDGER_CLI_TARGET_DIR.to_owned());
+    env.extend(LEAN_BUILD_ENV.map(|(key, value)| (key.to_owned(), value.to_owned())));
     env.insert(
         RUSTUP_AUTO_INSTALL_ENV.to_owned(),
         RUSTUP_AUTO_INSTALL_DISABLED.to_owned(),
