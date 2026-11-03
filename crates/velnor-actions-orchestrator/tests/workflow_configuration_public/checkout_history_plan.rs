@@ -66,7 +66,7 @@ fn origin() -> Result<Origin, Box<dyn Error>> {
             velnor_actions_mise::RUST_VERSION
         ),
     )?;
-    for (relative_root, package_name) in [("crates/a-b", "a-b"), ("crates/a/b", "b")] {
+    for (relative_root, package_name) in [("crates/a-b", "a-b"), ("crates/a/c", "c")] {
         workflow_configuration_fixture::add_independent_mbx_package(
             root,
             relative_root,
@@ -81,7 +81,7 @@ fn origin() -> Result<Origin, Box<dyn Error>> {
     let second = commit_all(root, "change a-b")?;
     workflow_configuration_fixture::git(&["checkout", "-q", "-b", "pr", &first], root)?;
     fs::write(
-        root.join("crates/a/b/src/lib.rs"),
+        root.join("crates/a/c/src/lib.rs"),
         "pub fn f() -> u8 { 2 }\n",
     )?;
     let pr_head = commit_all(root, "change b")?;
