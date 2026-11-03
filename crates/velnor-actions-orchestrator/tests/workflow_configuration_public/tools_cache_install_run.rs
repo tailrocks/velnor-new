@@ -3,6 +3,7 @@
 
 use std::error::Error;
 use std::fs;
+use std::os::unix::fs::symlink;
 
 use super::ledger_cli_verify_script::RenderedVerify;
 use super::tools_cache_verify_hook::{Sandbox, expand_shell, pair};
@@ -16,6 +17,7 @@ pub(super) struct Install<'a> {
     pub(super) archive: &'a [u8],
     pub(super) extra_archives: &'a [(&'a str, &'a [u8])],
     pub(super) file: &'a [u8],
+    pub(super) links: &'a [(&'a str, &'a str)],
 }
 
 pub(super) struct Outcome {
@@ -43,6 +45,14 @@ pub(super) fn run_install(
         fs::write(runner.workspace.path().join("mise.lock"), lock)?;
     }
     fs::write(version.join("file"), install.file)?;
+    let dir = version.display().to_string();
+    for (link, target) in install.links {
+        let path = version.join(link);
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        symlink(target.replace("{dir}", &dir), path)?;
+    }
     let mut env = vec![
         pair("VELNOR_TOOL_PINS", install.pins),
         pair("RUNNER_OS", "Linux"),

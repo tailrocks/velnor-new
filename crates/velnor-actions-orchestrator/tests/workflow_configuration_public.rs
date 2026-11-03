@@ -121,6 +121,8 @@ mod tools_cache_install_run;
 mod tools_cache_pin_fixture;
 #[path = "workflow_configuration_public/tools_cache_pin_precedence.rs"]
 mod tools_cache_pin_precedence;
+#[path = "workflow_configuration_public/tools_cache_symlink_escape.rs"]
+mod tools_cache_symlink_escape;
 #[path = "workflow_configuration_public/tools_cache_verify_hook.rs"]
 mod tools_cache_verify_hook;
 #[path = "workflow_configuration_public/tools_producers.rs"]

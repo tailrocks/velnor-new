@@ -250,6 +250,7 @@ fn install_outcome(
             archive: BYTES,
             extra_archives: &[],
             file: install,
+            links: &[],
         },
         extra,
     )?;
@@ -323,6 +324,7 @@ fn restored_cargo_machete_install_is_kept_when_it_matches_its_pinned_archive()
                 archive: &archive,
                 extra_archives: &[],
                 file,
+                links: &[],
             },
             &[],
         )

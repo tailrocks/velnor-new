@@ -48,6 +48,7 @@ fn outcome_for(
             archive: &archive_a,
             extra_archives: &[(&sha_b, &archive_b)],
             file: install_file,
+            links: &[],
         },
         &[],
     )

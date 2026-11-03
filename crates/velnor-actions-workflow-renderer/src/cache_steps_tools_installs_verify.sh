@@ -91,8 +91,9 @@ verify_install() {
   while IFS= read -r link; do
     target=$(readlink "$link")
     case "$target" in
+      ..|../*|*/../*|*/..) echo "symlink ${link#"$dir"/} leaves the install"; return 1 ;;
       "$dir"/*) ;;
-      /*|..|../*|*/../*|*/..) echo "symlink ${link#"$dir"/} leaves the install"; return 1 ;;
+      /*) echo "symlink ${link#"$dir"/} leaves the install"; return 1 ;;
     esac
   done < <(find "$dir" -type l)
   # Mise's own bookkeeping under `.mise-*` (the packslip statement, shell
