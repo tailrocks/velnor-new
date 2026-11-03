@@ -215,12 +215,22 @@ directly after the Rust install in every other generated job:
 | `.github/actions/generator-release-build-*` | the `velnor-actions` release builds, after the Intel target on the cross leg |
 | `.github/actions/generator-release-qualify-*` | release qualification |
 | `qualification.yml` | `mbx-cache-write-hosted`, `mbx-cache-read-hosted` (the toolchain is put on `PATH` only after the check) |
-| `freshness.yml` | `freshness` |
 | `binary-release.yml`, `binary-preview.yml` | every payload producer, after `Install pinned Cargo metadata toolchain` and before `Fetch Cargo sources` |
 | `upgrades.yml` | `prepare` and `verify`, inside the regeneration prerequisites: right after the fresh `rust@<pin>` install and before `cargo fetch` (`VELNOR_VERIFY_RUST_SCRIPT`) |
 
 These default-home steps carry no tree pin. They restore no cache and install
 the default profile, so they always run the file-by-file check.
+
+`freshness.yml` is not among them. Its `freshness` job installs into owned,
+job-local homes and runs the pinned installed-phase verifier only (no restore
+phase, no tools cache). It installs `rust[profile=minimal]@<pin>` and adds no
+component: its probe runs `cargo run --locked -p velnor-actions-cli` and
+`cargo metadata` only. The pinned verifier requires the installed component
+set to equal a pinned row, and a bare `rust@<pin>` install yields the default
+profile, which no row pins, so the job would exit with
+`pin_mismatch: components_not_pinned`. The two pinned sets are the minimal
+profile (`cargo`, `rust-std`, `rustc`) and the minimal profile plus
+`clippy-preview` and `rustfmt-preview`.
 
 Two more job kinds run on the owned homes with the tools cache, so they also
 get `Verify restored Rust toolchain` before their install:

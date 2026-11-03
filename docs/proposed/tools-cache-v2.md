@@ -33,7 +33,7 @@ row X44), so `rustup component add` reads verified bytes. The tools-cache static
 entries stored with rustup's rewritten manifest are not restored. The pin is selected by the job's Rust version and the rendered target, never by restored
 bytes. A match passes. If a pin row exists for that version and target, any difference (an unpinned components
 set, an extra or renamed `toolchains/` entry, a tree difference) fails the job with `rust_tree_digest_mismatch`;
-it never falls back. ARM targets have no pin row yet (owner standing grant 2026-11-02, velnor-fast-ci GOAL.md; decisions.tsv X35): a lone `<version>-aarch64-unknown-linux-gnu` toolchain directory is treated as unpinned. Only a version and target with no pin row, or that ARM directory, prints `pin_mismatch: no_pin` and falls back to
+it never falls back. ARM targets have no pin row yet (owner standing grant 2026-11-02, velnor-fast-ci GOAL.md; decisions.tsv X35): a lone `<version>-*-*-*` toolchain entry that is not `<version>-<target>` is treated as unpinned. Only a version and target with no pin row, or that lone entry, prints `pin_mismatch: no_pin` and falls back to
 the file-by-file check against the channel manifest. That fallback overwrites the channel manifest but leaves the `manifest-*` bytes, the `multirust-config.toml` content and all file modes unbound, which affects consumer repos that pin a Rust other than the pinned 1.99.1 in owned-home jobs. The pin binds only `toolchains/`; the rest of `$RUNNER_TEMP/velnor/rustup` (`settings.toml`, `update-hashes`, `downloads`) is restored by the tools cache and no check binds it (info). The cache payload holds no memo of a passed check. See
 [verified Rust installs](../implemented/rust-channel-manifest.md).
 

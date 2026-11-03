@@ -66,7 +66,7 @@ jobs:
           NODE_AUTH_TOKEN: ""
           NPM_TOKEN: ""
           RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
-        run: "env -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR mise --no-config --no-env --no-hooks install 'rust@'\"${VELNOR_TOOL_RUST}\""
+        run: "env -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR mise --no-config --no-env --no-hooks install 'rust[profile=minimal]@'\"${VELNOR_TOOL_RUST}\""
       - name: Verify Rust channel manifest
         env:
           ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
