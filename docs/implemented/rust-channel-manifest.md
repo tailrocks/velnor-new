@@ -164,11 +164,14 @@ first version of this step did exactly that.
    `scripts/derive-rust-tree-digest` derives a pin row, sets
    `PATH=/usr/bin:/bin:/usr/sbin:/sbin` itself before anything else (so no
    helper comes from the caller's `PATH`),
-   inspects its own environment and re-executes itself under `env -i` with the
-   same allowlist minus `PATH` whenever any variable outside that allowlist,
-   `PATH`, `LC_ALL=C` and the shell-provided `PWD`, `SHLVL` and `_` is present (it
-   adds no argument and trusts no marker, so `--velnor-clean-reexec` is an
-   unknown option and a usage error, and a caller's `TAR_OPTIONS`,
+   inspects its own environment (`env -0`, never awk `ENVIRON`, which GNU awk
+   extends with `AWKPATH` and `AWKLIBPATH`) and re-executes itself once under
+   `env -i` with the same allowlist minus `PATH` plus `VELNOR_DERIVE_REEXEC=1`
+   whenever any variable outside that allowlist, `PATH`, `LC_ALL=C`, the
+   marker and the shell-provided `PWD`, `SHLVL` and `_` is present (it adds no
+   argument, so `--velnor-clean-reexec` is an unknown option and a usage
+   error; a second pass that still finds such a variable exits 1 naming it
+   instead of looping, so the script always terminates, and a caller's `TAR_OPTIONS`,
    `XZ_DEFAULTS`, `QUOTING_STYLE`, `TMPDIR`, `CDPATH` or `LC_ALL` never reaches
    `tar`, `xz`, `find` or `mktemp`; one list names both the variables the check
    accepts and the variables the re-execution forwards), refuses a

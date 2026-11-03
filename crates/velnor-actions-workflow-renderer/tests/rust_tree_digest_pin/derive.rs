@@ -192,9 +192,7 @@ impl Bundle {
 
     fn run_at(&self, program: &Path, args: &[&str], extra: &[(&str, &str)]) -> Outcome {
         let root = self.work.path();
-        let output = Command::new("/usr/bin/timeout")
-            .arg(TIMEOUT_SECONDS)
-            .arg(program)
+        let output = timed(program)
             .args(args)
             .current_dir(root)
             .env_clear()
@@ -209,6 +207,12 @@ impl Bundle {
             ..outcome(&output)
         }
     }
+}
+
+pub(crate) fn timed(program: impl AsRef<std::ffi::OsStr>) -> Command {
+    let mut command = Command::new("/usr/bin/timeout");
+    command.arg(TIMEOUT_SECONDS).arg(program);
+    command
 }
 
 pub(crate) fn outcome(output: &Output) -> Outcome {
@@ -279,7 +283,7 @@ fn d2_derive_prints_the_listing_and_ignores_the_caller_environment() {
         assert_eq!(poisoned.stdout, clean.stdout, "{env:?}: {poisoned:?}");
     }
     let fx = Fixture::standard();
-    let output = Command::new(crate::pinned::derive_tool())
+    let output = timed(crate::pinned::derive_tool())
         .arg("--tree")
         .arg(fx.root())
         .env("QUOTING_STYLE", "c")

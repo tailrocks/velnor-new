@@ -7,7 +7,7 @@ use std::os::unix::fs::{PermissionsExt, symlink};
 use std::os::unix::process::CommandExt;
 use std::process::Command;
 
-use crate::derive::{Bundle, outcome};
+use crate::derive::{Bundle, outcome, timed};
 use crate::fixture::{
     CAP, CHANNEL_MANIFEST, CHANNEL_URL, FIXTURE_CHANNEL, FIXTURE_COMPONENTS_SHA256,
     FIXTURE_TREE_SHA256, Fixture, MISMATCH, MULTIRUST_CONFIG, Outcome, TARBALL_URL, TARGET,
@@ -17,7 +17,7 @@ use velnor_actions_workflow_renderer::verifier_builders::ToolchainPhase;
 
 fn derive(args: &[&std::ffi::OsStr]) -> Outcome {
     outcome(
-        &Command::new(crate::pinned::derive_tool())
+        &timed(crate::pinned::derive_tool())
             .args(args)
             .output()
             .expect("run derive tool"),
@@ -155,7 +155,7 @@ fn h1_derive_runs_no_helper_from_the_callers_path() {
         std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).expect("chmod");
     }
     for preset_marker in [false, true] {
-        let mut command = Command::new(crate::pinned::derive_tool());
+        let mut command = timed(crate::pinned::derive_tool());
         command
             .args(["--tree".as_ref(), fx.root().as_os_str()])
             .env_clear()
@@ -278,7 +278,7 @@ fn h2_a_preset_marker_does_not_let_the_callers_environment_reach_the_tools() {
     }
 
     let fx = Fixture::standard();
-    let mut command = Command::new(crate::pinned::derive_tool());
+    let mut command = timed(crate::pinned::derive_tool());
     command
         .args(["--tree".as_ref(), fx.root().as_os_str()])
         .env_clear()
@@ -317,7 +317,7 @@ fn faithful(outcome: &Outcome) -> bool {
 
 fn relative_tree(fx: &Fixture, name: &str, home: &Fixture) -> Outcome {
     outcome(
-        &Command::new(crate::pinned::derive_tool())
+        &timed(crate::pinned::derive_tool())
             .current_dir(fx.toolchains())
             .env("HOME", home.root())
             .args(["--tree", name])
@@ -358,7 +358,7 @@ fn running_privileged() -> bool {
 }
 
 fn derive_tree_as_unprivileged_reader(fx: &Fixture) -> Outcome {
-    let mut command = Command::new(crate::pinned::derive_tool());
+    let mut command = timed(crate::pinned::derive_tool());
     command.args(["--tree".as_ref(), fx.root().as_os_str()]);
     if running_privileged() {
         let toolchains = fx.toolchains();

@@ -10,40 +10,48 @@ export PATH
 
 forwarded="HOME RUNNER_TEMP RUSTUP_HOME MISE_RUSTUP_HOME CARGO_HOME VELNOR_TOOL_RUST HTTPS_PROXY https_proxy HTTP_PROXY http_proxy NO_PROXY no_proxy ALL_PROXY all_proxy SSL_CERT_FILE SSL_CERT_DIR CURL_CA_BUNDLE"
 
-env_status=0
-awk -v forwarded="$forwarded" '
+scan_end=VELNOR_DERIVE_SCAN_END
+scan_status=0
+unclean=$({ /usr/bin/env -0 && printf '%s\000' "$scan_end"; } | /usr/bin/tr '\000\n' '\n\015' | awk -v forwarded="$forwarded" -v end="$scan_end" '
   BEGIN {
-    n = split(forwarded "  PATH PWD SHLVL _", names, " ")
+    n = split(forwarded "  VELNOR_DERIVE_REEXEC PATH PWD SHLVL _", names, " ")
     for (i = 1; i <= n; i++) known[names[i]] = 1
-    for (name in ENVIRON) {
-      if (name == "LC_ALL") { if (ENVIRON[name] != "C") exit 1; continue }
-      if (!(name in known)) exit 1
+  }
+  {
+    eq = index($0, "=")
+    name = eq ? substr($0, 1, eq - 1) : $0
+    if (!eq && name == end) { ended++; next }
+    if (name == "LC_ALL" ? $0 != "LC_ALL=C" : !(name in known)) {
+      gsub(/[^A-Za-z0-9_]/, "?", name)
+      print name
     }
   }
-' || env_status=$?
-case "$env_status" in
-  0) ;;
-  1)
-    argc=$#
-    for name in $forwarded; do
-      eval "name_set=\${$name+set}"
-      if [ -n "$name_set" ]; then
-        eval "set -- \"\$@\" \"$name=\$$name\""
-      fi
-    done
-    set -- "$@" /bin/sh -- "$0"
-    while [ "$argc" -gt 0 ]; do
-      set -- "$@" "$1"
-      shift
-      argc=$((argc - 1))
-    done
-    exec /usr/bin/env -i LC_ALL=C "$@"
-    ;;
-  *)
-    printf '%s\n' "derive-rust-tree-digest: cannot inspect the environment" >&2
+  END { if (ended != 1) exit 2 }
+') || scan_status=$?
+if [ "$scan_status" -ne 0 ]; then
+  printf '%s\n' "derive-rust-tree-digest: cannot inspect the environment" >&2
+  exit 1
+fi
+if [ -n "$unclean" ]; then
+  if [ "${VELNOR_DERIVE_REEXEC+set}" = set ]; then
+    printf '%s\n' "derive-rust-tree-digest: the environment is not clean after the clean re-exec: $unclean" >&2
     exit 1
-    ;;
-esac
+  fi
+  argc=$#
+  for name in $forwarded; do
+    eval "name_set=\${$name+set}"
+    if [ -n "$name_set" ]; then
+      eval "set -- \"\$@\" \"$name=\$$name\""
+    fi
+  done
+  set -- "$@" /bin/sh -- "$0"
+  while [ "$argc" -gt 0 ]; do
+    set -- "$@" "$1"
+    shift
+    argc=$((argc - 1))
+  done
+  exec /usr/bin/env -i LC_ALL=C VELNOR_DERIVE_REEXEC=1 "$@"
+fi
 
 dist="https://static.rust-lang.org/dist"
 size_cap=4194304

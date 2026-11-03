@@ -212,3 +212,58 @@ fn r9d_the_reexec_guard_terminates_and_derives_for_every_kind_of_caller_environm
         .collect::<Vec<_>>();
     assert!(wrong.is_empty(), "{wrong:#?}");
 }
+
+const REEXEC_MARKER: (&str, &str) = ("VELNOR_DERIVE_REEXEC", "1");
+const NEVER_BLAMED: [&str; 9] = [
+    "AWKPATH",
+    "AWKLIBPATH",
+    "VELNOR_DERIVE_REEXEC",
+    "PATH",
+    "PWD",
+    "SHLVL",
+    "_",
+    "LC_ALL",
+    "HOME",
+];
+
+fn blamed<'a>(stderr: &'a str, culprits: &[&str]) -> Vec<&'a str> {
+    stderr
+        .split(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))
+        .filter(|word| culprits.contains(word) || NEVER_BLAMED.contains(word))
+        .collect()
+}
+
+#[test]
+fn r9e_a_second_pass_that_is_still_unclean_is_refused_by_name_not_looped() {
+    let bundle = Bundle::new(&|_| {});
+    let clean = bundle.run_derive(&manifest_args(false), &[]);
+    assert_eq!(clean.code, Some(0), "{clean:?}");
+    let rows: [(&str, (&str, &str)); 2] =
+        [("FOO", ("FOO", "1")), ("LC_ALL", ("LC_ALL", "C.UTF-8"))];
+    let wrong = rows
+        .into_iter()
+        .filter_map(|(culprit, var)| {
+            let run = bundle.run_derive(&manifest_args(false), &[REEXEC_MARKER, var]);
+            let refused = run.code == Some(1)
+                && run.stdout.is_empty()
+                && run.requests.len() == clean.requests.len()
+                && blamed(&run.stderr, &[culprit]) == [culprit];
+            (!refused).then(|| format!("{culprit}: {run:?}"))
+        })
+        .collect::<Vec<_>>();
+    assert!(wrong.is_empty(), "{wrong:#?}");
+}
+
+#[test]
+fn r9f_a_second_pass_with_a_clean_environment_derives_and_never_blames_awk() {
+    let bundle = Bundle::new(&|_| {});
+    let clean = bundle.run_derive(&manifest_args(false), &[]);
+    assert_eq!(clean.code, Some(0), "{clean:?}");
+    let second = bundle.run_derive(&manifest_args(false), &[REEXEC_MARKER]);
+    assert!(
+        second.code == Some(0)
+            && second.stdout == clean.stdout
+            && blamed(&second.stderr, &[]).is_empty(),
+        "{second:?}"
+    );
+}

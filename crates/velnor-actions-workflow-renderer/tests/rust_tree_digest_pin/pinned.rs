@@ -6,7 +6,6 @@
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
-use std::process::Command;
 
 use velnor_actions_contract::StepKind;
 use velnor_actions_mise::{PinnedTool, ToolCatalog};
@@ -38,7 +37,7 @@ fn p1_matching_tree_is_accepted_offline_in_both_phases() {
 #[test]
 fn p2_derive_tool_and_verifier_agree_on_the_fixture() {
     let fx = Fixture::standard();
-    let output = Command::new(derive_tool())
+    let output = crate::derive::timed(derive_tool())
         .arg("--tree")
         .arg(fx.root())
         .output()
