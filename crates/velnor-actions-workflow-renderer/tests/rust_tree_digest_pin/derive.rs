@@ -22,7 +22,7 @@ type Tweak<'a> = &'a dyn Fn(&Path);
 const STD_LIB: &str = "lib/rustlib/x86_64-unknown-linux-gnu/lib/libstd.rlib";
 const SELF_CONTAINED: &str = "lib/rustlib/x86_64-unknown-linux-gnu/lib/self-contained";
 const MANIFEST_IN: &str = "manifest.in";
-const SHIM: &str = "#!/bin/sh\nwhile [ \"$#\" -gt 1 ]; do\n  if [ \"$1\" = --output ]; then out=$2; fi\n  shift\ndone\ncase \"$1\" in\n  CHANNEL_URL) cp CHANNEL_FILE \"$out\" ;;\n  TARBALL_URL) cp TARBALL_FILE \"$out\" ;;\n  *) exit 22 ;;\nesac\n";
+const SERVE: &str = "get() {\n  printf '%s\\n' \"$2\" >> REQUESTS_FILE\n  case \"$2\" in\n    CHANNEL_URL) cp CHANNEL_FILE \"$1\" ;;\n    TARBALL_URL) cp TARBALL_FILE \"$1\" ;;\n    *) exit 22 ;;\n  esac\n}\n";
 
 fn rustup_tree() -> Fixture {
     let fx = Fixture::with_components(&format!("{COMPONENT}\n"));
@@ -74,14 +74,14 @@ fn pack_sub(fx: &Fixture, sub: &Path, tweak: Tweak<'_>) {
 }
 
 #[derive(Debug)]
-struct Bundle {
+pub(crate) struct Bundle {
     work: TempDir,
     installed: Fixture,
     channel: String,
 }
 
 impl Bundle {
-    fn new(tweak: Tweak<'_>) -> Self {
+    pub(crate) fn new(tweak: Tweak<'_>) -> Self {
         let work = tempfile::tempdir().expect("work dir");
         let installed = rustup_tree();
         let stage = work.path().join("stage/pkg");
@@ -140,14 +140,14 @@ impl Bundle {
         )
         .expect("catalog");
         fs::create_dir_all(root.join("scripts")).expect("scripts dir");
-        fs::copy(
-            crate::pinned::derive_tool(),
-            root.join("scripts/derive-rust-tree-digest"),
-        )
-        .expect("copy script");
-        fs::create_dir_all(root.join("shim")).expect("shim dir");
-        let curl = root.join("shim/curl");
-        let shim = SHIM
+        let tool = fs::read_to_string(crate::pinned::derive_tool()).expect("read script");
+        let start = tool.find("get() {").expect("get definition");
+        let end = start + tool[start..].find("\n}\n").expect("get end") + 3;
+        let serve = SERVE
+            .replace(
+                "REQUESTS_FILE",
+                &root.join("requests").display().to_string(),
+            )
             .replace("CHANNEL_URL", CHANNEL_URL)
             .replace(
                 "CHANNEL_FILE",
@@ -158,27 +158,42 @@ impl Bundle {
                 "TARBALL_FILE",
                 &root.join("cargo.tar.xz").display().to_string(),
             );
-        fs::write(&curl, shim).expect("curl shim");
-        fs::set_permissions(&curl, fs::Permissions::from_mode(0o755)).expect("chmod shim");
+        let tool_path = root.join("scripts/derive-rust-tree-digest");
+        fs::write(
+            &tool_path,
+            format!("{}{serve}{}", &tool[..start], &tool[end..]),
+        )
+        .expect("write script");
+        fs::set_permissions(&tool_path, fs::Permissions::from_mode(0o755)).expect("chmod script");
     }
 
     fn derive(&self) -> Outcome {
         self.derive_with_env(&[])
     }
 
+    pub(crate) fn derive_with_args(&self, version: &str, target: &str) -> Outcome {
+        self.run_derive(&["--from-manifest", version, target, COMPONENT], &[])
+    }
+
     fn derive_with_env(&self, extra: &[(&str, &str)]) -> Outcome {
+        self.run_derive(&["--from-manifest", VERSION, TARGET, COMPONENT], extra)
+    }
+
+    fn run_derive(&self, args: &[&str], extra: &[(&str, &str)]) -> Outcome {
         let root = self.work.path();
         let output = Command::new(root.join("scripts/derive-rust-tree-digest"))
-            .args(["--from-manifest", VERSION, TARGET, COMPONENT])
+            .args(args)
             .env_clear()
             .envs(extra.iter().copied())
-            .env(
-                "PATH",
-                format!("{}:/usr/bin:/bin", root.join("shim").display()),
-            )
+            .env("PATH", "/usr/bin:/bin")
             .output()
             .expect("run derive tool");
-        outcome(&output)
+        Outcome {
+            requests: fs::read_to_string(root.join("requests"))
+                .map(|log| log.lines().map(str::to_owned).collect())
+                .unwrap_or_default(),
+            ..outcome(&output)
+        }
     }
 }
 

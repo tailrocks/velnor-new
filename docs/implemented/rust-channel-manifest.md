@@ -161,9 +161,12 @@ first version of this step did exactly that.
    The pinned listing is built with `find -printf` (GNU `find`), which the
    file-by-file path does not need; a toolchain directory of another host
    triple (macOS, ARM or musl Linux) never reaches the pinned listing.
-   `scripts/derive-rust-tree-digest` derives a pin row, re-executes itself
-   under `env -i` with the same allowlist unless the caller already set its
-   `VELNOR_DERIVE_CLEAN` marker, writes only to stdout (digests, the pin row and
+   `scripts/derive-rust-tree-digest` derives a pin row, sets
+   `PATH=/usr/bin:/bin:/usr/sbin:/sbin` itself before anything else (so no
+   helper comes from the caller's `PATH`, with or without the marker),
+   re-executes itself under `env -i` with the same allowlist minus `PATH`
+   unless the caller already set its `VELNOR_DERIVE_CLEAN` marker, refuses a
+   blank or malformed version or target before any download, writes only to stdout (digests, the pin row and
    the listing) and stages the downloaded
    channel manifest as the manifest entry. A manifest-form token in the
    tools-cache static digest keeps entries stored before this change, whose

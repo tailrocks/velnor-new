@@ -3,12 +3,13 @@
 
 #![cfg(target_os = "linux")]
 
-use std::os::unix::fs::symlink;
+use std::os::unix::fs::{PermissionsExt, symlink};
 use std::process::Command;
 
-use crate::derive::outcome;
+use crate::derive::{Bundle, outcome};
 use crate::fixture::{
-    CAP, CHANNEL_MANIFEST, FIXTURE_CHANNEL, Fixture, MISMATCH, MULTIRUST_CONFIG, Outcome, TARGET,
+    CAP, CHANNEL_MANIFEST, CHANNEL_URL, FIXTURE_CHANNEL, FIXTURE_COMPONENTS_SHA256,
+    FIXTURE_TREE_SHA256, Fixture, MISMATCH, MULTIRUST_CONFIG, Outcome, TARBALL_URL, TARGET,
     VERSION, fixture_pin, script,
 };
 use velnor_actions_workflow_renderer::verifier_builders::ToolchainPhase;
@@ -117,4 +118,91 @@ fn d1_derive_has_no_listing_option_and_never_writes_into_a_tree() {
     let again = derive_tree(&fx);
     assert_eq!(again.stdout, plain.stdout);
     assert_eq!(fx.snapshot(), before);
+}
+
+const TREE_HELPERS: [&str; 10] = [
+    "sha256sum",
+    "shasum",
+    "dirname",
+    "mktemp",
+    "rm",
+    "find",
+    "sort",
+    "awk",
+    "tr",
+    "sed",
+];
+
+#[test]
+fn h1_derive_runs_no_helper_from_the_callers_path() {
+    let fx = Fixture::standard();
+    let hostile = tempfile::tempdir().expect("hostile dir");
+    let marker = hostile.path().join("ran");
+    for helper in TREE_HELPERS {
+        let lies = matches!(helper, "sha256sum" | "shasum");
+        let body = format!(
+            "#!/bin/sh\nprintf '%s\\n' {helper} >> {marker}\n{}",
+            if lies {
+                format!("printf '%s  -\\n' {}\n", "a".repeat(64))
+            } else {
+                format!("PATH=/usr/bin:/bin\nexport PATH\nexec {helper} \"$@\"\n")
+            },
+            marker = marker.display(),
+        );
+        let path = hostile.path().join(helper);
+        std::fs::write(&path, body).expect("write fake");
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).expect("chmod");
+    }
+    for preset_marker in [false, true] {
+        let mut command = Command::new(crate::pinned::derive_tool());
+        command
+            .args(["--tree".as_ref(), fx.root().as_os_str()])
+            .env_clear()
+            .env(
+                "PATH",
+                format!("{}:/usr/bin:/bin", hostile.path().display()),
+            );
+        if preset_marker {
+            command.env("VELNOR_DERIVE_CLEAN", "1");
+        }
+        let derived = outcome(&command.output().expect("run derive tool"));
+        let ran = std::fs::read_to_string(&marker).unwrap_or_default();
+        assert_eq!(ran, "", "marker preset {preset_marker}: {derived:?}");
+        assert_eq!(derived.code, Some(0), "{derived:?}");
+        assert!(
+            derived
+                .stdout
+                .contains(&format!("components_sha256={FIXTURE_COMPONENTS_SHA256}\n"))
+                && derived
+                    .stdout
+                    .contains(&format!("tree_sha256={FIXTURE_TREE_SHA256}\n")),
+            "marker preset {preset_marker}: {derived:?}"
+        );
+    }
+}
+
+#[test]
+fn v1_a_blank_version_or_target_is_refused_before_any_download() {
+    let bundle = Bundle::new(&|_| {});
+    let control = bundle.derive_with_args(VERSION, TARGET);
+    assert_eq!(control.code, Some(0), "{control:?}");
+    assert!(
+        control
+            .stdout
+            .contains(&format!("TreeDigestPin::new(\"{VERSION}\", \"{TARGET}\", ")),
+        "{control:?}"
+    );
+    assert_eq!(control.requests, [CHANNEL_URL, TARBALL_URL], "{control:?}");
+    let refused = [("blank target", VERSION, ""), ("blank version", "", TARGET)]
+        .into_iter()
+        .filter_map(|(name, version, target)| {
+            let outcome = Bundle::new(&|_| {}).derive_with_args(version, target);
+            let closed = matches!(outcome.code, Some(1 | 2))
+                && outcome.stdout.is_empty()
+                && !outcome.stderr.is_empty()
+                && outcome.requests.is_empty();
+            (!closed).then(|| format!("{name}: {outcome:?}"))
+        })
+        .collect::<Vec<_>>();
+    assert!(refused.is_empty(), "{refused:#?}");
 }
