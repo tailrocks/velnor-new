@@ -13,6 +13,10 @@ use velnor_actions_orchestrator::render_staged_tree;
 use super::ledger_cli_verify_script::{
     BYTES, BYTES_SHA256, Planted, RenderedVerify, TAMPERED, rendered_step, resolve_on,
 };
+use super::tools_cache_pin_fixture::{
+    HttpSpec, MACHETE_BINARY, MACHETE_DIR, MACHETE_VERSION, machete_archive, pins_with_fixture_sha,
+    rendered_http_specs,
+};
 use super::tools_producers_donors::prepared_for;
 
 const RESTORE_ACTION: &str = ".github/actions/velnor-tools-cache-restore/action.yml";
@@ -228,28 +232,67 @@ fn admission_ignores_env_hooks_and_exported_functions() -> Result<(), Box<dyn Er
     Ok(())
 }
 
+struct Install<'a> {
+    dir: &'a str,
+    version: &'a str,
+    pins: &'a str,
+    archive_sha256: &'a str,
+    archive: &'a [u8],
+    file: &'a [u8],
+}
+
+struct Outcome {
+    exit: Option<i32>,
+    kept: bool,
+    stdout: String,
+}
+
+fn run_install(
+    step: &RenderedVerify,
+    install: &Install<'_>,
+    extra: &[(String, String)],
+) -> Result<Outcome, Box<dyn Error>> {
+    let runner = Sandbox::new()?;
+    let installs = runner.mise_root().join("installs");
+    let archives = installs.join(".velnor-verified-archives");
+    let version = installs.join(install.dir).join(install.version);
+    fs::create_dir_all(&archives)?;
+    fs::create_dir_all(&version)?;
+    fs::write(archives.join(install.archive_sha256), install.archive)?;
+    fs::write(version.join("file"), install.file)?;
+    let mut env = vec![
+        pair("VELNOR_TOOL_PINS", install.pins),
+        pair("RUNNER_OS", "Linux"),
+        pair("RUNNER_ARCH", "X64"),
+    ];
+    env.extend_from_slice(extra);
+    let captured = runner.spawn(&expand_shell(&step.shell), &step.run, &env)?;
+    Ok(Outcome {
+        exit: captured.code,
+        kept: version.exists(),
+        stdout: captured.stdout,
+    })
+}
+
 fn install_outcome(
     step: &RenderedVerify,
     install: &[u8],
     extra: &[(String, String)],
 ) -> Result<(Option<i32>, bool), Box<dyn Error>> {
-    let runner = Sandbox::new()?;
-    let installs = runner.mise_root().join("installs");
-    let archives = installs.join(".velnor-verified-archives");
-    let version = installs.join("fake/1.0.0");
-    fs::create_dir_all(&archives)?;
-    fs::create_dir_all(&version)?;
-    fs::write(archives.join(BYTES_SHA256), BYTES)?;
-    fs::write(version.join("file"), install)?;
-    let pin = format!("fake 1.0.0 linux-x64 https://example.invalid/fake.bin {BYTES_SHA256}");
-    let mut env = vec![
-        pair("VELNOR_TOOL_PINS", &pin),
-        pair("RUNNER_OS", "Linux"),
-        pair("RUNNER_ARCH", "X64"),
-    ];
-    env.extend_from_slice(extra);
-    let exit = runner.run(step, &env)?;
-    Ok((exit, version.exists()))
+    let pins = format!("fake 1.0.0 linux-x64 https://example.invalid/fake.bin {BYTES_SHA256}");
+    let outcome = run_install(
+        step,
+        &Install {
+            dir: "fake",
+            version: "1.0.0",
+            pins: &pins,
+            archive_sha256: BYTES_SHA256,
+            archive: BYTES,
+            file: install,
+        },
+        extra,
+    )?;
+    Ok((outcome.exit, outcome.kept))
 }
 
 #[test]
@@ -270,5 +313,83 @@ fn reverify_discards_a_tampered_install_despite_env_hooks() -> Result<(), Box<dy
     assert_eq!((outcome, shadow.calls().as_str()), ((Some(0), false), ""));
     let outcome = install_outcome(&step, BYTES, &shadowed)?;
     assert_eq!((outcome, shadow.calls().as_str()), ((Some(0), true), ""));
+    Ok(())
+}
+
+#[test]
+fn catalog_pins_match_every_installed_http_validator() -> Result<(), Box<dyn Error>> {
+    let specs = rendered_http_specs()?;
+    let step = step_in(RESTORE_ACTION, REVERIFY_STEP)?;
+    let pins = step
+        .tool_pins
+        .ok_or("restore step has no VELNOR_TOOL_PINS")?;
+    let mut rows: Vec<&str> = pins
+        .lines()
+        .filter(|row| row.starts_with("http-"))
+        .collect();
+    rows.sort_unstable();
+    let expected: Vec<String> = specs.iter().map(HttpSpec::row).collect();
+    for name in ["cargo-machete", "lychee"] {
+        assert!(
+            specs.iter().any(|spec| spec.name == name),
+            "no rendered job installs {name}: {expected:?}"
+        );
+    }
+    assert_eq!(rows, expected);
+    Ok(())
+}
+
+#[test]
+fn restored_cargo_machete_install_is_kept_when_it_matches_its_pinned_archive()
+-> Result<(), Box<dyn Error>> {
+    let step = step_in(RESTORE_ACTION, REVERIFY_STEP)?;
+    let rendered = step
+        .tool_pins
+        .as_deref()
+        .ok_or("restore step has no pins")?;
+    let scratch = tempfile::tempdir()?;
+    let (archive, sha256) = machete_archive(scratch.path())?;
+    let pins = pins_with_fixture_sha(rendered, &sha256);
+    let run = |file: &[u8]| {
+        run_install(
+            &step,
+            &Install {
+                dir: MACHETE_DIR,
+                version: MACHETE_VERSION,
+                pins: &pins,
+                archive_sha256: &sha256,
+                archive: &archive,
+                file,
+            },
+            &[],
+        )
+    };
+    let kept = run(MACHETE_BINARY)?;
+    assert_eq!(
+        (kept.exit, kept.kept),
+        (Some(0), true),
+        "stdout: {}",
+        kept.stdout
+    );
+    assert!(
+        kept.stdout
+            .contains("restored http-cargo-machete@0.9.2 matches its mise.lock archive"),
+        "stdout: {}",
+        kept.stdout
+    );
+    assert!(
+        !kept.stdout.contains("discarding"),
+        "stdout: {}",
+        kept.stdout
+    );
+    let tampered = run(b"fixture cargo-machete binary, changed\n")?;
+    assert_eq!((tampered.exit, tampered.kept), (Some(0), false));
+    assert!(
+        tampered
+            .stdout
+            .contains("a file differs from the pinned archive"),
+        "stdout: {}",
+        tampered.stdout
+    );
     Ok(())
 }
