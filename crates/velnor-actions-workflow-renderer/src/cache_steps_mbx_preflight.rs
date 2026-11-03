@@ -21,6 +21,32 @@ pub fn mbx_steps_for_driver(
     transport: MbxTransport,
     working_directory: Option<&str>,
 ) -> Result<Option<Vec<Step>>, RenderError> {
+    mbx_steps_for_driver_bounded(
+        uses,
+        driver,
+        mbx_version,
+        rust_toolchain,
+        env,
+        transport,
+        working_directory,
+        super::mbx_bundle::StateCeilings::V3,
+    )
+}
+
+#[expect(
+    clippy::too_many_arguments,
+    reason = "extends mbx_steps_for_driver by the state ceilings under test"
+)]
+pub fn mbx_steps_for_driver_bounded(
+    uses: &str,
+    driver: CompileDriver,
+    mbx_version: &str,
+    rust_toolchain: &str,
+    env: BTreeMap<String, String>,
+    transport: MbxTransport,
+    working_directory: Option<&str>,
+    ceilings: super::mbx_bundle::StateCeilings,
+) -> Result<Option<Vec<Step>>, RenderError> {
     match driver {
         CompileDriver::Cargo => Ok(None),
         CompileDriver::Mbx => {
@@ -46,6 +72,7 @@ pub fn mbx_steps_for_driver(
                     rust_toolchain,
                     working_directory,
                     &action_env,
+                    ceilings,
                 )?);
             }
             Ok(Some(steps))

@@ -31,9 +31,8 @@ pub const fn zstd_compress_bound(source: u64) -> Option<u64> {
 
 #[must_use]
 pub const fn outer_tar_bytes(inner: u64) -> Option<u64> {
-    let blocks = match inner.checked_next_multiple_of(TAR_BLOCK_BYTES) {
-        Some(blocks) => blocks,
-        None => return None,
+    let Some(blocks) = inner.checked_next_multiple_of(TAR_BLOCK_BYTES) else {
+        return None;
     };
     let Some(framed) = blocks.checked_add(OUTER_ENTRY_HEADER_BYTES + TAR_END_OF_ARCHIVE_BYTES)
     else {
@@ -44,8 +43,8 @@ pub const fn outer_tar_bytes(inner: u64) -> Option<u64> {
 
 #[must_use]
 pub const fn outer_entry_bound(inner: u64) -> Option<u64> {
-    match outer_tar_bytes(inner) {
-        Some(tar) => zstd_compress_bound(tar),
-        None => None,
-    }
+    let Some(tar) = outer_tar_bytes(inner) else {
+        return None;
+    };
+    zstd_compress_bound(tar)
 }
