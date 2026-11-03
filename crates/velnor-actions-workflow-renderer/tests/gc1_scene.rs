@@ -235,6 +235,16 @@ impl Scene {
         env: &[(&str, &str)],
         fsize_blocks: Option<u64>,
     ) -> Result<String, Box<dyn Error>> {
+        let bound = self.bind_to_payload(matched);
+        self.recover_unbound(&bound, env, fsize_blocks)
+    }
+
+    pub(crate) fn recover_unbound(
+        &self,
+        matched: &str,
+        env: &[(&str, &str)],
+        fsize_blocks: Option<u64>,
+    ) -> Result<String, Box<dyn Error>> {
         self.fresh_outputs()?;
         let step = &self.scripts.recover;
         let run = resolve(&step.run, matched, &self.runner)?;

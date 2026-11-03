@@ -89,16 +89,17 @@ impl Scene {
         self.key_from_outputs()
     }
 
+    fn record_value(&self, name: &str) -> Result<String, Box<dyn Error>> {
+        let text = std::fs::read_to_string(self.runner.join("velnor/state-discovery.record"))?;
+        text.lines()
+            .find_map(|line| line.strip_prefix(&format!("{name}=")))
+            .map(str::to_owned)
+            .ok_or_else(|| fail(&format!("discovery record lost: {name}")))
+    }
+
     pub(crate) fn key_from_outputs(&self) -> Result<Key, Box<dyn Error>> {
-        let [first, second]: [String; 2] = self
-            .output_block("restore_keys")?
-            .try_into()
-            .map_err(|_| fail("restore_keys must carry the snapshot and the compat prefix"))?;
-        let (restore_prefix, snapshot_prefix) = if first.len() < second.len() {
-            (first, second)
-        } else {
-            (second, first)
-        };
+        let restore_prefix = self.record_value("restore_prefix")?;
+        let snapshot_prefix = self.record_value("snapshot_prefix")?;
         if !snapshot_prefix.starts_with(&restore_prefix) {
             return Err(fail(
                 "the snapshot prefix does not extend the compat prefix",

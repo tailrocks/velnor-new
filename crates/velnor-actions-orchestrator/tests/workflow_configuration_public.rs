@@ -109,6 +109,8 @@ mod source_qualification_jobs;
 mod source_qualification_proof;
 #[path = "workflow_configuration_public/state_roots.rs"]
 mod state_roots;
+#[path = "workflow_configuration_public/state_seal_jobs.rs"]
+mod state_seal_jobs;
 #[path = "workflow_configuration_public/support.rs"]
 mod support;
 #[path = "workflow_configuration_public/timeouts.rs"]

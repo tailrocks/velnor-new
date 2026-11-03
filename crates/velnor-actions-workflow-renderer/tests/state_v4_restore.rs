@@ -3,136 +3,141 @@
 
 use std::error::Error;
 
-use velnor_actions_contract::workflow::cache_family_mbx::{
-    MBX_BUNDLE_KEY_EXPR, MBX_BUNDLE_RESTORE_KEYS_EXPR,
-};
 use velnor_actions_workflow_renderer::steps::MbxTransport;
 
 use crate::gc1_cache_service::CacheService;
 use crate::gc1_scene::{Key, Scene, fail};
+use crate::gc1_seal_support::{Attestation, Gh, MAIN, run_select, selected};
 
 const SNAPSHOT_A: &str = "s256-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 const SNAPSHOT_B: &str = "s256-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
-const SNAPSHOT_C: &str = "s256-cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc";
 const PAYLOAD_ONE: &str = "s256-1111111111111111111111111111111111111111111111111111111111111111";
 const PAYLOAD_TWO: &str = "s256-2222222222222222222222222222222222222222222222222222222222222222";
+const OUTPUT_OPEN: &str = "${{steps.mbx-bundle-key.outputs.";
+const T1: &str = "2026-11-04T01:00:00Z";
+const T2: &str = "2026-11-04T02:00:00Z";
 
 fn restore(
     scene: &Scene,
     service: &CacheService,
     root: Option<&str>,
+    attested: &[String],
+    env: &[(&str, &str)],
 ) -> Result<Option<String>, Box<dyn Error>> {
+    let list = attested.join("\n");
+    let mut pairs = vec![("VELNOR_STATE_ATTESTED", list.as_str())];
+    pairs.extend_from_slice(env);
+    scene.discover_with(&pairs)?;
     let with = crate::gc1_t53::restore_with(MbxTransport::SeedRead, root)?;
-    let key = match with.get("key").map(String::as_str) {
-        Some(MBX_BUNDLE_KEY_EXPR) => scene.output_value("key")?,
-        other => {
-            return Err(fail(&format!(
-                "restore key left the discover output: {other:?}"
-            )));
-        }
-    };
-    let restore_keys = match with.get("restore-keys").map(String::as_str) {
-        Some(MBX_BUNDLE_RESTORE_KEYS_EXPR) => scene.output_block("restore_keys")?,
-        other => {
-            return Err(fail(&format!(
-                "restore-keys left the discover output: {other:?}"
-            )));
-        }
-    };
-    Ok(service.restore(&key, &restore_keys))
-}
-
-fn discover(scene: &Scene, env: &[(&str, &str)]) -> Result<Key, Box<dyn Error>> {
-    scene.discover_with(env)
-}
-
-fn at(key: &Key, snapshot: &str, payload: &str) -> String {
-    format!("{}{snapshot}-{payload}", key.restore_prefix)
-}
-
-fn expect(got: Option<String>, want: &str, label: &str) -> Result<(), Box<dyn Error>> {
-    match got {
-        Some(picked) if picked == want => Ok(()),
-        other => Err(fail(&format!("{label}: picked {other:?}, wanted {want}"))),
+    if with.contains_key("restore-keys") {
+        return Err(fail("restore step kept a prefix fallback"));
     }
+    let output = with
+        .get("key")
+        .and_then(|key| key.strip_prefix(OUTPUT_OPEN))
+        .and_then(|key| key.strip_suffix("}}"))
+        .ok_or_else(|| fail("restore key is not a discover output"))?;
+    Ok(service.restore(&scene.output_value(output)?, &[]))
+}
+
+fn expect(got: Option<&String>, want: Option<&str>, label: &str) -> Result<(), Box<dyn Error>> {
+    if got.map(String::as_str) == want {
+        Ok(())
+    } else {
+        Err(fail(&format!("{label}: picked {got:?}, wanted {want:?}")))
+    }
+}
+
+fn plan(
+    scene: &Scene,
+    gh: &Gh,
+    root: &str,
+    rows: &[(&str, &str, &str)],
+    attested: &[&str],
+) -> Result<Vec<String>, Box<dyn Error>> {
+    gh.list(rows)?;
+    gh.attest(
+        &attested
+            .iter()
+            .map(|key| Attestation::signed(key))
+            .collect::<Vec<_>>(),
+    )?;
+    run_select(scene, gh, root, false, &[])?;
+    selected(scene, root)
 }
 
 #[test]
 #[cfg(unix)]
-fn restore_picks_exact_snapshot_else_newest_same_compat() -> Result<(), Box<dyn Error>> {
+fn restore_takes_only_the_key_plan_selected() -> Result<(), Box<dyn Error>> {
     let scene = Scene::new("v4-restore", crate::gc1_t53::scripts()?)?;
-    let other_compat = discover(&scene, &[("ImageOS", "ubuntu24")])?;
-    let key = discover(&scene, &[])?;
-    let current = key.snapshot_prefix.trim_end_matches('-');
-    let current_snapshot = current
-        .rsplit_once("-s256-")
-        .map(|(_, tail)| format!("s256-{tail}"))
-        .ok_or_else(|| fail("snapshot prefix lost its digest"))?;
-    let same_snapshot = format!("{}{PAYLOAD_ONE}", key.snapshot_prefix);
-    let same_snapshot_newer = format!("{}{PAYLOAD_TWO}", key.snapshot_prefix);
-    let other_old = at(&key, SNAPSHOT_A, PAYLOAD_ONE);
-    let other_new = at(&key, SNAPSHOT_B, PAYLOAD_ONE);
-    let newest_other = at(&key, SNAPSHOT_C, PAYLOAD_TWO);
+    let gh = Gh::install(&scene)?;
+    let other = scene.discover_with(&[("ImageOS", "ubuntu24")])?;
+    let id = scene.discover()?;
+    let sealed = format!("{}{PAYLOAD_ONE}", id.snapshot_prefix);
+    let forged = format!("{}{PAYLOAD_TWO}", id.snapshot_prefix);
+    let predecessor = format!("{}{SNAPSHOT_A}-{PAYLOAD_ONE}", id.restore_prefix);
+    let foreign = format!("{}{SNAPSHOT_B}-{PAYLOAD_ONE}", other.restore_prefix);
 
-    let mut exact = CacheService::new();
-    exact.save(&same_snapshot, 10);
-    exact.save(&other_new, 20);
-    expect(
-        restore(&scene, &exact, None)?,
-        &same_snapshot,
-        "exact preferred over newer",
+    let mut service = CacheService::new();
+    service.save(&sealed, 10);
+    service.save(&predecessor, 5);
+    service.save(&forged, 30);
+    service.save(&foreign, 40);
+
+    let both = plan(
+        &scene,
+        &gh,
+        ".",
+        &[(T2, MAIN, &forged), (T1, MAIN, &sealed)],
+        &[&sealed],
     )?;
-
-    let mut newest = CacheService::new();
-    newest.save(&other_old, 10);
-    newest.save(&newest_other, 30);
-    newest.save(&other_new, 20);
     expect(
-        restore(&scene, &newest, None)?,
-        &newest_other,
-        "newest same compat",
+        restore(&scene, &service, None, &both, &[])?.as_ref(),
+        Some(&sealed),
+        "attested exact entry beats a newer forged one under the same prefix",
     )?;
-
-    let mut digests = CacheService::new();
-    digests.save(&same_snapshot, 10);
-    digests.save(&same_snapshot_newer, 20);
-    expect(
-        restore(&scene, &digests, None)?,
-        &same_snapshot_newer,
-        "newest payload digest",
-    )?;
-
-    let foreign = [
-        key.restore_prefix.replacen("-trusted-", "-pr-", 1),
-        key.restore_prefix.replacen("-union-", "-suite-", 1),
-        key.restore_prefix.replacen("-root-", "-other-", 1),
-        other_compat.restore_prefix.clone(),
-        key.restore_prefix.replacen("velnor-v4-", "velnor-v3-", 1),
-        key.restore_prefix.replacen("velnor-v4-", "velnor-v2-", 1),
-        format!("zz-{}", key.restore_prefix),
-    ];
-    let legit = at(&key, SNAPSHOT_A, PAYLOAD_ONE);
-    let mut hostile = CacheService::new();
-    hostile.save(&legit, 1);
-    for (offset, prefix) in foreign.iter().enumerate() {
-        hostile.save(
-            &format!("{prefix}{current_snapshot}-{PAYLOAD_TWO}"),
-            100 + offset as u64,
-        );
+    if scene.output_value("exact")? != "true" {
+        return Err(fail(
+            "an attested entry at the current snapshot is not exact",
+        ));
     }
+
+    let older = plan(
+        &scene,
+        &gh,
+        ".",
+        &[(T2, MAIN, &forged), (T1, MAIN, &predecessor)],
+        &[&predecessor],
+    )?;
     expect(
-        restore(&scene, &hostile, None)?,
-        &legit,
-        "foreign entries never selected",
+        restore(&scene, &service, None, &older, &[])?.as_ref(),
+        Some(&predecessor),
+        "attested predecessor of another snapshot",
+    )?;
+    if scene.output_value("exact")? != "false" {
+        return Err(fail("a predecessor entry reported exact"));
+    }
+
+    let wrong_compat = plan(&scene, &gh, ".", &[(T2, MAIN, &foreign)], &[&foreign])?;
+    expect(
+        restore(&scene, &service, None, &wrong_compat, &[])?.as_ref(),
+        None,
+        "attested entry of another compat",
     )?;
 
-    let mut only_foreign = CacheService::new();
-    for prefix in &foreign {
-        only_foreign.save(&format!("{prefix}{current_snapshot}-{PAYLOAD_TWO}"), 5);
-    }
-    if let Some(picked) = restore(&scene, &only_foreign, None)? {
-        return Err(fail(&format!("restore reached a foreign entry: {picked}")));
-    }
+    gh.mode("fail")?;
+    let none = plan(
+        &scene,
+        &gh,
+        ".",
+        &[(T2, MAIN, &forged), (T1, MAIN, &sealed)],
+        &[&sealed],
+    )?;
+    expect(
+        restore(&scene, &service, None, &none, &[])?.as_ref(),
+        None,
+        "empty selection with forged and attested entries in the service",
+    )?;
     scene.finish()
 }
 
@@ -143,24 +148,50 @@ fn restore_never_crosses_roots_that_share_a_name_prefix() -> Result<(), Box<dyn 
         "v4-root-a",
         crate::gc1_t53::scripts_for(MbxTransport::SeedRead, Some("a"))?,
     )?;
-    let long = Scene::new(
-        "v4-root-ab",
-        crate::gc1_t53::scripts_for(MbxTransport::SeedRead, Some("a-b"))?,
-    )?;
-    let short_key = discover(&short, &[("VELNOR_MBX_BUNDLE_ROOT", "a")])?;
-    let long_key = discover(&long, &[("VELNOR_MBX_BUNDLE_ROOT", "a-b")])?;
+    let gh = Gh::install(&short)?;
+    let short_key: Key = short.discover_with(&[("VELNOR_MBX_BUNDLE_ROOT", "a")])?;
+    let long_entry = format!(
+        "{}{SNAPSHOT_A}-{PAYLOAD_ONE}",
+        short_key
+            .restore_prefix
+            .replacen("-union-a-", "-union-a-b-", 1)
+    );
+    let own_entry = format!("{}{SNAPSHOT_A}-{PAYLOAD_TWO}", short_key.restore_prefix);
     let mut service = CacheService::new();
-    service.save(&at(&long_key, SNAPSHOT_A, PAYLOAD_ONE), 50);
-    if let Some(picked) = restore(&short, &service, Some("a"))? {
-        return Err(fail(&format!("root a restored {picked}")));
-    }
-    service.save(&at(&short_key, SNAPSHOT_A, PAYLOAD_TWO), 1);
-    let want = at(&short_key, SNAPSHOT_A, PAYLOAD_TWO);
+    service.save(&long_entry, 50);
+    service.save(&own_entry, 1);
+
+    let crossed = plan(&short, &gh, "a", &[(T2, MAIN, &long_entry)], &[&long_entry])?;
     expect(
-        restore(&short, &service, Some("a"))?,
-        &want,
+        restore(
+            &short,
+            &service,
+            Some("a"),
+            &crossed,
+            &[("VELNOR_MBX_BUNDLE_ROOT", "a")],
+        )?
+        .as_ref(),
+        None,
+        "root a restored an entry of root a-b",
+    )?;
+    let own = plan(
+        &short,
+        &gh,
+        "a",
+        &[(T2, MAIN, &long_entry), (T1, MAIN, &own_entry)],
+        &[&long_entry, &own_entry],
+    )?;
+    expect(
+        restore(
+            &short,
+            &service,
+            Some("a"),
+            &own,
+            &[("VELNOR_MBX_BUNDLE_ROOT", "a")],
+        )?
+        .as_ref(),
+        Some(&own_entry),
         "root a keeps its own entry",
     )?;
-    long.finish()?;
     short.finish()
 }

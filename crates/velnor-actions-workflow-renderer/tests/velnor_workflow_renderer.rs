@@ -16,7 +16,9 @@ mod gc1_scene_assert;
 #[cfg(target_os = "linux")]
 mod gc1_scene_bounded;
 mod gc1_scene_key;
+mod gc1_scene_seal;
 mod gc1_scene_tree;
+mod gc1_seal_support;
 mod gc1_t13;
 mod gc1_t14;
 mod gc1_t16;
@@ -44,4 +46,6 @@ mod state_v4_pack;
 #[cfg(target_os = "linux")]
 mod state_v4_packer;
 mod state_v4_restore;
+mod state_v4_seal;
+mod state_v4_select;
 mod state_v4_snapshot;

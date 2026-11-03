@@ -16,7 +16,8 @@ fn check_discovery_binds_provenance(key: &Step) -> Result<(), Box<dyn Error>> {
         "\"schema=4\"",
         "$RUNNER_TEMP/velnor-gc1/state",
         "\"key=$key\"",
-        "restore_keys<<VELNOR_STATE_KEYS_EOF",
+        "\"restore_key=$restore_key\"",
+        "\"restore_digest=$restore_digest\"",
         "\"save=$save\"",
         "\"provenance=$provenance\"",
         "\"decision=$decision\"",
@@ -54,8 +55,8 @@ fn check_restore_uses_fixed_transport(restore: &Step) -> Result<(), Box<dyn Erro
     if with.get("key").map(String::as_str) != Some(MBX_BUNDLE_KEY_EXPR) {
         return Err(fail("restore step left its selected key"));
     }
-    if with.get("restore-keys").map(String::as_str) != Some(MBX_BUNDLE_RESTORE_KEYS_EXPR) {
-        return Err(fail("restore step left its selected restore keys"));
+    if with.contains_key("restore-keys") {
+        return Err(fail("restore step kept a prefix fallback"));
     }
     let path = with
         .get("path")
