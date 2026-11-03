@@ -124,7 +124,6 @@ pub(crate) fn publish_step(
             "compat_now=\"s256-$h\"".to_owned(),
             "if [ \"$compat_now\" != \"$rec_compat\" ]; then skip coverage_drift; fi".to_owned(),
             cold_produce_fragment(rust_toolchain, ceiling, ceiling_kb),
-            format!("if du -sb \"$root\" > \"$d/uncompressed\"; then usize=; usize_rest=; read -r usize usize_rest < \"$d/uncompressed\" || [ -n \"$usize\" ]; case \"$usize\" in ''|*[!0-9]*) skip du_unreadable ;; esac; if [ \"$usize\" -gt {ceiling} ]; then printf '%s\\n' '::warning::over_ceiling: uncompressed state snapshot exceeds the family ceiling; save refused'; skip over_ceiling; fi; elif du -sk \"$root\" > \"$d/uncompressed_kb\"; then usize_kb=; usize_kb_rest=; read -r usize_kb usize_kb_rest < \"$d/uncompressed_kb\" || [ -n \"$usize_kb\" ]; case \"$usize_kb\" in ''|*[!0-9]*) skip du_unreadable ;; esac; if [ \"$usize_kb\" -gt {ceiling_kb} ]; then printf '%s\\n' '::warning::over_ceiling: uncompressed state snapshot exceeds the family ceiling; save refused'; skip over_ceiling; fi; else skip du_unreadable; fi"),
             format!("mkdir -p \"{payload_parent}\""),
             "rm -f \"$payload\"".to_owned(),
             "if tar --sort=name --owner=0 --group=0 --numeric-owner --mtime=@0 -czf \"$payload\" -C \"$parent\" \"$base\"; then :; else rm -f \"$payload\"; if tar -czf \"$payload\" -C \"$parent\" \"$base\"; then :; else rm -f \"$payload\"; printf '%s\\n' '::warning::cache_unavailable: state snapshot pack failed'; skip pack_failed; fi; fi".to_owned(),
