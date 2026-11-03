@@ -63,3 +63,35 @@ fn gc1_t30_scripts_behave() -> Result<(), Box<dyn Error>> {
     }
     scene.finish()
 }
+
+#[test]
+#[cfg(unix)]
+fn gc1_t30_key_binds_source_date_epoch() -> Result<(), Box<dyn Error>> {
+    let scene = Scene::new("sde", crate::gc1_t53::scripts()?)?;
+    let discover = |value| scene.discover_with(&[("SOURCE_DATE_EPOCH", value)]);
+    let zero = discover("0")?;
+    let one = discover("1")?;
+    let unset = discover("")?;
+    let again = discover("0")?;
+    if zero.key != again.key || zero.restore_prefix != again.restore_prefix {
+        return Err(fail("same SOURCE_DATE_EPOCH produced different keys"));
+    }
+    let states = [("0", &zero), ("1", &one), ("unset", &unset)];
+    for (index, (label, state)) in states.iter().enumerate() {
+        for (other_label, other) in &states[index + 1..] {
+            if state.key == other.key {
+                return Err(fail(&format!(
+                    "same key across SOURCE_DATE_EPOCH values {label} and {other_label}"
+                )));
+            }
+            if other.key.starts_with(&state.restore_prefix)
+                || state.key.starts_with(&other.restore_prefix)
+            {
+                return Err(fail(&format!(
+                    "restore prefix of SOURCE_DATE_EPOCH {label} reaches state of {other_label}"
+                )));
+            }
+        }
+    }
+    scene.finish()
+}

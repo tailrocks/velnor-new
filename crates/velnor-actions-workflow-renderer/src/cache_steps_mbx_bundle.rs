@@ -133,7 +133,7 @@ fn compat_head_lines(
         format!("uname -s >> \"{dir}/compat\""),
         format!("uname -m >> \"{dir}/compat\""),
         format!(
-            "printf '%s\\n' \"MBX_SHARE_OUT_DIR=${{MBX_SHARE_OUT_DIR-}}\" \"MBX_BUILD_SCRIPT_EXECUTION=${{MBX_BUILD_SCRIPT_EXECUTION-}}\" \"MBX_CC=${{MBX_CC-}}\" \"ImageOS=${{ImageOS-}}\" >> \"{dir}/compat\""
+            "printf '%s\\n' \"MBX_SHARE_OUT_DIR=${{MBX_SHARE_OUT_DIR-}}\" \"MBX_BUILD_SCRIPT_EXECUTION=${{MBX_BUILD_SCRIPT_EXECUTION-}}\" \"MBX_CC=${{MBX_CC-}}\" \"SOURCE_DATE_EPOCH=${{SOURCE_DATE_EPOCH-}}\" \"ImageOS=${{ImageOS-}}\" >> \"{dir}/compat\""
         ),
         format!("s256 \"{dir}/compat\""),
     ]

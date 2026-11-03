@@ -8,7 +8,7 @@ use velnor_actions_contract::Job;
 use crate::cache_steps::{
     MBX_BUILD_SCRIPT_EXECUTION_ENV, MBX_BUILD_SCRIPT_EXECUTION_VALUE, MBX_CC_ENV, MBX_CC_VALUE,
     MBX_EXPORT_GROUP_ENV, MBX_EXPORT_GROUP_VALUE, MBX_GC_AUTO_ENV, MBX_GC_AUTO_VALUE,
-    MBX_SHARE_OUT_DIR_ENV, MBX_SHARE_OUT_DIR_VALUE,
+    MBX_SHARE_OUT_DIR_ENV, MBX_SHARE_OUT_DIR_VALUE, SOURCE_DATE_EPOCH_ENV, SOURCE_DATE_EPOCH_VALUE,
 };
 use crate::render::{PLAN_ATTEMPT_ENV, PLAN_JOB_ID};
 
@@ -37,6 +37,7 @@ pub(crate) fn mbx_job_env() -> BTreeMap<String, String> {
             MBX_BUILD_SCRIPT_EXECUTION_ENV,
             MBX_BUILD_SCRIPT_EXECUTION_VALUE,
         ),
+        (SOURCE_DATE_EPOCH_ENV, SOURCE_DATE_EPOCH_VALUE),
     ]
     .into_iter()
     .map(|(key, value)| (key.to_owned(), value.to_owned()))

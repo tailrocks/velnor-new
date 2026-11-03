@@ -173,6 +173,7 @@ impl Scene {
             .env("MBX_SHARE_OUT_DIR", "1")
             .env("MBX_BUILD_SCRIPT_EXECUTION", "0")
             .env("MBX_CC", "0")
+            .env("SOURCE_DATE_EPOCH", "0")
             .env("ImageOS", "ubuntu26")
             .env("MBX_CACHE_EXPORT_GROUP", "velnor")
             .env("MBX_CACHE_DIR", self.store());
@@ -233,7 +234,12 @@ impl Scene {
     }
 
     pub(crate) fn discover(&self) -> Result<Key, Box<dyn Error>> {
-        self.run_script(&self.scripts.discover, &[], None)?;
+        self.discover_with(&[])
+    }
+
+    pub(crate) fn discover_with(&self, env: &[(&str, &str)]) -> Result<Key, Box<dyn Error>> {
+        std::fs::remove_file(&self.github_output).ok();
+        self.run_script(&self.scripts.discover, env, None)?;
         if self.output_value("provenance")? != "trusted" {
             return Err(fail("discover misclassified a trusted push"));
         }

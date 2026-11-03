@@ -80,6 +80,15 @@ fn collect_anchors(lines: &[&str], anchors: &mut BTreeMap<String, Env>) {
     }
 }
 
+fn workflow_env(text: &str) -> Env {
+    let lines: Vec<&str> = text.lines().collect();
+    lines
+        .iter()
+        .position(|line| *line == "env:")
+        .map(|index| env_entries(&lines, index + 1, 0))
+        .unwrap_or_default()
+}
+
 fn job_env(block: &JobBlock<'_>, anchors: &BTreeMap<String, Env>) -> Result<Env, Box<dyn Error>> {
     for (index, line) in block.lines.iter().enumerate() {
         if indent_of(line) != 4 {
@@ -106,6 +115,7 @@ fn rendered_jobs() -> Result<Vec<RenderedJob>, Box<dyn Error>> {
         .get(WORKFLOW_PATH)
         .ok_or("rendered workflow is missing")?;
     let blocks = job_blocks(text);
+    let inherited = workflow_env(text);
     let mut anchors = BTreeMap::new();
     let mut jobs = Vec::new();
     for block in &blocks {
@@ -117,7 +127,11 @@ fn rendered_jobs() -> Result<Vec<RenderedJob>, Box<dyn Error>> {
         jobs.push(RenderedJob {
             id: block.id.to_owned(),
             runs_mbx,
-            env: job_env(block, &anchors)?,
+            env: {
+                let mut env = inherited.clone();
+                env.extend(job_env(block, &anchors)?);
+                env
+            },
         });
     }
     Ok(jobs)
@@ -142,6 +156,7 @@ fn mbx_jobs_run_the_compiler_with_shared_out_dirs_and_build_script_execution_dis
             ("MBX_CC", "0"),
             ("MBX_GC_AUTO", "0"),
             ("MBX_CACHE_EXPORT_GROUP", "velnor"),
+            ("SOURCE_DATE_EPOCH", "0"),
         ] {
             let actual = env.get(key).map(String::as_str);
             if actual != Some(expected) {
@@ -169,7 +184,10 @@ fn jobs_without_mbx_get_no_mbx_environment() -> Result<(), Box<dyn Error>> {
         if *runs_mbx {
             return Err(format!("job {id} unexpectedly runs mbx").into());
         }
-        if let Some(key) = env.keys().find(|key| key.starts_with("MBX_")) {
+        if let Some(key) = env
+            .keys()
+            .find(|key| key.starts_with("MBX_") || *key == "SOURCE_DATE_EPOCH")
+        {
             return Err(format!("job {id} leaked {key}").into());
         }
     }
