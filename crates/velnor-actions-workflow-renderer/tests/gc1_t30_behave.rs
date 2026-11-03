@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::*;
-use crate::gc1_scene::Scene;
+use crate::gc1_scene::{Key, Scene};
+
+use velnor_actions_contract::cachekey::MAX_CACHE_KEY_BYTES;
 
 fn record_field<'a>(record: &'a str, name: &str) -> Option<&'a str> {
     record
@@ -64,33 +66,182 @@ fn gc1_t30_scripts_behave() -> Result<(), Box<dyn Error>> {
     scene.finish()
 }
 
+#[derive(Clone, Copy, Debug)]
+struct Inputs {
+    share_out_dir: Option<&'static str>,
+    build_script_execution: Option<&'static str>,
+    mbx_cc: Option<&'static str>,
+    source_date_epoch: Option<&'static str>,
+    image_os: Option<&'static str>,
+}
+
+const BASELINE: Inputs = Inputs {
+    share_out_dir: Some("1"),
+    build_script_execution: Some("0"),
+    mbx_cc: Some("0"),
+    source_date_epoch: Some("0"),
+    image_os: Some("ubuntu26"),
+};
+
+fn cells() -> Vec<Inputs> {
+    let mut cells = Vec::new();
+    for share_out_dir in ["0", "1"] {
+        for build_script_execution in ["0", "1"] {
+            for mbx_cc in ["0", "1"] {
+                for source_date_epoch in ["0", "1"] {
+                    for image_os in ["ubuntu24", "ubuntu26"] {
+                        cells.push(Inputs {
+                            share_out_dir: Some(share_out_dir),
+                            build_script_execution: Some(build_script_execution),
+                            mbx_cc: Some(mbx_cc),
+                            source_date_epoch: Some(source_date_epoch),
+                            image_os: Some(image_os),
+                        });
+                    }
+                }
+            }
+        }
+    }
+    cells.extend([
+        Inputs {
+            share_out_dir: None,
+            build_script_execution: None,
+            mbx_cc: None,
+            source_date_epoch: None,
+            ..BASELINE
+        },
+        Inputs {
+            mbx_cc: None,
+            ..BASELINE
+        },
+        Inputs {
+            source_date_epoch: None,
+            ..BASELINE
+        },
+    ]);
+    cells
+}
+
+fn discover_inputs(
+    scene: &Scene,
+    inputs: Inputs,
+    extra: &[(&str, &str)],
+) -> Result<String, Box<dyn Error>> {
+    let mut set = extra.to_vec();
+    let mut unset = Vec::new();
+    for (name, value) in [
+        ("MBX_SHARE_OUT_DIR", inputs.share_out_dir),
+        ("MBX_BUILD_SCRIPT_EXECUTION", inputs.build_script_execution),
+        ("MBX_CC", inputs.mbx_cc),
+        ("SOURCE_DATE_EPOCH", inputs.source_date_epoch),
+        ("ImageOS", inputs.image_os),
+    ] {
+        match value {
+            Some(value) => set.push((name, value)),
+            None => unset.push(name),
+        }
+    }
+    scene.discover_outputs(&set, &unset)
+}
+
+fn key_of(scene: &Scene, inputs: Inputs, extra: &[(&str, &str)]) -> Result<Key, Box<dyn Error>> {
+    discover_inputs(scene, inputs, extra)?;
+    Ok(Key {
+        key: scene.output_value("key")?,
+        restore_prefix: scene.output_value("restore_keys")?,
+    })
+}
+
 #[test]
 #[cfg(unix)]
-fn gc1_t30_key_binds_source_date_epoch() -> Result<(), Box<dyn Error>> {
-    let scene = Scene::new("sde", crate::gc1_t53::scripts()?)?;
-    let discover = |value| scene.discover_with(&[("SOURCE_DATE_EPOCH", value)]);
-    let zero = discover("0")?;
-    let one = discover("1")?;
-    let unset = discover("")?;
-    let again = discover("0")?;
-    if zero.key != again.key || zero.restore_prefix != again.restore_prefix {
-        return Err(fail("same SOURCE_DATE_EPOCH produced different keys"));
+fn gc1_t30_key_is_stable_across_runs_and_versioned() -> Result<(), Box<dyn Error>> {
+    let scene = Scene::new("key-stable", crate::gc1_t53::scripts()?)?;
+    let first = key_of(&scene, BASELINE, &[])?;
+    let again = key_of(&scene, BASELINE, &[])?;
+    if first.key != again.key || first.restore_prefix != again.restore_prefix {
+        return Err(fail("same inputs produced different keys"));
     }
-    let states = [("0", &zero), ("1", &one), ("unset", &unset)];
-    for (index, (label, state)) in states.iter().enumerate() {
-        for (other_label, other) in &states[index + 1..] {
+    let other_run = key_of(
+        &scene,
+        BASELINE,
+        &[
+            ("GITHUB_RUN_ID", "2002"),
+            ("GITHUB_RUN_ATTEMPT", "3"),
+            ("RUNNER_NAME", "runner-b"),
+        ],
+    )?;
+    if first.key != other_run.key || first.restore_prefix != other_run.restore_prefix {
+        return Err(fail("key changed with run id, attempt or runner name"));
+    }
+    if !first.key.starts_with("velnor-v3-state-trusted-s256-") {
+        return Err(fail("key lost the schema 3 state prefix"));
+    }
+    if first.key.len() > MAX_CACHE_KEY_BYTES {
+        return Err(fail("key outgrew the cache key cap"));
+    }
+    scene.finish()
+}
+
+#[test]
+#[cfg(unix)]
+fn gc1_t30_key_never_aliases_across_flags_epoch_or_image() -> Result<(), Box<dyn Error>> {
+    let scene = Scene::new("key-alias", crate::gc1_t53::scripts()?)?;
+    let mut seen: Vec<(Inputs, Key)> = Vec::new();
+    for inputs in cells() {
+        seen.push((inputs, key_of(&scene, inputs, &[])?));
+    }
+    for (index, (inputs, state)) in seen.iter().enumerate() {
+        for (other_inputs, other) in &seen[index + 1..] {
             if state.key == other.key {
                 return Err(fail(&format!(
-                    "same key across SOURCE_DATE_EPOCH values {label} and {other_label}"
+                    "keys collide: {inputs:?} and {other_inputs:?}"
                 )));
             }
             if other.key.starts_with(&state.restore_prefix)
                 || state.key.starts_with(&other.restore_prefix)
             {
                 return Err(fail(&format!(
-                    "restore prefix of SOURCE_DATE_EPOCH {label} reaches state of {other_label}"
+                    "restore prefix reaches foreign state: {inputs:?} and {other_inputs:?}"
                 )));
             }
+        }
+    }
+    scene.finish()
+}
+
+#[test]
+#[cfg(unix)]
+fn gc1_t30_missing_image_os_goes_cold() -> Result<(), Box<dyn Error>> {
+    let scene = Scene::new("image-os-cold", crate::gc1_t53::scripts()?)?;
+    let baseline = discover_inputs(&scene, BASELINE, &[])?;
+    for expected in ["restore=true", "save=true"] {
+        if !baseline.lines().any(|line| line == expected) {
+            return Err(fail(&format!("baseline lost {expected}: {baseline:?}")));
+        }
+    }
+    if baseline.lines().any(|line| line.starts_with("reason=")) {
+        return Err(fail(&format!("baseline went cold: {baseline:?}")));
+    }
+    for image_os in [None, Some("")] {
+        let outputs = discover_inputs(
+            &scene,
+            Inputs {
+                image_os,
+                ..BASELINE
+            },
+            &[],
+        )?;
+        for expected in ["reason=image_os_missing", "save=false", "restore=false"] {
+            if !outputs.lines().any(|line| line == expected) {
+                return Err(fail(&format!(
+                    "image_os={image_os:?}: missing {expected}; outputs: {outputs:?}"
+                )));
+            }
+        }
+        if outputs.lines().any(|line| line.starts_with("key=")) {
+            return Err(fail(&format!(
+                "image_os={image_os:?}: cold discover still published a key"
+            )));
         }
     }
     scene.finish()
