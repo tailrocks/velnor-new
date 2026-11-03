@@ -9,7 +9,7 @@ mod registry;
 mod tracked;
 
 pub use cache_admission::is_reserved_cache_path_bytes;
-pub use glob::{is_excluded, matches_glob, validate_pattern};
+pub use glob::{expand_braces, is_excluded, matches_glob, validate_pattern};
 pub use index::{
     BUILTIN_EXCLUSIONS, FileIndex, IndexError, build_index, build_index_from_list, build_index_walk,
 };

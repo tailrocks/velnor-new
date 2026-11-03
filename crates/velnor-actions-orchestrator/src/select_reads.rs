@@ -38,6 +38,19 @@ pub(crate) fn forced_packages(
     Ok(forced)
 }
 
+pub(crate) fn read_target_paths(
+    root: &Path,
+    ownership: &Ownership<'_>,
+) -> Result<BTreeSet<String>, String> {
+    Ok(source_reads(root, ownership)?
+        .into_iter()
+        .filter_map(|(_, read)| match read.target {
+            ReadTarget::Path(path) => Some(path),
+            ReadTarget::Outside | ReadTarget::Unbounded(_) => None,
+        })
+        .collect())
+}
+
 pub(crate) fn forced_warnings(ownership: &Ownership<'_>, forced: &Forced) -> Vec<String> {
     let mut warnings: Vec<String> = forced
         .iter()

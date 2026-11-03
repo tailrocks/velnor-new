@@ -46,7 +46,7 @@ private_mods!(mbx_preflight, merge);
 private_mods!(merge_request, native_image_tasks);
 private_mods!(native_mise_tasks, native_mise_version);
 private_mods!(native_tool_input, native_tool_lock);
-private_mods!(noop_report, obligation_order);
+private_mods!(non_inputs, noop_report, obligation_order);
 private_mods!(origin, owned_tool_preview);
 private_mods!(owned_tool_publication);
 private_mods!(package_publication);

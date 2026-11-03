@@ -173,7 +173,13 @@ fn affected_from_changed(
         };
         keys
     };
-    let Some(mut affected) = rust_affected(discovery, changed, root, base, head, warnings) else {
+    let rust_changed: BTreeSet<String> = changed
+        .iter()
+        .filter(|path| !discovery.affected.non_inputs.contains(path))
+        .cloned()
+        .collect();
+    let Some(mut affected) = rust_affected(discovery, &rust_changed, root, base, head, warnings)
+    else {
         return all_packages;
     };
     affected.extend(tofu_affected);
@@ -216,6 +222,9 @@ fn rust_affected(
     let ownership = Ownership::new(discovery);
     let links = resolved_links(root, &ownership, warnings)?;
     let ownership = ownership.with_links(links);
+    if changed.is_empty() {
+        return Some(BTreeSet::new());
+    }
     if has_unowned_file(&ownership, changed) {
         warnings.push("unclassified_files:all_changed".to_owned());
         return None;
@@ -229,9 +238,6 @@ fn rust_affected(
     };
     warnings.extend(crate::select_reads::forced_warnings(&ownership, &forced));
     let forced = crate::select_reads::forced_ids(&forced);
-    if changed.is_empty() && forced.is_empty() {
-        return Some(BTreeSet::new());
-    }
     let head_edges = head_edges(discovery);
     match base_edges(root, base, head, discovery) {
         Ok(base_edges) => Some(affected_packages(
