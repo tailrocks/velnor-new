@@ -99,13 +99,13 @@ fn sha256_hex(path: &Path) -> Result<String, Box<dyn Error>> {
         .to_owned())
 }
 
-pub(super) fn machete_archive(scratch: &Path) -> Result<(Vec<u8>, String), Box<dyn Error>> {
+pub(super) fn machete_archive(
+    scratch: &Path,
+    binary: &[u8],
+) -> Result<(Vec<u8>, String), Box<dyn Error>> {
     let tree = scratch.join("tree");
     fs::create_dir_all(tree.join("cargo-machete-v0.9.2"))?;
-    fs::write(
-        tree.join("cargo-machete-v0.9.2/cargo-machete"),
-        MACHETE_BINARY,
-    )?;
+    fs::write(tree.join("cargo-machete-v0.9.2/cargo-machete"), binary)?;
     let archive = scratch.join("machete.tar.gz");
     let status = Command::new("tar")
         .arg("-czf")

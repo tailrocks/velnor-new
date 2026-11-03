@@ -13,6 +13,7 @@ use velnor_actions_orchestrator::render_staged_tree;
 use super::ledger_cli_verify_script::{
     BYTES, BYTES_SHA256, Planted, RenderedVerify, TAMPERED, rendered_step, resolve_on,
 };
+use super::tools_cache_install_run::{Install, run_install};
 use super::tools_cache_pin_fixture::{
     HttpSpec, MACHETE_BINARY, MACHETE_DIR, MACHETE_VERSION, assert_urls_carry_pinned_version,
     machete_archive, pins_with_fixture_sha, rendered_http_specs,
@@ -35,7 +36,7 @@ pub(super) fn pair(name: &str, value: &str) -> (String, String) {
 pub(super) struct Sandbox {
     pub(super) home: TempDir,
     pub(super) runner_temp: TempDir,
-    workspace: TempDir,
+    pub(super) workspace: TempDir,
 }
 
 impl Sandbox {
@@ -47,7 +48,7 @@ impl Sandbox {
         })
     }
 
-    fn mise_root(&self) -> PathBuf {
+    pub(super) fn mise_root(&self) -> PathBuf {
         self.home.path().join(".local/share/mise")
     }
 
@@ -90,7 +91,7 @@ impl Sandbox {
         Ok(captured)
     }
 
-    fn spawn(
+    pub(super) fn spawn(
         &self,
         shell: &str,
         run: &str,
@@ -232,48 +233,6 @@ fn admission_ignores_env_hooks_and_exported_functions() -> Result<(), Box<dyn Er
     Ok(())
 }
 
-struct Install<'a> {
-    dir: &'a str,
-    version: &'a str,
-    pins: &'a str,
-    archive_sha256: &'a str,
-    archive: &'a [u8],
-    file: &'a [u8],
-}
-
-struct Outcome {
-    exit: Option<i32>,
-    kept: bool,
-    stdout: String,
-}
-
-fn run_install(
-    step: &RenderedVerify,
-    install: &Install<'_>,
-    extra: &[(String, String)],
-) -> Result<Outcome, Box<dyn Error>> {
-    let runner = Sandbox::new()?;
-    let installs = runner.mise_root().join("installs");
-    let archives = installs.join(".velnor-verified-archives");
-    let version = installs.join(install.dir).join(install.version);
-    fs::create_dir_all(&archives)?;
-    fs::create_dir_all(&version)?;
-    fs::write(archives.join(install.archive_sha256), install.archive)?;
-    fs::write(version.join("file"), install.file)?;
-    let mut env = vec![
-        pair("VELNOR_TOOL_PINS", install.pins),
-        pair("RUNNER_OS", "Linux"),
-        pair("RUNNER_ARCH", "X64"),
-    ];
-    env.extend_from_slice(extra);
-    let captured = runner.spawn(&expand_shell(&step.shell), &step.run, &env)?;
-    Ok(Outcome {
-        exit: captured.code,
-        kept: version.exists(),
-        stdout: captured.stdout,
-    })
-}
-
 fn install_outcome(
     step: &RenderedVerify,
     install: &[u8],
@@ -286,8 +245,10 @@ fn install_outcome(
             dir: "fake",
             version: "1.0.0",
             pins: &pins,
+            lock: None,
             archive_sha256: BYTES_SHA256,
             archive: BYTES,
+            extra_archives: &[],
             file: install,
         },
         extra,
@@ -348,7 +309,7 @@ fn restored_cargo_machete_install_is_kept_when_it_matches_its_pinned_archive()
         .as_deref()
         .ok_or("restore step has no pins")?;
     let scratch = tempfile::tempdir()?;
-    let (archive, sha256) = machete_archive(scratch.path())?;
+    let (archive, sha256) = machete_archive(scratch.path(), MACHETE_BINARY)?;
     let pins = pins_with_fixture_sha(rendered, &sha256);
     let run = |file: &[u8]| {
         run_install(
@@ -357,8 +318,10 @@ fn restored_cargo_machete_install_is_kept_when_it_matches_its_pinned_archive()
                 dir: MACHETE_DIR,
                 version: MACHETE_VERSION,
                 pins: &pins,
+                lock: None,
                 archive_sha256: &sha256,
                 archive: &archive,
+                extra_archives: &[],
                 file,
             },
             &[],
