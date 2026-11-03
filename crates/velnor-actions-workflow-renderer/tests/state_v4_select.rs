@@ -5,7 +5,8 @@ use std::error::Error;
 
 use crate::gc1_scene::{Scene, fail};
 use crate::gc1_seal_support::{
-    Attestation, Gh, MAIN, PULL, REPO, digest, key, run_select, scope, selected,
+    Attestation, ENTRY_ID, ENTRY_SIZE, Gh, MAIN, PULL, REPO, digest, key, run_select, scope,
+    selected,
 };
 
 const ROOT: &str = ".";
@@ -146,5 +147,72 @@ fn plan_selects_only_the_newest_attested_entry() -> Result<(), Box<dyn Error>> {
         &[&newest, &older],
         "outage cleared",
     )?;
+    scene.finish()
+}
+
+#[test]
+#[cfg(unix)]
+fn plan_selects_only_the_entry_generation_that_was_attested() -> Result<(), Box<dyn Error>> {
+    let scene = Scene::new("seal-generation", crate::gc1_t53::scripts()?)?;
+    let gh = Gh::install(&scene)?;
+    let sealed = key('a', '1', '1')?;
+    gh.attest(&[Attestation::bound(&sealed, ENTRY_ID, ENTRY_SIZE)])?;
+
+    gh.list_entries(&[(T1, MAIN, &sealed, ENTRY_ID + 1, ENTRY_SIZE)])?;
+    run_select(&scene, &gh, ROOT, &[])?;
+    expect(
+        &selected(&scene, ROOT)?,
+        &[],
+        "same key resaved under a new cache id",
+    )?;
+
+    gh.list_entries(&[(T1, MAIN, &sealed, ENTRY_ID, ENTRY_SIZE + 1)])?;
+    run_select(&scene, &gh, ROOT, &[])?;
+    expect(
+        &selected(&scene, ROOT)?,
+        &[],
+        "same key and id with other bytes",
+    )?;
+
+    gh.list_entries(&[
+        (T2, MAIN, &sealed, ENTRY_ID + 1, ENTRY_SIZE),
+        (T1, MAIN, &sealed, ENTRY_ID, ENTRY_SIZE),
+    ])?;
+    run_select(&scene, &gh, ROOT, &[])?;
+    expect(
+        &selected(&scene, ROOT)?,
+        &[&sealed],
+        "the attested generation beside a newer resaved one",
+    )?;
+    scene.finish()
+}
+
+#[test]
+#[cfg(unix)]
+fn plan_selects_nothing_when_only_the_verifier_fails() -> Result<(), Box<dyn Error>> {
+    let scene = Scene::new("seal-verifier", crate::gc1_t53::scripts()?)?;
+    let gh = Gh::install(&scene)?;
+    let sealed = key('a', '1', '1')?;
+    gh.list(&[(T1, MAIN, &sealed)])?;
+    gh.attest(&[Attestation::signed(&sealed)])?;
+
+    let outages: &[(&str, &[(&str, &str)])] = &[
+        ("verify-fail", &[]),
+        ("verify-garbage", &[]),
+        #[cfg(target_os = "linux")]
+        ("verify-hang", &[("VELNOR_STATE_GH_TIMEOUT", "1")]),
+    ];
+    for (mode, extra) in outages {
+        gh.mode(mode)?;
+        run_select(&scene, &gh, ROOT, extra)?;
+        expect(
+            &selected(&scene, ROOT)?,
+            &[],
+            &format!("verifier outage {mode}"),
+        )?;
+    }
+    gh.mode("ok")?;
+    run_select(&scene, &gh, ROOT, &[])?;
+    expect(&selected(&scene, ROOT)?, &[&sealed], "verifier restored")?;
     scene.finish()
 }

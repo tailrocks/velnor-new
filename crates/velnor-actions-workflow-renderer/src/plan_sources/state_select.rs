@@ -64,15 +64,21 @@ attested() {
   : > "$out"
   [ -n "$ref" ] && [ -n "$repo" ] && [ -n "$signer" ] || return 0
   command -v gh >/dev/null 2>&1 || return 0
-  run_gh cache list --key "$1" --ref "$ref" --limit @LIST_LIMIT@ --json key,createdAt --jq '.[] | .createdAt + " " + .key' > "$d/list" 2>/dev/null || return 0
+  run_gh cache list --key "$1" --ref "$ref" --limit @LIST_LIMIT@ --json key,createdAt,id,sizeInBytes --jq '.[] | .createdAt + " " + .key + " " + (.id | tostring) + " " + (.sizeInBytes | tostring)' > "$d/list" 2>/dev/null || return 0
   LC_ALL=C sort -r "$d/list" > "$d/sorted" || return 0
   n=
   while IFS= read -r line; do
     [ "${#n}" -lt @VERIFY_LIMIT@ ] || break
-    key=${line#* }
+    rest=${line#* }
+    key=${rest%% *}
+    meta=${rest#* }
+    id=${meta%% *}
+    size=${meta#* }
+    case "$id" in ''|*[!0-9]*) continue ;; esac
+    case "$size" in ''|*[!0-9]*) continue ;; esac
     case "$key" in "$1"?*) ;; *) continue ;; esac
     printf '%s\n' "${key#"$1"}" | grep -Eq "$shape" || continue
-    printf '%s\n' "$key" > "$d/subject"
+    printf '%s %s %s\n' "$key" "$id" "$size" > "$d/subject"
     n="${n}x"
     if run_gh attestation verify "$d/subject" -R "$repo" --signer-workflow "$signer" --source-ref "$ref" --predicate-type '@PREDICATE@' >/dev/null 2>&1; then printf '%s\n' "$key" >> "$out"; fi
   done < "$d/sorted"

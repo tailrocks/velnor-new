@@ -90,6 +90,7 @@ pub(super) fn state_seal_role(role: StepRole) -> bool {
         StepRole::StateSealDownload
             | StepRole::StateSealSubject
             | StepRole::StateSealAdmit
+            | StepRole::StateSealBind
             | StepRole::StateSealAttest
             | StepRole::StateSealSave
             | StepRole::StateSealRetire

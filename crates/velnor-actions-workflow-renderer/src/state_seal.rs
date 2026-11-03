@@ -8,10 +8,11 @@ use velnor_actions_contract::workflow::cache_family::{
 };
 use velnor_actions_contract::workflow::cache_family_mbx::MBX_BUNDLE_ROOT_ENV;
 use velnor_actions_contract::workflow::state_seal::{
-    STATE_PRODUCER_ARTIFACT_OUTPUT, STATE_SEAL_PREDICATE, STATE_SEAL_PREDICATE_TYPE,
-    STATE_SEAL_PREFIX_ENV, STATE_SEAL_SAVE_CONDITION, STATE_SEAL_SUBJECT_EXPR,
-    STATE_SEAL_SUBJECT_REL, state_compat_plan_expr, state_produce_plan_expr, state_producer_job_id,
-    state_seal_condition, state_seal_job_id,
+    STATE_PRODUCER_ARTIFACT_OUTPUT, STATE_SEAL_ATTEST_CONDITION, STATE_SEAL_BIND_CONDITION,
+    STATE_SEAL_KEY_ENV, STATE_SEAL_KEY_EXPR, STATE_SEAL_LIST_LIMIT, STATE_SEAL_PREDICATE,
+    STATE_SEAL_PREDICATE_TYPE, STATE_SEAL_PREFIX_ENV, STATE_SEAL_SAVE_CONDITION,
+    STATE_SEAL_SUBJECT_EXPR, STATE_SEAL_SUBJECT_REL, state_compat_plan_expr,
+    state_produce_plan_expr, state_producer_job_id, state_seal_condition, state_seal_job_id,
 };
 use velnor_actions_contract::workflow::{ProducerKind, SOURCES_PRODUCER_JOB_ID};
 use velnor_actions_contract::{
@@ -21,11 +22,15 @@ use velnor_actions_contract::{
 
 use crate::RenderError;
 use crate::render::PLAN_JOB_ID;
-use crate::steps::{DOWNLOAD_ARTIFACT_USES, TOOLS_SAVE_USES, action_step, shell_step};
+use crate::steps::{
+    DOWNLOAD_ARTIFACT_USES, TOOLS_SAVE_USES, action_step, ambient_shell_step, shell_step,
+};
 
 const SEAL_DISPLAY_PREFIX: &str = "State seal / ";
 const JOB_MINUTES: u32 = 15;
 const SEALED_OUTPUT: &str = "sealed";
+const BOUND_OUTPUT: &str = "bound";
+const TOKEN_EXPR: &str = "${{ github.token }}";
 const GUARD: &str = "case \"$RUNNER_TEMP\" in /*) ;; *) printf '%s\\n' 'RUNNER_TEMP must be absolute' >&2; exit 1 ;; esac";
 
 struct ProducerRoot {
@@ -159,6 +164,7 @@ fn seal_job(
     download.role = Some(StepRole::StateSealDownload);
     let subject = state_seal_subject_step(&scope_prefix(&root.slug), &identity_prefix(&root.slug))?;
     let admit = crate::state_seal_save::state_seal_admit_step(pending, unit_bound)?;
+    let bind = state_seal_bind_step()?;
     let mut attest = action_step(
         "Attest state seal",
         ATTEST_USES,
@@ -175,7 +181,7 @@ fn seal_job(
         ]),
     )?;
     attest.role = Some(StepRole::StateSealAttest);
-    attest.condition = Some(STATE_SEAL_SAVE_CONDITION.to_owned());
+    attest.condition = Some(STATE_SEAL_ATTEST_CONDITION.to_owned());
     let mut save = action_step(
         "Save sealed payload",
         TOOLS_SAVE_USES,
@@ -212,7 +218,7 @@ fn seal_job(
         services: Vec::new(),
         outputs: BTreeMap::new(),
         env: JobEnv::Unset,
-        steps: vec![download, subject, admit, attest, save, retire],
+        steps: vec![download, subject, admit, save, bind, attest, retire],
     })
 }
 
@@ -230,6 +236,65 @@ fn transport_file() -> Result<String, RenderError> {
         .ok_or_else(|| invalid("transport_not_runner_temp"))
 }
 
+pub fn state_seal_bind_step() -> Result<Step, RenderError> {
+    let script = format!(
+        r#"set -eu
+{GUARD}
+d="$RUNNER_TEMP/{rel_dir}"
+subject="$RUNNER_TEMP/{rel}"
+mkdir -p "$d"
+rm -f "$subject"
+refuse() {{ printf '%s\n' "::warning::cache_unavailable: state seal bind refused ($1)"; printf '%s\n' '{bound}=false' >> "$GITHUB_OUTPUT"; exit 0; }}
+key="${{{key_env}-}}"
+ref="${{GITHUB_REF-}}"
+[ -n "$key" ] && [ -n "$ref" ] || refuse input_missing
+command -v gh >/dev/null 2>&1 || refuse gh_missing
+gh cache list --key "$key" --ref "$ref" --limit {list_limit} --json key,id,sizeInBytes --jq '.[] | .key + " " + (.id | tostring) + " " + (.sizeInBytes | tostring)' > "$d/list" || refuse list_failed
+hits=
+id=
+size=
+while read -r k i s rest; do
+  [ "$k" = "$key" ] || continue
+  case "$i" in ''|*[!0-9]*) refuse id_malformed ;; esac
+  case "$s" in ''|*[!0-9]*) refuse size_malformed ;; esac
+  hits="${{hits}}x"
+  id=$i
+  size=$s
+done < "$d/list"
+[ "$hits" = x ] || refuse "entries=${{#hits}}"
+printf '%s %s %s\n' "$key" "$id" "$size" > "$subject"
+printf '%s\n' '{bound}=true' >> "$GITHUB_OUTPUT"
+printf 'velnor: state seal subject %s %s %s\n' "$key" "$id" "$size"
+"#,
+        rel_dir = STATE_SEAL_SUBJECT_REL
+            .rsplit_once('/')
+            .map_or("", |(dir, _)| dir),
+        rel = STATE_SEAL_SUBJECT_REL,
+        bound = BOUND_OUTPUT,
+        key_env = STATE_SEAL_KEY_ENV,
+        list_limit = STATE_SEAL_LIST_LIMIT,
+    );
+    let mut step = ambient_shell_step(
+        "Bind seal subject",
+        vec![
+            "sh".to_owned(),
+            "-c".to_owned(),
+            crate::state_script::one_line(&script),
+        ],
+        BTreeMap::from([
+            (
+                STATE_SEAL_KEY_ENV.to_owned(),
+                STATE_SEAL_KEY_EXPR.to_owned(),
+            ),
+            ("GH_TOKEN".to_owned(), TOKEN_EXPR.to_owned()),
+        ]),
+    )?;
+    step.id = Some(StepId::StateSealBind);
+    step.role = Some(StepRole::StateSealBind);
+    step.condition = Some(STATE_SEAL_BIND_CONDITION.to_owned());
+    Ok(step)
+}
+
 pub fn state_seal_subject_step(scope: &str, prefix: &str) -> Result<Step, RenderError> {
     let stored = CacheFamily::MbxBundle.spec().ceiling.stored();
     let script = format!(
@@ -237,7 +302,6 @@ pub fn state_seal_subject_step(scope: &str, prefix: &str) -> Result<Step, Render
 {GUARD}
 payload="{payload}"
 d="$RUNNER_TEMP/{rel_dir}"
-subject="$RUNNER_TEMP/{rel}"
 rm -rf "$d"
 mkdir -p "$d"
 refuse() {{ printf '%s\n' "::warning::cache_unavailable: state seal refused ($1)"; printf '%s\n' '{sealed}=false' >> "$GITHUB_OUTPUT"; exit 0; }}
@@ -256,7 +320,6 @@ if [ "$size" -gt {stored} ]; then refuse "over_stored stored=$size ceiling={stor
 s256 "$payload" || refuse digest_unreadable
 key="${{prefix}}s256-$h"
 [ "${{#key}}" -le {max_key} ] || refuse key_too_long
-printf '%s\n' "$key" > "$subject"
 printf '%s\n' '{sealed}=true' "key=$key" >> "$GITHUB_OUTPUT"
 printf 'velnor: state seal subject %s\n' "$key"
 "#,
@@ -264,7 +327,6 @@ printf 'velnor: state seal subject %s\n' "$key"
         rel_dir = STATE_SEAL_SUBJECT_REL
             .rsplit_once('/')
             .map_or("", |(dir, _)| dir),
-        rel = STATE_SEAL_SUBJECT_REL,
         sealed = SEALED_OUTPUT,
         prefix_env = STATE_SEAL_PREFIX_ENV,
         scope_env = velnor_actions_contract::workflow::state_seal::STATE_SEAL_SCOPE_ENV,

@@ -68,15 +68,13 @@ signer="${signer%%@*}"
 [ -n "$key" ] && [ -n "$scope" ] && [ -n "$ref" ] && [ -n "$repo" ] && [ -n "$signer" ] || skip identity_missing
 number "$size" && [ "$size" -gt 0 ] || skip payload_unreadable
 bound_of "$size" || skip bound_unavailable
-gh cache list --key "$key" --ref "$ref" --limit @LIMIT@ --json id,key,sizeInBytes --jq '.[] | "\(.id) \(.key) \(.sizeInBytes)"' > "$d/exact" 2> /dev/null || skip lookup_failed
-found=
-stored=
-while read -r id k sz; do
-  if [ "$k" = "$key" ]; then found="${found}x"; stored=$sz; fi
-done < "$d/exact"
-[ "$found" = x ] || skip key_not_listed
-number "$stored" && [ "$stored" -gt 0 ] && [ "$stored" -le "$bound" ] || skip "size_out_of_bound stored=$stored bound=$bound"
-gh attestation verify "$RUNNER_TEMP/@SUBJECT@" -R "$repo" --signer-workflow "$signer" --source-ref "$ref" --predicate-type '@PREDICATE@' > /dev/null 2>&1 || skip attestation_unverified
+subject="$RUNNER_TEMP/@SUBJECT@"
+if [ -L "$subject" ] || [ ! -f "$subject" ]; then skip subject_missing; fi
+sk=; sid=; stored=
+read -r sk sid stored < "$subject" || skip subject_unreadable
+[ "$sk" = "$key" ] || skip subject_key_mismatch
+number "$sid" && number "$stored" && [ "$stored" -gt 0 ] && [ "$stored" -le "$bound" ] || skip "size_out_of_bound stored=$stored bound=$bound"
+gh attestation verify "$subject" -R "$repo" --signer-workflow "$signer" --source-ref "$ref" --predicate-type '@PREDICATE@' > /dev/null 2>&1 || skip attestation_unverified
 shape='^s256-[0-9a-f]{64}-s256-[0-9a-f]{64}-s256-[0-9a-f]{64}$'
 gh cache list --key "$scope" --ref "$ref" --limit @LIMIT@ --json id,key --jq '.[] | "\(.id) \(.key)"' > "$d/scope" 2> /dev/null || skip scope_list_failed
 while read -r id k; do

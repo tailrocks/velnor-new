@@ -49,6 +49,7 @@ impl StepRole {
                 | Self::StateProduced
                 | Self::StateSkeleton
                 | Self::StateSkeletonRestore
+                | Self::StateSealBind
         )
     }
 }

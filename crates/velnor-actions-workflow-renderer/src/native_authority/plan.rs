@@ -25,6 +25,7 @@ pub(super) fn build(
         input.config.workflow.policy,
     )
     .map_err(NativeAuthorityError::Job)?;
+    job.permissions = Some(crate::native_job_builders::read_actions_permissions());
     crate::native_job_builders::plan_state_roots(
         &mut job,
         catalog,
@@ -36,7 +37,6 @@ pub(super) fn build(
     .map_err(NativeAuthorityError::Job)?;
     job.timeout_minutes =
         velnor_actions_contract::JobTimeout::new(input.config.workflow.plan_timeout_minutes)?;
-    job.permissions = Some(crate::native_job_builders::read_actions_permissions());
     if let Some(fact) = input.workspace_format {
         let task = format_task(fact)?;
         let driver = RouteDriver::from_compile_driver(&task.identity.compile_driver)

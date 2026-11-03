@@ -238,6 +238,8 @@ pub enum StepRole {
 
     StateSealSubject,
 
+    StateSealBind,
+
     StateSealAttest,
 
     StateSealSave,
@@ -351,6 +353,7 @@ impl StepRole {
             Self::LedgerCliVerify => Some(StepId::LedgerCliVerify),
             Self::StateSelect => Some(StepId::StateSelect),
             Self::StateSealSubject => Some(StepId::StateSealSubject),
+            Self::StateSealBind => Some(StepId::StateSealBind),
             Self::StateSealUpload => Some(StepId::StateSealUpload),
             Self::StateSealAdmit => Some(StepId::StateSealAdmit),
             Self::StateSealSave => Some(StepId::StateSealSave),
@@ -379,6 +382,7 @@ impl StepRole {
             StepId::LedgerCliVerify => Self::LedgerCliVerify,
             StepId::StateSelect => Self::StateSelect,
             StepId::StateSealSubject => Self::StateSealSubject,
+            StepId::StateSealBind => Self::StateSealBind,
             StepId::StateSealUpload => Self::StateSealUpload,
             StepId::StateSealAdmit => Self::StateSealAdmit,
             StepId::StateSealSave => Self::StateSealSave,

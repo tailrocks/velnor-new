@@ -4,7 +4,8 @@
 use super::cache_access::SOURCES_PRODUCER_JOB_ID;
 use super::crate_job::{TOFU_PROVIDERS_PRODUCER_JOB_ID_PREFIX, TOOLS_PRODUCER_JOB_ID_PREFIX};
 use super::state_seal::{
-    STATE_PRODUCER_JOB_ID_PREFIX, STATE_SEAL_JOB_ID_PREFIX, STATE_SEAL_SAVE_CONDITION,
+    STATE_PRODUCER_JOB_ID_PREFIX, STATE_SEAL_ATTEST_CONDITION, STATE_SEAL_BIND_CONDITION,
+    STATE_SEAL_JOB_ID_PREFIX, STATE_SEAL_SAVE_CONDITION,
 };
 use super::{Job, PLAN_JOB_ID, Step, StepKind, StepRole};
 
@@ -18,12 +19,13 @@ const PRODUCER_SEQUENCE: [StepRole; 7] = [
     StepRole::StateProduced,
 ];
 
-const SEAL_SEQUENCE: [StepRole; 6] = [
+const SEAL_SEQUENCE: [StepRole; 7] = [
     StepRole::StateSealDownload,
     StepRole::StateSealSubject,
     StepRole::StateSealAdmit,
-    StepRole::StateSealAttest,
     StepRole::StateSealSave,
+    StepRole::StateSealBind,
+    StepRole::StateSealAttest,
     StepRole::StateSealRetire,
 ];
 
@@ -95,10 +97,14 @@ pub(super) fn state_seal_shape_ok(id: &str, job: &Job) -> bool {
             .zip(SEAL_SEQUENCE)
             .all(|(step, role)| step.role == Some(role))
         && job.steps.iter().all(|step| {
-            let gated = matches!(
-                step.role,
-                Some(StepRole::StateSealAttest | StepRole::StateSealSave)
-            );
-            !gated || step.condition.as_deref() == Some(STATE_SEAL_SAVE_CONDITION)
+            let expected = match step.role {
+                Some(StepRole::StateSealSave) => Some(STATE_SEAL_SAVE_CONDITION),
+                Some(StepRole::StateSealBind) => Some(STATE_SEAL_BIND_CONDITION),
+                Some(StepRole::StateSealAttest | StepRole::StateSealRetire) => {
+                    Some(STATE_SEAL_ATTEST_CONDITION)
+                }
+                _ => return true,
+            };
+            step.condition.as_deref() == expected
         })
 }

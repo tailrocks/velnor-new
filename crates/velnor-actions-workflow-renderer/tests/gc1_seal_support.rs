@@ -19,6 +19,8 @@ pub(crate) const REPO: &str = "tailrocks/velnor-new";
 pub(crate) const SIGNER: &str = "tailrocks/velnor-new/.github/workflows/ci.yml";
 pub(crate) const MAIN: &str = "refs/heads/main";
 pub(crate) const PULL: &str = "refs/pull/9/merge";
+pub(crate) const ENTRY_ID: u64 = 7001;
+pub(crate) const ENTRY_SIZE: u64 = 4096;
 
 const GH: &str = r#"#!/bin/sh
 d="${FAKE_GH_DIR:?}"
@@ -32,18 +34,20 @@ verb="$1 $2"
 shift 2
 case "$verb" in
   "cache list")
-    key=; ref=; prog=.
+    key=; ref=; fields=
     while [ $# -gt 0 ]; do
-      case "$1" in --key) key=$2; shift ;; --ref) ref=$2; shift ;; --jq) prog=$2; shift ;; esac
+      case "$1" in --key) key=$2; shift ;; --ref) ref=$2; shift ;; --json) fields=$2; shift ;; esac
       shift
     done
     if [ "$mode" = garbage ]; then printf '%s\n' '<<<not json>>>' '{"oops"'; exit 0; fi
-    : > "$d/json"
     while read -r created lref lkey lid lsize; do
       [ "$lref" = "$ref" ] || continue
-      case "$lkey" in "$key"*) printf '{"createdAt":"%s","key":"%s","id":%s,"sizeInBytes":%s}\n' "$created" "$lkey" "$lid" "$lsize" >> "$d/json" ;; esac
+      case "$lkey" in "$key"*) ;; *) continue ;; esac
+      case "$fields" in
+        *createdAt*) printf '%s %s %s %s\n' "$created" "$lkey" "$lid" "$lsize" ;;
+        *) printf '%s %s %s\n' "$lkey" "$lid" "$lsize" ;;
+      esac
     done < "$d/list"
-    jq -s -r "$prog" "$d/json"
     ;;
   "cache delete")
     id=$1
@@ -52,26 +56,25 @@ case "$verb" in
     mv "$d/list.next" "$d/list"
     printf 'delete cache %s\n' "$id" >> "$d/log"
     ;;
-  "api actions/cache/usage"|"api repos/"*"/actions/cache/usage")
+  "api repos/"*"/actions/cache/usage")
     [ "$mode" = usage_fail ] && exit 1
-    prog=.
-    while [ $# -gt 0 ]; do
-      case "$1" in --jq) prog=$2; shift ;; esac
-      shift
-    done
     read -r usage < "$d/usage"
-    printf '{"active_caches_size_in_bytes":%s}\n' "$usage" | jq -r "$prog"
+    printf '%s\n' "$usage"
     ;;
   "api -X")
     [ "$1" = DELETE ] || exit 2
-    path=$2
-    id=${path##*/}
+    id=${2##*/}
     grep -qx "$id" "$d/artifacts" || exit 1
     grep -vx "$id" "$d/artifacts" > "$d/artifacts.next" || :
     mv "$d/artifacts.next" "$d/artifacts"
     printf 'delete artifact %s\n' "$id" >> "$d/log"
     ;;
   "attestation verify")
+    case "$mode" in
+      verify-fail) exit 1 ;;
+      verify-hang) sleep 30; exit 0 ;;
+      verify-garbage) printf '%s\n' '<<<not a verdict>>>' '{"oops"'; exit 3 ;;
+    esac
     file=$1
     shift
     repo=; signer=; sref=; pred=
@@ -100,14 +103,6 @@ pub(crate) struct Gh {
     dir: PathBuf,
 }
 
-pub(crate) struct Entry<'a> {
-    pub(crate) created: &'a str,
-    pub(crate) git_ref: &'a str,
-    pub(crate) key: &'a str,
-    pub(crate) id: u64,
-    pub(crate) size: u64,
-}
-
 pub(crate) struct Attestation {
     pub(crate) subject: String,
     pub(crate) repo: String,
@@ -118,8 +113,12 @@ pub(crate) struct Attestation {
 
 impl Attestation {
     pub(crate) fn signed(key: &str) -> Self {
+        Self::bound(key, ENTRY_ID, ENTRY_SIZE)
+    }
+
+    pub(crate) fn bound(key: &str, id: u64, size: u64) -> Self {
         Self {
-            subject: format!("{key}\n"),
+            subject: format!("{key} {id} {size}\n"),
             repo: REPO.to_owned(),
             signer: SIGNER.to_owned(),
             git_ref: MAIN.to_owned(),
@@ -166,30 +165,24 @@ impl Gh {
     }
 
     pub(crate) fn list(&self, rows: &[(&str, &str, &str)]) -> Result<(), Box<dyn Error>> {
-        let entries: Vec<Entry<'_>> = rows
+        let entries: Vec<(&str, &str, &str, u64, u64)> = rows
             .iter()
-            .enumerate()
-            .map(|(index, (created, git_ref, key))| Entry {
-                created,
-                git_ref,
-                key,
-                id: 100 + index as u64,
-                size: 1,
-            })
+            .map(|(created, git_ref, key)| (*created, *git_ref, *key, ENTRY_ID, ENTRY_SIZE))
             .collect();
-        self.entries(&entries)
+        self.list_entries(&entries)
     }
 
-    pub(crate) fn entries(&self, rows: &[Entry<'_>]) -> Result<(), Box<dyn Error>> {
-        let text: String = rows
+    pub(crate) fn list_entries(
+        &self,
+        rows: &[(&str, &str, &str, u64, u64)],
+    ) -> Result<(), Box<dyn Error>> {
+        let text = rows
             .iter()
-            .map(|row| {
-                format!(
-                    "{} {} {} {} {}\n",
-                    row.created, row.git_ref, row.key, row.id, row.size
-                )
+            .map(|(created, git_ref, key, id, size)| {
+                format!("{created} {git_ref} {key} {id} {size}\n")
             })
-            .collect();
+            .collect::<Vec<String>>()
+            .concat();
         std::fs::write(self.dir.join("list"), text)?;
         Ok(())
     }

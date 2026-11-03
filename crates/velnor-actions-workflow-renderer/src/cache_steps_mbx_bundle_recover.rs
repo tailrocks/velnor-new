@@ -7,8 +7,8 @@ use velnor_actions_contract::workflow::cache_family::{
     COMPLETE_STATE_ROOT_EXPR, COMPLETE_STATE_TRANSPORT_EXPR, RUNNER_TEMP_SHELL,
 };
 use velnor_actions_contract::workflow::cache_family_mbx::{
-    MBX_BUNDLE_IMPORT_CONDITION, MBX_BUNDLE_MATCHED_KEY_ENV, MBX_BUNDLE_MATCHED_KEY_EXPR,
-    MBX_BUNDLE_PRODUCER_SKIP_OUTPUT,
+    MBX_BUNDLE_IMPORT_CONDITION, MBX_BUNDLE_KEY_EXPR, MBX_BUNDLE_MATCHED_KEY_ENV,
+    MBX_BUNDLE_MATCHED_KEY_EXPR, MBX_BUNDLE_PRODUCER_SKIP_OUTPUT, MBX_BUNDLE_RESTORE_KEY_ENV,
 };
 use velnor_actions_contract::{Step, StepId, StepRole};
 
@@ -63,6 +63,10 @@ pub(crate) fn recover_step(
         MBX_BUNDLE_MATCHED_KEY_ENV.to_owned(),
         MBX_BUNDLE_MATCHED_KEY_EXPR.to_owned(),
     );
+    env.insert(
+        MBX_BUNDLE_RESTORE_KEY_ENV.to_owned(),
+        MBX_BUNDLE_KEY_EXPR.to_owned(),
+    );
     let payload = shell_literal(COMPLETE_STATE_TRANSPORT_EXPR)?;
     let root = shell_literal(COMPLETE_STATE_ROOT_EXPR)?;
     let (_, base) = split_shell(&root)?;
@@ -75,6 +79,7 @@ pub(crate) fn recover_step(
         format!("base=\"{base}\""),
         format!("record=\"{DISCOVERY_RECORD}\""),
         format!("matched=\"${{{MBX_BUNDLE_MATCHED_KEY_ENV}:-}}\""),
+        format!("selected=\"${{{MBX_BUNDLE_RESTORE_KEY_ENV}:-}}\""),
         "d=\"$RUNNER_TEMP/velnor/state-recover\"".to_owned(),
         "stage=\"$RUNNER_TEMP/velnor/state-stage\"".to_owned(),
         "plain=\"$d/plain.tar\"".to_owned(),
@@ -93,6 +98,7 @@ pub(crate) fn recover_step(
         "if [ ! -s \"$payload\" ]; then corrupt \"payload empty\"; fi".to_owned(),
         "if [ -L \"$root\" ]; then corrupt \"state root is a symlink\"; fi".to_owned(),
         "if [ -z \"$matched\" ]; then cold cold-missing; fi".to_owned(),
+        "if [ \"$matched\" != \"$selected\" ]; then refused refused-selection; fi".to_owned(),
         "case \"$matched\" in *[!A-Za-z0-9._-]*) refused refused-provenance ;; esac".to_owned(),
         "if [ ! -f \"$record\" ] || [ -L \"$record\" ]; then refused refused-provenance; fi".to_owned(),
         "snapshot_prefix=\"\"; expected_prefix=\"\"; compat=\"\"; provenance=\"\"; rec_unit=\"\"; rec_mbx=\"\"; rec_toolchain=\"\"; rec_root=\"\"".to_owned(),

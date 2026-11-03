@@ -16,6 +16,8 @@ pub const MBX_BUNDLE_MATCHED_KEY_EXPR: &str =
 
 pub const MBX_BUNDLE_MATCHED_KEY_ENV: &str = "VELNOR_MBX_BUNDLE_MATCHED_KEY";
 
+pub const MBX_BUNDLE_RESTORE_KEY_ENV: &str = "VELNOR_MBX_BUNDLE_RESTORE_KEY";
+
 pub const MBX_BUNDLE_KEY_OUTPUT: &str = "key";
 
 pub const MBX_BUNDLE_RESTORE_KEY_OUTPUT: &str = "restore_key";

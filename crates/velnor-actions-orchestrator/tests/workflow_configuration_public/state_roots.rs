@@ -3,6 +3,9 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
+use std::fs;
+use std::path::Path;
+use std::process::Command;
 
 use velnor_actions_contract::workflow::cache_family::CacheFamily;
 use velnor_actions_contract::workflow::cache_family_mbx::{
@@ -12,7 +15,7 @@ use velnor_actions_contract::{Job, StepId, StepKind, StepRole};
 use velnor_actions_orchestrator::{finalized_jobs, prepare};
 
 use super::one_job_per_crate::mbx_repo;
-use super::workflow_configuration_fixture::add_independent_mbx_package;
+use super::workflow_configuration_fixture::{add_independent_mbx_package, git, write_nextest_task};
 
 fn render(extra_roots: &[&str]) -> Result<BTreeMap<String, Job>, Box<dyn Error>> {
     let repo = mbx_repo(false)?;
@@ -105,6 +108,157 @@ fn generation_rejects_colliding_or_delimiter_roots() -> Result<(), Box<dyn Error
         if !message.contains(needle) {
             return Err(format!("roots {roots:?} failed without {needle}: {message}").into());
         }
+    }
+    Ok(())
+}
+
+fn snapshot_names(jobs: &BTreeMap<String, Job>) -> BTreeMap<String, String> {
+    snapshot_bindings(jobs)
+        .into_iter()
+        .map(|(root, expr)| {
+            let name = expr
+                .trim_start_matches("${{needs.plan.outputs.")
+                .trim_end_matches("}}")
+                .to_owned();
+            (root, name)
+        })
+        .collect()
+}
+
+fn state_snapshots(
+    jobs: &BTreeMap<String, Job>,
+    repo: &Path,
+) -> Result<BTreeMap<String, String>, Box<dyn Error>> {
+    git(&["add", "-A"], repo)?;
+    let temp = tempfile::tempdir()?;
+    let output = temp.path().join("github_output");
+    fs::write(&output, "")?;
+    let run = Command::new("sh")
+        .args(["-c", &plan_key_script(jobs)?])
+        .env("RUNNER_TEMP", temp.path())
+        .env("GITHUB_WORKSPACE", repo)
+        .env("GITHUB_OUTPUT", &output)
+        .env("ImageOS", "ubuntu24")
+        .env("VELNOR_MBX_BUNDLE_VERSION", "1.2.3")
+        .env("VELNOR_MBX_BUNDLE_TOOLCHAIN", "1.89.0")
+        .output()?;
+    if !run.status.success() {
+        return Err(format!(
+            "plan script failed: {}",
+            String::from_utf8_lossy(&run.stderr)
+        )
+        .into());
+    }
+    let snapshots: BTreeMap<String, String> = fs::read_to_string(&output)?
+        .lines()
+        .filter_map(|line| line.split_once('='))
+        .filter(|(name, _)| name.starts_with("state_") && name.ends_with("_snapshot"))
+        .map(|(name, value)| (name.to_owned(), value.to_owned()))
+        .collect();
+    if snapshots.len() != snapshot_names(jobs).len() || snapshots.len() < 2 {
+        return Err(format!("expected a snapshot per root: {snapshots:?}").into());
+    }
+    Ok(snapshots)
+}
+
+fn moved_roots(
+    names: &BTreeMap<String, String>,
+    before: &BTreeMap<String, String>,
+    after: &BTreeMap<String, String>,
+) -> Vec<String> {
+    names
+        .iter()
+        .filter(|(_, name)| before.get(*name) != after.get(*name))
+        .map(|(root, _)| root.clone())
+        .collect()
+}
+
+fn declared_input_repo() -> Result<tempfile::TempDir, Box<dyn Error>> {
+    let repo = mbx_repo(false)?;
+    add_independent_mbx_package(repo.path(), "other", "other")?;
+    write_nextest_task(&repo.path().join("other"))?;
+    let config = repo.path().join(".velnor/config.toml");
+    let mut text = fs::read_to_string(&config)?;
+    text.push_str("\n[[stacks.rust.inputs]]\nglobs = [\"data/**\"]\npackages = [\"nested\"]\n");
+    fs::write(&config, text)?;
+    fs::create_dir_all(repo.path().join("data"))?;
+    fs::write(repo.path().join("data/fixture.txt"), "one\n")?;
+    Ok(repo)
+}
+
+fn edit_and_measure(
+    jobs: &BTreeMap<String, Job>,
+    repo: &Path,
+    file: &str,
+    content: &str,
+) -> Result<BTreeMap<String, String>, Box<dyn Error>> {
+    let path = repo.join(file);
+    let original = fs::read_to_string(&path).ok();
+    fs::create_dir_all(path.parent().ok_or("file without a parent")?)?;
+    fs::write(&path, content)?;
+    let measured = state_snapshots(jobs, repo);
+    match original {
+        Some(text) => fs::write(&path, text)?,
+        None => fs::remove_file(&path)?,
+    }
+    measured
+}
+
+#[test]
+fn state_snapshot_moves_only_with_the_roots_rust_inputs() -> Result<(), Box<dyn Error>> {
+    let repo = declared_input_repo()?;
+    let root = repo.path();
+    let jobs = finalized_jobs(&prepare(root)?)?;
+    let names = snapshot_names(&jobs);
+    let base = state_snapshots(&jobs, root)?;
+    let cases: [(&str, &str, &[&str]); 5] = [
+        ("data/fixture.txt", "two\n", &["crates/nested"]),
+        (
+            "crates/rust-toolchain.toml",
+            "[toolchain]\nchannel = \"1.90.0\"\n",
+            &["crates/nested"],
+        ),
+        (
+            "rust-toolchain.toml",
+            "[toolchain]\nchannel = \"1.90.0\"\n",
+            &["crates/nested", "other"],
+        ),
+        (
+            "crates/nested/src/lib.rs",
+            "pub fn f() { let _ = 1; }\n",
+            &["crates/nested"],
+        ),
+        ("docs/guide.md", "words\n", &[]),
+    ];
+    for (file, content, expected) in cases {
+        let after = edit_and_measure(&jobs, root, file, content)?;
+        let got = moved_roots(&names, &base, &after);
+        if got != expected {
+            return Err(format!("editing {file} moved {got:?}, wanted {expected:?}").into());
+        }
+    }
+    if state_snapshots(&jobs, root)? != base {
+        return Err("restoring every edit did not restore the snapshots".into());
+    }
+    Ok(())
+}
+
+#[test]
+fn state_snapshot_moves_with_the_lane_task_digest() -> Result<(), Box<dyn Error>> {
+    let repo = declared_input_repo()?;
+    let root = repo.path();
+    let jobs = finalized_jobs(&prepare(root)?)?;
+    let names = snapshot_names(&jobs);
+    let base = state_snapshots(&jobs, root)?;
+    let config = root.join(".velnor/config.toml");
+    let mut text = fs::read_to_string(&config)?;
+    text.push_str("\n[stacks.rust]\nclippy_all_features = true\n");
+    fs::write(&config, text)?;
+    let changed = finalized_jobs(&prepare(root)?)?;
+    let after = state_snapshots(&changed, root)?;
+    let got = moved_roots(&names, &base, &after);
+    if got != ["crates/nested", "other"] {
+        return Err(format!("a changed task digest moved {got:?}").into());
     }
     Ok(())
 }
