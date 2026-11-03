@@ -44,7 +44,7 @@ jobs:
     continue-on-error: true
     env:
       CARGO_CACHE_AUTO_CLEAN_FREQUENCY: never
-      MBX_BUILD_SCRIPT_EXECUTION: "1"
+      MBX_BUILD_SCRIPT_EXECUTION: "0"
       MBX_CACHE_EXPORT_GROUP: velnor
       MBX_CC: "0"
       MBX_GC_AUTO: "0"
@@ -499,7 +499,7 @@ jobs:
     timeout-minutes: 5
     env:
       CARGO_CACHE_AUTO_CLEAN_FREQUENCY: never
-      MBX_BUILD_SCRIPT_EXECUTION: "1"
+      MBX_BUILD_SCRIPT_EXECUTION: "0"
       MBX_CACHE_EXPORT_GROUP: velnor
       MBX_CC: "0"
       MBX_GC_AUTO: "0"

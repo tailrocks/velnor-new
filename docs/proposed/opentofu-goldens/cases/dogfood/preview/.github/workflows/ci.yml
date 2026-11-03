@@ -542,7 +542,7 @@ jobs:
     runs-on: ubuntu-26.04
     timeout-minutes: 15
     env: &m20
-      MBX_BUILD_SCRIPT_EXECUTION: "1"
+      MBX_BUILD_SCRIPT_EXECUTION: "0"
       MBX_CACHE_EXPORT_GROUP: velnor
       MBX_CC: "0"
       MBX_GC_AUTO: "0"
