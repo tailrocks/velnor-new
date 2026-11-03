@@ -25,6 +25,12 @@ digest inputs only with a schema bump.
 | `ansible-collections` (1) | `$RUNNER_TEMP/velnor/ansible-collections` (verified tarballs) | family, schema, `uname -sm` | sorted `name\tversion\tsha256` lines of `[[stacks.ansible.collections]]` | the Ansible job, `trusted` only, right after the collections install | yes |
 | `mbx-bundle` (3) | `$RUNNER_TEMP/velnor/mbx-bundle` (the directory `mbx cache export --format directory` writes) | family, schema, path, `unit` (`seed` or `suite`), MBX version, Rust toolchain, workspace root, `uname -sm`, `MBX_SHARE_OUT_DIR`, `MBX_BUILD_SCRIPT_EXECUTION`, `MBX_CC`, `SOURCE_DATE_EPOCH`, `ImageOS` (an empty or unset `ImageOS` goes cold with `reason=image_os_missing`), ceiling | sha256 of the workspace `Cargo.lock` | the `Dependency seed` job (unit `seed`) and suite jobs (unit `suite`), `trusted` only; crate jobs read `seed`; computed in the job (`Compute MBX bundle key`), not in the Plan job | yes |
 
+The MBX qualification job is deliberately off the shared MBX job env that
+the crate, seed and suite jobs use. Its own `qualification_env` sets
+`MBX_GC_AUTO=0` and `MBX_SHARE_OUT_DIR=0` only and leaves
+`SOURCE_DATE_EPOCH` unset, because that job runs the action's objects-mode
+post step on protected main under its own cache generation label.
+
 `node_modules` is never cached: the isolated linker rebuilds it from the Bun
 cache in seconds, and a cached `node_modules` would carry lifecycle-script
 output across trust scopes.
