@@ -47,6 +47,8 @@ mod bun_runtime;
 mod cache_authority;
 #[path = "workflow_configuration_public/empty_suite.rs"]
 mod empty_suite;
+#[path = "workflow_configuration_public/family_save_suppression.rs"]
+mod family_save_suppression;
 #[path = "workflow_configuration_public/feature_toggles.rs"]
 mod feature_toggles;
 #[path = "workflow_configuration_public/install_profile.rs"]
