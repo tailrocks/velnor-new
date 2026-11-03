@@ -8,8 +8,8 @@ set -eu
 PATH=/usr/bin:/bin:/usr/sbin:/sbin
 export PATH
 
-if [ -z "${VELNOR_DERIVE_CLEAN-}" ]; then
-  exec /usr/bin/env -i VELNOR_DERIVE_CLEAN=1 LC_ALL=C \
+if [ "${1-}" != "--velnor-clean-reexec" ]; then
+  exec /usr/bin/env -i LC_ALL=C \
     ${HOME+HOME="$HOME"} ${RUNNER_TEMP+RUNNER_TEMP="$RUNNER_TEMP"} \
     ${RUSTUP_HOME+RUSTUP_HOME="$RUSTUP_HOME"} ${MISE_RUSTUP_HOME+MISE_RUSTUP_HOME="$MISE_RUSTUP_HOME"} \
     ${CARGO_HOME+CARGO_HOME="$CARGO_HOME"} ${VELNOR_TOOL_RUST+VELNOR_TOOL_RUST="$VELNOR_TOOL_RUST"} \
@@ -19,8 +19,9 @@ if [ -z "${VELNOR_DERIVE_CLEAN-}" ]; then
     ${ALL_PROXY+ALL_PROXY="$ALL_PROXY"} ${all_proxy+all_proxy="$all_proxy"} \
     ${SSL_CERT_FILE+SSL_CERT_FILE="$SSL_CERT_FILE"} ${SSL_CERT_DIR+SSL_CERT_DIR="$SSL_CERT_DIR"} \
     ${CURL_CA_BUNDLE+CURL_CA_BUNDLE="$CURL_CA_BUNDLE"} \
-    /bin/sh "$0" "$@"
+    /bin/sh "$0" --velnor-clean-reexec "$@"
 fi
+shift
 
 root=$(cd "$(dirname "$0")/.." && pwd)
 catalog="$root/crates/velnor-actions-mise/src/catalog_rust_manifests.rs"

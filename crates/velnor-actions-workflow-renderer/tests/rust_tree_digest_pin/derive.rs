@@ -175,7 +175,7 @@ impl Bundle {
         self.run_derive(&["--from-manifest", version, target, COMPONENT], &[])
     }
 
-    fn derive_with_env(&self, extra: &[(&str, &str)]) -> Outcome {
+    pub(crate) fn derive_with_env(&self, extra: &[(&str, &str)]) -> Outcome {
         self.run_derive(&["--from-manifest", VERSION, TARGET, COMPONENT], extra)
     }
 

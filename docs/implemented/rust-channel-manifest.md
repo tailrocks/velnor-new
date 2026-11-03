@@ -163,9 +163,12 @@ first version of this step did exactly that.
    triple (macOS, ARM or musl Linux) never reaches the pinned listing.
    `scripts/derive-rust-tree-digest` derives a pin row, sets
    `PATH=/usr/bin:/bin:/usr/sbin:/sbin` itself before anything else (so no
-   helper comes from the caller's `PATH`, with or without the marker),
-   re-executes itself under `env -i` with the same allowlist minus `PATH`
-   unless the caller already set its `VELNOR_DERIVE_CLEAN` marker, refuses a
+   helper comes from the caller's `PATH`),
+   always re-executes itself once under `env -i` with the same allowlist minus
+   `PATH` (it trusts no environment marker: recursion is detected by an
+   argument the re-execution adds and the script then consumes, so a caller's
+   `TAR_OPTIONS`, `XZ_DEFAULTS`, `QUOTING_STYLE` or `LC_ALL` never reaches
+   `tar`, `xz` or `find`), refuses a
    blank or malformed version or target before any download, writes only to stdout (digests, the pin row and
    the listing) and stages the downloaded
    channel manifest as the manifest entry. A manifest-form token in the

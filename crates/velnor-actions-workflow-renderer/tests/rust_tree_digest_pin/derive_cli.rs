@@ -206,3 +206,92 @@ fn v1_a_blank_version_or_target_is_refused_before_any_download() {
         .collect::<Vec<_>>();
     assert!(refused.is_empty(), "{refused:#?}");
 }
+
+const HOSTILE_ENV: [(&str, &str); 3] = [
+    ("QUOTING_STYLE", "c"),
+    ("LC_ALL", "tr_TR.UTF-8"),
+    ("XZ_DEFAULTS", "--memlimit=1B"),
+];
+
+#[test]
+fn h2_a_preset_marker_does_not_let_the_callers_environment_reach_the_tools() {
+    let scratch = tempfile::tempdir().expect("scratch dir");
+    let ran = scratch.path().join("ran");
+    let hook = scratch.path().join("hook");
+    std::fs::write(
+        &hook,
+        format!("#!/bin/sh\nprintf hook >> {}\n", ran.display()),
+    )
+    .expect("write hook");
+    std::fs::set_permissions(&hook, std::fs::Permissions::from_mode(0o755)).expect("chmod");
+    let tar_options = format!("--checkpoint=1 --checkpoint-action=exec={}", hook.display());
+
+    let probe = scratch.path().join("probe.tar");
+    let packed = Command::new("tar")
+        .args([
+            "-cf".as_ref(),
+            probe.as_os_str(),
+            "-C".as_ref(),
+            scratch.path().as_os_str(),
+            "hook".as_ref(),
+        ])
+        .status()
+        .expect("pack probe");
+    assert!(packed.success());
+    let listed = Command::new("tar")
+        .args(["-tf".as_ref(), probe.as_os_str()])
+        .env("TAR_OPTIONS", &tar_options)
+        .output()
+        .expect("list probe");
+    assert!(listed.status.success());
+    assert_eq!(std::fs::read_to_string(&ran).unwrap_or_default(), "hook");
+    std::fs::remove_file(&ran).expect("reset probe");
+
+    let bundle = Bundle::new(&|_| {});
+    let clean = bundle.derive_with_env(&[]);
+    assert_eq!(clean.code, Some(0), "{clean:?}");
+    let hostile: Vec<(&str, &str)> = HOSTILE_ENV
+        .into_iter()
+        .chain([("TAR_OPTIONS", tar_options.as_str())])
+        .collect();
+    for preset_marker in [false, true] {
+        let mut env = hostile.clone();
+        if preset_marker {
+            env.push(("VELNOR_DERIVE_CLEAN", "1"));
+        }
+        let derived = bundle.derive_with_env(&env);
+        assert_eq!(
+            std::fs::read_to_string(&ran).unwrap_or_default(),
+            "",
+            "marker preset {preset_marker}: {derived:?}"
+        );
+        assert_eq!(
+            derived.code,
+            Some(0),
+            "marker preset {preset_marker}: {derived:?}"
+        );
+        assert_eq!(
+            derived.stdout, clean.stdout,
+            "marker preset {preset_marker}"
+        );
+    }
+
+    let fx = Fixture::standard();
+    let mut command = Command::new(crate::pinned::derive_tool());
+    command
+        .args(["--tree".as_ref(), fx.root().as_os_str()])
+        .env_clear()
+        .env("PATH", "/usr/bin:/bin")
+        .env("VELNOR_DERIVE_CLEAN", "1")
+        .envs(hostile.iter().copied());
+    let tree = outcome(&command.output().expect("run derive tool"));
+    assert_eq!(tree.code, Some(0), "{tree:?}");
+    assert!(
+        tree.stdout
+            .contains(&format!("components_sha256={FIXTURE_COMPONENTS_SHA256}\n"))
+            && tree
+                .stdout
+                .contains(&format!("tree_sha256={FIXTURE_TREE_SHA256}\n")),
+        "{tree:?}"
+    );
+}
