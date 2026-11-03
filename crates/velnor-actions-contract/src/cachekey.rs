@@ -23,7 +23,7 @@ pub use crate::extension_schemas::{
 pub const MAX_CACHE_KEY_BYTES: usize = 512;
 
 #[must_use]
-pub fn mbx_cache_generation(version: &str) -> String {
+pub fn mbx_qualification_cache_generation(version: &str) -> String {
     format!("{MBX_CACHE_GENERATION_PREFIX}{version}-share-out-dir-disabled-v1")
 }
 

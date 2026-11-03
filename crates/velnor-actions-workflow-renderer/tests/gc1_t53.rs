@@ -281,8 +281,20 @@ fn gc1_t53_recover_bounds_uncompressed() -> Result<(), Box<dyn Error>> {
     check_recover_bounds_uncompressed()
 }
 
+const PRODUCTION_IMAGE_OS: &str = "ubuntu26";
+
+fn production_state_env(command: &mut std::process::Command) -> &mut std::process::Command {
+    command
+        .env("MBX_SHARE_OUT_DIR", "1")
+        .env("MBX_BUILD_SCRIPT_EXECUTION", "0")
+        .env("MBX_CC", "0")
+        .env("ImageOS", PRODUCTION_IMAGE_OS)
+}
+
 #[path = "gc1_t53_cold.rs"]
 mod gc1_t53_cold;
+#[path = "gc1_t53_env.rs"]
+mod gc1_t53_env;
 #[path = "gc1_t53_publish.rs"]
 mod gc1_t53_publish;
 #[path = "gc1_t53_recover.rs"]

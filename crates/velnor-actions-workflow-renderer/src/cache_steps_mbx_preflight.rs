@@ -76,7 +76,7 @@ pub(crate) use crate::action_mbx_shell::{ACTION_MBX_BIN, RESOLVE_ACTION_MBX_BIN}
 pub(crate) const MBX_GC_AUTO_ENV: &str = "MBX_GC_AUTO";
 pub(crate) const MBX_GC_AUTO_VALUE: &str = "0";
 pub(crate) const MBX_SHARE_OUT_DIR_ENV: &str = "MBX_SHARE_OUT_DIR";
-pub(crate) const MBX_SHARE_OUT_DIR_VALUE: &str = "0";
+pub(crate) const MBX_SHARE_OUT_DIR_VALUE: &str = "1";
 pub(crate) const MBX_CC_ENV: &str = "MBX_CC";
 pub(crate) const MBX_CC_VALUE: &str = "0";
 pub(crate) const MBX_BUILD_SCRIPT_EXECUTION_ENV: &str = "MBX_BUILD_SCRIPT_EXECUTION";

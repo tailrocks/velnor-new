@@ -10,7 +10,8 @@ use velnor_actions_contract::workflow::cache_family::{
     is_plan_cache_output,
 };
 use velnor_actions_contract::workflow::cache_family_mbx::{
-    MBX_BUNDLE_KEY_EXPR, MBX_BUNDLE_RESTORE_KEYS_EXPR, MBX_BUNDLE_SAVE_CONDITION,
+    MBX_BUNDLE_KEY_EXPR, MBX_BUNDLE_RESTORE_CONDITION, MBX_BUNDLE_RESTORE_KEYS_EXPR,
+    MBX_BUNDLE_SAVE_CONDITION,
 };
 use velnor_actions_contract::workflow::cache_family_steps::{
     STACK_FAMILIES, family_key_expr, family_save_condition,
@@ -236,6 +237,7 @@ fn check_paths(job: &str, step: &Step, cache: &CacheUse<'_>) -> Result<(), Rende
             // payload (or the state root) is the only accepted bundle path.
             (path == COMPLETE_STATE_TRANSPORT_EXPR || path == COMPLETE_STATE_ROOT_EXPR)
                 && mbx_bundle_restore_keys_ok(step, cache.save)
+                && (cache.save || mbx_bundle_restore_gated(step))
         }
         (
             Family::Runtime(
@@ -282,6 +284,17 @@ fn mbx_bundle_restore_keys_ok(step: &Step, save: bool) -> bool {
             .map(String::as_str)
             .is_some_and(|keys| keys == MBX_BUNDLE_RESTORE_KEYS_EXPR)
     }
+}
+
+fn mbx_bundle_restore_gated(step: &Step) -> bool {
+    let dispatch_denied = format!(
+        "({MBX_BUNDLE_RESTORE_CONDITION}) && {}",
+        crate::dispatch_cache_boundary::DISPATCH_DENY
+    );
+    matches!(
+        step.condition.as_deref(),
+        Some(condition) if condition == MBX_BUNDLE_RESTORE_CONDITION || condition == dispatch_denied
+    )
 }
 
 fn tofu_slug(path: &str) -> Option<&str> {

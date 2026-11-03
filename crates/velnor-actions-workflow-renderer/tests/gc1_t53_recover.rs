@@ -13,9 +13,7 @@ fn run_discover_key(
     scratch: &std::path::Path,
 ) -> Result<String, Box<dyn Error>> {
     let github_output = scratch.join("github-output");
-    let status = std::process::Command::new("sh")
-        .arg("-c")
-        .arg(discover)
+    let status = production_state_env(std::process::Command::new("sh").arg("-c").arg(discover))
         .env("RUNNER_TEMP", runner)
         .env("GITHUB_WORKSPACE", workspace)
         .env("GITHUB_OUTPUT", &github_output)

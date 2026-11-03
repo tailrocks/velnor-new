@@ -105,22 +105,24 @@ fn behave_setup() -> Result<BehaveSetup, Box<dyn Error>> {
 
 #[cfg(unix)]
 fn behave_discover(setup: &BehaveSetup) -> Result<(String, String), Box<dyn Error>> {
-    let status = std::process::Command::new("sh")
-        .arg("-c")
-        .arg(&setup.discover)
-        .env("PATH", &setup.path_env)
-        .env("RUNNER_TEMP", &setup.runner)
-        .env("GITHUB_WORKSPACE", &setup.workspace)
-        .env("GITHUB_OUTPUT", &setup.github_output)
-        .env("GITHUB_EVENT_NAME", "push")
-        .env("GITHUB_REF", "refs/heads/main")
-        .env("GITHUB_REF_PROTECTED", "true")
-        .env("VELNOR_DEFAULT_REF", "refs/heads/main")
-        .env("VELNOR_MBX_BUNDLE_VERSION", "1.2.3")
-        .env("VELNOR_MBX_BUNDLE_TOOLCHAIN", "1.89.0")
-        .env("VELNOR_MBX_BUNDLE_ROOT", ".")
-        .status()
-        .map_err(|error| fail(&format!("discover failed to run: {error}")))?;
+    let status = production_state_env(
+        std::process::Command::new("sh")
+            .arg("-c")
+            .arg(&setup.discover),
+    )
+    .env("PATH", &setup.path_env)
+    .env("RUNNER_TEMP", &setup.runner)
+    .env("GITHUB_WORKSPACE", &setup.workspace)
+    .env("GITHUB_OUTPUT", &setup.github_output)
+    .env("GITHUB_EVENT_NAME", "push")
+    .env("GITHUB_REF", "refs/heads/main")
+    .env("GITHUB_REF_PROTECTED", "true")
+    .env("VELNOR_DEFAULT_REF", "refs/heads/main")
+    .env("VELNOR_MBX_BUNDLE_VERSION", "1.2.3")
+    .env("VELNOR_MBX_BUNDLE_TOOLCHAIN", "1.89.0")
+    .env("VELNOR_MBX_BUNDLE_ROOT", ".")
+    .status()
+    .map_err(|error| fail(&format!("discover failed to run: {error}")))?;
     if !status.success() {
         return Err(fail("discover script failed on trusted push"));
     }
@@ -173,9 +175,7 @@ fn behave_run_recover(
         .recover
         .replace(MBX_BUNDLE_KEY_EXPR, key)
         .replace(MATCHED_KEY_BAKE, matched);
-    let status = std::process::Command::new("sh")
-        .arg("-c")
-        .arg(&script)
+    let status = production_state_env(std::process::Command::new("sh").arg("-c").arg(&script))
         .env("PATH", &setup.path_env)
         .env("RUNNER_TEMP", &setup.runner)
         .env("GITHUB_WORKSPACE", &setup.workspace)
@@ -249,16 +249,18 @@ fn check_scripts_behave() -> Result<(), Box<dyn Error>> {
         .recover
         .replace(MBX_BUNDLE_KEY_EXPR, &key)
         .replace(MATCHED_KEY_BAKE, &key);
-    let hostile_run = std::process::Command::new("sh")
-        .arg("-c")
-        .arg(&hostile_script)
-        .env("PATH", &setup.path_env)
-        .env("RUNNER_TEMP", &setup.runner)
-        .env("GITHUB_WORKSPACE", &setup.workspace)
-        .env("MBX_CACHE_DIR", setup.runner.join("velnor/mbx"))
-        .env("MBX_STUB_LOG", &setup.stub_log)
-        .status()
-        .map_err(|error| fail(&format!("hostile recover failed to run: {error}")))?;
+    let hostile_run = production_state_env(
+        std::process::Command::new("sh")
+            .arg("-c")
+            .arg(&hostile_script),
+    )
+    .env("PATH", &setup.path_env)
+    .env("RUNNER_TEMP", &setup.runner)
+    .env("GITHUB_WORKSPACE", &setup.workspace)
+    .env("MBX_CACHE_DIR", setup.runner.join("velnor/mbx"))
+    .env("MBX_STUB_LOG", &setup.stub_log)
+    .status()
+    .map_err(|error| fail(&format!("hostile recover failed to run: {error}")))?;
     if !hostile_run.success() {
         return Err(fail("hostile archive must go cold, not fail the step"));
     }
@@ -278,3 +280,6 @@ fn check_scripts_behave() -> Result<(), Box<dyn Error>> {
 fn gc1_t30_scripts_behave() -> Result<(), Box<dyn Error>> {
     check_scripts_behave()
 }
+
+#[path = "gc1_t30_key_binding.rs"]
+mod gc1_t30_key_binding;

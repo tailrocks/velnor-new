@@ -13,6 +13,7 @@ pub const CACHE_PRUNE_FALLBACK_RUNNER: &str = "ubuntu-latest";
 pub const TOOLS_PRUNE_PREFIX: &str = "mise-tools-v2-";
 pub const TOOLS_PRUNE_UNIT: &str = "mise-tools-v2";
 pub const TOOLS_RETAINED_ENTRIES: u64 = 8;
+pub const RETIRED_STATE_PRUNE_PREFIX: &str = "velnor-v1-state-trusted-";
 
 fn strip_snapshot_digest(cache_key: &str) -> Option<&str> {
     let (unit, digest) = cache_key.rsplit_once("-s256-")?;
@@ -46,6 +47,7 @@ pub fn prune_targets() -> Vec<(String, u64)> {
         })
         .collect();
     targets.push((TOOLS_PRUNE_PREFIX.to_owned(), TOOLS_RETAINED_ENTRIES));
+    targets.push((RETIRED_STATE_PRUNE_PREFIX.to_owned(), 0));
     targets
 }
 

@@ -13,7 +13,7 @@ fn check_discovery_binds_provenance(key: &Step) -> Result<(), Box<dyn Error>> {
     let script = shell_script(key)?;
     for marker in [
         "'family=state'",
-        "'schema=1'",
+        "'schema=2'",
         "$RUNNER_TEMP/velnor-gc1/state",
         "\"key=$key\"",
         "\"restore_keys=$trusted\"",
@@ -37,9 +37,11 @@ fn check_restore_uses_fixed_transport(restore: &Step) -> Result<(), Box<dyn Erro
     if restore.name != MBX_BUNDLE_RESTORE_NAME
         || restore.id != Some(velnor_actions_contract::StepId::MbxBundleRestore)
         || restore.role != Some(StepRole::MbxBundleRestore)
-        || restore.condition.is_some()
     {
         return Err(fail("restore step lost its state identity"));
+    }
+    if restore.condition.as_deref() != Some(MBX_BUNDLE_RESTORE_CONDITION) {
+        return Err(fail("restore step not gated on the restore output"));
     }
     let (uses, with) = match &restore.kind {
         StepKind::Action { uses, with, .. } => (uses.as_str(), with),
