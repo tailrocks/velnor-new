@@ -27,6 +27,23 @@ pub(crate) struct Entry {
 
 pub(crate) type Tree = BTreeMap<PathBuf, Entry>;
 
+pub(crate) fn files_under(root: &Path) -> Result<Vec<PathBuf>, Box<dyn Error>> {
+    let mut found = Vec::new();
+    let mut pending = vec![root.to_path_buf()];
+    while let Some(dir) = pending.pop() {
+        for entry in std::fs::read_dir(&dir)? {
+            let entry = entry?;
+            let kind = entry.file_type()?;
+            if kind.is_dir() {
+                pending.push(entry.path());
+            } else {
+                found.push(entry.path());
+            }
+        }
+    }
+    Ok(found)
+}
+
 fn digest_of(path: &Path, size: u64) -> Option<[u8; 32]> {
     if size > HASHED_FILE_LIMIT {
         return None;
