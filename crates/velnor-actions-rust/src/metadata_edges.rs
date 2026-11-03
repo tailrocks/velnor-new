@@ -75,6 +75,8 @@ pub(crate) struct RawTarget {
     pub(crate) doctest: bool,
     #[serde(rename = "required-features", default)]
     pub(crate) required_features: Vec<String>,
+    #[serde(default)]
+    pub(crate) src_path: String,
 }
 
 #[derive(Debug, serde::Deserialize)]
