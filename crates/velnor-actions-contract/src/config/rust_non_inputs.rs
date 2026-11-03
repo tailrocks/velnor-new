@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::discover::{expand_braces, matches_glob, validate_pattern};
+use crate::discover::{expand_braces, glob_may_overlap, matches_glob, validate_pattern};
 use crate::errors::ContractError;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
@@ -77,22 +77,14 @@ impl NonInputs {
 }
 
 #[must_use]
-pub fn glob_may_overlap(glob: &str, other: &str) -> bool {
-    let (left, right) = (literal_prefix(glob), literal_prefix(other));
-    left.starts_with(right) || right.starts_with(left)
+pub fn is_sparse_checkout_exclusion(patterns: &str) -> bool {
+    let mut lines = patterns.lines();
+    lines.next() == Some(SPARSE_INCLUDE_ALL)
+        && lines.clone().next().is_some()
+        && lines.all(|line| line.starts_with("!/") && line.len() > 2)
 }
 
 #[must_use]
 pub fn glob_may_reach_tree(glob: &str, dir: &str) -> bool {
-    if dir.is_empty() {
-        return true;
-    }
-    let tree = format!("{dir}/");
-    let prefix = literal_prefix(glob);
-    prefix.starts_with(&tree) || tree.starts_with(prefix)
-}
-
-fn literal_prefix(glob: &str) -> &str {
-    let end = glob.find(['*', '?', '[', '{']).unwrap_or(glob.len());
-    &glob[..end]
+    dir.is_empty() || glob_may_overlap(glob, &format!("{dir}/**"))
 }

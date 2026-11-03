@@ -43,6 +43,7 @@ impl StepRole {
                 | Self::LedgerCliBuild
                 | Self::LedgerCliPublish
                 | Self::LedgerCliVerify
+                | Self::NonInputGuard
         )
     }
 }

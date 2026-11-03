@@ -92,6 +92,8 @@ pub(super) fn valid_configured_checkout_payload(kind: &StepKind) -> bool {
                 "persist-credentials" => value == "false",
                 "fetch-depth" => value == "0",
                 "lfs" => value == "true",
+                "sparse-checkout" => crate::config::is_sparse_checkout_exclusion(value),
+                "sparse-checkout-cone-mode" => value == "false",
                 _ => false,
             })
             && env.is_empty())

@@ -231,6 +231,8 @@ pub enum StepRole {
     LedgerCliDownload,
 
     LedgerCliVerify,
+
+    NonInputGuard,
 }
 
 fn valid_bun_assets_handoff(kind: &StepKind) -> bool {
@@ -287,7 +289,9 @@ impl StepRole {
             }
             Self::TofuProvidersRestore => super::step_protocol::valid_provider_restore(kind),
             Self::TofuProvidersSave => super::step_protocol::valid_provider_save(kind),
-            Self::TofuProvidersPrepare => matches!(kind, StepKind::Shell { .. }),
+            Self::TofuProvidersPrepare | Self::NonInputGuard => {
+                matches!(kind, StepKind::Shell { .. })
+            }
             Self::PrivateTokenMint => matches!(kind,
                 StepKind::Action { uses, .. } if uses.starts_with(PRIVATE_TOKEN_MINT_ACTION_PREFIX)),
             Self::PrivateFetch => internal_operation(kind, PRIVATE_FETCH_OPERATION),
