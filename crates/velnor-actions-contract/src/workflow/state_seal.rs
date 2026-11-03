@@ -31,6 +31,8 @@ pub const STATE_SEAL_KEY_EXPR: &str = "${{steps.state-seal-subject.outputs.key}}
 
 pub const STATE_SEAL_SAVE_CONDITION: &str = "steps.state-seal-subject.outputs.sealed == 'true'";
 
+pub const STATE_SEAL_ATTEST_CONDITION: &str = "steps.state-seal-bind.outputs.bound == 'true'";
+
 pub const STATE_SEAL_VERIFY_LIMIT: usize = 3;
 
 pub const STATE_SEAL_LIST_LIMIT: usize = 100;
@@ -38,6 +40,8 @@ pub const STATE_SEAL_LIST_LIMIT: usize = 100;
 pub const STATE_SEAL_VERIFY_TIMEOUT_SECONDS: u64 = 60;
 
 pub const STATE_SEAL_VERIFY_TIMEOUT_ENV: &str = "VELNOR_STATE_GH_TIMEOUT";
+
+pub const STATE_SEAL_KEY_ENV: &str = "VELNOR_STATE_SEAL_KEY";
 
 pub const STATE_SEAL_PREFIX_ENV: &str = "VELNOR_STATE_SEAL_PREFIX";
 

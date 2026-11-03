@@ -52,6 +52,8 @@ pub enum StepId {
 
     StateSealSubject,
 
+    StateSealBind,
+
     StateSealUpload,
 }
 
@@ -81,6 +83,7 @@ impl StepId {
             Self::LedgerCliVerify => "verify-ledger-cli",
             Self::StateSelect => "state-select",
             Self::StateSealSubject => "state-seal-subject",
+            Self::StateSealBind => "state-seal-bind",
             Self::StateSealUpload => "state-seal-upload",
         }
     }

@@ -181,10 +181,11 @@ fn is_private_env_binding(key: &str, inner: &str) -> bool {
 fn is_mbx_bundle_key_binding(key: &str, inner: &str) -> bool {
     use velnor_actions_contract::workflow::cache_family::is_state_snapshot_output;
     use velnor_actions_contract::workflow::cache_family_mbx::{
-        MBX_BUNDLE_MATCHED_KEY_ENV, MBX_BUNDLE_MATCHED_KEY_EXPR, MBX_BUNDLE_SNAPSHOT_ENV,
+        MBX_BUNDLE_KEY_EXPR, MBX_BUNDLE_MATCHED_KEY_ENV, MBX_BUNDLE_MATCHED_KEY_EXPR,
+        MBX_BUNDLE_RESTORE_KEY_ENV, MBX_BUNDLE_SNAPSHOT_ENV,
     };
     use velnor_actions_contract::workflow::state_seal::{
-        STATE_SEAL_ATTESTED_ENV, is_state_attested_output,
+        STATE_SEAL_ATTESTED_ENV, STATE_SEAL_KEY_ENV, STATE_SEAL_KEY_EXPR, is_state_attested_output,
     };
     let bound = |expr: &str| {
         expr.strip_prefix("${{")
@@ -192,6 +193,8 @@ fn is_mbx_bundle_key_binding(key: &str, inner: &str) -> bool {
             == Some(inner)
     };
     (key == MBX_BUNDLE_MATCHED_KEY_ENV && bound(MBX_BUNDLE_MATCHED_KEY_EXPR))
+        || (key == MBX_BUNDLE_RESTORE_KEY_ENV && bound(MBX_BUNDLE_KEY_EXPR))
+        || (key == STATE_SEAL_KEY_ENV && bound(STATE_SEAL_KEY_EXPR))
         || (key == STATE_SEAL_ATTESTED_ENV
             && inner
                 .strip_prefix("needs.plan.outputs.")

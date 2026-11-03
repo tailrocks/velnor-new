@@ -10,10 +10,10 @@ use velnor_actions_contract::workflow::cache_family::{
 };
 use velnor_actions_contract::workflow::state_seal::{
     STATE_CANARY_ARTIFACT_OUTPUT, STATE_CANARY_PRODUCER_JOB_ID, STATE_CANARY_SEAL_JOB_ID,
-    STATE_CANARY_UNVERIFIED_TEST, STATE_SEAL_ARTIFACT_RETENTION_DAYS, STATE_SEAL_KEY_EXPR,
-    STATE_SEAL_PREDICATE, STATE_SEAL_PREDICATE_TYPE, STATE_SEAL_PREFIX_ENV,
-    STATE_SEAL_SAVE_CONDITION, STATE_SEAL_SUBJECT_EXPR, STATE_SEAL_SUBJECT_REL,
-    state_canary_identity_prefix,
+    STATE_CANARY_UNVERIFIED_TEST, STATE_SEAL_ARTIFACT_RETENTION_DAYS, STATE_SEAL_ATTEST_CONDITION,
+    STATE_SEAL_KEY_ENV, STATE_SEAL_KEY_EXPR, STATE_SEAL_LIST_LIMIT, STATE_SEAL_PREDICATE,
+    STATE_SEAL_PREDICATE_TYPE, STATE_SEAL_PREFIX_ENV, STATE_SEAL_SAVE_CONDITION,
+    STATE_SEAL_SUBJECT_EXPR, STATE_SEAL_SUBJECT_REL, state_canary_identity_prefix,
 };
 use velnor_actions_contract::{
     CacheAccess, CacheWriter, Job, JobEnv, JobTimeout, PermissionLevel, Permissions, Step, StepId,
@@ -23,7 +23,8 @@ use velnor_actions_contract::{
 use crate::RenderError;
 use crate::render::PLAN_JOB_ID;
 use crate::steps::{
-    DOWNLOAD_ARTIFACT_USES, TOOLS_SAVE_USES, UPLOAD_ARTIFACT_USES, action_step, shell_step,
+    DOWNLOAD_ARTIFACT_USES, TOOLS_SAVE_USES, UPLOAD_ARTIFACT_USES, action_step, ambient_shell_step,
+    shell_step,
 };
 
 const BUILD_DISPLAY_NAME: &str = "State canary build";
@@ -33,6 +34,8 @@ const CANARY_FILE_EXPR: &str = "${{ runner.temp }}/velnor/state-seal/out/payload
 const CANARY_FILE: &str = "$RUNNER_TEMP/velnor/state-seal/out/payload.tar.zst";
 const CANARY_BYTES: usize = 1024;
 const SEALED_OUTPUT: &str = "sealed";
+const BOUND_OUTPUT: &str = "bound";
+const TOKEN_EXPR: &str = "${{ github.token }}";
 const GUARD: &str = "case \"$RUNNER_TEMP\" in /*) ;; *) printf '%s\\n' 'RUNNER_TEMP must be absolute' >&2; exit 1 ;; esac";
 
 pub fn add_state_seal_canary(jobs: &mut BTreeMap<String, Job>) -> Result<(), RenderError> {
@@ -128,6 +131,7 @@ fn canary_seal_job(runs_on: &str) -> Result<Job, RenderError> {
     )?;
     download.role = Some(StepRole::StateSealDownload);
     let subject = state_seal_subject_step(&state_canary_identity_prefix())?;
+    let bind = state_seal_bind_step()?;
     let mut attest = action_step(
         "Attest state seal",
         ATTEST_USES,
@@ -144,7 +148,7 @@ fn canary_seal_job(runs_on: &str) -> Result<Job, RenderError> {
         ]),
     )?;
     attest.role = Some(StepRole::StateSealAttest);
-    attest.condition = Some(STATE_SEAL_SAVE_CONDITION.to_owned());
+    attest.condition = Some(STATE_SEAL_ATTEST_CONDITION.to_owned());
     let mut save = action_step(
         "Save sealed payload",
         TOOLS_SAVE_USES,
@@ -169,7 +173,7 @@ fn canary_seal_job(runs_on: &str) -> Result<Job, RenderError> {
             contents: PermissionLevel::None,
             pull_requests: PermissionLevel::None,
             id_token: PermissionLevel::Write,
-            actions: PermissionLevel::None,
+            actions: PermissionLevel::Read,
             packages: PermissionLevel::None,
             attest: PermissionLevel::Write,
         }),
@@ -178,7 +182,7 @@ fn canary_seal_job(runs_on: &str) -> Result<Job, RenderError> {
         services: Vec::new(),
         outputs: BTreeMap::new(),
         env: JobEnv::Unset,
-        steps: vec![download, subject, attest, save],
+        steps: vec![download, subject, save, bind, attest],
     })
 }
 
@@ -209,6 +213,65 @@ fn canary_script() -> String {
     .join("; ")
 }
 
+pub fn state_seal_bind_step() -> Result<Step, RenderError> {
+    let script = format!(
+        r#"set -eu
+{GUARD}
+d="$RUNNER_TEMP/{rel_dir}"
+subject="$RUNNER_TEMP/{rel}"
+mkdir -p "$d"
+rm -f "$subject"
+refuse() {{ printf '%s\n' "::warning::cache_unavailable: state seal bind refused ($1)"; printf '%s\n' '{bound}=false' >> "$GITHUB_OUTPUT"; exit 0; }}
+key="${{{key_env}-}}"
+ref="${{GITHUB_REF-}}"
+[ -n "$key" ] && [ -n "$ref" ] || refuse input_missing
+command -v gh >/dev/null 2>&1 || refuse gh_missing
+gh cache list --key "$key" --ref "$ref" --limit {list_limit} --json key,id,sizeInBytes --jq '.[] | .key + " " + (.id | tostring) + " " + (.sizeInBytes | tostring)' > "$d/list" || refuse list_failed
+hits=
+id=
+size=
+while read -r k i s rest; do
+  [ "$k" = "$key" ] || continue
+  case "$i" in ''|*[!0-9]*) refuse id_malformed ;; esac
+  case "$s" in ''|*[!0-9]*) refuse size_malformed ;; esac
+  hits="${{hits}}x"
+  id=$i
+  size=$s
+done < "$d/list"
+[ "$hits" = x ] || refuse "entries=${{#hits}}"
+printf '%s %s %s\n' "$key" "$id" "$size" > "$subject"
+printf '%s\n' '{bound}=true' >> "$GITHUB_OUTPUT"
+printf 'velnor: state seal subject %s %s %s\n' "$key" "$id" "$size"
+"#,
+        rel_dir = STATE_SEAL_SUBJECT_REL
+            .rsplit_once('/')
+            .map_or("", |(dir, _)| dir),
+        rel = STATE_SEAL_SUBJECT_REL,
+        bound = BOUND_OUTPUT,
+        key_env = STATE_SEAL_KEY_ENV,
+        list_limit = STATE_SEAL_LIST_LIMIT,
+    );
+    let mut step = ambient_shell_step(
+        "Bind seal subject",
+        vec![
+            "sh".to_owned(),
+            "-c".to_owned(),
+            crate::state_script::one_line(&script),
+        ],
+        BTreeMap::from([
+            (
+                STATE_SEAL_KEY_ENV.to_owned(),
+                STATE_SEAL_KEY_EXPR.to_owned(),
+            ),
+            ("GH_TOKEN".to_owned(), TOKEN_EXPR.to_owned()),
+        ]),
+    )?;
+    step.id = Some(StepId::StateSealBind);
+    step.role = Some(StepRole::StateSealBind);
+    step.condition = Some(STATE_SEAL_SAVE_CONDITION.to_owned());
+    Ok(step)
+}
+
 pub fn state_seal_subject_step(prefix: &str) -> Result<Step, RenderError> {
     let stored = CacheFamily::MbxBundle.spec().ceiling.stored();
     let script = format!(
@@ -216,7 +279,6 @@ pub fn state_seal_subject_step(prefix: &str) -> Result<Step, RenderError> {
 {GUARD}
 payload="{payload}"
 d="$RUNNER_TEMP/{rel_dir}"
-subject="$RUNNER_TEMP/{rel}"
 rm -rf "$d"
 mkdir -p "$d"
 refuse() {{ printf '%s\n' "::warning::cache_unavailable: state seal refused ($1)"; printf '%s\n' '{sealed}=false' >> "$GITHUB_OUTPUT"; exit 0; }}
@@ -232,15 +294,13 @@ if [ "$size" -gt {stored} ]; then refuse "over_stored stored=$size ceiling={stor
 s256 "$payload" || refuse digest_unreadable
 key="${{prefix}}s256-$h"
 [ "${{#key}}" -le {max_key} ] || refuse key_too_long
-printf '%s\n' "$key" > "$subject"
 printf '%s\n' '{sealed}=true' "key=$key" >> "$GITHUB_OUTPUT"
-printf 'velnor: state seal subject %s\n' "$key"
+printf 'velnor: state seal key %s\n' "$key"
 "#,
         payload = transport_file()?,
         rel_dir = STATE_SEAL_SUBJECT_REL
             .rsplit_once('/')
             .map_or("", |(dir, _)| dir),
-        rel = STATE_SEAL_SUBJECT_REL,
         sealed = SEALED_OUTPUT,
         prefix_env = STATE_SEAL_PREFIX_ENV,
         max_key = velnor_actions_contract::cachekey::MAX_CACHE_KEY_BYTES,

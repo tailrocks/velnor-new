@@ -7,7 +7,9 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
-use velnor_actions_contract::workflow::cache_family_mbx::MBX_BUNDLE_MATCHED_KEY_EXPR;
+use velnor_actions_contract::workflow::cache_family_mbx::{
+    MBX_BUNDLE_KEY_EXPR, MBX_BUNDLE_MATCHED_KEY_EXPR,
+};
 
 use crate::gc1_mbx_stub;
 pub(crate) use crate::gc1_scene_key::{DEFAULT_SNAPSHOT, Key};
@@ -245,12 +247,25 @@ impl Scene {
         env: &[(&str, &str)],
         fsize_blocks: Option<u64>,
     ) -> Result<String, Box<dyn Error>> {
+        self.recover_selected(matched, matched, env, fsize_blocks)
+    }
+
+    pub(crate) fn recover_selected(
+        &self,
+        matched: &str,
+        selected: &str,
+        env: &[(&str, &str)],
+        fsize_blocks: Option<u64>,
+    ) -> Result<String, Box<dyn Error>> {
         self.fresh_outputs()?;
         let step = &self.scripts.recover;
-        let run = resolve(&step.run, matched, &self.runner)?;
+        let run = resolve(&step.run, matched, selected, &self.runner)?;
         let mut resolved = Vec::new();
         for (name, value) in &step.env {
-            resolved.push((name.clone(), resolve(value, matched, &self.runner)?));
+            resolved.push((
+                name.clone(),
+                resolve(value, matched, selected, &self.runner)?,
+            ));
         }
         let mut pairs: Vec<(&str, &str)> = resolved
             .iter()
@@ -364,7 +379,12 @@ impl Drop for Scene {
     }
 }
 
-fn resolve(text: &str, matched: &str, runner: &Path) -> Result<String, Box<dyn Error>> {
+fn resolve(
+    text: &str,
+    matched: &str,
+    selected: &str,
+    runner: &Path,
+) -> Result<String, Box<dyn Error>> {
     let strip = |expr: &str| -> String {
         expr.strip_prefix("${{")
             .and_then(|rest| rest.strip_suffix("}}"))
@@ -373,6 +393,7 @@ fn resolve(text: &str, matched: &str, runner: &Path) -> Result<String, Box<dyn E
             .to_owned()
     };
     let matched_expr = strip(MBX_BUNDLE_MATCHED_KEY_EXPR);
+    let selected_expr = strip(MBX_BUNDLE_KEY_EXPR);
     let mut out = String::new();
     let mut rest = text;
     while let Some(at) = rest.find("${{") {
@@ -384,6 +405,8 @@ fn resolve(text: &str, matched: &str, runner: &Path) -> Result<String, Box<dyn E
         let inner = after[..end].trim();
         if inner == matched_expr {
             out.push_str(matched);
+        } else if inner == selected_expr {
+            out.push_str(selected);
         } else if inner == "runner.temp" {
             out.push_str(&runner.display().to_string());
         } else {

@@ -186,7 +186,9 @@ impl ProducerKind {
             return effective.id_token == PermissionLevel::Write
                 && effective.attest == PermissionLevel::Write
                 && effective.contents == PermissionLevel::None
-                && others.iter().all(|level| *level == PermissionLevel::None);
+                && effective.actions == PermissionLevel::Read
+                && effective.pull_requests == PermissionLevel::None
+                && effective.packages == PermissionLevel::None;
         }
         effective.id_token == PermissionLevel::None
             && effective.attest == PermissionLevel::None
@@ -283,11 +285,12 @@ impl ProducerKind {
 }
 
 fn state_seal_order_ok(steps: &[Step]) -> bool {
-    const ORDER: [StepRole; 4] = [
+    const ORDER: [StepRole; 5] = [
         StepRole::StateSealDownload,
         StepRole::StateSealSubject,
-        StepRole::StateSealAttest,
         StepRole::StateSealSave,
+        StepRole::StateSealBind,
+        StepRole::StateSealAttest,
     ];
     steps.len() == ORDER.len()
         && steps

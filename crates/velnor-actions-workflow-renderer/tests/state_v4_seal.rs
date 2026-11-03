@@ -17,6 +17,7 @@ use velnor_actions_workflow_renderer::plan_sources::state_select::state_select_s
 use velnor_actions_workflow_renderer::state_seal::add_state_seal_canary;
 
 use crate::gc1_scene::{Scene, fail};
+use crate::gc1_seal_support::{ENTRY_ID, ENTRY_SIZE, Gh, MAIN};
 
 const FIXTURE: &[u8] = b"sealed state payload fixture";
 
@@ -130,8 +131,8 @@ fn attest_job_binds_key_to_stored_file() -> Result<(), Box<dyn Error>> {
         ));
     }
     let subject = scene.runner.join(STATE_SEAL_SUBJECT_REL);
-    if std::fs::read(&subject)? != format!("{want}\n").as_bytes() {
-        return Err(fail("the subject bytes are not the key and one line feed"));
+    if subject.exists() {
+        return Err(fail("the subject was written before the save"));
     }
     let save = inputs_of(step_of(&job, StepRole::StateSealSave)?)?;
     if save.get("key").map(String::as_str) != Some(STATE_SEAL_KEY_EXPR)
@@ -177,6 +178,71 @@ fn attest_job_binds_key_to_stored_file() -> Result<(), Box<dyn Error>> {
     std::fs::create_dir(scene.payload())?;
     let output = run_subject(&scene, &job)?;
     assert_refused(&scene, &output, "directory")?;
+    scene.finish()
+}
+
+fn run_bind(scene: &Scene, gh: &Gh, job: &Job, key: &str) -> Result<(), Box<dyn Error>> {
+    let step = step_of(job, StepRole::StateSealBind)?;
+    let StepKind::Shell { run, .. } = &step.kind else {
+        return Err(fail("the bind step is not a shell step"));
+    };
+    match std::fs::remove_file(&scene.github_output) {
+        Err(error) if error.kind() != std::io::ErrorKind::NotFound => return Err(error.into()),
+        _ => {}
+    }
+    let dir = gh.dir();
+    let env = [
+        ("FAKE_GH_DIR", dir.as_str()),
+        ("GITHUB_REF", MAIN),
+        ("VELNOR_STATE_SEAL_KEY", key),
+    ];
+    scene.run_script(run.get(2).ok_or_else(|| fail("no script"))?, &env, None)?;
+    Ok(())
+}
+
+#[test]
+#[cfg(unix)]
+fn bind_attests_the_saved_entry_by_key_id_and_size() -> Result<(), Box<dyn Error>> {
+    let job = seal_job()?;
+    let scene = Scene::new("seal-bind", crate::gc1_t53::scripts()?)?;
+    let gh = Gh::install(&scene)?;
+    let subject = scene.runner.join(STATE_SEAL_SUBJECT_REL);
+    let sealed = format!("{}{}", state_canary_identity_prefix(), S256::of(FIXTURE));
+    let planted = format!("{sealed}-{}", S256::of(b"planted"));
+    let at = "2026-11-04T01:00:00Z";
+
+    gh.list_entries(&[
+        (at, MAIN, &planted, ENTRY_ID + 1, ENTRY_SIZE + 1),
+        (at, MAIN, &sealed, ENTRY_ID, ENTRY_SIZE),
+    ])?;
+    run_bind(&scene, &gh, &job, &sealed)?;
+    let want = format!("{sealed} {ENTRY_ID} {ENTRY_SIZE}\n");
+    if scene.output_value("bound")? != "true" || std::fs::read(&subject)? != want.as_bytes() {
+        return Err(fail(
+            "the subject is not the exact key, its cache id and its size",
+        ));
+    }
+
+    gh.list_entries(&[(at, MAIN, &planted, ENTRY_ID + 1, ENTRY_SIZE)])?;
+    run_bind(&scene, &gh, &job, &sealed)?;
+    if scene.output_value("bound")? != "false" || subject.exists() {
+        return Err(fail("a key-prefix neighbour was bound in place of the key"));
+    }
+
+    gh.list_entries(&[
+        (at, MAIN, &sealed, ENTRY_ID, ENTRY_SIZE),
+        (at, MAIN, &sealed, ENTRY_ID + 2, ENTRY_SIZE),
+    ])?;
+    run_bind(&scene, &gh, &job, &sealed)?;
+    if scene.output_value("bound")? != "false" || subject.exists() {
+        return Err(fail("an ambiguous key was bound"));
+    }
+
+    gh.list_entries(&[])?;
+    run_bind(&scene, &gh, &job, &sealed)?;
+    if scene.output_value("bound")? != "false" || subject.exists() {
+        return Err(fail("a missing entry was bound"));
+    }
     scene.finish()
 }
 
@@ -232,5 +298,31 @@ fn recover_refuses_payload_that_differs_from_the_key_digest() -> Result<(), Box<
     let undigested = format!("{}oldsnap", key.snapshot_prefix);
     let output = scene.recover_unbound(&undigested, &env, None)?;
     scene.assert_cold(&output, "refused-digest")?;
+    scene.finish()
+}
+
+#[test]
+#[cfg(target_os = "linux")]
+fn recover_takes_only_the_key_plan_selected() -> Result<(), Box<dyn Error>> {
+    let scene = Scene::new("seal-selection", crate::gc1_t53::scripts()?)?;
+    let key = scene.discover()?;
+    let attested = format!("{}{}", key.snapshot_prefix, S256::of(b"attested payload"));
+    let other = format!("{}{}", key.snapshot_prefix, S256::of(b"other payload"));
+
+    scene.pack_export("planted")?;
+    let planted = format!("{attested}-{}", scene.payload_digest()?);
+    let output = scene.recover_selected(&planted, &attested, &[], None)?;
+    scene.assert_cold(&output, "refused-selection")?;
+
+    scene.pack_export("planted")?;
+    let bound = format!("{}{}", key.snapshot_prefix, scene.payload_digest()?);
+    let output = scene.recover_selected(&bound, &other, &[], None)?;
+    scene.assert_cold(&output, "refused-selection")?;
+
+    scene.pack_export("planted")?;
+    scene.recover_selected(&bound, &bound, &[], None)?;
+    if scene.store_files()?.is_empty() || !scene.recovery_record().exists() {
+        return Err(fail("the entry plan selected was not imported"));
+    }
     scene.finish()
 }

@@ -112,6 +112,12 @@ pub fn plan_state_roots(
         let select = plan_sources::state_select::state_select_step(&seal.roots, seal.canary)
             .map_err(NativeJobBuilderError::Render)?;
         plan.steps.insert(at + 1, select);
+        let mut permissions = plan
+            .permissions
+            .take()
+            .unwrap_or_else(read_actions_permissions);
+        permissions.attest = PermissionLevel::Read;
+        plan.permissions = Some(permissions);
     }
     Ok(())
 }

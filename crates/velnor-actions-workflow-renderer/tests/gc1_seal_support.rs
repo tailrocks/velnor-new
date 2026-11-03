@@ -19,6 +19,8 @@ pub(crate) const REPO: &str = "tailrocks/velnor-new";
 pub(crate) const SIGNER: &str = "tailrocks/velnor-new/.github/workflows/ci.yml";
 pub(crate) const MAIN: &str = "refs/heads/main";
 pub(crate) const PULL: &str = "refs/pull/9/merge";
+pub(crate) const ENTRY_ID: u64 = 7001;
+pub(crate) const ENTRY_SIZE: u64 = 4096;
 
 const GH: &str = r#"#!/bin/sh
 d="${FAKE_GH_DIR:?}"
@@ -32,18 +34,27 @@ verb="$1 $2"
 shift 2
 case "$verb" in
   "cache list")
-    key=; ref=
+    key=; ref=; fields=
     while [ $# -gt 0 ]; do
-      case "$1" in --key) key=$2; shift ;; --ref) ref=$2; shift ;; esac
+      case "$1" in --key) key=$2; shift ;; --ref) ref=$2; shift ;; --json) fields=$2; shift ;; esac
       shift
     done
     if [ "$mode" = garbage ]; then printf '%s\n' '<<<not json>>>' '{"oops"'; exit 0; fi
-    while read -r created lref lkey; do
+    while read -r created lref lkey lid lsize; do
       [ "$lref" = "$ref" ] || continue
-      case "$lkey" in "$key"*) printf '%s %s\n' "$created" "$lkey" ;; esac
+      case "$lkey" in "$key"*) ;; *) continue ;; esac
+      case "$fields" in
+        *createdAt*) printf '%s %s %s %s\n' "$created" "$lkey" "$lid" "$lsize" ;;
+        *) printf '%s %s %s\n' "$lkey" "$lid" "$lsize" ;;
+      esac
     done < "$d/list"
     ;;
   "attestation verify")
+    case "$mode" in
+      verify-fail) exit 1 ;;
+      verify-hang) sleep 30; exit 0 ;;
+      verify-garbage) printf '%s\n' '<<<not a verdict>>>' '{"oops"'; exit 3 ;;
+    esac
     file=$1
     shift
     repo=; signer=; sref=; pred=
@@ -82,8 +93,12 @@ pub(crate) struct Attestation {
 
 impl Attestation {
     pub(crate) fn signed(key: &str) -> Self {
+        Self::bound(key, ENTRY_ID, ENTRY_SIZE)
+    }
+
+    pub(crate) fn bound(key: &str, id: u64, size: u64) -> Self {
         Self {
-            subject: format!("{key}\n"),
+            subject: format!("{key} {id} {size}\n"),
             repo: REPO.to_owned(),
             signer: SIGNER.to_owned(),
             git_ref: MAIN.to_owned(),
@@ -126,17 +141,24 @@ impl Gh {
     }
 
     pub(crate) fn list(&self, rows: &[(&str, &str, &str)]) -> Result<(), Box<dyn Error>> {
+        let entries: Vec<(&str, &str, &str, u64, u64)> = rows
+            .iter()
+            .map(|(created, git_ref, key)| (*created, *git_ref, *key, ENTRY_ID, ENTRY_SIZE))
+            .collect();
+        self.list_entries(&entries)
+    }
+
+    pub(crate) fn list_entries(
+        &self,
+        rows: &[(&str, &str, &str, u64, u64)],
+    ) -> Result<(), Box<dyn Error>> {
         let text = rows
             .iter()
-            .fold(String::new(), |mut text, (created, git_ref, key)| {
-                text.push_str(created);
-                text.push(' ');
-                text.push_str(git_ref);
-                text.push(' ');
-                text.push_str(key);
-                text.push('\n');
-                text
-            });
+            .map(|(created, git_ref, key, id, size)| {
+                format!("{created} {git_ref} {key} {id} {size}\n")
+            })
+            .collect::<Vec<String>>()
+            .concat();
         std::fs::write(self.dir.join("list"), text)?;
         Ok(())
     }

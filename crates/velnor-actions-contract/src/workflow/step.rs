@@ -211,7 +211,8 @@ fn validate_id_kind(id: Option<StepId>, kind: &StepKind, job: &str) -> Result<()
         | StepId::LedgerCliPublish
         | StepId::LedgerCliVerify
         | StepId::StateSelect
-        | StepId::StateSealSubject => {
+        | StepId::StateSealSubject
+        | StepId::StateSealBind => {
             matches!(kind, StepKind::Shell { .. })
         }
         StepId::StateSealUpload => {

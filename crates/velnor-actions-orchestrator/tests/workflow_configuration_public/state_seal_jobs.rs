@@ -9,7 +9,7 @@ use velnor_actions_contract::workflow::state_seal::{
     STATE_CANARY_PRODUCER_JOB_ID, STATE_CANARY_SEAL_JOB_ID, STATE_CANARY_UNVERIFIED_TEST,
     STATE_SEAL_SUBJECT_EXPR, STATE_SEAL_SUBJECT_REL,
 };
-use velnor_actions_contract::workflow::{DEPENDENCY_SEED_JOB_CONDITION, ProducerKind};
+use velnor_actions_contract::workflow::{DEPENDENCY_SEED_JOB_CONDITION, PLAN_JOB_ID, ProducerKind};
 use velnor_actions_contract::{
     CRATE_JOB_ID_PREFIX, CacheAccess, CacheWriter, Job, PermissionLevel, Permissions, Step,
     StepKind, StepRole, WorkflowIr, WorkflowPolicy,
@@ -153,7 +153,7 @@ fn seal_job_checks_out_nothing_and_signs_one_subject(
             contents: PermissionLevel::None,
             pull_requests: PermissionLevel::None,
             id_token: PermissionLevel::Write,
-            actions: PermissionLevel::None,
+            actions: PermissionLevel::Read,
             packages: PermissionLevel::None,
             attest: PermissionLevel::Write,
         })
@@ -173,8 +173,9 @@ fn seal_job_checks_out_nothing_and_signs_one_subject(
         vec![
             Some(StepRole::StateSealDownload),
             Some(StepRole::StateSealSubject),
-            Some(StepRole::StateSealAttest),
             Some(StepRole::StateSealSave),
+            Some(StepRole::StateSealBind),
+            Some(StepRole::StateSealAttest),
         ]
     );
     for step in &seal.steps {
@@ -192,8 +193,8 @@ fn seal_job_checks_out_nothing_and_signs_one_subject(
         with_of(attest)?.get("subject-path").map(String::as_str),
         Some(STATE_SEAL_SUBJECT_EXPR)
     );
-    let subject = step_of(seal, StepRole::StateSealSubject)?;
-    assert!(matches!(&subject.kind, StepKind::Shell { run, .. }
+    let bind = step_of(seal, StepRole::StateSealBind)?;
+    assert!(matches!(&bind.kind, StepKind::Shell { run, .. }
         if run.iter().any(|arg| arg.contains(STATE_SEAL_SUBJECT_REL))));
     for read in needs_reads(seal) {
         let allowed = read.starts_with("plan.outputs.")
@@ -213,8 +214,13 @@ fn signing_stays_on_the_seal_job(generated: &Generated) {
             "{id}"
         );
         if id != STATE_CANARY_SEAL_JOB_ID {
-            assert_eq!(permissions.attest, PermissionLevel::None, "{id}");
+            assert_ne!(permissions.attest, PermissionLevel::Write, "{id}");
         }
+        assert_eq!(
+            permissions.attest == PermissionLevel::Read,
+            id == PLAN_JOB_ID,
+            "{id}"
+        );
     }
     assert_eq!(generated.ci.matches("id-token: write").count(), 1);
     assert_eq!(generated.ci.matches("cache-mode: write-only").count(), 1);

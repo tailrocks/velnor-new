@@ -46,6 +46,7 @@ impl StepRole {
                 | Self::StateSelect
                 | Self::StateSealBuild
                 | Self::StateSealSubject
+                | Self::StateSealBind
         )
     }
 }
