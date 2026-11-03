@@ -21,6 +21,7 @@ pub(crate) struct Archive {
     child: Child,
     stdin: ChildStdin,
     plain_bytes: u64,
+    ustar: bool,
 }
 
 fn octal(field: &mut [u8], value: u64) {
@@ -34,6 +35,7 @@ fn header(
     size: u64,
     link: &str,
     mode: u64,
+    ustar: bool,
 ) -> Result<[u8; BLOCK], Box<dyn Error>> {
     if name.len() > NAME_FIELD || link.len() > LINK_FIELD {
         return Err(std::io::Error::other(format!(
@@ -53,8 +55,10 @@ fn header(
     block[148..156].fill(b' ');
     block[156] = typeflag;
     block[157..157 + link.len()].copy_from_slice(link.as_bytes());
-    block[257..263].copy_from_slice(b"ustar\0");
-    block[263..265].copy_from_slice(b"00");
+    if ustar {
+        block[257..263].copy_from_slice(b"ustar\0");
+        block[263..265].copy_from_slice(b"00");
+    }
     let sum: u32 = block.iter().map(|byte| u32::from(*byte)).sum();
     let digits = format!("{sum:06o}");
     block[148..154].copy_from_slice(digits.as_bytes());
@@ -72,6 +76,12 @@ enum Codec {
 impl Archive {
     pub(crate) fn create(out: &Path) -> Result<Self, Box<dyn Error>> {
         Self::spawn(out, Codec::Zstd)
+    }
+
+    pub(crate) fn create_v7(out: &Path) -> Result<Self, Box<dyn Error>> {
+        let mut archive = Self::spawn(out, Codec::Zstd)?;
+        archive.ustar = false;
+        Ok(archive)
     }
 
     pub(crate) fn create_gzip(out: &Path) -> Result<Self, Box<dyn Error>> {
@@ -103,6 +113,7 @@ impl Archive {
             child,
             stdin,
             plain_bytes: 0,
+            ustar: true,
         })
     }
 
@@ -128,7 +139,9 @@ impl Archive {
         }
         let short_name = &name[..name.len().min(NAME_FIELD)];
         let short_link = &link[..link.len().min(LINK_FIELD)];
-        self.put(&header(short_name, typeflag, size, short_link, mode)?)
+        self.put(&header(
+            short_name, typeflag, size, short_link, mode, self.ustar,
+        )?)
     }
 
     fn long_record(&mut self, typeflag: u8, text: &str) -> Result<(), Box<dyn Error>> {
@@ -141,6 +154,7 @@ impl Archive {
             record.len() as u64,
             "",
             0,
+            self.ustar,
         )?)?;
         self.put(&record)?;
         self.put(&vec![0u8; padded])

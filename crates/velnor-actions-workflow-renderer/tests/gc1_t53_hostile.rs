@@ -36,9 +36,10 @@ enum Row {
     LongWindow31,
     OuterGzip,
     TooManyMembers,
+    V7Tar,
 }
 
-const ROWS: [Row; 18] = [
+const ROWS: [Row; 19] = [
     Row::SiblingFamily,
     Row::ParentTraversal,
     Row::SymlinkWriteThrough,
@@ -57,6 +58,7 @@ const ROWS: [Row; 18] = [
     Row::LongWindow31,
     Row::OuterGzip,
     Row::TooManyMembers,
+    Row::V7Tar,
 ];
 
 fn token(row: Row) -> &'static str {
@@ -126,6 +128,13 @@ fn build_bare(row: Row, scene: &Scene) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+fn build_v7(scene: &Scene) -> Result<(), Box<dyn Error>> {
+    let mut archive = Archive::create_v7(&scene.payload())?;
+    archive.state_layout("old")?;
+    archive.finish()?;
+    Ok(())
+}
+
 fn build_members(row: Row, scene: &Scene, outside: &Path) -> Result<(), Box<dyn Error>> {
     let mut archive = Archive::create(&scene.payload())?;
     archive.state_layout("old")?;
@@ -164,6 +173,7 @@ fn build(row: Row, scene: &Scene, outside: &Path) -> Result<(), Box<dyn Error>> 
             build_wrapped(row, scene)
         }
         Row::EmptyTar | Row::ZeroTar => build_bare(row, scene),
+        Row::V7Tar => build_v7(scene),
         Row::NotZstd
         | Row::SkippableOnly
         | Row::TruncatedFrame
