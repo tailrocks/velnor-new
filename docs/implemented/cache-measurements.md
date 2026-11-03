@@ -202,7 +202,7 @@ per-action PR-save verdict: gate-4 doc R13 bullet.
 ## Hosted MBX object-cache round-trip
 
 `qualification.yml` mode `mbx-cache-roundtrip` runs two hosted jobs in one
-dispatch. The protected-main writer builds a probe crate and its post step
+dispatch, from a non-default branch only (workflow-level `cache-mode: read` leaves the writer job as the one writer). The branch writer builds a probe crate and its post step
 must export and save the MBX objects before the dependent reader starts. The
 reader has only `actions: read`, requires an imported object set, and checks
 that MBX reuses a cached compilation. A run-and-attempt-specific generation
