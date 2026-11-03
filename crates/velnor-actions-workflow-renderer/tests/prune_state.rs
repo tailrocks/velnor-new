@@ -211,7 +211,7 @@ fn retired_state_entries_are_all_pruned_and_current_ones_kept() -> Result<(), Bo
     assert_eq!(
         sorted(run.attempted),
         retired,
-        "retired v2 and v3 state entries must all be deleted and v4 kept"
+        "retired v1, v2 and v3 state entries must all be deleted and v4 kept"
     );
     Ok(())
 }
