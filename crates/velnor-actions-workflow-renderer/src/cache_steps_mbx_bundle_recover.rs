@@ -4,7 +4,7 @@
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::workflow::cache_family::{
-    COMPLETE_STATE_ROOT_EXPR, COMPLETE_STATE_TRANSPORT_EXPR, CacheFamily, RUNNER_TEMP_SHELL,
+    COMPLETE_STATE_ROOT_EXPR, COMPLETE_STATE_TRANSPORT_EXPR, RUNNER_TEMP_SHELL,
 };
 use velnor_actions_contract::workflow::cache_family_mbx::{
     MBX_BUNDLE_IMPORT_CONDITION, MBX_BUNDLE_MATCHED_KEY_ENV, MBX_BUNDLE_MATCHED_KEY_EXPR,
@@ -17,10 +17,12 @@ use crate::state_fragments::S256_FN;
 use crate::steps::shell_step;
 
 use super::{
-    DISCOVERY_RECORD, MARK_FILE, MAX_ARCHIVE_MEMBERS, MAX_COMPONENT_BYTES, MAX_MEMBER_DEPTH,
-    MBX_BUNDLE_IMPORT_NAME, MBX_PRODUCER_MARK_NAME, RECOVERY_RECORD, RUNNER_TEMP_GUARD,
-    compat_head_lines, shell_literal, split_shell,
+    DISCOVERY_RECORD, MARK_FILE, MAX_COMPONENT_BYTES, MAX_MEMBER_DEPTH, MBX_BUNDLE_IMPORT_NAME,
+    MBX_PRODUCER_MARK_NAME, RECOVERY_RECORD, RUNNER_TEMP_GUARD, StateCeilings, compat_head_lines,
+    shell_literal, split_shell,
 };
+
+const ZSTD_MAGIC_OCTAL: &str = "\\050\\265\\057\\375";
 
 fn ancestors(payload: &str) -> Result<Vec<String>, RenderError> {
     let (parent, _) = split_shell(payload)?;
@@ -54,6 +56,7 @@ pub(crate) fn recover_step(
     rust_toolchain: &str,
     _working_directory: Option<&str>,
     mut env: BTreeMap<String, String>,
+    ceilings: StateCeilings,
 ) -> Result<Step, RenderError> {
     super::super::mbx_preflight::validate_rust_toolchain(rust_toolchain)?;
     env.insert(
@@ -64,8 +67,6 @@ pub(crate) fn recover_step(
     let root = shell_literal(COMPLETE_STATE_ROOT_EXPR)?;
     let (_, base) = split_shell(&root)?;
     let (payload_parent, _) = split_shell(&payload)?;
-    let ceiling = CacheFamily::MbxBundle.spec().ceiling.stored();
-    let ceiling_kb = ceiling.div_ceil(1024);
     let mut script = vec![
         "set -eu".to_owned(),
         RUNNER_TEMP_GUARD.to_owned(),
@@ -110,10 +111,10 @@ pub(crate) fn recover_step(
         "compat_now=\"s256-$h\"".to_owned(),
         "if [ \"$compat_now\" != \"$compat\" ]; then corrupt \"coverage drift\"; fi".to_owned(),
     ]);
-    script.extend(admission_lines(ceiling));
-    script.extend(screen_lines());
+    script.extend(admission_lines(ceilings));
+    script.extend(screen_lines(ceilings));
     script.extend(extract_lines());
-    script.extend(measure_lines(ceiling, ceiling_kb));
+    script.extend(measure_lines(ceilings));
     script.extend(import_lines(rust_toolchain));
     let script = script.join("; ");
     let mut step = shell_step(
@@ -132,37 +133,39 @@ fn read_number(var: &str, source: &str, tmp: &str, failure: &str) -> String {
     )
 }
 
-fn inflate_cap(ceiling: u64) -> u64 {
-    ceiling + MAX_ARCHIVE_MEMBERS * 1024 + 10_240
-}
-
-fn admission_lines(ceiling: u64) -> Vec<String> {
-    let cap = inflate_cap(ceiling);
+fn admission_lines(ceilings: StateCeilings) -> Vec<String> {
+    let stored = ceilings.stored();
+    let extracted = ceilings.extracted();
+    let cap = ceilings.stream_cap();
     let cap_plus = cap + 1;
     vec![
         read_number("size", "wc -c < \"$payload\"", "size", "size unreadable"),
-        format!("if [ \"$size\" -gt {ceiling} ]; then refused refused-oversize; fi"),
+        format!("if [ \"$size\" -gt {stored} ]; then refused \"over_stored stored=$size ceiling={stored}\"; fi"),
         "if [ -z \"${MBX_CACHE_DIR:-}\" ] || [ \"$MBX_CACHE_DIR\" != \"$RUNNER_TEMP/velnor/mbx\" ] || [ ! -d \"$MBX_CACHE_DIR/actions\" ]; then corrupt import_unavailable; fi".to_owned(),
-        "for tool in gzip tar head tail wc find du sort mise mbx; do command -v \"$tool\" >/dev/null 2>&1 || corrupt import_unavailable; done".to_owned(),
+        "for tool in zstd cmp tar head tail wc find du sort mise mbx; do command -v \"$tool\" >/dev/null 2>&1 || corrupt import_unavailable; done".to_owned(),
         "ws=${GITHUB_WORKSPACE:-}; ws=${ws%/}; if [ -z \"$ws\" ]; then corrupt import_unavailable; fi".to_owned(),
         "case \"$RUNNER_TEMP/velnor\" in \"$ws\"|\"$ws\"/*) corrupt import_in_workspace ;; esac".to_owned(),
-        format!("if {{ gzip -dc \"$payload\" && : > \"$d/inflated\"; }} | head -c {cap_plus} > \"$plain\"; then :; else corrupt \"payload unreadable\"; fi"),
+        "if head -c 4 \"$payload\" > \"$d/zmagic\"; then :; else corrupt \"payload unreadable\"; fi".to_owned(),
+        format!("printf '{ZSTD_MAGIC_OCTAL}' > \"$d/zref\""),
+        "if cmp -s \"$d/zmagic\" \"$d/zref\"; then :; else refused refused-format; fi".to_owned(),
+        format!("if {{ zstd -dc --long=30 \"$payload\" && : > \"$d/inflated\"; }} | head -c {cap_plus} > \"$plain\"; then :; else corrupt \"payload unreadable\"; fi"),
         read_number("plain_n", "wc -c < \"$plain\"", "plain_size", "payload unreadable"),
-        format!("if [ \"$plain_n\" -gt {cap} ]; then refused refused-oversize; fi"),
+        format!("if [ \"$plain_n\" -gt {cap} ]; then refused \"over_extracted extracted>=$plain_n ceiling={extracted}\"; fi"),
         "if [ ! -f \"$d/inflated\" ]; then corrupt \"payload unreadable\"; fi".to_owned(),
         "head -c 262 \"$plain\" | tail -c 5 > \"$d/magic\"; magic=; read -r magic < \"$d/magic\" || :; if [ \"$magic\" != ustar ]; then refused refused-shadow; fi".to_owned(),
         "prefix=\"$base/\"; head -c \"${#prefix}\" \"$plain\" > \"$d/first\"; first=; read -r first < \"$d/first\" || :; if [ \"$first\" != \"$prefix\" ]; then refused refused-shadow; fi".to_owned(),
     ]
 }
 
-fn screen_lines() -> Vec<String> {
+fn screen_lines(ceilings: StateCeilings) -> Vec<String> {
+    let members = ceilings.members();
     vec![
         "if tar -tf - < \"$plain\" > \"$d/members\"; then :; else corrupt \"payload unreadable\"; fi".to_owned(),
         "if tar -tvf - < \"$plain\" > \"$d/verbose\"; then :; else corrupt \"payload unreadable\"; fi".to_owned(),
         read_number("members_n", "wc -l < \"$d/members\"", "count", "member count unreadable"),
         read_number("verbose_n", "wc -l < \"$d/verbose\"", "vcount", "member count unreadable"),
         "if [ \"$members_n\" != \"$verbose_n\" ]; then refused refused-shadow; fi".to_owned(),
-        format!("if [ \"$members_n\" -gt {MAX_ARCHIVE_MEMBERS} ]; then refused refused-shadow; fi"),
+        format!("if [ \"$members_n\" -gt {members} ]; then refused refused-shadow; fi"),
         "v=; while IFS= read -r v || [ -n \"$v\" ]; do case \"$v\" in -*|d*) ;; *) refused refused-shadow ;; esac; done < \"$d/verbose\"".to_owned(),
         format!("shape() {{ rest=$1; n=; while [ -n \"$rest\" ]; do c=${{rest%%/*}}; if [ \"${{#c}}\" -gt {MAX_COMPONENT_BYTES} ]; then refused refused-name; fi; n=\"$n.\"; if [ \"${{#n}}\" -gt {MAX_MEMBER_DEPTH} ]; then refused refused-depth; fi; case \"$rest\" in */*) rest=${{rest#*/}} ;; *) rest= ;; esac; done; }}"),
         "m=; while IFS= read -r m || [ -n \"$m\" ]; do case \"$m\" in /*|..|../*|*/..|*/../*|*\\\\*) refused refused-shadow ;; \"$base\"|\"$base\"/*) ;; *) refused refused-shadow ;; esac; shape \"$m\"; done < \"$d/members\"".to_owned(),
@@ -181,9 +184,11 @@ fn extract_lines() -> Vec<String> {
     ]
 }
 
-fn measure_lines(ceiling: u64, ceiling_kb: u64) -> Vec<String> {
+fn measure_lines(ceilings: StateCeilings) -> Vec<String> {
+    let extracted = ceilings.extracted();
     vec![
-        format!("if du -sb \"$stage/$base\" > \"$d/uncompressed\"; then usize=; usize_rest=; read -r usize usize_rest < \"$d/uncompressed\" || :; case \"$usize\" in ''|*[!0-9]*) corrupt \"uncompressed size unreadable\" ;; esac; if [ \"$usize\" -gt {ceiling} ]; then corrupt \"over ceiling\"; fi; elif du -sk \"$stage/$base\" > \"$d/uncompressed_kb\"; then usize_kb=; usize_kb_rest=; read -r usize_kb usize_kb_rest < \"$d/uncompressed_kb\" || :; case \"$usize_kb\" in ''|*[!0-9]*) corrupt \"uncompressed size unreadable\" ;; esac; if [ \"$usize_kb\" -gt {ceiling_kb} ]; then corrupt \"over ceiling\"; fi; else corrupt \"uncompressed size unreadable\"; fi"),
+        read_number("usize", "du -sb \"$stage/$base\"", "uncompressed", "uncompressed size unreadable"),
+        format!("if [ \"$usize\" -gt {extracted} ]; then refused \"over_extracted extracted=$usize ceiling={extracted}\"; fi"),
         "if command -v sha256sum >/dev/null 2>&1; then if find \"$stage/$base\" -type f -exec sha256sum {} + > \"$d/found\"; then :; else corrupt \"payload unreadable\"; fi; else if find \"$stage/$base\" -type f -exec shasum -a 256 {} + > \"$d/found\"; then :; else corrupt \"payload unreadable\"; fi; fi".to_owned(),
         "if sort \"$d/found\" > \"$d/manifest\"; then :; else corrupt \"payload unreadable\"; fi".to_owned(),
         "if [ ! -s \"$d/manifest\" ]; then corrupt \"empty manifest\"; fi".to_owned(),

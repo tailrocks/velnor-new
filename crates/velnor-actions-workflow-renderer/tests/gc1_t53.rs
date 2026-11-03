@@ -35,7 +35,6 @@ const RECORD_STEP: &str = "Record state publication";
 const SAVE_OUTCOME_GATE: &str = "steps.velnor-optional-mbx-bundle-save.outcome == 'success'";
 const RECORD_CONDITION: &str =
     "always() && !cancelled() && steps.velnor-optional-mbx-bundle-save.outcome == 'success'";
-const OVER_CEILING_MIB: u64 = 400;
 
 fn fail(message: &str) -> Box<dyn Error> {
     io::Error::other(message).into()
@@ -192,7 +191,9 @@ fn check_shell_syntax(script: &str, label: &str) -> Result<(), Box<dyn Error>> {
 fn check_export_bounds_uncompressed(export: &str) -> Result<(), Box<dyn Error>> {
     for marker in [
         "du -sb",
-        "over_ceiling",
+        "over_extracted",
+        "over_stored",
+        "zstd -3 --long=30",
         "mbx cache export",
         "$d/export",
         "state-publication.staged",
@@ -238,7 +239,7 @@ fn gc1_t53_publish_binds_evidence_to_save() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn driver_env() -> Result<BTreeMap<String, String>, Box<dyn Error>> {
+pub(crate) fn driver_env() -> Result<BTreeMap<String, String>, Box<dyn Error>> {
     Ok(checked_task_env(
         &BTreeMap::new(),
         "${{ runner.temp }}/velnor/rustup",
@@ -247,7 +248,9 @@ fn driver_env() -> Result<BTreeMap<String, String>, Box<dyn Error>> {
     )?)
 }
 
-fn shell_script_of(step: &velnor_actions_contract::Step) -> Result<String, Box<dyn Error>> {
+pub(crate) fn shell_script_of(
+    step: &velnor_actions_contract::Step,
+) -> Result<String, Box<dyn Error>> {
     match &step.kind {
         StepKind::Shell { run, .. } => run
             .get(2)
@@ -351,6 +354,7 @@ pub(crate) fn scripts_for(
     })
 }
 
+#[cfg(target_os = "linux")]
 #[path = "gc1_t53_cold.rs"]
 mod gc1_t53_cold;
 #[path = "gc1_t53_depth.rs"]
@@ -371,5 +375,6 @@ mod gc1_t53_key;
 mod gc1_t53_meta;
 #[path = "gc1_t53_publish.rs"]
 mod gc1_t53_publish;
+#[cfg(target_os = "linux")]
 #[path = "gc1_t53_recover.rs"]
 mod gc1_t53_recover;
