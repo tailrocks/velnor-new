@@ -3,6 +3,7 @@
 
 use super::HostContainerProfile;
 use crate::errors::ContractError;
+use crate::workflow::CheckoutHistory;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 #[path = "check_system_tools.rs"]
@@ -36,6 +37,9 @@ pub struct MiseCheck {
 
     #[serde(default = "default_timeout")]
     pub timeout_minutes: u32,
+
+    #[serde(default, skip_serializing_if = "CheckoutHistory::is_full")]
+    pub history: CheckoutHistory,
 }
 
 fn default_directory() -> String {

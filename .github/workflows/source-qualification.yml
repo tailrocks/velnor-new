@@ -5,6 +5,7 @@ name: Source qualification
   workflow_dispatch: {}
 permissions:
   contents: read
+cache-mode: read
 concurrency:
   group: source-qualification-${{ github.ref }}
   cancel-in-progress: false

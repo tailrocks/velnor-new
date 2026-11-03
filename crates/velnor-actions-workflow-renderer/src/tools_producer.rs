@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 
 use velnor_actions_contract::workflow::crate_job::TOOLS_PRODUCER_JOB_ID_PREFIX;
 use velnor_actions_contract::workflow::{
-    DEPENDENCY_SEED_JOB_CONDITION, TOOLS_PRODUCER_INSTALL_CONDITION, validate_tools_producer,
+    CacheAccess, CacheWriter, TOOLS_PRODUCER_INSTALL_CONDITION, validate_tools_producer,
 };
 use velnor_actions_contract::workflow::{JACTIONLINT_VERIFIER_USES, RUST_VERIFIER_USES};
 use velnor_actions_contract::{Job, PullRequestCachePolicy, Step, StepKind, StepRole};
@@ -105,9 +105,9 @@ fn build(plan: &ToolsProducerPlan, policy: PullRequestCachePolicy) -> Result<Job
         check_runner: None,
         timeout_minutes: crate::cache_save_budget::lift_to_save_budget(donor.timeout_minutes)?,
         needs: Vec::new(),
-        condition: Some(DEPENDENCY_SEED_JOB_CONDITION.to_owned()),
+        condition: Some(CacheWriter::ToolsProducer.condition()),
         permissions: None,
-        cache_mode: None,
+        cache_access: CacheAccess::Writer(CacheWriter::ToolsProducer),
         environment: None,
         services: Vec::new(),
         outputs: BTreeMap::new(),

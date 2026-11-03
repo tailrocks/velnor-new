@@ -168,7 +168,7 @@ pub(crate) fn alint_job(ctx: &RenderContext) -> Result<Job, RenderError> {
         needs: Vec::new(),
         condition: None,
         permissions: None,
-        cache_mode: None,
+        cache_access: velnor_actions_contract::CacheAccess::Read,
         environment: None,
         env: velnor_actions_contract::JobEnv::Unset,
         steps: vec![
@@ -231,7 +231,7 @@ pub(crate) fn validator_job(
         needs: Vec::new(),
         condition: None,
         permissions: None,
-        cache_mode: None,
+        cache_access: velnor_actions_contract::CacheAccess::Read,
         environment: None,
         env: velnor_actions_contract::JobEnv::Unset,
         steps: job_steps,

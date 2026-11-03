@@ -60,7 +60,7 @@ fn native_check_job(step: Step) -> Job {
         needs: Vec::new(),
         condition: None,
         permissions: None,
-        cache_mode: None,
+        cache_access: velnor_actions_contract::CacheAccess::Read,
         environment: None,
         services: Vec::new(),
         outputs: BTreeMap::new(),
@@ -135,7 +135,6 @@ fn workflow(step: Step) -> WorkflowIr {
             schedule: None,
         },
         permissions: Permissions::default(),
-        cache_mode: None,
         concurrency: Concurrency {
             group: CONCURRENCY_GROUP.to_owned(),
             cancel_in_progress: CONCURRENCY_CANCEL.to_owned(),
