@@ -13,7 +13,8 @@ pub const CACHE_PRUNE_FALLBACK_RUNNER: &str = "ubuntu-latest";
 pub const TOOLS_PRUNE_PREFIX: &str = "mise-tools-v2-";
 pub const TOOLS_PRUNE_UNIT: &str = "mise-tools-v2";
 pub const TOOLS_RETAINED_ENTRIES: u64 = 8;
-pub const RETIRED_STATE_PRUNE_PREFIX: &str = "velnor-v1-state-trusted-";
+pub const RETIRED_STATE_PRUNE_PREFIXES: [&str; 2] =
+    ["velnor-v1-state-trusted-", "velnor-v2-state-trusted-"];
 
 fn strip_snapshot_digest(cache_key: &str) -> Option<&str> {
     let (unit, digest) = cache_key.rsplit_once("-s256-")?;
@@ -47,7 +48,11 @@ pub fn prune_targets() -> Vec<(String, u64)> {
         })
         .collect();
     targets.push((TOOLS_PRUNE_PREFIX.to_owned(), TOOLS_RETAINED_ENTRIES));
-    targets.push((RETIRED_STATE_PRUNE_PREFIX.to_owned(), 0));
+    targets.extend(
+        RETIRED_STATE_PRUNE_PREFIXES
+            .into_iter()
+            .map(|prefix| (prefix.to_owned(), 0)),
+    );
     targets
 }
 
@@ -95,7 +100,7 @@ pub fn render_cache_prune_yml(
     }
     let script = prune_script().replace('\\', "\\\\").replace('"', "\\\"");
     let body = format!(
-        "name: Cache prune\n\"on\":\n  push:\n    branches:\n      - {default_branch}\npermissions: {{}}\nconcurrency:\n  group: velnor-cache-prune\n  cancel-in-progress: false\njobs:\n  prune:\n    name: Prune superseded cache entries\n    if: github.ref_protected == true\n    runs-on: {label}\n    timeout-minutes: 5\n    permissions:\n      actions: write\n    steps:\n      - name: Prune superseded cache entries\n        env:\n          GH_TOKEN: ${{{{ github.token }}}}\n          GH_REPO: ${{{{ github.repository }}}}\n        run: \"{script}\"\n"
+        "name: Cache prune\n\"on\":\n  push:\n    branches:\n      - {default_branch}\npermissions: {{}}\ncache-mode: read\nconcurrency:\n  group: velnor-cache-prune\n  cancel-in-progress: false\njobs:\n  prune:\n    name: Prune superseded cache entries\n    if: github.ref_protected == true\n    runs-on: {label}\n    timeout-minutes: 5\n    permissions:\n      actions: write\n    steps:\n      - name: Prune superseded cache entries\n        env:\n          GH_TOKEN: ${{{{ github.token }}}}\n          GH_REPO: ${{{{ github.repository }}}}\n        run: \"{script}\"\n"
     );
     Ok(RenderedFile {
         path: CACHE_PRUNE_PATH.to_owned(),

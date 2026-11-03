@@ -36,18 +36,18 @@ mod anchors;
 use anchors::duplicate_anchor_names as find_duplicate_anchor_names;
 
 #[derive(Clone)]
-pub(super) struct StepText {
-    pub(super) name: String,
-    pub(super) text: String,
-    pub(super) fields: Vec<(String, String)>,
-    pub(super) top_fields: Vec<(String, String)>,
-    pub(super) env_fields: Vec<(String, String)>,
-    pub(super) unexpected_nested: bool,
-    pub(super) invalid_anchor: bool,
-    pub(super) run_scalar: Option<String>,
+pub(crate) struct StepText {
+    pub(crate) name: String,
+    pub(crate) text: String,
+    pub(crate) fields: Vec<(String, String)>,
+    pub(crate) top_fields: Vec<(String, String)>,
+    pub(crate) env_fields: Vec<(String, String)>,
+    pub(crate) unexpected_nested: bool,
+    pub(crate) invalid_anchor: bool,
+    pub(crate) run_scalar: Option<String>,
 }
 
-pub(super) fn step_lists(text: &str) -> Vec<(String, Vec<StepText>)> {
+pub(crate) fn step_lists(text: &str) -> Vec<(String, Vec<StepText>)> {
     let lines: Vec<&str> = text.lines().collect();
     let duplicate_anchors = find_duplicate_anchor_names(text);
     let mut anchors: BTreeMap<String, Option<StepText>> = BTreeMap::new();
@@ -256,7 +256,7 @@ fn step_fields(
 }
 
 impl StepText {
-    pub(super) fn uses_value(&self) -> Option<&str> {
+    pub(crate) fn uses_value(&self) -> Option<&str> {
         self.fields.iter().find_map(|(key, value)| {
             (key == "uses").then(|| {
                 value

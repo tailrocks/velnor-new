@@ -69,8 +69,8 @@ impl Yaml {
     }
 
     #[must_use]
-    pub fn cache_mode_field(mode: &velnor_actions_contract::CacheMode) -> (String, Self) {
-        ("cache-mode".to_owned(), Self::str(mode.as_str().to_owned()))
+    pub fn cache_mode_field(access: velnor_actions_contract::CacheAccess) -> (String, Self) {
+        ("cache-mode".to_owned(), Self::str(access.mode()))
     }
 
     fn is_inline(&self) -> bool {

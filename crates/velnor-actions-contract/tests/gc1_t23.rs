@@ -43,17 +43,22 @@ fn check_complete_state_binding() -> Result<(), Box<dyn Error>> {
             return Err(fail("persisted MBX path survived"));
         }
     }
-    if CacheFamily::MbxBundle.key_prefix() != "velnor-v2-state-" {
+    if CacheFamily::MbxBundle.key_prefix() != "velnor-v3-state-" {
         return Err(fail("complete-state key prefix drifted"));
     }
     if CacheFamily::MbxBundle.gc1_family() != Some(Gc1Family::State) {
         return Err(fail("complete-state family lost its contract identity"));
     }
-    if CacheFamily::for_key("velnor-v2-state-trusted-aabb-r0") != Some(CacheFamily::MbxBundle) {
+    if CacheFamily::for_key("velnor-v3-state-trusted-aabb-r0") != Some(CacheFamily::MbxBundle) {
         return Err(fail("complete-state discovery drifted"));
     }
-    if CacheFamily::for_key("velnor-v1-state-trusted-aabb-r0").is_some() {
-        return Err(fail("complete-state discovery claimed the retired schema"));
+    for retired in [
+        "velnor-v1-state-trusted-aabb-r0",
+        "velnor-v2-state-trusted-aabb-r0",
+    ] {
+        if CacheFamily::for_key(retired).is_some() {
+            return Err(fail("complete-state discovery claimed a retired schema"));
+        }
     }
     Ok(())
 }

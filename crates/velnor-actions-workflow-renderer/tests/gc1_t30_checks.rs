@@ -13,7 +13,7 @@ fn check_discovery_binds_provenance(key: &Step) -> Result<(), Box<dyn Error>> {
     let script = shell_script(key)?;
     for marker in [
         "'family=state'",
-        "'schema=2'",
+        "'schema=3'",
         "$RUNNER_TEMP/velnor-gc1/state",
         "\"key=$key\"",
         "\"restore_keys=$trusted\"",

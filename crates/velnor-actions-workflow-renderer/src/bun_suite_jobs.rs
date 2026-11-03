@@ -138,7 +138,7 @@ pub fn build_bun_suite_job(
         needs: policy.needs(),
         condition: Some(crate::plan_gate::not_affected_gate(&policy.id)),
         permissions: Some(bun_permissions(&policy.steps)),
-        cache_mode: None,
+        cache_access: velnor_actions_contract::CacheAccess::Read,
         environment: None,
         env: velnor_actions_contract::JobEnv::Unset,
         steps: all,
@@ -185,7 +185,7 @@ pub fn build_bun_report_job(
             policy.id
         )),
         permissions: Some(bun_permissions(&report.steps)),
-        cache_mode: None,
+        cache_access: velnor_actions_contract::CacheAccess::Read,
         environment: None,
         env: velnor_actions_contract::JobEnv::Unset,
         steps: all,

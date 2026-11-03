@@ -147,7 +147,6 @@ fn metadata_ir(
                 cancel_in_progress: String::new(),
             },
             jobs,
-            cache_mode: None,
         },
         owners,
     ))
@@ -319,7 +318,7 @@ fn projection(
                 metadata.condition = None;
                 metadata.permissions = None;
                 metadata.environment = None;
-                metadata.cache_mode = None;
+                metadata.cache_access = velnor_actions_contract::CacheAccess::Read;
             }
             (id.clone(), metadata)
         })
@@ -376,7 +375,7 @@ fn metadata(runner: &str) -> Job {
         environment: None,
         env: velnor_actions_contract::JobEnv::Unset,
         steps: Vec::new(),
-        cache_mode: None,
+        cache_access: velnor_actions_contract::CacheAccess::Read,
     }
 }
 

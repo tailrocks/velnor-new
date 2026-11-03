@@ -25,6 +25,7 @@ pub(super) fn jobs(hosted: &RunnerSpec, scale: &RunnerSpec) -> Vec<(String, Yaml
         steps(),
         Extras {
             permissions: Some(mapping(&[("contents", "read"), ("actions", "write")])),
+            cache_writer: true,
             ..Extras::default()
         },
     )

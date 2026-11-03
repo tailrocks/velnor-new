@@ -34,6 +34,5 @@ pub(crate) fn keyed_restore_steps(
     fetch_roots: &[String],
 ) -> Result<Vec<Step>, OrchestratorError> {
     velnor_actions_workflow_renderer::plan_sources::cache_steps_for_plan(catalog, fetch_roots, &[])
-        .map(|cache| cache.restore)
         .map_err(orchestrator_error)
 }

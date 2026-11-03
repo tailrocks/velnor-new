@@ -13,7 +13,8 @@ use velnor_actions_contract::workflow::{
     DEPENDENCY_SEED_JOB_CONDITION, ProducerKind, validate_tofu_providers_producer,
 };
 use velnor_actions_contract::{
-    CacheMode, Job, PermissionLevel, Permissions, REQUIRED_JOB_ID, Step, StepKind, StepRole,
+    CacheAccess, CacheWriter, Job, PermissionLevel, Permissions, REQUIRED_JOB_ID, Step, StepKind,
+    StepRole,
 };
 use velnor_actions_orchestrator::{finalized_jobs, prepare, render_staged_tree};
 use velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
@@ -91,13 +92,7 @@ fn crate_provider_bindings(
 ) -> Result<BTreeSet<(String, String)>, Box<dyn Error>> {
     let mut bindings = BTreeSet::new();
     for (id, job) in crates {
-        assert!(
-            job.cache_mode
-                .as_ref()
-                .is_some_and(CacheMode::is_explicit_read),
-            "{id}: {:?}",
-            job.cache_mode
-        );
+        assert_eq!(job.cache_access, CacheAccess::Read, "{id}");
         assert!(
             !job.steps
                 .iter()
@@ -130,7 +125,12 @@ pub(super) fn assert_producer_shape(
     validate_tofu_providers_producer(job, id)?;
     assert!(gate_or_survival(job), "{id}: {:?}", job.condition);
     assert!(job.needs.iter().any(|need| need == "plan"), "{id}");
-    assert!(job.permissions.is_none() && job.cache_mode.is_none());
+    assert!(job.permissions.is_none());
+    assert_eq!(
+        job.cache_access,
+        CacheAccess::Writer(CacheWriter::TofuProvidersProducer),
+        "{id}"
+    );
     let required = jobs.get(REQUIRED_JOB_ID).ok_or("no required job")?;
     assert!(
         !required.needs.contains(&id.to_owned()),

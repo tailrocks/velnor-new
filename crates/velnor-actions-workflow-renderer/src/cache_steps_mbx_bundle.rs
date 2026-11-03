@@ -11,6 +11,7 @@ use velnor_actions_contract::workflow::cache_family_mbx::{
 };
 use velnor_actions_contract::{Step, StepId, StepRole};
 
+use super::MBX_COMPILE_ENV;
 use crate::RenderError;
 use crate::steps::shell_step;
 
@@ -122,6 +123,11 @@ fn compat_head_lines(
     } else {
         format!("\"unit={unit}\"")
     };
+    let compile_env = MBX_COMPILE_ENV
+        .iter()
+        .map(|(name, _)| format!("\"{name}=${{{name}-}}\""))
+        .collect::<Vec<_>>()
+        .join(" ");
     vec![
         format!(
             "printf '%s\\n' 'family={}' 'schema={}' '{}' {unit_arg} \"mbx={version}\" \"toolchain={toolchain}\" \"root={root}\" 'ceiling={}' > \"{dir}/compat\"",
@@ -132,9 +138,7 @@ fn compat_head_lines(
         ),
         format!("uname -s >> \"{dir}/compat\""),
         format!("uname -m >> \"{dir}/compat\""),
-        format!(
-            "printf '%s\\n' \"MBX_SHARE_OUT_DIR=${{MBX_SHARE_OUT_DIR-}}\" \"MBX_BUILD_SCRIPT_EXECUTION=${{MBX_BUILD_SCRIPT_EXECUTION-}}\" \"MBX_CC=${{MBX_CC-}}\" \"ImageOS=${{ImageOS-}}\" >> \"{dir}/compat\""
-        ),
+        format!("printf '%s\\n' {compile_env} \"ImageOS=${{ImageOS-}}\" >> \"{dir}/compat\""),
         format!("s256 \"{dir}/compat\""),
     ]
 }

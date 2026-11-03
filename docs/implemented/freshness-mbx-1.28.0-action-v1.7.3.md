@@ -118,5 +118,6 @@ reported MBX `1.27.0` and action `v1.7.2` as stale. The pins and policy mirror
 now name the current releases. The inventory records MBX 1.28.0 and action
 v1.7.3 as locally qualified and current, based on the evidence above. This does
 not claim hosted acceptance. The new-action pull-request checks and the
-protected-main MBX cache roundtrip must still pass before SDK publication.
+MBX cache roundtrip, dispatched from a non-default branch, must still pass
+before SDK publication.
 A catalog change alone does not qualify either pin.

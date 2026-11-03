@@ -13,7 +13,10 @@ use crate::pins::resolve_mise_setup;
 use crate::prepare::GenerationPreparation;
 use crate::workflow::scale_set_selector_for_dispatch;
 
-use super::{cache_cleanup_emit, mise_task_suites_emit, runner_labels, rust_install_audit};
+use super::{
+    cache_authority_audit, cache_cleanup_emit, mise_task_suites_emit, runner_labels,
+    rust_install_audit,
+};
 
 pub(super) fn render_all(
     prep: &GenerationPreparation,
@@ -83,6 +86,7 @@ pub(super) fn render_all(
         bytes: workflow.clone(),
     });
     rust_install_audit::audit_with_verifiers(&audit_files, &verifier_actions)?;
+    cache_authority_audit::audit(&audit_files)?;
     let tree = render_tree_with_claude_mode(
         &workflow,
         &lint_config,

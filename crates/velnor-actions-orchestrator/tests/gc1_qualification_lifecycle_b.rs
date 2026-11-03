@@ -28,8 +28,8 @@ pub(crate) fn check_merge_consumers_read_only() -> Result<(), Box<dyn Error>> {
         if decide_save(&denied)? != SaveOutcome::Denied {
             return Err(invalid("merge consumer save escaped its denial"));
         }
-        let mode = CacheMode::explicit_read();
-        if !mode.is_explicit_read() || mode.grants_write() {
+        let access = CacheAccess::Read;
+        if !access.is_read() || access.writer().is_some() {
             return Err(invalid("merge consumer lost its read-only mode"));
         }
         let _ = job;
