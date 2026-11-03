@@ -12,15 +12,16 @@ fn check_discovery_binds_provenance(key: &Step) -> Result<(), Box<dyn Error>> {
     }
     let script = shell_script(key)?;
     for marker in [
-        "'family=state'",
-        "'schema=3'",
+        "\"family=state\"",
+        "\"schema=4\"",
         "$RUNNER_TEMP/velnor-gc1/state",
         "\"key=$key\"",
-        "\"restore_keys=$trusted\"",
+        "restore_keys<<VELNOR_STATE_KEYS_EOF",
         "\"save=$save\"",
         "\"provenance=$provenance\"",
         "\"decision=$decision\"",
         "state-discovery.record",
+        "snapshot_prefix=",
         "restore_prefix=",
         "compat=$compat",
     ] {
@@ -98,7 +99,7 @@ fn check_save_shape() -> Result<(), Box<dyn Error>> {
         false,
         TOOLS_SAVE_USES,
         "mbx-bundle",
-        MBX_BUNDLE_KEY_EXPR,
+        MBX_BUNDLE_SAVE_KEY_EXPR,
         &[],
         &[COMPLETE_STATE_TRANSPORT_EXPR.to_owned()],
     )?;
@@ -106,7 +107,7 @@ fn check_save_shape() -> Result<(), Box<dyn Error>> {
         return Err(fail("save step left its pinned save action"));
     }
     let with = action_with(&save)?;
-    if with.get("key").map(String::as_str) != Some(MBX_BUNDLE_KEY_EXPR) {
+    if with.get("key").map(String::as_str) != Some(MBX_BUNDLE_SAVE_KEY_EXPR) {
         return Err(fail("save step left its selected key"));
     }
     if with.contains_key("restore-keys") {

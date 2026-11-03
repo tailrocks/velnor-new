@@ -126,7 +126,7 @@ impl FamilySpec {
     /// authorize publication; the common admission policy owns that
     /// decision under [`GC1_HARD_CEILING_BYTES`].
     pub fn check_subordinate_to_common_ceiling(&self) -> Result<(), ContractError> {
-        if self.ceiling_bytes > GC1_HARD_CEILING_BYTES {
+        if self.ceiling.stored() > GC1_HARD_CEILING_BYTES {
             return Err(ContractError::identity(
                 "cache_family.ceiling",
                 format!("exceeds_common_ceiling:{}", self.layer),

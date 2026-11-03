@@ -4,15 +4,19 @@
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::workflow::cache_family::{
-    COMPLETE_STATE_TRANSPORT_EXPR, CacheFamily, RUNNER_TEMP_EXPR, RUNNER_TEMP_SHELL,
+    COMPLETE_STATE_TRANSPORT_EXPR, RUNNER_TEMP_EXPR, RUNNER_TEMP_SHELL, RootSlug,
+    S256_DIGEST_BYTES, StateScope, StateTrust, StateUnit, state_snapshot_plan_expr,
 };
 use velnor_actions_contract::workflow::cache_family_mbx::{
     MBX_BUNDLE_KEY_EXPR, MBX_BUNDLE_RESTORE_CONDITION, MBX_BUNDLE_RESTORE_KEYS_EXPR,
+    MBX_BUNDLE_ROOT_ENV, MBX_BUNDLE_SNAPSHOT_ENV,
 };
 use velnor_actions_contract::{Step, StepId, StepRole};
 
-use super::MBX_COMPILE_ENV;
 use crate::RenderError;
+use crate::state_fragments::{
+    CompatBinding, S256_FN, absent_digest_lines, compat_lines, lock_digest_lines, snapshot_lines,
+};
 use crate::steps::shell_step;
 
 #[path = "cache_steps_mbx_bundle_publish.rs"]
@@ -39,7 +43,7 @@ const DEFAULT_REF_EXPR: &str =
 const HEAD_FORK_EXPR: &str = "${{ github.event.pull_request.head.repo.fork }}";
 const VERSION_ENV: &str = "VELNOR_MBX_BUNDLE_VERSION";
 const TOOLCHAIN_ENV: &str = "VELNOR_MBX_BUNDLE_TOOLCHAIN";
-const ROOT_ENV: &str = "VELNOR_MBX_BUNDLE_ROOT";
+const ROOT_ENV: &str = MBX_BUNDLE_ROOT_ENV;
 const MARK_FILE: &str = "$RUNNER_TEMP/velnor/state-producer-ok";
 const SIZE_FILE: &str = "$RUNNER_TEMP/velnor/state-payload.size";
 
@@ -88,7 +92,7 @@ fn split_shell(path: &str) -> Result<(String, String), RenderError> {
 }
 
 pub(crate) fn mbx_bundle_prelude(
-    unit: &str,
+    unit: StateUnit,
     mbx_version_expr: &str,
     toolchain_expr: &str,
     rust_toolchain: &str,
@@ -102,66 +106,62 @@ pub(crate) fn mbx_bundle_prelude(
     Ok([discover, restore, recover])
 }
 
-/// Shared compatibility-digest shell fragment.
-///
-/// Both the discovery step and the recovery/publication steps compute the
-/// snapshot compatibility digest with the same byte layout: the family
-/// identity line, the OS identity lines, then the pinned lock digest. The
-/// recovery side recomputes it from the discovery record values and refuses
-/// on drift, which is the shell half of the coverage-replay check.
-fn compat_head_lines(
+pub(crate) fn compat_head_lines(
     dir: &str,
     version: &str,
     toolchain: &str,
     root: &str,
     unit: &str,
-    unit_is_literal: bool,
 ) -> Vec<String> {
-    let spec = CacheFamily::MbxBundle.spec();
-    let unit_arg = if unit_is_literal {
-        format!("'unit={unit}'")
-    } else {
-        format!("\"unit={unit}\"")
-    };
-    let compile_env = MBX_COMPILE_ENV
-        .iter()
-        .map(|(name, _)| format!("\"{name}=${{{name}-}}\""))
-        .collect::<Vec<_>>()
-        .join(" ");
-    vec![
-        format!(
-            "printf '%s\\n' 'family={}' 'schema={}' '{}' {unit_arg} \"mbx={version}\" \"toolchain={toolchain}\" \"root={root}\" 'ceiling={}' > \"{dir}/compat\"",
-            spec.layer,
-            spec.schema,
-            spec.shell_paths(None).join("' '"),
-            spec.ceiling_bytes,
-        ),
-        format!("uname -s >> \"{dir}/compat\""),
-        format!("uname -m >> \"{dir}/compat\""),
-        format!("printf '%s\\n' {compile_env} \"ImageOS=${{ImageOS-}}\" >> \"{dir}/compat\""),
-        format!("s256 \"{dir}/compat\""),
-    ]
+    compat_lines(
+        dir,
+        &CompatBinding {
+            unit,
+            mbx: version,
+            toolchain,
+            root,
+        },
+    )
 }
 
-const S256_FN: &str = "s256() { sha256sum \"$1\" > \"$d/sum\" || return 1; h=; rest=; read -r h rest < \"$d/sum\" || [ -n \"$h\" ]; case \"$h\" in ''|*[!0-9a-f]*) printf '%s\\n' 'sha256sum returned no digest' >&2; return 1 ;; esac; [ \"${#h}\" -eq 64 ] || return 1; }";
+fn snapshot_source(unit: StateUnit, root_env: &str) -> Vec<String> {
+    match unit {
+        StateUnit::Union => vec![
+            format!("snap=\"${{{MBX_BUNDLE_SNAPSHOT_ENV}-}}\""),
+            "case \"$snap\" in s256-*) [ \"${#snap}\" -eq 69 ] || snap= ;; *) snap= ;; esac"
+                .to_owned(),
+            "case \"${snap#s256-}\" in *[!0-9a-f]*) snap= ;; esac".to_owned(),
+            format!(
+                "if [ -z \"$snap\" ]; then rm -f \"{DISCOVERY_RECORD}\"; printf '%s\\n' 'reason=snapshot_missing' 'save=false' 'restore=false' >> \"$GITHUB_OUTPUT\"; printf '%s\\n' 'velnor: state snapshot disabled reason=snapshot_missing'; exit 0; fi"
+            ),
+        ],
+        StateUnit::Suite => {
+            let mut lines = vec![format!(
+                "lock=\"$GITHUB_WORKSPACE/${{{root_env}}}/Cargo.lock\""
+            )];
+            lines.extend(lock_digest_lines("$d", "$lock", "lock_h"));
+            lines.extend(absent_digest_lines("$d", "absent_h"));
+            lines.extend(snapshot_lines("$d", "$lock_h", "$absent_h", "$absent_h"));
+            lines
+        }
+    }
+}
 
-/// Discover the restore candidate and record its provenance.
-///
-/// This replaces the old key-only computation with a discovery step: the
-/// key and restore-keys outputs keep their exact legacy semantics for the
-/// transport steps, while the new `provenance`/`decision` outputs plus the
-/// discovery record bind every later stage (verify the restore observation,
-/// replay the coverage digest, admit the payload, publish, exact readback)
-/// to the same provenance classification.
 fn discover_step(
-    unit: &str,
+    unit: StateUnit,
     version: &str,
     toolchain: &str,
     root: &str,
 ) -> Result<Step, RenderError> {
-    let spec = CacheFamily::MbxBundle.spec();
-    let prefix = CacheFamily::MbxBundle.key_prefix();
-    let ceiling = spec.ceiling_bytes;
+    let slug = RootSlug::from_root(root)
+        .map_err(|error| RenderError::InvalidWorkflow(format!("state_root:{error}")))?;
+    let scope = StateScope {
+        trust: StateTrust::Trusted,
+        unit,
+        root: slug.clone(),
+    };
+    let scope_prefix = scope.prefix();
+    let max_payload_segment = S256_DIGEST_BYTES;
     let mut script = vec![
         "set -eu".to_owned(),
         RUNNER_TEMP_GUARD.to_owned(),
@@ -179,35 +179,37 @@ fn discover_step(
         &format!("${{{VERSION_ENV}}}"),
         &format!("${{{TOOLCHAIN_ENV}}}"),
         &format!("${{{ROOT_ENV}}}"),
-        unit,
-        true,
+        unit.as_str(),
     ));
-    script.extend(
-        [
-            "compat=\"s256-$h\"".to_owned(),
-            format!("lock=\"$GITHUB_WORKSPACE/${{{ROOT_ENV}}}/Cargo.lock\""),
-            "if [ -f \"$lock\" ] && [ ! -L \"$lock\" ]; then s256 \"$lock\"; else printf '%s\\n' absent > \"$d/absent\"; s256 \"$d/absent\"; fi".to_owned(),
-            "snap=\"s256-$h\"".to_owned(),
-            format!("trusted=\"{prefix}trusted-$compat-\""),
-            "key=\"$trusted$snap\"".to_owned(),
-            format!("[ \"${{#key}}\" -le {} ] || {{ printf 'cache key exceeds the GitHub cap: %s\\n' \"$key\" >&2; exit 1; }}", velnor_actions_contract::cachekey::MAX_CACHE_KEY_BYTES),
-            "save=false".to_owned(),
-            "[ \"$trust\" != trusted ] || save=true".to_owned(),
-            "if [ \"$trust\" = trusted ]; then provenance=trusted; decision=admitted; else case \"${GITHUB_EVENT_NAME:-}\" in pull_request) provenance=untrusted ;; *) provenance=ambiguous ;; esac; decision=restore-only; fi".to_owned(),
-            "printf '%s\\n' \"key=$key\" \"restore_keys=$trusted\" \"save=$save\" \"restore=true\" \"provenance=$provenance\" \"decision=$decision\" >> \"$GITHUB_OUTPUT\"".to_owned(),
-            format!("record=\"{DISCOVERY_RECORD}\""),
-            format!("printf '%s\\n' \"key=$key\" \"restore_prefix=$trusted\" \"compat=$compat\" \"provenance=$provenance\" \"decision=$decision\" \"ceiling={ceiling}\" \"save=$save\" \"unit={unit}\" \"mbx_version=${{{VERSION_ENV}}}\" \"toolchain=${{{TOOLCHAIN_ENV}}}\" \"root=${{{ROOT_ENV}}}\" > \"$record\""),
-            "printf 'velnor: state snapshot trust=%s key=%s save=%s provenance=%s decision=%s\\n' \"$trust\" \"$key\" \"$save\" \"$provenance\" \"$decision\"".to_owned(),
-        ],
-    );
+    script.push("compat=\"s256-$h\"".to_owned());
+    script.extend(snapshot_source(unit, ROOT_ENV));
+    script.extend([
+        format!("restore_prefix=\"{scope_prefix}$compat-\""),
+        "snapshot_prefix=\"$restore_prefix$snap-\"".to_owned(),
+        "key=\"$snapshot_prefix\"".to_owned(),
+        format!("[ \"${{#key}}\" -le {} ] || {{ printf 'cache key exceeds the GitHub cap: %s\\n' \"$key\" >&2; exit 1; }}", velnor_actions_contract::cachekey::MAX_CACHE_KEY_BYTES - max_payload_segment),
+        "save=false".to_owned(),
+        "[ \"$trust\" != trusted ] || save=true".to_owned(),
+        "if [ \"$trust\" = trusted ]; then provenance=trusted; decision=admitted; else case \"${GITHUB_EVENT_NAME:-}\" in pull_request) provenance=untrusted ;; *) provenance=ambiguous ;; esac; decision=restore-only; fi".to_owned(),
+        "printf '%s\\n' \"key=$key\" \"save=$save\" \"restore=true\" \"provenance=$provenance\" \"decision=$decision\" 'restore_keys<<VELNOR_STATE_KEYS_EOF' \"$snapshot_prefix\" \"$restore_prefix\" 'VELNOR_STATE_KEYS_EOF' >> \"$GITHUB_OUTPUT\"".to_owned(),
+        format!("record=\"{DISCOVERY_RECORD}\""),
+        format!("printf '%s\\n' \"key=$key\" \"snapshot_prefix=$snapshot_prefix\" \"restore_prefix=$restore_prefix\" \"compat=$compat\" \"provenance=$provenance\" \"decision=$decision\" \"save=$save\" \"unit={}\" \"mbx_version=${{{VERSION_ENV}}}\" \"toolchain=${{{TOOLCHAIN_ENV}}}\" \"root=${{{ROOT_ENV}}}\" > \"$record\"", unit.as_str()),
+        "printf 'velnor: state snapshot trust=%s key=%s save=%s provenance=%s decision=%s\\n' \"$trust\" \"$key\" \"$save\" \"$provenance\" \"$decision\"".to_owned(),
+    ]);
     let script = script.join("; ");
-    let env = BTreeMap::from([
+    let mut env = BTreeMap::from([
         (DEFAULT_REF_ENV.to_owned(), DEFAULT_REF_EXPR.to_owned()),
         (HEAD_FORK_ENV.to_owned(), HEAD_FORK_EXPR.to_owned()),
         (VERSION_ENV.to_owned(), version.to_owned()),
         (TOOLCHAIN_ENV.to_owned(), toolchain.to_owned()),
         (ROOT_ENV.to_owned(), root.to_owned()),
     ]);
+    if unit == StateUnit::Union {
+        env.insert(
+            MBX_BUNDLE_SNAPSHOT_ENV.to_owned(),
+            state_snapshot_plan_expr(&slug),
+        );
+    }
     let mut step = shell_step(
         MBX_BUNDLE_KEY_NAME,
         vec!["sh".to_owned(), "-c".to_owned(), script],

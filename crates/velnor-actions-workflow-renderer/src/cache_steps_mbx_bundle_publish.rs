@@ -4,19 +4,20 @@
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::workflow::cache_family::{
-    COMPLETE_STATE_ROOT_EXPR, COMPLETE_STATE_TRANSPORT_EXPR, CacheFamily,
+    COMPLETE_STATE_ROOT_EXPR, COMPLETE_STATE_TRANSPORT_EXPR, CacheFamily, MBX_COMPILE_ENV,
 };
 use velnor_actions_contract::workflow::cache_family_mbx::{
-    MBX_BUNDLE_EXPORT_CONDITION, MBX_BUNDLE_KEY_EXPR, MBX_BUNDLE_SAVE_CONDITION,
+    MBX_BUNDLE_EXPORT_CONDITION, MBX_BUNDLE_SAVE_CONDITION, MBX_BUNDLE_SAVE_KEY_EXPR,
 };
 use velnor_actions_contract::{Step, StepId, StepKind, StepRole};
 
 use crate::RenderError;
+use crate::state_fragments::S256_FN;
 use crate::steps::shell_step;
 
 use super::{
     DISCOVERY_RECORD, MARK_FILE, MAX_ARCHIVE_MEMBERS, MBX_BUNDLE_EXPORT_NAME, MBX_BUNDLE_SAVE_NAME,
-    MBX_EXPORT_GROUP_ENV, PUBLICATION_RECORD, RUNNER_TEMP_GUARD, S256_FN, SIZE_FILE,
+    MBX_EXPORT_GROUP_ENV, PUBLICATION_RECORD, RECOVERY_RECORD, RUNNER_TEMP_GUARD, SIZE_FILE,
     compat_head_lines, shell_literal, split_shell,
 };
 
@@ -82,7 +83,7 @@ pub(crate) fn publish_step(
     let root = shell_literal(COMPLETE_STATE_ROOT_EXPR)?;
     let (parent, base) = split_shell(&root)?;
     let (payload_parent, _payload_base) = split_shell(&payload)?;
-    let ceiling = CacheFamily::MbxBundle.spec().ceiling_bytes;
+    let ceiling = CacheFamily::MbxBundle.spec().ceiling.stored();
     let ceiling_kb = ceiling.div_ceil(1024);
     let mut script = vec![
         "set -eu".to_owned(),
@@ -106,18 +107,19 @@ pub(crate) fn publish_step(
         "command -v du >/dev/null 2>&1 || { printf '%s\\n' '::warning::cache_unavailable: du is missing; save refused'; skip du_missing; }".to_owned(),
         "command -v sha256sum >/dev/null 2>&1 || command -v shasum >/dev/null 2>&1 || { printf '%s\\n' '::warning::cache_unavailable: no digest tool; save refused'; skip digest_unavailable; }".to_owned(),
         "if [ ! -f \"$record\" ] || [ -L \"$record\" ]; then skip provenance_unavailable; fi".to_owned(),
-        "provenance=\"\"; rec_compat=\"\"; rec_unit=\"\"; rec_mbx=\"\"; rec_toolchain=\"\"; rec_root=\"\"".to_owned(),
-        "line=; while IFS= read -r line || [ -n \"$line\" ]; do case \"$line\" in provenance=*) provenance=${line#provenance=} ;; compat=*) rec_compat=${line#compat=} ;; unit=*) rec_unit=${line#unit=} ;; mbx_version=*) rec_mbx=${line#mbx_version=} ;; toolchain=*) rec_toolchain=${line#toolchain=} ;; root=*) rec_root=${line#root=} ;; esac; done < \"$record\"".to_owned(),
+        "provenance=\"\"; rec_snapshot_prefix=\"\"; rec_compat=\"\"; rec_unit=\"\"; rec_mbx=\"\"; rec_toolchain=\"\"; rec_root=\"\"".to_owned(),
+        "line=; while IFS= read -r line || [ -n \"$line\" ]; do case \"$line\" in provenance=*) provenance=${line#provenance=} ;; snapshot_prefix=*) rec_snapshot_prefix=${line#snapshot_prefix=} ;; compat=*) rec_compat=${line#compat=} ;; unit=*) rec_unit=${line#unit=} ;; mbx_version=*) rec_mbx=${line#mbx_version=} ;; toolchain=*) rec_toolchain=${line#toolchain=} ;; root=*) rec_root=${line#root=} ;; esac; done < \"$record\"".to_owned(),
         "if [ \"$provenance\" != trusted ]; then skip provenance_refused; fi".to_owned(),
-        "if [ -z \"$rec_compat\" ] || [ -z \"$rec_unit\" ] || [ -z \"$rec_mbx\" ] || [ -z \"$rec_toolchain\" ] || [ -z \"$rec_root\" ]; then skip provenance_refused; fi".to_owned(),
+        "if [ -z \"$rec_snapshot_prefix\" ] || [ -z \"$rec_compat\" ] || [ -z \"$rec_unit\" ] || [ -z \"$rec_mbx\" ] || [ -z \"$rec_toolchain\" ] || [ -z \"$rec_root\" ]; then skip provenance_refused; fi".to_owned(),
     ];
+    script.extend(exact_hit_lines());
+    script.extend(env_gate_lines());
     script.extend(compat_head_lines(
         "$d",
         "$rec_mbx",
         "$rec_toolchain",
         "$rec_root",
         "$rec_unit",
-        false,
     ));
     script.extend(
         [
@@ -148,7 +150,7 @@ pub(crate) fn publish_step(
             "if [ \"$digest_one\" != \"$digest_two\" ] || [ \"$size\" != \"$size_two\" ]; then rm -f \"$payload\"; skip readback_mismatch; fi".to_owned(),
             format!("printf '%s\\n' \"payload=$digest_one\" \"size=$size\" \"members=$members_n\" \"manifest=$manifest\" \"compat=$compat_now\" > \"{PUBLICATION_STAGED}\""),
             "printf 'velnor: state snapshot readback verified (sha256:%s)\\n' \"$digest_one\"".to_owned(),
-            "if [ -n \"$out\" ]; then printf '%s\\n' 'exported=true' >> \"$out\"; fi".to_owned(),
+            "if [ -n \"$out\" ]; then printf '%s\\n' \"key=${rec_snapshot_prefix}s256-$digest_one\" 'exported=true' >> \"$out\"; fi".to_owned(),
         ],
     );
     let script = script.join("; ");
@@ -161,6 +163,21 @@ pub(crate) fn publish_step(
     step.condition = Some(MBX_BUNDLE_EXPORT_CONDITION.to_owned());
     step.role = Some(StepRole::MbxBundleExport);
     Ok(step)
+}
+
+fn exact_hit_lines() -> Vec<String> {
+    vec![format!(
+        "recovered=; if [ -f \"{RECOVERY_RECORD}\" ] && [ ! -L \"{RECOVERY_RECORD}\" ]; then line=; while IFS= read -r line || [ -n \"$line\" ]; do case \"$line\" in decision=*) recovered=${{line#decision=}} ;; esac; done < \"{RECOVERY_RECORD}\"; fi; if [ \"$recovered\" = exact-hit ]; then skip exact_hit; fi"
+    )]
+}
+
+fn env_gate_lines() -> Vec<String> {
+    MBX_COMPILE_ENV
+        .iter()
+        .map(|(name, value)| {
+            format!("if [ \"${{{name}-}}\" != \"{value}\" ]; then printf '%s\\n' '::warning::state snapshot refused: {name} is not {value}'; skip env_mismatch; fi")
+        })
+        .collect()
 }
 
 fn cold_produce_fragment(rust_toolchain: &str, ceiling: u64, ceiling_kb: u64) -> String {
@@ -180,7 +197,7 @@ fn save_step() -> Result<Step, RenderError> {
         false,
         crate::cache_steps::TOOLS_SAVE_USES,
         "mbx-bundle",
-        MBX_BUNDLE_KEY_EXPR,
+        MBX_BUNDLE_SAVE_KEY_EXPR,
         &[],
         &[COMPLETE_STATE_TRANSPORT_EXPR.to_owned()],
     )?;

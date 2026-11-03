@@ -6,6 +6,8 @@ use std::path::Path;
 
 pub(crate) const EXPORT_MARK_ENV: &str = "MBX_STUB_EXPORT_MARK";
 pub(crate) const EXPORT_BULK_MIB_ENV: &str = "MBX_STUB_EXPORT_BULK_MIB";
+pub(crate) const UNAME_S_ENV: &str = "VELNOR_STUB_UNAME_S";
+pub(crate) const UNAME_M_ENV: &str = "VELNOR_STUB_UNAME_M";
 pub(crate) const FAIL_ENV: &str = "MBX_STUB_FAIL";
 
 const MBX: &str = r#"#!/bin/sh
@@ -22,6 +24,7 @@ if [ "$op" = export ]; then
   printf '{"version":1}\n' > "$dir/mbx-cache-export-v1.json" || exit 1
   bulk="${MBX_STUB_EXPORT_BULK_MIB:-0}"
   if [ "$bulk" -gt 0 ]; then dd if=/dev/zero of="$dir/cas/bulk" bs=1048576 count="$bulk" 2>/dev/null || exit 1; fi
+  find "$dir" -exec touch -t 200001010000 {} + || exit 1
   exit 0
 fi
 [ "$#" -eq 3 ] || exit 1
@@ -50,6 +53,8 @@ done
 exit 0
 "#;
 
+const UNAME: &str = "#!/bin/sh\ncase \"$1\" in\n  -s) [ -z \"${VELNOR_STUB_UNAME_S:-}\" ] || { printf '%s\\n' \"$VELNOR_STUB_UNAME_S\"; exit 0; } ;;\n  -m) [ -z \"${VELNOR_STUB_UNAME_M:-}\" ] || { printf '%s\\n' \"$VELNOR_STUB_UNAME_M\"; exit 0; } ;;\nesac\nexec /usr/bin/uname \"$@\"\n";
+
 const MISE: &str = "#!/bin/sh\nwhile [ $# -gt 0 ]; do case \"$1\" in --) shift; break ;; *) shift ;; esac; done\nexec \"$@\"\n";
 
 pub(crate) fn write_executable(path: &Path, body: &str) -> Result<(), Box<dyn Error>> {
@@ -63,6 +68,7 @@ pub(crate) fn write_executable(path: &Path, body: &str) -> Result<(), Box<dyn Er
 pub(crate) fn install(bin: &Path) -> Result<(), Box<dyn Error>> {
     std::fs::create_dir_all(bin)?;
     write_executable(&bin.join("mbx"), MBX)?;
+    write_executable(&bin.join("uname"), UNAME)?;
     write_executable(&bin.join("mise"), MISE)
 }
 

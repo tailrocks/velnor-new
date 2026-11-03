@@ -134,7 +134,7 @@ fn check_row(row: Row) -> Result<(), Box<dyn Error>> {
     build(row, &scene, &outside)?;
     let before = scene.tree()?;
     let output = scene
-        .recover(&key.key, &key.key, &[], None)
+        .recover(&key.exact(), &[], None)
         .map_err(|error| fail(&format!("{row:?}: {error}")))?;
     scene
         .assert_cold(&output, token(row))

@@ -7,6 +7,7 @@ use super::{CompileDriver, MBX_ACTION_NAME};
 use crate::RenderError;
 use crate::steps::{action_owned_mbx_shell_step, action_step_with_env, shell_step, validate_uses};
 use velnor_actions_contract::workflow::MBX_WORKSPACE_CLEAN_CONDITION;
+use velnor_actions_contract::workflow::cache_family::{MBX_COMPILE_ENV as COMPILE_ENV, StateUnit};
 use velnor_actions_contract::{Step, StepId, StepKind, StepRole};
 
 pub const MBX_PREFLIGHT_NAME: &str = "Verify Rust before MBX action";
@@ -61,11 +62,11 @@ pub enum MbxTransport {
 }
 
 impl MbxTransport {
-    pub(crate) const fn unit(self) -> Option<&'static str> {
+    pub(crate) const fn unit(self) -> Option<StateUnit> {
         match self {
             Self::InstallOnly => None,
-            Self::SeedRead | Self::SeedWrite => Some("seed"),
-            Self::SuiteBundle => Some("suite"),
+            Self::SeedRead | Self::SeedWrite => Some(StateUnit::Union),
+            Self::SuiteBundle => Some(StateUnit::Suite),
         }
     }
 }
@@ -75,23 +76,7 @@ pub const MBX_VERSION_CHECK_NAME: &str = "Verify native MBX version";
 pub(crate) use crate::action_mbx_shell::{ACTION_MBX_BIN, RESOLVE_ACTION_MBX_BIN};
 pub(crate) const MBX_GC_AUTO_ENV: &str = "MBX_GC_AUTO";
 pub(crate) const MBX_GC_AUTO_VALUE: &str = "0";
-pub(crate) const MBX_SHARE_OUT_DIR_ENV: &str = "MBX_SHARE_OUT_DIR";
-pub(crate) const MBX_SHARE_OUT_DIR_VALUE: &str = "1";
-pub(crate) const MBX_CC_ENV: &str = "MBX_CC";
-pub(crate) const MBX_CC_VALUE: &str = "0";
-pub(crate) const MBX_BUILD_SCRIPT_EXECUTION_ENV: &str = "MBX_BUILD_SCRIPT_EXECUTION";
-pub(crate) const MBX_BUILD_SCRIPT_EXECUTION_VALUE: &str = "0";
-pub(crate) const SOURCE_DATE_EPOCH_ENV: &str = "SOURCE_DATE_EPOCH";
-pub(crate) const SOURCE_DATE_EPOCH_VALUE: &str = "0";
-pub(crate) const MBX_COMPILE_ENV: [(&str, &str); 4] = [
-    (MBX_SHARE_OUT_DIR_ENV, MBX_SHARE_OUT_DIR_VALUE),
-    (
-        MBX_BUILD_SCRIPT_EXECUTION_ENV,
-        MBX_BUILD_SCRIPT_EXECUTION_VALUE,
-    ),
-    (MBX_CC_ENV, MBX_CC_VALUE),
-    (SOURCE_DATE_EPOCH_ENV, SOURCE_DATE_EPOCH_VALUE),
-];
+pub(crate) const MBX_COMPILE_ENV: [(&str, &str); 4] = COMPILE_ENV;
 pub(crate) const MBX_CACHE_DIR_ENV: &str = "MBX_CACHE_DIR";
 pub(crate) const MBX_CACHE_DIR_VALUE: &str = "${{ runner.temp }}/velnor/mbx";
 

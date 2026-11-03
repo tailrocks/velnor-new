@@ -13,9 +13,7 @@ use velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
 use super::workflow_configuration_fixture;
 
 #[test]
-fn prepare_and_render_keep_distinct_seed_ids_for_colliding_nested_roots()
--> Result<(), Box<dyn Error>> {
-    const ROOT_ENV: &str = "VELNOR_MBX_BUNDLE_ROOT";
+fn prepare_rejects_nested_roots_that_share_a_state_slug() -> Result<(), Box<dyn Error>> {
     let expected_roots = [("crates/a-b", "a-b"), ("crates/a/b", "b")];
     let config = workflow_configuration_fixture::config_with_verification_branch(None);
     let repo = workflow_configuration_fixture::make_repo(&config)?;
@@ -35,10 +33,13 @@ fn prepare_and_render_keep_distinct_seed_ids_for_colliding_nested_roots()
         )?;
     }
 
-    let prepared = prepare(root)?;
-    assert_discovered_workspaces(&prepared, root, &expected_roots)?;
-    let seed_ids = seed_ids_by_root(&prepared, &expected_roots, ROOT_ENV)?;
-    assert_rendered_seed_routing(&prepared, &expected_roots, &seed_ids, ROOT_ENV)?;
+    let error = prepare(root)
+        .err()
+        .ok_or("colliding state slugs were generated")?;
+    assert!(
+        error.to_string().contains("root_slug_collision"),
+        "unexpected error: {error}"
+    );
     Ok(())
 }
 
@@ -48,7 +49,7 @@ fn prepare_and_render_keep_valid_seed_ids_for_dotted_and_hyphenated_roots()
     const ROOT_ENV: &str = "VELNOR_MBX_BUNDLE_ROOT";
     let expected_roots = [
         ("crates/lib.v2", "dot-root"),
-        ("crates/lib-v2", "hyphen-root"),
+        ("crates/lib-v3", "hyphen-root"),
     ];
     let config = workflow_configuration_fixture::config_with_verification_branch(None);
     let repo = workflow_configuration_fixture::make_repo(&config)?;
@@ -293,7 +294,7 @@ fn assert_seed_bundle_key_unit(job: &Job) -> Result<(), Box<dyn Error>> {
     assert_eq!(
         compatibility_write
             .split_whitespace()
-            .filter(|argument| *argument == "'unit=seed'")
+            .filter(|argument| *argument == "\"unit=union\"")
             .count(),
         1
     );

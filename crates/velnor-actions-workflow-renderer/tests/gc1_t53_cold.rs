@@ -82,7 +82,7 @@ fn gc1_t53_recover_import_failure_goes_cold() -> Result<(), Box<dyn Error>> {
     let scene = Scene::new("cold-recover-fail", crate::gc1_t53::scripts()?)?;
     let key = scene.discover()?;
     scene.pack_export("old")?;
-    let output = scene.recover(&key.key, &key.key, &[(FAIL_ENV, "import")], None)?;
+    let output = scene.recover(&key.exact(), &[(FAIL_ENV, "import")], None)?;
     if scene.recovery_record().exists() {
         return Err(fail("failed import must leave no recovery record"));
     }

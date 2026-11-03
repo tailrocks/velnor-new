@@ -55,7 +55,7 @@ const ENV_EXPRESSIONS: [&str; 17] = [
     "steps.aws-credentials.outputs.aws-session-token",
 ];
 
-const WITH_EXPRESSIONS: [&str; 17] = [
+const WITH_EXPRESSIONS: [&str; 18] = [
     "needs.ledger-cli.outputs.artifact_name",
     "runner.temp",
     "github.run_id",
@@ -73,6 +73,7 @@ const WITH_EXPRESSIONS: [&str; 17] = [
     "needs.plan.outputs.sources_restore_keys",
     "steps.mbx-bundle-key.outputs.key",
     "steps.mbx-bundle-key.outputs.restore_keys",
+    "steps.mbx-bundle-export.outputs.key",
 ];
 
 fn is_image_publish_output(inner: &str) -> bool {
@@ -172,17 +173,20 @@ fn is_private_env_binding(key: &str, inner: &str) -> bool {
 }
 
 fn is_mbx_bundle_key_binding(key: &str, inner: &str) -> bool {
+    use velnor_actions_contract::workflow::cache_family::is_state_snapshot_output;
     use velnor_actions_contract::workflow::cache_family_mbx::{
-        MBX_BUNDLE_EXPECTED_KEY_ENV, MBX_BUNDLE_KEY_EXPR, MBX_BUNDLE_MATCHED_KEY_ENV,
-        MBX_BUNDLE_MATCHED_KEY_EXPR,
+        MBX_BUNDLE_MATCHED_KEY_ENV, MBX_BUNDLE_MATCHED_KEY_EXPR, MBX_BUNDLE_SNAPSHOT_ENV,
     };
     let bound = |expr: &str| {
         expr.strip_prefix("${{")
             .and_then(|rest| rest.strip_suffix("}}"))
             == Some(inner)
     };
-    (key == MBX_BUNDLE_EXPECTED_KEY_ENV && bound(MBX_BUNDLE_KEY_EXPR))
-        || (key == MBX_BUNDLE_MATCHED_KEY_ENV && bound(MBX_BUNDLE_MATCHED_KEY_EXPR))
+    (key == MBX_BUNDLE_MATCHED_KEY_ENV && bound(MBX_BUNDLE_MATCHED_KEY_EXPR))
+        || (key == MBX_BUNDLE_SNAPSHOT_ENV
+            && inner
+                .strip_prefix("needs.plan.outputs.")
+                .is_some_and(is_state_snapshot_output))
 }
 
 fn is_private_mint_input(key: &str, inner: &str) -> bool {

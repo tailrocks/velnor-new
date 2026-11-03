@@ -211,12 +211,14 @@ fn every_mbx_job_env_key_outside_the_non_compile_set_binds_the_state_key()
         .ok_or("cargo crate job is missing")?;
     let mut checked = 0;
     for job in jobs.iter().filter(|job| job.runs_mbx) {
-        for key in job.env.keys() {
+        for (key, value) in &job.env {
             if cargo_job.env.contains_key(key) || NON_COMPILE_ENV.contains(&key.as_str()) {
                 continue;
             }
-            let binding = format!("{key}=${{{key}-}}");
-            if !job.text.contains(&binding) {
+            let literal = format!("{key}={value}");
+            let gate = format!("${{{key}-}}");
+            let gated = !job.text.contains("Publish state snapshot") || job.text.contains(&gate);
+            if !job.text.contains(&literal) || !gated {
                 return Err(format!(
                     "job {}: env {key} reaches the compiler but not the state key",
                     job.id

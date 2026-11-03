@@ -1,9 +1,11 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+mod gc1_cache_service;
 mod gc1_mbx_stub;
 mod gc1_scene;
 mod gc1_scene_assert;
+mod gc1_scene_key;
 mod gc1_scene_tree;
 mod gc1_t13;
 mod gc1_t14;
@@ -25,3 +27,7 @@ mod gc1_ustar;
 mod gc1_workflow_cases_common;
 mod gc1_workflow_cases_preserve;
 mod gc1_workflow_cases_reject;
+mod state_v4_key;
+mod state_v4_pack;
+mod state_v4_restore;
+mod state_v4_snapshot;

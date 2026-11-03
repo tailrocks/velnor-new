@@ -75,7 +75,7 @@ fn retired_state_entries_of_every_schema_are_all_pruned_and_current_ones_kept()
     let hash = |c: char| c.to_string().repeat(64);
     let (a, b, c) = (hash('a'), hash('b'), hash('c'));
     let fixture = format!(
-        "11\tvelnor-v2-state-trusted-s256-{a}-s256-{b}\n12\tvelnor-v2-state-trusted-s256-{a}-s256-{c}\n13\tvelnor-v2-state-trusted-s256-{c}-s256-{b}\n21\tvelnor-v3-state-trusted-s256-{a}-s256-{b}\n31\tvelnor-v1-state-trusted-s256-{a}-s256-{b}\n32\tvelnor-v1-state-trusted-s256-{c}-s256-{b}\n"
+        "11\tvelnor-v2-state-trusted-s256-{a}-s256-{b}\n12\tvelnor-v2-state-trusted-s256-{a}-s256-{c}\n13\tvelnor-v2-state-trusted-s256-{c}-s256-{b}\n21\tvelnor-v3-state-trusted-s256-{a}-s256-{b}\n22\tvelnor-v3-state-trusted-s256-{c}-s256-{b}\n31\tvelnor-v4-state-trusted-union-root-s256-{a}-s256-{b}-s256-{c}\n41\tvelnor-v1-state-trusted-s256-{a}-s256-{b}\n42\tvelnor-v1-state-trusted-s256-{c}-s256-{b}\n"
     );
     std::fs::write(dir.join("fixture"), fixture)?;
     let shim = dir.join("gh");
@@ -99,8 +99,8 @@ fn retired_state_entries_of_every_schema_are_all_pruned_and_current_ones_kept()
     deleted.sort();
     assert_eq!(
         deleted,
-        ["11", "12", "13", "31", "32"],
-        "retired v1 and v2 state entries must all be deleted and v3 kept"
+        ["11", "12", "13", "21", "22", "41", "42"],
+        "retired v1, v2 and v3 state entries must all be deleted and v4 kept"
     );
     std::fs::remove_dir_all(&dir)?;
     Ok(())

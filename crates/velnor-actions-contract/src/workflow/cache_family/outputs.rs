@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use super::CacheFamily;
+use super::{CacheFamily, ROOT_SLUG_MAX_BYTES};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CacheTrust {
@@ -85,9 +85,42 @@ pub fn tofu_providers_key_plan_expr(ordinal: usize) -> String {
     )
 }
 
+const STATE_SNAPSHOT_OUTPUT_PREFIX: &str = "state_";
+
+const STATE_SNAPSHOT_OUTPUT_SUFFIX: &str = "_snapshot";
+
+#[must_use]
+pub fn state_snapshot_output(root: &super::RootSlug) -> String {
+    format!(
+        "{STATE_SNAPSHOT_OUTPUT_PREFIX}{}{STATE_SNAPSHOT_OUTPUT_SUFFIX}",
+        root.as_str().replace('-', "_")
+    )
+}
+
+#[must_use]
+pub fn state_snapshot_plan_expr(root: &super::RootSlug) -> String {
+    format!(
+        "${{{{needs.plan.outputs.{}}}}}",
+        state_snapshot_output(root)
+    )
+}
+
+#[must_use]
+pub fn is_state_snapshot_output(name: &str) -> bool {
+    name.strip_prefix(STATE_SNAPSHOT_OUTPUT_PREFIX)
+        .and_then(|rest| rest.strip_suffix(STATE_SNAPSHOT_OUTPUT_SUFFIX))
+        .is_some_and(|slug| {
+            !slug.is_empty()
+                && slug
+                    .bytes()
+                    .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_')
+        })
+}
+
 #[must_use]
 pub fn is_plan_cache_output(name: &str) -> bool {
     PLAN_CACHE_OUTPUTS.iter().any(|(output, _)| *output == name)
+        || is_state_snapshot_output(name)
         || name == SOURCES_PRODUCE_OUTPUT
         || name
             .strip_prefix(TOFU_PROVIDERS_KEY_OUTPUT_PREFIX)
@@ -99,7 +132,7 @@ pub fn is_plan_cache_output(name: &str) -> bool {
 pub const PLAN_CACHE_OUTPUTS_RESERVE_UTF16_BYTES: usize = 64 * 1024;
 
 #[must_use]
-pub fn cache_output_reserve_utf16_bytes(tofu_roots: usize) -> usize {
+pub fn cache_output_reserve_utf16_bytes(tofu_roots: usize, state_roots: usize) -> usize {
     let record = |name: &str, value: usize| (name.len() + 1 + value + 1) * 2;
     let sources = CacheFamily::Sources.max_key_bytes();
     let tofu = CacheFamily::TofuProviders.max_key_bytes();
@@ -107,4 +140,5 @@ pub fn cache_output_reserve_utf16_bytes(tofu_roots: usize) -> usize {
         + record(SOURCES_KEY_OUTPUT, sources)
         + record(SOURCES_RESTORE_KEYS_OUTPUT, 2 * sources + 1)
         + tofu_roots * record(&tofu_providers_key_output(tofu_roots), tofu)
+        + state_roots * record(&"s".repeat(ROOT_SLUG_MAX_BYTES + 16), S256_DIGEST_BYTES)
 }

@@ -6,7 +6,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use velnor_actions_contract::workflow::cache_family::{
     PLAN_CACHE_OUTPUTS, PLAN_CACHE_OUTPUTS_RESERVE_UTF16_BYTES, PLAN_CACHE_TRUST_OUTPUT,
     SOURCES_PRODUCE_OUTPUT, SOURCES_PRODUCE_STEP_EXPR, cache_output_reserve_utf16_bytes,
-    is_plan_cache_output,
+    is_plan_cache_output, is_state_snapshot_output,
 };
 use velnor_actions_contract::{Job, Step, StepId, StepKind};
 
@@ -48,14 +48,19 @@ pub(crate) fn consumed(jobs: &BTreeMap<String, Job>) -> Result<Vec<(String, Stri
             "plan_cache_output_without_key_step".to_owned(),
         ));
     }
+    let state = names
+        .iter()
+        .filter(|name| is_state_snapshot_output(name))
+        .count();
     let tofu = names
         .iter()
         .filter(|name| {
             *name != SOURCES_PRODUCE_OUTPUT
                 && !PLAN_CACHE_OUTPUTS.iter().any(|(output, _)| output == name)
         })
-        .count();
-    if cache_output_reserve_utf16_bytes(tofu) > PLAN_CACHE_OUTPUTS_RESERVE_UTF16_BYTES {
+        .count()
+        - state;
+    if cache_output_reserve_utf16_bytes(tofu, state) > PLAN_CACHE_OUTPUTS_RESERVE_UTF16_BYTES {
         return Err(RenderError::InvalidWorkflow(format!(
             "plan_cache_outputs_exceed_reserve:{tofu}"
         )));

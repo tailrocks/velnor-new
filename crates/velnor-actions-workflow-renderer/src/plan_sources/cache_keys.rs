@@ -3,15 +3,17 @@
 
 use std::collections::BTreeMap;
 
+use velnor_actions_contract::ContractError;
 use velnor_actions_contract::workflow::cache_family::{
     CACHE_KEYS_STEP_NAME, CARGO_HOME_EXPR, CacheFamily, RUNNER_TEMP_EXPR, RUNNER_TEMP_SHELL,
-    SOURCES_KEY_OUTPUT, SOURCES_RESTORE_KEYS_OUTPUT, SOURCES_SAVE_OUTPUT, SOURCES_SNAPSHOT_OUTPUT,
-    TRUST_OUTPUT, tofu_providers_key_output,
+    RootSlug, S256, SOURCES_KEY_OUTPUT, SOURCES_RESTORE_KEYS_OUTPUT, SOURCES_SAVE_OUTPUT,
+    SOURCES_SNAPSHOT_OUTPUT, TRUST_OUTPUT, state_snapshot_output, tofu_providers_key_output,
 };
 use velnor_actions_contract::{Step, StepId, StepRole, validate_fetch_root};
 use velnor_actions_mise::{PinnedTool, ToolCatalog};
 
 use super::PlanSourcesError;
+use crate::state_fragments::{lock_digest_lines, snapshot_lines};
 
 pub const DEFAULT_REF_ENV: &str = "VELNOR_DEFAULT_REF";
 const DEFAULT_REF_EXPR: &str =
@@ -19,12 +21,20 @@ const DEFAULT_REF_EXPR: &str =
 const OUTPUT_DELIMITER: &str = "VELNOR_CACHE_KEYS_EOF";
 const MAX_KEY: usize = velnor_actions_contract::cachekey::MAX_CACHE_KEY_BYTES;
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StateRootPlan {
+    pub root: String,
+    pub pathspecs: Vec<String>,
+    pub task_set: S256,
+}
+
 pub fn cache_keys_step(
     catalog: &ToolCatalog,
     fetch_roots: &[String],
     tofu_roots: &[String],
+    state_roots: &[StateRootPlan],
 ) -> Result<Option<Step>, PlanSourcesError> {
-    if fetch_roots.is_empty() && tofu_roots.is_empty() {
+    if fetch_roots.is_empty() && tofu_roots.is_empty() && state_roots.is_empty() {
         return Ok(None);
     }
     let mut script = prelude();
@@ -39,6 +49,9 @@ pub fn cache_keys_step(
             .validate_key_bound()
             .map_err(PlanSourcesError::Contract)?;
         script.extend(tofu_commands(catalog, tofu_roots)?);
+    }
+    for (ordinal, plan) in state_roots.iter().enumerate() {
+        script.extend(state_commands(ordinal, plan)?);
     }
     script.push(format!(
         "printf '%s\\n' \"{TRUST_OUTPUT}=$trust\" >> \"$GITHUB_OUTPUT\""
@@ -164,6 +177,48 @@ fn tofu_commands(
             format!("printf '%s\\n' \"{output}=$tkey\" >> \"$GITHUB_OUTPUT\""),
         ]);
     }
+    Ok(script)
+}
+
+fn pathspec(spec: &str) -> Result<String, PlanSourcesError> {
+    let safe = !spec.is_empty()
+        && spec.bytes().all(|b| {
+            b.is_ascii_alphanumeric()
+                || matches!(
+                    b,
+                    b'.' | b'_' | b'/' | b'*' | b'?' | b':' | b'(' | b')' | b'-' | b'[' | b']'
+                )
+        });
+    if safe {
+        Ok(format!("'{spec}'"))
+    } else {
+        Err(PlanSourcesError::Contract(ContractError::identity(
+            "state.pathspec",
+            format!("pathspec_not_shell_safe:{spec}"),
+        )))
+    }
+}
+
+fn state_commands(ordinal: usize, plan: &StateRootPlan) -> Result<Vec<String>, PlanSourcesError> {
+    let slug = RootSlug::from_root(&plan.root).map_err(PlanSourcesError::Contract)?;
+    let output = state_snapshot_output(&slug);
+    let specs = plan
+        .pathspecs
+        .iter()
+        .map(|spec| pathspec(spec))
+        .collect::<Result<Vec<_>, _>>()?
+        .join(" ");
+    let file = format!("$d/rust-inputs-{ordinal}");
+    let mut script = lock_digest_lines(
+        "$d",
+        &format!("$GITHUB_WORKSPACE/{}", workspace_lock(&plan.root)),
+        "lock_h",
+    );
+    script.push(format!(
+        "if (cd \"$GITHUB_WORKSPACE\" && git ls-files -s -- {specs}) > \"{file}\" 2>/dev/null; then s256 \"{file}\"; ri_h=\"s256-$h\"; {}; printf '%s\\n' \"{output}=$snap\" >> \"$GITHUB_OUTPUT\"; else printf '%s\\n' '::warning::state snapshot unavailable for root {}'; fi",
+        snapshot_lines("$d", "$lock_h", "$ri_h", &plan.task_set.to_string()).join("; "),
+        slug,
+    ));
     Ok(script)
 }
 

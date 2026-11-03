@@ -12,7 +12,7 @@ const MIB: u64 = 1024 * 1024;
 const FSIZE_BLOCK: u64 = 512;
 
 fn ceiling() -> u64 {
-    CacheFamily::MbxBundle.spec().ceiling_bytes
+    CacheFamily::MbxBundle.spec().ceiling.stored()
 }
 
 fn check_no_inflate_residue(scene: &Scene) -> Result<(), Box<dyn Error>> {
@@ -38,7 +38,7 @@ fn gc1_t53_recover_refuses_oversize_inflate() -> Result<(), Box<dyn Error>> {
     archive.zeros("state/bomb", ceiling() + 160 * MIB)?;
     archive.finish()?;
     let limit = (ceiling() + 128 * MIB) / FSIZE_BLOCK;
-    let output = scene.recover(&key.key, &key.key, &[], Some(limit))?;
+    let output = scene.recover(&key.exact(), &[], Some(limit))?;
     scene.assert_cold(&output, "refused-oversize")?;
     check_no_inflate_residue(&scene)?;
     scene.finish()
@@ -51,7 +51,7 @@ fn gc1_t53_recover_refuses_oversize_payload_before_inflate() -> Result<(), Box<d
     let key = scene.discover()?;
     std::fs::create_dir_all(scene.payload().parent().ok_or_else(|| fail("no parent"))?)?;
     std::fs::File::create(scene.payload())?.set_len(ceiling() + 16 * MIB)?;
-    let output = scene.recover(&key.key, &key.key, &[], None)?;
+    let output = scene.recover(&key.exact(), &[], None)?;
     scene.assert_cold(&output, "refused-oversize")?;
     scene.finish()
 }
@@ -70,7 +70,7 @@ fn gc1_t53_recover_restores_locked_directories() -> Result<(), Box<dyn Error>> {
     archive.file("state/cas/object", b"locked")?;
     archive.file("state/mbx-cache-export-v1.json", b"{\"version\":1}\n")?;
     archive.finish()?;
-    scene.recover(&key.key, &key.key, &[], None)?;
+    scene.recover(&key.exact(), &[], None)?;
     let object = std::fs::read_to_string(scene.store().join("cas/object"))?;
     if object != "locked" {
         return Err(fail("store lost the object behind a locked directory"));
