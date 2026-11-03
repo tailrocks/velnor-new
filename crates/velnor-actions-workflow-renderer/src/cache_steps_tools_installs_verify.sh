@@ -4,14 +4,14 @@
 set -euo pipefail
 # Re-verify every Mise install the tools cache restored, before anything runs
 # one. A cached install is kept only when every file in it is byte-identical
-# to a file of the release archive `mise.lock` (or, for a tool without a lock
-# entry, the Velnor catalog) pins for this platform (a verified local copy
-# of the archive is reused when its bytes still match the pinned SHA-256,
-# else the archive is downloaded and its SHA-256 checked first) and every
-# symlink in it stays inside it. Anything else (no lock entry, another checksum
-# algorithm, a changed or planted file, an escaping symlink) is discarded, so
-# `Prepare pinned tools` reinstalls it from the lock. Rust is checked by its
-# own step (`Verify restored Rust toolchain`).
+# to a file of the release archive the Velnor catalog (or, for a tool the
+# catalog does not pin at that version, `mise.lock`) pins for this platform (a
+# verified local copy of the archive is reused when its bytes still match the
+# pinned SHA-256, else the archive is downloaded and its SHA-256 checked first)
+# and every symlink in it stays inside it. Anything else (no pin, another
+# checksum algorithm, a changed or planted file, an escaping symlink) is
+# discarded, so `Prepare pinned tools` reinstalls it from the lock. Rust is
+# checked by its own step (`Verify restored Rust toolchain`).
 #
 # Setup Mise already put the restored `bin/` and `shims/` on PATH ahead of
 # the system directories, so every helper comes from root-owned system
@@ -44,6 +44,12 @@ reused_archives=0
 verified_files=0
 # `<install dir name> <version> <url> <checksum>` for this platform.
 : > "$work/pins"
+# Velnor catalog pins (`<dir> <version> <platform> <url> <sha256>`) for tools
+# Velnor installs itself, listed first so they win over a `mise.lock` entry for
+# the same name and version.
+if [ -n "$platform" ]; then
+  printf '%s\n' "${VELNOR_TOOL_PINS:-}" | awk -v p="$platform" 'NF == 5 && $3 == p { print $1, $2, $4, "sha256:" $5 }' > "$work/pins"
+fi
 if [ -n "$platform" ] && [ -f "$lock" ] && [ ! -L "$lock" ]; then
   awk -v want="platforms.$platform" '
     function unq(s) { gsub(/^"|"$/, "", s); return s }
@@ -55,12 +61,7 @@ if [ -n "$platform" ] && [ -f "$lock" ] && [ ! -L "$lock" ]; then
     section && $1 == "url" { url = unq($3) }
     section && $1 == "checksum" { sum = unq($3) }
     END { flush() }
-  ' "$lock" > "$work/pins"
-fi
-# Velnor catalog pins (`<dir> <version> <platform> <url> <sha256>`) for tools
-# Velnor installs itself, used when `mise.lock` has no entry.
-if [ -n "$platform" ]; then
-  printf '%s\n' "${VELNOR_TOOL_PINS:-}" | awk -v p="$platform" 'NF == 5 && $3 == p { print $1, $2, $4, "sha256:" $5 }' >> "$work/pins"
+  ' "$lock" >> "$work/pins"
 fi
 discard() { printf 'velnor: discarding restored %s: %s; Prepare pinned tools reinstalls it\n' "$1" "$2"; rm -rf "$3"; }
 verify_install() {
