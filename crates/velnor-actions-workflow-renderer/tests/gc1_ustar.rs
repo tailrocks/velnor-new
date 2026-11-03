@@ -19,13 +19,10 @@ fn octal(field: &mut [u8], value: u64) {
     field[..digits.len()].copy_from_slice(digits.as_bytes());
 }
 
-fn header(name: &str, typeflag: u8, size: u64, link: &str) -> [u8; BLOCK] {
+fn header(name: &str, typeflag: u8, size: u64, link: &str, mode: u64) -> [u8; BLOCK] {
     let mut block = [0u8; BLOCK];
     block[..name.len()].copy_from_slice(name.as_bytes());
-    octal(
-        &mut block[100..108],
-        if typeflag == b'5' { 0o755 } else { 0o644 },
-    );
+    octal(&mut block[100..108], mode);
     octal(&mut block[108..116], 0);
     octal(&mut block[116..124], 0);
     octal(&mut block[124..136], size);
@@ -58,13 +55,18 @@ impl Archive {
     }
 
     pub(crate) fn dir(&mut self, name: &str) -> Result<(), Box<dyn Error>> {
-        self.stdin.write_all(&header(name, b'5', 0, ""))?;
+        self.stdin.write_all(&header(name, b'5', 0, "", 0o755))?;
+        Ok(())
+    }
+
+    pub(crate) fn locked_dir(&mut self, name: &str) -> Result<(), Box<dyn Error>> {
+        self.stdin.write_all(&header(name, b'5', 0, "", 0))?;
         Ok(())
     }
 
     pub(crate) fn file(&mut self, name: &str, content: &[u8]) -> Result<(), Box<dyn Error>> {
         self.stdin
-            .write_all(&header(name, b'0', content.len() as u64, ""))?;
+            .write_all(&header(name, b'0', content.len() as u64, "", 0o644))?;
         self.stdin.write_all(content)?;
         self.stdin.write_all(&vec![
             0u8;
@@ -74,17 +76,19 @@ impl Archive {
     }
 
     pub(crate) fn symlink(&mut self, name: &str, target: &str) -> Result<(), Box<dyn Error>> {
-        self.stdin.write_all(&header(name, b'2', 0, target))?;
+        self.stdin
+            .write_all(&header(name, b'2', 0, target, 0o644))?;
         Ok(())
     }
 
     pub(crate) fn hardlink(&mut self, name: &str, target: &str) -> Result<(), Box<dyn Error>> {
-        self.stdin.write_all(&header(name, b'1', 0, target))?;
+        self.stdin
+            .write_all(&header(name, b'1', 0, target, 0o644))?;
         Ok(())
     }
 
     pub(crate) fn zeros(&mut self, name: &str, size: u64) -> Result<(), Box<dyn Error>> {
-        self.stdin.write_all(&header(name, b'0', size, ""))?;
+        self.stdin.write_all(&header(name, b'0', size, "", 0o644))?;
         let chunk = vec![0u8; ZERO_CHUNK];
         let mut left = size.next_multiple_of(BLOCK as u64);
         while left > 0 {
