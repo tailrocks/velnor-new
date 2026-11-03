@@ -231,6 +231,20 @@ pub enum StepRole {
     LedgerCliDownload,
 
     LedgerCliVerify,
+
+    StateSelect,
+
+    StateSealBuild,
+
+    StateSealUpload,
+
+    StateSealDownload,
+
+    StateSealSubject,
+
+    StateSealAttest,
+
+    StateSealSave,
 }
 
 fn valid_bun_assets_handoff(kind: &StepKind) -> bool {
@@ -267,6 +281,7 @@ impl StepRole {
             Self::DownloadPlan
             | Self::AttestationDownload
             | Self::PreseedDownload
+            | Self::StateSealDownload
             | Self::LedgerCliDownload => {
                 action_has_prefix_for_kind(kind, "actions/download-artifact@")
             }
@@ -274,10 +289,13 @@ impl StepRole {
             | Self::MatrixReportUpload
             | Self::PublishFinal
             | Self::PreseedUpload
+            | Self::StateSealUpload
             | Self::LedgerCliUpload => action_has_prefix_for_kind(kind, "actions/upload-artifact@"),
+            Self::StateSealAttest => action_has_prefix_for_kind(kind, "actions/attest@"),
             Self::ToolsCacheSave
             | Self::CargoSourcesSave
             | Self::MbxBundleSave
+            | Self::StateSealSave
             | Self::FamilySave => action_has_prefix_for_kind(kind, "actions/cache/save@"),
             Self::ToolsCacheIdentity => valid_tools_cache_identity(kind),
             Self::ToolsCacheRestore => ToolsRestoreForm::of(kind).is_some(),
@@ -324,6 +342,9 @@ impl StepRole {
             Self::FamilyKeys => Some(StepId::FamilyKeys),
             Self::LedgerCliPublish => Some(StepId::LedgerCliPublish),
             Self::LedgerCliVerify => Some(StepId::LedgerCliVerify),
+            Self::StateSelect => Some(StepId::StateSelect),
+            Self::StateSealSubject => Some(StepId::StateSealSubject),
+            Self::StateSealUpload => Some(StepId::StateSealUpload),
             _ => None,
         }
     }
@@ -345,6 +366,9 @@ impl StepRole {
             StepId::FamilyKeys => Self::FamilyKeys,
             StepId::LedgerCliPublish => Self::LedgerCliPublish,
             StepId::LedgerCliVerify => Self::LedgerCliVerify,
+            StepId::StateSelect => Self::StateSelect,
+            StepId::StateSealSubject => Self::StateSealSubject,
+            StepId::StateSealUpload => Self::StateSealUpload,
             StepId::FamilySizeBunInstall
             | StepId::FamilySizePlaywrightBrowsers
             | StepId::FamilySizeDbtPackages

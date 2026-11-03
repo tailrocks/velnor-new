@@ -4,10 +4,19 @@
 use super::cache_access::{CacheAccess, CacheWriter, SOURCES_PRODUCER_JOB_ID};
 use super::cache_family::{TOFU_PROVIDERS_PROBE_MISS_CONDITION, TOFU_PROVIDERS_SAVE_CONDITION};
 use super::crate_job::{TOFU_PROVIDERS_PRODUCER_JOB_ID_PREFIX, TOOLS_PRODUCER_JOB_ID_PREFIX};
+use super::producer_roles::{
+    seed_role, sources_role, state_seal_build_role, state_seal_role, tofu_role, tools_role,
+};
+use super::state_seal::{
+    STATE_CANARY_ARTIFACT_OUTPUT, STATE_CANARY_PRODUCER_JOB_ID, STATE_CANARY_SEAL_JOB_ID,
+    STATE_CANARY_UNVERIFIED_TEST,
+};
 use super::step_identity::{RUST_VERIFIER_USES, ToolsRestoreForm};
 use super::step_protocol::ProviderRestoreForm;
 use super::step_tofu_prepare::valid_provider_prepare;
-use super::{Job, PermissionLevel, Permissions, Step, StepKind, StepRole, TOFU_JOB_ID_PREFIX};
+use super::{
+    Job, PLAN_JOB_ID, PermissionLevel, Permissions, Step, StepKind, StepRole, TOFU_JOB_ID_PREFIX,
+};
 use crate::ContractError;
 
 pub const DEPENDENCY_SEED_JOB_CONDITION: &str = "github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true";
@@ -23,6 +32,8 @@ pub enum ProducerKind {
     ToolsIdentity,
     TofuProviders,
     SourcesProducer,
+    StateSealBuild,
+    StateSeal,
 }
 
 impl Job {
@@ -37,6 +48,18 @@ impl Job {
     pub fn producer_kind(&self) -> Option<ProducerKind> {
         if self.is_dependency_seed() {
             Some(ProducerKind::DependencySeed)
+        } else if self
+            .steps
+            .iter()
+            .any(|step| step.role == Some(StepRole::StateSealBuild))
+        {
+            Some(ProducerKind::StateSealBuild)
+        } else if self
+            .steps
+            .iter()
+            .any(|step| step.role == Some(StepRole::StateSealAttest))
+        {
+            Some(ProducerKind::StateSeal)
         } else if self.steps.iter().any(|step| {
             step.role == Some(StepRole::ToolsCacheRestore)
                 && ToolsRestoreForm::of(&step.kind) == Some(ToolsRestoreForm::LookupOnly)
@@ -103,6 +126,8 @@ pub(super) fn validate_job(
         || (id == SOURCES_PRODUCER_JOB_ID) != (kind == Some(ProducerKind::SourcesProducer))
         || id.starts_with(TOFU_PROVIDERS_PRODUCER_JOB_ID_PREFIX)
             != (kind == Some(ProducerKind::TofuProviders))
+        || (id == STATE_CANARY_PRODUCER_JOB_ID) != (kind == Some(ProducerKind::StateSealBuild))
+        || (id == STATE_CANARY_SEAL_JOB_ID) != (kind == Some(ProducerKind::StateSeal))
     {
         return Err(invalid(id));
     }
@@ -113,16 +138,8 @@ pub(super) fn validate_job(
         && job.environment.is_none()
         && job.check_runner.is_none()
         && job.services.is_empty()
-        && job.outputs.is_empty()
-        && effective.id_token == PermissionLevel::None
-        && [
-            effective.contents,
-            effective.pull_requests,
-            effective.actions,
-            effective.packages,
-        ]
-        .into_iter()
-        .all(|level| level != PermissionLevel::Write)
+        && kind.outputs_ok(job)
+        && kind.permissions_ok(effective)
         && job
             .steps
             .iter()
@@ -146,7 +163,36 @@ impl ProducerKind {
             Self::ToolsIdentity => CacheAccess::Writer(CacheWriter::ToolsProducer),
             Self::TofuProviders => CacheAccess::Writer(CacheWriter::TofuProvidersProducer),
             Self::SourcesProducer => CacheAccess::Writer(CacheWriter::SourcesProducer),
+            Self::StateSealBuild => CacheAccess::Read,
+            Self::StateSeal => CacheAccess::Writer(CacheWriter::StateSeal),
         }
+    }
+
+    fn outputs_ok(self, job: &Job) -> bool {
+        match self {
+            Self::StateSealBuild => {
+                job.outputs.len() == 1 && job.outputs.contains_key(STATE_CANARY_ARTIFACT_OUTPUT)
+            }
+            _ => job.outputs.is_empty(),
+        }
+    }
+
+    fn permissions_ok(self, effective: &Permissions) -> bool {
+        let others = [
+            effective.pull_requests,
+            effective.actions,
+            effective.packages,
+        ];
+        if self == Self::StateSeal {
+            return effective.id_token == PermissionLevel::Write
+                && effective.attest == PermissionLevel::Write
+                && effective.contents == PermissionLevel::None
+                && others.iter().all(|level| *level == PermissionLevel::None);
+        }
+        effective.id_token == PermissionLevel::None
+            && effective.attest == PermissionLevel::None
+            && effective.contents != PermissionLevel::Write
+            && others.iter().all(|level| *level != PermissionLevel::Write)
     }
 
     fn allows(self, role: StepRole) -> bool {
@@ -155,6 +201,8 @@ impl ProducerKind {
             Self::ToolsIdentity => tools_role(role),
             Self::TofuProviders => tofu_role(role),
             Self::SourcesProducer => sources_role(role),
+            Self::StateSealBuild => state_seal_build_role(role),
+            Self::StateSeal => state_seal_role(role),
         }
     }
 
@@ -164,6 +212,16 @@ impl ProducerKind {
             Self::TofuProviders => CacheWriter::TofuProvidersProducer.admits(condition),
             Self::DependencySeed | Self::ToolsIdentity => {
                 condition == Some(DEPENDENCY_SEED_JOB_CONDITION)
+            }
+            Self::StateSeal => CacheWriter::StateSeal.admits(condition),
+            Self::StateSealBuild => {
+                condition
+                    == Some(
+                        format!(
+                            "{DEPENDENCY_SEED_JOB_CONDITION} && {STATE_CANARY_UNVERIFIED_TEST}"
+                        )
+                        .as_str(),
+                    )
             }
         }
     }
@@ -199,6 +257,17 @@ impl ProducerKind {
                     && count(StepRole::CargoSourcesFetch) >= 1
                     && sources_order_ok(&job.steps)
             }
+            Self::StateSealBuild => {
+                job.needs == [PLAN_JOB_ID]
+                    && count(StepRole::StateSealBuild) == 1
+                    && count(StepRole::StateSealUpload) == 1
+                    && job.steps.len() == 2
+                    && job.steps[0].role == Some(StepRole::StateSealBuild)
+            }
+            Self::StateSeal => {
+                job.needs == [PLAN_JOB_ID, STATE_CANARY_PRODUCER_JOB_ID]
+                    && state_seal_order_ok(&job.steps)
+            }
             Self::TofuProviders => {
                 tofu_lane_needs_ok(&job.needs)
                     && count(StepRole::Checkout) == 1
@@ -212,6 +281,20 @@ impl ProducerKind {
             }
         }
     }
+}
+
+fn state_seal_order_ok(steps: &[Step]) -> bool {
+    const ORDER: [StepRole; 4] = [
+        StepRole::StateSealDownload,
+        StepRole::StateSealSubject,
+        StepRole::StateSealAttest,
+        StepRole::StateSealSave,
+    ];
+    steps.len() == ORDER.len()
+        && steps
+            .iter()
+            .zip(ORDER)
+            .all(|(step, role)| step.role == Some(role))
 }
 
 fn tofu_lane_needs_ok(needs: &[String]) -> bool {
@@ -267,37 +350,6 @@ fn sources_order_ok(steps: &[Step]) -> bool {
     matches!((last_fetch, save), (Some(fetch), Some(save)) if fetch < save && save + 1 == steps.len())
 }
 
-fn sources_role(role: StepRole) -> bool {
-    matches!(
-        role,
-        StepRole::Checkout
-            | StepRole::AcquireVelnor
-            | StepRole::MiseSetup
-            | StepRole::ToolsCacheIdentity
-            | StepRole::ToolsCacheRestore
-            | StepRole::PreparePinnedTools
-            | StepRole::PrepareRustComponents
-            | StepRole::VerifyRustManifest
-            | StepRole::VerifyJactionlint
-            | StepRole::CargoSourcesRestore
-            | StepRole::CargoSourcesFetch
-            | StepRole::CargoSourcesSave
-    )
-}
-
-fn tofu_role(role: StepRole) -> bool {
-    matches!(
-        role,
-        StepRole::Checkout
-            | StepRole::MiseSetup
-            | StepRole::PreparePinnedTools
-            | StepRole::TofuProvidersRestore
-            | StepRole::TofuProvidersPrepare
-            | StepRole::TofuProviderUse
-            | StepRole::TofuProvidersSave
-    )
-}
-
 fn tools_order_ok(steps: &[Step]) -> bool {
     let at = |role| steps.iter().position(|step| step.role == Some(role));
     let (Some(checkout), Some(mise), Some(identity), Some(probe), Some(scrub), Some(save)) = (
@@ -346,52 +398,4 @@ fn installed_verifier_only(step: &Step) -> bool {
         }
         _ => true,
     }
-}
-
-fn tools_role(role: StepRole) -> bool {
-    matches!(
-        role,
-        StepRole::Checkout
-            | StepRole::MiseSetup
-            | StepRole::ToolsCacheIdentity
-            | StepRole::ToolsCacheRestore
-            | StepRole::ToolsCacheScrub
-            | StepRole::PreparePinnedTools
-            | StepRole::PrepareRustComponents
-            | StepRole::VerifyRustManifest
-            | StepRole::VerifyJactionlint
-            | StepRole::ToolsCacheSave
-    )
-}
-
-fn seed_role(role: StepRole) -> bool {
-    matches!(
-        role,
-        StepRole::Checkout
-            | StepRole::MiseSetup
-            | StepRole::PreparePinnedTools
-            | StepRole::PrepareRustComponents
-            | StepRole::VerifyRustManifest
-            | StepRole::AcquireVelnor
-            | StepRole::CargoSourcesRestore
-            | StepRole::CargoSourcesFetch
-            | StepRole::MbxPreflight
-            | StepRole::MbxCache
-            | StepRole::MbxVersionCheck
-            | StepRole::MbxWorkspaceCleanup
-            | StepRole::MbxBundleKey
-            | StepRole::MbxBundleRestore
-            | StepRole::MbxBundleImport
-            | StepRole::MbxProducerMark
-            | StepRole::MbxSeedBuild
-            | StepRole::MbxBundleExport
-            | StepRole::MbxBundleSave
-            | StepRole::MbxBundleRecord
-            | StepRole::PrivateTokenMint
-            | StepRole::PrivateFetch
-            | StepRole::PrivateRevoke
-            | StepRole::ToolsCacheIdentity
-            | StepRole::ToolsCacheRestore
-            | StepRole::ToolsCacheSave
-    )
 }

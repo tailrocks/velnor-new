@@ -40,6 +40,12 @@ pub struct Permissions {
         skip_serializing_if = "PermissionLevel::is_none"
     )]
     pub packages: PermissionLevel,
+
+    #[serde(
+        default = "PermissionLevel::none",
+        skip_serializing_if = "PermissionLevel::is_none"
+    )]
+    pub attest: PermissionLevel,
 }
 
 impl Permissions {
@@ -64,6 +70,7 @@ impl Default for Permissions {
             id_token: PermissionLevel::None,
             actions: PermissionLevel::None,
             packages: PermissionLevel::None,
+            attest: PermissionLevel::None,
         }
     }
 }

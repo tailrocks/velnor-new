@@ -234,6 +234,7 @@ pub fn read_actions_permissions() -> Permissions {
         contents: PermissionLevel::Read,
         pull_requests: PermissionLevel::None,
         id_token: PermissionLevel::None,
+        attest: PermissionLevel::None,
         actions: PermissionLevel::Read,
         packages: PermissionLevel::None,
     }

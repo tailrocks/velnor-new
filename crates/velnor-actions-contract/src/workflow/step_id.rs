@@ -47,6 +47,12 @@ pub enum StepId {
     LedgerCliPublish,
 
     LedgerCliVerify,
+
+    StateSelect,
+
+    StateSealSubject,
+
+    StateSealUpload,
 }
 
 impl StepId {
@@ -73,6 +79,9 @@ impl StepId {
             Self::FamilySizeAnsibleCollections => "family-size-ansible-collections",
             Self::LedgerCliPublish => "ledger-cli",
             Self::LedgerCliVerify => "verify-ledger-cli",
+            Self::StateSelect => "state-select",
+            Self::StateSealSubject => "state-seal-subject",
+            Self::StateSealUpload => "state-seal-upload",
         }
     }
 }

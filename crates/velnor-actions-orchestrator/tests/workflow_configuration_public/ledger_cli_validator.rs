@@ -66,6 +66,7 @@ fn mutations() -> Vec<(&'static str, Mutation)> {
             let job = jobs.get_mut(LEDGER_CLI_JOB_ID).ok_or("job")?;
             job.permissions = Some(Permissions {
                 packages: PermissionLevel::Write,
+                attest: PermissionLevel::None,
                 ..Permissions::default()
             });
             Ok(())

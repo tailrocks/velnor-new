@@ -378,6 +378,7 @@ fn suite_job_record(
             contents: PermissionLevel::Read,
             pull_requests: PermissionLevel::None,
             id_token: PermissionLevel::None,
+            attest: PermissionLevel::None,
             actions: PermissionLevel::None,
             packages: PermissionLevel::None,
         }),

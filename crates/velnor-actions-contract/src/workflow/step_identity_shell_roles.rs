@@ -43,6 +43,9 @@ impl StepRole {
                 | Self::LedgerCliBuild
                 | Self::LedgerCliPublish
                 | Self::LedgerCliVerify
+                | Self::StateSelect
+                | Self::StateSealBuild
+                | Self::StateSealSubject
         )
     }
 }
