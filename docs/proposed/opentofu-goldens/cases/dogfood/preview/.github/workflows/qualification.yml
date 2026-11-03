@@ -9,6 +9,7 @@ name: Qualification
         default: both
 permissions:
   contents: read
+cache-mode: read
 jobs:
   verify-hosted:
     name: Verify / GitHub hosted / Linux x64
@@ -341,7 +342,7 @@ jobs:
         run: "echo \"::add-mask::g4-mask-canary\" && echo g4-mask-canary"
   cache-scale-set:
     name: Cache / Velnor Scale Set
-    if: inputs.mode == 'cache'
+    if: inputs.mode == 'cache' && github.ref != format('refs/heads/{0}', github.event.repository.default_branch)
     runs-on: [velnor, ubuntu-26.04-scale-set]
     timeout-minutes: 5
     defaults:
@@ -350,6 +351,7 @@ jobs:
     permissions:
       contents: read
       actions: write
+    cache-mode: write
     steps:
       - name: Write cache file
         run: echo cache-ok > g4-cache.txt
@@ -379,12 +381,13 @@ jobs:
         run: grep -qx cache-ok g4-cache.txt
   empty-cache-hosted:
     name: Empty cache / GitHub hosted
-    if: inputs.mode == 'empty-cache'
+    if: inputs.mode == 'empty-cache' && github.ref != format('refs/heads/{0}', github.event.repository.default_branch)
     runs-on: ubuntu-26.04
     timeout-minutes: 5
     permissions:
       contents: read
       actions: write
+    cache-mode: write
     steps:
       - name: Restore absent cache
         id: empty
@@ -419,7 +422,7 @@ jobs:
         run: "grep -qx cache-ok \"g4 cache/note.txt\" && test \"$HIT\" = true"
   empty-cache-scale-set:
     name: Empty cache / Velnor Scale Set
-    if: inputs.mode == 'empty-cache'
+    if: inputs.mode == 'empty-cache' && github.ref != format('refs/heads/{0}', github.event.repository.default_branch)
     runs-on: [velnor, ubuntu-26.04-scale-set]
     timeout-minutes: 5
     defaults:
@@ -428,6 +431,7 @@ jobs:
     permissions:
       contents: read
       actions: write
+    cache-mode: write
     steps:
       - name: Restore absent cache
         id: empty
@@ -797,13 +801,14 @@ jobs:
           G3_CANARY: ${{ secrets.G3_CANARY }}
         run: "test -n \"$G3_CANARY\" && sleep 180"
   mbx-cache-write-hosted:
-    name: MBX objects cache / protected-main writer
-    if: inputs.mode == 'mbx-cache-roundtrip' && github.ref == 'refs/heads/main' && github.ref_protected == true
+    name: MBX objects cache / branch writer
+    if: inputs.mode == 'mbx-cache-roundtrip' && github.ref != format('refs/heads/{0}', github.event.repository.default_branch)
     runs-on: ubuntu-26.04
     timeout-minutes: 5
     permissions:
       contents: read
       actions: write
+    cache-mode: write
     env:
       MBX_GC_AUTO: "0"
       MBX_SHARE_OUT_DIR: "0"
@@ -895,7 +900,7 @@ jobs:
         run: "df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\""
   mbx-cache-read-hosted:
     name: MBX objects cache / read-only reuse
-    if: inputs.mode == 'mbx-cache-roundtrip' && github.ref == 'refs/heads/main' && github.ref_protected == true
+    if: inputs.mode == 'mbx-cache-roundtrip' && github.ref != format('refs/heads/{0}', github.event.repository.default_branch)
     runs-on: ubuntu-26.04
     timeout-minutes: 5
     needs:
