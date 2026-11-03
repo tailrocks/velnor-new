@@ -11,7 +11,7 @@ use velnor_actions_contract::{
     Job, PermissionLevel, Permissions, REQUIRED_JOB_ID, Step, StepKind, StepRole, WorkflowPolicy,
 };
 
-use velnor_actions_workflow_renderer::plan_sources::source_cache::plan_sources_steps;
+use velnor_actions_workflow_renderer::plan_sources::source_cache::producer_sources_steps;
 
 use super::ledger_cli_job::velnor_fixtures;
 use super::one_job_per_crate::{Rendered, crate_jobs, rust_fixtures};
@@ -234,7 +234,7 @@ fn sources_mutations() -> Vec<(&'static str, Mutation)> {
         }),
         ("sources save", |jobs, _| {
             let job = jobs.get_mut(LEDGER_CLI_JOB_ID).ok_or("job")?;
-            let (_, save) = plan_sources_steps().map_err(|err| format!("{err:?}"))?;
+            let (_, save) = producer_sources_steps().map_err(|err| format!("{err:?}"))?;
             let build = step_at(job, StepRole::LedgerCliBuild)?;
             job.steps.insert(build + 1, save);
             Ok(())

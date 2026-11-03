@@ -145,7 +145,7 @@ pub fn build_bun_assets_job(
         needs: vec![crate::render::PLAN_JOB_ID.to_owned()],
         condition: Some(crate::plan_gate::not_affected_gate(&policy.id)),
         permissions: Some(bun_permissions(&policy.steps)),
-        cache_mode: None,
+        cache_access: velnor_actions_contract::CacheAccess::Read,
         environment: None,
         env: velnor_actions_contract::JobEnv::Unset,
         steps: all,

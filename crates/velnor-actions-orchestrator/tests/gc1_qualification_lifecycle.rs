@@ -12,13 +12,12 @@ use std::collections::BTreeSet;
 use std::error::Error;
 
 use velnor_actions_contract::canonical::{Digest, digest_b3, digest_b3_typed};
+use velnor_actions_contract::workflow::cache_access::CacheAccess;
 use velnor_actions_contract::workflow::cache_context::{
     JobBindingV1, MeasuredU64, ObservationGapCode, ObservationGapV1,
 };
 use velnor_actions_contract::workflow::cache_identity::{Gc1Family, GenerationId};
-use velnor_actions_contract::workflow::ir::{
-    CacheMode, Concurrency, WRITER_QUEUE_CANCEL_IN_PROGRESS,
-};
+use velnor_actions_contract::workflow::ir::{Concurrency, WRITER_QUEUE_CANCEL_IN_PROGRESS};
 use velnor_actions_contract::workflow::plan::WorkflowEvent;
 use velnor_actions_contract::workflow::trust::{Trust, trust_for_event};
 use velnor_actions_mise::compiler_observer::{

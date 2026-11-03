@@ -16,11 +16,12 @@ Workflow to generate
   Runner: ubuntu-26.04 (latest pinned default)
   Jobs:
     - jactionlint (7 steps)
-    - plan (17 steps)
+    - plan (16 steps)
     - required (10 steps)
     - required-gate (1 steps)
     - rust-a (20 steps)
     - rust-lib (20 steps)
+    - sources-producer (11 steps)
     - tools-producer-0ee4a3f5 (10 steps)
     - tools-producer-18fa7d95 (8 steps)
     - tools-producer-7d71ebb6 (9 steps)

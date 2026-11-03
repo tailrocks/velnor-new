@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 pub mod artifacts;
+pub mod cache_access;
 pub mod cache_context;
 pub mod cache_family;
 pub mod cache_family_mbx;
@@ -28,7 +29,8 @@ pub mod platform;
 mod producer;
 pub use producer::{
     DEPENDENCY_SEED_JOB_CONDITION, LANE_SURVIVAL_CONDITION, ProducerKind,
-    TOOLS_PRODUCER_INSTALL_CONDITION, validate_tofu_providers_producer, validate_tools_producer,
+    TOOLS_PRODUCER_INSTALL_CONDITION, validate_sources_producer, validate_tofu_providers_producer,
+    validate_tools_producer,
 };
 pub mod qualification;
 pub mod qualification_cache_lineage;
@@ -55,6 +57,12 @@ pub use artifacts::{
     MATRIX_JSON_FILENAME, PLAN_JSON_FILENAME, check_matrix_agreement, matrix_json_bytes,
     plan_json_bytes,
 };
+pub use cache_access::{
+    CacheAccess, CacheWriter, QUALIFICATION_CACHE_GUARD_ERROR, QUALIFICATION_CACHE_GUARD_ID,
+    QUALIFICATION_CACHE_MODES, QUALIFICATION_CACHE_WRITER_IDS, QUALIFICATION_DEFAULT_BRANCH_GATE,
+    QUALIFICATION_WRITER_GATE, SOURCES_PRODUCER_JOB_ID, WORKFLOW_CACHE_MODE, WRITER_CACHE_MODE,
+    WRITER_MISE_ENV,
+};
 pub use cache_context::{
     ApiConclusion, CacheCapability, CacheDriver, CacheRestoreOutcome, CompilerAdapterV1,
     EffectiveJobBindingV1, ExecutionBranch, ExecutionContextV1, JobBindingV1, LaneContextV1,
@@ -69,9 +77,7 @@ pub use cache_policy::{
 pub use crate_job::{CrateJob, CrateObligation};
 pub use dispatch::{DispatchInput, DispatchInputType, WorkflowDispatch};
 pub use execute::{ExecuteTaskIds, ExecuteTaskRef};
-pub use ir::{
-    CACHE_MODE_PUSH_WRITE_EXPR, CacheMode, Concurrency, Job, ScheduleTrigger, Trigger, WorkflowIr,
-};
+pub use ir::{Concurrency, Job, ScheduleTrigger, Trigger, WorkflowIr};
 pub use job_env::{HomeKey, JobEnv, RUSTUP_AUTO_INSTALL_DISABLED, RUSTUP_AUTO_INSTALL_ENV};
 pub use jobs::{
     CI_WORKFLOW_PATH, CRATE_JOB_ID_PREFIX, FRESHNESS_CRON_WEEKLY, FRESHNESS_WORKFLOW_PATH,

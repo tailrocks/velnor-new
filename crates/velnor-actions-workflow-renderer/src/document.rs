@@ -12,55 +12,9 @@ use crate::{
     yaml::Yaml,
 };
 use velnor_actions_contract::{
-    CacheMode, Job, Permissions, Trigger, WorkflowIr,
+    Job, Permissions, Trigger, WorkflowIr,
     workflow::{DispatchInput, DispatchInputType, permissions::PermissionLevel},
 };
-
-const PUSH_EVENT_GATE: &str = "github.event_name == 'push'";
-
-fn outer_wrapped(text: &str) -> bool {
-    if !text.starts_with('(') {
-        return false;
-    }
-    let mut depth = 0i32;
-    for (index, byte) in text.bytes().enumerate() {
-        if byte == b'(' {
-            depth += 1;
-        } else if byte == b')' {
-            depth -= 1;
-            if depth == 0 && index != text.len() - 1 {
-                return false;
-            }
-        }
-        if depth < 0 {
-            return false;
-        }
-    }
-    depth == 0
-}
-
-fn push_only_condition(condition: &str) -> bool {
-    if condition == PUSH_EVENT_GATE {
-        return true;
-    }
-    let Some(head) = condition.strip_suffix(PUSH_EVENT_GATE) else {
-        return false;
-    };
-    let Some(head) = head.trim_end().strip_suffix("&&") else {
-        return false;
-    };
-    outer_wrapped(head.trim_end())
-}
-
-fn push_gated_literal_mode(mode: &CacheMode, condition: Option<&str>) -> Option<CacheMode> {
-    if !matches!(mode, CacheMode::Expression(_)) {
-        return None;
-    }
-    if condition.is_some_and(push_only_condition) {
-        return Some(CacheMode::Write);
-    }
-    None
-}
 
 pub(crate) fn workflow_to_yaml(
     ir: &WorkflowIr,
@@ -116,16 +70,6 @@ pub(crate) fn workflow_to_yaml(
             permissions_to_yaml(&ir.permissions),
         ),
     ];
-    if let Some(cache_mode) = &ir.cache_mode {
-        steps::scan_for_private_subcommands(cache_mode.as_str())?;
-        // Same IR-only rule as job-level conditional modes above.
-        if !matches!(
-            cache_mode,
-            velnor_actions_contract::CacheMode::Expression(_)
-        ) {
-            top.push(Yaml::cache_mode_field(cache_mode));
-        }
-    }
     top.extend([
         ("env".to_owned(), string_map_yaml(&workflow_env)),
         (
@@ -319,13 +263,8 @@ pub(super) fn append_job_options(
     if let Some(permissions) = &job.permissions {
         entries.push(("permissions".to_owned(), permissions_to_yaml(permissions)));
     }
-    if let Some(cache_mode) = &job.cache_mode {
-        steps::scan_for_private_subcommands(cache_mode.as_str())?;
-        if let Some(literal) = push_gated_literal_mode(cache_mode, job.condition.as_deref()) {
-            entries.push(Yaml::cache_mode_field(&literal));
-        } else if !matches!(cache_mode, CacheMode::Expression(_)) {
-            entries.push(Yaml::cache_mode_field(cache_mode));
-        }
+    if job.cache_access.writer().is_some() {
+        entries.push(Yaml::cache_mode_field(job.cache_access));
     }
     if !job.needs.is_empty() {
         let needs: Vec<Yaml> = job
@@ -350,7 +289,3 @@ use super::document_jobs::job_to_yaml;
 #[cfg(test)]
 #[path = "document_tests.rs"]
 mod tests;
-
-#[cfg(test)]
-#[path = "document_authority_regression_tests.rs"]
-mod authority_regression_tests;

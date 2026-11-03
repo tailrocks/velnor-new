@@ -76,7 +76,7 @@ pub fn build_build_task_job(
         needs: Vec::new(),
         condition: None,
         permissions: Some(build_task_permissions()),
-        cache_mode: None,
+        cache_access: velnor_actions_contract::CacheAccess::Read,
         environment: None,
         env: velnor_actions_contract::JobEnv::Unset,
         steps: build_task_steps(policy, checkout_uses)?,

@@ -118,9 +118,7 @@ exact MBX binary and nothing else; MBX owns the object format. Velnor's GitHub c
 opaque directory `mbx cache export` writes, and restore it only through `mbx cache import`.
 
 Cache save is allowed only after its producer succeeded, the current run is trusted for that namespace, and
-the export has a useful delta within the family's size ceiling ([cache decisions](cache-decisions.md)). Sources have one writer, the Plan job, saving when not cancelled, after the
-last fetch succeeded, with `trusted` or `pr` trust (a PR-scoped entry visible only to that PR), and unless the
-restore already holds the snapshot; crate jobs restore read-only (compiled bundles are written only by the `Dependency seed` job, which velnor-new does not generate while `dependency_seed = "off"`), forks and merge groups never write. A task-result cache hit, failed/cancelled task, untrusted PR, empty export, or
+the export has a useful delta within the family's size ceiling ([cache decisions](cache-decisions.md)). Sources have one writer, the `sources-producer` job, which runs only for a push to the protected default branch, only when Plan reports that the exact sources key is missing, and saves with `trusted` trust after its fetch succeeded; it is `continue-on-error` and outside `Required`. Pull requests, forks and merge groups never write sources (the `pr` trust scope does not exist). Every generated workflow declares `cache-mode: read` at workflow level, and only the named writers (the tools producers, the tofu providers producers and `sources-producer`; in `qualification.yml` the four jobs dispatched from a non-default branch) declare job-level `cache-mode: write`; Plan and crate jobs restore read-only (compiled bundles are written only by the `Dependency seed` job, which velnor-new does not generate while `dependency_seed = "off"`), forks and merge groups never write. A task-result cache hit, failed/cancelled task, untrusted PR, empty export, or
 unavailable producer MUST NOT trigger a trusted save. Restore and save destinations MUST not overlap active
 compiler writers.
 

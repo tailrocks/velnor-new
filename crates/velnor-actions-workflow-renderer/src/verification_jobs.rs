@@ -161,7 +161,7 @@ pub fn build_verification_task_job(
         needs: Vec::new(),
         condition: None,
         permissions: Some(verification_permissions()),
-        cache_mode: None,
+        cache_access: velnor_actions_contract::CacheAccess::Read,
         environment: None,
         env: velnor_actions_contract::JobEnv::Unset,
         steps,

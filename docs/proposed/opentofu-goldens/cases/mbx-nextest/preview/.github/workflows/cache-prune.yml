@@ -5,6 +5,7 @@ name: Cache prune
     branches:
       - main
 permissions: {}
+cache-mode: read
 concurrency:
   group: velnor-cache-prune
   cancel-in-progress: false

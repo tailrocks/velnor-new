@@ -10,8 +10,7 @@ save-on-producer-success, pruning).
 Every family key is
 `velnor-v<schema>-<layer>-<trust>-<compat>-<snapshot>` (`compat` and `snapshot`
 are `s256-<64 hex>` digests). `trust` is `trusted` (protected default-branch
-push), `pr` (same-repository pull request, PR-scoped writes only) or `none`
-(forks, merge groups, dispatches: never writes). A family changes its paths or
+push), `none` (pull requests, forks, merge groups, dispatches: never writes). A family changes its paths or
 digest inputs only with a schema bump.
 
 | Family (schema) | Paths | Compat hashes | Snapshot | Writers | Generated |

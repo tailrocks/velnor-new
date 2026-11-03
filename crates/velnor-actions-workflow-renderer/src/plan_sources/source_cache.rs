@@ -13,10 +13,16 @@ use super::PlanSourcesError;
 pub const SHARED_CARGO_HOME: &str =
     velnor_actions_contract::workflow::cache_family::CARGO_HOME_EXPR;
 
-pub fn plan_sources_steps() -> Result<(Step, Step), PlanSourcesError> {
+pub fn plan_sources_restore() -> Result<Step, PlanSourcesError> {
     let mut restore = sources_step(true, SOURCES_KEY_STEP_EXPR, SOURCES_RESTORE_KEYS_STEP_EXPR)?;
     restore.id = Some(StepId::SourcesRestore);
-    let mut save = sources_step(false, SOURCES_KEY_STEP_EXPR, "")?;
+    Ok(restore)
+}
+
+pub fn producer_sources_steps() -> Result<(Step, Step), PlanSourcesError> {
+    let mut restore = sources_step(true, SOURCES_KEY_PLAN_EXPR, SOURCES_RESTORE_KEYS_PLAN_EXPR)?;
+    restore.id = Some(StepId::SourcesRestore);
+    let mut save = sources_step(false, SOURCES_KEY_PLAN_EXPR, "")?;
     save.condition = Some(SOURCES_SAVE_CONDITION.to_owned());
     Ok((restore, save))
 }

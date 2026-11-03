@@ -22,8 +22,6 @@ pub enum StepId {
 
     SourcesRestore,
 
-    SourcesFetch,
-
     ToolsRestore,
 
     DepsToken,
@@ -62,7 +60,6 @@ impl StepId {
             Self::MbxReady => "mbx-ready",
             Self::CacheKeys => "cache-keys",
             Self::SourcesRestore => "sources-restore",
-            Self::SourcesFetch => "sources-fetch",
             Self::ToolsRestore => "tools-restore",
             Self::DepsToken => "deps-token",
             Self::MbxBundleKey => "mbx-bundle-key",

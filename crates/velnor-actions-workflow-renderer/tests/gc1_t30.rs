@@ -97,7 +97,7 @@ fn job_with(steps: Vec<Step>) -> Job {
         needs: Vec::new(),
         condition: None,
         permissions: None,
-        cache_mode: None,
+        cache_access: velnor_actions_contract::CacheAccess::Read,
         environment: None,
         services: Vec::new(),
         outputs: BTreeMap::new(),

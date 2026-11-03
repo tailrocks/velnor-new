@@ -43,8 +43,12 @@ mod bun_request_lanes;
 mod bun_routing;
 #[path = "workflow_configuration_public/bun_runtime.rs"]
 mod bun_runtime;
+#[path = "workflow_configuration_public/cache_authority.rs"]
+mod cache_authority;
 #[path = "workflow_configuration_public/empty_suite.rs"]
 mod empty_suite;
+#[path = "workflow_configuration_public/family_save_suppression.rs"]
+mod family_save_suppression;
 #[path = "workflow_configuration_public/feature_toggles.rs"]
 mod feature_toggles;
 #[path = "workflow_configuration_public/install_profile.rs"]

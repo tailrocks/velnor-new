@@ -4,6 +4,7 @@
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::Job;
+use velnor_actions_contract::workflow::WRITER_MISE_ENV;
 
 use crate::cache_steps::{
     MBX_COMPILE_ENV, MBX_EXPORT_GROUP_ENV, MBX_EXPORT_GROUP_VALUE, MBX_GC_AUTO_ENV,
@@ -48,6 +49,17 @@ pub(super) fn extend_job_env(
     if let Some(value) = plan_attempt {
         job_env.insert(PLAN_ATTEMPT_ENV.to_owned(), value.to_owned());
     }
+}
+
+pub(super) fn extend_writer_env(job_env: &mut BTreeMap<String, String>, job: &Job) {
+    if job.cache_access.is_read() {
+        return;
+    }
+    job_env.extend(
+        WRITER_MISE_ENV
+            .iter()
+            .map(|(key, value)| ((*key).to_owned(), (*value).to_owned())),
+    );
 }
 
 pub(super) fn workflow_env(
