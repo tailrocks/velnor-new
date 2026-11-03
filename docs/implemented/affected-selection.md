@@ -113,13 +113,25 @@ them in `non_inputs` (next section).
 ### Non-inputs
 
 `[stacks.rust] non_inputs` is a list of globs, empty by default, in
-`.velnor/config.toml`. The globs support the same syntax as declared inputs and
-must not start with `!`.
+`.velnor/config.toml`.
 
 ```toml
 [stacks.rust]
 non_inputs = ["docs/**"]
 ```
+
+Each glob is `<seg>(/<seg>)*/**`. A segment is `*` or one or more of
+`A-Za-z0-9._-` that are not all dots. Anything else fails with
+`bad_glob:<glob>`: `?`, `[`, `{`, partial wildcards such as `do*`, `**` before
+the tail, `.`, `..` and empty segments, a bare directory (`docs`, `docs/`) and
+root files (`Cargo.lock`, `mise.toml`). A repeated glob fails with
+`duplicate_glob:<glob>`. A path matches when a strict ancestor directory
+matches the prefix before `/**`; one `*` is exactly one directory level. So
+`docs/**` matches `docs/a.md` and `docs/sub/b.md`, and `docs/*/**` matches
+`docs/sub/b.md` but not `docs/guide.md`. The planner, config validation, the
+claim checks, the sparse exclusion and the guard all use this rule; the
+`non_inputs_differential` test compares the planner with real `git`
+sparse-checkout and `:(glob)` pathspecs over generated globs.
 
 A path that matches is removed from the Rust change set (Rust claims, the
 unowned check and forced packages see only the remaining paths). Bun, image,
@@ -142,9 +154,18 @@ of:
 | `lockfile` | a Cargo lockfile |
 | `tool_file` | a known tool file (for example Mise or toolchain configuration) |
 
-An invalid glob fails with `bad_glob:<glob>` and a repeated one with
-`duplicate_glob:<glob>`. A failed repository scan fails with
-`non_input_scan_failed:<problem>`.
+Config load also rejects `non_inputs` that the exclusion cannot make safe, with
+`non_inputs_unsupported:<reason>`:
+
+| Reason | Meaning |
+|---|---|
+| `unbounded_read:<package>` | the package has a read the scan cannot bound (for example a `CARGO_MANIFEST_DIR` path with `..`) and no `[[stacks.rust.inputs]]` rule with `complete = true` |
+| `outside_read:<package>` | the package reads a path outside the repository (for example an absolute `include_str!`) and has no complete rule |
+| `non_rust_check:<check id>` | a named check has no input under a package directory or a declared Rust rule, so its checkout is not a Rust checkout |
+| `case_conflation:<path>` | a tracked path is classified differently with and without ASCII case folding, which a case-insensitive checkout would do |
+| `root_package` | a package manifest sits at the repository root, so no path can be excluded |
+
+A failed repository scan fails with `non_input_scan_failed:<problem>`.
 
 The exclusion is enforced in the checkout, not only in the plan. Every job that
 builds, tests, lints or ships Rust (crate, named check, suite, seed, ledger CLI,
@@ -153,8 +174,10 @@ exclusion (`sparse-checkout-cone-mode: false`, patterns `/*` then `!/<glob>`)
 on every event, including `push`, `merge_group` and `workflow_dispatch`. A step
 named `Verify non-input paths are absent` runs right after the checkout and
 fails with `non_input_present:<path>` when a tracked non-input path exists on
-disk. The plan, actionlint, `Required` and non-Rust jobs keep the full tree.
-An ignore list without this absence enforcement stays forbidden.
+disk. The guard lists the tracked paths into a file first, so a Git failure
+aborts the step instead of passing it. The plan, actionlint, `Required` and
+non-Rust jobs keep the full tree. An ignore list without this absence
+enforcement stays forbidden.
 
 ### Declaring inputs
 
@@ -243,15 +266,21 @@ removed by the pull request still selects its old consumer).
 
 Each obligation is `execute`, `reused_from_task_cache` (fails closed in
 `Required` until restore proofs exist), or `not_affected`. On an affected-mode
-event, an unchanged Rust obligation is `not_affected`. An empty Rust change set
-(no diff, only paths in `non_inputs`, or only advisory tool files) selects no
-package and forces none, even with empty `non_inputs`; the warning is
-`no_affected_files:all_unchanged` or `toolfiles_only:all_unchanged`. Fail-safe
-signals are applied before the reverse closure, so they reach dependents:
+event, an unchanged Rust obligation is `not_affected`. Fail-safe signals are
+applied before the reverse closure, so they reach dependents. Forcing depends
+on the change set:
+
+| Change set | Forced packages |
+|---|---|
+| empty diff (`no_affected_files:all_unchanged`) | none |
+| only paths in `non_inputs` | none |
+| only tool files (`toolfiles_only:all_unchanged`) | run, with their dependents |
+| `non_inputs` paths plus a tool-file edit | run, with their dependents |
+| a Rust-visible path | run, with their dependents |
 
 - `undeclared_reads` (build script, or an uncovered source read): the package
-  joins the claimed set only when the Rust change set is non-empty, and its
-  dependents run with it;
+  joins the claimed set whenever forcing applies, and its dependents run with
+  it;
 - `archive_source_unbound`: an unchanged sharded Nextest archive whose source
   identity is not content-bound fails the plan rather than executing alone
   (unreachable today: the closure digest always binds the source).
@@ -372,13 +401,22 @@ Public-API tests under
 
 - `scoped_workspace.rs`: the shared fixture (a scoped Rust workspace with real
   Git commits, plan and `merge-v1` helpers) the other files build on.
-- `non_inputs_selection.rs`: a change confined to `non_inputs` plans no Rust
-  job, an empty diff forces no package, and other stacks still see the path.
-- `non_inputs_config.rs`: config load rejects each `non_input_overlaps_claim:<kind>:<glob>`
-  kind.
-- `non_inputs_checkout.rs`: generated Rust jobs carry the sparse exclusion and
-  the `non_input_present:<path>` guard on every event; the plan, actionlint and
-  `Required` jobs keep the full tree.
+- `non_inputs_selection.rs`, `non_inputs_forcing.rs`: a change confined to
+  `non_inputs` plans no Rust job, an empty diff forces no package, a tool-file
+  edit still forces them, a `*` segment skips only what the checkout drops, and
+  other stacks still see the path.
+- `non_inputs_config.rs`: config load rejects each
+  `non_input_overlaps_claim:<kind>:<glob>` kind and each
+  `non_inputs_unsupported:<reason>`.
+- `non_inputs_grammar.rs`: the accepted and rejected glob table.
+- `non_inputs_differential.rs`, `non_inputs_overlap_git.rs`: the planner, the
+  sparse checkout and the guard agree with real `git` over generated globs;
+  case conflation matches a `core.ignorecase=true` checkout; accepted globs
+  never drop a claimed path.
+- `non_inputs_checkout.rs`, `non_inputs_guard.rs`, `non_inputs_release.rs`:
+  generated Rust jobs and the release producer jobs carry the sparse exclusion
+  and the `non_input_present:<path>` guard on every event, the guard fails when
+  Git fails, and the plan, actionlint and `Required` jobs keep the full tree.
 - `non_inputs_replay.rs`: replays the change sets of real pull requests (for
   example #473, docs only) against the recorded package topology and checks the
   planned jobs.
@@ -418,9 +456,9 @@ Other tests:
   read of a directory above packages does; anchor and escape split across
   files, included support files and fragments, and another package's
   declared module all count for the includer; a build-script library's
-  dependents run, on an empty change set too; `merge_group` and
-  `workflow_dispatch` run everything; fork pull requests select affected
-  work; a dirty worktree and a stale merge ref run everything.
+  dependents run on a Rust-visible or tool-file change, not on an empty diff;
+  `merge_group` and `workflow_dispatch` run everything; fork pull requests
+  select affected work; a dirty worktree and a stale merge ref run everything.
 - `crates/velnor-actions-orchestrator/src/select_reads_scan_tests.rs` and
   `src/select_reads_lex.rs`: every scanned read form, comments, raw strings,
   and literals that are not reads.

@@ -97,19 +97,38 @@ changes only documentation runs no Rust job. The directive replaces the rule
 - `[stacks.rust] non_inputs` is a list of globs, empty by default. A path in it
   is removed from the Rust change set and from the checkout of every Rust job.
   A path outside it keeps "Unowned -> all, per stack".
+- Each glob is `<seg>(/<seg>)*/**`. A segment is `*` or one or more of
+  `A-Za-z0-9._-` that are not all dots. Anything else is `bad_glob:<glob>`: no
+  `?`, `[`, `{`, partial wildcards, `**` before the tail, `.`, `..` or empty
+  segments, bare directory forms or root files such as `Cargo.lock`. A path is
+  a non-input when a strict ancestor directory matches the prefix before
+  `/**`; one `*` is exactly one directory level. The planner, config
+  validation, the claim checks, the sparse exclusion and the guard use this one
+  rule, and a differential test checks it against real git.
 - Config load rejects a glob that overlaps a claim with
   `non_input_overlaps_claim:<kind>:<glob>`. `<kind>` is `github`, `velnor`,
   `package_dir`, `declared_input` (this includes `[[checks]].inputs`),
   `read_target`, `symlink`, `lockfile` or `tool_file`.
+- Config load rejects `non_inputs` it cannot make safe with
+  `non_inputs_unsupported:<reason>`: `unbounded_read:<package>` or
+  `outside_read:<package>` while a package has such a read without a
+  `complete = true` input rule, `non_rust_check:<check id>` for a named check
+  with no input under a package directory or a declared Rust rule,
+  `case_conflation:<path>` when a tracked path classifies differently with and
+  without ASCII case folding, and `root_package` when a package manifest sits
+  at the repository root.
 - Every job that builds, tests, lints or ships Rust checks out the repository
   without the `non_inputs` paths, on every event, through a non-cone sparse
   exclusion. An unconditional guard step fails the job with
   `non_input_present:<path>` when a tracked `non_inputs` path exists on disk.
   The plan, actionlint, `Required` and non-Rust jobs keep the full tree.
-- An empty or tool-files-only change set no longer forces packages, even with
-  empty `non_inputs`. Forced packages (`undeclared_reads`) run only when a
-  Rust-visible path changed. `non_inputs` narrows the Rust change set only.
-  Bun, image, OpenTofu and `evidence.paths` still see the path.
+- Forced packages (`undeclared_reads`) run when the Rust change set is
+  non-empty or a tool file (for example `mise.toml`, `rust-toolchain.toml`)
+  changed. Matrix: a diff of only `non_inputs` paths runs nothing; an empty
+  diff runs nothing; a diff of only tool files runs the forced packages and
+  their dependents; documentation plus a tool-file edit does the same.
+  `non_inputs` narrows the Rust change set only. Bun, image, OpenTofu and
+  `evidence.paths` still see the path.
 - `push`, `merge_group` and `workflow_dispatch` stay full runs.
 
 The earlier approval of 2026-10-19 is unchanged for everything else in this
@@ -141,9 +160,11 @@ job to skip steps inside it.
   build script, or whose tracked `.rs` sources read outside the paths it
   claims (`include_str!`/`include_bytes!`/`include!`/`#[path]`, a
   `CARGO_MANIFEST_DIR` path with a `..` component or `parent()`, a relative
-  `..` file-system read), counts as changed on every pull request until it
-  declares those inputs (an unbounded read only through a rule with
-  `complete = true`), and its dependents run with it. An unchanged sharded
+  `..` file-system read), counts as changed on every pull request that
+  changes a Rust-visible path or a tool file, until it declares those inputs
+  (an unbounded read only through a rule with `complete = true`), and its
+  dependents run with it. While any package has an unbounded or outside read
+  without such a rule, `[stacks.rust] non_inputs` is rejected. An unchanged sharded
   archive whose source is not content-bound fails the plan instead of running
   alone (unreachable today: the closure digest always binds it).
 - Residual risk, named: the read scan is static. A read through a computed
