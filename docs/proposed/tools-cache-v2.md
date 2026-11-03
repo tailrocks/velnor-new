@@ -24,8 +24,17 @@ sources, credentials, Cargo targets, MBX objects, or task artifacts. The source 
 Restored Rust is never trusted as restored. In every job that installs Rust, `Verify restored Rust
 toolchain` runs right after the restore (before `Prepare pinned tools`, which already runs `rustup` and
 `rustc` on a hit): it deletes the restored `cargo/bin` (rustup and its proxies; Mise reinstalls a fresh
-rustup) and verifies the restored toolchain file by file against the component tarballs of its pinned
-channel manifest, failing the job on any difference. See
+rustup). It then compares the restored toolchain with a pinned installed-tree digest (type, path, mode and
+SHA-256 of every entry, derived from the component tarballs of its pinned channel manifest) before any
+network access. The stored `multirust-channel-manifest.toml` is an ordinary entry of that listing, bound by SHA-256: the
+restored phase never repairs it, and the installed phase and the file-by-file fallback overwrite it with the
+catalog-pinned `channel-rust-<version>.toml` bytes (owner standing grant 2026-11-02, velnor-fast-ci GOAL.md; decisions.tsv
+row X44), so `rustup component add` reads verified bytes. The tools-cache static digest carries a manifest-form token, so
+entries stored with rustup's rewritten manifest are not restored. The pin is selected by the job's Rust version and the rendered target, never by restored
+bytes. A match passes. If a pin row exists for that version and target, any difference (an unpinned components
+set, an extra or renamed `toolchains/` entry, a tree difference) fails the job with `rust_tree_digest_mismatch`;
+it never falls back. ARM targets have no pin row yet (owner standing grant 2026-11-02, velnor-fast-ci GOAL.md; decisions.tsv X35): a lone `<version>-*-*-*` toolchain entry that is not `<version>-<target>` is treated as unpinned. Only a version and target with no pin row, or that lone entry, prints `pin_mismatch: no_pin` and falls back to
+the file-by-file check against the channel manifest. That fallback overwrites the channel manifest but leaves the `manifest-*` bytes, the `multirust-config.toml` content and all file modes unbound, which affects consumer repos that pin a Rust other than the pinned 1.99.1 in owned-home jobs. The pin binds only `toolchains/`; the rest of `$RUNNER_TEMP/velnor/rustup` (`settings.toml`, `update-hashes`, `downloads`) is restored by the tools cache and no check binds it (info). The cache payload holds no memo of a passed check. See
 [verified Rust installs](../implemented/rust-channel-manifest.md).
 
 ## Re-verification after restore

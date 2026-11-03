@@ -79,6 +79,10 @@ mod parallel_owners;
 mod release_bun_prerequisite;
 #[path = "workflow_configuration_public/report_upload.rs"]
 mod report_upload;
+#[path = "workflow_configuration_public/rust_tree_pin_jobs.rs"]
+mod rust_tree_pin_jobs;
+#[path = "workflow_configuration_public/rust_tree_pin_rendered.rs"]
+mod rust_tree_pin_rendered;
 #[path = "workflow_configuration_public/seed_ids.rs"]
 mod seed_ids;
 #[path = "workflow_configuration_public/seed_off.rs"]

@@ -191,5 +191,37 @@ fn tools_identity_separates_rust_install_profiles() -> Result<(), Box<dyn Error>
     Ok(())
 }
 
+const PRE_X44_RUST_STATIC_DIGEST: &str =
+    "26cf85558bce297155044b6da2e856e4c97870f7fa4ede071b119b4128d96d81";
+
+#[test]
+fn tools_identity_never_matches_a_pre_x44_rust_cache_entry() -> Result<(), Box<dyn Error>> {
+    let setup = mise_setup();
+    let current = || {
+        payload(
+            &setup,
+            "ubuntu-24.04",
+            "x86_64-unknown-linux-gnu",
+            &["rust[profile=minimal]@1.99.1"],
+            Some("1.99.1"),
+            &["clippy", "rustfmt"],
+        )
+    };
+    let digest = current()?.static_digest().to_owned();
+    if digest == PRE_X44_RUST_STATIC_DIGEST {
+        return Err(fail("a pre-X44 cache entry keeps the current identity"));
+    }
+    if current()?
+        .identity_input()
+        .contains(PRE_X44_RUST_STATIC_DIGEST)
+    {
+        return Err(fail("the identity input still carries the pre-X44 digest"));
+    }
+    if digest != current()?.static_digest() {
+        return Err(fail("identical inputs gave different identities"));
+    }
+    Ok(())
+}
+
 #[path = "gc1_t13_reject.rs"]
 mod gc1_t13_reject;

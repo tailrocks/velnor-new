@@ -38,8 +38,10 @@ design (T58+ own `run-commands.json`; no hosted commands were executed here).
   `qualified_tool_home` / `qualified_source_command` with archive,
   tree, and executable probes; `check_execution.rs::compiler_prefix`
   binds the qualified context; `cache_steps_tools_restore.rs` owns the
-  generated Mise verifier composition; `rust_toolchain_script.rs`
-  reuses reverified archives before origin fetch.
+  generated Mise verifier composition; the
+  `toolchain_script` Rust verifier in `native_verifiers.rs` reuses the
+  per-job verified channel manifest and component sums before origin fetch
+  (`rust_tree_digest_pin` `manifest::px1` and `bookkeeping::c2`).
 - Controller bootstrap bridge (`closure.rs::provision_acquire_step`,
   `steps.rs::acquire_velnor_step`, `cache_bootstrap.py`) stages only the
   exact bounded standalone member and verifies it against the
