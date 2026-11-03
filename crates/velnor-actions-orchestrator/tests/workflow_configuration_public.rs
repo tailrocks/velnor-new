@@ -99,6 +99,10 @@ mod source_qualification_checkout;
 mod source_qualification_jobs;
 #[path = "workflow_configuration_public/source_qualification_proof.rs"]
 mod source_qualification_proof;
+#[path = "workflow_configuration_public/state_prune_workflow.rs"]
+mod state_prune_workflow;
+#[path = "workflow_configuration_public/state_prune_yaml.rs"]
+mod state_prune_yaml;
 #[path = "workflow_configuration_public/state_roots.rs"]
 mod state_roots;
 #[path = "workflow_configuration_public/support.rs"]
