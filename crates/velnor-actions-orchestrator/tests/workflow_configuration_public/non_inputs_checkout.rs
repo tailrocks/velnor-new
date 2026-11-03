@@ -259,23 +259,37 @@ fn default_non_inputs_is_empty_and_changes_nothing() -> TestResult {
     Ok(())
 }
 
-fn guard_run(root: &Path) -> Result<std::process::Output, Box<dyn Error>> {
+fn rendered_rust_job() -> Result<Job, Box<dyn Error>> {
     let repo = rust_repo(WorkflowPolicy::ConsumerV1, true)?;
     let jobs = finalized_jobs(&prepare(repo.path())?)?;
-    let job = jobs
-        .values()
-        .find(|job| {
-            job.steps
-                .iter()
-                .any(|step| step.name == NON_INPUT_GUARD_STEP)
-        })
-        .ok_or("no rendered guard step")?;
+    jobs.into_iter()
+        .find(|(id, _)| id.starts_with("rust-"))
+        .map(|(_, job)| job)
+        .ok_or_else(|| "no rendered crate job".into())
+}
+
+fn rendered_patterns() -> Result<String, Box<dyn Error>> {
+    let job = rendered_rust_job()?;
+    let (_, checkout) = checkout_steps(&job)
+        .into_iter()
+        .next()
+        .ok_or("crate job has no checkout")?;
+    Ok(with_value(checkout, SPARSE_CHECKOUT_KEY)
+        .ok_or("crate job checkout has no sparse-checkout input")?
+        .to_owned())
+}
+
+fn guard_run(root: &Path) -> Result<std::process::Output, Box<dyn Error>> {
+    let job = rendered_rust_job()?;
     let guard = job
         .steps
         .iter()
-        .find(|step| step.name == NON_INPUT_GUARD_STEP)
-        .ok_or("guard step missing")?;
-    let StepKind::Shell { run, .. } = &guard.kind else {
+        .find(|step| step.name == NON_INPUT_GUARD_STEP);
+    assert!(
+        guard.is_some(),
+        "the rendered crate job has no absence guard"
+    );
+    let StepKind::Shell { run, .. } = &guard.ok_or("guard step missing")?.kind else {
         return Err("guard is not a shell step".into());
     };
     let (program, args) = run.split_first().ok_or("empty guard command")?;
@@ -312,11 +326,11 @@ fn git_output(root: &Path, args: &[&str]) -> Result<String, Box<dyn Error>> {
     Ok(String::from_utf8(output.stdout)?)
 }
 
-fn apply_exclusion(root: &Path) -> TestResult {
+fn apply_exclusion(root: &Path, patterns: &str) -> TestResult {
     git(&["config", "core.sparseCheckout", "true"], root)?;
     let info = git_output(root, &["rev-parse", "--git-path", "info/sparse-checkout"])?;
     fs::create_dir_all(root.join(info.trim()).parent().ok_or("no parent")?)?;
-    fs::write(root.join(info.trim()), format!("{EXCLUSION}\n"))?;
+    fs::write(root.join(info.trim()), format!("{patterns}\n"))?;
     git(&["read-tree", "-mu", "HEAD"], root)?;
     Ok(())
 }
@@ -325,7 +339,7 @@ fn apply_exclusion(root: &Path) -> TestResult {
 fn rendered_exclusion_removes_non_inputs_on_a_real_git_tree() -> TestResult {
     let tree = tracked_tree()?;
     let root = tree.path();
-    apply_exclusion(root)?;
+    apply_exclusion(root, &rendered_patterns()?)?;
     for gone in ["docs/a.md", "docs/sub/b.md"] {
         assert!(!root.join(gone).exists(), "{gone} survived the exclusion");
     }
@@ -344,7 +358,7 @@ fn absence_guard_fails_when_a_non_input_is_present() -> TestResult {
     assert!(!present.status.success(), "guard passed with docs present");
     let stderr = String::from_utf8(present.stderr)?;
     assert!(stderr.contains("non_input_present:docs/"), "{stderr}");
-    apply_exclusion(root)?;
+    apply_exclusion(root, &rendered_patterns()?)?;
     let absent = guard_run(root)?;
     assert!(
         absent.status.success(),
