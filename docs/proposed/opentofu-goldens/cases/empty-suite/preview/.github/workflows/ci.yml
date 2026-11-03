@@ -49,7 +49,7 @@ jobs:
         with:
           persist-credentials: "false"
       - name: Setup Mise
-        uses: jdx/mise-action@6612f0ef07ed2a736cd1e00a94a065522dd41195
+        uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
           cache: "false"
           cache_save: "false"
@@ -61,7 +61,7 @@ jobs:
         id: v2
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: 0d994f240dc80e01cd8d0db5c0b788b1cd9fca86c52a5f019ab9940a12da374f
+          d: 18fa7d952315e366530df4ebd0f2c8f3e29450541a2333a4d3a230ba27175f18
       - name: Restore Mise tools
         id: tools-restore
         if: steps.v2.outputs.enabled == 'true'
@@ -103,7 +103,7 @@ jobs:
           fetch-depth: "0"
           persist-credentials: "false"
       - name: Setup Mise
-        uses: jdx/mise-action@6612f0ef07ed2a736cd1e00a94a065522dd41195
+        uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
           cache: "false"
           cache_save: "false"
@@ -115,7 +115,7 @@ jobs:
         id: v2
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: f04b5b065081cd60efcbd66ab1d163e1f77acb7b1d7d73edaf479b7860f21b7c
+          d: c69e2be06f1c7fdcc56d41ba79b3e3f9241e46f93c541de316961e5c48c72070
       - name: Restore Mise tools
         id: tools-restore
         if: steps.v2.outputs.enabled == 'true'
@@ -132,7 +132,7 @@ jobs:
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
-        run: mise --no-config --no-env --no-hooks install 'rust[profile=minimal]@1.99.1' jactionlint@2.4.0 shellcheck@0.11.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.150
+        run: mise --no-config --no-env --no-hooks install 'rust[profile=minimal]@1.99.1' jactionlint@2.4.0 shellcheck@0.11.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.151
       - name: Verify jactionlint
         uses: ./.github/actions/velnor-verify-jactionlint # zizmor: ignore[self-repository]
       - name: Verify Rust channel manifest
@@ -197,7 +197,7 @@ jobs:
           fetch-depth: "0"
           persist-credentials: "false"
       - name: Setup Mise
-        uses: jdx/mise-action@6612f0ef07ed2a736cd1e00a94a065522dd41195
+        uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
           cache: "false"
           cache_save: "false"
@@ -289,7 +289,7 @@ jobs:
         with:
           persist-credentials: "false"
       - name: Setup Mise
-        uses: jdx/mise-action@6612f0ef07ed2a736cd1e00a94a065522dd41195
+        uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
           cache: "false"
           cache_save: "false"
@@ -301,7 +301,7 @@ jobs:
         id: v2
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: bb83f7dbf0da097176e4384aced509f700601f5f908ea469ed8a786f47c1ddeb
+          d: 41c45df31fafb29cb35bb683838837a871ccc09653cbac9ed2a392328185972e
       - name: Restore Mise tools
         id: tools-restore
         if: steps.v2.outputs.enabled == 'true'
@@ -326,7 +326,7 @@ jobs:
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
-        run: mise --no-config --no-env --no-hooks install 'rust[profile=minimal]@1.99.1' jactionlint@2.4.0 shellcheck@0.11.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.150
+        run: mise --no-config --no-env --no-hooks install 'rust[profile=minimal]@1.99.1' jactionlint@2.4.0 shellcheck@0.11.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.151
       - name: Verify jactionlint
         uses: ./.github/actions/velnor-verify-jactionlint # zizmor: ignore[self-repository]
       - name: Prepare Rust components
@@ -340,19 +340,19 @@ jobs:
         uses: ./.github/actions/velnor-verify-rust-manifest # zizmor: ignore[self-repository]
       - name: Build test executables
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-1345c82e352a02e4ab71ba8a2fd1c5b31599f7647778108a6c5bab7699884cd3"}
+        with: {"digest": "b3-fa9628665dc37d7e87acbaa39460ddfe78dbb93af211424609d165ef9e265d2f"}
       - name: Format
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-d517ac144a98e993026edd9f5f94267f2549e9a402cd262a6b8fb2bf4559d106"}
+        with: {"digest": "b3-82d92ddc3943c8d0c26a80c81ee3d8bbdf17e251301065a0c1fe9ded2ababa76"}
       - name: Clippy
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-e3d8fafc3be9b208dff90c6bc5f0ec902f854636da2ebb51ca80cf0662ba280e"}
+        with: {"digest": "b3-9e94d572263733c2ad1ced8afdb74b0a7077ac6fa115dbbfa1a9ef3edf6b18b4"}
       - name: Documentation
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-689733727c567b500c3b84f97708ff4c0281a09af4a8671ae065cb1cbae713ae"}
+        with: {"digest": "b3-1a1cfce5bff55f17e2fe2f6aea54bfaf28690a8a5e6efa13d7a93729b20469ec"}
       - name: Wait for parallel checks
         wait-all:
       - name: Emit group ledger
@@ -381,8 +381,8 @@ jobs:
           overwrite: "true"
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
           retention-days: "30"
-  tools-producer-0d994f24:
-    name: Tools producer / 0d994f24
+  tools-producer-18fa7d95:
+    name: Tools producer / 18fa7d95
     runs-on: ubuntu-26.04
     timeout-minutes: 5
     continue-on-error: true
@@ -400,7 +400,7 @@ jobs:
         with:
           persist-credentials: "false"
       - name: Setup Mise
-        uses: jdx/mise-action@6612f0ef07ed2a736cd1e00a94a065522dd41195
+        uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
           cache: "false"
           cache_save: "false"
@@ -412,7 +412,7 @@ jobs:
         id: v2
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: 0d994f240dc80e01cd8d0db5c0b788b1cd9fca86c52a5f019ab9940a12da374f
+          d: 18fa7d952315e366530df4ebd0f2c8f3e29450541a2333a4d3a230ba27175f18
       - name: Probe Mise tools
         id: tools-restore
         if: steps.v2.outputs.enabled == 'true'
@@ -453,8 +453,8 @@ jobs:
       - name: Report optional cache save failure
         if: always() && !cancelled() && steps.velnor-optional-tools-save.outcome == 'failure'
         run: "printf '%s\\n' '::warning::cache_unavailable: optional save failed or timed out'"
-  tools-producer-bb83f7db:
-    name: Tools producer / bb83f7db
+  tools-producer-41c45df3:
+    name: Tools producer / 41c45df3
     runs-on: ubuntu-26.04
     timeout-minutes: 5
     continue-on-error: true
@@ -475,7 +475,7 @@ jobs:
         with:
           persist-credentials: "false"
       - name: Setup Mise
-        uses: jdx/mise-action@6612f0ef07ed2a736cd1e00a94a065522dd41195
+        uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
           cache: "false"
           cache_save: "false"
@@ -487,7 +487,7 @@ jobs:
         id: v2
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: bb83f7dbf0da097176e4384aced509f700601f5f908ea469ed8a786f47c1ddeb
+          d: 41c45df31fafb29cb35bb683838837a871ccc09653cbac9ed2a392328185972e
       - name: Probe Mise tools
         id: tools-restore
         if: steps.v2.outputs.enabled == 'true'
@@ -508,7 +508,7 @@ jobs:
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
-        run: mise --no-config --no-env --no-hooks install 'rust[profile=minimal]@1.99.1' jactionlint@2.4.0 shellcheck@0.11.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.150
+        run: mise --no-config --no-env --no-hooks install 'rust[profile=minimal]@1.99.1' jactionlint@2.4.0 shellcheck@0.11.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.151
       - name: Verify jactionlint
         if: steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
         uses: ./.github/actions/velnor-verify-jactionlint # zizmor: ignore[self-repository]
@@ -544,8 +544,8 @@ jobs:
       - name: Report optional cache save failure
         if: always() && !cancelled() && steps.velnor-optional-tools-save.outcome == 'failure'
         run: "printf '%s\\n' '::warning::cache_unavailable: optional save failed or timed out'"
-  tools-producer-f04b5b06:
-    name: Tools producer / f04b5b06
+  tools-producer-c69e2be0:
+    name: Tools producer / c69e2be0
     runs-on: ubuntu-26.04
     timeout-minutes: 5
     continue-on-error: true
@@ -567,7 +567,7 @@ jobs:
           fetch-depth: "0"
           persist-credentials: "false"
       - name: Setup Mise
-        uses: jdx/mise-action@6612f0ef07ed2a736cd1e00a94a065522dd41195
+        uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
           cache: "false"
           cache_save: "false"
@@ -579,7 +579,7 @@ jobs:
         id: v2
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: f04b5b065081cd60efcbd66ab1d163e1f77acb7b1d7d73edaf479b7860f21b7c
+          d: c69e2be06f1c7fdcc56d41ba79b3e3f9241e46f93c541de316961e5c48c72070
       - name: Probe Mise tools
         id: tools-restore
         if: steps.v2.outputs.enabled == 'true'
@@ -600,7 +600,7 @@ jobs:
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
-        run: mise --no-config --no-env --no-hooks install 'rust[profile=minimal]@1.99.1' jactionlint@2.4.0 shellcheck@0.11.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.150
+        run: mise --no-config --no-env --no-hooks install 'rust[profile=minimal]@1.99.1' jactionlint@2.4.0 shellcheck@0.11.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.151
       - name: Verify jactionlint
         if: steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
         uses: ./.github/actions/velnor-verify-jactionlint # zizmor: ignore[self-repository]

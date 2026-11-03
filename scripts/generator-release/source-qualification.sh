@@ -375,7 +375,7 @@ channel="$(mise --no-config --no-env --no-hooks config get -f rust-toolchain.tom
 expected_mise=2026.10.25
 expected_rust=1.99.1
 expected_mbx=1.29.1
-expected_nextest=0.9.150
+expected_nextest=0.9.151
 expected_jactionlint=2.4.0
 expected_shellcheck=0.11.0
 if [ "$mise_version" != "$expected_mise" ] || [ "$rust" != "$expected_rust" ] \
