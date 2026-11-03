@@ -145,6 +145,8 @@ fn admission_lines(ceilings: StateCeilings) -> Vec<String> {
         "for tool in zstd cmp tar head tail wc find du sort mise mbx; do command -v \"$tool\" >/dev/null 2>&1 || corrupt import_unavailable; done".to_owned(),
         "ws=${GITHUB_WORKSPACE:-}; ws=${ws%/}; if [ -z \"$ws\" ]; then corrupt import_unavailable; fi".to_owned(),
         "case \"$RUNNER_TEMP/velnor\" in \"$ws\"|\"$ws\"/*) corrupt import_in_workspace ;; esac".to_owned(),
+        "expect=${matched##*-s256-}; case \"$expect\" in ''|*[!0-9a-f]*) refused refused-digest ;; esac; if [ \"${#expect}\" -ne 64 ]; then refused refused-digest; fi".to_owned(),
+        "if s256 \"$payload\"; then payload_h=\"$h\"; else corrupt \"digest unreadable\"; fi; if [ \"$payload_h\" != \"$expect\" ]; then refused refused-digest; fi".to_owned(),
         "if head -c 4 \"$payload\" > \"$d/zmagic\"; then :; else corrupt \"payload unreadable\"; fi".to_owned(),
         format!("printf '{ZSTD_MAGIC_OCTAL}' > \"$d/zref\""),
         "if cmp -s \"$d/zmagic\" \"$d/zref\"; then :; else refused refused-format; fi".to_owned(),
@@ -193,7 +195,7 @@ fn measure_lines(ceilings: StateCeilings) -> Vec<String> {
         "if sort \"$d/found\" > \"$d/manifest\"; then :; else corrupt \"payload unreadable\"; fi".to_owned(),
         "if [ ! -s \"$d/manifest\" ]; then corrupt \"empty manifest\"; fi".to_owned(),
         "if s256 \"$d/manifest\"; then manifest=\"$h\"; else corrupt \"digest unreadable\"; fi".to_owned(),
-        "if s256 \"$payload\"; then digest=\"$h\"; else corrupt \"digest unreadable\"; fi".to_owned(),
+        "digest=\"$payload_h\"".to_owned(),
     ]
 }
 

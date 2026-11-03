@@ -27,6 +27,10 @@ pub const STATE_SEAL_SUBJECT_REL: &str = "velnor/state-seal/subject";
 
 pub const STATE_SEAL_SUBJECT_EXPR: &str = "${{ runner.temp }}/velnor/state-seal/subject";
 
+pub const STATE_SEAL_KEY_EXPR: &str = "${{steps.state-seal-subject.outputs.key}}";
+
+pub const STATE_SEAL_SAVE_CONDITION: &str = "steps.state-seal-subject.outputs.sealed == 'true'";
+
 pub const STATE_SEAL_VERIFY_LIMIT: usize = 3;
 
 pub const STATE_SEAL_LIST_LIMIT: usize = 100;
@@ -48,9 +52,17 @@ pub const STATE_SEAL_ATTESTED_PREFIX: &str = "state_";
 #[must_use]
 pub fn state_canary_prefix() -> String {
     format!(
-        "{}{}-{STATE_CANARY_UNIT}-{STATE_CANARY_ROOT}-{}-{}-",
+        "{}{}-{STATE_CANARY_UNIT}-{STATE_CANARY_ROOT}-",
         CacheFamily::MbxBundle.key_prefix(),
         StateTrust::Trusted.as_str(),
+    )
+}
+
+#[must_use]
+pub fn state_canary_identity_prefix() -> String {
+    format!(
+        "{}{}-{}-",
+        state_canary_prefix(),
         S256::of(b"velnor-state-seal-canary-compat"),
         S256::of(b"velnor-state-seal-canary-snapshot"),
     )

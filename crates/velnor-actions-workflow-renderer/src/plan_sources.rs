@@ -9,6 +9,7 @@ use crate::RenderError;
 pub mod cache_keys;
 pub mod cargo_fetch;
 pub mod source_cache;
+pub mod state_select;
 
 #[derive(Debug)]
 pub enum PlanSourcesError {

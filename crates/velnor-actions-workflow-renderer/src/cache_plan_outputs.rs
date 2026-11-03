@@ -8,6 +8,9 @@ use velnor_actions_contract::workflow::cache_family::{
     SOURCES_PRODUCE_OUTPUT, SOURCES_PRODUCE_STEP_EXPR, cache_output_reserve_utf16_bytes,
     is_plan_cache_output, is_state_snapshot_output,
 };
+use velnor_actions_contract::workflow::state_seal::{
+    STATE_CANARY_VERIFIED_OUTPUT, is_state_attested_output,
+};
 use velnor_actions_contract::{Job, Step, StepId, StepKind};
 
 use crate::RenderError;
@@ -52,15 +55,23 @@ pub(crate) fn consumed(jobs: &BTreeMap<String, Job>) -> Result<Vec<(String, Stri
         .iter()
         .filter(|name| is_state_snapshot_output(name))
         .count();
+    let attested = names
+        .iter()
+        .filter(|name| is_state_attested_output(name))
+        .count();
     let tofu = names
         .iter()
         .filter(|name| {
             *name != SOURCES_PRODUCE_OUTPUT
+                && *name != STATE_CANARY_VERIFIED_OUTPUT
                 && !PLAN_CACHE_OUTPUTS.iter().any(|(output, _)| output == name)
         })
         .count()
-        - state;
-    if cache_output_reserve_utf16_bytes(tofu, state) > PLAN_CACHE_OUTPUTS_RESERVE_UTF16_BYTES {
+        - state
+        - attested;
+    if cache_output_reserve_utf16_bytes(tofu, state, attested)
+        > PLAN_CACHE_OUTPUTS_RESERVE_UTF16_BYTES
+    {
         return Err(RenderError::InvalidWorkflow(format!(
             "plan_cache_outputs_exceed_reserve:{tofu}"
         )));
@@ -70,6 +81,11 @@ pub(crate) fn consumed(jobs: &BTreeMap<String, Job>) -> Result<Vec<(String, Stri
         .map(|name| {
             let expression = if name == SOURCES_PRODUCE_OUTPUT {
                 SOURCES_PRODUCE_STEP_EXPR.to_owned()
+            } else if is_state_attested_output(&name) || name == STATE_CANARY_VERIFIED_OUTPUT {
+                format!(
+                    "${{{{ steps.{}.outputs.{name} }}}}",
+                    velnor_actions_contract::StepId::StateSelect.as_str()
+                )
             } else {
                 let step_output = PLAN_CACHE_OUTPUTS
                     .iter()

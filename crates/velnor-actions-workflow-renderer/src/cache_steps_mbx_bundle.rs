@@ -8,10 +8,12 @@ use velnor_actions_contract::workflow::cache_family::{
     S256_DIGEST_BYTES, StateScope, StateTrust, StateUnit, state_snapshot_plan_expr,
 };
 use velnor_actions_contract::workflow::cache_family_mbx::{
-    MBX_BUNDLE_KEY_EXPR, MBX_BUNDLE_RESTORE_CONDITION, MBX_BUNDLE_RESTORE_KEYS_EXPR,
-    MBX_BUNDLE_ROOT_ENV, MBX_BUNDLE_SNAPSHOT_ENV,
+    MBX_BUNDLE_KEY_EXPR, MBX_BUNDLE_RESTORE_CONDITION, MBX_BUNDLE_ROOT_ENV, MBX_BUNDLE_SNAPSHOT_ENV,
 };
-use velnor_actions_contract::{Step, StepId, StepRole};
+use velnor_actions_contract::workflow::state_seal::{
+    STATE_SEAL_ATTESTED_ENV, state_attested_plan_expr,
+};
+use velnor_actions_contract::{Step, StepId, StepKind, StepRole};
 
 use crate::RenderError;
 use crate::state_fragments::{
@@ -241,7 +243,11 @@ fn discover_step(
         "save=false".to_owned(),
         "[ \"$trust\" != trusted ] || save=true".to_owned(),
         "if [ \"$trust\" = trusted ]; then provenance=trusted; decision=admitted; else case \"${GITHUB_EVENT_NAME:-}\" in pull_request) provenance=untrusted ;; *) provenance=ambiguous ;; esac; decision=restore-only; fi".to_owned(),
-        "printf '%s\\n' \"key=$key\" \"save=$save\" \"restore=true\" \"provenance=$provenance\" \"decision=$decision\" 'restore_keys<<VELNOR_STATE_KEYS_EOF' \"$snapshot_prefix\" \"$restore_prefix\" 'VELNOR_STATE_KEYS_EOF' >> \"$GITHUB_OUTPUT\"".to_owned(),
+        "restore_key=; restore_digest=; exact=false".to_owned(),
+        format!("printf '%s\\n' \"${{{STATE_SEAL_ATTESTED_ENV}-}}\" > \"$d/attested\""),
+        "while IFS= read -r cand || [ -n \"$cand\" ]; do case \"$cand\" in \"$restore_prefix\"?*) ;; *) continue ;; esac; if printf '%s\\n' \"${cand#\"$restore_prefix\"}\" | grep -Eq '^s256-[0-9a-f]{64}-s256-[0-9a-f]{64}$'; then restore_key=$cand; break; fi; done < \"$d/attested\"".to_owned(),
+        "if [ -n \"$restore_key\" ]; then restore_digest=\"s256-${restore_key##*-s256-}\"; case \"$restore_key\" in \"$snapshot_prefix\"?*) exact=true ;; esac; fi".to_owned(),
+        "printf '%s\\n' \"key=$key\" \"save=$save\" \"restore=true\" \"provenance=$provenance\" \"decision=$decision\" \"restore_key=$restore_key\" \"restore_digest=$restore_digest\" \"exact=$exact\" >> \"$GITHUB_OUTPUT\"".to_owned(),
         format!("record=\"{DISCOVERY_RECORD}\""),
         format!("printf '%s\\n' \"key=$key\" \"snapshot_prefix=$snapshot_prefix\" \"restore_prefix=$restore_prefix\" \"compat=$compat\" \"provenance=$provenance\" \"decision=$decision\" \"save=$save\" \"unit={}\" \"mbx_version=${{{VERSION_ENV}}}\" \"toolchain=${{{TOOLCHAIN_ENV}}}\" \"root=${{{ROOT_ENV}}}\" > \"$record\"", unit.as_str()),
         "printf 'velnor: state snapshot trust=%s key=%s save=%s provenance=%s decision=%s\\n' \"$trust\" \"$key\" \"$save\" \"$provenance\" \"$decision\"".to_owned(),
@@ -255,6 +261,10 @@ fn discover_step(
         (ROOT_ENV.to_owned(), root.to_owned()),
     ]);
     if unit == StateUnit::Union {
+        env.insert(
+            STATE_SEAL_ATTESTED_ENV.to_owned(),
+            state_attested_plan_expr(unit.as_str(), slug.as_str()),
+        );
         env.insert(
             MBX_BUNDLE_SNAPSHOT_ENV.to_owned(),
             state_snapshot_plan_expr(&slug),
@@ -276,9 +286,12 @@ fn restore_step() -> Result<Step, RenderError> {
         crate::cache_steps::TOOLS_RESTORE_ACTION_USES,
         "mbx-bundle",
         MBX_BUNDLE_KEY_EXPR,
-        &[MBX_BUNDLE_RESTORE_KEYS_EXPR.to_owned()],
+        &[],
         &[COMPLETE_STATE_TRANSPORT_EXPR.to_owned()],
     )?;
+    if let StepKind::Action { with, .. } = &mut step.kind {
+        with.remove("restore-keys");
+    }
     MBX_BUNDLE_RESTORE_NAME.clone_into(&mut step.name);
     step.condition = Some(MBX_BUNDLE_RESTORE_CONDITION.to_owned());
     step.id = Some(StepId::MbxBundleRestore);

@@ -2,6 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{CacheFamily, ROOT_SLUG_MAX_BYTES};
+use crate::workflow::state_seal::{
+    STATE_CANARY_VERIFIED_OUTPUT, STATE_SEAL_VERIFY_LIMIT, is_state_attested_output,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CacheTrust {
@@ -26,6 +29,8 @@ impl CacheTrust {
 }
 
 pub const S256_DIGEST_BYTES: usize = 69;
+
+const MAX_KEY_LINE_BYTES: usize = crate::cachekey::MAX_CACHE_KEY_BYTES;
 
 pub const CACHE_KEYS_STEP_NAME: &str = "Compute cache keys";
 
@@ -121,6 +126,8 @@ pub fn is_state_snapshot_output(name: &str) -> bool {
 pub fn is_plan_cache_output(name: &str) -> bool {
     PLAN_CACHE_OUTPUTS.iter().any(|(output, _)| *output == name)
         || is_state_snapshot_output(name)
+        || is_state_attested_output(name)
+        || name == STATE_CANARY_VERIFIED_OUTPUT
         || name == SOURCES_PRODUCE_OUTPUT
         || name
             .strip_prefix(TOFU_PROVIDERS_KEY_OUTPUT_PREFIX)
@@ -132,7 +139,11 @@ pub fn is_plan_cache_output(name: &str) -> bool {
 pub const PLAN_CACHE_OUTPUTS_RESERVE_UTF16_BYTES: usize = 64 * 1024;
 
 #[must_use]
-pub fn cache_output_reserve_utf16_bytes(tofu_roots: usize, state_roots: usize) -> usize {
+pub fn cache_output_reserve_utf16_bytes(
+    tofu_roots: usize,
+    state_roots: usize,
+    attested_outputs: usize,
+) -> usize {
     let record = |name: &str, value: usize| (name.len() + 1 + value + 1) * 2;
     let sources = CacheFamily::Sources.max_key_bytes();
     let tofu = CacheFamily::TofuProviders.max_key_bytes();
@@ -141,4 +152,10 @@ pub fn cache_output_reserve_utf16_bytes(tofu_roots: usize, state_roots: usize) -
         + record(SOURCES_RESTORE_KEYS_OUTPUT, 2 * sources + 1)
         + tofu_roots * record(&tofu_providers_key_output(tofu_roots), tofu)
         + state_roots * record(&"s".repeat(ROOT_SLUG_MAX_BYTES + 16), S256_DIGEST_BYTES)
+        + attested_outputs
+            * record(
+                &"s".repeat(ROOT_SLUG_MAX_BYTES + 32),
+                STATE_SEAL_VERIFY_LIMIT * (MAX_KEY_LINE_BYTES + 1),
+            )
+        + record(STATE_CANARY_VERIFIED_OUTPUT, 5)
 }

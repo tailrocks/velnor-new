@@ -25,16 +25,15 @@ pub(super) fn build(
         input.config.workflow.policy,
     )
     .map_err(NativeAuthorityError::Job)?;
-    if !input.state_roots.is_empty() {
-        crate::native_job_builders::plan_state_roots(
-            &mut job,
-            catalog,
-            fetch,
-            tofu,
-            input.state_roots,
-        )
-        .map_err(NativeAuthorityError::Job)?;
-    }
+    crate::native_job_builders::plan_state_roots(
+        &mut job,
+        catalog,
+        fetch,
+        tofu,
+        input.state_roots,
+        input.seal,
+    )
+    .map_err(NativeAuthorityError::Job)?;
     job.timeout_minutes =
         velnor_actions_contract::JobTimeout::new(input.config.workflow.plan_timeout_minutes)?;
     job.permissions = Some(crate::native_job_builders::read_actions_permissions());

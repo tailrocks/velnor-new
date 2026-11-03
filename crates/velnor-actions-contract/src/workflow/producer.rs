@@ -159,11 +159,10 @@ impl ProducerKind {
     #[must_use]
     pub(super) const fn cache_access(self) -> CacheAccess {
         match self {
-            Self::DependencySeed => CacheAccess::Read,
+            Self::DependencySeed | Self::StateSealBuild => CacheAccess::Read,
             Self::ToolsIdentity => CacheAccess::Writer(CacheWriter::ToolsProducer),
             Self::TofuProviders => CacheAccess::Writer(CacheWriter::TofuProvidersProducer),
             Self::SourcesProducer => CacheAccess::Writer(CacheWriter::SourcesProducer),
-            Self::StateSealBuild => CacheAccess::Read,
             Self::StateSeal => CacheAccess::Writer(CacheWriter::StateSeal),
         }
     }
