@@ -47,7 +47,7 @@ fn check_restored(
 }
 
 #[test]
-#[cfg(unix)]
+#[cfg(target_os = "linux")]
 fn gc1_t30_scripts_behave() -> Result<(), Box<dyn Error>> {
     let scene = Scene::new("behave", crate::gc1_t53::scripts()?)?;
     let key = scene.discover()?;

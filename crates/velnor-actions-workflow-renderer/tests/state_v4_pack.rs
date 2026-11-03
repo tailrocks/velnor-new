@@ -4,6 +4,7 @@
 use std::error::Error;
 use std::process::Command;
 
+#[cfg(target_os = "linux")]
 use velnor_actions_contract::workflow::cache_family::MBX_COMPILE_ENV;
 
 use crate::gc1_mbx_stub::EXPORT_MARK_ENV;
@@ -37,7 +38,7 @@ fn fallback_scene(name: &str) -> Result<(Scene, Key, String, u64), Box<dyn Error
 }
 
 #[test]
-#[cfg(unix)]
+#[cfg(target_os = "linux")]
 fn export_saves_every_new_generation_regardless_of_bytes() -> Result<(), Box<dyn Error>> {
     let grown: String = (0..255_u8)
         .map(|n| char::from(b'a' + n.wrapping_mul(7) % 26))
@@ -100,7 +101,7 @@ fn export_saves_every_new_generation_regardless_of_bytes() -> Result<(), Box<dyn
 }
 
 #[test]
-#[cfg(unix)]
+#[cfg(target_os = "linux")]
 fn publish_refuses_off_table_env() -> Result<(), Box<dyn Error>> {
     for (name, value) in MBX_COMPILE_ENV {
         let scene = Scene::new("v4-env-gate", crate::gc1_t53::scripts()?)?;

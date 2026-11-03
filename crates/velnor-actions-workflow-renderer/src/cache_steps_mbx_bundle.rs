@@ -4,7 +4,7 @@
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::workflow::cache_family::{
-    COMPLETE_STATE_TRANSPORT_EXPR, RUNNER_TEMP_EXPR, RUNNER_TEMP_SHELL, RootSlug,
+    COMPLETE_STATE_TRANSPORT_EXPR, CacheFamily, RUNNER_TEMP_EXPR, RUNNER_TEMP_SHELL, RootSlug,
     S256_DIGEST_BYTES, StateScope, StateTrust, StateUnit, state_snapshot_plan_expr,
 };
 use velnor_actions_contract::workflow::cache_family_mbx::{
@@ -25,6 +25,7 @@ mod publish;
 mod recover;
 
 pub(crate) use publish::append_bundle_postludes;
+pub use publish::mbx_bundle_postlude_bounded;
 pub use recover::mbx_producer_mark_step;
 
 pub const MBX_BUNDLE_KEY_NAME: &str = "Compute state snapshot key";
@@ -56,11 +57,59 @@ const PUBLICATION_RECORD: &str = "$RUNNER_TEMP/velnor/state-publication.record";
 /// hostile or degenerate payload is refused before extraction.
 const MAX_ARCHIVE_MEMBERS: u64 = 100_000;
 
+const STREAM_SLACK_PER_MEMBER: u64 = 1024;
+
+const STREAM_SLACK_FIXED: u64 = 10_240;
+
 const MAX_MEMBER_DEPTH: u64 = 64;
 
 const MAX_COMPONENT_BYTES: u64 = 255;
 
 const RUNNER_TEMP_GUARD: &str = "case \"$RUNNER_TEMP\" in /*) ;; *) printf '%s\\n' 'RUNNER_TEMP must be absolute' >&2; exit 1 ;; esac";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct StateCeilings {
+    stored: u64,
+    extracted: u64,
+    members: u64,
+}
+
+impl StateCeilings {
+    pub const V3: Self = Self::new(
+        CacheFamily::MbxBundle.spec().ceiling.stored(),
+        CacheFamily::MbxBundle.spec().ceiling.extracted(),
+        MAX_ARCHIVE_MEMBERS,
+    );
+
+    #[must_use]
+    pub const fn new(stored: u64, extracted: u64, members: u64) -> Self {
+        Self {
+            stored,
+            extracted,
+            members,
+        }
+    }
+
+    #[must_use]
+    pub const fn stored(self) -> u64 {
+        self.stored
+    }
+
+    #[must_use]
+    pub const fn extracted(self) -> u64 {
+        self.extracted
+    }
+
+    #[must_use]
+    pub const fn members(self) -> u64 {
+        self.members
+    }
+
+    #[must_use]
+    pub const fn stream_cap(self) -> u64 {
+        self.extracted + self.members * STREAM_SLACK_PER_MEMBER + STREAM_SLACK_FIXED
+    }
+}
 
 fn workspace_root(working_directory: Option<&str>) -> Result<String, RenderError> {
     let Some(dir) = working_directory.filter(|dir| !dir.is_empty() && *dir != ".") else {
@@ -98,11 +147,12 @@ pub(crate) fn mbx_bundle_prelude(
     rust_toolchain: &str,
     working_directory: Option<&str>,
     env: &BTreeMap<String, String>,
+    ceilings: StateCeilings,
 ) -> Result<[Step; 3], RenderError> {
     let root = workspace_root(working_directory)?;
     let discover = discover_step(unit, mbx_version_expr, toolchain_expr, &root)?;
     let restore = restore_step()?;
-    let recover = recover::recover_step(rust_toolchain, working_directory, env.clone())?;
+    let recover = recover::recover_step(rust_toolchain, working_directory, env.clone(), ceilings)?;
     Ok([discover, restore, recover])
 }
 

@@ -40,7 +40,7 @@ Successful and failed jobs are both covered: see decision 1 and the cases table.
 | Cancelled run | Nothing saves. |
 | Same-repo PR | Restores trusted entries; writes nothing. |
 | Fork PR, merge group | Read-only. |
-| Over ceiling | Save refused and reported as `over_ceiling`; older entries untouched. |
+| Over a ceiling | Save refused and reported as `over_ceiling` (state: `over_stored` or `over_extracted`, with the measured and ceiling bytes); older entries untouched. |
 
 ## Source notes
 

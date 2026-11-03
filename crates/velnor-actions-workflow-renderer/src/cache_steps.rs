@@ -26,7 +26,7 @@ pub(crate) use mbx_bundle::append_bundle_postludes;
 pub use mbx_bundle::{
     MBX_BUNDLE_EXPORT_NAME, MBX_BUNDLE_IMPORT_NAME, MBX_BUNDLE_KEY_NAME, MBX_BUNDLE_RESTORE_NAME,
     MBX_BUNDLE_SAVE_NAME, MBX_EXPORT_GROUP_ENV, MBX_EXPORT_GROUP_VALUE, MBX_PRODUCER_MARK_NAME,
-    mbx_producer_mark_step,
+    StateCeilings, mbx_bundle_postlude_bounded, mbx_producer_mark_step,
 };
 pub(crate) use mbx_gate::append_workspace_cleanups;
 pub use mbx_gate::check_mbx_gating;
@@ -37,7 +37,7 @@ pub(crate) use mbx_preflight::{
 };
 pub use mbx_preflight::{
     MBX_PREFLIGHT_NAME, MBX_RESTORE_NAME, MBX_VERSION_CHECK_NAME, MbxTransport,
-    mbx_steps_for_driver,
+    mbx_steps_for_driver, mbx_steps_for_driver_bounded,
 };
 
 use crate::{

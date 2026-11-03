@@ -17,7 +17,7 @@ use crate::gc1_scene_tree::{tree_of, unlock_tree};
 const RECOVERY_RECORD: &str = "velnor/state-recovery.record";
 const RUN_DEADLINE: Duration = Duration::from_secs(300);
 const POLL: Duration = Duration::from_millis(25);
-const PAYLOAD: &str = "velnor-gc1/transport/state/payload.tar.gz";
+const PAYLOAD: &str = "velnor-gc1/transport/state/payload.tar.zst";
 
 pub(crate) struct Rendered {
     pub(crate) run: String,
@@ -266,10 +266,12 @@ impl Scene {
         self.run_script(&self.scripts.record, &[], None)
     }
 
-    pub(crate) fn pack_export(&self, mark: &str) -> Result<(), Box<dyn Error>> {
-        let parent = self.scratch.join("pack");
-        std::fs::create_dir_all(self.payload().parent().ok_or_else(|| fail("no parent"))?)?;
-        let exported = Command::new(self.bin.join("mbx"))
+    pub(crate) fn stub_export(
+        &self,
+        dir: &Path,
+        env: &[(&str, &str)],
+    ) -> Result<(), Box<dyn Error>> {
+        let status = Command::new(self.bin.join("mbx"))
             .args([
                 "cache",
                 "export",
@@ -278,17 +280,40 @@ impl Scene {
                 "--format",
                 "directory",
             ])
-            .arg(parent.join("state"))
-            .env(gc1_mbx_stub::EXPORT_MARK_ENV, mark)
+            .arg(dir)
+            .envs(env.iter().copied())
             .status()?;
-        let packed = Command::new("tar")
-            .arg("-czf")
-            .arg(self.payload())
-            .arg("-C")
+        if status.success() {
+            Ok(())
+        } else {
+            Err(fail("fixture export failed"))
+        }
+    }
+
+    pub(crate) fn pack_export(&self, mark: &str) -> Result<(), Box<dyn Error>> {
+        let parent = self.scratch.join("pack");
+        std::fs::create_dir_all(self.payload().parent().ok_or_else(|| fail("no parent"))?)?;
+        self.stub_export(
+            &parent.join("state"),
+            &[(gc1_mbx_stub::EXPORT_MARK_ENV, mark)],
+        )?;
+        let mut tar = Command::new("tar")
+            .args(["-cf", "-", "-C"])
             .arg(&parent)
             .arg("state")
+            .stdout(Stdio::piped())
+            .spawn()?;
+        let tar_out = tar
+            .stdout
+            .take()
+            .ok_or_else(|| fail("tar stdout unavailable"))?;
+        let compressed = Command::new("zstd")
+            .args(["-3", "--long=30", "-q", "-f", "-o"])
+            .arg(self.payload())
+            .stdin(tar_out)
             .status()?;
-        if exported.success() && packed.success() {
+        let packed = tar.wait()?;
+        if packed.success() && compressed.success() {
             Ok(())
         } else {
             Err(fail("fixture pack failed"))
@@ -301,6 +326,14 @@ impl Scene {
 
     pub(crate) fn tree(&self) -> Result<Tree, Box<dyn Error>> {
         tree_of(&self.scratch)
+    }
+
+    pub(crate) fn install_shim(&self, tool: &str, body: &str) -> Result<(), Box<dyn Error>> {
+        gc1_mbx_stub::write_executable(&self.bin.join(tool), body)
+    }
+
+    pub(crate) fn install_zstd_pad(&self) -> Result<(), Box<dyn Error>> {
+        gc1_mbx_stub::install_zstd_pad(&self.bin)
     }
 
     pub(crate) fn shim_failure(&self, tool: &str) -> Result<(), Box<dyn Error>> {

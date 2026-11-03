@@ -35,7 +35,7 @@ const ANSIBLE_COLLECTIONS_PATHS: [&str; 1] = ["${{ runner.temp }}/velnor/ansible
 pub const COMPLETE_STATE_ROOT_EXPR: &str = "${{ runner.temp }}/velnor-gc1/state";
 
 pub const COMPLETE_STATE_TRANSPORT_EXPR: &str =
-    "${{ runner.temp }}/velnor-gc1/transport/state/payload.tar.gz";
+    "${{ runner.temp }}/velnor-gc1/transport/state/payload.tar.zst";
 
 const STATE_PATHS: [&str; 1] = [COMPLETE_STATE_ROOT_EXPR];
 
@@ -44,6 +44,8 @@ pub const GC1_HARD_CEILING_BYTES: u64 = 10_000_000_000;
 pub const GC1_MAX_GENERATION_SLOTS: u64 = 2;
 
 const MIB: u64 = 1024 * 1024;
+
+const GIB: u64 = 1024 * MIB;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum CacheFamily {
@@ -158,7 +160,10 @@ const MBX_BUNDLE: FamilySpec = FamilySpec {
     layer: "state",
     schema: 4,
     paths: &STATE_PATHS,
-    ceiling: Ceiling::Single(384 * MIB),
+    ceiling: Ceiling::StoredAndExtracted {
+        stored: GIB + GIB / 2,
+        extracted: 12 * GIB,
+    },
     retained_entries: 1,
 };
 
