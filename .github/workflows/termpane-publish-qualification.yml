@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 name: Termpane no-publish qualification
 on:
+  pull_request:
   workflow_dispatch:
     inputs:
       pull_request:
@@ -18,8 +19,18 @@ permissions:
   checks: read
   statuses: read
 jobs:
+  admission-tests:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - run: python3 -m unittest discover -s qualification/termpane-publish -p 'test_*.py'
   qualify:
-    if: github.repository == 'tailrocks/velnor-new' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'workflow_dispatch' && github.repository == 'tailrocks/velnor-new' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     environment: generator-release
     timeout-minutes: 45

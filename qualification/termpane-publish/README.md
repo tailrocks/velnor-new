@@ -20,8 +20,9 @@ This rehearsal does not verify a real GitHub OIDC exchange, a real crates.io
 upload, termpane's protected environment, or the complete generated
 publisher and its execution boundary. Those require separate qualification.
 
-The workflow runs only from Velnor's default branch and uses its protected
-`generator-release` environment. Supply the current pull request number and its
+The qualification job runs only from Velnor's default branch and uses its
+protected `generator-release` environment. Pull requests run only the read-only
+candidate-admission tests. Supply the current pull request number and its
 full head SHA. Before checkout and again immediately before the candidate test,
 the workflow verifies the same-repository open PR, current head, clean merge
 state, successful checks, the required GitHub Actions check, effective strict
