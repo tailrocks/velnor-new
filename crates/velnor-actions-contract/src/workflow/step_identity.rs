@@ -15,8 +15,8 @@ mod sequence;
 #[path = "step_identity_shell_roles.rs"]
 mod shell_roles;
 use payload::{
-    action_has_prefix_for_kind, internal_operation, valid_jactionlint_verifier_payload,
-    valid_rust_verifier_payload,
+    action_has_prefix_for_kind, internal_operation, valid_bun_assets_handoff,
+    valid_jactionlint_verifier_payload, valid_rust_verifier_payload,
 };
 pub use payload::{is_configured_checkout, is_tool_seed_step};
 pub use sequence::{validate_step_identity_scope, validate_step_sequence};
@@ -238,6 +238,8 @@ pub enum StepRole {
 
     StateSealBind,
 
+    StateSealTip,
+
     StateSealAttest,
 
     StateSealSave,
@@ -253,17 +255,6 @@ pub enum StepRole {
     StateSkeletonRestore,
     NonInputGuard,
     MbxStats,
-}
-
-fn valid_bun_assets_handoff(kind: &StepKind) -> bool {
-    [
-        BUN_ASSETS_EXPORT_OPERATION,
-        BUN_ASSETS_PREPARE_OPERATION,
-        BUN_ASSETS_IMPORT_OPERATION,
-        BUN_ASSETS_REPOSITORY_CHECK_OPERATION,
-    ]
-    .into_iter()
-    .any(|operation| internal_operation(kind, operation))
 }
 
 impl StepRole {
@@ -355,6 +346,7 @@ impl StepRole {
             Self::StateSelect => Some(StepId::StateSelect),
             Self::StateSealSubject => Some(StepId::StateSealSubject),
             Self::StateSealBind => Some(StepId::StateSealBind),
+            Self::StateSealTip => Some(StepId::StateSealTip),
             Self::StateSealUpload => Some(StepId::StateSealUpload),
             Self::StateSealAdmit => Some(StepId::StateSealAdmit),
             Self::StateSealSave => Some(StepId::StateSealSave),
@@ -384,6 +376,7 @@ impl StepRole {
             StepId::StateSelect => Self::StateSelect,
             StepId::StateSealSubject => Self::StateSealSubject,
             StepId::StateSealBind => Self::StateSealBind,
+            StepId::StateSealTip => Self::StateSealTip,
             StepId::StateSealUpload => Self::StateSealUpload,
             StepId::StateSealAdmit => Self::StateSealAdmit,
             StepId::StateSealSave => Self::StateSealSave,

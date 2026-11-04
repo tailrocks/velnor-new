@@ -2,7 +2,22 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::super::step_payloads::{valid_configured_checkout_payload, valid_tool_seed_payload};
-use super::{JACTIONLINT_VERIFIER_USES, RUST_VERIFIER_USES, Step, StepKind, StepRole};
+use super::{
+    BUN_ASSETS_EXPORT_OPERATION, BUN_ASSETS_IMPORT_OPERATION, BUN_ASSETS_PREPARE_OPERATION,
+    BUN_ASSETS_REPOSITORY_CHECK_OPERATION, JACTIONLINT_VERIFIER_USES, RUST_VERIFIER_USES, Step,
+    StepKind, StepRole,
+};
+
+pub(super) fn valid_bun_assets_handoff(kind: &StepKind) -> bool {
+    [
+        BUN_ASSETS_EXPORT_OPERATION,
+        BUN_ASSETS_PREPARE_OPERATION,
+        BUN_ASSETS_IMPORT_OPERATION,
+        BUN_ASSETS_REPOSITORY_CHECK_OPERATION,
+    ]
+    .into_iter()
+    .any(|operation| internal_operation(kind, operation))
+}
 
 pub(super) fn valid_rust_verifier_payload(kind: &StepKind) -> bool {
     match kind {

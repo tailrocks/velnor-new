@@ -181,3 +181,66 @@ fn seeding_names_the_clippy_and_doc_lanes_and_never_the_doctest_lane() -> Result
     assert!(seeded > 0, "no crate job was seeded");
     Ok(())
 }
+
+#[test]
+fn controller_plan_lists_no_moved_job_and_executes_every_producer_lane()
+-> Result<(), Box<dyn Error>> {
+    let repo = seed_repo("")?;
+    let root = repo.path();
+    let prepared = prepare(root)?;
+    let combined = velnor_actions_orchestrator::finalized_jobs(&prepared)?;
+    workflow_configuration_fixture::git(&["add", "-A"], root)?;
+    workflow_configuration_fixture::git(&["commit", "-qm", "base"], root)?;
+    let head = String::from_utf8(
+        git_fixture::command(root)?
+            .args(["rev-parse", "HEAD"])
+            .output()?
+            .stdout,
+    )?;
+    let request = json!({
+        "schema": 1,
+        "op": "plan-v1",
+        "run_key": "r190001-a1",
+        "head": head.trim(),
+        "event": "push",
+        "root": root.to_string_lossy(),
+    });
+    let response: Value = serde_json::from_str(&plan_internal(&request.to_string())?)?;
+    let plan = response.get("plan").ok_or("plan response has no plan")?;
+    let listed: BTreeSet<&str> = plan
+        .get("jobs")
+        .and_then(Value::as_array)
+        .ok_or("plan has no jobs")?
+        .iter()
+        .filter_map(|job| job.get("job_id").and_then(Value::as_str))
+        .collect();
+    for moved in combined
+        .iter()
+        .filter(|(_, job)| job.producer_kind().is_some())
+        .map(|(id, _)| id.as_str())
+    {
+        assert!(!listed.contains(moved), "plan-v1 lists {moved}");
+    }
+    let executed: BTreeSet<&str> = plan
+        .get("obligations")
+        .and_then(Value::as_array)
+        .ok_or("plan has no obligations")?
+        .iter()
+        .filter(|obligation| obligation.get("decision").and_then(Value::as_str) == Some("execute"))
+        .filter_map(|obligation| obligation.get("task_id").and_then(Value::as_str))
+        .collect();
+    let mut lanes = 0;
+    for (id, job) in &combined {
+        if !id.starts_with("state-producer-") {
+            continue;
+        }
+        for step in &job.steps {
+            if let velnor_actions_contract::StepKind::TaskExecution { task_id, .. } = &step.kind {
+                lanes += 1;
+                assert!(executed.contains(task_id.as_str()), "{id}: {task_id}");
+            }
+        }
+    }
+    assert_ne!(lanes, 0, "no producer lane was checked");
+    Ok(())
+}

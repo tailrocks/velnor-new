@@ -41,6 +41,8 @@ pub mod producer_steps;
 pub mod save;
 #[path = "state_skeleton.rs"]
 pub mod skeleton;
+#[path = "state_seal_tip.rs"]
+pub mod tip;
 
 struct ProducerRoot {
     slug: RootSlug,
@@ -58,11 +60,7 @@ pub fn add_state_seal_jobs(jobs: &mut BTreeMap<String, Job>) -> Result<(), Rende
         .filter(|(id, job)| {
             matches!(
                 job.producer_kind(),
-                Some(
-                    ProducerKind::SourcesProducer
-                        | ProducerKind::ToolsIdentity
-                        | ProducerKind::TofuProviders
-                )
+                Some(ProducerKind::SourcesProducer | ProducerKind::ToolsIdentity)
             ) && !id.is_empty()
         })
         .map(|(id, _)| id.clone())
@@ -180,6 +178,7 @@ fn seal_job(
     let subject = state_seal_subject_step(&scope_prefix(&root.slug), &identity_prefix(&root.slug))?;
     let admit = crate::state_seal::save::state_seal_admit_step(pending, unit_bound)?;
     let bind = state_seal_bind_step()?;
+    let tip = tip::state_seal_tip_step()?;
     let mut attest = action_step(
         "Attest state seal",
         ATTEST_USES,
@@ -221,7 +220,7 @@ fn seal_job(
         needs,
         condition: Some(state_seal_condition(&root.producer_id)),
         permissions: Some(Permissions {
-            contents: PermissionLevel::None,
+            contents: PermissionLevel::Read,
             pull_requests: PermissionLevel::None,
             id_token: PermissionLevel::Write,
             actions: PermissionLevel::Write,
@@ -233,7 +232,7 @@ fn seal_job(
         services: Vec::new(),
         outputs: BTreeMap::new(),
         env: JobEnv::Unset,
-        steps: vec![download, subject, admit, save, bind, attest, retire],
+        steps: vec![download, subject, tip, admit, save, bind, attest, retire],
     })
 }
 
