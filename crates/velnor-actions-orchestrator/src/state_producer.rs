@@ -3,11 +3,13 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::workflow::cache_family::RootSlug;
+use velnor_actions_contract::workflow::cache_family::{RootSlug, S256};
 use velnor_actions_contract::workflow::state_seal::{
     STATE_PRODUCER_LANE_CONDITION, state_producer_condition, state_producer_job_id,
 };
-use velnor_actions_contract::{CacheAccess, Job, JobEnv, JobTimeout, Step, StepKind};
+use velnor_actions_contract::{
+    CacheAccess, Job, JobEnv, JobTimeout, Step, StepKind, StepRole, canonical_json_bytes,
+};
 use velnor_actions_mise::PinnedTool;
 use velnor_actions_workflow_renderer::state_seal::producer_steps::{
     state_payload_upload_step, state_produced_step, state_producer_outputs,
@@ -44,6 +46,27 @@ pub(crate) fn state_producer_jobs(
             Ok((
                 state_producer_job_id(&slug),
                 producer_job(input, lane, root, &slug, private, timeout)?,
+            ))
+        })
+        .collect()
+}
+
+pub(crate) fn recipe_digests(
+    producers: &[(String, Job)],
+) -> Result<BTreeMap<String, S256>, OrchestratorError> {
+    producers
+        .iter()
+        .map(|(id, job)| {
+            let start = job
+                .steps
+                .iter()
+                .position(|step| step.role == Some(StepRole::StateSkeleton))
+                .ok_or_else(|| OrchestratorError::Contract {
+                    problem: format!("state_producer_skeleton_missing:{id}"),
+                })?;
+            Ok((
+                id.clone(),
+                S256::of(&canonical_json_bytes(&job.steps[start..])?),
             ))
         })
         .collect()

@@ -77,7 +77,7 @@ fn fixture(repo: &Path) -> Result<(), Box<dyn Error>> {
     commit(repo)
 }
 
-fn plans(task_set: &str) -> Vec<StateRootPlan> {
+fn plans(task_set: &str, recipe: &str) -> Vec<StateRootPlan> {
     ROOTS
         .iter()
         .map(|root| StateRootPlan {
@@ -90,6 +90,7 @@ fn plans(task_set: &str) -> Vec<StateRootPlan> {
                 format!(":(glob){root}/declared/**"),
             ],
             task_set: S256::of(format!("{root}{task_set}").as_bytes()),
+            producer_recipe: S256::of(format!("{root}{recipe}").as_bytes()),
         })
         .collect()
 }
@@ -98,11 +99,17 @@ fn snapshots(
     repo: &Path,
     scratch: &Path,
     task_set: &str,
+    recipe: &str,
 ) -> Result<BTreeMap<String, String>, Box<dyn Error>> {
     let roots: Vec<String> = ROOTS.iter().map(|root| (*root).to_owned()).collect();
-    let step = cache_keys_step(&ToolCatalog::pinned(), &roots, &[], &plans(task_set))
-        .map_err(|error| fail(&format!("{error:?}")))?
-        .ok_or_else(|| fail("cache keys step vanished"))?;
+    let step = cache_keys_step(
+        &ToolCatalog::pinned(),
+        &roots,
+        &[],
+        &plans(task_set, recipe),
+    )
+    .map_err(|error| fail(&format!("{error:?}")))?
+    .ok_or_else(|| fail("cache keys step vanished"))?;
     let StepKind::Shell { run, .. } = &step.kind else {
         return Err(fail("cache keys step left its shell form"));
     };
@@ -228,8 +235,8 @@ fn snapshot_tracks_only_rust_inputs() -> Result<(), Box<dyn Error>> {
     std::fs::create_dir_all(&repo)?;
     std::fs::create_dir_all(&scratch)?;
     fixture(&repo)?;
-    let base = snapshots(&repo, &scratch, "")?;
-    if base != snapshots(&repo, &scratch, "")? {
+    let base = snapshots(&repo, &scratch, "", "")?;
+    if base != snapshots(&repo, &scratch, "", "")? {
         return Err(fail("snapshot unstable across runs"));
     }
     for (label, edit, changed) in rows() {
@@ -237,7 +244,7 @@ fn snapshot_tracks_only_rust_inputs() -> Result<(), Box<dyn Error>> {
         git(&repo, &["clean", "-fdq", "-e", "ws-a/target"])?;
         edit(&repo)?;
         commit(&repo)?;
-        let now = snapshots(&repo, &scratch, "")?;
+        let now = snapshots(&repo, &scratch, "", "")?;
         for (name, before) in &base {
             let moved = now.get(name) != Some(before);
             let expected = changed.contains(&name.as_str());
@@ -249,9 +256,13 @@ fn snapshot_tracks_only_rust_inputs() -> Result<(), Box<dyn Error>> {
         }
         git(&repo, &["reset", "-q", "--hard", "HEAD~1"])?;
     }
-    let argv = snapshots(&repo, &scratch, "-argv-changed")?;
+    let argv = snapshots(&repo, &scratch, "-argv-changed", "")?;
     if argv.keys().any(|name| argv.get(name) == base.get(name)) {
         return Err(fail("a changed producer task set left a snapshot equal"));
+    }
+    let recipe = snapshots(&repo, &scratch, "", "-recipe-changed")?;
+    if recipe.keys().any(|name| recipe.get(name) == base.get(name)) {
+        return Err(fail("a changed producer recipe left a snapshot equal"));
     }
     Ok(())
 }

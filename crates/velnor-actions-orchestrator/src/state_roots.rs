@@ -7,6 +7,7 @@ use velnor_actions_contract::workflow::cache_family::{RootSlug, S256, StateUnit}
 use velnor_actions_contract::workflow::cache_family_mbx::{
     MBX_BUNDLE_ROOT_ENV, MBX_BUNDLE_SNAPSHOT_ENV,
 };
+use velnor_actions_contract::workflow::state_seal::state_producer_job_id;
 use velnor_actions_contract::{Job, StepKind, StepRole};
 use velnor_actions_workflow_renderer::plan_sources::cache_keys::StateRootPlan;
 use velnor_actions_workflow_renderer::plan_sources::state_select::{SealRoot, StateSealPlan};
@@ -19,6 +20,7 @@ use crate::select_affected::manifest_dir;
 pub(crate) fn plans(
     discovery: &Discovery,
     jobs: &BTreeMap<String, Job>,
+    recipes: &BTreeMap<String, S256>,
 ) -> Result<Vec<StateRootPlan>, OrchestratorError> {
     let mut digests: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
     for job in jobs.values() {
@@ -52,6 +54,12 @@ pub(crate) fn plans(
                 root: repo_root.to_owned(),
                 pathspecs: rust_inputs(discovery, repo_root),
                 task_set: S256::of(text.as_bytes()),
+                producer_recipe: recipes
+                    .get(&state_producer_job_id(&RootSlug::from_root(repo_root)?))
+                    .copied()
+                    .ok_or_else(|| OrchestratorError::Contract {
+                        problem: format!("state_producer_recipe_missing:{root}"),
+                    })?,
             })
         })
         .collect()
