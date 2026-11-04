@@ -424,7 +424,7 @@ fn renamed_inherited_target_dev_wildcard_matches_cargo_package() {
     write(
         &root,
         "app/Cargo.toml",
-        "[package]\nname='inherited_probe_487'\nversion='1.0.0'\nedition='2021'\n[target.'cfg(unix)'.dev-dependencies]\nrenamed.workspace=true\n",
+        "[package]\nname='inherited_probe_487'\nversion='1.0.0'\nedition='2021'\n[target.'cfg( unix )'.dev-dependencies]\nrenamed.workspace=true\n",
     );
     let scope = ReleaseScope::Packages(vec!["inherited_probe_487".into()]);
     let empty = BTreeSet::new();

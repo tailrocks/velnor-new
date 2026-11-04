@@ -22,10 +22,28 @@ pub(crate) fn version_declared(
         .ok_or_else(fail)?;
     let member_manifest = read_manifest(root, &package.manifest)?;
     let parent = match target {
-        Some(target) => member_manifest
-            .get("target")
-            .and_then(|table| table.get(target))
-            .ok_or_else(fail)?,
+        Some(target) => {
+            let expected = target
+                .parse::<cargo_platform::Platform>()
+                .map_err(|_| fail())?;
+            let entries = member_manifest
+                .get("target")
+                .and_then(toml::Value::as_table)
+                .ok_or_else(fail)?;
+            let matching: Vec<_> = entries
+                .iter()
+                .filter_map(|(name, value)| {
+                    name.parse::<cargo_platform::Platform>()
+                        .ok()
+                        .filter(|actual| *actual == expected)
+                        .map(|_| value)
+                })
+                .collect();
+            let [matched] = matching.as_slice() else {
+                return Err(fail());
+            };
+            *matched
+        }
         None => &member_manifest,
     };
     let names: &[&str] = match kind {

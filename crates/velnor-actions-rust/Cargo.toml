@@ -20,6 +20,7 @@ name = "velnor_rust"
 path = "tests/velnor_rust.rs"
 
 [dependencies]
+cargo-platform = { version = "=0.3.3" }
 semver = { version = "=1.0.28" }
 velnor-actions-contract = { version = "=0.1.73", path = "../velnor-actions-contract" }
 serde = { workspace = true }
