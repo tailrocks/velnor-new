@@ -105,6 +105,7 @@ struct Github {
     sha: String,
     policy_sha: String,
     approved: Cell<bool>,
+    revoke_on_tag_read: Cell<bool>,
     tag_exists: Cell<bool>,
     tag_wrong: Cell<bool>,
     owner_match: Cell<bool>,
@@ -222,6 +223,9 @@ impl GitHubAdmissionRead for Github {
         Ok(data)
     }
     fn get_optional(&self, route: &str) -> Result<Option<Value>, OrchestratorError> {
+        if route.contains("/git/ref/tags/") && self.revoke_on_tag_read.replace(false) {
+            self.approved.set(false);
+        }
         if !self.tag_exists.get() {
             return Ok(None);
         }
@@ -452,6 +456,7 @@ fn make_fixture(
         sha,
         policy_sha: request.workflow_sha.clone(),
         approved: Cell::new(false),
+        revoke_on_tag_read: Cell::new(false),
         tag_exists: Cell::new(false),
         tag_wrong: Cell::new(false),
         owner_match: Cell::new(true),
@@ -1151,9 +1156,7 @@ fn observed_upload_is_derived_from_current_registry() -> Result<(), Box<dyn std:
         ..obs
     };
     assert!(record_verified_mutation(&wrong).is_err());
-    github.owner_match.set(false);
-    assert!(record_verified_mutation(&obs).is_err());
-    github.owner_match.set(true);
+    reject_observed_approval_revocation(&obs)?;
     reject_tampered_source(&obs)?;
     assert!(inspect_journal_mutation(&journal, &identity, 2)?.is_none());
     github.approved.set(false);
@@ -1167,6 +1170,26 @@ fn observed_upload_is_derived_from_current_registry() -> Result<(), Box<dyn std:
     record_verified_mutation(&obs)?;
     verify_upload_result(&obs)?;
     verify_metadata_observations(&obs, &github)?;
+    Ok(())
+}
+
+fn reject_observed_approval_revocation(
+    obs: &crate::crate_release_controller::CrateReleaseObservation<
+        '_,
+        JournalRegistryFake,
+        Github,
+        Registry,
+    >,
+) -> Result<(), Box<dyn std::error::Error>> {
+    use crate::crate_release_controller::record_verified_mutation;
+    use crate::crate_release_journal::inspect_journal_mutation;
+    obs.github.owner_match.set(false);
+    assert!(record_verified_mutation(obs).is_err());
+    obs.github.owner_match.set(true);
+    obs.github.revoke_on_tag_read.set(true);
+    assert!(record_verified_mutation(obs).is_err());
+    assert!(inspect_journal_mutation(obs.journal, obs.identity, 2)?.is_none());
+    obs.github.approved.set(true);
     Ok(())
 }
 
@@ -1796,6 +1819,18 @@ fn check_upload_authorization(
         .is_err()
     );
     registry.absent.set(true);
+    let verified = prove()?;
+    github.revoke_on_tag_read.set(true);
+    assert!(
+        record_admitted_upload_intent(
+            obs,
+            verified,
+            crate::crate_release_semver::fixture_verified_semver(admission, "demo")?
+        )
+        .is_err()
+    );
+    assert!(inspect_journal_mutation(journal, identity, 1)?.is_none());
+    github.approved.set(true);
     assert!(inspect_journal_mutation(journal, identity, 1)?.is_none());
     check_upload_identity_rejections(obs)?;
     assert!(inspect_journal_mutation(journal, identity, 1)?.is_none());
@@ -2594,6 +2629,105 @@ fn ambiguous_metadata_write_stops_with_durable_unresolved_intent()
     assert!(inspect_journal_mutation(&journal, &identity, 2)?.is_none());
     assert!(repair_verified_metadata(&input, "demo", JournalMutationKind::CreateTag).is_err());
     assert_eq!(github.writes.get(), 1);
+    Ok(())
+}
+
+#[test]
+fn metadata_intent_requires_fresh_approval_after_state_observation()
+-> Result<(), Box<dyn std::error::Error>> {
+    use crate::crate_release_controller::{CrateReleaseObservation, repair_verified_metadata};
+    use crate::crate_release_journal::{
+        JournalMutationKind, inspect_journal_mutation, record_source_bound_start,
+    };
+    let temp = tempfile::tempdir()?;
+    let root = temp.path();
+    let (intent, request, github, registry) = make_fixture(root)?;
+    github.approved.set(true);
+    let admission = prepare_crate_release(&intent, &request, &github, &registry, root)?;
+    let (identity, plan) = fixture_journal_plan(root, &intent, &request, &admission)?;
+    let journal = JournalRegistryFake::default();
+    record_source_bound_start(&journal, &identity, &plan, root)?;
+    *registry.archive.borrow_mut() = fixture_archive(root)?;
+    registry.absent.set(false);
+    github.revoke_on_tag_read.set(true);
+    let input = CrateReleaseObservation {
+        journal: &journal,
+        identity: &identity,
+        journal_receipt: &plan,
+        admission: &admission,
+        intent: &intent,
+        request: &request,
+        github: &github,
+        registry: &registry,
+        source: root,
+        sequence: 1,
+    };
+    assert!(repair_verified_metadata(&input, "demo", JournalMutationKind::CreateTag).is_err());
+    assert_eq!(github.writes.get(), 0);
+    assert!(
+        inspect_journal_mutation(&journal, &identity, 1)?.is_none(),
+        "revoked approval must prevent recording a new intent"
+    );
+    Ok(())
+}
+
+#[test]
+fn metadata_repair_stops_if_tag_or_registry_changes_after_intent()
+-> Result<(), Box<dyn std::error::Error>> {
+    use crate::crate_release_controller::{CrateReleaseObservation, repair_verified_metadata};
+    use crate::crate_release_journal::{
+        JournalMutationKind, inspect_journal_mutation, record_source_bound_start,
+    };
+    for (kind, change_tag) in [
+        (JournalMutationKind::CreateTag, true),
+        (JournalMutationKind::CreateTag, false),
+        (JournalMutationKind::CreateRelease, false),
+    ] {
+        let temp = tempfile::tempdir()?;
+        let root = temp.path();
+        let (intent, request, github, registry) = make_fixture(root)?;
+        let github = std::rc::Rc::new(github);
+        let registry = std::rc::Rc::new(registry);
+        github.approved.set(true);
+        let admission =
+            prepare_crate_release(&intent, &request, github.as_ref(), registry.as_ref(), root)?;
+        let (identity, plan) = fixture_journal_plan(root, &intent, &request, &admission)?;
+        let journal = JournalRegistryFake::default();
+        record_source_bound_start(&journal, &identity, &plan, root)?;
+        *registry.archive.borrow_mut() = fixture_archive(root)?;
+        registry.absent.set(false);
+        if kind == JournalMutationKind::CreateRelease {
+            github.tag_exists.set(true);
+            github.release_variant.set(4);
+        }
+        let observed_github = github.clone();
+        let observed_registry = registry.clone();
+        *journal.after_ref_created.borrow_mut() = Some(Box::new(move |reference| {
+            if reference.ends_with("operation-1") {
+                if change_tag {
+                    observed_github.tag_exists.set(true);
+                } else {
+                    observed_registry.absent.set(true);
+                }
+            }
+        }));
+        let input = CrateReleaseObservation {
+            journal: &journal,
+            identity: &identity,
+            journal_receipt: &plan,
+            admission: &admission,
+            intent: &intent,
+            request: &request,
+            github: github.as_ref(),
+            registry: registry.as_ref(),
+            source: root,
+            sequence: 1,
+        };
+        assert!(repair_verified_metadata(&input, "demo", kind).is_err());
+        assert_eq!(github.writes.get(), 0);
+        assert!(inspect_journal_mutation(&journal, &identity, 1)?.is_some());
+        assert!(inspect_journal_mutation(&journal, &identity, 2)?.is_none());
+    }
     Ok(())
 }
 

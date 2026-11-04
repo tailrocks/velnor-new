@@ -223,6 +223,24 @@ fn observe_crate_release<G: GitHubAdmissionRead, R: CrateRegistryRead>(
         .map_err(|_| internal("crate_release_intent_invalid"))?;
     verify_request_intent(intent, request)?;
     let admitted = verify_github_evidence(request, github)?;
+    observe_package_state(intent, request, github, registry, source, &admitted)
+}
+
+fn observe_package_state<G: GitHubAdmissionRead, R: CrateRegistryRead>(
+    intent: &CrateReleaseIntent,
+    request: &GitHubAdmissionRequest,
+    github: &G,
+    registry: &R,
+    source: &Path,
+    admitted: &GitHubCandidate,
+) -> Result<CrateReleaseAdmissionReceipt, OrchestratorError> {
+    intent
+        .validate()
+        .map_err(|_| internal("crate_release_intent_invalid"))?;
+    verify_request_intent(intent, request)?;
+    if admitted.request != *request {
+        return Err(internal("crate_release_candidate_mismatch"));
+    }
     crate::crate_release_github::verify_immutable_tag_rules(&intent.repository, github)?;
     let effective_intent = effective_release_intent(intent, request);
     let inventory = workspace_inventory(source, &request.source_sha, &effective_intent, registry)?;
@@ -288,7 +306,7 @@ fn observe_crate_release<G: GitHubAdmissionRead, R: CrateRegistryRead>(
     Ok(CrateReleaseAdmissionReceipt {
         schema: 1,
         intent: intent.clone(),
-        github: admitted,
+        github: admitted.clone(),
         packages,
         semver_evidence: std::collections::BTreeMap::new(),
     })

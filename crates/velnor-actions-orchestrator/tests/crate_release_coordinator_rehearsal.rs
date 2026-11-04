@@ -132,6 +132,7 @@ fn run_child(operation: &str) -> Result<(), Box<dyn Error>> {
         sha: request.source_sha.clone(),
         policy_sha: request.workflow_sha.clone(),
         approved: Cell::new(true),
+        revoke_on_tag_read: Cell::new(false),
         tag_exists: Cell::new(metadata_completed),
         tag_wrong: Cell::new(false),
         owner_match: Cell::new(true),
