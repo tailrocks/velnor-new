@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_actions_contract::{ReleaseTarget, RunsOn, SCALE_SET_NAME};
+use velnor_actions_contract::{Job, ReleaseTarget, RunsOn, SCALE_SET_NAME};
 
 use crate::{RenderError, yaml::Yaml};
 
@@ -13,6 +13,13 @@ pub(crate) fn target_for_runner(label: &str) -> Option<&'static str> {
         }
         RunsOn::ScaleSet(_) => None,
     }
+}
+
+pub(crate) fn lane_target(job: &Job) -> Option<&'static str> {
+    job.check_runner
+        .as_ref()
+        .map(|runner| runner.platform.target())
+        .or_else(|| target_for_runner(&job.runs_on))
 }
 
 pub(crate) const SCALE_SET_RUN_SHELL: &str = "bash -e {0}";

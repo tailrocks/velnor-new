@@ -56,6 +56,8 @@ pub enum StepId {
 
     StateSealBind,
 
+    StateSealTip,
+
     StateSealUpload,
 
     StateSealAdmit,
@@ -93,6 +95,7 @@ impl StepId {
             Self::StateSelect => "state-select",
             Self::StateSealSubject => "state-seal-subject",
             Self::StateSealBind => "state-seal-bind",
+            Self::StateSealTip => "state-seal-tip",
             Self::StateSealUpload => "state-seal-upload",
             Self::StateSealAdmit => "state-seal-admit",
             Self::StateSealSave => "state-seal-save",

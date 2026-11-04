@@ -6,6 +6,7 @@ use std::error::Error;
 use std::path::Path;
 use std::{fs, io};
 
+use velnor_actions_contract::workflow::state_seal::STATE_SEAL_WORKFLOW_PATH;
 use velnor_actions_contract::{Job, REQUIRED_JOB_ID, StepKind, StepRole, validate_job_id};
 use velnor_actions_orchestrator::{GenerationPreparation, prepare, render_staged_tree};
 use velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
@@ -198,6 +199,9 @@ fn assert_rendered_seed_routing(
     let workflow = rendered
         .get(WORKFLOW_PATH)
         .ok_or("rendered workflow is missing")?;
+    let sealed = rendered
+        .get(STATE_SEAL_WORKFLOW_PATH)
+        .ok_or("rendered state-seal workflow is missing")?;
     for &(relative_root, _) in expected_roots {
         let seed_id = *seed_ids_by_root
             .get(relative_root)
@@ -248,7 +252,7 @@ fn assert_rendered_seed_routing(
             );
             assert!(!consumer.needs.iter().any(|need| need.as_str() == seed_id));
             assert!(!required.needs.iter().any(|need| need.as_str() == seed_id));
-            assert!(workflow.contains(seed_id), "{consumer_id}: {workflow}");
+            assert!(sealed.contains(seed_id), "{consumer_id}: {sealed}");
             assert!(workflow.contains(relative_root), "{workflow}");
         }
     }

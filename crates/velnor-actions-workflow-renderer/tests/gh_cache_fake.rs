@@ -45,7 +45,7 @@ case "$1 $2" in
     case "$1" in -R) repo=$2;; --signer-workflow) signer=$2;; --source-ref) sref=$2;; --predicate-type) pred=$2;; esac
     shift 2
   done
-  [ "$repo" = "$GITHUB_REPOSITORY" ] && [ "$signer" = "$GITHUB_REPOSITORY/.github/workflows/ci.yml" ] && [ "$sref" = "$GITHUB_REF" ] && [ "$pred" = "https://velnor.dev/attestation/state-seal/v1" ] || exit 1
+  [ "$repo" = "$GITHUB_REPOSITORY" ] && [ "$signer" = "$GITHUB_REPOSITORY/.github/workflows/state-seal.yml" ] && [ "$sref" = "$GITHUB_REF" ] && [ "$pred" = "https://velnor.dev/attestation/state-seal/v1" ] || exit 1
   read -r skey sid ssize < "$file"
   case " $GH_ATTESTED " in *" $sid "*) exit 0;; esac
   exit 1

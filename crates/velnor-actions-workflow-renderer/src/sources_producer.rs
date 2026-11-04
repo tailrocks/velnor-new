@@ -42,7 +42,7 @@ fn build(plan: &Job) -> Result<Job, RenderError> {
         .iter()
         .position(|step| step.role == Some(StepRole::CacheKeys))
         .ok_or_else(|| invalid("plan_without_cache_keys"))?;
-    let mut steps = Vec::new();
+    let mut steps = vec![crate::state_seal::tip::stale_tip_stops_job_step()?];
     for step in &plan.steps[..keys_at] {
         steps.push(lean(step.clone()));
     }

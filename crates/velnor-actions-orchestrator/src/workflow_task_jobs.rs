@@ -3,8 +3,7 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::{Job, Step, VelnorConfig};
-use velnor_actions_mise::ToolCatalog;
+use velnor_actions_contract::{Job, VelnorConfig};
 use velnor_actions_workflow_renderer::{
     build_verification_task_job,
     verification_jobs::{
@@ -15,8 +14,6 @@ use velnor_actions_workflow_renderer::{
 };
 
 use crate::OrchestratorError;
-use crate::config::private_wiring::PrivateWiring;
-use crate::discover::Discovery;
 use crate::workflow::CHECKOUT_USES;
 
 #[path = "ansible_inventory.rs"]
@@ -49,26 +46,19 @@ pub(crate) mod stack_support;
 pub(crate) fn policies(
     root: &std::path::Path,
     config: &VelnorConfig,
-    discovery: &Discovery,
-    catalog: &ToolCatalog,
-    fetch_roots: &[String],
-    acquire: Option<&Step>,
-    private: Option<&PrivateWiring>,
+    inputs: &crate::image_build_tasks::PrebuiltInputs<'_>,
 ) -> Result<Vec<WorkflowTaskPolicy>, OrchestratorError> {
+    let crate::image_build_tasks::PrebuiltInputs {
+        discovery,
+        catalog,
+        acquire,
+        private,
+        ..
+    } = *inputs;
     let verification_policies = crate::verification_tasks::policies(config, discovery)?;
     let build_policies = crate::build_tasks::policies(config, discovery)?;
     let native_image_policies = crate::native_image_tasks::policies(root, config)?;
-    let image_policies = crate::image_build_tasks::policies(
-        root,
-        config,
-        &crate::image_build_tasks::PrebuiltInputs {
-            discovery,
-            catalog,
-            fetch_roots,
-            acquire,
-            private,
-        },
-    )?;
+    let image_policies = crate::image_build_tasks::policies(root, config, inputs)?;
     let bun_policies = bun_tasks::policies(root, config, discovery, catalog, acquire, private)?;
     let dbt_policies = dbt_tasks::policies(config, discovery, catalog)?;
     let ansible_policies = ansible_tasks::policies(config, discovery, catalog)?;

@@ -6,6 +6,7 @@ use std::fs;
 
 use serde_json::{Value, json};
 use velnor_actions_contract::RESTRICTED_ACTION_EVENTS;
+use velnor_actions_contract::workflow::state_seal::STATE_SEAL_WORKFLOW_PATH;
 use velnor_actions_orchestrator::{prepare, render_staged_tree};
 use velnor_actions_workflow_renderer::cache_prune::CACHE_PRUNE_PATH;
 use velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
@@ -18,6 +19,7 @@ const DEFAULT_BRANCH: &str = "testmain";
 
 struct Rendered {
     ci: String,
+    sealed: String,
     prune: String,
     workflow_run_files: Vec<String>,
 }
@@ -47,6 +49,7 @@ fn render() -> Result<Rendered, Box<dyn Error>> {
         .collect();
     Ok(Rendered {
         ci: text(WORKFLOW_PATH)?,
+        sealed: text(STATE_SEAL_WORKFLOW_PATH)?,
         prune: text(CACHE_PRUNE_PATH)?,
         workflow_run_files,
     })
@@ -133,13 +136,18 @@ fn prune_runs_only_after_a_main_push_ci() -> Result<(), Box<dyn Error>> {
         .find_map(|line| line.strip_prefix("name: "))
         .ok_or("ci.yml has no top-level name")?;
     assert_eq!(ci_name, CI_NAME);
+    let sealed_name = rendered
+        .sealed
+        .lines()
+        .find_map(|line| line.strip_prefix("name: "))
+        .ok_or("state-seal.yml has no top-level name")?;
 
     let workflow = parse(&rendered.prune)?;
     assert_eq!(
         workflow["on"],
         json!({
             "workflow_run": {
-                "workflows": [ci_name],
+                "workflows": [ci_name, sealed_name],
                 "types": ["completed"],
                 "branches": [DEFAULT_BRANCH],
             }

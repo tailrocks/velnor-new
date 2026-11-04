@@ -114,14 +114,9 @@ pub fn finalize_jobs(
             continue;
         }
         let always = id == PLAN_JOB_ID || id == TASK_JOB_ID || job.check_runner.is_some();
-        let target = job
-            .check_runner
-            .as_ref()
-            .map(|runner| runner.platform.target())
-            .or_else(|| crate::runs_on::target_for_runner(&job.runs_on))
-            .ok_or_else(|| {
-                RenderError::InvalidWorkflow(format!("tools_cache_unsupported_target:{id}"))
-            })?;
+        let target = crate::runs_on::lane_target(job).ok_or_else(|| {
+            RenderError::InvalidWorkflow(format!("tools_cache_unsupported_target:{id}"))
+        })?;
         let default_target = crate::runs_on::target_for_runner(&ctx.runs_on);
         let setup = if let Some(helper) = ctx.authority_steps.check_mise_setup(id, target)? {
             helper
@@ -287,12 +282,19 @@ fn render_merged(
     )?;
     let mut shared = crate::lane_share::share_lanes(&jobs, ctx)?;
     shared.files.extend(task_files);
+    let all_jobs = jobs.clone();
+    let mut jobs = jobs;
+    let state_seal = crate::render_state_seal::split_state_seal(ir, &mut shared, &mut jobs)?;
     execution_boundaries::validate_required_verdict(&shared.jobs, phase, &ctx.authority_steps)?;
     execution_boundaries::validate_trusted_plan(&shared.jobs, policy, phase, &ctx.authority_steps)?;
     match emit::emit_shared(
         ir,
         &shared,
-        &jobs,
+        &emit::EmitScope {
+            jobs: &jobs,
+            all_jobs: &all_jobs,
+            state_seal: state_seal.as_ref(),
+        },
         ctx,
         matrix.as_ref(),
         &caps,
@@ -319,7 +321,11 @@ fn render_merged(
             emit::emit_shared(
                 ir,
                 &shared,
-                &jobs,
+                &emit::EmitScope {
+                    jobs: &jobs,
+                    all_jobs: &all_jobs,
+                    state_seal: state_seal.as_ref(),
+                },
                 ctx,
                 matrix.as_ref(),
                 &caps,

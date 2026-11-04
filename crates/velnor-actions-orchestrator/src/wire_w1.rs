@@ -217,6 +217,7 @@ fn format_step_env(catalog: &ToolCatalog) -> Result<BTreeMap<String, String>, Or
 pub(crate) fn check_crate_mbx_gating(
     jobs: &BTreeMap<String, Job>,
     drivers: &BTreeMap<String, CompileDriver>,
+    catalog: &ToolCatalog,
 ) -> Result<(), OrchestratorError> {
-    check_mbx_gating(jobs, drivers).map_err(OrchestratorError::from)
+    check_mbx_gating(jobs, drivers, catalog).map_err(OrchestratorError::from)
 }

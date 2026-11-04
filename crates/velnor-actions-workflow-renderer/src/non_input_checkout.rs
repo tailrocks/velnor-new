@@ -20,7 +20,7 @@ pub const SPARSE_CONE_MODE_KEY: &str = "sparse-checkout-cone-mode";
 
 const NAMED_CHECK_JOB_ID_PREFIX: &str = "check-";
 
-const SUITE_JOB_ID_PREFIX: &str = "suite-";
+pub(crate) const SUITE_JOB_ID_PREFIX: &str = "suite-";
 
 #[must_use]
 pub fn consumes_rust_sources(job_id: &str) -> bool {

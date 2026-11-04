@@ -3,6 +3,7 @@
 
 use std::collections::BTreeMap;
 
+use velnor_actions_contract::workflow::state_seal::STATE_PRODUCER_JOB_ID_PREFIX;
 use velnor_actions_contract::{Job, Step, StepKind, StepRole};
 
 use crate::toolchain_env::STEP_PRIVATE_FETCH_ALLOWLIST;
@@ -42,6 +43,7 @@ fn is_ambient_auth_role(role: Option<StepRole>) -> bool {
                 | StepRole::LinkCheck
                 | StepRole::NativeValidators
                 | StepRole::StateSelect
+                | StepRole::StateSealTip
         )
     )
 }
@@ -58,7 +60,7 @@ fn check_step_tokens(
     }
     match &step.kind {
         StepKind::Shell { run, env } => {
-            check_env_tokens(id, env, false)?;
+            check_env_tokens(id, step.role, env, false)?;
             for arg in strip_unset_argv(run) {
                 if names_token(&strip_unset_prelude(arg)) {
                     return Err(RenderError::InvalidWorkflow(format!(
@@ -70,7 +72,7 @@ fn check_step_tokens(
             check_scrub_coverage(id, &step.name, step.role, env)?;
         }
         StepKind::TaskExecution { argv, env, .. } => {
-            check_env_tokens(id, env, false)?;
+            check_env_tokens(id, step.role, env, false)?;
             for arg in argv {
                 if names_token(arg) {
                     return Err(RenderError::InvalidWorkflow(format!(
@@ -102,7 +104,8 @@ fn check_step_tokens(
             if private::is_private_binding_role(step.role)
                 || step.role == Some(StepRole::GitHubEvidenceFetch)
             {
-                check_env_tokens(id, env, step.role == Some(StepRole::GitHubEvidenceFetch))?;
+                let evidence = step.role == Some(StepRole::GitHubEvidenceFetch);
+                check_env_tokens(id, step.role, env, evidence)?;
             }
         }
         StepKind::NativeCheckExecution {
@@ -131,8 +134,10 @@ fn check_step_tokens(
     Ok(())
 }
 
-fn is_scoped_gh_token(id: &str, env: &BTreeMap<String, String>) -> bool {
-    (id == PLAN_JOB_ID || id == FINAL_JOB_ID)
+fn is_scoped_gh_token(id: &str, role: Option<StepRole>, env: &BTreeMap<String, String>) -> bool {
+    let producer_tip =
+        role == Some(StepRole::StateSealTip) && id.starts_with(STATE_PRODUCER_JOB_ID_PREFIX);
+    (id == PLAN_JOB_ID || id == FINAL_JOB_ID || producer_tip)
         && env
             .get("GH_TOKEN")
             .is_some_and(|value| value == "${{ github.token }}")
@@ -172,6 +177,7 @@ fn is_scoped_evidence_token(
 
 fn check_env_tokens(
     id: &str,
+    role: Option<StepRole>,
     env: &BTreeMap<String, String>,
     evidence_fetch: bool,
 ) -> Result<(), RenderError> {
@@ -185,7 +191,8 @@ fn check_env_tokens(
                 continue;
             }
             if key == "GH_TOKEN" {
-                if is_scoped_gh_token(id, env) || is_scoped_evidence_token(id, env, evidence_fetch)
+                if is_scoped_gh_token(id, role, env)
+                    || is_scoped_evidence_token(id, env, evidence_fetch)
                 {
                     continue;
                 }
@@ -281,7 +288,7 @@ fn check_scrub_coverage(
     if is_ambient_auth_role(role) {
         return Ok(());
     }
-    let scoped = is_scoped_gh_token(id, env);
+    let scoped = is_scoped_gh_token(id, role, env);
     let scrubbed = STEP_CREDENTIAL_DENYLIST
         .iter()
         .all(|key| env.get(*key).is_some_and(String::is_empty) || (*key == "GH_TOKEN" && scoped));

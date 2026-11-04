@@ -2,10 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::cache_access::SOURCES_PRODUCER_JOB_ID;
-use super::crate_job::{TOFU_PROVIDERS_PRODUCER_JOB_ID_PREFIX, TOOLS_PRODUCER_JOB_ID_PREFIX};
+use super::crate_job::TOOLS_PRODUCER_JOB_ID_PREFIX;
 use super::state_seal::{
-    STATE_PRODUCER_JOB_ID_PREFIX, STATE_SEAL_ATTEST_CONDITION, STATE_SEAL_BIND_CONDITION,
-    STATE_SEAL_JOB_ID_PREFIX, STATE_SEAL_SAVE_CONDITION,
+    STATE_PRODUCER_JOB_ID_PREFIX, STATE_SEAL_ADMIT_CONDITION, STATE_SEAL_ATTEST_CONDITION,
+    STATE_SEAL_BIND_CONDITION, STATE_SEAL_JOB_ID_PREFIX, STATE_SEAL_SAVE_CONDITION,
+    STATE_SEAL_TIP_CONDITION,
 };
 use super::{Job, PLAN_JOB_ID, Step, StepKind, StepRole};
 
@@ -19,9 +20,10 @@ const PRODUCER_SEQUENCE: [StepRole; 7] = [
     StepRole::StateProduced,
 ];
 
-const SEAL_SEQUENCE: [StepRole; 7] = [
+const SEAL_SEQUENCE: [StepRole; 8] = [
     StepRole::StateSealDownload,
     StepRole::StateSealSubject,
+    StepRole::StateSealTip,
     StepRole::StateSealAdmit,
     StepRole::StateSealSave,
     StepRole::StateSealBind,
@@ -87,7 +89,6 @@ pub(super) fn state_seal_shape_ok(id: &str, job: &Job) -> bool {
         && rest.iter().all(|need| {
             need == SOURCES_PRODUCER_JOB_ID
                 || need.starts_with(TOOLS_PRODUCER_JOB_ID_PREFIX)
-                || need.starts_with(TOFU_PROVIDERS_PRODUCER_JOB_ID_PREFIX)
                 || (need.starts_with(STATE_SEAL_JOB_ID_PREFIX) && need != id)
         })
         && job.steps.len() == SEAL_SEQUENCE.len()
@@ -100,6 +101,8 @@ pub(super) fn state_seal_shape_ok(id: &str, job: &Job) -> bool {
             let expected = match step.role {
                 Some(StepRole::StateSealSave) => Some(STATE_SEAL_SAVE_CONDITION),
                 Some(StepRole::StateSealBind) => Some(STATE_SEAL_BIND_CONDITION),
+                Some(StepRole::StateSealTip) => Some(STATE_SEAL_TIP_CONDITION),
+                Some(StepRole::StateSealAdmit) => Some(STATE_SEAL_ADMIT_CONDITION),
                 Some(StepRole::StateSealAttest | StepRole::StateSealRetire) => {
                     Some(STATE_SEAL_ATTEST_CONDITION)
                 }

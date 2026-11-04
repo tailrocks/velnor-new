@@ -8,7 +8,13 @@ pub(crate) fn reject_with(
     with: BTreeMap<String, String>,
 ) -> Result<(), Box<dyn Error>> {
     let jobs = BTreeMap::from([("worker".to_owned(), job_with(vec![setup_step(with)]))]);
-    if check_mbx_gating(&jobs, &BTreeMap::new()).is_ok() {
+    if check_mbx_gating(
+        &jobs,
+        &BTreeMap::new(),
+        &velnor_actions_mise::ToolCatalog::pinned(),
+    )
+    .is_ok()
+    {
         return Err(fail(&format!("explicit mbx selection accepted: {label}")));
     }
     Ok(())
@@ -46,7 +52,13 @@ pub(crate) fn check_rejects_explicit_selection() -> Result<(), Box<dyn Error>> {
         },
     };
     let jobs = BTreeMap::from([("worker".to_owned(), job_with(vec![shell]))]);
-    if check_mbx_gating(&jobs, &BTreeMap::new()).is_ok() {
+    if check_mbx_gating(
+        &jobs,
+        &BTreeMap::new(),
+        &velnor_actions_mise::ToolCatalog::pinned(),
+    )
+    .is_ok()
+    {
         return Err(fail("shell mbx selection accepted"));
     }
     let action = Step {
@@ -63,12 +75,13 @@ pub(crate) fn check_rejects_explicit_selection() -> Result<(), Box<dyn Error>> {
     };
     let jobs = BTreeMap::from([("worker".to_owned(), job_with(vec![action]))]);
     let drivers = BTreeMap::from([("worker".to_owned(), CompileDriver::Cargo)]);
-    if check_mbx_gating(&jobs, &drivers).is_ok() {
+    if check_mbx_gating(&jobs, &drivers, &velnor_actions_mise::ToolCatalog::pinned()).is_ok() {
         return Err(fail("cargo driver kept its mbx action"));
     }
     if check_mbx_gating(
         &jobs,
         &BTreeMap::from([("ghost".to_owned(), CompileDriver::Mbx)]),
+        &velnor_actions_mise::ToolCatalog::pinned(),
     )
     .is_ok()
     {
