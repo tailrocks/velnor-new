@@ -11,7 +11,10 @@ use sha2::{Digest, Sha256};
 
 #[path = "github_evidence_http_route.rs"]
 mod route;
+#[path = "github_evidence_http_validation.rs"]
+mod validation;
 pub(super) use route::EvidenceRoute;
+use validation::is_sha256;
 
 use crate::OrchestratorError;
 use crate::internal::internal;
@@ -110,7 +113,7 @@ impl GitHubEvidenceRead for NativeGitHubEvidenceRead {
         } = request;
         if expected_size == 0
             || expected_size > velnor_actions_contract::MAX_GITHUB_EVIDENCE_ARCHIVE_BYTES
-            || !velnor_actions_contract::is_valid_digest(expected_sha256)
+            || !is_sha256(expected_sha256)
         {
             return Err(internal("github_evidence_archive_bound"));
         }
