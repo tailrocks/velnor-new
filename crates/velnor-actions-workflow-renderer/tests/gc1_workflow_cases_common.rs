@@ -79,6 +79,7 @@ pub(crate) fn cleanup_permissions() -> Permissions {
         id_token: PermissionLevel::None,
         actions: PermissionLevel::Write,
         packages: PermissionLevel::None,
+        attest: PermissionLevel::None,
     }
 }
 

@@ -113,7 +113,10 @@ impl Job {
         }
         let effective = self.permissions.as_ref().unwrap_or(workflow);
         super::super::producer::validate_job(self, id, effective)?;
-        if matches!(effective.id_token, PermissionLevel::Write) && self.environment.is_none() {
+        if matches!(effective.id_token, PermissionLevel::Write)
+            && self.environment.is_none()
+            && self.producer_kind() != Some(super::super::producer::ProducerKind::StateSeal)
+        {
             return Err(ContractError::identity(
                 "job.environment",
                 format!("id_token_write_needs_environment:{id}"),

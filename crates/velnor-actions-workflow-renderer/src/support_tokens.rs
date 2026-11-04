@@ -41,6 +41,7 @@ fn is_ambient_auth_role(role: Option<StepRole>) -> bool {
                 | StepRole::FrontmatterId
                 | StepRole::LinkCheck
                 | StepRole::NativeValidators
+                | StepRole::StateSelect
         )
     )
 }

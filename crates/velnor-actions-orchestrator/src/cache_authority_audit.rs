@@ -8,6 +8,7 @@ use velnor_actions_contract::workflow::{
     CacheWriter, QUALIFICATION_CACHE_WRITER_IDS, QUALIFICATION_WRITER_GATE,
     SOURCES_PRODUCER_JOB_ID, WORKFLOW_CACHE_MODE, WRITER_CACHE_MODE, WRITER_MISE_ENV,
 };
+use velnor_actions_contract::workflow::state_seal::STATE_CANARY_SEAL_JOB_ID;
 use velnor_actions_workflow_renderer::render::RenderedFile;
 use velnor_actions_workflow_renderer::schema2::QUALIFICATION_WORKFLOW;
 
@@ -74,7 +75,11 @@ fn check_writer(file: &RenderedFile, job: &JobHeader, mode: &str) -> Result<(), 
     let Some(role) = role_of(path, id) else {
         return Err(violation(path, id, "cache_writer_undeclared"));
     };
-    if mode != WRITER_CACHE_MODE {
+    let expected = match role {
+        Role::Qualification => WRITER_CACHE_MODE,
+        Role::Producer(writer) => writer.mode(),
+    };
+    if mode != expected {
         return Err(violation(path, id, "cache_writer_mode_not_write"));
     }
     let condition = job.condition.as_deref().unwrap_or_default();
@@ -151,6 +156,9 @@ fn role_of(path: &str, id: &str) -> Option<Role> {
     }
     if id.starts_with(TOFU_PROVIDERS_PRODUCER_JOB_ID_PREFIX) {
         return Some(Role::Producer(CacheWriter::TofuProvidersProducer));
+    }
+    if id == STATE_CANARY_SEAL_JOB_ID {
+        return Some(Role::Producer(CacheWriter::StateSeal));
     }
     (id == SOURCES_PRODUCER_JOB_ID).then_some(Role::Producer(CacheWriter::SourcesProducer))
 }

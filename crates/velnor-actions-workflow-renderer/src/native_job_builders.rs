@@ -71,15 +71,23 @@ pub fn plan_state_roots(
     fetch_roots: &[String],
     tofu_roots: &[String],
     state_roots: &[plan_sources::cache_keys::StateRootPlan],
+    seal: &plan_sources::state_select::StateSealPlan,
 ) -> Result<(), NativeJobBuilderError> {
+    let selecting = !seal.roots.is_empty() || seal.canary;
     let rebuilt =
         plan_sources::cache_keys::cache_keys_step(catalog, fetch_roots, tofu_roots, state_roots)
-            .map_err(NativeJobBuilderError::PlanSources)?
-            .ok_or(NativeJobBuilderError::Render(
-                crate::RenderError::InvalidWorkflow(
-                    "state_roots_without_cache_keys_step".to_owned(),
-                ),
-            ))?;
+            .map_err(NativeJobBuilderError::PlanSources)?;
+    let Some(rebuilt) = rebuilt else {
+        if state_roots.is_empty() {
+            return Ok(());
+        }
+        return Err(NativeJobBuilderError::Render(
+            crate::RenderError::InvalidWorkflow("state_roots_without_cache_keys_step".to_owned()),
+        ));
+    };
+    if state_roots.is_empty() && !selecting {
+        return Ok(());
+    }
     let existing = plan
         .steps
         .iter()
@@ -100,6 +108,17 @@ pub fn plan_state_roots(
             ))?,
     };
     plan.steps.insert(at, rebuilt);
+    if selecting {
+        let select = plan_sources::state_select::state_select_step(&seal.roots, seal.canary)
+            .map_err(NativeJobBuilderError::Render)?;
+        plan.steps.insert(at + 1, select);
+        let mut permissions = plan
+            .permissions
+            .take()
+            .unwrap_or_else(read_actions_permissions);
+        permissions.attest = PermissionLevel::Read;
+        plan.permissions = Some(permissions);
+    }
     Ok(())
 }
 
@@ -234,6 +253,7 @@ pub fn read_actions_permissions() -> Permissions {
         contents: PermissionLevel::Read,
         pull_requests: PermissionLevel::None,
         id_token: PermissionLevel::None,
+        attest: PermissionLevel::None,
         actions: PermissionLevel::Read,
         packages: PermissionLevel::None,
     }

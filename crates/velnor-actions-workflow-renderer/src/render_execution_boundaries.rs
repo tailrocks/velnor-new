@@ -224,6 +224,7 @@ fn trusted_plan_step(step: &Step, request: &str) -> bool {
                     | StepRole::VerifyJactionlint
                     | StepRole::CargoSourcesFetch
                     | StepRole::CacheKeys
+                    | StepRole::StateSelect
             )
         ),
         StepKind::Internal { operation, .. } => {

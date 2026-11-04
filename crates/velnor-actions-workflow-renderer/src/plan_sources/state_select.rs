@@ -1,0 +1,140 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
+use std::collections::BTreeMap;
+
+use velnor_actions_contract::workflow::cache_family::{
+    RootSlug, StateScope, StateTrust, StateUnit,
+};
+use velnor_actions_contract::workflow::state_seal::{
+    STATE_CANARY_VERIFIED_OUTPUT, STATE_SEAL_LIST_LIMIT, STATE_SEAL_PREDICATE_TYPE,
+    STATE_SEAL_VERIFY_LIMIT, STATE_SEAL_VERIFY_TIMEOUT_ENV, STATE_SEAL_VERIFY_TIMEOUT_SECONDS,
+    state_attested_output, state_canary_prefix,
+};
+use velnor_actions_contract::{Step, StepId, StepRole};
+
+use super::cache_keys::DEFAULT_REF_ENV;
+use crate::RenderError;
+
+const DEFAULT_REF_EXPR: &str =
+    "${{ format('refs/heads/{0}', github.event.repository.default_branch) }}";
+const TOKEN_EXPR: &str = "${{ github.token }}";
+const STEP_NAME: &str = "Select attested state";
+const OUTPUT_DELIMITER: &str = "VELNOR_STATE_ATTESTED_EOF";
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SealRoot {
+    pub unit: StateUnit,
+    pub slug: RootSlug,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct StateSealPlan {
+    pub roots: Vec<SealRoot>,
+    pub canary: bool,
+}
+
+impl SealRoot {
+    fn prefix(&self) -> String {
+        StateScope {
+            trust: StateTrust::Trusted,
+            unit: self.unit,
+            root: self.slug.clone(),
+        }
+        .prefix()
+    }
+}
+
+const SELECT_HEAD: &str = r#"set -eu
+case "$RUNNER_TEMP" in /*) ;; *) printf '%s\n' 'RUNNER_TEMP must be absolute' >&2; exit 1 ;; esac
+d="$RUNNER_TEMP/velnor/state-select"
+rm -rf "$d"
+mkdir -p "$d"
+ref="${VELNOR_DEFAULT_REF:-}"
+repo="${GITHUB_REPOSITORY:-}"
+signer="${GITHUB_WORKFLOW_REF:-}"
+signer="${signer%%@*}"
+limit="${@TIMEOUT_ENV@:-@TIMEOUT@}"
+shape='^s256-[0-9a-f]{64}-s256-[0-9a-f]{64}-s256-[0-9a-f]{64}$'
+run_gh() {
+  if command -v timeout >/dev/null 2>&1; then timeout "$limit" gh "$@"; else gh "$@"; fi
+}
+attested() {
+  out="$d/$2"
+  : > "$out"
+  [ -n "$ref" ] && [ -n "$repo" ] && [ -n "$signer" ] || return 0
+  command -v gh >/dev/null 2>&1 || return 0
+  run_gh cache list -R "$repo" --key "$1" --ref "$ref" --sort created_at --order desc --limit @LIST_LIMIT@ --json key,createdAt,id,sizeInBytes --jq '.[] | .createdAt + " " + .key + " " + (.id | tostring) + " " + (.sizeInBytes | tostring)' > "$d/list" 2>/dev/null || return 0
+  LC_ALL=C sort -r "$d/list" > "$d/sorted" || return 0
+  n=
+  v=
+  while IFS= read -r line; do
+    [ "${#v}" -lt @VERIFY_LIMIT@ ] && [ "${#n}" -lt @LIST_LIMIT@ ] || break
+    rest=${line#* }
+    key=${rest%% *}
+    meta=${rest#* }
+    id=${meta%% *}
+    size=${meta#* }
+    case "$id" in ''|*[!0-9]*) continue ;; esac
+    case "$size" in ''|*[!0-9]*) continue ;; esac
+    case "$key" in "$1"?*) ;; *) continue ;; esac
+    printf '%s\n' "${key#"$1"}" | grep -Eq "$shape" || continue
+    printf '%s %s %s\n' "$key" "$id" "$size" > "$d/subject"
+    n="${n}x"
+    if run_gh attestation verify "$d/subject" -R "$repo" --signer-workflow "$signer" --source-ref "$ref" --predicate-type '@PREDICATE@' >/dev/null 2>&1; then printf '%s\n' "$key" >> "$out"; v="${v}x"; fi
+  done < "$d/sorted"
+}
+emit() {
+  { printf '%s\n' "$1<<@DELIMITER@"; cat "$d/$2"; printf '%s\n' @DELIMITER@; } >> "$GITHUB_OUTPUT"
+}
+"#;
+
+const CANARY_TAIL: &str = r#"if [ -s "$d/canary" ]; then verified=true; printf '%s\n' 'velnor: state seal canary verified'; else verified=false; fi
+printf '%s\n' "@VERIFIED@=$verified" >> "$GITHUB_OUTPUT"
+"#;
+
+fn head() -> String {
+    SELECT_HEAD
+        .replace("@TIMEOUT_ENV@", STATE_SEAL_VERIFY_TIMEOUT_ENV)
+        .replace("@TIMEOUT@", &STATE_SEAL_VERIFY_TIMEOUT_SECONDS.to_string())
+        .replace("@LIST_LIMIT@", &STATE_SEAL_LIST_LIMIT.to_string())
+        .replace("@VERIFY_LIMIT@", &STATE_SEAL_VERIFY_LIMIT.to_string())
+        .replace("@PREDICATE@", STATE_SEAL_PREDICATE_TYPE)
+        .replace("@DELIMITER@", OUTPUT_DELIMITER)
+}
+
+pub fn state_select_step(roots: &[SealRoot], canary: bool) -> Result<Step, RenderError> {
+    let mut sections = vec![head()];
+    sections.extend(roots.iter().enumerate().map(|(ordinal, root)| {
+        format!(
+            "attested '{}' r{ordinal}\nemit {} r{ordinal}\n",
+            root.prefix(),
+            state_attested_output(root.unit.as_str(), root.slug.as_str())
+        )
+    }));
+    if canary {
+        sections.push(format!("attested '{}' canary\n", state_canary_prefix()));
+        sections.push(CANARY_TAIL.replace("@VERIFIED@", STATE_CANARY_VERIFIED_OUTPUT));
+    }
+    let script = sections.concat();
+    let env = BTreeMap::from([
+        (DEFAULT_REF_ENV.to_owned(), DEFAULT_REF_EXPR.to_owned()),
+        ("GH_TOKEN".to_owned(), TOKEN_EXPR.to_owned()),
+        (
+            STATE_SEAL_VERIFY_TIMEOUT_ENV.to_owned(),
+            STATE_SEAL_VERIFY_TIMEOUT_SECONDS.to_string(),
+        ),
+    ]);
+    let mut step = crate::steps::ambient_shell_step(
+        STEP_NAME,
+        vec![
+            "sh".to_owned(),
+            "-c".to_owned(),
+            crate::state_script::one_line(&script),
+        ],
+        env,
+    )?;
+    step.id = Some(StepId::StateSelect);
+    step.role = Some(StepRole::StateSelect);
+    Ok(step)
+}

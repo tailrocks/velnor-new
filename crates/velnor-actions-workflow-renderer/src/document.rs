@@ -139,6 +139,14 @@ fn permissions_to_yaml(permissions: &Permissions) -> Yaml {
             Yaml::str(level_str(permissions.packages).to_owned()),
         ));
     }
+    if !matches!(permissions.attest, PermissionLevel::None) {
+        for scope in ["attestations", "artifact-metadata"] {
+            entries.push((
+                scope.to_owned(),
+                Yaml::str(level_str(permissions.attest).to_owned()),
+            ));
+        }
+    }
     Yaml::Map(entries)
 }
 

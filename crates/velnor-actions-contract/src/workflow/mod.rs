@@ -29,6 +29,8 @@ pub mod plan;
 mod plan_jobs;
 pub mod platform;
 mod producer;
+mod producer_order;
+mod producer_roles;
 pub use producer::{
     DEPENDENCY_SEED_JOB_CONDITION, LANE_SURVIVAL_CONDITION, ProducerKind,
     TOOLS_PRODUCER_INSTALL_CONDITION, validate_sources_producer, validate_tofu_providers_producer,
@@ -41,6 +43,7 @@ pub mod qualification_phase;
 pub mod report;
 mod report_validate;
 pub mod services;
+pub mod state_seal;
 pub mod step;
 mod step_id;
 mod step_payloads;
@@ -62,8 +65,8 @@ pub use artifacts::{
 pub use cache_access::{
     CacheAccess, CacheWriter, QUALIFICATION_CACHE_GUARD_ERROR, QUALIFICATION_CACHE_GUARD_ID,
     QUALIFICATION_CACHE_MODES, QUALIFICATION_CACHE_WRITER_IDS, QUALIFICATION_DEFAULT_BRANCH_GATE,
-    QUALIFICATION_WRITER_GATE, SOURCES_PRODUCER_JOB_ID, WORKFLOW_CACHE_MODE, WRITER_CACHE_MODE,
-    WRITER_MISE_ENV,
+    QUALIFICATION_WRITER_GATE, SOURCES_PRODUCER_JOB_ID, WORKFLOW_CACHE_MODE, WRITE_ONLY_CACHE_MODE,
+    WRITER_CACHE_MODE, WRITER_MISE_ENV,
 };
 pub use cache_context::{
     ApiConclusion, CacheCapability, CacheDriver, CacheRestoreOutcome, CompilerAdapterV1,
