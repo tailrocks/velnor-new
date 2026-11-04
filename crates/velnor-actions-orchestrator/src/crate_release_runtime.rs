@@ -162,23 +162,23 @@ pub(crate) fn validate_workflow_concurrency(
 ) -> Result<(), OrchestratorError> {
     let invalid = || internal("crate_release_workflow_lock_invalid");
     let text = std::str::from_utf8(bytes).map_err(|_| invalid())?;
-    let value: serde_yaml::Value = serde_yaml::from_str(text).map_err(|_| invalid())?;
-    let root = value.as_mapping().ok_or_else(invalid)?;
-    if root.contains_key(serde_yaml::Value::String("<<".into())) {
+    let mut options = serde_saphyr::Options::default();
+    options.merge_keys = serde_saphyr::MergeKeyPolicy::Error;
+    let value: serde_json::Value =
+        serde_saphyr::from_str_with_options(text, options).map_err(|_| invalid())?;
+    let root = value.as_object().ok_or_else(invalid)?;
+    if root.contains_key("<<") {
         return Err(invalid());
     }
     let concurrency = root
-        .get(serde_yaml::Value::String("concurrency".into()))
-        .and_then(serde_yaml::Value::as_mapping)
+        .get("concurrency")
+        .and_then(serde_json::Value::as_object)
         .ok_or_else(invalid)?;
     if concurrency.len() != 2
+        || concurrency.get("group").and_then(serde_json::Value::as_str) != Some(group)
         || concurrency
-            .get(serde_yaml::Value::String("group".into()))
-            .and_then(serde_yaml::Value::as_str)
-            != Some(group)
-        || concurrency
-            .get(serde_yaml::Value::String("cancel-in-progress".into()))
-            .and_then(serde_yaml::Value::as_bool)
+            .get("cancel-in-progress")
+            .and_then(serde_json::Value::as_bool)
             != Some(false)
     {
         return Err(invalid());
@@ -1143,9 +1143,9 @@ mod tests {
             },
             &rust,
         )?;
-        let workflow: serde_yaml::Value = serde_yaml::from_str(&workflow)?;
+        let workflow: serde_json::Value = serde_saphyr::from_str(&workflow)?;
         let steps = workflow["jobs"]["release-publish"]["steps"]
-            .as_sequence()
+            .as_array()
             .ok_or("publisher steps")?;
         let script = steps
             .iter()
@@ -1669,6 +1669,26 @@ mod tests {
             format!("{valid}concurrency:\n  group: {group}\n  cancel-in-progress: false\n"),
             valid.replace(&format!("  group: {group}"), "  group: *other"),
             valid.replace("concurrency:", "concurrency: &value"),
+            valid.replace(
+                "  cancel-in-progress: false",
+                "  cancel-in-progress: false\n  group: other",
+            ),
+            valid.replace(
+                "  cancel-in-progress: false",
+                "  cancel-in-progress: false\n  cancel-in-progress: true",
+            ),
+            valid.replace(
+                "  cancel-in-progress: false",
+                "  cancel-in-progress: false\n  <<: {}",
+            ),
+            valid.replace("cancel-in-progress: false", "cancel-in-progress: 'false'"),
+            format!("base: &base {{extra: value}}\n<<: *base\n{valid}"),
+            valid
+                .replace("concurrency:", "base: &base {extra: value}\nconcurrency:")
+                .replace(
+                    "  cancel-in-progress: false",
+                    "  cancel-in-progress: false\n  <<: *base",
+                ),
         ] {
             assert!(super::validate_workflow_concurrency(bad.as_bytes(), group).is_err());
         }

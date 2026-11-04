@@ -144,9 +144,9 @@ fn source_require_script() -> Result<String, Box<dyn Error>> {
         },
         &rust,
     )?;
-    let workflow: serde_yaml::Value = serde_yaml::from_str(&workflow)?;
+    let workflow: serde_json::Value = serde_saphyr::from_str(&workflow)?;
     let steps = workflow["jobs"]["release-publish"]["steps"]
-        .as_sequence()
+        .as_array()
         .ok_or("publisher steps")?;
     Ok(steps
         .iter()

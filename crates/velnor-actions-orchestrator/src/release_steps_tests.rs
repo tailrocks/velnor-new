@@ -739,7 +739,7 @@ fn workspace_creation_dispatch_binds_source_and_each_package()
     assert!(files.workflow.bytes.contains("workflow_dispatch:"));
     assert!(files.workflow.bytes.contains("github.event.inputs.source_sha"));
     assert!(!files.workflow.bytes.contains("github.event.inputs.version"));
-    let yaml: serde_yaml::Value = serde_yaml::from_str(&files.workflow.bytes)?;
+    let yaml: serde_json::Value = serde_saphyr::from_str(&files.workflow.bytes)?;
     let gate = yaml["jobs"]["release-publish-bootstrap"]["if"].as_str().ok_or("publisher gate")?;
     assert!(gate.contains("workflow_dispatch"));
     assert!(!gate.contains("event_name == 'push'"));
@@ -785,7 +785,7 @@ fn bootstrap_handover_renders_normal_trusted_publisher() -> Result<(), Box<dyn s
     let decoded: CrateReleaseIntent = toml::from_str(&files.intent.bytes)?;
     assert_eq!(decoded, intent);
     assert!(decoded.new_crates.is_none());
-    let yaml: serde_yaml::Value = serde_yaml::from_str(&files.workflow.bytes)?;
+    let yaml: serde_json::Value = serde_saphyr::from_str(&files.workflow.bytes)?;
     let publisher = &yaml["jobs"]["release-publish"];
     assert!(publisher["if"].as_str().ok_or("gate")?.contains("github.event_name == 'push'"));
     assert_eq!(publisher["permissions"]["id-token"].as_str(), Some("write"));
