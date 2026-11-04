@@ -22,6 +22,8 @@ use super::{
     shell_literal, split_shell,
 };
 
+const DISK_HEADROOM_DIVISOR: u64 = 8;
+
 const ZSTD_MAGIC_OCTAL: &str = "\\050\\265\\057\\375";
 
 fn ancestors(payload: &str) -> Result<Vec<String>, RenderError> {
@@ -82,7 +84,6 @@ pub(crate) fn recover_step(
         format!("selected=\"${{{MBX_BUNDLE_RESTORE_KEY_ENV}:-}}\""),
         "d=\"$RUNNER_TEMP/velnor/state-recover\"".to_owned(),
         "stage=\"$RUNNER_TEMP/velnor/state-stage\"".to_owned(),
-        "plain=\"$d/plain.tar\"".to_owned(),
     ];
     script.extend(cleanup_lines(&payload_parent, &ancestors(&payload)?));
     script.extend([
@@ -92,6 +93,7 @@ pub(crate) fn recover_step(
         "cold() { printf '%s\\n' \"velnor: state snapshot no_entry ($1)\"; exit 0; }".to_owned(),
         "corrupt() { printf '%s\\n' \"::warning::cache_corrupt: state snapshot $1; building cold\"; mode=purge; exit 0; }".to_owned(),
         "refused() { printf '%s\\n' \"::warning::cache_corrupt: state snapshot refused ($1); building cold\"; mode=purge; exit 0; }".to_owned(),
+        "lowdisk() { printf '%s\\n' \"velnor: state snapshot cold (disk_free=$1 need=$2)\"; mode=purge; exit 0; }".to_owned(),
         "if chain; then :; else corrupt \"payload path is a symlink\"; fi".to_owned(),
         "if [ ! -e \"$payload\" ] && [ ! -L \"$payload\" ]; then cold no_entry; fi".to_owned(),
         "if [ ! -f \"$payload\" ] || [ -L \"$payload\" ]; then corrupt \"payload is not a regular file\"; fi".to_owned(),
@@ -149,7 +151,7 @@ fn admission_lines(ceilings: StateCeilings) -> Vec<String> {
         read_number("size", "wc -c < \"$payload\"", "size", "size unreadable"),
         format!("if [ \"$size\" -gt {stored} ]; then refused \"over_stored stored=$size ceiling={stored}\"; fi"),
         "if [ -z \"${MBX_CACHE_DIR:-}\" ] || [ \"$MBX_CACHE_DIR\" != \"$RUNNER_TEMP/velnor/mbx\" ] || [ ! -d \"$MBX_CACHE_DIR/actions\" ]; then corrupt import_unavailable; fi".to_owned(),
-        "for tool in zstd cmp tar head tail wc find du sort mise mbx; do command -v \"$tool\" >/dev/null 2>&1 || corrupt import_unavailable; done".to_owned(),
+        "for tool in zstd cmp tar head tail wc find du df expr sort mise mbx; do command -v \"$tool\" >/dev/null 2>&1 || corrupt import_unavailable; done".to_owned(),
         "ws=${GITHUB_WORKSPACE:-}; ws=${ws%/}; if [ -z \"$ws\" ]; then corrupt import_unavailable; fi".to_owned(),
         "case \"$RUNNER_TEMP/velnor\" in \"$ws\"|\"$ws\"/*) corrupt import_in_workspace ;; esac".to_owned(),
         "expect=${matched##*-s256-}; case \"$expect\" in ''|*[!0-9a-f]*) refused refused-digest ;; esac; if [ \"${#expect}\" -ne 64 ]; then refused refused-digest; fi".to_owned(),
@@ -157,20 +159,26 @@ fn admission_lines(ceilings: StateCeilings) -> Vec<String> {
         "if head -c 4 \"$payload\" > \"$d/zmagic\"; then :; else corrupt \"payload unreadable\"; fi".to_owned(),
         format!("printf '{ZSTD_MAGIC_OCTAL}' > \"$d/zref\""),
         "if cmp -s \"$d/zmagic\" \"$d/zref\"; then :; else refused refused-format; fi".to_owned(),
-        format!("if {{ zstd -dc --long=30 \"$payload\" && : > \"$d/inflated\"; }} | head -c {cap_plus} > \"$plain\"; then :; else corrupt \"payload unreadable\"; fi"),
-        read_number("plain_n", "wc -c < \"$plain\"", "plain_size", "payload unreadable"),
+        "inflate() { zstd -dc --long=30 \"$payload\" && : > \"$d/inflated\"; }".to_owned(),
+        format!("bounded() {{ inflate | head -c {cap_plus}; }}"),
+        read_number("plain_n", "bounded | wc -c", "plain_size", "payload unreadable"),
         format!("if [ \"$plain_n\" -gt {cap} ]; then refused \"over_extracted extracted>=$plain_n ceiling={extracted}\"; fi"),
         "if [ ! -f \"$d/inflated\" ]; then corrupt \"payload unreadable\"; fi".to_owned(),
-        "head -c 262 \"$plain\" | tail -c 5 > \"$d/magic\"; magic=; read -r magic < \"$d/magic\" || :; if [ \"$magic\" != ustar ]; then refused refused-shadow; fi".to_owned(),
-        "prefix=\"$base/\"; head -c \"${#prefix}\" \"$plain\" > \"$d/first\"; first=; read -r first < \"$d/first\" || :; if [ \"$first\" != \"$prefix\" ]; then refused refused-shadow; fi".to_owned(),
+        "dfs=; dfk=; dfu=; dfa=; dfr=; if df -Pk \"$RUNNER_TEMP\" > \"$d/df\" && tail -n 1 \"$d/df\" > \"$d/df_last\"; then read -r dfs dfk dfu dfa dfr < \"$d/df_last\" || :; else corrupt \"disk free unreadable\"; fi; case \"$dfa\" in ''|*[!0-9]*) corrupt \"disk free unreadable\" ;; esac".to_owned(),
+        "expr \"$dfa\" \\* 1024 > \"$d/free\" || :; free=; free_rest=; read -r free free_rest < \"$d/free\" || :; case \"$free\" in ''|*[!0-9]*) corrupt \"disk free unreadable\" ;; esac".to_owned(),
+        format!("expr \"$plain_n\" / {DISK_HEADROOM_DIVISOR} > \"$d/headroom\" || :; headroom=; headroom_rest=; read -r headroom headroom_rest < \"$d/headroom\" || :; case \"$headroom\" in ''|*[!0-9]*) corrupt \"payload unreadable\" ;; esac"),
+        "expr \"$plain_n\" + \"$headroom\" > \"$d/need\" || :; need=; need_rest=; read -r need need_rest < \"$d/need\" || :; case \"$need\" in ''|*[!0-9]*) corrupt \"payload unreadable\" ;; esac; if [ \"$free\" -lt \"$need\" ]; then lowdisk \"$free\" \"$need\"; fi".to_owned(),
+        "if inflate 2>/dev/null | head -c 512 > \"$d/first512\"; then :; else corrupt \"payload unreadable\"; fi".to_owned(),
+        "head -c 262 \"$d/first512\" | tail -c 5 > \"$d/magic\"; magic=; read -r magic < \"$d/magic\" || :; if [ \"$magic\" != ustar ]; then refused refused-shadow; fi".to_owned(),
+        "prefix=\"$base/\"; head -c \"${#prefix}\" \"$d/first512\" > \"$d/first\"; first=; read -r first < \"$d/first\" || :; if [ \"$first\" != \"$prefix\" ]; then refused refused-shadow; fi".to_owned(),
     ]
 }
 
 fn screen_lines(ceilings: StateCeilings) -> Vec<String> {
     let members = ceilings.members();
     vec![
-        "if tar -tf - < \"$plain\" > \"$d/members\"; then :; else corrupt \"payload unreadable\"; fi".to_owned(),
-        "if tar -tvf - < \"$plain\" > \"$d/verbose\"; then :; else corrupt \"payload unreadable\"; fi".to_owned(),
+        "if bounded | tar -tf - > \"$d/members\"; then :; else corrupt \"payload unreadable\"; fi".to_owned(),
+        "if bounded | tar -tvf - > \"$d/verbose\"; then :; else corrupt \"payload unreadable\"; fi".to_owned(),
         read_number("members_n", "wc -l < \"$d/members\"", "count", "member count unreadable"),
         read_number("verbose_n", "wc -l < \"$d/verbose\"", "vcount", "member count unreadable"),
         "if [ \"$members_n\" != \"$verbose_n\" ]; then refused refused-shadow; fi".to_owned(),
@@ -184,8 +192,9 @@ fn screen_lines(ceilings: StateCeilings) -> Vec<String> {
 fn extract_lines() -> Vec<String> {
     vec![
         "if mkdir -m 700 \"$stage\"; then :; else corrupt \"payload unreadable\"; fi".to_owned(),
-        "if tar -xf - -C \"$stage\" --no-same-owner < \"$plain\"; then :; else corrupt \"payload unreadable\"; fi".to_owned(),
-        "rm -f \"$plain\"; unlock \"$stage\"".to_owned(),
+        "if bounded | tar -xf - -C \"$stage\" --no-same-owner; then :; else corrupt \"payload unreadable\"; fi".to_owned(),
+        "unlock \"$stage\"".to_owned(),
+        "if s256 \"$payload\"; then :; else corrupt \"digest unreadable\"; fi; if [ \"$h\" != \"$payload_h\" ]; then refused refused-digest; fi".to_owned(),
         "if [ -d \"$stage/$base\" ] && [ ! -L \"$stage/$base\" ]; then :; else refused refused-shadow; fi".to_owned(),
         "if find \"$stage\" ! -type f ! -type d > \"$d/special\"; then :; else corrupt \"payload unreadable\"; fi; if [ -s \"$d/special\" ]; then refused refused-shadow; fi".to_owned(),
         "if find \"$stage\" -type f -links +1 > \"$d/linked\"; then :; else corrupt \"payload unreadable\"; fi; if [ -s \"$d/linked\" ]; then refused refused-shadow; fi".to_owned(),
