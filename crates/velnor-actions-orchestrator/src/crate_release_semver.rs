@@ -1,6 +1,10 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+#[cfg(all(test, unix))]
+#[path = "crate_release_semver_test_registry.rs"]
+mod test_registry;
+
 use std::{cmp::Ordering, ffi::OsString, io::Write as _, path::Path, time::Duration};
 
 use crate::{
@@ -476,6 +480,14 @@ fn run_check(
     let temp = tempfile::tempdir().map_err(|_| invalid())?;
     let home = temp.path().join("cargo-home");
     std::fs::create_dir(&home).map_err(|_| invalid())?;
+    #[cfg(all(test, unix))]
+    let fixture_registry =
+        if let Some(snapshot) = std::env::var_os("VELNOR_NATIVE_REGISTRY_SNAPSHOT") {
+            test_registry::copy_snapshot(Path::new(&snapshot), &home).map_err(|_| invalid())?;
+            true
+        } else {
+            false
+        };
     let baseline_root = temp.path().join("baseline");
     std::fs::create_dir(&baseline_root).map_err(|_| invalid())?;
     extract_baseline(baseline.1, package, &baseline.0.version, &baseline_root)?;
@@ -488,6 +500,10 @@ fn run_check(
         format!("CARGO={}", cargo.display()).into(),
     ];
     args.extend(source_compiler_env(rust, git)?);
+    #[cfg(all(test, unix))]
+    if fixture_registry {
+        args.push("CARGO_NET_OFFLINE=true".into());
+    }
     args.extend([
         executable.as_os_str().to_owned(),
         "check-release".into(),
@@ -513,6 +529,28 @@ fn run_check(
         .run_quiescent_until(1024 * 1024, deadline)
         .map_err(|_| invalid())?;
     if !output.success {
+        #[cfg(test)]
+        {
+            let text = String::from_utf8_lossy(&output.stderr).to_ascii_lowercase();
+            for (name, pattern) in [
+                ("registry-unavailable", "failed to download"),
+                ("registry-unavailable", "failed to get"),
+                ("registry-unavailable", "failed to fetch"),
+                ("dependency-unavailable", "no matching package named"),
+                ("network-unavailable", "failed to resolve"),
+                ("network-unavailable", "could not resolve"),
+                ("manifest-error", "failed to parse manifest"),
+                ("rustdoc-error", "failed to generate rustdoc"),
+                ("rustdoc-error", "failed to build"),
+                ("semver-violations", "semver requires"),
+                ("semver-violations", "breaking change"),
+            ] {
+                if text.contains(pattern) {
+                    eprintln!("fixture semver class: {name}");
+                }
+            }
+            eprintln!("fixture semver checker exited unsuccessfully");
+        }
         return Err(invalid());
     }
     velnor_actions_mise::release_git_pin::ReleaseGitExecutable::revalidate(git)
