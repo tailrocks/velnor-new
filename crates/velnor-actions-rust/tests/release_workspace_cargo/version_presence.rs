@@ -180,46 +180,7 @@ fn dev_git_wildcard_presence_matches_cargo_package() {
         "dep/Cargo.toml",
         "[package]\nname='unique_git_missing_487'\nversion='1.0.0'\nedition='2021'\n",
     );
-    let dep = root.join("dep");
-    for args in [
-        vec!["init", "-q"],
-        vec![
-            "-c",
-            "user.name=Fixture",
-            "-c",
-            "user.email=fixture@example.invalid",
-            "add",
-            ".",
-        ],
-        vec![
-            "-c",
-            "user.name=Fixture",
-            "-c",
-            "user.email=fixture@example.invalid",
-            "commit",
-            "-qm",
-            "fixture",
-        ],
-    ] {
-        assert!(
-            Command::new("git")
-                .args(args)
-                .current_dir(&dep)
-                .status()
-                .expect("git")
-                .success()
-        );
-    }
-    let path = dep.to_string_lossy().replace('\\', "/");
-    let url = if cfg!(windows) {
-        if let Some(unc) = path.strip_prefix("//?/UNC/") {
-            format!("file://{unc}")
-        } else {
-            format!("file:///{}", path.strip_prefix("//?/").unwrap_or(&path))
-        }
-    } else {
-        format!("file://{path}")
-    };
+    let url = git_fixture_url(&root);
     let scope = ReleaseScope::Packages(vec!["workspace_git_probe_487".into()]);
     let empty = BTreeSet::new();
     for (version, expected) in [("", true), (",version='*'", false)] {
@@ -281,5 +242,48 @@ fn dev_git_wildcard_presence_matches_cargo_package() {
             );
             assert!(plan_release(&request, &available).is_ok());
         }
+    }
+}
+
+fn git_fixture_url(root: &Path) -> String {
+    let dep = root.join("dep");
+    for args in [
+        vec!["init", "-q"],
+        vec![
+            "-c",
+            "user.name=Fixture",
+            "-c",
+            "user.email=fixture@example.invalid",
+            "add",
+            ".",
+        ],
+        vec![
+            "-c",
+            "user.name=Fixture",
+            "-c",
+            "user.email=fixture@example.invalid",
+            "commit",
+            "-qm",
+            "fixture",
+        ],
+    ] {
+        assert!(
+            Command::new("git")
+                .args(args)
+                .current_dir(&dep)
+                .status()
+                .expect("git")
+                .success()
+        );
+    }
+    let path = dep.to_string_lossy().replace('\\', "/");
+    if cfg!(windows) {
+        if let Some(unc) = path.strip_prefix("//?/UNC/") {
+            format!("file://{unc}")
+        } else {
+            format!("file:///{}", path.strip_prefix("//?/").unwrap_or(&path))
+        }
+    } else {
+        format!("file://{path}")
     }
 }

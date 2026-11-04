@@ -8,6 +8,7 @@ on:
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
+cache-mode: read
 permissions:
   contents: read
 jobs:
@@ -28,7 +29,7 @@ jobs:
         run: cargo +1.99.1 install --locked --version 0.9.151 cargo-nextest
       - name: Verify nested tracked manifests
         shell: pwsh
-        run: cargo +1.99.1 nextest run --locked -p velnor-actions-orchestrator --test workflow_configuration_public release_tracked_manifests
+        run: cargo +1.99.1 nextest run --locked -p velnor-actions-rust --test tracked_manifest_public
       - name: Verify workspace manifest handling
         shell: pwsh
         run: cargo +1.99.1 nextest run --locked -p velnor-actions-rust --test release_workspace_cargo

@@ -40,6 +40,7 @@ pub mod stability;
 mod task_identity;
 pub mod tasks;
 pub mod toolfiles;
+mod tracked_manifest;
 
 pub use cargo_env::{DENY_WARNINGS, RUSTDOCFLAGS_ENV, cargo_payload_env};
 pub use closure::{
@@ -114,3 +115,5 @@ pub use toolfiles::{
 };
 
 pub const STACK_ID: &str = "rust";
+
+pub use tracked_manifest::tracked_manifest_in_source;

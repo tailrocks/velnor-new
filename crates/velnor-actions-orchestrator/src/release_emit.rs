@@ -190,11 +190,11 @@ pub(crate) fn select_from_json(
     } else {
         format!("{}/Cargo.toml", record.workspace_root)
     };
-    if !tracked_manifest_in_source(&prep.root, &known_manifests, manifest)
-        || !tracked_manifest_in_source(&prep.root, &known_manifests, &workspace_manifest)
+    if !velnor_actions_rust::tracked_manifest_in_source(&prep.root, &known_manifests, manifest)
+        || !velnor_actions_rust::tracked_manifest_in_source(&prep.root, &known_manifests, &workspace_manifest)
         || record.packages.iter().any(|package| {
             !package.external
-                && !tracked_manifest_in_source(&prep.root, &known_manifests, &package.manifest)
+                && !velnor_actions_rust::tracked_manifest_in_source(&prep.root, &known_manifests, &package.manifest)
         })
     {
         return Err(OrchestratorError::Contract {
@@ -204,31 +204,6 @@ pub(crate) fn select_from_json(
     select_release_set(&request).map_err(|err| OrchestratorError::Contract {
         problem: err.to_string(),
     })
-}
-
-fn tracked_manifest_in_source(
-    root: &std::path::Path,
-    known: &BTreeSet<String>,
-    path: &str,
-) -> bool {
-    if !known.contains(path) {
-        return false;
-    }
-    let Ok(root) = root.canonicalize() else {
-        return false;
-    };
-    let Ok(target) = root.join(path).canonicalize() else {
-        return false;
-    };
-    let Ok(relative) = target.strip_prefix(root) else {
-        return false;
-    };
-    relative
-        .components()
-        .map(|part| part.as_os_str().to_str())
-        .collect::<Option<Vec<_>>>()
-        .is_some_and(|parts| known.contains(&parts.join("/")))
-        && target.is_file()
 }
 
 fn tracked_manifests(root: &std::path::Path) -> Result<BTreeSet<String>, OrchestratorError> {

@@ -38,3 +38,7 @@ path = "tests/release_workspace_cargo.rs"
 [[test]]
 name = "crate_release_semver_public"
 path = "tests/crate_release_semver_public.rs"
+
+[[test]]
+name = "tracked_manifest_public"
+path = "tests/tracked_manifest_public.rs"
