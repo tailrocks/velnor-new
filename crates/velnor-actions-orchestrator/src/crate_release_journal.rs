@@ -434,11 +434,21 @@ fn read_mutation<I: JournalIo>(
     let Some(tag_sha) = read_ref(io, &identity.repository, &name).map_err(|_| invalid())? else {
         return Ok(None);
     };
-    if !valid_sha(&tag_sha) {
+    read_mutation_at(io, identity, sequence, &tag_sha).map(Some)
+}
+
+fn read_mutation_at<I: JournalIo>(
+    io: &I,
+    identity: &JournalIdentity,
+    sequence: u32,
+    tag_sha: &str,
+) -> Result<MutationRecord, OrchestratorError> {
+    let name = mutation_name(identity, sequence);
+    if !valid_sha(tag_sha) {
         return Err(invalid());
     }
     let tag = io
-        .get_tag_object(&identity.repository, &tag_sha)
+        .get_tag_object(&identity.repository, tag_sha)
         .map_err(|_| invalid())?;
     if tag.name != name.trim_start_matches("refs/tags/")
         || tag.object_type != "blob"
@@ -447,7 +457,7 @@ fn read_mutation<I: JournalIo>(
     {
         return Err(invalid());
     }
-    verify_raw_tag(io, &identity.repository, &tag_sha, &tag)?;
+    verify_raw_tag(io, &identity.repository, tag_sha, &tag)?;
     let bytes = io
         .get_blob(&identity.repository, &tag.object_sha)
         .map_err(|_| invalid())?;
@@ -468,14 +478,14 @@ fn read_mutation<I: JournalIo>(
     {
         return Err(invalid());
     }
-    Ok(Some(record))
+    Ok(record)
 }
 
 pub trait JournalOperationRefs {
     fn list_operation_refs(
         &self,
         identity: &JournalIdentity,
-    ) -> Result<Vec<String>, OrchestratorError>;
+    ) -> Result<Vec<(String, String)>, OrchestratorError>;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -516,8 +526,8 @@ pub(crate) fn inspect_recoverable_history<I: JournalIo + JournalOperationRefs>(
     }
     let listed = operation_sequences(io, identity)?;
     let mut mutations = Vec::with_capacity(listed.len());
-    for sequence in &listed {
-        let record = read_mutation(io, identity, *sequence)?.ok_or_else(invalid)?;
+    for (sequence, sha) in &listed {
+        let record = read_mutation_at(io, identity, *sequence, sha)?;
         if record.receipt != *receipt
             || !valid_mutation(&record.mutation, receipt, mutations.last())
         {
@@ -547,8 +557,8 @@ pub fn inspect_prior_history<I: JournalIo + JournalOperationRefs>(
     let start = inspect_prior_incomplete_inner(io, previous, current, source, true)?;
     let listed = operation_sequences(io, previous)?;
     let mut mutations = Vec::with_capacity(listed.len());
-    for sequence in &listed {
-        let record = read_mutation(io, previous, *sequence)?.ok_or_else(invalid)?;
+    for (sequence, sha) in &listed {
+        let record = read_mutation_at(io, previous, *sequence, sha)?;
         if record.receipt != start.receipt
             || !valid_mutation(&record.mutation, &start.receipt, mutations.last())
         {
@@ -568,7 +578,7 @@ pub fn inspect_prior_history<I: JournalIo + JournalOperationRefs>(
 fn operation_sequences<I: JournalOperationRefs>(
     io: &I,
     identity: &JournalIdentity,
-) -> Result<Vec<u32>, OrchestratorError> {
+) -> Result<Vec<(u32, String)>, OrchestratorError> {
     let prefix = format!(
         "refs/tags/velnor-receipt/{}/{}/operation-",
         identity.run_id, identity.run_attempt
@@ -577,11 +587,15 @@ fn operation_sequences<I: JournalOperationRefs>(
     if refs.len() > 1000 {
         return Err(invalid());
     }
-    let mut sequences = std::collections::BTreeSet::new();
-    for reference in refs {
+    let mut sequences = std::collections::BTreeMap::new();
+    for (reference, sha) in refs {
         let value = reference.strip_prefix(&prefix).ok_or_else(invalid)?;
         let number = value.parse::<u32>().map_err(|_| invalid())?;
-        if number == 0 || number > 1000 || number.to_string() != value || !sequences.insert(number)
+        if number == 0
+            || number > 1000
+            || number.to_string() != value
+            || !valid_sha(&sha)
+            || sequences.insert(number, sha).is_some()
         {
             return Err(invalid());
         }
@@ -589,7 +603,7 @@ fn operation_sequences<I: JournalOperationRefs>(
     let values: Vec<_> = sequences.into_iter().collect();
     if values
         .iter()
-        .copied()
+        .map(|(number, _)| *number)
         .ne(1..=u32::try_from(values.len()).map_err(|_| invalid())?)
     {
         return Err(invalid());

@@ -30,13 +30,14 @@ struct Registry {
     access_checks: Cell<usize>,
     reject_access: Option<()>,
     inject_after_list: Cell<bool>,
+    move_on_second_list: Cell<u8>,
 }
 
 impl JournalOperationRefs for Registry {
     fn list_operation_refs(
         &self,
         identity: &JournalIdentity,
-    ) -> Result<Vec<String>, OrchestratorError> {
+    ) -> Result<Vec<(String, String)>, OrchestratorError> {
         if self.reject_access.is_some() {
             return Err(err());
         }
@@ -44,12 +45,20 @@ impl JournalOperationRefs for Registry {
             "refs/tags/velnor-receipt/{}/{}/operation-",
             identity.run_id, identity.run_attempt
         );
+        if self.move_on_second_list.get() == 1 {
+            self.move_on_second_list.set(2);
+        } else if self.move_on_second_list.get() == 2 {
+            self.refs
+                .borrow_mut()
+                .insert(format!("{prefix}1"), "a".repeat(40));
+            self.move_on_second_list.set(0);
+        }
         let listed = self
             .refs
             .borrow()
-            .keys()
-            .filter(|name| name.starts_with(&prefix))
-            .cloned()
+            .iter()
+            .filter(|(name, _)| name.starts_with(&prefix))
+            .map(|(name, sha)| (name.clone(), sha.clone()))
             .collect();
         if self.inject_after_list.replace(false) {
             self.refs
@@ -1398,6 +1407,18 @@ fn verify_new_crate_prior_intention(
         },
     )?;
     assert!(inspect_prior_history(&journal, &prior.identity, &current, root).is_ok());
+    let original_refs = journal.refs.borrow().clone();
+    let object_counts = (journal.tags.borrow().len(), journal.blobs.borrow().len());
+    journal.move_on_second_list.set(1);
+    assert!(
+        inspect_prior_history(&journal, &prior.identity, &current, root).is_err(),
+        "moving a journal ref between history observations must be rejected"
+    );
+    assert_eq!(
+        (journal.tags.borrow().len(), journal.blobs.borrow().len()),
+        object_counts
+    );
+    *journal.refs.borrow_mut() = original_refs;
     reject_forged_new_crate_prior(plan, &prior, &current, root)?;
     let actual_owners = journal_existing_owners(&current.packages[0].owners);
     crate::crate_release_journal::record_journal_mutation(

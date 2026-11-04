@@ -961,7 +961,7 @@ impl velnor_actions_orchestrator::crate_release_journal::JournalOperationRefs
     fn list_operation_refs(
         &self,
         identity: &velnor_actions_orchestrator::crate_release_journal::JournalIdentity,
-    ) -> Result<Vec<String>, OrchestratorError> {
+    ) -> Result<Vec<(String, String)>, OrchestratorError> {
         let prefix = format!(
             "refs/tags/velnor-receipt/{}/{}/operation-",
             identity.run_id, identity.run_attempt
@@ -969,9 +969,9 @@ impl velnor_actions_orchestrator::crate_release_journal::JournalOperationRefs
         Ok(self
             .refs
             .borrow()
-            .keys()
-            .filter(|name| name.starts_with(&prefix))
-            .cloned()
+            .iter()
+            .filter(|(name, _)| name.starts_with(&prefix))
+            .map(|(name, sha)| (name.clone(), sha.clone()))
             .collect())
     }
 }

@@ -81,7 +81,7 @@ impl crate::crate_release_journal_adapter::JournalRefTransport for NativeGitHubA
     fn list_operations(
         &self,
         identity: &crate::crate_release_journal::JournalIdentity,
-    ) -> Result<Vec<String>, OrchestratorError> {
+    ) -> Result<Vec<(String, String)>, OrchestratorError> {
         self.reader.list_journal_operations(
             &identity.repository,
             identity.run_id,

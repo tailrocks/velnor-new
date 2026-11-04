@@ -1296,7 +1296,11 @@ mod tests {
             run_attempt: 1,
         };
         assert_eq!(
-            journal.list_operation_refs(&identity)?,
+            journal
+                .list_operation_refs(&identity)?
+                .iter()
+                .map(|(name, _)| name.as_str())
+                .collect::<Vec<_>>(),
             ["refs/tags/velnor-receipt/12/1/operation-1"]
         );
         Ok(())

@@ -40,7 +40,7 @@ impl GitHubAdmissionHttp {
         repository: &str,
         run_id: u64,
         attempt: u32,
-    ) -> Result<Vec<String>, OrchestratorError> {
+    ) -> Result<Vec<(String, String)>, OrchestratorError> {
         validate_repository(repository)?;
         if run_id == 0 || attempt == 0 {
             return Err(internal("crate_release_http_write_input"));
@@ -55,7 +55,7 @@ impl GitHubAdmissionHttp {
             .as_array()
             .filter(|items| items.len() <= 1000)
             .ok_or_else(|| internal("crate_release_http_response"))?;
-        let mut unique = std::collections::BTreeSet::new();
+        let mut unique = std::collections::BTreeMap::new();
         for entry in entries {
             let reference = entry["ref"]
                 .as_str()
@@ -67,7 +67,15 @@ impl GitHubAdmissionHttp {
                 || validate_journal_name(name).is_err()
                 || entry["object"]["type"].as_str() != Some("tag")
                 || !entry["object"]["sha"].as_str().is_some_and(valid_sha)
-                || !unique.insert(reference.to_owned())
+                || unique
+                    .insert(
+                        reference.to_owned(),
+                        entry["object"]["sha"]
+                            .as_str()
+                            .ok_or_else(|| internal("crate_release_http_response"))?
+                            .to_owned(),
+                    )
+                    .is_some()
             {
                 return Err(internal("crate_release_http_response"));
             }
@@ -744,7 +752,13 @@ mod tests {
         let result = client(origin)
             .list_journal_operations("example/demo-crate", 42, 1)
             .expect("listing");
-        assert_eq!(result, ["refs/tags/velnor-receipt/42/1/operation-1"]);
+        assert_eq!(
+            result,
+            [(
+                "refs/tags/velnor-receipt/42/1/operation-1".to_owned(),
+                "a".repeat(40)
+            )]
+        );
         let requests = worker.join().expect("server");
         assert!(requests[0].contains(
             "/repos/example/demo-crate/git/matching-refs/tags/velnor-receipt%2F42%2F1%2Foperation-"

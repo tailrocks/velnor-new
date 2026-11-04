@@ -49,7 +49,7 @@ pub trait JournalRefTransport {
     fn list_operations(
         &self,
         identity: &crate::crate_release_journal::JournalIdentity,
-    ) -> Result<Vec<String>, OrchestratorError>;
+    ) -> Result<Vec<(String, String)>, OrchestratorError>;
 }
 
 type CacheKey = (String, String);
@@ -78,7 +78,7 @@ impl<T: JournalTransport + JournalRefTransport> crate::crate_release_journal::Jo
     fn list_operation_refs(
         &self,
         identity: &crate::crate_release_journal::JournalIdentity,
-    ) -> Result<Vec<String>, OrchestratorError> {
+    ) -> Result<Vec<(String, String)>, OrchestratorError> {
         self.transport
             .check_repository_access(&identity.repository)?;
         let names = self.transport.list_operations(identity)?;
@@ -86,9 +86,13 @@ impl<T: JournalTransport + JournalRefTransport> crate::crate_release_journal::Jo
             "refs/tags/velnor-receipt/{}/{}/operation-",
             identity.run_id, identity.run_attempt
         );
-        let mut unique = std::collections::BTreeSet::new();
-        for name in names {
-            if !name.starts_with(&prefix) || !valid_reference(&name) || !unique.insert(name) {
+        let mut unique = std::collections::BTreeMap::new();
+        for (name, sha) in names {
+            if !name.starts_with(&prefix)
+                || !valid_reference(&name)
+                || !valid_sha(&sha)
+                || unique.insert(name, sha).is_some()
+            {
                 return Err(invalid());
             }
         }
