@@ -32,11 +32,12 @@ pub fn crate_release_workspace_plan_with_registry<
     sha: &str,
     intent: &CrateReleaseIntent,
     registry: &R,
+    git: &velnor_actions_mise::release_git_pin::VerifiedGit,
 ) -> Result<CrateReleaseWorkspacePlan, OrchestratorError> {
     intent
         .validate()
         .map_err(|_| internal("crate_release_intent_invalid"))?;
-    verify_crate_release_source(root, sha)?;
+    verify_crate_release_source(root, sha, git)?;
     verify_toolchain_source_separation(root)?;
     let canonical = root
         .canonicalize()
@@ -49,12 +50,12 @@ pub fn crate_release_workspace_plan_with_registry<
             }
         }
     }
-    let manifests = tracked_manifests(&canonical)?;
+    let manifests = tracked_manifests(&canonical, git)?;
     if !manifests.contains(&intent.manifest_path) {
         return Err(internal("crate_release_manifest_untracked"));
     }
     let metadata = workspace_metadata(&canonical, intent)?;
-    verify_crate_release_source(&canonical, sha)?;
+    verify_crate_release_source(&canonical, sha, git)?;
     let concurrency_group = crate::release_identity::workspace_lock(
         &metadata,
         &canonical,
@@ -102,9 +103,12 @@ pub fn crate_release_workspace_plan_with_registry<
     })
 }
 
-fn tracked_manifests(root: &Path) -> Result<BTreeSet<String>, OrchestratorError> {
+fn tracked_manifests(
+    root: &Path,
+    git: &velnor_actions_mise::release_git_pin::VerifiedGit,
+) -> Result<BTreeSet<String>, OrchestratorError> {
     let tracked = GitRequest::ls_files(vec!["-z".into()])
-        .run_release_in(root)
+        .run_release_in(root, git)
         .map_err(|_| internal("crate_release_source_git"))?;
     if !tracked.success {
         return Err(internal("crate_release_source_git"));

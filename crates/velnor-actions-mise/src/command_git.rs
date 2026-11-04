@@ -6,9 +6,12 @@ use std::ffi::OsString;
 use super::{EnvPolicy, IsolatedCommand};
 
 impl IsolatedCommand {
-    pub(crate) fn release_git(args: Vec<OsString>) -> Self {
+    pub(crate) fn release_git(
+        args: Vec<OsString>,
+        git: &crate::release_git_pin::VerifiedGit,
+    ) -> Self {
         Self {
-            program: OsString::from("/usr/bin/git"),
+            program: git.executable().as_os_str().to_owned(),
             args,
             cwd: None,
             extra_env: [
@@ -21,6 +24,10 @@ impl IsolatedCommand {
             ]
             .into_iter()
             .map(|(key, value)| (OsString::from(key), OsString::from(value)))
+            .chain(std::iter::once((
+                OsString::from("GIT_EXEC_PATH"),
+                git.exec_path().as_os_str().to_owned(),
+            )))
             .collect(),
             policy: EnvPolicy::QualifiedProbe,
             operator_guarded: false,

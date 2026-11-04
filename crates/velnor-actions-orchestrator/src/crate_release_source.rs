@@ -3,13 +3,14 @@
 
 use crate::{OrchestratorError, internal::internal};
 use std::{fs, path::Path};
-use velnor_actions_mise::GitRequest;
+use velnor_actions_mise::{GitRequest, release_git_pin::VerifiedGit};
 
 pub fn verify_journal_source(
     root: &Path,
     receipt: &crate::crate_release_journal::JournalReceipt,
+    git: &VerifiedGit,
 ) -> Result<(), OrchestratorError> {
-    if journal_source_inventory(root, &receipt.identity.source_sha)? != receipt.source_files {
+    if journal_source_inventory(root, &receipt.identity.source_sha, git)? != receipt.source_files {
         return Err(internal("crate_release_journal_source_mismatch"));
     }
     Ok(())
@@ -18,10 +19,11 @@ pub fn verify_journal_source(
 pub fn journal_source_inventory(
     root: &Path,
     expected_sha: &str,
+    git: &VerifiedGit,
 ) -> Result<Vec<crate::crate_release_journal::JournalFile>, OrchestratorError> {
     use crate::crate_release_journal::{JournalFile, JournalFileKind};
-    verify_crate_release_source(root, expected_sha)?;
-    let entries = source_tree_entries(root)?;
+    verify_crate_release_source(root, expected_sha, git)?;
+    let entries = source_tree_entries(root, git)?;
     if entries.is_empty() || entries.len() > 100_000 {
         return Err(internal("crate_release_journal_inventory_invalid"));
     }
@@ -49,13 +51,14 @@ pub fn journal_source_inventory(
     if !crate::crate_release_journal::valid_source_files(&files) {
         return Err(internal("crate_release_journal_inventory_invalid"));
     }
-    verify_crate_release_source(root, expected_sha)?;
+    verify_crate_release_source(root, expected_sha, git)?;
     Ok(files)
 }
 
 pub fn verify_crate_release_source(
     root: &Path,
     expected_sha: &str,
+    git: &VerifiedGit,
 ) -> Result<(), OrchestratorError> {
     if expected_sha.len() != 40
         || !expected_sha
@@ -73,7 +76,7 @@ pub fn verify_crate_release_source(
         .canonicalize()
         .map_err(|_| internal("crate_release_source_root_invalid"))?;
     let top = GitRequest::rev_parse(vec!["--show-toplevel".into()])
-        .run_release_in(&canonical)
+        .run_release_in(&canonical, git)
         .map_err(|_| internal("crate_release_source_git"))?;
     if !top.success {
         return Err(internal("crate_release_source_git"));
@@ -85,7 +88,7 @@ pub fn verify_crate_release_source(
         .canonicalize()
         .map_err(|_| internal("crate_release_source_git"))?;
     let head = GitRequest::rev_parse(vec!["HEAD".into()])
-        .run_release_in(&canonical)
+        .run_release_in(&canonical, git)
         .map_err(|_| internal("crate_release_source_git"))?;
     let head_sha = head
         .stdout_text("git")
@@ -93,9 +96,9 @@ pub fn verify_crate_release_source(
     if top != canonical || !head.success || head_sha.trim() != expected_sha {
         return Err(internal("crate_release_source_mismatch"));
     }
-    validate_source_links(&canonical)?;
+    validate_source_links(&canonical, git)?;
     let untracked = GitRequest::ls_files(vec!["--others".into()])
-        .run_release_in(&canonical)
+        .run_release_in(&canonical, git)
         .map_err(|_| internal("crate_release_source_git"))?;
     if !untracked.success || !untracked.stdout.is_empty() {
         return Err(internal("crate_release_source_untracked"));
@@ -127,18 +130,18 @@ pub(crate) fn source_tool_catalog(
     )
 }
 
-fn validate_source_links(root: &Path) -> Result<(), OrchestratorError> {
+fn validate_source_links(root: &Path, git: &VerifiedGit) -> Result<(), OrchestratorError> {
     use std::collections::BTreeSet;
     if !cfg!(unix) {
         return Err(internal("crate_release_source_platform_unsupported"));
     }
     let output = GitRequest::ls_files(vec!["--stage".into(), "-z".into()])
-        .run_release_in(root)
+        .run_release_in(root, git)
         .map_err(|_| internal("crate_release_source_git"))?;
     if !output.success {
         return Err(internal("crate_release_source_git"));
     }
-    let mut tree_entries = source_tree_entries(root)?;
+    let mut tree_entries = source_tree_entries(root, git)?;
     let mut files = BTreeSet::new();
     let mut links = Vec::new();
     for entry in output
@@ -175,6 +178,7 @@ fn validate_source_links(root: &Path) -> Result<(), OrchestratorError> {
 
 fn source_tree_entries(
     root: &Path,
+    git: &VerifiedGit,
 ) -> Result<std::collections::BTreeSet<(String, String, String)>, OrchestratorError> {
     let tree = GitRequest::ls_tree(vec![
         "-r".into(),
@@ -182,7 +186,7 @@ fn source_tree_entries(
         "--full-tree".into(),
         "HEAD".into(),
     ])
-    .run_release_in(root)
+    .run_release_in(root, git)
     .map_err(|_| internal("crate_release_source_git"))?;
     if !tree.success {
         return Err(internal("crate_release_source_git"));

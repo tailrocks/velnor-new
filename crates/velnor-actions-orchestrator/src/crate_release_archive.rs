@@ -19,11 +19,12 @@ pub fn verify_archive_tracked_content(
     manifest: &str,
     package: &str,
     version: &str,
+    git: &velnor_actions_mise::release_git_pin::VerifiedGit,
 ) -> Result<(), OrchestratorError> {
     let invalid = || internal("crate_archive_source_evidence_invalid");
     let package_dir = source_package_dir(manifest, package, version)?;
-    crate::verify_crate_release_source(root, source_sha)?;
-    let files = tracked_paths(root)?;
+    crate::verify_crate_release_source(root, source_sha, git)?;
+    let files = tracked_paths(root, git)?;
     let archive = read_archive(archive, &format!("{package}-{version}/"))?;
     validate_archive_generated(
         &archive,
@@ -89,7 +90,7 @@ pub fn verify_archive_tracked_content(
             return Err(invalid());
         }
     }
-    crate::verify_crate_release_source(root, source_sha)
+    crate::verify_crate_release_source(root, source_sha, git)
 }
 
 fn source_package_dir<'a>(
@@ -119,10 +120,11 @@ fn source_package_dir<'a>(
 
 fn tracked_paths(
     root: &std::path::Path,
+    git: &velnor_actions_mise::release_git_pin::VerifiedGit,
 ) -> Result<std::collections::BTreeSet<String>, OrchestratorError> {
     let invalid = || internal("crate_archive_source_evidence_invalid");
     let tracked = velnor_actions_mise::GitRequest::ls_files(vec!["--stage".into(), "-z".into()])
-        .run_release_in(root)
+        .run_release_in(root, git)
         .map_err(|_| invalid())?;
     if !tracked.success {
         return Err(invalid());

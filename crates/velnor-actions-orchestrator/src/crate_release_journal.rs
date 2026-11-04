@@ -565,8 +565,9 @@ pub fn inspect_prior_history<I: JournalIo + JournalOperationRefs>(
     previous: &JournalIdentity,
     current: &JournalReceipt,
     source: &std::path::Path,
+    git: &velnor_actions_mise::release_git_pin::VerifiedGit,
 ) -> Result<PriorHistoryEvidence, OrchestratorError> {
-    let start = inspect_prior_incomplete_inner(io, previous, current, source, true)?;
+    let start = inspect_prior_incomplete_inner(io, previous, current, source, true, git)?;
     let listed = operation_sequences(io, previous)?;
     let mut mutations = Vec::with_capacity(listed.len());
     for (sequence, sha) in &listed {
@@ -579,7 +580,7 @@ pub fn inspect_prior_history<I: JournalIo + JournalOperationRefs>(
         mutations.push(record.mutation);
     }
     if operation_sequences(io, previous)? != listed
-        || inspect_prior_incomplete_inner(io, previous, current, source, true)? != start
+        || inspect_prior_incomplete_inner(io, previous, current, source, true, git)? != start
     {
         return Err(invalid());
     }
@@ -628,8 +629,9 @@ pub fn inspect_prior_incomplete_evidence<I: JournalIo>(
     previous: &JournalIdentity,
     current: &JournalReceipt,
     source: &std::path::Path,
+    git: &velnor_actions_mise::release_git_pin::VerifiedGit,
 ) -> Result<JournalEvidence, OrchestratorError> {
-    inspect_prior_incomplete_inner(io, previous, current, source, false)
+    inspect_prior_incomplete_inner(io, previous, current, source, false, git)
 }
 
 fn inspect_prior_incomplete_inner<I: JournalIo>(
@@ -638,6 +640,7 @@ fn inspect_prior_incomplete_inner<I: JournalIo>(
     current: &JournalReceipt,
     source: &std::path::Path,
     allow_creation_transition: bool,
+    git: &velnor_actions_mise::release_git_pin::VerifiedGit,
 ) -> Result<JournalEvidence, OrchestratorError> {
     validate_identity(&current.identity)?;
     if !valid_receipt(current, &current.identity)
@@ -649,7 +652,7 @@ fn inspect_prior_incomplete_inner<I: JournalIo>(
     {
         return Err(invalid());
     }
-    crate::verify_journal_source(source, current)?;
+    crate::verify_journal_source(source, current, git)?;
     let prior = inspect_journal(io, previous, JournalStage::Started)?.ok_or_else(invalid)?;
     if inspect_journal(io, previous, JournalStage::Completed)?.is_some()
         || prior.receipt.base_intent_sha256 != current.base_intent_sha256
@@ -758,6 +761,7 @@ pub(crate) fn inspect_prior_chain<I: JournalIo + JournalOperationRefs>(
     io: &I,
     current: &JournalReceipt,
     source: &std::path::Path,
+    git: &velnor_actions_mise::release_git_pin::VerifiedGit,
 ) -> Result<Vec<PriorHistoryEvidence>, OrchestratorError> {
     let mut chain = Vec::new();
     let mut cursor = current.clone();
@@ -767,7 +771,7 @@ pub(crate) fn inspect_prior_chain<I: JournalIo + JournalOperationRefs>(
         if chain.len() == 32 || !seen.insert((previous.run_id, previous.run_attempt)) {
             return Err(invalid());
         }
-        let evidence = inspect_prior_history(io, &previous, &cursor, source)?;
+        let evidence = inspect_prior_history(io, &previous, &cursor, source, git)?;
         cursor = evidence.start.receipt.clone();
         chain.push(evidence);
     }
@@ -779,11 +783,12 @@ pub fn record_source_bound_start<I: JournalIo>(
     identity: &JournalIdentity,
     receipt: &JournalReceipt,
     source: &std::path::Path,
+    git: &velnor_actions_mise::release_git_pin::VerifiedGit,
 ) -> Result<String, OrchestratorError> {
     if &receipt.identity != identity {
         return Err(internal("crate_release_journal_source_mismatch"));
     }
-    crate::verify_journal_source(source, receipt)?;
+    crate::verify_journal_source(source, receipt, git)?;
     record_journal(io, identity, JournalStage::Started, receipt, None)
 }
 

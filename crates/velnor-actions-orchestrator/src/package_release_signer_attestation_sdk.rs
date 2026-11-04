@@ -98,6 +98,7 @@ pub(crate) struct AdmittedStart<'a, J, G, R> {
     pub(crate) request: &'a crate::crate_release_github::GitHubAdmissionRequest,
     pub(crate) admission: &'a crate::crate_release_controller::CrateReleaseAdmissionReceipt,
     pub(crate) source: &'a std::path::Path,
+    pub(crate) git: &'a velnor_actions_mise::release_git_pin::VerifiedGit,
     pub(crate) workflow_root: &'a std::path::Path,
     pub(crate) generator: &'a AttestedLinuxGenerator,
 }
@@ -126,6 +127,7 @@ pub(crate) fn record_admitted_start<
         input.github,
         input.registry,
         input.source,
+        input.git,
     )?;
     crate::crate_release_controller::verify_observed_packages(&observed, input.admission)?;
     let receipt = derive_start_receipt(input, &observed)?;
@@ -140,6 +142,7 @@ pub(crate) fn record_admitted_start<
         &receipt.identity,
         &receipt,
         input.source,
+        input.git,
     )?;
     if verified_prior_chain(input, &receipt)? != prior_history {
         return Err(internal("crate_release_previous_changed"));
@@ -150,6 +153,7 @@ pub(crate) fn record_admitted_start<
         input.github,
         input.registry,
         input.source,
+        input.git,
     )? != observed
     {
         return Err(internal("crate_release_start_state_changed"));
@@ -171,12 +175,13 @@ where
     G: crate::crate_release_github::GitHubAdmissionRead,
 {
     let chain =
-        crate::crate_release_journal::inspect_prior_chain(input.journal, receipt, input.source)?;
+        crate::crate_release_journal::inspect_prior_chain(input.journal, receipt, input.source, input.git)?;
     for prior in &chain {
         let previous = &prior.start.receipt;
         let intent = crate::crate_release_runtime::read_intent_at_workflow(
             input.workflow_root,
             &previous.identity.workflow_sha,
+            input.git,
         )?;
         let bytes = velnor_actions_contract::canonical_json_bytes(&intent)
             .map_err(|_| internal("crate_release_previous_invalid"))?;
@@ -287,7 +292,7 @@ fn derive_start_receipt<
             "https://github.com/{}/actions/runs/{}",
             input.request.repository, input.request.run_id
         ),
-        source_files: crate::journal_source_inventory(input.source, &input.request.source_sha)?,
+        source_files: crate::journal_source_inventory(input.source, &input.request.source_sha, input.git)?,
         packages,
         semver_evidence: input.admission.semver_evidence.clone(),
     })

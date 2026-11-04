@@ -267,6 +267,7 @@ pub struct ToolchainStageRequest<'a> {
     pub artifact_id: u64,
     pub token: &'a str,
     pub runner_temp: &'a std::path::Path,
+    pub git: &'a velnor_actions_mise::release_git_pin::VerifiedGit,
     pub deadline: std::time::Instant,
 }
 
@@ -294,6 +295,7 @@ pub fn acquire_reconciliation_receipt_artifact<
                 receipt,
                 registry,
                 request.runner_temp,
+                request.git,
             )
         },
     )
@@ -323,6 +325,7 @@ pub fn acquire_receipt_artifact<
                 receipt,
                 registry,
                 request.runner_temp,
+                request.git,
             )
         },
     )
@@ -403,6 +406,7 @@ fn acquire_receipt<
             github,
             registry,
             source,
+            request.git,
         )?;
         if !visible {
             return Err(internal("crate_release_visibility_timeout"));
@@ -414,6 +418,7 @@ fn acquire_receipt<
             github,
             registry,
             source,
+            request.git,
         )?;
         fresh.semver_evidence = verify_semver(&fresh)?;
         crate::crate_release_controller::verify_observed_packages(&fresh, &receipt)?;

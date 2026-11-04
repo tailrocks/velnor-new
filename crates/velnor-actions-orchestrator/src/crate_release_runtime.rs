@@ -43,8 +43,12 @@ pub fn run_crate_release(operation: &str) -> Result<(), OrchestratorError> {
 
 fn run_qualified_crate_release(operation: &str) -> Result<(), OrchestratorError> {
     let workspace = required_path("GITHUB_WORKSPACE")?;
+    let git = velnor_actions_mise::release_git_pin::verify_bundle(
+        &required_path("RUNNER_TEMP")?.join("velnor/git-bundle"),
+    )
+    .map_err(|_| internal("release_git_bundle_invalid"))?;
     let workflow_sha = required("GITHUB_SHA")?;
-    let intent = read_intent_at_workflow(&workspace, &workflow_sha)?;
+    let intent = read_intent_at_workflow(&workspace, &workflow_sha, &git)?;
     let request = request_from_environment(&intent, &workflow_sha)?;
     let token = required("GIT_TOKEN")?;
     if matches!(operation, "source-admit" | "source-require") {
@@ -63,24 +67,27 @@ fn run_qualified_crate_release(operation: &str) -> Result<(), OrchestratorError>
             &token,
             &source,
             operation == "reconciliation-receipt-acquire",
+            &git,
         );
     }
     if operation == "candidate-receipt" {
-        return candidate_receipt(&intent, &request, &github, &source);
+        return candidate_receipt(&intent, &request, &github, &source, &git);
     }
     if operation == "toolchain-acquire" {
-        return acquire_toolchain(&intent, &request, &github, &token);
+        return acquire_toolchain(&intent, &request, &github, &token, &git);
     }
     let registry = NativeCrateRegistryRead;
     verify_runtime_tool_homes(&source)?;
     if is_journal_operation(operation) {
         let candidate = crate::crate_release_github::verify_github_evidence(&request, &github)?;
         crate::crate_release_github::authorize_github_candidate(&request, &candidate, &github)?;
-        verify_workflow_concurrency(&workspace, &source, &intent, &request, &registry)?;
+        verify_workflow_concurrency(&workspace, &source, &intent, &request, &registry, &git)?;
     }
     let receipt_path = required_path("RUNNER_TEMP")?.join("velnor-crate-release-receipt.json");
     match operation {
-        "verify-package" => verify_package(&receipt_path, &intent, &request, &github, &source),
+        "verify-package" => {
+            verify_package(&receipt_path, &intent, &request, &github, &source, &git)
+        }
         "admit" => write_admission(
             &receipt_path,
             &intent,
@@ -88,6 +95,7 @@ fn run_qualified_crate_release(operation: &str) -> Result<(), OrchestratorError>
             &github,
             &registry,
             &source,
+            &git,
         ),
         "verify-admission" => verify_admission_output(
             &receipt_path,
@@ -96,6 +104,7 @@ fn run_qualified_crate_release(operation: &str) -> Result<(), OrchestratorError>
             &github,
             &registry,
             &source,
+            &git,
         ),
         "publication-started" => checkpoint_publication(
             &receipt_path,
@@ -104,6 +113,7 @@ fn run_qualified_crate_release(operation: &str) -> Result<(), OrchestratorError>
             &github,
             &registry,
             &source,
+            &git,
         ),
         operation if is_journal_operation(operation) => run_journal(
             operation,
@@ -115,9 +125,10 @@ fn run_qualified_crate_release(operation: &str) -> Result<(), OrchestratorError>
                 registry: &registry,
                 source: &source,
                 token: &token,
+                git: &git,
             },
         ),
-        "reconcile" => reconcile_receipt(&receipt_path, &intent, &request, &github, &source),
+        "reconcile" => reconcile_receipt(&receipt_path, &intent, &request, &github, &source, &git),
         _ => Err(internal("crate_release_operation_invalid")),
     }
 }
@@ -128,6 +139,7 @@ pub(crate) fn verify_workflow_concurrency<R: crate::crate_release_registry::Crat
     intent: &CrateReleaseIntent,
     request: &GitHubAdmissionRequest,
     registry: &R,
+    git: &velnor_actions_mise::release_git_pin::VerifiedGit,
 ) -> Result<(), OrchestratorError> {
     let effective_intent =
         crate::crate_release_controller::effective_release_intent(intent, request);
@@ -136,14 +148,16 @@ pub(crate) fn verify_workflow_concurrency<R: crate::crate_release_registry::Crat
         &request.source_sha,
         &effective_intent,
         registry,
+        git,
     )?;
-    let bytes = read_workflow_at(workspace, &request.workflow_sha)?;
+    let bytes = read_workflow_at(workspace, &request.workflow_sha, git)?;
     validate_workflow_concurrency(&bytes, &plan.concurrency_group)
 }
 
 pub(crate) fn read_workflow_at(
     workspace: &Path,
     workflow_sha: &str,
+    git: &velnor_actions_mise::release_git_pin::VerifiedGit,
 ) -> Result<Vec<u8>, OrchestratorError> {
     if !is_full_sha(workflow_sha) {
         return Err(internal("crate_release_workflow_sha"));
@@ -151,7 +165,7 @@ pub(crate) fn read_workflow_at(
     let show = GitRequest::show(vec![
         format!("{workflow_sha}:.github/workflows/release.yml").into(),
     ])
-    .run_release_in(workspace)
+    .run_release_in(workspace, git)
     .map_err(|_| internal("crate_release_workflow_read"))?;
     if !show.success || show.stdout.is_empty() || show.stdout.len() > 1_048_576 {
         return Err(internal("crate_release_workflow_read"));
@@ -224,6 +238,7 @@ struct JournalRuntime<'a> {
     registry: &'a NativeCrateRegistryRead,
     source: &'a Path,
     token: &'a str,
+    git: &'a velnor_actions_mise::release_git_pin::VerifiedGit,
 }
 
 fn run_journal(operation: &str, input: JournalRuntime<'_>) -> Result<(), OrchestratorError> {
@@ -242,6 +257,7 @@ fn run_journal(operation: &str, input: JournalRuntime<'_>) -> Result<(), Orchest
             input.registry,
             input.source,
             input.token,
+            input.git,
         ),
         "journal-reconcile-evidence" => reconcile_journal_evidence(
             input.receipt_path,
@@ -251,6 +267,7 @@ fn run_journal(operation: &str, input: JournalRuntime<'_>) -> Result<(), Orchest
             input.registry,
             input.source,
             input.token,
+            input.git,
         ),
         _ => Err(internal("crate_release_operation_invalid")),
     }
@@ -370,6 +387,7 @@ fn start_journal(input: JournalRuntime<'_>) -> Result<(), OrchestratorError> {
     let reviewed_manifest = read_manifest_at_workflow(
         &required_path("GITHUB_WORKSPACE")?,
         &input.request.workflow_sha,
+        input.git,
     )?;
     start_journal_with(
         &bootstrap,
@@ -384,12 +402,14 @@ fn start_journal(input: JournalRuntime<'_>) -> Result<(), OrchestratorError> {
                 input.github,
                 input.registry,
                 input.source,
+                input.git,
             )?;
             observed.semver_evidence = crate::crate_release_semver::verify_preflight(
                 input.source,
                 &observed,
                 input.registry,
                 &required_path("RUNNER_TEMP")?,
+                input.git,
             )?;
             crate::crate_release_controller::verify_observed_packages(&observed, &admission)?;
             if !crate::crate_release_semver::matches_revalidated_preflight(
@@ -408,6 +428,7 @@ fn start_journal(input: JournalRuntime<'_>) -> Result<(), OrchestratorError> {
                 request: input.request,
                 admission: &admission,
                 source: input.source,
+                git: input.git,
                 workflow_root: &required_path("GITHUB_WORKSPACE")?,
                 generator: &generator,
             })?;
@@ -423,8 +444,9 @@ fn write_admission(
     github: &NativeGitHubAdmissionRead,
     registry: &NativeCrateRegistryRead,
     source: &Path,
+    git: &velnor_actions_mise::release_git_pin::VerifiedGit,
 ) -> Result<(), OrchestratorError> {
-    let receipt = prepare_crate_release(intent, request, github, registry, source)?;
+    let receipt = prepare_crate_release(intent, request, github, registry, source, git)?;
     let data = serde_json::to_vec(&receipt).map_err(|_| internal("crate_release_receipt_write"))?;
     crate::exclusive_write::write_exclusive(receipt_path, &data, "crate_release_receipt")
 }
@@ -447,10 +469,11 @@ fn verify_admission_output(
     github: &NativeGitHubAdmissionRead,
     registry: &NativeCrateRegistryRead,
     source: &Path,
+    git: &velnor_actions_mise::release_git_pin::VerifiedGit,
 ) -> Result<(), OrchestratorError> {
     let receipt = read_receipt(receipt_path)?;
-    verify_crate_release_admission(&receipt, intent, request, github, registry, source)?;
-    let fresh = prepare_crate_release(intent, request, github, registry, source)?;
+    verify_crate_release_admission(&receipt, intent, request, github, registry, source, git)?;
+    let fresh = prepare_crate_release(intent, request, github, registry, source, git)?;
     crate::crate_release_controller::verify_observed_packages(&fresh, &receipt)?;
     crate::crate_release_github::authorize_github_candidate(request, &receipt.github, github)?;
     append_output(&format!("release_mode={}\n", release_mode(&fresh)))
@@ -464,6 +487,7 @@ fn reconcile_journal_evidence(
     registry: &NativeCrateRegistryRead,
     source: &Path,
     token: &str,
+    git: &velnor_actions_mise::release_git_pin::VerifiedGit,
 ) -> Result<(), OrchestratorError> {
     use crate::crate_release_controller::{CrateReleaseObservation, derive_reconciled_candidate};
     use crate::crate_release_journal::{JournalIdentity, JournalStage, inspect_journal};
@@ -489,6 +513,7 @@ fn reconcile_journal_evidence(
         github,
         registry,
         source,
+        git,
         sequence: 0,
     };
     let candidate = derive_reconciled_candidate(&input)?;
@@ -506,6 +531,7 @@ fn inspect_prior_journal(
     registry: &NativeCrateRegistryRead,
     source: &Path,
     token: &str,
+    git: &velnor_actions_mise::release_git_pin::VerifiedGit,
 ) -> Result<(), OrchestratorError> {
     use crate::crate_release_controller::{CrateReleaseObservation, observe_prior_recovery};
     use crate::crate_release_journal::{JournalIdentity, JournalStage, inspect_journal};
@@ -553,6 +579,7 @@ fn inspect_prior_journal(
         github,
         registry,
         source,
+        git,
         sequence: 0,
     };
     let evidence = observe_prior_recovery(&input, &previous)?;
@@ -569,9 +596,10 @@ fn checkpoint_publication(
     github: &NativeGitHubAdmissionRead,
     registry: &NativeCrateRegistryRead,
     source: &Path,
+    git: &velnor_actions_mise::release_git_pin::VerifiedGit,
 ) -> Result<(), OrchestratorError> {
     let receipt = read_receipt(receipt_path)?;
-    verify_crate_release_admission(&receipt, intent, request, github, registry, source)?;
+    verify_crate_release_admission(&receipt, intent, request, github, registry, source, git)?;
     if release_mode(&receipt) == "none" {
         return Err(internal("crate_release_no_mutation"));
     }
@@ -611,6 +639,7 @@ fn coordinate_journal(runtime: JournalRuntime<'_>) -> Result<(), OrchestratorErr
         github: runtime.github,
         registry: runtime.registry,
         source: runtime.source,
+        git: runtime.git,
         sequence: 1,
     };
     let runner_temp = required_path("RUNNER_TEMP")?;
@@ -623,6 +652,7 @@ fn coordinate_journal(runtime: JournalRuntime<'_>) -> Result<(), OrchestratorErr
                 runtime.registry,
                 &runner_temp,
                 package,
+                runtime.git,
             )
         },
         |permit| {
@@ -643,6 +673,7 @@ fn coordinate_journal(runtime: JournalRuntime<'_>) -> Result<(), OrchestratorErr
     let reviewed_manifest = read_manifest_at_workflow(
         &required_path("GITHUB_WORKSPACE")?,
         &runtime.request.workflow_sha,
+        runtime.git,
     )?;
     start_journal_with(
         &runner_temp.join("velnor/bootstrap"),
@@ -693,6 +724,7 @@ fn observe_journal_operation(
         registry,
         source,
         token,
+        git,
     } = runtime;
     let value = required("VELNOR_JOURNAL_SEQUENCE")?;
     let sequence = value
@@ -722,6 +754,7 @@ fn observe_journal_operation(
         github,
         registry,
         source,
+        git,
         sequence,
     };
     match operation {
@@ -733,6 +766,7 @@ fn observe_journal_operation(
                 registry,
                 &required_path("RUNNER_TEMP")?,
                 &package,
+                git,
             )?;
             verify_and_record_upload_intent(&input, &package, semver)?;
         }
@@ -760,6 +794,7 @@ fn verify_package(
     request: &GitHubAdmissionRequest,
     github: &NativeGitHubAdmissionRead,
     source: &Path,
+    git: &velnor_actions_mise::release_git_pin::VerifiedGit,
 ) -> Result<(), OrchestratorError> {
     let receipt = read_receipt(receipt_path)?;
     verify_release_package(
@@ -770,6 +805,7 @@ fn verify_package(
         &NativeCrateRegistryRead,
         source,
         &required("VELNOR_JOURNAL_PACKAGE")?,
+        git,
     )
     .map(|_| ())
 }
@@ -780,6 +816,7 @@ fn reconcile_receipt(
     request: &GitHubAdmissionRequest,
     github: &NativeGitHubAdmissionRead,
     source: &Path,
+    git: &velnor_actions_mise::release_git_pin::VerifiedGit,
 ) -> Result<(), OrchestratorError> {
     let receipt = read_receipt(receipt_path)?;
     let completed = reconcile_crate_release(
@@ -789,6 +826,7 @@ fn reconcile_receipt(
         github,
         &NativeCrateRegistryRead,
         source,
+        git,
     )?;
     let body = serde_json::to_vec(&serde_json::json!({"schema":1,"stage":"reconciled","receipt":receipt,"packages":completed,"generator_version":env!("CARGO_PKG_VERSION"),"workflow_run":format!("https://github.com/{}/actions/runs/{}", request.repository, request.run_id)})).map_err(|_| internal("crate_release_checkpoint_write"))?;
     crate::exclusive_write::write_exclusive(
@@ -801,6 +839,7 @@ fn reconcile_receipt(
 pub(crate) fn read_intent_at_workflow(
     workspace: &Path,
     workflow_sha: &str,
+    git: &velnor_actions_mise::release_git_pin::VerifiedGit,
 ) -> Result<CrateReleaseIntent, OrchestratorError> {
     if !is_full_sha(workflow_sha) {
         return Err(internal("crate_release_workflow_sha"));
@@ -808,7 +847,7 @@ pub(crate) fn read_intent_at_workflow(
     let show = GitRequest::show(vec![
         format!("{workflow_sha}:.github/velnor-release-intent.toml").into(),
     ])
-    .run_release_in(workspace)
+    .run_release_in(workspace, git)
     .map_err(|_| internal("crate_release_intent_read"))?;
     if !show.success || show.stdout.len() > 1_048_576 {
         return Err(internal("crate_release_intent_read"));
@@ -819,6 +858,7 @@ pub(crate) fn read_intent_at_workflow(
 fn read_manifest_at_workflow(
     workspace: &Path,
     workflow_sha: &str,
+    git: &velnor_actions_mise::release_git_pin::VerifiedGit,
 ) -> Result<Vec<u8>, OrchestratorError> {
     if !is_full_sha(workflow_sha) {
         return Err(internal("crate_release_workflow_sha"));
@@ -826,7 +866,7 @@ fn read_manifest_at_workflow(
     let show = GitRequest::show(vec![
         format!("{workflow_sha}:.velnor/release-manifest.json").into(),
     ])
-    .run_release_in(workspace)
+    .run_release_in(workspace, git)
     .map_err(|_| internal("crate_release_reviewed_manifest_read"))?;
     if !show.success || show.stdout.is_empty() || show.stdout.len() > 1024 * 1024 {
         return Err(internal("crate_release_reviewed_manifest_read"));
@@ -839,6 +879,7 @@ fn candidate_receipt(
     request: &GitHubAdmissionRequest,
     github: &NativeGitHubAdmissionRead,
     source: &Path,
+    git: &velnor_actions_mise::release_git_pin::VerifiedGit,
 ) -> Result<(), OrchestratorError> {
     let mut receipt = crate::crate_release_controller::prepare_crate_release(
         intent,
@@ -846,12 +887,14 @@ fn candidate_receipt(
         github,
         &NativeCrateRegistryRead,
         source,
+        git,
     )?;
     receipt.semver_evidence = crate::crate_release_semver::verify_preflight(
         source,
         &receipt,
         &NativeCrateRegistryRead,
         &required_path("RUNNER_TEMP")?,
+        git,
     )?;
     let data = serde_json::to_vec(&receipt).map_err(|_| internal("crate_release_receipt_write"))?;
     crate::crate_release_tool_artifact::write_receipt(&required_path("RUNNER_TEMP")?, &data)
@@ -869,6 +912,7 @@ fn acquire_toolchain(
     request: &GitHubAdmissionRequest,
     github: &NativeGitHubAdmissionRead,
     token: &str,
+    git: &velnor_actions_mise::release_git_pin::VerifiedGit,
 ) -> Result<(), OrchestratorError> {
     let artifact_id = required("VELNOR_RUST_ARTIFACT_ID")?
         .parse()
@@ -882,6 +926,7 @@ fn acquire_toolchain(
             artifact_id,
             token,
             runner_temp: &required_path("RUNNER_TEMP")?,
+            git,
             deadline: Instant::now() + Duration::from_mins(15),
         },
         github,
@@ -897,6 +942,7 @@ fn acquire_receipt(
     token: &str,
     source: &std::path::Path,
     reconciliation: bool,
+    git: &velnor_actions_mise::release_git_pin::VerifiedGit,
 ) -> Result<(), OrchestratorError> {
     let artifact_id = required("VELNOR_RECEIPT_ARTIFACT_ID")?
         .parse()
@@ -914,6 +960,7 @@ fn acquire_receipt(
         artifact_id,
         token,
         runner_temp: &required_path("RUNNER_TEMP")?,
+        git,
         deadline: Instant::now() + Duration::from_mins(5),
     };
     if !reconciliation {

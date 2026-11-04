@@ -50,6 +50,7 @@ pub(crate) struct CrateReleaseObservation<'a, J, G, R> {
     pub github: &'a G,
     pub registry: &'a R,
     pub source: &'a Path,
+    pub git: &'a velnor_actions_mise::release_git_pin::VerifiedGit,
     pub sequence: u32,
 }
 
@@ -144,6 +145,7 @@ where
         input.github,
         input.registry,
         input.source,
+        input.git,
     )?;
     verify_observed_packages_after_recorded_upload(
         &CrateReleaseObservation {
@@ -216,6 +218,7 @@ where
             input.github,
             input.registry,
             input.source,
+            input.git,
         )?;
         verify_observed_packages_after_recorded_upload(
             &CrateReleaseObservation {
@@ -257,6 +260,7 @@ fn wait_for_predecessor_indexes<J: JournalIo, G: GitHubAdmissionRead, R: CrateRe
         &input.request.source_sha,
         &effective,
         input.registry,
+        input.git,
     )?;
     let predecessors: std::collections::BTreeSet<_> = workspace
         .plan
@@ -304,6 +308,7 @@ fn ensure_package_reconciled<
         input.github,
         input.registry,
         input.source,
+        input.git,
     )?;
     verify_observed_packages_after_recorded_upload(input, &current)?;
     if !current.packages.iter().any(|item| {
@@ -352,6 +357,7 @@ pub(crate) fn verify_and_record_upload_intent<
         github: input.github,
         registry: input.registry,
         source: input.source,
+        git: input.git,
         package,
     };
     let proof = super::verify_release_package_with(&verification, |observed| {
@@ -409,6 +415,7 @@ pub(super) fn record_admitted_upload_intent<
         input.registry,
         input.source,
         &input.admission.github,
+        input.git,
     )?;
     verify_observed_packages_after_recorded_upload(input, &state)?;
     let index = state
@@ -433,6 +440,7 @@ pub(super) fn record_admitted_upload_intent<
         input.registry,
         input.source,
         &input.admission.github,
+        input.git,
     )? != state
     {
         return Err(invalid());
@@ -492,6 +500,7 @@ pub(crate) fn repair_verified_metadata<
         input.registry,
         input.source,
         &input.admission.github,
+        input.git,
     )?;
     verify_observed_packages_after_recorded_upload(input, &state)?;
     let index = state
@@ -529,6 +538,7 @@ pub(crate) fn repair_verified_metadata<
         input.registry,
         input.source,
         &input.admission.github,
+        input.git,
     )? != state
     {
         return Err(invalid());
@@ -595,6 +605,7 @@ pub(crate) fn record_verified_mutation<
         input.registry,
         input.source,
         &input.admission.github,
+        input.git,
     )?;
     let pending_upload = (prior.kind == JournalMutationKind::Upload).then_some(&prior);
     verify_observed_packages_with_upload_intent(input, &state, pending_upload)?;
@@ -613,6 +624,7 @@ pub(crate) fn record_verified_mutation<
         input.registry,
         input.source,
         &input.admission.github,
+        input.git,
     )? != state
     {
         return Err(invalid());
@@ -683,7 +695,7 @@ pub(super) fn verify_binding<J: JournalIo, G: GitHubAdmissionRead, R: CrateRegis
     if input.journal_receipt.intent_sha256 != crate::generator::sha256_hex(&intent_bytes) {
         return Err(invalid());
     }
-    crate::verify_journal_source(input.source, input.journal_receipt)?;
+    crate::verify_journal_source(input.source, input.journal_receipt, input.git)?;
     verify_bound_packages(input.journal_receipt, input.admission)?;
     Ok(())
 }
@@ -921,6 +933,7 @@ fn derive_result<J: JournalIo, G: GitHubAdmissionRead, R: CrateRegistryRead>(
                 target.path(),
                 &input.request.source_sha,
                 false,
+                input.git,
             )?;
             let files = crate::crate_release_archive::crate_archive_inventory(
                 &archive,
@@ -1029,6 +1042,7 @@ pub(crate) fn observe_prior_recovery<
         input.journal,
         input.journal_receipt,
         input.source,
+        input.git,
     )?;
     let current = observe_crate_release(
         input.intent,
@@ -1036,6 +1050,7 @@ pub(crate) fn observe_prior_recovery<
         input.github,
         input.registry,
         input.source,
+        input.git,
     )?;
     verify_observed_packages(&current, input.admission)?;
     let mut results = Vec::new();
@@ -1070,11 +1085,13 @@ pub(crate) fn observe_prior_recovery<
         input.github,
         input.registry,
         input.source,
+        input.git,
     )? != current
         || crate::crate_release_journal::inspect_prior_chain(
             input.journal,
             input.journal_receipt,
             input.source,
+            input.git,
         )? != history
     {
         return Err(invalid());
@@ -1285,6 +1302,7 @@ pub(crate) fn derive_reconciled_candidate<
         input.github,
         input.registry,
         input.source,
+        input.git,
     )?;
     let sequence = u32::try_from(history.len())
         .map_err(|_| invalid())?
@@ -1303,6 +1321,7 @@ pub(crate) fn derive_reconciled_candidate<
         input.github,
         input.registry,
         input.source,
+        input.git,
     )?;
     if packages.len() != input.admission.packages.len()
         || packages
@@ -1317,7 +1336,7 @@ pub(crate) fn derive_reconciled_candidate<
     {
         return Err(invalid());
     }
-    crate::verify_journal_source(input.source, input.journal_receipt)?;
+    crate::verify_journal_source(input.source, input.journal_receipt, input.git)?;
     authorize_github_candidate(input.request, &input.admission.github, input.github)?;
     Ok(ReconciledCandidate { packages, history })
 }

@@ -198,9 +198,10 @@ pub(crate) fn verify_preflight<R: CrateRegistryRead>(
     receipt: &CrateReleaseAdmissionReceipt,
     registry: &R,
     runner_temp: &Path,
+    git: &velnor_actions_mise::release_git_pin::VerifiedGit,
 ) -> Result<std::collections::BTreeMap<String, SemverEvidence>, OrchestratorError> {
     let executable = verify_checker(receipt, runner_temp)?;
-    crate::verify_crate_release_source(source, &receipt.github.request.source_sha)?;
+    crate::verify_crate_release_source(source, &receipt.github.request.source_sha, git)?;
     let effective = crate::crate_release_controller::effective_release_intent(
         &receipt.intent,
         &receipt.github.request,
@@ -210,6 +211,7 @@ pub(crate) fn verify_preflight<R: CrateRegistryRead>(
         &receipt.github.request.source_sha,
         &effective,
         registry,
+        git,
     )?;
     let mut evidence = std::collections::BTreeMap::new();
     for package in &receipt.packages {
@@ -252,7 +254,7 @@ pub(crate) fn verify_preflight<R: CrateRegistryRead>(
         };
         evidence.insert(package.source.name.clone(), item);
     }
-    crate::verify_crate_release_source(source, &receipt.github.request.source_sha)?;
+    crate::verify_crate_release_source(source, &receipt.github.request.source_sha, git)?;
     Ok(evidence)
 }
 
@@ -306,16 +308,17 @@ pub(crate) fn verify_before_upload<R: CrateRegistryRead>(
     registry: &R,
     runner_temp: &Path,
     name: &str,
+    git: &velnor_actions_mise::release_git_pin::VerifiedGit,
 ) -> Result<VerifiedSemver, OrchestratorError> {
     let executable = verify_checker(receipt, runner_temp)?;
-    crate::verify_crate_release_source(source, &receipt.github.request.source_sha)?;
+    crate::verify_crate_release_source(source, &receipt.github.request.source_sha, git)?;
     let package = receipt
         .packages
         .iter()
         .find(|package| package.source.name == name)
         .ok_or_else(invalid)?;
     let evidence = verify_one(source, receipt, registry, package, &executable)?;
-    crate::verify_crate_release_source(source, &receipt.github.request.source_sha)?;
+    crate::verify_crate_release_source(source, &receipt.github.request.source_sha, git)?;
     let intent =
         velnor_actions_contract::canonical_json_bytes(&receipt.intent).map_err(|_| invalid())?;
     Ok(VerifiedSemver {

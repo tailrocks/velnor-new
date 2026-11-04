@@ -42,6 +42,7 @@ pub struct PreparationArtifact {
 #[derive(Debug)]
 pub struct PreparationCheckout {
     root: PathBuf,
+    git: velnor_actions_mise::release_git_pin::VerifiedGit,
     binding: PreparationBinding,
     allowed_paths: BTreeSet<String>,
     tracked: BTreeMap<String, TrackedFile>,
@@ -59,19 +60,21 @@ impl PreparationCheckout {
         root: &Path,
         binding: PreparationBinding,
         allowed_paths: BTreeSet<String>,
+        git: velnor_actions_mise::release_git_pin::VerifiedGit,
     ) -> Result<Self, &'static str> {
         if !valid_binding(&binding) || allowed_paths.iter().any(|path| !valid_path(path)) {
             return Err("release_pr_checkout_invalid");
         }
-        crate::verify_crate_release_source(root, &binding.source_sha)
+        crate::verify_crate_release_source(root, &binding.source_sha, &git)
             .map_err(|_| "release_pr_checkout_invalid")?;
         let root = root
             .canonicalize()
             .map_err(|_| "release_pr_checkout_invalid")?;
-        let tracked = tracked_files(&root)?;
-        let git_files = git_file_digests(&root)?;
+        let tracked = tracked_files(&root, &git)?;
+        let git_files = git_file_digests(&root, &git)?;
         Ok(Self {
             root,
+            git,
             binding,
             allowed_paths,
             tracked,
@@ -107,10 +110,14 @@ impl PreparationCheckout {
     }
 
     fn ensure_current(&self) -> Result<(), &'static str> {
-        let head = git_output(&self.root, &GitRequest::rev_parse(vec!["HEAD".into()]))?;
+        let head = git_output(
+            &self.root,
+            &GitRequest::rev_parse(vec!["HEAD".into()]),
+            &self.git,
+        )?;
         if head != format!("{}\n", self.binding.source_sha).as_bytes()
-            || tracked_files(&self.root)? != self.tracked
-            || git_file_digests(&self.root)? != self.git_files
+            || tracked_files(&self.root, &self.git)? != self.tracked
+            || git_file_digests(&self.root, &self.git)? != self.git_files
         {
             return Err("release_pr_checkout_changed");
         }
@@ -131,7 +138,7 @@ impl PreparationCheckout {
                 insert_change(&mut changed, &mut changed_bytes, path, bytes)?;
             }
         }
-        for path in untracked_files(&self.root)? {
+        for path in untracked_files(&self.root, &self.git)? {
             if !self.allowed_paths.contains(&path) {
                 return Err("release_pr_checkout_unapproved_change");
             }
@@ -170,9 +177,13 @@ fn insert_change(
     Ok(())
 }
 
-fn git_output(root: &Path, request: &GitRequest) -> Result<Vec<u8>, &'static str> {
+fn git_output(
+    root: &Path,
+    request: &GitRequest,
+    git: &velnor_actions_mise::release_git_pin::VerifiedGit,
+) -> Result<Vec<u8>, &'static str> {
     let result = request
-        .run_release_in(root)
+        .run_release_in(root, git)
         .map_err(|_| "release_pr_checkout_git")?;
     if !result.success {
         return Err("release_pr_checkout_git");
@@ -180,7 +191,10 @@ fn git_output(root: &Path, request: &GitRequest) -> Result<Vec<u8>, &'static str
     Ok(result.stdout)
 }
 
-fn tracked_files(root: &Path) -> Result<BTreeMap<String, TrackedFile>, &'static str> {
+fn tracked_files(
+    root: &Path,
+    git: &velnor_actions_mise::release_git_pin::VerifiedGit,
+) -> Result<BTreeMap<String, TrackedFile>, &'static str> {
     let output = git_output(
         root,
         &GitRequest::ls_tree(vec![
@@ -189,6 +203,7 @@ fn tracked_files(root: &Path) -> Result<BTreeMap<String, TrackedFile>, &'static 
             "--full-tree".into(),
             "HEAD".into(),
         ]),
+        git,
     )?;
     let mut files = BTreeMap::new();
     for entry in output
@@ -221,10 +236,14 @@ fn tracked_files(root: &Path) -> Result<BTreeMap<String, TrackedFile>, &'static 
     Ok(files)
 }
 
-fn untracked_files(root: &Path) -> Result<Vec<String>, &'static str> {
+fn untracked_files(
+    root: &Path,
+    git: &velnor_actions_mise::release_git_pin::VerifiedGit,
+) -> Result<Vec<String>, &'static str> {
     let output = git_output(
         root,
         &GitRequest::ls_files(vec!["--others".into(), "-z".into()]),
+        git,
     )?;
     output
         .split(|byte| *byte == 0)
@@ -239,7 +258,10 @@ fn untracked_files(root: &Path) -> Result<Vec<String>, &'static str> {
         .collect()
 }
 
-fn git_file_digests(root: &Path) -> Result<BTreeMap<String, String>, &'static str> {
+fn git_file_digests(
+    root: &Path,
+    verified_git: &velnor_actions_mise::release_git_pin::VerifiedGit,
+) -> Result<BTreeMap<String, String>, &'static str> {
     let git = root.join(".git");
     let metadata = fs::symlink_metadata(&git).map_err(|_| "release_pr_checkout_git")?;
     if !metadata.is_dir() || metadata.file_type().is_symlink() {
@@ -253,6 +275,7 @@ fn git_file_digests(root: &Path) -> Result<BTreeMap<String, String>, &'static st
     let index = git_output(
         root,
         &GitRequest::ls_files(vec!["--stage".into(), "-z".into()]),
+        verified_git,
     )?;
     hashes.insert("index".to_owned(), sha256(&index));
     Ok(hashes)
