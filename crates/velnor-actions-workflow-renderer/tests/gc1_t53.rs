@@ -318,6 +318,9 @@ pub(crate) fn scripts_for(
 mod gc1_t53_cold;
 #[path = "gc1_t53_depth.rs"]
 mod gc1_t53_depth;
+#[cfg(target_os = "linux")]
+#[path = "gc1_t53_drift.rs"]
+mod gc1_t53_drift;
 #[path = "gc1_t53_env.rs"]
 mod gc1_t53_env;
 #[path = "gc1_t53_exit.rs"]
