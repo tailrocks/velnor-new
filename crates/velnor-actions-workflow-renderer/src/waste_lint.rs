@@ -12,16 +12,22 @@ use crate::RenderError;
 pub enum WasteRule {
     JobContextEnv,
     RustupAutoInstall,
+    SplitToolsIdentity,
 }
 
 impl WasteRule {
-    pub const ALL: &'static [Self] = &[Self::JobContextEnv, Self::RustupAutoInstall];
+    pub const ALL: &'static [Self] = &[
+        Self::JobContextEnv,
+        Self::RustupAutoInstall,
+        Self::SplitToolsIdentity,
+    ];
 
     #[must_use]
     pub const fn id(self) -> &'static str {
         match self {
             Self::JobContextEnv => "W2 job_context_env",
             Self::RustupAutoInstall => "W3 rustup_auto_install",
+            Self::SplitToolsIdentity => "W7 split_tools_identity",
         }
     }
 
@@ -34,6 +40,9 @@ impl WasteRule {
             Self::RustupAutoInstall => {
                 "bind the job to the rust toolchain job env; do not override RUSTUP_AUTO_INSTALL per step."
             }
+            Self::SplitToolsIdentity => {
+                "install the lane's union tool set in every rust job so the lane has one tools identity."
+            }
         }
     }
 
@@ -41,6 +50,7 @@ impl WasteRule {
         match self {
             Self::JobContextEnv => crate::waste_lint_env::w2(jobs),
             Self::RustupAutoInstall => crate::waste_lint_env::w3(jobs),
+            Self::SplitToolsIdentity => Vec::new(),
         }
     }
 }
@@ -103,6 +113,7 @@ pub enum WasteFinding {
         step: Option<String>,
         found: Option<String>,
     },
+    ToolsIdentity(crate::waste_lint_tools::ToolsIdentityFinding),
 }
 
 impl WasteFinding {
@@ -113,6 +124,7 @@ impl WasteFinding {
             | Self::MissingVerifierHome { .. }
             | Self::ConflictingHome { .. } => WasteRule::JobContextEnv,
             Self::AutoInstallNotDisabled { .. } => WasteRule::RustupAutoInstall,
+            Self::ToolsIdentity(_) => WasteRule::SplitToolsIdentity,
         }
     }
 }
@@ -168,6 +180,7 @@ impl Display for WasteFinding {
                 "job {job} step {step:?} sets RUSTUP_AUTO_INSTALL={}",
                 found.as_deref().unwrap_or_default()
             )?,
+            Self::ToolsIdentity(finding) => write!(f, "{finding}")?,
         }
         write!(f, ". fix: {}", self.rule().fix())
     }
