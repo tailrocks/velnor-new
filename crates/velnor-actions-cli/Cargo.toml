@@ -20,6 +20,10 @@ path = "examples/qualification_diagnostics.rs"
 test = false
 
 [[test]]
+name = "crate_release_prepare_pr_public"
+path = "tests/crate_release_prepare_pr_public.rs"
+
+[[test]]
 name = "velnor_cli"
 path = "tests/velnor_cli.rs"
 
