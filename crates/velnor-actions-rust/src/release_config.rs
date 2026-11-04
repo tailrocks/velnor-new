@@ -6,7 +6,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use crate::release_error::ReleaseError;
 use crate::release_facts::validate_registry_name;
 use crate::release_select::ReleaseSelection;
-use crate::release_semver::parse_version;
+use semver::Version;
 
 pub const DEFAULT_TAG_PATTERN: &str = "{{ package }}-v{{ version }}";
 
@@ -192,13 +192,15 @@ fn resolve_group(
                 member: (*member).to_owned(),
                 version: String::new(),
             })?;
-        let parsed = parse_version(text).ok_or_else(|| ReleaseError::InvalidGroupVersion {
+        let parsed = Version::parse(text).map_err(|_| ReleaseError::InvalidGroupVersion {
             group: group.name.clone(),
             member: (*member).to_owned(),
             version: text.clone(),
         })?;
         let keep = next.as_ref().is_none_or(|held: &String| {
-            parse_version(held).is_none_or(|current_max| parsed > current_max)
+            Version::parse(held).map_or(true, |current_max| {
+                parsed.cmp_precedence(&current_max).is_gt()
+            })
         });
         if keep {
             next = Some(text.clone());
@@ -217,7 +219,7 @@ fn resolve_group(
                     member: member.clone(),
                     version: String::new(),
                 })?;
-            if parse_version(held).is_none() {
+            if Version::parse(held).is_err() {
                 return Err(ReleaseError::InvalidGroupVersion {
                     group: group.name.clone(),
                     member: member.clone(),
