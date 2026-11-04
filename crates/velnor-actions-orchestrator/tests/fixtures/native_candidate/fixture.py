@@ -86,6 +86,7 @@ release_plz_version = "0.4.3"
 runner = "ubuntu-24.04"
 authentication = "trusted-publishing"
 manifest_path = "Cargo.toml"
+pr_write_paths = ["CHANGELOG.md", "Cargo.lock", "Cargo.toml"]
 registry = "crates-io"
 packages = ["example"]
 tag_template = "{{{{ package }}}}-v{{{{ version }}}}"
