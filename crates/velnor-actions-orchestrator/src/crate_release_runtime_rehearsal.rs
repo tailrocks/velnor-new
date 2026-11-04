@@ -29,6 +29,15 @@ fn generated_source_require_rehearsal() -> Result<(), Box<dyn Error>> {
 
 #[test]
 fn generated_candidate_receipt_rejects_unprotected_environment() -> Result<(), Box<dyn Error>> {
+    if std::env::var_os("VELNOR_NATIVE_RECEIPT_CHILD").is_some() {
+        assert_eq!(
+            std::env::var("VELNOR_TEST_COMMAND_ARGS")?,
+            "crate-release candidate-receipt"
+        );
+        assert!(matches!(super::run_crate_release("candidate-receipt"),
+            Err(crate::OrchestratorError::Internal { problem }) if problem == "crate_release_authority_not_qualified"));
+        return super::run_qualified_crate_release("candidate-receipt").map_err(Into::into);
+    }
     if std::env::var_os("VELNOR_CANDIDATE_CHILD").is_some() {
         assert_eq!(
             std::env::var("VELNOR_TEST_COMMAND_ARGS")?,
@@ -42,7 +51,79 @@ fn generated_candidate_receipt_rejects_unprotected_environment() -> Result<(), B
         );
         return Ok(());
     }
-    rehearse_candidate_denial()
+    rehearse_candidate_denial()?;
+    if std::env::var_os("VELNOR_TEST_NATIVE_REHEARSAL").is_some() {
+        rehearse_supplied_candidate()?;
+    }
+    Ok(())
+}
+
+fn rehearse_supplied_candidate() -> Result<(), Box<dyn Error>> {
+    let root = std::path::PathBuf::from(std::env::var_os("RUNNER_TEMP").ok_or("runner temp")?);
+    let bin = root.join("velnor/bin");
+    std::fs::create_dir_all(&bin)?;
+    let executable = bin.join(format!("velnor-actions-{}", env!("CARGO_PKG_VERSION")));
+    std::fs::write(
+        &executable,
+        "#!/bin/sh\nexport VELNOR_TEST_COMMAND_ARGS=\"$*\"\nexec \"$VELNOR_TEST_BINARY\" --exact crate_release_runtime::rehearsal::generated_candidate_receipt_rejects_unprotected_environment\n",
+    )?;
+    std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o755))?;
+    let script = generated_script("release-preflight", "Release candidate-receipt")?;
+    let output = std::process::Command::new("bash")
+        .args(["-e", "-c", &script])
+        .env("VELNOR_NATIVE_RECEIPT_CHILD", "1")
+        .env("VELNOR_TEST_BINARY", std::env::current_exe()?)
+        .env("RUSTUP_HOME", root.join("velnor/rustup"))
+        .env("MISE_RUSTUP_HOME", root.join("velnor/rustup"))
+        .env("CARGO_HOME", root.join("velnor/cargo"))
+        .env("MISE_CARGO_HOME", root.join("velnor/cargo"))
+        .env("RUSTUP_AUTO_INSTALL", "0")
+        .output()?;
+    let receipt = root.join("velnor-crate-release-receipt.json");
+    if std::env::var("VELNOR_NATIVE_EXPECT_SUCCESS")? != "1" {
+        assert!(!output.status.success());
+        let actual = String::from_utf8_lossy(&output.stdout).to_string()
+            + &String::from_utf8_lossy(&output.stderr);
+        assert!(
+            actual.contains(&std::env::var("VELNOR_NATIVE_EXPECT_ERROR")?),
+            "{actual}"
+        );
+        assert!(!receipt.exists());
+        return Ok(());
+    }
+    assert!(
+        output.status.success(),
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let receipt: crate::crate_release_controller::CrateReleaseAdmissionReceipt =
+        serde_json::from_slice(&std::fs::read(receipt)?)?;
+    assert_eq!(
+        receipt.github.request.workflow_sha,
+        std::env::var("GITHUB_SHA")?
+    );
+    assert_eq!(
+        receipt.github.request.source_sha,
+        std::env::var("VELNOR_NATIVE_EXPECT_SOURCE")?
+    );
+    assert_eq!(receipt.packages.len(), 1);
+    assert_eq!(
+        receipt.packages[0].source.name,
+        std::env::var("VELNOR_NATIVE_EXPECT_PACKAGE")?
+    );
+    assert_eq!(
+        receipt.packages[0].source.version,
+        std::env::var("VELNOR_NATIVE_EXPECT_VERSION")?
+    );
+    assert!(
+        matches!(receipt.semver_evidence.get(&receipt.packages[0].source.name),
+        Some(crate::crate_release_semver::SemverEvidence::Checked { baseline, baseline_checksum, checker_sha256 })
+        if baseline == &std::env::var("VELNOR_NATIVE_EXPECT_BASELINE")?
+        && baseline_checksum == &std::env::var("VELNOR_NATIVE_EXPECT_CHECKSUM")?
+        && checker_sha256 == velnor_actions_mise::catalog::qualified_cargo_semver_checks("ubuntu-24.04").ok_or("checker")?.executable_sha256)
+    );
+    Ok(())
 }
 
 fn rehearse_candidate_denial() -> Result<(), Box<dyn Error>> {
