@@ -3,16 +3,24 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::metadata::WorkspaceRecord;
+use crate::metadata::{WorkspaceRecord, parse_metadata_json};
 use crate::metadata_edges::DepKind;
 use crate::release_error::ReleaseError;
-use crate::release_facts::{DepFact, DepSource};
-use crate::release_select::{ReleaseSelection, supported_or_default};
+use crate::release_facts::{DepFact, DepSource, DependencyRegistry};
+use crate::release_select::{
+    ReleaseRequest, ReleaseSelection, select_release_set, supported_or_default,
+};
 use crate::release_semver::{VersionReq, parse_req, parse_version, req_matches};
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct RegistryPackage {
+    pub registry: String,
+    pub package: String,
+}
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct RegistryState {
-    pub published: BTreeMap<String, BTreeSet<String>>,
+    pub published: BTreeMap<RegistryPackage, BTreeSet<String>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -22,6 +30,28 @@ pub struct PackagingEdge {
     pub kind: DepKind,
     pub optional: bool,
     pub target: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReleasePlan {
+    pub selection: ReleaseSelection,
+    pub graph: PublicationGraph,
+}
+
+pub fn plan_release(
+    request: &ReleaseRequest<'_>,
+    registry: &RegistryState,
+) -> Result<ReleasePlan, ReleaseError> {
+    let selection = select_release_set(request)?;
+    let record = parse_metadata_json(
+        request.metadata_json,
+        request.repo_root,
+        request.manifest_hint,
+        request.known_manifests,
+    )
+    .map_err(ReleaseError::Metadata)?;
+    let graph = publication_graph(&selection, &record, registry, request.supported_registries)?;
+    Ok(ReleasePlan { selection, graph })
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -129,6 +159,12 @@ fn check_package_deps(
         return Ok(());
     };
     for fact in facts {
+        if fact.kind == DepKind::Dev
+            && fact.req == "*"
+            && matches!(fact.source, DepSource::Path | DepSource::Git)
+        {
+            continue;
+        }
         check_dep_registry(name, fact, lookups)?;
         let Some(req) = parse_req(&fact.req) else {
             return Err(ReleaseError::InvalidRequirement {
@@ -139,10 +175,13 @@ fn check_package_deps(
         };
         match &fact.source {
             DepSource::Git => {
-                return Err(ReleaseError::GitOnlyDep {
-                    package: name.to_owned(),
-                    dep: fact.name.clone(),
-                });
+                if fact.req == "*" {
+                    return Err(ReleaseError::GitOnlyDep {
+                        package: name.to_owned(),
+                        dep: fact.name.clone(),
+                    });
+                }
+                check_registry_dep(name, fact, &req, lookups)?;
             }
             DepSource::Other(source) => {
                 return Err(ReleaseError::UnsupportedSource {
@@ -163,16 +202,20 @@ fn check_dep_registry(
     fact: &DepFact,
     lookups: &GraphLookups<'_>,
 ) -> Result<(), ReleaseError> {
-    if let Some(registry) = fact.registry.as_deref()
-        && !lookups
-            .supported
-            .iter()
-            .any(|supported| supported == registry)
-    {
-        return Err(ReleaseError::UnsupportedRegistry {
-            package: name.to_owned(),
-            registry: registry.to_owned(),
-        });
+    if let Some(registry) = &fact.registry {
+        let supported = match registry {
+            DependencyRegistry::Name(name) => lookups.supported.contains(name),
+            DependencyRegistry::Index(_) => false,
+        };
+        if !supported {
+            let registry = match registry {
+                DependencyRegistry::Name(value) | DependencyRegistry::Index(value) => value,
+            };
+            return Err(ReleaseError::UnsupportedRegistry {
+                package: name.to_owned(),
+                registry: registry.clone(),
+            });
+        }
     }
     Ok(())
 }
@@ -183,7 +226,7 @@ fn check_registry_dep(
     req: &VersionReq,
     lookups: &GraphLookups<'_>,
 ) -> Result<(), ReleaseError> {
-    if registry_satisfies(lookups.registry, &fact.name, req) {
+    if registry_satisfies(lookups.registry, fact.registry.as_ref(), &fact.name, req) {
         Ok(())
     } else {
         Err(ReleaseError::MissingRegistryVersion {
@@ -201,10 +244,15 @@ fn check_path_dep(
     lookups: &GraphLookups<'_>,
     edges: &mut Vec<PackagingEdge>,
 ) -> Result<(), ReleaseError> {
-    let Some(to) = fact.to.as_deref() else {
-        return Err(ReleaseError::MetadataMismatch {
-            detail: format!("path dep {} of {name} has no target", fact.name),
+    if fact.req == "*" {
+        return Err(ReleaseError::UnresolvedLocalDep {
+            package: name.to_owned(),
+            dep: fact.name.clone(),
+            path: String::new(),
         });
+    }
+    let Some(to) = fact.to.as_deref() else {
+        return check_registry_dep(name, fact, req, lookups);
     };
     let Some((target, version)) = lookups.by_id.get(to).copied() else {
         return Err(ReleaseError::MetadataMismatch {
@@ -226,7 +274,7 @@ fn check_path_dep(
         });
     }
     if !lookups.selected.contains(target) {
-        if registry_satisfies(lookups.registry, target, req) {
+        if registry_satisfies(lookups.registry, fact.registry.as_ref(), target, req) {
             return Ok(());
         }
         return Err(ReleaseError::UnpublishedLocalDep {
@@ -235,7 +283,9 @@ fn check_path_dep(
             req: fact.req.clone(),
         });
     }
-    if fact.kind != DepKind::Dev {
+    if fact.kind != DepKind::Dev
+        || !registry_satisfies(lookups.registry, fact.registry.as_ref(), target, req)
+    {
         edges.push(PackagingEdge {
             from: name.to_owned(),
             to: target.to_owned(),
@@ -247,8 +297,22 @@ fn check_path_dep(
     Ok(())
 }
 
-fn registry_satisfies(registry: &RegistryState, name: &str, req: &VersionReq) -> bool {
-    registry.published.get(name).is_some_and(|versions| {
+fn registry_satisfies(
+    state: &RegistryState,
+    registry: Option<&DependencyRegistry>,
+    name: &str,
+    req: &VersionReq,
+) -> bool {
+    let registry = match registry {
+        None => crate::release_select::DEFAULT_REGISTRY,
+        Some(DependencyRegistry::Name(name)) => name.as_str(),
+        Some(DependencyRegistry::Index(_)) => return false,
+    };
+    let key = RegistryPackage {
+        registry: registry.to_owned(),
+        package: name.to_owned(),
+    };
+    state.published.get(&key).is_some_and(|versions| {
         versions
             .iter()
             .any(|version| parse_version(version).is_some_and(|parsed| req_matches(req, &parsed)))

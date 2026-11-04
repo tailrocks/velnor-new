@@ -131,6 +131,13 @@ pub(crate) fn convert_edge(
     let Some(path) = dependency.path.as_deref() else {
         return Ok(EdgeResolution::Ignored);
     };
+    if !is_source_directory(path, repo_root) {
+        return Err(MetadataError::UnresolvedPathEdge {
+            manifest: hint.to_owned(),
+            from: from.to_owned(),
+            path: path.to_owned(),
+        });
+    }
     if let Some(to) = dirs.get(&normalize_path(path)) {
         return Ok(EdgeResolution::Edge(LocalEdge {
             from: from.to_owned(),
@@ -154,6 +161,25 @@ pub(crate) fn convert_edge(
         from: from.to_owned(),
         path: path.to_owned(),
     })
+}
+
+fn is_source_directory(path: &str, repo_root: &Path) -> bool {
+    use std::path::Component;
+    let path = Path::new(path);
+    if !path.is_absolute()
+        || path
+            .components()
+            .any(|component| matches!(component, Component::ParentDir))
+    {
+        return false;
+    }
+    let Ok(root) = repo_root.canonicalize() else {
+        return false;
+    };
+    let Ok(target) = path.canonicalize() else {
+        return false;
+    };
+    target.is_dir() && target.starts_with(root)
 }
 
 fn is_known_target(path: &str, repo_root: &Path, known: &BTreeSet<String>) -> bool {

@@ -38,6 +38,7 @@ pub struct ReleaseRequest<'a> {
     pub scope: &'a ReleaseScope,
     pub enabled: bool,
     pub affected: &'a BTreeSet<String>,
+    pub known_manifests: &'a BTreeSet<String>,
     pub supported_registries: &'a [String],
 }
 
@@ -101,7 +102,7 @@ pub fn select_release_set(request: &ReleaseRequest<'_>) -> Result<ReleaseSelecti
         request.metadata_json,
         request.repo_root,
         request.manifest_hint,
-        &BTreeSet::new(),
+        request.known_manifests,
     )
     .map_err(ReleaseError::Metadata)?;
     let facts = parse_release_facts(request.metadata_json, request.manifest_hint)?;

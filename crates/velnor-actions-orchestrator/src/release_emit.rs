@@ -5,7 +5,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_actions_contract::WorkflowPolicy;
 use velnor_actions_contract::config::{ReleaseAuthentication, ReleaseRegistry, RustReleaseConfig};
-use velnor_actions_mise::MetadataDiscovery;
+use velnor_actions_mise::{GitRequest, MetadataDiscovery};
 use velnor_actions_rust::release_select::{
     DEFAULT_REGISTRY, ReleaseRequest as SelectRequest, ReleaseScope, ReleaseSelection,
     select_release_set,
@@ -165,6 +165,7 @@ pub(crate) fn select_from_json(
         ReleaseScope::Packages(release.packages.clone())
     };
     let affected = BTreeSet::new();
+    let known_manifests = tracked_manifests(&prep.root)?;
     let supported: &[String] = &[];
     let request = SelectRequest {
         metadata_json: json,
@@ -173,11 +174,71 @@ pub(crate) fn select_from_json(
         scope: &scope,
         enabled: true,
         affected: &affected,
+        known_manifests: &known_manifests,
         supported_registries: supported,
     };
+    let record = velnor_actions_rust::metadata::parse_metadata_json(
+        json,
+        &prep.root,
+        manifest,
+        &known_manifests,
+    )
+    .map_err(|err| OrchestratorError::Contract {
+        problem: err.to_string(),
+    })?;
+    if record.packages.iter().any(|package| {
+        !package.external
+            && !tracked_manifest_in_source(&prep.root, &known_manifests, &package.manifest)
+    }) {
+        return Err(OrchestratorError::Contract {
+            problem: "release_manifest_not_tracked".to_owned(),
+        });
+    }
     select_release_set(&request).map_err(|err| OrchestratorError::Contract {
         problem: err.to_string(),
     })
+}
+
+fn tracked_manifest_in_source(
+    root: &std::path::Path,
+    known: &BTreeSet<String>,
+    path: &str,
+) -> bool {
+    if !known.contains(path) {
+        return false;
+    }
+    let Ok(root) = root.canonicalize() else {
+        return false;
+    };
+    let Ok(target) = root.join(path).canonicalize() else {
+        return false;
+    };
+    let Ok(relative) = target.strip_prefix(root) else {
+        return false;
+    };
+    relative.to_str().is_some_and(|name| known.contains(name)) && target.is_file()
+}
+
+fn tracked_manifests(root: &std::path::Path) -> Result<BTreeSet<String>, OrchestratorError> {
+    let failure = || OrchestratorError::Contract {
+        problem: "release_tracked_manifests_unavailable".to_owned(),
+    };
+    let output = GitRequest::ls_files(vec!["-z".into()])
+        .run_in(root)
+        .map_err(|_| failure())?;
+    if !output.success {
+        return Err(failure());
+    }
+    let paths: BTreeSet<String> =
+        crate::git_paths::split_nul_paths(&output.stdout).map_err(|_| failure())?;
+    Ok(paths
+        .into_iter()
+        .filter(|path| {
+            std::path::Path::new(path)
+                .file_name()
+                .is_some_and(|name| name == "Cargo.toml")
+        })
+        .collect())
 }
 
 pub(crate) fn release_metadata_json(
@@ -198,9 +259,8 @@ pub(crate) fn release_metadata_json(
         problem,
     };
     crate::inventory::require_rust_pin(catalog).map_err(|err| incomplete(err.to_string()))?;
-    let request =
-        MetadataDiscovery::new(prep.root.join(manifest))
-            .map_err(|err| incomplete(err.to_string()))?;
+    let request = MetadataDiscovery::new(prep.root.join(manifest))
+        .map_err(|err| incomplete(err.to_string()))?;
     let command = request
         .command(catalog)
         .map_err(|err| incomplete(err.to_string()))?;

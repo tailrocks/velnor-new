@@ -1114,6 +1114,7 @@ version = "0.1.72"
 dependencies = [
  "serde",
  "serde_json",
+ "tempfile",
  "toml",
  "velnor-actions-contract",
 ]

@@ -195,3 +195,6 @@ mod waste_rules;
 mod waste_verifier_oracle;
 #[path = "workflow_configuration_public/workspace_format.rs"]
 mod workspace_format;
+
+#[path = "workflow_configuration_public/release_tracked_manifests.rs"]
+mod release_tracked_manifests;

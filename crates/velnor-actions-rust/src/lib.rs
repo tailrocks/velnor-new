@@ -84,7 +84,10 @@ pub use release_config::{
 };
 pub use release_error::ReleaseError;
 pub use release_facts::{DepFact, DepSource, PublishSetting, ReleaseFacts};
-pub use release_graph::{PackagingEdge, PublicationGraph, RegistryState, publication_graph};
+pub use release_graph::{
+    PackagingEdge, PublicationGraph, RegistryPackage, RegistryState, ReleasePlan, plan_release,
+    publication_graph,
+};
 pub use release_products::{
     ResolvedReleaseProducts, release_version_policy, resolve_release_products,
 };

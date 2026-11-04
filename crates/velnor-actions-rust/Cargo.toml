@@ -25,3 +25,10 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 toml = { version = "=1.1.8" }
 
+
+[dev-dependencies]
+tempfile = { version = "=3.27.0" }
+
+[[test]]
+name = "release_workspace_cargo"
+path = "tests/release_workspace_cargo.rs"
