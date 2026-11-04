@@ -316,7 +316,7 @@ A failed hit that reaches `import_failed`, `over_stored` or `over_extracted` mus
 
 ## Open measurements
 
-The Linux harness answered the layout, ceiling, retention, packer-level and hit-rate questions. These remain, on a hosted Linux runner, per Cargo root, lanes build, clippy and doc in one store, `MBX_BUILD_SCRIPT_EXECUTION=0`, `MBX_SHARE_OUT_DIR=1`, `SOURCE_DATE_EPOCH=0`:
+The Linux harness answered the layout, ceiling, retention, packer-level and hit-rate questions. These remain, on a hosted Linux runner, per Cargo root, lanes build, clippy, doc and doctest in one store, `MBX_BUILD_SCRIPT_EXECUTION=hybrid` (phase 1 at `1`, phase 2 at `0`), `MBX_SHARE_OUT_DIR=1`, `SOURCE_DATE_EPOCH=0`:
 
 1. Stored bytes with `--long=30`, which the harness omitted, and compression CPU time for `zstd -3 --long=30` over the export.
 2. Restore time per job on a 4-core runner: download, extraction and `mbx cache import`.
