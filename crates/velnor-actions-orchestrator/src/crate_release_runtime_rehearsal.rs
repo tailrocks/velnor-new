@@ -27,6 +27,77 @@ fn generated_source_require_rehearsal() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+#[test]
+fn generated_candidate_receipt_rejects_unprotected_environment() -> Result<(), Box<dyn Error>> {
+    if std::env::var_os("VELNOR_CANDIDATE_CHILD").is_some() {
+        assert_eq!(
+            std::env::var("VELNOR_TEST_COMMAND_ARGS")?,
+            "crate-release candidate-receipt"
+        );
+        assert!(matches!(super::run_crate_release("candidate-receipt"),
+            Err(crate::OrchestratorError::Internal { problem }) if problem == "crate_release_authority_not_qualified"));
+        assert!(
+            matches!(super::run_qualified_crate_release("candidate-receipt"),
+            Err(crate::OrchestratorError::Internal { problem }) if problem == "crate_release_environment_bypass")
+        );
+        return Ok(());
+    }
+    rehearse_candidate_denial()
+}
+
+fn rehearse_candidate_denial() -> Result<(), Box<dyn Error>> {
+    let temp = tempfile::tempdir()?;
+    let root = temp.path();
+    let source = "a".repeat(40);
+    let sha = committed_intent(root, &source)?;
+    let listener = std::net::TcpListener::bind("127.0.0.1:0")?;
+    listener.set_nonblocking(true)?;
+    let origin = format!("http://{}", listener.local_addr()?);
+    let done = Arc::new(AtomicBool::new(false));
+    let server_done = Arc::clone(&done);
+    let server_sha = sha.clone();
+    let server = std::thread::spawn(move || {
+        serve_admission(&listener, &server_done, &server_sha, &source, true)
+    });
+    let bin = root.join("velnor/bin");
+    std::fs::create_dir_all(&bin)?;
+    let executable = bin.join(format!("velnor-actions-{}", env!("CARGO_PKG_VERSION")));
+    std::fs::write(
+        &executable,
+        "#!/bin/sh\nexport VELNOR_TEST_COMMAND_ARGS=\"$*\"\nexec \"$VELNOR_TEST_BINARY\" --exact crate_release_runtime::rehearsal::generated_candidate_receipt_rejects_unprotected_environment\n",
+    )?;
+    std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o755))?;
+    let script = generated_script("release-preflight", "Release candidate-receipt")?;
+    let status = std::process::Command::new("bash")
+        .args(["-e", "-c", &script])
+        .env("VELNOR_CANDIDATE_CHILD", "1")
+        .env("VELNOR_TEST_BINARY", std::env::current_exe()?)
+        .env("VELNOR_TEST_GITHUB_ORIGIN", origin)
+        .env("RUNNER_TEMP", root)
+        .env("GITHUB_WORKSPACE", root)
+        .env("GITHUB_REPOSITORY", "owner/project")
+        .env("GITHUB_SHA", &sha)
+        .env("GITHUB_WORKFLOW_SHA", &sha)
+        .env(
+            "GITHUB_WORKFLOW_REF",
+            "owner/project/.github/workflows/release.yml@refs/heads/main",
+        )
+        .env("GITHUB_REF", "refs/heads/main")
+        .env("GITHUB_EVENT_NAME", "workflow_dispatch")
+        .env("GITHUB_RUN_ID", "12")
+        .env("GITHUB_RUN_ATTEMPT", "1")
+        .env("GIT_TOKEN", "fixture")
+        .status()?;
+    done.store(true, Ordering::Release);
+    server
+        .join()
+        .map_err(|_| "fake GitHub panicked")?
+        .map_err(|e| format!("fake GitHub: {e}"))?;
+    assert!(status.success());
+    assert!(!root.join("velnor-crate-release-receipt.json").exists());
+    Ok(())
+}
+
 fn rehearse_source_require(event: &str, denied: bool) -> Result<(), Box<dyn Error>> {
     let temp = tempfile::tempdir()?;
     let root = temp.path();
@@ -135,6 +206,10 @@ fn git(root: &Path, args: &[&str]) -> Result<String, Box<dyn Error>> {
 }
 
 fn source_require_script() -> Result<String, Box<dyn Error>> {
+    generated_script("release-publish", "Release source-require")
+}
+
+fn generated_script(job: &str, name: &str) -> Result<String, Box<dyn Error>> {
     let (spec, rust) = crate::release_steps::tests::fixture()?;
     let workflow = velnor_actions_workflow_renderer::release_tree::render_release_workflow(
         &spec,
@@ -145,12 +220,12 @@ fn source_require_script() -> Result<String, Box<dyn Error>> {
         &rust,
     )?;
     let workflow: serde_json::Value = serde_saphyr::from_str(&workflow)?;
-    let steps = workflow["jobs"]["release-publish"]["steps"]
+    let steps = workflow["jobs"][job]["steps"]
         .as_array()
         .ok_or("publisher steps")?;
     Ok(steps
         .iter()
-        .find(|step| step["name"].as_str() == Some("Release source-require"))
+        .find(|step| step["name"].as_str() == Some(name))
         .and_then(|step| step["run"].as_str())
         .ok_or("source-require step")?
         .to_owned())
