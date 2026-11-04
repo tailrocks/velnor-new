@@ -13,6 +13,7 @@ autotests = false
 v1-task-owner = "repository-maintenance"
 
 [lib]
+doctest = false
 path = "src/lib.rs"
 test = true
 

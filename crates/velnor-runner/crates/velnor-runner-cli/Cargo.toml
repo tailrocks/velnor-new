@@ -22,6 +22,7 @@ velnor-runner-host = { version = "=0.1.0", path = "../velnor-runner-host" }
 security-framework = { version = "=3.7.0" }
 
 [lib]
+doctest = false
 name = "velnor_runner_cli"
 path = "src/lib.rs"
 test = false

@@ -13,10 +13,21 @@ use super::workflow_configuration_fixture;
 type StepShape = (String, Option<String>);
 
 const PUSH_AWARE_DEPTH: &str = "${{ github.event_name == 'push' && '1' || '0' }}";
+const MERGE_PARENTS_DEPTH: &str = "${{ github.event_name == 'push' && '1' || '2' }}";
+
+const NATIVE_CHECK: &str = "[[native_checks]]\nid = \"fixture-native-tree\"\noperation = \"tap_tree\"\n[native_checks.runner]\nlabel = \"ubuntu-26.04\"\nplatform = \"linux_x64\"\nexecutor = \"hosted\"\n";
 
 fn config(default_branch: &str, extra_workflow: &str) -> String {
+    config_with_native_checks(default_branch, extra_workflow, NATIVE_CHECK)
+}
+
+fn config_with_native_checks(
+    default_branch: &str,
+    extra_workflow: &str,
+    native_checks: &str,
+) -> String {
     format!(
-        "schema = 1\n[workflow]\nname = \"CI\"\npolicy = \"consumer-v1\"\ndefault_branch = \"{default_branch}\"\n{extra_workflow}\n[[native_checks]]\nid = \"fixture-native-tree\"\noperation = \"tap_tree\"\n[native_checks.runner]\nlabel = \"ubuntu-26.04\"\nplatform = \"linux_x64\"\nexecutor = \"hosted\"\n\n{}\n{}",
+        "schema = 1\n[workflow]\nname = \"CI\"\npolicy = \"consumer-v1\"\ndefault_branch = \"{default_branch}\"\n{extra_workflow}\n{native_checks}\n{}\n{}",
         check("lean", "history = \"shallow_on_push\"\n"),
         check("full", "")
     )
@@ -134,7 +145,7 @@ fn only_the_promised_jobs_take_the_push_aware_checkout_depth() -> Result<(), Box
         ("check-lean", Some(PUSH_AWARE_DEPTH)),
         ("jactionlint", None),
         ("plan", Some(PUSH_AWARE_DEPTH)),
-        ("required", Some(PUSH_AWARE_DEPTH)),
+        ("required", Some("\"0\"")),
         ("rust-demo", None),
     ]
     .into_iter()
@@ -224,6 +235,49 @@ fn shallow_check_requires_the_rendered_push_branch_to_be_main() -> Result<(), Bo
     assert!(
         push.starts_with("    branches:\n      - main\n  merge_group:"),
         "{push}"
+    );
+    Ok(())
+}
+
+#[test]
+fn required_job_keeps_full_history_exactly_when_native_checks_are_configured()
+-> Result<(), Box<dyn Error>> {
+    for extra_workflow in ["", "verification_branch = \"sea/integration\"\n"] {
+        let with_native = rendered_workflow(&config("main", extra_workflow))?;
+        let without_native =
+            rendered_workflow(&config_with_native_checks("main", extra_workflow, ""))?;
+        assert_eq!(
+            checkout_depths(&with_native).get("required"),
+            Some(&Some("\"0\"".to_owned())),
+            "extra workflow settings {extra_workflow:?}"
+        );
+        assert_eq!(
+            checkout_depths(&without_native).get("required"),
+            Some(&Some(MERGE_PARENTS_DEPTH.to_owned())),
+            "extra workflow settings {extra_workflow:?}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn config_rejects_the_merge_parents_history_setting() -> Result<(), Box<dyn Error>> {
+    let tampered = config("main", "").replace(
+        "history = \"shallow_on_push\"",
+        "history = \"shallow_with_merge_parents\"",
+    );
+    let repo = workflow_configuration_fixture::make_repo(&tampered)?;
+    fs::write(
+        repo.path().join("mise.toml"),
+        "[tasks.fixture-check]\nrun = \"true\"\n",
+    )?;
+    let Err(error) = prepare(repo.path()) else {
+        return Err("history = shallow_with_merge_parents must not load".into());
+    };
+    let message = error.to_string();
+    assert!(
+        message.contains("history = \"shallow_with_merge_parents\""),
+        "{message}"
     );
     Ok(())
 }

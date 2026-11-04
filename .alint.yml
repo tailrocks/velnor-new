@@ -1,8 +1,8 @@
 # Repository policy, enforced by asamarts/alint as its own CI job.
 # Local rules cover generic file/path requirements and agent-instruction
-# file integrity only. No dependency-architecture, Rust-syntax, or
-# test-layout claims: Alint cannot inspect those (see
-# docs/proposed/rust-quality-contract.md §1, §4).
+# file integrity only, plus the `no-doctests` content rule (decision X76).
+# No dependency-architecture, Rust-syntax, or test-layout claims: Alint
+# cannot inspect those (see docs/proposed/rust-quality-contract.md §1, §4).
 #
 # `extends` pins the five pr-1 R04 bundles (OSS, GitHub Actions, Rust,
 # lockfiles, no-tracked-artifacts), deduped: the review example repeats
@@ -199,3 +199,11 @@ rules:
     max_lines: 150
     level: error
     message: "src/lib.rs and src/main.rs MUST stay under 150 physical lines (§5)"
+
+  - id: no-doctests
+    kind: file_content_forbidden
+    paths:
+      include: ["crates/**/src/**/*.rs"]
+    pattern: '(?m)^[ \t]*//[/!][ \t]*(?:```|~~~)|(?m)^[ \t]*//[/!] {5,}\S|#!?\[doc\s*=[^\]]*(?:```|~~~|include_str)|\bdoc\s*=\s*include_str!'
+    level: error
+    message: "Doctests are off by decision (Cargo `doctest = false`, velnor-fast-ci decision X76). A doctest would bring back the MBX `rustdoc` bypass in every CI run. Do not add a doc fence, an indented doc code block or a `#[doc]` include; a decision is needed first."
