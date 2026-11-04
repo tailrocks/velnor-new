@@ -58,9 +58,10 @@ exports or saves. When `compiled_state` is not `"off"`, the non-crate
 `State producer` job (one per MBX Cargo workspace; protected default-branch
 pushes only; not part of `Required`) runs the crate jobs' build, Clippy and
 documentation lane records twice, first over a dependency skeleton at
-`MBX_BUILD_SCRIPT_EXECUTION=1` and then over the real members at `0`, records
-the producer marker, and exports one bundle that the `State seal` job saves and
-attests ([cache decisions](../proposed/cache-decisions.md) 1 to 3).
+`MBX_BUILD_SCRIPT_EXECUTION=1` and then over the real members at `0` (the
+switch between the phases deletes the first phase's task reports, which the
+controller writes once per task), records the producer marker, and exports one
+bundle that the `State seal` job saves and attests ([cache decisions](../proposed/cache-decisions.md) 1 to 3).
 `union` is the default `compiled_state`, so velnor-new sets nothing; see
 [compiled-state persistence](../proposed/compiled-state-persistence.md). MBX shares
 one compiler CPU/memory budget and deduplicates identical in-flight

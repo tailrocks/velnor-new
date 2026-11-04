@@ -157,7 +157,7 @@ fn producer_runs_the_crate_job_lane_records() -> Result<(), Box<dyn Error>> {
                 .steps
                 .iter()
                 .all(|step| !step.name.contains("ledger") && !step.name.contains("reports")),
-            "{root}: the producer emits no ledger or task report"
+            "{root}: the producer has no ledger or report step"
         );
         let block = rendered_job_block(&built.ci, producer_id)?;
         assert!(
