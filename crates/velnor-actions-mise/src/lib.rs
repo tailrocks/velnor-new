@@ -33,6 +33,7 @@ pub mod nextest_shapes;
 pub mod operator_toolchain_guard;
 pub mod package_release_tools;
 pub mod preflight;
+pub mod release_git_pin;
 pub mod requests;
 pub mod requests_presence;
 pub mod restore;
