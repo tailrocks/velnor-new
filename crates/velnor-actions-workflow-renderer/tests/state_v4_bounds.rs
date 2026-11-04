@@ -12,27 +12,32 @@ use crate::gc1_scene::{Scene, fail};
 use crate::gc1_scene_bounded::scripts_with;
 use crate::gc1_ustar::{Archive, decode_zstd, list_members, pad_to};
 
-const KIB: u64 = 1024;
+pub(crate) const KIB: u64 = 1024;
 const STORED: u64 = 4 * KIB;
-const EXTRACTED: u64 = 1024 * KIB;
-const MEMBERS: u64 = 1_000;
+pub(crate) const EXTRACTED: u64 = 1024 * KIB;
+pub(crate) const MEMBERS: u64 = 1_000;
 const SHIPPED_STORED: u64 = 1_610_612_736;
 const SHIPPED_EXTRACTED: u64 = 12_884_901_888;
 const SHIPPED_MEMBERS: u64 = 100_000;
 
-fn bounded(name: &str, stored: u64, extracted: u64, members: u64) -> Result<Scene, Box<dyn Error>> {
+pub(crate) fn bounded(
+    name: &str,
+    stored: u64,
+    extracted: u64,
+    members: u64,
+) -> Result<Scene, Box<dyn Error>> {
     Scene::new(
         name,
         scripts_with(StateCeilings::new(stored, extracted, members))?,
     )
 }
 
-fn payload_dir(scene: &Scene) -> Result<(), Box<dyn Error>> {
+pub(crate) fn payload_dir(scene: &Scene) -> Result<(), Box<dyn Error>> {
     std::fs::create_dir_all(scene.payload().parent().ok_or_else(|| fail("no parent"))?)?;
     Ok(())
 }
 
-fn valid_payload(scene: &Scene) -> Result<(), Box<dyn Error>> {
+pub(crate) fn valid_payload(scene: &Scene) -> Result<(), Box<dyn Error>> {
     payload_dir(scene)?;
     let mut archive = Archive::create(&scene.payload())?;
     archive.state_layout("old")?;
@@ -84,7 +89,7 @@ fn member_count(scene: &Scene) -> Result<u64, Box<dyn Error>> {
     )?)
 }
 
-fn require_imported(scene: &Scene, label: &str) -> Result<(), Box<dyn Error>> {
+pub(crate) fn require_imported(scene: &Scene, label: &str) -> Result<(), Box<dyn Error>> {
     let record = std::fs::read_to_string(scene.recovery_record())
         .map_err(|error| fail(&format!("{label}: no recovery record ({error})")))?;
     if !record.contains("decision=exact-hit") {
@@ -98,7 +103,7 @@ fn require_imported(scene: &Scene, label: &str) -> Result<(), Box<dyn Error>> {
     scene.assert_clean_exit()
 }
 
-fn require_in(output: &str, needle: &str, label: &str) -> Result<(), Box<dyn Error>> {
+pub(crate) fn require_in(output: &str, needle: &str, label: &str) -> Result<(), Box<dyn Error>> {
     if output.contains(needle) {
         Ok(())
     } else {
