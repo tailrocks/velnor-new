@@ -390,6 +390,23 @@ fn sha256(bytes: &[u8]) -> String {
 }
 
 #[cfg(test)]
+fn execute_preparation_command(
+    checkout: PreparationCheckout,
+    command: &velnor_actions_mise::command::IsolatedCommand,
+    timeout: std::time::Duration,
+) -> Result<PreparationArtifact, &'static str> {
+    let deadline = velnor_actions_mise::CheckDeadline::after(timeout)
+        .map_err(|_| "release_pr_update_failed")?;
+    let (output, _drained) = command
+        .run_quiescent_until(1024 * 1024, deadline)
+        .map_err(|_| "release_pr_update_failed")?;
+    if !output.success {
+        return Err("release_pr_update_failed");
+    }
+    checkout.collect()
+}
+
+#[cfg(test)]
 mod tests {
     use super::{PreparationBinding, PreparationCheckout};
     use std::{collections::BTreeSet, fs, path::Path, process::Command};
@@ -412,6 +429,7 @@ mod tests {
         let root = tempfile::tempdir()?;
         git(root.path(), &["init", "-q"])?;
         fs::write(root.path().join("Cargo.toml"), "base\n")?;
+        fs::write(root.path().join("release-plz.toml"), "")?;
         git(root.path(), &["add", "."])?;
         git(
             root.path(),
@@ -459,6 +477,98 @@ mod tests {
         assert!(
             checkout
                 .collect_with(|| fs::write(&config, bytes).expect("fixture write"))
+                .is_err()
+        );
+        Ok(())
+    }
+    #[cfg(unix)]
+    fn update_command(
+        source: &Path,
+        tools: &Path,
+        script: &str,
+    ) -> Result<velnor_actions_mise::command::IsolatedCommand, Box<dyn std::error::Error>> {
+        use std::{ffi::OsString, os::unix::fs::PermissionsExt as _};
+        let program = tools.join("release-plz");
+        fs::write(&program, script)?;
+        fs::set_permissions(&program, fs::Permissions::from_mode(0o755))?;
+        let tool_home = tools.to_str().ok_or("tools")?;
+        let env: Vec<(OsString, OsString)> = [
+            ("PATH", "/usr/bin:/bin"),
+            ("CARGO", "/usr/bin/true"),
+            ("RUSTC", "/usr/bin/true"),
+            ("RUSTDOC", "/usr/bin/true"),
+            ("HOME", tool_home),
+            ("CARGO_HOME", tool_home),
+            ("CARGO_TARGET_DIR", tool_home),
+            ("RUSTUP_HOME", tool_home),
+            ("RUSTUP_AUTO_INSTALL", "0"),
+        ]
+        .into_iter()
+        .map(|(key, value)| (key.into(), value.into()))
+        .collect();
+        let args = vec![
+            "update".into(),
+            "--config".into(),
+            source.join("release-plz.toml").into_os_string(),
+            "--manifest-path".into(),
+            source.join("Cargo.toml").into_os_string(),
+        ];
+        Ok(velnor_actions_mise::command::IsolatedCommand::crate_update(
+            &program, args, source, &env,
+        )?)
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn updater_success_is_captured_but_failure_never_produces_artifact()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let (root, checkout) = make_checkout()?;
+        let tools = tempfile::tempdir()?;
+        let cmd = update_command(
+            root.path(),
+            tools.path(),
+            "#!/bin/sh\nprintf 'update\\n' > Cargo.toml\n",
+        )?;
+        let artifact =
+            super::execute_preparation_command(checkout, &cmd, std::time::Duration::from_secs(10))?;
+        assert_eq!(artifact.files.len(), 1);
+        assert_eq!(artifact.files[0].bytes, b"update\n");
+        let (root, checkout) = make_checkout()?;
+        let tools = tempfile::tempdir()?;
+        let cmd = update_command(
+            root.path(),
+            tools.path(),
+            "#!/bin/sh\nprintf 'partial\\n' > Cargo.toml\nexit 1\n",
+        )?;
+        assert!(
+            super::execute_preparation_command(checkout, &cmd, std::time::Duration::from_secs(10))
+                .is_err()
+        );
+        Ok(())
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn updater_children_are_drained_and_timeout_is_not_captured()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let (root, checkout) = make_checkout()?;
+        let tools = tempfile::tempdir()?;
+        let cmd = update_command(
+            root.path(),
+            tools.path(),
+            "#!/bin/sh\nprintf 'ready\\n' > Cargo.toml\n(sleep 2; printf 'late\\n' > Cargo.toml) >/dev/null 2>&1 &\n",
+        )?;
+        let artifact =
+            super::execute_preparation_command(checkout, &cmd, std::time::Duration::from_secs(10))?;
+        assert_eq!(artifact.files[0].bytes, b"ready\n");
+        std::thread::sleep(std::time::Duration::from_secs(3));
+        assert_eq!(fs::read(root.path().join("Cargo.toml"))?, b"ready\n");
+
+        let (root, checkout) = make_checkout()?;
+        let tools = tempfile::tempdir()?;
+        let cmd = update_command(root.path(), tools.path(), "#!/bin/sh\nsleep 5\n")?;
+        assert!(
+            super::execute_preparation_command(checkout, &cmd, std::time::Duration::from_secs(1))
                 .is_err()
         );
         Ok(())
