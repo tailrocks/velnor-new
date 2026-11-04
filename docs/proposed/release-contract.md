@@ -381,3 +381,44 @@ cleanup; pinned release-plz command/config compatibility. Mocks and a
 disposable registry cover failure cases; no throwaway public names are
 reserved. Generated output passes jactionlint and the existing
 workflow-security checks.
+
+## 13. Protected rehearsal runner
+
+A repository can enable a protected runner independently of publication:
+
+```toml
+[stacks.rust.release.rehearsal]
+script = "qualification/rehearse.sh"
+environment = "qualification"
+reviewer_id = 12345
+```
+
+The script is a tracked, repository-relative Bash script. The environment must
+already exist, require the configured human reviewer, restrict deployment to
+protected branches, and disallow administrator bypass. The runner accepts only a
+first-attempt manual dispatch from the protected default branch. It checks the
+environment before creating a deployment and checks the policy and approval
+again after the environment gate. The read-only acquisition job checks out the
+exact workflow commit without persisting credentials. A separate job with empty
+GitHub token permissions runs the script with a cleared environment.
+
+The script receives `PATH`, `HOME`, `TMPDIR`, `RUNNER_TEMP`, `CANDIDATE_PR`,
+`CANDIDATE_SHA`, and `SOURCE_SHA`. `SOURCE_SHA` identifies the workflow source
+commit; the candidate values are unverified inputs. The script cannot use the
+repository token or OIDC credentials. A private repository can use the
+read-only acquisition job, but the script cannot fetch other private
+repositories unless their inputs are made available without credentials.
+Clearing environment variables is not an operating-system sandbox.
+
+The source transfer verifies tracked file and link blobs against the checked-out
+Git tree and preserves internal symlinks. It rejects escaping or cyclic links,
+submodules, unsafe paths, more than 100,000 entries, an index larger than 16 MiB,
+and a source archive larger than 100 MiB. The executor verifies the archive
+digest and validates its entries before extraction. A later job records a
+runner observation after the script exits successfully.
+
+A successful runner observation establishes only the script's exit status and
+the recorded workflow source and archive identities. It does **not** establish
+that a candidate PR, release source, required checks, publication authority, or
+crates.io OIDC exchange was verified. A separate trusted release qualification
+verifier must establish those facts before any publication guard is removed.

@@ -60,6 +60,7 @@ pub(super) fn render_all(
     }
     let lint_config = rehead_lint_config_marker(&render_jactionlint_yaml(&lint_input)?, version)?;
     let mut extra = crate::release_emit::release_files(prep)?;
+    extra.extend(rehearsal_files(prep, version)?);
     extra.extend(crate::publish_emit::publish_files(prep, &mise)?);
     extra.extend(crate::binary_release_emit::files(prep)?);
     extra.extend(crate::binary_preview_emit::files(prep)?);
@@ -98,6 +99,24 @@ pub(super) fn render_all(
         prep.config.agents.claude_md,
     )?;
     Ok(tree)
+}
+
+fn rehearsal_files(
+    prep: &GenerationPreparation,
+    version: &str,
+) -> Result<Vec<velnor_actions_workflow_renderer::render::RenderedFile>, OrchestratorError> {
+    let Some(rehearsal) = prep
+        .config
+        .stacks
+        .rust
+        .as_ref()
+        .and_then(|rust| rust.release.rehearsal.as_ref())
+    else {
+        return Ok(Vec::new());
+    };
+    Ok(vec![
+        velnor_actions_workflow_renderer::release_tree::rehearsal::render(rehearsal, version)?,
+    ])
 }
 
 pub(super) fn check_tree_paths(

@@ -33,6 +33,7 @@ velnor-actions-rust = { version = "=0.1.73", path = "../velnor-actions-rust" }
 velnor-actions-tofu = { version = "=0.1.73", path = "../velnor-actions-tofu" }
 
 [dev-dependencies]
+serde-saphyr = { version = "=2.1.0", default-features = false, features = ["deserialize"] }
 tempfile = { version = "=3.27.0" }
 velnor-actions-mise = { version = "=0.1.73", path = "../velnor-actions-mise" }
 
@@ -87,3 +88,7 @@ path = "tests/crate_release_version_public.rs"
 [[test]]
 name = "crate_upload_config_public"
 path = "tests/crate_upload_config_public.rs"
+
+[[test]]
+name = "release_rehearsal_public"
+path = "tests/release_rehearsal_public.rs"

@@ -54,6 +54,45 @@ pub struct CrateReleasePredecessor {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
+pub struct ReleaseRehearsalConfig {
+    pub script: String,
+    pub environment: String,
+    pub reviewer_id: u64,
+}
+
+impl ReleaseRehearsalConfig {
+    pub fn validate(&self, file: &str) -> Result<(), ContractError> {
+        validate_environment(file, &self.environment)?;
+        let path = &self.script;
+        if self.reviewer_id == 0
+            || !self
+                .environment
+                .bytes()
+                .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b'.'))
+            || path.is_empty()
+            || path.starts_with('/')
+            || !std::path::Path::new(path)
+                .extension()
+                .is_some_and(|ext| ext.eq_ignore_ascii_case("sh"))
+            || path
+                .split('/')
+                .any(|part| part.is_empty() || part == "." || part == "..")
+            || !path
+                .bytes()
+                .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'/' | b'_' | b'-' | b'.'))
+        {
+            return Err(ContractError::config(
+                file,
+                "stacks.rust.release.rehearsal",
+                "invalid_rehearsal_config",
+            ));
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct RustReleaseConfig {
     #[serde(default)]
     pub enabled: bool,
@@ -99,6 +138,9 @@ pub struct RustReleaseConfig {
 
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub journal_predecessor: Option<CrateReleasePredecessor>,
+
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rehearsal: Option<ReleaseRehearsalConfig>,
 
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub version_groups: BTreeMap<String, Vec<String>>,
@@ -146,6 +188,7 @@ impl Default for RustReleaseConfig {
             tag_name: default_tag_name(),
             recovery: None,
             journal_predecessor: None,
+            rehearsal: None,
             version_groups: BTreeMap::new(),
         }
     }
@@ -188,6 +231,9 @@ impl RustReleaseConfig {
             ));
         }
         validate_environment(file, &self.environment)?;
+        if let Some(rehearsal) = &self.rehearsal {
+            rehearsal.validate(file)?;
+        }
         self.validate_authentication(file)?;
         validate_tag_name(file, &self.tag_name)?;
         if let Some(recovery) = &self.recovery {
