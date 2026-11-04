@@ -133,6 +133,7 @@ fn supplied_consumer_intent_preview() -> Result<(), Box<dyn std::error::Error>> 
     write_consumer_intent(&checkout, &output)?;
     let intent = crate::crate_release_runtime::parse_crate_release_intent(&std::fs::read(&output)?)?;
     assert_eq!(intent.packages, ["demo"]);
+    assert_eq!(intent.pr_write_paths, ["CHANGELOG.md", "Cargo.lock", "Cargo.toml"]);
     assert!(write_consumer_intent(&checkout, &output).is_err());
     let config_path = checkout.join(".velnor/config.toml");
     let config = std::fs::read_to_string(&config_path)?;
@@ -264,5 +265,26 @@ fn configured_features_reach_release_plz_and_cargo_package()
         .publish_features
         .insert("other".into(), vec!["pty".into()]);
     assert!(super::config::plz_config(&unknown, &selected).is_err());
+    Ok(())
+}
+
+#[test]
+fn release_intent_includes_nested_auto_workspace_members() -> Result<(), Box<dyn std::error::Error>> {
+    use std::{fs, process::Command};
+    let temp = tempfile::tempdir()?;
+    let root = temp.path().join("checkout");
+    fs::create_dir(&root)?;
+    preview_fixture(&root)?;
+    fs::create_dir_all(root.join(".private/dependency/src"))?;
+    fs::write(root.join(".private/dependency/Cargo.toml"), "[package]\nname = 'dependency'\nversion = '0.1.0'\nedition = '2021'\n")?;
+    fs::write(root.join(".private/dependency/src/lib.rs"), "pub fn dependency() {}\n")?;
+    fs::write(root.join("Cargo.toml"), "[workspace]\nmembers = []\n\n[package]\nname = 'demo'\nversion = '0.1.0'\nedition = '2021'\n\n[dependencies]\ndependency = { path = '.private/dependency' }\n")?;
+    fs::write(root.join("Cargo.lock"), "version = 4\n\n[[package]]\nname = 'demo'\nversion = '0.1.0'\ndependencies = [\n 'dependency',\n]\n\n[[package]]\nname = 'dependency'\nversion = '0.1.0'\n")?;
+    for args in [&["add", "."][..], &["-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "-m", "workspace"][..]] {
+        if !Command::new("git").args(args).current_dir(&root).status()?.success() { return Err("fixture git failed".into()); }
+    }
+    let intent = preview_consumer_intent(&root)?;
+    let intent = crate::crate_release_runtime::parse_crate_release_intent(intent.as_bytes())?;
+    assert_eq!(intent.pr_write_paths, [".private/dependency/CHANGELOG.md", ".private/dependency/Cargo.toml", "CHANGELOG.md", "Cargo.lock", "Cargo.toml"]);
     Ok(())
 }

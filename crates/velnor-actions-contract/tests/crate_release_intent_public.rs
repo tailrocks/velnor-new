@@ -6,9 +6,12 @@ use velnor_actions_contract::config::CrateReleaseIntent;
 #[test]
 fn intent_rejects_unapproved_or_ambiguous_release_inputs() -> Result<(), Box<dyn std::error::Error>>
 {
-    let value = serde_json::json!({"schema": 1, "repository": "example/demo-crate", "default_branch": "main", "environment": "release", "required_workflow_path": ".github/workflows/ci.yml", "trusted_reviewer_id": 139_017, "generator_version":"0.1.72","generator_source_sha":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","generator_manifest_sha256":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc","release_plz_version":"0.4.3","runner":"ubuntu-24.04","authentication":"trusted-publishing","rust_version": "1.97.1", "manifest_path": "Cargo.toml", "registry": "crates-io", "packages": ["demo-crate"], "publish_features": {"demo-crate":[]}, "tag_template": "{{ package }}-v{{ version }}", "recovery": {"package": "demo-crate", "version": "0.1.1", "source_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}});
+    let value = serde_json::json!({"schema": 1, "repository": "example/demo-crate", "default_branch": "main", "environment": "release", "required_workflow_path": ".github/workflows/ci.yml", "trusted_reviewer_id": 139_017, "generator_version":"0.1.72","generator_source_sha":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","generator_manifest_sha256":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc","release_plz_version":"0.4.3","runner":"ubuntu-24.04","authentication":"trusted-publishing","rust_version": "1.97.1", "manifest_path": "Cargo.toml", "pr_write_paths": ["Cargo.toml"], "registry": "crates-io", "packages": ["demo-crate"], "publish_features": {"demo-crate":[]}, "tag_template": "{{ package }}-v{{ version }}", "recovery": {"package": "demo-crate", "version": "0.1.1", "source_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}});
     let intent: CrateReleaseIntent = serde_json::from_value(value.clone())?;
     intent.validate()?;
+    let mut hidden = intent.clone();
+    hidden.pr_write_paths = vec![".private/Cargo.toml".into(), "Cargo.toml".into()];
+    hidden.validate()?;
     for (key, invalid) in [
         ("generator_version", serde_json::json!("latest")),
         ("generator_source_sha", serde_json::json!("invalid")),
@@ -21,6 +24,28 @@ fn intent_rejects_unapproved_or_ambiguous_release_inputs() -> Result<(), Box<dyn
         ("environment", serde_json::json!("release\nother")),
         ("manifest_path", serde_json::json!("../Cargo.toml")),
         ("registry", serde_json::json!("another")),
+        ("pr_write_paths", serde_json::json!([])),
+        ("pr_write_paths", serde_json::json!(["Cargo.lock"])),
+        (
+            "pr_write_paths",
+            serde_json::json!(["Cargo.toml", "Cargo.toml"]),
+        ),
+        (
+            "pr_write_paths",
+            serde_json::json!(["Cargo.toml", "../CHANGELOG.md"]),
+        ),
+        (
+            "pr_write_paths",
+            serde_json::json!(["Cargo.toml", "src/lib.rs"]),
+        ),
+        (
+            "pr_write_paths",
+            serde_json::json!([".git/Cargo.toml", "Cargo.toml"]),
+        ),
+        (
+            "pr_write_paths",
+            serde_json::json!(["Cargo.toml", "CHANGELOG.md"]),
+        ),
         ("publish_features", serde_json::json!({})),
         ("publish_features", serde_json::json!({"other": []})),
         (
@@ -46,6 +71,7 @@ fn intent_rejects_unapproved_or_ambiguous_release_inputs() -> Result<(), Box<dyn
         "runner",
         "authentication",
         "publish_features",
+        "pr_write_paths",
     ] {
         let mut candidate = value.clone();
         candidate.as_object_mut().ok_or("object")?.remove(missing);
@@ -60,7 +86,7 @@ fn intent_rejects_unapproved_or_ambiguous_release_inputs() -> Result<(), Box<dyn
 #[test]
 fn recovery_accepts_cargo_semver_and_rejects_invalid_versions()
 -> Result<(), Box<dyn std::error::Error>> {
-    let mut value = serde_json::json!({"schema":1,"repository":"example/demo-crate","default_branch":"main","environment":"release","required_workflow_path":".github/workflows/ci.yml","trusted_reviewer_id":139_017,"generator_version":"0.1.72","generator_source_sha":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","generator_manifest_sha256":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc","release_plz_version":"0.4.3","runner":"ubuntu-24.04","authentication":"trusted-publishing","rust_version":"1.97.1","manifest_path":"Cargo.toml","registry":"crates-io","packages":["demo-crate"],"publish_features":{"demo-crate":[]},"tag_template":"{{ package }}-v{{ version }}","recovery":{"package":"demo-crate","version":"1.2.3-alpha.1+build.5","source_sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}});
+    let mut value = serde_json::json!({"schema":1,"repository":"example/demo-crate","default_branch":"main","environment":"release","required_workflow_path":".github/workflows/ci.yml","trusted_reviewer_id":139_017,"generator_version":"0.1.72","generator_source_sha":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","generator_manifest_sha256":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc","release_plz_version":"0.4.3","runner":"ubuntu-24.04","authentication":"trusted-publishing","rust_version":"1.97.1","manifest_path":"Cargo.toml","pr_write_paths":["Cargo.toml"],"registry":"crates-io","packages":["demo-crate"],"publish_features":{"demo-crate":[]},"tag_template":"{{ package }}-v{{ version }}","recovery":{"package":"demo-crate","version":"1.2.3-alpha.1+build.5","source_sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}});
     serde_json::from_value::<CrateReleaseIntent>(value.clone())?.validate()?;
     let maximum = format!("1.2.3-{}", "a".repeat(144));
     value["recovery"]["version"] = serde_json::json!(maximum);

@@ -117,7 +117,10 @@ fn release_files_for_config(
     })?;
     let concurrency = workspace_lock(&metadata, &prep.root, &release.manifest_path, &known_manifests, &registry, &repository)?;
     let config = plz_config(release, &selection)?;
-    let intent = crate_release_intent(prep, release, &repository, &registry, &generator_source_sha, &generator_manifest_sha256, &config);
+    let record = velnor_actions_rust::metadata::parse_metadata_json(&metadata, &prep.root, &release.manifest_path, &known_manifests)
+        .map_err(|err| OrchestratorError::Contract { problem: err.to_string() })?;
+    let pr_write_paths = release_pr_write_paths(&record);
+    let intent = crate_release_intent(prep, release, &repository, &registry, &generator_source_sha, &generator_manifest_sha256, &config, pr_write_paths);
     let spec = ReleaseWorkflowSpec {
         name: RELEASE_WORKFLOW_NAME.to_owned(),
         repository,
@@ -149,6 +152,7 @@ fn crate_release_intent(
     generator_source_sha: &str,
     generator_manifest_sha256: &str,
     config: &velnor_actions_workflow_renderer::release_config::ReleasePlzConfig,
+    pr_write_paths: Vec<String>,
 ) -> CrateReleaseIntent {
     CrateReleaseIntent {
         schema: 1,
@@ -168,6 +172,7 @@ fn crate_release_intent(
         runner: RELEASE_HOSTED_RUNNER.to_owned(),
         authentication: release.effective_authentication(),
         manifest_path: release.manifest_path.clone(),
+        pr_write_paths,
         registry: registry.to_owned(),
         packages: config
             .packages
@@ -187,6 +192,20 @@ fn crate_release_intent(
                 source_sha: recovery.source_sha.clone(),
             }),
     }
+}
+
+fn release_pr_write_paths(record: &velnor_actions_rust::metadata::WorkspaceRecord) -> Vec<String> {
+    let join = |dir: &str, file: &str| if dir.is_empty() { file.to_owned() } else { format!("{dir}/{file}") };
+    let mut paths = BTreeSet::new();
+    for name in ["Cargo.toml", "Cargo.lock", "CHANGELOG.md"] {
+        paths.insert(join(&record.workspace_root, name));
+    }
+    for package in record.packages.iter().filter(|package| package.in_workspace && !package.external) {
+        paths.insert(package.manifest.clone());
+        let dir = package.manifest.rsplit_once('/').map_or("", |(dir, _)| dir);
+        paths.insert(join(dir, "CHANGELOG.md"));
+    }
+    paths.into_iter().collect()
 }
 
 pub(crate) fn enabled_release(
