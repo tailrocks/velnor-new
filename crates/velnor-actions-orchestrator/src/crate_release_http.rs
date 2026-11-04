@@ -1,8 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::io::Read;
 use std::time::Instant;
+use std::{cell::RefCell, collections::BTreeMap, io::Read};
 
 use serde_json::Value;
 
@@ -10,11 +10,20 @@ use crate::{OrchestratorError, internal::internal};
 
 const JSON_LIMIT: u64 = 8 * 1024 * 1024;
 const JOURNAL_BLOB_JSON_LIMIT: u64 = 48 * 1024 * 1024;
+const MAX_VALIDATED_RESPONSES: usize = 64;
+const MAX_VALIDATED_RESPONSE_BYTES: usize = 256 * 1024;
+
+#[derive(Clone)]
+struct ValidatedResponse {
+    etag: String,
+    body: Value,
+}
 
 pub struct GitHubAdmissionHttp {
     token: String,
     deadline: Instant,
     origin: String,
+    responses: RefCell<BTreeMap<(String, u64), ValidatedResponse>>,
 }
 
 impl std::fmt::Debug for GitHubAdmissionHttp {
@@ -231,6 +240,7 @@ impl GitHubAdmissionHttp {
             token,
             deadline,
             origin,
+            responses: RefCell::new(BTreeMap::new()),
         })
     }
 
@@ -339,13 +349,19 @@ impl GitHubAdmissionHttp {
             return Err(internal("crate_release_http_deadline"));
         }
         let url = format!("{}/{route}", self.origin);
-        let response = crate::api::github_evidence_http::agent()?
+        let key = (route.to_owned(), limit);
+        let previous = self.responses.borrow().get(&key).cloned();
+        let mut request = crate::api::github_evidence_http::agent()?
             .get(&url)
             .header("Authorization", &format!("Bearer {}", self.token))
             .header("Accept", "application/vnd.github+json")
             .header("X-GitHub-Api-Version", "2022-11-28")
             .header("Accept-Encoding", "identity")
-            .header("User-Agent", "velnor-actions-crate-release")
+            .header("User-Agent", "velnor-actions-crate-release");
+        if let Some(entry) = &previous {
+            request = request.header("If-None-Match", &entry.etag);
+        }
+        let response = request
             .config()
             .timeout_global(Some(remaining))
             .max_redirects(0)
@@ -353,16 +369,49 @@ impl GitHubAdmissionHttp {
             .build()
             .call()
             .map_err(|_| internal("crate_release_http_transport"))?;
+        if route.contains("/git/matching-refs/") && response.headers().contains_key("link") {
+            self.responses.borrow_mut().remove(&key);
+            return Err(internal("crate_release_http_pagination_unverified"));
+        }
+        if response.status().as_u16() == 304 {
+            let entry = previous.ok_or_else(|| internal("crate_release_http_response"))?;
+            if no_store(response.headers())
+                || response.headers().get_all("etag").iter().count() > 1
+                || response
+                    .headers()
+                    .get("etag")
+                    .is_some_and(|etag| etag.to_str().ok() != Some(entry.etag.as_str()))
+                || Instant::now() >= self.deadline
+            {
+                self.responses.borrow_mut().remove(&key);
+                return Err(internal("crate_release_http_response"));
+            }
+            return Ok(Some(entry.body));
+        }
+        self.responses.borrow_mut().remove(&key);
         if optional && response.status().as_u16() == 404 {
             return Ok(None);
         }
         if response.status().as_u16() != 200 {
             return Err(internal("crate_release_http_response"));
         }
-        if route.contains("/git/matching-refs/") && response.headers().contains_key("link") {
-            return Err(internal("crate_release_http_pagination_unverified"));
+        let etag = response_etag(response.headers());
+        let body = parse_json(response, self.deadline, limit)?;
+        if let Some(etag) = etag {
+            let small = serde_json::to_vec(&body)
+                .is_ok_and(|bytes| bytes.len() <= MAX_VALIDATED_RESPONSE_BYTES);
+            let mut cache = self.responses.borrow_mut();
+            if small && cache.len() < MAX_VALIDATED_RESPONSES {
+                cache.insert(
+                    key,
+                    ValidatedResponse {
+                        etag,
+                        body: body.clone(),
+                    },
+                );
+            }
         }
-        parse_json(response, self.deadline, limit).map(Some)
+        Ok(Some(body))
     }
 
     fn verify_repository_access(&self, route: &str) -> Result<(), OrchestratorError> {
@@ -437,6 +486,35 @@ fn parse_json(
         return Err(internal("crate_release_http_body"));
     }
     serde_json::from_slice(&bytes).map_err(|_| internal("crate_release_http_json"))
+}
+
+fn no_store(headers: &ureq::http::HeaderMap) -> bool {
+    headers.get_all("cache-control").iter().any(|value| {
+        value.to_str().map_or(true, |text| {
+            text.split(',')
+                .any(|part| part.trim().eq_ignore_ascii_case("no-store"))
+        })
+    })
+}
+
+fn response_etag(headers: &ureq::http::HeaderMap) -> Option<String> {
+    if no_store(headers) || headers.get_all("etag").iter().count() != 1 {
+        return None;
+    }
+    let value = headers.get("etag")?.to_str().ok()?;
+    let opaque = value.strip_prefix("W/").unwrap_or(value);
+    let bytes = opaque.as_bytes();
+    if value.len() > 256
+        || bytes.len() < 2
+        || bytes.first() != Some(&b'"')
+        || bytes.last() != Some(&b'"')
+        || bytes[1..bytes.len() - 1]
+            .iter()
+            .any(|b| !(*b == 0x21 || (0x23..=0x7e).contains(b)))
+    {
+        return None;
+    }
+    Some(value.to_owned())
 }
 
 fn validate_journal_name(name: &str) -> Result<(), OrchestratorError> {
@@ -722,6 +800,161 @@ mod tests {
             assert!(super::parse_test_loopback_origin(invalid).is_err());
         }
     }
+    #[test]
+    fn conditional_reads_revalidate_before_reusing_response() {
+        let body = r#"{"generation":1}"#;
+        let first = format!(
+            "HTTP/1.1 200 OK\r\nETag: \"v1\"\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+            body.len()
+        );
+        let unchanged = "HTTP/1.1 304 Not Modified\r\nETag: \"v1\"\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".to_owned();
+        let (origin, worker) = server(vec![first, unchanged]);
+        let reader = client(origin);
+        let route = "repos/example/demo-crate";
+        assert_eq!(reader.get(route).expect("initial")["generation"], 1);
+        assert_eq!(reader.get(route).expect("revalidated")["generation"], 1);
+        let requests = worker.join().expect("server");
+        assert!(!requests[0].to_ascii_lowercase().contains("if-none-match:"));
+        assert!(
+            requests[1]
+                .to_ascii_lowercase()
+                .contains("if-none-match: \"v1\"")
+        );
+    }
+
+    fn tagged_reply(status: &str, tag: &str, body: &str) -> String {
+        format!(
+            "HTTP/1.1 {status}\r\nETag: {tag}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+            body.len()
+        )
+    }
+
+    #[test]
+    fn conditional_reads_never_hide_changes_or_failed_access() {
+        let (origin, worker) = server(vec![
+            tagged_reply("200 OK", "\"v1\"", r#"{"value":1}"#),
+            tagged_reply("200 OK", "\"v2\"", r#"{"value":2}"#),
+            reply("403 Forbidden", "{}"),
+            tagged_reply("304 Not Modified", "\"v2\"", ""),
+        ]);
+        let reader = client(origin);
+        let route = "repos/example/demo-crate";
+        assert_eq!(reader.get(route).expect("first")["value"], 1);
+        assert_eq!(reader.get(route).expect("changed")["value"], 2);
+        assert!(reader.get(route).is_err());
+        assert!(reader.get(route).is_err());
+        let requests = worker.join().expect("server");
+        assert!(
+            requests[1]
+                .to_ascii_lowercase()
+                .contains("if-none-match: \"v1\"")
+        );
+        assert!(
+            requests[2]
+                .to_ascii_lowercase()
+                .contains("if-none-match: \"v2\"")
+        );
+        assert!(!requests[3].to_ascii_lowercase().contains("if-none-match:"));
+        assert!(requests.iter().all(|request| {
+            request
+                .to_ascii_lowercase()
+                .contains("authorization: bearer ")
+        }));
+    }
+
+    #[test]
+    fn conditional_reads_require_matching_route_client_and_size() {
+        let (origin, worker) = server(vec![
+            tagged_reply("200 OK", "\"v1\"", r#"{"value":1}"#),
+            tagged_reply("304 Not Modified", "\"v1\"", ""),
+            tagged_reply("304 Not Modified", "\"v1\"", ""),
+            tagged_reply("304 Not Modified", "\"v1\"", ""),
+        ]);
+        let reader = client(origin.clone());
+        let route = "repos/example/demo-crate";
+        assert!(reader.get(route).is_ok());
+        assert!(reader.get("repos/example/another").is_err());
+        assert!(reader.request_with_limit(route, false, 1024).is_err());
+        assert!(client(origin).get(route).is_err());
+        let requests = worker.join().expect("server");
+        assert!(
+            requests
+                .iter()
+                .all(|request| !request.to_ascii_lowercase().contains("if-none-match:"))
+        );
+    }
+
+    #[test]
+    fn conditional_reads_reject_mismatched_validators_and_link_metadata() {
+        let route =
+            "repos/example/demo-crate/git/matching-refs/tags/velnor-receipt%2F42%2F1%2Foperation-";
+        let linked = "HTTP/1.1 304 Not Modified\r\nETag: \"v1\"\r\nLink: <https://example.invalid>; rel=next\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".to_owned();
+        let (origin, worker) = server(vec![
+            tagged_reply("200 OK", "\"v1\"", "[]"),
+            tagged_reply("304 Not Modified", "\"v2\"", ""),
+            tagged_reply("200 OK", "\"v1\"", "[]"),
+            linked,
+        ]);
+        let reader = client(origin);
+        assert!(reader.get(route).is_ok());
+        assert!(reader.get(route).is_err());
+        assert!(reader.get(route).is_ok());
+        assert!(reader.get(route).is_err());
+        worker.join().expect("server");
+    }
+
+    #[test]
+    fn conditional_reads_do_not_cache_no_store_or_missing_responses() {
+        let no_store = "HTTP/1.1 200 OK\r\nETag: \"v1\"\r\nCache-Control: no-store\r\nContent-Length: 2\r\nConnection: close\r\n\r\n{}".to_owned();
+        let (origin, worker) = server(vec![
+            no_store,
+            reply("200 OK", "{}"),
+            tagged_reply("200 OK", "\"v1\"", "{}"),
+            reply("404 Not Found", "{}"),
+            tagged_reply("304 Not Modified", "\"v1\"", ""),
+        ]);
+        let reader = client(origin);
+        let route = "repos/example/demo-crate/git/ref/tags/missing";
+        assert!(reader.request_with_limit(route, true, 1024).is_ok());
+        assert!(reader.request_with_limit(route, true, 1024).is_ok());
+        assert!(reader.request_with_limit(route, true, 1024).is_ok());
+        assert!(
+            reader
+                .request_with_limit(route, true, 1024)
+                .expect("404")
+                .is_none()
+        );
+        assert!(reader.request_with_limit(route, true, 1024).is_err());
+        let requests = worker.join().expect("server");
+        assert!(!requests[1].to_ascii_lowercase().contains("if-none-match:"));
+        assert!(!requests[2].to_ascii_lowercase().contains("if-none-match:"));
+        assert!(
+            requests[3]
+                .to_ascii_lowercase()
+                .contains("if-none-match: \"v1\"")
+        );
+        assert!(!requests[4].to_ascii_lowercase().contains("if-none-match:"));
+    }
+
+    #[test]
+    fn conditional_reads_bound_response_storage() {
+        let replies = (0..66)
+            .map(|_| tagged_reply("200 OK", "\"v1\"", "{}"))
+            .collect();
+        let (origin, worker) = server(replies);
+        let reader = client(origin);
+        for index in 0..65 {
+            assert!(reader.get(&format!("repos/example/crate-{index}")).is_ok());
+        }
+        assert!(reader.get("repos/example/crate-64").is_ok());
+        assert_eq!(
+            reader.responses.borrow().len(),
+            super::MAX_VALIDATED_RESPONSES
+        );
+        let requests = worker.join().expect("server");
+        assert!(!requests[65].to_ascii_lowercase().contains("if-none-match:"));
+    }
+
     #[test]
     fn reads_exact_workflow_attempt_and_rejects_unsafe_attempt_routes() {
         let (origin, worker) = server(vec![reply("200 OK", r#"{"id":42}"#)]);
@@ -1113,6 +1346,7 @@ mod tests {
             token: TOKEN.to_owned(),
             deadline: Instant::now() + Duration::from_secs(5),
             origin,
+            responses: std::cell::RefCell::default(),
         }
     }
 
@@ -1439,6 +1673,7 @@ mod tests {
             token: TOKEN.to_owned(),
             deadline: Instant::now() + Duration::from_secs(2),
             origin: format!("http://{address}"),
+            responses: std::cell::RefCell::default(),
         };
         assert!(
             client
@@ -1652,6 +1887,7 @@ mod tests {
             token: TOKEN.to_owned(),
             deadline: Instant::now() + Duration::from_secs(2),
             origin: format!("http://{address}"),
+            responses: std::cell::RefCell::default(),
         };
         assert!(client.get("repos/example/demo-crate").is_err());
         worker.join().expect("server");
