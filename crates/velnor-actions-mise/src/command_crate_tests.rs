@@ -163,11 +163,13 @@ fn tool_env() -> Vec<(OsString, OsString)> {
 #[test]
 fn crate_publish_exposes_only_the_selected_credentials() -> Result<(), Box<dyn std::error::Error>> {
     let (_git_dir, git) = fixture_git()?;
+    let source_dir = tempfile::tempdir()?;
+    let source = source_dir.path().canonicalize()?;
     let script = "test -n \"$GIT_TOKEN\"; test \"$GITHUB_ACTIONS\" = true; test -n \"$ACTIONS_ID_TOKEN_REQUEST_URL\"; test -n \"$ACTIONS_ID_TOKEN_REQUEST_TOKEN\"; test -z \"${CARGO_REGISTRY_TOKEN+x}\"; test -z \"${HTTP_PROXY+x}\"; test -z \"${HOSTILE_TOKEN+x}\"";
     let command = IsolatedCommand::crate_publish(
         Path::new("/bin/sh"),
         vec!["-c".into(), script.into()],
-        Path::new("/tmp"),
+        &source,
         &tool_env(),
         "fixture_git_987",
         CratePublishCredential::Trusted {
@@ -196,9 +198,29 @@ fn crate_publish_exposes_only_the_selected_credentials() -> Result<(), Box<dyn s
     assert!(!env.iter().any(|(key, _)| key == "HOSTILE_TOKEN"
         || key == "HTTP_PROXY"
         || key == "CARGO_REGISTRY_TOKEN"));
-    let bootstrap = IsolatedCommand::crate_publish(Path::new("/bin/sh"), vec!["-c".into(), "test -n \"$GIT_TOKEN\"; test -n \"$CARGO_REGISTRY_TOKEN\"; test -z \"${GITHUB_ACTIONS+x}\"; test -z \"${ACTIONS_ID_TOKEN_REQUEST_TOKEN+x}\"".into()], Path::new("/tmp"), &tool_env(), "fixture_git_987", CratePublishCredential::Bootstrap { cargo_token: "fixture_cargo_654" }, &git)?;
+    let bootstrap = IsolatedCommand::crate_publish(Path::new("/bin/sh"), vec!["-c".into(), "test -n \"$GIT_TOKEN\"; test -n \"$CARGO_REGISTRY_TOKEN\"; test -z \"${GITHUB_ACTIONS+x}\"; test -z \"${ACTIONS_ID_TOKEN_REQUEST_TOKEN+x}\"".into()], &source, &tool_env(), "fixture_git_987", CratePublishCredential::Bootstrap { cargo_token: "fixture_cargo_654" }, &git)?;
     assert!(bootstrap.run_bounded(1024, Duration::from_secs(5))?.success);
     assert!(!format!("{bootstrap:?}").contains("fixture_cargo_654"));
+    Ok(())
+}
+
+#[test]
+fn crate_publish_rejects_git_tools_inside_source() -> Result<(), Box<dyn std::error::Error>> {
+    let (_git_dir, git) = fixture_git()?;
+    assert!(
+        IsolatedCommand::crate_publish(
+            Path::new("/bin/sh"),
+            vec!["release".into()],
+            git.exec_path(),
+            &tool_env(),
+            "fixture_git_987",
+            CratePublishCredential::Bootstrap {
+                cargo_token: "fixture_cargo_654"
+            },
+            &git,
+        )
+        .is_err()
+    );
     Ok(())
 }
 
@@ -206,11 +228,13 @@ fn crate_publish_exposes_only_the_selected_credentials() -> Result<(), Box<dyn s
 fn crate_publish_rejects_untrusted_endpoints_and_secret_arguments()
 -> Result<(), Box<dyn std::error::Error>> {
     let (_git_dir, git) = fixture_git()?;
+    let source_dir = tempfile::tempdir()?;
+    let source = source_dir.path().canonicalize()?;
     let create = |args: Vec<OsString>, url: &str| {
         IsolatedCommand::crate_publish(
             Path::new("/bin/sh"),
             args,
-            Path::new("/tmp"),
+            &source,
             &tool_env(),
             "fixture_git_987",
             CratePublishCredential::Trusted {
@@ -248,7 +272,7 @@ fn crate_publish_rejects_untrusted_endpoints_and_secret_arguments()
         IsolatedCommand::crate_publish(
             Path::new("/bin/sh"),
             vec!["release".into()],
-            Path::new("/tmp"),
+            &source,
             &hostile,
             "fixture_git_987",
             CratePublishCredential::Bootstrap {
