@@ -210,6 +210,8 @@ pub(crate) enum ConfigCommand {
 
 #[derive(Debug, Subcommand)]
 pub(crate) enum CrateReleaseCommand {
+    CheckoutPolicy,
+    CheckoutSource,
     PreparePr,
     #[command(about = "Validate release source authority")]
     SourceAdmit,

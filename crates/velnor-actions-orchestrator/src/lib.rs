@@ -30,6 +30,7 @@ private_mods!(
 );
 private_mods!(crate_job_ids, crate_jobs);
 mod crate_release_archive;
+pub mod crate_release_checkout;
 pub mod crate_release_controller;
 pub mod crate_release_github;
 pub mod crate_release_http;

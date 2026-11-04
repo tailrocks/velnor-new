@@ -5,7 +5,7 @@ use velnor_actions_contract::{Step, StepId, StepKind, StepRole};
 
 use crate::{
     RenderError, commands,
-    release_checkout_gates::{check_checkout_shape, require_exact_checkout},
+    release_checkout_gates::check_checkout_shape,
     release_jobs::{ReleaseJobSpec, ReleaseRole, ReleaseWorkflowSpec},
     steps,
 };
@@ -214,7 +214,7 @@ fn check_rust_custody(
             "release_rust_custody:{id}"
         )));
     }
-    let prepare_index = if preparation_with_pr { 3 } else { 2 };
+    let prepare_index = 3;
     if job.role == ReleaseRole::Preparation
         && (job.steps.get(prepare_index) != Some(&prepare)
             || job.steps.get(prepare_index + 1) != Some(&verify))
@@ -660,20 +660,19 @@ fn check_preparation(
     forbid_unexpected_secrets(id, &job.steps)?;
     forbid_registry_token(id, &job.steps)?;
     forbid_inputs_interpolation(id, &job.steps)?;
-    check_checkout_shape(id, &job.steps, job.role, sha)?;
+    check_checkout_shape(id, &job.steps, job.role, sha, binding.generator_version)?;
     let has_pr = !job.outputs.is_empty();
-    let offset = usize::from(has_pr);
-    if job.steps.len() != if has_pr { 10 } else { 7 }
-        || job.steps[4 + offset]
+    if job.steps.len() != if has_pr { 10 } else { 8 }
+        || job.steps[5]
             != crate::release_plz_acquire::acquire_step(binding.release_plz_version, &job.runs_on)?
-        || job.steps[5 + offset] != crate::release_plz_acquire::acquire_semver_step(&job.runs_on)?
+        || job.steps[6] != crate::release_plz_acquire::acquire_semver_step(&job.runs_on)?
     {
         return Err(RenderError::InvalidWorkflow(format!(
             "release_plz_acquire:{id}"
         )));
     }
+    check_acquire_step(id, &job.steps[0], binding.generator_version, &job.runs_on)?;
     if has_pr {
-        check_acquire_step(id, &job.steps[1], binding.generator_version, &job.runs_on)?;
         if job.steps[7]
             != release_pr_candidate_step(
                 binding.generator_version,
@@ -686,7 +685,7 @@ fn check_preparation(
                 "release_pr_preparation:{id}"
             )));
         }
-    } else if job.steps[6].name != "Validate release" {
+    } else if job.steps[7].name != "Validate release" {
         return Err(RenderError::InvalidWorkflow(format!(
             "release_pr_disabled:{id}"
         )));
@@ -741,8 +740,7 @@ fn check_preflight(
     forbid_unexpected_secrets(id, &job.steps)?;
     forbid_registry_token(id, &job.steps)?;
     forbid_inputs_interpolation(id, &job.steps)?;
-    check_checkout_shape(id, &job.steps, job.role, sha)?;
-    require_exact_checkout(id, &job.steps, sha)?;
+    check_checkout_shape(id, &job.steps, job.role, sha, version)?;
     check_runtime_steps(id, job, version, None)
 }
 
@@ -771,8 +769,7 @@ fn check_publish_common(
     plz_version: &str,
 ) -> Result<(), RenderError> {
     forbid_inputs_interpolation(id, &job.steps)?;
-    check_checkout_shape(id, &job.steps, job.role, sha)?;
-    require_exact_checkout(id, &job.steps, sha)?;
+    check_checkout_shape(id, &job.steps, job.role, sha, version)?;
     forbid_verify_bypass(id, &job.steps)?;
     check_runtime_steps(id, job, version, Some(plz_version))
 }
@@ -876,16 +873,15 @@ fn check_reconcile(
     forbid_unexpected_secrets(id, &job.steps)?;
     forbid_registry_token(id, &job.steps)?;
     forbid_inputs_interpolation(id, &job.steps)?;
-    check_checkout_shape(id, &job.steps, job.role, sha)?;
-    require_exact_checkout(id, &job.steps, sha)?;
+    check_checkout_shape(id, &job.steps, job.role, sha, version)?;
     check_runtime_steps(id, job, version, None)
 }
 
 fn runtime_step_names(role: ReleaseRole) -> &'static [&'static str] {
     match role {
         ReleaseRole::Preflight => &[
-            "Checkout",
             "Acquire Velnor",
+            "Checkout",
             "Release source-admit",
             "Checkout exact source",
             "Setup Mise",
@@ -898,8 +894,8 @@ fn runtime_step_names(role: ReleaseRole) -> &'static [&'static str] {
             "Upload release Rust toolchain",
         ],
         ReleaseRole::PublishOidc | ReleaseRole::PublishBootstrap => &[
-            "Checkout",
             "Acquire Velnor",
+            "Checkout",
             "Release source-require",
             "Checkout exact source",
             "Release toolchain-acquire",
@@ -913,8 +909,8 @@ fn runtime_step_names(role: ReleaseRole) -> &'static [&'static str] {
             "Release journal-coordinate",
         ],
         ReleaseRole::Reconcile => &[
-            "Checkout",
             "Acquire Velnor",
+            "Checkout",
             "Release source-require",
             "Checkout exact source",
             "Release toolchain-acquire",
@@ -945,7 +941,7 @@ fn check_runtime_steps(
             "release_step_sequence:{id}"
         )));
     }
-    let velnor_actions_contract::StepKind::Shell { env, .. } = &job.steps[1].kind else {
+    let velnor_actions_contract::StepKind::Shell { env, .. } = &job.steps[0].kind else {
         return Err(RenderError::InvalidWorkflow(format!(
             "release_generator_acquire:{id}"
         )));
@@ -956,14 +952,14 @@ fn check_runtime_steps(
     let manifest_sha = env
         .get("VELNOR_GENERATOR_MANIFEST_SHA256")
         .ok_or_else(|| RenderError::InvalidWorkflow(format!("release_generator_acquire:{id}")))?;
-    if job.steps[1]
+    if job.steps[0]
         != crate::release_generator_bootstrap::acquire_step(
             version,
             &job.runs_on,
             source_sha,
             manifest_sha,
         )?
-        || job.steps[1].role != Some(velnor_actions_contract::StepRole::AcquireVelnor)
+        || job.steps[0].role != Some(velnor_actions_contract::StepRole::AcquireVelnor)
         || job.steps[2].id != Some(velnor_actions_contract::StepId::ReleaseAdmission)
     {
         return Err(RenderError::InvalidWorkflow(format!(

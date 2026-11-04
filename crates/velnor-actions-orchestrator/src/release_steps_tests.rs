@@ -170,8 +170,7 @@ fn release_pr_split_rejects_authority_and_artifact_forgery() -> Result<(), Box<d
     assert!(!valid(&candidate, &rust));
     let mut candidate = spec.clone();
     let producer = candidate.jobs.get_mut("release-preparation").ok_or("producer")?;
-    let StepKind::Action { with, .. } = &mut producer.steps[0].kind else { return Err("checkout".into()) };
-    with.insert("persist-credentials".into(), "true".into());
+    producer.steps[1] = velnor_actions_workflow_renderer::action_step("Checkout", crate::workflow::CHECKOUT_USES, BTreeMap::from([("persist-credentials".into(), "true".into()), ("fetch-depth".into(), "0".into())]))?;
     assert!(!valid(&candidate, &rust));
     let mut candidate = spec.clone();
     let producer = candidate.jobs.get_mut("release-preparation").ok_or("producer")?;
@@ -193,7 +192,7 @@ fn release_pr_split_rejects_authority_and_artifact_forgery() -> Result<(), Box<d
     candidate.jobs.get_mut("release-pr-create").ok_or("writer")?.permissions.id_token = PermissionLevel::Write;
     assert!(!valid(&candidate, &rust));
     let mut candidate = spec.clone();
-    let checkout = candidate.jobs.get("release-preparation").ok_or("producer")?.steps[0].clone();
+    let checkout = candidate.jobs.get("release-preparation").ok_or("producer")?.steps[1].clone();
     candidate.jobs.get_mut("release-pr-create").ok_or("writer")?.steps.push(checkout);
     assert!(!valid(&candidate, &rust));
     let mut candidate = spec.clone();
@@ -742,10 +741,10 @@ fn publishing_jobs_verify_generator_before_running_it() -> Result<(), Box<dyn st
         let workflow = render_release_workflow(&spec, &context, &rust)?;
         let mut tampered = spec.clone();
         let publisher = tampered.jobs.values_mut().find(|job| matches!(job.role, ReleaseRole::PublishOidc | ReleaseRole::PublishBootstrap)).ok_or("publisher")?;
-        if let StepKind::Shell { env, .. } = &mut publisher.steps[1].kind { env.insert("VELNOR_GENERATOR_VERSION".into(), "0.1.99".into()); }
+        if let StepKind::Shell { env, .. } = &mut publisher.steps[0].kind { env.insert("VELNOR_GENERATOR_VERSION".into(), "0.1.99".into()); }
         assert!(render_release_workflow(&tampered, &context, &rust).is_err());
         for job in spec.jobs.values().filter(|job| matches!(job.role, ReleaseRole::PublishOidc | ReleaseRole::PublishBootstrap | ReleaseRole::Preflight)) {
-            let acquire = job.steps.get(1).ok_or("missing acquisition")?;
+            let acquire = job.steps.first().ok_or("missing acquisition")?;
             let StepKind::Shell { run, env } = &acquire.kind else { return Err("wrong acquisition kind".into()); };
             assert_eq!(env.get("VELNOR_GENERATOR_VERSION").map(String::as_str), Some(env!("CARGO_PKG_VERSION")));
             assert_eq!(env.get("GH_TOKEN").map(String::as_str), Some("${{ github.token }}"));
@@ -961,6 +960,38 @@ fn preparation_waits_for_negative_trusted_release_admission() -> Result<(), Box<
         let mut forged = spec.clone();
         forged.jobs.get_mut("release-preparation").ok_or("preparation")?.condition = Some(bad_condition);
         assert!(!valid(&forged, &rust));
+    }
+    Ok(())
+}
+
+#[test]
+fn crate_release_checkouts_use_attested_file_free_git() -> Result<(), Box<dyn std::error::Error>> {
+    use velnor_actions_workflow_renderer::release_jobs::ReleaseRole;
+    for authentication in [ReleaseAuthentication::TrustedPublishing, ReleaseAuthentication::BootstrapToken] {
+        for release_pr in [true, false] {
+            let (spec, rust) = fixture_for_release_pr(authentication, release_pr)?;
+            assert!(valid(&spec, &rust));
+            for job in spec.jobs.values().filter(|job| job.role != ReleaseRole::PrCreate) {
+                assert_eq!(job.steps[0].name, "Acquire Velnor");
+                assert_eq!(job.steps[1].name, "Checkout");
+                let StepKind::Shell { run, env } = &job.steps[1].kind else { return Err("policy checkout is not Velnor".into()); };
+                assert_eq!(run[2], "checkout-policy");
+                assert_eq!(env.get("GIT_TOKEN").map(String::as_str), Some("${{ secrets.GITHUB_TOKEN }}"));
+                assert!(!job.steps.iter().any(|step| matches!(&step.kind, StepKind::Action { uses, .. } if uses.starts_with("actions/checkout@"))));
+                if job.role != ReleaseRole::Preparation {
+                    let source = job.steps.iter().find(|step| step.name == "Checkout exact source").ok_or("source checkout")?;
+                    let StepKind::Shell { run, env } = &source.kind else { return Err("source checkout is not Velnor".into()); };
+                    assert_eq!(run[2], "checkout-source");
+                    assert_eq!(env.get("VELNOR_SOURCE_SHA").map(String::as_str), Some("${{ steps.release-admission.outputs.source_sha }}"));
+                    assert_eq!(env.get("GIT_TOKEN").map(String::as_str), Some("${{ secrets.GITHUB_TOKEN }}"));
+                }
+            }
+            let mut forged = spec.clone();
+            let step = &mut forged.jobs.get_mut("release-preflight").ok_or("preflight")?.steps[3];
+            let StepKind::Shell { env, .. } = &mut step.kind else { return Err("source checkout is not Velnor".into()); };
+            env.insert("VELNOR_SOURCE_SHA".into(), "${{ github.sha }}".into());
+            assert!(!valid(&forged, &rust));
+        }
     }
     Ok(())
 }

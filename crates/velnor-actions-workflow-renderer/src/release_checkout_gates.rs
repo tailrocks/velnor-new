@@ -1,17 +1,38 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_actions_contract::{Step, StepKind};
+use crate::release_gates::{GIT_TOKEN_ENV, GIT_TOKEN_REF};
+use crate::{RenderError, ambient_shell_step, release_jobs::ReleaseRole};
+use std::collections::BTreeMap;
+use velnor_actions_contract::{Step, StepKind, StepRole};
 
-use crate::{RenderError, release_jobs::ReleaseRole, release_tree::RELEASE_SOURCE_DIR};
+pub fn policy_checkout(version: &str) -> Result<Step, RenderError> {
+    crate::marker::validate_version(version)?;
+    ambient_shell_step(
+        "Checkout",
+        vec![
+            format!("$RUNNER_TEMP/velnor/bin/velnor-actions-{version}"),
+            "crate-release".to_owned(),
+            "checkout-policy".to_owned(),
+        ],
+        BTreeMap::from([(GIT_TOKEN_ENV.to_owned(), GIT_TOKEN_REF.to_owned())]),
+    )
+}
 
-fn expected_persist(role: ReleaseRole, sourced: bool) -> &'static str {
-    let pushes = sourced
-        && matches!(
-            role,
-            ReleaseRole::PublishOidc | ReleaseRole::PublishBootstrap
-        );
-    if pushes { "true" } else { "false" }
+pub fn source_checkout(version: &str, sha: &str) -> Result<Step, RenderError> {
+    crate::marker::validate_version(version)?;
+    ambient_shell_step(
+        "Checkout exact source",
+        vec![
+            format!("$RUNNER_TEMP/velnor/bin/velnor-actions-{version}"),
+            "crate-release".to_owned(),
+            "checkout-source".to_owned(),
+        ],
+        BTreeMap::from([
+            (GIT_TOKEN_ENV.to_owned(), GIT_TOKEN_REF.to_owned()),
+            ("VELNOR_SOURCE_SHA".to_owned(), sha.to_owned()),
+        ]),
+    )
 }
 
 pub fn check_checkout_shape(
@@ -19,68 +40,28 @@ pub fn check_checkout_shape(
     steps: &[Step],
     role: ReleaseRole,
     sha: &str,
+    version: &str,
 ) -> Result<(), RenderError> {
-    for step in steps {
-        let StepKind::Action { uses, with, .. } = &step.kind else {
-            continue;
-        };
-        if !uses.starts_with("actions/checkout@") {
-            continue;
+    let invalid = || RenderError::InvalidWorkflow(format!("release_checkout_invalid:{id}"));
+    if steps.iter().any(|step| matches!(&step.kind, StepKind::Action { uses, .. } if uses.starts_with("actions/checkout@")))
+        || steps.first().is_none_or(|step| step.role != Some(StepRole::AcquireVelnor))
+        || steps.get(1) != Some(&policy_checkout(version)?)
+        || steps.iter().filter(|step| step.name == "Checkout").count() != 1
+    { return Err(invalid()); }
+    let sources: Vec<_> = steps
+        .iter()
+        .filter(|step| step.name == "Checkout exact source")
+        .collect();
+    if role == ReleaseRole::Preparation {
+        if !sources.is_empty() {
+            return Err(invalid());
         }
-        let sourced = with.contains_key("path");
-        if with
-            .get("persist-credentials")
-            .is_none_or(|value| value != expected_persist(role, sourced))
-        {
-            return Err(RenderError::InvalidWorkflow(format!(
-                "checkout_with_credentials:{id}"
-            )));
-        }
-        if with.get("fetch-depth").is_none_or(|value| value != "0") {
-            return Err(RenderError::InvalidWorkflow(format!(
-                "shallow_checkout:{id}"
-            )));
-        }
-        if !sourced {
-            if with.contains_key("ref") {
-                return Err(RenderError::InvalidWorkflow(format!(
-                    "pinned_policy_checkout:{id}"
-                )));
-            }
-            continue;
-        }
-        if with
-            .get("path")
-            .is_none_or(|value| value != RELEASE_SOURCE_DIR)
-        {
-            return Err(RenderError::InvalidWorkflow(format!(
-                "unknown_checkout_path:{id}"
-            )));
-        }
-        if with.get("ref").is_none_or(|value| value != sha) {
-            return Err(RenderError::InvalidWorkflow(format!(
-                "source_ref_mismatch:{id}"
-            )));
+    } else {
+        let mut expected = source_checkout(version, sha)?;
+        expected.condition = Some("steps.release-admission.outputs.eligible == 'true'".to_owned());
+        if sources != [&expected] {
+            return Err(invalid());
         }
     }
     Ok(())
-}
-
-fn has_exact_checkout(steps: &[Step], sha: &str) -> bool {
-    steps.iter().any(|step| {
-        matches!(&step.kind, StepKind::Action { uses, with, .. }
-            if uses.starts_with("actions/checkout@")
-                && with.get("path").is_some_and(|value| value == RELEASE_SOURCE_DIR)
-                && with.get("ref").is_some_and(|value| value == sha))
-    })
-}
-
-pub fn require_exact_checkout(id: &str, steps: &[Step], sha: &str) -> Result<(), RenderError> {
-    if has_exact_checkout(steps, sha) {
-        Ok(())
-    } else {
-        Err(RenderError::InvalidWorkflow(format!(
-            "checkout_without_exact_source:{id}"
-        )))
-    }
 }

@@ -18,7 +18,8 @@ use velnor_actions_workflow_renderer::{
 };
 
 use crate::OrchestratorError;
-use crate::release_checkouts::{forge_env, policy_checkout, source_checkout};
+use crate::release_checkouts::forge_env;
+use velnor_actions_workflow_renderer::release_checkout_gates::{policy_checkout, source_checkout};
 use crate::utf8::{strings_of, strings_of_env};
 
 const BOOTSTRAP_TOKEN_ENV: &str = "CARGO_REGISTRY_TOKEN";
@@ -44,7 +45,6 @@ pub(crate) struct JobInputs<'a> {
 struct JobParts<'a> {
     policy: Step,
     source: Step,
-    source_push: Step,
     setup: Step,
     prepare_rust: Step,
     verify_rust: Step,
@@ -65,9 +65,8 @@ pub(crate) fn assemble_jobs(
     inputs: &JobInputs<'_>,
 ) -> Result<BTreeMap<String, ReleaseJobSpec>, OrchestratorError> {
     let parts = JobParts {
-        policy: policy_checkout(false)?,
-        source: source_checkout("${{ steps.release-admission.outputs.source_sha }}", false)?,
-        source_push: source_checkout("${{ steps.release-admission.outputs.source_sha }}", true)?,
+        policy: policy_checkout(inputs.generator_version)?,
+        source: source_checkout(inputs.generator_version, "${{ steps.release-admission.outputs.source_sha }}")?,
         setup: mise_setup_step(inputs.mise)?,
         prepare_rust:
             velnor_actions_workflow_renderer::release_gates::release_rust_prepare(inputs.catalog)?,
@@ -193,10 +192,7 @@ fn preparation_job(
     manifest: &str,
     registry: Option<&str>,
 ) -> Result<ReleaseJobSpec, OrchestratorError> {
-    let mut steps = vec![parts.policy.clone()];
-    if create_pr {
-        steps.push(parts.acquire.clone());
-    }
+    let mut steps = vec![parts.acquire.clone(), parts.policy.clone()];
     steps.extend([
         parts.setup.clone(), parts.prepare_rust.clone(), parts.verify_rust.clone(),
         parts.release_plz.clone(), parts.semver.clone(),
@@ -334,12 +330,11 @@ fn upload_record_step(name: &str, artifact: &str, path: &str) -> Result<Step, Or
 
 fn common_source_steps(
     parts: &JobParts<'_>,
-    push: bool,
     require: bool,
 ) -> Result<Vec<Step>, OrchestratorError> {
     let mut steps = vec![
-        parts.policy.clone(),
         parts.acquire.clone(),
+        parts.policy.clone(),
         controller_step(
             parts,
             if require {
@@ -348,11 +343,7 @@ fn common_source_steps(
                 "source-admit"
             },
         )?,
-        conditional(if push {
-            parts.source_push.clone()
-        } else {
-            parts.source.clone()
-        }),
+        conditional(parts.source.clone()),
     ];
     if require {
         steps.push(controller_step(parts, "toolchain-acquire")?);
@@ -365,7 +356,7 @@ fn common_source_steps(
 }
 
 fn preflight_job(parts: &JobParts<'_>) -> Result<ReleaseJobSpec, OrchestratorError> {
-    let mut steps = common_source_steps(parts, false, false)?;
+    let mut steps = common_source_steps(parts, false)?;
     steps.push(conditional(parts.semver.clone()));
     steps.push(controller_step(parts, "candidate-receipt")?);
     steps.push(receipt_step()?);
@@ -417,7 +408,7 @@ fn publish_steps(
     parts: &JobParts<'_>,
     bootstrap: bool,
 ) -> Result<Vec<Step>, OrchestratorError> {
-    let mut steps = common_source_steps(parts, true, true)?;
+    let mut steps = common_source_steps(parts, true)?;
     steps.push(conditional(parts.semver.clone()));
     steps.push(controller_step(parts, "receipt-acquire")?);
     steps.push(controller_step(parts, "verify-admission")?);
@@ -489,7 +480,7 @@ fn reconcile_job(
     } else {
         "release-publish"
     };
-    let mut steps = common_source_steps(parts, false, true)?;
+    let mut steps = common_source_steps(parts, true)?;
     steps.push(controller_step(parts, "reconciliation-receipt-acquire")?);
     steps.push(controller_step(parts, "reconcile")?);
     steps.push(upload_record_step(
