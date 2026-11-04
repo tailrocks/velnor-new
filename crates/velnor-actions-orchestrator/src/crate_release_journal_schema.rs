@@ -5,6 +5,10 @@ use super::JournalIdentity;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
+#[path = "crate_release_journal_source_files.rs"]
+mod source_files;
+pub(crate) use source_files::valid_source_files;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum JournalAuthentication {
@@ -282,63 +286,6 @@ pub(super) fn valid_files(files: &[JournalFile]) -> bool {
         && files
             .iter()
             .all(|file| valid_path(&file.path) && valid_sha256(&file.sha256))
-}
-
-pub(crate) fn valid_source_files(files: &[JournalFile]) -> bool {
-    if !valid_files(files) {
-        return false;
-    }
-    let paths: std::collections::BTreeMap<_, _> = files
-        .iter()
-        .map(|file| (file.path.as_str(), file))
-        .collect();
-    files.iter().all(|file| {
-        let mut current = file;
-        let mut seen = BTreeSet::new();
-        loop {
-            if !seen.insert(current.path.as_str()) {
-                return false;
-            }
-            match &current.kind {
-                JournalFileKind::Regular { .. } => return true,
-                JournalFileKind::Symlink { target } => {
-                    if crate::generator::sha256_hex(target.as_bytes()) != current.sha256 {
-                        return false;
-                    }
-                    let Some(resolved) = resolve_link(&current.path, target) else {
-                        return false;
-                    };
-                    let Some(next) = paths.get(resolved.as_str()) else {
-                        return false;
-                    };
-                    current = next;
-                }
-            }
-        }
-    })
-}
-
-fn resolve_link(path: &str, target: &str) -> Option<String> {
-    if target.is_empty()
-        || target.starts_with('/')
-        || target.contains('\\')
-        || target.chars().any(char::is_control)
-    {
-        return None;
-    }
-    let mut parts: Vec<&str> = path.split('/').collect();
-    parts.pop();
-    for part in target.split('/') {
-        match part {
-            "" | "." => return None,
-            ".." => {
-                parts.pop()?;
-            }
-            component => parts.push(component),
-        }
-    }
-    let resolved = parts.join("/");
-    valid_path(&resolved).then_some(resolved)
 }
 
 pub(super) fn percent_encode(value: &str) -> String {
