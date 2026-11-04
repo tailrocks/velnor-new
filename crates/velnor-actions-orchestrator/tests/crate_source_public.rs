@@ -53,7 +53,7 @@ fn source_verification_ignores_hostile_git_environment() -> Result<(), Box<dyn s
     let status = Command::new(std::env::current_exe()?)
         .args([
             "--exact",
-            "source_verification_ignores_hostile_git_environment",
+            "crate_source_public::source_verification_ignores_hostile_git_environment",
         ])
         .env("VELNOR_GIT_FIXTURE_ROOT", &root)
         .env("VELNOR_GIT_FIXTURE_SHA", &sha)
@@ -412,7 +412,10 @@ fn metadata_subprocess_drops_ambient_cargo_overrides() -> Result<(), Box<dyn std
         fs::set_permissions(path, fs::Permissions::from_mode(0o755))?;
     }
     let status = std::process::Command::new(std::env::current_exe()?)
-        .args(["--exact", "approved_source_must_be_exact_clean_repository"])
+        .args([
+            "--exact",
+            "crate_source_public::approved_source_must_be_exact_clean_repository",
+        ])
         .env("PATH", format!("{}:/usr/bin:/bin", fake_mise.display()))
         .env("RUSTUP_HOME", &fake_home)
         .env("RUSTC_WRAPPER", "hostile-sentinel")
