@@ -99,13 +99,25 @@ fn check_lane_classification() -> Result<(), Box<dyn Error>> {
     if concurrent_target_lane("doc") != Some("velnor-doc") {
         return Err(fail("doc lane drifted"));
     }
-    for kind in ["build", "test", "nextest", "doctest", "fmt"] {
+    if concurrent_target_lane("doctest") != Some("velnor-doctest") {
+        return Err(fail("doctest lane drifted"));
+    }
+    for kind in ["build", "test", "nextest", "fmt"] {
         if concurrent_target_lane(kind).is_some() {
             return Err(fail("build/test lane must stay on the shared target dir"));
         }
     }
-    if concurrent_target_lane("clippy") == concurrent_target_lane("doc") {
-        return Err(fail("clippy and doc lanes collide"));
+    let lanes = [
+        concurrent_target_lane("clippy"),
+        concurrent_target_lane("doc"),
+        concurrent_target_lane("doctest"),
+    ];
+    if lanes.iter().any(Option::is_none)
+        || lanes[0] == lanes[1]
+        || lanes[0] == lanes[2]
+        || lanes[1] == lanes[2]
+    {
+        return Err(fail("clippy, doc and doctest lanes collide"));
     }
     Ok(())
 }

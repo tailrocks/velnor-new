@@ -100,7 +100,7 @@ fn seed_step(
     let lanes: BTreeSet<&str> = model
         .obligations
         .iter()
-        .filter_map(|task| velnor_actions_rust::concurrent_target_lane(&task.kind))
+        .filter_map(|task| velnor_actions_rust::check_target_lane(&task.kind))
         .collect();
     if lanes.is_empty() {
         return Ok(None);

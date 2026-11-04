@@ -478,7 +478,7 @@ jobs:
       - name: Doctests
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-eb32da182fb3295c203686d2b5f0e215c7f72642386ffbff1108e48458d936dd"}
+        with: {"digest": "b3-4e03d6d5eb44aa0ca312a5524c5a806cbed2ac5b94fb70a27d03598c2f562ae0"}
       - name: Documentation
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
