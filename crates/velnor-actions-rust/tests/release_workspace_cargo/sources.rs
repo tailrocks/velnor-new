@@ -536,7 +536,11 @@ fn dev_git_wildcard_presence_matches_cargo_package() {
     }
     let path = dep.to_string_lossy().replace('\\', "/");
     let url = if cfg!(windows) {
-        format!("file:///{path}")
+        if let Some(unc) = path.strip_prefix("//?/UNC/") {
+            format!("file://{unc}")
+        } else {
+            format!("file:///{}", path.strip_prefix("//?/").unwrap_or(&path))
+        }
     } else {
         format!("file://{path}")
     };
