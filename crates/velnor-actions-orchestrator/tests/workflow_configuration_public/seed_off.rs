@@ -6,9 +6,9 @@ use std::error::Error;
 use std::fs;
 
 use serde_json::{Value, json};
-use velnor_actions_contract::Job;
+use velnor_actions_contract::{Job, StepKind};
 use velnor_actions_orchestrator::{
-    GenerationPreparation, plan_internal, prepare, render_staged_tree,
+    GenerationPreparation, finalized_jobs, plan_internal, prepare, render_staged_tree,
 };
 use velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
 
@@ -148,5 +148,36 @@ fn controller_plan_accepts_a_seedless_graph() -> Result<(), Box<dyn Error>> {
             .ok_or("plan job has no id")?;
         assert!(!id.contains("state-producer"), "{id}");
     }
+    Ok(())
+}
+
+#[test]
+fn seeding_names_the_clippy_and_doc_lanes_and_never_the_doctest_lane() -> Result<(), Box<dyn Error>>
+{
+    let repo = seed_repo("\n[stacks.rust]\nseed_parallel_targets = true\n")?;
+    for root in [".", "crates/a-b", "crates/a/c"] {
+        workflow_configuration_fixture::write_nextest_task(&repo.path().join(root))?;
+    }
+    let prepared = prepare(repo.path())
+        .map_err(|error| format!("seed lanes were rejected at generation: {error}"))?;
+    let jobs = finalized_jobs(&prepared)?;
+    let mut seeded = 0;
+    for (id, crate_job) in jobs.iter().filter(|(id, _)| id.starts_with("rust-")) {
+        let doctests = crate_job.steps.iter().any(|step| {
+            step.name == "Doctests" && matches!(step.kind, StepKind::TaskExecution { .. })
+        });
+        for step in &crate_job.steps {
+            let StepKind::Internal { env, .. } = &step.kind else {
+                continue;
+            };
+            let Some(lanes) = env.get("VELNOR_TARGET_LANES") else {
+                continue;
+            };
+            assert!(doctests, "{id} is seeded without a Doctests lane to refuse");
+            assert_eq!(lanes, "velnor-clippy,velnor-doc", "{id}");
+            seeded += 1;
+        }
+    }
+    assert!(seeded > 0, "no crate job was seeded");
     Ok(())
 }

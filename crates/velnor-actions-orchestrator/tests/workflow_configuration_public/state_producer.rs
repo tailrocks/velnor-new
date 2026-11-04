@@ -24,7 +24,12 @@ pub(super) const ROOTS: [(&str, &str); 2] = [
     ("state-producer-crates-a-b", "state-seal-crates-a-b"),
     ("state-producer-crates-a-c", "state-seal-crates-a-c"),
 ];
-const LANE_NAMES: [&str; 3] = ["Build test executables", "Clippy", "Documentation"];
+const LANE_NAMES: [&str; 4] = [
+    "Build test executables",
+    "Clippy",
+    "Doctests",
+    "Documentation",
+];
 const UNIT_BOUND: &str = "1616920640";
 
 pub(super) struct Built {
@@ -85,6 +90,10 @@ fn lanes(job: &Job) -> Vec<&Step> {
         .collect()
 }
 
+fn has_doctests(lanes: &[&Step]) -> bool {
+    lanes.iter().any(|step| step.name == "Doctests")
+}
+
 fn effective(job: &Job, ir: &WorkflowIr) -> Permissions {
     job.permissions
         .clone()
@@ -120,7 +129,7 @@ fn producer_runs_the_crate_job_lane_records() -> Result<(), Box<dyn Error>> {
             .into_iter()
             .flat_map(lanes)
             .collect();
-        assert!(!wanted.is_empty(), "{root} has no lane records");
+        assert!(has_doctests(&wanted), "{root} has no Doctests lane record");
         let repeated = lanes(producer);
         assert_eq!(repeated.len(), 2 * wanted.len(), "{root}: two phases");
         for lane in &wanted {
