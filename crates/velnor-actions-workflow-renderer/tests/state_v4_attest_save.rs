@@ -228,3 +228,32 @@ fn new_generation_is_proven_before_the_old_one_is_deleted() -> Result<(), Box<dy
     )?;
     world.scene.finish()
 }
+
+#[test]
+#[cfg(unix)]
+fn gh_needs_a_repository_in_a_job_without_a_checkout() -> Result<(), Box<dyn Error>> {
+    let scene = Scene::new("attest-repo", crate::gc1_t53::scripts()?)?;
+    let gh = Gh::install(&scene)?;
+    let dir = gh.dir();
+    let env = [("FAKE_GH_DIR", dir.as_str())];
+    let list = "gh cache list --key k --ref r";
+    let with_flag = scene.run_script(&format!("{list} -R {REPO}"), &env, None);
+    let with_env = scene.run_script(
+        list,
+        &[("FAKE_GH_DIR", dir.as_str()), ("GH_REPO", REPO)],
+        None,
+    );
+    require(
+        with_flag.is_ok() && with_env.is_ok(),
+        "the double must accept a named repository",
+    )?;
+    require(
+        scene.run_script(list, &env, None).is_err(),
+        "the double accepted a cache listing without a repository",
+    )?;
+    require(
+        scene.run_script("gh cache delete 11", &env, None).is_err(),
+        "the double accepted a cache delete without a repository",
+    )?;
+    scene.finish()
+}
