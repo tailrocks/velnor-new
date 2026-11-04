@@ -71,6 +71,7 @@ pub(crate) fn build_for_workflow(
     fetch_roots: &[String],
     acquire: Option<&Step>,
     helper_version: &str,
+    generator_version: &str,
     private: Option<&PrivateWiring>,
 ) -> Result<CrateBuild, OrchestratorError> {
     let no_crates = BTreeMap::new();
@@ -91,6 +92,7 @@ pub(crate) fn build_for_workflow(
             max_parallel_jobs: config.workflow.max_parallel_jobs,
             timeout: JobTimeout::new(config.workflow.crate_timeout_minutes)?,
             helper_version,
+            generator_version,
             crates,
             compiled_state: config.stacks.compiled_state(),
             seed_parallel_targets: config
@@ -142,7 +144,7 @@ fn build_crate_jobs_with_seed_timeout(
     let roots: Vec<_> = producer_roots.into_values().collect();
     let recipe_jobs =
         state_producer::state_producer_jobs(&input, &lane, &roots, private, seed_timeout)?;
-    let state_recipes = state_producer::recipe_digests(&recipe_jobs)?;
+    let state_recipes = state_producer::recipe_digests(&recipe_jobs, input.helper_version, input.generator_version)?;
     let producers = match input.compiled_state {
         CompiledStateMode::Union => recipe_jobs,
         CompiledStateMode::Off => Vec::new(),

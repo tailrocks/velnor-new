@@ -14,6 +14,7 @@ use velnor_actions_mise::PinnedTool;
 use velnor_actions_workflow_renderer::state_seal::producer_steps::{
     state_payload_upload_step, state_produced_step, state_producer_outputs,
 };
+use velnor_actions_workflow_renderer::declared_task_wrapper_digest;
 use velnor_actions_workflow_renderer::state_seal::skeleton::{
     state_skeleton_restore_step, state_skeleton_step,
 };
@@ -53,7 +54,10 @@ pub(crate) fn state_producer_jobs(
 
 pub(crate) fn recipe_digests(
     producers: &[(String, Job)],
+    helper_version: &str,
+    generator_version: &str,
 ) -> Result<BTreeMap<String, S256>, OrchestratorError> {
+    let wrapper = declared_task_wrapper_digest(helper_version, generator_version)?;
     producers
         .iter()
         .map(|(id, job)| {
@@ -66,7 +70,10 @@ pub(crate) fn recipe_digests(
                 })?;
             Ok((
                 id.clone(),
-                S256::of(&canonical_json_bytes(&job.steps[start..])?),
+                S256::of(&canonical_json_bytes(&(
+                    &job.steps[start..],
+                    wrapper.to_string(),
+                ))?),
             ))
         })
         .collect()
@@ -189,5 +196,108 @@ fn display_name(root: &str) -> String {
         "State producer".to_owned()
     } else {
         format!("State producer / {root}")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::error::Error;
+
+    use velnor_actions_contract::CrateObligation;
+    use velnor_actions_contract::cachekey::ToolchainInputs;
+    use velnor_actions_mise::ToolCatalog;
+
+    use super::*;
+
+    const HELPER_VERSION: &str = "0.1.73";
+
+    fn lane(argv: &[&str]) -> Result<Step, Box<dyn Error>> {
+        let obligation = CrateObligation {
+            task_id: "stack/rust/crates/demo/clippy/default".to_owned(),
+            kind: "clippy".to_owned(),
+            step_name: "Clippy".to_owned(),
+            gated_by: Vec::new(),
+            matrix_key: "clippy".to_owned(),
+            task_digest: "b3-0000000000000000000000000000000000000000000000000000000000000000"
+                .to_owned(),
+            toolchain_inputs: ToolchainInputs {
+                tools: Vec::new(),
+                components: Vec::new(),
+                compile_driver: "cargo".to_owned(),
+                test_runner: "nextest".to_owned(),
+            },
+            run: argv.iter().map(|arg| (*arg).to_owned()).collect(),
+        };
+        Ok(crate::matrix_step::obligation_step(
+            &obligation,
+            &ToolCatalog::pinned(),
+            &[],
+            None,
+            HELPER_VERSION,
+            None,
+        )?)
+    }
+
+    fn producer(id: &str, argv: &[&str]) -> Result<(String, Job), Box<dyn Error>> {
+        let catalog = ToolCatalog::pinned();
+        let toolchain = catalog.version(PinnedTool::Rust).to_owned();
+        let env = crate::matrix_step::task_step_env(&catalog, &BTreeMap::new(), true)?;
+        let steps = vec![
+            state_skeleton_step(&toolchain, ".", env)?,
+            lane(argv)?,
+        ];
+        let job = Job {
+            services: Vec::new(),
+            outputs: BTreeMap::new(),
+            display_name: id.to_owned(),
+            runs_on: "ubuntu-24.04".to_owned(),
+            check_runner: None,
+            timeout_minutes: JobTimeout::new(30)?,
+            needs: Vec::new(),
+            condition: None,
+            permissions: None,
+            environment: None,
+            env: JobEnv::Unset,
+            steps,
+            cache_access: CacheAccess::Read,
+        };
+        Ok((id.to_owned(), job))
+    }
+
+    #[test]
+    fn recipe_moves_with_the_task_wrapper_and_only_with_it() -> Result<(), Box<dyn Error>> {
+        let jobs = [producer("state-producer-x", &["cargo", "clippy"])?];
+        let old = recipe_digests(&jobs, HELPER_VERSION, "0.1.73")?;
+        let again = recipe_digests(&jobs, HELPER_VERSION, "0.1.73")?;
+        let new = recipe_digests(&jobs, HELPER_VERSION, "0.1.74")?;
+        assert_eq!(old, again, "the recipe is not deterministic");
+        assert_ne!(
+            old, new,
+            "a new generator version changed the wrapper file but not the recipe"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn recipe_of_one_producer_ignores_another_producers_lanes() -> Result<(), Box<dyn Error>> {
+        let before = [
+            producer("state-producer-x", &["cargo", "clippy"])?,
+            producer("state-producer-y", &["cargo", "clippy"])?,
+        ];
+        let after = [
+            producer("state-producer-x", &["cargo", "clippy"])?,
+            producer("state-producer-y", &["cargo", "clippy", "--all-features"])?,
+        ];
+        let before = recipe_digests(&before, HELPER_VERSION, "0.1.73")?;
+        let after = recipe_digests(&after, HELPER_VERSION, "0.1.73")?;
+        assert_eq!(
+            before["state-producer-x"], after["state-producer-x"],
+            "a lane change in Y moved X"
+        );
+        assert_ne!(
+            before["state-producer-y"], after["state-producer-y"],
+            "a lane change in Y left Y unchanged"
+        );
+        Ok(())
     }
 }

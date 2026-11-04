@@ -65,6 +65,7 @@ pub use crate::steps::{
     upload_suite_archive_step, upload_suite_artifact_step, validate_uses, write_request_step,
 };
 pub use crate::steps_internal::group_ledger_steps::crate_group_ledger_steps;
+pub use crate::task_wrapper::declared_task_wrapper_digest;
 pub use crate::tofu_apply::{
     AWS_CREDENTIALS_STEP_ID, AWS_CREDENTIALS_USES, AWS_CREDENTIALS_VERSION,
     TOFU_APPLY_CONCURRENCY_GROUP, TOFU_APPLY_JOB_ID, TOFU_APPLY_TIMEOUT_MINUTES,

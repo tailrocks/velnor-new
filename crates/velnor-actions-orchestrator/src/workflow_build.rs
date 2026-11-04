@@ -296,6 +296,7 @@ fn build_workflow_jobs(
         input.fetch_roots,
         prepared.acquire.as_ref(),
         &prepared.report_helper_version,
+        prepared.generator_version,
         prepared.private.as_ref(),
     )?;
     let mut required_ids: Vec<String> = built.jobs.iter().map(|(id, _)| id.clone()).collect();
