@@ -16,6 +16,7 @@ on:
 concurrency:
   group: termpane-publish-qualification-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: false
+cache-mode: read
 permissions:
   contents: read
   pull-requests: read
