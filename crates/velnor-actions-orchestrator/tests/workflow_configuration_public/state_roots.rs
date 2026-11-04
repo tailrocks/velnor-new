@@ -40,7 +40,7 @@ fn snapshot_bindings(jobs: &BTreeMap<String, Job>) -> BTreeSet<(String, String)>
         .collect()
 }
 
-fn plan_key_script(jobs: &BTreeMap<String, Job>) -> Result<String, Box<dyn Error>> {
+pub(super) fn plan_key_script(jobs: &BTreeMap<String, Job>) -> Result<String, Box<dyn Error>> {
     let step = jobs
         .get("plan")
         .and_then(|plan| plan.steps.iter().find(|s| s.id == Some(StepId::CacheKeys)))
@@ -173,7 +173,7 @@ fn moved_roots(
         .collect()
 }
 
-fn declared_input_repo() -> Result<tempfile::TempDir, Box<dyn Error>> {
+pub(super) fn declared_input_repo() -> Result<tempfile::TempDir, Box<dyn Error>> {
     let repo = mbx_repo(false)?;
     add_independent_mbx_package(repo.path(), "other", "other")?;
     write_nextest_task(&repo.path().join("other"))?;

@@ -107,6 +107,8 @@ mod source_qualification_checkout;
 mod source_qualification_jobs;
 #[path = "workflow_configuration_public/source_qualification_proof.rs"]
 mod source_qualification_proof;
+#[path = "workflow_configuration_public/state_compat.rs"]
+mod state_compat;
 #[path = "workflow_configuration_public/state_producer.rs"]
 mod state_producer;
 #[path = "workflow_configuration_public/state_producer_eval.rs"]
