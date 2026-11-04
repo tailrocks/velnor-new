@@ -322,13 +322,14 @@ tree cleanup fail after publication; the command reports that cleanup failure,
 leaves the published output in place, and requires safe operator recovery before
 the next in-place generation.
 
-After exchange, generation checks the retired workflow directory again. An
-unmarked entry causes rollback only while both root identities still match;
-otherwise generation refuses rollback and preserves the spare for recovery.
-Retained trees protect later writes through open handles from automatic cleanup.
-They do not prevent an unrelated writer replacing a root between identity
-validation and rollback. Prevent concurrent external edits during generation;
-a filesystem transaction or writer coordination is needed to remove that race.
+After exchange, generation checks the retired workflow directory again. If it
+finds an unmarked entry or a changed root identity, it does not exchange either
+tree again. Generation reports failure even though the live `.github` tree may
+have changed, and identifies the displaced tree in the private staging path.
+Stop concurrent writers, inspect both trees, and reconcile them manually before
+removing either. A later generation retains any interrupted spare under a unique
+recovery path. Retained trees protect later writes through open handles from
+automatic cleanup.
 
 In-place generation identifies the repository mount using Linux `STATX_MNT_ID`
 or the macOS mount-point name returned by `fstatfs`; device IDs alone do not

@@ -212,15 +212,12 @@ fn publish_existing_with(
         )));
     }
     if let Err(cause) = staging.validate_exchanged(retired) {
-        return Err(OrchestratorError::io(staged.display().to_string(), format!("exchange_identity_changed:{cause}; recovery_required")));
+        return Err(OrchestratorError::io(staged.display().to_string(), format!("exchange_identity_changed:{cause}; live_tree:{}; retained_tree:{}; stop_writers_and_reconcile", target.display(), staged.display())));
     }
     if let Err(cause) = preflight::reject_unmarked_workflows_at(staged) {
-        staging.validate_exchanged(retired)?;
-        let rollback = exchange_directories(staged, target);
-        let retained = staging.retain_spare();
         return Err(OrchestratorError::io(
             staged.display().to_string(),
-            format!("workflow_changed_during_generation:{cause}; rollback:{rollback:?}; retained:{retained:?}; recovery_required"),
+            format!("workflow_changed_during_generation:{cause}; live_tree:{}; retained_tree:{}; stop_writers_and_reconcile", target.display(), staged.display()),
         ));
     }
     match staging.retain_spare() {
