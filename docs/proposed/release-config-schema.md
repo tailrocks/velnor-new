@@ -25,7 +25,7 @@ Reference for the typed config in `velnor-actions-contract`
 | Key | Type | Rule |
 |---|---|---|
 | `package` | string | Package-name shape; the one crate authorized for first publication. |
-| `version` | string | Strict `major.minor.patch`, numeric parts only (`bad_version` otherwise). |
+| `version` | string | Cargo SemVer, including prerelease and build metadata, up to 150 ASCII bytes (`bad_version` otherwise). |
 | `source_sha` | string | 40 lowercase hex, the immutable approved source (`bad_source_sha` otherwise). |
 
 Unknown keys anywhere in this section fail deserialization with
@@ -76,7 +76,7 @@ authentication = "bootstrap-token"
 
 [stacks.rust.release.bootstrap]
 package = "demo-crate"
-version = "1.2.3"
+version = "1.2.3-rc.1+build.42"
 source_sha = "0123456789abcdef0123456789abcdef01234567"
 ```
 

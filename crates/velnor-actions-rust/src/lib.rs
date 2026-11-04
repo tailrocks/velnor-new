@@ -32,7 +32,6 @@ pub mod release_graph;
 pub mod release_products;
 pub mod release_projection;
 pub mod release_select;
-pub mod release_semver;
 pub mod release_versions;
 pub mod resolved_graph;
 pub mod scan;
@@ -95,9 +94,6 @@ pub use release_projection::{project_release_workspace, release_workspace_manife
 pub use release_select::{
     DEFAULT_REGISTRY, ReleaseRequest, ReleaseScope, ReleaseSelection, ResolvedScope,
     SelectedPackage, select_release_set,
-};
-pub use release_semver::{
-    PreIdent, SemVersion, VersionReq, parse_req, parse_version, req_matches, version_satisfies,
 };
 pub use release_versions::resolve_release_policy;
 pub use resolved_graph::{ResolvedGraph, ResolvedPathPackage, parse_resolved_graph};

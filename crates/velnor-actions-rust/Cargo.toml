@@ -20,6 +20,7 @@ name = "velnor_rust"
 path = "tests/velnor_rust.rs"
 
 [dependencies]
+semver = { version = "=1.0.28" }
 velnor-actions-contract = { version = "=0.1.72", path = "../velnor-actions-contract" }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -32,3 +33,7 @@ tempfile = { version = "=3.27.0" }
 [[test]]
 name = "release_workspace_cargo"
 path = "tests/release_workspace_cargo.rs"
+
+[[test]]
+name = "crate_release_semver_public"
+path = "tests/crate_release_semver_public.rs"

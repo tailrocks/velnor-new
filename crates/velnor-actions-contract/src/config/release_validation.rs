@@ -212,11 +212,7 @@ pub(super) fn is_package_name(name: &str) -> bool {
 }
 
 pub(super) fn is_bootstrap_version(version: &str) -> bool {
-    let parts: Vec<&str> = version.split('.').collect();
-    parts.len() == 3
-        && parts
-            .iter()
-            .all(|part| !part.is_empty() && part.bytes().all(|b| b.is_ascii_digit()))
+    version.len() <= 150 && semver::Version::parse(version).is_ok()
 }
 
 pub(super) fn is_full_sha(sha: &str) -> bool {
