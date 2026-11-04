@@ -110,6 +110,30 @@ pub(crate) fn build_workflow_for_consumer_release(
     })
 }
 
+fn lane_workflow_tasks(
+    input: &WorkflowBuildInput<'_>,
+    acquire: Option<&Step>,
+    private: Option<&crate::config::private_wiring::PrivateWiring>,
+) -> Result<Vec<velnor_actions_workflow_renderer::verification_jobs::WorkflowTaskPolicy>, OrchestratorError> {
+    let lane = crate::matrix_step::LaneTools::union(
+        input.config.workflow.policy,
+        input.catalog,
+        &crate::crate_job_ids::group_runnable(&input.discovery.proposals)?,
+    );
+    crate::workflow_task_jobs::policies(
+        input.root,
+        input.config,
+        &crate::image_build_tasks::PrebuiltInputs {
+            discovery: input.discovery,
+            catalog: input.catalog,
+            lane: &lane,
+            fetch_roots: input.fetch_roots,
+            acquire,
+            private,
+        },
+    )
+}
+
 fn prepare_workflow(input: &WorkflowBuildInput<'_>) -> Result<PreparedWorkflow, OrchestratorError> {
     wire_w1::vet_step_syntax(StepSyntax::JobMatrix)?;
     wire_w1::vet_step_syntax(StepSyntax::NativeParallelism)?;
@@ -152,15 +176,7 @@ fn prepare_workflow(input: &WorkflowBuildInput<'_>) -> Result<PreparedWorkflow, 
     };
     let private =
         crate::config::private_wiring::PrivateWiring::load(input.root, input.config, catalog)?;
-    let workflow_tasks = crate::workflow_task_jobs::policies(
-        input.root,
-        input.config,
-        input.discovery,
-        catalog,
-        input.fetch_roots,
-        acquire.as_ref(),
-        private.as_ref(),
-    )?;
+    let workflow_tasks = lane_workflow_tasks(input, acquire.as_ref(), private.as_ref())?;
     let format = wire_w1::workspace_format_step(input.discovery, catalog)?;
     let rust = match (plan_uses_rust(input.discovery, policy), format.is_some()) {
         (false, false) => PlanRustNeed::None,
@@ -342,7 +358,7 @@ fn build_workflow_jobs(
     )?;
     let mut drivers = built.drivers;
     drivers.extend(suite_build.drivers);
-    wire_w1::check_crate_mbx_gating(&jobs, &drivers)?;
+    wire_w1::check_crate_mbx_gating(&jobs, &drivers, &prepared.catalog)?;
     Ok(jobs)
 }
 

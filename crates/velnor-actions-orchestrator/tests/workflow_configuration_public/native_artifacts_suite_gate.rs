@@ -30,7 +30,11 @@ fn public_mbx_gate_accepts_generated_run_and_archive_commands() -> Result<(), Bo
         (2, RustSuiteBuildMode::Archive),
     ] {
         let built = build_ci_suite_jobs(&renderer_spec(CompileDriver::Mbx, partitions, build))?;
-        check_mbx_gating(&built.jobs, &built.drivers)?;
+        check_mbx_gating(
+            &built.jobs,
+            &built.drivers,
+            &velnor_actions_mise::ToolCatalog::pinned(),
+        )?;
     }
     Ok(())
 }
@@ -88,7 +92,11 @@ fn public_mbx_gate_accepts_exact_resolver_rust_token() -> Result<(), Box<dyn Err
         shell_command(&jobs[SUITE_ID], "Run suite (proof-suite)")?
             .contains("rust@${VELNOR_TOOL_RUST}")
     );
-    check_mbx_gating(&jobs, &built.drivers)?;
+    check_mbx_gating(
+        &jobs,
+        &built.drivers,
+        &velnor_actions_mise::ToolCatalog::pinned(),
+    )?;
     Ok(())
 }
 
@@ -239,7 +247,7 @@ fn assert_gate_rejects_with_context(
     expected: &str,
     context: &str,
 ) -> Result<(), Box<dyn Error>> {
-    let error = match check_mbx_gating(jobs, drivers) {
+    let error = match check_mbx_gating(jobs, drivers, &velnor_actions_mise::ToolCatalog::pinned()) {
         Ok(()) => {
             return Err(format!("MBX gate accepted invalid input: {context} ({expected})").into());
         }

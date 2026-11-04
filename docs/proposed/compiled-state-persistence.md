@@ -262,7 +262,7 @@ The attestation unit (SEC-7) shipped the P and A split first with a throwaway ca
 
 ## First hosted result
 
-The main push [run 41798794144](https://github.com/tailrocks/velnor-new/actions/runs/41798794144) (head `c9f5f0a815`) was the first hosted run of the writer. It wrote and attested two entries (measured): the root entry at 1,258,969,937 B and the `crates/velnor-runner` entry at 607,368,491 B. Total cache usage after the run was 2,561,071,061 B.
+The main push [run 41798794144](https://github.com/tailrocks/velnor-new/actions/runs/41798794144) (head `c9f5f0a815`) was the first successful hosted writer run. The runs before it at `a7b2d83e62` ([41788881765](https://github.com/tailrocks/velnor-new/actions/runs/41788881765)) and `03f6ef18c7` ([41796317458](https://github.com/tailrocks/velnor-new/actions/runs/41796317458)) failed in the producer with `report_exists`, and #491 fixed that. Run 41798794144 wrote and attested two entries (measured, from the seal job logs). The cache entries have these outer sizes: 1,258,969,937 B for the root and 607,368,491 B for `crates/velnor-runner`. The inner `payload.tar.zst` files hold 1,259,348,365 B (`sha256:fe6fa41a…`) for the root and 607,577,040 B (`sha256:0bee1bd1…`) for `crates/velnor-runner`. The admission lines were, for `crates/velnor-runner`, `usage=1953702570 bound=609963800 reserved=1616920640 budget=8000000000`, and for the root, `usage=2561071061 bound=1264275520 reserved=0 budget=8000000000`. The root admission usage of 2,561,071,061 B equals the runner admission usage of 1,953,702,570 B plus the 607,368,491 B runner entry saved just before it, so it is the usage before the root save and not the total after the run.
 
 ## Pull-request-scoped state: last
 

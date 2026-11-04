@@ -59,6 +59,7 @@ pub(super) fn state_producer_role(role: StepRole) -> bool {
             | StepRole::PreparePinnedTools
             | StepRole::PrepareRustComponents
             | StepRole::VerifyRustManifest
+            | StepRole::VerifyJactionlint
             | StepRole::AcquireVelnor
             | StepRole::DownloadPlan
             | StepRole::CargoSourcesRestore

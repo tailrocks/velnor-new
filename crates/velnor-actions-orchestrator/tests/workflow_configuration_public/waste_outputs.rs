@@ -13,12 +13,13 @@ use velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
 
 use super::one_job_per_crate::{mbx_repo, rust_fixtures, tofu_fixture};
 use super::support::rendered_job_block;
-use super::tools_producers::finalized;
+use super::tools_producers::{finalized, identity_digest};
 use super::waste_graph::{
     clone_crate_job, digests, mbx_jobs, of, recheck_copy, repeat_restore, save_in_crate_job,
 };
 use super::waste_lint::{home_env, step_name, toolchain_step};
 use super::waste_rules::mutable;
+use super::waste_tools::{crate_id, foreign_digest, lane_jobs, set_digest};
 
 fn restore_output_job(jobs: &BTreeMap<String, Job>) -> Result<(String, String), Box<dyn Error>> {
     jobs.iter()
@@ -147,6 +148,20 @@ fn scenario(rule: WasteRule) -> Result<Scenario, Box<dyn Error>> {
         }
         WasteRule::UnconsumedRestoreOutput => {
             vec![add_key_output(&mut jobs)?, "mbx_bundle_key".to_owned()]
+        }
+        WasteRule::SplitToolsIdentity => {
+            let mut jobs = lane_jobs()?;
+            let id = crate_id(&jobs)?;
+            let own = identity_digest(&jobs[&id])
+                .ok_or("crate job has no identity")?
+                .to_owned();
+            let other = foreign_digest(&jobs, &own)?;
+            let runs_on = jobs[&id].runs_on.clone();
+            set_digest(jobs.get_mut(&id).ok_or("job vanished")?, &other)?;
+            return Ok(Scenario {
+                jobs,
+                mentions: vec![id, runs_on, own[..8].to_owned(), other[..8].to_owned()],
+            });
         }
         WasteRule::JobContextEnv => {
             let (_, mut jobs) = finalized(WorkflowPolicy::ConsumerV1)?;
