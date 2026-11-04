@@ -21,7 +21,7 @@ Reference for the typed config in `velnor-actions-contract`
 | `release_pr` | bool | `true` | Whether release-plz preparation PRs run (crates.io only; `git-tag` releases are prepared by a maintainer's version bump). |
 | `tag_name` | string | `"{{ package }}-v{{ version }}"` | Safe charset, balanced braces, must contain both `{{package}}` and `{{version}}` (whitespace-insensitive). |
 | `recovery` | table or absent | absent | Binds an exact package, version, and source for an approved recovery dispatch. Cannot coexist with `new_crates`. Bootstrap-token authentication requires either `recovery` or `new_crates`. |
-| `journal_predecessor` | table or absent | absent | Binds a reviewed previous run ID, attempt, and workflow SHA for durable release recovery. |
+| `journal_predecessor` | table or absent | absent | Binds a reviewed previous run ID, attempt, and workflow SHA for durable release recovery. Protected admission currently accepts only attempt `1`. |
 | `version_groups` | string→string-list map | `{}` | Group names use package-name shape; members must be sorted, unique, listed in `packages`, and in at most one group. Non-lockstep: unchanged members are not forced to release. |
 
 For example, to verify `termpane` with its `pty` feature during publication:
@@ -34,6 +34,13 @@ termpane = ["pty"]
 Cargo default features remain enabled. The publisher must pass the same reviewed selectors to Cargo verification and release-plz.
 
 ## Recovery record
+
+To resume an interrupted first attempt, review a recovery configuration that
+names its exact run ID, attempt `1`, and workflow SHA in
+`journal_predecessor`, then start a fresh approved dispatch. GitHub workflow
+reruns are not supported by the current approval verification. If a later
+attempt performed an operation, stop and reconcile it separately before
+publishing; do not identify attempt `1` as a substitute for that operation.
 
 | Key | Type | Rule |
 |---|---|---|

@@ -314,6 +314,15 @@ result MUST stop rather than trigger a blind retry. A journal entry, its
 absence from an incomplete listing, or a prior success alone does not grant
 new publication authority. Revalidate the current admission under the lock.
 
+The current implementation accepts only attempt 1 for both the current run
+and each predecessor. GitHub's run-level approval history does not establish
+which attempt received an approval. To resume an interrupted attempt 1, make
+a reviewed recovery configuration naming that exact run ID, attempt `1`, and
+workflow SHA, then start a fresh approved dispatch. A rerun of the old workflow
+is not a substitute. If a later attempt performed an operation, this mechanism
+cannot authenticate that attempt; stop and reconcile it separately before
+any further publication.
+
 A nonsecret release receipt records schema version, release intent ID,
 repository, registry, workflow source SHA, actual library source SHA,
 selected package/version map, normalized file inventory, validation results,
