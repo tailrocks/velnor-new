@@ -26,6 +26,7 @@ pub mod crate_release_pr_artifact;
 mod crate_release_pr_run;
 mod crate_release_pr_tree;
 mod crate_release_pr_writer;
+pub mod crate_release_qualification_witness;
 pub mod crate_release_registry;
 mod crate_release_runtime;
 mod crate_release_semver;
