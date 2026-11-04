@@ -1,14 +1,23 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use super::{
+    Cell, CreationWorkspaceGithub, CreationWorkspaceRegistry, FIXTURE_SPARSE_INDEX,
+    JournalRegistryFake, MixedGithub, MixedRegistry, OrchestratorError, Path, RefCell,
+    SparseFixture, err, fixture_journal_plan, fs, make_fixture, make_workspace_order_fixture,
+    prepare_crate_release, set_workspace_journal_packages, test_git,
+};
+
 #[test]
-fn coordinator_publishes_two_new_workspace_crates_only_with_recorded_owners()
+pub(super) fn coordinator_publishes_two_new_workspace_crates_only_with_recorded_owners()
 -> Result<(), Box<dyn std::error::Error>> {
     run_two_new_workspace_crates(false)?;
     run_two_new_workspace_crates(true)
 }
 
-fn run_two_new_workspace_crates(change_owner: bool) -> Result<(), Box<dyn std::error::Error>> {
+pub(super) fn run_two_new_workspace_crates(
+    change_owner: bool,
+) -> Result<(), Box<dyn std::error::Error>> {
     use crate::crate_release_controller::CrateReleaseObservation;
     use crate::crate_release_journal::{
         JournalAuthentication, JournalOwnership, record_source_bound_start,
@@ -47,7 +56,7 @@ fn run_two_new_workspace_crates(change_owner: bool) -> Result<(), Box<dyn std::e
             .all(|p| p.owners == crate::crate_release_registry::CrateRegistryOwnership::NewCrate)
     );
     let target = tempfile::tempdir()?;
-    let first_archive = super::package_source(
+    let first_archive = super::super::package_source(
         root,
         &intent,
         &admission.packages[0].source,
@@ -90,7 +99,7 @@ fn run_two_new_workspace_crates(change_owner: bool) -> Result<(), Box<dyn std::e
     Ok(())
 }
 
-fn execute_two_new_workspace_crates(
+pub(super) fn execute_two_new_workspace_crates(
     input: &crate::crate_release_controller::CrateReleaseObservation<
         '_,
         JournalRegistryFake,
@@ -113,12 +122,12 @@ fn execute_two_new_workspace_crates(
         input,
         |name| crate::crate_release_semver::fixture_verified_semver(admission, name),
         |permit| {
-            let rendered = super::fixture_upload_config(intent, &permit.package)?;
+            let rendered = super::super::fixture_upload_config(intent, &permit.package)?;
             let config: toml::Value = toml::from_str(&rendered).map_err(|_| err())?;
             let packages = config["package"].as_array().ok_or_else(err)?;
             assert_eq!(packages.len(), 1);
             assert_eq!(packages[0]["name"].as_str(), Some(permit.package.as_str()));
-            super::plz::validate_upload(
+            super::super::plz::validate_upload(
                 input,
                 &permit,
                 &velnor_actions_mise::command::CratePublishCredential::Bootstrap {
@@ -133,7 +142,7 @@ fn execute_two_new_workspace_crates(
                 let target = tempfile::tempdir().map_err(|_| OrchestratorError::Contract {
                     problem: "fixture".into(),
                 })?;
-                let archive = super::package_source(
+                let archive = super::super::package_source(
                     root,
                     intent,
                     &admission.packages[1].source,
@@ -178,16 +187,15 @@ fn execute_two_new_workspace_crates(
     Ok(())
 }
 
-#[cfg(unix)]
-#[path = "crate_release_coordinator_rehearsal.rs"]
-mod coordinator_rehearsal;
-
-fn render_supplied_upload_config(bytes: &[u8], package: &str) -> Result<String, OrchestratorError> {
+pub(super) fn render_supplied_upload_config(
+    bytes: &[u8],
+    package: &str,
+) -> Result<String, OrchestratorError> {
     let intent = crate::crate_release_runtime::parse_crate_release_intent(bytes)?;
-    super::fixture_upload_config(&intent, package)
+    super::super::fixture_upload_config(&intent, package)
 }
 
-fn write_supplied_upload_config(
+pub(super) fn write_supplied_upload_config(
     input: &Path,
     package: &str,
     output: &Path,
@@ -203,7 +211,8 @@ fn write_supplied_upload_config(
 }
 
 #[test]
-fn supplied_intent_renders_actual_upload_config() -> Result<(), Box<dyn std::error::Error>> {
+pub(super) fn supplied_intent_renders_actual_upload_config()
+-> Result<(), Box<dyn std::error::Error>> {
     let temp = tempfile::tempdir()?;
     let (intent, _, _, _) = make_fixture(temp.path())?;
     let bytes = toml::to_string(&intent)?;

@@ -1,8 +1,14 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use super::{
+    Github, JournalRegistryFake, OrchestratorError, Registry, fixture_archive,
+    fixture_journal_plan, fixture_verify_release_package, make_fixture, prepare_crate_release,
+    test_git, velnor_actions_orchestrator,
+};
+
 #[test]
-fn upload_intent_requires_fresh_admission_and_absent_publication()
+pub(super) fn upload_intent_requires_fresh_admission_and_absent_publication()
 -> Result<(), Box<dyn std::error::Error>> {
     use velnor_actions_orchestrator::crate_release_controller::CrateReleaseObservation;
     use velnor_actions_orchestrator::crate_release_journal::record_source_bound_start;
@@ -31,7 +37,7 @@ fn upload_intent_requires_fresh_admission_and_absent_publication()
     check_upload_authorization(&obs)
 }
 
-fn check_upload_authorization(
+pub(super) fn check_upload_authorization(
     obs: &crate::crate_release_controller::CrateReleaseObservation<
         '_,
         JournalRegistryFake,
@@ -39,7 +45,7 @@ fn check_upload_authorization(
         Registry,
     >,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    use super::observation::record_admitted_upload_intent;
+    use super::super::observation::record_admitted_upload_intent;
     use crate::crate_release_controller::verify_and_record_upload_intent;
     use crate::crate_release_journal::{JournalMutationPhase, inspect_journal_mutation};
     let (admission, github, registry, root, journal, identity) = (
@@ -113,7 +119,7 @@ fn check_upload_authorization(
     Ok(())
 }
 
-fn prove_upload_fixture(
+pub(super) fn prove_upload_fixture(
     obs: &crate::crate_release_controller::CrateReleaseObservation<
         '_,
         JournalRegistryFake,
@@ -134,7 +140,7 @@ fn prove_upload_fixture(
     )
 }
 
-fn check_upload_identity_rejections(
+pub(super) fn check_upload_identity_rejections(
     obs: &crate::crate_release_controller::CrateReleaseObservation<
         '_,
         JournalRegistryFake,
@@ -142,7 +148,7 @@ fn check_upload_identity_rejections(
         Registry,
     >,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    use super::observation::record_admitted_upload_intent;
+    use super::super::observation::record_admitted_upload_intent;
     use crate::crate_release_controller::CrateReleaseObservation;
     let (admission, intent, request, github, registry, root) = (
         obs.admission,
@@ -179,7 +185,7 @@ fn check_upload_identity_rejections(
         )
         .is_err()
     );
-    let mutations: [fn(&mut super::VerifiedReleasePackage); 5] = [
+    let mutations: [fn(&mut super::super::VerifiedReleasePackage); 5] = [
         |proof| proof.package = "other".into(),
         |proof| proof.version = "0.1.2".into(),
         |proof| proof.intent_sha256 = "e".repeat(64),
@@ -201,7 +207,7 @@ fn check_upload_identity_rejections(
     Ok(())
 }
 
-fn check_upload_semver_rejections(
+pub(super) fn check_upload_semver_rejections(
     obs: &crate::crate_release_controller::CrateReleaseObservation<
         '_,
         JournalRegistryFake,
@@ -251,4 +257,3 @@ fn check_upload_semver_rejections(
     assert_eq!(obs.journal.write_calls.get(), before);
     Ok(())
 }
-

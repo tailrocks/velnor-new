@@ -1,7 +1,13 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-fn journal_existing_owners(
+use super::{
+    Cell, CrateRegistryRead, CrateRegistryResponse, Github, JournalRegistryFake, NewRegistry,
+    OrchestratorError, fixture_archive, fixture_journal_plan, fixture_no_baseline, make_fixture,
+    prepare_crate_release, test_git, velnor_actions_orchestrator,
+};
+
+pub(super) fn journal_existing_owners(
     value: &crate::crate_release_journal::JournalOwnership,
 ) -> Vec<crate::crate_release_journal::JournalOwner> {
     let crate::crate_release_journal::JournalOwnership::Existing { owners } = value else {
@@ -11,7 +17,7 @@ fn journal_existing_owners(
 }
 
 #[test]
-fn explicitly_approved_new_crate_admission_records_unknown_ownership()
+pub(super) fn explicitly_approved_new_crate_admission_records_unknown_ownership()
 -> Result<(), Box<dyn std::error::Error>> {
     struct Absent;
     impl CrateRegistryRead for Absent {
@@ -64,7 +70,7 @@ fn explicitly_approved_new_crate_admission_records_unknown_ownership()
 }
 
 #[test]
-fn new_crate_upload_observation_requires_durable_intent_and_real_reviewer_owner()
+pub(super) fn new_crate_upload_observation_requires_durable_intent_and_real_reviewer_owner()
 -> Result<(), Box<dyn std::error::Error>> {
     use velnor_actions_orchestrator::crate_release_controller::{
         CrateReleaseObservation, record_verified_mutation,
@@ -143,7 +149,8 @@ fn new_crate_upload_observation_requires_durable_intent_and_real_reviewer_owner(
     Ok(())
 }
 
-fn new_crate_upload_intention() -> crate::crate_release_journal::JournalIntendedMutation {
+pub(super) fn new_crate_upload_intention() -> crate::crate_release_journal::JournalIntendedMutation
+{
     use crate::crate_release_journal::{JournalIntendedMutation, JournalMutationKind};
     JournalIntendedMutation {
         sequence: 1,
@@ -154,7 +161,7 @@ fn new_crate_upload_intention() -> crate::crate_release_journal::JournalIntended
     }
 }
 
-fn verify_recorded_new_crate_owner(
+pub(super) fn verify_recorded_new_crate_owner(
     journal: &JournalRegistryFake,
     identity: &crate::crate_release_journal::JournalIdentity,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -173,7 +180,7 @@ fn verify_recorded_new_crate_owner(
     Ok(())
 }
 
-fn verify_new_crate_metadata(
+pub(super) fn verify_new_crate_metadata(
     upload_obs: &crate::crate_release_controller::CrateReleaseObservation<
         '_,
         JournalRegistryFake,
@@ -237,4 +244,3 @@ fn verify_new_crate_metadata(
     assert_eq!(candidate.packages.len(), 1);
     Ok(())
 }
-

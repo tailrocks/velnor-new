@@ -1,8 +1,13 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use super::{
+    JournalRegistryFake, fixture_archive, fixture_journal_plan, make_fixture,
+    prepare_crate_release, reject_invalid_metadata_prerequisites, test_git,
+};
+
 #[test]
-fn metadata_repair_journals_each_create_before_and_after_write()
+pub(super) fn metadata_repair_journals_each_create_before_and_after_write()
 -> Result<(), Box<dyn std::error::Error>> {
     use crate::crate_release_controller::{CrateReleaseObservation, repair_verified_metadata};
     use crate::crate_release_journal::{
@@ -86,7 +91,7 @@ fn metadata_repair_journals_each_create_before_and_after_write()
 }
 
 #[test]
-fn ambiguous_metadata_write_stops_with_durable_unresolved_intent()
+pub(super) fn ambiguous_metadata_write_stops_with_durable_unresolved_intent()
 -> Result<(), Box<dyn std::error::Error>> {
     use crate::crate_release_controller::{CrateReleaseObservation, repair_verified_metadata};
     use crate::crate_release_journal::{
@@ -133,7 +138,7 @@ fn ambiguous_metadata_write_stops_with_durable_unresolved_intent()
 }
 
 #[test]
-fn metadata_intent_requires_fresh_approval_after_state_observation()
+pub(super) fn metadata_intent_requires_fresh_approval_after_state_observation()
 -> Result<(), Box<dyn std::error::Error>> {
     use crate::crate_release_controller::{CrateReleaseObservation, repair_verified_metadata};
     use crate::crate_release_journal::{
@@ -173,7 +178,7 @@ fn metadata_intent_requires_fresh_approval_after_state_observation()
 }
 
 #[test]
-fn metadata_repair_stops_if_tag_or_registry_changes_after_intent()
+pub(super) fn metadata_repair_stops_if_tag_or_registry_changes_after_intent()
 -> Result<(), Box<dyn std::error::Error>> {
     use crate::crate_release_controller::{CrateReleaseObservation, repair_verified_metadata};
     use crate::crate_release_journal::{
@@ -234,8 +239,8 @@ fn metadata_repair_stops_if_tag_or_registry_changes_after_intent()
 }
 
 #[test]
-fn metadata_repair_stops_if_approval_changes_after_intent() -> Result<(), Box<dyn std::error::Error>>
-{
+pub(super) fn metadata_repair_stops_if_approval_changes_after_intent()
+-> Result<(), Box<dyn std::error::Error>> {
     use crate::crate_release_controller::{CrateReleaseObservation, repair_verified_metadata};
     use crate::crate_release_journal::{
         JournalMutationKind, JournalMutationPhase, inspect_journal_mutation,
@@ -282,4 +287,3 @@ fn metadata_repair_stops_if_approval_changes_after_intent() -> Result<(), Box<dy
     assert!(inspect_journal_mutation(&journal, &identity, 2)?.is_none());
     Ok(())
 }
-

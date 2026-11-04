@@ -1,8 +1,15 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use super::{
+    Cell, Github, JournalRegistryFake, OrchestratorError, Registry, fixture_archive,
+    fixture_journal_plan, fs, journal_existing_owners, make_fixture, make_workspace_order_fixture,
+    prepare_crate_release, reject_bad_completion_evidence, test_git,
+    verify_crate_release_admission,
+};
+
 #[test]
-fn workspace_receipt_rederives_ordered_source_before_publishing()
+pub(super) fn workspace_receipt_rederives_ordered_source_before_publishing()
 -> Result<(), Box<dyn std::error::Error>> {
     let (temp, intent, request, github, registry) = make_workspace_order_fixture()?;
     let root = temp.path();
@@ -79,7 +86,7 @@ fn workspace_receipt_rederives_ordered_source_before_publishing()
 }
 
 #[test]
-fn serial_coordinator_records_upload_and_metadata_before_reconciling()
+pub(super) fn serial_coordinator_records_upload_and_metadata_before_reconciling()
 -> Result<(), Box<dyn std::error::Error>> {
     use crate::crate_release_controller::{
         CrateReleaseObservation, UploadAttempt, coordinate_release,
@@ -159,7 +166,7 @@ fn serial_coordinator_records_upload_and_metadata_before_reconciling()
     Ok(())
 }
 
-fn assert_semver_failure_writes_nothing(
+pub(super) fn assert_semver_failure_writes_nothing(
     input: &crate::crate_release_controller::CrateReleaseObservation<
         '_,
         JournalRegistryFake,
@@ -197,7 +204,7 @@ fn assert_semver_failure_writes_nothing(
     Ok(())
 }
 
-fn check_completion_retry(
+pub(super) fn check_completion_retry(
     input: &crate::crate_release_controller::CrateReleaseObservation<
         '_,
         JournalRegistryFake,
@@ -271,7 +278,7 @@ fn check_completion_retry(
     Ok(())
 }
 
-fn check_stale_completed_retry(
+pub(super) fn check_stale_completed_retry(
     input: &crate::crate_release_controller::CrateReleaseObservation<
         '_,
         JournalRegistryFake,
@@ -304,4 +311,3 @@ fn check_stale_completed_retry(
     assert_eq!(input.journal.write_calls.get(), journal_writes);
     assert_eq!(input.github.writes.get(), 2);
 }
-

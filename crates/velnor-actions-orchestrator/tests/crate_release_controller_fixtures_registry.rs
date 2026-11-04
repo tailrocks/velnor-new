@@ -1,10 +1,16 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-struct NewRegistry {
-    base: Registry,
-    visible: Cell<bool>,
-    owner_changed: Cell<bool>,
+use super::{
+    Cell, Command, CrateRegistryRead, CrateRegistryResponse, CrateReleaseAction,
+    CrateReleaseIntent, Digest, GitHubAdmissionRequest, Github, OrchestratorError, Path, RefCell,
+    Sha256, fs, json, prepare_crate_release, repair_crate_release, test_git,
+};
+
+pub(super) struct NewRegistry {
+    pub(super) base: Registry,
+    pub(super) visible: Cell<bool>,
+    pub(super) owner_changed: Cell<bool>,
 }
 impl CrateRegistryRead for NewRegistry {
     fn get(&self, path: &str) -> Result<CrateRegistryResponse, OrchestratorError> {
@@ -27,10 +33,10 @@ impl CrateRegistryRead for NewRegistry {
     }
 }
 
-struct Registry {
-    absent: Cell<bool>,
-    inconsistent: Cell<bool>,
-    archive: RefCell<Vec<u8>>,
+pub(super) struct Registry {
+    pub(super) absent: Cell<bool>,
+    pub(super) inconsistent: Cell<bool>,
+    pub(super) archive: RefCell<Vec<u8>>,
 }
 impl CrateRegistryRead for Registry {
     fn get(&self, path: &str) -> Result<CrateRegistryResponse, OrchestratorError> {
@@ -83,7 +89,7 @@ impl CrateRegistryRead for Registry {
         })
     }
 }
-fn git(root: &Path, args: &[&str]) -> Result<String, Box<dyn std::error::Error>> {
+pub(super) fn git(root: &Path, args: &[&str]) -> Result<String, Box<dyn std::error::Error>> {
     let result = Command::new("git")
         .current_dir(root)
         .env("GIT_CONFIG_NOSYSTEM", "1")
@@ -96,7 +102,7 @@ fn git(root: &Path, args: &[&str]) -> Result<String, Box<dyn std::error::Error>>
     Ok(String::from_utf8(result.stdout)?.trim().to_owned())
 }
 
-fn make_fixture(
+pub(super) fn make_fixture(
     root: &Path,
 ) -> Result<
     (CrateReleaseIntent, GitHubAdmissionRequest, Github, Registry),
@@ -172,7 +178,7 @@ fn make_fixture(
     Ok((intent, request, github, registry))
 }
 
-fn fixture_archive(root: &Path) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+pub(super) fn fixture_archive(root: &Path) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
     let target = tempfile::tempdir()?;
     let which = Command::new("mise")
         .current_dir(target.path())
@@ -218,7 +224,7 @@ fn fixture_archive(root: &Path) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
     Ok(fs::read(target.path().join("package/demo-0.1.1.crate"))?)
 }
 
-fn exercise_repair(
+pub(super) fn exercise_repair(
     intent: &CrateReleaseIntent,
     request: &GitHubAdmissionRequest,
     github: &Github,
@@ -295,4 +301,3 @@ fn exercise_repair(
     ));
     Ok(())
 }
-

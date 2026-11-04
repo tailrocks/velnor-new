@@ -1,38 +1,17 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-fn test_git() -> &'static crate::crate_release_git::ReleaseGit {
-    static GIT: std::sync::OnceLock<crate::crate_release_git::ReleaseGit> =
-        std::sync::OnceLock::new();
-    GIT.get_or_init(crate::crate_release_git::ReleaseGit::host_fixture)
-}
-
-use crate as velnor_actions_orchestrator;
-use serde_json::{Value, json};
-use sha2::{Digest, Sha256};
-use std::{
-    cell::{Cell, RefCell},
-    fs,
-    path::Path,
-    process::Command,
-};
-use velnor_actions_contract::config::CrateReleaseIntent;
-use velnor_actions_orchestrator::{
-    OrchestratorError,
-    crate_release_controller::{
-        CrateReleaseAction, CrateReleaseRepairWrite,
-        prepare_crate_release as raw_prepare_crate_release, reconcile_crate_release,
-        repair_crate_release, verify_crate_release_admission,
-    },
-    crate_release_github::{GitHubAdmissionRead, GitHubAdmissionRequest},
-    crate_release_registry::{CrateRegistryRead, CrateRegistryResponse},
+use super::{
+    Cell, CrateRegistryRead, CrateReleaseIntent, CrateReleaseRepairWrite, Digest,
+    GitHubAdmissionRead, GitHubAdmissionRequest, OrchestratorError, Path, RefCell, Sha256, Value,
+    json, raw_prepare_crate_release, test_git, velnor_actions_orchestrator,
 };
 
 #[expect(
     clippy::too_many_arguments,
     reason = "This test helper binds the full package-verification fixture"
 )]
-fn fixture_verify_release_package<G: GitHubAdmissionRead, R: CrateRegistryRead>(
+pub(super) fn fixture_verify_release_package<G: GitHubAdmissionRead, R: CrateRegistryRead>(
     receipt: &crate::crate_release_controller::CrateReleaseAdmissionReceipt,
     intent: &CrateReleaseIntent,
     request: &GitHubAdmissionRequest,
@@ -42,7 +21,7 @@ fn fixture_verify_release_package<G: GitHubAdmissionRead, R: CrateRegistryRead>(
     package: &str,
     git: &crate::crate_release_git::ReleaseGit,
 ) -> Result<crate::crate_release_controller::VerifiedReleasePackage, OrchestratorError> {
-    let input = super::PackageVerification {
+    let input = super::super::PackageVerification {
         receipt,
         intent,
         request,
@@ -52,18 +31,18 @@ fn fixture_verify_release_package<G: GitHubAdmissionRead, R: CrateRegistryRead>(
         git,
         package,
     };
-    super::verify_release_package_with(&input, |observed| {
-        super::verify_observed_packages(observed, receipt)
+    super::super::verify_release_package_with(&input, |observed| {
+        super::super::verify_observed_packages(observed, receipt)
     })
 }
 
-fn fixture_no_baseline() -> crate::crate_release_semver::SemverEvidence {
+pub(super) fn fixture_no_baseline() -> crate::crate_release_semver::SemverEvidence {
     crate::crate_release_semver::SemverEvidence::NoBaseline {
         checker_sha256: "bc9eb06ce04e97d6160c875ffdee1f6e56793e423dea025f344826be03e66829".into(),
     }
 }
 
-fn fixture_semver_map(
+pub(super) fn fixture_semver_map(
     receipt: &crate::crate_release_controller::CrateReleaseAdmissionReceipt,
 ) -> Result<
     std::collections::BTreeMap<String, crate::crate_release_semver::SemverEvidence>,
@@ -87,7 +66,7 @@ fn fixture_semver_map(
         .collect())
 }
 
-fn prepare_crate_release<G: GitHubAdmissionRead, R: CrateRegistryRead>(
+pub(super) fn prepare_crate_release<G: GitHubAdmissionRead, R: CrateRegistryRead>(
     intent: &CrateReleaseIntent,
     request: &GitHubAdmissionRequest,
     github: &G,
@@ -101,7 +80,7 @@ fn prepare_crate_release<G: GitHubAdmissionRead, R: CrateRegistryRead>(
 }
 
 #[test]
-fn reconciliation_waits_only_for_visibility() -> Result<(), Box<dyn std::error::Error>> {
+pub(super) fn reconciliation_waits_only_for_visibility() -> Result<(), Box<dyn std::error::Error>> {
     use std::cell::Cell;
     use velnor_actions_orchestrator::crate_release_controller::wait_for_reconciliation_visibility;
     let calls = Cell::new(0);
@@ -134,27 +113,27 @@ fn reconciliation_waits_only_for_visibility() -> Result<(), Box<dyn std::error::
     Ok(())
 }
 
-type MetadataWriteHook = Box<dyn Fn(u32)>;
-type RefCreatedHook = Box<dyn Fn(&str)>;
+pub(super) type MetadataWriteHook = Box<dyn Fn(u32)>;
+pub(super) type RefCreatedHook = Box<dyn Fn(&str)>;
 
-struct Github {
-    sha: String,
-    policy_sha: String,
-    approved: Cell<bool>,
-    revoke_on_tag_read: Cell<bool>,
-    tag_exists: Cell<bool>,
-    tag_wrong: Cell<bool>,
-    owner_match: Cell<bool>,
-    release_variant: Cell<u8>,
-    write_error: Cell<u8>,
-    writes: Cell<u32>,
-    tool_archive: RefCell<Vec<u8>>,
-    mutate_after_download: Cell<u8>,
-    artifact_receipt: Cell<bool>,
-    before_metadata_write: RefCell<Option<MetadataWriteHook>>,
+pub(super) struct Github {
+    pub(super) sha: String,
+    pub(super) policy_sha: String,
+    pub(super) approved: Cell<bool>,
+    pub(super) revoke_on_tag_read: Cell<bool>,
+    pub(super) tag_exists: Cell<bool>,
+    pub(super) tag_wrong: Cell<bool>,
+    pub(super) owner_match: Cell<bool>,
+    pub(super) release_variant: Cell<u8>,
+    pub(super) write_error: Cell<u8>,
+    pub(super) writes: Cell<u32>,
+    pub(super) tool_archive: RefCell<Vec<u8>>,
+    pub(super) mutate_after_download: Cell<u8>,
+    pub(super) artifact_receipt: Cell<bool>,
+    pub(super) before_metadata_write: RefCell<Option<MetadataWriteHook>>,
 }
 impl Github {
-    fn tool_metadata(&self) -> Value {
+    pub(super) fn tool_metadata(&self) -> Value {
         let bytes = self.tool_archive.borrow();
         let mut digest = String::from("sha256:");
         for byte in Sha256::digest(&*bytes) {

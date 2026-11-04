@@ -1,8 +1,14 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use super::{
+    Cell, Command, CrateReleaseIntent, GitHubAdmissionRequest, Github, HistoricalAuthority,
+    JournalRegistryFake, Registry, fixture_journal_plan, fixture_no_baseline, fs, git,
+    make_fixture, prepare_crate_release, test_git,
+};
+
 #[test]
-fn previous_push_or_dispatch_requires_original_historical_authority()
+pub(super) fn previous_push_or_dispatch_requires_original_historical_authority()
 -> Result<(), Box<dyn std::error::Error>> {
     for event in ["push", "workflow_dispatch"] {
         exercise_historical_authority(event, 0)?;
@@ -12,18 +18,18 @@ fn previous_push_or_dispatch_requires_original_historical_authority()
     Ok(())
 }
 
-struct HistoricalFixture {
-    temp: tempfile::TempDir,
-    workflow: tempfile::TempDir,
-    intent: CrateReleaseIntent,
-    request: GitHubAdmissionRequest,
-    github: Github,
-    registry: Registry,
-    previous_intent: CrateReleaseIntent,
-    prior_sha: String,
+pub(super) struct HistoricalFixture {
+    pub(super) temp: tempfile::TempDir,
+    pub(super) workflow: tempfile::TempDir,
+    pub(super) intent: CrateReleaseIntent,
+    pub(super) request: GitHubAdmissionRequest,
+    pub(super) github: Github,
+    pub(super) registry: Registry,
+    pub(super) previous_intent: CrateReleaseIntent,
+    pub(super) prior_sha: String,
 }
 
-fn historical_fixture(
+pub(super) fn historical_fixture(
     event: &'static str,
     bad_recovery: u8,
 ) -> Result<HistoricalFixture, Box<dyn std::error::Error>> {
@@ -104,7 +110,7 @@ fn historical_fixture(
     })
 }
 
-fn exercise_historical_authority(
+pub(super) fn exercise_historical_authority(
     event: &'static str,
     bad_recovery: u8,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -173,7 +179,7 @@ fn exercise_historical_authority(
     Ok(())
 }
 
-fn check_historical_authority(
+pub(super) fn check_historical_authority(
     input: &crate::package_release_signer::AdmittedStart<
         '_,
         JournalRegistryFake,
@@ -218,7 +224,7 @@ fn check_historical_authority(
 }
 
 #[test]
-fn workflow_lock_uses_event_scoped_recovery_and_committed_policy()
+pub(super) fn workflow_lock_uses_event_scoped_recovery_and_committed_policy()
 -> Result<(), Box<dyn std::error::Error>> {
     let source = tempfile::tempdir()?;
     let policy = tempfile::tempdir()?;
@@ -226,7 +232,7 @@ fn workflow_lock_uses_event_scoped_recovery_and_committed_policy()
     intent.recovery.as_mut().expect("recovery").source_sha = "f".repeat(40);
     request.event = "push".into();
     request.recovery_sha = None;
-    let effective = super::effective_release_intent(&intent, &request);
+    let effective = super::super::effective_release_intent(&intent, &request);
     let plan = crate::crate_release_workspace::crate_release_workspace_plan_with_registry(
         source.path(),
         &request.source_sha,
@@ -295,4 +301,3 @@ fn workflow_lock_uses_event_scoped_recovery_and_committed_policy()
     assert_eq!(github.writes.get(), 0);
     Ok(())
 }
-

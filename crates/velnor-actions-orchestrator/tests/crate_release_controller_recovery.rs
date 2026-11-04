@@ -1,8 +1,14 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use super::{
+    Command, GitHubAdmissionRequest, Github, Path, Registry, exercise_repair, fixture_archive,
+    fixture_no_baseline, fs, make_fixture, prepare_crate_release, reconcile_crate_release,
+    test_git, velnor_actions_orchestrator, verify_crate_release_admission,
+};
+
 #[test]
-fn recovery_requires_fresh_human_approval_and_registry_absence()
+pub(super) fn recovery_requires_fresh_human_approval_and_registry_absence()
 -> Result<(), Box<dyn std::error::Error>> {
     let temp = tempfile::tempdir()?;
     let root = temp.path();
@@ -74,7 +80,8 @@ fn recovery_requires_fresh_human_approval_and_registry_absence()
 }
 
 #[test]
-fn source_free_github_gate_does_not_execute_cargo() -> Result<(), Box<dyn std::error::Error>> {
+pub(super) fn source_free_github_gate_does_not_execute_cargo()
+-> Result<(), Box<dyn std::error::Error>> {
     if std::env::var_os("VELNOR_SOURCE_FREE_GATE").is_some() {
         let temp = tempfile::tempdir()?;
         let (_intent, request, github, _registry) = make_fixture(temp.path())?;
@@ -101,7 +108,7 @@ fn source_free_github_gate_does_not_execute_cargo() -> Result<(), Box<dyn std::e
 }
 
 #[test]
-fn receipt_acquire_requires_current_approval_and_matching_evidence()
+pub(super) fn receipt_acquire_requires_current_approval_and_matching_evidence()
 -> Result<(), Box<dyn std::error::Error>> {
     use velnor_actions_orchestrator::crate_release_tool_artifact::{
         ToolchainStageRequest, fixture_acquire_receipt as acquire_receipt_artifact,
@@ -150,7 +157,7 @@ fn receipt_acquire_requires_current_approval_and_matching_evidence()
     check_receipt_denials(&stage, &github, &registry, &receipt, source.path())
 }
 
-fn check_receipt_denials(
+pub(super) fn check_receipt_denials(
     stage: &crate::crate_release_tool_artifact::ToolchainStageRequest<'_>,
     github: &Github,
     registry: &Registry,
@@ -211,7 +218,7 @@ fn check_receipt_denials(
     Ok(())
 }
 
-fn check_receipt_revalidation(
+pub(super) fn check_receipt_revalidation(
     stage: &crate::crate_release_tool_artifact::ToolchainStageRequest<'_>,
     github: &Github,
     registry: &Registry,
@@ -246,7 +253,7 @@ fn check_receipt_revalidation(
     Ok(())
 }
 
-fn receipt_zip(bytes: &[u8]) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+pub(super) fn receipt_zip(bytes: &[u8]) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
     use std::io::Write as _;
     let mut zip = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
     zip.start_file(
@@ -259,8 +266,8 @@ fn receipt_zip(bytes: &[u8]) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
 
 #[cfg(unix)]
 #[test]
-fn ambient_rust_wrappers_cannot_override_verified_tools() -> Result<(), Box<dyn std::error::Error>>
-{
+pub(super) fn ambient_rust_wrappers_cannot_override_verified_tools()
+-> Result<(), Box<dyn std::error::Error>> {
     use std::os::unix::fs::PermissionsExt;
     let temp = tempfile::tempdir()?;
     let wrapper = temp.path().join("hostile-wrapper");
@@ -283,8 +290,8 @@ fn ambient_rust_wrappers_cannot_override_verified_tools() -> Result<(), Box<dyn 
 
 #[cfg(unix)]
 #[test]
-fn toolchain_staging_requires_approved_same_run_artifact() -> Result<(), Box<dyn std::error::Error>>
-{
+pub(super) fn toolchain_staging_requires_approved_same_run_artifact()
+-> Result<(), Box<dyn std::error::Error>> {
     use flate2::{Compression, write::GzEncoder};
     use std::io::{Cursor, Write};
     use velnor_actions_orchestrator::crate_release_github::verify_github_evidence;
@@ -348,4 +355,3 @@ fn toolchain_staging_requires_approved_same_run_artifact() -> Result<(), Box<dyn
     );
     Ok(())
 }
-

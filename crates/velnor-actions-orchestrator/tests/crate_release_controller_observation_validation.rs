@@ -1,7 +1,13 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-fn reject_observed_approval_revocation(
+use super::{
+    CrateReleaseIntent, Digest, GitHubAdmissionRequest, Github, JournalRegistryFake, Path,
+    Registry, Sha256, fs, journal_existing_owners, test_git, velnor_actions_orchestrator,
+    verify_reconciled_candidate,
+};
+
+pub(super) fn reject_observed_approval_revocation(
     obs: &crate::crate_release_controller::CrateReleaseObservation<
         '_,
         JournalRegistryFake,
@@ -21,7 +27,7 @@ fn reject_observed_approval_revocation(
     Ok(())
 }
 
-fn reject_tampered_source(
+pub(super) fn reject_tampered_source(
     obs: &velnor_actions_orchestrator::crate_release_controller::CrateReleaseObservation<
         '_,
         JournalRegistryFake,
@@ -39,7 +45,7 @@ fn reject_tampered_source(
     Ok(())
 }
 
-fn reject_wrong_authentication(
+pub(super) fn reject_wrong_authentication(
     obs: &velnor_actions_orchestrator::crate_release_controller::CrateReleaseObservation<
         '_,
         JournalRegistryFake,
@@ -48,17 +54,17 @@ fn reject_wrong_authentication(
     >,
 ) {
     let mut wrong_auth = obs.journal_receipt.clone();
-    assert!(super::observation::verify_binding(obs).is_ok());
+    assert!(super::super::observation::verify_binding(obs).is_ok());
     wrong_auth.authentication =
         velnor_actions_orchestrator::crate_release_journal::JournalAuthentication::BootstrapToken;
     let wrong = velnor_actions_orchestrator::crate_release_controller::CrateReleaseObservation {
         journal_receipt: &wrong_auth,
         ..*obs
     };
-    assert!(super::observation::verify_binding(&wrong).is_err());
+    assert!(super::super::observation::verify_binding(&wrong).is_err());
 }
 
-fn fixture_journal_plan(
+pub(super) fn fixture_journal_plan(
     root: &Path,
     intent: &CrateReleaseIntent,
     request: &GitHubAdmissionRequest,
@@ -131,7 +137,7 @@ fn fixture_journal_plan(
     Ok((identity, plan))
 }
 
-fn verify_metadata_observations(
+pub(super) fn verify_metadata_observations(
     prior: &velnor_actions_orchestrator::crate_release_controller::CrateReleaseObservation<
         '_,
         JournalRegistryFake,
@@ -201,7 +207,7 @@ fn verify_metadata_observations(
     Ok(())
 }
 
-fn test_hex(bytes: &[u8]) -> String {
+pub(super) fn test_hex(bytes: &[u8]) -> String {
     let mut result = String::with_capacity(bytes.len() * 2);
     for byte in bytes {
         result.push(char::from(b"0123456789abcdef"[usize::from(byte >> 4)]));
@@ -210,7 +216,7 @@ fn test_hex(bytes: &[u8]) -> String {
     result
 }
 
-fn verify_upload_result(
+pub(super) fn verify_upload_result(
     obs: &velnor_actions_orchestrator::crate_release_controller::CrateReleaseObservation<
         '_,
         JournalRegistryFake,
@@ -278,4 +284,3 @@ fn verify_upload_result(
     drop(archive);
     Ok(())
 }
-

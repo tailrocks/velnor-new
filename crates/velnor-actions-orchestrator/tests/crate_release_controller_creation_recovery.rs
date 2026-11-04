@@ -1,7 +1,14 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-fn verify_created_crate_recovers_without_reupload(
+use super::{
+    Cell, CrateRegistryRead, CrateRegistryResponse, CrateReleaseRepairWrite, GitHubAdmissionRead,
+    Github, HistoricalAuthority, JournalRegistryFake, MixedGithub, MixedRegistry, NewRegistry,
+    OrchestratorError, Value, fixture_archive, fixture_journal_plan, fixture_no_baseline, json,
+    make_fixture, prepare_crate_release, test_git,
+};
+
+pub(super) fn verify_created_crate_recovers_without_reupload(
     input: &crate::package_release_signer::AdmittedStart<
         '_,
         JournalRegistryFake,
@@ -58,7 +65,7 @@ fn verify_created_crate_recovers_without_reupload(
     Ok(())
 }
 
-fn reject_untrusted_prior_creation(
+pub(super) fn reject_untrusted_prior_creation(
     input: &crate::package_release_signer::AdmittedStart<
         '_,
         JournalRegistryFake,
@@ -108,8 +115,8 @@ fn reject_untrusted_prior_creation(
 }
 
 #[test]
-fn coordinator_completes_first_crate_with_durable_owners() -> Result<(), Box<dyn std::error::Error>>
-{
+pub(super) fn coordinator_completes_first_crate_with_durable_owners()
+-> Result<(), Box<dyn std::error::Error>> {
     use crate::crate_release_controller::{CrateReleaseObservation, coordinate_release};
     use crate::crate_release_journal::{
         JournalAuthentication, JournalOwnership, record_source_bound_start,
@@ -158,7 +165,7 @@ fn coordinator_completes_first_crate_with_durable_owners() -> Result<(), Box<dyn
             uploads.set(uploads.get() + 1);
             registry.base.absent.set(false);
             registry.visible.set(true);
-            Ok(super::observation::UploadAttempt::ExitedSuccess)
+            Ok(super::super::observation::UploadAttempt::ExitedSuccess)
         },
         || {},
     )?;
@@ -187,7 +194,7 @@ fn coordinator_completes_first_crate_with_durable_owners() -> Result<(), Box<dyn
     Ok(())
 }
 
-fn reject_changed_first_crate_completion(
+pub(super) fn reject_changed_first_crate_completion(
     input: &crate::crate_release_controller::CrateReleaseObservation<
         '_,
         JournalRegistryFake,
@@ -211,7 +218,7 @@ fn reject_changed_first_crate_completion(
     assert_eq!(input.github.writes.get(), 2);
 }
 
-struct CreationWorkspaceGithub(MixedGithub);
+pub(super) struct CreationWorkspaceGithub(pub(super) MixedGithub);
 impl GitHubAdmissionRead for CreationWorkspaceGithub {
     fn get(&self, route: &str) -> Result<Value, OrchestratorError> {
         if route.ends_with("/actions/runs/12") {
@@ -232,9 +239,9 @@ impl CrateReleaseRepairWrite for CreationWorkspaceGithub {
         self.0.create_release(repo, tag, sha)
     }
 }
-struct CreationWorkspaceRegistry {
-    inner: MixedRegistry,
-    owner_changed: Cell<bool>,
+pub(super) struct CreationWorkspaceRegistry {
+    pub(super) inner: MixedRegistry,
+    pub(super) owner_changed: Cell<bool>,
 }
 impl CrateRegistryRead for CreationWorkspaceRegistry {
     fn get(&self, path: &str) -> Result<CrateRegistryResponse, OrchestratorError> {
@@ -269,4 +276,3 @@ impl CrateRegistryRead for CreationWorkspaceRegistry {
         self.inner.get(path)
     }
 }
-

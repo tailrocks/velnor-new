@@ -1,9 +1,16 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use super::{
+    Cell, OrchestratorError, RefCell, RefCreatedHook, fixture_archive, fixture_journal_plan,
+    fixture_no_baseline, make_fixture, prepare_crate_release, reject_observed_approval_revocation,
+    reject_tampered_source, reject_wrong_authentication, test_git, velnor_actions_orchestrator,
+    verify_metadata_observations, verify_upload_result,
+};
+
 #[test]
-fn github_release_evidence_requires_a_positive_numeric_id() -> Result<(), Box<dyn std::error::Error>>
-{
+pub(super) fn github_release_evidence_requires_a_positive_numeric_id()
+-> Result<(), Box<dyn std::error::Error>> {
     let temp = tempfile::tempdir()?;
     let (_, _, github, _) = make_fixture(temp.path())?;
     github.tag_exists.set(true);
@@ -32,20 +39,20 @@ use sha1_checked::{Digest as Sha1Digest, Sha1};
 use std::collections::BTreeMap;
 use velnor_actions_orchestrator::crate_release_journal::{JournalIo, JournalTag};
 #[derive(Default)]
-struct JournalRegistryFake {
-    refs: RefCell<BTreeMap<String, String>>,
-    blobs: RefCell<BTreeMap<String, Vec<u8>>>,
-    tags: RefCell<BTreeMap<String, JournalTag>>,
-    reject_rules: bool,
-    fail_ref_after_write: bool,
-    fail_ref_before_write: Option<()>,
-    wrong_blob_sha: bool,
-    wrong_tag_target: Option<()>,
-    wrong_tag_sha: Option<()>,
-    access_checks: Cell<usize>,
-    write_calls: Cell<usize>,
-    reject_access: Option<()>,
-    after_ref_created: RefCell<Option<RefCreatedHook>>,
+pub(super) struct JournalRegistryFake {
+    pub(super) refs: RefCell<BTreeMap<String, String>>,
+    pub(super) blobs: RefCell<BTreeMap<String, Vec<u8>>>,
+    pub(super) tags: RefCell<BTreeMap<String, JournalTag>>,
+    pub(super) reject_rules: bool,
+    pub(super) fail_ref_after_write: bool,
+    pub(super) fail_ref_before_write: Option<()>,
+    pub(super) wrong_blob_sha: bool,
+    pub(super) wrong_tag_target: Option<()>,
+    pub(super) wrong_tag_sha: Option<()>,
+    pub(super) access_checks: Cell<usize>,
+    pub(super) write_calls: Cell<usize>,
+    pub(super) reject_access: Option<()>,
+    pub(super) after_ref_created: RefCell<Option<RefCreatedHook>>,
 }
 
 impl velnor_actions_orchestrator::crate_release_journal::JournalOperationRefs
@@ -165,7 +172,7 @@ impl JournalIo for JournalRegistryFake {
     }
 }
 
-fn raw_tag(tag: &JournalTag) -> Vec<u8> {
+pub(super) fn raw_tag(tag: &JournalTag) -> Vec<u8> {
     format!(
         "object {}\ntype {}\ntag {}\ntagger Velnor Release <release@velnor.invalid> 0 +0000\n\n{}",
         tag.object_sha, tag.object_type, tag.name, tag.message
@@ -173,14 +180,15 @@ fn raw_tag(tag: &JournalTag) -> Vec<u8> {
     .into_bytes()
 }
 
-fn err() -> OrchestratorError {
+pub(super) fn err() -> OrchestratorError {
     OrchestratorError::Contract {
         problem: "fake_remote_failure".into(),
     }
 }
 
 #[test]
-fn observed_upload_is_derived_from_current_registry() -> Result<(), Box<dyn std::error::Error>> {
+pub(super) fn observed_upload_is_derived_from_current_registry()
+-> Result<(), Box<dyn std::error::Error>> {
     use velnor_actions_orchestrator::crate_release_controller::{
         CrateReleaseObservation, record_verified_mutation,
     };
@@ -261,4 +269,3 @@ fn observed_upload_is_derived_from_current_registry() -> Result<(), Box<dyn std:
     verify_metadata_observations(&obs, &github)?;
     Ok(())
 }
-

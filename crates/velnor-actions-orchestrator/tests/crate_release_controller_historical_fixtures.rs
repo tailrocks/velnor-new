@@ -1,7 +1,14 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-fn initialize_history_repo(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
+use super::{
+    Cell, CrateReleaseIntent, CrateReleaseRepairWrite, GitHubAdmissionRead, Github,
+    JournalRegistryFake, OrchestratorError, Path, Registry, Value, fixture_archive,
+    fixture_journal_plan, fixture_no_baseline, fs, git, json, make_fixture, prepare_crate_release,
+    test_git,
+};
+
+pub(super) fn initialize_history_repo(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
     git(path, &["init", "-q"])?;
     git(path, &["config", "user.name", "Alexey Zhokhov"])?;
     git(path, &["config", "user.email", "alexey@zhokhov.com"])?;
@@ -9,7 +16,7 @@ fn initialize_history_repo(path: &Path) -> Result<(), Box<dyn std::error::Error>
     Ok(())
 }
 
-fn commit_history_intent(
+pub(super) fn commit_history_intent(
     path: &Path,
     intent: &CrateReleaseIntent,
     message: &str,
@@ -24,7 +31,7 @@ fn commit_history_intent(
     git(path, &["rev-parse", "HEAD"])
 }
 
-fn assert_two_link_recovery(
+pub(super) fn assert_two_link_recovery(
     input: &crate::package_release_signer::AdmittedStart<
         '_,
         JournalRegistryFake,
@@ -98,7 +105,8 @@ fn assert_two_link_recovery(
 }
 
 #[test]
-fn admitted_start_rejects_forged_prior_intent_digest() -> Result<(), Box<dyn std::error::Error>> {
+pub(super) fn admitted_start_rejects_forged_prior_intent_digest()
+-> Result<(), Box<dyn std::error::Error>> {
     use crate::crate_release_journal::{record_journal_intent, record_source_bound_start};
     use crate::package_release_signer::{
         AdmittedStart, fixture_attested_generator, record_admitted_start,
@@ -174,7 +182,7 @@ fn admitted_start_rejects_forged_prior_intent_digest() -> Result<(), Box<dyn std
     Ok(())
 }
 
-fn fixture_upload_intention() -> crate::crate_release_journal::JournalIntendedMutation {
+pub(super) fn fixture_upload_intention() -> crate::crate_release_journal::JournalIntendedMutation {
     crate::crate_release_journal::JournalIntendedMutation {
         semver_evidence: Some(fixture_no_baseline()),
         sequence: 1,
@@ -184,12 +192,12 @@ fn fixture_upload_intention() -> crate::crate_release_journal::JournalIntendedMu
     }
 }
 
-struct HistoricalAuthority<'a> {
-    base: &'a Github,
-    workflow: String,
-    older: Option<String>,
-    event: &'static str,
-    defect: Cell<u8>,
+pub(super) struct HistoricalAuthority<'a> {
+    pub(super) base: &'a Github,
+    pub(super) workflow: String,
+    pub(super) older: Option<String>,
+    pub(super) event: &'static str,
+    pub(super) defect: Cell<u8>,
 }
 
 impl CrateReleaseRepairWrite for HistoricalAuthority<'_> {
@@ -287,4 +295,3 @@ impl GitHubAdmissionRead for HistoricalAuthority<'_> {
         self.base.get_optional(route)
     }
 }
-

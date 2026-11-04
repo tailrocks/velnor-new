@@ -1,8 +1,16 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use super::{
+    Cell, FIXTURE_SPARSE_INDEX, HistoricalAuthority, JournalRegistryFake, MixedGithub,
+    MixedRegistry, OrchestratorError, RefCell, SparseFixture, assert_two_link_recovery,
+    commit_history_intent, fixture_archive, fixture_journal_plan, fixture_upload_intention, fs,
+    initialize_history_repo, make_fixture, make_workspace_order_fixture, prepare_crate_release,
+    test_git,
+};
+
 #[test]
-fn mixed_workspace_coordinator_repairs_predecessor_before_upload()
+pub(super) fn mixed_workspace_coordinator_repairs_predecessor_before_upload()
 -> Result<(), Box<dyn std::error::Error>> {
     use crate::crate_release_controller::{
         CrateReleaseObservation, UploadAttempt, coordinate_release,
@@ -12,7 +20,7 @@ fn mixed_workspace_coordinator_repairs_predecessor_before_upload()
     let root = temp.path();
     let original = prepare_crate_release(&intent, &request, &original_github, &registry, root)?;
     let archive_dir = tempfile::tempdir()?;
-    let first_archive = super::package_source(
+    let first_archive = super::super::package_source(
         root,
         &intent,
         &original.packages[0].source,
@@ -65,7 +73,7 @@ fn mixed_workspace_coordinator_repairs_predecessor_before_upload()
             let target = tempfile::tempdir().map_err(|_| OrchestratorError::Contract {
                 problem: "fixture".into(),
             })?;
-            let archive = super::package_source(
+            let archive = super::super::package_source(
                 root,
                 &intent,
                 &admission.packages[1].source,
@@ -85,7 +93,7 @@ fn mixed_workspace_coordinator_repairs_predecessor_before_upload()
     Ok(())
 }
 
-fn mixed_verified_semver(
+pub(super) fn mixed_verified_semver(
     admission: &crate::crate_release_controller::CrateReleaseAdmissionReceipt,
     github: &MixedGithub,
     server: &SparseFixture,
@@ -101,7 +109,11 @@ fn mixed_verified_semver(
     crate::crate_release_semver::fixture_verified_semver(admission, name)
 }
 
-fn propagate_sparse_index(registry: &MixedRegistry, server: &SparseFixture, waits: &Cell<u32>) {
+pub(super) fn propagate_sparse_index(
+    registry: &MixedRegistry,
+    server: &SparseFixture,
+    waits: &Cell<u32>,
+) {
     waits.set(waits.get() + 1);
     registry.first.index_visible.set(true);
     server
@@ -109,7 +121,7 @@ fn propagate_sparse_index(registry: &MixedRegistry, server: &SparseFixture, wait
         .store(true, std::sync::atomic::Ordering::SeqCst);
 }
 
-fn check_mixed_workspace_result(github: &MixedGithub, packages: usize) {
+pub(super) fn check_mixed_workspace_result(github: &MixedGithub, packages: usize) {
     assert_eq!(packages, 2);
     assert_eq!(
         &*github.writes.borrow(),
@@ -117,7 +129,7 @@ fn check_mixed_workspace_result(github: &MixedGithub, packages: usize) {
     );
 }
 
-fn set_workspace_journal_packages(
+pub(super) fn set_workspace_journal_packages(
     plan: &mut crate::crate_release_journal::JournalReceipt,
     admission: &crate::crate_release_controller::CrateReleaseAdmissionReceipt,
 ) {
@@ -143,7 +155,7 @@ fn set_workspace_journal_packages(
 }
 
 #[test]
-fn serial_coordinator_recovers_pending_visible_tag_without_recreating()
+pub(super) fn serial_coordinator_recovers_pending_visible_tag_without_recreating()
 -> Result<(), Box<dyn std::error::Error>> {
     use crate::crate_release_controller::{CrateReleaseObservation, coordinate_release};
     use crate::crate_release_journal::{
@@ -199,7 +211,7 @@ fn serial_coordinator_recovers_pending_visible_tag_without_recreating()
 }
 
 #[test]
-fn admitted_start_binds_previous_workflow_commit_and_reobserves_prior_upload()
+pub(super) fn admitted_start_binds_previous_workflow_commit_and_reobserves_prior_upload()
 -> Result<(), Box<dyn std::error::Error>> {
     use crate::crate_release_journal::{record_journal_intent, record_source_bound_start};
     use crate::package_release_signer::{
@@ -275,4 +287,3 @@ fn admitted_start_binds_previous_workflow_commit_and_reobserves_prior_upload()
     assert_two_link_recovery(&input, &previous)?;
     Ok(())
 }
-

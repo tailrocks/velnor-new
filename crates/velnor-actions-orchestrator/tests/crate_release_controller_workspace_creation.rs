@@ -1,8 +1,16 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use super::{
+    Cell, HistoricalAuthority, JournalRegistryFake, NewRegistry, WorkspaceGithub,
+    WorkspaceRegistry, commit_history_intent, fixture_archive, fixture_journal_plan,
+    fixture_no_baseline, initialize_history_repo, make_fixture, make_workspace_order_fixture,
+    prepare_crate_release, reject_untrusted_prior_creation, set_workspace_journal_packages,
+    test_git, verify_created_crate_recovers_without_reupload,
+};
+
 #[test]
-fn two_new_workspace_crates_require_each_own_recorded_upload()
+pub(super) fn two_new_workspace_crates_require_each_own_recorded_upload()
 -> Result<(), Box<dyn std::error::Error>> {
     use crate::crate_release_controller::CrateReleaseObservation;
     use crate::crate_release_journal::{
@@ -67,7 +75,7 @@ fn two_new_workspace_crates_require_each_own_recorded_upload()
         source: root,
         sequence: 4,
     };
-    super::observation::verify_observed_packages_with_upload_intent(
+    super::super::observation::verify_observed_packages_with_upload_intent(
         &input,
         &current,
         Some(&pending),
@@ -76,7 +84,7 @@ fn two_new_workspace_crates_require_each_own_recorded_upload()
     Ok(())
 }
 
-fn reject_changed_workspace_owner(
+pub(super) fn reject_changed_workspace_owner(
     input: &crate::crate_release_controller::CrateReleaseObservation<
         '_,
         JournalRegistryFake,
@@ -94,7 +102,7 @@ fn reject_changed_workspace_owner(
     };
     owners[0].id += 1;
     assert!(
-        super::observation::verify_observed_packages_with_upload_intent(
+        super::super::observation::verify_observed_packages_with_upload_intent(
             input,
             &wrong,
             Some(pending)
@@ -104,7 +112,7 @@ fn reject_changed_workspace_owner(
     Ok(())
 }
 
-fn fixture_creation_intention(
+pub(super) fn fixture_creation_intention(
     sequence: u32,
     name: &str,
     version: &str,
@@ -118,7 +126,7 @@ fn fixture_creation_intention(
     }
 }
 
-fn created_workspace_admission(
+pub(super) fn created_workspace_admission(
     admission: &crate::crate_release_controller::CrateReleaseAdmissionReceipt,
     original: &crate::crate_release_controller::CrateReleaseAdmissionReceipt,
 ) -> Result<crate::crate_release_controller::CrateReleaseAdmissionReceipt, Box<dyn std::error::Error>>
@@ -145,7 +153,7 @@ fn created_workspace_admission(
     Ok(current)
 }
 
-fn record_first_created_workspace_crate(
+pub(super) fn record_first_created_workspace_crate(
     journal: &JournalRegistryFake,
     identity: &crate::crate_release_journal::JournalIdentity,
     plan: &crate::crate_release_journal::JournalReceipt,
@@ -189,7 +197,7 @@ fn record_first_created_workspace_crate(
 }
 
 #[test]
-fn first_crate_prior_upload_recovers_only_with_authenticated_intent_and_owner()
+pub(super) fn first_crate_prior_upload_recovers_only_with_authenticated_intent_and_owner()
 -> Result<(), Box<dyn std::error::Error>> {
     use crate::crate_release_journal::{
         JournalAuthentication, JournalOwnership, record_source_bound_start,
@@ -266,4 +274,3 @@ fn first_crate_prior_upload_recovers_only_with_authenticated_intent_and_owner()
     verify_created_crate_recovers_without_reupload(&input)?;
     Ok(())
 }
-

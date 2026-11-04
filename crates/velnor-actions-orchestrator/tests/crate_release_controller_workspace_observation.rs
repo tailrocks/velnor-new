@@ -1,7 +1,15 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-struct WorkspaceGithub(Github, Cell<bool>);
+use super::{
+    Cell, Command, CrateRegistryRead, CrateRegistryResponse, CrateReleaseAction,
+    CrateReleaseIntent, Digest, GitHubAdmissionRead, GitHubAdmissionRequest, Github,
+    OrchestratorError, Path, RefCell, Sha256, SparseFixture, Value, err,
+    fixture_verify_release_package, fs, git, json, make_fixture, prepare_crate_release, test_git,
+    test_hex,
+};
+
+pub(super) struct WorkspaceGithub(pub(super) Github, Cell<bool>);
 impl GitHubAdmissionRead for WorkspaceGithub {
     fn get(&self, route: &str) -> Result<Value, OrchestratorError> {
         let sha = &self.0.sha;
@@ -43,10 +51,10 @@ impl GitHubAdmissionRead for WorkspaceGithub {
         Ok(None)
     }
 }
-struct WorkspaceRegistry {
-    visible: Cell<bool>,
-    index_visible: Cell<bool>,
-    archive: RefCell<Vec<u8>>,
+pub(super) struct WorkspaceRegistry {
+    pub(super) visible: Cell<bool>,
+    pub(super) index_visible: Cell<bool>,
+    pub(super) archive: RefCell<Vec<u8>>,
 }
 impl CrateRegistryRead for WorkspaceRegistry {
     fn get(&self, path: &str) -> Result<CrateRegistryResponse, OrchestratorError> {
@@ -92,7 +100,7 @@ impl CrateRegistryRead for WorkspaceRegistry {
     }
 }
 
-type WorkspaceOrderFixture = (
+pub(super) type WorkspaceOrderFixture = (
     tempfile::TempDir,
     CrateReleaseIntent,
     GitHubAdmissionRequest,
@@ -100,7 +108,8 @@ type WorkspaceOrderFixture = (
     WorkspaceRegistry,
 );
 
-fn make_workspace_order_fixture() -> Result<WorkspaceOrderFixture, Box<dyn std::error::Error>> {
+pub(super) fn make_workspace_order_fixture()
+-> Result<WorkspaceOrderFixture, Box<dyn std::error::Error>> {
     let temp = tempfile::tempdir()?;
     let root = temp.path();
     let (mut intent, mut request, github, _) = make_fixture(root)?;
@@ -174,7 +183,7 @@ fn make_workspace_order_fixture() -> Result<WorkspaceOrderFixture, Box<dyn std::
 }
 
 #[test]
-fn multi_crate_absent_predecessor_does_not_block_observation()
+pub(super) fn multi_crate_absent_predecessor_does_not_block_observation()
 -> Result<(), Box<dyn std::error::Error>> {
     let (temp, intent, request, github, registry) = make_workspace_order_fixture()?;
     let root = temp.path();
@@ -225,7 +234,7 @@ fn multi_crate_absent_predecessor_does_not_block_observation()
     verify_after_index_visibility(root, &intent, &request, &github, &registry, &admission)
 }
 
-fn verify_after_index_visibility(
+pub(super) fn verify_after_index_visibility(
     root: &Path,
     intent: &CrateReleaseIntent,
     request: &GitHubAdmissionRequest,
@@ -239,7 +248,7 @@ fn verify_after_index_visibility(
         .iter()
         .find(|p| p.source.name.ends_with("_a"))
         .ok_or("a")?;
-    *registry.archive.borrow_mut() = super::package_source(
+    *registry.archive.borrow_mut() = super::super::package_source(
         root,
         intent,
         &source.source,
@@ -292,9 +301,9 @@ fn verify_after_index_visibility(
     Ok(())
 }
 
-thread_local! { static FIXTURE_SPARSE_INDEX: RefCell<Option<String>> = const { RefCell::new(None) }; }
+thread_local! { pub(super) static FIXTURE_SPARSE_INDEX: RefCell<Option<String>> = const { RefCell::new(None) }; }
 
-pub(super) fn configure_test_registry(home: &Path) -> Result<(), OrchestratorError> {
+pub(crate) fn configure_test_registry(home: &Path) -> Result<(), OrchestratorError> {
     FIXTURE_SPARSE_INDEX.with(|value| {
         if let Some(url) = value.borrow().as_ref() {
             fs::write(home.join("config.toml"), format!("[source.crates-io]\nreplace-with='fixture'\n[source.fixture]\nregistry='sparse+{url}/'\n")).map_err(|_| OrchestratorError::Contract { problem: "fixture registry config".into() })?;
@@ -302,4 +311,3 @@ pub(super) fn configure_test_registry(home: &Path) -> Result<(), OrchestratorErr
         Ok(())
     })
 }
-

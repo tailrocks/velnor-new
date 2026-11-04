@@ -1,16 +1,21 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-struct SparseFixture {
-    url: String,
-    stop: std::sync::Arc<std::sync::atomic::AtomicBool>,
-    thread: Option<std::thread::JoinHandle<()>>,
-    index_visible: std::sync::Arc<std::sync::atomic::AtomicBool>,
-    index_hits: std::sync::Arc<std::sync::atomic::AtomicUsize>,
-    download_hits: std::sync::Arc<std::sync::atomic::AtomicUsize>,
+use super::{
+    Digest, Github, JournalRegistryFake, Registry, Sha256, fixture_journal_plan, json,
+    make_fixture, prepare_crate_release, test_git, test_hex,
+};
+
+pub(super) struct SparseFixture {
+    pub(super) url: String,
+    pub(super) stop: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    pub(super) thread: Option<std::thread::JoinHandle<()>>,
+    pub(super) index_visible: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    pub(super) index_hits: std::sync::Arc<std::sync::atomic::AtomicUsize>,
+    pub(super) download_hits: std::sync::Arc<std::sync::atomic::AtomicUsize>,
 }
 impl SparseFixture {
-    fn start(name: &str, archive: Vec<u8>) -> Result<Self, Box<dyn std::error::Error>> {
+    pub(super) fn start(name: &str, archive: Vec<u8>) -> Result<Self, Box<dyn std::error::Error>> {
         use std::sync::{
             Arc,
             atomic::{AtomicBool, Ordering},
@@ -64,18 +69,18 @@ impl SparseFixture {
         })
     }
 }
-struct SparseRequest {
-    name: String,
-    url: String,
-    checksum: String,
-    archive: Vec<u8>,
-    visible: std::sync::Arc<std::sync::atomic::AtomicBool>,
-    index_hits: std::sync::Arc<std::sync::atomic::AtomicUsize>,
-    download_hits: std::sync::Arc<std::sync::atomic::AtomicUsize>,
-    stop: std::sync::Arc<std::sync::atomic::AtomicBool>,
+pub(super) struct SparseRequest {
+    pub(super) name: String,
+    pub(super) url: String,
+    pub(super) checksum: String,
+    pub(super) archive: Vec<u8>,
+    pub(super) visible: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    pub(super) index_hits: std::sync::Arc<std::sync::atomic::AtomicUsize>,
+    pub(super) download_hits: std::sync::Arc<std::sync::atomic::AtomicUsize>,
+    pub(super) stop: std::sync::Arc<std::sync::atomic::AtomicBool>,
 }
 
-fn serve_sparse_request(mut stream: std::net::TcpStream, fixture: SparseRequest) {
+pub(super) fn serve_sparse_request(mut stream: std::net::TcpStream, fixture: SparseRequest) {
     use std::io::{Read, Write};
     use std::sync::atomic::Ordering;
     stream
@@ -146,8 +151,8 @@ impl Drop for SparseFixture {
 }
 
 #[test]
-fn admitted_start_derives_receipt_and_rechecks_authority() -> Result<(), Box<dyn std::error::Error>>
-{
+pub(super) fn admitted_start_derives_receipt_and_rechecks_authority()
+-> Result<(), Box<dyn std::error::Error>> {
     use crate::crate_release_journal::{JournalAuthentication, JournalStage, inspect_journal};
     use crate::package_release_signer::{
         AdmittedStart, fixture_attested_generator, record_admitted_start,
@@ -205,7 +210,7 @@ fn admitted_start_derives_receipt_and_rechecks_authority() -> Result<(), Box<dyn
     Ok(())
 }
 
-fn reject_invalid_metadata_prerequisites(
+pub(super) fn reject_invalid_metadata_prerequisites(
     input: &crate::crate_release_controller::CrateReleaseObservation<
         '_,
         JournalRegistryFake,
@@ -241,4 +246,3 @@ fn reject_invalid_metadata_prerequisites(
             .is_err()
     );
 }
-

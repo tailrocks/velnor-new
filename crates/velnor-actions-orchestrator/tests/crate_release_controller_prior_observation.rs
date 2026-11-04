@@ -1,8 +1,14 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use super::{
+    BTreeMap, Digest, Github, JournalIo, JournalRegistryFake, JournalTag, Registry, Sha256,
+    fixture_archive, fixture_journal_plan, fixture_no_baseline, fs, journal_existing_owners, json,
+    make_fixture, prepare_crate_release, test_git, test_hex, velnor_actions_orchestrator,
+};
+
 #[test]
-fn journal_observation_runtime_is_blocked_until_authority_is_qualified() {
+pub(super) fn journal_observation_runtime_is_blocked_until_authority_is_qualified() {
     for operation in [
         "journal-observe",
         "journal-coordinate",
@@ -24,7 +30,7 @@ fn journal_observation_runtime_is_blocked_until_authority_is_qualified() {
 }
 
 #[test]
-fn prior_upload_recovery_reobserves_registry_without_writes()
+pub(super) fn prior_upload_recovery_reobserves_registry_without_writes()
 -> Result<(), Box<dyn std::error::Error>> {
     use velnor_actions_orchestrator::crate_release_controller::CrateReleaseObservation;
     use velnor_actions_orchestrator::crate_release_journal::{
@@ -82,7 +88,7 @@ fn prior_upload_recovery_reobserves_registry_without_writes()
     Ok(())
 }
 
-fn assert_prior_observation_states(
+pub(super) fn assert_prior_observation_states(
     input: &velnor_actions_orchestrator::crate_release_controller::CrateReleaseObservation<
         '_,
         JournalRegistryFake,
@@ -126,7 +132,7 @@ fn assert_prior_observation_states(
     Ok(())
 }
 
-fn append_fixture_prior_upload_observation(
+pub(super) fn append_fixture_prior_upload_observation(
     journal: &JournalRegistryFake,
     receipt: &velnor_actions_orchestrator::crate_release_journal::JournalReceipt,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -174,7 +180,7 @@ fn append_fixture_prior_upload_observation(
     Ok(())
 }
 
-fn verify_reconciled_candidate(
+pub(super) fn verify_reconciled_candidate(
     input: &velnor_actions_orchestrator::crate_release_controller::CrateReleaseObservation<
         '_,
         JournalRegistryFake,
@@ -252,7 +258,7 @@ fn verify_reconciled_candidate(
 }
 
 #[test]
-fn reconciled_candidate_allows_verified_state_without_mutation_history()
+pub(super) fn reconciled_candidate_allows_verified_state_without_mutation_history()
 -> Result<(), Box<dyn std::error::Error>> {
     use velnor_actions_orchestrator::crate_release_controller::{
         CrateReleaseObservation, derive_reconciled_candidate,
@@ -290,4 +296,3 @@ fn reconciled_candidate_allows_verified_state_without_mutation_history()
     assert_eq!(journal.refs.borrow().len(), before);
     Ok(())
 }
-
