@@ -13,9 +13,11 @@ use velnor_actions_contract::workflow::{ProducerKind, SOURCES_PRODUCER_JOB_ID};
 use velnor_actions_contract::{
     CRATE_JOB_ID_PREFIX, Job, PLAN_JOB_ID, StepKind, StepRole, TOFU_JOB_ID_PREFIX, WorkflowPolicy,
 };
+use velnor_actions_mise::{PinnedTool, ToolCatalog};
 use velnor_actions_orchestrator::{
     WasteFinding, WasteRule, finalized_jobs, prepare, waste_findings,
 };
+use velnor_actions_workflow_renderer::steps::check_mbx_gating;
 
 use super::one_job_per_crate::mbx_repo_for;
 use super::tools_producers::{identity_digest, is_tools_producer};
@@ -36,6 +38,10 @@ const OTHER_LANE_USES: &str = TOOLS_CACHE_PRELUDE_USES[1];
 const OTHER_LANE_RUNS_ON: &str = "ubuntu-24.04";
 
 pub(super) fn lane_jobs() -> Result<BTreeMap<String, Job>, Box<dyn Error>> {
+    Ok(lane_jobs_with_catalog()?.0)
+}
+
+fn lane_jobs_with_catalog() -> Result<(BTreeMap<String, Job>, ToolCatalog), Box<dyn Error>> {
     let repo = mbx_repo_for(true, WorkflowPolicy::VelnorRepositoryV1)?;
     let root = repo.path();
     for (dir, name) in [
@@ -54,7 +60,8 @@ pub(super) fn lane_jobs() -> Result<BTreeMap<String, Job>, Box<dyn Error>> {
         root.join("mise.lock"),
         include_str!("../../../../mise.lock"),
     )?;
-    Ok(finalized_jobs(&prepare(root)?)?)
+    let prepared = prepare(root)?;
+    Ok((finalized_jobs(&prepared)?, prepared.emission_catalog()))
 }
 
 fn is_lane_job(id: &str, job: &Job) -> bool {
@@ -241,5 +248,74 @@ fn w7_exempts_the_plan_and_the_sources_producer() -> Result<(), Box<dyn Error>> 
         );
     }
     assert_eq!(waste_findings(&jobs), Vec::new());
+    Ok(())
+}
+
+#[test]
+fn a_prebuilt_image_job_shares_the_lane_identity() -> Result<(), Box<dyn Error>> {
+    let repo = mbx_repo_for(false, WorkflowPolicy::ConsumerV1)?;
+    let root = repo.path();
+    fs::write(root.join("src/main.rs"), "fn main() {}\n")?;
+    workflow_configuration_fixture::write_root_cargo_lock(root, &["demo"])?;
+    fs::create_dir_all(root.join("docker"))?;
+    fs::write(
+        root.join("docker/Dockerfile"),
+        "FROM scratch\nCOPY app /app\n",
+    )?;
+    let mut config = fs::read_to_string(root.join(".velnor/config.toml"))?;
+    config.push_str(
+        "\n[[images]]\nid = \"app\"\nrepository = \"ghcr.io/acme/app\"\ndockerfile = \"docker/Dockerfile\"\ncontext = \"docker\"\nplatforms = [\"linux_amd64\"]\n\n[images.prebuilt]\nkind = \"cargo_bin\"\npackage = \"demo\"\nbin = \"demo\"\nstage = \"docker/app\"\n",
+    );
+    fs::write(root.join(".velnor/config.toml"), config)?;
+    workflow_configuration_fixture::git(&["add", "-A"], root)?;
+    let jobs = finalized_jobs(&prepare(root)?)?;
+    assert_eq!(of(&jobs, WasteRule::SplitToolsIdentity), Vec::new());
+    let image = jobs.get("image-app-amd64").ok_or("no image job")?;
+    let image_digest = identity_digest(image).ok_or("image job has no tools identity")?;
+    let lane = jobs
+        .iter()
+        .find(|(id, job)| id.starts_with(CRATE_JOB_ID_PREFIX) && is_lane_job(id, job))
+        .ok_or("no rust crate job")?
+        .1;
+    assert_eq!(Some(image_digest), identity_digest(lane));
+    assert_eq!(image.runs_on, lane.runs_on);
+    Ok(())
+}
+
+#[test]
+fn an_install_only_mbx_selector_must_equal_the_catalog_version() -> Result<(), Box<dyn Error>> {
+    let (jobs, catalog) = lane_jobs_with_catalog()?;
+    let reference = catalog.version(PinnedTool::MrBoxington).to_owned();
+    let (id, job) = jobs
+        .iter()
+        .find(|(_, job)| {
+            job.steps.iter().any(|step| {
+                step.role == Some(StepRole::PreparePinnedTools)
+                    && matches!(&step.kind, StepKind::Shell { run, .. } if run.iter().any(|word| word.contains("mr-boxington@")))
+            })
+        })
+        .ok_or("no job installs mr-boxington through the pinned tools step")?;
+    let one = BTreeMap::from([(id.clone(), job.clone())]);
+    check_mbx_gating(&one, &BTreeMap::new(), &catalog)?;
+    let mut stale = job.clone();
+    for step in &mut stale.steps {
+        if let (Some(StepRole::PreparePinnedTools), StepKind::Shell { run, .. }) =
+            (&step.role, &mut step.kind)
+        {
+            for word in run.iter_mut() {
+                *word = word.replace(&reference, "0.0.1");
+            }
+        }
+    }
+    let message = check_mbx_gating(
+        &BTreeMap::from([(id.clone(), stale)]),
+        &BTreeMap::new(),
+        &catalog,
+    )
+    .err()
+    .ok_or("a stale mr-boxington selector was accepted")?
+    .to_string();
+    assert!(message.contains("mbx_mise_selector_forbidden"), "{message}");
+    assert!(message.contains(id.as_str()), "{message}");
     Ok(())
 }

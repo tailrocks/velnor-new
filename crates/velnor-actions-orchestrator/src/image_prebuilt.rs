@@ -23,6 +23,7 @@ pub(crate) fn steps(
     let PrebuiltInputs {
         discovery,
         catalog,
+        lane,
         fetch_roots,
         acquire,
         private,
@@ -56,12 +57,11 @@ pub(crate) fn steps(
     let source_steps = crate::source_prep::fetch_steps_for_crate(catalog, &roots, false)?;
     let mut steps = vec![
         crate::workflow::verify_restored_rust_step(catalog),
-        crate::matrix_step::prepare_crate_tools_step(
-            catalog,
-            &crate::matrix_step::LaneTools::rust(catalog),
-        )?,
-        crate::workflow::verify_rust_manifest_step(catalog),
+        crate::matrix_step::prepare_crate_tools_step(catalog, lane)?,
     ];
+    steps.extend(crate::matrix_step::verify_validators_step(catalog, lane));
+    steps.push(crate::workflow::prepare_rust_components_step(catalog)?);
+    steps.push(crate::workflow::verify_rust_manifest_step(catalog));
     steps.extend(crate::source_cache::restore_step_for_crate(&roots, true)?);
     let block = match private {
         Some(private) => private.steps_for_roots(&roots)?,
