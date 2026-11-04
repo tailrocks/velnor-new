@@ -39,7 +39,13 @@ and overlaps the independent checks.
 - Clippy and Documentation compile in their own Cargo target lanes
   (`target/velnor-clippy`, `target/velnor-doc`, seeded from the
   dependency-seed family) so Cargo's target-directory lock never serializes test execution
-  and doctests behind them. Tests and doctests reuse the built executables.
+  behind them. Doctests compile in their own lane `target/velnor-doctest`, which is
+  never seeded. Tests reuse the built executables. Amended for decision X70
+  (owner standing grant 2026-11-02, velnor-fast-ci GOAL.md, decisions.tsv X70):
+  doctests used to share `target/` with the tests, and a replay by one lane
+  removed outputs that a concurrent doctest run still read. The amendment
+  restores the invariant in `docs/proposed/parallelism-and-selection-contract.md:220`
+  that concurrent Cargo writers use different target directories.
 - `workflow.crate_timeout_minutes` bounds the one crate job (decision 2).
 - The pinned jactionlint parses and validates the native step keys (every
   member and the body-less `wait-all` join) with no ignore pattern

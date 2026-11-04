@@ -180,6 +180,15 @@ pub fn concurrent_target_lane(kind: &str) -> Option<&'static str> {
     match TaskKind::parse(kind) {
         Ok(TaskKind::Clippy) => Some("velnor-clippy"),
         Ok(TaskKind::Doc) => Some("velnor-doc"),
+        Ok(TaskKind::Doctest) => Some("velnor-doctest"),
+        _ => None,
+    }
+}
+
+#[must_use]
+pub fn check_target_lane(kind: &str) -> Option<&'static str> {
+    match TaskKind::parse(kind) {
+        Ok(TaskKind::Clippy | TaskKind::Doc) => concurrent_target_lane(kind),
         _ => None,
     }
 }

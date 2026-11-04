@@ -182,10 +182,7 @@ fn assert_rust_owner_job<'a>(
         )
     })?;
     assert_eq!(documentation_manifest, clippy_manifest);
-    let (clippy_target, documentation_target) = lane_targets_for_fixture_manifest(clippy_manifest)?;
-    assert_eq!(clippy.4, Some(clippy_target));
-    assert_eq!(documentation.4, Some(documentation_target));
-    assert_ne!(clippy.4, documentation.4);
+    assert_lane_targets(id, &task_steps, clippy_manifest)?;
 
     let job_yaml = rendered_job_block(workflow, id)?;
     let parallel_count = task_steps.iter().filter(|step| step.3).count();
@@ -199,14 +196,57 @@ fn assert_rust_owner_job<'a>(
     Ok(())
 }
 
+type TaskStep<'a> = (usize, &'a str, &'a str, bool, Option<&'a str>);
+
+fn assert_lane_targets(
+    id: &str,
+    task_steps: &[TaskStep<'_>],
+    workspace_manifest: &str,
+) -> Result<(), Box<dyn Error>> {
+    let find = |name: &str| {
+        task_steps
+            .iter()
+            .find(|step| step.2 == name)
+            .ok_or_else(|| format!("{id} has no {name} task"))
+    };
+    let (clippy_target, documentation_target, doctest_target) =
+        lane_targets_for_fixture_manifest(workspace_manifest)?;
+    assert_eq!(find("Clippy")?.4, Some(clippy_target));
+    assert_eq!(find("Documentation")?.4, Some(documentation_target));
+    assert_eq!(find("Doctests")?.4, Some(doctest_target));
+    for shared in ["Build test executables", "Unit and integration tests"] {
+        assert_eq!(
+            find(shared)?.4,
+            None,
+            "{id} {shared} stays on the shared target"
+        );
+    }
+    let compiling_targets: Vec<&str> = task_steps
+        .iter()
+        .filter(|step| step.3 && step.2 != "Format")
+        .map(|step| step.4.unwrap_or("shared"))
+        .collect();
+    assert_eq!(
+        compiling_targets.iter().collect::<BTreeSet<_>>().len(),
+        compiling_targets.len(),
+        "{id} concurrent Cargo writers share a target directory: {compiling_targets:?}"
+    );
+    Ok(())
+}
+
 fn lane_targets_for_fixture_manifest(
     manifest: &str,
-) -> Result<(&'static str, &'static str), Box<dyn Error>> {
+) -> Result<(&'static str, &'static str, &'static str), Box<dyn Error>> {
     match manifest {
-        "Cargo.toml" => Ok(("target/velnor-clippy", "target/velnor-doc")),
+        "Cargo.toml" => Ok((
+            "target/velnor-clippy",
+            "target/velnor-doc",
+            "target/velnor-doctest",
+        )),
         "crates/nested/Cargo.toml" => Ok((
             "crates/nested/target/velnor-clippy",
             "crates/nested/target/velnor-doc",
+            "crates/nested/target/velnor-doctest",
         )),
         _ => Err(format!("unexpected fixture workspace manifest: {manifest}").into()),
     }

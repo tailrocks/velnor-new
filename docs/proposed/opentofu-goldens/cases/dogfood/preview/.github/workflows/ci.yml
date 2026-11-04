@@ -669,7 +669,7 @@ jobs:
       - name: Doctests
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-80206e1459f93379de042b3e4fb36f13799b6973e308ba60efda9f003ba1f00f"}
+        with: {"digest": "b3-7b9b572f2fc5fbd2e47d3eb4d0d68e5904d2102142b7ad692a7a49a442b09a7a"}
       - name: Documentation
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
@@ -763,7 +763,7 @@ jobs:
       - name: Doctests
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-e48e44d2a3770c05763b26e146dc7f951096a81a7f3f2b3a3bf511a908a232dc"}
+        with: {"digest": "b3-c83f097948ab9fea355e49b6224f35ce79911f51bc7d452d477225b41c29d746"}
       - name: Documentation
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
@@ -833,7 +833,7 @@ jobs:
       - name: Doctests
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-4a3037c400168e37f3cec9287730e7260ac182fe76d631d02236ada966bcb569"}
+        with: {"digest": "b3-8dd4214ac99b4d0bb01f2b5516b6fd0edd93dc9bc4017176c704fa1687cd64e8"}
       - name: Documentation
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
@@ -990,7 +990,7 @@ jobs:
       - name: Doctests
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-82376774e94979f540a8f09e7418d8c86f4e4a0c6574af0964aa1208a367b2d5"}
+        with: {"digest": "b3-714953866702946f11f225f7bff838bd1625a7eb762154ff98d96e32c58d2005"}
       - name: Documentation
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
@@ -1060,7 +1060,7 @@ jobs:
       - name: Doctests
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-438eefe1d5fc24e8141284e01928da0eac11173b3a719a111f9b185a7a9c3949"}
+        with: {"digest": "b3-823332f768933aaecf0425fa8cd478c64079edfe24b87e28b8f6f5bb8256fc65"}
       - name: Documentation
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
@@ -1130,7 +1130,7 @@ jobs:
       - name: Doctests
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-e7789b4e3e2eff8a6ab5807ea87c1e183496b720af48a4a239da13e98b2175a0"}
+        with: {"digest": "b3-edfe8ce12bef8e1c8e226307a9b9eea41aaee5f404c82cc73561513bf12d8142"}
       - name: Documentation
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
@@ -1215,7 +1215,7 @@ jobs:
       - name: Doctests
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-a2180f33c88389f121a877c4c34583cb95a58030b851649d68a4a10254331b86"}
+        with: {"digest": "b3-1d6ab45eb0dc94a8326f2584854bb00557c30bd3d46afc63215a0357da159b64"}
       - name: Documentation
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
@@ -1302,7 +1302,7 @@ jobs:
       - name: Doctests
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-4fe7e79bd0c1d6710e331fec778dd049fb1f9ccf3e546149649a5e6f1aed59ca"}
+        with: {"digest": "b3-3d03b5844b2d209063e61b00fa2a57540c1b0f72b871b2e66618c2faff6e54ad"}
       - name: Documentation
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
@@ -1376,7 +1376,7 @@ jobs:
       - name: Doctests
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-2c3f91f74130d45013544e5fd49f1648167d9a2f38e90564e2d66398c19e07b2"}
+        with: {"digest": "b3-9ac56aba691bb478949ed24253442676f10c8a969fabbad71578990a47968397"}
       - name: Documentation
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
@@ -1446,7 +1446,7 @@ jobs:
       - name: Doctests
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-d5eae810bdd1824fbe6e20dbaf0e450fd2e70a7e73cca69ce79132ed5aa1ebd7"}
+        with: {"digest": "b3-cfc3fd4b4f8d311fa42c730e7a99d83c0e96f1fff80853feadc3faba46764318"}
       - name: Documentation
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
@@ -1520,7 +1520,7 @@ jobs:
       - name: Doctests
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-b96bc890e471c3d2d40d307920de920903c3e799e00de6c6574b73b98b1b146f"}
+        with: {"digest": "b3-51b8a083d8ebeea997bf6cdfa005792a0e5d6ae7d58fc8f7fe2fb07e5b11c6ad"}
       - name: Documentation
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
@@ -1609,7 +1609,7 @@ jobs:
       - name: Doctests
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-66b3edeb6be073d7f0ec37c329fcaa0be8cfdc46a7be61737215e396bf3c64b9"}
+        with: {"digest": "b3-a32ca261890fa37523682b29d2a0040691829011a3578566d0ebabcf82929f67"}
       - name: Documentation
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
@@ -1749,7 +1749,7 @@ jobs:
       - name: Doctests
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-1b3264c9425a6155c56efb2fd20190d5d68b02508e86cabb86b5473b339d50c7"}
+        with: {"digest": "b3-bbaa129b89357754733f5d6013ef1336bd3bc2854be84075206b07a4d87e354c"}
       - name: Documentation
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
@@ -1819,7 +1819,7 @@ jobs:
       - name: Doctests
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-05b81f43aa3ab9898ef586f207c33504be3fdb7df3252ea6d57b7497eafe5a5f"}
+        with: {"digest": "b3-496334997d6104165c172b740d360501116e2fa8676c3f276c81d2e32b80dee6"}
       - name: Documentation
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
@@ -1889,7 +1889,7 @@ jobs:
       - name: Doctests
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-90279a14f00db90d5ff646cc8156af2b47a82894f036a626b3c235ca8c057959"}
+        with: {"digest": "b3-61809f54acd9e5583b195cec8790da8ba9fd4521bb3ce791ed80ed146d1826e3"}
       - name: Documentation
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
@@ -1963,7 +1963,7 @@ jobs:
       - name: Doctests
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-6f96d352c5816e3569382507bf13312db1385c82cd8ee8d4b015da3cf36a563d"}
+        with: {"digest": "b3-4996763e652938b096c3a8146b0b494e74403be9fd73338209ea314a4400923c"}
       - name: Documentation
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
