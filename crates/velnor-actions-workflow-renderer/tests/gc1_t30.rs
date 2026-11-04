@@ -62,13 +62,6 @@ fn shell_script(step: &Step) -> Result<&str, Box<dyn Error>> {
     }
 }
 
-fn action_with(step: &Step) -> Result<&BTreeMap<String, String>, Box<dyn Error>> {
-    match &step.kind {
-        StepKind::Action { with, .. } => Ok(with),
-        _ => Err(fail("expected an action step")),
-    }
-}
-
 fn check_shell_syntax(step: &Step, label: &str) -> Result<(), Box<dyn Error>> {
     let script = shell_script(step)?;
     let output = std::process::Command::new("sh")

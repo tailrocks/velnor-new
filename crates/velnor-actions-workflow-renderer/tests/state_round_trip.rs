@@ -83,13 +83,14 @@ fn seal(
     let mut rows = gh.rows()?;
     let mut entries: Vec<(String, u64)> = std::mem::take(&mut rows);
     entries.push((key.clone(), id));
-    let text: String = entries
+    let text = entries
         .iter()
         .map(|(entry, entry_id)| {
             let entry_size = if *entry_id == id { size } else { 1 };
             format!("{AT} {MAIN} {entry} {entry_id} {entry_size}\n")
         })
-        .collect();
+        .collect::<Vec<String>>()
+        .concat();
     std::fs::write(PathBuf::from(gh.dir()).join("list"), text)?;
     gh.artifacts(&[7001])?;
     run_bind(scene, gh, job, &key)?;
@@ -131,6 +132,104 @@ fn restore(scene: &Scene, cache: &Cache, id: u64) -> Result<(), Box<dyn Error>> 
     Ok(())
 }
 
+struct Runs<'a> {
+    scene: &'a Scene,
+    gh: &'a Gh,
+    cache: &'a Cache,
+    job: &'a Job,
+    scope: &'a str,
+}
+
+fn second_run(runs: &Runs<'_>, first: &str, first_prefix: &str) -> Result<(), Box<dyn Error>> {
+    let Runs {
+        scene,
+        gh,
+        cache,
+        scope,
+        ..
+    } = runs;
+    fresh_runner(scene)?;
+    if plan(scene, gh, first_prefix, scope)? != "false"
+        || selected(scene, ROOT)? != [first.to_owned()]
+    {
+        return Err(fail(
+            "run 2 must select the attested entry and skip the producer",
+        ));
+    }
+    scene.discover_with(&[("VELNOR_STATE_ATTESTED", first)])?;
+    if scene.output_value("restore_key")? != first || scene.output_value("exact")? != "true" {
+        return Err(fail("run 2 must restore the attested key exactly"));
+    }
+    restore(scene, cache, 20)?;
+    scene.recover_selected(first, first, &[], None)?;
+    let record = std::fs::read_to_string(scene.recovery_record())?;
+    if !record.contains("decision=exact-hit")
+        || scene.store_files()?.is_empty()
+        || scene.output_value("producer_skip")? != "true"
+    {
+        return Err(fail(&format!(
+            "run 2 did not import the first run's state: {record}"
+        )));
+    }
+
+    Ok(())
+}
+
+fn third_run(
+    runs: &Runs<'_>,
+    first: &str,
+    first_prefix: &str,
+) -> Result<(String, String), Box<dyn Error>> {
+    let Runs {
+        scene,
+        gh,
+        cache,
+        job,
+        scope,
+    } = runs;
+    fresh_runner(scene)?;
+    let changed = digest('3');
+    let second_prefix = format!(
+        "{}{changed}-",
+        &first_prefix[..first_prefix.len() - DEFAULT_SNAPSHOT.len() - 1]
+    );
+    if plan(scene, gh, &second_prefix, scope)? != "true" {
+        return Err(fail("run 3 must be eligible after a snapshot change"));
+    }
+    scene.discover_with(&[
+        ("VELNOR_STATE_ATTESTED", first),
+        ("VELNOR_STATE_SNAPSHOT", changed.as_str()),
+    ])?;
+    if scene.output_value("restore_key")? != first || scene.output_value("exact")? != "false" {
+        return Err(fail("run 3 must fall back to the predecessor"));
+    }
+    restore(scene, cache, 20)?;
+    scene.recover_selected(first, first, &[], None)?;
+    let record = std::fs::read_to_string(scene.recovery_record())?;
+    if !record.contains("decision=predecessor-fallback")
+        || scene.output_value("producer_skip")? != "false"
+    {
+        return Err(fail(&format!("run 3 lost its warm start: {record}")));
+    }
+    scene.mark_producer()?;
+    scene.export(&[(EXPORT_MARK_ENV, "gen2")])?;
+    let second = seal(scene, gh, cache, job, &second_prefix, 21)?;
+    if gh
+        .rows()?
+        .iter()
+        .map(|(k, _)| k.as_str())
+        .collect::<Vec<_>>()
+        != [second.as_str()]
+    {
+        return Err(fail("run 3 must leave exactly the new generation"));
+    }
+    if !gh.log().contains("delete cache 20\n") {
+        return Err(fail("run 3 did not delete the superseded generation"));
+    }
+
+    Ok((second, second_prefix))
+}
+
 #[test]
 fn second_run_restores_what_the_first_run_attested() -> Result<(), Box<dyn Error>> {
     let scene = Scene::new("round-trip", crate::gc1_t53::scripts()?)?;
@@ -163,70 +262,15 @@ fn second_run_restores_what_the_first_run_attested() -> Result<(), Box<dyn Error
         return Err(fail("run 1 must leave exactly one entry"));
     }
 
-    fresh_runner(&scene)?;
-    if plan(&scene, &gh, &first_prefix, &scope)? != "false"
-        || selected(&scene, ROOT)? != [first.clone()]
-    {
-        return Err(fail(
-            "run 2 must select the attested entry and skip the producer",
-        ));
-    }
-    scene.discover_with(&[("VELNOR_STATE_ATTESTED", first.as_str())])?;
-    if scene.output_value("restore_key")? != first || scene.output_value("exact")? != "true" {
-        return Err(fail("run 2 must restore the attested key exactly"));
-    }
-    restore(&scene, &cache, 20)?;
-    scene.recover_selected(&first, &first, &[], None)?;
-    let record = std::fs::read_to_string(scene.recovery_record())?;
-    if !record.contains("decision=exact-hit")
-        || scene.store_files()?.is_empty()
-        || scene.output_value("producer_skip")? != "true"
-    {
-        return Err(fail(&format!(
-            "run 2 did not import the first run's state: {record}"
-        )));
-    }
-
-    fresh_runner(&scene)?;
-    let changed = digest('3');
-    let second_prefix = format!(
-        "{}{changed}-",
-        &first_prefix[..first_prefix.len() - DEFAULT_SNAPSHOT.len() - 1]
-    );
-    if plan(&scene, &gh, &second_prefix, &scope)? != "true" {
-        return Err(fail("run 3 must be eligible after a snapshot change"));
-    }
-    scene.discover_with(&[
-        ("VELNOR_STATE_ATTESTED", first.as_str()),
-        ("VELNOR_STATE_SNAPSHOT", changed.as_str()),
-    ])?;
-    if scene.output_value("restore_key")? != first || scene.output_value("exact")? != "false" {
-        return Err(fail("run 3 must fall back to the predecessor"));
-    }
-    restore(&scene, &cache, 20)?;
-    scene.recover_selected(&first, &first, &[], None)?;
-    let record = std::fs::read_to_string(scene.recovery_record())?;
-    if !record.contains("decision=predecessor-fallback")
-        || scene.output_value("producer_skip")? != "false"
-    {
-        return Err(fail(&format!("run 3 lost its warm start: {record}")));
-    }
-    scene.mark_producer()?;
-    scene.export(&[(EXPORT_MARK_ENV, "gen2")])?;
-    let second = seal(&scene, &gh, &cache, &job, &second_prefix, 21)?;
-    if gh
-        .rows()?
-        .iter()
-        .map(|(k, _)| k.as_str())
-        .collect::<Vec<_>>()
-        != [second.as_str()]
-    {
-        return Err(fail("run 3 must leave exactly the new generation"));
-    }
-    if !gh.log().contains("delete cache 20\n") {
-        return Err(fail("run 3 did not delete the superseded generation"));
-    }
-
+    let runs = Runs {
+        scene: &scene,
+        gh: &gh,
+        cache: &cache,
+        job: &job,
+        scope: &scope,
+    };
+    second_run(&runs, &first, &first_prefix)?;
+    let (_, second_prefix) = third_run(&runs, &first, &first_prefix)?;
     gh.list(&[])?;
     fresh_runner(&scene)?;
     if plan(&scene, &gh, &second_prefix, &scope)? != "true" {

@@ -30,7 +30,6 @@ const MBX_VERSION: &str = "1.91.0";
 const RUST_VERSION: &str = "1.89.0";
 const NEXTEST_VERSION: &str = "0.9.151";
 const RECOVER_STEP: &str = "Recover state snapshot";
-const EXPORT_STEP: &str = "Publish state snapshot";
 
 fn fail(message: &str) -> Box<dyn Error> {
     io::Error::other(message).into()
@@ -49,25 +48,6 @@ fn forbid(haystack: &str, needle: &str, label: &str) -> Result<(), Box<dyn Error
         Err(fail(&format!("{label} kept:{needle}")))
     } else {
         Ok(())
-    }
-}
-
-fn require_order(
-    haystack: &str,
-    first: &str,
-    second: &str,
-    label: &str,
-) -> Result<(), Box<dyn Error>> {
-    let first_pos = haystack
-        .find(first)
-        .ok_or_else(|| fail(&format!("{label} lost:{first}")))?;
-    let second_pos = haystack
-        .find(second)
-        .ok_or_else(|| fail(&format!("{label} lost:{second}")))?;
-    if first_pos < second_pos {
-        Ok(())
-    } else {
-        Err(fail(&format!("{label} misordered:{first}:{second}")))
     }
 }
 
