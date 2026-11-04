@@ -33,6 +33,7 @@ mod crate_release_archive;
 pub mod crate_release_controller;
 pub mod crate_release_github;
 pub mod crate_release_http;
+pub mod crate_release_pr_artifact;
 pub mod crate_release_registry;
 mod crate_release_runtime;
 mod crate_release_semver;

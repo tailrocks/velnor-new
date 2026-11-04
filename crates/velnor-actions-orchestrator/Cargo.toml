@@ -34,6 +34,10 @@ name = "crate_release_github_public"
 path = "tests/crate_release_github_public.rs"
 
 [[test]]
+name = "crate_release_pr_artifact_public"
+path = "tests/crate_release_pr_artifact_public.rs"
+
+[[test]]
 name = "crate_source_public"
 path = "tests/crate_source_public.rs"
 
