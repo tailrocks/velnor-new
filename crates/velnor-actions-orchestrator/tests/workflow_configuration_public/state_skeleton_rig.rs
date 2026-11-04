@@ -16,10 +16,11 @@ use velnor_actions_workflow_renderer::state_seal::skeleton::{
 
 pub(super) const HASH: &str = "0123456789abcdef";
 pub(super) const OTHER_HASH: &str = "fedcba9876543210";
-pub(super) const LANES: [&str; 3] = [
+pub(super) const LANES: [&str; 4] = [
     "target/debug",
     "target/velnor-clippy/debug",
     "target/velnor-doc/debug",
+    "target/velnor-doctest/debug",
 ];
 const MISE_SHIM: &str = "#!/bin/sh\nwhile [ \"$#\" -gt 0 ]; do\n  if [ \"$1\" = \"--\" ]; then shift; break; fi\n  shift\ndone\nif [ \"${1-}\" = cargo ] && [ -n \"${CARGO-}\" ]; then shift; exec \"$CARGO\" \"$@\"; fi\nexec \"$@\"\n";
 

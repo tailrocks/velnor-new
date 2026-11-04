@@ -577,6 +577,11 @@ jobs:
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-27698586a8d8f5a1583cd99f7a62be678c771f9733a5ce40fe2d3d1a5e38d33e"}
+      - name: Doctests
+        background: true
+        if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
+        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
+        with: {"digest": "b3-a32ca261890fa37523682b29d2a0040691829011a3578566d0ebabcf82929f67"}
       - name: Documentation
         background: true
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
@@ -609,6 +614,11 @@ jobs:
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-5b08e7d383fec2811d6921334b9cedfbe4a583439cbfe32788d4b604186b4ed7"}
+      - name: Doctests
+        background: true
+        if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
+        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
+        with: {"digest": "b3-bbaa129b89357754733f5d6013ef1336bd3bc2854be84075206b07a4d87e354c"}
       - name: Documentation
         background: true
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
@@ -625,6 +635,11 @@ jobs:
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-c9ad1fdb570bb03ab744c3782d6b691a5d095ab92acfca81e6ce39bf6d2e02d7"}
+      - name: Doctests
+        background: true
+        if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
+        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
+        with: {"digest": "b3-496334997d6104165c172b740d360501116e2fa8676c3f276c81d2e32b80dee6"}
       - name: Documentation
         background: true
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
@@ -641,6 +656,11 @@ jobs:
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-453d5dbbc394cc4fb51d23f0e715c2b1d25ea68726389ec26c64d21a9c170562"}
+      - name: Doctests
+        background: true
+        if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
+        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
+        with: {"digest": "b3-61809f54acd9e5583b195cec8790da8ba9fd4521bb3ce791ed80ed146d1826e3"}
       - name: Documentation
         background: true
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
@@ -657,6 +677,11 @@ jobs:
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-1c767304176d57ba72dee2af06b2cad679c44ff46914ebe04aa19a11cd9d9ab2"}
+      - name: Doctests
+        background: true
+        if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
+        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
+        with: {"digest": "b3-4996763e652938b096c3a8146b0b494e74403be9fd73338209ea314a4400923c"}
       - name: Documentation
         background: true
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
@@ -676,6 +701,11 @@ jobs:
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-27698586a8d8f5a1583cd99f7a62be678c771f9733a5ce40fe2d3d1a5e38d33e"}
+      - name: Doctests
+        background: true
+        if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
+        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
+        with: {"digest": "b3-a32ca261890fa37523682b29d2a0040691829011a3578566d0ebabcf82929f67"}
       - name: Documentation
         background: true
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
@@ -708,6 +738,11 @@ jobs:
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-5b08e7d383fec2811d6921334b9cedfbe4a583439cbfe32788d4b604186b4ed7"}
+      - name: Doctests
+        background: true
+        if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
+        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
+        with: {"digest": "b3-bbaa129b89357754733f5d6013ef1336bd3bc2854be84075206b07a4d87e354c"}
       - name: Documentation
         background: true
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
@@ -724,6 +759,11 @@ jobs:
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-c9ad1fdb570bb03ab744c3782d6b691a5d095ab92acfca81e6ce39bf6d2e02d7"}
+      - name: Doctests
+        background: true
+        if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
+        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
+        with: {"digest": "b3-496334997d6104165c172b740d360501116e2fa8676c3f276c81d2e32b80dee6"}
       - name: Documentation
         background: true
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
@@ -740,6 +780,11 @@ jobs:
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-453d5dbbc394cc4fb51d23f0e715c2b1d25ea68726389ec26c64d21a9c170562"}
+      - name: Doctests
+        background: true
+        if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
+        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
+        with: {"digest": "b3-61809f54acd9e5583b195cec8790da8ba9fd4521bb3ce791ed80ed146d1826e3"}
       - name: Documentation
         background: true
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
@@ -756,6 +801,11 @@ jobs:
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-1c767304176d57ba72dee2af06b2cad679c44ff46914ebe04aa19a11cd9d9ab2"}
+      - name: Doctests
+        background: true
+        if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
+        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
+        with: {"digest": "b3-4996763e652938b096c3a8146b0b494e74403be9fd73338209ea314a4400923c"}
       - name: Documentation
         background: true
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
@@ -996,6 +1046,11 @@ jobs:
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-1ea73c9afabe472a278252d3ca53094adc9b85b25378a4391c94c2cb0c135589"}
+      - name: Doctests
+        background: true
+        if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
+        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
+        with: {"digest": "b3-7b9b572f2fc5fbd2e47d3eb4d0d68e5904d2102142b7ad692a7a49a442b09a7a"}
       - name: Documentation
         background: true
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
@@ -1012,6 +1067,11 @@ jobs:
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-d2ac4204ae08d3169276d402d3b46da66383a7ab21f067e8d21d214f4051c167"}
+      - name: Doctests
+        background: true
+        if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
+        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
+        with: {"digest": "b3-c83f097948ab9fea355e49b6224f35ce79911f51bc7d452d477225b41c29d746"}
       - name: Documentation
         background: true
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
@@ -1028,6 +1088,11 @@ jobs:
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-caee46d1356bdd9d85c580b5c7d56ec9839b6b047908fce9fc7854d565ff7f2f"}
+      - name: Doctests
+        background: true
+        if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
+        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
+        with: {"digest": "b3-8dd4214ac99b4d0bb01f2b5516b6fd0edd93dc9bc4017176c704fa1687cd64e8"}
       - name: Documentation
         background: true
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
@@ -1060,6 +1125,11 @@ jobs:
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-7a806cf4f58f22997895bc68e9f1352b0a3b62efbac16efc29282884babf26bd"}
+      - name: Doctests
+        background: true
+        if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
+        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
+        with: {"digest": "b3-714953866702946f11f225f7bff838bd1625a7eb762154ff98d96e32c58d2005"}
       - name: Documentation
         background: true
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
@@ -1076,6 +1146,11 @@ jobs:
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-43042c0677eedb286f7603a36e7638d58983e59559a6b437a70ccdb388efab9d"}
+      - name: Doctests
+        background: true
+        if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
+        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
+        with: {"digest": "b3-823332f768933aaecf0425fa8cd478c64079edfe24b87e28b8f6f5bb8256fc65"}
       - name: Documentation
         background: true
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
@@ -1092,6 +1167,11 @@ jobs:
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-93ddaa7e9d1205f23d5de7cd349b822dfc660e6bb1b035cc64f4fd86d2b0c3b4"}
+      - name: Doctests
+        background: true
+        if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
+        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
+        with: {"digest": "b3-edfe8ce12bef8e1c8e226307a9b9eea41aaee5f404c82cc73561513bf12d8142"}
       - name: Documentation
         background: true
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
@@ -1108,6 +1188,11 @@ jobs:
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-06e63359b3ac9ea1538cb68219f2f5214bc3889399f032b9cd5cffbc3af3e0de"}
+      - name: Doctests
+        background: true
+        if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
+        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
+        with: {"digest": "b3-1d6ab45eb0dc94a8326f2584854bb00557c30bd3d46afc63215a0357da159b64"}
       - name: Documentation
         background: true
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
@@ -1124,6 +1209,11 @@ jobs:
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-1f087d64cdc850c9a54cbb5c687164ecbcc9bb6cd5a23aafb25e4949416d97f0"}
+      - name: Doctests
+        background: true
+        if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
+        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
+        with: {"digest": "b3-3d03b5844b2d209063e61b00fa2a57540c1b0f72b871b2e66618c2faff6e54ad"}
       - name: Documentation
         background: true
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
@@ -1140,6 +1230,11 @@ jobs:
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-7797a79c94bec58af70c7c6724740a54ad155feb1672c4de9ffb4e5f7cc076bd"}
+      - name: Doctests
+        background: true
+        if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
+        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
+        with: {"digest": "b3-9ac56aba691bb478949ed24253442676f10c8a969fabbad71578990a47968397"}
       - name: Documentation
         background: true
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
@@ -1156,6 +1251,11 @@ jobs:
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-a63253391d1fbdfda2ea66c3b08404b429138217443d29835e09c2a586e9de43"}
+      - name: Doctests
+        background: true
+        if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
+        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
+        with: {"digest": "b3-cfc3fd4b4f8d311fa42c730e7a99d83c0e96f1fff80853feadc3faba46764318"}
       - name: Documentation
         background: true
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
@@ -1172,6 +1272,11 @@ jobs:
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-94490c835d235f8cdbf41e9416f061d4c668f100158a07c6439f374bab0bb7b9"}
+      - name: Doctests
+        background: true
+        if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
+        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
+        with: {"digest": "b3-51b8a083d8ebeea997bf6cdfa005792a0e5d6ae7d58fc8f7fe2fb07e5b11c6ad"}
       - name: Documentation
         background: true
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
@@ -1191,6 +1296,11 @@ jobs:
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-1ea73c9afabe472a278252d3ca53094adc9b85b25378a4391c94c2cb0c135589"}
+      - name: Doctests
+        background: true
+        if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
+        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
+        with: {"digest": "b3-7b9b572f2fc5fbd2e47d3eb4d0d68e5904d2102142b7ad692a7a49a442b09a7a"}
       - name: Documentation
         background: true
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
@@ -1207,6 +1317,11 @@ jobs:
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-d2ac4204ae08d3169276d402d3b46da66383a7ab21f067e8d21d214f4051c167"}
+      - name: Doctests
+        background: true
+        if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
+        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
+        with: {"digest": "b3-c83f097948ab9fea355e49b6224f35ce79911f51bc7d452d477225b41c29d746"}
       - name: Documentation
         background: true
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
@@ -1223,6 +1338,11 @@ jobs:
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-caee46d1356bdd9d85c580b5c7d56ec9839b6b047908fce9fc7854d565ff7f2f"}
+      - name: Doctests
+        background: true
+        if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
+        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
+        with: {"digest": "b3-8dd4214ac99b4d0bb01f2b5516b6fd0edd93dc9bc4017176c704fa1687cd64e8"}
       - name: Documentation
         background: true
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
@@ -1255,6 +1375,11 @@ jobs:
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-7a806cf4f58f22997895bc68e9f1352b0a3b62efbac16efc29282884babf26bd"}
+      - name: Doctests
+        background: true
+        if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
+        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
+        with: {"digest": "b3-714953866702946f11f225f7bff838bd1625a7eb762154ff98d96e32c58d2005"}
       - name: Documentation
         background: true
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
@@ -1271,6 +1396,11 @@ jobs:
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-43042c0677eedb286f7603a36e7638d58983e59559a6b437a70ccdb388efab9d"}
+      - name: Doctests
+        background: true
+        if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
+        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
+        with: {"digest": "b3-823332f768933aaecf0425fa8cd478c64079edfe24b87e28b8f6f5bb8256fc65"}
       - name: Documentation
         background: true
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
@@ -1287,6 +1417,11 @@ jobs:
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-93ddaa7e9d1205f23d5de7cd349b822dfc660e6bb1b035cc64f4fd86d2b0c3b4"}
+      - name: Doctests
+        background: true
+        if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
+        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
+        with: {"digest": "b3-edfe8ce12bef8e1c8e226307a9b9eea41aaee5f404c82cc73561513bf12d8142"}
       - name: Documentation
         background: true
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
@@ -1303,6 +1438,11 @@ jobs:
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-06e63359b3ac9ea1538cb68219f2f5214bc3889399f032b9cd5cffbc3af3e0de"}
+      - name: Doctests
+        background: true
+        if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
+        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
+        with: {"digest": "b3-1d6ab45eb0dc94a8326f2584854bb00557c30bd3d46afc63215a0357da159b64"}
       - name: Documentation
         background: true
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
@@ -1319,6 +1459,11 @@ jobs:
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-1f087d64cdc850c9a54cbb5c687164ecbcc9bb6cd5a23aafb25e4949416d97f0"}
+      - name: Doctests
+        background: true
+        if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
+        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
+        with: {"digest": "b3-3d03b5844b2d209063e61b00fa2a57540c1b0f72b871b2e66618c2faff6e54ad"}
       - name: Documentation
         background: true
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
@@ -1335,6 +1480,11 @@ jobs:
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-7797a79c94bec58af70c7c6724740a54ad155feb1672c4de9ffb4e5f7cc076bd"}
+      - name: Doctests
+        background: true
+        if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
+        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
+        with: {"digest": "b3-9ac56aba691bb478949ed24253442676f10c8a969fabbad71578990a47968397"}
       - name: Documentation
         background: true
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
@@ -1351,6 +1501,11 @@ jobs:
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-a63253391d1fbdfda2ea66c3b08404b429138217443d29835e09c2a586e9de43"}
+      - name: Doctests
+        background: true
+        if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
+        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
+        with: {"digest": "b3-cfc3fd4b4f8d311fa42c730e7a99d83c0e96f1fff80853feadc3faba46764318"}
       - name: Documentation
         background: true
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
@@ -1367,6 +1522,11 @@ jobs:
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-94490c835d235f8cdbf41e9416f061d4c668f100158a07c6439f374bab0bb7b9"}
+      - name: Doctests
+        background: true
+        if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
+        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
+        with: {"digest": "b3-51b8a083d8ebeea997bf6cdfa005792a0e5d6ae7d58fc8f7fe2fb07e5b11c6ad"}
       - name: Documentation
         background: true
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
