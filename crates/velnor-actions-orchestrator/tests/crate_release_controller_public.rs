@@ -782,24 +782,34 @@ fn receipt_acquire_requires_current_approval_and_matching_evidence()
     );
     fs::remove_file(runner.path().join("velnor-crate-release-receipt.json"))?;
     check_receipt_revalidation(&stage, &github, &registry, &receipt, source.path())?;
+    check_receipt_denials(&stage, &github, &registry, &receipt, source.path())
+}
+
+fn check_receipt_denials(
+    stage: &crate::crate_release_tool_artifact::ToolchainStageRequest<'_>,
+    github: &Github,
+    registry: &Registry,
+    receipt: &crate::crate_release_controller::CrateReleaseAdmissionReceipt,
+    source: &Path,
+) -> Result<(), Box<dyn std::error::Error>> {
     let reconcile = || {
-        velnor_actions_orchestrator::crate_release_tool_artifact::acquire_reconciliation_receipt_artifact(&stage, &github, &registry, &github, source.path())
+        velnor_actions_orchestrator::crate_release_tool_artifact::acquire_reconciliation_receipt_artifact(stage, github, registry, github, source)
     };
     github.tag_exists.set(true);
     reconcile()?;
-    fs::remove_file(runner.path().join("velnor-crate-release-receipt.json"))?;
+    fs::remove_file(stage.runner_temp.join("velnor-crate-release-receipt.json"))?;
     github.tag_wrong.set(true);
     assert!(reconcile().is_err());
     github.tag_wrong.set(false);
     registry.inconsistent.set(true);
     assert!(
         !velnor_actions_orchestrator::crate_release_controller::validate_reconciliation_receipt(
-            &receipt,
-            &intent,
-            &request,
-            &github,
-            &registry,
-            source.path(),
+            receipt,
+            stage.intent,
+            stage.github,
+            github,
+            registry,
+            source,
             test_git(),
         )?
     );
@@ -812,14 +822,24 @@ fn receipt_acquire_requires_current_approval_and_matching_evidence()
     github.owner_match.set(true);
     registry.absent.set(true);
     github.tag_exists.set(false);
-    *github.tool_archive.borrow_mut() = receipt_zip(&serde_json::to_vec_pretty(&receipt)?)?;
-    assert!(acquire_receipt_artifact(&stage, &github, &registry, &github, source.path()).is_err());
-    *github.tool_archive.borrow_mut() = receipt_zip(&serde_json::to_vec(&receipt)?)?;
-    github.mutate_after_download.set(1);
-    assert!(acquire_receipt_artifact(&stage, &github, &registry, &github, source.path()).is_err());
+    *github.tool_archive.borrow_mut() = receipt_zip(&serde_json::to_vec_pretty(receipt)?)?;
     assert!(
-        !runner
-            .path()
+        crate::crate_release_tool_artifact::fixture_acquire_receipt(
+            stage, github, registry, github, source
+        )
+        .is_err()
+    );
+    *github.tool_archive.borrow_mut() = receipt_zip(&serde_json::to_vec(receipt)?)?;
+    github.mutate_after_download.set(1);
+    assert!(
+        crate::crate_release_tool_artifact::fixture_acquire_receipt(
+            stage, github, registry, github, source
+        )
+        .is_err()
+    );
+    assert!(
+        !stage
+            .runner_temp
             .join("velnor-crate-release-receipt.json")
             .exists()
     );
@@ -1834,30 +1854,16 @@ fn check_upload_authorization(
     use super::observation::record_admitted_upload_intent;
     use crate::crate_release_controller::verify_and_record_upload_intent;
     use crate::crate_release_journal::{JournalMutationPhase, inspect_journal_mutation};
-    let (admission, intent, request, github, registry, root, journal, identity) = (
+    let (admission, github, registry, root, journal, identity) = (
         obs.admission,
-        obs.intent,
-        obs.request,
         obs.github,
         obs.registry,
         obs.source,
         obs.journal,
         obs.identity,
     );
-    let prove_package = |package| {
-        fixture_verify_release_package(
-            admission,
-            intent,
-            request,
-            github,
-            registry,
-            root,
-            package,
-            test_git(),
-        )
-    };
-    let prove = || prove_package("demo");
-    assert!(prove_package("other").is_err());
+    let prove = || prove_upload_fixture(obs, "demo");
+    assert!(prove_upload_fixture(obs, "other").is_err());
     let verified = prove()?;
     github.approved.set(false);
     assert!(
@@ -1917,6 +1923,27 @@ fn check_upload_authorization(
         JournalMutationPhase::Intended
     ));
     Ok(())
+}
+
+fn prove_upload_fixture(
+    obs: &crate::crate_release_controller::CrateReleaseObservation<
+        '_,
+        JournalRegistryFake,
+        Github,
+        Registry,
+    >,
+    package: &str,
+) -> Result<crate::crate_release_controller::VerifiedReleasePackage, OrchestratorError> {
+    fixture_verify_release_package(
+        obs.admission,
+        obs.intent,
+        obs.request,
+        obs.github,
+        obs.registry,
+        obs.source,
+        package,
+        test_git(),
+    )
 }
 
 fn check_upload_identity_rejections(
