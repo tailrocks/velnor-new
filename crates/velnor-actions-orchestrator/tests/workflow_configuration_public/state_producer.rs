@@ -19,7 +19,7 @@ use velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
 use super::seed_off::seed_repo;
 use super::state_producer_eval::{seal_runs, simulate};
 use super::support::rendered_job_block;
-use super::waste_oracle::files_of;
+use super::waste_oracle::{Files, files_of};
 
 pub(super) const ROOTS: [(&str, &str); 2] = [
     ("state-producer-crates-a-b", "state-seal-crates-a-b"),
@@ -38,6 +38,7 @@ pub(super) struct Built {
     pub(super) jobs: BTreeMap<String, Job>,
     pub(super) ci: String,
     pub(super) seal: String,
+    pub(super) files: Files,
 }
 
 pub(super) fn text_of<'a>(built: &'a Built, id: &str) -> &'a str {
@@ -67,6 +68,7 @@ pub(super) fn build() -> Result<Built, Box<dyn Error>> {
         jobs,
         ci,
         seal,
+        files,
     })
 }
 

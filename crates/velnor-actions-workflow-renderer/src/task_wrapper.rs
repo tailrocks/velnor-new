@@ -3,6 +3,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use velnor_actions_contract::workflow::cache_family::S256;
 use velnor_actions_contract::workflow::state_seal::STATE_PRODUCER_LANE_CONDITION;
 use velnor_actions_contract::{
     Job, RunsOn, ScaleSetSelector, Step, StepKind, StepRole, TASK_EXECUTION_MANIFEST_PATH,
@@ -76,6 +77,18 @@ pub(crate) fn factor_obligation_steps(
     let factored = replace_task_steps(jobs, &collected.eligible, &shape_ids)?;
     let files = render_task_files(&shape_ids, collected.manifest_tasks, generator_version)?;
     Ok((factored, files))
+}
+
+pub fn declared_task_wrapper_digest(
+    helper_version: &str,
+    generator_version: &str,
+) -> Result<S256, RenderError> {
+    let shape_ids = index_shapes(BTreeSet::from([Shape {
+        helper_version: helper_version.to_owned(),
+    }]));
+    let files = render_task_files(&shape_ids, BTreeMap::new(), generator_version)?;
+    let bytes: String = files.into_iter().map(|file| file.bytes).collect();
+    Ok(S256::of(bytes.as_bytes()))
 }
 
 fn collect_task_executions<'a>(

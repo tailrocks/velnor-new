@@ -30,6 +30,7 @@ pub struct StateRootPlan {
     pub root: String,
     pub pathspecs: Vec<String>,
     pub task_set: S256,
+    pub producer_recipe: S256,
 }
 
 pub fn cache_keys_step(
@@ -235,7 +236,14 @@ fn state_commands(ordinal: usize, plan: &StateRootPlan) -> Result<Vec<String>, P
     );
     script.push(format!(
         "if (cd \"$GITHUB_WORKSPACE\" && git ls-files -s -- {specs}) > \"{file}\" 2>/dev/null; then s256 \"{file}\"; ri_h=\"s256-$h\"; {}; printf '%s\\n' \"{output}=$snap\" >> \"$GITHUB_OUTPUT\"; else printf '%s\\n' '::warning::state snapshot unavailable for root {}'; fi",
-        snapshot_lines("$d", "$lock_h", "$ri_h", &plan.task_set.to_string()).join("; "),
+        snapshot_lines(
+            "$d",
+            "$lock_h",
+            "$ri_h",
+            &plan.task_set.to_string(),
+            &plan.producer_recipe.to_string(),
+        )
+        .join("; "),
         slug,
     ));
     script.extend(crate::cache_steps::compat_head_lines(

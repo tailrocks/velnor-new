@@ -239,16 +239,23 @@ pub struct StateSnapshot {
     pub lock: S256,
     pub rust_inputs: S256,
     pub task_set: S256,
+    pub producer_recipe: S256,
 }
 
 impl StateSnapshot {
-    pub const LINE_NAMES: [&'static str; 3] = ["lock", "rust_inputs", "task_set"];
+    pub const LINE_NAMES: [&'static str; 4] =
+        ["lock", "rust_inputs", "task_set", "producer_recipe"];
 
     #[must_use]
     pub fn lines(&self) -> Vec<String> {
         Self::LINE_NAMES
             .iter()
-            .zip([self.lock, self.rust_inputs, self.task_set])
+            .zip([
+                self.lock,
+                self.rust_inputs,
+                self.task_set,
+                self.producer_recipe,
+            ])
             .map(|(name, digest)| format!("{name}={digest}"))
             .collect()
     }

@@ -190,7 +190,13 @@ fn snapshot_source(unit: StateUnit, root_env: &str) -> Vec<String> {
             )];
             lines.extend(lock_digest_lines("$d", "$lock", "lock_h"));
             lines.extend(absent_digest_lines("$d", "absent_h"));
-            lines.extend(snapshot_lines("$d", "$lock_h", "$absent_h", "$absent_h"));
+            lines.extend(snapshot_lines(
+                "$d",
+                "$lock_h",
+                "$absent_h",
+                "$absent_h",
+                "$absent_h",
+            ));
             lines
         }
     }
