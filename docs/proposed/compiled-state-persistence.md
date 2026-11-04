@@ -264,6 +264,10 @@ The attestation unit (SEC-7) shipped the P and A split first with a throwaway ca
 
 The main push [run 41798794144](https://github.com/tailrocks/velnor-new/actions/runs/41798794144) (head `c9f5f0a815`) was the first hosted run of the writer. It wrote and attested two entries (measured): the root entry at 1,258,969,937 B and the `crates/velnor-runner` entry at 607,368,491 B. Total cache usage after the run was 2,561,071,061 B.
 
+The next main push, [run 41803715425](https://github.com/tailrocks/velnor-new/actions/runs/41803715425) (head `f499aaf43d`), was the first warm run (measured). All 18 crate jobs restored the attested state. Registry misses were 0 in every job. Registry units not looked up were 0 in 13 jobs and 2 to 5 in the other 5. Workspace misses were 1 to 2 per job, with 0 not looked up. The producers skipped on an exact attested hit. Doctests failed in 3 jobs because a replay in the test lane raced them. #494 fixed that race with a separate doctest target directory.
+
+[Run 41815723168](https://github.com/tailrocks/velnor-new/actions/runs/41815723168) (head `198fd26118`) was the first green warm push (measured). Registry misses were 0 to 2 and units not looked up 0 to 5 per job. Workspace units not looked up were 0. Workspace misses appeared only in dependents of the crate that the push changed.
+
 ## Pull-request-scoped state: last
 
 After the producer exists, a pull request run restores the trusted entry that `main` last saved, because a pull request reads the default branch's scope. Reuse for a pull request is therefore limited to units that `main` already produced. A pull request that changes a workspace crate recompiles that crate and everything that depends on it on every push, and a pull request that changes `Cargo.lock` misses the changed units. This page does not promise sequential reuse across pushes to one pull request until pull-request-scoped state lands.
