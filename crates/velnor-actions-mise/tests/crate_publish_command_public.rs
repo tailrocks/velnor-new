@@ -10,25 +10,7 @@ fn crate_update_exposes_no_credentials_or_write_handles() -> Result<(), Box<dyn 
 {
     use std::os::unix::fs::PermissionsExt;
     if std::env::var_os("VELNOR_TEST_UPDATE_CHILD").is_none() {
-        let mut child = std::process::Command::new(std::env::current_exe()?);
-        child.args([
-            "--exact",
-            "crate_update_exposes_no_credentials_or_write_handles",
-        ]);
-        child.env("VELNOR_TEST_UPDATE_CHILD", "1");
-        for key in [
-            "GIT_TOKEN",
-            "GITHUB_TOKEN",
-            "GH_TOKEN",
-            "CARGO_REGISTRY_TOKEN",
-            "ACTIONS_ID_TOKEN_REQUEST_TOKEN",
-            "GITHUB_OUTPUT",
-            "HTTP_PROXY",
-        ] {
-            child.env(key, "fixture");
-        }
-        assert!(child.status()?.success());
-        return Ok(());
+        return run_update_with_poisoned_environment();
     }
     let root = tempfile::tempdir()?;
     let source = root.path().join("source");
@@ -104,6 +86,29 @@ fn crate_update_exposes_no_credentials_or_write_handles() -> Result<(), Box<dyn 
     let mut hostile = env;
     hostile.push(("GIT_TOKEN".into(), "fixture".into()));
     assert!(IsolatedCommand::crate_update(&program, args, &source, &hostile).is_err());
+    Ok(())
+}
+
+#[cfg(unix)]
+fn run_update_with_poisoned_environment() -> Result<(), Box<dyn std::error::Error>> {
+    let mut child = std::process::Command::new(std::env::current_exe()?);
+    child.args([
+        "--exact",
+        "crate_update_exposes_no_credentials_or_write_handles",
+    ]);
+    child.env("VELNOR_TEST_UPDATE_CHILD", "1");
+    for key in [
+        "GIT_TOKEN",
+        "GITHUB_TOKEN",
+        "GH_TOKEN",
+        "CARGO_REGISTRY_TOKEN",
+        "ACTIONS_ID_TOKEN_REQUEST_TOKEN",
+        "GITHUB_OUTPUT",
+        "HTTP_PROXY",
+    ] {
+        child.env(key, "fixture");
+    }
+    assert!(child.status()?.success());
     Ok(())
 }
 
