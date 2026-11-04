@@ -17,6 +17,8 @@ use crate::gc1_scene::{Scene, fail};
 
 pub(crate) const REPO: &str = "tailrocks/velnor-new";
 pub(crate) const SIGNER: &str = "tailrocks/velnor-new/.github/workflows/state-seal.yml";
+pub(crate) const OTHER_WORKFLOW_REF: &str =
+    "tailrocks/velnor-new/.github/workflows/ci.yml@refs/heads/main";
 pub(crate) const MAIN: &str = "refs/heads/main";
 pub(crate) const PULL: &str = "refs/pull/9/merge";
 pub(crate) const ENTRY_ID: u64 = 7001;
@@ -354,10 +356,7 @@ pub(crate) fn run_select(
     let mut env = vec![
         ("FAKE_GH_DIR", dir.as_str()),
         ("GITHUB_REPOSITORY", REPO),
-        (
-            "GITHUB_WORKFLOW_REF",
-            "tailrocks/velnor-new/.github/workflows/ci.yml@refs/heads/main",
-        ),
+        ("GITHUB_WORKFLOW_REF", OTHER_WORKFLOW_REF),
         ("GH_TOKEN", "fixture"),
     ];
     env.extend_from_slice(extra);

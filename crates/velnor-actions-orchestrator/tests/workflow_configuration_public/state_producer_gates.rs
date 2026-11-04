@@ -9,7 +9,7 @@ use velnor_actions_contract::workflow::state_seal::{
 use velnor_actions_contract::{Job, Step, StepRole};
 
 use super::state_producer::{ROOTS, build, job, text_of};
-use super::state_producer_eval::{seal_runs, seal_steps_run, simulate};
+use super::state_producer_eval::{seal_runs, seal_steps_run, simulate, simulate_run};
 use super::support::rendered_job_block;
 
 #[test]
@@ -180,6 +180,35 @@ fn a_stale_head_saves_binds_and_attests_nothing() -> Result<(), Box<dyn Error>> 
                 "{seal_id}: a stale head still ran {role:?}"
             );
         }
+    }
+    Ok(())
+}
+
+#[test]
+fn a_stale_head_runs_no_producer_lane_and_the_seal_does_not_run() -> Result<(), Box<dyn Error>> {
+    let built = build()?;
+    for (producer_id, seal_id) in ROOTS {
+        let producer = job(&built.jobs, producer_id)?;
+        let seal = job(&built.jobs, seal_id)?;
+        assert_eq!(
+            producer.steps.first().and_then(|step| step.role),
+            Some(StepRole::StateSealTip),
+            "{producer_id} does not check the tip first"
+        );
+        let (current, lanes) = simulate_run(producer, None, false, false)?;
+        assert_ne!(lanes, 0, "{producer_id}: a current head ran no lane");
+        assert_eq!(current.get("produced").map(String::as_str), Some("true"));
+        let (stale, lanes) = simulate_run(producer, None, false, true)?;
+        assert_eq!(lanes, 0, "{producer_id}: a stale head ran lanes");
+        assert_eq!(
+            stale.get("produced").map(String::as_str),
+            Some(""),
+            "{producer_id}: a stale head set produced"
+        );
+        assert!(
+            !seal_runs(seal, producer_id, &stale)?,
+            "{producer_id}: a stale head was sealed"
+        );
     }
     Ok(())
 }

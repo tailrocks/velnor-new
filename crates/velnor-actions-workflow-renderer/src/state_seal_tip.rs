@@ -17,13 +17,25 @@ const DEFAULT_REF_EXPR: &str =
     "${{ format('refs/heads/{0}', github.event.repository.default_branch) }}";
 
 pub fn state_seal_tip_step() -> Result<Step, RenderError> {
+    let mut step = tip_step(&format!(
+        "printf '%s\\n' '{STATE_SEAL_TIP_OUTPUT}=false' >> \"$GITHUB_OUTPUT\"; exit 0"
+    ))?;
+    step.condition = Some(STATE_SEAL_TIP_CONDITION.to_owned());
+    Ok(step)
+}
+
+pub fn state_producer_tip_step() -> Result<Step, RenderError> {
+    tip_step("exit 1")
+}
+
+fn tip_step(skip: &str) -> Result<Step, RenderError> {
     let script = format!(
         r#"set -eu
 case "$RUNNER_TEMP" in /*) ;; *) printf '%s\n' 'RUNNER_TEMP must be absolute' >&2; exit 1 ;; esac
 d="$RUNNER_TEMP/velnor/state-tip"
 rm -rf "$d"
 mkdir -p "$d"
-refuse() {{ printf '%s\n' "::warning::cache_unavailable: state seal tip check refused ($1)"; printf '%s\n' '{STATE_SEAL_TIP_OUTPUT}=false' >> "$GITHUB_OUTPUT"; exit 0; }}
+refuse() {{ printf '%s\n' "::warning::cache_unavailable: state seal tip check refused ($1)"; {skip}; }}
 head="${{GITHUB_SHA-}}"
 ref="${{{DEFAULT_REF_ENV}-}}"
 repo="${{GITHUB_REPOSITORY-}}"
@@ -37,8 +49,8 @@ if [ "$tip" = "$head" ]; then
   printf '%s\n' '{STATE_SEAL_TIP_OUTPUT}=true' >> "$GITHUB_OUTPUT"
   printf 'velnor: state seal head %s is the tip of %s\n' "$head" "$ref"
 else
-  printf '%s\n' '{STATE_SEAL_TIP_OUTPUT}=false' >> "$GITHUB_OUTPUT"
   printf 'velnor: state seal skipped: head %s is behind %s at %s; nothing saved or attested\n' "$head" "$ref" "$tip"
+  {skip}
 fi
 "#,
     );
@@ -56,6 +68,5 @@ fi
     )?;
     step.id = Some(StepId::StateSealTip);
     step.role = Some(StepRole::StateSealTip);
-    step.condition = Some(STATE_SEAL_TIP_CONDITION.to_owned());
     Ok(step)
 }

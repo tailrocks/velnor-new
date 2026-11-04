@@ -281,7 +281,7 @@ fn only_attest_jobs_hold_actions_write() -> Result<(), Box<dyn Error>> {
         let permissions = effective(job(&built.jobs, seal)?, &built.ir);
         assert_eq!(permissions.id_token, PermissionLevel::Write);
         assert_eq!(permissions.attest, PermissionLevel::Write);
-        assert_eq!(permissions.contents, PermissionLevel::None);
+        assert_eq!(permissions.contents, PermissionLevel::Read);
         assert_eq!(permissions.pull_requests, PermissionLevel::None);
         assert_eq!(permissions.packages, PermissionLevel::None);
         assert!(

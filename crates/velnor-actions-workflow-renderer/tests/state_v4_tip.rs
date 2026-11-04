@@ -3,7 +3,8 @@
 
 use std::error::Error;
 
-use velnor_actions_contract::{Job, StepKind, StepRole};
+use velnor_actions_contract::{Job, Step, StepKind, StepRole};
+use velnor_actions_workflow_renderer::state_seal::tip::state_producer_tip_step;
 
 use crate::gc1_scene::{Scene, fail};
 use crate::gc1_seal_support::{Gh, MAIN, REPO};
@@ -13,7 +14,10 @@ const HEAD: &str = "1111111111111111111111111111111111111111";
 const NEWER: &str = "2222222222222222222222222222222222222222";
 
 fn run_tip(scene: &Scene, gh: &Gh, job: &Job, head: &str) -> Result<String, Box<dyn Error>> {
-    let step = step_of(job, StepRole::StateSealTip)?;
+    run_step(scene, gh, step_of(job, StepRole::StateSealTip)?, head)
+}
+
+fn run_step(scene: &Scene, gh: &Gh, step: &Step, head: &str) -> Result<String, Box<dyn Error>> {
     let StepKind::Shell { run, .. } = &step.kind else {
         return Err(fail("the tip step is not a shell step"));
     };
@@ -73,6 +77,37 @@ fn only_the_head_that_is_still_the_tip_of_main_may_be_sealed() -> Result<(), Box
         return Err(fail(&format!(
             "a malformed tip was treated as current: {log}"
         )));
+    }
+    scene.finish()
+}
+
+#[test]
+#[cfg(unix)]
+fn the_producer_stops_before_building_unless_its_head_is_the_tip() -> Result<(), Box<dyn Error>> {
+    let step = state_producer_tip_step()?;
+    let scene = Scene::new("producer-tip", crate::gc1_t53::scripts()?)?;
+    let gh = Gh::install(&scene)?;
+
+    gh.tip(HEAD)?;
+    let log = run_step(&scene, &gh, &step, HEAD)?;
+    if !log.contains("is the tip of") {
+        return Err(fail(&format!("the tip head was stopped: {log}")));
+    }
+
+    gh.tip(NEWER)?;
+    match run_step(&scene, &gh, &step, HEAD) {
+        Err(error) if error.to_string().contains("state seal skipped: head") => {}
+        other => {
+            return Err(fail(&format!(
+                "a head behind the tip kept building: {other:?}"
+            )));
+        }
+    }
+
+    gh.mode("tip_fail")?;
+    match run_step(&scene, &gh, &step, HEAD) {
+        Err(error) if error.to_string().contains("tip_unreadable") => {}
+        other => return Err(fail(&format!("an unreadable tip kept building: {other:?}"))),
     }
     scene.finish()
 }

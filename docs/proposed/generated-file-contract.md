@@ -25,7 +25,7 @@ preserves other repository-owned entries as specified in §3:
     ├── ci.yml                      # both policies; Velnor policy adds campaign inputs
     ├── publish.yml                 # consumer-v1 only, `[[publish.bundles]]` or `registry = "git-tag"`
     ├── qualification.yml           # optional schema 2 workflow selected by configuration
-    ├── state-seal.yml              # push to the default branch only: its own Plan, then every cache writer job (sources, tools, tofu providers, state producers, attest jobs); emitted when the plan has any producer
+    ├── state-seal.yml              # push to the default branch only: its own Plan, then the sources and tools producers, the state producers and the attest jobs; emitted when the plan has any of them. The tofu providers producers stay in `ci.yml`
     ├── release.yml               # velnor-repository-v1, or consumer-v1 with release enabled
     └── suites.yml                  # optional standalone Nextest suite workflow (or `<slug>.yml`)
 ```

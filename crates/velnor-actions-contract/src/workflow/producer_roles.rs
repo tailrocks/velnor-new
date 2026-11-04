@@ -77,6 +77,7 @@ pub(super) fn state_producer_role(role: StepRole) -> bool {
             | StepRole::MbxStats
             | StepRole::MbxBundleExport
             | StepRole::StateSealUpload
+            | StepRole::StateSealTip
             | StepRole::StateProduced
             | StepRole::PrivateTokenMint
             | StepRole::PrivateFetch

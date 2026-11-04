@@ -220,7 +220,7 @@ fn seal_job(
         needs,
         condition: Some(state_seal_condition(&root.producer_id)),
         permissions: Some(Permissions {
-            contents: PermissionLevel::None,
+            contents: PermissionLevel::Read,
             pull_requests: PermissionLevel::None,
             id_token: PermissionLevel::Write,
             actions: PermissionLevel::Write,

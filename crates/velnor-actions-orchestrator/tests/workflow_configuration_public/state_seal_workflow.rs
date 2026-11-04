@@ -155,7 +155,7 @@ fn state_seal_workflow_is_push_only_and_owns_every_writer() -> Result<(), Box<dy
                     "id-token": "write",
                     "attestations": "write",
                     "artifact-metadata": "write",
-                    "contents": "none",
+                    "contents": "read",
                 }),
                 "{id}"
             );
@@ -189,14 +189,25 @@ fn each_producer_runs_on_the_runner_class_of_its_crate_jobs() -> Result<(), Box<
         .filter_map(|(_, job)| job["runs-on"].as_str())
         .collect();
     assert_eq!(crate_runners.len(), 1, "{crate_runners:?}");
+    let mut checked = BTreeSet::new();
     for (id, job) in jobs(&pair.sealed)? {
-        if id.starts_with("state-producer-") {
+        let writer = id.starts_with("state-producer-")
+            || id == "sources-producer"
+            || id.starts_with("tools-producer-");
+        if writer {
             assert_eq!(
                 job["runs-on"].as_str(),
                 crate_runners.iter().next().copied(),
                 "{id}"
             );
+            checked.insert(id.split_inclusive('-').take(2).collect::<String>());
         }
+    }
+    for family in ["state-producer-", "sources-producer", "tools-producer-"] {
+        assert!(
+            checked.iter().any(|id| id.starts_with(family)),
+            "{family} was not checked: {checked:?}"
+        );
     }
     Ok(())
 }
