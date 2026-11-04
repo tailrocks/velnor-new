@@ -30,7 +30,6 @@ fn is_cache_save(role: StepRole) -> bool {
         role,
         StepRole::ToolsCacheSave
             | StepRole::CargoSourcesSave
-            | StepRole::MbxBundleSave
             | StepRole::FamilySave
             | StepRole::TofuProvidersSave
     )

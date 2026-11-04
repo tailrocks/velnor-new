@@ -5,7 +5,7 @@ use std::collections::BTreeSet;
 use std::error::Error;
 
 use velnor_actions_contract::workflow::{DEPENDENCY_SEED_JOB_CONDITION, validate_tools_producer};
-use velnor_actions_contract::{Job, WorkflowPolicy};
+use velnor_actions_contract::{CacheWriter, Job, WorkflowPolicy};
 use velnor_actions_orchestrator::{prepare, render_staged_tree};
 use velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
 
@@ -46,7 +46,11 @@ fn ci_workflow_holds_one_push_only_producer_per_identity_of_every_workflow()
             .lines()
             .find_map(|line| line.strip_prefix("    if: "))
             .ok_or_else(|| format!("{id} has no condition"))?;
-        assert_eq!(condition, DEPENDENCY_SEED_JOB_CONDITION, "{id}");
+        assert_eq!(
+            condition.trim_matches('"'),
+            CacheWriter::ToolsProducer.condition(),
+            "{id}"
+        );
         assert_eq!(block.matches("name: Save Mise tools").count(), 1, "{id}");
     }
     Ok(())

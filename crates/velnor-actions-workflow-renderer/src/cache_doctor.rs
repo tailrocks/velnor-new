@@ -11,14 +11,13 @@ use velnor_actions_contract::workflow::cache_family::{
     is_plan_cache_output,
 };
 use velnor_actions_contract::workflow::cache_family_mbx::{
-    MBX_BUNDLE_KEY_EXPR, MBX_BUNDLE_RESTORE_CONDITION, MBX_BUNDLE_SAVE_CONDITION,
-    MBX_BUNDLE_SAVE_KEY_EXPR,
+    MBX_BUNDLE_KEY_EXPR, MBX_BUNDLE_RESTORE_CONDITION,
 };
 use velnor_actions_contract::workflow::cache_family_steps::{
     STACK_FAMILIES, family_key_expr, family_save_condition,
 };
 use velnor_actions_contract::workflow::state_seal::{
-    STATE_CANARY_SEAL_JOB_ID, STATE_SEAL_KEY_EXPR, STATE_SEAL_SAVE_CONDITION,
+    STATE_SEAL_JOB_ID_PREFIX, STATE_SEAL_KEY_EXPR, STATE_SEAL_SAVE_CONDITION,
 };
 use velnor_actions_contract::workflow::step_identity::TOFU_PROVIDER_ADMISSION_USES;
 use velnor_actions_contract::{Job, PullRequestCachePolicy, Step, StepKind};
@@ -79,6 +78,19 @@ fn doctor(job: &str, problem: &str) -> RenderError {
 
 type CacheInputs<'a> = (&'a str, Option<&'a str>, bool);
 
+pub(crate) struct CacheOp<'a> {
+    pub(crate) step: &'a Step,
+    pub(crate) key: &'a str,
+    pub(crate) save: bool,
+}
+
+pub(crate) fn cache_ops<'a>(id: &'a str, job: &'a Job) -> impl Iterator<Item = CacheOp<'a>> {
+    job.steps.iter().filter_map(move |step| {
+        let (key, _, save) = classify(id, step).ok().flatten()?;
+        Some(CacheOp { step, key, save })
+    })
+}
+
 fn classify<'a>(job: &str, step: &'a Step) -> Result<Option<CacheInputs<'a>>, RenderError> {
     let StepKind::Action { uses, with, .. } = &step.kind else {
         return Ok(None);
@@ -108,7 +120,7 @@ fn family_for_key(key: &str) -> Option<Family> {
     if key == SOURCES_KEY_STEP_EXPR || key == SOURCES_KEY_PLAN_EXPR {
         return Some(Family::Runtime(CacheFamily::Sources));
     }
-    if key == MBX_BUNDLE_KEY_EXPR || key == MBX_BUNDLE_SAVE_KEY_EXPR || key == STATE_SEAL_KEY_EXPR {
+    if key == MBX_BUNDLE_KEY_EXPR || key == STATE_SEAL_KEY_EXPR {
         return Some(Family::Runtime(CacheFamily::MbxBundle));
     }
     if let Some(family) = STACK_FAMILIES
@@ -316,8 +328,7 @@ fn check_save(job: &str, step: &Step, family: Family) -> Result<(), RenderError>
         }
         Family::Runtime(CacheFamily::TofuProviders) => condition == TOFU_PROVIDERS_SAVE_CONDITION,
         Family::Runtime(CacheFamily::MbxBundle) => {
-            condition == MBX_BUNDLE_SAVE_CONDITION
-                || (condition == STATE_SEAL_SAVE_CONDITION && job == STATE_CANARY_SEAL_JOB_ID)
+            condition == STATE_SEAL_SAVE_CONDITION && job.starts_with(STATE_SEAL_JOB_ID_PREFIX)
         }
         Family::Runtime(
             family @ (CacheFamily::BunInstall

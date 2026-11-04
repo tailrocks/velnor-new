@@ -31,6 +31,7 @@ pub mod platform;
 mod producer;
 mod producer_order;
 mod producer_roles;
+mod producer_state;
 pub use producer::{
     DEPENDENCY_SEED_JOB_CONDITION, LANE_SURVIVAL_CONDITION, ProducerKind,
     TOOLS_PRODUCER_INSTALL_CONDITION, validate_sources_producer, validate_tofu_providers_producer,

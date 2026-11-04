@@ -110,7 +110,7 @@ generator_validation = "bootstrap"
 max_parallel_jobs = 2
 crate_timeout_minutes = 5 # default; bounded 1..=360; applies to every Rust crate job and OpenTofu root job
 plan_timeout_minutes = 5 # default; bounded 1..=360; applies to the plan job only
-dependency_seed_timeout_minutes = 30 # default; bounded 1..=360; applies only to MBX dependency-seed jobs
+state_producer_timeout_minutes = 60 # default; bounded 1..=360; applies only to state producer jobs
 checkout_lfs = false # default; `true` fetches Git LFS objects in every generated checkout
 mise_quiet = true # default; `false` drops MISE_QUIET so the mise wrapper-dispatch trace stays visible
 preserve_workflows = [] # optional [".github/workflows/<slug>.yml"] allowlist
@@ -130,7 +130,7 @@ ignore = []
 [stacks.rust]
 toolchain = "1.98.1" # optional exact X.Y.Z override; must agree with rust-toolchain.toml / rust-toolchain when present
 configurations = [{ name = "default", features = ["default"], target = "host" }]
-# dependency_seed = "off" # default "produce"; "off" emits no Dependency seed jobs
+# compiled_state = "off" # default "union"; "off" emits no state producer or state seal jobs
 # seed_parallel_targets = true # default false; see ../implemented/parallel-target-seeding.md
 # clippy_all_features = true # default false; Clippy alone runs --all-features
 # allow_empty_test_suite = true # default false; unsharded nextest tasks emit --no-tests warn; see task-execution-contract.md

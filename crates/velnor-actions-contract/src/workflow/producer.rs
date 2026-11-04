@@ -3,19 +3,18 @@
 
 use super::cache_access::{CacheAccess, CacheWriter, SOURCES_PRODUCER_JOB_ID};
 use super::crate_job::{TOFU_PROVIDERS_PRODUCER_JOB_ID_PREFIX, TOOLS_PRODUCER_JOB_ID_PREFIX};
-use super::producer_order::{
-    sources_order_ok, state_seal_order_ok, tofu_lane_needs_ok, tofu_order_ok, tools_order_ok,
-};
+use super::producer_order::{sources_order_ok, tofu_lane_needs_ok, tofu_order_ok, tools_order_ok};
 use super::producer_roles::{
-    seed_role, sources_role, state_seal_build_role, state_seal_role, tofu_role, tools_role,
+    sources_role, state_producer_role, state_seal_role, tofu_role, tools_role,
 };
+use super::producer_state::{state_producer_shape_ok, state_seal_shape_ok};
 use super::state_seal::{
-    STATE_CANARY_ARTIFACT_OUTPUT, STATE_CANARY_PRODUCER_JOB_ID, STATE_CANARY_SEAL_JOB_ID,
-    STATE_CANARY_UNVERIFIED_TEST,
+    STATE_PRODUCER_ARTIFACT_OUTPUT, STATE_PRODUCER_JOB_ID_PREFIX, STATE_PRODUCER_LANE_CONDITION,
+    STATE_PRODUCER_PRODUCED_OUTPUT, STATE_SEAL_JOB_ID_PREFIX, state_producer_condition,
 };
 use super::step_identity::ToolsRestoreForm;
 use super::step_protocol::ProviderRestoreForm;
-use super::{Job, PLAN_JOB_ID, PermissionLevel, Permissions, StepRole};
+use super::{Job, PermissionLevel, Permissions, Step, StepKind, StepRole};
 use crate::ContractError;
 
 pub const DEPENDENCY_SEED_JOB_CONDITION: &str = "github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true";
@@ -27,32 +26,22 @@ pub const TOOLS_PRODUCER_INSTALL_CONDITION: &str =
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ProducerKind {
-    DependencySeed,
+    StateProducer,
     ToolsIdentity,
     TofuProviders,
     SourcesProducer,
-    StateSealBuild,
     StateSeal,
 }
 
 impl Job {
     #[must_use]
-    pub fn is_dependency_seed(&self) -> bool {
-        self.steps
-            .iter()
-            .any(|step| step.role == Some(StepRole::MbxSeedBuild))
-    }
-
-    #[must_use]
     pub fn producer_kind(&self) -> Option<ProducerKind> {
-        if self.is_dependency_seed() {
-            Some(ProducerKind::DependencySeed)
-        } else if self
+        if self
             .steps
             .iter()
-            .any(|step| step.role == Some(StepRole::StateSealBuild))
+            .any(|step| step.role == Some(StepRole::StateProduced))
         {
-            Some(ProducerKind::StateSealBuild)
+            Some(ProducerKind::StateProducer)
         } else if self
             .steps
             .iter()
@@ -125,25 +114,23 @@ pub(super) fn validate_job(
         || (id == SOURCES_PRODUCER_JOB_ID) != (kind == Some(ProducerKind::SourcesProducer))
         || id.starts_with(TOFU_PROVIDERS_PRODUCER_JOB_ID_PREFIX)
             != (kind == Some(ProducerKind::TofuProviders))
-        || (id == STATE_CANARY_PRODUCER_JOB_ID) != (kind == Some(ProducerKind::StateSealBuild))
-        || (id == STATE_CANARY_SEAL_JOB_ID) != (kind == Some(ProducerKind::StateSeal))
+        || id.starts_with(STATE_PRODUCER_JOB_ID_PREFIX)
+            != (kind == Some(ProducerKind::StateProducer))
+        || id.starts_with(STATE_SEAL_JOB_ID_PREFIX) != (kind == Some(ProducerKind::StateSeal))
     {
         return Err(invalid(id));
     }
     let Some(kind) = kind else {
         return job.cache_access.validate(id, job);
     };
-    let cache_only = kind.condition_ok(job.condition.as_deref())
+    let cache_only = kind.condition_ok(id, job.condition.as_deref())
         && job.environment.is_none()
         && job.check_runner.is_none()
         && job.services.is_empty()
         && kind.outputs_ok(job)
         && kind.permissions_ok(effective)
-        && job
-            .steps
-            .iter()
-            .all(|step| !step.parallel && step.role.is_some_and(|role| kind.allows(role)))
-        && kind.shape_ok(job);
+        && job.steps.iter().all(|step| kind.step_ok(step))
+        && kind.shape_ok(id, job);
     if !cache_only {
         return Err(invalid(id));
     }
@@ -158,7 +145,7 @@ impl ProducerKind {
     #[must_use]
     pub(super) const fn cache_access(self) -> CacheAccess {
         match self {
-            Self::DependencySeed | Self::StateSealBuild => CacheAccess::Read,
+            Self::StateProducer => CacheAccess::Read,
             Self::ToolsIdentity => CacheAccess::Writer(CacheWriter::ToolsProducer),
             Self::TofuProviders => CacheAccess::Writer(CacheWriter::TofuProvidersProducer),
             Self::SourcesProducer => CacheAccess::Writer(CacheWriter::SourcesProducer),
@@ -168,8 +155,10 @@ impl ProducerKind {
 
     fn outputs_ok(self, job: &Job) -> bool {
         match self {
-            Self::StateSealBuild => {
-                job.outputs.len() == 1 && job.outputs.contains_key(STATE_CANARY_ARTIFACT_OUTPUT)
+            Self::StateProducer => {
+                job.outputs.len() == 2
+                    && job.outputs.contains_key(STATE_PRODUCER_ARTIFACT_OUTPUT)
+                    && job.outputs.contains_key(STATE_PRODUCER_PRODUCED_OUTPUT)
             }
             _ => job.outputs.is_empty(),
         }
@@ -184,8 +173,8 @@ impl ProducerKind {
         if self == Self::StateSeal {
             return effective.id_token == PermissionLevel::Write
                 && effective.attest == PermissionLevel::Write
+                && effective.actions == PermissionLevel::Write
                 && effective.contents == PermissionLevel::None
-                && effective.actions == PermissionLevel::Read
                 && effective.pull_requests == PermissionLevel::None
                 && effective.packages == PermissionLevel::None;
         }
@@ -195,38 +184,37 @@ impl ProducerKind {
             && others.iter().all(|level| *level != PermissionLevel::Write)
     }
 
+    fn step_ok(self, step: &Step) -> bool {
+        if matches!(step.kind, StepKind::TaskExecution { .. }) {
+            return self == Self::StateProducer
+                && step.condition.as_deref() == Some(STATE_PRODUCER_LANE_CONDITION);
+        }
+        !step.parallel && step.role.is_some_and(|role| self.allows(role))
+    }
+
     fn allows(self, role: StepRole) -> bool {
         match self {
-            Self::DependencySeed => seed_role(role),
+            Self::StateProducer => state_producer_role(role),
             Self::ToolsIdentity => tools_role(role),
             Self::TofuProviders => tofu_role(role),
             Self::SourcesProducer => sources_role(role),
-            Self::StateSealBuild => state_seal_build_role(role),
             Self::StateSeal => state_seal_role(role),
         }
     }
 
-    fn condition_ok(self, condition: Option<&str>) -> bool {
+    fn condition_ok(self, id: &str, condition: Option<&str>) -> bool {
         match self {
-            Self::SourcesProducer => CacheWriter::SourcesProducer.admits(condition),
-            Self::TofuProviders => CacheWriter::TofuProvidersProducer.admits(condition),
-            Self::DependencySeed | Self::ToolsIdentity => {
-                condition == Some(DEPENDENCY_SEED_JOB_CONDITION)
-            }
-            Self::StateSeal => CacheWriter::StateSeal.admits(condition),
-            Self::StateSealBuild => {
-                condition
-                    == Some(
-                        format!(
-                            "{DEPENDENCY_SEED_JOB_CONDITION} && {STATE_CANARY_UNVERIFIED_TEST}"
-                        )
-                        .as_str(),
-                    )
-            }
+            Self::SourcesProducer => CacheWriter::SourcesProducer.admits(id, condition),
+            Self::TofuProviders => CacheWriter::TofuProvidersProducer.admits(id, condition),
+            Self::ToolsIdentity => CacheWriter::ToolsProducer.admits(id, condition),
+            Self::StateSeal => CacheWriter::StateSeal.admits(id, condition),
+            Self::StateProducer => id
+                .strip_prefix(STATE_PRODUCER_JOB_ID_PREFIX)
+                .is_some_and(|root| condition == Some(state_producer_condition(root).as_str())),
         }
     }
 
-    fn shape_ok(self, job: &Job) -> bool {
+    fn shape_ok(self, id: &str, job: &Job) -> bool {
         let count = |role| {
             job.steps
                 .iter()
@@ -234,13 +222,9 @@ impl ProducerKind {
                 .count()
         };
         match self {
-            Self::DependencySeed => {
-                job.needs == ["plan"]
-                    && count(StepRole::MbxSeedBuild) == 3
-                    && count(StepRole::MbxProducerMark) == 1
-            }
+            Self::StateProducer => state_producer_shape_ok(job),
             Self::ToolsIdentity => {
-                job.needs.is_empty()
+                (job.needs.is_empty() || job.needs == [SOURCES_PRODUCER_JOB_ID])
                     && count(StepRole::Checkout) == 1
                     && count(StepRole::MiseSetup) == 1
                     && count(StepRole::ToolsCacheIdentity) == 1
@@ -257,17 +241,7 @@ impl ProducerKind {
                     && count(StepRole::CargoSourcesFetch) >= 1
                     && sources_order_ok(&job.steps)
             }
-            Self::StateSealBuild => {
-                job.needs == [PLAN_JOB_ID]
-                    && count(StepRole::StateSealBuild) == 1
-                    && count(StepRole::StateSealUpload) == 1
-                    && job.steps.len() == 2
-                    && job.steps[0].role == Some(StepRole::StateSealBuild)
-            }
-            Self::StateSeal => {
-                job.needs == [PLAN_JOB_ID, STATE_CANARY_PRODUCER_JOB_ID]
-                    && state_seal_order_ok(&job.steps)
-            }
+            Self::StateSeal => state_seal_shape_ok(id, job),
             Self::TofuProviders => {
                 tofu_lane_needs_ok(&job.needs)
                     && count(StepRole::Checkout) == 1

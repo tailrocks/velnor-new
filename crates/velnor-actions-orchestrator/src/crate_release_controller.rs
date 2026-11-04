@@ -431,7 +431,6 @@ pub fn wait_for_reconciliation_visibility(
     Err(internal("crate_release_visibility_timeout"))
 }
 
-// SemVer evidence is authenticated separately against a fresh checker run.
 pub(crate) fn same_observed_state(
     left: &CrateReleaseAdmissionReceipt,
     right: &CrateReleaseAdmissionReceipt,

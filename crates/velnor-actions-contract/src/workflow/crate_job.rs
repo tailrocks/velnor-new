@@ -20,8 +20,6 @@ pub const GROUP_READER_SUFFIX: &str = "-read";
 
 pub const GROUP_WRITER_SUFFIX: &str = "-write";
 
-pub const SEED_JOB_ID_PREFIX: &str = "dependency-seed";
-
 pub const TOOLS_PRODUCER_JOB_ID_PREFIX: &str = "tools-producer-";
 
 pub const TOFU_PROVIDERS_PRODUCER_JOB_ID_PREFIX: &str = "providers-producer-";
@@ -216,16 +214,10 @@ impl CrateGroupPlan {
 }
 
 #[must_use]
-pub fn is_seed_job_id(job_id: &str) -> bool {
-    job_id == SEED_JOB_ID_PREFIX
-        || job_id
-            .strip_prefix(SEED_JOB_ID_PREFIX)
-            .is_some_and(|rest| rest.starts_with('-') || rest.starts_with('_'))
-}
-
-#[must_use]
 pub fn is_producer_job_id(job_id: &str) -> bool {
-    is_seed_job_id(job_id)
+    job_id == super::cache_access::SOURCES_PRODUCER_JOB_ID
+        || job_id.starts_with(super::state_seal::STATE_PRODUCER_JOB_ID_PREFIX)
+        || job_id.starts_with(super::state_seal::STATE_SEAL_JOB_ID_PREFIX)
         || job_id.starts_with(TOOLS_PRODUCER_JOB_ID_PREFIX)
         || job_id.starts_with(TOFU_PROVIDERS_PRODUCER_JOB_ID_PREFIX)
 }

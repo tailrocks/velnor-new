@@ -53,6 +53,7 @@ pub mod marker;
 mod matrix;
 mod matrix_output_mode;
 mod mbx_gc_policy;
+pub mod mbx_stats;
 pub mod msrv;
 pub mod native_authority;
 mod native_helper;
@@ -128,6 +129,7 @@ pub mod upgrades;
 mod verifier_shell;
 mod waste_lint;
 mod waste_lint_env;
+mod waste_lint_graph;
 
 pub mod verification_jobs;
 pub mod verifier_builders;

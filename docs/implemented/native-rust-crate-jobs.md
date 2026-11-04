@@ -39,28 +39,38 @@ Nextest data dependency on its build.
 
 Cargo holds a target-directory lock for a whole build. Sharing one target
 directory would serialize the group behind whichever check compiles longest.
-After the sequential build, test execution and doctests reuse the workspace
-target (their Cargo invocations only confirm fresh units). Clippy and
-documentation need check-mode dependency metadata the build does not produce,
-so each compiles in its own lane through `CARGO_TARGET_DIR`:
+After the sequential build, test execution reuses the workspace target. A
+Cargo invocation that finds a unit stale replays or recompiles it and rewrites
+its outputs, so it is a writer. MBX restores replayed outputs as hard links to
+the store object on a filesystem without reflinks, and a restore in one lane
+moves the modification time shared by every link to that object. That makes
+the dependencies look newer to the test runner's Cargo, which replays them
+while a concurrent doctest run still reads the same outputs, and rustdoc fails
+with `extern location for <crate> does not exist`. Every concurrent Cargo
+writer therefore gets its own lane through `CARGO_TARGET_DIR`. Clippy and
+documentation also need check-mode dependency metadata the build does not
+produce:
 
 | Check | Target directory |
 |---|---|
-| Build, tests, doctests | `<workspace>/target` |
+| Build, tests | `<workspace>/target` |
 | Clippy | `<workspace>/target/velnor-clippy` |
+| Doctests | `<workspace>/target/velnor-doctest` |
 | Documentation | `<workspace>/target/velnor-doc` |
 | Format | none (no compilation) |
 
 The lanes live inside the workspace `target/`. Compiled state reaches the next
 run as the opaque `mbx cache export` bundle, not as a `target/` payload. A crate
-job restores the dependency-seed bundle read-only and imports it; it never
-exports or saves. When `dependency_seed` is not `"off"`, the non-crate
-`Dependency seed` job (one per MBX Cargo workspace; protected default-branch
-pushes only; not part of `Required`) compiles the three lanes for `--workspace`
-under the job's `MBX_CACHE_EXPORT_GROUP`, records the producer marker, and
-exports and saves the bundle ([cache decisions](../proposed/cache-decisions.md)
-1 to 3). velnor-new sets `dependency_seed = "off"` (`.velnor/config.toml:40`),
-so nothing saves compiled state there today; see
+job restores the attested state bundle read-only and imports it; it never
+exports or saves. When `compiled_state` is not `"off"`, the non-crate
+`State producer` job (one per MBX Cargo workspace; protected default-branch
+pushes only; not part of `Required`) runs the crate jobs' build, Clippy and
+documentation lane records twice, first over a dependency skeleton at
+`MBX_BUILD_SCRIPT_EXECUTION=1` and then over the real members at `0` (the
+switch between the phases deletes the first phase's task reports, which the
+controller writes once per task), records the producer marker, and exports one
+bundle that the `State seal` job saves and attests ([cache decisions](../proposed/cache-decisions.md) 1 to 3).
+`union` is the default `compiled_state`, so velnor-new sets nothing; see
 [compiled-state persistence](../proposed/compiled-state-persistence.md). MBX shares
 one compiler CPU/memory budget and deduplicates identical in-flight
 compilations across target directories (upstream "Parallel Cargo steps"

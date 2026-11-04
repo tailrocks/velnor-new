@@ -151,7 +151,6 @@ fn finalize_suite_workflow_jobs(
 ) -> Result<(), RenderError> {
     prepare_suite_tools(jobs, spec)?;
     crate::non_input_checkout::exclude_non_inputs(jobs, &spec.non_inputs)?;
-    crate::cache_steps::append_bundle_postludes(jobs)?;
     crate::cache_steps::append_workspace_cleanups(jobs)?;
     crate::waste_lint::bind_and_check(jobs)
 }
@@ -258,7 +257,9 @@ fn extract_suite_job_env(job: &Job, native_mbx: bool) -> BTreeMap<String, String
         }
     }
     if native_mbx {
-        job_env.extend(crate::document_env::mbx_job_env());
+        job_env.extend(crate::document_env::mbx_job_env(
+            velnor_actions_contract::workflow::cache_family::MBX_BSE_CONSUMER,
+        ));
     }
     job_env
 }

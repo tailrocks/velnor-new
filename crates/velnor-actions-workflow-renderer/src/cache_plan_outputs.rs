@@ -9,7 +9,7 @@ use velnor_actions_contract::workflow::cache_family::{
     is_plan_cache_output, is_state_snapshot_output,
 };
 use velnor_actions_contract::workflow::state_seal::{
-    STATE_CANARY_VERIFIED_OUTPUT, is_state_attested_output,
+    is_state_attested_output, is_state_compat_output, is_state_produce_output,
 };
 use velnor_actions_contract::{Job, Step, StepId, StepKind};
 
@@ -51,24 +51,7 @@ pub(crate) fn consumed(jobs: &BTreeMap<String, Job>) -> Result<Vec<(String, Stri
             "plan_cache_output_without_key_step".to_owned(),
         ));
     }
-    let state = names
-        .iter()
-        .filter(|name| is_state_snapshot_output(name))
-        .count();
-    let attested = names
-        .iter()
-        .filter(|name| is_state_attested_output(name))
-        .count();
-    let tofu = names
-        .iter()
-        .filter(|name| {
-            *name != SOURCES_PRODUCE_OUTPUT
-                && *name != STATE_CANARY_VERIFIED_OUTPUT
-                && !PLAN_CACHE_OUTPUTS.iter().any(|(output, _)| output == name)
-        })
-        .count()
-        - state
-        - attested;
+    let (tofu, state, attested) = output_counts(&names);
     if cache_output_reserve_utf16_bytes(tofu, state, attested)
         > PLAN_CACHE_OUTPUTS_RESERVE_UTF16_BYTES
     {
@@ -81,7 +64,7 @@ pub(crate) fn consumed(jobs: &BTreeMap<String, Job>) -> Result<Vec<(String, Stri
         .map(|name| {
             let expression = if name == SOURCES_PRODUCE_OUTPUT {
                 SOURCES_PRODUCE_STEP_EXPR.to_owned()
-            } else if is_state_attested_output(&name) || name == STATE_CANARY_VERIFIED_OUTPUT {
+            } else if is_state_attested_output(&name) || is_state_produce_output(&name) {
                 format!(
                     "${{{{ steps.{}.outputs.{name} }}}}",
                     velnor_actions_contract::StepId::StateSelect.as_str()
@@ -99,6 +82,31 @@ pub(crate) fn consumed(jobs: &BTreeMap<String, Job>) -> Result<Vec<(String, Stri
             (name, expression)
         })
         .collect())
+}
+
+fn output_counts(names: &BTreeSet<String>) -> (usize, usize, usize) {
+    let state = names
+        .iter()
+        .filter(|name| {
+            is_state_snapshot_output(name)
+                || is_state_compat_output(name)
+                || is_state_produce_output(name)
+        })
+        .count();
+    let attested = names
+        .iter()
+        .filter(|name| is_state_attested_output(name))
+        .count();
+    let tofu = names
+        .iter()
+        .filter(|name| {
+            *name != SOURCES_PRODUCE_OUTPUT
+                && !PLAN_CACHE_OUTPUTS.iter().any(|(output, _)| output == name)
+        })
+        .count()
+        - state
+        - attested;
+    (tofu, state, attested)
 }
 
 fn step_texts(step: &Step) -> Vec<&str> {

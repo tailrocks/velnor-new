@@ -12,8 +12,8 @@ pub const fn default_plan_timeout_minutes() -> u16 {
 }
 
 #[must_use]
-pub const fn default_dependency_seed_timeout_minutes() -> u16 {
-    30
+pub const fn default_state_producer_timeout_minutes() -> u16 {
+    60
 }
 
 #[expect(
@@ -36,6 +36,6 @@ pub(super) fn is_default_plan_timeout(value: &u16) -> bool {
     clippy::trivially_copy_pass_by_ref,
     reason = "serde skip_serializing_if requires fn(&u16) -> bool"
 )]
-pub(super) fn is_default_dependency_seed_timeout(value: &u16) -> bool {
-    *value == default_dependency_seed_timeout_minutes()
+pub(super) fn is_default_state_producer_timeout(value: &u16) -> bool {
+    *value == default_state_producer_timeout_minutes()
 }

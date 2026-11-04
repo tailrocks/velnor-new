@@ -22,7 +22,7 @@ pub(super) struct RegisteredSources {
 impl RegisteredSources {
     pub(super) fn new(input: &NativeAuthorityInput<'_>) -> Result<Self, NativeAuthorityError> {
         let roots = seeds::roots(input)?;
-        let seed_ids = seeds::unique_dependency_seed_job_ids(&roots)
+        let seed_ids = seeds::state_producer_job_ids(&roots)?
             .into_iter()
             .zip(roots)
             .map(|(id, root)| (root, id))
@@ -108,7 +108,7 @@ impl RegisteredSources {
                 }
                 Ok(false)
             }
-            LogicalJobSource::DependencySeed { root } => {
+            LogicalJobSource::StateProducer { root } => {
                 if !self.seen_seeds.insert(root.clone())
                     || self.seed_ids.get(root) != Some(&fact.id)
                 {

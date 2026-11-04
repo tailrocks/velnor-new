@@ -3,7 +3,7 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::{DependencySeedMode, RustCrateConfig, Step, WorkflowPolicy};
+use velnor_actions_contract::{CompiledStateMode, RustCrateConfig, Step, WorkflowPolicy};
 use velnor_actions_mise::ToolCatalog;
 
 use crate::discover::Discovery;
@@ -19,7 +19,7 @@ pub(crate) struct CrateJobInputs<'a> {
     pub(crate) max_parallel_jobs: u32,
     pub(crate) timeout: velnor_actions_contract::JobTimeout,
     pub(crate) helper_version: &'a str,
-    pub(crate) dependency_seed: DependencySeedMode,
+    pub(crate) compiled_state: CompiledStateMode,
     pub(crate) seed_parallel_targets: bool,
     pub(crate) crates: &'a BTreeMap<String, RustCrateConfig>,
 }

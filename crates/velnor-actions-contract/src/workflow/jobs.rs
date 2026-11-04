@@ -156,7 +156,9 @@ pub fn validate_job_id(id: &str) -> Result<(), ContractError> {
             format!("bad_job_id:{id}"),
         ));
     }
-    if !is_crate_job_id(id) && id.contains("velnor") {
+    let state_job = id.starts_with(super::state_seal::STATE_PRODUCER_JOB_ID_PREFIX)
+        || id.starts_with(super::state_seal::STATE_SEAL_JOB_ID_PREFIX);
+    if !is_crate_job_id(id) && !state_job && id.contains("velnor") {
         return Err(ContractError::identity(
             "job.id",
             format!("branded_job_id:{id}"),

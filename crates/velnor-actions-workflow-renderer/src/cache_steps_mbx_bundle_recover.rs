@@ -10,7 +10,7 @@ use velnor_actions_contract::workflow::cache_family_mbx::{
     MBX_BUNDLE_IMPORT_CONDITION, MBX_BUNDLE_KEY_EXPR, MBX_BUNDLE_MATCHED_KEY_ENV,
     MBX_BUNDLE_MATCHED_KEY_EXPR, MBX_BUNDLE_PRODUCER_SKIP_OUTPUT, MBX_BUNDLE_RESTORE_KEY_ENV,
 };
-use velnor_actions_contract::{Step, StepRole};
+use velnor_actions_contract::{Step, StepId, StepRole};
 
 use crate::RenderError;
 use crate::state_fragments::S256_FN;
@@ -129,6 +129,7 @@ pub(crate) fn recover_step(
         env,
     )?;
     step.condition = Some(MBX_BUNDLE_IMPORT_CONDITION.to_owned());
+    step.id = Some(StepId::MbxBundleImport);
     step.role = Some(StepRole::MbxBundleImport);
     Ok(step)
 }

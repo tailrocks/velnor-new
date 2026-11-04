@@ -3,7 +3,6 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use velnor_actions_contract::WorkflowPolicy;
 use velnor_actions_contract::workflow::cache_family::{RootSlug, S256, StateUnit};
 use velnor_actions_contract::workflow::cache_family_mbx::{
     MBX_BUNDLE_ROOT_ENV, MBX_BUNDLE_SNAPSHOT_ENV,
@@ -16,8 +15,6 @@ use crate::OrchestratorError;
 use crate::affected_inputs::InputRule;
 use crate::discover::{Discovery, PlannedWorkspace};
 use crate::select_affected::manifest_dir;
-
-const ROOTLESS_SOURCE_DIRS: [&str; 4] = ["src", "tests", "benches", "examples"];
 
 pub(crate) fn plans(
     discovery: &Discovery,
@@ -60,10 +57,7 @@ pub(crate) fn plans(
         .collect()
 }
 
-pub(crate) fn seal_plan(
-    jobs: &BTreeMap<String, Job>,
-    policy: WorkflowPolicy,
-) -> Result<StateSealPlan, OrchestratorError> {
+pub(crate) fn seal_plan(jobs: &BTreeMap<String, Job>) -> Result<StateSealPlan, OrchestratorError> {
     let mut roots: Vec<SealRoot> = Vec::new();
     for job in jobs.values() {
         let Some(root) = union_root(job) else {
@@ -77,10 +71,7 @@ pub(crate) fn seal_plan(
             roots.push(seal);
         }
     }
-    Ok(StateSealPlan {
-        roots,
-        canary: policy == WorkflowPolicy::VelnorRepositoryV1,
-    })
+    Ok(StateSealPlan { roots })
 }
 
 fn union_root(job: &Job) -> Option<String> {
@@ -136,16 +127,44 @@ fn member_specs(workspace: &PlannedWorkspace, specs: &mut BTreeSet<String>) {
         let dir = manifest_dir(&package.manifest);
         if dir.is_empty() {
             specs.insert("Cargo.toml".to_owned());
-            specs.insert("build.rs".to_owned());
-            specs.extend(
-                ROOTLESS_SOURCE_DIRS
-                    .iter()
-                    .map(|name| format!(":(glob){name}/**")),
-            );
         } else {
-            specs.insert(dir);
+            specs.insert(dir.clone());
+        }
+        for target in &package.targets {
+            target_spec(&dir, &target.src_path, specs);
         }
     }
+}
+
+fn normalized(path: &str) -> Option<String> {
+    let mut parts: Vec<&str> = Vec::new();
+    for part in path.split('/') {
+        match part {
+            "" | "." => {}
+            ".." => {
+                parts.pop()?;
+            }
+            other => parts.push(other),
+        }
+    }
+    (!parts.is_empty()).then(|| parts.join("/"))
+}
+
+fn target_spec(package_dir: &str, src_path: &str, specs: &mut BTreeSet<String>) {
+    if src_path.starts_with('/') {
+        return;
+    }
+    let Some(src_path) = normalized(src_path) else {
+        return;
+    };
+    let src_path = src_path.as_str();
+    if !package_dir.is_empty() && src_path.starts_with(&format!("{package_dir}/")) {
+        return;
+    }
+    match src_path.rsplit_once('/') {
+        Some((parent, _)) => specs.insert(format!(":(glob){parent}/**")),
+        None => specs.insert(src_path.to_owned()),
+    };
 }
 
 fn rule_specs(discovery: &Discovery, workspace: &PlannedWorkspace, specs: &mut BTreeSet<String>) {
@@ -170,4 +189,61 @@ fn same_root(workspace_root: &str, root: &str) -> bool {
     let normal = |text: &str| text.trim_matches('/').trim_start_matches("./").to_owned();
     let (left, right) = (normal(workspace_root), normal(root));
     left == right || (left == "." && right.is_empty()) || (left.is_empty() && right == ".")
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::BTreeSet;
+
+    use super::target_spec;
+
+    fn specs(package_dir: &str, paths: &[&str]) -> Vec<String> {
+        let mut specs = BTreeSet::new();
+        for path in paths {
+            target_spec(package_dir, path, &mut specs);
+        }
+        specs.into_iter().collect()
+    }
+
+    #[test]
+    fn root_package_targets_name_their_own_directories_and_the_build_script() {
+        let got = specs(
+            "",
+            &[
+                "src/lib.rs",
+                "src/main.rs",
+                "tools/build.rs",
+                "lib2/extra.rs",
+                "tests/a.rs",
+                "build.rs",
+                "/outside/the/repo.rs",
+                "../outside/the/repo.rs",
+            ],
+        );
+        assert_eq!(
+            got,
+            [
+                ":(glob)lib2/**",
+                ":(glob)src/**",
+                ":(glob)tests/**",
+                ":(glob)tools/**",
+                "build.rs",
+            ]
+        );
+    }
+
+    #[test]
+    fn nested_package_targets_inside_the_package_directory_add_nothing() {
+        assert_eq!(
+            specs(
+                "crates/a",
+                &[
+                    "crates/a/src/lib.rs",
+                    "crates/a/../shared/lib.rs",
+                    "crates/a/./src/x.rs",
+                ]
+            ),
+            [":(glob)crates/shared/**"]
+        );
+    }
 }

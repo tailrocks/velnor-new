@@ -27,7 +27,6 @@ pub(crate) struct Scripts {
     pub(crate) discover: String,
     pub(crate) recover: Rendered,
     pub(crate) export: String,
-    pub(crate) record: String,
 }
 
 pub(crate) struct Scene {
@@ -282,10 +281,6 @@ impl Scene {
     pub(crate) fn export(&self, env: &[(&str, &str)]) -> Result<String, Box<dyn Error>> {
         self.fresh_outputs()?;
         self.run_script(&self.scripts.export, env, None)
-    }
-
-    pub(crate) fn record(&self) -> Result<String, Box<dyn Error>> {
-        self.run_script(&self.scripts.record, &[], None)
     }
 
     pub(crate) fn stub_export(

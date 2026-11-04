@@ -5,7 +5,9 @@ use serde::{Deserialize, Serialize};
 
 use super::cache_family::SOURCES_PRODUCE_PLAN_TEST;
 use super::producer::{DEPENDENCY_SEED_JOB_CONDITION, LANE_SURVIVAL_CONDITION, ProducerKind};
-use super::state_seal::{STATE_CANARY_PRODUCER_JOB_ID, STATE_CANARY_UNVERIFIED_TEST};
+use super::state_seal::{
+    STATE_PRODUCER_JOB_ID_PREFIX, STATE_SEAL_JOB_ID_PREFIX, state_seal_condition,
+};
 use super::{Job, StepKind};
 use crate::ContractError;
 
@@ -35,6 +37,8 @@ pub const QUALIFICATION_CACHE_MODES: [&str; 3] = ["cache", "empty-cache", "mbx-c
 pub const QUALIFICATION_CACHE_GUARD_ID: &str = "cache-default-branch-guard";
 
 pub const QUALIFICATION_CACHE_GUARD_ERROR: &str = "cache_qualification_requires_non_default_branch";
+
+pub const WRITER_ORDER_CONDITION: &str = "!cancelled()";
 
 pub const WRITER_MISE_ENV: [(&str, &str); 2] = [("MISE_NO_CONFIG", "1"), ("MISE_NO_ENV", "1")];
 
@@ -113,7 +117,7 @@ impl CacheAccess {
         if required != self {
             return Err(invalid(id, "not_a_producer"));
         }
-        if !writer.admits(job.condition.as_deref()) {
+        if !writer.admits(id, job.condition.as_deref()) {
             return Err(invalid(id, "not_trusted_gate"));
         }
         for step in &job.steps {
@@ -141,23 +145,31 @@ impl CacheWriter {
     #[must_use]
     pub fn condition(self) -> String {
         match self {
-            Self::ToolsProducer | Self::TofuProvidersProducer => {
+            Self::TofuProvidersProducer | Self::StateSeal => {
                 DEPENDENCY_SEED_JOB_CONDITION.to_owned()
+            }
+            Self::ToolsProducer => {
+                format!("{WRITER_ORDER_CONDITION} && {DEPENDENCY_SEED_JOB_CONDITION}")
             }
             Self::SourcesProducer => {
                 format!("{DEPENDENCY_SEED_JOB_CONDITION} && {SOURCES_PRODUCE_PLAN_TEST}")
             }
-            Self::StateSeal => format!(
-                "{DEPENDENCY_SEED_JOB_CONDITION} && {STATE_CANARY_UNVERIFIED_TEST} && needs.{STATE_CANARY_PRODUCER_JOB_ID}.result == 'success'"
-            ),
         }
     }
 
     #[must_use]
-    pub fn admits(self, condition: Option<&str>) -> bool {
+    pub fn admits(self, id: &str, condition: Option<&str>) -> bool {
         let Some(condition) = condition else {
             return false;
         };
+        if self == Self::StateSeal {
+            return id
+                .strip_prefix(STATE_SEAL_JOB_ID_PREFIX)
+                .is_some_and(|root| {
+                    condition
+                        == state_seal_condition(&format!("{STATE_PRODUCER_JOB_ID_PREFIX}{root}"))
+                });
+        }
         let gate = self.condition();
         condition == gate
             || (self == Self::TofuProvidersProducer

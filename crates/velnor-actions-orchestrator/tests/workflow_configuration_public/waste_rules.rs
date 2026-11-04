@@ -1,26 +1,18 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::error::Error;
 
 use velnor_actions_contract::workflow::cache_family::SOURCES_SAVE_CONDITION;
 use velnor_actions_contract::workflow::{
     validate_tofu_providers_producer, validate_tools_producer,
 };
-use velnor_actions_contract::{Job, Step, StepKind, StepRole};
+use velnor_actions_contract::{Job, Step, StepRole};
 
 use velnor_actions_orchestrator::{finalized_jobs, prepare};
 
 use super::one_job_per_crate::{crate_jobs, mbx_repo, rust_fixtures, tofu_fixture};
-
-const RESTORE_ROLES: [StepRole; 5] = [
-    StepRole::ToolsCacheRestore,
-    StepRole::CargoSourcesRestore,
-    StepRole::MbxBundleRestore,
-    StepRole::FamilyRestore,
-    StepRole::TofuProvidersRestore,
-];
 
 #[derive(Debug, PartialEq, Eq)]
 pub(super) struct Violation {
@@ -37,66 +29,10 @@ fn violation(rule: &'static str, job: &str, detail: &str) -> Violation {
     }
 }
 
-pub(super) fn w1(jobs: &BTreeMap<String, Job>) -> Vec<Violation> {
-    let mut owners: BTreeMap<&str, BTreeSet<&str>> = BTreeMap::new();
-    for (id, job) in jobs {
-        for step in &job.steps {
-            if let StepKind::TaskExecution { task_digest, .. } = &step.kind {
-                owners.entry(task_digest).or_default().insert(id);
-            }
-        }
-    }
-    owners
-        .into_iter()
-        .filter(|(_, ids)| ids.len() > 1)
-        .flat_map(|(digest, ids)| ids.into_iter().map(move |id| violation("w1", id, digest)))
-        .collect()
-}
-
-fn restore_key(step: &Step) -> Option<&str> {
-    if !step.role.is_some_and(|role| RESTORE_ROLES.contains(&role)) {
-        return None;
-    }
-    match &step.kind {
-        StepKind::Action { with, .. } => with
-            .get("key")
-            .or_else(|| with.get("cache-key"))
-            .map(String::as_str),
-        _ => None,
-    }
-}
-
-pub(super) fn w4(jobs: &BTreeMap<String, Job>) -> Vec<Violation> {
-    let mut found = Vec::new();
-    for (id, job) in jobs {
-        let mut seen = BTreeSet::new();
-        for key in job.steps.iter().filter_map(restore_key) {
-            if !seen.insert(key) {
-                found.push(violation("w4", id, key));
-            }
-        }
-    }
-    found
-}
-
-pub(super) fn w5(jobs: &BTreeMap<String, Job>) -> Vec<Violation> {
-    jobs.iter()
-        .flat_map(|(id, job)| {
-            job.steps
-                .iter()
-                .filter(move |step| match step.role {
-                    Some(StepRole::ToolsCacheSave) => validate_tools_producer(job, id).is_err(),
-                    Some(StepRole::TofuProvidersSave) => {
-                        validate_tofu_providers_producer(job, id).is_err()
-                    }
-                    _ => false,
-                })
-                .map(move |step| violation("w5", id, &step.name))
-        })
-        .collect()
-}
-
-fn producer_step(jobs: &BTreeMap<String, Job>, role: StepRole) -> Result<Step, Box<dyn Error>> {
+pub(super) fn producer_step(
+    jobs: &BTreeMap<String, Job>,
+    role: StepRole,
+) -> Result<Step, Box<dyn Error>> {
     jobs.iter()
         .filter(|(id, job)| match role {
             StepRole::TofuProvidersSave => validate_tofu_providers_producer(job, id).is_ok(),
@@ -108,118 +44,19 @@ fn producer_step(jobs: &BTreeMap<String, Job>, role: StepRole) -> Result<Step, B
         .ok_or_else(|| format!("no producer step with role {role:?}").into())
 }
 
-fn first_crate_id(jobs: &BTreeMap<String, Job>) -> Result<String, Box<dyn Error>> {
+pub(super) fn first_crate_id(jobs: &BTreeMap<String, Job>) -> Result<String, Box<dyn Error>> {
     crate_jobs(jobs)
         .first()
         .map(|(id, _)| (*id).clone())
         .ok_or_else(|| "no crate job".into())
 }
 
-fn mutable<'a>(
+pub(super) fn mutable<'a>(
     jobs: &'a mut BTreeMap<String, Job>,
     id: &str,
 ) -> Result<&'a mut Job, Box<dyn Error>> {
     jobs.get_mut(id)
         .ok_or_else(|| format!("missing job {id}").into())
-}
-
-#[test]
-fn w1_no_two_jobs_run_the_same_task() -> Result<(), Box<dyn Error>> {
-    let mut fixtures = rust_fixtures()?;
-    for fixture in &fixtures {
-        assert_eq!(w1(&fixture.jobs), Vec::new(), "{}", fixture.name);
-    }
-    let mut jobs = fixtures.remove(0).jobs;
-    let id = first_crate_id(&jobs)?;
-    let clone = mutable(&mut jobs, &id)?.clone();
-    jobs.insert(format!("{id}-copy"), clone);
-    let flagged: BTreeSet<String> = w1(&jobs).into_iter().map(|found| found.job).collect();
-    assert_eq!(flagged, BTreeSet::from([id.clone(), format!("{id}-copy")]));
-    assert_eq!(w1(&tofu_fixture()?.jobs), Vec::new());
-    Ok(())
-}
-
-#[test]
-fn w4_no_job_restores_the_same_key_twice() -> Result<(), Box<dyn Error>> {
-    let mut fixtures = rust_fixtures()?;
-    for fixture in &fixtures {
-        assert_eq!(w4(&fixture.jobs), Vec::new(), "{}", fixture.name);
-    }
-    let mut jobs = fixtures.remove(0).jobs;
-    let id = first_crate_id(&jobs)?;
-    let job = mutable(&mut jobs, &id)?;
-    let restore = job
-        .steps
-        .iter()
-        .find(|step| restore_key(step).is_some())
-        .cloned()
-        .ok_or("crate job has no keyed restore")?;
-    job.steps.push(restore);
-    let flagged = w4(&jobs);
-    assert_eq!(flagged.len(), 1, "{flagged:?}");
-    assert_eq!(flagged[0].job, id);
-    let mut tofu = tofu_fixture()?.jobs;
-    assert_eq!(w4(&tofu), Vec::new());
-    let tofu_id = tofu
-        .iter()
-        .find(|(_, job)| {
-            job.steps
-                .iter()
-                .any(|step| step.role == Some(StepRole::TofuProvidersRestore))
-        })
-        .map(|(id, _)| id.clone())
-        .ok_or("no tofu provider restore")?;
-    let tofu_job = mutable(&mut tofu, &tofu_id)?;
-    let provider_restore = tofu_job
-        .steps
-        .iter()
-        .find(|step| step.role == Some(StepRole::TofuProvidersRestore))
-        .cloned()
-        .ok_or("tofu provider restore vanished")?;
-    tofu_job.steps.push(provider_restore);
-    let flagged = w4(&tofu);
-    assert_eq!(flagged.len(), 1, "{flagged:?}");
-    assert_eq!(flagged[0].job, tofu_id);
-    Ok(())
-}
-
-#[test]
-fn w5_producer_saves_live_only_in_a_producer() -> Result<(), Box<dyn Error>> {
-    let mut fixtures = rust_fixtures()?;
-    for fixture in &fixtures {
-        assert_eq!(w5(&fixture.jobs), Vec::new(), "{}", fixture.name);
-        assert!(
-            producer_step(&fixture.jobs, StepRole::ToolsCacheSave).is_ok(),
-            "{}: no producer save to exempt",
-            fixture.name
-        );
-    }
-    let mut jobs = fixtures.remove(0).jobs;
-    let save = producer_step(&jobs, StepRole::ToolsCacheSave)?;
-    let id = first_crate_id(&jobs)?;
-    mutable(&mut jobs, &id)?.steps.push(save);
-    let flagged = w5(&jobs);
-    assert_eq!(flagged.len(), 1, "{flagged:?}");
-    assert_eq!(flagged[0].job, id);
-    let mut tofu = tofu_fixture()?.jobs;
-    assert_eq!(w5(&tofu), Vec::new());
-    let provider_save = producer_step(&tofu, StepRole::TofuProvidersSave)?;
-    let tofu_id = tofu
-        .iter()
-        .find(|(_, job)| job.producer_kind().is_none() && has_provider_restore(job))
-        .map(|(id, _)| id.clone())
-        .ok_or("no tofu crate job")?;
-    mutable(&mut tofu, &tofu_id)?.steps.push(provider_save);
-    let flagged = w5(&tofu);
-    assert_eq!(flagged.len(), 1, "{flagged:?}");
-    assert_eq!(flagged[0].job, tofu_id);
-    Ok(())
-}
-
-fn has_provider_restore(job: &Job) -> bool {
-    job.steps
-        .iter()
-        .any(|step| step.role == Some(StepRole::TofuProvidersRestore))
 }
 
 fn prepared_with_extra_step(
@@ -245,7 +82,7 @@ fn prepared_with_extra_step(
         .ir
         .jobs
         .iter()
-        .find(|(id, job)| id.starts_with("rust-") && !job.is_dependency_seed())
+        .find(|(id, job)| id.starts_with("rust-") && job.producer_kind().is_none())
         .map(|(id, _)| id.clone())
         .ok_or("no crate job in the prepared workflow")?;
     prepared
@@ -277,10 +114,9 @@ fn render_rejects_a_hand_authored_tools_cache_step() -> Result<(), Box<dyn Error
     Ok(())
 }
 
-const SAVE_ROLES: [StepRole; 5] = [
+const SAVE_ROLES: [StepRole; 4] = [
     StepRole::ToolsCacheSave,
     StepRole::CargoSourcesSave,
-    StepRole::MbxBundleSave,
     StepRole::FamilySave,
     StepRole::TofuProvidersSave,
 ];

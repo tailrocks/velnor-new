@@ -4936,3 +4936,34 @@ fn execute_two_new_workspace_crates(
 #[cfg(unix)]
 #[path = "crate_release_coordinator_rehearsal.rs"]
 mod coordinator_rehearsal;
+
+#[test]
+fn termpane_qualification_emits_production_upload_config() -> Result<(), Box<dyn std::error::Error>>
+{
+    use std::io::Write as _;
+    let temp = tempfile::tempdir()?;
+    let (mut intent, _, _, _) = make_fixture(temp.path())?;
+    intent.generator_version = env!("CARGO_PKG_VERSION").into();
+    intent.packages = vec!["termpane".into()];
+    intent.publish_features =
+        std::collections::BTreeMap::from([("termpane".into(), vec!["pty".into()])]);
+    let config = crate::crate_release_controller::fixture_upload_config(&intent, "termpane")?;
+    let parsed: toml::Value = toml::from_str(&config)?;
+    assert_eq!(parsed["workspace"]["release"].as_bool(), Some(false));
+    assert_eq!(parsed["package"][0]["name"].as_str(), Some("termpane"));
+    assert_eq!(
+        parsed["package"][0]["publish_features"][0].as_str(),
+        Some("pty")
+    );
+    if std::env::var_os("VELNOR_HOSTED_QUALIFICATION").is_some() {
+        let runner =
+            std::path::PathBuf::from(std::env::var_os("RUNNER_TEMP").ok_or("runner temp")?)
+                .canonicalize()?;
+        let mut output = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(runner.join("termpane-upload.toml"))?;
+        output.write_all(config.as_bytes())?;
+    }
+    Ok(())
+}

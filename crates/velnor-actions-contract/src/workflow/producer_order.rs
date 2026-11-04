@@ -9,21 +9,6 @@ use super::step_protocol::ProviderRestoreForm;
 use super::step_tofu_prepare::valid_provider_prepare;
 use super::{Step, StepKind, StepRole, TOFU_JOB_ID_PREFIX};
 
-pub(super) fn state_seal_order_ok(steps: &[Step]) -> bool {
-    const ORDER: [StepRole; 5] = [
-        StepRole::StateSealDownload,
-        StepRole::StateSealSubject,
-        StepRole::StateSealSave,
-        StepRole::StateSealBind,
-        StepRole::StateSealAttest,
-    ];
-    steps.len() == ORDER.len()
-        && steps
-            .iter()
-            .zip(ORDER)
-            .all(|(step, role)| step.role == Some(role))
-}
-
 pub(super) fn tofu_lane_needs_ok(needs: &[String]) -> bool {
     match needs {
         [plan] => plan == "plan",

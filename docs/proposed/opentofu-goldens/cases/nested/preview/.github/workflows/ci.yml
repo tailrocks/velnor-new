@@ -392,13 +392,20 @@ jobs:
       - name: Doctests
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-df8872f48000ec5b29f0bb15f5be494262afd30f5807d43af2b28143df823ca7"}
+        with: {"digest": "b3-4b67827c15ca4dd8dbc0f168d7f0d007548220d05188b643380a27bbce0f7f94"}
       - name: Documentation
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-4166950aaf3e67280aecb88e4c989323bb92e7fee18d0d201b60e29bc43515b2"}
       - name: Wait for parallel checks
         wait-all:
+      - name: MBX stats
+        if: always()
+        continue-on-error: true
+        env:
+          VELNOR_MBX_STATS_JOB: rust-a
+          VELNOR_MBX_STATS_WORKSPACE: a lib
+        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; job=\"${VELNOR_MBX_STATS_JOB-}\"; members=\"${VELNOR_MBX_STATS_WORKSPACE-}\"; out=\"${RUNNER_TEMP:?}/velnor-mbx-stats.line\"; set -- \"${MBX_CACHE_DIR-}\"/actions/sessions/v1/*.jsonl; if [ -z \"${MBX_CACHE_DIR-}\" ] || [ ! -f \"$1\" ]; then printf '\\''mbx-stats job=%s sessions=0\\n'\\'' \"$job\" > \"$out\"; else jq -r -n -R --arg job \"$job\" --arg members \"$members\" '\\''[inputs | fromjson? | select(type == \"object\" and .type == \"action\")] as $a | ($members | split(\" \") | map(select(length > 0) | {key: ., value: true}) | from_entries) as $m | def benign: .outcome.kind == \"bypass\" and (.outcome.reason == \"compiler-query\" or .outcome.reason == \"standard-input\"); def n($c; $k): [$a[] | select((benign | not) and .outcome.kind == $k and ((if $m[.crate_name // \"\"] then \"workspace\" else \"registry\" end) == $c))] | length; def group($c): \"\\($c) hit=\\(n($c; \"hit\")) miss=\\(n($c; \"miss\")) not_looked_up=\\(n($c; \"unconsulted\")) bypassed=\\(n($c; \"bypass\"))\"; \"mbx-stats job=\\($job) \\(group(\"registry\")) \\(group(\"workspace\")) bypassed_benign=\\([$a[] | select(benign)] | length)\"'\\'' \"$@\" > \"$out\"; fi; read -r line < \"$out\"; printf '\\''%s\\n'\\'' \"$line\"; if [ -n \"${GITHUB_STEP_SUMMARY-}\" ]; then printf '\\''%s\\n'\\'' \"$line\" >> \"$GITHUB_STEP_SUMMARY\"; fi'"
       - name: Emit group ledger
         if: always()
         env:
@@ -524,13 +531,20 @@ jobs:
       - name: Doctests
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-cfa74311a1c57183f9756c059f4ffab8f63f47b818977aadb204302d7cf8942b"}
+        with: {"digest": "b3-96f1d0e824c1f9000d60b15c1561458dd9fdf5e4b395f039a5179bed2e6937da"}
       - name: Documentation
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-30d8ef95afd87f3d88a5f68bdcbb1a35bfc10cfaad69079447c78dbf32608c00"}
       - name: Wait for parallel checks
         wait-all:
+      - name: MBX stats
+        if: always()
+        continue-on-error: true
+        env:
+          VELNOR_MBX_STATS_JOB: rust-lib
+          VELNOR_MBX_STATS_WORKSPACE: a lib
+        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; job=\"${VELNOR_MBX_STATS_JOB-}\"; members=\"${VELNOR_MBX_STATS_WORKSPACE-}\"; out=\"${RUNNER_TEMP:?}/velnor-mbx-stats.line\"; set -- \"${MBX_CACHE_DIR-}\"/actions/sessions/v1/*.jsonl; if [ -z \"${MBX_CACHE_DIR-}\" ] || [ ! -f \"$1\" ]; then printf '\\''mbx-stats job=%s sessions=0\\n'\\'' \"$job\" > \"$out\"; else jq -r -n -R --arg job \"$job\" --arg members \"$members\" '\\''[inputs | fromjson? | select(type == \"object\" and .type == \"action\")] as $a | ($members | split(\" \") | map(select(length > 0) | {key: ., value: true}) | from_entries) as $m | def benign: .outcome.kind == \"bypass\" and (.outcome.reason == \"compiler-query\" or .outcome.reason == \"standard-input\"); def n($c; $k): [$a[] | select((benign | not) and .outcome.kind == $k and ((if $m[.crate_name // \"\"] then \"workspace\" else \"registry\" end) == $c))] | length; def group($c): \"\\($c) hit=\\(n($c; \"hit\")) miss=\\(n($c; \"miss\")) not_looked_up=\\(n($c; \"unconsulted\")) bypassed=\\(n($c; \"bypass\"))\"; \"mbx-stats job=\\($job) \\(group(\"registry\")) \\(group(\"workspace\")) bypassed_benign=\\([$a[] | select(benign)] | length)\"'\\'' \"$@\" > \"$out\"; fi; read -r line < \"$out\"; printf '\\''%s\\n'\\'' \"$line\"; if [ -n \"${GITHUB_STEP_SUMMARY-}\" ]; then printf '\\''%s\\n'\\'' \"$line\" >> \"$GITHUB_STEP_SUMMARY\"; fi'"
       - name: Emit group ledger
         if: always()
         env:
@@ -663,7 +677,7 @@ jobs:
       RUSTUP_TOOLCHAIN: 1.99.1
       VELNOR_RUN_KEY_ATTEMPT: ${{ github.run_attempt }}
     cache-mode: write
-    if: github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true
+    if: "!cancelled() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true"
     steps:
       - name: Record optional cache budget
         id: velnor-cache-clock
@@ -752,7 +766,7 @@ jobs:
     env:
       VELNOR_RUN_KEY_ATTEMPT: ${{ github.run_attempt }}
     cache-mode: write
-    if: github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true
+    if: "!cancelled() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true"
     steps:
       - name: Record optional cache budget
         id: velnor-cache-clock
@@ -828,7 +842,7 @@ jobs:
       RUSTUP_TOOLCHAIN: 1.99.1
       VELNOR_RUN_KEY_ATTEMPT: ${{ github.run_attempt }}
     cache-mode: write
-    if: github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true
+    if: "!cancelled() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true"
     steps:
       - name: Record optional cache budget
         id: velnor-cache-clock

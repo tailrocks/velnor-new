@@ -9,12 +9,21 @@ use crate::errors::ContractError;
 
 use super::CacheFamily;
 
-pub const MBX_COMPILE_ENV: [(&str, &str); 4] = [
+pub const MBX_COMPILE_ENV: [(&str, &str); 3] = [
     ("MBX_SHARE_OUT_DIR", "1"),
-    ("MBX_BUILD_SCRIPT_EXECUTION", "0"),
     ("MBX_CC", "0"),
     ("SOURCE_DATE_EPOCH", "0"),
 ];
+
+pub const MBX_BSE_ENV: &str = "MBX_BUILD_SCRIPT_EXECUTION";
+
+pub const MBX_BSE_PRODUCER: &str = "0";
+
+pub const MBX_BSE_SKELETON: &str = "1";
+
+pub const MBX_BSE_CONSUMER: &str = "1";
+
+pub const MBX_BSE_COMPAT: &str = "hybrid";
 
 pub const ROOT_SLUG_MAX_BYTES: usize = 48;
 
@@ -208,6 +217,7 @@ impl StateCompat {
                 .iter()
                 .map(|(name, value)| format!("{name}={value}")),
         );
+        lines.push(format!("{MBX_BSE_ENV}={MBX_BSE_COMPAT}"));
         lines.extend([
             format!("uname_s={}", self.uname_s),
             format!("uname_m={}", self.uname_m),

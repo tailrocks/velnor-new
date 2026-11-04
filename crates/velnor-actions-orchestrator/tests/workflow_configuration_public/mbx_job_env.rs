@@ -140,7 +140,7 @@ fn rendered_jobs() -> Result<Vec<RenderedJob>, Box<dyn Error>> {
 }
 
 #[test]
-fn mbx_jobs_run_the_compiler_with_shared_out_dirs_and_build_script_execution_disabled()
+fn mbx_jobs_run_the_compiler_with_shared_out_dirs_and_the_build_script_setting_per_role()
 -> Result<(), Box<dyn Error>> {
     let jobs = rendered_jobs()?;
     let mbx_jobs: Vec<_> = jobs.iter().filter(|job| job.runs_mbx).collect();
@@ -154,7 +154,14 @@ fn mbx_jobs_run_the_compiler_with_shared_out_dirs_and_build_script_execution_dis
     for RenderedJob { id, env, .. } in mbx_jobs {
         for (key, expected) in [
             ("MBX_SHARE_OUT_DIR", "1"),
-            ("MBX_BUILD_SCRIPT_EXECUTION", "0"),
+            (
+                "MBX_BUILD_SCRIPT_EXECUTION",
+                if id.starts_with("state-producer-") {
+                    "0"
+                } else {
+                    "1"
+                },
+            ),
             ("MBX_CC", "0"),
             ("MBX_GC_AUTO", "0"),
             ("MBX_CACHE_EXPORT_GROUP", "velnor"),
@@ -199,7 +206,7 @@ fn jobs_without_mbx_get_no_mbx_environment() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-const NON_COMPILE_ENV: [&str; 2] = ["MBX_GC_AUTO", "MBX_CACHE_EXPORT_GROUP"];
+const NON_COMPILE_ENV: [&str; 3] = ["MBX_GC_AUTO", "MBX_CACHE_EXPORT_GROUP", "MBX_SUMMARY"];
 
 #[test]
 fn every_mbx_job_env_key_outside_the_non_compile_set_binds_the_state_key()
@@ -215,7 +222,14 @@ fn every_mbx_job_env_key_outside_the_non_compile_set_binds_the_state_key()
             if cargo_job.env.contains_key(key) || NON_COMPILE_ENV.contains(&key.as_str()) {
                 continue;
             }
-            let literal = format!("{key}={value}");
+            let literal = if key == "MBX_BUILD_SCRIPT_EXECUTION" {
+                format!(
+                    "{key}={}",
+                    velnor_actions_contract::workflow::cache_family::MBX_BSE_COMPAT
+                )
+            } else {
+                format!("{key}={value}")
+            };
             let gate = format!("${{{key}-}}");
             let gated = !job.text.contains("Publish state snapshot") || job.text.contains(&gate);
             if !job.text.contains(&literal) || !gated {

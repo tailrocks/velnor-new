@@ -6,28 +6,44 @@ use std::error::Error;
 use std::path::Path;
 
 use velnor_actions_contract::workflow::cache_family::{
-    COMPLETE_STATE_TRANSPORT_EXPR, CacheFamily, S256,
+    COMPLETE_STATE_TRANSPORT_EXPR, CacheFamily, RootSlug, S256,
 };
 use velnor_actions_contract::workflow::state_seal::{
-    STATE_CANARY_SEAL_JOB_ID, STATE_SEAL_KEY_EXPR, STATE_SEAL_PREFIX_ENV, STATE_SEAL_SUBJECT_REL,
-    state_canary_identity_prefix,
+    STATE_SEAL_KEY_EXPR, STATE_SEAL_PREFIX_ENV, STATE_SEAL_SUBJECT_REL, state_compat_plan_expr,
+    state_producer_job_id, state_seal_job_id,
 };
-use velnor_actions_contract::{CacheAccess, Job, JobEnv, JobTimeout, Step, StepKind, StepRole};
-use velnor_actions_workflow_renderer::plan_sources::state_select::state_select_step;
-use velnor_actions_workflow_renderer::state_seal::add_state_seal_canary;
+use velnor_actions_contract::{
+    CacheAccess, Job, JobEnv, JobTimeout, Step, StepId, StepKind, StepRole,
+};
+use velnor_actions_workflow_renderer::state_seal::add_state_seal_jobs;
 
 use crate::gc1_scene::{Scene, fail};
-use crate::gc1_seal_support::{ENTRY_ID, ENTRY_SIZE, Gh, MAIN, REPO};
+use crate::gc1_seal_support::scope_of;
 
-const FIXTURE: &[u8] = b"sealed state payload fixture";
+pub(crate) const FIXTURE: &[u8] = b"sealed state payload fixture";
+const ROOT: &str = ".";
 
-fn plan_job() -> Result<Job, Box<dyn Error>> {
-    Ok(Job {
-        display_name: "Plan".to_owned(),
+fn shell_step(role: StepRole, id: StepId, env: BTreeMap<String, String>) -> Step {
+    Step {
+        parallel: false,
+        name: "fixture".to_owned(),
+        id: Some(id),
+        role: Some(role),
+        condition: None,
+        kind: StepKind::Shell {
+            run: vec!["sh".to_owned(), "-c".to_owned(), "true".to_owned()],
+            env,
+        },
+    }
+}
+
+fn producer_fixture() -> Job {
+    Job {
+        display_name: "producer".to_owned(),
         runs_on: "ubuntu-26.04".to_owned(),
         check_runner: None,
         timeout_minutes: JobTimeout::PLAN,
-        needs: Vec::new(),
+        needs: vec!["plan".to_owned()],
         condition: None,
         permissions: None,
         cache_access: CacheAccess::Read,
@@ -35,18 +51,69 @@ fn plan_job() -> Result<Job, Box<dyn Error>> {
         services: Vec::new(),
         outputs: BTreeMap::new(),
         env: JobEnv::Unset,
-        steps: vec![state_select_step(&[], true)?],
-    })
+        steps: vec![
+            shell_step(
+                StepRole::MbxBundleKey,
+                StepId::MbxBundleKey,
+                BTreeMap::from([("VELNOR_MBX_BUNDLE_ROOT".to_owned(), ROOT.to_owned())]),
+            ),
+            shell_step(
+                StepRole::StateProduced,
+                StepId::StateProduced,
+                BTreeMap::new(),
+            ),
+        ],
+    }
 }
 
-fn seal_job() -> Result<Job, Box<dyn Error>> {
-    let mut jobs = BTreeMap::from([("plan".to_owned(), plan_job()?)]);
-    add_state_seal_canary(&mut jobs)?;
-    jobs.remove(STATE_CANARY_SEAL_JOB_ID)
+pub(crate) fn seal_jobs(roots: &[&str]) -> Result<BTreeMap<String, Job>, Box<dyn Error>> {
+    let mut jobs = BTreeMap::new();
+    for root in roots {
+        let slug = RootSlug::from_root(root)?;
+        let mut producer = producer_fixture();
+        for step in &mut producer.steps {
+            if let StepKind::Shell { env, .. } = &mut step.kind
+                && env.contains_key("VELNOR_MBX_BUNDLE_ROOT")
+            {
+                env.insert("VELNOR_MBX_BUNDLE_ROOT".to_owned(), (*root).to_owned());
+            }
+        }
+        jobs.insert(state_producer_job_id(&slug), producer);
+    }
+    add_state_seal_jobs(&mut jobs)?;
+    Ok(jobs)
+}
+
+pub(crate) fn seal_job() -> Result<Job, Box<dyn Error>> {
+    let mut jobs = seal_jobs(&[ROOT])?;
+    jobs.remove(&state_seal_job_id(&RootSlug::from_root(ROOT)?))
         .ok_or_else(|| fail("the seal job was not generated"))
 }
 
-fn step_of(job: &Job, role: StepRole) -> Result<&Step, Box<dyn Error>> {
+pub(crate) fn identity_expression() -> Result<String, Box<dyn Error>> {
+    let job = seal_job()?;
+    let step = step_of(&job, StepRole::StateSealSubject)?;
+    let StepKind::Shell { env, .. } = &step.kind else {
+        return Err(fail("the subject step is not a shell step"));
+    };
+    env.get(STATE_SEAL_PREFIX_ENV)
+        .cloned()
+        .ok_or_else(|| fail("the subject step lost its identity prefix"))
+}
+
+pub(crate) fn resolved_prefix(expression: &str) -> String {
+    expression
+        .replace(
+            &state_compat_plan_expr("root"),
+            &S256::of(b"compat").to_string(),
+        )
+        .replace(
+            "${{needs.plan.outputs.state_root_snapshot}}",
+            &S256::of(b"snapshot").to_string(),
+        )
+}
+
+pub(crate) fn step_of(job: &Job, role: StepRole) -> Result<&Step, Box<dyn Error>> {
     job.steps
         .iter()
         .find(|step| step.role == Some(role))
@@ -73,7 +140,11 @@ fn run_subject(scene: &Scene, job: &Job) -> Result<String, Box<dyn Error>> {
         Err(error) if error.kind() != std::io::ErrorKind::NotFound => return Err(error.into()),
         _ => {}
     }
-    let pairs: Vec<(&str, &str)> = env
+    let resolved: Vec<(String, String)> = env
+        .iter()
+        .map(|(name, value)| (name.clone(), resolved_prefix(value)))
+        .collect();
+    let pairs: Vec<(&str, &str)> = resolved
         .iter()
         .map(|(name, value)| (name.as_str(), value.as_str()))
         .collect();
@@ -115,7 +186,8 @@ fn attest_job_binds_key_to_stored_file() -> Result<(), Box<dyn Error>> {
     let prefix = env
         .get(STATE_SEAL_PREFIX_ENV)
         .ok_or_else(|| fail("the subject step lost its identity prefix"))?;
-    if *prefix != state_canary_identity_prefix() {
+    let prefix = &resolved_prefix(prefix);
+    if !prefix.starts_with(&scope_of(ROOT)?.prefix()) || prefix.contains("${{") {
         return Err(fail(
             "the key identity does not come from the planned constants",
         ));
@@ -178,72 +250,6 @@ fn attest_job_binds_key_to_stored_file() -> Result<(), Box<dyn Error>> {
     std::fs::create_dir(scene.payload())?;
     let output = run_subject(&scene, &job)?;
     assert_refused(&scene, &output, "directory")?;
-    scene.finish()
-}
-
-fn run_bind(scene: &Scene, gh: &Gh, job: &Job, key: &str) -> Result<(), Box<dyn Error>> {
-    let step = step_of(job, StepRole::StateSealBind)?;
-    let StepKind::Shell { run, .. } = &step.kind else {
-        return Err(fail("the bind step is not a shell step"));
-    };
-    match std::fs::remove_file(&scene.github_output) {
-        Err(error) if error.kind() != std::io::ErrorKind::NotFound => return Err(error.into()),
-        _ => {}
-    }
-    let dir = gh.dir();
-    let env = [
-        ("FAKE_GH_DIR", dir.as_str()),
-        ("GITHUB_REF", MAIN),
-        ("VELNOR_STATE_SEAL_KEY", key),
-        ("GITHUB_REPOSITORY", REPO),
-    ];
-    scene.run_script(run.get(2).ok_or_else(|| fail("no script"))?, &env, None)?;
-    Ok(())
-}
-
-#[test]
-#[cfg(unix)]
-fn bind_attests_the_saved_entry_by_key_id_and_size() -> Result<(), Box<dyn Error>> {
-    let job = seal_job()?;
-    let scene = Scene::new("seal-bind", crate::gc1_t53::scripts()?)?;
-    let gh = Gh::install(&scene)?;
-    let subject = scene.runner.join(STATE_SEAL_SUBJECT_REL);
-    let sealed = format!("{}{}", state_canary_identity_prefix(), S256::of(FIXTURE));
-    let planted = format!("{sealed}-{}", S256::of(b"planted"));
-    let at = "2026-11-04T01:00:00Z";
-
-    gh.list_entries(&[
-        (at, MAIN, &planted, ENTRY_ID + 1, ENTRY_SIZE + 1),
-        (at, MAIN, &sealed, ENTRY_ID, ENTRY_SIZE),
-    ])?;
-    run_bind(&scene, &gh, &job, &sealed)?;
-    let want = format!("{sealed} {ENTRY_ID} {ENTRY_SIZE}\n");
-    if scene.output_value("bound")? != "true" || std::fs::read(&subject)? != want.as_bytes() {
-        return Err(fail(
-            "the subject is not the exact key, its cache id and its size",
-        ));
-    }
-
-    gh.list_entries(&[(at, MAIN, &planted, ENTRY_ID + 1, ENTRY_SIZE)])?;
-    run_bind(&scene, &gh, &job, &sealed)?;
-    if scene.output_value("bound")? != "false" || subject.exists() {
-        return Err(fail("a key-prefix neighbour was bound in place of the key"));
-    }
-
-    gh.list_entries(&[
-        (at, MAIN, &sealed, ENTRY_ID, ENTRY_SIZE),
-        (at, MAIN, &sealed, ENTRY_ID + 2, ENTRY_SIZE),
-    ])?;
-    run_bind(&scene, &gh, &job, &sealed)?;
-    if scene.output_value("bound")? != "false" || subject.exists() {
-        return Err(fail("an ambiguous key was bound"));
-    }
-
-    gh.list_entries(&[])?;
-    run_bind(&scene, &gh, &job, &sealed)?;
-    if scene.output_value("bound")? != "false" || subject.exists() {
-        return Err(fail("a missing entry was bound"));
-    }
     scene.finish()
 }
 

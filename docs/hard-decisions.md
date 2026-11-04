@@ -39,19 +39,29 @@ and overlaps the independent checks.
 - Clippy and Documentation compile in their own Cargo target lanes
   (`target/velnor-clippy`, `target/velnor-doc`, seeded from the
   dependency-seed family) so Cargo's target-directory lock never serializes test execution
-  and doctests behind them. Tests and doctests reuse the built executables.
+  behind them. Doctests compile in their own lane `target/velnor-doctest`, which is
+  never seeded. Tests reuse the built executables. Amended for decision X70
+  (owner standing grant 2026-11-02, velnor-fast-ci GOAL.md, decisions.tsv X70):
+  doctests used to share `target/` with the tests, and a replay by one lane
+  removed outputs that a concurrent doctest run still read. The amendment
+  restores the invariant in `docs/proposed/parallelism-and-selection-contract.md:220`
+  that concurrent Cargo writers use different target directories.
 - `workflow.crate_timeout_minutes` bounds the one crate job (decision 2).
 - The pinned jactionlint parses and validates the native step keys (every
   member and the body-less `wait-all` join) with no ignore pattern
   (decision 10).
-- The dependency-seed job is not a crate job: it runs no checks and is not in
+- The state producer job is not a crate job: it runs no checks and is not in
   Required, so this decision governs crate jobs only. Crate jobs restore
   compiled caches read-only. See the
   [cache decisions](proposed/cache-decisions.md) (owner-approved 2026-10-20).
-- Dependency seeds are off on main (`[stacks.rust] dependency_seed = "off"`): no
-  dependency-seed job is generated. Note recorded under owner standing grant
-  2026-11-02, velnor-fast-ci GOAL.md, and decisions.tsv row U-SEED. Setting
-  `produce` restores the job.
+- Compiled state is written on main. `union` is the generator default for
+  `[stacks.rust] compiled_state`, so velnor-new sets nothing (owner standing
+  grant 2026-11-02, velnor-fast-ci GOAL.md, decisions.tsv X64). It adds one
+  non-crate `state-producer-<root>` job and one `state-seal-<root>` job per
+  Cargo root, both outside Required and `continue-on-error`. Crate jobs stay
+  read-only and run `MBX_BUILD_SCRIPT_EXECUTION=1` (decisions.tsv X61, which
+  amends X48). Owner standing grant 2026-11-02 and X50. Setting `off` removes
+  the jobs.
 
 **Must not be reintroduced without owner approval:** per-phase crate jobs
 (`-lint`, `-tests`, `-docs` or any other split of one crate's checks across
@@ -448,8 +458,9 @@ crate publisher may check out and execute the approved package source and its
 dependencies in the publishing job so that release-plz can run Cargo's normal
 package verification and publication. This exception permits a reviewed
 release-PR push on the default branch or an explicitly approved, bounded
-exact-source recovery dispatch. It does not authorize publication from a pull
-request or fork event, or privileged source execution by other publishers.
+exact-source recovery or first-publication dispatch. It does not authorize
+publication from a pull request or fork event, or privileged source execution
+by other publishers.
 The workflow must establish the repository identity, reviewed source ancestry,
 successful required checks for the exact package source, and the authorized
 package and version before publication. It must use a preconfigured protected

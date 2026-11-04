@@ -133,14 +133,22 @@ mod source_qualification_checkout;
 mod source_qualification_jobs;
 #[path = "workflow_configuration_public/source_qualification_proof.rs"]
 mod source_qualification_proof;
+#[path = "workflow_configuration_public/state_compat.rs"]
+mod state_compat;
+#[path = "workflow_configuration_public/state_producer.rs"]
+mod state_producer;
+#[path = "workflow_configuration_public/state_producer_eval.rs"]
+mod state_producer_eval;
+#[path = "workflow_configuration_public/state_producer_gates.rs"]
+mod state_producer_gates;
+#[path = "workflow_configuration_public/state_producer_reports.rs"]
+mod state_producer_reports;
 #[path = "workflow_configuration_public/state_prune_workflow.rs"]
 mod state_prune_workflow;
 #[path = "workflow_configuration_public/state_prune_yaml.rs"]
 mod state_prune_yaml;
 #[path = "workflow_configuration_public/state_roots.rs"]
 mod state_roots;
-#[path = "workflow_configuration_public/state_seal_jobs.rs"]
-mod state_seal_jobs;
 #[path = "workflow_configuration_public/support.rs"]
 mod support;
 #[path = "workflow_configuration_public/timeouts.rs"]
@@ -183,6 +191,8 @@ mod tools_producers_scope;
 mod topology_e797385c74;
 #[path = "workflow_configuration_public/verification_tools.rs"]
 mod verification_tools;
+#[path = "workflow_configuration_public/waste_graph.rs"]
+mod waste_graph;
 #[path = "workflow_configuration_public/waste_lint.rs"]
 mod waste_lint;
 #[path = "workflow_configuration_public/waste_lint_scope.rs"]
@@ -191,6 +201,8 @@ mod waste_lint_scope;
 mod waste_lint_verifier;
 #[path = "workflow_configuration_public/waste_oracle.rs"]
 mod waste_oracle;
+#[path = "workflow_configuration_public/waste_outputs.rs"]
+mod waste_outputs;
 #[path = "workflow_configuration_public/waste_rules.rs"]
 mod waste_rules;
 #[path = "workflow_configuration_public/waste_verifier_oracle.rs"]

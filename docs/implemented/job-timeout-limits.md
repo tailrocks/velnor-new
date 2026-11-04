@@ -26,12 +26,12 @@ The required verdict and gate jobs instead use a fixed fifteen minutes: the
 verdict checks out the full history before merging reports, and on large
 histories that checkout alone can exceed five minutes.
 
-Dependency-seed jobs use `[workflow] dependency_seed_timeout_minutes` (default
-`30`, bounded `1..=360`) independently of crate and plan budgets. Each MBX
-workspace has one optional non-crate seed job that serially compiles test,
-Clippy and documentation lanes for the whole workspace. A crate's budget is
-not a budget for those three workspace-wide builds. The Cargo driver emits no
-seed job. The public `WorkflowConfig` field has the same name; default values
+State producer jobs use `[workflow] state_producer_timeout_minutes` (default
+`60`, bounded `1..=360`) independently of crate and plan budgets. Each MBX
+workspace has one optional non-crate producer job that runs every crate job's
+build, Clippy and documentation lane records in two phases. A crate's budget is
+not a budget for those workspace-wide runs. The Cargo driver emits no
+producer job. The public `WorkflowConfig` field has the same name; default values
 are omitted from serialized configuration. Rust struct literals must supply
 the new field.
 
@@ -99,7 +99,7 @@ unmeasured. The failed producer did not authorize SDK publication.
 [workflow]
 crate_timeout_minutes = 20 # every Rust crate job and OpenTofu root job
 plan_timeout_minutes = 15  # planning job only
-dependency_seed_timeout_minutes = 30 # each MBX workspace dependency seed only
+state_producer_timeout_minutes = 60 # each MBX workspace state producer only
 ```
 
 Bun jobs resolve their bound most specific first:

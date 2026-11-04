@@ -3,8 +3,8 @@
 Generation runs a waste lint on the final job graph. A finding stops
 generation. Nothing is written.
 
-The lint code is in `crates/velnor-actions-workflow-renderer/src/waste_lint.rs`
-and `waste_lint_env.rs`. The lint runs in `finalize_jobs` and in the suites
+The lint code is in `crates/velnor-actions-workflow-renderer/src/waste_lint.rs`,
+`waste_lint_env.rs` (W2, W3) and `waste_lint_graph.rs` (W1, W4, W5, W6). The lint runs in `finalize_jobs` and in the suites
 workflow render, after the cache doctor.
 
 ## Scope
@@ -43,8 +43,12 @@ starts the proxy.
 
 | Rule | Finding | Fix |
 |---|---|---|
+| W1 `duplicate_task` | Two non-producer jobs run the same task digest, or two producer jobs do. A job and its `__hosted` and `__local` lane twins count as one job. One producer may repeat the digest of one crate job. | Run each task digest in one job. |
 | W2 `job_context_env` | A shell step of a job that installs rust runs `cargo`, `rustup`, `rustc`, `mbx`, or `mise` with a rust spec, without all four toolchain homes. Or a shell Rust verifier step of such a job has no `RUSTUP_HOME` or `CARGO_HOME`. Or a home differs from its standard value. A `mise` command without a rust spec is not counted. A `jactionlint` verifier is not counted. | Set `CARGO_HOME`, `MISE_CARGO_HOME`, `MISE_RUSTUP_HOME` and `RUSTUP_HOME` to the standard values in the step. In a verifier step, set `RUSTUP_HOME` and `CARGO_HOME`. |
 | W3 `rustup_auto_install` | A rust-bearing job has no job-level `RUSTUP_AUTO_INSTALL=0`. Or a step of any job sets `RUSTUP_AUTO_INSTALL` to another value. | Bind the job to the rust toolchain job env. Do not set the value per step. |
+| W4 `duplicate_restore` | A job restores the same cache key twice. The cache doctor's classifier decides what a restore is, so a step without a role counts. The two sources key expressions (`steps.cache-keys.outputs.sources_key` and `needs.plan.outputs.sources_key`) are one key. `restore-keys` is ignored. | Restore each key once per job. |
+| W5 `non_producer_save` | A job with no producer kind has an `actions/cache/save` step whose condition is not the literal `false`. No role is exempt. Stack family saves render as `false` in read jobs, so they pass. | Save from a producer job only. |
+| W6 `unconsumed_restore_output` | A job other than `plan` has an output that reads `steps.<id>.outputs` of a restore step or of the mbx bundle key step, and no other job reads `needs.<job>.outputs.<name>`. `toJSON(needs)` is not a read. | Delete the output, or read it in another job. |
 
 The verifier script reads `RUSTUP_HOME` and, in the restored phase,
 `CARGO_HOME`. Without them it falls back to `$HOME/.rustup` and checks a
