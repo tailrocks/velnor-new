@@ -32,7 +32,7 @@ pub fn crate_release_workspace_plan_with_registry<
     sha: &str,
     intent: &CrateReleaseIntent,
     registry: &R,
-    git: &velnor_actions_mise::release_git_pin::VerifiedGit,
+    git: &crate::crate_release_git::ReleaseGit,
 ) -> Result<CrateReleaseWorkspacePlan, OrchestratorError> {
     intent
         .validate()
@@ -105,7 +105,7 @@ pub fn crate_release_workspace_plan_with_registry<
 
 fn tracked_manifests(
     root: &Path,
-    git: &velnor_actions_mise::release_git_pin::VerifiedGit,
+    git: &crate::crate_release_git::ReleaseGit,
 ) -> Result<BTreeSet<String>, OrchestratorError> {
     let tracked = GitRequest::ls_files(vec!["-z".into()])
         .run_release_in(root, git)

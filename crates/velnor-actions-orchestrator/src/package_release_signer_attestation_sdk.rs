@@ -98,7 +98,7 @@ pub(crate) struct AdmittedStart<'a, J, G, R> {
     pub(crate) request: &'a crate::crate_release_github::GitHubAdmissionRequest,
     pub(crate) admission: &'a crate::crate_release_controller::CrateReleaseAdmissionReceipt,
     pub(crate) source: &'a std::path::Path,
-    pub(crate) git: &'a velnor_actions_mise::release_git_pin::VerifiedGit,
+    pub(crate) git: &'a crate::crate_release_git::ReleaseGit,
     pub(crate) workflow_root: &'a std::path::Path,
     pub(crate) generator: &'a AttestedLinuxGenerator,
 }

@@ -136,13 +136,11 @@ impl GitRequest {
     pub fn run_release_in(
         &self,
         cwd: &Path,
-        git: &crate::release_git_pin::VerifiedGit,
+        git: &impl crate::release_git_pin::ReleaseGitExecutable,
     ) -> Result<ProcessOutput, MiseError> {
-        crate::release_git_pin::verify_bundle(git.exec_path()).map_err(|_| {
-            MiseError::InvalidStepInput {
-                field: "release_git".to_owned(),
-                value: "unverified_bundle".to_owned(),
-            }
+        git.revalidate().map_err(|_| MiseError::InvalidStepInput {
+            field: "release_git".to_owned(),
+            value: "unverified_bundle".to_owned(),
         })?;
         let mut args: Vec<OsString> = [
             "-c",
@@ -158,7 +156,7 @@ impl GitRequest {
         .map(Into::into)
         .collect();
         args.extend(self.git_args());
-        IsolatedCommand::release_git(args, git)
+        IsolatedCommand::release_git(args, git)?
             .with_cwd(cwd.to_path_buf())
             .run()
     }

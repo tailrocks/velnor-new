@@ -45,6 +45,7 @@ mod crate_release_semver;
 pub mod crate_release_tool_artifact;
 pub mod crate_release_tool_download;
 pub use crate_release_runtime::{parse_crate_release_intent, run_crate_release};
+pub mod crate_release_git;
 mod crate_release_source;
 mod crate_release_workspace;
 pub use crate_release_archive::{verify_archive_tracked_content, verify_crate_archive};

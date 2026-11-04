@@ -50,7 +50,7 @@ pub(crate) struct CrateReleaseObservation<'a, J, G, R> {
     pub github: &'a G,
     pub registry: &'a R,
     pub source: &'a Path,
-    pub git: &'a velnor_actions_mise::release_git_pin::VerifiedGit,
+    pub git: &'a crate::crate_release_git::ReleaseGit,
     pub sequence: u32,
 }
 

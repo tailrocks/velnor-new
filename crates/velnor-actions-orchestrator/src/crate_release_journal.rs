@@ -565,7 +565,7 @@ pub fn inspect_prior_history<I: JournalIo + JournalOperationRefs>(
     previous: &JournalIdentity,
     current: &JournalReceipt,
     source: &std::path::Path,
-    git: &velnor_actions_mise::release_git_pin::VerifiedGit,
+    git: &crate::crate_release_git::ReleaseGit,
 ) -> Result<PriorHistoryEvidence, OrchestratorError> {
     let start = inspect_prior_incomplete_inner(io, previous, current, source, true, git)?;
     let listed = operation_sequences(io, previous)?;
@@ -629,7 +629,7 @@ pub fn inspect_prior_incomplete_evidence<I: JournalIo>(
     previous: &JournalIdentity,
     current: &JournalReceipt,
     source: &std::path::Path,
-    git: &velnor_actions_mise::release_git_pin::VerifiedGit,
+    git: &crate::crate_release_git::ReleaseGit,
 ) -> Result<JournalEvidence, OrchestratorError> {
     inspect_prior_incomplete_inner(io, previous, current, source, false, git)
 }
@@ -640,7 +640,7 @@ fn inspect_prior_incomplete_inner<I: JournalIo>(
     current: &JournalReceipt,
     source: &std::path::Path,
     allow_creation_transition: bool,
-    git: &velnor_actions_mise::release_git_pin::VerifiedGit,
+    git: &crate::crate_release_git::ReleaseGit,
 ) -> Result<JournalEvidence, OrchestratorError> {
     validate_identity(&current.identity)?;
     if !valid_receipt(current, &current.identity)
@@ -761,7 +761,7 @@ pub(crate) fn inspect_prior_chain<I: JournalIo + JournalOperationRefs>(
     io: &I,
     current: &JournalReceipt,
     source: &std::path::Path,
-    git: &velnor_actions_mise::release_git_pin::VerifiedGit,
+    git: &crate::crate_release_git::ReleaseGit,
 ) -> Result<Vec<PriorHistoryEvidence>, OrchestratorError> {
     let mut chain = Vec::new();
     let mut cursor = current.clone();
@@ -783,7 +783,7 @@ pub fn record_source_bound_start<I: JournalIo>(
     identity: &JournalIdentity,
     receipt: &JournalReceipt,
     source: &std::path::Path,
-    git: &velnor_actions_mise::release_git_pin::VerifiedGit,
+    git: &crate::crate_release_git::ReleaseGit,
 ) -> Result<String, OrchestratorError> {
     if &receipt.identity != identity {
         return Err(internal("crate_release_journal_source_mismatch"));

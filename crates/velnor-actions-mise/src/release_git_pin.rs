@@ -14,6 +14,12 @@ pub const GIT_PACKAGE_SHA256: &str =
     "c79b7948ef9860c97ec74293a90178676e63368a0711c95c28a55af4edf1adab";
 pub const GIT_PACKAGE_URL: &str = "https://snapshot.ubuntu.com/ubuntu/20261103T000000Z/pool/main/g/git/git_2.43.0-1ubuntu7.4_amd64.deb";
 
+pub trait ReleaseGitExecutable {
+    fn executable(&self) -> &Path;
+    fn exec_path(&self) -> &Path;
+    fn revalidate(&self) -> Result<(), &'static str>;
+}
+
 #[derive(Debug, Clone)]
 pub struct VerifiedGit {
     executable: PathBuf,
@@ -28,6 +34,18 @@ impl VerifiedGit {
     #[must_use]
     pub fn exec_path(&self) -> &Path {
         &self.exec_path
+    }
+}
+
+impl ReleaseGitExecutable for VerifiedGit {
+    fn executable(&self) -> &Path {
+        self.executable()
+    }
+    fn exec_path(&self) -> &Path {
+        self.exec_path()
+    }
+    fn revalidate(&self) -> Result<(), &'static str> {
+        verify_bundle(&self.exec_path).map(|_| ())
     }
 }
 

@@ -80,7 +80,7 @@ pub fn prepare_crate_release<G: GitHubAdmissionRead, R: CrateRegistryRead>(
     github: &G,
     registry: &R,
     source: &Path,
-    git: &velnor_actions_mise::release_git_pin::VerifiedGit,
+    git: &crate::crate_release_git::ReleaseGit,
 ) -> Result<CrateReleaseAdmissionReceipt, OrchestratorError> {
     let observed = observe_crate_release(intent, request, github, registry, source, git)?;
     if intent.journal_predecessor.is_none()
@@ -116,7 +116,7 @@ pub(super) struct PackageVerification<'a, G, R> {
     pub github: &'a G,
     pub registry: &'a R,
     pub source: &'a Path,
-    pub git: &'a velnor_actions_mise::release_git_pin::VerifiedGit,
+    pub git: &'a crate::crate_release_git::ReleaseGit,
     pub package: &'a str,
 }
 
@@ -128,7 +128,7 @@ pub(crate) fn verify_release_package<G: GitHubAdmissionRead, R: CrateRegistryRea
     registry: &R,
     source: &Path,
     package: &str,
-    git: &velnor_actions_mise::release_git_pin::VerifiedGit,
+    git: &crate::crate_release_git::ReleaseGit,
 ) -> Result<VerifiedReleasePackage, OrchestratorError> {
     let input = PackageVerification {
         receipt,
@@ -223,7 +223,7 @@ fn observe_crate_release<G: GitHubAdmissionRead, R: CrateRegistryRead>(
     github: &G,
     registry: &R,
     source: &Path,
-    git: &velnor_actions_mise::release_git_pin::VerifiedGit,
+    git: &crate::crate_release_git::ReleaseGit,
 ) -> Result<CrateReleaseAdmissionReceipt, OrchestratorError> {
     intent
         .validate()
@@ -240,7 +240,7 @@ fn observe_package_state<G: GitHubAdmissionRead, R: CrateRegistryRead>(
     registry: &R,
     source: &Path,
     admitted: &GitHubCandidate,
-    git: &velnor_actions_mise::release_git_pin::VerifiedGit,
+    git: &crate::crate_release_git::ReleaseGit,
 ) -> Result<CrateReleaseAdmissionReceipt, OrchestratorError> {
     intent
         .validate()
@@ -394,7 +394,7 @@ pub fn validate_reconciliation_receipt<G: GitHubAdmissionRead, R: CrateRegistryR
     github: &G,
     registry: &R,
     source: &Path,
-    git: &velnor_actions_mise::release_git_pin::VerifiedGit,
+    git: &crate::crate_release_git::ReleaseGit,
 ) -> Result<bool, OrchestratorError> {
     let invalid = || internal("crate_release_reconciliation_receipt_invalid");
     if receipt.schema != 1
@@ -489,7 +489,7 @@ pub fn verify_crate_release_admission<G: GitHubAdmissionRead, R: CrateRegistryRe
     github: &G,
     registry: &R,
     source: &Path,
-    git: &velnor_actions_mise::release_git_pin::VerifiedGit,
+    git: &crate::crate_release_git::ReleaseGit,
 ) -> Result<(), OrchestratorError> {
     if receipt.schema != 1 || &receipt.intent != intent {
         return Err(internal("crate_release_receipt_mismatch"));
@@ -520,7 +520,7 @@ pub fn reconcile_crate_release<G: GitHubAdmissionRead, R: CrateRegistryRead>(
     github: &G,
     registry: &R,
     source: &Path,
-    git: &velnor_actions_mise::release_git_pin::VerifiedGit,
+    git: &crate::crate_release_git::ReleaseGit,
 ) -> Result<Vec<CrateReleaseCompletedPackage>, OrchestratorError> {
     if receipt.schema != 1 || &receipt.intent != intent {
         return Err(internal("crate_release_receipt_mismatch"));
@@ -607,7 +607,7 @@ fn workspace_inventory<R: CrateRegistryRead>(
     source_sha: &str,
     intent: &CrateReleaseIntent,
     registry: &R,
-    git: &velnor_actions_mise::release_git_pin::VerifiedGit,
+    git: &crate::crate_release_git::ReleaseGit,
 ) -> Result<Vec<CrateReleaseSourcePackage>, OrchestratorError> {
     let workspace =
         crate_release_workspace_plan_with_registry(source, source_sha, intent, registry, git)?;
@@ -638,7 +638,7 @@ fn package_source(
     target: &Path,
     expected_sha: &str,
     verify: bool,
-    git: &velnor_actions_mise::release_git_pin::VerifiedGit,
+    git: &crate::crate_release_git::ReleaseGit,
 ) -> Result<Vec<u8>, OrchestratorError> {
     use std::ffi::{OsStr, OsString};
     use velnor_actions_mise::{PinnedTool, PinnedToolExec};
@@ -789,7 +789,7 @@ pub fn repair_crate_release<
     github: &G,
     registry: &R,
     source: &Path,
-    git: &velnor_actions_mise::release_git_pin::VerifiedGit,
+    git: &crate::crate_release_git::ReleaseGit,
 ) -> Result<(), OrchestratorError> {
     let recovery = intent
         .recovery

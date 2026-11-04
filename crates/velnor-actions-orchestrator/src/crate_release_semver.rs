@@ -198,7 +198,7 @@ pub(crate) fn verify_preflight<R: CrateRegistryRead>(
     receipt: &CrateReleaseAdmissionReceipt,
     registry: &R,
     runner_temp: &Path,
-    git: &velnor_actions_mise::release_git_pin::VerifiedGit,
+    git: &crate::crate_release_git::ReleaseGit,
 ) -> Result<std::collections::BTreeMap<String, SemverEvidence>, OrchestratorError> {
     let executable = verify_checker(receipt, runner_temp)?;
     crate::verify_crate_release_source(source, &receipt.github.request.source_sha, git)?;
@@ -308,7 +308,7 @@ pub(crate) fn verify_before_upload<R: CrateRegistryRead>(
     registry: &R,
     runner_temp: &Path,
     name: &str,
-    git: &velnor_actions_mise::release_git_pin::VerifiedGit,
+    git: &crate::crate_release_git::ReleaseGit,
 ) -> Result<VerifiedSemver, OrchestratorError> {
     let executable = verify_checker(receipt, runner_temp)?;
     crate::verify_crate_release_source(source, &receipt.github.request.source_sha, git)?;

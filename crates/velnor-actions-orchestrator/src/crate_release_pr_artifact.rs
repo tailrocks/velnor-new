@@ -42,7 +42,7 @@ pub struct PreparationArtifact {
 #[derive(Debug)]
 pub struct PreparationCheckout {
     root: PathBuf,
-    git: velnor_actions_mise::release_git_pin::VerifiedGit,
+    git: crate::crate_release_git::ReleaseGit,
     binding: PreparationBinding,
     allowed_paths: BTreeSet<String>,
     tracked: BTreeMap<String, TrackedFile>,
@@ -60,7 +60,7 @@ impl PreparationCheckout {
         root: &Path,
         binding: PreparationBinding,
         allowed_paths: BTreeSet<String>,
-        git: velnor_actions_mise::release_git_pin::VerifiedGit,
+        git: crate::crate_release_git::ReleaseGit,
     ) -> Result<Self, &'static str> {
         if !valid_binding(&binding) || allowed_paths.iter().any(|path| !valid_path(path)) {
             return Err("release_pr_checkout_invalid");
@@ -180,7 +180,7 @@ fn insert_change(
 fn git_output(
     root: &Path,
     request: &GitRequest,
-    git: &velnor_actions_mise::release_git_pin::VerifiedGit,
+    git: &crate::crate_release_git::ReleaseGit,
 ) -> Result<Vec<u8>, &'static str> {
     let result = request
         .run_release_in(root, git)
@@ -193,7 +193,7 @@ fn git_output(
 
 fn tracked_files(
     root: &Path,
-    git: &velnor_actions_mise::release_git_pin::VerifiedGit,
+    git: &crate::crate_release_git::ReleaseGit,
 ) -> Result<BTreeMap<String, TrackedFile>, &'static str> {
     let output = git_output(
         root,
@@ -238,7 +238,7 @@ fn tracked_files(
 
 fn untracked_files(
     root: &Path,
-    git: &velnor_actions_mise::release_git_pin::VerifiedGit,
+    git: &crate::crate_release_git::ReleaseGit,
 ) -> Result<Vec<String>, &'static str> {
     let output = git_output(
         root,
@@ -260,7 +260,7 @@ fn untracked_files(
 
 fn git_file_digests(
     root: &Path,
-    verified_git: &velnor_actions_mise::release_git_pin::VerifiedGit,
+    verified_git: &crate::crate_release_git::ReleaseGit,
 ) -> Result<BTreeMap<String, String>, &'static str> {
     let git = root.join(".git");
     let metadata = fs::symlink_metadata(&git).map_err(|_| "release_pr_checkout_git")?;
@@ -488,7 +488,11 @@ fn prepare_pr_inner() -> Result<(), &'static str> {
         run_attempt,
     };
     let allowed: BTreeSet<String> = intent.pr_write_paths.iter().cloned().collect();
-    let checkout = PreparationCheckout::open(&source, binding, allowed)?;
+    let git = crate::crate_release_git::ReleaseGit::new(
+        velnor_actions_mise::release_git_pin::verify_bundle(&temp.join("velnor/git-bundle"))
+            .map_err(|_| invalid())?,
+    );
+    let checkout = PreparationCheckout::open(&source, binding, allowed, git)?;
     let config = ReleasePlzConfig {
         tag_pattern: intent.tag_template.clone(),
         semver_check: true,

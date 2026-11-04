@@ -19,7 +19,7 @@ pub fn verify_archive_tracked_content(
     manifest: &str,
     package: &str,
     version: &str,
-    git: &velnor_actions_mise::release_git_pin::VerifiedGit,
+    git: &crate::crate_release_git::ReleaseGit,
 ) -> Result<(), OrchestratorError> {
     let invalid = || internal("crate_archive_source_evidence_invalid");
     let package_dir = source_package_dir(manifest, package, version)?;
@@ -120,7 +120,7 @@ fn source_package_dir<'a>(
 
 fn tracked_paths(
     root: &std::path::Path,
-    git: &velnor_actions_mise::release_git_pin::VerifiedGit,
+    git: &crate::crate_release_git::ReleaseGit,
 ) -> Result<std::collections::BTreeSet<String>, OrchestratorError> {
     let invalid = || internal("crate_archive_source_evidence_invalid");
     let tracked = velnor_actions_mise::GitRequest::ls_files(vec!["--stage".into(), "-z".into()])

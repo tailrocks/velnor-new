@@ -1,14 +1,15 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::crate_release_git::ReleaseGit;
 use crate::{OrchestratorError, internal::internal};
 use std::{fs, path::Path};
-use velnor_actions_mise::{GitRequest, release_git_pin::VerifiedGit};
+use velnor_actions_mise::GitRequest;
 
 pub fn verify_journal_source(
     root: &Path,
     receipt: &crate::crate_release_journal::JournalReceipt,
-    git: &VerifiedGit,
+    git: &ReleaseGit,
 ) -> Result<(), OrchestratorError> {
     if journal_source_inventory(root, &receipt.identity.source_sha, git)? != receipt.source_files {
         return Err(internal("crate_release_journal_source_mismatch"));
@@ -19,7 +20,7 @@ pub fn verify_journal_source(
 pub fn journal_source_inventory(
     root: &Path,
     expected_sha: &str,
-    git: &VerifiedGit,
+    git: &ReleaseGit,
 ) -> Result<Vec<crate::crate_release_journal::JournalFile>, OrchestratorError> {
     use crate::crate_release_journal::{JournalFile, JournalFileKind};
     verify_crate_release_source(root, expected_sha, git)?;
@@ -58,7 +59,7 @@ pub fn journal_source_inventory(
 pub fn verify_crate_release_source(
     root: &Path,
     expected_sha: &str,
-    git: &VerifiedGit,
+    git: &ReleaseGit,
 ) -> Result<(), OrchestratorError> {
     if expected_sha.len() != 40
         || !expected_sha
@@ -130,7 +131,7 @@ pub(crate) fn source_tool_catalog(
     )
 }
 
-fn validate_source_links(root: &Path, git: &VerifiedGit) -> Result<(), OrchestratorError> {
+fn validate_source_links(root: &Path, git: &ReleaseGit) -> Result<(), OrchestratorError> {
     use std::collections::BTreeSet;
     if !cfg!(unix) {
         return Err(internal("crate_release_source_platform_unsupported"));
@@ -178,7 +179,7 @@ fn validate_source_links(root: &Path, git: &VerifiedGit) -> Result<(), Orchestra
 
 fn source_tree_entries(
     root: &Path,
-    git: &VerifiedGit,
+    git: &ReleaseGit,
 ) -> Result<std::collections::BTreeSet<(String, String, String)>, OrchestratorError> {
     let tree = GitRequest::ls_tree(vec![
         "-r".into(),
