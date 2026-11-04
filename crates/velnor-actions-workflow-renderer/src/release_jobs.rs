@@ -18,6 +18,7 @@ use crate::{
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ReleaseRole {
     Preparation,
+    PrCreate,
     Preflight,
     PublishOidc,
     PublishBootstrap,
@@ -29,6 +30,7 @@ impl ReleaseRole {
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Preparation => "preparation",
+            Self::PrCreate => "pr-create",
             Self::Preflight => "preflight",
             Self::PublishOidc => "publish-oidc",
             Self::PublishBootstrap => "publish-bootstrap",
@@ -43,10 +45,9 @@ impl ReleaseRole {
 
     fn rank(self) -> u8 {
         match self {
-            Self::Preparation => 0,
-            Self::Preflight => 1,
-            Self::PublishOidc | Self::PublishBootstrap => 2,
-            Self::Reconcile => 3,
+            Self::Preflight => 0,
+            Self::Preparation | Self::PublishOidc | Self::PublishBootstrap => 1,
+            Self::PrCreate | Self::Reconcile => 2,
         }
     }
 }
@@ -75,7 +76,7 @@ fn check_condition_text(condition: &str) -> Result<(), RenderError> {
 }
 
 impl ReleaseJobSpec {
-    pub fn validate_shape(&self, id: &str) -> Result<(), RenderError> {
+    fn validate_outputs(&self, id: &str) -> Result<(), RenderError> {
         if self.role == ReleaseRole::Preflight
             && (self.outputs.len() != 4
                 || ![
@@ -91,7 +92,31 @@ impl ReleaseJobSpec {
                 "missing_release_output:{id}"
             )));
         }
-        if self.outputs.iter().any(|(key, value)| {
+        if self.role == ReleaseRole::Preparation && !self.outputs.is_empty() {
+            let expected = BTreeMap::from([
+                (
+                    "artifact_id".to_owned(),
+                    "${{ steps.release-pr-artifact.outputs.artifact-id }}".to_owned(),
+                ),
+                (
+                    "artifact_digest".to_owned(),
+                    "${{ steps.release-pr-artifact.outputs.artifact-digest }}".to_owned(),
+                ),
+                (
+                    "content_sha256".to_owned(),
+                    "${{ steps.release-pr-candidate.outputs.content_sha256 }}".to_owned(),
+                ),
+                (
+                    "changed".to_owned(),
+                    "${{ steps.release-pr-candidate.outputs.changed }}".to_owned(),
+                ),
+            ]);
+            if self.outputs != expected {
+                return Err(RenderError::InvalidWorkflow(format!(
+                    "bad_preparation_output:{id}"
+                )));
+            }
+        } else if self.outputs.iter().any(|(key, value)| {
             if key == "receipt_artifact_id" {
                 self.role != ReleaseRole::Preflight
                     || value != "${{ steps.release-receipt-upload.outputs.artifact-id }}"
@@ -113,6 +138,11 @@ impl ReleaseJobSpec {
                 "bad_release_output:{id}"
             )));
         }
+        Ok(())
+    }
+
+    pub fn validate_shape(&self, id: &str) -> Result<(), RenderError> {
+        self.validate_outputs(id)?;
         if !is_clean_text(&self.display_name, 128) {
             return Err(RenderError::InvalidWorkflow(format!(
                 "bad_job_display:{id}"
@@ -216,7 +246,19 @@ fn check_role_set(jobs: &BTreeMap<String, ReleaseJobSpec>) -> Result<(), RenderE
         ReleaseRole::Reconcile,
     ];
     with_bootstrap.sort();
-    if roles != required && roles != with_bootstrap {
+    let preparation = jobs
+        .values()
+        .find(|job| job.role == ReleaseRole::Preparation);
+    let has_writer = jobs.values().any(|job| job.role == ReleaseRole::PrCreate);
+    if has_writer {
+        required.push(ReleaseRole::PrCreate);
+        with_bootstrap.push(ReleaseRole::PrCreate);
+        required.sort();
+        with_bootstrap.sort();
+    }
+    if preparation.is_none_or(|job| job.outputs.is_empty() == has_writer)
+        || (roles != required && roles != with_bootstrap)
+    {
         return Err(RenderError::InvalidWorkflow(format!(
             "release_role_set:{}",
             roles.len()
@@ -285,11 +327,23 @@ fn check_role_conditions(
             }
             ReleaseRole::Preparation => {
                 let expected = format!(
-                    "github.repository == '{repository}' && github.event_name == 'push' && github.ref == 'refs/heads/{branch}'"
+                    "github.repository == '{repository}' && github.event_name == 'push' && github.ref == 'refs/heads/{branch}' && needs.release-preflight.result == 'success' && needs.release-preflight.outputs.eligible == 'false'"
                 );
-                if job.condition.as_deref() != Some(expected.as_str()) {
+                if job.condition.as_deref() != Some(expected.as_str())
+                    || job.needs != ["release-preflight"]
+                {
                     return Err(RenderError::InvalidWorkflow(format!(
                         "preparation_gate_mismatch:{id}"
+                    )));
+                }
+            }
+            ReleaseRole::PrCreate => {
+                let expected = "needs.release-preparation.result == 'success' && needs.release-preparation.outputs.changed == 'true'";
+                if job.condition.as_deref() != Some(expected)
+                    || job.needs != ["release-preparation"]
+                {
+                    return Err(RenderError::InvalidWorkflow(format!(
+                        "release_pr_create_gate:{id}"
                     )));
                 }
             }

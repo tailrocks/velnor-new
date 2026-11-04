@@ -6,12 +6,11 @@ use velnor_actions_contract::{Step, StepKind};
 use crate::{RenderError, release_jobs::ReleaseRole, release_tree::RELEASE_SOURCE_DIR};
 
 fn expected_persist(role: ReleaseRole, sourced: bool) -> &'static str {
-    let pushes = (!sourced && role == ReleaseRole::Preparation)
-        || (sourced
-            && matches!(
-                role,
-                ReleaseRole::PublishOidc | ReleaseRole::PublishBootstrap
-            ));
+    let pushes = sourced
+        && matches!(
+            role,
+            ReleaseRole::PublishOidc | ReleaseRole::PublishBootstrap
+        );
     if pushes { "true" } else { "false" }
 }
 

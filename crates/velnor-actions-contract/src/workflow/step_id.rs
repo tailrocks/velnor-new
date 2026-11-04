@@ -12,6 +12,8 @@ pub enum StepId {
     ReleaseVerification,
     ReleaseRustUpload,
     ReleaseReceiptUpload,
+    ReleasePrCandidate,
+    ReleasePrArtifact,
     Plan,
 
     BuildTaskRun,
@@ -77,6 +79,8 @@ impl StepId {
             Self::ReleaseVerification => "release-verification",
             Self::ReleaseRustUpload => "release-rust-upload",
             Self::ReleaseReceiptUpload => "release-receipt-upload",
+            Self::ReleasePrCandidate => "release-pr-candidate",
+            Self::ReleasePrArtifact => "release-pr-artifact",
             Self::Plan => "plan",
             Self::BuildTaskRun => "build-task-run",
             Self::ToolsCacheIdentity => "v2",

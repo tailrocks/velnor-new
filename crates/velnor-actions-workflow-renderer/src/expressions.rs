@@ -164,6 +164,19 @@ fn check_env_value_with_scope(key: &str, value: &str, composite: bool) -> Result
                 && inner == "needs.release-preflight.outputs.rust_artifact_id")
             && !(key == "VELNOR_RECEIPT_ARTIFACT_ID"
                 && inner == "needs.release-preflight.outputs.receipt_artifact_id")
+            && !matches!(
+                (key, inner),
+                (
+                    "VELNOR_PR_ARTIFACT_ID",
+                    "needs.release-preparation.outputs.artifact_id"
+                ) | (
+                    "VELNOR_PR_ARTIFACT_DIGEST",
+                    "needs.release-preparation.outputs.artifact_digest"
+                ) | (
+                    "VELNOR_PR_CONTENT_SHA256",
+                    "needs.release-preparation.outputs.content_sha256"
+                )
+            )
             && !is_state_producer_output(inner)
             && !is_state_identity_binding(key, inner)
         {

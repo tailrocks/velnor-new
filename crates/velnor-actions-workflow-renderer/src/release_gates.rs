@@ -22,6 +22,77 @@ pub const REJECT_MODE_CONDITION: &str = "steps.release-verification.outputs.rele
 pub const GIT_TOKEN_ENV: &str = "GIT_TOKEN";
 pub const GIT_TOKEN_REF: &str = "${{ secrets.GITHUB_TOKEN }}";
 
+pub fn release_pr_candidate_step(
+    version: &str,
+    rust: &str,
+    runner: &str,
+) -> Result<Step, RenderError> {
+    crate::marker::validate_version(version)?;
+    let mut step = crate::ambient_shell_step(
+        "Prepare release PR candidate",
+        vec![
+            format!("$RUNNER_TEMP/velnor/bin/velnor-actions-{version}"),
+            "crate-release".to_owned(),
+            "prepare-pr".to_owned(),
+        ],
+        release_executable_env(rust, runner)?,
+    )?;
+    step.id = Some(StepId::ReleasePrCandidate);
+    step.role = Some(StepRole::ReleasePrCandidate);
+    Ok(step)
+}
+
+pub fn release_pr_artifact_step() -> Result<Step, RenderError> {
+    let mut step = crate::action_step(
+        "Upload release PR candidate",
+        crate::steps::UPLOAD_ARTIFACT_USES,
+        std::collections::BTreeMap::from([
+            (
+                "name".to_owned(),
+                "velnor-release-pr-preparation-${{ github.run_id }}-${{ github.run_attempt }}"
+                    .to_owned(),
+            ),
+            (
+                "path".to_owned(),
+                "${{ runner.temp }}/velnor-release-pr-preparation.json".to_owned(),
+            ),
+            ("if-no-files-found".to_owned(), "error".to_owned()),
+            ("retention-days".to_owned(), "7".to_owned()),
+        ]),
+    )?;
+    step.id = Some(StepId::ReleasePrArtifact);
+    step.role = Some(StepRole::ReleasePrArtifact);
+    step.condition = Some("steps.release-pr-candidate.outputs.changed == 'true'".to_owned());
+    Ok(step)
+}
+
+pub fn release_pr_writer_step(version: &str) -> Result<Step, RenderError> {
+    crate::marker::validate_version(version)?;
+    crate::ambient_shell_step(
+        "Create release PR",
+        vec![
+            format!("$RUNNER_TEMP/velnor/bin/velnor-actions-{version}"),
+            "crate-release".to_owned(),
+            "release-pr-create".to_owned(),
+        ],
+        std::collections::BTreeMap::from([
+            (GIT_TOKEN_ENV.to_owned(), GIT_TOKEN_REF.to_owned()),
+            (
+                "VELNOR_PR_ARTIFACT_ID".to_owned(),
+                "${{ needs.release-preparation.outputs.artifact_id }}".to_owned(),
+            ),
+            (
+                "VELNOR_PR_ARTIFACT_DIGEST".to_owned(),
+                "${{ needs.release-preparation.outputs.artifact_digest }}".to_owned(),
+            ),
+            (
+                "VELNOR_PR_CONTENT_SHA256".to_owned(),
+                "${{ needs.release-preparation.outputs.content_sha256 }}".to_owned(),
+            ),
+        ]),
+    )
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ReleaseConfigBinding<'a> {
     pub generator_version: &'a str,
@@ -34,14 +105,34 @@ pub fn check_release_jobs(
     binding: &ReleaseConfigBinding<'_>,
 ) -> Result<(), RenderError> {
     let catalog = release_catalog(binding.rust_version)?;
+    let mut acquire: Option<&Step> = None;
     for (id, job) in &spec.jobs {
         check_job_steps(id, job)?;
+        for step in job
+            .steps
+            .iter()
+            .filter(|step| step.role == Some(StepRole::AcquireVelnor))
+        {
+            if acquire.is_some_and(|prior| prior != step) {
+                return Err(RenderError::InvalidWorkflow(format!(
+                    "release_generator_acquire_mismatch:{id}"
+                )));
+            }
+            acquire = Some(step);
+        }
+        if job.role == ReleaseRole::PrCreate {
+            check_pr_writer(id, job, binding.generator_version)?;
+            continue;
+        }
         check_rust_custody(id, job, &catalog)?;
-        require_forge_binding(id, &job.steps)?;
+        if job.role != ReleaseRole::Preparation {
+            require_forge_binding(id, &job.steps)?;
+        }
         match job.role {
             ReleaseRole::Preparation => {
-                check_preparation(id, job, &spec.plan.source_sha, binding.release_plz_version)?;
+                check_preparation(id, job, &spec.plan.source_sha, binding)?;
             }
+            ReleaseRole::PrCreate => unreachable!(),
             ReleaseRole::Preflight => {
                 check_preflight(id, job, ADMITTED_SOURCE, binding.generator_version)?;
             }
@@ -109,16 +200,24 @@ fn check_rust_custody(
         .filter(|step| step.role == Some(StepRole::VerifyRustManifest))
         .collect();
     let expects_prepare = matches!(job.role, ReleaseRole::Preparation | ReleaseRole::Preflight);
+    let preparation_with_pr = job.role == ReleaseRole::Preparation && !job.outputs.is_empty();
+    let expected_verifications = if preparation_with_pr {
+        vec![&verify, &verify]
+    } else {
+        vec![&verify]
+    };
     if (expects_prepare && prepared != vec![&prepare])
         || (!expects_prepare && !prepared.is_empty())
-        || verified != vec![&verify]
+        || verified != expected_verifications
     {
         return Err(RenderError::InvalidWorkflow(format!(
             "release_rust_custody:{id}"
         )));
     }
+    let prepare_index = if preparation_with_pr { 3 } else { 2 };
     if job.role == ReleaseRole::Preparation
-        && (job.steps.get(2) != Some(&prepare) || job.steps.get(3) != Some(&verify))
+        && (job.steps.get(prepare_index) != Some(&prepare)
+            || job.steps.get(prepare_index + 1) != Some(&verify))
     {
         return Err(RenderError::InvalidWorkflow(format!(
             "release_rust_custody_order:{id}"
@@ -216,7 +315,9 @@ fn check_release_tool_environment(
             .map_err(|_| RenderError::InvalidWorkflow("release_rust_env".to_owned()))?;
         expected_env.insert(key, value);
     }
-    expected_env.insert(GIT_TOKEN_ENV.to_owned(), GIT_TOKEN_REF.to_owned());
+    if job.role != ReleaseRole::Preparation {
+        expected_env.insert(GIT_TOKEN_ENV.to_owned(), GIT_TOKEN_REF.to_owned());
+    }
     expected_env.insert("RUSTUP_AUTO_INSTALL".to_owned(), "0".to_owned());
     for step in &job.steps {
         if (step.name.starts_with("Release ")
@@ -355,18 +456,18 @@ pub fn isolated_release_plz_argv(payload: Vec<String>, auth: ReleasePlzAuth) -> 
         "GITHUB_API_URL",
         "GITHUB_RUN_ID",
         "GITHUB_RUN_ATTEMPT",
-        "GITHUB_OUTPUT",
-        "GIT_TOKEN",
     ];
     let mut argv = vec!["/usr/bin/env".to_owned(), "-i".to_owned()];
     argv.extend(names.iter().map(|name| format!("{name}=${{{name}-}}")));
     match auth {
         ReleasePlzAuth::None => {}
         ReleasePlzAuth::Trusted => argv.extend([
+            "GIT_TOKEN=${GIT_TOKEN-}".to_owned(),
             "ACTIONS_ID_TOKEN_REQUEST_URL=${ACTIONS_ID_TOKEN_REQUEST_URL-}".to_owned(),
             "ACTIONS_ID_TOKEN_REQUEST_TOKEN=${ACTIONS_ID_TOKEN_REQUEST_TOKEN-}".to_owned(),
         ]),
         ReleasePlzAuth::Bootstrap => {
+            argv.push("GIT_TOKEN=${GIT_TOKEN-}".to_owned());
             argv.push("CARGO_REGISTRY_TOKEN=${CARGO_REGISTRY_TOKEN-}".to_owned());
         }
     }
@@ -554,21 +655,81 @@ fn check_preparation(
     id: &str,
     job: &ReleaseJobSpec,
     sha: &str,
-    plz_version: &str,
+    binding: &ReleaseConfigBinding<'_>,
 ) -> Result<(), RenderError> {
     forbid_unexpected_secrets(id, &job.steps)?;
     forbid_registry_token(id, &job.steps)?;
     forbid_inputs_interpolation(id, &job.steps)?;
     check_checkout_shape(id, &job.steps, job.role, sha)?;
-    if job.steps.len() != 7
-        || job.steps[4] != crate::release_plz_acquire::acquire_step(plz_version, &job.runs_on)?
-        || job.steps[5] != crate::release_plz_acquire::acquire_semver_step(&job.runs_on)?
+    let has_pr = !job.outputs.is_empty();
+    let offset = usize::from(has_pr);
+    if job.steps.len() != if has_pr { 10 } else { 7 }
+        || job.steps[4 + offset]
+            != crate::release_plz_acquire::acquire_step(binding.release_plz_version, &job.runs_on)?
+        || job.steps[5 + offset] != crate::release_plz_acquire::acquire_semver_step(&job.runs_on)?
     {
         return Err(RenderError::InvalidWorkflow(format!(
             "release_plz_acquire:{id}"
         )));
     }
+    if has_pr {
+        check_acquire_step(id, &job.steps[1], binding.generator_version, &job.runs_on)?;
+        if job.steps[7]
+            != release_pr_candidate_step(
+                binding.generator_version,
+                binding.rust_version,
+                &job.runs_on,
+            )?
+            || job.steps[9] != release_pr_artifact_step()?
+        {
+            return Err(RenderError::InvalidWorkflow(format!(
+                "release_pr_preparation:{id}"
+            )));
+        }
+    } else if job.steps[6].name != "Validate release" {
+        return Err(RenderError::InvalidWorkflow(format!(
+            "release_pr_disabled:{id}"
+        )));
+    }
     Ok(())
+}
+
+fn check_acquire_step(
+    id: &str,
+    step: &Step,
+    version: &str,
+    runner: &str,
+) -> Result<(), RenderError> {
+    let StepKind::Shell { env, .. } = &step.kind else {
+        return Err(RenderError::InvalidWorkflow(format!(
+            "release_generator_acquire:{id}"
+        )));
+    };
+    let source = env
+        .get("VELNOR_GENERATOR_SOURCE_SHA")
+        .ok_or_else(|| RenderError::InvalidWorkflow(format!("release_generator_acquire:{id}")))?;
+    let manifest = env
+        .get("VELNOR_GENERATOR_MANIFEST_SHA256")
+        .ok_or_else(|| RenderError::InvalidWorkflow(format!("release_generator_acquire:{id}")))?;
+    if *step != crate::release_generator_bootstrap::acquire_step(version, runner, source, manifest)?
+    {
+        return Err(RenderError::InvalidWorkflow(format!(
+            "release_generator_acquire:{id}"
+        )));
+    }
+    Ok(())
+}
+
+fn check_pr_writer(id: &str, job: &ReleaseJobSpec, version: &str) -> Result<(), RenderError> {
+    forbid_unexpected_secrets(id, &job.steps)?;
+    forbid_registry_token(id, &job.steps)?;
+    forbid_inputs_interpolation(id, &job.steps)?;
+    if job.steps.len() != 2 || job.steps[1] != release_pr_writer_step(version)? {
+        return Err(RenderError::InvalidWorkflow(format!(
+            "release_pr_writer:{id}"
+        )));
+    }
+    check_acquire_step(id, &job.steps[0], version, &job.runs_on)
 }
 
 fn check_preflight(
@@ -762,7 +923,7 @@ fn runtime_step_names(role: ReleaseRole) -> &'static [&'static str] {
             "Release reconcile",
             "Upload reconciliation record",
         ],
-        ReleaseRole::Preparation => &[],
+        ReleaseRole::Preparation | ReleaseRole::PrCreate => &[],
     }
 }
 

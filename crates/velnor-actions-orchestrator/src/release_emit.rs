@@ -95,7 +95,7 @@ fn release_files_for_config(
         release.effective_authentication() == ReleaseAuthentication::TrustedPublishing,
     );
     let preparation_gate = format!(
-        "github.repository == '{repository}' && github.event_name == 'push' && github.ref == 'refs/heads/{}'",
+        "github.repository == '{repository}' && github.event_name == 'push' && github.ref == 'refs/heads/{}' && needs.release-preflight.result == 'success' && needs.release-preflight.outputs.eligible == 'false'",
         prep.default_branch
     );
     let catalog = prep.catalog.clone().with_export_rustup_toolchain(false);

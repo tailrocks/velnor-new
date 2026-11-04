@@ -33,6 +33,10 @@ pub(crate) fn fixture() -> Result<(ReleaseWorkflowSpec, String), Box<dyn std::er
 }
 
 fn fixture_for(authentication: ReleaseAuthentication) -> Result<(ReleaseWorkflowSpec, String), Box<dyn std::error::Error>> {
+    fixture_for_release_pr(authentication, true)
+}
+
+fn fixture_for_release_pr(authentication: ReleaseAuthentication, release_pr: bool) -> Result<(ReleaseWorkflowSpec, String), Box<dyn std::error::Error>> {
     let generator_version = env!("CARGO_PKG_VERSION");
     let repository = "owner/project";
     let source = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
@@ -49,6 +53,7 @@ fn fixture_for(authentication: ReleaseAuthentication) -> Result<(ReleaseWorkflow
         enabled: true,
         registry: ReleaseRegistry::CratesIo,
         authentication: Some(authentication),
+        release_pr,
         packages: vec!["example".to_owned()],
         required_workflow_path: ".github/workflows/ci.yml".to_owned(),
         trusted_reviewer_id: 1,
@@ -68,7 +73,7 @@ fn fixture_for(authentication: ReleaseAuthentication) -> Result<(ReleaseWorkflow
         release: &release,
         gate: publish_gate_condition(repository, "main", &plan, authentication == ReleaseAuthentication::TrustedPublishing),
         preparation_gate: format!(
-            "github.repository == '{repository}' && github.event_name == 'push' && github.ref == 'refs/heads/main'"
+            "github.repository == '{repository}' && github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.release-preflight.result == 'success' && needs.release-preflight.outputs.eligible == 'false'"
         ),
         registry: None,
         label: "ubuntu-24.04",
@@ -123,6 +128,94 @@ fn valid(spec: &ReleaseWorkflowSpec, rust: &str) -> bool {
             },
         )
         .is_ok()
+}
+
+#[test]
+fn release_pr_preparation_separates_source_execution_from_write_authority()
+-> Result<(), Box<dyn std::error::Error>> {
+    let (spec, rust) = fixture()?;
+    let producer = spec.jobs.get("release-preparation").ok_or("producer")?;
+    let writer = spec.jobs.get("release-pr-create").ok_or("missing create-only writer")?;
+    assert_eq!(producer.permissions.contents, PermissionLevel::Read);
+    assert_eq!(producer.permissions.pull_requests, PermissionLevel::None);
+    assert_eq!(producer.permissions.id_token, PermissionLevel::None);
+    assert_eq!(writer.permissions.contents, PermissionLevel::Write);
+    assert_eq!(writer.permissions.pull_requests, PermissionLevel::Write);
+    assert_eq!(writer.permissions.actions, PermissionLevel::Read);
+    assert_eq!(writer.permissions.id_token, PermissionLevel::None);
+    assert_eq!(writer.needs, ["release-preparation"]);
+    assert!(writer.steps.iter().all(|step| !matches!(
+        &step.kind, StepKind::Action { uses, .. } if uses.starts_with("actions/checkout@")
+    )));
+    assert!(producer.steps.iter().filter_map(|step| match &step.kind {
+        StepKind::Action { uses, with, .. } if uses.starts_with("actions/checkout@") => Some(with),
+        _ => None,
+    }).all(|with| with.get("persist-credentials").is_some_and(|value| value == "false")));
+    let ctx = velnor_actions_workflow_renderer::release_tree::ReleaseRenderContext {
+        generator_version: env!("CARGO_PKG_VERSION").to_owned(),
+        runs_on: "ubuntu-24.04".to_owned(),
+    };
+    let workflow = velnor_actions_workflow_renderer::release_tree::render_release_workflow(&spec, &ctx, &rust)?;
+    assert!(workflow.contains("release-pr-create:"));
+    assert!(workflow.contains("needs.release-preparation.outputs.artifact_id"));
+    Ok(())
+}
+
+#[test]
+fn release_pr_split_rejects_authority_and_artifact_forgery() -> Result<(), Box<dyn std::error::Error>> {
+    let (spec, rust) = fixture()?;
+    assert!(valid(&spec, &rust));
+    let mut candidate = spec.clone();
+    candidate.jobs.get_mut("release-preparation").ok_or("producer")?.permissions.contents = PermissionLevel::Write;
+    assert!(!valid(&candidate, &rust));
+    let mut candidate = spec.clone();
+    let producer = candidate.jobs.get_mut("release-preparation").ok_or("producer")?;
+    let StepKind::Action { with, .. } = &mut producer.steps[0].kind else { return Err("checkout".into()) };
+    with.insert("persist-credentials".into(), "true".into());
+    assert!(!valid(&candidate, &rust));
+    let mut candidate = spec.clone();
+    let producer = candidate.jobs.get_mut("release-preparation").ok_or("producer")?;
+    let step = producer.steps.iter_mut().find(|step| step.name == "Prepare release PR candidate").ok_or("candidate")?;
+    let StepKind::Shell { env, .. } = &mut step.kind else { return Err("candidate shell".into()) };
+    env.insert("GIT_TOKEN".into(), "${{ secrets.GITHUB_TOKEN }}".into());
+    assert!(!valid(&candidate, &rust));
+    let mut candidate = spec.clone();
+    candidate.jobs.get_mut("release-preparation").ok_or("producer")?.outputs.insert("artifact_id".into(), "${{ steps.release-pr-artifact.outputs.artifact-digest }}".into());
+    assert!(!valid(&candidate, &rust));
+    let mut candidate = spec.clone();
+    let producer = candidate.jobs.get_mut("release-preparation").ok_or("producer")?;
+    producer.steps.swap(8, 9);
+    assert!(!valid(&candidate, &rust));
+    let mut candidate = spec.clone();
+    candidate.jobs.get_mut("release-pr-create").ok_or("writer")?.condition = None;
+    assert!(!valid(&candidate, &rust));
+    let mut candidate = spec.clone();
+    candidate.jobs.get_mut("release-pr-create").ok_or("writer")?.permissions.id_token = PermissionLevel::Write;
+    assert!(!valid(&candidate, &rust));
+    let mut candidate = spec.clone();
+    let checkout = candidate.jobs.get("release-preparation").ok_or("producer")?.steps[0].clone();
+    candidate.jobs.get_mut("release-pr-create").ok_or("writer")?.steps.push(checkout);
+    assert!(!valid(&candidate, &rust));
+    let mut candidate = spec.clone();
+    let writer = candidate.jobs.get_mut("release-pr-create").ok_or("writer")?;
+    let StepKind::Shell { env, .. } = &mut writer.steps[1].kind else { return Err("writer shell".into()) };
+    env.insert("VELNOR_PR_CONTENT_SHA256".into(), "${{ needs.release-preparation.outputs.artifact_digest }}".into());
+    assert!(!valid(&candidate, &rust));
+    Ok(())
+}
+
+#[test]
+fn disabled_release_pr_keeps_readonly_dry_run_without_writer() -> Result<(), Box<dyn std::error::Error>> {
+    for authentication in [ReleaseAuthentication::TrustedPublishing, ReleaseAuthentication::BootstrapToken] {
+        let (spec, rust) = fixture_for_release_pr(authentication, false)?;
+        assert!(valid(&spec, &rust));
+        assert!(!spec.jobs.contains_key("release-pr-create"));
+        let producer = spec.jobs.get("release-preparation").ok_or("producer")?;
+        assert_eq!(producer.permissions.contents, PermissionLevel::Read);
+        assert!(producer.outputs.is_empty());
+        assert!(producer.steps.iter().any(|step| step.name == "Validate release"));
+    }
+    Ok(())
 }
 
 #[test]
@@ -729,7 +822,7 @@ fn workspace_creation_dispatch_binds_source_and_each_package()
     let catalog = ToolCatalog::pinned().with_export_rustup_toolchain(false);
     let mise = MiseSetup { uses: format!("jdx/mise-action@{}", velnor_actions_actionlint::actions::MISE_ACTION_SHA), version: MISE_VERSION.to_owned(), sha256: MISE_BINARY_SHA256_LINUX_X64.to_owned() };
     let acquire = velnor_actions_workflow_renderer::release_generator_bootstrap::acquire_step(env!("CARGO_PKG_VERSION"), "ubuntu-24.04", &"b".repeat(40), &"c".repeat(64))?;
-    spec.jobs = assemble_jobs(&JobInputs { release: &release, gate: publish_gate_condition(&spec.repository, "main", &spec.plan, false), preparation_gate: "github.repository == 'owner/project' && github.event_name == 'push' && github.ref == 'refs/heads/main'".into(), registry: None, label: "ubuntu-24.04", mise: &mise, catalog: &catalog, acquire: &acquire, generator_version: env!("CARGO_PKG_VERSION") })?;
+    spec.jobs = assemble_jobs(&JobInputs { release: &release, gate: publish_gate_condition(&spec.repository, "main", &spec.plan, false), preparation_gate: "github.repository == 'owner/project' && github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.release-preflight.result == 'success' && needs.release-preflight.outputs.eligible == 'false'".into(), registry: None, label: "ubuntu-24.04", mise: &mise, catalog: &catalog, acquire: &acquire, generator_version: env!("CARGO_PKG_VERSION") })?;
     let config = ReleasePlzConfig { tag_pattern: "{{ package }}-v{{ version }}".into(), semver_check: true, packages: spec.plan.packages.keys().map(|name| ReleasePlzPackage { name: name.clone(), publish_features: vec![] }).collect() };
     let intent: CrateReleaseIntent = serde_json::from_value(serde_json::json!({"schema":1,"repository":"owner/project","default_branch":"main","environment":"release","required_workflow_path":".github/workflows/ci.yml","trusted_reviewer_id":1,"rust_version":rust,"generator_version":env!("CARGO_PKG_VERSION"),"generator_source_sha":"b".repeat(40),"generator_manifest_sha256":"c".repeat(64),"release_plz_version":"0.4.3","runner":"ubuntu-24.04","authentication":"bootstrap-token","manifest_path":"Cargo.toml","registry":"crates-io","packages":["example","second"],"publish_features":{"example":[],"second":[]},"tag_template":"{{ package }}-v{{ version }}","new_crates":creation,"recovery":null}))?;
     let ctx = ReleaseRenderContext { generator_version: env!("CARGO_PKG_VERSION").into(), runs_on: "ubuntu-24.04".into() };
@@ -792,5 +885,25 @@ fn bootstrap_handover_renders_normal_trusted_publisher() -> Result<(), Box<dyn s
     assert_eq!(publisher["environment"].as_str(), Some("release"));
     assert!(yaml["jobs"]["release-publish-bootstrap"].is_null());
     assert!(!files.workflow.bytes.contains("secrets.CARGO_REGISTRY_TOKEN"));
+    Ok(())
+}
+
+#[test]
+fn preparation_waits_for_negative_trusted_release_admission() -> Result<(), Box<dyn std::error::Error>> {
+    let (spec, rust) = fixture()?;
+    let preparation = spec.jobs.get("release-preparation").ok_or("preparation")?;
+    assert_eq!(preparation.needs, ["release-preflight"]);
+    let condition = preparation.condition.as_deref().ok_or("condition")?;
+    assert!(condition.contains("needs.release-preflight.result == 'success'"));
+    assert!(condition.contains("needs.release-preflight.outputs.eligible == 'false'"));
+    for bad_condition in [
+        condition.replace("needs.release-preflight.result == 'success'", "true"),
+        condition.replace("needs.release-preflight.outputs.eligible == 'false'", "needs.release-preflight.outputs.eligible != 'true'"),
+        condition.replace("needs.release-preflight.outputs.eligible == 'false'", "true"),
+    ] {
+        let mut forged = spec.clone();
+        forged.jobs.get_mut("release-preparation").ok_or("preparation")?.condition = Some(bad_condition);
+        assert!(!valid(&forged, &rust));
+    }
     Ok(())
 }

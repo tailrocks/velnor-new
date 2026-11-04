@@ -88,6 +88,8 @@ pub enum StepRole {
     ReleaseVerification,
     ReleaseRustUpload,
     ReleaseReceiptUpload,
+    ReleasePrCandidate,
+    ReleasePrArtifact,
     ReleaseRustArchive,
     AcquireReleasePlz,
     AcquireCargoSemverChecks,
@@ -330,9 +332,10 @@ impl StepRole {
                 internal_operation(kind, GITHUB_EVIDENCE_IMPORT_OPERATION)
             }
             Self::PrivateRevoke => internal_operation(kind, PRIVATE_REVOKE_OPERATION),
-            Self::ReleaseRustUpload | Self::ReleaseReceiptUpload => {
+            Self::ReleaseRustUpload | Self::ReleaseReceiptUpload | Self::ReleasePrArtifact => {
                 matches!(kind, StepKind::Action { uses, .. } if uses.starts_with("actions/upload-artifact@"))
             }
+            Self::ReleasePrCandidate => matches!(kind, StepKind::Shell { .. }),
             Self::BunRegistryInstall => internal_operation(kind, BUN_REGISTRY_INSTALL_OPERATION),
             Self::BunAssetsHandoff => valid_bun_assets_handoff(kind),
             Self::MbxCache => super::step_mbx_lifecycle::valid_mbx_cache(kind),
@@ -349,6 +352,8 @@ impl StepRole {
             Self::ReleaseVerification => Some(StepId::ReleaseVerification),
             Self::ReleaseRustUpload => Some(StepId::ReleaseRustUpload),
             Self::ReleaseReceiptUpload => Some(StepId::ReleaseReceiptUpload),
+            Self::ReleasePrCandidate => Some(StepId::ReleasePrCandidate),
+            Self::ReleasePrArtifact => Some(StepId::ReleasePrArtifact),
             Self::PlanProducer => Some(StepId::Plan),
             Self::BuildTaskRun => Some(StepId::BuildTaskRun),
             Self::ToolsCacheIdentity => Some(StepId::ToolsCacheIdentity),
@@ -383,6 +388,8 @@ impl StepRole {
             StepId::ReleaseVerification => Self::ReleaseVerification,
             StepId::ReleaseRustUpload => Self::ReleaseRustUpload,
             StepId::ReleaseReceiptUpload => Self::ReleaseReceiptUpload,
+            StepId::ReleasePrCandidate => Self::ReleasePrCandidate,
+            StepId::ReleasePrArtifact => Self::ReleasePrArtifact,
             StepId::Plan => Self::PlanProducer,
             StepId::BuildTaskRun => Self::BuildTaskRun,
             StepId::ToolsCacheIdentity => Self::ToolsCacheIdentity,

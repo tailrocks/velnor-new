@@ -38,6 +38,13 @@ impl JobPermissions {
             ReleaseRole::Preparation => Self {
                 actions: None,
                 checks: None,
+                contents: Read,
+                pull_requests: None,
+                id_token: None,
+            },
+            ReleaseRole::PrCreate => Self {
+                actions: Read,
+                checks: None,
                 contents: Write,
                 pull_requests: Write,
                 id_token: None,
