@@ -109,7 +109,7 @@ pub(crate) fn check_rejects_bad_transport_inputs() -> Result<(), Box<dyn Error>>
         "actions/cache/restore",
         "mbx-bundle",
         MBX_BUNDLE_KEY_EXPR,
-        &[MBX_BUNDLE_RESTORE_KEYS_EXPR.to_owned()],
+        &[],
         &[COMPLETE_STATE_TRANSPORT_EXPR.to_owned()],
     )
     .is_ok()
@@ -121,7 +121,7 @@ pub(crate) fn check_rejects_bad_transport_inputs() -> Result<(), Box<dyn Error>>
         TOOLS_RESTORE_ACTION_USES,
         "mbx-bundle",
         MBX_BUNDLE_KEY_EXPR,
-        &[MBX_BUNDLE_RESTORE_KEYS_EXPR.to_owned()],
+        &[],
         &[MBX_BUNDLE_PATH_EXPR.to_owned()],
     )
     .is_ok()
@@ -133,7 +133,7 @@ pub(crate) fn check_rejects_bad_transport_inputs() -> Result<(), Box<dyn Error>>
         TOOLS_RESTORE_ACTION_USES,
         "mbx-bundle",
         "bad key",
-        &[MBX_BUNDLE_RESTORE_KEYS_EXPR.to_owned()],
+        &[],
         &[COMPLETE_STATE_TRANSPORT_EXPR.to_owned()],
     )
     .is_ok()

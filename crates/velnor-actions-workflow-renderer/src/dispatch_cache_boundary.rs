@@ -125,6 +125,9 @@ fn is_push_only_cache_save(step: &Step) -> bool {
             == Some(velnor_actions_contract::workflow::cache_family::TOFU_PROVIDERS_SAVE_CONDITION)
         || condition
             == Some(velnor_actions_contract::workflow::cache_family_mbx::MBX_BUNDLE_SAVE_CONDITION)
+        || (step.role == Some(velnor_actions_contract::StepRole::StateSealSave)
+            && condition
+                == Some(velnor_actions_contract::workflow::state_seal::STATE_SEAL_SAVE_CONDITION))
         || (step.role == Some(velnor_actions_contract::StepRole::FamilySave)
             && velnor_actions_contract::workflow::cache_family_steps::STACK_FAMILIES
                 .into_iter()

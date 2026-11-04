@@ -95,6 +95,8 @@ mod selected_mise_verifier;
 pub mod setup;
 mod sources_producer;
 mod state_fragments;
+mod state_script;
+pub mod state_seal;
 mod step_ids;
 pub mod steps;
 mod steps_artifact;
@@ -135,7 +137,5 @@ pub mod yaml;
 
 mod root_api;
 pub use self::root_api::*;
-
-pub const RENDERER_VERSION: u32 = 2;
 
 pub mod review_completion;

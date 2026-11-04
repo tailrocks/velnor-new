@@ -32,6 +32,7 @@ pub(super) fn build(
     let workflow_sources = facts::workflow_sources(input, prepared);
     let facts = graph::graph(input, prepared, jobs)?;
     let state_roots = crate::state_roots::plans(input.discovery, jobs)?;
+    let seal = crate::state_roots::seal_plan(jobs, prepared.policy)?;
     let native = NativeAuthority::build(NativeAuthorityInput {
         config: input.config,
         runner: input.label,
@@ -60,6 +61,7 @@ pub(super) fn build(
         tools: prepared.needs,
         rust_detected: super::plan_uses_rust(input.discovery, prepared.policy),
         state_roots: &state_roots,
+        seal: &seal,
     })
     .map_err(map_error)?;
     replace_native(

@@ -100,3 +100,5 @@ pub const VERIFY_VERIFIER_SHELL: &str = "/bin/bash --noprofile --norc -p -e -o p
 pub fn jactionlint_verifier_script(version: &str) -> String {
     crate::selected_mise_verifier::script_for_version(version)
 }
+
+pub const RENDERER_VERSION: u32 = 2;

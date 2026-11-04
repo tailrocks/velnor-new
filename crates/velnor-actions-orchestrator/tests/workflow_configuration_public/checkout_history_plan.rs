@@ -84,7 +84,7 @@ fn origin() -> Result<Origin, Box<dyn Error>> {
         root.join("crates/a/c/src/lib.rs"),
         "pub fn f() -> u8 { 2 }\n",
     )?;
-    let pr_head = commit_all(root, "change b")?;
+    let pr_head = commit_all(root, "change c")?;
     workflow_configuration_fixture::git(&["checkout", "-q", "testmain"], root)?;
     workflow_configuration_fixture::git(&["merge", "-q", "--no-ff", "pr", "-m", "merge"], root)?;
     let merge = git_output(root, &["rev-parse", "HEAD"])?;

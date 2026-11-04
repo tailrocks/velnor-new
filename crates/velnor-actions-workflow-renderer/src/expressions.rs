@@ -55,7 +55,7 @@ const ENV_EXPRESSIONS: [&str; 17] = [
     "steps.aws-credentials.outputs.aws-session-token",
 ];
 
-const WITH_EXPRESSIONS: [&str; 18] = [
+const WITH_EXPRESSIONS: [&str; 19] = [
     "needs.ledger-cli.outputs.artifact_name",
     "runner.temp",
     "github.run_id",
@@ -71,9 +71,10 @@ const WITH_EXPRESSIONS: [&str; 18] = [
     "steps.cache-keys.outputs.sources_restore_keys",
     "needs.plan.outputs.sources_key",
     "needs.plan.outputs.sources_restore_keys",
-    "steps.mbx-bundle-key.outputs.key",
-    "steps.mbx-bundle-key.outputs.restore_keys",
+    "steps.mbx-bundle-key.outputs.restore_key",
     "steps.mbx-bundle-export.outputs.key",
+    "steps.state-seal-subject.outputs.key",
+    "needs.state-canary-producer.outputs.artifact_id",
 ];
 
 fn is_image_publish_output(inner: &str) -> bool {
@@ -158,12 +159,17 @@ fn check_env_value_with_scope(key: &str, value: &str, composite: bool) -> Result
             && !workflow_input
             && !is_github_token_secret(inner)
             && !is_private_env_binding(key, inner)
+            && !is_plan_gh_token_binding(key, inner)
             && !is_mbx_bundle_key_binding(key, inner)
         {
             return Err(RenderError::BadCommand(format!("bad_env_expression:{key}")));
         }
     }
     Ok(())
+}
+
+fn is_plan_gh_token_binding(key: &str, inner: &str) -> bool {
+    key == "GH_TOKEN" && inner == "github.token"
 }
 
 fn is_private_env_binding(key: &str, inner: &str) -> bool {
@@ -175,7 +181,11 @@ fn is_private_env_binding(key: &str, inner: &str) -> bool {
 fn is_mbx_bundle_key_binding(key: &str, inner: &str) -> bool {
     use velnor_actions_contract::workflow::cache_family::is_state_snapshot_output;
     use velnor_actions_contract::workflow::cache_family_mbx::{
-        MBX_BUNDLE_MATCHED_KEY_ENV, MBX_BUNDLE_MATCHED_KEY_EXPR, MBX_BUNDLE_SNAPSHOT_ENV,
+        MBX_BUNDLE_KEY_EXPR, MBX_BUNDLE_MATCHED_KEY_ENV, MBX_BUNDLE_MATCHED_KEY_EXPR,
+        MBX_BUNDLE_RESTORE_KEY_ENV, MBX_BUNDLE_SNAPSHOT_ENV,
+    };
+    use velnor_actions_contract::workflow::state_seal::{
+        STATE_SEAL_ATTESTED_ENV, STATE_SEAL_KEY_ENV, STATE_SEAL_KEY_EXPR, is_state_attested_output,
     };
     let bound = |expr: &str| {
         expr.strip_prefix("${{")
@@ -183,6 +193,12 @@ fn is_mbx_bundle_key_binding(key: &str, inner: &str) -> bool {
             == Some(inner)
     };
     (key == MBX_BUNDLE_MATCHED_KEY_ENV && bound(MBX_BUNDLE_MATCHED_KEY_EXPR))
+        || (key == MBX_BUNDLE_RESTORE_KEY_ENV && bound(MBX_BUNDLE_KEY_EXPR))
+        || (key == STATE_SEAL_KEY_ENV && bound(STATE_SEAL_KEY_EXPR))
+        || (key == STATE_SEAL_ATTESTED_ENV
+            && inner
+                .strip_prefix("needs.plan.outputs.")
+                .is_some_and(is_state_attested_output))
         || (key == MBX_BUNDLE_SNAPSHOT_ENV
             && inner
                 .strip_prefix("needs.plan.outputs.")

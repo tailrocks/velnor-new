@@ -209,8 +209,14 @@ fn validate_id_kind(id: Option<StepId>, kind: &StepKind, job: &str) -> Result<()
         | StepId::FamilySizePythonVenv
         | StepId::FamilySizeAnsibleCollections
         | StepId::LedgerCliPublish
-        | StepId::LedgerCliVerify => {
+        | StepId::LedgerCliVerify
+        | StepId::StateSelect
+        | StepId::StateSealSubject
+        | StepId::StateSealBind => {
             matches!(kind, StepKind::Shell { .. })
+        }
+        StepId::StateSealUpload => {
+            matches!(kind, StepKind::Action { uses, .. } if uses.starts_with("actions/upload-artifact@"))
         }
         StepId::SourcesRestore | StepId::MbxBundleRestore => {
             matches!(kind, StepKind::Action { uses, .. } if uses.starts_with("actions/cache/restore@"))

@@ -139,6 +139,8 @@ mod state_prune_workflow;
 mod state_prune_yaml;
 #[path = "workflow_configuration_public/state_roots.rs"]
 mod state_roots;
+#[path = "workflow_configuration_public/state_seal_jobs.rs"]
+mod state_seal_jobs;
 #[path = "workflow_configuration_public/support.rs"]
 mod support;
 #[path = "workflow_configuration_public/timeouts.rs"]

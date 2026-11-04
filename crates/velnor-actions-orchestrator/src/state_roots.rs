@@ -3,12 +3,14 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use velnor_actions_contract::workflow::cache_family::{RootSlug, S256};
+use velnor_actions_contract::WorkflowPolicy;
+use velnor_actions_contract::workflow::cache_family::{RootSlug, S256, StateUnit};
 use velnor_actions_contract::workflow::cache_family_mbx::{
     MBX_BUNDLE_ROOT_ENV, MBX_BUNDLE_SNAPSHOT_ENV,
 };
 use velnor_actions_contract::{Job, StepKind, StepRole};
 use velnor_actions_workflow_renderer::plan_sources::cache_keys::StateRootPlan;
+use velnor_actions_workflow_renderer::plan_sources::state_select::{SealRoot, StateSealPlan};
 
 use crate::OrchestratorError;
 use crate::affected_inputs::InputRule;
@@ -56,6 +58,29 @@ pub(crate) fn plans(
             })
         })
         .collect()
+}
+
+pub(crate) fn seal_plan(
+    jobs: &BTreeMap<String, Job>,
+    policy: WorkflowPolicy,
+) -> Result<StateSealPlan, OrchestratorError> {
+    let mut roots: Vec<SealRoot> = Vec::new();
+    for job in jobs.values() {
+        let Some(root) = union_root(job) else {
+            continue;
+        };
+        let seal = SealRoot {
+            unit: StateUnit::Union,
+            slug: RootSlug::from_root(&root)?,
+        };
+        if !roots.contains(&seal) {
+            roots.push(seal);
+        }
+    }
+    Ok(StateSealPlan {
+        roots,
+        canary: policy == WorkflowPolicy::VelnorRepositoryV1,
+    })
 }
 
 fn union_root(job: &Job) -> Option<String> {

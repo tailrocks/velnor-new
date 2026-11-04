@@ -93,6 +93,7 @@ pub fn build_stack_job(policy: &StackJobPolicy, checkout_uses: &str) -> Result<J
             contents: PermissionLevel::Read,
             pull_requests: PermissionLevel::None,
             id_token: PermissionLevel::None,
+            attest: PermissionLevel::None,
             actions: PermissionLevel::None,
             packages: PermissionLevel::None,
         }),

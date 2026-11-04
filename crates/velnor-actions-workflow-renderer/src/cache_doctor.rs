@@ -11,11 +11,14 @@ use velnor_actions_contract::workflow::cache_family::{
     is_plan_cache_output,
 };
 use velnor_actions_contract::workflow::cache_family_mbx::{
-    MBX_BUNDLE_KEY_EXPR, MBX_BUNDLE_RESTORE_CONDITION, MBX_BUNDLE_RESTORE_KEYS_EXPR,
-    MBX_BUNDLE_SAVE_CONDITION, MBX_BUNDLE_SAVE_KEY_EXPR,
+    MBX_BUNDLE_KEY_EXPR, MBX_BUNDLE_RESTORE_CONDITION, MBX_BUNDLE_SAVE_CONDITION,
+    MBX_BUNDLE_SAVE_KEY_EXPR,
 };
 use velnor_actions_contract::workflow::cache_family_steps::{
     STACK_FAMILIES, family_key_expr, family_save_condition,
+};
+use velnor_actions_contract::workflow::state_seal::{
+    STATE_CANARY_SEAL_JOB_ID, STATE_SEAL_KEY_EXPR, STATE_SEAL_SAVE_CONDITION,
 };
 use velnor_actions_contract::workflow::step_identity::TOFU_PROVIDER_ADMISSION_USES;
 use velnor_actions_contract::{Job, PullRequestCachePolicy, Step, StepKind};
@@ -105,7 +108,7 @@ fn family_for_key(key: &str) -> Option<Family> {
     if key == SOURCES_KEY_STEP_EXPR || key == SOURCES_KEY_PLAN_EXPR {
         return Some(Family::Runtime(CacheFamily::Sources));
     }
-    if key == MBX_BUNDLE_KEY_EXPR || key == MBX_BUNDLE_SAVE_KEY_EXPR {
+    if key == MBX_BUNDLE_KEY_EXPR || key == MBX_BUNDLE_SAVE_KEY_EXPR || key == STATE_SEAL_KEY_EXPR {
         return Some(Family::Runtime(CacheFamily::MbxBundle));
     }
     if let Some(family) = STACK_FAMILIES
@@ -237,7 +240,7 @@ fn check_paths(job: &str, step: &Step, cache: &CacheUse<'_>) -> Result<(), Rende
             // The stale `velnor/mbx-bundle` path is rejected; the state transport
             // payload (or the state root) is the only accepted bundle path.
             (path == COMPLETE_STATE_TRANSPORT_EXPR || path == COMPLETE_STATE_ROOT_EXPR)
-                && mbx_bundle_restore_keys_ok(step, cache.save)
+                && mbx_bundle_without_restore_keys(step)
                 && (cache.save || mbx_bundle_restore_gated(step))
         }
         (
@@ -274,17 +277,11 @@ fn sources_restore_keys_ok(step: &Step, save: bool) -> bool {
     }
 }
 
-fn mbx_bundle_restore_keys_ok(step: &Step, save: bool) -> bool {
+fn mbx_bundle_without_restore_keys(step: &Step) -> bool {
     let StepKind::Action { with, .. } = &step.kind else {
         return false;
     };
-    if save {
-        !with.contains_key("restore-keys")
-    } else {
-        with.get("restore-keys")
-            .map(String::as_str)
-            .is_some_and(|keys| keys == MBX_BUNDLE_RESTORE_KEYS_EXPR)
-    }
+    !with.contains_key("restore-keys")
 }
 
 fn mbx_bundle_restore_gated(step: &Step) -> bool {
@@ -318,7 +315,10 @@ fn check_save(job: &str, step: &Step, family: Family) -> Result<(), RenderError>
             condition == SOURCES_SAVE_CONDITION && job == SOURCES_PRODUCER_JOB_ID
         }
         Family::Runtime(CacheFamily::TofuProviders) => condition == TOFU_PROVIDERS_SAVE_CONDITION,
-        Family::Runtime(CacheFamily::MbxBundle) => condition == MBX_BUNDLE_SAVE_CONDITION,
+        Family::Runtime(CacheFamily::MbxBundle) => {
+            condition == MBX_BUNDLE_SAVE_CONDITION
+                || (condition == STATE_SEAL_SAVE_CONDITION && job == STATE_CANARY_SEAL_JOB_ID)
+        }
         Family::Runtime(
             family @ (CacheFamily::BunInstall
             | CacheFamily::PlaywrightBrowsers

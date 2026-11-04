@@ -3,7 +3,7 @@
 
 pub const MBX_BUNDLE_PATH_EXPR: &str = "${{ runner.temp }}/velnor/mbx-bundle";
 
-pub const MBX_BUNDLE_KEY_EXPR: &str = "${{steps.mbx-bundle-key.outputs.key}}";
+pub const MBX_BUNDLE_KEY_EXPR: &str = "${{steps.mbx-bundle-key.outputs.restore_key}}";
 
 pub const MBX_BUNDLE_SAVE_KEY_EXPR: &str = "${{steps.mbx-bundle-export.outputs.key}}";
 
@@ -18,17 +18,17 @@ pub const MBX_BUNDLE_MATCHED_KEY_EXPR: &str =
 
 pub const MBX_BUNDLE_MATCHED_KEY_ENV: &str = "VELNOR_MBX_BUNDLE_MATCHED_KEY";
 
-pub const MBX_BUNDLE_RESTORE_KEYS_EXPR: &str = "${{steps.mbx-bundle-key.outputs.restore_keys}}";
+pub const MBX_BUNDLE_RESTORE_KEY_ENV: &str = "VELNOR_MBX_BUNDLE_RESTORE_KEY";
 
 pub const MBX_BUNDLE_KEY_OUTPUT: &str = "key";
 
-pub const MBX_BUNDLE_RESTORE_KEYS_OUTPUT: &str = "restore_keys";
+pub const MBX_BUNDLE_RESTORE_KEY_OUTPUT: &str = "restore_key";
 
 pub const MBX_BUNDLE_SAVE_OUTPUT: &str = "save";
 
 pub const MBX_BUNDLE_EXPORTED_OUTPUT: &str = "exported";
 
-pub const MBX_BUNDLE_RESTORE_CONDITION: &str = "steps.mbx-bundle-key.outputs.restore == 'true'";
+pub const MBX_BUNDLE_RESTORE_CONDITION: &str = "steps.mbx-bundle-key.outputs.restore == 'true' && steps.mbx-bundle-key.outputs.restore_key != ''";
 
 pub const MBX_BUNDLE_IMPORT_CONDITION: &str =
     "steps.mbx-bundle-restore.outputs.cache-matched-key != ''";
