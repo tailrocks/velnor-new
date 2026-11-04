@@ -12,13 +12,37 @@ use std::sync::{
 use std::time::{Duration, Instant};
 
 #[test]
+fn qualified_runtime_rejects_missing_git_without_fallback() -> Result<(), Box<dyn Error>> {
+    if std::env::var_os("VELNOR_MISSING_GIT_CHILD").is_some() {
+        assert!(
+            matches!(super::run_qualified_crate_release("source-require"),
+            Err(crate::OrchestratorError::Internal { problem }) if problem == "release_git_bundle_invalid")
+        );
+        return Ok(());
+    }
+    let temp = tempfile::tempdir()?;
+    let status = std::process::Command::new(std::env::current_exe()?)
+        .arg("--exact")
+        .arg("crate_release_runtime::rehearsal::qualified_runtime_rejects_missing_git_without_fallback")
+        .env("VELNOR_MISSING_GIT_CHILD", "1")
+        .env("RUNNER_TEMP", temp.path())
+        .status()?;
+    assert!(status.success());
+    Ok(())
+}
+
+#[test]
 fn generated_source_require_rehearsal() -> Result<(), Box<dyn Error>> {
     if std::env::var_os("VELNOR_SOURCE_CHILD").is_some() {
         assert_eq!(
             std::env::var("VELNOR_TEST_COMMAND_ARGS")?,
             "crate-release source-require"
         );
-        return super::run_qualified_crate_release("source-require").map_err(Into::into);
+        return super::run_qualified_crate_release_with_git(
+            "source-require",
+            &crate::crate_release_git::ReleaseGit::host_fixture(),
+        )
+        .map_err(Into::into);
     }
     for event in ["push", "workflow_dispatch"] {
         rehearse_source_require(event, false)?;
@@ -51,7 +75,7 @@ fn generated_candidate_receipt_rejects_unprotected_environment() -> Result<(), B
         assert!(matches!(super::run_crate_release("candidate-receipt"),
             Err(crate::OrchestratorError::Internal { problem }) if problem == "crate_release_authority_not_qualified"));
         assert!(
-            matches!(super::run_qualified_crate_release("candidate-receipt"),
+            matches!(super::run_qualified_crate_release_with_git("candidate-receipt", &crate::crate_release_git::ReleaseGit::host_fixture()),
             Err(crate::OrchestratorError::Internal { problem }) if problem == "crate_release_environment_bypass")
         );
         return Ok(());

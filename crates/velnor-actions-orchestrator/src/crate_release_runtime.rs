@@ -42,15 +42,22 @@ pub fn run_crate_release(operation: &str) -> Result<(), OrchestratorError> {
 }
 
 fn run_qualified_crate_release(operation: &str) -> Result<(), OrchestratorError> {
-    let workspace = required_path("GITHUB_WORKSPACE")?;
     let git = crate::crate_release_git::ReleaseGit::new(
         velnor_actions_mise::release_git_pin::verify_bundle(
             &required_path("RUNNER_TEMP")?.join("velnor/git-bundle"),
         )
         .map_err(|_| internal("release_git_bundle_invalid"))?,
     );
+    run_qualified_crate_release_with_git(operation, &git)
+}
+
+fn run_qualified_crate_release_with_git(
+    operation: &str,
+    git: &crate::crate_release_git::ReleaseGit,
+) -> Result<(), OrchestratorError> {
+    let workspace = required_path("GITHUB_WORKSPACE")?;
     let workflow_sha = required("GITHUB_SHA")?;
-    let intent = read_intent_at_workflow(&workspace, &workflow_sha, &git)?;
+    let intent = read_intent_at_workflow(&workspace, &workflow_sha, git)?;
     let request = request_from_environment(&intent, &workflow_sha)?;
     let token = required("GIT_TOKEN")?;
     if matches!(operation, "source-admit" | "source-require") {
@@ -69,21 +76,21 @@ fn run_qualified_crate_release(operation: &str) -> Result<(), OrchestratorError>
             &token,
             &source,
             operation == "reconciliation-receipt-acquire",
-            &git,
+            git,
         );
     }
     if operation == "candidate-receipt" {
-        return candidate_receipt(&intent, &request, &github, &source, &git);
+        return candidate_receipt(&intent, &request, &github, &source, git);
     }
     if operation == "toolchain-acquire" {
-        return acquire_toolchain(&intent, &request, &github, &token, &git);
+        return acquire_toolchain(&intent, &request, &github, &token, git);
     }
     let registry = NativeCrateRegistryRead;
     verify_runtime_tool_homes(&source)?;
     if is_journal_operation(operation) {
         let candidate = crate::crate_release_github::verify_github_evidence(&request, &github)?;
         crate::crate_release_github::authorize_github_candidate(&request, &candidate, &github)?;
-        verify_workflow_concurrency(&workspace, &source, &intent, &request, &registry, &git)?;
+        verify_workflow_concurrency(&workspace, &source, &intent, &request, &registry, git)?;
     }
     let receipt_path = required_path("RUNNER_TEMP")?.join("velnor-crate-release-receipt.json");
     dispatch_release_operation(
@@ -96,7 +103,7 @@ fn run_qualified_crate_release(operation: &str) -> Result<(), OrchestratorError>
             registry: &registry,
             source: &source,
             token: &token,
-            git: &git,
+            git,
         },
     )
 }
