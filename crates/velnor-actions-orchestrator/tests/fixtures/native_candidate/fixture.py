@@ -4,17 +4,24 @@
 import base64
 import hashlib
 import http.server
+import io
 import json
 import os
 import pathlib
+import signal
 import subprocess
+import shutil
+import tomllib
+import re
 import sys
+import tarfile
 import urllib.parse
+
+from fixture_support import approved_baseline, index_path
 
 root = pathlib.Path(sys.argv[1]).resolve()
 root.mkdir(parents=True, exist_ok=True)
 source = root / "release-source"
-source.mkdir()
 
 
 def run(*args, cwd):
@@ -26,38 +33,84 @@ def write(path, data):
     path.write_text(data)
 
 
-manifest = '[package]\nname = "example"\nversion = "{}"\nedition = "2021"\nlicense = "MIT"\ndescription = "Generic release rehearsal"\nrepository = "https://github.com/owner/project"\n'
-write(source / "Cargo.toml", manifest.format("0.1.0"))
-write(source / "src/lib.rs", "pub fn example() -> u32 { 1 }\n")
-run("cargo", "generate-lockfile", "--offline", cwd=source)
-run("cargo", "package", "--offline", "--no-verify", "--allow-dirty", cwd=source)
-archive = (source / "target/package/example-0.1.0.crate").read_bytes()
-checksum = hashlib.sha256(archive).hexdigest()
-if os.environ.get("VELNOR_FIXTURE_FAILURE") == "checksum":
-    checksum = "0" * 64
-write(source / "Cargo.toml", manifest.format("0.1.1"))
-run("cargo", "generate-lockfile", "--offline", cwd=source)
-run("git", "init", "-q", cwd=source)
-run("git", "add", "Cargo.toml", "Cargo.lock", "src/lib.rs", cwd=source)
-run(
-    "git",
-    "-c",
-    "user.name=Fixture",
-    "-c",
-    "user.email=fixture@example.invalid",
-    "-c",
-    "commit.gpgsign=false",
-    "commit",
-    "-qm",
-    "source",
-    cwd=source,
-)
-source_sha = run("git", "rev-parse", "HEAD", cwd=source)
-if os.environ.get("VELNOR_FIXTURE_FAILURE") == "source":
-    write(source / "src/lib.rs", "pub fn example() -> u32 { 2 }\n")
-import shutil
-
-shutil.rmtree(source / "target")
+repository = "owner/project"
+package = "example"
+version = "0.1.1"
+baseline_version = "0.1.0"
+reviewer_id = 139017
+required_workflow = ".github/workflows/ci.yml"
+supplied = os.environ.get("VELNOR_FIXTURE_SUPPLIED_INTENT")
+supplied_intent = None
+dependency_snapshots = {}
+if supplied:
+    if os.environ.get("VELNOR_FIXTURE_FAILURE") in ("source", "checksum", "verify-source"):
+        raise ValueError("supplied fixture does not support source, checksum, or verify-source fault injection")
+    supplied_intent = pathlib.Path(supplied).read_text()
+    selected = tomllib.loads(supplied_intent)
+    repository = selected["repository"]
+    package = selected["recovery"]["package"]
+    version = selected["recovery"]["version"]
+    reviewer_id = selected["trusted_reviewer_id"]
+    required_workflow = selected["required_workflow_path"]
+    assert selected["packages"] == [package]
+    assert selected["default_branch"] == "main" and selected["environment"] == "release"
+    assert selected["registry"] == "crates-io" and selected["manifest_path"] == "Cargo.toml"
+    original = pathlib.Path(os.environ["VELNOR_FIXTURE_SUPPLIED_SOURCE"]).resolve(strict=True)
+    assert run("git", "-c", f"safe.directory={original}", "rev-parse", "HEAD", cwd=original) == selected["recovery"]["source_sha"]
+    assert not run("git", "-c", f"safe.directory={original}", "status", "--porcelain", cwd=original)
+    run("git", "clone", "--quiet", "--no-local", str(original), str(source), cwd=root)
+    run("git", "remote", "set-url", "origin", "https://github.com/" + repository, cwd=source)
+    source_sha = run("git", "rev-parse", "HEAD", cwd=source)
+    assert source_sha == selected["recovery"]["source_sha"]
+    metadata = json.loads(run("cargo", "metadata", "--offline", "--locked", "--format-version", "1", cwd=source))
+    selected_package = next(item for item in metadata["packages"] if item["name"] == package and item["version"] == version)
+    snapshot_dir = pathlib.Path(os.environ["VELNOR_FIXTURE_DEPENDENCY_SNAPSHOTS"]).resolve(strict=True)
+    for dependency in selected_package["dependencies"]:
+        name = dependency["name"]
+        if name == package or name in dependency_snapshots:
+            continue
+        assert re.fullmatch(r"[a-zA-Z0-9_-]{1,64}", name)
+        payload = json.loads((snapshot_dir / (name + ".json")).read_bytes())
+        assert payload["crate"]["name"] == name and payload["crate"]["id"] == name
+        dependency_snapshots[name] = payload
+    baseline_version = os.environ["VELNOR_FIXTURE_BASELINE_VERSION"]
+    archive = pathlib.Path(os.environ["VELNOR_FIXTURE_BASELINE_ARCHIVE"]).read_bytes()
+    checksum = hashlib.sha256(archive).hexdigest()
+    index = [json.loads(line) for line in pathlib.Path(os.environ["VELNOR_FIXTURE_BASELINE_INDEX"]).read_text().splitlines()]
+    approved_baseline(index, package, baseline_version, checksum)
+else:
+    source.mkdir()
+    manifest = '[package]\nname = "example"\nversion = "{}"\nedition = "2021"\nlicense = "MIT"\ndescription = "Generic release rehearsal"\nrepository = "https://github.com/owner/project"\n'
+    write(source / "Cargo.toml", manifest.format("0.1.0"))
+    write(source / "src/lib.rs", "pub fn example() -> u32 { 1 }\n")
+    run("cargo", "generate-lockfile", "--offline", cwd=source)
+    run("cargo", "package", "--offline", "--no-verify", "--allow-dirty", cwd=source)
+    archive = (source / "target/package/example-0.1.0.crate").read_bytes()
+    checksum = hashlib.sha256(archive).hexdigest()
+    if os.environ.get("VELNOR_FIXTURE_FAILURE") == "checksum":
+        checksum = "0" * 64
+    write(source / "Cargo.toml", manifest.format("0.1.1"))
+    run("cargo", "generate-lockfile", "--offline", cwd=source)
+    run("git", "init", "-q", cwd=source)
+    run("git", "remote", "add", "origin", "https://github.com/owner/project", cwd=source)
+    run("git", "add", "Cargo.toml", "Cargo.lock", "src/lib.rs", cwd=source)
+    run(
+        "git",
+        "-c",
+        "user.name=Fixture",
+        "-c",
+        "user.email=fixture@example.invalid",
+        "-c",
+        "commit.gpgsign=false",
+        "commit",
+        "-qm",
+        "source",
+        cwd=source,
+    )
+    source_sha = run("git", "rev-parse", "HEAD", cwd=source)
+    if os.environ.get("VELNOR_FIXTURE_FAILURE") == "source":
+        write(source / "src/lib.rs", "pub fn example() -> u32 { 2 }\n")
+    shutil.rmtree(source / "target")
 assets = os.environ.get("VELNOR_FIXTURE_OFFICIAL_ASSETS")
 generator_version = "0.1.5"
 generator_source = "f1041f322c54cd7edfdef06afd307799eeaa801a"
@@ -97,10 +150,26 @@ package = "example"
 version = "0.1.1"
 source_sha = "{source_sha}"
 '''
+if supplied_intent is not None:
+    values = {
+        "generator_version": generator_version,
+        "generator_source_sha": generator_source,
+        "generator_manifest_sha256": generator_manifest_sha,
+    }
+    intent = supplied_intent
+    for key, value in values.items():
+        intent, count = re.subn(rf'^({key} = )"[^"\n]*"$', rf'\g<1>"{value}"', intent, flags=re.MULTILINE)
+        assert count == 1
+    original = tomllib.loads(supplied_intent)
+    rewritten = tomllib.loads(intent)
+    for key in values:
+        original.pop(key)
+        rewritten.pop(key)
+    assert original == rewritten
 write(root / ".github/velnor-release-intent.toml", intent)
 write(
     root / ".github/workflows/release.yml",
-    "name: release\nconcurrency:\n  group: release-crates-io-owner/project-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\n  cancel-in-progress: false\njobs: {}\n",
+    f"name: release\nconcurrency:\n  group: release-crates-io-{repository}-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\n  cancel-in-progress: false\njobs: {{}}\n",
 )
 run("git", "init", "-q", cwd=root)
 run("git", "add", ".github", cwd=root)
@@ -125,6 +194,10 @@ mutations = 0
 blobs = {}
 tags = {}
 refs = {}
+published = None
+published_features = {}
+release = None
+uploads = 0
 
 
 def git_hash(kind, data):
@@ -147,8 +220,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 "blobs": len(blobs),
                 "tags": len(tags),
                 "records": [json.loads(raw) for raw in blobs.values()],
+                "uploads": uploads,
+                "published_sha256": hashlib.sha256(published).hexdigest()
+                if published
+                else None,
+                "release": release,
             }
-        elif p.startswith("/repos/owner/project/git/matching-refs/tags/"):
+        elif p.startswith(f"/repos/{repository}/git/matching-refs/tags/"):
             prefix = "refs/tags/" + urllib.parse.unquote(
                 p.split("/git/matching-refs/tags/", 1)[1]
             )
@@ -157,19 +235,19 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 for name, sha in sorted(refs.items())
                 if name.startswith(prefix)
             ]
-        elif p.startswith("/repos/owner/project/git/ref/tags/velnor-receipt"):
+        elif p.startswith(f"/repos/{repository}/git/ref/tags/velnor-receipt"):
             name = "refs/tags/" + urllib.parse.unquote(p.split("/git/ref/tags/", 1)[1])
             if name in refs:
                 obj = {"ref": name, "object": {"type": "tag", "sha": refs[name]}}
             else:
                 status, obj = 404, {"message": "Not Found"}
-        elif p.startswith("/repos/owner/project/git/tags/"):
+        elif p.startswith(f"/repos/{repository}/git/tags/"):
             sha = p.rsplit("/", 1)[-1]
             if sha in tags:
                 obj = tags[sha]
             else:
                 status, obj = 404, {"message": "Not Found"}
-        elif p.startswith("/repos/owner/project/git/blobs/"):
+        elif p.startswith(f"/repos/{repository}/git/blobs/"):
             sha = p.rsplit("/", 1)[-1]
             if sha in blobs:
                 raw = blobs[sha]
@@ -181,25 +259,25 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 }
             else:
                 status, obj = 404, {"message": "Not Found"}
-        elif p == "/repos/owner/project":
-            obj = {"id": 22, "full_name": "owner/project", "default_branch": "main"}
-        elif p == "/repos/owner/project/git/ref/heads/main":
+        elif p == f"/repos/{repository}":
+            obj = {"id": 22, "full_name": repository, "default_branch": "main"}
+        elif p == f"/repos/{repository}/git/ref/heads/main":
             obj = {
                 "ref": "refs/heads/main",
                 "object": {"type": "commit", "sha": policy},
             }
-        elif p.startswith("/repos/owner/project/actions/runs/12/approvals"):
+        elif p.startswith(f"/repos/{repository}/actions/runs/12/approvals"):
             obj = [
                 {
                     "state": "approved",
-                    "user": {"type": "User", "id": 139017},
+                    "user": {"type": "User", "id": reviewer_id},
                     "environments": [{"id": 9, "name": "release"}],
                     "comment": f"I reviewed the complete release policy at {policy} and source {source_sha}, and authorize this source for run 12.",
                 }
             ]
             if os.environ.get("VELNOR_FIXTURE_FAILURE") == "approval":
                 obj[0]["comment"] = "Unrelated approval"
-        elif p.startswith("/repos/owner/project/actions/runs/12"):
+        elif p.startswith(f"/repos/{repository}/actions/runs/12"):
             obj = {
                 "id": 12,
                 "run_attempt": 1,
@@ -207,19 +285,19 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 "head_branch": "main",
                 "event": "workflow_dispatch",
                 "path": ".github/workflows/release.yml",
-                "repository": {"id": 22, "full_name": "owner/project"},
-                "head_repository": {"id": 22, "full_name": "owner/project"},
+                "repository": {"id": 22, "full_name": repository},
+                "head_repository": {"id": 22, "full_name": repository},
             }
         elif "/compare/" in p:
             obj = {"status": "ahead"}
         elif p.startswith(
-            "/repos/owner/project/environments/release/deployment-branch-policies?"
+            f"/repos/{repository}/environments/release/deployment-branch-policies?"
         ):
             obj = {
                 "total_count": 1,
                 "branch_policies": [{"type": "branch", "name": "main"}],
             }
-        elif p == "/repos/owner/project/environments/release":
+        elif p == f"/repos/{repository}/environments/release":
             obj = {
                 "id": 9,
                 "name": "release",
@@ -228,7 +306,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 "protection_rules": [
                     {
                         "type": "required_reviewers",
-                        "reviewers": [{"type": "User", "reviewer": {"id": 139017}}],
+                        "reviewers": [{"type": "User", "reviewer": {"id": reviewer_id}}],
                     }
                 ],
             }
@@ -255,15 +333,15 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     {
                         "check_suite_id": 123,
                         "head_sha": sha,
-                        "path": ".github/workflows/ci.yml",
+                        "path": required_workflow,
                         "status": "completed",
                         "conclusion": "success",
                     }
                 ],
             }
-        elif p.startswith("/repos/owner/project/rulesets?"):
+        elif p.startswith(f"/repos/{repository}/rulesets?"):
             obj = [{"id": 1}]
-        elif p == "/repos/owner/project/rulesets/1":
+        elif p == f"/repos/{repository}/rulesets/1":
             obj = {
                 "id": 1,
                 "target": "tag",
@@ -272,37 +350,78 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 "conditions": {"ref_name": {"include": ["~ALL"], "exclude": []}},
                 "rules": [{"type": "update"}, {"type": "deletion"}],
             }
-        elif p.startswith("/repos/owner/project/git/ref/tags/"):
-            status, obj = 404, {"message": "Not Found"}
+        elif p.startswith(f"/repos/{repository}/git/ref/tags/"):
+            name = "refs/tags/" + urllib.parse.unquote(p.split("/git/ref/tags/", 1)[1])
+            if name in refs:
+                obj = {"ref": name, "object": {"type": "commit", "sha": refs[name]}}
+            else:
+                status, obj = 404, {"message": "Not Found"}
+        elif p.startswith(f"/repos/{repository}/releases/tags/"):
+            if release is None:
+                status, obj = 404, {"message": "Not Found"}
+            else:
+                obj = release
         elif p == "/users/owner":
-            obj = {"id": 139017, "login": "owner", "type": "User"}
-        elif p == "/api/v1/crates/example":
+            obj = {"id": reviewer_id, "login": "owner", "type": "User"}
+        elif p.startswith("/api/v1/crates/") and p.removeprefix("/api/v1/crates/") in dependency_snapshots:
+            obj = dependency_snapshots[p.removeprefix("/api/v1/crates/")]
+        elif p == f"/api/v1/crates/{package}":
             obj = {
-                "crate": {"id": "example", "name": "example", "versions": [100]},
+                "crate": {"id": package, "name": package, "versions": [100]},
                 "versions": [
-                    {"id": 100, "crate": "example", "num": "0.1.0", "yanked": False}
+                    {"id": 100, "crate": package, "num": baseline_version, "yanked": False}
                 ],
             }
-        elif p == "/api/v1/crates/example/owners":
-            obj = {"users": [{"id": 139017, "login": "owner", "kind": "user"}]}
-        elif p == "/api/v1/crates/example/0.1.0":
+            if published:
+                obj["crate"]["versions"].append(101)
+                obj["versions"].append(
+                    {"id": 101, "crate": package, "num": version, "yanked": False}
+                )
+        elif p == f"/api/v1/crates/{package}/owners":
+            obj = {"users": [{"id": reviewer_id, "login": "owner", "kind": "user"}]}
+        elif p == f"/api/v1/crates/{package}/{baseline_version}":
             obj = {
                 "version": {
                     "id": 100,
-                    "crate": "example",
-                    "num": "0.1.0",
+                    "crate": package,
+                    "num": baseline_version,
                     "yanked": False,
                     "checksum": checksum,
                 }
             }
-        elif p == "/api/v1/crates/example/0.1.1":
-            status, obj = 404, {"errors": []}
-        elif p == "/crates/example/example-0.1.0.crate":
+        elif p == f"/api/v1/crates/{package}/{version}":
+            if published:
+                obj = {
+                    "version": {
+                        "id": 101,
+                        "crate": package,
+                        "num": version,
+                        "yanked": False,
+                        "checksum": hashlib.sha256(published).hexdigest(),
+                        "features": published_features,
+                    }
+                }
+            else:
+                status, obj = 404, {"errors": []}
+        elif p == f"/crates/{package}/{package}-{baseline_version}.crate":
             self.send_response(200)
             self.send_header("Content-Length", str(len(archive)))
             self.end_headers()
             self.wfile.write(archive)
             return
+        elif p == f"/crates/{package}/{package}-{version}.crate" and published:
+            self.send_response(200)
+            self.send_header("Content-Length", str(len(published)))
+            self.end_headers()
+            self.wfile.write(published)
+            return
+        elif p == index_path(package) and published:
+            obj = {
+                "name": package,
+                "vers": version,
+                "cksum": hashlib.sha256(published).hexdigest(),
+                "yanked": False,
+            }
         else:
             status, obj = 500, {"unexpected": p}
         data = json.dumps(obj).encode()
@@ -313,17 +432,40 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.wfile.write(data)
 
     def do_POST(self):
-        global mutations
+        global mutations, published, published_features, uploads, release
         mutations += 1
-        value = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+        data = self.rfile.read(int(self.headers["Content-Length"]))
+        if self.path == "/__fixture/upload":
+            assert not published
+            with tarfile.open(fileobj=io.BytesIO(data), mode="r:gz") as archive_file:
+                vcs = json.load(
+                    archive_file.extractfile(f"{package}-{version}/.cargo_vcs_info.json")
+                )
+                assert vcs["git"]["sha1"] == source_sha
+                manifest = archive_file.extractfile(f"{package}-{version}/Cargo.toml").read()
+                published_features = tomllib.loads(manifest.decode()).get("features", {})
+                assert (
+                    archive_file.extractfile(f"{package}-{version}/src/lib.rs").read()
+                    == (source / "src/lib.rs").read_bytes()
+                )
+            published = data
+            uploads += 1
+            if os.environ.get("VELNOR_FIXTURE_FAILURE") == "coordinate-crash":
+                pid_path = pathlib.Path(os.environ["VELNOR_FIXTURE_CRASH_PID_PATH"])
+                os.kill(int(pid_path.read_text()), signal.SIGKILL)
+            self.send_response(201)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
+        value = json.loads(data)
         status = 201
-        if self.path == "/repos/owner/project/git/blobs":
+        if self.path == f"/repos/{repository}/git/blobs":
             assert value["encoding"] == "base64"
             raw = base64.b64decode(value["content"], validate=True)
             sha = git_hash("blob", raw)
             blobs[sha] = raw
             obj = {"sha": sha}
-        elif self.path == "/repos/owner/project/git/tags":
+        elif self.path == f"/repos/{repository}/git/tags":
             tag, blob = value["tag"], value["object"]
             assert (
                 tag.startswith("velnor-receipt/")
@@ -350,14 +492,33 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 },
             }
             tags[sha] = obj
-        elif self.path == "/repos/owner/project/git/refs":
+        elif self.path == f"/repos/{repository}/git/refs":
             name, sha = value["ref"], value["sha"]
-            assert sha in tags and name == "refs/tags/" + tags[sha]["tag"]
+            is_journal = name.startswith("refs/tags/velnor-receipt/")
+            assert (
+                is_journal and sha in tags and name == "refs/tags/" + tags[sha]["tag"]
+            ) or (name == f"refs/tags/{package}-v{version}" and sha == source_sha)
             if name in refs:
                 status, obj = 422, {}
             else:
                 refs[name] = sha
-                obj = {"ref": name, "object": {"type": "tag", "sha": sha}}
+                obj = {
+                    "ref": name,
+                    "object": {"type": "tag" if is_journal else "commit", "sha": sha},
+                }
+        elif self.path == f"/repos/{repository}/releases":
+            assert (
+                value["tag_name"] == f"{package}-v{version}"
+                and value["target_commitish"] == source_sha
+                and release is None
+            )
+            release = {
+                "id": 99,
+                "tag_name": value["tag_name"],
+                "draft": False,
+                "html_url": f"https://github.com/{repository}/releases/tag/{package}-v{version}",
+            }
+            obj = release
         else:
             status, obj = 405, {}
         data = json.dumps(obj).encode()
@@ -375,8 +536,10 @@ info = {
     "source_sha": source_sha,
     "workflow_sha": policy,
     "workspace": str(root),
-    "package": "example",
-    "version": "0.1.1",
+    "package": package,
+    "repository": repository,
+    "version": version,
+    "baseline_version": baseline_version,
     "baseline_checksum": checksum,
 }
 print(json.dumps(info), flush=True)

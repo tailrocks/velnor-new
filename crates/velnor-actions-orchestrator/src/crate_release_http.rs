@@ -34,6 +34,23 @@ impl std::fmt::Debug for GitHubAdmissionHttp {
     }
 }
 
+fn rehearsal_transport_error(error: &ureq::Error) -> OrchestratorError {
+    #[cfg(test)]
+    match error {
+        ureq::Error::Io(io) => {
+            eprintln!("fixture HTTP I/O: {:?} {:?}", io.kind(), io.raw_os_error());
+        }
+        ureq::Error::Timeout(timeout) => {
+            eprintln!("fixture HTTP timeout: {timeout:?}");
+        }
+        _ => {
+            eprintln!("fixture HTTP class: {:?}", std::mem::discriminant(error));
+        }
+    }
+    let _ = error;
+    internal("crate_release_http_transport")
+}
+
 impl GitHubAdmissionHttp {
     pub(crate) fn check_journal_repository_access(
         &self,
@@ -381,7 +398,7 @@ impl GitHubAdmissionHttp {
             .http_status_as_error(false)
             .build()
             .call()
-            .map_err(|_| internal("crate_release_http_transport"))?;
+            .map_err(|error| rehearsal_transport_error(&error))?;
         let unpaginated_pulls = route.split_once('?').is_some_and(|(path, query)| {
             path.ends_with("/pulls")
                 && path.bytes().filter(|byte| *byte == b'/').count() == 3

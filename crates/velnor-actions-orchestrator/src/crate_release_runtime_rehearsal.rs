@@ -50,11 +50,17 @@ fn generated_source_require_rehearsal() -> Result<(), Box<dyn Error>> {
 
 #[test]
 fn generated_candidate_receipt_rejects_unprotected_environment() -> Result<(), Box<dyn Error>> {
+    if let Some(temp) = std::env::var_os("VELNOR_NATIVE_ACQUIRE_GIT") {
+        let root = std::path::PathBuf::from(temp);
+        let git = crate::crate_release_git_bundle::acquire(&root)?;
+        assert_eq!(git.exec_path(), root.join("velnor/git-bundle"));
+        return Ok(());
+    }
     if std::env::var_os("VELNOR_NATIVE_RECEIPT_CHILD").is_some() {
         let operation = std::env::var("VELNOR_NATIVE_OPERATION")?;
         assert!(matches!(
             operation.as_str(),
-            "candidate-receipt" | "verify-admission" | "journal-start"
+            "candidate-receipt" | "verify-admission" | "journal-start" | "journal-coordinate"
         ));
         assert_eq!(
             std::env::var("VELNOR_TEST_COMMAND_ARGS")?,
@@ -62,6 +68,11 @@ fn generated_candidate_receipt_rejects_unprotected_environment() -> Result<(), B
         );
         assert!(matches!(super::run_crate_release(&operation),
             Err(crate::OrchestratorError::Internal { problem }) if problem == "crate_release_authority_not_qualified"));
+        if operation == "journal-coordinate"
+            && let Some(path) = std::env::var_os("VELNOR_NATIVE_PID_FILE")
+        {
+            std::fs::write(path, std::process::id().to_string())?;
+        }
         return super::run_qualified_crate_release(&operation).map_err(Into::into);
     }
     if std::env::var_os("VELNOR_CANDIDATE_CHILD").is_some() {
@@ -141,6 +152,9 @@ fn rehearse_supplied_candidate() -> Result<(), Box<dyn Error>> {
     );
     if verify_supplied_admission(&root)? && std::env::var_os("VELNOR_NATIVE_JOURNAL").is_some() {
         rehearse_journal_start(&root)?;
+        if std::env::var_os("VELNOR_NATIVE_COORDINATE").is_some() {
+            rehearse_journal_coordinate(&root)?;
+        }
     }
     Ok(())
 }
@@ -189,6 +203,25 @@ fn rehearse_journal_start(root: &Path) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+fn rehearse_journal_coordinate(root: &Path) -> Result<(), Box<dyn Error>> {
+    if std::env::var_os("VELNOR_NATIVE_COORDINATE_CRASH").is_some() {
+        use std::os::unix::process::ExitStatusExt as _;
+        let interrupted = supplied_step(root, "release-publish", "journal-coordinate")?;
+        assert!(interrupted.status.signal() == Some(9) || interrupted.status.code() == Some(137));
+    }
+    let output = supplied_step(root, "release-publish", "journal-coordinate")?;
+    let actual = String::from_utf8_lossy(&output.stdout).to_string()
+        + &String::from_utf8_lossy(&output.stderr);
+    let error = std::env::var("VELNOR_NATIVE_COORDINATE_ERROR")?;
+    if error.is_empty() {
+        assert!(output.status.success(), "{actual}");
+    } else {
+        assert!(!output.status.success());
+        assert!(actual.contains(&error), "{actual}");
+    }
+    Ok(())
+}
+
 fn supplied_step(
     root: &Path,
     job: &str,
@@ -207,7 +240,7 @@ fn supplied_step(
         .env("CARGO_HOME", root.join("velnor/cargo"))
         .env("MISE_CARGO_HOME", root.join("velnor/cargo"))
         .env("RUSTUP_AUTO_INSTALL", "0");
-    if operation == "journal-start" {
+    if matches!(operation, "journal-start" | "journal-coordinate") {
         command.env("HOME", root).env("GH_TOKEN", "fixture");
     }
     Ok(command.output()?)

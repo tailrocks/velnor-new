@@ -667,7 +667,7 @@ fn coordinate_journal(runtime: JournalRuntime<'_>) -> Result<(), OrchestratorErr
             };
             invoke_upload(&input, permit, &runner_temp, runtime.token, credential)
         },
-        || thread::sleep(Duration::from_secs(2)),
+        || thread::sleep(coordinator_wait_duration()),
     )?;
     let reviewed_manifest = read_manifest_at_workflow(
         &required_path("GITHUB_WORKSPACE")?,
@@ -690,6 +690,14 @@ fn coordinate_journal(runtime: JournalRuntime<'_>) -> Result<(), OrchestratorErr
             Ok(())
         },
     )
+}
+
+fn coordinator_wait_duration() -> Duration {
+    #[cfg(test)]
+    if env::var_os("VELNOR_TEST_FAST_POLL").is_some() {
+        return Duration::ZERO;
+    }
+    Duration::from_secs(2)
 }
 
 fn upload_credentials(
