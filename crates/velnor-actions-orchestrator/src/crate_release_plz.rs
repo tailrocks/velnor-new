@@ -111,13 +111,7 @@ pub(crate) fn invoke_upload<
         &git,
     )
     .map_err(|_| invalid())?;
-    let deadline = velnor_actions_mise::CheckDeadline::after(Duration::from_secs(600))
-        .map_err(|_| invalid())?;
-    velnor_actions_mise::release_git_pin::verify_bundle(&git_root).map_err(|_| invalid())?;
-    let result = command.run_quiescent_until(1024 * 1024, deadline);
-    velnor_actions_mise::release_git_pin::verify_bundle(&git_root).map_err(|_| invalid())?;
-    let (output, _drained) = result.map_err(|_| internal("crate_release_upload_incomplete"))?;
-    let attempt = if output.success {
+    let attempt = if execute_upload(&command, &git_root)? {
         UploadAttempt::ExitedSuccess
     } else {
         UploadAttempt::Uncertain
@@ -126,6 +120,17 @@ pub(crate) fn invoke_upload<
         return Ok(UploadAttempt::Uncertain);
     }
     Ok(attempt)
+}
+
+fn execute_upload(command: &IsolatedCommand, git_root: &Path) -> Result<bool, OrchestratorError> {
+    let invalid = || internal("crate_release_upload_unverified");
+    let deadline = velnor_actions_mise::CheckDeadline::after(Duration::from_secs(600))
+        .map_err(|_| invalid())?;
+    velnor_actions_mise::release_git_pin::verify_bundle(git_root).map_err(|_| invalid())?;
+    let result = command.run_quiescent_until(1024 * 1024, deadline);
+    velnor_actions_mise::release_git_pin::verify_bundle(git_root).map_err(|_| invalid())?;
+    let (output, _drained) = result.map_err(|_| internal("crate_release_upload_incomplete"))?;
+    Ok(output.success)
 }
 
 fn verified_release_plz(
