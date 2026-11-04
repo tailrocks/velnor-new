@@ -15,7 +15,8 @@ fn write_rust_verifier(
     };
     let intent = crate::crate_release_runtime::parse_crate_release_intent(&std::fs::read(intent)?)?;
     rust_channel_manifest_sha256(&intent.rust_version).ok_or("unknown Rust channel")?;
-    let catalog = ToolCatalog::pinned().with_project_tool(PinnedTool::Rust, &intent.rust_version)?;
+    let catalog =
+        ToolCatalog::pinned().with_project_tool(PinnedTool::Rust, &intent.rust_version)?;
     let step = rust_verifier_shell_step(&catalog, ToolchainPhase::Installed)?;
     let script = verifier_shell_run_scalar(&step)?;
     let parent = output.parent().ok_or("output parent")?.canonicalize()?;
@@ -72,32 +73,51 @@ fn supplied_intent_renders_rust_verifier() -> Result<(), Box<dyn std::error::Err
 
 fn preview_consumer_intent(root: &std::path::Path) -> Result<String, crate::OrchestratorError> {
     let prep = crate::prepare::prepare_for_candidate(root)?;
-    let release = super::enabled_release(&prep)?.ok_or_else(|| crate::OrchestratorError::unsupported(
-        "crate_release_preview", "release is not enabled",
-    ))?;
+    let release = super::enabled_release(&prep)?.ok_or_else(|| {
+        crate::OrchestratorError::unsupported("crate_release_preview", "release is not enabled")
+    })?;
     if release.registry != velnor_actions_contract::config::ReleaseRegistry::CratesIo {
-        return Err(crate::OrchestratorError::unsupported("crate_release_preview", "registry is not crates.io"));
+        return Err(crate::OrchestratorError::unsupported(
+            "crate_release_preview",
+            "registry is not crates.io",
+        ));
     }
     let mise = crate::pins::resolve_mise_setup(&prep.config, super::RELEASE_HOSTED_RUNNER)?;
     let files = super::release_files_for_config(&prep, &mise, release)?;
-    let mut matching = files.into_iter().filter(|file| file.path == velnor_actions_workflow_renderer::release_tree::RELEASE_INTENT_PATH);
-    let intent = matching.next().ok_or_else(|| crate::OrchestratorError::unsupported("crate_release_preview", "intent missing"))?;
+    let mut matching = files.into_iter().filter(|file| {
+        file.path == velnor_actions_workflow_renderer::release_tree::RELEASE_INTENT_PATH
+    });
+    let intent = matching.next().ok_or_else(|| {
+        crate::OrchestratorError::unsupported("crate_release_preview", "intent missing")
+    })?;
     if matching.next().is_some() {
-        return Err(crate::OrchestratorError::unsupported("crate_release_preview", "duplicate intent"));
+        return Err(crate::OrchestratorError::unsupported(
+            "crate_release_preview",
+            "duplicate intent",
+        ));
     }
     crate::crate_release_runtime::parse_crate_release_intent(intent.bytes.as_bytes())?;
     Ok(intent.bytes)
 }
 
-fn write_consumer_intent(root: &std::path::Path, output: &std::path::Path) -> Result<(), Box<dyn std::error::Error>> {
+fn write_consumer_intent(
+    root: &std::path::Path,
+    output: &std::path::Path,
+) -> Result<(), Box<dyn std::error::Error>> {
     use std::io::Write as _;
     let root = root.canonicalize()?;
     let parent = output.parent().ok_or("output parent")?.canonicalize()?;
     if parent.starts_with(&root) || !parent.starts_with(std::env::temp_dir().canonicalize()?) {
-        return Err("output must be outside the checkout and inside the temporary directory".into());
+        return Err(
+            "output must be outside the checkout and inside the temporary directory".into(),
+        );
     }
     let intent = preview_consumer_intent(&root)?;
-    std::fs::OpenOptions::new().write(true).create_new(true).open(output)?.write_all(intent.as_bytes())?;
+    std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(output)?
+        .write_all(intent.as_bytes())?;
     Ok(())
 }
 
@@ -105,16 +125,45 @@ fn preview_fixture(root: &std::path::Path) -> Result<(), Box<dyn std::error::Err
     use std::{fs, process::Command};
     fs::create_dir_all(root.join(".velnor"))?;
     fs::create_dir_all(root.join("src"))?;
-    fs::write(root.join(".velnor/config.toml"), "schema = 1\n[workflow]\npolicy = 'consumer-v1'\ndefault_branch = 'main'\n[stacks.rust.release]\nenabled = true\nregistry = 'crates-io'\ntrusted_reviewer_id = 123\nrequired_workflow_path = '.github/workflows/ci.yml'\npackages = ['demo']\n")?;
-    fs::write(root.join("Cargo.toml"), "[package]\nname = 'demo'\nversion = '0.1.0'\nedition = '2021'\n")?;
-    fs::write(root.join("Cargo.lock"), "version = 4\n\n[[package]]\nname = 'demo'\nversion = '0.1.0'\n")?;
+    fs::write(
+        root.join(".velnor/config.toml"),
+        "schema = 1\n[workflow]\npolicy = 'consumer-v1'\ndefault_branch = 'main'\n[stacks.rust.release]\nenabled = true\nregistry = 'crates-io'\ntrusted_reviewer_id = 123\nrequired_workflow_path = '.github/workflows/ci.yml'\npackages = ['demo']\n",
+    )?;
+    fs::write(
+        root.join("Cargo.toml"),
+        "[package]\nname = 'demo'\nversion = '0.1.0'\nedition = '2021'\n",
+    )?;
+    fs::write(
+        root.join("Cargo.lock"),
+        "version = 4\n\n[[package]]\nname = 'demo'\nversion = '0.1.0'\n",
+    )?;
     fs::write(root.join("src/lib.rs"), "pub fn demo() {}\n")?;
     let version = env!("CARGO_PKG_VERSION");
     let targets: Vec<_> = ["x86_64-unknown-linux-gnu", "aarch64-apple-darwin", "x86_64-apple-darwin"].into_iter().map(|target| serde_json::json!({"target": target, "artifact": format!("https://github.com/tailrocks/velnor-new/releases/download/v{version}/velnor-actions-{version}-{target}"), "sha256": "a".repeat(64)})).collect();
     fs::write(root.join(".velnor/release-manifest.json"), serde_json::json!({"schema": 1, "version": version, "repository": "tailrocks/velnor-new", "commit": "b".repeat(40), "targets": targets}).to_string())?;
-    for args in [&["init", "-b", "main"][..], &["remote", "add", "origin", "https://github.com/example/demo.git"][..], &["add", "."][..], &["-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "-m", "fixture"][..]] {
+    for args in [
+        &["init", "-b", "main"][..],
+        &[
+            "remote",
+            "add",
+            "origin",
+            "https://github.com/example/demo.git",
+        ][..],
+        &["add", "."][..],
+        &[
+            "-c",
+            "user.name=Fixture",
+            "-c",
+            "user.email=fixture@example.invalid",
+            "commit",
+            "-m",
+            "fixture",
+        ][..],
+    ] {
         let result = Command::new("git").args(args).current_dir(root).output()?;
-        if !result.status.success() { return Err(String::from_utf8_lossy(&result.stderr).into_owned().into()); }
+        if !result.status.success() {
+            return Err(String::from_utf8_lossy(&result.stderr).into_owned().into());
+        }
     }
     Ok(())
 }
@@ -131,13 +180,20 @@ fn supplied_consumer_intent_preview() -> Result<(), Box<dyn std::error::Error>> 
     let prep = crate::prepare::prepare_for_candidate(&checkout)?;
     assert!(super::release_files(&prep).is_err());
     write_consumer_intent(&checkout, &output)?;
-    let intent = crate::crate_release_runtime::parse_crate_release_intent(&std::fs::read(&output)?)?;
+    let intent =
+        crate::crate_release_runtime::parse_crate_release_intent(&std::fs::read(&output)?)?;
     assert_eq!(intent.packages, ["demo"]);
-    assert_eq!(intent.pr_write_paths, ["CHANGELOG.md", "Cargo.lock", "Cargo.toml"]);
+    assert_eq!(
+        intent.pr_write_paths,
+        ["CHANGELOG.md", "Cargo.lock", "Cargo.toml"]
+    );
     assert!(write_consumer_intent(&checkout, &output).is_err());
     let config_path = checkout.join(".velnor/config.toml");
     let config = std::fs::read_to_string(&config_path)?;
-    std::fs::write(&config_path, config.replace("packages = ['demo']", "packages = ['missing']"))?;
+    std::fs::write(
+        &config_path,
+        config.replace("packages = ['demo']", "packages = ['missing']"),
+    )?;
     let invalid_output = temp.path().join("invalid.toml");
     assert!(write_consumer_intent(&checkout, &invalid_output).is_err());
     assert!(!invalid_output.exists());
@@ -268,33 +324,5 @@ fn configured_features_reach_release_plz_and_cargo_package()
     Ok(())
 }
 
-#[test]
-fn release_intent_includes_nested_auto_workspace_members() -> Result<(), Box<dyn std::error::Error>> {
-    use std::{fs, process::Command};
-    let temp = tempfile::tempdir()?;
-    let root = temp.path().join("checkout");
-    fs::create_dir(&root)?;
-    preview_fixture(&root)?;
-    fs::create_dir_all(root.join(".private/dependency/src"))?;
-    fs::write(root.join(".private/dependency/Cargo.toml"), "[package]\nname = 'dependency'\nversion = '0.1.0'\nedition = '2021'\n")?;
-    fs::write(root.join(".private/dependency/src/lib.rs"), "pub fn dependency() {}\n")?;
-    fs::write(root.join("Cargo.toml"), "[workspace]\nmembers = []\n\n[package]\nname = 'demo'\nversion = '0.1.0'\nedition = '2021'\n\n[dependencies]\ndependency = { path = '.private/dependency' }\n")?;
-    fs::write(root.join("Cargo.lock"), "version = 4\n\n[[package]]\nname = 'demo'\nversion = '0.1.0'\ndependencies = [\n 'dependency',\n]\n\n[[package]]\nname = 'dependency'\nversion = '0.1.0'\n")?;
-    for args in [&["add", "."][..], &["-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "-m", "workspace"][..]] {
-        if !Command::new("git").args(args).current_dir(&root).status()?.success() { return Err("fixture git failed".into()); }
-    }
-    let intent = preview_consumer_intent(&root)?;
-    let intent = crate::crate_release_runtime::parse_crate_release_intent(intent.as_bytes())?;
-    assert_eq!(intent.pr_write_paths, [".private/dependency/CHANGELOG.md", ".private/dependency/Cargo.toml", "CHANGELOG.md", "Cargo.lock", "Cargo.toml"]);
-    let config_path = root.join(".velnor/config.toml");
-    let config = fs::read_to_string(&config_path)?;
-    fs::write(&config_path, config.replace("[stacks.rust.release]", "[stacks.rust.release]\nmanifest_path = '.private/dependency/Cargo.toml'"))?;
-    for args in [&["add", "."][..], &["-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "-m", "nested manifest"][..]] {
-        if !Command::new("git").args(args).current_dir(&root).status()?.success() { return Err("fixture git failed".into()); }
-    }
-    let nested = preview_consumer_intent(&root)?;
-    let nested = crate::crate_release_runtime::parse_crate_release_intent(nested.as_bytes())?;
-    assert_eq!(nested.manifest_path, ".private/dependency/Cargo.toml");
-    assert_eq!(nested.pr_write_paths, intent.pr_write_paths);
-    Ok(())
-}
+#[path = "release_emit_workspace_tests.rs"]
+mod workspace;
