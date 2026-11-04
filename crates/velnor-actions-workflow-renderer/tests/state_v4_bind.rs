@@ -8,7 +8,7 @@ use velnor_actions_contract::workflow::state_seal::STATE_SEAL_SUBJECT_REL;
 use velnor_actions_contract::{Job, StepKind, StepRole};
 
 use crate::gc1_scene::{Scene, fail};
-use crate::gc1_seal_support::{ENTRY_ID, ENTRY_SIZE, Gh, MAIN, PULL, REPO};
+use crate::gc1_seal_support::{Attestation, ENTRY_ID, ENTRY_SIZE, Gh, MAIN, PULL, REPO};
 use crate::state_v4_admit::Admit;
 use crate::state_v4_attest_save::BOUND;
 use crate::state_v4_seal::{FIXTURE, identity_expression, resolved_prefix, seal_job, step_of};
@@ -22,6 +22,7 @@ pub(crate) fn run_bind(scene: &Scene, gh: &Gh, job: &Job, key: &str) -> Result<(
         Err(error) if error.kind() != std::io::ErrorKind::NotFound => return Err(error.into()),
         _ => {}
     }
+    scene.install_shim("sleep", crate::gc1_seal_support::SLEEP_SHIM)?;
     let dir = gh.dir();
     let env = [
         ("FAKE_GH_DIR", dir.as_str()),
@@ -105,7 +106,8 @@ fn bind_attests_the_saved_entry_by_key_id_and_size() -> Result<(), Box<dyn Error
 
 #[test]
 #[cfg(unix)]
-fn save_is_refused_when_the_key_already_holds_an_entry() -> Result<(), Box<dyn Error>> {
+fn an_existing_entry_ends_the_run_and_only_an_unattested_one_is_deleted()
+-> Result<(), Box<dyn Error>> {
     let scene = Scene::new("seal-preexisting", crate::gc1_t53::scripts()?)?;
     let gh = Gh::install(&scene)?;
     let admit = Admit::new()?;
@@ -131,18 +133,87 @@ fn save_is_refused_when_the_key_already_holds_an_entry() -> Result<(), Box<dyn E
         return Err(fail("entries of other keys or other refs blocked the save"));
     }
 
-    gh.list_entries(&[(at, MAIN, &sealed, ENTRY_ID, ENTRY_SIZE)])?;
+    gh.list_entries(&[
+        (at, MAIN, &sealed, ENTRY_ID, ENTRY_SIZE),
+        (at, MAIN, &neighbour, ENTRY_ID + 1, ENTRY_SIZE),
+    ])?;
+    gh.attest(&[Attestation::bound(&sealed, ENTRY_ID, ENTRY_SIZE)])?;
     let (ok, output) = admitted(&gh)?;
-    if ok || !output.contains("key_exists") {
+    if ok || !output.contains("already_attested") || !gh.log().is_empty() {
         return Err(fail(&format!(
-            "an entry that existed before the save was admitted: {output}"
+            "an attested entry must end the run without a delete: {output} {}",
+            gh.log()
         )));
     }
+    if gh.rows()?.len() != 2 {
+        return Err(fail("an attested entry was removed"));
+    }
+
+    gh.attest(&[])?;
+    let (ok, output) = admitted(&gh)?;
+    let remaining: Vec<String> = gh.rows()?.into_iter().map(|(key, _)| key).collect();
+    if ok
+        || !output.contains("preexisting_unattested_deleted")
+        || gh.log() != format!("delete cache {ENTRY_ID}\n")
+        || remaining != [neighbour.clone()]
+    {
+        return Err(fail(&format!(
+            "an unattested entry must be deleted by its exact id and refuse the run: {output} {} {remaining:?}",
+            gh.log()
+        )));
+    }
+    gh.clear_log()?;
+
+    gh.list_entries(&[(at, MAIN, &sealed, ENTRY_ID, ENTRY_SIZE)])?;
+    gh.refuse_delete(&[ENTRY_ID])?;
+    let (ok, output) = admitted(&gh)?;
+    if ok || !output.contains("preexisting_unattested_undeletable") {
+        return Err(fail(&format!(
+            "an entry that cannot be deleted was admitted: {output}"
+        )));
+    }
+    gh.refuse_delete(&[])?;
 
     gh.mode("fail")?;
     let (ok, output) = admitted(&gh)?;
     if ok || !output.contains("existing_unlistable") {
         return Err(fail(&format!("an unlistable cache was admitted: {output}")));
+    }
+    scene.finish()
+}
+
+#[test]
+#[cfg(unix)]
+fn bind_waits_for_a_listing_that_lags_the_save() -> Result<(), Box<dyn Error>> {
+    let job = seal_job()?;
+    let scene = Scene::new("seal-bind-lag", crate::gc1_t53::scripts()?)?;
+    let gh = Gh::install(&scene)?;
+    let subject = scene.runner.join(STATE_SEAL_SUBJECT_REL);
+    let sealed = format!(
+        "{}{}",
+        resolved_prefix(&identity_expression()?),
+        S256::of(FIXTURE)
+    );
+    std::fs::create_dir_all(scene.payload().parent().ok_or_else(|| fail("no parent"))?)?;
+    std::fs::write(scene.payload(), FIXTURE)?;
+    gh.list_entries(&[("2026-11-04T01:00:00Z", MAIN, &sealed, ENTRY_ID, ENTRY_SIZE)])?;
+
+    gh.lag(2)?;
+    run_bind(&scene, &gh, &job, &sealed)?;
+    if scene.output_value("bound")? != "true" || !subject.exists() || gh.sleeps() != 2 {
+        return Err(fail(&format!(
+            "a listing empty twice then complete must bind after two pauses, got {} pauses",
+            gh.sleeps()
+        )));
+    }
+
+    gh.lag(5)?;
+    let pauses = gh.sleeps();
+    run_bind(&scene, &gh, &job, &sealed)?;
+    if scene.output_value("bound")? != "false" || subject.exists() || gh.sleeps() - pauses != 4 {
+        return Err(fail(
+            "a listing empty five times must refuse after four pauses",
+        ));
     }
     scene.finish()
 }

@@ -42,7 +42,8 @@ size=
 if [ -L "$payload" ] || [ ! -f "$payload" ]; then size=; else wc -c < "$payload" > "$d/size" && read -r size < "$d/size" || size=; fi
 "#;
 
-const ADMIT: &str = r#"refuse() { printf '%s\n' "::warning::cache_unavailable: state save refused ($1)"; printf '%s\n' '@ADMITTED@=false' >> "$GITHUB_OUTPUT"; exit 0; }
+const ADMIT: &str = r#"settle() { printf '%s\n' "velnor: state save skipped ($1)"; printf '%s\n' '@ADMITTED@=false' >> "$GITHUB_OUTPUT"; exit 0; }
+refuse() { printf '%s\n' "::warning::cache_unavailable: state save refused ($1)"; printf '%s\n' '@ADMITTED@=false' >> "$GITHUB_OUTPUT"; exit 0; }
 number "$size" && [ "$size" -gt 0 ] || refuse payload_unreadable
 bound_of "$size" || refuse bound_unavailable
 key="${@KEY_ENV@-}"
@@ -51,8 +52,16 @@ repo="${GITHUB_REPOSITORY-}"
 [ -n "$key" ] && [ -n "$ref" ] && [ -n "$repo" ] || refuse identity_missing
 case "$key" in *[[:space:]]*) refuse key_whitespace ;; esac
 gh cache list -R "$repo" --key "$key" --ref "$ref" --limit @LIMIT@ --json @FIELDS@ --jq '@JQ@' > "$d/existing" 2> /dev/null || refuse existing_unlistable
+signer="${GITHUB_WORKFLOW_REF-}"
+signer="${signer%%@*}"
 while IFS='@TAB@' read -r k i s; do
-  [ "$k" != "$key" ] || refuse key_exists
+  [ "$k" = "$key" ] || continue
+  number "$i" && number "$s" || refuse key_exists_malformed
+  [ -n "$signer" ] || refuse signer_missing
+  printf '%s %s %s\n' "$k" "$i" "$s" > "$d/subject"
+  if gh attestation verify "$d/subject" -R "$repo" --signer-workflow "$signer" --source-ref "$ref" --predicate-type '@PREDICATE@' > /dev/null 2>&1; then settle already_attested; fi
+  gh cache delete -R "$repo" "$i" > /dev/null 2>&1 || refuse preexisting_unattested_undeletable
+  refuse preexisting_unattested_deleted
 done < "$d/existing"
 gh api "repos/$GITHUB_REPOSITORY/actions/cache/usage" --jq .active_caches_size_in_bytes > "$d/usage" 2> /dev/null || refuse usage_unavailable
 usage=
@@ -153,6 +162,7 @@ pub fn state_seal_admit_step(pending: &[String], pending_bytes: u64) -> Result<S
             .replace("@FIELDS@", STATE_SEAL_LIST_FIELDS)
             .replace("@JQ@", STATE_SEAL_LIST_JQ)
             .replace("@TAB@", STATE_SEAL_LIST_TAB)
+            .replace("@PREDICATE@", STATE_SEAL_PREDICATE_TYPE)
             .replace("@ADMITTED@", STATE_SEAL_ADMITTED_OUTPUT)
             .replace("@PENDING_BYTES@", STATE_SEAL_PENDING_BYTES_ENV)
             .replace("@PENDING@", STATE_SEAL_PENDING_ENV)

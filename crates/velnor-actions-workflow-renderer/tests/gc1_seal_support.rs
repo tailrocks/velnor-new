@@ -41,6 +41,10 @@ case "$verb" in
       shift
     done
     [ -n "$repo" ] || exit 1
+    if [ -f "$d/lag" ]; then
+      read -r lag < "$d/lag"
+      if [ "$lag" -gt 0 ]; then printf '%s\n' "$((lag - 1))" > "$d/lag"; exit 0; fi
+    fi
     if [ "$mode" = garbage ]; then printf '%s\n' '<<<not json>>>' '{"oops"'; exit 0; fi
     sflag=-r
     [ "$order" = asc ] && sflag=
@@ -114,6 +118,9 @@ case "$verb" in
 esac
 "#;
 
+pub(crate) const SLEEP_SHIM: &str =
+    "#!/bin/sh\nprintf '%s\\n' \"$1\" >> \"${FAKE_GH_DIR:?}/sleeps\"\n";
+
 pub(crate) struct Gh {
     dir: PathBuf,
 }
@@ -168,6 +175,15 @@ impl Gh {
         gh.refuse_delete(&[])?;
         gh.clear_log()?;
         Ok(gh)
+    }
+
+    pub(crate) fn lag(&self, empty_listings: u32) -> Result<(), Box<dyn Error>> {
+        std::fs::write(self.dir.join("lag"), format!("{empty_listings}\n"))?;
+        Ok(())
+    }
+
+    pub(crate) fn sleeps(&self) -> usize {
+        std::fs::read_to_string(self.dir.join("sleeps")).map_or(0, |text| text.lines().count())
     }
 
     pub(crate) fn dir(&self) -> String {

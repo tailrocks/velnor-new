@@ -61,6 +61,10 @@ pub const STATE_SEAL_VERIFY_LIMIT: usize = 3;
 
 pub const STATE_SEAL_LIST_LIMIT: usize = 100;
 
+pub const STATE_SEAL_BIND_ATTEMPTS: usize = 5;
+
+pub const STATE_SEAL_BIND_PAUSE_SECONDS: u64 = 3;
+
 pub const STATE_SEAL_LIST_FIELDS: &str = "key,id,sizeInBytes";
 
 pub const STATE_SEAL_LIST_TAB: &str = "\t";

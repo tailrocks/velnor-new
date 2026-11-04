@@ -4,7 +4,7 @@
 use std::collections::BTreeMap;
 use std::error::Error;
 
-use velnor_actions_contract::{Job, StepKind};
+use velnor_actions_contract::{Job, StepKind, StepRole};
 
 type Needs = BTreeMap<(String, String), String>;
 
@@ -163,4 +163,39 @@ pub(super) fn seal_runs(
         outcomes: BTreeMap::new(),
     };
     evaluates(seal.condition.as_deref(), &run, &needs)
+}
+
+pub(super) fn seal_steps_run(seal: &Job, admitted: bool) -> Result<Vec<StepRole>, Box<dyn Error>> {
+    let mut run = Run {
+        failed: false,
+        outputs: BTreeMap::from([(("state-seal-subject", "sealed"), "true")]),
+        outcomes: BTreeMap::new(),
+    };
+    let none = Needs::new();
+    let mut ran = Vec::new();
+    for step in &seal.steps {
+        if !evaluates(step.condition.as_deref(), &run, &none)? {
+            continue;
+        }
+        let Some(role) = step.role else {
+            continue;
+        };
+        ran.push(role);
+        match role {
+            StepRole::StateSealAdmit => {
+                run.outputs.insert(
+                    ("state-seal-admit", "admitted"),
+                    if admitted { "true" } else { "false" },
+                );
+            }
+            StepRole::StateSealSave => {
+                run.outcomes.insert("state-seal-save", "success");
+            }
+            StepRole::StateSealBind => {
+                run.outputs.insert(("state-seal-bind", "bound"), "true");
+            }
+            _ => {}
+        }
+    }
+    Ok(ran)
 }

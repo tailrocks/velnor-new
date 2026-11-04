@@ -151,7 +151,10 @@ fn prune_runs_only_after_a_main_push_ci() -> Result<(), Box<dyn Error>> {
         json!({"group": "velnor-cache-prune", "cancel-in-progress": false})
     );
     let job = &workflow["jobs"]["prune"];
-    assert_eq!(job["permissions"], json!({"actions": "write"}));
+    assert_eq!(
+        job["permissions"],
+        json!({"actions": "write", "attestations": "read"})
+    );
     let steps = job["steps"].as_array().ok_or("prune job has no steps")?;
     assert!(
         steps.iter().all(|step| step.get("uses").is_none()),

@@ -9,7 +9,7 @@ use velnor_actions_contract::workflow::state_seal::{
 use velnor_actions_contract::{Job, Step, StepRole};
 
 use super::state_producer::{ROOTS, build, job};
-use super::state_producer_eval::{seal_runs, simulate};
+use super::state_producer_eval::{seal_runs, seal_steps_run, simulate};
 use super::support::rendered_job_block;
 
 #[test]
@@ -114,5 +114,35 @@ fn every_rust_job_and_the_producer_end_with_a_stats_step_that_always_runs()
         checked += 1;
     }
     assert!(checked >= 3, "only {checked} jobs were checked");
+    Ok(())
+}
+
+#[test]
+fn a_refused_admit_leaves_save_bind_and_attest_unrun() -> Result<(), Box<dyn Error>> {
+    let built = build()?;
+    let (_, seal_id) = ROOTS[0];
+    let seal = job(&built.jobs, seal_id)?;
+    let admitted = seal_steps_run(seal, true)?;
+    for role in [
+        StepRole::StateSealSave,
+        StepRole::StateSealBind,
+        StepRole::StateSealAttest,
+        StepRole::StateSealRetire,
+    ] {
+        assert!(admitted.contains(&role), "an admitted run skipped {role:?}");
+    }
+    let refused = seal_steps_run(seal, false)?;
+    assert!(refused.contains(&StepRole::StateSealAdmit));
+    for role in [
+        StepRole::StateSealSave,
+        StepRole::StateSealBind,
+        StepRole::StateSealAttest,
+        StepRole::StateSealRetire,
+    ] {
+        assert!(
+            !refused.contains(&role),
+            "a refused admit still ran {role:?}"
+        );
+    }
     Ok(())
 }

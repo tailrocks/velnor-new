@@ -10,7 +10,7 @@ use velnor_actions_contract::workflow::state_seal::{
 use velnor_actions_contract::{StepKind, StepRole};
 
 use crate::gc1_scene::{Scene, fail};
-use crate::gc1_seal_support::{Gh, MAIN, PULL, REPO, digest, key, scope_of};
+use crate::gc1_seal_support::{Gh, MAIN, PULL, REPO, SIGNER, digest, key, scope_of};
 use crate::state_v4_seal::seal_jobs;
 
 const BUDGET: u64 = 8_000_000_000;
@@ -104,12 +104,14 @@ impl Admit {
         }
         let dir = gh.dir();
         let bytes = pending_bytes.to_string();
+        let signer = format!("{SIGNER}@{MAIN}");
         let output = scene.run_script(
             &self.script,
             &[
                 ("FAKE_GH_DIR", dir.as_str()),
                 ("GITHUB_REPOSITORY", REPO),
                 ("GITHUB_REF", MAIN),
+                ("GITHUB_WORKFLOW_REF", signer.as_str()),
                 (STATE_SEAL_KEY_ENV, sealed),
                 ("GH_TOKEN", "fixture"),
                 (STATE_SEAL_PENDING_ENV, pending),

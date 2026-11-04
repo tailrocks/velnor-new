@@ -8,12 +8,13 @@ use velnor_actions_contract::workflow::cache_family::{
 };
 use velnor_actions_contract::workflow::cache_family_mbx::MBX_BUNDLE_ROOT_ENV;
 use velnor_actions_contract::workflow::state_seal::{
-    STATE_PRODUCER_ARTIFACT_OUTPUT, STATE_SEAL_ATTEST_CONDITION, STATE_SEAL_BIND_CONDITION,
-    STATE_SEAL_KEY_ENV, STATE_SEAL_KEY_EXPR, STATE_SEAL_LIST_FIELDS, STATE_SEAL_LIST_JQ,
-    STATE_SEAL_LIST_LIMIT, STATE_SEAL_LIST_TAB, STATE_SEAL_PREDICATE, STATE_SEAL_PREDICATE_TYPE,
-    STATE_SEAL_PREFIX_ENV, STATE_SEAL_SAVE_CONDITION, STATE_SEAL_SUBJECT_EXPR,
-    STATE_SEAL_SUBJECT_REL, state_compat_plan_expr, state_produce_plan_expr, state_producer_job_id,
-    state_seal_condition, state_seal_job_id,
+    STATE_PRODUCER_ARTIFACT_OUTPUT, STATE_SEAL_ATTEST_CONDITION, STATE_SEAL_BIND_ATTEMPTS,
+    STATE_SEAL_BIND_CONDITION, STATE_SEAL_BIND_PAUSE_SECONDS, STATE_SEAL_KEY_ENV,
+    STATE_SEAL_KEY_EXPR, STATE_SEAL_LIST_FIELDS, STATE_SEAL_LIST_JQ, STATE_SEAL_LIST_LIMIT,
+    STATE_SEAL_LIST_TAB, STATE_SEAL_PREDICATE, STATE_SEAL_PREDICATE_TYPE, STATE_SEAL_PREFIX_ENV,
+    STATE_SEAL_SAVE_CONDITION, STATE_SEAL_SUBJECT_EXPR, STATE_SEAL_SUBJECT_REL,
+    state_compat_plan_expr, state_produce_plan_expr, state_producer_job_id, state_seal_condition,
+    state_seal_job_id,
 };
 use velnor_actions_contract::workflow::{ProducerKind, SOURCES_PRODUCER_JOB_ID};
 use velnor_actions_contract::{
@@ -264,18 +265,25 @@ case "$key" in *[[:space:]]*) refuse key_whitespace ;; esac
 number "$size" && [ "$size" -gt 0 ] || refuse payload_unreadable
 bound_of "$size" || refuse bound_unavailable
 command -v gh >/dev/null 2>&1 || refuse gh_missing
-gh cache list -R "$repo" --key "$key" --ref "$ref" --limit {list_limit} --json {fields} --jq '{jq}' > "$d/list" || refuse list_failed
-hits=
-id=
-stored=
-while IFS='{tab}' read -r k i s; do
-  [ "$k" = "$key" ] || continue
-  case "$i" in ''|*[!0-9]*) refuse id_malformed ;; esac
-  case "$s" in ''|*[!0-9]*) refuse size_malformed ;; esac
-  hits="${{hits}}x"
-  id=$i
-  stored=$s
-done < "$d/list"
+tries=
+while :; do
+  gh cache list -R "$repo" --key "$key" --ref "$ref" --limit {list_limit} --json {fields} --jq '{jq}' > "$d/list" || refuse list_failed
+  hits=
+  id=
+  stored=
+  while IFS='{tab}' read -r k i s; do
+    [ "$k" = "$key" ] || continue
+    case "$i" in ''|*[!0-9]*) refuse id_malformed ;; esac
+    case "$s" in ''|*[!0-9]*) refuse size_malformed ;; esac
+    hits="${{hits}}x"
+    id=$i
+    stored=$s
+  done < "$d/list"
+  [ -z "$hits" ] || break
+  tries="${{tries}}x"
+  [ "${{#tries}}" -lt {attempts} ] || break
+  sleep {pause}
+done
 [ "$hits" = x ] || refuse "entries=${{#hits}}"
 [ "$stored" -le "$bound" ] || refuse "size_out_of_bound stored=$stored bound=$bound"
 printf '%s %s %s\n' "$key" "$id" "$stored" > "$subject"
@@ -290,6 +298,8 @@ printf 'velnor: state seal subject %s %s %s\n' "$key" "$id" "$stored"
         fields = STATE_SEAL_LIST_FIELDS,
         jq = STATE_SEAL_LIST_JQ,
         tab = STATE_SEAL_LIST_TAB,
+        attempts = STATE_SEAL_BIND_ATTEMPTS,
+        pause = STATE_SEAL_BIND_PAUSE_SECONDS,
     );
     let mut step = ambient_shell_step(
         "Bind seal subject",
