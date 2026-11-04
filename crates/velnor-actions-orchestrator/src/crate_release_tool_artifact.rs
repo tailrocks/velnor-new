@@ -8,12 +8,57 @@ use std::collections::BTreeSet;
 
 const MAX_TOOL_ARCHIVE_BYTES: u64 = 1024 * 1024 * 1024;
 
+pub fn read_pr_preparation_archive(archive: &std::fs::File) -> Result<Vec<u8>, OrchestratorError> {
+    read_single_file_archive(
+        archive,
+        "velnor-release-pr-preparation.json",
+        64 * 1024 * 1024,
+        64 * 1024 * 1024,
+    )
+}
+
+pub fn validate_pr_preparation_artifact_metadata(
+    list: &Value,
+    detail: &Value,
+    artifact_id: u64,
+    run_id: u64,
+    attempt: u32,
+    repository_id: u64,
+    head_sha: &str,
+) -> Result<ToolArtifactMetadata, OrchestratorError> {
+    validate_artifact_metadata(
+        list,
+        detail,
+        artifact_id,
+        run_id,
+        attempt,
+        repository_id,
+        head_sha,
+        "pr-preparation",
+        64 * 1024 * 1024,
+    )
+}
+
 pub fn read_receipt_archive(archive: &std::fs::File) -> Result<Vec<u8>, OrchestratorError> {
+    read_single_file_archive(
+        archive,
+        "velnor-crate-release-receipt.json",
+        16 * 1024 * 1024,
+        1024 * 1024,
+    )
+}
+
+fn read_single_file_archive(
+    archive: &std::fs::File,
+    expected: &str,
+    archive_limit: u64,
+    entry_limit: u64,
+) -> Result<Vec<u8>, OrchestratorError> {
     use std::io::{Read as _, Seek as _};
     let invalid = || internal("crate_release_receipt_archive_invalid");
     let mut input = archive.try_clone().map_err(|_| invalid())?;
     if !input.metadata().map_err(|_| invalid())?.is_file()
-        || input.metadata().map_err(|_| invalid())?.len() > 16 * 1024 * 1024
+        || input.metadata().map_err(|_| invalid())?.len() > archive_limit
     {
         return Err(invalid());
     }
@@ -25,26 +70,27 @@ pub fn read_receipt_archive(archive: &std::fs::File) -> Result<Vec<u8>, Orchestr
     )?;
     input.rewind().map_err(|_| invalid())?;
     let mut zip = zip::ZipArchive::new(input).map_err(|_| invalid())?;
+    zip.validate_header_consistency().map_err(|_| invalid())?;
     if zip.len() != 1 {
         return Err(invalid());
     }
     let mut entry = zip.by_index(0).map_err(|_| invalid())?;
     let mode = entry.unix_mode().unwrap_or(0);
-    if entry.name().map_err(|_| invalid())? != "velnor-crate-release-receipt.json"
+    if entry.name().map_err(|_| invalid())? != expected
         || !entry.is_file()
         || (mode & 0o170_000 != 0 && mode & 0o170_000 != 0o100_000)
         || mode & 0o7000 != 0
-        || entry.size() > 1024 * 1024
+        || entry.size() > entry_limit
     {
         return Err(invalid());
     }
     let mut bytes = Vec::new();
     entry
         .by_ref()
-        .take(1024 * 1024 + 1)
+        .take(entry_limit + 1)
         .read_to_end(&mut bytes)
         .map_err(|_| invalid())?;
-    if bytes.len() > 1024 * 1024 || bytes.len() as u64 != entry.size() {
+    if bytes.len() as u64 > entry_limit || bytes.len() as u64 != entry.size() {
         return Err(invalid());
     }
     Ok(bytes)

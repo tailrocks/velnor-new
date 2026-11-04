@@ -120,6 +120,126 @@ fn receipt_artifact_requires_its_own_same_run_identity() {
 }
 
 #[test]
+fn release_pr_artifact_requires_exact_same_run_identity() {
+    use velnor_actions_orchestrator::crate_release_tool_artifact::validate_pr_preparation_artifact_metadata;
+    let (mut list, mut detail) = valid();
+    detail["name"] = json!("velnor-release-pr-preparation-12-1");
+    detail["size_in_bytes"] = json!(4096);
+    list["artifacts"][0] = detail.clone();
+    let check = |list: &Value, detail: &Value| {
+        validate_pr_preparation_artifact_metadata(
+            list,
+            detail,
+            10,
+            12,
+            1,
+            22,
+            "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        )
+    };
+    assert!(check(&list, &detail).is_ok());
+    for (field, value) in [
+        ("name", json!("velnor-release-pr-preparation-12-2")),
+        ("expired", json!(true)),
+        ("digest", json!("sha256:bad")),
+        ("size_in_bytes", json!(u64::MAX)),
+    ] {
+        let mut invalid = detail.clone();
+        invalid[field] = value;
+        let mut invalid_list = list.clone();
+        invalid_list["artifacts"][0] = invalid.clone();
+        assert!(check(&invalid_list, &invalid).is_err());
+    }
+    for field in ["id", "repository_id", "head_repository_id", "head_sha"] {
+        let mut invalid = detail.clone();
+        invalid["workflow_run"][field] = if field == "head_sha" {
+            json!("c".repeat(40))
+        } else {
+            json!(999)
+        };
+        let mut invalid_list = list.clone();
+        invalid_list["artifacts"][0] = invalid.clone();
+        assert!(check(&invalid_list, &invalid).is_err());
+    }
+    list["total_count"] = json!(2);
+    assert!(check(&list, &detail).is_err());
+}
+
+#[test]
+fn release_pr_archive_requires_one_regular_bounded_entry() -> Result<(), Box<dyn std::error::Error>>
+{
+    use std::io::Write;
+    use velnor_actions_orchestrator::crate_release_tool_artifact::read_pr_preparation_archive;
+    use zip::{ZipWriter, write::SimpleFileOptions};
+    let temp = tempfile::tempdir()?;
+    let path = temp.path().join("candidate.zip");
+    let make = |entries: &[(&str, &[u8])]| -> Result<(), Box<dyn std::error::Error>> {
+        let mut zip = ZipWriter::new(std::fs::File::create(&path)?);
+        for (name, data) in entries {
+            zip.start_file(*name, SimpleFileOptions::default())?;
+            zip.write_all(data)?;
+        }
+        zip.finish()?;
+        Ok(())
+    };
+    make(&[("velnor-release-pr-preparation.json", b"{}")])?;
+    assert_eq!(
+        read_pr_preparation_archive(&std::fs::File::open(&path)?)?,
+        b"{}"
+    );
+    let mut zip = ZipWriter::new(std::fs::File::create(&path)?);
+    zip.start_file(
+        "velnor-release-pr-preparation.json",
+        SimpleFileOptions::default().large_file(true),
+    )?;
+    zip.write_all(b"{}")?;
+    zip.finish()?;
+    assert_eq!(
+        read_pr_preparation_archive(&std::fs::File::open(&path)?)?,
+        b"{}"
+    );
+    for entries in [
+        vec![("other.json", &b"{}"[..])],
+        vec![("../velnor-release-pr-preparation.json", &b"{}"[..])],
+        vec![
+            ("velnor-release-pr-preparation.json", &b"{}"[..]),
+            ("extra", &b"x"[..]),
+        ],
+    ] {
+        make(&entries)?;
+        assert!(read_pr_preparation_archive(&std::fs::File::open(&path)?).is_err());
+    }
+    let original = b"xelnor-release-pr-preparation.json";
+    let replacement = b"velnor-release-pr-preparation.json";
+    make(&[
+        ("velnor-release-pr-preparation.json", b"{}"),
+        ("xelnor-release-pr-preparation.json", b"{}"),
+    ])?;
+    let mut bytes = std::fs::read(&path)?;
+    let positions: Vec<_> = bytes
+        .windows(original.len())
+        .enumerate()
+        .filter_map(|(index, value)| (value == original).then_some(index))
+        .collect();
+    assert_eq!(positions.len(), 2);
+    for position in positions {
+        bytes[position..position + replacement.len()].copy_from_slice(replacement);
+    }
+    std::fs::write(&path, bytes)?;
+    assert!(read_pr_preparation_archive(&std::fs::File::open(&path)?).is_err());
+    make(&[("velnor-release-pr-preparation.json", b"{}")])?;
+    let mut bytes = std::fs::read(&path)?;
+    let position = bytes
+        .windows(replacement.len())
+        .position(|value| value == replacement)
+        .ok_or("filename")?;
+    bytes[position] = b'x';
+    std::fs::write(&path, bytes)?;
+    assert!(read_pr_preparation_archive(&std::fs::File::open(&path)?).is_err());
+    Ok(())
+}
+
+#[test]
 fn receipt_archive_requires_one_regular_bounded_entry() -> Result<(), Box<dyn std::error::Error>> {
     use std::io::Write;
     use velnor_actions_orchestrator::crate_release_tool_artifact::read_receipt_archive;
@@ -148,6 +268,24 @@ fn receipt_archive_requires_one_regular_bounded_entry() -> Result<(), Box<dyn st
         make(&entries)?;
         assert!(read_receipt_archive(&std::fs::File::open(&path)?).is_err());
     }
+    make(&[
+        ("velnor-crate-release-receipt.json", b"{}"),
+        ("xelnor-crate-release-receipt.json", b"{}"),
+    ])?;
+    let original = b"xelnor-crate-release-receipt.json";
+    let replacement = b"velnor-crate-release-receipt.json";
+    let mut bytes = std::fs::read(&path)?;
+    let positions: Vec<_> = bytes
+        .windows(original.len())
+        .enumerate()
+        .filter_map(|(index, value)| (value == original).then_some(index))
+        .collect();
+    assert_eq!(positions.len(), 2);
+    for position in positions {
+        bytes[position..position + replacement.len()].copy_from_slice(replacement);
+    }
+    std::fs::write(&path, bytes)?;
+    assert!(read_receipt_archive(&std::fs::File::open(&path)?).is_err());
     Ok(())
 }
 
