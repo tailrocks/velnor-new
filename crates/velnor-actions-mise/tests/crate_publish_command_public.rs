@@ -4,6 +4,88 @@
 use std::{ffi::OsString, path::Path, time::Duration};
 use velnor_actions_mise::command::{CratePublishCredential, IsolatedCommand};
 
+#[cfg(unix)]
+#[test]
+fn crate_update_exposes_no_credentials_or_write_handles() -> Result<(), Box<dyn std::error::Error>>
+{
+    use std::os::unix::fs::PermissionsExt;
+    let root = tempfile::tempdir()?;
+    let source = root.path().join("source");
+    let home = root.path().join("home");
+    std::fs::create_dir(&source)?;
+    std::fs::create_dir(&home)?;
+    let config = source.join("release-plz.toml");
+    let manifest = source.join("Cargo.toml");
+    std::fs::write(&config, "")?;
+    std::fs::write(&manifest, "")?;
+    let program = root.path().join("release-plz");
+    std::fs::write(
+        &program,
+        "#!/bin/sh\ntest \"$1\" = update && test -z \"${GIT_TOKEN+x}${GITHUB_TOKEN+x}${GH_TOKEN+x}${CARGO_REGISTRY_TOKEN+x}${ACTIONS_ID_TOKEN_REQUEST_TOKEN+x}${GITHUB_OUTPUT+x}${HTTP_PROXY+x}\"\n",
+    )?;
+    std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755))?;
+    let env: Vec<(OsString, OsString)> = [
+        ("PATH", "/usr/bin:/bin"),
+        ("CARGO", "/usr/bin/true"),
+        ("RUSTC", "/usr/bin/true"),
+        ("RUSTDOC", "/usr/bin/true"),
+        ("HOME", home.to_str().ok_or("home")?),
+        ("CARGO_HOME", home.to_str().ok_or("home")?),
+        ("CARGO_TARGET_DIR", home.to_str().ok_or("home")?),
+        ("RUSTUP_HOME", home.to_str().ok_or("home")?),
+        ("RUSTUP_AUTO_INSTALL", "0"),
+    ]
+    .into_iter()
+    .map(|(key, value)| (key.into(), value.into()))
+    .collect();
+    let args = vec![
+        "update".into(),
+        "--config".into(),
+        config.into_os_string(),
+        "--manifest-path".into(),
+        manifest.into_os_string(),
+    ];
+    let command = IsolatedCommand::crate_update(&program, args.clone(), &source, &env)?;
+    let parent = [
+        "GIT_TOKEN",
+        "GITHUB_TOKEN",
+        "GH_TOKEN",
+        "CARGO_REGISTRY_TOKEN",
+        "ACTIONS_ID_TOKEN_REQUEST_TOKEN",
+        "GITHUB_OUTPUT",
+        "HTTP_PROXY",
+    ]
+    .into_iter()
+    .map(|key| (OsString::from(key), OsString::from("fixture")))
+    .collect::<Vec<_>>();
+    assert!(
+        !command
+            .spawn_env(&parent)
+            .iter()
+            .any(|(key, _)| parent.iter().any(|(forbidden, _)| key == forbidden))
+    );
+    assert!(command.run_bounded(1024, Duration::from_secs(5))?.success);
+    let mut release_pr = args.clone();
+    release_pr[0] = "release-pr".into();
+    assert!(IsolatedCommand::crate_update(&program, release_pr, &source, &env).is_err());
+    let mut dirty = args.clone();
+    dirty.push("--allow-dirty".into());
+    assert!(IsolatedCommand::crate_update(&program, dirty, &source, &env).is_err());
+    let mut source_target = env.clone();
+    source_target
+        .iter_mut()
+        .find(|(key, _)| key == "CARGO_TARGET_DIR")
+        .ok_or("target")?
+        .1 = source.as_os_str().to_owned();
+    assert!(
+        IsolatedCommand::crate_update(&program, args.clone(), &source, &source_target).is_err()
+    );
+    let mut hostile = env;
+    hostile.push(("GIT_TOKEN".into(), "fixture".into()));
+    assert!(IsolatedCommand::crate_update(&program, args, &source, &hostile).is_err());
+    Ok(())
+}
+
 fn tool_env() -> Vec<(OsString, OsString)> {
     [
         ("PATH", "/usr/bin:/bin"),

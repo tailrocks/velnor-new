@@ -7,6 +7,8 @@ mod cancellable;
 mod check;
 #[path = "command_crate_publish.rs"]
 mod crate_publish;
+#[path = "command_crate_update.rs"]
+mod crate_update;
 #[path = "command_credential.rs"]
 mod credential;
 #[path = "command_env.rs"]
