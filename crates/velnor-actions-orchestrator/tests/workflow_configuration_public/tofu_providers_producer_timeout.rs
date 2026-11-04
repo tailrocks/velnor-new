@@ -6,6 +6,7 @@ use std::fs;
 
 use tempfile::TempDir;
 use velnor_actions_contract::workflow::ProducerKind;
+use velnor_actions_contract::workflow::state_seal::STATE_SEAL_WORKFLOW_PATH;
 use velnor_actions_contract::{Job, WorkflowPolicy};
 use velnor_actions_orchestrator::{finalized_jobs, prepare, render_staged_tree};
 use velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
@@ -86,21 +87,34 @@ fn assert_tofu_producer_budgets(
     Ok(())
 }
 
-fn rendered(repo: &TempDir) -> Result<(String, Jobs), Box<dyn Error>> {
+fn rendered(repo: &TempDir) -> Result<([String; 2], Jobs), Box<dyn Error>> {
     let prepared = prepare(repo.path())?;
     let tree = render_staged_tree(&prepared)?;
     let ci = tree.get(WORKFLOW_PATH).ok_or("CI workflow is missing")?;
-    Ok((ci.to_owned(), finalized_jobs(&prepared)?))
+    let sealed = tree
+        .get(STATE_SEAL_WORKFLOW_PATH)
+        .ok_or("state-seal workflow is missing")?;
+    Ok((
+        [ci.to_owned(), sealed.to_owned()],
+        finalized_jobs(&prepared)?,
+    ))
 }
 
 fn producer_blocks(
-    ci: &str,
+    texts: &[String; 2],
     jobs: &Jobs,
     is_producer: fn(&Job) -> bool,
 ) -> Result<Vec<(String, String)>, Box<dyn Error>> {
     jobs.iter()
         .filter(|(_, job)| is_producer(job))
-        .map(|(id, _)| Ok((id.clone(), rendered_job_block(ci, id)?.to_owned())))
+        .map(|(id, _)| {
+            let marker = format!("\n  {id}:\n");
+            let text = texts
+                .iter()
+                .find(|text| text.contains(&marker))
+                .ok_or_else(|| format!("rendered job {id} is missing"))?;
+            Ok((id.clone(), rendered_job_block(text, id)?.to_owned()))
+        })
         .collect()
 }
 
@@ -119,7 +133,7 @@ fn tofu_producer_timeout_admits_its_save_and_never_shrinks_the_crate_timeout()
         let crates = tofu_crate_jobs(&jobs);
         assert!(!crates.is_empty());
         for (id, _) in crates {
-            let block = rendered_job_block(&ci, id)?;
+            let block = rendered_job_block(&ci[0], id)?;
             assert!(
                 block.contains(&format!("{JOB_TIMEOUT_PREFIX}{crate_timeout}\n")),
                 "{id}: {block}"

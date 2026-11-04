@@ -3,11 +3,13 @@
 
 use velnor_actions_contract::RunsOn;
 use velnor_actions_contract::workflow::cache_family::CacheFamily;
-use velnor_actions_contract::workflow::state_seal::STATE_SEAL_PREDICATE_TYPE;
+use velnor_actions_contract::workflow::state_seal::{
+    STATE_SEAL_PREDICATE_TYPE, STATE_SEAL_WORKFLOW_NAME, state_seal_signer_workflow,
+};
 
 use crate::RenderError;
 use crate::marker::with_marker;
-use crate::render::{RenderedFile, WORKFLOW_PATH};
+use crate::render::RenderedFile;
 use crate::yaml::quote_scalar;
 
 pub const CACHE_PRUNE_PATH: &str = ".github/workflows/cache-prune.yml";
@@ -60,6 +62,7 @@ pub fn prune_script() -> String {
     let group_program = format!(
         "{{ if ($2 ~ /^{TOOLS_PRUNE_PREFIX}/) g = \"{TOOLS_PRUNE_UNIT}\"; else {{ g = $2; sub(/-s256-[0-9a-f]+$/, \"\", g) }}; n[g]++; if (n[g] > keep) print $1 }}",
     );
+    let signer = state_seal_signer_workflow();
     let mut lines = vec![
         "set -eu".to_owned(),
         "ref=\"$GITHUB_REF\"".to_owned(),
@@ -74,7 +77,7 @@ pub fn prune_script() -> String {
         ),
         "fetch_state() { if gh cache list --key \"$1\" --ref \"$ref\" --limit 1000 --sort created_at --order desc --json id,key,sizeInBytes --jq '.[] | [.id, .key, .sizeInBytes] | @tsv' > \"$d/list\"; then return 0; else warn \"could not list $1\"; return 1; fi; }".to_owned(),
         format!(
-            "sweep_state() {{ cur=; found=; tried=; while read -r g id key size; do if [ \"$g\" != \"$cur\" ]; then cur=$g; found=; tried=; fi; if [ -n \"$found\" ]; then if gh cache delete \"$id\" < /dev/null; then printf 'velnor: pruned superseded entry %s of %s\\n' \"$id\" \"$1\"; else warn \"could not delete $id\"; fi; elif [ \"${{#tried}}\" -lt {STATE_PRUNE_VERIFY_CAP} ]; then tried=\"${{tried}}x\"; printf '%s %s %s\\n' \"$key\" \"$id\" \"$size\" > \"$d/subject\"; if gh attestation verify \"$d/subject\" -R \"$GITHUB_REPOSITORY\" --signer-workflow \"$GITHUB_REPOSITORY/{WORKFLOW_PATH}\" --source-ref \"$ref\" --predicate-type '{STATE_SEAL_PREDICATE_TYPE}' > /dev/null 2>&1 < /dev/null; then found=x; fi; fi; done < \"$d/groups\"; }}"
+            "sweep_state() {{ cur=; found=; tried=; while read -r g id key size; do if [ \"$g\" != \"$cur\" ]; then cur=$g; found=; tried=; fi; if [ -n \"$found\" ]; then if gh cache delete \"$id\" < /dev/null; then printf 'velnor: pruned superseded entry %s of %s\\n' \"$id\" \"$1\"; else warn \"could not delete $id\"; fi; elif [ \"${{#tried}}\" -lt {STATE_PRUNE_VERIFY_CAP} ]; then tried=\"${{tried}}x\"; printf '%s %s %s\\n' \"$key\" \"$id\" \"$size\" > \"$d/subject\"; if gh attestation verify \"$d/subject\" -R \"$GITHUB_REPOSITORY\" --signer-workflow \"{signer}\" --source-ref \"$ref\" --predicate-type '{STATE_SEAL_PREDICATE_TYPE}' > /dev/null 2>&1 < /dev/null; then found=x; fi; fi; done < \"$d/groups\"; }}"
         ),
         format!(
             "prune_state() {{ if fetch_state \"$1\"; then awk -F '\\t' '{}' \"$d/list\" > \"$d/rows\"; LC_ALL=C sort -s -k1,1 \"$d/rows\" > \"$d/groups\"; sweep_state \"$1\"; fi; }}",
@@ -108,9 +111,10 @@ pub fn render_cache_prune_yml(
         ));
     }
     let workflow = quote_scalar(workflow_name);
+    let sealed = quote_scalar(STATE_SEAL_WORKFLOW_NAME);
     let script = prune_script().replace('\\', "\\\\").replace('"', "\\\"");
     let body = format!(
-        "name: Cache prune\n\"on\":\n  workflow_run:\n    workflows:\n      - {workflow} # zizmor: ignore[dangerous-triggers]\n    types:\n      - completed\n    branches:\n      - {default_branch}\npermissions: {{}}\ncache-mode: read\nconcurrency:\n  group: velnor-cache-prune\n  cancel-in-progress: false\njobs:\n  prune:\n    name: Prune superseded cache entries\n    if: github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == '{default_branch}' && github.event.workflow_run.head_repository.full_name == github.repository && github.event.workflow_run.conclusion != 'cancelled'\n    runs-on: {label}\n    timeout-minutes: 5\n    permissions:\n      actions: write\n      attestations: read\n    steps:\n      - name: Prune superseded cache entries\n        env:\n          GH_TOKEN: ${{{{ github.token }}}}\n          GH_REPO: ${{{{ github.repository }}}}\n        run: \"{script}\"\n"
+        "name: Cache prune\n\"on\":\n  workflow_run:\n    workflows:\n      - {workflow} # zizmor: ignore[dangerous-triggers]\n      - {sealed} # zizmor: ignore[dangerous-triggers]\n    types:\n      - completed\n    branches:\n      - {default_branch}\npermissions: {{}}\ncache-mode: read\nconcurrency:\n  group: velnor-cache-prune\n  cancel-in-progress: false\njobs:\n  prune:\n    name: Prune superseded cache entries\n    if: github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == '{default_branch}' && github.event.workflow_run.head_repository.full_name == github.repository && github.event.workflow_run.conclusion != 'cancelled'\n    runs-on: {label}\n    timeout-minutes: 5\n    permissions:\n      actions: write\n      attestations: read\n    steps:\n      - name: Prune superseded cache entries\n        env:\n          GH_TOKEN: ${{{{ github.token }}}}\n          GH_REPO: ${{{{ github.repository }}}}\n        run: \"{script}\"\n"
     );
     Ok(RenderedFile {
         path: CACHE_PRUNE_PATH.to_owned(),

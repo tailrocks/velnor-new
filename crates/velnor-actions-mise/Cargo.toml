@@ -13,6 +13,8 @@ autotests = false
 name = "velnor_mise"
 path = "tests/velnor_mise.rs"
 
+[lib]
+doctest = false
 
 [lints]
 workspace = true

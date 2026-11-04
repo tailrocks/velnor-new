@@ -38,12 +38,19 @@ and overlaps the independent checks.
   (decision 4).
 - Clippy and Documentation compile in their own Cargo target lanes
   (`target/velnor-clippy`, `target/velnor-doc`, seeded from the
-  dependency-seed family) so Cargo's target-directory lock never serializes test execution
-  behind them. Doctests compile in their own lane `target/velnor-doctest`, which is
-  never seeded. Tests reuse the built executables. Amended for decision X70
+  compiled-state family; owner standing grant 2026-11-02, velnor-fast-ci
+  GOAL.md, decisions X61, X64 and X73) so Cargo's target-directory lock never
+  serializes test execution behind them. Doctests compile in their own lane
+  `target/velnor-doctest`. The compiled-state producer runs the crate jobs'
+  doctests lane record too. Tests reuse the built executables. Amended for decision X70
   (owner standing grant 2026-11-02, velnor-fast-ci GOAL.md, decisions.tsv X70):
-  doctests used to share `target/` with the tests, and a replay by one lane
-  removed outputs that a concurrent doctest run still read. The amendment
+  doctests used to share `target/` with the tests. On a filesystem without
+  reflinks, MBX restores replayed outputs as hard links to one store object,
+  and a replay in one lane moves the modification time shared by every link.
+  That makes the dependencies look newer to the test lane's Cargo, which
+  replays them while a concurrent doctest run still reads the same outputs, and
+  rustdoc fails with `extern location for <crate> does not exist`
+  (`docs/implemented/native-rust-crate-jobs.md`, "Cargo target lanes"). The amendment
   restores the invariant in `docs/proposed/parallelism-and-selection-contract.md:220`
   that concurrent Cargo writers use different target directories.
 - `workflow.crate_timeout_minutes` bounds the one crate job (decision 2).

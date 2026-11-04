@@ -223,8 +223,8 @@ fn staged_tree_renders_producers_for_both_policies() -> Result<(), Box<dyn Error
         let prepared = prepare(repo.path())?;
         let tree = render_staged_tree(&prepared)?;
         let workflow = tree
-            .get(velnor_actions_workflow_renderer::render::WORKFLOW_PATH)
-            .ok_or("rendered workflow is missing")?;
+            .get(velnor_actions_contract::workflow::state_seal::STATE_SEAL_WORKFLOW_PATH)
+            .ok_or("rendered state-seal workflow is missing")?;
         assert!(
             workflow.contains("  tools-producer-"),
             "{policy:?}: no producer job rendered"

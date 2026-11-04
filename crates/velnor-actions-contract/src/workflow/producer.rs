@@ -174,7 +174,7 @@ impl ProducerKind {
             return effective.id_token == PermissionLevel::Write
                 && effective.attest == PermissionLevel::Write
                 && effective.actions == PermissionLevel::Write
-                && effective.contents == PermissionLevel::None
+                && effective.contents == PermissionLevel::Read
                 && effective.pull_requests == PermissionLevel::None
                 && effective.packages == PermissionLevel::None;
         }

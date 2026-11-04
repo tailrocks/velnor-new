@@ -45,6 +45,13 @@ fn forgeries(newest: &str) -> Vec<(&'static str, Attestation)> {
             },
         ),
         (
+            "previous signer workflow ci.yml",
+            Attestation {
+                signer: format!("{REPO}/.github/workflows/ci.yml"),
+                ..signed()
+            },
+        ),
+        (
             "other predicate type",
             Attestation {
                 predicate: "https://slsa.dev/provenance/v1".to_owned(),

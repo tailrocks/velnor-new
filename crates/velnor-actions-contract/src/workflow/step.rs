@@ -227,6 +227,7 @@ fn validate_id_kind(id: Option<StepId>, kind: &StepKind, job: &str) -> Result<()
         | StepId::MbxBundleImport
         | StepId::StateSealAdmit
         | StepId::StateProduced
+        | StepId::StateSealTip
         | StepId::StateSealBind => {
             matches!(kind, StepKind::Shell { .. })
         }

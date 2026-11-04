@@ -80,7 +80,7 @@ fn plan(
 
 fn build(plan: &ToolsProducerPlan, policy: PullRequestCachePolicy) -> Result<Job, RenderError> {
     let donor = &plan.donor;
-    let mut steps = Vec::new();
+    let mut steps = vec![crate::state_seal::tip::stale_tip_stops_job_step()?];
     for role in [
         StepRole::Checkout,
         StepRole::MiseSetup,

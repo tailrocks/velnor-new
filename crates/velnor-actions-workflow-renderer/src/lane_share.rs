@@ -32,6 +32,30 @@ pub(crate) struct LaneShare {
     pub files: Vec<RenderedFile>,
 }
 
+impl LaneShare {
+    pub(crate) fn split_off(&mut self, ids: &std::collections::BTreeSet<String>) -> LaneShare {
+        fn take<T>(
+            map: &mut BTreeMap<String, T>,
+            ids: &std::collections::BTreeSet<String>,
+        ) -> BTreeMap<String, T> {
+            ids.iter()
+                .filter_map(|id| map.remove(id).map(|value| (id.clone(), value)))
+                .collect()
+        }
+        LaneShare {
+            jobs: take(&mut self.jobs, ids),
+            calls: take(&mut self.calls, ids),
+            checkouts: take(&mut self.checkouts, ids),
+            env_steps: take(&mut self.env_steps, ids),
+            runtime_preludes: take(&mut self.runtime_preludes, ids),
+            prefixes: take(&mut self.prefixes, ids),
+            preludes: take(&mut self.preludes, ids),
+            postludes: take(&mut self.postludes, ids),
+            files: Vec::new(),
+        }
+    }
+}
+
 struct SharedLaneParts {
     checkout: Step,
     hosted_runtime_prelude: Vec<Step>,

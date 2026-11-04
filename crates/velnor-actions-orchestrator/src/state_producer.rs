@@ -66,7 +66,10 @@ fn producer_job(
 ) -> Result<Job, OrchestratorError> {
     let catalog = input.catalog;
     crate::source_prep::validate_root(&producer.root)?;
-    let mut steps = vec![crate::workflow::wire_w1::checkout_step()?];
+    let mut steps = vec![
+        velnor_actions_workflow_renderer::state_seal::tip::stale_tip_stops_job_step()?,
+        crate::workflow::wire_w1::checkout_step()?,
+    ];
     steps.extend(input.acquire.cloned());
     steps.push(crate::matrix_step::download_plan_step()?);
     steps.push(crate::workflow::verify_restored_rust_step(catalog));

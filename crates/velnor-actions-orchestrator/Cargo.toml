@@ -57,6 +57,7 @@ name = "workflow_configuration_public"
 path = "tests/workflow_configuration_public.rs"
 
 [lib]
+doctest = false
 test = true
 
 [features]
