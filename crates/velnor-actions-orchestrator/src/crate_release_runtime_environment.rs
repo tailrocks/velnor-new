@@ -158,7 +158,12 @@ pub(super) fn write_checkpoint(
 ) -> Result<(), OrchestratorError> {
     let body = serde_json::to_vec(&serde_json::json!({"schema":1,"stage":stage,"receipt":receipt}))
         .map_err(|_| internal("crate_release_checkpoint_write"))?;
-    crate::exclusive_write::write_exclusive(path, &body, "crate_release_checkpoint")
+    velnor_actions_contract::exclusive_write::write_exclusive(
+        path,
+        &body,
+        "crate_release_checkpoint",
+    )
+    .map_err(Into::into)
 }
 
 pub(crate) fn release_mode(receipt: &CrateReleaseAdmissionReceipt) -> &'static str {

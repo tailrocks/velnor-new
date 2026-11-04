@@ -134,9 +134,10 @@ pub(super) fn reconcile_receipt(
         git,
     )?;
     let body = serde_json::to_vec(&serde_json::json!({"schema":1,"stage":"reconciled","receipt":receipt,"packages":completed,"generator_version":env!("CARGO_PKG_VERSION"),"workflow_run":format!("https://github.com/{}/actions/runs/{}", request.repository, request.run_id)})).map_err(|_| internal("crate_release_checkpoint_write"))?;
-    crate::exclusive_write::write_exclusive(
+    velnor_actions_contract::exclusive_write::write_exclusive(
         &required_path("RUNNER_TEMP")?.join("velnor-crate-release-reconciled.json"),
         &body,
         "crate_release_checkpoint",
     )
+    .map_err(Into::into)
 }

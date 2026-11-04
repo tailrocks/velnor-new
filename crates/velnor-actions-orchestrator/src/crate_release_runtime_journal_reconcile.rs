@@ -51,7 +51,12 @@ pub(super) fn reconcile_journal_evidence(
     let data =
         serde_json::to_vec(&candidate).map_err(|_| internal("crate_release_receipt_write"))?;
     let path = required_path("RUNNER_TEMP")?.join("velnor-reconciled-candidate.json");
-    crate::exclusive_write::write_exclusive(&path, &data, "crate_release_candidate")
+    velnor_actions_contract::exclusive_write::write_exclusive(
+        &path,
+        &data,
+        "crate_release_candidate",
+    )
+    .map_err(Into::into)
 }
 
 pub(super) fn inspect_prior_journal(input: JournalRuntime<'_>) -> Result<(), OrchestratorError> {
@@ -118,7 +123,12 @@ pub(super) fn inspect_prior_journal(input: JournalRuntime<'_>) -> Result<(), Orc
     let data =
         serde_json::to_vec(&evidence).map_err(|_| internal("crate_release_receipt_write"))?;
     let path = required_path("RUNNER_TEMP")?.join("velnor-prior-recovery-evidence.json");
-    crate::exclusive_write::write_exclusive(&path, &data, "crate_release_prior_evidence")
+    velnor_actions_contract::exclusive_write::write_exclusive(
+        &path,
+        &data,
+        "crate_release_prior_evidence",
+    )
+    .map_err(Into::into)
 }
 
 pub(super) fn checkpoint_publication(

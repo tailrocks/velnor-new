@@ -213,7 +213,12 @@ pub(super) fn write_admission(
 ) -> Result<(), OrchestratorError> {
     let receipt = prepare_crate_release(intent, request, github, registry, source, git)?;
     let data = serde_json::to_vec(&receipt).map_err(|_| internal("crate_release_receipt_write"))?;
-    crate::exclusive_write::write_exclusive(receipt_path, &data, "crate_release_receipt")
+    velnor_actions_contract::exclusive_write::write_exclusive(
+        receipt_path,
+        &data,
+        "crate_release_receipt",
+    )
+    .map_err(Into::into)
 }
 
 pub(super) fn verify_runtime_tool_homes(source: &Path) -> Result<(), OrchestratorError> {
