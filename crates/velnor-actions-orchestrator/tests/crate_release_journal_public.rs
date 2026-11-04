@@ -1407,18 +1407,7 @@ fn verify_new_crate_prior_intention(
         },
     )?;
     assert!(inspect_prior_history(&journal, &prior.identity, &current, root).is_ok());
-    let original_refs = journal.refs.borrow().clone();
-    let object_counts = (journal.tags.borrow().len(), journal.blobs.borrow().len());
-    journal.move_on_second_list.set(1);
-    assert!(
-        inspect_prior_history(&journal, &prior.identity, &current, root).is_err(),
-        "moving a journal ref between history observations must be rejected"
-    );
-    assert_eq!(
-        (journal.tags.borrow().len(), journal.blobs.borrow().len()),
-        object_counts
-    );
-    *journal.refs.borrow_mut() = original_refs;
+    reject_moved_history_ref(&journal, &prior, &current, root);
     reject_forged_new_crate_prior(plan, &prior, &current, root)?;
     let actual_owners = journal_existing_owners(&current.packages[0].owners);
     crate::crate_release_journal::record_journal_mutation(
@@ -1449,6 +1438,26 @@ fn verify_new_crate_prior_intention(
     assert!(inspect_prior_history(&journal, &prior.identity, &current, root).is_ok());
     reject_changed_new_crate_result(&journal, &prior, &current, root)?;
     Ok(())
+}
+
+fn reject_moved_history_ref(
+    journal: &Registry,
+    prior: &JournalReceipt,
+    current: &JournalReceipt,
+    root: &std::path::Path,
+) {
+    let original_refs = journal.refs.borrow().clone();
+    let object_counts = (journal.tags.borrow().len(), journal.blobs.borrow().len());
+    journal.move_on_second_list.set(1);
+    assert!(
+        inspect_prior_history(journal, &prior.identity, current, root).is_err(),
+        "moving a journal ref between history observations must be rejected"
+    );
+    assert_eq!(
+        (journal.tags.borrow().len(), journal.blobs.borrow().len()),
+        object_counts
+    );
+    *journal.refs.borrow_mut() = original_refs;
 }
 
 fn reject_changed_new_crate_result(
