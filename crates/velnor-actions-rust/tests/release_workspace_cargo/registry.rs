@@ -343,7 +343,8 @@ fn plan_handles_versioned_dependencies_outside_workspace_and_omits_path_only_dev
     let error = plan_release(&request, &registry)
         .expect_err("versioned external dependency must exist in registry");
     assert!(
-        matches!(error, ReleaseError::MissingRegistryVersion { dep, .. } if dep == "probe_external")
+        matches!(&error, ReleaseError::MissingRegistryVersion { dep, .. } if dep == "probe_external"),
+        "unexpected planner error: {error:?}"
     );
     registry.published.insert(
         RegistryPackage {

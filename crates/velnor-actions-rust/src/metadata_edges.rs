@@ -195,10 +195,10 @@ fn is_known_target(path: &str, repo_root: &Path, known: &BTreeSet<String>) -> bo
         return false;
     };
     let manifest = Path::new(path).join("Cargo.toml");
-    let Ok(lexical) = manifest.strip_prefix(repo_root) else {
+    let Some(lexical) = lexical_relative(repo_root, &manifest) else {
         return false;
     };
-    if !known.contains(&posix(lexical)) {
+    if !known.contains(&posix(&lexical)) {
         return false;
     }
     let Ok(target) = manifest.canonicalize() else {
@@ -208,6 +208,40 @@ fn is_known_target(path: &str, repo_root: &Path, known: &BTreeSet<String>) -> bo
         return false;
     };
     target.is_file() && known.contains(&posix(relative))
+}
+
+fn lexical_relative(root: &Path, path: &Path) -> Option<std::path::PathBuf> {
+    if let Ok(relative) = path.strip_prefix(root) {
+        return Some(relative.to_path_buf());
+    }
+    #[cfg(windows)]
+    {
+        let root = windows_nonverbatim(root)?;
+        let path = windows_nonverbatim(path)?;
+        path.strip_prefix(root).ok().map(Path::to_path_buf)
+    }
+    #[cfg(not(windows))]
+    None
+}
+
+#[cfg(windows)]
+fn windows_nonverbatim(path: &Path) -> Option<std::path::PathBuf> {
+    let text = path.to_str()?;
+    if let Some(unc) = text.strip_prefix(r"\\?\UNC\") {
+        Some(std::path::PathBuf::from(format!(r"\\{unc}")))
+    } else if let Some(disk) = text.strip_prefix(r"\\?\") {
+        let bytes = disk.as_bytes();
+        if bytes.len() < 3
+            || !bytes[0].is_ascii_alphabetic()
+            || bytes[1] != b':'
+            || bytes[2] != b'\\'
+        {
+            return None;
+        }
+        Some(std::path::PathBuf::from(disk))
+    } else {
+        Some(path.to_path_buf())
+    }
 }
 
 fn dep_kind(raw: Option<&str>, hint: &str) -> Result<DepKind, MetadataError> {

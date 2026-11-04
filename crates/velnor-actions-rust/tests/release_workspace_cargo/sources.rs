@@ -162,7 +162,41 @@ fn source_escape_cannot_be_authorized_as_a_known_manifest() {
             ..request
         };
         assert_unresolved(&plan_release(&forged_request, &state));
+        assert_untracked_alias_rejected(&root, &mut altered, &forged_request, &state)
+            .expect("untracked alias fixture");
     }
+}
+
+#[cfg(unix)]
+fn assert_untracked_alias_rejected(
+    root: &Path,
+    altered: &mut serde_json::Value,
+    request: &ReleaseRequest<'_>,
+    state: &RegistryState,
+) -> Result<(), Box<dyn std::error::Error>> {
+    write(
+        root,
+        "inside/Cargo.toml",
+        "[package]\nname='probe_escape'\nversion='1.0.0'\n",
+    );
+    std::os::unix::fs::symlink(root.join("inside"), root.join("untracked-link"))?;
+    altered["packages"][0]["dependencies"][0]["path"] = root
+        .join("untracked-link")
+        .to_string_lossy()
+        .to_string()
+        .into();
+    let forged = serde_json::to_string(altered)?;
+    let known = BTreeSet::from(["inside/Cargo.toml".to_owned()]);
+    let forged_request = ReleaseRequest {
+        metadata_json: &forged,
+        known_manifests: &known,
+        ..request.clone()
+    };
+    assert_unresolved(&velnor_actions_rust::release_graph::plan_release(
+        &forged_request,
+        state,
+    ));
+    Ok(())
 }
 
 #[test]
