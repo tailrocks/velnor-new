@@ -38,7 +38,7 @@ pub(super) fn unmanaged_notices(
         return Ok(Vec::new());
     }
     let entries =
-        super::unmanaged::list(&prep.root, &prep.config.workflow.preserve_workflows, github)?;
+        super::unmanaged::list(&prep.root, github)?;
     if entries.is_empty() {
         return Ok(Vec::new());
     }
@@ -51,4 +51,25 @@ pub(super) fn unmanaged_notices(
         .into_iter()
         .map(|entry| format!("unmanaged_github_entry:{entry}"))
         .collect())
+}
+
+pub(super) fn reject_unmarked_workflows(prep: &GenerationPreparation) -> Result<(), OrchestratorError> {
+    let github = prep.root.join(".github");
+    super::reject_symlink(&github)?;
+    let path = github.join("workflows");
+    super::reject_symlink(&path)?;
+    let entries = match std::fs::read_dir(&path) {
+        Ok(entries) => entries,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(error) => return Err(OrchestratorError::io(path.display().to_string(), error.to_string())),
+    };
+    for entry in entries {
+        let entry = entry.map_err(|error| OrchestratorError::io(path.display().to_string(), error.to_string()))?;
+        let file = entry.path();
+        let metadata = std::fs::symlink_metadata(&file).map_err(|error| OrchestratorError::io(file.display().to_string(), error.to_string()))?;
+        if !metadata.is_file() || metadata.is_symlink() || !super::preserve::first_line_is_generated_marker(&file)? {
+            return Err(OrchestratorError::Contract { problem: format!("unmanaged_workflow:{}", file.display()) });
+        }
+    }
+    Ok(())
 }

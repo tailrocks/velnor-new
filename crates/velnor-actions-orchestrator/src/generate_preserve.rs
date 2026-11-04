@@ -17,7 +17,6 @@ pub(super) fn stage_in_place(
     source: &Path,
     staging_root: &Path,
     tree: &RenderedTree,
-    preserve_workflows: &[String],
 ) -> Result<PathBuf, OrchestratorError> {
     let permissions = root_permissions(source)?;
     let staged = if permissions.is_some() {
@@ -25,7 +24,7 @@ pub(super) fn stage_in_place(
     } else {
         staging_root.join(".github")
     };
-    let directories = copy_repository_content(source, &staged, preserve_workflows)?;
+    let directories = copy_repository_content(source, &staged)?;
     check_generated_collisions(&staged, tree)?;
     super::write_tree(&staged, tree)?;
     restore_directory_permissions(directories)?;
@@ -37,10 +36,9 @@ pub(super) fn write_preview(
     source: &Path,
     destination: &Path,
     tree: &RenderedTree,
-    preserve_workflows: &[String],
 ) -> Result<(), OrchestratorError> {
     let permissions = root_permissions(source)?;
-    let directories = copy_repository_content(source, destination, preserve_workflows)?;
+    let directories = copy_repository_content(source, destination)?;
     check_generated_collisions(destination, tree)?;
     super::write_tree(destination, tree)?;
     restore_directory_permissions(directories)?;
@@ -130,7 +128,6 @@ fn check_generated_collisions(
 fn copy_repository_content(
     source: &Path,
     destination: &Path,
-    preserve_workflows: &[String],
 ) -> Result<Vec<(PathBuf, std::fs::Permissions)>, OrchestratorError> {
     if std::fs::symlink_metadata(source).is_ok_and(|metadata| metadata.is_symlink()) {
         return Err(OrchestratorError::UnsafePath {
@@ -152,23 +149,15 @@ fn copy_repository_content(
             &entry.path(),
             &destination.join(&name),
             Path::new(&name),
-            preserve_workflows,
             &mut directories,
         )?;
     }
     Ok(directories)
 }
 
-pub(super) fn generator_owned(relative: &Path, preserve_workflows: &[String]) -> bool {
-    if relative == Path::new("workflows") {
-        return preserve_workflows.is_empty();
-    }
+pub(super) fn generator_owned(relative: &Path) -> bool {
     if relative.starts_with("workflows") {
-        return !preserve_workflows.iter().any(|preserved| {
-            Path::new(preserved)
-                .strip_prefix(".github")
-                .is_ok_and(|rel| rel == relative)
-        });
+        return true;
     }
     DECLARED_GITHUB_FORMATS
         .iter()
@@ -231,7 +220,7 @@ pub(super) fn retired_marked_lint_config(
     first_line_is_generated_marker(source)
 }
 
-fn first_line_is_generated_marker(source: &Path) -> Result<bool, OrchestratorError> {
+pub(super) fn first_line_is_generated_marker(source: &Path) -> Result<bool, OrchestratorError> {
     let file = fs::File::open(source).map_err(|error| io(source, &error))?;
     let mut reader = std::io::BufReader::new(file);
     let limit = MARKER_PREFIX.len().max(OLD_MARKER_PREFIX.len());
@@ -251,11 +240,10 @@ fn copy_entry(
     source: &Path,
     destination: &Path,
     relative: &Path,
-    preserve_workflows: &[String],
     directories: &mut Vec<(PathBuf, std::fs::Permissions)>,
 ) -> Result<bool, OrchestratorError> {
     let metadata = std::fs::symlink_metadata(source).map_err(|error| io(source, &error))?;
-    if generator_owned(relative, preserve_workflows)
+    if generator_owned(relative)
         || generated_shared_action(relative, source, &metadata)?
         || generated_marked_script(relative, source, &metadata)?
         || generated_marked_dco(relative, source, &metadata)?
@@ -281,7 +269,6 @@ fn copy_entry(
                 &entry.path(),
                 &destination.join(&name),
                 &relative.join(&name),
-                preserve_workflows,
                 directories,
             )?;
         }
@@ -368,7 +355,7 @@ mod release_cleanup_tests {
         std::fs::write(github.join("release-plz-publish.toml"), "obsolete")?;
         std::fs::write(github.join("manual.txt"), "keep")?;
         let tree = velnor_actions_workflow_renderer::render::RenderedTree { files: vec![], symlinks: vec![] };
-        super::write_preview(&github, &output.path().join(".github"), &tree, &[])?;
+        super::write_preview(&github, &output.path().join(".github"), &tree)?;
         assert!(!output.path().join(".github/release-plz-publish.toml").exists());
         assert_eq!(std::fs::read_to_string(output.path().join(".github/manual.txt"))?, "keep");
         Ok(())

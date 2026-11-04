@@ -37,7 +37,7 @@ pub(crate) fn expected_structural_output_tree(
 ) -> Result<RegularTree, OrchestratorError> {
     validate_witness(authority, witness)?;
     let (config, serialized_config) = normal_config(authority, witness, deadline)?;
-    let base = seed_base_tree(root, witness, &config, deadline)?;
+    let base = seed_base_tree(root, witness, deadline)?;
     let mut expected = preserved_seed_files(root, witness, &base, deadline)?;
     overlay_normal_renderer(root, &config, &mut expected)?;
     expected.insert(
@@ -102,7 +102,6 @@ fn normal_config(
 fn seed_base_tree(
     root: &Path,
     witness: &PrivateVerifiedSeedOutputBase,
-    config: &velnor_actions_contract::VelnorConfig,
     deadline: CheckDeadline,
 ) -> Result<(Vec<TapTreeEntry>, Vec<String>), OrchestratorError> {
     let base = velnor_actions_mise::read_tap_tree(
@@ -115,7 +114,6 @@ fn seed_base_tree(
     let projection = materialize_seed_workflows(root, witness, &base, deadline)?;
     let unmanaged = crate::generate::unmanaged::list(
         projection.path(),
-        &config.workflow.preserve_workflows,
         &velnor_actions_contract::GithubConfig::default(),
     )?;
     Ok((base, unmanaged))

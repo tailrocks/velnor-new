@@ -7,8 +7,7 @@ use std::path::{Path, PathBuf};
 
 use tempfile::TempDir;
 use velnor_actions_contract::{
-    RESERVED_SUITE_WORKFLOW_SLUGS, RustSuiteConfig, validate_preserve_workflows,
-    validate_rust_suites,
+    RESERVED_SUITE_WORKFLOW_SLUGS, RustSuiteConfig, validate_rust_suites,
 };
 use velnor_actions_orchestrator::{GenerateOptions, generate, prepare, render_staged_tree};
 use velnor_actions_workflow_renderer::MARKER_PREFIX;
@@ -29,7 +28,10 @@ fn generator_release_owns_source_qualification_lifecycle() -> Result<(), Box<dyn
             .parent()
             .ok_or("workflow path has no parent")?,
     )?;
-    fs::write(&source_workflow, "name: stale user-owned workflow\n")?;
+    fs::write(
+        &source_workflow,
+        format!("{MARKER_PREFIX} 0.1.0\nname: stale generated workflow\n"),
+    )?;
     fs::create_dir_all(
         root.join(UNRELATED_PATH)
             .parent()
@@ -51,7 +53,7 @@ fn generator_release_owns_source_qualification_lifecycle() -> Result<(), Box<dyn
     assert!(!rendered.contains("workflow_run:"));
     assert!(rendered.contains("permissions:\n  contents: read"));
     assert!(!rendered.contains("contents: write"));
-    assert!(!rendered.contains("stale user-owned workflow"));
+    assert!(!rendered.contains("stale generated workflow"));
 
     let previews = tempfile::tempdir()?;
     let first = preview_generation(&prepared, previews.path().join("enabled-first"))?;
@@ -107,20 +109,6 @@ fn generator_release_owns_source_qualification_lifecycle() -> Result<(), Box<dyn
 
 #[test]
 fn source_qualification_reservations_reject_collisions_and_allow_unrelated_entries() {
-    let preserve_error =
-        validate_preserve_workflows(&[WORKFLOW_PATH.to_owned()], ".velnor/config.toml")
-            .expect_err("generator-owned workflow must reject preserve_workflows collision");
-    assert!(
-        preserve_error
-            .to_string()
-            .contains("cannot_preserve_generator_workflow")
-    );
-    validate_preserve_workflows(
-        &[".github/workflows/project-checks.yml".to_owned()],
-        ".velnor/config.toml",
-    )
-    .expect("unrelated workflow may remain preserved");
-
     assert!(RESERVED_SUITE_WORKFLOW_SLUGS.contains(&"source-qualification"));
     let mut suite = RustSuiteConfig::new("project-check", "default");
     suite.workflow = Some("source-qualification".to_owned());
@@ -165,4 +153,55 @@ fn preview_generation(
         },
     )?;
     Ok(destination)
+}
+
+#[test]
+fn handwritten_workflow_blocks_generation_without_modifying_existing_files()
+-> Result<(), Box<dyn Error>> {
+    let repo = generator_repo(true)?;
+    let root = repo.path();
+    let workflow = root.join(".github/workflows/custom.yml");
+    fs::create_dir_all(workflow.parent().ok_or("parent")?)?;
+    fs::write(&workflow, "name: custom\n")?;
+    let other = root.join(".github/notes.txt");
+    fs::write(&other, "preserve me\n")?;
+    let prepared = prepare(root)?;
+    assert!(generate(&prepared, &GenerateOptions::default()).is_err());
+    assert_eq!(fs::read_to_string(&workflow)?, "name: custom\n");
+    assert_eq!(fs::read_to_string(other)?, "preserve me\n");
+    let config = root.join(".velnor/config.toml");
+    fs::write(
+        &config,
+        format!(
+            "{}\n[github]\nallow = [\".github/workflows/custom.yml\"]\n",
+            generator_config(true)
+        ),
+    )?;
+    assert!(prepare(root).is_err());
+    fs::write(&config, generator_config(true).replace("default_branch = \"testmain\"", "default_branch = \"testmain\"\npreserve_workflows = [\".github/workflows/custom.yml\"]"))?;
+    assert!(prepare(root).is_err());
+    fs::write(&config, generator_config(true))?;
+    fs::write(&workflow, format!("{MARKER_PREFIX} 0.1.0\nname: stale\n"))?;
+    let prepared = prepare(root)?;
+    let preview = tempfile::tempdir()?;
+    let destination = preview.path().join("preview");
+    generate(
+        &prepared,
+        &GenerateOptions {
+            output_dir: Some(destination.clone()),
+        },
+    )?;
+    assert!(!destination.join(".github/workflows/custom.yml").exists());
+    assert!(workflow.exists());
+    #[cfg(unix)]
+    {
+        let outside = tempfile::tempdir()?;
+        let outside_file = outside.path().join("keep.yml");
+        fs::write(&outside_file, "outside\n")?;
+        fs::remove_dir_all(root.join(".github/workflows"))?;
+        std::os::unix::fs::symlink(outside.path(), root.join(".github/workflows"))?;
+        assert!(generate(&prepared, &GenerateOptions::default()).is_err());
+        assert_eq!(fs::read_to_string(&outside_file)?, "outside\n");
+    }
+    Ok(())
 }

@@ -77,6 +77,7 @@ pub fn generate_dispatched(
     opts: &GenerateOptions,
     dispatch: Option<ExecutionMode>,
 ) -> Result<GenerateReport, OrchestratorError> {
+    preflight::reject_unmarked_workflows(prep)?;
     preflight::fail_on_blocking_findings(prep)?;
     let notices = preflight::unmanaged_notices(prep)?;
     let tools = ToolSnapshot::capture(&prep.root);
@@ -153,7 +154,6 @@ fn replace_in_place(
         &target,
         staging.spare(),
         tree,
-        &prep.config.workflow.preserve_workflows,
     ) {
         Ok(path) => path,
         Err(error) => return Err(staging.abort_before_commit(error)),

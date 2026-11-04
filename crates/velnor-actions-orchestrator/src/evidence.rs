@@ -21,13 +21,12 @@ pub(crate) fn profile_for_workspace(
     index: &FileIndex,
     record: &WorkspaceRecord,
     rust: Option<&RustStackConfig>,
-    preserve_workflows: &[String],
 ) -> Result<velnor_actions_rust::ProfileOutcome, OrchestratorError> {
     let tool_config = tool_config_input(root);
     let cargo_a = read_optional(root, ".cargo/config.toml");
     let cargo_b = read_optional(root, ".cargo/config");
     let exec_texts = collect_executables(root, index);
-    let flow_texts = collect_handwritten(root, index, preserve_workflows);
+    let flow_texts = collect_handwritten(root, index);
     let mut executables = Vec::with_capacity(exec_texts.len());
     for (path, text) in &exec_texts {
         executables.push(EvidenceFile {
@@ -160,12 +159,10 @@ fn collect_executables(root: &Path, index: &FileIndex) -> Vec<(String, String)> 
 fn collect_handwritten(
     root: &Path,
     index: &FileIndex,
-    preserve_workflows: &[String],
 ) -> Vec<(String, String)> {
     let mut out = Vec::new();
     for path in index.files() {
         if is_workflow_path(path)
-            && !preserve_workflows.iter().any(|preserved| preserved == path)
             && let Some(text) = read_optional(root, path)
             && !starts_generated(&text)
         {

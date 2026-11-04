@@ -44,7 +44,6 @@ fn write_staged_preview(
         &prep.root.join(".github"),
         staging.path(),
         tree,
-        &prep.config.workflow.preserve_workflows,
     )?;
     swap_directories(canonical, &canonical.join(".github"), staging.path())
 }

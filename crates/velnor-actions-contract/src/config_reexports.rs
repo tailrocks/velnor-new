@@ -36,6 +36,6 @@ pub use crate::config::{
     is_exact_semver, is_valid_build_tool_key, is_valid_feature_name, is_valid_mise_task_name,
     is_valid_rust_target, is_valid_workflow_task_id, mise_task_suite_artifact_name,
     mise_task_suite_artifact_name_for_attempt, non_input_covers, non_input_may_overlap,
-    non_input_may_reach_tree, validate_preserve_workflows, validate_qualified_tools,
-    validate_rust_suites, validate_shard_changes_need_evidence, validate_suites_with_dispatch,
+    non_input_may_reach_tree, validate_qualified_tools, validate_rust_suites,
+    validate_shard_changes_need_evidence, validate_suites_with_dispatch,
 };

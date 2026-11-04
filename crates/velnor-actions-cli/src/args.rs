@@ -53,7 +53,7 @@ pub(crate) enum Command {
     /// List `.github` entries that generation would not emit or retire.
     ///
     /// Prints one repository-relative path per line to stdout, honoring
-    /// `[github] allow` and `[workflow] preserve_workflows`. Exits 1 when
+    /// `[github] allow`. Exits 1 when
     /// `[github] unmanaged = "deny"` and any entry is listed.
     Unmanaged,
     /// Read or rewrite `.velnor/config.toml`.

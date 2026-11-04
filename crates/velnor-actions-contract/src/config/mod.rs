@@ -171,9 +171,7 @@ pub use rust_suites::{
     RustSuiteBuildMode, RustSuiteConfig, RustSuiteTrigger, WorkflowDispatchConfig,
     WorkflowDispatchInputConfig, WorkflowDispatchInputType,
 };
-pub use rust_suites_validate::{
-    validate_preserve_workflows, validate_rust_suites, validate_suites_with_dispatch,
-};
+pub use rust_suites_validate::{validate_rust_suites, validate_suites_with_dispatch};
 pub use rust_toolchain_source::RustToolchainSource;
 pub use stacks::{
     CompiledStateMode, DeclaredCompileDriver, DeclaredTestRunner, MAX_CRATE_BUILD_JOBS,
