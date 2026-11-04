@@ -119,3 +119,55 @@ fn git_status(root: &std::path::Path) -> Result<Vec<u8>, Box<dyn Error>> {
     }
     Ok(result.stdout)
 }
+
+#[cfg(unix)]
+#[test]
+fn excluded_path_dependency_manifest_cannot_escape_tracked_source() -> Result<(), Box<dyn Error>> {
+    let config = "schema = 2\n[workflow]\npolicy = \"consumer-v1\"\ndefault_branch = \"testmain\"\n[execution]\ndefault_profile = \"hosted\"\nhosted_profile = \"hosted\"\nscale_set_profile = \"local\"\n[execution.profiles.hosted]\nkind = \"github-hosted\"\nlabel = \"ubuntu-26.04\"\nplatform = \"linux/amd64\"\n[execution.profiles.local]\nkind = \"github-scale-set\"\nname = \"ubuntu-26.04-scale-set\"\nlabels = [\"velnor\", \"ubuntu-26.04-scale-set\"]\nplatform = \"linux/amd64\"\n[stacks.rust.release]\nenabled = true\npackages = [\"demo\"]\n";
+    let repo = make_repo(config)?;
+    let root = repo.path();
+    git(
+        &[
+            "remote",
+            "add",
+            "origin",
+            "https://github.com/example/demo.git",
+        ],
+        root,
+    )?;
+    fs::write(
+        root.join("Cargo.toml"),
+        "[package]\nname='demo'\nversion='0.1.0'\nedition='2021'\n[workspace]\nexclude=['helper']\n[dependencies]\nhelper={path='helper',version='0.1.0'}\n",
+    )?;
+    fs::create_dir_all(root.join("helper/src"))?;
+    let manifest = root.join("helper/Cargo.toml");
+    let contents = "[package]\nname='helper'\nversion='0.1.0'\nedition='2021'\n";
+    fs::write(&manifest, contents)?;
+    fs::write(root.join("helper/src/lib.rs"), "pub fn f() {}\n")?;
+    git(&["add", "."], root)?;
+    assert!(render_staged_tree(&prepare(root)?).is_ok());
+    let outside = tempfile::tempdir()?;
+    let outside_manifest = outside.path().join("Cargo.toml");
+    fs::write(&outside_manifest, contents)?;
+    fs::remove_file(&manifest)?;
+    std::os::unix::fs::symlink(&outside_manifest, &manifest)?;
+    git(&["add", "helper/Cargo.toml"], root)?;
+    let before = git_status(root)?;
+    assert!(
+        prepare(root)
+            .and_then(|prep| render_staged_tree(&prep))
+            .is_err()
+    );
+    assert_eq!(git_status(root)?, before);
+    fs::remove_file(&manifest)?;
+    let untracked = root.join("untracked.toml");
+    fs::write(&untracked, contents)?;
+    std::os::unix::fs::symlink(&untracked, &manifest)?;
+    git(&["add", "helper/Cargo.toml"], root)?;
+    assert!(
+        prepare(root)
+            .and_then(|prep| render_staged_tree(&prep))
+            .is_err()
+    );
+    Ok(())
+}

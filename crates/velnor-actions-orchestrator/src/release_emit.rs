@@ -216,7 +216,7 @@ fn tracked_manifest_in_source(
     let Ok(relative) = target.strip_prefix(root) else {
         return false;
     };
-    relative.to_str().is_some_and(|name| known.contains(name)) && target.is_file()
+    relative.components().map(|part| part.as_os_str().to_str()).collect::<Option<Vec<_>>>().is_some_and(|parts| known.contains(&parts.join("/"))) && target.is_file()
 }
 
 fn tracked_manifests(root: &std::path::Path) -> Result<BTreeSet<String>, OrchestratorError> {

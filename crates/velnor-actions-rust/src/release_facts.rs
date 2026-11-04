@@ -175,7 +175,7 @@ fn publish_setting(package: &RawReleasePackage) -> Result<PublishSetting, Releas
 fn manifest_dirs(packages: &[RawReleasePackage]) -> BTreeMap<String, String> {
     let mut dirs = BTreeMap::new();
     for package in packages {
-        let normalized = package.manifest_path.replace('\\', "/");
+        let normalized = crate::metadata_edges::normalize_separators(&package.manifest_path);
         let dir = match normalized.rsplit_once('/') {
             Some((dir, _)) => dir.to_owned(),
             None => normalized,
@@ -288,7 +288,7 @@ fn classify_source(dependency: &RawReleaseDep) -> DepSource {
 }
 
 fn resolve_dep_path(path: &str, dirs: &BTreeMap<String, String>) -> Option<String> {
-    let dir = path.replace('\\', "/");
+    let dir = crate::metadata_edges::normalize_separators(path);
     let dir = dir.strip_suffix('/').unwrap_or(&dir);
     dirs.get(dir).cloned()
 }

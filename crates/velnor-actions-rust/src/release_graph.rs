@@ -43,6 +43,15 @@ pub fn plan_release(
     registry: &RegistryState,
 ) -> Result<ReleasePlan, ReleaseError> {
     let selection = select_release_set(request)?;
+    if !request.enabled {
+        return Ok(ReleasePlan {
+            selection,
+            graph: PublicationGraph {
+                order: Vec::new(),
+                edges: Vec::new(),
+            },
+        });
+    }
     let record = parse_metadata_json(
         request.metadata_json,
         request.repo_root,

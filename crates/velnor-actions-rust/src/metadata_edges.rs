@@ -106,8 +106,16 @@ pub(crate) fn manifest_dirs(packages: &[RawPackage]) -> BTreeMap<String, String>
     dirs
 }
 
+pub(crate) fn normalize_separators(path: &str) -> String {
+    if cfg!(windows) {
+        path.replace('\\', "/")
+    } else {
+        path.to_owned()
+    }
+}
+
 fn parent_dir(manifest_path: &str) -> String {
-    let normalized = manifest_path.replace('\\', "/");
+    let normalized = normalize_separators(manifest_path);
     match normalized.rsplit_once('/') {
         Some((dir, _)) => dir.to_owned(),
         None => normalized,
@@ -115,7 +123,7 @@ fn parent_dir(manifest_path: &str) -> String {
 }
 
 fn normalize_path(path: &str) -> String {
-    let dir = path.replace('\\', "/");
+    let dir = normalize_separators(path);
     dir.strip_suffix('/')
         .map_or_else(|| dir.clone(), str::to_owned)
 }
@@ -183,14 +191,23 @@ fn is_source_directory(path: &str, repo_root: &Path) -> bool {
 }
 
 fn is_known_target(path: &str, repo_root: &Path, known: &BTreeSet<String>) -> bool {
-    let normalized = normalize_path(path);
-    let Ok(relative) = Path::new(&normalized).strip_prefix(repo_root) else {
+    let Ok(root) = repo_root.canonicalize() else {
         return false;
     };
-    if relative.as_os_str().is_empty() {
-        return known.contains("Cargo.toml");
+    let manifest = Path::new(path).join("Cargo.toml");
+    let Ok(lexical) = manifest.strip_prefix(repo_root) else {
+        return false;
+    };
+    if !known.contains(&posix(lexical)) {
+        return false;
     }
-    known.contains(&format!("{}/Cargo.toml", posix(relative)))
+    let Ok(target) = manifest.canonicalize() else {
+        return false;
+    };
+    let Ok(relative) = target.strip_prefix(&root) else {
+        return false;
+    };
+    target.is_file() && known.contains(&posix(relative))
 }
 
 fn dep_kind(raw: Option<&str>, hint: &str) -> Result<DepKind, MetadataError> {
