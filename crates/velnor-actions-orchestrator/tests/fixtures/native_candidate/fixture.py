@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 # SPDX-License-Identifier: Apache-2.0
 
+import base64
 import hashlib
 import http.server
 import json
@@ -8,6 +9,7 @@ import os
 import pathlib
 import subprocess
 import sys
+import urllib.parse
 
 root = pathlib.Path(sys.argv[1]).resolve()
 root.mkdir(parents=True, exist_ok=True)
@@ -56,6 +58,20 @@ if os.environ.get("VELNOR_FIXTURE_FAILURE") == "source":
 import shutil
 
 shutil.rmtree(source / "target")
+assets = os.environ.get("VELNOR_FIXTURE_OFFICIAL_ASSETS")
+generator_version = "0.1.5"
+generator_source = "f1041f322c54cd7edfdef06afd307799eeaa801a"
+generator_manifest_sha = (
+    "e38d047150f9e0347ec2160fd65bb7f026842e6f416e456990cf3b7ccd284c52"
+)
+if assets:
+    manifest_bytes = (pathlib.Path(assets) / "release-manifest.json").read_bytes()
+    generator = json.loads(manifest_bytes)
+    generator_version = generator["version"]
+    generator_source = generator["commit"]
+    generator_manifest_sha = hashlib.sha256(manifest_bytes).hexdigest()
+    (root / ".velnor").mkdir()
+    (root / ".velnor/release-manifest.json").write_bytes(manifest_bytes)
 intent = f'''schema = 1
 repository = "owner/project"
 default_branch = "main"
@@ -63,9 +79,9 @@ environment = "release"
 required_workflow_path = ".github/workflows/ci.yml"
 trusted_reviewer_id = 139017
 rust_version = "1.97.1"
-generator_version = "0.1.5"
-generator_source_sha = "f1041f322c54cd7edfdef06afd307799eeaa801a"
-generator_manifest_sha256 = "e38d047150f9e0347ec2160fd65bb7f026842e6f416e456990cf3b7ccd284c52"
+generator_version = "{generator_version}"
+generator_source_sha = "{generator_source}"
+generator_manifest_sha256 = "{generator_manifest_sha}"
 release_plz_version = "0.4.3"
 runner = "ubuntu-24.04"
 authentication = "trusted-publishing"
@@ -81,8 +97,14 @@ version = "0.1.1"
 source_sha = "{source_sha}"
 '''
 write(root / ".github/velnor-release-intent.toml", intent)
+write(
+    root / ".github/workflows/release.yml",
+    "name: release\nconcurrency:\n  group: release-crates-io-owner/project-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\n  cancel-in-progress: false\njobs: {}\n",
+)
 run("git", "init", "-q", cwd=root)
-run("git", "add", ".github/velnor-release-intent.toml", cwd=root)
+run("git", "add", ".github", cwd=root)
+if assets:
+    run("git", "add", ".velnor/release-manifest.json", cwd=root)
 run(
     "git",
     "-c",
@@ -99,6 +121,13 @@ run(
 policy = run("git", "rev-parse", "HEAD", cwd=root)
 
 mutations = 0
+blobs = {}
+tags = {}
+refs = {}
+
+
+def git_hash(kind, data):
+    return hashlib.sha1(f"{kind} {len(data)}\0".encode() + data).hexdigest()
 
 
 class Handler(http.server.BaseHTTPRequestHandler):
@@ -111,7 +140,46 @@ class Handler(http.server.BaseHTTPRequestHandler):
         status = 200
         obj = None
         if p == "/__fixture/state":
-            obj = {"mutations": mutations}
+            obj = {
+                "mutations": mutations,
+                "refs": refs,
+                "blobs": len(blobs),
+                "tags": len(tags),
+                "records": [json.loads(raw) for raw in blobs.values()],
+            }
+        elif p.startswith("/repos/owner/project/git/matching-refs/tags/"):
+            prefix = "refs/tags/" + urllib.parse.unquote(
+                p.split("/git/matching-refs/tags/", 1)[1]
+            )
+            obj = [
+                {"ref": name, "object": {"type": "tag", "sha": sha}}
+                for name, sha in sorted(refs.items())
+                if name.startswith(prefix)
+            ]
+        elif p.startswith("/repos/owner/project/git/ref/tags/velnor-receipt"):
+            name = "refs/tags/" + urllib.parse.unquote(p.split("/git/ref/tags/", 1)[1])
+            if name in refs:
+                obj = {"ref": name, "object": {"type": "tag", "sha": refs[name]}}
+            else:
+                status, obj = 404, {"message": "Not Found"}
+        elif p.startswith("/repos/owner/project/git/tags/"):
+            sha = p.rsplit("/", 1)[-1]
+            if sha in tags:
+                obj = tags[sha]
+            else:
+                status, obj = 404, {"message": "Not Found"}
+        elif p.startswith("/repos/owner/project/git/blobs/"):
+            sha = p.rsplit("/", 1)[-1]
+            if sha in blobs:
+                raw = blobs[sha]
+                obj = {
+                    "sha": sha,
+                    "encoding": "base64",
+                    "content": base64.b64encode(raw).decode(),
+                    "size": len(raw),
+                }
+            else:
+                status, obj = 404, {"message": "Not Found"}
         elif p == "/repos/owner/project":
             obj = {"id": 22, "full_name": "owner/project", "default_branch": "main"}
         elif p == "/repos/owner/project/git/ref/heads/main":
@@ -246,7 +314,57 @@ class Handler(http.server.BaseHTTPRequestHandler):
     def do_POST(self):
         global mutations
         mutations += 1
-        self.send_error(405)
+        value = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+        status = 201
+        if self.path == "/repos/owner/project/git/blobs":
+            assert value["encoding"] == "base64"
+            raw = base64.b64decode(value["content"], validate=True)
+            sha = git_hash("blob", raw)
+            blobs[sha] = raw
+            obj = {"sha": sha}
+        elif self.path == "/repos/owner/project/git/tags":
+            tag, blob = value["tag"], value["object"]
+            assert (
+                tag.startswith("velnor-receipt/")
+                and value["type"] == "blob"
+                and blob in blobs
+            )
+            raw = f"object {blob}\ntype blob\ntag {tag}\ntagger Velnor Release <release@velnor.invalid> 0 +0000\n\nvelnor-release-receipt-v1".encode()
+            sha = git_hash("tag", raw)
+            obj = {
+                "sha": sha,
+                "tag": tag,
+                "message": "velnor-release-receipt-v1",
+                "object": {"type": "blob", "sha": blob},
+                "tagger": {
+                    "name": "Velnor Release",
+                    "email": "release@velnor.invalid",
+                    "date": "1970-01-01T00:00:00Z",
+                },
+                "verification": {
+                    "verified": False,
+                    "reason": "unsigned",
+                    "signature": None,
+                    "payload": None,
+                },
+            }
+            tags[sha] = obj
+        elif self.path == "/repos/owner/project/git/refs":
+            name, sha = value["ref"], value["sha"]
+            assert sha in tags and name == "refs/tags/" + tags[sha]["tag"]
+            if name in refs:
+                status, obj = 422, {}
+            else:
+                refs[name] = sha
+                obj = {"ref": name, "object": {"type": "tag", "sha": sha}}
+        else:
+            status, obj = 405, {}
+        data = json.dumps(obj).encode()
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
 
 
 server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)

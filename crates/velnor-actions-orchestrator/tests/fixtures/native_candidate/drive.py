@@ -3,12 +3,45 @@
 
 import json
 import os
+import pathlib
+import shutil
 import subprocess
 import sys
 import urllib.request
 
 mode = sys.argv[1] if len(sys.argv) > 1 else "success"
 env = os.environ.copy()
+journal = mode in ("journal", "journal-bad-bundle")
+if journal:
+    env["VELNOR_FIXTURE_OFFICIAL_ASSETS"] = "/assets"
+    env["VELNOR_NATIVE_JOURNAL"] = "1"
+    env["VELNOR_TEST_ATTESTATION_ROOT"] = "/assets/trusted-root.jsonl"
+    env["VELNOR_NATIVE_JOURNAL_ERROR"] = (
+        "package_attestation_verification_failed"
+        if mode == "journal-bad-bundle"
+        else ""
+    )
+    runner = pathlib.Path("/runner") / mode
+    bootstrap = runner / "velnor/bootstrap"
+    bootstrap.mkdir(parents=True)
+    for name in (
+        "release-manifest.json",
+        "release-manifest.json.intoto.jsonl",
+        "velnor-actions-0.1.73-x86_64-unknown-linux-gnu",
+        "velnor-actions-0.1.73-x86_64-unknown-linux-gnu.intoto.jsonl",
+    ):
+        shutil.copyfile(pathlib.Path("/assets") / name, bootstrap / name)
+    gh_dir = runner / ".local/share/mise/installs/gh/2.103.3"
+    gh_dir.mkdir(parents=True)
+    shutil.copytree("/assets/gh_2.103.3_linux_amd64", gh_dir / "gh_2.103.3_linux_amd64")
+    if mode == "journal-bad-bundle":
+        bundle_path = bootstrap / "release-manifest.json.intoto.jsonl"
+        bundle = json.loads(bundle_path.read_text())
+        payload = bundle["dsseEnvelope"]["payload"]
+        bundle["dsseEnvelope"]["payload"] = (
+            "A" if payload[0] != "A" else "B"
+        ) + payload[1:]
+        bundle_path.write_text(json.dumps(bundle) + "\n")
 if mode != "success":
     env["VELNOR_FIXTURE_FAILURE"] = mode
 fixture_env = env.copy()
@@ -79,7 +112,19 @@ try:
         check=True,
     )
     with urllib.request.urlopen(info["origin"] + "/__fixture/state") as response:
-        assert json.load(response)["mutations"] == 0
+        state = json.load(response)
+    if mode == "journal":
+        assert state["mutations"] == 3
+        assert list(state["refs"]) == [
+            "refs/tags/velnor-receipt/12/1/publication-started"
+        ]
+        record = state["records"][0]
+        assert record["identity"]["workflow_sha"] == info["workflow_sha"]
+        assert record["identity"]["source_sha"] == info["source_sha"]
+        assert record["identity"]["run_id"] == 12
+        assert record["receipt"]["generator_version"] == "0.1.73"
+    else:
+        assert state["mutations"] == 0
 finally:
     server.terminate()
     server.wait(timeout=5)

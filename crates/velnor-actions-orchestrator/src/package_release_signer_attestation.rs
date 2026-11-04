@@ -111,6 +111,10 @@ fn verify_one_with_bundle(
     if let Some(bundle) = bundle {
         args.extend([OsString::from("--bundle"), bundle.as_os_str().to_owned()]);
     }
+    #[cfg(test)]
+    if let Some(root) = env::var_os("VELNOR_TEST_ATTESTATION_ROOT") {
+        args.extend([OsString::from("--custom-trusted-root"), root]);
+    }
     args.extend([
         OsString::from("--repo"),
         OsString::from(identity.repository),

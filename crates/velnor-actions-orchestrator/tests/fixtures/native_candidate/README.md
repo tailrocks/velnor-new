@@ -9,3 +9,5 @@ Run `python3 /fixture/drive.py success`, then `checksum` and `source`, each with
 The test-only entry point leaves the production authority guard enabled. This rehearsal does not test protected GitHub jobs, real OIDC, publication, or the release coordinator.
 
 The `success` case also runs the rendered publisher admission step and requires `release_mode=publish`. The `approval` case gives that step the wrong approval comment; `verify-source` changes source after the receipt is made. Both require an error and no admission output.
+
+The `journal` and `journal-bad-bundle` cases also need `/assets` containing an official Velnor 0.1.73 manifest, its Linux binary and both signed bundles, the catalog-pinned GitHub CLI archive contents, and a public trusted-root file. The test-only runner passes that root to the real `gh attestation verify` command so verification works offline. The positive case verifies the recorded started receipt; the altered bundle must fail before any journal write. These historical assets are test inputs and do not authorize a later generator release.

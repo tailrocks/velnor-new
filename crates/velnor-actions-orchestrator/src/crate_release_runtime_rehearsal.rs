@@ -33,7 +33,7 @@ fn generated_candidate_receipt_rejects_unprotected_environment() -> Result<(), B
         let operation = std::env::var("VELNOR_NATIVE_OPERATION")?;
         assert!(matches!(
             operation.as_str(),
-            "candidate-receipt" | "verify-admission"
+            "candidate-receipt" | "verify-admission" | "journal-start"
         ));
         assert_eq!(
             std::env::var("VELNOR_TEST_COMMAND_ARGS")?,
@@ -118,6 +118,13 @@ fn rehearse_supplied_candidate() -> Result<(), Box<dyn Error>> {
         && baseline_checksum == &std::env::var("VELNOR_NATIVE_EXPECT_CHECKSUM")?
         && checker_sha256 == velnor_actions_mise::catalog::qualified_cargo_semver_checks("ubuntu-24.04").ok_or("checker")?.executable_sha256)
     );
+    if verify_supplied_admission(&root)? && std::env::var_os("VELNOR_NATIVE_JOURNAL").is_some() {
+        rehearse_journal_start(&root)?;
+    }
+    Ok(())
+}
+
+fn verify_supplied_admission(root: &Path) -> Result<bool, Box<dyn Error>> {
     if std::env::var_os("VELNOR_NATIVE_MUTATE_AFTER_RECEIPT").is_some() {
         let workspace =
             std::path::PathBuf::from(std::env::var_os("GITHUB_WORKSPACE").ok_or("workspace")?);
@@ -128,7 +135,7 @@ fn rehearse_supplied_candidate() -> Result<(), Box<dyn Error>> {
     }
     let output_path = root.join("github-output");
     std::fs::write(&output_path, "")?;
-    let output = supplied_step(&root, "release-publish", "verify-admission")?;
+    let output = supplied_step(root, "release-publish", "verify-admission")?;
     let actual = String::from_utf8_lossy(&output.stdout).to_string()
         + &String::from_utf8_lossy(&output.stderr);
     let expected_error = std::env::var("VELNOR_NATIVE_VERIFY_ERROR")?;
@@ -142,6 +149,21 @@ fn rehearse_supplied_candidate() -> Result<(), Box<dyn Error>> {
         assert!(!output.status.success());
         assert!(actual.contains(&expected_error), "{actual}");
         assert_eq!(std::fs::read_to_string(output_path)?, "");
+        return Ok(false);
+    }
+    Ok(true)
+}
+
+fn rehearse_journal_start(root: &Path) -> Result<(), Box<dyn Error>> {
+    let output = supplied_step(root, "release-publish", "journal-start")?;
+    let actual = String::from_utf8_lossy(&output.stdout).to_string()
+        + &String::from_utf8_lossy(&output.stderr);
+    let error = std::env::var("VELNOR_NATIVE_JOURNAL_ERROR")?;
+    if error.is_empty() {
+        assert!(output.status.success(), "{actual}");
+    } else {
+        assert!(!output.status.success());
+        assert!(actual.contains(&error), "{actual}");
     }
     Ok(())
 }
@@ -152,7 +174,8 @@ fn supplied_step(
     operation: &str,
 ) -> Result<std::process::Output, Box<dyn Error>> {
     let script = generated_script(job, &format!("Release {operation}"))?;
-    Ok(std::process::Command::new("bash")
+    let mut command = std::process::Command::new("bash");
+    command
         .args(["-e", "-c", &script])
         .env("VELNOR_NATIVE_RECEIPT_CHILD", "1")
         .env("VELNOR_NATIVE_OPERATION", operation)
@@ -162,8 +185,11 @@ fn supplied_step(
         .env("MISE_RUSTUP_HOME", root.join("velnor/rustup"))
         .env("CARGO_HOME", root.join("velnor/cargo"))
         .env("MISE_CARGO_HOME", root.join("velnor/cargo"))
-        .env("RUSTUP_AUTO_INSTALL", "0")
-        .output()?)
+        .env("RUSTUP_AUTO_INSTALL", "0");
+    if operation == "journal-start" {
+        command.env("HOME", root).env("GH_TOKEN", "fixture");
+    }
+    Ok(command.output()?)
 }
 
 fn rehearse_candidate_denial() -> Result<(), Box<dyn Error>> {
