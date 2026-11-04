@@ -34,6 +34,10 @@ pub mod crate_release_controller;
 pub mod crate_release_github;
 pub mod crate_release_http;
 pub mod crate_release_pr_artifact;
+#[cfg(test)]
+mod crate_release_pr_writer;
+#[cfg(test)]
+mod crate_release_pr_tree;
 pub mod crate_release_registry;
 mod crate_release_runtime;
 mod crate_release_semver;

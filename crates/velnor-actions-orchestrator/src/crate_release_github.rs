@@ -115,7 +115,7 @@ pub fn admit_github_evidence(
         .map(|value| GitHubAdmissionOutcome::Candidate(Box::new(value)))
 }
 
-fn has_release_pr(
+pub(crate) fn has_release_pr(
     api: &dyn GitHubAdmissionRead,
     prefix: &str,
     source: &str,

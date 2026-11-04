@@ -244,6 +244,16 @@ impl GitHubAdmissionHttp {
         })
     }
 
+    #[cfg(test)]
+    pub(crate) fn test_client(origin: String) -> Result<Self, OrchestratorError> {
+        Ok(Self {
+            token: "test-credential".to_owned(),
+            deadline: Instant::now() + std::time::Duration::from_secs(15),
+            origin: parse_test_loopback_origin(&origin)?,
+            responses: RefCell::new(BTreeMap::new()),
+        })
+    }
+
     pub fn get(&self, route: &str) -> Result<Value, OrchestratorError> {
         self.request(route, false)?
             .ok_or_else(|| internal("crate_release_http_status"))
@@ -303,7 +313,10 @@ impl GitHubAdmissionHttp {
         Ok(())
     }
 
-    fn post(&self, route: &str, body: &Value) -> Result<Value, OrchestratorError> {
+    pub(crate) fn post(&self, route: &str, body: &Value) -> Result<Value, OrchestratorError> {
+        if !valid_post_route(route) {
+            return Err(internal("crate_release_http_route"));
+        }
         let remaining = self.deadline.saturating_duration_since(Instant::now());
         if remaining.is_zero() {
             return Err(internal("crate_release_http_deadline"));
@@ -369,7 +382,16 @@ impl GitHubAdmissionHttp {
             .build()
             .call()
             .map_err(|_| internal("crate_release_http_transport"))?;
-        if route.contains("/git/matching-refs/") && response.headers().contains_key("link") {
+        let unpaginated_pulls = route.split_once('?').is_some_and(|(path, query)| {
+            path.ends_with("/pulls")
+                && path.bytes().filter(|byte| *byte == b'/').count() == 3
+                && !query.contains("&page=")
+        });
+        if (route.contains("/git/matching-refs/")
+            || unpaginated_pulls
+            || (route.contains("/jobs?") && !route.contains("&page=")))
+            && response.headers().contains_key("link")
+        {
             self.responses.borrow_mut().remove(&key);
             return Err(internal("crate_release_http_pagination_unverified"));
         }
@@ -639,7 +661,7 @@ fn valid_headers(headers: &ureq::http::HeaderMap, limit: u64) -> bool {
     }
 }
 
-fn encode(value: &str) -> String {
+pub(crate) fn encode(value: &str) -> String {
     let mut result = String::new();
     for byte in value.bytes() {
         if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.' | b'~') {
@@ -707,6 +729,19 @@ fn page_query(query: &str) -> bool {
         .is_some_and(|v| v.parse::<u32>().is_ok_and(|n| (1..=100).contains(&n)))
 }
 
+fn valid_post_route(route: &str) -> bool {
+    let parts: Vec<_> = route.split('/').collect();
+    let ["repos", owner, repo, rest @ ..] = parts.as_slice() else {
+        return false;
+    };
+    velnor_actions_contract::config::is_valid_github_owner(owner)
+        && velnor_actions_contract::config::is_valid_github_repo_name(repo)
+        && matches!(
+            rest,
+            ["git", "tags" | "blobs" | "trees" | "commits" | "refs"] | ["releases" | "pulls"]
+        )
+}
+
 fn valid_route(route: &str) -> bool {
     if route.len() > 4096 || !route.is_ascii() || route.contains('#') {
         return false;
@@ -735,6 +770,9 @@ fn valid_route(route: &str) -> bool {
         ["actions", "runs", id, "attempts", attempt] => {
             numeric(id) && numeric(attempt) && query.is_empty()
         }
+        ["actions", "runs", id, "attempts", attempt, "jobs"] => {
+            numeric(id) && numeric(attempt) && (query == "per_page=100" || page_query(query))
+        }
         ["actions", "runs", id, "artifacts"] => {
             numeric(id) && (query == "per_page=100" || page_query(query))
         }
@@ -757,7 +795,20 @@ fn valid_route(route: &str) -> bool {
             valid_segment(name) && query == "per_page=100"
         }
         ["git", "matching-refs", "tags", prefix] => valid_segment(prefix) && query.is_empty(),
+        ["git", "matching-refs", "heads", prefix] => {
+            prefix.starts_with("release-plz-") && valid_segment(prefix) && query.is_empty()
+        }
+        ["git", "trees", sha] => valid_sha(sha) && query.is_empty(),
         ["git", "tags" | "commits" | "blobs", sha] => valid_sha(sha) && query.is_empty(),
+        ["pulls"] if query.starts_with("state=open&base=") => query
+            .strip_prefix("state=open&base=")
+            .and_then(|q| q.split_once('&'))
+            .is_some_and(|(base, q)| valid_segment(base) && page_query(q)),
+        ["pulls"] => query
+            .strip_prefix("state=all&head=")
+            .and_then(|rest| rest.split_once("&base="))
+            .and_then(|(head, rest)| rest.strip_suffix("&per_page=100").map(|base| (head, base)))
+            .is_some_and(|(head, base)| valid_segment(head) && valid_segment(base)),
         ["commits", sha, "pulls"] => valid_sha(sha) && page_query(query),
         ["commits", sha, "check-runs"] => {
             valid_sha(sha) && query.strip_prefix("filter=all&").is_some_and(page_query)
