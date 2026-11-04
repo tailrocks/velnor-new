@@ -44,21 +44,7 @@ pub(crate) fn invoke_upload<
     let git =
         velnor_actions_mise::release_git_pin::verify_bundle(&git_root).map_err(|_| invalid())?;
     let rustup_home = runner_temp.join("velnor/rustup");
-    let cargo = crate::crate_release_source::verified_rust_tool_path(
-        &rustup_home,
-        &input.intent.rust_version,
-        "cargo",
-    )?;
-    let rustc = crate::crate_release_source::verified_rust_tool_path(
-        &rustup_home,
-        &input.intent.rust_version,
-        "rustc",
-    )?;
-    let rustdoc = crate::crate_release_source::verified_rust_tool_path(
-        &rustup_home,
-        &input.intent.rust_version,
-        "rustdoc",
-    )?;
+    let [cargo, rustc, rustdoc] = upload_rust_tools(&rustup_home, &input.intent.rust_version)?;
     let bin = cargo.parent().ok_or_else(invalid)?;
     let source = input.source.canonicalize().map_err(|_| invalid())?;
     if runner_temp.starts_with(&source) {
@@ -120,6 +106,14 @@ pub(crate) fn invoke_upload<
         return Ok(UploadAttempt::Uncertain);
     }
     Ok(attempt)
+}
+
+fn upload_rust_tools(
+    home: &Path,
+    version: &str,
+) -> Result<[std::path::PathBuf; 3], OrchestratorError> {
+    let tool = |name| crate::crate_release_source::verified_rust_tool_path(home, version, name);
+    Ok([tool("cargo")?, tool("rustc")?, tool("rustdoc")?])
 }
 
 fn execute_upload(command: &IsolatedCommand, git_root: &Path) -> Result<bool, OrchestratorError> {
