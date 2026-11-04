@@ -83,5 +83,13 @@ job-level value.
   `product-release-images.yml`, `product-release.yml` and `qualification.yml`.
   The list can only shrink. T5 is measured on main-push CI, and covering these
   workflows is a tracked follow-up.
+- W6 counts any raw text `needs.<job>.outputs.<name>` in another job as a read
+  (`consumed` and `reads` in `waste_lint_graph.rs`). It matches the text of a
+  job condition, `runs-on`, job outputs, and the conditions, inputs, scripts,
+  arguments and env values of steps. It does not check that the text sits in an
+  expression, and it does not check that the reader's `needs` list the
+  producer. Text outside an expression, or in a job that cannot read the
+  producer's outputs, therefore hides an unconsumed output. This limitation is
+  known and not fixed.
 - `ci.yml` is excluded from that committed-file test because it uses YAML
   aliases. The tests that render the CI workflow cover it.
