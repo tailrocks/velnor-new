@@ -21,7 +21,7 @@ use std::collections::BTreeMap;
 
 use velnor_actions_actionlint::JactionlintConfigInput;
 use velnor_actions_contract::{
-    Concurrency, ExecutionMode, Job, Permissions, ScaleSetSelector, Step, StepKind, Trigger,
+    CheckoutHistory, Concurrency, ExecutionMode, Job, Permissions, ScaleSetSelector, Step, StepKind, Trigger,
     ValidatorKind, VelnorConfig, VelnorSupportWorkflow, WorkflowIr, WorkflowPolicy,
 };
 use velnor_actions_mise::ToolCatalog;
@@ -132,11 +132,12 @@ fn insert_gate_jobs(
     acquire: Option<Step>,
     catalog: &ToolCatalog,
     helper_catalog: &ToolCatalog,
+    history: CheckoutHistory,
 ) -> Result<(), OrchestratorError> {
     jobs.insert(LINT_JOB_ID.to_owned(), lint_job(label, catalog)?);
     jobs.insert(
         FINAL_JOB_ID.to_owned(),
-        final_job(label, crate_ids, acquire, helper_catalog)?,
+        final_job(label, crate_ids, acquire, helper_catalog, history)?,
     );
     Ok(())
 }

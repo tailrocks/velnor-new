@@ -355,6 +355,7 @@ fn build_workflow_jobs(
         required_acquire,
         &prepared.catalog,
         &required_catalog,
+        input.config.required_checkout_history(),
     )?;
     let mut drivers = built.drivers;
     drivers.extend(suite_build.drivers);

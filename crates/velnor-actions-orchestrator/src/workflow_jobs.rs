@@ -4,7 +4,9 @@
 use std::collections::BTreeMap;
 use std::ffi::OsString;
 
-use velnor_actions_contract::{Job, JobTimeout, Permissions, Step, StepRole, WorkflowPolicy};
+use velnor_actions_contract::{
+    CheckoutHistory, Job, JobTimeout, Permissions, Step, StepRole, WorkflowPolicy,
+};
 use velnor_actions_mise::{PinnedTool, PinnedToolExec, ToolCatalog};
 use velnor_actions_workflow_renderer::native_job_builders::NativeJobBuilderError;
 
@@ -95,12 +97,14 @@ pub(crate) fn final_job(
     crate_job_ids: &[String],
     acquire: Option<Step>,
     catalog: &ToolCatalog,
+    history: CheckoutHistory,
 ) -> Result<Job, OrchestratorError> {
     velnor_actions_workflow_renderer::native_job_builders::final_job(
         label,
         crate_job_ids,
         acquire,
         catalog,
+        history,
     )
     .map_err(map_native_job_builder_error)
 }
