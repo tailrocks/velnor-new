@@ -9,7 +9,7 @@ use crate::{
     RenderError,
     release_permissions::JobPermissions,
     release_spec::{
-        BootstrapPlan, ReleaseConcurrency, ReleaseTriggers, check_lock_anchor, is_clean_text,
+        ReleaseConcurrency, ReleasePlan, ReleaseTriggers, check_lock_anchor, is_clean_text,
         publish_gate_condition, validate_environment, validate_repository,
     },
     steps::scan_for_private_subcommands,
@@ -58,6 +58,7 @@ pub struct ReleaseJobSpec {
     pub runs_on: String,
     pub timeout_minutes: JobTimeout,
     pub needs: Vec<String>,
+    pub outputs: BTreeMap<String, String>,
     pub condition: Option<String>,
     pub environment: Option<String>,
     pub permissions: JobPermissions,
@@ -75,6 +76,43 @@ fn check_condition_text(condition: &str) -> Result<(), RenderError> {
 
 impl ReleaseJobSpec {
     pub fn validate_shape(&self, id: &str) -> Result<(), RenderError> {
+        if self.role == ReleaseRole::Preflight
+            && (self.outputs.len() != 4
+                || ![
+                    "source_sha",
+                    "eligible",
+                    "rust_artifact_id",
+                    "receipt_artifact_id",
+                ]
+                .iter()
+                .all(|key| self.outputs.contains_key(*key)))
+        {
+            return Err(RenderError::InvalidWorkflow(format!(
+                "missing_release_output:{id}"
+            )));
+        }
+        if self.outputs.iter().any(|(key, value)| {
+            if key == "receipt_artifact_id" {
+                self.role != ReleaseRole::Preflight
+                    || value != "${{ steps.release-receipt-upload.outputs.artifact-id }}"
+            } else if key == "rust_artifact_id" {
+                self.role != ReleaseRole::Preflight
+                    || value != "${{ steps.release-rust-upload.outputs.artifact-id }}"
+            } else {
+                !matches!(key.as_str(), "source_sha" | "eligible")
+                    || value != &format!("${{{{ steps.release-admission.outputs.{key} }}}}")
+                    || !matches!(
+                        self.role,
+                        ReleaseRole::Preflight
+                            | ReleaseRole::PublishOidc
+                            | ReleaseRole::PublishBootstrap
+                    )
+            }
+        }) {
+            return Err(RenderError::InvalidWorkflow(format!(
+                "bad_release_output:{id}"
+            )));
+        }
         if !is_clean_text(&self.display_name, 128) {
             return Err(RenderError::InvalidWorkflow(format!(
                 "bad_job_display:{id}"
@@ -115,9 +153,12 @@ pub struct ReleaseWorkflowSpec {
     pub triggers: ReleaseTriggers,
     pub concurrency: ReleaseConcurrency,
     pub jobs: BTreeMap<String, ReleaseJobSpec>,
-    pub bootstrap: BootstrapPlan,
+    pub plan: ReleasePlan,
     pub publish_environment: String,
     pub bootstrap_environment: String,
+    pub release_plz_version: String,
+    pub journal_predecessor: Option<velnor_actions_contract::config::CrateReleasePredecessor>,
+    pub new_crates: Option<velnor_actions_contract::config::NewCrateRelease>,
 }
 
 impl ReleaseWorkflowSpec {
@@ -127,15 +168,15 @@ impl ReleaseWorkflowSpec {
         }
         scan_for_private_subcommands(&self.name)?;
         validate_repository(&self.repository)?;
-        self.bootstrap.validate()?;
-        if self.bootstrap.repository != self.repository {
+        self.plan.validate()?;
+        if self.plan.repository != self.repository {
             return Err(RenderError::InvalidWorkflow(
                 "bootstrap_repository_mismatch".to_owned(),
             ));
         }
         validate_environment(&self.publish_environment)?;
         validate_environment(&self.bootstrap_environment)?;
-        self.triggers.validate(&self.bootstrap)?;
+        self.triggers.validate(&self.plan)?;
         self.concurrency.validate()?;
         check_lock_anchor(&self.concurrency.group, &self.repository)?;
         check_role_set(&self.jobs)?;
@@ -143,7 +184,12 @@ impl ReleaseWorkflowSpec {
             job.validate_shape(id)?;
         }
         check_needs_graph(&self.jobs)?;
-        check_role_conditions(&self.jobs, &self.repository, &self.bootstrap)?;
+        check_role_conditions(
+            &self.jobs,
+            &self.repository,
+            &self.triggers.push_branches[0],
+            &self.plan,
+        )?;
         check_publish_needs(&self.jobs)?;
         Ok(())
     }
@@ -163,8 +209,12 @@ fn check_role_set(jobs: &BTreeMap<String, ReleaseJobSpec>) -> Result<(), RenderE
         ReleaseRole::Reconcile,
     ];
     required.sort();
-    let mut with_bootstrap = required.clone();
-    with_bootstrap.push(ReleaseRole::PublishBootstrap);
+    let mut with_bootstrap = vec![
+        ReleaseRole::Preparation,
+        ReleaseRole::Preflight,
+        ReleaseRole::PublishBootstrap,
+        ReleaseRole::Reconcile,
+    ];
     with_bootstrap.sort();
     if roles != required && roles != with_bootstrap {
         return Err(RenderError::InvalidWorkflow(format!(
@@ -199,12 +249,18 @@ fn check_needs_graph(jobs: &BTreeMap<String, ReleaseJobSpec>) -> Result<(), Rend
 fn check_role_conditions(
     jobs: &BTreeMap<String, ReleaseJobSpec>,
     repository: &str,
-    bootstrap: &BootstrapPlan,
+    branch: &str,
+    plan: &ReleasePlan,
 ) -> Result<(), RenderError> {
-    let gate = publish_gate_condition(repository, bootstrap);
     for (id, job) in jobs {
         match job.role {
             ReleaseRole::PublishOidc | ReleaseRole::PublishBootstrap => {
+                let gate = publish_gate_condition(
+                    repository,
+                    branch,
+                    plan,
+                    job.role == ReleaseRole::PublishOidc,
+                );
                 if job.condition.as_deref() != Some(gate.as_str()) {
                     return Err(RenderError::InvalidWorkflow(format!(
                         "publish_gate_mismatch:{id}"
@@ -212,13 +268,32 @@ fn check_role_conditions(
                 }
             }
             ReleaseRole::Reconcile => {
-                if job.condition.as_deref() != Some("always()") {
+                let publisher = if jobs
+                    .values()
+                    .any(|candidate| candidate.role == ReleaseRole::PublishBootstrap)
+                {
+                    "release-publish-bootstrap"
+                } else {
+                    "release-publish"
+                };
+                let condition = format!("always() && needs.{publisher}.result != 'skipped'");
+                if job.condition.as_deref() != Some(condition.as_str()) {
                     return Err(RenderError::InvalidWorkflow(format!(
                         "reconcile_condition:{id}"
                     )));
                 }
             }
-            ReleaseRole::Preparation | ReleaseRole::Preflight => {}
+            ReleaseRole::Preparation => {
+                let expected = format!(
+                    "github.repository == '{repository}' && github.event_name == 'push' && github.ref == 'refs/heads/{branch}'"
+                );
+                if job.condition.as_deref() != Some(expected.as_str()) {
+                    return Err(RenderError::InvalidWorkflow(format!(
+                        "preparation_gate_mismatch:{id}"
+                    )));
+                }
+            }
+            ReleaseRole::Preflight => {}
         }
     }
     Ok(())

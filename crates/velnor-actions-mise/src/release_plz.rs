@@ -10,9 +10,6 @@ use crate::command::IsolatedCommand;
 use crate::error::MiseError;
 use crate::requests::PinnedToolExec;
 
-pub const RELEASE_PLZ_CKSUM: &str =
-    "0174d748c692bfeeda6098467ddb2cb7d6f11be997b38a1d6ae3ee5990e4a9e2";
-
 pub const REGISTRY_TOKEN_ENV: &str = "CARGO_REGISTRY_TOKEN";
 
 pub const REQUIRED_ID_TOKEN_PERMISSION: &str = "write";

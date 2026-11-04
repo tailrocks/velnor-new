@@ -40,6 +40,9 @@ mod receipt;
 pub(crate) use attestation::{
     SdkManifestAttestationExpectation, verify_published_manifest_attestation,
 };
+pub(crate) use attestation::{AdmittedStart, AttestedLinuxGenerator, MeasuredReleaseTools, measure_release_tools, record_admitted_start, verify_published_linux_binary_attestation};
+#[cfg(test)]
+pub(crate) use attestation::{fixture_attested_generator, fixture_measured_tools};
 
 pub(crate) use publication::verify_attested_signed_package_with_owned_tempdir;
 pub(crate) use publication::verify_attested_signed_package_with_owned_tempdir_and_deadlines;

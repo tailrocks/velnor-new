@@ -81,13 +81,10 @@ fn guarded_generate_and_plan_succeed_and_denial_writes_nothing() -> Result<(), B
 
 #[test]
 fn guarded_generate_keeps_guard_for_release_rendering() -> Result<(), Box<dyn Error>> {
-    for (registry, outputs) in [
-        ("crates-io", &[".github/workflows/release.yml"][..]),
-        (
-            "git-tag",
-            &[".github/workflows/publish.yml", ".github/release-plz.toml"][..],
-        ),
-    ] {
+    for (registry, outputs) in [(
+        "git-tag",
+        &[".github/workflows/publish.yml", ".github/release-plz.toml"][..],
+    )] {
         let fixture = fixture::Fixture::new()?;
         fixture.enable_release(registry)?;
         let control_plan = fixture.invoke(&["plan"])?;
@@ -136,6 +133,21 @@ fn guarded_generate_keeps_guard_for_release_rendering() -> Result<(), Box<dyn Er
         assert!(fixture::stderr(&denied).contains("operator toolchain guard rejected metadata"));
         assert!(!denied_output.exists());
     }
+    Ok(())
+}
+
+#[test]
+fn guarded_crate_release_rejects_unqualified_publication() -> Result<(), Box<dyn Error>> {
+    let fixture = fixture::Fixture::new()?;
+    fixture.enable_release("crates-io")?;
+    let plan = fixture.plan("allow")?;
+    assert!(!plan.status.success());
+    assert!(fixture::stderr(&plan).contains("crate_release_admission"));
+    let output = fixture.root.join("guarded-crate-release");
+    let generated = fixture.generate("allow", &output)?;
+    assert!(!generated.status.success());
+    assert!(fixture::stderr(&generated).contains("crate_release_admission"));
+    assert!(!output.exists());
     Ok(())
 }
 

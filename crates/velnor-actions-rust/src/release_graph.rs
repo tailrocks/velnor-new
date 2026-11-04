@@ -38,6 +38,54 @@ pub struct ReleasePlan {
     pub graph: PublicationGraph,
 }
 
+pub fn registry_requirements(
+    selection: &ReleaseSelection,
+) -> Result<BTreeSet<RegistryPackage>, ReleaseError> {
+    let selected: BTreeSet<&str> = selection
+        .packages
+        .iter()
+        .map(|package| package.id.as_str())
+        .collect();
+    let mut required = BTreeSet::new();
+    for package in &selection.packages {
+        if let Some(facts) = selection.facts.deps.get(&package.id) {
+            for fact in facts {
+                if fact.kind == DepKind::Dev
+                    && !fact.version_declared
+                    && matches!(fact.source, DepSource::Path | DepSource::Git)
+                {
+                    continue;
+                }
+                if fact.source == DepSource::Path
+                    && fact.kind != DepKind::Dev
+                    && fact.to.as_deref().is_some_and(|id| selected.contains(id))
+                {
+                    continue;
+                }
+                let registry = match &fact.registry {
+                    None => crate::release_select::DEFAULT_REGISTRY,
+                    Some(DependencyRegistry::Name(name))
+                        if name == crate::release_select::DEFAULT_REGISTRY =>
+                    {
+                        name.as_str()
+                    }
+                    Some(DependencyRegistry::Name(name) | DependencyRegistry::Index(name)) => {
+                        return Err(ReleaseError::UnsupportedRegistry {
+                            package: package.name.clone(),
+                            registry: name.clone(),
+                        });
+                    }
+                };
+                required.insert(RegistryPackage {
+                    registry: registry.to_owned(),
+                    package: fact.name.clone(),
+                });
+            }
+        }
+    }
+    Ok(required)
+}
+
 pub fn plan_release(
     request: &ReleaseRequest<'_>,
     registry: &RegistryState,

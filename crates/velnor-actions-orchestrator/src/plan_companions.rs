@@ -4,7 +4,7 @@
 use super::{GenerationPreparation, push};
 use velnor_actions_contract::config::ReleaseRegistry;
 use velnor_actions_contract::{FRESHNESS_WORKFLOW_PATH, TOFU_APPLY_WORKFLOW_PATH};
-use velnor_actions_workflow_renderer::release_tree::{RELEASE_CONFIG_PATH, RELEASE_TREE_PATHS};
+use velnor_actions_workflow_renderer::release_tree::{RELEASE_CONFIG_PATH, RELEASE_CURRENT_PATHS};
 
 pub(super) fn file_lines(out: &mut String, prep: &GenerationPreparation) {
     release_file_lines(out, prep);
@@ -50,7 +50,7 @@ fn release_file_lines(out: &mut String, prep: &GenerationPreparation) {
         .flatten()
         .is_some_and(|release| release.registry == ReleaseRegistry::CratesIo);
     if enabled {
-        for path in RELEASE_TREE_PATHS {
+        for path in RELEASE_CURRENT_PATHS {
             push(out, &format!("  {path}"));
         }
     }

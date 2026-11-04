@@ -4,7 +4,7 @@
 use crate::errors::ContractError;
 use std::collections::{BTreeMap, BTreeSet};
 
-use super::release::BootstrapRelease;
+use super::release::RecoveryRelease;
 
 pub(super) fn validate_manifest_path(file: &str, path: &str) -> Result<(), ContractError> {
     let key = "stacks.rust.release.manifest_path";
@@ -116,30 +116,30 @@ pub(super) fn is_stable_tag_name(tag: &str) -> bool {
         .is_some_and(|body| body.trim_matches(' ') == "version")
 }
 
-pub(super) fn validate_bootstrap(
+pub(super) fn validate_recovery(
     file: &str,
-    bootstrap: &BootstrapRelease,
+    recovery: &RecoveryRelease,
 ) -> Result<(), ContractError> {
-    if !is_package_name(&bootstrap.package) {
-        let package = bootstrap.package.as_str();
+    if !is_package_name(&recovery.package) {
+        let package = recovery.package.as_str();
         return Err(ContractError::config(
             file,
-            "stacks.rust.release.bootstrap.package",
+            "stacks.rust.release.recovery.package",
             format!("unsafe_package:{package}"),
         ));
     }
-    if !is_bootstrap_version(&bootstrap.version) {
-        let version = bootstrap.version.as_str();
+    if !is_recovery_version(&recovery.version) {
+        let version = recovery.version.as_str();
         return Err(ContractError::config(
             file,
-            "stacks.rust.release.bootstrap.version",
+            "stacks.rust.release.recovery.version",
             format!("bad_version:{version}"),
         ));
     }
-    if !is_full_sha(&bootstrap.source_sha) {
+    if !is_full_sha(&recovery.source_sha) {
         return Err(ContractError::config(
             file,
-            "stacks.rust.release.bootstrap.source_sha",
+            "stacks.rust.release.recovery.source_sha",
             "bad_source_sha",
         ));
     }
@@ -211,7 +211,7 @@ pub(super) fn is_package_name(name: &str) -> bool {
         && bytes.all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_'))
 }
 
-pub(super) fn is_bootstrap_version(version: &str) -> bool {
+pub(super) fn is_recovery_version(version: &str) -> bool {
     version.len() <= 150 && semver::Version::parse(version).is_ok()
 }
 
@@ -232,4 +232,50 @@ pub(super) fn is_environment_byte(byte: u8) -> bool {
 
 pub(super) fn is_tag_byte(byte: u8) -> bool {
     byte.is_ascii_alphanumeric() || matches!(byte, b' ' | b'-' | b'_' | b'.' | b'/' | b'{' | b'}')
+}
+
+#[must_use]
+pub fn is_release_feature_name(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 128
+        && value.bytes().all(|byte| {
+            byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'+' | b'.' | b'/' | b'-')
+        })
+}
+
+pub(super) fn validate_publish_features(
+    file: &str,
+    features: &BTreeMap<String, Vec<String>>,
+    packages: &[String],
+    publishable: bool,
+) -> Result<(), ContractError> {
+    if features.len() > 64 {
+        return Err(ContractError::config(
+            file,
+            "publish_features",
+            "too_many_packages",
+        ));
+    }
+    for (package, selected) in features {
+        if !is_package_name(package) || (!publishable && !packages.contains(package)) {
+            return Err(ContractError::config(
+                file,
+                "publish_features",
+                format!("unknown_package:{package}"),
+            ));
+        }
+        if selected.len() > 64
+            || selected
+                .iter()
+                .any(|feature| !is_release_feature_name(feature))
+            || selected.windows(2).any(|pair| pair[0] >= pair[1])
+        {
+            return Err(ContractError::config(
+                file,
+                "publish_features",
+                format!("invalid_features:{package}"),
+            ));
+        }
+    }
+    Ok(())
 }

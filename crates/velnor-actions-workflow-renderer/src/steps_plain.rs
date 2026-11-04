@@ -17,6 +17,9 @@ pub(crate) fn plain_step_to_yaml(step: &Step) -> Result<Yaml, RenderError> {
             }
             commands::validate_env(env)?;
             let mut entries = vec![("name".to_owned(), Yaml::str(step.name.clone()))];
+            if step.id == Some(velnor_actions_contract::StepId::ReleaseRustUpload) {
+                entries.push(("id".to_owned(), Yaml::str("release-rust-upload")));
+            }
             if let Some(condition) = &step.condition {
                 crate::steps::scan_for_private_subcommands(condition)?;
                 entries.push(("if".to_owned(), Yaml::str(condition.clone())));
@@ -43,6 +46,13 @@ pub(crate) fn plain_step_to_yaml(step: &Step) -> Result<Yaml, RenderError> {
             crate::action_mbx_shell::validate_step_argv(run, step.role)?;
             commands::validate_env(env)?;
             let mut entries = vec![("name".to_owned(), Yaml::str(step.name.clone()))];
+            if let Some(
+                id @ (velnor_actions_contract::StepId::ReleaseAdmission
+                | velnor_actions_contract::StepId::ReleaseVerification),
+            ) = step.id
+            {
+                entries.push(("id".to_owned(), Yaml::str(id.as_str())));
+            }
             if let Some(condition) = &step.condition {
                 crate::steps::scan_for_private_subcommands(condition)?;
                 entries.push(("if".to_owned(), Yaml::str(condition.clone())));

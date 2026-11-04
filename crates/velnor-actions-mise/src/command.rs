@@ -5,6 +5,8 @@
 mod cancellable;
 #[path = "check_command.rs"]
 mod check;
+#[path = "command_crate_publish.rs"]
+mod crate_publish;
 #[path = "command_credential.rs"]
 mod credential;
 #[path = "command_env.rs"]
@@ -29,6 +31,7 @@ mod stream;
 #[path = "command_tofu.rs"]
 mod tofu;
 pub use check::resolve_program as resolve_check_program;
+pub use crate_publish::CratePublishCredential;
 pub use credential::is_safe_credential_value;
 pub use private_fetch::{
     CREDENTIAL_ALLOWLIST_PRIVATE_FETCH, FETCH_REDIRECT_ENV_KEYS, PrivateFetchCredential,

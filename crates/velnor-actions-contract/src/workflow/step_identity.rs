@@ -84,6 +84,13 @@ pub use super::step_id::StepId;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum StepRole {
+    ReleaseAdmission,
+    ReleaseVerification,
+    ReleaseRustUpload,
+    ReleaseReceiptUpload,
+    ReleaseRustArchive,
+    AcquireReleasePlz,
+    AcquireCargoSemverChecks,
     Checkout,
 
     ToolSeed,
@@ -322,6 +329,9 @@ impl StepRole {
                 internal_operation(kind, GITHUB_EVIDENCE_IMPORT_OPERATION)
             }
             Self::PrivateRevoke => internal_operation(kind, PRIVATE_REVOKE_OPERATION),
+            Self::ReleaseRustUpload | Self::ReleaseReceiptUpload => {
+                matches!(kind, StepKind::Action { uses, .. } if uses.starts_with("actions/upload-artifact@"))
+            }
             Self::BunRegistryInstall => internal_operation(kind, BUN_REGISTRY_INSTALL_OPERATION),
             Self::BunAssetsHandoff => valid_bun_assets_handoff(kind),
             Self::MbxCache => super::step_mbx_lifecycle::valid_mbx_cache(kind),
@@ -334,6 +344,10 @@ impl StepRole {
 
     pub(crate) const fn required_id(self) -> Option<StepId> {
         match self {
+            Self::ReleaseAdmission => Some(StepId::ReleaseAdmission),
+            Self::ReleaseVerification => Some(StepId::ReleaseVerification),
+            Self::ReleaseRustUpload => Some(StepId::ReleaseRustUpload),
+            Self::ReleaseReceiptUpload => Some(StepId::ReleaseReceiptUpload),
             Self::PlanProducer => Some(StepId::Plan),
             Self::BuildTaskRun => Some(StepId::BuildTaskRun),
             Self::ToolsCacheIdentity => Some(StepId::ToolsCacheIdentity),
@@ -360,6 +374,10 @@ impl StepRole {
 
     pub(crate) const fn for_id(id: StepId) -> Self {
         match id {
+            StepId::ReleaseAdmission => Self::ReleaseAdmission,
+            StepId::ReleaseVerification => Self::ReleaseVerification,
+            StepId::ReleaseRustUpload => Self::ReleaseRustUpload,
+            StepId::ReleaseReceiptUpload => Self::ReleaseReceiptUpload,
             StepId::Plan => Self::PlanProducer,
             StepId::BuildTaskRun => Self::BuildTaskRun,
             StepId::ToolsCacheIdentity => Self::ToolsCacheIdentity,

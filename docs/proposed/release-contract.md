@@ -1,7 +1,9 @@
 # Velnor Actions release contract (consumer-release scope amendment)
 
-**Status:** Implemented specification. This document amends the V1 generator
-boundary with a reviewed consumer-release scope; it does not authorize Kubernetes,
+**Status:** Required consumer-release specification. The Rust publication path
+remains fail-closed until its implementation and security boundaries are qualified.
+This document amends the V1 generator boundary with a reviewed consumer-release
+scope; it does not authorize Kubernetes,
 or general deployment platforms beyond the Runner Scale Set controller (`crates/velnor-runner`).
 
 Velnor Actions generates repository-local release-plz preparation, validation,
@@ -46,26 +48,19 @@ an enabled section requires exactly one of the two.
 
 ## 2. Pinned release-plz toolchain selection
 
-The table records the initial 2026-09-30 qualification. Velnor's current
-release-plz CLI pin is `0.3.172`, with crate checksum and source evidence in
-[`freshness-evidence-2026-10-13.md`](../implemented/freshness-evidence-2026-10-13.md).
-Reverify at execution. Pin the executable content and Action identity
-separately. No runtime `latest` lookup and no recompilation of the coordinator
-on every release.
+The qualified CLI catalog selects release-plz `0.4.3` for the current Rust
+release implementation. The workflow MUST acquire the exact catalogued archive
+and verify both archive and executable digests; it MUST NOT resolve `latest` or
+recompile release-plz for each run. The archive and executable pins establish
+what bytes were acquired, not independent upstream source provenance. The
+recorded release tag is unsigned and the measured asset evidence and limits
+are in [release-plz qualification](../implemented/release-plz-0.4.3-qualification-2026-11-04.md).
+Protected use additionally requires the approved generator, Rust toolchain,
+source, runner and artifact custody to satisfy the publication boundary.
 
-| Component | Selection | Evidence |
-|---|---|---|
-| release-plz CLI | `0.3.169` (initial qualified baseline) | `release-plz-v0.3.169` release exists; tag `63a04978…`, commit `786894b6…` |
-| GitHub Action | `release-plz/action@v0.5.139` pinned to full SHA `b8d6b54b02889ff2ae2bb82e8b57c3a8fc1683a5` | Tag verified via `git ls-remote` on `release-plz/action`; peeled commit recorded |
-| Binary digest | TBD-integrator | Upstream publishes no checksum asset for `release-plz-v0.3.169`; the integrator MUST measure and record the SHA-256 of the exact consumed artifact out of band before protected use |
-
-Install-chain note: at the pinned Action tag, `action.yml` declares the
-`version` input with `default: "0.3.169"` — the Action release is paired with
-the CLI release, and the Action downloads the CLI from the official
-`release-plz/release-plz` release assets. Generated workflows MUST still set
-`command` and `version` explicitly on every invocation (§6); they MUST NOT
-rely on Action defaults, and MUST NOT use the Action's dual-command default
-or its partial dry-run behavior as a substitute for an explicit phase.
+Preparation and publication use explicitly different commands and generated
+configurations. Do not rely on Action defaults, the Action's dual-command
+default, or a dry-run result as proof of publication.
 
 ## 3. Selection contract
 
@@ -86,9 +81,10 @@ manifest path, version, registry, and local dependency requirement.
 - For a selected dependent requiring an unpublished local dependency outside
   the authorized set, generation or preflight MUST fail with the exact
   missing dependency and the needed config change. Once a reviewed expanded
-  set lands, dependency-ordered publication is delegated to release-plz. The
-  generator MUST NOT upload workspace crates in an uncontrolled parallel
-  matrix.
+  set lands, the protected coordinator MUST process selected packages serially
+  in dependency order, invoking release-plz for one approved package at a
+  time. The generator MUST NOT upload workspace crates in an uncontrolled
+  parallel matrix.
 
 ## 4. Packaging-rule graph
 
@@ -97,8 +93,10 @@ preserving normal/build/optional/target-specific constraints, with
 development edges handled under actual Cargo packaging rules. The generator
 MUST NOT invent publish cycles from the conservative CI graph.
 
-- Reject unresolved local/`git`-only dependencies and missing registry
-  versions before granting publisher authority.
+- Reject unresolved local/`git`-only dependencies and missing unselected
+  registry prerequisites during admission. A selected predecessor may be
+  absent until its own approved upload; before verifying or uploading the
+  dependent, establish that the predecessor is published and index-visible.
 - Diagnose a missing external prerequisite with the exact requirement chain.
 - Validate internal version requirements against the versions that will
   actually be published, in dependency order.
@@ -112,7 +110,7 @@ an implemented and tested explicit contract.
 
 ## 6. Effective release-plz configuration invariants
 
-The normal effective config MUST preserve all of the following:
+The checked-in release-PR preparation config MUST preserve all of the following:
 
 - `release_always = false`;
 - `semver_check = true` where applicable;
@@ -146,10 +144,33 @@ publish_features = ["pty"]
 ```
 
 `publish_features` requests verification with the feature; consumers still
-choose their own features. Keep `release-pr` and `release` invocations
-separate. When using the upstream Action, always set `command` and the exact
-binary `version`. Do not invent repeated package flags and do not treat JSON
-output as a no-side-effect release plan.
+choose their own features. Release eligibility and source selection are decided
+by Velnor's reviewed admission, independently of authentication and before an
+upload is intended. A normal publication requires a reviewed, merged
+release-plz PR; an exact-source recovery requires its separately reviewed,
+bounded recovery intent. Neither condition is inferred from release-plz's
+return code.
+
+For each approved upload the coordinator renders a temporary config outside
+the source checkout. It selects exactly that package and its reviewed
+features, keeps Cargo verification and clean-source checks enabled, disables
+release-plz's tag and GitHub Release creation, and sets `release_always =
+true` plus `pr_branch_prefix = ":"`. In the recorded macOS 0.4.3 dry-run
+fixtures, these settings retained the selected checkout even with an associated
+release PR; those fixtures did not prove the Linux hosted upload or OIDC path.
+Before enabling publication, verify that the exact upload invocation packages
+the admitted checkout in the protected runner. This execution mechanism serves
+both admitted normal releases and admitted recovery; it does not authorize
+arbitrary commits or packages. Changing the CLI or settings requires
+requalification.
+
+The coordinator journals each upload intent before invoking `release-plz
+release`, observes the exact registry version and archive afterward, and
+records an independently verified result. A zero exit or skipped package is
+not success. Tags and GitHub Releases are separate, create-only journaled
+operations after the crate is independently verified. Verify an existing
+matching object; stop on conflict, and reobserve an ambiguous result. Do not
+invent repeated package flags or treat JSON output as a side-effect-free plan.
 
 ## 7. Workflow boundaries and per-job permissions
 
@@ -166,8 +187,10 @@ Rules:
 - Record both the workflow-authority SHA and the package-source SHA; they may
   differ legitimately but MUST never differ accidentally through checkout
   fallback or a mutable-branch input. Preflight resolves the exact source
-  release-plz will publish, not merely the event SHA; release-plz may select
-  the release-PR head rather than the merge result — qualify that behavior.
+  release-plz will publish, not merely the event SHA. The qualified temporary
+  upload configuration MUST prevent release-plz from substituting an
+  associated PR head for the admitted checkout; qualify the actual upload
+  path and revalidate source custody.
 - Publish only from repository-local generated jobs on fresh GitHub-hosted
   runners, an explicitly preconfigured protected environment, and trusted
   eligible branch/dispatch events. Never publish from PRs,
@@ -213,11 +236,17 @@ registry, and immutable source. A dispatch MUST NOT widen this record.
 - Prefer one-shot bootstrap retirement after successful initial publication
   over a permanent permissive mode. Revoke the bootstrap token and remove its
   environment secret/reference once the OIDC handover is verified.
-- Normal `release_always = false` would not publish an existing implementation
-  merge as a release PR; the bootstrap run uses a bootstrap-only effective
-  config with `release_always = true` after all identity/source/absence
-  gates, or an equivalently qualified initial release-PR path (§10). Routine
-  publication MUST NOT stay in always-release mode.
+  A crate owner must configure a crates.io trusted publisher for each crate,
+  naming the caller repository, `release.yml`, and protected release
+  environment. Remove the one-shot `new_crates` intent, switch to
+  trusted-publishing authentication, and regenerate and review the workflow to
+  restore normal push releases. These repository changes do not themselves
+  alter crates.io settings or revoke credentials.
+- The preparation config remains `release_always = false`. After the
+  exact-source, identity and registry-absence gates, the bootstrap upload
+  uses the same one-package temporary upload config described in §6. Its
+  `release_always = true` does not bypass admission; normal publication uses
+  it only after its own reviewed-release-PR admission.
 - Run `release-plz release`, not `release-pr`/`update`, for the exact-version
   upload. Prevent concurrent release-PR preparation from changing the
   bootstrap intent. With no prior registry baseline, historical SemVer
@@ -232,7 +261,7 @@ registry, and immutable source. A dispatch MUST NOT widen this record.
 
 ## 9. Tag collision and registry absence
 
-The inspected release-plz 0.3.169 code returns early from the per-package
+The qualified release-plz 0.4.3 behavior returns early from the per-package
 release path when its expected tag already exists. Therefore:
 
 - Tag-exists-but-crate-absent is a collision/incomplete release report, never
@@ -275,6 +304,16 @@ member after a partial failure. Use release-plz for publication with thin
 verification/reconciliation around it; do not assume a rerun repairs all
 metadata.
 
+A later run may name a reviewed predecessor by run ID, attempt and workflow
+SHA independently of the package-source recovery selection. Before any new
+mutation, authenticate that predecessor's repository, source, exact run and
+historical authorization; validate the complete immutable journal chain and
+bind the predecessor identity into the new receipt. Reobserve every unresolved
+prior operation against the registry or GitHub state. An absent or ambiguous
+result MUST stop rather than trigger a blind retry. A journal entry, its
+absence from an incomplete listing, or a prior success alone does not grant
+new publication authority. Revalidate the current admission under the lock.
+
 A nonsecret release receipt records schema version, release intent ID,
 repository, registry, workflow source SHA, actual library source SHA,
 selected package/version map, normalized file inventory, validation results,
@@ -290,25 +329,24 @@ headers, credential-provider output, or private key material.
   with an explicit per-job `permissions:` block. (Under
   `velnor-repository-v1` the same filename keeps its existing Velnor-internal
   meaning.)
-- `.github/release-plz.toml`: the generated normal effective release-plz
-  config; workflows pass it via release-plz's explicit config argument. No
-  second user-owned root config is silently created.
-- `.github/release-plz-bootstrap.toml`: the generated bootstrap-only variant
-  (`release_always = true`); used only by the bootstrap dispatch after all
-  gates. Its setting is not the normal release policy.
-- For exact-source bootstrap, the config comes from the trusted
-  workflow/policy checkout while release-plz operates on a separate clean
-  source checkout; never dirty the release checkout to insert config.
-- Qualified release-plz 0.3.169 requirements (observed 2026-09-30): the
-  git token arrives via the `GIT_TOKEN` env binding (upstream never
-  reads `GITHUB_TOKEN`) and is required in every phase, including
-  `--dry-run`; `release-pr` pushes its branch and `release` pushes
-  tags, so those checkouts persist credentials while all others stay
-  credential-free; `--registry` is omitted for the cargo-implicit
-  default (upstream resolves the flag from Cargo config only, where
-  that name is absent); every release checkout fetches full history;
-  the policy checkout never pins `ref` (`release-pr` rejects a
-  detached HEAD).
+- `.github/release-plz.toml`: generated preparation configuration used by
+  release-plz release-PR creation or validation. No second user-owned root
+  config is silently created.
+- `.github/velnor-release-intent.toml`: generated reviewed selection,
+  authentication and tool expectations, including an optional explicit
+  predecessor identity for cross-run recovery. It MUST NOT contain secrets.
+- No checked-in publish-only or bootstrap-only release-plz config is emitted.
+  The coordinator renders the scoped per-package upload config into the runner
+  temporary directory after admission, outside the approved source checkout.
+  The generator removes obsolete files it previously owned.
+- Release-plz receives the GitHub credential through its isolated `GIT_TOKEN`
+  binding. The trusted path uses GitHub OIDC and no stored Cargo token; the
+  separately configured bootstrap path uses only its required Cargo secret.
+  `--registry` is omitted for Cargo's implicit default. The approved source
+  checkout and all acquired tools remain subject to the custody controls in
+  §7. The preparation checkout retains full history and its branch context;
+  it has only the authority needed to open a PR. Release source checkouts
+  retain full history and use the exact admitted SHA.
 - The generator MUST NOT rewrite consumer Cargo manifests, Mise files,
   lockfiles, or toolchains. An explicit reviewed repository setup change may
   edit those inputs; generation itself cannot.

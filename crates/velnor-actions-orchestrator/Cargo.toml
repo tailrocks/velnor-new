@@ -10,6 +10,38 @@ license.workspace = true
 autotests = false
 
 [[test]]
+name = "crate_tool_download_public"
+path = "tests/crate_tool_download_public.rs"
+
+[[test]]
+name = "crate_tool_artifact_public"
+path = "tests/crate_tool_artifact_public.rs"
+
+[[test]]
+name = "crate_toolchain_path_public"
+path = "tests/crate_toolchain_path_public.rs"
+
+[[test]]
+name = "crate_tag_rules_public"
+path = "tests/crate_tag_rules_public.rs"
+
+[[test]]
+name = "crate_registry_public"
+path = "tests/crate_registry_public.rs"
+
+[[test]]
+name = "crate_release_github_public"
+path = "tests/crate_release_github_public.rs"
+
+[[test]]
+name = "crate_source_public"
+path = "tests/crate_source_public.rs"
+
+[[test]]
+name = "crate_archive_public"
+path = "tests/crate_archive_public.rs"
+
+[[test]]
 name = "controller_approval_public"
 path = "tests/controller_approval_public.rs"
 
@@ -38,6 +70,7 @@ test-render-capture = ["velnor-actions-workflow-renderer/test-render-capture"]
 [dependencies]
 velnor-archive-guard = { version = "=0.1.73", path = "../velnor-archive-guard" }
 base64 = { workspace = true }
+semver = "=1.0.28"
 flate2 = { version = "=1.1.10", default-features = false, features = ["rust_backend"] }
 lzma-rust2 = { version = "=0.23.0", default-features = false, features = ["std", "xz"] }
 tar = { version = "=0.4.46", default-features = false }
@@ -55,6 +88,7 @@ velnor-actions-workflow-renderer = { version = "=0.1.73", path = "../velnor-acti
 rustix = { version = "=1.1.5", features = ["fs", "process"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
+serde_yaml = "=0.9.34"
 sha2 = { workspace = true }
 sha1-checked = { version = "=0.10.0", default-features = false }
 tempfile = { version = "=3.27.0" }
@@ -78,3 +112,19 @@ serde_json = { workspace = true }
 syn = { version = "=3.0.9", default-features = false, features = ["full", "parsing", "printing", "visit"] }
 tempfile = { version = "=3.27.0" }
 velnor-actions-contract = { version = "=0.1.73", path = "../velnor-actions-contract" }
+
+[[test]]
+name = "fd_tool_extract_public"
+path = "tests/fd_tool_extract_public.rs"
+
+[[test]]
+name = "crate_release_journal_adapter_public"
+path = "tests/crate_release_journal_adapter_public.rs"
+
+[[test]]
+name = "crate_registry_inventory_public"
+path = "tests/crate_registry_inventory_public.rs"
+
+[[test]]
+name = "crate_workspace_plan_public"
+path = "tests/crate_workspace_plan_public.rs"

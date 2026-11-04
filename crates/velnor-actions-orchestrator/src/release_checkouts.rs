@@ -44,7 +44,3 @@ fn persist_word(persist: bool) -> String {
 pub(crate) fn forge_env() -> BTreeMap<String, String> {
     BTreeMap::from([(GIT_TOKEN_ENV.to_owned(), GIT_TOKEN_REF.to_owned())])
 }
-
-pub(crate) fn source_manifest(manifest: &str) -> String {
-    format!("{RELEASE_SOURCE_DIR}/{manifest}")
-}

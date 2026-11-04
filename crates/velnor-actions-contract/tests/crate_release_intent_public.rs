@@ -1,0 +1,149 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
+use velnor_actions_contract::config::CrateReleaseIntent;
+
+#[test]
+fn intent_rejects_unapproved_or_ambiguous_release_inputs() -> Result<(), Box<dyn std::error::Error>>
+{
+    let value = serde_json::json!({"schema": 1, "repository": "tailrocks/termpane", "default_branch": "main", "environment": "release", "required_workflow_path": ".github/workflows/ci.yml", "trusted_reviewer_id": 139_017, "generator_version":"0.1.72","generator_source_sha":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","generator_manifest_sha256":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc","release_plz_version":"0.4.3","runner":"ubuntu-24.04","authentication":"trusted-publishing","rust_version": "1.97.1", "manifest_path": "Cargo.toml", "registry": "crates-io", "packages": ["termpane"], "publish_features": {"termpane":[]}, "tag_template": "{{ package }}-v{{ version }}", "recovery": {"package": "termpane", "version": "0.1.1", "source_sha": "f1c2dfde45bdbe91425af6bb17d80e606703baac"}});
+    let intent: CrateReleaseIntent = serde_json::from_value(value.clone())?;
+    intent.validate()?;
+    for (key, invalid) in [
+        ("generator_version", serde_json::json!("latest")),
+        ("generator_source_sha", serde_json::json!("invalid")),
+        ("generator_manifest_sha256", serde_json::json!("invalid")),
+        ("release_plz_version", serde_json::json!("0.4")),
+        ("runner", serde_json::json!("${{ inputs.runner }}")),
+        ("authentication", serde_json::json!("unknown")),
+        ("repository", serde_json::json!("tailrocks/termpane/other")),
+        ("default_branch", serde_json::json!("../main")),
+        ("environment", serde_json::json!("release\nother")),
+        ("manifest_path", serde_json::json!("../Cargo.toml")),
+        ("registry", serde_json::json!("another")),
+        ("publish_features", serde_json::json!({})),
+        ("publish_features", serde_json::json!({"other": []})),
+        (
+            "publish_features",
+            serde_json::json!({"termpane": ["pty", "pty"]}),
+        ),
+        ("packages", serde_json::json!(["other"])),
+        ("tag_template", serde_json::json!("v{{ version }}")),
+    ] {
+        let mut candidate = value.clone();
+        candidate[key] = invalid;
+        let result = serde_json::from_value::<CrateReleaseIntent>(candidate);
+        assert!(
+            result.is_err() || result?.validate().is_err(),
+            "invalid {key} was accepted"
+        );
+    }
+    for missing in [
+        "generator_version",
+        "generator_source_sha",
+        "generator_manifest_sha256",
+        "release_plz_version",
+        "runner",
+        "authentication",
+        "publish_features",
+    ] {
+        let mut candidate = value.clone();
+        candidate.as_object_mut().ok_or("object")?.remove(missing);
+        assert!(serde_json::from_value::<CrateReleaseIntent>(candidate).is_err());
+    }
+    let mut extra = value;
+    extra["unexpected"] = serde_json::json!(true);
+    assert!(serde_json::from_value::<CrateReleaseIntent>(extra).is_err());
+    Ok(())
+}
+
+#[test]
+fn recovery_accepts_cargo_semver_and_rejects_invalid_versions()
+-> Result<(), Box<dyn std::error::Error>> {
+    let mut value = serde_json::json!({"schema":1,"repository":"tailrocks/termpane","default_branch":"main","environment":"release","required_workflow_path":".github/workflows/ci.yml","trusted_reviewer_id":139_017,"generator_version":"0.1.72","generator_source_sha":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","generator_manifest_sha256":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc","release_plz_version":"0.4.3","runner":"ubuntu-24.04","authentication":"trusted-publishing","rust_version":"1.97.1","manifest_path":"Cargo.toml","registry":"crates-io","packages":["termpane"],"publish_features":{"termpane":[]},"tag_template":"{{ package }}-v{{ version }}","recovery":{"package":"termpane","version":"1.2.3-alpha.1+build.5","source_sha":"f1c2dfde45bdbe91425af6bb17d80e606703baac"}});
+    serde_json::from_value::<CrateReleaseIntent>(value.clone())?.validate()?;
+    let maximum = format!("1.2.3-{}", "a".repeat(144));
+    value["recovery"]["version"] = serde_json::json!(maximum);
+    serde_json::from_value::<CrateReleaseIntent>(value.clone())?.validate()?;
+    value["recovery"]["version"] = serde_json::json!(format!("{maximum}a"));
+    assert!(
+        serde_json::from_value::<CrateReleaseIntent>(value.clone())?
+            .validate()
+            .is_err()
+    );
+    for invalid in [
+        "01.2.3", "1.02.3", "1.2.3-01", "1.2.3-", "1.2.3+", " 1.2.3", "1.2",
+    ] {
+        value["recovery"]["version"] = serde_json::json!(invalid);
+        assert!(
+            serde_json::from_value::<CrateReleaseIntent>(value.clone())?
+                .validate()
+                .is_err(),
+            "accepted {invalid}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn configured_package_features_are_safe_and_owned() -> Result<(), Box<dyn std::error::Error>> {
+    use velnor_actions_contract::config::RustReleaseConfig;
+    let input = serde_json::json!({"enabled":true,"registry":"crates-io","packages":["demo"],"required_workflow_path":".github/workflows/ci.yml","trusted_reviewer_id":1,"publish_features":{"demo":["dep/feature","pty"]}});
+    let config: RustReleaseConfig = serde_json::from_value(input.clone())?;
+    config.validate("test")?;
+    for (package, features) in [
+        ("unknown", vec!["pty"]),
+        ("demo", vec!["pty", "pty"]),
+        ("demo", vec!["bad feature"]),
+        ("demo", vec!["z", "a"]),
+    ] {
+        let mut wrong = input.clone();
+        wrong["publish_features"] = serde_json::json!({package:features});
+        let parsed: RustReleaseConfig = serde_json::from_value(wrong)?;
+        assert!(parsed.validate("test").is_err());
+    }
+    Ok(())
+}
+
+#[test]
+fn reviewed_new_crate_scope_requires_exact_package_version_and_bootstrap_authentication()
+-> Result<(), Box<dyn std::error::Error>> {
+    use velnor_actions_contract::config::RustReleaseConfig;
+    let mut input = serde_json::json!({"enabled":true,"registry":"crates-io","packages":["demo"],"required_workflow_path":".github/workflows/ci.yml","trusted_reviewer_id":1,"authentication":"bootstrap-token","new_crates":{"source_sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","packages":{"demo":"0.1.0"}}});
+    serde_json::from_value::<RustReleaseConfig>(input.clone())?.validate("test")?;
+    for invalid in [
+        serde_json::json!({"other":"0.1.0"}),
+        serde_json::json!({"demo":"latest"}),
+        serde_json::json!({"demo":""}),
+    ] {
+        input["new_crates"]["packages"] = invalid;
+        assert!(
+            serde_json::from_value::<RustReleaseConfig>(input.clone())?
+                .validate("test")
+                .is_err()
+        );
+    }
+    input["new_crates"]["packages"] = serde_json::json!({"demo":"0.1.0"});
+    input["authentication"] = serde_json::json!("trusted-publishing");
+    assert!(
+        serde_json::from_value::<RustReleaseConfig>(input.clone())?
+            .validate("test")
+            .is_err()
+    );
+    input
+        .as_object_mut()
+        .ok_or("configuration")?
+        .remove("new_crates");
+    serde_json::from_value::<RustReleaseConfig>(input)?.validate("test")?;
+    Ok(())
+}
+
+#[test]
+fn bootstrap_workspace_creation_has_explicit_source_and_each_version()
+-> Result<(), Box<dyn std::error::Error>> {
+    use velnor_actions_contract::config::RustReleaseConfig;
+    let input = serde_json::json!({"enabled":true,"registry":"crates-io","packages":["alpha","beta"],"required_workflow_path":".github/workflows/ci.yml","trusted_reviewer_id":1,"authentication":"bootstrap-token","new_crates":{"source_sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","packages":{"alpha":"0.1.0","beta":"0.2.0"}}});
+    let config: RustReleaseConfig = serde_json::from_value(input)?;
+    config.validate("test")?;
+    Ok(())
+}

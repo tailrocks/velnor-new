@@ -39,6 +39,7 @@ mod publish_maven;
 mod publish_npm;
 mod qualified_tools;
 mod release;
+mod release_intent;
 mod release_validation;
 mod resources;
 mod runs_on;
@@ -146,7 +147,10 @@ pub use qualified_tools::{
     QualifiedToolRecipePlatform, validate_qualified_tool_recipe, validate_qualified_tool_recipes,
     validate_qualified_tools,
 };
-pub use release::{BootstrapRelease, ReleaseAuthentication, ReleaseRegistry, RustReleaseConfig};
+pub use release::{
+    CrateReleasePredecessor, NewCrateRelease, RecoveryRelease, ReleaseAuthentication,
+    ReleaseRegistry, RustReleaseConfig,
+};
 pub use resources::{
     ResourcesConfig, ShardTimingEvidence, TestShardingConfig, validate_shard_changes_need_evidence,
 };
@@ -261,3 +265,6 @@ pub(crate) use distribution::valid_review_check_name;
 pub use review_completion::{ReviewCompletionConfig, ReviewCompletionProvider};
 
 pub(crate) const NATIVE_TAP_UPDATER_MAX_TIMEOUT_MINUTES: u16 = 5;
+
+pub use release_intent::{CrateReleaseIntent, CrateReleaseRecovery, is_cargo_version};
+pub use release_validation::is_release_feature_name;

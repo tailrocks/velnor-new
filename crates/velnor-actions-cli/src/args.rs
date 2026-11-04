@@ -24,6 +24,8 @@ pub(crate) struct Cli {
 /// Public command tree: init, plan, generate, and config.
 #[derive(Debug, Subcommand)]
 pub(crate) enum Command {
+    #[command(about = "Validate and reconcile a crate release") ]
+    CrateRelease { #[command(subcommand)] command: CrateReleaseCommand },
     /// Create `.velnor/config.toml` in the Git working tree.
     Init,
     /// Print the deterministic plan report to stdout.
@@ -201,4 +203,37 @@ pub(crate) enum ConfigCommand {
         #[arg(long = "write")]
         write: bool,
     },
+}
+
+#[derive(Debug, Subcommand)]
+pub(crate) enum CrateReleaseCommand {
+    #[command(about = "Validate release source authority")]
+    SourceAdmit,
+    CandidateReceipt,
+    ReceiptAcquire,
+    ReconciliationReceiptAcquire,
+    VerifyPackage,
+    #[command(about = "Require a previously admitted release source")]
+    SourceRequire,
+    #[command(about = "Stage a same-run Rust toolchain artifact")]
+    ToolchainAcquire,
+    #[command(about = "Validate source, registry and tag")]
+    Admit,
+    #[command(about = "Revalidate the release receipt")]
+    VerifyAdmission,
+    #[command(about = "Record intent before an irreversible publication")]
+    PublicationStarted,
+    #[command(about = "Record an independently verified release operation")]
+    JournalObserve,
+    JournalStart,
+    JournalCoordinate,
+    JournalRepairTag,
+    JournalRepairRelease,
+    JournalUploadIntent,
+    #[command(about = "Inspect prior release evidence")]
+    JournalRecoveryInspect,
+    #[command(about = "Derive reconciliation evidence")]
+    JournalReconcileEvidence,
+    #[command(about = "Verify published registry and tag state")]
+    Reconcile,
 }

@@ -341,7 +341,7 @@ fn checked_storage_uri(value: &str) -> Result<String, OrchestratorError> {
     Ok(uri.to_string())
 }
 
-fn agent() -> Result<&'static ureq::Agent, OrchestratorError> {
+pub(crate) fn agent() -> Result<&'static ureq::Agent, OrchestratorError> {
     AGENT
         .get_or_init(build_agent)
         .as_ref()

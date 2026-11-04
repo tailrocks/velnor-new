@@ -19,6 +19,13 @@ pub use mise_binary::{
 #[path = "release_plz.rs"]
 pub mod release_plz;
 
+#[path = "catalog_release_plz.rs"]
+mod release_plz_catalog;
+pub use release_plz_catalog::{
+    QualifiedCargoSemverChecks, QualifiedReleasePlz, qualified_cargo_semver_checks,
+    qualified_release_plz,
+};
+
 #[path = "catalog_mbx.rs"]
 pub mod mbx;
 pub use mbx::MbxProvisioning;

@@ -27,27 +27,8 @@ pub fn stable_release_pr_config(version_package: &str) -> Result<String, RenderE
     ))
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct BootstrapReleasePlzConfig {
-    inner: ReleasePlzConfig,
-}
-
-impl BootstrapReleasePlzConfig {
-    pub fn new(config: ReleasePlzConfig) -> Result<Self, RenderError> {
-        config.validate()?;
-        Ok(Self { inner: config })
-    }
-
-    #[must_use]
-    pub fn inner(&self) -> &ReleasePlzConfig {
-        &self.inner
-    }
-}
-
 pub fn validate_feature_name(feature: &str) -> Result<(), RenderError> {
-    let charset =
-        |b: u8| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'+' | b'.' | b'/' | b'-');
-    if is_clean_text(feature, 128) && feature.bytes().all(charset) {
+    if velnor_actions_contract::config::is_release_feature_name(feature) {
         Ok(())
     } else {
         Err(RenderError::InvalidWorkflow(format!(
@@ -131,12 +112,15 @@ fn toml_line(out: &mut String, args: std::fmt::Arguments<'_>) -> Result<(), Rend
         .map_err(|_| RenderError::InvalidWorkflow("toml_write".to_owned()))
 }
 
-fn toml_body(config: &ReleasePlzConfig, release_always: bool) -> Result<String, RenderError> {
+fn toml_body(config: &ReleasePlzConfig, upload_only: bool) -> Result<String, RenderError> {
     let mut out = String::from("[workspace]\nrelease = false\n");
-    toml_line(
-        &mut out,
-        format_args!("release_always = {release_always}\n"),
-    )?;
+    if upload_only {
+        out.push_str("git_tag_enable = false\ngit_release_enable = false\n");
+    }
+    toml_line(&mut out, format_args!("release_always = {upload_only}\n"))?;
+    if upload_only {
+        out.push_str("pr_branch_prefix = \":\"\n");
+    }
     toml_line(
         &mut out,
         format_args!("semver_check = {}\n", config.semver_check),
@@ -178,11 +162,23 @@ pub fn render_release_plz_config(
     Ok(text)
 }
 
-pub fn render_bootstrap_release_plz_config(
-    config: &BootstrapReleasePlzConfig,
+pub fn render_single_package_upload_config(
+    config: &ReleasePlzConfig,
+    package_name: &str,
     version: &str,
 ) -> Result<String, RenderError> {
-    let text = marker::with_marker(version, &toml_body(config.inner(), true)?)?;
+    config.validate()?;
+    let package = config
+        .packages
+        .iter()
+        .find(|package| package.name == package_name)
+        .ok_or_else(|| RenderError::InvalidWorkflow("release_package_not_selected".to_owned()))?;
+    let selected = ReleasePlzConfig {
+        tag_pattern: config.tag_pattern.clone(),
+        semver_check: config.semver_check,
+        packages: vec![package.clone()],
+    };
+    let text = marker::with_marker(version, &toml_body(&selected, true)?)?;
     scan_for_private_subcommands(&text)?;
     Ok(text)
 }

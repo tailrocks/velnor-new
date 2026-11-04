@@ -51,12 +51,15 @@ pub(super) fn render_all(
         &mise,
     )?;
     let workflow = rendered.yaml;
-    let verifier_actions = crate::workflow::verifier_actions::VerifierActionSet::build(
+    let mut verifier_actions = crate::workflow::verifier_actions::VerifierActionSet::build(
         &prep.emission_catalog(),
         version,
     )?;
+    if crate::release_emit::enabled_release(prep)?.is_some() {
+        verifier_actions.add_release_rust_template(&prep.catalog)?;
+    }
     let lint_config = rehead_lint_config_marker(&render_jactionlint_yaml(&lint_input)?, version)?;
-    let mut extra = crate::release_emit::release_files(prep, &mise)?;
+    let mut extra = crate::release_emit::release_files(prep)?;
     extra.extend(crate::publish_emit::publish_files(prep, &mise)?);
     extra.extend(crate::binary_release_emit::files(prep)?);
     extra.extend(crate::binary_preview_emit::files(prep)?);

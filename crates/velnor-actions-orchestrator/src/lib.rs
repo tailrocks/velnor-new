@@ -6,6 +6,8 @@
     missing_docs,
     reason = "documentation comments are intentionally absent from this codebase"
 )]
+mod crate_release_inventory_read;
+
 macro_rules! private_mods {
     ($($module:ident),* $(,)?) => {
         $(mod $module;)*
@@ -27,6 +29,26 @@ private_mods!(
     cover
 );
 private_mods!(crate_job_ids, crate_jobs);
+mod crate_release_archive;
+pub mod crate_release_controller;
+pub mod crate_release_github;
+pub mod crate_release_http;
+pub mod crate_release_registry;
+mod crate_release_runtime;
+mod crate_release_semver;
+pub mod crate_release_tool_artifact;
+pub mod crate_release_tool_download;
+pub use crate_release_runtime::{parse_crate_release_intent, run_crate_release};
+mod crate_release_source;
+mod crate_release_workspace;
+pub use crate_release_archive::{verify_archive_tracked_content, verify_crate_archive};
+pub use crate_release_source::{
+    CrateReleaseSourcePackage, journal_source_inventory, verified_rust_tool_path,
+    verify_crate_release_source, verify_journal_source, verify_owned_tool_homes,
+};
+pub use crate_release_workspace::{
+    CrateReleaseWorkspacePlan, crate_release_workspace_plan_with_registry,
+};
 private_mods!(critical_path, derive_groups);
 private_mods!(discover, discover_index);
 private_mods!(discover_tofu, error, evidence);
@@ -110,3 +132,12 @@ pub(crate) mod tool_catalog_project;
 pub(crate) mod tool_catalog_resolve;
 
 pub use api::*;
+
+pub mod crate_registry_inventory;
+pub use crate_registry_inventory::{
+    CrateInventoryError, CrateRegistryInventory, CrateRegistryVersion, inspect_crate_versions,
+};
+pub mod crate_release_journal;
+pub mod crate_release_journal_adapter;
+mod crate_release_journal_github;
+pub mod fd_tool_extract;

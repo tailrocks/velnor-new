@@ -10,9 +10,10 @@ use crate::error::MiseError;
 
 const GIT_PROGRAM: &str = "git";
 
-pub const ALLOWED_GIT_VERBS: [&str; 6] = [
+pub const ALLOWED_GIT_VERBS: [&str; 7] = [
     "rev-parse",
     "ls-files",
+    "ls-tree",
     "diff",
     "show",
     "config",
@@ -51,6 +52,11 @@ impl GitRequest {
     #[must_use]
     pub fn ls_files(args: Vec<OsString>) -> Self {
         Self::allowed("ls-files", args)
+    }
+
+    #[must_use]
+    pub fn ls_tree(args: Vec<OsString>) -> Self {
+        Self::allowed("ls-tree", args)
     }
 
     #[must_use]
@@ -125,6 +131,26 @@ impl GitRequest {
 
     pub fn run_in(&self, cwd: &Path) -> Result<ProcessOutput, MiseError> {
         self.command_in(cwd).run()
+    }
+
+    pub fn run_release_in(&self, cwd: &Path) -> Result<ProcessOutput, MiseError> {
+        let mut args: Vec<OsString> = [
+            "-c",
+            "core.fsmonitor=false",
+            "-c",
+            "core.hooksPath=/dev/null",
+            "-c",
+            "core.attributesFile=/dev/null",
+            "-c",
+            "diff.external=",
+        ]
+        .into_iter()
+        .map(Into::into)
+        .collect();
+        args.extend(self.git_args());
+        IsolatedCommand::release_git(args)
+            .with_cwd(cwd.to_path_buf())
+            .run()
     }
 
     pub fn run_in_until(

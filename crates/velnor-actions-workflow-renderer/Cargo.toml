@@ -16,6 +16,7 @@ test = false
 test-render-capture = []
 
 [dependencies]
+base64 = { workspace = true }
 semver = { version = "=1.0.28" }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -63,5 +64,21 @@ workspace = true
 
 
 [[test]]
+name = "crate_release_checkout_public"
+path = "tests/crate_release_checkout_public.rs"
+
+[[test]]
+name = "crate_release_acquire_public"
+path = "tests/crate_release_acquire_public.rs"
+
+[[test]]
+name = "crate_release_tool_isolation_public"
+path = "tests/crate_release_tool_isolation_public.rs"
+
+[[test]]
 name = "crate_release_version_public"
 path = "tests/crate_release_version_public.rs"
+
+[[test]]
+name = "crate_upload_config_public"
+path = "tests/crate_upload_config_public.rs"

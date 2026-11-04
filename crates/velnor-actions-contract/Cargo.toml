@@ -10,6 +10,10 @@ license.workspace = true
 autotests = false
 
 [[test]]
+name = "crate_release_intent_public"
+path = "tests/crate_release_intent_public.rs"
+
+[[test]]
 name = "velnor_contract"
 path = "tests/velnor_contract.rs"
 

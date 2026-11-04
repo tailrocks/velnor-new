@@ -161,6 +161,10 @@ fn check_env_value_with_scope(key: &str, value: &str, composite: bool) -> Result
             && !is_private_env_binding(key, inner)
             && !is_plan_gh_token_binding(key, inner)
             && !is_mbx_bundle_key_binding(key, inner)
+            && !(key == "VELNOR_RUST_ARTIFACT_ID"
+                && inner == "needs.release-preflight.outputs.rust_artifact_id")
+            && !(key == "VELNOR_RECEIPT_ARTIFACT_ID"
+                && inner == "needs.release-preflight.outputs.receipt_artifact_id")
         {
             return Err(RenderError::BadCommand(format!("bad_env_expression:{key}")));
         }
@@ -289,7 +293,11 @@ pub(crate) fn check_with_action_value(
     value: &str,
 ) -> Result<(), RenderError> {
     if uses.starts_with("actions/checkout@")
-        && ((key == "ref" && value == "${{ github.sha }}")
+        && ((key == "ref"
+            && matches!(
+                value,
+                "${{ github.sha }}" | "${{ steps.release-admission.outputs.source_sha }}"
+            ))
             || (key == "fetch-depth" && CheckoutHistory::parse_fetch_depth(value).is_some()))
     {
         return Ok(());

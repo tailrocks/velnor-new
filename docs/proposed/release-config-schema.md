@@ -9,22 +9,35 @@ Reference for the typed config in `velnor-actions-contract`
 
 | Key | Type | Default | Rule |
 |---|---|---|---|
-| `enabled` | bool | `false` | `false` emits no release work; `true` requires a nonempty `packages` allowlist (`empty_packages`). |
+| `enabled` | bool | `false` | `false` emits no release work; `true` requires a nonempty `packages` allowlist unless `publishable_workspace` is enabled. |
 | `manifest_path` | string | `"Cargo.toml"` | Repo-relative, `[A-Za-z0-9/._-]`, no leading `/`, no empty/`..` segments, must be or end with `/Cargo.toml`. |
 | `packages` | string list | `[]` | Sorted, unique, never auto-expanded; each matches Cargo name shape (letter/`_` start, then alnum/`-`/`_`). |
+| `publishable_workspace` | bool | `false` | Select the publishable Cargo workspace packages instead of an explicit package allowlist. |
+| `publish_features` | package → string-list map | `{}` | Each key names a selected package. Feature selectors are sorted and unique; omitted packages use Cargo default features. Cargo validates feature existence during per-package verification. Not available for `git-tag`. |
+| `new_crates` | table or absent | absent | Explicit creation intent with a full `source_sha` and a `packages` map of selected crate names to exact versions. Permitted only for crates.io with `bootstrap-token`; cannot coexist with `recovery`. The plan binds every listed version and the source. Protected admission and post-upload owner verification are required. |
 | `environment` | string | `"release"` | Nonempty, unpadded, `[A-Za-z0-9-_/]` plus `.`, no empty/`..` segments. Binds the publish jobs. |
 | `registry` | enum | `"crates-io"` | `"crates-io"` or `"git-tag"`. `git-tag` creates tags and GitHub releases only; see [git-tag mode](#git-tag-mode). |
 | `authentication` | enum | absent (`"trusted-publishing"` on crates.io) | `"trusted-publishing"` or `"bootstrap-token"` (kebab-case). Exactly one mode; modes never mix. Forbidden with `registry = "git-tag"` (`contradictory_authentication`). |
 | `release_pr` | bool | `true` | Whether release-plz preparation PRs run (crates.io only; `git-tag` releases are prepared by a maintainer's version bump). |
 | `tag_name` | string | `"{{ package }}-v{{ version }}"` | Safe charset, balanced braces, must contain both `{{package}}` and `{{version}}` (whitespace-insensitive). |
-| `bootstrap` | table or absent | absent | Required iff `authentication = "bootstrap-token"`; forbidden otherwise, including in `git-tag` mode (`missing_bootstrap_record` / `contradictory_authentication`). |
+| `recovery` | table or absent | absent | Binds an exact package, version, and source for an approved recovery dispatch. Cannot coexist with `new_crates`. Bootstrap-token authentication requires either `recovery` or `new_crates`. |
+| `journal_predecessor` | table or absent | absent | Binds a reviewed previous run ID, attempt, and workflow SHA for durable release recovery. |
 | `version_groups` | string→string-list map | `{}` | Group names use package-name shape; members must be sorted, unique, listed in `packages`, and in at most one group. Non-lockstep: unchanged members are not forced to release. |
 
-## Bootstrap record
+For example, to verify `termpane` with its `pty` feature during publication:
+
+```toml
+[stacks.rust.release.publish_features]
+termpane = ["pty"]
+```
+
+Cargo default features remain enabled. The publisher must pass the same reviewed selectors to Cargo verification and release-plz.
+
+## Recovery record
 
 | Key | Type | Rule |
 |---|---|---|
-| `package` | string | Package-name shape; the one crate authorized for first publication. |
+| `package` | string | Package-name shape; the one crate authorized for recovery. |
 | `version` | string | Cargo SemVer, including prerelease and build metadata, up to 150 ASCII bytes (`bad_version` otherwise). |
 | `source_sha` | string | 40 lowercase hex, the immutable approved source (`bad_source_sha` otherwise). |
 
@@ -66,7 +79,7 @@ packages = ["aaa-crate", "demo-crate"]
 core = ["aaa-crate", "demo-crate"]
 ```
 
-Bootstrap first publication (retire after the OIDC handover):
+Bootstrap first publication:
 
 ```toml
 [stacks.rust.release]
@@ -74,11 +87,19 @@ enabled = true
 packages = ["demo-crate"]
 authentication = "bootstrap-token"
 
-[stacks.rust.release.bootstrap]
-package = "demo-crate"
-version = "1.2.3-rc.1+build.42"
+[stacks.rust.release.new_crates]
 source_sha = "0123456789abcdef0123456789abcdef01234567"
+
+[stacks.rust.release.new_crates.packages]
+demo-crate = "1.2.3-rc.1+build.42"
 ```
+
+Creation is limited to an approved dispatch for the listed source and versions.
+After configuring trusted publishing, remove `new_crates` and switch
+`authentication` to `"trusted-publishing"` in a reviewed configuration change,
+then regenerate the workflow. This restores normal push releases; retaining the
+creation configuration keeps the release dispatch-only. Revoke the bootstrap
+token and remove its secret after the handover.
 
 ## git-tag mode
 
@@ -98,7 +119,7 @@ tag_name = "{{ package }}-v{{ version }}"
 
 Rules (`RustReleaseConfig::validate`, then generation):
 
-- `authentication` and `bootstrap` are forbidden (`contradictory_authentication`):
+- `authentication`, `recovery`, and `new_crates` are forbidden:
   the mode holds no registry credential and no `id-token`.
 - `publishable_workspace` is forbidden (`git_tag_requires_packages`); the
   allowlist is explicit and `publish = false` and registry restrictions do

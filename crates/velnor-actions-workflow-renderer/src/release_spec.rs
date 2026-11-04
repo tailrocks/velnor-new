@@ -71,9 +71,11 @@ pub struct ReleaseTriggers {
 }
 
 impl ReleaseTriggers {
-    pub fn validate(&self, bootstrap: &BootstrapPlan) -> Result<(), RenderError> {
-        if self.push_branches.is_empty() || self.push_branches.len() > 8 {
-            return Err(RenderError::InvalidWorkflow("no_push_branch".to_owned()));
+    pub fn validate(&self, plan: &ReleasePlan) -> Result<(), RenderError> {
+        if self.push_branches.len() != 1 {
+            return Err(RenderError::InvalidWorkflow(
+                "release_requires_one_default_branch".to_owned(),
+            ));
         }
         for branch in &self.push_branches {
             if !is_valid_branch_name(branch) {
@@ -86,10 +88,10 @@ impl ReleaseTriggers {
         if let Some(schedule) = &self.schedule {
             schedule.validate().map_err(RenderError::Contract)?;
         }
-        self.check_dispatch_binding(bootstrap)
+        self.check_dispatch_binding(plan)
     }
 
-    fn check_dispatch_binding(&self, bootstrap: &BootstrapPlan) -> Result<(), RenderError> {
+    fn check_dispatch_binding(&self, plan: &ReleasePlan) -> Result<(), RenderError> {
         let mut names = BTreeSet::new();
         for input in &self.dispatch_inputs {
             input.validate()?;
@@ -100,11 +102,22 @@ impl ReleaseTriggers {
                 )));
             }
         }
-        check_bound_input(&self.dispatch_inputs, "plan", &bootstrap.plan_id)?;
-        check_bound_input(&self.dispatch_inputs, "source_sha", &bootstrap.source_sha)?;
-        match &bootstrap.version {
-            Some(version) => check_bound_input(&self.dispatch_inputs, "version", version)?,
-            None => check_absent_input(&self.dispatch_inputs, "version")?,
+        if plan.dispatch {
+            let expected_len = if plan.version.is_some() { 3 } else { 2 };
+            if self.dispatch_inputs.len() != expected_len {
+                return Err(RenderError::InvalidWorkflow(
+                    "unexpected_release_dispatch_input".to_owned(),
+                ));
+            }
+            check_bound_input(&self.dispatch_inputs, "plan", &plan.plan_id)?;
+            check_bound_input(&self.dispatch_inputs, "source_sha", &plan.source_sha)?;
+            if let Some(version) = &plan.version {
+                check_bound_input(&self.dispatch_inputs, "version", version)?;
+            }
+        } else if !self.dispatch_inputs.is_empty() || plan.version.is_some() {
+            return Err(RenderError::InvalidWorkflow(
+                "unexpected_release_dispatch".to_owned(),
+            ));
         }
         Ok(())
     }
@@ -127,27 +140,18 @@ fn check_bound_input(
     }
 }
 
-fn check_absent_input(inputs: &[DispatchInput], name: &str) -> Result<(), RenderError> {
-    let present = inputs.iter().any(|input| input.name == name);
-    if present {
-        return Err(RenderError::InvalidWorkflow(format!(
-            "dispatch_plan_mismatch:{name}"
-        )));
-    }
-    Ok(())
-}
-
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct BootstrapPlan {
+pub struct ReleasePlan {
     pub plan_id: String,
     pub repository: String,
     pub source_sha: String,
     pub registry: String,
     pub packages: BTreeMap<String, String>,
     pub version: Option<String>,
+    pub dispatch: bool,
 }
 
-impl BootstrapPlan {
+impl ReleasePlan {
     pub fn validate(&self) -> Result<(), RenderError> {
         validate_plan_id(&self.plan_id)?;
         validate_repository(&self.repository)?;
@@ -177,13 +181,32 @@ impl BootstrapPlan {
 }
 
 #[must_use]
-pub fn publish_gate_condition(repository: &str, bootstrap: &BootstrapPlan) -> String {
-    let base = format!(
-        "github.repository == '{repository}' && github.event.inputs.plan == '{}' && github.event.inputs.source_sha == '{}'",
-        bootstrap.plan_id, bootstrap.source_sha
-    );
-    match &bootstrap.version {
-        Some(version) => format!("{base} && github.event.inputs.version == '{version}'"),
-        None => base,
-    }
+pub fn publish_gate_condition(
+    repository: &str,
+    branch: &str,
+    plan: &ReleasePlan,
+    allow_push: bool,
+) -> String {
+    let event = format!("github.event_name == 'push' && github.ref == 'refs/heads/{branch}'");
+    let event = if plan.dispatch {
+        let mut dispatch = format!(
+            "github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/{branch}' && github.event.inputs.plan == '{}' && github.event.inputs.source_sha == '{}'",
+            plan.plan_id, plan.source_sha
+        );
+        if let Some(version) = &plan.version {
+            dispatch.push_str(" && github.event.inputs.version == '");
+            dispatch.push_str(version);
+            dispatch.push('\'');
+        }
+        if allow_push {
+            format!("({event} || ({dispatch}))")
+        } else {
+            dispatch
+        }
+    } else {
+        event
+    };
+    format!(
+        "github.repository == '{repository}' && ({event}) && needs.release-preflight.outputs.eligible == 'true'"
+    )
 }

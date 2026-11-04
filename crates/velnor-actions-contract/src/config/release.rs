@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::release_validation::{
-    validate_bootstrap, validate_environment, validate_manifest_path, validate_packages,
-    validate_tag_name, validate_version_groups,
+    validate_environment, validate_manifest_path, validate_packages, validate_publish_features,
+    validate_recovery, validate_tag_name, validate_version_groups,
 };
 use crate::errors::ContractError;
 use serde::{Deserialize, Serialize};
@@ -29,12 +29,27 @@ pub enum ReleaseRegistry {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct BootstrapRelease {
+pub struct RecoveryRelease {
     pub package: String,
 
     pub version: String,
 
     pub source_sha: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct NewCrateRelease {
+    pub source_sha: String,
+    pub packages: BTreeMap<String, String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CrateReleasePredecessor {
+    pub run_id: u64,
+    pub run_attempt: u32,
+    pub workflow_sha: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -52,8 +67,20 @@ pub struct RustReleaseConfig {
     #[serde(default)]
     pub publishable_workspace: bool,
 
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub publish_features: BTreeMap<String, Vec<String>>,
+
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub new_crates: Option<NewCrateRelease>,
+
     #[serde(default = "default_environment")]
     pub environment: String,
+
+    #[serde(default)]
+    pub required_workflow_path: String,
+
+    #[serde(default)]
+    pub trusted_reviewer_id: u64,
 
     #[serde(default, skip_serializing_if = "is_default_registry")]
     pub registry: ReleaseRegistry,
@@ -68,7 +95,10 @@ pub struct RustReleaseConfig {
     pub tag_name: String,
 
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub bootstrap: Option<BootstrapRelease>,
+    pub recovery: Option<RecoveryRelease>,
+
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub journal_predecessor: Option<CrateReleasePredecessor>,
 
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub version_groups: BTreeMap<String, Vec<String>>,
@@ -105,12 +135,17 @@ impl Default for RustReleaseConfig {
             manifest_path: default_manifest_path(),
             packages: Vec::new(),
             publishable_workspace: false,
+            publish_features: BTreeMap::new(),
+            new_crates: None,
             environment: default_environment(),
+            required_workflow_path: String::new(),
+            trusted_reviewer_id: 0,
             registry: ReleaseRegistry::default(),
             authentication: None,
             release_pr: true,
             tag_name: default_tag_name(),
-            bootstrap: None,
+            recovery: None,
+            journal_predecessor: None,
             version_groups: BTreeMap::new(),
         }
     }
@@ -130,12 +165,35 @@ impl RustReleaseConfig {
             self.enabled,
             self.publishable_workspace,
         )?;
+        validate_publish_features(
+            file,
+            &self.publish_features,
+            &self.packages,
+            self.publishable_workspace,
+        )?;
+        validate_new_crates(
+            file,
+            self.new_crates.as_ref(),
+            &self.packages,
+            self.publishable_workspace,
+        )?;
+        if self.new_crates.is_some()
+            && (self.registry != ReleaseRegistry::CratesIo
+                || self.effective_authentication() != ReleaseAuthentication::BootstrapToken)
+        {
+            return Err(ContractError::config(
+                file,
+                "new_crates",
+                "bootstrap_token_required",
+            ));
+        }
         validate_environment(file, &self.environment)?;
         self.validate_authentication(file)?;
         validate_tag_name(file, &self.tag_name)?;
-        if let Some(bootstrap) = &self.bootstrap {
-            validate_bootstrap(file, bootstrap)?;
+        if let Some(recovery) = &self.recovery {
+            validate_recovery(file, recovery)?;
         }
+        validate_journal_predecessor(file, self.journal_predecessor.as_ref())?;
         validate_version_groups(
             file,
             &self.version_groups,
@@ -146,19 +204,25 @@ impl RustReleaseConfig {
     }
 
     fn validate_authentication(&self, file: &str) -> Result<(), ContractError> {
-        let key = "stacks.rust.release.bootstrap";
+        let key = "stacks.rust.release.recovery";
         if self.registry == ReleaseRegistry::GitTag {
             return self.validate_git_tag(file);
         }
-        match (self.effective_authentication(), &self.bootstrap) {
-            (ReleaseAuthentication::BootstrapToken, None) => {
-                Err(ContractError::config(file, key, "missing_bootstrap_record"))
-            }
-            (ReleaseAuthentication::TrustedPublishing, Some(_)) => Err(ContractError::config(
+        if self.recovery.is_some() && self.new_crates.is_some() {
+            return Err(ContractError::config(
                 file,
-                key,
-                "contradictory_authentication",
-            )),
+                "new_crates",
+                "conflicting_release_intents",
+            ));
+        }
+        match (
+            self.effective_authentication(),
+            &self.recovery,
+            &self.new_crates,
+        ) {
+            (ReleaseAuthentication::BootstrapToken, None, None) => {
+                Err(ContractError::config(file, key, "missing_recovery_record"))
+            }
             _ => Ok(()),
         }
     }
@@ -166,6 +230,13 @@ impl RustReleaseConfig {
 
 impl RustReleaseConfig {
     fn validate_git_tag(&self, file: &str) -> Result<(), ContractError> {
+        if !self.publish_features.is_empty() {
+            return Err(ContractError::config(
+                file,
+                "stacks.rust.release.publish_features",
+                "git_tag_forbids_features",
+            ));
+        }
         if self.authentication.is_some() {
             return Err(ContractError::config(
                 file,
@@ -173,10 +244,17 @@ impl RustReleaseConfig {
                 "contradictory_authentication",
             ));
         }
-        if self.bootstrap.is_some() {
+        if self.journal_predecessor.is_some() {
             return Err(ContractError::config(
                 file,
-                "stacks.rust.release.bootstrap",
+                "stacks.rust.release.journal_predecessor",
+                "git_tag_forbids_predecessor",
+            ));
+        }
+        if self.recovery.is_some() {
+            return Err(ContractError::config(
+                file,
+                "stacks.rust.release.recovery",
                 "contradictory_authentication",
             ));
         }
@@ -189,4 +267,50 @@ impl RustReleaseConfig {
         }
         Ok(())
     }
+}
+
+pub(crate) fn validate_journal_predecessor(
+    file: &str,
+    predecessor: Option<&CrateReleasePredecessor>,
+) -> Result<(), ContractError> {
+    if predecessor.is_some_and(|prior| {
+        prior.run_id == 0
+            || prior.run_attempt == 0
+            || !super::release_validation::is_full_sha(&prior.workflow_sha)
+    }) {
+        return Err(ContractError::config(
+            file,
+            "journal_predecessor",
+            "invalid_predecessor",
+        ));
+    }
+    Ok(())
+}
+
+pub(super) fn validate_new_crates(
+    file: &str,
+    new_crates: Option<&NewCrateRelease>,
+    packages: &[String],
+    workspace: bool,
+) -> Result<(), ContractError> {
+    let Some(creation) = new_crates else {
+        return Ok(());
+    };
+    if !super::release_validation::is_full_sha(&creation.source_sha)
+        || creation.packages.is_empty()
+        || creation.packages.len() > 256
+        || creation.packages.iter().any(|(name, version)| {
+            !super::release_validation::is_package_name(name)
+                || (!workspace && !packages.contains(name))
+                || version.len() > 150
+                || !super::release_intent::is_cargo_version(version)
+        })
+    {
+        return Err(ContractError::config(
+            file,
+            "new_crates",
+            "invalid_new_crates",
+        ));
+    }
+    Ok(())
 }

@@ -5,7 +5,10 @@ use super::*;
 
 #[test]
 fn dev_path_wildcard_presence_matches_cargo_package() {
-    use velnor_actions_rust::release_graph::{RegistryPackage, plan_release};
+    use velnor_actions_rust::release_graph::{
+        RegistryPackage, plan_release, registry_requirements,
+    };
+    use velnor_actions_rust::release_select::select_release_set;
     let temp = tempfile::tempdir().expect("tempdir");
     let root = temp.path().canonicalize().expect("root");
     write(&root, "src/lib.rs", "pub fn f() {}\n");
@@ -26,20 +29,8 @@ fn dev_path_wildcard_presence_matches_cargo_package() {
                 "[package]\nname='workspace_probe_487'\nversion='1.0.0'\nedition='2021'\n[workspace]\nexclude=['dep']\n[dev-dependencies]\nunique_missing_probe_487={{path='dep'{version}}}\n"
             ),
         );
-        let metadata = Command::new(env!("CARGO"))
-            .args([
-                "metadata",
-                "--no-deps",
-                "--format-version",
-                "1",
-                "--offline",
-            ])
-            .current_dir(&root)
-            .env("CARGO_HOME", root.join("cargo-home"))
-            .output()
-            .expect("metadata");
-        assert!(metadata.status.success());
-        let metadata = String::from_utf8(metadata.stdout).expect("utf8");
+        let metadata =
+            wildcard_fixture_metadata(&root, version, expected).expect("fixture metadata");
         let request = ReleaseRequest {
             metadata_json: &metadata,
             repo_root: &root,
@@ -50,17 +41,14 @@ fn dev_path_wildcard_presence_matches_cargo_package() {
             known_manifests: &known,
             supported_registries: &[],
         };
-        let cargo = Command::new(env!("CARGO"))
-            .args(["package", "--no-verify", "--offline"])
-            .current_dir(&root)
-            .env("CARGO_HOME", root.join("cargo-home"))
-            .output()
-            .expect("cargo package");
+        let selection = select_release_set(&request).expect("selection");
+        let requirements = registry_requirements(&selection).expect("requirements");
         assert_eq!(
-            cargo.status.success(),
-            expected,
-            "Cargo case {version}: {}",
-            String::from_utf8_lossy(&cargo.stderr)
+            requirements.contains(&RegistryPackage {
+                registry: "crates-io".into(),
+                package: "unique_missing_probe_487".into(),
+            }),
+            !expected
         );
         let result = plan_release(&request, &RegistryState::default());
         assert_eq!(
@@ -83,6 +71,38 @@ fn dev_path_wildcard_presence_matches_cargo_package() {
             );
         }
     }
+}
+
+fn wildcard_fixture_metadata(
+    root: &Path,
+    version: &str,
+    expected: bool,
+) -> Result<String, Box<dyn std::error::Error>> {
+    let metadata = Command::new(env!("CARGO"))
+        .args([
+            "metadata",
+            "--no-deps",
+            "--format-version",
+            "1",
+            "--offline",
+        ])
+        .current_dir(root)
+        .env("CARGO_HOME", root.join("cargo-home"))
+        .output()?;
+    assert!(metadata.status.success());
+    let metadata = String::from_utf8(metadata.stdout)?;
+    let cargo = Command::new(env!("CARGO"))
+        .args(["package", "--no-verify", "--offline"])
+        .current_dir(root)
+        .env("CARGO_HOME", root.join("cargo-home"))
+        .output()?;
+    assert_eq!(
+        cargo.status.success(),
+        expected,
+        "Cargo case {version}: {}",
+        String::from_utf8_lossy(&cargo.stderr)
+    );
+    Ok(metadata)
 }
 
 #[test]
