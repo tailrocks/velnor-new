@@ -18,6 +18,7 @@ use super::waste_lint::CI_PATH;
 use super::waste_oracle::{Files, files_of, job_ids};
 use super::waste_verifier_oracle::{StepText, steps_of};
 use super::workflow_configuration_fixture::make_repo;
+use velnor_actions_contract::workflow::state_seal::STATE_SEAL_WORKFLOW_PATH;
 
 #[path = "rust_tree_pin_rendered_shell.rs"]
 mod shell;
@@ -362,6 +363,12 @@ fn a_partial_component_add_in_ci_is_detected_in_every_job_that_adds() -> Result<
     assert_eq!(clean.findings, Vec::<Finding>::new());
     assert!(!clean.with_adds.is_empty());
     let broken = mutated(&tree, CI_PATH, " clippy rustfmt", " clippy")?;
+    let broken = mutated(
+        &broken,
+        STATE_SEAL_WORKFLOW_PATH,
+        " clippy rustfmt",
+        " clippy",
+    )?;
     let report = scan(&[broken])?;
     let flagged = report
         .findings

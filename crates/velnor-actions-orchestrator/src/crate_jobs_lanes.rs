@@ -5,7 +5,6 @@ use velnor_actions_contract::{CrateJob, Job, Step, StepKind};
 
 pub(super) struct ProducerLanes {
     pub(super) root: String,
-    pub(super) nextest: bool,
     pub(super) lanes: Vec<Step>,
 }
 
@@ -28,5 +27,5 @@ pub(super) fn lane_records(job: &Job, model: &CrateJob) -> Vec<Step> {
 
 fn is_producer_lane(kind: &str) -> bool {
     velnor_actions_rust::runs_before_parallel_checks(kind)
-        || velnor_actions_rust::check_target_lane(kind).is_some()
+        || velnor_actions_rust::concurrent_target_lane(kind).is_some()
 }

@@ -8,17 +8,19 @@ use super::mbx_preflight::{canonical_mbx_preflight_step, mbx_version_check_step}
 use super::{CompileDriver, MBX_ACTION_NAME};
 use crate::RenderError;
 use velnor_actions_contract::{Job, Step, StepKind, StepRole};
+use velnor_actions_mise::{PinnedTool, ToolCatalog};
 
 pub fn check_mbx_gating(
     jobs: &BTreeMap<String, Job>,
     drivers: &BTreeMap<String, CompileDriver>,
+    catalog: &ToolCatalog,
 ) -> Result<(), RenderError> {
     for (id, job) in jobs {
         for step in &job.steps {
             if !is_action_ref_selection(step) {
                 continue;
             }
-            if installs_only_the_action_mbx_version(step, job) {
+            if installs_no_foreign_mbx_version(step, job, catalog) {
                 continue;
             }
             return Err(RenderError::InvalidWorkflow(format!(
@@ -73,7 +75,7 @@ fn is_mbx_tool_selector(word: &str) -> bool {
     selector == "mr-boxington" || selector.starts_with("mr-boxington@")
 }
 
-fn installs_only_the_action_mbx_version(step: &Step, job: &Job) -> bool {
+fn installs_no_foreign_mbx_version(step: &Step, job: &Job, catalog: &ToolCatalog) -> bool {
     if step.role != Some(StepRole::PreparePinnedTools) {
         return false;
     }
@@ -83,7 +85,9 @@ fn installs_only_the_action_mbx_version(step: &Step, job: &Job) -> bool {
     }
     let mut versions = job.steps.iter().filter_map(mbx_action_version);
     let Some(version) = versions.next() else {
-        return false;
+        let expected = format!("mr-boxington@{}", catalog.version(PinnedTool::MrBoxington));
+        return !job.steps.iter().any(is_mbx_action)
+            && install.iter().all(|selector| selector == &expected);
     };
     versions.next().is_none()
         && install

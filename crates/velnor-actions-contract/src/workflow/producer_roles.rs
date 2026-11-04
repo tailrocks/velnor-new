@@ -18,6 +18,7 @@ pub(super) fn sources_role(role: StepRole) -> bool {
             | StepRole::CargoSourcesRestore
             | StepRole::CargoSourcesFetch
             | StepRole::CargoSourcesSave
+            | StepRole::StateSealTip
     )
 }
 
@@ -47,6 +48,7 @@ pub(super) fn tools_role(role: StepRole) -> bool {
             | StepRole::VerifyRustManifest
             | StepRole::VerifyJactionlint
             | StepRole::ToolsCacheSave
+            | StepRole::StateSealTip
     )
 }
 
@@ -59,6 +61,7 @@ pub(super) fn state_producer_role(role: StepRole) -> bool {
             | StepRole::PreparePinnedTools
             | StepRole::PrepareRustComponents
             | StepRole::VerifyRustManifest
+            | StepRole::VerifyJactionlint
             | StepRole::AcquireVelnor
             | StepRole::DownloadPlan
             | StepRole::CargoSourcesRestore
@@ -76,6 +79,7 @@ pub(super) fn state_producer_role(role: StepRole) -> bool {
             | StepRole::MbxStats
             | StepRole::MbxBundleExport
             | StepRole::StateSealUpload
+            | StepRole::StateSealTip
             | StepRole::StateProduced
             | StepRole::PrivateTokenMint
             | StepRole::PrivateFetch
@@ -93,6 +97,7 @@ pub(super) fn state_seal_role(role: StepRole) -> bool {
             | StepRole::StateSealSubject
             | StepRole::StateSealAdmit
             | StepRole::StateSealBind
+            | StepRole::StateSealTip
             | StepRole::StateSealAttest
             | StepRole::StateSealSave
             | StepRole::StateSealRetire

@@ -20,8 +20,8 @@ mod tools;
 mod tofu_env;
 
 pub(crate) use tools::{
-    CrateSuite, crate_needs_generate_validators, prepare_crate_tools_step,
-    prepare_crate_tools_step_with_bun, prepare_install_opentofu, suite_for_package,
+    CrateSuite, LaneTools, crate_needs_generate_validators, prepare_crate_tools_step,
+    suite_for_package, verify_validators_step,
 };
 
 pub(crate) const OBLIGATION_TASK_ID_ENV: &str = "VELNOR_TASK_ID";

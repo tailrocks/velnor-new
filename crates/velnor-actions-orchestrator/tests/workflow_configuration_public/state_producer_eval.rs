@@ -96,12 +96,22 @@ pub(super) fn simulate(
     failing: Option<usize>,
     refuse_export: bool,
 ) -> Result<BTreeMap<String, String>, Box<dyn Error>> {
+    Ok(simulate_run(producer, failing, refuse_export, false)?.0)
+}
+
+pub(super) fn simulate_run(
+    producer: &Job,
+    failing: Option<usize>,
+    refuse_export: bool,
+    stale_tip: bool,
+) -> Result<(BTreeMap<String, String>, usize), Box<dyn Error>> {
     let mut run = Run {
         failed: false,
         outputs: BTreeMap::from([(("mbx-bundle-key", "save"), "true")]),
         outcomes: BTreeMap::new(),
     };
     let mut lane_index = 0;
+    let mut lanes_run = 0;
     let none = Needs::new();
     for step in &producer.steps {
         if !evaluates(step.condition.as_deref(), &run, &none)? {
@@ -111,10 +121,15 @@ pub(super) fn simulate(
             continue;
         }
         if matches!(step.kind, StepKind::TaskExecution { .. }) {
+            lanes_run += 1;
             if failing == Some(lane_index) {
                 run.failed = true;
             }
             lane_index += 1;
+            continue;
+        }
+        if step.role == Some(StepRole::StateSealTip) && stale_tip {
+            run.failed = true;
             continue;
         }
         match step.id.map(velnor_actions_contract::StepId::as_str) {
@@ -145,7 +160,7 @@ pub(super) fn simulate(
         let value = run.outputs.get(&(step, output)).copied().unwrap_or("");
         outputs.insert(name.clone(), value.to_owned());
     }
-    Ok(outputs)
+    Ok((outputs, lanes_run))
 }
 
 pub(super) fn seal_runs(
@@ -165,7 +180,11 @@ pub(super) fn seal_runs(
     evaluates(seal.condition.as_deref(), &run, &needs)
 }
 
-pub(super) fn seal_steps_run(seal: &Job, admitted: bool) -> Result<Vec<StepRole>, Box<dyn Error>> {
+pub(super) fn seal_steps_run(
+    seal: &Job,
+    admitted: bool,
+    tip_current: bool,
+) -> Result<Vec<StepRole>, Box<dyn Error>> {
     let mut run = Run {
         failed: false,
         outputs: BTreeMap::from([(("state-seal-subject", "sealed"), "true")]),
@@ -182,6 +201,12 @@ pub(super) fn seal_steps_run(seal: &Job, admitted: bool) -> Result<Vec<StepRole>
         };
         ran.push(role);
         match role {
+            StepRole::StateSealTip => {
+                run.outputs.insert(
+                    ("state-seal-tip", "current"),
+                    if tip_current { "true" } else { "false" },
+                );
+            }
             StepRole::StateSealAdmit => {
                 run.outputs.insert(
                     ("state-seal-admit", "admitted"),
@@ -195,6 +220,31 @@ pub(super) fn seal_steps_run(seal: &Job, admitted: bool) -> Result<Vec<StepRole>
                 run.outputs.insert(("state-seal-bind", "bound"), "true");
             }
             _ => {}
+        }
+    }
+    Ok(ran)
+}
+
+pub(super) fn writer_roles_run(
+    writer: &Job,
+    stale_tip: bool,
+) -> Result<Vec<StepRole>, Box<dyn Error>> {
+    let mut run = Run {
+        failed: false,
+        outputs: BTreeMap::from([(("v2", "enabled"), "true")]),
+        outcomes: BTreeMap::new(),
+    };
+    let none = Needs::new();
+    let mut ran = Vec::new();
+    for step in &writer.steps {
+        if !evaluates(step.condition.as_deref(), &run, &none)? {
+            continue;
+        }
+        if let Some(role) = step.role {
+            ran.push(role);
+        }
+        if step.role == Some(StepRole::StateSealTip) && stale_tip {
+            run.failed = true;
         }
     }
     Ok(ran)

@@ -33,6 +33,7 @@ pub(crate) fn policies(
 pub(crate) struct PrebuiltInputs<'a> {
     pub(crate) discovery: &'a Discovery,
     pub(crate) catalog: &'a ToolCatalog,
+    pub(crate) lane: &'a crate::matrix_step::LaneTools,
     pub(crate) fetch_roots: &'a [String],
     pub(crate) acquire: Option<&'a Step>,
     pub(crate) private: Option<&'a PrivateWiring>,
