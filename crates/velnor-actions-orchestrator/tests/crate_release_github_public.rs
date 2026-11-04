@@ -42,7 +42,7 @@ impl Fixture {
             reviewer_id: 99,
             reviewer_permission: "write",
             approvals: vec![
-                json!({"state":"approved","user":{"type":"User","id":99},"comment":format!("I reviewed the complete release policy at {SOURCE} and authorize source {SOURCE} for run 12."),"environments":[{"id":22,"name":"release"}]}),
+                json!({"state":"approved","user":{"type":"User","id":99},"comment":format!("I reviewed the complete release policy at {SOURCE} and source {SOURCE}, and authorize this source for run 12."),"environments":[{"id":22,"name":"release"}]}),
             ],
         }
     }
@@ -439,6 +439,24 @@ fn environment_approval_binds_reviewer_policy_source_and_run() {
         "wrong reviewer cannot authorize release"
     );
     fixture.approvals = Fixture::valid().approvals;
+    fixture.approvals[0]["state"] = json!("rejected");
+    assert!(verify_environment_approval(&input, &fixture).is_err());
+    fixture.approvals = Fixture::valid().approvals;
+    for wrong in [
+        format!(
+            "I reviewed the complete release policy at {WORKFLOW} and source {SOURCE}, and authorize this source for run 12."
+        ),
+        format!(
+            "I reviewed the complete release policy at {SOURCE} and source {WORKFLOW}, and authorize this source for run 12."
+        ),
+        format!(
+            "I reviewed the complete release policy at {SOURCE} and source {SOURCE}, and authorize this source for run 13."
+        ),
+    ] {
+        fixture.approvals[0]["comment"] = json!(wrong);
+        assert!(verify_environment_approval(&input, &fixture).is_err());
+    }
+    fixture.approvals = Fixture::valid().approvals;
     input.run_attempt = 2;
     assert!(
         verify_environment_approval(&input, &fixture).is_err(),
@@ -485,6 +503,13 @@ fn recovery_authorization_requires_owner_review_of_the_complete_policy() {
     );
     fixture.approvals[0]["comment"] = json!(format!(
         "I reviewed the complete release policy at {WORKFLOW} and authorize source {SOURCE} for run 12."
+    ));
+    assert!(
+        authorize_github_candidate(&input, &candidate, &fixture).is_err(),
+        "source authorization alone does not attest to source review"
+    );
+    fixture.approvals[0]["comment"] = json!(format!(
+        "I reviewed the complete release policy at {WORKFLOW} and source {SOURCE}, and authorize this source for run 12."
     ));
     assert!(authorize_github_candidate(&input, &candidate, &fixture).is_ok());
 }

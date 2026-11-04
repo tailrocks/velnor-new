@@ -454,7 +454,7 @@ pub fn verify_environment_approval(
     require(related.len() == 1, "environment_approval_count")?;
     let approval = related[0];
     let expected = format!(
-        "I reviewed the complete release policy at {} and authorize source {} for run {}.",
+        "I reviewed the complete release policy at {} and source {}, and authorize this source for run {}.",
         request.workflow_sha, request.source_sha, request.run_id
     );
     require(

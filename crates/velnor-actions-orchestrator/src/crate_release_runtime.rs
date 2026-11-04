@@ -1018,7 +1018,7 @@ fn source_admit(
     match outcome {
         GitHubAdmissionOutcome::Candidate(_) => {
             let approval = format!(
-                "I reviewed the complete release policy at {} and authorize source {} for run {}.",
+                "I reviewed the complete release policy at {} and source {}, and authorize this source for run {}.",
                 request.workflow_sha, request.source_sha, request.run_id
             );
             println!(
@@ -1561,7 +1561,7 @@ mod tests {
         let value = if line == "GET /repos/owner/project/git/ref/heads/main HTTP/1.1" {
             serde_json::json!({"ref":"refs/heads/main","object":{"type":"commit","sha":policy}})
         } else if line.starts_with("GET /repos/owner/project/actions/runs/13/approvals ") {
-            serde_json::json!([{"state":"approved","user":{"type":"User","id":139_017},"environments":[{"id":9,"name":"release"}],"comment":format!("I reviewed the complete release policy at {policy} and authorize source {policy} for run 13.")}])
+            serde_json::json!([{"state":"approved","user":{"type":"User","id":139_017},"environments":[{"id":9,"name":"release"}],"comment":format!("I reviewed the complete release policy at {policy} and source {policy}, and authorize this source for run 13.")}])
         } else if line.starts_with("GET /repos/owner/project/actions/runs/13 ") {
             serde_json::json!({"id":13,"run_attempt":1,"head_sha":policy,"head_branch":"main","event":"push","path":".github/workflows/release.yml","repository":{"id":22,"full_name":"owner/project"},"head_repository":{"id":22,"full_name":"owner/project"}})
         } else if line.contains("/pulls?") {
@@ -1578,7 +1578,7 @@ mod tests {
         } else if line.contains("/collaborators/owner/permission") {
             serde_json::json!({"user":{"id":139_017,"type":"User"},"permission":"admin"})
         } else if line.starts_with("GET /repos/owner/project/actions/runs/12/approvals ") {
-            serde_json::json!([{"state":"approved","user":{"type":"User","id":139_017},"environments":[{"id":9,"name":"release"}],"comment":format!("I reviewed the complete release policy at {policy} and authorize source {source} for run 12.")}])
+            serde_json::json!([{"state":"approved","user":{"type":"User","id":139_017},"environments":[{"id":9,"name":"release"}],"comment":format!("I reviewed the complete release policy at {policy} and source {source}, and authorize this source for run 12.")}])
         } else if line.starts_with("GET /repos/owner/project/actions/runs/12 ") {
             serde_json::json!({"id":12,"run_attempt":1,"head_sha":policy,"head_branch":"main","event":"workflow_dispatch","path":".github/workflows/release.yml","repository":{"id":22,"full_name":"owner/project"},"head_repository":{"id":22,"full_name":"owner/project"}})
         } else if line.contains("/compare/") {

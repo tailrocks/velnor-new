@@ -194,7 +194,7 @@ impl GitHubAdmissionRead for Github {
             json!({"id":22,"full_name":"example/demo","default_branch":"main"})
         } else if route.ends_with("/actions/runs/12/approvals") {
             if self.approved.get() {
-                json!([{"state":"approved","user":{"type":"User","id":139_017},"environments":[{"id":9,"name":"release"}],"comment":format!("I reviewed the complete release policy at {policy_sha} and authorize source {sha} for run 12.")}])
+                json!([{"state":"approved","user":{"type":"User","id":139_017},"environments":[{"id":9,"name":"release"}],"comment":format!("I reviewed the complete release policy at {policy_sha} and source {sha}, and authorize this source for run 12.")}])
             } else {
                 json!([])
             }
@@ -3660,7 +3660,7 @@ impl GitHubAdmissionRead for HistoricalAuthority<'_> {
             return Ok(if defect == 7 {
                 json!([])
             } else {
-                json!([{"state":"approved","user":{"type":"User","id":if defect == 8 { 1 } else { 139_017 }},"environments":[{"id":9,"name":"release"}],"comment":format!("I reviewed the complete release policy at {} and authorize source {} for run {}.", workflow, source, run_id)}])
+                json!([{"state":"approved","user":{"type":"User","id":if defect == 8 { 1 } else { 139_017 }},"environments":[{"id":9,"name":"release"}],"comment":format!("I reviewed the complete release policy at {} and source {}, and authorize this source for run {}.", workflow, source, run_id)}])
             });
         }
         if (route.contains(&self.workflow)

@@ -148,8 +148,11 @@ choose their own features. Release eligibility and source selection are decided
 by Velnor's reviewed admission, independently of authentication and before an
 upload is intended. A normal publication requires a reviewed, merged
 release-plz PR; an exact-source recovery requires its separately reviewed,
-bounded recovery intent. Neither condition is inferred from release-plz's
-return code.
+bounded recovery intent. The existing protected-environment reviewer must
+review the exact package-source SHA and release policy before approving, and
+attest to both in the run-bound approval comment. This attestation records the
+reviewer’s statement; it cannot independently prove the review’s substance.
+Neither condition is inferred from release-plz's return code.
 
 For each approved upload the coordinator renders a temporary config outside
 the source checkout. It selects exactly that package and its reviewed
