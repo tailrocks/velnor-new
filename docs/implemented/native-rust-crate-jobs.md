@@ -39,15 +39,23 @@ Nextest data dependency on its build.
 
 Cargo holds a target-directory lock for a whole build. Sharing one target
 directory would serialize the group behind whichever check compiles longest.
-After the sequential build, test execution and doctests reuse the workspace
-target (their Cargo invocations only confirm fresh units). Clippy and
-documentation need check-mode dependency metadata the build does not produce,
-so each compiles in its own lane through `CARGO_TARGET_DIR`:
+After the sequential build, test execution reuses the workspace target. A
+Cargo invocation that finds a unit stale replays or recompiles it and rewrites
+its outputs, so it is a writer. MBX restores replayed outputs as hard links to
+the store object on a filesystem without reflinks, and a restore in one lane
+moves the modification time shared by every link to that object. That makes
+the dependencies look newer to the test runner's Cargo, which replays them
+while a concurrent doctest run still reads the same outputs, and rustdoc fails
+with `extern location for <crate> does not exist`. Every concurrent Cargo
+writer therefore gets its own lane through `CARGO_TARGET_DIR`. Clippy and
+documentation also need check-mode dependency metadata the build does not
+produce:
 
 | Check | Target directory |
 |---|---|
-| Build, tests, doctests | `<workspace>/target` |
+| Build, tests | `<workspace>/target` |
 | Clippy | `<workspace>/target/velnor-clippy` |
+| Doctests | `<workspace>/target/velnor-doctest` |
 | Documentation | `<workspace>/target/velnor-doc` |
 | Format | none (no compilation) |
 

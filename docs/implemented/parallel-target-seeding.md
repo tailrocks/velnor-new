@@ -22,8 +22,10 @@ retains the complete job and report inventory. The barrier does not extend the
 job timeout; the default remains five minutes, including copying and cleanup.
 
 The helper takes the existing workspace-relative Cargo target root and only
-the declared `velnor-clippy` and `velnor-doc` lanes. It initializes missing lanes
-only. Any existing real lane directory, including an empty directory, is
+the declared `velnor-clippy` and `velnor-doc` lanes. The `velnor-doctest` lane is
+never seeded: the pinned seed helper accepts only those two lanes, so the
+Doctests lane always starts from its own target directory and the store. It
+initializes missing lanes only. Any existing real lane directory, including an empty directory, is
 preserved. A lone sequential check, a graph without the build producer, or a
 parallel group without either dedicated lane receives no seed step.
 
