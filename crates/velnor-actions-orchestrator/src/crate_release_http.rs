@@ -718,17 +718,17 @@ mod tests {
     fn reads_exact_workflow_attempt_and_rejects_unsafe_attempt_routes() {
         let (origin, worker) = server(vec![reply("200 OK", r#"{"id":42}"#)]);
         let response = client(origin)
-            .get("repos/tailrocks/termpane/actions/runs/42/attempts/1")
+            .get("repos/example/demo-crate/actions/runs/42/attempts/1")
             .expect("attempt response");
         assert_eq!(response["id"], 42);
         assert!(
             worker.join().expect("server")[0]
-                .contains("/repos/tailrocks/termpane/actions/runs/42/attempts/1")
+                .contains("/repos/example/demo-crate/actions/runs/42/attempts/1")
         );
         for route in [
-            "repos/tailrocks/termpane/actions/runs/42/attempts/1/extra",
-            "repos/tailrocks/termpane/actions/runs/42/attempts/1?extra=1",
-            "repos/tailrocks/termpane/actions/runs/42/attempts/nope",
+            "repos/example/demo-crate/actions/runs/42/attempts/1/extra",
+            "repos/example/demo-crate/actions/runs/42/attempts/1?extra=1",
+            "repos/example/demo-crate/actions/runs/42/attempts/nope",
         ] {
             assert!(!super::valid_route(route), "accepted {route}");
         }
@@ -742,12 +742,12 @@ mod tests {
         );
         let (origin, worker) = server(vec![reply("200 OK", &good)]);
         let result = client(origin)
-            .list_journal_operations("tailrocks/termpane", 42, 1)
+            .list_journal_operations("example/demo-crate", 42, 1)
             .expect("listing");
         assert_eq!(result, ["refs/tags/velnor-receipt/42/1/operation-1"]);
         let requests = worker.join().expect("server");
         assert!(requests[0].contains(
-            "/repos/tailrocks/termpane/git/matching-refs/tags/velnor-receipt%2F42%2F1%2Foperation-"
+            "/repos/example/demo-crate/git/matching-refs/tags/velnor-receipt%2F42%2F1%2Foperation-"
         ));
         let linked = format!(
             "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nLink: <https://api.github.com/next>; rel=\"next\"\r\nConnection: close\r\n\r\n{good}",
@@ -763,7 +763,7 @@ mod tests {
             let (origin, worker) = server(vec![response]);
             assert!(
                 client(origin)
-                    .list_journal_operations("tailrocks/termpane", 42, 1)
+                    .list_journal_operations("example/demo-crate", 42, 1)
                     .is_err()
             );
             worker.join().expect("server");
@@ -783,7 +783,7 @@ mod tests {
             let (origin, worker) = server(vec![reply("200 OK", &bad)]);
             assert!(
                 client(origin)
-                    .list_journal_operations("tailrocks/termpane", 42, 1)
+                    .list_journal_operations("example/demo-crate", 42, 1)
                     .is_err()
             );
             worker.join().expect("server");
@@ -852,12 +852,12 @@ mod tests {
         });
         assert_eq!(
             adapter
-                .get_verified_tag_bytes("tailrocks/termpane", &sha)
+                .get_verified_tag_bytes("example/demo-crate", &sha)
                 .expect("canonical tag"),
             raw.as_bytes()
         );
         let requests = worker.join().expect("server");
-        assert!(requests[0].contains(&format!("/repos/tailrocks/termpane/git/tags/{sha}")));
+        assert!(requests[0].contains(&format!("/repos/example/demo-crate/git/tags/{sha}")));
     }
 
     #[test]
@@ -882,7 +882,7 @@ mod tests {
             });
             assert!(
                 adapter
-                    .get_verified_tag_bytes("tailrocks/termpane", sha)
+                    .get_verified_tag_bytes("example/demo-crate", sha)
                     .is_err()
             );
             assert_eq!(worker.join().expect("server").len(), 1);
@@ -931,28 +931,28 @@ mod tests {
         let client = client(origin);
         assert_eq!(
             client
-                .create_journal_tag("tailrocks/termpane", name, blob_sha)
+                .create_journal_tag("example/demo-crate", name, blob_sha)
                 .expect("tag"),
             tag_sha
         );
         client
-            .create_journal_ref("tailrocks/termpane", &reference, &tag_sha)
+            .create_journal_ref("example/demo-crate", &reference, &tag_sha)
             .expect("ref");
         assert_eq!(
             client
-                .get_journal_ref("tailrocks/termpane", &reference)
+                .get_journal_ref("example/demo-crate", &reference)
                 .expect("read ref"),
             Some(tag_sha.clone())
         );
         assert_eq!(
             client
-                .get_journal_tag("tailrocks/termpane", &tag_sha)
+                .get_journal_tag("example/demo-crate", &tag_sha)
                 .expect("read tag")["tag"],
             name
         );
         assert_eq!(
             client
-                .get_journal_blob("tailrocks/termpane", blob_sha)
+                .get_journal_blob("example/demo-crate", blob_sha)
                 .expect("read blob"),
             b"hello"
         );
@@ -969,7 +969,7 @@ mod tests {
             let (origin, worker) = server(vec![reply("200 OK", &body)]);
             assert!(
                 client(origin)
-                    .get_journal_blob("tailrocks/termpane", sha)
+                    .get_journal_blob("example/demo-crate", sha)
                     .is_err()
             );
             worker.join().expect("server");
@@ -982,7 +982,7 @@ mod tests {
             let (origin, worker) = server(vec![reply(status, "{}")]);
             assert!(
                 client(origin)
-                    .create_journal_blob("tailrocks/termpane", b"hello")
+                    .create_journal_blob("example/demo-crate", b"hello")
                     .is_err()
             );
             assert_eq!(worker.join().expect("server").len(), 1);
@@ -1001,7 +1001,7 @@ mod tests {
             let (origin, worker) = server(vec![reply("200 OK", &bad.to_string())]);
             assert!(
                 client(origin)
-                    .get_journal_tag("tailrocks/termpane", &sha)
+                    .get_journal_tag("example/demo-crate", &sha)
                     .is_err()
             );
             worker.join().expect("server");
@@ -1014,7 +1014,7 @@ mod tests {
         let (origin, worker) = server(vec![reply("201 Created", &format!(r#"{{"sha":"{sha}"}}"#))]);
         assert_eq!(
             client(origin)
-                .create_journal_blob("tailrocks/termpane", b"hello")
+                .create_journal_blob("example/demo-crate", b"hello")
                 .expect("valid blob"),
             sha
         );
@@ -1027,7 +1027,7 @@ mod tests {
         )]);
         assert!(
             client(origin)
-                .create_journal_blob("tailrocks/termpane", b"hello")
+                .create_journal_blob("example/demo-crate", b"hello")
                 .is_err()
         );
         worker.join().expect("server");
@@ -1106,7 +1106,7 @@ mod tests {
     fn reads_authenticated_json_and_does_not_follow_redirects() {
         let (origin, worker) = server(vec![reply("200 OK", r#"{"ok":true}"#)]);
         let response = client(origin)
-            .get("repos/tailrocks/termpane")
+            .get("repos/example/demo-crate")
             .expect("authenticated JSON");
         assert_eq!(response["ok"], true);
         let requests = worker.join().expect("server");
@@ -1120,7 +1120,7 @@ mod tests {
         let (origin, worker) = server(vec![format!(
             "HTTP/1.1 302 Found\r\nLocation: {location}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
         )]);
-        assert!(client(origin).get("repos/tailrocks/termpane").is_err());
+        assert!(client(origin).get("repos/example/demo-crate").is_err());
         worker.join().expect("server");
         assert_eq!(
             sink.accept()
@@ -1137,10 +1137,10 @@ mod tests {
         let client = client(origin);
         assert!(
             client
-                .get("repos/tailrocks/termpane/git/ref/heads/release%2Fmain")
+                .get("repos/example/demo-crate/git/ref/heads/release%2Fmain")
                 .is_ok()
         );
-        assert!(client.get("repos/tailrocks/termpane/commits/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/check-runs?filter=all&per_page=100&page=2").is_ok());
+        assert!(client.get("repos/example/demo-crate/commits/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/check-runs?filter=all&per_page=100&page=2").is_ok());
         assert_eq!(worker.join().expect("server").len(), 2);
     }
 
@@ -1150,12 +1150,12 @@ mod tests {
         let client = client(origin);
         assert!(
             client
-                .get("repos/tailrocks/termpane/actions/runs/123/artifacts?per_page=100&page=1")
+                .get("repos/example/demo-crate/actions/runs/123/artifacts?per_page=100&page=1")
                 .is_ok()
         );
         assert!(
             client
-                .get("repos/tailrocks/termpane/actions/artifacts/456")
+                .get("repos/example/demo-crate/actions/artifacts/456")
                 .is_ok()
         );
         assert_eq!(worker.join().expect("server").len(), 2);
@@ -1163,8 +1163,8 @@ mod tests {
 
     #[test]
     fn posts_exact_approved_tag_and_release() {
-        let tag_response = r#"{"ref":"refs/tags/termpane-v0.1.1","object":{"type":"commit","sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}}"#;
-        let release_response = r#"{"tag_name":"termpane-v0.1.1","target_commitish":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","draft":false,"html_url":"https://github.com/tailrocks/termpane/releases/tag/termpane-v0.1.1"}"#;
+        let tag_response = r#"{"ref":"refs/tags/demo-crate-v0.1.1","object":{"type":"commit","sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}}"#;
+        let release_response = r#"{"tag_name":"demo-crate-v0.1.1","target_commitish":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","draft":false,"html_url":"https://github.com/example/demo-crate/releases/tag/demo-crate-v0.1.1"}"#;
         let (origin, worker) = server(vec![
             reply("201 Created", tag_response),
             reply("201 Created", release_response),
@@ -1173,8 +1173,8 @@ mod tests {
         assert!(
             client
                 .create_tag(
-                    "tailrocks/termpane",
-                    "termpane-v0.1.1",
+                    "example/demo-crate",
+                    "demo-crate-v0.1.1",
                     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
                 )
                 .is_ok()
@@ -1182,15 +1182,15 @@ mod tests {
         assert!(
             client
                 .create_release(
-                    "tailrocks/termpane",
-                    "termpane-v0.1.1",
+                    "example/demo-crate",
+                    "demo-crate-v0.1.1",
                     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
                 )
                 .is_ok()
         );
         let requests = worker.join().expect("server");
-        assert!(requests[0].starts_with("POST /repos/tailrocks/termpane/git/refs "));
-        assert!(requests[1].starts_with("POST /repos/tailrocks/termpane/releases "));
+        assert!(requests[0].starts_with("POST /repos/example/demo-crate/git/refs "));
+        assert!(requests[1].starts_with("POST /repos/example/demo-crate/releases "));
         let tag_body: serde_json::Value =
             serde_json::from_str(requests[0].split_once("\r\n\r\n").expect("body").1)
                 .expect("JSON body");
@@ -1199,11 +1199,11 @@ mod tests {
                 .expect("JSON body");
         assert_eq!(
             tag_body,
-            serde_json::json!({"ref":"refs/tags/termpane-v0.1.1", "sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"})
+            serde_json::json!({"ref":"refs/tags/demo-crate-v0.1.1", "sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"})
         );
         assert_eq!(
             release_body,
-            serde_json::json!({"tag_name":"termpane-v0.1.1", "name":"termpane-v0.1.1", "target_commitish":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"})
+            serde_json::json!({"tag_name":"demo-crate-v0.1.1", "name":"demo-crate-v0.1.1", "target_commitish":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"})
         );
     }
 
@@ -1218,20 +1218,20 @@ mod tests {
         for (repo, tag, sha) in [
             (
                 "bad/repo/extra",
-                "termpane-v0.1.1",
+                "demo-crate-v0.1.1",
                 "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
             ),
             (
-                "tailrocks/termpane",
+                "example/demo-crate",
                 "../escape",
                 "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
             ),
             (
-                "tailrocks/termpane",
+                "example/demo-crate",
                 "v1.lock",
                 "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
             ),
-            ("tailrocks/termpane", "v1", "not-a-sha"),
+            ("example/demo-crate", "v1", "not-a-sha"),
         ] {
             let result = client.create_tag(repo, tag, sha);
             assert!(result.is_err());
@@ -1266,14 +1266,14 @@ mod tests {
                 let client = client(origin);
                 let result = if release {
                     client.create_release(
-                        "tailrocks/termpane",
-                        "termpane-v0.1.1",
+                        "example/demo-crate",
+                        "demo-crate-v0.1.1",
                         "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
                     )
                 } else {
                     client.create_tag(
-                        "tailrocks/termpane",
-                        "termpane-v0.1.1",
+                        "example/demo-crate",
+                        "demo-crate-v0.1.1",
                         "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
                     )
                 };
@@ -1284,15 +1284,15 @@ mod tests {
         }
         for body in [
             "not-json",
-            r#"{"ref":"refs/tags/termpane-v0.1.1","object":{"type":"commit","sha":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}}"#,
+            r#"{"ref":"refs/tags/demo-crate-v0.1.1","object":{"type":"commit","sha":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}}"#,
             r#"{"ref":"refs/tags/other","object":{"type":"commit","sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}}"#,
         ] {
             let (origin, worker) = server(vec![reply("201 Created", body)]);
             assert!(
                 client(origin)
                     .create_tag(
-                        "tailrocks/termpane",
-                        "termpane-v0.1.1",
+                        "example/demo-crate",
+                        "demo-crate-v0.1.1",
                         "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
                     )
                     .is_err()
@@ -1300,16 +1300,16 @@ mod tests {
             worker.join().expect("server");
         }
         for body in [
-            r#"{"tag_name":"other","draft":false,"html_url":"https://github.com/tailrocks/termpane/releases/tag/termpane-v0.1.1"}"#,
-            r#"{"tag_name":"termpane-v0.1.1","draft":true,"html_url":"https://github.com/tailrocks/termpane/releases/tag/termpane-v0.1.1"}"#,
-            r#"{"tag_name":"termpane-v0.1.1","draft":false,"html_url":"https://evil.test/"}"#,
+            r#"{"tag_name":"other","draft":false,"html_url":"https://github.com/example/demo-crate/releases/tag/demo-crate-v0.1.1"}"#,
+            r#"{"tag_name":"demo-crate-v0.1.1","draft":true,"html_url":"https://github.com/example/demo-crate/releases/tag/demo-crate-v0.1.1"}"#,
+            r#"{"tag_name":"demo-crate-v0.1.1","draft":false,"html_url":"https://evil.test/"}"#,
         ] {
             let (origin, worker) = server(vec![reply("201 Created", body)]);
             assert!(
                 client(origin)
                     .create_release(
-                        "tailrocks/termpane",
-                        "termpane-v0.1.1",
+                        "example/demo-crate",
+                        "demo-crate-v0.1.1",
                         "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
                     )
                     .is_err()
@@ -1359,8 +1359,8 @@ mod tests {
             );
         });
         let result = client(format!("http://{address}")).create_tag(
-            "tailrocks/termpane",
-            "termpane-v0.1.1",
+            "example/demo-crate",
+            "demo-crate-v0.1.1",
             "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         );
         assert!(result.is_err());
@@ -1379,8 +1379,8 @@ mod tests {
         assert!(
             client(origin)
                 .create_tag(
-                    "tailrocks/termpane",
-                    "termpane-v0.1.1",
+                    "example/demo-crate",
+                    "demo-crate-v0.1.1",
                     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
                 )
                 .is_err()
@@ -1402,7 +1402,7 @@ mod tests {
             "HTTP/1.1 201 Created\r\nContent-Length: 8388609\r\nConnection: close\r\n\r\n".to_owned(),
         ] {
             let (origin, worker) = server(vec![response]);
-            assert!(client(origin).create_tag("tailrocks/termpane", "termpane-v0.1.1", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa").is_err());
+            assert!(client(origin).create_tag("example/demo-crate", "demo-crate-v0.1.1", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa").is_err());
             worker.join().expect("server");
         }
     }
@@ -1429,8 +1429,8 @@ mod tests {
         assert!(
             client
                 .create_tag(
-                    "tailrocks/termpane",
-                    "termpane-v0.1.1",
+                    "example/demo-crate",
+                    "demo-crate-v0.1.1",
                     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
                 )
                 .is_err()
@@ -1448,11 +1448,11 @@ mod tests {
         ));
         for route in [
             "https://evil.test/",
-            "repos/tailrocks/termpane/%2E%2E/secrets",
-            "repos/tailrocks/termpane/git/ref/tags/%252e%252e",
-            "repos/tailrocks/termpane/git/ref/tags/a%0D%0AInjected",
-            "repos/tailrocks/termpane?x=1",
-            "repos/tailrocks/termpane/git/ref/tags/a%2F..%2Fsecret",
+            "repos/example/demo-crate/%2E%2E/secrets",
+            "repos/example/demo-crate/git/ref/tags/%252e%252e",
+            "repos/example/demo-crate/git/ref/tags/a%0D%0AInjected",
+            "repos/example/demo-crate?x=1",
+            "repos/example/demo-crate/git/ref/tags/a%2F..%2Fsecret",
             "users/name@evil.test",
         ] {
             let result = client.get(route);
@@ -1479,14 +1479,14 @@ mod tests {
             "500 Server Error",
         ] {
             let (origin, worker) = server(vec![reply(status, "{}")]);
-            let result = client(origin).get("repos/tailrocks/termpane");
+            let result = client(origin).get("repos/example/demo-crate");
             assert!(result.is_err(), "accepted {status}");
             assert!(!format!("{result:?}").contains(TOKEN));
             worker.join().expect("server");
         }
         for response in [reply("200 OK", "not-json"), "HTTP/1.1 200 OK\r\nContent-Length: 8388609\r\nConnection: close\r\n\r\n".to_owned(), "HTTP/1.1 200 OK\r\nContent-Length: 10\r\nConnection: close\r\n\r\n{}".to_owned(), "HTTP/1.1 200 OK\r\nContent-Length: 2\r\nContent-Encoding: gzip\r\nConnection: close\r\n\r\n{}".to_owned()] {
             let (origin, worker) = server(vec![response]);
-            assert!(client(origin).get("repos/tailrocks/termpane").is_err());
+            assert!(client(origin).get("repos/example/demo-crate").is_err());
             worker.join().expect("server");
         }
     }
@@ -1511,7 +1511,7 @@ mod tests {
         });
         assert!(
             client(format!("http://{address}"))
-                .get("repos/tailrocks/termpane")
+                .get("repos/example/demo-crate")
                 .is_err()
         );
         worker.join().expect("server");
@@ -1519,7 +1519,7 @@ mod tests {
 
     #[test]
     fn optional_absence_requires_access_to_default_branch() {
-        let repo = r#"{"full_name":"tailrocks/termpane","default_branch":"main"}"#;
+        let repo = r#"{"full_name":"example/demo-crate","default_branch":"main"}"#;
         let branch = r#"{"ref":"refs/heads/main","object":{"type":"commit","sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}}"#;
         let (origin, worker) = server(vec![
             reply("404 Not Found", "{}"),
@@ -1528,7 +1528,7 @@ mod tests {
         ]);
         assert!(
             client(origin)
-                .get_optional("repos/tailrocks/termpane/git/ref/tags/termpane-v0.1.1")
+                .get_optional("repos/example/demo-crate/git/ref/tags/demo-crate-v0.1.1")
                 .expect("authorized absence")
                 .is_none()
         );
@@ -1539,7 +1539,7 @@ mod tests {
         ]);
         assert!(
             client(origin)
-                .get_optional("repos/tailrocks/termpane/git/ref/tags/termpane-v0.1.1")
+                .get_optional("repos/example/demo-crate/git/ref/tags/demo-crate-v0.1.1")
                 .is_err()
         );
         worker.join().expect("server");
@@ -1550,7 +1550,7 @@ mod tests {
         ]);
         assert!(
             client(origin)
-                .get_optional("repos/tailrocks/termpane/releases/tags/termpane-v0.1.1")
+                .get_optional("repos/example/demo-crate/releases/tags/demo-crate-v0.1.1")
                 .is_err()
         );
         worker.join().expect("server");
@@ -1575,7 +1575,7 @@ mod tests {
             deadline: Instant::now() + Duration::from_secs(2),
             origin: format!("http://{address}"),
         };
-        assert!(client.get("repos/tailrocks/termpane").is_err());
+        assert!(client.get("repos/example/demo-crate").is_err());
         worker.join().expect("server");
     }
 }

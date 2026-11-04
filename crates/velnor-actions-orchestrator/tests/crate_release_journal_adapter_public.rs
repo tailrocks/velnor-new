@@ -71,13 +71,13 @@ fn reconstructs_only_canonical_unsigned_journal_tag() {
     let client = JournalAdapter(Transport(remote.clone()));
     assert_eq!(
         client
-            .get_tag_object("tailrocks/termpane", &remote.sha)
+            .get_tag_object("example/demo-crate", &remote.sha)
             .expect("canonical tag"),
         tag
     );
     client
         .create_ref(
-            "tailrocks/termpane",
+            "example/demo-crate",
             "refs/tags/velnor-receipt/42/1/publication-started",
             &remote.sha,
         )
@@ -85,13 +85,13 @@ fn reconstructs_only_canonical_unsigned_journal_tag() {
     assert!(
         client
             .create_ref(
-                "tailrocks/termpane",
+                "example/demo-crate",
                 "refs/tags/velnor-receipt/42/1/reconciled",
                 &remote.sha,
             )
             .is_err()
     );
-    assert_eq!(client.get_verified_tag_bytes("tailrocks/termpane", &remote.sha).expect("tag bytes"), format!("object {}\ntype blob\ntag velnor-receipt/42/1/publication-started\ntagger Velnor Release <release@velnor.invalid> 0 +0000\n\nvelnor-release-receipt-v1", "a".repeat(40)).as_bytes());
+    assert_eq!(client.get_verified_tag_bytes("example/demo-crate", &remote.sha).expect("tag bytes"), format!("object {}\ntype blob\ntag velnor-receipt/42/1/publication-started\ntagger Velnor Release <release@velnor.invalid> 0 +0000\n\nvelnor-release-receipt-v1", "a".repeat(40)).as_bytes());
     for changed in [
         RemoteTag {
             tagger_date: "1970-01-01T00:00:01Z".to_owned(),
@@ -108,7 +108,7 @@ fn reconstructs_only_canonical_unsigned_journal_tag() {
     ] {
         assert!(
             JournalAdapter(Transport(changed))
-                .get_verified_tag_bytes("tailrocks/termpane", &remote.sha)
+                .get_verified_tag_bytes("example/demo-crate", &remote.sha)
                 .is_err()
         );
     }
@@ -120,7 +120,7 @@ fn rejects_invalid_references(client: &JournalAdapter<Transport>) {
         "refs/tags/velnor-receipt/42/1/operation-1",
         "refs/tags/velnor-receipt/42/1/operation-1000",
     ] {
-        assert!(client.get_ref("tailrocks/termpane", reference).is_ok());
+        assert!(client.get_ref("example/demo-crate", reference).is_ok());
     }
     for reference in [
         "refs/tags/velnor-receipt/042/1/publication-started",
@@ -132,6 +132,6 @@ fn rejects_invalid_references(client: &JournalAdapter<Transport>) {
         "refs/tags/velnor-receipt/42/1/operation--1",
         "refs/tags/velnor-receipt/42/1/publication-started/extra",
     ] {
-        assert!(client.get_ref("tailrocks/termpane", reference).is_err());
+        assert!(client.get_ref("example/demo-crate", reference).is_err());
     }
 }

@@ -6,7 +6,7 @@ use velnor_actions_contract::config::CrateReleaseIntent;
 #[test]
 fn intent_rejects_unapproved_or_ambiguous_release_inputs() -> Result<(), Box<dyn std::error::Error>>
 {
-    let value = serde_json::json!({"schema": 1, "repository": "tailrocks/termpane", "default_branch": "main", "environment": "release", "required_workflow_path": ".github/workflows/ci.yml", "trusted_reviewer_id": 139_017, "generator_version":"0.1.72","generator_source_sha":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","generator_manifest_sha256":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc","release_plz_version":"0.4.3","runner":"ubuntu-24.04","authentication":"trusted-publishing","rust_version": "1.97.1", "manifest_path": "Cargo.toml", "registry": "crates-io", "packages": ["termpane"], "publish_features": {"termpane":[]}, "tag_template": "{{ package }}-v{{ version }}", "recovery": {"package": "termpane", "version": "0.1.1", "source_sha": "f1c2dfde45bdbe91425af6bb17d80e606703baac"}});
+    let value = serde_json::json!({"schema": 1, "repository": "example/demo-crate", "default_branch": "main", "environment": "release", "required_workflow_path": ".github/workflows/ci.yml", "trusted_reviewer_id": 139_017, "generator_version":"0.1.72","generator_source_sha":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","generator_manifest_sha256":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc","release_plz_version":"0.4.3","runner":"ubuntu-24.04","authentication":"trusted-publishing","rust_version": "1.97.1", "manifest_path": "Cargo.toml", "registry": "crates-io", "packages": ["demo-crate"], "publish_features": {"demo-crate":[]}, "tag_template": "{{ package }}-v{{ version }}", "recovery": {"package": "demo-crate", "version": "0.1.1", "source_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}});
     let intent: CrateReleaseIntent = serde_json::from_value(value.clone())?;
     intent.validate()?;
     for (key, invalid) in [
@@ -16,7 +16,7 @@ fn intent_rejects_unapproved_or_ambiguous_release_inputs() -> Result<(), Box<dyn
         ("release_plz_version", serde_json::json!("0.4")),
         ("runner", serde_json::json!("${{ inputs.runner }}")),
         ("authentication", serde_json::json!("unknown")),
-        ("repository", serde_json::json!("tailrocks/termpane/other")),
+        ("repository", serde_json::json!("example/demo-crate/other")),
         ("default_branch", serde_json::json!("../main")),
         ("environment", serde_json::json!("release\nother")),
         ("manifest_path", serde_json::json!("../Cargo.toml")),
@@ -25,7 +25,7 @@ fn intent_rejects_unapproved_or_ambiguous_release_inputs() -> Result<(), Box<dyn
         ("publish_features", serde_json::json!({"other": []})),
         (
             "publish_features",
-            serde_json::json!({"termpane": ["pty", "pty"]}),
+            serde_json::json!({"demo-crate": ["pty", "pty"]}),
         ),
         ("packages", serde_json::json!(["other"])),
         ("tag_template", serde_json::json!("v{{ version }}")),
@@ -60,7 +60,7 @@ fn intent_rejects_unapproved_or_ambiguous_release_inputs() -> Result<(), Box<dyn
 #[test]
 fn recovery_accepts_cargo_semver_and_rejects_invalid_versions()
 -> Result<(), Box<dyn std::error::Error>> {
-    let mut value = serde_json::json!({"schema":1,"repository":"tailrocks/termpane","default_branch":"main","environment":"release","required_workflow_path":".github/workflows/ci.yml","trusted_reviewer_id":139_017,"generator_version":"0.1.72","generator_source_sha":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","generator_manifest_sha256":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc","release_plz_version":"0.4.3","runner":"ubuntu-24.04","authentication":"trusted-publishing","rust_version":"1.97.1","manifest_path":"Cargo.toml","registry":"crates-io","packages":["termpane"],"publish_features":{"termpane":[]},"tag_template":"{{ package }}-v{{ version }}","recovery":{"package":"termpane","version":"1.2.3-alpha.1+build.5","source_sha":"f1c2dfde45bdbe91425af6bb17d80e606703baac"}});
+    let mut value = serde_json::json!({"schema":1,"repository":"example/demo-crate","default_branch":"main","environment":"release","required_workflow_path":".github/workflows/ci.yml","trusted_reviewer_id":139_017,"generator_version":"0.1.72","generator_source_sha":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","generator_manifest_sha256":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc","release_plz_version":"0.4.3","runner":"ubuntu-24.04","authentication":"trusted-publishing","rust_version":"1.97.1","manifest_path":"Cargo.toml","registry":"crates-io","packages":["demo-crate"],"publish_features":{"demo-crate":[]},"tag_template":"{{ package }}-v{{ version }}","recovery":{"package":"demo-crate","version":"1.2.3-alpha.1+build.5","source_sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}});
     serde_json::from_value::<CrateReleaseIntent>(value.clone())?.validate()?;
     let maximum = format!("1.2.3-{}", "a".repeat(144));
     value["recovery"]["version"] = serde_json::json!(maximum);

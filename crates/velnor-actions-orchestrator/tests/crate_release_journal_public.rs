@@ -196,7 +196,7 @@ fn err() -> OrchestratorError {
 
 fn identity() -> JournalIdentity {
     JournalIdentity {
-        repository: "tailrocks/termpane".to_owned(),
+        repository: "example/demo-crate".to_owned(),
         workflow_sha: "a".repeat(40),
         source_sha: "b".repeat(40),
         run_id: 42,
@@ -207,7 +207,7 @@ fn identity() -> JournalIdentity {
 fn receipt(version: &str) -> JournalReceipt {
     JournalReceipt {
         semver_evidence: BTreeMap::from([(
-            "termpane".into(),
+            "demo-crate".into(),
             crate::crate_release_semver::SemverEvidence::NoBaseline {
                 checker_sha256: "bc9eb06ce04e97d6160c875ffdee1f6e56793e423dea025f344826be03e66829"
                     .into(),
@@ -229,17 +229,17 @@ fn receipt(version: &str) -> JournalReceipt {
         authentication: JournalAuthentication::TrustedPublishing,
         required_check_id: 17,
         trusted_reviewer_id: 139_017,
-        workflow_run_url: "https://github.com/tailrocks/termpane/actions/runs/42".to_owned(),
+        workflow_run_url: "https://github.com/example/demo-crate/actions/runs/42".to_owned(),
         source_files: vec![JournalFile {
             path: "src/lib.rs".to_owned(),
             sha256: "e".repeat(64),
             kind: JournalFileKind::Regular { executable: false },
         }],
         packages: vec![JournalPackage {
-            name: "termpane".to_owned(),
+            name: "demo-crate".to_owned(),
             version: version.to_owned(),
             manifest: "Cargo.toml".to_owned(),
-            tag: format!("termpane-v{version}"),
+            tag: format!("demo-crate-v{version}"),
             owners: crate::crate_release_journal::JournalOwnership::Existing {
                 owners: vec![JournalOwner {
                     id: 1,
@@ -259,7 +259,7 @@ fn completion(version: &str) -> JournalCompletion {
             rust_manifest_sha256: "3".repeat(64),
         },
         packages: vec![JournalPublishedPackage {
-            name: "termpane".to_owned(),
+            name: "demo-crate".to_owned(),
             version: version.to_owned(),
             owners: vec![JournalOwner {
                 id: 1,
@@ -271,7 +271,7 @@ fn completion(version: &str) -> JournalCompletion {
             tag_target: "b".repeat(40),
             release_id: 12,
             release_url: format!(
-                "https://github.com/tailrocks/termpane/releases/tag/termpane-v{version}"
+                "https://github.com/example/demo-crate/releases/tag/demo-crate-v{version}"
             ),
             files: vec![JournalFile {
                 path: "src/lib.rs".to_owned(),
@@ -508,13 +508,13 @@ fn semver_receipt_rejects_missing_forged_or_impossible_evidence() {
     unknown.semver_evidence.insert(
         "other".into(),
         SemverEvidence::Deferred {
-            predecessors: vec!["termpane".into()],
+            predecessors: vec!["demo-crate".into()],
         },
     );
     bad.push(unknown);
     let mut digest = good.clone();
     digest.semver_evidence.insert(
-        "termpane".into(),
+        "demo-crate".into(),
         SemverEvidence::NoBaseline {
             checker_sha256: "a".repeat(64),
         },
@@ -522,7 +522,7 @@ fn semver_receipt_rejects_missing_forged_or_impossible_evidence() {
     bad.push(digest);
     let mut baseline = good.clone();
     baseline.semver_evidence.insert(
-        "termpane".into(),
+        "demo-crate".into(),
         SemverEvidence::Checked {
             baseline: "0.1.1".into(),
             baseline_checksum: "d".repeat(64),
@@ -533,7 +533,7 @@ fn semver_receipt_rejects_missing_forged_or_impossible_evidence() {
     bad.push(baseline);
     let mut checksum = good.clone();
     checksum.semver_evidence.insert(
-        "termpane".into(),
+        "demo-crate".into(),
         SemverEvidence::Checked {
             baseline: "0.1.0".into(),
             baseline_checksum: "A".repeat(64),
@@ -544,9 +544,9 @@ fn semver_receipt_rejects_missing_forged_or_impossible_evidence() {
     bad.push(checksum);
     let mut deferred = good;
     deferred.semver_evidence.insert(
-        "termpane".into(),
+        "demo-crate".into(),
         SemverEvidence::Deferred {
-            predecessors: vec!["termpane".into()],
+            predecessors: vec!["demo-crate".into()],
         },
     );
     bad.push(deferred);
@@ -617,7 +617,7 @@ fn journal_versions_match_crates_io_length_limit() {
 fn receipt_requires_cargo_version_and_exact_intent_tag() {
     let remote = Registry::default();
     let mut malformed = receipt("bogus");
-    malformed.packages[0].tag = "termpane-vbogus".to_owned();
+    malformed.packages[0].tag = "demo-crate-vbogus".to_owned();
     assert!(
         record_journal(
             &remote,
@@ -874,7 +874,7 @@ fn mutation_records_require_a_contiguous_immutable_chain() -> Result<(), Box<dyn
             .into(),
         }),
         sequence: 1,
-        package: "termpane".into(),
+        package: "demo-crate".into(),
         version: "0.1.1".into(),
         kind: JournalMutationKind::Upload,
         phase: JournalMutationPhase::Intended,
@@ -896,7 +896,7 @@ fn mutation_records_require_a_contiguous_immutable_chain() -> Result<(), Box<dyn
     item.semver_evidence = None;
     item.phase = JournalMutationPhase::Observed {
         result: JournalMutationResult::Tag {
-            name: "termpane-v0.1.1".into(),
+            name: "demo-crate-v0.1.1".into(),
             target_sha: "b".repeat(40),
         },
     };
@@ -938,7 +938,7 @@ fn completion_rejects_a_pending_mutation() -> Result<(), Box<dyn std::error::Err
             .into(),
         }),
         sequence: 1,
-        package: "termpane".into(),
+        package: "demo-crate".into(),
         version: "0.1.1".into(),
         kind: JournalMutationKind::Upload,
         phase: JournalMutationPhase::Intended,
@@ -1004,7 +1004,7 @@ fn mutation_record_retry_reads_back_exact_ambiguous_write() -> Result<(), Box<dy
             .into(),
         }),
         sequence: 1,
-        package: "termpane".into(),
+        package: "demo-crate".into(),
         version: "0.1.1".into(),
         kind: JournalMutationKind::Upload,
         phase: JournalMutationPhase::Intended,
@@ -1045,7 +1045,7 @@ fn mutation_results_match_package_operation_and_verified_shape()
             .into(),
         }),
         sequence: 1,
-        package: "termpane".into(),
+        package: "demo-crate".into(),
         version: "0.1.1".into(),
         kind: Kind::Upload,
         phase: Phase::Intended,
@@ -1088,7 +1088,7 @@ fn mutation_results_match_package_operation_and_verified_shape()
     item.semver_evidence = None;
     item.phase = Phase::Observed {
         result: ResultKind::Tag {
-            name: "termpane-v0.1.1".into(),
+            name: "demo-crate-v0.1.1".into(),
             target_sha: "c".repeat(40),
         },
     };
@@ -1096,7 +1096,7 @@ fn mutation_results_match_package_operation_and_verified_shape()
     item.semver_evidence = None;
     item.phase = Phase::Observed {
         result: ResultKind::Tag {
-            name: "termpane-v0.1.1".into(),
+            name: "demo-crate-v0.1.1".into(),
             target_sha: "b".repeat(40),
         },
     };
@@ -1123,8 +1123,8 @@ fn verify_release_result_shape(
     item.phase = Phase::Observed {
         result: ResultKind::Release {
             id: 0,
-            tag: "termpane-v0.1.1".into(),
-            url: "https://github.com/tailrocks/termpane/releases/tag/termpane-v0.1.1".into(),
+            tag: "demo-crate-v0.1.1".into(),
+            url: "https://github.com/example/demo-crate/releases/tag/demo-crate-v0.1.1".into(),
         },
     };
     assert!(record_journal_mutation(remote, &identity(), plan, item).is_err());
@@ -1132,7 +1132,7 @@ fn verify_release_result_shape(
     item.phase = Phase::Observed {
         result: ResultKind::Release {
             id: 12,
-            tag: "termpane-v0.1.1".into(),
+            tag: "demo-crate-v0.1.1".into(),
             url: "https://evil.invalid/".into(),
         },
     };
@@ -1141,8 +1141,8 @@ fn verify_release_result_shape(
     item.phase = Phase::Observed {
         result: ResultKind::Release {
             id: 12,
-            tag: "termpane-v0.1.1".into(),
-            url: "https://github.com/tailrocks/termpane/releases/tag/termpane-v0.1.1".into(),
+            tag: "demo-crate-v0.1.1".into(),
+            url: "https://github.com/example/demo-crate/releases/tag/demo-crate-v0.1.1".into(),
         },
     };
     record_journal_mutation(remote, &identity(), plan, item)?;
@@ -1197,7 +1197,7 @@ fn verify_prior_run_cases(
     current.identity.run_id = 43;
     current.predecessor = Some(plan.identity.clone());
     current.identity.workflow_sha = "c".repeat(40);
-    current.workflow_run_url = "https://github.com/tailrocks/termpane/actions/runs/43".into();
+    current.workflow_run_url = "https://github.com/example/demo-crate/actions/runs/43".into();
     let prior = inspect_prior_incomplete_evidence(journal, &plan.identity, &current, root)?;
     assert_eq!(&prior.receipt, plan);
     verify_chain_and_rerun(journal, plan, &current, root)?;
@@ -1295,7 +1295,7 @@ fn verify_prior_operation_chain(
             .into(),
         }),
         sequence: 1,
-        package: "termpane".into(),
+        package: "demo-crate".into(),
         version: "0.1.1".into(),
         kind: JournalMutationKind::Upload,
         phase: JournalMutationPhase::Intended,
@@ -1370,11 +1370,11 @@ fn verify_new_crate_prior_intention(
     record_source_bound_start(&journal, &prior.identity, &prior, root)?;
     let mut current = prior.clone();
     current.identity.run_id += 1;
-    current.workflow_run_url = "https://github.com/tailrocks/termpane/actions/runs/43".into();
+    current.workflow_run_url = "https://github.com/example/demo-crate/actions/runs/43".into();
     current.predecessor = Some(prior.identity.clone());
     current.packages[0].owners = plan.packages[0].owners.clone();
     current.semver_evidence.insert(
-        "termpane".into(),
+        "demo-crate".into(),
         SemverEvidence::PriorNoBaselinePending {
             checker_sha256: "bc9eb06ce04e97d6160c875ffdee1f6e56793e423dea025f344826be03e66829"
                 .into(),
@@ -1388,7 +1388,7 @@ fn verify_new_crate_prior_intention(
         &prior,
         &JournalIntendedMutation {
             sequence: 1,
-            package: "termpane".into(),
+            package: "demo-crate".into(),
             version: "0.1.1".into(),
             kind: JournalMutationKind::Upload,
             semver_evidence: Some(SemverEvidence::NoBaseline {
@@ -1406,7 +1406,7 @@ fn verify_new_crate_prior_intention(
         &prior,
         &crate::crate_release_journal::JournalMutation {
             sequence: 2,
-            package: "termpane".into(),
+            package: "demo-crate".into(),
             version: "0.1.1".into(),
             kind: JournalMutationKind::Upload,
             semver_evidence: None,
@@ -1440,7 +1440,7 @@ fn reject_changed_new_crate_result(
     use crate::crate_release_semver::SemverEvidence;
     let mut wrong_checksum = current.clone();
     wrong_checksum.semver_evidence.insert(
-        "termpane".into(),
+        "demo-crate".into(),
         SemverEvidence::PriorNoBaselinePending {
             checker_sha256: "bc9eb06ce04e97d6160c875ffdee1f6e56793e423dea025f344826be03e66829"
                 .into(),
@@ -1486,7 +1486,7 @@ fn reject_forged_new_crate_prior(
         &existing_prior,
         &JournalIntendedMutation {
             sequence: 1,
-            package: "termpane".into(),
+            package: "demo-crate".into(),
             version: "0.1.1".into(),
             kind: JournalMutationKind::Upload,
             semver_evidence: Some(SemverEvidence::NoBaseline {

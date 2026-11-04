@@ -30,7 +30,7 @@ keys — not claimed to exist yet):
 [stacks.rust.release]
 enabled = true
 manifest_path = "Cargo.toml"
-packages = ["termpane"]
+packages = ["demo-crate"]
 environment = "release"
 authentication = "trusted-publishing"
 release_pr = true
@@ -136,7 +136,7 @@ publish_allow_dirty = false
 git_tag_name = "{{ package }}-v{{ version }}"
 
 [[package]]
-name = "termpane"
+name = "demo-crate"
 release = true
 publish = true
 git_only = false

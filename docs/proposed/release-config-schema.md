@@ -24,11 +24,11 @@ Reference for the typed config in `velnor-actions-contract`
 | `journal_predecessor` | table or absent | absent | Binds a reviewed previous run ID, attempt, and workflow SHA for durable release recovery. Protected admission currently accepts only attempt `1`. |
 | `version_groups` | string→string-list map | `{}` | Group names use package-name shape; members must be sorted, unique, listed in `packages`, and in at most one group. Non-lockstep: unchanged members are not forced to release. |
 
-For example, to verify `termpane` with its `pty` feature during publication:
+For example, to verify `demo-crate` with its `pty` feature during publication:
 
 ```toml
 [stacks.rust.release.publish_features]
-termpane = ["pty"]
+demo-crate = ["pty"]
 ```
 
 Cargo default features remain enabled. The publisher must pass the same reviewed selectors to Cargo verification and release-plz.
@@ -68,7 +68,7 @@ Single crate on trusted publishing:
 [stacks.rust.release]
 enabled = true
 manifest_path = "Cargo.toml"
-packages = ["termpane"]
+packages = ["demo-crate"]
 environment = "release"
 authentication = "trusted-publishing"
 release_pr = true
