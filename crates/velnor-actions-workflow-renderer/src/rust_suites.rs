@@ -39,6 +39,7 @@ pub struct RustSuitesRenderSpec {
     pub verify_restored_rust_argv: Vec<String>,
     pub verify_rust_argv: Vec<String>,
     pub export_rustup_toolchain: bool,
+    pub non_inputs: velnor_actions_contract::NonInputs,
 }
 
 #[derive(Debug, Clone)]

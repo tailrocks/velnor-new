@@ -57,6 +57,7 @@ pub mod msrv;
 pub mod native_authority;
 mod native_helper;
 pub mod native_job_builders;
+pub mod non_input_checkout;
 pub mod overlap;
 pub mod owned_tool_publication;
 mod parallel_steps;

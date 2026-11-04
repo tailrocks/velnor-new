@@ -130,6 +130,13 @@ pub(crate) fn specification(
         gh_argv: strings_of(exec.argv(&native_catalog)).map_err(|error| internal(&error))?,
         homebrew_tap: tap_spec(prep)?.filter(|tap| tap.policy.destination(channel).is_some()),
         stable: None,
+        non_inputs: prep
+            .config
+            .stacks
+            .rust
+            .as_ref()
+            .map(|rust| rust.non_inputs.clone())
+            .unwrap_or_default(),
     };
     Ok(spec)
 }

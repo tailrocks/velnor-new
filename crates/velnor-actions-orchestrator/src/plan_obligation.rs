@@ -119,7 +119,7 @@ pub(crate) fn plan_group(
             task.task_id
         )));
     } else if Stack::from_id(&task.stack_id) == Some(Stack::Rust) {
-        crate::plan_dispositions::unaffected_rust_outcome(task)
+        wire_w2::ReuseOutcome::not_affected()
     } else {
         wire_w2::plan_reuse_outcome(
             task,

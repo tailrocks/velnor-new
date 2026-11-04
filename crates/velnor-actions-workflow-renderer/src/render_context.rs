@@ -60,6 +60,7 @@ pub struct RenderContext {
     pub tool_pins: Vec<String>,
     pub standalone_tools_donors: BTreeMap<String, Job>,
     pub max_parallel_jobs: u32,
+    pub non_inputs: velnor_actions_contract::NonInputs,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

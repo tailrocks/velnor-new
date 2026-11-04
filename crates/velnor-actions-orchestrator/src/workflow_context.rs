@@ -65,6 +65,13 @@ pub(super) fn render_context(
             input.catalog,
         )?,
         max_parallel_jobs: input.config.workflow.max_parallel_jobs,
+        non_inputs: input
+            .config
+            .stacks
+            .rust
+            .as_ref()
+            .map(|rust| rust.non_inputs.clone())
+            .unwrap_or_default(),
     })
 }
 

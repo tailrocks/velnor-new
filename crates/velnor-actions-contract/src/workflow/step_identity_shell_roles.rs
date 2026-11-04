@@ -47,6 +47,7 @@ impl StepRole {
                 | Self::StateSealBuild
                 | Self::StateSealSubject
                 | Self::StateSealBind
+                | Self::NonInputGuard
         )
     }
 }
