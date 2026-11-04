@@ -879,6 +879,29 @@ fn bootstrap_handover_renders_normal_trusted_publisher() -> Result<(), Box<dyn s
     assert_eq!(decoded, intent);
     assert!(decoded.new_crates.is_none());
     let yaml: serde_json::Value = serde_saphyr::from_str(&files.workflow.bytes)?;
+    let prep = &yaml["jobs"]["release-preparation"];
+    let steps = prep["steps"].as_array().ok_or("preparation steps")?;
+    for id in ["release-pr-candidate", "release-pr-artifact"] {
+        assert_eq!(steps.iter().filter(|step| step["id"].as_str() == Some(id)).count(), 1, "missing rendered {id}");
+    }
+    let preflight_steps = yaml["jobs"]["release-preflight"]["steps"].as_array().ok_or("preflight steps")?;
+    assert_eq!(preflight_steps.iter().filter(|step| step["id"].as_str() == Some("release-receipt-upload")).count(), 1, "missing receipt upload id");
+    assert_eq!(prep["outputs"]["artifact_id"].as_str(), Some("${{ steps.release-pr-artifact.outputs.artifact-id }}"));
+    assert_eq!(prep["outputs"]["content_sha256"].as_str(), Some("${{ steps.release-pr-candidate.outputs.content_sha256 }}"));
+    assert_eq!(yaml["jobs"]["release-pr-create"]["needs"][0].as_str(), Some("release-preparation"));
+    assert_eq!(prep["outputs"]["artifact_digest"].as_str(), Some("${{ steps.release-pr-artifact.outputs.artifact-digest }}"));
+    assert_eq!(prep["outputs"]["changed"].as_str(), Some("${{ steps.release-pr-candidate.outputs.changed }}"));
+    let upload = steps.iter().find(|step| step["id"].as_str() == Some("release-pr-artifact")).ok_or("upload")?;
+    assert_eq!(upload["if"].as_str(), Some("steps.release-pr-candidate.outputs.changed == 'true'"));
+    let receipt = preflight_steps.iter().find(|step| step["id"].as_str() == Some("release-receipt-upload")).ok_or("receipt")?;
+    assert_eq!(receipt["if"].as_str(), Some("steps.release-admission.outputs.eligible == 'true'"));
+    let writer = &yaml["jobs"]["release-pr-create"];
+    assert_eq!(writer["if"].as_str(), Some("needs.release-preparation.result == 'success' && needs.release-preparation.outputs.changed == 'true'"));
+    let writer_steps = writer["steps"].as_array().ok_or("writer steps")?;
+    let env = &writer_steps.last().ok_or("writer command")?["env"];
+    for (name, output) in [("VELNOR_PR_ARTIFACT_ID", "artifact_id"), ("VELNOR_PR_ARTIFACT_DIGEST", "artifact_digest"), ("VELNOR_PR_CONTENT_SHA256", "content_sha256")] {
+        assert_eq!(env[name].as_str(), Some(format!("${{{{ needs.release-preparation.outputs.{output} }}}}").as_str()));
+    }
     let publisher = &yaml["jobs"]["release-publish"];
     assert!(publisher["if"].as_str().ok_or("gate")?.contains("github.event_name == 'push'"));
     assert_eq!(publisher["permissions"]["id-token"].as_str(), Some("write"));
