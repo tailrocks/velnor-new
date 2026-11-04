@@ -153,37 +153,39 @@ fn admission_lines(ceilings: StateCeilings) -> Vec<String> {
         read_number("size", "wc -c < \"$payload\"", "size", "size unreadable"),
         format!("if [ \"$size\" -gt {stored} ]; then refused \"over_stored stored=$size ceiling={stored}\"; fi"),
         "if [ -z \"${MBX_CACHE_DIR:-}\" ] || [ \"$MBX_CACHE_DIR\" != \"$RUNNER_TEMP/velnor/mbx\" ] || [ ! -d \"$MBX_CACHE_DIR/actions\" ]; then corrupt import_unavailable; fi".to_owned(),
-        "for tool in zstd cmp tar head tail wc find du df expr sort mise mbx; do command -v \"$tool\" >/dev/null 2>&1 || corrupt import_unavailable; done".to_owned(),
+        "for tool in zstd cmp tar head tail wc find du df expr dd date mise mbx; do command -v \"$tool\" >/dev/null 2>&1 || corrupt import_unavailable; done".to_owned(),
         "ws=${GITHUB_WORKSPACE:-}; ws=${ws%/}; if [ -z \"$ws\" ]; then corrupt import_unavailable; fi".to_owned(),
         "case \"$RUNNER_TEMP/velnor\" in \"$ws\"|\"$ws\"/*) corrupt import_in_workspace ;; esac".to_owned(),
+        "clock() { lap_now=; date +%s > \"$d/clock\" || :; read -r lap_now < \"$d/clock\" || :; }; lap() { clock; lap_s=; expr \"$lap_now\" - \"$lap_prev\" > \"$d/lap\" 2>/dev/null || :; read -r lap_s < \"$d/lap\" || :; printf 'velnor: recover_phase %s %s\\n' \"$1\" \"$lap_s\"; lap_prev=$lap_now; }; clock; lap_prev=$lap_now".to_owned(),
         "expect=${matched##*-s256-}; case \"$expect\" in ''|*[!0-9a-f]*) refused refused-digest ;; esac; if [ \"${#expect}\" -ne 64 ]; then refused refused-digest; fi".to_owned(),
         "if s256 \"$payload\"; then payload_h=\"$h\"; else corrupt \"digest unreadable\"; fi; if [ \"$payload_h\" != \"$expect\" ]; then refused refused-digest; fi".to_owned(),
         "if head -c 4 \"$payload\" > \"$d/zmagic\"; then :; else corrupt \"payload unreadable\"; fi".to_owned(),
         format!("printf '{ZSTD_MAGIC_OCTAL}' > \"$d/zref\""),
         "if cmp -s \"$d/zmagic\" \"$d/zref\"; then :; else refused refused-format; fi".to_owned(),
+        "lap digest".to_owned(),
         "inflate() { zstd -dc --long=30 \"$payload\" && : > \"$d/inflated\"; }".to_owned(),
         format!("bounded() {{ inflate | head -c {cap_plus}; }}"),
-        read_number("plain_n", "bounded | wc -c", "plain_size", "payload unreadable"),
+        format!("counted() {{ inflate | LC_MESSAGES=C dd bs=1M iflag=count_bytes,fullblock count={cap_plus} 2> \"$d/dd\"; }}"),
+        "list_rc=0; if counted | { rc=0; tar -tvf - --numeric-owner --quoting-style=escape > \"$d/verbose\" || rc=$?; wc -c > /dev/null; exit $rc; }; then :; else list_rc=1; fi".to_owned(),
+        "plain_n=; line=; while IFS= read -r line || [ -n \"$line\" ]; do case \"$line\" in *\" copied\"*) plain_n=${line%% *} ;; esac; done < \"$d/dd\"; case \"$plain_n\" in ''|*[!0-9]*) corrupt \"payload unreadable\" ;; esac".to_owned(),
         format!("if [ \"$plain_n\" -gt {cap} ]; then refused \"over_extracted extracted>=$plain_n ceiling={extracted}\"; fi"),
         "if [ ! -f \"$d/inflated\" ]; then corrupt \"payload unreadable\"; fi".to_owned(),
+        "lap decode_list".to_owned(),
         "if inflate 2>/dev/null | head -c 512 > \"$d/first512\"; then :; else corrupt \"payload unreadable\"; fi".to_owned(),
         "head -c 262 \"$d/first512\" | tail -c 5 > \"$d/magic\"; magic=; read -r magic < \"$d/magic\" || :; if [ \"$magic\" != ustar ]; then refused refused-shadow; fi".to_owned(),
         "prefix=\"$base/\"; head -c \"${#prefix}\" \"$d/first512\" > \"$d/first\"; first=; read -r first < \"$d/first\" || :; if [ \"$first\" != \"$prefix\" ]; then refused refused-shadow; fi".to_owned(),
+        "if [ \"$list_rc\" -ne 0 ]; then corrupt \"payload unreadable\"; fi".to_owned(),
     ]
 }
 
 fn screen_lines(ceilings: StateCeilings) -> Vec<String> {
     let members = ceilings.members();
     vec![
-        "if bounded | tar -tf - > \"$d/members\"; then :; else corrupt \"payload unreadable\"; fi".to_owned(),
-        "if bounded | tar -tvf - > \"$d/verbose\"; then :; else corrupt \"payload unreadable\"; fi".to_owned(),
-        read_number("members_n", "wc -l < \"$d/members\"", "count", "member count unreadable"),
-        read_number("verbose_n", "wc -l < \"$d/verbose\"", "vcount", "member count unreadable"),
-        "if [ \"$members_n\" != \"$verbose_n\" ]; then refused refused-shadow; fi".to_owned(),
+        read_number("members_n", "wc -l < \"$d/verbose\"", "count", "member count unreadable"),
         format!("if [ \"$members_n\" -gt {members} ]; then refused refused-shadow; fi"),
-        "v=; while IFS= read -r v || [ -n \"$v\" ]; do case \"$v\" in -*|d*) ;; *) refused refused-shadow ;; esac; done < \"$d/verbose\"".to_owned(),
         format!("shape() {{ rest=$1; n=; while [ -n \"$rest\" ]; do c=${{rest%%/*}}; if [ \"${{#c}}\" -gt {MAX_COMPONENT_BYTES} ]; then refused refused-name; fi; n=\"$n.\"; if [ \"${{#n}}\" -gt {MAX_MEMBER_DEPTH} ]; then refused refused-depth; fi; case \"$rest\" in */*) rest=${{rest#*/}} ;; *) rest= ;; esac; done; }}"),
-        "m=; while IFS= read -r m || [ -n \"$m\" ]; do case \"$m\" in /*|..|../*|*/..|*/../*|*\\\\*) refused refused-shadow ;; \"$base\"|\"$base\"/*) ;; *) refused refused-shadow ;; esac; shape \"$m\"; done < \"$d/members\"".to_owned(),
+        "v_line=; while IFS= read -r v_line || [ -n \"$v_line\" ]; do set -f; set -- $v_line; set +f; v_mode=${1-}; v_own=${2-}; v_size=${3-}; v_date=${4-}; v_time=${5-}; case \"$v_mode\" in -*|d*) ;; *) refused refused-shadow ;; esac; case \"$v_own\" in [0-9]*/[0-9]*) ;; *) refused refused-shadow ;; esac; case \"$v_own\" in *[!0-9/]*|*/*/*) refused refused-shadow ;; esac; case \"$v_size\" in ''|*[!0-9]*) refused refused-shadow ;; esac; case \"$v_date\" in [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]) ;; *) refused refused-shadow ;; esac; case \"$v_time\" in [0-9][0-9]:[0-9][0-9]) ;; *) refused refused-shadow ;; esac; v_name=${v_line#*\"$v_date $v_time \"}; case \"$v_name\" in /*|..|../*|*/..|*/../*|*\\\\*) refused refused-shadow ;; \"$base\"|\"$base\"/*) ;; *) refused refused-shadow ;; esac; shape \"$v_name\"; done < \"$d/verbose\"".to_owned(),
+        "lap screen".to_owned(),
     ]
 }
 
@@ -196,12 +198,14 @@ fn extract_lines() -> Vec<String> {
         "expr \"$plain_n\" + \"$headroom\" + \"$blocks\" > \"$d/need\" || :; need=; need_rest=; read -r need need_rest < \"$d/need\" || :; case \"$need\" in ''|*[!0-9]*) corrupt \"payload unreadable\" ;; esac; if [ \"$free\" -lt \"$need\" ]; then lowdisk \"$free\" \"$need\"; fi".to_owned(),
         "if mkdir -m 700 \"$stage\"; then :; else corrupt \"payload unreadable\"; fi".to_owned(),
         "if bounded | tar -xf - -C \"$stage\" --no-same-owner; then :; else corrupt \"payload unreadable\"; fi".to_owned(),
+        "lap extract".to_owned(),
         "unlock \"$stage\"".to_owned(),
         "if s256 \"$payload\"; then :; else corrupt \"digest unreadable\"; fi; if [ \"$h\" != \"$payload_h\" ]; then refused refused-digest; fi".to_owned(),
         "if [ -d \"$stage/$base\" ] && [ ! -L \"$stage/$base\" ]; then :; else refused refused-shadow; fi".to_owned(),
         "if find \"$stage\" ! -type f ! -type d > \"$d/special\"; then :; else corrupt \"payload unreadable\"; fi; if [ -s \"$d/special\" ]; then refused refused-shadow; fi".to_owned(),
         "if find \"$stage\" -type f -links +1 > \"$d/linked\"; then :; else corrupt \"payload unreadable\"; fi; if [ -s \"$d/linked\" ]; then refused refused-shadow; fi".to_owned(),
         "if find \"$stage\" -mindepth 1 -maxdepth 1 ! -name \"$base\" > \"$d/beside\"; then :; else corrupt \"payload unreadable\"; fi; if [ -s \"$d/beside\" ]; then refused refused-shadow; fi".to_owned(),
+        "lap verify".to_owned(),
     ]
 }
 
@@ -210,10 +214,8 @@ fn measure_lines(ceilings: StateCeilings) -> Vec<String> {
     vec![
         read_number("usize", "du -sb \"$stage/$base\"", "uncompressed", "uncompressed size unreadable"),
         format!("if [ \"$usize\" -gt {extracted} ]; then refused \"over_extracted extracted=$usize ceiling={extracted}\"; fi"),
-        "if command -v sha256sum >/dev/null 2>&1; then if find \"$stage/$base\" -type f -exec sha256sum {} + > \"$d/found\"; then :; else corrupt \"payload unreadable\"; fi; else if find \"$stage/$base\" -type f -exec shasum -a 256 {} + > \"$d/found\"; then :; else corrupt \"payload unreadable\"; fi; fi".to_owned(),
-        "if sort \"$d/found\" > \"$d/manifest\"; then :; else corrupt \"payload unreadable\"; fi".to_owned(),
-        "if [ ! -s \"$d/manifest\" ]; then corrupt \"empty manifest\"; fi".to_owned(),
-        "if s256 \"$d/manifest\"; then manifest=\"$h\"; else corrupt \"digest unreadable\"; fi".to_owned(),
+        "if find \"$stage/$base\" -type f -print -quit > \"$d/found\"; then :; else corrupt \"payload unreadable\"; fi; if [ ! -s \"$d/found\" ]; then corrupt \"no regular file\"; fi".to_owned(),
+        "lap measure".to_owned(),
         "digest=\"$payload_h\"".to_owned(),
     ]
 }
@@ -221,10 +223,15 @@ fn measure_lines(ceilings: StateCeilings) -> Vec<String> {
 fn import_lines(rust_toolchain: &str) -> Vec<String> {
     vec![
         "if cd \"$RUNNER_TEMP/velnor\"; then :; else corrupt import_unavailable; fi".to_owned(),
-        format!("if mise --no-config --no-env --no-hooks exec rust@{rust_toolchain} -- mbx cache import \"$stage/$base\"; then :; else corrupt import_failed; fi"),
+        format!(
+            "if mise --no-config --no-env --no-hooks exec rust@{rust_toolchain} -- mbx cache import \"$stage/$base\"; then :; else corrupt import_failed; fi"
+        ),
         "if rm -rf \"$stage\" \"$root\"; then :; else corrupt import_failed; fi".to_owned(),
-        format!("if printf '%s\\n' \"decision=$decision\" \"matched=$matched\" \"manifest=$manifest\" \"payload=$digest\" \"size=$size\" > \"{RECOVERY_RECORD}\"; then :; else corrupt import_failed; fi"),
-        "printf 'velnor: state snapshot recovered (decision=%s manifest=%s)\\n' \"$decision\" \"$manifest\"".to_owned(),
+        format!(
+            "if printf '%s\\n' \"decision=$decision\" \"matched=$matched\" \"payload=$digest\" \"size=$size\" > \"{RECOVERY_RECORD}\"; then :; else corrupt import_failed; fi"
+        ),
+        "printf 'velnor: state snapshot recovered (decision=%s)\\n' \"$decision\"".to_owned(),
+        "lap import".to_owned(),
         "if [ \"$decision\" = exact-hit ]; then skip=true; fi".to_owned(),
     ]
 }

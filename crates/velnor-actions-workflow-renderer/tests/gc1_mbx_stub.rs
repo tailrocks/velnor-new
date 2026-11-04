@@ -13,6 +13,7 @@ pub(crate) const UNAME_M_ENV: &str = "VELNOR_STUB_UNAME_M";
 pub(crate) const FAIL_ENV: &str = "MBX_STUB_FAIL";
 pub(crate) const DF_AVAIL_ENV: &str = "VELNOR_STUB_DF_AVAIL_KIB";
 pub(crate) const TAR_LOG_ENV: &str = "VELNOR_STUB_TAR_LOG";
+pub(crate) const ZSTD_LOG_ENV: &str = "VELNOR_STUB_ZSTD_LOG";
 const DF_AVAIL_DEFAULT_KIB: u64 = 1 << 30;
 
 const MBX: &str = r#"#!/bin/sh
@@ -80,6 +81,15 @@ done
 exec "TAR_REAL" "$@"
 "#;
 
+const ZSTD_LOG: &str = r#"#!/bin/sh
+"ZSTD_REAL" "$@"
+rc=$?
+case " $* " in
+  *" -dc "*) [ "$rc" -ne 0 ] || printf 'decode\n' >> "$VELNOR_STUB_ZSTD_LOG" ;;
+esac
+exit "$rc"
+"#;
+
 const ZSTD_PAD: &str = r#"#!/bin/sh
 real="$ZSTD_SHIM_REAL"
 for a in "$@"; do case "$a" in -d|-dc|-cd) exec "$real" "$@" ;; esac; done
@@ -108,6 +118,14 @@ pub(crate) fn install_zstd_pad(bin: &Path) -> Result<(), Box<dyn Error>> {
     write_executable(
         &bin.join("zstd"),
         &ZSTD_PAD.replacen("$ZSTD_SHIM_REAL", &real.display().to_string(), 1),
+    )
+}
+
+pub(crate) fn install_zstd_log(bin: &Path) -> Result<(), Box<dyn Error>> {
+    let real = real_tool("zstd")?;
+    write_executable(
+        &bin.join("zstd"),
+        &ZSTD_LOG.replacen("ZSTD_REAL", &real.display().to_string(), 1),
     )
 }
 

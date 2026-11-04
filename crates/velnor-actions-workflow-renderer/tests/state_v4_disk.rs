@@ -4,7 +4,9 @@
 use std::error::Error;
 use std::path::Path;
 
-use crate::gc1_mbx_stub::{DF_AVAIL_ENV, TAR_LOG_ENV};
+use velnor_actions_workflow_renderer::steps::StateCeilings;
+
+use crate::gc1_mbx_stub::{DF_AVAIL_ENV, TAR_LOG_ENV, ZSTD_LOG_ENV};
 use crate::gc1_scene::{Scene, fail};
 use crate::gc1_ustar::{Archive, decode_zstd, list_members};
 use crate::state_v4_bounds::{KIB, MEMBERS, bounded, payload_dir, require_imported, require_in};
@@ -190,5 +192,62 @@ fn recover_disk_need_counts_the_block_of_every_member() -> Result<(), Box<dyn Er
         &scene,
         "free space for the tar and the blocks of its members",
     )?;
+    scene.finish()
+}
+
+#[test]
+fn recover_decodes_the_payload_at_most_twice() -> Result<(), Box<dyn Error>> {
+    let scene = bounded("v4-decode-budget", DISK_STORED, DISK_EXTRACTED, MEMBERS)?;
+    zero_members(&scene, 8, 512 * KIB)?;
+    scene.shim_tar_log()?;
+    scene.shim_zstd_log()?;
+    let key = scene.discover()?;
+    let tar_log = scene.scratch.join("tar.log").display().to_string();
+    let zstd_log = scene.scratch.join("zstd.log").display().to_string();
+    scene.recover(
+        &key.exact(),
+        &[
+            (TAR_LOG_ENV, tar_log.as_str()),
+            (ZSTD_LOG_ENV, zstd_log.as_str()),
+        ],
+        None,
+    )?;
+    require_imported(&scene, "a payload larger than the pipe buffer")?;
+    let decodes = std::fs::read_to_string(&zstd_log)?.lines().count();
+    if decodes == 0 || decodes > 2 {
+        return Err(fail(&format!(
+            "the recovery decoded the whole payload {decodes} times"
+        )));
+    }
+    scene.finish()
+}
+
+#[test]
+fn recover_counts_the_stream_after_the_end_of_the_archive() -> Result<(), Box<dyn Error>> {
+    let ceilings = StateCeilings::new(DISK_STORED, DISK_EXTRACTED, MEMBERS);
+    let cap = ceilings.stream_cap();
+    let scene = bounded("v4-tail-bomb", DISK_STORED, DISK_EXTRACTED, MEMBERS)?;
+    payload_dir(&scene)?;
+    let mut archive = Archive::create(&scene.payload())?;
+    archive.state_layout("old")?;
+    archive.raw_zeros(2 * BLOCK)?;
+    archive.raw_zeros(cap + 64 * KIB)?;
+    archive.finish_untrailed()?;
+    if std::fs::metadata(scene.payload())?.len() >= DISK_STORED {
+        return Err(fail("the tail does not compress below the stored bound"));
+    }
+    let output = run_logged(&scene, None, None)?;
+    scene.assert_cold(&output, "over_extracted")?;
+    require_in(
+        &output,
+        &format!(
+            "over_extracted extracted>={} ceiling={DISK_EXTRACTED}",
+            cap + 1
+        ),
+        "zeros after a complete archive",
+    )?;
+    if extractions(&scene) != 0 {
+        return Err(fail("a stream past the cap reached the extraction"));
+    }
     scene.finish()
 }
