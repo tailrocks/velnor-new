@@ -137,8 +137,7 @@ fn derive_start_receipt<
     observed: &crate::crate_release_controller::CrateReleaseAdmissionReceipt,
 ) -> Result<crate::crate_release_journal::JournalReceipt, OrchestratorError> {
     use crate::crate_release_journal::{
-        JournalAuthentication, JournalIdentity, JournalOwner, JournalOwnerKind, JournalPackage,
-        JournalReceipt, JournalRegistry,
+        JournalAuthentication, JournalIdentity, JournalReceipt, JournalRegistry,
     };
     let identity = JournalIdentity {
         repository: input.request.repository.clone(),
@@ -155,42 +154,7 @@ fn derive_start_receipt<
             JournalAuthentication::BootstrapToken
         }
     };
-    let packages = observed
-        .packages
-        .iter()
-        .map(|package| {
-            let owners = match &package.owners {
-                crate::crate_release_registry::CrateRegistryOwnership::NewCrate => {
-                    crate::crate_release_journal::JournalOwnership::NewCrate
-                }
-                crate::crate_release_registry::CrateRegistryOwnership::Existing { owners } => {
-                    let owners = owners
-                        .iter()
-                        .map(|owner| {
-                            let kind = match owner.kind.as_str() {
-                                "user" => JournalOwnerKind::User,
-                                "team" => JournalOwnerKind::Team,
-                                _ => return Err(internal("crate_release_start_owner_invalid")),
-                            };
-                            Ok(JournalOwner {
-                                id: owner.id,
-                                login: owner.login.clone(),
-                                kind,
-                            })
-                        })
-                        .collect::<Result<Vec<_>, OrchestratorError>>()?;
-                    crate::crate_release_journal::JournalOwnership::Existing { owners }
-                }
-            };
-            Ok(JournalPackage {
-                name: package.source.name.clone(),
-                version: package.source.version.clone(),
-                manifest: package.source.manifest.clone(),
-                tag: package.tag.clone(),
-                owners,
-            })
-        })
-        .collect::<Result<Vec<_>, OrchestratorError>>()?;
+    let packages = journal_packages(observed)?;
     let intent_bytes = velnor_actions_contract::canonical_json_bytes(input.intent)
         .map_err(|_| internal("crate_release_start_intent_invalid"))?;
     Ok(JournalReceipt {
@@ -226,6 +190,48 @@ fn derive_start_receipt<
         packages,
         semver_evidence: input.admission.semver_evidence.clone(),
     })
+}
+
+fn journal_packages(
+    observed: &crate::crate_release_controller::CrateReleaseAdmissionReceipt,
+) -> Result<Vec<crate::crate_release_journal::JournalPackage>, OrchestratorError> {
+    use crate::crate_release_journal::{JournalOwner, JournalOwnerKind, JournalPackage};
+    observed
+        .packages
+        .iter()
+        .map(|package| {
+            let owners = match &package.owners {
+                crate::crate_release_registry::CrateRegistryOwnership::NewCrate => {
+                    crate::crate_release_journal::JournalOwnership::NewCrate
+                }
+                crate::crate_release_registry::CrateRegistryOwnership::Existing { owners } => {
+                    let owners = owners
+                        .iter()
+                        .map(|owner| {
+                            let kind = match owner.kind.as_str() {
+                                "user" => JournalOwnerKind::User,
+                                "team" => JournalOwnerKind::Team,
+                                _ => return Err(internal("crate_release_start_owner_invalid")),
+                            };
+                            Ok(JournalOwner {
+                                id: owner.id,
+                                login: owner.login.clone(),
+                                kind,
+                            })
+                        })
+                        .collect::<Result<Vec<_>, OrchestratorError>>()?;
+                    crate::crate_release_journal::JournalOwnership::Existing { owners }
+                }
+            };
+            Ok(JournalPackage {
+                name: package.source.name.clone(),
+                version: package.source.version.clone(),
+                manifest: package.source.manifest.clone(),
+                tag: package.tag.clone(),
+                owners,
+            })
+        })
+        .collect::<Result<Vec<_>, OrchestratorError>>()
 }
 
 pub(super) fn match_attested_tool_expectations(

@@ -98,41 +98,21 @@ fn release_files_for_config(
         version,
         release.recovery.is_some() || release.new_crates.is_some(),
     );
-    let gate = publish_gate_condition(
-        &repository,
-        &prep.default_branch,
-        &plan,
-        release.effective_authentication() == ReleaseAuthentication::TrustedPublishing,
-    );
-    let preparation_gate = format!(
-        "github.repository == '{repository}' && github.event_name == 'push' && github.ref == 'refs/heads/{}' && needs.release-preflight.result == 'success' && needs.release-preflight.outputs.eligible == 'false'",
-        prep.default_branch
-    );
-    let catalog = prep.catalog.clone().with_export_rustup_toolchain(false);
-    let registry_arg = (registry != DEFAULT_REGISTRY).then_some(registry.as_str());
     let generator_version = env!("CARGO_PKG_VERSION");
     let (generator_source_sha, generator_manifest_sha256) = reviewed_generator_manifest(
         prep.discovery.consumer_manifest_json.as_deref(),
         prep.discovery.consumer_manifest_stand_in,
         generator_version,
     )?;
-    let acquire = velnor_actions_workflow_renderer::release_generator_bootstrap::acquire_step(
-        generator_version,
-        RELEASE_HOSTED_RUNNER,
-        &generator_source_sha,
-        &generator_manifest_sha256,
-    )?;
-    let jobs = assemble_jobs(&JobInputs {
-        release,
-        gate,
-        preparation_gate,
-        registry: registry_arg,
-        label: RELEASE_HOSTED_RUNNER,
+    let jobs = build_release_jobs(
+        prep,
         mise,
-        catalog: &catalog,
-        acquire: &acquire,
-        generator_version,
-    })?;
+        release,
+        &registry,
+        &repository,
+        &plan,
+        (&generator_source_sha, &generator_manifest_sha256),
+    )?;
     let concurrency = workspace_lock(
         &metadata,
         &prep.root,
@@ -168,11 +148,62 @@ fn release_files_for_config(
             .version(velnor_actions_mise::PinnedTool::ReleasePlz)
             .to_owned(),
     };
-    let ctx = ReleaseRenderContext {
+    let ctx = release_render_context();
+    Ok(render_release_files(&spec, &ctx, &config, &intent)?.as_sorted_vec())
+}
+
+fn release_render_context() -> ReleaseRenderContext {
+    ReleaseRenderContext {
         generator_version: env!("CARGO_PKG_VERSION").to_owned(),
         runs_on: RELEASE_HOSTED_RUNNER.to_owned(),
-    };
-    Ok(render_release_files(&spec, &ctx, &config, &intent)?.as_sorted_vec())
+    }
+}
+
+fn build_release_jobs(
+    prep: &GenerationPreparation,
+    mise: &MiseSetup,
+    release: &RustReleaseConfig,
+    registry: &str,
+    repository: &str,
+    plan: &velnor_actions_workflow_renderer::release_spec::ReleasePlan,
+    generator: (&str, &str),
+) -> Result<
+    std::collections::BTreeMap<
+        String,
+        velnor_actions_workflow_renderer::release_jobs::ReleaseJobSpec,
+    >,
+    OrchestratorError,
+> {
+    let gate = publish_gate_condition(
+        repository,
+        &prep.default_branch,
+        plan,
+        release.effective_authentication() == ReleaseAuthentication::TrustedPublishing,
+    );
+    let preparation_gate = format!(
+        "github.repository == '{repository}' && github.event_name == 'push' && github.ref == 'refs/heads/{}' && needs.release-preflight.result == 'success' && needs.release-preflight.outputs.eligible == 'false'",
+        prep.default_branch
+    );
+    let catalog = prep.catalog.clone().with_export_rustup_toolchain(false);
+    let registry_arg = (registry != DEFAULT_REGISTRY).then_some(registry);
+    let generator_version = env!("CARGO_PKG_VERSION");
+    let acquire = velnor_actions_workflow_renderer::release_generator_bootstrap::acquire_step(
+        generator_version,
+        RELEASE_HOSTED_RUNNER,
+        generator.0,
+        generator.1,
+    )?;
+    assemble_jobs(&JobInputs {
+        release,
+        gate,
+        preparation_gate,
+        registry: registry_arg,
+        label: RELEASE_HOSTED_RUNNER,
+        mise,
+        catalog: &catalog,
+        acquire: &acquire,
+        generator_version,
+    })
 }
 
 fn crate_release_intent(

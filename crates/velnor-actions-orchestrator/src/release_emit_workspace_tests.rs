@@ -6,7 +6,7 @@ use super::{preview_consumer_intent, preview_fixture};
 #[test]
 fn release_intent_includes_nested_auto_workspace_members() -> Result<(), Box<dyn std::error::Error>>
 {
-    use std::{fs, process::Command};
+    use std::fs;
     let temp = tempfile::tempdir()?;
     let root = temp.path().join("checkout");
     fs::create_dir(&root)?;
@@ -28,27 +28,7 @@ fn release_intent_includes_nested_auto_workspace_members() -> Result<(), Box<dyn
         root.join("Cargo.lock"),
         "version = 4\n\n[[package]]\nname = 'demo'\nversion = '0.1.0'\ndependencies = [\n 'dependency',\n]\n\n[[package]]\nname = 'dependency'\nversion = '0.1.0'\n",
     )?;
-    for args in [
-        &["add", "."][..],
-        &[
-            "-c",
-            "user.name=Fixture",
-            "-c",
-            "user.email=fixture@example.invalid",
-            "commit",
-            "-m",
-            "workspace",
-        ][..],
-    ] {
-        if !Command::new("git")
-            .args(args)
-            .current_dir(&root)
-            .status()?
-            .success()
-        {
-            return Err("fixture git failed".into());
-        }
-    }
+    commit_fixture(&root, "workspace")?;
     let intent = preview_consumer_intent(&root)?;
     let intent = crate::crate_release_runtime::parse_crate_release_intent(intent.as_bytes())?;
     assert_eq!(
@@ -70,30 +50,35 @@ fn release_intent_includes_nested_auto_workspace_members() -> Result<(), Box<dyn
             "[stacks.rust.release]\nmanifest_path = '.private/dependency/Cargo.toml'",
         ),
     )?;
+    commit_fixture(&root, "nested manifest")?;
+    let nested = preview_consumer_intent(&root)?;
+    let nested = crate::crate_release_runtime::parse_crate_release_intent(nested.as_bytes())?;
+    assert_eq!(nested.manifest_path, ".private/dependency/Cargo.toml");
+    assert_eq!(nested.pr_write_paths, intent.pr_write_paths);
+    Ok(())
+}
+
+fn commit_fixture(root: &std::path::Path, message: &str) -> Result<(), Box<dyn std::error::Error>> {
     for args in [
-        &["add", "."][..],
-        &[
+        vec!["add", "."],
+        vec![
             "-c",
             "user.name=Fixture",
             "-c",
             "user.email=fixture@example.invalid",
             "commit",
             "-m",
-            "nested manifest",
-        ][..],
+            message,
+        ],
     ] {
-        if !Command::new("git")
+        if !std::process::Command::new("git")
             .args(args)
-            .current_dir(&root)
+            .current_dir(root)
             .status()?
             .success()
         {
             return Err("fixture git failed".into());
         }
     }
-    let nested = preview_consumer_intent(&root)?;
-    let nested = crate::crate_release_runtime::parse_crate_release_intent(nested.as_bytes())?;
-    assert_eq!(nested.manifest_path, ".private/dependency/Cargo.toml");
-    assert_eq!(nested.pr_write_paths, intent.pr_write_paths);
     Ok(())
 }
