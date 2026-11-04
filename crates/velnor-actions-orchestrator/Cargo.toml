@@ -73,6 +73,7 @@ ignored = ["flate2"]
 workspace = true
 
 [dev-dependencies]
+serde-saphyr = "=2.1.0"
 proc-macro2 = { version = "=1.0.107", features = ["span-locations"] }
 serde_json = { workspace = true }
 syn = { version = "=3.0.9", default-features = false, features = ["full", "parsing", "printing", "visit"] }
