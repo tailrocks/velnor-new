@@ -40,6 +40,7 @@ fn cargo_prerelease_version_can_be_selected() -> Result<(), Box<dyn std::error::
         scope: &scope,
         enabled: true,
         affected: &changed,
+        known_manifests: &BTreeSet::new(),
         supported_registries: &[],
     };
     assert_eq!(select_release_set(&request)?.names(), vec!["probe"]);
@@ -75,7 +76,7 @@ fn registry_graph_uses_cargo_prerelease_requirement_semantics()
 -> Result<(), Box<dyn std::error::Error>> {
     use velnor_actions_rust::{
         metadata::parse_metadata_json,
-        release_graph::{RegistryState, publication_graph},
+        release_graph::{RegistryPackage, RegistryState, publication_graph},
     };
     let temp = tempfile::tempdir()?;
     fs::create_dir(temp.path().join("src"))?;
@@ -110,6 +111,7 @@ fn registry_graph_uses_cargo_prerelease_requirement_semantics()
         scope: &scope,
         enabled: true,
         affected: &changed,
+        known_manifests: &BTreeSet::new(),
         supported_registries: &[],
     };
     let selection = select_release_set(&request)?;
@@ -122,7 +124,13 @@ fn registry_graph_uses_cargo_prerelease_requirement_semantics()
         "1.2.4-alpha",
     ] {
         let state = RegistryState {
-            published: BTreeMap::from([("example".into(), BTreeSet::from([version.into()]))]),
+            published: BTreeMap::from([(
+                RegistryPackage {
+                    registry: "crates-io".into(),
+                    package: "example".into(),
+                },
+                BTreeSet::from([version.into()]),
+            )]),
         };
         assert_eq!(
             publication_graph(&selection, &record, &state, &[]).is_ok(),

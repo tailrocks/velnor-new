@@ -108,8 +108,16 @@ pub(crate) fn manifest_dirs(packages: &[RawPackage]) -> BTreeMap<String, String>
     dirs
 }
 
+pub(crate) fn normalize_separators(path: &str) -> String {
+    if cfg!(windows) {
+        path.replace('\\', "/")
+    } else {
+        path.to_owned()
+    }
+}
+
 fn parent_dir(manifest_path: &str) -> String {
-    let normalized = manifest_path.replace('\\', "/");
+    let normalized = normalize_separators(manifest_path);
     match normalized.rsplit_once('/') {
         Some((dir, _)) => dir.to_owned(),
         None => normalized,
@@ -117,7 +125,7 @@ fn parent_dir(manifest_path: &str) -> String {
 }
 
 fn normalize_path(path: &str) -> String {
-    let dir = path.replace('\\', "/");
+    let dir = normalize_separators(path);
     dir.strip_suffix('/')
         .map_or_else(|| dir.clone(), str::to_owned)
 }
@@ -133,6 +141,13 @@ pub(crate) fn convert_edge(
     let Some(path) = dependency.path.as_deref() else {
         return Ok(EdgeResolution::Ignored);
     };
+    if !is_source_directory(path, repo_root) {
+        return Err(MetadataError::UnresolvedPathEdge {
+            manifest: hint.to_owned(),
+            from: from.to_owned(),
+            path: path.to_owned(),
+        });
+    }
     if let Some(to) = dirs.get(&normalize_path(path)) {
         return Ok(EdgeResolution::Edge(LocalEdge {
             from: from.to_owned(),
@@ -158,15 +173,82 @@ pub(crate) fn convert_edge(
     })
 }
 
-fn is_known_target(path: &str, repo_root: &Path, known: &BTreeSet<String>) -> bool {
-    let normalized = normalize_path(path);
-    let Ok(relative) = Path::new(&normalized).strip_prefix(repo_root) else {
+fn is_source_directory(path: &str, repo_root: &Path) -> bool {
+    use std::path::Component;
+    let path = Path::new(path);
+    if !path.is_absolute()
+        || path
+            .components()
+            .any(|component| matches!(component, Component::ParentDir))
+    {
+        return false;
+    }
+    let Ok(root) = repo_root.canonicalize() else {
         return false;
     };
-    if relative.as_os_str().is_empty() {
-        return known.contains("Cargo.toml");
+    let Ok(target) = path.canonicalize() else {
+        return false;
+    };
+    target.is_dir() && target.starts_with(root)
+}
+
+fn is_known_target(path: &str, repo_root: &Path, known: &BTreeSet<String>) -> bool {
+    let Ok(root) = repo_root.canonicalize() else {
+        return false;
+    };
+    let manifest = Path::new(path).join("Cargo.toml");
+    let Some(lexical) = lexical_relative(repo_root, &manifest).or_else(|| {
+        repo_root
+            .canonicalize()
+            .ok()
+            .and_then(|root| lexical_relative(&root, &manifest))
+    }) else {
+        return false;
+    };
+    if !known.contains(&posix(&lexical)) {
+        return false;
     }
-    known.contains(&format!("{}/Cargo.toml", posix(relative)))
+    let Ok(target) = manifest.canonicalize() else {
+        return false;
+    };
+    let Ok(relative) = target.strip_prefix(&root) else {
+        return false;
+    };
+    target.is_file() && known.contains(&posix(relative))
+}
+
+fn lexical_relative(root: &Path, path: &Path) -> Option<std::path::PathBuf> {
+    if let Ok(relative) = path.strip_prefix(root) {
+        return Some(relative.to_path_buf());
+    }
+    #[cfg(windows)]
+    {
+        let root = windows_nonverbatim(root)?;
+        let path = windows_nonverbatim(path)?;
+        path.strip_prefix(root).ok().map(Path::to_path_buf)
+    }
+    #[cfg(not(windows))]
+    None
+}
+
+#[cfg(windows)]
+fn windows_nonverbatim(path: &Path) -> Option<std::path::PathBuf> {
+    let text = path.to_str()?;
+    if let Some(unc) = text.strip_prefix(r"\\?\UNC\") {
+        Some(std::path::PathBuf::from(format!(r"\\{unc}")))
+    } else if let Some(disk) = text.strip_prefix(r"\\?\") {
+        let bytes = disk.as_bytes();
+        if bytes.len() < 3
+            || !bytes[0].is_ascii_alphabetic()
+            || bytes[1] != b':'
+            || bytes[2] != b'\\'
+        {
+            return None;
+        }
+        Some(std::path::PathBuf::from(disk))
+    } else {
+        Some(path.to_path_buf())
+    }
 }
 
 fn dep_kind(raw: Option<&str>, hint: &str) -> Result<DepKind, MetadataError> {

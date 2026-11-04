@@ -20,6 +20,7 @@ name = "velnor_rust"
 path = "tests/velnor_rust.rs"
 
 [dependencies]
+cargo-platform = { version = "=0.3.3" }
 semver = { version = "=1.0.28" }
 velnor-actions-contract = { version = "=0.1.73", path = "../velnor-actions-contract" }
 serde = { workspace = true }
@@ -31,5 +32,13 @@ toml = { version = "=1.1.8" }
 tempfile = { version = "=3.27.0" }
 
 [[test]]
+name = "release_workspace_cargo"
+path = "tests/release_workspace_cargo.rs"
+
+[[test]]
 name = "crate_release_semver_public"
 path = "tests/crate_release_semver_public.rs"
+
+[[test]]
+name = "tracked_manifest_public"
+path = "tests/tracked_manifest_public.rs"
