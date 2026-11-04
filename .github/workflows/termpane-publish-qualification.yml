@@ -1,0 +1,102 @@
+# SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+# SPDX-License-Identifier: Apache-2.0
+name: Termpane no-publish qualification
+on:
+  workflow_dispatch:
+    inputs:
+      pull_request:
+        description: Reviewed same-repository pull request number
+        required: true
+        type: string
+      candidate_sha:
+        description: Reviewed Velnor candidate commit SHA
+        required: true
+        type: string
+permissions:
+  contents: read
+  pull-requests: read
+  checks: read
+  statuses: read
+jobs:
+  qualify:
+    if: github.repository == 'tailrocks/velnor-new' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    environment: generator-release
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Acquire pinned GitHub CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir "$RUNNER_TEMP/qualification-gh"
+          curl -fsSL --proto '=https' --tlsv1.2 --connect-timeout 15 --max-time 120 --max-filesize 104857600 -o "$RUNNER_TEMP/qualification-gh/archive.tar.gz" https://github.com/cli/cli/releases/download/v2.103.3/gh_2.103.3_linux_amd64.tar.gz
+          echo '4c806978ffce1cec70853302a56d70ac6da4f19bae7adca4e1a8ab00633dd91d  '"$RUNNER_TEMP/qualification-gh/archive.tar.gz" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/qualification-gh/archive.tar.gz" -C "$RUNNER_TEMP/qualification-gh" gh_2.103.3_linux_amd64/bin/gh
+          echo 'b768184570b12536be4ac1528893f6340d1c6a7b40b56ad45bca9cd0e87ad34d  '"$RUNNER_TEMP/qualification-gh/gh_2.103.3_linux_amd64/bin/gh" | sha256sum -c -
+      - name: Verify candidate PR and checks
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+          PR_NUMBER: ${{ inputs.pull_request }}
+        run: bash qualification/termpane-publish/check-candidate.sh
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ inputs.candidate_sha }}
+          path: qualification/termpane-publish/candidate
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: tailrocks/termpane
+          ref: f1c2dfde45bdbe91425af6bb17d80e606703baac
+          path: qualification/termpane-publish/source
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Prepare exact source and pinned tools
+        shell: bash
+        env:
+          CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+        run: |
+          set -euo pipefail
+          source_dir="$GITHUB_WORKSPACE/qualification/termpane-publish/source"
+          candidate_dir="$GITHUB_WORKSPACE/qualification/termpane-publish/candidate"
+          test "$(git -C "$candidate_dir" rev-parse HEAD)" = "$CANDIDATE_SHA"
+          test "$(git -C "$source_dir" rev-parse HEAD)" = f1c2dfde45bdbe91425af6bb17d80e606703baac
+          test -z "$(git -C "$source_dir" status --porcelain)"
+          rustup toolchain install 1.99.1 --profile minimal
+          curl -fsSL --proto '=https' --tlsv1.2 --connect-timeout 15 --max-time 120 -o "$RUNNER_TEMP/nextest.tar.gz" https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.151/cargo-nextest-0.9.151-x86_64-unknown-linux-gnu.tar.gz
+          echo '1d4ce302b820c41f4b89c5fb9bce45f0f0c94882c1cf08fc360caf08be6e7df4  '"$RUNNER_TEMP/nextest.tar.gz" | sha256sum -c -
+          mkdir "$RUNNER_TEMP/nextest" "$RUNNER_TEMP/release-plz" "$RUNNER_TEMP/cargo-cache"
+          tar -xzf "$RUNNER_TEMP/nextest.tar.gz" -C "$RUNNER_TEMP/nextest" cargo-nextest
+          curl -fsSL --proto '=https' --tlsv1.2 --connect-timeout 15 --max-time 120 -o "$RUNNER_TEMP/release-plz.tar.gz" https://github.com/release-plz/release-plz/releases/download/release-plz-v0.4.3/release-plz-x86_64-unknown-linux-musl.tar.gz
+          echo '4a4cfa92ea2abaee02b40daa596a95ca2725816a6a32cb03a8f48ddead287681  '"$RUNNER_TEMP/release-plz.tar.gz" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/release-plz.tar.gz" -C "$RUNNER_TEMP/release-plz" release-plz
+          echo '678330a1f03330fb375d15be8d6e094d0f65d2b70e2af417c69fcec78fa74466  '"$RUNNER_TEMP/release-plz/release-plz" | sha256sum -c -
+          docker pull --platform linux/amd64 rust@sha256:b1b3c9c0d921d7fa0a6d1f9ec7e4eab87f8c8ec97644c3d791450f131dec813f
+          docker run --platform linux/amd64 --rm -v "$source_dir:/source" -v "$RUNNER_TEMP/cargo-cache:/cargo-cache" -e CARGO_HOME=/cargo-cache -e RUSTUP_TOOLCHAIN=1.97.1 -w /source rust@sha256:b1b3c9c0d921d7fa0a6d1f9ec7e4eab87f8c8ec97644c3d791450f131dec813f cargo fetch --locked
+      - name: Recheck candidate PR and checks
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+          PR_NUMBER: ${{ inputs.pull_request }}
+        run: bash qualification/termpane-publish/check-candidate.sh
+      - name: Render actual upload config
+        shell: bash
+        env:
+          VELNOR_HOSTED_QUALIFICATION: '1'
+        run: |
+          set -euo pipefail
+          cd "$GITHUB_WORKSPACE/qualification/termpane-publish/candidate"
+          PATH="$RUNNER_TEMP/nextest:$PATH" cargo +1.99.1 nextest run --locked -p velnor-actions-orchestrator --lib -E 'test(termpane_qualification_emits_production_upload_config)'
+          test -s "$RUNNER_TEMP/termpane-upload.toml"
+      - name: Rehearse without network or publication
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp "$RUNNER_TEMP/termpane-upload.toml" "$RUNNER_TEMP/release-plz/upload.toml"
+          docker run --platform linux/amd64 --rm --network none --add-host api.github.com:127.0.0.1 --add-host github.com:127.0.0.1 --add-host fixture.actions.githubusercontent.com:127.0.0.1 --add-host crates.io:127.0.0.1 -v "$GITHUB_WORKSPACE/qualification/termpane-publish/source:/source" -v "$RUNNER_TEMP/cargo-cache:/cargo-cache" -v "$RUNNER_TEMP/release-plz:/test:ro" -v "$GITHUB_WORKSPACE/qualification/termpane-publish/fixture.py:/fixture.py:ro" -e RUSTUP_TOOLCHAIN=1.97.1 -w /source rust@sha256:b1b3c9c0d921d7fa0a6d1f9ec7e4eab87f8c8ec97644c3d791450f131dec813f python3 /fixture.py

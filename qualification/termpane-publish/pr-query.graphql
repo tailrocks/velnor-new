@@ -1,0 +1,18 @@
+query($number: Int!) {
+  repository(owner: "tailrocks", name: "velnor-new") {
+    pullRequest(number: $number) {
+      number state isDraft baseRefName headRefOid mergeStateStatus
+      baseRepository { nameWithOwner }
+      headRepository { nameWithOwner }
+      reviewThreads(first: 100) { pageInfo { hasNextPage } nodes { isResolved } }
+      commits(last: 1) {
+        nodes { commit { oid statusCheckRollup {
+          state contexts(first: 100) {
+            pageInfo { hasNextPage }
+            nodes { __typename ... on CheckRun { name conclusion checkSuite { app { databaseId } commit { oid } workflowRun { file { path repositoryName } } } } }
+          }
+        } } }
+      }
+    }
+  }
+}
