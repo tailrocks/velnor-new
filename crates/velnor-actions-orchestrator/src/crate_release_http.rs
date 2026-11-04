@@ -8,6 +8,7 @@ use serde_json::Value;
 
 use crate::{OrchestratorError, internal::internal};
 
+mod graphql;
 mod journal;
 mod routes;
 mod validation;

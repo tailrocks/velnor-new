@@ -16,7 +16,7 @@ mod errors;
 mod journal;
 mod requests;
 
-fn server(replies: Vec<String>) -> (String, thread::JoinHandle<Vec<String>>) {
+pub(super) fn server(replies: Vec<String>) -> (String, thread::JoinHandle<Vec<String>>) {
     let listener = TcpListener::bind("127.0.0.1:0").expect("listen");
     listener.set_nonblocking(true).expect("nonblocking");
     let address = listener.local_addr().expect("address");
@@ -68,14 +68,14 @@ fn server(replies: Vec<String>) -> (String, thread::JoinHandle<Vec<String>>) {
     (format!("http://{address}"), worker)
 }
 
-fn reply(status: &str, body: &str) -> String {
+pub(super) fn reply(status: &str, body: &str) -> String {
     format!(
         "HTTP/1.1 {status}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
         body.len()
     )
 }
 
-fn client(origin: String) -> GitHubAdmissionHttp {
+pub(super) fn client(origin: String) -> GitHubAdmissionHttp {
     GitHubAdmissionHttp {
         token: TOKEN.to_owned(),
         deadline: Instant::now() + Duration::from_secs(5),
