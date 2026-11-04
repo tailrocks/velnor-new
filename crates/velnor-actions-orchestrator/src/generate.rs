@@ -143,6 +143,7 @@ fn replace_in_place(
     let target = root.join(".github");
     reject_symlink(&target)?;
     let staging = stage_root::StageRoot::open(root)?;
+    let result = (|| -> Result<Vec<String>, OrchestratorError> {
     let target_identity = staging.validate_target(&target)?;
     staging.validate_target_directories(&target, target_identity)?;
     reject_symlink(&target.join("workflows"))?;
@@ -162,6 +163,15 @@ fn replace_in_place(
         return Err(staging.abort_before_commit(error));
     }
     publish_in_place(&staging, &target, target_identity, &staged)
+    })();
+    match (result, staging.recovered()) {
+        (Ok(mut warnings), Some(path)) => {
+            warnings.push(format!("prior_staging_tree_retained:{}", path.display()));
+            Ok(warnings)
+        }
+        (Err(error), Some(path)) => Err(OrchestratorError::io(path.display().to_string(), format!("generation_failed:{error}; prior_staging_tree_retained"))),
+        (result, None) => result,
+    }
 }
 
 fn publish_in_place(
@@ -182,18 +192,40 @@ fn publish_existing_in_place(
     retired: stage_root::FsIdentity,
     staged: &Path,
 ) -> Result<Vec<String>, OrchestratorError> {
+    publish_existing_with(staging, target, retired, staged, exchange_directories)
+}
+
+fn publish_existing_with(
+    staging: &stage_root::StageRoot,
+    target: &Path,
+    retired: stage_root::FsIdentity,
+    staged: &Path,
+    exchange: impl FnOnce(&Path, &Path) -> std::io::Result<()>,
+) -> Result<Vec<String>, OrchestratorError> {
     if let Err(error) = staging.validate_target_directories(target, Some(retired)) {
         return Err(staging.abort_before_commit(error));
     }
-    if let Err(error) = exchange_directories(staged, target) {
+    if let Err(error) = exchange(staged, target) {
         return Err(staging.abort_before_commit(OrchestratorError::io(
             target.display().to_string(),
             error.to_string(),
         )));
     }
-    match staging.clean_retired_root(retired) {
-        Ok(()) => Ok(Vec::new()),
-        Err(error) => Ok(vec![format!("backup_cleanup_failed:{error}")]),
+    if let Err(cause) = staging.validate_exchanged(retired) {
+        return Err(OrchestratorError::io(staged.display().to_string(), format!("exchange_identity_changed:{cause}; recovery_required")));
+    }
+    if let Err(cause) = preflight::reject_unmarked_workflows_at(staged) {
+        staging.validate_exchanged(retired)?;
+        let rollback = exchange_directories(staged, target);
+        let retained = staging.retain_spare();
+        return Err(OrchestratorError::io(
+            staged.display().to_string(),
+            format!("workflow_changed_during_generation:{cause}; rollback:{rollback:?}; retained:{retained:?}; recovery_required"),
+        ));
+    }
+    match staging.retain_spare() {
+        Ok(path) => Ok(vec![format!("retired_tree_retained:{}", path.display())]),
+        Err(error) => Err(OrchestratorError::io(staged.display().to_string(), format!("retired_tree_retention_failed:{error}"))),
     }
 }
 
@@ -258,3 +290,7 @@ fn exchange_directories(_staged: &Path, _target: &Path) -> std::io::Result<()> {
 pub(crate) mod write;
 
 pub(crate) use write::write_tree;
+
+#[cfg(all(test, unix))]
+#[path = "generate_workflow_race_tests.rs"]
+mod workflow_race_tests;

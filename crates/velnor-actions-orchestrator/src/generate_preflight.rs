@@ -54,8 +54,11 @@ pub(super) fn unmanaged_notices(
 }
 
 pub(super) fn reject_unmarked_workflows(prep: &GenerationPreparation) -> Result<(), OrchestratorError> {
-    let github = prep.root.join(".github");
-    super::reject_symlink(&github)?;
+    reject_unmarked_workflows_at(&prep.root.join(".github"))
+}
+
+pub(super) fn reject_unmarked_workflows_at(github: &std::path::Path) -> Result<(), OrchestratorError> {
+    super::reject_symlink(github)?;
     let path = github.join("workflows");
     super::reject_symlink(&path)?;
     let entries = match std::fs::read_dir(&path) {

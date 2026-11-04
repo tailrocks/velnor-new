@@ -255,9 +255,15 @@ requires kernel 5.8 or newer and `statx` reporting `STATX_MNT_ID`. Ubuntu
 22.04 and newer are supported when the running kernel reports this field;
 older kernels or missing mount identity fail closed before staging. Preview
 generation does not use this restriction.
-It contains a root-bound owner record and one persistent same-filesystem spare
-directory; generation clears spare children but never removes or recreates
-either root. This container is runtime state, not generated output. `plan`
+It contains a root-bound owner record and a same-filesystem spare directory.
+Generation retains each retired tree under a unique private `retained-*/tree`
+path and reports that path. On startup, it retains even an empty existing spare
+before creating a fresh spare, so an interrupted exchange and late writes via
+open directory handles cannot be erased by the next generation. The container
+is private to the effective user. Retained trees consume unbounded disk space;
+inspect their contents and stop all processes that may hold directory handles
+before manually removing any retained tree. Removing a tree while a writer still
+has an open handle can lose that writer's later changes. This container is runtime state, not generated output. `plan`
 and preview generation never create or modify it. The orchestrator owns only
 the declared generated paths,
 the reserved `.github/workflows/**` namespace, and shared action definitions
@@ -315,6 +321,14 @@ contract. An out-of-band ownership change after the final scan can make retired
 tree cleanup fail after publication; the command reports that cleanup failure,
 leaves the published output in place, and requires safe operator recovery before
 the next in-place generation.
+
+After exchange, generation checks the retired workflow directory again. An
+unmarked entry causes rollback only while both root identities still match;
+otherwise generation refuses rollback and preserves the spare for recovery.
+Retained trees protect later writes through open handles from automatic cleanup.
+They do not prevent an unrelated writer replacing a root between identity
+validation and rollback. Prevent concurrent external edits during generation;
+a filesystem transaction or writer coordination is needed to remove that race.
 
 In-place generation identifies the repository mount using Linux `STATX_MNT_ID`
 or the macOS mount-point name returned by `fstatfs`; device IDs alone do not
