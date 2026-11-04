@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use serde_json::{Value, json};
+use std::cell::Cell;
 use velnor_actions_orchestrator::{
     OrchestratorError,
     crate_release_github::{GitHubAdmissionRead, GitHubAdmissionRequest, verify_github_evidence},
@@ -419,6 +420,64 @@ fn ordinary_push_skips_without_weakening_release_admission() {
         admit_github_evidence(&request(), &fixture).is_err(),
         "unreviewed release PR cannot skip admission"
     );
+}
+
+#[test]
+fn environment_approval_uses_the_validated_environment_identity() {
+    use velnor_actions_orchestrator::crate_release_github::verify_environment_approval;
+    struct ChangingEnvironment {
+        base: Fixture,
+        reads: Cell<usize>,
+        first_id: Value,
+    }
+    impl GitHubAdmissionRead for ChangingEnvironment {
+        fn get(&self, route: &str) -> Result<Value, OrchestratorError> {
+            if route.ends_with("/environments/release") {
+                let reads = self.reads.get();
+                self.reads.set(reads + 1);
+                if reads > 0 {
+                    return Ok(json!({"id":44,"name":"release","can_admins_bypass":true}));
+                }
+                let mut env = self.base.get(route)?;
+                if self.first_id.is_null() {
+                    env.as_object_mut().expect("environment").remove("id");
+                } else {
+                    env["id"] = self.first_id.clone();
+                }
+                return Ok(env);
+            }
+            self.base.get(route)
+        }
+        fn get_optional(&self, route: &str) -> Result<Option<Value>, OrchestratorError> {
+            self.get(route).map(Some)
+        }
+    }
+    let mut fixture = Fixture::valid();
+    fixture.approvals[0]["environments"][0]["id"] = json!(44);
+    let api = ChangingEnvironment {
+        base: fixture,
+        reads: Cell::new(0),
+        first_id: json!(22),
+    };
+    assert!(
+        verify_environment_approval(&request(), &api).is_err(),
+        "an approval for an unverified environment ID must be rejected"
+    );
+    for id in [Value::Null, json!(0), json!("22")] {
+        let api = ChangingEnvironment {
+            base: Fixture::valid(),
+            reads: Cell::new(0),
+            first_id: id,
+        };
+        assert!(verify_environment_approval(&request(), &api).is_err());
+    }
+    let api = ChangingEnvironment {
+        base: Fixture::valid(),
+        reads: Cell::new(0),
+        first_id: json!(22),
+    };
+    assert!(verify_environment_approval(&request(), &api).is_ok());
+    assert_eq!(api.reads.get(), 1, "approval uses the validated response");
 }
 
 #[test]

@@ -338,7 +338,7 @@ fn verify_environment(
     request: &GitHubAdmissionRequest,
     api: &dyn GitHubAdmissionRead,
     prefix: &str,
-) -> Result<(), OrchestratorError> {
+) -> Result<u64, OrchestratorError> {
     let env: Value = api.get(&format!(
         "{prefix}/environments/{}",
         encode(&request.environment)
@@ -347,6 +347,10 @@ fn verify_environment(
         env["name"].as_str() == Some(request.environment.as_str()),
         "environment",
     )?;
+    let id = env["id"]
+        .as_u64()
+        .filter(|id| *id > 0)
+        .ok_or_else(|| internal("crate_release_environment_id"))?;
     require(
         env["deployment_branch_policy"]["custom_branch_policies"].as_bool() == Some(true),
         "environment_policy",
@@ -390,7 +394,7 @@ fn verify_environment(
             && rules[0]["name"].as_str() == Some(request.default_branch.as_str()),
         "environment_branch",
     )?;
-    Ok(())
+    Ok(id)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -424,15 +428,7 @@ pub fn verify_environment_approval(
     require(request.run_attempt == 1, "approval_attempt_unverified")?;
     let prefix = format!("repos/{}", request.repository);
     verify_run_authority(request, api, &prefix)?;
-    verify_environment(request, api, &prefix)?;
-    let environment = api.get(&format!(
-        "{prefix}/environments/{}",
-        encode(&request.environment)
-    ))?;
-    let id = environment["id"]
-        .as_u64()
-        .filter(|id| *id > 0)
-        .ok_or_else(|| internal("crate_release_environment_id"))?;
+    let id = verify_environment(request, api, &prefix)?;
     let response = api.get(&format!(
         "{prefix}/actions/runs/{}/approvals",
         request.run_id
