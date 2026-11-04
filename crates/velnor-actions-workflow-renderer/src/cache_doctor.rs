@@ -79,6 +79,19 @@ fn doctor(job: &str, problem: &str) -> RenderError {
 
 type CacheInputs<'a> = (&'a str, Option<&'a str>, bool);
 
+pub(crate) struct CacheOp<'a> {
+    pub(crate) step: &'a Step,
+    pub(crate) key: &'a str,
+    pub(crate) save: bool,
+}
+
+pub(crate) fn cache_ops<'a>(id: &'a str, job: &'a Job) -> impl Iterator<Item = CacheOp<'a>> {
+    job.steps.iter().filter_map(move |step| {
+        let (key, _, save) = classify(id, step).ok().flatten()?;
+        Some(CacheOp { step, key, save })
+    })
+}
+
 fn classify<'a>(job: &str, step: &'a Step) -> Result<Option<CacheInputs<'a>>, RenderError> {
     let StepKind::Action { uses, with, .. } = &step.kind else {
         return Ok(None);
