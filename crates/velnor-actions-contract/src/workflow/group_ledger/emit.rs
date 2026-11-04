@@ -5,84 +5,76 @@ use std::env;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use velnor_actions_contract::workflow::{
+use crate::workflow::{
     ExecutionBranch, JobBindingV1, TaskExecutionManifestV1, UnitLedgerV1, UnitResultV1,
 };
-use velnor_actions_contract::{
-    Plan, WorkflowEvent, parse_strict_json, plan_json_bytes, validate_matrix_key,
-};
+use crate::{Plan, WorkflowEvent, parse_strict_json, plan_json_bytes, validate_matrix_key};
 
-use crate::OrchestratorError;
-use crate::internal::{internal, internal_contract};
+use crate::helper_error::HelperError;
 
 pub const EMIT_GROUP_LEDGER_OP: &str = "emit-group-ledger-v1";
 
-pub(super) const GROUP_LEDGER_FILENAME: &str = "group-ledger.json";
+pub const GROUP_LEDGER_FILENAME: &str = "group-ledger.json";
 
 const MAX_PLAN_JSON_BYTES: u64 = 4 << 20;
 const MAX_MANIFEST_BYTES: u64 = 4 << 20;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum JobStatus {
+pub enum JobStatus {
     Success,
     Failure,
     Cancelled,
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct EmitEnv {
-    pub(crate) job_key: String,
-    pub(crate) run_id: u64,
-    pub(crate) run_attempt: u64,
-    pub(crate) event: String,
-    pub(crate) source_sha: String,
-    pub(crate) ref_name: String,
-    pub(crate) repository: String,
-    pub(crate) workflow_sha: String,
-    pub(crate) matrix_key: Option<String>,
-    pub(crate) job_status: JobStatus,
+pub struct EmitEnv {
+    pub job_key: String,
+    pub run_id: u64,
+    pub run_attempt: u64,
+    pub event: String,
+    pub source_sha: String,
+    pub ref_name: String,
+    pub repository: String,
+    pub workflow_sha: String,
+    pub matrix_key: Option<String>,
+    pub job_status: JobStatus,
 }
 
-/// Read the tokenless emit environment and write the matrix or crate job ledger.
-///
-/// Identity binds on the repository slug, `run_id`, `run_attempt`, and
-/// `job_key`: the numeric `repository_id`/`job_id` are unresolvable without
-/// a token, so emit records them as `0` (see `JobBindingV1`).
-pub fn emit_group_ledger() -> Result<PathBuf, OrchestratorError> {
+pub fn emit_group_ledger() -> Result<PathBuf, HelperError> {
     let emit = emit_env_from_process()?;
-    let run_key = crate::internal_request::resolve_run_key(None)?;
+    let run_key = crate::resolve_run_key(None)?;
     let runner_temp = env::var_os("RUNNER_TEMP")
         .filter(|value| !value.is_empty())
         .map(PathBuf::from)
-        .ok_or_else(|| internal("missing_runner_temp"))?;
+        .ok_or_else(|| HelperError::internal("missing_runner_temp"))?;
     let run_dir = Path::new(&runner_temp).join("velnor").join(&run_key);
-    let checkout = env::current_dir().map_err(|err| OrchestratorError::io(".", err.to_string()))?;
-    let manifest_path = checkout.join(velnor_actions_contract::TASK_EXECUTION_MANIFEST_PATH);
+    let checkout = env::current_dir().map_err(|err| HelperError::io(".", err.to_string()))?;
+    let manifest_path = checkout.join(crate::TASK_EXECUTION_MANIFEST_PATH);
     emit_group_ledger_to(&runner_temp, &manifest_path, &run_dir, &run_key, &emit)
 }
 
-fn emit_env_from_process() -> Result<EmitEnv, OrchestratorError> {
+fn emit_env_from_process() -> Result<EmitEnv, HelperError> {
     let job_status = match required_env("VELNOR_JOB_STATUS")?.as_str() {
         "success" => JobStatus::Success,
         "failure" => JobStatus::Failure,
         "cancelled" => JobStatus::Cancelled,
-        _ => return Err(internal("bad_job_status")),
+        _ => return Err(HelperError::internal("bad_job_status")),
     };
     let run_id = required_env("GITHUB_RUN_ID")?
         .parse::<u64>()
-        .map_err(|_| internal("bad_run_id"))?;
+        .map_err(|_| HelperError::internal("bad_run_id"))?;
     if run_id == 0 {
-        return Err(internal("bad_run_id"));
+        return Err(HelperError::internal("bad_run_id"));
     }
     let run_attempt = required_env("GITHUB_RUN_ATTEMPT")?
         .parse::<u64>()
-        .map_err(|_| internal("bad_run_attempt"))?;
+        .map_err(|_| HelperError::internal("bad_run_attempt"))?;
     if run_attempt == 0 {
-        return Err(internal("bad_run_attempt"));
+        return Err(HelperError::internal("bad_run_attempt"));
     }
     let repository = required_env("GITHUB_REPOSITORY")?;
-    if crate::origin::validate_repository_slug(&repository).is_none() {
-        return Err(internal("bad_repository_slug"));
+    if crate::validate_repository_slug(&repository).is_none() {
+        return Err(HelperError::internal("bad_repository_slug"));
     }
     let (event, source_sha) = event_source_from_process()?;
     Ok(EmitEnv {
@@ -97,80 +89,84 @@ fn emit_env_from_process() -> Result<EmitEnv, OrchestratorError> {
         matrix_key: match env::var("VELNOR_MATRIX_KEY") {
             Ok(key) => Some(key),
             Err(env::VarError::NotPresent) => None,
-            Err(env::VarError::NotUnicode(_)) => return Err(internal("bad_velnor_matrix_key")),
+            Err(env::VarError::NotUnicode(_)) => {
+                return Err(HelperError::internal("bad_velnor_matrix_key"));
+            }
         },
         job_status,
     })
 }
 
-fn event_source_from_process() -> Result<(String, String), OrchestratorError> {
+fn event_source_from_process() -> Result<(String, String), HelperError> {
     let event_name = required_env("GITHUB_EVENT_NAME")?;
     let github_sha = required_env("GITHUB_SHA")?;
     let payload_path = env::var_os("GITHUB_EVENT_PATH")
         .filter(|value| !value.is_empty())
-        .ok_or_else(|| internal("missing_event_payload"))?;
-    let payload_text = crate::safe_read::read_event_file(
+        .ok_or_else(|| HelperError::internal("missing_event_payload"))?;
+    let payload_text = crate::staged_reads::read_staged_text(
         Path::new(&payload_path),
-        crate::safe_read::MAX_REPO_FILE_BYTES,
-    )?;
-    let payload =
-        parse_strict_json(&payload_text).map_err(|_| internal("malformed_event_payload"))?;
+        crate::MAX_CHECK_SOURCE_BYTES as u64,
+    )
+    .map_err(|_| HelperError::internal("unreadable_event_payload"))?;
+    let payload = parse_strict_json(&payload_text)
+        .map_err(|_| HelperError::internal("malformed_event_payload"))?;
     let event = crate::request_event::workflow_event_for(&event_name, &payload)?;
     let (_, head) = crate::request_event::request_refs(event, &payload, Some(&github_sha))?;
     Ok((event_name_for(event)?, head))
 }
 
-fn event_name_for(event: WorkflowEvent) -> Result<String, OrchestratorError> {
+fn event_name_for(event: WorkflowEvent) -> Result<String, HelperError> {
     serde_json::to_value(event)
-        .map_err(|_| internal("unserializable_workflow_event"))?
+        .map_err(|_| HelperError::internal("unserializable_workflow_event"))?
         .as_str()
         .map(str::to_owned)
-        .ok_or_else(|| internal("unserializable_workflow_event"))
+        .ok_or_else(|| HelperError::internal("unserializable_workflow_event"))
 }
 
-fn required_env(name: &str) -> Result<String, OrchestratorError> {
+fn required_env(name: &str) -> Result<String, HelperError> {
     env::var(name)
         .ok()
         .filter(|value| !value.is_empty())
         .ok_or_else(|| {
-            internal(&format!(
+            HelperError::internal(&format!(
                 "missing_{}",
                 name.to_ascii_lowercase().replace('-', "_")
             ))
         })
 }
 
-pub(crate) fn emit_group_ledger_to(
+pub fn emit_group_ledger_to(
     anchor: &Path,
     manifest_path: &Path,
     run_dir: &Path,
     run_key: &str,
     emit: &EmitEnv,
-) -> Result<PathBuf, OrchestratorError> {
+) -> Result<PathBuf, HelperError> {
     if let Some(key) = &emit.matrix_key {
-        validate_matrix_key(key).map_err(internal_contract)?;
+        validate_matrix_key(key).map_err(HelperError::from)?;
     }
     let plan_text =
-        crate::retrieve_reports::read_staged_text(&run_dir.join("plan.json"), MAX_PLAN_JSON_BYTES)
-            .map_err(|kind| internal(&format!("{kind}_plan")))?;
-    let plan_value = parse_strict_json(&plan_text).map_err(|_| internal("unparsable_plan"))?;
-    let plan: Plan = serde_json::from_value(plan_value).map_err(|_| internal("unparsable_plan"))?;
-    plan.validate().map_err(internal_contract)?;
+        crate::staged_reads::read_staged_text(&run_dir.join("plan.json"), MAX_PLAN_JSON_BYTES)
+            .map_err(|kind| HelperError::internal(&format!("{kind}_plan")))?;
+    let plan_value =
+        parse_strict_json(&plan_text).map_err(|_| HelperError::internal("unparsable_plan"))?;
+    let plan: Plan =
+        serde_json::from_value(plan_value).map_err(|_| HelperError::internal("unparsable_plan"))?;
+    plan.validate().map_err(HelperError::from)?;
     if plan.run_key != run_key {
-        return Err(internal("ledger_run_mismatch"));
+        return Err(HelperError::internal("ledger_run_mismatch"));
     }
     if emit.source_sha != plan.head || emit.event != event_name_for(plan.event)? {
-        return Err(internal("ledger_source_scope_mismatch"));
+        return Err(HelperError::internal("ledger_source_scope_mismatch"));
     }
-    let manifest_text =
-        crate::retrieve_reports::read_staged_text(manifest_path, MAX_MANIFEST_BYTES)
-            .map_err(|kind| internal(&format!("{kind}_manifest")))?;
+    let manifest_text = crate::staged_reads::read_staged_text(manifest_path, MAX_MANIFEST_BYTES)
+        .map_err(|kind| HelperError::internal(&format!("{kind}_manifest")))?;
     let manifest = parse_manifest_document(&manifest_text)?;
     let (group_key, branch) = split_job_key(&emit.job_key)?;
-    let plan_canonical = plan_json_bytes(&plan).map_err(internal_contract)?;
+    let plan_canonical = plan_json_bytes(&plan).map_err(HelperError::from)?;
     let plan_digest = UnitLedgerV1::plan_digest_from_canonical_bytes(&plan_canonical);
     let group_digest =
-        UnitLedgerV1::group_digest_for_group(group_key, &plan_digest).map_err(internal_contract)?;
+        UnitLedgerV1::group_digest_for_group(group_key, &plan_digest).map_err(HelperError::from)?;
     let finished_secs = clock_secs()?;
     let (ordered_results, observation_sidecars) =
         selection::build_ordered_results(&plan, &manifest, run_key, emit, run_dir, finished_secs)?;
@@ -179,10 +175,10 @@ pub(crate) fn emit_group_ledger_to(
         .map(|sidecar| sidecar.as_deref())
         .collect();
     let observation_digest = UnitLedgerV1::observation_digest_for_sidecars(&observation_refs)
-        .map_err(internal_contract)?;
+        .map_err(HelperError::from)?;
     let source_binding_digest =
         UnitLedgerV1::source_binding_digest_for_sidecars(&vec![None; ordered_results.len()])
-            .map_err(internal_contract)?;
+            .map_err(HelperError::from)?;
     let ledger = UnitLedgerV1 {
         schema: 1,
         job: JobBindingV1 {
@@ -209,8 +205,8 @@ pub(crate) fn emit_group_ledger_to(
         observation_digest,
         source_binding_digest,
     };
-    ledger.validate().map_err(internal_contract)?;
-    let bytes = ledger.to_canonical_bytes().map_err(internal_contract)?;
+    ledger.validate().map_err(HelperError::from)?;
+    let bytes = ledger.to_canonical_bytes().map_err(HelperError::from)?;
     let out_dir = emit
         .matrix_key
         .as_ref()
@@ -226,48 +222,44 @@ type OrderedUnits = (Vec<UnitResultV1>, Vec<Option<Vec<u8>>>);
 #[path = "emit_selection.rs"]
 mod selection;
 
-/// Parse the on-disk task execution manifest: the checked-in document
-/// carries a generated-marker header line (see `marked_json`) which is
-/// stripped before strict parsing; a bare canonical document parses as-is.
-fn parse_manifest_document(text: &str) -> Result<TaskExecutionManifestV1, OrchestratorError> {
+fn parse_manifest_document(text: &str) -> Result<TaskExecutionManifestV1, HelperError> {
     let body = match text.split_once('\n') {
-        Some((first, rest)) if first.starts_with(velnor_actions_contract::MARKER_PREFIX) => {
+        Some((first, rest)) if first.starts_with(crate::MARKER_PREFIX) => {
             rest.strip_suffix('\n').unwrap_or(rest)
         }
         _ => text,
     };
     if body.bytes().any(|byte| matches!(byte, b'\n' | b'\r')) {
-        return Err(internal("noncanonical_task_execution_manifest"));
+        return Err(HelperError::internal(
+            "noncanonical_task_execution_manifest",
+        ));
     }
-    let value = parse_strict_json(body).map_err(|_| internal("unparsable_manifest"))?;
+    let value =
+        parse_strict_json(body).map_err(|_| HelperError::internal("unparsable_manifest"))?;
     let manifest: TaskExecutionManifestV1 =
-        serde_json::from_value(value).map_err(|_| internal("unparsable_manifest"))?;
-    manifest.validate().map_err(internal_contract)?;
+        serde_json::from_value(value).map_err(|_| HelperError::internal("unparsable_manifest"))?;
+    manifest.validate().map_err(HelperError::from)?;
     Ok(manifest)
 }
 
-fn obligation_digest<'a>(plan: &'a Plan, unit_id: &str) -> Result<&'a str, OrchestratorError> {
+fn obligation_digest<'a>(plan: &'a Plan, unit_id: &str) -> Result<&'a str, HelperError> {
     plan.obligations
         .iter()
         .find(|obligation| obligation.task_id == unit_id)
         .map(|obligation| obligation.task_digest.as_str())
-        .ok_or_else(|| internal(&format!("task_without_obligation:{unit_id}")))
+        .ok_or_else(|| HelperError::internal(&format!("task_without_obligation:{unit_id}")))
 }
 
-fn split_job_key(job_key: &str) -> Result<(&str, ExecutionBranch), OrchestratorError> {
+fn split_job_key(job_key: &str) -> Result<(&str, ExecutionBranch), HelperError> {
     if job_key.is_empty() {
-        return Err(internal("job_key_without_group"));
+        return Err(HelperError::internal("job_key_without_group"));
     }
     Ok((job_key, ExecutionBranch::Reader))
 }
 
-fn clock_secs() -> Result<u64, OrchestratorError> {
+fn clock_secs() -> Result<u64, HelperError> {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|elapsed| elapsed.as_secs())
-        .map_err(|_| internal("missing_clock"))
+        .map_err(|_| HelperError::internal("missing_clock"))
 }
-
-#[cfg(test)]
-#[path = "emit_gc1_t54.rs"]
-mod gc1_t54;

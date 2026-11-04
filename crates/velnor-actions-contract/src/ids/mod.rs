@@ -66,6 +66,20 @@ pub fn run_key_for_ci(run_id: u64, run_attempt: u64) -> String {
     key
 }
 
+pub fn validate_repository_slug(raw: &str) -> Option<String> {
+    if raw.chars().any(char::is_whitespace) {
+        return None;
+    }
+    let mut parts = raw.split('/');
+    let (Some(owner), Some(repo), None) = (parts.next(), parts.next(), parts.next()) else {
+        return None;
+    };
+    if owner.is_empty() || repo.is_empty() {
+        return None;
+    }
+    Some(format!("{}/{}", owner.to_lowercase(), repo.to_lowercase()))
+}
+
 pub fn validate_run_key(value: &str) -> Result<(), ContractError> {
     if value == "local" || is_ci_run_key(value) {
         Ok(())

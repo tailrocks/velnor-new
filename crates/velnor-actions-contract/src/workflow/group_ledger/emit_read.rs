@@ -3,11 +3,10 @@
 
 use std::path::Path;
 
-use velnor_actions_contract::workflow::{TaskExecutionManifestEntryV1, UnitOutcome, UnitResultV1};
-use velnor_actions_contract::{TaskReport, TaskStatus, parse_strict_json};
+use crate::workflow::{TaskExecutionManifestEntryV1, UnitOutcome, UnitResultV1};
+use crate::{TaskReport, TaskStatus, parse_strict_json};
 
-use crate::OrchestratorError;
-use crate::internal::{internal, internal_contract};
+use crate::helper_error::HelperError;
 
 use super::emit::JobStatus;
 
@@ -17,27 +16,31 @@ const MAX_SIDECAR_BYTES: u64 = 64 << 10;
 pub(super) fn read_staged_report(
     tasks_dir: &Path,
     report_id: &str,
-) -> Result<Option<String>, OrchestratorError> {
+) -> Result<Option<String>, HelperError> {
     let path = tasks_dir.join(format!("{report_id}.json"));
-    match crate::retrieve_reports::read_staged_text(&path, MAX_REPORT_BYTES) {
+    match crate::staged_reads::read_staged_text(&path, MAX_REPORT_BYTES) {
         Ok(text) => Ok(Some(text)),
         Err("missing") => Ok(None),
-        Err(kind) => Err(internal(&format!("{kind}_task_report:{report_id}"))),
+        Err(kind) => Err(HelperError::internal(&format!(
+            "{kind}_task_report:{report_id}"
+        ))),
     }
 }
 
 pub(super) fn read_staged_sidecar(
     tasks_dir: &Path,
     report_id: &str,
-) -> Result<Option<Vec<u8>>, OrchestratorError> {
+) -> Result<Option<Vec<u8>>, HelperError> {
     let path = tasks_dir.join(format!(
         "{report_id}{}",
-        crate::task_report::UNIT_OBSERVATION_SUFFIX
+        crate::workflow::UNIT_OBSERVATION_SUFFIX
     ));
-    match crate::retrieve_reports::read_staged_text(&path, MAX_SIDECAR_BYTES) {
+    match crate::staged_reads::read_staged_text(&path, MAX_SIDECAR_BYTES) {
         Ok(text) => Ok(Some(text.into_bytes())),
         Err("missing") => Ok(None),
-        Err(kind) => Err(internal(&format!("{kind}_observation:{report_id}"))),
+        Err(kind) => Err(HelperError::internal(&format!(
+            "{kind}_observation:{report_id}"
+        ))),
     }
 }
 
@@ -48,20 +51,19 @@ pub(super) fn unit_result_for_report(
     staged: Option<&str>,
     job_status: JobStatus,
     finished_secs: u64,
-) -> Result<UnitResultV1, OrchestratorError> {
+) -> Result<UnitResultV1, HelperError> {
     let recipe_id =
-        UnitResultV1::recipe_digest_from_manifest_entry(entry).map_err(internal_contract)?;
+        UnitResultV1::recipe_digest_from_manifest_entry(entry).map_err(HelperError::from)?;
     let argv_digest =
-        UnitResultV1::argv_digest_from_manifest_entry(entry).map_err(internal_contract)?;
+        UnitResultV1::argv_digest_from_manifest_entry(entry).map_err(HelperError::from)?;
     let effective_input_digest = UnitResultV1::effective_input_digest_from_manifest_entry(entry)
-        .map_err(internal_contract)?;
+        .map_err(HelperError::from)?;
     let task_identity = unit_id.to_owned();
     let Some(text) = staged else {
-        // On success every selected unit must stage a report; on failure or
-        // cancellation the missing unit is honestly recorded as
-        // `NeedsPrepare` (evidence absent) rather than fabricated.
         if job_status == JobStatus::Success {
-            return Err(internal(&format!("missing_task_report:{report_id}")));
+            return Err(HelperError::internal(&format!(
+                "missing_task_report:{report_id}"
+            )));
         }
         let (started_at, finished_at) = window_for_duration(finished_secs, 0);
         let result = UnitResultV1 {
@@ -76,18 +78,18 @@ pub(super) fn unit_result_for_report(
             finished_at,
             report_digest: UnitResultV1::missing_report_digest(),
         };
-        result.validate().map_err(internal_contract)?;
+        result.validate().map_err(HelperError::from)?;
         return Ok(result);
     };
-    let value = parse_strict_json(text).map_err(|_| internal("unparsable_task_report"))?;
-    let report: TaskReport =
-        serde_json::from_value(value).map_err(|_| internal("unparsable_task_report"))?;
-    report.validate().map_err(internal_contract)?;
+    let value =
+        parse_strict_json(text).map_err(|_| HelperError::internal("unparsable_task_report"))?;
+    let report: TaskReport = serde_json::from_value(value)
+        .map_err(|_| HelperError::internal("unparsable_task_report"))?;
+    report.validate().map_err(HelperError::from)?;
     let (outcome, exit_code) = outcome_for_report(&report, job_status, report_id)?;
     let duration_secs = report.duration_ms.unwrap_or(0) / 1_000;
     let (started_at, finished_at) = window_for_duration(finished_secs, duration_secs);
-    let report_canonical =
-        velnor_actions_contract::canonical_json_bytes(&report).map_err(internal_contract)?;
+    let report_canonical = crate::canonical_json_bytes(&report).map_err(HelperError::from)?;
     let report_digest = UnitResultV1::report_digest_from_canonical_bytes(&report_canonical);
     let result = UnitResultV1 {
         unit_id: unit_id.to_owned(),
@@ -101,7 +103,7 @@ pub(super) fn unit_result_for_report(
         finished_at,
         report_digest,
     };
-    result.validate().map_err(internal_contract)?;
+    result.validate().map_err(HelperError::from)?;
     Ok(result)
 }
 
@@ -109,7 +111,7 @@ pub(super) fn outcome_for_report(
     report: &TaskReport,
     job_status: JobStatus,
     report_id: &str,
-) -> Result<(UnitOutcome, Option<i32>), OrchestratorError> {
+) -> Result<(UnitOutcome, Option<i32>), HelperError> {
     let mapped = match (report.status, report.exit_code) {
         (TaskStatus::Executed, 0) => (UnitOutcome::Executed, Some(0)),
         (TaskStatus::Executed | TaskStatus::Failed, code) => (UnitOutcome::Failed, Some(code)),
@@ -119,13 +121,12 @@ pub(super) fn outcome_for_report(
             (UnitOutcome::NeedsPrepare, None)
         }
     };
-    // A successful job cannot carry failed or cancelled units: that evidence
-    // contradicts the job conclusion, so emit refuses loudly instead of
-    // writing a ledger the merge checker must reject.
     if job_status == JobStatus::Success
         && matches!(mapped.0, UnitOutcome::Failed | UnitOutcome::Cancelled)
     {
-        return Err(internal(&format!("failed_unit_on_success:{report_id}")));
+        return Err(HelperError::internal(&format!(
+            "failed_unit_on_success:{report_id}"
+        )));
     }
     Ok(mapped)
 }

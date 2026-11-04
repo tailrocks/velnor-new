@@ -272,7 +272,7 @@ fn runner_root() -> Result<std::path::PathBuf, OrchestratorError> {
         return Err(internal("release_policy_runner_root"));
     }
     let temp = runner.join("velnor");
-    crate::exclusive_write::create_dir_no_symlink(&runner, &temp)?;
+    velnor_actions_contract::exclusive_write::create_dir_no_symlink(&runner, &temp)?;
     Ok(temp)
 }
 
@@ -320,7 +320,7 @@ fn lower_sha256(value: &str) -> bool {
 }
 
 fn read_source_admission(path: &Path) -> Result<Vec<u8>, OrchestratorError> {
-    crate::retrieve_reports::staged_reads::read_staged_bytes(path, MAX_ADMISSION_BYTES as u64)
+    velnor_actions_contract::staged_reads::read_staged_bytes(path, MAX_ADMISSION_BYTES as u64)
         .map_err(|_| internal("release_policy_admission_read"))
 }
 

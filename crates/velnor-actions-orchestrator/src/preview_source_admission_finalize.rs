@@ -305,7 +305,7 @@ fn write_finalization_files(
         ("package-release-policy.json", policy, "release_policy"),
         ("package-release-plan.json", plan, "release_plan"),
     ] {
-        crate::exclusive_write::write_exclusive(&temp.join(name), bytes, label)?;
+        velnor_actions_contract::exclusive_write::write_exclusive(&temp.join(name), bytes, label)?;
     }
     Ok(())
 }

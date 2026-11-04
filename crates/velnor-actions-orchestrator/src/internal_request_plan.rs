@@ -10,7 +10,7 @@ use velnor_actions_contract::{
     NamedCheckLane, QualificationDispatch, WorkflowEvent, parse_strict_json,
 };
 
-use super::resolve_run_key;
+use velnor_actions_contract::resolve_run_key;
 use crate::OrchestratorError;
 use crate::internal::{PLAN_OP, check_schema, internal, internal_contract};
 

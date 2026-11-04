@@ -18,7 +18,7 @@ pub fn execute_native_homebrew_check_from_env() -> Result<usize, OrchestratorErr
     let check_id = required_env("VELNOR_CHECK_ID")?;
     let operation = parse_operation(&required_env(OPERATION_ENV)?)?;
     let task_id = required_env(crate::task_report::TASK_ID_ENV)?;
-    let run_key = crate::internal_request::resolve_run_key(None)?;
+    let run_key = velnor_actions_contract::resolve_run_key(None)?;
     execute_native_homebrew_check_to(
         Path::new(&root),
         Path::new(&temp),

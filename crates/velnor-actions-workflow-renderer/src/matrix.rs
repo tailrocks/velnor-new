@@ -31,7 +31,7 @@ pub const RUN_KEY_OUTPUT: &str = "run_key";
 pub const NOT_AFFECTED_JOBS_OUTPUT: &str = "not_affected_jobs";
 
 pub const PLAN_ATTEMPT_OUTPUT: &str = "plan_attempt";
-pub const PLAN_ATTEMPT_ENV: &str = "VELNOR_RUN_KEY_ATTEMPT";
+pub use velnor_actions_contract::PLAN_ATTEMPT_ENV;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MatrixSource {

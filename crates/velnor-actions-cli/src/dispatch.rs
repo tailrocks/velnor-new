@@ -9,10 +9,10 @@ use std::process::ExitCode;
 
 use velnor_actions_orchestrator::{
     ACQUIRE_PREVIEW_SOURCE_OP, ACQUIRE_RELEASE_LEAVES_OP, ADMIT_HOMEBREW_TAP_OP,
-    ADMIT_RELEASE_AGGREGATE_OP, ADMIT_STABLE_TAG_ORIGIN_OP, ASSEMBLE_GROUP_LEDGERS_OP,
+    ADMIT_RELEASE_AGGREGATE_OP, ADMIT_STABLE_TAG_ORIGIN_OP,
     BUN_ASSETS_EXPORT_OP, BUN_ASSETS_IMPORT_OP, BUN_ASSETS_PREPARE_OP,
     BUN_ASSETS_REPOSITORY_CHECK_OP, BUN_REGISTRY_INSTALL_OP, CAPTURE_REVIEW_COMPLETION_OP,
-    DYNAMIC_MATRIX_OUTPUT_MODE, EMIT_GROUP_LEDGER_OP, EMIT_REVIEW_COMPLETION_OP, EXECUTE_CHECK_OP,
+    DYNAMIC_MATRIX_OUTPUT_MODE, EMIT_REVIEW_COMPLETION_OP, EXECUTE_CHECK_OP,
     EXECUTE_RELEASE_PRODUCER_OP, FETCH_OP, FINALIZE_PREVIEW_SOURCE_OP, GITHUB_EVIDENCE_FETCH_OP,
     GITHUB_EVIDENCE_IMPORT_OP, GRADLE_RUN_OP, MERGE_HOMEBREW_TAP_PR_OP, MERGE_OP,
     OrchestratorError, PLAN_MATRIX_OUTPUT_MODE_ENV, PLAN_OP, PLAYWRIGHT_INSTALL_OP,
@@ -34,10 +34,6 @@ mod bun_assets;
 mod cache;
 #[path = "dispatch/fileless.rs"]
 mod fileless;
-#[path = "dispatch/cache/ledger_assemble.rs"]
-mod ledger_assemble;
-#[path = "dispatch/cache/ledger_emit.rs"]
-mod ledger_emit;
 #[path = "dispatch_preview_production.rs"]
 mod preview_production;
 #[path = "dispatch/public.rs"]
@@ -88,9 +84,6 @@ pub(crate) fn try_internal() -> Option<ExitCode> {
 
 fn gate_request() -> Option<InternalRequest> {
     let op = internal_op()?;
-    if let Some(request) = ledger_emit::gate(op).or_else(|| ledger_assemble::gate(op)) {
-        return Some(request);
-    }
     if fileless::uses_runner_temp_gate(op) {
         return fileless::gate_runner_temp_operation(op);
     }
@@ -157,12 +150,6 @@ fn gate_file_request(op: InternalOp, path: PathBuf) -> Option<InternalRequest> {
         }
         InternalOp::CachePublish | InternalOp::CacheRecover | InternalOp::CacheCleanup => {
             return gated(op, &path, |request| cache::gate_request(op, request));
-        }
-        InternalOp::EmitGroupLedger => {
-            return ledger_emit::gate(op);
-        }
-        InternalOp::AssembleGroupLedgers => {
-            return ledger_assemble::gate(op);
         }
         InternalOp::WriteRequest
         | InternalOp::Plan
@@ -282,8 +269,6 @@ fn run_internal(request: &InternalRequest) -> ExitCode {
         InternalOp::CachePublish | InternalOp::CacheRecover | InternalOp::CacheCleanup => {
             cache::run(request.op, &request.path)
         }
-        InternalOp::EmitGroupLedger => ledger_emit::run(),
-        InternalOp::AssembleGroupLedgers => ledger_assemble::run(),
     }
 }
 

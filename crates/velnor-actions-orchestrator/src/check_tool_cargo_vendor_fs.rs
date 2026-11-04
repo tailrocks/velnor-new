@@ -124,7 +124,7 @@ fn file_hashes(
             if metadata.is_dir() {
                 pending.push(path);
             } else {
-                let content = crate::retrieve_reports::staged_reads::read_staged_bytes_until(
+                let content = velnor_actions_contract::staged_reads::read_staged_bytes_until(
                     &path,
                     512 * 1024 * 1024,
                     || deadline.remaining().map(|_| ()).map_err(|_| "deadline"),
@@ -152,7 +152,7 @@ pub(super) fn write_checksum(
     let bytes = serde_json::to_vec(&serde_json::json!({"files":files,"package":package}))
         .map_err(|error| internal(&format!("qualified_cargo_checksum:{error}")))?;
     check_deadline(deadline)?;
-    crate::exclusive_write::write_exclusive_until(
+    velnor_actions_contract::exclusive_write::write_exclusive_until(
         &root.join(".cargo-checksum.json"),
         &bytes,
         "qualified_cargo_checksum",

@@ -84,7 +84,7 @@ pub(super) fn write(
     bytes: &[u8],
     deadline: CheckDeadline,
 ) -> Result<(), OrchestratorError> {
-    crate::exclusive_write::write_exclusive_until(path, bytes, "qualification_candidate", || {
+    velnor_actions_contract::exclusive_write::write_exclusive_until(path, bytes, "qualification_candidate", || {
         super::checkpoint(deadline)
     })
 }

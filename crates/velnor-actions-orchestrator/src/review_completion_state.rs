@@ -1,13 +1,12 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use velnor_actions_contract::staged_reads::read_staged_bytes_until;
 use super::super::{
     feedback::{CapturedFeedback, FeedbackContext},
     github::TapMergeGitHub,
 };
-use crate::{
-    OrchestratorError, internal::internal, retrieve_reports::staged_reads::read_staged_bytes_until,
-};
+use crate::{OrchestratorError, internal::internal};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{

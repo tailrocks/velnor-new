@@ -97,8 +97,9 @@ fn stage_admission(bytes: &[u8]) -> Result<(), OrchestratorError> {
     let parent = path
         .parent()
         .ok_or_else(|| internal("bad_qualification_admission_path"))?;
-    crate::exclusive_write::create_dir_no_symlink(&runner_temp, parent)?;
-    crate::exclusive_write::write_exclusive(&path, bytes, "qualification_admission")
+    velnor_actions_contract::exclusive_write::create_dir_no_symlink(&runner_temp, parent)?;
+    velnor_actions_contract::exclusive_write::write_exclusive(&path, bytes, "qualification_admission")?;
+    Ok(())
 }
 
 fn admission_path(runner_temp: &Path) -> PathBuf {
