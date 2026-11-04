@@ -13,5 +13,5 @@ a95a014f4edd0498b56d4e5cbcbdd5bfcfd7b12496674e07ded2def5ef38e3f4  ./.github/acti
 cdd634481b37ca81b8b1532275c20aa1629b5616b1abe27657d2625110d152c7  ./.github/scripts/velnor-tools-cache-identity.sh
 45b5c90e884c02196cb396c789c8ff8d53a6885469d3a6a2e889de28d65202a8  ./.github/velnor/task-execution-manifest-v1.json
 3b019c1d0dafa22ec5f0d68ef1a3f5ee63e8ad7b442dd1a24e6e36f6c4030948  ./.github/workflows/cache-prune.yml
-5b2b537a7f167b9ae44218bc9d48ea490c2bf00672caee175d5657f88cca05c6  ./.github/workflows/ci.yml
-891df6e8893568af0019204c91b797fabaee44581b69ca2fe5c8e1a93c82e864  ./.github/workflows/state-seal.yml
+82edad39b126157b6008e334e79e00fc4b75457d6e6bee0375841c56c6dccd13  ./.github/workflows/ci.yml
+52807ed31241e79267c960aa9b9a415de53b755c2427ff34139343b5828b500d  ./.github/workflows/state-seal.yml

@@ -90,7 +90,7 @@ pub(crate) fn recover_step(
     script.extend(cleanup_lines(&payload_parent, &ancestors(&payload)?));
     script.extend([
         "unlock \"$stage\"; rm -rf \"$d\" \"$stage\" || :".to_owned(),
-        "mkdir -p \"$d\"".to_owned(),
+        "mkdir -p -m 700 \"$d\"".to_owned(),
         S256_FN.to_owned(),
         "cold() { printf '%s\\n' \"velnor: state snapshot no_entry ($1)\"; exit 0; }".to_owned(),
         "corrupt() { printf '%s\\n' \"::warning::cache_corrupt: state snapshot $1; building cold\"; mode=purge; exit 0; }".to_owned(),
@@ -165,6 +165,10 @@ fn admission_lines(ceilings: StateCeilings) -> Vec<String> {
         "lap digest".to_owned(),
         "inflate() { zstd -dc --long=30 \"$payload\" && : > \"$d/inflated\"; }".to_owned(),
         format!("bounded() {{ inflate | head -c {cap_plus}; }}"),
+        "if inflate 2>/dev/null | head -c 512 > \"$d/first512\"; then :; else corrupt \"payload unreadable\"; fi".to_owned(),
+        "if [ ! -s \"$d/first512\" ]; then if zstd -dc --long=30 \"$payload\" > /dev/null 2>&1; then :; else corrupt \"payload unreadable\"; fi; fi".to_owned(),
+        "head -c 262 \"$d/first512\" | tail -c 5 > \"$d/magic\"; magic=; read -r magic < \"$d/magic\" || :; if [ \"$magic\" != ustar ]; then refused refused-shadow; fi".to_owned(),
+        "prefix=\"$base/\"; head -c \"${#prefix}\" \"$d/first512\" > \"$d/first\"; first=; read -r first < \"$d/first\" || :; if [ \"$first\" != \"$prefix\" ]; then refused refused-shadow; fi".to_owned(),
         "mkfifo \"$d/f1\" \"$d/f2\" || corrupt \"payload unreadable\"".to_owned(),
         read_number(
             "plain_n",
@@ -176,9 +180,6 @@ fn admission_lines(ceilings: StateCeilings) -> Vec<String> {
         format!("if [ \"$plain_n\" -gt {cap} ]; then refused \"over_extracted extracted>=$plain_n ceiling={extracted}\"; fi"),
         "if [ ! -f \"$d/inflated\" ]; then corrupt \"payload unreadable\"; fi".to_owned(),
         "lap decode_list".to_owned(),
-        "if inflate 2>/dev/null | head -c 512 > \"$d/first512\"; then :; else corrupt \"payload unreadable\"; fi".to_owned(),
-        "head -c 262 \"$d/first512\" | tail -c 5 > \"$d/magic\"; magic=; read -r magic < \"$d/magic\" || :; if [ \"$magic\" != ustar ]; then refused refused-shadow; fi".to_owned(),
-        "prefix=\"$base/\"; head -c \"${#prefix}\" \"$d/first512\" > \"$d/first\"; first=; read -r first < \"$d/first\" || :; if [ \"$first\" != \"$prefix\" ]; then refused refused-shadow; fi".to_owned(),
         "if [ \"$list_rc\" -ne 0 ]; then corrupt \"payload unreadable\"; fi".to_owned(),
     ]
 }

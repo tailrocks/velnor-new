@@ -13,6 +13,7 @@ pub(crate) const UNAME_M_ENV: &str = "VELNOR_STUB_UNAME_M";
 pub(crate) const FAIL_ENV: &str = "MBX_STUB_FAIL";
 pub(crate) const DF_AVAIL_ENV: &str = "VELNOR_STUB_DF_AVAIL_KIB";
 pub(crate) const TAR_LOG_ENV: &str = "VELNOR_STUB_TAR_LOG";
+pub(crate) const TAR_LIST_LOG_ENV: &str = "VELNOR_STUB_TAR_LIST_LOG";
 pub(crate) const ZSTD_LOG_ENV: &str = "VELNOR_STUB_ZSTD_LOG";
 const DF_AVAIL_DEFAULT_KIB: u64 = 1 << 30;
 
@@ -76,6 +77,7 @@ const TAR_LOG: &str = r#"#!/bin/sh
 for a in "$@"; do
   case "$a" in
     -xf) printf 'extract\n' >> "$VELNOR_STUB_TAR_LOG" ;;
+    -tf|-tvf) [ -z "${VELNOR_STUB_TAR_LIST_LOG:-}" ] || printf 'list\n' >> "$VELNOR_STUB_TAR_LIST_LOG" ;;
   esac
 done
 exec "TAR_REAL" "$@"
