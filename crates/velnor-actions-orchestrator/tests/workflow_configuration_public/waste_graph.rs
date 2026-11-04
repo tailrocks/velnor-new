@@ -4,6 +4,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
 
+use velnor_actions_contract::workflow::ProducerKind;
 use velnor_actions_contract::workflow::cache_family::{
     SOURCES_KEY_PLAN_EXPR, SOURCES_KEY_STEP_EXPR,
 };
@@ -14,6 +15,7 @@ use velnor_actions_orchestrator::{
 
 use super::bun_routing::make_bun_repo;
 use super::one_job_per_crate::{rust_fixtures, tofu_fixture};
+use super::seed_off::seed_repo;
 use super::waste_lint::step_name;
 use super::waste_rules::{first_crate_id, mutable, producer_step};
 
@@ -148,37 +150,41 @@ fn w1_treats_the_hosted_and_local_lane_twins_as_one_job() -> Result<(), Box<dyn 
 
 #[test]
 fn w1_lets_one_producer_repeat_a_crate_digest_but_not_two() -> Result<(), Box<dyn Error>> {
-    let mut jobs = mbx_jobs()?;
-    let crate_id = first_crate_id(&jobs)?;
-    let task = jobs[&crate_id]
-        .steps
-        .iter()
-        .find(|step| matches!(step.kind, StepKind::TaskExecution { .. }))
-        .cloned()
-        .ok_or("crate job runs no task")?;
-    let StepKind::TaskExecution { task_digest, .. } = &task.kind else {
-        return Err("not a task step".into());
-    };
+    let repo = seed_repo("")?;
+    let mut jobs = finalized_jobs(&prepare(repo.path())?)?;
     let producer_id = jobs
         .iter()
-        .find(|(_, job)| job.producer_kind().is_some())
+        .find(|(_, job)| job.producer_kind() == Some(ProducerKind::StateProducer))
         .map(|(id, _)| id.clone())
-        .ok_or("no producer job")?;
-    mutable(&mut jobs, &producer_id)?.steps.push(task.clone());
+        .ok_or("no state producer job")?;
+    let crate_digests: BTreeSet<String> = jobs
+        .values()
+        .filter(|job| job.producer_kind().is_none())
+        .flat_map(digests)
+        .collect();
+    let producer_digests = digests(&jobs[&producer_id]);
+    assert!(
+        producer_digests
+            .iter()
+            .any(|digest| crate_digests.contains(digest)),
+        "the state producer shares no digest with a crate job"
+    );
     assert_eq!(
         of(&jobs, WasteRule::DuplicateTask),
         Vec::new(),
-        "a producer sharing a crate digest was flagged"
+        "a state producer sharing a crate digest was flagged"
     );
     let copy = jobs[&producer_id].clone();
     jobs.insert(format!("{producer_id}-copy"), copy);
-    assert_eq!(
-        of(&jobs, WasteRule::DuplicateTask),
-        vec![WasteFinding::DuplicateTask {
-            digest: task_digest.clone(),
+    let mut expected: Vec<WasteFinding> = producer_digests
+        .into_iter()
+        .map(|digest| WasteFinding::DuplicateTask {
+            digest,
             jobs: vec![producer_id.clone(), format!("{producer_id}-copy")],
-        }]
-    );
+        })
+        .collect();
+    expected.sort();
+    assert_eq!(of(&jobs, WasteRule::DuplicateTask), expected);
     Ok(())
 }
 
