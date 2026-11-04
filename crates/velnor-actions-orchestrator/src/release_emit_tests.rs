@@ -3,6 +3,73 @@
 
 use super::reviewed_generator_manifest;
 
+fn write_rust_verifier(
+    intent: &std::path::Path,
+    output: &std::path::Path,
+) -> Result<(), Box<dyn std::error::Error>> {
+    use std::io::Write as _;
+    use velnor_actions_mise::{PinnedTool, ToolCatalog, catalog::rust_channel_manifest_sha256};
+    use velnor_actions_workflow_renderer::{
+        verifier_builders::{ToolchainPhase, rust_verifier_shell_step},
+        verifier_composite::verifier_shell_run_scalar,
+    };
+    let intent = crate::crate_release_runtime::parse_crate_release_intent(&std::fs::read(intent)?)?;
+    rust_channel_manifest_sha256(&intent.rust_version).ok_or("unknown Rust channel")?;
+    let catalog = ToolCatalog::pinned().with_project_tool(PinnedTool::Rust, &intent.rust_version)?;
+    let step = rust_verifier_shell_step(&catalog, ToolchainPhase::Installed)?;
+    let script = verifier_shell_run_scalar(&step)?;
+    let parent = output.parent().ok_or("output parent")?.canonicalize()?;
+    if !parent.starts_with(std::env::temp_dir().canonicalize()?) {
+        return Err("output must be inside the temporary directory".into());
+    }
+    std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(output)?
+        .write_all(script.as_bytes())?;
+    Ok(())
+}
+
+#[test]
+fn supplied_intent_renders_rust_verifier() -> Result<(), Box<dyn std::error::Error>> {
+    let temp = tempfile::tempdir()?;
+    let checkout = temp.path().join("checkout");
+    std::fs::create_dir(&checkout)?;
+    preview_fixture(&checkout)?;
+    let intent = temp.path().join("intent.toml");
+    write_consumer_intent(&checkout, &intent)?;
+    let verifier = temp.path().join("verify-rust.sh");
+    write_rust_verifier(&intent, &verifier)?;
+    let result = std::process::Command::new("/bin/bash")
+        .args(["--noprofile", "--norc", "-p", "-e", "-o", "pipefail"])
+        .arg(&verifier)
+        .env_clear()
+        .env("HOME", temp.path())
+        .env("RUNNER_TEMP", temp.path())
+        .env("RUSTUP_HOME", temp.path().join("velnor/rustup"))
+        .env("CARGO_HOME", temp.path().join("velnor/cargo"))
+        .output()?;
+    assert!(!result.status.success());
+    assert!(String::from_utf8_lossy(&result.stderr).contains("rust_toolchain_missing"));
+    assert!(write_rust_verifier(&intent, &verifier).is_err());
+    let invalid = temp.path().join("invalid.toml");
+    std::fs::write(&invalid, "invalid = true\n")?;
+    let missing = temp.path().join("missing.sh");
+    assert!(write_rust_verifier(&invalid, &missing).is_err());
+    assert!(!missing.exists());
+    let mut unknown =
+        crate::crate_release_runtime::parse_crate_release_intent(&std::fs::read(&intent)?)?;
+    unknown.rust_version = "1.2.3".to_owned();
+    std::fs::write(&invalid, toml::to_string(&unknown)?)?;
+    assert!(write_rust_verifier(&invalid, &missing).is_err());
+    assert!(!missing.exists());
+    if let Some(input) = std::env::var_os("VELNOR_TEST_RUST_VERIFIER_INTENT") {
+        let output = std::env::var_os("VELNOR_TEST_RUST_VERIFIER_OUTPUT").ok_or("output path")?;
+        write_rust_verifier(std::path::Path::new(&input), std::path::Path::new(&output))?;
+    }
+    Ok(())
+}
+
 fn preview_consumer_intent(root: &std::path::Path) -> Result<String, crate::OrchestratorError> {
     let prep = crate::prepare::prepare_for_candidate(root)?;
     let release = super::enabled_release(&prep)?.ok_or_else(|| crate::OrchestratorError::unsupported(
