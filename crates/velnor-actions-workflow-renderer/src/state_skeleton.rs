@@ -77,6 +77,7 @@ while IFS= read -r rel; do git checkout -- "$rel"; done < "$d/stubbed"
 git diff --quiet || {{ printf '%s\n' 'workspace sources differ after the skeleton phase' >&2; exit 1; }}
 [ -n "${{MBX_CACHE_DIR-}}" ] && [ "$MBX_CACHE_DIR" = "$RUNNER_TEMP/velnor/mbx" ] || {{ printf '%s\n' 'MBX_CACHE_DIR is not the store path' >&2; exit 1; }}
 rm -rf "$MBX_CACHE_DIR/incremental"
+rm -rf "$RUNNER_TEMP/velnor/r${{GITHUB_RUN_ID:?}}-a${{VELNOR_RUN_KEY_ATTEMPT:?}}"/m-*
 printf '%s\n' '{MBX_BSE_ENV}={MBX_BSE_PRODUCER}' >> "$GITHUB_ENV"
 wc -l < "$d/stubbed" > "$d/count"; count=; read -r count < "$d/count"; printf 'velnor: state skeleton restored files=%s\n' "$count"
 "#

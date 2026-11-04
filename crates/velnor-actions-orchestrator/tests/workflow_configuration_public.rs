@@ -141,6 +141,8 @@ mod state_producer;
 mod state_producer_eval;
 #[path = "workflow_configuration_public/state_producer_gates.rs"]
 mod state_producer_gates;
+#[path = "workflow_configuration_public/state_producer_reports.rs"]
+mod state_producer_reports;
 #[path = "workflow_configuration_public/state_prune_workflow.rs"]
 mod state_prune_workflow;
 #[path = "workflow_configuration_public/state_prune_yaml.rs"]
