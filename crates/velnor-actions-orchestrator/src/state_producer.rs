@@ -22,16 +22,17 @@ use velnor_actions_workflow_renderer::steps::{
 use super::CrateJobInputs;
 use crate::OrchestratorError;
 use crate::config::private_wiring::PrivateWiring;
+use crate::matrix_step::LaneTools;
 
 #[derive(Debug, Clone)]
 pub(crate) struct ProducerRoot {
     pub(crate) root: String,
-    pub(crate) nextest: bool,
     pub(crate) lanes: Vec<Step>,
 }
 
 pub(crate) fn state_producer_jobs(
     input: &CrateJobInputs<'_>,
+    lane: &LaneTools,
     roots: &[ProducerRoot],
     private: Option<&PrivateWiring>,
     timeout: JobTimeout,
@@ -42,7 +43,7 @@ pub(crate) fn state_producer_jobs(
             let slug = RootSlug::from_root(&root.root)?;
             Ok((
                 state_producer_job_id(&slug),
-                producer_job(input, root, &slug, private, timeout)?,
+                producer_job(input, lane, root, &slug, private, timeout)?,
             ))
         })
         .collect()
@@ -57,6 +58,7 @@ pub(crate) fn producer_job_ids(roots: &[String]) -> Result<Vec<String>, Orchestr
 
 fn producer_job(
     input: &CrateJobInputs<'_>,
+    lane: &LaneTools,
     producer: &ProducerRoot,
     slug: &RootSlug,
     private: Option<&PrivateWiring>,
@@ -68,13 +70,8 @@ fn producer_job(
     steps.extend(input.acquire.cloned());
     steps.push(crate::matrix_step::download_plan_step()?);
     steps.push(crate::workflow::verify_restored_rust_step(catalog));
-    steps.push(crate::matrix_step::prepare_crate_tools_step(
-        catalog,
-        true,
-        producer.nextest,
-        false,
-        false,
-    )?);
+    steps.push(crate::matrix_step::prepare_crate_tools_step(catalog, lane)?);
+    steps.extend(crate::matrix_step::verify_validators_step(catalog, lane));
     steps.push(crate::workflow::prepare_rust_components_step(catalog)?);
     steps.push(crate::workflow::verify_rust_manifest_step(catalog));
     steps.extend(crate::source_cache::restore_step_for_crate(

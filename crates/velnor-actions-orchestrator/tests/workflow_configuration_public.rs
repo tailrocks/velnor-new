@@ -205,6 +205,8 @@ mod waste_oracle;
 mod waste_outputs;
 #[path = "workflow_configuration_public/waste_rules.rs"]
 mod waste_rules;
+#[path = "workflow_configuration_public/waste_tools.rs"]
+mod waste_tools;
 #[path = "workflow_configuration_public/waste_verifier_oracle.rs"]
 mod waste_verifier_oracle;
 #[path = "workflow_configuration_public/workspace_format.rs"]

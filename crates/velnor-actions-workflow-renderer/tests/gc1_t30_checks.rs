@@ -117,7 +117,13 @@ fn check_inventory_install_accepted() -> Result<(), Box<dyn Error>> {
         ]),
     ] {
         let jobs = BTreeMap::from([("worker".to_owned(), job_with(vec![setup_step(with)]))]);
-        if check_mbx_gating(&jobs, &BTreeMap::new()).is_err() {
+        if check_mbx_gating(
+            &jobs,
+            &BTreeMap::new(),
+            &velnor_actions_mise::ToolCatalog::pinned(),
+        )
+        .is_err()
+        {
             return Err(fail("inventory filtering rejected as action ref selection"));
         }
     }

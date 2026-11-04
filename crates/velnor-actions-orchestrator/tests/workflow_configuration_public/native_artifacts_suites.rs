@@ -109,7 +109,8 @@ fn assert_gate_accepts(
         jobs.extend(suite_job(&prepared.workflow.ir.jobs, BUILD_ID)?);
         drivers.insert(BUILD_ID.to_owned(), selected);
     }
-    check_mbx_gating(&jobs, &drivers).map_err(Into::into)
+    check_mbx_gating(&jobs, &drivers, &velnor_actions_mise::ToolCatalog::pinned())
+        .map_err(Into::into)
 }
 
 fn configured_driver(configured: &str) -> CompileDriver {
