@@ -3,6 +3,7 @@
 
 use std::collections::BTreeSet;
 
+#[must_use]
 pub fn tracked_manifest_in_source(
     root: &std::path::Path,
     known: &BTreeSet<String>,

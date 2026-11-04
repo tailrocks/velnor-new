@@ -272,8 +272,7 @@ fn git_fixture_url(root: &Path) -> String {
                 .args(args)
                 .current_dir(&dep)
                 .status()
-                .expect("git")
-                .success()
+                .is_ok_and(|status| status.success())
         );
     }
     let path = dep.to_string_lossy().replace('\\', "/");
