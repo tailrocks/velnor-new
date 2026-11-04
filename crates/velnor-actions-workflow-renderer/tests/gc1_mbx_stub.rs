@@ -11,6 +11,9 @@ pub(crate) const ZSTD_PAD_ENV: &str = "ZSTD_SHIM_PAD_TO";
 pub(crate) const UNAME_S_ENV: &str = "VELNOR_STUB_UNAME_S";
 pub(crate) const UNAME_M_ENV: &str = "VELNOR_STUB_UNAME_M";
 pub(crate) const FAIL_ENV: &str = "MBX_STUB_FAIL";
+pub(crate) const DF_AVAIL_ENV: &str = "VELNOR_STUB_DF_AVAIL_KIB";
+pub(crate) const TAR_LOG_ENV: &str = "VELNOR_STUB_TAR_LOG";
+const DF_AVAIL_DEFAULT_KIB: u64 = 1 << 30;
 
 const MBX: &str = r#"#!/bin/sh
 export LC_ALL=C
@@ -62,6 +65,21 @@ const UNAME: &str = "#!/bin/sh\ncase \"$1\" in\n  -s) [ -z \"${VELNOR_STUB_UNAME
 
 const MISE: &str = "#!/bin/sh\nwhile [ $# -gt 0 ]; do case \"$1\" in --) shift; break ;; *) shift ;; esac; done\nexec \"$@\"\n";
 
+const DF: &str = r#"#!/bin/sh
+[ "$#" -eq 2 ] && [ "$1" = -Pk ] && [ "$2" = "$RUNNER_TEMP" ] || exit 1
+printf 'Filesystem 1024-blocks Used Available Capacity Mounted on\n'
+printf 'shim 2147483648 0 %s 0%% %s\n' "${VELNOR_STUB_DF_AVAIL_KIB:-DEFAULT_AVAIL}" "$RUNNER_TEMP"
+"#;
+
+const TAR_LOG: &str = r#"#!/bin/sh
+for a in "$@"; do
+  case "$a" in
+    -xf) printf 'extract\n' >> "$VELNOR_STUB_TAR_LOG" ;;
+  esac
+done
+exec "TAR_REAL" "$@"
+"#;
+
 const ZSTD_PAD: &str = r#"#!/bin/sh
 real="$ZSTD_SHIM_REAL"
 for a in "$@"; do case "$a" in -d|-dc|-cd) exec "$real" "$@" ;; esac; done
@@ -77,15 +95,27 @@ printf "$(printf '\\%03o\\%03o\\%03o\\%03o' $((data & 255)) $(((data >> 8) & 255
 head -c "$data" /dev/zero >> "$out"
 "#;
 
-pub(crate) fn install_zstd_pad(bin: &Path) -> Result<(), Box<dyn Error>> {
+fn real_tool(name: &str) -> Result<std::path::PathBuf, Box<dyn Error>> {
     let path = std::env::var("PATH")?;
-    let real = std::env::split_paths(&path)
-        .map(|dir| dir.join("zstd"))
+    std::env::split_paths(&path)
+        .map(|dir| dir.join(name))
         .find(|candidate| candidate.is_file())
-        .ok_or_else(|| std::io::Error::other("no zstd on PATH"))?;
+        .ok_or_else(|| std::io::Error::other(format!("no {name} on PATH")).into())
+}
+
+pub(crate) fn install_zstd_pad(bin: &Path) -> Result<(), Box<dyn Error>> {
+    let real = real_tool("zstd")?;
     write_executable(
         &bin.join("zstd"),
         &ZSTD_PAD.replacen("$ZSTD_SHIM_REAL", &real.display().to_string(), 1),
+    )
+}
+
+pub(crate) fn install_tar_log(bin: &Path) -> Result<(), Box<dyn Error>> {
+    let real = real_tool("tar")?;
+    write_executable(
+        &bin.join("tar"),
+        &TAR_LOG.replacen("TAR_REAL", &real.display().to_string(), 1),
     )
 }
 
@@ -101,7 +131,11 @@ pub(crate) fn install(bin: &Path) -> Result<(), Box<dyn Error>> {
     std::fs::create_dir_all(bin)?;
     write_executable(&bin.join("mbx"), MBX)?;
     write_executable(&bin.join("uname"), UNAME)?;
-    write_executable(&bin.join("mise"), MISE)
+    write_executable(&bin.join("mise"), MISE)?;
+    write_executable(
+        &bin.join("df"),
+        &DF.replacen("DEFAULT_AVAIL", &DF_AVAIL_DEFAULT_KIB.to_string(), 1),
+    )
 }
 
 pub(crate) fn install_failure(bin: &Path, tool: &str) -> Result<(), Box<dyn Error>> {

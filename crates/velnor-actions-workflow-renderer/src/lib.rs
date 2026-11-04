@@ -87,6 +87,7 @@ pub mod release_spec;
 pub mod release_tree;
 pub mod render;
 mod render_cache_files;
+mod render_state_seal;
 mod required_gate;
 mod runs_on;
 mod rust_job_env;
@@ -128,6 +129,7 @@ mod verifier_shell;
 mod waste_lint;
 mod waste_lint_env;
 mod waste_lint_graph;
+mod waste_lint_tools;
 
 pub mod verification_jobs;
 pub mod verifier_builders;

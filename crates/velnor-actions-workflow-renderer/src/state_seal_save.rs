@@ -11,7 +11,7 @@ use velnor_actions_contract::workflow::state_seal::{
     STATE_SEAL_KEY_ENV, STATE_SEAL_KEY_EXPR, STATE_SEAL_LIST_FIELDS, STATE_SEAL_LIST_JQ,
     STATE_SEAL_LIST_LIMIT, STATE_SEAL_LIST_TAB, STATE_SEAL_PENDING_BYTES_ENV,
     STATE_SEAL_PENDING_ENV, STATE_SEAL_PREDICATE_TYPE, STATE_SEAL_RETIRE_CONDITION,
-    STATE_SEAL_SCOPE_ENV, STATE_SEAL_SUBJECT_REL,
+    STATE_SEAL_SCOPE_ENV, STATE_SEAL_SUBJECT_REL, STATE_SEAL_WORKFLOW_PATH,
 };
 use velnor_actions_contract::{Step, StepRole};
 
@@ -52,12 +52,10 @@ repo="${GITHUB_REPOSITORY-}"
 [ -n "$key" ] && [ -n "$ref" ] && [ -n "$repo" ] || refuse identity_missing
 case "$key" in *[[:space:]]*) refuse key_whitespace ;; esac
 gh cache list -R "$repo" --key "$key" --ref "$ref" --limit @LIMIT@ --json @FIELDS@ --jq '@JQ@' > "$d/existing" 2> /dev/null || refuse existing_unlistable
-signer="${GITHUB_WORKFLOW_REF-}"
-signer="${signer%%@*}"
+signer="$repo/@SIGNER_PATH@"
 while IFS='@TAB@' read -r k i s; do
   [ "$k" = "$key" ] || continue
   number "$i" && number "$s" || refuse key_exists_malformed
-  [ -n "$signer" ] || refuse signer_missing
   printf '%s %s %s\n' "$k" "$i" "$s" > "$d/subject"
   if gh attestation verify "$d/subject" -R "$repo" --signer-workflow "$signer" --source-ref "$ref" --predicate-type '@PREDICATE@' > /dev/null 2>&1; then settle already_attested; fi
   gh cache delete -R "$repo" "$i" > /dev/null 2>&1 || refuse preexisting_unattested_undeletable
@@ -97,9 +95,8 @@ key="${@KEY_ENV@-}"
 scope="${@SCOPE@-}"
 ref="${@REF_ENV@-}"
 repo="${GITHUB_REPOSITORY-}"
-signer="${GITHUB_WORKFLOW_REF-}"
-signer="${signer%%@*}"
-[ -n "$key" ] && [ -n "$scope" ] && [ -n "$ref" ] && [ -n "$repo" ] && [ -n "$signer" ] || skip identity_missing
+signer="$repo/@SIGNER_PATH@"
+[ -n "$key" ] && [ -n "$scope" ] && [ -n "$ref" ] && [ -n "$repo" ] || skip identity_missing
 number "$size" && [ "$size" -gt 0 ] || skip payload_unreadable
 bound_of "$size" || skip bound_unavailable
 subject="$RUNNER_TEMP/@SUBJECT@"
@@ -163,6 +160,7 @@ pub fn state_seal_admit_step(pending: &[String], pending_bytes: u64) -> Result<S
             .replace("@JQ@", STATE_SEAL_LIST_JQ)
             .replace("@TAB@", STATE_SEAL_LIST_TAB)
             .replace("@PREDICATE@", STATE_SEAL_PREDICATE_TYPE)
+            .replace("@SIGNER_PATH@", STATE_SEAL_WORKFLOW_PATH)
             .replace("@ADMITTED@", STATE_SEAL_ADMITTED_OUTPUT)
             .replace("@PENDING_BYTES@", STATE_SEAL_PENDING_BYTES_ENV)
             .replace("@PENDING@", STATE_SEAL_PENDING_ENV)
@@ -185,9 +183,8 @@ pub fn state_seal_admit_step(pending: &[String], pending_bytes: u64) -> Result<S
     )?;
     step.id = Some(velnor_actions_contract::StepId::StateSealAdmit);
     step.role = Some(StepRole::StateSealAdmit);
-    step.condition = Some(
-        velnor_actions_contract::workflow::state_seal::STATE_SEAL_SUBJECT_CONDITION.to_owned(),
-    );
+    step.condition =
+        Some(velnor_actions_contract::workflow::state_seal::STATE_SEAL_ADMIT_CONDITION.to_owned());
     Ok(step)
 }
 
@@ -206,6 +203,7 @@ pub fn state_seal_retire_step(scope: &str, artifact_expr: &str) -> Result<Step, 
             .replace("@TAB@", STATE_SEAL_LIST_TAB)
             .replace("@SUBJECT@", STATE_SEAL_SUBJECT_REL)
             .replace("@PREDICATE@", STATE_SEAL_PREDICATE_TYPE)
+            .replace("@SIGNER_PATH@", STATE_SEAL_WORKFLOW_PATH)
     );
     let mut step = gh_step(
         "Retire superseded state",

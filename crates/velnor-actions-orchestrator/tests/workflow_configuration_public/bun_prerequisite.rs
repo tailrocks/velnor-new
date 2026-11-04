@@ -6,6 +6,7 @@ use std::error::Error;
 use std::fs;
 use std::path::Path;
 
+use velnor_actions_contract::workflow::state_seal::STATE_SEAL_WORKFLOW_PATH;
 use velnor_actions_contract::{StepKind, StepRole, WorkflowPolicy};
 use velnor_actions_orchestrator::{
     GenerationPreparation, finalized_jobs, prepare, render_staged_tree,
@@ -167,7 +168,10 @@ fn assert_orchestrator_execution(
     );
     assert!(document.contains("mise.toml"));
     assert!(document.contains("mise.lock"));
-    assert!(document.contains("~/.local/share/mise"));
+    let sealed = workflow
+        .get(STATE_SEAL_WORKFLOW_PATH)
+        .ok_or("generated state-seal workflow is missing")?;
+    assert!(sealed.contains("~/.local/share/mise"));
     assert!(document.contains("${{ runner.temp }}/velnor/cargo"));
     Ok(())
 }
