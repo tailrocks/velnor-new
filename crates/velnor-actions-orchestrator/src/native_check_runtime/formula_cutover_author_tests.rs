@@ -179,6 +179,76 @@ fn checkout_proof(
     )
 }
 
+fn merge_checkout_at_depth(
+    fixture: &GitFixture,
+    depth: u32,
+) -> Result<TempDir, Box<dyn Error>> {
+    git(
+        fixture.root(),
+        &["update-ref", "refs/pull/1/merge", &fixture.merge],
+    )?;
+    let clone = tempfile::tempdir()?;
+    git(clone.path(), &["init", "--quiet"])?;
+    let url = format!("file://{}", fixture.root().display());
+    let depth_flag = format!("--depth={depth}");
+    git(
+        clone.path(),
+        &[
+            "fetch",
+            "--quiet",
+            "--no-tags",
+            &depth_flag,
+            &url,
+            "+refs/pull/1/merge:refs/remotes/pull/1/merge",
+        ],
+    )?;
+    git(clone.path(), &["symbolic-ref", "HEAD", "refs/heads/main"])?;
+    git(
+        clone.path(),
+        &["update-ref", "refs/heads/main", &fixture.merge],
+    )?;
+    assert_eq!(
+        git(clone.path(), &["rev-parse", "--is-shallow-repository"])?,
+        "true"
+    );
+    Ok(clone)
+}
+
+#[test]
+fn pull_request_merge_checkout_proves_its_parents_at_depth_two_and_not_at_depth_one()
+-> Result<(), Box<dyn Error>> {
+    let fixture = GitFixture::new()?;
+    let pull = snapshot(
+        &fixture.head,
+        &fixture.base,
+        Some(&fixture.merge),
+        expected_author(),
+    );
+    let prove = |root: &Path| {
+        crate::homebrew::authority::verify_homebrew_authority_pull_request_checkout(
+            root,
+            &pull,
+            &fixture.base,
+            &fixture.head,
+            &fixture.merge,
+            CheckDeadline::after(Duration::from_secs(10)).expect("deadline"),
+        )
+    };
+
+    let depth_one = merge_checkout_at_depth(&fixture, 1)?;
+    let error = prove(depth_one.path()).expect_err("a depth-1 merge checkout has no parents");
+    assert!(
+        error
+            .to_string()
+            .contains("homebrew_authority_pull_request_merge_parents"),
+        "unexpected error: {error}"
+    );
+
+    let depth_two = merge_checkout_at_depth(&fixture, 2)?;
+    prove(depth_two.path())?;
+    Ok(())
+}
+
 #[test]
 fn structural_cutover_author_admission_accepts_exact_head_or_merge_and_rejects_identity_drift()
 -> Result<(), Box<dyn Error>> {

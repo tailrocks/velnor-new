@@ -21,7 +21,7 @@ use velnor_actions_mise::{
     PrepareRustComponents, ToolCatalog, ToolHomes,
 };
 
-pub const VERDICT_CHECKOUT_HISTORY: CheckoutHistory = CheckoutHistory::ShallowOnPush;
+pub const PLAN_CHECKOUT_HISTORY: CheckoutHistory = CheckoutHistory::ShallowOnPush;
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum PlanRustNeed {
@@ -132,7 +132,7 @@ pub fn plan_job(
     policy: WorkflowPolicy,
 ) -> Result<Job, NativeJobBuilderError> {
     let source_free = policy == WorkflowPolicy::VelnorRepositoryV1;
-    let mut steps = vec![checkout_history_action(VERDICT_CHECKOUT_HISTORY)?];
+    let mut steps = vec![checkout_history_action(PLAN_CHECKOUT_HISTORY)?];
     let mut acquire = acquire;
     if source_free {
         steps.extend(acquire.take());
@@ -214,13 +214,14 @@ pub fn final_job(
     crate_job_ids: &[String],
     acquire: Option<Step>,
     catalog: &ToolCatalog,
+    history: CheckoutHistory,
 ) -> Result<Job, NativeJobBuilderError> {
     let mut crate_job_ids = crate_job_ids.to_vec();
     crate_job_ids.sort();
     let mut needs = vec![PLAN_JOB_ID.to_owned()];
     needs.extend(crate_job_ids);
     needs.push(LINT_JOB_ID.to_owned());
-    let mut steps = vec![checkout_history_action(VERDICT_CHECKOUT_HISTORY)?];
+    let mut steps = vec![checkout_history_action(history)?];
     steps.extend(acquire);
     steps.push(prepare_pinned_tools_step(
         catalog,
