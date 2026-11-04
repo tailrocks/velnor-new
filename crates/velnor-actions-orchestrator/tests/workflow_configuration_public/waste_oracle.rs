@@ -282,9 +282,11 @@ fn scan_job(files: &Files, file: &str, workflow: &str, id: &str) -> Result<JobUs
         .collect();
     let installs_rust = scalars.iter().any(|scalar| installs_toolchain(scalar));
     let entries = job_env_entries(workflow, block)?;
-    let env_off = entries
-        .iter()
-        .any(|(key, value)| key == AUTO_INSTALL_ENV && value == "\"0\"");
+    let env_off = entries.iter().any(|(key, value)| {
+        key == AUTO_INSTALL_ENV
+            && serde_saphyr::from_str::<serde_json::Value>(value)
+                .is_ok_and(|scalar| scalar.as_str() == Some("0"))
+    });
     Ok(JobUse {
         file: file.to_owned(),
         job: id.to_owned(),

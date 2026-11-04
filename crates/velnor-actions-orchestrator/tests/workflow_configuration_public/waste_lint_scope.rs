@@ -218,3 +218,23 @@ fn committed_generated_workflows_have_auto_install_off_or_are_listed_uncovered()
     }
     Ok(())
 }
+
+#[test]
+fn rust_auto_install_guard_interprets_yaml_string_values() -> Result<(), Box<dyn Error>> {
+    for (value, expected) in [
+        ("\"0\"", true),
+        ("'0'", true),
+        ("\"1\"", false),
+        ("0", false),
+    ] {
+        let files = Files::from([(
+            ".github/workflows/example.yml".to_owned(),
+            format!(
+                "name: Example\non: push\njobs:\n  build:\n    runs-on: ubuntu-24.04\n    env:\n      RUSTUP_AUTO_INSTALL: {value}\n    steps:\n      - run: mise install rust@1.99.1\n      - run: cargo --version\n"
+            ),
+        )]);
+        let jobs = oracle::scan(&files, |_| true)?;
+        assert_eq!(oracle::violations(&jobs).is_empty(), expected, "{value}");
+    }
+    Ok(())
+}
