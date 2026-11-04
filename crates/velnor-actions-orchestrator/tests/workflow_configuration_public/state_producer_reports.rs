@@ -10,7 +10,7 @@ use std::process::{Command, Output};
 use velnor_actions_contract::ids::run_key_for_ci;
 use velnor_actions_contract::{Job, Step, StepKind, StepRole};
 
-use super::state_producer::{ROOTS, build, job};
+use super::state_producer::{ROOTS, build, job, text_of};
 use super::support::rendered_job_block;
 use super::workflow_configuration_fixture::git;
 
@@ -185,7 +185,7 @@ fn the_second_producer_phase_can_write_the_task_reports_the_first_phase_wrote()
         let lanes = lane_matrix_keys(producer);
         assert!(!lanes.is_empty(), "{producer_id} has no lane records");
         assert!(
-            job_env(&built.ci, producer_id)?.contains("VELNOR_RUN_KEY_ATTEMPT"),
+            job_env(text_of(&built, producer_id), producer_id)?.contains("VELNOR_RUN_KEY_ATTEMPT"),
             "{producer_id} does not carry the run attempt the restore step needs"
         );
         let workspace = tempfile::tempdir()?;

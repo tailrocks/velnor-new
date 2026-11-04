@@ -7,6 +7,7 @@ use std::path::Path;
 
 use velnor_actions_contract::workflow::TOOLS_PRODUCER_INSTALL_CONDITION;
 use velnor_actions_contract::workflow::crate_job::TOOLS_PRODUCER_JOB_ID_PREFIX;
+use velnor_actions_contract::workflow::state_seal::STATE_SEAL_WORKFLOW_PATH;
 use velnor_actions_workflow_renderer::render::{RenderedFile, WORKFLOW_PATH};
 
 use super::audit_with_verifiers;
@@ -104,13 +105,27 @@ fn job_blocks(text: &str) -> Vec<JobBlock> {
     blocks
 }
 
-fn workflow_text(rendered: &Rendered) -> Result<&str, Box<dyn Error>> {
+const WORKFLOW_PATHS: [&str; 2] = [WORKFLOW_PATH, STATE_SEAL_WORKFLOW_PATH];
+
+fn workflow_text<'a>(rendered: &'a Rendered, path: &str) -> Result<&'a str, Box<dyn Error>> {
     rendered
         .files
         .iter()
-        .find(|file| file.path == WORKFLOW_PATH)
+        .find(|file| file.path == path)
         .map(|file| file.bytes.as_str())
-        .ok_or_else(|| "rendered workflow is missing".into())
+        .ok_or_else(|| format!("rendered workflow {path} is missing").into())
+}
+
+fn locate(rendered: &Rendered, job_id: &str) -> Result<&'static str, Box<dyn Error>> {
+    for path in WORKFLOW_PATHS {
+        if job_blocks(workflow_text(rendered, path)?)
+            .iter()
+            .any(|block| block.id == job_id)
+        {
+            return Ok(path);
+        }
+    }
+    Err(format!("no job block {job_id}").into())
 }
 
 fn edited(
@@ -127,7 +142,8 @@ fn edited_all(
     job_id: &str,
     edits: &[(&str, &str)],
 ) -> Result<Vec<RenderedFile>, Box<dyn Error>> {
-    let text = workflow_text(rendered)?;
+    let path = locate(rendered, job_id)?;
+    let text = workflow_text(rendered, path)?;
     let block = job_blocks(text)
         .into_iter()
         .find(|block| block.id == job_id)
@@ -148,7 +164,7 @@ fn edited_all(
         .iter()
         .map(|file| RenderedFile {
             path: file.path.clone(),
-            bytes: if file.path == WORKFLOW_PATH {
+            bytes: if file.path == path {
                 changed.clone()
             } else {
                 file.bytes.clone()
@@ -158,12 +174,16 @@ fn edited_all(
 }
 
 fn first_job_containing(rendered: &Rendered, needle: &str) -> Result<String, Box<dyn Error>> {
-    let text = workflow_text(rendered)?;
-    job_blocks(text)
-        .into_iter()
-        .find(|block| text[block.start..block.end].contains(needle))
-        .map(|block| block.id)
-        .ok_or_else(|| format!("no job contains {needle:?}").into())
+    for path in WORKFLOW_PATHS {
+        let text = workflow_text(rendered, path)?;
+        if let Some(block) = job_blocks(text)
+            .into_iter()
+            .find(|block| text[block.start..block.end].contains(needle))
+        {
+            return Ok(block.id);
+        }
+    }
+    Err(format!("no job contains {needle:?}").into())
 }
 
 fn gated_verifier_lines() -> String {
@@ -182,7 +202,7 @@ fn producer_with_gated_verifier(rendered: &Rendered) -> Result<String, Box<dyn E
         id.starts_with(TOOLS_PRODUCER_JOB_ID_PREFIX),
         "gated installed verifier first appears in {id}"
     );
-    let text = workflow_text(rendered)?;
+    let text = workflow_text(rendered, locate(rendered, &id)?)?;
     let block = job_blocks(text)
         .into_iter()
         .find(|block| block.id == id)

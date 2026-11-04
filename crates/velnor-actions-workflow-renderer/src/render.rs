@@ -282,12 +282,19 @@ fn render_merged(
     )?;
     let mut shared = crate::lane_share::share_lanes(&jobs, ctx)?;
     shared.files.extend(task_files);
+    let all_jobs = jobs.clone();
+    let mut jobs = jobs;
+    let state_seal = crate::render_state_seal::split_state_seal(ir, &mut shared, &mut jobs)?;
     execution_boundaries::validate_required_verdict(&shared.jobs, phase, &ctx.authority_steps)?;
     execution_boundaries::validate_trusted_plan(&shared.jobs, policy, phase, &ctx.authority_steps)?;
     match emit::emit_shared(
         ir,
         &shared,
-        &jobs,
+        &emit::EmitScope {
+            jobs: &jobs,
+            all_jobs: &all_jobs,
+            state_seal: state_seal.as_ref(),
+        },
         ctx,
         matrix.as_ref(),
         &caps,
@@ -314,7 +321,11 @@ fn render_merged(
             emit::emit_shared(
                 ir,
                 &shared,
-                &jobs,
+                &emit::EmitScope {
+                    jobs: &jobs,
+                    all_jobs: &all_jobs,
+                    state_seal: state_seal.as_ref(),
+                },
                 ctx,
                 matrix.as_ref(),
                 &caps,

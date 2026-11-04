@@ -280,6 +280,25 @@ pub(crate) fn attach_plan_outputs(
     insert_job_key(jobs, PLAN_JOB_ID, "outputs", Yaml::Map(outputs))
 }
 
+pub(crate) fn attach_state_seal_plan_outputs(
+    document: &mut Yaml,
+    cache: &[(String, String)],
+) -> Result<(), RenderError> {
+    let Yaml::Map(entries) = document else {
+        return Err(matrix_invalid("matrix_without_document"));
+    };
+    let Some(Yaml::Map(jobs)) = entries
+        .iter_mut()
+        .find(|entry| entry.0 == "jobs")
+        .map(|entry| &mut entry.1)
+    else {
+        return Err(matrix_invalid("matrix_without_jobs"));
+    };
+    let mut outputs = vec![plan_attempt_output()];
+    outputs.extend(crate::cache_plan_outputs::output_entries(cache));
+    insert_job_key(jobs, PLAN_JOB_ID, "outputs", Yaml::Map(outputs))
+}
+
 pub(super) fn insert_job_key(
     jobs: &mut [(String, Yaml)],
     id: &str,

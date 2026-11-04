@@ -12,7 +12,7 @@ use velnor_actions_contract::{Job, StepRole};
 use crate::gc1_mbx_stub::EXPORT_MARK_ENV;
 use crate::gc1_scene::{DEFAULT_SNAPSHOT, Scene, fail};
 use crate::gc1_seal_support::{
-    Attestation, Gh, MAIN, REPO, SIGNER, digest, run_select, scope_of, selected,
+    Attestation, Gh, MAIN, OTHER_WORKFLOW_REF, REPO, digest, run_select, scope_of, selected,
 };
 use crate::state_v4_attest_save::script_and_env;
 use crate::state_v4_bind::run_bind;
@@ -95,7 +95,6 @@ fn seal(
     gh.attest(&[Attestation::bound(&key, id, size)])?;
     let (script, env) = script_and_env(job, StepRole::StateSealRetire)?;
     let dir = gh.dir();
-    let signer = format!("{SIGNER}@refs/heads/main");
     let mut pairs: Vec<(&str, &str)> = env
         .iter()
         .filter(|(name, _)| {
@@ -112,7 +111,7 @@ fn seal(
     pairs.extend([
         ("FAKE_GH_DIR", dir.as_str()),
         ("GITHUB_REPOSITORY", REPO),
-        ("GITHUB_WORKFLOW_REF", signer.as_str()),
+        ("GITHUB_WORKFLOW_REF", OTHER_WORKFLOW_REF),
         ("GH_TOKEN", "fixture"),
         ("VELNOR_DEFAULT_REF", MAIN),
         (STATE_SEAL_KEY_ENV, key.as_str()),

@@ -3,7 +3,10 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use velnor_actions_contract::workflow::state_seal::STATE_SEAL_WORKFLOW_PATH;
 use velnor_actions_contract::{Job, WorkflowIr};
+
+use crate::tree::RenderedFile;
 
 use super::{MatrixSource, RenderContext, RenderedWorkflow, WORKFLOW_PATH, fallback};
 use crate::{RenderError, document, matrix, steps};
@@ -16,10 +19,17 @@ pub(crate) fn workflow_file_too_large(error: &RenderError) -> bool {
     )
 }
 
+#[derive(Clone, Copy)]
+pub(crate) struct EmitScope<'a> {
+    pub(crate) jobs: &'a BTreeMap<String, Job>,
+    pub(crate) all_jobs: &'a BTreeMap<String, Job>,
+    pub(crate) state_seal: Option<&'a crate::render_state_seal::StateSealWorkflow>,
+}
+
 pub(crate) fn emit_shared(
     ir: &WorkflowIr,
     shared: &crate::lane_share::LaneShare,
-    jobs: &BTreeMap<String, Job>,
+    scope: &EmitScope<'_>,
     ctx: &RenderContext,
     matrix: Option<&(MatrixSource, u32)>,
     caps: &BTreeMap<String, u32>,
@@ -29,9 +39,14 @@ pub(crate) fn emit_shared(
         BTreeMap<String, matrix::bun::BunLegMatrix>,
     ),
 ) -> Result<RenderedWorkflow, RenderError> {
+    let EmitScope {
+        jobs,
+        all_jobs,
+        state_seal,
+    } = *scope;
     let mbx_jobs = crate::mbx_gc_policy::jobs_with_mbx_objects(jobs);
     let mut document = document::workflow_to_yaml(ir, shared, ctx, &mbx_jobs)?;
-    let cache_outputs = crate::cache_plan_outputs::consumed(jobs)?;
+    let cache_outputs = crate::cache_plan_outputs::consumed(jobs, true)?;
     if let Some((source, max_parallel)) = matrix {
         matrix::attach_task_matrix(&mut document, source, *max_parallel, &cache_outputs)?;
     } else {
@@ -43,13 +58,16 @@ pub(crate) fn emit_shared(
     matrix::bun::attach_bun_matrices(&mut document, &suite_matrices.2)?;
     let text = fallback::render_checked_workflow(WORKFLOW_PATH, &document, &ctx.generator_version)?;
     steps::scan_for_private_subcommands(&text)?;
-    let shared_files = crate::render_cache_files::with_runtime_identity_files(
+    let mut shared_files = crate::render_cache_files::with_runtime_identity_files(
         shared.files.clone(),
-        jobs,
+        all_jobs,
         &ctx.generator_version,
         &ctx.tool_pins,
     )?;
-    if crate::tool_seed::any_job_has_seed(jobs)? {
+    if let Some(sealed) = state_seal {
+        shared_files.push(emit_state_seal(sealed, ctx)?);
+    }
+    if crate::tool_seed::any_job_has_seed(all_jobs)? {
         return Err(RenderError::InvalidWorkflow(
             "tool_seed_requires_tools_prelude".to_owned(),
         ));
@@ -57,5 +75,25 @@ pub(crate) fn emit_shared(
     Ok(RenderedWorkflow {
         yaml: text,
         shared: shared_files,
+    })
+}
+
+fn emit_state_seal(
+    sealed: &crate::render_state_seal::StateSealWorkflow,
+    ctx: &RenderContext,
+) -> Result<RenderedFile, RenderError> {
+    let mbx_jobs = crate::mbx_gc_policy::jobs_with_mbx_objects(&sealed.jobs);
+    let mut document = document::workflow_to_yaml(&sealed.ir, &sealed.shared, ctx, &mbx_jobs)?;
+    let cache_outputs = crate::cache_plan_outputs::consumed(&sealed.jobs, false)?;
+    matrix::attach_state_seal_plan_outputs(&mut document, &cache_outputs)?;
+    let bytes = fallback::render_checked_workflow(
+        STATE_SEAL_WORKFLOW_PATH,
+        &document,
+        &ctx.generator_version,
+    )?;
+    steps::scan_for_private_subcommands(&bytes)?;
+    Ok(RenderedFile {
+        path: STATE_SEAL_WORKFLOW_PATH.to_owned(),
+        bytes,
     })
 }
