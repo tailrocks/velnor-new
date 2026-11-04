@@ -10,7 +10,9 @@ use velnor_actions_contract::workflow::state_seal::{
 use velnor_actions_contract::{Job, StepKind, StepRole};
 
 use crate::gc1_scene::{Scene, fail};
-use crate::gc1_seal_support::{Attestation, Gh, MAIN, PULL, REPO, SIGNER, digest, scope_of};
+use crate::gc1_seal_support::{
+    Attestation, Gh, MAIN, OTHER_WORKFLOW_REF, PULL, REPO, digest, scope_of,
+};
 use crate::state_v4_bind::run_bind;
 use crate::state_v4_seal::{FIXTURE, resolved_prefix, seal_job, step_of};
 
@@ -101,7 +103,6 @@ impl World {
         let (script, env) = script_and_env(&self.job, StepRole::StateSealRetire)?;
         let dir = self.gh.dir();
         let artifact = ARTIFACT.to_string();
-        let signer = format!("{SIGNER}@refs/heads/main");
         let mut pairs: Vec<(&str, &str)> = env
             .iter()
             .filter(|(name, _)| {
@@ -117,7 +118,7 @@ impl World {
         pairs.extend([
             ("FAKE_GH_DIR", dir.as_str()),
             ("GITHUB_REPOSITORY", REPO),
-            ("GITHUB_WORKFLOW_REF", signer.as_str()),
+            ("GITHUB_WORKFLOW_REF", OTHER_WORKFLOW_REF),
             ("GH_TOKEN", "fixture"),
             ("VELNOR_DEFAULT_REF", MAIN),
             (STATE_SEAL_KEY_ENV, self.key.as_str()),

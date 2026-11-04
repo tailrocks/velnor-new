@@ -4,6 +4,7 @@
 use std::collections::BTreeMap;
 use std::error::Error;
 
+use velnor_actions_contract::workflow::state_seal::STATE_SEAL_WORKFLOW_PATH;
 use velnor_actions_orchestrator::{prepare, render_staged_tree};
 use velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
 
@@ -112,29 +113,31 @@ fn rendered_jobs() -> Result<Vec<RenderedJob>, Box<dyn Error>> {
     let repo = mbx_repo(false)?;
     let prepared = prepare(repo.path())?;
     let tree = render_staged_tree(&prepared)?;
-    let text = tree
-        .get(WORKFLOW_PATH)
-        .ok_or("rendered workflow is missing")?;
-    let blocks = job_blocks(text);
-    let inherited = workflow_env(text);
-    let mut anchors = BTreeMap::new();
     let mut jobs = Vec::new();
-    for block in &blocks {
-        collect_anchors(&block.lines, &mut anchors);
-        let runs_mbx = block
-            .lines
-            .iter()
-            .any(|line| line.contains("mbx cache import"));
-        jobs.push(RenderedJob {
-            id: block.id.to_owned(),
-            runs_mbx,
-            text: block.lines.join("\n"),
-            env: {
-                let mut env = inherited.clone();
-                env.extend(job_env(block, &anchors)?);
-                env
-            },
-        });
+    for path in [WORKFLOW_PATH, STATE_SEAL_WORKFLOW_PATH] {
+        let text = tree
+            .get(path)
+            .ok_or_else(|| format!("rendered workflow {path} is missing"))?;
+        let blocks = job_blocks(text);
+        let inherited = workflow_env(text);
+        let mut anchors = BTreeMap::new();
+        for block in &blocks {
+            collect_anchors(&block.lines, &mut anchors);
+            let runs_mbx = block
+                .lines
+                .iter()
+                .any(|line| line.contains("mbx cache import"));
+            jobs.push(RenderedJob {
+                id: block.id.to_owned(),
+                runs_mbx,
+                text: block.lines.join("\n"),
+                env: {
+                    let mut env = inherited.clone();
+                    env.extend(job_env(block, &anchors)?);
+                    env
+                },
+            });
+        }
     }
     Ok(jobs)
 }

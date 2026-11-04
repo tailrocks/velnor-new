@@ -78,7 +78,11 @@ pub(crate) fn workflow_to_yaml(
                 ("group".to_owned(), Yaml::str(ir.concurrency.group.clone())),
                 (
                     "cancel-in-progress".to_owned(),
-                    Yaml::str(ir.concurrency.cancel_in_progress.clone()),
+                    match ir.concurrency.cancel_in_progress.as_str() {
+                        "true" => Yaml::Bool(true),
+                        "false" => Yaml::Bool(false),
+                        expression => Yaml::str(expression.to_owned()),
+                    },
                 ),
             ]),
         ),
@@ -161,16 +165,17 @@ fn triggers_to_yaml(triggers: &Trigger) -> Yaml {
         .iter()
         .map(|branch| Yaml::str(branch.clone()))
         .collect();
-    let mut entries = vec![
-        (
+    let mut entries = Vec::new();
+    if !triggers.pull_request_types.is_empty() {
+        entries.push((
             "pull_request".to_owned(),
             Yaml::Map(vec![("types".to_owned(), Yaml::Seq(pr_types))]),
-        ),
-        (
-            "push".to_owned(),
-            Yaml::Map(vec![("branches".to_owned(), Yaml::Seq(branches))]),
-        ),
-    ];
+        ));
+    }
+    entries.push((
+        "push".to_owned(),
+        Yaml::Map(vec![("branches".to_owned(), Yaml::Seq(branches))]),
+    ));
     if let Some(schedule) = &triggers.schedule {
         let crons: Vec<Yaml> = schedule
             .cron
@@ -190,7 +195,9 @@ fn triggers_to_yaml(triggers: &Trigger) -> Yaml {
             Yaml::Map(vec![("inputs".to_owned(), Yaml::Map(inputs))]),
         ));
     }
-    entries.push(("merge_group".to_owned(), Yaml::Null));
+    if triggers.merge_group {
+        entries.push(("merge_group".to_owned(), Yaml::Null));
+    }
     Yaml::Map(entries)
 }
 

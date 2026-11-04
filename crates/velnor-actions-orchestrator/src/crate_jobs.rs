@@ -112,18 +112,17 @@ fn build_crate_jobs_with_seed_timeout(
     let owners = JobOwners::from_grouped(&discovery.proposals, &grouped)?;
     let mut jobs = Vec::with_capacity(grouped.len());
     let mut drivers = BTreeMap::new();
+    let lane = crate::matrix_step::LaneTools::union(input.policy, input.catalog, &grouped);
     let mut producer_roots: BTreeMap<String, state_producer::ProducerRoot> = BTreeMap::new();
     for (key, tasks) in &grouped {
-        let output = build_group_job(&input, &owners, key, tasks, private)?;
+        let output = build_group_job(&input, &lane, &owners, key, tasks, private)?;
         if let Some(lanes) = output.producer {
             let entry = producer_roots
                 .entry(lanes.root.clone())
                 .or_insert_with(|| state_producer::ProducerRoot {
                     root: lanes.root.clone(),
-                    nextest: false,
                     lanes: Vec::new(),
                 });
-            entry.nextest |= lanes.nextest;
             entry.lanes.extend(lanes.lanes);
         }
         drivers.insert(output.job_id.clone(), output.driver);
@@ -132,7 +131,7 @@ fn build_crate_jobs_with_seed_timeout(
     jobs.sort_by(|left, right| left.0.cmp(&right.0));
     let ledger_cli = (LedgerCliSource::for_policy(input.policy) == LedgerCliSource::SameRunBuild
         && !jobs.is_empty())
-    .then(|| ledger_cli::ledger_cli_job(&input, private))
+    .then(|| ledger_cli::ledger_cli_job(&input, &lane, private))
     .transpose()?
     .map(|job| (LEDGER_CLI_JOB_ID.to_owned(), job));
     if let Some((id, _)) = &ledger_cli {
@@ -141,7 +140,7 @@ fn build_crate_jobs_with_seed_timeout(
     let producers = match input.compiled_state {
         CompiledStateMode::Union => {
             let roots: Vec<_> = producer_roots.into_values().collect();
-            state_producer::state_producer_jobs(&input, &roots, private, seed_timeout)?
+            state_producer::state_producer_jobs(&input, &lane, &roots, private, seed_timeout)?
         }
         CompiledStateMode::Off => Vec::new(),
     };
@@ -166,6 +165,7 @@ struct GroupOutput {
 
 fn build_group_job(
     input: &CrateJobInputs<'_>,
+    lane: &crate::matrix_step::LaneTools,
     owners: &JobOwners<'_>,
     key: &CrateGroupKey,
     tasks: &[&ProposedTask],
@@ -184,7 +184,6 @@ fn build_group_job(
     };
     let use_rust = tasks.iter().any(|task| is_rust(task));
     let use_mbx = tasks.iter().any(|task| is_mbx(task));
-    let use_nextest = tasks.iter().any(|task| is_nextest(task));
     let use_opentofu = tasks.iter().any(|task| is_opentofu(task));
     let model = CrateJob {
         job_id: job_id.clone(),
@@ -206,13 +205,18 @@ fn build_group_job(
     let workspace_root =
         crate::source_prep::workspace_root_for_manifest(&model.manifest, input.fetch_roots);
     let plan = group_plan_for(&model, workspace_root, input.label, input.timeout)?;
+    let tools = if use_rust {
+        lane.clone()
+    } else {
+        crate::matrix_step::LaneTools::of_group(input.policy, input.catalog, tasks)
+    };
     let job = render_job(
         input,
         &model,
         use_rust,
         use_mbx,
-        use_nextest,
         use_opentofu,
+        &tools,
         needs,
         plan.timeout_minutes,
         private,
@@ -224,7 +228,6 @@ fn build_group_job(
     };
     let producer = use_mbx.then(|| ProducerLanes {
         root: workspace_root.to_owned(),
-        nextest: use_nextest,
         lanes: lane_records(&job, &model),
     });
     Ok(GroupOutput {
@@ -299,7 +302,6 @@ fn stack_cache_steps(
 }
 
 #[expect(
-    clippy::fn_params_excessive_bools,
     clippy::too_many_arguments,
     reason = "one call site threads job scope plus driver selection"
 )]
@@ -308,8 +310,8 @@ fn render_job(
     model: &CrateJob,
     use_rust: bool,
     use_mbx: bool,
-    use_nextest: bool,
     use_opentofu: bool,
+    tools: &crate::matrix_step::LaneTools,
     needs: Vec<String>,
     timeout: JobTimeout,
     private: Option<&PrivateWiring>,
@@ -330,18 +332,8 @@ fn render_job(
     if use_rust {
         steps.push(crate::workflow::verify_restored_rust_step(catalog));
     }
-    let needs_bun = policy == WorkflowPolicy::VelnorRepositoryV1
-        && suite.is_some_and(crate::matrix_step::CrateSuite::owns_bun);
-    steps.push(crate::matrix_step::prepare_crate_tools_step_with_bun(
-        catalog,
-        use_rust,
-        use_nextest,
-        crate::matrix_step::prepare_install_opentofu(policy, suite, use_opentofu),
-        needs_validators,
-        needs_bun,
-    )?);
-    let verify = needs_validators.then(|| crate::workflow::verify_jactionlint_step(catalog));
-    steps.extend(verify);
+    steps.push(crate::matrix_step::prepare_crate_tools_step(catalog, tools)?);
+    steps.extend(crate::matrix_step::verify_validators_step(catalog, tools));
     if use_rust {
         steps.push(crate::workflow::prepare_rust_components_step(catalog)?);
         steps.push(crate::workflow::verify_rust_manifest_step(catalog));

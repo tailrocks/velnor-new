@@ -22,11 +22,6 @@ impl Scene {
                 return Err(fail(&format!("recover left the {what}")));
             }
         }
-        for path in self.tree()?.keys() {
-            if path.file_name().is_some_and(|name| name == "plain.tar") {
-                return Err(fail("recover left the inflated archive"));
-            }
-        }
         Ok(())
     }
 

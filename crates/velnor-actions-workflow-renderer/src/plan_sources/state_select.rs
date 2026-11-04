@@ -9,8 +9,8 @@ use velnor_actions_contract::workflow::cache_family::{
 };
 use velnor_actions_contract::workflow::state_seal::{
     STATE_SEAL_LIST_LIMIT, STATE_SEAL_LIST_TAB, STATE_SEAL_PREDICATE_TYPE, STATE_SEAL_VERIFY_LIMIT,
-    STATE_SEAL_VERIFY_TIMEOUT_ENV, STATE_SEAL_VERIFY_TIMEOUT_SECONDS, state_attested_output,
-    state_compat_output, state_produce_output,
+    STATE_SEAL_VERIFY_TIMEOUT_ENV, STATE_SEAL_VERIFY_TIMEOUT_SECONDS, STATE_SEAL_WORKFLOW_PATH,
+    state_attested_output, state_compat_output, state_produce_output,
 };
 use velnor_actions_contract::{Step, StepId, StepRole};
 
@@ -53,8 +53,7 @@ rm -rf "$d"
 mkdir -p "$d"
 ref="${VELNOR_DEFAULT_REF:-}"
 repo="${GITHUB_REPOSITORY:-}"
-signer="${GITHUB_WORKFLOW_REF:-}"
-signer="${signer%%@*}"
+signer="$repo/@SIGNER_PATH@"
 limit="${@TIMEOUT_ENV@:-@TIMEOUT@}"
 shape='^s256-[0-9a-f]{64}-s256-[0-9a-f]{64}-s256-[0-9a-f]{64}$'
 run_gh() {
@@ -110,6 +109,7 @@ fn head(outer_bound: u64) -> String {
         .replace("@VERIFY_LIMIT@", &STATE_SEAL_VERIFY_LIMIT.to_string())
         .replace("@PREDICATE@", STATE_SEAL_PREDICATE_TYPE)
         .replace("@DELIMITER@", OUTPUT_DELIMITER)
+        .replace("@SIGNER_PATH@", STATE_SEAL_WORKFLOW_PATH)
 }
 
 pub fn state_select_step(roots: &[SealRoot]) -> Result<Step, RenderError> {

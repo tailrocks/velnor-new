@@ -4,7 +4,7 @@ Generation runs a waste lint on the final job graph. A finding stops
 generation. Nothing is written.
 
 The lint code is in `crates/velnor-actions-workflow-renderer/src/waste_lint.rs`,
-`waste_lint_env.rs` (W2, W3) and `waste_lint_graph.rs` (W1, W4, W5, W6). The lint runs in `finalize_jobs` and in the suites
+`waste_lint_env.rs` (W2, W3), `waste_lint_graph.rs` (W1, W4, W5, W6) and `waste_lint_tools.rs` (W7). The lint runs in `finalize_jobs` and in the suites
 workflow render, after the cache doctor.
 
 ## Scope
@@ -49,6 +49,9 @@ starts the proxy.
 | W4 `duplicate_restore` | A job restores the same cache key twice. The cache doctor's classifier decides what a restore is, so a step without a role counts. The two sources key expressions (`steps.cache-keys.outputs.sources_key` and `needs.plan.outputs.sources_key`) are one key. `restore-keys` is ignored. | Restore each key once per job. |
 | W5 `non_producer_save` | A job with no producer kind has an `actions/cache/save` step whose condition is not the literal `false`. No role is exempt. Stack family saves render as `false` in read jobs, so they pass. | Save from a producer job only. |
 | W6 `unconsumed_restore_output` | A job other than `plan` has an output that reads `steps.<id>.outputs` of a restore step or of the mbx bundle key step, and no other job reads `needs.<job>.outputs.<name>`. `toJSON(needs)` is not a read. | Delete the output, or read it in another job. |
+| W7 `split_tools_identity` | Two jobs that install rust in one lane (`runs_on`, target) carry different tools identity digests. Or a job's tools identity cannot be read, which is reported as its own finding. | Install the lane's union tool set in every rust job. `LaneTools::union` derives it from the crate groups. |
+
+W7 covers crate jobs, `ledger-cli` and the state producers. It skips the plan job, whose tools are the control-plane set, and every producer job except the state producers. The `sources-producer` copies the plan job's tools, so it is exempt with the plan. The `suite-` jobs of `stacks.rust.suites` install their own `Install suite tools` set and are outside W7. A lane's tool set is the union of the tools every rust crate group needs: rust, MBX, nextest, jactionlint, shellcheck, OpenTofu and Bun. Jobs that do not install rust keep their own set.
 
 The verifier script reads `RUSTUP_HOME` and, in the restored phase,
 `CARGO_HOME`. Without them it falls back to `$HOME/.rustup` and checks a
@@ -83,5 +86,13 @@ job-level value.
   `product-release-images.yml`, `product-release.yml` and `qualification.yml`.
   The list can only shrink. T5 is measured on main-push CI, and covering these
   workflows is a tracked follow-up.
+- W6 counts any raw text `needs.<job>.outputs.<name>` in another job as a read
+  (`consumed` and `reads` in `waste_lint_graph.rs`). It matches the text of a
+  job condition, `runs-on`, job outputs, and the conditions, inputs, scripts,
+  arguments and env values of steps. It does not check that the text sits in an
+  expression, and it does not check that the reader's `needs` list the
+  producer. Text outside an expression, or in a job that cannot read the
+  producer's outputs, therefore hides an unconsumed output. This limitation is
+  known and not fixed.
 - `ci.yml` is excluded from that committed-file test because it uses YAML
   aliases. The tests that render the CI workflow cover it.

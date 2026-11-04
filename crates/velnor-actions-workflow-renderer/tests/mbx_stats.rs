@@ -19,8 +19,10 @@ const SESSION_ONE: &str = r#"{"type":"session_started","v":1,"session":"one"}
 {"type":"action","v":1,"outcome":{"kind":"hit"},"crate_name":"serde","duration_ns":1}
 {"type":"action","v":1,"outcome":{"kind":"hit"},"crate_name":"serde_derive","duration_ns":1}
 {"type":"action","v":1,"outcome":{"kind":"miss"},"crate_name":"serde","duration_ns":1}
+{"type":"action","v":1,"outcome":{"kind":"miss"},"crate_name":"blake3 build script","duration_ns":1}
 {"type":"action","v":1,"outcome":{"kind":"unconsulted"},"crate_name":"syn","duration_ns":1}
-{"type":"action","v":1,"outcome":{"kind":"bypass","reason":"link-step"},"crate_name":"cc","duration_ns":1}
+{"type":"action","v":1,"outcome":{"kind":"bypass","reason":"unsupported-crate-type"},"crate_name":"cc","duration_ns":1}
+{"type":"action","v":1,"outcome":{"kind":"bypass"},"duration_ns":1}
 {"type":"action","v":1,"outcome":{"kind":"hit"},"crate_name":"velnor_a","duration_ns":1}
 {"type":"action
 "#;
@@ -82,12 +84,48 @@ fn stats_count_registry_and_workspace_outcomes_from_the_session_files() -> Resul
     fs::write(sessions.join("2.lock"), "")?;
     let line = run_step(&cache, &summary, &temp)?;
     let expected = format!(
-        "mbx-stats job={JOB} registry hit=2 miss=1 not_looked_up=1 bypassed=1 workspace hit=1 miss=2 not_looked_up=0 bypassed=0 bypassed_benign=3\n"
+        "mbx-stats job={JOB} registry hit=2 miss=2 not_looked_up=1 bypassed=2 workspace hit=1 miss=2 not_looked_up=0 bypassed=0 bypassed_benign=3 nonhit=registry:bypass:cc,registry:bypass:unnamed,registry:miss:blake3_build_script,registry:miss:serde,registry:not_looked_up:syn,workspace:miss:velnor_b bypass=unrecorded:unnamed,unsupported-crate-type:cc\n"
     );
     assert_eq!(line, expected);
     assert_eq!(
         fs::read_to_string(&summary)?,
         format!("mbx-stats job={JOB} sessions=0\n{expected}")
     );
+    Ok(())
+}
+
+#[test]
+fn stats_bound_the_named_lists_to_forty_entries_on_one_line() -> Result<(), Box<dyn Error>> {
+    let dir = tempfile::tempdir()?;
+    let cache = dir.path().join("mbx");
+    let sessions = cache.join("actions/sessions/v1");
+    fs::create_dir_all(&sessions)?;
+    let temp = dir.path().join("temp");
+    fs::create_dir_all(&temp)?;
+    let session = (1..=45)
+        .map(|i| {
+            format!(
+                "{{\"type\":\"action\",\"v\":1,\"outcome\":{{\"kind\":\"bypass\",\"reason\":\"unsupported-crate-type\"}},\"crate_name\":\"b{i:02}\",\"duration_ns\":1}}\n"
+            )
+        })
+        .collect::<Vec<_>>()
+        .concat();
+    fs::write(sessions.join("1.jsonl"), session)?;
+
+    let line = run_step(&cache, &dir.path().join("summary"), &temp)?;
+
+    let first_forty = |prefix: &str| {
+        (1..=40)
+            .map(|i| format!("{prefix}b{i:02}"))
+            .collect::<Vec<_>>()
+            .join(",")
+    };
+    let expected = format!(
+        "mbx-stats job={JOB} registry hit=0 miss=0 not_looked_up=0 bypassed=45 workspace hit=0 miss=0 not_looked_up=0 bypassed=0 bypassed_benign=0 nonhit={},+5 bypass={},+5\n",
+        first_forty("registry:bypass:"),
+        first_forty("unsupported-crate-type:"),
+    );
+    assert_eq!(line, expected);
+    assert_eq!(line.matches('\n').count(), 1);
     Ok(())
 }

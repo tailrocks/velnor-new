@@ -37,6 +37,7 @@ pub const RESERVED_SUITE_WORKFLOW_SLUGS: &[&str] = &[
     "product-release",
     "monitoring",
     "source-qualification",
+    "state-seal",
 ];
 
 pub const GENERATOR_OWNED_WORKFLOW_FILES: &[&str] = &[
@@ -53,6 +54,7 @@ pub const GENERATOR_OWNED_WORKFLOW_FILES: &[&str] = &[
     "product-release.yml",
     "monitoring.yml",
     "source-qualification.yml",
+    "state-seal.yml",
     "suites.yml",
 ];
 
