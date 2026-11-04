@@ -1119,8 +1119,10 @@ dependencies = [
 name = "velnor-actions-rust"
 version = "0.1.72"
 dependencies = [
+ "semver",
  "serde",
  "serde_json",
+ "tempfile",
  "toml",
  "velnor-actions-contract",
 ]

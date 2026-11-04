@@ -8,7 +8,7 @@ use crate::metadata_edges::DepKind;
 use crate::release_error::ReleaseError;
 use crate::release_facts::{DepFact, DepSource};
 use crate::release_select::{ReleaseSelection, supported_or_default};
-use crate::release_semver::{VersionReq, parse_req, parse_version, req_matches};
+use semver::{Version, VersionReq};
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct RegistryState {
@@ -130,7 +130,7 @@ fn check_package_deps(
     };
     for fact in facts {
         check_dep_registry(name, fact, lookups)?;
-        let Some(req) = parse_req(&fact.req) else {
+        let Some(req) = VersionReq::parse(&fact.req).ok() else {
             return Err(ReleaseError::InvalidRequirement {
                 package: name.to_owned(),
                 dep: fact.name.clone(),
@@ -211,13 +211,13 @@ fn check_path_dep(
             detail: format!("path target {to} is not a reported package"),
         });
     };
-    let Some(parsed) = parse_version(version) else {
+    let Some(parsed) = Version::parse(version).ok() else {
         return Err(ReleaseError::InvalidVersion {
             package: target.to_owned(),
             version: version.to_owned(),
         });
     };
-    if !req_matches(req, &parsed) {
+    if !req.matches(&parsed) {
         return Err(ReleaseError::RequirementMismatch {
             package: name.to_owned(),
             dep: fact.name.clone(),
@@ -251,7 +251,7 @@ fn registry_satisfies(registry: &RegistryState, name: &str, req: &VersionReq) ->
     registry.published.get(name).is_some_and(|versions| {
         versions
             .iter()
-            .any(|version| parse_version(version).is_some_and(|parsed| req_matches(req, &parsed)))
+            .any(|version| Version::parse(version).is_ok_and(|parsed| req.matches(&parsed)))
     })
 }
 

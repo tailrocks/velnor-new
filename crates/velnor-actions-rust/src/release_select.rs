@@ -10,7 +10,7 @@ use crate::release_facts::{
     PublishSetting, ReleaseFacts, parse_release_facts, validate_manifest_path,
     validate_package_name, validate_registry_name,
 };
-use crate::release_semver::parse_version;
+use semver::Version;
 
 pub const DEFAULT_REGISTRY: &str = "crates-io";
 
@@ -139,7 +139,7 @@ fn index_members(
                 name: package.name.clone(),
             });
         }
-        if parse_version(&package.version).is_none() {
+        if Version::parse(&package.version).is_err() {
             return Err(ReleaseError::InvalidVersion {
                 package: package.name.clone(),
                 version: package.version.clone(),
