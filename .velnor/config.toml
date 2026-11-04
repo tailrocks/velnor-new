@@ -4,7 +4,6 @@
 schema = 2
 
 [workflow]
-preserve_workflows = [".github/workflows/windows-release-qualification.yml"]
 name = "CI"
 policy = "velnor-repository-v1"
 default_branch = "main"
