@@ -151,6 +151,10 @@ fn release_triggers_to_yaml(triggers: &ReleaseTriggers) -> Yaml {
     Yaml::Map(entries)
 }
 
+pub fn render_release_job(job: &ReleaseJobSpec) -> Result<String, RenderError> {
+    Ok(crate::yaml::render_yaml(&release_job_to_yaml(job)?))
+}
+
 fn release_job_to_yaml(job: &ReleaseJobSpec) -> Result<Yaml, RenderError> {
     steps::scan_for_private_subcommands(&job.display_name)?;
     let mut entries = vec![

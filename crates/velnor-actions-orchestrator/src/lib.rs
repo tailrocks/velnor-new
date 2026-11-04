@@ -33,6 +33,8 @@ mod crate_release_archive;
 pub mod crate_release_controller;
 pub mod crate_release_github;
 pub mod crate_release_http;
+#[cfg(test)]
+mod crate_release_pr_acquisition;
 pub mod crate_release_pr_artifact;
 #[cfg(test)]
 mod crate_release_pr_writer;
