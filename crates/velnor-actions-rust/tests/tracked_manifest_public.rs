@@ -44,6 +44,16 @@ fn tracked_nested_manifest_uses_native_canonical_paths() -> Result<(), Box<dyn s
         &known,
         "nested/member/Cargo.toml"
     ));
+    assert!(tracked_manifest_in_source(
+        root.path(),
+        &known,
+        "./nested/./member/Cargo.toml"
+    ));
+    assert!(!tracked_manifest_in_source(
+        root.path(),
+        &known,
+        "nested/../nested/member/Cargo.toml"
+    ));
     assert!(!tracked_manifest_in_source(
         root.path(),
         &known,

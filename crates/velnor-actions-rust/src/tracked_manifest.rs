@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeSet;
+use std::{collections::BTreeSet, path::Path};
 
 #[must_use]
 pub fn tracked_manifest_in_source(
@@ -9,7 +9,23 @@ pub fn tracked_manifest_in_source(
     known: &BTreeSet<String>,
     path: &str,
 ) -> bool {
-    if !known.contains(path) {
+    let components = Path::new(path)
+        .components()
+        .map(|component| match component {
+            std::path::Component::Normal(name) => name.to_str(),
+            std::path::Component::CurDir => Some(""),
+            _ => None,
+        })
+        .collect::<Option<Vec<_>>>();
+    let Some(components) = components else {
+        return false;
+    };
+    let normalized = components
+        .into_iter()
+        .filter(|part| !part.is_empty())
+        .collect::<Vec<_>>()
+        .join("/");
+    if !known.contains(&normalized) {
         return false;
     }
     let Ok(root) = root.canonicalize() else {

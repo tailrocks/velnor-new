@@ -21,16 +21,15 @@ pub(crate) fn version_declared(
         .find(|package| package.id == package_id && package.in_workspace && !package.external)
         .ok_or_else(fail)?;
     let member_manifest = read_manifest(root, &package.manifest)?;
-    let parent = match target {
+    let parents = match target {
         Some(target) => {
             let expected = target
                 .parse::<cargo_platform::Platform>()
                 .map_err(|_| fail())?;
-            let entries = member_manifest
+            member_manifest
                 .get("target")
                 .and_then(toml::Value::as_table)
-                .ok_or_else(fail)?;
-            let matching: Vec<_> = entries
+                .ok_or_else(fail)?
                 .iter()
                 .filter_map(|(name, value)| {
                     name.parse::<cargo_platform::Platform>()
@@ -38,25 +37,45 @@ pub(crate) fn version_declared(
                         .filter(|actual| *actual == expected)
                         .map(|_| value)
                 })
-                .collect();
-            let [matched] = matching.as_slice() else {
-                return Err(fail());
-            };
-            *matched
+                .collect::<Vec<_>>()
         }
-        None => &member_manifest,
+        None => vec![&member_manifest],
     };
     let names: &[&str] = match kind {
         DepKind::Normal => &["dependencies"],
         DepKind::Build => &["build-dependencies", "build_dependencies"],
         DepKind::Dev => &["dev-dependencies", "dev_dependencies"],
     };
-    let declarations: Vec<_> = names
-        .iter()
-        .filter_map(|section| parent.get(*section).and_then(|table| table.get(alias)))
+    let declarations: Vec<_> = parents
+        .into_iter()
+        .flat_map(|parent| {
+            names
+                .iter()
+                .filter_map(move |section| parent.get(*section).and_then(|table| table.get(alias)))
+        })
         .collect();
-    let [declaration] = declarations.as_slice() else {
+    if declarations.is_empty() {
         return Err(fail());
+    }
+    let mut result = None;
+    for declaration in declarations {
+        let value = declaration_version(root, workspace, alias, declaration)?;
+        if result.is_some_and(|prior| prior != value) {
+            return Err(fail());
+        }
+        result = Some(value);
+    }
+    result.ok_or_else(fail)
+}
+
+fn declaration_version(
+    root: &Path,
+    workspace: &WorkspaceRecord,
+    alias: &str,
+    declaration: &toml::Value,
+) -> Result<bool, ReleaseError> {
+    let fail = || ReleaseError::MetadataMismatch {
+        detail: "dependency declaration unavailable or ambiguous".to_owned(),
     };
     if declaration
         .as_table()

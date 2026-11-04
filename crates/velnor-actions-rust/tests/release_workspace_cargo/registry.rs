@@ -339,6 +339,8 @@ fn plan_handles_versioned_dependencies_outside_workspace_and_omits_path_only_dev
         known_manifests: &known,
         supported_registries: &[],
     };
+    #[cfg(unix)]
+    assert_alias_root(temp.path(), &root, &request).expect("alias root fixture");
     let mut registry = RegistryState::default();
     let error = plan_release(&request, &registry)
         .expect_err("versioned external dependency must exist in registry");
@@ -356,4 +358,25 @@ fn plan_handles_versioned_dependencies_outside_workspace_and_omits_path_only_dev
     let plan =
         plan_release(&request, &registry).expect("published external dependency permits release");
     assert_eq!(plan.graph.order, ["probe_app"]);
+}
+
+#[cfg(unix)]
+fn assert_alias_root(
+    temp: &Path,
+    root: &Path,
+    request: &ReleaseRequest<'_>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let alias = temp.join("alias-root");
+    std::os::unix::fs::symlink(root, &alias)?;
+    let alias_request = ReleaseRequest {
+        repo_root: &alias,
+        ..request.clone()
+    };
+    let result =
+        velnor_actions_rust::release_graph::plan_release(&alias_request, &RegistryState::default());
+    assert!(
+        matches!(result, Err(ReleaseError::MissingRegistryVersion { dep, .. }) if dep == "probe_external"),
+        "alias root must resolve tracked excluded path"
+    );
+    Ok(())
 }

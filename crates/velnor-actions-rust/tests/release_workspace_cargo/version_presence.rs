@@ -286,3 +286,67 @@ fn git_fixture_url(root: &Path) -> String {
         format!("file://{path}")
     }
 }
+
+#[test]
+fn equivalent_target_tables_keep_consistent_dependency_versions() {
+    use velnor_actions_rust::release_graph::plan_release;
+    let temp = tempfile::tempdir().expect("tempdir");
+    let root = temp.path().canonicalize().expect("root");
+    write(&root, "src/lib.rs", "pub fn f() {}\n");
+    write(&root, "dep/src/lib.rs", "pub fn f() {}\n");
+    write(
+        &root,
+        "dep/Cargo.toml",
+        "[package]\nname='cfg_probe_dep'\nversion='1.0.0'\nedition='2021'\n",
+    );
+    write(
+        &root,
+        "Cargo.toml",
+        "[package]\nname='cfg_probe_app'\nversion='1.0.0'\nedition='2021'\n[workspace]\nexclude=['dep']\n[target.'cfg(unix)'.dev-dependencies]\ncfg_probe_dep={path='dep'}\n[target.'cfg( unix )'.dev-dependencies]\ncfg_probe_dep={path='dep'}\n",
+    );
+    let output = Command::new(env!("CARGO"))
+        .args([
+            "metadata",
+            "--no-deps",
+            "--format-version",
+            "1",
+            "--offline",
+        ])
+        .current_dir(&root)
+        .output()
+        .expect("metadata");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let cargo = Command::new(env!("CARGO"))
+        .args(["package", "--offline", "--no-verify"])
+        .current_dir(&root)
+        .output()
+        .expect("package");
+    assert!(
+        cargo.status.success(),
+        "{}",
+        String::from_utf8_lossy(&cargo.stderr)
+    );
+    let metadata = String::from_utf8(output.stdout).expect("utf8");
+    let known = BTreeSet::from(["dep/Cargo.toml".to_owned()]);
+    let scope = ReleaseScope::Packages(vec!["cfg_probe_app".into()]);
+    let empty = BTreeSet::new();
+    let request = ReleaseRequest {
+        metadata_json: &metadata,
+        repo_root: &root,
+        manifest_hint: "Cargo.toml",
+        scope: &scope,
+        enabled: true,
+        affected: &empty,
+        known_manifests: &known,
+        supported_registries: &[],
+    };
+    let result = plan_release(&request, &RegistryState::default());
+    assert!(
+        result.is_ok(),
+        "Cargo packaged consistent declarations but planner rejected: {result:?}"
+    );
+}

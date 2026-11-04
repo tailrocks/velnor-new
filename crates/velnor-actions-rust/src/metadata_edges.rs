@@ -195,7 +195,12 @@ fn is_known_target(path: &str, repo_root: &Path, known: &BTreeSet<String>) -> bo
         return false;
     };
     let manifest = Path::new(path).join("Cargo.toml");
-    let Some(lexical) = lexical_relative(repo_root, &manifest) else {
+    let Some(lexical) = lexical_relative(repo_root, &manifest).or_else(|| {
+        repo_root
+            .canonicalize()
+            .ok()
+            .and_then(|root| lexical_relative(&root, &manifest))
+    }) else {
         return false;
     };
     if !known.contains(&posix(&lexical)) {
