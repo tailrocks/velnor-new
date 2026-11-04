@@ -147,6 +147,15 @@ fn seed(workspace: &Path, runner_temp: &Path, run_key: &str) -> Result<(), Box<d
     let skeleton = runner_temp.join("velnor/state-skeleton");
     fs::create_dir_all(&skeleton)?;
     fs::write(skeleton.join("stubbed"), format!("{STUB}\n"))?;
+    fs::create_dir_all(workspace.join("target"))?;
+    fs::create_dir_all(skeleton.join("task-manifests"))?;
+    fs::write(
+        skeleton.join("metadata.json"),
+        format!(
+            "{{\"target_directory\":\"{}\",\"packages\":[]}}",
+            workspace.join("target").display()
+        ),
+    )?;
     let run_dir = runner_temp.join("velnor").join(run_key);
     fs::create_dir_all(&run_dir)?;
     fs::write(run_dir.join("plan.json"), "{}")?;
