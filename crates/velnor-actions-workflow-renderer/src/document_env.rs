@@ -30,11 +30,15 @@ pub(super) fn plan_attempt_value(
     }
 }
 
+const MBX_SUMMARY_ENV: &str = "MBX_SUMMARY";
+const MBX_SUMMARY_VALUE: &str = "ci";
+
 pub(crate) fn mbx_job_env(build_script_execution: &str) -> BTreeMap<String, String> {
     [
         (MBX_GC_AUTO_ENV, MBX_GC_AUTO_VALUE),
         (MBX_EXPORT_GROUP_ENV, MBX_EXPORT_GROUP_VALUE),
         (MBX_BSE_ENV, build_script_execution),
+        (MBX_SUMMARY_ENV, MBX_SUMMARY_VALUE),
     ]
     .into_iter()
     .chain(MBX_COMPILE_ENV)

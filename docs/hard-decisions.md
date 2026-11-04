@@ -48,8 +48,10 @@ and overlaps the independent checks.
   Required, so this decision governs crate jobs only. Crate jobs restore
   compiled caches read-only. See the
   [cache decisions](proposed/cache-decisions.md) (owner-approved 2026-10-20).
-- Compiled state is written on main (`[stacks.rust] compiled_state = "union"`):
-  one non-crate `state-producer-<root>` job and one `state-seal-<root>` job per
+- Compiled state is written on main. `union` is the generator default for
+  `[stacks.rust] compiled_state`, so velnor-new sets nothing (owner standing
+  grant 2026-11-02, velnor-fast-ci GOAL.md, decisions.tsv X64). It adds one
+  non-crate `state-producer-<root>` job and one `state-seal-<root>` job per
   Cargo root, both outside Required and `continue-on-error`. Crate jobs stay
   read-only and run `MBX_BUILD_SCRIPT_EXECUTION=1` (decisions.tsv X61, which
   amends X48). Owner standing grant 2026-11-02 and X50. Setting `off` removes

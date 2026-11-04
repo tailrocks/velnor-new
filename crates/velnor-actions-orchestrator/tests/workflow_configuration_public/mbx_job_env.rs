@@ -206,7 +206,7 @@ fn jobs_without_mbx_get_no_mbx_environment() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-const NON_COMPILE_ENV: [&str; 2] = ["MBX_GC_AUTO", "MBX_CACHE_EXPORT_GROUP"];
+const NON_COMPILE_ENV: [&str; 3] = ["MBX_GC_AUTO", "MBX_CACHE_EXPORT_GROUP", "MBX_SUMMARY"];
 
 #[test]
 fn every_mbx_job_env_key_outside_the_non_compile_set_binds_the_state_key()

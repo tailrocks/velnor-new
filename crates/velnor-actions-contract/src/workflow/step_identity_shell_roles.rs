@@ -50,6 +50,7 @@ impl StepRole {
                 | Self::StateSkeletonRestore
                 | Self::StateSealBind
                 | Self::NonInputGuard
+                | Self::MbxStats
         )
     }
 }

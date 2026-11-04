@@ -35,7 +35,7 @@ fn sorted(mut ids: Vec<u32>) -> Vec<u32> {
 }
 
 #[test]
-fn prune_keeps_newest_complete_and_everything_newer_per_root() -> Result<(), Box<dyn Error>> {
+fn prune_keeps_the_newest_two_complete_generations_per_root() -> Result<(), Box<dyn Error>> {
     let mut ledger = Ledger::new();
     let g1 = ledger.add(901, MAIN, &trusted("union", "root", 'a', '1'));
     let junk_old = ledger.add(902, MAIN, "velnor-v4-state-trusted-union-root-junk");
@@ -84,8 +84,8 @@ fn prune_keeps_newest_complete_and_everything_newer_per_root() -> Result<(), Box
     assert_eq!(run.status, Some(0), "stdout: {}", run.stdout);
     assert_eq!(
         sorted(run.attempted),
-        sorted(vec![g1, g2, h1]),
-        "kept must be g3={g3} h2={h2} and every unparseable key ({junk_old}, {no_payload}, {short_digest}, {only_incomplete}, {lone_suite})"
+        sorted(vec![g1]),
+        "kept must be g2={g2} g3={g3} h1={h1} h2={h2} and every unparseable key ({junk_old}, {no_payload}, {short_digest}, {only_incomplete}, {lone_suite})"
     );
     Ok(())
 }
@@ -108,6 +108,8 @@ fn prune_groups_by_trust_unit_root_only() -> Result<(), Box<dyn Error>> {
     ledger.add(809, "refs/pull/7/merge", &trusted("union", "y", 'a', '3'));
     let x2 = ledger.add(810, MAIN, &trusted("union", "x", 'b', '2'));
     let y2 = ledger.add(811, MAIN, &trusted("union", "y", 'b', '2'));
+    let x3 = ledger.add(816, MAIN, &trusted("union", "x", 'c', '3'));
+    let y3 = ledger.add(817, MAIN, &trusted("union", "y", 'c', '3'));
     let hostile_x = format!(
         "velnor-v4-state-trusted-union-s256-x-s256-{}-s256-{}-s256-{}",
         hash('f'),
@@ -125,7 +127,7 @@ fn prune_groups_by_trust_unit_root_only() -> Result<(), Box<dyn Error>> {
     assert_eq!(
         sorted(run.attempted),
         sorted(vec![x1, y1]),
-        "only the superseded union/x and union/y generations on main may go; kept x2={x2} y2={y2}"
+        "only the third-newest union/x and union/y generations on main may go; kept x2={x2} x3={x3} y2={y2} y3={y3}"
     );
     Ok(())
 }
@@ -136,6 +138,7 @@ fn prune_warns_and_exits_zero_on_gh_failure() -> Result<(), Box<dyn Error>> {
     let a1 = ledger.add(701, MAIN, &trusted("union", "root", 'a', '1'));
     let a2 = ledger.add(702, MAIN, &trusted("union", "root", 'b', '2'));
     ledger.add(703, MAIN, &trusted("union", "root", 'c', '3'));
+    ledger.add(704, MAIN, &trusted("union", "root", 'd', '4'));
     let list_down = GhFake::new(&ledger)?.failing_list();
     let run = list_down.run_prune(MAIN)?;
     assert_eq!(run.status, Some(0), "stdout: {}", run.stdout);
@@ -212,6 +215,23 @@ fn retired_state_entries_are_all_pruned_and_current_ones_kept() -> Result<(), Bo
         sorted(run.attempted),
         retired,
         "retired v1, v2 and v3 state entries must all be deleted and v4 kept"
+    );
+    Ok(())
+}
+
+#[test]
+fn prune_keeps_the_attested_generation_when_a_newer_one_never_attested()
+-> Result<(), Box<dyn Error>> {
+    let mut ledger = Ledger::new();
+    let k1 = ledger.add(601, MAIN, &trusted("union", "root", 'a', '1'));
+    let k2 = ledger.add(602, MAIN, &trusted("union", "root", 'b', '2'));
+    let fake = GhFake::new(&ledger)?;
+    let run = fake.run_prune(MAIN)?;
+    assert_eq!(run.status, Some(0), "stdout: {}", run.stdout);
+    assert!(
+        run.attempted.is_empty(),
+        "the older attested generation {k1} must survive its unattested successor {k2}: deleted {:?}",
+        run.attempted
     );
     Ok(())
 }

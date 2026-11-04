@@ -61,6 +61,13 @@ pub const STATE_SEAL_VERIFY_LIMIT: usize = 3;
 
 pub const STATE_SEAL_LIST_LIMIT: usize = 100;
 
+pub const STATE_SEAL_LIST_FIELDS: &str = "key,id,sizeInBytes";
+
+pub const STATE_SEAL_LIST_TAB: &str = "\t";
+
+pub const STATE_SEAL_LIST_JQ: &str =
+    ".[] | [.key, (.id | tostring), (.sizeInBytes | tostring)] | @tsv";
+
 pub const STATE_SEAL_VERIFY_TIMEOUT_SECONDS: u64 = 60;
 
 pub const STATE_SEAL_VERIFY_TIMEOUT_ENV: &str = "VELNOR_STATE_GH_TIMEOUT";

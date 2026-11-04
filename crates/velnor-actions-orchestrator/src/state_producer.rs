@@ -106,6 +106,10 @@ fn producer_job(
     steps.extend(lane_steps(&producer.lanes));
     steps.push(state_skeleton_restore_step()?);
     steps.extend(lane_steps(&producer.lanes));
+    steps.push(velnor_actions_workflow_renderer::mbx_stats::mbx_stats_step(
+        &state_producer_job_id(slug),
+        &crate::source_prep::workspace_crate_names(&input.discovery.workspaces, &producer.root),
+    )?);
     let mut mark = mbx_producer_mark_step()?;
     mark.condition = Some(STATE_PRODUCER_LANE_CONDITION.to_owned());
     steps.push(mark);

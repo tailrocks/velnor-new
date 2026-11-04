@@ -8,7 +8,9 @@ use velnor_actions_contract::workflow::state_seal::STATE_SEAL_SUBJECT_REL;
 use velnor_actions_contract::{Job, StepKind, StepRole};
 
 use crate::gc1_scene::{Scene, fail};
-use crate::gc1_seal_support::{ENTRY_ID, ENTRY_SIZE, Gh, MAIN, REPO};
+use crate::gc1_seal_support::{ENTRY_ID, ENTRY_SIZE, Gh, MAIN, PULL, REPO};
+use crate::state_v4_admit::Admit;
+use crate::state_v4_attest_save::BOUND;
 use crate::state_v4_seal::{FIXTURE, identity_expression, resolved_prefix, seal_job, step_of};
 
 pub(crate) fn run_bind(scene: &Scene, gh: &Gh, job: &Job, key: &str) -> Result<(), Box<dyn Error>> {
@@ -42,6 +44,8 @@ fn bind_attests_the_saved_entry_by_key_id_and_size() -> Result<(), Box<dyn Error
     let sealed = format!("{prefix}{}", S256::of(FIXTURE));
     let planted = format!("{sealed}-{}", S256::of(b"planted"));
     let at = "2026-11-04T01:00:00Z";
+    std::fs::create_dir_all(scene.payload().parent().ok_or_else(|| fail("no parent"))?)?;
+    std::fs::write(scene.payload(), FIXTURE)?;
 
     gh.list_entries(&[
         (at, MAIN, &planted, ENTRY_ID + 1, ENTRY_SIZE + 1),
@@ -74,6 +78,71 @@ fn bind_attests_the_saved_entry_by_key_id_and_size() -> Result<(), Box<dyn Error
     run_bind(&scene, &gh, &job, &sealed)?;
     if scene.output_value("bound")? != "false" || subject.exists() {
         return Err(fail("a missing entry was bound"));
+    }
+
+    gh.list_entries(&[(at, MAIN, &sealed, ENTRY_ID, BOUND)])?;
+    run_bind(&scene, &gh, &job, &sealed)?;
+    if scene.output_value("bound")? != "true" || !subject.exists() {
+        return Err(fail("an entry exactly at the outer bound was refused"));
+    }
+
+    gh.list_entries(&[(at, MAIN, &sealed, ENTRY_ID, BOUND + 1)])?;
+    run_bind(&scene, &gh, &job, &sealed)?;
+    if scene.output_value("bound")? != "false" || subject.exists() {
+        return Err(fail("an entry above the outer bound was bound"));
+    }
+
+    let forged = format!("{sealed} 99 1");
+    gh.list_entries(&[(at, MAIN, &forged, ENTRY_ID, ENTRY_SIZE)])?;
+    run_bind(&scene, &gh, &job, &sealed)?;
+    if scene.output_value("bound")? != "false" || subject.exists() {
+        return Err(fail(
+            "a key with a forged id and size after a space was bound",
+        ));
+    }
+    scene.finish()
+}
+
+#[test]
+#[cfg(unix)]
+fn save_is_refused_when_the_key_already_holds_an_entry() -> Result<(), Box<dyn Error>> {
+    let scene = Scene::new("seal-preexisting", crate::gc1_t53::scripts()?)?;
+    let gh = Gh::install(&scene)?;
+    let admit = Admit::new()?;
+    let prefix = resolved_prefix(&identity_expression()?);
+    let sealed = format!("{prefix}{}", S256::of(FIXTURE));
+    let neighbour = format!("{sealed}-{}", S256::of(b"neighbour"));
+    let forged = format!("{sealed} 99 1");
+    let at = "2026-11-04T01:00:00Z";
+    let size = u64::try_from(FIXTURE.len())?;
+    let admitted = |gh: &Gh| admit.run_keyed(&scene, gh, Some(size), "", 0, &sealed);
+
+    gh.list_entries(&[])?;
+    if !admitted(&gh)?.0 {
+        return Err(fail("a key with no entry was not admitted"));
+    }
+
+    gh.list_entries(&[
+        (at, MAIN, &neighbour, ENTRY_ID + 1, ENTRY_SIZE),
+        (at, MAIN, &forged, ENTRY_ID + 2, ENTRY_SIZE),
+        (at, PULL, &sealed, ENTRY_ID + 3, ENTRY_SIZE),
+    ])?;
+    if !admitted(&gh)?.0 {
+        return Err(fail("entries of other keys or other refs blocked the save"));
+    }
+
+    gh.list_entries(&[(at, MAIN, &sealed, ENTRY_ID, ENTRY_SIZE)])?;
+    let (ok, output) = admitted(&gh)?;
+    if ok || !output.contains("key_exists") {
+        return Err(fail(&format!(
+            "an entry that existed before the save was admitted: {output}"
+        )));
+    }
+
+    gh.mode("fail")?;
+    let (ok, output) = admitted(&gh)?;
+    if ok || !output.contains("existing_unlistable") {
+        return Err(fail(&format!("an unlistable cache was admitted: {output}")));
     }
     scene.finish()
 }

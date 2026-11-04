@@ -9,10 +9,11 @@ use velnor_actions_contract::workflow::cache_family::{
 use velnor_actions_contract::workflow::cache_family_mbx::MBX_BUNDLE_ROOT_ENV;
 use velnor_actions_contract::workflow::state_seal::{
     STATE_PRODUCER_ARTIFACT_OUTPUT, STATE_SEAL_ATTEST_CONDITION, STATE_SEAL_BIND_CONDITION,
-    STATE_SEAL_KEY_ENV, STATE_SEAL_KEY_EXPR, STATE_SEAL_LIST_LIMIT, STATE_SEAL_PREDICATE,
-    STATE_SEAL_PREDICATE_TYPE, STATE_SEAL_PREFIX_ENV, STATE_SEAL_SAVE_CONDITION,
-    STATE_SEAL_SUBJECT_EXPR, STATE_SEAL_SUBJECT_REL, state_compat_plan_expr,
-    state_produce_plan_expr, state_producer_job_id, state_seal_condition, state_seal_job_id,
+    STATE_SEAL_KEY_ENV, STATE_SEAL_KEY_EXPR, STATE_SEAL_LIST_FIELDS, STATE_SEAL_LIST_JQ,
+    STATE_SEAL_LIST_LIMIT, STATE_SEAL_LIST_TAB, STATE_SEAL_PREDICATE, STATE_SEAL_PREDICATE_TYPE,
+    STATE_SEAL_PREFIX_ENV, STATE_SEAL_SAVE_CONDITION, STATE_SEAL_SUBJECT_EXPR,
+    STATE_SEAL_SUBJECT_REL, state_compat_plan_expr, state_produce_plan_expr, state_producer_job_id,
+    state_seal_condition, state_seal_job_id,
 };
 use velnor_actions_contract::workflow::{ProducerKind, SOURCES_PRODUCER_JOB_ID};
 use velnor_actions_contract::{
@@ -72,7 +73,13 @@ pub fn add_state_seal_jobs(jobs: &mut BTreeMap<String, Job>) -> Result<(), Rende
     for (index, root) in roots.iter().enumerate() {
         let pending: Vec<String> = roots[index + 1..]
             .iter()
-            .map(|later| state_produce_plan_expr("union", later.slug.as_str()))
+            .map(|later| {
+                format!(
+                    "{}:{}",
+                    state_produce_plan_expr("union", later.slug.as_str()),
+                    scope_prefix(&later.slug)
+                )
+            })
             .collect();
         let seal_id = state_seal_job_id(&root.slug);
         let mut needs = vec![PLAN_JOB_ID.to_owned(), root.producer_id.clone()];
@@ -245,42 +252,44 @@ fn transport_file() -> Result<String, RenderError> {
 
 pub fn state_seal_bind_step() -> Result<Step, RenderError> {
     let script = format!(
-        r#"set -eu
-{GUARD}
-d="$RUNNER_TEMP/{rel_dir}"
-subject="$RUNNER_TEMP/{rel}"
-mkdir -p "$d"
+        r#"{head}subject="$RUNNER_TEMP/{rel}"
+mkdir -p "${{subject%/*}}"
 rm -f "$subject"
 refuse() {{ printf '%s\n' "::warning::cache_unavailable: state seal bind refused ($1)"; printf '%s\n' '{bound}=false' >> "$GITHUB_OUTPUT"; exit 0; }}
 key="${{{key_env}-}}"
 ref="${{GITHUB_REF-}}"
 repo="${{GITHUB_REPOSITORY-}}"
 [ -n "$key" ] && [ -n "$ref" ] && [ -n "$repo" ] || refuse input_missing
+case "$key" in *[[:space:]]*) refuse key_whitespace ;; esac
+number "$size" && [ "$size" -gt 0 ] || refuse payload_unreadable
+bound_of "$size" || refuse bound_unavailable
 command -v gh >/dev/null 2>&1 || refuse gh_missing
-gh cache list -R "$repo" --key "$key" --ref "$ref" --limit {list_limit} --json key,id,sizeInBytes --jq '.[] | .key + " " + (.id | tostring) + " " + (.sizeInBytes | tostring)' > "$d/list" || refuse list_failed
+gh cache list -R "$repo" --key "$key" --ref "$ref" --limit {list_limit} --json {fields} --jq '{jq}' > "$d/list" || refuse list_failed
 hits=
 id=
-size=
-while read -r k i s rest; do
+stored=
+while IFS='{tab}' read -r k i s; do
   [ "$k" = "$key" ] || continue
   case "$i" in ''|*[!0-9]*) refuse id_malformed ;; esac
   case "$s" in ''|*[!0-9]*) refuse size_malformed ;; esac
   hits="${{hits}}x"
   id=$i
-  size=$s
+  stored=$s
 done < "$d/list"
 [ "$hits" = x ] || refuse "entries=${{#hits}}"
-printf '%s %s %s\n' "$key" "$id" "$size" > "$subject"
+[ "$stored" -le "$bound" ] || refuse "size_out_of_bound stored=$stored bound=$bound"
+printf '%s %s %s\n' "$key" "$id" "$stored" > "$subject"
 printf '%s\n' '{bound}=true' >> "$GITHUB_OUTPUT"
-printf 'velnor: state seal subject %s %s %s\n' "$key" "$id" "$size"
+printf 'velnor: state seal subject %s %s %s\n' "$key" "$id" "$stored"
 "#,
-        rel_dir = STATE_SEAL_SUBJECT_REL
-            .rsplit_once('/')
-            .map_or("", |(dir, _)| dir),
+        head = crate::state_seal::save::head("state-bind"),
         rel = STATE_SEAL_SUBJECT_REL,
         bound = BOUND_OUTPUT,
         key_env = STATE_SEAL_KEY_ENV,
         list_limit = STATE_SEAL_LIST_LIMIT,
+        fields = STATE_SEAL_LIST_FIELDS,
+        jq = STATE_SEAL_LIST_JQ,
+        tab = STATE_SEAL_LIST_TAB,
     );
     let mut step = ambient_shell_step(
         "Bind seal subject",

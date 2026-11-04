@@ -360,6 +360,13 @@ fn render_job(
         "",
     )?);
     steps.extend(obligation_steps(input, model, use_opentofu)?);
+    if use_rust {
+        let root = crate::source_prep::workspace_root_for_manifest(&model.manifest, fetch_roots);
+        steps.push(velnor_actions_workflow_renderer::mbx_stats::mbx_stats_step(
+            &model.job_id,
+            &crate::source_prep::workspace_crate_names(&input.discovery.workspaces, root),
+        )?);
+    }
     steps.extend(velnor_actions_workflow_renderer::crate_group_ledger_steps(
         policy,
     )?);

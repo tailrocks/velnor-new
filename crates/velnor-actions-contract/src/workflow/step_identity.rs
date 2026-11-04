@@ -252,6 +252,7 @@ pub enum StepRole {
 
     StateSkeletonRestore,
     NonInputGuard,
+    MbxStats,
 }
 
 fn valid_bun_assets_handoff(kind: &StepKind) -> bool {

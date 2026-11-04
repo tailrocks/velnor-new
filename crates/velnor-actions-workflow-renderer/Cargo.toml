@@ -51,6 +51,10 @@ name = "prune_tools"
 path = "tests/prune_tools.rs"
 
 [[test]]
+name = "mbx_stats"
+path = "tests/mbx_stats.rs"
+
+[[test]]
 name = "prune_state"
 path = "tests/prune_state.rs"
 

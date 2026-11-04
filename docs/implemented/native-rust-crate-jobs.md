@@ -61,7 +61,7 @@ documentation lane records twice, first over a dependency skeleton at
 `MBX_BUILD_SCRIPT_EXECUTION=1` and then over the real members at `0`, records
 the producer marker, and exports one bundle that the `State seal` job saves and
 attests ([cache decisions](../proposed/cache-decisions.md) 1 to 3).
-velnor-new sets `compiled_state = "union"` (`.velnor/config.toml:40`); see
+`union` is the default `compiled_state`, so velnor-new sets nothing; see
 [compiled-state persistence](../proposed/compiled-state-persistence.md). MBX shares
 one compiler CPU/memory budget and deduplicates identical in-flight
 compilations across target directories (upstream "Parallel Cargo steps"

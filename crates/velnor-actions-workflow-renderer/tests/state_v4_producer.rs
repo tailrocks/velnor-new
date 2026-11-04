@@ -184,7 +184,10 @@ fn plan_reserves_only_the_later_eligible_roots() -> Result<(), Box<dyn Error>> {
                 .ok_or_else(|| fail("admit step lost its reservation"))
         };
     let (pending, bytes) = reservation(first)?;
-    if pending != "${{needs.plan.outputs.state_union_root_produce}}" || bytes != UNIT_BOUND {
+    if pending
+        != "${{needs.plan.outputs.state_union_root_produce}}:velnor-v4-state-trusted-union-root-"
+        || bytes != UNIT_BOUND
+    {
         return Err(fail(&format!(
             "the first root must reserve the second: {pending} {bytes}"
         )));

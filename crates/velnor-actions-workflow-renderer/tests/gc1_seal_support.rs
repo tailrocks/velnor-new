@@ -34,25 +34,26 @@ verb="$1 $2"
 shift 2
 case "$verb" in
   "cache list")
+    tab=$(printf '\t')
     key=; ref=; fields=; repo=${GH_REPO-}; sortf=last_accessed_at; order=desc; limit=30
     while [ $# -gt 0 ]; do
-      case "$1" in --key) key=$2; shift ;; --ref) ref=$2; shift ;; --json) fields=$2; shift ;; -R) repo=$2; shift ;; --sort) sortf=$2; shift ;; --order) order=$2; shift ;; --limit) limit=$2; shift ;; esac
+      case "$1" in --key) key=$2; shift ;; --ref) ref=$2; shift ;; --json) fields=$2; shift ;; --jq) shift ;; -R) repo=$2; shift ;; --sort) sortf=$2; shift ;; --order) order=$2; shift ;; --limit) limit=$2; shift ;; esac
       shift
     done
     [ -n "$repo" ] || exit 1
     if [ "$mode" = garbage ]; then printf '%s\n' '<<<not json>>>' '{"oops"'; exit 0; fi
     sflag=-r
     [ "$order" = asc ] && sflag=
-    while read -r created lref lkey lid lsize accessed; do
+    while IFS="$tab" read -r created lref lkey lid lsize accessed; do
       [ "$lref" = "$ref" ] || continue
       case "$lkey" in "$key"*) ;; *) continue ;; esac
       [ -n "$accessed" ] || accessed=$created
       case "$sortf" in created_at) sk=$created ;; *) sk=$accessed ;; esac
-      printf '%s %s %s %s %s\n' "$sk" "$created" "$lkey" "$lid" "$lsize"
-    done < "$d/list" | LC_ALL=C sort $sflag | head -n "$limit" | while read -r sk created lkey lid lsize; do
+      printf '%s\t%s\t%s\t%s\t%s\n' "$sk" "$created" "$lkey" "$lid" "$lsize"
+    done < "$d/list" | LC_ALL=C sort $sflag | head -n "$limit" | while IFS="$tab" read -r sk created lkey lid lsize; do
       case "$fields" in
-        *createdAt*) printf '%s %s %s %s\n' "$created" "$lkey" "$lid" "$lsize" ;;
-        *) printf '%s %s %s\n' "$lkey" "$lid" "$lsize" ;;
+        *createdAt*) printf '%s\t%s\t%s\t%s\n' "$created" "$lkey" "$lid" "$lsize" ;;
+        *) printf '%s\t%s\t%s\n' "$lkey" "$lid" "$lsize" ;;
       esac
     done
     ;;
@@ -64,17 +65,19 @@ case "$verb" in
     done
     [ -n "$repo" ] || exit 1
     if [ -f "$d/refuse" ] && grep -qx "$id" "$d/refuse"; then exit 1; fi
-    grep -v "^[^ ]* [^ ]* [^ ]* $id " "$d/list" > "$d/list.next" || :
+    tab=$(printf '\t')
+    awk -F "$tab" -v id="$id" '$4 != id' "$d/list" > "$d/list.next" || :
     mv "$d/list.next" "$d/list"
     printf 'delete cache %s\n' "$id" >> "$d/log"
     ;;
-  "api repos/"*"/actions/cache/usage")
+  "api repos/${GITHUB_REPOSITORY:?}/actions/cache/usage")
     [ "$mode" = usage_fail ] && exit 1
     read -r usage < "$d/usage"
     printf '%s\n' "$usage"
     ;;
   "api -X")
     [ "$1" = DELETE ] || exit 2
+    case "$2" in "repos/${GITHUB_REPOSITORY:?}/actions/artifacts/"*) ;; *) exit 1 ;; esac
     id=${2##*/}
     grep -qx "$id" "$d/artifacts" || exit 1
     grep -vx "$id" "$d/artifacts" > "$d/artifacts.next" || :
@@ -191,7 +194,7 @@ impl Gh {
         let text = rows
             .iter()
             .map(|(created, git_ref, key, id, size)| {
-                format!("{created} {git_ref} {key} {id} {size}\n")
+                format!("{created}\t{git_ref}\t{key}\t{id}\t{size}\n")
             })
             .collect::<Vec<String>>()
             .concat();
@@ -203,7 +206,7 @@ impl Gh {
         let text = std::fs::read_to_string(self.dir.join("list"))?;
         text.lines()
             .map(|line| {
-                let mut fields = line.split(' ');
+                let mut fields = line.split('\t');
                 let key = fields.nth(2).ok_or_else(|| fail("list row lost its key"))?;
                 let id = fields.next().ok_or_else(|| fail("list row lost its id"))?;
                 Ok((key.to_owned(), id.parse()?))
@@ -252,7 +255,7 @@ impl Gh {
         let text = rows
             .iter()
             .map(|(created, git_ref, key, accessed)| {
-                format!("{created} {git_ref} {key} {ENTRY_ID} {ENTRY_SIZE} {accessed}\n")
+                format!("{created}\t{git_ref}\t{key}\t{ENTRY_ID}\t{ENTRY_SIZE}\t{accessed}\n")
             })
             .collect::<Vec<String>>()
             .concat();

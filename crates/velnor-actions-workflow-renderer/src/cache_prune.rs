@@ -14,6 +14,7 @@ pub const CACHE_PRUNE_FALLBACK_RUNNER: &str = "ubuntu-latest";
 pub const TOOLS_PRUNE_PREFIX: &str = "mise-tools-v2-";
 pub const TOOLS_PRUNE_UNIT: &str = "mise-tools-v2";
 pub const TOOLS_RETAINED_ENTRIES: u64 = 8;
+pub const STATE_RETAINED_ENTRIES: u64 = 2;
 pub const RETIRED_STATE_PRUNE_PREFIXES: [&str; 3] = [
     "velnor-v1-state-trusted-",
     "velnor-v2-state-trusted-",
@@ -49,7 +50,7 @@ pub fn state_prune_prefix() -> String {
 fn state_group_program() -> String {
     let prefix = state_prune_prefix();
     format!(
-        "{{ n = split($2, p, \"-s256-\"); if (n != 4 || p[1] !~ /^{prefix}(union|suite)-[a-z0-9][a-z0-9-]*$/) next; for (i = 2; i <= 4; i++) if (length(p[i]) != 64 || p[i] !~ /^[0-9a-f]+$/) next; if (seen[p[1]]++) print $1 }}"
+        "{{ n = split($2, p, \"-s256-\"); if (n != 4 || p[1] !~ /^{prefix}(union|suite)-[a-z0-9][a-z0-9-]*$/) next; for (i = 2; i <= 4; i++) if (length(p[i]) != 64 || p[i] !~ /^[0-9a-f]+$/) next; if (++seen[p[1]] > {STATE_RETAINED_ENTRIES}) print $1 }}"
     )
 }
 

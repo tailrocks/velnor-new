@@ -4,10 +4,11 @@
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::workflow::cache_family::{
-    RootSlug, StateScope, StateTrust, StateUnit, state_snapshot_output,
+    CacheFamily, RootSlug, StateScope, StateTrust, StateUnit, outer_entry_bound,
+    state_snapshot_output,
 };
 use velnor_actions_contract::workflow::state_seal::{
-    STATE_SEAL_LIST_LIMIT, STATE_SEAL_PREDICATE_TYPE, STATE_SEAL_VERIFY_LIMIT,
+    STATE_SEAL_LIST_LIMIT, STATE_SEAL_LIST_TAB, STATE_SEAL_PREDICATE_TYPE, STATE_SEAL_VERIFY_LIMIT,
     STATE_SEAL_VERIFY_TIMEOUT_ENV, STATE_SEAL_VERIFY_TIMEOUT_SECONDS, state_attested_output,
     state_compat_output, state_produce_output,
 };
@@ -64,19 +65,16 @@ attested() {
   : > "$out"
   [ -n "$ref" ] && [ -n "$repo" ] && [ -n "$signer" ] || return 0
   command -v gh >/dev/null 2>&1 || return 0
-  run_gh cache list -R "$repo" --key "$1" --ref "$ref" --sort created_at --order desc --limit @LIST_LIMIT@ --json key,createdAt,id,sizeInBytes --jq '.[] | .createdAt + " " + .key + " " + (.id | tostring) + " " + (.sizeInBytes | tostring)' > "$d/list" 2>/dev/null || return 0
+  run_gh cache list -R "$repo" --key "$1" --ref "$ref" --sort created_at --order desc --limit @LIST_LIMIT@ --json key,createdAt,id,sizeInBytes --jq '.[] | [.createdAt, .key, (.id | tostring), (.sizeInBytes | tostring)] | @tsv' > "$d/list" 2>/dev/null || return 0
   LC_ALL=C sort -r "$d/list" > "$d/sorted" || return 0
   n=
   v=
-  while IFS= read -r line; do
+  while IFS='@TAB@' read -r created key id size; do
     [ "${#v}" -lt @VERIFY_LIMIT@ ] && [ "${#n}" -lt @LIST_LIMIT@ ] || break
-    rest=${line#* }
-    key=${rest%% *}
-    meta=${rest#* }
-    id=${meta%% *}
-    size=${meta#* }
+    case "$key" in *[[:space:]]*) continue ;; esac
     case "$id" in ''|*[!0-9]*) continue ;; esac
     case "$size" in ''|*[!0-9]*) continue ;; esac
+    [ "$size" -le @OUTER_BOUND@ ] || continue
     case "$key" in "$1"?*) ;; *) continue ;; esac
     printf '%s\n' "${key#"$1"}" | grep -Eq "$shape" || continue
     printf '%s %s %s\n' "$key" "$id" "$size" > "$d/subject"
@@ -102,8 +100,10 @@ const DECIDE: &str = r#"decide() {
 }
 "#;
 
-fn head() -> String {
+fn head(outer_bound: u64) -> String {
     SELECT_HEAD
+        .replace("@OUTER_BOUND@", &outer_bound.to_string())
+        .replace("@TAB@", STATE_SEAL_LIST_TAB)
         .replace("@TIMEOUT_ENV@", STATE_SEAL_VERIFY_TIMEOUT_ENV)
         .replace("@TIMEOUT@", &STATE_SEAL_VERIFY_TIMEOUT_SECONDS.to_string())
         .replace("@LIST_LIMIT@", &STATE_SEAL_LIST_LIMIT.to_string())
@@ -113,7 +113,11 @@ fn head() -> String {
 }
 
 pub fn state_select_step(roots: &[SealRoot]) -> Result<Step, RenderError> {
-    let mut sections = vec![head(), DECIDE.to_owned()];
+    let outer_bound = outer_entry_bound(CacheFamily::MbxBundle.spec().ceiling.stored())
+        .ok_or_else(|| {
+            RenderError::InvalidWorkflow("state_select:outer_bound_unbounded".to_owned())
+        })?;
+    let mut sections = vec![head(outer_bound), DECIDE.to_owned()];
     let mut env = BTreeMap::from([
         (DEFAULT_REF_ENV.to_owned(), DEFAULT_REF_EXPR.to_owned()),
         ("GH_TOKEN".to_owned(), TOKEN_EXPR.to_owned()),

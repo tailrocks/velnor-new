@@ -73,6 +73,7 @@ pub(super) fn state_producer_role(role: StepRole) -> bool {
             | StepRole::StateSkeleton
             | StepRole::StateSkeletonRestore
             | StepRole::MbxProducerMark
+            | StepRole::MbxStats
             | StepRole::MbxBundleExport
             | StepRole::StateSealUpload
             | StepRole::StateProduced

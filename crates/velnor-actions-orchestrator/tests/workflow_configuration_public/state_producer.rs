@@ -20,20 +20,20 @@ use super::state_producer_eval::{seal_runs, simulate};
 use super::support::rendered_job_block;
 use super::waste_oracle::files_of;
 
-const ROOTS: [(&str, &str); 2] = [
+pub(super) const ROOTS: [(&str, &str); 2] = [
     ("state-producer-crates-a-b", "state-seal-crates-a-b"),
     ("state-producer-crates-a-c", "state-seal-crates-a-c"),
 ];
 const LANE_NAMES: [&str; 3] = ["Build test executables", "Clippy", "Documentation"];
 const UNIT_BOUND: &str = "1616920640";
 
-struct Built {
-    ir: WorkflowIr,
-    jobs: BTreeMap<String, Job>,
-    ci: String,
+pub(super) struct Built {
+    pub(super) ir: WorkflowIr,
+    pub(super) jobs: BTreeMap<String, Job>,
+    pub(super) ci: String,
 }
 
-fn build() -> Result<Built, Box<dyn Error>> {
+pub(super) fn build() -> Result<Built, Box<dyn Error>> {
     let repo = seed_repo("")?;
     let prepared = prepare(repo.path())?;
     let jobs = finalized_jobs(&prepared)?;
@@ -49,7 +49,10 @@ fn build() -> Result<Built, Box<dyn Error>> {
     })
 }
 
-fn job<'a>(jobs: &'a BTreeMap<String, Job>, id: &str) -> Result<&'a Job, Box<dyn Error>> {
+pub(super) fn job<'a>(
+    jobs: &'a BTreeMap<String, Job>,
+    id: &str,
+) -> Result<&'a Job, Box<dyn Error>> {
     jobs.get(id)
         .ok_or_else(|| format!("{id} was not generated").into())
 }
@@ -313,7 +316,8 @@ fn only_attest_jobs_hold_actions_write() -> Result<(), Box<dyn Error>> {
     assert_eq!(
         pending(first_job),
         [(
-            "${{needs.plan.outputs.state_union_crates_a_c_produce}}".to_owned(),
+            "${{needs.plan.outputs.state_union_crates_a_c_produce}}:velnor-v4-state-trusted-union-crates-a-c-"
+                .to_owned(),
             UNIT_BOUND.to_owned()
         )]
     );

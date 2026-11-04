@@ -96,7 +96,7 @@ output across trust scopes.
 - Compat does not name a job: every reader of a workspace shares the entry,
   and the key changes only when the lock, toolchain, MBX version or platform
   changes. The `unit` keeps the dependency seed and suite bundles apart.
-- velnor-new sets `compiled_state = "union"` (`.velnor/config.toml:40`): one
+- `union` is the default `compiled_state`, so velnor-new sets nothing: one
   `state-producer-<root>` job per Cargo root compiles, one `state-seal-<root>`
   job saves and attests the entry, and crate jobs restore it read-only. The
   design is [compiled-state persistence](compiled-state-persistence.md).

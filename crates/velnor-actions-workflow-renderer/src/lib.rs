@@ -53,6 +53,7 @@ pub mod marker;
 mod matrix;
 mod matrix_output_mode;
 mod mbx_gc_policy;
+pub mod mbx_stats;
 pub mod msrv;
 pub mod native_authority;
 mod native_helper;

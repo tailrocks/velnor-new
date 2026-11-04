@@ -139,6 +139,8 @@ mod state_compat;
 mod state_producer;
 #[path = "workflow_configuration_public/state_producer_eval.rs"]
 mod state_producer_eval;
+#[path = "workflow_configuration_public/state_producer_gates.rs"]
+mod state_producer_gates;
 #[path = "workflow_configuration_public/state_prune_workflow.rs"]
 mod state_prune_workflow;
 #[path = "workflow_configuration_public/state_prune_yaml.rs"]

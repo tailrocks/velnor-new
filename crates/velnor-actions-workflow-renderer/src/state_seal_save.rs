@@ -8,7 +8,8 @@ use velnor_actions_contract::workflow::cache_family::{
 };
 use velnor_actions_contract::workflow::state_seal::{
     STATE_SEAL_ADMITTED_OUTPUT, STATE_SEAL_ARTIFACT_ENV, STATE_SEAL_BUDGET_BYTES,
-    STATE_SEAL_KEY_ENV, STATE_SEAL_LIST_LIMIT, STATE_SEAL_PENDING_BYTES_ENV,
+    STATE_SEAL_KEY_ENV, STATE_SEAL_KEY_EXPR, STATE_SEAL_LIST_FIELDS, STATE_SEAL_LIST_JQ,
+    STATE_SEAL_LIST_LIMIT, STATE_SEAL_LIST_TAB, STATE_SEAL_PENDING_BYTES_ENV,
     STATE_SEAL_PENDING_ENV, STATE_SEAL_PREDICATE_TYPE, STATE_SEAL_RETIRE_CONDITION,
     STATE_SEAL_SCOPE_ENV, STATE_SEAL_SUBJECT_REL,
 };
@@ -44,15 +45,39 @@ if [ -L "$payload" ] || [ ! -f "$payload" ]; then size=; else wc -c < "$payload"
 const ADMIT: &str = r#"refuse() { printf '%s\n' "::warning::cache_unavailable: state save refused ($1)"; printf '%s\n' '@ADMITTED@=false' >> "$GITHUB_OUTPUT"; exit 0; }
 number "$size" && [ "$size" -gt 0 ] || refuse payload_unreadable
 bound_of "$size" || refuse bound_unavailable
+key="${@KEY_ENV@-}"
+ref="${GITHUB_REF-}"
+repo="${GITHUB_REPOSITORY-}"
+[ -n "$key" ] && [ -n "$ref" ] && [ -n "$repo" ] || refuse identity_missing
+case "$key" in *[[:space:]]*) refuse key_whitespace ;; esac
+gh cache list -R "$repo" --key "$key" --ref "$ref" --limit @LIMIT@ --json @FIELDS@ --jq '@JQ@' > "$d/existing" 2> /dev/null || refuse existing_unlistable
+while IFS='@TAB@' read -r k i s; do
+  [ "$k" != "$key" ] || refuse key_exists
+done < "$d/existing"
 gh api "repos/$GITHUB_REPOSITORY/actions/cache/usage" --jq .active_caches_size_in_bytes > "$d/usage" 2> /dev/null || refuse usage_unavailable
 usage=
 read -r usage < "$d/usage" || usage=
 number "$usage" || refuse usage_unreadable
 unit="${@PENDING_BYTES@:-0}"
 number "$unit" || refuse pending_unreadable
-printf '%s\n' "${@PENDING@-}" | awk -v unit="$unit" '{ for (i = 1; i <= NF; i++) if ($i == "true") n++ } END { printf "%.0f\n", n * unit }' > "$d/reserved" || refuse reserve_unreadable
-reserved=; read -r reserved < "$d/reserved" || reserved=
-number "$reserved" || refuse reserve_unreadable
+printf '%s\n' "${@PENDING@-}" | tr ' ' '\n' > "$d/pending"
+shape='^s256-[0-9a-f]{64}-s256-[0-9a-f]{64}-s256-[0-9a-f]{64}$'
+reserved=0
+while IFS= read -r item || [ -n "$item" ]; do
+  [ "${item%%:*}" = true ] || continue
+  later="${item#*:}"
+  gh cache list -R "$repo" --key "$later" --ref "$ref" --limit @LIMIT@ --json @FIELDS@ --jq '@JQ@' > "$d/later" 2> /dev/null || refuse reserve_unlistable
+  : > "$d/held"
+  while IFS='@TAB@' read -r k i s; do
+    case "$k" in "$later"?*) ;; *) continue ;; esac
+    printf '%s\n' "${k#"$later"}" | grep -Eq "$shape" || continue
+    number "$s" || continue
+    printf '%s\n' "$s" >> "$d/held"
+  done < "$d/later"
+  awk -v unit="$unit" -v r="$reserved" '{ h += $1 } END { if (h < unit) r += unit - h; printf "%.0f\n", r }' "$d/held" > "$d/reserved" || refuse reserve_unreadable
+  reserved=; read -r reserved < "$d/reserved" || reserved=
+  number "$reserved" || refuse reserve_unreadable
+done < "$d/pending"
 awk -v u="$usage" -v b="$bound" -v r="$reserved" 'BEGIN { exit !(u + b + r <= @BUDGET@) }' || refuse "over_budget usage=$usage bound=$bound reserved=$reserved budget=@BUDGET@"
 printf '%s\n' '@ADMITTED@=true' >> "$GITHUB_OUTPUT"
 printf 'velnor: state save admitted usage=%s bound=%s reserved=%s budget=%s\n' "$usage" "$bound" "$reserved" @BUDGET@
@@ -76,8 +101,8 @@ read -r sk sid stored < "$subject" || skip subject_unreadable
 number "$sid" && number "$stored" && [ "$stored" -gt 0 ] && [ "$stored" -le "$bound" ] || skip "size_out_of_bound stored=$stored bound=$bound"
 gh attestation verify "$subject" -R "$repo" --signer-workflow "$signer" --source-ref "$ref" --predicate-type '@PREDICATE@' > /dev/null 2>&1 || skip attestation_unverified
 shape='^s256-[0-9a-f]{64}-s256-[0-9a-f]{64}-s256-[0-9a-f]{64}$'
-gh cache list -R "$repo" --key "$scope" --ref "$ref" --limit @LIMIT@ --json key,id,sizeInBytes --jq '.[] | .key + " " + (.id | tostring) + " " + (.sizeInBytes | tostring)' > "$d/scope" 2> /dev/null || skip scope_list_failed
-while read -r k id rest; do
+gh cache list -R "$repo" --key "$scope" --ref "$ref" --limit @LIMIT@ --json @FIELDS@ --jq '@JQ@' > "$d/scope" 2> /dev/null || skip scope_list_failed
+while IFS='@TAB@' read -r k id rest; do
   case "$k" in "$scope"?*) ;; *) continue ;; esac
   number "$id" || continue
   printf '%s\n' "${k#"$scope"}" | grep -Eq "$shape" || continue
@@ -91,7 +116,7 @@ if number "$artifact" && [ -n "$artifact" ]; then
 fi
 "#;
 
-fn head(dir: &str) -> String {
+pub(crate) fn head(dir: &str) -> String {
     HEAD.replace("@PAYLOAD@", PAYLOAD)
         .replace("@DIR@", dir)
         .replace("@BLOCK@", &TAR_BLOCK_BYTES.to_string())
@@ -123,6 +148,11 @@ pub fn state_seal_admit_step(pending: &[String], pending_bytes: u64) -> Result<S
         "{}{}",
         head("state-admit"),
         ADMIT
+            .replace("@KEY_ENV@", STATE_SEAL_KEY_ENV)
+            .replace("@LIMIT@", &STATE_SEAL_LIST_LIMIT.to_string())
+            .replace("@FIELDS@", STATE_SEAL_LIST_FIELDS)
+            .replace("@JQ@", STATE_SEAL_LIST_JQ)
+            .replace("@TAB@", STATE_SEAL_LIST_TAB)
             .replace("@ADMITTED@", STATE_SEAL_ADMITTED_OUTPUT)
             .replace("@PENDING_BYTES@", STATE_SEAL_PENDING_BYTES_ENV)
             .replace("@PENDING@", STATE_SEAL_PENDING_ENV)
@@ -132,6 +162,10 @@ pub fn state_seal_admit_step(pending: &[String], pending_bytes: u64) -> Result<S
         "Admit state save",
         &script,
         BTreeMap::from([
+            (
+                STATE_SEAL_KEY_ENV.to_owned(),
+                STATE_SEAL_KEY_EXPR.to_owned(),
+            ),
             (STATE_SEAL_PENDING_ENV.to_owned(), pending.join(" ")),
             (
                 STATE_SEAL_PENDING_BYTES_ENV.to_owned(),
@@ -157,6 +191,9 @@ pub fn state_seal_retire_step(scope: &str, artifact_expr: &str) -> Result<Step, 
             .replace("@REF_ENV@", DEFAULT_REF_ENV)
             .replace("@ARTIFACT@", STATE_SEAL_ARTIFACT_ENV)
             .replace("@LIMIT@", &STATE_SEAL_LIST_LIMIT.to_string())
+            .replace("@FIELDS@", STATE_SEAL_LIST_FIELDS)
+            .replace("@JQ@", STATE_SEAL_LIST_JQ)
+            .replace("@TAB@", STATE_SEAL_LIST_TAB)
             .replace("@SUBJECT@", STATE_SEAL_SUBJECT_REL)
             .replace("@PREDICATE@", STATE_SEAL_PREDICATE_TYPE)
     );
