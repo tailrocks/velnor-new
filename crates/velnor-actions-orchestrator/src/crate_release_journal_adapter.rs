@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use sha1_checked::{Digest, Sha1};
+use std::{cell::RefCell, collections::BTreeMap};
 
 use crate::{
     OrchestratorError,
@@ -51,7 +52,25 @@ pub trait JournalRefTransport {
     ) -> Result<Vec<String>, OrchestratorError>;
 }
 
-pub struct JournalAdapter<T>(pub T);
+type CacheKey = (String, String);
+const MAX_CACHED_OBJECTS: usize = 128;
+const MAX_CACHED_BLOB_BYTES: usize = 64 * 1024;
+
+pub struct JournalAdapter<T> {
+    transport: T,
+    tags: RefCell<BTreeMap<CacheKey, (JournalTag, Vec<u8>)>>,
+    blobs: RefCell<BTreeMap<CacheKey, Vec<u8>>>,
+}
+
+impl<T> JournalAdapter<T> {
+    pub fn new(transport: T) -> Self {
+        Self {
+            transport,
+            tags: RefCell::new(BTreeMap::new()),
+            blobs: RefCell::new(BTreeMap::new()),
+        }
+    }
+}
 
 impl<T: JournalTransport + JournalRefTransport> crate::crate_release_journal::JournalOperationRefs
     for JournalAdapter<T>
@@ -60,8 +79,9 @@ impl<T: JournalTransport + JournalRefTransport> crate::crate_release_journal::Jo
         &self,
         identity: &crate::crate_release_journal::JournalIdentity,
     ) -> Result<Vec<String>, OrchestratorError> {
-        self.0.check_repository_access(&identity.repository)?;
-        let names = self.0.list_operations(identity)?;
+        self.transport
+            .check_repository_access(&identity.repository)?;
+        let names = self.transport.list_operations(identity)?;
         let prefix = format!(
             "refs/tags/velnor-receipt/{}/{}/operation-",
             identity.run_id, identity.run_attempt
@@ -72,7 +92,8 @@ impl<T: JournalTransport + JournalRefTransport> crate::crate_release_journal::Jo
                 return Err(invalid());
             }
         }
-        self.0.check_repository_access(&identity.repository)?;
+        self.transport
+            .check_repository_access(&identity.repository)?;
         Ok(unique.into_iter().collect())
     }
 }
@@ -94,7 +115,11 @@ impl<T: JournalTransport> JournalAdapter<T> {
         if !valid_sha(sha) {
             return Err(invalid());
         }
-        let remote = self.0.get_tag(repository, sha)?;
+        let key = (repository.to_owned(), sha.to_owned());
+        if let Some(value) = self.tags.borrow().get(&key) {
+            return Ok(value.clone());
+        }
+        let remote = self.transport.get_tag(repository, sha)?;
         if remote.sha != sha
             || !remote.unsigned
             || remote.tagger_name != "Velnor Release"
@@ -123,16 +148,21 @@ impl<T: JournalTransport> JournalAdapter<T> {
         if computed != sha {
             return Err(invalid());
         }
-        Ok((remote.tag, raw))
+        let value = (remote.tag, raw);
+        let mut cache = self.tags.borrow_mut();
+        if cache.len() < MAX_CACHED_OBJECTS {
+            cache.insert(key, value.clone());
+        }
+        Ok(value)
     }
 }
 
 impl<T: JournalTransport> JournalIo for JournalAdapter<T> {
     fn check_repository_access(&self, repository: &str) -> Result<(), OrchestratorError> {
-        self.0.check_repository_access(repository)
+        self.transport.check_repository_access(repository)
     }
     fn check_tag_rules(&self, repository: &str) -> Result<(), OrchestratorError> {
-        self.0.check_tag_rules(repository)
+        self.transport.check_tag_rules(repository)
     }
     fn get_ref(
         &self,
@@ -142,14 +172,14 @@ impl<T: JournalTransport> JournalIo for JournalAdapter<T> {
         if !valid_reference(reference) {
             return Err(invalid());
         }
-        let result = self.0.get_ref(repository, reference)?;
+        let result = self.transport.get_ref(repository, reference)?;
         if result.as_deref().is_some_and(|sha| !valid_sha(sha)) {
             return Err(invalid());
         }
         Ok(result)
     }
     fn create_blob(&self, repository: &str, bytes: &[u8]) -> Result<String, OrchestratorError> {
-        self.0.create_blob(repository, bytes)
+        self.transport.create_blob(repository, bytes)
     }
     fn create_tag_object(
         &self,
@@ -159,7 +189,9 @@ impl<T: JournalTransport> JournalIo for JournalAdapter<T> {
         if !valid_tag(tag) {
             return Err(invalid());
         }
-        let sha = self.0.create_tag(repository, &tag.name, &tag.object_sha)?;
+        let sha = self
+            .transport
+            .create_tag(repository, &tag.name, &tag.object_sha)?;
         if self.verified_tag(repository, &sha)?.0 != *tag {
             return Err(invalid());
         }
@@ -178,7 +210,7 @@ impl<T: JournalTransport> JournalIo for JournalAdapter<T> {
         if reference != format!("refs/tags/{}", tag.name) {
             return Err(invalid());
         }
-        self.0.create_ref(repository, reference, tag_sha)
+        self.transport.create_ref(repository, reference, tag_sha)
     }
     fn get_tag_object(&self, repository: &str, sha: &str) -> Result<JournalTag, OrchestratorError> {
         Ok(self.verified_tag(repository, sha)?.0)
@@ -194,7 +226,19 @@ impl<T: JournalTransport> JournalIo for JournalAdapter<T> {
         if !valid_sha(sha) {
             return Err(invalid());
         }
-        self.0.get_blob(repository, sha)
+        let key = (repository.to_owned(), sha.to_owned());
+        if let Some(value) = self.blobs.borrow().get(&key) {
+            return Ok(value.clone());
+        }
+        let value = self.transport.get_blob(repository, sha)?;
+        if crate::release_policy_admission::git_blob_sha1(&value)? != sha {
+            return Err(invalid());
+        }
+        let mut cache = self.blobs.borrow_mut();
+        if value.len() <= MAX_CACHED_BLOB_BYTES && cache.len() < MAX_CACHED_OBJECTS {
+            cache.insert(key, value.clone());
+        }
+        Ok(value)
     }
 }
 

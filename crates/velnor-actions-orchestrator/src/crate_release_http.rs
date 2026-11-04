@@ -847,7 +847,7 @@ mod tests {
             r#"{{"sha":"{sha}","tag":"{name}","message":"velnor-release-receipt-v1","object":{{"sha":"{blob}","type":"blob"}},"tagger":{{"name":"Velnor Release","email":"release@velnor.invalid","date":"1970-01-01T00:00:00Z"}},"verification":{{"verified":false,"reason":"unsigned","signature":null,"payload":null}}}}"#
         );
         let (origin, worker) = server(vec![reply("200 OK", &tag)]);
-        let adapter = JournalAdapter(NativeGitHubAdmissionRead {
+        let adapter = JournalAdapter::new(NativeGitHubAdmissionRead {
             reader: client(origin),
         });
         assert_eq!(
@@ -877,7 +877,7 @@ mod tests {
             "{}".to_owned(),
         ] {
             let (origin, worker) = server(vec![reply("200 OK", &body)]);
-            let adapter = JournalAdapter(NativeGitHubAdmissionRead {
+            let adapter = JournalAdapter::new(NativeGitHubAdmissionRead {
                 reader: client(origin),
             });
             assert!(
