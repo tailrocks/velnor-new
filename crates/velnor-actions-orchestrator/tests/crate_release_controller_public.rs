@@ -28,6 +28,35 @@ use velnor_actions_orchestrator::{
     crate_release_registry::{CrateRegistryRead, CrateRegistryResponse},
 };
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "This test helper binds the full package-verification fixture"
+)]
+fn fixture_verify_release_package<G: GitHubAdmissionRead, R: CrateRegistryRead>(
+    receipt: &crate::crate_release_controller::CrateReleaseAdmissionReceipt,
+    intent: &CrateReleaseIntent,
+    request: &GitHubAdmissionRequest,
+    github: &G,
+    registry: &R,
+    source: &Path,
+    package: &str,
+    git: &crate::crate_release_git::ReleaseGit,
+) -> Result<crate::crate_release_controller::VerifiedReleasePackage, OrchestratorError> {
+    let input = super::PackageVerification {
+        receipt,
+        intent,
+        request,
+        github,
+        registry,
+        source,
+        git,
+        package,
+    };
+    super::verify_release_package_with(&input, |observed| {
+        super::verify_observed_packages(observed, receipt)
+    })
+}
+
 fn fixture_no_baseline() -> crate::crate_release_semver::SemverEvidence {
     crate::crate_release_semver::SemverEvidence::NoBaseline {
         checker_sha256: "bc9eb06ce04e97d6160c875ffdee1f6e56793e423dea025f344826be03e66829".into(),
@@ -1934,9 +1963,7 @@ fn check_upload_authorization(
     >,
 ) -> Result<(), Box<dyn std::error::Error>> {
     use super::observation::record_admitted_upload_intent;
-    use crate::crate_release_controller::{
-        verify_and_record_upload_intent, verify_release_package,
-    };
+    use crate::crate_release_controller::verify_and_record_upload_intent;
     use crate::crate_release_journal::{JournalMutationPhase, inspect_journal_mutation};
     let (admission, intent, request, github, registry, root, journal, identity) = (
         obs.admission,
@@ -1949,7 +1976,7 @@ fn check_upload_authorization(
         obs.identity,
     );
     let prove = || {
-        verify_release_package(
+        fixture_verify_release_package(
             admission,
             intent,
             request,
@@ -1961,7 +1988,7 @@ fn check_upload_authorization(
         )
     };
     assert!(
-        verify_release_package(
+        fixture_verify_release_package(
             admission,
             intent,
             request,
@@ -2043,7 +2070,7 @@ fn check_upload_identity_rejections(
     >,
 ) -> Result<(), Box<dyn std::error::Error>> {
     use super::observation::record_admitted_upload_intent;
-    use crate::crate_release_controller::{CrateReleaseObservation, verify_release_package};
+    use crate::crate_release_controller::CrateReleaseObservation;
     let (admission, intent, request, github, registry, root) = (
         obs.admission,
         obs.intent,
@@ -2053,7 +2080,7 @@ fn check_upload_identity_rejections(
         obs.source,
     );
     let prove = || {
-        verify_release_package(
+        fixture_verify_release_package(
             admission,
             intent,
             request,
@@ -2109,9 +2136,7 @@ fn check_upload_semver_rejections(
         Registry,
     >,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    use crate::crate_release_controller::{
-        observation::record_admitted_upload_intent, verify_release_package,
-    };
+    use crate::crate_release_controller::observation::record_admitted_upload_intent;
     use crate::crate_release_journal::{
         JournalIntendedMutation, JournalMutationKind, record_journal_intent,
     };
@@ -2138,7 +2163,7 @@ fn check_upload_semver_rejections(
     let mut forged = obs.admission.clone();
     forged.github.request.source_sha = "f".repeat(40);
     let semver = crate::crate_release_semver::fixture_verified_semver(&forged, "demo")?;
-    let verified = verify_release_package(
+    let verified = fixture_verify_release_package(
         obs.admission,
         obs.intent,
         obs.request,
@@ -2349,7 +2374,7 @@ fn multi_crate_absent_predecessor_does_not_block_observation()
             .iter()
             .all(|p| p.action == CrateReleaseAction::Publish)
     );
-    let error = super::verify_release_package(
+    let error = fixture_verify_release_package(
         &admission,
         &intent,
         &request,
@@ -2365,7 +2390,7 @@ fn multi_crate_absent_predecessor_does_not_block_observation()
             .to_string()
             .contains("crate_release_package_not_ready")
     );
-    super::verify_release_package(
+    fixture_verify_release_package(
         &admission,
         &intent,
         &request,
@@ -2408,7 +2433,7 @@ fn verify_after_index_visibility(
     FIXTURE_SPARSE_INDEX.with(|value| *value.borrow_mut() = Some(server.url.clone()));
     registry.visible.set(true);
     github.1.set(true);
-    let error = super::verify_release_package(
+    let error = fixture_verify_release_package(
         admission,
         intent,
         request,
@@ -2423,7 +2448,7 @@ fn verify_after_index_visibility(
     server
         .index_visible
         .store(true, std::sync::atomic::Ordering::SeqCst);
-    let result = super::verify_release_package(
+    let result = fixture_verify_release_package(
         admission,
         intent,
         request,
