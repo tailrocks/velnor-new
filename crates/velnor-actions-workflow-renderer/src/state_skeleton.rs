@@ -19,6 +19,8 @@ pub const STATE_SKELETON_DIR: &str = "$RUNNER_TEMP/velnor/state-skeleton";
 
 const GUARD: &str = "case \"$RUNNER_TEMP\" in /*) ;; *) printf '%s\\n' 'RUNNER_TEMP must be absolute' >&2; exit 1 ;; esac";
 
+const STORE_GUARD: &str = "[ -n \"${MBX_CACHE_DIR-}\" ] && [ \"$MBX_CACHE_DIR\" = \"$RUNNER_TEMP/velnor/mbx\" ] || { printf '%s\\n' 'MBX_CACHE_DIR is not the store path' >&2; exit 1; }";
+
 pub fn state_skeleton_step(
     rust_toolchain: &str,
     root: &str,
@@ -28,9 +30,11 @@ pub fn state_skeleton_step(
     let script = format!(
         r#"set -eu
 {GUARD}
+{STORE_GUARD}
 d="{STATE_SKELETON_DIR}"
 rm -rf "$d"
-mkdir -p "$d"
+mkdir -p "$d/task-manifests"
+[ ! -d "$MBX_CACHE_DIR/actions/task-manifests" ] || cp -R "$MBX_CACHE_DIR/actions/task-manifests/." "$d/task-manifests"
 root="${{{MBX_BUNDLE_ROOT_ENV}}}"
 manifest="$root/Cargo.toml"
 [ "$root" != . ] || manifest=Cargo.toml
@@ -69,15 +73,27 @@ pub fn state_skeleton_restore_step() -> Result<Step, RenderError> {
     let script = format!(
         r#"set -eu
 {GUARD}
+{STORE_GUARD}
 d="{STATE_SKELETON_DIR}"
 ws="${{GITHUB_WORKSPACE%/}}"
+reports="$RUNNER_TEMP/velnor/r${{GITHUB_RUN_ID:?}}-a${{VELNOR_RUN_KEY_ATTEMPT:?}}"
 [ -s "$d/stubbed" ] || {{ printf '%s\n' 'state skeleton record is missing' >&2; exit 1; }}
+[ -d "$d/task-manifests" ] || {{ printf '%s\n' 'state skeleton manifest record is missing' >&2; exit 1; }}
+[ -s "$d/metadata.json" ] || {{ printf '%s\n' 'state skeleton metadata record is missing' >&2; exit 1; }}
+jq -r '.target_directory' "$d/metadata.json" > "$d/target"; tdir=; read -r tdir < "$d/target"
+[ -d "$tdir" ] || {{ printf 'state skeleton target directory is missing: %s\n' "$tdir" >&2; exit 1; }}
+jq -r '[.packages[].targets[] | select(.kind | index("custom-build") | not) | .name | gsub("-"; "_")] | unique[]' "$d/metadata.json" > "$d/member-crates"
+jq -r '.packages[] | select(any(.targets[]; .kind | index("custom-build"))) | .name' "$d/metadata.json" > "$d/member-builds"
 cd "$ws"
 while IFS= read -r rel; do git checkout -- "$rel"; done < "$d/stubbed"
 git diff --quiet || {{ printf '%s\n' 'workspace sources differ after the skeleton phase' >&2; exit 1; }}
-[ -n "${{MBX_CACHE_DIR-}}" ] && [ "$MBX_CACHE_DIR" = "$RUNNER_TEMP/velnor/mbx" ] || {{ printf '%s\n' 'MBX_CACHE_DIR is not the store path' >&2; exit 1; }}
+rm -rf "$MBX_CACHE_DIR/actions/task-manifests"
+mkdir -p "$MBX_CACHE_DIR/actions/task-manifests"
+cp -R "$d/task-manifests/." "$MBX_CACHE_DIR/actions/task-manifests"
 rm -rf "$MBX_CACHE_DIR/incremental"
-rm -rf "$RUNNER_TEMP/velnor/r${{GITHUB_RUN_ID:?}}-a${{VELNOR_RUN_KEY_ATTEMPT:?}}"/m-*
+find "$tdir" -type d \( -name deps -o -name build \) -prune -print > "$d/output-dirs"
+while IFS= read -r out; do case "${{out##*/}}" in deps) while IFS= read -r crate; do rm -rf "$out/$crate"-???????????????? "$out/$crate"-????????????????.*; for ext in rlib rmeta so dylib dll a; do rm -rf "$out/lib$crate"-????????????????."$ext"; done; done < "$d/member-crates" ;; build) while IFS= read -r pkg; do rm -rf "$out/$pkg"-????????????????; done < "$d/member-builds" ;; esac; done < "$d/output-dirs"
+rm -rf "$reports"/m-*
 printf '%s\n' '{MBX_BSE_ENV}={MBX_BSE_PRODUCER}' >> "$GITHUB_ENV"
 wc -l < "$d/stubbed" > "$d/count"; count=; read -r count < "$d/count"; printf 'velnor: state skeleton restored files=%s\n' "$count"
 "#
