@@ -1169,10 +1169,12 @@ name = "velnor-actions-contract"
 version = "0.1.73"
 dependencies = [
  "blake3",
+ "rustix",
  "semver",
  "serde",
  "serde_json",
  "sha2",
+ "tempfile",
  "thiserror",
 ]
 

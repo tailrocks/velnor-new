@@ -20,7 +20,8 @@ use super::support::{
 use super::{
     FORMULA_LIMIT, HOMEBREW_HOST_INSTALLED_MODE, HomebrewInstallRequest, auxiliary_installed_mode,
 };
-use crate::{OrchestratorError, exclusive_write, filesystem_owner::held_file::HeldFile};
+use crate::{OrchestratorError, filesystem_owner::held_file::HeldFile};
+use velnor_actions_contract::exclusive_write;
 
 pub(super) fn validate_request(
     request: &HomebrewInstallRequest<'_>,

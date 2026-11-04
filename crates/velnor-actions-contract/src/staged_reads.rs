@@ -5,15 +5,16 @@ use std::fs;
 use std::io::Read as _;
 use std::path::Path;
 
-pub(crate) fn path_is_symlink(path: &Path) -> bool {
+#[must_use]
+pub fn path_is_symlink(path: &Path) -> bool {
     fs::symlink_metadata(path).is_ok_and(|meta| meta.file_type().is_symlink())
 }
 
-pub(crate) fn read_staged_bytes(path: &Path, bound: u64) -> Result<Vec<u8>, &'static str> {
+pub fn read_staged_bytes(path: &Path, bound: u64) -> Result<Vec<u8>, &'static str> {
     read_staged_bytes_until(path, bound, || Ok(()))
 }
 
-pub(crate) fn read_staged_bytes_until(
+pub fn read_staged_bytes_until(
     path: &Path,
     bound: u64,
     mut checkpoint: impl FnMut() -> Result<(), &'static str>,
@@ -67,7 +68,7 @@ pub(crate) fn read_staged_bytes_until(
     Ok(bytes)
 }
 
-pub(crate) fn read_staged_text(path: &Path, bound: u64) -> Result<String, &'static str> {
+pub fn read_staged_text(path: &Path, bound: u64) -> Result<String, &'static str> {
     let bytes = read_staged_bytes(path, bound)?;
     String::from_utf8(bytes).map_err(|_| "unreadable")
 }

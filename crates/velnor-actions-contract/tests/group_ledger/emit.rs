@@ -1,21 +1,21 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-// gc1-t54 covers group-ledger emit: the success path writes a validated
-// ledger whose every digest recomputes from the staged inputs, a missing
-// report on success is a loud error (red first), a missing report on
-// failure records NeedsPrepare, and a failed unit on success is refused.
 use velnor_actions_contract::workflow::{ExecutionBranch, UnitLedgerV1, UnitOutcome, UnitResultV1};
 
-use super::super::gc1_t54_support::{self, RUN_KEY};
-use super::{JobStatus, emit_group_ledger_to};
+use velnor_actions_contract::HelperError;
+use velnor_actions_contract::workflow::group_ledger::{
+    GROUP_LEDGER_FILENAME, JobStatus, emit_group_ledger_to,
+};
 
-fn fail(problem: &str) -> crate::OrchestratorError {
-    crate::internal::internal(problem)
+use super::support::{self as gc1_t54_support, RUN_KEY};
+
+fn fail(problem: &str) -> HelperError {
+    HelperError::internal(problem)
 }
 
 #[test]
-fn success_emits_validated_ledger() -> Result<(), crate::OrchestratorError> {
+fn success_emits_validated_ledger() -> Result<(), HelperError> {
     let fixture = gc1_t54_support::build(JobStatus::Success)?;
     let report_file = format!("{}.json", fixture.report_id.as_str());
     let out = emit_group_ledger_to(
@@ -30,7 +30,7 @@ fn success_emits_validated_ledger() -> Result<(), crate::OrchestratorError> {
         fixture
             .run_dir
             .join(&fixture.matrix_key)
-            .join(super::GROUP_LEDGER_FILENAME)
+            .join(GROUP_LEDGER_FILENAME)
     );
     let text = std::fs::read_to_string(&out).map_err(|err| fail(&err.to_string()))?;
     let ledger = UnitLedgerV1::parse_json(&text).map_err(|_| fail("ledger_parse"))?;
@@ -83,7 +83,7 @@ fn success_emits_validated_ledger() -> Result<(), crate::OrchestratorError> {
 }
 
 #[test]
-fn missing_report_on_success_is_loud() -> Result<(), crate::OrchestratorError> {
+fn missing_report_on_success_is_loud() -> Result<(), HelperError> {
     let fixture = gc1_t54_support::build(JobStatus::Success)?;
     let report_file = format!("{}.json", fixture.report_id.as_str());
     std::fs::remove_file(
@@ -113,7 +113,7 @@ fn missing_report_on_success_is_loud() -> Result<(), crate::OrchestratorError> {
 }
 
 #[test]
-fn missing_report_on_failure_defers() -> Result<(), crate::OrchestratorError> {
+fn missing_report_on_failure_defers() -> Result<(), HelperError> {
     let fixture = gc1_t54_support::build(JobStatus::Failure)?;
     let report_file = format!("{}.json", fixture.report_id.as_str());
     std::fs::remove_file(
@@ -144,7 +144,7 @@ fn missing_report_on_failure_defers() -> Result<(), crate::OrchestratorError> {
 }
 
 #[test]
-fn unsuffixed_job_key_emits_a_reader_ledger_for_that_group() -> Result<(), crate::OrchestratorError> {
+fn unsuffixed_job_key_emits_a_reader_ledger_for_that_group() -> Result<(), HelperError> {
     let fixture = gc1_t54_support::build(JobStatus::Success)?;
     assert_eq!(fixture.emit_env.job_key, gc1_t54_support::GROUP);
     let out = emit_group_ledger_to(
@@ -162,7 +162,7 @@ fn unsuffixed_job_key_emits_a_reader_ledger_for_that_group() -> Result<(), crate
 }
 
 #[test]
-fn branch_suffixed_job_key_is_not_a_selected_group() -> Result<(), crate::OrchestratorError> {
+fn branch_suffixed_job_key_is_not_a_selected_group() -> Result<(), HelperError> {
     for suffix in ["-write", "-read"] {
         let mut fixture = gc1_t54_support::build(JobStatus::Success)?;
         fixture.emit_env.job_key = format!("{}{suffix}", gc1_t54_support::GROUP);

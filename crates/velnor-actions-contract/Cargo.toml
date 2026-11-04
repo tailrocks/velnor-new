@@ -25,10 +25,12 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
 blake3 = { version = "=1.8.7" }
+rustix = { version = "=1.1.5", features = ["fs"] }
 thiserror = { workspace = true }
 
 [dev-dependencies]
 serde_json = { workspace = true }
+tempfile = { version = "=3.27.0" }
 
 [[test]]
 name = "crate_bootstrap_version_public"

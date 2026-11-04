@@ -134,7 +134,7 @@ fn verify_owned_cli(
     if !metadata.is_file() || metadata.permissions().mode() & 0o7_777 != 0o500 {
         return Err(internal("container_owned_cli_mode"));
     }
-    let bytes = crate::retrieve_reports::staged_reads::read_staged_bytes_until(
+    let bytes = velnor_actions_contract::staged_reads::read_staged_bytes_until(
         &prepared.docker_program,
         256 * 1024 * 1024,
         || read_deadline_checkpoint(deadline),
@@ -168,7 +168,7 @@ fn project_executable(
             .ok_or_else(|| internal("container_cli_path"))?
             .trim_start_matches('/'),
     )?;
-    let bytes = crate::retrieve_reports::staged_reads::read_staged_bytes_until(
+    let bytes = velnor_actions_contract::staged_reads::read_staged_bytes_until(
         source,
         256 * 1024 * 1024,
         || read_deadline_checkpoint(Some(deadline)),
@@ -178,7 +178,7 @@ fn project_executable(
     if bytes.is_empty() || observed != expected {
         return Err(internal("container_cli_sha256"));
     }
-    crate::exclusive_write::write_exclusive_until(destination, &bytes, "container_cli", || {
+    velnor_actions_contract::exclusive_write::write_exclusive_until(destination, &bytes, "container_cli", || {
         checkpoint(Some(deadline))
     })?;
     let fd = rustix::fs::open(

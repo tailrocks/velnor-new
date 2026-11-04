@@ -383,8 +383,8 @@ fn write_execution_receipt(
         .join("velnor")
         .join(&loaded.plan.run_key)
         .join(&loaded.entry.matrix_key);
-    crate::exclusive_write::create_dir_no_symlink(temp, &base)?;
-    crate::exclusive_write::write_exclusive(
+    velnor_actions_contract::exclusive_write::create_dir_no_symlink(temp, &base)?;
+    velnor_actions_contract::exclusive_write::write_exclusive(
         &base.join("check-execution.json"),
         &receipt_bytes,
         "check_execution",

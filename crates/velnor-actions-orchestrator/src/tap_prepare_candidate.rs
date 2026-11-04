@@ -101,7 +101,7 @@ pub(super) fn persist_candidate(
     }
     fs::create_dir(&staging).map_err(|_| internal("tap_candidate_staging_create"))?;
     let result = (|| {
-        crate::exclusive_write::write_exclusive(
+        velnor_actions_contract::exclusive_write::write_exclusive(
             &staging.join("formula.rb"),
             identity.formula,
             "tap_candidate_formula",
@@ -109,7 +109,7 @@ pub(super) fn persist_candidate(
         let proof = candidate_proof(&identity)?;
         let bytes =
             canonical_json_bytes(&proof).map_err(|_| internal("tap_candidate_proof_encode"))?;
-        crate::exclusive_write::write_exclusive(
+        velnor_actions_contract::exclusive_write::write_exclusive(
             &staging.join("candidate.json"),
             &bytes,
             "tap_candidate_proof",

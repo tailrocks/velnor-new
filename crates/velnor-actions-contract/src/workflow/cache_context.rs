@@ -15,6 +15,6 @@ pub use effective::{ApiConclusion, EffectiveJobBindingV1};
 pub use execution::ExecutionContextV1;
 pub use job::JobBindingV1;
 pub use lane::{CacheCapability, CacheDriver, CompilerAdapterV1, LaneContextV1};
-pub use observation::{MeasuredU64, ObservationGapCode, ObservationGapV1};
+pub use observation::{MeasuredU64, ObservationGapCode, ObservationGapV1, UNIT_OBSERVATION_SUFFIX};
 pub use source::SourceBindingV1;
 pub use units::{CacheRestoreOutcome, ExecutionBranch, UnitLedgerV1, UnitOutcome, UnitResultV1};

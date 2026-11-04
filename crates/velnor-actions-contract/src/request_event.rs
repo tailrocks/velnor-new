@@ -1,82 +1,80 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_actions_contract::{
-    QualificationDispatch, QualificationPhase, QualificationRunRef, WorkflowEvent,
-};
-
-use crate::OrchestratorError;
-use crate::internal::internal;
+use crate::helper_error::HelperError;
+use crate::{QualificationDispatch, QualificationPhase, QualificationRunRef, WorkflowEvent};
 
 #[derive(Debug, Clone, Copy)]
-pub(crate) struct QualificationRunnerContext<'a> {
-    pub(crate) repository: Option<&'a str>,
-    pub(crate) git_ref: Option<&'a str>,
-    pub(crate) ref_protected: Option<&'a str>,
-    pub(crate) workflow_ref: Option<&'a str>,
-    pub(crate) workflow_sha: Option<&'a str>,
-    pub(crate) source_sha: Option<&'a str>,
-    pub(crate) run_id: Option<&'a str>,
-    pub(crate) run_attempt: Option<&'a str>,
+pub struct QualificationRunnerContext<'a> {
+    pub repository: Option<&'a str>,
+    pub git_ref: Option<&'a str>,
+    pub ref_protected: Option<&'a str>,
+    pub workflow_ref: Option<&'a str>,
+    pub workflow_sha: Option<&'a str>,
+    pub source_sha: Option<&'a str>,
+    pub run_id: Option<&'a str>,
+    pub run_attempt: Option<&'a str>,
 }
 
-pub(crate) fn workflow_event_for(
+pub fn workflow_event_for(
     event_name: &str,
     payload: &serde_json::Value,
-) -> Result<WorkflowEvent, OrchestratorError> {
+) -> Result<WorkflowEvent, HelperError> {
     match event_name {
         "pull_request" => match fork_flag(payload) {
             Some(true) => Ok(WorkflowEvent::Fork),
             Some(false) => Ok(WorkflowEvent::PullRequest),
-            None => Err(internal("indeterminate_fork")),
+            None => Err(HelperError::internal("indeterminate_fork")),
         },
         "push" => Ok(WorkflowEvent::Push),
         "merge_group" => Ok(WorkflowEvent::MergeGroup),
         "workflow_dispatch" => Ok(WorkflowEvent::Qualification),
         "local" => Ok(WorkflowEvent::Local),
-        _ => Err(internal("unsupported_event")),
+        _ => Err(HelperError::internal("unsupported_event")),
     }
 }
 
-pub(crate) fn qualification_dispatch_for_parts(
+pub fn qualification_dispatch_for_parts(
     event_name: &str,
     payload: &serde_json::Value,
     runner: QualificationRunnerContext<'_>,
-) -> Result<Option<QualificationDispatch>, OrchestratorError> {
+) -> Result<Option<QualificationDispatch>, HelperError> {
     if event_name != "workflow_dispatch" {
         return Ok(None);
     }
     let inputs = &payload["inputs"];
     let payload_repository = nonempty(payload["repository"]["full_name"].as_str())
-        .ok_or_else(|| internal("missing_qualification_payload_repository"))?;
+        .ok_or_else(|| HelperError::internal("missing_qualification_payload_repository"))?;
     let default_branch = nonempty(payload["repository"]["default_branch"].as_str())
-        .ok_or_else(|| internal("missing_qualification_default_branch"))?;
+        .ok_or_else(|| HelperError::internal("missing_qualification_default_branch"))?;
     let payload_ref = nonempty(payload["ref"].as_str())
-        .ok_or_else(|| internal("missing_qualification_payload_ref"))?;
+        .ok_or_else(|| HelperError::internal("missing_qualification_payload_ref"))?;
     let repository = required_context(runner.repository, "repository")?;
     let git_ref = required_context(runner.git_ref, "ref")?;
     if payload_repository != repository || payload_ref != git_ref {
-        return Err(internal("qualification_payload_context_mismatch"));
+        return Err(HelperError::internal(
+            "qualification_payload_context_mismatch",
+        ));
     }
     let campaign = nonempty(inputs["campaign"].as_str())
-        .ok_or_else(|| internal("missing_qualification_campaign"))?;
+        .ok_or_else(|| HelperError::internal("missing_qualification_campaign"))?;
     let phase = match inputs["phase"].as_str() {
         Some("cold") => QualificationPhase::Cold,
         Some("warm") => QualificationPhase::Warm,
         Some("third") => QualificationPhase::Third,
         Some("useful_delta") => QualificationPhase::UsefulDelta,
         Some("control") => QualificationPhase::Control,
-        _ => return Err(internal("invalid_qualification_phase")),
+        _ => return Err(HelperError::internal("invalid_qualification_phase")),
     };
     let predecessor = qualification_predecessor(inputs)?;
     let run_id = runner
         .run_id
         .and_then(|value| value.parse::<u64>().ok())
-        .ok_or_else(|| internal("invalid_qualification_run_id"))?;
+        .ok_or_else(|| HelperError::internal("invalid_qualification_run_id"))?;
     let run_attempt = runner
         .run_attempt
         .and_then(|value| value.parse::<u32>().ok())
-        .ok_or_else(|| internal("invalid_qualification_run_attempt"))?;
+        .ok_or_else(|| HelperError::internal("invalid_qualification_run_attempt"))?;
     let context = QualificationDispatch {
         campaign,
         phase,
@@ -93,13 +91,13 @@ pub(crate) fn qualification_dispatch_for_parts(
     };
     context
         .validate_shape()
-        .map_err(|_| internal("invalid_qualification_context"))?;
+        .map_err(|_| HelperError::internal("invalid_qualification_context"))?;
     Ok(Some(context))
 }
 
 fn qualification_predecessor(
     inputs: &serde_json::Value,
-) -> Result<Option<QualificationRunRef>, OrchestratorError> {
+) -> Result<Option<QualificationRunRef>, HelperError> {
     let run_id = nonempty(inputs["predecessor_run_id"].as_str());
     let run_attempt = nonempty(inputs["predecessor_run_attempt"].as_str());
     match (run_id, run_attempt) {
@@ -109,43 +107,48 @@ fn qualification_predecessor(
                 .parse::<u64>()
                 .ok()
                 .filter(|value| *value > 0)
-                .ok_or_else(|| internal("invalid_qualification_predecessor_run_id"))?;
+                .ok_or_else(|| HelperError::internal("invalid_qualification_predecessor_run_id"))?;
             let run_attempt = run_attempt
                 .parse::<u32>()
                 .ok()
                 .filter(|value| *value > 0)
-                .ok_or_else(|| internal("invalid_qualification_predecessor_run_attempt"))?;
+                .ok_or_else(|| {
+                    HelperError::internal("invalid_qualification_predecessor_run_attempt")
+                })?;
             Ok(Some(QualificationRunRef {
                 run_id,
                 run_attempt,
             }))
         }
-        _ => Err(internal("incomplete_qualification_predecessor")),
+        _ => Err(HelperError::internal(
+            "incomplete_qualification_predecessor",
+        )),
     }
 }
 
-fn required_context(value: Option<&str>, name: &str) -> Result<String, OrchestratorError> {
-    nonempty(value).ok_or_else(|| internal(&format!("missing_qualification_{name}")))
+fn required_context(value: Option<&str>, name: &str) -> Result<String, HelperError> {
+    nonempty(value).ok_or_else(|| HelperError::internal(&format!("missing_qualification_{name}")))
 }
 
 fn fork_flag(payload: &serde_json::Value) -> Option<bool> {
     payload["pull_request"]["head"]["repo"]["fork"].as_bool()
 }
 
-pub(crate) fn request_refs(
+pub fn request_refs(
     event: WorkflowEvent,
     payload: &serde_json::Value,
     github_sha: Option<&str>,
-) -> Result<(Option<String>, String), OrchestratorError> {
+) -> Result<(Option<String>, String), HelperError> {
     match event {
         WorkflowEvent::PullRequest => {
             let pr = &payload["pull_request"];
             Ok((
                 Some(
                     nonempty(pr["base"]["sha"].as_str())
-                        .ok_or_else(|| internal("missing_pr_base"))?,
+                        .ok_or_else(|| HelperError::internal("missing_pr_base"))?,
                 ),
-                nonempty(pr["head"]["sha"].as_str()).ok_or_else(|| internal("missing_pr_head"))?,
+                nonempty(pr["head"]["sha"].as_str())
+                    .ok_or_else(|| HelperError::internal("missing_pr_head"))?,
             ))
         }
         WorkflowEvent::MergeGroup => {
@@ -153,10 +156,10 @@ pub(crate) fn request_refs(
             Ok((
                 Some(
                     nonempty(group["base_sha"].as_str())
-                        .ok_or_else(|| internal("missing_merge_base"))?,
+                        .ok_or_else(|| HelperError::internal("missing_merge_base"))?,
                 ),
                 nonempty(group["head_sha"].as_str())
-                    .ok_or_else(|| internal("missing_merge_head"))?,
+                    .ok_or_else(|| HelperError::internal("missing_merge_head"))?,
             ))
         }
         WorkflowEvent::Push => {
@@ -164,21 +167,23 @@ pub(crate) fn request_refs(
             let head = nonempty(payload["after"].as_str())
                 .filter(|sha| !is_zero_sha(sha))
                 .or_else(|| nonempty(github_sha))
-                .ok_or_else(|| internal("missing_push_head"))?;
+                .ok_or_else(|| HelperError::internal("missing_push_head"))?;
             Ok((base, head))
         }
         WorkflowEvent::Qualification => Ok((
             None,
-            nonempty(github_sha).ok_or_else(|| internal("missing_qualification_head"))?,
+            nonempty(github_sha)
+                .ok_or_else(|| HelperError::internal("missing_qualification_head"))?,
         )),
         WorkflowEvent::Fork => {
             let pr = &payload["pull_request"];
             Ok((
                 Some(
                     nonempty(pr["base"]["sha"].as_str())
-                        .ok_or_else(|| internal("missing_pr_base"))?,
+                        .ok_or_else(|| HelperError::internal("missing_pr_base"))?,
                 ),
-                nonempty(pr["head"]["sha"].as_str()).ok_or_else(|| internal("missing_pr_head"))?,
+                nonempty(pr["head"]["sha"].as_str())
+                    .ok_or_else(|| HelperError::internal("missing_pr_head"))?,
             ))
         }
         WorkflowEvent::Local => {

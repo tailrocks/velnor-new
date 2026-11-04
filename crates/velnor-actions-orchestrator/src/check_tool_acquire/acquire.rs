@@ -77,7 +77,7 @@ fn hydrate_tool(
         return Err(internal("qualified_tool_shared_context"));
     }
     for directory in ["downloads", "verified", "unpacked", "cargo", "target"] {
-        crate::exclusive_write::create_dir_no_symlink(home, &tool_home.join(directory))?;
+        velnor_actions_contract::exclusive_write::create_dir_no_symlink(home, &tool_home.join(directory))?;
     }
     let prefix = tool_home.join("prefix");
     let shared_prefix = shared_home.join("prefix");

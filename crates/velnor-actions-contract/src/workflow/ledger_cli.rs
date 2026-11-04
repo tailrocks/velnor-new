@@ -63,6 +63,16 @@ pub const LEDGER_CLI_EMIT_CONDITION: &str =
 
 pub const LEDGER_CLI_OFFLINE_FLAG: &str = "--offline";
 
+pub const LEDGER_CLI_NO_DEFAULT_FEATURES_FLAG: &str = "--no-default-features";
+
+pub const LEDGER_CLI_FEATURES_FLAG: &str = "--features";
+
+pub const LEDGER_CLI_FEATURE: &str = "ledger-helper";
+
+pub const LEDGER_CLI_SMOKE_OP: &str = "ledger-cli-smoke";
+
+pub const LEDGER_CLI_REJECTION_MARKER: &str = "ledger helper build only runs";
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LedgerCliSource {
     Installed,
@@ -183,8 +193,27 @@ fn offline_build_ok(step: &Step) -> bool {
         return false;
     };
     run.iter().any(|arg| arg == LEDGER_CLI_OFFLINE_FLAG)
+        && ledger_features_only(run)
         && env.get(RUSTUP_AUTO_INSTALL_ENV).map(String::as_str)
             == Some(RUSTUP_AUTO_INSTALL_DISABLED)
+}
+
+fn ledger_features_only(run: &[String]) -> bool {
+    let flag_count = |flag: &str| run.iter().filter(|arg| arg.as_str() == flag).count();
+    let feature_flags: Vec<usize> = run
+        .iter()
+        .enumerate()
+        .filter(|(_, arg)| arg.as_str() == LEDGER_CLI_FEATURES_FLAG)
+        .map(|(at, _)| at)
+        .collect();
+    let one_feature = matches!(
+        feature_flags[..],
+        [at] if run.get(at + 1).map(String::as_str) == Some(LEDGER_CLI_FEATURE)
+    );
+    let stray = run.iter().any(|arg| {
+        arg == "--all-features" || arg.starts_with("--features=") || arg.starts_with("-F")
+    });
+    flag_count(LEDGER_CLI_NO_DEFAULT_FEATURES_FLAG) == 1 && one_feature && !stray
 }
 
 fn validate_ledger_cli_steps(job: &Job) -> Result<(), ContractError> {
