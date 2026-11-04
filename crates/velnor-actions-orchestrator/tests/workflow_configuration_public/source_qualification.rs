@@ -22,22 +22,7 @@ const UNRELATED_CONTENT: &str = "name: preserved user content\n";
 fn generator_release_owns_source_qualification_lifecycle() -> Result<(), Box<dyn Error>> {
     let repo = generator_repo(true)?;
     let root = repo.path();
-    let source_workflow = root.join(WORKFLOW_PATH);
-    fs::create_dir_all(
-        source_workflow
-            .parent()
-            .ok_or("workflow path has no parent")?,
-    )?;
-    fs::write(
-        &source_workflow,
-        format!("{MARKER_PREFIX} 0.1.0\nname: stale generated workflow\n"),
-    )?;
-    fs::create_dir_all(
-        root.join(UNRELATED_PATH)
-            .parent()
-            .ok_or("unrelated path has no parent")?,
-    )?;
-    fs::write(root.join(UNRELATED_PATH), UNRELATED_CONTENT)?;
+    seed_stale_workflow(root)?;
 
     let prepared = prepare(root)?;
     let tree = render_staged_tree(&prepared)?;
@@ -104,6 +89,27 @@ fn generator_release_owns_source_qualification_lifecycle() -> Result<(), Box<dyn
         fs::read(retired.join(&unrelated))?,
         UNRELATED_CONTENT.as_bytes()
     );
+    Ok(())
+}
+
+fn seed_stale_workflow(root: &Path) -> Result<(), Box<dyn Error>> {
+    let source_workflow = root.join(WORKFLOW_PATH);
+    fs::create_dir_all(
+        source_workflow
+            .parent()
+            .ok_or("workflow path has no parent")?,
+    )?;
+    fs::write(
+        &source_workflow,
+        format!("{MARKER_PREFIX} 0.1.0\nname: stale generated workflow\n"),
+    )?;
+    fs::create_dir_all(
+        root.join(UNRELATED_PATH)
+            .parent()
+            .ok_or("unrelated path has no parent")?,
+    )?;
+    fs::write(root.join(UNRELATED_PATH), UNRELATED_CONTENT)?;
+
     Ok(())
 }
 
