@@ -189,6 +189,8 @@ mod tools_producers_scope;
 mod topology_e797385c74;
 #[path = "workflow_configuration_public/verification_tools.rs"]
 mod verification_tools;
+#[path = "workflow_configuration_public/waste_graph.rs"]
+mod waste_graph;
 #[path = "workflow_configuration_public/waste_lint.rs"]
 mod waste_lint;
 #[path = "workflow_configuration_public/waste_lint_scope.rs"]
@@ -197,6 +199,8 @@ mod waste_lint_scope;
 mod waste_lint_verifier;
 #[path = "workflow_configuration_public/waste_oracle.rs"]
 mod waste_oracle;
+#[path = "workflow_configuration_public/waste_outputs.rs"]
+mod waste_outputs;
 #[path = "workflow_configuration_public/waste_rules.rs"]
 mod waste_rules;
 #[path = "workflow_configuration_public/waste_verifier_oracle.rs"]
