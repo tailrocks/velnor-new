@@ -119,4 +119,3 @@ path = "tests/crate_release_journal_adapter_public.rs"
 [[test]]
 name = "crate_registry_inventory_public"
 path = "tests/crate_registry_inventory_public.rs"
-
