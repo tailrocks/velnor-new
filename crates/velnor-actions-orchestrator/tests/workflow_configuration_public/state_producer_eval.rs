@@ -224,3 +224,28 @@ pub(super) fn seal_steps_run(
     }
     Ok(ran)
 }
+
+pub(super) fn writer_roles_run(
+    writer: &Job,
+    stale_tip: bool,
+) -> Result<Vec<StepRole>, Box<dyn Error>> {
+    let mut run = Run {
+        failed: false,
+        outputs: BTreeMap::from([(("v2", "enabled"), "true")]),
+        outcomes: BTreeMap::new(),
+    };
+    let none = Needs::new();
+    let mut ran = Vec::new();
+    for step in &writer.steps {
+        if !evaluates(step.condition.as_deref(), &run, &none)? {
+            continue;
+        }
+        if let Some(role) = step.role {
+            ran.push(role);
+        }
+        if step.role == Some(StepRole::StateSealTip) && stale_tip {
+            run.failed = true;
+        }
+    }
+    Ok(ran)
+}

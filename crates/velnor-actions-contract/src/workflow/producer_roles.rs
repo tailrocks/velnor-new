@@ -18,6 +18,7 @@ pub(super) fn sources_role(role: StepRole) -> bool {
             | StepRole::CargoSourcesRestore
             | StepRole::CargoSourcesFetch
             | StepRole::CargoSourcesSave
+            | StepRole::StateSealTip
     )
 }
 
@@ -47,6 +48,7 @@ pub(super) fn tools_role(role: StepRole) -> bool {
             | StepRole::VerifyRustManifest
             | StepRole::VerifyJactionlint
             | StepRole::ToolsCacheSave
+            | StepRole::StateSealTip
     )
 }
 

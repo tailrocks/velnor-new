@@ -9,7 +9,9 @@ use velnor_actions_contract::workflow::state_seal::{
 use velnor_actions_contract::{Job, Step, StepRole};
 
 use super::state_producer::{ROOTS, build, job, text_of};
-use super::state_producer_eval::{seal_runs, seal_steps_run, simulate, simulate_run};
+use super::state_producer_eval::{
+    seal_runs, seal_steps_run, simulate, simulate_run, writer_roles_run,
+};
 use super::support::rendered_job_block;
 
 #[test]
@@ -209,6 +211,52 @@ fn a_stale_head_runs_no_producer_lane_and_the_seal_does_not_run() -> Result<(), 
             !seal_runs(seal, producer_id, &stale)?,
             "{producer_id}: a stale head was sealed"
         );
+    }
+    Ok(())
+}
+
+#[test]
+fn a_stale_head_stops_the_sources_and_tools_writers_before_they_fetch_or_save()
+-> Result<(), Box<dyn Error>> {
+    let built = build()?;
+    let writers: Vec<&String> = built
+        .jobs
+        .keys()
+        .filter(|id| id.as_str() == "sources-producer" || id.starts_with("tools-producer-"))
+        .collect();
+    assert!(writers.iter().any(|id| id.as_str() == "sources-producer"));
+    assert!(writers.iter().any(|id| id.starts_with("tools-producer-")));
+    let side_effects = [
+        StepRole::CargoSourcesRestore,
+        StepRole::CargoSourcesFetch,
+        StepRole::CargoSourcesSave,
+        StepRole::ToolsCacheRestore,
+        StepRole::ToolsCacheSave,
+        StepRole::PreparePinnedTools,
+    ];
+    for id in writers {
+        let writer = job(&built.jobs, id)?;
+        assert_eq!(
+            writer.steps.first().and_then(|step| step.role),
+            Some(StepRole::StateSealTip),
+            "{id} does not check the tip first"
+        );
+        let current = writer_roles_run(writer, false)?;
+        assert!(
+            current.contains(&StepRole::Checkout),
+            "{id}: a current head skipped checkout"
+        );
+        assert!(
+            side_effects.iter().any(|role| current.contains(role)),
+            "{id}: a current head ran no fetch, restore or save"
+        );
+        let stale = writer_roles_run(writer, true)?;
+        for role in side_effects.iter().chain(&[StepRole::Checkout]) {
+            assert!(
+                !stale.contains(role),
+                "{id}: a stale head still ran {role:?}"
+            );
+        }
     }
     Ok(())
 }

@@ -92,7 +92,7 @@ pub const STATE_SEAL_WORKFLOW_PATH: &str = ".github/workflows/state-seal.yml";
 
 pub const STATE_SEAL_WORKFLOW_NAME: &str = "State seal";
 
-pub const STATE_SEAL_CONCURRENCY_GROUP: &str = "velnor-${{ github.workflow }}-${{ github.ref }}";
+pub const STATE_SEAL_CONCURRENCY_GROUP: &str = "velnor-state-seal-${{ github.ref }}";
 
 pub const STATE_SEAL_CONCURRENCY_CANCEL: &str = "false";
 

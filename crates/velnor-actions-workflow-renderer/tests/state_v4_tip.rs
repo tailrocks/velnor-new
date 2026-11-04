@@ -4,7 +4,7 @@
 use std::error::Error;
 
 use velnor_actions_contract::{Job, Step, StepKind, StepRole};
-use velnor_actions_workflow_renderer::state_seal::tip::state_producer_tip_step;
+use velnor_actions_workflow_renderer::state_seal::tip::stale_tip_stops_job_step;
 
 use crate::gc1_scene::{Scene, fail};
 use crate::gc1_seal_support::{Gh, MAIN, REPO};
@@ -84,7 +84,7 @@ fn only_the_head_that_is_still_the_tip_of_main_may_be_sealed() -> Result<(), Box
 #[test]
 #[cfg(unix)]
 fn the_producer_stops_before_building_unless_its_head_is_the_tip() -> Result<(), Box<dyn Error>> {
-    let step = state_producer_tip_step()?;
+    let step = stale_tip_stops_job_step()?;
     let scene = Scene::new("producer-tip", crate::gc1_t53::scripts()?)?;
     let gh = Gh::install(&scene)?;
 

@@ -24,7 +24,7 @@ pub fn state_seal_tip_step() -> Result<Step, RenderError> {
     Ok(step)
 }
 
-pub fn state_producer_tip_step() -> Result<Step, RenderError> {
+pub fn stale_tip_stops_job_step() -> Result<Step, RenderError> {
     tip_step("exit 1")
 }
 

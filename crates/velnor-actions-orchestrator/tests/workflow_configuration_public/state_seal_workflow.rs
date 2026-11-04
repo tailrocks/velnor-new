@@ -10,6 +10,7 @@ use std::process::Command;
 use serde_json::{Value, json};
 use velnor_actions_contract::workflow::ProducerKind;
 use velnor_actions_contract::workflow::state_seal::STATE_SEAL_WORKFLOW_PATH;
+use velnor_actions_contract::{RustSuiteConfig, validate_preserve_workflows, validate_rust_suites};
 use velnor_actions_orchestrator::{finalized_jobs, prepare, render_staged_tree};
 use velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
 
@@ -125,7 +126,7 @@ fn state_seal_workflow_is_push_only_and_owns_every_writer() -> Result<(), Box<dy
     assert_eq!(sealed["permissions"], json!({"contents": "read"}));
     assert_eq!(
         sealed["concurrency"],
-        json!({"group": "velnor-${{ github.workflow }}-${{ github.ref }}", "cancel-in-progress": false})
+        json!({"group": "velnor-state-seal-${{ github.ref }}", "cancel-in-progress": false})
     );
     let all = jobs(sealed)?;
     let ids: BTreeSet<String> = all.keys().cloned().collect();
@@ -330,4 +331,68 @@ fn both_plans_compute_byte_identical_cache_keys() -> Result<(), Box<dyn Error>> 
     };
     assert_eq!(select(&ci), select(&sealed));
     Ok(())
+}
+
+fn evaluated_group(workflow: &Value, name: &str) -> Result<String, Box<dyn Error>> {
+    let group = workflow["concurrency"]["group"]
+        .as_str()
+        .ok_or("workflow has no concurrency group")?;
+    Ok(group
+        .replace("${{ github.workflow }}", name)
+        .replace(
+            "${{ github.event.pull_request.number || github.ref }}",
+            "refs/heads/testmain",
+        )
+        .replace("${{ github.ref }}", "refs/heads/testmain"))
+}
+
+#[test]
+fn a_ci_named_state_seal_does_not_share_the_seal_concurrency_group() -> Result<(), Box<dyn Error>> {
+    let repo = seed_repo("")?;
+    let config_path = repo.path().join(".velnor/config.toml");
+    let config = fs::read_to_string(&config_path)?;
+    fs::write(
+        &config_path,
+        config.replacen("name = \"CI\"\n", "name = \"State seal\"\n", 1),
+    )?;
+    let tree = render_staged_tree(&prepare(repo.path())?)?;
+    let parse = |path: &str| -> Result<Value, Box<dyn Error>> {
+        Ok(serde_saphyr::from_str(
+            tree.get(path).ok_or_else(|| format!("{path} missing"))?,
+        )?)
+    };
+    let ci = parse(WORKFLOW_PATH)?;
+    let sealed = parse(STATE_SEAL_WORKFLOW_PATH)?;
+    assert_eq!(ci["name"], "State seal");
+    assert_eq!(sealed["name"], "State seal");
+    assert_ne!(
+        evaluated_group(&ci, "State seal")?,
+        evaluated_group(&sealed, "State seal")?
+    );
+    Ok(())
+}
+
+#[test]
+fn a_suite_or_preserved_workflow_cannot_take_the_state_seal_name() {
+    let mut suite = RustSuiteConfig::new("project-check", "default");
+    suite.workflow = Some("state-seal".to_owned());
+    let error = validate_rust_suites(&[suite], ".velnor/config.toml")
+        .expect_err("a suite must not claim the state-seal workflow");
+    assert!(
+        error
+            .to_string()
+            .contains("reserved_suite_workflow:state-seal"),
+        "{error}"
+    );
+    let error = validate_preserve_workflows(
+        &[STATE_SEAL_WORKFLOW_PATH.to_owned()],
+        ".velnor/config.toml",
+    )
+    .expect_err("the state-seal workflow must not be preservable");
+    assert!(
+        error
+            .to_string()
+            .contains("cannot_preserve_generator_workflow"),
+        "{error}"
+    );
 }
