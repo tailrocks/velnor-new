@@ -19,6 +19,7 @@ const SESSION_ONE: &str = r#"{"type":"session_started","v":1,"session":"one"}
 {"type":"action","v":1,"outcome":{"kind":"hit"},"crate_name":"serde","duration_ns":1}
 {"type":"action","v":1,"outcome":{"kind":"hit"},"crate_name":"serde_derive","duration_ns":1}
 {"type":"action","v":1,"outcome":{"kind":"miss"},"crate_name":"serde","duration_ns":1}
+{"type":"action","v":1,"outcome":{"kind":"miss"},"crate_name":"blake3 build script","duration_ns":1}
 {"type":"action","v":1,"outcome":{"kind":"unconsulted"},"crate_name":"syn","duration_ns":1}
 {"type":"action","v":1,"outcome":{"kind":"bypass","reason":"unsupported-crate-type"},"crate_name":"cc","duration_ns":1}
 {"type":"action","v":1,"outcome":{"kind":"bypass"},"duration_ns":1}
@@ -83,7 +84,7 @@ fn stats_count_registry_and_workspace_outcomes_from_the_session_files() -> Resul
     fs::write(sessions.join("2.lock"), "")?;
     let line = run_step(&cache, &summary, &temp)?;
     let expected = format!(
-        "mbx-stats job={JOB} registry hit=2 miss=1 not_looked_up=1 bypassed=2 workspace hit=1 miss=2 not_looked_up=0 bypassed=0 bypassed_benign=3 nonhit=registry:bypass:cc,registry:bypass:unnamed,registry:miss:serde,registry:not_looked_up:syn,workspace:miss:velnor_b bypass=unrecorded:unnamed,unsupported-crate-type:cc\n"
+        "mbx-stats job={JOB} registry hit=2 miss=2 not_looked_up=1 bypassed=2 workspace hit=1 miss=2 not_looked_up=0 bypassed=0 bypassed_benign=3 nonhit=registry:bypass:cc,registry:bypass:unnamed,registry:miss:blake3_build_script,registry:miss:serde,registry:not_looked_up:syn,workspace:miss:velnor_b bypass=unrecorded:unnamed,unsupported-crate-type:cc\n"
     );
     assert_eq!(line, expected);
     assert_eq!(
