@@ -19,6 +19,7 @@ use velnor_actions_orchestrator::{
 
 use super::one_job_per_crate::mbx_repo_for;
 use super::tools_producers::{identity_digest, is_tools_producer};
+use super::waste_graph::of;
 use super::workflow_configuration_fixture;
 
 const LANE_TOOLS: [&str; 7] = [
@@ -211,9 +212,9 @@ fn a_rust_job_in_another_lane_keeps_its_own_identity() -> Result<(), Box<dyn Err
         }
     }
     jobs.insert("rust-other-lane".to_owned(), other_lane);
-    assert_eq!(waste_findings(&jobs), Vec::new());
+    assert_eq!(of(&jobs, WasteRule::SplitToolsIdentity), Vec::new());
     jobs.insert("rust-same-lane".to_owned(), same_lane);
-    let found = waste_findings(&jobs);
+    let found = of(&jobs, WasteRule::SplitToolsIdentity);
     assert_eq!(found.len(), 1, "{found:?}");
     assert_eq!(found[0].rule(), WasteRule::SplitToolsIdentity);
     Ok(())
