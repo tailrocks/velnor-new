@@ -411,7 +411,7 @@ jobs:
           VELNOR_STATE_GH_TIMEOUT: "60"
           VELNOR_STATE_SNAPSHOT_R0: ${{ steps.cache-keys.outputs.state_root_snapshot }}
           VELNOR_STATE_SNAPSHOT_R1: ${{ steps.cache-keys.outputs.state_crates_velnor_runner_snapshot }}
-        run: "sh -c 'set -eu; case \"$RUNNER_TEMP\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''RUNNER_TEMP must be absolute'\\'' >&2; exit 1 ;; esac; d=\"$RUNNER_TEMP/velnor/state-select\"; rm -rf \"$d\"; mkdir -p \"$d\"; ref=\"${VELNOR_DEFAULT_REF:-}\"; repo=\"${GITHUB_REPOSITORY:-}\"; signer=\"${GITHUB_WORKFLOW_REF:-}\"; signer=\"${signer%%@*}\"; limit=\"${VELNOR_STATE_GH_TIMEOUT:-60}\"; shape='\\''^s256-[0-9a-f]{64}-s256-[0-9a-f]{64}-s256-[0-9a-f]{64}$'\\''; run_gh() { if command -v timeout >/dev/null 2>&1; then timeout \"$limit\" gh \"$@\"; else gh \"$@\"; fi; }; attested() { out=\"$d/$2\"; : > \"$out\"; [ -n \"$ref\" ] && [ -n \"$repo\" ] && [ -n \"$signer\" ] || return 0; command -v gh >/dev/null 2>&1 || return 0; run_gh cache list -R \"$repo\" --key \"$1\" --ref \"$ref\" --sort created_at --order desc --limit 100 --json key,createdAt,id,sizeInBytes --jq '\\''.[] | .createdAt + \" \" + .key + \" \" + (.id | tostring) + \" \" + (.sizeInBytes | tostring)'\\'' > \"$d/list\" 2>/dev/null || return 0; LC_ALL=C sort -r \"$d/list\" > \"$d/sorted\" || return 0; n=; v=; while IFS= read -r line; do [ \"${#v}\" -lt 3 ] && [ \"${#n}\" -lt 100 ] || break; rest=${line#* }; key=${rest%% *}; meta=${rest#* }; id=${meta%% *}; size=${meta#* }; case \"$id\" in '\\'''\\''|*[!0-9]*) continue ;; esac; case \"$size\" in '\\'''\\''|*[!0-9]*) continue ;; esac; case \"$key\" in \"$1\"?*) ;; *) continue ;; esac; printf '\\''%s\\n'\\'' \"${key#\"$1\"}\" | grep -Eq \"$shape\" || continue; printf '\\''%s %s %s\\n'\\'' \"$key\" \"$id\" \"$size\" > \"$d/subject\"; n=\"${n}x\"; if run_gh attestation verify \"$d/subject\" -R \"$repo\" --signer-workflow \"$signer\" --source-ref \"$ref\" --predicate-type '\\''https://velnor.dev/attestation/state-seal/v1'\\'' >/dev/null 2>&1; then printf '\\''%s\\n'\\'' \"$key\" >> \"$out\"; v=\"${v}x\"; fi; done < \"$d/sorted\"; }; emit() { { printf '\\''%s\\n'\\'' \"$1<<VELNOR_STATE_ATTESTED_EOF\"; cat \"$d/$2\"; printf '\\''%s\\n'\\'' VELNOR_STATE_ATTESTED_EOF; } >> \"$GITHUB_OUTPUT\"; }; decide() { want=false; if [ -n \"$4\" ] && [ -n \"$5\" ]; then want=true; prefix=\"$3$4-$5-\"; while IFS= read -r cand || [ -n \"$cand\" ]; do case \"$cand\" in \"$prefix\"?*) want=false ;; esac; done < \"$d/$2\"; fi; printf '\\''%s\\n'\\'' \"$1=$want\" >> \"$GITHUB_OUTPUT\"; }; attested '\\''velnor-v4-state-trusted-union-root-'\\'' r0; emit state_union_root_attested r0; decide state_union_root_produce r0 '\\''velnor-v4-state-trusted-union-root-'\\'' \"${VELNOR_STATE_COMPAT_R0-}\" \"${VELNOR_STATE_SNAPSHOT_R0-}\"; attested '\\''velnor-v4-state-trusted-union-crates-velnor-runner-'\\'' r1; emit state_union_crates_velnor_runner_attested r1; decide state_union_crates_velnor_runner_produce r1 '\\''velnor-v4-state-trusted-union-crates-velnor-runner-'\\'' \"${VELNOR_STATE_COMPAT_R1-}\" \"${VELNOR_STATE_SNAPSHOT_R1-}\"'"
+        run: "sh -c 'set -eu; case \"$RUNNER_TEMP\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''RUNNER_TEMP must be absolute'\\'' >&2; exit 1 ;; esac; d=\"$RUNNER_TEMP/velnor/state-select\"; rm -rf \"$d\"; mkdir -p \"$d\"; ref=\"${VELNOR_DEFAULT_REF:-}\"; repo=\"${GITHUB_REPOSITORY:-}\"; signer=\"${GITHUB_WORKFLOW_REF:-}\"; signer=\"${signer%%@*}\"; limit=\"${VELNOR_STATE_GH_TIMEOUT:-60}\"; shape='\\''^s256-[0-9a-f]{64}-s256-[0-9a-f]{64}-s256-[0-9a-f]{64}$'\\''; run_gh() { if command -v timeout >/dev/null 2>&1; then timeout \"$limit\" gh \"$@\"; else gh \"$@\"; fi; }; attested() { out=\"$d/$2\"; : > \"$out\"; [ -n \"$ref\" ] && [ -n \"$repo\" ] && [ -n \"$signer\" ] || return 0; command -v gh >/dev/null 2>&1 || return 0; run_gh cache list -R \"$repo\" --key \"$1\" --ref \"$ref\" --sort created_at --order desc --limit 100 --json key,createdAt,id,sizeInBytes --jq '\\''.[] | [.createdAt, .key, (.id | tostring), (.sizeInBytes | tostring)] | @tsv'\\'' > \"$d/list\" 2>/dev/null || return 0; LC_ALL=C sort -r \"$d/list\" > \"$d/sorted\" || return 0; n=; v=; while IFS='\\''\t'\\'' read -r created key id size; do [ \"${#v}\" -lt 3 ] && [ \"${#n}\" -lt 100 ] || break; case \"$key\" in *[[:space:]]*) continue ;; esac; case \"$id\" in '\\'''\\''|*[!0-9]*) continue ;; esac; case \"$size\" in '\\'''\\''|*[!0-9]*) continue ;; esac; [ \"$size\" -le 1616920640 ] || continue; case \"$key\" in \"$1\"?*) ;; *) continue ;; esac; printf '\\''%s\\n'\\'' \"${key#\"$1\"}\" | grep -Eq \"$shape\" || continue; printf '\\''%s %s %s\\n'\\'' \"$key\" \"$id\" \"$size\" > \"$d/subject\"; n=\"${n}x\"; if run_gh attestation verify \"$d/subject\" -R \"$repo\" --signer-workflow \"$signer\" --source-ref \"$ref\" --predicate-type '\\''https://velnor.dev/attestation/state-seal/v1'\\'' >/dev/null 2>&1; then printf '\\''%s\\n'\\'' \"$key\" >> \"$out\"; v=\"${v}x\"; fi; done < \"$d/sorted\"; }; emit() { { printf '\\''%s\\n'\\'' \"$1<<VELNOR_STATE_ATTESTED_EOF\"; cat \"$d/$2\"; printf '\\''%s\\n'\\'' VELNOR_STATE_ATTESTED_EOF; } >> \"$GITHUB_OUTPUT\"; }; decide() { want=false; if [ -n \"$4\" ] && [ -n \"$5\" ]; then want=true; prefix=\"$3$4-$5-\"; while IFS= read -r cand || [ -n \"$cand\" ]; do case \"$cand\" in \"$prefix\"?*) want=false ;; esac; done < \"$d/$2\"; fi; printf '\\''%s\\n'\\'' \"$1=$want\" >> \"$GITHUB_OUTPUT\"; }; attested '\\''velnor-v4-state-trusted-union-root-'\\'' r0; emit state_union_root_attested r0; decide state_union_root_produce r0 '\\''velnor-v4-state-trusted-union-root-'\\'' \"${VELNOR_STATE_COMPAT_R0-}\" \"${VELNOR_STATE_SNAPSHOT_R0-}\"; attested '\\''velnor-v4-state-trusted-union-crates-velnor-runner-'\\'' r1; emit state_union_crates_velnor_runner_attested r1; decide state_union_crates_velnor_runner_produce r1 '\\''velnor-v4-state-trusted-union-crates-velnor-runner-'\\'' \"${VELNOR_STATE_COMPAT_R1-}\" \"${VELNOR_STATE_SNAPSHOT_R1-}\"'"
       - *s16
       - *s17
       - &s23
@@ -556,6 +556,7 @@ jobs:
       MBX_CC: "0"
       MBX_GC_AUTO: "0"
       MBX_SHARE_OUT_DIR: "1"
+      MBX_SUMMARY: ci
       RUSTUP_AUTO_INSTALL: "0"
       SOURCE_DATE_EPOCH: "0"
       VELNOR_ASSET_SHA256: ae9b45357917fb3dd279b2fb1d0f6df527ca1a3403fb4af3baf2043c56be4559
@@ -675,6 +676,13 @@ jobs:
         with: {"digest": "b3-93c389474beec2e41c33470192fe9d7955750ed18eeaaeb04ec36a3af69ec478"}
       - name: Wait for parallel checks
         wait-all:
+      - name: MBX stats
+        if: always()
+        continue-on-error: true
+        env:
+          VELNOR_MBX_STATS_JOB: rust-velnor-actions-actionlint
+          VELNOR_MBX_STATS_WORKSPACE: api2026_pull_context_public build_script_build bun_assets_handoff_public bun_private_repository_public candidate_freshness_public check_runtime_identity_public controller_approval_public crate_bootstrap_version_public crate_release_semver_public crate_release_version_public generator_release_prepare_public homebrew_adoption_seed_public mbx_stats pin_mirror_public preview_source_selection_public product_release_binary_public prune_state prune_tools qualification_diagnostics review_completion_public rust_tree_digest_pin task_report_public velnor_actions velnor_actions_actionlint velnor_actions_ansible velnor_actions_bun velnor_actions_cli velnor_actions_contract velnor_actions_dbt velnor_actions_freshness velnor_actions_gradle velnor_actions_mise velnor_actions_orchestrator velnor_actions_rust velnor_actions_tofu velnor_actions_workflow_renderer velnor_archive_guard velnor_cli velnor_contract velnor_mise velnor_orchestrator velnor_rust velnor_workflow_renderer workflow_configuration_public
+        run: &r18 "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; job=\"${VELNOR_MBX_STATS_JOB-}\"; members=\"${VELNOR_MBX_STATS_WORKSPACE-}\"; out=\"${RUNNER_TEMP:?}/velnor-mbx-stats.line\"; set -- \"${MBX_CACHE_DIR-}\"/actions/sessions/v1/*.jsonl; if [ -z \"${MBX_CACHE_DIR-}\" ] || [ ! -f \"$1\" ]; then printf '\\''mbx-stats job=%s sessions=0\\n'\\'' \"$job\" > \"$out\"; else jq -r -n -R --arg job \"$job\" --arg members \"$members\" '\\''[inputs | fromjson? | select(type == \"object\" and .type == \"action\")] as $a | ($members | split(\" \") | map(select(length > 0) | {key: ., value: true}) | from_entries) as $m | def benign: .outcome.kind == \"bypass\" and (.outcome.reason == \"compiler-query\" or .outcome.reason == \"standard-input\"); def n($c; $k): [$a[] | select((benign | not) and .outcome.kind == $k and ((if $m[.crate_name // \"\"] then \"workspace\" else \"registry\" end) == $c))] | length; def group($c): \"\\($c) hit=\\(n($c; \"hit\")) miss=\\(n($c; \"miss\")) not_looked_up=\\(n($c; \"unconsulted\")) bypassed=\\(n($c; \"bypass\"))\"; \"mbx-stats job=\\($job) \\(group(\"registry\")) \\(group(\"workspace\")) bypassed_benign=\\([$a[] | select(benign)] | length)\"'\\'' \"$@\" > \"$out\"; fi; read -r line < \"$out\"; printf '\\''%s\\n'\\'' \"$line\"; if [ -n \"${GITHUB_STEP_SUMMARY-}\" ]; then printf '\\''%s\\n'\\'' \"$line\" >> \"$GITHUB_STEP_SUMMARY\"; fi'"
       - &s34
         name: Download ledger CLI
         if: always()
@@ -762,6 +770,13 @@ jobs:
         with: {"digest": "b3-15b4e7ea6def66a87085e196c4b4f79de1ce14f7725db1d68b9666941ce3e73e"}
       - name: Wait for parallel checks
         wait-all:
+      - name: MBX stats
+        if: always()
+        continue-on-error: true
+        env:
+          VELNOR_MBX_STATS_JOB: rust-velnor-actions-ansible
+          VELNOR_MBX_STATS_WORKSPACE: api2026_pull_context_public build_script_build bun_assets_handoff_public bun_private_repository_public candidate_freshness_public check_runtime_identity_public controller_approval_public crate_bootstrap_version_public crate_release_semver_public crate_release_version_public generator_release_prepare_public homebrew_adoption_seed_public mbx_stats pin_mirror_public preview_source_selection_public product_release_binary_public prune_state prune_tools qualification_diagnostics review_completion_public rust_tree_digest_pin task_report_public velnor_actions velnor_actions_actionlint velnor_actions_ansible velnor_actions_bun velnor_actions_cli velnor_actions_contract velnor_actions_dbt velnor_actions_freshness velnor_actions_gradle velnor_actions_mise velnor_actions_orchestrator velnor_actions_rust velnor_actions_tofu velnor_actions_workflow_renderer velnor_archive_guard velnor_cli velnor_contract velnor_mise velnor_orchestrator velnor_rust velnor_workflow_renderer workflow_configuration_public
+        run: *r18
       - *s34
       - *s35
       - *s36
@@ -825,6 +840,13 @@ jobs:
         with: {"digest": "b3-7a3612e07f3bd0fe844d8cb328a4c81d482e456521c6e13a8b7fef77b9a2ddbd"}
       - name: Wait for parallel checks
         wait-all:
+      - name: MBX stats
+        if: always()
+        continue-on-error: true
+        env:
+          VELNOR_MBX_STATS_JOB: rust-velnor-actions-bun
+          VELNOR_MBX_STATS_WORKSPACE: api2026_pull_context_public build_script_build bun_assets_handoff_public bun_private_repository_public candidate_freshness_public check_runtime_identity_public controller_approval_public crate_bootstrap_version_public crate_release_semver_public crate_release_version_public generator_release_prepare_public homebrew_adoption_seed_public mbx_stats pin_mirror_public preview_source_selection_public product_release_binary_public prune_state prune_tools qualification_diagnostics review_completion_public rust_tree_digest_pin task_report_public velnor_actions velnor_actions_actionlint velnor_actions_ansible velnor_actions_bun velnor_actions_cli velnor_actions_contract velnor_actions_dbt velnor_actions_freshness velnor_actions_gradle velnor_actions_mise velnor_actions_orchestrator velnor_actions_rust velnor_actions_tofu velnor_actions_workflow_renderer velnor_archive_guard velnor_cli velnor_contract velnor_mise velnor_orchestrator velnor_rust velnor_workflow_renderer workflow_configuration_public
+        run: *r18
       - *s34
       - *s35
       - *s36
@@ -867,7 +889,7 @@ jobs:
       - *s13
       - name: Prepare pinned tools
         env: *m13
-        run: &r21 "mise --no-config --no-env --no-hooks install 'rust[profile=minimal]@'\"${VELNOR_TOOL_RUST}\" 'mr-boxington@'\"${VELNOR_TOOL_MR_BOXINGTON}\" 'jactionlint@'\"${VELNOR_TOOL_JACTIONLINT}\" 'shellcheck@'\"${VELNOR_TOOL_SHELLCHECK}\" 'aqua:nextest-rs/nextest/cargo-nextest@'\"${VELNOR_TOOL_NEXTEST}\""
+        run: &r22 "mise --no-config --no-env --no-hooks install 'rust[profile=minimal]@'\"${VELNOR_TOOL_RUST}\" 'mr-boxington@'\"${VELNOR_TOOL_MR_BOXINGTON}\" 'jactionlint@'\"${VELNOR_TOOL_JACTIONLINT}\" 'shellcheck@'\"${VELNOR_TOOL_SHELLCHECK}\" 'aqua:nextest-rs/nextest/cargo-nextest@'\"${VELNOR_TOOL_NEXTEST}\""
       - *s10
       - *s14
       - *s15
@@ -901,6 +923,13 @@ jobs:
         with: {"digest": "b3-b8e78f5f06008504cdb3b8fae00c9bbe2c4ba08ce323acdf4a5d37e81132f7c6"}
       - name: Wait for parallel checks
         wait-all:
+      - name: MBX stats
+        if: always()
+        continue-on-error: true
+        env:
+          VELNOR_MBX_STATS_JOB: rust-velnor-actions-cli
+          VELNOR_MBX_STATS_WORKSPACE: api2026_pull_context_public build_script_build bun_assets_handoff_public bun_private_repository_public candidate_freshness_public check_runtime_identity_public controller_approval_public crate_bootstrap_version_public crate_release_semver_public crate_release_version_public generator_release_prepare_public homebrew_adoption_seed_public mbx_stats pin_mirror_public preview_source_selection_public product_release_binary_public prune_state prune_tools qualification_diagnostics review_completion_public rust_tree_digest_pin task_report_public velnor_actions velnor_actions_actionlint velnor_actions_ansible velnor_actions_bun velnor_actions_cli velnor_actions_contract velnor_actions_dbt velnor_actions_freshness velnor_actions_gradle velnor_actions_mise velnor_actions_orchestrator velnor_actions_rust velnor_actions_tofu velnor_actions_workflow_renderer velnor_archive_guard velnor_cli velnor_contract velnor_mise velnor_orchestrator velnor_rust velnor_workflow_renderer workflow_configuration_public
+        run: *r18
       - *s34
       - *s35
       - *s36
@@ -968,6 +997,13 @@ jobs:
         with: {"digest": "b3-12bc88e3e6c6bbb504d39b08639e74e5b7ee0e34ce2aea11156a36fcec421fcd"}
       - name: Wait for parallel checks
         wait-all:
+      - name: MBX stats
+        if: always()
+        continue-on-error: true
+        env:
+          VELNOR_MBX_STATS_JOB: rust-velnor-actions-contract
+          VELNOR_MBX_STATS_WORKSPACE: api2026_pull_context_public build_script_build bun_assets_handoff_public bun_private_repository_public candidate_freshness_public check_runtime_identity_public controller_approval_public crate_bootstrap_version_public crate_release_semver_public crate_release_version_public generator_release_prepare_public homebrew_adoption_seed_public mbx_stats pin_mirror_public preview_source_selection_public product_release_binary_public prune_state prune_tools qualification_diagnostics review_completion_public rust_tree_digest_pin task_report_public velnor_actions velnor_actions_actionlint velnor_actions_ansible velnor_actions_bun velnor_actions_cli velnor_actions_contract velnor_actions_dbt velnor_actions_freshness velnor_actions_gradle velnor_actions_mise velnor_actions_orchestrator velnor_actions_rust velnor_actions_tofu velnor_actions_workflow_renderer velnor_archive_guard velnor_cli velnor_contract velnor_mise velnor_orchestrator velnor_rust velnor_workflow_renderer workflow_configuration_public
+        run: *r18
       - *s34
       - *s35
       - *s36
@@ -1031,6 +1067,13 @@ jobs:
         with: {"digest": "b3-8b9133c7e2296748dfbf41218e227168d5644fdd45f0d20ca74d80fc8dff427a"}
       - name: Wait for parallel checks
         wait-all:
+      - name: MBX stats
+        if: always()
+        continue-on-error: true
+        env:
+          VELNOR_MBX_STATS_JOB: rust-velnor-actions-dbt
+          VELNOR_MBX_STATS_WORKSPACE: api2026_pull_context_public build_script_build bun_assets_handoff_public bun_private_repository_public candidate_freshness_public check_runtime_identity_public controller_approval_public crate_bootstrap_version_public crate_release_semver_public crate_release_version_public generator_release_prepare_public homebrew_adoption_seed_public mbx_stats pin_mirror_public preview_source_selection_public product_release_binary_public prune_state prune_tools qualification_diagnostics review_completion_public rust_tree_digest_pin task_report_public velnor_actions velnor_actions_actionlint velnor_actions_ansible velnor_actions_bun velnor_actions_cli velnor_actions_contract velnor_actions_dbt velnor_actions_freshness velnor_actions_gradle velnor_actions_mise velnor_actions_orchestrator velnor_actions_rust velnor_actions_tofu velnor_actions_workflow_renderer velnor_archive_guard velnor_cli velnor_contract velnor_mise velnor_orchestrator velnor_rust velnor_workflow_renderer workflow_configuration_public
+        run: *r18
       - *s34
       - *s35
       - *s36
@@ -1094,6 +1137,13 @@ jobs:
         with: {"digest": "b3-25807a59a1fa09abba302f1740d611b973eae09b6bb802a276501e8ab5a5e91c"}
       - name: Wait for parallel checks
         wait-all:
+      - name: MBX stats
+        if: always()
+        continue-on-error: true
+        env:
+          VELNOR_MBX_STATS_JOB: rust-velnor-actions-gradle
+          VELNOR_MBX_STATS_WORKSPACE: api2026_pull_context_public build_script_build bun_assets_handoff_public bun_private_repository_public candidate_freshness_public check_runtime_identity_public controller_approval_public crate_bootstrap_version_public crate_release_semver_public crate_release_version_public generator_release_prepare_public homebrew_adoption_seed_public mbx_stats pin_mirror_public preview_source_selection_public product_release_binary_public prune_state prune_tools qualification_diagnostics review_completion_public rust_tree_digest_pin task_report_public velnor_actions velnor_actions_actionlint velnor_actions_ansible velnor_actions_bun velnor_actions_cli velnor_actions_contract velnor_actions_dbt velnor_actions_freshness velnor_actions_gradle velnor_actions_mise velnor_actions_orchestrator velnor_actions_rust velnor_actions_tofu velnor_actions_workflow_renderer velnor_archive_guard velnor_cli velnor_contract velnor_mise velnor_orchestrator velnor_rust velnor_workflow_renderer workflow_configuration_public
+        run: *r18
       - *s34
       - *s35
       - *s36
@@ -1136,7 +1186,7 @@ jobs:
       - *s13
       - name: Prepare pinned tools
         env: *m13
-        run: &r22 "mise --no-config --no-env --no-hooks install 'rust[profile=minimal]@'\"${VELNOR_TOOL_RUST}\" 'opentofu@'\"${VELNOR_TOOL_OPENTOFU}\" 'mr-boxington@'\"${VELNOR_TOOL_MR_BOXINGTON}\" 'aqua:nextest-rs/nextest/cargo-nextest@'\"${VELNOR_TOOL_NEXTEST}\""
+        run: &r23 "mise --no-config --no-env --no-hooks install 'rust[profile=minimal]@'\"${VELNOR_TOOL_RUST}\" 'opentofu@'\"${VELNOR_TOOL_OPENTOFU}\" 'mr-boxington@'\"${VELNOR_TOOL_MR_BOXINGTON}\" 'aqua:nextest-rs/nextest/cargo-nextest@'\"${VELNOR_TOOL_NEXTEST}\""
       - *s14
       - *s15
       - *s27
@@ -1172,6 +1222,13 @@ jobs:
         with: {"digest": "b3-9111bc09f480debea0c9836b1a9e938c7537c803a8d254459438c28d83335a47"}
       - name: Wait for parallel checks
         wait-all:
+      - name: MBX stats
+        if: always()
+        continue-on-error: true
+        env:
+          VELNOR_MBX_STATS_JOB: rust-velnor-actions-mise
+          VELNOR_MBX_STATS_WORKSPACE: api2026_pull_context_public build_script_build bun_assets_handoff_public bun_private_repository_public candidate_freshness_public check_runtime_identity_public controller_approval_public crate_bootstrap_version_public crate_release_semver_public crate_release_version_public generator_release_prepare_public homebrew_adoption_seed_public mbx_stats pin_mirror_public preview_source_selection_public product_release_binary_public prune_state prune_tools qualification_diagnostics review_completion_public rust_tree_digest_pin task_report_public velnor_actions velnor_actions_actionlint velnor_actions_ansible velnor_actions_bun velnor_actions_cli velnor_actions_contract velnor_actions_dbt velnor_actions_freshness velnor_actions_gradle velnor_actions_mise velnor_actions_orchestrator velnor_actions_rust velnor_actions_tofu velnor_actions_workflow_renderer velnor_archive_guard velnor_cli velnor_contract velnor_mise velnor_orchestrator velnor_rust velnor_workflow_renderer workflow_configuration_public
+        run: *r18
       - *s34
       - *s35
       - *s36
@@ -1214,7 +1271,7 @@ jobs:
       - *s13
       - name: Prepare pinned tools
         env: *m13
-        run: &r23 "mise --no-config --no-env --no-hooks install 'rust[profile=minimal]@'\"${VELNOR_TOOL_RUST}\" 'mr-boxington@'\"${VELNOR_TOOL_MR_BOXINGTON}\" 'jactionlint@'\"${VELNOR_TOOL_JACTIONLINT}\" 'shellcheck@'\"${VELNOR_TOOL_SHELLCHECK}\" 'aqua:nextest-rs/nextest/cargo-nextest@'\"${VELNOR_TOOL_NEXTEST}\" 'bun@'\"${VELNOR_TOOL_BUN}\""
+        run: &r24 "mise --no-config --no-env --no-hooks install 'rust[profile=minimal]@'\"${VELNOR_TOOL_RUST}\" 'mr-boxington@'\"${VELNOR_TOOL_MR_BOXINGTON}\" 'jactionlint@'\"${VELNOR_TOOL_JACTIONLINT}\" 'shellcheck@'\"${VELNOR_TOOL_SHELLCHECK}\" 'aqua:nextest-rs/nextest/cargo-nextest@'\"${VELNOR_TOOL_NEXTEST}\" 'bun@'\"${VELNOR_TOOL_BUN}\""
       - *s10
       - *s14
       - *s15
@@ -1252,6 +1309,13 @@ jobs:
         with: {"digest": "b3-7bdf1d86fd8b1a1d706408fce026796e76303e6ba7783022c74f23605c34b7aa"}
       - name: Wait for parallel checks
         wait-all:
+      - name: MBX stats
+        if: always()
+        continue-on-error: true
+        env:
+          VELNOR_MBX_STATS_JOB: rust-velnor-actions-orchestrator
+          VELNOR_MBX_STATS_WORKSPACE: api2026_pull_context_public build_script_build bun_assets_handoff_public bun_private_repository_public candidate_freshness_public check_runtime_identity_public controller_approval_public crate_bootstrap_version_public crate_release_semver_public crate_release_version_public generator_release_prepare_public homebrew_adoption_seed_public mbx_stats pin_mirror_public preview_source_selection_public product_release_binary_public prune_state prune_tools qualification_diagnostics review_completion_public rust_tree_digest_pin task_report_public velnor_actions velnor_actions_actionlint velnor_actions_ansible velnor_actions_bun velnor_actions_cli velnor_actions_contract velnor_actions_dbt velnor_actions_freshness velnor_actions_gradle velnor_actions_mise velnor_actions_orchestrator velnor_actions_rust velnor_actions_tofu velnor_actions_workflow_renderer velnor_archive_guard velnor_cli velnor_contract velnor_mise velnor_orchestrator velnor_rust velnor_workflow_renderer workflow_configuration_public
+        run: *r18
       - *s34
       - *s35
       - *s36
@@ -1319,6 +1383,13 @@ jobs:
         with: {"digest": "b3-b6bb95bdad77490bafa27d62552761c8e4ee2a14d5c92e275c2fd9f8c3e6e79e"}
       - name: Wait for parallel checks
         wait-all:
+      - name: MBX stats
+        if: always()
+        continue-on-error: true
+        env:
+          VELNOR_MBX_STATS_JOB: rust-velnor-actions-rust
+          VELNOR_MBX_STATS_WORKSPACE: api2026_pull_context_public build_script_build bun_assets_handoff_public bun_private_repository_public candidate_freshness_public check_runtime_identity_public controller_approval_public crate_bootstrap_version_public crate_release_semver_public crate_release_version_public generator_release_prepare_public homebrew_adoption_seed_public mbx_stats pin_mirror_public preview_source_selection_public product_release_binary_public prune_state prune_tools qualification_diagnostics review_completion_public rust_tree_digest_pin task_report_public velnor_actions velnor_actions_actionlint velnor_actions_ansible velnor_actions_bun velnor_actions_cli velnor_actions_contract velnor_actions_dbt velnor_actions_freshness velnor_actions_gradle velnor_actions_mise velnor_actions_orchestrator velnor_actions_rust velnor_actions_tofu velnor_actions_workflow_renderer velnor_archive_guard velnor_cli velnor_contract velnor_mise velnor_orchestrator velnor_rust velnor_workflow_renderer workflow_configuration_public
+        run: *r18
       - *s34
       - *s35
       - *s36
@@ -1382,6 +1453,13 @@ jobs:
         with: {"digest": "b3-67204f1b03beffc9b082f8223981a56a62871600bae59ff800237057e80dc456"}
       - name: Wait for parallel checks
         wait-all:
+      - name: MBX stats
+        if: always()
+        continue-on-error: true
+        env:
+          VELNOR_MBX_STATS_JOB: rust-velnor-actions-tofu
+          VELNOR_MBX_STATS_WORKSPACE: api2026_pull_context_public build_script_build bun_assets_handoff_public bun_private_repository_public candidate_freshness_public check_runtime_identity_public controller_approval_public crate_bootstrap_version_public crate_release_semver_public crate_release_version_public generator_release_prepare_public homebrew_adoption_seed_public mbx_stats pin_mirror_public preview_source_selection_public product_release_binary_public prune_state prune_tools qualification_diagnostics review_completion_public rust_tree_digest_pin task_report_public velnor_actions velnor_actions_actionlint velnor_actions_ansible velnor_actions_bun velnor_actions_cli velnor_actions_contract velnor_actions_dbt velnor_actions_freshness velnor_actions_gradle velnor_actions_mise velnor_actions_orchestrator velnor_actions_rust velnor_actions_tofu velnor_actions_workflow_renderer velnor_archive_guard velnor_cli velnor_contract velnor_mise velnor_orchestrator velnor_rust velnor_workflow_renderer workflow_configuration_public
+        run: *r18
       - *s34
       - *s35
       - *s36
@@ -1449,6 +1527,13 @@ jobs:
         with: {"digest": "b3-2863e280197b6a5645a481bc27c0a824bb399df359c4f77f1886307f40f707fb"}
       - name: Wait for parallel checks
         wait-all:
+      - name: MBX stats
+        if: always()
+        continue-on-error: true
+        env:
+          VELNOR_MBX_STATS_JOB: rust-velnor-actions-workflow-renderer
+          VELNOR_MBX_STATS_WORKSPACE: api2026_pull_context_public build_script_build bun_assets_handoff_public bun_private_repository_public candidate_freshness_public check_runtime_identity_public controller_approval_public crate_bootstrap_version_public crate_release_semver_public crate_release_version_public generator_release_prepare_public homebrew_adoption_seed_public mbx_stats pin_mirror_public preview_source_selection_public product_release_binary_public prune_state prune_tools qualification_diagnostics review_completion_public rust_tree_digest_pin task_report_public velnor_actions velnor_actions_actionlint velnor_actions_ansible velnor_actions_bun velnor_actions_cli velnor_actions_contract velnor_actions_dbt velnor_actions_freshness velnor_actions_gradle velnor_actions_mise velnor_actions_orchestrator velnor_actions_rust velnor_actions_tofu velnor_actions_workflow_renderer velnor_archive_guard velnor_cli velnor_contract velnor_mise velnor_orchestrator velnor_rust velnor_workflow_renderer workflow_configuration_public
+        run: *r18
       - *s34
       - *s35
       - *s36
@@ -1531,6 +1616,13 @@ jobs:
         with: {"digest": "b3-e8f4899e1ebb179e2f4ee9c8ab214d469f67991b583f7388d62bc4e581d7e15e"}
       - name: Wait for parallel checks
         wait-all:
+      - name: MBX stats
+        if: always()
+        continue-on-error: true
+        env:
+          VELNOR_MBX_STATS_JOB: rust-velnor-resource-probe
+          VELNOR_MBX_STATS_WORKSPACE: build_script_build census_once ensure_set launch_once probe_once resource_probe_release_public stage_once velnor_host velnor_resource_probe velnor_resource_probe_release velnor_runner_attestation velnor_runner_attestation_helper velnor_runner_cli velnor_runner_core velnor_runner_github velnor_runner_host
+        run: *r18
       - *s34
       - *s35
       - *s36
@@ -1594,6 +1686,13 @@ jobs:
         with: {"digest": "b3-41af867cbe83c9c14757dc3f2ae0f13bea2da31f2c4fbb5070a67763b37f5d5c"}
       - name: Wait for parallel checks
         wait-all:
+      - name: MBX stats
+        if: always()
+        continue-on-error: true
+        env:
+          VELNOR_MBX_STATS_JOB: rust-velnor-runner-attestation
+          VELNOR_MBX_STATS_WORKSPACE: build_script_build census_once ensure_set launch_once probe_once resource_probe_release_public stage_once velnor_host velnor_resource_probe velnor_resource_probe_release velnor_runner_attestation velnor_runner_attestation_helper velnor_runner_cli velnor_runner_core velnor_runner_github velnor_runner_host
+        run: *r18
       - *s34
       - *s35
       - *s36
@@ -1657,6 +1756,13 @@ jobs:
         with: {"digest": "b3-397ccddc9863152d5435aca0abf7b7b57b369cd1e1ea28ce026e1a7d07382111"}
       - name: Wait for parallel checks
         wait-all:
+      - name: MBX stats
+        if: always()
+        continue-on-error: true
+        env:
+          VELNOR_MBX_STATS_JOB: rust-velnor-runner-cli
+          VELNOR_MBX_STATS_WORKSPACE: build_script_build census_once ensure_set launch_once probe_once resource_probe_release_public stage_once velnor_host velnor_resource_probe velnor_resource_probe_release velnor_runner_attestation velnor_runner_attestation_helper velnor_runner_cli velnor_runner_core velnor_runner_github velnor_runner_host
+        run: *r18
       - *s34
       - *s35
       - *s36
@@ -1720,6 +1826,13 @@ jobs:
         with: {"digest": "b3-03b67d946e9b9dab3b1b3f559979d9f9937de61815c46337af4274bf4b8d1f87"}
       - name: Wait for parallel checks
         wait-all:
+      - name: MBX stats
+        if: always()
+        continue-on-error: true
+        env:
+          VELNOR_MBX_STATS_JOB: rust-velnor-runner-core
+          VELNOR_MBX_STATS_WORKSPACE: build_script_build census_once ensure_set launch_once probe_once resource_probe_release_public stage_once velnor_host velnor_resource_probe velnor_resource_probe_release velnor_runner_attestation velnor_runner_attestation_helper velnor_runner_cli velnor_runner_core velnor_runner_github velnor_runner_host
+        run: *r18
       - *s34
       - *s35
       - *s36
@@ -1783,6 +1896,13 @@ jobs:
         with: {"digest": "b3-e1491b51e90e714cacf5a80e3010a2c430dc1f7d38831a083267f6a197e46ce2"}
       - name: Wait for parallel checks
         wait-all:
+      - name: MBX stats
+        if: always()
+        continue-on-error: true
+        env:
+          VELNOR_MBX_STATS_JOB: rust-velnor-runner-github
+          VELNOR_MBX_STATS_WORKSPACE: build_script_build census_once ensure_set launch_once probe_once resource_probe_release_public stage_once velnor_host velnor_resource_probe velnor_resource_probe_release velnor_runner_attestation velnor_runner_attestation_helper velnor_runner_cli velnor_runner_core velnor_runner_github velnor_runner_host
+        run: *r18
       - *s34
       - *s35
       - *s36
@@ -1850,6 +1970,13 @@ jobs:
         with: {"digest": "b3-34e3d7d4ece76911a9a2b16d20b5fa4caaa09338f502e28df7fb0217c6675f59"}
       - name: Wait for parallel checks
         wait-all:
+      - name: MBX stats
+        if: always()
+        continue-on-error: true
+        env:
+          VELNOR_MBX_STATS_JOB: rust-velnor-runner-host
+          VELNOR_MBX_STATS_WORKSPACE: build_script_build census_once ensure_set launch_once probe_once resource_probe_release_public stage_once velnor_host velnor_resource_probe velnor_resource_probe_release velnor_runner_attestation velnor_runner_attestation_helper velnor_runner_cli velnor_runner_core velnor_runner_github velnor_runner_host
+        run: *r18
       - *s34
       - *s35
       - *s36
@@ -1882,7 +2009,7 @@ jobs:
       - &s47
         name: Record optional cache budget
         id: velnor-cache-clock
-        run: &r26 "set -eu\nunavailable() { printf '%s\\n' '::warning::cache_unavailable: invalid first-step clock or output'; }\noutput=${GITHUB_OUTPUT-}\nseconds=${VELNOR_CACHE_JOB_SECONDS-}\nnow=$(date +%s) || now=\nfor value in \"$now\" \"$seconds\"; do\n  case \"$value\" in ''|*[!0-9]*) unavailable; exit 0 ;; esac\n  case \"$value\" in 0|[1-9]*) ;; *) unavailable; exit 0 ;; esac\n  [ \"${#value}\" -le 10 ] || { unavailable; exit 0; }\ndone\nif [ -z \"$output\" ] || ! printf 'started=%s\\ndeadline=%s\\n' \"$now\" \"$((now + seconds))\" 2>/dev/null >> \"$output\"; then\n  unavailable\nfi\n"
+        run: &r27 "set -eu\nunavailable() { printf '%s\\n' '::warning::cache_unavailable: invalid first-step clock or output'; }\noutput=${GITHUB_OUTPUT-}\nseconds=${VELNOR_CACHE_JOB_SECONDS-}\nnow=$(date +%s) || now=\nfor value in \"$now\" \"$seconds\"; do\n  case \"$value\" in ''|*[!0-9]*) unavailable; exit 0 ;; esac\n  case \"$value\" in 0|[1-9]*) ;; *) unavailable; exit 0 ;; esac\n  [ \"${#value}\" -le 10 ] || { unavailable; exit 0; }\ndone\nif [ -z \"$output\" ] || ! printf 'started=%s\\ndeadline=%s\\n' \"$now\" \"$((now + seconds))\" 2>/dev/null >> \"$output\"; then\n  unavailable\nfi\n"
         env:
           VELNOR_CACHE_JOB_SECONDS: "900"
       - *s1
@@ -1906,7 +2033,7 @@ jobs:
       - name: Admit optional cache save
         id: velnor-optional-sources-save-budget
         if: success() && steps.sources-restore.outputs.cache-hit != 'true'
-        run: &r27 "set -eu\noutput=${GITHUB_OUTPUT-}\nemit() { [ -n \"$output\" ] && printf '%s\\n' \"$1\" 2>/dev/null >> \"$output\"; }\nrefuse() {\n  emit 'admitted=false' || :\n  printf '%s\\n' '::warning::cache_unavailable: optional save has no safe remaining job budget or output'\n}\nstarted=${VELNOR_CACHE_STARTED-}\ndeadline=${VELNOR_CACHE_DEADLINE-}\nseconds=${VELNOR_CACHE_JOB_SECONDS-}\nrequired=${VELNOR_CACHE_REQUIRED_SECONDS-}\nnow=$(date +%s) || now=\nfor value in \"$started\" \"$deadline\" \"$now\" \"$seconds\" \"$required\"; do\n  case \"$value\" in ''|*[!0-9]*) refuse; exit 0 ;; esac\n  case \"$value\" in 0|[1-9]*) ;; *) refuse; exit 0 ;; esac\n  [ \"${#value}\" -le 10 ] || { refuse; exit 0; }\ndone\nif [ \"$now\" -lt \"$started\" ] || [ \"$deadline\" -lt \"$started\" ] ||\n   [ \"$((deadline - started))\" -ne \"$seconds\" ] ||\n   [ \"$((deadline - now))\" -lt \"$required\" ]; then\n  refuse\nelif ! emit 'admitted=true'; then\n  refuse\nfi\n"
+        run: &r28 "set -eu\noutput=${GITHUB_OUTPUT-}\nemit() { [ -n \"$output\" ] && printf '%s\\n' \"$1\" 2>/dev/null >> \"$output\"; }\nrefuse() {\n  emit 'admitted=false' || :\n  printf '%s\\n' '::warning::cache_unavailable: optional save has no safe remaining job budget or output'\n}\nstarted=${VELNOR_CACHE_STARTED-}\ndeadline=${VELNOR_CACHE_DEADLINE-}\nseconds=${VELNOR_CACHE_JOB_SECONDS-}\nrequired=${VELNOR_CACHE_REQUIRED_SECONDS-}\nnow=$(date +%s) || now=\nfor value in \"$started\" \"$deadline\" \"$now\" \"$seconds\" \"$required\"; do\n  case \"$value\" in ''|*[!0-9]*) refuse; exit 0 ;; esac\n  case \"$value\" in 0|[1-9]*) ;; *) refuse; exit 0 ;; esac\n  [ \"${#value}\" -le 10 ] || { refuse; exit 0; }\ndone\nif [ \"$now\" -lt \"$started\" ] || [ \"$deadline\" -lt \"$started\" ] ||\n   [ \"$((deadline - started))\" -ne \"$seconds\" ] ||\n   [ \"$((deadline - now))\" -lt \"$required\" ]; then\n  refuse\nelif ! emit 'admitted=true'; then\n  refuse\nfi\n"
         env: &m34
           VELNOR_CACHE_JOB_SECONDS: "900"
           VELNOR_CACHE_STARTED: ${{ steps.velnor-cache-clock.outputs.started }}
@@ -1923,7 +2050,7 @@ jobs:
           path: "${{ runner.temp }}/velnor/cargo/registry/index\n${{ runner.temp }}/velnor/cargo/registry/cache\n${{ runner.temp }}/velnor/cargo/git/db"
       - name: Report optional cache save failure
         if: always() && !cancelled() && steps.velnor-optional-sources-save.outcome == 'failure'
-        run: &r28 "printf '%s\\n' '::warning::cache_unavailable: optional save failed or timed out'"
+        run: &r29 "printf '%s\\n' '::warning::cache_unavailable: optional save failed or timed out'"
   state-producer-crates-velnor-runner:
     name: State producer / crates/velnor-runner
     runs-on: ubuntu-26.04
@@ -1935,6 +2062,7 @@ jobs:
       MBX_CC: "0"
       MBX_GC_AUTO: "0"
       MBX_SHARE_OUT_DIR: "1"
+      MBX_SUMMARY: ci
       RUSTUP_AUTO_INSTALL: "0"
       SOURCE_DATE_EPOCH: "0"
       VELNOR_ASSET_SHA256: ae9b45357917fb3dd279b2fb1d0f6df527ca1a3403fb4af3baf2043c56be4559
@@ -1975,7 +2103,7 @@ jobs:
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           VELNOR_MBX_BUNDLE_ROOT: crates/velnor-runner
-        run: &r29 "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; case \"$RUNNER_TEMP\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''RUNNER_TEMP must be absolute'\\'' >&2; exit 1 ;; esac; d=\"$RUNNER_TEMP/velnor/state-skeleton\"; rm -rf \"$d\"; mkdir -p \"$d\"; root=\"${VELNOR_MBX_BUNDLE_ROOT}\"; manifest=\"$root/Cargo.toml\"; [ \"$root\" != . ] || manifest=Cargo.toml; ws=\"${GITHUB_WORKSPACE%/}\"; cd \"$ws\"; mise --no-config --no-env --no-hooks exec rust@'\"${VELNOR_TOOL_RUST}\"' -- cargo metadata --no-deps --locked --offline --format-version 1 --manifest-path \"$manifest\" > \"$d/metadata.json\"; empties='\\''.kind | any(. == \"lib\" or . == \"rlib\" or . == \"dylib\" or . == \"cdylib\" or . == \"staticlib\" or . == \"proc-macro\" or . == \"test\" or . == \"bench\")'\\''; jq -r \".packages[].targets[] | select($empties) | .src_path\" \"$d/metadata.json\" > \"$d/libs\"; jq -r \".packages[].targets[] | select($empties | not) | .src_path\" \"$d/metadata.json\" > \"$d/bins\"; : > \"$d/stubbed\"; stub() { case \"$1\" in \"$ws\"/*) rel=${1#\"$ws\"/} ;; *) printf '\\''state skeleton target outside the workspace: %s\\n'\\'' \"$1\" >&2; exit 1 ;; esac; git ls-files --error-unmatch -- \"$rel\" > /dev/null; printf '\\''%s\\n'\\'' \"$rel\" >> \"$d/stubbed\"; }; while IFS= read -r path; do stub \"$path\"; : > \"$path\"; done < \"$d/libs\"; while IFS= read -r path; do stub \"$path\"; printf '\\''%s\\n'\\'' '\\''fn main() {}'\\'' > \"$path\"; done < \"$d/bins\"; [ -s \"$d/stubbed\" ] || { printf '\\''%s\\n'\\'' '\\''state skeleton has no targets'\\'' >&2; exit 1; }; printf '\\''%s\\n'\\'' '\\''MBX_BUILD_SCRIPT_EXECUTION=1'\\'' >> \"$GITHUB_ENV\"; wc -l < \"$d/stubbed\" > \"$d/count\"; count=; read -r count < \"$d/count\"; printf '\\''velnor: state skeleton stubbed targets=%s\\n'\\'' \"$count\"'"
+        run: &r30 "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; case \"$RUNNER_TEMP\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''RUNNER_TEMP must be absolute'\\'' >&2; exit 1 ;; esac; d=\"$RUNNER_TEMP/velnor/state-skeleton\"; rm -rf \"$d\"; mkdir -p \"$d\"; root=\"${VELNOR_MBX_BUNDLE_ROOT}\"; manifest=\"$root/Cargo.toml\"; [ \"$root\" != . ] || manifest=Cargo.toml; ws=\"${GITHUB_WORKSPACE%/}\"; cd \"$ws\"; mise --no-config --no-env --no-hooks exec rust@'\"${VELNOR_TOOL_RUST}\"' -- cargo metadata --no-deps --locked --offline --format-version 1 --manifest-path \"$manifest\" > \"$d/metadata.json\"; empties='\\''.kind | any(. == \"lib\" or . == \"rlib\" or . == \"dylib\" or . == \"cdylib\" or . == \"staticlib\" or . == \"proc-macro\" or . == \"test\" or . == \"bench\")'\\''; jq -r \".packages[].targets[] | select($empties) | .src_path\" \"$d/metadata.json\" > \"$d/libs\"; jq -r \".packages[].targets[] | select($empties | not) | .src_path\" \"$d/metadata.json\" > \"$d/bins\"; : > \"$d/stubbed\"; stub() { case \"$1\" in \"$ws\"/*) rel=${1#\"$ws\"/} ;; *) printf '\\''state skeleton target outside the workspace: %s\\n'\\'' \"$1\" >&2; exit 1 ;; esac; git ls-files --error-unmatch -- \"$rel\" > /dev/null; printf '\\''%s\\n'\\'' \"$rel\" >> \"$d/stubbed\"; }; while IFS= read -r path; do stub \"$path\"; : > \"$path\"; done < \"$d/libs\"; while IFS= read -r path; do stub \"$path\"; printf '\\''%s\\n'\\'' '\\''fn main() {}'\\'' > \"$path\"; done < \"$d/bins\"; [ -s \"$d/stubbed\" ] || { printf '\\''%s\\n'\\'' '\\''state skeleton has no targets'\\'' >&2; exit 1; }; printf '\\''%s\\n'\\'' '\\''MBX_BUILD_SCRIPT_EXECUTION=1'\\'' >> \"$GITHUB_ENV\"; wc -l < \"$d/stubbed\" > \"$d/count\"; count=; read -r count < \"$d/count\"; printf '\\''velnor: state skeleton stubbed targets=%s\\n'\\'' \"$count\"'"
       - &s48
         name: Build test executables
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
@@ -2160,6 +2288,13 @@ jobs:
         with: {"digest": "b3-34e3d7d4ece76911a9a2b16d20b5fa4caaa09338f502e28df7fb0217c6675f59"}
       - name: Wait for parallel checks
         wait-all:
+      - name: MBX stats
+        if: always()
+        continue-on-error: true
+        env:
+          VELNOR_MBX_STATS_JOB: state-producer-crates-velnor-runner
+          VELNOR_MBX_STATS_WORKSPACE: build_script_build census_once ensure_set launch_once probe_once resource_probe_release_public stage_once velnor_host velnor_resource_probe velnor_resource_probe_release velnor_runner_attestation velnor_runner_attestation_helper velnor_runner_cli velnor_runner_core velnor_runner_github velnor_runner_host
+        run: *r18
       - &s55
         name: Record state producer success
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
@@ -2225,7 +2360,7 @@ jobs:
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           VELNOR_MBX_BUNDLE_ROOT: .
-        run: *r29
+        run: *r30
       - &s58
         name: Build test executables
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
@@ -2587,6 +2722,13 @@ jobs:
         with: {"digest": "b3-2863e280197b6a5645a481bc27c0a824bb399df359c4f77f1886307f40f707fb"}
       - name: Wait for parallel checks
         wait-all:
+      - name: MBX stats
+        if: always()
+        continue-on-error: true
+        env:
+          VELNOR_MBX_STATS_JOB: state-producer-root
+          VELNOR_MBX_STATS_WORKSPACE: api2026_pull_context_public build_script_build bun_assets_handoff_public bun_private_repository_public candidate_freshness_public check_runtime_identity_public controller_approval_public crate_bootstrap_version_public crate_release_semver_public crate_release_version_public generator_release_prepare_public homebrew_adoption_seed_public mbx_stats pin_mirror_public preview_source_selection_public product_release_binary_public prune_state prune_tools qualification_diagnostics review_completion_public rust_tree_digest_pin task_report_public velnor_actions velnor_actions_actionlint velnor_actions_ansible velnor_actions_bun velnor_actions_cli velnor_actions_contract velnor_actions_dbt velnor_actions_freshness velnor_actions_gradle velnor_actions_mise velnor_actions_orchestrator velnor_actions_rust velnor_actions_tofu velnor_actions_workflow_renderer velnor_archive_guard velnor_cli velnor_contract velnor_mise velnor_orchestrator velnor_rust velnor_workflow_renderer workflow_configuration_public
+        run: *r18
       - *s55
       - *s56
       - name: Upload state payload
@@ -2639,15 +2781,16 @@ jobs:
         env:
           VELNOR_STATE_SEAL_PREFIX: velnor-v4-state-trusted-union-crates-velnor-runner-${{needs.plan.outputs.state_crates_velnor_runner_compat}}-${{needs.plan.outputs.state_crates_velnor_runner_snapshot}}-
           VELNOR_STATE_SEAL_SCOPE: velnor-v4-state-trusted-union-crates-velnor-runner-
-        run: &r34 "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; case \"$RUNNER_TEMP\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''RUNNER_TEMP must be absolute'\\'' >&2; exit 1 ;; esac; payload=\"$RUNNER_TEMP/velnor-gc1/transport/state/payload.tar.zst\"; d=\"$RUNNER_TEMP/velnor/state-seal\"; rm -rf \"$d\"; mkdir -p \"$d\"; refuse() { printf '\\''%s\\n'\\'' \"::warning::cache_unavailable: state seal refused ($1)\"; printf '\\''%s\\n'\\'' '\\''sealed=false'\\'' >> \"$GITHUB_OUTPUT\"; exit 0; }; s256() { sha256sum \"$1\" > \"$d/sum\" || return 1; h=; rest=; read -r h rest < \"$d/sum\" || [ -n \"$h\" ]; case \"$h\" in '\\'''\\''|*[!0-9a-f]*) return 1 ;; esac; [ \"${#h}\" -eq 64 ] || return 1; }; prefix=\"${VELNOR_STATE_SEAL_PREFIX-}\"; scope=\"${VELNOR_STATE_SEAL_SCOPE-}\"; [ -n \"$prefix\" ] && [ -n \"$scope\" ] || refuse prefix_missing; case \"$prefix\" in \"$scope\"?*) ;; *) refuse prefix_scope ;; esac; printf '\\''%s\\n'\\'' \"${prefix#\"$scope\"}\" | grep -Eq '\\''^s256-[0-9a-f]{64}-s256-[0-9a-f]{64}-$'\\'' || refuse prefix_shape; if [ -L \"$payload\" ] || [ ! -f \"$payload\" ]; then refuse payload_not_regular; fi; size=; wc -c < \"$payload\" > \"$d/size\" || refuse size_unreadable; read -r size < \"$d/size\" || :; case \"$size\" in '\\'''\\''|*[!0-9]*) refuse size_unreadable ;; esac; if [ \"$size\" -eq 0 ]; then refuse payload_empty; fi; if [ \"$size\" -gt 1610612736 ]; then refuse \"over_stored stored=$size ceiling=1610612736\"; fi; s256 \"$payload\" || refuse digest_unreadable; key=\"${prefix}s256-$h\"; [ \"${#key}\" -le 512 ] || refuse key_too_long; printf '\\''%s\\n'\\'' '\\''sealed=true'\\'' \"key=$key\" >> \"$GITHUB_OUTPUT\"; printf '\\''velnor: state seal subject %s\\n'\\'' \"$key\"'"
+        run: &r35 "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; case \"$RUNNER_TEMP\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''RUNNER_TEMP must be absolute'\\'' >&2; exit 1 ;; esac; payload=\"$RUNNER_TEMP/velnor-gc1/transport/state/payload.tar.zst\"; d=\"$RUNNER_TEMP/velnor/state-seal\"; rm -rf \"$d\"; mkdir -p \"$d\"; refuse() { printf '\\''%s\\n'\\'' \"::warning::cache_unavailable: state seal refused ($1)\"; printf '\\''%s\\n'\\'' '\\''sealed=false'\\'' >> \"$GITHUB_OUTPUT\"; exit 0; }; s256() { sha256sum \"$1\" > \"$d/sum\" || return 1; h=; rest=; read -r h rest < \"$d/sum\" || [ -n \"$h\" ]; case \"$h\" in '\\'''\\''|*[!0-9a-f]*) return 1 ;; esac; [ \"${#h}\" -eq 64 ] || return 1; }; prefix=\"${VELNOR_STATE_SEAL_PREFIX-}\"; scope=\"${VELNOR_STATE_SEAL_SCOPE-}\"; [ -n \"$prefix\" ] && [ -n \"$scope\" ] || refuse prefix_missing; case \"$prefix\" in \"$scope\"?*) ;; *) refuse prefix_scope ;; esac; printf '\\''%s\\n'\\'' \"${prefix#\"$scope\"}\" | grep -Eq '\\''^s256-[0-9a-f]{64}-s256-[0-9a-f]{64}-$'\\'' || refuse prefix_shape; if [ -L \"$payload\" ] || [ ! -f \"$payload\" ]; then refuse payload_not_regular; fi; size=; wc -c < \"$payload\" > \"$d/size\" || refuse size_unreadable; read -r size < \"$d/size\" || :; case \"$size\" in '\\'''\\''|*[!0-9]*) refuse size_unreadable ;; esac; if [ \"$size\" -eq 0 ]; then refuse payload_empty; fi; if [ \"$size\" -gt 1610612736 ]; then refuse \"over_stored stored=$size ceiling=1610612736\"; fi; s256 \"$payload\" || refuse digest_unreadable; key=\"${prefix}s256-$h\"; [ \"${#key}\" -le 512 ] || refuse key_too_long; printf '\\''%s\\n'\\'' '\\''sealed=true'\\'' \"key=$key\" >> \"$GITHUB_OUTPUT\"; printf '\\''velnor: state seal subject %s\\n'\\'' \"$key\"'"
       - name: Admit state save
         id: state-seal-admit
         if: steps.state-seal-subject.outputs.sealed == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-          VELNOR_STATE_PENDING: ${{needs.plan.outputs.state_union_root_produce}}
+          VELNOR_STATE_PENDING: ${{needs.plan.outputs.state_union_root_produce}}:velnor-v4-state-trusted-union-root-
           VELNOR_STATE_PENDING_BYTES: "1616920640"
-        run: &r35 "sh -c 'set -eu; case \"$RUNNER_TEMP\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''RUNNER_TEMP must be absolute'\\'' >&2; exit 1 ;; esac; payload=\"$RUNNER_TEMP/velnor-gc1/transport/state/payload.tar.zst\"; d=\"$RUNNER_TEMP/velnor/state-admit\"; rm -rf \"$d\"; mkdir -p \"$d\"; number() { case \"$1\" in '\\'''\\''|*[!0-9]*) return 1 ;; esac; }; bound_of() { awk -v n=\"$1\" '\\''BEGIN { b = int((n + 512 - 1) / 512) * 512; f = b + 6656; t = int((f + 10240 - 1) / 10240) * 10240; m = 0; if (t < 131072) m = int((131072 - t) / 2048); printf \"%.0f\\n\", t + int(t / 256) + m }'\\'' > \"$d/bound\" || return 1; bound=; read -r bound < \"$d/bound\" || return 1; number \"$bound\"; }; size=; if [ -L \"$payload\" ] || [ ! -f \"$payload\" ]; then size=; else wc -c < \"$payload\" > \"$d/size\" && read -r size < \"$d/size\" || size=; fi; refuse() { printf '\\''%s\\n'\\'' \"::warning::cache_unavailable: state save refused ($1)\"; printf '\\''%s\\n'\\'' '\\''admitted=false'\\'' >> \"$GITHUB_OUTPUT\"; exit 0; }; number \"$size\" && [ \"$size\" -gt 0 ] || refuse payload_unreadable; bound_of \"$size\" || refuse bound_unavailable; gh api \"repos/$GITHUB_REPOSITORY/actions/cache/usage\" --jq .active_caches_size_in_bytes > \"$d/usage\" 2> /dev/null || refuse usage_unavailable; usage=; read -r usage < \"$d/usage\" || usage=; number \"$usage\" || refuse usage_unreadable; unit=\"${VELNOR_STATE_PENDING_BYTES:-0}\"; number \"$unit\" || refuse pending_unreadable; printf '\\''%s\\n'\\'' \"${VELNOR_STATE_PENDING-}\" | awk -v unit=\"$unit\" '\\''{ for (i = 1; i <= NF; i++) if ($i == \"true\") n++ } END { printf \"%.0f\\n\", n * unit }'\\'' > \"$d/reserved\" || refuse reserve_unreadable; reserved=; read -r reserved < \"$d/reserved\" || reserved=; number \"$reserved\" || refuse reserve_unreadable; awk -v u=\"$usage\" -v b=\"$bound\" -v r=\"$reserved\" '\\''BEGIN { exit !(u + b + r <= 8000000000) }'\\'' || refuse \"over_budget usage=$usage bound=$bound reserved=$reserved budget=8000000000\"; printf '\\''%s\\n'\\'' '\\''admitted=true'\\'' >> \"$GITHUB_OUTPUT\"; printf '\\''velnor: state save admitted usage=%s bound=%s reserved=%s budget=%s\\n'\\'' \"$usage\" \"$bound\" \"$reserved\" 8000000000'"
+          VELNOR_STATE_SEAL_KEY: ${{steps.state-seal-subject.outputs.key}}
+        run: &r36 "sh -c 'set -eu; case \"$RUNNER_TEMP\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''RUNNER_TEMP must be absolute'\\'' >&2; exit 1 ;; esac; payload=\"$RUNNER_TEMP/velnor-gc1/transport/state/payload.tar.zst\"; d=\"$RUNNER_TEMP/velnor/state-admit\"; rm -rf \"$d\"; mkdir -p \"$d\"; number() { case \"$1\" in '\\'''\\''|*[!0-9]*) return 1 ;; esac; }; bound_of() { awk -v n=\"$1\" '\\''BEGIN { b = int((n + 512 - 1) / 512) * 512; f = b + 6656; t = int((f + 10240 - 1) / 10240) * 10240; m = 0; if (t < 131072) m = int((131072 - t) / 2048); printf \"%.0f\\n\", t + int(t / 256) + m }'\\'' > \"$d/bound\" || return 1; bound=; read -r bound < \"$d/bound\" || return 1; number \"$bound\"; }; size=; if [ -L \"$payload\" ] || [ ! -f \"$payload\" ]; then size=; else wc -c < \"$payload\" > \"$d/size\" && read -r size < \"$d/size\" || size=; fi; refuse() { printf '\\''%s\\n'\\'' \"::warning::cache_unavailable: state save refused ($1)\"; printf '\\''%s\\n'\\'' '\\''admitted=false'\\'' >> \"$GITHUB_OUTPUT\"; exit 0; }; number \"$size\" && [ \"$size\" -gt 0 ] || refuse payload_unreadable; bound_of \"$size\" || refuse bound_unavailable; key=\"${VELNOR_STATE_SEAL_KEY-}\"; ref=\"${GITHUB_REF-}\"; repo=\"${GITHUB_REPOSITORY-}\"; [ -n \"$key\" ] && [ -n \"$ref\" ] && [ -n \"$repo\" ] || refuse identity_missing; case \"$key\" in *[[:space:]]*) refuse key_whitespace ;; esac; gh cache list -R \"$repo\" --key \"$key\" --ref \"$ref\" --limit 100 --json key,id,sizeInBytes --jq '\\''.[] | [.key, (.id | tostring), (.sizeInBytes | tostring)] | @tsv'\\'' > \"$d/existing\" 2> /dev/null || refuse existing_unlistable; while IFS='\\''\t'\\'' read -r k i s; do [ \"$k\" != \"$key\" ] || refuse key_exists; done < \"$d/existing\"; gh api \"repos/$GITHUB_REPOSITORY/actions/cache/usage\" --jq .active_caches_size_in_bytes > \"$d/usage\" 2> /dev/null || refuse usage_unavailable; usage=; read -r usage < \"$d/usage\" || usage=; number \"$usage\" || refuse usage_unreadable; unit=\"${VELNOR_STATE_PENDING_BYTES:-0}\"; number \"$unit\" || refuse pending_unreadable; printf '\\''%s\\n'\\'' \"${VELNOR_STATE_PENDING-}\" | tr '\\'' '\\'' '\\''\\n'\\'' > \"$d/pending\"; shape='\\''^s256-[0-9a-f]{64}-s256-[0-9a-f]{64}-s256-[0-9a-f]{64}$'\\''; reserved=0; while IFS= read -r item || [ -n \"$item\" ]; do [ \"${item%%:*}\" = true ] || continue; later=\"${item#*:}\"; gh cache list -R \"$repo\" --key \"$later\" --ref \"$ref\" --limit 100 --json key,id,sizeInBytes --jq '\\''.[] | [.key, (.id | tostring), (.sizeInBytes | tostring)] | @tsv'\\'' > \"$d/later\" 2> /dev/null || refuse reserve_unlistable; : > \"$d/held\"; while IFS='\\''\t'\\'' read -r k i s; do case \"$k\" in \"$later\"?*) ;; *) continue ;; esac; printf '\\''%s\\n'\\'' \"${k#\"$later\"}\" | grep -Eq \"$shape\" || continue; number \"$s\" || continue; printf '\\''%s\\n'\\'' \"$s\" >> \"$d/held\"; done < \"$d/later\"; awk -v unit=\"$unit\" -v r=\"$reserved\" '\\''{ h += $1 } END { if (h < unit) r += unit - h; printf \"%.0f\\n\", r }'\\'' \"$d/held\" > \"$d/reserved\" || refuse reserve_unreadable; reserved=; read -r reserved < \"$d/reserved\" || reserved=; number \"$reserved\" || refuse reserve_unreadable; done < \"$d/pending\"; awk -v u=\"$usage\" -v b=\"$bound\" -v r=\"$reserved\" '\\''BEGIN { exit !(u + b + r <= 8000000000) }'\\'' || refuse \"over_budget usage=$usage bound=$bound reserved=$reserved budget=8000000000\"; printf '\\''%s\\n'\\'' '\\''admitted=true'\\'' >> \"$GITHUB_OUTPUT\"; printf '\\''velnor: state save admitted usage=%s bound=%s reserved=%s budget=%s\\n'\\'' \"$usage\" \"$bound\" \"$reserved\" 8000000000'"
       - &s70
         name: Save sealed payload
         id: state-seal-save
@@ -2663,7 +2806,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           VELNOR_STATE_SEAL_KEY: ${{steps.state-seal-subject.outputs.key}}
-        run: "sh -c 'set -eu; case \"$RUNNER_TEMP\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''RUNNER_TEMP must be absolute'\\'' >&2; exit 1 ;; esac; d=\"$RUNNER_TEMP/velnor/state-seal\"; subject=\"$RUNNER_TEMP/velnor/state-seal/subject\"; mkdir -p \"$d\"; rm -f \"$subject\"; refuse() { printf '\\''%s\\n'\\'' \"::warning::cache_unavailable: state seal bind refused ($1)\"; printf '\\''%s\\n'\\'' '\\''bound=false'\\'' >> \"$GITHUB_OUTPUT\"; exit 0; }; key=\"${VELNOR_STATE_SEAL_KEY-}\"; ref=\"${GITHUB_REF-}\"; repo=\"${GITHUB_REPOSITORY-}\"; [ -n \"$key\" ] && [ -n \"$ref\" ] && [ -n \"$repo\" ] || refuse input_missing; command -v gh >/dev/null 2>&1 || refuse gh_missing; gh cache list -R \"$repo\" --key \"$key\" --ref \"$ref\" --limit 100 --json key,id,sizeInBytes --jq '\\''.[] | .key + \" \" + (.id | tostring) + \" \" + (.sizeInBytes | tostring)'\\'' > \"$d/list\" || refuse list_failed; hits=; id=; size=; while read -r k i s rest; do [ \"$k\" = \"$key\" ] || continue; case \"$i\" in '\\'''\\''|*[!0-9]*) refuse id_malformed ;; esac; case \"$s\" in '\\'''\\''|*[!0-9]*) refuse size_malformed ;; esac; hits=\"${hits}x\"; id=$i; size=$s; done < \"$d/list\"; [ \"$hits\" = x ] || refuse \"entries=${#hits}\"; printf '\\''%s %s %s\\n'\\'' \"$key\" \"$id\" \"$size\" > \"$subject\"; printf '\\''%s\\n'\\'' '\\''bound=true'\\'' >> \"$GITHUB_OUTPUT\"; printf '\\''velnor: state seal subject %s %s %s\\n'\\'' \"$key\" \"$id\" \"$size\"'"
+        run: "sh -c 'set -eu; case \"$RUNNER_TEMP\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''RUNNER_TEMP must be absolute'\\'' >&2; exit 1 ;; esac; payload=\"$RUNNER_TEMP/velnor-gc1/transport/state/payload.tar.zst\"; d=\"$RUNNER_TEMP/velnor/state-bind\"; rm -rf \"$d\"; mkdir -p \"$d\"; number() { case \"$1\" in '\\'''\\''|*[!0-9]*) return 1 ;; esac; }; bound_of() { awk -v n=\"$1\" '\\''BEGIN { b = int((n + 512 - 1) / 512) * 512; f = b + 6656; t = int((f + 10240 - 1) / 10240) * 10240; m = 0; if (t < 131072) m = int((131072 - t) / 2048); printf \"%.0f\\n\", t + int(t / 256) + m }'\\'' > \"$d/bound\" || return 1; bound=; read -r bound < \"$d/bound\" || return 1; number \"$bound\"; }; size=; if [ -L \"$payload\" ] || [ ! -f \"$payload\" ]; then size=; else wc -c < \"$payload\" > \"$d/size\" && read -r size < \"$d/size\" || size=; fi; subject=\"$RUNNER_TEMP/velnor/state-seal/subject\"; mkdir -p \"${subject%/*}\"; rm -f \"$subject\"; refuse() { printf '\\''%s\\n'\\'' \"::warning::cache_unavailable: state seal bind refused ($1)\"; printf '\\''%s\\n'\\'' '\\''bound=false'\\'' >> \"$GITHUB_OUTPUT\"; exit 0; }; key=\"${VELNOR_STATE_SEAL_KEY-}\"; ref=\"${GITHUB_REF-}\"; repo=\"${GITHUB_REPOSITORY-}\"; [ -n \"$key\" ] && [ -n \"$ref\" ] && [ -n \"$repo\" ] || refuse input_missing; case \"$key\" in *[[:space:]]*) refuse key_whitespace ;; esac; number \"$size\" && [ \"$size\" -gt 0 ] || refuse payload_unreadable; bound_of \"$size\" || refuse bound_unavailable; command -v gh >/dev/null 2>&1 || refuse gh_missing; gh cache list -R \"$repo\" --key \"$key\" --ref \"$ref\" --limit 100 --json key,id,sizeInBytes --jq '\\''.[] | [.key, (.id | tostring), (.sizeInBytes | tostring)] | @tsv'\\'' > \"$d/list\" || refuse list_failed; hits=; id=; stored=; while IFS='\\''\t'\\'' read -r k i s; do [ \"$k\" = \"$key\" ] || continue; case \"$i\" in '\\'''\\''|*[!0-9]*) refuse id_malformed ;; esac; case \"$s\" in '\\'''\\''|*[!0-9]*) refuse size_malformed ;; esac; hits=\"${hits}x\"; id=$i; stored=$s; done < \"$d/list\"; [ \"$hits\" = x ] || refuse \"entries=${#hits}\"; [ \"$stored\" -le \"$bound\" ] || refuse \"size_out_of_bound stored=$stored bound=$bound\"; printf '\\''%s %s %s\\n'\\'' \"$key\" \"$id\" \"$stored\" > \"$subject\"; printf '\\''%s\\n'\\'' '\\''bound=true'\\'' >> \"$GITHUB_OUTPUT\"; printf '\\''velnor: state seal subject %s %s %s\\n'\\'' \"$key\" \"$id\" \"$stored\"'"
       - &s72
         name: Attest state seal
         if: steps.state-seal-bind.outputs.bound == 'true'
@@ -2680,7 +2823,7 @@ jobs:
           VELNOR_STATE_ARTIFACT_ID: ${{ needs.state-producer-crates-velnor-runner.outputs.artifact_id }}
           VELNOR_STATE_SEAL_KEY: ${{steps.state-seal-subject.outputs.key}}
           VELNOR_STATE_SEAL_SCOPE: velnor-v4-state-trusted-union-crates-velnor-runner-
-        run: &r37 "sh -c 'set -eu; case \"$RUNNER_TEMP\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''RUNNER_TEMP must be absolute'\\'' >&2; exit 1 ;; esac; payload=\"$RUNNER_TEMP/velnor-gc1/transport/state/payload.tar.zst\"; d=\"$RUNNER_TEMP/velnor/state-retire\"; rm -rf \"$d\"; mkdir -p \"$d\"; number() { case \"$1\" in '\\'''\\''|*[!0-9]*) return 1 ;; esac; }; bound_of() { awk -v n=\"$1\" '\\''BEGIN { b = int((n + 512 - 1) / 512) * 512; f = b + 6656; t = int((f + 10240 - 1) / 10240) * 10240; m = 0; if (t < 131072) m = int((131072 - t) / 2048); printf \"%.0f\\n\", t + int(t / 256) + m }'\\'' > \"$d/bound\" || return 1; bound=; read -r bound < \"$d/bound\" || return 1; number \"$bound\"; }; size=; if [ -L \"$payload\" ] || [ ! -f \"$payload\" ]; then size=; else wc -c < \"$payload\" > \"$d/size\" && read -r size < \"$d/size\" || size=; fi; skip() { printf '\\''%s\\n'\\'' \"::warning::cache_unavailable: state retire skipped ($1)\"; exit 0; }; key=\"${VELNOR_STATE_SEAL_KEY-}\"; scope=\"${VELNOR_STATE_SEAL_SCOPE-}\"; ref=\"${VELNOR_DEFAULT_REF-}\"; repo=\"${GITHUB_REPOSITORY-}\"; signer=\"${GITHUB_WORKFLOW_REF-}\"; signer=\"${signer%%@*}\"; [ -n \"$key\" ] && [ -n \"$scope\" ] && [ -n \"$ref\" ] && [ -n \"$repo\" ] && [ -n \"$signer\" ] || skip identity_missing; number \"$size\" && [ \"$size\" -gt 0 ] || skip payload_unreadable; bound_of \"$size\" || skip bound_unavailable; subject=\"$RUNNER_TEMP/velnor/state-seal/subject\"; if [ -L \"$subject\" ] || [ ! -f \"$subject\" ]; then skip subject_missing; fi; sk=; sid=; stored=; read -r sk sid stored < \"$subject\" || skip subject_unreadable; [ \"$sk\" = \"$key\" ] || skip subject_key_mismatch; number \"$sid\" && number \"$stored\" && [ \"$stored\" -gt 0 ] && [ \"$stored\" -le \"$bound\" ] || skip \"size_out_of_bound stored=$stored bound=$bound\"; gh attestation verify \"$subject\" -R \"$repo\" --signer-workflow \"$signer\" --source-ref \"$ref\" --predicate-type '\\''https://velnor.dev/attestation/state-seal/v1'\\'' > /dev/null 2>&1 || skip attestation_unverified; shape='\\''^s256-[0-9a-f]{64}-s256-[0-9a-f]{64}-s256-[0-9a-f]{64}$'\\''; gh cache list -R \"$repo\" --key \"$scope\" --ref \"$ref\" --limit 100 --json key,id,sizeInBytes --jq '\\''.[] | .key + \" \" + (.id | tostring) + \" \" + (.sizeInBytes | tostring)'\\'' > \"$d/scope\" 2> /dev/null || skip scope_list_failed; while read -r k id rest; do case \"$k\" in \"$scope\"?*) ;; *) continue ;; esac; number \"$id\" || continue; printf '\\''%s\\n'\\'' \"${k#\"$scope\"}\" | grep -Eq \"$shape\" || continue; [ \"$k\" != \"$key\" ] || continue; if gh cache delete -R \"$repo\" \"$id\" > /dev/null 2>&1; then printf '\\''velnor: retired superseded state entry %s\\n'\\'' \"$k\"; else printf '\\''%s\\n'\\'' \"::warning::cache_unavailable: could not delete state entry $id\"; fi; done < \"$d/scope\"; printf '\\''velnor: state snapshot published (%s bytes, sha256:%s)\\n'\\'' \"$size\" \"${key##*-s256-}\"; artifact=\"${VELNOR_STATE_ARTIFACT_ID-}\"; if number \"$artifact\" && [ -n \"$artifact\" ]; then if gh api -X DELETE \"repos/$repo/actions/artifacts/$artifact\" > /dev/null 2>&1; then printf '\\''velnor: deleted handoff artifact %s\\n'\\'' \"$artifact\"; else printf '\\''%s\\n'\\'' \"::warning::cache_unavailable: could not delete handoff artifact $artifact\"; fi; fi'"
+        run: &r38 "sh -c 'set -eu; case \"$RUNNER_TEMP\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''RUNNER_TEMP must be absolute'\\'' >&2; exit 1 ;; esac; payload=\"$RUNNER_TEMP/velnor-gc1/transport/state/payload.tar.zst\"; d=\"$RUNNER_TEMP/velnor/state-retire\"; rm -rf \"$d\"; mkdir -p \"$d\"; number() { case \"$1\" in '\\'''\\''|*[!0-9]*) return 1 ;; esac; }; bound_of() { awk -v n=\"$1\" '\\''BEGIN { b = int((n + 512 - 1) / 512) * 512; f = b + 6656; t = int((f + 10240 - 1) / 10240) * 10240; m = 0; if (t < 131072) m = int((131072 - t) / 2048); printf \"%.0f\\n\", t + int(t / 256) + m }'\\'' > \"$d/bound\" || return 1; bound=; read -r bound < \"$d/bound\" || return 1; number \"$bound\"; }; size=; if [ -L \"$payload\" ] || [ ! -f \"$payload\" ]; then size=; else wc -c < \"$payload\" > \"$d/size\" && read -r size < \"$d/size\" || size=; fi; skip() { printf '\\''%s\\n'\\'' \"::warning::cache_unavailable: state retire skipped ($1)\"; exit 0; }; key=\"${VELNOR_STATE_SEAL_KEY-}\"; scope=\"${VELNOR_STATE_SEAL_SCOPE-}\"; ref=\"${VELNOR_DEFAULT_REF-}\"; repo=\"${GITHUB_REPOSITORY-}\"; signer=\"${GITHUB_WORKFLOW_REF-}\"; signer=\"${signer%%@*}\"; [ -n \"$key\" ] && [ -n \"$scope\" ] && [ -n \"$ref\" ] && [ -n \"$repo\" ] && [ -n \"$signer\" ] || skip identity_missing; number \"$size\" && [ \"$size\" -gt 0 ] || skip payload_unreadable; bound_of \"$size\" || skip bound_unavailable; subject=\"$RUNNER_TEMP/velnor/state-seal/subject\"; if [ -L \"$subject\" ] || [ ! -f \"$subject\" ]; then skip subject_missing; fi; sk=; sid=; stored=; read -r sk sid stored < \"$subject\" || skip subject_unreadable; [ \"$sk\" = \"$key\" ] || skip subject_key_mismatch; number \"$sid\" && number \"$stored\" && [ \"$stored\" -gt 0 ] && [ \"$stored\" -le \"$bound\" ] || skip \"size_out_of_bound stored=$stored bound=$bound\"; gh attestation verify \"$subject\" -R \"$repo\" --signer-workflow \"$signer\" --source-ref \"$ref\" --predicate-type '\\''https://velnor.dev/attestation/state-seal/v1'\\'' > /dev/null 2>&1 || skip attestation_unverified; shape='\\''^s256-[0-9a-f]{64}-s256-[0-9a-f]{64}-s256-[0-9a-f]{64}$'\\''; gh cache list -R \"$repo\" --key \"$scope\" --ref \"$ref\" --limit 100 --json key,id,sizeInBytes --jq '\\''.[] | [.key, (.id | tostring), (.sizeInBytes | tostring)] | @tsv'\\'' > \"$d/scope\" 2> /dev/null || skip scope_list_failed; while IFS='\\''\t'\\'' read -r k id rest; do case \"$k\" in \"$scope\"?*) ;; *) continue ;; esac; number \"$id\" || continue; printf '\\''%s\\n'\\'' \"${k#\"$scope\"}\" | grep -Eq \"$shape\" || continue; [ \"$k\" != \"$key\" ] || continue; if gh cache delete -R \"$repo\" \"$id\" > /dev/null 2>&1; then printf '\\''velnor: retired superseded state entry %s\\n'\\'' \"$k\"; else printf '\\''%s\\n'\\'' \"::warning::cache_unavailable: could not delete state entry $id\"; fi; done < \"$d/scope\"; printf '\\''velnor: state snapshot published (%s bytes, sha256:%s)\\n'\\'' \"$size\" \"${key##*-s256-}\"; artifact=\"${VELNOR_STATE_ARTIFACT_ID-}\"; if number \"$artifact\" && [ -n \"$artifact\" ]; then if gh api -X DELETE \"repos/$repo/actions/artifacts/$artifact\" > /dev/null 2>&1; then printf '\\''velnor: deleted handoff artifact %s\\n'\\'' \"$artifact\"; else printf '\\''%s\\n'\\'' \"::warning::cache_unavailable: could not delete handoff artifact $artifact\"; fi; fi'"
   state-seal-root:
     name: State seal / root
     runs-on: ubuntu-26.04
@@ -2711,7 +2854,7 @@ jobs:
         env:
           VELNOR_STATE_SEAL_PREFIX: velnor-v4-state-trusted-union-root-${{needs.plan.outputs.state_root_compat}}-${{needs.plan.outputs.state_root_snapshot}}-
           VELNOR_STATE_SEAL_SCOPE: velnor-v4-state-trusted-union-root-
-        run: *r34
+        run: *r35
       - name: Admit state save
         id: state-seal-admit
         if: steps.state-seal-subject.outputs.sealed == 'true'
@@ -2719,7 +2862,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           VELNOR_STATE_PENDING: ""
           VELNOR_STATE_PENDING_BYTES: "1616920640"
-        run: *r35
+          VELNOR_STATE_SEAL_KEY: ${{steps.state-seal-subject.outputs.key}}
+        run: *r36
       - *s70
       - *s71
       - *s72
@@ -2731,7 +2875,7 @@ jobs:
           VELNOR_STATE_ARTIFACT_ID: ${{ needs.state-producer-root.outputs.artifact_id }}
           VELNOR_STATE_SEAL_KEY: ${{steps.state-seal-subject.outputs.key}}
           VELNOR_STATE_SEAL_SCOPE: velnor-v4-state-trusted-union-root-
-        run: *r37
+        run: *r38
   tools-producer-2d8ab338:
     name: Tools producer / 2d8ab338
     runs-on: ubuntu-26.04
@@ -2746,7 +2890,7 @@ jobs:
       - &s73
         name: Record optional cache budget
         id: velnor-cache-clock
-        run: *r26
+        run: *r27
         env:
           VELNOR_CACHE_JOB_SECONDS: "300"
       - *s1
@@ -2779,7 +2923,7 @@ jobs:
         name: Admit optional cache save
         id: velnor-optional-tools-save-budget
         if: success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
-        run: *r27
+        run: *r28
         env:
           VELNOR_CACHE_JOB_SECONDS: "300"
           VELNOR_CACHE_STARTED: ${{ steps.velnor-cache-clock.outputs.started }}
@@ -2798,7 +2942,7 @@ jobs:
       - &s79
         name: Report optional cache save failure
         if: always() && !cancelled() && steps.velnor-optional-tools-save.outcome == 'failure'
-        run: *r28
+        run: *r29
   tools-producer-69a47f7a:
     name: Tools producer / 69a47f7a
     runs-on: ubuntu-26.04
@@ -2820,7 +2964,7 @@ jobs:
       - name: Prepare pinned tools
         if: steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
         env: *m13
-        run: *r23
+        run: *r24
       - *s76
       - &s80
         name: Prepare Rust components
@@ -2835,7 +2979,7 @@ jobs:
         name: Admit optional cache save
         id: velnor-optional-tools-save-budget
         if: success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
-        run: *r27
+        run: *r28
         env: *m34
       - *s78
       - *s79
@@ -2883,7 +3027,7 @@ jobs:
       - name: Prepare pinned tools
         if: steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
         env: *m13
-        run: *r21
+        run: *r22
       - *s76
       - *s80
       - *s81
@@ -2911,7 +3055,7 @@ jobs:
       - name: Prepare pinned tools
         if: steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
         env: *m13
-        run: *r22
+        run: *r23
       - *s80
       - *s81
       - *s82
@@ -2930,7 +3074,7 @@ jobs:
     steps:
       - name: Record optional cache budget
         id: velnor-cache-clock
-        run: *r26
+        run: *r27
         env:
           VELNOR_CACHE_JOB_SECONDS: "600"
       - *s1
@@ -2948,7 +3092,7 @@ jobs:
       - name: Admit optional cache save
         id: velnor-optional-tools-save-budget
         if: success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
-        run: *r27
+        run: *r28
         env:
           VELNOR_CACHE_JOB_SECONDS: "600"
           VELNOR_CACHE_STARTED: ${{ steps.velnor-cache-clock.outputs.started }}
