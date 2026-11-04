@@ -64,8 +64,8 @@ run as the opaque `mbx cache export` bundle, not as a `target/` payload. A crate
 job restores the attested state bundle read-only and imports it; it never
 exports or saves. When `compiled_state` is not `"off"`, the non-crate
 `State producer` job (one per MBX Cargo workspace; protected default-branch
-pushes only; not part of `Required`) runs the crate jobs' build, Clippy and
-documentation lane records twice, first over a dependency skeleton at
+pushes only; not part of `Required`) runs the crate jobs' build, Clippy,
+documentation and doctests lane records twice, first over a dependency skeleton at
 `MBX_BUILD_SCRIPT_EXECUTION=1` and then over the real members at `0` (the
 switch between the phases deletes the first phase's task reports, which the
 controller writes once per task), records the producer marker, and exports one
