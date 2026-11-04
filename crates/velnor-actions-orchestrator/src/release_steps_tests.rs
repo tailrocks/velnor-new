@@ -607,7 +607,7 @@ fn assert_committed_workflow_lock(workflow: &str, group: &str) -> Result<(), Box
     assert!(output.status.success());
     let sha = std::str::from_utf8(&output.stdout)?.trim();
     std::fs::write(&path, workflow.replace("cancel-in-progress: false", "cancel-in-progress: true"))?;
-    let committed = crate::crate_release_runtime::read_workflow_at(temp.path(), sha)?;
+    let committed = crate::crate_release_runtime::read_workflow_at(temp.path(), sha, &crate::crate_release_git::ReleaseGit::host_fixture())?;
     crate::crate_release_runtime::validate_workflow_concurrency(&committed, group)?;
     assert!(crate::crate_release_runtime::validate_workflow_concurrency(&std::fs::read(path)?, group).is_err());
     Ok(())

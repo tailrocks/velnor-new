@@ -1,6 +1,12 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use crate as velnor_actions_orchestrator;
+
+fn test_git() -> crate::crate_release_git::ReleaseGit {
+    crate::crate_release_git::ReleaseGit::host_fixture()
+}
+
 use std::{fs, path::Path, process::Command};
 use velnor_actions_contract::config::CrateReleaseIntent;
 use velnor_actions_orchestrator::verify_crate_release_source;
@@ -13,6 +19,7 @@ fn source_verification_ignores_hostile_git_environment() -> Result<(), Box<dyn s
         return verify_crate_release_source(
             Path::new(&root),
             &std::env::var("VELNOR_GIT_FIXTURE_SHA")?,
+            &test_git(),
         )
         .map_err(Into::into);
     }
@@ -88,6 +95,7 @@ fn planned_inventory(
         sha,
         intent,
         &EmptyRegistry,
+        &test_git(),
     )?;
     Ok(plan
         .plan
@@ -144,7 +152,7 @@ fn journal_inventory_captures_the_approved_tree_and_rejects_changes()
         &["-c", "commit.gpgsign=false", "commit", "-qm", "fixture"],
     )?;
     let sha = git(root, &["rev-parse", "HEAD"])?;
-    let inventory = journal_source_inventory(root, &sha)?;
+    let inventory = journal_source_inventory(root, &sha, &test_git())?;
     assert_eq!(inventory.len(), 6);
     let file = |path: &str| inventory.iter().find(|file| file.path == path);
     assert_eq!(
@@ -175,24 +183,24 @@ fn journal_inventory_captures_the_approved_tree_and_rejects_changes()
             target: "link".into()
         })
     );
-    assert!(journal_source_inventory(root, &"0".repeat(40)).is_err());
+    assert!(journal_source_inventory(root, &"0".repeat(40), &test_git()).is_err());
     fs::write(root.join("untracked"), "untracked")?;
-    assert!(journal_source_inventory(root, &sha).is_err());
+    assert!(journal_source_inventory(root, &sha, &test_git()).is_err());
     fs::remove_file(root.join("untracked"))?;
     fs::rename(root.join("dir"), root.join("saved-dir"))?;
     symlink("saved-dir", root.join("dir"))?;
-    assert!(journal_source_inventory(root, &sha).is_err());
+    assert!(journal_source_inventory(root, &sha, &test_git()).is_err());
     fs::remove_file(root.join("dir"))?;
     fs::rename(root.join("saved-dir"), root.join("dir"))?;
     fs::write(root.join("ignored"), "ignored but present")?;
-    assert!(journal_source_inventory(root, &sha).is_err());
+    assert!(journal_source_inventory(root, &sha, &test_git()).is_err());
     fs::remove_file(root.join("ignored"))?;
     git(root, &["config", "core.filemode", "false"])?;
     fs::set_permissions(root.join("plain"), fs::Permissions::from_mode(0o755))?;
-    assert!(journal_source_inventory(root, &sha).is_err());
+    assert!(journal_source_inventory(root, &sha, &test_git()).is_err());
     fs::set_permissions(root.join("plain"), fs::Permissions::from_mode(0o644))?;
     git(root, &["rm", "--cached", "plain"])?;
-    assert!(journal_source_inventory(root, &sha).is_err());
+    assert!(journal_source_inventory(root, &sha, &test_git()).is_err());
     Ok(())
 }
 
@@ -228,7 +236,7 @@ fn approved_source_must_be_exact_clean_repository() -> Result<(), Box<dyn std::e
         ],
     )?;
     let sha = git(root, &["rev-parse", "HEAD"])?;
-    verify_crate_release_source(root, &sha)?;
+    verify_crate_release_source(root, &sha, &test_git())?;
     let intent: CrateReleaseIntent = serde_json::from_value(
         serde_json::json!({"schema": 1, "repository": "tailrocks/demo", "default_branch": "main", "environment": "release", "required_workflow_path": ".github/workflows/ci.yml", "trusted_reviewer_id": 139_017, "generator_version":"0.1.72","generator_source_sha":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","generator_manifest_sha256":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc","release_plz_version":"0.4.3","runner":"ubuntu-24.04","authentication":"trusted-publishing","rust_version": "1.97.1", "manifest_path": "Cargo.toml", "pr_write_paths": ["CHANGELOG.md", "Cargo.lock", "Cargo.toml"], "registry": "crates-io", "packages": ["demo"], "publish_features": {"demo":[]}, "tag_template": "{{ package }}-v{{ version }}", "recovery": {"package": "demo", "version": "0.1.1", "source_sha": sha}}),
     )?;
@@ -237,17 +245,17 @@ fn approved_source_must_be_exact_clean_repository() -> Result<(), Box<dyn std::e
     assert_eq!(packages[0].name, "demo");
     assert_eq!(packages[0].version, "0.1.1");
 
-    assert!(verify_crate_release_source(root, &"0".repeat(40)).is_err());
+    assert!(verify_crate_release_source(root, &"0".repeat(40), &test_git()).is_err());
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
         git(root, &["config", "core.filemode", "false"])?;
         fs::set_permissions(root.join("src/lib.rs"), fs::Permissions::from_mode(0o755))?;
-        assert!(verify_crate_release_source(root, &sha).is_err());
+        assert!(verify_crate_release_source(root, &sha, &test_git()).is_err());
         fs::set_permissions(root.join("src/lib.rs"), fs::Permissions::from_mode(0o644))?;
         git(root, &["update-index", "--assume-unchanged", "src/lib.rs"])?;
         fs::write(root.join("src/lib.rs"), "tampered")?;
-        assert!(verify_crate_release_source(root, &sha).is_err());
+        assert!(verify_crate_release_source(root, &sha, &test_git()).is_err());
         git(
             root,
             &["update-index", "--no-assume-unchanged", "src/lib.rs"],
@@ -255,12 +263,12 @@ fn approved_source_must_be_exact_clean_repository() -> Result<(), Box<dyn std::e
         git(root, &["checkout", "--", "src/lib.rs"])?;
     }
     fs::write(root.join("Cargo.toml"), "changed")?;
-    assert!(verify_crate_release_source(root, &sha).is_err());
+    assert!(verify_crate_release_source(root, &sha, &test_git()).is_err());
     git(root, &["checkout", "--", "Cargo.toml"])?;
     fs::write(root.join("ignored"), "could enter package")?;
-    assert!(verify_crate_release_source(root, &sha).is_err());
+    assert!(verify_crate_release_source(root, &sha, &test_git()).is_err());
     fs::remove_file(root.join("ignored"))?;
-    verify_crate_release_source(root, &sha)?;
+    verify_crate_release_source(root, &sha, &test_git())?;
     #[cfg(unix)]
     reject_escaping_link(root)?;
     Ok(())
@@ -307,8 +315,8 @@ fn source_verification_does_not_execute_repository_fsmonitor()
         &root,
         &["config", "filter.probe.clean", hook.to_str().ok_or("path")?],
     )?;
-    verify_crate_release_source(&root, &sha)?;
-    velnor_actions_orchestrator::journal_source_inventory(&root, &sha)?;
+    verify_crate_release_source(&root, &sha, &test_git())?;
+    velnor_actions_orchestrator::journal_source_inventory(&root, &sha, &test_git())?;
     assert!(!sentinel.exists());
     git(
         &root,
@@ -320,12 +328,12 @@ fn source_verification_does_not_execute_repository_fsmonitor()
             "data",
         ],
     )?;
-    assert!(verify_crate_release_source(&root, &sha).is_err());
+    assert!(verify_crate_release_source(&root, &sha, &test_git()).is_err());
     assert!(!sentinel.exists());
     git(&root, &["-c", "core.fsmonitor=false", "read-tree", "HEAD"])?;
     fs::write(root.join("new"), "unapproved")?;
     git(&root, &["-c", "core.fsmonitor=false", "add", "new"])?;
-    assert!(verify_crate_release_source(&root, &sha).is_err());
+    assert!(verify_crate_release_source(&root, &sha, &test_git()).is_err());
     assert!(!sentinel.exists());
     Ok(())
 }
@@ -349,7 +357,7 @@ fn reject_escaping_link(root: &Path) -> Result<(), Box<dyn std::error::Error>> {
         ],
     )?;
     let escaped = git(root, &["rev-parse", "HEAD"])?;
-    assert!(verify_crate_release_source(root, &escaped).is_err());
+    assert!(verify_crate_release_source(root, &escaped, &test_git()).is_err());
     Ok(())
 }
 

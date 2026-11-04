@@ -736,8 +736,12 @@ mod tests {
             run_id: 12,
             run_attempt: 1,
         };
-        let checkout =
-            PreparationCheckout::open(root.path(), binding, BTreeSet::from(["Cargo.toml".into()]))?;
+        let checkout = PreparationCheckout::open(
+            root.path(),
+            binding,
+            BTreeSet::from(["Cargo.toml".into()]),
+            crate::crate_release_git::ReleaseGit::host_fixture(),
+        )?;
         Ok((root, checkout))
     }
 

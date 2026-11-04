@@ -1,6 +1,12 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use crate as velnor_actions_orchestrator;
+
+fn test_git() -> crate::crate_release_git::ReleaseGit {
+    crate::crate_release_git::ReleaseGit::host_fixture()
+}
+
 use std::{fs, path::Path, process::Command};
 use velnor_actions_contract::config::CrateReleaseIntent;
 use velnor_actions_orchestrator::{
@@ -75,16 +81,27 @@ fn fixture_with_version(
 fn workspace_plan_binds_source_and_recovery() -> Result<(), Box<dyn std::error::Error>> {
     let (temp, sha, mut intent) =
         fixture("[package]\nname = \"demo\"\nversion = \"0.1.1\"\nedition = \"2021\"\n")?;
-    let result =
-        crate_release_workspace_plan_with_registry(temp.path(), &sha, &intent, &NoRegistry)?;
+    let result = crate_release_workspace_plan_with_registry(
+        temp.path(),
+        &sha,
+        &intent,
+        &NoRegistry,
+        &test_git(),
+    )?;
     assert_eq!(result.plan.graph.order, vec!["demo"]);
     assert_eq!(result.plan.selection.packages[0].version, "0.1.1");
     intent.recovery = Some(serde_json::from_value(
         serde_json::json!({"package":"demo","version":"0.1.2","source_sha":sha}),
     )?);
     assert!(
-        crate_release_workspace_plan_with_registry(temp.path(), &sha, &intent, &NoRegistry)
-            .is_err()
+        crate_release_workspace_plan_with_registry(
+            temp.path(),
+            &sha,
+            &intent,
+            &NoRegistry,
+            &test_git()
+        )
+        .is_err()
     );
     Ok(())
 }
@@ -136,13 +153,17 @@ fn workspace_members_and_project_configuration_are_bound_without_running_project
     let sha = git(root, &["rev-parse", "HEAD"])?;
     intent.packages = vec!["a".into(), "b".into()];
     intent.publish_features = [("a".into(), vec![]), ("b".into(), vec![])].into();
-    let plan = crate_release_workspace_plan_with_registry(root, &sha, &intent, &NoRegistry)?;
+    let plan =
+        crate_release_workspace_plan_with_registry(root, &sha, &intent, &NoRegistry, &test_git())?;
     assert_eq!(plan.plan.graph.order, vec!["b", "a"]);
     fs::write(
         root.join(".cargo/config.toml"),
         "[build]\nrustc-wrapper = \"/bin/true\"\n",
     )?;
-    assert!(crate_release_workspace_plan_with_registry(root, &sha, &intent, &NoRegistry).is_err());
+    assert!(
+        crate_release_workspace_plan_with_registry(root, &sha, &intent, &NoRegistry, &test_git())
+            .is_err()
+    );
     Ok(())
 }
 
@@ -179,6 +200,7 @@ fn workspace_plan_fetches_registry_prerequisites_and_rejects_yanked_or_denied()
             status: 200,
             yanked: false,
         },
+        &test_git(),
     )?;
     assert_eq!(result.registry_evidence.len(), 1);
     assert_eq!(result.registry_evidence[0].package, "serde");
@@ -191,7 +213,8 @@ fn workspace_plan_fetches_registry_prerequisites_and_rejects_yanked_or_denied()
             &Registry {
                 status: 200,
                 yanked: true
-            }
+            },
+            &test_git()
         )
         .is_err()
     );
@@ -204,7 +227,8 @@ fn workspace_plan_fetches_registry_prerequisites_and_rejects_yanked_or_denied()
                 &Registry {
                     status,
                     yanked: false
-                }
+                },
+                &test_git()
             )
             .is_err(),
             "registry status {status} must not satisfy a dependency"

@@ -391,13 +391,7 @@ fn acquire_receipt<
         return Err(invalid());
     }
     let bytes = read_receipt_archive(&file)?;
-    let receipt: crate::crate_release_controller::CrateReleaseAdmissionReceipt =
-        serde_json::from_slice(&bytes).map_err(|_| invalid())?;
-    if serde_json::to_vec(&receipt).map_err(|_| invalid())? != bytes
-        || receipt.github != *request.candidate
-    {
-        return Err(invalid());
-    }
+    let receipt = decode_receipt(&bytes, request.candidate)?;
     if reconciliation {
         let visible = crate::crate_release_controller::validate_reconciliation_receipt(
             &receipt,
@@ -430,6 +424,20 @@ fn acquire_receipt<
         }
     }
     write_receipt(request.runner_temp, &bytes)
+}
+
+fn decode_receipt(
+    bytes: &[u8],
+    candidate: &crate::crate_release_github::GitHubCandidate,
+) -> Result<crate::crate_release_controller::CrateReleaseAdmissionReceipt, OrchestratorError> {
+    let invalid = || internal("crate_release_receipt_acquire_invalid");
+    let receipt: crate::crate_release_controller::CrateReleaseAdmissionReceipt =
+        serde_json::from_slice(bytes).map_err(|_| invalid())?;
+    if serde_json::to_vec(&receipt).map_err(|_| invalid())? != bytes || receipt.github != *candidate
+    {
+        return Err(invalid());
+    }
+    Ok(receipt)
 }
 
 #[cfg(test)]

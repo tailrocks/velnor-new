@@ -1,6 +1,12 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use crate as velnor_actions_orchestrator;
+
+fn test_git() -> crate::crate_release_git::ReleaseGit {
+    crate::crate_release_git::ReleaseGit::host_fixture()
+}
+
 use std::collections::BTreeSet;
 
 use sha2::{Digest, Sha256};
@@ -160,7 +166,8 @@ fn make_checkout()
 fn captures_only_allowed_regular_updates_from_clean_source()
 -> Result<(), Box<dyn std::error::Error>> {
     let (root, binding, allowed) = make_checkout()?;
-    let checkout = PreparationCheckout::open(root.path(), binding.clone(), allowed.clone())?;
+    let checkout =
+        PreparationCheckout::open(root.path(), binding.clone(), allowed.clone(), test_git())?;
     std::fs::write(root.path().join("Cargo.toml"), "version = \"0.1.1\"\n")?;
     std::fs::write(root.path().join("CHANGELOG.md"), "release notes\n")?;
     let artifact = checkout.collect()?;
@@ -184,9 +191,9 @@ fn captures_only_allowed_regular_updates_from_clean_source()
 fn refuses_dirty_source_and_unapproved_updates() -> Result<(), Box<dyn std::error::Error>> {
     let (root, binding, allowed) = make_checkout()?;
     std::fs::write(root.path().join("README.md"), "dirty\n")?;
-    assert!(PreparationCheckout::open(root.path(), binding, allowed).is_err());
+    assert!(PreparationCheckout::open(root.path(), binding, allowed, test_git()).is_err());
     let (root, binding, allowed) = make_checkout()?;
-    let checkout = PreparationCheckout::open(root.path(), binding, allowed)?;
+    let checkout = PreparationCheckout::open(root.path(), binding, allowed, test_git())?;
     std::fs::write(root.path().join(".hidden"), "unexpected\n")?;
     assert!(checkout.collect().is_err());
     Ok(())
@@ -197,18 +204,18 @@ fn refuses_dirty_source_and_unapproved_updates() -> Result<(), Box<dyn std::erro
 fn refuses_deleted_files_mode_changes_and_symlinks() -> Result<(), Box<dyn std::error::Error>> {
     use std::os::unix::fs::{PermissionsExt, symlink};
     let (root, binding, allowed) = make_checkout()?;
-    let checkout = PreparationCheckout::open(root.path(), binding, allowed)?;
+    let checkout = PreparationCheckout::open(root.path(), binding, allowed, test_git())?;
     std::fs::remove_file(root.path().join("Cargo.toml"))?;
     assert!(checkout.collect().is_err());
     let (root, binding, allowed) = make_checkout()?;
-    let checkout = PreparationCheckout::open(root.path(), binding, allowed)?;
+    let checkout = PreparationCheckout::open(root.path(), binding, allowed, test_git())?;
     std::fs::set_permissions(
         root.path().join("Cargo.toml"),
         std::fs::Permissions::from_mode(0o755),
     )?;
     assert!(checkout.collect().is_err());
     let (root, binding, allowed) = make_checkout()?;
-    let checkout = PreparationCheckout::open(root.path(), binding, allowed)?;
+    let checkout = PreparationCheckout::open(root.path(), binding, allowed, test_git())?;
     symlink("README.md", root.path().join("CHANGELOG.md"))?;
     assert!(checkout.collect().is_err());
     Ok(())
@@ -217,19 +224,19 @@ fn refuses_deleted_files_mode_changes_and_symlinks() -> Result<(), Box<dyn std::
 #[test]
 fn refuses_git_control_and_head_changes() -> Result<(), Box<dyn std::error::Error>> {
     let (root, binding, allowed) = make_checkout()?;
-    let checkout = PreparationCheckout::open(root.path(), binding, allowed)?;
+    let checkout = PreparationCheckout::open(root.path(), binding, allowed, test_git())?;
     let config = root.path().join(".git/config");
     let mut contents = std::fs::read(&config)?;
     contents.extend_from_slice(b"\n");
     std::fs::write(config, contents)?;
     assert!(checkout.collect().is_err());
     let (root, binding, allowed) = make_checkout()?;
-    let checkout = PreparationCheckout::open(root.path(), binding, allowed)?;
+    let checkout = PreparationCheckout::open(root.path(), binding, allowed, test_git())?;
     std::fs::write(root.path().join("Cargo.toml"), "staged change\n")?;
     git(root.path(), &["add", "Cargo.toml"])?;
     assert!(checkout.collect().is_err());
     let (root, binding, allowed) = make_checkout()?;
-    let checkout = PreparationCheckout::open(root.path(), binding, allowed)?;
+    let checkout = PreparationCheckout::open(root.path(), binding, allowed, test_git())?;
     std::fs::write(root.path().join("Cargo.toml"), "new head\n")?;
     git(root.path(), &["add", "Cargo.toml"])?;
     git(
@@ -270,7 +277,7 @@ fn refuses_ignored_untracked_files() -> Result<(), Box<dyn std::error::Error>> {
         ],
     )?;
     binding.source_sha = git(root.path(), &["rev-parse", "HEAD"])?;
-    let checkout = PreparationCheckout::open(root.path(), binding, allowed)?;
+    let checkout = PreparationCheckout::open(root.path(), binding, allowed, test_git())?;
     std::fs::write(root.path().join(".hidden"), "ignored\n")?;
     assert!(checkout.collect().is_err());
     Ok(())
@@ -279,7 +286,7 @@ fn refuses_ignored_untracked_files() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn refuses_oversized_release_output() -> Result<(), Box<dyn std::error::Error>> {
     let (root, binding, allowed) = make_checkout()?;
-    let checkout = PreparationCheckout::open(root.path(), binding, allowed)?;
+    let checkout = PreparationCheckout::open(root.path(), binding, allowed, test_git())?;
     std::fs::write(
         root.path().join("CHANGELOG.md"),
         vec![b'x'; 8 * 1024 * 1024 + 1],
@@ -313,7 +320,7 @@ fn refuses_replaced_parent_directory_symlink() -> Result<(), Box<dyn std::error:
         ],
     )?;
     binding.source_sha = git(root.path(), &["rev-parse", "HEAD"])?;
-    let checkout = PreparationCheckout::open(root.path(), binding, allowed)?;
+    let checkout = PreparationCheckout::open(root.path(), binding, allowed, test_git())?;
     std::fs::remove_file(root.path().join("one/data"))?;
     std::fs::remove_dir(root.path().join("one"))?;
     symlink("two", root.path().join("one"))?;

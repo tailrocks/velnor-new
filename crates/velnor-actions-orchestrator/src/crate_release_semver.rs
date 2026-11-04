@@ -250,7 +250,7 @@ pub(crate) fn verify_preflight<R: CrateRegistryRead>(
         let item = if let Some(pending) = prior_no_baseline_pending(receipt, registry, package)? {
             pending
         } else {
-            verify_one(source, receipt, registry, package, &executable)?
+            verify_one(source, receipt, registry, package, &executable, git)?
         };
         evidence.insert(package.source.name.clone(), item);
     }
@@ -317,7 +317,7 @@ pub(crate) fn verify_before_upload<R: CrateRegistryRead>(
         .iter()
         .find(|package| package.source.name == name)
         .ok_or_else(invalid)?;
-    let evidence = verify_one(source, receipt, registry, package, &executable)?;
+    let evidence = verify_one(source, receipt, registry, package, &executable, git)?;
     crate::verify_crate_release_source(source, &receipt.github.request.source_sha, git)?;
     let intent =
         velnor_actions_contract::canonical_json_bytes(&receipt.intent).map_err(|_| invalid())?;
@@ -355,6 +355,7 @@ fn verify_one<R: CrateRegistryRead>(
     registry: &R,
     package: &crate::crate_release_controller::CrateReleasePlannedPackage,
     executable: &Path,
+    git: &crate::crate_release_git::ReleaseGit,
 ) -> Result<SemverEvidence, OrchestratorError> {
     let checker_sha256 =
         velnor_actions_mise::catalog::qualified_cargo_semver_checks(&receipt.intent.runner)
@@ -377,8 +378,8 @@ fn verify_one<R: CrateRegistryRead>(
         &package.source.manifest,
         &package.source.name,
         (&previous, &archive),
-        features,
-        executable,
+        (features, executable),
+        git,
     )?;
     Ok(SemverEvidence::Checked {
         baseline: previous.version,
@@ -468,9 +469,10 @@ fn run_check(
     manifest: &str,
     package: &str,
     baseline: (&Baseline, &[u8]),
-    features: &[String],
-    executable: &Path,
+    tools: (&[String], &Path),
+    git: &crate::crate_release_git::ReleaseGit,
 ) -> Result<(), OrchestratorError> {
+    let (features, executable) = tools;
     let temp = tempfile::tempdir().map_err(|_| invalid())?;
     let home = temp.path().join("cargo-home");
     std::fs::create_dir(&home).map_err(|_| invalid())?;
@@ -485,7 +487,7 @@ fn run_check(
         format!("CARGO_TARGET_DIR={}", temp.path().join("target").display()).into(),
         format!("CARGO={}", cargo.display()).into(),
     ];
-    args.extend(source_compiler_env(rust)?);
+    args.extend(source_compiler_env(rust, git)?);
     args.extend([
         executable.as_os_str().to_owned(),
         "check-release".into(),
@@ -513,6 +515,8 @@ fn run_check(
     if !output.success {
         return Err(invalid());
     }
+    velnor_actions_mise::release_git_pin::ReleaseGitExecutable::revalidate(git)
+        .map_err(|_| invalid())?;
     Ok(())
 }
 

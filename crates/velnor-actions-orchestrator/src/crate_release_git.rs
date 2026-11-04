@@ -15,9 +15,11 @@ enum GitKind {
 }
 
 impl ReleaseGit {
+    #[must_use]
     pub fn new(git: VerifiedGit) -> Self {
         Self(GitKind::Verified(git))
     }
+    #[must_use]
     pub fn verified(&self) -> Option<&VerifiedGit> {
         match &self.0 {
             GitKind::Verified(git) => Some(git),

@@ -3,7 +3,7 @@
 
 use crate::crate_release_controller::{
     CrateReleaseAdmissionReceipt, prepare_crate_release, reconcile_crate_release,
-    verify_crate_release_admission, verify_release_package,
+    verify_crate_release_admission,
 };
 use crate::crate_release_github::{
     GitHubAdmissionOutcome, GitHubAdmissionRequest, NativeGitHubAdmissionRead,
@@ -86,51 +86,46 @@ fn run_qualified_crate_release(operation: &str) -> Result<(), OrchestratorError>
         verify_workflow_concurrency(&workspace, &source, &intent, &request, &registry, &git)?;
     }
     let receipt_path = required_path("RUNNER_TEMP")?.join("velnor-crate-release-receipt.json");
+    dispatch_release_operation(
+        operation,
+        JournalRuntime {
+            receipt_path: &receipt_path,
+            intent: &intent,
+            request: &request,
+            github: &github,
+            registry: &registry,
+            source: &source,
+            token: &token,
+            git: &git,
+        },
+    )
+}
+
+fn dispatch_release_operation(
+    operation: &str,
+    input: JournalRuntime<'_>,
+) -> Result<(), OrchestratorError> {
+    let JournalRuntime {
+        receipt_path,
+        intent,
+        request,
+        github,
+        registry,
+        source,
+        git,
+        ..
+    } = input;
     match operation {
-        "verify-package" => {
-            verify_package(&receipt_path, &intent, &request, &github, &source, &git)
+        "verify-package" => verify_package(receipt_path, intent, request, github, source, git),
+        "admit" => write_admission(receipt_path, intent, request, github, registry, source, git),
+        "verify-admission" => {
+            verify_admission_output(receipt_path, intent, request, github, registry, source, git)
         }
-        "admit" => write_admission(
-            &receipt_path,
-            &intent,
-            &request,
-            &github,
-            &registry,
-            &source,
-            &git,
-        ),
-        "verify-admission" => verify_admission_output(
-            &receipt_path,
-            &intent,
-            &request,
-            &github,
-            &registry,
-            &source,
-            &git,
-        ),
-        "publication-started" => checkpoint_publication(
-            &receipt_path,
-            &intent,
-            &request,
-            &github,
-            &registry,
-            &source,
-            &git,
-        ),
-        operation if is_journal_operation(operation) => run_journal(
-            operation,
-            JournalRuntime {
-                receipt_path: &receipt_path,
-                intent: &intent,
-                request: &request,
-                github: &github,
-                registry: &registry,
-                source: &source,
-                token: &token,
-                git: &git,
-            },
-        ),
-        "reconcile" => reconcile_receipt(&receipt_path, &intent, &request, &github, &source, &git),
+        "publication-started" => {
+            checkpoint_publication(receipt_path, intent, request, github, registry, source, git)
+        }
+        operation if is_journal_operation(operation) => run_journal(operation, input),
+        "reconcile" => reconcile_receipt(receipt_path, intent, request, github, source, git),
         _ => Err(internal("crate_release_operation_invalid")),
     }
 }
@@ -251,26 +246,8 @@ fn run_journal(operation: &str, input: JournalRuntime<'_>) -> Result<(), Orchest
         | "journal-observe"
         | "journal-repair-tag"
         | "journal-repair-release" => observe_journal_operation(input, operation),
-        "journal-recovery-inspect" => inspect_prior_journal(
-            input.receipt_path,
-            input.intent,
-            input.request,
-            input.github,
-            input.registry,
-            input.source,
-            input.token,
-            input.git,
-        ),
-        "journal-reconcile-evidence" => reconcile_journal_evidence(
-            input.receipt_path,
-            input.intent,
-            input.request,
-            input.github,
-            input.registry,
-            input.source,
-            input.token,
-            input.git,
-        ),
+        "journal-recovery-inspect" => inspect_prior_journal(input),
+        "journal-reconcile-evidence" => reconcile_journal_evidence(input),
         _ => Err(internal("crate_release_operation_invalid")),
     }
 }
@@ -481,19 +458,20 @@ fn verify_admission_output(
     append_output(&format!("release_mode={}\n", release_mode(&fresh)))
 }
 
-fn reconcile_journal_evidence(
-    receipt_path: &Path,
-    intent: &CrateReleaseIntent,
-    request: &GitHubAdmissionRequest,
-    github: &NativeGitHubAdmissionRead,
-    registry: &NativeCrateRegistryRead,
-    source: &Path,
-    token: &str,
-    git: &crate::crate_release_git::ReleaseGit,
-) -> Result<(), OrchestratorError> {
+fn reconcile_journal_evidence(input: JournalRuntime<'_>) -> Result<(), OrchestratorError> {
     use crate::crate_release_controller::{CrateReleaseObservation, derive_reconciled_candidate};
     use crate::crate_release_journal::{JournalIdentity, JournalStage, inspect_journal};
     use crate::crate_release_journal_adapter::JournalAdapter;
+    let JournalRuntime {
+        receipt_path,
+        intent,
+        request,
+        github,
+        registry,
+        source,
+        token,
+        git,
+    } = input;
     let identity = JournalIdentity {
         repository: request.repository.clone(),
         workflow_sha: request.workflow_sha.clone(),
@@ -525,19 +503,20 @@ fn reconcile_journal_evidence(
     crate::exclusive_write::write_exclusive(&path, &data, "crate_release_candidate")
 }
 
-fn inspect_prior_journal(
-    receipt_path: &Path,
-    intent: &CrateReleaseIntent,
-    request: &GitHubAdmissionRequest,
-    github: &NativeGitHubAdmissionRead,
-    registry: &NativeCrateRegistryRead,
-    source: &Path,
-    token: &str,
-    git: &crate::crate_release_git::ReleaseGit,
-) -> Result<(), OrchestratorError> {
+fn inspect_prior_journal(input: JournalRuntime<'_>) -> Result<(), OrchestratorError> {
     use crate::crate_release_controller::{CrateReleaseObservation, observe_prior_recovery};
     use crate::crate_release_journal::{JournalIdentity, JournalStage, inspect_journal};
     use crate::crate_release_journal_adapter::JournalAdapter;
+    let JournalRuntime {
+        receipt_path,
+        intent,
+        request,
+        github,
+        registry,
+        source,
+        token,
+        git,
+    } = input;
     let run_text = required("VELNOR_PREVIOUS_RUN_ID")?;
     let run_id = run_text
         .parse::<u64>()
@@ -799,16 +778,20 @@ fn verify_package(
     git: &crate::crate_release_git::ReleaseGit,
 ) -> Result<(), OrchestratorError> {
     let receipt = read_receipt(receipt_path)?;
-    verify_release_package(
-        &receipt,
+    let package = required("VELNOR_JOURNAL_PACKAGE")?;
+    let input = crate::crate_release_controller::PackageVerification {
+        receipt: &receipt,
         intent,
         request,
         github,
-        &NativeCrateRegistryRead,
+        registry: &NativeCrateRegistryRead,
         source,
-        &required("VELNOR_JOURNAL_PACKAGE")?,
         git,
-    )
+        package: &package,
+    };
+    crate::crate_release_controller::verify_release_package_with(&input, |observed| {
+        crate::crate_release_controller::verify_observed_packages(observed, &receipt)
+    })
     .map(|_| ())
 }
 
@@ -1921,6 +1904,9 @@ mod tests {
     -> Result<(), Box<dyn std::error::Error>> {
         use super::{read_intent_at_workflow, read_manifest_at_workflow};
         use std::{fs, path::Path, process::Command};
+        fn test_git() -> crate::crate_release_git::ReleaseGit {
+            crate::crate_release_git::ReleaseGit::host_fixture()
+        }
         fn git(root: &Path, args: &[&str]) -> Result<String, Box<dyn std::error::Error>> {
             let output = Command::new("/usr/bin/git")
                 .current_dir(root)
@@ -1960,23 +1946,26 @@ mod tests {
         let second = git(root, &["rev-parse", "HEAD"])?;
         fs::write(&path, make("0.1.7"))?;
         fs::write(&manifest_path, b"dirty manifest")?;
-        assert_eq!(read_manifest_at_workflow(root, &first)?, b"first manifest");
         assert_eq!(
-            read_manifest_at_workflow(root, &second)?,
+            read_manifest_at_workflow(root, &first, &test_git())?,
+            b"first manifest"
+        );
+        assert_eq!(
+            read_manifest_at_workflow(root, &second, &test_git())?,
             b"second manifest"
         );
-        assert!(read_manifest_at_workflow(root, "bad").is_err());
-        assert!(read_manifest_at_workflow(root, &"0".repeat(40)).is_err());
+        assert!(read_manifest_at_workflow(root, "bad", &test_git()).is_err());
+        assert!(read_manifest_at_workflow(root, &"0".repeat(40), &test_git()).is_err());
         assert_eq!(
-            read_intent_at_workflow(root, &first)?.generator_version,
+            read_intent_at_workflow(root, &first, &test_git())?.generator_version,
             "0.1.5"
         );
         assert_eq!(
-            read_intent_at_workflow(root, &second)?.generator_version,
+            read_intent_at_workflow(root, &second, &test_git())?.generator_version,
             "0.1.6"
         );
-        assert!(read_intent_at_workflow(root, "bad").is_err());
-        assert!(read_intent_at_workflow(root, &"0".repeat(40)).is_err());
+        assert!(read_intent_at_workflow(root, "bad", &test_git()).is_err());
+        assert!(read_intent_at_workflow(root, &"0".repeat(40), &test_git()).is_err());
         Ok(())
     }
     use super::{OrchestratorError, poll_pending_admission};

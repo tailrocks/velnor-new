@@ -380,6 +380,20 @@ fn bind_semver(
     )
 }
 
+fn observe_input_state<J, G: GitHubAdmissionRead, R: CrateRegistryRead>(
+    input: &CrateReleaseObservation<'_, J, G, R>,
+) -> Result<CrateReleaseAdmissionReceipt, OrchestratorError> {
+    observe_package_state(
+        input.intent,
+        input.request,
+        input.github,
+        input.registry,
+        input.source,
+        &input.admission.github,
+        input.git,
+    )
+}
+
 pub(super) fn record_admitted_upload_intent<
     J: JournalIo + crate::crate_release_journal::JournalOperationRefs,
     G: GitHubAdmissionRead,
@@ -408,15 +422,7 @@ pub(super) fn record_admitted_upload_intent<
     if started.receipt != *input.journal_receipt {
         return Err(invalid());
     }
-    let state = observe_package_state(
-        input.intent,
-        input.request,
-        input.github,
-        input.registry,
-        input.source,
-        &input.admission.github,
-        input.git,
-    )?;
+    let state = observe_input_state(input)?;
     verify_observed_packages_after_recorded_upload(input, &state)?;
     let index = state
         .packages
@@ -433,16 +439,7 @@ pub(super) fn record_admitted_upload_intent<
     if selected.action != CrateReleaseAction::Publish {
         return Err(invalid());
     }
-    if observe_package_state(
-        input.intent,
-        input.request,
-        input.github,
-        input.registry,
-        input.source,
-        &input.admission.github,
-        input.git,
-    )? != state
-    {
+    if observe_input_state(input)? != state {
         return Err(invalid());
     }
     authorize_github_candidate(input.request, &input.admission.github, input.github)?;
@@ -493,15 +490,7 @@ pub(crate) fn repair_verified_metadata<
     if started.receipt != *input.journal_receipt {
         return Err(invalid());
     }
-    let state = observe_package_state(
-        input.intent,
-        input.request,
-        input.github,
-        input.registry,
-        input.source,
-        &input.admission.github,
-        input.git,
-    )?;
+    let state = observe_input_state(input)?;
     verify_observed_packages_after_recorded_upload(input, &state)?;
     let index = state
         .packages
@@ -531,16 +520,7 @@ pub(crate) fn repair_verified_metadata<
             semver_evidence: None,
         },
     )?;
-    if observe_package_state(
-        input.intent,
-        input.request,
-        input.github,
-        input.registry,
-        input.source,
-        &input.admission.github,
-        input.git,
-    )? != state
-    {
+    if observe_input_state(input)? != state {
         return Err(invalid());
     }
     authorize_github_candidate(input.request, &input.admission.github, input.github)?;
@@ -598,15 +578,7 @@ pub(crate) fn record_verified_mutation<
     if !matches!(prior.phase, JournalMutationPhase::Intended) {
         return Err(invalid());
     }
-    let state = observe_package_state(
-        input.intent,
-        input.request,
-        input.github,
-        input.registry,
-        input.source,
-        &input.admission.github,
-        input.git,
-    )?;
+    let state = observe_input_state(input)?;
     let pending_upload = (prior.kind == JournalMutationKind::Upload).then_some(&prior);
     verify_observed_packages_with_upload_intent(input, &state, pending_upload)?;
     let selected = state
@@ -617,16 +589,7 @@ pub(crate) fn record_verified_mutation<
         })
         .ok_or_else(invalid)?;
     let result = derive_result(input, selected, prior.kind)?;
-    if observe_package_state(
-        input.intent,
-        input.request,
-        input.github,
-        input.registry,
-        input.source,
-        &input.admission.github,
-        input.git,
-    )? != state
-    {
+    if observe_input_state(input)? != state {
         return Err(invalid());
     }
     authorize_github_candidate(input.request, &input.admission.github, input.github)?;

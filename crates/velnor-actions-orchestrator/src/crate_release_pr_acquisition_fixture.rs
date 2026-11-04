@@ -345,6 +345,7 @@ fn produce_artifact(
         repo,
         binding,
         intent.pr_write_paths.iter().cloned().collect(),
+        crate::crate_release_git::ReleaseGit::host_fixture(),
     )?;
     let script = temp.join("fixture-updater");
     std::fs::write(

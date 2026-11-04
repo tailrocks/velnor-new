@@ -33,17 +33,8 @@ path = "tests/crate_registry_public.rs"
 name = "crate_release_github_public"
 path = "tests/crate_release_github_public.rs"
 
-[[test]]
-name = "crate_release_pr_artifact_public"
-path = "tests/crate_release_pr_artifact_public.rs"
 
-[[test]]
-name = "crate_source_public"
-path = "tests/crate_source_public.rs"
 
-[[test]]
-name = "crate_archive_public"
-path = "tests/crate_archive_public.rs"
 
 [[test]]
 name = "controller_approval_public"
@@ -129,6 +120,3 @@ path = "tests/crate_release_journal_adapter_public.rs"
 name = "crate_registry_inventory_public"
 path = "tests/crate_registry_inventory_public.rs"
 
-[[test]]
-name = "crate_workspace_plan_public"
-path = "tests/crate_workspace_plan_public.rs"

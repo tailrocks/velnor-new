@@ -54,7 +54,7 @@ pub fn crate_release_workspace_plan_with_registry<
     if !manifests.contains(&intent.manifest_path) {
         return Err(internal("crate_release_manifest_untracked"));
     }
-    let metadata = workspace_metadata(&canonical, intent)?;
+    let metadata = workspace_metadata(&canonical, intent, git)?;
     verify_crate_release_source(&canonical, sha, git)?;
     let concurrency_group = crate::release_identity::workspace_lock(
         &metadata,
@@ -163,6 +163,7 @@ fn registry_state<R: crate::crate_release_registry::CrateRegistryRead>(
 fn workspace_metadata(
     root: &Path,
     intent: &CrateReleaseIntent,
+    git: &crate::crate_release_git::ReleaseGit,
 ) -> Result<String, OrchestratorError> {
     let temporary = tempfile::tempdir().map_err(|_| internal("crate_release_metadata_temp"))?;
     let cargo_home = temporary.path().join("cargo-home");
@@ -175,7 +176,7 @@ fn workspace_metadata(
         format!("CARGO_HOME={}", cargo_home.display()).into(),
         "CARGO_NET_OFFLINE=true".into(),
     ];
-    args.extend(source_compiler_env(&intent.rust_version)?);
+    args.extend(source_compiler_env(&intent.rust_version, git)?);
     args.push(source_cargo_path(&intent.rust_version, temporary.path())?.into_os_string());
     args.extend(discovery.cargo_argv().into_iter().skip(1));
     let exec = PinnedToolExec::new(vec![PinnedTool::Rust], std::ffi::OsStr::new("env"), args)

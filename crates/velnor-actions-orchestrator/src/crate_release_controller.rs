@@ -120,31 +120,6 @@ pub(super) struct PackageVerification<'a, G, R> {
     pub package: &'a str,
 }
 
-pub(crate) fn verify_release_package<G: GitHubAdmissionRead, R: CrateRegistryRead>(
-    receipt: &CrateReleaseAdmissionReceipt,
-    intent: &CrateReleaseIntent,
-    request: &GitHubAdmissionRequest,
-    github: &G,
-    registry: &R,
-    source: &Path,
-    package: &str,
-    git: &crate::crate_release_git::ReleaseGit,
-) -> Result<VerifiedReleasePackage, OrchestratorError> {
-    let input = PackageVerification {
-        receipt,
-        intent,
-        request,
-        github,
-        registry,
-        source,
-        git,
-        package,
-    };
-    verify_release_package_with(&input, |observed| {
-        observation::verify_observed_packages(observed, receipt)
-    })
-}
-
 pub(super) fn verify_release_package_with<G: GitHubAdmissionRead, R: CrateRegistryRead>(
     input: &PackageVerification<'_, G, R>,
     validate: impl Fn(&CrateReleaseAdmissionReceipt) -> Result<(), OrchestratorError>,
@@ -292,23 +267,14 @@ fn observe_package_state<G: GitHubAdmissionRead, R: CrateRegistryRead>(
                     },
                     &archive,
                 )?;
-                match tag_sha {
-                    None => CrateReleaseAction::RepairTag { registry: state },
-                    Some(sha) if sha == request.source_sha => {
-                        match crate::crate_release_github::read_github_release_evidence(
-                            &intent.repository,
-                            &tag,
-                            github,
-                        )? {
-                            None => CrateReleaseAction::RepairRelease { registry: state },
-                            Some(release) => CrateReleaseAction::Reconciled {
-                                registry: state,
-                                release,
-                            },
-                        }
-                    }
-                    Some(_) => return Err(internal("crate_release_tag_mismatch")),
-                }
+                package_action_for_tag(
+                    github,
+                    &intent.repository,
+                    &tag,
+                    &request.source_sha,
+                    tag_sha,
+                    state,
+                )?
             }
         };
         packages.push(CrateReleasePlannedPackage {
@@ -325,6 +291,31 @@ fn observe_package_state<G: GitHubAdmissionRead, R: CrateRegistryRead>(
         packages,
         semver_evidence: std::collections::BTreeMap::new(),
     })
+}
+
+fn package_action_for_tag<G: GitHubAdmissionRead>(
+    github: &G,
+    repository: &str,
+    tag: &str,
+    source_sha: &str,
+    tag_sha: Option<String>,
+    state: crate::crate_release_registry::CrateRegistryReconciliation,
+) -> Result<CrateReleaseAction, OrchestratorError> {
+    match tag_sha {
+        None => Ok(CrateReleaseAction::RepairTag { registry: state }),
+        Some(sha) if sha == source_sha => {
+            match crate::crate_release_github::read_github_release_evidence(
+                repository, tag, github,
+            )? {
+                None => Ok(CrateReleaseAction::RepairRelease { registry: state }),
+                Some(release) => Ok(CrateReleaseAction::Reconciled {
+                    registry: state,
+                    release,
+                }),
+            }
+        }
+        Some(_) => Err(internal("crate_release_tag_mismatch")),
+    }
 }
 
 fn verify_release_ownership<G: GitHubAdmissionRead>(
@@ -679,6 +670,7 @@ fn package_source(
     ];
     isolated_args.extend(crate::crate_release_source::source_compiler_env(
         &intent.rust_version,
+        git,
     )?);
     isolated_args.push(
         crate::crate_release_source::source_cargo_path(&intent.rust_version, sterile.path())?

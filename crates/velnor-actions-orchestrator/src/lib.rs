@@ -148,3 +148,16 @@ pub mod crate_release_journal;
 pub mod crate_release_journal_adapter;
 mod crate_release_journal_github;
 pub mod fd_tool_extract;
+
+#[cfg(test)]
+#[path = "../tests/crate_archive_public.rs"]
+mod crate_archive_public;
+#[cfg(test)]
+#[path = "../tests/crate_release_pr_artifact_public.rs"]
+mod crate_release_pr_artifact_public;
+#[cfg(test)]
+#[path = "../tests/crate_source_public.rs"]
+mod crate_source_public;
+#[cfg(test)]
+#[path = "../tests/crate_workspace_plan_public.rs"]
+mod crate_workspace_plan_public;

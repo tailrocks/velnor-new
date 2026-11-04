@@ -183,6 +183,7 @@ fn run_child(operation: &str) -> Result<(), Box<dyn Error>> {
             request: &request,
             admission: &admission,
             source: &source,
+            git: &crate::crate_release_git::ReleaseGit::host_fixture(),
             workflow_root: &source,
             generator: &generator,
         })?;
@@ -237,6 +238,7 @@ fn coordinate(
         github,
         registry,
         source,
+        git: &crate::crate_release_git::ReleaseGit::host_fixture(),
         sequence: 1,
     };
     let archive = fixture_archive(source)?;

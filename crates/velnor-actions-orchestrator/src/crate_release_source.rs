@@ -316,7 +316,11 @@ pub(crate) fn verify_toolchain_source_separation(source: &Path) -> Result<(), Or
 
 pub(crate) fn source_compiler_env(
     version: &str,
+    git: &crate::crate_release_git::ReleaseGit,
 ) -> Result<Vec<std::ffi::OsString>, OrchestratorError> {
+    use velnor_actions_mise::release_git_pin::ReleaseGitExecutable as _;
+    git.revalidate()
+        .map_err(|_| internal("release_git_bundle_invalid"))?;
     let home = std::env::var_os("RUSTUP_HOME")
         .ok_or_else(|| internal("crate_release_toolchain_invalid"))?;
     let home = Path::new(&home);
@@ -325,8 +329,20 @@ pub(crate) fn source_compiler_env(
     let bin = rustc
         .parent()
         .ok_or_else(|| internal("crate_release_toolchain_invalid"))?;
+    let path = std::env::join_paths([
+        git.exec_path(),
+        bin,
+        Path::new("/usr/bin"),
+        Path::new("/bin"),
+    ])
+    .map_err(|_| internal("crate_release_toolchain_invalid"))?;
+    let mut path_env = std::ffi::OsString::from("PATH=");
+    path_env.push(path);
+    let mut git_env = std::ffi::OsString::from("GIT_EXEC_PATH=");
+    git_env.push(git.exec_path());
     Ok(vec![
-        format!("PATH={}:{}", bin.display(), "/usr/bin:/bin").into(),
+        path_env,
+        git_env,
         format!("RUSTC={}", rustc.display()).into(),
         format!("RUSTDOC={}", rustdoc.display()).into(),
     ])

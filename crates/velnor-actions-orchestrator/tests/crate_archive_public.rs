@@ -1,6 +1,12 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use crate as velnor_actions_orchestrator;
+
+fn test_git() -> crate::crate_release_git::ReleaseGit {
+    crate::crate_release_git::ReleaseGit::host_fixture()
+}
+
 use std::io::Write;
 
 use flate2::{Compression, write::GzEncoder};
@@ -59,6 +65,7 @@ fn crate_entries_are_bound_to_approved_tracked_source() -> Result<(), Box<dyn st
         "Cargo.toml",
         "demo",
         "0.1.1",
+        &test_git(),
     )?;
     assert!(
         verify_archive_tracked_content(
@@ -67,7 +74,8 @@ fn crate_entries_are_bound_to_approved_tracked_source() -> Result<(), Box<dyn st
             &sha,
             "Cargo.toml",
             "demo",
-            "0.1.1"
+            "0.1.1",
+            &test_git()
         )
         .is_err()
     );
@@ -78,7 +86,8 @@ fn crate_entries_are_bound_to_approved_tracked_source() -> Result<(), Box<dyn st
             &sha,
             "Cargo.toml",
             "demo",
-            "0.1.1"
+            "0.1.1",
+            &test_git()
         )
         .is_err()
     );
@@ -116,7 +125,8 @@ fn reject_archive_symlink_targets(
             &escaped_sha,
             "Cargo.toml",
             "demo",
-            "0.1.1"
+            "0.1.1",
+            &test_git()
         )
         .is_err()
     );
@@ -141,7 +151,8 @@ fn reject_archive_symlink_targets(
             &untracked_sha,
             "Cargo.toml",
             "demo",
-            "0.1.1"
+            "0.1.1",
+            &test_git()
         )
         .is_err()
     );
