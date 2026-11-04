@@ -122,7 +122,7 @@ pub(crate) fn invoke_upload<
     } else {
         UploadAttempt::Uncertain
     };
-    if crate::verify_crate_release_source(input.source, &permit.source_sha).is_err() {
+    if crate::verify_crate_release_source(input.source, &permit.source_sha, input.git).is_err() {
         return Ok(UploadAttempt::Uncertain);
     }
     Ok(attempt)
@@ -200,6 +200,7 @@ pub(super) fn validate_upload<
         input.github,
         input.registry,
         input.source,
+        input.git,
     )?;
     let next_sequence = permit.sequence.checked_add(1).ok_or_else(invalid)?;
     verify_observed_packages_after_recorded_upload(
@@ -217,7 +218,7 @@ pub(super) fn validate_upload<
         return Err(invalid());
     }
     authorize_github_candidate(input.request, &input.admission.github, input.github)?;
-    crate::verify_crate_release_source(input.source, &permit.source_sha)?;
+    crate::verify_crate_release_source(input.source, &permit.source_sha, input.git)?;
     let qualified = velnor_actions_mise::catalog::qualified_release_plz(
         &input.intent.release_plz_version,
         &input.intent.runner,
