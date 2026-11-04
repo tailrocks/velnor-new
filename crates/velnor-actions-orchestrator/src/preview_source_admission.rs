@@ -147,7 +147,7 @@ fn parse_seed_policy() -> Result<PackageReleasePolicy, OrchestratorError> {
         return Err(internal("preview_source_policy_seed_path"));
     }
     let bytes =
-        crate::retrieve_reports::staged_reads::read_staged_bytes(&expected_path, 1024 * 1024)
+        velnor_actions_contract::staged_reads::read_staged_bytes(&expected_path, 1024 * 1024)
             .map_err(|_| internal("preview_source_policy_seed_read"))?;
     let policy = velnor_actions_contract::parse_package_release_policy(policy_text.as_bytes())
         .map_err(|_| internal("preview_source_policy_seed"))?;
@@ -161,7 +161,7 @@ fn parse_seed_policy() -> Result<PackageReleasePolicy, OrchestratorError> {
 }
 
 fn event_json() -> Result<Value, OrchestratorError> {
-    let bytes = crate::retrieve_reports::staged_reads::read_staged_bytes(
+    let bytes = velnor_actions_contract::staged_reads::read_staged_bytes(
         Path::new(&required("GITHUB_EVENT_PATH")?),
         4 * 1024 * 1024,
     )

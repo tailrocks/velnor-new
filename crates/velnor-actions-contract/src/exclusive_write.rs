@@ -8,49 +8,46 @@ use std::path::{Component, Path};
 #[cfg(unix)]
 use rustix::fs::{Mode, OFlags, open, openat};
 
-use crate::OrchestratorError;
-use crate::internal::internal;
+use crate::helper_error::HelperError;
 
-pub(crate) fn write_exclusive(
-    path: &Path,
-    bytes: &[u8],
-    context: &str,
-) -> Result<(), OrchestratorError> {
-    write_exclusive_until(path, bytes, context, || Ok(()))
+pub fn write_exclusive(path: &Path, bytes: &[u8], context: &str) -> Result<(), HelperError> {
+    write_exclusive_until(path, bytes, context, || Ok::<(), HelperError>(()))
 }
 
-pub(crate) fn write_exclusive_until(
+pub fn write_exclusive_until<E: From<HelperError>>(
     path: &Path,
     bytes: &[u8],
     context: &str,
-    mut checkpoint: impl FnMut() -> Result<(), OrchestratorError>,
-) -> Result<(), OrchestratorError> {
+    mut checkpoint: impl FnMut() -> Result<(), E>,
+) -> Result<(), E> {
     checkpoint()?;
     match fs::symlink_metadata(path) {
-        Ok(meta) if meta.file_type().is_symlink() => return Err(internal("symlink_refused")),
-        Ok(_) => return Err(internal(&format!("{context}_exists"))),
+        Ok(meta) if meta.file_type().is_symlink() => {
+            return Err(HelperError::internal("symlink_refused").into());
+        }
+        Ok(_) => return Err(HelperError::internal(&format!("{context}_exists")).into()),
         Err(_) => {}
     }
     let mut file = open_exclusive(path, context)?;
     if !created_identity(&file, path) {
-        return Err(internal("symlink_refused"));
+        return Err(HelperError::internal("symlink_refused").into());
     }
     for chunk in bytes.chunks(64 * 1024) {
         checkpoint()?;
         file.write_all(chunk)
-            .map_err(|_| internal(&format!("{context}_unwritable")))?;
+            .map_err(|_| HelperError::internal(&format!("{context}_unwritable")))?;
         checkpoint()?;
     }
     Ok(())
 }
 
 #[cfg(unix)]
-fn open_exclusive(path: &Path, context: &str) -> Result<std::fs::File, OrchestratorError> {
+fn open_exclusive(path: &Path, context: &str) -> Result<std::fs::File, HelperError> {
     let parent = path.parent().unwrap_or_else(|| Path::new("."));
     let file_name = path
         .file_name()
         .map(Path::new)
-        .ok_or_else(|| internal(&format!("{context}_unwritable")))?;
+        .ok_or_else(|| HelperError::internal(&format!("{context}_unwritable")))?;
     let parent_fd = open(
         parent,
         OFlags::DIRECTORY | OFlags::NOFOLLOW | OFlags::CLOEXEC,
@@ -68,12 +65,12 @@ fn open_exclusive(path: &Path, context: &str) -> Result<std::fs::File, Orchestra
 }
 
 #[cfg(not(unix))]
-fn open_exclusive(path: &Path, context: &str) -> Result<std::fs::File, OrchestratorError> {
+fn open_exclusive(path: &Path, context: &str) -> Result<std::fs::File, HelperError> {
     fs::OpenOptions::new()
         .write(true)
         .create_new(true)
         .open(path)
-        .map_err(|_| internal(&format!("{context}_exists")))
+        .map_err(|_| HelperError::internal(&format!("{context}_exists")))
 }
 
 #[cfg(unix)]
@@ -82,32 +79,32 @@ fn file_mode() -> Mode {
 }
 
 #[cfg(unix)]
-fn parent_open_error(parent: &Path, context: &str) -> OrchestratorError {
+fn parent_open_error(parent: &Path, context: &str) -> HelperError {
     if fs::symlink_metadata(parent).is_ok_and(|meta| meta.file_type().is_symlink()) {
-        return internal("symlink_refused");
+        return HelperError::internal("symlink_refused");
     }
-    internal(&format!("{context}_unwritable"))
+    HelperError::internal(&format!("{context}_unwritable"))
 }
 
 #[cfg(unix)]
-fn child_open_error(err: rustix::io::Errno, context: &str) -> OrchestratorError {
+fn child_open_error(err: rustix::io::Errno, context: &str) -> HelperError {
     if err == rustix::io::Errno::EXIST {
-        return internal(&format!("{context}_exists"));
+        return HelperError::internal(&format!("{context}_exists"));
     }
     if err == rustix::io::Errno::LOOP {
-        return internal("symlink_refused");
+        return HelperError::internal("symlink_refused");
     }
-    internal(&format!("{context}_unwritable"))
+    HelperError::internal(&format!("{context}_unwritable"))
 }
 
-pub(crate) fn create_dir_no_symlink(anchor: &Path, dir: &Path) -> Result<(), OrchestratorError> {
+pub fn create_dir_no_symlink(anchor: &Path, dir: &Path) -> Result<(), HelperError> {
     let relative = dir
         .strip_prefix(anchor)
-        .map_err(|_| internal("anchor_escape"))?;
+        .map_err(|_| HelperError::internal("anchor_escape"))?;
     let mut parts = Vec::new();
     for component in relative.components() {
         let Component::Normal(part) = component else {
-            return Err(internal("anchor_escape"));
+            return Err(HelperError::internal("anchor_escape"));
         };
         parts.push(part);
     }
@@ -120,7 +117,7 @@ pub(crate) fn create_dir_no_symlink(anchor: &Path, dir: &Path) -> Result<(), Orc
                 Ok(()) => {}
                 Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => {}
                 Err(err) => {
-                    return Err(OrchestratorError::io(
+                    return Err(HelperError::io(
                         current.display().to_string(),
                         err.to_string(),
                     ));
@@ -132,9 +129,9 @@ pub(crate) fn create_dir_no_symlink(anchor: &Path, dir: &Path) -> Result<(), Orc
     Ok(())
 }
 
-fn refuse_if_link(path: &Path) -> Result<(), OrchestratorError> {
+fn refuse_if_link(path: &Path) -> Result<(), HelperError> {
     if fs::symlink_metadata(path).is_ok_and(|meta| meta.file_type().is_symlink()) {
-        return Err(internal("symlink_refused"));
+        return Err(HelperError::internal("symlink_refused"));
     }
     Ok(())
 }

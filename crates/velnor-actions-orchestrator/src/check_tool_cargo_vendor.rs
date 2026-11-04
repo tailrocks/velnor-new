@@ -123,11 +123,12 @@ fn write_source_config(tool_home: &Path, vendor: &Path) -> Result<(), Orchestrat
         "[source.crates-io]\nreplace-with = \"velnor-vendor\"\n\n[source.velnor-vendor]\ndirectory = {}\n",
         toml::Value::String(directory.to_owned())
     );
-    crate::exclusive_write::write_exclusive(
+    velnor_actions_contract::exclusive_write::write_exclusive(
         &tool_home.join("cargo-source.toml"),
         text.as_bytes(),
         "qualified_cargo_config",
-    )
+    )?;
+    Ok(())
 }
 
 fn require_cargo_home(tool_home: &Path) -> Result<(), OrchestratorError> {

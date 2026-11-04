@@ -42,7 +42,7 @@ pub fn resolve_task_execution() -> Result<Vec<u8>, OrchestratorError> {
         .map(PathBuf::from)
         .ok_or_else(|| internal("missing_runtime_runner_temp"))?;
     validate_runner_temp_binding(&runner_temp, &action_runner_temp)?;
-    let run_key = crate::internal_request::resolve_run_key(None)?;
+    let run_key = velnor_actions_contract::resolve_run_key(None)?;
     let execution_digest = required_env(TASK_EXECUTION_DIGEST_ENV, "missing_execution_digest")?;
     let generator_version = required_env(GENERATOR_VERSION_ENV, "missing_generator_version")?;
     resolve_task_execution_to(

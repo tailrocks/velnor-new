@@ -1,10 +1,10 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use velnor_actions_contract::exclusive_write::write_exclusive_until;
 use super::{context, handoff, leaf_manifest::PreviewAggregateManifest};
 use crate::{
     OrchestratorError,
-    exclusive_write::write_exclusive_until,
     internal::internal,
     package_release_artifacts::{PackageOutputIdentity, verify_package_output},
     package_release_publish::{
@@ -229,7 +229,7 @@ fn runner_temp() -> Result<std::path::PathBuf, OrchestratorError> {
         .canonicalize()
         .map_err(|_| internal("preview_runner_temp"))?;
     let root = temp.join("velnor");
-    crate::exclusive_write::create_dir_no_symlink(&temp, &root)?;
+    velnor_actions_contract::exclusive_write::create_dir_no_symlink(&temp, &root)?;
     Ok(root)
 }
 
@@ -275,7 +275,7 @@ fn create_parents(root: &Path, relative: &str) -> Result<(), OrchestratorError> 
             return Err(internal("preview_signer_input_path"));
         };
         let next = parent.join(name);
-        crate::exclusive_write::create_dir_no_symlink(&parent, &next)?;
+        velnor_actions_contract::exclusive_write::create_dir_no_symlink(&parent, &next)?;
         parent = next;
     }
     Ok(())

@@ -25,17 +25,3 @@ pub(crate) fn origin_url_via_git(root: &Path) -> Option<String> {
     }
     Some(trimmed.to_owned())
 }
-
-pub(crate) fn validate_repository_slug(raw: &str) -> Option<String> {
-    if raw.chars().any(char::is_whitespace) {
-        return None;
-    }
-    let mut parts = raw.split('/');
-    let (Some(owner), Some(repo), None) = (parts.next(), parts.next(), parts.next()) else {
-        return None;
-    };
-    if owner.is_empty() || repo.is_empty() {
-        return None;
-    }
-    Some(format!("{}/{}", owner.to_lowercase(), repo.to_lowercase()))
-}

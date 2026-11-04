@@ -6,7 +6,8 @@ use std::path::Path;
 use velnor_actions_contract::canonical_json_bytes;
 
 use super::{CANDIDATE_LIMIT, PR_RECEIPT_FILE, TapPromotionReceipt, read_regular_limited};
-use crate::{OrchestratorError, exclusive_write, internal::internal};
+use crate::{OrchestratorError, internal::internal};
+use velnor_actions_contract::exclusive_write;
 
 pub(super) fn persist_result(
     root: &Path,
@@ -21,5 +22,6 @@ pub(super) fn persist_result(
         }
         return Ok(());
     }
-    exclusive_write::write_exclusive(&path, &bytes, "tap_pr_receipt")
+    exclusive_write::write_exclusive(&path, &bytes, "tap_pr_receipt")?;
+    Ok(())
 }

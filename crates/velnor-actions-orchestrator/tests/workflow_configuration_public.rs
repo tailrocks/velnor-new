@@ -61,6 +61,8 @@ mod install_profile;
 mod ledger_cli_build_env;
 #[path = "workflow_configuration_public/ledger_cli_job.rs"]
 mod ledger_cli_job;
+#[path = "workflow_configuration_public/ledger_cli_publish_script.rs"]
+mod ledger_cli_publish_script;
 #[path = "workflow_configuration_public/ledger_cli_validator.rs"]
 mod ledger_cli_validator;
 #[path = "workflow_configuration_public/ledger_cli_verify_script.rs"]

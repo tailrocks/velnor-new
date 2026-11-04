@@ -19,6 +19,7 @@ mod config_reexports;
 pub mod deps_lock;
 pub mod discover;
 pub mod errors;
+pub mod exclusive_write;
 pub mod extension_schemas;
 pub mod extensions;
 pub mod finding;
@@ -26,6 +27,7 @@ pub mod formats;
 pub mod freshness;
 pub mod github_evidence_snapshot;
 pub mod graph;
+pub mod helper_error;
 pub mod homebrew_adoption;
 pub mod homebrew_authority;
 pub mod homebrew_formula;
@@ -45,7 +47,10 @@ pub mod preview_production;
 pub mod propose;
 pub mod publication_retry;
 mod release_reexports;
+pub mod request_event;
+pub mod run_key_env;
 pub mod secrets;
+pub mod staged_reads;
 pub mod strict_json;
 pub mod targets;
 pub mod tooling;
@@ -99,13 +104,15 @@ pub use graph::{
     CachePolicy, EdgeKind, ResourceClass, ResourceDemand, TaskEdge, TaskGraph, TaskNode,
     validate_plan_edges,
 };
+pub use helper_error::HelperError;
 pub use ids::{
     artifact_id_for_crate_job, artifact_id_for_final, artifact_id_for_matrix, artifact_id_for_plan,
     is_valid_branch_name, manifest_key_for_cargo_manifest, matrix_id_for_task_group,
     matrix_key_for_id, plan_id_for_run, report_id_for_matrix, run_key_for_ci, split_shard_suffix,
     target_key, task_id_for_internal, task_id_for_stack, task_report_id_for_task,
     validate_artifact_id, validate_fetch_root, validate_id, validate_matrix_key, validate_plan_id,
-    validate_report_id, validate_run_key, validate_task_id, validate_task_report_id,
+    validate_report_id, validate_repository_slug, validate_run_key, validate_task_id,
+    validate_task_report_id,
 };
 pub use manifest::{
     ActionPin, CandidateArtifactManifest, GeneratorBinary, GeneratorLock, LockedGenerator,
@@ -121,6 +128,7 @@ pub use propose::{
     component_id_for_unit, project_root_for_unit_path,
 };
 pub use release_reexports::*;
+pub use run_key_env::{PLAN_ATTEMPT_ENV, resolve_run_key};
 pub use secrets::is_secret_env_name;
 pub use strict_json::parse_strict_json;
 pub use targets::{

@@ -18,9 +18,9 @@ pub(super) fn prepare_receipt_handoff(
     bytes: &[u8],
 ) -> Result<PathBuf, OrchestratorError> {
     let directory = temp.join("tap-release-handoff");
-    crate::exclusive_write::create_dir_no_symlink(temp, &directory)?;
+    velnor_actions_contract::exclusive_write::create_dir_no_symlink(temp, &directory)?;
     let path = directory.join("release.json");
-    crate::exclusive_write::write_exclusive(&path, bytes, "tap_release_handoff")?;
+    velnor_actions_contract::exclusive_write::write_exclusive(&path, bytes, "tap_release_handoff")?;
     let mut permissions = fs::metadata(&path)
         .map_err(|_| internal("tap_release_handoff_metadata"))?
         .permissions();
@@ -35,12 +35,12 @@ pub(super) fn prepare_plan_handoff(
     plan: &PackageReleasePlan,
 ) -> Result<PathBuf, OrchestratorError> {
     let directory = temp.join("tap-release-handoff");
-    crate::exclusive_write::create_dir_no_symlink(temp, &directory)?;
+    velnor_actions_contract::exclusive_write::create_dir_no_symlink(temp, &directory)?;
     let path = directory.join("plan.json");
     let bytes = plan
         .canonical_bytes()
         .map_err(|_| internal("tap_plan_handoff_encode"))?;
-    crate::exclusive_write::write_exclusive(&path, &bytes, "tap_plan_handoff")?;
+    velnor_actions_contract::exclusive_write::write_exclusive(&path, &bytes, "tap_plan_handoff")?;
     let mut permissions = fs::metadata(&path)
         .map_err(|_| internal("tap_plan_handoff_metadata"))?
         .permissions();

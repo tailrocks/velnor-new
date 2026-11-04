@@ -27,7 +27,7 @@ fn capture_until(operation: &Operation) -> Result<Option<String>, OrchestratorEr
     let proposal = observe(operation, number)?;
     let bytes =
         canonical_json_bytes(&proposal).map_err(|_| internal("review_completion_encode"))?;
-    crate::exclusive_write::write_exclusive_until(
+    velnor_actions_contract::exclusive_write::write_exclusive_until(
         &operation.temp.join(state::PROPOSAL_NAME),
         &bytes,
         "review_completion_proposal",

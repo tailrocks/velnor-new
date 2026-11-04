@@ -150,7 +150,7 @@ fn fetch_extract(
             if dependency { "dependency" } else { "primary" }
         );
         let verified = tool_home.join("verified").join(&name);
-        crate::exclusive_write::write_exclusive_until(
+        velnor_actions_contract::exclusive_write::write_exclusive_until(
             &verified,
             &bytes,
             "qualified_tool_archive",

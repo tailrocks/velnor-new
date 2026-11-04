@@ -9,7 +9,7 @@ use velnor_actions_mise::{PinnedTool, PinnedToolExec, ToolCatalog};
 
 use crate::OrchestratorError;
 use crate::internal::internal;
-use crate::origin::validate_repository_slug;
+use velnor_actions_contract::validate_repository_slug;
 
 const MAX_API_JSON_BYTES: usize = 1_048_576;
 const GH_API_TIMEOUT: Duration = Duration::from_secs(60);

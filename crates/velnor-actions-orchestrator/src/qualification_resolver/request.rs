@@ -78,10 +78,10 @@ fn validate_runner_request(
         crate::safe_read::read_event_file(&payload_path, crate::safe_read::MAX_REPO_FILE_BYTES)?;
     let value: serde_json::Value =
         serde_json::from_str(&payload).map_err(|_| internal("malformed_event_payload"))?;
-    let actual = crate::request_event::qualification_dispatch_for_parts(
+    let actual = velnor_actions_contract::request_event::qualification_dispatch_for_parts(
         &event_name,
         &value,
-        crate::request_event::QualificationRunnerContext {
+        velnor_actions_contract::request_event::QualificationRunnerContext {
             repository: env::var(crate::origin::GITHUB_REPOSITORY_ENV)
                 .ok()
                 .as_deref(),

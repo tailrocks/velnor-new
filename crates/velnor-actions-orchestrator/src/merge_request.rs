@@ -13,10 +13,10 @@ use velnor_actions_contract::{
 use self::needs_channel::{NEEDS_ENV, parse_needs};
 use crate::OrchestratorError;
 use crate::internal::{internal, internal_contract};
-use crate::internal_request::resolve_run_key;
-use crate::request_event::{
+use velnor_actions_contract::request_event::{
     QualificationRunnerContext, qualification_dispatch_for_parts, workflow_event_for,
 };
+use velnor_actions_contract::resolve_run_key;
 
 pub fn assemble_merge_request(run_key: &str, run_dir: &Path) -> Result<String, OrchestratorError> {
     let needs = std::env::var(NEEDS_ENV).ok();
@@ -90,7 +90,7 @@ pub(crate) fn assemble_with_needs(
 const GROUP_LEDGERS_FILENAME: &str = "group-ledgers.json";
 
 fn read_group_ledgers(run_dir: &Path, errors: &mut Vec<String>) -> Vec<serde_json::Value> {
-    match crate::retrieve_reports::read_staged_text(
+    match velnor_actions_contract::staged_reads::read_staged_text(
         &run_dir.join(GROUP_LEDGERS_FILENAME),
         MAX_ASSEMBLY_JSON_BYTES,
     ) {
@@ -167,7 +167,7 @@ fn resolve_actual_event(
     };
     match workflow_event_for(name, &payload) {
         Ok(event) => Some(event),
-        Err(OrchestratorError::Internal { problem }) => {
+        Err(velnor_actions_contract::HelperError::Internal { problem }) => {
             errors.push(problem);
             None
         }
@@ -211,7 +211,7 @@ fn resolve_actual_qualification(
         },
     ) {
         Ok(context) => context,
-        Err(OrchestratorError::Internal { problem }) => {
+        Err(velnor_actions_contract::HelperError::Internal { problem }) => {
             errors.push(problem);
             None
         }
@@ -241,9 +241,9 @@ pub(crate) fn write_merge_request_to(
     let path = request_path.to_path_buf();
     let request = assemble_merge_request(run_key, run_dir)?;
     if let Some(parent) = path.parent() {
-        crate::exclusive_write::create_dir_no_symlink(anchor, parent)?;
+        velnor_actions_contract::exclusive_write::create_dir_no_symlink(anchor, parent)?;
     }
-    crate::exclusive_write::write_exclusive(&path, request.as_bytes(), "request")?;
+    velnor_actions_contract::exclusive_write::write_exclusive(&path, request.as_bytes(), "request")?;
     Ok(path)
 }
 
@@ -274,7 +274,7 @@ fn read_json_with_limit(
     max_bytes: u64,
     errors: &mut Vec<String>,
 ) -> serde_json::Value {
-    match crate::retrieve_reports::read_staged_text(&run_dir.join(name), max_bytes) {
+    match velnor_actions_contract::staged_reads::read_staged_text(&run_dir.join(name), max_bytes) {
         Ok(text) => {
             if let Ok(value) = parse_strict_json(&text) {
                 value
