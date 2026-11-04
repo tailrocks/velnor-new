@@ -16,7 +16,7 @@ use velnor_actions_workflow_renderer::plan_sources::state_select::{SealRoot, sta
 use crate::gc1_scene::{Scene, fail};
 
 pub(crate) const REPO: &str = "tailrocks/velnor-new";
-pub(crate) const SIGNER: &str = "tailrocks/velnor-new/.github/workflows/ci.yml";
+pub(crate) const SIGNER: &str = "tailrocks/velnor-new/.github/workflows/state-seal.yml";
 pub(crate) const MAIN: &str = "refs/heads/main";
 pub(crate) const PULL: &str = "refs/pull/9/merge";
 pub(crate) const ENTRY_ID: u64 = 7001;
@@ -78,6 +78,11 @@ case "$verb" in
     [ "$mode" = usage_fail ] && exit 1
     read -r usage < "$d/usage"
     printf '%s\n' "$usage"
+    ;;
+  "api repos/${GITHUB_REPOSITORY:?}/git/ref/"*)
+    [ "$mode" = tip_fail ] && exit 1
+    read -r tip < "$d/tip" || exit 1
+    printf '%s\n' "$tip"
     ;;
   "api -X")
     [ "$1" = DELETE ] || exit 2
@@ -175,6 +180,11 @@ impl Gh {
         gh.refuse_delete(&[])?;
         gh.clear_log()?;
         Ok(gh)
+    }
+
+    pub(crate) fn tip(&self, sha: &str) -> Result<(), Box<dyn Error>> {
+        std::fs::write(self.dir.join("tip"), format!("{sha}\n"))?;
+        Ok(())
     }
 
     pub(crate) fn lag(&self, empty_listings: u32) -> Result<(), Box<dyn Error>> {

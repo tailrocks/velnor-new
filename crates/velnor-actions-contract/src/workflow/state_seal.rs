@@ -55,6 +55,12 @@ pub const STATE_SEAL_BIND_CONDITION: &str = "steps.state-seal-save.outcome == 's
 
 pub const STATE_SEAL_RETIRE_CONDITION: &str = STATE_SEAL_ATTEST_CONDITION;
 
+pub const STATE_SEAL_TIP_CONDITION: &str = STATE_SEAL_SUBJECT_CONDITION;
+
+pub const STATE_SEAL_ADMIT_CONDITION: &str = "steps.state-seal-subject.outputs.sealed == 'true' && steps.state-seal-tip.outputs.current == 'true'";
+
+pub const STATE_SEAL_TIP_OUTPUT: &str = "current";
+
 pub const STATE_SEAL_ATTEST_CONDITION: &str = "steps.state-seal-bind.outputs.bound == 'true'";
 
 pub const STATE_SEAL_VERIFY_LIMIT: usize = 3;
@@ -82,11 +88,22 @@ pub const STATE_SEAL_PREFIX_ENV: &str = "VELNOR_STATE_SEAL_PREFIX";
 
 pub const STATE_SEAL_ATTESTED_ENV: &str = "VELNOR_STATE_ATTESTED";
 
-pub const STATE_SEAL_SIGNER_REF_ENV: &str = "GITHUB_WORKFLOW_REF";
+pub const STATE_SEAL_WORKFLOW_PATH: &str = ".github/workflows/state-seal.yml";
+
+pub const STATE_SEAL_WORKFLOW_NAME: &str = "State seal";
+
+pub const STATE_SEAL_CONCURRENCY_GROUP: &str = "velnor-${{ github.workflow }}-${{ github.ref }}";
+
+pub const STATE_SEAL_CONCURRENCY_CANCEL: &str = "false";
 
 pub const STATE_SEAL_ATTESTED_SUFFIX: &str = "_attested";
 
 pub const STATE_SEAL_ATTESTED_PREFIX: &str = "state_";
+
+#[must_use]
+pub fn state_seal_signer_workflow() -> String {
+    format!("$GITHUB_REPOSITORY/{STATE_SEAL_WORKFLOW_PATH}")
+}
 
 #[must_use]
 pub fn state_producer_job_id(root: &RootSlug) -> String {

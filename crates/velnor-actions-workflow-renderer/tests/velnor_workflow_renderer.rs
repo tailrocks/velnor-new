@@ -56,3 +56,4 @@ mod state_v4_restore;
 mod state_v4_seal;
 mod state_v4_select;
 mod state_v4_snapshot;
+mod state_v4_tip;

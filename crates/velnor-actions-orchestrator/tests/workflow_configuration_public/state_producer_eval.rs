@@ -165,7 +165,11 @@ pub(super) fn seal_runs(
     evaluates(seal.condition.as_deref(), &run, &needs)
 }
 
-pub(super) fn seal_steps_run(seal: &Job, admitted: bool) -> Result<Vec<StepRole>, Box<dyn Error>> {
+pub(super) fn seal_steps_run(
+    seal: &Job,
+    admitted: bool,
+    tip_current: bool,
+) -> Result<Vec<StepRole>, Box<dyn Error>> {
     let mut run = Run {
         failed: false,
         outputs: BTreeMap::from([(("state-seal-subject", "sealed"), "true")]),
@@ -182,6 +186,12 @@ pub(super) fn seal_steps_run(seal: &Job, admitted: bool) -> Result<Vec<StepRole>
         };
         ran.push(role);
         match role {
+            StepRole::StateSealTip => {
+                run.outputs.insert(
+                    ("state-seal-tip", "current"),
+                    if tip_current { "true" } else { "false" },
+                );
+            }
             StepRole::StateSealAdmit => {
                 run.outputs.insert(
                     ("state-seal-admit", "admitted"),

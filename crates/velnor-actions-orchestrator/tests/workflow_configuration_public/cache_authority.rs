@@ -16,6 +16,7 @@ use super::waste_oracle::{Files, files_of, files_of_repo};
 use super::workflow_configuration_fixture;
 
 const CI_PATH: &str = ".github/workflows/ci.yml";
+const STATE_SEAL_PATH: &str = ".github/workflows/state-seal.yml";
 const QUALIFICATION_PATH: &str = ".github/workflows/qualification.yml";
 const SOURCES_PRODUCER: &str = "sources-producer";
 const STATE_SEAL_PREFIX: &str = "state-seal-";
@@ -30,7 +31,7 @@ const NON_DEFAULT_BRANCH: &str =
 const TRUSTED_PUSH: &str = "github.event_name == 'push'";
 const PROTECTED_REF: &str = "github.ref_protected == true";
 const DEFAULT_MODE: &str = "DEFAULT";
-const COMMITTED_WORKFLOWS: [&str; 11] = [
+const COMMITTED_WORKFLOWS: [&str; 12] = [
     "cache-prune.yml",
     "ci.yml",
     "freshness.yml",
@@ -42,6 +43,7 @@ const COMMITTED_WORKFLOWS: [&str; 11] = [
     "product-release.yml",
     "qualification.yml",
     "source-qualification.yml",
+    "state-seal.yml",
 ];
 
 struct JobModes {
@@ -113,10 +115,12 @@ fn expected_writer(path: &str, id: &str) -> bool {
     if path == QUALIFICATION_PATH {
         return QUALIFICATION_WRITERS.contains(&id);
     }
-    id.starts_with("tools-producer-")
-        || id.starts_with("providers-producer-")
-        || id == SOURCES_PRODUCER
-        || id.starts_with(STATE_SEAL_PREFIX)
+    if path == STATE_SEAL_PATH {
+        return id.starts_with("tools-producer-")
+            || id == SOURCES_PRODUCER
+            || id.starts_with(STATE_SEAL_PREFIX);
+    }
+    id.starts_with("providers-producer-")
 }
 
 fn workflow_files(files: &Files) -> impl Iterator<Item = (&String, &String)> {
@@ -196,11 +200,15 @@ fn every_generated_workflow_resolves_read_except_declared_writers() -> Result<()
         let files = rendered(policy)?;
         let writers = check_files(&label, &files);
         let ci = writers.get(CI_PATH).ok_or("ci.yml not rendered")?;
+        assert!(ci.is_empty(), "{label}: ci.yml holds writers: {ci:?}");
+        let sealed = writers
+            .get(STATE_SEAL_PATH)
+            .ok_or("state-seal.yml not rendered")?;
         assert!(
-            ci.iter().any(|id| id.starts_with("tools-producer-")),
-            "{label}: no tools producer writes: {ci:?}"
+            sealed.iter().any(|id| id.starts_with("tools-producer-")),
+            "{label}: no tools producer writes: {sealed:?}"
         );
-        assert!(ci.contains(SOURCES_PRODUCER), "{label}: {ci:?}");
+        assert!(sealed.contains(SOURCES_PRODUCER), "{label}: {sealed:?}");
         assert!(workflow_files(&files).count() >= 2, "{label}");
     }
     let repo = workflow_configuration_fixture::make_repo(SCHEDULED_SUITES_CONFIG)?;
@@ -229,7 +237,11 @@ fn every_generated_workflow_resolves_read_except_declared_writers() -> Result<()
         )
     );
     let ci = writers.get(CI_PATH).ok_or("committed ci.yml missing")?;
-    assert!(ci.contains(SOURCES_PRODUCER), "{ci:?}");
+    assert!(ci.is_empty(), "committed ci.yml holds writers: {ci:?}");
+    let sealed = writers
+        .get(STATE_SEAL_PATH)
+        .ok_or("committed state-seal.yml missing")?;
+    assert!(sealed.contains(SOURCES_PRODUCER), "{sealed:?}");
     Ok(())
 }
 

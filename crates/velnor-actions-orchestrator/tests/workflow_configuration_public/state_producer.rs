@@ -5,6 +5,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
 
 use velnor_actions_contract::workflow::ProducerKind;
+use velnor_actions_contract::workflow::state_seal::STATE_SEAL_WORKFLOW_PATH;
 use velnor_actions_contract::workflow::state_seal::{
     STATE_PRODUCER_LANE_CONDITION, STATE_SEAL_PENDING_BYTES_ENV, STATE_SEAL_PENDING_ENV,
 };
@@ -31,6 +32,15 @@ pub(super) struct Built {
     pub(super) ir: WorkflowIr,
     pub(super) jobs: BTreeMap<String, Job>,
     pub(super) ci: String,
+    pub(super) seal: String,
+}
+
+pub(super) fn text_of<'a>(built: &'a Built, id: &str) -> &'a str {
+    if built.seal.contains(&format!("\n  {id}:\n")) {
+        &built.seal
+    } else {
+        &built.ci
+    }
 }
 
 pub(super) fn build() -> Result<Built, Box<dyn Error>> {
@@ -38,14 +48,20 @@ pub(super) fn build() -> Result<Built, Box<dyn Error>> {
     let prepared = prepare(repo.path())?;
     let jobs = finalized_jobs(&prepared)?;
     let tree = render_staged_tree(&prepared)?;
-    let ci = files_of(&tree)?
+    let files = files_of(&tree)?;
+    let ci = files
         .get(WORKFLOW_PATH)
         .ok_or("ci.yml was not rendered")?
+        .clone();
+    let seal = files
+        .get(STATE_SEAL_WORKFLOW_PATH)
+        .ok_or("state-seal.yml was not rendered")?
         .clone();
     Ok(Built {
         ir: prepared.workflow.ir.clone(),
         jobs,
         ci,
+        seal,
     })
 }
 
@@ -159,7 +175,7 @@ fn producer_runs_the_crate_job_lane_records() -> Result<(), Box<dyn Error>> {
                 .all(|step| !step.name.contains("ledger") && !step.name.contains("reports")),
             "{root}: the producer has no ledger or report step"
         );
-        let block = rendered_job_block(&built.ci, producer_id)?;
+        let block = rendered_job_block(text_of(&built, producer_id), producer_id)?;
         assert!(
             block.contains("MBX_BUILD_SCRIPT_EXECUTION: \"0\""),
             "{producer_id}"
@@ -175,7 +191,7 @@ fn producer_runs_the_crate_job_lane_records() -> Result<(), Box<dyn Error>> {
         }
     }
     for (id, consumer) in built.jobs.iter().filter(|(id, _)| id.starts_with("rust-")) {
-        let block = rendered_job_block(&built.ci, id)?;
+        let block = rendered_job_block(text_of(&built, id), id)?;
         assert!(
             consumer
                 .needs
@@ -233,7 +249,7 @@ fn writers_are_chained_by_needs_without_concurrency() -> Result<(), Box<dyn Erro
         .chain(ROOTS.iter().flat_map(|(p, s)| [*p, *s]))
     {
         assert!(
-            !rendered_job_block(&built.ci, id)?.contains("concurrency:"),
+            !rendered_job_block(text_of(&built, id), id)?.contains("concurrency:"),
             "{id} carries a concurrency group"
         );
     }
@@ -246,7 +262,7 @@ fn writers_are_chained_by_needs_without_concurrency() -> Result<(), Box<dyn Erro
                 .any(|need| need == producer || need == seal)
         );
     }
-    let gate = rendered_job_block(&built.ci, "required-gate")?;
+    let gate = rendered_job_block(text_of(&built, "required-gate"), "required-gate")?;
     assert!(!gate.contains("state-producer") && !gate.contains("state-seal"));
     Ok(())
 }
@@ -261,7 +277,7 @@ fn only_attest_jobs_hold_actions_write() -> Result<(), Box<dyn Error>> {
         assert_eq!(writes, seals.contains(&id.as_str()), "{id}");
     }
     for seal in &seals {
-        let block = rendered_job_block(&built.ci, seal)?;
+        let block = rendered_job_block(text_of(&built, seal), seal)?;
         let permissions = effective(job(&built.jobs, seal)?, &built.ir);
         assert_eq!(permissions.id_token, PermissionLevel::Write);
         assert_eq!(permissions.attest, PermissionLevel::Write);

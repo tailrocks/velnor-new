@@ -16,6 +16,7 @@ Repository: <repo>
 .github/velnor/task-execution-manifest-v1.json
 .github/workflows/cache-prune.yml
 .github/workflows/ci.yml
+.github/workflows/state-seal.yml
 mise.lock not found; Velnor will not create or refresh it
 mise.toml not found; Velnor will use its pinned tools
 nextest_recommendation: no explicit test-runner usage; defaulting to `cargo test`

@@ -8,7 +8,7 @@ use velnor_actions_contract::workflow::state_seal::{
 };
 use velnor_actions_contract::{Job, Step, StepRole};
 
-use super::state_producer::{ROOTS, build, job};
+use super::state_producer::{ROOTS, build, job, text_of};
 use super::state_producer_eval::{seal_runs, seal_steps_run, simulate};
 use super::support::rendered_job_block;
 
@@ -97,7 +97,7 @@ fn every_rust_job_and_the_producer_end_with_a_stats_step_that_always_runs()
             return Err(format!("{id} has {} stats steps", stats.len()).into());
         };
         assert_eq!(step.condition.as_deref(), Some("always()"), "{id}");
-        let block = rendered_job_block(&built.ci, id)?;
+        let block = rendered_job_block(text_of(&built, id), id)?;
         let at = block
             .find("      - name: MBX stats\n")
             .ok_or_else(|| format!("{id} renders no stats step"))?;
@@ -108,7 +108,7 @@ fn every_rust_job_and_the_producer_end_with_a_stats_step_that_always_runs()
             "{id}: {rendered:?}"
         );
         assert!(
-            block.contains("MBX_SUMMARY: ci") || built.ci.contains("MBX_SUMMARY: ci"),
+            block.contains("MBX_SUMMARY: ci") || text_of(&built, id).contains("MBX_SUMMARY: ci"),
             "{id}: no MBX_SUMMARY"
         );
         checked += 1;
@@ -122,7 +122,7 @@ fn a_refused_admit_leaves_save_bind_and_attest_unrun() -> Result<(), Box<dyn Err
     let built = build()?;
     let (_, seal_id) = ROOTS[0];
     let seal = job(&built.jobs, seal_id)?;
-    let admitted = seal_steps_run(seal, true)?;
+    let admitted = seal_steps_run(seal, true, true)?;
     for role in [
         StepRole::StateSealSave,
         StepRole::StateSealBind,
@@ -131,7 +131,7 @@ fn a_refused_admit_leaves_save_bind_and_attest_unrun() -> Result<(), Box<dyn Err
     ] {
         assert!(admitted.contains(&role), "an admitted run skipped {role:?}");
     }
-    let refused = seal_steps_run(seal, false)?;
+    let refused = seal_steps_run(seal, false, true)?;
     assert!(refused.contains(&StepRole::StateSealAdmit));
     for role in [
         StepRole::StateSealSave,
@@ -143,6 +143,43 @@ fn a_refused_admit_leaves_save_bind_and_attest_unrun() -> Result<(), Box<dyn Err
             !refused.contains(&role),
             "a refused admit still ran {role:?}"
         );
+    }
+    Ok(())
+}
+
+#[test]
+fn a_stale_head_saves_binds_and_attests_nothing() -> Result<(), Box<dyn Error>> {
+    let built = build()?;
+    for (_, seal_id) in ROOTS {
+        let seal = job(&built.jobs, seal_id)?;
+        let current = seal_steps_run(seal, true, true)?;
+        for role in [
+            StepRole::StateSealTip,
+            StepRole::StateSealAdmit,
+            StepRole::StateSealSave,
+            StepRole::StateSealBind,
+            StepRole::StateSealAttest,
+            StepRole::StateSealRetire,
+        ] {
+            assert!(
+                current.contains(&role),
+                "{seal_id}: a current head skipped {role:?}"
+            );
+        }
+        let stale = seal_steps_run(seal, true, false)?;
+        assert!(stale.contains(&StepRole::StateSealTip), "{seal_id}");
+        for role in [
+            StepRole::StateSealAdmit,
+            StepRole::StateSealSave,
+            StepRole::StateSealBind,
+            StepRole::StateSealAttest,
+            StepRole::StateSealRetire,
+        ] {
+            assert!(
+                !stale.contains(&role),
+                "{seal_id}: a stale head still ran {role:?}"
+            );
+        }
     }
     Ok(())
 }

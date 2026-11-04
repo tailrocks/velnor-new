@@ -19,7 +19,10 @@ const NEEDS_PLAN: &str = "needs.plan.outputs.";
 static EMPTY_ENV: std::sync::LazyLock<BTreeMap<String, String>> =
     std::sync::LazyLock::new(BTreeMap::new);
 
-pub(crate) fn consumed(jobs: &BTreeMap<String, Job>) -> Result<Vec<(String, String)>, RenderError> {
+pub(crate) fn consumed(
+    jobs: &BTreeMap<String, Job>,
+    trust_always: bool,
+) -> Result<Vec<(String, String)>, RenderError> {
     let mut names = BTreeSet::new();
     let texts = jobs.values().flat_map(|job| {
         let steps = job.steps.iter().flat_map(step_texts);
@@ -43,7 +46,9 @@ pub(crate) fn consumed(jobs: &BTreeMap<String, Job>) -> Result<Vec<(String, Stri
             .any(|step| step.id == Some(StepId::CacheKeys))
     });
     if has_key_step {
-        names.insert(PLAN_CACHE_TRUST_OUTPUT.to_owned());
+        if trust_always {
+            names.insert(PLAN_CACHE_TRUST_OUTPUT.to_owned());
+        }
     } else if names.is_empty() {
         return Ok(Vec::new());
     } else {

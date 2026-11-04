@@ -185,9 +185,8 @@ pub fn state_seal_admit_step(pending: &[String], pending_bytes: u64) -> Result<S
     )?;
     step.id = Some(velnor_actions_contract::StepId::StateSealAdmit);
     step.role = Some(StepRole::StateSealAdmit);
-    step.condition = Some(
-        velnor_actions_contract::workflow::state_seal::STATE_SEAL_SUBJECT_CONDITION.to_owned(),
-    );
+    step.condition =
+        Some(velnor_actions_contract::workflow::state_seal::STATE_SEAL_ADMIT_CONDITION.to_owned());
     Ok(step)
 }
 
