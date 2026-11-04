@@ -102,7 +102,10 @@ pub(super) fn crate_id(jobs: &BTreeMap<String, Job>) -> Result<String, Box<dyn E
         .ok_or_else(|| "no rust crate job".into())
 }
 
-pub(super) fn foreign_digest(jobs: &BTreeMap<String, Job>, own: &str) -> Result<String, Box<dyn Error>> {
+pub(super) fn foreign_digest(
+    jobs: &BTreeMap<String, Job>,
+    own: &str,
+) -> Result<String, Box<dyn Error>> {
     jobs.values()
         .filter_map(identity_digest)
         .find(|digest| *digest != own)
