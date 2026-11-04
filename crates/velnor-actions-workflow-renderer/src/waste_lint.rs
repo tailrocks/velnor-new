@@ -50,7 +50,7 @@ impl WasteRule {
         match self {
             Self::JobContextEnv => crate::waste_lint_env::w2(jobs),
             Self::RustupAutoInstall => crate::waste_lint_env::w3(jobs),
-            Self::SplitToolsIdentity => Vec::new(),
+            Self::SplitToolsIdentity => crate::waste_lint_tools::w7(jobs),
         }
     }
 }
