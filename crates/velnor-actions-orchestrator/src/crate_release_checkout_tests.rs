@@ -302,7 +302,15 @@ fn checkout_fetches_exact_private_source_without_credential_files()
     fs::create_dir(&destination)?;
     let (sha, head) = seed_remote(&root, &source, &owner)?;
     let (origin, stop, count, worker) = server(root.clone())?;
-    checkout(&destination, "owner/demo", &sha, DUMMY, &origin, true)?;
+    checkout(
+        &SystemGit,
+        &destination,
+        "owner/demo",
+        &sha,
+        DUMMY,
+        &origin,
+        true,
+    )?;
     assert!(count.load(Ordering::Relaxed) > 0);
     assert_eq!(git_fixture(&destination, &["rev-parse", "HEAD"])?, sha);
     assert_eq!(
@@ -325,6 +333,7 @@ fn checkout_fetches_exact_private_source_without_credential_files()
     fs::create_dir(&wrong_auth)?;
     assert!(
         checkout(
+            &SystemGit,
             &wrong_auth,
             "owner/demo",
             &sha,
@@ -342,6 +351,7 @@ fn checkout_fetches_exact_private_source_without_credential_files()
     fs::create_dir(&missing)?;
     assert!(
         checkout(
+            &SystemGit,
             &missing,
             "owner/demo",
             &"a".repeat(40),
@@ -416,6 +426,7 @@ fn checkout_never_forwards_credentials_to_redirected_origin()
     );
     assert!(
         checkout(
+            &SystemGit,
             &destination,
             "owner/demo",
             &"a".repeat(40),
@@ -435,5 +446,49 @@ fn checkout_never_forwards_credentials_to_redirected_origin()
     let encoded =
         base64::engine::general_purpose::STANDARD.encode(format!("x-access-token:{DUMMY}"));
     assert_no_credential(&destination, &encoded)?;
+    Ok(())
+}
+
+#[test]
+fn checkout_git_runs_only_the_supplied_tool_and_exec_path() -> Result<(), Box<dyn std::error::Error>>
+{
+    use std::{cell::Cell, os::unix::fs::PermissionsExt as _};
+    struct FixtureGit {
+        binary: PathBuf,
+        directory: PathBuf,
+        verified: Cell<bool>,
+    }
+    impl GitTool for FixtureGit {
+        fn executable(&self) -> &Path {
+            &self.binary
+        }
+        fn exec_path(&self) -> Option<&Path> {
+            Some(&self.directory)
+        }
+        fn verify(&self) -> Result<(), OrchestratorError> {
+            self.verified.set(true);
+            Ok(())
+        }
+    }
+    let temp = tempfile::tempdir()?;
+    let root = temp.path().canonicalize()?;
+    let binary = root.join("git-fixture");
+    fs::write(&binary, "#!/bin/sh\nprintf '%s' \"$GIT_EXEC_PATH\"\n")?;
+    fs::set_permissions(&binary, fs::Permissions::from_mode(0o500))?;
+    let tool = FixtureGit {
+        binary,
+        directory: root.clone(),
+        verified: Cell::new(false),
+    };
+    let output = git(
+        &tool,
+        &root,
+        &["--version".into()],
+        None,
+        "https://github.com",
+        false,
+    )?;
+    assert_eq!(output, root.to_string_lossy());
+    assert!(tool.verified.get());
     Ok(())
 }

@@ -10,6 +10,41 @@ use std::{
     process::Command,
 };
 
+trait GitTool {
+    fn executable(&self) -> &Path;
+    fn exec_path(&self) -> Option<&Path>;
+    fn verify(&self) -> Result<(), OrchestratorError>;
+}
+
+impl GitTool for velnor_actions_mise::release_git_pin::VerifiedGit {
+    fn executable(&self) -> &Path {
+        self.executable()
+    }
+    fn exec_path(&self) -> Option<&Path> {
+        Some(self.exec_path())
+    }
+    fn verify(&self) -> Result<(), OrchestratorError> {
+        velnor_actions_mise::release_git_pin::verify_bundle(self.exec_path())
+            .map(|_| ())
+            .map_err(|_| internal("release_checkout_git_invalid"))
+    }
+}
+
+#[cfg(test)]
+struct SystemGit;
+#[cfg(test)]
+impl GitTool for SystemGit {
+    fn executable(&self) -> &Path {
+        Path::new("/usr/bin/git")
+    }
+    fn exec_path(&self) -> Option<&Path> {
+        None
+    }
+    fn verify(&self) -> Result<(), OrchestratorError> {
+        Ok(())
+    }
+}
+
 pub fn checkout_from_environment(mode: &str) -> Result<(), OrchestratorError> {
     let invalid = || internal("release_checkout_invalid");
     let required = |key: &str| {
@@ -40,8 +75,11 @@ pub fn checkout_from_environment(mode: &str) -> Result<(), OrchestratorError> {
         _ => return Err(invalid()),
     };
     let repository = required("GITHUB_REPOSITORY")?;
+    let runner_temp = PathBuf::from(required("RUNNER_TEMP")?);
+    let verified_git = crate::crate_release_git_bundle::acquire(&runner_temp)?;
     let token = required("GIT_TOKEN")?;
     checkout(
+        &verified_git,
         &target,
         &repository,
         &sha,
@@ -52,6 +90,7 @@ pub fn checkout_from_environment(mode: &str) -> Result<(), OrchestratorError> {
 }
 
 fn checkout(
+    git_tool: &impl GitTool,
     target: &Path,
     repository: &str,
     sha: &str,
@@ -82,6 +121,7 @@ fn checkout(
     }
     let remote = format!("{origin}/{repository}.git");
     git(
+        git_tool,
         target,
         &["init".into(), "--quiet".into()],
         None,
@@ -89,6 +129,7 @@ fn checkout(
         test_http,
     )?;
     git(
+        git_tool,
         target,
         &[
             "remote".into(),
@@ -101,6 +142,7 @@ fn checkout(
         test_http,
     )?;
     git(
+        git_tool,
         target,
         &[
             "fetch".into(),
@@ -116,6 +158,7 @@ fn checkout(
         test_http,
     )?;
     git(
+        git_tool,
         target,
         &[
             "checkout".into(),
@@ -128,6 +171,7 @@ fn checkout(
         test_http,
     )?;
     if git(
+        git_tool,
         target,
         &["rev-parse".into(), "HEAD".into()],
         None,
@@ -137,6 +181,7 @@ fn checkout(
     .trim()
         != sha
         || !git(
+            git_tool,
             target,
             &[
                 "status".into(),
@@ -149,6 +194,7 @@ fn checkout(
         )?
         .is_empty()
         || git(
+            git_tool,
             target,
             &["rev-parse".into(), "--is-shallow-repository".into()],
             None,
@@ -164,6 +210,7 @@ fn checkout(
 }
 
 fn git(
+    git_tool: &impl GitTool,
     target: &Path,
     args: &[OsString],
     token: Option<&str>,
@@ -193,7 +240,8 @@ fn git(
             format!("Authorization: Basic {encoded}"),
         ));
     }
-    let mut command = Command::new("/usr/bin/git");
+    git_tool.verify()?;
+    let mut command = Command::new(git_tool.executable());
     command
         .args(args)
         .current_dir(target)
@@ -207,6 +255,9 @@ fn git(
         .env("GIT_LFS_SKIP_SMUDGE", "1")
         .env("GIT_ATTR_NOSYSTEM", "1")
         .env("GIT_CONFIG_COUNT", options.len().to_string());
+    if let Some(path) = git_tool.exec_path() {
+        command.env("GIT_EXEC_PATH", path);
+    }
     for (index, (key, value)) in options.into_iter().enumerate() {
         command
             .env(format!("GIT_CONFIG_KEY_{index}"), key)
