@@ -30,13 +30,18 @@ fn generated_source_require_rehearsal() -> Result<(), Box<dyn Error>> {
 #[test]
 fn generated_candidate_receipt_rejects_unprotected_environment() -> Result<(), Box<dyn Error>> {
     if std::env::var_os("VELNOR_NATIVE_RECEIPT_CHILD").is_some() {
+        let operation = std::env::var("VELNOR_NATIVE_OPERATION")?;
+        assert!(matches!(
+            operation.as_str(),
+            "candidate-receipt" | "verify-admission"
+        ));
         assert_eq!(
             std::env::var("VELNOR_TEST_COMMAND_ARGS")?,
-            "crate-release candidate-receipt"
+            format!("crate-release {operation}")
         );
-        assert!(matches!(super::run_crate_release("candidate-receipt"),
+        assert!(matches!(super::run_crate_release(&operation),
             Err(crate::OrchestratorError::Internal { problem }) if problem == "crate_release_authority_not_qualified"));
-        return super::run_qualified_crate_release("candidate-receipt").map_err(Into::into);
+        return super::run_qualified_crate_release(&operation).map_err(Into::into);
     }
     if std::env::var_os("VELNOR_CANDIDATE_CHILD").is_some() {
         assert_eq!(
@@ -68,17 +73,7 @@ fn rehearse_supplied_candidate() -> Result<(), Box<dyn Error>> {
         "#!/bin/sh\nexport VELNOR_TEST_COMMAND_ARGS=\"$*\"\nexec \"$VELNOR_TEST_BINARY\" --exact crate_release_runtime::rehearsal::generated_candidate_receipt_rejects_unprotected_environment\n",
     )?;
     std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o755))?;
-    let script = generated_script("release-preflight", "Release candidate-receipt")?;
-    let output = std::process::Command::new("bash")
-        .args(["-e", "-c", &script])
-        .env("VELNOR_NATIVE_RECEIPT_CHILD", "1")
-        .env("VELNOR_TEST_BINARY", std::env::current_exe()?)
-        .env("RUSTUP_HOME", root.join("velnor/rustup"))
-        .env("MISE_RUSTUP_HOME", root.join("velnor/rustup"))
-        .env("CARGO_HOME", root.join("velnor/cargo"))
-        .env("MISE_CARGO_HOME", root.join("velnor/cargo"))
-        .env("RUSTUP_AUTO_INSTALL", "0")
-        .output()?;
+    let output = supplied_step(&root, "release-preflight", "candidate-receipt")?;
     let receipt = root.join("velnor-crate-release-receipt.json");
     if std::env::var("VELNOR_NATIVE_EXPECT_SUCCESS")? != "1" {
         assert!(!output.status.success());
@@ -123,7 +118,52 @@ fn rehearse_supplied_candidate() -> Result<(), Box<dyn Error>> {
         && baseline_checksum == &std::env::var("VELNOR_NATIVE_EXPECT_CHECKSUM")?
         && checker_sha256 == velnor_actions_mise::catalog::qualified_cargo_semver_checks("ubuntu-24.04").ok_or("checker")?.executable_sha256)
     );
+    if std::env::var_os("VELNOR_NATIVE_MUTATE_AFTER_RECEIPT").is_some() {
+        let workspace =
+            std::path::PathBuf::from(std::env::var_os("GITHUB_WORKSPACE").ok_or("workspace")?);
+        std::fs::write(
+            workspace.join("release-source/src/lib.rs"),
+            b"pub fn changed() {}\n",
+        )?;
+    }
+    let output_path = root.join("github-output");
+    std::fs::write(&output_path, "")?;
+    let output = supplied_step(&root, "release-publish", "verify-admission")?;
+    let actual = String::from_utf8_lossy(&output.stdout).to_string()
+        + &String::from_utf8_lossy(&output.stderr);
+    let expected_error = std::env::var("VELNOR_NATIVE_VERIFY_ERROR")?;
+    if expected_error.is_empty() {
+        assert!(output.status.success(), "{actual}");
+        assert_eq!(
+            std::fs::read_to_string(output_path)?,
+            "release_mode=publish\n"
+        );
+    } else {
+        assert!(!output.status.success());
+        assert!(actual.contains(&expected_error), "{actual}");
+        assert_eq!(std::fs::read_to_string(output_path)?, "");
+    }
     Ok(())
+}
+
+fn supplied_step(
+    root: &Path,
+    job: &str,
+    operation: &str,
+) -> Result<std::process::Output, Box<dyn Error>> {
+    let script = generated_script(job, &format!("Release {operation}"))?;
+    Ok(std::process::Command::new("bash")
+        .args(["-e", "-c", &script])
+        .env("VELNOR_NATIVE_RECEIPT_CHILD", "1")
+        .env("VELNOR_NATIVE_OPERATION", operation)
+        .env("VELNOR_TEST_BINARY", std::env::current_exe()?)
+        .env("GITHUB_OUTPUT", root.join("github-output"))
+        .env("RUSTUP_HOME", root.join("velnor/rustup"))
+        .env("MISE_RUSTUP_HOME", root.join("velnor/rustup"))
+        .env("CARGO_HOME", root.join("velnor/cargo"))
+        .env("MISE_CARGO_HOME", root.join("velnor/cargo"))
+        .env("RUSTUP_AUTO_INSTALL", "0")
+        .output()?)
 }
 
 fn rehearse_candidate_denial() -> Result<(), Box<dyn Error>> {

@@ -7,3 +7,5 @@ Run `drive.py` inside a network-disabled Linux container with the Velnor checkou
 Run `python3 /fixture/drive.py success`, then `checksum` and `source`, each with an empty workspace and runner. The success case checks the generated receipt, baseline checksum, and checker identity. The other cases require the exact checksum and changed-source errors without a receipt. Every case checks that the fake services received no mutation.
 
 The test-only entry point leaves the production authority guard enabled. This rehearsal does not test protected GitHub jobs, real OIDC, publication, or the release coordinator.
+
+The `success` case also runs the rendered publisher admission step and requires `release_mode=publish`. The `approval` case gives that step the wrong approval comment; `verify-source` changes source after the receipt is made. Both require an error and no admission output.

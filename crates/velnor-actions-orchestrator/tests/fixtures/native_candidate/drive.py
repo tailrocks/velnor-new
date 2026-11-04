@@ -27,10 +27,16 @@ try:
     env.update(
         {
             "VELNOR_TEST_NATIVE_REHEARSAL": "1",
-            "VELNOR_NATIVE_EXPECT_SUCCESS": "1" if mode == "success" else "0",
+            "VELNOR_NATIVE_EXPECT_SUCCESS": "0"
+            if mode in ("checksum", "source")
+            else "1",
             "VELNOR_NATIVE_EXPECT_ERROR": {
                 "checksum": "crate_release_semver_unverified",
                 "source": "crate_release_source_content_mismatch",
+            }.get(mode, ""),
+            "VELNOR_NATIVE_VERIFY_ERROR": {
+                "approval": "crate_release_environment_approval",
+                "verify-source": "crate_release_source_content_mismatch",
             }.get(mode, ""),
             "VELNOR_NATIVE_EXPECT_SOURCE": info["source_sha"],
             "VELNOR_NATIVE_EXPECT_PACKAGE": info["package"],
@@ -52,6 +58,8 @@ try:
             "RUNNER_TEMP": "/runner/" + mode,
         }
     )
+    if mode == "verify-source":
+        env["VELNOR_NATIVE_MUTATE_AFTER_RECEIPT"] = "1"
     subprocess.run(
         [
             "cargo",

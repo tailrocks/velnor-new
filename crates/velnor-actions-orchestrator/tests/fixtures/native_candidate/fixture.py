@@ -128,6 +128,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     "comment": f"I reviewed the complete release policy at {policy} and source {source_sha}, and authorize this source for run 12.",
                 }
             ]
+            if os.environ.get("VELNOR_FIXTURE_FAILURE") == "approval":
+                obj[0]["comment"] = "Unrelated approval"
         elif p.startswith("/repos/owner/project/actions/runs/12"):
             obj = {
                 "id": 12,
