@@ -4936,3 +4936,50 @@ fn execute_two_new_workspace_crates(
 #[cfg(unix)]
 #[path = "crate_release_coordinator_rehearsal.rs"]
 mod coordinator_rehearsal;
+
+fn render_supplied_upload_config(bytes: &[u8], package: &str) -> Result<String, OrchestratorError> {
+    let intent = crate::crate_release_runtime::parse_crate_release_intent(bytes)?;
+    super::fixture_upload_config(&intent, package)
+}
+
+fn write_supplied_upload_config(
+    input: &Path,
+    package: &str,
+    output: &Path,
+) -> Result<(), Box<dyn std::error::Error>> {
+    use std::io::Write as _;
+    let config = render_supplied_upload_config(&fs::read(input)?, package)?;
+    fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(output)?
+        .write_all(config.as_bytes())?;
+    Ok(())
+}
+
+#[test]
+fn supplied_intent_renders_actual_upload_config() -> Result<(), Box<dyn std::error::Error>> {
+    let temp = tempfile::tempdir()?;
+    let (intent, _, _, _) = make_fixture(temp.path())?;
+    let bytes = toml::to_string(&intent)?;
+    let package = &intent.packages[0];
+    let config = render_supplied_upload_config(bytes.as_bytes(), package)?;
+    let parsed: toml::Value = toml::from_str(&config)?;
+    assert_eq!(
+        parsed["package"][0]["name"].as_str(),
+        Some(package.as_str())
+    );
+    assert!(render_supplied_upload_config(bytes.as_bytes(), "not-selected").is_err());
+    assert!(render_supplied_upload_config(b"invalid", package).is_err());
+    let invalid = temp.path().join("invalid-intent");
+    let output = temp.path().join("output");
+    fs::write(&invalid, b"invalid")?;
+    assert!(write_supplied_upload_config(&invalid, package, &output).is_err());
+    assert!(!output.exists());
+    if let Some(path) = std::env::var_os("VELNOR_TEST_UPLOAD_INTENT") {
+        let package = std::env::var("VELNOR_TEST_UPLOAD_PACKAGE")?;
+        let output = std::env::var_os("VELNOR_TEST_UPLOAD_OUTPUT").ok_or("output path")?;
+        write_supplied_upload_config(Path::new(&path), &package, Path::new(&output))?;
+    }
+    Ok(())
+}
