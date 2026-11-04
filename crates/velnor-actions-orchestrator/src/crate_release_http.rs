@@ -245,11 +245,11 @@ impl GitHubAdmissionHttp {
     }
 
     #[cfg(test)]
-    pub(crate) fn test_client(origin: String) -> Result<Self, OrchestratorError> {
+    pub(crate) fn test_client(origin: &str) -> Result<Self, OrchestratorError> {
         Ok(Self {
             token: "test-credential".to_owned(),
             deadline: Instant::now() + std::time::Duration::from_secs(15),
-            origin: parse_test_loopback_origin(&origin)?,
+            origin: parse_test_loopback_origin(origin)?,
             responses: RefCell::new(BTreeMap::new()),
         })
     }
@@ -798,8 +798,7 @@ fn valid_route(route: &str) -> bool {
         ["git", "matching-refs", "heads", prefix] => {
             prefix.starts_with("release-plz-") && valid_segment(prefix) && query.is_empty()
         }
-        ["git", "trees", sha] => valid_sha(sha) && query.is_empty(),
-        ["git", "tags" | "commits" | "blobs", sha] => valid_sha(sha) && query.is_empty(),
+        ["git", "tags" | "commits" | "blobs" | "trees", sha] => valid_sha(sha) && query.is_empty(),
         ["pulls"] if query.starts_with("state=open&base=") => query
             .strip_prefix("state=open&base=")
             .and_then(|q| q.split_once('&'))

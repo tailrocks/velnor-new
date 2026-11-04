@@ -132,14 +132,13 @@ fn create_or_reconcile<I: WriterIo>(io: &I, plan: &Plan) -> Result<u64, Orchestr
     require_base(io, plan)?;
     let expected = expected_tree(plan)?;
     let existing = io.branch_sha(plan)?;
-    let head = match existing {
-        Some(sha) => verify_commit(io, plan, &sha)?,
-        None => {
-            if !io.pull_requests(plan)?.is_empty() {
-                return Err(internal("release_pr_conflict"));
-            }
-            create_branch(io, plan, &expected)?
+    let head = if let Some(sha) = existing {
+        verify_commit(io, plan, &sha)?
+    } else {
+        if !io.pull_requests(plan)?.is_empty() {
+            return Err(internal("release_pr_conflict"));
         }
+        create_branch(io, plan, &expected)?
     };
     require_base(io, plan)?;
     require_branch(io, plan, &head)?;
@@ -150,7 +149,7 @@ fn create_or_reconcile<I: WriterIo>(io: &I, plan: &Plan) -> Result<u64, Orchestr
     require_branch(io, plan, &head)?;
     io.require_not_release_pr(plan)?;
     io.require_no_other_release_pr(plan)?;
-    let _ = io.create_pull_request(plan, &head);
+    drop(io.create_pull_request(plan, &head));
     let pr = exact_pull_request(io, plan, &head)?
         .ok_or_else(|| internal("release_pr_create_unreconciled"))?;
     require_base(io, plan)?;
@@ -263,7 +262,7 @@ fn create_branch<I: WriterIo>(
         return Err(internal("release_pr_conflict"));
     }
     require_base(io, plan)?;
-    let _ = io.create_branch(plan, &sha);
+    drop(io.create_branch(plan, &sha));
     let actual = io
         .branch_sha(plan)?
         .ok_or_else(|| internal("release_pr_branch_unreconciled"))?;
@@ -534,6 +533,10 @@ mod tests {
     }
 
     #[derive(Default)]
+    #[expect(
+        clippy::struct_excessive_bools,
+        reason = "Independent external failure scenarios"
+    )]
     struct State {
         branch: Option<String>,
         commit: Option<Commit>,
@@ -656,6 +659,103 @@ mod tests {
     }
 
     #[test]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "The complete verified input is visible in one fixture"
+    )]
+    fn derives_reviewable_plan_from_verified_source_tree() -> Result<(), OrchestratorError> {
+        use crate::crate_release_pr_tree::{GitHubTrees, TreeItem, git_tree_sha};
+        struct Api {
+            sha: String,
+            blob: String,
+        }
+        impl crate::crate_release_github::GitHubAdmissionRead for Api {
+            fn get(&self, route: &str) -> Result<serde_json::Value, OrchestratorError> {
+                assert_eq!(route, format!("repos/owner/project/git/trees/{}", self.sha));
+                Ok(
+                    serde_json::json!({"sha":self.sha,"truncated":false,"tree":[{"path":"Cargo.toml","mode":"100755","type":"blob","sha":self.blob}]}),
+                )
+            }
+            fn get_optional(
+                &self,
+                _: &str,
+            ) -> Result<Option<serde_json::Value>, OrchestratorError> {
+                Err(internal("unexpected_optional"))
+            }
+        }
+        let old_blob = crate::release_policy_admission::git_blob_sha1(b"old")?;
+        let root = git_tree_sha(&[TreeItem {
+            name: "Cargo.toml".into(),
+            mode: "100755".into(),
+            sha: old_blob.clone(),
+        }])?;
+        let api = Api {
+            sha: root.clone(),
+            blob: old_blob,
+        };
+        let trees = GitHubTrees {
+            api: &api,
+            repository: "owner/project",
+        };
+        let source = "a".repeat(40);
+        let intent = velnor_actions_contract::config::CrateReleaseIntent {
+            schema: 1,
+            repository: "owner/project".into(),
+            default_branch: "main".into(),
+            environment: "release".into(),
+            required_workflow_path: ".github/workflows/ci.yml".into(),
+            trusted_reviewer_id: 1,
+            rust_version: "1.90.0".into(),
+            generator_version: "0.1.73".into(),
+            generator_source_sha: "b".repeat(40),
+            generator_manifest_sha256: "c".repeat(64),
+            release_plz_version: "0.4.3".into(),
+            runner: "ubuntu-24.04".into(),
+            authentication:
+                velnor_actions_contract::config::ReleaseAuthentication::TrustedPublishing,
+            manifest_path: "Cargo.toml".into(),
+            pr_write_paths: vec!["Cargo.toml".into()],
+            registry: "crates-io".into(),
+            packages: vec!["sample".into()],
+            publish_features: BTreeMap::new(),
+            new_crates: None,
+            tag_template: "{{ crate }}-v{{ version }}".into(),
+            recovery: None,
+            journal_predecessor: None,
+        };
+        let mut artifact = crate::crate_release_pr_artifact::PreparationArtifact {
+            schema: 1,
+            binding: crate::crate_release_pr_artifact::PreparationBinding {
+                repository: intent.repository.clone(),
+                workflow_sha: source.clone(),
+                source_sha: source.clone(),
+                run_id: 42,
+                run_attempt: 1,
+            },
+            files: vec![crate::crate_release_pr_artifact::PreparedFile {
+                path: "Cargo.toml".into(),
+                sha256: crate::generator::sha256_hex(b"new"),
+                bytes: b"new".to_vec(),
+            }],
+        };
+        let result = build_plan(&trees, &intent, &source, &root, &artifact)?;
+        assert_eq!(result.branch, "release-plz-42-1");
+        assert_eq!(result.changes["Cargo.toml"].0, "100755");
+        let changed_sha = crate::release_policy_admission::git_blob_sha1(b"new")?;
+        assert_eq!(
+            result.expected_tree,
+            git_tree_sha(&[TreeItem {
+                name: "Cargo.toml".into(),
+                mode: "100755".into(),
+                sha: changed_sha
+            }])?
+        );
+        artifact.files[0].path = "unauthorized/Cargo.toml".into();
+        assert!(build_plan(&trees, &intent, &source, &root, &artifact).is_err());
+        Ok(())
+    }
+
+    #[test]
     fn creates_and_reconciles_exact_branch_and_pull_request_after_lost_replies()
     -> Result<(), OrchestratorError> {
         let server = Server::default();
@@ -673,6 +773,10 @@ mod tests {
     }
 
     #[test]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "The complete HTTP exchange is visible in one fixture"
+    )]
     fn native_adapter_creates_and_reconciles_through_github_http() -> Result<(), OrchestratorError>
     {
         use std::{
@@ -789,7 +893,7 @@ mod tests {
             requests
         });
         let github = crate::crate_release_github::NativeGitHubAdmissionRead {
-            reader: crate::crate_release_http::GitHubAdmissionHttp::test_client(format!(
+            reader: crate::crate_release_http::GitHubAdmissionHttp::test_client(&format!(
                 "http://{address}"
             ))?,
         };
@@ -811,8 +915,78 @@ mod tests {
     }
 
     #[test]
-    fn conflicting_branch_and_untrusted_blob_never_create_pull_requests()
-    -> Result<(), OrchestratorError> {
+    fn rejects_existing_release_pr_on_later_page_and_api_failures() -> Result<(), OrchestratorError>
+    {
+        use std::{
+            io::{Read, Write},
+            net::TcpListener,
+            thread,
+            time::Duration,
+        };
+        let first: Vec<_> = (0..100).map(|i| serde_json::json!({"head":{"ref":format!("feature-{i}"),"repo":{"full_name":"owner/project"}}})).collect();
+        let replies = vec![
+            ("200 OK", serde_json::json!(first)),
+            (
+                "200 OK",
+                serde_json::json!([{"head":{"ref":"release-plz-another","repo":{"full_name":"other/fork"}}}]),
+            ),
+            ("403 Forbidden", serde_json::json!({"message":"denied"})),
+        ];
+        let listener = TcpListener::bind("127.0.0.1:0").expect("listen");
+        let address = listener.local_addr().expect("address");
+        let worker = thread::spawn(move || {
+            let mut requests = Vec::new();
+            for (status, response) in replies {
+                let (mut stream, _) = listener.accept().expect("accept");
+                stream
+                    .set_read_timeout(Some(Duration::from_secs(3)))
+                    .expect("timeout");
+                let mut bytes = Vec::new();
+                let mut buffer = [0; 4096];
+                while !bytes.windows(4).any(|w| w == b"\r\n\r\n") {
+                    let count = stream.read(&mut buffer).expect("read");
+                    assert!(count > 0);
+                    bytes.extend_from_slice(&buffer[..count]);
+                }
+                requests.push(
+                    String::from_utf8(bytes)
+                        .expect("utf8")
+                        .lines()
+                        .next()
+                        .expect("request")
+                        .to_owned(),
+                );
+                let body = response.to_string();
+                write!(
+                    stream,
+                    "HTTP/1.1 {status}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                    body.len()
+                )
+                .expect("write");
+            }
+            requests
+        });
+        let github = crate::crate_release_github::NativeGitHubAdmissionRead {
+            reader: crate::crate_release_http::GitHubAdmissionHttp::test_client(&format!(
+                "http://{address}"
+            ))?,
+        };
+        let writer = NativeWriter { github: &github };
+        assert!(
+            matches!(writer.require_no_other_release_pr(&plan()), Err(OrchestratorError::Internal { problem }) if problem == "release_pr_existing")
+        );
+        assert!(
+            matches!(writer.require_no_other_release_pr(&plan()), Err(OrchestratorError::Internal { problem }) if problem == "crate_release_http_response")
+        );
+        let requests = worker.join().expect("worker");
+        assert!(requests[0].contains("page=1"));
+        assert!(requests[1].contains("page=2"));
+        assert!(requests.iter().all(|request| request.starts_with("GET ")));
+        Ok(())
+    }
+
+    #[test]
+    fn conflicting_branch_and_untrusted_blob_never_create_pull_requests() {
         let plan = plan();
         let conflicting = Server::default();
         {
@@ -834,16 +1008,15 @@ mod tests {
             });
         }
         assert!(create_or_reconcile(&conflicting, &plan).is_err());
-        assert!(conflicting.state.borrow().pulls.is_empty());
+        assert_eq!(conflicting.state.borrow().pulls.len(), 0);
         let corrupt_blob = Server::default();
         corrupt_blob.state.borrow_mut().bad_blob = true;
         assert!(create_or_reconcile(&corrupt_blob, &plan).is_err());
         assert!(corrupt_blob.state.borrow().branch.is_none());
-        assert!(corrupt_blob.state.borrow().pulls.is_empty());
+        assert_eq!(corrupt_blob.state.borrow().pulls.len(), 0);
         let moved = Server::default();
         moved.state.borrow_mut().moved_base = true;
         assert!(create_or_reconcile(&moved, &plan).is_err());
         assert!(moved.state.borrow().branch.is_none());
-        Ok(())
     }
 }

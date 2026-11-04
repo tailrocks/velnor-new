@@ -215,6 +215,7 @@ fn overlay_directory<R: TreeRead>(
 
 pub(super) fn git_tree_sha(entries: &[TreeItem]) -> Result<String, OrchestratorError> {
     use sha1_checked::{Digest as _, Sha1};
+    const HEX: &[u8; 16] = b"0123456789abcdef";
     let invalid = || internal("release_pr_tree_invalid");
     if entries.len() > 100_000 {
         return Err(invalid());
@@ -235,7 +236,7 @@ pub(super) fn git_tree_sha(entries: &[TreeItem]) -> Result<String, OrchestratorE
             return Err(invalid());
         }
         let mut id = Vec::with_capacity(20);
-        for pair in entry.sha.as_bytes().chunks_exact(2) {
+        for pair in entry.sha.as_bytes().as_chunks::<2>().0 {
             let digit = |byte| match byte {
                 b'0'..=b'9' => Some(byte - b'0'),
                 b'a'..=b'f' => Some(byte - b'a' + 10),
@@ -272,7 +273,6 @@ pub(super) fn git_tree_sha(entries: &[TreeItem]) -> Result<String, OrchestratorE
     if result.has_collision() {
         return Err(invalid());
     }
-    const HEX: &[u8; 16] = b"0123456789abcdef";
     let mut digest = String::with_capacity(40);
     for byte in result.hash() {
         digest.push(char::from(HEX[usize::from(byte >> 4)]));
@@ -424,6 +424,10 @@ mod tests {
     }
 
     #[test]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "The complete Git fixture and its boundaries are reviewed together"
+    )]
     fn overlays_real_git_tree_without_changing_unrelated_entries()
     -> Result<(), Box<dyn std::error::Error>> {
         use std::os::unix::fs::symlink;
