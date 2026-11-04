@@ -8,6 +8,7 @@ use super::dbt::DbtStackConfig;
 use super::gradle::GradleStackConfig;
 use super::release::RustReleaseConfig;
 use super::rust_inputs::RustInputRule;
+use super::rust_non_inputs::NonInputs;
 use super::rust_suites::RustSuiteConfig;
 use super::rust_suites_validate::validate_rust_suites;
 use super::tofu::TofuStackConfig;
@@ -122,6 +123,9 @@ pub struct RustStackConfig {
 
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub inputs: Vec<RustInputRule>,
+
+    #[serde(default, skip_serializing_if = "NonInputs::is_empty")]
+    pub non_inputs: NonInputs,
 }
 
 pub const MAX_CRATE_BUILD_JOBS: u32 = 64;
@@ -202,6 +206,7 @@ impl RustStackConfig {
             suites: Vec::new(),
             crates: BTreeMap::new(),
             inputs: Vec::new(),
+            non_inputs: NonInputs::default(),
         }
     }
 }
@@ -345,6 +350,7 @@ impl RustStackConfig {
         self.binary_release.validate(file)?;
         validate_rust_suites(&self.suites, file)?;
         super::rust_inputs::validate_rust_inputs(&self.inputs, file)?;
+        self.non_inputs.validate(file)?;
         self.validate_crates(file)
     }
 

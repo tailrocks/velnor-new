@@ -68,6 +68,7 @@ pub struct NativeAuthorityInput<'a> {
     pub tools: crate::native_job_builders::PlanJobToolNeeds,
     pub rust_detected: bool,
     pub state_roots: &'a [crate::plan_sources::cache_keys::StateRootPlan],
+    pub seal: &'a crate::plan_sources::state_select::StateSealPlan,
 }
 
 #[derive(Debug, Clone)]

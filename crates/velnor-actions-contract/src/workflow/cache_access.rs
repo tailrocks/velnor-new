@@ -5,12 +5,15 @@ use serde::{Deserialize, Serialize};
 
 use super::cache_family::SOURCES_PRODUCE_PLAN_TEST;
 use super::producer::{DEPENDENCY_SEED_JOB_CONDITION, LANE_SURVIVAL_CONDITION, ProducerKind};
+use super::state_seal::{STATE_CANARY_PRODUCER_JOB_ID, STATE_CANARY_UNVERIFIED_TEST};
 use super::{Job, StepKind};
 use crate::ContractError;
 
 pub const WORKFLOW_CACHE_MODE: &str = "read";
 
 pub const WRITER_CACHE_MODE: &str = "write";
+
+pub const WRITE_ONLY_CACHE_MODE: &str = "write-only";
 
 pub const SOURCES_PRODUCER_JOB_ID: &str = "sources-producer";
 
@@ -44,6 +47,12 @@ const WRITER_USES: [&str; 4] = [
     "jdx/mise-action",
 ];
 
+const STATE_SEAL_USES: [&str; 3] = [
+    "actions/download-artifact",
+    "actions/attest",
+    "actions/cache/save",
+];
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum CacheAccess {
@@ -57,6 +66,7 @@ pub enum CacheWriter {
     ToolsProducer,
     TofuProvidersProducer,
     SourcesProducer,
+    StateSeal,
 }
 
 impl CacheAccess {
@@ -64,7 +74,7 @@ impl CacheAccess {
     pub const fn mode(self) -> &'static str {
         match self {
             Self::Read => WORKFLOW_CACHE_MODE,
-            Self::Writer(_) => WRITER_CACHE_MODE,
+            Self::Writer(writer) => writer.mode(),
         }
     }
 
@@ -119,6 +129,16 @@ impl CacheAccess {
 
 impl CacheWriter {
     #[must_use]
+    pub const fn mode(self) -> &'static str {
+        match self {
+            Self::StateSeal => WRITE_ONLY_CACHE_MODE,
+            Self::ToolsProducer | Self::TofuProvidersProducer | Self::SourcesProducer => {
+                WRITER_CACHE_MODE
+            }
+        }
+    }
+
+    #[must_use]
     pub fn condition(self) -> String {
         match self {
             Self::ToolsProducer | Self::TofuProvidersProducer => {
@@ -127,6 +147,9 @@ impl CacheWriter {
             Self::SourcesProducer => {
                 format!("{DEPENDENCY_SEED_JOB_CONDITION} && {SOURCES_PRODUCE_PLAN_TEST}")
             }
+            Self::StateSeal => format!(
+                "{DEPENDENCY_SEED_JOB_CONDITION} && {STATE_CANARY_UNVERIFIED_TEST} && needs.{STATE_CANARY_PRODUCER_JOB_ID}.result == 'success'"
+            ),
         }
     }
 
@@ -144,6 +167,9 @@ impl CacheWriter {
     #[must_use]
     pub fn allows_uses(self, uses: &str) -> bool {
         let base = uses.split_once('@').map_or(uses, |(base, _)| base);
+        if self == Self::StateSeal {
+            return STATE_SEAL_USES.contains(&base);
+        }
         WRITER_USES.contains(&base) || base.starts_with(OWNED_ACTION_PREFIX)
     }
 }

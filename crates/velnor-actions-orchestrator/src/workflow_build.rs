@@ -239,7 +239,8 @@ fn attach_state_roots(
     jobs: &mut BTreeMap<String, Job>,
 ) -> Result<(), OrchestratorError> {
     let state_roots = crate::state_roots::plans(input.discovery, jobs)?;
-    if state_roots.is_empty() {
+    let seal = crate::state_roots::seal_plan(jobs, prepared.policy)?;
+    if state_roots.is_empty() && seal.roots.is_empty() && !seal.canary {
         return Ok(());
     }
     let tofu_roots = crate::tofu_cache::tofu_cache_roots(input.discovery)?;
@@ -254,8 +255,12 @@ fn attach_state_roots(
         input.fetch_roots,
         &tofu_roots,
         &state_roots,
+        &seal,
     )
-    .map_err(crate::workflow_jobs::map_native_job_builder_error)
+    .map_err(crate::workflow_jobs::map_native_job_builder_error)?;
+    plan.permissions
+        .get_or_insert_with(crate::workflow_jobs::read_actions_permissions);
+    Ok(())
 }
 
 fn build_workflow_jobs(

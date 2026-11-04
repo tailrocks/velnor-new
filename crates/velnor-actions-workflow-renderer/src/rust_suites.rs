@@ -39,6 +39,7 @@ pub struct RustSuitesRenderSpec {
     pub verify_restored_rust_argv: Vec<String>,
     pub verify_rust_argv: Vec<String>,
     pub export_rustup_toolchain: bool,
+    pub non_inputs: velnor_actions_contract::NonInputs,
 }
 
 #[derive(Debug, Clone)]
@@ -378,6 +379,7 @@ fn suite_job_record(
             contents: PermissionLevel::Read,
             pull_requests: PermissionLevel::None,
             id_token: PermissionLevel::None,
+            attest: PermissionLevel::None,
             actions: PermissionLevel::None,
             packages: PermissionLevel::None,
         }),

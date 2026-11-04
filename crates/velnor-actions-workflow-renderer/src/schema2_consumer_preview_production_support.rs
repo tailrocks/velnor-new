@@ -77,11 +77,14 @@ pub(super) fn source_steps(spec: &ConsumerReleaseSpec, id: &str) -> Result<Vec<Y
     );
     if spec.policy.channel == PackageReleaseChannel::Preview {
         crate::toolchain_env::reject_denied_step_keys(&spec.producer_cargo_env)?;
-        return Ok(vec![steps::checkout_with_lfs(
-            spec,
-            TapInvocationContext::for_channel(spec.policy.channel).source(),
-            "${{ needs.preview-eligibility.outputs.checkout_lfs }}",
-        )]);
+        return Ok(crate::non_input_checkout::restrict_checkout_yaml(
+            steps::checkout_with_lfs(
+                spec,
+                TapInvocationContext::for_channel(spec.policy.channel).source(),
+                "${{ needs.preview-eligibility.outputs.checkout_lfs }}",
+            ),
+            &spec.non_inputs,
+        ));
     }
     let runner = spec.producer_runner.runs_on();
     crate::toolchain_env::check_toolchain_homes(&spec.producer_cargo_env)?;
@@ -93,8 +96,9 @@ pub(super) fn source_steps(spec: &ConsumerReleaseSpec, id: &str) -> Result<Vec<Y
         BTreeMap::new(),
     )?;
     let verify_yaml = crate::document_steps::verifier_shell_step_to_yaml(&verify_step)?;
-    let mut producer_steps = vec![
-        checkout,
+    let mut producer_steps =
+        crate::non_input_checkout::restrict_checkout_yaml(checkout, &spec.non_inputs);
+    producer_steps.extend([
         run_step(
             "Create owned Cargo metadata homes",
             "mkdir -p \"$MISE_CARGO_HOME\" \"$MISE_RUSTUP_HOME\"",
@@ -104,7 +108,7 @@ pub(super) fn source_steps(spec: &ConsumerReleaseSpec, id: &str) -> Result<Vec<Y
             &join_argv_for_run(&spec.install_rust_argv)?,
         ),
         verify_yaml,
-    ];
+    ]);
     for step in &spec.producer_source_prep {
         let velnor_actions_contract::StepKind::Shell { env, .. } = &step.kind else {
             return Err(RenderError::InvalidWorkflow(

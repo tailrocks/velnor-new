@@ -238,6 +238,7 @@ pub(crate) fn bun_permissions(steps: &[Step]) -> Permissions {
         contents: PermissionLevel::Read,
         pull_requests: PermissionLevel::None,
         id_token: PermissionLevel::None,
+        attest: PermissionLevel::None,
         actions: PermissionLevel::None,
         packages: if reads_registry(steps) {
             PermissionLevel::Read

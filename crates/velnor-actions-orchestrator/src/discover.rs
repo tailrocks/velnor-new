@@ -137,7 +137,7 @@ pub(crate) fn discover_with_options(
         consumer_manifest::for_policy(root, config.workflow.policy)?;
     let (bun, dbt, ansible) = task_inventories(root, &index, config)?;
     let gradle_roots = gradle_jobs::analyze_roots(root, &index, config)?;
-    Ok(Discovery {
+    let discovery = Discovery {
         gradle_roots,
         mise_checks,
         native_checks,
@@ -153,11 +153,17 @@ pub(crate) fn discover_with_options(
         skipped_non_utf8,
         tofu_note: tofu_step.note,
         tofu_units,
-        affected: crate::affected_inputs::AffectedInputs { resolves, rules },
+        affected: crate::affected_inputs::AffectedInputs::new(
+            resolves,
+            rules,
+            config.stacks.rust.as_ref(),
+        ),
         bun,
         dbt,
         ansible,
-    })
+    };
+    crate::non_inputs::validate(root, config, &discovery)?;
+    Ok(discovery)
 }
 
 fn task_tool_paths(config: &VelnorConfig) -> Vec<String> {

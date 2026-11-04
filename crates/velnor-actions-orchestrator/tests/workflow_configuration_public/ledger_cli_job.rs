@@ -75,6 +75,7 @@ fn velnor_repository_has_one_ledger_cli_job() -> Result<(), Box<dyn Error>> {
             id_token: PermissionLevel::None,
             actions: PermissionLevel::None,
             packages: PermissionLevel::None,
+            attest: PermissionLevel::None,
         };
         assert_eq!(job.permissions.as_ref(), Some(&read_only), "{name}");
         assert_eq!(job.environment, None, "{name}");

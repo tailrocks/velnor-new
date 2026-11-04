@@ -11,18 +11,9 @@ use velnor_actions_contract::{
 use crate::OrchestratorError;
 use crate::crate_job_ids::JobOwners;
 use crate::internal::internal_contract;
-use crate::internal_plan::wire_w2::ReuseOutcome;
 
 pub(crate) const JOB_RUNS_REASON: &str = "job_runs";
 pub(crate) const NEEDED_REASON: &str = "needed_by_running_job";
-
-pub(crate) fn unaffected_rust_outcome(task: &ProposedTask) -> ReuseOutcome {
-    if task.identity.undeclared_reads {
-        ReuseOutcome::execute("undeclared_reads")
-    } else {
-        ReuseOutcome::not_affected()
-    }
-}
 
 pub(crate) fn job_needs(
     tasks: &[&ProposedTask],

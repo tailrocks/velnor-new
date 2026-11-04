@@ -7,10 +7,11 @@ use super::step_payloads::{valid_checkout_payload, valid_mise_setup, valid_tool_
 pub(super) use super::step_payloads::{valid_tools_cache_identity, valid_tools_cache_scrub};
 use crate::errors::ContractError;
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeSet;
 
 #[path = "step_identity_payload.rs"]
 mod payload;
+#[path = "step_identity_sequence.rs"]
+mod sequence;
 #[path = "step_identity_shell_roles.rs"]
 mod shell_roles;
 use payload::{
@@ -18,6 +19,7 @@ use payload::{
     valid_rust_verifier_payload,
 };
 pub use payload::{is_configured_checkout, is_tool_seed_step};
+pub use sequence::{validate_step_identity_scope, validate_step_sequence};
 
 pub const TOFU_PROVIDER_ADMISSION_USES: &str = "./.github/actions/tofu-provider-admission";
 
@@ -231,6 +233,24 @@ pub enum StepRole {
     LedgerCliDownload,
 
     LedgerCliVerify,
+
+    StateSelect,
+
+    StateSealBuild,
+
+    StateSealUpload,
+
+    StateSealDownload,
+
+    StateSealSubject,
+
+    StateSealBind,
+
+    StateSealAttest,
+
+    StateSealSave,
+
+    NonInputGuard,
 }
 
 fn valid_bun_assets_handoff(kind: &StepKind) -> bool {
@@ -267,6 +287,7 @@ impl StepRole {
             Self::DownloadPlan
             | Self::AttestationDownload
             | Self::PreseedDownload
+            | Self::StateSealDownload
             | Self::LedgerCliDownload => {
                 action_has_prefix_for_kind(kind, "actions/download-artifact@")
             }
@@ -274,10 +295,13 @@ impl StepRole {
             | Self::MatrixReportUpload
             | Self::PublishFinal
             | Self::PreseedUpload
+            | Self::StateSealUpload
             | Self::LedgerCliUpload => action_has_prefix_for_kind(kind, "actions/upload-artifact@"),
+            Self::StateSealAttest => action_has_prefix_for_kind(kind, "actions/attest@"),
             Self::ToolsCacheSave
             | Self::CargoSourcesSave
             | Self::MbxBundleSave
+            | Self::StateSealSave
             | Self::FamilySave => action_has_prefix_for_kind(kind, "actions/cache/save@"),
             Self::ToolsCacheIdentity => valid_tools_cache_identity(kind),
             Self::ToolsCacheRestore => ToolsRestoreForm::of(kind).is_some(),
@@ -287,7 +311,9 @@ impl StepRole {
             }
             Self::TofuProvidersRestore => super::step_protocol::valid_provider_restore(kind),
             Self::TofuProvidersSave => super::step_protocol::valid_provider_save(kind),
-            Self::TofuProvidersPrepare => matches!(kind, StepKind::Shell { .. }),
+            Self::TofuProvidersPrepare | Self::NonInputGuard => {
+                matches!(kind, StepKind::Shell { .. })
+            }
             Self::PrivateTokenMint => matches!(kind,
                 StepKind::Action { uses, .. } if uses.starts_with(PRIVATE_TOKEN_MINT_ACTION_PREFIX)),
             Self::PrivateFetch => internal_operation(kind, PRIVATE_FETCH_OPERATION),
@@ -324,6 +350,10 @@ impl StepRole {
             Self::FamilyKeys => Some(StepId::FamilyKeys),
             Self::LedgerCliPublish => Some(StepId::LedgerCliPublish),
             Self::LedgerCliVerify => Some(StepId::LedgerCliVerify),
+            Self::StateSelect => Some(StepId::StateSelect),
+            Self::StateSealSubject => Some(StepId::StateSealSubject),
+            Self::StateSealBind => Some(StepId::StateSealBind),
+            Self::StateSealUpload => Some(StepId::StateSealUpload),
             _ => None,
         }
     }
@@ -345,6 +375,10 @@ impl StepRole {
             StepId::FamilyKeys => Self::FamilyKeys,
             StepId::LedgerCliPublish => Self::LedgerCliPublish,
             StepId::LedgerCliVerify => Self::LedgerCliVerify,
+            StepId::StateSelect => Self::StateSelect,
+            StepId::StateSealSubject => Self::StateSealSubject,
+            StepId::StateSealBind => Self::StateSealBind,
+            StepId::StateSealUpload => Self::StateSealUpload,
             StepId::FamilySizeBunInstall
             | StepId::FamilySizePlaywrightBrowsers
             | StepId::FamilySizeDbtPackages
@@ -352,30 +386,4 @@ impl StepRole {
             | StepId::FamilySizeAnsibleCollections => Self::FamilySizeCheck,
         }
     }
-}
-
-pub fn validate_step_sequence(steps: &[Step], scope: &str) -> Result<(), ContractError> {
-    validate_step_identities(steps, scope)?;
-    super::step_mbx_lifecycle::validate_mbx_cleanup_sequence(steps, scope)?;
-    super::step_protocol::validate_tofu_provider_sequence(steps, scope)
-}
-
-pub fn validate_step_identity_scope(steps: &[Step], scope: &str) -> Result<(), ContractError> {
-    validate_step_identities(steps, scope)
-}
-
-fn validate_step_identities(steps: &[Step], scope: &str) -> Result<(), ContractError> {
-    let mut ids = BTreeSet::new();
-    for step in steps {
-        step.validate(scope)?;
-        if let Some(step_id) = step.id
-            && !ids.insert(step_id)
-        {
-            return Err(ContractError::identity(
-                "job.steps.id",
-                format!("duplicate_step_id:{scope}:{}", step_id.as_str()),
-            ));
-        }
-    }
-    Ok(())
 }

@@ -7,10 +7,9 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
-use velnor_actions_contract::workflow::cache_family_mbx::MBX_BUNDLE_MATCHED_KEY_EXPR;
-
 use crate::gc1_mbx_stub;
 pub(crate) use crate::gc1_scene_key::{DEFAULT_SNAPSHOT, Key};
+use crate::gc1_scene_resolve::resolve;
 pub(crate) use crate::gc1_scene_tree::{Tree, files_under};
 use crate::gc1_scene_tree::{tree_of, unlock_tree};
 
@@ -235,12 +234,35 @@ impl Scene {
         env: &[(&str, &str)],
         fsize_blocks: Option<u64>,
     ) -> Result<String, Box<dyn Error>> {
+        let bound = self.bind_to_payload(matched);
+        self.recover_unbound(&bound, env, fsize_blocks)
+    }
+
+    pub(crate) fn recover_unbound(
+        &self,
+        matched: &str,
+        env: &[(&str, &str)],
+        fsize_blocks: Option<u64>,
+    ) -> Result<String, Box<dyn Error>> {
+        self.recover_selected(matched, matched, env, fsize_blocks)
+    }
+
+    pub(crate) fn recover_selected(
+        &self,
+        matched: &str,
+        selected: &str,
+        env: &[(&str, &str)],
+        fsize_blocks: Option<u64>,
+    ) -> Result<String, Box<dyn Error>> {
         self.fresh_outputs()?;
         let step = &self.scripts.recover;
-        let run = resolve(&step.run, matched, &self.runner)?;
+        let run = resolve(&step.run, matched, selected, &self.runner)?;
         let mut resolved = Vec::new();
         for (name, value) in &step.env {
-            resolved.push((name.clone(), resolve(value, matched, &self.runner)?));
+            resolved.push((
+                name.clone(),
+                resolve(value, matched, selected, &self.runner)?,
+            ));
         }
         let mut pairs: Vec<(&str, &str)> = resolved
             .iter()
@@ -352,35 +374,4 @@ impl Drop for Scene {
         unlock_tree(&self.scratch);
         drop(std::fs::remove_dir_all(&self.scratch));
     }
-}
-
-fn resolve(text: &str, matched: &str, runner: &Path) -> Result<String, Box<dyn Error>> {
-    let strip = |expr: &str| -> String {
-        expr.strip_prefix("${{")
-            .and_then(|rest| rest.strip_suffix("}}"))
-            .unwrap_or(expr)
-            .trim()
-            .to_owned()
-    };
-    let matched_expr = strip(MBX_BUNDLE_MATCHED_KEY_EXPR);
-    let mut out = String::new();
-    let mut rest = text;
-    while let Some(at) = rest.find("${{") {
-        out.push_str(&rest[..at]);
-        let after = &rest[at + 3..];
-        let end = after
-            .find("}}")
-            .ok_or_else(|| fail("unterminated expression"))?;
-        let inner = after[..end].trim();
-        if inner == matched_expr {
-            out.push_str(matched);
-        } else if inner == "runner.temp" {
-            out.push_str(&runner.display().to_string());
-        } else {
-            return Err(fail(&format!("unresolved expression {inner}")));
-        }
-        rest = &after[end + 2..];
-    }
-    out.push_str(rest);
-    Ok(out)
 }
