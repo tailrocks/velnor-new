@@ -37,13 +37,13 @@ manifest="$root/Cargo.toml"
 ws="${{GITHUB_WORKSPACE%/}}"
 cd "$ws"
 mise --no-config --no-env --no-hooks exec rust@{rust_toolchain} -- cargo metadata --no-deps --locked --offline --format-version 1 --manifest-path "$manifest" > "$d/metadata.json"
-libs='.kind | any(. == "lib" or . == "rlib" or . == "dylib" or . == "cdylib" or . == "staticlib" or . == "proc-macro")'
-jq -r ".packages[].targets[] | select($libs) | .src_path" "$d/metadata.json" > "$d/libs"
-jq -r ".packages[].targets[] | select($libs | not) | .src_path" "$d/metadata.json" > "$d/bins"
+empties='.kind | any(. == "lib" or . == "rlib" or . == "dylib" or . == "cdylib" or . == "staticlib" or . == "proc-macro" or . == "test" or . == "bench")'
+jq -r ".packages[].targets[] | select($empties) | .src_path" "$d/metadata.json" > "$d/libs"
+jq -r ".packages[].targets[] | select($empties | not) | .src_path" "$d/metadata.json" > "$d/bins"
 : > "$d/stubbed"
 stub() {{ case "$1" in "$ws"/*) rel=${{1#"$ws"/}} ;; *) printf 'state skeleton target outside the workspace: %s\n' "$1" >&2; exit 1 ;; esac; git ls-files --error-unmatch -- "$rel" > /dev/null; printf '%s\n' "$rel" >> "$d/stubbed"; }}
 while IFS= read -r path; do stub "$path"; : > "$path"; done < "$d/libs"
-while IFS= read -r path; do stub "$path"; printf '%s\n' '#![allow(dead_code)]' 'fn main() {{}}' > "$path"; done < "$d/bins"
+while IFS= read -r path; do stub "$path"; printf '%s\n' 'fn main() {{}}' > "$path"; done < "$d/bins"
 [ -s "$d/stubbed" ] || {{ printf '%s\n' 'state skeleton has no targets' >&2; exit 1; }}
 printf '%s\n' '{MBX_BSE_ENV}={MBX_BSE_SKELETON}' >> "$GITHUB_ENV"
 wc -l < "$d/stubbed" > "$d/count"; count=; read -r count < "$d/count"; printf 'velnor: state skeleton stubbed targets=%s\n' "$count"
