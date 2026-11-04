@@ -8,7 +8,6 @@ name = "CI"
 policy = "velnor-repository-v1"
 default_branch = "main"
 generator_validation = "bootstrap"
-preserve_workflows = [".github/workflows/termpane-publish-qualification.yml"]
 max_parallel_jobs = 2
 crate_timeout_minutes = 15
 plan_timeout_minutes = 15
