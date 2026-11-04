@@ -59,27 +59,27 @@ Workflow to generate
     - plan (16 steps)
     - required (10 steps)
     - required-gate (1 steps)
-    - rust-velnor-actions-actionlint (30 steps)
-    - rust-velnor-actions-ansible (30 steps)
-    - rust-velnor-actions-bun (30 steps)
+    - rust-velnor-actions-actionlint (29 steps)
+    - rust-velnor-actions-ansible (29 steps)
+    - rust-velnor-actions-bun (29 steps)
     - rust-velnor-actions-cli (31 steps)
-    - rust-velnor-actions-contract (31 steps)
-    - rust-velnor-actions-dbt (30 steps)
-    - rust-velnor-actions-gradle (30 steps)
-    - rust-velnor-actions-mise (31 steps)
-    - rust-velnor-actions-orchestrator (32 steps)
-    - rust-velnor-actions-rust (31 steps)
-    - rust-velnor-actions-tofu (30 steps)
-    - rust-velnor-actions-workflow-renderer (31 steps)
-    - rust-velnor-resource-probe (30 steps)
+    - rust-velnor-actions-contract (30 steps)
+    - rust-velnor-actions-dbt (29 steps)
+    - rust-velnor-actions-gradle (29 steps)
+    - rust-velnor-actions-mise (30 steps)
+    - rust-velnor-actions-orchestrator (31 steps)
+    - rust-velnor-actions-rust (30 steps)
+    - rust-velnor-actions-tofu (29 steps)
+    - rust-velnor-actions-workflow-renderer (30 steps)
+    - rust-velnor-resource-probe (29 steps)
     - rust-velnor-runner-attestation (29 steps)
-    - rust-velnor-runner-cli (30 steps)
-    - rust-velnor-runner-core (30 steps)
-    - rust-velnor-runner-github (30 steps)
-    - rust-velnor-runner-host (31 steps)
+    - rust-velnor-runner-cli (29 steps)
+    - rust-velnor-runner-core (29 steps)
+    - rust-velnor-runner-github (29 steps)
+    - rust-velnor-runner-host (30 steps)
     - sources-producer (12 steps)
-    - state-producer-crates-velnor-runner (74 steps)
-    - state-producer-root (122 steps)
+    - state-producer-crates-velnor-runner (64 steps)
+    - state-producer-root (100 steps)
     - state-seal-crates-velnor-runner (8 steps)
     - state-seal-root (8 steps)
     - tools-producer-2d8ab338 (9 steps)
@@ -88,7 +88,7 @@ Workflow to generate
     - tools-producer-f00f54f8 (8 steps)
     - 18 Rust crate jobs
       Timeout: 15 minutes per crate job
-      Obligations: Clippy -> build -> run tests -> doctests -> doc build -> format check
+      Obligations: Clippy -> build -> run tests -> doc build -> format check
       Entries:
         - rust-velnor-actions-actionlint
         - rust-velnor-actions-ansible
@@ -112,17 +112,14 @@ Workflow to generate
         - stack/rust/crates/velnor-actions-actionlint/build/default
         - stack/rust/crates/velnor-actions-actionlint/clippy/default
         - stack/rust/crates/velnor-actions-actionlint/doc/default
-        - stack/rust/crates/velnor-actions-actionlint/doctest/default
         - stack/rust/crates/velnor-actions-actionlint/fmt/default
         - stack/rust/crates/velnor-actions-ansible/build/default
         - stack/rust/crates/velnor-actions-ansible/clippy/default
         - stack/rust/crates/velnor-actions-ansible/doc/default
-        - stack/rust/crates/velnor-actions-ansible/doctest/default
         - stack/rust/crates/velnor-actions-ansible/fmt/default
         - stack/rust/crates/velnor-actions-bun/build/default
         - stack/rust/crates/velnor-actions-bun/clippy/default
         - stack/rust/crates/velnor-actions-bun/doc/default
-        - stack/rust/crates/velnor-actions-bun/doctest/default
         - stack/rust/crates/velnor-actions-bun/fmt/default
         - stack/rust/crates/velnor-actions-cli/build/default
         - stack/rust/crates/velnor-actions-cli/clippy/default
@@ -132,52 +129,43 @@ Workflow to generate
         - stack/rust/crates/velnor-actions-contract/build/default
         - stack/rust/crates/velnor-actions-contract/clippy/default
         - stack/rust/crates/velnor-actions-contract/doc/default
-        - stack/rust/crates/velnor-actions-contract/doctest/default
         - stack/rust/crates/velnor-actions-contract/fmt/default
         - stack/rust/crates/velnor-actions-contract/nextest/default
         - stack/rust/crates/velnor-actions-dbt/build/default
         - stack/rust/crates/velnor-actions-dbt/clippy/default
         - stack/rust/crates/velnor-actions-dbt/doc/default
-        - stack/rust/crates/velnor-actions-dbt/doctest/default
         - stack/rust/crates/velnor-actions-dbt/fmt/default
         - stack/rust/crates/velnor-actions-gradle/build/default
         - stack/rust/crates/velnor-actions-gradle/clippy/default
         - stack/rust/crates/velnor-actions-gradle/doc/default
-        - stack/rust/crates/velnor-actions-gradle/doctest/default
         - stack/rust/crates/velnor-actions-gradle/fmt/default
         - stack/rust/crates/velnor-actions-mise/build/default
         - stack/rust/crates/velnor-actions-mise/clippy/default
         - stack/rust/crates/velnor-actions-mise/doc/default
-        - stack/rust/crates/velnor-actions-mise/doctest/default
         - stack/rust/crates/velnor-actions-mise/fmt/default
         - stack/rust/crates/velnor-actions-mise/nextest/default
         - stack/rust/crates/velnor-actions-orchestrator/build/default
         - stack/rust/crates/velnor-actions-orchestrator/clippy/default
         - stack/rust/crates/velnor-actions-orchestrator/doc/default
-        - stack/rust/crates/velnor-actions-orchestrator/doctest/default
         - stack/rust/crates/velnor-actions-orchestrator/fmt/default
         - stack/rust/crates/velnor-actions-orchestrator/nextest/default
         - stack/rust/crates/velnor-actions-rust/build/default
         - stack/rust/crates/velnor-actions-rust/clippy/default
         - stack/rust/crates/velnor-actions-rust/doc/default
-        - stack/rust/crates/velnor-actions-rust/doctest/default
         - stack/rust/crates/velnor-actions-rust/fmt/default
         - stack/rust/crates/velnor-actions-rust/nextest/default
         - stack/rust/crates/velnor-actions-tofu/build/default
         - stack/rust/crates/velnor-actions-tofu/clippy/default
         - stack/rust/crates/velnor-actions-tofu/doc/default
-        - stack/rust/crates/velnor-actions-tofu/doctest/default
         - stack/rust/crates/velnor-actions-tofu/fmt/default
         - stack/rust/crates/velnor-actions-workflow-renderer/build/default
         - stack/rust/crates/velnor-actions-workflow-renderer/clippy/default
         - stack/rust/crates/velnor-actions-workflow-renderer/doc/default
-        - stack/rust/crates/velnor-actions-workflow-renderer/doctest/default
         - stack/rust/crates/velnor-actions-workflow-renderer/fmt/default
         - stack/rust/crates/velnor-actions-workflow-renderer/nextest/default
         - stack/rust/crates/velnor-runner/crates/velnor-resource-probe/build/default
         - stack/rust/crates/velnor-runner/crates/velnor-resource-probe/clippy/default
         - stack/rust/crates/velnor-runner/crates/velnor-resource-probe/doc/default
-        - stack/rust/crates/velnor-runner/crates/velnor-resource-probe/doctest/default
         - stack/rust/crates/velnor-runner/crates/velnor-resource-probe/fmt/default
         - stack/rust/crates/velnor-runner/crates/velnor-runner-attestation/build/default
         - stack/rust/crates/velnor-runner/crates/velnor-runner-attestation/clippy/default
@@ -186,22 +174,18 @@ Workflow to generate
         - stack/rust/crates/velnor-runner/crates/velnor-runner-cli/build/default
         - stack/rust/crates/velnor-runner/crates/velnor-runner-cli/clippy/default
         - stack/rust/crates/velnor-runner/crates/velnor-runner-cli/doc/default
-        - stack/rust/crates/velnor-runner/crates/velnor-runner-cli/doctest/default
         - stack/rust/crates/velnor-runner/crates/velnor-runner-cli/fmt/default
         - stack/rust/crates/velnor-runner/crates/velnor-runner-core/build/default
         - stack/rust/crates/velnor-runner/crates/velnor-runner-core/clippy/default
         - stack/rust/crates/velnor-runner/crates/velnor-runner-core/doc/default
-        - stack/rust/crates/velnor-runner/crates/velnor-runner-core/doctest/default
         - stack/rust/crates/velnor-runner/crates/velnor-runner-core/fmt/default
         - stack/rust/crates/velnor-runner/crates/velnor-runner-github/build/default
         - stack/rust/crates/velnor-runner/crates/velnor-runner-github/clippy/default
         - stack/rust/crates/velnor-runner/crates/velnor-runner-github/doc/default
-        - stack/rust/crates/velnor-runner/crates/velnor-runner-github/doctest/default
         - stack/rust/crates/velnor-runner/crates/velnor-runner-github/fmt/default
         - stack/rust/crates/velnor-runner/crates/velnor-runner-host/build/default
         - stack/rust/crates/velnor-runner/crates/velnor-runner-host/clippy/default
         - stack/rust/crates/velnor-runner/crates/velnor-runner-host/doc/default
-        - stack/rust/crates/velnor-runner/crates/velnor-runner-host/doctest/default
         - stack/rust/crates/velnor-runner/crates/velnor-runner-host/fmt/default
         - stack/rust/crates/velnor-runner/crates/velnor-runner-host/nextest/default
   Parallel: 18 execution jobs; dependencies preserved; no matrix fan-out
@@ -219,19 +203,35 @@ Workflow to generate
     - asamarts/alint@d61e4c802b02ac811224b35c59a62cfe5176f4d0
     - jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
     - jdx/mr-boxington-action@88acf2bb50552c7c508cbac13e5f8c576b95b1de
+  Ineligible: stack/rust/crates/velnor-actions-actionlint/doctest/default has no test targets; no test command emitted
   Ineligible: stack/rust/crates/velnor-actions-actionlint/nextest/default has no test targets; no test command emitted
+  Ineligible: stack/rust/crates/velnor-actions-ansible/doctest/default has no test targets; no test command emitted
   Ineligible: stack/rust/crates/velnor-actions-ansible/nextest/default has no test targets; no test command emitted
+  Ineligible: stack/rust/crates/velnor-actions-bun/doctest/default has no test targets; no test command emitted
   Ineligible: stack/rust/crates/velnor-actions-bun/nextest/default has no test targets; no test command emitted
   Ineligible: stack/rust/crates/velnor-actions-cli/doctest/default has no test targets; no test command emitted
+  Ineligible: stack/rust/crates/velnor-actions-contract/doctest/default has no test targets; no test command emitted
+  Ineligible: stack/rust/crates/velnor-actions-dbt/doctest/default has no test targets; no test command emitted
   Ineligible: stack/rust/crates/velnor-actions-dbt/nextest/default has no test targets; no test command emitted
+  Ineligible: stack/rust/crates/velnor-actions-gradle/doctest/default has no test targets; no test command emitted
   Ineligible: stack/rust/crates/velnor-actions-gradle/nextest/default has no test targets; no test command emitted
+  Ineligible: stack/rust/crates/velnor-actions-mise/doctest/default has no test targets; no test command emitted
+  Ineligible: stack/rust/crates/velnor-actions-orchestrator/doctest/default has no test targets; no test command emitted
+  Ineligible: stack/rust/crates/velnor-actions-rust/doctest/default has no test targets; no test command emitted
+  Ineligible: stack/rust/crates/velnor-actions-tofu/doctest/default has no test targets; no test command emitted
   Ineligible: stack/rust/crates/velnor-actions-tofu/nextest/default has no test targets; no test command emitted
+  Ineligible: stack/rust/crates/velnor-actions-workflow-renderer/doctest/default has no test targets; no test command emitted
+  Ineligible: stack/rust/crates/velnor-runner/crates/velnor-resource-probe/doctest/default has no test targets; no test command emitted
   Ineligible: stack/rust/crates/velnor-runner/crates/velnor-resource-probe/nextest/default has no test targets; no test command emitted
   Ineligible: stack/rust/crates/velnor-runner/crates/velnor-runner-attestation/doctest/default has no test targets; no test command emitted
   Ineligible: stack/rust/crates/velnor-runner/crates/velnor-runner-attestation/nextest/default has no test targets; no test command emitted
+  Ineligible: stack/rust/crates/velnor-runner/crates/velnor-runner-cli/doctest/default has no test targets; no test command emitted
   Ineligible: stack/rust/crates/velnor-runner/crates/velnor-runner-cli/nextest/default has no test targets; no test command emitted
+  Ineligible: stack/rust/crates/velnor-runner/crates/velnor-runner-core/doctest/default has no test targets; no test command emitted
   Ineligible: stack/rust/crates/velnor-runner/crates/velnor-runner-core/nextest/default has no test targets; no test command emitted
+  Ineligible: stack/rust/crates/velnor-runner/crates/velnor-runner-github/doctest/default has no test targets; no test command emitted
   Ineligible: stack/rust/crates/velnor-runner/crates/velnor-runner-github/nextest/default has no test targets; no test command emitted
+  Ineligible: stack/rust/crates/velnor-runner/crates/velnor-runner-host/doctest/default has no test targets; no test command emitted
   Pull-request execution narrows crate obligations through its event-time affected-work plan.
 
 Required-check migration

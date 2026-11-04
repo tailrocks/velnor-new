@@ -19,6 +19,7 @@ path = "src/bin/velnor_resource_probe_release.rs"
 test = false
 
 [lib]
+doctest = false
 test = false
 
 [lints]
