@@ -437,6 +437,7 @@ fn read_reviewed_file<G: crate::crate_release_github::GitHubAdmissionRead>(
     Err(invalid())
 }
 
+#[cfg(test)]
 #[path = "crate_release_pr_acquisition_fixture.rs"]
 pub(super) mod integration_fixture;
 

@@ -35,6 +35,9 @@ pub fn parse_crate_release_intent(bytes: &[u8]) -> Result<CrateReleaseIntent, Or
 
 pub fn run_crate_release(operation: &str) -> Result<(), OrchestratorError> {
     require_authority_implementation()?;
+    if operation == "release-pr-create" {
+        return crate::crate_release_pr_run::run_from_environment();
+    }
     run_qualified_crate_release(operation)
 }
 

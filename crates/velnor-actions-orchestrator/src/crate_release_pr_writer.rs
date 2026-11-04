@@ -52,6 +52,26 @@ struct Plan {
     changes: BTreeMap<String, (String, Vec<u8>)>,
 }
 
+pub(crate) fn write_prepared_pr(
+    github: &crate::crate_release_github::NativeGitHubAdmissionRead,
+    preparation: &crate::crate_release_pr_acquisition::VerifiedPreparation,
+) -> Result<(), OrchestratorError> {
+    let trees = crate::crate_release_pr_tree::GitHubTrees {
+        api: github,
+        repository: &preparation.intent.repository,
+    };
+    let source = &preparation.artifact.binding.source_sha;
+    let plan = build_plan(
+        &trees,
+        &preparation.intent,
+        source,
+        &preparation.source_tree,
+        &preparation.artifact,
+    )?;
+    create_or_reconcile(&NativeWriter { github }, &plan)?;
+    Ok(())
+}
+
 fn build_plan<R: crate::crate_release_pr_tree::TreeRead>(
     trees: &R,
     intent: &velnor_actions_contract::config::CrateReleaseIntent,
