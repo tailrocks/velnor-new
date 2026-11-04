@@ -1260,6 +1260,44 @@ mod tests {
             crate::crate_release_registry::CrateRegistryPresence::Absent
         );
         verify_test_admissions(&github)?;
+        verify_test_journal_refs(&journal)?;
+        Ok(())
+    }
+
+    #[cfg(unix)]
+    fn verify_test_journal_refs(
+        journal: &crate::crate_release_journal_adapter::JournalAdapter<
+            crate::crate_release_github::NativeGitHubAdmissionRead,
+        >,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        use crate::crate_release_journal::{JournalIo as _, JournalOperationRefs as _};
+        for name in [
+            "velnor-receipt/12/1/publication-started",
+            "velnor-receipt/12/1/reconciled",
+        ] {
+            let tag = crate::crate_release_journal::JournalTag {
+                name: name.into(),
+                object_type: "blob".into(),
+                object_sha: journal.create_blob("owner/project", name.as_bytes())?,
+                message: "velnor-release-receipt-v1".into(),
+            };
+            let sha = journal.create_tag_object("owner/project", &tag)?;
+            let reference = format!("refs/tags/{name}");
+            assert_eq!(journal.get_ref("owner/project", &reference)?, None);
+            journal.create_ref("owner/project", &reference, &sha)?;
+            assert_eq!(journal.get_ref("owner/project", &reference)?, Some(sha));
+        }
+        let identity = crate::crate_release_journal::JournalIdentity {
+            repository: "owner/project".into(),
+            workflow_sha: "b".repeat(40),
+            source_sha: "a".repeat(40),
+            run_id: 12,
+            run_attempt: 1,
+        };
+        assert_eq!(
+            journal.list_operation_refs(&identity)?,
+            ["refs/tags/velnor-receipt/12/1/operation-1"]
+        );
         Ok(())
     }
 
@@ -1520,7 +1558,9 @@ mod tests {
         policy: &str,
         source: &str,
     ) -> Option<serde_json::Value> {
-        let value = if line.starts_with("GET /repos/owner/project/actions/runs/13/approvals ") {
+        let value = if line == "GET /repos/owner/project/git/ref/heads/main HTTP/1.1" {
+            serde_json::json!({"ref":"refs/heads/main","object":{"type":"commit","sha":policy}})
+        } else if line.starts_with("GET /repos/owner/project/actions/runs/13/approvals ") {
             serde_json::json!([{"state":"approved","user":{"type":"User","id":139_017},"environments":[{"id":9,"name":"release"}],"comment":format!("I reviewed the complete release policy at {policy} and authorize source {policy} for run 13.")}])
         } else if line.starts_with("GET /repos/owner/project/actions/runs/13 ") {
             serde_json::json!({"id":13,"run_attempt":1,"head_sha":policy,"head_branch":"main","event":"push","path":".github/workflows/release.yml","repository":{"id":22,"full_name":"owner/project"},"head_repository":{"id":22,"full_name":"owner/project"}})
@@ -1584,14 +1624,16 @@ mod tests {
         state: &mut TestJournalState,
     ) -> Result<(&'static str, String), String> {
         use sha1_checked::{Digest as _, Sha1};
-        let tag_name = "velnor-receipt/12/1/operation-1";
-        let reference = format!("refs/tags/{tag_name}");
         let (status, response) = match line {
+            path if path.starts_with("GET /repos/owner/project/git/matching-refs/tags/") => {
+                ("200 OK", test_matching_refs(path, state)?)
+            }
             "POST /repos/owner/project/git/tags HTTP/1.1" => {
                 let value: serde_json::Value =
                     serde_json::from_slice(body).map_err(|e| e.to_string())?;
                 let blob = value["object"].as_str().ok_or("missing target")?;
-                if value["tag"] != tag_name
+                let tag_name = value["tag"].as_str().ok_or("missing tag")?;
+                if !tag_name.starts_with("velnor-receipt/")
                     || value["type"] != "blob"
                     || !state.blobs.contains_key(blob)
                 {
@@ -1630,29 +1672,71 @@ mod tests {
                 let value: serde_json::Value =
                     serde_json::from_slice(body).map_err(|e| e.to_string())?;
                 let sha = value["sha"].as_str().ok_or("missing tag sha")?;
-                if value["ref"] != reference || !state.tags.contains_key(sha) {
+                let reference = value["ref"].as_str().ok_or("missing ref")?;
+                let tag = state.tags.get(sha).ok_or("missing tag")?;
+                if tag["tag"]
+                    .as_str()
+                    .map(|name| format!("refs/tags/{name}"))
+                    .as_deref()
+                    != Some(reference)
+                {
                     return Err("invalid journal ref".into());
                 }
-                if state.refs.contains_key(&reference) {
+                if state.refs.contains_key(reference) {
                     return Ok(("422 Unprocessable Entity", "{}".into()));
                 }
-                state.refs.insert(reference.clone(), sha.into());
+                state.refs.insert(reference.to_owned(), sha.into());
                 (
                     "201 Created",
                     serde_json::json!({"ref":reference,"object":{"type":"tag","sha":sha}}),
                 )
             }
-            "GET /repos/owner/project/git/ref/tags/velnor-receipt%2F12%2F1%2Foperation-1 HTTP/1.1" =>
-            {
-                let sha = state.refs.get(&reference).ok_or("missing ref")?;
-                (
-                    "200 OK",
-                    serde_json::json!({"ref":reference,"object":{"type":"tag","sha":sha}}),
-                )
+            path if path.starts_with("GET /repos/owner/project/git/ref/tags/velnor-receipt%2F") => {
+                return test_journal_ref(path, state);
             }
             _ => return Err(format!("unexpected request: {line}")),
         };
         Ok((status, response.to_string()))
+    }
+
+    #[cfg(unix)]
+    fn test_journal_ref(
+        path: &str,
+        state: &TestJournalState,
+    ) -> Result<(&'static str, String), String> {
+        let name = path
+            .strip_prefix("GET /repos/owner/project/git/ref/tags/")
+            .and_then(|v| v.strip_suffix(" HTTP/1.1"))
+            .ok_or("invalid ref path")?
+            .replace("%2F", "/");
+        let reference = format!("refs/tags/{name}");
+        let Some(sha) = state.refs.get(&reference) else {
+            return Ok(("404 Not Found", "{}".into()));
+        };
+        Ok((
+            "200 OK",
+            serde_json::json!({"ref":reference,"object":{"type":"tag","sha":sha}}).to_string(),
+        ))
+    }
+
+    #[cfg(unix)]
+    fn test_matching_refs(
+        path: &str,
+        state: &TestJournalState,
+    ) -> Result<serde_json::Value, String> {
+        let prefix = path
+            .strip_prefix("GET /repos/owner/project/git/matching-refs/tags/")
+            .and_then(|v| v.strip_suffix(" HTTP/1.1"))
+            .ok_or("invalid prefix")?
+            .replace("%2F", "/");
+        let prefix = format!("refs/tags/{prefix}");
+        let refs: Vec<_> = state
+            .refs
+            .iter()
+            .filter(|(name, _)| name.starts_with(&prefix))
+            .map(|(name, sha)| serde_json::json!({"ref":name,"object":{"type":"tag","sha":sha}}))
+            .collect();
+        Ok(serde_json::json!(refs))
     }
 
     #[test]
