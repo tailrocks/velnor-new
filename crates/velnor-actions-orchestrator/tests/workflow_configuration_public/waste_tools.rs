@@ -34,7 +34,7 @@ const LANE_TOOLS: [&str; 7] = [
 const OTHER_LANE_USES: &str = TOOLS_CACHE_PRELUDE_USES[1];
 const OTHER_LANE_RUNS_ON: &str = "ubuntu-24.04";
 
-fn lane_jobs() -> Result<BTreeMap<String, Job>, Box<dyn Error>> {
+pub(super) fn lane_jobs() -> Result<BTreeMap<String, Job>, Box<dyn Error>> {
     let repo = mbx_repo_for(true, WorkflowPolicy::VelnorRepositoryV1)?;
     let root = repo.path();
     for (dir, name) in [
@@ -80,7 +80,7 @@ fn install_run(job: &Job) -> Result<String, Box<dyn Error>> {
         .ok_or_else(|| "job has no pinned tools install".into())
 }
 
-fn set_digest(job: &mut Job, digest: &str) -> Result<(), Box<dyn Error>> {
+pub(super) fn set_digest(job: &mut Job, digest: &str) -> Result<(), Box<dyn Error>> {
     for step in &mut job.steps {
         if let (Some(StepRole::ToolsCacheIdentity), StepKind::Action { with, .. }) =
             (&step.role, &mut step.kind)
@@ -95,14 +95,14 @@ fn set_digest(job: &mut Job, digest: &str) -> Result<(), Box<dyn Error>> {
     Err("job has no tools identity step".into())
 }
 
-fn crate_id(jobs: &BTreeMap<String, Job>) -> Result<String, Box<dyn Error>> {
+pub(super) fn crate_id(jobs: &BTreeMap<String, Job>) -> Result<String, Box<dyn Error>> {
     jobs.iter()
         .find(|(id, job)| id.starts_with(CRATE_JOB_ID_PREFIX) && is_lane_job(id, job))
         .map(|(id, _)| id.clone())
         .ok_or_else(|| "no rust crate job".into())
 }
 
-fn foreign_digest(jobs: &BTreeMap<String, Job>, own: &str) -> Result<String, Box<dyn Error>> {
+pub(super) fn foreign_digest(jobs: &BTreeMap<String, Job>, own: &str) -> Result<String, Box<dyn Error>> {
     jobs.values()
         .filter_map(identity_digest)
         .find(|digest| *digest != own)

@@ -80,18 +80,16 @@ fn seal(
     let key = scene.output_value("key")?;
     let size = std::fs::metadata(scene.payload())?.len();
     std::fs::copy(scene.payload(), cache.dir.join(id.to_string()))?;
-    let mut rows = gh.rows()?;
-    let mut entries: Vec<(String, u64)> = std::mem::take(&mut rows);
+    let mut entries = gh.rows()?;
     entries.push((key.clone(), id));
-    let text = entries
+    let rows: Vec<(&str, &str, &str, u64, u64)> = entries
         .iter()
         .map(|(entry, entry_id)| {
             let entry_size = if *entry_id == id { size } else { 1 };
-            format!("{AT} {MAIN} {entry} {entry_id} {entry_size}\n")
+            (AT, MAIN, entry.as_str(), *entry_id, entry_size)
         })
-        .collect::<Vec<String>>()
-        .concat();
-    std::fs::write(PathBuf::from(gh.dir()).join("list"), text)?;
+        .collect();
+    gh.list_entries(&rows)?;
     gh.artifacts(&[7001])?;
     run_bind(scene, gh, job, &key)?;
     gh.attest(&[Attestation::bound(&key, id, size)])?;

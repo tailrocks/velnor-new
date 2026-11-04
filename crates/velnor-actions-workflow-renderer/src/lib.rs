@@ -127,6 +127,7 @@ pub mod upgrades;
 mod verifier_shell;
 mod waste_lint;
 mod waste_lint_env;
+mod waste_lint_graph;
 mod waste_lint_tools;
 
 pub mod verification_jobs;

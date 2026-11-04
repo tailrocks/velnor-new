@@ -10,23 +10,35 @@ use crate::RenderError;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum WasteRule {
+    DuplicateTask,
     JobContextEnv,
     RustupAutoInstall,
+    DuplicateRestore,
+    NonProducerSave,
+    UnconsumedRestoreOutput,
     SplitToolsIdentity,
 }
 
 impl WasteRule {
     pub const ALL: &'static [Self] = &[
+        Self::DuplicateTask,
         Self::JobContextEnv,
         Self::RustupAutoInstall,
+        Self::DuplicateRestore,
+        Self::NonProducerSave,
+        Self::UnconsumedRestoreOutput,
         Self::SplitToolsIdentity,
     ];
 
     #[must_use]
     pub const fn id(self) -> &'static str {
         match self {
+            Self::DuplicateTask => "W1 duplicate_task",
             Self::JobContextEnv => "W2 job_context_env",
             Self::RustupAutoInstall => "W3 rustup_auto_install",
+            Self::DuplicateRestore => "W4 duplicate_restore",
+            Self::NonProducerSave => "W5 non_producer_save",
+            Self::UnconsumedRestoreOutput => "W6 unconsumed_restore_output",
             Self::SplitToolsIdentity => "W7 split_tools_identity",
         }
     }
@@ -34,11 +46,23 @@ impl WasteRule {
     #[must_use]
     pub const fn fix(self) -> &'static str {
         match self {
+            Self::DuplicateTask => {
+                "run each task digest in one job; reuse the job that already runs it. A hosted and local lane twin counts as one job. A state producer may repeat the lane digests of one crate job."
+            }
             Self::JobContextEnv => {
                 "set all four toolchain homes to their standard values in every step that runs a toolchain command, and RUSTUP_HOME and CARGO_HOME in every Rust verifier step."
             }
             Self::RustupAutoInstall => {
                 "bind the job to the rust toolchain job env; do not override RUSTUP_AUTO_INSTALL per step."
+            }
+            Self::DuplicateRestore => {
+                "restore each cache key once per job; drop the repeated restore step."
+            }
+            Self::NonProducerSave => {
+                "move the cache save into a producer job, or render it with the literal condition false."
+            }
+            Self::UnconsumedRestoreOutput => {
+                "delete the job output, or read it through needs.<job>.outputs.<name> in another job."
             }
             Self::SplitToolsIdentity => {
                 "install the lane's union tool set in every rust job so the lane has one tools identity."
@@ -48,8 +72,12 @@ impl WasteRule {
 
     fn run(self, jobs: &BTreeMap<String, Job>) -> Vec<WasteFinding> {
         match self {
+            Self::DuplicateTask => crate::waste_lint_graph::w1(jobs),
             Self::JobContextEnv => crate::waste_lint_env::w2(jobs),
             Self::RustupAutoInstall => crate::waste_lint_env::w3(jobs),
+            Self::DuplicateRestore => crate::waste_lint_graph::w4(jobs),
+            Self::NonProducerSave => crate::waste_lint_graph::w5(jobs),
+            Self::UnconsumedRestoreOutput => crate::waste_lint_graph::w6(jobs),
             Self::SplitToolsIdentity => crate::waste_lint_tools::w7(jobs),
         }
     }
@@ -90,6 +118,22 @@ impl ExecWord {
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum WasteFinding {
+    DuplicateTask {
+        digest: String,
+        jobs: Vec<String>,
+    },
+    DuplicateRestore {
+        job: String,
+        key: String,
+    },
+    NonProducerSave {
+        job: String,
+        step: String,
+    },
+    UnconsumedOutput {
+        job: String,
+        output: String,
+    },
     MissingHome {
         job: String,
         step: String,
@@ -120,6 +164,10 @@ impl WasteFinding {
     #[must_use]
     pub const fn rule(&self) -> WasteRule {
         match self {
+            Self::DuplicateTask { .. } => WasteRule::DuplicateTask,
+            Self::DuplicateRestore { .. } => WasteRule::DuplicateRestore,
+            Self::NonProducerSave { .. } => WasteRule::NonProducerSave,
+            Self::UnconsumedOutput { .. } => WasteRule::UnconsumedRestoreOutput,
             Self::MissingHome { .. }
             | Self::MissingVerifierHome { .. }
             | Self::ConflictingHome { .. } => WasteRule::JobContextEnv,
@@ -133,6 +181,21 @@ impl Display for WasteFinding {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}: ", self.rule().id())?;
         match self {
+            Self::DuplicateTask { digest, jobs } => {
+                write!(f, "task {digest} runs in jobs {}", jobs.join(", "))?;
+            }
+            Self::DuplicateRestore { job, key } => {
+                write!(f, "job {job} restores cache key {key} more than once")?;
+            }
+            Self::NonProducerSave { job, step } => {
+                write!(
+                    f,
+                    "job {job} step {step:?} saves a cache outside a producer job"
+                )?;
+            }
+            Self::UnconsumedOutput { job, output } => {
+                write!(f, "job {job} output {output} is read by no other job")?;
+            }
             Self::MissingHome {
                 job,
                 step,

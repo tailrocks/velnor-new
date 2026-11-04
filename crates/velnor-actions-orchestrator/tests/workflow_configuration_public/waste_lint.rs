@@ -75,7 +75,9 @@ pub(super) fn home_env(
     }
 }
 
-fn toolchain_step(jobs: &BTreeMap<String, Job>) -> Result<(String, usize), Box<dyn Error>> {
+pub(super) fn toolchain_step(
+    jobs: &BTreeMap<String, Job>,
+) -> Result<(String, usize), Box<dyn Error>> {
     jobs.iter()
         .filter(|(_, job)| job.env != JobEnv::Unset)
         .find_map(|(id, job)| {
