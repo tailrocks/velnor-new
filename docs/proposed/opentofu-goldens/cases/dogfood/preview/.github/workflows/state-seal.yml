@@ -157,7 +157,7 @@ jobs:
           VELNOR_DEFAULT_REF: ${{ format('refs/heads/{0}', github.event.repository.default_branch) }}
           VELNOR_MBX_BUNDLE_TOOLCHAIN: ${{ env.VELNOR_TOOL_RUST }}
           VELNOR_MBX_BUNDLE_VERSION: ${{ env.VELNOR_TOOL_MR_BOXINGTON }}
-        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; case \"$RUNNER_TEMP\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''RUNNER_TEMP must be absolute'\\'' >&2; exit 1 ;; esac; d=\"$RUNNER_TEMP/velnor/cache-keys\"; rm -rf \"$d\"; mkdir -p \"$d\"; s256() { sha256sum \"$1\" > \"$d/sum\"; h=; rest=; read -r h rest < \"$d/sum\" || [ -n \"$h\" ]; case \"$h\" in '\\'''\\''|*[!0-9a-f]*) printf '\\''%s\\n'\\'' '\\''sha256sum returned no digest'\\'' >&2; exit 1 ;; esac; [ \"${#h}\" -eq 64 ] || exit 1; }; uname -s > \"$d/platform\"; uname -m >> \"$d/platform\"; default_ref=\"${VELNOR_DEFAULT_REF:-}\"; trust=none; if [ \"${GITHUB_EVENT_NAME:-}\" = push ] && [ -n \"${default_ref#refs/heads/}\" ] && [ \"${GITHUB_REF:-}\" = \"$default_ref\" ] && [ \"${GITHUB_REF_PROTECTED:-}\" = true ]; then trust=trusted; fi; check_key() { [ \"${#1}\" -le 512 ] || { printf '\\''cache key exceeds 512 bytes: %s\\n'\\'' \"$1\" >&2; exit 1; }; }; printf '\\''%s\\n'\\'' \"family=sources\" \"schema=2\" \"$RUNNER_TEMP/velnor/cargo/registry/index\" \"$RUNNER_TEMP/velnor/cargo/registry/cache\" \"$RUNNER_TEMP/velnor/cargo/git/db\" > \"$d/sources-compat\"; cat \"$d/platform\" >> \"$d/sources-compat\"; printf '\\''%s\\n'\\'' \"$RUNNER_TEMP/velnor/cargo\" >> \"$d/sources-compat\"; s256 \"$d/sources-compat\"; compat=\"s256-$h\"; : > \"$d/sources-locks\"; s256 \"$GITHUB_WORKSPACE/Cargo.lock\"; printf '\\''%s\\t%s\\n'\\'' \".\" \"$h\" >> \"$d/sources-locks\"; s256 \"$GITHUB_WORKSPACE/crates/velnor-runner/Cargo.lock\"; printf '\\''%s\\t%s\\n'\\'' \"crates/velnor-runner\" \"$h\" >> \"$d/sources-locks\"; LC_ALL=C sort \"$d/sources-locks\" > \"$d/sources-snapshot\"; s256 \"$d/sources-snapshot\"; snap=\"s256-$h\"; trusted=\"velnor-v2-sources-trusted-$compat-\"; key=\"$trusted$snap\"; check_key \"$key\"; save=false; [ \"$trust\" = none ] || save=true; printf '\\''%s\\n'\\'' \"sources_key=$key\" \"sources_save=$save\" \"sources_snapshot=$snap\" '\\''sources_restore_keys<<VELNOR_CACHE_KEYS_EOF'\\'' >> \"$GITHUB_OUTPUT\"; printf '\\''%s\\n'\\'' \"$trusted\" '\\''VELNOR_CACHE_KEYS_EOF'\\'' >> \"$GITHUB_OUTPUT\"; printf '\\''velnor: cache trust=%s sources key=%s save=%s\\n'\\'' \"$trust\" \"$key\" \"$save\"; lock_h=; if [ -f \"$GITHUB_WORKSPACE/Cargo.lock\" ] && [ ! -L \"$GITHUB_WORKSPACE/Cargo.lock\" ]; then s256 \"$GITHUB_WORKSPACE/Cargo.lock\"; lock_h=\"s256-$h\"; fi; if [ -z \"$lock_h\" ]; then printf '\\''%s\\n'\\'' absent > \"$d/absent\"; s256 \"$d/absent\"; lock_h=\"s256-$h\"; fi; if (cd \"$GITHUB_WORKSPACE\" && git ls-files -s -- '\\''.cargo'\\'' '\\'':(glob)crates/velnor-actions-*/**'\\'' '\\'':(glob)crates/velnor-archive-guard/**'\\'' '\\'':(glob)crates/velnor-runner/Cargo.toml'\\'' '\\'':(glob)crates/velnor-runner/crates/*/**'\\'' '\\'':(glob)rust-toolchain*'\\'' '\\''Cargo.toml'\\'' '\\''crates/velnor-actions-actionlint'\\'' '\\''crates/velnor-actions-ansible'\\'' '\\''crates/velnor-actions-bun'\\'' '\\''crates/velnor-actions-cli'\\'' '\\''crates/velnor-actions-contract'\\'' '\\''crates/velnor-actions-dbt'\\'' '\\''crates/velnor-actions-freshness'\\'' '\\''crates/velnor-actions-gradle'\\'' '\\''crates/velnor-actions-mise'\\'' '\\''crates/velnor-actions-orchestrator'\\'' '\\''crates/velnor-actions-rust'\\'' '\\''crates/velnor-actions-tofu'\\'' '\\''crates/velnor-actions-workflow-renderer'\\'' '\\''crates/velnor-archive-guard'\\'') > \"$d/rust-inputs-0\" 2>/dev/null; then s256 \"$d/rust-inputs-0\"; ri_h=\"s256-$h\"; printf '\\''%s\\n'\\'' \"lock=$lock_h\" \"rust_inputs=$ri_h\" \"task_set=s256-12b5b7f0e30836a62339ad04d1123da3848e1f9469912dc2e8dd3abb42c1e763\" \"producer_recipe=s256-1782ade76b4dfe3706b99f6139baddc9dd1503618556d7385df9fe79421cb660\" > \"$d/snapshot\"; s256 \"$d/snapshot\"; snap=\"s256-$h\"; printf '\\''%s\\n'\\'' \"state_root_snapshot=$snap\" >> \"$GITHUB_OUTPUT\"; else printf '\\''%s\\n'\\'' '\\''::warning::state snapshot unavailable for root root'\\''; fi; uname -s > \"$d/uname_s\" || :; uname_s=; read -r uname_s < \"$d/uname_s\" || :; uname -m > \"$d/uname_m\" || :; uname_m=; read -r uname_m < \"$d/uname_m\" || :; printf '\\''%s\\n'\\'' \"family=state\" \"schema=4\" '\\''$RUNNER_TEMP/velnor-gc1/state'\\'' \"unit=union\" \"mbx=${VELNOR_MBX_BUNDLE_VERSION}\" \"toolchain=${VELNOR_MBX_BUNDLE_TOOLCHAIN}\" \"root=.\" \"MBX_SHARE_OUT_DIR=1\" \"MBX_CC=0\" \"SOURCE_DATE_EPOCH=0\" \"MBX_BUILD_SCRIPT_EXECUTION=hybrid\" \"uname_s=$uname_s\" \"uname_m=$uname_m\" \"ImageOS=${ImageOS-}\" \"store=$RUNNER_TEMP/velnor/mbx\" \"checkout=$GITHUB_WORKSPACE\" > \"$d/compat\"; s256 \"$d/compat\"; printf '\\''%s\\n'\\'' \"state_root_compat=s256-$h\" >> \"$GITHUB_OUTPUT\"; lock_h=; if [ -f \"$GITHUB_WORKSPACE/crates/velnor-runner/Cargo.lock\" ] && [ ! -L \"$GITHUB_WORKSPACE/crates/velnor-runner/Cargo.lock\" ]; then s256 \"$GITHUB_WORKSPACE/crates/velnor-runner/Cargo.lock\"; lock_h=\"s256-$h\"; fi; if [ -z \"$lock_h\" ]; then printf '\\''%s\\n'\\'' absent > \"$d/absent\"; s256 \"$d/absent\"; lock_h=\"s256-$h\"; fi; if (cd \"$GITHUB_WORKSPACE\" && git ls-files -s -- '\\''.cargo'\\'' '\\'':(glob)crates/rust-toolchain*'\\'' '\\'':(glob)crates/velnor-runner/rust-toolchain*'\\'' '\\'':(glob)rust-toolchain*'\\'' '\\''crates/.cargo'\\'' '\\''crates/velnor-runner/.cargo'\\'' '\\''crates/velnor-runner/Cargo.toml'\\'' '\\''crates/velnor-runner/crates/velnor-resource-probe'\\'' '\\''crates/velnor-runner/crates/velnor-runner-attestation'\\'' '\\''crates/velnor-runner/crates/velnor-runner-cli'\\'' '\\''crates/velnor-runner/crates/velnor-runner-core'\\'' '\\''crates/velnor-runner/crates/velnor-runner-github'\\'' '\\''crates/velnor-runner/crates/velnor-runner-host'\\'') > \"$d/rust-inputs-1\" 2>/dev/null; then s256 \"$d/rust-inputs-1\"; ri_h=\"s256-$h\"; printf '\\''%s\\n'\\'' \"lock=$lock_h\" \"rust_inputs=$ri_h\" \"task_set=s256-cdfd27ffd6bf22fd77de1d5419d0998d66d615840630c9a0bb732644cb928830\" \"producer_recipe=s256-376a50c763a579d95b384ae53b6e9ab4939d10588bee63ebfa6ae12af2810220\" > \"$d/snapshot\"; s256 \"$d/snapshot\"; snap=\"s256-$h\"; printf '\\''%s\\n'\\'' \"state_crates_velnor_runner_snapshot=$snap\" >> \"$GITHUB_OUTPUT\"; else printf '\\''%s\\n'\\'' '\\''::warning::state snapshot unavailable for root crates-velnor-runner'\\''; fi; uname -s > \"$d/uname_s\" || :; uname_s=; read -r uname_s < \"$d/uname_s\" || :; uname -m > \"$d/uname_m\" || :; uname_m=; read -r uname_m < \"$d/uname_m\" || :; printf '\\''%s\\n'\\'' \"family=state\" \"schema=4\" '\\''$RUNNER_TEMP/velnor-gc1/state'\\'' \"unit=union\" \"mbx=${VELNOR_MBX_BUNDLE_VERSION}\" \"toolchain=${VELNOR_MBX_BUNDLE_TOOLCHAIN}\" \"root=crates/velnor-runner\" \"MBX_SHARE_OUT_DIR=1\" \"MBX_CC=0\" \"SOURCE_DATE_EPOCH=0\" \"MBX_BUILD_SCRIPT_EXECUTION=hybrid\" \"uname_s=$uname_s\" \"uname_m=$uname_m\" \"ImageOS=${ImageOS-}\" \"store=$RUNNER_TEMP/velnor/mbx\" \"checkout=$GITHUB_WORKSPACE\" > \"$d/compat\"; s256 \"$d/compat\"; printf '\\''%s\\n'\\'' \"state_crates_velnor_runner_compat=s256-$h\" >> \"$GITHUB_OUTPUT\"; printf '\\''%s\\n'\\'' \"trust=$trust\" >> \"$GITHUB_OUTPUT\"'"
+        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; case \"$RUNNER_TEMP\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''RUNNER_TEMP must be absolute'\\'' >&2; exit 1 ;; esac; d=\"$RUNNER_TEMP/velnor/cache-keys\"; rm -rf \"$d\"; mkdir -p \"$d\"; s256() { sha256sum \"$1\" > \"$d/sum\"; h=; rest=; read -r h rest < \"$d/sum\" || [ -n \"$h\" ]; case \"$h\" in '\\'''\\''|*[!0-9a-f]*) printf '\\''%s\\n'\\'' '\\''sha256sum returned no digest'\\'' >&2; exit 1 ;; esac; [ \"${#h}\" -eq 64 ] || exit 1; }; uname -s > \"$d/platform\"; uname -m >> \"$d/platform\"; default_ref=\"${VELNOR_DEFAULT_REF:-}\"; trust=none; if [ \"${GITHUB_EVENT_NAME:-}\" = push ] && [ -n \"${default_ref#refs/heads/}\" ] && [ \"${GITHUB_REF:-}\" = \"$default_ref\" ] && [ \"${GITHUB_REF_PROTECTED:-}\" = true ]; then trust=trusted; fi; check_key() { [ \"${#1}\" -le 512 ] || { printf '\\''cache key exceeds 512 bytes: %s\\n'\\'' \"$1\" >&2; exit 1; }; }; printf '\\''%s\\n'\\'' \"family=sources\" \"schema=2\" \"$RUNNER_TEMP/velnor/cargo/registry/index\" \"$RUNNER_TEMP/velnor/cargo/registry/cache\" \"$RUNNER_TEMP/velnor/cargo/git/db\" > \"$d/sources-compat\"; cat \"$d/platform\" >> \"$d/sources-compat\"; printf '\\''%s\\n'\\'' \"$RUNNER_TEMP/velnor/cargo\" >> \"$d/sources-compat\"; s256 \"$d/sources-compat\"; compat=\"s256-$h\"; : > \"$d/sources-locks\"; s256 \"$GITHUB_WORKSPACE/Cargo.lock\"; printf '\\''%s\\t%s\\n'\\'' \".\" \"$h\" >> \"$d/sources-locks\"; s256 \"$GITHUB_WORKSPACE/crates/velnor-runner/Cargo.lock\"; printf '\\''%s\\t%s\\n'\\'' \"crates/velnor-runner\" \"$h\" >> \"$d/sources-locks\"; LC_ALL=C sort \"$d/sources-locks\" > \"$d/sources-snapshot\"; s256 \"$d/sources-snapshot\"; snap=\"s256-$h\"; trusted=\"velnor-v2-sources-trusted-$compat-\"; key=\"$trusted$snap\"; check_key \"$key\"; save=false; [ \"$trust\" = none ] || save=true; printf '\\''%s\\n'\\'' \"sources_key=$key\" \"sources_save=$save\" \"sources_snapshot=$snap\" '\\''sources_restore_keys<<VELNOR_CACHE_KEYS_EOF'\\'' >> \"$GITHUB_OUTPUT\"; printf '\\''%s\\n'\\'' \"$trusted\" '\\''VELNOR_CACHE_KEYS_EOF'\\'' >> \"$GITHUB_OUTPUT\"; printf '\\''velnor: cache trust=%s sources key=%s save=%s\\n'\\'' \"$trust\" \"$key\" \"$save\"; lock_h=; if [ -f \"$GITHUB_WORKSPACE/Cargo.lock\" ] && [ ! -L \"$GITHUB_WORKSPACE/Cargo.lock\" ]; then s256 \"$GITHUB_WORKSPACE/Cargo.lock\"; lock_h=\"s256-$h\"; fi; if [ -z \"$lock_h\" ]; then printf '\\''%s\\n'\\'' absent > \"$d/absent\"; s256 \"$d/absent\"; lock_h=\"s256-$h\"; fi; if (cd \"$GITHUB_WORKSPACE\" && git ls-files -s -- '\\''.cargo'\\'' '\\'':(glob)crates/velnor-actions-*/**'\\'' '\\'':(glob)crates/velnor-archive-guard/**'\\'' '\\'':(glob)crates/velnor-runner/Cargo.toml'\\'' '\\'':(glob)crates/velnor-runner/crates/*/**'\\'' '\\'':(glob)rust-toolchain*'\\'' '\\''Cargo.toml'\\'' '\\''crates/velnor-actions-actionlint'\\'' '\\''crates/velnor-actions-ansible'\\'' '\\''crates/velnor-actions-bun'\\'' '\\''crates/velnor-actions-cli'\\'' '\\''crates/velnor-actions-contract'\\'' '\\''crates/velnor-actions-dbt'\\'' '\\''crates/velnor-actions-freshness'\\'' '\\''crates/velnor-actions-gradle'\\'' '\\''crates/velnor-actions-mise'\\'' '\\''crates/velnor-actions-orchestrator'\\'' '\\''crates/velnor-actions-rust'\\'' '\\''crates/velnor-actions-tofu'\\'' '\\''crates/velnor-actions-workflow-renderer'\\'' '\\''crates/velnor-archive-guard'\\'') > \"$d/rust-inputs-0\" 2>/dev/null; then s256 \"$d/rust-inputs-0\"; ri_h=\"s256-$h\"; printf '\\''%s\\n'\\'' \"lock=$lock_h\" \"rust_inputs=$ri_h\" \"task_set=s256-72d71456e7875d08eab731ac8fac1f652852127ce0d7f34cbe8c2cbb601e6c30\" > \"$d/snapshot\"; s256 \"$d/snapshot\"; snap=\"s256-$h\"; printf '\\''%s\\n'\\'' \"state_root_snapshot=$snap\" >> \"$GITHUB_OUTPUT\"; else printf '\\''%s\\n'\\'' '\\''::warning::state snapshot unavailable for root root'\\''; fi; uname -s > \"$d/uname_s\" || :; uname_s=; read -r uname_s < \"$d/uname_s\" || :; uname -m > \"$d/uname_m\" || :; uname_m=; read -r uname_m < \"$d/uname_m\" || :; printf '\\''%s\\n'\\'' \"family=state\" \"schema=4\" '\\''$RUNNER_TEMP/velnor-gc1/state'\\'' \"unit=union\" \"mbx=${VELNOR_MBX_BUNDLE_VERSION}\" \"toolchain=${VELNOR_MBX_BUNDLE_TOOLCHAIN}\" \"root=.\" \"MBX_SHARE_OUT_DIR=1\" \"MBX_CC=0\" \"SOURCE_DATE_EPOCH=0\" \"MBX_BUILD_SCRIPT_EXECUTION=hybrid\" \"uname_s=$uname_s\" \"uname_m=$uname_m\" \"ImageOS=${ImageOS-}\" \"store=$RUNNER_TEMP/velnor/mbx\" \"checkout=$GITHUB_WORKSPACE\" > \"$d/compat\"; s256 \"$d/compat\"; printf '\\''%s\\n'\\'' \"state_root_compat=s256-$h\" >> \"$GITHUB_OUTPUT\"; lock_h=; if [ -f \"$GITHUB_WORKSPACE/crates/velnor-runner/Cargo.lock\" ] && [ ! -L \"$GITHUB_WORKSPACE/crates/velnor-runner/Cargo.lock\" ]; then s256 \"$GITHUB_WORKSPACE/crates/velnor-runner/Cargo.lock\"; lock_h=\"s256-$h\"; fi; if [ -z \"$lock_h\" ]; then printf '\\''%s\\n'\\'' absent > \"$d/absent\"; s256 \"$d/absent\"; lock_h=\"s256-$h\"; fi; if (cd \"$GITHUB_WORKSPACE\" && git ls-files -s -- '\\''.cargo'\\'' '\\'':(glob)crates/rust-toolchain*'\\'' '\\'':(glob)crates/velnor-runner/rust-toolchain*'\\'' '\\'':(glob)rust-toolchain*'\\'' '\\''crates/.cargo'\\'' '\\''crates/velnor-runner/.cargo'\\'' '\\''crates/velnor-runner/Cargo.toml'\\'' '\\''crates/velnor-runner/crates/velnor-resource-probe'\\'' '\\''crates/velnor-runner/crates/velnor-runner-attestation'\\'' '\\''crates/velnor-runner/crates/velnor-runner-cli'\\'' '\\''crates/velnor-runner/crates/velnor-runner-core'\\'' '\\''crates/velnor-runner/crates/velnor-runner-github'\\'' '\\''crates/velnor-runner/crates/velnor-runner-host'\\'') > \"$d/rust-inputs-1\" 2>/dev/null; then s256 \"$d/rust-inputs-1\"; ri_h=\"s256-$h\"; printf '\\''%s\\n'\\'' \"lock=$lock_h\" \"rust_inputs=$ri_h\" \"task_set=s256-7552a0c8f0ae217c82b73fb3b6ef8e15d8f32e826405e163b82fb907e41d41c1\" > \"$d/snapshot\"; s256 \"$d/snapshot\"; snap=\"s256-$h\"; printf '\\''%s\\n'\\'' \"state_crates_velnor_runner_snapshot=$snap\" >> \"$GITHUB_OUTPUT\"; else printf '\\''%s\\n'\\'' '\\''::warning::state snapshot unavailable for root crates-velnor-runner'\\''; fi; uname -s > \"$d/uname_s\" || :; uname_s=; read -r uname_s < \"$d/uname_s\" || :; uname -m > \"$d/uname_m\" || :; uname_m=; read -r uname_m < \"$d/uname_m\" || :; printf '\\''%s\\n'\\'' \"family=state\" \"schema=4\" '\\''$RUNNER_TEMP/velnor-gc1/state'\\'' \"unit=union\" \"mbx=${VELNOR_MBX_BUNDLE_VERSION}\" \"toolchain=${VELNOR_MBX_BUNDLE_TOOLCHAIN}\" \"root=crates/velnor-runner\" \"MBX_SHARE_OUT_DIR=1\" \"MBX_CC=0\" \"SOURCE_DATE_EPOCH=0\" \"MBX_BUILD_SCRIPT_EXECUTION=hybrid\" \"uname_s=$uname_s\" \"uname_m=$uname_m\" \"ImageOS=${ImageOS-}\" \"store=$RUNNER_TEMP/velnor/mbx\" \"checkout=$GITHUB_WORKSPACE\" > \"$d/compat\"; s256 \"$d/compat\"; printf '\\''%s\\n'\\'' \"state_crates_velnor_runner_compat=s256-$h\" >> \"$GITHUB_OUTPUT\"; printf '\\''%s\\n'\\'' \"trust=$trust\" >> \"$GITHUB_OUTPUT\"'"
       - name: Select attested state
         id: state-select
         env:
@@ -577,11 +577,6 @@ jobs:
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-27698586a8d8f5a1583cd99f7a62be678c771f9733a5ce40fe2d3d1a5e38d33e"}
-      - name: Doctests
-        background: true
-        if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
-        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-a32ca261890fa37523682b29d2a0040691829011a3578566d0ebabcf82929f67"}
       - name: Documentation
         background: true
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
@@ -614,11 +609,6 @@ jobs:
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-5b08e7d383fec2811d6921334b9cedfbe4a583439cbfe32788d4b604186b4ed7"}
-      - name: Doctests
-        background: true
-        if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
-        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-bbaa129b89357754733f5d6013ef1336bd3bc2854be84075206b07a4d87e354c"}
       - name: Documentation
         background: true
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
@@ -635,11 +625,6 @@ jobs:
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-c9ad1fdb570bb03ab744c3782d6b691a5d095ab92acfca81e6ce39bf6d2e02d7"}
-      - name: Doctests
-        background: true
-        if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
-        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-496334997d6104165c172b740d360501116e2fa8676c3f276c81d2e32b80dee6"}
       - name: Documentation
         background: true
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
@@ -656,11 +641,6 @@ jobs:
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-453d5dbbc394cc4fb51d23f0e715c2b1d25ea68726389ec26c64d21a9c170562"}
-      - name: Doctests
-        background: true
-        if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
-        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-61809f54acd9e5583b195cec8790da8ba9fd4521bb3ce791ed80ed146d1826e3"}
       - name: Documentation
         background: true
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
@@ -677,11 +657,6 @@ jobs:
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-1c767304176d57ba72dee2af06b2cad679c44ff46914ebe04aa19a11cd9d9ab2"}
-      - name: Doctests
-        background: true
-        if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
-        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-4996763e652938b096c3a8146b0b494e74403be9fd73338209ea314a4400923c"}
       - name: Documentation
         background: true
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
@@ -701,11 +676,6 @@ jobs:
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-27698586a8d8f5a1583cd99f7a62be678c771f9733a5ce40fe2d3d1a5e38d33e"}
-      - name: Doctests
-        background: true
-        if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
-        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-a32ca261890fa37523682b29d2a0040691829011a3578566d0ebabcf82929f67"}
       - name: Documentation
         background: true
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
@@ -738,11 +708,6 @@ jobs:
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-5b08e7d383fec2811d6921334b9cedfbe4a583439cbfe32788d4b604186b4ed7"}
-      - name: Doctests
-        background: true
-        if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
-        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-bbaa129b89357754733f5d6013ef1336bd3bc2854be84075206b07a4d87e354c"}
       - name: Documentation
         background: true
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
@@ -759,11 +724,6 @@ jobs:
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-c9ad1fdb570bb03ab744c3782d6b691a5d095ab92acfca81e6ce39bf6d2e02d7"}
-      - name: Doctests
-        background: true
-        if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
-        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-496334997d6104165c172b740d360501116e2fa8676c3f276c81d2e32b80dee6"}
       - name: Documentation
         background: true
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
@@ -780,11 +740,6 @@ jobs:
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-453d5dbbc394cc4fb51d23f0e715c2b1d25ea68726389ec26c64d21a9c170562"}
-      - name: Doctests
-        background: true
-        if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
-        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-61809f54acd9e5583b195cec8790da8ba9fd4521bb3ce791ed80ed146d1826e3"}
       - name: Documentation
         background: true
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
@@ -801,11 +756,6 @@ jobs:
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-1c767304176d57ba72dee2af06b2cad679c44ff46914ebe04aa19a11cd9d9ab2"}
-      - name: Doctests
-        background: true
-        if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
-        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-4996763e652938b096c3a8146b0b494e74403be9fd73338209ea314a4400923c"}
       - name: Documentation
         background: true
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
@@ -1046,11 +996,6 @@ jobs:
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-1ea73c9afabe472a278252d3ca53094adc9b85b25378a4391c94c2cb0c135589"}
-      - name: Doctests
-        background: true
-        if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
-        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-7b9b572f2fc5fbd2e47d3eb4d0d68e5904d2102142b7ad692a7a49a442b09a7a"}
       - name: Documentation
         background: true
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
@@ -1067,11 +1012,6 @@ jobs:
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-d2ac4204ae08d3169276d402d3b46da66383a7ab21f067e8d21d214f4051c167"}
-      - name: Doctests
-        background: true
-        if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
-        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-c83f097948ab9fea355e49b6224f35ce79911f51bc7d452d477225b41c29d746"}
       - name: Documentation
         background: true
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
@@ -1088,11 +1028,6 @@ jobs:
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-caee46d1356bdd9d85c580b5c7d56ec9839b6b047908fce9fc7854d565ff7f2f"}
-      - name: Doctests
-        background: true
-        if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
-        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-8dd4214ac99b4d0bb01f2b5516b6fd0edd93dc9bc4017176c704fa1687cd64e8"}
       - name: Documentation
         background: true
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
@@ -1125,11 +1060,6 @@ jobs:
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-7a806cf4f58f22997895bc68e9f1352b0a3b62efbac16efc29282884babf26bd"}
-      - name: Doctests
-        background: true
-        if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
-        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-714953866702946f11f225f7bff838bd1625a7eb762154ff98d96e32c58d2005"}
       - name: Documentation
         background: true
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
@@ -1146,11 +1076,6 @@ jobs:
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-43042c0677eedb286f7603a36e7638d58983e59559a6b437a70ccdb388efab9d"}
-      - name: Doctests
-        background: true
-        if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
-        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-823332f768933aaecf0425fa8cd478c64079edfe24b87e28b8f6f5bb8256fc65"}
       - name: Documentation
         background: true
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
@@ -1167,11 +1092,6 @@ jobs:
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-93ddaa7e9d1205f23d5de7cd349b822dfc660e6bb1b035cc64f4fd86d2b0c3b4"}
-      - name: Doctests
-        background: true
-        if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
-        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-edfe8ce12bef8e1c8e226307a9b9eea41aaee5f404c82cc73561513bf12d8142"}
       - name: Documentation
         background: true
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
@@ -1188,11 +1108,6 @@ jobs:
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-06e63359b3ac9ea1538cb68219f2f5214bc3889399f032b9cd5cffbc3af3e0de"}
-      - name: Doctests
-        background: true
-        if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
-        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-1d6ab45eb0dc94a8326f2584854bb00557c30bd3d46afc63215a0357da159b64"}
       - name: Documentation
         background: true
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
@@ -1209,11 +1124,6 @@ jobs:
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-1f087d64cdc850c9a54cbb5c687164ecbcc9bb6cd5a23aafb25e4949416d97f0"}
-      - name: Doctests
-        background: true
-        if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
-        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-3d03b5844b2d209063e61b00fa2a57540c1b0f72b871b2e66618c2faff6e54ad"}
       - name: Documentation
         background: true
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
@@ -1230,11 +1140,6 @@ jobs:
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-7797a79c94bec58af70c7c6724740a54ad155feb1672c4de9ffb4e5f7cc076bd"}
-      - name: Doctests
-        background: true
-        if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
-        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-9ac56aba691bb478949ed24253442676f10c8a969fabbad71578990a47968397"}
       - name: Documentation
         background: true
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
@@ -1251,11 +1156,6 @@ jobs:
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-a63253391d1fbdfda2ea66c3b08404b429138217443d29835e09c2a586e9de43"}
-      - name: Doctests
-        background: true
-        if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
-        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-cfc3fd4b4f8d311fa42c730e7a99d83c0e96f1fff80853feadc3faba46764318"}
       - name: Documentation
         background: true
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
@@ -1272,11 +1172,6 @@ jobs:
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-94490c835d235f8cdbf41e9416f061d4c668f100158a07c6439f374bab0bb7b9"}
-      - name: Doctests
-        background: true
-        if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
-        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-51b8a083d8ebeea997bf6cdfa005792a0e5d6ae7d58fc8f7fe2fb07e5b11c6ad"}
       - name: Documentation
         background: true
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
@@ -1296,11 +1191,6 @@ jobs:
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-1ea73c9afabe472a278252d3ca53094adc9b85b25378a4391c94c2cb0c135589"}
-      - name: Doctests
-        background: true
-        if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
-        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-7b9b572f2fc5fbd2e47d3eb4d0d68e5904d2102142b7ad692a7a49a442b09a7a"}
       - name: Documentation
         background: true
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
@@ -1317,11 +1207,6 @@ jobs:
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-d2ac4204ae08d3169276d402d3b46da66383a7ab21f067e8d21d214f4051c167"}
-      - name: Doctests
-        background: true
-        if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
-        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-c83f097948ab9fea355e49b6224f35ce79911f51bc7d452d477225b41c29d746"}
       - name: Documentation
         background: true
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
@@ -1338,11 +1223,6 @@ jobs:
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-caee46d1356bdd9d85c580b5c7d56ec9839b6b047908fce9fc7854d565ff7f2f"}
-      - name: Doctests
-        background: true
-        if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
-        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-8dd4214ac99b4d0bb01f2b5516b6fd0edd93dc9bc4017176c704fa1687cd64e8"}
       - name: Documentation
         background: true
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
@@ -1375,11 +1255,6 @@ jobs:
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-7a806cf4f58f22997895bc68e9f1352b0a3b62efbac16efc29282884babf26bd"}
-      - name: Doctests
-        background: true
-        if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
-        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-714953866702946f11f225f7bff838bd1625a7eb762154ff98d96e32c58d2005"}
       - name: Documentation
         background: true
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
@@ -1396,11 +1271,6 @@ jobs:
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-43042c0677eedb286f7603a36e7638d58983e59559a6b437a70ccdb388efab9d"}
-      - name: Doctests
-        background: true
-        if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
-        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-823332f768933aaecf0425fa8cd478c64079edfe24b87e28b8f6f5bb8256fc65"}
       - name: Documentation
         background: true
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
@@ -1417,11 +1287,6 @@ jobs:
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-93ddaa7e9d1205f23d5de7cd349b822dfc660e6bb1b035cc64f4fd86d2b0c3b4"}
-      - name: Doctests
-        background: true
-        if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
-        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-edfe8ce12bef8e1c8e226307a9b9eea41aaee5f404c82cc73561513bf12d8142"}
       - name: Documentation
         background: true
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
@@ -1438,11 +1303,6 @@ jobs:
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-06e63359b3ac9ea1538cb68219f2f5214bc3889399f032b9cd5cffbc3af3e0de"}
-      - name: Doctests
-        background: true
-        if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
-        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-1d6ab45eb0dc94a8326f2584854bb00557c30bd3d46afc63215a0357da159b64"}
       - name: Documentation
         background: true
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
@@ -1459,11 +1319,6 @@ jobs:
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-1f087d64cdc850c9a54cbb5c687164ecbcc9bb6cd5a23aafb25e4949416d97f0"}
-      - name: Doctests
-        background: true
-        if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
-        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-3d03b5844b2d209063e61b00fa2a57540c1b0f72b871b2e66618c2faff6e54ad"}
       - name: Documentation
         background: true
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
@@ -1480,11 +1335,6 @@ jobs:
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-7797a79c94bec58af70c7c6724740a54ad155feb1672c4de9ffb4e5f7cc076bd"}
-      - name: Doctests
-        background: true
-        if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
-        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-9ac56aba691bb478949ed24253442676f10c8a969fabbad71578990a47968397"}
       - name: Documentation
         background: true
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
@@ -1501,11 +1351,6 @@ jobs:
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-a63253391d1fbdfda2ea66c3b08404b429138217443d29835e09c2a586e9de43"}
-      - name: Doctests
-        background: true
-        if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
-        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-cfc3fd4b4f8d311fa42c730e7a99d83c0e96f1fff80853feadc3faba46764318"}
       - name: Documentation
         background: true
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
@@ -1522,11 +1367,6 @@ jobs:
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-94490c835d235f8cdbf41e9416f061d4c668f100158a07c6439f374bab0bb7b9"}
-      - name: Doctests
-        background: true
-        if: steps.mbx-bundle-import.outputs.producer_skip != 'true'
-        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-51b8a083d8ebeea997bf6cdfa005792a0e5d6ae7d58fc8f7fe2fb07e5b11c6ad"}
       - name: Documentation
         background: true
         if: steps.mbx-bundle-import.outputs.producer_skip != 'true'

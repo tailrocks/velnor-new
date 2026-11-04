@@ -10,6 +10,7 @@ license.workspace = true
 autotests = false
 
 [lib]
+doctest = false
 test = false
 
 [lints]
