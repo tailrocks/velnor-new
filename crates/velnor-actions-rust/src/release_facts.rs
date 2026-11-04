@@ -23,14 +23,21 @@ pub enum DepSource {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DependencyRegistry {
+    Name(String),
+    Index(String),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DepFact {
     pub from: String,
     pub name: String,
     pub req: String,
+    pub version_declared: bool,
     pub kind: DepKind,
     pub optional: bool,
     pub target: Option<String>,
-    pub registry: Option<String>,
+    pub registry: Option<DependencyRegistry>,
     pub source: DepSource,
     pub to: Option<String>,
 }
@@ -104,6 +111,8 @@ struct RawReleaseDep {
     #[serde(default)]
     package: Option<String>,
     #[serde(default)]
+    rename: Option<String>,
+    #[serde(default)]
     req: String,
     #[serde(default)]
     kind: Option<String>,
@@ -122,6 +131,8 @@ struct RawReleaseDep {
 pub(crate) fn parse_release_facts(
     json: &str,
     manifest_hint: &str,
+    root: &std::path::Path,
+    workspace: &crate::metadata::WorkspaceRecord,
 ) -> Result<ReleaseFacts, ReleaseError> {
     let raw: RawReleaseMetadata =
         serde_json::from_str(json).map_err(|err| ReleaseError::FactsInvalid {
@@ -135,7 +146,24 @@ pub(crate) fn parse_release_facts(
         publish.insert(package.id.clone(), publish_setting(package)?);
         let mut facts = Vec::with_capacity(package.dependencies.len());
         for dependency in &package.dependencies {
-            facts.push(convert_dep(package, dependency, &dirs, manifest_hint)?);
+            let mut fact = convert_dep(package, dependency, &dirs, manifest_hint)?;
+            if fact.req == "*"
+                && matches!(fact.source, DepSource::Path | DepSource::Git)
+                && workspace.packages.iter().any(|candidate| {
+                    candidate.id == package.id && candidate.in_workspace && !candidate.external
+                })
+            {
+                let alias = dependency.rename.as_deref().unwrap_or(&dependency.name);
+                fact.version_declared = crate::release_manifest_dependency::version_declared(
+                    root,
+                    workspace,
+                    &package.id,
+                    alias,
+                    fact.kind,
+                    fact.target.as_deref(),
+                )?;
+            }
+            facts.push(fact);
         }
         facts.sort_by(|left: &DepFact, right: &DepFact| {
             (&left.name, &left.req).cmp(&(&right.name, &right.req))
@@ -169,7 +197,7 @@ fn publish_setting(package: &RawReleasePackage) -> Result<PublishSetting, Releas
 fn manifest_dirs(packages: &[RawReleasePackage]) -> BTreeMap<String, String> {
     let mut dirs = BTreeMap::new();
     for package in packages {
-        let normalized = package.manifest_path.replace('\\', "/");
+        let normalized = crate::metadata_edges::normalize_separators(&package.manifest_path);
         let dir = match normalized.rsplit_once('/') {
             Some((dir, _)) => dir.to_owned(),
             None => normalized,
@@ -185,21 +213,14 @@ fn convert_dep(
     dirs: &BTreeMap<String, String>,
     hint: &str,
 ) -> Result<DepFact, ReleaseError> {
-    if let Some(registry) = dependency.registry.as_deref()
-        && !validate_registry_name(registry)
-    {
-        return Err(ReleaseError::InvalidRegistry {
-            package: package.name.clone(),
-            registry: registry.to_owned(),
-        });
-    }
+    let registry = dependency_registry(package, dependency)?;
     let name = dependency
         .package
         .clone()
         .unwrap_or_else(|| dependency.name.clone());
     let source = classify_source(dependency);
     let to = match (&source, dependency.path.as_deref()) {
-        (DepSource::Path, Some(path)) => Some(resolve_dep_path(package, &name, path, dirs)?),
+        (DepSource::Path, Some(path)) => resolve_dep_path(path, dirs),
         (DepSource::Path, None) => {
             return Err(ReleaseError::UnresolvedLocalDep {
                 package: package.name.clone(),
@@ -213,13 +234,65 @@ fn convert_dep(
         from: package.id.clone(),
         name,
         req: dependency.req.clone(),
+        version_declared: dependency.req != "*",
         kind: dep_kind(dependency.kind.as_deref(), hint).map_err(ReleaseError::Metadata)?,
         optional: dependency.optional,
         target: dep_target(dependency.target.as_ref(), hint).map_err(ReleaseError::Metadata)?,
-        registry: dependency.registry.clone(),
+        registry,
         source,
         to,
     })
+}
+
+fn dependency_registry(
+    package: &RawReleasePackage,
+    dependency: &RawReleaseDep,
+) -> Result<Option<DependencyRegistry>, ReleaseError> {
+    let declared = dependency
+        .registry
+        .as_deref()
+        .map(|registry| {
+            if validate_registry_name(registry) {
+                Ok(DependencyRegistry::Name(registry.to_owned()))
+            } else if registry.starts_with("sparse+")
+                || registry.starts_with("registry+")
+                || registry.starts_with("https://")
+                || registry.starts_with("http://")
+                || registry.starts_with("file://")
+            {
+                Ok(DependencyRegistry::Index(registry.to_owned()))
+            } else {
+                Err(ReleaseError::InvalidRegistry {
+                    package: package.name.clone(),
+                    registry: registry.to_owned(),
+                })
+            }
+        })
+        .transpose()?;
+    let Some(source) = dependency
+        .source
+        .as_deref()
+        .filter(|source| source.starts_with("registry+") || source.starts_with("sparse+"))
+    else {
+        return Ok(declared);
+    };
+    if let Some(DependencyRegistry::Index(index)) = &declared
+        && index != source
+    {
+        return Err(ReleaseError::MetadataMismatch {
+            detail: format!(
+                "dependency {} has mismatched registry identities",
+                dependency.name
+            ),
+        });
+    }
+    if matches!(
+        source,
+        "registry+https://github.com/rust-lang/crates.io-index" | "sparse+https://index.crates.io/"
+    ) {
+        return Ok(declared);
+    }
+    Ok(Some(DependencyRegistry::Index(source.to_owned())))
 }
 
 fn classify_source(dependency: &RawReleaseDep) -> DepSource {
@@ -228,30 +301,19 @@ fn classify_source(dependency: &RawReleaseDep) -> DepSource {
     }
     match dependency.source.as_deref() {
         None => DepSource::Registry,
-        Some(text) if text.starts_with("registry+") => DepSource::Registry,
+        Some(text) if text.starts_with("registry+") || text.starts_with("sparse+") => {
+            DepSource::Registry
+        }
         Some(text) if text.starts_with("git+") => DepSource::Git,
         Some(text) if text.starts_with("path+") => DepSource::Path,
         Some(text) => DepSource::Other(text.to_owned()),
     }
 }
 
-fn resolve_dep_path(
-    package: &RawReleasePackage,
-    dep: &str,
-    path: &str,
-    dirs: &BTreeMap<String, String>,
-) -> Result<String, ReleaseError> {
-    let dir = path.replace('\\', "/");
-    let dir = dir
-        .strip_suffix('/')
-        .map_or_else(|| dir.clone(), str::to_owned);
-    dirs.get(&dir)
-        .cloned()
-        .ok_or_else(|| ReleaseError::UnresolvedLocalDep {
-            package: package.name.clone(),
-            dep: dep.to_owned(),
-            path: path.to_owned(),
-        })
+fn resolve_dep_path(path: &str, dirs: &BTreeMap<String, String>) -> Option<String> {
+    let dir = crate::metadata_edges::normalize_separators(path);
+    let dir = dir.strip_suffix('/').unwrap_or(&dir);
+    dirs.get(dir).cloned()
 }
 
 fn dep_kind(raw: Option<&str>, hint: &str) -> Result<DepKind, MetadataError> {
