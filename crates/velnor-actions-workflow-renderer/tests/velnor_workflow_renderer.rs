@@ -16,6 +16,7 @@ mod gc1_scene_assert;
 #[cfg(target_os = "linux")]
 mod gc1_scene_bounded;
 mod gc1_scene_key;
+mod gc1_scene_resolve;
 mod gc1_scene_seal;
 mod gc1_scene_tree;
 mod gc1_seal_support;

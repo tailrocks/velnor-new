@@ -7,12 +7,9 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
-use velnor_actions_contract::workflow::cache_family_mbx::{
-    MBX_BUNDLE_KEY_EXPR, MBX_BUNDLE_MATCHED_KEY_EXPR,
-};
-
 use crate::gc1_mbx_stub;
 pub(crate) use crate::gc1_scene_key::{DEFAULT_SNAPSHOT, Key};
+use crate::gc1_scene_resolve::resolve;
 pub(crate) use crate::gc1_scene_tree::{Tree, files_under};
 use crate::gc1_scene_tree::{tree_of, unlock_tree};
 
@@ -377,43 +374,4 @@ impl Drop for Scene {
         unlock_tree(&self.scratch);
         drop(std::fs::remove_dir_all(&self.scratch));
     }
-}
-
-fn resolve(
-    text: &str,
-    matched: &str,
-    selected: &str,
-    runner: &Path,
-) -> Result<String, Box<dyn Error>> {
-    let strip = |expr: &str| -> String {
-        expr.strip_prefix("${{")
-            .and_then(|rest| rest.strip_suffix("}}"))
-            .unwrap_or(expr)
-            .trim()
-            .to_owned()
-    };
-    let matched_expr = strip(MBX_BUNDLE_MATCHED_KEY_EXPR);
-    let selected_expr = strip(MBX_BUNDLE_KEY_EXPR);
-    let mut out = String::new();
-    let mut rest = text;
-    while let Some(at) = rest.find("${{") {
-        out.push_str(&rest[..at]);
-        let after = &rest[at + 3..];
-        let end = after
-            .find("}}")
-            .ok_or_else(|| fail("unterminated expression"))?;
-        let inner = after[..end].trim();
-        if inner == matched_expr {
-            out.push_str(matched);
-        } else if inner == selected_expr {
-            out.push_str(selected);
-        } else if inner == "runner.temp" {
-            out.push_str(&runner.display().to_string());
-        } else {
-            return Err(fail(&format!("unresolved expression {inner}")));
-        }
-        rest = &after[end + 2..];
-    }
-    out.push_str(rest);
-    Ok(out)
 }

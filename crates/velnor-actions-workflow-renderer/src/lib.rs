@@ -126,16 +126,6 @@ mod verifier_shell;
 mod waste_lint;
 mod waste_lint_env;
 
-pub const VERIFY_RUST_TOOLCHAIN_STEP: &str = "Verify Rust channel manifest";
-
-pub const VERIFY_PATH: &str = "/usr/bin:/bin:/usr/sbin:/sbin";
-
-pub const VERIFY_VERIFIER_SHELL: &str = "/bin/bash --noprofile --norc -p -e -o pipefail {0}";
-
-#[must_use]
-pub fn jactionlint_verifier_script(version: &str) -> String {
-    selected_mise_verifier::script_for_version(version)
-}
 pub mod verification_jobs;
 pub mod verifier_builders;
 pub mod verifier_composite;
@@ -146,7 +136,5 @@ pub mod yaml;
 
 mod root_api;
 pub use self::root_api::*;
-
-pub const RENDERER_VERSION: u32 = 2;
 
 pub mod review_completion;

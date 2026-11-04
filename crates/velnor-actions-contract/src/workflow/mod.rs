@@ -29,6 +29,7 @@ pub mod plan;
 mod plan_jobs;
 pub mod platform;
 mod producer;
+mod producer_order;
 mod producer_roles;
 pub use producer::{
     DEPENDENCY_SEED_JOB_CONDITION, LANE_SURVIVAL_CONDITION, ProducerKind,
