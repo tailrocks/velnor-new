@@ -42,22 +42,33 @@ pub fn run_crate_release(operation: &str) -> Result<(), OrchestratorError> {
 }
 
 fn run_qualified_crate_release(operation: &str) -> Result<(), OrchestratorError> {
+    let workspace = required_path("GITHUB_WORKSPACE")?;
     let git = crate::crate_release_git::ReleaseGit::new(
         velnor_actions_mise::release_git_pin::verify_bundle(
             &required_path("RUNNER_TEMP")?.join("velnor/git-bundle"),
         )
         .map_err(|_| internal("release_git_bundle_invalid"))?,
     );
-    run_qualified_crate_release_with_git(operation, &git)
+    run_qualified_crate_release_with_git(operation, &git, &workspace)
+}
+
+#[cfg(test)]
+fn run_qualified_with_fixture_git(operation: &str) -> Result<(), OrchestratorError> {
+    let workspace = required_path("GITHUB_WORKSPACE")?;
+    run_qualified_crate_release_with_git(
+        operation,
+        &crate::crate_release_git::ReleaseGit::host_fixture(),
+        &workspace,
+    )
 }
 
 fn run_qualified_crate_release_with_git(
     operation: &str,
     git: &crate::crate_release_git::ReleaseGit,
+    workspace: &Path,
 ) -> Result<(), OrchestratorError> {
-    let workspace = required_path("GITHUB_WORKSPACE")?;
     let workflow_sha = required("GITHUB_SHA")?;
-    let intent = read_intent_at_workflow(&workspace, &workflow_sha, git)?;
+    let intent = read_intent_at_workflow(workspace, &workflow_sha, git)?;
     let request = request_from_environment(&intent, &workflow_sha)?;
     let token = required("GIT_TOKEN")?;
     if matches!(operation, "source-admit" | "source-require") {
@@ -90,7 +101,7 @@ fn run_qualified_crate_release_with_git(
     if is_journal_operation(operation) {
         let candidate = crate::crate_release_github::verify_github_evidence(&request, &github)?;
         crate::crate_release_github::authorize_github_candidate(&request, &candidate, &github)?;
-        verify_workflow_concurrency(&workspace, &source, &intent, &request, &registry, git)?;
+        verify_workflow_concurrency(workspace, &source, &intent, &request, &registry, git)?;
     }
     let receipt_path = required_path("RUNNER_TEMP")?.join("velnor-crate-release-receipt.json");
     dispatch_release_operation(

@@ -488,11 +488,6 @@ fn prepare_pr_inner() -> Result<(), &'static str> {
         run_attempt,
     };
     let allowed: BTreeSet<String> = intent.pr_write_paths.iter().cloned().collect();
-    let git = crate::crate_release_git::ReleaseGit::new(
-        velnor_actions_mise::release_git_pin::verify_bundle(&temp.join("velnor/git-bundle"))
-            .map_err(|_| invalid())?,
-    );
-    let checkout = PreparationCheckout::open(&source, binding, allowed, git)?;
     let config = ReleasePlzConfig {
         tag_pattern: intent.tag_template.clone(),
         semver_check: true,
@@ -508,8 +503,13 @@ fn prepare_pr_inner() -> Result<(), &'static str> {
     let expected =
         render_release_plz_config(&config, &intent.generator_version).map_err(|_| invalid())?;
     if read_regular(&source, ".github/release-plz.toml", 1024 * 1024)? != expected.as_bytes() {
-        return Err(invalid());
+        return Err("release_pr_generated_config_mismatch");
     }
+    let git = crate::crate_release_git::ReleaseGit::new(
+        velnor_actions_mise::release_git_pin::verify_bundle(&temp.join("velnor/git-bundle"))
+            .map_err(|_| invalid())?,
+    );
+    let checkout = PreparationCheckout::open(&source, binding, allowed, git)?;
     let artifact = run_preparation_update(checkout, &intent, &source, &temp)?;
     let output = PathBuf::from(required("GITHUB_OUTPUT")?);
     write_preparation_artifact(&artifact, &temp, &output)
@@ -762,6 +762,28 @@ mod tests {
         fs::write(root.path().join("Cargo.toml"), "changed\n")?;
         git(root.path(), &["add", "Cargo.toml"])?;
         assert!(checkout.collect().is_err());
+        Ok(())
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn release_tool_must_exist_and_match_its_pin() -> Result<(), Box<dyn std::error::Error>> {
+        use std::os::unix::fs::PermissionsExt as _;
+        let temp = tempfile::tempdir()?;
+        let path = temp.path().join("release-plz");
+        let digest = super::sha256(b"verified fixture");
+        assert_eq!(
+            super::check_pinned_executable(&path, &digest),
+            Err("release_pr_tool_invalid")
+        );
+        fs::write(&path, b"tampered")?;
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o755))?;
+        assert_eq!(
+            super::check_pinned_executable(&path, &digest),
+            Err("release_pr_tool_invalid")
+        );
+        fs::write(&path, b"verified fixture")?;
+        assert_eq!(super::check_pinned_executable(&path, &digest), Ok(()));
         Ok(())
     }
 

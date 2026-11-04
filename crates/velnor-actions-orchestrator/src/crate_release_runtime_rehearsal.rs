@@ -26,6 +26,7 @@ fn qualified_runtime_rejects_missing_git_without_fallback() -> Result<(), Box<dy
         .arg("crate_release_runtime::rehearsal::qualified_runtime_rejects_missing_git_without_fallback")
         .env("VELNOR_MISSING_GIT_CHILD", "1")
         .env("RUNNER_TEMP", temp.path())
+        .env("GITHUB_WORKSPACE", temp.path())
         .status()?;
     assert!(status.success());
     Ok(())
@@ -38,11 +39,7 @@ fn generated_source_require_rehearsal() -> Result<(), Box<dyn Error>> {
             std::env::var("VELNOR_TEST_COMMAND_ARGS")?,
             "crate-release source-require"
         );
-        return super::run_qualified_crate_release_with_git(
-            "source-require",
-            &crate::crate_release_git::ReleaseGit::host_fixture(),
-        )
-        .map_err(Into::into);
+        return super::run_qualified_with_fixture_git("source-require").map_err(Into::into);
     }
     for event in ["push", "workflow_dispatch"] {
         rehearse_source_require(event, false)?;
@@ -75,7 +72,7 @@ fn generated_candidate_receipt_rejects_unprotected_environment() -> Result<(), B
         assert!(matches!(super::run_crate_release("candidate-receipt"),
             Err(crate::OrchestratorError::Internal { problem }) if problem == "crate_release_authority_not_qualified"));
         assert!(
-            matches!(super::run_qualified_crate_release_with_git("candidate-receipt", &crate::crate_release_git::ReleaseGit::host_fixture()),
+            matches!(super::run_qualified_with_fixture_git("candidate-receipt"),
             Err(crate::OrchestratorError::Internal { problem }) if problem == "crate_release_environment_bypass")
         );
         return Ok(());

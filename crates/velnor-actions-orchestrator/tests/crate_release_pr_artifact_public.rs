@@ -163,6 +163,17 @@ fn make_checkout()
 }
 
 #[test]
+fn refuses_checkout_at_unapproved_source_sha() -> Result<(), Box<dyn std::error::Error>> {
+    let (root, mut binding, allowed) = make_checkout()?;
+    binding.source_sha = "a".repeat(40);
+    assert!(matches!(
+        PreparationCheckout::open(root.path(), binding, allowed, test_git()),
+        Err("release_pr_checkout_invalid")
+    ));
+    Ok(())
+}
+
+#[test]
 fn captures_only_allowed_regular_updates_from_clean_source()
 -> Result<(), Box<dyn std::error::Error>> {
     let (root, binding, allowed) = make_checkout()?;

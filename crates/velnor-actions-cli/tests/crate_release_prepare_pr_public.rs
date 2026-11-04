@@ -139,11 +139,7 @@ fn prepare_pr_rejects_unapproved_inputs_without_output() -> Result<(), Box<dyn s
         if key == "INVALID_INTENT" {
             fs::write(&intent_path, &intent)?;
         }
-        let expected = match key {
-            "NO_OVERRIDE" => "release_pr_tool_invalid",
-            "GITHUB_SHA" => "release_pr_checkout_invalid",
-            _ => "release_pr_preparation_invalid",
-        };
+        let expected = "release_pr_preparation_invalid";
         assert!(
             String::from_utf8_lossy(&result.stderr).contains(expected),
             "wrong failure for {key}"
@@ -201,7 +197,9 @@ fn prepare_pr_rejects_changed_generated_config() -> Result<(), Box<dyn std::erro
         .env("GITHUB_OUTPUT", &output_file)
         .output()?;
     assert!(!result.status.success());
-    assert!(String::from_utf8_lossy(&result.stderr).contains("release_pr_preparation_invalid"));
+    assert!(
+        String::from_utf8_lossy(&result.stderr).contains("release_pr_generated_config_mismatch")
+    );
     assert_eq!(fs::read(&output_file)?, Vec::<u8>::new());
     assert!(!runner.join("velnor-release-pr-preparation.json").exists());
     Ok(())
