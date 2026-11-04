@@ -26,6 +26,15 @@ impl JournalTransport for NativeGitHubAdmissionRead {
         self.reader.get_journal_ref(repository, reference)
     }
 
+    fn read_ref_with_access(
+        &self,
+        repository: &str,
+        reference: &str,
+    ) -> Result<Option<String>, OrchestratorError> {
+        self.reader.check_journal_repository_access(repository)?;
+        self.reader.get_journal_ref(repository, reference)
+    }
+
     fn create_blob(&self, repository: &str, bytes: &[u8]) -> Result<String, OrchestratorError> {
         self.reader.create_journal_blob(repository, bytes)
     }

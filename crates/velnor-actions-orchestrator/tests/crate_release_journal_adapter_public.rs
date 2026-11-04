@@ -247,3 +247,50 @@ fn verified_blob_cache_remains_bounded() {
         .expect("uncached last blob");
     assert_eq!(reads.get(), 130);
 }
+#[test]
+fn generic_transport_rechecks_access_after_absence() {
+    struct Revoked(Cell<usize>);
+    impl JournalTransport for Revoked {
+        fn check_repository_access(&self, _: &str) -> Result<(), OrchestratorError> {
+            let next = self.0.get() + 1;
+            self.0.set(next);
+            if next == 1 {
+                Ok(())
+            } else {
+                Err(OrchestratorError::Internal {
+                    problem: "fixture_access_revoked".to_owned(),
+                })
+            }
+        }
+        fn get_ref(&self, _: &str, _: &str) -> Result<Option<String>, OrchestratorError> {
+            Ok(None)
+        }
+        fn check_tag_rules(&self, _: &str) -> Result<(), OrchestratorError> {
+            unreachable!()
+        }
+        fn create_blob(&self, _: &str, _: &[u8]) -> Result<String, OrchestratorError> {
+            unreachable!()
+        }
+        fn create_tag(&self, _: &str, _: &str, _: &str) -> Result<String, OrchestratorError> {
+            unreachable!()
+        }
+        fn create_ref(&self, _: &str, _: &str, _: &str) -> Result<(), OrchestratorError> {
+            unreachable!()
+        }
+        fn get_tag(&self, _: &str, _: &str) -> Result<RemoteTag, OrchestratorError> {
+            unreachable!()
+        }
+        fn get_blob(&self, _: &str, _: &str) -> Result<Vec<u8>, OrchestratorError> {
+            unreachable!()
+        }
+    }
+    let client = JournalAdapter::new(Revoked(Cell::new(0)));
+    assert!(
+        client
+            .read_ref_with_access(
+                "example/demo-crate",
+                "refs/tags/velnor-receipt/42/1/publication-started"
+            )
+            .is_err()
+    );
+}

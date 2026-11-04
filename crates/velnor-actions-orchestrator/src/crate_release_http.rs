@@ -1532,6 +1532,70 @@ mod tests {
     }
 
     #[test]
+    fn journal_ref_read_brackets_absence_with_repository_access() {
+        use crate::{
+            crate_release_github::NativeGitHubAdmissionRead, crate_release_journal::JournalIo as _,
+            crate_release_journal_adapter::JournalAdapter,
+        };
+        let repo = r#"{"full_name":"example/demo-crate","default_branch":"main"}"#;
+        let branch = r#"{"ref":"refs/heads/main","object":{"type":"commit","sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}}"#;
+        let reference = "refs/tags/velnor-receipt/12/1/publication-started";
+        let cases = [
+            (
+                vec![
+                    reply("200 OK", repo),
+                    reply("200 OK", branch),
+                    reply("404 Not Found", "{}"),
+                    reply("200 OK", repo),
+                    reply("200 OK", branch),
+                ],
+                true,
+            ),
+            (vec![reply("403 Forbidden", "{}")], false),
+            (
+                vec![
+                    reply("200 OK", repo),
+                    reply("200 OK", branch),
+                    reply("404 Not Found", "{}"),
+                    reply("403 Forbidden", "{}"),
+                ],
+                false,
+            ),
+        ];
+        for (responses, succeeds) in cases {
+            let count = responses.len();
+            let (origin, worker) = server(responses);
+            let adapter = JournalAdapter::new(NativeGitHubAdmissionRead {
+                reader: client(origin),
+            });
+            let result = adapter.read_ref_with_access("example/demo-crate", reference);
+            assert_eq!(result.is_ok(), succeeds);
+            if succeeds {
+                assert_eq!(result.expect("authorized absence"), None);
+            }
+            assert_eq!(worker.join().expect("server").len(), count);
+        }
+        let present = format!(
+            r#"{{"ref":"{reference}","object":{{"type":"tag","sha":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}}}}"#
+        );
+        let (origin, worker) = server(vec![
+            reply("200 OK", repo),
+            reply("200 OK", branch),
+            reply("200 OK", &present),
+        ]);
+        let adapter = JournalAdapter::new(NativeGitHubAdmissionRead {
+            reader: client(origin),
+        });
+        assert_eq!(
+            adapter
+                .read_ref_with_access("example/demo-crate", reference)
+                .expect("authorized reference"),
+            Some("b".repeat(40))
+        );
+        assert_eq!(worker.join().expect("server").len(), 3);
+    }
+
+    #[test]
     fn optional_absence_requires_access_to_default_branch() {
         let repo = r#"{"full_name":"example/demo-crate","default_branch":"main"}"#;
         let branch = r#"{"ref":"refs/heads/main","object":{"type":"commit","sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}}"#;

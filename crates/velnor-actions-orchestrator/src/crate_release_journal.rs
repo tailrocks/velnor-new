@@ -61,6 +61,18 @@ pub trait JournalIo {
         repository: &str,
         reference: &str,
     ) -> Result<Option<String>, OrchestratorError>;
+    fn read_ref_with_access(
+        &self,
+        repository: &str,
+        reference: &str,
+    ) -> Result<Option<String>, OrchestratorError> {
+        self.check_repository_access(repository)?;
+        let observed = self.get_ref(repository, reference)?;
+        if observed.is_none() {
+            self.check_repository_access(repository)?;
+        }
+        Ok(observed)
+    }
     fn create_blob(&self, repository: &str, content: &[u8]) -> Result<String, OrchestratorError>;
     fn create_tag_object(
         &self,
@@ -1077,14 +1089,8 @@ fn read_ref<I: JournalIo>(
     repository: &str,
     reference: &str,
 ) -> Result<Option<String>, OrchestratorError> {
-    io.check_repository_access(repository)
-        .map_err(|_| invalid())?;
-    let observed = io.get_ref(repository, reference).map_err(|_| invalid())?;
-    if observed.is_none() {
-        io.check_repository_access(repository)
-            .map_err(|_| invalid())?;
-    }
-    Ok(observed)
+    io.read_ref_with_access(repository, reference)
+        .map_err(|_| invalid())
 }
 
 #[cfg(test)]

@@ -28,6 +28,18 @@ pub trait JournalTransport {
         repository: &str,
         reference: &str,
     ) -> Result<Option<String>, OrchestratorError>;
+    fn read_ref_with_access(
+        &self,
+        repository: &str,
+        reference: &str,
+    ) -> Result<Option<String>, OrchestratorError> {
+        self.check_repository_access(repository)?;
+        let observed = self.get_ref(repository, reference)?;
+        if observed.is_none() {
+            self.check_repository_access(repository)?;
+        }
+        Ok(observed)
+    }
     fn create_blob(&self, repository: &str, bytes: &[u8]) -> Result<String, OrchestratorError>;
     fn create_tag(
         &self,
@@ -177,6 +189,20 @@ impl<T: JournalTransport> JournalIo for JournalAdapter<T> {
             return Err(invalid());
         }
         let result = self.transport.get_ref(repository, reference)?;
+        if result.as_deref().is_some_and(|sha| !valid_sha(sha)) {
+            return Err(invalid());
+        }
+        Ok(result)
+    }
+    fn read_ref_with_access(
+        &self,
+        repository: &str,
+        reference: &str,
+    ) -> Result<Option<String>, OrchestratorError> {
+        if !valid_reference(reference) {
+            return Err(invalid());
+        }
+        let result = self.transport.read_ref_with_access(repository, reference)?;
         if result.as_deref().is_some_and(|sha| !valid_sha(sha)) {
             return Err(invalid());
         }
