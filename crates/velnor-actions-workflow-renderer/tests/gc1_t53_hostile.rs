@@ -247,7 +247,7 @@ fn gc1_t53_recover_refuses_hostile_archives() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
-#[cfg(unix)]
+#[cfg(target_os = "linux")]
 fn gc1_t53_recover_imports_names_that_look_like_columns() -> Result<(), Box<dyn Error>> {
     let scene = Scene::new("lookalike", crate::gc1_t53::scripts()?)?;
     let key = scene.discover()?;
