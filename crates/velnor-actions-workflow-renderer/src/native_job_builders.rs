@@ -21,7 +21,8 @@ use velnor_actions_mise::{
     PrepareRustComponents, ToolCatalog, ToolHomes,
 };
 
-pub const VERDICT_CHECKOUT_HISTORY: CheckoutHistory = CheckoutHistory::ShallowOnPush;
+pub const PLAN_CHECKOUT_HISTORY: CheckoutHistory = CheckoutHistory::ShallowOnPush;
+pub const VERDICT_CHECKOUT_HISTORY: CheckoutHistory = CheckoutHistory::ShallowWithMergeParents;
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum PlanRustNeed {
@@ -132,7 +133,7 @@ pub fn plan_job(
     policy: WorkflowPolicy,
 ) -> Result<Job, NativeJobBuilderError> {
     let source_free = policy == WorkflowPolicy::VelnorRepositoryV1;
-    let mut steps = vec![checkout_history_action(VERDICT_CHECKOUT_HISTORY)?];
+    let mut steps = vec![checkout_history_action(PLAN_CHECKOUT_HISTORY)?];
     let mut acquire = acquire;
     if source_free {
         steps.extend(acquire.take());

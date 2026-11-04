@@ -13,6 +13,7 @@ use super::workflow_configuration_fixture;
 type StepShape = (String, Option<String>);
 
 const PUSH_AWARE_DEPTH: &str = "${{ github.event_name == 'push' && '1' || '0' }}";
+const MERGE_PARENTS_DEPTH: &str = "${{ github.event_name == 'push' && '1' || '2' }}";
 
 fn config(default_branch: &str, extra_workflow: &str) -> String {
     format!(
@@ -134,7 +135,7 @@ fn only_the_promised_jobs_take_the_push_aware_checkout_depth() -> Result<(), Box
         ("check-lean", Some(PUSH_AWARE_DEPTH)),
         ("jactionlint", None),
         ("plan", Some(PUSH_AWARE_DEPTH)),
-        ("required", Some(PUSH_AWARE_DEPTH)),
+        ("required", Some(MERGE_PARENTS_DEPTH)),
         ("rust-demo", None),
     ]
     .into_iter()
