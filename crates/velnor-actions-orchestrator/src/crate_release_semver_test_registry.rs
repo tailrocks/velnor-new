@@ -16,7 +16,7 @@ const FLAGS: OFlags = OFlags::RDONLY
 const MAX_FILES: usize = 100_000;
 const MAX_BYTES: u64 = 512 * 1024 * 1024;
 
-pub(super) fn copy_snapshot(source: &Path, home: &Path) -> Result<(), &'static str> {
+pub(crate) fn copy_snapshot(source: &Path, home: &Path) -> Result<(), &'static str> {
     copy_snapshot_with(source, home, || {})
 }
 

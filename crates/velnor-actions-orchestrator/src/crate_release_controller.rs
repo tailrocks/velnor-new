@@ -661,6 +661,8 @@ fn package_source(
     std::fs::create_dir(&cargo_home).map_err(|_| internal("crate_release_package_temp"))?;
     #[cfg(test)]
     tests::configure_test_registry(&cargo_home)?;
+    #[cfg(all(test, unix))]
+    let fixture_registry = seed_package_fixture(&cargo_home)?;
     let catalog = crate::crate_release_source::source_tool_catalog(&intent.rust_version)
         .map_err(|_| internal("crate_release_toolchain_invalid"))?;
     let mut isolated_args = vec![
@@ -668,6 +670,10 @@ fn package_source(
         OsString::from(format!("HOME={}", sterile.path().display())),
         OsString::from(format!("CARGO_HOME={}", cargo_home.display())),
     ];
+    #[cfg(all(test, unix))]
+    if fixture_registry {
+        isolated_args.push(OsString::from("CARGO_NET_OFFLINE=true"));
+    }
     isolated_args.extend(crate::crate_release_source::source_compiler_env(
         &intent.rust_version,
         git,
@@ -698,6 +704,16 @@ fn package_source(
         crate::safe_read::RepoBytes::Bytes(bytes) => Ok(bytes),
         crate::safe_read::RepoBytes::Absent => Err(internal("crate_release_package_missing")),
     }
+}
+
+#[cfg(all(test, unix))]
+fn seed_package_fixture(home: &Path) -> Result<bool, OrchestratorError> {
+    let Some(snapshot) = std::env::var_os("VELNOR_NATIVE_REGISTRY_SNAPSHOT") else {
+        return Ok(false);
+    };
+    crate::crate_release_semver::test_registry::copy_snapshot(Path::new(&snapshot), home)
+        .map_err(|_| internal("crate_release_package_temp"))?;
+    Ok(true)
 }
 
 fn require_reviewer_owner<G: GitHubAdmissionRead>(

@@ -3,7 +3,7 @@
 
 #[cfg(all(test, unix))]
 #[path = "crate_release_semver_test_registry.rs"]
-mod test_registry;
+pub(crate) mod test_registry;
 
 use std::{cmp::Ordering, ffi::OsString, io::Write as _, path::Path, time::Duration};
 

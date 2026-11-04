@@ -63,6 +63,14 @@ pub(crate) fn invoke_upload<
         .map_err(|_| invalid())?;
     let cargo_home = private.path().join("cargo");
     std::fs::create_dir(&cargo_home).map_err(|_| invalid())?;
+    #[cfg(all(test, unix))]
+    if let Some(snapshot) = std::env::var_os("VELNOR_NATIVE_REGISTRY_SNAPSHOT") {
+        crate::crate_release_semver::test_registry::copy_snapshot(
+            Path::new(&snapshot),
+            &cargo_home,
+        )
+        .map_err(|_| invalid())?;
+    }
     let config_path = private.path().join("release-plz.toml");
     let config = single_package_config(input.intent, &permit.package)?;
     std::fs::write(&config_path, config).map_err(|_| invalid())?;
