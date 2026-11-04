@@ -22,3 +22,6 @@ fn write(root: &Path, path: &str, text: &str) {
 mod registry;
 #[path = "release_workspace_cargo/sources.rs"]
 mod sources;
+
+#[path = "release_workspace_cargo/version_presence.rs"]
+mod version_presence;
