@@ -167,6 +167,12 @@ pub(super) fn required_job(
     } else {
         helper_catalog(input, &ToolCatalog::pinned())?
     };
-    crate::native_job_builders::final_job(input.runner, required_ids, Some(acquire), &catalog)
-        .map_err(NativeAuthorityError::Job)
+    crate::native_job_builders::final_job(
+        input.runner,
+        required_ids,
+        Some(acquire),
+        &catalog,
+        input.config.required_checkout_history(),
+    )
+    .map_err(NativeAuthorityError::Job)
 }
