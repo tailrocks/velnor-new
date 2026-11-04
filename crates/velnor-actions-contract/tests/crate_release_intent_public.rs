@@ -12,6 +12,8 @@ fn intent_rejects_unapproved_or_ambiguous_release_inputs() -> Result<(), Box<dyn
     let mut hidden = intent.clone();
     hidden.pr_write_paths = vec![".private/Cargo.toml".into(), "Cargo.toml".into()];
     hidden.validate()?;
+    hidden.pr_write_paths = vec!["Cargo.toml".into(), "crates/é space/Cargo.toml".into()];
+    hidden.validate()?;
     for (key, invalid) in [
         ("generator_version", serde_json::json!("latest")),
         ("generator_source_sha", serde_json::json!("invalid")),

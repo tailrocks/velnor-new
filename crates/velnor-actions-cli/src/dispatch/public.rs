@@ -35,33 +35,7 @@ pub(crate) fn run_public() -> ExitCode {
         return owned_publication::run_owned_command(command);
     }
     match command {
-        Command::CrateRelease { command } => {
-            let operation = match command {
-                crate::args::CrateReleaseCommand::SourceAdmit => "source-admit",
-                crate::args::CrateReleaseCommand::CandidateReceipt => "candidate-receipt",
-                crate::args::CrateReleaseCommand::ReceiptAcquire => "receipt-acquire",
-                crate::args::CrateReleaseCommand::ReconciliationReceiptAcquire => "reconciliation-receipt-acquire",
-                crate::args::CrateReleaseCommand::VerifyPackage => "verify-package",
-                crate::args::CrateReleaseCommand::SourceRequire => "source-require",
-                crate::args::CrateReleaseCommand::ToolchainAcquire => "toolchain-acquire",
-                crate::args::CrateReleaseCommand::Admit => "admit",
-                crate::args::CrateReleaseCommand::VerifyAdmission => "verify-admission",
-                crate::args::CrateReleaseCommand::PublicationStarted => "publication-started",
-                crate::args::CrateReleaseCommand::JournalObserve => "journal-observe",
-                crate::args::CrateReleaseCommand::JournalStart => "journal-start",
-                crate::args::CrateReleaseCommand::JournalCoordinate => "journal-coordinate",
-                crate::args::CrateReleaseCommand::JournalRepairTag => "journal-repair-tag",
-                crate::args::CrateReleaseCommand::JournalRepairRelease => "journal-repair-release",
-                crate::args::CrateReleaseCommand::JournalUploadIntent => "journal-upload-intent",
-                crate::args::CrateReleaseCommand::JournalRecoveryInspect => "journal-recovery-inspect",
-                crate::args::CrateReleaseCommand::JournalReconcileEvidence => "journal-reconcile-evidence",
-                crate::args::CrateReleaseCommand::Reconcile => "reconcile",
-            };
-            match velnor_actions_orchestrator::run_crate_release(operation) {
-                Ok(()) => ExitCode::SUCCESS,
-                Err(error) => fail_public(&error),
-            }
-        }
+        Command::CrateRelease { command } => run_crate_release_command(&command),
         Command::Init => run_init(),
         Command::Plan => run_plan(guard.as_ref()),
         Command::Generate {
@@ -145,4 +119,41 @@ fn run_plan(guard: Option<&OperatorToolchainGuard>) -> ExitCode {
         println!();
     }
     ExitCode::SUCCESS
+}
+
+fn run_crate_release_command(command: &crate::args::CrateReleaseCommand) -> ExitCode {
+    if matches!(command, crate::args::CrateReleaseCommand::PreparePr) {
+        return match velnor_actions_orchestrator::crate_release_pr_artifact::prepare_pr_from_environment() {
+                    Ok(()) => ExitCode::SUCCESS,
+                    Err(error) => fail_public(&error),
+                };
+    }
+    let operation = match command {
+        crate::args::CrateReleaseCommand::PreparePr => unreachable!(),
+        crate::args::CrateReleaseCommand::SourceAdmit => "source-admit",
+        crate::args::CrateReleaseCommand::CandidateReceipt => "candidate-receipt",
+        crate::args::CrateReleaseCommand::ReceiptAcquire => "receipt-acquire",
+        crate::args::CrateReleaseCommand::ReconciliationReceiptAcquire => {
+            "reconciliation-receipt-acquire"
+        }
+        crate::args::CrateReleaseCommand::VerifyPackage => "verify-package",
+        crate::args::CrateReleaseCommand::SourceRequire => "source-require",
+        crate::args::CrateReleaseCommand::ToolchainAcquire => "toolchain-acquire",
+        crate::args::CrateReleaseCommand::Admit => "admit",
+        crate::args::CrateReleaseCommand::VerifyAdmission => "verify-admission",
+        crate::args::CrateReleaseCommand::PublicationStarted => "publication-started",
+        crate::args::CrateReleaseCommand::JournalObserve => "journal-observe",
+        crate::args::CrateReleaseCommand::JournalStart => "journal-start",
+        crate::args::CrateReleaseCommand::JournalCoordinate => "journal-coordinate",
+        crate::args::CrateReleaseCommand::JournalRepairTag => "journal-repair-tag",
+        crate::args::CrateReleaseCommand::JournalRepairRelease => "journal-repair-release",
+        crate::args::CrateReleaseCommand::JournalUploadIntent => "journal-upload-intent",
+        crate::args::CrateReleaseCommand::JournalRecoveryInspect => "journal-recovery-inspect",
+        crate::args::CrateReleaseCommand::JournalReconcileEvidence => "journal-reconcile-evidence",
+        crate::args::CrateReleaseCommand::Reconcile => "reconcile",
+    };
+    match velnor_actions_orchestrator::run_crate_release(operation) {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(error) => fail_public(&error),
+    }
 }

@@ -24,8 +24,11 @@ pub(crate) struct Cli {
 /// Public command tree: init, plan, generate, and config.
 #[derive(Debug, Subcommand)]
 pub(crate) enum Command {
-    #[command(about = "Validate and reconcile a crate release") ]
-    CrateRelease { #[command(subcommand)] command: CrateReleaseCommand },
+    #[command(about = "Validate and reconcile a crate release")]
+    CrateRelease {
+        #[command(subcommand)]
+        command: CrateReleaseCommand,
+    },
     /// Create `.velnor/config.toml` in the Git working tree.
     Init,
     /// Print the deterministic plan report to stdout.
@@ -207,6 +210,7 @@ pub(crate) enum ConfigCommand {
 
 #[derive(Debug, Subcommand)]
 pub(crate) enum CrateReleaseCommand {
+    PreparePr,
     #[command(about = "Validate release source authority")]
     SourceAdmit,
     CandidateReceipt,

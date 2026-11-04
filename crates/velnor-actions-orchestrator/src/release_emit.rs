@@ -117,10 +117,8 @@ fn release_files_for_config(
     })?;
     let concurrency = workspace_lock(&metadata, &prep.root, &release.manifest_path, &known_manifests, &registry, &repository)?;
     let config = plz_config(release, &selection)?;
-    let record = velnor_actions_rust::metadata::parse_metadata_json(&metadata, &prep.root, &release.manifest_path, &known_manifests)
-        .map_err(|err| OrchestratorError::Contract { problem: err.to_string() })?;
-    let pr_write_paths = release_pr_write_paths(&record);
-    let intent = crate_release_intent(prep, release, &repository, &registry, &generator_source_sha, &generator_manifest_sha256, &config, pr_write_paths);
+    let paths = reviewed_pr_write_paths(prep, release, &metadata, &known_manifests)?;
+    let intent = crate_release_intent(prep, release, &repository, &registry, (&generator_source_sha, &generator_manifest_sha256), &config, paths);
     let spec = ReleaseWorkflowSpec {
         name: RELEASE_WORKFLOW_NAME.to_owned(),
         repository,
@@ -149,8 +147,7 @@ fn crate_release_intent(
     release: &RustReleaseConfig,
     repository: &str,
     registry: &str,
-    generator_source_sha: &str,
-    generator_manifest_sha256: &str,
+    generator_pin: (&str, &str),
     config: &velnor_actions_workflow_renderer::release_config::ReleasePlzConfig,
     pr_write_paths: Vec<String>,
 ) -> CrateReleaseIntent {
@@ -166,8 +163,8 @@ fn crate_release_intent(
             .version(velnor_actions_mise::PinnedTool::Rust)
             .to_owned(),
         generator_version: env!("CARGO_PKG_VERSION").to_owned(),
-        generator_source_sha: generator_source_sha.to_owned(),
-        generator_manifest_sha256: generator_manifest_sha256.to_owned(),
+        generator_source_sha: generator_pin.0.to_owned(),
+        generator_manifest_sha256: generator_pin.1.to_owned(),
         release_plz_version: prep.catalog.version(velnor_actions_mise::PinnedTool::ReleasePlz).to_owned(),
         runner: RELEASE_HOSTED_RUNNER.to_owned(),
         authentication: release.effective_authentication(),
@@ -192,6 +189,12 @@ fn crate_release_intent(
                 source_sha: recovery.source_sha.clone(),
             }),
     }
+}
+
+fn reviewed_pr_write_paths(prep: &GenerationPreparation, release: &RustReleaseConfig, metadata: &str, known: &BTreeSet<String>) -> Result<Vec<String>, OrchestratorError> {
+    let record = velnor_actions_rust::metadata::parse_metadata_json(metadata, &prep.root, &release.manifest_path, known)
+        .map_err(|err| OrchestratorError::Contract { problem: err.to_string() })?;
+    Ok(release_pr_write_paths(&record))
 }
 
 fn release_pr_write_paths(record: &velnor_actions_rust::metadata::WorkspaceRecord) -> Vec<String> {

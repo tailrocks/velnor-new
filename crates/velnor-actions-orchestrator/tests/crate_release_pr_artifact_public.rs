@@ -225,10 +225,8 @@ fn refuses_git_control_and_head_changes() -> Result<(), Box<dyn std::error::Erro
     assert!(checkout.collect().is_err());
     let (root, binding, allowed) = make_checkout()?;
     let checkout = PreparationCheckout::open(root.path(), binding, allowed)?;
-    let index = root.path().join(".git/index");
-    let mut contents = std::fs::read(&index)?;
-    contents.push(0);
-    std::fs::write(index, contents)?;
+    std::fs::write(root.path().join("Cargo.toml"), "staged change\n")?;
+    git(root.path(), &["add", "Cargo.toml"])?;
     assert!(checkout.collect().is_err());
     let (root, binding, allowed) = make_checkout()?;
     let checkout = PreparationCheckout::open(root.path(), binding, allowed)?;

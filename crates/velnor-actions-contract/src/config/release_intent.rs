@@ -104,33 +104,7 @@ impl CrateReleaseIntent {
             return Err(invalid("required_workflow_path", "invalid_workflow_path"));
         }
         validate_manifest_path(file, &self.manifest_path)?;
-        if self.pr_write_paths.is_empty()
-            || self.pr_write_paths.len() > 256
-            || !self
-                .pr_write_paths
-                .iter()
-                .any(|path| path == &self.manifest_path)
-            || self
-                .pr_write_paths
-                .windows(2)
-                .any(|paths| paths[0] >= paths[1])
-            || self.pr_write_paths.iter().any(|path| {
-                let name = path
-                    .rsplit_once('/')
-                    .map_or(path.as_str(), |(_, name)| name);
-                path.len() > 1024
-                    || !matches!(name, "Cargo.toml" | "Cargo.lock" | "CHANGELOG.md")
-                    || path.starts_with('/')
-                    || path.split('/').any(|part| {
-                        part.is_empty() || part == "." || part == ".." || part == ".git"
-                    })
-                    || !path.bytes().all(|b| {
-                        b.is_ascii_alphanumeric() || matches!(b, b'/' | b'_' | b'-' | b'.')
-                    })
-            })
-        {
-            return Err(invalid("pr_write_paths", "invalid_pr_write_paths"));
-        }
+        validate_pr_write_paths(self)?;
         validate_intent_packages(self)?;
         super::release::validate_journal_predecessor(file, self.journal_predecessor.as_ref())?;
         validate_tag_name(file, &self.tag_template)?;
@@ -154,6 +128,39 @@ impl CrateReleaseIntent {
         }
         Ok(())
     }
+}
+
+fn validate_pr_write_paths(intent: &CrateReleaseIntent) -> Result<(), ContractError> {
+    if intent.pr_write_paths.is_empty()
+        || intent.pr_write_paths.len() > 256
+        || !intent
+            .pr_write_paths
+            .iter()
+            .any(|path| path == &intent.manifest_path)
+        || intent
+            .pr_write_paths
+            .windows(2)
+            .any(|paths| paths[0] >= paths[1])
+        || intent.pr_write_paths.iter().any(|path| {
+            let name = path
+                .rsplit_once('/')
+                .map_or(path.as_str(), |(_, name)| name);
+            path.len() > 1024
+                || !matches!(name, "Cargo.toml" | "Cargo.lock" | "CHANGELOG.md")
+                || path.starts_with('/')
+                || path
+                    .split('/')
+                    .any(|part| part.is_empty() || part == "." || part == ".." || part == ".git")
+                || path.bytes().any(|b| b.is_ascii_control() || b == b'\\')
+        })
+    {
+        return Err(ContractError::config(
+            "release_intent",
+            "pr_write_paths",
+            "invalid_pr_write_paths",
+        ));
+    }
+    Ok(())
 }
 
 fn validate_intent_packages(intent: &CrateReleaseIntent) -> Result<(), ContractError> {
