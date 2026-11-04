@@ -69,6 +69,50 @@ fn expand_braces(pattern: &str) -> Vec<String> {
     out
 }
 
+#[must_use]
+pub fn glob_may_overlap(left: &str, right: &str) -> bool {
+    expand_braces(left).iter().any(|left| {
+        expand_braces(right).iter().any(|right| {
+            segments_may_overlap(
+                &left.split('/').collect::<Vec<_>>(),
+                &right.split('/').collect::<Vec<_>>(),
+            )
+        })
+    })
+}
+
+fn segments_may_overlap(left: &[&str], right: &[&str]) -> bool {
+    match (left.split_first(), right.split_first()) {
+        (None, None) => true,
+        (Some((&"**", rest)), _) => {
+            segments_may_overlap(rest, right)
+                || right
+                    .split_first()
+                    .is_some_and(|(_, tail)| segments_may_overlap(left, tail))
+        }
+        (_, Some((&"**", rest))) => {
+            segments_may_overlap(left, rest)
+                || left
+                    .split_first()
+                    .is_some_and(|(_, tail)| segments_may_overlap(tail, right))
+        }
+        (Some((first, left_rest)), Some((second, right_rest))) => {
+            segment_may_overlap(first, second) && segments_may_overlap(left_rest, right_rest)
+        }
+        _ => false,
+    }
+}
+
+fn segment_may_overlap(left: &str, right: &str) -> bool {
+    let wild = |segment: &str| segment.contains(['*', '?', '[']);
+    match (wild(left), wild(right)) {
+        (false, false) => left == right,
+        (true, false) => match_segment(left, right),
+        (false, true) => match_segment(right, left),
+        (true, true) => true,
+    }
+}
+
 fn match_segments(pattern: &[&str], path: &[&str]) -> bool {
     match pattern.split_first() {
         None => path.is_empty(),

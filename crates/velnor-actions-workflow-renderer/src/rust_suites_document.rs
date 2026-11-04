@@ -150,6 +150,7 @@ fn finalize_suite_workflow_jobs(
     spec: &RustSuitesRenderSpec,
 ) -> Result<(), RenderError> {
     prepare_suite_tools(jobs, spec)?;
+    crate::non_input_checkout::exclude_non_inputs(jobs, &spec.non_inputs)?;
     crate::cache_steps::append_bundle_postludes(jobs)?;
     crate::cache_steps::append_workspace_cleanups(jobs)?;
     crate::waste_lint::bind_and_check(jobs)

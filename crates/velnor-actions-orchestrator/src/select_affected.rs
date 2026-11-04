@@ -96,6 +96,18 @@ impl<'a> Ownership<'a> {
             .any(|rule| rule.complete && rule.package_ids.contains(id))
     }
 
+    pub(crate) fn owner_dirs(&self) -> impl Iterator<Item = &str> {
+        self.owners.iter().map(|(dir, _)| dir.as_str())
+    }
+
+    pub(crate) fn is_tool_config(&self, path: &str) -> bool {
+        upward_config_scope(path).is_some()
+            || self
+                .workspaces
+                .iter()
+                .any(|(root, _)| is_workspace_scoped(root, path))
+    }
+
     pub(crate) fn with_links(mut self, links: Vec<ResolvedLink>) -> Self {
         let mut owned = Vec::with_capacity(links.len());
         for link in links {

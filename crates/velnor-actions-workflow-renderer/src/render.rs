@@ -158,6 +158,7 @@ pub fn finalize_jobs(
     closure::insert_task_closure(&mut jobs)?;
     closure::insert_final_closure(&mut jobs)?;
     final_steps::insert_final_fanin(&mut jobs, ctx)?;
+    crate::non_input_checkout::exclude_non_inputs(&mut jobs, &ctx.non_inputs)?;
     crate::dispatch_cache_boundary::suppress_unvalidated_cache_access(&mut jobs);
     validate_final_jobs(ir, &mut jobs, policy, ValidationPhase::Finalized, ctx)?;
     crate::waste_lint::bind_and_check(&mut jobs)?;

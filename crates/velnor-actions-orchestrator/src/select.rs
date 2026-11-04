@@ -173,7 +173,18 @@ fn affected_from_changed(
         };
         keys
     };
-    let Some(mut affected) = rust_affected(discovery, changed, root, base, head, warnings) else {
+    let rust_changed: BTreeSet<String> = changed
+        .iter()
+        .filter(|path| !discovery.affected.non_inputs.contains(path))
+        .cloned()
+        .collect();
+    let Some(mut affected) = rust_affected(
+        discovery,
+        &rust_changed,
+        toolfiles,
+        (root, base, head),
+        warnings,
+    ) else {
         return all_packages;
     };
     affected.extend(tofu_affected);
@@ -207,15 +218,17 @@ fn broadening_warning(changed: &BTreeSet<String>) -> Option<String> {
 fn rust_affected(
     discovery: &Discovery,
     changed: &BTreeSet<String>,
-    root: &Path,
-    base: &str,
-    head: &str,
+    toolfiles: bool,
+    (root, base, head): (&Path, &str, &str),
     warnings: &mut Vec<String>,
 ) -> Option<BTreeSet<String>> {
     let resolved = resolved_edges(discovery, warnings)?;
     let ownership = Ownership::new(discovery);
     let links = resolved_links(root, &ownership, warnings)?;
     let ownership = ownership.with_links(links);
+    if changed.is_empty() && !toolfiles {
+        return Some(BTreeSet::new());
+    }
     if has_unowned_file(&ownership, changed) {
         warnings.push("unclassified_files:all_changed".to_owned());
         return None;
