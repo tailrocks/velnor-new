@@ -117,6 +117,9 @@ fn snapshots(
         .env("GITHUB_WORKSPACE", repo)
         .env("GITHUB_OUTPUT", &output)
         .env("GITHUB_EVENT_NAME", "push")
+        .env("ImageOS", "ubuntu24")
+        .env("VELNOR_MBX_BUNDLE_VERSION", "1.2.3")
+        .env("VELNOR_MBX_BUNDLE_TOOLCHAIN", "1.89.0")
         .env("GIT_CONFIG_GLOBAL", "/dev/null")
         .env("GIT_CONFIG_SYSTEM", "/dev/null")
         .status()?;

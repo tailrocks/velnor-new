@@ -17,14 +17,13 @@ Workflow to generate
   Push branch: main
   Runner: ubuntu-26.04 (latest pinned default)
   Jobs:
-    - dependency-seed (23 steps)
     - jactionlint (7 steps)
     - plan (15 steps)
     - required (10 steps)
     - required-gate (1 steps)
-    - rust-app (26 steps)
-    - state-canary-producer (2 steps)
-    - state-canary-seal (5 steps)
+    - rust-app (27 steps)
+    - state-producer-root (31 steps)
+    - state-seal-root (7 steps)
     - tools-producer-18fa7d95 (8 steps)
     - tools-producer-693100f7 (9 steps)
     - tools-producer-bcdf7cdd (10 steps)

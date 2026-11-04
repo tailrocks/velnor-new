@@ -8,8 +8,8 @@ use std::error::Error;
 use std::io;
 
 use velnor_actions_contract::config::{
-    default_crate_timeout_minutes, default_dependency_seed_timeout_minutes,
-    default_plan_timeout_minutes,
+    default_crate_timeout_minutes, default_plan_timeout_minutes,
+    default_state_producer_timeout_minutes,
 };
 use velnor_actions_contract::{
     ContractError, GeneratorValidation, PullRequestCachePolicy, WorkflowConfig, WorkflowPolicy,
@@ -48,7 +48,7 @@ fn check_consumer_defaults_preserved() -> Result<(), Box<dyn Error>> {
     }
     if config.plan_timeout_minutes != default_plan_timeout_minutes()
         || config.crate_timeout_minutes != default_crate_timeout_minutes()
-        || config.dependency_seed_timeout_minutes != default_dependency_seed_timeout_minutes()
+        || config.state_producer_timeout_minutes != default_state_producer_timeout_minutes()
     {
         return Err(fail("workflow timeout defaults drifted"));
     }

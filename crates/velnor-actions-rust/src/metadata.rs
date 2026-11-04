@@ -13,6 +13,7 @@ pub const METADATA_FORMAT_VERSION: u32 = 1;
 pub struct TargetRecord {
     pub kind: String,
     pub name: String,
+    pub src_path: String,
     pub test: bool,
     pub doctest: bool,
     pub required_features: Vec<String>,
@@ -195,6 +196,7 @@ fn convert_package(
             targets.push(TargetRecord {
                 kind: kind.clone(),
                 name: target.name.clone(),
+                src_path: relativize_file(repo_root, &target.src_path).0,
                 test: target.test,
                 doctest: target.doctest,
                 required_features: required,

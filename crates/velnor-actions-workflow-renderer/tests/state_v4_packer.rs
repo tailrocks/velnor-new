@@ -20,23 +20,22 @@ fn sha256_of(scene: &Scene) -> Result<String, Box<dyn Error>> {
 }
 
 #[test]
-fn save_key_binds_the_stored_bytes() -> Result<(), Box<dyn Error>> {
+fn different_exports_pack_to_different_bytes() -> Result<(), Box<dyn Error>> {
     let mut keys = Vec::new();
     for mark in ["first", "second"] {
         let scene = Scene::new("v4-key-binds", crate::gc1_t53::scripts()?)?;
         let key = scene.discover()?;
         scene.mark_producer()?;
         scene.export(&[(EXPORT_MARK_ENV, mark)])?;
-        let saved = scene.output_value("key")?;
-        let digest = sha256_of(&scene)?;
-        if saved != format!("{}s256-{digest}", key.snapshot_prefix) {
-            return Err(fail(&format!("{mark}: key {saved} does not bind {digest}")));
+        if scene.output_value("exported")? != "true" {
+            return Err(fail(&format!("{mark}: the export was not admitted")));
         }
-        keys.push(saved);
+        let digest = sha256_of(&scene)?;
+        keys.push(format!("{}s256-{digest}", key.snapshot_prefix));
         scene.finish()?;
     }
     if keys[0] == keys[1] {
-        return Err(fail("two different exports saved under one key"));
+        return Err(fail("two different exports packed to the same bytes"));
     }
     let scene = Scene::new("v4-key-refused", crate::gc1_t53::scripts()?)?;
     scene.discover()?;

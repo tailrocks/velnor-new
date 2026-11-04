@@ -22,18 +22,18 @@ pub use family::{
     FAMILY_KEYS_NAME, FamilyCachePlan, FamilySnapshot, family_keys_step,
     family_keys_step_single_writer, family_restore_step, family_save_step, family_size_step,
 };
-pub(crate) use mbx_bundle::append_bundle_postludes;
+pub(crate) use mbx_bundle::compat_head_lines;
 pub use mbx_bundle::{
     MBX_BUNDLE_EXPORT_NAME, MBX_BUNDLE_IMPORT_NAME, MBX_BUNDLE_KEY_NAME, MBX_BUNDLE_RESTORE_NAME,
-    MBX_BUNDLE_SAVE_NAME, MBX_EXPORT_GROUP_ENV, MBX_EXPORT_GROUP_VALUE, MBX_PRODUCER_MARK_NAME,
-    StateCeilings, mbx_bundle_postlude_bounded, mbx_producer_mark_step,
+    MBX_EXPORT_GROUP_ENV, MBX_EXPORT_GROUP_VALUE, MBX_PRODUCER_MARK_NAME, StateCeilings,
+    mbx_bundle_publish_bounded, mbx_producer_mark_step,
 };
 pub(crate) use mbx_gate::append_workspace_cleanups;
 pub use mbx_gate::check_mbx_gating;
 pub(crate) use mbx_gate::is_mbx_action;
 pub(crate) use mbx_preflight::{
     ACTION_MBX_BIN, MBX_COMPILE_ENV, MBX_GC_AUTO_ENV, MBX_GC_AUTO_VALUE, RESOLVE_ACTION_MBX_BIN,
-    mbx_version_check_step, mbx_workspace_clean_step_for_action,
+    mbx_version_check_step, mbx_workspace_clean_step_for_action, validate_rust_toolchain,
 };
 pub use mbx_preflight::{
     MBX_PREFLIGHT_NAME, MBX_RESTORE_NAME, MBX_VERSION_CHECK_NAME, MbxTransport,

@@ -44,14 +44,18 @@ and overlaps the independent checks.
 - The pinned jactionlint parses and validates the native step keys (every
   member and the body-less `wait-all` join) with no ignore pattern
   (decision 10).
-- The dependency-seed job is not a crate job: it runs no checks and is not in
+- The state producer job is not a crate job: it runs no checks and is not in
   Required, so this decision governs crate jobs only. Crate jobs restore
   compiled caches read-only. See the
   [cache decisions](proposed/cache-decisions.md) (owner-approved 2026-10-20).
-- Dependency seeds are off on main (`[stacks.rust] dependency_seed = "off"`): no
-  dependency-seed job is generated. Note recorded under owner standing grant
-  2026-11-02, velnor-fast-ci GOAL.md, and decisions.tsv row U-SEED. Setting
-  `produce` restores the job.
+- Compiled state is written on main. `union` is the generator default for
+  `[stacks.rust] compiled_state`, so velnor-new sets nothing (owner standing
+  grant 2026-11-02, velnor-fast-ci GOAL.md, decisions.tsv X64). It adds one
+  non-crate `state-producer-<root>` job and one `state-seal-<root>` job per
+  Cargo root, both outside Required and `continue-on-error`. Crate jobs stay
+  read-only and run `MBX_BUILD_SCRIPT_EXECUTION=1` (decisions.tsv X61, which
+  amends X48). Owner standing grant 2026-11-02 and X50. Setting `off` removes
+  the jobs.
 
 **Must not be reintroduced without owner approval:** per-phase crate jobs
 (`-lint`, `-tests`, `-docs` or any other split of one crate's checks across

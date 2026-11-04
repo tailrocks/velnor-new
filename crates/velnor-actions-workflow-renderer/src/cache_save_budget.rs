@@ -11,23 +11,13 @@ const SOURCES_ID: &str = "velnor-optional-sources-save";
 const TOOLS_ID: &str = "velnor-optional-tools-save";
 const PROVIDERS_ID: &str = "velnor-optional-providers-save";
 const FAMILY_SAVE_ID_PREFIX: &str = "velnor-optional-family-";
-const MBX_BUNDLE_ID: &str = "velnor-optional-mbx-bundle-save";
 const RESERVE_SECONDS: u32 = 30;
 const WRITE_SECONDS: u32 = 60;
-const BUNDLE_WRITE_SECONDS: u32 = 180;
 const SECONDS_PER_MINUTE: u32 = 60;
 
 pub(crate) fn lift_to_save_budget(timeout: JobTimeout) -> Result<JobTimeout, RenderError> {
     let floor = (WRITE_SECONDS + RESERVE_SECONDS).div_ceil(SECONDS_PER_MINUTE);
     JobTimeout::try_from(u32::from(timeout.minutes()).max(floor)).map_err(RenderError::Contract)
-}
-
-fn write_seconds(id: &str) -> u32 {
-    if id == MBX_BUNDLE_ID {
-        BUNDLE_WRITE_SECONDS
-    } else {
-        WRITE_SECONDS
-    }
 }
 
 const CLOCK_SCRIPT: &str = r#"set -eu
@@ -80,7 +70,6 @@ pub(crate) fn decorate(
         Some(StepRole::CargoSourcesSave) => SOURCES_ID.to_owned(),
         Some(StepRole::ToolsCacheSave) => TOOLS_ID.to_owned(),
         Some(StepRole::TofuProvidersSave) => PROVIDERS_ID.to_owned(),
-        Some(StepRole::MbxBundleSave) => MBX_BUNDLE_ID.to_owned(),
         Some(StepRole::FamilySave) => family_save_id(step)?,
         _ => return Ok(()),
     };
@@ -97,7 +86,7 @@ pub(crate) fn decorate(
         ("id".to_owned(), Yaml::str(id.as_str())),
         (
             "timeout-minutes".to_owned(),
-            Yaml::Int(i64::from(write_seconds(&id) / SECONDS_PER_MINUTE)),
+            Yaml::Int(i64::from(WRITE_SECONDS / SECONDS_PER_MINUTE)),
         ),
         ("continue-on-error".to_owned(), Yaml::Bool(true)),
     ]);
@@ -180,7 +169,7 @@ fn step_id(step: &Yaml) -> Option<&str> {
 
 fn save_id(step: &Yaml) -> Option<&str> {
     step_id(step).filter(|id| {
-        matches!(*id, SOURCES_ID | TOOLS_ID | PROVIDERS_ID | MBX_BUNDLE_ID)
+        matches!(*id, SOURCES_ID | TOOLS_ID | PROVIDERS_ID)
             || (id.starts_with(FAMILY_SAVE_ID_PREFIX) && id.ends_with("-save"))
     })
 }
@@ -214,7 +203,7 @@ fn admission(id: &str, minutes: u16, condition: &str) -> Yaml {
         ),
         (
             "VELNOR_CACHE_REQUIRED_SECONDS".to_owned(),
-            Yaml::str((write_seconds(id) + RESERVE_SECONDS).to_string()),
+            Yaml::str((WRITE_SECONDS + RESERVE_SECONDS).to_string()),
         ),
     ]);
     Yaml::Map(vec![

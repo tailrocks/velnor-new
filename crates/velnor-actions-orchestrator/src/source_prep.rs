@@ -29,6 +29,22 @@ pub(crate) fn workspace_root_for_manifest<'a>(
     matching
 }
 
+pub(crate) fn workspace_crate_names(workspaces: &[PlannedWorkspace], root: &str) -> Vec<String> {
+    let mut names: Vec<String> = workspaces
+        .iter()
+        .filter(|workspace| workspace.record.workspace_root == root)
+        .flat_map(|workspace| &workspace.record.packages)
+        .filter(|package| package.in_workspace && !package.external)
+        .flat_map(|package| {
+            std::iter::once(&package.name).chain(package.targets.iter().map(|target| &target.name))
+        })
+        .map(|name| name.replace('-', "_"))
+        .collect();
+    names.sort();
+    names.dedup();
+    names
+}
+
 pub(crate) fn crate_fetch_roots(
     manifest: &str,
     fetch_roots: &[String],

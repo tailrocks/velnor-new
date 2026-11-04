@@ -4,68 +4,27 @@
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::workflow::cache_family::{
-    COMPLETE_STATE_ROOT_EXPR, COMPLETE_STATE_TRANSPORT_EXPR, MBX_COMPILE_ENV,
+    COMPLETE_STATE_ROOT_EXPR, COMPLETE_STATE_TRANSPORT_EXPR, MBX_BSE_ENV, MBX_BSE_PRODUCER,
+    MBX_COMPILE_ENV,
 };
-use velnor_actions_contract::workflow::cache_family_mbx::{
-    MBX_BUNDLE_EXPORT_CONDITION, MBX_BUNDLE_SAVE_CONDITION, MBX_BUNDLE_SAVE_KEY_EXPR,
-};
-use velnor_actions_contract::{Step, StepId, StepKind, StepRole};
+use velnor_actions_contract::workflow::cache_family_mbx::MBX_BUNDLE_EXPORT_CONDITION;
+use velnor_actions_contract::{Step, StepId, StepRole};
 
 use crate::RenderError;
 use crate::state_fragments::S256_FN;
 use crate::steps::shell_step;
 
 use super::{
-    DISCOVERY_RECORD, MARK_FILE, MBX_BUNDLE_EXPORT_NAME, MBX_BUNDLE_SAVE_NAME,
-    MBX_EXPORT_GROUP_ENV, PUBLICATION_RECORD, RECOVERY_RECORD, RUNNER_TEMP_GUARD, SIZE_FILE,
-    StateCeilings, compat_head_lines, shell_literal, split_shell,
+    DISCOVERY_RECORD, MARK_FILE, MBX_BUNDLE_EXPORT_NAME, MBX_EXPORT_GROUP_ENV, RECOVERY_RECORD,
+    RUNNER_TEMP_GUARD, SIZE_FILE, StateCeilings, compat_head_lines, shell_literal, split_shell,
 };
 
-/// Staged export attestation: the export step writes its verified
-/// payload/size/members/manifest/compat here instead of the publication
-/// record. The record step promotes it into the publication record only
-/// after the save step reports success.
-const PUBLICATION_STAGED: &str = "$RUNNER_TEMP/velnor/state-publication.staged";
-
-pub(crate) const MBX_BUNDLE_RECORD_NAME: &str = "Record state publication";
-
-/// The record step runs only after the save step reports success, so a
-/// rejected or failed save can never leave publication evidence behind.
-/// The save step id is assigned at YAML emission by
-/// `cache_save_budget::decorate` for every `MbxBundleSave` save step; if
-/// that id ever went missing the gate would fail closed (no record).
-const MBX_BUNDLE_RECORD_CONDITION: &str =
-    "always() && !cancelled() && steps.velnor-optional-mbx-bundle-save.outcome == 'success'";
-
-pub(crate) fn bundle_postlude(
-    action: &Step,
-    ceilings: StateCeilings,
-) -> Result<[Step; 3], RenderError> {
-    let StepKind::Action { with, env, .. } = &action.kind else {
-        return Err(RenderError::InvalidWorkflow(
-            "mbx_bundle_action_kind_mismatch".to_owned(),
-        ));
-    };
-    let rust = with
-        .get("toolchain")
-        .ok_or_else(|| RenderError::InvalidWorkflow("mbx_bundle_toolchain_missing".to_owned()))?;
-    let working_directory = with.get("working-directory").map(String::as_str);
-    let export = publish_step(rust, working_directory, env.clone(), ceilings)?;
-    let save = save_step()?;
-    let record = record_step()?;
-    Ok([export, save, record])
-}
-
-pub fn mbx_bundle_postlude_bounded(
+pub fn mbx_bundle_publish_bounded(
     rust_toolchain: &str,
     env: BTreeMap<String, String>,
     ceilings: StateCeilings,
-) -> Result<[Step; 3], RenderError> {
-    Ok([
-        publish_step(rust_toolchain, None, env, ceilings)?,
-        save_step()?,
-        record_step()?,
-    ])
+) -> Result<Step, RenderError> {
+    publish_step(rust_toolchain, None, env, ceilings)
 }
 
 pub(crate) fn publish_step(
@@ -148,9 +107,8 @@ pub(crate) fn publish_step(
             "s256 \"$payload\"; digest_two=\"$h\"".to_owned(),
             "size_two=; size_two_rest=; wc -c < \"$payload\" > \"$d/size_two\"; read -r size_two size_two_rest < \"$d/size_two\" || [ -n \"$size_two\" ]".to_owned(),
             "if [ \"$digest_one\" != \"$digest_two\" ] || [ \"$size\" != \"$size_two\" ]; then rm -f \"$payload\"; skip readback_mismatch; fi".to_owned(),
-            format!("printf '%s\\n' \"payload=$digest_one\" \"size=$size\" \"members=$members_n\" \"manifest=$manifest\" \"compat=$compat_now\" > \"{PUBLICATION_STAGED}\""),
             "printf 'velnor: state snapshot readback verified (sha256:%s)\\n' \"$digest_one\"".to_owned(),
-            "if [ -n \"$out\" ]; then printf '%s\\n' \"key=${rec_snapshot_prefix}s256-$digest_one\" 'exported=true' >> \"$out\"; fi".to_owned(),
+            "if [ -n \"$out\" ]; then printf '%s\\n' 'exported=true' >> \"$out\"; fi".to_owned(),
         ],
     );
     let script = script.join("; ");
@@ -174,6 +132,7 @@ fn exact_hit_lines() -> Vec<String> {
 fn env_gate_lines() -> Vec<String> {
     MBX_COMPILE_ENV
         .iter()
+        .chain(&[(MBX_BSE_ENV, MBX_BSE_PRODUCER)])
         .map(|(name, value)| {
             format!("if [ \"${{{name}-}}\" != \"{value}\" ]; then printf '%s\\n' '::warning::state snapshot refused: {name} is not {value}'; skip env_mismatch; fi")
         })
@@ -190,99 +149,4 @@ fn cold_produce_fragment(rust_toolchain: &str, extracted: u64) -> String {
     let install =
         "mkdir -p \"$parent\"; if mv \"$d/export\" \"$root\"; then :; else skip export_handoff; fi";
     format!("rm -rf \"$root\"; {produce}; {measure}; {install}")
-}
-
-fn save_step() -> Result<Step, RenderError> {
-    let mut step = super::super::cache_action_step(
-        false,
-        crate::cache_steps::TOOLS_SAVE_USES,
-        "mbx-bundle",
-        MBX_BUNDLE_SAVE_KEY_EXPR,
-        &[],
-        &[COMPLETE_STATE_TRANSPORT_EXPR.to_owned()],
-    )?;
-    MBX_BUNDLE_SAVE_NAME.clone_into(&mut step.name);
-    step.condition = Some(MBX_BUNDLE_SAVE_CONDITION.to_owned());
-    step.role = Some(StepRole::MbxBundleSave);
-    Ok(step)
-}
-
-/// Record the publication evidence after the save step succeeds.
-///
-/// The export step only stages its verified attestation; this step is
-/// conditioned on the save outcome and promotes the staging into the
-/// publication record with the `published` print. A rejected, skipped, or
-/// failed save leaves no record and no print, so PASS-looking evidence can
-/// no longer outlive the save. The step carries the dedicated
-/// `MbxBundleRecord` role (a plain shell role with no pinned id and no
-/// lifecycle counts), so dependency-seed cache-only validation keeps
-/// accepting producer jobs that carry this postlude.
-fn record_step() -> Result<Step, RenderError> {
-    let payload = shell_literal(COMPLETE_STATE_TRANSPORT_EXPR)?;
-    let script = vec![
-        "set -eu".to_owned(),
-        RUNNER_TEMP_GUARD.to_owned(),
-        format!("payload=\"{payload}\""),
-        format!("staged=\"{PUBLICATION_STAGED}\""),
-        format!("record=\"{PUBLICATION_RECORD}\""),
-        "d=\"$RUNNER_TEMP/velnor/state-record\"".to_owned(),
-        "rm -rf \"$d\"".to_owned(),
-        "mkdir -p \"$d\"".to_owned(),
-        S256_FN.to_owned(),
-        "if [ ! -f \"$staged\" ] || [ -L \"$staged\" ]; then printf '%s\\n' '::warning::cache_unavailable: state publication attestation missing; evidence refused'; exit 0; fi".to_owned(),
-        "digest=\"\"; size=\"\"; members=\"\"; manifest=\"\"; compat=\"\"".to_owned(),
-        "line=; while IFS= read -r line || [ -n \"$line\" ]; do case \"$line\" in payload=*) digest=${line#payload=} ;; size=*) size=${line#size=} ;; members=*) members=${line#members=} ;; manifest=*) manifest=${line#manifest=} ;; compat=*) compat=${line#compat=} ;; esac; done < \"$staged\"".to_owned(),
-        "if [ -z \"$digest\" ] || [ -z \"$size\" ] || [ -z \"$members\" ] || [ -z \"$manifest\" ] || [ -z \"$compat\" ]; then printf '%s\\n' '::warning::cache_unavailable: state publication attestation malformed; evidence refused'; exit 0; fi".to_owned(),
-        "if [ ! -f \"$payload\" ] || [ -L \"$payload\" ]; then printf '%s\\n' '::warning::cache_unavailable: state payload missing after save; evidence refused'; exit 0; fi".to_owned(),
-        "s256 \"$payload\"; if [ \"$h\" != \"$digest\" ]; then printf '%s\\n' '::warning::cache_unavailable: state payload changed after save; evidence refused'; exit 0; fi".to_owned(),
-        "printf '%s\\n' \"payload=$digest\" \"size=$size\" \"members=$members\" \"manifest=$manifest\" \"compat=$compat\" > \"$record\"".to_owned(),
-        "printf 'velnor: state snapshot published (%s bytes, sha256:%s)\\n' \"$size\" \"$digest\"".to_owned(),
-    ];
-    let script = script.join("; ");
-    let mut step = shell_step(
-        MBX_BUNDLE_RECORD_NAME,
-        vec!["sh".to_owned(), "-c".to_owned(), script],
-        BTreeMap::new(),
-    )?;
-    step.role = Some(StepRole::MbxBundleRecord);
-    step.condition = Some(MBX_BUNDLE_RECORD_CONDITION.to_owned());
-    Ok(step)
-}
-
-pub(crate) fn append_bundle_postludes(
-    jobs: &mut BTreeMap<String, velnor_actions_contract::Job>,
-) -> Result<(), RenderError> {
-    for (id, job) in jobs {
-        let restores = count(&job.steps, StepRole::MbxBundleRestore);
-        let exports = count(&job.steps, StepRole::MbxBundleExport);
-        let marks = count(&job.steps, StepRole::MbxProducerMark);
-        if restores == 0 && exports == 0 && marks == 0 {
-            continue;
-        }
-        if marks == 0 && exports == 0 {
-            continue;
-        }
-        if marks != 1 {
-            return Err(RenderError::InvalidWorkflow(format!(
-                "mbx_producer_mark_count:{id}"
-            )));
-        }
-        if restores != 1 || exports != 0 {
-            return Err(RenderError::InvalidWorkflow(format!(
-                "mbx_bundle_lifecycle:{id}"
-            )));
-        }
-        let action = job
-            .steps
-            .iter()
-            .find(|step| step.role == Some(StepRole::MbxCache))
-            .ok_or_else(|| RenderError::InvalidWorkflow(format!("mbx_bundle_no_action:{id}")))?;
-        let postlude = bundle_postlude(action, StateCeilings::V3)?;
-        job.steps.extend(postlude);
-    }
-    Ok(())
-}
-
-fn count(steps: &[Step], role: StepRole) -> usize {
-    steps.iter().filter(|step| step.role == Some(role)).count()
 }

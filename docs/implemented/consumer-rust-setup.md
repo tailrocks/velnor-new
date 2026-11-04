@@ -174,14 +174,14 @@ Nothing needs to be declared in `.velnor/config.toml`. `mr_boxington = true`
 in `mise.toml` is durable evidence for `compile_driver = mbx`, so generation
 selects:
 
-- the MBX compile driver in every crate job, and in the dependency-seed job
-  when `[stacks.rust] dependency_seed` is not `"off"`;
-- the seed-only bundle writer: when the seed job is generated, only that job
-  runs `Record MBX producer success`, `Export MBX bundle` and
-  `Save MBX bundle`, on trusted pushes; crate jobs restore and import
-  read-only. velnor-new sets `dependency_seed = "off"`
-  (`.velnor/config.toml:40`, PR #466), so no job writes compiled state there
-  and every crate-job restore misses; see
+- the MBX compile driver in every crate job, and in the state producer job
+  when `[stacks.rust] compiled_state` is not `"off"`;
+- the compiled-state writer: when the producer is generated, one
+  `state-producer-<root>` job per Cargo root compiles the crate jobs' lane
+  records and uploads one handoff artifact, and one `state-seal-<root>` job
+  saves, attests and retires the previous generation, on trusted pushes;
+  crate jobs restore and import read-only with
+  `MBX_BUILD_SCRIPT_EXECUTION=1`; see
   [compiled-state persistence](../proposed/compiled-state-persistence.md);
 - the opaque bundle transport: `mbx cache export --group velnor --format
   directory` and `mbx cache import`, never a Cargo `target/` cache (the MBX

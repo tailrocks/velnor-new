@@ -103,7 +103,7 @@ pub const MBX_VERSION_CHECK_NAME: &str = "Verify native MBX version";
 pub(crate) use crate::action_mbx_shell::{ACTION_MBX_BIN, RESOLVE_ACTION_MBX_BIN};
 pub(crate) const MBX_GC_AUTO_ENV: &str = "MBX_GC_AUTO";
 pub(crate) const MBX_GC_AUTO_VALUE: &str = "0";
-pub(crate) const MBX_COMPILE_ENV: [(&str, &str); 4] = COMPILE_ENV;
+pub(crate) const MBX_COMPILE_ENV: [(&str, &str); 3] = COMPILE_ENV;
 pub(crate) const MBX_CACHE_DIR_ENV: &str = "MBX_CACHE_DIR";
 pub(crate) const MBX_CACHE_DIR_VALUE: &str = "${{ runner.temp }}/velnor/mbx";
 
@@ -356,7 +356,7 @@ fn with_rustup_process_homes(
     Ok(env)
 }
 
-pub(super) fn validate_rust_toolchain(toolchain: &str) -> Result<(), RenderError> {
+pub(crate) fn validate_rust_toolchain(toolchain: &str) -> Result<(), RenderError> {
     crate::commands::is_exact_or_project_version(toolchain)
         .then_some(())
         .ok_or_else(|| RenderError::BadCommand(format!("bad_rust_toolchain:{toolchain}")))

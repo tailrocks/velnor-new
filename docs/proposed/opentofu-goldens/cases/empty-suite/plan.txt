@@ -19,7 +19,7 @@ Workflow to generate
     - plan (13 steps)
     - required (10 steps)
     - required-gate (1 steps)
-    - rust-empty-suite (17 steps)
+    - rust-empty-suite (18 steps)
     - tools-producer-18fa7d95 (8 steps)
     - tools-producer-41c45df3 (10 steps)
     - tools-producer-c69e2be0 (9 steps)

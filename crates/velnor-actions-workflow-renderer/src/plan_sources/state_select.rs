@@ -4,12 +4,13 @@
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::workflow::cache_family::{
-    RootSlug, StateScope, StateTrust, StateUnit,
+    CacheFamily, RootSlug, StateScope, StateTrust, StateUnit, outer_entry_bound,
+    state_snapshot_output,
 };
 use velnor_actions_contract::workflow::state_seal::{
-    STATE_CANARY_VERIFIED_OUTPUT, STATE_SEAL_LIST_LIMIT, STATE_SEAL_PREDICATE_TYPE,
-    STATE_SEAL_VERIFY_LIMIT, STATE_SEAL_VERIFY_TIMEOUT_ENV, STATE_SEAL_VERIFY_TIMEOUT_SECONDS,
-    state_attested_output, state_canary_prefix,
+    STATE_SEAL_LIST_LIMIT, STATE_SEAL_LIST_TAB, STATE_SEAL_PREDICATE_TYPE, STATE_SEAL_VERIFY_LIMIT,
+    STATE_SEAL_VERIFY_TIMEOUT_ENV, STATE_SEAL_VERIFY_TIMEOUT_SECONDS, state_attested_output,
+    state_compat_output, state_produce_output,
 };
 use velnor_actions_contract::{Step, StepId, StepRole};
 
@@ -21,6 +22,7 @@ const DEFAULT_REF_EXPR: &str =
 const TOKEN_EXPR: &str = "${{ github.token }}";
 const STEP_NAME: &str = "Select attested state";
 const OUTPUT_DELIMITER: &str = "VELNOR_STATE_ATTESTED_EOF";
+const CACHE_KEYS_OUTPUTS: &str = "steps.cache-keys.outputs";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SealRoot {
@@ -31,7 +33,6 @@ pub struct SealRoot {
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct StateSealPlan {
     pub roots: Vec<SealRoot>,
-    pub canary: bool,
 }
 
 impl SealRoot {
@@ -64,19 +65,16 @@ attested() {
   : > "$out"
   [ -n "$ref" ] && [ -n "$repo" ] && [ -n "$signer" ] || return 0
   command -v gh >/dev/null 2>&1 || return 0
-  run_gh cache list -R "$repo" --key "$1" --ref "$ref" --sort created_at --order desc --limit @LIST_LIMIT@ --json key,createdAt,id,sizeInBytes --jq '.[] | .createdAt + " " + .key + " " + (.id | tostring) + " " + (.sizeInBytes | tostring)' > "$d/list" 2>/dev/null || return 0
+  run_gh cache list -R "$repo" --key "$1" --ref "$ref" --sort created_at --order desc --limit @LIST_LIMIT@ --json key,createdAt,id,sizeInBytes --jq '.[] | [.createdAt, .key, (.id | tostring), (.sizeInBytes | tostring)] | @tsv' > "$d/list" 2>/dev/null || return 0
   LC_ALL=C sort -r "$d/list" > "$d/sorted" || return 0
   n=
   v=
-  while IFS= read -r line; do
+  while IFS='@TAB@' read -r created key id size; do
     [ "${#v}" -lt @VERIFY_LIMIT@ ] && [ "${#n}" -lt @LIST_LIMIT@ ] || break
-    rest=${line#* }
-    key=${rest%% *}
-    meta=${rest#* }
-    id=${meta%% *}
-    size=${meta#* }
+    case "$key" in *[[:space:]]*) continue ;; esac
     case "$id" in ''|*[!0-9]*) continue ;; esac
     case "$size" in ''|*[!0-9]*) continue ;; esac
+    [ "$size" -le @OUTER_BOUND@ ] || continue
     case "$key" in "$1"?*) ;; *) continue ;; esac
     printf '%s\n' "${key#"$1"}" | grep -Eq "$shape" || continue
     printf '%s %s %s\n' "$key" "$id" "$size" > "$d/subject"
@@ -89,12 +87,23 @@ emit() {
 }
 "#;
 
-const CANARY_TAIL: &str = r#"if [ -s "$d/canary" ]; then verified=true; printf '%s\n' 'velnor: state seal canary verified'; else verified=false; fi
-printf '%s\n' "@VERIFIED@=$verified" >> "$GITHUB_OUTPUT"
+const DECIDE: &str = r#"decide() {
+  want=false
+  if [ -n "$4" ] && [ -n "$5" ]; then
+    want=true
+    prefix="$3$4-$5-"
+    while IFS= read -r cand || [ -n "$cand" ]; do
+      case "$cand" in "$prefix"?*) want=false ;; esac
+    done < "$d/$2"
+  fi
+  printf '%s\n' "$1=$want" >> "$GITHUB_OUTPUT"
+}
 "#;
 
-fn head() -> String {
+fn head(outer_bound: u64) -> String {
     SELECT_HEAD
+        .replace("@OUTER_BOUND@", &outer_bound.to_string())
+        .replace("@TAB@", STATE_SEAL_LIST_TAB)
         .replace("@TIMEOUT_ENV@", STATE_SEAL_VERIFY_TIMEOUT_ENV)
         .replace("@TIMEOUT@", &STATE_SEAL_VERIFY_TIMEOUT_SECONDS.to_string())
         .replace("@LIST_LIMIT@", &STATE_SEAL_LIST_LIMIT.to_string())
@@ -103,21 +112,13 @@ fn head() -> String {
         .replace("@DELIMITER@", OUTPUT_DELIMITER)
 }
 
-pub fn state_select_step(roots: &[SealRoot], canary: bool) -> Result<Step, RenderError> {
-    let mut sections = vec![head()];
-    sections.extend(roots.iter().enumerate().map(|(ordinal, root)| {
-        format!(
-            "attested '{}' r{ordinal}\nemit {} r{ordinal}\n",
-            root.prefix(),
-            state_attested_output(root.unit.as_str(), root.slug.as_str())
-        )
-    }));
-    if canary {
-        sections.push(format!("attested '{}' canary\n", state_canary_prefix()));
-        sections.push(CANARY_TAIL.replace("@VERIFIED@", STATE_CANARY_VERIFIED_OUTPUT));
-    }
-    let script = sections.concat();
-    let env = BTreeMap::from([
+pub fn state_select_step(roots: &[SealRoot]) -> Result<Step, RenderError> {
+    let outer_bound = outer_entry_bound(CacheFamily::MbxBundle.spec().ceiling.stored())
+        .ok_or_else(|| {
+            RenderError::InvalidWorkflow("state_select:outer_bound_unbounded".to_owned())
+        })?;
+    let mut sections = vec![head(outer_bound), DECIDE.to_owned()];
+    let mut env = BTreeMap::from([
         (DEFAULT_REF_ENV.to_owned(), DEFAULT_REF_EXPR.to_owned()),
         ("GH_TOKEN".to_owned(), TOKEN_EXPR.to_owned()),
         (
@@ -125,6 +126,32 @@ pub fn state_select_step(roots: &[SealRoot], canary: bool) -> Result<Step, Rende
             STATE_SEAL_VERIFY_TIMEOUT_SECONDS.to_string(),
         ),
     ]);
+    for (ordinal, root) in roots.iter().enumerate() {
+        let compat_env = format!("VELNOR_STATE_COMPAT_R{ordinal}");
+        let snapshot_env = format!("VELNOR_STATE_SNAPSHOT_R{ordinal}");
+        env.insert(
+            compat_env.clone(),
+            format!(
+                "${{{{ {CACHE_KEYS_OUTPUTS}.{} }}}}",
+                state_compat_output(root.slug.as_str())
+            ),
+        );
+        env.insert(
+            snapshot_env.clone(),
+            format!(
+                "${{{{ {CACHE_KEYS_OUTPUTS}.{} }}}}",
+                state_snapshot_output(&root.slug)
+            ),
+        );
+        sections.push(format!(
+            "attested '{}' r{ordinal}\nemit {} r{ordinal}\ndecide {} r{ordinal} '{}' \"${{{compat_env}-}}\" \"${{{snapshot_env}-}}\"\n",
+            root.prefix(),
+            state_attested_output(root.unit.as_str(), root.slug.as_str()),
+            state_produce_output(root.unit.as_str(), root.slug.as_str()),
+            root.prefix(),
+        ));
+    }
+    let script = sections.concat();
     let mut step = crate::steps::ambient_shell_step(
         STEP_NAME,
         vec![

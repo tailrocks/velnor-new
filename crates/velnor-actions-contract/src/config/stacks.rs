@@ -53,9 +53,9 @@ pub enum DeclaredCompileDriver {
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum DependencySeedMode {
+pub enum CompiledStateMode {
     #[default]
-    Produce,
+    Union,
 
     Off,
 }
@@ -64,8 +64,8 @@ pub enum DependencySeedMode {
     clippy::trivially_copy_pass_by_ref,
     reason = "serde skip_serializing_if requires a borrowed value"
 )]
-fn is_produce(value: &DependencySeedMode) -> bool {
-    *value == DependencySeedMode::Produce
+fn is_union(value: &CompiledStateMode) -> bool {
+    *value == CompiledStateMode::Union
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -97,8 +97,8 @@ pub struct RustStackConfig {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub run_ignored: Option<String>,
 
-    #[serde(default, skip_serializing_if = "is_produce")]
-    pub dependency_seed: DependencySeedMode,
+    #[serde(default, skip_serializing_if = "is_union")]
+    pub compiled_state: CompiledStateMode,
 
     #[serde(default, skip_serializing_if = "is_false")]
     pub seed_parallel_targets: bool,
@@ -197,7 +197,7 @@ impl RustStackConfig {
             compile_driver: None,
             test_runner: None,
             run_ignored: None,
-            dependency_seed: DependencySeedMode::Produce,
+            compiled_state: CompiledStateMode::Union,
             seed_parallel_targets: false,
             clippy_all_features: false,
             allow_empty_test_suite: false,
@@ -213,10 +213,10 @@ impl RustStackConfig {
 
 impl StacksConfig {
     #[must_use]
-    pub fn dependency_seed(&self) -> DependencySeedMode {
+    pub fn compiled_state(&self) -> CompiledStateMode {
         self.rust
             .as_ref()
-            .map_or_else(DependencySeedMode::default, |rust| rust.dependency_seed)
+            .map_or_else(CompiledStateMode::default, |rust| rust.compiled_state)
     }
 
     pub fn validate(&self, file: &str) -> Result<(), ContractError> {

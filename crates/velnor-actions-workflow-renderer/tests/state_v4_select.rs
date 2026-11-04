@@ -3,8 +3,9 @@
 
 use std::error::Error;
 
+use velnor_actions_contract::workflow::cache_family::{CacheFamily, outer_entry_bound};
 use velnor_actions_contract::workflow::state_seal::{
-    STATE_SEAL_LIST_LIMIT, STATE_SEAL_VERIFY_LIMIT, state_canary_identity_prefix,
+    STATE_SEAL_LIST_LIMIT, STATE_SEAL_VERIFY_LIMIT,
 };
 
 use crate::gc1_scene::{Scene, fail};
@@ -79,7 +80,7 @@ fn plan_selects_only_the_newest_attested_entry() -> Result<(), Box<dyn Error>> {
         Attestation::signed(&newest),
         Attestation::signed(&oldest),
     ])?;
-    run_select(&scene, &gh, ROOT, false, &[])?;
+    run_select(&scene, &gh, ROOT, &[])?;
     expect(
         &selected(&scene, ROOT)?,
         &[&newest, &older, &oldest],
@@ -88,7 +89,7 @@ fn plan_selects_only_the_newest_attested_entry() -> Result<(), Box<dyn Error>> {
 
     gh.list(&[(T3, MAIN, &newest), (T2, MAIN, &older)])?;
     gh.attest(&[Attestation::signed(&older)])?;
-    run_select(&scene, &gh, ROOT, false, &[])?;
+    run_select(&scene, &gh, ROOT, &[])?;
     expect(
         &selected(&scene, ROOT)?,
         &[&older],
@@ -97,7 +98,7 @@ fn plan_selects_only_the_newest_attested_entry() -> Result<(), Box<dyn Error>> {
 
     for (label, forged) in forgeries(&newest) {
         gh.attest(&[Attestation::signed(&older), forged])?;
-        run_select(&scene, &gh, ROOT, false, &[])?;
+        run_select(&scene, &gh, ROOT, &[])?;
         expect(&selected(&scene, ROOT)?, &[&older], label)?;
     }
 
@@ -120,7 +121,7 @@ fn plan_selects_only_the_newest_attested_entry() -> Result<(), Box<dyn Error>> {
     let mut attested = vec![Attestation::signed(&older), Attestation::signed(&newest)];
     attested.extend(stray.iter().map(|entry| Attestation::signed(entry)));
     gh.attest(&attested)?;
-    run_select(&scene, &gh, ROOT, false, &[])?;
+    run_select(&scene, &gh, ROOT, &[])?;
     expect(
         &selected(&scene, ROOT)?,
         &[&older],
@@ -137,7 +138,7 @@ fn plan_selects_only_the_newest_attested_entry() -> Result<(), Box<dyn Error>> {
     ];
     for (mode, extra) in outages {
         gh.mode(mode)?;
-        run_select(&scene, &gh, ROOT, false, extra)?;
+        run_select(&scene, &gh, ROOT, extra)?;
         expect(
             &selected(&scene, ROOT)?,
             &[],
@@ -145,7 +146,7 @@ fn plan_selects_only_the_newest_attested_entry() -> Result<(), Box<dyn Error>> {
         )?;
     }
     gh.mode("ok")?;
-    run_select(&scene, &gh, ROOT, false, &[])?;
+    run_select(&scene, &gh, ROOT, &[])?;
     expect(
         &selected(&scene, ROOT)?,
         &[&newest, &older],
@@ -163,7 +164,7 @@ fn plan_selects_only_the_entry_generation_that_was_attested() -> Result<(), Box<
     gh.attest(&[Attestation::bound(&sealed, ENTRY_ID, ENTRY_SIZE)])?;
 
     gh.list_entries(&[(T1, MAIN, &sealed, ENTRY_ID + 1, ENTRY_SIZE)])?;
-    run_select(&scene, &gh, ROOT, false, &[])?;
+    run_select(&scene, &gh, ROOT, &[])?;
     expect(
         &selected(&scene, ROOT)?,
         &[],
@@ -171,7 +172,7 @@ fn plan_selects_only_the_entry_generation_that_was_attested() -> Result<(), Box<
     )?;
 
     gh.list_entries(&[(T1, MAIN, &sealed, ENTRY_ID, ENTRY_SIZE + 1)])?;
-    run_select(&scene, &gh, ROOT, false, &[])?;
+    run_select(&scene, &gh, ROOT, &[])?;
     expect(
         &selected(&scene, ROOT)?,
         &[],
@@ -182,7 +183,7 @@ fn plan_selects_only_the_entry_generation_that_was_attested() -> Result<(), Box<
         (T2, MAIN, &sealed, ENTRY_ID + 1, ENTRY_SIZE),
         (T1, MAIN, &sealed, ENTRY_ID, ENTRY_SIZE),
     ])?;
-    run_select(&scene, &gh, ROOT, false, &[])?;
+    run_select(&scene, &gh, ROOT, &[])?;
     expect(
         &selected(&scene, ROOT)?,
         &[&sealed],
@@ -208,7 +209,7 @@ fn plan_selects_nothing_when_only_the_verifier_fails() -> Result<(), Box<dyn Err
     ];
     for (mode, extra) in outages {
         gh.mode(mode)?;
-        run_select(&scene, &gh, ROOT, false, extra)?;
+        run_select(&scene, &gh, ROOT, extra)?;
         expect(
             &selected(&scene, ROOT)?,
             &[],
@@ -216,46 +217,8 @@ fn plan_selects_nothing_when_only_the_verifier_fails() -> Result<(), Box<dyn Err
         )?;
     }
     gh.mode("ok")?;
-    run_select(&scene, &gh, ROOT, false, &[])?;
+    run_select(&scene, &gh, ROOT, &[])?;
     expect(&selected(&scene, ROOT)?, &[&sealed], "verifier restored")?;
-    scene.finish()
-}
-
-#[test]
-#[cfg(unix)]
-fn canary_is_selected_only_for_its_own_unit() -> Result<(), Box<dyn Error>> {
-    let scene = Scene::new("seal-canary", crate::gc1_t53::scripts()?)?;
-    let gh = Gh::install(&scene)?;
-    let canary = format!("{}{}", state_canary_identity_prefix(), digest('c'));
-    let union = key('a', '1', '1')?;
-
-    gh.list(&[(T1, MAIN, &union)])?;
-    gh.attest(&[Attestation::signed(&union)])?;
-    let output = run_select(&scene, &gh, ROOT, true, &[])?;
-    if scene.output_value("state_canary_verified")? != "false"
-        || output.contains("state seal canary verified")
-    {
-        return Err(fail("a missing canary reported verified"));
-    }
-
-    gh.list(&[(T2, MAIN, &canary), (T1, MAIN, &union)])?;
-    run_select(&scene, &gh, ROOT, true, &[])?;
-    if scene.output_value("state_canary_verified")? != "false" {
-        return Err(fail("an unattested canary reported verified"));
-    }
-
-    gh.attest(&[Attestation::signed(&canary), Attestation::signed(&union)])?;
-    let output = run_select(&scene, &gh, ROOT, true, &[])?;
-    if scene.output_value("state_canary_verified")? != "true"
-        || !output.contains("velnor: state seal canary verified")
-    {
-        return Err(fail("a sealed canary was not recognised"));
-    }
-    expect(
-        &selected(&scene, ROOT)?,
-        &[&union],
-        "union root with a sealed canary beside it",
-    )?;
     scene.finish()
 }
 
@@ -290,7 +253,7 @@ fn plan_counts_only_verified_entries_against_its_limit() -> Result<(), Box<dyn E
     rows.push((T1, MAIN, attested.as_str()));
     gh.list(&rows)?;
     gh.attest(&[Attestation::signed(&attested)])?;
-    run_select(&scene, &gh, ROOT, false, &[])?;
+    run_select(&scene, &gh, ROOT, &[])?;
     expect(
         &selected(&scene, ROOT)?,
         &[&attested],
@@ -313,11 +276,37 @@ fn plan_lists_by_creation_not_by_last_access() -> Result<(), Box<dyn Error>> {
     rows.extend(stale.iter().map(|entry| (T1, MAIN, entry.as_str(), T3)));
     gh.list_accessed(&rows)?;
     gh.attest(&[Attestation::signed(&fresh)])?;
-    run_select(&scene, &gh, ROOT, false, &[])?;
+    run_select(&scene, &gh, ROOT, &[])?;
     expect(
         &selected(&scene, ROOT)?,
         &[&fresh],
         "newest creation with the oldest access",
+    )?;
+    scene.finish()
+}
+
+#[test]
+#[cfg(unix)]
+fn plan_skips_entries_above_the_outer_bound() -> Result<(), Box<dyn Error>> {
+    let scene = Scene::new("seal-outer-bound", crate::gc1_t53::scripts()?)?;
+    let gh = Gh::install(&scene)?;
+    let bound = outer_entry_bound(CacheFamily::MbxBundle.spec().ceiling.stored())
+        .ok_or_else(|| fail("the outer bound is unbounded"))?;
+    let over = key('a', '1', '1')?;
+    let at = key('a', '1', '2')?;
+    gh.list_entries(&[
+        (T2, MAIN, &over, ENTRY_ID, bound + 1),
+        (T1, MAIN, &at, ENTRY_ID + 1, bound),
+    ])?;
+    gh.attest(&[
+        Attestation::bound(&over, ENTRY_ID, bound + 1),
+        Attestation::bound(&at, ENTRY_ID + 1, bound),
+    ])?;
+    run_select(&scene, &gh, ROOT, &[])?;
+    expect(
+        &selected(&scene, ROOT)?,
+        &[&at],
+        "an attested entry above the outer bound",
     )?;
     scene.finish()
 }

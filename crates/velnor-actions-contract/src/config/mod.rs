@@ -172,7 +172,7 @@ pub use rust_suites_validate::{
 };
 pub use rust_toolchain_source::RustToolchainSource;
 pub use stacks::{
-    DeclaredCompileDriver, DeclaredTestRunner, DependencySeedMode, MAX_CRATE_BUILD_JOBS,
+    CompiledStateMode, DeclaredCompileDriver, DeclaredTestRunner, MAX_CRATE_BUILD_JOBS,
     RustConfiguration, RustCrateConfig, RustStackConfig, StacksConfig, is_valid_feature_name,
     is_valid_rust_target,
 };
@@ -188,8 +188,8 @@ pub use verification::{VerificationRunner, VerificationTask};
 pub use workflow::{
     GeneratorValidation, LATEST_RUNNER_LABEL, PullRequestCachePolicy, RUNNER_LABEL_CATALOG,
     RunnerSelection, VelnorSupportWorkflow, VerifyConfig, WorkflowConfig, WorkflowPolicy,
-    default_crate_timeout_minutes, default_dependency_seed_timeout_minutes,
-    default_plan_timeout_minutes,
+    default_crate_timeout_minutes, default_plan_timeout_minutes,
+    default_state_producer_timeout_minutes,
 };
 pub use workflow_lint::{WorkflowLintConfig, WorkflowLintProfile};
 pub use workflow_task::{WORKFLOW_TASK_JOB_PREFIX, WorkflowTask, is_valid_workflow_task_id};

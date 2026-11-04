@@ -18,7 +18,7 @@ Workflow to generate
     - plan (13 steps)
     - required (10 steps)
     - required-gate (1 steps)
-    - rust-minimal-cargo (18 steps)
+    - rust-minimal-cargo (19 steps)
     - tools-producer-0ee4a3f5 (10 steps)
     - tools-producer-18fa7d95 (8 steps)
     - tools-producer-7d71ebb6 (9 steps)

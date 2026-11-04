@@ -14,10 +14,10 @@ use velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
 
 use super::workflow_configuration_fixture::{self, git_fixture};
 
-const OFF: &str = "\n[stacks.rust]\ndependency_seed = \"off\"\n";
-const PRODUCE: &str = "\n[stacks.rust]\ndependency_seed = \"produce\"\n";
+const OFF: &str = "\n[stacks.rust]\ncompiled_state = \"off\"\n";
+const PRODUCE: &str = "\n[stacks.rust]\ncompiled_state = \"union\"\n";
 
-fn seed_repo(extra: &str) -> Result<tempfile::TempDir, Box<dyn Error>> {
+pub(super) fn seed_repo(extra: &str) -> Result<tempfile::TempDir, Box<dyn Error>> {
     let mut config = workflow_configuration_fixture::config_with_verification_branch(None);
     config.push_str(extra);
     let repo = workflow_configuration_fixture::make_repo(&config)?;
@@ -45,14 +45,16 @@ fn seed_ids(prepared: &GenerationPreparation) -> BTreeSet<&str> {
         .ir
         .jobs
         .iter()
-        .filter(|(_, job)| job.is_dependency_seed())
+        .filter(|(_, job)| {
+            job.producer_kind()
+                == Some(velnor_actions_contract::workflow::ProducerKind::StateProducer)
+        })
         .map(|(id, _)| id.as_str())
         .collect()
 }
 
 #[test]
-fn prepare_and_render_emit_no_seed_jobs_when_dependency_seed_is_off() -> Result<(), Box<dyn Error>>
-{
+fn prepare_and_render_emit_no_seed_jobs_when_compiled_state_is_off() -> Result<(), Box<dyn Error>> {
     let produce_repo = seed_repo("")?;
     let produce = prepare(produce_repo.path())?;
     let off_repo = seed_repo(OFF)?;
@@ -90,8 +92,8 @@ fn prepare_and_render_emit_no_seed_jobs_when_dependency_seed_is_off() -> Result<
     }
     let rendered = render_staged_tree(&off)?;
     let workflow = rendered.get(WORKFLOW_PATH).ok_or("workflow missing")?;
-    assert!(!workflow.contains("dependency-seed"));
-    assert!(!workflow.contains("Dependency seed"));
+    assert!(!workflow.contains("state-producer"));
+    assert!(!workflow.contains("State producer"));
     Ok(())
 }
 
@@ -144,7 +146,7 @@ fn controller_plan_accepts_a_seedless_graph() -> Result<(), Box<dyn Error>> {
             .get("job_id")
             .and_then(Value::as_str)
             .ok_or("plan job has no id")?;
-        assert!(!id.contains("dependency-seed"), "{id}");
+        assert!(!id.contains("state-producer"), "{id}");
     }
     Ok(())
 }

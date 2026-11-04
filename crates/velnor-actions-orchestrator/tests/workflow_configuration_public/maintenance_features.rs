@@ -279,7 +279,10 @@ pub(super) fn assert_required_owner_routes(
         .iter()
         .filter_map(|id| {
             let job = prepared.workflow.ir.jobs.get(id)?;
-            (id.starts_with("rust-") && !job.is_dependency_seed()).then_some(id.as_str())
+            (id.starts_with("rust-")
+                && job.producer_kind()
+                    != Some(velnor_actions_contract::workflow::ProducerKind::StateProducer))
+            .then_some(id.as_str())
         })
         .collect();
     assert_eq!(required_rust_owners, owner_ids);
