@@ -40,6 +40,9 @@ pub(crate) fn invoke_upload<
     let qualified = validate_upload(input, &permit, &credential)?;
     let runner_temp = runner_temp.canonicalize().map_err(|_| invalid())?;
     let executable = verified_release_plz(&runner_temp, qualified.executable_sha256)?;
+    let git_root = runner_temp.join("velnor/git-bundle");
+    let git =
+        velnor_actions_mise::release_git_pin::verify_bundle(&git_root).map_err(|_| invalid())?;
     let rustup_home = runner_temp.join("velnor/rustup");
     let cargo = crate::crate_release_source::verified_rust_tool_path(
         &rustup_home,
@@ -98,14 +101,22 @@ pub(crate) fn invoke_upload<
     .into_iter()
     .map(|(key, value)| (key.into(), value.into()))
     .collect();
-    let command =
-        IsolatedCommand::crate_publish(&executable, args, &source, &env, git_token, credential)
-            .map_err(|_| invalid())?;
+    let command = IsolatedCommand::crate_publish(
+        &executable,
+        args,
+        &source,
+        &env,
+        git_token,
+        credential,
+        &git,
+    )
+    .map_err(|_| invalid())?;
     let deadline = velnor_actions_mise::CheckDeadline::after(Duration::from_secs(600))
         .map_err(|_| invalid())?;
-    let (output, _drained) = command
-        .run_quiescent_until(1024 * 1024, deadline)
-        .map_err(|_| internal("crate_release_upload_incomplete"))?;
+    velnor_actions_mise::release_git_pin::verify_bundle(&git_root).map_err(|_| invalid())?;
+    let result = command.run_quiescent_until(1024 * 1024, deadline);
+    velnor_actions_mise::release_git_pin::verify_bundle(&git_root).map_err(|_| invalid())?;
+    let (output, _drained) = result.map_err(|_| internal("crate_release_upload_incomplete"))?;
     let attempt = if output.success {
         UploadAttempt::ExitedSuccess
     } else {

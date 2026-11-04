@@ -32,6 +32,7 @@ impl IsolatedCommand {
         args: Vec<OsString>,
         cwd: &Path,
         tool_env: &[(OsString, OsString)],
+        git: &crate::release_git_pin::VerifiedGit,
     ) -> Result<Self, MiseError> {
         if !program.is_absolute() || !cwd.is_absolute() {
             return Err(invalid());
@@ -48,11 +49,15 @@ impl IsolatedCommand {
             return Err(invalid());
         }
         validate_env(tool_env, &source)?;
+        if git.exec_path().starts_with(&source) {
+            return Err(invalid());
+        }
+        let extra_env = super::with_pinned_git(tool_env, git, invalid)?;
         Ok(Self {
             program: executable.into_os_string(),
             args,
             cwd: Some(source),
-            extra_env: tool_env.to_vec(),
+            extra_env,
             policy: EnvPolicy::QualifiedProbe,
             operator_guarded: false,
         })

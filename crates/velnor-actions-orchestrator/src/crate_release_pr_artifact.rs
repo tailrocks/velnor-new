@@ -552,6 +552,9 @@ fn run_preparation_update(
     temp: &Path,
 ) -> Result<PreparationArtifact, &'static str> {
     let invalid = || "release_pr_preparation_invalid";
+    let git_root = temp.join("velnor/git-bundle");
+    let git =
+        velnor_actions_mise::release_git_pin::verify_bundle(&git_root).map_err(|_| invalid())?;
     let plz = temp.join("velnor-release-plz/release-plz");
     let semver = temp.join("velnor-semver/cargo-semver-checks");
     let plz_pin = velnor_actions_mise::catalog::qualified_release_plz(
@@ -611,10 +614,13 @@ fn run_preparation_update(
         source.join(&intent.manifest_path).into_os_string(),
     ];
     let command =
-        velnor_actions_mise::command::IsolatedCommand::crate_update(&plz, args, source, &env)
+        velnor_actions_mise::command::IsolatedCommand::crate_update(&plz, args, source, &env, &git)
             .map_err(|_| invalid())?;
-    let artifact =
-        execute_preparation_command(checkout, &command, std::time::Duration::from_mins(20))?;
+    velnor_actions_mise::release_git_pin::verify_bundle(&git_root).map_err(|_| invalid())?;
+    let result =
+        execute_preparation_command(checkout, &command, std::time::Duration::from_mins(20));
+    velnor_actions_mise::release_git_pin::verify_bundle(&git_root).map_err(|_| invalid())?;
+    let artifact = result?;
     check_pinned_executable(&plz, plz_pin.executable_sha256)?;
     check_pinned_executable(&semver, semver_pin.executable_sha256)?;
     for (path, expected) in [&cargo, &rustc, &rustdoc].iter().zip(rust_hashes) {
@@ -788,25 +794,10 @@ mod tests {
         tools: &Path,
         script: &str,
     ) -> Result<velnor_actions_mise::command::IsolatedCommand, Box<dyn std::error::Error>> {
-        use std::{ffi::OsString, os::unix::fs::PermissionsExt as _};
+        use std::os::unix::fs::PermissionsExt as _;
         let program = tools.join("release-plz");
         fs::write(&program, script)?;
         fs::set_permissions(&program, fs::Permissions::from_mode(0o755))?;
-        let tool_home = tools.to_str().ok_or("tools")?;
-        let env: Vec<(OsString, OsString)> = [
-            ("PATH", "/usr/bin:/bin"),
-            ("CARGO", "/usr/bin/true"),
-            ("RUSTC", "/usr/bin/true"),
-            ("RUSTDOC", "/usr/bin/true"),
-            ("HOME", tool_home),
-            ("CARGO_HOME", tool_home),
-            ("CARGO_TARGET_DIR", tool_home),
-            ("RUSTUP_HOME", tool_home),
-            ("RUSTUP_AUTO_INSTALL", "0"),
-        ]
-        .into_iter()
-        .map(|(key, value)| (key.into(), value.into()))
-        .collect();
         let args = vec![
             "update".into(),
             "--config".into(),
@@ -814,9 +805,12 @@ mod tests {
             "--manifest-path".into(),
             source.join("Cargo.toml").into_os_string(),
         ];
-        Ok(velnor_actions_mise::command::IsolatedCommand::crate_update(
-            &program, args, source, &env,
-        )?)
+        Ok(velnor_actions_mise::command::IsolatedCommand::repo_task(
+            program.to_str().ok_or("program")?,
+            args,
+            &[],
+        )?
+        .with_cwd(source.to_path_buf()))
     }
 
     #[cfg(unix)]

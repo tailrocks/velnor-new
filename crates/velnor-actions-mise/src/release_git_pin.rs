@@ -49,6 +49,14 @@ impl ReleaseGitExecutable for VerifiedGit {
     }
 }
 
+#[cfg(test)]
+pub(crate) fn fixture_git(root: &Path) -> VerifiedGit {
+    VerifiedGit {
+        executable: root.join("git"),
+        exec_path: root.to_owned(),
+    }
+}
+
 pub fn verify_bundle(root: &Path) -> Result<VerifiedGit, &'static str> {
     verify_with(root, GIT_SHA256, GIT_HTTP_SHA256)?;
     Ok(VerifiedGit {

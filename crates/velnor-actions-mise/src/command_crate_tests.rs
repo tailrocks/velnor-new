@@ -1,17 +1,30 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use super::{CratePublishCredential, IsolatedCommand};
 use std::{ffi::OsString, path::Path, time::Duration};
-use velnor_actions_mise::command::{CratePublishCredential, IsolatedCommand};
+
+fn fixture_git()
+-> Result<(tempfile::TempDir, crate::release_git_pin::VerifiedGit), Box<dyn std::error::Error>> {
+    let temp = tempfile::tempdir()?;
+    let root = temp.path().canonicalize()?;
+    std::fs::write(root.join("git"), b"fixture")?;
+    Ok((temp, crate::release_git_pin::fixture_git(&root)))
+}
 
 #[cfg(unix)]
 #[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "The complete child isolation fixture is reviewed together"
+)]
 fn crate_update_exposes_no_credentials_or_write_handles() -> Result<(), Box<dyn std::error::Error>>
 {
     use std::os::unix::fs::PermissionsExt;
     if std::env::var_os("VELNOR_TEST_UPDATE_CHILD").is_none() {
         return run_update_with_poisoned_environment();
     }
+    let (_git_dir, git) = fixture_git()?;
     let root = tempfile::tempdir()?;
     let source = root.path().join("source");
     let home = root.path().join("home");
@@ -48,7 +61,7 @@ fn crate_update_exposes_no_credentials_or_write_handles() -> Result<(), Box<dyn 
         "--manifest-path".into(),
         manifest.into_os_string(),
     ];
-    let command = IsolatedCommand::crate_update(&program, args.clone(), &source, &env)?;
+    let command = IsolatedCommand::crate_update(&program, args.clone(), &source, &env, &git)?;
     let parent = [
         "GIT_TOKEN",
         "GITHUB_TOKEN",
@@ -67,13 +80,27 @@ fn crate_update_exposes_no_credentials_or_write_handles() -> Result<(), Box<dyn 
             .iter()
             .any(|(key, _)| parent.iter().any(|(forbidden, _)| key == forbidden))
     );
+    let child_env = command.spawn_env(&parent);
+    assert!(
+        child_env
+            .iter()
+            .any(|(key, value)| key == "GIT_EXEC_PATH" && value == git.exec_path().as_os_str())
+    );
+    let path = child_env
+        .iter()
+        .find(|(key, _)| key == "PATH")
+        .ok_or("path")?;
+    assert_eq!(
+        std::env::split_paths(&path.1).next().as_deref(),
+        Some(git.exec_path())
+    );
     assert!(command.run_bounded(1024, Duration::from_secs(5))?.success);
     let mut release_pr = args.clone();
     release_pr[0] = "release-pr".into();
-    assert!(IsolatedCommand::crate_update(&program, release_pr, &source, &env).is_err());
+    assert!(IsolatedCommand::crate_update(&program, release_pr, &source, &env, &git).is_err());
     let mut dirty = args.clone();
     dirty.push("--allow-dirty".into());
-    assert!(IsolatedCommand::crate_update(&program, dirty, &source, &env).is_err());
+    assert!(IsolatedCommand::crate_update(&program, dirty, &source, &env, &git).is_err());
     let mut source_target = env.clone();
     source_target
         .iter_mut()
@@ -81,11 +108,17 @@ fn crate_update_exposes_no_credentials_or_write_handles() -> Result<(), Box<dyn 
         .ok_or("target")?
         .1 = source.as_os_str().to_owned();
     assert!(
-        IsolatedCommand::crate_update(&program, args.clone(), &source, &source_target).is_err()
+        IsolatedCommand::crate_update(&program, args.clone(), &source, &source_target, &git)
+            .is_err()
+    );
+    let mut injected = env.clone();
+    injected.push(("GIT_EXEC_PATH".into(), "/usr/bin".into()));
+    assert!(
+        IsolatedCommand::crate_update(&program, args.clone(), &source, &injected, &git).is_err()
     );
     let mut hostile = env;
     hostile.push(("GIT_TOKEN".into(), "fixture".into()));
-    assert!(IsolatedCommand::crate_update(&program, args, &source, &hostile).is_err());
+    assert!(IsolatedCommand::crate_update(&program, args, &source, &hostile, &git).is_err());
     Ok(())
 }
 
@@ -129,6 +162,7 @@ fn tool_env() -> Vec<(OsString, OsString)> {
 
 #[test]
 fn crate_publish_exposes_only_the_selected_credentials() -> Result<(), Box<dyn std::error::Error>> {
+    let (_git_dir, git) = fixture_git()?;
     let script = "test -n \"$GIT_TOKEN\"; test \"$GITHUB_ACTIONS\" = true; test -n \"$ACTIONS_ID_TOKEN_REQUEST_URL\"; test -n \"$ACTIONS_ID_TOKEN_REQUEST_TOKEN\"; test -z \"${CARGO_REGISTRY_TOKEN+x}\"; test -z \"${HTTP_PROXY+x}\"; test -z \"${HOSTILE_TOKEN+x}\"";
     let command = IsolatedCommand::crate_publish(
         Path::new("/bin/sh"),
@@ -140,6 +174,7 @@ fn crate_publish_exposes_only_the_selected_credentials() -> Result<(), Box<dyn s
             request_url: "https://pipelines.actions.githubusercontent.com/id",
             request_token: "fixture_oidc_789",
         },
+        &git,
     )?;
     let debug = format!("{command:?}");
     assert!(!debug.contains("fixture_git_987") && !debug.contains("fixture_oidc_789"));
@@ -149,17 +184,28 @@ fn crate_publish_exposes_only_the_selected_credentials() -> Result<(), Box<dyn s
         ("HTTP_PROXY".into(), "http://untrusted".into()),
     ];
     let env = command.spawn_env(&parent);
+    assert!(
+        env.iter()
+            .any(|(key, value)| key == "GIT_EXEC_PATH" && value == git.exec_path().as_os_str())
+    );
+    let path = env.iter().find(|(key, _)| key == "PATH").ok_or("path")?;
+    assert_eq!(
+        std::env::split_paths(&path.1).next().as_deref(),
+        Some(git.exec_path())
+    );
     assert!(!env.iter().any(|(key, _)| key == "HOSTILE_TOKEN"
         || key == "HTTP_PROXY"
         || key == "CARGO_REGISTRY_TOKEN"));
-    let bootstrap = IsolatedCommand::crate_publish(Path::new("/bin/sh"), vec!["-c".into(), "test -n \"$GIT_TOKEN\"; test -n \"$CARGO_REGISTRY_TOKEN\"; test -z \"${GITHUB_ACTIONS+x}\"; test -z \"${ACTIONS_ID_TOKEN_REQUEST_TOKEN+x}\"".into()], Path::new("/tmp"), &tool_env(), "fixture_git_987", CratePublishCredential::Bootstrap { cargo_token: "fixture_cargo_654" })?;
+    let bootstrap = IsolatedCommand::crate_publish(Path::new("/bin/sh"), vec!["-c".into(), "test -n \"$GIT_TOKEN\"; test -n \"$CARGO_REGISTRY_TOKEN\"; test -z \"${GITHUB_ACTIONS+x}\"; test -z \"${ACTIONS_ID_TOKEN_REQUEST_TOKEN+x}\"".into()], Path::new("/tmp"), &tool_env(), "fixture_git_987", CratePublishCredential::Bootstrap { cargo_token: "fixture_cargo_654" }, &git)?;
     assert!(bootstrap.run_bounded(1024, Duration::from_secs(5))?.success);
     assert!(!format!("{bootstrap:?}").contains("fixture_cargo_654"));
     Ok(())
 }
 
 #[test]
-fn crate_publish_rejects_untrusted_endpoints_and_secret_arguments() {
+fn crate_publish_rejects_untrusted_endpoints_and_secret_arguments()
+-> Result<(), Box<dyn std::error::Error>> {
+    let (_git_dir, git) = fixture_git()?;
     let create = |args: Vec<OsString>, url: &str| {
         IsolatedCommand::crate_publish(
             Path::new("/bin/sh"),
@@ -171,6 +217,7 @@ fn crate_publish_rejects_untrusted_endpoints_and_secret_arguments() {
                 request_url: url,
                 request_token: "fixture_oidc_789",
             },
+            &git,
         )
     };
     for url in [
@@ -206,8 +253,10 @@ fn crate_publish_rejects_untrusted_endpoints_and_secret_arguments() {
             "fixture_git_987",
             CratePublishCredential::Bootstrap {
                 cargo_token: "fixture_cargo_654"
-            }
+            },
+            &git,
         )
         .is_err()
     );
+    Ok(())
 }

@@ -86,6 +86,7 @@ impl IsolatedCommand {
         tool_env: &[(OsString, OsString)],
         git_token: &str,
         credential: CratePublishCredential<'_>,
+        git: &crate::release_git_pin::VerifiedGit,
     ) -> Result<Self, MiseError> {
         if !program.is_absolute() || !cwd.is_absolute() || !is_safe_credential_value(git_token) {
             return Err(invalid());
@@ -125,7 +126,11 @@ impl IsolatedCommand {
                 return Err(invalid());
             }
         }
-        let mut extra_env = tool_env.to_vec();
+        let source = cwd.canonicalize().map_err(|_| invalid())?;
+        if git.exec_path().starts_with(&source) {
+            return Err(invalid());
+        }
+        let mut extra_env = super::with_pinned_git(tool_env, git, invalid)?;
         extra_env.push(("GIT_TOKEN".into(), git_token.into()));
         match credential {
             CratePublishCredential::Trusted {

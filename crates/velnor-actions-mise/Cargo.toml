@@ -13,8 +13,6 @@ autotests = false
 name = "velnor_mise"
 path = "tests/velnor_mise.rs"
 
-[lib]
-test = false
 
 [lints]
 workspace = true
@@ -31,6 +29,10 @@ toml = { version = "=1.1.8" }
 velnor-actions-tofu = { version = "=0.1.73", path = "../velnor-actions-tofu" }
 tempfile = { version = "=3.27.0" }
 
+[features]
+release-git-rehearsal = []
+
 [[test]]
-name = "crate_publish_command_public"
-path = "tests/crate_publish_command_public.rs"
+name = "release_git_rehearsal"
+path = "tests/release_git_rehearsal.rs"
+required-features = ["release-git-rehearsal"]

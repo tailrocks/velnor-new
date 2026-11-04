@@ -353,23 +353,8 @@ fn produce_artifact(
         "#!/bin/sh\nprintf \"[package]\\nname='example'\\nversion='0.2.0'\\n\" > \"$5\"\n",
     )?;
     std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755))?;
-    let dir = temp.canonicalize()?;
-    let env = [
-        ("PATH", "/usr/bin:/bin"),
-        ("CARGO", "/usr/bin/true"),
-        ("RUSTC", "/usr/bin/true"),
-        ("RUSTDOC", "/usr/bin/true"),
-        ("HOME", dir.to_str().ok_or("temp path")?),
-        ("CARGO_HOME", dir.to_str().ok_or("temp path")?),
-        ("CARGO_TARGET_DIR", dir.to_str().ok_or("temp path")?),
-        ("RUSTUP_HOME", dir.to_str().ok_or("temp path")?),
-        ("RUSTUP_AUTO_INSTALL", "0"),
-    ]
-    .into_iter()
-    .map(|(key, value)| (key.into(), value.into()))
-    .collect::<Vec<_>>();
-    let command = velnor_actions_mise::command::IsolatedCommand::crate_update(
-        &script,
+    let command = velnor_actions_mise::command::IsolatedCommand::repo_task(
+        script.to_str().ok_or("script")?,
         vec![
             "update".into(),
             "--config".into(),
@@ -377,9 +362,9 @@ fn produce_artifact(
             "--manifest-path".into(),
             repo.join("Cargo.toml").into_os_string(),
         ],
-        repo,
-        &env,
-    )?;
+        &[],
+    )?
+    .with_cwd(repo.to_path_buf());
     let artifact =
         crate::crate_release_pr_artifact::fixture_execute_preparation_command(checkout, &command)?;
     assert_eq!(artifact.files.len(), 1);

@@ -7,6 +7,9 @@ mod cancellable;
 mod check;
 #[path = "command_crate_publish.rs"]
 mod crate_publish;
+#[cfg(test)]
+#[path = "command_crate_tests.rs"]
+mod crate_tests;
 #[path = "command_crate_update.rs"]
 mod crate_update;
 #[path = "command_credential.rs"]
@@ -66,6 +69,26 @@ use std::time::Duration;
 
 use crate::OperatorToolchainGuard;
 use crate::error::MiseError;
+fn with_pinned_git(
+    env: &[(OsString, OsString)],
+    git: &crate::release_git_pin::VerifiedGit,
+    invalid: impl Fn() -> MiseError,
+) -> Result<Vec<(OsString, OsString)>, MiseError> {
+    let root = git.exec_path();
+    if !root.is_absolute() || git.executable().parent() != Some(root) || !root.is_dir() {
+        return Err(invalid());
+    }
+    let mut result = env.to_vec();
+    let path = result
+        .iter_mut()
+        .find(|(key, _)| key == "PATH")
+        .ok_or_else(&invalid)?;
+    let mut entries = vec![root.to_path_buf()];
+    entries.extend(std::env::split_paths(&path.1));
+    path.1 = std::env::join_paths(entries).map_err(|_| invalid())?;
+    result.push(("GIT_EXEC_PATH".into(), root.as_os_str().to_owned()));
+    Ok(result)
+}
 
 fn cleared_parent_passthrough(
     policy: EnvPolicy,
