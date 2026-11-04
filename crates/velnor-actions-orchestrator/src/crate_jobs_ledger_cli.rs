@@ -13,9 +13,11 @@ use velnor_actions_contract::{CacheAccess, Job, JobTimeout, Permissions};
 use super::CrateJobInputs;
 use crate::OrchestratorError;
 use crate::config::private_wiring::PrivateWiring;
+use crate::matrix_step::LaneTools;
 
 pub(super) fn ledger_cli_job(
     input: &CrateJobInputs<'_>,
+    lane: &LaneTools,
     private: Option<&PrivateWiring>,
 ) -> Result<Job, OrchestratorError> {
     let &CrateJobInputs {
@@ -31,9 +33,8 @@ pub(super) fn ledger_cli_job(
     let mut steps = vec![crate::workflow::wire_w1::checkout_step()?];
     steps.extend(input.acquire.cloned());
     steps.push(crate::workflow::verify_restored_rust_step(catalog));
-    steps.push(crate::matrix_step::prepare_crate_tools_step_with_bun(
-        catalog, true, false, false, false, false,
-    )?);
+    steps.push(crate::matrix_step::prepare_crate_tools_step(catalog, lane)?);
+    steps.extend(crate::matrix_step::verify_validators_step(catalog, lane));
     steps.push(crate::workflow::prepare_rust_components_step(catalog)?);
     steps.push(crate::workflow::verify_rust_manifest_step(catalog));
     steps.extend(crate::source_cache::keyed_restore_steps(catalog, &roots)?);

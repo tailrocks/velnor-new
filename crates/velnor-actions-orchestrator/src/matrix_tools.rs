@@ -1,21 +1,17 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_actions_contract::{Step, StepRole, WorkflowPolicy};
+use std::collections::{BTreeMap, BTreeSet};
+
+use velnor_actions_contract::{ProposedTask, Step, StepRole, WorkflowPolicy};
 use velnor_actions_mise::{
     PREPARE_PINNED_TOOLS_STEP, PinnedTool, PreparePinnedTools, ToolCatalog, ToolHomes,
 };
 
 use crate::OrchestratorError;
+use crate::crate_job_ids::CrateGroupKey;
+use crate::crate_jobs::{is_nextest, is_opentofu, is_rust};
 use crate::utf8::{strings_of, strings_of_env};
-
-#[must_use]
-pub(crate) fn task_driver_tools(use_rust: bool, use_opentofu: bool) -> Vec<PinnedTool> {
-    let mut tools = Vec::new();
-    tools.extend(use_rust.then_some(PinnedTool::Rust));
-    tools.extend(use_opentofu.then_some(PinnedTool::Opentofu));
-    tools
-}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum SuiteName {
@@ -179,7 +175,7 @@ pub(crate) fn crate_needs_tofu_install(policy: WorkflowPolicy, suite: Option<Cra
 }
 
 #[must_use]
-pub(crate) fn prepare_install_opentofu(
+fn prepare_install_opentofu(
     policy: WorkflowPolicy,
     suite: Option<CrateSuite>,
     use_opentofu: bool,
@@ -187,54 +183,80 @@ pub(crate) fn prepare_install_opentofu(
     use_opentofu || crate_needs_tofu_install(policy, suite)
 }
 
-#[expect(
-    clippy::fn_params_excessive_bools,
-    reason = "five independent install flags mirror the driver selection"
-)]
-pub(crate) fn prepare_crate_tools_step(
-    catalog: &ToolCatalog,
-    use_rust: bool,
-    use_nextest: bool,
-    use_opentofu: bool,
-    needs_validators: bool,
-) -> Result<Step, OrchestratorError> {
-    prepare_crate_tools_step_with_bun(
-        catalog,
-        use_rust,
-        use_nextest,
-        use_opentofu,
-        needs_validators,
-        false,
-    )
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct LaneTools(BTreeSet<PinnedTool>);
+
+impl LaneTools {
+    pub(crate) fn rust(catalog: &ToolCatalog) -> Self {
+        let mut tools = BTreeSet::from([PinnedTool::Rust]);
+        if catalog.rust_mr_boxington() {
+            tools.insert(PinnedTool::MrBoxington);
+        }
+        Self(tools)
+    }
+
+    pub(crate) fn of_group(policy: WorkflowPolicy, catalog: &ToolCatalog, tasks: &[&ProposedTask]) -> Self {
+        let suite = tasks
+            .first()
+            .and_then(|task| suite_for_package(&task.display_name));
+        let mut tools = if tasks.iter().any(|task| is_rust(task)) {
+            Self::rust(catalog).0
+        } else {
+            BTreeSet::new()
+        };
+        if crate_needs_generate_validators(policy, suite) {
+            tools.extend([PinnedTool::Jactionlint, PinnedTool::Shellcheck]);
+        }
+        if tasks.iter().any(|task| is_nextest(task)) {
+            tools.insert(PinnedTool::Nextest);
+        }
+        if prepare_install_opentofu(policy, suite, tasks.iter().any(|task| is_opentofu(task))) {
+            tools.insert(PinnedTool::Opentofu);
+        }
+        if policy == WorkflowPolicy::VelnorRepositoryV1 && suite.is_some_and(CrateSuite::owns_bun) {
+            tools.insert(PinnedTool::Bun);
+        }
+        Self(tools)
+    }
+
+    pub(crate) fn union(
+        policy: WorkflowPolicy,
+        catalog: &ToolCatalog,
+        groups: &BTreeMap<CrateGroupKey, Vec<&ProposedTask>>,
+    ) -> Self {
+        let mut union = Self::rust(catalog);
+        for tasks in groups.values() {
+            let group = Self::of_group(policy, catalog, tasks);
+            if group.installs_rust() {
+                union.0.extend(group.0);
+            }
+        }
+        union
+    }
+
+    fn installs_rust(&self) -> bool {
+        self.0.contains(&PinnedTool::Rust)
+    }
 }
 
-#[expect(
-    clippy::fn_params_excessive_bools,
-    reason = "independent install flags mirror the existing driver selection"
-)]
-pub(crate) fn prepare_crate_tools_step_with_bun(
+pub(crate) fn verify_validators_step(catalog: &ToolCatalog, tools: &LaneTools) -> Option<Step> {
+    tools
+        .0
+        .contains(&PinnedTool::Jactionlint)
+        .then(|| crate::workflow::verify_jactionlint_step(catalog))
+}
+
+pub(crate) fn prepare_crate_tools_step(
     catalog: &ToolCatalog,
-    use_rust: bool,
-    use_nextest: bool,
-    use_opentofu: bool,
-    needs_validators: bool,
-    needs_bun: bool,
+    tools: &LaneTools,
 ) -> Result<Step, OrchestratorError> {
-    let mut tools = task_driver_tools(use_rust, use_opentofu);
-    tools.extend((use_rust && catalog.rust_mr_boxington()).then_some(PinnedTool::MrBoxington));
-    if needs_validators {
-        tools.extend([PinnedTool::Jactionlint, PinnedTool::Shellcheck]);
-    }
-    tools.extend(use_nextest.then_some(PinnedTool::Nextest));
-    tools.extend(needs_bun.then_some(PinnedTool::Bun));
-    let prepare = PreparePinnedTools::new(tools, ToolHomes::runner_temp()).map_err(|err| {
-        OrchestratorError::Contract {
+    let prepare = PreparePinnedTools::new(tools.0.iter().copied().collect(), ToolHomes::runner_temp())
+        .map_err(|err| OrchestratorError::Contract {
             problem: err.to_string(),
-        }
-    })?;
+        })?;
     let run = strings_of(prepare.argv(catalog))
         .map_err(|problem| OrchestratorError::Contract { problem })?;
-    let env = if use_rust {
+    let env = if tools.installs_rust() {
         strings_of_env(&prepare.env(catalog))
     } else {
         strings_of_env(&prepare.env_without_homes())

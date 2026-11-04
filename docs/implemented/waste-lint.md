@@ -3,8 +3,8 @@
 Generation runs a waste lint on the final job graph. A finding stops
 generation. Nothing is written.
 
-The lint code is in `crates/velnor-actions-workflow-renderer/src/waste_lint.rs`
-and `waste_lint_env.rs`. The lint runs in `finalize_jobs` and in the suites
+The lint code is in `crates/velnor-actions-workflow-renderer/src/waste_lint.rs`,
+`waste_lint_env.rs` and `waste_lint_tools.rs`. The lint runs in `finalize_jobs` and in the suites
 workflow render, after the cache doctor.
 
 ## Scope
@@ -45,6 +45,9 @@ starts the proxy.
 |---|---|---|
 | W2 `job_context_env` | A shell step of a job that installs rust runs `cargo`, `rustup`, `rustc`, `mbx`, or `mise` with a rust spec, without all four toolchain homes. Or a shell Rust verifier step of such a job has no `RUSTUP_HOME` or `CARGO_HOME`. Or a home differs from its standard value. A `mise` command without a rust spec is not counted. A `jactionlint` verifier is not counted. | Set `CARGO_HOME`, `MISE_CARGO_HOME`, `MISE_RUSTUP_HOME` and `RUSTUP_HOME` to the standard values in the step. In a verifier step, set `RUSTUP_HOME` and `CARGO_HOME`. |
 | W3 `rustup_auto_install` | A rust-bearing job has no job-level `RUSTUP_AUTO_INSTALL=0`. Or a step of any job sets `RUSTUP_AUTO_INSTALL` to another value. | Bind the job to the rust toolchain job env. Do not set the value per step. |
+| W7 `split_tools_identity` | Two jobs that install rust in one lane (`runs_on`, target) carry different tools identity digests. Or a job's tools identity cannot be read, which is reported as its own finding. | Install the lane's union tool set in every rust job. `LaneTools::union` derives it from the crate groups. |
+
+W7 covers crate jobs, `ledger-cli` and the state producers. It skips the plan job, whose tools are the control-plane set, and every producer job except the state producers. The `sources-producer` copies the plan job's tools, so it is exempt with the plan. The `suite-` jobs of `stacks.rust.suites` install their own `Install suite tools` set and are outside W7. A lane's tool set is the union of the tools every rust crate group needs: rust, MBX, nextest, jactionlint, shellcheck, OpenTofu and Bun. Jobs that do not install rust keep their own set.
 
 The verifier script reads `RUSTUP_HOME` and, in the restored phase,
 `CARGO_HOME`. Without them it falls back to `$HOME/.rustup` and checks a

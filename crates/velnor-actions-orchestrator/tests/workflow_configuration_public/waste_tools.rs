@@ -6,7 +6,9 @@ use std::error::Error;
 use std::fs;
 
 use velnor_actions_contract::workflow::ledger_cli::LEDGER_CLI_JOB_ID;
-use velnor_actions_contract::workflow::step_identity::TOOLS_CACHE_IDENTITY_DIGEST_INPUT;
+use velnor_actions_contract::workflow::step_identity::{
+    TOOLS_CACHE_IDENTITY_DIGEST_INPUT, TOOLS_CACHE_PRELUDE_USES,
+};
 use velnor_actions_contract::workflow::{ProducerKind, SOURCES_PRODUCER_JOB_ID};
 use velnor_actions_contract::{
     CRATE_JOB_ID_PREFIX, Job, PLAN_JOB_ID, StepKind, StepRole, TOFU_JOB_ID_PREFIX, WorkflowPolicy,
@@ -20,16 +22,16 @@ use super::tools_producers::{identity_digest, is_tools_producer};
 use super::workflow_configuration_fixture;
 
 const LANE_TOOLS: [&str; 7] = [
-    "rust",
-    "mr-boxington",
-    "jactionlint",
-    "shellcheck",
-    "nextest",
-    "opentofu",
-    "bun",
+    " rust[",
+    " mr-boxington@",
+    " jactionlint@",
+    " shellcheck@",
+    "/cargo-nextest@",
+    " opentofu@",
+    " bun@",
 ];
 
-const OTHER_LANE_USES: &str = "./.github/actions/u24";
+const OTHER_LANE_USES: &str = TOOLS_CACHE_PRELUDE_USES[1];
 const OTHER_LANE_RUNS_ON: &str = "ubuntu-24.04";
 
 fn lane_jobs() -> Result<BTreeMap<String, Job>, Box<dyn Error>> {
@@ -76,10 +78,6 @@ fn install_run(job: &Job) -> Result<String, Box<dyn Error>> {
             _ => None,
         })
         .ok_or_else(|| "job has no pinned tools install".into())
-}
-
-fn installs(run: &str, tool: &str) -> bool {
-    run.contains(&format!(" {tool}@")) || run.contains(&format!(" {tool}["))
 }
 
 fn set_digest(job: &mut Job, digest: &str) -> Result<(), Box<dyn Error>> {
@@ -144,7 +142,7 @@ fn rust_jobs_in_one_lane_share_one_union_tool_set() -> Result<(), Box<dyn Error>
     for (id, job) in &lane {
         let run = install_run(job)?;
         for tool in LANE_TOOLS {
-            assert!(installs(&run, tool), "{id} does not install {tool}: {run}");
+            assert!(run.contains(tool), "{id} does not install {tool}: {run}");
         }
     }
     let tofu = jobs
@@ -152,7 +150,7 @@ fn rust_jobs_in_one_lane_share_one_union_tool_set() -> Result<(), Box<dyn Error>
         .find(|(id, _)| id.starts_with(TOFU_JOB_ID_PREFIX))
         .ok_or("no tofu job")?
         .1;
-    assert!(!installs(&install_run(tofu)?, "rust"));
+    assert!(!install_run(tofu)?.contains(" rust["));
     Ok(())
 }
 

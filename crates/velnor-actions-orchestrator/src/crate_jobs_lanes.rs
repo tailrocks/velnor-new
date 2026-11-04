@@ -5,7 +5,6 @@ use velnor_actions_contract::{CrateJob, Job, Step, StepKind};
 
 pub(super) struct ProducerLanes {
     pub(super) root: String,
-    pub(super) nextest: bool,
     pub(super) lanes: Vec<Step>,
 }
 

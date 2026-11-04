@@ -18,7 +18,7 @@ pub fn check_mbx_gating(
             if !is_action_ref_selection(step) {
                 continue;
             }
-            if installs_only_the_action_mbx_version(step, job) {
+            if installs_no_foreign_mbx_version(step, job) {
                 continue;
             }
             return Err(RenderError::InvalidWorkflow(format!(
@@ -73,7 +73,7 @@ fn is_mbx_tool_selector(word: &str) -> bool {
     selector == "mr-boxington" || selector.starts_with("mr-boxington@")
 }
 
-fn installs_only_the_action_mbx_version(step: &Step, job: &Job) -> bool {
+fn installs_no_foreign_mbx_version(step: &Step, job: &Job) -> bool {
     if step.role != Some(StepRole::PreparePinnedTools) {
         return false;
     }
@@ -83,7 +83,7 @@ fn installs_only_the_action_mbx_version(step: &Step, job: &Job) -> bool {
     }
     let mut versions = job.steps.iter().filter_map(mbx_action_version);
     let Some(version) = versions.next() else {
-        return false;
+        return !job.steps.iter().any(is_mbx_action);
     };
     versions.next().is_none()
         && install

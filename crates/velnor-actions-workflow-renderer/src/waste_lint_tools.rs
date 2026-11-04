@@ -7,6 +7,7 @@ use std::fmt::{Display, Formatter};
 use velnor_actions_contract::workflow::ProducerKind;
 use velnor_actions_contract::{Job, PLAN_JOB_ID};
 
+use crate::non_input_checkout::SUITE_JOB_ID_PREFIX;
 use crate::tools_identity::tools_digest;
 use crate::waste_lint::WasteFinding;
 
@@ -54,6 +55,7 @@ impl Display for ToolsIdentityFinding {
 
 fn in_scope(id: &str, job: &Job) -> bool {
     id != PLAN_JOB_ID
+        && !id.starts_with(SUITE_JOB_ID_PREFIX)
         && matches!(
             job.producer_kind(),
             None | Some(ProducerKind::StateProducer)
