@@ -1,6 +1,12 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+fn test_git() -> &'static crate::crate_release_git::ReleaseGit {
+    static GIT: std::sync::OnceLock<crate::crate_release_git::ReleaseGit> =
+        std::sync::OnceLock::new();
+    GIT.get_or_init(crate::crate_release_git::ReleaseGit::host_fixture)
+}
+
 use crate as velnor_actions_orchestrator;
 use sha1_checked::{Digest, Sha1};
 use std::cell::{Cell, RefCell};
@@ -818,49 +824,51 @@ fn journal_source_binding_requires_exact_approved_tree() -> Result<(), Box<dyn s
     let sha = git(&["rev-parse", "HEAD"])?;
     let mut plan = receipt("0.1.1");
     plan.identity.source_sha.clone_from(&sha);
-    plan.source_files = journal_source_inventory(root, &sha)?;
-    verify_journal_source(root, &plan)?;
+    plan.source_files = journal_source_inventory(root, &sha, test_git())?;
+    verify_journal_source(root, &plan, test_git())?;
     let mut journal = Registry::default();
     let mut forged = plan.clone();
     forged.source_files[0].sha256 = "f".repeat(64);
-    assert!(record_source_bound_start(&journal, &plan.identity, &forged, root).is_err());
+    assert!(
+        record_source_bound_start(&journal, &plan.identity, &forged, root, test_git()).is_err()
+    );
     assert!(journal.refs.borrow().is_empty());
     let mut wrong_identity = plan.identity.clone();
     wrong_identity.source_sha = "0".repeat(40);
-    assert!(record_source_bound_start(&journal, &wrong_identity, &plan, root).is_err());
+    assert!(record_source_bound_start(&journal, &wrong_identity, &plan, root, test_git()).is_err());
     assert!(journal.refs.borrow().is_empty());
-    record_source_bound_start(&journal, &plan.identity, &plan, root)?;
+    record_source_bound_start(&journal, &plan.identity, &plan, root, test_git())?;
     assert_eq!(journal.refs.borrow().len(), 1);
     verify_prior_run_cases(&mut journal, &plan, root)?;
     verify_new_crate_prior_intention(&plan, root)?;
     let original = plan.clone();
     plan.source_files[0].sha256 = "f".repeat(64);
-    assert!(verify_journal_source(root, &plan).is_err());
+    assert!(verify_journal_source(root, &plan, test_git()).is_err());
     plan = original.clone();
     plan.source_files.pop();
-    assert!(verify_journal_source(root, &plan).is_err());
+    assert!(verify_journal_source(root, &plan, test_git()).is_err());
     plan = original.clone();
     plan.source_files.push(plan.source_files[0].clone());
-    assert!(verify_journal_source(root, &plan).is_err());
+    assert!(verify_journal_source(root, &plan, test_git()).is_err());
     plan = original.clone();
     plan.source_files[0].path = "forged".to_owned();
-    assert!(verify_journal_source(root, &plan).is_err());
+    assert!(verify_journal_source(root, &plan, test_git()).is_err());
     plan = original.clone();
     plan.source_files[0].kind = JournalFileKind::Regular { executable: true };
-    assert!(verify_journal_source(root, &plan).is_err());
+    assert!(verify_journal_source(root, &plan, test_git()).is_err());
     plan = original.clone();
     plan.source_files[1].kind = JournalFileKind::Symlink {
         target: "../escape".to_owned(),
     };
-    assert!(verify_journal_source(root, &plan).is_err());
+    assert!(verify_journal_source(root, &plan, test_git()).is_err());
     plan = original.clone();
     plan.source_files.reverse();
-    assert!(verify_journal_source(root, &plan).is_err());
+    assert!(verify_journal_source(root, &plan, test_git()).is_err());
     plan = original.clone();
     plan.identity.source_sha = "0".repeat(40);
-    assert!(verify_journal_source(root, &plan).is_err());
+    assert!(verify_journal_source(root, &plan, test_git()).is_err());
     git(&["rm", "--cached", "AGENTS.md"])?;
-    assert!(verify_journal_source(root, &original).is_err());
+    assert!(verify_journal_source(root, &original, test_git()).is_err());
     Ok(())
 }
 
@@ -1171,29 +1179,45 @@ fn verify_chain_and_rerun(
         "https://github.com/{}/actions/runs/{}",
         older.identity.repository, older.identity.run_id
     );
-    record_source_bound_start(&chained_journal, &older.identity, &older, root)?;
+    record_source_bound_start(&chained_journal, &older.identity, &older, root, test_git())?;
     let mut chained = plan.clone();
     chained.predecessor = Some(older.identity.clone());
-    record_source_bound_start(&chained_journal, &chained.identity, &chained, root)?;
+    record_source_bound_start(
+        &chained_journal,
+        &chained.identity,
+        &chained,
+        root,
+        test_git(),
+    )?;
     assert_eq!(
-        super::inspect_prior_chain(&chained_journal, current, root)?.len(),
+        super::inspect_prior_chain(&chained_journal, current, root, test_git())?.len(),
         2
     );
     let cyclic_journal = Registry::default();
     older.predecessor = Some(chained.identity.clone());
-    record_source_bound_start(&cyclic_journal, &older.identity, &older, root)?;
-    record_source_bound_start(&cyclic_journal, &chained.identity, &chained, root)?;
-    assert!(super::inspect_prior_chain(&cyclic_journal, current, root).is_err());
+    record_source_bound_start(&cyclic_journal, &older.identity, &older, root, test_git())?;
+    record_source_bound_start(
+        &cyclic_journal,
+        &chained.identity,
+        &chained,
+        root,
+        test_git(),
+    )?;
+    assert!(super::inspect_prior_chain(&cyclic_journal, current, root, test_git()).is_err());
     let mut rerun = current.clone();
     rerun.identity.run_id = plan.identity.run_id;
     rerun.identity.run_attempt = plan.identity.run_attempt + 1;
     rerun.workflow_run_url = plan.workflow_run_url.clone();
     assert_eq!(
-        inspect_prior_incomplete_evidence(journal, &plan.identity, &rerun, root)?.receipt,
+        inspect_prior_incomplete_evidence(journal, &plan.identity, &rerun, root, test_git())?
+            .receipt,
         *plan
     );
     rerun.identity.run_attempt = plan.identity.run_attempt;
-    assert!(inspect_prior_incomplete_evidence(journal, &plan.identity, &rerun, root).is_err());
+    assert!(
+        inspect_prior_incomplete_evidence(journal, &plan.identity, &rerun, root, test_git())
+            .is_err()
+    );
     Ok(())
 }
 
@@ -1207,13 +1231,14 @@ fn verify_prior_run_cases(
     current.predecessor = Some(plan.identity.clone());
     current.identity.workflow_sha = "c".repeat(40);
     current.workflow_run_url = "https://github.com/example/demo-crate/actions/runs/43".into();
-    let prior = inspect_prior_incomplete_evidence(journal, &plan.identity, &current, root)?;
+    let prior =
+        inspect_prior_incomplete_evidence(journal, &plan.identity, &current, root, test_git())?;
     assert_eq!(&prior.receipt, plan);
     verify_chain_and_rerun(journal, plan, &current, root)?;
-    let history = inspect_prior_history(journal, &plan.identity, &current, root)?;
+    let history = inspect_prior_history(journal, &plan.identity, &current, root, test_git())?;
     assert_eq!(history.mutations.len(), 0);
     journal.inject_after_list.set(true);
-    assert!(inspect_prior_history(journal, &plan.identity, &current, root).is_err());
+    assert!(inspect_prior_history(journal, &plan.identity, &current, root, test_git()).is_err());
     let inserted = format!(
         "refs/tags/velnor-receipt/{}/{}/operation-1",
         plan.identity.run_id, plan.identity.run_attempt
@@ -1229,7 +1254,7 @@ fn verify_prior_run_cases(
         .refs
         .borrow_mut()
         .insert(gap.clone(), "a".repeat(40));
-    assert!(inspect_prior_history(journal, &plan.identity, &current, root).is_err());
+    assert!(inspect_prior_history(journal, &plan.identity, &current, root, test_git()).is_err());
     journal.refs.borrow_mut().remove(&gap);
     let malformed = format!(
         "refs/tags/velnor-receipt/{}/{}/operation-01",
@@ -1239,7 +1264,7 @@ fn verify_prior_run_cases(
         .refs
         .borrow_mut()
         .insert(malformed.clone(), "a".repeat(40));
-    assert!(inspect_prior_history(journal, &plan.identity, &current, root).is_err());
+    assert!(inspect_prior_history(journal, &plan.identity, &current, root, test_git()).is_err());
     journal.refs.borrow_mut().remove(&malformed);
     for invalid in ["intent", "owner", "source", "repo", "run", "predecessor"] {
         let mut forged = current.clone();
@@ -1259,15 +1284,23 @@ fn verify_prior_run_cases(
             "predecessor" => forged.predecessor = None,
             _ => return Err("bad fixture".into()),
         }
-        assert!(inspect_prior_incomplete_evidence(journal, &plan.identity, &forged, root).is_err());
+        assert!(
+            inspect_prior_incomplete_evidence(journal, &plan.identity, &forged, root, test_git())
+                .is_err()
+        );
     }
     assert_eq!(journal.refs.borrow().len(), 1);
     journal.reject_access = Some(());
-    assert!(inspect_prior_incomplete_evidence(journal, &plan.identity, &current, root).is_err());
+    assert!(
+        inspect_prior_incomplete_evidence(journal, &plan.identity, &current, root, test_git())
+            .is_err()
+    );
     journal.reject_access = None;
     let mut missing = plan.identity.clone();
     missing.run_id = 44;
-    assert!(inspect_prior_incomplete_evidence(journal, &missing, &current, root).is_err());
+    assert!(
+        inspect_prior_incomplete_evidence(journal, &missing, &current, root, test_git()).is_err()
+    );
     verify_prior_operation_chain(journal, plan, &current, root)?;
     let mut result = completion("0.1.1");
     result.packages[0]
@@ -1280,7 +1313,10 @@ fn verify_prior_run_cases(
         plan,
         Some(&result),
     )?;
-    assert!(inspect_prior_incomplete_evidence(journal, &plan.identity, &current, root).is_err());
+    assert!(
+        inspect_prior_incomplete_evidence(journal, &plan.identity, &current, root, test_git())
+            .is_err()
+    );
     Ok(())
 }
 
@@ -1311,7 +1347,7 @@ fn verify_prior_operation_chain(
     };
     record_journal_mutation(journal, &plan.identity, plan, &mutation)?;
     let refs_before = journal.refs.borrow().len();
-    let history = inspect_prior_history(journal, &plan.identity, current, root)?;
+    let history = inspect_prior_history(journal, &plan.identity, current, root, test_git())?;
     assert_eq!(history.mutations, vec![mutation.clone()]);
     assert_eq!(journal.refs.borrow().len(), refs_before);
     mutation.sequence = 2;
@@ -1326,7 +1362,7 @@ fn verify_prior_operation_chain(
         },
     };
     record_journal_mutation(journal, &plan.identity, plan, &mutation)?;
-    let history = inspect_prior_history(journal, &plan.identity, current, root)?;
+    let history = inspect_prior_history(journal, &plan.identity, current, root, test_git())?;
     assert_eq!(history.mutations.len(), 2);
     assert_eq!(history.mutations[1], mutation);
     Ok(())
@@ -1376,7 +1412,7 @@ fn verify_new_crate_prior_intention(
     let mut prior = plan.clone();
     prior.authentication = JournalAuthentication::BootstrapToken;
     prior.packages[0].owners = JournalOwnership::NewCrate;
-    record_source_bound_start(&journal, &prior.identity, &prior, root)?;
+    record_source_bound_start(&journal, &prior.identity, &prior, root, test_git())?;
     let mut current = prior.clone();
     current.identity.run_id += 1;
     current.workflow_run_url = "https://github.com/example/demo-crate/actions/runs/43".into();
@@ -1390,7 +1426,7 @@ fn verify_new_crate_prior_intention(
             target_checksum: "d".repeat(64),
         },
     );
-    assert!(inspect_prior_history(&journal, &prior.identity, &current, root).is_err());
+    assert!(inspect_prior_history(&journal, &prior.identity, &current, root, test_git()).is_err());
     record_journal_intent(
         &journal,
         &prior.identity,
@@ -1406,7 +1442,7 @@ fn verify_new_crate_prior_intention(
             }),
         },
     )?;
-    assert!(inspect_prior_history(&journal, &prior.identity, &current, root).is_ok());
+    assert!(inspect_prior_history(&journal, &prior.identity, &current, root, test_git()).is_ok());
     reject_moved_history_ref(&journal, &prior, &current, root);
     reject_forged_new_crate_prior(plan, &prior, &current, root)?;
     let actual_owners = journal_existing_owners(&current.packages[0].owners);
@@ -1435,7 +1471,7 @@ fn verify_new_crate_prior_intention(
             },
         },
     )?;
-    assert!(inspect_prior_history(&journal, &prior.identity, &current, root).is_ok());
+    assert!(inspect_prior_history(&journal, &prior.identity, &current, root, test_git()).is_ok());
     reject_changed_new_crate_result(&journal, &prior, &current, root)?;
     Ok(())
 }
@@ -1450,7 +1486,7 @@ fn reject_moved_history_ref(
     let object_counts = (journal.tags.borrow().len(), journal.blobs.borrow().len());
     journal.move_on_second_list.set(1);
     assert!(
-        inspect_prior_history(journal, &prior.identity, current, root).is_err(),
+        inspect_prior_history(journal, &prior.identity, current, root, test_git()).is_err(),
         "moving a journal ref between history observations must be rejected"
     );
     assert_eq!(
@@ -1477,16 +1513,20 @@ fn reject_changed_new_crate_result(
             target_checksum: "e".repeat(64),
         },
     );
-    assert!(inspect_prior_history(journal, &prior.identity, &wrong_checksum, root).is_err());
+    assert!(
+        inspect_prior_history(journal, &prior.identity, &wrong_checksum, root, test_git()).is_err()
+    );
     let mut wrong_owner = current.clone();
     let JournalOwnership::Existing { owners } = &mut wrong_owner.packages[0].owners else {
         return Err("owner".into());
     };
     owners[0].id += 1;
-    assert!(inspect_prior_history(journal, &prior.identity, &wrong_owner, root).is_err());
+    assert!(
+        inspect_prior_history(journal, &prior.identity, &wrong_owner, root, test_git()).is_err()
+    );
     let mut bad = current.clone();
     bad.identity.source_sha = "f".repeat(40);
-    assert!(inspect_prior_history(journal, &prior.identity, &bad, root).is_err());
+    assert!(inspect_prior_history(journal, &prior.identity, &bad, root, test_git()).is_err());
     Ok(())
 }
 
@@ -1509,6 +1549,7 @@ fn reject_forged_new_crate_prior(
         &existing_prior.identity,
         &existing_prior,
         root,
+        test_git(),
     )?;
     record_journal_intent(
         &forged_journal,
@@ -1526,7 +1567,14 @@ fn reject_forged_new_crate_prior(
         },
     )?;
     assert!(
-        inspect_prior_history(&forged_journal, &existing_prior.identity, current, root).is_err()
+        inspect_prior_history(
+            &forged_journal,
+            &existing_prior.identity,
+            current,
+            root,
+            test_git()
+        )
+        .is_err()
     );
     Ok(())
 }
