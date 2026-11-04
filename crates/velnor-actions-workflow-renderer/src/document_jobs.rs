@@ -70,12 +70,7 @@ pub(super) fn job_to_yaml(
         }
     }
     crate::rust_job_env::extend_env(&mut job_env, job.env);
-    crate::document_env::extend_job_env(
-        &mut job_env,
-        policy.native_mbx,
-        job.producer_kind() == Some(velnor_actions_contract::workflow::ProducerKind::StateProducer),
-        policy.plan_attempt,
-    );
+    crate::document_env::extend_job_env(&mut job_env, job, policy.native_mbx, policy.plan_attempt);
     crate::document_env::extend_writer_env(&mut job_env, job);
     let mut entries = job_header_fields(job, runs_on);
     append_job_options(&mut entries, job, scale_set, &job_env, policy.workflow_env)?;

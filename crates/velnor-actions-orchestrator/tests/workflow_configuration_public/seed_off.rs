@@ -17,7 +17,7 @@ use super::workflow_configuration_fixture::{self, git_fixture};
 const OFF: &str = "\n[stacks.rust]\ncompiled_state = \"off\"\n";
 const PRODUCE: &str = "\n[stacks.rust]\ncompiled_state = \"union\"\n";
 
-fn seed_repo(extra: &str) -> Result<tempfile::TempDir, Box<dyn Error>> {
+pub(super) fn seed_repo(extra: &str) -> Result<tempfile::TempDir, Box<dyn Error>> {
     let mut config = workflow_configuration_fixture::config_with_verification_branch(None);
     config.push_str(extra);
     let repo = workflow_configuration_fixture::make_repo(&config)?;

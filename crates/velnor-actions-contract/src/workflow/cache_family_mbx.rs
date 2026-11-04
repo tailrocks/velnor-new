@@ -22,10 +22,6 @@ pub const MBX_BUNDLE_KEY_OUTPUT: &str = "key";
 
 pub const MBX_BUNDLE_RESTORE_KEY_OUTPUT: &str = "restore_key";
 
-pub const MBX_BUNDLE_SAVE_OUTPUT: &str = "save";
-
-pub const MBX_BUNDLE_EXPORTED_OUTPUT: &str = "exported";
-
 pub const MBX_BUNDLE_RESTORE_CONDITION: &str = "steps.mbx-bundle-key.outputs.restore == 'true' && steps.mbx-bundle-key.outputs.restore_key != ''";
 
 pub const MBX_BUNDLE_IMPORT_CONDITION: &str =

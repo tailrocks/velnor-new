@@ -136,10 +136,28 @@ fn member_specs(workspace: &PlannedWorkspace, specs: &mut BTreeSet<String>) {
     }
 }
 
+fn normalized(path: &str) -> Option<String> {
+    let mut parts: Vec<&str> = Vec::new();
+    for part in path.split('/') {
+        match part {
+            "" | "." => {}
+            ".." => {
+                parts.pop()?;
+            }
+            other => parts.push(other),
+        }
+    }
+    (!parts.is_empty()).then(|| parts.join("/"))
+}
+
 fn target_spec(package_dir: &str, src_path: &str, specs: &mut BTreeSet<String>) {
-    if src_path.is_empty() || src_path.starts_with('/') {
+    if src_path.starts_with('/') {
         return;
     }
+    let Some(src_path) = normalized(src_path) else {
+        return;
+    };
+    let src_path = src_path.as_str();
     if !package_dir.is_empty() && src_path.starts_with(&format!("{package_dir}/")) {
         return;
     }
@@ -171,4 +189,61 @@ fn same_root(workspace_root: &str, root: &str) -> bool {
     let normal = |text: &str| text.trim_matches('/').trim_start_matches("./").to_owned();
     let (left, right) = (normal(workspace_root), normal(root));
     left == right || (left == "." && right.is_empty()) || (left.is_empty() && right == ".")
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::BTreeSet;
+
+    use super::target_spec;
+
+    fn specs(package_dir: &str, paths: &[&str]) -> Vec<String> {
+        let mut specs = BTreeSet::new();
+        for path in paths {
+            target_spec(package_dir, path, &mut specs);
+        }
+        specs.into_iter().collect()
+    }
+
+    #[test]
+    fn root_package_targets_name_their_own_directories_and_the_build_script() {
+        let got = specs(
+            "",
+            &[
+                "src/lib.rs",
+                "src/main.rs",
+                "tools/build.rs",
+                "lib2/extra.rs",
+                "tests/a.rs",
+                "build.rs",
+                "/outside/the/repo.rs",
+                "../outside/the/repo.rs",
+            ],
+        );
+        assert_eq!(
+            got,
+            [
+                ":(glob)lib2/**",
+                ":(glob)src/**",
+                ":(glob)tests/**",
+                ":(glob)tools/**",
+                "build.rs",
+            ]
+        );
+    }
+
+    #[test]
+    fn nested_package_targets_inside_the_package_directory_add_nothing() {
+        assert_eq!(
+            specs(
+                "crates/a",
+                &[
+                    "crates/a/src/lib.rs",
+                    "crates/a/../shared/lib.rs",
+                    "crates/a/./src/x.rs",
+                ]
+            ),
+            [":(glob)crates/shared/**"]
+        );
+    }
 }

@@ -76,7 +76,7 @@ Each rule below was checked on 2026-11-04 against the original sources, and [the
 
 The Velnor fast CI decision record fixes the following design. It replaces the earlier proposal on this page. Items marked open are not decided.
 
-1. One union producer per Cargo root. It builds the real workspace members with `MBX_BUILD_SCRIPT_EXECUTION=0` and runs the same per-crate lane commands as the crate jobs, not one `--workspace` build. A registry-only skeleton producer was rejected by measurement.
+1. One union producer per Cargo root. It runs the crate jobs' per-crate lane records by digest, not one `--workspace` build, in two phases: a dependency skeleton at `MBX_BUILD_SCRIPT_EXECUTION=1`, then the real members at `0` (see [The build-script rule](#the-build-script-rule)). Crate jobs run `1`. A registry-only skeleton producer was rejected by measurement.
 2. A split into job P (compile) and job A (attest and save).
 3. A workflow-level `cache-mode: read` with named writers.
 4. Key version 4.
@@ -224,15 +224,17 @@ All figures are arithmetic from the decided ceilings and the measured entry size
 
 ## The build-script rule
 
-Every writer compiles with `MBX_BUILD_SCRIPT_EXECUTION=0` and `SOURCE_DATE_EPOCH=0`. A bundle written under `1` and restored in a different job replayed a workspace member's stale build-script output: the consumer exited 100 where a cold build exited 0 (reported from a local reproduction recorded by the maintainers). mbx 1.29.1 has no per-package scope for this setting. The rule is therefore:
+Decision X61 amends X48 (rule K). Registry crates' build scripts run under `MBX_BUILD_SCRIPT_EXECUTION=1` so a consumer at `1` hits them. A workspace member's own build script must never be replayed from a bundle another job wrote, because mbx 1.29.1 has no per-package scope for the setting: a bundle written under `1` and restored in a different job replayed a member's stale build-script output, and the consumer exited 100 where a cold build exited 0 (a local reproduction recorded by the maintainers). The producer therefore builds a hybrid bundle in one store and exports it once:
 
-- A job that exports a bundle runs with `MBX_BUILD_SCRIPT_EXECUTION=0`, set by role and not by a free constant, so no code path builds a producer environment with `1`.
-- The publish step refuses to export unless the variable is `0`, and the renderer rejects a producer job whose environment says otherwise.
-- The compatibility digest carries the bundle's value as a literal, so writer and reader keys match whatever the consumers use.
-- Consumers keep `0`. A consumer at `1` over a `0` bundle (rule K) is rejected: it adds 8 uncached compiles, and on one root it showed the same registry hits and 23 more "not looked up" units (52 against 29) with no wall-time gain.
+- Phase 1 stubs every workspace target source (libraries empty, other targets a bare `main`, member build scripts included) and runs the crate jobs' lane records at `MBX_BUILD_SCRIPT_EXECUTION=1`. Only dependencies compile for real.
+- The restore step puts the sources back (`git checkout` of the stubbed files, then `git diff --quiet`), removes the store's `incremental/` directory, and sets `MBX_BUILD_SCRIPT_EXECUTION=0`. Without the removal the real members compile incrementally, their results are not stored, and the export fails with `action result is missing`.
+- Phase 2 runs the same lane records at `0`. The publish step refuses to export unless the variable is `0`, and the job environment of every producer is `0`.
+- Crate jobs run `MBX_BUILD_SCRIPT_EXECUTION=1` (measured over 18 jobs: registry bypass 216 to 10, registry misses 14 to 6, stale-replay safety passes).
+- The compatibility digest binds the bundle's shape as the literal `MBX_BUILD_SCRIPT_EXECUTION=hybrid`, never an environment value, so the producer's `0` and the consumers' `1` produce the same key. A bundle of another shape would need another literal.
+- The producer and the consumers run on the same runner class, because cargo passes `NUM_JOBS` to build scripts and a `1` bundle misses its build-script runs when the CPU counts differ.
 - `SOURCE_DATE_EPOCH=0` goes in every mbx task environment and in the compatibility key. Without it the `velnor-runner-cli` chain always misses, because `mimalloc` expands `__DATE__` and `__TIME__`.
 
-A side effect of `0`: warm runs bypass about 4 registry units per job, which are build-script executions. Item 7 of the decision record leaves this open: the confirmation measured the bypassed units as real `rustc` runs of 5 registry crates, so they fail an acceptance that counts every registry unit that is not a hit. A hybrid bundle (dependency skeleton at `1` plus real members at `0`) reached 0 bypassed units with exit code 0 on macOS. It needs a Linux measurement and an amendment to the build-script decision (open). Until then, bypassed units are reported separately from misses.
+About 4 registry units stay bypassed as `unsupported-crate-type` (an mbx 1.29.1 limit). If the first hosted push confirms it, acceptance T5 follows the unmeetable-target path with that evidence.
 
 ## Workflow-level cache-mode
 

@@ -33,6 +33,13 @@ const BOUND_OUTPUT: &str = "bound";
 const TOKEN_EXPR: &str = "${{ github.token }}";
 const GUARD: &str = "case \"$RUNNER_TEMP\" in /*) ;; *) printf '%s\\n' 'RUNNER_TEMP must be absolute' >&2; exit 1 ;; esac";
 
+#[path = "state_producer_steps.rs"]
+pub mod producer_steps;
+#[path = "state_seal_save.rs"]
+pub mod save;
+#[path = "state_skeleton.rs"]
+pub mod skeleton;
+
 struct ProducerRoot {
     slug: RootSlug,
     producer_id: String,
@@ -163,7 +170,7 @@ fn seal_job(
     )?;
     download.role = Some(StepRole::StateSealDownload);
     let subject = state_seal_subject_step(&scope_prefix(&root.slug), &identity_prefix(&root.slug))?;
-    let admit = crate::state_seal_save::state_seal_admit_step(pending, unit_bound)?;
+    let admit = crate::state_seal::save::state_seal_admit_step(pending, unit_bound)?;
     let bind = state_seal_bind_step()?;
     let mut attest = action_step(
         "Attest state seal",
@@ -197,7 +204,7 @@ fn seal_job(
     save.role = Some(StepRole::StateSealSave);
     save.condition = Some(STATE_SEAL_SAVE_CONDITION.to_owned());
     let retire =
-        crate::state_seal_save::state_seal_retire_step(&scope_prefix(&root.slug), &artifact)?;
+        crate::state_seal::save::state_seal_retire_step(&scope_prefix(&root.slug), &artifact)?;
     Ok(Job {
         display_name: format!("{SEAL_DISPLAY_PREFIX}{}", root.slug),
         runs_on: root.runs_on.clone(),

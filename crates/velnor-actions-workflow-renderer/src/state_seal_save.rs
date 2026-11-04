@@ -76,9 +76,10 @@ read -r sk sid stored < "$subject" || skip subject_unreadable
 number "$sid" && number "$stored" && [ "$stored" -gt 0 ] && [ "$stored" -le "$bound" ] || skip "size_out_of_bound stored=$stored bound=$bound"
 gh attestation verify "$subject" -R "$repo" --signer-workflow "$signer" --source-ref "$ref" --predicate-type '@PREDICATE@' > /dev/null 2>&1 || skip attestation_unverified
 shape='^s256-[0-9a-f]{64}-s256-[0-9a-f]{64}-s256-[0-9a-f]{64}$'
-gh cache list --key "$scope" --ref "$ref" --limit @LIMIT@ --json id,key --jq '.[] | "\(.id) \(.key)"' > "$d/scope" 2> /dev/null || skip scope_list_failed
-while read -r id k; do
+gh cache list --key "$scope" --ref "$ref" --limit @LIMIT@ --json key,id,sizeInBytes --jq '.[] | .key + " " + (.id | tostring) + " " + (.sizeInBytes | tostring)' > "$d/scope" 2> /dev/null || skip scope_list_failed
+while read -r k id rest; do
   case "$k" in "$scope"?*) ;; *) continue ;; esac
+  number "$id" || continue
   printf '%s\n' "${k#"$scope"}" | grep -Eq "$shape" || continue
   [ "$k" != "$key" ] || continue
   if gh cache delete "$id" > /dev/null 2>&1; then printf 'velnor: retired superseded state entry %s\n' "$k"; else printf '%s\n' "::warning::cache_unavailable: could not delete state entry $id"; fi

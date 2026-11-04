@@ -192,10 +192,6 @@ pub enum StepRole {
 
     MbxBundleExport,
 
-    MbxBundleSave,
-
-    MbxBundleRecord,
-
     FamilyKeys,
 
     FamilyRestore,
@@ -302,7 +298,6 @@ impl StepRole {
             Self::StateSealAttest => action_has_prefix_for_kind(kind, "actions/attest@"),
             Self::ToolsCacheSave
             | Self::CargoSourcesSave
-            | Self::MbxBundleSave
             | Self::StateSealSave
             | Self::FamilySave => action_has_prefix_for_kind(kind, "actions/cache/save@"),
             Self::ToolsCacheIdentity => valid_tools_cache_identity(kind),

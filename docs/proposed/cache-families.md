@@ -96,15 +96,16 @@ output across trust scopes.
 - Compat does not name a job: every reader of a workspace shares the entry,
   and the key changes only when the lock, toolchain, MBX version or platform
   changes. The `unit` keeps the dependency seed and suite bundles apart.
-- velnor-new sets `dependency_seed = "off"` (`.velnor/config.toml:40`, PR
-  #466), so no job writes this family there and no `velnor-v2-state-` entry
-  exists. Crate-job restores miss. The design that would restore this
-  persistence is [compiled-state persistence](compiled-state-persistence.md).
-- Units are the key schema of decision 2. `seed` is written only by the
-  non-crate `Dependency seed` job (one per MBX Cargo workspace, protected
-  default-branch pushes only, outside `Required`); crate jobs restore it
-  read-only and never mark a producer, export or save. `suite` is written by
-  the suite job that compiled it.
+- velnor-new sets `compiled_state = "union"` (`.velnor/config.toml:40`): one
+  `state-producer-<root>` job per Cargo root compiles, one `state-seal-<root>`
+  job saves and attests the entry, and crate jobs restore it read-only. The
+  design is [compiled-state persistence](compiled-state-persistence.md).
+- Units are the key schema of decision 2. `union` is written only by the
+  non-crate `State seal` job of a root (protected default-branch pushes only,
+  outside `Required`) from the bytes of that root's `State producer` job; crate
+  jobs restore it read-only and never mark a producer, export or save. No job
+  writes a `suite` entry, because a suite bundle binds the root workspace and
+  not the manifest the suite selects.
 - A restore may fall back to any snapshot of the same compat, but only to an
   entry whose key the trusted A job attested (the newest such entry), which
   `mbx cache import` then reuses object by object. The restore step carries no

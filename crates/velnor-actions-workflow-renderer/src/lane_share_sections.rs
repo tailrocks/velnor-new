@@ -132,7 +132,6 @@ fn is_postlude_step(step: &Step) -> bool {
             StepRole::ToolsCacheSave
                 | StepRole::TofuProvidersSave
                 | StepRole::MbxBundleExport
-                | StepRole::MbxBundleSave
                 | StepRole::MbxWorkspaceCleanup
         )
     )

@@ -227,7 +227,6 @@ pub(crate) fn step_to_yaml(
                 velnor_actions_contract::StepRole::CargoSourcesSave
                     | velnor_actions_contract::StepRole::ToolsCacheSave
                     | velnor_actions_contract::StepRole::TofuProvidersSave
-                    | velnor_actions_contract::StepRole::MbxBundleSave
                     | velnor_actions_contract::StepRole::FamilySave
             )
         ) {

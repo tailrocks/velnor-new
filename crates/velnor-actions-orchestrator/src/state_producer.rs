@@ -9,10 +9,10 @@ use velnor_actions_contract::workflow::state_seal::{
 };
 use velnor_actions_contract::{CacheAccess, Job, JobEnv, JobTimeout, Step, StepKind};
 use velnor_actions_mise::PinnedTool;
-use velnor_actions_workflow_renderer::state_producer_steps::{
+use velnor_actions_workflow_renderer::state_seal::producer_steps::{
     state_payload_upload_step, state_produced_step, state_producer_outputs,
 };
-use velnor_actions_workflow_renderer::state_skeleton::{
+use velnor_actions_workflow_renderer::state_seal::skeleton::{
     state_skeleton_restore_step, state_skeleton_step,
 };
 use velnor_actions_workflow_renderer::steps::{

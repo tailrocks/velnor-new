@@ -74,13 +74,10 @@ fn export_saves_every_new_generation_regardless_of_bytes() -> Result<(), Box<dyn
                 "{label}: no fixture reached the intended order ({size} vs {predecessor_len})"
             )));
         }
-        let saved = scene.output_value("key")?;
-        if saved == matched
-            || !saved.starts_with(&key.snapshot_prefix)
-            || !saved.ends_with(&payload_digest(&scene)?)
-        {
+        let saved = format!("{}{}", key.snapshot_prefix, payload_digest(&scene)?);
+        if saved == matched || scene.output_value("exported")? != "true" {
             return Err(fail(&format!(
-                "{label}: save key {saved} does not bind its payload"
+                "{label}: save key {saved} does not differ from the restored key"
             )));
         }
         scene.finish()?;

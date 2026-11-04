@@ -4,10 +4,10 @@
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::Job;
-use velnor_actions_contract::workflow::WRITER_MISE_ENV;
 use velnor_actions_contract::workflow::cache_family::{
     MBX_BSE_CONSUMER, MBX_BSE_ENV, MBX_BSE_PRODUCER,
 };
+use velnor_actions_contract::workflow::{ProducerKind, WRITER_MISE_ENV};
 
 use crate::cache_steps::{
     MBX_COMPILE_ENV, MBX_EXPORT_GROUP_ENV, MBX_EXPORT_GROUP_VALUE, MBX_GC_AUTO_ENV,
@@ -44,11 +44,12 @@ pub(crate) fn mbx_job_env(build_script_execution: &str) -> BTreeMap<String, Stri
 
 pub(super) fn extend_job_env(
     job_env: &mut BTreeMap<String, String>,
+    job: &Job,
     native_mbx: bool,
-    producer: bool,
     plan_attempt: Option<&str>,
 ) {
     if native_mbx {
+        let producer = job.producer_kind() == Some(ProducerKind::StateProducer);
         job_env.extend(mbx_job_env(if producer {
             MBX_BSE_PRODUCER
         } else {

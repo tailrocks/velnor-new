@@ -205,13 +205,21 @@ impl Gh {
     }
 
     pub(crate) fn artifacts(&self, ids: &[u64]) -> Result<(), Box<dyn Error>> {
-        let text: String = ids.iter().map(|id| format!("{id}\n")).collect();
+        let text = ids.iter().fold(String::new(), |mut text, id| {
+            text.push_str(&id.to_string());
+            text.push('\n');
+            text
+        });
         std::fs::write(self.dir.join("artifacts"), text)?;
         Ok(())
     }
 
     pub(crate) fn refuse_delete(&self, ids: &[u64]) -> Result<(), Box<dyn Error>> {
-        let text: String = ids.iter().map(|id| format!("{id}\n")).collect();
+        let text = ids.iter().fold(String::new(), |mut text, id| {
+            text.push_str(&id.to_string());
+            text.push('\n');
+            text
+        });
         std::fs::write(self.dir.join("refuse"), text)?;
         Ok(())
     }

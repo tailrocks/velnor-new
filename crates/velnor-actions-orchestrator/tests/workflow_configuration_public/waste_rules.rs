@@ -286,10 +286,9 @@ fn render_rejects_a_hand_authored_tools_cache_step() -> Result<(), Box<dyn Error
     Ok(())
 }
 
-const SAVE_ROLES: [StepRole; 5] = [
+const SAVE_ROLES: [StepRole; 4] = [
     StepRole::ToolsCacheSave,
     StepRole::CargoSourcesSave,
-    StepRole::MbxBundleSave,
     StepRole::FamilySave,
     StepRole::TofuProvidersSave,
 ];

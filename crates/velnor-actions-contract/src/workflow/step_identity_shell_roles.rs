@@ -16,7 +16,6 @@ impl StepRole {
                 | Self::MbxBundleImport
                 | Self::MbxProducerMark
                 | Self::MbxBundleExport
-                | Self::MbxBundleRecord
                 | Self::PrepareRustComponents
                 | Self::CargoDeny
                 | Self::CargoMachete
