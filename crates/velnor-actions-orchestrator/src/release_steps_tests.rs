@@ -104,7 +104,7 @@ fn fixture_for_release_pr(authentication: ReleaseAuthentication, release_pr: boo
                 schedule: None,
                 dispatch_inputs,
             },
-            concurrency: stable_lock_group("crates-io", repository, "workspace")?,
+            concurrency: stable_lock_group("crates-io", repository, "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")?,
             jobs,
             plan,
             publish_environment: "release".to_owned(),
@@ -879,8 +879,21 @@ fn bootstrap_handover_renders_normal_trusted_publisher() -> Result<(), Box<dyn s
     assert_eq!(decoded, intent);
     assert!(decoded.new_crates.is_none());
     crate::crate_release_pr_acquisition::verify_reviewed_workflow(files.workflow.bytes.as_bytes(), &intent)?;
-    let yaml: serde_json::Value = serde_saphyr::from_str(&files.workflow.bytes)?;
+    crate::crate_release_pr_acquisition::integration_fixture::exercise(&intent, &files.intent.bytes, &files.workflow.bytes)?;
+    assert_reviewed_rendered_workflow(&files.workflow.bytes, &intent)?;
+    Ok(())
+}
+
+fn assert_reviewed_rendered_workflow(bytes: &str, intent: &velnor_actions_contract::config::CrateReleaseIntent) -> Result<(), Box<dyn std::error::Error>> {
+    let yaml: serde_json::Value = serde_saphyr::from_str(bytes)?;
+    for key in ["env", "defaults", "permissions"] {
+        let mut tampered = yaml.clone();
+        tampered.as_object_mut().ok_or("workflow")?.insert(key.into(), serde_json::json!({"PATH": "/tmp/forged"}));
+        assert!(crate::crate_release_pr_acquisition::verify_reviewed_workflow(serde_json::to_string(&tampered)?.as_bytes(), intent).is_err(), "accepted global {key}");
+    }
     for (path, value) in [
+        ("/concurrency/group", serde_json::json!("forged")),
+        ("/concurrency/cancel-in-progress", serde_json::json!(true)),
         ("/jobs/release-preflight/permissions/contents", serde_json::json!("write")),
         ("/jobs/release-preparation/outputs/changed", serde_json::json!("true")),
         ("/jobs/release-preparation/if", serde_json::json!("true")),
@@ -889,8 +902,17 @@ fn bootstrap_handover_renders_normal_trusted_publisher() -> Result<(), Box<dyn s
     ] {
         let mut tampered = yaml.clone();
         *tampered.pointer_mut(path).ok_or("workflow field")? = value;
-        assert!(crate::crate_release_pr_acquisition::verify_reviewed_workflow(serde_json::to_string(&tampered)?.as_bytes(), &intent).is_err(), "accepted {path}");
+        assert!(crate::crate_release_pr_acquisition::verify_reviewed_workflow(serde_json::to_string(&tampered)?.as_bytes(), intent).is_err(), "accepted {path}");
     }
+    let mut nested_intent = intent.clone();
+    nested_intent.pr_write_paths = vec!["nested/workspace/Cargo.lock".into()];
+    let mut nested_workflow = yaml.clone();
+    nested_workflow["concurrency"]["group"] = serde_json::json!("release-crates-io-owner/project-bed46b222d05fcf033c7a100925229762295940199bb5c2e0aba841333bfa949");
+    assert!(crate::crate_release_pr_acquisition::verify_reviewed_workflow(serde_json::to_string(&nested_workflow)?.as_bytes(), &nested_intent).is_ok());
+    nested_intent.pr_write_paths.clear();
+    assert!(crate::crate_release_pr_acquisition::verify_reviewed_workflow(serde_json::to_string(&nested_workflow)?.as_bytes(), &nested_intent).is_err());
+    nested_intent.pr_write_paths = vec!["Cargo.lock".into(), "nested/workspace/Cargo.lock".into()];
+    assert!(crate::crate_release_pr_acquisition::verify_reviewed_workflow(serde_json::to_string(&nested_workflow)?.as_bytes(), &nested_intent).is_err());
     let prep = &yaml["jobs"]["release-preparation"];
     let steps = prep["steps"].as_array().ok_or("preparation steps")?;
     for id in ["release-pr-candidate", "release-pr-artifact"] {
@@ -919,7 +941,7 @@ fn bootstrap_handover_renders_normal_trusted_publisher() -> Result<(), Box<dyn s
     assert_eq!(publisher["permissions"]["id-token"].as_str(), Some("write"));
     assert_eq!(publisher["environment"].as_str(), Some("release"));
     assert!(yaml["jobs"]["release-publish-bootstrap"].is_null());
-    assert!(!files.workflow.bytes.contains("secrets.CARGO_REGISTRY_TOKEN"));
+    assert!(!bytes.contains("secrets.CARGO_REGISTRY_TOKEN"));
     Ok(())
 }
 

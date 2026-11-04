@@ -4,6 +4,7 @@
 use crate::{OrchestratorError, internal::internal};
 use serde_json::Value;
 
+#[derive(Clone, Copy)]
 pub(crate) struct RunBinding<'a> {
     pub repository: &'a str,
     pub branch: &'a str,
@@ -56,6 +57,9 @@ pub(crate) fn verify_run_and_producer(
     if matched.next().is_some()
         || job["id"].as_u64().is_none_or(|id| id == 0)
         || job["run_id"].as_u64() != Some(binding.run_id)
+        || job
+            .get("run_attempt")
+            .is_some_and(|attempt| attempt.as_u64() != Some(u64::from(binding.attempt)))
         || job["head_sha"].as_str() != Some(binding.sha)
         || job["status"].as_str() != Some("completed")
         || job["conclusion"].as_str() != Some("success")
@@ -64,6 +68,377 @@ pub(crate) fn verify_run_and_producer(
     }
     Ok(repo_id)
 }
+
+fn expected_concurrency(
+    intent: &velnor_actions_contract::config::CrateReleaseIntent,
+) -> Result<String, OrchestratorError> {
+    use sha2::{Digest as _, Sha256};
+    let invalid = || internal("release_pr_workflow_unverified");
+    let mut roots = intent.pr_write_paths.iter().filter_map(|path| {
+        if path == "Cargo.lock" {
+            Some("")
+        } else {
+            path.strip_suffix("/Cargo.lock")
+        }
+    });
+    let root = roots.next().ok_or_else(invalid)?;
+    if roots.next().is_some() {
+        return Err(invalid());
+    }
+    let digest = Sha256::digest(root.as_bytes());
+    let mut hex = String::with_capacity(64);
+    for byte in digest {
+        use std::fmt::Write as _;
+        write!(&mut hex, "{byte:02x}").map_err(|_| invalid())?;
+    }
+    let lock = velnor_actions_workflow_renderer::release_spec::lock::stable_lock_group(
+        &intent.registry,
+        &intent.repository,
+        &hex,
+    )
+    .map_err(|_| invalid())?;
+    Ok(lock.group)
+}
+
+pub(crate) fn verify_reviewed_workflow(
+    bytes: &[u8],
+    intent: &velnor_actions_contract::config::CrateReleaseIntent,
+) -> Result<(), OrchestratorError> {
+    let invalid = || internal("release_pr_workflow_unverified");
+    if bytes.len() > 1024 * 1024 || intent.generator_version != env!("CARGO_PKG_VERSION") {
+        return Err(invalid());
+    }
+    let text = std::str::from_utf8(bytes).map_err(|_| invalid())?;
+    let mut options = serde_saphyr::Options::default();
+    options.merge_keys = serde_saphyr::MergeKeyPolicy::Error;
+    let workflow: Value =
+        serde_saphyr::from_str_with_options(text, options).map_err(|_| invalid())?;
+    let root = workflow.as_object().ok_or_else(invalid)?;
+    if root.keys().any(|key| {
+        !matches!(
+            key.as_str(),
+            "name" | "on" | "concurrency" | "permissions" | "cache-mode" | "jobs"
+        )
+    }) {
+        return Err(invalid());
+    }
+    if workflow["permissions"] != serde_json::json!({"contents": "read"})
+        || workflow["cache-mode"] != "read"
+    {
+        return Err(invalid());
+    }
+    let expected = expected_concurrency(intent)?;
+    if workflow["concurrency"]
+        != serde_json::json!({"group": expected, "cancel-in-progress": false})
+    {
+        return Err(invalid());
+    }
+    verify_reviewed_jobs(&workflow, intent)
+}
+
+fn verify_reviewed_jobs(
+    workflow: &Value,
+    intent: &velnor_actions_contract::config::CrateReleaseIntent,
+) -> Result<(), OrchestratorError> {
+    use velnor_actions_contract::config::RustReleaseConfig;
+    use velnor_actions_mise::{MISE_VERSION, PinnedTool, ToolCatalog};
+    use velnor_actions_workflow_renderer::{MiseSetup, setup::MISE_BINARY_SHA256_LINUX_X64};
+    let invalid = || internal("release_pr_workflow_unverified");
+    let catalog = ToolCatalog::pinned()
+        .with_project_tool(PinnedTool::Rust, &intent.rust_version)
+        .map_err(|_| invalid())?
+        .with_export_rustup_toolchain(false);
+    if catalog.version(PinnedTool::ReleasePlz) != intent.release_plz_version {
+        return Err(invalid());
+    }
+    let release = RustReleaseConfig {
+        release_pr: true,
+        manifest_path: intent.manifest_path.clone(),
+        environment: intent.environment.clone(),
+        authentication: Some(intent.authentication),
+        ..RustReleaseConfig::default()
+    };
+    let mise = MiseSetup {
+        uses: format!(
+            "jdx/mise-action@{}",
+            velnor_actions_actionlint::actions::MISE_ACTION_SHA
+        ),
+        version: MISE_VERSION.to_owned(),
+        sha256: MISE_BINARY_SHA256_LINUX_X64.to_owned(),
+    };
+    let acquire = velnor_actions_workflow_renderer::release_generator_bootstrap::acquire_step(
+        &intent.generator_version,
+        &intent.runner,
+        &intent.generator_source_sha,
+        &intent.generator_manifest_sha256,
+    )
+    .map_err(|_| invalid())?;
+    let preparation_gate = format!(
+        "github.repository == '{}' && github.event_name == 'push' && github.ref == 'refs/heads/{}' && needs.release-preflight.result == 'success' && needs.release-preflight.outputs.eligible == 'false'",
+        intent.repository, intent.default_branch
+    );
+    let jobs = crate::release_steps::assemble_jobs(&crate::release_steps::JobInputs {
+        release: &release,
+        gate: String::new(),
+        preparation_gate,
+        registry: None,
+        label: &intent.runner,
+        mise: &mise,
+        catalog: &catalog,
+        acquire: &acquire,
+        generator_version: &intent.generator_version,
+    })?;
+    for id in [
+        "release-preflight",
+        "release-preparation",
+        "release-pr-create",
+    ] {
+        let expected_yaml = velnor_actions_workflow_renderer::release_tree::render_release_job(
+            jobs.get(id).ok_or_else(invalid)?,
+        )
+        .map_err(|_| invalid())?;
+        let expected: Value = serde_saphyr::from_str(&expected_yaml).map_err(|_| invalid())?;
+        if workflow["jobs"][id] != expected {
+            return Err(invalid());
+        }
+    }
+    Ok(())
+}
+
+#[derive(Clone, Copy)]
+pub(crate) struct AcquisitionRequest<'a> {
+    pub binding: RunBinding<'a>,
+    pub artifact_id: u64,
+    pub archive_digest: &'a str,
+    pub content_digest: &'a str,
+    pub token: &'a str,
+    pub runner_temp: &'a std::path::Path,
+    pub deadline: std::time::Instant,
+}
+
+pub(crate) struct VerifiedPreparation {
+    pub repository_id: u64,
+    pub intent: velnor_actions_contract::config::CrateReleaseIntent,
+    pub source_tree: String,
+    pub artifact: crate::crate_release_pr_artifact::PreparationArtifact,
+}
+
+pub(crate) fn acquire_preparation<G, T>(
+    request: &AcquisitionRequest<'_>,
+    github: &G,
+    transport: &T,
+) -> Result<VerifiedPreparation, OrchestratorError>
+where
+    G: crate::crate_release_github::GitHubAdmissionRead,
+    T: crate::crate_release_tool_download::ToolDownloadTransport,
+{
+    let invalid = || internal("release_pr_acquisition_invalid");
+    if request.artifact_id == 0
+        || request.token.is_empty()
+        || !request.runner_temp.is_absolute()
+        || std::time::Instant::now() >= request.deadline
+    {
+        return Err(invalid());
+    }
+    let repository_id = run_evidence(request, github)?;
+    let prefix = format!("repos/{}", request.binding.repository);
+    let commit = github.get(&format!("{prefix}/git/commits/{}", request.binding.sha))?;
+    if commit["sha"].as_str() != Some(request.binding.sha) {
+        return Err(invalid());
+    }
+    let source_tree = commit["tree"]["sha"]
+        .as_str()
+        .ok_or_else(invalid)?
+        .to_owned();
+    let trees = crate::crate_release_pr_tree::GitHubTrees {
+        api: github,
+        repository: request.binding.repository,
+    };
+    let intent_bytes = read_reviewed_file(
+        github,
+        &trees,
+        &source_tree,
+        ".github/velnor-release-intent.toml",
+    )?;
+    let intent = crate::parse_crate_release_intent(&intent_bytes)?;
+    if intent.repository != request.binding.repository
+        || intent.default_branch != request.binding.branch
+    {
+        return Err(invalid());
+    }
+    let workflow = read_reviewed_file(
+        github,
+        &trees,
+        &source_tree,
+        ".github/workflows/release.yml",
+    )?;
+    verify_reviewed_workflow(&workflow, &intent)?;
+    let bytes = download_preparation(request, github, transport, repository_id)?;
+    let binding = crate::crate_release_pr_artifact::PreparationBinding {
+        repository: request.binding.repository.to_owned(),
+        workflow_sha: request.binding.sha.to_owned(),
+        source_sha: request.binding.sha.to_owned(),
+        run_id: request.binding.run_id,
+        run_attempt: request.binding.attempt,
+    };
+    let allowed = intent.pr_write_paths.iter().cloned().collect();
+    let artifact = crate::crate_release_pr_artifact::verify_preparation_artifact(
+        &bytes,
+        request.content_digest,
+        &binding,
+        &allowed,
+    )
+    .map_err(|_| invalid())?;
+    Ok(VerifiedPreparation {
+        repository_id,
+        intent,
+        source_tree,
+        artifact,
+    })
+}
+
+fn download_preparation<G, T>(
+    request: &AcquisitionRequest<'_>,
+    github: &G,
+    transport: &T,
+    repository_id: u64,
+) -> Result<Vec<u8>, OrchestratorError>
+where
+    G: crate::crate_release_github::GitHubAdmissionRead,
+    T: crate::crate_release_tool_download::ToolDownloadTransport,
+{
+    let invalid = || internal("release_pr_acquisition_invalid");
+    let initial = current_preparation_artifact(request, github, repository_id)?;
+    let digest = initial.digest.strip_prefix("sha256:").ok_or_else(invalid)?;
+    if digest != request.archive_digest {
+        return Err(invalid());
+    }
+    let scratch = tempfile::Builder::new()
+        .prefix(".velnor-pr-artifact-")
+        .tempdir_in(request.runner_temp)
+        .map_err(|_| invalid())?;
+    let archive = crate::crate_release_tool_download::download_tool_artifact(
+        transport,
+        &crate::crate_release_tool_download::ToolDownloadRequest {
+            repository: request.binding.repository,
+            id: request.artifact_id,
+            token: request.token,
+            expected_size: initial.size_in_bytes,
+            expected_sha256: digest,
+            destination: &scratch.path().join("preparation.zip"),
+            deadline: request.deadline,
+        },
+    )?;
+    if run_evidence(request, github)? != repository_id
+        || current_preparation_artifact(request, github, repository_id)? != initial
+    {
+        return Err(invalid());
+    }
+    crate::crate_release_tool_artifact::read_pr_preparation_archive(&archive)
+}
+
+fn run_evidence<G: crate::crate_release_github::GitHubAdmissionRead>(
+    request: &AcquisitionRequest<'_>,
+    github: &G,
+) -> Result<u64, OrchestratorError> {
+    let prefix = format!("repos/{}", request.binding.repository);
+    let run = request.binding.run_id;
+    let attempt = request.binding.attempt;
+    let repository = github.get(&prefix)?;
+    let info = github.get(&format!("{prefix}/actions/runs/{run}/attempts/{attempt}"))?;
+    let jobs = github.get(&format!(
+        "{prefix}/actions/runs/{run}/attempts/{attempt}/jobs?per_page=100"
+    ))?;
+    let branch = crate::crate_release_http::encode(request.binding.branch);
+    let reference = github.get(&format!("{prefix}/git/ref/heads/{branch}"))?;
+    verify_run_and_producer(&request.binding, &repository, &info, &jobs, &reference)
+}
+
+fn current_preparation_artifact<G: crate::crate_release_github::GitHubAdmissionRead>(
+    request: &AcquisitionRequest<'_>,
+    github: &G,
+    repository_id: u64,
+) -> Result<crate::crate_release_tool_artifact::ToolArtifactMetadata, OrchestratorError> {
+    let prefix = format!("repos/{}", request.binding.repository);
+    let list = github.get(&format!(
+        "{prefix}/actions/runs/{}/artifacts?per_page=100",
+        request.binding.run_id
+    ))?;
+    let detail = github.get(&format!(
+        "{prefix}/actions/artifacts/{}",
+        request.artifact_id
+    ))?;
+    crate::crate_release_tool_artifact::validate_pr_preparation_artifact_metadata(
+        &list,
+        &detail,
+        request.artifact_id,
+        request.binding.run_id,
+        request.binding.attempt,
+        repository_id,
+        request.binding.sha,
+    )
+}
+
+fn read_reviewed_file<G: crate::crate_release_github::GitHubAdmissionRead>(
+    github: &G,
+    trees: &crate::crate_release_pr_tree::GitHubTrees<'_>,
+    root: &str,
+    path: &str,
+) -> Result<Vec<u8>, OrchestratorError> {
+    use crate::crate_release_pr_tree::TreeRead as _;
+    use base64::Engine as _;
+    let invalid = || internal("release_pr_reviewed_file_invalid");
+    let mut tree = root.to_owned();
+    let mut parts = path.split('/').peekable();
+    while let Some(name) = parts.next() {
+        let entries = trees.read_tree(&tree)?;
+        let entry = entries
+            .iter()
+            .find(|entry| entry.name == name)
+            .ok_or_else(invalid)?;
+        if parts.peek().is_some() {
+            if entry.mode != "040000" {
+                return Err(invalid());
+            }
+            tree.clone_from(&entry.sha);
+        } else {
+            if !matches!(entry.mode.as_str(), "100644" | "100755") {
+                return Err(invalid());
+            }
+            let response = github.get(&format!(
+                "repos/{}/git/blobs/{}",
+                trees.repository, entry.sha
+            ))?;
+            if response["sha"].as_str() != Some(&entry.sha)
+                || response["encoding"].as_str() != Some("base64")
+            {
+                return Err(invalid());
+            }
+            let content = response["content"].as_str().ok_or_else(invalid)?;
+            if content.len() > 2 * 1024 * 1024 {
+                return Err(invalid());
+            }
+            let normalized: String = content
+                .chars()
+                .filter(|c| !c.is_ascii_whitespace())
+                .collect();
+            let bytes = base64::engine::general_purpose::STANDARD
+                .decode(normalized)
+                .map_err(|_| invalid())?;
+            if response["size"].as_u64() != Some(bytes.len() as u64)
+                || bytes.len() > 1024 * 1024
+                || crate::release_policy_admission::git_blob_sha1(&bytes)? != entry.sha
+            {
+                return Err(invalid());
+            }
+            return Ok(bytes);
+        }
+    }
+    Err(invalid())
+}
+
+#[path = "crate_release_pr_acquisition_fixture.rs"]
+pub(super) mod integration_fixture;
 
 #[cfg(test)]
 mod tests {
@@ -128,81 +503,4 @@ mod tests {
         );
         Ok(())
     }
-}
-
-pub(crate) fn verify_reviewed_workflow(
-    bytes: &[u8],
-    intent: &velnor_actions_contract::config::CrateReleaseIntent,
-) -> Result<(), OrchestratorError> {
-    use velnor_actions_contract::config::RustReleaseConfig;
-    use velnor_actions_mise::{MISE_VERSION, PinnedTool, ToolCatalog};
-    use velnor_actions_workflow_renderer::{MiseSetup, setup::MISE_BINARY_SHA256_LINUX_X64};
-    let invalid = || internal("release_pr_workflow_unverified");
-    if bytes.len() > 1024 * 1024 || intent.generator_version != env!("CARGO_PKG_VERSION") {
-        return Err(invalid());
-    }
-    let text = std::str::from_utf8(bytes).map_err(|_| invalid())?;
-    let mut options = serde_saphyr::Options::default();
-    options.merge_keys = serde_saphyr::MergeKeyPolicy::Error;
-    let workflow: Value =
-        serde_saphyr::from_str_with_options(text, options).map_err(|_| invalid())?;
-    let catalog = ToolCatalog::pinned()
-        .with_project_tool(PinnedTool::Rust, &intent.rust_version)
-        .map_err(|_| invalid())?
-        .with_export_rustup_toolchain(false);
-    if catalog.version(PinnedTool::ReleasePlz) != intent.release_plz_version {
-        return Err(invalid());
-    }
-    let release = RustReleaseConfig {
-        release_pr: true,
-        manifest_path: intent.manifest_path.clone(),
-        environment: intent.environment.clone(),
-        authentication: Some(intent.authentication),
-        ..RustReleaseConfig::default()
-    };
-    let mise = MiseSetup {
-        uses: format!(
-            "jdx/mise-action@{}",
-            velnor_actions_actionlint::actions::MISE_ACTION_SHA
-        ),
-        version: MISE_VERSION.to_owned(),
-        sha256: MISE_BINARY_SHA256_LINUX_X64.to_owned(),
-    };
-    let acquire = velnor_actions_workflow_renderer::release_generator_bootstrap::acquire_step(
-        &intent.generator_version,
-        &intent.runner,
-        &intent.generator_source_sha,
-        &intent.generator_manifest_sha256,
-    )
-    .map_err(|_| invalid())?;
-    let preparation_gate = format!(
-        "github.repository == '{}' && github.event_name == 'push' && github.ref == 'refs/heads/{}' && needs.release-preflight.result == 'success' && needs.release-preflight.outputs.eligible == 'false'",
-        intent.repository, intent.default_branch
-    );
-    let jobs = crate::release_steps::assemble_jobs(&crate::release_steps::JobInputs {
-        release: &release,
-        gate: String::new(),
-        preparation_gate,
-        registry: None,
-        label: &intent.runner,
-        mise: &mise,
-        catalog: &catalog,
-        acquire: &acquire,
-        generator_version: &intent.generator_version,
-    })?;
-    for id in [
-        "release-preflight",
-        "release-preparation",
-        "release-pr-create",
-    ] {
-        let expected_yaml = velnor_actions_workflow_renderer::release_tree::render_release_job(
-            jobs.get(id).ok_or_else(invalid)?,
-        )
-        .map_err(|_| invalid())?;
-        let expected: Value = serde_saphyr::from_str(&expected_yaml).map_err(|_| invalid())?;
-        if workflow["jobs"][id] != expected {
-            return Err(invalid());
-        }
-    }
-    Ok(())
 }
