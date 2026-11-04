@@ -1301,7 +1301,16 @@ fn verify_prior_run_cases(
     assert!(
         inspect_prior_incomplete_evidence(journal, &missing, &current, root, test_git()).is_err()
     );
-    verify_prior_operation_chain(journal, plan, &current, root)?;
+    finish_prior_run(journal, plan, &current, root)
+}
+
+fn finish_prior_run(
+    journal: &Registry,
+    plan: &JournalReceipt,
+    current: &JournalReceipt,
+    root: &std::path::Path,
+) -> Result<(), Box<dyn std::error::Error>> {
+    verify_prior_operation_chain(journal, plan, current, root)?;
     let mut result = completion("0.1.1");
     result.packages[0]
         .tag_target
@@ -1314,7 +1323,7 @@ fn verify_prior_run_cases(
         Some(&result),
     )?;
     assert!(
-        inspect_prior_incomplete_evidence(journal, &plan.identity, &current, root, test_git())
+        inspect_prior_incomplete_evidence(journal, &plan.identity, current, root, test_git())
             .is_err()
     );
     Ok(())

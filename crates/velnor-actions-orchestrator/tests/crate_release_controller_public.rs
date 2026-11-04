@@ -566,101 +566,46 @@ fn exercise_repair(
     root: &Path,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let repair_tag = prepare_crate_release(intent, request, github, registry, root)?;
+    let attempt = || {
+        repair_crate_release(
+            &repair_tag,
+            intent,
+            request,
+            github,
+            registry,
+            root,
+            test_git(),
+        )
+    };
     assert!(matches!(
         repair_tag.packages[0].action,
         CrateReleaseAction::RepairTag { .. }
     ));
     github.approved.set(false);
-    assert!(
-        repair_crate_release(
-            &repair_tag,
-            intent,
-            request,
-            github,
-            registry,
-            root,
-            test_git()
-        )
-        .is_err()
-    );
+    assert!(attempt().is_err());
     assert_eq!(github.writes.get(), 0);
     github.approved.set(true);
     github.owner_match.set(false);
-    assert!(
-        repair_crate_release(
-            &repair_tag,
-            intent,
-            request,
-            github,
-            registry,
-            root,
-            test_git()
-        )
-        .is_err()
-    );
+    assert!(attempt().is_err());
     assert_eq!(github.writes.get(), 0);
     github.owner_match.set(true);
     registry.archive.borrow_mut().push(0);
-    assert!(
-        repair_crate_release(
-            &repair_tag,
-            intent,
-            request,
-            github,
-            registry,
-            root,
-            test_git()
-        )
-        .is_err()
-    );
+    assert!(attempt().is_err());
     assert_eq!(github.writes.get(), 0);
     registry.archive.borrow_mut().pop();
     github.release_variant.set(4);
     github.tag_exists.set(true);
     github.tag_wrong.set(true);
-    assert!(
-        repair_crate_release(
-            &repair_tag,
-            intent,
-            request,
-            github,
-            registry,
-            root,
-            test_git()
-        )
-        .is_err()
-    );
+    assert!(attempt().is_err());
     assert_eq!(github.writes.get(), 0);
     github.tag_wrong.set(false);
     github.tag_exists.set(false);
     github.write_error.set(1);
-    assert!(
-        repair_crate_release(
-            &repair_tag,
-            intent,
-            request,
-            github,
-            registry,
-            root,
-            test_git()
-        )
-        .is_err()
-    );
+    assert!(attempt().is_err());
     assert!(!github.tag_exists.get());
     assert_eq!(github.writes.get(), 1);
     github.write_error.set(3);
-    assert!(
-        repair_crate_release(
-            &repair_tag,
-            intent,
-            request,
-            github,
-            registry,
-            root,
-            test_git()
-        )
-        .is_err()
-    );
+    assert!(attempt().is_err());
     assert!(github.tag_exists.get());
     assert_eq!(github.release_variant.get(), 4);
     github.write_error.set(0);
@@ -670,15 +615,7 @@ fn exercise_repair(
         CrateReleaseAction::RepairRelease { .. }
     ));
     github.tag_exists.set(false);
-    repair_crate_release(
-        &repair_tag,
-        intent,
-        request,
-        github,
-        registry,
-        root,
-        test_git(),
-    )?;
+    attempt()?;
     assert!(github.tag_exists.get());
     assert_eq!(github.release_variant.get(), 0);
     github.tag_exists.set(false);
@@ -706,94 +643,45 @@ fn recovery_requires_fresh_human_approval_and_registry_absence()
     let root = temp.path();
     let (intent, request, github, registry) = make_fixture(root)?;
     let receipt = prepare_crate_release(&intent, &request, &github, &registry, root)?;
-    assert!(
+    let verify = |candidate: &GitHubAdmissionRequest| {
         verify_crate_release_admission(
             &receipt,
             &intent,
-            &request,
-            &github,
-            &registry,
-            root,
-            test_git()
-        )
-        .is_err()
-    );
-    github.approved.set(true);
-    let mut wrong_workflow = request.clone();
-    wrong_workflow.workflow_sha = "cccccccccccccccccccccccccccccccccccccccc".into();
-    assert!(
-        verify_crate_release_admission(
-            &receipt,
-            &intent,
-            &wrong_workflow,
+            candidate,
             &github,
             &registry,
             root,
             test_git(),
         )
-        .is_err()
-    );
+    };
+    let reconcile = || {
+        reconcile_crate_release(
+            &receipt,
+            &intent,
+            &request,
+            &github,
+            &registry,
+            root,
+            test_git(),
+        )
+    };
+    assert!(verify(&request).is_err());
+    github.approved.set(true);
+    let mut wrong_workflow = request.clone();
+    wrong_workflow.workflow_sha = "cccccccccccccccccccccccccccccccccccccccc".into();
+    assert!(verify(&wrong_workflow).is_err());
     let mut wrong_source = request.clone();
     wrong_source.source_sha = "dddddddddddddddddddddddddddddddddddddddd".into();
-    assert!(
-        verify_crate_release_admission(
-            &receipt,
-            &intent,
-            &wrong_source,
-            &github,
-            &registry,
-            root,
-            test_git()
-        )
-        .is_err()
-    );
+    assert!(verify(&wrong_source).is_err());
     github.owner_match.set(false);
-    assert!(
-        verify_crate_release_admission(
-            &receipt,
-            &intent,
-            &request,
-            &github,
-            &registry,
-            root,
-            test_git()
-        )
-        .is_err()
-    );
+    assert!(verify(&request).is_err());
     github.owner_match.set(true);
-    verify_crate_release_admission(
-        &receipt,
-        &intent,
-        &request,
-        &github,
-        &registry,
-        root,
-        test_git(),
-    )?;
+    verify(&request)?;
     registry.absent.set(false);
-    assert!(
-        verify_crate_release_admission(
-            &receipt,
-            &intent,
-            &request,
-            &github,
-            &registry,
-            root,
-            test_git()
-        )
-        .is_err()
-    );
+    assert!(verify(&request).is_err());
     *registry.archive.borrow_mut() = fixture_archive(root)?;
     exercise_repair(&intent, &request, &github, &registry, root)?;
-    let completed = reconcile_crate_release(
-        &receipt,
-        &intent,
-        &request,
-        &github,
-        &registry,
-        root,
-        test_git(),
-    )?;
+    let completed = reconcile()?;
     assert_eq!(completed[0].release_id, 12);
     assert_eq!(
         completed[0].release_url,
@@ -803,18 +691,7 @@ fn recovery_requires_fresh_human_approval_and_registry_absence()
     assert!(completed[0].source_inventory.contains_key("src/lib.rs"));
     for variant in [1, 2, 3] {
         github.release_variant.set(variant);
-        assert!(
-            reconcile_crate_release(
-                &receipt,
-                &intent,
-                &request,
-                &github,
-                &registry,
-                root,
-                test_git()
-            )
-            .is_err()
-        );
+        assert!(reconcile().is_err());
     }
     github.release_variant.set(4);
     assert!(
@@ -827,18 +704,7 @@ fn recovery_requires_fresh_human_approval_and_registry_absence()
     );
     github.release_variant.set(0);
     registry.archive.borrow_mut().push(0);
-    assert!(
-        reconcile_crate_release(
-            &receipt,
-            &intent,
-            &request,
-            &github,
-            &registry,
-            root,
-            test_git()
-        )
-        .is_err()
-    );
+    assert!(reconcile().is_err());
     Ok(())
 }
 
@@ -916,11 +782,14 @@ fn receipt_acquire_requires_current_approval_and_matching_evidence()
     );
     fs::remove_file(runner.path().join("velnor-crate-release-receipt.json"))?;
     check_receipt_revalidation(&stage, &github, &registry, &receipt, source.path())?;
+    let reconcile = || {
+        velnor_actions_orchestrator::crate_release_tool_artifact::acquire_reconciliation_receipt_artifact(&stage, &github, &registry, &github, source.path())
+    };
     github.tag_exists.set(true);
-    velnor_actions_orchestrator::crate_release_tool_artifact::acquire_reconciliation_receipt_artifact(&stage, &github, &registry, &github, source.path())?;
+    reconcile()?;
     fs::remove_file(runner.path().join("velnor-crate-release-receipt.json"))?;
     github.tag_wrong.set(true);
-    assert!(velnor_actions_orchestrator::crate_release_tool_artifact::acquire_reconciliation_receipt_artifact(&stage, &github, &registry, &github, source.path()).is_err());
+    assert!(reconcile().is_err());
     github.tag_wrong.set(false);
     registry.inconsistent.set(true);
     assert!(
@@ -936,10 +805,10 @@ fn receipt_acquire_requires_current_approval_and_matching_evidence()
     );
     registry.inconsistent.set(false);
     registry.absent.set(true);
-    assert!(velnor_actions_orchestrator::crate_release_tool_artifact::acquire_reconciliation_receipt_artifact(&stage, &github, &registry, &github, source.path()).is_err());
+    assert!(reconcile().is_err());
     registry.absent.set(false);
     github.owner_match.set(false);
-    assert!(velnor_actions_orchestrator::crate_release_tool_artifact::acquire_reconciliation_receipt_artifact(&stage, &github, &registry, &github, source.path()).is_err());
+    assert!(reconcile().is_err());
     github.owner_match.set(true);
     registry.absent.set(true);
     github.tag_exists.set(false);
@@ -1975,7 +1844,7 @@ fn check_upload_authorization(
         obs.journal,
         obs.identity,
     );
-    let prove = || {
+    let prove_package = |package| {
         fixture_verify_release_package(
             admission,
             intent,
@@ -1983,23 +1852,12 @@ fn check_upload_authorization(
             github,
             registry,
             root,
-            "demo",
+            package,
             test_git(),
         )
     };
-    assert!(
-        fixture_verify_release_package(
-            admission,
-            intent,
-            request,
-            github,
-            registry,
-            root,
-            "other",
-            test_git()
-        )
-        .is_err()
-    );
+    let prove = || prove_package("demo");
+    assert!(prove_package("other").is_err());
     let verified = prove()?;
     github.approved.set(false);
     assert!(
@@ -3586,10 +3444,8 @@ fn mixed_workspace_coordinator_repairs_predecessor_before_upload()
         second: RefCell::new(None),
     };
     let admission = prepare_crate_release(&intent, &request, &github, &registry, root)?;
-    assert_eq!(
-        crate::crate_release_runtime::release_mode(&admission),
-        "mixed"
-    );
+    let mode = crate::crate_release_runtime::release_mode(&admission);
+    assert_eq!(mode, "mixed");
     let (identity, mut plan) = fixture_journal_plan(root, &intent, &request, &admission)?;
     set_workspace_journal_packages(&mut plan, &admission);
     let journal = JournalRegistryFake::default();
@@ -4481,8 +4337,8 @@ fn new_crate_upload_observation_requires_durable_intent_and_real_reviewer_owner(
         CrateReleaseObservation, record_verified_mutation,
     };
     use velnor_actions_orchestrator::crate_release_journal::{
-        JournalAuthentication, JournalIntendedMutation, JournalMutationKind, JournalOwnership,
-        record_journal_intent, record_source_bound_start,
+        JournalAuthentication, JournalMutationKind, JournalOwnership, record_journal_intent,
+        record_source_bound_start,
     };
     let temp = tempfile::tempdir()?;
     let root = temp.path();
@@ -4509,13 +4365,7 @@ fn new_crate_upload_observation_requires_durable_intent_and_real_reviewer_owner(
     plan.packages[0].owners = JournalOwnership::NewCrate;
     let journal = JournalRegistryFake::default();
     record_source_bound_start(&journal, &identity, &plan, root, test_git())?;
-    let intended = JournalIntendedMutation {
-        sequence: 1,
-        package: "demo".into(),
-        version: "0.1.1".into(),
-        kind: JournalMutationKind::Upload,
-        semver_evidence: Some(fixture_no_baseline()),
-    };
+    let intended = new_crate_upload_intention();
     let obs = CrateReleaseObservation {
         git: test_git(),
         journal: &journal,
@@ -4558,6 +4408,17 @@ fn new_crate_upload_observation_requires_durable_intent_and_real_reviewer_owner(
     verify_recorded_new_crate_owner(&journal, &identity)?;
     verify_new_crate_metadata(&upload_obs, &github, &registry, before_metadata)?;
     Ok(())
+}
+
+fn new_crate_upload_intention() -> crate::crate_release_journal::JournalIntendedMutation {
+    use crate::crate_release_journal::{JournalIntendedMutation, JournalMutationKind};
+    JournalIntendedMutation {
+        sequence: 1,
+        package: "demo".into(),
+        version: "0.1.1".into(),
+        kind: JournalMutationKind::Upload,
+        semver_evidence: Some(fixture_no_baseline()),
+    }
 }
 
 fn verify_recorded_new_crate_owner(
