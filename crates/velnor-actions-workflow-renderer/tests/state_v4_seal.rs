@@ -292,7 +292,10 @@ fn recover_refuses_payload_that_differs_from_the_key_digest() -> Result<(), Box<
     std::fs::remove_dir_all(scene.store())?;
     std::fs::create_dir_all(scene.store().join("actions"))?;
     scene.pack_export("swapped")?;
-    let _ = std::fs::remove_file(&log);
+    match std::fs::remove_file(&log) {
+        Err(error) if error.kind() != std::io::ErrorKind::NotFound => return Err(error.into()),
+        _ => {}
+    }
     let output = scene.recover_unbound(&sealed, &env, None)?;
     scene.assert_cold(&output, "refused-digest")?;
     if std::fs::read_to_string(&log).is_ok_and(|text| text.contains("decode")) {

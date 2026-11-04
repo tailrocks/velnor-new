@@ -8,7 +8,7 @@ use velnor_actions_contract::workflow::state_seal::STATE_SEAL_SUBJECT_REL;
 use velnor_actions_contract::{Job, StepKind, StepRole};
 
 use crate::gc1_scene::{Scene, fail};
-use crate::gc1_seal_support::{ENTRY_ID, ENTRY_SIZE, Gh, MAIN};
+use crate::gc1_seal_support::{ENTRY_ID, ENTRY_SIZE, Gh, MAIN, REPO};
 use crate::state_v4_seal::{FIXTURE, identity_expression, resolved_prefix, seal_job, step_of};
 
 pub(crate) fn run_bind(scene: &Scene, gh: &Gh, job: &Job, key: &str) -> Result<(), Box<dyn Error>> {
@@ -25,6 +25,7 @@ pub(crate) fn run_bind(scene: &Scene, gh: &Gh, job: &Job, key: &str) -> Result<(
         ("FAKE_GH_DIR", dir.as_str()),
         ("GITHUB_REF", MAIN),
         ("VELNOR_STATE_SEAL_KEY", key),
+        ("GITHUB_REPOSITORY", REPO),
     ];
     scene.run_script(run.get(2).ok_or_else(|| fail("no script"))?, &env, None)?;
     Ok(())

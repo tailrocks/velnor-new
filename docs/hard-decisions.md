@@ -89,6 +89,53 @@ read be selected only by its declared inputs, was approved by the human owner
 on 2026-10-20 (PR #192 review question; the alternative, running every such
 package on every pull request, was declined).
 
+**Amendment 2026-11-03 (owner directive: never build, test or lint what a
+change does not affect).** Authority: owner standing grant 2026-11-02,
+velnor-fast-ci GOAL.md, decisions X51 and X52. Generated workflows never run a
+build, test or lint job that the change does not affect. A pull request that
+changes only documentation runs no Rust job. The directive replaces the rule
+"no `ignore` list exists" with a typed, enforced exclusion:
+
+- `[stacks.rust] non_inputs` is a list of globs, empty by default. A path in it
+  is removed from the Rust change set and from the checkout of every Rust job.
+  A path outside it keeps "Unowned -> all, per stack".
+- Each glob is `<seg>(/<seg>)*/**`. A segment is `*` or one or more of
+  `A-Za-z0-9._-` that are not all dots. Anything else is `bad_glob:<glob>`: no
+  `?`, `[`, `{`, partial wildcards, `**` before the tail, `.`, `..` or empty
+  segments, bare directory forms or root files such as `Cargo.lock`. A path is
+  a non-input when a strict ancestor directory matches the prefix before
+  `/**`; one `*` is exactly one directory level. The planner, config
+  validation, the claim checks, the sparse exclusion and the guard use this one
+  rule, and a differential test checks it against real git.
+- Config load rejects a glob that overlaps a claim with
+  `non_input_overlaps_claim:<kind>:<glob>`. `<kind>` is `github`, `velnor`,
+  `package_dir`, `declared_input` (this includes `[[checks]].inputs`),
+  `read_target`, `symlink`, `lockfile` or `tool_file`.
+- Config load rejects `non_inputs` it cannot make safe with
+  `non_inputs_unsupported:<reason>`: `unbounded_read:<package>` or
+  `outside_read:<package>` while a package has such a read without a
+  `complete = true` input rule, `non_rust_check:<check id>` for a named check
+  with no input under a package directory or a declared Rust rule,
+  `case_conflation:<path>` when a tracked path classifies differently with and
+  without ASCII case folding, and `root_package` when a package manifest sits
+  at the repository root.
+- Every job that builds, tests, lints or ships Rust checks out the repository
+  without the `non_inputs` paths, on every event, through a non-cone sparse
+  exclusion. An unconditional guard step fails the job with
+  `non_input_present:<path>` when a tracked `non_inputs` path exists on disk.
+  The plan, actionlint, `Required` and non-Rust jobs keep the full tree.
+- Forced packages (`undeclared_reads`) run when the Rust change set is
+  non-empty or a tool file (for example `mise.toml`, `rust-toolchain.toml`)
+  changed. Matrix: a diff of only `non_inputs` paths runs nothing; an empty
+  diff runs nothing; a diff of only tool files runs the forced packages and
+  their dependents; documentation plus a tool-file edit does the same.
+  `non_inputs` narrows the Rust change set only. Bun, image, OpenTofu and
+  `evidence.paths` still see the path.
+- `push`, `merge_group` and `workflow_dispatch` stay full runs.
+
+The earlier approval of 2026-10-19 is unchanged for everything else in this
+decision.
+
 **Rationale.** In a monorepo most pull requests touch one or two crates, but
 every crate job paid runner start, checkout, tool setup, cache restore, and a
 build. Baseline coverage never skipped anything in practice: it needed a green
@@ -109,14 +156,17 @@ job to skip steps inside it.
   config, a workspace root, a declared `[[stacks.rust.inputs]]` rule, or a
   tracked symlink claims it. A path an OpenTofu root owns but no Rust rule
   claims still runs every Rust job; the Tofu split feeds only Tofu root
-  selection. No `ignore` list exists until in-job runtime-read capture exists.
+  selection. A path leaves a stack only through `[stacks.rust] non_inputs`, which
+  config validation and the checkout guard enforce (amendment 2026-11-03).
 - Unverified reads force a package (`undeclared_reads`): a package with a
   build script, or whose tracked `.rs` sources read outside the paths it
   claims (`include_str!`/`include_bytes!`/`include!`/`#[path]`, a
   `CARGO_MANIFEST_DIR` path with a `..` component or `parent()`, a relative
-  `..` file-system read), counts as changed on every pull request until it
-  declares those inputs (an unbounded read only through a rule with
-  `complete = true`), and its dependents run with it. An unchanged sharded
+  `..` file-system read), counts as changed on every pull request that
+  changes a Rust-visible path or a tool file, until it declares those inputs
+  (an unbounded read only through a rule with `complete = true`), and its
+  dependents run with it. While any package has an unbounded or outside read
+  without such a rule, `[stacks.rust] non_inputs` is rejected. An unchanged sharded
   archive whose source is not content-bound fails the plan instead of running
   alone (unreachable today: the closure digest always binds it).
 - Residual risk, named: the read scan is static. A read through a computed
@@ -144,8 +194,9 @@ job to skip steps inside it.
   partial re-run resolves the plan by the attempt that produced it.
 
 **Must not be reintroduced without owner approval:** baseline-gated skipping or
-any other second skip mechanism, hand-written per-job path filters, an `ignore`
-list without runtime-read capture, narrowing on any selection error, affected
+any other second skip mechanism, hand-written per-job path filters (including
+GitHub `paths:` filters), an ignore list without the absence enforcement
+(config validation plus the checkout guard), narrowing on any selection error, affected
 mode on `push`, `merge_group`, or `workflow_dispatch`, a `Required` rule that
 passes a skipped job the plan scheduled, a protected check a cancelled run can
 leave skipped, one stack's ownership hiding another stack's claims, or a forced

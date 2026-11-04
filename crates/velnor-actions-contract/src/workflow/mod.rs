@@ -29,6 +29,7 @@ pub mod plan;
 mod plan_jobs;
 pub mod platform;
 mod producer;
+mod producer_order;
 mod producer_roles;
 mod producer_state;
 pub use producer::{

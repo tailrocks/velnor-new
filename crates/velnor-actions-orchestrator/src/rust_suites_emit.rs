@@ -250,6 +250,7 @@ fn build_render_spec(
     Ok(Some(RustSuitesRenderSpec {
         suites: rust.suites.clone(),
         workflow_dispatch,
+        non_inputs: rust.non_inputs.clone(),
         default_runs_on: label.to_owned(),
         checkout_uses: CHECKOUT_USES.to_owned(),
         generator_version: env!("CARGO_PKG_VERSION").to_owned(),

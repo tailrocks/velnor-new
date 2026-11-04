@@ -76,36 +76,12 @@ pub fn validate_package_name(name: &str) -> Result<(), RenderError> {
     }
 }
 
-fn is_version_tail(tail: &str) -> bool {
-    !tail.is_empty()
-        && tail.len() <= 64
-        && tail.split('.').all(|ident| {
-            !ident.is_empty()
-                && ident
-                    .bytes()
-                    .all(|b| b.is_ascii_alphanumeric() || b == b'-')
-        })
-}
-
 pub fn validate_package_version(version: &str) -> Result<(), RenderError> {
-    let invalid = RenderError::InvalidWorkflow(format!("bad_package_version:{version}"));
-    if !is_clean_text(version, 128) {
-        return Err(invalid);
+    if version.len() <= 150 && semver::Version::parse(version).is_ok() {
+        Ok(())
+    } else {
+        Err(RenderError::InvalidWorkflow(format!(
+            "bad_package_version:{version}"
+        )))
     }
-    let head = match version.split_once('+') {
-        Some((head, build)) if !build.contains('+') && is_version_tail(build) => head,
-        Some(_) => return Err(invalid),
-        None => version,
-    };
-    let core = match head.split_once('-') {
-        Some((core, pre)) if is_version_tail(pre) => core,
-        Some(_) => return Err(invalid),
-        None => head,
-    };
-    let numeric: Vec<&str> = core.split('.').collect();
-    let shaped = numeric.len() == 3
-        && numeric
-            .iter()
-            .all(|part| !part.is_empty() && part.bytes().all(|b| b.is_ascii_digit()));
-    if shaped { Ok(()) } else { Err(invalid) }
 }

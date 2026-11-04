@@ -121,6 +121,7 @@ fn context(jobs: &BTreeMap<String, Job>) -> Result<RenderContext, Box<dyn Error>
         tool_pins: Vec::new(),
         standalone_tools_donors: std::collections::BTreeMap::new(),
         max_parallel_jobs: config.workflow.max_parallel_jobs,
+        non_inputs: velnor_actions_contract::NonInputs::default(),
     })
 }
 

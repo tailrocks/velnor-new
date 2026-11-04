@@ -49,6 +49,8 @@ pub(crate) struct PartialRustStack {
     crates: std::collections::BTreeMap<String, velnor_actions_contract::RustCrateConfig>,
     #[serde(default)]
     inputs: Vec<velnor_actions_contract::RustInputRule>,
+    #[serde(default)]
+    non_inputs: velnor_actions_contract::NonInputs,
 }
 
 #[derive(Debug, Deserialize)]
@@ -77,6 +79,7 @@ impl PartialStacks {
                 toolchain_source: stack.toolchain_source,
                 crates: stack.crates,
                 inputs: stack.inputs,
+                non_inputs: stack.non_inputs,
             }
         });
         let tofu = self

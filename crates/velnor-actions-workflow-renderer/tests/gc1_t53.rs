@@ -85,6 +85,7 @@ fn spec() -> RustSuitesRenderSpec {
     RustSuitesRenderSpec {
         suites: vec![suite],
         workflow_dispatch: None,
+        non_inputs: velnor_actions_contract::NonInputs::default(),
         default_runs_on: "ubuntu-24.04".to_owned(),
         checkout_uses: CHECKOUT_USES.to_owned(),
         generator_version: "0.1.55".to_owned(),

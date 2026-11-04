@@ -254,9 +254,10 @@ rm -f "$subject"
 refuse() {{ printf '%s\n' "::warning::cache_unavailable: state seal bind refused ($1)"; printf '%s\n' '{bound}=false' >> "$GITHUB_OUTPUT"; exit 0; }}
 key="${{{key_env}-}}"
 ref="${{GITHUB_REF-}}"
-[ -n "$key" ] && [ -n "$ref" ] || refuse input_missing
+repo="${{GITHUB_REPOSITORY-}}"
+[ -n "$key" ] && [ -n "$ref" ] && [ -n "$repo" ] || refuse input_missing
 command -v gh >/dev/null 2>&1 || refuse gh_missing
-gh cache list --key "$key" --ref "$ref" --limit {list_limit} --json key,id,sizeInBytes --jq '.[] | .key + " " + (.id | tostring) + " " + (.sizeInBytes | tostring)' > "$d/list" || refuse list_failed
+gh cache list -R "$repo" --key "$key" --ref "$ref" --limit {list_limit} --json key,id,sizeInBytes --jq '.[] | .key + " " + (.id | tostring) + " " + (.sizeInBytes | tostring)' > "$d/list" || refuse list_failed
 hits=
 id=
 size=

@@ -7,10 +7,11 @@ use super::step_payloads::{valid_checkout_payload, valid_mise_setup, valid_tool_
 pub(super) use super::step_payloads::{valid_tools_cache_identity, valid_tools_cache_scrub};
 use crate::errors::ContractError;
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeSet;
 
 #[path = "step_identity_payload.rs"]
 mod payload;
+#[path = "step_identity_sequence.rs"]
+mod sequence;
 #[path = "step_identity_shell_roles.rs"]
 mod shell_roles;
 use payload::{
@@ -18,6 +19,7 @@ use payload::{
     valid_rust_verifier_payload,
 };
 pub use payload::{is_configured_checkout, is_tool_seed_step};
+pub use sequence::{validate_step_identity_scope, validate_step_sequence};
 
 pub const TOFU_PROVIDER_ADMISSION_USES: &str = "./.github/actions/tofu-provider-admission";
 
@@ -249,6 +251,7 @@ pub enum StepRole {
     StateSkeleton,
 
     StateSkeletonRestore,
+    NonInputGuard,
 }
 
 fn valid_bun_assets_handoff(kind: &StepKind) -> bool {
@@ -308,7 +311,9 @@ impl StepRole {
             }
             Self::TofuProvidersRestore => super::step_protocol::valid_provider_restore(kind),
             Self::TofuProvidersSave => super::step_protocol::valid_provider_save(kind),
-            Self::TofuProvidersPrepare => matches!(kind, StepKind::Shell { .. }),
+            Self::TofuProvidersPrepare | Self::NonInputGuard => {
+                matches!(kind, StepKind::Shell { .. })
+            }
             Self::PrivateTokenMint => matches!(kind,
                 StepKind::Action { uses, .. } if uses.starts_with(PRIVATE_TOKEN_MINT_ACTION_PREFIX)),
             Self::PrivateFetch => internal_operation(kind, PRIVATE_FETCH_OPERATION),
@@ -389,30 +394,4 @@ impl StepRole {
             | StepId::FamilySizeAnsibleCollections => Self::FamilySizeCheck,
         }
     }
-}
-
-pub fn validate_step_sequence(steps: &[Step], scope: &str) -> Result<(), ContractError> {
-    validate_step_identities(steps, scope)?;
-    super::step_mbx_lifecycle::validate_mbx_cleanup_sequence(steps, scope)?;
-    super::step_protocol::validate_tofu_provider_sequence(steps, scope)
-}
-
-pub fn validate_step_identity_scope(steps: &[Step], scope: &str) -> Result<(), ContractError> {
-    validate_step_identities(steps, scope)
-}
-
-fn validate_step_identities(steps: &[Step], scope: &str) -> Result<(), ContractError> {
-    let mut ids = BTreeSet::new();
-    for step in steps {
-        step.validate(scope)?;
-        if let Some(step_id) = step.id
-            && !ids.insert(step_id)
-        {
-            return Err(ContractError::identity(
-                "job.steps.id",
-                format!("duplicate_step_id:{scope}:{}", step_id.as_str()),
-            ));
-        }
-    }
-    Ok(())
 }

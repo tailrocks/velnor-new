@@ -65,6 +65,7 @@ pub struct ConsumerReleaseSpec {
     pub gh_argv: Vec<String>,
     pub homebrew_tap: Option<ConsumerReleaseTapSpec>,
     pub stable: Option<super::consumer_binary_release::ConsumerStableReleaseSpec>,
+    pub non_inputs: velnor_actions_contract::NonInputs,
 }
 
 pub fn render_consumer_preview(spec: &ConsumerReleaseSpec) -> Result<RenderedFile, RenderError> {

@@ -90,9 +90,10 @@ pub(super) fn valid_configured_checkout_payload(kind: &StepKind) -> bool {
     matches!(kind, StepKind::Action { with, env, .. }
         if valid_checkout_payload(kind)
             && with.iter().all(|(key, value)| match key.as_str() {
-                "persist-credentials" => value == "false",
+                "persist-credentials" | "sparse-checkout-cone-mode" => value == "false",
                 "fetch-depth" => CheckoutHistory::parse_fetch_depth(value).is_some(),
                 "lfs" => value == "true",
+                "sparse-checkout" => crate::config::is_sparse_checkout_exclusion(value),
                 _ => false,
             })
             && env.is_empty())

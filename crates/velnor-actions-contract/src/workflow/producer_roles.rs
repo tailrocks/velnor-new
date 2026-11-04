@@ -54,6 +54,7 @@ pub(super) fn state_producer_role(role: StepRole) -> bool {
     matches!(
         role,
         StepRole::Checkout
+            | StepRole::NonInputGuard
             | StepRole::MiseSetup
             | StepRole::PreparePinnedTools
             | StepRole::PrepareRustComponents

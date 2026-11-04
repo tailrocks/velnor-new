@@ -16,6 +16,7 @@ test = false
 test-render-capture = []
 
 [dependencies]
+semver = { version = "=1.0.28" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
@@ -60,3 +61,7 @@ path = "tests/rust_tree_digest_pin.rs"
 [lints]
 workspace = true
 
+
+[[test]]
+name = "crate_release_version_public"
+path = "tests/crate_release_version_public.rs"

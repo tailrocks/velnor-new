@@ -3,7 +3,7 @@
 
 use std::collections::BTreeSet;
 
-use velnor_actions_contract::RustStackConfig;
+use velnor_actions_contract::{NonInputs, RustStackConfig};
 
 use crate::OrchestratorError;
 use crate::config::CONFIG_REL;
@@ -14,6 +14,21 @@ pub(crate) use crate::inventory::WorkspaceResolve;
 pub struct AffectedInputs {
     pub(crate) resolves: Vec<WorkspaceResolve>,
     pub(crate) rules: Vec<InputRule>,
+    pub(crate) non_inputs: NonInputs,
+}
+
+impl AffectedInputs {
+    pub(crate) fn new(
+        resolves: Vec<WorkspaceResolve>,
+        rules: Vec<InputRule>,
+        rust: Option<&RustStackConfig>,
+    ) -> Self {
+        Self {
+            resolves,
+            rules,
+            non_inputs: rust.map(|rust| rust.non_inputs.clone()).unwrap_or_default(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
