@@ -114,14 +114,9 @@ pub fn finalize_jobs(
             continue;
         }
         let always = id == PLAN_JOB_ID || id == TASK_JOB_ID || job.check_runner.is_some();
-        let target = job
-            .check_runner
-            .as_ref()
-            .map(|runner| runner.platform.target())
-            .or_else(|| crate::runs_on::target_for_runner(&job.runs_on))
-            .ok_or_else(|| {
-                RenderError::InvalidWorkflow(format!("tools_cache_unsupported_target:{id}"))
-            })?;
+        let target = crate::runs_on::lane_target(job).ok_or_else(|| {
+            RenderError::InvalidWorkflow(format!("tools_cache_unsupported_target:{id}"))
+        })?;
         let default_target = crate::runs_on::target_for_runner(&ctx.runs_on);
         let setup = if let Some(helper) = ctx.authority_steps.check_mise_setup(id, target)? {
             helper
