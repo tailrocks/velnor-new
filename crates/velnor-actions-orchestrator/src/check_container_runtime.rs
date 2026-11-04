@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::OrchestratorError;
-use crate::exclusive_write;
+use velnor_actions_contract::exclusive_write;
 use crate::generator::sha256_hex;
 use crate::internal::internal;
 use std::fs;

@@ -39,7 +39,8 @@ fn export_homebrew_source_policy_inner(
     let prep = prepare_candidate_with_guard(root, guard)?;
     require_enabled_tap(&prep)?;
     let bytes = source_policy_bytes(&prep)?;
-    crate::exclusive_write::write_exclusive(output, &bytes, "homebrew_source_policy")
+    velnor_actions_contract::exclusive_write::write_exclusive(output, &bytes, "homebrew_source_policy")?;
+    Ok(())
 }
 
 pub fn check_homebrew_source_policy(root: &Path) -> Result<(), OrchestratorError> {

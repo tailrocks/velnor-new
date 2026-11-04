@@ -113,6 +113,7 @@ fn mutations() -> Vec<(&'static str, Mutation)> {
         }),
     ];
     all.extend(sources_mutations());
+    all.extend(feature_mutations());
     all.extend(artifact_mutations());
     all
 }
@@ -212,6 +213,62 @@ fn artifact_mutations() -> Vec<(&'static str, Mutation)> {
             );
             let emit = emit_at(job)?;
             job.steps.insert(emit, extra);
+            Ok(())
+        }),
+    ]
+}
+
+fn ledger_build_run(jobs: &mut Jobs) -> Result<&mut Vec<String>, Box<dyn Error>> {
+    let job = jobs.get_mut(LEDGER_CLI_JOB_ID).ok_or("job")?;
+    let at = step_at(job, StepRole::LedgerCliBuild)?;
+    let StepKind::Shell { run, .. } = &mut job.steps[at].kind else {
+        return Err("build is not a shell step".into());
+    };
+    Ok(run)
+}
+
+fn feature_mutations() -> Vec<(&'static str, Mutation)> {
+    vec![
+        ("build without no-default-features", |jobs, _| {
+            let run = ledger_build_run(jobs)?;
+            run.retain(|arg| arg != "--no-default-features");
+            Ok(())
+        }),
+        ("build without the ledger feature", |jobs, _| {
+            let run = ledger_build_run(jobs)?;
+            let at = run
+                .iter()
+                .position(|arg| arg == "--features")
+                .ok_or("no --features flag")?;
+            run.drain(at..=at + 1);
+            Ok(())
+        }),
+        ("build with the generator feature added", |jobs, _| {
+            let run = ledger_build_run(jobs)?;
+            let at = run
+                .iter()
+                .position(|arg| arg == "--features")
+                .ok_or("no --features flag")?;
+            "ledger-helper,generator".clone_into(&mut run[at + 1]);
+            Ok(())
+        }),
+        ("build with a second features flag", |jobs, _| {
+            let run = ledger_build_run(jobs)?;
+            run.extend(["--features".to_owned(), "generator".to_owned()]);
+            Ok(())
+        }),
+        ("build with the generator feature only", |jobs, _| {
+            let run = ledger_build_run(jobs)?;
+            let at = run
+                .iter()
+                .position(|arg| arg == "--features")
+                .ok_or("no --features flag")?;
+            "generator".clone_into(&mut run[at + 1]);
+            Ok(())
+        }),
+        ("build with all features", |jobs, _| {
+            let run = ledger_build_run(jobs)?;
+            run.push("--all-features".to_owned());
             Ok(())
         }),
     ]

@@ -18,6 +18,11 @@ test = false
 name = "qualification-diagnostics"
 path = "examples/qualification_diagnostics.rs"
 test = false
+required-features = ["generator"]
+
+[[test]]
+name = "ledger_helper_public"
+path = "tests/ledger_helper_public.rs"
 
 [[test]]
 name = "crate_release_prepare_pr_public"
@@ -26,44 +31,65 @@ path = "tests/crate_release_prepare_pr_public.rs"
 [[test]]
 name = "velnor_cli"
 path = "tests/velnor_cli.rs"
+required-features = ["generator"]
 
 [[test]]
 name = "api2026_pull_context_public"
 path = "tests/api2026_pull_context_public.rs"
+required-features = ["generator"]
 
 [[test]]
 name = "preview_source_selection_public"
 path = "tests/preview_source_selection_public.rs"
+required-features = ["generator"]
 
 [[test]]
 name = "candidate_freshness_public"
 path = "tests/candidate_freshness_public.rs"
+required-features = ["generator"]
 
 [[test]]
 name = "bun_private_repository_public"
 path = "tests/bun_private_repository_public.rs"
+required-features = ["generator"]
 
 [[test]]
 name = "bun_assets_handoff_public"
 path = "tests/bun_assets_handoff_public.rs"
+required-features = ["generator"]
 
 [[test]]
 name = "check_runtime_identity_public"
 path = "tests/check_runtime_identity_public.rs"
+required-features = ["generator"]
 
 [[test]]
 name = "review_completion_public"
 path = "tests/review_completion_public.rs"
+required-features = ["generator"]
 
 [[test]]
 name = "pin_mirror_public"
 path = "tests/pin_mirror_public.rs"
+required-features = ["generator"]
+
+[features]
+default = ["generator"]
+generator = [
+    "ledger-helper",
+    "dep:serde_json",
+    "dep:velnor-actions-orchestrator",
+    "dep:velnor-actions-freshness",
+    "dep:clap",
+]
+ledger-helper = ["dep:velnor-actions-contract"]
 
 [dependencies]
-serde_json = { workspace = true }
-velnor-actions-orchestrator = { version = "=0.1.73", path = "../velnor-actions-orchestrator" }
-velnor-actions-freshness = { version = "=0.1.73", path = "../velnor-actions-freshness" }
-clap = { version = "=4.6.7", features = ["derive"] }
+serde_json = { workspace = true, optional = true }
+velnor-actions-contract = { version = "=0.1.73", path = "../velnor-actions-contract", optional = true }
+velnor-actions-orchestrator = { version = "=0.1.73", path = "../velnor-actions-orchestrator", optional = true }
+velnor-actions-freshness = { version = "=0.1.73", path = "../velnor-actions-freshness", optional = true }
+clap = { version = "=4.6.7", features = ["derive"], optional = true }
 
 [lints]
 workspace = true

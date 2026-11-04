@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use velnor_actions_contract::staged_reads::read_staged_bytes_until;
 use crate::filesystem_owner::held_file::HeldFile;
 
 use super::{
@@ -9,9 +10,7 @@ use super::{
     handoff::{self, TaskInput},
     leaf_manifest::{self, PreviewLeafManifest},
 };
-use crate::{
-    OrchestratorError, internal::internal, retrieve_reports::staged_reads::read_staged_bytes_until,
-};
+use crate::{OrchestratorError, internal::internal};
 use serde::{Deserialize, Serialize};
 use std::{
     env,
@@ -60,7 +59,7 @@ pub fn acquire_release_leaves() -> Result<String, OrchestratorError> {
                 inputs: admitted.inputs,
             };
             let bytes = leaf_manifest::encode(&record)?;
-            crate::exclusive_write::write_exclusive_until(
+            velnor_actions_contract::exclusive_write::write_exclusive_until(
                 &temp.join(RECORD),
                 &bytes,
                 "preview_admission",
@@ -212,6 +211,6 @@ fn runner_temp() -> Result<PathBuf, OrchestratorError> {
         .canonicalize()
         .map_err(|_| internal("preview_runner_temp"))?;
     let root = temp.join("velnor");
-    crate::exclusive_write::create_dir_no_symlink(&temp, &root)?;
+    velnor_actions_contract::exclusive_write::create_dir_no_symlink(&temp, &root)?;
     Ok(root)
 }

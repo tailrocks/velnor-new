@@ -15,6 +15,7 @@ pub use checkout_history::CheckoutHistory;
 pub mod crate_job;
 pub mod dispatch;
 pub mod execute;
+pub mod group_ledger;
 pub mod ir;
 pub mod job_env;
 pub mod jobs;
@@ -72,8 +73,8 @@ pub use cache_access::{
 pub use cache_context::{
     ApiConclusion, CacheCapability, CacheDriver, CacheRestoreOutcome, CompilerAdapterV1,
     EffectiveJobBindingV1, ExecutionBranch, ExecutionContextV1, JobBindingV1, LaneContextV1,
-    MeasuredU64, ObservationGapCode, ObservationGapV1, SourceBindingV1, UnitLedgerV1, UnitOutcome,
-    UnitResultV1,
+    MeasuredU64, ObservationGapCode, ObservationGapV1, SourceBindingV1, UNIT_OBSERVATION_SUFFIX,
+    UnitLedgerV1, UnitOutcome, UnitResultV1,
 };
 pub use cache_identity::{CompatibilityV1, Gc1Family, GenerationId};
 pub use cache_ids::EntryCacheIds;

@@ -118,8 +118,8 @@ pub(crate) fn caller_repository(root: &Path) -> Result<String, crate::Orchestrat
 }
 
 pub(crate) fn caller_repository_matches(repository: &str, origin: &str) -> bool {
-    let Some(repository) = crate::origin::validate_repository_slug(repository) else {
+    let Some(repository) = velnor_actions_contract::validate_repository_slug(repository) else {
         return false;
     };
-    crate::origin::validate_repository_slug(origin).as_deref() == Some(repository.as_str())
+    velnor_actions_contract::validate_repository_slug(origin).as_deref() == Some(repository.as_str())
 }

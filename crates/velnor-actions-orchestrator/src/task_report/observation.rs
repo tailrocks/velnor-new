@@ -9,12 +9,13 @@ use velnor_actions_contract::{
     validate_task_report_id,
 };
 
+use velnor_actions_contract::workflow::UNIT_OBSERVATION_SUFFIX;
+
 use crate::OrchestratorError;
 use crate::internal::internal_contract;
 
 pub(crate) const UNIT_OBSERVATION_ENV: &str = "VELNOR_UNIT_OBSERVATION_JSON";
 pub(crate) const UNIT_OBSERVATION_SCHEMA: u32 = 1;
-pub(crate) const UNIT_OBSERVATION_SUFFIX: &str = ".observation.json";
 pub(crate) const MAX_UNIT_OBSERVATION_BYTES: u64 = 64 << 10;
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -282,9 +283,9 @@ pub(crate) fn stage_unit_observation_to(
         .join(&plan.run_key)
         .join(&entry.matrix_key)
         .join("tasks");
-    crate::exclusive_write::create_dir_no_symlink(runner_temp, &dir)?;
+    velnor_actions_contract::exclusive_write::create_dir_no_symlink(runner_temp, &dir)?;
     let path = dir.join(format!("{task_report_id}{UNIT_OBSERVATION_SUFFIX}"));
-    crate::exclusive_write::write_exclusive(&path, &bytes, "unit_observation")?;
+    velnor_actions_contract::exclusive_write::write_exclusive(&path, &bytes, "unit_observation")?;
     Ok(path)
 }
 
@@ -300,15 +301,15 @@ pub(crate) fn write_entry_reports(
         .join(&plan.run_key)
         .join(&entry.matrix_key);
     let task_files_dir = dir.join("tasks");
-    crate::exclusive_write::create_dir_no_symlink(runner_temp, &task_files_dir)?;
+    velnor_actions_contract::exclusive_write::create_dir_no_symlink(runner_temp, &task_files_dir)?;
     let matrix_bytes = canonical_json_bytes(matrix).map_err(internal_contract)?;
     let task_bytes = canonical_json_bytes(task).map_err(internal_contract)?;
-    crate::exclusive_write::write_exclusive(
+    velnor_actions_contract::exclusive_write::write_exclusive(
         &dir.join("matrix-report.json"),
         &matrix_bytes,
         "report",
     )?;
-    crate::exclusive_write::write_exclusive(
+    velnor_actions_contract::exclusive_write::write_exclusive(
         &task_files_dir.join(format!("{}.json", task.task_report_id)),
         &task_bytes,
         "report",

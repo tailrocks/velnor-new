@@ -6,13 +6,10 @@ use std::{
     path::Path,
 };
 
-use velnor_actions_contract::workflow::TaskExecutionManifestV1;
-use velnor_actions_contract::{ExecuteTaskRef, JobDisposition, Plan, task_report_id_for_task};
+use crate::workflow::TaskExecutionManifestV1;
+use crate::{ExecuteTaskRef, JobDisposition, Plan, task_report_id_for_task};
 
-use crate::{
-    OrchestratorError,
-    internal::{internal, internal_contract},
-};
+use crate::helper_error::HelperError;
 
 use super::super::emit_read::{read_staged_report, read_staged_sidecar, unit_result_for_report};
 use super::{EmitEnv, OrderedUnits, obligation_digest, split_job_key};
@@ -24,14 +21,14 @@ pub(super) fn build_ordered_results(
     emit: &EmitEnv,
     run_dir: &Path,
     finished_secs: u64,
-) -> Result<OrderedUnits, OrchestratorError> {
+) -> Result<OrderedUnits, HelperError> {
     let (group, _) = split_job_key(&emit.job_key)?;
     if !plan
         .jobs
         .iter()
         .any(|job| job.job_id == group && job.disposition == JobDisposition::Run)
     {
-        return Err(internal("ledger_group_not_selected"));
+        return Err(HelperError::internal("ledger_group_not_selected"));
     }
     let mut results = BTreeMap::new();
     for entry in &plan.matrix.include {
@@ -54,13 +51,12 @@ pub(super) fn build_ordered_results(
         }
         let tasks_dir = run_dir.join(&entry.matrix_key).join("tasks");
         for unit_id in units {
-            let task = manifest
-                .tasks
-                .get(&unit_id)
-                .ok_or_else(|| internal(&format!("task_without_manifest_entry:{unit_id}")))?;
+            let task = manifest.tasks.get(&unit_id).ok_or_else(|| {
+                HelperError::internal(&format!("task_without_manifest_entry:{unit_id}"))
+            })?;
             let digest = obligation_digest(plan, &unit_id)?;
             let report_id = task_report_id_for_task(run_key, &entry.matrix_key, digest)
-                .map_err(internal_contract)?;
+                .map_err(HelperError::from)?;
             let staged = read_staged_report(&tasks_dir, &report_id)?;
             let sidecar = read_staged_sidecar(&tasks_dir, &report_id)?;
             let result = unit_result_for_report(
@@ -72,12 +68,12 @@ pub(super) fn build_ordered_results(
                 finished_secs,
             )?;
             if results.insert(unit_id, (result, sidecar)).is_some() {
-                return Err(internal("duplicate_group_unit"));
+                return Err(HelperError::internal("duplicate_group_unit"));
             }
         }
     }
     if results.is_empty() {
-        return Err(internal("matrix_key_not_in_group"));
+        return Err(HelperError::internal("matrix_key_not_in_group"));
     }
     Ok(results.into_values().unzip())
 }
