@@ -144,10 +144,10 @@ fn check_access_modes() -> Result<(), Box<dyn Error>> {
             return Err(fail("trusted writer lost its write capability"));
         }
         let gate = writer.condition();
-        if !writer.admits(Some(&gate)) || writer.admits(None) {
+        if !writer.admits("writer", Some(&gate)) || writer.admits("writer", None) {
             return Err(fail("writer gate lost its boundary"));
         }
-        if writer.admits(Some("github.event_name == 'push'")) {
+        if writer.admits("writer", Some("github.event_name == 'push'")) {
             return Err(fail("writer gate admitted a bare push"));
         }
     }

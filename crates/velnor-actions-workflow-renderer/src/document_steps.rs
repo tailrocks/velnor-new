@@ -163,6 +163,9 @@ fn shell_step_to_yaml(
         steps::scan_for_private_subcommands(condition)?;
         entries.push(("if".to_owned(), Yaml::str(condition.clone())));
     }
+    if step.role == Some(velnor_actions_contract::StepRole::MbxStats) {
+        entries.push(("continue-on-error".to_owned(), Yaml::Bool(true)));
+    }
     if !composite && step.role == Some(velnor_actions_contract::StepRole::AcquireVelnor) {
         entries.push((
             "timeout-minutes".to_owned(),
@@ -227,7 +230,6 @@ pub(crate) fn step_to_yaml(
                 velnor_actions_contract::StepRole::CargoSourcesSave
                     | velnor_actions_contract::StepRole::ToolsCacheSave
                     | velnor_actions_contract::StepRole::TofuProvidersSave
-                    | velnor_actions_contract::StepRole::MbxBundleSave
                     | velnor_actions_contract::StepRole::FamilySave
             )
         ) {

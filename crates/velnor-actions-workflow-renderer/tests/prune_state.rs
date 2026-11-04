@@ -35,7 +35,8 @@ fn sorted(mut ids: Vec<u32>) -> Vec<u32> {
 }
 
 #[test]
-fn prune_keeps_newest_complete_and_everything_newer_per_root() -> Result<(), Box<dyn Error>> {
+fn prune_keeps_the_newest_attested_generation_and_everything_newer_per_root()
+-> Result<(), Box<dyn Error>> {
     let mut ledger = Ledger::new();
     let g1 = ledger.add(901, MAIN, &trusted("union", "root", 'a', '1'));
     let junk_old = ledger.add(902, MAIN, "velnor-v4-state-trusted-union-root-junk");
@@ -51,6 +52,8 @@ fn prune_keeps_newest_complete_and_everything_newer_per_root() -> Result<(), Box
         MAIN,
         &trusted("union", "crates-velnor-runner", 'a', '2'),
     );
+    ledger.attest(g3);
+    ledger.attest(h2);
     let no_payload = ledger.add(
         907,
         MAIN,
@@ -108,6 +111,8 @@ fn prune_groups_by_trust_unit_root_only() -> Result<(), Box<dyn Error>> {
     ledger.add(809, "refs/pull/7/merge", &trusted("union", "y", 'a', '3'));
     let x2 = ledger.add(810, MAIN, &trusted("union", "x", 'b', '2'));
     let y2 = ledger.add(811, MAIN, &trusted("union", "y", 'b', '2'));
+    ledger.attest(x2);
+    ledger.attest(y2);
     let hostile_x = format!(
         "velnor-v4-state-trusted-union-s256-x-s256-{}-s256-{}-s256-{}",
         hash('f'),
@@ -135,7 +140,8 @@ fn prune_warns_and_exits_zero_on_gh_failure() -> Result<(), Box<dyn Error>> {
     let mut ledger = Ledger::new();
     let a1 = ledger.add(701, MAIN, &trusted("union", "root", 'a', '1'));
     let a2 = ledger.add(702, MAIN, &trusted("union", "root", 'b', '2'));
-    ledger.add(703, MAIN, &trusted("union", "root", 'c', '3'));
+    let a3 = ledger.add(703, MAIN, &trusted("union", "root", 'c', '3'));
+    ledger.attest(a3);
     let list_down = GhFake::new(&ledger)?.failing_list();
     let run = list_down.run_prune(MAIN)?;
     assert_eq!(run.status, Some(0), "stdout: {}", run.stdout);
@@ -212,6 +218,71 @@ fn retired_state_entries_are_all_pruned_and_current_ones_kept() -> Result<(), Bo
         sorted(run.attempted),
         retired,
         "retired v1, v2 and v3 state entries must all be deleted and v4 kept"
+    );
+    Ok(())
+}
+
+#[test]
+fn prune_deletes_nothing_when_only_the_older_generation_is_attested() -> Result<(), Box<dyn Error>>
+{
+    let mut ledger = Ledger::new();
+    let k1 = ledger.add(301, MAIN, &trusted("union", "root", 'a', '1'));
+    ledger.add(302, MAIN, &trusted("union", "root", 'b', '2'));
+    ledger.add(303, MAIN, &trusted("union", "root", 'c', '3'));
+    ledger.attest(k1);
+    let run = GhFake::new(&ledger)?.run_prune(MAIN)?;
+    assert_eq!(run.status, Some(0), "stdout: {}", run.stdout);
+    assert!(
+        run.attempted.is_empty(),
+        "the attested generation {k1} must survive two unattested successors: deleted {:?}",
+        run.attempted
+    );
+    Ok(())
+}
+
+#[test]
+fn prune_deletes_only_what_is_older_than_the_newest_attested_generation()
+-> Result<(), Box<dyn Error>> {
+    let mut ledger = Ledger::new();
+    let k1 = ledger.add(301, MAIN, &trusted("union", "root", 'a', '1'));
+    let k2 = ledger.add(302, MAIN, &trusted("union", "root", 'b', '2'));
+    ledger.add(303, MAIN, &trusted("union", "root", 'c', '3'));
+    ledger.add(304, MAIN, &trusted("union", "root", 'd', '4'));
+    ledger.attest(k1);
+    ledger.attest(k2);
+    let run = GhFake::new(&ledger)?.run_prune(MAIN)?;
+    assert_eq!(run.status, Some(0), "stdout: {}", run.stdout);
+    assert_eq!(
+        run.attempted,
+        [k1],
+        "302 anchors the group; 303 and 304 are newer and stay"
+    );
+    Ok(())
+}
+
+#[test]
+fn prune_deletes_nothing_in_a_group_without_a_verified_anchor() -> Result<(), Box<dyn Error>> {
+    let mut none = Ledger::new();
+    for (id, compat) in [(401, 'a'), (402, 'b'), (403, 'c')] {
+        none.add(id, MAIN, &trusted("union", "root", compat, '1'));
+    }
+    let run = GhFake::new(&none)?.run_prune(MAIN)?;
+    assert_eq!(run.status, Some(0), "stdout: {}", run.stdout);
+    assert!(run.attempted.is_empty(), "deleted {:?}", run.attempted);
+
+    let mut beyond_cap = Ledger::new();
+    let oldest = beyond_cap.add(500, MAIN, &trusted("union", "root", 'a', '1'));
+    beyond_cap.attest(oldest);
+    for (id, compat) in [(501, 'b'), (502, 'c'), (503, 'd'), (504, 'e'), (505, 'f')] {
+        beyond_cap.add(id, MAIN, &trusted("union", "root", compat, '1'));
+    }
+    beyond_cap.add(506, MAIN, &trusted("union", "root", 'a', '2'));
+    let run = GhFake::new(&beyond_cap)?.run_prune(MAIN)?;
+    assert_eq!(run.status, Some(0), "stdout: {}", run.stdout);
+    assert!(
+        run.attempted.is_empty(),
+        "an anchor beyond the fifth entry must not be searched for: deleted {:?}",
+        run.attempted
     );
     Ok(())
 }

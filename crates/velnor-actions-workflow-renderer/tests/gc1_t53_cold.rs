@@ -21,31 +21,16 @@ fn gc1_t53_cold_trusted_push_publishes_first_entry() -> Result<(), Box<dyn Error
     if scene.output_value("exported")? != "true" {
         return Err(fail("cold export must admit the produced snapshot"));
     }
-    if !scene
-        .runner
-        .join("velnor/state-publication.staged")
-        .is_file()
-    {
-        return Err(fail("cold export must stage its attestation"));
-    }
     if scene
         .runner
-        .join("velnor/state-publication.record")
+        .join("velnor/state-publication.staged")
         .exists()
+        || scene
+            .runner
+            .join("velnor/state-publication.record")
+            .exists()
     {
-        return Err(fail("cold export must not write the publication record"));
-    }
-    require(
-        &scene.record()?,
-        "state snapshot published (",
-        "cold record",
-    )?;
-    if !scene
-        .runner
-        .join("velnor/state-publication.record")
-        .is_file()
-    {
-        return Err(fail("record must write the publication record"));
+        return Err(fail("cold export must leave no publication evidence"));
     }
     scene.finish()
 }

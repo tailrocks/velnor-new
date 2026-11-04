@@ -18,7 +18,7 @@ pub(super) struct PartialWorkflow {
     max_parallel_jobs: Option<u32>,
     plan_timeout_minutes: Option<u16>,
     crate_timeout_minutes: Option<u16>,
-    dependency_seed_timeout_minutes: Option<u16>,
+    state_producer_timeout_minutes: Option<u16>,
     mise_quiet: Option<bool>,
     checkout_lfs: Option<bool>,
     #[serde(default)]
@@ -57,8 +57,8 @@ impl PartialWorkflow {
             crate_timeout_minutes: self
                 .crate_timeout_minutes
                 .unwrap_or_else(velnor_actions_contract::config::default_crate_timeout_minutes),
-            dependency_seed_timeout_minutes: self.dependency_seed_timeout_minutes.unwrap_or_else(
-                velnor_actions_contract::config::default_dependency_seed_timeout_minutes,
+            state_producer_timeout_minutes: self.state_producer_timeout_minutes.unwrap_or_else(
+                velnor_actions_contract::config::default_state_producer_timeout_minutes,
             ),
             mise_quiet: self.mise_quiet.unwrap_or(true),
             checkout_lfs: self.checkout_lfs.unwrap_or(false),

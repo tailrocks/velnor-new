@@ -294,10 +294,10 @@ fn product_bins(
             [] => return Err(invalid("binary_missing")),
             _ => return Err(invalid("ambiguous_binary_target")),
         };
-        let _ = path;
         result.push(TargetRecord {
             kind: "bin".to_owned(),
             name: name.clone(),
+            src_path: path,
             test: false,
             doctest: false,
             required_features,

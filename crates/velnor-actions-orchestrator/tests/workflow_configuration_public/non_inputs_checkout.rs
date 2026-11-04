@@ -23,14 +23,15 @@ enum Kind {
     Other,
 }
 
-const RUST_PREFIXES: [&str; 5] = ["rust-", "check-", "suite-", "dependency-seed", "msrv"];
+const RUST_PREFIXES: [&str; 5] = ["rust-", "check-", "suite-", "state-producer-", "msrv"];
 
 const RUST_IDS: [&str; 3] = ["ledger-cli", "cargo-deny", "cargo-machete"];
 
-const OTHER_PREFIXES: [&str; 7] = [
+const OTHER_PREFIXES: [&str; 8] = [
     "tofu-",
     "tools-producer-",
     "providers-producer-",
+    "state-seal-",
     "bun-",
     "dbt-",
     "image-",
@@ -160,7 +161,7 @@ fn every_rust_job_checkout_excludes_non_inputs_and_other_jobs_do_not() -> TestRe
         "Rust:cargo-machete",
         "Rust:suite-",
         "Rust:check-",
-        "Rust:dependency-seed",
+        "Rust:state-producer-",
         "Other:plan",
         "Other:required",
         "Other:tools-producer-",

@@ -18,7 +18,7 @@ use super::workflow_configuration_fixture;
 const CI_PATH: &str = ".github/workflows/ci.yml";
 const QUALIFICATION_PATH: &str = ".github/workflows/qualification.yml";
 const SOURCES_PRODUCER: &str = "sources-producer";
-const STATE_SEAL_WRITER: &str = "state-canary-seal";
+const STATE_SEAL_PREFIX: &str = "state-seal-";
 const QUALIFICATION_WRITERS: [&str; 4] = [
     "cache-scale-set",
     "empty-cache-hosted",
@@ -116,7 +116,7 @@ fn expected_writer(path: &str, id: &str) -> bool {
     id.starts_with("tools-producer-")
         || id.starts_with("providers-producer-")
         || id == SOURCES_PRODUCER
-        || id == STATE_SEAL_WRITER
+        || id.starts_with(STATE_SEAL_PREFIX)
 }
 
 fn workflow_files(files: &Files) -> impl Iterator<Item = (&String, &String)> {

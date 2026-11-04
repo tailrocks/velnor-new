@@ -13,6 +13,7 @@ pub const METADATA_FORMAT_VERSION: u32 = 1;
 pub struct TargetRecord {
     pub kind: String,
     pub name: String,
+    pub src_path: String,
     pub test: bool,
     pub doctest: bool,
     pub required_features: Vec<String>,
@@ -195,6 +196,7 @@ fn convert_package(
             targets.push(TargetRecord {
                 kind: kind.clone(),
                 name: target.name.clone(),
+                src_path: relativize_file(repo_root, &target.src_path).0,
                 test: target.test,
                 doctest: target.doctest,
                 required_features: required,
@@ -252,18 +254,28 @@ fn package_v1_task_owner(
     }
 }
 
+fn relative_to_root(repo_root: &Path, absolute: &str) -> Option<std::path::PathBuf> {
+    let path = Path::new(absolute);
+    if let Ok(relative) = path.strip_prefix(repo_root) {
+        return Some(relative.to_path_buf());
+    }
+    let root = repo_root.canonicalize().ok()?;
+    let target = path.canonicalize().ok()?;
+    target.strip_prefix(root).ok().map(Path::to_path_buf)
+}
+
 fn relativize_file(repo_root: &Path, absolute: &str) -> (String, bool) {
-    match Path::new(absolute).strip_prefix(repo_root) {
-        Ok(relative) => (posix(relative), false),
-        Err(_) => (absolute.replace('\\', "/"), true),
+    match relative_to_root(repo_root, absolute) {
+        Some(relative) => (posix(&relative), false),
+        None => (absolute.replace('\\', "/"), true),
     }
 }
 
 fn relativize_dir(repo_root: &Path, absolute: &str, hint: &str) -> Result<String, MetadataError> {
-    match Path::new(absolute).strip_prefix(repo_root) {
-        Ok(relative) if relative.as_os_str().is_empty() => Ok(String::new()),
-        Ok(relative) => Ok(posix(relative)),
-        Err(_) => Err(MetadataError::OutsideRoot {
+    match relative_to_root(repo_root, absolute) {
+        Some(relative) if relative.as_os_str().is_empty() => Ok(String::new()),
+        Some(relative) => Ok(posix(&relative)),
+        None => Err(MetadataError::OutsideRoot {
             manifest: hint.to_owned(),
             path: absolute.to_owned(),
         }),

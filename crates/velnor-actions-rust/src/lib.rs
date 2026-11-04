@@ -29,6 +29,7 @@ pub mod release_config;
 pub mod release_error;
 pub mod release_facts;
 pub mod release_graph;
+mod release_manifest_dependency;
 pub mod release_products;
 pub mod release_projection;
 pub mod release_select;
@@ -39,6 +40,7 @@ pub mod stability;
 mod task_identity;
 pub mod tasks;
 pub mod toolfiles;
+mod tracked_manifest;
 
 pub use cargo_env::{DENY_WARNINGS, RUSTDOCFLAGS_ENV, cargo_payload_env};
 pub use closure::{
@@ -83,7 +85,10 @@ pub use release_config::{
 };
 pub use release_error::ReleaseError;
 pub use release_facts::{DepFact, DepSource, PublishSetting, ReleaseFacts};
-pub use release_graph::{PackagingEdge, PublicationGraph, RegistryState, publication_graph};
+pub use release_graph::{
+    PackagingEdge, PublicationGraph, RegistryPackage, RegistryState, ReleasePlan, plan_release,
+    publication_graph,
+};
 pub use release_products::{
     ResolvedReleaseProducts, release_version_policy, resolve_release_products,
 };
@@ -110,3 +115,5 @@ pub use toolfiles::{
 };
 
 pub const STACK_ID: &str = "rust";
+
+pub use tracked_manifest::tracked_manifest_in_source;

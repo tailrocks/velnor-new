@@ -192,13 +192,7 @@ pub enum StepRole {
 
     MbxProducerMark,
 
-    MbxSeedBuild,
-
     MbxBundleExport,
-
-    MbxBundleSave,
-
-    MbxBundleRecord,
 
     FamilyKeys,
 
@@ -236,8 +230,6 @@ pub enum StepRole {
 
     StateSelect,
 
-    StateSealBuild,
-
     StateSealUpload,
 
     StateSealDownload,
@@ -250,7 +242,17 @@ pub enum StepRole {
 
     StateSealSave,
 
+    StateSealAdmit,
+
+    StateSealRetire,
+
+    StateProduced,
+
+    StateSkeleton,
+
+    StateSkeletonRestore,
     NonInputGuard,
+    MbxStats,
 }
 
 fn valid_bun_assets_handoff(kind: &StepKind) -> bool {
@@ -300,7 +302,6 @@ impl StepRole {
             Self::StateSealAttest => action_has_prefix_for_kind(kind, "actions/attest@"),
             Self::ToolsCacheSave
             | Self::CargoSourcesSave
-            | Self::MbxBundleSave
             | Self::StateSealSave
             | Self::FamilySave => action_has_prefix_for_kind(kind, "actions/cache/save@"),
             Self::ToolsCacheIdentity => valid_tools_cache_identity(kind),
@@ -346,6 +347,7 @@ impl StepRole {
             // No pinned id: the writer's queue-slot recheck re-runs the
             // bundle restore without an id (a job carries one canonical
             // restore id), like the other restore roles below.
+            Self::MbxBundleImport => Some(StepId::MbxBundleImport),
             Self::MbxBundleExport => Some(StepId::MbxBundleExport),
             Self::FamilyKeys => Some(StepId::FamilyKeys),
             Self::LedgerCliPublish => Some(StepId::LedgerCliPublish),
@@ -354,6 +356,9 @@ impl StepRole {
             Self::StateSealSubject => Some(StepId::StateSealSubject),
             Self::StateSealBind => Some(StepId::StateSealBind),
             Self::StateSealUpload => Some(StepId::StateSealUpload),
+            Self::StateSealAdmit => Some(StepId::StateSealAdmit),
+            Self::StateSealSave => Some(StepId::StateSealSave),
+            Self::StateProduced => Some(StepId::StateProduced),
             _ => None,
         }
     }
@@ -371,6 +376,7 @@ impl StepRole {
             StepId::DepsToken => Self::PrivateTokenMint,
             StepId::MbxBundleKey => Self::MbxBundleKey,
             StepId::MbxBundleRestore => Self::MbxBundleRestore,
+            StepId::MbxBundleImport => Self::MbxBundleImport,
             StepId::MbxBundleExport => Self::MbxBundleExport,
             StepId::FamilyKeys => Self::FamilyKeys,
             StepId::LedgerCliPublish => Self::LedgerCliPublish,
@@ -379,6 +385,9 @@ impl StepRole {
             StepId::StateSealSubject => Self::StateSealSubject,
             StepId::StateSealBind => Self::StateSealBind,
             StepId::StateSealUpload => Self::StateSealUpload,
+            StepId::StateSealAdmit => Self::StateSealAdmit,
+            StepId::StateSealSave => Self::StateSealSave,
+            StepId::StateProduced => Self::StateProduced,
             StepId::FamilySizeBunInstall
             | StepId::FamilySizePlaywrightBrowsers
             | StepId::FamilySizeDbtPackages

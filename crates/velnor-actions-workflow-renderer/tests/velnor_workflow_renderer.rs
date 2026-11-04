@@ -41,11 +41,17 @@ mod gc1_workflow_cases_common;
 mod gc1_workflow_cases_preserve;
 mod gc1_workflow_cases_reject;
 #[cfg(target_os = "linux")]
+mod state_round_trip;
+mod state_v4_admit;
+mod state_v4_attest_save;
+mod state_v4_bind;
+#[cfg(target_os = "linux")]
 mod state_v4_bounds;
 mod state_v4_key;
 mod state_v4_pack;
 #[cfg(target_os = "linux")]
 mod state_v4_packer;
+mod state_v4_producer;
 mod state_v4_restore;
 mod state_v4_seal;
 mod state_v4_select;

@@ -3,8 +3,8 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::workflow::crate_job::SEED_JOB_ID_PREFIX;
 use velnor_actions_contract::workflow::ledger_cli::LEDGER_CLI_JOB_ID;
+use velnor_actions_contract::workflow::state_seal::STATE_PRODUCER_JOB_ID_PREFIX;
 use velnor_actions_contract::{
     CRATE_JOB_ID_PREFIX, Job, NonInputs, Step, StepKind, StepRole, ValidatorKind,
 };
@@ -27,7 +27,7 @@ pub fn consumes_rust_sources(job_id: &str) -> bool {
     job_id.starts_with(CRATE_JOB_ID_PREFIX)
         || job_id.starts_with(NAMED_CHECK_JOB_ID_PREFIX)
         || job_id.starts_with(SUITE_JOB_ID_PREFIX)
-        || job_id.starts_with(SEED_JOB_ID_PREFIX)
+        || job_id.starts_with(STATE_PRODUCER_JOB_ID_PREFIX)
         || [
             LEDGER_CLI_JOB_ID,
             ValidatorKind::CargoDeny.job_id(),

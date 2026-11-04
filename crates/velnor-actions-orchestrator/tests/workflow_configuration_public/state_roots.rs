@@ -40,7 +40,7 @@ fn snapshot_bindings(jobs: &BTreeMap<String, Job>) -> BTreeSet<(String, String)>
         .collect()
 }
 
-fn plan_key_script(jobs: &BTreeMap<String, Job>) -> Result<String, Box<dyn Error>> {
+pub(super) fn plan_key_script(jobs: &BTreeMap<String, Job>) -> Result<String, Box<dyn Error>> {
     let step = jobs
         .get("plan")
         .and_then(|plan| plan.steps.iter().find(|s| s.id == Some(StepId::CacheKeys)))
@@ -138,6 +138,9 @@ fn state_snapshots(
         .env("RUNNER_TEMP", temp.path())
         .env("GITHUB_WORKSPACE", repo)
         .env("GITHUB_OUTPUT", &output)
+        .env("ImageOS", "ubuntu24")
+        .env("VELNOR_MBX_BUNDLE_VERSION", "1.2.3")
+        .env("VELNOR_MBX_BUNDLE_TOOLCHAIN", "1.89.0")
         .output()?;
     if !run.status.success() {
         return Err(format!(
@@ -170,7 +173,7 @@ fn moved_roots(
         .collect()
 }
 
-fn declared_input_repo() -> Result<tempfile::TempDir, Box<dyn Error>> {
+pub(super) fn declared_input_repo() -> Result<tempfile::TempDir, Box<dyn Error>> {
     let repo = mbx_repo(false)?;
     add_independent_mbx_package(repo.path(), "other", "other")?;
     write_nextest_task(&repo.path().join("other"))?;
@@ -256,6 +259,36 @@ fn state_snapshot_moves_with_the_lane_task_digest() -> Result<(), Box<dyn Error>
     let got = moved_roots(&names, &base, &after);
     if got != ["crates/nested", "other"] {
         return Err(format!("a changed task digest moved {got:?}").into());
+    }
+    Ok(())
+}
+
+#[test]
+fn state_snapshot_follows_targets_outside_the_package_directory() -> Result<(), Box<dyn Error>> {
+    let repo = declared_input_repo()?;
+    let root = repo.path();
+    let manifest = root.join("crates/nested/Cargo.toml");
+    let mut text = fs::read_to_string(&manifest)?;
+    text.push_str("\n[lib]\npath = \"../shared/lib.rs\"\n");
+    fs::write(&manifest, text)?;
+    fs::create_dir_all(root.join("crates/shared"))?;
+    fs::write(root.join("crates/shared/lib.rs"), "pub fn shared() {}\n")?;
+    let jobs = finalized_jobs(&prepare(root)?)?;
+    let names = snapshot_names(&jobs);
+    let base = state_snapshots(&jobs, root)?;
+    for (file, content, expected) in [
+        (
+            "crates/shared/lib.rs",
+            "pub fn shared() { let _ = 1; }\n",
+            vec!["crates/nested"],
+        ),
+        ("docs/guide.md", "words\n", vec![]),
+    ] {
+        let after = edit_and_measure(&jobs, root, file, content)?;
+        let got = moved_roots(&names, &base, &after);
+        if got != expected {
+            return Err(format!("editing {file} moved {got:?}, wanted {expected:?}").into());
+        }
     }
     Ok(())
 }

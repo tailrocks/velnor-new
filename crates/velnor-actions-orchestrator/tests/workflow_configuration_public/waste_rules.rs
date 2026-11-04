@@ -82,7 +82,7 @@ fn prepared_with_extra_step(
         .ir
         .jobs
         .iter()
-        .find(|(id, job)| id.starts_with("rust-") && !job.is_dependency_seed())
+        .find(|(id, job)| id.starts_with("rust-") && job.producer_kind().is_none())
         .map(|(id, _)| id.clone())
         .ok_or("no crate job in the prepared workflow")?;
     prepared
@@ -114,10 +114,9 @@ fn render_rejects_a_hand_authored_tools_cache_step() -> Result<(), Box<dyn Error
     Ok(())
 }
 
-const SAVE_ROLES: [StepRole; 5] = [
+const SAVE_ROLES: [StepRole; 4] = [
     StepRole::ToolsCacheSave,
     StepRole::CargoSourcesSave,
-    StepRole::MbxBundleSave,
     StepRole::FamilySave,
     StepRole::TofuProvidersSave,
 ];

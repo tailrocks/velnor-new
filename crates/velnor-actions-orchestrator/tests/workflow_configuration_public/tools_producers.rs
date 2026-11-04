@@ -8,10 +8,10 @@ use velnor_actions_contract::workflow::step_identity::{
     TOOLS_CACHE_IDENTITY_DIGEST_INPUT, ToolsRestoreForm,
 };
 use velnor_actions_contract::workflow::{
-    DEPENDENCY_SEED_JOB_CONDITION, ProducerKind, RUST_VERIFIER_USES,
+    ProducerKind, RUST_VERIFIER_USES, SOURCES_PRODUCER_JOB_ID,
 };
 use velnor_actions_contract::{
-    Job, REQUIRED_JOB_ID, Step, StepKind, StepRole, WorkflowIr, WorkflowPolicy,
+    CacheWriter, Job, REQUIRED_JOB_ID, Step, StepKind, StepRole, WorkflowIr, WorkflowPolicy,
 };
 use velnor_actions_orchestrator::{finalized_jobs, prepare, render_staged_tree};
 
@@ -63,10 +63,14 @@ pub(super) fn is_upload(step: &Step) -> bool {
 fn assert_producer_shape(id: &str, job: &Job) {
     assert_eq!(
         job.condition.as_deref(),
-        Some(DEPENDENCY_SEED_JOB_CONDITION),
+        Some(CacheWriter::ToolsProducer.condition().as_str()),
         "{id}"
     );
-    assert!(job.needs.is_empty(), "{id} needs {:?}", job.needs);
+    assert!(
+        job.needs.is_empty() || job.needs == [SOURCES_PRODUCER_JOB_ID],
+        "{id} needs {:?}",
+        job.needs
+    );
     for step in &job.steps {
         assert!(
             !matches!(step.kind, StepKind::TaskExecution { .. })

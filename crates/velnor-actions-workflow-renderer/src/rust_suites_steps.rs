@@ -46,14 +46,6 @@ pub(super) fn compile_driver_steps(spec: &RustSuitesRenderSpec) -> Result<Vec<St
     Ok(steps.unwrap_or_default())
 }
 
-pub(super) fn producer_mark_steps(spec: &RustSuitesRenderSpec) -> Result<Vec<Step>, RenderError> {
-    if spec.compile_driver == CompileDriver::Mbx {
-        Ok(vec![steps::mbx_producer_mark_step()?])
-    } else {
-        Ok(Vec::new())
-    }
-}
-
 fn verify_env() -> BTreeMap<String, String> {
     BTreeMap::from([
         ("RUSTUP_HOME".to_owned(), RUSTUP_HOME_EXPR.to_owned()),

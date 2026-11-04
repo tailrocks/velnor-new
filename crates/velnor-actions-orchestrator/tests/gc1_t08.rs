@@ -10,9 +10,8 @@ use velnor_actions_contract::ids::{
     matrix_id_for_task_group, matrix_key_for_id, task_id_for_internal,
 };
 use velnor_actions_contract::workflow::crate_job::{
-    CrateGroupPlan, CrateJob, CrateObligation, MAX_GROUP_UNITS, SEED_JOB_ID_PREFIX,
-    TOOLS_PRODUCER_JOB_ID_PREFIX, group_timeout_for, is_seed_job_id, task_digest_for_execution,
-    validate_group_needs,
+    CrateGroupPlan, CrateJob, CrateObligation, MAX_GROUP_UNITS, TOOLS_PRODUCER_JOB_ID_PREFIX,
+    group_timeout_for, is_producer_job_id, task_digest_for_execution, validate_group_needs,
 };
 use velnor_actions_contract::workflow::jobs::crate_display_name;
 
@@ -129,9 +128,9 @@ fn gc1_t08_preserves_contract() -> Result<(), Box<dyn Error>> {
     check_same_units_and_commands()?;
     check_group_needs()?;
     check_grouped_deadlines()?;
-    if !is_seed_job_id(SEED_JOB_ID_PREFIX)
-        || !is_seed_job_id("dependency-seed-workspace")
-        || is_seed_job_id("rust-demo")
+    if !is_producer_job_id("state-producer-root")
+        || !is_producer_job_id("state-seal-root")
+        || is_producer_job_id("rust-demo")
     {
         return Err(io::Error::other("seed job guard misclassifies ids").into());
     }
@@ -243,8 +242,8 @@ fn check_rejects_bad_roots() -> Result<(), Box<dyn Error>> {
 fn check_rejects_seed_race() -> Result<(), Box<dyn Error>> {
     let job = fixture_job()?;
     for seed in [
-        SEED_JOB_ID_PREFIX.to_owned(),
-        "dependency-seed-workspace".to_owned(),
+        "state-producer-root".to_owned(),
+        "state-seal-root".to_owned(),
         format!("{TOOLS_PRODUCER_JOB_ID_PREFIX}0123abcd"),
     ] {
         if validate_group_needs(&["plan".to_owned(), seed.clone()], &job.job_id).is_ok() {

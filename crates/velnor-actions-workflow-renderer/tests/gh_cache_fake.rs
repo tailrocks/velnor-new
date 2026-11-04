@@ -31,11 +31,24 @@ case "$1 $2" in
   [ -z "$GH_FAIL_LIST" ] || exit 1
   flag=-k1,1nr
   [ "$order" = desc ] || flag=-k1,1n
-  awk -F'\t' -v p="$key" -v r="$ref" 'index($2,p)==1 && (r=="" || $3==r) { print $4 "\t" $1 "\t" $2 }' "$GH_FIXTURE" | sort -t "$tab" $flag | head -n "$limit" | cut -f2,3
+  awk -F'\t' -v p="$key" -v r="$ref" 'index($2,p)==1 && (r=="" || $3==r) { print $4 "\t" $1 "\t" $2 "\t" 100 }' "$GH_FIXTURE" | sort -t "$tab" $flag | head -n "$limit" | cut -f2,3,4
   ;;
 "cache delete")
   echo "$3" >> "$GH_DELETED"
   case " $GH_FAIL_DELETE " in *" $3 "*) exit 1;; esac
+  ;;
+"attestation verify")
+  file=$3
+  shift 3
+  repo=; signer=; sref=; pred=
+  while [ $# -gt 0 ]; do
+    case "$1" in -R) repo=$2;; --signer-workflow) signer=$2;; --source-ref) sref=$2;; --predicate-type) pred=$2;; esac
+    shift 2
+  done
+  [ "$repo" = "$GITHUB_REPOSITORY" ] && [ "$signer" = "$GITHUB_REPOSITORY/.github/workflows/ci.yml" ] && [ "$sref" = "$GITHUB_REF" ] && [ "$pred" = "https://velnor.dev/attestation/state-seal/v1" ] || exit 1
+  read -r skey sid ssize < "$file"
+  case " $GH_ATTESTED " in *" $sid "*) exit 0;; esac
+  exit 1
   ;;
 *) exit 99;;
 esac
@@ -43,11 +56,20 @@ esac
 
 pub(crate) struct Ledger {
     rows: Vec<(u32, String, String)>,
+    attested: Vec<u32>,
 }
 
 impl Ledger {
     pub(crate) fn new() -> Self {
-        Self { rows: Vec::new() }
+        Self {
+            rows: Vec::new(),
+            attested: Vec::new(),
+        }
+    }
+
+    pub(crate) fn attest(&mut self, id: u32) -> u32 {
+        self.attested.push(id);
+        id
     }
 
     pub(crate) fn add(&mut self, id: u32, git_ref: &str, key: &str) -> u32 {
@@ -66,6 +88,7 @@ pub(crate) struct GhFake {
     dir: TempDir,
     fail_list: bool,
     fail_delete: Vec<u32>,
+    attested: Vec<u32>,
 }
 
 impl GhFake {
@@ -83,6 +106,7 @@ impl GhFake {
             dir,
             fail_list: false,
             fail_delete: Vec::new(),
+            attested: ledger.attested.clone(),
         })
     }
 
@@ -106,6 +130,19 @@ impl GhFake {
             .env("RUNNER_TEMP", root)
             .env("GH_FIXTURE", root.join("fixture"))
             .env("GH_DELETED", root.join("deleted"))
+            .env("GITHUB_REPOSITORY", "acme/app")
+            .env(
+                "GITHUB_WORKFLOW_REF",
+                "acme/app/.github/workflows/cache-prune.yml@refs/heads/main",
+            )
+            .env(
+                "GH_ATTESTED",
+                self.attested
+                    .iter()
+                    .map(u32::to_string)
+                    .collect::<Vec<_>>()
+                    .join(" "),
+            )
             .env("GH_FAIL_LIST", if self.fail_list { "1" } else { "" })
             .env(
                 "GH_FAIL_DELETE",

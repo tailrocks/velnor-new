@@ -55,7 +55,7 @@ const ENV_EXPRESSIONS: [&str; 17] = [
     "steps.aws-credentials.outputs.aws-session-token",
 ];
 
-const WITH_EXPRESSIONS: [&str; 19] = [
+const WITH_EXPRESSIONS: [&str; 18] = [
     "needs.ledger-cli.outputs.artifact_name",
     "runner.temp",
     "github.run_id",
@@ -74,7 +74,6 @@ const WITH_EXPRESSIONS: [&str; 19] = [
     "steps.mbx-bundle-key.outputs.restore_key",
     "steps.mbx-bundle-export.outputs.key",
     "steps.state-seal-subject.outputs.key",
-    "needs.state-canary-producer.outputs.artifact_id",
 ];
 
 fn is_image_publish_output(inner: &str) -> bool {
@@ -161,6 +160,8 @@ fn check_env_value_with_scope(key: &str, value: &str, composite: bool) -> Result
             && !is_private_env_binding(key, inner)
             && !is_plan_gh_token_binding(key, inner)
             && !is_mbx_bundle_key_binding(key, inner)
+            && !is_state_producer_output(inner)
+            && !is_state_identity_binding(key, inner)
         {
             return Err(RenderError::BadCommand(format!("bad_env_expression:{key}")));
         }
@@ -203,6 +204,35 @@ fn is_mbx_bundle_key_binding(key: &str, inner: &str) -> bool {
             && inner
                 .strip_prefix("needs.plan.outputs.")
                 .is_some_and(is_state_snapshot_output))
+}
+
+fn is_state_producer_output(inner: &str) -> bool {
+    use velnor_actions_contract::workflow::state_seal::{
+        STATE_PRODUCER_ARTIFACT_OUTPUT, STATE_PRODUCER_JOB_ID_PREFIX,
+    };
+    inner
+        .strip_prefix("needs.")
+        .and_then(|rest| rest.strip_suffix(&format!(".outputs.{STATE_PRODUCER_ARTIFACT_OUTPUT}")))
+        .is_some_and(|job| job.starts_with(STATE_PRODUCER_JOB_ID_PREFIX))
+}
+
+fn is_state_identity_binding(key: &str, inner: &str) -> bool {
+    use velnor_actions_contract::workflow::cache_family::is_state_snapshot_output;
+    use velnor_actions_contract::workflow::state_seal::{
+        STATE_SEAL_KEY_ENV, STATE_SEAL_PENDING_ENV, STATE_SEAL_PREFIX_ENV, is_state_compat_output,
+        is_state_produce_output,
+    };
+    let plan = inner.strip_prefix("needs.plan.outputs.");
+    let keys = inner.strip_prefix("steps.cache-keys.outputs.");
+    (key == STATE_SEAL_KEY_ENV && inner == "steps.state-seal-subject.outputs.key")
+        || (key == STATE_SEAL_PREFIX_ENV
+            && plan
+                .is_some_and(|name| is_state_compat_output(name) || is_state_snapshot_output(name)))
+        || (key == STATE_SEAL_PENDING_ENV && plan.is_some_and(is_state_produce_output))
+        || ((key.starts_with("VELNOR_STATE_COMPAT_R")
+            || key.starts_with("VELNOR_STATE_SNAPSHOT_R"))
+            && keys
+                .is_some_and(|name| is_state_compat_output(name) || is_state_snapshot_output(name)))
 }
 
 fn is_private_mint_input(key: &str, inner: &str) -> bool {
@@ -274,6 +304,7 @@ pub(crate) fn check_with_value(key: &str, value: &str) -> Result<(), RenderError
             && !is_private_mint_input(key, inner)
             && !is_image_publish_output(inner)
             && !is_family_key_output(inner)
+            && !is_state_producer_output(inner)
         {
             return Err(RenderError::BadActionRef(format!(
                 "bad_with_expression:{key}"

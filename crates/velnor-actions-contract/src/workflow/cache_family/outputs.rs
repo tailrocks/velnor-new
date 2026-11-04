@@ -3,7 +3,8 @@
 
 use super::{CacheFamily, ROOT_SLUG_MAX_BYTES};
 use crate::workflow::state_seal::{
-    STATE_CANARY_VERIFIED_OUTPUT, STATE_SEAL_VERIFY_LIMIT, is_state_attested_output,
+    STATE_SEAL_VERIFY_LIMIT, is_state_attested_output, is_state_compat_output,
+    is_state_produce_output,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -127,7 +128,8 @@ pub fn is_plan_cache_output(name: &str) -> bool {
     PLAN_CACHE_OUTPUTS.iter().any(|(output, _)| *output == name)
         || is_state_snapshot_output(name)
         || is_state_attested_output(name)
-        || name == STATE_CANARY_VERIFIED_OUTPUT
+        || is_state_compat_output(name)
+        || is_state_produce_output(name)
         || name == SOURCES_PRODUCE_OUTPUT
         || name
             .strip_prefix(TOFU_PROVIDERS_KEY_OUTPUT_PREFIX)
@@ -157,5 +159,4 @@ pub fn cache_output_reserve_utf16_bytes(
                 &"s".repeat(ROOT_SLUG_MAX_BYTES + 32),
                 STATE_SEAL_VERIFY_LIMIT * (MAX_KEY_LINE_BYTES + 1),
             )
-        + record(STATE_CANARY_VERIFIED_OUTPUT, 5)
 }

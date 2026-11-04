@@ -4,7 +4,7 @@
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::{
-    CacheAccess, CrateJob, DependencySeedMode, Job, JobTimeout, ProposedTask, Stack, Step,
+    CacheAccess, CompiledStateMode, CrateJob, Job, JobTimeout, ProposedTask, Stack, Step,
     VelnorConfig, WorkflowPolicy, crate_display_name, tofu_display_name,
 };
 use velnor_actions_contract::workflow::ledger_cli::{LEDGER_CLI_JOB_ID, LedgerCliSource};
@@ -21,8 +21,12 @@ use crate::internal::internal;
 mod inputs;
 pub(crate) use inputs::CrateJobInputs;
 
-#[path = "dependency_seed.rs"]
-pub(crate) mod dependency_seed;
+#[path = "state_producer.rs"]
+pub(crate) mod state_producer;
+
+#[path = "crate_jobs_lanes.rs"]
+mod lanes;
+use lanes::{ProducerLanes, lane_records};
 
 #[path = "crate_jobs_stage.rs"]
 mod stage;
@@ -48,7 +52,7 @@ pub(crate) use stage::{is_mbx, is_nextest, is_opentofu, is_rust};
 
 pub(crate) struct CrateBuild {
     pub(crate) ledger_cli: Option<(String, Job)>,
-    pub(crate) seeds: Vec<(String, Job)>,
+    pub(crate) producers: Vec<(String, Job)>,
     pub(crate) jobs: Vec<(String, Job)>,
     pub(crate) drivers: BTreeMap<String, RenderDriver>,
 }
@@ -86,7 +90,7 @@ pub(crate) fn build_for_workflow(
             timeout: JobTimeout::new(config.workflow.crate_timeout_minutes)?,
             helper_version,
             crates,
-            dependency_seed: config.stacks.dependency_seed(),
+            compiled_state: config.stacks.compiled_state(),
             seed_parallel_targets: config
                 .stacks
                 .rust
@@ -94,7 +98,7 @@ pub(crate) fn build_for_workflow(
                 .is_some_and(|rust| rust.seed_parallel_targets),
         },
         private,
-        JobTimeout::new(config.workflow.dependency_seed_timeout_minutes)?,
+        JobTimeout::new(config.workflow.state_producer_timeout_minutes)?,
     )
 }
 
@@ -108,20 +112,24 @@ fn build_crate_jobs_with_seed_timeout(
     let owners = JobOwners::from_grouped(&discovery.proposals, &grouped)?;
     let mut jobs = Vec::with_capacity(grouped.len());
     let mut drivers = BTreeMap::new();
-    let mut seed_workspaces: BTreeMap<String, bool> = BTreeMap::new();
+    let mut producer_roots: BTreeMap<String, state_producer::ProducerRoot> = BTreeMap::new();
     for (key, tasks) in &grouped {
         let output = build_group_job(&input, &owners, key, tasks, private)?;
-        if let Some(seed) = output.seed {
-            *seed_workspaces.entry(seed.root).or_default() |= seed.nextest;
+        if let Some(lanes) = output.producer {
+            let entry = producer_roots
+                .entry(lanes.root.clone())
+                .or_insert_with(|| state_producer::ProducerRoot {
+                    root: lanes.root.clone(),
+                    nextest: false,
+                    lanes: Vec::new(),
+                });
+            entry.nextest |= lanes.nextest;
+            entry.lanes.extend(lanes.lanes);
         }
         drivers.insert(output.job_id.clone(), output.driver);
         jobs.push((output.job_id, output.job));
     }
     jobs.sort_by(|left, right| left.0.cmp(&right.0));
-    let workspaces: Vec<_> = seed_workspaces
-        .into_iter()
-        .map(|(root, nextest)| dependency_seed::SeedWorkspace { root, nextest })
-        .collect();
     let ledger_cli = (LedgerCliSource::for_policy(input.policy) == LedgerCliSource::SameRunBuild
         && !jobs.is_empty())
     .then(|| ledger_cli::ledger_cli_job(&input, private))
@@ -130,18 +138,19 @@ fn build_crate_jobs_with_seed_timeout(
     if let Some((id, _)) = &ledger_cli {
         drivers.insert(id.clone(), RenderDriver::Cargo);
     }
-    let seeds = match input.dependency_seed {
-        DependencySeedMode::Produce => {
-            dependency_seed::seed_jobs(&input, &workspaces, private, seed_timeout)?
+    let producers = match input.compiled_state {
+        CompiledStateMode::Union => {
+            let roots: Vec<_> = producer_roots.into_values().collect();
+            state_producer::state_producer_jobs(&input, &roots, private, seed_timeout)?
         }
-        DependencySeedMode::Off => Vec::new(),
+        CompiledStateMode::Off => Vec::new(),
     };
-    for (id, _) in &seeds {
+    for (id, _) in &producers {
         drivers.insert(id.clone(), RenderDriver::Mbx);
     }
     Ok(CrateBuild {
         ledger_cli,
-        seeds,
+        producers,
         jobs,
         drivers,
     })
@@ -151,8 +160,9 @@ struct GroupOutput {
     job_id: String,
     job: Job,
     driver: RenderDriver,
-    seed: Option<dependency_seed::SeedWorkspace>,
+    producer: Option<ProducerLanes>,
 }
+
 
 fn build_group_job(
     input: &CrateJobInputs<'_>,
@@ -212,15 +222,16 @@ fn build_group_job(
     } else {
         RenderDriver::Cargo
     };
-    let seed = use_mbx.then(|| dependency_seed::SeedWorkspace {
+    let producer = use_mbx.then(|| ProducerLanes {
         root: workspace_root.to_owned(),
         nextest: use_nextest,
+        lanes: lane_records(&job, &model),
     });
     Ok(GroupOutput {
         job_id,
         job,
         driver,
-        seed,
+        producer,
     })
 }
 
@@ -349,6 +360,13 @@ fn render_job(
         "",
     )?);
     steps.extend(obligation_steps(input, model, use_opentofu)?);
+    if use_rust {
+        let root = crate::source_prep::workspace_root_for_manifest(&model.manifest, fetch_roots);
+        steps.push(velnor_actions_workflow_renderer::mbx_stats::mbx_stats_step(
+            &model.job_id,
+            &crate::source_prep::workspace_crate_names(&input.discovery.workspaces, root),
+        )?);
+    }
     steps.extend(velnor_actions_workflow_renderer::crate_group_ledger_steps(
         policy,
     )?);

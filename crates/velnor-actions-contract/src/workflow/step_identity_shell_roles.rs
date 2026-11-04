@@ -15,9 +15,7 @@ impl StepRole {
                 | Self::FamilySizeCheck
                 | Self::MbxBundleImport
                 | Self::MbxProducerMark
-                | Self::MbxSeedBuild
                 | Self::MbxBundleExport
-                | Self::MbxBundleRecord
                 | Self::PrepareRustComponents
                 | Self::CargoDeny
                 | Self::CargoMachete
@@ -44,10 +42,15 @@ impl StepRole {
                 | Self::LedgerCliPublish
                 | Self::LedgerCliVerify
                 | Self::StateSelect
-                | Self::StateSealBuild
                 | Self::StateSealSubject
+                | Self::StateSealAdmit
+                | Self::StateSealRetire
+                | Self::StateProduced
+                | Self::StateSkeleton
+                | Self::StateSkeletonRestore
                 | Self::StateSealBind
                 | Self::NonInputGuard
+                | Self::MbxStats
         )
     }
 }
