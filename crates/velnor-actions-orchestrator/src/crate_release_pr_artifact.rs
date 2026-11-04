@@ -409,6 +409,14 @@ fn execute_preparation_command(
     checkout.collect()
 }
 
+#[cfg(test)]
+pub(crate) fn fixture_execute_preparation_command(
+    checkout: PreparationCheckout,
+    command: &velnor_actions_mise::command::IsolatedCommand,
+) -> Result<PreparationArtifact, &'static str> {
+    execute_preparation_command(checkout, command, std::time::Duration::from_secs(10))
+}
+
 pub fn prepare_pr_from_environment() -> Result<(), crate::OrchestratorError> {
     prepare_pr_inner().map_err(crate::internal::internal)
 }
