@@ -7,9 +7,7 @@ use std::path::Path;
 use crate::gc1_mbx_stub::{DF_AVAIL_ENV, TAR_LOG_ENV};
 use crate::gc1_scene::{Scene, fail};
 use crate::gc1_ustar::{Archive, decode_zstd};
-use crate::state_v4_bounds::{
-    KIB, MEMBERS, bounded, payload_dir, require_imported, require_in, valid_payload,
-};
+use crate::state_v4_bounds::{KIB, MEMBERS, bounded, payload_dir, require_imported, require_in};
 
 const DISK_STORED: u64 = 64 * KIB;
 const DISK_EXTRACTED: u64 = 8 * 1024 * KIB;
@@ -22,6 +20,17 @@ fn decoded_bytes(payload: &Path) -> Result<u64, Box<dyn Error>> {
     let plain = oracle.path().join("oracle.tar");
     decode_zstd(payload, &plain)?;
     Ok(std::fs::metadata(&plain)?.len())
+}
+
+fn aligned_payload(scene: &Scene) -> Result<(), Box<dyn Error>> {
+    payload_dir(scene)?;
+    let mut archive = Archive::create(&scene.payload())?;
+    archive.state_layout("old")?;
+    archive.dir("state/cas/pad/")?;
+    archive.file("state/cas/pad/a", b"a")?;
+    archive.file("state/cas/pad/b", b"b")?;
+    archive.finish()?;
+    Ok(())
 }
 
 fn zero_members(scene: &Scene, count: u64, bytes: u64) -> Result<(), Box<dyn Error>> {
@@ -57,15 +66,20 @@ fn run_logged(
 #[test]
 fn recover_disk_need_boundary() -> Result<(), Box<dyn Error>> {
     let oracle = bounded("v4-disk-oracle", DISK_STORED, DISK_EXTRACTED, MEMBERS)?;
-    valid_payload(&oracle)?;
+    aligned_payload(&oracle)?;
     let plain = decoded_bytes(&oracle.payload())?;
     oracle.finish()?;
     let need = plain + plain / 8;
-    let enough_kib = need.div_ceil(KIB);
+    if plain != 8 * KIB || need != 9 * KIB {
+        return Err(fail(&format!(
+            "the boundary payload lost its alignment: plain={plain} need={need}"
+        )));
+    }
+    let enough_kib = need / KIB;
     let short_kib = enough_kib - 1;
 
     let scene = bounded("v4-disk-short", DISK_STORED, DISK_EXTRACTED, MEMBERS)?;
-    valid_payload(&scene)?;
+    aligned_payload(&scene)?;
     let output = run_logged(&scene, Some(&short_kib.to_string()), None)?;
     require_in(
         &output,
@@ -85,7 +99,7 @@ fn recover_disk_need_boundary() -> Result<(), Box<dyn Error>> {
     scene.finish()?;
 
     let scene = bounded("v4-disk-enough", DISK_STORED, DISK_EXTRACTED, MEMBERS)?;
-    valid_payload(&scene)?;
+    aligned_payload(&scene)?;
     run_logged(&scene, Some(&enough_kib.to_string()), None)?;
     require_imported(&scene, "free space equal to the need")?;
     if extractions(&scene) != 1 {
