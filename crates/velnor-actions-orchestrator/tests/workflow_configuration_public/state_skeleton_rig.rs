@@ -46,7 +46,7 @@ impl Rig {
         };
         rig.write(
             "Cargo.toml",
-            "[workspace]\nmembers = [\"foo\", \"my-crate\"]\nresolver = \"2\"\n",
+            "[workspace]\nmembers = [\"foo\", \"my-crate\", \"my-tool\"]\nresolver = \"2\"\n",
         )?;
         for (name, extra) in [("foo", ""), ("my-crate", "")] {
             rig.write(
@@ -59,6 +59,12 @@ impl Rig {
             rig.write(&format!("{name}/build.rs"), "fn main() {}\n")?;
         }
         rig.write("my-crate/src/main.rs", "fn main() {}\n")?;
+        rig.write(
+            "my-tool/Cargo.toml",
+            "[package]\nname = \"my-tool\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+        )?;
+        rig.write("my-tool/src/main.rs", "fn main() {}\n")?;
+        rig.write("my-tool/build.rs", "fn main() {}\n")?;
         rig.write("foo/tests/it.rs", "#[test]\nfn it() {}\n")?;
         rig.write(".gitignore", "target\n")?;
         let lock = Command::new(cargo())
@@ -179,7 +185,15 @@ impl Rig {
     }
 
     pub(super) fn seed_member_and_registry_outputs(&self) -> Result<(), Box<dyn Error>> {
+        self.seed_member_and_registry_outputs_in("target")
+    }
+
+    pub(super) fn seed_member_and_registry_outputs_in(
+        &self,
+        target: &str,
+    ) -> Result<(), Box<dyn Error>> {
         for lane in LANES {
+            let lane = lane.replacen("target", target, 1);
             for name in [
                 format!("libfoo-{HASH}.rlib"),
                 format!("libfoo-{HASH}.rmeta"),
@@ -189,6 +203,8 @@ impl Rig {
                 format!("libmy_crate-{HASH}.rlib"),
                 format!("my_crate-{HASH}.d"),
                 format!("my_crate-{HASH}"),
+                format!("my_tool-{HASH}"),
+                format!("my_tool-{HASH}.d"),
             ] {
                 self.touch(&format!("{lane}/deps/{name}"))?;
             }
@@ -200,6 +216,7 @@ impl Rig {
                 format!("libfoo-{HASH}.d"),
                 format!("build_script_build-{HASH}"),
                 format!("foo-{HASH}x"),
+                format!("my_tool_extra-{HASH}.d"),
             ] {
                 self.touch(&format!("{lane}/deps/{name}"))?;
             }
@@ -207,6 +224,7 @@ impl Rig {
                 format!("foo-{HASH}"),
                 format!("foo-{OTHER_HASH}"),
                 format!("my-crate-{HASH}"),
+                format!("my-tool-{HASH}"),
             ] {
                 self.touch(&format!("{lane}/build/{dir}/out/generated.rs"))?;
             }
@@ -214,6 +232,7 @@ impl Rig {
                 format!("foo-bar-{HASH}"),
                 format!("serde-{HASH}"),
                 format!("foo-extra-{HASH}"),
+                format!("my-tool-extra-{HASH}"),
             ] {
                 self.touch(&format!("{lane}/build/{dir}/output"))?;
             }

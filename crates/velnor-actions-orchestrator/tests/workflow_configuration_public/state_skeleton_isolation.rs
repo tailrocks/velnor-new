@@ -47,6 +47,9 @@ fn restore_returns_the_predecessor_prediction_and_removes_only_member_outputs()
             format!("deps/libmy_crate-{HASH}.rlib"),
             format!("deps/my_crate-{HASH}.d"),
             format!("deps/my_crate-{HASH}"),
+            format!("deps/my_tool-{HASH}"),
+            format!("deps/my_tool-{HASH}.d"),
+            format!("build/my-tool-{HASH}"),
             format!("build/foo-{HASH}"),
             format!("build/foo-{OTHER_HASH}"),
             format!("build/my-crate-{HASH}"),
@@ -64,6 +67,8 @@ fn restore_returns_the_predecessor_prediction_and_removes_only_member_outputs()
             format!("deps/libfoo-{HASH}.d"),
             format!("deps/build_script_build-{HASH}"),
             format!("deps/foo-{HASH}x"),
+            format!("deps/my_tool_extra-{HASH}.d"),
+            format!("build/my-tool-extra-{HASH}/output"),
             format!("build/foo-bar-{HASH}/output"),
             format!("build/serde-{HASH}/output"),
             format!("build/foo-extra-{HASH}/output"),
@@ -73,6 +78,38 @@ fn restore_returns_the_predecessor_prediction_and_removes_only_member_outputs()
                 "{lane}/{kept} was removed"
             );
         }
+    }
+    Ok(())
+}
+
+#[test]
+fn restore_cleans_the_recorded_target_directory_and_leaves_the_default_one()
+-> Result<(), Box<dyn Error>> {
+    let rig = Rig::new()?;
+    rig.seed_predecessor()?;
+    rig.write(
+        ".cargo/config.toml",
+        "[build]\ntarget-dir = \"custom-target\"\n",
+    )?;
+    rig.stub()?;
+    rig.simulate_phase_one()?;
+    rig.seed_member_and_registry_outputs_in("custom-target")?;
+    rig.seed_member_and_registry_outputs_in("target")?;
+
+    let restore = rig.restore()?;
+    assert!(
+        restore.status.success(),
+        "restore failed: {}",
+        String::from_utf8_lossy(&restore.stderr)
+    );
+
+    for lane in LANES {
+        let custom = lane.replacen("target", "custom-target", 1);
+        assert!(!rig.exists(&format!("{custom}/deps/libfoo-{HASH}.rlib")));
+        assert!(!rig.exists(&format!("{custom}/build/my-tool-{HASH}")));
+        assert!(rig.exists(&format!("{custom}/deps/libserde-{HASH}.rlib")));
+        assert!(rig.exists(&format!("{lane}/deps/libfoo-{HASH}.rlib")));
+        assert!(rig.exists(&format!("{lane}/build/my-tool-{HASH}")));
     }
     Ok(())
 }
