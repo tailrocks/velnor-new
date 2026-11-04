@@ -415,7 +415,10 @@ Git tree and preserves internal symlinks. It rejects escaping or cyclic links,
 submodules, unsafe paths, more than 100,000 entries, an index larger than 16 MiB,
 and a source archive larger than 100 MiB. The executor verifies the archive
 digest and validates its entries before extraction. A later job records a
-runner observation after the script exits successfully.
+runner observation after the script exits successfully. A final trusted step emits
+the upload action’s artifact ID and digest as a structured marker in that job’s
+log. A verifier must authenticate the exact job log and bind the marker to the
+artifact; artifact name or run membership alone is insufficient.
 
 A successful runner observation establishes only the script's exit status and
 the recorded workflow source and archive identities. It does **not** establish

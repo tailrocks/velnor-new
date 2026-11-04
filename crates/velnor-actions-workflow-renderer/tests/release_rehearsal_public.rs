@@ -97,6 +97,10 @@ fn rehearsal_scripts_enforce_their_boundaries() -> Result<(), Box<dyn std::error
             "VELNOR_RENDERED_WITNESS",
             &workflow["jobs"]["witness"]["steps"][0]["run"],
         ),
+        (
+            "VELNOR_RENDERED_MARKER",
+            &workflow["jobs"]["witness"]["steps"][2]["run"],
+        ),
     ];
     let script = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests/release_rehearsal_behavior.py");

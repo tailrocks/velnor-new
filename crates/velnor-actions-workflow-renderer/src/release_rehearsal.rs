@@ -208,6 +208,7 @@ fn witness_job(config: &ReleaseRehearsalConfig) -> Yaml {
         Yaml::str(config.reviewer_id.to_string()),
     ));
     let upload = map(vec![
+        ("id", Yaml::str("observation_upload")),
         (
             "uses",
             Yaml::str(velnor_actions_actionlint::actions::UPLOAD_ARTIFACT_ACTION_USES),
@@ -233,6 +234,20 @@ fn witness_job(config: &ReleaseRehearsalConfig) -> Yaml {
                 Yaml::Map(env),
             ),
             upload,
+            step(
+                "Bind observation artifact",
+                include_str!("release_rehearsal_artifact_marker.sh"),
+                map(vec![
+                    (
+                        "VELNOR_ARTIFACT_ID",
+                        Yaml::str("${{ steps.observation_upload.outputs.artifact-id }}"),
+                    ),
+                    (
+                        "VELNOR_ARTIFACT_DIGEST",
+                        Yaml::str("${{ steps.observation_upload.outputs.artifact-digest }}"),
+                    ),
+                ]),
+            ),
         ],
         map(vec![]),
     );

@@ -171,6 +171,15 @@ class RehearsalBehavior(unittest.TestCase):
             bad = dict(env, **{key: value})
             self.assertNotEqual(subprocess.run(["bash", script], env=bad, capture_output=True).returncode, 0)
 
+    def test_artifact_marker_is_bound_to_id_digest_and_attempt(self):
+        script = os.environ.get("VELNOR_RENDERED_MARKER", str(SRC / "release_rehearsal_artifact_marker.sh"))
+        env = dict(os.environ, GITHUB_RUN_ID="7", GITHUB_RUN_ATTEMPT="1",
+                   VELNOR_ARTIFACT_ID="123", VELNOR_ARTIFACT_DIGEST="a" * 64)
+        result = subprocess.run(["bash", script], env=env, check=True, capture_output=True, text=True)
+        self.assertEqual(result.stdout, f"VELNOR_REHEARSAL_WITNESS run=7 attempt=1 artifact=123 sha256={'a' * 64}\n")
+        for key, value in [("VELNOR_ARTIFACT_ID", "0"), ("VELNOR_ARTIFACT_DIGEST", "invalid"), ("GITHUB_RUN_ATTEMPT", "2")]:
+            self.assertNotEqual(subprocess.run(["bash", script], env=dict(env, **{key: value}), capture_output=True).returncode, 0)
+
     def test_policy_requires_human_approval_and_rejects_bypass(self):
         fake = self.root / "bin"
         fake.mkdir()
