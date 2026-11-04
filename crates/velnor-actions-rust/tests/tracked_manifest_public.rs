@@ -56,3 +56,34 @@ fn tracked_nested_manifest_uses_native_canonical_paths() -> Result<(), Box<dyn s
     ));
     Ok(())
 }
+
+#[cfg(unix)]
+#[test]
+fn metadata_accepts_alias_root_and_rejects_outside_root() -> Result<(), Box<dyn std::error::Error>>
+{
+    use velnor_actions_rust::parse_metadata_json;
+    let temp = tempfile::tempdir()?;
+    let real = temp.path().join("real");
+    let alias = temp.path().join("alias");
+    fs::create_dir_all(real.join("src"))?;
+    fs::write(
+        real.join("Cargo.toml"),
+        "[package]\nname='alias_probe'\nversion='0.1.0'\nedition='2021'\n[workspace]\n",
+    )?;
+    fs::write(real.join("src/lib.rs"), "pub fn f() {}\n")?;
+    std::os::unix::fs::symlink(&real, &alias)?;
+    let output = Command::new(env!("CARGO"))
+        .args(["metadata", "--no-deps", "--format-version", "1"])
+        .current_dir(&real)
+        .output()?;
+    assert!(output.status.success());
+    let json = String::from_utf8(output.stdout)?;
+    let parsed = parse_metadata_json(&json, &alias, "Cargo.toml", &BTreeSet::new())?;
+    assert_eq!(parsed.workspace_root, "");
+    assert_eq!(parsed.packages[0].manifest, "Cargo.toml");
+    assert!(!parsed.packages[0].external);
+    let outside = temp.path().join("outside");
+    fs::create_dir(&outside)?;
+    assert!(parse_metadata_json(&json, &outside, "Cargo.toml", &BTreeSet::new()).is_err());
+    Ok(())
+}
