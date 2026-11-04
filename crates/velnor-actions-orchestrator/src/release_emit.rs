@@ -186,10 +186,18 @@ pub(crate) fn select_from_json(
     .map_err(|err| OrchestratorError::Contract {
         problem: err.to_string(),
     })?;
-    if record.packages.iter().any(|package| {
-        !package.external
-            && !tracked_manifest_in_source(&prep.root, &known_manifests, &package.manifest)
-    }) {
+    let workspace_manifest = if record.workspace_root.is_empty() {
+        "Cargo.toml".to_owned()
+    } else {
+        format!("{}/Cargo.toml", record.workspace_root)
+    };
+    if !tracked_manifest_in_source(&prep.root, &known_manifests, manifest)
+        || !tracked_manifest_in_source(&prep.root, &known_manifests, &workspace_manifest)
+        || record.packages.iter().any(|package| {
+            !package.external
+                && !tracked_manifest_in_source(&prep.root, &known_manifests, &package.manifest)
+        })
+    {
         return Err(OrchestratorError::Contract {
             problem: "release_manifest_not_tracked".to_owned(),
         });
@@ -216,7 +224,12 @@ fn tracked_manifest_in_source(
     let Ok(relative) = target.strip_prefix(root) else {
         return false;
     };
-    relative.components().map(|part| part.as_os_str().to_str()).collect::<Option<Vec<_>>>().is_some_and(|parts| known.contains(&parts.join("/"))) && target.is_file()
+    relative
+        .components()
+        .map(|part| part.as_os_str().to_str())
+        .collect::<Option<Vec<_>>>()
+        .is_some_and(|parts| known.contains(&parts.join("/")))
+        && target.is_file()
 }
 
 fn tracked_manifests(root: &std::path::Path) -> Result<BTreeSet<String>, OrchestratorError> {

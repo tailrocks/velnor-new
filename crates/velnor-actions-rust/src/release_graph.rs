@@ -169,7 +169,7 @@ fn check_package_deps(
     };
     for fact in facts {
         if fact.kind == DepKind::Dev
-            && fact.req == "*"
+            && !fact.version_declared
             && matches!(fact.source, DepSource::Path | DepSource::Git)
         {
             continue;
@@ -184,7 +184,7 @@ fn check_package_deps(
         };
         match &fact.source {
             DepSource::Git => {
-                if fact.req == "*" {
+                if !fact.version_declared {
                     return Err(ReleaseError::GitOnlyDep {
                         package: name.to_owned(),
                         dep: fact.name.clone(),
@@ -253,7 +253,7 @@ fn check_path_dep(
     lookups: &GraphLookups<'_>,
     edges: &mut Vec<PackagingEdge>,
 ) -> Result<(), ReleaseError> {
-    if fact.req == "*" {
+    if !fact.version_declared {
         return Err(ReleaseError::UnresolvedLocalDep {
             package: name.to_owned(),
             dep: fact.name.clone(),

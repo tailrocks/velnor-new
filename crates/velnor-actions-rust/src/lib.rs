@@ -29,6 +29,7 @@ pub mod release_config;
 pub mod release_error;
 pub mod release_facts;
 pub mod release_graph;
+mod release_manifest_dependency;
 pub mod release_products;
 pub mod release_projection;
 pub mod release_select;

@@ -33,6 +33,7 @@ pub struct DepFact {
     pub from: String,
     pub name: String,
     pub req: String,
+    pub version_declared: bool,
     pub kind: DepKind,
     pub optional: bool,
     pub target: Option<String>,
@@ -110,6 +111,8 @@ struct RawReleaseDep {
     #[serde(default)]
     package: Option<String>,
     #[serde(default)]
+    rename: Option<String>,
+    #[serde(default)]
     req: String,
     #[serde(default)]
     kind: Option<String>,
@@ -128,6 +131,8 @@ struct RawReleaseDep {
 pub(crate) fn parse_release_facts(
     json: &str,
     manifest_hint: &str,
+    root: &std::path::Path,
+    workspace: &crate::metadata::WorkspaceRecord,
 ) -> Result<ReleaseFacts, ReleaseError> {
     let raw: RawReleaseMetadata =
         serde_json::from_str(json).map_err(|err| ReleaseError::FactsInvalid {
@@ -141,7 +146,24 @@ pub(crate) fn parse_release_facts(
         publish.insert(package.id.clone(), publish_setting(package)?);
         let mut facts = Vec::with_capacity(package.dependencies.len());
         for dependency in &package.dependencies {
-            facts.push(convert_dep(package, dependency, &dirs, manifest_hint)?);
+            let mut fact = convert_dep(package, dependency, &dirs, manifest_hint)?;
+            if fact.req == "*"
+                && matches!(fact.source, DepSource::Path | DepSource::Git)
+                && workspace.packages.iter().any(|candidate| {
+                    candidate.id == package.id && candidate.in_workspace && !candidate.external
+                })
+            {
+                let alias = dependency.rename.as_deref().unwrap_or(&dependency.name);
+                fact.version_declared = crate::release_manifest_dependency::version_declared(
+                    root,
+                    workspace,
+                    &package.id,
+                    alias,
+                    fact.kind,
+                    fact.target.as_deref(),
+                )?;
+            }
+            facts.push(fact);
         }
         facts.sort_by(|left: &DepFact, right: &DepFact| {
             (&left.name, &left.req).cmp(&(&right.name, &right.req))
@@ -212,6 +234,7 @@ fn convert_dep(
         from: package.id.clone(),
         name,
         req: dependency.req.clone(),
+        version_declared: dependency.req != "*",
         kind: dep_kind(dependency.kind.as_deref(), hint).map_err(ReleaseError::Metadata)?,
         optional: dependency.optional,
         target: dep_target(dependency.target.as_ref(), hint).map_err(ReleaseError::Metadata)?,

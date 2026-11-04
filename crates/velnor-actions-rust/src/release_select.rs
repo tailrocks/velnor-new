@@ -105,7 +105,12 @@ pub fn select_release_set(request: &ReleaseRequest<'_>) -> Result<ReleaseSelecti
         request.known_manifests,
     )
     .map_err(ReleaseError::Metadata)?;
-    let facts = parse_release_facts(request.metadata_json, request.manifest_hint)?;
+    let facts = parse_release_facts(
+        request.metadata_json,
+        request.manifest_hint,
+        request.repo_root,
+        &record,
+    )?;
     let members = index_members(&record)?;
     let supported = supported_or_default(request.supported_registries);
     for registry in &supported {

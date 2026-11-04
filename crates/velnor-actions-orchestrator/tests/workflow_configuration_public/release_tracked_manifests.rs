@@ -171,3 +171,72 @@ fn excluded_path_dependency_manifest_cannot_escape_tracked_source() -> Result<()
     );
     Ok(())
 }
+
+#[test]
+fn virtual_workspace_manifest_must_be_in_tracked_source() -> Result<(), Box<dyn Error>> {
+    let config = "schema = 2\n[workflow]\npolicy = \"consumer-v1\"\ndefault_branch = \"testmain\"\n[execution]\ndefault_profile = \"hosted\"\nhosted_profile = \"hosted\"\nscale_set_profile = \"local\"\n[execution.profiles.hosted]\nkind = \"github-hosted\"\nlabel = \"ubuntu-26.04\"\nplatform = \"linux/amd64\"\n[execution.profiles.local]\nkind = \"github-scale-set\"\nname = \"ubuntu-26.04-scale-set\"\nlabels = [\"velnor\", \"ubuntu-26.04-scale-set\"]\nplatform = \"linux/amd64\"\n[stacks.rust.release]\nenabled = true\npackages = [\"demo\"]\n";
+    let repo = make_repo(config)?;
+    let root = repo.path();
+    git(
+        &[
+            "remote",
+            "add",
+            "origin",
+            "https://github.com/example/demo.git",
+        ],
+        root,
+    )?;
+    fs::write(
+        root.join("Cargo.toml"),
+        "[workspace]\nmembers=['member']\nresolver='2'\n",
+    )?;
+    fs::create_dir_all(root.join("member/src"))?;
+    fs::write(
+        root.join("member/Cargo.toml"),
+        "[package]\nname='demo'\nversion='0.1.0'\nedition='2021'\n",
+    )?;
+    fs::write(root.join("member/src/lib.rs"), "pub fn f() {}\n")?;
+    git(&["add", "."], root)?;
+    render_staged_tree(&prepare(root)?)?;
+    git(&["rm", "--cached", "Cargo.toml"], root)?;
+    let before = git_status(root)?;
+    assert!(
+        prepare(root)
+            .and_then(|prep| render_staged_tree(&prep))
+            .is_err(),
+        "untracked virtual workspace manifest must not drive generation"
+    );
+    assert_eq!(git_status(root)?, before);
+    #[cfg(unix)]
+    {
+        let outside = tempfile::tempdir()?;
+        let external = outside.path().join("Cargo.toml");
+        fs::write(&external, "[workspace]\nmembers=['member']\nresolver='2'\n")?;
+        fs::remove_file(root.join("Cargo.toml"))?;
+        std::os::unix::fs::symlink(&external, root.join("Cargo.toml"))?;
+        git(&["add", "Cargo.toml"], root)?;
+        let metadata = std::process::Command::new(env!("CARGO"))
+            .args([
+                "metadata",
+                "--no-deps",
+                "--format-version",
+                "1",
+                "--offline",
+            ])
+            .current_dir(root)
+            .output()?;
+        assert!(
+            metadata.status.success(),
+            "Cargo must accept fixture metadata"
+        );
+        let before = git_status(root)?;
+        assert!(
+            prepare(root)
+                .and_then(|prep| render_staged_tree(&prep))
+                .is_err(),
+            "workspace manifest escaping source must not drive generation"
+        );
+        assert_eq!(git_status(root)?, before);
+    }
+    Ok(())
+}
