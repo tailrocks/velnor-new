@@ -17,7 +17,7 @@ use velnor_actions_workflow_renderer::plan_sources::state_select::state_select_s
 use velnor_actions_workflow_renderer::state_seal::add_state_seal_canary;
 
 use crate::gc1_scene::{Scene, fail};
-use crate::gc1_seal_support::{ENTRY_ID, ENTRY_SIZE, Gh, MAIN};
+use crate::gc1_seal_support::{ENTRY_ID, ENTRY_SIZE, Gh, MAIN, REPO};
 
 const FIXTURE: &[u8] = b"sealed state payload fixture";
 
@@ -195,6 +195,7 @@ fn run_bind(scene: &Scene, gh: &Gh, job: &Job, key: &str) -> Result<(), Box<dyn 
         ("FAKE_GH_DIR", dir.as_str()),
         ("GITHUB_REF", MAIN),
         ("VELNOR_STATE_SEAL_KEY", key),
+        ("GITHUB_REPOSITORY", REPO),
     ];
     scene.run_script(run.get(2).ok_or_else(|| fail("no script"))?, &env, None)?;
     Ok(())

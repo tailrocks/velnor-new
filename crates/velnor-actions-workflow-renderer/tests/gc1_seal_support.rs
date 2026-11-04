@@ -34,20 +34,27 @@ verb="$1 $2"
 shift 2
 case "$verb" in
   "cache list")
-    key=; ref=; fields=
+    key=; ref=; fields=; repo=${GH_REPO-}; sortf=last_accessed_at; order=desc; limit=30
     while [ $# -gt 0 ]; do
-      case "$1" in --key) key=$2; shift ;; --ref) ref=$2; shift ;; --json) fields=$2; shift ;; esac
+      case "$1" in --key) key=$2; shift ;; --ref) ref=$2; shift ;; --json) fields=$2; shift ;; -R) repo=$2; shift ;; --sort) sortf=$2; shift ;; --order) order=$2; shift ;; --limit) limit=$2; shift ;; esac
       shift
     done
+    [ -n "$repo" ] || exit 1
     if [ "$mode" = garbage ]; then printf '%s\n' '<<<not json>>>' '{"oops"'; exit 0; fi
-    while read -r created lref lkey lid lsize; do
+    sflag=-r
+    [ "$order" = asc ] && sflag=
+    while read -r created lref lkey lid lsize accessed; do
       [ "$lref" = "$ref" ] || continue
       case "$lkey" in "$key"*) ;; *) continue ;; esac
+      [ -n "$accessed" ] || accessed=$created
+      case "$sortf" in created_at) sk=$created ;; *) sk=$accessed ;; esac
+      printf '%s %s %s %s %s\n' "$sk" "$created" "$lkey" "$lid" "$lsize"
+    done < "$d/list" | LC_ALL=C sort $sflag | head -n "$limit" | while read -r sk created lkey lid lsize; do
       case "$fields" in
         *createdAt*) printf '%s %s %s %s\n' "$created" "$lkey" "$lid" "$lsize" ;;
         *) printf '%s %s %s\n' "$lkey" "$lid" "$lsize" ;;
       esac
-    done < "$d/list"
+    done
     ;;
   "attestation verify")
     case "$mode" in
@@ -156,6 +163,21 @@ impl Gh {
             .iter()
             .map(|(created, git_ref, key, id, size)| {
                 format!("{created} {git_ref} {key} {id} {size}\n")
+            })
+            .collect::<Vec<String>>()
+            .concat();
+        std::fs::write(self.dir.join("list"), text)?;
+        Ok(())
+    }
+
+    pub(crate) fn list_accessed(
+        &self,
+        rows: &[(&str, &str, &str, &str)],
+    ) -> Result<(), Box<dyn Error>> {
+        let text = rows
+            .iter()
+            .map(|(created, git_ref, key, accessed)| {
+                format!("{created} {git_ref} {key} {ENTRY_ID} {ENTRY_SIZE} {accessed}\n")
             })
             .collect::<Vec<String>>()
             .concat();
