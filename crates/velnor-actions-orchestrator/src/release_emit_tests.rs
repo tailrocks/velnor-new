@@ -286,5 +286,15 @@ fn release_intent_includes_nested_auto_workspace_members() -> Result<(), Box<dyn
     let intent = preview_consumer_intent(&root)?;
     let intent = crate::crate_release_runtime::parse_crate_release_intent(intent.as_bytes())?;
     assert_eq!(intent.pr_write_paths, [".private/dependency/CHANGELOG.md", ".private/dependency/Cargo.toml", "CHANGELOG.md", "Cargo.lock", "Cargo.toml"]);
+    let config_path = root.join(".velnor/config.toml");
+    let config = fs::read_to_string(&config_path)?;
+    fs::write(&config_path, config.replace("[stacks.rust.release]", "[stacks.rust.release]\nmanifest_path = '.private/dependency/Cargo.toml'"))?;
+    for args in [&["add", "."][..], &["-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "-m", "nested manifest"][..]] {
+        if !Command::new("git").args(args).current_dir(&root).status()?.success() { return Err("fixture git failed".into()); }
+    }
+    let nested = preview_consumer_intent(&root)?;
+    let nested = crate::crate_release_runtime::parse_crate_release_intent(nested.as_bytes())?;
+    assert_eq!(nested.manifest_path, ".private/dependency/Cargo.toml");
+    assert_eq!(nested.pr_write_paths, intent.pr_write_paths);
     Ok(())
 }
