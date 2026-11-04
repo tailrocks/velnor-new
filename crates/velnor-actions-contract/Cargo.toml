@@ -20,6 +20,7 @@ test = false
 workspace = true
 
 [dependencies]
+semver = { version = "=1.0.28" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
@@ -28,3 +29,7 @@ thiserror = { workspace = true }
 
 [dev-dependencies]
 serde_json = { workspace = true }
+
+[[test]]
+name = "crate_bootstrap_version_public"
+path = "tests/crate_bootstrap_version_public.rs"
