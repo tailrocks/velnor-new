@@ -1,9 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use super::{
-    ToolchainStageRequest, check_real_directories, current_artifact, read_receipt_archive,
-};
+use super::{ToolchainStageRequest, current_artifact, read_receipt_archive};
 use crate::{OrchestratorError, internal::internal};
 
 pub fn acquire_reconciliation_receipt_artifact<
@@ -252,4 +250,22 @@ pub(crate) fn write_receipt(
     _bytes: &[u8],
 ) -> Result<(), OrchestratorError> {
     Err(internal("crate_release_receipt_platform_unsupported"))
+}
+
+pub(super) fn check_real_directories(path: &std::path::Path) -> Result<(), OrchestratorError> {
+    let mut current = std::path::PathBuf::new();
+    for component in path.components() {
+        match component {
+            std::path::Component::RootDir | std::path::Component::Normal(_) => {
+                current.push(component);
+            }
+            _ => return Err(internal("crate_release_tool_archive_invalid")),
+        }
+        let metadata = std::fs::symlink_metadata(&current)
+            .map_err(|_| internal("crate_release_tool_archive_invalid"))?;
+        if metadata.file_type().is_symlink() || !metadata.is_dir() {
+            return Err(internal("crate_release_tool_archive_invalid"));
+        }
+    }
+    Ok(())
 }

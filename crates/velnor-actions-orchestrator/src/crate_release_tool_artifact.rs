@@ -242,24 +242,6 @@ fn validate_artifact_metadata(
 
 pub use crate::fd_tool_extract::extract_verified_tool_archive_file;
 
-fn check_real_directories(path: &std::path::Path) -> Result<(), OrchestratorError> {
-    let mut current = std::path::PathBuf::new();
-    for component in path.components() {
-        match component {
-            std::path::Component::RootDir | std::path::Component::Normal(_) => {
-                current.push(component);
-            }
-            _ => return Err(internal("crate_release_tool_archive_invalid")),
-        }
-        let metadata = std::fs::symlink_metadata(&current)
-            .map_err(|_| internal("crate_release_tool_archive_invalid"))?;
-        if metadata.file_type().is_symlink() || !metadata.is_dir() {
-            return Err(internal("crate_release_tool_archive_invalid"));
-        }
-    }
-    Ok(())
-}
-
 pub struct ToolchainStageRequest<'a> {
     pub intent: &'a velnor_actions_contract::config::CrateReleaseIntent,
     pub github: &'a crate::crate_release_github::GitHubAdmissionRequest,
@@ -273,6 +255,7 @@ pub struct ToolchainStageRequest<'a> {
 
 #[path = "crate_release_tool_receipt.rs"]
 mod receipt;
+use receipt::check_real_directories;
 #[cfg(test)]
 pub(crate) use receipt::fixture_acquire_receipt;
 pub(crate) use receipt::write_receipt;
