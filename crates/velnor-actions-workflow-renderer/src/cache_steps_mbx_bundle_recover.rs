@@ -24,6 +24,8 @@ use super::{
 
 const DISK_HEADROOM_DIVISOR: u64 = 8;
 
+const DISK_BLOCK_BYTES: u64 = 4096;
+
 const ZSTD_MAGIC_OCTAL: &str = "\\050\\265\\057\\375";
 
 fn ancestors(payload: &str) -> Result<Vec<String>, RenderError> {
@@ -164,10 +166,6 @@ fn admission_lines(ceilings: StateCeilings) -> Vec<String> {
         read_number("plain_n", "bounded | wc -c", "plain_size", "payload unreadable"),
         format!("if [ \"$plain_n\" -gt {cap} ]; then refused \"over_extracted extracted>=$plain_n ceiling={extracted}\"; fi"),
         "if [ ! -f \"$d/inflated\" ]; then corrupt \"payload unreadable\"; fi".to_owned(),
-        "dfs=; dfk=; dfu=; dfa=; dfr=; if df -Pk \"$RUNNER_TEMP\" > \"$d/df\" && tail -n 1 \"$d/df\" > \"$d/df_last\"; then read -r dfs dfk dfu dfa dfr < \"$d/df_last\" || :; else corrupt \"disk free unreadable\"; fi; case \"$dfa\" in ''|*[!0-9]*) corrupt \"disk free unreadable\" ;; esac".to_owned(),
-        "expr \"$dfa\" \\* 1024 > \"$d/free\" || :; free=; free_rest=; read -r free free_rest < \"$d/free\" || :; case \"$free\" in ''|*[!0-9]*) corrupt \"disk free unreadable\" ;; esac".to_owned(),
-        format!("expr \"$plain_n\" / {DISK_HEADROOM_DIVISOR} > \"$d/headroom\" || :; headroom=; headroom_rest=; read -r headroom headroom_rest < \"$d/headroom\" || :; case \"$headroom\" in ''|*[!0-9]*) corrupt \"payload unreadable\" ;; esac"),
-        "expr \"$plain_n\" + \"$headroom\" > \"$d/need\" || :; need=; need_rest=; read -r need need_rest < \"$d/need\" || :; case \"$need\" in ''|*[!0-9]*) corrupt \"payload unreadable\" ;; esac; if [ \"$free\" -lt \"$need\" ]; then lowdisk \"$free\" \"$need\"; fi".to_owned(),
         "if inflate 2>/dev/null | head -c 512 > \"$d/first512\"; then :; else corrupt \"payload unreadable\"; fi".to_owned(),
         "head -c 262 \"$d/first512\" | tail -c 5 > \"$d/magic\"; magic=; read -r magic < \"$d/magic\" || :; if [ \"$magic\" != ustar ]; then refused refused-shadow; fi".to_owned(),
         "prefix=\"$base/\"; head -c \"${#prefix}\" \"$d/first512\" > \"$d/first\"; first=; read -r first < \"$d/first\" || :; if [ \"$first\" != \"$prefix\" ]; then refused refused-shadow; fi".to_owned(),
@@ -191,6 +189,11 @@ fn screen_lines(ceilings: StateCeilings) -> Vec<String> {
 
 fn extract_lines() -> Vec<String> {
     vec![
+        "dfs=; dfk=; dfu=; dfa=; dfr=; if df -Pk \"$RUNNER_TEMP\" > \"$d/df\" && tail -n 1 \"$d/df\" > \"$d/df_last\"; then read -r dfs dfk dfu dfa dfr < \"$d/df_last\" || :; else corrupt \"disk free unreadable\"; fi; case \"$dfa\" in ''|*[!0-9]*) corrupt \"disk free unreadable\" ;; esac".to_owned(),
+        "expr \"$dfa\" \\* 1024 > \"$d/free\" || :; free=; free_rest=; read -r free free_rest < \"$d/free\" || :; case \"$free\" in ''|*[!0-9]*) corrupt \"disk free unreadable\" ;; esac".to_owned(),
+        format!("expr \"$plain_n\" / {DISK_HEADROOM_DIVISOR} > \"$d/headroom\" || :; headroom=; headroom_rest=; read -r headroom headroom_rest < \"$d/headroom\" || :; case \"$headroom\" in ''|*[!0-9]*) corrupt \"payload unreadable\" ;; esac"),
+        format!("expr \"$members_n\" \\* {DISK_BLOCK_BYTES} > \"$d/blocks\" || :; blocks=; blocks_rest=; read -r blocks blocks_rest < \"$d/blocks\" || :; case \"$blocks\" in ''|*[!0-9]*) corrupt \"payload unreadable\" ;; esac"),
+        "expr \"$plain_n\" + \"$headroom\" + \"$blocks\" > \"$d/need\" || :; need=; need_rest=; read -r need need_rest < \"$d/need\" || :; case \"$need\" in ''|*[!0-9]*) corrupt \"payload unreadable\" ;; esac; if [ \"$free\" -lt \"$need\" ]; then lowdisk \"$free\" \"$need\"; fi".to_owned(),
         "if mkdir -m 700 \"$stage\"; then :; else corrupt \"payload unreadable\"; fi".to_owned(),
         "if bounded | tar -xf - -C \"$stage\" --no-same-owner; then :; else corrupt \"payload unreadable\"; fi".to_owned(),
         "unlock \"$stage\"".to_owned(),

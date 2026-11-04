@@ -6,12 +6,14 @@ use std::path::Path;
 
 use crate::gc1_mbx_stub::{DF_AVAIL_ENV, TAR_LOG_ENV};
 use crate::gc1_scene::{Scene, fail};
-use crate::gc1_ustar::{Archive, decode_zstd};
+use crate::gc1_ustar::{Archive, decode_zstd, list_members};
 use crate::state_v4_bounds::{KIB, MEMBERS, bounded, payload_dir, require_imported, require_in};
 
 const DISK_STORED: u64 = 64 * KIB;
 const DISK_EXTRACTED: u64 = 8 * 1024 * KIB;
 const BLOCK: u64 = 512;
+const FILE_BLOCK: u64 = 4 * KIB;
+const TINY_MEMBERS: u64 = 200;
 const FILE_LIMIT_BLOCKS: u64 = 2 * KIB;
 const FILE_LIMIT: u64 = FILE_LIMIT_BLOCKS * BLOCK;
 
@@ -31,6 +33,24 @@ fn aligned_payload(scene: &Scene) -> Result<(), Box<dyn Error>> {
     archive.file("state/cas/pad/b", b"b")?;
     archive.finish()?;
     Ok(())
+}
+
+fn tiny_payload(scene: &Scene) -> Result<(), Box<dyn Error>> {
+    payload_dir(scene)?;
+    let mut archive = Archive::create(&scene.payload())?;
+    archive.state_layout("old")?;
+    archive.dir("state/cas/tiny/")?;
+    for index in 0..TINY_MEMBERS {
+        archive.file(&format!("state/cas/tiny/t{index}"), b"x")?;
+    }
+    archive.finish()?;
+    Ok(())
+}
+
+fn disk_need(payload: &Path) -> Result<(u64, u64), Box<dyn Error>> {
+    let plain = decoded_bytes(payload)?;
+    let members = u64::try_from(list_members(payload)?.lines().count())?;
+    Ok((plain, plain + plain / 8 + members * FILE_BLOCK))
 }
 
 fn zero_members(scene: &Scene, count: u64, bytes: u64) -> Result<(), Box<dyn Error>> {
@@ -67,10 +87,9 @@ fn run_logged(
 fn recover_disk_need_boundary() -> Result<(), Box<dyn Error>> {
     let oracle = bounded("v4-disk-oracle", DISK_STORED, DISK_EXTRACTED, MEMBERS)?;
     aligned_payload(&oracle)?;
-    let plain = decoded_bytes(&oracle.payload())?;
+    let (plain, need) = disk_need(&oracle.payload())?;
     oracle.finish()?;
-    let need = plain + plain / 8;
-    if plain != 8 * KIB || need != 9 * KIB {
+    if plain != 8 * KIB || !need.is_multiple_of(KIB) {
         return Err(fail(&format!(
             "the boundary payload lost its alignment: plain={plain} need={need}"
         )));
@@ -133,5 +152,43 @@ fn recover_goes_cold_when_the_extraction_cannot_write() -> Result<(), Box<dyn Er
     if extractions(&scene) != 1 {
         return Err(fail("the extraction was never attempted"));
     }
+    scene.finish()
+}
+
+#[test]
+fn recover_disk_need_counts_the_block_of_every_member() -> Result<(), Box<dyn Error>> {
+    let oracle = bounded("v4-tiny-oracle", DISK_STORED, DISK_EXTRACTED, MEMBERS)?;
+    tiny_payload(&oracle)?;
+    let (plain, need) = disk_need(&oracle.payload())?;
+    oracle.finish()?;
+    let tar_only_kib = (plain + plain / 8).div_ceil(KIB);
+    if tar_only_kib * KIB >= need || tar_only_kib * KIB < plain + plain / 8 {
+        return Err(fail("the tiny members no longer separate the two needs"));
+    }
+
+    let scene = bounded("v4-tiny-short", DISK_STORED, DISK_EXTRACTED, MEMBERS)?;
+    tiny_payload(&scene)?;
+    let output = run_logged(&scene, Some(&tar_only_kib.to_string()), None)?;
+    require_in(
+        &output,
+        &format!(
+            "velnor: state snapshot cold (disk_free={} need={need})",
+            tar_only_kib * KIB
+        ),
+        "free space for the tar but not for the blocks of its members",
+    )?;
+    scene.assert_silent_cold(&output, "state snapshot cold")?;
+    if extractions(&scene) != 0 {
+        return Err(fail("a short disk reached the extraction"));
+    }
+    scene.finish()?;
+
+    let scene = bounded("v4-tiny-enough", DISK_STORED, DISK_EXTRACTED, MEMBERS)?;
+    tiny_payload(&scene)?;
+    run_logged(&scene, Some(&need.div_ceil(KIB).to_string()), None)?;
+    require_imported(
+        &scene,
+        "free space for the tar and the blocks of its members",
+    )?;
     scene.finish()
 }
