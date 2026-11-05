@@ -238,3 +238,16 @@ fn rust_auto_install_guard_interprets_yaml_string_values() -> Result<(), Box<dyn
     }
     Ok(())
 }
+
+#[test]
+fn rust_auto_install_guard_scans_aliased_steps_and_runs() -> Result<(), Box<dyn Error>> {
+    let workflow = "name: Example\non: push\njobs:\n  first:\n    runs-on: ubuntu-24.04\n    steps:\n      - &s1\n        run: &r1 cargo --version\n  second:\n    runs-on: ubuntu-24.04\n    steps:\n      - *s1\n      - run: *r1\n";
+    let files = Files::from([(
+        ".github/workflows/example.yml".to_owned(),
+        workflow.to_owned(),
+    )]);
+    let jobs = oracle::scan(&files, |_| true)?;
+    assert_eq!(jobs.len(), 2);
+    assert!(jobs.iter().all(|job| job.is_user() && !job.env_off));
+    Ok(())
+}
