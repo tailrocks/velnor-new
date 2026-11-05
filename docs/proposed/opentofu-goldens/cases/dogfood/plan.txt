@@ -6,6 +6,7 @@ Detected stacks
   Tofu: not detected (strong evidence; add [stacks.tofu] roots to enable)
     evidence: mise-tool:opentofu
   Mise check maintenance-helpers: test-maintenance-helpers (runner: ubuntu-26.04, target: x86_64-unknown-linux-gnu)
+  Mise check hosted-budget-containment: test-hosted-budget-containment (runner: ubuntu-24.04, target: x86_64-unknown-linux-gnu)
   Workspace crates: 20
     - velnor-actions-actionlint (crates/velnor-actions-actionlint/Cargo.toml) [lib; depends on velnor-actions-contract]
     - velnor-actions-ansible (crates/velnor-actions-ansible/Cargo.toml) [lib; depends on velnor-actions-contract]
@@ -53,6 +54,7 @@ Workflow to generate
     - alint (2 steps)
     - cargo-deny (5 steps)
     - cargo-machete (6 steps)
+    - check-hosted-budget-containment (6 steps)
     - check-maintenance-helpers (6 steps)
     - jactionlint (7 steps)
     - ledger-cli (16 steps)
@@ -83,8 +85,8 @@ Workflow to generate
     - state-seal-crates-velnor-runner (8 steps)
     - state-seal-root (8 steps)
     - tools-producer-2d8ab338 (9 steps)
-    - tools-producer-6ba5fbf5 (11 steps)
     - tools-producer-70705458 (8 steps)
+    - tools-producer-8edd4bed (11 steps)
     - tools-producer-f00f54f8 (8 steps)
     - 18 Rust crate jobs
       Timeout: 15 minutes per crate job
