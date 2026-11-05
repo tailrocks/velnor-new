@@ -286,3 +286,45 @@ fn prune_deletes_nothing_in_a_group_without_a_verified_anchor() -> Result<(), Bo
     );
     Ok(())
 }
+
+#[test]
+fn prune_targets_the_completed_runs_branch_not_the_workflow_ref() -> Result<(), Box<dyn Error>> {
+    const FEATURE: &str = "refs/heads/design/interaction-polish";
+    let mut ledger = Ledger::new();
+    let f1 = ledger.add(601, FEATURE, &trusted("union", "root", 'a', '1'));
+    let f2 = ledger.add(602, FEATURE, &trusted("union", "root", 'b', '2'));
+    let f3 = ledger.add(603, FEATURE, &trusted("union", "root", 'c', '3'));
+    ledger.add(611, MAIN, &trusted("union", "root", 'a', '1'));
+    ledger.add(612, MAIN, &trusted("union", "root", 'b', '2'));
+    let main_head = ledger.add(613, MAIN, &trusted("union", "root", 'c', '3'));
+    ledger.attest(f3);
+    ledger.attest(main_head);
+    let run = GhFake::new(&ledger)?.run_prune(FEATURE)?;
+    assert_eq!(run.status, Some(0), "stdout: {}", run.stdout);
+    assert_eq!(
+        run.attempted,
+        [f2, f1],
+        "only the completed run's branch is pruned: stdout {}",
+        run.stdout
+    );
+    Ok(())
+}
+
+#[test]
+fn prune_refuses_a_head_branch_that_could_inject_shell() -> Result<(), Box<dyn Error>> {
+    let mut ledger = Ledger::new();
+    ledger.add(701, MAIN, &trusted("union", "root", 'a', '1'));
+    let fake = GhFake::new(&ledger)?;
+    for hostile in ["main\"; touch pwned; \"", "$(touch pwned)", "main x", ""] {
+        let run = fake.run_prune_for(hostile)?;
+        assert_ne!(run.status, Some(0), "accepted {hostile:?}");
+        assert!(run.attempted.is_empty(), "deleted {:?}", run.attempted);
+        assert!(
+            run.stdout.is_empty() || run.stdout.contains("cache_prune_head_branch_invalid"),
+            "stdout: {}",
+            run.stdout
+        );
+    }
+    assert!(!fake.root().join("pwned").exists());
+    Ok(())
+}

@@ -45,8 +45,10 @@ case "$1 $2" in
     case "$1" in -R) repo=$2;; --signer-workflow) signer=$2;; --source-ref) sref=$2;; --predicate-type) pred=$2;; esac
     shift 2
   done
-  [ "$repo" = "$GITHUB_REPOSITORY" ] && [ "$signer" = "$GITHUB_REPOSITORY/.github/workflows/state-seal.yml" ] && [ "$sref" = "$GITHUB_REF" ] && [ "$pred" = "https://velnor.dev/attestation/state-seal/v1" ] || exit 1
+  [ "$repo" = "$GITHUB_REPOSITORY" ] && [ "$signer" = "$GITHUB_REPOSITORY/.github/workflows/state-seal.yml" ] && [ "$pred" = "https://velnor.dev/attestation/state-seal/v1" ] || exit 1
   read -r skey sid ssize < "$file"
+  entry_ref=$(awk -F'\t' -v id="$sid" '$1==id { print $3 }' "$GH_FIXTURE")
+  [ "$sref" = "$entry_ref" ] || exit 1
   case " $GH_ATTESTED " in *" $sid "*) exit 0;; esac
   exit 1
   ;;
@@ -110,6 +112,10 @@ impl GhFake {
         })
     }
 
+    pub(crate) fn root(&self) -> &Path {
+        self.dir.path()
+    }
+
     pub(crate) fn failing_list(mut self) -> Self {
         self.fail_list = true;
         self
@@ -121,12 +127,18 @@ impl GhFake {
     }
 
     pub(crate) fn run_prune(&self, git_ref: &str) -> Result<PruneRun, Box<dyn Error>> {
+        let head_branch = git_ref.strip_prefix("refs/heads/").unwrap_or(git_ref);
+        self.run_prune_for(head_branch)
+    }
+
+    pub(crate) fn run_prune_for(&self, head_branch: &str) -> Result<PruneRun, Box<dyn Error>> {
         let root: &Path = self.dir.path();
         let output = Command::new("sh")
             .arg("-c")
             .arg(prune_script())
             .env("PATH", format!("{}:/usr/bin:/bin", root.display()))
-            .env("GITHUB_REF", git_ref)
+            .env("GITHUB_REF", "refs/heads/main")
+            .env("HEAD_BRANCH", head_branch)
             .env("RUNNER_TEMP", root)
             .env("GH_FIXTURE", root.join("fixture"))
             .env("GH_DELETED", root.join("deleted"))

@@ -65,7 +65,8 @@ pub fn prune_script() -> String {
     let signer = state_seal_signer_workflow();
     let mut lines = vec![
         "set -eu".to_owned(),
-        "ref=\"$GITHUB_REF\"".to_owned(),
+        "case \"$HEAD_BRANCH\" in ''|*[!A-Za-z0-9._/-]*) printf '%s\\n' '::error::cache_prune_head_branch_invalid' >&2; exit 1;; esac".to_owned(),
+        "ref=\"refs/heads/$HEAD_BRANCH\"".to_owned(),
         "d=\"$RUNNER_TEMP/velnor-cache-prune\"".to_owned(),
         "rm -rf \"$d\"".to_owned(),
         "mkdir -p \"$d\"".to_owned(),
@@ -114,7 +115,7 @@ pub fn render_cache_prune_yml(
     let sealed = quote_scalar(STATE_SEAL_WORKFLOW_NAME);
     let script = prune_script().replace('\\', "\\\\").replace('"', "\\\"");
     let body = format!(
-        "name: Cache prune\n\"on\":\n  workflow_run:\n    workflows:\n      - {workflow} # zizmor: ignore[dangerous-triggers]\n      - {sealed} # zizmor: ignore[dangerous-triggers]\n    types:\n      - completed\n    branches:\n      - {default_branch}\npermissions: {{}}\ncache-mode: read\nconcurrency:\n  group: velnor-cache-prune\n  cancel-in-progress: false\njobs:\n  prune:\n    name: Prune superseded cache entries\n    if: github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == '{default_branch}' && github.event.workflow_run.head_repository.full_name == github.repository && github.event.workflow_run.conclusion != 'cancelled'\n    runs-on: {label}\n    timeout-minutes: 5\n    permissions:\n      actions: write\n      attestations: read\n    steps:\n      - name: Prune superseded cache entries\n        env:\n          GH_TOKEN: ${{{{ github.token }}}}\n          GH_REPO: ${{{{ github.repository }}}}\n        run: \"{script}\"\n"
+        "name: Cache prune\n\"on\":\n  workflow_run:\n    workflows:\n      - {workflow} # zizmor: ignore[dangerous-triggers]\n      - {sealed} # zizmor: ignore[dangerous-triggers]\n    types:\n      - completed\n    branches:\n      - {default_branch}\npermissions: {{}}\ncache-mode: read\nconcurrency:\n  group: velnor-cache-prune\n  cancel-in-progress: false\njobs:\n  prune:\n    name: Prune superseded cache entries\n    if: github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == '{default_branch}' && github.event.workflow_run.head_repository.full_name == github.repository && github.event.workflow_run.conclusion != 'cancelled'\n    runs-on: {label}\n    timeout-minutes: 5\n    permissions:\n      actions: write\n      attestations: read\n    steps:\n      - name: Prune superseded cache entries\n        env:\n          GH_TOKEN: ${{{{ github.token }}}}\n          GH_REPO: ${{{{ github.repository }}}}\n          HEAD_BRANCH: ${{{{ github.event.workflow_run.head_branch }}}}\n        run: \"{script}\"\n"
     );
     Ok(RenderedFile {
         path: CACHE_PRUNE_PATH.to_owned(),
