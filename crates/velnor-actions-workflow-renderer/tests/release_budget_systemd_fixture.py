@@ -51,7 +51,7 @@ time.sleep(300)
 def invoke(mode):
     unit = "velnor-budget-probe-" + str(os.getpid()) + "-" + mode
     command = [
-        "/usr/bin/sudo", "-n", "/usr/bin/systemd-run", "--quiet", "--wait", "--pipe", "--collect",
+        "/usr/bin/sudo", "-n", "/usr/bin/systemd-run", "--quiet", "--wait", "--pipe",
         "--unit=" + unit, "--property=DynamicUser=yes", "--property=NoNewPrivileges=yes",
         "--property=CapabilityBoundingSet=", "--property=AmbientCapabilities=", "--property=LimitCORE=0",
         "--property=Delegate=no", "--property=TimeoutStartSec=5s", "--property=RuntimeMaxSec=10s", "--property=TimeoutStopSec=2s",
@@ -115,7 +115,17 @@ def invoke(mode):
         if canary in journal.stdout or canary in journal.stderr:
             raise RuntimeError("dummy credential appeared in completed journal")
         if (mode == "orphan" and process.returncode != 0) or (mode != "orphan" and process.returncode == 0) or (mode == "timeout" and elapsed < 8):
-            raise RuntimeError(f"service outcome mismatch: mode={mode} status={process.returncode} elapsed={elapsed:.1f}")
+            query = subprocess.run(["/usr/bin/systemctl", "show", unit, "-p", "Result", "-p", "ExecMainCode", "-p", "ExecMainStatus", "-p", "ActiveState", "-p", "LoadState"], capture_output=True, text=True, timeout=5, check=False)
+            values = {}
+            for line in query.stdout.splitlines():
+                key, sep, value = line.partition("=")
+                if sep and key in {"Result", "ExecMainCode", "ExecMainStatus", "ActiveState", "LoadState"} and re.fullmatch(r"[A-Za-z0-9_-]{1,40}", value):
+                    values[key] = value
+            events = "/sys/fs/cgroup" + cgroup + "/cgroup.events"
+            populated = None
+            if cgroup and os.path.exists(events):
+                populated = "populated 1" in open(events, encoding="ascii").read()
+            raise RuntimeError(f"service outcome mismatch: mode={mode} status={process.returncode} elapsed={elapsed:.1f} unit={values} pid_alive={os.path.exists('/proc/' + str(pid))} cgroup_populated={populated}")
         if not cgroup:
             state = subprocess.run(["/usr/bin/systemctl", "show", unit, "--value", "-p", "ActiveState"], capture_output=True, text=True, timeout=5, check=False)
             if state.returncode != 0 or state.stdout.strip() not in ("inactive", "failed"):
@@ -133,6 +143,7 @@ def invoke(mode):
         if process.poll() is None:
             process.kill()
             process.wait(timeout=5)
+        subprocess.run(["/usr/bin/sudo", "-n", "/usr/bin/systemctl", "reset-failed", unit], capture_output=True, timeout=10, check=False)
 
 
 invoke("timeout")
