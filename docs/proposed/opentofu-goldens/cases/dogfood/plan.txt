@@ -50,7 +50,7 @@ Workflow to generate
   .github/dco.yml
   Workflow: CI (velnor-repository-v1)
   Push branch: main
-  Runner: ubuntu-26.04 (latest pinned default)
+  Runner: ubuntu-24.04 (config override)
   Jobs:
     - alint (2 steps)
     - cargo-deny (5 steps)
@@ -86,10 +86,10 @@ Workflow to generate
     - state-producer-root (100 steps)
     - state-seal-crates-velnor-runner (8 steps)
     - state-seal-root (8 steps)
-    - tools-producer-06f9acb0 (8 steps)
-    - tools-producer-9df4a4f6 (11 steps)
-    - tools-producer-c957c0bd (8 steps)
-    - tools-producer-caf63d48 (9 steps)
+    - tools-producer-7c8ff8be (9 steps)
+    - tools-producer-e37def0d (8 steps)
+    - tools-producer-e924b13c (8 steps)
+    - tools-producer-f2a575f2 (11 steps)
     - 18 Rust crate jobs
       Timeout: 15 minutes per crate job
       Obligations: Clippy -> build -> run tests -> doc build -> format check

@@ -17,7 +17,7 @@ runs:
   steps:
     - name: V2 identity
       id: v2
-      uses: ./.github/actions/u26 # zizmor: ignore[self-repository]
+      uses: ./.github/actions/u24 # zizmor: ignore[self-repository]
       with:
         d: ${{ inputs.d }}
     - name: Restore Velnor tool seed
