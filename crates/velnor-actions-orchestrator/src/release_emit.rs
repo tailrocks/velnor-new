@@ -11,7 +11,7 @@ use velnor_actions_rust::release_select::DEFAULT_REGISTRY;
 use velnor_actions_workflow_renderer::release_jobs::ReleaseWorkflowSpec;
 use velnor_actions_workflow_renderer::release_spec::publish_gate_condition;
 use velnor_actions_workflow_renderer::release_tree::{
-    RELEASE_HOSTED_RUNNER, ReleaseRenderContext, render_release_files,
+    RELEASE_HOSTED_RUNNER, render_release_files,
 };
 use velnor_actions_workflow_renderer::{MiseSetup, render::RenderedFile};
 
@@ -25,7 +25,7 @@ use crate::release_steps::{JobInputs, assemble_jobs};
 
 #[path = "release_emit_config.rs"]
 mod config;
-use config::plz_config;
+use config::{plz_config, release_render_context};
 
 #[path = "release_emit_plan.rs"]
 mod plan;
@@ -128,13 +128,6 @@ fn release_files_for_config(
     };
     let ctx = release_render_context();
     Ok(render_release_files(&spec, &ctx, &config, &intent)?.as_sorted_vec())
-}
-
-fn release_render_context() -> ReleaseRenderContext {
-    ReleaseRenderContext {
-        generator_version: env!("CARGO_PKG_VERSION").to_owned(),
-        runs_on: RELEASE_HOSTED_RUNNER.to_owned(),
-    }
 }
 
 fn build_release_jobs(

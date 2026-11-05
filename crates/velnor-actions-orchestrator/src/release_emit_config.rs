@@ -47,3 +47,12 @@ pub(super) fn plz_config(
             .collect(),
     })
 }
+
+use velnor_actions_workflow_renderer::release_tree::{ReleaseRenderContext, RELEASE_HOSTED_RUNNER};
+
+pub(super) fn release_render_context() -> ReleaseRenderContext {
+    ReleaseRenderContext {
+        generator_version: env!("CARGO_PKG_VERSION").to_owned(),
+        runs_on: RELEASE_HOSTED_RUNNER.to_owned(),
+    }
+}
