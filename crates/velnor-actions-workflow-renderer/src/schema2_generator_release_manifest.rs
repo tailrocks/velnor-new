@@ -110,6 +110,9 @@ fn product_download_steps() -> Vec<Yaml> {
 
 fn candidate_manifest_steps() -> Result<Vec<Yaml>, RenderError> {
     let mut steps = Vec::new();
+    steps.push(workflow_steps::validate_artifact_id(
+        "${{ needs.candidate-manifest.outputs.artifact_id }}",
+    ));
     steps.push(workflow_steps::download_step_by_id(
         "Download exact canonical candidate manifest",
         "${{ needs.candidate-manifest.outputs.artifact_id }}",

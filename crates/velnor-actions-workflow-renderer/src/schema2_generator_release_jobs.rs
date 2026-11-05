@@ -258,6 +258,9 @@ fn publish_steps(pins: &ProductReleasePins) -> Result<Vec<Yaml>, RenderError> {
             &artifact_id,
         ));
     }
+    steps.push(workflow_steps::validate_artifact_id(
+        "${{ needs.candidate-manifest.outputs.artifact_id }}",
+    ));
     steps.push(workflow_steps::download_step_by_id(
         "Download canonical same-run release manifest",
         "${{ needs.candidate-manifest.outputs.artifact_id }}",

@@ -60,6 +60,9 @@ pub(super) fn job(
         job.product,
         "Download built asset files",
     ));
+    action_steps.push(workflow_steps::validate_artifact_id(
+        "${{ inputs.manifest_artifact_id }}",
+    ));
     action_steps.push(workflow_steps::download_step_by_id(
         "Download canonical same-run candidate manifest",
         "${{ inputs.manifest_artifact_id }}",

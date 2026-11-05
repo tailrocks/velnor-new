@@ -215,10 +215,12 @@ pub(super) fn download_build_steps_for_id(
     name: &str,
     artifact_id: &str,
 ) -> Vec<Yaml> {
-    download_steps_with(
+    let mut steps = vec![workflow_steps::validate_artifact_id(artifact_id)];
+    steps.extend(download_steps_with(
         asset,
         workflow_steps::download_step_by_id(name, artifact_id, asset.directory),
-    )
+    ));
+    steps
 }
 
 fn download_steps_with(asset: ProductAsset, download: Yaml) -> Vec<Yaml> {

@@ -33,10 +33,7 @@ fn admission_mac_and_finalizer_are_bound_in_generated_graph() -> Result<(), Box<
             .iter()
             .position(|step| step["name"] == name)
             .ok_or("raw download")?;
-        assert_eq!(
-            final_steps[index - 1]["name"],
-            "Validate exact evidence artifact ID"
-        );
+        assert_eq!(final_steps[index - 1]["name"], "Validate exact artifact ID");
         let step = &final_steps[index];
         assert_eq!(step["with"]["skip-decompress"], true);
     }
@@ -204,7 +201,7 @@ fn evidence_artifact_id_guard_rejects_empty_and_malformed_ids() -> Result<(), Bo
         .position(|step| step["name"] == "Download exact admission")
         .ok_or("download")?;
     let guard = &steps[index - 1];
-    assert_eq!(guard["name"], "Validate exact evidence artifact ID");
+    assert_eq!(guard["name"], "Validate exact artifact ID");
     let script = guard["run"].as_str().ok_or("guard")?;
     for (id, expected) in [
         ("123", true),
@@ -220,6 +217,48 @@ fn evidence_artifact_id_guard_rejects_empty_and_malformed_ids() -> Result<(), Bo
             .env("VELNOR_EVIDENCE_ARTIFACT_ID", id)
             .status()?;
         assert_eq!(status.success(), expected, "{id:?}");
+    }
+    Ok(())
+}
+
+#[test]
+fn every_generated_artifact_id_download_is_preceded_by_its_guard() -> Result<(), Box<dyn Error>> {
+    for file in super::rendered()? {
+        if std::path::Path::new(&file.path)
+            .extension()
+            .is_some_and(|ext| ext.eq_ignore_ascii_case("yml"))
+        {
+            let yaml: serde_json::Value = serde_saphyr::from_str(&file.bytes)?;
+            check_download_guards(&yaml)?;
+        }
+    }
+    Ok(())
+}
+
+fn check_download_guards(value: &serde_json::Value) -> Result<(), Box<dyn Error>> {
+    match value {
+        serde_json::Value::Array(items) => {
+            for (index, item) in items.iter().enumerate() {
+                if let Some(id) = item
+                    .pointer("/with/artifact-ids")
+                    .and_then(serde_json::Value::as_str)
+                {
+                    let previous = index
+                        .checked_sub(1)
+                        .and_then(|i| items.get(i))
+                        .ok_or("missing artifact guard")?;
+                    assert_eq!(previous["name"], "Validate exact artifact ID");
+                    assert_eq!(previous["env"]["VELNOR_EVIDENCE_ARTIFACT_ID"], id);
+                }
+                check_download_guards(item)?;
+            }
+        }
+        serde_json::Value::Object(fields) => {
+            for child in fields.values() {
+                check_download_guards(child)?;
+            }
+        }
+        _ => {}
     }
     Ok(())
 }

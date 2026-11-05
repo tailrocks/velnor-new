@@ -236,6 +236,14 @@ pub(super) fn release_compiler_output_dir(target: ReleaseTarget) -> String {
     }
 }
 
+pub(super) fn validate_artifact_id(value: &str) -> Yaml {
+    bash_step_with_env(
+        "Validate exact artifact ID",
+        "set -eu\n[[ \"$VELNOR_EVIDENCE_ARTIFACT_ID\" =~ ^[1-9][0-9]*$ ]]",
+        vec![("VELNOR_EVIDENCE_ARTIFACT_ID", value)],
+    )
+}
+
 pub(super) fn download_step_by_id(name: &str, artifact_id: &str, path: &str) -> Yaml {
     Yaml::Map(vec![
         ("name".to_owned(), Yaml::str(name)),
