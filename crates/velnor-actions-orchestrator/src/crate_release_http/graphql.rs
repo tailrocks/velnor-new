@@ -268,4 +268,109 @@ mod tests {
         worker.join().map_err(|_| "server")?;
         Ok(())
     }
+    #[test]
+    fn native_feedback_adapter_dispatches_only_fixed_queries()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use crate::github_review_feedback::{FeedbackQuery, FeedbackRead};
+        let (origin, worker) = server(vec![reply(
+            "200 OK",
+            r#"{"data":{"repository":{"pullRequest":{"latestOpinionatedReviews":{"nodes":[],"pageInfo":{"hasNextPage":false,"endCursor":null}}}}}}"#,
+        )]);
+        let api = crate::crate_release_github::NativeGitHubAdmissionRead {
+            reader: client(origin),
+        };
+        let fields = [
+            ("owner", "owner".into()),
+            ("name", "repo".into()),
+            ("number", "7".into()),
+        ];
+        api.feedback_graphql(FeedbackQuery::Opinions, &fields)?;
+        let requests = worker.join().map_err(|_| "server")?;
+        assert!(requests[0].contains("latestOpinionatedReviews"));
+        let duplicate = [
+            ("owner", "owner".into()),
+            ("owner", "other".into()),
+            ("name", "repo".into()),
+            ("number", "7".into()),
+        ];
+        assert!(
+            api.feedback_graphql(FeedbackQuery::Threads, &duplicate)
+                .is_err()
+        );
+        Ok(())
+    }
+    #[test]
+    fn native_transport_drives_complete_feedback_capture() -> Result<(), Box<dyn std::error::Error>>
+    {
+        use crate::github_review_feedback::{
+            FeedbackContext, capture_feedback, verify_complete_feedback,
+        };
+        use std::collections::BTreeSet;
+        use velnor_actions_contract::{
+            canonical_json_bytes,
+            homebrew_review_completion::{
+                TAP_REVIEW_COMPLETION_SCHEMA, TapCompletedReviewer, TapReviewCompletionPayload,
+                TapReviewVerdict,
+            },
+        };
+        let head = "a".repeat(40);
+        let pull = serde_json::json!({"number":7,"head":{"sha":head},"commits":1}).to_string();
+        let commits = serde_json::json!([{"sha":head}]).to_string();
+        let threads = r#"{"data":{"repository":{"pullRequest":{"reviewThreads":{"nodes":[],"pageInfo":{"hasNextPage":false,"endCursor":null}}}}}}"#;
+        let opinions = r#"{"data":{"repository":{"pullRequest":{"latestOpinionatedReviews":{"nodes":[],"pageInfo":{"hasNextPage":false,"endCursor":null}}}}}}"#;
+        let mut responses = Vec::new();
+        for _ in 0..3 {
+            for body in [
+                pull.as_str(),
+                commits.as_str(),
+                "[]",
+                "[]",
+                "[]",
+                "[]",
+                threads,
+                opinions,
+                pull.as_str(),
+            ] {
+                responses.push(reply("200 OK", body));
+            }
+        }
+        let (origin, worker) = server(responses);
+        let api = crate::crate_release_github::NativeGitHubAdmissionRead {
+            reader: client(origin),
+        };
+        let reviewers = BTreeSet::from([90]);
+        let context = FeedbackContext {
+            repository: "acme/repo",
+            pull_request_number: 7,
+            head_sha: &head,
+            completion_app_id: 80,
+            completion_check_name: "review-complete",
+            expected_reviewer_app_ids: &reviewers,
+        };
+        let captured = capture_feedback(&api, &context, &[])?;
+        let payload = TapReviewCompletionPayload {
+            schema: TAP_REVIEW_COMPLETION_SCHEMA.into(),
+            repository: "acme/repo".into(),
+            pull_request_number: 7,
+            head_sha: head.clone(),
+            verdict: TapReviewVerdict::Complete,
+            feedback_digest: captured.snapshot.canonical_digest()?,
+            has_unaddressed_findings: false,
+            reviewers: vec![TapCompletedReviewer {
+                app_id: 90,
+                head_sha: head.clone(),
+                evidence_digest: format!("b3-{}", "c".repeat(64)),
+                complete: true,
+                has_unaddressed_findings: false,
+            }],
+        };
+        let text = String::from_utf8(canonical_json_bytes(&payload)?)?;
+        let checks = [
+            serde_json::json!({"name":"review-complete","app":{"id":80},"head_sha":head,"status":"completed","conclusion":"success","output":{"text":text}}),
+        ];
+        let result = verify_complete_feedback(&api, &context, &checks)?;
+        assert_eq!(result.records_digest, captured.snapshot.records_digest);
+        assert_eq!(worker.join().map_err(|_| "server")?.len(), 27);
+        Ok(())
+    }
 }

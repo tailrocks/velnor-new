@@ -116,6 +116,48 @@ impl crate::crate_release_qualification_witness::WitnessRead for NativeGitHubAdm
     }
 }
 
+impl crate::github_review_feedback::FeedbackRead for NativeGitHubAdmissionRead {
+    fn feedback_get(&self, route: &str) -> Result<Value, OrchestratorError> {
+        self.reader.get(route)
+    }
+
+    fn feedback_graphql(
+        &self,
+        query: crate::github_review_feedback::FeedbackQuery,
+        fields: &[(&str, String)],
+    ) -> Result<Value, OrchestratorError> {
+        let mut values = BTreeMap::new();
+        for (name, value) in fields {
+            if !matches!(*name, "owner" | "name" | "number" | "cursor")
+                || values.insert(*name, value.as_str()).is_some()
+            {
+                return Err(internal("qualification_feedback_fields"));
+            }
+        }
+        let owner = values
+            .get("owner")
+            .ok_or_else(|| internal("qualification_feedback_fields"))?;
+        let name = values
+            .get("name")
+            .ok_or_else(|| internal("qualification_feedback_fields"))?;
+        let number = values
+            .get("number")
+            .and_then(|s| s.parse::<u32>().ok())
+            .filter(|n| *n > 0)
+            .ok_or_else(|| internal("qualification_feedback_fields"))?;
+        let repository = format!("{owner}/{name}");
+        let cursor = values.get("cursor").copied();
+        match query {
+            crate::github_review_feedback::FeedbackQuery::Threads => self
+                .reader
+                .qualification_review_threads(&repository, number, cursor),
+            crate::github_review_feedback::FeedbackQuery::Opinions => self
+                .reader
+                .qualification_opinionated_reviews(&repository, number, cursor),
+        }
+    }
+}
+
 pub fn admit_github_evidence(
     request: &GitHubAdmissionRequest,
     api: &dyn GitHubAdmissionRead,

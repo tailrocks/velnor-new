@@ -148,7 +148,7 @@ pub(super) fn valid_route(route: &str) -> bool {
                 .is_some_and(|(left, right)| valid_sha(left) && valid_segment(right))
                 && query.is_empty()
         }
-        ["environments", name]
+        ["environments" | "branches", name]
         | ["git", "ref", "heads" | "tags", name]
         | ["collaborators", name, "permission"]
         | ["releases", "tags", name] => valid_segment(name) && query.is_empty(),
