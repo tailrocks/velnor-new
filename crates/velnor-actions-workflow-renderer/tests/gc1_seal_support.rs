@@ -103,6 +103,20 @@ case "$verb" in
     esac
     file=$1
     shift
+    read -r skey sid ssize < "$file"
+    if [ -f "$d/hang-keys" ] && grep -qxF "$skey" "$d/hang-keys"; then sleep 10; exit 1; fi
+    if [ -f "$d/rendezvous" ]; then
+      read -r want < "$d/rendezvous"
+      slot=1
+      while [ "$slot" -le "$want" ]; do
+        if mkdir "$d/rv/$slot" 2>/dev/null; then
+          waited=0
+          while [ "$(ls "$d/rv" | wc -l | tr -d ' ')" -lt "$want" ] && [ "$waited" -lt 100 ]; do sleep 0.1; waited=$((waited + 1)); done
+          break
+        fi
+        slot=$((slot + 1))
+      done
+    fi
     repo=; signer=; sref=; pred=
     while [ $# -gt 0 ]; do
       case "$1" in -R) repo=$2; shift ;; --signer-workflow) signer=$2; shift ;; --source-ref) sref=$2; shift ;; --predicate-type) pred=$2; shift ;; esac
