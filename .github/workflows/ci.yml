@@ -929,7 +929,7 @@ jobs:
       - *s16
       - *s17
       - name: Stage isolated GitHub CLI test tools
-        run: env -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR python3 -I scripts/prepare-gh-fixture-tools.py
+        run: env -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR /usr/bin/python3 -I scripts/prepare-gh-fixture-tools.py
       - name: Build test executables
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-d40845ae3812ea99f47a064b9ce41403dcdc3ebb35ce4d84fb332605bc9355a7"}
