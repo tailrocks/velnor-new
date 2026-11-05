@@ -132,7 +132,11 @@ fn read_entry(root: &Path, raw: &[u8], symlink: bool) -> Result<(Vec<u8>, u32), 
     {
         return Err(invalid());
     }
-    Ok((bytes, (before.st_mode & 0o777).into()))
+    #[cfg(target_os = "macos")]
+    let mode = u32::from(before.st_mode & 0o777);
+    #[cfg(not(target_os = "macos"))]
+    let mode = before.st_mode & 0o777;
+    Ok((bytes, mode))
 }
 
 #[cfg(not(unix))]

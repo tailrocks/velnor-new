@@ -47,6 +47,7 @@ fn captured_planner_isolated_from_live_edits_and_hydrates_symlink_target()
         .and_then(Path::parent)
         .ok_or("root")?;
     let status = Command::new("/usr/bin/git")
+        .env("GIT_LFS_SKIP_SMUDGE", "1")
         .args(["clone", "--no-local", "--quiet"])
         .arg(root)
         .arg(&repo)
