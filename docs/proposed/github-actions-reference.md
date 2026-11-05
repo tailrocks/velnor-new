@@ -8,6 +8,10 @@ When designing workflows in the Velnor V1 generator or implementing runner infra
 
 ---
 
+### Branch-only image candidate trigger (checked 2026-11-05)
+
+GitHub's [push filter syntax](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#onpushbranchestagsbranches-ignoretags-ignore) says a branch-only filter does not run for tag pushes. Its [filter pattern reference](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#filter-pattern-cheat-sheet) defines `**` to include slash-separated names. The job-image candidate workflow uses `branches: ["**"]` to retain branch candidate runs without rebuilding or attesting on a tag push. Manual dispatch remains available; publication retains its separate main-branch dispatch gate.
+
 ## Official Source Repositories
 
 ### 1. Runner Core & Execution Protocol

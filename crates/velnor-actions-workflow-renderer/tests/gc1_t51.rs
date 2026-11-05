@@ -368,3 +368,24 @@ pub(crate) use gc1_t51_stream::*;
 mod gc1_t51_argv;
 
 use gc1_t51_argv::*;
+
+#[test]
+fn image_candidate_runs_on_branches_and_dispatch_but_not_tags() -> Result<(), Box<dyn Error>> {
+    let workflow: serde_json::Value = serde_saphyr::from_str(&candidate_text()?)?;
+    assert_eq!(
+        workflow["on"]["push"]["branches"],
+        serde_json::json!(["**"])
+    );
+    assert!(workflow["on"]["push"].get("tags").is_none());
+    assert!(workflow["on"].get("workflow_dispatch").is_some());
+    let permissions = &workflow["jobs"]["attest-image-candidate"]["permissions"];
+    assert_eq!(permissions["attestations"], "write");
+    assert_eq!(permissions["artifact-metadata"], "write");
+    assert_eq!(permissions["id-token"], "write");
+    let condition = workflow["jobs"]["publish-job-image"]["if"]
+        .as_str()
+        .ok_or("publish condition")?;
+    assert!(condition.contains("github.event_name == 'workflow_dispatch'"));
+    assert!(condition.contains("github.ref == 'refs/heads/main'"));
+    Ok(())
+}
