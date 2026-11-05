@@ -104,7 +104,7 @@ fn posts_exact_approved_tag_and_release() {
     );
     assert_eq!(
         release_body,
-        serde_json::json!({"tag_name":"demo-crate-v0.1.1", "name":"demo-crate-v0.1.1", "target_commitish":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"})
+        serde_json::json!({"tag_name":"demo-crate-v0.1.1", "name":"demo-crate-v0.1.1", "target_commitish":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "make_latest":"false"})
     );
 }
 

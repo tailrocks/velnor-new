@@ -278,7 +278,7 @@
                 let value: serde_json::Value =
                     serde_json::from_slice(body).map_err(|e| e.to_string())?;
                 if value
-                    != serde_json::json!({"tag_name":"demo-v0.1.1","name":"demo-v0.1.1","target_commitish":sha})
+                    != serde_json::json!({"tag_name":"demo-v0.1.1","name":"demo-v0.1.1","target_commitish":sha,"make_latest":"false"})
                 {
                     return Err("wrong release mutation".into());
                 }

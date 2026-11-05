@@ -149,8 +149,7 @@ impl GitHubAdmissionHttp {
         source_sha: &str,
     ) -> Result<(), OrchestratorError> {
         validate_write(repository, tag, source_sha)?;
-        let body =
-            serde_json::json!({"tag_name": tag, "name": tag, "target_commitish": source_sha});
+        let body = serde_json::json!({"tag_name": tag, "name": tag, "target_commitish": source_sha, "make_latest": "false"});
         let result = self.post(&format!("repos/{repository}/releases"), &body)?;
         let expected = format!("https://github.com/{repository}/releases/tag/{tag}");
         let expected_encoded = format!(
