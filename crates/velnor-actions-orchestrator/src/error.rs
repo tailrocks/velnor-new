@@ -113,6 +113,20 @@ impl OrchestratorError {
     }
 }
 
+impl From<velnor_actions_contract::HelperError> for OrchestratorError {
+    fn from(error: velnor_actions_contract::HelperError) -> Self {
+        use velnor_actions_contract::HelperError;
+        match error {
+            HelperError::UnsafePath { path, reason } => Self::UnsafePath { path, reason },
+            HelperError::Internal { problem } => Self::Internal { problem },
+            HelperError::Io { path, problem } => Self::Io { path, problem },
+            _ => Self::Internal {
+                problem: error.to_string(),
+            },
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum WarmRemedy {
     Command {

@@ -319,7 +319,7 @@ fn materialize(
         checkpoint(deadline)?;
     }
     binary::project_mise_binary(home, check.check.runner.platform, runtime, deadline)?;
-    crate::exclusive_write::write_exclusive_until(
+    velnor_actions_contract::exclusive_write::write_exclusive_until(
         &home.join("empty.toml"),
         b"",
         "check_config",
@@ -360,7 +360,7 @@ fn materialize(
     let projection = qualified
         .bound_projection()
         .map_err(|e| internal(&e.to_string()))?;
-    crate::exclusive_write::write_exclusive_until(
+    velnor_actions_contract::exclusive_write::write_exclusive_until(
         &home.join("tasks.toml"),
         projection.as_bytes(),
         "check_config",

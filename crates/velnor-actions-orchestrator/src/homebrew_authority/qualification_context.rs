@@ -85,7 +85,7 @@ fn capture_dispatch(
     let source_sha = std::env::var("GITHUB_SHA").ok();
     let run_id = std::env::var("GITHUB_RUN_ID").ok();
     let run_attempt = std::env::var("GITHUB_RUN_ATTEMPT").ok();
-    let runner = crate::request_event::QualificationRunnerContext {
+    let runner = velnor_actions_contract::request_event::QualificationRunnerContext {
         repository: github_repository.as_deref(),
         git_ref: git_ref.as_deref(),
         ref_protected: ref_protected.as_deref(),
@@ -96,7 +96,7 @@ fn capture_dispatch(
         run_attempt: run_attempt.as_deref(),
     };
     let dispatch =
-        crate::request_event::qualification_dispatch_for_parts(&event_name, &payload, runner)?
+        velnor_actions_contract::request_event::qualification_dispatch_for_parts(&event_name, &payload, runner)?
             .ok_or_else(|| internal("homebrew_authority_qualification_event"))?;
     if !dispatch_is_admitted(&dispatch, repository, expected_head, &event_name) {
         return Err(internal("homebrew_authority_qualification_runner_context"));

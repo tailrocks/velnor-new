@@ -8,6 +8,7 @@ use velnor_actions_contract::{Step, StepKind, StepRole};
 
 const CHECKOUT_USES: &str = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1";
 const PUSH_EXPRESSION: &str = "${{ github.event_name == 'push' && '1' || '0' }}";
+const MERGE_PARENTS_EXPRESSION: &str = "${{ github.event_name == 'push' && '1' || '2' }}";
 
 fn checkout_with_depth(depth: &str) -> Step {
     Step {
@@ -28,8 +29,8 @@ fn checkout_with_depth(depth: &str) -> Step {
 }
 
 #[test]
-fn configured_checkout_accepts_only_the_two_promised_fetch_depths() {
-    for accepted in ["0", PUSH_EXPRESSION] {
+fn configured_checkout_accepts_only_the_three_promised_fetch_depths() {
+    for accepted in ["0", PUSH_EXPRESSION, MERGE_PARENTS_EXPRESSION] {
         assert!(
             is_configured_checkout(&checkout_with_depth(accepted), CHECKOUT_USES),
             "fetch-depth {accepted:?} must stay a configured checkout"
@@ -45,6 +46,11 @@ fn configured_checkout_accepts_only_the_two_promised_fetch_depths() {
         "${{ github.event_name == 'push' && '2' || '0' }}",
         "${{  github.event_name == 'push' && '1' || '0' }}",
         "${{ github.event_name == 'push' && '1' || '0' }} ",
+        "${{ github.event_name != 'push' && '1' || '2' }}",
+        "${{ github.event_name == 'push' && '1' || '3' }}",
+        "${{ github.event_name == 'push' && '2' || '2' }}",
+        "${{ github.event_name == 'merge_group' && '1' || '2' }}",
+        "${{ github.event_name == 'push' && '1' || '2' }} ",
     ] {
         assert!(
             !is_configured_checkout(&checkout_with_depth(rejected), CHECKOUT_USES),

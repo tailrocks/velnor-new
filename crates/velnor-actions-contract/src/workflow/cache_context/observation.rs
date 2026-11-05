@@ -7,6 +7,8 @@ use crate::canonical::canonical_json_bytes;
 use crate::errors::ContractError;
 use crate::workflow::cache_identity::{parse_strict_record, require_nonempty};
 
+pub const UNIT_OBSERVATION_SUFFIX: &str = ".observation.json";
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ObservationGapCode {

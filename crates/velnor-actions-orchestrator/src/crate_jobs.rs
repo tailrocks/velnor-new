@@ -7,6 +7,7 @@ use velnor_actions_contract::{
     CacheAccess, CompiledStateMode, CrateJob, Job, JobTimeout, ProposedTask, Stack, Step,
     VelnorConfig, WorkflowPolicy, crate_display_name, tofu_display_name,
 };
+use velnor_actions_contract::workflow::cache_family::S256;
 use velnor_actions_contract::workflow::ledger_cli::{LEDGER_CLI_JOB_ID, LedgerCliSource};
 use velnor_actions_mise::{TaskCacheMode, ToolCatalog};
 use velnor_actions_workflow_renderer::steps::CompileDriver as RenderDriver;
@@ -53,6 +54,7 @@ pub(crate) use stage::{is_mbx, is_nextest, is_opentofu, is_rust};
 pub(crate) struct CrateBuild {
     pub(crate) ledger_cli: Option<(String, Job)>,
     pub(crate) producers: Vec<(String, Job)>,
+    pub(crate) state_recipes: BTreeMap<String, S256>,
     pub(crate) jobs: Vec<(String, Job)>,
     pub(crate) drivers: BTreeMap<String, RenderDriver>,
 }
@@ -69,6 +71,7 @@ pub(crate) fn build_for_workflow(
     fetch_roots: &[String],
     acquire: Option<&Step>,
     helper_version: &str,
+    generator_version: &str,
     private: Option<&PrivateWiring>,
 ) -> Result<CrateBuild, OrchestratorError> {
     let no_crates = BTreeMap::new();
@@ -89,6 +92,7 @@ pub(crate) fn build_for_workflow(
             max_parallel_jobs: config.workflow.max_parallel_jobs,
             timeout: JobTimeout::new(config.workflow.crate_timeout_minutes)?,
             helper_version,
+            generator_version,
             crates,
             compiled_state: config.stacks.compiled_state(),
             seed_parallel_targets: config
@@ -137,11 +141,12 @@ fn build_crate_jobs_with_seed_timeout(
     if let Some((id, _)) = &ledger_cli {
         drivers.insert(id.clone(), RenderDriver::Cargo);
     }
+    let roots: Vec<_> = producer_roots.into_values().collect();
+    let recipe_jobs =
+        state_producer::state_producer_jobs(&input, &lane, &roots, private, seed_timeout)?;
+    let state_recipes = state_producer::recipe_digests(&recipe_jobs, input.helper_version, input.generator_version)?;
     let producers = match input.compiled_state {
-        CompiledStateMode::Union => {
-            let roots: Vec<_> = producer_roots.into_values().collect();
-            state_producer::state_producer_jobs(&input, &lane, &roots, private, seed_timeout)?
-        }
+        CompiledStateMode::Union => recipe_jobs,
         CompiledStateMode::Off => Vec::new(),
     };
     for (id, _) in &producers {
@@ -150,6 +155,7 @@ fn build_crate_jobs_with_seed_timeout(
     Ok(CrateBuild {
         ledger_cli,
         producers,
+        state_recipes,
         jobs,
         drivers,
     })

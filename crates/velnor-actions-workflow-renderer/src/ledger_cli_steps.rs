@@ -5,10 +5,11 @@ use std::collections::BTreeMap;
 
 use velnor_actions_contract::workflow::ledger_cli::{
     LEDGER_CLI_ARTIFACT_NAME, LEDGER_CLI_ARTIFACT_NAME_EXPR, LEDGER_CLI_BUILD_STEP,
-    LEDGER_CLI_CONSUME_CONDITION, LEDGER_CLI_DOWNLOAD_STEP, LEDGER_CLI_OFFLINE_FLAG,
-    LEDGER_CLI_PUBLISH_STEP, LEDGER_CLI_SHA256_ENV, LEDGER_CLI_SHA256_EXPR,
-    LEDGER_CLI_SOURCE_SHA_ENV, LEDGER_CLI_SOURCE_SHA_EXPR, LEDGER_CLI_UPLOAD_STEP,
-    LEDGER_CLI_VERIFY_STEP,
+    LEDGER_CLI_CONSUME_CONDITION, LEDGER_CLI_DOWNLOAD_STEP, LEDGER_CLI_FEATURE,
+    LEDGER_CLI_FEATURES_FLAG, LEDGER_CLI_NO_DEFAULT_FEATURES_FLAG, LEDGER_CLI_OFFLINE_FLAG,
+    LEDGER_CLI_PUBLISH_STEP, LEDGER_CLI_REJECTION_MARKER, LEDGER_CLI_SHA256_ENV,
+    LEDGER_CLI_SHA256_EXPR, LEDGER_CLI_SMOKE_OP, LEDGER_CLI_SOURCE_SHA_ENV,
+    LEDGER_CLI_SOURCE_SHA_EXPR, LEDGER_CLI_UPLOAD_STEP, LEDGER_CLI_VERIFY_STEP,
 };
 use velnor_actions_contract::{
     RUSTUP_AUTO_INSTALL_DISABLED, RUSTUP_AUTO_INSTALL_ENV, Step, StepId, StepRole,
@@ -49,23 +50,35 @@ fn verify_script() -> String {
     )
 }
 
-const PUBLISH_SCRIPT: &str = concat!(
-    "set -eu; ",
-    "out=\"$RUNNER_TEMP/velnor/ledger-cli-out\"; ",
-    "meta=\"$RUNNER_TEMP/velnor/ledger-cli-meta\"; ",
-    "rm -rf \"$out\" \"$meta\"; ",
-    "mkdir -p \"$out\" \"$meta\"; ",
-    "cp \"$CARGO_TARGET_DIR/debug/velnor-actions\" \"$out/velnor-actions\"; ",
-    "if command -v sha256sum >/dev/null 2>&1; then ",
-    "sha256sum \"$out/velnor-actions\" > \"$meta/sha256\"; ",
-    "else ",
-    "shasum -a 256 \"$out/velnor-actions\" > \"$meta/sha256\"; ",
-    "fi; ",
-    "read -r digest _ < \"$meta/sha256\"; ",
-    "git rev-parse HEAD > \"$meta/head\"; ",
-    "read -r head < \"$meta/head\"; ",
-    "printf 'sha256=%s\\nsource_sha=%s\\n' \"$digest\" \"$head\" >> \"$GITHUB_OUTPUT\"",
-);
+fn publish_script() -> String {
+    format!(
+        concat!(
+            "set -eu; ",
+            "bin=\"$CARGO_TARGET_DIR/debug/velnor-actions\"; ",
+            "smoke=\"$RUNNER_TEMP/velnor/ledger-cli-smoke.txt\"; ",
+            "mkdir -p \"$RUNNER_TEMP/velnor\"; ",
+            "code=0; env -i VELNOR_INTERNAL_OP={} \"$bin\" > \"$smoke\" 2>&1 || code=$?; ",
+            "[ \"$code\" -eq 2 ] || exit 1; ",
+            "grep -qF \"{}\" \"$smoke\" || exit 1; ",
+            "rm -f \"$smoke\"; ",
+            "out=\"$RUNNER_TEMP/velnor/ledger-cli-out\"; ",
+            "meta=\"$RUNNER_TEMP/velnor/ledger-cli-meta\"; ",
+            "rm -rf \"$out\" \"$meta\"; ",
+            "mkdir -p \"$out\" \"$meta\"; ",
+            "cp \"$bin\" \"$out/velnor-actions\"; ",
+            "if command -v sha256sum >/dev/null 2>&1; then ",
+            "sha256sum \"$out/velnor-actions\" > \"$meta/sha256\"; ",
+            "else ",
+            "shasum -a 256 \"$out/velnor-actions\" > \"$meta/sha256\"; ",
+            "fi; ",
+            "read -r digest _ < \"$meta/sha256\"; ",
+            "git rev-parse HEAD > \"$meta/head\"; ",
+            "read -r head < \"$meta/head\"; ",
+            "printf 'sha256=%s\\nsource_sha=%s\\n' \"$digest\" \"$head\" >> \"$GITHUB_OUTPUT\"",
+        ),
+        LEDGER_CLI_SMOKE_OP, LEDGER_CLI_REJECTION_MARKER,
+    )
+}
 
 fn sh_step(
     name: &str,
@@ -102,6 +115,9 @@ pub fn ledger_cli_build_step(
         LEDGER_CLI_OFFLINE_FLAG,
         "-p",
         "velnor-actions-cli",
+        LEDGER_CLI_NO_DEFAULT_FEATURES_FLAG,
+        LEDGER_CLI_FEATURES_FLAG,
+        LEDGER_CLI_FEATURE,
         "--bin",
         BINARY_NAME,
     ]
@@ -122,7 +138,7 @@ pub fn ledger_cli_build_step(
 pub fn ledger_cli_publish_step() -> Result<Step, RenderError> {
     sh_step(
         LEDGER_CLI_PUBLISH_STEP,
-        PUBLISH_SCRIPT,
+        &publish_script(),
         BTreeMap::from([(TARGET_ENV.to_owned(), LEDGER_CLI_TARGET_DIR.to_owned())]),
         StepRole::LedgerCliPublish,
         Some(StepId::LedgerCliPublish),

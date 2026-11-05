@@ -299,7 +299,7 @@ pub(crate) fn check_velnor_identity(
         return Ok(());
     }
     if let Ok(hint) = std::env::var("GITHUB_REPOSITORY")
-        && crate::origin::validate_repository_slug(&hint).as_deref() != Some(VELNOR_IDENTITY)
+        && velnor_actions_contract::validate_repository_slug(&hint).as_deref() != Some(VELNOR_IDENTITY)
     {
         return Err(OrchestratorError::IdentityRejected {
             problem: "github_repository_mismatch:velnor_policy_requires_tailrocks_velnor_new"

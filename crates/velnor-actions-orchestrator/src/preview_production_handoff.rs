@@ -1,10 +1,10 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use velnor_actions_contract::exclusive_write::{create_dir_no_symlink, write_exclusive_until};
 use crate::filesystem_owner::held_file::HeldFile;
 use crate::{
     OrchestratorError,
-    exclusive_write::{create_dir_no_symlink, write_exclusive_until},
     internal::internal,
     package_release_artifacts::VerifiedPackageArtifact,
 };

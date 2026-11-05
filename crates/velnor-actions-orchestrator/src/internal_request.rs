@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use velnor_actions_contract::{
     FINAL_JSON_FILENAME, FinalStatus, MATRIX_JSON_FILENAME, NAMED_CHECK_LANES_ENV, NamedCheckLane,
     PLAN_JSON_FILENAME, QualificationDispatch, WorkflowEvent, canonical_json_bytes,
-    matrix_json_bytes, plan_json_bytes, run_key_for_ci, validate_run_key,
+    matrix_json_bytes, plan_json_bytes,
 };
 
 use crate::OrchestratorError;
@@ -17,7 +17,7 @@ use crate::decisions::plan_artifact_dir;
 use crate::internal::{
     MERGE_OP, PLAN_OP, PlanResponse, SCHEMA, check_schema, internal, internal_contract,
 };
-use crate::request_event::{
+use velnor_actions_contract::request_event::{
     QualificationRunnerContext, qualification_dispatch_for_parts, request_refs, workflow_event_for,
 };
 
@@ -146,9 +146,9 @@ fn write_request_parts_with_lanes(
     };
     let bytes = canonical_json_bytes(&request).map_err(internal_contract)?;
     if let Some(parent) = path.parent() {
-        crate::exclusive_write::create_dir_no_symlink(anchor, parent)?;
+        velnor_actions_contract::exclusive_write::create_dir_no_symlink(anchor, parent)?;
     }
-    crate::exclusive_write::write_exclusive(&path, &bytes, "request")?;
+    velnor_actions_contract::exclusive_write::write_exclusive(&path, &bytes, "request")?;
     Ok(path)
 }
 
@@ -185,9 +185,9 @@ pub(crate) fn write_plan_files(
     response.validate()?;
     let plan = plan_json_bytes(&response.plan).map_err(internal_contract)?;
     let matrix = matrix_json_bytes(&response.plan.matrix).map_err(internal_contract)?;
-    crate::exclusive_write::create_dir_no_symlink(artifact_anchor(velnor_dir)?, dir)?;
-    crate::exclusive_write::write_exclusive(&dir.join(PLAN_JSON_FILENAME), &plan, "plan_artifact")?;
-    crate::exclusive_write::write_exclusive(
+    velnor_actions_contract::exclusive_write::create_dir_no_symlink(artifact_anchor(velnor_dir)?, dir)?;
+    velnor_actions_contract::exclusive_write::write_exclusive(&dir.join(PLAN_JSON_FILENAME), &plan, "plan_artifact")?;
+    velnor_actions_contract::exclusive_write::write_exclusive(
         &dir.join(MATRIX_JSON_FILENAME),
         &matrix,
         "plan_artifact",
@@ -203,9 +203,9 @@ pub fn publish_final_report(
         serde_json::from_str(response_json).map_err(|_| internal("malformed_response"))?;
     check_schema(report.schema)?;
     let dir = plan_artifact_dir(velnor_dir, &report.run_key)?;
-    crate::exclusive_write::create_dir_no_symlink(artifact_anchor(velnor_dir)?, &dir)?;
+    velnor_actions_contract::exclusive_write::create_dir_no_symlink(artifact_anchor(velnor_dir)?, &dir)?;
     let bytes = canonical_json_bytes(&report).map_err(internal_contract)?;
-    crate::exclusive_write::write_exclusive(
+    velnor_actions_contract::exclusive_write::write_exclusive(
         &dir.join(FINAL_JSON_FILENAME),
         &bytes,
         "plan_artifact",
@@ -224,30 +224,6 @@ pub fn merge_passed(response_json: &str) -> Result<bool, OrchestratorError> {
         verdict.status,
         FinalStatus::Passed | FinalStatus::NoWork
     ))
-}
-
-use velnor_actions_workflow_renderer::render::PLAN_ATTEMPT_ENV;
-
-pub(crate) fn resolve_run_key(explicit: Option<&str>) -> Result<String, OrchestratorError> {
-    if let Some(key) = explicit.filter(|key| !key.trim().is_empty()) {
-        validate_run_key(key).map_err(internal_contract)?;
-        return Ok(key.to_owned());
-    }
-    let id = env::var("GITHUB_RUN_ID").ok().filter(|v| !v.is_empty());
-    let attempt = env::var(PLAN_ATTEMPT_ENV)
-        .ok()
-        .filter(|v| !v.is_empty())
-        .or_else(|| {
-            env::var("GITHUB_RUN_ATTEMPT")
-                .ok()
-                .filter(|v| !v.is_empty())
-        });
-    let (Some(id), Some(attempt)) = (id, attempt) else {
-        return Err(internal("missing_run_key"));
-    };
-    let id: u64 = id.parse().map_err(|_| internal("bad_run_id"))?;
-    let attempt: u64 = attempt.parse().map_err(|_| internal("bad_run_attempt"))?;
-    Ok(run_key_for_ci(id, attempt))
 }
 
 fn artifact_anchor(velnor_dir: &Path) -> Result<&Path, OrchestratorError> {

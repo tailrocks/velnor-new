@@ -1,10 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-#[path = "staged_reads.rs"]
-pub(crate) mod staged_reads;
-
-pub(crate) use self::staged_reads::{path_is_symlink, read_staged_text};
+use velnor_actions_contract::staged_reads::{path_is_symlink, read_staged_text};
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::ffi::OsString;
@@ -29,7 +26,7 @@ pub fn retrieve_reports() -> Result<usize, OrchestratorError> {
         .ok_or_else(|| internal("missing_run_id"))?
         .parse::<u64>()
         .map_err(|_| internal("bad_run_id"))?;
-    let run_key = crate::internal_request::resolve_run_key(None)?;
+    let run_key = velnor_actions_contract::resolve_run_key(None)?;
     let temp = std::env::var_os("RUNNER_TEMP")
         .filter(|value| !value.is_empty())
         .ok_or_else(|| internal("missing_runner_temp"))?;
@@ -44,7 +41,7 @@ pub(crate) fn retrieve_reports_to(run_id: u64, run_dir: &Path) -> usize {
     };
     let repo = std::env::var(crate::origin::GITHUB_REPOSITORY_ENV)
         .ok()
-        .and_then(|raw| crate::origin::validate_repository_slug(&raw));
+        .and_then(|raw| velnor_actions_contract::validate_repository_slug(&raw));
     let Some(repo) = repo else {
         return 0;
     };
@@ -78,7 +75,7 @@ pub(crate) fn retrieve_args(
     repo: &str,
 ) -> Result<Vec<OsString>, OrchestratorError> {
     validate_artifact_id(artifact_id).map_err(internal_contract)?;
-    let Some(repo) = crate::origin::validate_repository_slug(repo) else {
+    let Some(repo) = velnor_actions_contract::validate_repository_slug(repo) else {
         return Err(internal_contract(
             velnor_actions_contract::ContractError::identity("repository", "bad_lookup_repo"),
         ));
@@ -218,7 +215,7 @@ fn check_staged_observation(
     let report_id = expectation.task_report_id.as_str();
     let path = tasks_dir.join(format!(
         "{report_id}{}",
-        crate::task_report::UNIT_OBSERVATION_SUFFIX
+        velnor_actions_contract::workflow::UNIT_OBSERVATION_SUFFIX
     ));
     let text = match read_bounded(&path) {
         Ok(text) => text,

@@ -93,12 +93,12 @@ fn project_binary_until(
     deadline: Option<CheckDeadline>,
 ) -> Result<(), OrchestratorError> {
     let bytes =
-        crate::retrieve_reports::staged_reads::read_staged_bytes_until(source, max_bytes, || {
+        velnor_actions_contract::staged_reads::read_staged_bytes_until(source, max_bytes, || {
             read_deadline_checkpoint(deadline)
         })
         .map_err(|_| internal("mise_binary_unreadable"))?;
     verify_binary_bytes(&bytes, expected)?;
-    crate::exclusive_write::write_exclusive_until(
+    velnor_actions_contract::exclusive_write::write_exclusive_until(
         destination,
         &bytes,
         "qualified_mise_binary",

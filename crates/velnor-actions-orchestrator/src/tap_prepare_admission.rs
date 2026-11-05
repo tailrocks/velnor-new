@@ -1,10 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use velnor_actions_contract::staged_reads::read_staged_bytes_until;
 use super::{absolute_env, static_tap_policy};
-use crate::{
-    OrchestratorError, internal::internal, retrieve_reports::staged_reads::read_staged_bytes_until,
-};
+use crate::{OrchestratorError, internal::internal};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::BTreeMap,
@@ -76,7 +75,7 @@ pub fn admit_homebrew_tap_from_env() -> Result<String, OrchestratorError> {
             if bytes.len() as u64 > LIMIT {
                 return Err(internal("tap_admission_oversize"));
             }
-            crate::exclusive_write::write_exclusive_until(
+            velnor_actions_contract::exclusive_write::write_exclusive_until(
                 &root.join(RECORD),
                 &bytes,
                 "tap_admission",

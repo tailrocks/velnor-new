@@ -40,7 +40,7 @@ pub fn execute_check() -> Result<usize, OrchestratorError> {
     let task_id = required_env(crate::task_report::TASK_ID_ENV)?;
     let job_id = required_env(NAMED_CHECK_JOB_ID_ENV)?;
     let lane = required_env(NAMED_CHECK_LANE_VARIANT_ENV)?;
-    let run_key = crate::internal_request::resolve_run_key(None)?;
+    let run_key = velnor_actions_contract::resolve_run_key(None)?;
     execute_check_to(
         Path::new(&root),
         Path::new(&temp),
@@ -348,12 +348,13 @@ fn write_execution_receipt(
         .join("velnor")
         .join(&plan.run_key)
         .join(&entry.matrix_key);
-    crate::exclusive_write::create_dir_no_symlink(temp, &base)?;
-    crate::exclusive_write::write_exclusive(
+    velnor_actions_contract::exclusive_write::create_dir_no_symlink(temp, &base)?;
+    velnor_actions_contract::exclusive_write::write_exclusive(
         &base.join("check-execution.json"),
         &bytes,
         "check_execution",
-    )
+    )?;
+    Ok(())
 }
 
 fn write_observation_report(
@@ -369,12 +370,13 @@ fn write_observation_report(
         .join("velnor")
         .join(&plan.run_key)
         .join(&entry.matrix_key);
-    crate::exclusive_write::create_dir_no_symlink(temp, &base)?;
-    crate::exclusive_write::write_exclusive(
+    velnor_actions_contract::exclusive_write::create_dir_no_symlink(temp, &base)?;
+    velnor_actions_contract::exclusive_write::write_exclusive(
         &base.join("check-observation.json"),
         &bytes,
         "check_observation",
-    )
+    )?;
+    Ok(())
 }
 
 fn save_evidence(
@@ -391,7 +393,7 @@ fn save_evidence(
     let parent = artifact
         .parent()
         .ok_or_else(|| internal("check_evidence_path"))?;
-    crate::exclusive_write::create_dir_no_symlink(temp, parent)?;
-    crate::exclusive_write::write_exclusive(&artifact, &receipt.bytes, "check_evidence")?;
+    velnor_actions_contract::exclusive_write::create_dir_no_symlink(temp, parent)?;
+    velnor_actions_contract::exclusive_write::write_exclusive(&artifact, &receipt.bytes, "check_evidence")?;
     Ok(())
 }

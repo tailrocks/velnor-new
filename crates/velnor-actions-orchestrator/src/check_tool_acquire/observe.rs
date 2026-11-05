@@ -139,7 +139,7 @@ pub(crate) fn read_with_deadline(
     limit: u64,
     deadline: CheckDeadline,
 ) -> Result<Vec<u8>, &'static str> {
-    crate::retrieve_reports::staged_reads::read_staged_bytes_until(path, limit, || {
+    velnor_actions_contract::staged_reads::read_staged_bytes_until(path, limit, || {
         deadline.remaining().map(|_| ()).map_err(|_| "deadline")
     })
 }

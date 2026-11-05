@@ -120,7 +120,7 @@ fn download_source_admission(
         return Err(internal("release_policy_source_artifact_digest"));
     }
     let extracted = temp.join("preview-source-admission-acquired");
-    crate::exclusive_write::create_dir_no_symlink(temp, &extracted)?;
+    velnor_actions_contract::exclusive_write::create_dir_no_symlink(temp, &extracted)?;
     artifact_zip::extract_in_scope(
         &zip,
         &extracted,
@@ -133,7 +133,7 @@ fn download_source_admission(
             unix_permissions: Some(0o644),
         }],
     )?;
-    let bytes = crate::retrieve_reports::staged_reads::read_staged_bytes(
+    let bytes = velnor_actions_contract::staged_reads::read_staged_bytes(
         &extracted.join("preview-source-admission.json"),
         MAX_ADMISSION_BYTES as u64,
     )
@@ -170,17 +170,17 @@ fn install_acquired_source(
     policy: &[u8],
     plan: &[u8],
 ) -> Result<(), OrchestratorError> {
-    crate::exclusive_write::write_exclusive(
+    velnor_actions_contract::exclusive_write::write_exclusive(
         &temp.join("package-release-policy.json"),
         policy,
         "release_policy",
     )?;
-    crate::exclusive_write::write_exclusive(
+    velnor_actions_contract::exclusive_write::write_exclusive(
         &temp.join("package-release-plan.json"),
         plan,
         "release_plan",
     )?;
-    crate::exclusive_write::write_exclusive(
+    velnor_actions_contract::exclusive_write::write_exclusive(
         &temp.join("release-policy-admission.json"),
         admission,
         "release_policy_admission",

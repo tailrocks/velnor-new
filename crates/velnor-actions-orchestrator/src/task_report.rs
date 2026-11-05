@@ -15,9 +15,8 @@ pub(crate) use crate::task_report_aggregate::single_task_aggregate;
 mod task_report_order;
 
 pub(crate) use observation::{
-    UNIT_OBSERVATION_SUFFIX, UnitObservationExpectation, parse_unit_observation_binding,
-    run_attempt, unit_observation_member_name, verify_unit_observation_binding,
-    write_entry_reports,
+    UnitObservationExpectation, parse_unit_observation_binding, run_attempt,
+    unit_observation_member_name, verify_unit_observation_binding, write_entry_reports,
 };
 pub use write::{REPORT_OP, write_task_report};
 pub(crate) use write::{

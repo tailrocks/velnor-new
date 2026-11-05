@@ -1,13 +1,25 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use super::VelnorConfig;
 use crate::{
     ContractError,
     config::{CheckExecutor, CheckPlatform, CheckRunner},
     package_release::PackageReleaseChannel,
-    workflow::timeout::JobTimeout,
+    workflow::{CheckoutHistory, timeout::JobTimeout},
 };
 use serde::{Deserialize, Serialize};
+
+impl VelnorConfig {
+    #[must_use]
+    pub fn required_checkout_history(&self) -> CheckoutHistory {
+        if self.native_checks.is_empty() {
+            CheckoutHistory::ShallowWithMergeParents
+        } else {
+            CheckoutHistory::Full
+        }
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
