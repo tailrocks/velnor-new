@@ -38,7 +38,7 @@ pub(super) fn workspace_inventory<R: CrateRegistryRead>(
         .collect()
 }
 
-pub(super) fn package_source(
+pub(crate) fn package_source(
     source: &Path,
     intent: &CrateReleaseIntent,
     package: &CrateReleaseSourcePackage,

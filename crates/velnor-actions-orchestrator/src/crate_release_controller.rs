@@ -25,9 +25,8 @@ pub(crate) use observation::{VerifiedMutation, verify_observed_packages};
 mod inventory;
 mod reconcile;
 mod state;
-use inventory::{
-    package_source, require_reviewer_owner, wait_for_release, wait_for_tag, workspace_inventory,
-};
+pub(crate) use inventory::package_source;
+use inventory::{require_reviewer_owner, wait_for_release, wait_for_tag, workspace_inventory};
 pub(crate) use reconcile::same_observed_state;
 pub use reconcile::{
     CrateReleaseCompletedPackage, reconcile_crate_release, validate_reconciliation_receipt,
