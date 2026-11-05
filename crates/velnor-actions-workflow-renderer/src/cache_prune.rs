@@ -18,11 +18,9 @@ pub const TOOLS_PRUNE_PREFIX: &str = "mise-tools-v2-";
 pub const TOOLS_PRUNE_UNIT: &str = "mise-tools-v2";
 pub const TOOLS_RETAINED_ENTRIES: u64 = 8;
 pub const STATE_PRUNE_VERIFY_CAP: usize = 5;
-const HEAD_BRANCH_PUNCTUATION: &str = "._/-";
-const _: () = assert!(matches!(
-    HEAD_BRANCH_PUNCTUATION.as_bytes().last(),
-    Some(b'-')
-));
+const HEAD_BRANCH_CHARS: &str =
+    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._/-";
+const _: () = assert!(matches!(HEAD_BRANCH_CHARS.as_bytes().last(), Some(b'-')));
 pub const RETIRED_STATE_PRUNE_PREFIXES: [&str; 3] = [
     "velnor-v1-state-trusted-",
     "velnor-v2-state-trusted-",
@@ -71,7 +69,7 @@ pub fn prune_script() -> String {
     let mut lines = vec![
         "set -eu".to_owned(),
         format!(
-            "(LC_ALL=C; case \"$HEAD_BRANCH\" in ''|*[!A-Za-z0-9{HEAD_BRANCH_PUNCTUATION}]*) exit 1;; esac) || {{ printf '%s\\n' '::error::cache_prune_head_branch_invalid' >&2; exit 1; }}"
+            "(LC_ALL=C; case \"$HEAD_BRANCH\" in ''|*[!{HEAD_BRANCH_CHARS}]*) exit 1;; esac) || {{ printf '%s\\n' '::error::cache_prune_head_branch_invalid' >&2; exit 1; }}"
         ),
         "ref=\"refs/heads/$HEAD_BRANCH\"".to_owned(),
         "d=\"$RUNNER_TEMP/velnor-cache-prune\"".to_owned(),
@@ -112,7 +110,7 @@ pub fn render_cache_prune_yml(
     let safe = !default_branch.is_empty()
         && default_branch
             .bytes()
-            .all(|b| b.is_ascii_alphanumeric() || HEAD_BRANCH_PUNCTUATION.as_bytes().contains(&b));
+            .all(|b| HEAD_BRANCH_CHARS.as_bytes().contains(&b));
     if !safe {
         return Err(RenderError::InvalidWorkflow(
             "cache_prune_default_branch".to_owned(),
