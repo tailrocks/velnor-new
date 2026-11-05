@@ -133,8 +133,18 @@ mod source_qualification_build;
 mod source_qualification_checkout;
 #[path = "workflow_configuration_public/source_qualification_jobs.rs"]
 mod source_qualification_jobs;
+#[path = "workflow_configuration_public/source_qualification_prefetch.rs"]
+mod source_qualification_prefetch;
+#[path = "workflow_configuration_public/source_qualification_prefetch_harness.rs"]
+mod source_qualification_prefetch_harness;
 #[path = "workflow_configuration_public/source_qualification_proof.rs"]
 mod source_qualification_proof;
+#[path = "workflow_configuration_public/source_qualification_sources.rs"]
+mod source_qualification_sources;
+#[path = "workflow_configuration_public/source_qualification_sources_keys.rs"]
+mod source_qualification_sources_keys;
+#[path = "workflow_configuration_public/source_qualification_sources_support.rs"]
+mod source_qualification_sources_support;
 #[path = "workflow_configuration_public/state_compat.rs"]
 mod state_compat;
 #[path = "workflow_configuration_public/state_producer.rs"]
