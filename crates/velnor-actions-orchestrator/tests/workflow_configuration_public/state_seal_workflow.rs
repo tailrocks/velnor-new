@@ -10,9 +10,7 @@ use std::process::Command;
 use serde_json::{Value, json};
 use velnor_actions_contract::workflow::ProducerKind;
 use velnor_actions_contract::workflow::state_seal::STATE_SEAL_WORKFLOW_PATH;
-use velnor_actions_contract::{
-    RustSuiteConfig, WorkflowPolicy, validate_preserve_workflows, validate_rust_suites,
-};
+use velnor_actions_contract::{RustSuiteConfig, validate_preserve_workflows, validate_rust_suites};
 use velnor_actions_orchestrator::{finalized_jobs, prepare, render_staged_tree};
 use velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
 
@@ -388,7 +386,7 @@ fn a_suite_or_preserved_workflow_cannot_take_the_state_seal_name() {
     );
     let error = validate_preserve_workflows(
         &[STATE_SEAL_WORKFLOW_PATH.to_owned()],
-        WorkflowPolicy::VelnorRepositoryV1,
+        velnor_actions_contract::WorkflowPolicy::VelnorRepositoryV1,
         ".velnor/config.toml",
     )
     .expect_err("the state-seal workflow must not be preservable");
