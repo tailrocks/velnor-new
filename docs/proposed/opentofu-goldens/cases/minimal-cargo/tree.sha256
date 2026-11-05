@@ -3,7 +3,7 @@
 afde80638a7b7865abf210011f190f30c288d28056c889d191850b65261204c2  ./.github/actions/declared-task-0/action.yml
 a5a1647e186de5903dca31975d372953006a611964c07c9da8ff3e4d4a453a85  ./.github/actions/u26/action.yml
 eb28c939fc45431c5ff680cf7acd7213301da004b816a9573e9bafe2f244eadc  ./.github/actions/velnor-tool-seed/action.yml
-f93f62b2894a987733c121080cf5eaa0b4b51c240f2655b2d1c159038dfcf7d4  ./.github/actions/velnor-tools-cache-restore/action.yml
+5445ce8af4fdba899f1a6c09365773e65ce58d1590c852ed1042e6219080ba11  ./.github/actions/velnor-tools-cache-restore/action.yml
 1e28abc695e71755c7614b635a6fd6d2e64118362dc65e0ff738b3e46dffe047  ./.github/actions/velnor-tools-cache-scrub/action.yml
 d814b0f6acd39108138b4f781a2019f4f992a6112f5e8e2be7a1b9276fb2eb1f  ./.github/actions/velnor-tools-prelude-u26/action.yml
 1b89aec15eb2030e80015ed4a408174465621b85725dd45563cd72e103a2faf1  ./.github/actions/velnor-verify-jactionlint/action.yml
@@ -13,5 +13,5 @@ ffebfa021e94bf5b06d44f549834ff84e98f35d9b0179b022d491f6b2a1a4ce3  ./.github/acti
 cdd634481b37ca81b8b1532275c20aa1629b5616b1abe27657d2625110d152c7  ./.github/scripts/velnor-tools-cache-identity.sh
 485b2432cd928d55d5dfdc3281160c23534b937c23b442d1a9d3e66c737d4842  ./.github/velnor/task-execution-manifest-v1.json
 b74d3420681c6bfc9c073774a9ec385e6ee22b27bcd4aa66fe59c438a568677a  ./.github/workflows/cache-prune.yml
-168d24bd214d6e170f8860fc82e8f2eb9608e368237f980ab36d50606f8ea957  ./.github/workflows/ci.yml
-9691fc28663478d6e3cbfaacd523282e5687a8f2fda216da42d22503446a4d61  ./.github/workflows/state-seal.yml
+090a0820de68f6687e37fdaad93929f994f3faa7818ea3a2263c2a537716fcf4  ./.github/workflows/ci.yml
+2a5c80a7d6bb0f00538f4ddd1ed5c4cec9170a9e1063738f1d3cb77999e67c68  ./.github/workflows/state-seal.yml

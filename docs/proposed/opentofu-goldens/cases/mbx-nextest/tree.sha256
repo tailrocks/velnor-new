@@ -3,7 +3,7 @@
 afde80638a7b7865abf210011f190f30c288d28056c889d191850b65261204c2  ./.github/actions/declared-task-0/action.yml
 a5a1647e186de5903dca31975d372953006a611964c07c9da8ff3e4d4a453a85  ./.github/actions/u26/action.yml
 eb28c939fc45431c5ff680cf7acd7213301da004b816a9573e9bafe2f244eadc  ./.github/actions/velnor-tool-seed/action.yml
-f93f62b2894a987733c121080cf5eaa0b4b51c240f2655b2d1c159038dfcf7d4  ./.github/actions/velnor-tools-cache-restore/action.yml
+5445ce8af4fdba899f1a6c09365773e65ce58d1590c852ed1042e6219080ba11  ./.github/actions/velnor-tools-cache-restore/action.yml
 1e28abc695e71755c7614b635a6fd6d2e64118362dc65e0ff738b3e46dffe047  ./.github/actions/velnor-tools-cache-scrub/action.yml
 d814b0f6acd39108138b4f781a2019f4f992a6112f5e8e2be7a1b9276fb2eb1f  ./.github/actions/velnor-tools-prelude-u26/action.yml
 1b89aec15eb2030e80015ed4a408174465621b85725dd45563cd72e103a2faf1  ./.github/actions/velnor-verify-jactionlint/action.yml
@@ -11,7 +11,7 @@ a94024b2a87c25da4b6074dea727203d68f4087bd014f04e6a85aa8feb7c41df  ./.github/acti
 a95a014f4edd0498b56d4e5cbcbdd5bfcfd7b12496674e07ded2def5ef38e3f4  ./.github/actions/velnor-verify-rust-manifest/action.yml
 415c8e613883c16efab32765ee5ddb2d54d6d25453ce4180e638091fc46edc15  ./.github/jactionlint.yaml
 cdd634481b37ca81b8b1532275c20aa1629b5616b1abe27657d2625110d152c7  ./.github/scripts/velnor-tools-cache-identity.sh
-45b5c90e884c02196cb396c789c8ff8d53a6885469d3a6a2e889de28d65202a8  ./.github/velnor/task-execution-manifest-v1.json
+11e575f87a65a414548ee9e12d338e29ceb67d5bb76d0ec4ca36531b3432f93d  ./.github/velnor/task-execution-manifest-v1.json
 b74d3420681c6bfc9c073774a9ec385e6ee22b27bcd4aa66fe59c438a568677a  ./.github/workflows/cache-prune.yml
-1fc945b10d599e7995cecfdf1140354abefd9fc1796afde72aa1752b2c4cab56  ./.github/workflows/ci.yml
-82948570acaba2d1c24e9aedd96f70460f6c2afa652e409ba20715a3db13caef  ./.github/workflows/state-seal.yml
+15138423cf2743bb1d55da1b5e9f1f2707e6cb3b4c90b7704f2d4226e6dd172e  ./.github/workflows/ci.yml
+852dd732a204e39575ad0aa399cac1bca535998fbb888eeb9f78a67711acfdf0  ./.github/workflows/state-seal.yml

@@ -1,0 +1,83 @@
+{
+  "schema": 1,
+  "checked_at": "2026-11-05",
+  "mise": {
+    "version": "2026.11.1",
+    "tag": "v2026.11.1",
+    "tag_object": "80b7205ce2e21ed38a941270258aec9a91375a48",
+    "source_commit": "0fa558048f88cfc1d3e9ad29f52b26a11debb1d9",
+    "source_tree": "865bec85a4afdf369ce9ab731db5c6e38fe64ac9",
+    "assets": {
+      "mise-v2026.11.1-linux-x64": {
+        "bytes": 177907728,
+        "sha256": "7129dbab31d698f9028db9374f7ba7987232b0426f837dcbce437130a61415f9",
+        "downloaded_sha256": "7129dbab31d698f9028db9374f7ba7987232b0426f837dcbce437130a61415f9"
+      },
+      "mise-v2026.11.1-macos-x64": {
+        "bytes": 172294368,
+        "sha256": "ead2414251e8f2909cc7564f8ab5fd1feea6962ed77d0177776d72e08ae747a0",
+        "downloaded_sha256": "ead2414251e8f2909cc7564f8ab5fd1feea6962ed77d0177776d72e08ae747a0"
+      },
+      "mise-v2026.11.1-macos-arm64": {
+        "bytes": 141426624,
+        "sha256": "9ca1005930fed90e0f4c30d9b13fe4530fe88d0549a71349716a3aab9051c627"
+      },
+      "mise-v2026.11.1-linux-arm64.tar.gz": {
+        "sha256": "6b54d9223f8bce04f9168ef482d9ee27f219c1ea11f4903569660049e5dec5aa",
+        "downloaded_sha256": "6b54d9223f8bce04f9168ef482d9ee27f219c1ea11f4903569660049e5dec5aa",
+        "inner_member": "mise/bin/mise",
+        "inner_sha256": "ed5dc8d5d8b334684409ef7abad2ffe5c22cf8e311905ae906c3246cbe2c5442"
+      },
+      "mise-v2026.11.1-macos-arm64.tar.gz": {
+        "sha256": "e1eaf20469e586f65849256a0be6a58dd7a3e93ae8db68bc74dd7af5ca0fe7f6",
+        "downloaded_sha256": "e1eaf20469e586f65849256a0be6a58dd7a3e93ae8db68bc74dd7af5ca0fe7f6",
+        "inner_member": "mise/bin/mise",
+        "inner_sha256": "9ca1005930fed90e0f4c30d9b13fe4530fe88d0549a71349716a3aab9051c627"
+      }
+    },
+    "agreement": "GitHub release API digest, vendor SHASUMS256.txt and the sha256 of the downloaded file agree for every asset above"
+  },
+  "mr-boxington": {
+    "version": "1.29.2",
+    "tag": "v1.29.2",
+    "tag_object": "b3c50e5f1aa91ff3134246a7b0860628447f967e",
+    "source_commit": "7fa83b28d239bd39d1079127ffd2f8b0f92df00a",
+    "source_tree": "f0bcb9892fd7597d0acd741fc76f6ea92ffad501",
+    "assets": {
+      "mbx-x86_64-unknown-linux-gnu.tar.gz": {
+        "sha256": "73e135d3e9e8b8ddc938b42407179a239917b7f02d3fa5f601f6783e5c0d36d6",
+        "downloaded_sha256": "73e135d3e9e8b8ddc938b42407179a239917b7f02d3fa5f601f6783e5c0d36d6",
+        "inner_member": "mbx",
+        "inner_sha256": "03337a94062a76bf08df445959a3b732416c3931752602edb8f36b12474a9400"
+      },
+      "mbx-aarch64-unknown-linux-gnu.tar.gz": {
+        "sha256": "1b6fbaebe0ea2c9b565c862a2b46e4756394ad530ce95b07333743104750a6fb",
+        "downloaded_sha256": "1b6fbaebe0ea2c9b565c862a2b46e4756394ad530ce95b07333743104750a6fb",
+        "inner_member": "mbx",
+        "inner_sha256": "31c0dd83d4c54d942b6e3d04edcf7064bb0536f6ce5a64806c130f17377d478a"
+      },
+      "mbx-aarch64-apple-darwin.tar.gz": {
+        "sha256": "621ce235d8f241c5a3728ca03d34b9864f466f4e8b3307d8a6d7101a24a71a60",
+        "downloaded_sha256": "621ce235d8f241c5a3728ca03d34b9864f466f4e8b3307d8a6d7101a24a71a60",
+        "inner_member": "mbx",
+        "inner_sha256": "c3f14e1e8564f0aae89e5157f5c0d06cf0e38f17072f170bd9364e2b7ef3781e"
+      }
+    },
+    "method_check": "the same archive and inner-binary method reproduces the 1.29.1 pins (linux-gnu x86_64 archive ca95f28c..., inner 4b0c0fcf...)",
+    "agreement": "GitHub release API digest, vendor SHA256SUMS and the sha256 of the downloaded file agree for every asset above"
+  },
+  "opentofu": {
+    "version": "1.13.8",
+    "tag": "v1.13.8",
+    "tag_object": "8f9577e18afcbe35a67a479be4904833090831a8",
+    "catalog_archives": {
+      "linux_amd64": "dab8135df87343ce143e1bef1a6174d7b82035950818bde17950658ff9a72697",
+      "linux_arm64": "fb4a3cbae5eba5a07f16e53bdf61493d2da81b4a559f645b39761409a7abc2ea",
+      "darwin_amd64": "1e829e672127cef6c712496adb161c22d5b85775a96f3ae1b3749151ea55e9fb",
+      "darwin_arm64": "dc53f79995cb235a3f68e87d3856f37179a091a9c75ff4eaf1d5ebf0006e4cf4"
+    },
+    "agreement": "GitHub release API digest and the tofu_1.13.8_SHA256SUMS entry agree for the four .tar.gz archives",
+    "checksums_signature": "cosign verify-blob of tofu_1.13.8_SHA256SUMS with its .sig and .pem passed for identity https://github.com/opentofu/opentofu/.github/workflows/release.yml@refs/heads/v1.13 and issuer https://token.actions.githubusercontent.com",
+    "executed": "tofu_1.13.8_darwin_arm64.tar.gz (sha256 dc53f799...) extracted and run: 'OpenTofu v1.13.8 on darwin_arm64'"
+  }
+}

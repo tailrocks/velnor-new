@@ -103,8 +103,13 @@ targets = ["aarch64-unknown-linux-gnu", "x86_64-unknown-linux-gnu"]
 
 ### How `mr_boxington = true` and MBX 1.29.1 behave
 
-Checked 2026-11-02 against mise 2026.10.25 and MBX 1.29.1. velnor-new pins
-MBX 1.29.1, so the 1.29.1 behavior below applies to it.
+Checked 2026-11-02 against mise 2026.10.25 and MBX 1.29.1. Rechecked
+2026-11-05 for the velnor-new pins mise 2026.11.1 and MBX 1.29.2: the cited
+`src/config/command_wrapper.rs` is identical at v2026.10.25 and v2026.11.1,
+`docs/lang/rust.md` only gained a paragraph about `RUSTUP_DIST_SERVER`, and
+the GitHub compare of `v1.29.1...v1.29.2` changes none of the cited MBX
+files except the changelogs. The 1.29.1 behavior below applies to the pinned
+versions.
 
 - At mise 2026.10.25, `mr_boxington = true` on the `rust` tool adds a
   `[wrappers.cargo]` entry with `command = "mbx"` and the environment

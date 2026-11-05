@@ -205,9 +205,9 @@ const STAGED_ENTRY: &str = r#"{
     ],
     "gh": "2.103.2",
     "mise_bootstrap": {
-      "version": "2026.10.25",
-      "artifact": "https://github.com/jdx/mise/releases/download/v2026.10.25/mise-v2026.10.25-linux-x64",
-      "sha256": "5d362ecc578dc7c146679b841dda949d6472cbf86ff5635db7afdca1b6b3fd87"
+      "version": "2026.11.1",
+      "artifact": "https://github.com/jdx/mise/releases/download/v2026.11.1/mise-v2026.11.1-linux-x64",
+      "sha256": "7129dbab31d698f9028db9374f7ba7987232b0426f837dcbce437130a61415f9"
     },
     "mise_runtime": [
       {"target": "x86_64-unknown-linux-gnu", "version": "2026.10.20", "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "bytes": 173449633},
@@ -271,7 +271,7 @@ fn lock_for_version(version: &str, commit: &str) -> String {
     })
     .join("");
     format!(
-        "schema = 1\n\n[generator]\nbinary = \"velnor-actions\"\nversion = \"{version}\"\ncommit = \"{commit}\"\n{binaries}\n[mise-bootstrap]\nversion = \"2026.10.25\"\nartifact = \"https://github.com/jdx/mise/releases/download/v2026.10.25/mise-v2026.10.25-linux-x64\"\nsha256 = \"5d362ecc578dc7c146679b841dda949d6472cbf86ff5635db7afdca1b6b3fd87\"\n"
+        "schema = 1\n\n[generator]\nbinary = \"velnor-actions\"\nversion = \"{version}\"\ncommit = \"{commit}\"\n{binaries}\n[mise-bootstrap]\nversion = \"2026.11.1\"\nartifact = \"https://github.com/jdx/mise/releases/download/v2026.11.1/mise-v2026.11.1-linux-x64\"\nsha256 = \"7129dbab31d698f9028db9374f7ba7987232b0426f837dcbce437130a61415f9\"\n"
     )
 }
 
@@ -305,33 +305,33 @@ fn stale_manifest_digest_is_rejected() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-const ROTATED_MISE_VERSION: &str = "2026.10.26";
+const ROTATED_MISE_VERSION: &str = "2026.11.2";
 const ROTATED_MISE_SHA: &str = "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
 
 fn approvals_with_mise(version: &str, sha: &str) -> String {
     BASE_APPROVALS
         .replace(
-            "\"version\": \"2026.10.25\"",
+            "\"version\": \"2026.11.1\"",
             &format!("\"version\": \"{version}\""),
         )
         .replace(
-            "5d362ecc578dc7c146679b841dda949d6472cbf86ff5635db7afdca1b6b3fd87",
+            "7129dbab31d698f9028db9374f7ba7987232b0426f837dcbce437130a61415f9",
             sha,
         )
-        .replace("v2026.10.25", &format!("v{version}"))
+        .replace("v2026.11.1", &format!("v{version}"))
 }
 
 fn lock_with_mise_bootstrap(version: &str, sha: &str) -> String {
     BASE_LOCK
         .replace(
-            "version = \"2026.10.25\"",
+            "version = \"2026.11.1\"",
             &format!("version = \"{version}\""),
         )
         .replace(
-            "5d362ecc578dc7c146679b841dda949d6472cbf86ff5635db7afdca1b6b3fd87",
+            "7129dbab31d698f9028db9374f7ba7987232b0426f837dcbce437130a61415f9",
             sha,
         )
-        .replace("v2026.10.25", &format!("v{version}"))
+        .replace("v2026.11.1", &format!("v{version}"))
 }
 
 #[test]
@@ -343,8 +343,8 @@ fn rotated_mise_identity_governs_lock() -> Result<(), Box<dyn Error>> {
         io::Error::other(format!("matching rotated mise must be accepted: {error}"))
     })?;
     let stale_lock = lock_with_mise_bootstrap(
-        "2026.10.25",
-        "5d362ecc578dc7c146679b841dda949d6472cbf86ff5635db7afdca1b6b3fd87",
+        "2026.11.1",
+        "7129dbab31d698f9028db9374f7ba7987232b0426f837dcbce437130a61415f9",
     );
     let temp_old = fixture(Some(&approvals), &stale_lock)?;
     let error = prepare_error(temp_old.path())?;

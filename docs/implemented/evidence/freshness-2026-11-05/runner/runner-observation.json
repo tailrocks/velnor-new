@@ -1,0 +1,16 @@
+{
+  "run_id": 41954899634,
+  "job_id": 127007350554,
+  "source_sha": "102936d506c5f7187cada60bb7065781b018c2a2",
+  "checked_at": "2026-11-05T04:35:18Z",
+  "labels": [
+    "ubuntu-26.04",
+    "ubuntu-24.04",
+    "ubuntu-22.04"
+  ],
+  "default": "ubuntu-26.04",
+  "image_version": "20261101.186.1",
+  "runner_version": "2.338.2",
+  "doc_sha256": "37c5222328487fa6f06f9f9a0b75a16ed9d42d270366841e4e26fb010a72a8f6",
+  "log_sha256": "667101f68ee03232cc90b7b350a1b88c31f7bafad8fd57a6393f2445db868d4d"
+}

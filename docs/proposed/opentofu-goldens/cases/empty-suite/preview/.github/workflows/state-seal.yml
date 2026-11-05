@@ -57,20 +57,20 @@ jobs:
           cache_save: "false"
           env: "false"
           install: "false"
-          sha256: 5d362ecc578dc7c146679b841dda949d6472cbf86ff5635db7afdca1b6b3fd87
-          version: 2026.10.25
+          sha256: 7129dbab31d698f9028db9374f7ba7987232b0426f837dcbce437130a61415f9
+          version: 2026.11.1
       - name: V2 identity
         id: v2
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: c69e2be06f1c7fdcc56d41ba79b3e3f9241e46f93c541de316961e5c48c72070
+          d: 4c12bb75ab5566b7aafa0e3a0373f22f0645936e70ce2cb60ca54c1c7c446a73
       - name: Restore Mise tools
         id: tools-restore
         if: steps.v2.outputs.enabled == 'true'
         uses: ./.github/actions/velnor-tools-cache-restore # zizmor: ignore[self-repository]
         with:
           key: mise-tools-v2-${{steps.v2.outputs.identity}}
-          mise-sha256: 5d362ecc578dc7c146679b841dda949d6472cbf86ff5635db7afdca1b6b3fd87
+          mise-sha256: 7129dbab31d698f9028db9374f7ba7987232b0426f837dcbce437130a61415f9
           seed-admitted: ${{ steps.v2.outputs.seed_admitted }}
       - name: Verify restored Rust toolchain
         uses: ./.github/actions/velnor-verify-restored-rust # zizmor: ignore[self-repository]
@@ -119,8 +119,8 @@ jobs:
           name: velnor-plan-r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
           retention-days: "30"
-  tools-producer-18fa7d95:
-    name: Tools producer / 18fa7d95
+  tools-producer-36cc6f04:
+    name: Tools producer / 36cc6f04
     runs-on: ubuntu-26.04
     timeout-minutes: 5
     continue-on-error: true
@@ -151,13 +151,13 @@ jobs:
           cache_save: "false"
           env: "false"
           install: "false"
-          sha256: 5d362ecc578dc7c146679b841dda949d6472cbf86ff5635db7afdca1b6b3fd87
-          version: 2026.10.25
+          sha256: 7129dbab31d698f9028db9374f7ba7987232b0426f837dcbce437130a61415f9
+          version: 2026.11.1
       - name: V2 identity
         id: v2
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: 18fa7d952315e366530df4ebd0f2c8f3e29450541a2333a4d3a230ba27175f18
+          d: 36cc6f04cfd6a90146951553babc9b614ebf899d0f0210122f817d1097748c2c
       - name: Probe Mise tools
         id: tools-restore
         if: steps.v2.outputs.enabled == 'true'
@@ -170,7 +170,7 @@ jobs:
         if: steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
         uses: ./.github/actions/velnor-tools-cache-scrub
         with:
-          mise-sha256: 5d362ecc578dc7c146679b841dda949d6472cbf86ff5635db7afdca1b6b3fd87
+          mise-sha256: 7129dbab31d698f9028db9374f7ba7987232b0426f837dcbce437130a61415f9
       - name: Prepare pinned tools
         if: steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
         run: mise --no-config --no-env --no-hooks install jactionlint@2.4.0 shellcheck@0.11.0
@@ -198,8 +198,8 @@ jobs:
       - name: Report optional cache save failure
         if: always() && !cancelled() && steps.velnor-optional-tools-save.outcome == 'failure'
         run: "printf '%s\\n' '::warning::cache_unavailable: optional save failed or timed out'"
-  tools-producer-41c45df3:
-    name: Tools producer / 41c45df3
+  tools-producer-36dc5056:
+    name: Tools producer / 36dc5056
     runs-on: ubuntu-26.04
     timeout-minutes: 5
     continue-on-error: true
@@ -233,13 +233,13 @@ jobs:
           cache_save: "false"
           env: "false"
           install: "false"
-          sha256: 5d362ecc578dc7c146679b841dda949d6472cbf86ff5635db7afdca1b6b3fd87
-          version: 2026.10.25
+          sha256: 7129dbab31d698f9028db9374f7ba7987232b0426f837dcbce437130a61415f9
+          version: 2026.11.1
       - name: V2 identity
         id: v2
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: 41c45df31fafb29cb35bb683838837a871ccc09653cbac9ed2a392328185972e
+          d: 36dc505668ecab5cc7f5b51a7730e45e805a2393225cdfd08b30ff1d931a4374
       - name: Probe Mise tools
         id: tools-restore
         if: steps.v2.outputs.enabled == 'true'
@@ -252,7 +252,7 @@ jobs:
         if: steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
         uses: ./.github/actions/velnor-tools-cache-scrub
         with:
-          mise-sha256: 5d362ecc578dc7c146679b841dda949d6472cbf86ff5635db7afdca1b6b3fd87
+          mise-sha256: 7129dbab31d698f9028db9374f7ba7987232b0426f837dcbce437130a61415f9
       - name: Prepare pinned tools
         if: steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
         env:
@@ -296,8 +296,8 @@ jobs:
       - name: Report optional cache save failure
         if: always() && !cancelled() && steps.velnor-optional-tools-save.outcome == 'failure'
         run: "printf '%s\\n' '::warning::cache_unavailable: optional save failed or timed out'"
-  tools-producer-c69e2be0:
-    name: Tools producer / c69e2be0
+  tools-producer-4c12bb75:
+    name: Tools producer / 4c12bb75
     runs-on: ubuntu-26.04
     timeout-minutes: 5
     continue-on-error: true
@@ -332,13 +332,13 @@ jobs:
           cache_save: "false"
           env: "false"
           install: "false"
-          sha256: 5d362ecc578dc7c146679b841dda949d6472cbf86ff5635db7afdca1b6b3fd87
-          version: 2026.10.25
+          sha256: 7129dbab31d698f9028db9374f7ba7987232b0426f837dcbce437130a61415f9
+          version: 2026.11.1
       - name: V2 identity
         id: v2
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: c69e2be06f1c7fdcc56d41ba79b3e3f9241e46f93c541de316961e5c48c72070
+          d: 4c12bb75ab5566b7aafa0e3a0373f22f0645936e70ce2cb60ca54c1c7c446a73
       - name: Probe Mise tools
         id: tools-restore
         if: steps.v2.outputs.enabled == 'true'
@@ -351,7 +351,7 @@ jobs:
         if: steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
         uses: ./.github/actions/velnor-tools-cache-scrub
         with:
-          mise-sha256: 5d362ecc578dc7c146679b841dda949d6472cbf86ff5635db7afdca1b6b3fd87
+          mise-sha256: 7129dbab31d698f9028db9374f7ba7987232b0426f837dcbce437130a61415f9
       - name: Prepare pinned tools
         if: steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
         env:
