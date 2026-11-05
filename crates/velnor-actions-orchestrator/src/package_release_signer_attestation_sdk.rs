@@ -206,3 +206,7 @@ use parse::{SubjectExpectation, is_sha, is_sha256, parse_verified_release_attest
 #[cfg(test)]
 #[path = "package_release_signer_attestation_sdk_tests.rs"]
 mod subject_tests;
+
+#[cfg(test)]
+#[path = "package_release_signer_attestation_fixture_tests.rs"]
+mod fixture_tests;

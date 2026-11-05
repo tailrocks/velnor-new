@@ -101,3 +101,6 @@ mod crate_source_public;
 #[cfg(test)]
 #[path = "../tests/crate_workspace_plan_public.rs"]
 mod crate_workspace_plan_public;
+
+#[cfg(test)]
+mod offline_attestation_test;

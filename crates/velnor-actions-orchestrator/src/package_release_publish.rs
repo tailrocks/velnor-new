@@ -354,3 +354,8 @@ fn current_ci_from_env() -> Result<(u64, u32), OrchestratorError> {
         .ok_or_else(|| internal("package_publish_current_ci_attempt_invalid"))?;
     Ok((run_id, attempt))
 }
+
+#[cfg(test)]
+pub(crate) fn set_github_read_fixture(responses: std::collections::BTreeMap<String, Vec<u8>>) {
+    github::GitHubApi::set_read_fixture(responses);
+}

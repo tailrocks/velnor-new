@@ -286,12 +286,35 @@ impl GitHubApi {
         self.request_accept(request_args, limit, "application/vnd.github+json")
     }
 
+    #[cfg(test)]
+    pub(crate) fn set_read_fixture(responses: std::collections::BTreeMap<String, Vec<u8>>) {
+        READ_FIXTURE.with(|fixture| *fixture.borrow_mut() = Some(responses));
+    }
+
     fn request_accept(
         &self,
         request_args: Vec<OsString>,
         limit: usize,
         accept: &str,
     ) -> Result<Vec<u8>, OrchestratorError> {
+        #[cfg(test)]
+        if let Some(result) = READ_FIXTURE.with(|fixture| {
+            let fixture = fixture.borrow();
+            fixture.as_ref().map(|responses| {
+                let raw = request_args
+                    .first()
+                    .and_then(|arg| arg.to_str())
+                    .unwrap_or("");
+                let route = raw.split("&_velnor_read_nonce=").next().unwrap_or(raw);
+                let route = route.split("?_velnor_read_nonce=").next().unwrap_or(route);
+                responses
+                    .get(route)
+                    .cloned()
+                    .ok_or_else(|| internal("fixture_route_missing"))
+            })
+        }) {
+            return result;
+        }
         let args = gh_api_arguments(request_args, accept);
         let exec = PinnedToolExec::new(vec![PinnedTool::Gh], OsStr::new("gh"), args)
             .map_err(|_| internal("package_publish_gh_unavailable"))?;
@@ -315,4 +338,9 @@ impl GitHubApi {
         }
         Ok(result.stdout)
     }
+}
+
+#[cfg(test)]
+thread_local! {
+    static READ_FIXTURE: std::cell::RefCell<Option<std::collections::BTreeMap<String, Vec<u8>>>> = const { std::cell::RefCell::new(None) };
 }
