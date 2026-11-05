@@ -170,5 +170,12 @@ pub(super) fn append_metadata_witness_steps(
             ),
         ]),
     ));
-    steps.push(step("Bind approved metadata source", "set -euo pipefail\n[[ \"$SOURCE_SHA\" =~ ^[a-f0-9]{40}$ && \"$APPROVED_TREE\" =~ ^[a-f0-9]{40}$ && \"$APPROVED_SHA256\" =~ ^[a-f0-9]{64}$ ]]\nprintf 'VELNOR_METADATA_SOURCE run=%s attempt=%s source=%s config=%s tree=%s sha256=%s\\n' \"$GITHUB_RUN_ID\" \"$GITHUB_RUN_ATTEMPT\" \"$SOURCE_SHA\" \"$INTENT_CONFIG_PATH\" \"$APPROVED_TREE\" \"$APPROVED_SHA256\"\n", map(vec![("SOURCE_SHA", Yaml::str("${{ inputs.source_sha }}")), ("APPROVED_SHA256", Yaml::str("${{ needs.gate.outputs.approved_sha256 }}")), ("APPROVED_TREE", Yaml::str("${{ needs.gate.outputs.approved_tree }}")), ("INTENT_CONFIG_PATH", Yaml::str(&metadata.intent_config_path))])));
+    steps.push(step("Bind approved metadata source", "set -euo pipefail\n[[ \"$SOURCE_SHA\" =~ ^[a-f0-9]{40}$ && \"$APPROVED_TREE\" =~ ^[a-f0-9]{40}$ && \"$APPROVED_SHA256\" =~ ^[a-f0-9]{64}$ ]]\nprintf 'VELNOR_METADATA_SOURCE run=%s attempt=%s source=%s config=%s tree=%s sha256=%s\\n' \"$GITHUB_RUN_ID\" \"$GITHUB_RUN_ATTEMPT\" \"$SOURCE_SHA\" \"$INTENT_CONFIG_PATH\" \"$APPROVED_TREE\" \"$APPROVED_SHA256\"\n", map(vec![("SOURCE_SHA", Yaml::str("${{ inputs.source_sha }}")), ("APPROVED_SHA256", Yaml::str("${{ needs.gate.outputs.approved_sha256 }}")), ("APPROVED_TREE", Yaml::str("${{ needs.gate.outputs.approved_tree }}")), ("INTENT_CONFIG_PATH", Yaml::str(&metadata.intent_config_path)), ("HISTORICAL_MANIFEST_VERSION", Yaml::str(&metadata.qualification.historical_manifest.version)), ("HISTORICAL_MANIFEST_SOURCE", Yaml::str(&metadata.qualification.historical_manifest.source_sha)), ("HISTORICAL_MANIFEST_SHA256", Yaml::str(&metadata.qualification.historical_manifest.sha256)),
+    ("CANDIDATE_REPOSITORY", Yaml::str(&metadata.qualification.candidate_repository)),
+    ("CANDIDATE_REPOSITORY_ID", Yaml::str(metadata.qualification.candidate_repository_id.to_string())),
+    ("CANDIDATE_DEFAULT_BRANCH", Yaml::str(&metadata.qualification.candidate_default_branch)),
+    ("CANDIDATE_REQUIRED_WORKFLOW", Yaml::str(&metadata.qualification.candidate_required_workflow_path)),
+    ("COMPLETION_APP_ID", Yaml::str(metadata.qualification.completion_app_id.to_string())),
+    ("COMPLETION_CHECK_NAME", Yaml::str(&metadata.qualification.completion_check_name)),
+    ("REVIEWER_APP_IDS", Yaml::str(metadata.qualification.reviewer_app_ids.iter().map(u64::to_string).collect::<Vec<_>>().join(",")))])));
 }

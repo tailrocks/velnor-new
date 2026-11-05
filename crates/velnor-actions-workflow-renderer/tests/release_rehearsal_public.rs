@@ -27,6 +27,7 @@ fn metadata_is_opt_in_and_bound_to_an_isolated_reviewed_source_job()
         velnor_actions_contract::config::ReleaseRehearsalMetadataConfig {
             manifest_path: "Cargo.toml".into(),
             intent_config_path: ".velnor/config.toml".into(),
+            qualification: policy(),
             rust_version: "1.97.1".into(),
         },
     );
@@ -83,7 +84,28 @@ fn metadata_is_opt_in_and_bound_to_an_isolated_reviewed_source_job()
         .ok_or("metadata")?
         .intent_config_path = "../secret.toml".into();
     assert!(rehearsal::render(&rehearsal, "0.1.73").is_err());
+    let metadata = rehearsal.metadata.as_mut().ok_or("metadata")?;
+    metadata.intent_config_path = ".velnor/config.toml".into();
+    metadata.qualification.completion_check_name = "${{ secrets.TOKEN }}".into();
+    assert!(rehearsal::render(&rehearsal, "0.1.73").is_err());
     Ok(())
+}
+
+fn policy() -> velnor_actions_contract::config::ReleaseQualificationPolicy {
+    velnor_actions_contract::config::ReleaseQualificationPolicy {
+        candidate_repository: "candidate/repo".into(),
+        candidate_repository_id: 1,
+        candidate_default_branch: "main".into(),
+        candidate_required_workflow_path: ".github/workflows/ci.yml".into(),
+        completion_app_id: 1,
+        completion_check_name: "complete".into(),
+        reviewer_app_ids: [1].into_iter().collect(),
+        historical_manifest: velnor_actions_contract::config::ReleaseHistoricalManifestPolicy {
+            version: "0.1.5".into(),
+            source_sha: "b".repeat(40),
+            sha256: "c".repeat(64),
+        },
+    }
 }
 
 fn config() -> ReleaseRehearsalConfig {

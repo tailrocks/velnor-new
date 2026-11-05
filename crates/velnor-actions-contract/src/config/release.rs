@@ -7,7 +7,7 @@ use super::release_validation::{
 };
 use crate::errors::ContractError;
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -54,7 +54,10 @@ pub struct CrateReleasePredecessor {
 
 #[path = "release_rehearsal.rs"]
 mod rehearsal;
-pub use rehearsal::{ReleaseRehearsalConfig, ReleaseRehearsalMetadataConfig};
+pub use rehearsal::{
+    ReleaseHistoricalManifestPolicy, ReleaseQualificationPolicy, ReleaseRehearsalConfig,
+    ReleaseRehearsalMetadataConfig,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]

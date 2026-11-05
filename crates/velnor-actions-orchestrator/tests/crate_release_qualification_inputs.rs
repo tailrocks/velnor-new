@@ -57,6 +57,20 @@ fn captures_exact_clean_checkout_inputs_and_rejects_changes() {
         manifest_path: "Cargo.toml".into(),
         rust_version: "1.97.1".into(),
         intent_config_path: "config.toml".into(),
+        qualification: velnor_actions_contract::config::ReleaseQualificationPolicy {
+            candidate_repository: "candidate/repo".into(),
+            candidate_repository_id: 1,
+            candidate_default_branch: "main".into(),
+            candidate_required_workflow_path: ".github/workflows/ci.yml".into(),
+            completion_app_id: 1,
+            completion_check_name: "complete".into(),
+            reviewer_app_ids: [1].into_iter().collect(),
+            historical_manifest: velnor_actions_contract::config::ReleaseHistoricalManifestPolicy {
+                version: "0.1.5".into(),
+                source_sha: "b".repeat(40),
+                sha256: "c".repeat(64),
+            },
+        },
     };
     assert!(
         crate::crate_release_qualification_intent::bind_config_path(&captured, &metadata).is_ok()

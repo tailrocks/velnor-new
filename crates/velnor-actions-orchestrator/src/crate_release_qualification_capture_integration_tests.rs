@@ -145,6 +145,21 @@ fn fixture() -> Result<
         metadata: Some(
             velnor_actions_contract::config::ReleaseRehearsalMetadataConfig {
                 intent_config_path: "qualification/release.toml".into(),
+                qualification: velnor_actions_contract::config::ReleaseQualificationPolicy {
+                    candidate_repository: "acme/candidate".into(),
+                    candidate_repository_id: 11,
+                    candidate_default_branch: "main".into(),
+                    candidate_required_workflow_path: ".github/workflows/ci.yml".into(),
+                    completion_app_id: 80,
+                    completion_check_name: "review-complete".into(),
+                    reviewer_app_ids: [90].into_iter().collect(),
+                    historical_manifest:
+                        velnor_actions_contract::config::ReleaseHistoricalManifestPolicy {
+                            version: "0.1.5".into(),
+                            source_sha: "b".repeat(40),
+                            sha256: "c".repeat(64),
+                        },
+                },
                 manifest_path: "Cargo.toml".into(),
                 rust_version: "1.99.1".into(),
             },

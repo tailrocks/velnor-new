@@ -27,6 +27,7 @@ pub fn derive_intent_from_evidence(
         return Err(invalid());
     }
     bind_config_path(inputs, metadata.metadata_config())?;
+    bind_historical_manifest(metadata.metadata_config(), manifest)?;
     let config = crate::config::load_config_from_text(inputs.config())?;
     if config
         .workflow
@@ -46,6 +47,39 @@ pub fn derive_intent_from_evidence(
         repository,
         default_branch,
     )
+}
+
+pub(crate) fn bind_historical_manifest(
+    metadata: &velnor_actions_contract::config::ReleaseRehearsalMetadataConfig,
+    manifest: &HistoricalManifest,
+) -> Result<(), OrchestratorError> {
+    bind_manifest_values(
+        &metadata.qualification.historical_manifest,
+        manifest.bytes(),
+        manifest.source_sha(),
+    )
+}
+
+fn bind_manifest_values(
+    policy: &velnor_actions_contract::config::ReleaseHistoricalManifestPolicy,
+    bytes: &[u8],
+    source: &str,
+) -> Result<(), OrchestratorError> {
+    if source != policy.source_sha || crate::generator::sha256_hex(bytes) != policy.sha256 {
+        return Err(invalid());
+    }
+    let raw = std::str::from_utf8(bytes).map_err(|_| invalid())?;
+    let parsed =
+        velnor_actions_workflow_renderer::release_helpers::validate_consumer_manifest_for_version(
+            velnor_actions_contract::ReleaseTarget::LinuxX86_64,
+            &policy.version,
+            Some(raw),
+        )
+        .map_err(|_| invalid())?;
+    if parsed.commit != policy.source_sha {
+        return Err(invalid());
+    }
+    Ok(())
 }
 
 pub(crate) fn bind_config_path(
@@ -109,4 +143,28 @@ fn remap_field(value: &mut Value, field: &str, root: &Path) -> Result<(), Orches
 
 fn invalid() -> OrchestratorError {
     internal("qualification_intent_evidence_invalid")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn reviewed_historical_pin_rejects_manifest_and_identity_substitution() {
+        let bytes = include_bytes!("../tests/attestation_fixtures/release-manifest.json");
+        let mut policy = velnor_actions_contract::config::ReleaseHistoricalManifestPolicy {
+            version: "0.1.5".into(),
+            source_sha: "f1041f322c54cd7edfdef06afd307799eeaa801a".into(),
+            sha256: "e38d047150f9e0347ec2160fd65bb7f026842e6f416e456990cf3b7ccd284c52".into(),
+        };
+        assert!(bind_manifest_values(&policy, bytes, &policy.source_sha).is_ok());
+        let mut changed = bytes.to_vec();
+        changed.push(b' ');
+        assert!(bind_manifest_values(&policy, &changed, &policy.source_sha).is_err());
+        assert!(bind_manifest_values(&policy, bytes, &"0".repeat(40)).is_err());
+        policy.version = "0.1.6".into();
+        assert!(bind_manifest_values(&policy, bytes, &policy.source_sha).is_err());
+        policy.version = "0.1.5".into();
+        policy.sha256 = "0".repeat(64);
+        assert!(bind_manifest_values(&policy, bytes, &policy.source_sha).is_err());
+    }
 }

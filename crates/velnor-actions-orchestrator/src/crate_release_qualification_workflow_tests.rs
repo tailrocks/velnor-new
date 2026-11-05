@@ -35,6 +35,7 @@ fn fixture(metadata: bool) -> Result<(WitnessRequest, Api), Box<dyn std::error::
             velnor_actions_contract::config::ReleaseRehearsalMetadataConfig {
                 manifest_path: "Cargo.toml".into(),
                 intent_config_path: ".velnor/config.toml".into(),
+                qualification: policy(),
                 rust_version: "1.97.1".into(),
             }
         }),
@@ -137,6 +138,47 @@ fn metadata_opt_in_requires_the_exact_successful_metadata_job()
         .as_mut()
         .ok_or("metadata")?
         .intent_config_path = ".velnor/config.toml".into();
+    request
+        .metadata
+        .as_mut()
+        .ok_or("metadata")?
+        .qualification
+        .candidate_repository = "other/repo".into();
+    assert!(verify_canonical_rehearsal(&request, "main", &api).is_err());
+    request
+        .metadata
+        .as_mut()
+        .ok_or("metadata")?
+        .qualification
+        .candidate_repository = "candidate/repo".into();
+    request
+        .metadata
+        .as_mut()
+        .ok_or("metadata")?
+        .qualification
+        .completion_app_id = 99;
+    assert!(verify_canonical_rehearsal(&request, "main", &api).is_err());
+    request
+        .metadata
+        .as_mut()
+        .ok_or("metadata")?
+        .qualification
+        .completion_app_id = 1;
+    request
+        .metadata
+        .as_mut()
+        .ok_or("metadata")?
+        .qualification
+        .historical_manifest
+        .sha256 = "d".repeat(64);
+    assert!(verify_canonical_rehearsal(&request, "main", &api).is_err());
+    request
+        .metadata
+        .as_mut()
+        .ok_or("metadata")?
+        .qualification
+        .historical_manifest
+        .sha256 = "c".repeat(64);
     let jobs = api
         .0
         .get_mut("repos/owner/repo/actions/runs/42/attempts/1/jobs?per_page=100&page=1")
@@ -161,4 +203,21 @@ fn rejects_different_generator_output_and_forged_git_tree() -> Result<(), Box<dy
     tree["tree"][0]["sha"] = "0".repeat(40).into();
     assert!(verify_canonical_rehearsal(&request, "main", &api).is_err());
     Ok(())
+}
+
+fn policy() -> velnor_actions_contract::config::ReleaseQualificationPolicy {
+    velnor_actions_contract::config::ReleaseQualificationPolicy {
+        candidate_repository: "candidate/repo".into(),
+        candidate_repository_id: 1,
+        candidate_default_branch: "main".into(),
+        candidate_required_workflow_path: ".github/workflows/ci.yml".into(),
+        completion_app_id: 1,
+        completion_check_name: "complete".into(),
+        reviewer_app_ids: [1].into_iter().collect(),
+        historical_manifest: velnor_actions_contract::config::ReleaseHistoricalManifestPolicy {
+            version: "0.1.5".into(),
+            source_sha: "b".repeat(40),
+            sha256: "c".repeat(64),
+        },
+    }
 }

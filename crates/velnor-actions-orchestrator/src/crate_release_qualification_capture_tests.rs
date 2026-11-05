@@ -80,6 +80,7 @@ fn rejects_source_from_another_repository_before_acquisition() {
         metadata: Some(
             velnor_actions_contract::config::ReleaseRehearsalMetadataConfig {
                 intent_config_path: "qualification/release.toml".into(),
+                qualification: policy(),
                 manifest_path: "Cargo.toml".into(),
                 rust_version: "1.99.1".into(),
             },
@@ -129,4 +130,21 @@ fn metadata_must_match_admitted_source_tree_and_strict_json() {
         verify_metadata_source("source", "tree", br#"{"x":1,"x":1}"#, "source", "tree").is_err()
     );
     assert!(verify_metadata_source("source", "tree", br"[]", "source", "tree").is_err());
+}
+
+fn policy() -> velnor_actions_contract::config::ReleaseQualificationPolicy {
+    velnor_actions_contract::config::ReleaseQualificationPolicy {
+        candidate_repository: "candidate/repo".into(),
+        candidate_repository_id: 1,
+        candidate_default_branch: "main".into(),
+        candidate_required_workflow_path: ".github/workflows/ci.yml".into(),
+        completion_app_id: 1,
+        completion_check_name: "complete".into(),
+        reviewer_app_ids: [1].into_iter().collect(),
+        historical_manifest: velnor_actions_contract::config::ReleaseHistoricalManifestPolicy {
+            version: "0.1.5".into(),
+            source_sha: "b".repeat(40),
+            sha256: "c".repeat(64),
+        },
+    }
 }

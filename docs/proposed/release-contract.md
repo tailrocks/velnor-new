@@ -430,6 +430,14 @@ toolchain. The witness records the source commit, tree, source archive digest,
 metadata artifact identity, and intent configuration path. A verifier must bind the commit and tree to
 independently reviewed source and validate the metadata before using it.
 
+The metadata configuration also requires a `qualification` policy naming the
+candidate repository, repository ID, default branch and required workflow, the
+review-completion app and check, the required reviewer app IDs, and the
+historical manifest version, source SHA and SHA-256. The canonical workflow
+binds these reviewed values. Qualification compares them with GitHub evidence
+and the independently attested historical manifest. A candidate's provisional
+manifest is a separate input and cannot establish a published release.
+
 Cargo may contact hosts named by dependencies or registry configuration in the
 lockfile. The job has no GitHub or publishing credentials, but does not enforce
 a public-host network allowlist. The GitHub runner and container host remain
