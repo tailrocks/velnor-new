@@ -182,7 +182,8 @@ pub(super) fn make_fixture(
 
 pub(super) fn fixture_archive(root: &Path) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
     let target = tempfile::tempdir()?;
-    let tool = velnor_actions_mise::ToolCatalog::pinned().tool_spec(velnor_actions_mise::PinnedTool::Rust);
+    let tool =
+        velnor_actions_mise::ToolCatalog::pinned().tool_spec(velnor_actions_mise::PinnedTool::Rust);
     let which = Command::new("mise")
         .current_dir(target.path())
         .env("MISE_AUTO_INSTALL", "false")
