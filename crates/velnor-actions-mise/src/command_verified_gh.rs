@@ -216,3 +216,94 @@ fn official_gh_runs_from_verified_snapshot() -> Result<(), Box<dyn std::error::E
     assert!(std::str::from_utf8(&output.stdout)?.starts_with("gh version 2.103.3"));
     Ok(())
 }
+
+#[cfg(all(
+    test,
+    target_os = "linux",
+    any(target_arch = "x86_64", target_arch = "aarch64"),
+    feature = "release-git-rehearsal"
+))]
+#[test]
+fn official_gh_retains_verified_launch_until_reaped() -> Result<(), Box<dyn std::error::Error>> {
+    use std::io::{Read as _, Write as _};
+    use std::time::Duration;
+
+    if std::env::var_os("VELNOR_GH_LIFETIME_CHILD").is_none() {
+        let status = std::process::Command::new(std::env::current_exe()?)
+            .args([
+                "--exact",
+                "command::verified_gh::official_gh_retains_verified_launch_until_reaped",
+            ])
+            .env("VELNOR_GH_LIFETIME_CHILD", "1")
+            .status()?;
+        assert!(status.success());
+        return Ok(());
+    }
+    let listener = std::net::TcpListener::bind("127.0.0.1:0")?;
+    let endpoint = format!("http://{}/fixture", listener.local_addr()?);
+    let (ready_tx, ready_rx) = std::sync::mpsc::channel();
+    let (release_tx, release_rx) = std::sync::mpsc::channel();
+    let server = std::thread::spawn(move || -> Result<(), String> {
+        let (mut stream, _) = listener.accept().map_err(|error| error.to_string())?;
+        stream
+            .set_read_timeout(Some(Duration::from_secs(20)))
+            .map_err(|error| error.to_string())?;
+        let mut request = [0_u8; 4096];
+        if stream
+            .read(&mut request)
+            .map_err(|error| error.to_string())?
+            == 0
+        {
+            return Err("empty_request".to_owned());
+        }
+        ready_tx.send(()).map_err(|error| error.to_string())?;
+        release_rx
+            .recv_timeout(Duration::from_secs(20))
+            .map_err(|error| error.to_string())?;
+        stream
+            .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\n{}")
+            .map_err(|error| error.to_string())
+    });
+    let worker = std::thread::spawn(move || -> Result<_, crate::MiseError> {
+        let exec = crate::PinnedToolExec::new(
+            vec![crate::PinnedTool::Gh],
+            std::ffi::OsStr::new("gh"),
+            vec!["api".into(), endpoint.into()],
+        )?;
+        exec.command_with_github_token(&crate::ToolCatalog::pinned(), "synthetic-token")?
+            .run_bounded(4096, Duration::from_secs(20))
+    });
+    ready_rx.recv_timeout(Duration::from_secs(20))?;
+    let retained = verified_launch_fds()?;
+    release_tx.send(())?;
+    let output = worker.join().map_err(|_| "worker panicked")??;
+    server
+        .join()
+        .map_err(|_| "server panicked")?
+        .map_err(|_| "server failed")?;
+    assert!(output.success);
+    assert_eq!(retained, 1);
+    assert_eq!(verified_launch_fds()?, 0);
+    Ok(())
+}
+
+#[cfg(all(
+    test,
+    target_os = "linux",
+    any(target_arch = "x86_64", target_arch = "aarch64"),
+    feature = "release-git-rehearsal"
+))]
+fn verified_launch_fds() -> Result<usize, std::io::Error> {
+    let mut found = 0;
+    for entry in std::fs::read_dir("/proc/self/fd")? {
+        let path = entry?.path();
+        if std::fs::read_link(path).is_ok_and(|target| {
+            target
+                .to_string_lossy()
+                .contains("memfd:velnor-verified-gh")
+        }) {
+            found += 1;
+        }
+    }
+    Ok(found)
+}

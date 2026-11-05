@@ -72,7 +72,7 @@ pub(super) fn spawn_child(
     command: &IsolatedCommand,
     anchor: &mut Option<ProcessGroupAnchor>,
     reserved_cleanup_deadline: Option<Instant>,
-) -> Result<Child, String> {
+) -> Result<(Child, Option<super::super::verified_gh::VerifiedLaunch>), String> {
     let verified = super::super::verified_gh::prepare(command)?;
     let mut child_command = match &verified {
         Some(launch) => command.command_for(&launch.executable, &launch.args),
@@ -84,7 +84,7 @@ pub(super) fn spawn_child(
         .stderr(Stdio::piped())
         .spawn()
     {
-        Ok(child) => Ok(child),
+        Ok(child) => Ok((child, verified)),
         Err(error) => Err(cleanup_context(
             &error.to_string(),
             cleanup_anchor(anchor, None, cleanup_deadline(reserved_cleanup_deadline)),
