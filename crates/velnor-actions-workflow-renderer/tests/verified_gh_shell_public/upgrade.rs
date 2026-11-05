@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-fn rendered_upgrade_publish_script() -> Result<String, Box<dyn std::error::Error>> {
+pub(super) fn rendered_upgrade_publish_script() -> Result<String, Box<dyn std::error::Error>> {
     rendered_upgrade_publish_script_for("ubuntu-24.04")
 }
 

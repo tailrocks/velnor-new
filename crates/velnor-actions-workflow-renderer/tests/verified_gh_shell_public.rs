@@ -303,7 +303,10 @@ fn verified_helper_authenticates_real_git_without_untrusted_helpers()
         .env("PATH", "/usr/bin:/bin")
         .env("MISE_DATA_DIR", data)
         .env("GH_TOKEN", fixture_token)
-        .env("VELNOR_PUBLISH", rendered_upgrade_publish_script()?)
+        .env(
+            "VELNOR_PUBLISH",
+            upgrade::rendered_upgrade_publish_script()?,
+        )
         .env(
             "VELNOR_TRANSPORT_SOURCE",
             include_str!("../src/verified_git_transport.py"),
