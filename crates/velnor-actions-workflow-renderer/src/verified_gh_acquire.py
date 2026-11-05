@@ -14,9 +14,14 @@ import urllib.parse
 import urllib.request
 
 VERSION = "@VERSION@"
-PLATFORM = "@PLATFORM@"
-ARCHIVE_SHA256 = "@ARCHIVE_SHA256@"
-BINARY_SHA256 = "@SHA256@"
+if os.uname().machine == "aarch64":
+    PLATFORM = "@ARM_PLATFORM@"
+    ARCHIVE_SHA256 = "@ARM_ARCHIVE_SHA256@"
+    BINARY_SHA256 = "@ARM_SHA256@"
+else:
+    PLATFORM = "@PLATFORM@"
+    ARCHIVE_SHA256 = "@ARCHIVE_SHA256@"
+    BINARY_SHA256 = "@SHA256@"
 ARCHIVE_LIMIT = 64 * 1024 * 1024
 TAR_LIMIT = 128 * 1024 * 1024
 BINARY_LIMIT = 128 * 1024 * 1024
@@ -117,7 +122,7 @@ def unpack(archive, uncompressed, root, deadline):
 
 
 def main():
-    if sys.platform != "linux" or os.uname().machine != "x86_64":
+    if sys.platform != "linux" or os.uname().machine not in ("x86_64", "aarch64"):
         raise ValueError("platform")
     base = os.environ.get("RUNNER_TEMP", "")
     if not os.path.isabs(base) or any(ord(c) < 32 or ord(c) == 127 for c in base) or os.path.islink(base) or not os.path.isdir(base):

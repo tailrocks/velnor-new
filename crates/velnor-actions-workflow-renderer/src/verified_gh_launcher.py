@@ -9,8 +9,11 @@ import re
 import stat
 import sys
 
-if sys.platform != "linux" or os.uname().machine != "x86_64":
+machine = os.uname().machine
+if sys.platform != "linux" or machine not in ("x86_64", "aarch64"):
     raise SystemExit("verified_gh_unsupported_platform")
+platform, expected_sha256 = (("@ARM_PLATFORM@", "@ARM_SHA256@") if machine == "aarch64"
+                             else ("@PLATFORM@", "@SHA256@"))
 required_version_variable = "@VERSION_VARIABLE@"
 if required_version_variable and os.environ.get(required_version_variable) != "@VERSION@":
     raise SystemExit("verified_gh_unqualified_version")
@@ -20,7 +23,7 @@ if not data:
     data = os.path.join(data, "mise") if data else os.path.join(os.environ.get("HOME", ""), ".local/share/mise")
 if not os.path.isabs(data):
     raise SystemExit("verified_gh_invalid")
-source = os.path.join(data, "installs/gh/@VERSION@/gh_@VERSION@_@PLATFORM@/bin/gh")
+source = os.path.join(data, "installs/gh/@VERSION@/gh_@VERSION@_" + platform + "/bin/gh")
 fd = os.open(source, os.O_RDONLY | os.O_CLOEXEC)
 metadata = os.fstat(fd)
 limit = 128 * 1024 * 1024
@@ -44,7 +47,7 @@ while True:
             raise SystemExit("verified_gh_invalid")
         view = view[count:]
 os.close(fd)
-if copied != metadata.st_size or digest.hexdigest() != "@SHA256@":
+if copied != metadata.st_size or digest.hexdigest() != expected_sha256:
     raise SystemExit("verified_gh_invalid")
 os.fchmod(memfd, 0o500)
 fcntl.fcntl(memfd, fcntl.F_ADD_SEALS, fcntl.F_SEAL_WRITE | fcntl.F_SEAL_GROW | fcntl.F_SEAL_SHRINK | fcntl.F_SEAL_SEAL)

@@ -14,21 +14,33 @@ pub(super) fn prepare(command: &IsolatedCommand) -> Result<Option<VerifiedLaunch
     if !matches!(command.policy, EnvPolicy::GhApi | EnvPolicy::GitHubToken) {
         return Ok(None);
     }
-    #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+    #[cfg(all(
+        target_os = "linux",
+        any(target_arch = "x86_64", target_arch = "aarch64")
+    ))]
     {
         prepare_linux(command).map(Some)
     }
-    #[cfg(not(all(target_os = "linux", target_arch = "x86_64")))]
+    #[cfg(not(all(
+        target_os = "linux",
+        any(target_arch = "x86_64", target_arch = "aarch64")
+    )))]
     {
         let _ = command;
         Err("verified_gh_unsupported_platform".into())
     }
 }
 
-#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+#[cfg(all(
+    target_os = "linux",
+    any(target_arch = "x86_64", target_arch = "aarch64")
+))]
 fn prepare_linux(command: &IsolatedCommand) -> Result<VerifiedLaunch, String> {
     use std::os::fd::AsRawFd as _;
+    #[cfg(target_arch = "x86_64")]
     let qualified = crate::catalog::QUALIFIED_GH_LINUX_AMD64;
+    #[cfg(target_arch = "aarch64")]
+    let qualified = crate::catalog::QUALIFIED_GH_LINUX_ARM64;
     let invalid = || "verified_gh_invalid".to_owned();
     let pin = format!("gh@{}", qualified.version);
     let expected = [
@@ -78,7 +90,10 @@ fn prepare_linux(command: &IsolatedCommand) -> Result<VerifiedLaunch, String> {
     })
 }
 
-#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+#[cfg(all(
+    target_os = "linux",
+    any(target_arch = "x86_64", target_arch = "aarch64")
+))]
 fn sealed_executable(path: &std::path::Path, expected_sha256: &str) -> Result<File, String> {
     use rustix::fs::{MemfdFlags, Mode, SealFlags};
     use std::io::{Read as _, Write as _};
@@ -115,7 +130,11 @@ fn sealed_executable(path: &std::path::Path, expected_sha256: &str) -> Result<Fi
     Ok(file)
 }
 
-#[cfg(all(test, target_os = "linux", target_arch = "x86_64"))]
+#[cfg(all(
+    test,
+    target_os = "linux",
+    any(target_arch = "x86_64", target_arch = "aarch64")
+))]
 mod tests {
     use super::*;
     use std::io::Write as _;
@@ -166,7 +185,7 @@ mod tests {
 #[cfg(all(
     test,
     target_os = "linux",
-    target_arch = "x86_64",
+    any(target_arch = "x86_64", target_arch = "aarch64"),
     feature = "release-git-rehearsal"
 ))]
 #[test]

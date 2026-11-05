@@ -32,10 +32,28 @@ fn hosted_custody_evidence_requires_the_named_passing_test()
     Ok(())
 }
 
-#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+#[cfg(all(
+    target_os = "linux",
+    any(target_arch = "x86_64", target_arch = "aarch64")
+))]
+fn platform_pin() -> velnor_actions_mise::catalog::QualifiedGh {
+    #[cfg(target_arch = "x86_64")]
+    {
+        velnor_actions_mise::catalog::QUALIFIED_GH_LINUX_AMD64
+    }
+    #[cfg(target_arch = "aarch64")]
+    {
+        velnor_actions_mise::catalog::QUALIFIED_GH_LINUX_ARM64
+    }
+}
+
+#[cfg(all(
+    target_os = "linux",
+    any(target_arch = "x86_64", target_arch = "aarch64")
+))]
 #[test]
 fn procfs_config_custody_rejects_same_user_poisoning() -> Result<(), Box<dyn std::error::Error>> {
-    let pin = velnor_actions_mise::catalog::QUALIFIED_GH_LINUX_AMD64;
+    let pin = platform_pin();
     let fallback = tempfile::tempdir()?;
     let mut source = std::env::var_os("MISE_DATA_DIR")
         .map(std::path::PathBuf::from)
@@ -97,11 +115,14 @@ fn rejects_unqualified_mise_arguments() {
     assert!(command_for(&dynamic).is_ok());
 }
 
-#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+#[cfg(all(
+    target_os = "linux",
+    any(target_arch = "x86_64", target_arch = "aarch64")
+))]
 #[test]
 fn rendered_shell_runs_only_the_verified_github_cli() -> Result<(), Box<dyn std::error::Error>> {
     use std::{os::unix::fs::PermissionsExt as _, path::PathBuf, process::Command};
-    let pin = velnor_actions_mise::catalog::QUALIFIED_GH_LINUX_AMD64;
+    let pin = platform_pin();
     let source_root = std::env::var_os("MISE_DATA_DIR")
         .map(PathBuf::from)
         .or_else(|| std::env::var_os("XDG_DATA_HOME").map(|v| PathBuf::from(v).join("mise")))
@@ -137,22 +158,7 @@ fn rendered_shell_runs_only_the_verified_github_cli() -> Result<(), Box<dyn std:
     assert!(
         String::from_utf8_lossy(&original.stdout).contains(&format!("gh version {}", pin.version))
     );
-    let mut dynamic = prefix();
-    dynamic[5] = "gh@$VELNOR_RELEASE_GH_VERSION".into();
-    let dynamic_shell = velnor_actions_workflow_renderer::publish_scripts::gh_function(&dynamic)?;
-    assert!(
-        !run(&format!("{dynamic_shell}\ngh --version"))?
-            .status
-            .success()
-    );
-    assert!(
-        run(&format!(
-            "{dynamic_shell}\nexport VELNOR_RELEASE_GH_VERSION={}; gh --version",
-            pin.version
-        ))?
-        .status
-        .success()
-    );
+    check_dynamic_version(run, pin.version)?;
     let direct = |args: &[&str]| -> Result<std::process::Output, Box<dyn std::error::Error>> {
         Ok(Command::new(&source)
             .args(args)
@@ -186,6 +192,28 @@ fn rendered_shell_runs_only_the_verified_github_cli() -> Result<(), Box<dyn std:
     let fake = run(&format!("{shell}\ngh --version"))?;
     assert!(!fake.status.success());
     assert!(!root.path().join("executed").exists());
+    Ok(())
+}
+
+#[cfg(all(
+    target_os = "linux",
+    any(target_arch = "x86_64", target_arch = "aarch64")
+))]
+fn check_dynamic_version(
+    run: impl Fn(&str) -> Result<std::process::Output, Box<dyn std::error::Error>>,
+    version: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let mut dynamic = prefix();
+    dynamic[5] = "gh@$VELNOR_RELEASE_GH_VERSION".into();
+    let shell = velnor_actions_workflow_renderer::publish_scripts::gh_function(&dynamic)?;
+    assert!(!run(&format!("{shell}\ngh --version"))?.status.success());
+    assert!(
+        run(&format!(
+            "{shell}\nexport VELNOR_RELEASE_GH_VERSION={version}; gh --version"
+        ))?
+        .status
+        .success()
+    );
     Ok(())
 }
 
@@ -246,7 +274,10 @@ fn bootstrap_gives_its_acquisition_process_only_safe_environment()
     Ok(())
 }
 
-#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+#[cfg(all(
+    target_os = "linux",
+    any(target_arch = "x86_64", target_arch = "aarch64")
+))]
 #[test]
 fn verified_helper_authenticates_real_git_without_untrusted_helpers()
 -> Result<(), Box<dyn std::error::Error>> {
@@ -378,7 +409,10 @@ fn upgrades_publish_uses_an_isolated_transport() -> Result<(), Box<dyn std::erro
     Ok(())
 }
 
-#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+#[cfg(all(
+    target_os = "linux",
+    any(target_arch = "x86_64", target_arch = "aarch64")
+))]
 #[test]
 fn verified_shell_checks_real_signed_attestation_without_writable_home()
 -> Result<(), Box<dyn std::error::Error>> {
@@ -444,7 +478,10 @@ fn upgrade_git_init_receives_no_credentials() -> Result<(), Box<dyn std::error::
     Ok(())
 }
 
-#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+#[cfg(all(
+    target_os = "linux",
+    any(target_arch = "x86_64", target_arch = "aarch64")
+))]
 #[test]
 fn upgrade_git_init_ignores_hostile_loader() -> Result<(), Box<dyn std::error::Error>> {
     let temp = tempfile::tempdir()?;

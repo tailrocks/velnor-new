@@ -20,10 +20,13 @@ pub fn command() -> String {
 
 fn command_with_version_variable(variable: &str) -> String {
     let pin = velnor_actions_mise::catalog::QUALIFIED_GH_LINUX_AMD64;
+    let arm = velnor_actions_mise::catalog::QUALIFIED_GH_LINUX_ARM64;
     let program = PROGRAM
         .replace("@VERSION@", pin.version)
         .replace("@PLATFORM@", pin.platform)
         .replace("@SHA256@", pin.sha256)
+        .replace("@ARM_PLATFORM@", arm.platform)
+        .replace("@ARM_SHA256@", arm.sha256)
         .replace("@VERSION_VARIABLE@", variable);
     let program = python_argument(&program);
     format!(
@@ -68,11 +71,16 @@ pub fn command_for(argv: &[String]) -> Result<String, crate::RenderError> {
 #[must_use]
 pub fn bootstrap() -> String {
     let pin = velnor_actions_mise::catalog::QUALIFIED_GH_LINUX_AMD64;
+    let arm = velnor_actions_mise::catalog::QUALIFIED_GH_LINUX_ARM64;
     let program = include_str!("verified_gh_acquire.py")
         .replace("@VERSION@", pin.version)
         .replace("@PLATFORM@", pin.platform)
         .replace("@SHA256@", pin.sha256)
         .replace("@ARCHIVE_SHA256@", pin.archive_sha256);
+    let program = program
+        .replace("@ARM_PLATFORM@", arm.platform)
+        .replace("@ARM_SHA256@", arm.sha256)
+        .replace("@ARM_ARCHIVE_SHA256@", arm.archive_sha256);
     let program = python_argument(&program);
     format!(
         "case \"$RUNNER_TEMP\" in /*) ;; *) exit 1 ;; esac; velnor_gh_path=\"$RUNNER_TEMP/velnor-gh-bootstrap-path\"; rm -f \"$velnor_gh_path\"; set -C; LD_PRELOAD=\"\" LD_LIBRARY_PATH=\"\" LD_AUDIT=\"\" LD_DEBUG=\"\" LD_PROFILE=\"\" GCONV_PATH=\"\" LOCPATH=\"\" /usr/bin/env -i RUNNER_TEMP=\"$RUNNER_TEMP\" PATH=/usr/bin:/bin /usr/bin/python3 -I -S -c {program} > \"$velnor_gh_path\" || exit 1; set +C; IFS= read -r VELNOR_VERIFIED_GH_DATA_DIR < \"$velnor_gh_path\" || exit 1; rm -f \"$velnor_gh_path\"; export VELNOR_VERIFIED_GH_DATA_DIR"

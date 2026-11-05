@@ -12,6 +12,8 @@ import time
 source = open(sys.argv[1], encoding="utf-8").read().split("\ntry:\n    main()")[0]
 source = source.replace("@VERSION@", "test").replace("@PLATFORM@", "linux_amd64")
 source = source.replace("@SHA256@", hashlib.sha256(b"qualified").hexdigest())
+source = source.replace("@ARM_PLATFORM@", "linux_amd64")
+source = source.replace("@ARM_SHA256@", hashlib.sha256(b"qualified").hexdigest())
 namespace = {}
 exec(compile(source, "acquire", "exec"), namespace)
 prefix = namespace["PREFIX"]
