@@ -1,0 +1,171 @@
+# Runner image release contract
+
+The owner approved GHCR distribution for Runner, DinD, and the resource probe
+on 2026-10-28. This is the target for their GitHub Release archive distribution.
+macOS host and attestation-helper binaries retain their existing GitHub Release
+distribution and exact-source compatibility checks.
+
+The current product-release image producer still writes Docker-save archives,
+attests the shared `image-assets` artifact, and has no per-image publication
+record or `qualify-images` job. The native OCI publisher therefore rejects its
+current Runner-family output. Keep the existing release workflow active until
+the producer emits the closed records below and OCI-layout archives from the
+same image builds. Do not add a rebuild or a Docker-save conversion in the
+privileged publisher.
+
+## Image family
+
+| Component | Repository | Platform |
+| --- | --- | --- |
+| Runner | `ghcr.io/tailrocks/velnor-runner` | `linux/amd64` |
+| DinD | `ghcr.io/tailrocks/velnor-dind` | `linux/amd64` |
+| Resource probe | `ghcr.io/tailrocks/velnor-resource-probe` | `linux/amd64` |
+
+Build each image once from the selected source commit. Qualification and
+publication use that same image. An Actions artifact may transport OCI bytes
+between jobs; it is not a published image archive or a consumer fallback.
+Build and integration qualification are separate CI steps. A normal local
+build remains a standard command, for example:
+
+```sh
+docker build --platform linux/amd64 -t velnor-dind:29.9.1 images/dind
+```
+
+Publication uses the shared Rust `image-maintenance publish-image` operation
+for these three packages and `ghcr.io/tailrocks/velnor-job`. It reuses the
+existing pinned Crane tool, credential login, bounded process runner, and OCI
+archive guard. Job-image evidence keeps its strict legacy source/workflow
+contract. The current GitHub Release workflow remains active until the new
+Runner-family producer and consumer are wired together; it is not a fallback
+after GHCR cutover.
+
+The producer writes one `velnor.runner-image-publication.v1` record per image:
+`runner-image-publication.json`, `dind-image-publication.json`, or
+`resource-probe-image-publication.json`. Each closed record binds its archive
+and OCI graph to the selected source inputs and exact committed runner lock.
+Its `workflow` names the `product-release.yml` caller run, and
+`referenced_workflow` names the `product-release-images.yml` callee ref and
+resolved SHA. The attestation signer is the callee. Verification binds
+`buildSignerURI` and the certificate subject alternative name to the callee
+workflow ref, and binds `buildConfigURI` and `sourceRepositoryDigest` to the
+caller run. The selected image source is bound separately by the record, lock,
+OCI revision, and successful same-source CI run. Its qualification tuple must name the successful `qualify-images`
+job from that same run and attempt. The archive and record subjects must both
+appear in the producer's verified provenance.
+
+Each image receives `sha-<full-source-commit>` after qualification. A tag that
+already names the same digest is idempotent; a tag naming different bytes is
+an error and must not be replaced. Readback must verify the published bytes
+and exact digest. Runtime consumers never select an image through this tag.
+
+`velnor-actions image-maintenance admit-runner-images` inspects the three OCI
+archives and writes schema-2 descriptors for the native manifest formatter.
+The descriptor includes a lowercase SHA-256 digest of the exact committed
+runner-lock bytes. The formatter checks that digest against one bounded lock
+read before parsing that same buffer. The selected source must match the clean
+checkout and the committed runner lock. The admission command derives manifest
+and config digests from authenticated archive bytes and preserves the
+[probe's closed execution profile](resource-probe-artifact.md).
+These descriptors are
+intermediate evidence, not publication authority or runtime qualification.
+The publisher must bind the same archives and lock to successful qualification
+before publishing or producing the release manifest.
+
+Native OCI materialization uses an absent destination inside a caller-owned
+private scratch directory and creates it exclusively. The caller keeps that
+scratch directory private and owned through Crane consumption, and consumes
+the projection only after materialization returns successfully. On failure,
+the materializer removes only the directory it created; if cleanup fails, the
+error identifies the destination for recovery. Existing destinations are
+never reused, overwritten or removed.
+
+Source-tag publication requires exclusive writer authority. Keep every
+Runner-family tag writer under the protected product-release concurrency group
+`${{ github.repository }}-product-release` with `cancel-in-progress: false`,
+and confirm package write access does not introduce another publication path.
+The shared publisher's HEAD/PUT checks are not atomic registry create semantics;
+another HEAD does not prevent a competing writer. Do not claim immutable tags
+against writers outside that serialized authority. Recorded digest references
+remain the consumer identity.
+
+## One immutable manifest
+
+The `runner-${source_sha}` GitHub Release contains exactly
+`RUNNER_IMAGE_MANIFEST.json`, `SHA256SUMS`, `LICENSE`, and `NOTICE`. Existing
+checksum, asset-inventory, attestation, immutable-release, and source/workflow
+verification apply to those exact bytes. Published historical releases remain
+unchanged.
+
+Manifest schema version 2 requires these fields:
+
+| Field | Contract |
+| --- | --- |
+| `schema_version` | Integer `2`. |
+| `repository` | `tailrocks/velnor-new`. |
+| `source_ref` | `refs/heads/main`. |
+| `source_commit` | Full lowercase 40-digit source SHA. |
+| `signer_workflow` | `.github/workflows/product-release-images.yml`. |
+| `signer_ref` | `refs/heads/main`. |
+| `workflow_authority_sha` | The same source SHA under the current protected release authority. |
+| `trusted_signing_identity` | Exactly `oidc_issuer` and `certificate_identity`, checked against verified provenance. |
+| `platform` | `linux/amd64`. |
+| `versions` | Required `runner`, `docker`, `buildx`, `compose`, and `node` versions from the selected source's `.velnor/runner.lock`. |
+| `images` | Exactly `runner`, `dind`, and `resource_probe` entries. |
+| `resource_probe` | Protocol version `1`, image user `65532:65532`, entrypoint `/velnor/resource-probe`, and working directory `/`. |
+
+`oidc_issuer` is `https://token.actions.githubusercontent.com`.
+`certificate_identity` is
+`https://github.com/tailrocks/velnor-new/.github/workflows/product-release-images.yml@refs/heads/main`.
+
+Each image entry requires `repository`, `tag`, `registry_digest`,
+`platform_manifest_digest`, and `config_digest`. Repository and source tag must
+match the component and source above. Digests use `sha256:<64 lowercase hex>`.
+This single-platform profile publishes the selected OCI platform manifest
+directly and requires `registry_digest == platform_manifest_digest`. Indexes
+are not accepted in this profile. The config digest identifies different bytes
+and must remain a separate field. No local Docker image ID belongs in the
+portable manifest. Missing, duplicate, unknown, or incompatible fields fail
+admission.
+
+The manifest is not its own trust root. Verify its authenticated asset bytes
+and provenance against the compiled source/helper identity before accepting its
+claims. Do not weaken the existing main, canonical-caller, source, or workflow
+checks to publish pull-request source.
+
+## Host admission
+
+Pull each recorded `repository@registry_digest` anonymously with explicit
+`linux/amd64` selection. GitHub release/provenance credentials must not become
+registry credentials. Keep bounded downloads, pull progress, inspection, and
+daemon/root identity checks. Reject a changed daemon, changed Docker root,
+unsupported platform, source/version mismatch, or failed pull before creating
+an accepted runtime candidate.
+
+Inspect the pulled image on the selected daemon and validate its config and
+identity against the authenticated manifest. Registry digest, platform-manifest
+digest, config digest, and local runtime ID have distinct roles. Preserve the
+supported classic and containerd image-store checks; do not equate a registry
+digest with every Docker image ID. Create containers using the verified local
+immutable ID. Creation, ownership recovery, and audit paths must use the same
+admitted Runner and DinD identities. Mutable local tags cannot select them.
+
+The probe retains its fixed execution configuration, restricted runtime,
+Docker-root binding, bounded six-field protocol, and existing failure behavior.
+
+## Publication and qualification gates
+
+Use the existing GitHub Actions publication mechanism with package write
+permission only in the relevant publishing jobs and caller. Confirm package
+association, permissions, and public visibility. A public repository alone does
+not prove a public package. Anonymous pulls must use no stored user login.
+
+Required live proof covers all three digest pulls on a GitHub-hosted runner
+and the Mac, source/version/platform checks, Runner communication through its
+private DinD socket, and different private and outer daemon IDs. Qualification
+uses unique resource ownership and bounded cleanup. It removes only its own
+containers and volumes and preserves unrelated sentinels and built images.
+
+Complete producer and consumer integration before release. Retain unreachable
+archive helpers only until GHCR publication and anonymous digest-pull proof;
+then remove them. There is no permanent archive publisher, loader, or fallback.
+Existing published releases and unrelated local recovery work are preserved.

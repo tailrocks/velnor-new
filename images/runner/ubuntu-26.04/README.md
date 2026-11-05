@@ -3,7 +3,7 @@
 Platform: `linux/amd64`. ARM64 is not the baseline.
 
 ```sh
-docker build --platform linux/amd64 -t velnor-runner:ubuntu-26.04-2.338.0 images/runner/ubuntu-26.04
+docker build --platform linux/amd64 --build-arg VELNOR_SOURCE_SHA="$(git rev-parse HEAD)" -t velnor-runner:ubuntu-26.04-2.338.0 images/runner/ubuntu-26.04
 ```
 
 Official [actions/runner `2.338.0` release](https://github.com/actions/runner/releases/tag/v2.338.0)

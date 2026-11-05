@@ -58,4 +58,6 @@ COPY cgroup-v2-delegation.sh /usr/local/libexec/velnor/cgroup-v2-delegation.sh
 COPY entrypoint.sh /usr/local/bin/velnor-dind-entrypoint
 COPY LICENSE-moby /usr/share/doc/velnor-dind/LICENSE-moby
 RUN chmod 0755 /usr/local/bin/velnor-dind-entrypoint
+ARG VELNOR_SOURCE_SHA
+LABEL io.velnor.image.kind="dind" org.opencontainers.image.revision="${VELNOR_SOURCE_SHA}"
 ENTRYPOINT ["/usr/local/bin/velnor-dind-entrypoint"]

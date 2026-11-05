@@ -64,7 +64,9 @@ jobs:
           persist-credentials: "false"
           ref: ${{ inputs.source_sha }}
       - name: Build runner and DinD images
-        run: "set -eu\ndocker build --platform linux/amd64 -t velnor-runner:linux-amd64 images/runner/ubuntu-26.04\ndocker build --platform linux/amd64 -t velnor-dind:linux-amd64 images/dind"
+        env:
+          VELNOR_SOURCE_SHA: ${{ inputs.source_sha }}
+        run: "set -eu\n: \"${VELNOR_SOURCE_SHA:?}\"\ndocker build --platform linux/amd64 --build-arg VELNOR_SOURCE_SHA=\"$VELNOR_SOURCE_SHA\" -t velnor-runner:linux-amd64 images/runner/ubuntu-26.04\ndocker build --platform linux/amd64 --build-arg VELNOR_SOURCE_SHA=\"$VELNOR_SOURCE_SHA\" -t velnor-dind:linux-amd64 images/dind"
       - name: Setup Mise
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
@@ -126,8 +128,10 @@ jobs:
       - name: Build and smoke-test resource-probe image
         shell: bash
         run: "set -euo pipefail\nproducer_target=\"$(cd -- \"${CARGO_TARGET_DIR:-crates/velnor-runner/target}\" && pwd -P)\"\nexport VELNOR_RESOURCE_PROBE_RELEASE_BIN=\"$producer_target/x86_64-unknown-linux-gnu/debug/velnor-resource-probe-release\"\nbash images/resource-probe/build-image.sh"
-      - name: Verify image architectures
-        run: "set -eu\nrunner=\"$(docker image inspect --format '{{.Architecture}}' velnor-runner:linux-amd64)\"\ndind=\"$(docker image inspect --format '{{.Architecture}}' velnor-dind:linux-amd64)\"\ntest \"$runner\" = amd64\ntest \"$dind\" = amd64"
+      - name: Verify image architectures and revisions
+        env:
+          VELNOR_SOURCE_SHA: ${{ inputs.source_sha }}
+        run: "set -eu\n: \"${VELNOR_SOURCE_SHA:?}\"\nrunner=\"$(docker image inspect --format '{{.Architecture}}' velnor-runner:linux-amd64)\"\ndind=\"$(docker image inspect --format '{{.Architecture}}' velnor-dind:linux-amd64)\"\ntest \"$runner\" = amd64\ntest \"$dind\" = amd64\nrunner_revision=\"$(docker image inspect --format '{{ index .Config.Labels \"org.opencontainers.image.revision\" }}' velnor-runner:linux-amd64)\"\ndind_revision=\"$(docker image inspect --format '{{ index .Config.Labels \"org.opencontainers.image.revision\" }}' velnor-dind:linux-amd64)\"\ntest \"$runner_revision\" = \"$VELNOR_SOURCE_SHA\"\ntest \"$dind_revision\" = \"$VELNOR_SOURCE_SHA\""
       - name: Save image archives
         run: "set -eu\ndocker save --output velnor-runner-linux-amd64.tar velnor-runner:linux-amd64\ndocker save --output velnor-dind-linux-amd64.tar velnor-dind:linux-amd64\ntest -s velnor-runner-linux-amd64.tar\ntest -s velnor-dind-linux-amd64.tar\ntest -s velnor-resource-probe-linux-amd64.tar\ntest -s RESOURCE_PROBE_MANIFEST.json"
       - name: Checksum built bytes
