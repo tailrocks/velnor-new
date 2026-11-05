@@ -350,3 +350,10 @@ fn aged_client_gets_fresh_bounded_request() -> Result<(), Box<dyn std::error::Er
     worker.join().map_err(|_| "server")?;
     Ok(())
 }
+
+#[test]
+fn request_timeout_must_be_nonzero_and_bounded() {
+    assert!(GitHubAdmissionHttp::new(TOKEN.into(), Duration::MAX).is_err());
+    assert!(GitHubAdmissionHttp::new(TOKEN.into(), Duration::ZERO).is_err());
+    assert!(GitHubAdmissionHttp::new(TOKEN.into(), Duration::from_secs(180)).is_ok());
+}

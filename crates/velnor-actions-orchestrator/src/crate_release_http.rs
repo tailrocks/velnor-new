@@ -67,6 +67,7 @@ impl GitHubAdmissionHttp {
     pub fn new(token: String, timeout: std::time::Duration) -> Result<Self, OrchestratorError> {
         if token.is_empty()
             || timeout.is_zero()
+            || timeout > std::time::Duration::from_secs(180)
             || token.bytes().any(|byte| byte.is_ascii_control())
         {
             return Err(internal("crate_release_http_token"));
