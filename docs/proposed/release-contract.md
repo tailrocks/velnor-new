@@ -103,7 +103,7 @@ MUST NOT invent publish cycles from the conservative CI graph.
 
 ## 5. Version-group semantics
 
-Default to independent crate versions. Native release-plz version groups are
+Default to independent crate versions. Native release-plz version groups
 compute a group maximum, but release-plz gives inherited workspace versions
 precedence. An independently versioned member can be updated even when its
 source is unchanged; an inheriting member need not follow the group maximum.
