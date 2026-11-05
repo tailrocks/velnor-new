@@ -122,10 +122,10 @@ fn metadata_must_match_admitted_source_tree_and_strict_json() {
     assert!(
         verify_metadata_source("source", "tree", br#"{"packages":[]}"#, "source", "tree").is_ok()
     );
-    assert!(verify_metadata_source("other", "tree", br#"{}"#, "source", "tree").is_err());
-    assert!(verify_metadata_source("source", "other", br#"{}"#, "source", "tree").is_err());
+    assert!(verify_metadata_source("other", "tree", br"{}", "source", "tree").is_err());
+    assert!(verify_metadata_source("source", "other", br"{}", "source", "tree").is_err());
     assert!(
         verify_metadata_source("source", "tree", br#"{"x":1,"x":1}"#, "source", "tree").is_err()
     );
-    assert!(verify_metadata_source("source", "tree", br#"[]"#, "source", "tree").is_err());
+    assert!(verify_metadata_source("source", "tree", br"[]", "source", "tree").is_err());
 }
