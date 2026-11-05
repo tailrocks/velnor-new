@@ -21,7 +21,7 @@ pub(crate) fn plain_step_to_yaml(step: &Step) -> Result<Yaml, RenderError> {
                 crate::steps::scan_for_private_subcommands(condition)?;
                 entries.push(("if".to_owned(), Yaml::str(condition.clone())));
             }
-            entries.push(("uses".to_owned(), Yaml::str(uses.clone())));
+            entries.push(("uses".to_owned(), Yaml::uses(uses.clone())));
             if !with.is_empty() {
                 entries.push(("with".to_owned(), string_map_yaml(with)));
             }

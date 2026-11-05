@@ -240,10 +240,7 @@ pub(super) fn identified_publish_step(id: &str, run: &str) -> Yaml {
 pub(super) fn local_action_step(name: &str, uses: &str) -> Yaml {
     Yaml::Map(vec![
         ("name".to_owned(), Yaml::str(name)),
-        (
-            "uses".to_owned(),
-            Yaml::annotated(uses, "zizmor: ignore[self-repository]"),
-        ),
+        ("uses".to_owned(), Yaml::uses(uses)),
     ])
 }
 

@@ -553,7 +553,7 @@ jobs:
           path: "~/.local/share/mise\n${{ runner.temp }}/velnor/rustup\n${{ runner.temp }}/velnor/cargo/.crates.toml\n${{ runner.temp }}/velnor/cargo/.crates2.json\n${{ runner.temp }}/velnor/cargo/bin"
       - name: Scrub and verify Mise tools
         if: steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
-        uses: ./.github/actions/velnor-tools-cache-scrub
+        uses: ./.github/actions/velnor-tools-cache-scrub # zizmor: ignore[self-repository]
         with:
           mise-sha256: 7129dbab31d698f9028db9374f7ba7987232b0426f837dcbce437130a61415f9
       - name: Prepare pinned tools
@@ -651,7 +651,7 @@ jobs:
           path: "~/.local/share/mise\n${{ runner.temp }}/velnor/rustup\n${{ runner.temp }}/velnor/cargo/.crates.toml\n${{ runner.temp }}/velnor/cargo/.crates2.json\n${{ runner.temp }}/velnor/cargo/bin"
       - name: Scrub and verify Mise tools
         if: steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
-        uses: ./.github/actions/velnor-tools-cache-scrub
+        uses: ./.github/actions/velnor-tools-cache-scrub # zizmor: ignore[self-repository]
         with:
           mise-sha256: 7129dbab31d698f9028db9374f7ba7987232b0426f837dcbce437130a61415f9
       - name: Prepare pinned tools
@@ -756,7 +756,7 @@ jobs:
           path: "~/.local/share/mise\n${{ runner.temp }}/velnor/rustup\n${{ runner.temp }}/velnor/cargo/.crates.toml\n${{ runner.temp }}/velnor/cargo/.crates2.json\n${{ runner.temp }}/velnor/cargo/bin"
       - name: Scrub and verify Mise tools
         if: steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
-        uses: ./.github/actions/velnor-tools-cache-scrub
+        uses: ./.github/actions/velnor-tools-cache-scrub # zizmor: ignore[self-repository]
         with:
           mise-sha256: 7129dbab31d698f9028db9374f7ba7987232b0426f837dcbce437130a61415f9
       - name: Prepare pinned tools

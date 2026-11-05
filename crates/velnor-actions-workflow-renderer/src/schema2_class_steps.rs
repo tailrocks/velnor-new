@@ -30,7 +30,7 @@ pub(super) fn run_env(name: &str, env: &[(&str, &str)], run: &str) -> Yaml {
 pub(super) fn uses_with(name: &str, uses: &str, with: &[(&str, &str)]) -> Yaml {
     Yaml::Map(vec![
         ("name".to_owned(), Yaml::str(name)),
-        ("uses".to_owned(), Yaml::str(uses)),
+        ("uses".to_owned(), Yaml::uses(uses)),
         ("with".to_owned(), mapping(with)),
     ])
 }

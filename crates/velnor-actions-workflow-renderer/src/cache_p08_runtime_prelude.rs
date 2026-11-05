@@ -162,10 +162,7 @@ fn identity_step(runs_on: &str) -> Result<Yaml, RenderError> {
             "id".to_owned(),
             Yaml::str(cache_p08::TOOLS_CACHE_IDENTITY_STEP_ID),
         ),
-        (
-            "uses".to_owned(),
-            Yaml::annotated(uses, "zizmor: ignore[self-repository]"),
-        ),
+        ("uses".to_owned(), Yaml::uses(uses)),
         (
             "with".to_owned(),
             Yaml::Map(vec![(
@@ -190,10 +187,7 @@ fn seed_step() -> Yaml {
         ),
         (
             "uses".to_owned(),
-            Yaml::annotated(
-                crate::tool_seed::TOOL_SEED_USES,
-                "zizmor: ignore[self-repository]",
-            ),
+            Yaml::uses(crate::tool_seed::TOOL_SEED_USES),
         ),
         (
             "with".to_owned(),
