@@ -116,7 +116,9 @@ impl GitHubAdmissionHttp {
         query: &'static str,
         variables: &Value,
     ) -> Result<Value, OrchestratorError> {
-        let deadline = std::time::Instant::now() + self.timeout;
+        let timeout = velnor_actions_mise::CheckDeadline::cap_to_scope(self.timeout)
+            .map_err(|_| internal("qualification_graphql_deadline"))?;
+        let deadline = std::time::Instant::now() + timeout;
         let remaining = deadline.saturating_duration_since(std::time::Instant::now());
         if remaining.is_zero() {
             return Err(internal("qualification_graphql_deadline"));

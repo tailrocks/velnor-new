@@ -12,6 +12,7 @@ use std::{
 const TOKEN: &str = "synthetic-test-credential";
 
 mod conditional;
+mod deadline;
 mod errors;
 mod journal;
 mod requests;

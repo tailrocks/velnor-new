@@ -3,6 +3,12 @@
 
 use super::{GitHubAdmissionHttp, OrchestratorError};
 
+fn deadline(timeout: std::time::Duration) -> Result<std::time::Instant, OrchestratorError> {
+    let timeout = velnor_actions_mise::CheckDeadline::cap_to_scope(timeout)
+        .map_err(|_| super::internal("qualification_deadline"))?;
+    Ok(std::time::Instant::now() + timeout)
+}
+
 impl GitHubAdmissionHttp {
     pub fn qualification_job_log(
         &self,
@@ -13,7 +19,7 @@ impl GitHubAdmissionHttp {
             repository,
             job_id,
             &self.token,
-            std::time::Instant::now() + self.timeout,
+            deadline(self.timeout)?,
         )
     }
 
@@ -30,7 +36,7 @@ impl GitHubAdmissionHttp {
             expected_size,
             expected_sha256,
             &self.token,
-            std::time::Instant::now() + self.timeout,
+            deadline(self.timeout)?,
         )
     }
 }
