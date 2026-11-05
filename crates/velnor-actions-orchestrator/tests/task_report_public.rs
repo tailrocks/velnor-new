@@ -219,6 +219,9 @@ fn valid_selected_noop_reports_block_tasks() -> TestResult<()> {
 #[cfg(unix)]
 #[test]
 fn shared_job_artifact_is_downloaded_once() -> TestResult<()> {
+    if std::env::var_os("VELNOR_TASK_REPORT_CHILD_CASE").is_some() {
+        worker::validate_worker("task_report", Some(SHARED_ARTIFACT_TEST))?;
+    }
     if process::child_mode(SHARED_ARTIFACT_TEST)? {
         return Ok(());
     }
