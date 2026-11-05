@@ -16,9 +16,9 @@ fn hash(c: char) -> String {
     c.to_string().repeat(64)
 }
 
-fn state_key(trust: &str, unit: &str, root: &str, compat: char, payload: char) -> String {
+fn state_key(trust: &str, unit_token: &str, compat: char, payload: char) -> String {
     format!(
-        "velnor-v5-state-{trust}-{unit}-{root}-s256-{}-s256-{}-s256-{}",
+        "velnor-v5-state-{trust}-{unit_token}-s256-{}-s256-{}-s256-{}",
         hash(compat),
         hash('5'),
         hash(payload)
@@ -26,7 +26,7 @@ fn state_key(trust: &str, unit: &str, root: &str, compat: char, payload: char) -
 }
 
 fn trusted(unit: &str, root: &str, compat: char, payload: char) -> String {
-    state_key("trusted", unit, root, compat, payload)
+    state_key("trusted", &format!("{unit}-{root}"), compat, payload)
 }
 
 fn sorted(mut ids: Vec<u32>) -> Vec<u32> {
@@ -104,8 +104,8 @@ fn prune_groups_by_trust_unit_root_only() -> Result<(), Box<dyn Error>> {
         &format!("velnor-v2-sources-trusted-s256-{}", hash('a')),
     );
     ledger.add(804, MAIN, &format!("mise-tools-v2-{}", hash('a')));
-    ledger.add(805, MAIN, &state_key("pr", "slice", "x", 'a', '1'));
-    ledger.add(806, MAIN, &state_key("pr", "slice", "x", 'b', '2'));
+    ledger.add(805, MAIN, &state_key("pr", "slice-x", 'a', '1'));
+    ledger.add(806, MAIN, &state_key("pr", "slice-x", 'b', '2'));
     let y1 = ledger.add(807, MAIN, &trusted("slice", "y", 'a', '1'));
     ledger.add(808, "refs/pull/7/merge", &trusted("slice", "x", 'a', '3'));
     ledger.add(809, "refs/pull/7/merge", &trusted("slice", "y", 'a', '3'));
@@ -210,14 +210,29 @@ fn retired_state_entries_are_all_pruned_and_current_ones_kept() -> Result<(), Bo
             &format!("velnor-v3-state-trusted-s256-{c}-s256-{b}"),
         ),
     ];
+    let v4_key = format!("velnor-v4-state-trusted-union-root-s256-{a}-s256-{b}-s256-{c}");
+    let retired_v4 = ledger.add(41, MAIN, &v4_key);
+    let mut retired = retired.to_vec();
+    retired.push(retired_v4);
     ledger.add(31, MAIN, &trusted("slice", "root", 'a', 'b'));
+    let slice_a_older = ledger.add(51, MAIN, &trusted("slice", "a", 'a', '1'));
+    let slice_a_b_newer = ledger.add(52, MAIN, &trusted("slice", "a-b", 'a', '2'));
+    let cli_newer = ledger.add(53, MAIN, &state_key("trusted", "cli", 'a', '3'));
+    ledger.attest(slice_a_b_newer);
+    ledger.attest(cli_newer);
+    let union_older = ledger.add(61, MAIN, &trusted("union", "root", 'a', '1'));
+    let union_newer = ledger.add(62, MAIN, &trusted("union", "root", 'a', '2'));
+    let empty_id_older = ledger.add(63, MAIN, &trusted("slice", "", 'a', '1'));
+    let empty_id_newer = ledger.add(64, MAIN, &trusted("slice", "", 'a', '2'));
+    ledger.attest(union_newer);
+    ledger.attest(empty_id_newer);
     let fake = GhFake::new(&ledger)?;
     let run = fake.run_prune(MAIN)?;
     assert_eq!(run.status, Some(0), "stdout: {}", run.stdout);
     assert_eq!(
         sorted(run.attempted),
         retired,
-        "retired v1, v2 and v3 state entries must all be deleted and v4 kept"
+        "every retired v1 to v4 entry goes; slice-a ({slice_a_older}) must survive the newer attested slice-a-b ({slice_a_b_newer}) and cli ({cli_newer}); unknown units union-root ({union_older}, {union_newer}) and an empty slice id ({empty_id_older}, {empty_id_newer}) are never grouped"
     );
     Ok(())
 }

@@ -101,6 +101,20 @@ case "$verb" in
     esac
     file=$1
     shift
+    if [ -f "$d/rv/want" ] && [ ! -f "$d/rv/reached" ] && [ ! -f "$d/rv/gave_up" ]; then
+      (
+        : > "$d/rv/in.$$"
+        read -r want < "$d/rv/want"
+        waited=0
+        while :; do
+          set -- "$d"/rv/in.*
+          if [ "$#" -ge "$want" ]; then : > "$d/rv/reached"; break; fi
+          waited=$((waited + 1))
+          if [ "$waited" -gt 100 ]; then : > "$d/rv/gave_up"; break; fi
+          sleep 0.1
+        done
+      )
+    fi
     repo=; signer=; sref=; pred=
     while [ $# -gt 0 ]; do
       case "$1" in -R) repo=$2; shift ;; --signer-workflow) signer=$2; shift ;; --source-ref) sref=$2; shift ;; --predicate-type) pred=$2; shift ;; esac
@@ -194,6 +208,18 @@ impl Gh {
 
     pub(crate) fn sleeps(&self) -> usize {
         std::fs::read_to_string(self.dir.join("sleeps")).map_or(0, |text| text.lines().count())
+    }
+
+    pub(crate) fn rendezvous(&self, workers: usize) -> Result<(), Box<dyn Error>> {
+        let rv = self.dir.join("rv");
+        std::fs::create_dir_all(&rv)?;
+        std::fs::write(rv.join("want"), format!("{workers}\n"))?;
+        Ok(())
+    }
+
+    pub(crate) fn rendezvous_outcome(&self) -> (bool, bool) {
+        let rv = self.dir.join("rv");
+        (rv.join("reached").exists(), rv.join("gave_up").exists())
     }
 
     pub(crate) fn dir(&self) -> String {
@@ -331,14 +357,19 @@ pub(crate) fn script_of(step: &Step) -> Result<String, Box<dyn Error>> {
     }
 }
 
-pub(crate) fn select_script(root: &str) -> Result<String, Box<dyn Error>> {
-    script_of(&state_select_step(&[StateUnit::slice_of_root(root)?])?)
-}
-
 pub(crate) fn run_select(
     scene: &Scene,
     gh: &Gh,
     root: &str,
+    extra: &[(&str, &str)],
+) -> Result<String, Box<dyn Error>> {
+    run_select_units(scene, gh, &[StateUnit::slice_of_root(root)?], extra)
+}
+
+pub(crate) fn run_select_units(
+    scene: &Scene,
+    gh: &Gh,
+    units: &[StateUnit],
     extra: &[(&str, &str)],
 ) -> Result<String, Box<dyn Error>> {
     match std::fs::remove_file(&scene.github_output) {
@@ -353,9 +384,16 @@ pub(crate) fn run_select(
         ("GH_TOKEN", "fixture"),
     ];
     env.extend_from_slice(extra);
-    scene.run_script(&select_script(root)?, &env, None)
+    scene.run_script(&script_of(&state_select_step(units)?)?, &env, None)
 }
 
 pub(crate) fn selected(scene: &Scene, root: &str) -> Result<Vec<String>, Box<dyn Error>> {
-    scene.output_block(&state_attested_output(&StateUnit::slice_of_root(root)?))
+    selected_unit(scene, &StateUnit::slice_of_root(root)?)
+}
+
+pub(crate) fn selected_unit(
+    scene: &Scene,
+    unit: &StateUnit,
+) -> Result<Vec<String>, Box<dyn Error>> {
+    scene.output_block(&state_attested_output(unit))
 }

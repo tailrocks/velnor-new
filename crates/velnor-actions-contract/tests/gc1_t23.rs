@@ -56,6 +56,7 @@ fn check_complete_state_binding() -> Result<(), Box<dyn Error>> {
         "velnor-v1-state-trusted-aabb-r0",
         "velnor-v2-state-trusted-aabb-r0",
         "velnor-v3-state-trusted-aabb-r0",
+        "velnor-v4-state-trusted-aabb-r0",
     ] {
         if CacheFamily::for_key(retired).is_some() {
             return Err(fail("complete-state discovery claimed a retired schema"));

@@ -7,12 +7,14 @@ use std::fs;
 use std::path::Path;
 use std::process::Command;
 
-use velnor_actions_contract::workflow::cache_family::CacheFamily;
+use velnor_actions_contract::workflow::cache_family::{CacheFamily, is_plan_cache_output};
 use velnor_actions_contract::workflow::cache_family_mbx::{
     MBX_BUNDLE_ROOT_ENV, MBX_BUNDLE_SNAPSHOT_ENV,
 };
+use velnor_actions_contract::workflow::state_seal::STATE_SEAL_WORKFLOW_PATH;
 use velnor_actions_contract::{Job, StepId, StepKind, StepRole};
-use velnor_actions_orchestrator::{finalized_jobs, prepare};
+use velnor_actions_orchestrator::{finalized_jobs, prepare, render_staged_tree};
+use velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
 
 use super::one_job_per_crate::mbx_repo;
 use super::workflow_configuration_fixture::{add_independent_mbx_package, git, write_nextest_task};
@@ -334,6 +336,55 @@ fn state_snapshot_follows_targets_outside_the_package_directory() -> Result<(), 
         if got != expected {
             return Err(format!("editing {file} moved {got:?}, wanted {expected:?}").into());
         }
+    }
+    Ok(())
+}
+
+#[test]
+fn plan_publishes_four_distinct_outputs_per_adversarial_unit() -> Result<(), Box<dyn Error>> {
+    let repo = mbx_repo(false)?;
+    for (index, dir) in ["a", "a-b", "cli", "suite-a"].iter().enumerate() {
+        add_independent_mbx_package(repo.path(), dir, &format!("extra{index}"))?;
+    }
+    let prepared = prepare(repo.path())?;
+    let tree = render_staged_tree(&prepared)?;
+    let mut published: BTreeSet<String> = BTreeSet::new();
+    for path in [WORKFLOW_PATH, STATE_SEAL_WORKFLOW_PATH] {
+        let workflow: serde_json::Value =
+            serde_saphyr::from_str(tree.get(path).ok_or("a workflow was not rendered")?)?;
+        published.extend(
+            workflow["jobs"]["plan"]["outputs"]
+                .as_object()
+                .ok_or("plan job has no outputs")?
+                .keys()
+                .filter(|name| name.starts_with("state_"))
+                .cloned(),
+        );
+    }
+    let mut expected: BTreeSet<String> = BTreeSet::new();
+    for unit in ["slice_a", "slice_a_b", "slice_cli", "slice_suite_a"] {
+        for kind in ["attested", "produce", "compat", "snapshot"] {
+            let name = format!("state_{unit}_{kind}");
+            if !published.contains(&name) {
+                return Err(format!("plan never declares {name}: {published:?}").into());
+            }
+            if !is_plan_cache_output(&name) {
+                return Err(format!("{name} is not a recognised plan cache output").into());
+            }
+            expected.insert(name);
+        }
+    }
+    if expected.len() != 16 {
+        return Err(format!("unit outputs collide: {expected:?}").into());
+    }
+    if let Some(unknown) = published.iter().find(|name| !is_plan_cache_output(name)) {
+        return Err(format!("plan declares an unrecognised state output {unknown}").into());
+    }
+    if let Some(stray) = published
+        .iter()
+        .find(|name| name.starts_with("state_cli_") || name.starts_with("state_suite_"))
+    {
+        return Err(format!("a unit without a producer is published: {stray}").into());
     }
     Ok(())
 }
