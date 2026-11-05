@@ -4,6 +4,8 @@
 # This image does not set privileged. The controller supplies runtime privileges.
 FROM ubuntu:26.04@sha256:42527649dbc4f9197a6073f426f488cbff0e9cc9f2afce32d91c383e4875634a
 
+LABEL io.velnor.image.kind="dind"
+
 ARG DOCKER_VERSION=29.9.1
 ARG DOCKER_SHA256=c158ecc55adb3afb01bbd3539ed3b997d20c26dbdc418080506cc1bf5243ff57
 ARG DEBIAN_FRONTEND=noninteractive
