@@ -11,20 +11,19 @@ pub(super) const GATHER_PHASE: Phase = (
     true,
 );
 
-pub(super) const PRELUDE_BEFORE_MISE: &[Phase] = &[
-    (
-        "Prepare external evidence directories",
-        "prepare-external-evidence-directories",
-        true,
-    ),
-    (
-        "Verify exact clean source checkout",
-        "verify-exact-clean-source-checkout",
-        false,
-    ),
-];
+pub(super) const PREPARE_PHASE: Phase = (
+    "Prepare external evidence directories",
+    "prepare-external-evidence-directories",
+    true,
+);
 
-pub(super) const PRELUDE_AFTER_MISE: &[Phase] = &[
+pub(super) const VERIFY_CHECKOUT_PHASE: Phase = (
+    "Verify exact clean source checkout",
+    "verify-exact-clean-source-checkout",
+    false,
+);
+
+pub(super) const PRELUDE_AFTER_MISE_BEFORE_PREFETCH: &[Phase] = &[
     (
         "Read and verify repository tool pins",
         "read-and-verify-repository-tool-pins",
@@ -40,11 +39,15 @@ pub(super) const PRELUDE_AFTER_MISE: &[Phase] = &[
         "record-installed-tool-identities",
         false,
     ),
-    (
-        "Prefetch locked sources for qualification workspaces",
-        "prefetch-locked-sources-for-qualification-workspaces",
-        false,
-    ),
+];
+
+pub(super) const PREFETCH_PHASE: Phase = (
+    "Prefetch locked sources for qualification workspaces",
+    "prefetch-locked-sources-for-qualification-workspaces",
+    false,
+);
+
+pub(super) const PRELUDE_AFTER_PREFETCH: &[Phase] = &[
     (
         "Install validator tools with native Mise checksums",
         "install-validator-tools-with-native-mise-checksums",

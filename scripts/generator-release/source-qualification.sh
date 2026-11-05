@@ -276,7 +276,7 @@ case "$evidence" in
 esac
 {
   printf 'CARGO_TARGET_DIR=%s/velnor-source-qualification-target\n' "$RUNNER_TEMP"
-  printf 'CARGO_HOME=%s/velnor-source-qualification-cargo-home\n' "$RUNNER_TEMP"
+  printf 'CARGO_HOME=%s\n' "$CARGO_HOME"
   printf 'MISE_DATA_DIR=%s\n' "$mise_data"
   printf 'MISE_CACHE_DIR=%s\n' "$mise_cache"
   printf 'MISE_STATE_DIR=%s\n' "$mise_state"
@@ -284,7 +284,7 @@ esac
 } >>"$GITHUB_ENV"
 {
   printf 'CARGO_TARGET_DIR=%s/velnor-source-qualification-target\n' "$RUNNER_TEMP"
-  printf 'CARGO_HOME=%s/velnor-source-qualification-cargo-home\n' "$RUNNER_TEMP"
+  printf 'CARGO_HOME=%s\n' "$CARGO_HOME"
   printf 'MISE_DATA_DIR=%s\n' "$mise_data"
   printf 'MISE_CACHE_DIR=%s\n' "$mise_cache"
   printf 'MISE_STATE_DIR=%s\n' "$mise_state"
@@ -461,6 +461,8 @@ identity="$evidence/cargo-fetch-lock-identity.txt"
 manifests=(Cargo.toml crates/velnor-runner/Cargo.toml)
 locks=(Cargo.lock crates/velnor-runner/Cargo.lock)
 final_status=0
+fetch_modes=()
+restored_sources_discarded=""
 : >"$log"
 : >"$identity"
 record_lock_hashes() {
@@ -479,6 +481,59 @@ record_lock_hashes() {
     printf '%s  %s\n' "$digest" "$lock" >>"$destination" || return 1
   done
 }
+run_fetch() {
+  local manifest="$1" mode="$2" flags=(--locked)
+  if [ "$mode" = offline ]; then flags+=(--offline); fi
+  printf 'command=mise --no-config --no-env --no-hooks exec rust@%s mr-boxington@%s -- cargo fetch %s --manifest-path %s/%s\n' \
+    "$VELNOR_RUST_VERSION" "$VELNOR_MBX_VERSION" "${flags[*]}" "$root" "$manifest" >>"$log"
+  mise --no-config --no-env --no-hooks exec \
+    "rust@$VELNOR_RUST_VERSION" "mr-boxington@$VELNOR_MBX_VERSION" -- \
+    cargo fetch "${flags[@]}" --manifest-path "$root/$manifest" >>"$log" 2>&1
+  local command_status=$?
+  printf 'manifest=%s mode=%s status=%s\n' "$manifest" "$mode" "$command_status" >>"$log"
+  return "$command_status"
+}
+discard_restored_sources() {
+  local manifest="$1" path entry updated=() refetch_status=0
+  for path in registry/index registry/cache git/db; do
+    rm -rf -- "${CARGO_HOME:?}/$path"
+  done
+  restored_sources_discarded="${restored_sources_discarded:+$restored_sources_discarded,}$manifest"
+  printf '::warning::restored Cargo sources discarded because the offline fetch of %s failed\n' "$manifest"
+  printf 'restored sources discarded after the offline fetch of %s failed\n' "$manifest" >>"$log"
+  for entry in ${fetch_modes[@]+"${fetch_modes[@]}"}; do
+    if [ "${entry##*:}" = offline ]; then
+      if run_fetch "${entry%:*}" network; then
+        entry="${entry%:*}:network"
+      else
+        entry="${entry%:*}:failed"
+        refetch_status=1
+      fi
+    fi
+    updated+=("$entry")
+  done
+  fetch_modes=(${updated[@]+"${updated[@]}"})
+  return "$refetch_status"
+}
+fetch_manifest() {
+  local manifest="$1"
+  if [ -n "${SOURCES_CACHE_MATCHED_KEY:-}" ] && [ -z "$restored_sources_discarded" ]; then
+    if run_fetch "$manifest" offline; then
+      fetch_modes+=("$manifest:offline")
+      return 0
+    fi
+    if [ "${SOURCES_CACHE_HIT:-}" = true ] && ! discard_restored_sources "$manifest"; then
+      fetch_modes+=("$manifest:failed")
+      return 1
+    fi
+  fi
+  if run_fetch "$manifest" network; then
+    fetch_modes+=("$manifest:network")
+    return 0
+  fi
+  fetch_modes+=("$manifest:failed")
+  return 1
+}
 if ! record_lock_hashes "$before"; then
   final_status=1
   printf 'lockfile baseline capture failed\n' >>"$log"
@@ -489,14 +544,7 @@ else
       final_status=1
       continue
     fi
-    printf 'command=mise --no-config --no-env --no-hooks exec rust@%s mr-boxington@%s -- cargo fetch --locked --manifest-path %s/%s\n' \
-      "$VELNOR_RUST_VERSION" "$VELNOR_MBX_VERSION" "$root" "$manifest" >>"$log"
-    mise --no-config --no-env --no-hooks exec \
-      "rust@$VELNOR_RUST_VERSION" "mr-boxington@$VELNOR_MBX_VERSION" -- \
-      cargo fetch --locked --manifest-path "$root/$manifest" >>"$log" 2>&1
-    command_status=$?
-    printf 'manifest=%s status=%s\n' "$manifest" "$command_status" >>"$log"
-    if [ "$command_status" -ne 0 ]; then final_status=1; fi
+    if ! fetch_manifest "$manifest"; then final_status=1; fi
   done
 fi
 if ! record_lock_hashes "$after"; then
@@ -506,11 +554,30 @@ elif [ -f "$before" ] && ! cmp -s "$before" "$after"; then
   final_status=1
   printf 'lockfile hashes changed during cargo fetch\n' >>"$log"
 fi
+downloaded_crates="$(grep -Ec '^ *Downloaded [^ ]+ v[0-9]' "$log" || true)"
+exact_hit_network_fetch=""
+if [ "${SOURCES_CACHE_HIT:-}" = true ]; then
+  for entry in ${fetch_modes[@]+"${fetch_modes[@]}"}; do
+    if [ "${entry##*:}" = network ]; then
+      exact_hit_network_fetch="${exact_hit_network_fetch:+$exact_hit_network_fetch,}${entry%:*}"
+    fi
+  done
+fi
+if [ -n "$exact_hit_network_fetch" ]; then
+  printf '::warning::exact sources cache hit but cargo fetch used the network for: %s\n' "$exact_hit_network_fetch"
+fi
 {
   printf 'source_head=%s\n' "$GITHUB_SHA"
   printf 'fetch_scope=root-and-runner\n'
   printf 'target_filter=none\n'
   printf 'locked=true\n'
+  printf 'cargo_home=%s\n' "$CARGO_HOME"
+  printf 'sources_cache_hit=%s\n' "${SOURCES_CACHE_HIT:-}"
+  printf 'sources_cache_matched_key=%s\n' "${SOURCES_CACHE_MATCHED_KEY:-}"
+  printf 'fetch_mode=%s\n' ${fetch_modes[@]+"${fetch_modes[@]}"}
+  printf 'downloaded_crates=%s\n' "$downloaded_crates"
+  if [ -n "$exact_hit_network_fetch" ]; then printf 'exact_hit_network_fetch=%s\n' "$exact_hit_network_fetch"; fi
+  if [ -n "$restored_sources_discarded" ]; then printf 'restored_sources_discarded=%s\n' "$restored_sources_discarded"; fi
   printf 'before_sha256\n'
   cat "$before"
   printf 'after_sha256\n'
