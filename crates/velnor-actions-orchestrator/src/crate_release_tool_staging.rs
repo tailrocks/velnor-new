@@ -16,22 +16,12 @@ pub fn stage_unverified_toolchain<
     transport: &T,
 ) -> Result<std::path::PathBuf, OrchestratorError> {
     let invalid = || internal("crate_release_toolchain_staging_invalid");
-    request.intent.validate().map_err(|_| invalid())?;
-    if request.github.repository != request.intent.repository
-        || request.github.default_branch != request.intent.default_branch
-        || request.github.environment != request.intent.environment
-        || request.github.required_workflow_path != request.intent.required_workflow_path
-        || request.github.trusted_reviewer_id != request.intent.trusted_reviewer_id
-        || request.github.workflow_path != ".github/workflows/release.yml"
-        || request.github.run_attempt != 1
+    if !authority_matches(request)
         || request.token.is_empty()
         || request.artifact_id == 0
         || !request.runner_temp.is_absolute()
         || std::time::Instant::now() >= request.deadline
     {
-        return Err(invalid());
-    }
-    if !source_matches(request) {
         return Err(invalid());
     }
     crate::crate_release_github::authorize_github_candidate(
@@ -72,6 +62,18 @@ pub fn stage_unverified_toolchain<
     }
     extract_verified_tool_archive_file(&file, digest, &request.intent.rust_version, &destination)?;
     Ok(destination)
+}
+
+pub(super) fn authority_matches(request: &ToolchainStageRequest<'_>) -> bool {
+    request.intent.validate().is_ok()
+        && request.github.repository == request.intent.repository
+        && request.github.default_branch == request.intent.default_branch
+        && request.github.environment == request.intent.environment
+        && request.github.required_workflow_path == request.intent.required_workflow_path
+        && request.github.trusted_reviewer_id == request.intent.trusted_reviewer_id
+        && request.github.workflow_path == ".github/workflows/release.yml"
+        && request.github.run_attempt == 1
+        && source_matches(request)
 }
 
 fn source_matches(request: &ToolchainStageRequest<'_>) -> bool {

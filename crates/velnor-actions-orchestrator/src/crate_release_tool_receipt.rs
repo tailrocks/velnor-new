@@ -91,7 +91,7 @@ fn acquire_receipt<
     let source = source_context.root;
     let source_execution = source_context.execution;
     let authenticated = acquire_authenticated_receipt(request, github, transport)?;
-    let AuthenticatedReceipt { bytes, receipt } = authenticated;
+    let (bytes, receipt, _authority) = authenticated.into_parts();
     let invalid = || internal("crate_release_receipt_acquire_invalid");
     if reconciliation {
         let visible = crate::crate_release_controller::validate_reconciliation_receipt(
@@ -125,12 +125,25 @@ fn acquire_receipt<
     write_receipt(request.runner_temp, &bytes)
 }
 
-struct AuthenticatedReceipt {
+pub(crate) struct AuthenticatedReceipt {
     bytes: Vec<u8>,
     receipt: crate::crate_release_controller::CrateReleaseAdmissionReceipt,
+    authority: crate::crate_release_github::GitHubAuthorized,
 }
 
-fn acquire_authenticated_receipt<
+impl AuthenticatedReceipt {
+    pub(crate) fn into_parts(
+        self,
+    ) -> (
+        Vec<u8>,
+        crate::crate_release_controller::CrateReleaseAdmissionReceipt,
+        crate::crate_release_github::GitHubAuthorized,
+    ) {
+        (self.bytes, self.receipt, self.authority)
+    }
+}
+
+pub(crate) fn acquire_authenticated_receipt<
     G: crate::crate_release_github::GitHubAdmissionRead,
     T: crate::crate_release_tool_download::ToolDownloadTransport,
 >(
@@ -139,7 +152,7 @@ fn acquire_authenticated_receipt<
     transport: &T,
 ) -> Result<AuthenticatedReceipt, OrchestratorError> {
     let invalid = || internal("crate_release_receipt_acquire_invalid");
-    if request.github.run_attempt != 1
+    if !super::staging::authority_matches(request)
         || request.token.is_empty()
         || request.artifact_id == 0
         || !request.runner_temp.is_absolute()
@@ -171,7 +184,7 @@ fn acquire_authenticated_receipt<
             deadline: request.deadline,
         },
     )?;
-    crate::crate_release_github::authorize_github_candidate(
+    let authority = crate::crate_release_github::authorize_github_candidate(
         request.github,
         request.candidate,
         github,
@@ -181,7 +194,14 @@ fn acquire_authenticated_receipt<
     }
     let bytes = read_receipt_archive(&file)?;
     let receipt = decode_receipt(&bytes, request.candidate)?;
-    Ok(AuthenticatedReceipt { bytes, receipt })
+    if receipt.schema != 1 || receipt.intent != *request.intent {
+        return Err(invalid());
+    }
+    Ok(AuthenticatedReceipt {
+        bytes,
+        receipt,
+        authority,
+    })
 }
 
 #[cfg(test)]

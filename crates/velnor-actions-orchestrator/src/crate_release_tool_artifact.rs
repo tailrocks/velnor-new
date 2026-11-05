@@ -253,7 +253,7 @@ pub struct ToolchainStageRequest<'a> {
 }
 
 #[path = "crate_release_tool_receipt.rs"]
-mod receipt;
+pub(crate) mod receipt;
 use receipt::check_real_directories;
 pub(crate) use receipt::write_receipt;
 pub use receipt::{acquire_receipt_artifact, acquire_reconciliation_receipt_artifact};
