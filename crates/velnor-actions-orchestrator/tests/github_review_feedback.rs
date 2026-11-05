@@ -177,3 +177,56 @@ fn feedback_rejects_duplicate_review_across_pages() {
     api.duplicate_reviews.set(true);
     assert!(capture_feedback(&api, &ctx, &[]).is_err());
 }
+
+#[test]
+fn refreshed_feedback_rejects_check_revocation_and_feedback_change()
+-> Result<(), Box<dyn std::error::Error>> {
+    use crate::crate_release_github::GitHubAdmissionRead;
+    use crate::crate_release_qualification_checks::verify_refreshed_feedback;
+    struct Checks {
+        value: Value,
+        calls: Cell<u32>,
+        revoke: bool,
+    }
+    impl GitHubAdmissionRead for Checks {
+        fn get(&self, _path: &str) -> Result<Value, OrchestratorError> {
+            let n = self.calls.get();
+            self.calls.set(n + 1);
+            let mut check = self.value.clone();
+            if self.revoke && n >= 2 {
+                check["conclusion"] = "failure".into();
+            }
+            Ok(json!({"total_count":1,"check_runs":[check]}))
+        }
+        fn get_optional(&self, path: &str) -> Result<Option<Value>, OrchestratorError> {
+            self.get(path).map(Some)
+        }
+    }
+    let api = fixture();
+    let head = "a".repeat(40);
+    let reviewers = BTreeSet::from([90]);
+    let ctx = context(&head, &reviewers);
+    let mut check = completion_check(&api, &ctx)?;
+    check["id"] = 123.into();
+    let checks = Checks {
+        value: check.clone(),
+        calls: Cell::new(0),
+        revoke: false,
+    };
+    assert!(verify_refreshed_feedback(&checks, &api, &ctx).is_ok());
+    let revoked = Checks {
+        value: check.clone(),
+        calls: Cell::new(0),
+        revoke: true,
+    };
+    assert!(verify_refreshed_feedback(&revoked, &api, &ctx).is_err());
+    let checks = Checks {
+        value: check,
+        calls: Cell::new(0),
+        revoke: false,
+    };
+    api.pulls.set(0);
+    api.mutate_head.set(true);
+    assert!(verify_refreshed_feedback(&checks, &api, &ctx).is_err());
+    Ok(())
+}

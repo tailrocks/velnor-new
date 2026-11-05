@@ -28,6 +28,7 @@ mod crate_release_pr_tree;
 mod crate_release_pr_writer;
 pub mod crate_release_qualification_approval;
 pub mod crate_release_qualification_bundle;
+pub mod crate_release_qualification_checks;
 pub mod crate_release_qualification_observation;
 pub mod crate_release_qualification_package;
 pub mod crate_release_qualification_source;
