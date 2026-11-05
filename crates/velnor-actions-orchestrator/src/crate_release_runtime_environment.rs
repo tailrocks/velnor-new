@@ -7,7 +7,7 @@ use super::{
     Path, PathBuf, Write, admit_github_evidence, env, internal, thread,
 };
 
-pub(super) fn request_from_environment(
+pub(crate) fn request_from_environment(
     intent: &CrateReleaseIntent,
     workflow_sha: &str,
 ) -> Result<GitHubAdmissionRequest, OrchestratorError> {

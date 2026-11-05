@@ -68,7 +68,7 @@ fn qualification_intent_matches_rendered_intent_without_enabling_publishing()
     Ok(())
 }
 
-fn qualification_metadata(rust_version: &str) -> velnor_actions_contract::config::ReleaseRehearsalMetadataConfig {
+pub(super) fn qualification_metadata(rust_version: &str) -> velnor_actions_contract::config::ReleaseRehearsalMetadataConfig {
     velnor_actions_contract::config::ReleaseRehearsalMetadataConfig {
         manifest_path: "Cargo.toml".into(),
         intent_config_path: ".velnor/config.toml".into(),

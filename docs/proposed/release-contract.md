@@ -155,6 +155,16 @@ attest to both in the run-bound approval comment. This attestation records the
 reviewer’s statement; it cannot independently prove the review’s substance.
 Neither condition is inferred from release-plz's return code.
 
+For an exact-source recovery or new-crate intent, workflow generation reads
+package metadata, workspace membership, write paths and the concurrency scope
+from the approved commit's Git objects. Qualification derives the same values
+from that source. The reviewed workflow policy and workflow-authority SHA
+remain those of the current workflow. Generation uses the host's system Git as
+an object transport, with Git transports and lazy fetching disabled for object reads, and checks
+commit, tree and blob hashes independently. This trusts the host operating
+system and executable; it does not pin the system Git binary. Missing objects,
+unsupported tree entries and unsafe links cause generation to fail.
+
 For each approved upload the coordinator renders a temporary config outside
 the source checkout. It selects exactly that package and its reviewed
 features, keeps Cargo verification and clean-source checks enabled, disables

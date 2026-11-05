@@ -181,6 +181,8 @@ use admission::{
 
 #[path = "crate_release_runtime_environment.rs"]
 mod environment;
+#[cfg(test)]
+pub(crate) use environment::request_from_environment as test_request_from_environment;
 use environment::{
     append_output, read_receipt, request_from_environment, require_authority_implementation,
     required, required_path, source_admit, write_checkpoint,

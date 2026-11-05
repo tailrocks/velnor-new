@@ -115,10 +115,18 @@ pub(crate) fn release_metadata_json(
     prep: &GenerationPreparation,
     manifest: &str,
 ) -> Result<String, OrchestratorError> {
-    let catalog = &prep.catalog;
+    release_metadata_json_at(prep, &prep.root, &prep.catalog, manifest)
+}
+
+pub(super) fn release_metadata_json_at(
+    prep: &GenerationPreparation,
+    root: &std::path::Path,
+    catalog: &velnor_actions_mise::ToolCatalog,
+    manifest: &str,
+) -> Result<String, OrchestratorError> {
     if let Some(guard) = prep.operator_toolchain_guard() {
         crate::inventory::require_metadata_tools(catalog, Some(guard))?;
-        return MetadataDiscovery::new(prep.root.join(manifest))
+        return MetadataDiscovery::new(root.join(manifest))
             .and_then(|request| request.run_with_operator_guard(catalog, guard))
             .map_err(|_| OrchestratorError::ToolchainGuard {
                 problem: "operator toolchain guard rejected metadata".to_owned(),
@@ -129,7 +137,7 @@ pub(crate) fn release_metadata_json(
         problem,
     };
     crate::inventory::require_rust_pin(catalog).map_err(|err| incomplete(err.to_string()))?;
-    let request = MetadataDiscovery::new(prep.root.join(manifest))
+    let request = MetadataDiscovery::new(root.join(manifest))
         .map_err(|err| incomplete(err.to_string()))?;
     let command = request
         .command(catalog)

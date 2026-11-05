@@ -96,6 +96,24 @@ impl GitRequest {
         })
     }
 
+    pub fn object(kind: &str, id: &str) -> Result<Self, MiseError> {
+        if !matches!(kind, "commit" | "tree" | "blob")
+            || id.len() != 40
+            || !id
+                .bytes()
+                .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+        {
+            return Err(MiseError::InvalidStepInput {
+                field: "git_object".to_owned(),
+                value: "requires_kind_and_full_lowercase_sha1".to_owned(),
+            });
+        }
+        Ok(Self {
+            verb: "cat-file".to_owned(),
+            args: vec![kind.into(), id.into()],
+        })
+    }
+
     #[must_use]
     pub fn verb(&self) -> &str {
         &self.verb
@@ -138,6 +156,21 @@ impl GitRequest {
         cwd: &Path,
         git: &impl crate::release_git_pin::ReleaseGitExecutable,
     ) -> Result<ProcessOutput, MiseError> {
+        self.run_release_in_bounded(
+            cwd,
+            git,
+            OUTPUT_CAPTURE_LIMIT_BYTES,
+            std::time::Duration::from_secs(crate::command::RUN_TIMEOUT_SECS),
+        )
+    }
+
+    pub fn run_release_in_bounded(
+        &self,
+        cwd: &Path,
+        git: &impl crate::release_git_pin::ReleaseGitExecutable,
+        cap: usize,
+        timeout: std::time::Duration,
+    ) -> Result<ProcessOutput, MiseError> {
         git.revalidate().map_err(|_| MiseError::InvalidStepInput {
             field: "release_git".to_owned(),
             value: "unverified_bundle".to_owned(),
@@ -156,9 +189,15 @@ impl GitRequest {
         .map(Into::into)
         .collect();
         args.extend(self.git_args());
-        IsolatedCommand::release_git(args, git)?
-            .with_cwd(cwd.to_path_buf())
-            .run()
+        let mut command = IsolatedCommand::release_git(args, git)?.with_cwd(cwd.to_path_buf());
+        if self.verb == "cat-file" {
+            command = command.with_env(&[
+                ("GIT_NO_LAZY_FETCH".into(), "1".into()),
+                ("GIT_ALLOW_PROTOCOL".into(), "".into()),
+                ("GIT_TERMINAL_PROMPT".into(), "0".into()),
+            ])?;
+        }
+        command.run_bounded(cap, timeout)
     }
 
     pub fn run_in_until(

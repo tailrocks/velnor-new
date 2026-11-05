@@ -12,6 +12,31 @@ use velnor_actions_contract::{
     config::{CrateReleaseIntent, ReleaseRegistry},
 };
 
+pub(super) struct SourceInputs {
+    pub selection: velnor_actions_rust::release_select::ReleaseSelection,
+    pub registry: String,
+    pub config: velnor_actions_workflow_renderer::release_config::ReleasePlzConfig,
+    pub paths: Vec<String>,
+}
+
+pub(super) fn derive_source_inputs(
+    root: &std::path::Path,
+    release: &velnor_actions_contract::config::RustReleaseConfig,
+    metadata: &str,
+    manifests: &std::collections::BTreeSet<String>,
+) -> Result<SourceInputs, OrchestratorError> {
+    let selection = selection::select_with_root(root, release, metadata, manifests)?;
+    if selection.is_empty() {
+        return Err(OrchestratorError::Contract { problem: "release_nothing_selected".to_owned() });
+    }
+    check_recovery_record(release, &selection)?;
+    check_release_selection(release, &selection)?;
+    let registry = common_registry(&selection)?;
+    let config = plz_config(release, &selection)?;
+    let paths = reviewed_pr_write_paths(root, release, metadata, manifests)?;
+    Ok(SourceInputs { selection, registry, config, paths })
+}
+
 pub(crate) fn derive_intent_from_snapshot(
     source: &crate::crate_release_qualification_snapshot::SourceSnapshot,
     config: &velnor_actions_contract::VelnorConfig,
@@ -52,21 +77,12 @@ pub(crate) fn derive_intent_from_snapshot(
     if metadata_config.rust_version != catalog.version(velnor_actions_mise::PinnedTool::Rust) {
         return Err(invalid());
     }
-    let selection =
-        selection::select_with_root(source.root(), release, metadata, source.manifests())?;
-    if selection.is_empty() {
-        return Err(invalid());
-    }
-    check_recovery_record(release, &selection)?;
-    check_release_selection(release, &selection)?;
-    let registry = common_registry(&selection)?;
+    let derived = derive_source_inputs(source.root(), release, metadata, source.manifests())?;
     let pin = reviewed_generator_manifest(
         Some(std::str::from_utf8(manifest).map_err(|_| invalid())?),
         false,
         env!("CARGO_PKG_VERSION"),
     )?;
-    let config = plz_config(release, &selection)?;
-    let paths = reviewed_pr_write_paths(source.root(), release, metadata, source.manifests())?;
     let intent = crate_release_intent(
         &IntentSettings {
             default_branch,
@@ -74,10 +90,10 @@ pub(crate) fn derive_intent_from_snapshot(
         },
         release,
         repository,
-        &registry,
+        &derived.registry,
         (&pin.0, &pin.1),
-        &config,
-        paths,
+        &derived.config,
+        derived.paths,
     );
     intent.validate().map_err(|_| invalid())?;
     Ok(intent)

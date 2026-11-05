@@ -102,6 +102,8 @@ fn preview_consumer_intent(root: &std::path::Path) -> Result<String, crate::Orch
 
 #[path = "release_emit_qualification_tests.rs"]
 mod qualification;
+#[path = "release_emit_historical_tests.rs"]
+mod historical;
 
 fn write_consumer_intent(
     root: &std::path::Path,

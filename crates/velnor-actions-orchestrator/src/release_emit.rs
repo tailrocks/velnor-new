@@ -37,7 +37,7 @@ use plan::{
 #[path = "release_emit_selection.rs"]
 mod selection;
 pub(crate) use selection::{release_metadata_json, select_from_json};
-use selection::{select_from_json_with_known, tracked_manifests};
+use selection::tracked_manifests;
 
 const RELEASE_WORKFLOW_NAME: &str = "Velnor Release";
 
@@ -75,7 +75,10 @@ fn release_files_for_config(
         pin,
         config,
         intent,
+        source_snapshot,
+        catalog,
     } = derive_release_inputs(prep, release)?;
+    let source_root = source_snapshot.as_ref().map_or(prep.root.as_path(), |source| source.root());
     let plan_id = plan_id_for_source(&source_sha);
     let version = release
         .recovery
@@ -97,11 +100,11 @@ fn release_files_for_config(
         &registry,
         &repository,
         &plan,
-        (&pin.0, &pin.1),
+        ((&pin.0, &pin.1), &catalog),
     )?;
     let concurrency = workspace_lock(
         &metadata,
-        &prep.root,
+        source_root,
         &release.manifest_path,
         &known,
         &registry,
@@ -119,8 +122,7 @@ fn release_files_for_config(
         bootstrap_environment: release.environment.clone(),
         journal_predecessor: release.journal_predecessor.clone(),
         new_crates: release.new_crates.clone(),
-        release_plz_version: prep
-            .catalog
+        release_plz_version: catalog
             .version(velnor_actions_mise::PinnedTool::ReleasePlz)
             .to_owned(),
     };
@@ -142,7 +144,7 @@ fn build_release_jobs(
     registry: &str,
     repository: &str,
     plan: &velnor_actions_workflow_renderer::release_spec::ReleasePlan,
-    generator: (&str, &str),
+    inputs: ((&str, &str), &velnor_actions_mise::ToolCatalog),
 ) -> Result<
     std::collections::BTreeMap<
         String,
@@ -159,7 +161,8 @@ fn build_release_jobs(
         "github.repository == '{repository}' && github.event_name == 'push' && github.ref == 'refs/heads/{}' && needs.release-preflight.result == 'success' && needs.release-preflight.outputs.eligible == 'false'",
         prep.default_branch
     );
-    let catalog = prep.catalog.clone().with_export_rustup_toolchain(false);
+    let (generator, source_catalog) = inputs;
+    let catalog = source_catalog.clone().with_export_rustup_toolchain(false);
     let registry_arg = (registry != DEFAULT_REGISTRY).then_some(registry);
     let generator_version = env!("CARGO_PKG_VERSION");
     let acquire = velnor_actions_workflow_renderer::release_generator_bootstrap::acquire_step(
@@ -257,36 +260,43 @@ struct ReleaseIntentInputs {
     pin: (String, String),
     config: velnor_actions_workflow_renderer::release_config::ReleasePlzConfig,
     intent: CrateReleaseIntent,
+    source_snapshot: Option<crate::crate_release_qualification_snapshot::SourceSnapshot>,
+    catalog: velnor_actions_mise::ToolCatalog,
 }
 
 fn derive_release_inputs(
     prep: &GenerationPreparation,
     release: &RustReleaseConfig,
 ) -> Result<ReleaseIntentInputs, OrchestratorError> {
-    let metadata = release_metadata_json(prep, release.manifest_path.as_str())?;
-    let known = tracked_manifests(&prep.root)?;
-    let selection = select_from_json_with_known(prep, release, &metadata, &known)?;
-    if selection.is_empty() {
-        return Err(OrchestratorError::Contract {
-            problem: "release_nothing_selected".to_owned(),
-        });
-    }
-    check_recovery_record(release, &selection)?;
-    check_release_selection(release, &selection)?;
-    let registry = common_registry(&selection)?;
-    let repository = origin_repository(&prep.root)?;
     let source_sha = approved_source(&prep.root, release)?;
+    let source_snapshot = if release.recovery.is_some() || release.new_crates.is_some() {
+        let git = crate::crate_release_git::ReleaseGit::system().map_err(|_| OrchestratorError::Contract {
+            problem: "release_source_git_unavailable".to_owned(),
+        })?;
+        Some(crate::crate_release_qualification_snapshot::snapshot_git_objects(&prep.root, &source_sha, &git)?)
+    } else {
+        None
+    };
+    let source_root = source_snapshot.as_ref().map_or(prep.root.as_path(), |source| source.root());
+    let catalog = if let Some(source) = &source_snapshot {
+        crate::tool_catalog_resolve::resolve_snapshot_catalog(source.root(), &prep.config, source.nested_toolchains())?
+    } else {
+        prep.catalog.clone()
+    };
+    let metadata = selection::release_metadata_json_at(prep, source_root, &catalog, release.manifest_path.as_str())?;
+    let known = if let Some(source) = &source_snapshot { source.manifests().clone() } else { tracked_manifests(source_root)? };
+    let snapshot::SourceInputs { selection, registry, config, paths } =
+        snapshot::derive_source_inputs(source_root, release, &metadata, &known)?;
+    let repository = origin_repository(&prep.root)?;
     let pin = reviewed_generator_manifest(
         prep.discovery.consumer_manifest_json.as_deref(),
         prep.discovery.consumer_manifest_stand_in,
         env!("CARGO_PKG_VERSION"),
     )?;
-    let config = plz_config(release, &selection)?;
-    let paths = reviewed_pr_write_paths(&prep.root, release, &metadata, &known)?;
     let intent = crate_release_intent(
         &IntentSettings {
             default_branch: &prep.default_branch,
-            catalog: &prep.catalog,
+            catalog: &catalog,
         },
         release,
         &repository,
@@ -305,6 +315,8 @@ fn derive_release_inputs(
         pin,
         config,
         intent,
+        source_snapshot,
+        catalog,
     })
 }
 
