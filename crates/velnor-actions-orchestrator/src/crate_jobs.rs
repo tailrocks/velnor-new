@@ -46,7 +46,9 @@ mod ledger_cli;
 mod job_steps;
 #[path = "crate_jobs_obligations.rs"]
 mod obligations;
-use job_steps::obligation_steps;
+use job_steps::{
+    image_publication_fixture_step, obligation_steps,
+};
 use obligations::obligations_for;
 
 pub(crate) use stage::{is_mbx, is_nextest, is_opentofu, is_rust};
@@ -357,6 +359,7 @@ fn render_job(
         TaskCacheMode::Off,
         "",
     )?);
+    steps.extend(image_publication_fixture_step(input, model)?);
     steps.extend(obligation_steps(input, model, use_opentofu)?);
     if use_rust {
         let root = crate::source_prep::workspace_root_for_manifest(&model.manifest, fetch_roots);

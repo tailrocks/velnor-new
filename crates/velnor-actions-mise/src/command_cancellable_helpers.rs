@@ -8,7 +8,7 @@ use super::{
 use crate::CheckDeadline;
 use std::os::unix::process::CommandExt;
 use std::process::Child;
-use std::process::Stdio;
+use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
 pub(super) struct ChildRunContext<'a, 'streams> {
@@ -21,6 +21,11 @@ pub(super) struct ChildRunContext<'a, 'streams> {
     pub(super) reserved_cleanup_deadline: Option<Instant>,
 }
 
+pub(super) struct ChildPollResult {
+    pub(super) status: Option<ObservedStatus>,
+    pub(super) error: Option<String>,
+}
+
 pub(super) fn poll_child(
     child: &mut Child,
     stdout: std::process::ChildStdout,
@@ -29,38 +34,71 @@ pub(super) fn poll_child(
     deadline: CheckDeadline,
     cancel: &CancelHandle,
     timeout_message: &str,
-) -> Result<ProcessOutput, String> {
+) -> ChildPollResult {
     let mut stdout = Some(stdout);
     let mut stderr = Some(stderr);
-    let mut err = Vec::with_capacity(streams.stderr_cap.min(64 * 1024));
     let mut status: Option<ObservedStatus> = None;
     loop {
         if cancel.is_cancelled() {
-            return Err(super::super::SPAWN_CANCELLED_MESSAGE.to_owned());
+            return ChildPollResult {
+                status,
+                error: Some(super::super::SPAWN_CANCELLED_MESSAGE.to_owned()),
+            };
         }
         let Ok(remaining) = deadline.remaining() else {
-            return Err(timeout_message.to_owned());
+            return ChildPollResult {
+                status,
+                error: Some(timeout_message.to_owned()),
+            };
         };
         if remaining.is_zero() {
-            return Err(timeout_message.to_owned());
+            return ChildPollResult {
+                status,
+                error: Some(timeout_message.to_owned()),
+            };
         }
-        let progressed = streams.poll_stdout(&mut stdout)?;
-        let progressed = streams.poll_stderr(&mut stderr, &mut err)? || progressed;
+        let stdout_poll = streams.poll_stdout(&mut stdout);
+        let stderr_poll = streams.poll_stderr(&mut stderr);
+        let progressed = stdout_poll.as_ref().is_ok_and(|value| *value)
+            || stderr_poll.as_ref().is_ok_and(|value| *value);
         if cancel.is_cancelled() {
-            return Err(super::super::SPAWN_CANCELLED_MESSAGE.to_owned());
+            return ChildPollResult {
+                status,
+                error: Some(super::super::SPAWN_CANCELLED_MESSAGE.to_owned()),
+            };
         }
-        deadline
-            .remaining()
-            .map_err(|_| timeout_message.to_owned())?;
-        status = observe_exit(child)?.or(status);
-        if let (Some(status), None, None) = (status, stdout.as_ref(), stderr.as_ref()) {
-            return Ok(ProcessOutput {
-                stdout: Vec::new(),
-                stderr: err,
-                code: status.code,
-                signal: status.signal,
-                success: status.success,
-            });
+        if let Err(error) = stdout_poll {
+            return ChildPollResult {
+                status,
+                error: Some(error),
+            };
+        }
+        if let Err(error) = stderr_poll {
+            return ChildPollResult {
+                status,
+                error: Some(error),
+            };
+        }
+        if deadline.remaining().is_err() {
+            return ChildPollResult {
+                status,
+                error: Some(timeout_message.to_owned()),
+            };
+        }
+        match observe_exit(child) {
+            Ok(observed) => status = observed.or(status),
+            Err(error) => {
+                return ChildPollResult {
+                    status,
+                    error: Some(error),
+                };
+            }
+        }
+        if status.is_some() && stdout.is_none() && stderr.is_none() {
+            return ChildPollResult {
+                status,
+                error: None,
+            };
         }
         if !progressed {
             std::thread::sleep(Duration::from_millis(5).min(remaining));
@@ -74,18 +112,25 @@ pub(super) fn spawn_child(
     reserved_cleanup_deadline: Option<Instant>,
 ) -> Result<Child, String> {
     let mut child_command = command.command();
-    child_command.process_group(anchor.as_ref().map_or(0, ProcessGroupAnchor::pgid));
-    match child_command
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-    {
+    match spawn_owned_command(&mut child_command, anchor.as_ref()) {
         Ok(child) => Ok(child),
         Err(error) => Err(cleanup_context(
-            &error.to_string(),
+            &error,
             cleanup_anchor(anchor, None, cleanup_deadline(reserved_cleanup_deadline)),
         )),
     }
+}
+
+pub(super) fn spawn_owned_command(
+    command: &mut Command,
+    anchor: Option<&ProcessGroupAnchor>,
+) -> Result<Child, String> {
+    command.process_group(anchor.map_or(0, ProcessGroupAnchor::pgid));
+    command
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|error| error.to_string())
 }
 
 pub(super) fn finish_child_process(
@@ -126,7 +171,7 @@ pub(super) fn finish_child_process(
         );
         return Err(fail(&message));
     }
-    match poll_child(
+    let polled = poll_child(
         child,
         stdout,
         stderr,
@@ -134,18 +179,55 @@ pub(super) fn finish_child_process(
         context.deadline,
         context.cancel,
         context.timeout_message,
-    ) {
-        Ok(output) => finish_success(
-            output,
+    );
+    finish_polled_child(context, child, anchor, polled)
+}
+
+fn finish_polled_child(
+    context: &mut ChildRunContext<'_, '_>,
+    child: &mut Child,
+    anchor: &mut Option<ProcessGroupAnchor>,
+    polled: ChildPollResult,
+) -> Result<
+    (
+        ProcessOutput,
+        Option<super::super::ProcessGroupDrainReceipt>,
+    ),
+    crate::MiseError,
+> {
+    let fail = |message: &str| crate::MiseError::SpawnFailed {
+        program: context.program.to_owned(),
+        message: message.to_owned(),
+    };
+    match (polled.status, polled.error) {
+        (Some(status), None) => finish_success(
+            ProcessOutput {
+                stdout: Vec::new(),
+                stderr: context.streams.take_stderr(),
+                code: status.code,
+                signal: status.signal,
+                success: status.success,
+            },
             child,
             anchor,
             context.quiescent,
             context.reserved_cleanup_deadline,
             &fail,
         ),
-        Err(problem) => {
+        (_, Some(problem)) => {
             let error = cleanup_context(
                 &problem,
+                cleanup_anchor(
+                    anchor,
+                    Some(child),
+                    cleanup_deadline(context.reserved_cleanup_deadline),
+                ),
+            );
+            Err(fail(&error))
+        }
+        (None, None) => {
+            let error = cleanup_context(
+                "child_status_unavailable",
                 cleanup_anchor(
                     anchor,
                     Some(child),

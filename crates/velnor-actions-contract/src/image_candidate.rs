@@ -5,9 +5,15 @@
 mod image_candidate_closure;
 #[path = "image_candidate/record.rs"]
 mod image_candidate_record;
+#[path = "image_candidate/runner_publication.rs"]
+mod runner_publication;
+#[path = "image_candidate/runner_publication_context.rs"]
+mod runner_publication_context;
+#[path = "image_candidate/runner_qualification.rs"]
+mod runner_qualification;
 
 pub use image_candidate_closure::{
-    IMAGE_NATIVE_CLOSURE_SCHEMA, ImageCandidateSourceClosure, NATIVE_IMAGE_CANDIDATE_INPUTS,
+    IMAGE_NATIVE_CLOSURE_SCHEMA, ImageCandidateSourceClosure, native_image_candidate_inputs,
     parse_image_candidate_source_closure, serialize_image_candidate_source_closure,
     validate_image_candidate_source_closure,
 };
@@ -16,4 +22,18 @@ pub use image_candidate_record::{
     ImageCandidateArchive, ImageCandidateBuild, ImageCandidateOci, ImageCandidateRecord,
     ImageCandidateSource, ImageCandidateWorkflow, parse_image_candidate_record,
     serialize_image_candidate_record, validate_image_candidate_record,
+};
+pub use runner_publication::{
+    RUNNER_IMAGE_PUBLICATION_SCHEMA, RUNNER_PUBLICATION_SOURCE_INPUTS, RunnerImagePublicationLock,
+    RunnerImagePublicationRecord, RunnerImagePublicationSource,
+    parse_runner_image_publication_record, validate_runner_image_publication_record,
+};
+pub use runner_publication_context::{
+    RunnerPublicationDockerfileContext, runner_publication_dockerfile_context,
+};
+
+pub use runner_qualification::{
+    RUNNER_QUALIFICATION_SCHEMA, RunnerImageQualification, RunnerImageQualificationImage,
+    RunnerImageQualificationImages, parse_runner_image_qualification,
+    validate_runner_image_qualification,
 };

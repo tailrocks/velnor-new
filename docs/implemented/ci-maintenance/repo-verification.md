@@ -43,6 +43,13 @@ declared required-suite scope, while intentional filtered or partitioned subruns
 may allow an empty selection only when the generated plan selects the complete
 suite and execution evidence confirms its tasks ran. V1 has no permanent empty-suite exception.
 
+Before either root verification entry point runs `velnor-archive-guard` tests,
+it builds the `qualification-diagnostics` CLI example and resolves its Cargo
+compiler artifact through the repository-policy executable selector with kind
+`example`. It exports the absolute executable path in
+`VELNOR_QUALIFICATION_DIAGNOSTICS_FIXTURE`. A missing or invalid artifact fails
+the test scope; tests do not invoke Cargo to build it.
+
 ---
 
 ## The Verification Suite
@@ -169,10 +176,10 @@ and digest. This native executable shares the production CLI entry and adds
 controlled plan diagnostics without changing release manifests.
 
 ```bash
-scripts/capture-opentofu-goldens.sh \
+/private/path/velnor-golden-collector check \
+  --root "$PWD" --cli /private/path/velnor-actions \
   --archive-guard /private/path/velnor-archive-guard \
-  --archive-guard-sha256 <independent-64-character-sha256> check \
-  /private/path/velnor-actions
+  --archive-guard-sha256 <independent-64-character-sha256>
 scripts/test-capture-opentofu-goldens-bin.sh \
   --archive-guard /private/path/velnor-archive-guard \
   --archive-guard-sha256 <independent-64-character-sha256> \
@@ -188,8 +195,14 @@ identity, digest, and source fingerprint again during candidate execution. A
 missing or invalid explicit guard fails. The collector does not select another
 guard or run the builder after that failure. Both options are required.
 
+Candidate commands use bounded process-group cleanup. This is not an operating
+system sandbox: repository code running as the same user can access that user's
+files, and a process that changes its session or process group can escape the
+original group. Qualification snapshots detect observed changes; they do not
+isolate hostile code. Pull-request candidate evidence does not authorize image
+publication, which separately requires the protected-main source and authenticated
+producer and attestor identities.
+
 Use `check` to compare the five CLI goldens without changing checked-in files.
-Use `capture` only after a known-good local result. Use `check-release` with an
-independently supplied candidate manifest and its SHA-256 to check a package
-release. These modes also require both archive-guard options when running with
-an explicitly supplied guard.
+Use `capture` only after a known-good local result. The separate shell harness
+continues to exercise release-candidate checks with its external oracle.

@@ -20,6 +20,13 @@ pub const TOFU_APPLY_WORKFLOW_PATH: &str = ".github/workflows/tofu-apply.yml";
 
 pub const PLAN_JOB_ID: &str = "plan";
 
+pub const NOT_AFFECTED_JOBS_OUTPUT: &str = "not_affected_jobs";
+
+#[must_use]
+pub fn not_affected_gate(job_id: &str) -> String {
+    format!("!contains(needs.{PLAN_JOB_ID}.outputs.{NOT_AFFECTED_JOBS_OUTPUT}, ',{job_id},')")
+}
+
 pub const REQUIRED_JOB_ID: &str = "required";
 
 pub const REQUIRED_GATE_JOB_ID: &str = "required-gate";

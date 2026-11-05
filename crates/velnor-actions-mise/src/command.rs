@@ -3,6 +3,7 @@
 
 #[path = "command_cancellable.rs"]
 mod cancellable;
+pub use cancellable::run_command_bounded;
 #[path = "check_command.rs"]
 mod check;
 #[path = "command_credential.rs"]
@@ -46,9 +47,9 @@ pub use self::env::{
 use self::env::{pairs_of, redact_env_for_debug, strip_credentials};
 pub(crate) use self::output::redact_argv_for_debug;
 pub use self::output::{
-    CancelHandle, ProcessFileOutput, ProcessGroupDrainReceipt, ProcessOutput,
-    SPAWN_CANCELLED_MESSAGE, SPAWN_DEADLINE_MESSAGE, SPAWN_TIMEOUT_MESSAGE_PREFIX,
-    is_cancel_or_timeout, is_cleanup_failure,
+    BoundedCommandOutput, BoundedCommandStatus, BoundedCommandTermination, CancelHandle,
+    ProcessFileOutput, ProcessGroupDrainReceipt, ProcessOutput, SPAWN_CANCELLED_MESSAGE,
+    SPAWN_DEADLINE_MESSAGE, SPAWN_TIMEOUT_MESSAGE_PREFIX, is_cancel_or_timeout, is_cleanup_failure,
 };
 pub use crate::compiler_observer::{
     MBX_PREVIOUS_RUSTC_WRAPPER_ENV, MBX_TARGET_VIEWS_DISABLED, MBX_TARGET_VIEWS_ENV,

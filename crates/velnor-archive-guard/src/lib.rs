@@ -9,6 +9,7 @@
     missing_docs,
     reason = "documentation comments are intentionally absent from this codebase"
 )]
+pub mod golden_collector;
 pub mod owned_archive_guard;
 pub use owned_archive_guard::{
     validate_qualification_manifest, validate_qualification_output_bindings,

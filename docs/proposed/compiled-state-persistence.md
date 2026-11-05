@@ -304,7 +304,7 @@ Budget. A full pull request state costs as much as one main generation, since an
 
 ## Sequenced plan
 
-Each unit ends in a check that a reviewer can run. Gate commands come from [repository verification](../implemented/repo-verification.md). Hosted proof uses ordinary pull request and main-push runs only. A pull request run cannot exercise the producer, which runs on a protected push, so producer proof is the first main push after merge.
+Each unit ends in a check that a reviewer can run. Gate commands come from [repository verification](../implemented/ci-maintenance/repo-verification.md). Hosted proof uses ordinary pull request and main-push runs only. A pull request run cannot exercise the producer, which runs on a protected push, so producer proof is the first main push after merge.
 
 1. **Restore hardening** (done, #477): import from a staged directory, working directory outside any checkout, bounded extraction.
 2. **`SOURCE_DATE_EPOCH=0`** in every mbx task environment and in the compatibility key. Acceptance: a warm run shows 0 registry misses for `velnor-runner-cli` and `velnor-runner-host`.

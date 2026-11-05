@@ -172,11 +172,13 @@ impl<'a> Claims<'a> {
     }
 
     fn overlap(&self, glob: &str) -> Option<Overlap> {
-        let tracked_hit = |claim: &dyn Fn(&str) -> bool| {
-            self.tracked
-                .iter()
-                .any(|file| non_input_covers(glob, file) && claim(file))
-        };
+        let covered: Vec<&str> = self
+            .tracked
+            .iter()
+            .map(String::as_str)
+            .filter(|file| non_input_covers(glob, file))
+            .collect();
+        let tracked_hit = |claim: &dyn Fn(&str) -> bool| covered.iter().any(|file| claim(file));
         let reaches = |path: &str, tree: bool| {
             non_input_covers(glob, path)
                 || (tree

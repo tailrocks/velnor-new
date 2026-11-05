@@ -28,7 +28,7 @@ pub const MATRIX_MAX_PARALLEL_ENV: &str = "VELNOR_MATRIX_MAX_PARALLEL";
 pub const PLAN_STEP_ID: &str = StepId::Plan.as_str();
 pub const PLAN_ID_OUTPUT: &str = "plan_id";
 pub const RUN_KEY_OUTPUT: &str = "run_key";
-pub const NOT_AFFECTED_JOBS_OUTPUT: &str = "not_affected_jobs";
+pub use velnor_actions_contract::workflow::NOT_AFFECTED_JOBS_OUTPUT;
 
 pub const PLAN_ATTEMPT_OUTPUT: &str = "plan_attempt";
 pub use velnor_actions_contract::PLAN_ATTEMPT_ENV;

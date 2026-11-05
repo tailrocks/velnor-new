@@ -114,6 +114,11 @@ pub(super) const PRODUCER_JOBS: &[ProducerJob] = &[
         name: "Source qualification generation and repository checks",
         phases: &[
             (
+                "Author Linux x64 native validator candidates",
+                "qualify-linux-x64-native-validator-tools",
+                false,
+            ),
+            (
                 "Repeat check against external oracle",
                 "repeat-check-against-external-oracle",
                 true,

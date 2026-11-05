@@ -7,7 +7,7 @@ and generated-file ownership. The exact executable interface is in the [CLI
 contract](cli-contract.md); workflow details are in [the workflow
 contract](workflow-contract.md); cache/report details are in [the cache
 contract](cache-contract.md); Rust tooling rules are in [the quality
-contract](rust-quality-contract.md).
+contract](ci-maintenance/rust-quality-contract.md).
 
 Normative terms **MUST**, **MUST NOT**, **SHOULD**, and **MAY** have their usual requirement meanings. Missing or invalid input MUST fail with a diagnostic; it MUST NOT silently select a broader or narrower behavior except where this spec says to broaden verification.
 

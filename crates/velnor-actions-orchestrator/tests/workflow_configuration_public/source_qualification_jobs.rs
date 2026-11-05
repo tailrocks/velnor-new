@@ -52,7 +52,7 @@ fn script_phases() -> Result<Vec<String>, Box<dyn Error>> {
         if labels.is_empty()
             || !labels
                 .chars()
-                .all(|c| c.is_ascii_lowercase() || c == '-' || c == '|')
+                .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-' || c == '|')
         {
             continue;
         }

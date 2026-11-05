@@ -11,6 +11,9 @@ use sha2::{Digest, Sha256};
 
 #[path = "github_evidence_http_route.rs"]
 mod route;
+#[path = "github_evidence_http_attestation.rs"]
+mod attestation;
+pub(crate) use attestation::fetch_attestation_bundle;
 pub(super) use route::EvidenceRoute;
 
 use crate::OrchestratorError;

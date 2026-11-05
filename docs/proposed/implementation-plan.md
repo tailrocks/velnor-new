@@ -53,7 +53,7 @@ logic, the renderer emits Mise syntax, or the CLI invokes external tools.
 It MUST also fail if process execution escapes the Mise adapter or if the
 orchestrator constructs shell commands instead of issuing typed tool requests.
 Policy fixtures are committed policy tests per [rust-quality
-§5](rust-quality-contract.md) (cargo-metadata edge test, exact member-set
+§5](ci-maintenance/rust-quality-contract.md) (cargo-metadata edge test, exact member-set
 test, literal-substring ownership tests, Alint-generic plus Clippy sizes,
 human-reviewed snapshots); custom linters are forbidden and Alint stays
 generic-only, with one exception: the `no-doctests` content rule in

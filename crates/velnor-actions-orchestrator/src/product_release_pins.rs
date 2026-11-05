@@ -214,7 +214,7 @@ fn mbx_locked_build_argv(
     )
 }
 
-fn exec_argv(
+pub(crate) fn exec_argv(
     tools: &[PinnedTool],
     program: &str,
     args: &[&str],

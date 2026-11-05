@@ -171,7 +171,7 @@ pub(super) fn compose_job(
         })?;
     let publish_steps = steps
         .iter()
-        .filter(|step| identified_step_role(step).is_some())
+        .filter(|step| matches!(identified_step_role(step), Some(family::StepRole::Publish)))
         .count();
     let expected_publish_steps = usize::from(matches!(role, JobRole::Publish));
     if publish_steps != expected_publish_steps {
@@ -314,9 +314,10 @@ fn compose_step(
         with.push(("ref".to_owned(), Yaml::str(MODULE_SOURCE)));
     }
     if matches!(role, JobRole::Publish)
-        && fields.iter().any(|(key, value)| {
-            key == "uses" && matches!(value, Yaml::Str(uses) if uses == DOWNLOAD_ARTIFACT_USES)
-        })
+        && (step_role == Some(family::StepRole::ArtifactIdentityGuard)
+            || fields.iter().any(|(key, value)| {
+                key == "uses" && matches!(value, Yaml::Str(uses) if uses == DOWNLOAD_ARTIFACT_USES)
+            }))
     {
         fields.retain(|(key, _)| key != "if");
         fields.push((

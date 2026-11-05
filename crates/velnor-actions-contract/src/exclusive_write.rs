@@ -14,6 +14,22 @@ pub fn write_exclusive(path: &Path, bytes: &[u8], context: &str) -> Result<(), H
     write_exclusive_until(path, bytes, context, || Ok::<(), HelperError>(()))
 }
 
+pub fn reserve_exclusive(path: &Path, context: &str) -> Result<fs::File, HelperError> {
+    let file = open_exclusive(path, context)?;
+    if !created_identity(&file, path) {
+        return Err(HelperError::internal("symlink_refused"));
+    }
+    Ok(file)
+}
+
+pub fn verify_reserved(file: &fs::File, path: &Path) -> Result<(), HelperError> {
+    if created_identity(file, path) {
+        Ok(())
+    } else {
+        Err(HelperError::internal("symlink_refused"))
+    }
+}
+
 pub fn write_exclusive_until<E: From<HelperError>>(
     path: &Path,
     bytes: &[u8],
