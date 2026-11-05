@@ -418,6 +418,21 @@ artifact ID and records that ID and digest. A verifier must authenticate the
 witness job and compare the bundle with independently established facts. The
 bundle and any observations inside it do not authorize publication.
 
+Set `[stacks.rust.release.rehearsal.metadata]` with `manifest_path` and a
+qualified `rust_version` to enable an additional metadata job. Dispatch also
+requires `source_sha`. The protected gate captures that commit's tracked source;
+the metadata job verifies the pinned Rust toolchain before and after running
+`cargo metadata --locked --no-deps`. Cargo runs with empty homes from a fresh
+working directory, in a non-root container with a read-only source and
+toolchain. The witness records the source commit, tree, source archive digest,
+and metadata artifact identity. A verifier must bind the commit and tree to
+independently reviewed source and validate the metadata before using it.
+
+Cargo may contact hosts named by dependencies or registry configuration in the
+lockfile. The job has no GitHub or publishing credentials, but does not enforce
+a public-host network allowlist. The GitHub runner and container host remain
+trusted; the read-only mounts do not protect against privileged host processes.
+
 The source transfer verifies tracked file and link blobs against the checked-out
 Git tree and preserves internal symlinks. It rejects escaping or cyclic links,
 submodules, unsafe paths, more than 100,000 entries, an index larger than 16 MiB,

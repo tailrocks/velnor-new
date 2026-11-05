@@ -18,7 +18,7 @@ impl GitHubAdmissionRead for Api {
     }
 }
 
-fn fixture() -> Result<(WitnessRequest, Api), Box<dyn std::error::Error>> {
+fn fixture(metadata: bool) -> Result<(WitnessRequest, Api), Box<dyn std::error::Error>> {
     use crate::crate_release_pr_tree::{TreeItem, git_tree_sha};
     let request = WitnessRequest {
         repository: "owner/repo".into(),
@@ -31,6 +31,13 @@ fn fixture() -> Result<(WitnessRequest, Api), Box<dyn std::error::Error>> {
         environment: "qualification".into(),
         reviewer_id: 5,
         output_bundle: false,
+        metadata: metadata.then(|| {
+            velnor_actions_contract::config::ReleaseRehearsalMetadataConfig {
+                manifest_path: "Cargo.toml".into(),
+                rust_version: "1.97.1".into(),
+            }
+        }),
+        source_sha: metadata.then(|| "d".repeat(40)),
         script: "qualification/rehearse.sh".into(),
         source_sha256: "b".repeat(64),
         candidate_pr: 9,
@@ -41,6 +48,7 @@ fn fixture() -> Result<(WitnessRequest, Api), Box<dyn std::error::Error>> {
         environment: request.environment.clone(),
         reviewer_id: request.reviewer_id,
         output_bundle: request.output_bundle,
+        metadata: request.metadata.clone(),
     };
     let bytes = velnor_actions_workflow_renderer::release_tree::rehearsal::render(
         &config,
@@ -78,10 +86,14 @@ fn fixture() -> Result<(WitnessRequest, Api), Box<dyn std::error::Error>> {
         format!("repos/owner/repo/git/commits/{}", request.workflow_sha),
         serde_json::json!({"sha":request.workflow_sha,"tree":{"sha":entry.sha}}),
     );
-    let jobs = ["preflight", "gate", "execute", "witness"].iter().enumerate().map(|(i,name)| serde_json::json!({"name":name,"id":i+1,"run_id":42,"run_attempt":1,"head_sha":request.workflow_sha,"status":"completed","conclusion":"success"})).collect::<Vec<_>>();
+    let mut names = vec!["preflight", "gate", "execute", "witness"];
+    if metadata {
+        names.push("metadata");
+    }
+    let jobs = names.iter().enumerate().map(|(i,name)| serde_json::json!({"name":name,"id":i+1,"run_id":42,"run_attempt":1,"head_sha":request.workflow_sha,"status":"completed","conclusion":"success"})).collect::<Vec<_>>();
     objects.insert(
         "repos/owner/repo/actions/runs/42/attempts/1/jobs?per_page=100&page=1".into(),
-        serde_json::json!({"total_count":4,"jobs":jobs}),
+        serde_json::json!({"total_count":jobs.len(),"jobs":jobs}),
     );
     Ok((request, Api(objects)))
 }
@@ -89,7 +101,7 @@ fn fixture() -> Result<(WitnessRequest, Api), Box<dyn std::error::Error>> {
 #[test]
 fn canonical_workflow_tree_and_successful_jobs_are_required()
 -> Result<(), Box<dyn std::error::Error>> {
-    let (request, mut api) = fixture()?;
+    let (request, mut api) = fixture(false)?;
     let evidence = verify_canonical_rehearsal(&request, "main", &api)?;
     assert_eq!(evidence.workflow_sha256.len(), 64);
     let jobs = api
@@ -109,9 +121,23 @@ fn canonical_workflow_tree_and_successful_jobs_are_required()
 }
 
 #[test]
+fn metadata_opt_in_requires_the_exact_successful_metadata_job()
+-> Result<(), Box<dyn std::error::Error>> {
+    let (request, mut api) = fixture(true)?;
+    verify_canonical_rehearsal(&request, "main", &api)?;
+    let jobs = api
+        .0
+        .get_mut("repos/owner/repo/actions/runs/42/attempts/1/jobs?per_page=100&page=1")
+        .ok_or("jobs")?;
+    jobs["jobs"][4]["conclusion"] = "skipped".into();
+    assert!(verify_canonical_rehearsal(&request, "main", &api).is_err());
+    Ok(())
+}
+
+#[test]
 fn rejects_different_generator_output_and_forged_git_tree() -> Result<(), Box<dyn std::error::Error>>
 {
-    let (mut request, mut api) = fixture()?;
+    let (mut request, mut api) = fixture(false)?;
     request.script = "qualification/other.sh".into();
     assert!(verify_canonical_rehearsal(&request, "main", &api).is_err());
     request.script = "qualification/rehearse.sh".into();

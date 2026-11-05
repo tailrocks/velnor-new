@@ -60,11 +60,30 @@ pub struct ReleaseRehearsalConfig {
     pub reviewer_id: u64,
     #[serde(default)]
     pub output_bundle: bool,
+    #[serde(default)]
+    pub metadata: Option<ReleaseRehearsalMetadataConfig>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ReleaseRehearsalMetadataConfig {
+    pub manifest_path: String,
+    pub rust_version: String,
 }
 
 impl ReleaseRehearsalConfig {
     pub fn validate(&self, file: &str) -> Result<(), ContractError> {
         validate_environment(file, &self.environment)?;
+        if let Some(metadata) = &self.metadata {
+            validate_manifest_path(file, &metadata.manifest_path)?;
+            if !super::release_intent::is_cargo_version(&metadata.rust_version) {
+                return Err(ContractError::config(
+                    file,
+                    "stacks.rust.release.rehearsal.metadata.rust_version",
+                    "invalid_rust_version",
+                ));
+            }
+        }
         let path = &self.script;
         if self.reviewer_id == 0
             || !self

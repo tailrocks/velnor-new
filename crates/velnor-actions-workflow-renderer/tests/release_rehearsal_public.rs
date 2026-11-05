@@ -4,12 +4,81 @@
 use velnor_actions_contract::config::{ReleaseRehearsalConfig, RustReleaseConfig};
 use velnor_actions_workflow_renderer::release_tree::rehearsal;
 
+#[cfg(unix)]
+#[test]
+fn metadata_ignores_source_cargo_configuration() -> Result<(), Box<dyn std::error::Error>> {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let status = std::process::Command::new("python3")
+        .arg(root.join("tests/release_rehearsal_metadata_fixture.py"))
+        .arg(root.join("src/release_rehearsal_metadata.py"))
+        .status()?;
+    assert!(status.success());
+    Ok(())
+}
+
+#[test]
+fn metadata_is_opt_in_and_bound_to_an_isolated_reviewed_source_job()
+-> Result<(), Box<dyn std::error::Error>> {
+    let baseline = rehearsal::render(&config(), "0.1.73")?;
+    let baseline: serde_json::Value = serde_saphyr::from_str(&baseline.bytes)?;
+    assert!(baseline["jobs"].get("metadata").is_none());
+    let mut rehearsal = config();
+    rehearsal.metadata = Some(
+        velnor_actions_contract::config::ReleaseRehearsalMetadataConfig {
+            manifest_path: "Cargo.toml".into(),
+            rust_version: "1.97.1".into(),
+        },
+    );
+    let output = rehearsal::render(&rehearsal, "0.1.73")?;
+    let workflow: serde_json::Value = serde_saphyr::from_str(&output.bytes)?;
+    assert_eq!(
+        workflow["on"]["workflow_dispatch"]["inputs"]["source_sha"]["required"],
+        true
+    );
+    assert_eq!(
+        workflow["jobs"]["metadata"]["permissions"],
+        serde_json::json!({})
+    );
+    assert_eq!(workflow["jobs"]["metadata"]["needs"], "gate");
+    assert_eq!(
+        workflow["jobs"]["witness"]["needs"],
+        serde_json::json!(["gate", "execute", "metadata"])
+    );
+    let steps = workflow["jobs"]["metadata"]["steps"]
+        .as_array()
+        .ok_or("metadata steps")?;
+    assert_eq!(
+        steps
+            .iter()
+            .filter(|s| s["name"] == velnor_actions_workflow_renderer::VERIFY_RUST_TOOLCHAIN_STEP)
+            .count(),
+        2
+    );
+    let script = steps
+        .iter()
+        .find(|s| s["name"] == "Compute approved source metadata")
+        .and_then(|s| s["run"].as_str())
+        .ok_or("metadata script")?;
+    assert!(script.contains("--cap-drop=ALL"));
+    assert!(script.contains("dst=/source,readonly"));
+    assert!(script.contains("--locked"));
+    assert!(
+        workflow["jobs"]["witness"]["steps"]
+            .as_array()
+            .ok_or("witness steps")?
+            .iter()
+            .any(|s| s["name"] == "Bind approved metadata source")
+    );
+    Ok(())
+}
+
 fn config() -> ReleaseRehearsalConfig {
     ReleaseRehearsalConfig {
         script: "qualification/rehearse.sh".into(),
         environment: "qualification".into(),
         reviewer_id: 42,
         output_bundle: false,
+        metadata: None,
     }
 }
 

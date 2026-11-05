@@ -25,6 +25,8 @@ pub struct WitnessRequest {
     pub environment: String,
     pub reviewer_id: u64,
     pub output_bundle: bool,
+    pub metadata: Option<velnor_actions_contract::config::ReleaseRehearsalMetadataConfig>,
+    pub source_sha: Option<String>,
     pub script: String,
     pub source_sha256: String,
     pub candidate_pr: u64,
@@ -120,6 +122,8 @@ pub(crate) fn validate_request(r: &WitnessRequest) -> Result<(), OrchestratorErr
         || !hex(&r.workflow_sha, 40)
         || !hex(&r.candidate_sha, 40)
         || !hex(&r.source_sha256, 64)
+        || r.metadata.is_some() != r.source_sha.is_some()
+        || r.source_sha.as_ref().is_some_and(|sha| !hex(sha, 40))
     {
         return Err(invalid());
     }

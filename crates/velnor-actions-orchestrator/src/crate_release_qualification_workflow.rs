@@ -39,6 +39,7 @@ pub fn verify_canonical_rehearsal(
         environment: request.environment.clone(),
         reviewer_id: request.reviewer_id,
         output_bundle: request.output_bundle,
+        metadata: request.metadata.clone(),
     };
     let expected = velnor_actions_workflow_renderer::release_tree::rehearsal::render(
         &config,
@@ -92,7 +93,8 @@ pub fn verify_canonical_rehearsal(
 fn verify_jobs(value: &Value, request: &WitnessRequest) -> Result<(), OrchestratorError> {
     let invalid = || internal("qualification_workflow_jobs");
     let jobs = value["jobs"].as_array().ok_or_else(invalid)?;
-    if jobs.len() != 4 || value["total_count"].as_u64() != Some(4) {
+    let expected = if request.metadata.is_some() { 5 } else { 4 };
+    if jobs.len() != expected || value["total_count"].as_u64() != Some(expected as u64) {
         return Err(invalid());
     }
     let mut names = BTreeSet::new();
@@ -103,7 +105,8 @@ fn verify_jobs(value: &Value, request: &WitnessRequest) -> Result<(), Orchestrat
             .as_u64()
             .filter(|id| *id > 0)
             .ok_or_else(invalid)?;
-        if !matches!(name, "preflight" | "gate" | "execute" | "witness")
+        if !(matches!(name, "preflight" | "gate" | "execute" | "witness")
+            || (name == "metadata" && request.metadata.is_some()))
             || !names.insert(name)
             || !ids.insert(id)
             || job["run_id"].as_u64() != Some(request.run_id)

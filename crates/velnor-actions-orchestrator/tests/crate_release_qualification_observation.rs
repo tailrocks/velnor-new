@@ -26,6 +26,8 @@ impl Fixture {
             environment: "staging".into(),
             reviewer_id: 55,
             output_bundle: false,
+            metadata: None,
+            source_sha: None,
             script: "verify/run.sh".into(),
             source_sha256: "b".repeat(64),
             candidate_pr: 66,

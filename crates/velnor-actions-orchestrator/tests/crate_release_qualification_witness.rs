@@ -2,10 +2,58 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{WitnessRead, WitnessRequest, verify_witness};
+use crate::crate_release_qualification_bundle::acquire_metadata;
 use crate::crate_release_qualification_bundle::acquire_output_bundle;
 #[path = "crate_release_qualification_witness/fixtures.rs"]
 mod fixtures;
 use fixtures::Fixture;
+
+#[test]
+fn metadata_requires_exact_witness_source_and_artifact_custody()
+-> Result<(), Box<dyn std::error::Error>> {
+    use std::io::{Cursor, Write};
+    let mut f = Fixture::new()?;
+    f.request.metadata = Some(
+        velnor_actions_contract::config::ReleaseRehearsalMetadataConfig {
+            manifest_path: "Cargo.toml".into(),
+            rust_version: "1.97.1".into(),
+        },
+    );
+    f.request.source_sha = Some("d".repeat(40));
+    let mut job = f.job.borrow_mut();
+    let steps = job["steps"].as_array_mut().ok_or("steps")?;
+    for name in ["Bind metadata artifact", "Bind approved metadata source"] {
+        steps.push(serde_json::json!({"name": name, "status":"completed", "conclusion":"success"}));
+    }
+    drop(job);
+    let mut archive = zip::ZipWriter::new(Cursor::new(Vec::new()));
+    archive.start_file("metadata.json", zip::write::SimpleFileOptions::default())?;
+    archive.write_all(b"{}")?;
+    f.bytes = archive.finish()?.into_inner();
+    let digest = crate::generator::sha256_hex(&f.bytes);
+    f.artifact.borrow_mut()["name"] = "approved-metadata-observation".into();
+    f.artifact.borrow_mut()["size_in_bytes"] = f.bytes.len().into();
+    f.artifact.borrow_mut()["digest"] = format!("sha256:{digest}").into();
+    f.log = format!("2026-11-05T00:00:00Z VELNOR_METADATA_SOURCE run=33 attempt=1 source={} tree={} sha256={}\n2026-11-05T00:00:00Z VELNOR_REHEARSAL_METADATA run=33 attempt=1 artifact=77 sha256={digest}\n", "d".repeat(40), "e".repeat(40), "f".repeat(64)).into_bytes();
+    let evidence = acquire_metadata(&f.request, &f)?;
+    assert_eq!(evidence.bytes(), b"{}");
+    assert_eq!(evidence.source_sha(), "d".repeat(40));
+    assert_eq!(evidence.source_tree_sha(), "e".repeat(40));
+    let original = f.log.clone();
+    f.log.extend(original.clone());
+    assert!(acquire_metadata(&f.request, &f).is_err());
+    f.log = String::from_utf8(original.clone())?
+        .replace("source=dddd", "source=aaaa")
+        .into_bytes();
+    assert!(acquire_metadata(&f.request, &f).is_err());
+    f.log = original;
+    f.job.borrow_mut()["steps"][2]["conclusion"] = "skipped".into();
+    assert!(acquire_metadata(&f.request, &f).is_err());
+    f.job.borrow_mut()["steps"][2]["conclusion"] = "success".into();
+    f.change_artifact_after_download.set(true);
+    assert!(acquire_metadata(&f.request, &f).is_err());
+    Ok(())
+}
 
 #[test]
 fn witness_requires_unique_marker_and_exact_run_job_artifact_identity()
