@@ -90,6 +90,19 @@ pub(crate) fn run(scenario: Scenario, expected: &str) -> Result<(), Box<dyn Erro
         expected_error(scenario, &stderr, expected),
         "expected {expected}, got {stderr}; fixture routes: {requests}"
     );
+    assert_safe_api_failure(scenario, &stderr, &requests);
+    assert!(!paths.runner_temp.join("velnor/local/plan.json").exists());
+    assert!(
+        !paths
+            .runner_temp
+            .join("velnor/request/plan-v1-response.json")
+            .exists()
+    );
+    driver::record_success(scenario)?;
+    Ok(())
+}
+
+fn assert_safe_api_failure(scenario: Scenario, stderr: &str, requests: &str) {
     if matches!(
         scenario,
         Scenario::HttpFailure | Scenario::StdoutLimit | Scenario::StderrLimit | Scenario::Deadline
@@ -125,14 +138,6 @@ pub(crate) fn run(scenario: Scenario, expected: &str) -> Result<(), Box<dyn Erro
             );
         }
     }
-    assert!(!paths.runner_temp.join("velnor/local/plan.json").exists());
-    assert!(
-        !paths
-            .runner_temp
-            .join("velnor/request/plan-v1-response.json")
-            .exists()
-    );
-    Ok(())
 }
 
 fn manifest_identity(cli: &Path, scenario: Scenario) -> Result<(String, String), Box<dyn Error>> {
@@ -226,35 +231,16 @@ fn invoke(paths: &Paths, ids: &Identities, scenario: Scenario) -> Result<Output,
     } else {
         Command::new(cli)
     };
+    command.env_clear();
+    pass_worker_environment(&mut command)?;
     let output = command
         .current_dir(&paths.repo)
-        .env_clear()
         .env(
             "VELNOR_API_DIAGNOSTIC_CHILD",
             if is_deadline { "1" } else { "0" },
         )
         .env("PATH", "/usr/bin:/bin")
         .env("MISE_DATA_DIR", mise_data)
-        .env(
-            "VELNOR_GH_FIXTURE_WORKER",
-            std::env::var("VELNOR_GH_FIXTURE_WORKER")?,
-        )
-        .env(
-            "VELNOR_GH_FIXTURE_SCENARIO",
-            std::env::var("VELNOR_GH_FIXTURE_SCENARIO")?,
-        )
-        .env(
-            "VELNOR_GH_FIXTURE_CACHE_KEY",
-            std::env::var("VELNOR_GH_FIXTURE_CACHE_KEY")?,
-        )
-        .env(
-            "VELNOR_GH_FIXTURE_ARCH",
-            std::env::var("VELNOR_GH_FIXTURE_ARCH")?,
-        )
-        .env(
-            "VELNOR_GH_TEST_TLS_ROOT",
-            std::env::var_os("VELNOR_GH_TEST_TLS_ROOT").ok_or("TLS root")?,
-        )
         .env("VELNOR_FIXTURE_STATE", paths.root.join("provider"))
         .env("VELNOR_FIXTURE_BASE", &ids.base)
         .env("VELNOR_FIXTURE_HEAD", &ids.head)
@@ -282,6 +268,22 @@ fn invoke(paths: &Paths, ids: &Identities, scenario: Scenario) -> Result<Output,
         )
         .output()?;
     Ok(output)
+}
+
+fn pass_worker_environment(command: &mut Command) -> Result<(), Box<dyn Error>> {
+    for key in [
+        "VELNOR_GH_FIXTURE_WORKER",
+        "VELNOR_GH_FIXTURE_SCENARIO",
+        "VELNOR_GH_FIXTURE_CACHE_KEY",
+        "VELNOR_GH_FIXTURE_ARCH",
+        "VELNOR_GH_TEST_TLS_ROOT",
+    ] {
+        command.env(
+            key,
+            std::env::var_os(key).ok_or("isolated fixture environment missing")?,
+        );
+    }
+    Ok(())
 }
 
 pub(crate) fn deadline_child() -> Result<bool, Box<dyn Error>> {

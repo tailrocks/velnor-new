@@ -7,11 +7,16 @@ import json
 import os
 import pathlib
 import platform
+import re
+import secrets
 import shutil
 import stat
 import subprocess
 import sys
 import tempfile
+
+sys.dont_write_bytecode = True
+from docker_host import docker_environment, local_daemon, trusted_docker, verify_image
 
 MANIFEST = json.loads(pathlib.Path(__file__).with_name("tools.json").read_text())
 IMAGE = MANIFEST["image"]
@@ -125,7 +130,7 @@ def fingerprint(root, arch, profile, dependency_digest):
     digest.update(("velnor-gh-fixture-v1\0" + arch + "\0" + profile + "\0" + IMAGE + "\0").encode())
     digest.update(dependency_digest)
     total = 0
-    for entry in sorted(filter(None, tracked.split(b"\0"))):
+    for entry in sorted(filter(None, tracked.split(b"\0")), key=lambda value: value.split(b"\t", 1)[1]):
         metadata, name = entry.split(b"\t", 1)
         mode, oid, stage = metadata.split(b" ")
         if stage != b"0":
@@ -171,11 +176,12 @@ def install_tool(source, target, expected):
         if os.path.exists(name): os.unlink(name)
 
 
-def docker_base(root, target, tools, registry, image_platform):
+
+def docker_base(client, root, target, tools, registry, image_platform):
     for path in [root, target, tools, registry]:
         if ":" in str(path) or "," in str(path):
             raise RuntimeError("fixture mount path is unsupported")
-    return ["docker", "run", "--rm", "--pull=never", "--network=none", "--platform", image_platform,
+    return [client, "run", "--rm", "--pull=never", "--network=none", "--platform", image_platform,
             "--add-host", "api.github.com:127.0.0.1", "--cap-drop=ALL", "--cap-add=CHOWN", "--cap-add=SETUID", "--cap-add=SETGID", "--security-opt=no-new-privileges", "--mount", f"type=bind,src={root},dst=/work,readonly",
             "--mount", f"type=bind,src={target},dst=/target", "--mount", f"type=bind,src={tools},dst=/tools,readonly",
             "--mount", f"type=bind,src={registry},dst=/usr/local/cargo/registry,readonly", "-w", "/work", IMAGE]
@@ -194,6 +200,14 @@ def main():
     selected = MANIFEST[arch]
     image_platform, gh_platform = selected["container_platform"], selected["tool_platform"]
     gh_digest, nextest_digest = selected["gh_sha256"], selected["nextest_sha256"]
+    expected_platform = "amd64" if arch == "x86_64" else "arm64"
+    if (image_platform != f"linux/{expected_platform}"
+            or gh_platform != f"linux_{expected_platform}"
+            or not re.fullmatch(r"[0-9]{1,8}\.[0-9]{1,8}\.[0-9]{1,8}", MANIFEST["gh_version"])):
+        raise RuntimeError("invalid fixture tool platform or version")
+    client = trusted_docker()
+    docker_env = docker_environment()
+    local_daemon(client, docker_env)
     root = pathlib.Path(__file__).resolve().parents[4]
     configured_tools = os.environ.get("VELNOR_GH_FIXTURE_TOOLS")
     if not configured_tools and os.environ.get("RUNNER_TEMP"):
@@ -213,13 +227,13 @@ def main():
         gh_version = MANIFEST["gh_version"]
         install_tool(source_tools / f"gh_{gh_platform}", tools / f"mise/installs/gh/{gh_version}/gh_{gh_version}_{gh_platform}/bin/gh", gh_digest)
         install_tool(source_tools / f"cargo-nextest_{gh_platform}", tools / "cargo-nextest", nextest_digest)
-        command(["docker", "image", "inspect", IMAGE], stdout=subprocess.DEVNULL)
+        verify_image(client, docker_env, IMAGE)
         metadata_target = cache / "metadata"; checked_directory(metadata_target)
-        metadata_docker = docker_base(root, metadata_target, tools, registry, image_platform)
+        metadata_docker = docker_base(client, root, metadata_target, tools, registry, image_platform)
         triple = "x86_64-unknown-linux-gnu" if arch == "x86_64" else "aarch64-unknown-linux-gnu"
         metadata_script = f"export HOME=/tmp PATH=/usr/local/cargo/bin:/usr/bin:/bin RUSTUP_TOOLCHAIN=1.99.1-{triple} CARGO_TARGET_DIR=/target CARGO_NET_OFFLINE=true; exec cargo metadata --locked --offline --all-features --filter-platform {triple} --format-version 1"
         with tempfile.TemporaryFile() as output:
-            command(metadata_docker[:-1] + ["--user", f"{os.getuid()}:{os.getgid()}", IMAGE, "sh", "-c", metadata_script], stdout=output)
+            command(metadata_docker[:-1] + ["--user", f"{os.getuid()}:{os.getgid()}", IMAGE, "sh", "-c", metadata_script], stdout=output, env=docker_env)
             output.seek(0)
             metadata_bytes = output.read(128 * 1024 * 1024 + 1)
         if len(metadata_bytes) > 128 * 1024 * 1024:
@@ -228,12 +242,12 @@ def main():
         dependency_digest = registry_fingerprint(packages, registry)
         key = fingerprint(root, arch, profile, dependency_digest)
         target = cache / key; checked_directory(target)
-        docker = docker_base(root, target, tools, registry, image_platform)
+        docker = docker_base(client, root, target, tools, registry, image_platform)
         binary_meta = target / "fixture-binaries.json"; cargo_meta = target / "fixture-cargo.json"
         if not binary_meta.is_file() or not cargo_meta.is_file():
             release = "--release" if profile == "release" else ""
             build = f'''set -eu; export HOME=/tmp PATH=/tools:/usr/local/cargo/bin:/usr/bin:/bin RUSTUP_TOOLCHAIN=1.99.1-{triple} CARGO_TARGET_DIR=/target CARGO_NET_OFFLINE=true; cargo metadata --locked --offline --all-features --filter-platform {triple} --format-version 1 > /target/fixture-cargo.tmp; /tools/cargo-nextest nextest list --locked --offline -p velnor-actions-cli --test api2026_pull_context_public {release} --list-type binaries-only --message-format json > /target/fixture-binaries.tmp; mv /target/fixture-cargo.tmp /target/fixture-cargo.json; mv /target/fixture-binaries.tmp /target/fixture-binaries.json'''
-            command(docker[:-1] + ["--user", f"{os.getuid()}:{os.getgid()}", IMAGE, "sh", "-c", build])
+            command(docker[:-1] + ["--user", f"{os.getuid()}:{os.getgid()}", IMAGE, "sh", "-c", build], env=docker_env)
             if fingerprint(root, arch, profile, registry_fingerprint(packages, registry)) != key:
                 binary_meta.unlink(missing_ok=True); cargo_meta.unlink(missing_ok=True)
                 raise RuntimeError("fixture sources changed during isolated build")
@@ -241,9 +255,16 @@ def main():
         if read_regular(target / "fixture-key", 64).decode() != key:
             raise RuntimeError("fixture cache identity mismatch")
         fcntl.flock(lock, fcntl.LOCK_UN)
-        script = f'''set -eu; mkdir /tmp/fixture-tls /tmp/fixture-home; openssl req -x509 -newkey rsa:2048 -nodes -keyout /tmp/fixture-tls/key.pem -out /tmp/fixture-tls/cert.pem -days 1 -subj /CN=api.github.com -addext subjectAltName=DNS:api.github.com >/dev/null 2>&1; cat /tmp/fixture-tls/cert.pem >> /etc/ssl/certs/ca-certificates.crt; chown -R {os.getuid()}:{os.getgid()} /tmp/fixture-tls /tmp/fixture-home; exec setpriv --reuid={os.getuid()} --regid={os.getgid()} --clear-groups /bin/sh -c 'export HOME=/tmp/fixture-home PATH=/tools:/usr/local/cargo/bin:/usr/bin:/bin MISE_DATA_DIR=/tools/mise VELNOR_GH_TEST_TLS_ROOT=/tmp/fixture-tls VELNOR_GH_FIXTURE_WORKER=container-v1 VELNOR_GH_FIXTURE_SCENARIO="$FIXTURE_SCENARIO" VELNOR_GH_FIXTURE_CACHE_KEY="$FIXTURE_KEY" VELNOR_GH_FIXTURE_ARCH="$FIXTURE_ARCH"; exec /tools/cargo-nextest nextest run --cargo-metadata /target/fixture-cargo.json --binaries-metadata /target/fixture-binaries.json -E "test(=$FIXTURE_SCENARIO)" --no-tests fail' '''
-        env_args = ["-e", f"FIXTURE_SCENARIO={test}", "-e", f"FIXTURE_KEY={key}", "-e", f"FIXTURE_ARCH={arch}"]
-        command(docker[:-1] + env_args + [IMAGE, "sh", "-c", script])
+        nonce = secrets.token_hex(32)
+        receipt = target / f"receipt-{nonce}"
+        script = f'''set -eu; mkdir /tmp/fixture-tls /tmp/fixture-home; openssl req -x509 -newkey rsa:2048 -nodes -keyout /tmp/fixture-tls/key.pem -out /tmp/fixture-tls/cert.pem -days 1 -subj /CN=api.github.com -addext subjectAltName=DNS:api.github.com >/dev/null 2>&1; cat /tmp/fixture-tls/cert.pem >> /etc/ssl/certs/ca-certificates.crt; chown -R {os.getuid()}:{os.getgid()} /tmp/fixture-tls /tmp/fixture-home; exec setpriv --reuid={os.getuid()} --regid={os.getgid()} --clear-groups /bin/sh -c 'export HOME=/tmp/fixture-home PATH=/tools:/usr/local/cargo/bin:/usr/bin:/bin MISE_DATA_DIR=/tools/mise VELNOR_GH_TEST_TLS_ROOT=/tmp/fixture-tls VELNOR_GH_FIXTURE_WORKER=container-v1 VELNOR_GH_FIXTURE_SCENARIO="$FIXTURE_SCENARIO" VELNOR_GH_FIXTURE_CACHE_KEY="$FIXTURE_KEY" VELNOR_GH_FIXTURE_ARCH="$FIXTURE_ARCH" VELNOR_GH_FIXTURE_NONCE="$FIXTURE_NONCE"; exec /tools/cargo-nextest nextest run --cargo-metadata /target/fixture-cargo.json --binaries-metadata /target/fixture-binaries.json -E "test(=$FIXTURE_SCENARIO)" --no-tests fail' '''
+        env_args = ["-e", f"FIXTURE_SCENARIO={test}", "-e", f"FIXTURE_KEY={key}", "-e", f"FIXTURE_ARCH={arch}", "-e", f"FIXTURE_NONCE={nonce}"]
+        try:
+            command(docker[:-1] + env_args + [IMAGE, "sh", "-c", script], env=docker_env)
+            if read_regular(receipt, 256).decode() != f"{nonce}\n{test}\n":
+                raise RuntimeError("fixture worker success receipt does not match scenario")
+        finally:
+            receipt.unlink(missing_ok=True)
         if fingerprint(root, arch, profile, registry_fingerprint(packages, registry)) != key:
             raise RuntimeError("fixture sources changed during isolated execution")
     finally:
@@ -253,6 +274,6 @@ def main():
 if __name__ == "__main__":
     try:
         main()
-    except (OSError, RuntimeError, subprocess.CalledProcessError) as error:
+    except (OSError, RuntimeError, ValueError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
         print(f"isolated GitHub fixture: {error}", file=sys.stderr)
         sys.exit(1)

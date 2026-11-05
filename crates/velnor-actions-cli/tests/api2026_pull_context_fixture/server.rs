@@ -17,8 +17,8 @@ pub(super) struct Server {
 
 impl Drop for Server {
     fn drop(&mut self) {
-        let _ = self.child.kill();
-        let _ = self.child.wait();
+        drop(self.child.kill());
+        drop(self.child.wait());
     }
 }
 
@@ -51,8 +51,8 @@ pub(super) fn start(paths: &Paths, ids: &Identities) -> Result<Server, Box<dyn E
             return Err(format!("TLS fixture exited: {status}").into());
         }
         if Instant::now() >= deadline {
-            let _ = child.kill();
-            let _ = child.wait();
+            drop(child.kill());
+            drop(child.wait());
             return Err("TLS fixture startup timed out".into());
         }
         thread::sleep(Duration::from_millis(20));

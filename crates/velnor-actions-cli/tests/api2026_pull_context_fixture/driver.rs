@@ -123,3 +123,19 @@ pub(super) fn validate_worker(scenario: Option<Scenario>) -> Result<(), Box<dyn 
     }
     Ok(())
 }
+
+pub(super) fn record_success(scenario: Scenario) -> Result<(), Box<dyn Error>> {
+    let nonce = std::env::var("VELNOR_GH_FIXTURE_NONCE")?;
+    if nonce.len() != 64
+        || !nonce
+            .bytes()
+            .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+    {
+        return Err("invalid isolated GitHub fixture receipt".into());
+    }
+    std::fs::write(
+        format!("/target/receipt-{nonce}"),
+        format!("{nonce}\n{}\n", scenario.test_name()),
+    )?;
+    Ok(())
+}
