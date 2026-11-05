@@ -144,6 +144,7 @@ fn fixture() -> Result<
         output_bundle: true,
         metadata: Some(
             velnor_actions_contract::config::ReleaseRehearsalMetadataConfig {
+                intent_config_path: "qualification/release.toml".into(),
                 manifest_path: "Cargo.toml".into(),
                 rust_version: "1.99.1".into(),
             },
