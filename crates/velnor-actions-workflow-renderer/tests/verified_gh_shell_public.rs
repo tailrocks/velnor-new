@@ -87,8 +87,34 @@ fn procfs_config_custody_rejects_same_user_poisoning() -> Result<(), Box<dyn std
     let result = std::process::Command::new("/usr/bin/python3")
         .arg(fixture)
         .arg(shell)
-        .arg(source)
+        .arg(&source)
         .arg(relative)
+        .output()?;
+    assert!(
+        result.status.success(),
+        "{}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+    let workspace = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .and_then(std::path::Path::parent)
+        .ok_or("workspace root")?;
+    let result = std::process::Command::new("cargo")
+        .args([
+            "nextest",
+            "run",
+            "--locked",
+            "-p",
+            "velnor-actions-mise",
+            "--features",
+            "release-git-rehearsal",
+            "-E",
+            "test(official_gh_retains_verified_launch_until_reaped)",
+            "--no-tests",
+            "fail",
+        ])
+        .env("MISE_DATA_DIR", source)
+        .current_dir(workspace)
         .output()?;
     assert!(
         result.status.success(),
