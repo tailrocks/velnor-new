@@ -8,6 +8,7 @@ use std::time::{Duration, Instant};
 use velnor_actions_contract::workflow::cache_family::StateUnit;
 use velnor_actions_contract::workflow::state_seal::{
     STATE_SEAL_LIST_LIMIT, STATE_SEAL_SELECT_LIST_LIMIT, STATE_SEAL_SELECT_PARALLELISM,
+    STATE_SEAL_VERIFY_LIMIT,
 };
 
 use crate::gc1_scene::{Scene, fail};
@@ -300,21 +301,27 @@ fn plan_gives_a_hung_unit_no_selection_and_leaves_the_others() -> Result<(), Box
 #[test]
 #[cfg(unix)]
 fn plan_caps_each_unit_at_its_own_newest_rows() -> Result<(), Box<dyn Error>> {
-    let units = [(StateUnit::Union, "."), (StateUnit::Union, "b")];
+    let units = [
+        (StateUnit::Union, "."),
+        (StateUnit::Union, "b"),
+        (StateUnit::Union, "a"),
+        (StateUnit::Union, "a-b"),
+    ];
     for (rank, selects) in [
         (STATE_SEAL_LIST_LIMIT, true),
         (STATE_SEAL_LIST_LIMIT + 1, false),
     ] {
         let scene = Scene::new("seal-select-cap", crate::gc1_t53::scripts()?)?;
         let gh = Gh::install(&scene)?;
-        let prefix = unit_scope(StateUnit::Union, ".")?.prefix();
         let other = unit_scope(StateUnit::Union, "b")?.prefix();
         let attested = unit_key(StateUnit::Union, ".", 0, 0x1000, 1)?;
         let newest = unit_key(StateUnit::Union, "b", 1, 0x1001, 1)?;
+        let nested = unit_key(StateUnit::Union, "a", 2, 0x1002, 1)?;
 
         let mut rows: Vec<(String, String)> = Vec::new();
         for position in 1..rank {
-            rows.push((at(2 * position), format!("{prefix}s256-nothex{position}")));
+            let unattested = unit_key(StateUnit::Union, ".", 0, 0x1000, 100 + position as u64)?;
+            rows.push((at(2 * position), unattested));
         }
         rows.push((at(2 * rank), attested.clone()));
         rows.push((at(1), newest.clone()));
@@ -324,8 +331,18 @@ fn plan_caps_each_unit_at_its_own_newest_rows() -> Result<(), Box<dyn Error>> {
                 format!("{other}s256-nothex{position}"),
             ));
         }
+        let mut sealed = vec![Attestation::signed(&attested), Attestation::signed(&newest)];
+        let neighbours: Vec<String> = (0..STATE_SEAL_LIST_LIMIT + 50)
+            .map(|position| unit_key(StateUnit::Union, "a-b", 3, 0x1003, 1000 + position as u64))
+            .collect::<Result<_, _>>()?;
+        for (position, key) in neighbours.iter().enumerate() {
+            rows.push((at(600 + position), key.clone()));
+            sealed.push(Attestation::signed(key));
+        }
+        rows.push((at(900), nested.clone()));
+        sealed.push(Attestation::signed(&nested));
         gh.list(&rows_of(&rows))?;
-        gh.attest(&[Attestation::signed(&attested), Attestation::signed(&newest)])?;
+        gh.attest(&sealed)?;
         run_select_units(&scene, &gh, &units, &[])?;
 
         let want: Vec<String> = if selects { vec![attested] } else { Vec::new() };
@@ -338,6 +355,19 @@ fn plan_caps_each_unit_at_its_own_newest_rows() -> Result<(), Box<dyn Error>> {
             &selected_unit(&scene, StateUnit::Union, "b")?,
             &[newest],
             &format!("neighbour unit with rank {rank}"),
+        )?;
+        expect(
+            &selected_unit(&scene, StateUnit::Union, "a")?,
+            &[nested],
+            &format!(
+                "nested unit under {} newer entries of its neighbour",
+                neighbours.len()
+            ),
+        )?;
+        expect(
+            &selected_unit(&scene, StateUnit::Union, "a-b")?,
+            &neighbours[..STATE_SEAL_VERIFY_LIMIT],
+            "nested neighbour keeps its own newest entries",
         )?;
         scene.finish()?;
     }

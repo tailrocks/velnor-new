@@ -91,15 +91,13 @@ const WORKER: &str = r#"set -eu
 m=
 v=
 while IFS="@TAB@" read -r created key id size; do
-  case "$key" in "$1"*) ;; *) continue ;; esac
+  case "$key" in "$1"?*) ;; *) continue ;; esac
+  printf "%s\n" "${key#"$1"}" | grep -Eq "$shape" || continue
   m="${m}x"
   [ "${#m}" -le @LIST_LIMIT@ ] && [ "${#v}" -lt @VERIFY_LIMIT@ ] || break
-  case "$key" in *[[:space:]]*) continue ;; esac
   case "$id" in ""|*[!0-9]*) continue ;; esac
   case "$size" in ""|*[!0-9]*) continue ;; esac
   [ "$size" -le @OUTER_BOUND@ ] || continue
-  case "$key" in "$1"?*) ;; *) continue ;; esac
-  printf "%s\n" "${key#"$1"}" | grep -Eq "$shape" || continue
   printf "%s %s %s\n" "$key" "$id" "$size" > "$w/subject"
   if run_gh attestation verify "$w/subject" -R "$repo" --signer-workflow "$signer" --source-ref "$ref" --predicate-type "@PREDICATE@" >/dev/null 2>&1; then printf "%s\n" "$key" >> "$w/part"; v="${v}x"; fi
 done < "$d/sorted"
