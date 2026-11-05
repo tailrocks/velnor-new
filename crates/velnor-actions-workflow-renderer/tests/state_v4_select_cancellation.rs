@@ -129,23 +129,6 @@ fn wait_for_rendezvous(gh: &Gh, expected: usize) -> Result<(), Box<dyn Error>> {
     )
 }
 
-fn install_pid_shim(scene: &Scene, gh: &Gh) -> Result<(String, PathBuf), Box<dyn Error>> {
-    let python = PathBuf::from(scene.restricted_path(&["python3"])?).join("python3");
-    let pid_file = PathBuf::from(gh.dir()).join("supervisor-pid");
-    scene.install_shim(
-        "python3",
-        r#"#!/bin/sh
-exec "$FAKE_REAL_PYTHON3" -I -c '
-import os, sys
-with open(os.environ["FAKE_SUPERVISOR_PID_FILE"], "w", encoding="utf-8") as pid_file:
-    pid_file.write(str(os.getpid()))
-exec(compile(sys.argv[1], "<selector>", "exec"), {"__name__": "__main__"})
-' "$3"
-"#,
-    )?;
-    Ok((pid_file.display().to_string(), python))
-}
-
 fn send_signal(signal: &str, pid: &str) -> Result<(), Box<dyn Error>> {
     let status = Command::new("kill").args(["-s", signal, pid]).status()?;
     if status.success() {
@@ -155,9 +138,61 @@ fn send_signal(signal: &str, pid: &str) -> Result<(), Box<dyn Error>> {
     }
 }
 
+fn barrier_failure(
+    scene: &Scene,
+    gh: &Gh,
+    signal: &str,
+    iteration: usize,
+    barrier: &str,
+    selector: &mut RunningSelector,
+    signal_marker: &PathBuf,
+    signal_ack: &PathBuf,
+) -> Box<dyn Error> {
+    let pid = selector.child.id();
+    let process_state = fs::read_to_string(format!("/proc/{pid}/status"))
+        .ok()
+        .and_then(|status| {
+            status
+                .lines()
+                .find(|line| line.starts_with("State:"))
+                .map(str::to_owned)
+        });
+    let rendezvous = fs::read_dir(PathBuf::from(gh.dir()).join("rv"))
+        .map(|entries| entries.count())
+        .ok();
+    let verified = fs::read_to_string(PathBuf::from(gh.dir()).join("verified")).ok();
+    let hung = gh.hung_pids().ok();
+    let outputs = (0..2)
+        .map(|index| {
+            let output = scene
+                .runner
+                .join(format!("velnor/state-select/u-r{index}/out"));
+            fs::read_to_string(output).ok()
+        })
+        .collect::<Vec<_>>();
+    let statuses = (0..2)
+        .map(|index| {
+            scene
+                .runner
+                .join(format!("velnor/state-select/status-u{index}"))
+                .exists()
+        })
+        .collect::<Vec<_>>();
+    let child_status = selector.child.try_wait().ok().flatten();
+    fail(&format!(
+        "{signal} cancellation iteration {iteration} barrier {barrier} timed out: pid={pid} process_state={process_state:?} child_status={child_status:?} rendezvous={rendezvous:?} verified={verified:?} hung={hung:?} outputs={outputs:?} statuses={statuses:?} cleanup_started={} cleanup_released={} scratch={}",
+        signal_marker.exists(),
+        signal_ack.exists(),
+        scene.scratch.display(),
+    ))
+}
+
 #[test]
 fn selector_cancellation_cleans_and_propagates_each_signal() -> Result<(), Box<dyn Error>> {
-    for (signal, status) in [("HUP", 129), ("INT", 130), ("TERM", 143)] {
+    for (iteration, (signal, status)) in [("HUP", 129), ("INT", 130), ("TERM", 143)]
+        .into_iter()
+        .enumerate()
+    {
         let scene = Scene::new("seal-select-cancellation", crate::gc1_t53::scripts()?)?;
         let gh = Gh::install(&scene)?;
         let completed = unit_key(StateUnit::Union, ".", 0, 0x1000, 1)?;
@@ -172,37 +207,75 @@ fn selector_cancellation_cleans_and_propagates_each_signal() -> Result<(), Box<d
         ])?;
         hang_keys(&gh, &[&hanging])?;
         rendezvous(&gh, 2)?;
-        let (pid_file, real_python) = install_pid_shim(&scene, &gh)?;
         let signal_marker = PathBuf::from(gh.dir()).join("cleanup-started");
         let signal_ack = PathBuf::from(gh.dir()).join("cleanup-release");
-        let pid_file_env = pid_file.clone();
         let signal_marker_env = signal_marker.display().to_string();
         let signal_ack_env = signal_ack.display().to_string();
-        let real_python_env = real_python
-            .to_str()
-            .ok_or_else(|| fail("invalid Python path"))?
-            .to_owned();
         let mut selector = RunningSelector::new(spawn_select_units(
             &scene,
             &gh,
             &[(StateUnit::Union, "."), (StateUnit::Union, "b")],
             &[
-                ("FAKE_SUPERVISOR_PID_FILE", &pid_file_env),
-                ("FAKE_REAL_PYTHON3", &real_python_env),
                 ("FAKE_GH_SIGNAL_MARKER", &signal_marker_env),
                 ("FAKE_GH_SIGNAL_ACK", &signal_ack_env),
             ],
         )?);
-        wait_for_rendezvous(&gh, 2)?;
-        wait_for_clean_success(&scene, &gh, 0, &completed)?;
-        wait_until(
+        if wait_for_rendezvous(&gh, 2).is_err() {
+            return Err(barrier_failure(
+                &scene,
+                &gh,
+                signal,
+                iteration,
+                "verifier rendezvous",
+                &mut selector,
+                &signal_marker,
+                &signal_ack,
+            ));
+        }
+        if wait_for_clean_success(&scene, &gh, 0, &completed).is_err() {
+            return Err(barrier_failure(
+                &scene,
+                &gh,
+                signal,
+                iteration,
+                "completed-unit cleanup",
+                &mut selector,
+                &signal_marker,
+                &signal_ack,
+            ));
+        }
+        if wait_until(
             || gh.hung_pids().is_ok_and(|pids| pids.len() >= 2),
             Duration::from_secs(5),
-        )?;
-        let pid = fs::read_to_string(&pid_file)?;
-        send_signal(signal, pid.trim())?;
-        wait_until(|| signal_marker.exists(), Duration::from_secs(5))?;
-        send_signal(signal, pid.trim())?;
+        )
+        .is_err()
+        {
+            return Err(barrier_failure(
+                &scene,
+                &gh,
+                signal,
+                iteration,
+                "hanging-verifier startup",
+                &mut selector,
+                &signal_marker,
+                &signal_ack,
+            ));
+        }
+        let pid = selector.child.id().to_string();
+        send_signal(signal, &pid)?;
+        if wait_until(|| signal_marker.exists(), Duration::from_secs(5)).is_err() {
+            return Err(barrier_failure(
+                &scene,
+                &gh,
+                signal,
+                iteration,
+                "cleanup handler start",
+                &mut selector,
+                &signal_marker,
+                &signal_ack,
+            ));
+        }
+        send_signal(signal, &pid)?;
         fs::write(&signal_ack, "continue\n")?;
         let actual = selector.wait(Duration::from_secs(10))?.code();
         if actual != Some(status) {

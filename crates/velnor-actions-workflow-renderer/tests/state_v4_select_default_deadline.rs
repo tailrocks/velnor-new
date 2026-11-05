@@ -10,9 +10,9 @@ use velnor_actions_contract::workflow::state_seal::{state_attested_output, state
 use velnor_actions_workflow_renderer::plan_sources::state_select::{SealRoot, state_select_step};
 
 use crate::gc1_scene::{Scene, fail};
-use crate::gc1_seal_support::{Attestation, Gh, MAIN, REPO, script_of};
 #[cfg(target_os = "linux")]
-use crate::gc1_seal_units::SupervisorClock;
+use crate::gc1_seal_clock::SupervisorClock;
+use crate::gc1_seal_support::{Attestation, Gh, MAIN, REPO, script_of};
 use crate::gc1_seal_units::{unit_compat, unit_key, unit_snapshot};
 
 #[test]

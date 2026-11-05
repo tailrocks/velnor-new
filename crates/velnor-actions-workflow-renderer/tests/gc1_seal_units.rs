@@ -13,6 +13,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use velnor_actions_contract::JobTimeout;
+use velnor_actions_contract::workflow::StepKind;
 use velnor_actions_contract::workflow::cache_family::{
     RootSlug, StateScope, StateTrust, StateUnit,
 };
@@ -20,84 +21,9 @@ use velnor_actions_contract::workflow::state_seal::{state_attested_output, state
 use velnor_actions_workflow_renderer::plan_sources::state_select::{SealRoot, state_select_step};
 
 use crate::gc1_scene::{Scene, fail};
-use crate::gc1_seal_support::{Gh, MAIN, OTHER_WORKFLOW_REF, REPO, script_of};
+use crate::gc1_seal_support::{Gh, MAIN, OTHER_WORKFLOW_REF, REPO};
 
 type SelectCommand = (String, Vec<(String, String)>);
-#[cfg(target_os = "linux")]
-pub(crate) struct SupervisorClock {
-    directory: PathBuf,
-    real_python: PathBuf,
-}
-
-#[cfg(target_os = "linux")]
-impl SupervisorClock {
-    pub(crate) fn install(scene: &Scene, gh: &Gh) -> Result<Self, Box<dyn Error>> {
-        let real_python = PathBuf::from(scene.restricted_path(&["python3"])?).join("python3");
-        scene.install_shim(
-            "python3",
-            r#"#!/bin/sh
-exec "$FAKE_REAL_PYTHON3" -I -c '
-import glob, os, sys, time
-elapsed = [0.0]
-real_monotonic = time.monotonic
-directory = os.environ["FAKE_GH_DIR"]
-def monotonic():
-    for marker in glob.glob(os.path.join(directory, "clock-marker-*")):
-        if marker.endswith(".next"):
-            continue
-        ack = marker.replace("clock-marker-", "clock-ack-", 1)
-        if not os.path.exists(ack):
-            with open(marker, encoding="utf-8") as request:
-                elapsed[0] += float(request.read().strip())
-            with open(ack, "x", encoding="utf-8"):
-                pass
-    return real_monotonic() + elapsed[0]
-time.monotonic = monotonic
-exec(compile(sys.argv[1], "<selector>", "exec"), {"__name__": "__main__"})
-' "$3"
-"#,
-        )?;
-        Ok(Self {
-            directory: PathBuf::from(gh.dir()),
-            real_python,
-        })
-    }
-
-    pub(crate) fn real_python(&self) -> &Path {
-        &self.real_python
-    }
-
-    pub(crate) fn advance(&self, label: &str, seconds: u64) -> Result<(), Box<dyn Error>> {
-        if seconds == 0
-            || !label
-                .chars()
-                .all(|character| character.is_ascii_alphanumeric() || character == '-')
-        {
-            return Err(fail("invalid supervisor clock advance"));
-        }
-        let marker = self.directory.join(format!("clock-marker-control-{label}"));
-        let pending = marker.with_extension("next");
-        std::fs::write(&pending, format!("{seconds}\n"))?;
-        std::fs::rename(pending, marker)?;
-        Ok(())
-    }
-
-    pub(crate) fn wait_for_advance(
-        &self,
-        label: &str,
-        limit: Duration,
-    ) -> Result<(), Box<dyn Error>> {
-        let ack = self.directory.join(format!("clock-ack-control-{label}"));
-        let deadline = Instant::now() + limit;
-        while Instant::now() < deadline {
-            if ack.exists() {
-                return Ok(());
-            }
-            thread::sleep(Duration::from_millis(10));
-        }
-        Err(fail("supervisor did not acknowledge the clock advance"))
-    }
-}
 
 #[cfg(target_os = "linux")]
 pub(crate) fn hang_keys(gh: &Gh, keys: &[&str]) -> Result<(), Box<dyn Error>> {
@@ -240,7 +166,7 @@ pub(crate) fn run_select_units(
 ) -> Result<String, Box<dyn Error>> {
     let (script, env) = select_script_env(scene, gh, units, extra)?;
     let pairs: Vec<(&str, &str)> = env.iter().map(|(k, v)| (k.as_str(), v.as_str())).collect();
-    scene.run_runner_script(&runner_step_body(&script), &pairs)
+    scene.run_runner_script(&script, &pairs)
 }
 
 #[cfg(target_os = "linux")]
@@ -252,11 +178,7 @@ pub(crate) fn spawn_select_units(
 ) -> Result<Child, Box<dyn Error>> {
     let (script, env) = select_script_env(scene, gh, units, extra)?;
     let pairs: Vec<(&str, &str)> = env.iter().map(|(k, v)| (k.as_str(), v.as_str())).collect();
-    scene.spawn_runner_script(&runner_step_body(&script), &pairs)
-}
-
-fn runner_step_body(script: &str) -> String {
-    format!("exec sh -c '{}'", script.replace('\'', "'\\''"))
+    scene.spawn_runner_script(&script, &pairs)
 }
 
 fn select_script_env(
@@ -278,7 +200,11 @@ fn select_script_env(
             })
         })
         .collect::<Result<Vec<_>, Box<dyn Error>>>()?;
-    let script = script_of(&state_select_step(&roots, JobTimeout::PLAN)?)?;
+    let step = state_select_step(&roots, JobTimeout::PLAN)?;
+    let StepKind::Shell { run, .. } = &step.kind else {
+        return Err(fail("expected a shell step"));
+    };
+    let script = velnor_actions_workflow_renderer::join_argv_for_run(run)?;
     let dir = gh.dir();
     let mut env: Vec<(String, String)> = vec![
         ("FAKE_GH_DIR".to_owned(), dir),

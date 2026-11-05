@@ -219,7 +219,7 @@ def publish_outputs():
         selected = (d / f"u-{unit}" / "out").read_text().splitlines()
         lines.extend((f"{attested_name}<<VELNOR_STATE_ATTESTED_EOF", *selected, "VELNOR_STATE_ATTESTED_EOF"))
         match_prefix = f"{prefix}{compat}-{snapshot}-" if compat and snapshot else None
-        produce = not any(match_prefix and candidate.startswith(match_prefix) for candidate in selected)
+        produce = bool(match_prefix and not any(candidate.startswith(match_prefix) for candidate in selected))
         lines.append(f"{produce_name}={str(produce).lower()}")
     with open(output_path, "a", encoding="utf-8") as output:
         output.write("\n".join(lines) + "\n")

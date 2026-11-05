@@ -19,6 +19,8 @@ mod gc1_scene_key;
 mod gc1_scene_resolve;
 mod gc1_scene_seal;
 mod gc1_scene_tree;
+#[cfg(target_os = "linux")]
+mod gc1_seal_clock;
 mod gc1_seal_support;
 mod gc1_seal_units;
 mod gc1_t13;

@@ -12,11 +12,12 @@ use velnor_actions_contract::workflow::cache_family::StateUnit;
 use velnor_actions_contract::workflow::state_seal::STATE_SEAL_SELECT_MAX_PARALLELISM;
 
 use crate::gc1_scene::{Scene, fail};
+use crate::gc1_seal_clock::SupervisorClock;
 use crate::gc1_seal_support::{Attestation, Gh, MAIN};
 use crate::gc1_seal_units::{
-    SupervisorClock, at, expect, expect_flag, group_is_live, hang_keys, hung_processes_gone,
-    process_group, process_is_reaped, process_is_running, produce_flag, rendezvous, rows_of,
-    selected_unit, spawn_select_units, unit_key,
+    at, expect, expect_flag, group_is_live, hang_keys, hung_processes_gone, process_group,
+    process_is_reaped, process_is_running, produce_flag, rendezvous, rows_of, selected_unit,
+    spawn_select_units, unit_key,
 };
 
 const T1: &str = "2026-11-04T01:00:00Z";
@@ -227,6 +228,7 @@ fn selector_does_not_accept_a_status_first_observed_after_unit_expiry() -> Resul
                 ("FAKE_GH_VERIFY_GATE", &gate_value),
                 ("FAKE_GH_VERIFY_GATE_KEY", &delayed),
                 ("FAKE_GH_VERIFY_STARTED", &started_value),
+                ("FAKE_SUPERVISOR_CLOCK_FREEZE", "1"),
             ],
         )?);
         wait_until(|| started.exists(), Duration::from_secs(10))?;
@@ -255,26 +257,15 @@ fn selector_does_not_accept_a_status_first_observed_after_unit_expiry() -> Resul
             },
             Duration::from_secs(20),
         )?;
-        let stop = Command::new("kill")
-            .args(["-STOP", &selector.child.id().to_string()])
-            .status()?;
-        if !stop.success() {
-            return Err(fail("could not stop the selector at the external boundary"));
-        }
-        clock.advance(label, advance_seconds)?;
+        clock.block(label)?;
+        clock.wait_for_block(label, Duration::from_secs(10))?;
         fs::write(&gate, "release\n")?;
         wait_until(
             || state_dir.join("status-u1").exists(),
             Duration::from_secs(10),
         )?;
-        let resume = Command::new("kill")
-            .args(["-CONT", &selector.child.id().to_string()])
-            .status()?;
-        if !resume.success() {
-            return Err(fail(
-                "could not resume the selector after delayed completion",
-            ));
-        }
+        clock.advance(label, advance_seconds)?;
+        clock.release_block(label)?;
         clock.wait_for_advance(label, Duration::from_secs(10))?;
         if !selector.wait(Duration::from_secs(10))?.success() {
             return Err(fail("unit expiry failed the selector step"));

@@ -11,13 +11,14 @@ use std::time::{Duration, Instant};
 use velnor_actions_contract::workflow::cache_family::StateUnit;
 
 use crate::gc1_scene::{Scene, fail};
-use crate::gc1_seal_support::{Attestation, Gh, MAIN};
 #[cfg(target_os = "linux")]
-use crate::gc1_seal_units::{SupervisorClock, group_is_live, process_group, process_is_reaped};
+use crate::gc1_seal_clock::SupervisorClock;
+use crate::gc1_seal_support::{Attestation, Gh, MAIN};
 use crate::gc1_seal_units::{
     expect, expect_flag, hang_keys, hung_processes_gone, produce_flag, rendezvous, rows_of,
     selected_unit, spawn_select_units, unit_key,
 };
+use crate::gc1_seal_units::{group_is_live, process_group, process_is_reaped};
 
 #[cfg(target_os = "linux")]
 struct RunningSelector {
