@@ -24,6 +24,54 @@ fn admission_mac_and_finalizer_are_bound_in_generated_graph() -> Result<(), Box<
             "{job} lacks {expected}"
         );
     }
+    check_evidence_producers(jobs)?;
+    let final_steps = jobs["qualify-homebrew-finalize"]["steps"]
+        .as_array()
+        .ok_or("finalizer steps")?;
+    for name in ["Download exact admission", "Download exact Mac result"] {
+        let index = final_steps
+            .iter()
+            .position(|step| step["name"] == name)
+            .ok_or("raw download")?;
+        assert_eq!(
+            final_steps[index - 1]["name"],
+            "Validate exact evidence artifact ID"
+        );
+        let step = &final_steps[index];
+        assert_eq!(step["with"]["skip-decompress"], true);
+    }
+    let action_text = super::find_file(
+        &files,
+        ".github/actions/generator-release-qualify-homebrew/action.yml",
+    )?;
+    let action: serde_json::Value = serde_saphyr::from_str(action_text)?;
+    let raw = action["runs"]["steps"]
+        .as_array()
+        .ok_or("action steps")?
+        .iter()
+        .find(|step| step["name"] == "Download exact admission")
+        .ok_or("raw admission")?;
+    assert_eq!(raw["with"]["skip-decompress"], true);
+    let publish_condition = jobs["publish-generator"]["if"]
+        .as_str()
+        .ok_or("publish condition")?;
+    assert!(publish_condition.contains("needs.qualify-homebrew-finalize.result == 'success'"));
+    Ok(())
+}
+
+fn check_evidence_producers(jobs: &serde_json::Value) -> Result<(), Box<dyn Error>> {
+    for (job, path) in [
+        ("qualify-homebrew-admit", "homebrew-admission/admission.zip"),
+        ("qualify-homebrew-macos", "homebrew-result/result.json"),
+    ] {
+        let steps = jobs[job]["steps"].as_array().ok_or("producer steps")?;
+        let upload = steps
+            .iter()
+            .find(|step| step["id"] == "upload")
+            .ok_or("upload")?;
+        assert_eq!(upload["with"]["archive"], false);
+        assert_eq!(upload["with"]["path"], path);
+    }
     for (job, name) in [
         ("qualify-homebrew-admit", "admission_sha256"),
         ("qualify-homebrew-macos", "result_sha256"),
@@ -55,32 +103,6 @@ fn admission_mac_and_finalizer_are_bound_in_generated_graph() -> Result<(), Box<
                 .contains("steps.evidence_digest.outputs.artifact_size")
         );
     }
-    let final_steps = jobs["qualify-homebrew-finalize"]["steps"]
-        .as_array()
-        .ok_or("finalizer steps")?;
-    for name in ["Download exact admission", "Download exact Mac result"] {
-        let step = final_steps
-            .iter()
-            .find(|step| step["name"] == name)
-            .ok_or("raw download")?;
-        assert_eq!(step["with"]["skip-decompress"], true);
-    }
-    let action_text = super::find_file(
-        &files,
-        ".github/actions/generator-release-qualify-homebrew/action.yml",
-    )?;
-    let action: serde_json::Value = serde_saphyr::from_str(action_text)?;
-    let raw = action["runs"]["steps"]
-        .as_array()
-        .ok_or("action steps")?
-        .iter()
-        .find(|step| step["name"] == "Download exact admission")
-        .ok_or("raw admission")?;
-    assert_eq!(raw["with"]["skip-decompress"], true);
-    let publish_condition = jobs["publish-generator"]["if"]
-        .as_str()
-        .ok_or("publish condition")?;
-    assert!(publish_condition.contains("needs.qualify-homebrew-finalize.result == 'success'"));
     Ok(())
 }
 
@@ -164,5 +186,40 @@ fn generated_mac_command_does_not_inherit_tokens() -> Result<(), Box<dyn Error>>
         "{}",
         String::from_utf8_lossy(&output.stderr)
     );
+    Ok(())
+}
+
+#[test]
+#[cfg(unix)]
+fn evidence_artifact_id_guard_rejects_empty_and_malformed_ids() -> Result<(), Box<dyn Error>> {
+    let files = super::rendered()?;
+    let text = super::find_file(
+        &files,
+        ".github/actions/generator-release-qualify-homebrew/action.yml",
+    )?;
+    let action: serde_json::Value = serde_saphyr::from_str(text)?;
+    let steps = action["runs"]["steps"].as_array().ok_or("steps")?;
+    let index = steps
+        .iter()
+        .position(|step| step["name"] == "Download exact admission")
+        .ok_or("download")?;
+    let guard = &steps[index - 1];
+    assert_eq!(guard["name"], "Validate exact evidence artifact ID");
+    let script = guard["run"].as_str().ok_or("guard")?;
+    for (id, expected) in [
+        ("123", true),
+        ("", false),
+        ("0", false),
+        ("01", false),
+        ("1 2", false),
+        ("1;exit 0", false),
+    ] {
+        let status = std::process::Command::new("/bin/bash")
+            .arg("-c")
+            .arg(script)
+            .env("VELNOR_EVIDENCE_ARTIFACT_ID", id)
+            .status()?;
+        assert_eq!(status.success(), expected, "{id:?}");
+    }
     Ok(())
 }

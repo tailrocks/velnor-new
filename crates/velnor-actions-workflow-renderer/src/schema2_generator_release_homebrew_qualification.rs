@@ -15,6 +15,14 @@ const RESULT_DIR: &str = "homebrew-result";
 const ADMISSION_ZIP_DIR: &str = "homebrew-admission-zip";
 const RESULT_ZIP_DIR: &str = "homebrew-result-zip";
 
+fn validate_artifact_id(value: &str) -> Yaml {
+    workflow_steps::bash_step_with_env(
+        "Validate exact evidence artifact ID",
+        "set -eu\n[[ \"$VELNOR_EVIDENCE_ARTIFACT_ID\" =~ ^[1-9][0-9]*$ ]]",
+        vec![("VELNOR_EVIDENCE_ARTIFACT_ID", value)],
+    )
+}
+
 fn download_raw_step(name: &str, artifact_id: &str, path: &str) -> Yaml {
     let mut step = workflow_steps::download_step_by_id(name, artifact_id, path);
     if let Yaml::Map(fields) = &mut step {
@@ -108,11 +116,13 @@ fn linux_steps(pins: &ProductReleasePins, finalizing: bool) -> Result<Vec<Yaml>,
     ]);
     if finalizing {
         steps.extend([
+            validate_artifact_id("${{ needs.qualify-homebrew-admit.outputs.artifact_id }}"),
             download_raw_step(
                 "Download exact admission",
                 "${{ needs.qualify-homebrew-admit.outputs.artifact_id }}",
                 ADMISSION_ZIP_DIR,
             ),
+            validate_artifact_id("${{ needs.qualify-homebrew-macos.outputs.artifact_id }}"),
             download_raw_step(
                 "Download exact Mac result",
                 "${{ needs.qualify-homebrew-macos.outputs.artifact_id }}",
@@ -338,6 +348,7 @@ fn candidate_steps(
         "Download exact ARM candidate artifact",
         "${{ inputs.artifact_id }}",
     ));
+    steps.push(validate_artifact_id("${{ inputs.admission_artifact_id }}"));
     steps.push(download_raw_step(
         "Download exact admission",
         "${{ inputs.admission_artifact_id }}",
