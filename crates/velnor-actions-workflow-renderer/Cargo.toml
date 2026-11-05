@@ -92,3 +92,7 @@ path = "tests/crate_upload_config_public.rs"
 [[test]]
 name = "release_rehearsal_public"
 path = "tests/release_rehearsal_public.rs"
+
+[[test]]
+name = "release_budget_public"
+path = "tests/release_budget_public.rs"

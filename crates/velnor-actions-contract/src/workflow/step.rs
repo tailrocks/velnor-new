@@ -207,7 +207,8 @@ fn validate_id_kind(id: Option<StepId>, kind: &StepKind, job: &str) -> Result<()
             matches!(kind, StepKind::Action { uses, .. } if uses.starts_with("actions/upload-artifact@"))
         }
         StepId::TofuProviders => super::step_protocol::valid_provider_restore(kind),
-        StepId::ReleasePrCandidate
+        StepId::ReleaseBudget
+        | StepId::ReleasePrCandidate
         | StepId::ReleaseAdmission
         | StepId::ReleaseVerification
         | StepId::MbxReady

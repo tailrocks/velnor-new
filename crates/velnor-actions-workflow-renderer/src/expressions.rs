@@ -167,6 +167,9 @@ fn check_env_value_with_scope(key: &str, value: &str, composite: bool) -> Result
             && !matches!(
                 (key, inner),
                 (
+                    "VELNOR_RELEASE_BUDGET",
+                    "steps.release-budget.outputs.budget"
+                ) | (
                     "VELNOR_SOURCE_SHA",
                     "steps.release-admission.outputs.source_sha"
                 ) | (

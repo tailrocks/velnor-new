@@ -145,11 +145,10 @@ fn add_journal_env(
     }
 }
 
-fn check_release_tool_environment(
-    id: &str,
-    job: &ReleaseJobSpec,
+fn release_tool_environment(
+    role: ReleaseRole,
     catalog: &velnor_actions_mise::ToolCatalog,
-) -> Result<(), RenderError> {
+) -> Result<std::collections::BTreeMap<String, String>, RenderError> {
     let mut expected_env = std::collections::BTreeMap::new();
     for (key, value) in velnor_actions_mise::ToolHomes::runner_temp().exec_env(catalog) {
         let key = key
@@ -160,10 +159,19 @@ fn check_release_tool_environment(
             .map_err(|_| RenderError::InvalidWorkflow("release_rust_env".to_owned()))?;
         expected_env.insert(key, value);
     }
-    if job.role != ReleaseRole::Preparation {
+    if role != ReleaseRole::Preparation {
         expected_env.insert(GIT_TOKEN_ENV.to_owned(), GIT_TOKEN_REF.to_owned());
     }
     expected_env.insert("RUSTUP_AUTO_INSTALL".to_owned(), "0".to_owned());
+    Ok(expected_env)
+}
+
+fn check_release_tool_environment(
+    id: &str,
+    job: &ReleaseJobSpec,
+    catalog: &velnor_actions_mise::ToolCatalog,
+) -> Result<(), RenderError> {
+    let expected_env = release_tool_environment(job.role, catalog)?;
     for step in &job.steps {
         if (step.name.starts_with("Release ")
             || step.name == "Publish release"
@@ -172,6 +180,16 @@ fn check_release_tool_environment(
             && let StepKind::Shell { run, env } = &step.kind
         {
             let mut expected = expected_env.clone();
+            if matches!(
+                job.role,
+                ReleaseRole::PublishOidc | ReleaseRole::PublishBootstrap
+            ) && step.name.starts_with("Release ")
+            {
+                expected.insert(
+                    "VELNOR_RELEASE_BUDGET".to_owned(),
+                    "${{ steps.release-budget.outputs.budget }}".to_owned(),
+                );
+            }
             if step.name == "Release toolchain-acquire" {
                 expected.insert(
                     "VELNOR_RUST_ARTIFACT_ID".to_owned(),

@@ -31,9 +31,10 @@ fn crate_release_checkouts_use_attested_file_free_git() -> Result<(), Box<dyn st
             let (spec, rust) = fixture_for_release_pr(authentication, release_pr)?;
             assert!(valid(&spec, &rust));
             for job in spec.jobs.values().filter(|job| job.role != ReleaseRole::PrCreate) {
-                assert_eq!(job.steps[0].name, "Acquire Velnor");
-                assert_eq!(job.steps[1].name, "Checkout");
-                let StepKind::Shell { run, env } = &job.steps[1].kind else { return Err("policy checkout is not Velnor".into()); };
+                let offset = usize::from(matches!(job.role, ReleaseRole::PublishOidc | ReleaseRole::PublishBootstrap));
+                assert_eq!(job.steps[offset].name, "Acquire Velnor");
+                assert_eq!(job.steps[offset + 1].name, "Checkout");
+                let StepKind::Shell { run, env } = &job.steps[offset + 1].kind else { return Err("policy checkout is not Velnor".into()); };
                 assert_eq!(run[2], "checkout-policy");
                 assert_eq!(env.get("GIT_TOKEN").map(String::as_str), Some("${{ secrets.GITHUB_TOKEN }}"));
                 assert!(!job.steps.iter().any(|step| matches!(&step.kind, StepKind::Action { uses, .. } if uses.starts_with("actions/checkout@"))));

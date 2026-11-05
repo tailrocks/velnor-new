@@ -72,10 +72,21 @@ pub(super) fn check_runtime_steps(
     version: &str,
     plz_version: Option<&str>,
 ) -> Result<(), RenderError> {
+    let publisher = matches!(
+        job.role,
+        ReleaseRole::PublishOidc | ReleaseRole::PublishBootstrap
+    );
+    let steps = if publisher {
+        if job.steps.first() != Some(&crate::release_budget::capture_step()?) {
+            return Err(RenderError::InvalidWorkflow(format!("release_budget:{id}")));
+        }
+        &job.steps[1..]
+    } else {
+        &job.steps[..]
+    };
     let expected = runtime_step_names(job.role);
-    if job.steps.len() != expected.len()
-        || job
-            .steps
+    if steps.len() != expected.len()
+        || steps
             .iter()
             .zip(expected)
             .any(|(step, name)| step.name != *name)
@@ -84,7 +95,7 @@ pub(super) fn check_runtime_steps(
             "release_step_sequence:{id}"
         )));
     }
-    let velnor_actions_contract::StepKind::Shell { env, .. } = &job.steps[0].kind else {
+    let velnor_actions_contract::StepKind::Shell { env, .. } = &steps[0].kind else {
         return Err(RenderError::InvalidWorkflow(format!(
             "release_generator_acquire:{id}"
         )));
@@ -95,21 +106,21 @@ pub(super) fn check_runtime_steps(
     let manifest_sha = env
         .get("VELNOR_GENERATOR_MANIFEST_SHA256")
         .ok_or_else(|| RenderError::InvalidWorkflow(format!("release_generator_acquire:{id}")))?;
-    if job.steps[0]
+    if steps[0]
         != crate::release_generator_bootstrap::acquire_step(
             version,
             &job.runs_on,
             source_sha,
             manifest_sha,
         )?
-        || job.steps[0].role != Some(velnor_actions_contract::StepRole::AcquireVelnor)
-        || job.steps[2].id != Some(velnor_actions_contract::StepId::ReleaseAdmission)
+        || steps[0].role != Some(velnor_actions_contract::StepRole::AcquireVelnor)
+        || steps[2].id != Some(velnor_actions_contract::StepId::ReleaseAdmission)
     {
         return Err(RenderError::InvalidWorkflow(format!(
             "release_source_admission:{id}"
         )));
     }
-    for (index, step) in job.steps.iter().enumerate() {
+    for (index, step) in steps.iter().enumerate() {
         check_runtime_condition(id, index, step, job.role)?;
         check_runtime_payload(id, step, version, plz_version, &job.runs_on, job.role)?;
     }

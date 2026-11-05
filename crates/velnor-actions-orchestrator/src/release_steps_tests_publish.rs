@@ -40,10 +40,10 @@ fn publishing_jobs_verify_generator_before_running_it() -> Result<(), Box<dyn st
         let workflow = render_release_workflow(&spec, &context, &rust)?;
         let mut tampered = spec.clone();
         let publisher = tampered.jobs.values_mut().find(|job| matches!(job.role, ReleaseRole::PublishOidc | ReleaseRole::PublishBootstrap)).ok_or("publisher")?;
-        if let StepKind::Shell { env, .. } = &mut publisher.steps[0].kind { env.insert("VELNOR_GENERATOR_VERSION".into(), "0.1.99".into()); }
+        if let StepKind::Shell { env, .. } = &mut publisher.steps.iter_mut().find(|step| step.name == "Acquire Velnor").ok_or("acquire")?.kind { env.insert("VELNOR_GENERATOR_VERSION".into(), "0.1.99".into()); }
         assert!(render_release_workflow(&tampered, &context, &rust).is_err());
         for job in spec.jobs.values().filter(|job| matches!(job.role, ReleaseRole::PublishOidc | ReleaseRole::PublishBootstrap | ReleaseRole::Preflight)) {
-            let acquire = job.steps.first().ok_or("missing acquisition")?;
+            let acquire = job.steps.iter().find(|step| step.name == "Acquire Velnor").ok_or("missing acquisition")?;
             let StepKind::Shell { run, env } = &acquire.kind else { return Err("wrong acquisition kind".into()); };
             assert_eq!(env.get("VELNOR_GENERATOR_VERSION").map(String::as_str), Some(env!("CARGO_PKG_VERSION")));
             assert_eq!(env.get("GH_TOKEN").map(String::as_str), Some("${{ github.token }}"));

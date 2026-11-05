@@ -84,6 +84,7 @@ pub use super::step_id::StepId;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum StepRole {
+    ReleaseBudget,
     ReleaseAdmission,
     ReleaseVerification,
     ReleaseRustUpload,

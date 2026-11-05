@@ -84,6 +84,7 @@ fn publish_steps(
     bootstrap: bool,
 ) -> Result<Vec<Step>, OrchestratorError> {
     let mut steps = common_source_steps(parts, true)?;
+    steps.insert(0, velnor_actions_workflow_renderer::release_budget::capture_step()?);
     steps.push(conditional(parts.semver.clone()));
     steps.push(controller_step(parts, "receipt-acquire")?);
     steps.push(controller_step(parts, "verify-admission")?);
@@ -108,6 +109,13 @@ fn publish_steps(
             }
         }
         steps.push(step);
+    }
+    for step in &mut steps {
+        if let StepKind::Shell { run, env } = &mut step.kind
+            && run.get(1).is_some_and(|arg| arg == "crate-release")
+        {
+            env.insert("VELNOR_RELEASE_BUDGET".to_owned(), "${{ steps.release-budget.outputs.budget }}".to_owned());
+        }
     }
     Ok(steps)
 }

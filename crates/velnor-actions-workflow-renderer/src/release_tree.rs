@@ -356,7 +356,7 @@ fn release_pin_matches(
     intent: &velnor_actions_contract::config::CrateReleaseIntent,
 ) -> bool {
     spec.jobs.values().filter(|job| matches!(job.role, ReleaseRole::Preflight | ReleaseRole::PublishOidc | ReleaseRole::PublishBootstrap | ReleaseRole::Reconcile)).all(|job| {
-        matches!(job.steps.first().map(|step| &step.kind), Some(velnor_actions_contract::StepKind::Shell { env, .. })
+        matches!(job.steps.iter().find(|step| step.role == Some(velnor_actions_contract::StepRole::AcquireVelnor)).map(|step| &step.kind), Some(velnor_actions_contract::StepKind::Shell { env, .. })
             if env.get("VELNOR_GENERATOR_SOURCE_SHA") == Some(&intent.generator_source_sha)
             && env.get("VELNOR_GENERATOR_MANIFEST_SHA256") == Some(&intent.generator_manifest_sha256))
     })

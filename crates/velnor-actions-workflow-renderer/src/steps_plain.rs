@@ -52,7 +52,8 @@ pub(crate) fn plain_step_to_yaml(step: &Step) -> Result<Yaml, RenderError> {
             commands::validate_env(env)?;
             let mut entries = vec![("name".to_owned(), Yaml::str(step.name.clone()))];
             if let Some(
-                id @ (velnor_actions_contract::StepId::ReleaseAdmission
+                id @ (velnor_actions_contract::StepId::ReleaseBudget
+                | velnor_actions_contract::StepId::ReleaseAdmission
                 | velnor_actions_contract::StepId::ReleaseVerification
                 | velnor_actions_contract::StepId::ReleasePrCandidate),
             ) = step.id

@@ -184,3 +184,33 @@ fn rendered_files_reject_divergent_release_intent() -> Result<(), Box<dyn std::e
     Ok(())
 }
 
+
+#[test]
+fn publisher_budget_is_first_and_cannot_be_forged() -> Result<(), Box<dyn std::error::Error>> {
+    use velnor_actions_workflow_renderer::release_tree::{render_release_workflow, ReleaseRenderContext};
+    let (spec, rust) = fixture()?;
+    let context = ReleaseRenderContext { generator_version: env!("CARGO_PKG_VERSION").into(), runs_on: "ubuntu-24.04".into() };
+    let workflow = render_release_workflow(&spec, &context, &rust)?;
+    let publisher = spec.jobs.get("release-publish").ok_or("publisher")?;
+    assert_eq!(publisher.steps.first().map(|step| step.name.as_str()), Some("Capture release budget"));
+    assert!(workflow.contains("steps.release-budget.outputs.budget"));
+    assert!(workflow.contains("id: release-budget"));
+    let StepKind::Shell { env, .. } = &publisher.steps[0].kind else { return Err("budget shell".into()); };
+    assert_eq!(env.get("SSL_CERT_FILE").map(String::as_str), Some("/etc/ssl/certs/ca-certificates.crt"));
+    assert_eq!(env.get("SSL_CERT_DIR").map(String::as_str), Some("/etc/ssl/certs"));
+    for key in ["LD_PRELOAD", "LD_AUDIT", "LD_LIBRARY_PATH", "GLIBC_TUNABLES", "BASH_ENV", "ENV"] {
+        assert_eq!(env.get(key).map(String::as_str), Some(""));
+    }
+    let mut missing = spec.clone();
+    missing.jobs.get_mut("release-publish").ok_or("publisher")?.steps.remove(0);
+    assert!(render_release_workflow(&missing, &context, &rust).is_err());
+    let mut short_timeout = spec.clone();
+    short_timeout.jobs.get_mut("release-publish").ok_or("publisher")?.timeout_minutes = velnor_actions_contract::JobTimeout::new(1)?;
+    assert!(render_release_workflow(&short_timeout, &context, &rust).is_err());
+    let mut forged = spec.clone();
+    let steps = &mut forged.jobs.get_mut("release-publish").ok_or("publisher")?.steps;
+    let step = steps.iter_mut().find(|step| step.name == "Release journal-coordinate").ok_or("coordinate")?;
+    if let StepKind::Shell { env, .. } = &mut step.kind { env.insert("VELNOR_RELEASE_BUDGET".into(), "forged".into()); } else { return Err("shell".into()); }
+    assert!(render_release_workflow(&forged, &context, &rust).is_err());
+    Ok(())
+}

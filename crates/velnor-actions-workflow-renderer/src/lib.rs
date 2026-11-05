@@ -77,6 +77,7 @@ pub mod publish_render;
 pub mod publish_roles;
 pub mod publish_scripts;
 pub mod publish_spec;
+pub mod release_budget;
 pub mod release_checkout_gates;
 pub mod release_config;
 pub mod release_gates;

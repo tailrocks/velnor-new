@@ -129,6 +129,11 @@ fn check_publish_common(
     version: &str,
     plz_version: &str,
 ) -> Result<(), RenderError> {
+    if job.timeout_minutes != velnor_actions_contract::JobTimeout::CRATE_RELEASE {
+        return Err(RenderError::InvalidWorkflow(format!(
+            "release_budget_timeout:{id}"
+        )));
+    }
     forbid_inputs_interpolation(id, &job.steps)?;
     check_checkout_shape(id, &job.steps, job.role, sha, version)?;
     forbid_verify_bypass(id, &job.steps)?;
