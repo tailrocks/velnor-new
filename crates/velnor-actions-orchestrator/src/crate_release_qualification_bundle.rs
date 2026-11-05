@@ -14,6 +14,7 @@ pub struct MetadataEvidence {
     source_sha: String,
     source_tree_sha: String,
     source_archive_sha256: String,
+    metadata: velnor_actions_contract::config::ReleaseRehearsalMetadataConfig,
 }
 
 impl MetadataEvidence {
@@ -32,6 +33,12 @@ impl MetadataEvidence {
     #[must_use]
     pub fn source_archive_sha256(&self) -> &str {
         &self.source_archive_sha256
+    }
+    #[must_use]
+    pub fn metadata_config(
+        &self,
+    ) -> &velnor_actions_contract::config::ReleaseRehearsalMetadataConfig {
+        &self.metadata
     }
 }
 
@@ -109,6 +116,7 @@ pub fn acquire_metadata(
         source_sha: source.to_owned(),
         source_tree_sha: source_tree,
         source_archive_sha256: archive_sha,
+        metadata: request.metadata.clone().ok_or_else(invalid)?,
     })
 }
 

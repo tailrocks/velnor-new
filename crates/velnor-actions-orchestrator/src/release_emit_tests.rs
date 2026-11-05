@@ -106,11 +106,66 @@ fn qualification_intent_matches_rendered_intent_without_enabling_publishing()
     let temp = tempfile::tempdir()?;
     preview_fixture(temp.path())?;
     let mut prep = crate::prepare::prepare_for_candidate(temp.path())?;
-    let actual = super::derive_qualification_intent(&prep)?;
+    let git = crate::crate_release_git::ReleaseGit::host_fixture();
+    let sha = std::process::Command::new("git")
+        .args(["rev-parse", "HEAD"])
+        .current_dir(temp.path())
+        .output()?;
+    let sha = std::str::from_utf8(&sha.stdout)?.trim();
+    let source = crate::crate_release_qualification_snapshot::snapshot_approved_source(
+        temp.path(),
+        sha,
+        &git,
+    )?;
+    let raw = super::release_metadata_json(&prep, "Cargo.toml")?;
+    let raw = raw.replace(
+        temp.path().canonicalize()?.to_str().ok_or("path")?,
+        "/source",
+    );
+    let metadata =
+        crate::crate_release_qualification_intent::remap_metadata(raw.as_bytes(), source.root())?;
+    let manifest = std::fs::read(temp.path().join(".velnor/release-manifest.json"))?;
+    let metadata_config = velnor_actions_contract::config::ReleaseRehearsalMetadataConfig {
+        manifest_path: "Cargo.toml".into(),
+        rust_version: prep
+            .catalog
+            .version(velnor_actions_mise::PinnedTool::Rust)
+            .to_owned(),
+    };
+    let derive = |config: &velnor_actions_contract::VelnorConfig| {
+        super::derive_intent_from_snapshot(
+            &source,
+            config,
+            &metadata,
+            &manifest,
+            &metadata_config,
+            "example/demo",
+            "main",
+        )
+    };
+    let actual = derive(&prep.config)?;
     let rendered = preview_consumer_intent(temp.path())?;
     let expected = crate::crate_release_runtime::parse_crate_release_intent(rendered.as_bytes())?;
     assert_eq!(toml::to_string(&actual)?, toml::to_string(&expected)?);
     assert!(super::release_files(&prep).is_err());
+    let mut forged: serde_json::Value = serde_json::from_str(&raw)?;
+    forged["packages"][0]["manifest_path"] = "/source/missing/Cargo.toml".into();
+    let forged = crate::crate_release_qualification_intent::remap_metadata(
+        serde_json::to_string(&forged)?.as_bytes(),
+        source.root(),
+    )?;
+    assert!(
+        super::derive_intent_from_snapshot(
+            &source,
+            &prep.config,
+            &forged,
+            &manifest,
+            &metadata_config,
+            "example/demo",
+            "main"
+        )
+        .is_err()
+    );
     prep.config
         .stacks
         .rust
@@ -118,10 +173,101 @@ fn qualification_intent_matches_rendered_intent_without_enabling_publishing()
         .ok_or("missing Rust")?
         .release
         .trusted_reviewer_id = 456;
-    let changed = super::derive_qualification_intent(&prep)?;
+    let changed = derive(&prep.config)?;
     assert_ne!(actual.trusted_reviewer_id, changed.trusted_reviewer_id);
-    prep.discovery.consumer_manifest_stand_in = true;
-    assert!(super::derive_qualification_intent(&prep).is_err());
+    let release = &mut prep
+        .config
+        .stacks
+        .rust
+        .as_mut()
+        .ok_or("missing Rust")?
+        .release;
+    release.recovery = Some(velnor_actions_contract::config::RecoveryRelease {
+        package: "demo".into(),
+        version: "0.1.0".into(),
+        source_sha: sha.to_owned(),
+    });
+    let recovery = derive(&prep.config)?;
+    assert_eq!(recovery.recovery.ok_or("missing recovery")?.source_sha, sha);
+    prep.config
+        .stacks
+        .rust
+        .as_mut()
+        .ok_or("missing Rust")?
+        .release
+        .recovery
+        .as_mut()
+        .ok_or("missing recovery")?
+        .source_sha = "0".repeat(40);
+    assert!(derive(&prep.config).is_err());
+    assert!(
+        crate::crate_release_qualification_intent::remap_metadata(
+            raw.replace("/source/Cargo.toml", "/source/../Cargo.toml")
+                .as_bytes(),
+            source.root()
+        )
+        .is_err()
+    );
+    assert!(
+        crate::crate_release_qualification_intent::remap_metadata(
+            raw.replace("/source", "/source-other").as_bytes(),
+            source.root()
+        )
+        .is_err()
+    );
+    assert!(
+        crate::crate_release_qualification_snapshot::snapshot_approved_source(
+            temp.path(),
+            &"0".repeat(40),
+            &git
+        )
+        .is_err()
+    );
+    Ok(())
+}
+
+#[cfg(unix)]
+#[test]
+fn source_snapshot_never_leaves_its_verified_tree() -> Result<(), Box<dyn std::error::Error>> {
+    use std::os::unix::fs::symlink;
+    let temp = tempfile::tempdir()?;
+    preview_fixture(temp.path())?;
+    let link = temp.path().join("src/link.rs");
+    symlink("lib.rs", &link)?;
+    for args in [
+        &["add", "."][..],
+        &[
+            "-c",
+            "user.name=Fixture",
+            "-c",
+            "user.email=fixture@example.invalid",
+            "commit",
+            "-m",
+            "link",
+        ][..],
+    ] {
+        assert!(
+            std::process::Command::new("git")
+                .args(args)
+                .current_dir(temp.path())
+                .status()?
+                .success()
+        );
+    }
+    let output = std::process::Command::new("git")
+        .args(["rev-parse", "HEAD"])
+        .current_dir(temp.path())
+        .output()?;
+    let sha = std::str::from_utf8(&output.stdout)?.trim();
+    let snapshot = crate::crate_release_qualification_snapshot::snapshot_approved_source(
+        temp.path(),
+        sha,
+        &crate::crate_release_git::ReleaseGit::host_fixture(),
+    )?;
+    assert_eq!(
+        std::fs::read(snapshot.root().join("src/link.rs"))?,
+        std::fs::read(temp.path().join("src/lib.rs"))?
+    );
     Ok(())
 }
 

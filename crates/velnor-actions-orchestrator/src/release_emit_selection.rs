@@ -24,6 +24,15 @@ pub(super) fn select_from_json_with_known(
     json: &str,
     known_manifests: &BTreeSet<String>,
 ) -> Result<ReleaseSelection, OrchestratorError> {
+    select_with_root(&prep.root, release, json, known_manifests)
+}
+
+pub(super) fn select_with_root(
+    root: &std::path::Path,
+    release: &RustReleaseConfig,
+    json: &str,
+    known_manifests: &BTreeSet<String>,
+) -> Result<ReleaseSelection, OrchestratorError> {
     let manifest = release.manifest_path.as_str();
     let scope = if release.publishable_workspace {
         ReleaseScope::PublishableWorkspace
@@ -36,7 +45,7 @@ pub(super) fn select_from_json_with_known(
     let supported: &[String] = &[];
     let request = SelectRequest {
         metadata_json: json,
-        repo_root: &prep.root,
+        repo_root: root,
         manifest_hint: manifest,
         scope: &scope,
         enabled: true,
@@ -44,30 +53,26 @@ pub(super) fn select_from_json_with_known(
         known_manifests,
         supported_registries: supported,
     };
-    let record = velnor_actions_rust::metadata::parse_metadata_json(
-        json,
-        &prep.root,
-        manifest,
-        known_manifests,
-    )
-    .map_err(|err| OrchestratorError::Contract {
-        problem: err.to_string(),
-    })?;
+    let record =
+        velnor_actions_rust::metadata::parse_metadata_json(json, root, manifest, known_manifests)
+            .map_err(|err| OrchestratorError::Contract {
+            problem: err.to_string(),
+        })?;
     let workspace_manifest = if record.workspace_root.is_empty() {
         "Cargo.toml".to_owned()
     } else {
         format!("{}/Cargo.toml", record.workspace_root)
     };
-    if !velnor_actions_rust::tracked_manifest_in_source(&prep.root, known_manifests, manifest)
+    if !velnor_actions_rust::tracked_manifest_in_source(root, known_manifests, manifest)
         || !velnor_actions_rust::tracked_manifest_in_source(
-            &prep.root,
+            root,
             known_manifests,
             &workspace_manifest,
         )
         || record.packages.iter().any(|package| {
             !package.external
                 && !velnor_actions_rust::tracked_manifest_in_source(
-                    &prep.root,
+                    root,
                     known_manifests,
                     &package.manifest,
                 )

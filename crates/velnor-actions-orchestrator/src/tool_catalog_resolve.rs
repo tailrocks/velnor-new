@@ -30,7 +30,24 @@ pub(crate) fn resolve_tool_catalog(
     root: &Path,
     config: &VelnorConfig,
 ) -> Result<ToolCatalog, OrchestratorError> {
-    rust_source::enforce_when_opted_in(root, config)?;
+    let nested = crate::project_tool_sources::nested_toolchain_paths(root);
+    resolve_with_nested(root, config, &nested)
+}
+
+pub(crate) fn resolve_snapshot_catalog(
+    root: &Path,
+    config: &VelnorConfig,
+    nested: &[String],
+) -> Result<ToolCatalog, OrchestratorError> {
+    resolve_with_nested(root, config, nested)
+}
+
+fn resolve_with_nested(
+    root: &Path,
+    config: &VelnorConfig,
+    nested: &[String],
+) -> Result<ToolCatalog, OrchestratorError> {
+    rust_source::enforce_when_opted_in(root, config, nested)?;
     let toml_tc = read_toolchain_file(root, RUST_TOOLCHAIN_FILE)?;
     let legacy_tc = read_toolchain_file(root, RUST_TOOLCHAIN_LEGACY_FILE)?;
     if let (Some((_, raw_toml, _)), Some((_, raw_legacy, _))) = (&toml_tc, &legacy_tc)
@@ -77,8 +94,8 @@ pub(crate) fn resolve_tool_catalog(
         resolve_wrapped_mr_boxington_pin(repo_mise.as_ref(), config.tools.get("mr-boxington"))?;
     }
     let declared = project_declarations(&sources)?;
-    reject_divergent_nested_toolchains(root, declared.get(&PinnedTool::Rust))?;
-    rust_mirror::check_toolchain_mirror(root)?;
+    reject_divergent_nested_toolchains(root, declared.get(&PinnedTool::Rust), nested)?;
+    rust_mirror::check_toolchain_mirror(root, nested)?;
     let pins = PinInputs {
         declared: &declared,
         config,
@@ -110,8 +127,9 @@ pub(crate) fn resolve_tool_catalog(
 fn reject_divergent_nested_toolchains(
     root: &Path,
     root_rust: Option<&String>,
+    nested: &[String],
 ) -> Result<(), OrchestratorError> {
-    for source in read_nested_toolchains(root)? {
+    for source in read_nested_toolchains(root, nested)? {
         for declaration in source.declarations {
             if root_rust != Some(&declaration.value) {
                 return Err(OrchestratorError::config(

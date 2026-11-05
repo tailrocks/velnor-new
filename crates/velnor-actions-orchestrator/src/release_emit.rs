@@ -187,8 +187,13 @@ fn build_release_jobs(
     })
 }
 
+struct IntentSettings<'a> {
+    default_branch: &'a str,
+    catalog: &'a velnor_actions_mise::ToolCatalog,
+}
+
 fn crate_release_intent(
-    prep: &GenerationPreparation,
+    settings: &IntentSettings<'_>,
     release: &RustReleaseConfig,
     repository: &str,
     registry: &str,
@@ -199,18 +204,18 @@ fn crate_release_intent(
     CrateReleaseIntent {
         schema: 1,
         repository: repository.to_owned(),
-        default_branch: prep.default_branch.clone(),
+        default_branch: settings.default_branch.to_owned(),
         environment: release.environment.clone(),
         required_workflow_path: release.required_workflow_path.clone(),
         trusted_reviewer_id: release.trusted_reviewer_id,
-        rust_version: prep
+        rust_version: settings
             .catalog
             .version(velnor_actions_mise::PinnedTool::Rust)
             .to_owned(),
         generator_version: env!("CARGO_PKG_VERSION").to_owned(),
         generator_source_sha: generator_pin.0.to_owned(),
         generator_manifest_sha256: generator_pin.1.to_owned(),
-        release_plz_version: prep
+        release_plz_version: settings
             .catalog
             .version(velnor_actions_mise::PinnedTool::ReleasePlz)
             .to_owned(),
@@ -243,19 +248,76 @@ fn crate_release_intent(
     }
 }
 
-pub(crate) fn derive_qualification_intent(
-    prep: &GenerationPreparation,
+pub(crate) fn derive_intent_from_snapshot(
+    source: &crate::crate_release_qualification_snapshot::SourceSnapshot,
+    config: &velnor_actions_contract::VelnorConfig,
+    metadata: &str,
+    manifest: &[u8],
+    metadata_config: &velnor_actions_contract::config::ReleaseRehearsalMetadataConfig,
+    repository: &str,
+    default_branch: &str,
 ) -> Result<CrateReleaseIntent, OrchestratorError> {
-    let release = enabled_release(prep)?.ok_or_else(|| {
-        OrchestratorError::unsupported("crate_release_qualification", "release is not enabled")
-    })?;
-    if release.registry != ReleaseRegistry::CratesIo {
-        return Err(OrchestratorError::unsupported(
-            "crate_release_qualification",
-            "registry is not crates.io",
-        ));
+    let invalid =
+        || OrchestratorError::unsupported("crate_release_qualification", "invalid reviewed inputs");
+    let release = config
+        .stacks
+        .rust
+        .as_ref()
+        .map(|stack| &stack.release)
+        .ok_or_else(invalid)?;
+    if config.workflow.policy != WorkflowPolicy::ConsumerV1
+        || !release.enabled
+        || release.registry != ReleaseRegistry::CratesIo
+        || !release.version_groups.is_empty()
+        || metadata_config.manifest_path != release.manifest_path
+        || release
+            .recovery
+            .as_ref()
+            .is_some_and(|record| record.source_sha != source.source_sha())
+        || release
+            .new_crates
+            .as_ref()
+            .is_some_and(|record| record.source_sha != source.source_sha())
+    {
+        return Err(invalid());
     }
-    Ok(derive_release_inputs(prep, release)?.intent)
+    let catalog = crate::tool_catalog_resolve::resolve_snapshot_catalog(
+        source.root(),
+        config,
+        source.nested_toolchains(),
+    )?;
+    if metadata_config.rust_version != catalog.version(velnor_actions_mise::PinnedTool::Rust) {
+        return Err(invalid());
+    }
+    let selection =
+        selection::select_with_root(source.root(), release, metadata, source.manifests())?;
+    if selection.is_empty() {
+        return Err(invalid());
+    }
+    check_recovery_record(release, &selection)?;
+    check_creation_selection(release, &selection)?;
+    let registry = common_registry(&selection)?;
+    let pin = reviewed_generator_manifest(
+        Some(std::str::from_utf8(manifest).map_err(|_| invalid())?),
+        false,
+        env!("CARGO_PKG_VERSION"),
+    )?;
+    let config = plz_config(release, &selection)?;
+    let paths = reviewed_pr_write_paths(source.root(), release, metadata, source.manifests())?;
+    let intent = crate_release_intent(
+        &IntentSettings {
+            default_branch,
+            catalog: &catalog,
+        },
+        release,
+        repository,
+        &registry,
+        (&pin.0, &pin.1),
+        &config,
+        paths,
+    );
+    intent.validate().map_err(|_| invalid())?;
+    Ok(intent)
 }
 
 struct ReleaseIntentInputs {
@@ -293,9 +355,12 @@ fn derive_release_inputs(
         env!("CARGO_PKG_VERSION"),
     )?;
     let config = plz_config(release, &selection)?;
-    let paths = reviewed_pr_write_paths(prep, release, &metadata, &known)?;
+    let paths = reviewed_pr_write_paths(&prep.root, release, &metadata, &known)?;
     let intent = crate_release_intent(
-        prep,
+        &IntentSettings {
+            default_branch: &prep.default_branch,
+            catalog: &prep.catalog,
+        },
         release,
         &repository,
         &registry,
@@ -317,14 +382,14 @@ fn derive_release_inputs(
 }
 
 fn reviewed_pr_write_paths(
-    prep: &GenerationPreparation,
+    root: &std::path::Path,
     release: &RustReleaseConfig,
     metadata: &str,
     known: &BTreeSet<String>,
 ) -> Result<Vec<String>, OrchestratorError> {
     let record = velnor_actions_rust::metadata::parse_metadata_json(
         metadata,
-        &prep.root,
+        root,
         &release.manifest_path,
         known,
     )

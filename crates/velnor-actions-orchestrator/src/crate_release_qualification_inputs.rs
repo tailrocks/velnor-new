@@ -23,8 +23,39 @@ pub struct CheckoutInputRequest<'a> {
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct CheckoutInputs {
-    pub config: String,
-    pub manifest: String,
+    config: String,
+    manifest: String,
+    control_sha: String,
+    source_sha: String,
+    config_path: String,
+    manifest_path: String,
+}
+
+impl CheckoutInputs {
+    #[must_use]
+    pub fn config(&self) -> &str {
+        &self.config
+    }
+    #[must_use]
+    pub fn manifest(&self) -> &str {
+        &self.manifest
+    }
+    #[must_use]
+    pub fn control_sha(&self) -> &str {
+        &self.control_sha
+    }
+    #[must_use]
+    pub fn source_sha(&self) -> &str {
+        &self.source_sha
+    }
+    #[must_use]
+    pub fn config_path(&self) -> &str {
+        &self.config_path
+    }
+    #[must_use]
+    pub fn manifest_path(&self) -> &str {
+        &self.manifest_path
+    }
 }
 
 pub fn capture_checkout_inputs(
@@ -59,7 +90,14 @@ fn observe(
     )?;
     crate::verify_crate_release_source(request.control, request.control_sha, git)?;
     crate::verify_crate_release_source(request.source, request.source_sha, git)?;
-    Ok(CheckoutInputs { config, manifest })
+    Ok(CheckoutInputs {
+        config,
+        manifest,
+        control_sha: request.control_sha.to_owned(),
+        source_sha: request.source_sha.to_owned(),
+        config_path: request.config_path.to_owned(),
+        manifest_path: request.manifest_path.to_owned(),
+    })
 }
 
 fn read(root: &Path, sha: &str, path: &str, git: &ReleaseGit) -> Result<String, OrchestratorError> {
