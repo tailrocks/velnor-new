@@ -1,7 +1,7 @@
 94d8e64740f58a077328caf7ee45f7cdc50a9b7adfd2515b5e775aab6afd44f4  ./.github/AGENTS.md
 336cc4fbf19beaada7ccf9986414fa91851a8d7a07dfb3ccbe800a69eed0ab49  ./.github/CLAUDE.md
 952c78c7e8f944dc89ae7733a76f912e2c6b7f7e6013bb2bad00ae85e5ceed3a  ./.github/PULL_REQUEST_TEMPLATE.md
-89d8b5f2dcc013f3bd316ba0cafeddb5aecca32498d0ceefa7c1828c87c1b03c  ./.github/actions/declared-task-0/action.yml
+c98a3859c50fb046ac740d5b99d067d053f4b90c800a6e7eb73abf96fbb7c8b3  ./.github/actions/declared-task-0/action.yml
 eedeeadb7561e6d9be03444483668c41c2b92af1acddc6faa71f88ae27e64730  ./.github/actions/generator-release-build-linux/action.yml
 936f3f18572b5c8e1aa45167fc85bd0700077d26f5f7e78294c7cf1d7086ae7f  ./.github/actions/generator-release-build-macos-intel/action.yml
 42426a7fde8970f3b68f634d2b95d1a1c6113fdae9813d2218bd265d16b2c710  ./.github/actions/generator-release-build-macos/action.yml
@@ -20,9 +20,9 @@ ba30ba31629303c8948ec1f9ff48514858fef63f72805da7eca5f5dfb89a117d  ./.github/acti
 e118225defbf83d8a6f61cdb2b9164426589cb6d3eaa4960092121e6ab91c1a8  ./.github/dco.yml
 b8a1a5fded44dd1e2f71477b1b00b8d87f26b72f552e3b031114cdf1c68108bd  ./.github/jactionlint.yaml
 ca4ca468341113bcc702fa935f93236ec738a202092b0af1d7ee6659f2b8096d  ./.github/scripts/velnor-tools-cache-identity.sh
-4e590c2ec2b85bda5dd7a78fc5cfe8bdcac6d447a551d31af69a0ad6fe24918c  ./.github/velnor/task-execution-manifest-v1.json
+c954cac8bc0dc15a1e008df68784915309c407560db3d709cb20802b6aa6441d  ./.github/velnor/task-execution-manifest-v1.json
 35232983c51d8fb339ed7ecc0ee6f6c8db9dee6df6b9c073a6d8017c842e5060  ./.github/workflows/cache-prune.yml
-b6085be05871c182a2bd82887f6fa119b204f79649cf867d6d01d557c251788b  ./.github/workflows/ci.yml
+e4fbb534b5027abb23fa384c10d34c51f5bec96759a9441d0a66fd0d67b72658  ./.github/workflows/ci.yml
 df96be0bbfc433cf6e48208b299f77cc63aa5b854ab3e31157bfbcec5d2fd21f  ./.github/workflows/freshness.yml
 60215285b83ae9d44f5fea647c280a4da72e0739675a2f7043c54f761896ea3e  ./.github/workflows/homebrew-adoption.yml
 f88495f45ef1db4cce243ad08f7ff99eff6fc3a9e326f5ea6bbcf378dccab788  ./.github/workflows/job-image-candidate.yml
@@ -32,4 +32,4 @@ f88495f45ef1db4cce243ad08f7ff99eff6fc3a9e326f5ea6bbcf378dccab788  ./.github/work
 682b338534f10820b32950cf4be8b6a08265450d4c7e6e2b79c7c029d37aa59b  ./.github/workflows/product-release.yml
 688cb6fb7a70be4270cb23d7eba8c90db74c1ba04f65f6fa6dc50df2ceb5320a  ./.github/workflows/qualification.yml
 9a4feafbb4aba72527caf425432fc57171dc3c374da910637b203f4a194007dc  ./.github/workflows/source-qualification.yml
-bdc79c289ec02b1175cc165c5a6551a28b3926dae1ca243f1fbe8a3bf5d2d2b5  ./.github/workflows/state-seal.yml
+896ae4fbc1b65d83e44716989d980f3e60b5c852ff525a9029b08cbe012350de  ./.github/workflows/state-seal.yml
