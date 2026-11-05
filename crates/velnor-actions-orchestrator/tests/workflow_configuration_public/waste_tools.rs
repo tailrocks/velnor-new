@@ -321,7 +321,7 @@ fn an_install_only_mbx_selector_must_equal_the_catalog_version() -> Result<(), B
 }
 
 #[test]
-fn cli_test_job_requires_isolated_gh_fixture_staging() -> Result<(), Box<dyn Error>> {
+fn gh_fixture_test_jobs_require_isolated_tool_staging() -> Result<(), Box<dyn Error>> {
     let jobs = lane_jobs()?;
     for job in jobs
         .values()
