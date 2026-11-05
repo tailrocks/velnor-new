@@ -51,7 +51,7 @@ fn merge_needs(fields: &[(String, Yaml)], role: JobRole) -> Yaml {
         ids.extend(["attest-linux", "attest-macos", "attest-macos-intel"].map(str::to_owned));
     }
     if matches!(role, JobRole::Publish) {
-        ids.extend(["attest-manifest", "qualify-homebrew-macos"].map(str::to_owned));
+        ids.extend(["attest-manifest", "qualify-homebrew-finalize"].map(str::to_owned));
     }
     for (key, value) in fields {
         if key == "needs"
@@ -71,12 +71,14 @@ fn merge_needs(fields: &[(String, Yaml)], role: JobRole) -> Yaml {
 
 fn condition(role: JobRole) -> String {
     match role {
-        JobRole::Publish => "always() && inputs.release_action == 'build' && needs.attest-linux.result == 'success' && needs.attest-macos.result == 'success' && needs.attest-macos-intel.result == 'success' && needs.attest-manifest.result == 'success' && needs.qualify-homebrew-macos.result == 'success'".to_owned(),
+        JobRole::Publish => "always() && inputs.release_action == 'build' && needs.attest-linux.result == 'success' && needs.attest-macos.result == 'success' && needs.attest-macos-intel.result == 'success' && needs.attest-manifest.result == 'success' && needs.qualify-homebrew-finalize.result == 'success'".to_owned(),
         JobRole::SourceGate
         | JobRole::Build(_)
         | JobRole::CandidateManifest
         | JobRole::Qualify(_)
+        | JobRole::AdmitHomebrew
         | JobRole::QualifyHomebrew
+        | JobRole::FinalizeHomebrew
         | JobRole::Attest(_)
         | JobRole::AttestManifest
         => "inputs.release_action == 'build'".to_owned(),
@@ -111,6 +113,7 @@ fn target_for_role(role: JobRole) -> Option<ReleaseTarget> {
     match role {
         JobRole::Build(target) | JobRole::Qualify(target) => Some(target),
         JobRole::QualifyHomebrew => Some(ReleaseTarget::MacosArm64),
+        JobRole::AdmitHomebrew | JobRole::FinalizeHomebrew => Some(ReleaseTarget::LinuxX86_64),
         JobRole::SourceGate
         | JobRole::Attest(_)
         | JobRole::CandidateManifest

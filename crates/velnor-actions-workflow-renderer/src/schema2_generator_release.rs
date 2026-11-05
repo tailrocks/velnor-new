@@ -37,7 +37,9 @@ pub(super) enum JobRole {
     Build(ReleaseTarget),
     CandidateManifest,
     Qualify(ReleaseTarget),
+    AdmitHomebrew,
     QualifyHomebrew,
+    FinalizeHomebrew,
     Attest(ReleaseTarget),
     AttestManifest,
     Publish,
@@ -47,7 +49,9 @@ pub(super) fn job_role(id: &str) -> Option<JobRole> {
     match id {
         "verify-release-source" => return Some(JobRole::SourceGate),
         "candidate-manifest" => return Some(JobRole::CandidateManifest),
+        "qualify-homebrew-admit" => return Some(JobRole::AdmitHomebrew),
         "qualify-homebrew-macos" => return Some(JobRole::QualifyHomebrew),
+        "qualify-homebrew-finalize" => return Some(JobRole::FinalizeHomebrew),
         "attest-manifest" => return Some(JobRole::AttestManifest),
         "publish-generator" => return Some(JobRole::Publish),
         _ => {}
@@ -177,6 +181,8 @@ pub(super) fn generator_release(
         &mut actions,
     )?);
     jobs.push(candidate_manifest::job(hosted.clone(), pins)?);
+    jobs.push(qualification::homebrew_admission_job(pins)?);
+    jobs.push(qualification::homebrew_finalization_job(pins)?);
     jobs.push(manifest::job(hosted.clone(), pins)?);
     jobs.push(jobs::publish_job(
         runs_on_yaml(crate::release_tree::RELEASE_HOSTED_RUNNER)?,

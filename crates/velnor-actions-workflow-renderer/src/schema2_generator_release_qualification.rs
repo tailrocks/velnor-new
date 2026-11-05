@@ -20,6 +20,18 @@ pub(super) fn homebrew_job(
     homebrew::job(pins, actions)
 }
 
+pub(super) fn homebrew_admission_job(
+    pins: &ProductReleasePins,
+) -> Result<(String, Yaml), RenderError> {
+    homebrew::admission_job(pins)
+}
+
+pub(super) fn homebrew_finalization_job(
+    pins: &ProductReleasePins,
+) -> Result<(String, Yaml), RenderError> {
+    homebrew::finalization_job(pins)
+}
+
 pub(super) struct QualificationJob<'a> {
     pub id: &'a str,
     pub name: &'a str,

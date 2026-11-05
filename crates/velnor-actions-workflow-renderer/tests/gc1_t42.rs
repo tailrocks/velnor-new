@@ -17,6 +17,9 @@ use velnor_actions_workflow_renderer::{
     ProductReleasePins, RenderedFile, Schema2WorkflowRequest, VERIFY_PATH, render_schema2_workflows,
 };
 
+#[path = "gc1_t42_homebrew.rs"]
+mod homebrew;
+
 fn fail(message: &str) -> Box<dyn Error> {
     io::Error::other(message).into()
 }

@@ -10,6 +10,178 @@ use super::super::{ProductReleasePins, assets, jobs, manifest, workflow_steps};
 
 const RUNS_ON: &str = "macos-15";
 const JOB_TIMEOUT_MINUTES: u16 = 30;
+const ADMISSION_DIR: &str = "homebrew-admission";
+const RESULT_DIR: &str = "homebrew-result";
+
+pub(super) fn admission_job(pins: &ProductReleasePins) -> Result<(String, Yaml), RenderError> {
+    linux_job(pins, false)
+}
+
+pub(super) fn finalization_job(pins: &ProductReleasePins) -> Result<(String, Yaml), RenderError> {
+    linux_job(pins, true)
+}
+
+fn linux_job(pins: &ProductReleasePins, finalizing: bool) -> Result<(String, Yaml), RenderError> {
+    let product = assets::LINUX;
+    let id = if finalizing {
+        "qualify-homebrew-finalize"
+    } else {
+        "qualify-homebrew-admit"
+    };
+    let mut fields = workflow_steps::with_permissions(
+        base(
+            id,
+            Yaml::str(crate::release_tree::RELEASE_HOSTED_RUNNER),
+            JobTimeout::new(JOB_TIMEOUT_MINUTES).map_err(RenderError::Contract)?,
+        ),
+        workflow_steps::perm(&[
+            ("actions", "read"),
+            ("contents", "read"),
+            ("attestations", "read"),
+        ]),
+    );
+    let needs = if finalizing {
+        vec![
+            product.build_job,
+            "qualify-linux",
+            "candidate-manifest",
+            "qualify-homebrew-admit",
+            "qualify-homebrew-macos",
+        ]
+    } else {
+        vec![product.build_job, "qualify-linux", "candidate-manifest"]
+    };
+    fields = workflow_steps::with_needs(fields, &needs);
+    if !finalizing {
+        fields.push(("outputs".to_owned(), artifact_outputs("admission_sha256")));
+    }
+    Ok(finish(id, fields, linux_steps(pins, finalizing)?))
+}
+
+fn linux_steps(pins: &ProductReleasePins, finalizing: bool) -> Result<Vec<Yaml>, RenderError> {
+    let product = assets::LINUX;
+    let mut steps = vec![
+        start_budget_step(),
+        workflow_steps::checkout_step(),
+        workflow_steps::mise_step(pins.setup_for(ReleaseTarget::LinuxX86_64))?,
+        workflow_steps::install_gh_step(&pins.install_gh_argv)?,
+    ];
+    steps.extend(assets::download_build_steps_for_id(
+        product,
+        "Download exact Linux candidate",
+        "${{ needs.build-linux.outputs.artifact_id }}",
+    ));
+    steps.extend([
+        workflow_steps::download_step_by_id(
+            "Download canonical candidate manifest",
+            "${{ needs.candidate-manifest.outputs.artifact_id }}",
+            manifest::DIR,
+        ),
+        workflow_steps::bash_step(
+            "Verify Linux candidate provenance",
+            &assets::verify_provenance_script(product, pins),
+        ),
+        workflow_steps::bash_step(
+            "Verify Linux candidate checksum",
+            &format!(
+                "set -eu\ncd {}\n{} {}",
+                product.directory, product.checksum_command, product.sidecar
+            ),
+        ),
+    ]);
+    if finalizing {
+        steps.extend([
+            workflow_steps::download_step_by_id(
+                "Download exact admission",
+                "${{ needs.qualify-homebrew-admit.outputs.artifact_id }}",
+                ADMISSION_DIR,
+            ),
+            workflow_steps::download_step_by_id(
+                "Download exact Mac result",
+                "${{ needs.qualify-homebrew-macos.outputs.artifact_id }}",
+                RESULT_DIR,
+            ),
+        ]);
+    }
+    steps.push(linux_operation_step(finalizing));
+    if !finalizing {
+        steps.extend(evidence_steps(
+            ADMISSION_DIR,
+            "admission",
+            "admission_sha256",
+            "sha256sum",
+        ));
+    }
+    Ok(steps)
+}
+
+fn linux_operation_step(finalizing: bool) -> Yaml {
+    let product = assets::LINUX;
+    let operation = if finalizing {
+        "finalize-homebrew-qualification-v1"
+    } else {
+        "admit-homebrew-qualification-v1"
+    };
+    let mut env = vec![
+        ("GH_TOKEN", "${{ github.token }}"),
+        ("VELNOR_INTERNAL_OP", operation),
+        (
+            "VELNOR_RELEASE_MANIFEST_SHA256",
+            "${{ needs.candidate-manifest.outputs.manifest_sha256 }}",
+        ),
+    ];
+    if finalizing {
+        env.extend([
+            (
+                "VELNOR_HOME_ADMISSION_SHA256",
+                "${{ needs.qualify-homebrew-admit.outputs.admission_sha256 }}",
+            ),
+            (
+                "VELNOR_HOME_RESULT_SHA256",
+                "${{ needs.qualify-homebrew-macos.outputs.result_sha256 }}",
+            ),
+        ]);
+    }
+    workflow_steps::bash_step_with_env(
+        "Verify historical Homebrew qualification",
+        &format!(
+            "set -eu\nchmod 0500 ./{}/{}\n./{}/{}",
+            product.directory, product.binary, product.directory, product.binary
+        ),
+        env,
+    )
+}
+
+fn artifact_outputs(digest: &str) -> Yaml {
+    Yaml::Map(vec![
+        (
+            "artifact_id".to_owned(),
+            Yaml::str("${{ steps.upload.outputs.artifact-id }}"),
+        ),
+        (
+            digest.to_owned(),
+            Yaml::str(format!("${{{{ steps.evidence_digest.outputs.{digest} }}}}")),
+        ),
+    ])
+}
+
+fn evidence_steps(directory: &str, file: &str, digest: &str, hash: &str) -> Vec<Yaml> {
+    vec![
+        workflow_steps::bash_step_with_id(
+            "evidence_digest",
+            "Bind evidence bytes",
+            &format!(
+                "set -eu\ntest -f {directory}/{file}.json && test ! -L {directory}/{file}.json\ndigest=\"$({hash} {directory}/{file}.json | awk 'NR == 1 {{print $1}}')\"\n[[ \"$digest\" =~ ^[0-9a-f]{{64}}$ ]]\nprintf '{digest}=%s\\n' \"$digest\" >> \"$GITHUB_OUTPUT\""
+            ),
+        ),
+        workflow_steps::upload_step_with_id(
+            "upload",
+            "Upload bound evidence",
+            directory,
+            &[directory],
+        ),
+    ]
+}
 
 pub(super) fn job(
     pins: &ProductReleasePins,
@@ -38,6 +210,16 @@ pub(super) fn job(
                 "SHA-256 of the canonical candidate manifest bytes",
                 "${{ needs.candidate-manifest.outputs.manifest_sha256 }}",
             ),
+            (
+                "admission_artifact_id",
+                "Exact same-run admission artifact ID",
+                "${{ needs.qualify-homebrew-admit.outputs.artifact_id }}",
+            ),
+            (
+                "admission_sha256",
+                "SHA-256 of authenticated admission bytes",
+                "${{ needs.qualify-homebrew-admit.outputs.admission_sha256 }}",
+            ),
         ],
         actions,
     )?;
@@ -48,15 +230,26 @@ pub(super) fn job(
             Yaml::str(RUNS_ON),
             timeout,
         ),
-        workflow_steps::perm(&[("contents", "read"), ("attestations", "read")]),
+        workflow_steps::perm(&[("contents", "read")]),
     );
     fields.retain(|(key, _)| key != "name");
-    fields = workflow_steps::with_needs(fields, &[product.build_job, "candidate-manifest"]);
-    Ok(finish(
-        "qualify-homebrew-macos",
+    fields = workflow_steps::with_needs(
         fields,
-        vec![start_budget_step(), workflow_steps::checkout_step(), call],
-    ))
+        &[
+            product.build_job,
+            "candidate-manifest",
+            "qualify-homebrew-admit",
+        ],
+    );
+    fields.push(("outputs".to_owned(), artifact_outputs("result_sha256")));
+    let mut steps = vec![start_budget_step(), workflow_steps::checkout_step(), call];
+    steps.extend(evidence_steps(
+        RESULT_DIR,
+        "result",
+        "result_sha256",
+        "shasum -a 256",
+    ));
+    Ok(finish("qualify-homebrew-macos", fields, steps))
 }
 
 fn candidate_steps(
@@ -72,12 +265,16 @@ fn candidate_steps(
         )?,
         workflow_steps::verify_rust_step(pins)?,
         workflow_steps::command_step("Verify jactionlint", &pins.verify_lint_argv)?,
-        workflow_steps::install_gh_step(&pins.install_gh_argv)?,
     ];
     steps.extend(assets::download_build_steps_for_id(
         product,
         "Download exact ARM candidate artifact",
         "${{ inputs.artifact_id }}",
+    ));
+    steps.push(workflow_steps::download_step_by_id(
+        "Download exact admission",
+        "${{ inputs.admission_artifact_id }}",
+        ADMISSION_DIR,
     ));
     steps.extend([
         workflow_steps::download_step_by_id(
@@ -105,11 +302,18 @@ fn candidate_steps(
             )],
         ),
         workflow_steps::bash_step_with_env(
-            "Authenticate historical A and D; install and test preserved Homebrew kegs",
-            &format!("set -eu\n{candidate_path}"),
+            "Validate admission; install and test preserved Homebrew kegs",
+            &format!("set -eu\nenv -i PATH=\"$PATH\" HOME=\"$HOME\" TMPDIR=\"${{TMPDIR:-/tmp}}\" RUNNER_TEMP=\"$RUNNER_TEMP\" RUNNER_OS=\"$RUNNER_OS\" RUNNER_ARCH=\"$RUNNER_ARCH\" RUNNER_ENVIRONMENT=\"$RUNNER_ENVIRONMENT\" GITHUB_ACTIONS=\"$GITHUB_ACTIONS\" GITHUB_REPOSITORY=\"$GITHUB_REPOSITORY\" GITHUB_REPOSITORY_ID=\"$GITHUB_REPOSITORY_ID\" GITHUB_RUN_ID=\"$GITHUB_RUN_ID\" GITHUB_RUN_ATTEMPT=\"$GITHUB_RUN_ATTEMPT\" GITHUB_WORKFLOW_REF=\"$GITHUB_WORKFLOW_REF\" GITHUB_WORKFLOW_SHA=\"$GITHUB_WORKFLOW_SHA\" GITHUB_SHA=\"$GITHUB_SHA\" GITHUB_WORKSPACE=\"$GITHUB_WORKSPACE\" VELNOR_HOME_BUDGET_DEADLINE_EPOCH=\"$VELNOR_HOME_BUDGET_DEADLINE_EPOCH\" VELNOR_HOME_ADMISSION_SHA256=\"$VELNOR_HOME_ADMISSION_SHA256\" VELNOR_RELEASE_MANIFEST_SHA256=\"$VELNOR_RELEASE_MANIFEST_SHA256\" VELNOR_INTERNAL_OP=qualify-homebrew-v1 {candidate_path}"),
             vec![
-                ("GH_TOKEN", "${{ github.token }}"),
-                ("VELNOR_INTERNAL_OP", "qualify-homebrew-v1"),
+                ("VELNOR_HOME_ADMISSION_SHA256", "${{ inputs.admission_sha256 }}"),
+                ("BASH_ENV", ""),
+                ("ENV", ""),
+                ("LD_PRELOAD", ""),
+                ("LD_LIBRARY_PATH", ""),
+                ("LD_AUDIT", ""),
+                ("DYLD_INSERT_LIBRARIES", ""),
+                ("DYLD_LIBRARY_PATH", ""),
+                ("DYLD_FRAMEWORK_PATH", ""),
                 (
                     "VELNOR_RELEASE_MANIFEST_SHA256",
                     "${{ inputs.manifest_sha256 }}",

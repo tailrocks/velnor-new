@@ -111,7 +111,7 @@ pub(super) fn attest_job(
                 product.build_job,
                 "candidate-manifest",
                 product.qualify_job,
-                "qualify-homebrew-macos",
+                "qualify-homebrew-finalize",
             ]
         } else {
             vec![product.build_job, "candidate-manifest", product.qualify_job]
@@ -146,7 +146,7 @@ pub(super) fn publish_job(
             "attest-macos-intel",
             "attest-manifest",
             "candidate-manifest",
-            "qualify-homebrew-macos",
+            "qualify-homebrew-finalize",
             "build-linux",
             "build-macos",
             "build-macos-intel",
