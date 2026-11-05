@@ -9,11 +9,6 @@ import selectors
 import subprocess
 import time
 
-with open("/etc/os-release", encoding="utf-8") as info:
-    release = info.read()
-if 'ID=ubuntu' not in release.splitlines() or 'VERSION_ID="24.04"' not in release.splitlines():
-    raise SystemExit("unexpected operating system image")
-print("operating system: ubuntu-24.04", flush=True)
 
 canary = "dummy-budget-canary"
 expected = hashlib.sha256(canary.encode()).hexdigest()
@@ -46,6 +41,15 @@ if MODE == "orphan":
     os._exit(0)
 time.sleep(300)
 '''.replace("EXPECTED", repr(expected))
+
+
+def valid_orphan(returncode, querycode, values):
+    expected = {"Result": "timeout", "ExecMainCode": "1", "ExecMainStatus": "0", "ActiveState": "failed", "LoadState": "loaded"}
+    return returncode == 1 and querycode == 0 and values == expected
+
+
+def cleanup_complete(pid_exists, cgroup_populated):
+    return not pid_exists and not cgroup_populated
 
 
 def invoke(mode):
@@ -114,13 +118,14 @@ def invoke(mode):
         journal = subprocess.run(["/usr/bin/sudo", "-n", "/usr/bin/journalctl", "--no-pager", "--unit", unit], capture_output=True, text=True, timeout=5, check=True)
         if canary in journal.stdout or canary in journal.stderr:
             raise RuntimeError("dummy credential appeared in completed journal")
-        if (mode == "orphan" and process.returncode != 0) or (mode != "orphan" and process.returncode == 0) or (mode == "timeout" and elapsed < 8):
-            query = subprocess.run(["/usr/bin/systemctl", "show", unit, "-p", "Result", "-p", "ExecMainCode", "-p", "ExecMainStatus", "-p", "ActiveState", "-p", "LoadState"], capture_output=True, text=True, timeout=5, check=False)
-            values = {}
-            for line in query.stdout.splitlines():
-                key, sep, value = line.partition("=")
-                if sep and key in {"Result", "ExecMainCode", "ExecMainStatus", "ActiveState", "LoadState"} and re.fullmatch(r"[A-Za-z0-9_-]{1,40}", value):
-                    values[key] = value
+        query = subprocess.run(["/usr/bin/systemctl", "show", unit, "-p", "Result", "-p", "ExecMainCode", "-p", "ExecMainStatus", "-p", "ActiveState", "-p", "LoadState"], capture_output=True, text=True, timeout=5, check=False)
+        values = {}
+        for line in query.stdout.splitlines():
+            key, sep, value = line.partition("=")
+            if sep and key in {"Result", "ExecMainCode", "ExecMainStatus", "ActiveState", "LoadState"} and re.fullmatch(r"[A-Za-z0-9_-]{1,40}", value):
+                values[key] = value
+        invalid_outcome = (mode == "orphan" and not valid_orphan(process.returncode, query.returncode, values)) or (mode != "orphan" and process.returncode == 0) or (mode == "timeout" and elapsed < 8)
+        if invalid_outcome:
             events = "/sys/fs/cgroup" + cgroup + "/cgroup.events"
             populated = None
             if cgroup and os.path.exists(events):
@@ -133,7 +138,7 @@ def invoke(mode):
         for _ in range(50):
             events = "/sys/fs/cgroup" + cgroup + "/cgroup.events"
             unpopulated = not cgroup or not os.path.exists(events) or "populated 0" in open(events, encoding="ascii").read()
-            if not os.path.exists("/proc/" + str(pid)) and unpopulated:
+            if cleanup_complete(os.path.exists("/proc/" + str(pid)), not unpopulated):
                 break
             time.sleep(0.1)
         else:
@@ -146,10 +151,22 @@ def invoke(mode):
         subprocess.run(["/usr/bin/sudo", "-n", "/usr/bin/systemctl", "reset-failed", unit], capture_output=True, timeout=10, check=False)
 
 
-invoke("timeout")
-invoke("cancel")
-invoke("orphan")
-evidence = {"schema": 1, "source": "mise-task-v1", "head": os.environ["VELNOR_CHECK_HEAD"], "check_id": os.environ["VELNOR_CHECK_ID"], "platform": os.environ["VELNOR_CHECK_PLATFORM"], "scenarios": [{"id": name, "executed": True, "status": "passed"} for name in ("cancellation", "no-credential-exposure", "orphan", "timeout", "ubuntu-24.04")]}
-with open(".velnor/hosted-budget-evidence.json", "x", encoding="utf-8") as output:
-    json.dump(evidence, output, separators=(",", ":"))
-print("hosted systemd timeout and cancellation removed escaped descendants")
+
+def main():
+    with open("/etc/os-release", encoding="utf-8") as info:
+        release = info.read()
+    if 'ID=ubuntu' not in release.splitlines() or 'VERSION_ID="24.04"' not in release.splitlines():
+        raise SystemExit("unexpected operating system image")
+    print("operating system: ubuntu-24.04", flush=True)
+
+    invoke("timeout")
+    invoke("cancel")
+    invoke("orphan")
+    evidence = {"schema": 1, "source": "mise-task-v1", "head": os.environ["VELNOR_CHECK_HEAD"], "check_id": os.environ["VELNOR_CHECK_ID"], "platform": os.environ["VELNOR_CHECK_PLATFORM"], "scenarios": [{"id": name, "executed": True, "status": "passed"} for name in ("cancellation", "no-credential-exposure", "orphan", "timeout", "ubuntu-24.04")]}
+    with open(".velnor/hosted-budget-evidence.json", "x", encoding="utf-8") as output:
+        json.dump(evidence, output, separators=(",", ":"))
+    print("hosted systemd timeout and cancellation removed escaped descendants")
+
+
+if __name__ == "__main__":
+    main()

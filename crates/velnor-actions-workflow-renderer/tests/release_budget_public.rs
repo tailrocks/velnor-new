@@ -12,3 +12,15 @@ fn budget_capture_binds_job_identity_and_original_start() -> Result<(), Box<dyn 
     assert!(status.success());
     Ok(())
 }
+
+#[test]
+fn hosted_containment_requires_expected_result_and_empty_scope()
+-> Result<(), Box<dyn std::error::Error>> {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let status = std::process::Command::new("python3")
+        .arg(root.join("tests/release_budget_systemd_logic.py"))
+        .arg(root.join("tests/release_budget_systemd_fixture.py"))
+        .status()?;
+    assert!(status.success());
+    Ok(())
+}
