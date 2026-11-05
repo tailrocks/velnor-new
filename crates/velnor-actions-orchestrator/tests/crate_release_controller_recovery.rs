@@ -350,7 +350,10 @@ pub(super) fn toolchain_staging_requires_approved_same_run_artifact()
     let result = stage_unverified_toolchain(&stage, &github, &github)?;
     assert_eq!(result, runner.join("velnor/rustup"));
     assert_eq!(
-        fs::read(result.join(format!("toolchains/{}-{host}/bin/cargo", intent.rust_version)))?,
+        fs::read(result.join(format!(
+            "toolchains/{}-{host}/bin/cargo",
+            intent.rust_version
+        )))?,
         b"x"
     );
     Ok(())

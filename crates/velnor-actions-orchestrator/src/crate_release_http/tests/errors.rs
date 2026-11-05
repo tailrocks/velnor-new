@@ -242,8 +242,16 @@ fn qualification_feedback_routes_are_strictly_bounded() {
 
 #[test]
 fn qualification_branch_rules_route_is_bounded() {
-    assert!(valid_route("repos/owner/repo/rules/branches/release%2Fmain?per_page=100&page=1"));
-    assert!(!valid_route("repos/owner/repo/rules/branches/main?per_page=100&page=101"));
-    assert!(!valid_route("repos/owner/repo/rules/branches/%2e%2e?per_page=100&page=1"));
-    assert!(!valid_route("repos/owner/repo/rules/branches/main?per_page=100&page=1&other=1"));
+    assert!(valid_route(
+        "repos/owner/repo/rules/branches/release%2Fmain?per_page=100&page=1"
+    ));
+    assert!(!valid_route(
+        "repos/owner/repo/rules/branches/main?per_page=100&page=101"
+    ));
+    assert!(!valid_route(
+        "repos/owner/repo/rules/branches/%2e%2e?per_page=100&page=1"
+    ));
+    assert!(!valid_route(
+        "repos/owner/repo/rules/branches/main?per_page=100&page=1&other=1"
+    ));
 }
