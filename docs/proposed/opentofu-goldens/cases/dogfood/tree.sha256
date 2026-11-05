@@ -21,7 +21,7 @@ ddf7c8dcf51a1ba9e64fb2dcd78540730d969e329d8d6dd56578c80d989528ba  ./.github/dco.
 dba69046eede52353267a8ff09f6abb23c1dc501522661ac3040201140f6ec3c  ./.github/jactionlint.yaml
 cdd634481b37ca81b8b1532275c20aa1629b5616b1abe27657d2625110d152c7  ./.github/scripts/velnor-tools-cache-identity.sh
 8f79c92052fdc6d90f2d9c7106c88c5861d7d80bdc2f1d568f136b09d00b0c3c  ./.github/velnor/task-execution-manifest-v1.json
-3b019c1d0dafa22ec5f0d68ef1a3f5ee63e8ad7b442dd1a24e6e36f6c4030948  ./.github/workflows/cache-prune.yml
+8671dd78f31103c27427bebd69b1b1df5b345820fa65cd5fec07a7bdfe3617f5  ./.github/workflows/cache-prune.yml
 a60a08f452235009ab18032618b468b83bc72eb8d7cf24d44ff9ec375bb3a185  ./.github/workflows/ci.yml
 0499537f9875993471fd6ce379f037f951716716f9962dd96a02c026722ddc58  ./.github/workflows/freshness.yml
 3a7bb8f05cc5255232c56917a887be77edb464c755260027007e9323e3a2fad3  ./.github/workflows/homebrew-adoption.yml
