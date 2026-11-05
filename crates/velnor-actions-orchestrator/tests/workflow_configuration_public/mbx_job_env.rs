@@ -109,6 +109,20 @@ fn job_env(block: &JobBlock<'_>, anchors: &BTreeMap<String, Env>) -> Result<Env,
     Ok(Env::new())
 }
 
+pub(super) fn rendered_job_env(text: &str, id: &str) -> Result<Env, Box<dyn Error>> {
+    let blocks = job_blocks(text);
+    let mut anchors = BTreeMap::new();
+    for block in &blocks {
+        collect_anchors(&block.lines, &mut anchors);
+        if block.id == id {
+            let mut env = workflow_env(text);
+            env.extend(job_env(block, &anchors)?);
+            return Ok(env);
+        }
+    }
+    Err(format!("rendered job {id} is missing").into())
+}
+
 fn rendered_jobs() -> Result<Vec<RenderedJob>, Box<dyn Error>> {
     let repo = mbx_repo(false)?;
     let prepared = prepare(repo.path())?;
