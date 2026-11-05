@@ -146,7 +146,7 @@
             }
             fs::fchmod(
                 &out,
-                Mode::from_raw_mode((mode & 0o777).try_into().map_err(|_| invalid())?),
+                permissions(mode),
             )
             .map_err(|_| invalid())?;
             Ok(())
@@ -156,7 +156,7 @@
             for (key, mode) in &self.modes {
                 fs::fchmod(
                     self.open_dir(key)?,
-                    Mode::from_raw_mode((*mode).try_into().map_err(|_| invalid())?),
+                    permissions(*mode),
                 )
                 .map_err(|_| invalid())?;
             }
@@ -189,5 +189,20 @@
                 return Err(internal("fd_tool_extract_cleanup_failed"));
             }
             Ok(())
+        }
+    }
+    fn permissions(mode: u32) -> Mode {
+        [
+            (0o400, Mode::RUSR), (0o200, Mode::WUSR), (0o100, Mode::XUSR),
+            (0o040, Mode::RGRP), (0o020, Mode::WGRP), (0o010, Mode::XGRP),
+            (0o004, Mode::ROTH), (0o002, Mode::WOTH), (0o001, Mode::XOTH),
+        ].into_iter().fold(Mode::empty(), |result, (bit, flag)| {
+            if mode & bit == 0 { result } else { result | flag }
+        })
+    }
+    #[test]
+    fn extracted_permission_bits_match_archive_modes() {
+        for mode in 0..=0o777 {
+            assert_eq!(u64::from(permissions(mode).bits()), u64::from(mode));
         }
     }
