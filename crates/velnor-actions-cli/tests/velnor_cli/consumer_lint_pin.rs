@@ -24,5 +24,10 @@ fn staged_lint_runs_the_jactionlint_the_consumer_pins() -> Result<(), Box<dyn Er
             .is_file(),
         "preview workflow missing after staged lint"
     );
+    assert_eq!(
+        fixture.jactionlint_specs_run()?,
+        [format!("jactionlint@{CONSUMER_JACTIONLINT}")],
+        "staged lint ran a jactionlint other than the consumer's pin"
+    );
     Ok(())
 }

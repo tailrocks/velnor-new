@@ -212,6 +212,13 @@ impl Fixture {
         )
     }
 
+    pub(super) fn jactionlint_specs_run(&self) -> Result<Vec<String>, Box<dyn Error>> {
+        Ok(fs::read_to_string(self.root.join("bin/jactionlint-spec"))?
+            .lines()
+            .map(str::to_owned)
+            .collect())
+    }
+
     pub(super) fn fail_qualification(&self, stderr: &str) -> Result<(), Box<dyn Error>> {
         fs::write(self.root.join("bin/qualify-stderr"), stderr)?;
         Ok(())

@@ -10,6 +10,7 @@ pub(super) fn write(
     repo: &Path,
     jactionlint: Option<&str>,
 ) -> Result<(), Box<dyn Error>> {
+    let default_jactionlint = ToolCatalog::pinned().tool_spec(PinnedTool::Jactionlint);
     let mut catalog = ToolCatalog::pinned();
     if let Some(version) = jactionlint {
         catalog = catalog.with_project_tool(PinnedTool::Jactionlint, version)?;
@@ -27,6 +28,7 @@ pub(super) fn write(
             "@JACTIONLINT_SPEC@",
             &catalog.tool_spec(PinnedTool::Jactionlint),
         )
+        .replace("@DEFAULT_JACTIONLINT_SPEC@", &default_jactionlint)
         .replace(
             "@SHELLCHECK_SPEC@",
             &catalog.tool_spec(PinnedTool::Shellcheck),
