@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{
-    API_ORIGIN, GitHubRepository, REDIRECT_LIMIT, agent, api_request, checked_storage_uri,
+    GitHubRepository, REDIRECT_LIMIT, agent, api_origin, api_request, checked_storage_uri,
     storage_request_headers,
 };
 use crate::{OrchestratorError, internal::internal};
@@ -22,8 +22,8 @@ pub(crate) fn qualification_job_log(
         return Err(internal("qualification_log_job_id"));
     }
     let url = format!(
-        "{API_ORIGIN}/repos/{}/{}/actions/jobs/{job_id}/logs",
-        repo.owner, repo.name
+        "{}/repos/{}/{}/actions/jobs/{job_id}/logs",
+        api_origin(), repo.owner, repo.name
     );
     fetch_job_log(&url, token, deadline, checked_storage_uri)
 }

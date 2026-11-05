@@ -394,3 +394,6 @@ fn add_feedback(
 
 #[path = "crate_release_qualification_capture_integration_cases.rs"]
 mod cases;
+
+#[path = "crate_release_qualification_native_capture_tests.rs"]
+mod native_capture;

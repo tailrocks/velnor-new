@@ -18,12 +18,26 @@ mod route;
 #[path = "github_evidence_http_validation.rs"]
 mod validation;
 pub(super) use route::EvidenceRoute;
-use validation::is_sha256;
+use validation::{agent_config, hex_digit, hex_lower, is_sha256};
 
 use crate::OrchestratorError;
 use crate::internal::internal;
 
 const API_ORIGIN: &str = "https://api.github.com";
+#[cfg(test)]
+#[path = "github_evidence_http_loopback.rs"]
+mod loopback;
+#[cfg(test)]
+pub(crate) use loopback::with_test_origins;
+
+fn api_origin() -> String {
+    #[cfg(test)]
+    if let Some(origin) = loopback::api_origin() {
+        return origin;
+    }
+    API_ORIGIN.to_owned()
+}
+
 const JSON_LIMIT: u64 = 8 * 1024 * 1024;
 const REDIRECT_LIMIT: usize = 3;
 const IO_CHUNK: usize = 64 * 1024;
@@ -97,7 +111,7 @@ impl GitHubEvidenceRead for NativeGitHubEvidenceRead {
         token: &str,
         deadline: Instant,
     ) -> Result<Vec<u8>, OrchestratorError> {
-        let url = format!("{API_ORIGIN}{}", route.path(repo));
+        let url = format!("{}{}", api_origin(), route.path(repo));
         let response = api_request(&url, token, deadline)?;
         read_json_response(response, deadline)
     }
@@ -122,7 +136,7 @@ impl GitHubEvidenceRead for NativeGitHubEvidenceRead {
             return Err(internal("github_evidence_archive_bound"));
         }
         let url = format!(
-            "{API_ORIGIN}{}",
+            "{}{}", api_origin(),
             EvidenceRoute::ArtifactDownload { artifact_id }.path(repo)
         );
         let response = api_request(&url, token, deadline)?;
@@ -330,6 +344,10 @@ fn next_storage_uri(location: &str, redirects: usize) -> Result<String, Orchestr
 }
 
 fn checked_storage_uri(value: &str) -> Result<String, OrchestratorError> {
+    #[cfg(test)]
+    if let Some(result) = loopback::storage_uri(value) {
+        return result;
+    }
     let uri = value
         .parse::<ureq::http::Uri>()
         .map_err(|_| internal("github_evidence_archive_location"))?;
@@ -371,26 +389,4 @@ fn build_agent() -> Result<ureq::Agent, String> {
         .build();
     let config = agent_config(tls);
     Ok(ureq::Agent::new_with_config(config))
-}
-
-fn agent_config(tls: ureq::tls::TlsConfig) -> ureq::config::Config {
-    ureq::Agent::config_builder()
-        .tls_config(tls)
-        .proxy(None)
-        .timeout_global(Some(std::time::Duration::from_secs(30)))
-        .max_redirects(0)
-        .build()
-}
-
-fn hex_lower(bytes: &[u8]) -> String {
-    let mut result = String::with_capacity(bytes.len() * 2);
-    for byte in bytes {
-        result.push(hex_digit(byte >> 4));
-        result.push(hex_digit(byte & 0x0f));
-    }
-    result
-}
-
-fn hex_digit(value: u8) -> char {
-    char::from(b"0123456789abcdef"[usize::from(value)])
 }
