@@ -7,6 +7,20 @@ use std::error::Error;
 mod fixture;
 
 #[test]
+fn isolated_source_snapshot_preserves_tracked_inputs_and_rejects_drift()
+-> Result<(), Box<dyn Error>> {
+    let status = std::process::Command::new("/usr/bin/python3")
+        .arg("-I")
+        .arg(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/api2026_pull_context_fixture/snapshot_probe.py"
+        ))
+        .status()?;
+    assert!(status.success());
+    Ok(())
+}
+
+#[test]
 fn isolated_fixture_tools_match_qualified_catalog_and_lock() -> Result<(), Box<dyn Error>> {
     let manifest: serde_json::Value =
         serde_json::from_str(include_str!("api2026_pull_context_fixture/tools.json"))?;

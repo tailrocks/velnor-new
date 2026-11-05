@@ -18,11 +18,11 @@ import tempfile
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from docker_host import docker_environment, local_daemon, trusted_docker, verify_image
+import source_snapshot
 
 MANIFEST = json.loads(pathlib.Path(__file__).with_name("tools.json").read_text())
 IMAGE = MANIFEST["image"]
 MAX_FILE = 128 * 1024 * 1024
-MAX_TOTAL = 512 * 1024 * 1024
 MAX_DEPENDENCY_TOTAL = 2 * 1024 * 1024 * 1024
 
 
@@ -119,44 +119,18 @@ def dependency_packages(metadata):
     return packages
 
 
-def fingerprint(root, arch, profile, target_name, dependency_digest):
-    git_env = {"PATH": "/usr/bin:/bin", "HOME": str(pathlib.Path.home()), "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": "/dev/null", "GIT_OPTIONAL_LOCKS": "0"}
-    tracked = subprocess.check_output(["/usr/bin/git", "-C", str(root), "ls-files", "-z", "--cached", "--stage"], env=git_env)
-    other = subprocess.check_output(["/usr/bin/git", "-C", str(root), "ls-files", "-z", "--others", "--exclude-standard"], env=git_env)
-    if other:
-        raise RuntimeError("untracked workspace files prevent a complete fixture fingerprint; stage or remove them")
-    ignored = subprocess.check_output(["/usr/bin/git", "-C", str(root), "ls-files", "-z", "--others", "--ignored", "--exclude-standard", "--directory", "--", ".", ":(exclude)target", ":(exclude)target/**"], env=git_env)
-    if ignored:
-        raise RuntimeError("ignored workspace files outside the Cargo target directory prevent a complete fixture fingerprint")
+def fingerprint(entries, arch, profile, target_name, dependency_digest):
     digest = hashlib.sha256()
-    digest.update(("velnor-gh-fixture-v1\0" + arch + "\0" + profile + "\0" + target_name + "\0" + IMAGE + "\0").encode())
+    digest.update(("velnor-gh-fixture-v2\0" + arch + "\0" + profile + "\0" + target_name + "\0" + IMAGE + "\0").encode())
     digest.update(dependency_digest)
-    total = 0
-    for entry in sorted(filter(None, tracked.split(b"\0")), key=lambda value: value.split(b"\t", 1)[1]):
-        metadata, name = entry.split(b"\t", 1)
-        mode, oid, stage = metadata.split(b" ")
-        if stage != b"0":
-            raise RuntimeError("unmerged workspace prevents fixture build")
-        digest.update(len(name).to_bytes(8, "big")); digest.update(name); digest.update(mode)
-        if mode == b"160000":
-            submodule = root / os.fsdecode(name)
-            if submodule.exists() and (not submodule.is_dir() or any(submodule.iterdir())):
-                raise RuntimeError("initialized submodule prevents complete fixture fingerprint")
-            digest.update(oid)
-            continue
-        if mode == b"120000":
-            raise RuntimeError("workspace symlink prevents safe fixture fingerprint")
-        try:
-            data, file_mode = read_tracked(root, name)
-        except FileNotFoundError:
-            digest.update(b"deleted\0")
-            continue
-        digest.update(file_mode.to_bytes(4, "big"))
-        total += len(data)
-        if total > MAX_TOTAL:
-            raise RuntimeError("fixture workspace exceeds fingerprint bound")
-        digest.update(len(data).to_bytes(8, "big")); digest.update(data)
+    digest.update(source_snapshot.digest(entries))
     return digest.hexdigest()
+
+
+def verify_sources(root, snapshot, entries):
+    if source_snapshot.collect(root, None, read_tracked) != entries:
+        raise RuntimeError("fixture tracked sources changed")
+    source_snapshot.verify_snapshot(snapshot, entries, read_tracked)
 
 
 def install_tool(source, target, expected):
@@ -230,6 +204,8 @@ def main():
     cache = pathlib.Path(tempfile.gettempdir()) / f"velnor-gh-fixture-{os.getuid()}"
     checked_directory(cache)
     lock = os.open(cache / "build.lock", os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+    snapshot_dir = tempfile.TemporaryDirectory(prefix="source-", dir=cache)
+    snapshot = pathlib.Path(snapshot_dir.name)
     try:
         fcntl.flock(lock, fcntl.LOCK_EX)
         tools = cache / "tools"; checked_directory(tools)
@@ -237,8 +213,10 @@ def main():
         install_tool(source_tools / f"gh_{gh_platform}", tools / f"mise/installs/gh/{gh_version}/gh_{gh_version}_{gh_platform}/bin/gh", gh_digest)
         install_tool(source_tools / f"cargo-nextest_{gh_platform}", tools / "cargo-nextest", nextest_digest)
         verify_image(client, docker_env, IMAGE)
+        entries = source_snapshot.collect(root, snapshot, read_tracked)
+        verify_sources(root, snapshot, entries)
         metadata_target = cache / "metadata"; checked_directory(metadata_target)
-        metadata_docker = docker_base(client, root, metadata_target, tools, registry, image_platform)
+        metadata_docker = docker_base(client, snapshot, metadata_target, tools, registry, image_platform)
         triple = "x86_64-unknown-linux-gnu" if arch == "x86_64" else "aarch64-unknown-linux-gnu"
         metadata_script = f"export HOME=/tmp PATH=/usr/local/cargo/bin:/usr/bin:/bin RUSTUP_TOOLCHAIN=1.99.1-{triple} CARGO_TARGET_DIR=/target CARGO_NET_OFFLINE=true; exec cargo metadata --locked --offline --all-features --filter-platform {triple} --format-version 1"
         with tempfile.TemporaryFile() as output:
@@ -249,18 +227,20 @@ def main():
             raise RuntimeError("fixture dependency metadata exceeds its bound")
         packages = dependency_packages(json.loads(metadata_bytes))
         dependency_digest = registry_fingerprint(packages, registry)
-        key = fingerprint(root, arch, profile, kind, dependency_digest)
+        key = fingerprint(entries, arch, profile, kind, dependency_digest)
         target = cache / key; checked_directory(target)
-        docker = docker_base(client, root, target, tools, registry, image_platform)
+        docker = docker_base(client, snapshot, target, tools, registry, image_platform)
         binary_meta = target / "fixture-binaries.json"; cargo_meta = target / "fixture-cargo.json"
         if not binary_meta.is_file() or not cargo_meta.is_file():
             release = "--release" if profile == "release" else ""
             build = f'''set -eu; export HOME=/tmp PATH=/tools:/usr/local/cargo/bin:/usr/bin:/bin RUSTUP_TOOLCHAIN=1.99.1-{triple} CARGO_TARGET_DIR=/target CARGO_NET_OFFLINE=true; cargo metadata --locked --offline --all-features --filter-platform {triple} --format-version 1 > /target/fixture-cargo.tmp; /tools/cargo-nextest nextest list --locked --offline -p {package} --test {test_target} {release} --list-type binaries-only --message-format json > /target/fixture-binaries.tmp; mv /target/fixture-cargo.tmp /target/fixture-cargo.json; mv /target/fixture-binaries.tmp /target/fixture-binaries.json'''
             command(docker[:-1] + ["--user", f"{os.getuid()}:{os.getgid()}", IMAGE, "sh", "-c", build], env=docker_env)
-            if fingerprint(root, arch, profile, kind, registry_fingerprint(packages, registry)) != key:
+            verify_sources(root, snapshot, entries)
+            if fingerprint(entries, arch, profile, kind, registry_fingerprint(packages, registry)) != key:
                 binary_meta.unlink(missing_ok=True); cargo_meta.unlink(missing_ok=True)
                 raise RuntimeError("fixture sources changed during isolated build")
             (target / "fixture-key").write_text(key)
+        verify_sources(root, snapshot, entries)
         if read_regular(target / "fixture-key", 64).decode() != key:
             raise RuntimeError("fixture cache identity mismatch")
         fcntl.flock(lock, fcntl.LOCK_UN)
@@ -274,9 +254,11 @@ def main():
                 raise RuntimeError("fixture worker success receipt does not match scenario")
         finally:
             receipt.unlink(missing_ok=True)
-        if fingerprint(root, arch, profile, kind, registry_fingerprint(packages, registry)) != key:
+        verify_sources(root, snapshot, entries)
+        if fingerprint(entries, arch, profile, kind, registry_fingerprint(packages, registry)) != key:
             raise RuntimeError("fixture sources changed during isolated execution")
     finally:
+        snapshot_dir.cleanup()
         os.close(lock)
 
 

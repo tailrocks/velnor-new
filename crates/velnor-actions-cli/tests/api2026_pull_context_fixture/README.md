@@ -32,8 +32,12 @@ Unix socket, but it does not defend against a compromised host or daemon. The
 worker runs with no network, using a disposable local TLS service and synthetic
 credentials. It verifies the qualified executable and exercises the owned CLI.
 
-The cache key covers tracked workspace content and the registry source packages
-selected by offline Cargo metadata for all features and the native Linux target.
-Untracked and ignored workspace files fail the check, except the root `target`
-build directory. Inputs are checked before and after execution. This does not
-prove that arbitrary build scripts cannot read other ambient inputs.
+The worker builds from a private snapshot containing the working-tree bytes and
+modes of tracked files, including dirty changes. Nonignored untracked files fail
+the check. Ignored files and Git metadata are absent from the snapshot. A build
+that requires an ignored file fails; an optional ignored build input is excluded
+and must not be relied upon to qualify the test. Inputs and snapshot membership
+are checked before and after execution. The cache key also covers registry source
+packages selected by offline Cargo metadata for all features and the native Linux
+target. This does not prove that arbitrary build scripts cannot read other
+ambient inputs.
