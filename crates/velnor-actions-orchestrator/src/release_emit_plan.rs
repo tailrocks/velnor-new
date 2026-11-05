@@ -106,7 +106,7 @@ pub(super) fn release_plan(
     }
 }
 
-pub(super) fn release_triggers(branch: &str, plan: &ReleasePlan) -> ReleaseTriggers {
+pub(super) fn release_triggers(branch: &str, plan: &ReleasePlan, creation: bool) -> ReleaseTriggers {
     if !plan.dispatch {
         return ReleaseTriggers {
             push_branches: vec![branch.to_owned()],
@@ -137,7 +137,7 @@ pub(super) fn release_triggers(branch: &str, plan: &ReleasePlan) -> ReleaseTrigg
         });
     }
     ReleaseTriggers {
-        push_branches: vec![branch.to_owned()],
+        push_branches: if creation { Vec::new() } else { vec![branch.to_owned()] },
         schedule: None,
         dispatch_inputs,
     }
@@ -176,4 +176,27 @@ pub(super) fn reviewed_generator_manifest(
         })?;
     }
     Ok((manifest.commit, digest))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn first_publication_is_dispatch_only() {
+        let plan = ReleasePlan {
+            plan_id: "test".into(),
+            repository: "owner/repo".into(),
+            source_sha: "a".repeat(40),
+            registry: "crates-io".into(),
+            packages: BTreeMap::new(),
+            version: None,
+            dispatch: true,
+        };
+        let creation = release_triggers("main", &plan, true);
+        assert!(creation.push_branches.is_empty());
+        assert!(!creation.dispatch_inputs.is_empty());
+        let recovery = release_triggers("main", &plan, false);
+        assert_eq!(recovery.push_branches, ["main"]);
+    }
 }

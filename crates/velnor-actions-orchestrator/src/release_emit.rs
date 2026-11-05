@@ -116,7 +116,7 @@ fn release_files_for_config(
     let spec = ReleaseWorkflowSpec {
         name: RELEASE_WORKFLOW_NAME.to_owned(),
         repository,
-        triggers: release_triggers(&prep.default_branch, &plan),
+        triggers: release_triggers(&prep.default_branch, &plan, release.new_crates.is_some()),
         concurrency,
         jobs,
         plan,
