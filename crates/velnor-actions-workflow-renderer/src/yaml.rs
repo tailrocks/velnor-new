@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+const SELF_REPOSITORY_IGNORE: &str = "zizmor: ignore[self-repository]";
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Yaml {
     Null,
@@ -58,6 +60,16 @@ impl Yaml {
     #[must_use]
     pub fn quoted(value: impl Into<String>) -> Self {
         Self::Quoted(value.into())
+    }
+
+    #[must_use]
+    pub fn uses(value: impl Into<String>) -> Self {
+        let value = value.into();
+        if value.starts_with("./") {
+            Self::annotated(value, SELF_REPOSITORY_IGNORE)
+        } else {
+            Self::Str(value)
+        }
     }
 
     #[must_use]

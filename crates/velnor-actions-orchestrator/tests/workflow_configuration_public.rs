@@ -69,6 +69,8 @@ mod ledger_cli_publish_script;
 mod ledger_cli_validator;
 #[path = "workflow_configuration_public/ledger_cli_verify_script.rs"]
 mod ledger_cli_verify_script;
+#[path = "workflow_configuration_public/local_action_annotation.rs"]
+mod local_action_annotation;
 #[path = "workflow_configuration_public/maintenance_features.rs"]
 mod maintenance_features;
 #[path = "workflow_configuration_public/mbx_job_env.rs"]
