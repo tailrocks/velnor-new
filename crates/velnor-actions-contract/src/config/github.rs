@@ -67,7 +67,7 @@ impl GithubConfig {
                 return Err(bad("allow_path_not_normalized"));
             }
             if rest == "workflows" || rest.starts_with("workflows/") {
-                return Err(bad("allow_workflow_forbidden"));
+                return Err(bad("allow_workflow_generator_owned"));
             }
             if !seen.insert(entry.as_str()) {
                 return Err(bad("duplicate_allow"));

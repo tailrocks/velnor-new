@@ -111,7 +111,7 @@ fn discover(
     inputs.sort();
     inputs.dedup();
     for input in &inputs {
-        repository_path(root, input)?;
+        require_regular_file(&repository_path(root, input)?, input)?;
     }
     let resolved = qualified::resolve(qualified_tools, &check.tools, check)?;
     let proposal = propose_check(
@@ -131,6 +131,24 @@ fn discover(
         qualification_digest: resolved.fingerprint,
         config_source: bytes,
     })
+}
+
+fn require_regular_file(path: &Path, input: &str) -> Result<(), MiseError> {
+    let metadata = std::fs::metadata(path)
+        .map_err(|error| invalid("check_input", format!("{input}:{error}")))?;
+    if metadata.is_file() {
+        Ok(())
+    } else if metadata.is_dir() {
+        Err(invalid(
+            "check_input",
+            format!("check_input_is_directory:{input}"),
+        ))
+    } else {
+        Err(invalid(
+            "check_input",
+            format!("check_input_not_a_regular_file:{input}"),
+        ))
+    }
 }
 
 fn read_source(

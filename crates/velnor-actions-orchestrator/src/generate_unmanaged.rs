@@ -88,11 +88,7 @@ fn walk(
     for entry in std::fs::read_dir(&source).map_err(|error| io(&source, &error))? {
         let entry = entry.map_err(|error| io(&source, &error))?;
         had_entry = true;
-        kept |= walk(
-            base,
-            &relative.join(entry.file_name()),
-            found,
-        )?;
+        kept |= walk(base, &relative.join(entry.file_name()), found)?;
     }
     if !had_entry && !relative.as_os_str().is_empty() {
         found.push(relative.to_path_buf());

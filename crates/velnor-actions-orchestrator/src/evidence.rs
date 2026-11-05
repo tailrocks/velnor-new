@@ -156,10 +156,7 @@ fn collect_executables(root: &Path, index: &FileIndex) -> Vec<(String, String)> 
     out
 }
 
-fn collect_handwritten(
-    root: &Path,
-    index: &FileIndex,
-) -> Vec<(String, String)> {
+fn collect_handwritten(root: &Path, index: &FileIndex) -> Vec<(String, String)> {
     let mut out = Vec::new();
     for path in index.files() {
         if is_workflow_path(path)

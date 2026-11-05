@@ -40,10 +40,6 @@ fn write_staged_preview(
     }
     let staging = tempfile::tempdir_in(canonical)
         .map_err(|err| OrchestratorError::io(canonical.display().to_string(), err.to_string()))?;
-    preserve::write_preview(
-        &prep.root.join(".github"),
-        staging.path(),
-        tree,
-    )?;
+    preserve::write_preview(&prep.root.join(".github"), staging.path(), tree)?;
     swap_directories(canonical, &canonical.join(".github"), staging.path())
 }
