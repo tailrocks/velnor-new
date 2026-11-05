@@ -63,7 +63,7 @@ pub(super) fn fetch_artifact_response_step() -> Yaml {
 
 pub(super) fn fetch_source_inputs_step() -> Yaml {
     const RUN: &str = r#"set -euo pipefail
-LD_PRELOAD= LD_LIBRARY_PATH= LD_AUDIT= LD_DEBUG= LD_PROFILE= GCONV_PATH= LOCPATH= /usr/bin/python3 -I -S - <<'VELNOR_SOURCE_INPUTS_EOF'
+LD_PRELOAD="" LD_LIBRARY_PATH="" LD_AUDIT="" LD_DEBUG="" LD_PROFILE="" GCONV_PATH="" LOCPATH="" /usr/bin/python3 -I -S - <<'VELNOR_SOURCE_INPUTS_EOF'
 import base64
 import hashlib
 import json

@@ -20,6 +20,18 @@ fn prefix() -> Vec<String> {
     .collect()
 }
 
+#[test]
+fn hosted_custody_evidence_requires_the_named_passing_test()
+-> Result<(), Box<dyn std::error::Error>> {
+    let fixture = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/hosted_gh_config_custody_test.py");
+    let result = std::process::Command::new("python3")
+        .arg(fixture)
+        .status()?;
+    assert!(result.success());
+    Ok(())
+}
+
 #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
 #[test]
 fn procfs_config_custody_rejects_same_user_poisoning() -> Result<(), Box<dyn std::error::Error>> {
@@ -200,12 +212,12 @@ fn bootstrap_gives_its_acquisition_process_only_safe_environment()
     let temp = tempfile::tempdir()?;
     let bootstrap = velnor_actions_workflow_renderer::verified_gh_shell::bootstrap();
     let start = bootstrap
-        .find("exec(bytes.fromhex(\"")
+        .find("exec(bytes.fromhex(\\\"")
         .ok_or("missing program")?
-        + "exec(bytes.fromhex(\"".len();
+        + "exec(bytes.fromhex(\\\"".len();
     let end = start
         + bootstrap[start..]
-            .find("\"))")
+            .find("\\\"))")
             .ok_or("missing program end")?;
     let test_program = "import os\nassert set(os.environ) <= {'RUNNER_TEMP', 'PATH', 'LC_CTYPE', 'CPATH', 'LIBRARY_PATH', 'MANPATH', 'SDKROOT', '__CF_USER_TEXT_ENCODING'}\nassert not any(k in os.environ for k in ('GH_TOKEN', 'GIT_TOKEN', 'CARGO_REGISTRY_TOKEN', 'ACTIONS_ID_TOKEN_REQUEST_TOKEN', 'TMPDIR'))\nprint(os.environ['RUNNER_TEMP'])\n";
     let mut encoded = String::new();

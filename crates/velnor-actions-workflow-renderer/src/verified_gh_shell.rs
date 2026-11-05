@@ -10,7 +10,7 @@ fn python_argument(program: &str) -> String {
         hex.push(char::from(DIGITS[usize::from(byte >> 4)]));
         hex.push(char::from(DIGITS[usize::from(byte & 15)]));
     }
-    format!("'exec(bytes.fromhex(\"{hex}\"))'")
+    format!("\"exec(bytes.fromhex(\\\"{hex}\\\"))\"")
 }
 
 #[must_use]
@@ -27,7 +27,7 @@ fn command_with_version_variable(variable: &str) -> String {
         .replace("@VERSION_VARIABLE@", variable);
     let program = python_argument(&program);
     format!(
-        "LD_PRELOAD= LD_LIBRARY_PATH= LD_AUDIT= LD_DEBUG= LD_PROFILE= GCONV_PATH= LOCPATH= PYTHONPATH= PYTHONHOME= PYTHONUSERBASE= /usr/bin/python3 -I -S -c {program}"
+        "LD_PRELOAD=\"\" LD_LIBRARY_PATH=\"\" LD_AUDIT=\"\" LD_DEBUG=\"\" LD_PROFILE=\"\" GCONV_PATH=\"\" LOCPATH=\"\" PYTHONPATH=\"\" PYTHONHOME=\"\" PYTHONUSERBASE=\"\" /usr/bin/python3 -I -S -c {program}"
     )
 }
 
@@ -75,15 +75,19 @@ pub fn bootstrap() -> String {
         .replace("@ARCHIVE_SHA256@", pin.archive_sha256);
     let program = python_argument(&program);
     format!(
-        "case \"$RUNNER_TEMP\" in /*) ;; *) exit 1 ;; esac; velnor_gh_path=\"$RUNNER_TEMP/velnor-gh-bootstrap-path\"; rm -f \"$velnor_gh_path\"; set -C; LD_PRELOAD= LD_LIBRARY_PATH= LD_AUDIT= LD_DEBUG= LD_PROFILE= GCONV_PATH= LOCPATH= /usr/bin/env -i RUNNER_TEMP=\"$RUNNER_TEMP\" PATH=/usr/bin:/bin /usr/bin/python3 -I -S -c {program} > \"$velnor_gh_path\" || exit 1; set +C; IFS= read -r VELNOR_VERIFIED_GH_DATA_DIR < \"$velnor_gh_path\" || exit 1; rm -f \"$velnor_gh_path\"; export VELNOR_VERIFIED_GH_DATA_DIR"
+        "case \"$RUNNER_TEMP\" in /*) ;; *) exit 1 ;; esac; velnor_gh_path=\"$RUNNER_TEMP/velnor-gh-bootstrap-path\"; rm -f \"$velnor_gh_path\"; set -C; LD_PRELOAD=\"\" LD_LIBRARY_PATH=\"\" LD_AUDIT=\"\" LD_DEBUG=\"\" LD_PROFILE=\"\" GCONV_PATH=\"\" LOCPATH=\"\" /usr/bin/env -i RUNNER_TEMP=\"$RUNNER_TEMP\" PATH=/usr/bin:/bin /usr/bin/python3 -I -S -c {program} > \"$velnor_gh_path\" || exit 1; set +C; IFS= read -r VELNOR_VERIFIED_GH_DATA_DIR < \"$velnor_gh_path\" || exit 1; rm -f \"$velnor_gh_path\"; export VELNOR_VERIFIED_GH_DATA_DIR"
     )
 }
 
 #[must_use]
 pub fn git_credential_config() -> String {
-    let helper = format!("!{} auth git-credential", command()).replace('\'', "'\\''");
+    let helper = format!("!{} auth git-credential", command())
+        .replace('\\', "\\\\")
+        .replace('"', "\\\"")
+        .replace('$', "\\$")
+        .replace('`', "\\`");
     format!(
-        "export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_COUNT=4\nexport GIT_CONFIG_KEY_0=credential.helper GIT_CONFIG_VALUE_0=''\nexport GIT_CONFIG_KEY_1=credential.https://github.com.helper GIT_CONFIG_VALUE_1='{helper}'\nexport GIT_CONFIG_KEY_2=core.hooksPath GIT_CONFIG_VALUE_2=/dev/null\nexport GIT_CONFIG_KEY_3=core.fsmonitor GIT_CONFIG_VALUE_3=false"
+        "export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_COUNT=4\nexport GIT_CONFIG_KEY_0=credential.helper GIT_CONFIG_VALUE_0=''\nexport GIT_CONFIG_KEY_1=credential.https://github.com.helper GIT_CONFIG_VALUE_1=\"{helper}\"\nexport GIT_CONFIG_KEY_2=core.hooksPath GIT_CONFIG_VALUE_2=/dev/null\nexport GIT_CONFIG_KEY_3=core.fsmonitor GIT_CONFIG_VALUE_3=false"
     )
 }
 
@@ -91,6 +95,6 @@ pub fn git_credential_config() -> String {
 pub fn git_transport_command() -> String {
     let program = python_argument(include_str!("verified_git_transport.py"));
     format!(
-        "LD_PRELOAD= LD_LIBRARY_PATH= LD_AUDIT= LD_DEBUG= LD_PROFILE= GCONV_PATH= LOCPATH= /usr/bin/timeout --signal=TERM --kill-after=5s 300s /usr/bin/python3 -I -S -c {program}"
+        "LD_PRELOAD=\"\" LD_LIBRARY_PATH=\"\" LD_AUDIT=\"\" LD_DEBUG=\"\" LD_PROFILE=\"\" GCONV_PATH=\"\" LOCPATH=\"\" /usr/bin/timeout --signal=TERM --kill-after=5s 300s /usr/bin/python3 -I -S -c {program}"
     )
 }
