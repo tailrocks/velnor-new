@@ -13,7 +13,6 @@ use crate::OrchestratorError;
 
 pub(crate) fn list(
     root: &Path,
-    preserve_workflows: &[String],
     github: &GithubConfig,
 ) -> Result<Vec<String>, OrchestratorError> {
     let base = root.join(".github");
@@ -29,7 +28,7 @@ pub(crate) fn list(
         Err(error) => return Err(io(&base, &error)),
     }
     let mut found = Vec::new();
-    walk(&base, Path::new(""), preserve_workflows, &mut found)?;
+    walk(&base, Path::new(""), &mut found)?;
     let mut paths: Vec<String> = found
         .into_iter()
         .map(|relative| {
@@ -37,7 +36,6 @@ pub(crate) fn list(
             format!(".github/{}", parts.join("/"))
         })
         .filter(|path| !github.is_allowed(path))
-        .filter(|path| !preserve_workflows.iter().any(|preserved| preserved == path))
         .collect();
     paths.sort();
     Ok(paths)
@@ -58,7 +56,7 @@ impl UnmanagedReport {
 
 pub fn unmanaged_report(root: &Path) -> Result<UnmanagedReport, OrchestratorError> {
     let config = crate::config::load_config(root)?;
-    let entries = list(root, &config.workflow.preserve_workflows, &config.github)?;
+    let entries = list(root, &config.github)?;
     Ok(UnmanagedReport {
         policy: config.github.unmanaged,
         entries,
@@ -68,13 +66,12 @@ pub fn unmanaged_report(root: &Path) -> Result<UnmanagedReport, OrchestratorErro
 fn walk(
     base: &Path,
     relative: &Path,
-    preserve_workflows: &[String],
     found: &mut Vec<PathBuf>,
 ) -> Result<bool, OrchestratorError> {
     let source = base.join(relative);
     let metadata = std::fs::symlink_metadata(&source).map_err(|error| io(&source, &error))?;
     if !relative.as_os_str().is_empty()
-        && (generator_owned(relative, preserve_workflows)
+        && (generator_owned(relative)
             || generated_shared_action(relative, &source, &metadata)?
             || generated_marked_script(relative, &source, &metadata)?
             || generated_marked_dco(relative, &source, &metadata)?
@@ -91,12 +88,7 @@ fn walk(
     for entry in std::fs::read_dir(&source).map_err(|error| io(&source, &error))? {
         let entry = entry.map_err(|error| io(&source, &error))?;
         had_entry = true;
-        kept |= walk(
-            base,
-            &relative.join(entry.file_name()),
-            preserve_workflows,
-            found,
-        )?;
+        kept |= walk(base, &relative.join(entry.file_name()), found)?;
     }
     if !had_entry && !relative.as_os_str().is_empty() {
         found.push(relative.to_path_buf());
