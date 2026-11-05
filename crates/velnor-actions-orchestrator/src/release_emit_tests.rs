@@ -100,6 +100,31 @@ fn preview_consumer_intent(root: &std::path::Path) -> Result<String, crate::Orch
     Ok(intent.bytes)
 }
 
+#[test]
+fn qualification_intent_matches_rendered_intent_without_enabling_publishing()
+-> Result<(), Box<dyn std::error::Error>> {
+    let temp = tempfile::tempdir()?;
+    preview_fixture(temp.path())?;
+    let mut prep = crate::prepare::prepare_for_candidate(temp.path())?;
+    let actual = super::derive_qualification_intent(&prep)?;
+    let rendered = preview_consumer_intent(temp.path())?;
+    let expected = crate::crate_release_runtime::parse_crate_release_intent(rendered.as_bytes())?;
+    assert_eq!(toml::to_string(&actual)?, toml::to_string(&expected)?);
+    assert!(super::release_files(&prep).is_err());
+    prep.config
+        .stacks
+        .rust
+        .as_mut()
+        .ok_or("missing Rust")?
+        .release
+        .trusted_reviewer_id = 456;
+    let changed = super::derive_qualification_intent(&prep)?;
+    assert_ne!(actual.trusted_reviewer_id, changed.trusted_reviewer_id);
+    prep.discovery.consumer_manifest_stand_in = true;
+    assert!(super::derive_qualification_intent(&prep).is_err());
+    Ok(())
+}
+
 fn write_consumer_intent(
     root: &std::path::Path,
     output: &std::path::Path,

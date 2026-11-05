@@ -262,6 +262,51 @@ fn crate_release_intent(
     }
 }
 
+/// Reconstruct release intent without rendering workflows or invoking a publisher.
+/// The caller must authenticate the source, configuration and generator manifest.
+pub(crate) fn derive_qualification_intent(
+    prep: &GenerationPreparation,
+) -> Result<CrateReleaseIntent, OrchestratorError> {
+    let release = enabled_release(prep)?.ok_or_else(|| {
+        OrchestratorError::unsupported("crate_release_qualification", "release is not enabled")
+    })?;
+    if release.registry != ReleaseRegistry::CratesIo {
+        return Err(OrchestratorError::unsupported(
+            "crate_release_qualification",
+            "registry is not crates.io",
+        ));
+    }
+    let metadata = release_metadata_json(prep, release.manifest_path.as_str())?;
+    let known = tracked_manifests(&prep.root)?;
+    let selection = select_from_json_with_known(prep, release, &metadata, &known)?;
+    if selection.is_empty() {
+        return Err(OrchestratorError::Contract {
+            problem: "release_nothing_selected".to_owned(),
+        });
+    }
+    check_recovery_record(release, &selection)?;
+    check_creation_selection(release, &selection)?;
+    let registry = common_registry(&selection)?;
+    let repository = origin_repository(&prep.root)?;
+    approved_source(&prep.root, release)?;
+    let pin = reviewed_generator_manifest(
+        prep.discovery.consumer_manifest_json.as_deref(),
+        prep.discovery.consumer_manifest_stand_in,
+        env!("CARGO_PKG_VERSION"),
+    )?;
+    let config = plz_config(release, &selection)?;
+    let paths = reviewed_pr_write_paths(prep, release, &metadata, &known)?;
+    Ok(crate_release_intent(
+        prep,
+        release,
+        &repository,
+        &registry,
+        (&pin.0, &pin.1),
+        &config,
+        paths,
+    ))
+}
+
 fn reviewed_pr_write_paths(
     prep: &GenerationPreparation,
     release: &RustReleaseConfig,
