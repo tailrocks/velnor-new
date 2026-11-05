@@ -41,8 +41,9 @@ fn render(request: &Schema2WorkflowRequest) -> Result<Yaml, RenderError> {
         RenderError::InvalidWorkflow("image_candidate_missing_native_pins".to_owned())
     })?;
     let build = build_job(hosted.clone(), pins)?;
-    let attest = attest_job(hosted.clone(), artifact_id);
-    let publish = publish_job(hosted, artifact_id);
+    let authority = runs_on_yaml(crate::release_tree::RELEASE_HOSTED_RUNNER)?;
+    let attest = attest_job(authority.clone(), artifact_id);
+    let publish = publish_job(authority, artifact_id);
     Ok(Yaml::Map(vec![
         ("name".to_owned(), Yaml::str("Job image candidate")),
         (

@@ -59,6 +59,58 @@ fn binary_publisher_uses_linux_setup_while_build_remains_macos()
     assert!(!publish.contains(&"b".repeat(64)));
     Ok(())
 }
+
+#[test]
+fn release_authority_jobs_use_qualified_linux_for_all_hosted_labels()
+-> Result<(), Box<dyn std::error::Error>> {
+    use std::collections::BTreeSet;
+    use velnor_actions_contract::RoutingWorkflow;
+    use velnor_actions_workflow_renderer::schema2::{
+        Schema2WorkflowRequest, render_schema2_workflows,
+    };
+    for label in ["ubuntu-22.04", "ubuntu-26.04", "ubuntu-24.04-arm"] {
+        let request = Schema2WorkflowRequest {
+            version: env!("CARGO_PKG_VERSION").to_owned(),
+            hosted_label: label.to_owned(),
+            scale_set: Schema2WorkflowRequest::canonical_scale_set()?,
+            workflows: BTreeSet::from([
+                RoutingWorkflow::ImageRelease,
+                RoutingWorkflow::GeneratorRelease,
+            ]),
+            mbx_qualification: None,
+            mise_pin_qualification: None,
+            product_release: Some(product_release_binary_fixture::pins()),
+        };
+        let files = render_schema2_workflows(&request)?;
+        for (path, jobs) in [
+            (
+                ".github/workflows/product-release-images.yml",
+                &["publish-images"][..],
+            ),
+            (
+                ".github/workflows/product-release-generator.yml",
+                &["publish-generator"][..],
+            ),
+            (
+                ".github/workflows/job-image-candidate.yml",
+                &["attest-image-candidate", "publish-job-image"][..],
+            ),
+        ] {
+            let file = files
+                .iter()
+                .find(|file| file.path == path)
+                .ok_or("missing workflow")?;
+            let workflow: serde_json::Value = serde_saphyr::from_str(&file.bytes)?;
+            for job in jobs {
+                assert_eq!(
+                    workflow["jobs"][*job]["runs-on"], "ubuntu-24.04",
+                    "{path}:{job} for {label}"
+                );
+            }
+        }
+    }
+    Ok(())
+}
 use product_release_binary_fixture::{BinaryReleaseFixture, BuildMode, HELPER_SUFFIX, SOURCE_SHA};
 #[path = "product_release_binary_hash_fixture.rs"]
 mod product_release_binary_hash_fixture;

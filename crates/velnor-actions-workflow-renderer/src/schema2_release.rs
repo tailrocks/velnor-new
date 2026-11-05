@@ -106,7 +106,7 @@ pub(super) fn image_release(request: &Schema2WorkflowRequest) -> Result<Yaml, Re
                 &files,
             ),
             publish_job(
-                hosted,
+                runs_on_yaml(crate::release_tree::RELEASE_HOSTED_RUNNER)?,
                 &Publish {
                     id: "publish-images",
                     name: "Publish runner images",

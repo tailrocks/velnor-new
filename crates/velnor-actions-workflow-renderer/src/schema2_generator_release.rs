@@ -178,7 +178,10 @@ pub(super) fn generator_release(
     )?);
     jobs.push(candidate_manifest::job(hosted.clone(), pins)?);
     jobs.push(manifest::job(hosted.clone(), pins)?);
-    jobs.push(jobs::publish_job(hosted, pins)?);
+    jobs.push(jobs::publish_job(
+        runs_on_yaml(crate::release_tree::RELEASE_HOSTED_RUNNER)?,
+        pins,
+    )?);
     Ok(GeneratorRelease {
         workflow: document(jobs),
         actions,
