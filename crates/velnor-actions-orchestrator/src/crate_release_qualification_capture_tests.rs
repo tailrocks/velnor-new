@@ -77,6 +77,13 @@ fn rejects_source_from_another_repository_before_acquisition() {
         environment: "release".into(),
         reviewer_id: 5,
         output_bundle: true,
+        metadata: Some(
+            velnor_actions_contract::config::ReleaseRehearsalMetadataConfig {
+                manifest_path: "Cargo.toml".into(),
+                rust_version: "1.99.1".into(),
+            },
+        ),
+        source_sha: Some(head.clone()),
         script: "review.sh".into(),
         source_sha256: "b".repeat(64),
         candidate_pr: 1,
@@ -108,4 +115,17 @@ fn rejects_source_from_another_repository_before_acquisition() {
     wrong_name.repository_id = 3;
     wrong_name.repository = "other/repo".into();
     assert!(check(&wrong_name).is_err());
+}
+
+#[test]
+fn metadata_must_match_admitted_source_tree_and_strict_json() {
+    assert!(
+        verify_metadata_source("source", "tree", br#"{"packages":[]}"#, "source", "tree").is_ok()
+    );
+    assert!(verify_metadata_source("other", "tree", br#"{}"#, "source", "tree").is_err());
+    assert!(verify_metadata_source("source", "other", br#"{}"#, "source", "tree").is_err());
+    assert!(
+        verify_metadata_source("source", "tree", br#"{"x":1,"x":1}"#, "source", "tree").is_err()
+    );
+    assert!(verify_metadata_source("source", "tree", br#"[]"#, "source", "tree").is_err());
 }

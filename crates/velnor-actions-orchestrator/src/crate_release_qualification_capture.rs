@@ -20,6 +20,7 @@ pub struct CaptureRequest<'a> {
 
 pub struct CapturedRehearsal {
     pub bundle: Vec<u8>,
+    pub metadata: crate::crate_release_qualification_bundle::MetadataEvidence,
 }
 
 impl std::fmt::Debug for CapturedRehearsal {
@@ -27,6 +28,7 @@ impl std::fmt::Debug for CapturedRehearsal {
         formatter
             .debug_struct("CapturedRehearsal")
             .field("bundle_bytes", &self.bundle.len())
+            .field("metadata_bytes", &self.metadata.bytes().len())
             .finish()
     }
 }
@@ -39,8 +41,14 @@ pub fn capture_rehearsal(
     let source = request.source;
     let witness = request.witness;
     let feedback = request.candidate_feedback;
+    let ReviewedPullState::Merged {
+        merge_sha,
+        merge_tree_sha,
+    } = &source.state
+    else {
+        return Err(internal("qualification_capture_identity"));
+    };
     if !matches!(candidate.state, ReviewedPullState::OpenHead)
-        || !matches!(source.state, ReviewedPullState::Merged { .. })
         || candidate.pull_request != witness.candidate_pr
         || candidate.head_sha != witness.candidate_sha
         || source.repository != witness.repository
@@ -49,6 +57,8 @@ pub fn capture_rehearsal(
         || feedback.pull_request_number != candidate.pull_request
         || feedback.head_sha != candidate.head_sha
         || !witness.output_bundle
+        || witness.metadata.is_none()
+        || witness.source_sha.as_deref() != Some(merge_sha)
     {
         return Err(internal("qualification_capture_identity"));
     }
@@ -69,6 +79,14 @@ pub fn capture_rehearsal(
     )?;
     let before_witness = crate::crate_release_qualification_witness::verify_witness(witness, api)?;
     let bundle = crate::crate_release_qualification_bundle::acquire_output_bundle(witness, api)?;
+    let metadata = crate::crate_release_qualification_bundle::acquire_metadata(witness, api)?;
+    verify_metadata_source(
+        metadata.source_sha(),
+        metadata.source_tree_sha(),
+        metadata.bytes(),
+        merge_sha,
+        merge_tree_sha,
+    )?;
     if before_candidate
         != crate::crate_release_qualification_source::verify_pull_source(candidate, api)?
         || before_source
@@ -93,9 +111,32 @@ pub fn capture_rehearsal(
         request.workflow_default_branch,
         api,
     )?;
-    Ok(CapturedRehearsal { bundle })
+    Ok(CapturedRehearsal { bundle, metadata })
+}
+
+fn verify_metadata_source(
+    source: &str,
+    tree: &str,
+    bytes: &[u8],
+    expected_source: &str,
+    expected_tree: &str,
+) -> Result<(), OrchestratorError> {
+    if source != expected_source || tree != expected_tree {
+        return Err(internal("qualification_metadata_source_mismatch"));
+    }
+    let value =
+        velnor_actions_contract::strict_json::parse_strict_json_bytes(bytes, 16 * 1024 * 1024)
+            .map_err(|_| internal("qualification_metadata_invalid"))?;
+    if !value.is_object() {
+        return Err(internal("qualification_metadata_invalid"));
+    }
+    Ok(())
 }
 
 #[cfg(test)]
 #[path = "crate_release_qualification_capture_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "crate_release_qualification_capture_integration_tests.rs"]
+mod integration_tests;
