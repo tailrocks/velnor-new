@@ -47,6 +47,10 @@ fn every_harness_job_restores_the_sources_family_read_only_before_prefetch()
         let cache_steps = positions(steps, |s| uses_prefix(s, "actions/cache"));
         assert_eq!(cache_steps, [restore], "job {job} touches the cache twice");
         assert_eq!(steps[restore]["id"], "sources-restore", "job {job}");
+        assert_eq!(
+            steps[restore]["if"], "github.event_name != 'workflow_dispatch'",
+            "job {job} restore condition"
+        );
         let prepare = only(
             &positions(steps, |s| runs_phase(s, PREPARE_PHASE)),
             "prepare phase",
