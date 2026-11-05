@@ -151,8 +151,8 @@ pub(super) fn serial_coordinator_records_upload_and_metadata_before_reconciling(
         completed[0].operations,
         vec![
             crate::crate_release_journal::JournalOperation::Published,
-            crate::crate_release_journal::JournalOperation::TagRepaired,
-            crate::crate_release_journal::JournalOperation::ReleaseRepaired,
+            crate::crate_release_journal::JournalOperation::TagCreated,
+            crate::crate_release_journal::JournalOperation::ReleaseCreated,
         ]
     );
     assert_eq!(
@@ -262,8 +262,8 @@ pub(super) fn check_completion_retry(
         completion.completion.expect("result").packages[0].operations,
         vec![
             crate::crate_release_journal::JournalOperation::Published,
-            crate::crate_release_journal::JournalOperation::TagRepaired,
-            crate::crate_release_journal::JournalOperation::ReleaseRepaired,
+            crate::crate_release_journal::JournalOperation::TagCreated,
+            crate::crate_release_journal::JournalOperation::ReleaseCreated,
         ]
     );
     let journal_writes = input.journal.write_calls.get();

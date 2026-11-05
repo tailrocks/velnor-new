@@ -105,8 +105,8 @@ pub enum JournalOperation {
     ObservedPresent,
     Published,
     AlreadyVerified,
-    TagRepaired,
-    ReleaseRepaired,
+    TagCreated,
+    ReleaseCreated,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

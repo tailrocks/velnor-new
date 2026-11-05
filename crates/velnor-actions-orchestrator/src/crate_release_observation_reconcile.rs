@@ -72,8 +72,8 @@ fn verified_operations(
         }
         let operation = match mutation.kind {
             JournalMutationKind::Upload => JournalOperation::Published,
-            JournalMutationKind::CreateTag => JournalOperation::TagRepaired,
-            JournalMutationKind::CreateRelease => JournalOperation::ReleaseRepaired,
+            JournalMutationKind::CreateTag => JournalOperation::TagCreated,
+            JournalMutationKind::CreateRelease => JournalOperation::ReleaseCreated,
         };
         if !operations.contains(&operation) {
             operations.push(operation);
