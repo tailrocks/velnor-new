@@ -10,7 +10,7 @@ use velnor_actions_contract::workflow::cache_family::{
 use velnor_actions_contract::workflow::state_seal::{
     STATE_SEAL_PREDICATE_TYPE, state_attested_output,
 };
-use velnor_actions_contract::{Step, StepKind};
+use velnor_actions_contract::{JobTimeout, Step, StepKind};
 use velnor_actions_workflow_renderer::plan_sources::state_select::{SealRoot, state_select_step};
 
 use crate::gc1_scene::{Scene, fail};
@@ -353,7 +353,7 @@ pub(crate) fn select_script(root: &str) -> Result<String, Box<dyn Error>> {
         unit: StateUnit::Union,
         slug: RootSlug::from_root(root)?,
     };
-    script_of(&state_select_step(&[root])?)
+    script_of(&state_select_step(&[root], JobTimeout::PLAN)?)
 }
 
 pub(crate) fn run_select(

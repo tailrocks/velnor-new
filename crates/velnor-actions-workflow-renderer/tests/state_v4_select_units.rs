@@ -2,21 +2,18 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::error::Error;
-#[cfg(target_os = "linux")]
-use std::time::{Duration, Instant};
 
 use velnor_actions_contract::workflow::cache_family::StateUnit;
 use velnor_actions_contract::workflow::state_seal::{
-    STATE_SEAL_LIST_LIMIT, STATE_SEAL_SELECT_LIST_LIMIT, STATE_SEAL_SELECT_PARALLELISM,
+    STATE_SEAL_LIST_LIMIT, STATE_SEAL_SELECT_LIST_LIMIT, STATE_SEAL_SELECT_MAX_PARALLELISM,
     STATE_SEAL_VERIFY_LIMIT,
 };
 
 use crate::gc1_scene::{Scene, fail};
-use crate::gc1_seal_support::{Attestation, Gh, MAIN, REPO};
-#[cfg(target_os = "linux")]
-use crate::gc1_seal_units::hang_keys;
+use crate::gc1_seal_support::{Attestation, Gh, REPO};
 use crate::gc1_seal_units::{
-    produce_flag, rendezvous, run_select_units, selected_unit, unit_key, unit_scope,
+    at, expect, expect_flag, produce_flag, rendezvous, rows_of, run_select_units, selected_unit,
+    unit_key, unit_scope,
 };
 
 const T1: &str = "2026-11-04T01:00:00Z";
@@ -27,38 +24,6 @@ enum Kind {
     Attested,
     ForgedUnattested,
     ForgedSigner,
-}
-
-fn expect(got: &[String], want: &[String], label: &str) -> Result<(), Box<dyn Error>> {
-    if got == want {
-        Ok(())
-    } else {
-        Err(fail(&format!("{label}: selected {got:?}, wanted {want:?}")))
-    }
-}
-
-fn expect_flag(got: &str, want: &str, label: &str) -> Result<(), Box<dyn Error>> {
-    if got == want {
-        Ok(())
-    } else {
-        Err(fail(&format!("{label}: produce {got}, wanted {want}")))
-    }
-}
-
-fn at(second: usize) -> String {
-    let total = 86_399 - second;
-    format!(
-        "2026-11-04T{:02}:{:02}:{:02}Z",
-        total / 3600,
-        (total % 3600) / 60,
-        total % 60
-    )
-}
-
-fn rows_of(rows: &[(String, String)]) -> Vec<(&str, &str, &str)> {
-    rows.iter()
-        .map(|(created, key)| (created.as_str(), MAIN, key.as_str()))
-        .collect()
 }
 
 #[test]
@@ -75,14 +40,14 @@ fn plan_never_selects_another_units_attestation_for_a_forged_entry() -> Result<(
         (StateUnit::Suite, "a-b".to_owned(), Kind::ForgedSigner),
     ];
     let cycle = [Kind::Attested, Kind::ForgedUnattested, Kind::ForgedSigner];
-    for ordinal in 0..18 {
+    for ordinal in 0..35 {
         units.push((
             StateUnit::Union,
             format!("r{ordinal:02}"),
             cycle[ordinal % cycle.len()],
         ));
     }
-    if units.len() <= STATE_SEAL_SELECT_PARALLELISM {
+    if units.len() <= STATE_SEAL_SELECT_MAX_PARALLELISM {
         return Err(fail("the units must outnumber the parallelism"));
     }
 
@@ -117,7 +82,7 @@ fn plan_never_selects_another_units_attestation_for_a_forged_entry() -> Result<(
     }
     gh.list(&rows_of(&rows))?;
     gh.attest(&attested)?;
-    rendezvous(&gh, STATE_SEAL_SELECT_PARALLELISM)?;
+    rendezvous(&gh, STATE_SEAL_SELECT_MAX_PARALLELISM)?;
 
     let targets: Vec<(StateUnit, &str)> = units
         .iter()
@@ -234,67 +199,6 @@ fn plan_selects_nothing_when_the_listing_may_be_truncated_or_unavailable()
         std::slice::from_ref(&first),
         "listing restored",
     )?;
-    scene.finish()
-}
-
-#[test]
-#[cfg(target_os = "linux")]
-fn plan_gives_a_hung_unit_no_selection_and_leaves_the_others() -> Result<(), Box<dyn Error>> {
-    let scene = Scene::new("seal-select-hung", crate::gc1_t53::scripts()?)?;
-    let gh = Gh::install(&scene)?;
-    let units = [
-        (StateUnit::Union, "h"),
-        (StateUnit::Union, "."),
-        (StateUnit::Union, "a"),
-        (StateUnit::Suite, "a"),
-    ];
-    let verified = unit_key(StateUnit::Union, "h", 0, 0x1000, 1)?;
-    let hung = unit_key(StateUnit::Union, "h", 0, 0x1000, 2)?;
-    let behind = unit_key(StateUnit::Union, "h", 0, 0x1000, 3)?;
-    let mut rows = vec![
-        (at(0), verified.clone()),
-        (at(1), hung.clone()),
-        (at(2), behind.clone()),
-    ];
-    let mut attested = vec![
-        Attestation::signed(&verified),
-        Attestation::signed(&hung),
-        Attestation::signed(&behind),
-    ];
-    let mut wanted = vec![Vec::new()];
-    for (index, (unit, root)) in units.iter().enumerate().skip(1) {
-        let entry = unit_key(*unit, root, index as u64, 0x1000 + index as u64, 1)?;
-        rows.push((at(10 + index), entry.clone()));
-        attested.push(Attestation::signed(&entry));
-        wanted.push(vec![entry]);
-    }
-    gh.list(&rows_of(&rows))?;
-    gh.attest(&attested)?;
-    hang_keys(&gh, &[&hung])?;
-
-    let started = Instant::now();
-    run_select_units(
-        &scene,
-        &gh,
-        &units,
-        &[
-            ("VELNOR_STATE_GH_TIMEOUT", "30"),
-            ("VELNOR_STATE_UNIT_TIMEOUT", "3"),
-        ],
-    )?;
-    let elapsed = started.elapsed();
-    for (index, (unit, root)) in units.iter().enumerate() {
-        expect(
-            &selected_unit(&scene, *unit, root)?,
-            &wanted[index],
-            &format!("unit {root} with a hung neighbour"),
-        )?;
-    }
-    if elapsed > Duration::from_secs(8) {
-        return Err(fail(&format!(
-            "the hung unit held the step for {elapsed:?}"
-        )));
-    }
     scene.finish()
 }
 

@@ -58,6 +58,8 @@ mod state_v4_producer;
 mod state_v4_restore;
 mod state_v4_seal;
 mod state_v4_select;
+#[cfg(target_os = "linux")]
+mod state_v4_select_bounds;
 mod state_v4_select_units;
 mod state_v4_snapshot;
 mod state_v4_tip;

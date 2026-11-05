@@ -9,12 +9,13 @@ use velnor_actions_contract::workflow::cache_family::{
 };
 use velnor_actions_contract::workflow::state_seal::{
     STATE_SEAL_LIST_LIMIT, STATE_SEAL_LIST_TAB, STATE_SEAL_PREDICATE_TYPE,
-    STATE_SEAL_SELECT_LIST_LIMIT, STATE_SEAL_SELECT_PARALLELISM, STATE_SEAL_UNIT_TIMEOUT_ENV,
+    STATE_SEAL_SELECT_DEADLINE_DIVISOR, STATE_SEAL_SELECT_DEADLINE_ENV,
+    STATE_SEAL_SELECT_LIST_LIMIT, STATE_SEAL_SELECT_MAX_PARALLELISM, STATE_SEAL_UNIT_TIMEOUT_ENV,
     STATE_SEAL_UNIT_TIMEOUT_SECONDS, STATE_SEAL_VERIFY_LIMIT, STATE_SEAL_VERIFY_TIMEOUT_ENV,
     STATE_SEAL_VERIFY_TIMEOUT_SECONDS, STATE_SEAL_WORKFLOW_PATH, state_attested_output,
     state_compat_output, state_produce_output,
 };
-use velnor_actions_contract::{Step, StepId, StepRole};
+use velnor_actions_contract::{JobTimeout, Step, StepId, StepRole};
 
 use super::cache_keys::DEFAULT_REF_ENV;
 use crate::RenderError;
@@ -64,6 +65,7 @@ repo="${GITHUB_REPOSITORY:-}"
 signer="$repo/@SIGNER_PATH@"
 limit="${@TIMEOUT_ENV@:-@TIMEOUT@}"
 unit_limit="${@UNIT_TIMEOUT_ENV@:-@UNIT_TIMEOUT@}"
+deadline="${@DEADLINE_ENV@:-@DEADLINE@}"
 shape='^s256-[0-9a-f]{64}-s256-[0-9a-f]{64}-s256-[0-9a-f]{64}$'
 export d ref repo signer limit shape
 @RUN_GH@worker='@WORKER@'
@@ -78,7 +80,7 @@ select_all() {
   run_gh cache list -R "$repo" --key '@STATE_PREFIX@' --ref "$ref" --sort created_at --order desc --limit @SELECT_LIMIT@ --json key,createdAt,id,sizeInBytes --jq '.[] | [.createdAt, .key, (.id | tostring), (.sizeInBytes | tostring)] | @tsv' > "$d/list" 2>/dev/null || return 0
   awk -v m=@SELECT_LIMIT@ 'END { exit (NR >= m) }' "$d/list" || return 0
   LC_ALL=C sort -r "$d/list" > "$d/sorted" || return 0
-  if command -v timeout >/dev/null 2>&1; then xargs -P @PARALLELISM@ -n 2 timeout "$unit_limit" sh -c "$worker" sh < "$d/units" || :; else xargs -P @PARALLELISM@ -n 2 sh -c "$worker" sh < "$d/units" || :; fi
+  if command -v timeout >/dev/null 2>&1; then timeout "$deadline" xargs -P @PARALLELISM@ -n 2 timeout --foreground "$unit_limit" sh -c "$worker" sh < "$d/units" || :; else xargs -P @PARALLELISM@ -n 2 sh -c "$worker" sh < "$d/units" || :; fi
 }
 emit() {
   { printf '%s\n' "$1<<@DELIMITER@"; cat "$d/u-$2/out"; printf '%s\n' @DELIMITER@; } >> "$GITHUB_OUTPUT"
@@ -133,30 +135,56 @@ fn worker(outer_bound: u64) -> Result<String, RenderError> {
     Ok(crate::state_script::one_line(&script))
 }
 
-fn head(outer_bound: u64) -> Result<String, RenderError> {
+struct SelectBounds {
+    parallelism: usize,
+    unit_seconds: u64,
+    deadline_seconds: u64,
+}
+
+impl SelectBounds {
+    fn of(units: usize, plan_timeout: JobTimeout) -> Self {
+        let parallelism = units.clamp(1, STATE_SEAL_SELECT_MAX_PARALLELISM);
+        let batches = units.div_ceil(parallelism).max(1) as u64;
+        let deadline_seconds =
+            (u64::from(plan_timeout.minutes()) * 60 / STATE_SEAL_SELECT_DEADLINE_DIVISOR).max(1);
+        let unit_seconds = STATE_SEAL_UNIT_TIMEOUT_SECONDS
+            .min(deadline_seconds / batches)
+            .max(1);
+        Self {
+            parallelism,
+            unit_seconds,
+            deadline_seconds,
+        }
+    }
+}
+
+fn head(outer_bound: u64, bounds: &SelectBounds) -> Result<String, RenderError> {
     Ok(SELECT_HEAD
         .replace("@RUN_GH@", RUN_GH)
         .replace("@WORKER@", &worker(outer_bound)?)
         .replace("@TIMEOUT_ENV@", STATE_SEAL_VERIFY_TIMEOUT_ENV)
         .replace("@TIMEOUT@", &STATE_SEAL_VERIFY_TIMEOUT_SECONDS.to_string())
         .replace("@UNIT_TIMEOUT_ENV@", STATE_SEAL_UNIT_TIMEOUT_ENV)
-        .replace(
-            "@UNIT_TIMEOUT@",
-            &STATE_SEAL_UNIT_TIMEOUT_SECONDS.to_string(),
-        )
+        .replace("@UNIT_TIMEOUT@", &bounds.unit_seconds.to_string())
+        .replace("@DEADLINE_ENV@", STATE_SEAL_SELECT_DEADLINE_ENV)
+        .replace("@DEADLINE@", &bounds.deadline_seconds.to_string())
         .replace("@STATE_PREFIX@", &state_prune_prefix())
         .replace("@SELECT_LIMIT@", &STATE_SEAL_SELECT_LIST_LIMIT.to_string())
-        .replace("@PARALLELISM@", &STATE_SEAL_SELECT_PARALLELISM.to_string())
+        .replace("@PARALLELISM@", &bounds.parallelism.to_string())
         .replace("@DELIMITER@", OUTPUT_DELIMITER)
         .replace("@SIGNER_PATH@", STATE_SEAL_WORKFLOW_PATH))
 }
 
-pub fn state_select_step(roots: &[SealRoot]) -> Result<Step, RenderError> {
+pub fn state_select_step(
+    roots: &[SealRoot],
+    plan_timeout: JobTimeout,
+) -> Result<Step, RenderError> {
     let outer_bound = outer_entry_bound(CacheFamily::MbxBundle.spec().ceiling.stored())
         .ok_or_else(|| {
             RenderError::InvalidWorkflow("state_select:outer_bound_unbounded".to_owned())
         })?;
-    let mut sections = vec![head(outer_bound)?, DECIDE.to_owned()];
+    let bounds = SelectBounds::of(roots.len(), plan_timeout);
+    let mut sections = vec![head(outer_bound, &bounds)?, DECIDE.to_owned()];
     let mut env = BTreeMap::from([
         (DEFAULT_REF_ENV.to_owned(), DEFAULT_REF_EXPR.to_owned()),
         ("GH_TOKEN".to_owned(), TOKEN_EXPR.to_owned()),
@@ -166,7 +194,11 @@ pub fn state_select_step(roots: &[SealRoot]) -> Result<Step, RenderError> {
         ),
         (
             STATE_SEAL_UNIT_TIMEOUT_ENV.to_owned(),
-            STATE_SEAL_UNIT_TIMEOUT_SECONDS.to_string(),
+            bounds.unit_seconds.to_string(),
+        ),
+        (
+            STATE_SEAL_SELECT_DEADLINE_ENV.to_owned(),
+            bounds.deadline_seconds.to_string(),
         ),
     ]);
     let mut decisions = Vec::with_capacity(roots.len());

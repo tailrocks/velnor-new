@@ -4,14 +4,15 @@
 use std::error::Error;
 use std::path::PathBuf;
 
+use velnor_actions_contract::JobTimeout;
 use velnor_actions_contract::workflow::cache_family::{
     RootSlug, StateScope, StateTrust, StateUnit,
 };
 use velnor_actions_contract::workflow::state_seal::{state_attested_output, state_produce_output};
 use velnor_actions_workflow_renderer::plan_sources::state_select::{SealRoot, state_select_step};
 
-use crate::gc1_scene::Scene;
-use crate::gc1_seal_support::{Gh, OTHER_WORKFLOW_REF, REPO, script_of};
+use crate::gc1_scene::{Scene, fail};
+use crate::gc1_seal_support::{Gh, MAIN, OTHER_WORKFLOW_REF, REPO, script_of};
 
 #[cfg(target_os = "linux")]
 pub(crate) fn hang_keys(gh: &Gh, keys: &[&str]) -> Result<(), Box<dyn Error>> {
@@ -87,7 +88,7 @@ pub(crate) fn run_select_units(
             })
         })
         .collect::<Result<Vec<_>, Box<dyn Error>>>()?;
-    let script = script_of(&state_select_step(&roots)?)?;
+    let script = script_of(&state_select_step(&roots, JobTimeout::PLAN)?)?;
     let dir = gh.dir();
     let mut env: Vec<(String, String)> = vec![
         ("FAKE_GH_DIR".to_owned(), dir),
@@ -133,4 +134,36 @@ pub(crate) fn produce_flag(
 ) -> Result<String, Box<dyn Error>> {
     let slug = RootSlug::from_root(root)?;
     scene.output_value(&state_produce_output(unit.as_str(), slug.as_str()))
+}
+
+pub(crate) fn expect(got: &[String], want: &[String], label: &str) -> Result<(), Box<dyn Error>> {
+    if got == want {
+        Ok(())
+    } else {
+        Err(fail(&format!("{label}: selected {got:?}, wanted {want:?}")))
+    }
+}
+
+pub(crate) fn expect_flag(got: &str, want: &str, label: &str) -> Result<(), Box<dyn Error>> {
+    if got == want {
+        Ok(())
+    } else {
+        Err(fail(&format!("{label}: produce {got}, wanted {want}")))
+    }
+}
+
+pub(crate) fn at(second: usize) -> String {
+    let total = 86_399 - second;
+    format!(
+        "2026-11-04T{:02}:{:02}:{:02}Z",
+        total / 3600,
+        (total % 3600) / 60,
+        total % 60
+    )
+}
+
+pub(crate) fn rows_of(rows: &[(String, String)]) -> Vec<(&str, &str, &str)> {
+    rows.iter()
+        .map(|(created, key)| (created.as_str(), MAIN, key.as_str()))
+        .collect()
 }

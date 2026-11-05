@@ -109,8 +109,9 @@ pub fn plan_state_roots(
     };
     plan.steps.insert(at, rebuilt);
     if selecting {
-        let select = plan_sources::state_select::state_select_step(&seal.roots)
-            .map_err(NativeJobBuilderError::Render)?;
+        let select =
+            plan_sources::state_select::state_select_step(&seal.roots, plan.timeout_minutes)
+                .map_err(NativeJobBuilderError::Render)?;
         plan.steps.insert(at + 1, select);
         let mut permissions = plan
             .permissions
