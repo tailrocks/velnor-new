@@ -14,6 +14,13 @@ pub(super) fn check_creation_selection(
     selection: &ReleaseSelection,
 ) -> Result<(), OrchestratorError> {
     if let Some(creation) = &release.new_crates {
+        if creation.packages.len() != selection.packages.len() {
+            return Err(OrchestratorError::config(
+                CONFIG_REL,
+                "stacks.rust.release.new_crates.packages",
+                "creation_package_selection_mismatch",
+            ));
+        }
         for (name, version) in &creation.packages {
             if !selection
                 .packages
@@ -179,24 +186,5 @@ pub(super) fn reviewed_generator_manifest(
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn first_publication_is_dispatch_only() {
-        let plan = ReleasePlan {
-            plan_id: "test".into(),
-            repository: "owner/repo".into(),
-            source_sha: "a".repeat(40),
-            registry: "crates-io".into(),
-            packages: BTreeMap::new(),
-            version: None,
-            dispatch: true,
-        };
-        let creation = release_triggers("main", &plan, true);
-        assert!(creation.push_branches.is_empty());
-        assert!(!creation.dispatch_inputs.is_empty());
-        let recovery = release_triggers("main", &plan, false);
-        assert_eq!(recovery.push_branches, ["main"]);
-    }
-}
+#[path = "release_emit_plan_tests.rs"]
+mod tests;

@@ -219,3 +219,16 @@ fn release_config_rejects_unusable_admission_and_tag_settings()
     serde_json::from_value::<RustReleaseConfig>(input)?.validate("test")?;
     Ok(())
 }
+
+#[test]
+fn bootstrap_creation_cannot_include_undeclared_packages() -> Result<(), Box<dyn std::error::Error>>
+{
+    use velnor_actions_contract::config::RustReleaseConfig;
+    let input = serde_json::json!({"enabled":true,"registry":"crates-io","packages":["alpha","beta"],"required_workflow_path":".github/workflows/ci.yml","trusted_reviewer_id":1,"authentication":"bootstrap-token","new_crates":{"source_sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","packages":{"alpha":"0.1.0"}}});
+    assert!(
+        serde_json::from_value::<RustReleaseConfig>(input)?
+            .validate("test")
+            .is_err()
+    );
+    Ok(())
+}
