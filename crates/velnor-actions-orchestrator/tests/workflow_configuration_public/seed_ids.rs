@@ -238,12 +238,7 @@ fn assert_rendered_seed_routing(
         for (consumer_id, consumer) in consumers {
             let consumer_keys = mbx_bundle_key_envs(consumer);
             assert_eq!(consumer_keys.len(), 1);
-            let consumer_key_env = consumer_keys
-                .first()
-                .copied()
-                .ok_or_else(|| format!("consumer bundle key is missing for {relative_root}"))?;
             assert_seed_bundle_key_unit(consumer, &format!("slice-{consumer_id}"))?;
-            assert_eq!(unit_free(consumer_key_env), unit_free(seed_key_env));
             assert!(
                 consumer
                     .steps
@@ -267,20 +262,6 @@ fn mbx_bundle_key_envs(job: &Job) -> Vec<&BTreeMap<String, String>> {
             StepKind::Shell { env, .. } => Some(env),
             _ => None,
         })
-        .collect()
-}
-
-fn unit_free(env: &BTreeMap<String, String>) -> BTreeMap<&str, &str> {
-    env.iter()
-        .filter(|(name, _)| {
-            ![
-                "VELNOR_MBX_BUNDLE_UNIT",
-                "VELNOR_STATE_ATTESTED",
-                "VELNOR_STATE_SNAPSHOT",
-            ]
-            .contains(&name.as_str())
-        })
-        .map(|(name, value)| (name.as_str(), value.as_str()))
         .collect()
 }
 

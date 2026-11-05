@@ -79,6 +79,43 @@ fn holds(atom: &str, run: &Run<'_>, needs: &Needs) -> Result<bool, Box<dyn Error
     Ok((actual == value) == equals)
 }
 
+pub(super) fn eval_expr(
+    expr: &str,
+    leg: &str,
+    value: &dyn Fn(&str) -> String,
+) -> Result<String, Box<dyn Error>> {
+    let mut last = String::new();
+    for term in expr.split(" || ") {
+        let mut current = String::new();
+        for atom in term.split(" && ") {
+            current = if let Some(slice) = atom
+                .strip_prefix("matrix.slice == '")
+                .and_then(|rest| rest.strip_suffix('\''))
+            {
+                if slice == leg {
+                    "true".to_owned()
+                } else {
+                    String::new()
+                }
+            } else if atom == "''" {
+                String::new()
+            } else if atom.starts_with("steps.") || atom.starts_with("needs.") {
+                value(atom)
+            } else {
+                return Err(unmodelled(atom));
+            };
+            if current.is_empty() {
+                break;
+            }
+        }
+        if !current.is_empty() {
+            return Ok(current);
+        }
+        last = current;
+    }
+    Ok(last)
+}
+
 fn evaluates(
     condition: Option<&str>,
     run: &Run<'_>,
@@ -87,6 +124,17 @@ fn evaluates(
     let Some(condition) = condition else {
         return Ok(!run.failed);
     };
+    if let Some(lookup) = condition
+        .strip_prefix('(')
+        .and_then(|rest| rest.strip_suffix(") != ''"))
+    {
+        let leg = run
+            .leg
+            .as_deref()
+            .ok_or_else(|| unmodelled("a lookup outside a leg"))?;
+        let value = |atom: &str| needs_value(atom, needs);
+        return Ok(!run.failed && !eval_expr(lookup, leg, &value)?.is_empty());
+    }
     let atoms: Vec<&str> = condition.split(" && ").collect();
     let status = atoms
         .iter()
@@ -174,21 +222,64 @@ pub(super) fn simulate_leg(
     })
 }
 
+pub(super) fn needs_value(atom: &str, needs: &Needs) -> String {
+    atom.strip_prefix("needs.")
+        .and_then(|rest| rest.split_once(".outputs."))
+        .and_then(|(job, name)| needs.get(&(job.to_owned(), name.to_owned())))
+        .cloned()
+        .unwrap_or_default()
+}
+
+pub(super) fn producer_outputs(
+    producer_id: &str,
+    producer: &Job,
+    faults: &LegFaults,
+) -> Result<Needs, Box<dyn Error>> {
+    let mut merged = Needs::new();
+    for leg in legs_of(producer) {
+        let uploaded = simulate_leg(producer, &leg, faults)?.uploaded;
+        let value = |atom: &str| {
+            if uploaded && atom == "steps.state-seal-upload.outputs.artifact-id" {
+                format!("id-{leg}")
+            } else {
+                String::new()
+            }
+        };
+        for (name, expression) in &producer.outputs {
+            let inner = expression
+                .strip_prefix("${{ ")
+                .and_then(|rest| rest.strip_suffix(" }}"))
+                .ok_or_else(|| unmodelled(expression))?;
+            let output = eval_expr(inner, &leg, &value)?;
+            if !output.is_empty() {
+                merged.insert((producer_id.to_owned(), name.clone()), output);
+            }
+        }
+    }
+    Ok(merged)
+}
+
+pub(super) struct SealLeg<'a> {
+    pub(super) leg: &'a str,
+    pub(super) artifacts: &'a Needs,
+    pub(super) sealed: bool,
+    pub(super) admitted: bool,
+    pub(super) tip_current: bool,
+}
+
 pub(super) fn seal_steps_run(
     seal: &Job,
-    admitted: bool,
-    tip_current: bool,
+    leg: &SealLeg<'_>,
 ) -> Result<Vec<StepRole>, Box<dyn Error>> {
     let mut run = Run {
-        leg: None,
+        leg: Some(leg.leg.to_owned()),
         failed: false,
-        outputs: BTreeMap::from([(("state-seal-subject", "sealed"), "true")]),
+        outputs: BTreeMap::new(),
         outcomes: BTreeMap::new(),
     };
-    let none = Needs::new();
     let mut ran = Vec::new();
     for step in &seal.steps {
-        if !evaluates(step.condition.as_deref(), &run, &none)? {
+        if !evaluates(step.condition.as_deref(), &run, leg.artifacts)? {
             continue;
         }
         let Some(role) = step.role else {
@@ -196,16 +287,19 @@ pub(super) fn seal_steps_run(
         };
         ran.push(role);
         match role {
+            StepRole::StateSealDownload if leg.sealed => {
+                run.outputs.insert(("state-seal-subject", "sealed"), "true");
+            }
             StepRole::StateSealTip => {
                 run.outputs.insert(
                     ("state-seal-tip", "current"),
-                    if tip_current { "true" } else { "false" },
+                    if leg.tip_current { "true" } else { "false" },
                 );
             }
             StepRole::StateSealAdmit => {
                 run.outputs.insert(
                     ("state-seal-admit", "admitted"),
-                    if admitted { "true" } else { "false" },
+                    if leg.admitted { "true" } else { "false" },
                 );
             }
             StepRole::StateSealSave => {

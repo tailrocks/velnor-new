@@ -49,7 +49,7 @@ impl Admit {
         size: Option<u64>,
         pending_bytes: u64,
     ) -> Result<(bool, String), Box<dyn Error>> {
-        self.run_keyed(scene, gh, size, pending_bytes, &key('a', '1', '1')?)
+        self.run_keyed(scene, gh, size, (pending_bytes, 0), &key('a', '1', '1')?)
     }
 
     pub(crate) fn run_keyed(
@@ -57,7 +57,7 @@ impl Admit {
         scene: &Scene,
         gh: &Gh,
         size: Option<u64>,
-        pending_bytes: u64,
+        (pending_bytes, writer_bytes): (u64, u64),
         sealed: &str,
     ) -> Result<(bool, String), Box<dyn Error>> {
         let payload = scene.payload();
@@ -76,6 +76,7 @@ impl Admit {
         }
         let dir = gh.dir();
         let bytes = pending_bytes.to_string();
+        let writers = writer_bytes.to_string();
         let output = scene.run_script(
             &self.script,
             &[
@@ -86,7 +87,7 @@ impl Admit {
                 (STATE_SEAL_KEY_ENV, sealed),
                 ("GH_TOKEN", "fixture"),
                 (STATE_SEAL_PENDING_BYTES_ENV, bytes.as_str()),
-                (STATE_SEAL_WRITERS_BYTES_ENV, "0"),
+                (STATE_SEAL_WRITERS_BYTES_ENV, writers.as_str()),
             ],
             None,
         )?;
@@ -167,12 +168,6 @@ fn state_save_obeys_the_8e9_total() -> Result<(), Box<dyn Error>> {
         "a later eligible root does not fit",
         &["reserved=1616920640"],
     )?;
-    expect(
-        &admit.run(&scene, &gh, ceiling, 0)?,
-        true,
-        "a later root that is not eligible reserves nothing",
-        &["reserved=0"],
-    )?;
 
     scene.finish()
 }
@@ -230,6 +225,32 @@ fn an_unlistable_cache_refuses_the_save() -> Result<(), Box<dyn Error>> {
         false,
         "an unlistable cache refuses the save",
         &["existing_unlistable"],
+    )?;
+    scene.finish()
+}
+
+#[test]
+#[cfg(unix)]
+fn state_save_reserves_the_rendered_writers_bound() -> Result<(), Box<dyn Error>> {
+    const WRITERS: u64 = 1_744_830_464;
+    let scene = Scene::new("admit-writers", crate::gc1_t53::scripts()?)?;
+    let gh = Gh::install(&scene)?;
+    let admit = Admit::new()?;
+    let sealed = key('a', '1', '1')?;
+    let ceiling = Some(CEILING_FILE);
+    gh.usage(BUDGET - CEILING_BOUND - WRITERS)?;
+    expect(
+        &admit.run_keyed(&scene, &gh, ceiling, (0, WRITERS), &sealed)?,
+        true,
+        "the writers bound fits exactly",
+        &["reserved=1744830464"],
+    )?;
+    gh.usage(BUDGET - CEILING_BOUND - WRITERS + 1)?;
+    expect(
+        &admit.run_keyed(&scene, &gh, ceiling, (0, WRITERS), &sealed)?,
+        false,
+        "one byte over the writers bound",
+        &["over_budget usage=4638248897 bound=1616920640 reserved=1744830464"],
     )?;
     scene.finish()
 }

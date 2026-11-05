@@ -244,6 +244,15 @@ fn attest_job_binds_key_to_stored_file() -> Result<(), Box<dyn Error>> {
     assert_refused(&scene, &output, "empty file")?;
 
     reset_payload(&scene)?;
+    let output = run_subject(&scene, &job)?;
+    assert_refused(&scene, &output, "absent payload")?;
+    if !output.contains("state seal refused (payload_not_regular)") {
+        return Err(fail(&format!(
+            "an absent payload lost its reason: {output}"
+        )));
+    }
+
+    reset_payload(&scene)?;
     std::fs::write(scene.scratch.join("elsewhere"), FIXTURE)?;
     std::os::unix::fs::symlink(scene.scratch.join("elsewhere"), scene.payload())?;
     let output = run_subject(&scene, &job)?;
@@ -336,6 +345,29 @@ fn recover_takes_only_the_key_plan_selected() -> Result<(), Box<dyn Error>> {
     scene.recover_selected(&bound, &bound, &[], None)?;
     if scene.store_files()?.is_empty() || !scene.recovery_record().exists() {
         return Err(fail("the entry plan selected was not imported"));
+    }
+    scene.finish()
+}
+
+#[test]
+#[cfg(unix)]
+fn the_seal_leg_clears_a_stale_payload_before_it_downloads() -> Result<(), Box<dyn Error>> {
+    let job = seal_job()?;
+    let roles: Vec<StepRole> = job.steps.iter().filter_map(|step| step.role).collect();
+    if roles.get(..2) != Some(&[StepRole::StateSealClear, StepRole::StateSealDownload][..]) {
+        return Err(fail(&format!(
+            "the clear does not precede the download: {roles:?}"
+        )));
+    }
+    let StepKind::Shell { run, .. } = &step_of(&job, StepRole::StateSealClear)?.kind else {
+        return Err(fail("the clear step is not a shell step"));
+    };
+    let scene = Scene::new("seal-clear", crate::gc1_t53::scripts()?)?;
+    reset_payload(&scene)?;
+    std::fs::write(scene.payload(), b"bytes another job left behind")?;
+    scene.run_script(run.get(2).ok_or_else(|| fail("no script"))?, &[], None)?;
+    if std::fs::symlink_metadata(scene.payload()).is_ok() {
+        return Err(fail("a stale payload survived the clear step"));
     }
     scene.finish()
 }

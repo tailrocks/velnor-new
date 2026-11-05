@@ -5,10 +5,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
 
 use velnor_actions_contract::workflow::ProducerKind;
+use velnor_actions_contract::workflow::state_seal::STATE_SEAL_JOB_ID;
 use velnor_actions_contract::workflow::state_seal::STATE_SEAL_WORKFLOW_PATH;
-use velnor_actions_contract::workflow::state_seal::{
-    STATE_SEAL_JOB_ID, STATE_SEAL_MAX_PARALLEL, state_producer_lane_slice,
-};
 use velnor_actions_contract::{
     CacheAccess, Job, PermissionLevel, Permissions, REQUIRED_JOB_ID, Step, StepKind, StepRole,
     WorkflowIr,
@@ -162,11 +160,6 @@ fn producer_runs_the_crate_job_lane_records() -> Result<(), Box<dyn Error>> {
         for step in &producer.steps {
             if let StepKind::TaskExecution { task_id, .. } = &step.kind {
                 assert!(ids.contains(task_id), "{root}: foreign task {task_id}");
-                let gated = step
-                    .condition
-                    .as_deref()
-                    .and_then(state_producer_lane_slice);
-                assert!(gated.is_some(), "{root}: a lane is not gated to its slice");
             }
         }
         let uploads = producer
@@ -228,14 +221,6 @@ fn writers_are_chained_by_needs_without_concurrency() -> Result<(), Box<dyn Erro
             "{writer} -> {STATE_SEAL_JOB_ID}"
         );
     }
-    assert_eq!(
-        job(&built.jobs, STATE_SEAL_JOB_ID)?
-            .matrix
-            .as_ref()
-            .map(|matrix| matrix.max_parallel),
-        Some(STATE_SEAL_MAX_PARALLEL),
-        "the seal legs must run one at a time"
-    );
     for (producer, seal) in ROOTS {
         assert!(
             job(&built.jobs, seal)?
@@ -357,5 +342,42 @@ fn a_failed_producer_lane_or_a_refused_export_uploads_no_payload() -> Result<(),
             "{leg}: a refused export was uploaded"
         );
     }
+    Ok(())
+}
+
+#[test]
+fn the_seal_legs_run_one_at_a_time_and_reserve_the_writers_bound() -> Result<(), Box<dyn Error>> {
+    let built = build()?;
+    let seal = job(&built.jobs, STATE_SEAL_JOB_ID)?;
+    assert_eq!(
+        seal.matrix.as_ref().map(|matrix| matrix.max_parallel),
+        Some(1),
+        "the seal legs must run one at a time"
+    );
+    let block = rendered_job_block(text_of(&built, STATE_SEAL_JOB_ID), STATE_SEAL_JOB_ID)?;
+    assert!(
+        block.contains("    strategy:\n      fail-fast: false\n      max-parallel: 1\n"),
+        "{block}"
+    );
+    for (producer, _) in ROOTS {
+        assert!(
+            rendered_job_block(text_of(&built, producer), producer)?
+                .contains("    strategy:\n      fail-fast: false\n      max-parallel: 2\n"),
+            "{producer}: its legs must not cancel each other"
+        );
+    }
+    let reserve = seal
+        .steps
+        .iter()
+        .find(|step| step.role == Some(StepRole::StateSealAdmit))
+        .and_then(|step| match &step.kind {
+            StepKind::Shell { env, .. } => env.get("VELNOR_STATE_WRITERS_BYTES").cloned(),
+            _ => None,
+        });
+    assert_eq!(
+        reserve.as_deref(),
+        Some("1744830464"),
+        "the admission reserve lost the sources and tools bounds"
+    );
     Ok(())
 }

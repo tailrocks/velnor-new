@@ -159,6 +159,10 @@ mod state_seal_workflow;
 mod state_skeleton_isolation;
 #[path = "workflow_configuration_public/state_skeleton_rig.rs"]
 mod state_skeleton_rig;
+#[path = "workflow_configuration_public/state_slices.rs"]
+mod state_slices;
+#[path = "workflow_configuration_public/state_slices_closure.rs"]
+mod state_slices_closure;
 #[path = "workflow_configuration_public/support.rs"]
 mod support;
 #[path = "workflow_configuration_public/timeouts.rs"]

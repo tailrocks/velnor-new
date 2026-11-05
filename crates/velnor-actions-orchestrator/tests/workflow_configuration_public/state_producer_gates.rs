@@ -1,15 +1,56 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeMap;
 use std::error::Error;
 
+use velnor_actions_contract::workflow::state_seal::STATE_SEAL_JOB_ID;
 use velnor_actions_contract::{Job, Step, StepRole};
 
-use super::state_producer::{ROOTS, build, job, text_of};
+use super::state_producer::{Built, ROOTS, build, job, text_of};
 use super::state_producer_eval::{
-    HEALTHY, LegFaults, legs_of, seal_steps_run, simulate_leg, writer_roles_run,
+    HEALTHY, LegFaults, SealLeg, legs_of, producer_outputs, seal_steps_run, simulate_leg,
+    writer_roles_run,
 };
 use super::support::rendered_job_block;
+
+type Artifacts = BTreeMap<(String, String), String>;
+
+fn artifacts(
+    built: &Built,
+    faults: &LegFaults,
+) -> Result<(Vec<String>, Artifacts), Box<dyn Error>> {
+    let mut legs = Vec::new();
+    let mut merged = Artifacts::new();
+    for (producer_id, _) in ROOTS {
+        let producer = job(&built.jobs, producer_id)?;
+        legs.extend(legs_of(producer));
+        merged.extend(producer_outputs(producer_id, producer, faults)?);
+    }
+    Ok((legs, merged))
+}
+
+fn healthy<'a>(
+    leg: &'a str,
+    artifacts: &'a Artifacts,
+    admitted: bool,
+    tip_current: bool,
+) -> SealLeg<'a> {
+    SealLeg {
+        leg,
+        artifacts,
+        sealed: true,
+        admitted,
+        tip_current,
+    }
+}
+
+const WRITES: [StepRole; 4] = [
+    StepRole::StateSealSave,
+    StepRole::StateSealBind,
+    StepRole::StateSealAttest,
+    StepRole::StateSealRetire,
+];
 
 #[test]
 fn a_seal_job_with_retire_before_save_or_attest_is_refused() -> Result<(), Box<dyn Error>> {
@@ -90,7 +131,9 @@ fn a_refused_admit_leaves_save_bind_and_attest_unrun() -> Result<(), Box<dyn Err
     let built = build()?;
     let (_, seal_id) = ROOTS[0];
     let seal = job(&built.jobs, seal_id)?;
-    let admitted = seal_steps_run(seal, true, true)?;
+    let (legs, artifacts) = artifacts(&built, &HEALTHY)?;
+    let leg = legs.first().ok_or("no seal leg")?;
+    let admitted = seal_steps_run(seal, &healthy(leg, &artifacts, true, true))?;
     for role in [
         StepRole::StateSealSave,
         StepRole::StateSealBind,
@@ -99,7 +142,7 @@ fn a_refused_admit_leaves_save_bind_and_attest_unrun() -> Result<(), Box<dyn Err
     ] {
         assert!(admitted.contains(&role), "an admitted run skipped {role:?}");
     }
-    let refused = seal_steps_run(seal, false, true)?;
+    let refused = seal_steps_run(seal, &healthy(leg, &artifacts, false, true))?;
     assert!(refused.contains(&StepRole::StateSealAdmit));
     for role in [
         StepRole::StateSealSave,
@@ -118,9 +161,11 @@ fn a_refused_admit_leaves_save_bind_and_attest_unrun() -> Result<(), Box<dyn Err
 #[test]
 fn a_stale_head_saves_binds_and_attests_nothing() -> Result<(), Box<dyn Error>> {
     let built = build()?;
-    for (_, seal_id) in ROOTS {
+    let (legs, artifacts) = artifacts(&built, &HEALTHY)?;
+    for leg in &legs {
+        let seal_id = STATE_SEAL_JOB_ID;
         let seal = job(&built.jobs, seal_id)?;
-        let current = seal_steps_run(seal, true, true)?;
+        let current = seal_steps_run(seal, &healthy(leg, &artifacts, true, true))?;
         for role in [
             StepRole::StateSealTip,
             StepRole::StateSealAdmit,
@@ -134,7 +179,7 @@ fn a_stale_head_saves_binds_and_attests_nothing() -> Result<(), Box<dyn Error>> 
                 "{seal_id}: a current head skipped {role:?}"
             );
         }
-        let stale = seal_steps_run(seal, true, false)?;
+        let stale = seal_steps_run(seal, &healthy(leg, &artifacts, true, false))?;
         assert!(stale.contains(&StepRole::StateSealTip), "{seal_id}");
         for role in [
             StepRole::StateSealAdmit,
@@ -221,5 +266,63 @@ fn a_stale_head_stops_the_sources_and_tools_writers_before_they_fetch_or_save()
             );
         }
     }
+    Ok(())
+}
+
+#[test]
+fn a_seal_leg_without_its_own_payload_saves_binds_attests_and_retires_nothing()
+-> Result<(), Box<dyn Error>> {
+    let built = build()?;
+    let seal = job(&built.jobs, STATE_SEAL_JOB_ID)?;
+    let (legs, _) = artifacts(&built, &HEALTHY)?;
+    for faults in [
+        LegFaults {
+            failing: Some(0),
+            ..HEALTHY
+        },
+        LegFaults {
+            refuse_export: true,
+            ..HEALTHY
+        },
+        LegFaults {
+            stale_tip: true,
+            ..HEALTHY
+        },
+    ] {
+        let (_, artifacts) = artifacts(&built, &faults)?;
+        for leg in &legs {
+            let ran = seal_steps_run(seal, &healthy(leg, &artifacts, true, true))?;
+            assert!(
+                !ran.contains(&StepRole::StateSealDownload),
+                "{leg}: a leg whose producer uploaded nothing downloaded a payload"
+            );
+            for role in WRITES {
+                assert!(!ran.contains(&role), "{leg}: no payload and {role:?} ran");
+            }
+        }
+    }
+    let (_, artifacts) = artifacts(&built, &HEALTHY)?;
+    for leg in &legs {
+        let refused = SealLeg {
+            sealed: false,
+            ..healthy(leg, &artifacts, true, true)
+        };
+        let ran = seal_steps_run(seal, &refused)?;
+        for role in WRITES {
+            assert!(
+                !ran.contains(&role),
+                "{leg}: an unsealed payload and {role:?} ran"
+            );
+        }
+    }
+    let block = rendered_job_block(text_of(&built, STATE_SEAL_JOB_ID), STATE_SEAL_JOB_ID)?;
+    let download = block
+        .split("      - name: ")
+        .find(|step| step.starts_with("Download sealed payload\n"))
+        .ok_or("the rendered seal job lost its download")?;
+    assert!(
+        download.contains("\n        continue-on-error: true\n"),
+        "a missing artifact fails the seal leg: {download}"
+    );
     Ok(())
 }
