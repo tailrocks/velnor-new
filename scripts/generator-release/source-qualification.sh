@@ -522,7 +522,7 @@ fetch_manifest() {
       fetch_modes+=("$manifest:offline")
       return 0
     fi
-    if ! discard_restored_sources "$manifest"; then
+    if [ "${SOURCES_CACHE_HIT:-}" = true ] && ! discard_restored_sources "$manifest"; then
       fetch_modes+=("$manifest:failed")
       return 1
     fi

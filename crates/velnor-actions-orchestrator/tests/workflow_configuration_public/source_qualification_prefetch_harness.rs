@@ -168,10 +168,12 @@ pub(super) fn run_prefetch(
         for restored in ["registry/index", "registry/cache", "git/db"] {
             fs::create_dir_all(cargo_home.join(restored))?;
         }
-        fs::write(
-            cargo_home.join("registry/cache/corrupt.crate"),
-            "not a crate",
-        )?;
+        let archive = if scenario.cache_hit == "true" {
+            "corrupt.crate"
+        } else {
+            "older.crate"
+        };
+        fs::write(cargo_home.join("registry/cache").join(archive), "restored")?;
     }
     let stub = stubs.join("mise");
     fs::write(&stub, CARGO_STUB)?;

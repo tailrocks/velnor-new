@@ -113,10 +113,12 @@ fn warnings(outcome: &Outcome) -> Vec<&str> {
         .collect()
 }
 
+const PRESENT: &str = "registry/index=present registry/cache=present git/db=present";
 const ABSENT: &str = "registry/index=absent registry/cache=absent git/db=absent";
 
 #[test]
-fn a_prefix_hit_that_fails_offline_is_discarded_and_fetched_cold() -> Result<(), Box<dyn Error>> {
+fn a_prefix_hit_that_fails_offline_fetches_the_delta_over_the_restored_sources()
+-> Result<(), Box<dyn Error>> {
     let outcome = run(&scenario(
         "false",
         "velnor-v2-sources-trusted-older",
@@ -130,10 +132,18 @@ fn a_prefix_hit_that_fails_offline_is_discarded_and_fetched_cold() -> Result<(),
         [
             format!("offline {ROOT_MANIFEST}"),
             format!("network {ROOT_MANIFEST}"),
+            format!("offline {RUNNER_MANIFEST}"),
             format!("network {RUNNER_MANIFEST}"),
         ]
     );
     assert_eq!(outcome.network_calls, 2);
+    assert_eq!(
+        outcome.network_sightings,
+        [
+            format!("{ROOT_MANIFEST} {PRESENT}"),
+            format!("{RUNNER_MANIFEST} {PRESENT}"),
+        ]
+    );
     assert_eq!(
         outcome.fetch_modes(),
         [
@@ -143,18 +153,45 @@ fn a_prefix_hit_that_fails_offline_is_discarded_and_fetched_cold() -> Result<(),
     );
     assert_eq!(outcome.field("downloaded_crates"), Some("4"));
     assert_eq!(outcome.field("exact_hit_network_fetch"), None);
+    assert_eq!(outcome.field("restored_sources_discarded"), None);
+    assert!(warnings(&outcome).is_empty(), "{}", outcome.stdout);
+    Ok(())
+}
+
+#[test]
+fn a_mixed_prefix_restore_fetches_each_manifest_by_its_own_outcome() -> Result<(), Box<dyn Error>> {
+    let outcome = run(&scenario(
+        "false",
+        "velnor-v2-sources-trusted-older",
+        &[ROOT_MANIFEST],
+        &[],
+    ))?;
+    assert_eq!(outcome.status, Some(0), "{}", outcome.stdout);
+    assert_every_call_is_locked(&outcome);
     assert_eq!(
-        outcome.field("restored_sources_discarded"),
-        Some(ROOT_MANIFEST)
+        outcome.sequence(),
+        [
+            format!("offline {ROOT_MANIFEST}"),
+            format!("offline {RUNNER_MANIFEST}"),
+            format!("network {RUNNER_MANIFEST}"),
+        ]
     );
-    assert_eq!(warnings(&outcome).len(), 1, "{}", outcome.stdout);
+    assert_eq!(
+        outcome.fetch_modes(),
+        [
+            format!("{ROOT_MANIFEST}:offline"),
+            format!("{RUNNER_MANIFEST}:network")
+        ]
+    );
+    assert_eq!(outcome.field("restored_sources_discarded"), None);
+    assert_eq!(outcome.field("downloaded_crates"), Some("2"));
     Ok(())
 }
 
 #[test]
 fn a_corrupt_restored_entry_is_removed_before_the_network_retry() -> Result<(), Box<dyn Error>> {
     let outcome = run(&scenario(
-        "false",
+        "true",
         "velnor-v2-sources-trusted-older",
         &[],
         &[],
@@ -185,7 +222,7 @@ fn a_corrupt_restored_entry_is_removed_before_the_network_retry() -> Result<(), 
 fn discarding_the_restore_refetches_what_was_already_fetched_offline() -> Result<(), Box<dyn Error>>
 {
     let outcome = run(&scenario(
-        "false",
+        "true",
         "velnor-v2-sources-trusted-older",
         &[ROOT_MANIFEST],
         &[],
