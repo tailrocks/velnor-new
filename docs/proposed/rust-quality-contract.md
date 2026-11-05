@@ -70,7 +70,7 @@ The `velnor-actions` binary is owned by package `velnor-actions-cli`. Future sta
 
 | Crate | MUST own | MUST NOT own |
 | --- | --- | --- |
-| `velnor-actions-contract` | Stack-neutral workflow/task contracts, task graph, identities, reports, recommendations | Rust/Cargo, Mise, process, filesystem, YAML implementation, CLI, generic application models |
+| `velnor-actions-contract` | Stack-neutral workflow/task contracts, task graph, identities, reports, recommendations; the ledger helper's file I/O and run-key environment reads (`exclusive_write.rs`, `staged_reads.rs`, `run_key_env.rs`), so the ledger CLI build (`--no-default-features --features ledger-helper`) depends on this crate only | Rust/Cargo, Mise, process, filesystem access other than the ledger helper's file I/O, YAML implementation, CLI, generic application models |
 | `velnor-actions-rust` | All Rust/Cargo discovery, metadata conversion, targets, graph, affected selection, Rust task proposals, `rust-toolchain.toml` inspection | Mise config/commands, workflow YAML, process execution, or non-Rust stack behavior |
 | `velnor-actions-mise` | Mise tool selection, pinned command construction, fixed subprocess/environment wrapper, `mise.toml`/`mise.lock` inspection, Mise cache integration | Cargo metadata, Rust graph/selection rules, `rust-toolchain.toml`, GitHub YAML, stack discovery |
 | `velnor-actions-actionlint` | jactionlint pin/capability metadata, generated config, action-schema validation | Mise process execution, stack scanning, generic workflow rendering |
