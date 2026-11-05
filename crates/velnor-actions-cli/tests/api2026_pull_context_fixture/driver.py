@@ -170,8 +170,9 @@ def main():
     targets = {
         "cli": ("velnor-actions-cli", "api2026_pull_context_public"),
         "task_report": ("velnor-actions-orchestrator", "task_report_public"),
+        "preview": ("velnor-actions-cli", "preview_source_selection_public"),
     }
-    if kind not in targets or (kind == "task_report" and test != "shared_job_artifact_is_downloaded_once") or (kind == "cli" and test == "shared_job_artifact_is_downloaded_once"):
+    if kind not in targets or (kind == "task_report" and test != "shared_job_artifact_is_downloaded_once") or (kind == "preview" and test != "public_preview_selection_uses_sha_media_and_preserves_parent_proofs") or (kind == "cli" and test in ("shared_job_artifact_is_downloaded_once", "public_preview_selection_uses_sha_media_and_preserves_parent_proofs")):
         raise RuntimeError("fixture scenario does not belong to target")
     package, test_target = targets[kind]
     if not test or any(c not in "abcdefghijklmnopqrstuvwxyz_" for c in test):
