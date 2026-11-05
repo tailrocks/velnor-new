@@ -10,8 +10,7 @@ mod cutover;
 #[path = "tap_merge_initialized.rs"]
 mod initialized;
 pub(crate) use cutover::{CutoverInput, observe_cutover_initialization};
-#[path = "tap_merge_feedback.rs"]
-mod feedback;
+
 #[path = "tap_merge_github.rs"]
 mod github;
 #[path = "tap_merge_history.rs"]

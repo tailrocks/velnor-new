@@ -190,3 +190,13 @@ fn parse_included_response(bytes: &[u8]) -> Result<ApiResponse, OrchestratorErro
         body: body.as_bytes().to_vec(),
     })
 }
+
+impl crate::github_review_feedback::FeedbackRead for TapMergeGitHub {
+    fn feedback_get(&self, route: &str) -> Result<serde_json::Value, OrchestratorError> {
+        self.get(route)
+    }
+
+    fn feedback_graphql(&self, query: crate::github_review_feedback::FeedbackQuery, fields: &[(&str, String)]) -> Result<serde_json::Value, OrchestratorError> {
+        self.graphql(query.query(), fields)
+    }
+}

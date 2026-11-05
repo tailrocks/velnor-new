@@ -2,17 +2,17 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{
-    FeedbackContext, MAX_FEEDBACK_RECORDS, TapMergeGitHub, Value, internal, paged_commit_comments,
+    FeedbackContext, FeedbackRead, MAX_FEEDBACK_RECORDS, Value, internal, paged_commit_comments,
     paged_values,
 };
 use crate::OrchestratorError;
 use std::collections::BTreeSet;
 
 pub(super) fn inventory(
-    api: &TapMergeGitHub,
+    api: &dyn FeedbackRead,
     context: &FeedbackContext<'_>,
 ) -> Result<Vec<String>, OrchestratorError> {
-    let pull: Value = api.get(&format!(
+    let pull: Value = api.feedback_get(&format!(
         "repos/{}/pulls/{}",
         context.repository, context.pull_request_number
     ))?;
@@ -57,7 +57,7 @@ pub(super) fn inventory(
 }
 
 pub(super) fn comments(
-    api: &TapMergeGitHub,
+    api: &dyn FeedbackRead,
     repository: &str,
     commits: &[String],
 ) -> Result<Vec<Value>, OrchestratorError> {
@@ -81,11 +81,11 @@ pub(super) fn comments(
 }
 
 pub(super) fn require_head(
-    api: &TapMergeGitHub,
+    api: &dyn FeedbackRead,
     context: &FeedbackContext<'_>,
     count: usize,
 ) -> Result<(), OrchestratorError> {
-    let pull: Value = api.get(&format!(
+    let pull: Value = api.feedback_get(&format!(
         "repos/{}/pulls/{}",
         context.repository, context.pull_request_number
     ))?;

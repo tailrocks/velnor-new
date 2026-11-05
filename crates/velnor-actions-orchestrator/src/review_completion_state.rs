@@ -1,11 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::github_review_feedback::{CapturedFeedback, FeedbackContext};
 use velnor_actions_contract::staged_reads::read_staged_bytes_until;
-use super::super::{
-    feedback::{CapturedFeedback, FeedbackContext},
-    github::TapMergeGitHub,
-};
+use super::super::github::TapMergeGitHub;
 use crate::{OrchestratorError, internal::internal};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -175,7 +173,7 @@ pub(super) fn feedback(
     head: &str,
 ) -> Result<CapturedFeedback, OrchestratorError> {
     let reviewers = BTreeSet::from([PROVIDER_APP]);
-    super::super::feedback::capture_feedback(
+    crate::github_review_feedback::capture_feedback(
         &operation.api,
         &FeedbackContext {
             repository: &operation.policy.repository,

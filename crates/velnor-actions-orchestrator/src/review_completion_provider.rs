@@ -1,10 +1,11 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::github_review_feedback::FeedbackRecords;
 #[path = "review_completion_time.rs"]
 mod time;
 use super::{
-    super::{feedback::FeedbackRecords, github::TapMergeGitHub},
+    super::github::TapMergeGitHub,
     state::{CompletionState, PROVIDER_APP, PROVIDER_BOT, PROVIDER_OWNER},
 };
 use crate::{OrchestratorError, internal::internal};

@@ -1,7 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use super::super::super::{feedback::FeedbackRecords, github::TapMergeGitHub};
+use crate::github_review_feedback::FeedbackRecords;
+use super::super::super::github::TapMergeGitHub;
 use super::time;
 use crate::{OrchestratorError, internal::internal};
 use serde_json::{Value, json};
