@@ -11,6 +11,8 @@ import subprocess
 import sys
 import urllib.request
 
+from evidence import read_bounded, write_evidence
+
 mode = sys.argv[1] if len(sys.argv) > 1 else "success"
 env = os.environ.copy()
 coordinate = mode.startswith("coordinate")
@@ -198,7 +200,7 @@ try:
         state = json.load(response)
     if mode in ("coordinate", "coordinate-crash"):
         assert state["uploads"] == 1
-        packed = (runner / "fixture-package/package" / f"{info['package']}-{info['version']}.crate").read_bytes()
+        packed = read_bounded(runner / "fixture-package/package" / f"{info['package']}-{info['version']}.crate", 100 * 1024 * 1024)
         assert state["published_sha256"] == hashlib.sha256(packed).hexdigest()
         assert state["release"]["tag_name"] == f"{info['package']}-v{info['version']}"
         assert state["refs"][f"refs/tags/{info['package']}-v{info['version']}"] == info["source_sha"]
@@ -210,6 +212,12 @@ try:
         assert counts["oidc"] == counts["exchange"] == 1
         if mode == "coordinate":
             assert counts["revoke"] == 1
+            destination = os.environ.get("VELNOR_NATIVE_FIXTURE_EVIDENCE")
+            if destination:
+                supplied_intent = os.environ.get("VELNOR_FIXTURE_SUPPLIED_INTENT")
+                if not supplied_intent:
+                    raise ValueError("fixture evidence requires a supplied intent")
+                write_evidence(destination, runner, pathlib.Path("/src"), supplied_intent, info, state, counts, packed)
     elif mode == "coordinate-corrupt-git":
         assert state["uploads"] == 0
         assert state["mutations"] == 0

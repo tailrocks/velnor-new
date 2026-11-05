@@ -261,3 +261,12 @@
         );
         assert!(result.is_err());
     }
+
+    #[test]
+    fn native_fixture_evidence_binds_observed_inputs() -> Result<(), Box<dyn std::error::Error>> {
+        let script = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/fixtures/native_candidate/test_evidence.py");
+        let status = std::process::Command::new("python3").arg("-B").arg(script).status()?;
+        assert!(status.success());
+        Ok(())
+    }
