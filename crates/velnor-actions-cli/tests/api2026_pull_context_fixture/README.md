@@ -7,6 +7,25 @@ Linux executables pinned in `tools.json`, and an offline Cargo registry. CI prep
 `gh_linux_amd64` or `gh_linux_arm64` and `cargo-nextest_linux_amd64` or
 `cargo-nextest_linux_arm64` executables. Missing inputs fail the tests.
 
+For a local macOS ARM host, create a private directory and download the Linux
+ARM64 archives for the `gh_version` and `nextest_version` in `tools.json` from
+[GitHub CLI releases](https://github.com/cli/cli/releases) and
+[nextest releases](https://github.com/nextest-rs/nextest/releases). Select
+`gh_<version>_linux_arm64.tar.gz` and
+`cargo-nextest-<version>-aarch64-unknown-linux-gnu.tar.gz`. Before extracting,
+compare each `shasum -a 256` result to `gh_archive_sha256` or
+`nextest_archive_sha256` under `aarch64` in `tools.json`. Extract only
+`gh_<version>_linux_arm64/bin/gh` and `cargo-nextest` into the private directory,
+name them `gh_linux_arm64` and `cargo-nextest_linux_arm64`, and compare their
+SHA-256 values with `gh_sha256` and `nextest_sha256` in the same record. Set
+`VELNOR_GH_FIXTURE_TOOLS` to that directory. Do not use the macOS executables.
+
+Pull the exact `image` digest from `tools.json` with Docker before running the
+tests, and prepare the locked Cargo registry with `cargo fetch --locked` on the
+host. The worker uses the selected image and registry with `--network=none`;
+missing inputs fail rather than skipping coverage. Other host architectures use
+the corresponding `tools.json` record and Linux archive names.
+
 The client, local daemon, application installation and host operating system are
 trusted. The fixture rejects Docker endpoint overrides and requires a local
 Unix socket, but it does not defend against a compromised host or daemon. The
