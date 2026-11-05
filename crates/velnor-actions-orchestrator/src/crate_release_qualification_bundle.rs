@@ -8,13 +8,21 @@ use crate::crate_release_qualification_witness::{
 };
 use std::io::{Cursor, Read};
 
-#[derive(Debug)]
 pub struct MetadataEvidence {
     bytes: Vec<u8>,
     source_sha: String,
     source_tree_sha: String,
     source_archive_sha256: String,
     metadata: velnor_actions_contract::config::ReleaseRehearsalMetadataConfig,
+}
+
+impl std::fmt::Debug for MetadataEvidence {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("MetadataEvidence")
+            .field("bytes", &self.bytes.len())
+            .finish_non_exhaustive()
+    }
 }
 
 impl MetadataEvidence {
