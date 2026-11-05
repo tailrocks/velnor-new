@@ -37,8 +37,7 @@ pub(super) fn unmanaged_notices(
     if github.unmanaged == UnmanagedPolicy::Allow {
         return Ok(Vec::new());
     }
-    let entries =
-        super::unmanaged::list(&prep.root, &prep.config.workflow.preserve_workflows, github)?;
+    let entries = super::unmanaged::list(&prep.root, github)?;
     if entries.is_empty() {
         return Ok(Vec::new());
     }

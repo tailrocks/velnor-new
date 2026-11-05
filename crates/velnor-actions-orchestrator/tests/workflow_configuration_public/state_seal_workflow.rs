@@ -10,7 +10,7 @@ use std::process::Command;
 use serde_json::{Value, json};
 use velnor_actions_contract::workflow::ProducerKind;
 use velnor_actions_contract::workflow::state_seal::STATE_SEAL_WORKFLOW_PATH;
-use velnor_actions_contract::{RustSuiteConfig, validate_preserve_workflows, validate_rust_suites};
+use velnor_actions_contract::{RustSuiteConfig, validate_rust_suites};
 use velnor_actions_orchestrator::{finalized_jobs, prepare, render_staged_tree};
 use velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
 
@@ -373,7 +373,7 @@ fn a_ci_named_state_seal_does_not_share_the_seal_concurrency_group() -> Result<(
 }
 
 #[test]
-fn a_suite_or_preserved_workflow_cannot_take_the_state_seal_name() {
+fn a_suite_cannot_take_the_state_seal_name() {
     let mut suite = RustSuiteConfig::new("project-check", "default");
     suite.workflow = Some("state-seal".to_owned());
     let error = validate_rust_suites(&[suite], ".velnor/config.toml")
@@ -382,18 +382,6 @@ fn a_suite_or_preserved_workflow_cannot_take_the_state_seal_name() {
         error
             .to_string()
             .contains("reserved_suite_workflow:state-seal"),
-        "{error}"
-    );
-    let error = validate_preserve_workflows(
-        &[STATE_SEAL_WORKFLOW_PATH.to_owned()],
-        velnor_actions_contract::WorkflowPolicy::VelnorRepositoryV1,
-        ".velnor/config.toml",
-    )
-    .expect_err("the state-seal workflow must not be preservable");
-    assert!(
-        error
-            .to_string()
-            .contains("cannot_preserve_generator_workflow"),
         "{error}"
     );
 }

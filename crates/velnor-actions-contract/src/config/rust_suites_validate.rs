@@ -1,12 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-#[path = "rust_suites_validate_preserve.rs"]
-mod preserve;
 #[path = "rust_suites_validate_rules.rs"]
 mod rules;
-
-pub use preserve::validate_preserve_workflows;
 
 use std::collections::{BTreeMap, BTreeSet};
 

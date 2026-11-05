@@ -65,10 +65,7 @@ fn check_consumer_defaults_preserved() -> Result<(), Box<dyn Error>> {
     {
         return Err(fail("optional product configuration gained a default"));
     }
-    if !config.tasks.is_empty()
-        || !config.task_suites.is_empty()
-        || !config.preserve_workflows.is_empty()
-    {
+    if !config.tasks.is_empty() || !config.task_suites.is_empty() {
         return Err(fail("task configuration gained a default"));
     }
     if !config.verify.is_empty() || !config.lint.is_default() || !config.dispatch.is_empty() {

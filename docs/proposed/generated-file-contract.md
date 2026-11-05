@@ -114,7 +114,7 @@ none of their workflows; successful generation retires their prior marked files.
 | .github/jactionlint.yaml | velnor-actions-actionlint | velnor-actions-orchestrator | Exact generated path; replaced on generation |
 | .github/AGENTS.md | velnor-actions-workflow-renderer | velnor-actions-orchestrator | Exact generated path; version marker; replaced on generation |
 | .github/CLAUDE.md | velnor-actions-workflow-renderer | velnor-actions-orchestrator | Exact generated pointer file with the single `@AGENTS.md` import line (or relative symlink `.github/CLAUDE.md -> AGENTS.md` when `[agents] claude_md = "symlink"`); replaced on generation |
-| .github/workflows/** | velnor-actions-workflow-renderer | velnor-actions-orchestrator | Reserved generator-owned namespace; every path is replaced or retired on successful generation unless allowlisted in `[workflow] preserve_workflows` |
+| .github/workflows/** | velnor-actions-workflow-renderer | velnor-actions-orchestrator | Reserved generator-owned namespace; every path is replaced or retired on successful generation |
 | .github/dco.yml | velnor-actions-workflow-renderer | velnor-actions-orchestrator | Emitted only when `[dco]` is configured; a file whose first line carries the Velnor generated marker is owned (replaced, or retired when `[dco]` is removed); an unmarked file stays repository-owned and makes generation refuse to overwrite it |
 | .github/release-plz*.toml | velnor-actions-workflow-renderer | velnor-actions-orchestrator | Exact generated release-plz config paths; retired when no longer emitted |
 | .github/actions/<logical>/action.yml | velnor-actions-workflow-renderer | velnor-actions-orchestrator | Generated shared action path is owned when its first line has a Velnor generated marker; replaced or retired with dispatch output |
@@ -264,21 +264,10 @@ the reserved `.github/workflows/**` namespace, and shared action definitions
 whose exact `.github/actions/<logical>/action.yml` path begins with a Velnor
 generated marker. Those paths are replaced when emitted and retired when a
 successful generation no longer emits them. The workflows namespace is fully
-generator-owned; manually maintained workflows placed there are retired unless
-explicitly allowlisted in `[workflow] preserve_workflows = [".github/workflows/<slug>.yml"]`.
-`consumer-v1` rejects a non-empty `preserve_workflows`
-(`preserve_workflows_not_allowed_under_consumer_v1`): every workflow of a
-consumer is generator output, so the `Check generated files` diff covers the
-whole namespace and no hand-owned workflow can hide from it. Under
-`velnor-repository-v1`, each `preserve_workflows` entry MUST be an exact `.github/workflows/<slug>.yml`
-path with a lowercase ASCII slug (`[a-z0-9][a-z0-9_-]*`), no duplicates, and
-MUST NOT name a generator-owned workflow (`ci.yml`, `freshness.yml`,
-`release.yml`, `publish.yml`, `binary-release.yml`, `binary-preview.yml`,
-`preview-tap-reconcile.yml`, `stable-tap-reconcile.yml`, `tofu-apply.yml`, `qualification.yml`,
-`product-release.yml`, `monitoring.yml`, `suites.yml`, or any custom suite
-`<workflow>.yml` slug). Allowlisted hand-owned workflows are preserved across
-in-place generation and copied into `--output-dir` preview trees so
-`Check generated files` drift checks pass.
+generator-owned; manually maintained workflows placed there are retired, and
+no configuration key exempts one. Every workflow is generator output, so the
+`Check generated files` diff covers the whole namespace and no hand-owned
+workflow can hide from it.
 
 All other entries under `.github` are unmanaged repository content. Successful
 generation MUST preserve their file bytes, hidden names, symbolic links and
@@ -305,18 +294,17 @@ allow = [".github/CODEOWNERS", ".github/ISSUE_TEMPLATE"]
 - An unmanaged entry is any file, symbolic link or empty directory under
   `.github` that generation preserves: not a declared format, not a
   generated-workflow-namespace path, not a marked shared action, marked helper
-  script or marked `dco.yml`. Entries named in `[workflow] preserve_workflows`
-  are explicitly allowlisted and never reported.
+  script or marked `dco.yml`.
 - With `warn`, every `generate` (in place or `--output-dir`, so also the drift
   step) prints `velnor-actions: WARNING: unmanaged_github_entry:<path>` per entry
   on stderr and succeeds. With `deny`, `generate` fails before writing anything
   with `contract: unmanaged_github_entries:<path>,...`, so the drift step fails.
 - Each `allow` entry MUST be a normalized path starting with `.github/`, without
   empty, `.` or `..` segments or backslashes, without duplicates, and not under
-  `.github/workflows/` (only `velnor-repository-v1` may use `preserve_workflows`). It exempts that exact path and
-  everything below it when it names a directory.
+  `.github/workflows/`. It exempts that exact path and everything below it when
+  it names a directory.
 - `velnor-actions unmanaged` prints the same list, one path per line on stdout,
-  after applying both allowlists. It never writes, lists regardless of the
+  after applying the `allow` list. It never writes, lists regardless of the
   configured policy, and exits 1 only under `deny` with at least one entry.
 - A velnor release that predates `[github]` rejects the table as an unknown
   field, so repositories must pin a velnor release that supports it.

@@ -149,12 +149,7 @@ fn replace_in_place(
         check_no_symlink_or_emitted_leaf(root, &rel)?;
     }
     staging.clear_spare_before_staging()?;
-    let staged = match preserve::stage_in_place(
-        &target,
-        staging.spare(),
-        tree,
-        &prep.config.workflow.preserve_workflows,
-    ) {
+    let staged = match preserve::stage_in_place(&target, staging.spare(), tree) {
         Ok(path) => path,
         Err(error) => return Err(staging.abort_before_commit(error)),
     };

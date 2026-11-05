@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::rust_suites::WorkflowDispatchConfig;
-use super::rust_suites_validate::validate_preserve_workflows;
 use super::workflow_flags::{default_true, is_false, is_true};
 pub use super::workflow_timeouts::{
     default_crate_timeout_minutes, default_plan_timeout_minutes,
@@ -94,9 +93,6 @@ pub struct WorkflowConfig {
 
     #[serde(default, skip_serializing_if = "WorkflowDispatchConfig::is_empty")]
     pub dispatch: WorkflowDispatchConfig,
-
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub preserve_workflows: Vec<String>,
 }
 
 const RETIRED_ZIZMOR_JOB: &str = "zizmor";
@@ -230,7 +226,6 @@ impl WorkflowConfig {
         }
         self.verify.validate(file)?;
         self.dispatch.validate(file)?;
-        validate_preserve_workflows(&self.preserve_workflows, self.policy, file)?;
         Ok(())
     }
 
