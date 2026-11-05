@@ -75,7 +75,7 @@ impl Fixture {
             ),
         )?;
         Self::write_metadata(&workspace, &root)?;
-        mise::write(&root, &workspace)?;
+        mise::write(&root, &workspace, None)?;
         Self::write_guard(&guard, "exec \"$@\"\n")?;
         git(&repo, &["init", "-b", "main"])?;
         git(
@@ -188,6 +188,27 @@ impl Fixture {
                 output.to_str().ok_or("non-UTF-8 output path")?,
             ],
             true,
+        )
+    }
+
+    pub(super) fn pin_jactionlint(&self, version: &str) -> Result<(), Box<dyn Error>> {
+        let manifest = self.repo.join("mise.toml");
+        let mut contents = fs::read_to_string(&manifest)?;
+        writeln!(contents, "\n[tools]\njactionlint = \"{version}\"")?;
+        fs::write(manifest, contents)?;
+        mise::write(&self.root, &self.workspace, Some(version))?;
+        git(&self.repo, &["add", "mise.toml"])?;
+        git(
+            &self.repo,
+            &[
+                "-c",
+                "user.name=Fixture",
+                "-c",
+                "user.email=fixture@example.invalid",
+                "commit",
+                "-m",
+                "pin jactionlint",
+            ],
         )
     }
 

@@ -83,7 +83,7 @@ pub fn generate_dispatched(
     let tofu_roots = crate::select_tofu::tofu_selected_roots(&prep.discovery.statuses);
     let tofu_locks = velnor_actions_tofu::TofuLockSnapshot::capture(&prep.root, &tofu_roots);
     let tree = render_staged_tree_with(prep, dispatch)?;
-    let validated_by = validate_staged(&tree)?;
+    let validated_by = validate_staged(&tree, &prep.catalog)?;
     tools.verify(&prep.root)?;
     tofu_locks
         .verify(&prep.root)
