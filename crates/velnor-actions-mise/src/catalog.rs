@@ -62,24 +62,24 @@ pub use tool::PinnedTool;
 pub mod project;
 use versions::tool_source;
 
-pub const MISE_VERSION: &str = "2026.10.25";
+pub const MISE_VERSION: &str = "2026.11.1";
 pub const MISE_BINARY_SHA256_LINUX_X64: &str =
-    "5d362ecc578dc7c146679b841dda949d6472cbf86ff5635db7afdca1b6b3fd87";
+    "7129dbab31d698f9028db9374f7ba7987232b0426f837dcbce437130a61415f9";
 pub const RUST_VERSION: &str = "1.99.1";
-pub const MR_BOXINGTON_VERSION: &str = "1.29.1";
+pub const MR_BOXINGTON_VERSION: &str = "1.29.2";
 pub const GH_VERSION: &str = "2.103.3";
 pub use velnor_actions_contract::config::jactionlint_verifier::JACTIONLINT_VERSION;
 pub const SHELLCHECK_VERSION: &str = "0.11.0";
 pub const NEXTEST_VERSION: &str = "0.9.151";
-pub const OPENTOFU_VERSION: &str = "1.13.2";
+pub const OPENTOFU_VERSION: &str = "1.13.8";
 pub const OPENTOFU_SHA256_LINUX_AMD64: &str =
-    "ac05d9952662c7db28dd57e93f0a68018837bfdf9342384ec0987977c16a9645";
+    "dab8135df87343ce143e1bef1a6174d7b82035950818bde17950658ff9a72697";
 pub const OPENTOFU_SHA256_LINUX_ARM64: &str =
-    "88e2d9e3f94f97b76ab2faf55ade87578f56aed19c5e45fa139d70e994366d1f";
+    "fb4a3cbae5eba5a07f16e53bdf61493d2da81b4a559f645b39761409a7abc2ea";
 pub const OPENTOFU_SHA256_DARWIN_AMD64: &str =
-    "dc6e4eb1d3ed6550c2ef052596f933dbcd8c806957665ea83ae7537147cb3074";
+    "1e829e672127cef6c712496adb161c22d5b85775a96f3ae1b3749151ea55e9fb";
 pub const OPENTOFU_SHA256_DARWIN_ARM64: &str =
-    "0d1cdc85f38992055b48e7fb161304a2ddfe2e5ee0ff68ffec9d0349c8bd1b59";
+    "dc53f79995cb235a3f68e87d3856f37179a091a9c75ff4eaf1d5ebf0006e4cf4";
 pub const RELEASE_PLZ_VERSION: &str = "0.4.3";
 pub const CRANE_VERSION: &str = "0.22.1";
 pub const BUN_VERSION: &str = "1.4.4";
