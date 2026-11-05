@@ -123,6 +123,20 @@ pub(super) fn rendered_job_env(text: &str, id: &str) -> Result<Env, Box<dyn Erro
     Err(format!("rendered job {id} is missing").into())
 }
 
+pub(super) fn assert_build_script_execution(
+    text: &str,
+    id: &str,
+    expected: &str,
+) -> Result<(), Box<dyn Error>> {
+    let env = rendered_job_env(text, id)?;
+    assert_eq!(
+        env.get("MBX_BUILD_SCRIPT_EXECUTION").map(String::as_str),
+        Some(expected),
+        "{id}"
+    );
+    Ok(())
+}
+
 fn rendered_jobs() -> Result<Vec<RenderedJob>, Box<dyn Error>> {
     let repo = mbx_repo(false)?;
     let prepared = prepare(repo.path())?;
