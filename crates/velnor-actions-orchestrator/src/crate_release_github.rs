@@ -206,6 +206,15 @@ pub(crate) fn has_release_pr(
     Err(internal("crate_release_pulls_limit"))
 }
 
+pub(crate) fn verify_required_check(
+    api: &dyn GitHubAdmissionRead,
+    repository: &str,
+    sha: &str,
+    workflow_path: &str,
+) -> Result<u64, OrchestratorError> {
+    required_check(api, &format!("repos/{repository}"), sha, workflow_path)
+}
+
 pub fn verify_github_admission(
     request: &GitHubAdmissionRequest,
     token: String,
