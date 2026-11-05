@@ -81,13 +81,6 @@ case "$verb" in
     read -r usage < "$d/usage"
     printf '%s\n' "$usage"
     ;;
-  "api repos/${GITHUB_REPOSITORY:?}/actions/runs/"*)
-    query=${verb#*artifacts?name=}
-    named=
-    [ -f "$d/artifact_name" ] && read -r named < "$d/artifact_name"
-    [ -n "$named" ] && [ "$query" = "$named" ] || exit 0
-    cat "$d/artifacts"
-    ;;
   "api repos/${GITHUB_REPOSITORY:?}/git/ref/"*)
     [ "$mode" = tip_fail ] && exit 1
     read -r tip < "$d/tip" || exit 1
@@ -261,11 +254,6 @@ impl Gh {
             text
         });
         std::fs::write(self.dir.join("artifacts"), text)?;
-        Ok(())
-    }
-
-    pub(crate) fn artifact_name(&self, name: &str) -> Result<(), Box<dyn Error>> {
-        std::fs::write(self.dir.join("artifact_name"), format!("{name}\n"))?;
         Ok(())
     }
 

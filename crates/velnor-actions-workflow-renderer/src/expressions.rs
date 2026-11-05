@@ -205,6 +205,18 @@ fn is_mbx_bundle_key_binding(key: &str, inner: &str) -> bool {
                 .is_some_and(is_state_snapshot_output))
 }
 
+fn is_state_artifact_lookup(inner: &str) -> bool {
+    use velnor_actions_contract::workflow::state_seal::{
+        STATE_PRODUCER_JOB_ID_PREFIX, state_seal_artifact_legs,
+    };
+    state_seal_artifact_legs(inner).is_some_and(|legs| {
+        !legs.is_empty()
+            && legs
+                .iter()
+                .all(|(producer, _)| producer.starts_with(STATE_PRODUCER_JOB_ID_PREFIX))
+    })
+}
+
 fn is_state_identity_binding(key: &str, inner: &str) -> bool {
     use velnor_actions_contract::workflow::cache_family::is_state_snapshot_output;
     use velnor_actions_contract::workflow::state_seal::{
@@ -212,8 +224,7 @@ fn is_state_identity_binding(key: &str, inner: &str) -> bool {
     };
     let keys = inner.strip_prefix("steps.cache-keys.outputs.");
     (key == STATE_SEAL_KEY_ENV && inner == "steps.state-seal-subject.outputs.key")
-        || (key == STATE_SEAL_ARTIFACT_ENV
-            && matches!(inner, "github.run_id" | "env.VELNOR_RUN_KEY_ATTEMPT"))
+        || (key == STATE_SEAL_ARTIFACT_ENV && is_state_artifact_lookup(inner))
         || ((key.starts_with("VELNOR_STATE_COMPAT_R")
             || key.starts_with("VELNOR_STATE_SNAPSHOT_R"))
             && keys
@@ -289,6 +300,7 @@ pub(crate) fn check_with_value(key: &str, value: &str) -> Result<(), RenderError
             && !is_private_mint_input(key, inner)
             && !is_image_publish_output(inner)
             && !is_family_key_output(inner)
+            && !(key == "artifact-ids" && is_state_artifact_lookup(inner))
         {
             return Err(RenderError::BadActionRef(format!(
                 "bad_with_expression:{key}"

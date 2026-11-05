@@ -1,12 +1,10 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
 
-use velnor_actions_contract::workflow::state_seal::{
-    STATE_SEAL_MATRIX_OUTPUT, state_producer_lane_slice,
-};
+use velnor_actions_contract::workflow::state_seal::state_producer_lane_slice;
 use velnor_actions_contract::{Job, StepKind, StepRole};
 
 type Needs = BTreeMap<(String, String), String>;
@@ -101,104 +99,79 @@ fn evaluates(
     Ok(status || !run.failed)
 }
 
-pub(super) fn simulate(
-    producer: &Job,
-    failing: Option<usize>,
-    refuse_export: bool,
-) -> Result<BTreeMap<String, String>, Box<dyn Error>> {
-    Ok(simulate_run(producer, failing, refuse_export, false)?.0)
+pub(super) struct LegRun {
+    pub(super) lanes: usize,
+    pub(super) uploaded: bool,
 }
 
-pub(super) fn simulate_run(
+pub(super) struct LegFaults {
+    pub(super) failing: Option<usize>,
+    pub(super) refuse_export: bool,
+    pub(super) stale_tip: bool,
+}
+
+pub(super) const HEALTHY: LegFaults = LegFaults {
+    failing: None,
+    refuse_export: false,
+    stale_tip: false,
+};
+
+pub(super) fn legs_of(producer: &Job) -> BTreeSet<String> {
+    producer
+        .steps
+        .iter()
+        .filter_map(|step| {
+            step.condition
+                .as_deref()
+                .and_then(state_producer_lane_slice)
+        })
+        .map(|slice| slice.to_string())
+        .collect()
+}
+
+pub(super) fn simulate_leg(
     producer: &Job,
-    failing: Option<usize>,
-    refuse_export: bool,
-    stale_tip: bool,
-) -> Result<(BTreeMap<String, String>, usize), Box<dyn Error>> {
-    let leg = producer.steps.iter().find_map(|step| {
-        step.condition
-            .as_deref()
-            .and_then(state_producer_lane_slice)
-            .map(|slice| slice.to_string())
-    });
+    leg: &str,
+    faults: &LegFaults,
+) -> Result<LegRun, Box<dyn Error>> {
     let mut run = Run {
-        leg,
+        leg: Some(leg.to_owned()),
         failed: false,
         outputs: BTreeMap::from([(("mbx-bundle-key", "save"), "true")]),
         outcomes: BTreeMap::new(),
     };
-    let mut lane_index = 0;
-    let mut lanes_run = 0;
+    let mut lanes = 0;
     let none = Needs::new();
     for step in &producer.steps {
         if !evaluates(step.condition.as_deref(), &run, &none)? {
-            if matches!(step.kind, StepKind::TaskExecution { .. }) {
-                lane_index += 1;
-            }
             continue;
         }
         if matches!(step.kind, StepKind::TaskExecution { .. }) {
-            lanes_run += 1;
-            if failing == Some(lane_index) {
+            if faults.failing == Some(lanes) {
                 run.failed = true;
             }
-            lane_index += 1;
+            lanes += 1;
             continue;
         }
-        if step.role == Some(StepRole::StateSealTip) && stale_tip {
+        if step.role == Some(StepRole::StateSealTip) && faults.stale_tip {
             run.failed = true;
             continue;
         }
         match step.id.map(velnor_actions_contract::StepId::as_str) {
-            Some("mbx-bundle-export") if !refuse_export => {
+            Some("mbx-bundle-export") if !faults.refuse_export => {
                 run.outputs
                     .insert(("mbx-bundle-export", "exported"), "true");
             }
             Some("state-seal-upload") => {
                 run.outcomes.insert("state-seal-upload", "success");
-                run.outputs
-                    .insert(("state-seal-upload", "artifact-id"), "7001");
-            }
-            Some("state-produced") => {
-                run.outputs.insert(("state-produced", "produced"), "true");
             }
             _ => {}
         }
     }
-    let handed_off = run.outcomes.get("state-seal-upload") == Some(&"success");
-    let outputs = BTreeMap::from([
-        (
-            "produced".to_owned(),
-            run.outputs
-                .get(&("state-produced", "produced"))
-                .copied()
-                .unwrap_or("")
-                .to_owned(),
-        ),
-        (
-            "artifact".to_owned(),
-            if handed_off { "true" } else { "" }.to_owned(),
-        ),
-    ]);
-    Ok((outputs, lanes_run))
-}
-
-pub(super) fn seal_runs(
-    seal: &Job,
-    outputs: &BTreeMap<String, String>,
-) -> Result<bool, Box<dyn Error>> {
-    let needs: Needs = BTreeMap::from([(
-        ("plan".to_owned(), STATE_SEAL_MATRIX_OUTPUT.to_owned()),
-        "{\"include\":[]}".to_owned(),
-    )]);
-    let run = Run {
-        leg: None,
-        failed: false,
-        outputs: BTreeMap::new(),
-        outcomes: BTreeMap::new(),
-    };
-    Ok(evaluates(seal.condition.as_deref(), &run, &needs)?
-        && outputs.get("artifact").map(String::as_str) == Some("true"))
+    Ok(LegRun {
+        lanes,
+        uploaded: run.outcomes.get("state-seal-upload") == Some(&"success"),
+    })
 }
 
 pub(super) fn seal_steps_run(

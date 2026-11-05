@@ -6,7 +6,7 @@ use std::error::Error;
 use std::path::Path;
 
 use velnor_actions_contract::workflow::cache_family::{
-    COMPLETE_STATE_TRANSPORT_EXPR, RootSlug, S256, SLICE_CEILING,
+    COMPLETE_STATE_TRANSPORT_EXPR, RootSlug, S256, SLICE_CEILING, SliceId,
 };
 use velnor_actions_contract::workflow::state_seal::{
     STATE_PRODUCER_MAX_PARALLEL, STATE_SEAL_JOB_ID, STATE_SEAL_KEY_EXPR, STATE_SEAL_PREFIX_ENV,
@@ -16,6 +16,7 @@ use velnor_actions_contract::{
     CacheAccess, Job, JobEnv, JobMatrix, JobTimeout, Step, StepId, StepKind, StepRole,
 };
 use velnor_actions_workflow_renderer::state_seal::add_state_seal_jobs;
+use velnor_actions_workflow_renderer::state_seal::producer_steps::state_producer_outputs;
 
 use crate::gc1_scene::{Scene, fail};
 use crate::gc1_seal_support::scope_of;
@@ -59,8 +60,8 @@ fn producer_fixture() -> Job {
                 BTreeMap::from([("VELNOR_MBX_BUNDLE_ROOT".to_owned(), ROOT.to_owned())]),
             ),
             shell_step(
-                StepRole::StateProduced,
-                StepId::StateProduced,
+                StepRole::StateSealUpload,
+                StepId::StateSealUpload,
                 BTreeMap::new(),
             ),
         ],
@@ -77,6 +78,7 @@ pub(crate) fn seal_jobs(roots: &[&str]) -> Result<BTreeMap<String, Job>, Box<dyn
             max_parallel: STATE_PRODUCER_MAX_PARALLEL,
             legs: 1,
         });
+        producer.outputs = state_producer_outputs([&SliceId::parse(slug.as_str())?]);
         for step in &mut producer.steps {
             if let StepKind::Shell { env, .. } = &mut step.kind
                 && env.contains_key("VELNOR_MBX_BUNDLE_ROOT")

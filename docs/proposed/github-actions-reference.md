@@ -277,6 +277,13 @@ Verdict key: TRUE, FALSE, PARTIAL (true with a stated correction or gap).
 - The 2025-11-20 and 2026-01-16 changelogs were read through a summarizing fetch, not verbatim; the 2026-09-10 changelog was not read (only its search snippet).
 - Did not run live a restore on the pinned SHA to see the `read`-mode warning text.
 
+## Matrix job outputs (2026-11-05)
+
+- The runner evaluates `jobs.<job_id>.outputs` at the end of each matrix leg and skips every output whose value is empty: `if (string.IsNullOrEmpty(output.Value)) { context.Debug($"Skip output '{output.Key}' since it's empty"); continue; }` ([actions/runner `src/Runner.Worker/JobExtension.cs:815-818` at `cf65f3ec8100ee0046d735ac5d647e00f4b8e817`](https://github.com/actions/runner/blob/cf65f3ec8100ee0046d735ac5d647e00f4b8e817/src/Runner.Worker/JobExtension.cs#L815-L818)).
+- GitHub documents the merge: "When using a matrix, job outputs will be combined from all jobs inside the matrix" and "Ensure that the output name is unique, otherwise the last matrix job that runs will override the output value" ([github/docs `data/reusables/actions/jobs/section-defining-outputs-for-jobs.md:42,79` at `58b7b56aa507ad1269b9f8e9e89a172f0976c7ce`](https://github.com/github/docs/blob/58b7b56aa507ad1269b9f8e9e89a172f0976c7ce/data/reusables/actions/jobs/section-defining-outputs-for-jobs.md)).
+- Velnor relies on both for the state handoff: one static output per slice, set only by that slice's leg ([compiled-state persistence](compiled-state-persistence.md), per-job slices).
+- The pinned jactionlint refuses a computed index such as `needs.<job>.outputs[format(...)]` (`[obfuscation]`), so the seal leg selects its output with a static `matrix.slice ==` chain.
+
 ## Native preview publication API boundaries (2026-10-18)
 
 The [workflow-jobs REST contract](https://docs.github.com/en/rest/actions/workflow-jobs#list-jobs-for-a-workflow-run-attempt)

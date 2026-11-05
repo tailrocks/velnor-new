@@ -63,8 +63,6 @@ pub enum StepId {
     StateSealAdmit,
 
     StateSealSave,
-
-    StateProduced,
 }
 
 impl StepId {
@@ -99,7 +97,6 @@ impl StepId {
             Self::StateSealUpload => "state-seal-upload",
             Self::StateSealAdmit => "state-seal-admit",
             Self::StateSealSave => "state-seal-save",
-            Self::StateProduced => "state-produced",
         }
     }
 }

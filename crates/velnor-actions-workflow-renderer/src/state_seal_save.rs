@@ -103,15 +103,10 @@ while IFS='@TAB@' read -r k id rest; do
   if gh cache delete -R "$repo" "$id" > /dev/null 2>&1; then printf 'velnor: retired superseded state entry %s\n' "$k"; else printf '%s\n' "::warning::cache_unavailable: could not delete state entry $id"; fi
 done < "$d/scope"
 printf 'velnor: state snapshot published (%s bytes, sha256:%s)\n' "$size" "${key##*-s256-}"
-name="${@ARTIFACT@-}"
-run="${GITHUB_RUN_ID-}"
-case "$name" in ''|*[!a-z0-9-]*) skip artifact_name_malformed ;; esac
-number "$run" || skip run_id_malformed
-gh api "repos/$repo/actions/runs/$run/artifacts?name=$name" --jq '.artifacts[].id' > "$d/artifacts" 2> /dev/null || skip artifact_unlistable
-while IFS= read -r artifact || [ -n "$artifact" ]; do
-  number "$artifact" || continue
+artifact="${@ARTIFACT@-}"
+if number "$artifact" && [ -n "$artifact" ]; then
   if gh api -X DELETE "repos/$repo/actions/artifacts/$artifact" > /dev/null 2>&1; then printf 'velnor: deleted handoff artifact %s\n' "$artifact"; else printf '%s\n' "::warning::cache_unavailable: could not delete handoff artifact $artifact"; fi
-done < "$d/artifacts"
+fi
 "#;
 
 pub(crate) fn head(dir: &str) -> String {
@@ -183,7 +178,7 @@ pub fn state_seal_admit_step(pending_bytes: &str, writer_bytes: u64) -> Result<S
     Ok(step)
 }
 
-pub fn state_seal_retire_step(scope: &str, artifact_name: &str) -> Result<Step, RenderError> {
+pub fn state_seal_retire_step(scope: &str, artifact_expr: &str) -> Result<Step, RenderError> {
     let script = format!(
         "{}{}",
         head("state-retire"),
@@ -210,7 +205,7 @@ pub fn state_seal_retire_step(scope: &str, artifact_name: &str) -> Result<Step, 
             ),
             (STATE_SEAL_SCOPE_ENV.to_owned(), scope.to_owned()),
             (DEFAULT_REF_ENV.to_owned(), DEFAULT_REF_EXPR.to_owned()),
-            (STATE_SEAL_ARTIFACT_ENV.to_owned(), artifact_name.to_owned()),
+            (STATE_SEAL_ARTIFACT_ENV.to_owned(), artifact_expr.to_owned()),
         ]),
     )?;
     step.role = Some(StepRole::StateSealRetire);

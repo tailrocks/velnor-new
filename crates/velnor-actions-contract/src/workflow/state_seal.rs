@@ -8,7 +8,7 @@ pub const STATE_PRODUCER_JOB_ID_PREFIX: &str = "state-producer-";
 
 pub const STATE_SEAL_JOB_ID: &str = "state-seal";
 
-pub const STATE_PRODUCER_PRODUCED_OUTPUT: &str = "produced";
+pub const STATE_PRODUCER_ARTIFACT_OUTPUT_PREFIX: &str = "artifact_id_";
 
 pub const STATE_PRODUCER_MAX_PARALLEL: u32 = 2;
 
@@ -33,8 +33,6 @@ pub const STATE_PRODUCER_LANE_CONDITION: &str =
 
 pub const STATE_UPLOAD_CONDITION: &str = "steps.mbx-bundle-export.outputs.exported == 'true'";
 
-pub const STATE_PRODUCED_CONDITION: &str = "steps.mbx-bundle-export.outputs.exported == 'true' && steps.state-seal-upload.outcome == 'success'";
-
 pub const STATE_SEAL_ADMITTED_OUTPUT: &str = "admitted";
 
 pub const STATE_SEAL_BUDGET_BYTES: u64 = 8_000_000_000;
@@ -45,7 +43,7 @@ pub const STATE_SEAL_PENDING_BYTES_ENV: &str = "VELNOR_STATE_PENDING_BYTES";
 
 pub const STATE_SEAL_WRITERS_BYTES_ENV: &str = "VELNOR_STATE_WRITERS_BYTES";
 
-pub const STATE_SEAL_ARTIFACT_ENV: &str = "VELNOR_STATE_ARTIFACT_NAME";
+pub const STATE_SEAL_ARTIFACT_ENV: &str = "VELNOR_STATE_ARTIFACT_ID";
 
 pub const STATE_SEAL_COMPAT_SUFFIX: &str = "_compat";
 
@@ -184,9 +182,63 @@ pub fn state_producer_lane_slice(condition: &str) -> Option<SliceId> {
 #[must_use]
 pub fn state_payload_artifact_name() -> String {
     format!(
-        "velnor-state-{}-r${{{{ github.run_id }}}}-a${{{{ env.VELNOR_RUN_KEY_ATTEMPT }}}}",
+        "velnor-state-{}-r${{{{ github.run_id }}}}-a${{{{ github.run_attempt }}}}",
         state_matrix_expr(STATE_MATRIX_SLICE)
     )
+}
+
+#[must_use]
+pub fn state_producer_artifact_output(slice: &SliceId) -> String {
+    format!("{STATE_PRODUCER_ARTIFACT_OUTPUT_PREFIX}{slice}")
+}
+
+#[must_use]
+pub fn state_producer_artifact_value(slice: &SliceId) -> String {
+    format!(
+        "${{{{ matrix.{STATE_MATRIX_SLICE} == '{slice}' && steps.state-seal-upload.outputs.artifact-id || '' }}}}"
+    )
+}
+
+const STATE_SEAL_LOOKUP_END: &str = " || ''";
+
+#[must_use]
+pub fn state_seal_artifact_lookup(legs: &[(String, SliceId)]) -> String {
+    let clauses: Vec<String> = legs
+        .iter()
+        .map(|(producer, slice)| {
+            format!(
+                "matrix.{STATE_MATRIX_SLICE} == '{slice}' && needs.{producer}.outputs.{}",
+                state_producer_artifact_output(slice)
+            )
+        })
+        .collect();
+    format!("{}{STATE_SEAL_LOOKUP_END}", clauses.join(" || "))
+}
+
+#[must_use]
+pub fn state_seal_artifact_legs(lookup: &str) -> Option<Vec<(String, SliceId)>> {
+    let legs = lookup
+        .strip_suffix(STATE_SEAL_LOOKUP_END)?
+        .split(" || ")
+        .map(|clause| {
+            let (slice, rest) = clause
+                .strip_prefix(&format!("matrix.{STATE_MATRIX_SLICE} == '"))?
+                .split_once("' && needs.")?;
+            let (producer, _) = rest.split_once(".outputs.")?;
+            Some((producer.to_owned(), SliceId::parse(slice).ok()?))
+        })
+        .collect::<Option<Vec<_>>>()?;
+    (state_seal_artifact_lookup(&legs) == lookup).then_some(legs)
+}
+
+#[must_use]
+pub fn state_seal_artifact_expr(legs: &[(String, SliceId)]) -> String {
+    format!("${{{{ {} }}}}", state_seal_artifact_lookup(legs))
+}
+
+#[must_use]
+pub fn state_seal_download_condition(legs: &[(String, SliceId)]) -> String {
+    format!("({}) != ''", state_seal_artifact_lookup(legs))
 }
 
 #[must_use]

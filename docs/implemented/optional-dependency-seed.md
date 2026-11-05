@@ -9,14 +9,14 @@ remain strict.
 
 `continue-on-error` makes `needs.<producer>.result` read `success` for a
 producer whose compile failed, so the seal job never reads the result. Matrix
-legs share one set of job outputs, so a producer leg hands its payload to the
-seal leg of the same slice only through the artifact name
-`velnor-state-<slice>-r<run id>-a<plan attempt>`. The leg uploads it after the
-export and the pack succeeded, and every earlier step runs under the default
-`success()`. A failed lane, a refused export or a failed upload therefore
-leaves no artifact of that name: the seal leg's download continues on error,
-its subject step finds no payload and refuses (`payload_not_regular`), and the
-leg attests and saves nothing.
+legs share one set of job outputs, so each producer job declares one output per
+slice, `artifact_id_<slice>`, that only that slice's leg fills with the id of
+its own upload; the runner drops empty outputs, so no other leg overwrites it.
+The leg uploads after the export and the pack succeeded, and every earlier
+step runs under the default `success()`. A failed lane, a refused export or a
+failed upload therefore leaves that output empty: the seal leg skips its
+download, its subject step finds no payload and refuses
+(`payload_not_regular`), and the leg attests and saves nothing.
 
 The typed `ProducerKind::StateProducer` identifies a producer. Workflow
 validation rejects mixed roles, parallel steps outside the lane records,

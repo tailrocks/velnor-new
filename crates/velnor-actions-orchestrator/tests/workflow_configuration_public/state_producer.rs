@@ -17,7 +17,7 @@ use velnor_actions_orchestrator::{finalized_jobs, prepare, render_staged_tree};
 use velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
 
 use super::seed_off::seed_repo;
-use super::state_producer_eval::{seal_runs, simulate};
+use super::state_producer_eval::{HEALTHY, LegFaults, legs_of, simulate_leg};
 use super::support::rendered_job_block;
 use super::waste_oracle::{Files, files_of};
 
@@ -330,43 +330,32 @@ fn only_attest_jobs_hold_actions_write() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
-fn a_failed_producer_lane_leaves_no_produced_output_and_the_seal_does_not_run()
--> Result<(), Box<dyn Error>> {
+fn a_failed_producer_lane_or_a_refused_export_uploads_no_payload() -> Result<(), Box<dyn Error>> {
     let built = build()?;
-    let (producer_id, seal_id) = ROOTS[0];
+    let (producer_id, _) = ROOTS[0];
     let producer = job(&built.jobs, producer_id)?;
-    let seal = job(&built.jobs, seal_id)?;
-    assert!(
-        seal.condition
-            .as_deref()
-            .is_some_and(|condition| !condition.contains(".result")),
-        "the seal gate reads a result, which is success for a failed continue-on-error job"
-    );
-    let flag = |outputs: &BTreeMap<String, String>| outputs.get("produced").cloned();
-
-    let healthy = simulate(producer, None, false)?;
-    assert_eq!(flag(&healthy).as_deref(), Some("true"));
-    assert!(seal_runs(seal, &healthy)?, "a healthy producer must seal");
-
-    let lane_steps = producer
-        .steps
-        .iter()
-        .filter(|step| matches!(step.kind, StepKind::TaskExecution { .. }))
-        .count();
-    assert!(lane_steps >= 4);
-    for failing in [0, 1, lane_steps / 2, lane_steps - 1] {
-        let outputs = simulate(producer, Some(failing), false)?;
-        assert_eq!(
-            flag(&outputs).as_deref(),
-            Some(""),
-            "lane {failing} failed but produced was set"
-        );
+    for leg in legs_of(producer) {
+        let healthy = simulate_leg(producer, &leg, &HEALTHY)?;
+        assert!(healthy.uploaded, "{leg}: a healthy leg uploaded nothing");
+        assert!(healthy.lanes >= 4, "{leg}: {} lanes", healthy.lanes);
+        for failing in [0, 1, healthy.lanes / 2, healthy.lanes - 1] {
+            let failed = LegFaults {
+                failing: Some(failing),
+                ..HEALTHY
+            };
+            assert!(
+                !simulate_leg(producer, &leg, &failed)?.uploaded,
+                "{leg}: lane {failing} failed and the payload was uploaded"
+            );
+        }
+        let refused = LegFaults {
+            refuse_export: true,
+            ..HEALTHY
+        };
         assert!(
-            !seal_runs(seal, &outputs)?,
-            "lane {failing} failed and the seal ran"
+            !simulate_leg(producer, &leg, &refused)?.uploaded,
+            "{leg}: a refused export was uploaded"
         );
     }
-    let refused = simulate(producer, None, true)?;
-    assert!(!seal_runs(seal, &refused)?, "a refused export was sealed");
     Ok(())
 }

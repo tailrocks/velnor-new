@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeMap;
+
 use super::cache_access::SOURCES_PRODUCER_JOB_ID;
 use super::cache_family::RootSlug;
 use super::crate_job::TOOLS_PRODUCER_JOB_ID_PREFIX;
@@ -8,21 +10,23 @@ use super::state_seal::{
     STATE_PRODUCER_JOB_ID_PREFIX, STATE_PRODUCER_MAX_PARALLEL, STATE_SEAL_ADMIT_CONDITION,
     STATE_SEAL_ATTEST_CONDITION, STATE_SEAL_BIND_CONDITION, STATE_SEAL_JOB_ID,
     STATE_SEAL_MATRIX_OUTPUT, STATE_SEAL_MAX_PARALLEL, STATE_SEAL_SAVE_CONDITION,
-    STATE_SEAL_TIP_CONDITION, state_producer_matrix_output,
+    STATE_SEAL_TIP_CONDITION, state_producer_artifact_output, state_producer_artifact_value,
+    state_producer_lane_slice, state_producer_matrix_output, state_seal_artifact_legs,
+    state_seal_download_condition,
 };
 use super::{Job, JobMatrix, PLAN_JOB_ID, Step, StepKind, StepRole};
 
-const PRODUCER_SEQUENCE: [StepRole; 7] = [
+const PRODUCER_SEQUENCE: [StepRole; 6] = [
     StepRole::MbxBundleImport,
     StepRole::StateSkeleton,
     StepRole::StateSkeletonRestore,
     StepRole::MbxProducerMark,
     StepRole::MbxBundleExport,
     StepRole::StateSealUpload,
-    StepRole::StateProduced,
 ];
 
-const SEAL_SEQUENCE: [StepRole; 8] = [
+const SEAL_SEQUENCE: [StepRole; 9] = [
+    StepRole::StateSealClear,
     StepRole::StateSealDownload,
     StepRole::StateSealSubject,
     StepRole::StateSealTip,
@@ -84,10 +88,10 @@ pub(super) fn state_producer_shape_ok(id: &str, job: &Job) -> bool {
     let Some(at) = at else {
         return false;
     };
-    let [_, skeleton, restore, mark, .., produced] = at[..] else {
+    let [_, skeleton, restore, mark, .., upload] = at[..] else {
         return false;
     };
-    let tail = &steps[produced + 1..];
+    let tail = &steps[upload + 1..];
     at.windows(2).all(|pair| pair[0] < pair[1])
         && (tail.is_empty()
             || matches!(tail, [step] if step.role == Some(StepRole::MbxWorkspaceCleanup)))
@@ -95,6 +99,48 @@ pub(super) fn state_producer_shape_ok(id: &str, job: &Job) -> bool {
         && lane_digests(&steps[mark..]).is_empty()
         && lane_digests(&steps[skeleton..restore]) == lane_digests(&steps[restore..mark])
         && !lane_digests(&steps[skeleton..restore]).is_empty()
+        && job.outputs == artifact_outputs(steps)
+}
+
+fn artifact_outputs(steps: &[Step]) -> BTreeMap<String, String> {
+    steps
+        .iter()
+        .filter_map(|step| {
+            step.condition
+                .as_deref()
+                .and_then(state_producer_lane_slice)
+        })
+        .map(|slice| {
+            (
+                state_producer_artifact_output(&slice),
+                state_producer_artifact_value(&slice),
+            )
+        })
+        .collect()
+}
+
+fn download_bound(job: &Job, producers: &[&String]) -> bool {
+    job.steps.iter().any(|step| {
+        let StepKind::Action { with, .. } = &step.kind else {
+            return false;
+        };
+        let Some(legs) = with
+            .get("artifact-ids")
+            .and_then(|value| value.strip_prefix("${{ "))
+            .and_then(|value| value.strip_suffix(" }}"))
+            .and_then(state_seal_artifact_legs)
+        else {
+            return false;
+        };
+        step.role == Some(StepRole::StateSealDownload)
+            && !legs.is_empty()
+            && legs
+                .iter()
+                .all(|(producer, _)| producers.contains(&producer))
+            && step.condition.as_deref() == Some(state_seal_download_condition(&legs).as_str())
+            && !with.contains_key("name")
+            && with.get("merge-multiple").map(String::as_str) == Some("true")
+    })
 }
 
 pub(super) fn state_seal_shape_ok(id: &str, job: &Job) -> bool {
@@ -112,6 +158,13 @@ pub(super) fn state_seal_shape_ok(id: &str, job: &Job) -> bool {
                 || need.starts_with(TOOLS_PRODUCER_JOB_ID_PREFIX)
                 || need.starts_with(STATE_PRODUCER_JOB_ID_PREFIX)
         })
+        && download_bound(
+            job,
+            &rest
+                .iter()
+                .filter(|need| need.starts_with(STATE_PRODUCER_JOB_ID_PREFIX))
+                .collect::<Vec<_>>(),
+        )
         && job.steps.len() == SEAL_SEQUENCE.len()
         && job
             .steps

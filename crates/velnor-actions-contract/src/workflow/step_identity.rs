@@ -248,7 +248,7 @@ pub enum StepRole {
 
     StateSealRetire,
 
-    StateProduced,
+    StateSealClear,
 
     StateSkeleton,
 
@@ -350,7 +350,6 @@ impl StepRole {
             Self::StateSealUpload => Some(StepId::StateSealUpload),
             Self::StateSealAdmit => Some(StepId::StateSealAdmit),
             Self::StateSealSave => Some(StepId::StateSealSave),
-            Self::StateProduced => Some(StepId::StateProduced),
             _ => None,
         }
     }
@@ -380,7 +379,6 @@ impl StepRole {
             StepId::StateSealUpload => Self::StateSealUpload,
             StepId::StateSealAdmit => Self::StateSealAdmit,
             StepId::StateSealSave => Self::StateSealSave,
-            StepId::StateProduced => Self::StateProduced,
             StepId::FamilySizeBunInstall
             | StepId::FamilySizePlaywrightBrowsers
             | StepId::FamilySizeDbtPackages

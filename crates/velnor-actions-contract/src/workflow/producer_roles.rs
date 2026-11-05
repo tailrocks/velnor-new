@@ -80,7 +80,6 @@ pub(super) fn state_producer_role(role: StepRole) -> bool {
             | StepRole::MbxBundleExport
             | StepRole::StateSealUpload
             | StepRole::StateSealTip
-            | StepRole::StateProduced
             | StepRole::PrivateTokenMint
             | StepRole::PrivateFetch
             | StepRole::PrivateRevoke
@@ -93,7 +92,8 @@ pub(super) fn state_producer_role(role: StepRole) -> bool {
 pub(super) fn state_seal_role(role: StepRole) -> bool {
     matches!(
         role,
-        StepRole::StateSealDownload
+        StepRole::StateSealClear
+            | StepRole::StateSealDownload
             | StepRole::StateSealSubject
             | StepRole::StateSealAdmit
             | StepRole::StateSealBind

@@ -3,17 +3,16 @@ use std::collections::BTreeMap;
 use velnor_actions_actionlint::actions::ATTEST_USES;
 use velnor_actions_contract::workflow::cache_family::{
     COMPLETE_STATE_TRANSPORT_EXPR, CacheFamily, RUNNER_TEMP_EXPR, RUNNER_TEMP_SHELL, SLICE_CEILING,
-    StateTrust, TOOLS_LAYER_ALLOWANCE_BYTES,
+    SliceId, StateTrust, TOOLS_LAYER_ALLOWANCE_BYTES,
 };
 use velnor_actions_contract::workflow::state_seal::{
     STATE_MATRIX_COMPAT, STATE_MATRIX_PENDING, STATE_MATRIX_SLICE, STATE_MATRIX_SNAPSHOT,
-    STATE_PRODUCER_JOB_ID_PREFIX, STATE_SEAL_ATTEST_CONDITION, STATE_SEAL_BIND_ATTEMPTS,
-    STATE_SEAL_BIND_CONDITION, STATE_SEAL_BIND_PAUSE_SECONDS, STATE_SEAL_JOB_ID,
-    STATE_SEAL_KEY_ENV, STATE_SEAL_KEY_EXPR, STATE_SEAL_LIST_FIELDS, STATE_SEAL_LIST_JQ,
-    STATE_SEAL_LIST_LIMIT, STATE_SEAL_LIST_TAB, STATE_SEAL_MATRIX_OUTPUT, STATE_SEAL_MAX_PARALLEL,
-    STATE_SEAL_PREDICATE, STATE_SEAL_PREDICATE_TYPE, STATE_SEAL_PREFIX_ENV,
-    STATE_SEAL_SAVE_CONDITION, STATE_SEAL_SUBJECT_EXPR, STATE_SEAL_SUBJECT_REL, state_matrix_expr,
-    state_payload_artifact_name, state_seal_condition,
+    STATE_PRODUCER_ARTIFACT_OUTPUT_PREFIX, STATE_PRODUCER_JOB_ID_PREFIX,
+    STATE_SEAL_ATTEST_CONDITION, STATE_SEAL_JOB_ID, STATE_SEAL_KEY_EXPR, STATE_SEAL_MATRIX_OUTPUT,
+    STATE_SEAL_MAX_PARALLEL, STATE_SEAL_PREDICATE, STATE_SEAL_PREDICATE_TYPE,
+    STATE_SEAL_PREFIX_ENV, STATE_SEAL_SAVE_CONDITION, STATE_SEAL_SUBJECT_EXPR,
+    STATE_SEAL_SUBJECT_REL, state_matrix_expr, state_seal_artifact_expr, state_seal_condition,
+    state_seal_download_condition,
 };
 use velnor_actions_contract::workflow::{ProducerKind, SOURCES_PRODUCER_JOB_ID};
 use velnor_actions_contract::{
@@ -23,9 +22,7 @@ use velnor_actions_contract::{
 
 use crate::RenderError;
 use crate::render::PLAN_JOB_ID;
-use crate::steps::{
-    DOWNLOAD_ARTIFACT_USES, TOOLS_SAVE_USES, action_step, ambient_shell_step, shell_step,
-};
+use crate::steps::{DOWNLOAD_ARTIFACT_USES, TOOLS_SAVE_USES, action_step, shell_step};
 
 const SEAL_DISPLAY_NAME: &str = "State seal";
 const JOB_MINUTES: u32 = 15;
@@ -34,6 +31,8 @@ const BOUND_OUTPUT: &str = "bound";
 const TOKEN_EXPR: &str = "${{ github.token }}";
 const GUARD: &str = "case \"$RUNNER_TEMP\" in /*) ;; *) printf '%s\\n' 'RUNNER_TEMP must be absolute' >&2; exit 1 ;; esac";
 
+#[path = "state_seal_bind.rs"]
+mod bind;
 #[path = "state_producer_steps.rs"]
 pub mod producer_steps;
 #[path = "state_seal_save.rs"]
@@ -42,6 +41,8 @@ pub mod save;
 pub mod skeleton;
 #[path = "state_seal_tip.rs"]
 pub mod tip;
+
+pub use bind::state_seal_bind_step;
 
 pub fn add_state_seal_jobs(jobs: &mut BTreeMap<String, Job>) -> Result<(), RenderError> {
     let producers: Vec<(&String, &Job)> = jobs
@@ -78,9 +79,24 @@ pub fn add_state_seal_jobs(jobs: &mut BTreeMap<String, Job>) -> Result<(), Rende
         .map(|(id, _)| id.clone())
         .collect();
     let writer_bytes = writers_bound(jobs);
+    let mut artifact_legs: Vec<(String, SliceId)> = Vec::new();
+    for (id, job) in &producers {
+        for output in job.outputs.keys() {
+            let slice = output
+                .strip_prefix(STATE_PRODUCER_ARTIFACT_OUTPUT_PREFIX)
+                .ok_or_else(|| invalid("producer_output"))?;
+            artifact_legs.push((
+                (*id).clone(),
+                SliceId::parse(slice).map_err(RenderError::Contract)?,
+            ));
+        }
+    }
     needs.extend(writers);
     chain_tools_after_sources(jobs);
-    let job = seal_job(runs_on, needs, legs, writer_bytes)?;
+    if artifact_legs.is_empty() {
+        return Err(invalid("producer_without_artifact_outputs"));
+    }
+    let job = seal_job(runs_on, needs, &artifact_legs, legs, writer_bytes)?;
     if jobs.insert(STATE_SEAL_JOB_ID.to_owned(), job).is_some() {
         return Err(invalid("id_collision"));
     }
@@ -131,22 +147,56 @@ fn matrix_identity_prefix() -> String {
     )
 }
 
-fn seal_job(
-    runs_on: String,
-    needs: Vec<String>,
-    legs: u32,
-    writer_bytes: u64,
-) -> Result<Job, RenderError> {
-    let artifact = state_payload_artifact_name();
-    let mut download = action_step(
+fn clear_step() -> Result<Step, RenderError> {
+    let script = format!(
+        r#"set -eu
+{GUARD}
+payload="{payload}"
+rm -rf "$payload"
+[ ! -e "$payload" ] && [ ! -L "$payload" ]
+"#,
+        payload = transport_file()?,
+    );
+    let mut step = shell_step(
+        "Clear sealed payload",
+        vec![
+            "sh".to_owned(),
+            "-c".to_owned(),
+            crate::state_script::one_line(&script),
+        ],
+        BTreeMap::new(),
+    )?;
+    step.role = Some(StepRole::StateSealClear);
+    Ok(step)
+}
+
+fn download_step(producers: &[(String, SliceId)]) -> Result<Step, RenderError> {
+    let mut step = action_step(
         "Download sealed payload",
         DOWNLOAD_ARTIFACT_USES,
         BTreeMap::from([
-            ("name".to_owned(), artifact.clone()),
+            (
+                "artifact-ids".to_owned(),
+                state_seal_artifact_expr(producers),
+            ),
+            ("merge-multiple".to_owned(), "true".to_owned()),
             ("path".to_owned(), transport_dir()?),
         ]),
     )?;
-    download.role = Some(StepRole::StateSealDownload);
+    step.role = Some(StepRole::StateSealDownload);
+    step.condition = Some(state_seal_download_condition(producers));
+    Ok(step)
+}
+
+fn seal_job(
+    runs_on: String,
+    needs: Vec<String>,
+    producers: &[(String, SliceId)],
+    legs: u32,
+    writer_bytes: u64,
+) -> Result<Job, RenderError> {
+    let artifact = state_seal_artifact_expr(producers);
+    let download = download_step(producers)?;
     let subject = state_seal_subject_step(&matrix_scope(), &matrix_identity_prefix())?;
     let admit = crate::state_seal::save::state_seal_admit_step(
         &state_matrix_expr(STATE_MATRIX_PENDING),
@@ -208,7 +258,17 @@ fn seal_job(
             max_parallel: STATE_SEAL_MAX_PARALLEL,
             legs,
         }),
-        steps: vec![download, subject, tip, admit, save, bind, attest, retire],
+        steps: vec![
+            clear_step()?,
+            download,
+            subject,
+            tip,
+            admit,
+            save,
+            bind,
+            attest,
+            retire,
+        ],
     })
 }
 
@@ -224,77 +284,6 @@ fn transport_file() -> Result<String, RenderError> {
         .strip_prefix(RUNNER_TEMP_EXPR)
         .map(|rest| format!("{RUNNER_TEMP_SHELL}{rest}"))
         .ok_or_else(|| invalid("transport_not_runner_temp"))
-}
-
-pub fn state_seal_bind_step() -> Result<Step, RenderError> {
-    let script = format!(
-        r#"{head}subject="$RUNNER_TEMP/{rel}"
-mkdir -p "${{subject%/*}}"
-rm -f "$subject"
-refuse() {{ printf '%s\n' "::warning::cache_unavailable: state seal bind refused ($1)"; printf '%s\n' '{bound}=false' >> "$GITHUB_OUTPUT"; exit 0; }}
-key="${{{key_env}-}}"
-ref="${{GITHUB_REF-}}"
-repo="${{GITHUB_REPOSITORY-}}"
-[ -n "$key" ] && [ -n "$ref" ] && [ -n "$repo" ] || refuse input_missing
-case "$key" in *[[:space:]]*) refuse key_whitespace ;; esac
-number "$size" && [ "$size" -gt 0 ] || refuse payload_unreadable
-bound_of "$size" || refuse bound_unavailable
-command -v gh >/dev/null 2>&1 || refuse gh_missing
-tries=
-while :; do
-  gh cache list -R "$repo" --key "$key" --ref "$ref" --limit {list_limit} --json {fields} --jq '{jq}' > "$d/list" || refuse list_failed
-  hits=
-  id=
-  stored=
-  while IFS='{tab}' read -r k i s; do
-    [ "$k" = "$key" ] || continue
-    case "$i" in ''|*[!0-9]*) refuse id_malformed ;; esac
-    case "$s" in ''|*[!0-9]*) refuse size_malformed ;; esac
-    hits="${{hits}}x"
-    id=$i
-    stored=$s
-  done < "$d/list"
-  [ -z "$hits" ] || break
-  tries="${{tries}}x"
-  [ "${{#tries}}" -lt {attempts} ] || break
-  sleep {pause}
-done
-[ "$hits" = x ] || refuse "entries=${{#hits}}"
-[ "$stored" -le "$bound" ] || refuse "size_out_of_bound stored=$stored bound=$bound"
-printf '%s %s %s\n' "$key" "$id" "$stored" > "$subject"
-printf '%s\n' '{bound}=true' >> "$GITHUB_OUTPUT"
-printf 'velnor: state seal subject %s %s %s\n' "$key" "$id" "$stored"
-"#,
-        head = crate::state_seal::save::head("state-bind"),
-        rel = STATE_SEAL_SUBJECT_REL,
-        bound = BOUND_OUTPUT,
-        key_env = STATE_SEAL_KEY_ENV,
-        list_limit = STATE_SEAL_LIST_LIMIT,
-        fields = STATE_SEAL_LIST_FIELDS,
-        jq = STATE_SEAL_LIST_JQ,
-        tab = STATE_SEAL_LIST_TAB,
-        attempts = STATE_SEAL_BIND_ATTEMPTS,
-        pause = STATE_SEAL_BIND_PAUSE_SECONDS,
-    );
-    let mut step = ambient_shell_step(
-        "Bind seal subject",
-        vec![
-            "sh".to_owned(),
-            "-c".to_owned(),
-            crate::state_script::one_line(&script),
-        ],
-        BTreeMap::from([
-            (
-                STATE_SEAL_KEY_ENV.to_owned(),
-                STATE_SEAL_KEY_EXPR.to_owned(),
-            ),
-            ("GH_TOKEN".to_owned(), TOKEN_EXPR.to_owned()),
-        ]),
-    )?;
-    step.id = Some(StepId::StateSealBind);
-    step.role = Some(StepRole::StateSealBind);
-    step.condition = Some(STATE_SEAL_BIND_CONDITION.to_owned());
-    Ok(step)
 }
 
 pub fn state_seal_subject_step(scope: &str, prefix: &str) -> Result<Step, RenderError> {

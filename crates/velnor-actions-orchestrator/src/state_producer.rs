@@ -16,7 +16,7 @@ use velnor_actions_contract::{
 use velnor_actions_mise::PinnedTool;
 use velnor_actions_workflow_renderer::declared_task_wrapper_digest;
 use velnor_actions_workflow_renderer::state_seal::producer_steps::{
-    state_payload_upload_step, state_produced_step,
+    state_payload_upload_step, state_producer_outputs,
 };
 use velnor_actions_workflow_renderer::state_seal::skeleton::{
     state_skeleton_restore_step, state_skeleton_step,
@@ -220,10 +220,9 @@ fn producer_job(
         StateCeilings::SLICE,
     )?);
     steps.push(state_payload_upload_step()?);
-    steps.push(state_produced_step()?);
     Ok(Job {
         services: Vec::new(),
-        outputs: BTreeMap::new(),
+        outputs: state_producer_outputs(slices.iter().map(|slice| &slice.slice)),
         display_name: display_name(root),
         runs_on: input.label.to_owned(),
         check_runner: None,

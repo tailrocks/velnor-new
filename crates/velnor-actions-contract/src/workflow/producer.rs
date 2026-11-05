@@ -40,7 +40,7 @@ impl Job {
         if self
             .steps
             .iter()
-            .any(|step| step.role == Some(StepRole::StateProduced))
+            .any(|step| step.role == Some(StepRole::StateSealUpload))
         {
             Some(ProducerKind::StateProducer)
         } else if self
@@ -128,7 +128,7 @@ pub(super) fn validate_job(
         && job.environment.is_none()
         && job.check_runner.is_none()
         && job.services.is_empty()
-        && job.outputs.is_empty()
+        && (kind == ProducerKind::StateProducer || job.outputs.is_empty())
         && kind.permissions_ok(effective)
         && job.steps.iter().all(|step| kind.step_ok(step))
         && kind.shape_ok(id, job);

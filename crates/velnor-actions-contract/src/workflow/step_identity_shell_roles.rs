@@ -45,7 +45,7 @@ impl StepRole {
                 | Self::StateSealSubject
                 | Self::StateSealAdmit
                 | Self::StateSealRetire
-                | Self::StateProduced
+                | Self::StateSealClear
                 | Self::StateSkeleton
                 | Self::StateSkeletonRestore
                 | Self::StateSealBind
