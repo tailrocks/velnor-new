@@ -6,6 +6,7 @@ use crate::crate_release_github::GitHubAdmissionRead;
 use crate::github_review_feedback::{FeedbackQuery, capture_feedback};
 use base64::Engine as _;
 use serde_json::{Value, json};
+use std::fmt::Write as _;
 use std::{
     cell::Cell,
     collections::{BTreeMap, BTreeSet},
@@ -20,10 +21,12 @@ use velnor_actions_contract::{
     },
 };
 
+type ArchiveFiles = BTreeMap<u64, Vec<u8>>;
+
 struct Api {
     values: BTreeMap<String, Value>,
     log: Vec<u8>,
-    archives: BTreeMap<u64, Vec<u8>>,
+    archives: ArchiveFiles,
     source_reads: Cell<u32>,
     mutate: bool,
 }
@@ -107,7 +110,6 @@ fn fixture() -> Result<
     ),
     Box<dyn std::error::Error>,
 > {
-    use crate::crate_release_pr_tree::{TreeItem, git_tree_sha};
     let candidate = ReviewedSourceRequest {
         repository: "acme/candidate".into(),
         repository_id: 11,
@@ -153,7 +155,28 @@ fn fixture() -> Result<
         candidate_sha: candidate.head_sha.clone(),
     };
     let mut values = BTreeMap::new();
-    for (r, merged) in [(&candidate, false), (&source, true)] {
+    add_reviewed_repositories(&mut values, &candidate, &source);
+    add_approval(&mut values, &witness);
+    add_workflow(&mut values, &witness)?;
+    add_jobs(&mut values, &witness);
+    let (log, archives) = add_artifacts(&mut values, &witness)?;
+    let mut api = Api {
+        values,
+        log: log.into_bytes(),
+        archives,
+        source_reads: Cell::new(0),
+        mutate: false,
+    };
+    add_feedback(&mut api, &candidate)?;
+    Ok((api, candidate, source, witness))
+}
+
+fn add_reviewed_repositories(
+    values: &mut BTreeMap<String, Value>,
+    candidate: &ReviewedSourceRequest,
+    source: &ReviewedSourceRequest,
+) {
+    for (r, merged) in [(candidate, false), (source, true)] {
         let p = format!("repos/{}", r.repository);
         values.insert(
             p.clone(),
@@ -182,6 +205,9 @@ fn fixture() -> Result<
             values.insert(format!("{p}/actions/runs?head_sha={sha}&per_page=100&page=1"),json!({"total_count":1,"workflow_runs":[{"check_suite_id":100,"head_sha":sha,"path":".github/workflows/ci.yml","status":"completed","conclusion":"success"}]}));
         }
     }
+}
+
+fn add_approval(values: &mut BTreeMap<String, Value>, witness: &WitnessRequest) {
     let p = "repos/acme/consumer";
     values.insert(
         format!("{p}/git/commits/{}", "c".repeat(40)),
@@ -198,6 +224,14 @@ fn fixture() -> Result<
     values.insert(format!("{p}/actions/runs/33/attempts/1"),json!({"id":33,"run_attempt":1,"event":"workflow_dispatch","head_sha":witness.workflow_sha,"head_branch":"main","path":witness.workflow_path,"repository":{"id":12},"head_repository":{"id":12},"status":"completed","conclusion":"success"}));
     values.insert(format!("{p}/environments/staging"),json!({"id":77,"name":"staging","can_admins_bypass":false,"deployment_branch_policy":{"protected_branches":true,"custom_branch_policies":false},"protection_rules":[{"type":"required_reviewers","reviewers":[{"type":"User","reviewer":{"type":"User","id":55}}]}]}));
     values.insert(format!("{p}/actions/runs/33/approvals"),json!([{"state":"approved","user":{"type":"User","id":55},"environments":[{"id":77,"name":"staging"}]}]));
+}
+
+fn add_workflow(
+    values: &mut BTreeMap<String, Value>,
+    witness: &WitnessRequest,
+) -> Result<(), Box<dyn std::error::Error>> {
+    use crate::crate_release_pr_tree::{TreeItem, git_tree_sha};
+    let p = "repos/acme/consumer";
     let config = ReleaseRehearsalConfig {
         script: witness.script.clone(),
         environment: witness.environment.clone(),
@@ -236,12 +270,24 @@ fn fixture() -> Result<
         format!("{p}/git/commits/{}", witness.workflow_sha),
         json!({"sha":witness.workflow_sha,"tree":{"sha":entry.sha}}),
     );
+    Ok(())
+}
+
+fn add_jobs(values: &mut BTreeMap<String, Value>, witness: &WitnessRequest) {
+    let p = "repos/acme/consumer";
     let jobs=[("preflight",41),("gate",42),("execute",43),("witness",44),("metadata",45)].iter().map(|(name,id)|json!({"name":name,"id":id,"run_id":33,"run_attempt":1,"head_sha":witness.workflow_sha,"status":"completed","conclusion":"success"})).collect::<Vec<_>>();
     values.insert(
         format!("{p}/actions/runs/33/attempts/1/jobs?per_page=100&page=1"),
         json!({"total_count":5,"jobs":jobs}),
     );
     values.insert(format!("{p}/actions/jobs/44"),json!({"id":44,"run_id":33,"run_attempt":1,"head_sha":witness.workflow_sha,"name":"witness","status":"completed","conclusion":"success","steps":[{"name":"Bind observation artifact","status":"completed","conclusion":"success"},{"name":"Bind rehearsal output artifact","status":"completed","conclusion":"success"},{"name":"Bind metadata artifact","status":"completed","conclusion":"success"},{"name":"Bind approved metadata source","status":"completed","conclusion":"success"}]}));
+}
+
+fn add_artifacts(
+    values: &mut BTreeMap<String, Value>,
+    witness: &WitnessRequest,
+) -> Result<(String, ArchiveFiles), Box<dyn std::error::Error>> {
+    let p = "repos/acme/consumer";
     let observation = json!({"schema":1,"observation":"script-exited-successfully","repository":witness.repository,"workflow_sha":witness.workflow_sha,"run_id":"33","run_attempt":"1","script":witness.script,"source_sha256":witness.source_sha256,"environment":witness.environment,"reviewer_id":"55","unverified_candidate_pr":"7","unverified_candidate_sha":witness.candidate_sha});
     let archives = BTreeMap::from([
         (
@@ -271,18 +317,25 @@ fn fixture() -> Result<
         let data = &archives[&id];
         let digest = crate::generator::sha256_hex(data);
         values.insert(format!("{p}/actions/artifacts/{id}"),json!({"id":id,"name":name,"expired":false,"size_in_bytes":data.len(),"digest":format!("sha256:{digest}"),"workflow_run":{"id":33,"repository_id":12,"head_repository_id":12,"head_sha":witness.workflow_sha}}));
-        log.push_str(&format!(
-            "2026-11-05T00:00:00.000Z {marker} run=33 attempt=1 artifact={id} sha256={digest}\n"
-        ));
+        writeln!(
+            log,
+            "2026-11-05T00:00:00.000Z {marker} run=33 attempt=1 artifact={id} sha256={digest}"
+        )?;
     }
-    log.push_str(&format!("2026-11-05T00:00:00Z VELNOR_METADATA_SOURCE run=33 attempt=1 source={} tree={} sha256={}\n", "c".repeat(40), "d".repeat(40), "9".repeat(64)));
-    let mut api = Api {
-        values,
-        log: log.into_bytes(),
-        archives,
-        source_reads: Cell::new(0),
-        mutate: false,
-    };
+    writeln!(
+        log,
+        "2026-11-05T00:00:00Z VELNOR_METADATA_SOURCE run=33 attempt=1 source={} tree={} sha256={}",
+        "c".repeat(40),
+        "d".repeat(40),
+        "9".repeat(64)
+    )?;
+    Ok((log, archives))
+}
+
+fn add_feedback(
+    api: &mut Api,
+    candidate: &ReviewedSourceRequest,
+) -> Result<(), Box<dyn std::error::Error>> {
     let reviewers = BTreeSet::from([90]);
     let context = FeedbackContext {
         repository: &candidate.repository,
@@ -292,7 +345,7 @@ fn fixture() -> Result<
         completion_check_name: "review-complete",
         expected_reviewer_app_ids: &reviewers,
     };
-    let observed = capture_feedback(&api, &context, &[])?;
+    let observed = capture_feedback(api, &context, &[])?;
     let payload = TapReviewCompletionPayload {
         schema: TAP_REVIEW_COMPLETION_SCHEMA.into(),
         repository: candidate.repository.clone(),
@@ -317,8 +370,9 @@ fn fixture() -> Result<
     let checks = &mut api.values.get_mut(&route).ok_or("check route")?["check_runs"];
     checks.as_array_mut().ok_or("checks")?.push(json!({"id":101,"name":"review-complete","app":{"id":80},"head_sha":candidate.head_sha,"status":"completed","conclusion":"success","output":{"text":text}}));
     api.values.get_mut(&route).ok_or("check route")?["total_count"] = 2.into();
-    Ok((api, candidate, source, witness))
+    Ok(())
 }
+
 #[test]
 fn captures_coherent_evidence_and_rejects_mid_capture_source_change()
 -> Result<(), Box<dyn std::error::Error>> {
