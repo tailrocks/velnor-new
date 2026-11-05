@@ -157,7 +157,7 @@ impl GhResolver {
         let exec = PinnedToolExec::new(vec![PinnedTool::Gh], OsStr::new("gh"), args)
             .map_err(|_| internal("deps_lock_gh_unavailable"))?;
         let output = exec
-            .command(&self.catalog)
+            .command_with_optional_environment_token(&self.catalog)
             .and_then(|command| command.run_bounded(limit, API_TIMEOUT))
             .map_err(|_| internal("deps_lock_api_unavailable"))?;
         if !output.success {

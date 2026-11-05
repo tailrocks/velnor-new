@@ -352,3 +352,19 @@ fn gh_cannot_be_combined_with_unverified_tool_or_payload() -> Result<(), Box<dyn
     assert!(shell.command(&catalog).is_err());
     Ok(())
 }
+
+#[test]
+fn gh_api_does_not_inherit_credentials_or_transport_overrides() {
+    let parent = [
+        ("PATH".into(), "/usr/bin".into()),
+        ("HOME".into(), "/tmp/untrusted".into()),
+        ("GH_TOKEN".into(), "dummy".into()),
+        ("GITHUB_TOKEN".into(), "dummy".into()),
+        ("HTTPS_PROXY".into(), "http://127.0.0.1:1234".into()),
+        ("SSL_CERT_FILE".into(), "/tmp/fake-ca".into()),
+    ];
+    let child = crate::command::EnvPolicy::GhApi.child_env(&parent, &[]);
+    for key in ["GH_TOKEN", "GITHUB_TOKEN", "HTTPS_PROXY", "SSL_CERT_FILE"] {
+        assert!(!child.iter().any(|(name, _)| name == key), "{key}");
+    }
+}

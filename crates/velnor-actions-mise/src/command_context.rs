@@ -29,7 +29,7 @@ pub(super) fn cleared_parent_passthrough(
     parent: &[(OsString, OsString)],
 ) -> Vec<(OsString, OsString)> {
     match policy {
-        EnvPolicy::GitHubToken => {
+        EnvPolicy::GhApi | EnvPolicy::GitHubToken => {
             let mut env: Vec<_> = parent
                 .iter()
                 .filter(|(key, _)| key == "PATH" || key == "HOME")

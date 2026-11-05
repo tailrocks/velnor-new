@@ -306,6 +306,10 @@ impl IsolatedCommand {
         for (key, value) in self.full_env() {
             command.env(key, value);
         }
+        if matches!(self.policy, EnvPolicy::GhApi | EnvPolicy::GitHubToken) {
+            command.env("HOME", "/proc/self/fd");
+            command.env("GH_CONFIG_DIR", "/proc/self/fd");
+        }
         if self.operator_guarded {
             command.env_remove("MBX_CARGO_SHIM_MODE");
             command.env_remove("MBX_CARGO_SHIM_PATH");

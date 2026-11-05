@@ -113,6 +113,20 @@ impl PinnedToolExec {
         self.command(catalog)?.with_github_token(token)
     }
 
+    pub fn command_with_optional_environment_token(
+        &self,
+        catalog: &ToolCatalog,
+    ) -> Result<IsolatedCommand, MiseError> {
+        let token = std::env::var("GH_TOKEN")
+            .or_else(|_| std::env::var("GITHUB_TOKEN"))
+            .ok()
+            .filter(|value| !value.is_empty());
+        match token {
+            Some(token) => self.command_with_github_token(catalog, &token),
+            None => self.command(catalog),
+        }
+    }
+
     pub fn run(&self, catalog: &ToolCatalog) -> Result<ProcessOutput, MiseError> {
         self.command(catalog)?.run()
     }

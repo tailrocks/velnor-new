@@ -89,7 +89,7 @@ impl<'a> GitHub<'a> {
         let exec = PinnedToolExec::new(vec![PinnedTool::Gh], OsStr::new("gh"), args)
             .map_err(|_| internal("qualification_gh_unavailable"))?;
         let output = exec
-            .command(catalog)
+            .command_with_optional_environment_token(catalog)
             .and_then(|command| command.run_bounded(MAX_API_JSON_BYTES, GH_API_TIMEOUT))
             .map_err(|_| internal("qualification_api_unavailable"))?;
         if !output.success {

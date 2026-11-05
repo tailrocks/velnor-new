@@ -330,7 +330,7 @@ impl GitHubApi {
             .unwrap_or(API_TIMEOUT);
         let diagnostic = diagnostics::RequestDiagnostic::new(exec.args(), timeout, limit);
         let result = exec
-            .command(&self.catalog)
+            .command_with_optional_environment_token(&self.catalog)
             .and_then(|command| command.run_bounded(limit, timeout))
             .map_err(|error| diagnostic.command_error(&error))?;
         if !result.success {

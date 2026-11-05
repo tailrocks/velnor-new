@@ -22,7 +22,7 @@ impl GitHubApi {
             OsString::from(route),
         ];
         let command = PinnedToolExec::new(vec![PinnedTool::Gh], OsStr::new("gh"), args)
-            .and_then(|exec| exec.command(&self.catalog))
+            .and_then(|exec| exec.command_with_optional_environment_token(&self.catalog))
             .map_err(|_| internal("package_publish_gh_unavailable"))?;
         let result = velnor_actions_mise::CheckDeadline::after(API_TIMEOUT)
             .and_then(|api_deadline| {

@@ -134,9 +134,9 @@ impl EnvPolicy {
     pub const fn allowed_credentials(&self) -> &'static [&'static str] {
         match self {
             Self::Bootstrap => &CREDENTIAL_ALLOWLIST_BOOTSTRAP,
-            Self::GhApi => &CREDENTIAL_ALLOWLIST_GH_API,
             Self::PrivateFetch => &CREDENTIAL_ALLOWLIST_PRIVATE_FETCH,
-            Self::Verify
+            Self::GhApi
+            | Self::Verify
             | Self::Discovery
             | Self::GitHubToken
             | Self::ReleaseSigner
@@ -152,6 +152,7 @@ impl EnvPolicy {
         !matches!(
             self,
             Self::RepoTask
+                | Self::GhApi
                 | Self::GitHubToken
                 | Self::ReleaseSigner
                 | Self::QualifiedCheck
