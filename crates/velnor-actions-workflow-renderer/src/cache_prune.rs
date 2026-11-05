@@ -71,7 +71,7 @@ pub fn prune_script() -> String {
     let mut lines = vec![
         "set -eu".to_owned(),
         format!(
-            "case \"$HEAD_BRANCH\" in ''|*[!A-Za-z0-9{HEAD_BRANCH_PUNCTUATION}]*) printf '%s\\n' '::error::cache_prune_head_branch_invalid' >&2; exit 1;; esac"
+            "(LC_ALL=C; case \"$HEAD_BRANCH\" in ''|*[!A-Za-z0-9{HEAD_BRANCH_PUNCTUATION}]*) exit 1;; esac) || {{ printf '%s\\n' '::error::cache_prune_head_branch_invalid' >&2; exit 1; }}"
         ),
         "ref=\"refs/heads/$HEAD_BRANCH\"".to_owned(),
         "d=\"$RUNNER_TEMP/velnor-cache-prune\"".to_owned(),

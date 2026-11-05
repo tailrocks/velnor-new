@@ -92,6 +92,7 @@ pub(crate) struct GhFake {
     fail_list: bool,
     fail_delete: Vec<u32>,
     attested: Vec<u32>,
+    locale: Option<&'static str>,
 }
 
 impl GhFake {
@@ -110,7 +111,13 @@ impl GhFake {
             fail_list: false,
             fail_delete: Vec::new(),
             attested: ledger.attested.clone(),
+            locale: None,
         })
+    }
+
+    pub(crate) fn in_locale(mut self, locale: &'static str) -> Self {
+        self.locale = Some(locale);
+        self
     }
 
     pub(crate) fn failing_list(mut self) -> Self {
@@ -130,7 +137,11 @@ impl GhFake {
 
     pub(crate) fn run_prune_for(&self, head_branch: &str) -> Result<PruneRun, Box<dyn Error>> {
         let root: &Path = self.dir.path();
-        let output = Command::new("sh")
+        let mut command = Command::new("sh");
+        if let Some(locale) = self.locale {
+            command.env("LC_ALL", locale);
+        }
+        let output = command
             .arg("-c")
             .arg(prune_script())
             .env("PATH", format!("{}:/usr/bin:/bin", root.display()))
