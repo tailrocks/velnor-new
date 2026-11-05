@@ -9,6 +9,7 @@ use crate::{OrchestratorError, internal::internal};
 use std::{io::Read, time::Instant};
 
 const LOG_LIMIT: u64 = 8 * 1024 * 1024;
+const ARTIFACT_LIMIT: u64 = velnor_actions_contract::MAX_GITHUB_EVIDENCE_ARCHIVE_BYTES;
 
 pub(crate) fn qualification_job_log(
     repository: &str,
@@ -99,7 +100,7 @@ pub(crate) fn qualification_artifact_bytes(
     deadline: Instant,
 ) -> Result<Vec<u8>, OrchestratorError> {
     use super::{ArtifactArchiveRequest, GitHubEvidenceRead, NativeGitHubEvidenceRead};
-    if artifact_id == 0 || expected_size == 0 || expected_size > LOG_LIMIT {
+    if artifact_id == 0 || expected_size == 0 || expected_size > ARTIFACT_LIMIT {
         return Err(internal("qualification_artifact_bound"));
     }
     let repo = GitHubRepository::parse(repository)?;
@@ -296,17 +297,26 @@ mod tests {
             )
             .is_err()
         );
-        assert!(
-            super::qualification_artifact_bytes(
-                "owner/repo",
-                1,
-                8_388_609,
-                &"0".repeat(64),
-                "fixture",
-                deadline
-            )
-            .is_err()
-        );
+        let accepted = super::qualification_artifact_bytes(
+            "owner/repo",
+            1,
+            8_388_609,
+            &"0".repeat(64),
+            "",
+            deadline,
+        )
+        .expect_err("missing token");
+        assert!(format!("{accepted:?}").contains("github_evidence_token_missing"));
+        let rejected = super::qualification_artifact_bytes(
+            "owner/repo",
+            1,
+            super::ARTIFACT_LIMIT + 1,
+            &"0".repeat(64),
+            "",
+            deadline,
+        )
+        .expect_err("oversized archive");
+        assert!(format!("{rejected:?}").contains("qualification_artifact_bound"));
     }
     #[test]
     fn production_storage_allowlist_rejects_non_github_redirects() {

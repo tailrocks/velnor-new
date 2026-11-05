@@ -38,6 +38,7 @@ pub fn verify_canonical_rehearsal(
         script: request.script.clone(),
         environment: request.environment.clone(),
         reviewer_id: request.reviewer_id,
+        output_bundle: request.output_bundle,
     };
     let expected = velnor_actions_workflow_renderer::release_tree::rehearsal::render(
         &config,

@@ -9,6 +9,7 @@ fn config() -> ReleaseRehearsalConfig {
         script: "qualification/rehearse.sh".into(),
         environment: "qualification".into(),
         reviewer_id: 42,
+        output_bundle: false,
     }
 }
 
@@ -46,6 +47,48 @@ fn runner_can_be_enabled_independently_of_publication() -> Result<(), Box<dyn st
         .ok_or("missing witness")?;
     assert!(witness.contains("script-exited-successfully"));
     assert!(witness.contains("unverified_candidate_sha"));
+    Ok(())
+}
+
+#[test]
+fn output_bundle_uses_separate_untrusted_and_witness_artifacts()
+-> Result<(), Box<dyn std::error::Error>> {
+    let mut rehearsal = config();
+    rehearsal.output_bundle = true;
+    let rendered = rehearsal::render(&rehearsal, "0.1.73")?;
+    let workflow: serde_json::Value = serde_saphyr::from_str(&rendered.bytes)?;
+    let execute = workflow["jobs"]["execute"]["steps"]
+        .as_array()
+        .ok_or("missing execute")?;
+    let witness = workflow["jobs"]["witness"]["steps"]
+        .as_array()
+        .ok_or("missing witness")?;
+    assert!(
+        execute
+            .iter()
+            .any(|s| s["with"]["name"] == "rehearsal-output-untrusted")
+    );
+    assert!(
+        witness
+            .iter()
+            .any(|s| s["with"]["name"] == "rehearsal-output-untrusted")
+    );
+    assert!(
+        witness
+            .iter()
+            .any(|s| s["with"]["name"] == "rehearsal-output-observation")
+    );
+    assert!(
+        witness
+            .iter()
+            .any(|s| s["name"] == "Bind rehearsal output artifact")
+    );
+    assert!(
+        execute
+            .iter()
+            .filter_map(|s| s["run"].as_str())
+            .any(|s| s.contains("VELNOR_REHEARSAL_OUTPUT=$RUNNER_TEMP/rehearsal-output.tar"))
+    );
     Ok(())
 }
 

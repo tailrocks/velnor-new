@@ -170,23 +170,48 @@ fn execute_job(config: &ReleaseRehearsalConfig) -> Yaml {
         "VELNOR_SOURCE_SHA256".to_owned(),
         Yaml::str("${{ needs.gate.outputs.source_sha256 }}"),
     ));
-    let mut execute = base_job(
-        vec![
-            download,
-            step(
-                "Run rehearsal without credentials",
-                &include_str!("release_rehearsal_execute.sh").replace(
+    let mut steps = vec![
+        download,
+        step(
+            "Run rehearsal without credentials",
+            &include_str!("release_rehearsal_execute.sh")
+                .replace(
+                    "__VELNOR_OUTPUT_ENV__",
+                    if config.output_bundle {
+                        "VELNOR_REHEARSAL_OUTPUT=$RUNNER_TEMP/rehearsal-output.tar"
+                    } else {
+                        ""
+                    },
+                )
+                .replace(
                     "__VELNOR_EXTRACT_PYTHON__",
                     &include_str!("release_rehearsal_extract.py").replace(
                         "__VELNOR_PATHS_PYTHON__",
                         include_str!("release_rehearsal_paths.py"),
                     ),
                 ),
-                Yaml::Map(execute_env),
+            Yaml::Map(execute_env),
+        ),
+    ];
+    if config.output_bundle {
+        steps.push(step("Validate untrusted rehearsal output", "set -euo pipefail\np=\"$RUNNER_TEMP/rehearsal-output.tar\"\ntest ! -L \"$p\" && test -f \"$p\"\ntest \"$(wc -c < \"$p\")\" -le 104857600\n", map(vec![])));
+        steps.push(map(vec![
+            (
+                "uses",
+                Yaml::str(velnor_actions_actionlint::actions::UPLOAD_ARTIFACT_ACTION_USES),
             ),
-        ],
-        map(vec![]),
-    );
+            (
+                "with",
+                map(vec![
+                    ("name", Yaml::str("rehearsal-output-untrusted")),
+                    ("path", Yaml::str("${{ runner.temp }}/rehearsal-output.tar")),
+                    ("if-no-files-found", Yaml::str("error")),
+                    ("retention-days", Yaml::Int(1)),
+                ]),
+            ),
+        ]));
+    }
+    let mut execute = base_job(steps, map(vec![]));
     execute.push(("needs", Yaml::str("gate")));
     map(execute)
 }
@@ -226,36 +251,88 @@ fn witness_job(config: &ReleaseRehearsalConfig) -> Yaml {
             ]),
         ),
     ]);
-    let mut job = base_job(
-        vec![
-            step(
-                "Record runner observation",
-                include_str!("release_rehearsal_witness.sh"),
-                Yaml::Map(env),
-            ),
-            upload,
-            step(
-                "Bind observation artifact",
-                include_str!("release_rehearsal_artifact_marker.sh"),
-                map(vec![
-                    (
-                        "VELNOR_ARTIFACT_ID",
-                        Yaml::str("${{ steps.observation_upload.outputs.artifact-id }}"),
-                    ),
-                    (
-                        "VELNOR_ARTIFACT_DIGEST",
-                        Yaml::str("${{ steps.observation_upload.outputs.artifact-digest }}"),
-                    ),
-                ]),
-            ),
-        ],
-        map(vec![]),
-    );
+    let mut steps = vec![
+        step(
+            "Record runner observation",
+            include_str!("release_rehearsal_witness.sh"),
+            Yaml::Map(env),
+        ),
+        upload,
+        step(
+            "Bind observation artifact",
+            include_str!("release_rehearsal_artifact_marker.sh"),
+            map(vec![
+                (
+                    "VELNOR_ARTIFACT_ID",
+                    Yaml::str("${{ steps.observation_upload.outputs.artifact-id }}"),
+                ),
+                (
+                    "VELNOR_ARTIFACT_DIGEST",
+                    Yaml::str("${{ steps.observation_upload.outputs.artifact-digest }}"),
+                ),
+            ]),
+        ),
+    ];
+    if config.output_bundle {
+        append_output_witness_steps(&mut steps);
+    }
+    let mut job = base_job(steps, map(vec![]));
     job.push((
         "needs",
         Yaml::Seq(vec![Yaml::str("gate"), Yaml::str("execute")]),
     ));
     map(job)
+}
+
+fn append_output_witness_steps(steps: &mut Vec<Yaml>) {
+    steps.push(map(vec![
+        (
+            "uses",
+            Yaml::str(velnor_actions_actionlint::actions::DOWNLOAD_ARTIFACT_ACTION_USES),
+        ),
+        (
+            "with",
+            map(vec![
+                ("name", Yaml::str("rehearsal-output-untrusted")),
+                ("path", Yaml::str("${{ runner.temp }}/output")),
+            ]),
+        ),
+    ]));
+    steps.push(step("Validate transferred rehearsal output", "set -euo pipefail\np=\"$RUNNER_TEMP/output/rehearsal-output.tar\"\ntest ! -L \"$p\" && test -f \"$p\"\ntest \"$(wc -c < \"$p\")\" -le 104857600\n", map(vec![])));
+    steps.push(map(vec![
+        ("id", Yaml::str("output_upload")),
+        (
+            "uses",
+            Yaml::str(velnor_actions_actionlint::actions::UPLOAD_ARTIFACT_ACTION_USES),
+        ),
+        (
+            "with",
+            map(vec![
+                ("name", Yaml::str("rehearsal-output-observation")),
+                (
+                    "path",
+                    Yaml::str("${{ runner.temp }}/output/rehearsal-output.tar"),
+                ),
+                ("if-no-files-found", Yaml::str("error")),
+                ("retention-days", Yaml::Int(1)),
+            ]),
+        ),
+    ]));
+    steps.push(step(
+        "Bind rehearsal output artifact",
+        &include_str!("release_rehearsal_artifact_marker.sh")
+            .replace("VELNOR_REHEARSAL_WITNESS", "VELNOR_REHEARSAL_OUTPUT"),
+        map(vec![
+            (
+                "VELNOR_ARTIFACT_ID",
+                Yaml::str("${{ steps.output_upload.outputs.artifact-id }}"),
+            ),
+            (
+                "VELNOR_ARTIFACT_DIGEST",
+                Yaml::str("${{ steps.output_upload.outputs.artifact-digest }}"),
+            ),
+        ]),
+    ));
 }
 
 pub fn render(config: &ReleaseRehearsalConfig, version: &str) -> Result<RenderedFile, RenderError> {

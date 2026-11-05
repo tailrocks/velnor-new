@@ -58,6 +58,8 @@ pub struct ReleaseRehearsalConfig {
     pub script: String,
     pub environment: String,
     pub reviewer_id: u64,
+    #[serde(default)]
+    pub output_bundle: bool,
 }
 
 impl ReleaseRehearsalConfig {

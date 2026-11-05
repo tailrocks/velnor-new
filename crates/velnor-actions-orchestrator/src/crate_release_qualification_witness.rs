@@ -24,6 +24,7 @@ pub struct WitnessRequest {
     pub job_id: u64,
     pub environment: String,
     pub reviewer_id: u64,
+    pub output_bundle: bool,
     pub script: String,
     pub source_sha256: String,
     pub candidate_pr: u64,
@@ -78,10 +79,17 @@ pub fn verify_witness(
     let job = api.get(&job_path)?;
     verify_job(&job, request)?;
     let log = api.witness_job_log(&request.repository, request.job_id)?;
-    let (artifact_id, digest) = marker(&log, request)?;
+    let (artifact_id, digest) = marker(&log, request, MARKER)?;
     let artifact_path = format!("{prefix}/actions/artifacts/{artifact_id}");
     let artifact = api.get(&artifact_path)?;
-    let size = verify_artifact(&artifact, request, artifact_id, &digest)?;
+    let size = verify_artifact(
+        &artifact,
+        request,
+        artifact_id,
+        &digest,
+        "rehearsal-observation",
+        MAX_ARCHIVE,
+    )?;
     let archive = api.artifact_bytes(&request.repository, artifact_id, size, &digest)?;
     let observation = read_observation(&archive, size, &digest)?;
     verify_observation(&observation, request)?;
@@ -140,7 +148,7 @@ pub(crate) fn verify_run(run: &Value, r: &WitnessRequest) -> Result<(), Orchestr
     Ok(())
 }
 
-fn verify_job(job: &Value, r: &WitnessRequest) -> Result<(), OrchestratorError> {
+pub(crate) fn verify_job(job: &Value, r: &WitnessRequest) -> Result<(), OrchestratorError> {
     let steps = job["steps"].as_array().ok_or_else(invalid)?;
     let marker_steps: Vec<&Value> = steps
         .iter()
@@ -162,7 +170,11 @@ fn verify_job(job: &Value, r: &WitnessRequest) -> Result<(), OrchestratorError> 
     Ok(())
 }
 
-fn marker(log: &[u8], r: &WitnessRequest) -> Result<(u64, String), OrchestratorError> {
+pub(crate) fn marker(
+    log: &[u8],
+    r: &WitnessRequest,
+    marker: &str,
+) -> Result<(u64, String), OrchestratorError> {
     if log.len() > MAX_LOG {
         return Err(invalid());
     }
@@ -172,11 +184,11 @@ fn marker(log: &[u8], r: &WitnessRequest) -> Result<(u64, String), OrchestratorE
     }
     let mut lines = Vec::new();
     for line in text.lines() {
-        if line.starts_with(MARKER) {
+        if line.starts_with(marker) {
             return Err(invalid());
         }
         if let Some((time, body)) = line.split_once(' ')
-            && body.starts_with(MARKER)
+            && body.starts_with(marker)
         {
             if !valid_log_time(time) {
                 return Err(invalid());
@@ -189,7 +201,7 @@ fn marker(log: &[u8], r: &WitnessRequest) -> Result<(u64, String), OrchestratorE
     }
     let fields: Vec<&str> = lines[0].split(' ').collect();
     if fields.len() != 5
-        || fields[0] != "VELNOR_REHEARSAL_WITNESS"
+        || fields[0] != marker.trim_end()
         || fields[1] != format!("run={}", r.run_id)
         || fields[2] != "attempt=1"
     {
@@ -239,18 +251,20 @@ pub(crate) fn valid_log_time(value: &str) -> bool {
         })
 }
 
-fn verify_artifact(
+pub(crate) fn verify_artifact(
     value: &Value,
     r: &WitnessRequest,
     id: u64,
     digest: &str,
+    name: &str,
+    limit: u64,
 ) -> Result<u64, OrchestratorError> {
     let size = value["size_in_bytes"]
         .as_u64()
-        .filter(|n| *n > 0 && *n <= MAX_ARCHIVE)
+        .filter(|n| *n > 0 && *n <= limit)
         .ok_or_else(invalid)?;
     if value["id"].as_u64() != Some(id)
-        || value["name"] != "rehearsal-observation"
+        || value["name"] != name
         || value["expired"] != false
         || value["digest"].as_str() != Some(format!("sha256:{digest}").as_str())
         || value["workflow_run"]["id"].as_u64() != Some(r.run_id)
@@ -316,7 +330,7 @@ fn verify_observation(o: &WitnessRecord, r: &WitnessRequest) -> Result<(), Orche
     Ok(())
 }
 
-fn invalid() -> OrchestratorError {
+pub(crate) fn invalid() -> OrchestratorError {
     internal("qualification_witness_invalid")
 }
 

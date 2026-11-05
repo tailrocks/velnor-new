@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{WitnessRead, WitnessRequest, verify_witness};
+use crate::crate_release_qualification_bundle::acquire_output_bundle;
 #[path = "crate_release_qualification_witness/fixtures.rs"]
 mod fixtures;
 use fixtures::Fixture;
@@ -62,5 +63,30 @@ fn witness_rejects_artifact_that_changes_during_acquisition()
     let f = Fixture::new()?;
     f.change_artifact_after_download.set(true);
     assert!(verify_witness(&f.request, &f).is_err());
+    Ok(())
+}
+
+#[test]
+fn output_bundle_requires_witness_custody_and_exact_bytes() -> Result<(), Box<dyn std::error::Error>>
+{
+    use std::io::{Cursor, Write};
+    let mut f = Fixture::new()?;
+    f.request.output_bundle = true;
+    f.job.borrow_mut()["steps"].as_array_mut().ok_or("steps")?.push(serde_json::json!({"name":"Bind rehearsal output artifact","status":"completed","conclusion":"success"}));
+    let mut archive = zip::ZipWriter::new(Cursor::new(Vec::new()));
+    archive.start_file(
+        "rehearsal-output.tar",
+        zip::write::SimpleFileOptions::default(),
+    )?;
+    archive.write_all(b"untrusted tar")?;
+    f.bytes = archive.finish()?.into_inner();
+    let digest = crate::generator::sha256_hex(&f.bytes);
+    f.artifact.borrow_mut()["name"] = "rehearsal-output-observation".into();
+    f.artifact.borrow_mut()["size_in_bytes"] = f.bytes.len().into();
+    f.artifact.borrow_mut()["digest"] = format!("sha256:{digest}").into();
+    f.log = format!("2026-11-05T00:00:00Z VELNOR_REHEARSAL_OUTPUT run=33 attempt=1 artifact=77 sha256={digest}\n").into_bytes();
+    assert_eq!(acquire_output_bundle(&f.request, &f)?, b"untrusted tar");
+    f.log.extend(f.log.clone());
+    assert!(acquire_output_bundle(&f.request, &f).is_err());
     Ok(())
 }

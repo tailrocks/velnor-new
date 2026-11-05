@@ -410,6 +410,14 @@ read-only acquisition job, but the script cannot fetch other private
 repositories unless their inputs are made available without credentials.
 Clearing environment variables is not an operating-system sandbox.
 
+Set `output_bundle = true` to provide the script with
+`VELNOR_REHEARSAL_OUTPUT`, the path for its evidence tar file. The file
+must be a regular file no larger than 100 MiB. The executor uploads it as
+untrusted data; the witness job downloads and re-uploads it under its own
+artifact ID and records that ID and digest. A verifier must authenticate the
+witness job and compare the bundle with independently established facts. The
+bundle and any observations inside it do not authorize publication.
+
 The source transfer verifies tracked file and link blobs against the checked-out
 Git tree and preserves internal symlinks. It rejects escaping or cyclic links,
 submodules, unsafe paths, more than 100,000 entries, an index larger than 16 MiB,

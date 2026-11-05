@@ -30,6 +30,7 @@ fn fixture() -> Result<(WitnessRequest, Api), Box<dyn std::error::Error>> {
         job_id: 4,
         environment: "qualification".into(),
         reviewer_id: 5,
+        output_bundle: false,
         script: "qualification/rehearse.sh".into(),
         source_sha256: "b".repeat(64),
         candidate_pr: 9,
@@ -39,6 +40,7 @@ fn fixture() -> Result<(WitnessRequest, Api), Box<dyn std::error::Error>> {
         script: request.script.clone(),
         environment: request.environment.clone(),
         reviewer_id: request.reviewer_id,
+        output_bundle: request.output_bundle,
     };
     let bytes = velnor_actions_workflow_renderer::release_tree::rehearsal::render(
         &config,

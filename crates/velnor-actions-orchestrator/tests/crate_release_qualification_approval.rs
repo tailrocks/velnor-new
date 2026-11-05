@@ -30,6 +30,7 @@ impl Fixture {
             job_id: 44,
             environment: "staging".into(),
             reviewer_id: 55,
+            output_bundle: false,
             script: "verify/run.sh".into(),
             source_sha256: "b".repeat(64),
             candidate_pr: 66,
