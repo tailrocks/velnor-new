@@ -10,6 +10,7 @@ use crate::{OrchestratorError, internal::internal};
 
 mod graphql;
 mod journal;
+mod qualification;
 mod routes;
 mod validation;
 pub(crate) use routes::encode;

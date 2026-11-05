@@ -95,6 +95,27 @@ impl GitHubAdmissionRead for NativeGitHubAdmissionRead {
     }
 }
 
+impl crate::crate_release_qualification_witness::WitnessRead for NativeGitHubAdmissionRead {
+    fn witness_job_log(&self, repository: &str, job_id: u64) -> Result<Vec<u8>, OrchestratorError> {
+        self.reader.qualification_job_log(repository, job_id)
+    }
+
+    fn artifact_bytes(
+        &self,
+        repository: &str,
+        artifact_id: u64,
+        expected_size: u64,
+        expected_sha256: &str,
+    ) -> Result<Vec<u8>, OrchestratorError> {
+        self.reader.qualification_artifact_bytes(
+            repository,
+            artifact_id,
+            expected_size,
+            expected_sha256,
+        )
+    }
+}
+
 pub fn admit_github_evidence(
     request: &GitHubAdmissionRequest,
     api: &dyn GitHubAdmissionRead,

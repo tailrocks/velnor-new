@@ -21,7 +21,9 @@ pub(super) fn parse_json(
     if bytes.is_empty() || bytes.len() as u64 > limit || Instant::now() >= deadline {
         return Err(internal("crate_release_http_body"));
     }
-    serde_json::from_slice(&bytes).map_err(|_| internal("crate_release_http_json"))
+    let limit = usize::try_from(limit).map_err(|_| internal("crate_release_http_json"))?;
+    velnor_actions_contract::strict_json::parse_strict_json_bytes(&bytes, limit)
+        .map_err(|_| internal("crate_release_http_json"))
 }
 
 pub(super) fn no_store(headers: &ureq::http::HeaderMap) -> bool {

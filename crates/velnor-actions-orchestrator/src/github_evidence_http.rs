@@ -9,6 +9,10 @@ use std::time::Instant;
 
 use sha2::{Digest, Sha256};
 
+#[path = "github_evidence_logs.rs"]
+mod logs;
+pub(crate) use logs::{qualification_artifact_bytes, qualification_job_log};
+
 #[path = "github_evidence_http_route.rs"]
 mod route;
 #[path = "github_evidence_http_validation.rs"]

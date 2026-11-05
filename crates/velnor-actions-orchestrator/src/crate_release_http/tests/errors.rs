@@ -208,3 +208,34 @@ fn deadline_stops_a_stalled_response_body() {
     assert!(client.get("repos/example/demo-crate").is_err());
     worker.join().expect("server");
 }
+
+#[test]
+fn qualification_job_route_accepts_only_a_numeric_job_id() {
+    assert!(valid_route("repos/owner/repo/actions/jobs/42"));
+    assert!(!valid_route("repos/owner/repo/actions/jobs/0"));
+    assert!(!valid_route("repos/owner/repo/actions/jobs/42/logs"));
+    assert!(!valid_route(
+        "repos/owner/repo/actions/jobs/42?unexpected=1"
+    ));
+}
+
+#[test]
+fn qualification_feedback_routes_are_strictly_bounded() {
+    for path in [
+        "repos/owner/repo/pulls/42",
+        "repos/owner/repo/pulls/42/commits?per_page=100&page=1",
+        "repos/owner/repo/pulls/42/comments?per_page=100&page=1",
+        "repos/owner/repo/issues/42/comments?per_page=100&page=1",
+        "repos/owner/repo/commits/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/comments?per_page=100&page=1",
+    ] {
+        assert!(valid_route(path), "{path}");
+    }
+    for path in [
+        "repos/owner/repo/pulls/0",
+        "repos/owner/repo/pulls/42/commits?per_page=100&page=101",
+        "repos/owner/repo/issues/42/comments?per_page=101&page=1",
+        "repos/owner/repo/commits/invalid/comments?per_page=100&page=1",
+    ] {
+        assert!(!valid_route(path), "{path}");
+    }
+}

@@ -126,9 +126,9 @@ pub(super) fn valid_route(route: &str) -> bool {
     }
     match rest {
         [] => query.is_empty(),
-        ["actions", "runs", id] | ["actions", "runs", id, "approvals"] => {
-            numeric(id) && query.is_empty()
-        }
+        ["actions", "runs" | "artifacts" | "jobs", id]
+        | ["actions", "runs", id, "approvals"]
+        | ["rulesets" | "pulls", id] => numeric(id) && query.is_empty(),
         ["actions", "runs", id, "attempts", attempt] => {
             numeric(id) && numeric(attempt) && query.is_empty()
         }
@@ -138,7 +138,6 @@ pub(super) fn valid_route(route: &str) -> bool {
         ["actions", "runs", id, "artifacts"] => {
             numeric(id) && (query == "per_page=100" || page_query(query))
         }
-        ["actions", "artifacts", id] | ["rulesets", id] => numeric(id) && query.is_empty(),
         ["actions", "runs"] => query
             .strip_prefix("head_sha=")
             .and_then(|q| q.split_once('&'))
@@ -170,11 +169,13 @@ pub(super) fn valid_route(route: &str) -> bool {
             .and_then(|rest| rest.split_once("&base="))
             .and_then(|(head, rest)| rest.strip_suffix("&per_page=100").map(|base| (head, base)))
             .is_some_and(|(head, base)| valid_segment(head) && valid_segment(base)),
-        ["commits", sha, "pulls"] => valid_sha(sha) && page_query(query),
+        ["commits", sha, "pulls" | "comments"] => valid_sha(sha) && page_query(query),
         ["commits", sha, "check-runs"] => {
             valid_sha(sha) && query.strip_prefix("filter=all&").is_some_and(page_query)
         }
-        ["pulls", id, "reviews"] => numeric(id) && page_query(query),
+        ["pulls", id, "reviews" | "comments" | "commits"] | ["issues", id, "comments"] => {
+            numeric(id) && page_query(query)
+        }
         ["rulesets"] => query == "targets=tag&includes_parents=true&per_page=100",
         _ => false,
     }
