@@ -155,6 +155,7 @@ pub(super) fn valid_route(route: &str) -> bool {
         ["environments", name, "deployment-branch-policies"] => {
             valid_segment(name) && query == "per_page=100"
         }
+        ["rules", "branches", name] => valid_segment(name) && page_query(query),
         ["git", "matching-refs", "tags", prefix] => valid_segment(prefix) && query.is_empty(),
         ["git", "matching-refs", "heads", prefix] => {
             prefix.starts_with("release-plz-") && valid_segment(prefix) && query.is_empty()
