@@ -137,8 +137,10 @@ pub(super) fn make_fixture(
         ],
     )?;
     let sha = git(root, &["rev-parse", "HEAD"])?;
+    let catalog = velnor_actions_mise::ToolCatalog::pinned();
+    let rust = catalog.version(velnor_actions_mise::PinnedTool::Rust);
     let intent: CrateReleaseIntent = serde_json::from_value(
-        json!({"schema":1,"repository":"example/demo","default_branch":"main","environment":"release","required_workflow_path":".github/workflows/ci.yml","trusted_reviewer_id":139_017,"rust_version":"1.97.1","generator_version":"0.1.72","generator_source_sha":"f1041f322c54cd7edfdef06afd307799eeaa801a","generator_manifest_sha256":"e38d047150f9e0347ec2160fd65bb7f026842e6f416e456990cf3b7ccd284c52","release_plz_version":"0.4.3","runner":"ubuntu-24.04","authentication":"trusted-publishing","manifest_path":"Cargo.toml","pr_write_paths":["CHANGELOG.md","Cargo.lock","Cargo.toml"],"registry":"crates-io","packages":["demo"],"publish_features":{"demo":[]},"tag_template":"{{ package }}-v{{ version }}","recovery":{"package":"demo","version":"0.1.1","source_sha":sha}}),
+        json!({"schema":1,"repository":"example/demo","default_branch":"main","environment":"release","required_workflow_path":".github/workflows/ci.yml","trusted_reviewer_id":139_017,"rust_version":rust,"generator_version":"0.1.72","generator_source_sha":"f1041f322c54cd7edfdef06afd307799eeaa801a","generator_manifest_sha256":"e38d047150f9e0347ec2160fd65bb7f026842e6f416e456990cf3b7ccd284c52","release_plz_version":"0.4.3","runner":"ubuntu-24.04","authentication":"trusted-publishing","manifest_path":"Cargo.toml","pr_write_paths":["CHANGELOG.md","Cargo.lock","Cargo.toml"],"registry":"crates-io","packages":["demo"],"publish_features":{"demo":[]},"tag_template":"{{ package }}-v{{ version }}","recovery":{"package":"demo","version":"0.1.1","source_sha":sha}}),
     )?;
     let request = GitHubAdmissionRequest {
         repository: "example/demo".into(),
@@ -180,6 +182,7 @@ pub(super) fn make_fixture(
 
 pub(super) fn fixture_archive(root: &Path) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
     let target = tempfile::tempdir()?;
+    let tool = velnor_actions_mise::ToolCatalog::pinned().tool_spec(velnor_actions_mise::PinnedTool::Rust);
     let which = Command::new("mise")
         .current_dir(target.path())
         .env("MISE_AUTO_INSTALL", "false")
@@ -191,7 +194,7 @@ pub(super) fn fixture_archive(root: &Path) -> Result<Vec<u8>, Box<dyn std::error
             "which",
             "cargo",
             "--tool",
-            "rust@1.97.1",
+            &tool,
         ])
         .output()?;
     if !which.status.success() {
@@ -207,7 +210,7 @@ pub(super) fn fixture_archive(root: &Path) -> Result<Vec<u8>, Box<dyn std::error
             "--no-env",
             "--no-hooks",
             "exec",
-            "rust@1.97.1",
+            &tool,
             "--",
             &cargo,
             "package",
