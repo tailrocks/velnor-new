@@ -87,6 +87,7 @@ def directories(entries):
 
 
 def check_links(entries, dirs):
+    directory_links = []
     for name, record in entries.items():
         if record[1] != b"link":
             continue
@@ -118,6 +119,29 @@ def check_links(entries, dirs):
         item = entries.get(final)
         if final and final not in dirs and (not item or item[1] != b"file"):
             raise RuntimeError("fixture link does not resolve to tracked content")
+        if not final or final in dirs:
+            directory_links.append((name.rpartition(b"/")[0], final))
+    nodes = dirs | {b""}
+    edges = {node: set() for node in nodes}
+    for directory in dirs:
+        edges[directory.rpartition(b"/")[0]].add(directory)
+    for parent, target in directory_links:
+        edges[parent].add(target)
+    incoming = {node: 0 for node in nodes}
+    for targets in edges.values():
+        for target in targets:
+            incoming[target] += 1
+    pending = [node for node, count in incoming.items() if count == 0]
+    visited = 0
+    while pending:
+        node = pending.pop()
+        visited += 1
+        for target in edges[node]:
+            incoming[target] -= 1
+            if incoming[target] == 0:
+                pending.append(target)
+    if visited != len(nodes):
+        raise RuntimeError("cyclic fixture directory links")
 
 
 def collect(root, destination, read_tracked):

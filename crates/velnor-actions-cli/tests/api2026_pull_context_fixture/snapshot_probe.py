@@ -73,6 +73,18 @@ def main():
         refuses(lambda: source_snapshot.collect(root, None, driver.read_tracked))
         (root / "a").unlink(); (root / "a").symlink_to("ignored/private")
         refuses(lambda: source_snapshot.collect(root, None, driver.read_tracked))
+        git(root, "rm", "-f", "--cached", "a", "b")
+        (root / "a").unlink(); (root / "b").unlink()
+        (root / "ancestor").symlink_to(".")
+        git(root, "add", "ancestor")
+        refuses(lambda: source_snapshot.collect(root, None, driver.read_tracked))
+        git(root, "rm", "--cached", "ancestor"); (root / "ancestor").unlink()
+        for name in ("left", "right"):
+            (root / name).mkdir(); (root / name / "file").write_text(name)
+        (root / "left/link").symlink_to("../right")
+        (root / "right/link").symlink_to("../left")
+        git(root, "add", "left", "right")
+        refuses(lambda: source_snapshot.collect(root, None, driver.read_tracked))
 
 
 if __name__ == "__main__":
