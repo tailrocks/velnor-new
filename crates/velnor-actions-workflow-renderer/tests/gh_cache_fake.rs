@@ -113,10 +113,6 @@ impl GhFake {
         })
     }
 
-    pub(crate) fn root(&self) -> &Path {
-        self.dir.path()
-    }
-
     pub(crate) fn failing_list(mut self) -> Self {
         self.fail_list = true;
         self
