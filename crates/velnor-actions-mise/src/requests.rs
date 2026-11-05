@@ -84,9 +84,16 @@ impl PinnedToolExec {
     }
 
     pub fn command(&self, catalog: &ToolCatalog) -> Result<IsolatedCommand, MiseError> {
+        let gh_program = self.program == OsStr::new("gh");
+        if gh_program != (self.tools.as_slice() == [PinnedTool::Gh]) {
+            return Err(MiseError::ForbiddenPayload {
+                program: self.program.to_string_lossy().into_owned(),
+                reason: "gh_requires_single_verified_tool".to_owned(),
+            });
+        }
         let specs = catalog.tool_specs(&self.tools);
         let command = IsolatedCommand::mise_exec(&specs, &self.payload())?;
-        if self.tools.as_slice() == [PinnedTool::Gh] {
+        if gh_program {
             return Ok(command.with_policy(crate::command::EnvPolicy::GhApi));
         }
         Ok(command)

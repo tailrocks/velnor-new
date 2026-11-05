@@ -35,6 +35,8 @@ mod release_signer;
 mod stream;
 #[path = "command_tofu.rs"]
 mod tofu;
+#[path = "command_verified_gh.rs"]
+mod verified_gh;
 pub use check::resolve_program as resolve_check_program;
 pub use crate_publish::CratePublishCredential;
 pub use credential::is_safe_credential_value;
@@ -291,9 +293,9 @@ impl IsolatedCommand {
         self.run_cancellable(cap, timeout, &CancelHandle::new())
     }
 
-    fn command(&self) -> Command {
-        let mut command = Command::new(&self.program);
-        command.args(&self.args);
+    fn command_for(&self, program: &OsStr, args: &[OsString]) -> Command {
+        let mut command = Command::new(program);
+        command.args(args);
         if self.policy.inherits_parent() {
             strip_credentials(&mut command, self.policy);
         } else {

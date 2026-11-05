@@ -73,7 +73,11 @@ pub(super) fn spawn_child(
     anchor: &mut Option<ProcessGroupAnchor>,
     reserved_cleanup_deadline: Option<Instant>,
 ) -> Result<Child, String> {
-    let mut child_command = command.command();
+    let verified = super::super::verified_gh::prepare(command)?;
+    let mut child_command = match &verified {
+        Some(launch) => command.command_for(&launch.executable, &launch.args),
+        None => command.command_for(&command.program, &command.args),
+    };
     child_command.process_group(anchor.as_ref().map_or(0, ProcessGroupAnchor::pgid));
     match child_command
         .stdout(Stdio::piped())

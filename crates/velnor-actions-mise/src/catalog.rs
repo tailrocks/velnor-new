@@ -67,7 +67,19 @@ pub const MISE_BINARY_SHA256_LINUX_X64: &str =
     "7129dbab31d698f9028db9374f7ba7987232b0426f837dcbce437130a61415f9";
 pub const RUST_VERSION: &str = "1.99.1";
 pub const MR_BOXINGTON_VERSION: &str = "1.29.2";
-pub const GH_VERSION: &str = "2.103.3";
+#[derive(Debug)]
+pub struct QualifiedGh {
+    pub version: &'static str,
+    pub platform: &'static str,
+    pub sha256: &'static str,
+}
+
+pub const QUALIFIED_GH_LINUX_AMD64: QualifiedGh = QualifiedGh {
+    version: "2.103.3",
+    platform: "linux_amd64",
+    sha256: "b768184570b12536be4ac1528893f6340d1c6a7b40b56ad45bca9cd0e87ad34d",
+};
+pub const GH_VERSION: &str = QUALIFIED_GH_LINUX_AMD64.version;
 pub use velnor_actions_contract::config::jactionlint_verifier::JACTIONLINT_VERSION;
 pub const SHELLCHECK_VERSION: &str = "0.11.0";
 pub const NEXTEST_VERSION: &str = "0.9.151";

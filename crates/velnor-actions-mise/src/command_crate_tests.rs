@@ -284,3 +284,71 @@ fn crate_publish_rejects_untrusted_endpoints_and_secret_arguments()
     );
     Ok(())
 }
+
+#[cfg(unix)]
+#[test]
+fn forged_gh_must_not_receive_authority() -> Result<(), Box<dyn std::error::Error>> {
+    use std::os::unix::fs::PermissionsExt as _;
+    if std::env::var_os("VELNOR_FORGED_GH_TEST").is_some() {
+        let exec = crate::PinnedToolExec::new(
+            vec![crate::PinnedTool::Gh],
+            std::ffi::OsStr::new("gh"),
+            vec!["--version".into()],
+        )?;
+        let _result = exec
+            .command_with_github_token(&crate::ToolCatalog::pinned(), "synthetic-token")?
+            .run_bounded(1024, Duration::from_secs(5));
+        return Ok(());
+    }
+    let temp = tempfile::tempdir()?;
+    let marker = temp.path().join("executed");
+    let mise = temp.path().join("mise");
+    std::fs::write(
+        &mise,
+        format!(
+            "#!/bin/sh\nif [ -n \"${{GH_TOKEN+x}}\" ]; then : > '{}'; fi\nprintf \"%s\\n\" '{}'\n",
+            marker.display(),
+            mise.display()
+        ),
+    )?;
+    std::fs::set_permissions(&mise, std::fs::Permissions::from_mode(0o700))?;
+    let path = std::env::join_paths([
+        temp.path(),
+        std::path::Path::new("/usr/bin"),
+        std::path::Path::new("/bin"),
+    ])?;
+    let output = std::process::Command::new(std::env::current_exe()?)
+        .args([
+            "--exact",
+            "command::crate_tests::forged_gh_must_not_receive_authority",
+        ])
+        .env("VELNOR_FORGED_GH_TEST", "1")
+        .env("PATH", path)
+        .output()?;
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(!marker.exists());
+    Ok(())
+}
+
+#[test]
+fn gh_cannot_be_combined_with_unverified_tool_or_payload() -> Result<(), Box<dyn std::error::Error>>
+{
+    let catalog = crate::ToolCatalog::pinned();
+    let combined = crate::PinnedToolExec::new(
+        vec![crate::PinnedTool::Gh, crate::PinnedTool::Rust],
+        std::ffi::OsStr::new("gh"),
+        vec!["--version".into()],
+    )?;
+    assert!(combined.command(&catalog).is_err());
+    let shell = crate::PinnedToolExec::new(
+        vec![crate::PinnedTool::Gh],
+        std::ffi::OsStr::new("sh"),
+        vec!["-c".into(), "gh --version".into()],
+    )?;
+    assert!(shell.command(&catalog).is_err());
+    Ok(())
+}
