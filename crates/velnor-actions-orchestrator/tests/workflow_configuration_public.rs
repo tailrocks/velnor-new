@@ -137,6 +137,8 @@ mod source_qualification_jobs;
 mod source_qualification_proof;
 #[path = "workflow_configuration_public/state_compat.rs"]
 mod state_compat;
+#[path = "workflow_configuration_public/state_plan_outputs.rs"]
+mod state_plan_outputs;
 #[path = "workflow_configuration_public/state_producer.rs"]
 mod state_producer;
 #[path = "workflow_configuration_public/state_producer_eval.rs"]

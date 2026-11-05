@@ -7,13 +7,14 @@ use std::path::PathBuf;
 use velnor_actions_contract::workflow::cache_family::{
     RootSlug, S256, SliceId, StateScope, StateTrust, StateUnit,
 };
-use velnor_actions_contract::workflow::state_seal::{
-    STATE_SEAL_PREDICATE_TYPE, state_attested_output,
-};
+use velnor_actions_contract::workflow::state_seal::STATE_SEAL_PREDICATE_TYPE;
 use velnor_actions_contract::{Step, StepKind};
-use velnor_actions_workflow_renderer::plan_sources::state_select::{SealUnit, state_select_step};
 
 use crate::gc1_scene::{Scene, fail};
+
+mod select;
+
+pub(crate) use select::{run_select, run_select_units, selected, selected_unit};
 
 pub(crate) const REPO: &str = "tailrocks/velnor-new";
 pub(crate) const SIGNER: &str = "tailrocks/velnor-new/.github/workflows/state-seal.yml";
@@ -103,6 +104,20 @@ case "$verb" in
     esac
     file=$1
     shift
+    if [ -f "$d/rv/want" ] && [ ! -f "$d/rv/reached" ] && [ ! -f "$d/rv/gave_up" ]; then
+      (
+        : > "$d/rv/in.$$"
+        read -r want < "$d/rv/want"
+        waited=0
+        while :; do
+          set -- "$d"/rv/in.*
+          if [ "$#" -ge "$want" ]; then : > "$d/rv/reached"; break; fi
+          waited=$((waited + 1))
+          if [ "$waited" -gt 100 ]; then : > "$d/rv/gave_up"; break; fi
+          sleep 0.1
+        done
+      )
+    fi
     repo=; signer=; sref=; pred=
     while [ $# -gt 0 ]; do
       case "$1" in -R) repo=$2; shift ;; --signer-workflow) signer=$2; shift ;; --source-ref) sref=$2; shift ;; --predicate-type) pred=$2; shift ;; esac
@@ -196,6 +211,18 @@ impl Gh {
 
     pub(crate) fn sleeps(&self) -> usize {
         std::fs::read_to_string(self.dir.join("sleeps")).map_or(0, |text| text.lines().count())
+    }
+
+    pub(crate) fn rendezvous(&self, workers: usize) -> Result<(), Box<dyn Error>> {
+        let rv = self.dir.join("rv");
+        std::fs::create_dir_all(&rv)?;
+        std::fs::write(rv.join("want"), format!("{workers}\n"))?;
+        Ok(())
+    }
+
+    pub(crate) fn rendezvous_outcome(&self) -> (bool, bool) {
+        let rv = self.dir.join("rv");
+        (rv.join("reached").exists(), rv.join("gave_up").exists())
     }
 
     pub(crate) fn dir(&self) -> String {
@@ -335,36 +362,4 @@ pub(crate) fn script_of(step: &Step) -> Result<String, Box<dyn Error>> {
             .ok_or_else(|| fail("shell step lost its script")),
         _ => Err(fail("expected a shell step")),
     }
-}
-
-pub(crate) fn select_script(root: &str) -> Result<String, Box<dyn Error>> {
-    script_of(&state_select_step(&[SealUnit {
-        slice: slice_of(root)?,
-        root: RootSlug::from_root(root)?,
-    }])?)
-}
-
-pub(crate) fn run_select(
-    scene: &Scene,
-    gh: &Gh,
-    root: &str,
-    extra: &[(&str, &str)],
-) -> Result<String, Box<dyn Error>> {
-    match std::fs::remove_file(&scene.github_output) {
-        Err(error) if error.kind() != std::io::ErrorKind::NotFound => return Err(error.into()),
-        _ => {}
-    }
-    let dir = gh.dir();
-    let mut env = vec![
-        ("FAKE_GH_DIR", dir.as_str()),
-        ("GITHUB_REPOSITORY", REPO),
-        ("GITHUB_WORKFLOW_REF", OTHER_WORKFLOW_REF),
-        ("GH_TOKEN", "fixture"),
-    ];
-    env.extend_from_slice(extra);
-    scene.run_script(&select_script(root)?, &env, None)
-}
-
-pub(crate) fn selected(scene: &Scene, root: &str) -> Result<Vec<String>, Box<dyn Error>> {
-    scene.output_block(&state_attested_output(&StateUnit::Slice(slice_of(root)?)))
 }

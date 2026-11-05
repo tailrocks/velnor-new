@@ -101,15 +101,16 @@ impl fmt::Display for StateUnit {
 
 #[must_use]
 pub fn is_state_output_token(token: &str) -> bool {
-    let unit = token.replace('_', "-");
     let named = |rest: &str| {
         !rest.is_empty()
             && rest
                 .bytes()
-                .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
+                .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_')
     };
-    unit == CLI_TOKEN
-        || [SLICE_TOKEN, SUITE_TOKEN]
-            .iter()
-            .any(|kind| unit.strip_prefix(kind).is_some_and(named))
+    token == CLI_TOKEN
+        || [SLICE_TOKEN, SUITE_TOKEN].iter().any(|kind| {
+            token
+                .strip_prefix(kind.replace('-', "_").as_str())
+                .is_some_and(named)
+        })
 }
