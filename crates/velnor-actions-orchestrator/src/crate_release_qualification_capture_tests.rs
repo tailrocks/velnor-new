@@ -3,7 +3,7 @@
 
 use super::*;
 use crate::crate_release_github::GitHubAdmissionRead;
-use crate::github_review_feedback::FeedbackQuery;
+use crate::github_review_feedback::{FeedbackQuery, FeedbackRead};
 use serde_json::Value;
 use std::collections::BTreeSet;
 
@@ -28,6 +28,24 @@ impl WitnessRead for NoReads {
         _: &str,
     ) -> Result<Vec<u8>, OrchestratorError> {
         panic!("unexpected artifact request")
+    }
+}
+impl crate::crate_release_qualification_provider::ProviderRead for NoReads {
+    fn provider_app(
+        &self,
+        _: crate::crate_release_qualification_provider::ProviderApp,
+    ) -> Result<Value, OrchestratorError> {
+        Err(crate::internal::internal("unexpected_provider"))
+    }
+    fn provider_graphql(
+        &self,
+        _: crate::crate_release_qualification_provider::ProviderQuery,
+        _: &[(&str, String)],
+    ) -> Result<Value, OrchestratorError> {
+        Err(crate::internal::internal("unexpected_provider"))
+    }
+    fn provider_check_runs(&self, _: &str, _: &str) -> Result<Vec<Value>, OrchestratorError> {
+        Err(crate::internal::internal("unexpected_provider"))
     }
 }
 impl FeedbackRead for NoReads {
@@ -107,7 +125,7 @@ fn rejects_source_from_another_repository_before_acquisition() {
                 source,
                 witness: &witness,
                 workflow_default_branch: "main",
-                candidate_feedback: &feedback,
+                review_proof: CaptureReviewProof::CompletionCheck(&feedback),
             },
             &NoReads,
         )
@@ -138,9 +156,11 @@ fn policy() -> velnor_actions_contract::config::ReleaseQualificationPolicy {
         candidate_repository_id: 1,
         candidate_default_branch: "main".into(),
         candidate_required_workflow_path: ".github/workflows/ci.yml".into(),
-        completion_app_id: 1,
-        completion_check_name: "complete".into(),
-        reviewer_app_ids: [1].into_iter().collect(),
+        review_proof: velnor_actions_contract::config::ReleaseReviewProof::CompletionCheck {
+            completion_app_id: 1,
+            completion_check_name: "complete".into(),
+            reviewer_app_ids: [1].into_iter().collect(),
+        },
         historical_manifest: velnor_actions_contract::config::ReleaseHistoricalManifestPolicy {
             version: "0.1.5".into(),
             source_sha: "b".repeat(40),

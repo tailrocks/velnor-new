@@ -29,28 +29,7 @@ fn qualification_intent_matches_rendered_intent_without_enabling_publishing()
     let metadata =
         crate::crate_release_qualification_intent::remap_metadata(raw.as_bytes(), source.root())?;
     let manifest = std::fs::read(temp.path().join(".velnor/release-manifest.json"))?;
-    let metadata_config = velnor_actions_contract::config::ReleaseRehearsalMetadataConfig {
-        manifest_path: "Cargo.toml".into(),
-        intent_config_path: ".velnor/config.toml".into(),
-        qualification: velnor_actions_contract::config::ReleaseQualificationPolicy {
-            candidate_repository: "candidate/repo".into(),
-            candidate_repository_id: 1,
-            candidate_default_branch: "main".into(),
-            candidate_required_workflow_path: ".github/workflows/ci.yml".into(),
-            completion_app_id: 1,
-            completion_check_name: "complete".into(),
-            reviewer_app_ids: [1].into_iter().collect(),
-            historical_manifest: velnor_actions_contract::config::ReleaseHistoricalManifestPolicy {
-                version: "0.1.5".into(),
-                source_sha: "b".repeat(40),
-                sha256: "c".repeat(64),
-            },
-        },
-        rust_version: prep
-            .catalog
-            .version(velnor_actions_mise::PinnedTool::Rust)
-            .to_owned(),
-    };
+    let metadata_config = qualification_metadata(prep.catalog.version(velnor_actions_mise::PinnedTool::Rust));
     let derive = |config: &velnor_actions_contract::VelnorConfig| {
         parent::derive_intent_from_snapshot(
             &source,
@@ -87,6 +66,30 @@ fn qualification_intent_matches_rendered_intent_without_enabling_publishing()
         .is_err()
     );
     Ok(())
+}
+
+fn qualification_metadata(rust_version: &str) -> velnor_actions_contract::config::ReleaseRehearsalMetadataConfig {
+    velnor_actions_contract::config::ReleaseRehearsalMetadataConfig {
+        manifest_path: "Cargo.toml".into(),
+        intent_config_path: ".velnor/config.toml".into(),
+        qualification: velnor_actions_contract::config::ReleaseQualificationPolicy {
+            candidate_repository: "candidate/repo".into(),
+            candidate_repository_id: 1,
+            candidate_default_branch: "main".into(),
+            candidate_required_workflow_path: ".github/workflows/ci.yml".into(),
+            review_proof: velnor_actions_contract::config::ReleaseReviewProof::CompletionCheck {
+                completion_app_id: 1,
+                completion_check_name: "complete".into(),
+                reviewer_app_ids: [1].into_iter().collect(),
+            },
+            historical_manifest: velnor_actions_contract::config::ReleaseHistoricalManifestPolicy {
+                version: "0.1.5".into(),
+                source_sha: "b".repeat(40),
+                sha256: "c".repeat(64),
+            },
+        },
+        rust_version: rust_version.to_owned(),
+    }
 }
 
 fn check_forged_metadata(

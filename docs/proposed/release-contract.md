@@ -431,12 +431,16 @@ metadata artifact identity, and intent configuration path. A verifier must bind 
 independently reviewed source and validate the metadata before using it.
 
 The metadata configuration also requires a `qualification` policy naming the
-candidate repository, repository ID, default branch and required workflow, the
-review-completion app and check, the required reviewer app IDs, and the
-historical manifest version, source SHA and SHA-256. The canonical workflow
-binds these reviewed values. Qualification compares them with GitHub evidence
-and the independently attested historical manifest. A candidate's provisional
-manifest is a separate input and cannot establish a published release.
+candidate repository, repository ID, default branch and required workflow, a
+review-proof policy, and the historical manifest version, source SHA and
+SHA-256. Set `[stacks.rust.release.rehearsal.metadata.qualification.review_proof]`
+to `mode = "direct-codex"` for authenticated Codex review inspection, or to
+`mode = "completion-check"` with `completion_app_id`, `completion_check_name`,
+and `reviewer_app_ids` for a digest-bound completion check. The two modes never
+fall back to each other. The canonical workflow binds the reviewed choice.
+Qualification must compare it with fresh GitHub evidence and the independently
+attested historical manifest. A candidate's provisional manifest is a separate
+input and cannot establish a published release.
 
 Cargo may contact hosts named by dependencies or registry configuration in the
 lockfile. The job has no GitHub or publishing credentials, but does not enforce

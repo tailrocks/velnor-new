@@ -34,10 +34,19 @@ pub struct ReleaseQualificationPolicy {
     pub candidate_repository_id: u64,
     pub candidate_default_branch: String,
     pub candidate_required_workflow_path: String,
-    pub completion_app_id: u64,
-    pub completion_check_name: String,
-    pub reviewer_app_ids: BTreeSet<u64>,
+    pub review_proof: ReleaseReviewProof,
     pub historical_manifest: ReleaseHistoricalManifestPolicy,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "mode", rename_all = "kebab-case", deny_unknown_fields)]
+pub enum ReleaseReviewProof {
+    CompletionCheck {
+        completion_app_id: u64,
+        completion_check_name: String,
+        reviewer_app_ids: BTreeSet<u64>,
+    },
+    DirectCodex,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -69,14 +78,7 @@ fn validate_qualification_policy(
         || policy.candidate_repository_id == 0
         || !crate::is_valid_branch_name(&policy.candidate_default_branch)
         || !workflow_valid
-        || policy.completion_app_id == 0
-        || policy.completion_check_name.is_empty()
-        || policy.completion_check_name.len() > 200
-        || policy.completion_check_name.chars().any(char::is_control)
-        || policy.completion_check_name.contains("${{")
-        || policy.reviewer_app_ids.is_empty()
-        || policy.reviewer_app_ids.len() > 32
-        || policy.reviewer_app_ids.contains(&0)
+        || !valid_review_proof(&policy.review_proof)
     {
         return Err(ContractError::config(
             file,
@@ -96,6 +98,26 @@ fn validate_qualification_policy(
         ));
     }
     Ok(())
+}
+
+fn valid_review_proof(proof: &ReleaseReviewProof) -> bool {
+    match proof {
+        ReleaseReviewProof::DirectCodex => true,
+        ReleaseReviewProof::CompletionCheck {
+            completion_app_id,
+            completion_check_name,
+            reviewer_app_ids,
+        } => {
+            *completion_app_id != 0
+                && !completion_check_name.is_empty()
+                && completion_check_name.len() <= 200
+                && !completion_check_name.chars().any(char::is_control)
+                && !completion_check_name.contains("${{")
+                && !reviewer_app_ids.is_empty()
+                && reviewer_app_ids.len() <= 32
+                && !reviewer_app_ids.contains(&0)
+        }
+    }
 }
 
 impl ReleaseRehearsalConfig {

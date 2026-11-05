@@ -151,7 +151,8 @@ pub use qualified_tools::{
 pub use release::{
     CrateReleasePredecessor, MAX_CRATE_RELEASE_PACKAGES, NewCrateRelease, RecoveryRelease,
     ReleaseAuthentication, ReleaseHistoricalManifestPolicy, ReleaseQualificationPolicy,
-    ReleaseRegistry, ReleaseRehearsalConfig, ReleaseRehearsalMetadataConfig, RustReleaseConfig,
+    ReleaseRegistry, ReleaseRehearsalConfig, ReleaseRehearsalMetadataConfig, ReleaseReviewProof,
+    RustReleaseConfig,
 };
 pub use resources::{
     ResourcesConfig, ShardTimingEvidence, TestShardingConfig, validate_shard_changes_need_evidence,

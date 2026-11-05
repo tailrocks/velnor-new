@@ -21,8 +21,18 @@ fn captures_coherent_evidence_and_rejects_mid_capture_source_change()
         source: &source,
         witness: &witness,
         workflow_default_branch: "main",
-        candidate_feedback: &feedback,
+        review_proof: CaptureReviewProof::CompletionCheck(&feedback),
     };
+    assert!(
+        capture_rehearsal(
+            &CaptureRequest {
+                review_proof: CaptureReviewProof::DirectCodex,
+                ..request
+            },
+            &api
+        )
+        .is_err()
+    );
     let result = capture_rehearsal(&request, &api)?;
     assert_eq!(result.bundle, b"fixture-output");
     assert_eq!(result.metadata.source_sha(), "c".repeat(40));
@@ -46,7 +56,7 @@ fn captures_coherent_evidence_and_rejects_mid_capture_source_change()
     assert!(
         capture_rehearsal(
             &CaptureRequest {
-                candidate_feedback: &wrong_feedback,
+                review_proof: CaptureReviewProof::CompletionCheck(&wrong_feedback),
                 ..request
             },
             &api
@@ -66,4 +76,23 @@ fn captures_coherent_evidence_and_rejects_mid_capture_source_change()
     api.mutate = true;
     assert!(capture_rehearsal(&request, &api).is_err());
     Ok(())
+}
+
+impl crate::crate_release_qualification_provider::ProviderRead for Api {
+    fn provider_app(
+        &self,
+        _: crate::crate_release_qualification_provider::ProviderApp,
+    ) -> Result<Value, OrchestratorError> {
+        Err(crate::internal::internal("unexpected_provider"))
+    }
+    fn provider_graphql(
+        &self,
+        _: crate::crate_release_qualification_provider::ProviderQuery,
+        _: &[(&str, String)],
+    ) -> Result<Value, OrchestratorError> {
+        Err(crate::internal::internal("unexpected_provider"))
+    }
+    fn provider_check_runs(&self, _: &str, _: &str) -> Result<Vec<Value>, OrchestratorError> {
+        Err(crate::internal::internal("unexpected_provider"))
+    }
 }

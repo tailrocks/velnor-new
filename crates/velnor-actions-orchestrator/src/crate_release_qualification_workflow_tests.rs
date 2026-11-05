@@ -151,19 +151,31 @@ fn metadata_opt_in_requires_the_exact_successful_metadata_job()
         .ok_or("metadata")?
         .qualification
         .candidate_repository = "candidate/repo".into();
-    request
+    let proof = &mut request
         .metadata
         .as_mut()
         .ok_or("metadata")?
         .qualification
-        .completion_app_id = 99;
+        .review_proof;
+    let velnor_actions_contract::config::ReleaseReviewProof::CompletionCheck {
+        completion_app_id,
+        ..
+    } = proof
+    else {
+        return Err("expected completion-check policy".into());
+    };
+    *completion_app_id = 99;
     assert!(verify_canonical_rehearsal(&request, "main", &api).is_err());
     request
         .metadata
         .as_mut()
         .ok_or("metadata")?
         .qualification
-        .completion_app_id = 1;
+        .review_proof = velnor_actions_contract::config::ReleaseReviewProof::CompletionCheck {
+        completion_app_id: 1,
+        completion_check_name: "complete".into(),
+        reviewer_app_ids: [1].into_iter().collect(),
+    };
     request
         .metadata
         .as_mut()
@@ -211,9 +223,11 @@ fn policy() -> velnor_actions_contract::config::ReleaseQualificationPolicy {
         candidate_repository_id: 1,
         candidate_default_branch: "main".into(),
         candidate_required_workflow_path: ".github/workflows/ci.yml".into(),
-        completion_app_id: 1,
-        completion_check_name: "complete".into(),
-        reviewer_app_ids: [1].into_iter().collect(),
+        review_proof: velnor_actions_contract::config::ReleaseReviewProof::CompletionCheck {
+            completion_app_id: 1,
+            completion_check_name: "complete".into(),
+            reviewer_app_ids: [1].into_iter().collect(),
+        },
         historical_manifest: velnor_actions_contract::config::ReleaseHistoricalManifestPolicy {
             version: "0.1.5".into(),
             source_sha: "b".repeat(40),

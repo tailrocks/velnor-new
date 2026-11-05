@@ -3,7 +3,7 @@
 
 use super::*;
 use crate::crate_release_github::GitHubAdmissionRead;
-use crate::github_review_feedback::{FeedbackQuery, capture_feedback};
+use crate::github_review_feedback::{FeedbackQuery, FeedbackRead, capture_feedback};
 use base64::Engine as _;
 use serde_json::{Value, json};
 use std::fmt::Write as _;
@@ -150,9 +150,12 @@ fn fixture() -> Result<
                     candidate_repository_id: 11,
                     candidate_default_branch: "main".into(),
                     candidate_required_workflow_path: ".github/workflows/ci.yml".into(),
-                    completion_app_id: 80,
-                    completion_check_name: "review-complete".into(),
-                    reviewer_app_ids: [90].into_iter().collect(),
+                    review_proof:
+                        velnor_actions_contract::config::ReleaseReviewProof::CompletionCheck {
+                            completion_app_id: 80,
+                            completion_check_name: "review-complete".into(),
+                            reviewer_app_ids: [90].into_iter().collect(),
+                        },
                     historical_manifest:
                         velnor_actions_contract::config::ReleaseHistoricalManifestPolicy {
                             version: "0.1.5".into(),

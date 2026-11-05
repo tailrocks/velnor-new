@@ -22,9 +22,12 @@ fn metadata_requires_exact_witness_source_and_artifact_custody()
                 candidate_repository_id: 1,
                 candidate_default_branch: "main".into(),
                 candidate_required_workflow_path: ".github/workflows/ci.yml".into(),
-                completion_app_id: 1,
-                completion_check_name: "complete".into(),
-                reviewer_app_ids: [1].into_iter().collect(),
+                review_proof:
+                    velnor_actions_contract::config::ReleaseReviewProof::CompletionCheck {
+                        completion_app_id: 1,
+                        completion_check_name: "complete".into(),
+                        reviewer_app_ids: [1].into_iter().collect(),
+                    },
                 historical_manifest:
                     velnor_actions_contract::config::ReleaseHistoricalManifestPolicy {
                         version: "0.1.5".into(),

@@ -58,7 +58,7 @@ pub struct CrateReleasePredecessor {
 mod rehearsal;
 pub use rehearsal::{
     ReleaseHistoricalManifestPolicy, ReleaseQualificationPolicy, ReleaseRehearsalConfig,
-    ReleaseRehearsalMetadataConfig,
+    ReleaseRehearsalMetadataConfig, ReleaseReviewProof,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

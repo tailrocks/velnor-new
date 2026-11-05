@@ -122,6 +122,27 @@ pub(super) fn append_metadata_witness_steps(
     steps: &mut Vec<Yaml>,
     metadata: &velnor_actions_contract::config::ReleaseRehearsalMetadataConfig,
 ) {
+    use velnor_actions_contract::config::ReleaseReviewProof;
+    let (review_mode, completion_app, completion_name, reviewers) =
+        match &metadata.qualification.review_proof {
+            ReleaseReviewProof::DirectCodex => {
+                ("direct-codex", String::new(), String::new(), String::new())
+            }
+            ReleaseReviewProof::CompletionCheck {
+                completion_app_id,
+                completion_check_name,
+                reviewer_app_ids,
+            } => (
+                "completion-check",
+                completion_app_id.to_string(),
+                completion_check_name.clone(),
+                reviewer_app_ids
+                    .iter()
+                    .map(u64::to_string)
+                    .collect::<Vec<_>>()
+                    .join(","),
+            ),
+        };
     steps.push(map(vec![
         (
             "uses",
@@ -175,7 +196,8 @@ pub(super) fn append_metadata_witness_steps(
     ("CANDIDATE_REPOSITORY_ID", Yaml::str(metadata.qualification.candidate_repository_id.to_string())),
     ("CANDIDATE_DEFAULT_BRANCH", Yaml::str(&metadata.qualification.candidate_default_branch)),
     ("CANDIDATE_REQUIRED_WORKFLOW", Yaml::str(&metadata.qualification.candidate_required_workflow_path)),
-    ("COMPLETION_APP_ID", Yaml::str(metadata.qualification.completion_app_id.to_string())),
-    ("COMPLETION_CHECK_NAME", Yaml::str(&metadata.qualification.completion_check_name)),
-    ("REVIEWER_APP_IDS", Yaml::str(metadata.qualification.reviewer_app_ids.iter().map(u64::to_string).collect::<Vec<_>>().join(",")))])));
+    ("REVIEW_PROOF_MODE", Yaml::str(review_mode)),
+    ("COMPLETION_APP_ID", Yaml::str(completion_app)),
+    ("COMPLETION_CHECK_NAME", Yaml::str(completion_name)),
+    ("REVIEWER_APP_IDS", Yaml::str(reviewers))])));
 }

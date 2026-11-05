@@ -1,13 +1,31 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::crate_release_qualification_provider::{
+    DirectFeedbackEvidence, DirectQualificationRead,
+};
 use crate::crate_release_qualification_source::{ReviewedPullState, ReviewedSourceRequest};
 use crate::crate_release_qualification_witness::{WitnessRead, WitnessRequest};
-use crate::github_review_feedback::{FeedbackContext, FeedbackRead};
+use crate::github_review_feedback::FeedbackContext;
 use crate::{OrchestratorError, internal::internal};
+use velnor_actions_contract::{
+    config::ReleaseReviewProof, homebrew_merge_gate::TapFeedbackSnapshot,
+};
 
-pub trait QualificationRead: WitnessRead + FeedbackRead {}
-impl<T: WitnessRead + FeedbackRead> QualificationRead for T {}
+pub trait QualificationRead: WitnessRead + DirectQualificationRead {}
+impl<T: WitnessRead + DirectQualificationRead> QualificationRead for T {}
+
+#[derive(Debug, Clone, Copy)]
+pub enum CaptureReviewProof<'a> {
+    CompletionCheck(&'a FeedbackContext<'a>),
+    DirectCodex,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+enum ProofEvidence {
+    CompletionCheck(TapFeedbackSnapshot),
+    DirectCodex(DirectFeedbackEvidence),
+}
 
 #[derive(Debug)]
 pub struct CaptureRequest<'a> {
@@ -15,7 +33,7 @@ pub struct CaptureRequest<'a> {
     pub source: &'a ReviewedSourceRequest,
     pub witness: &'a WitnessRequest,
     pub workflow_default_branch: &'a str,
-    pub candidate_feedback: &'a FeedbackContext<'a>,
+    pub review_proof: CaptureReviewProof<'a>,
 }
 
 pub struct CapturedRehearsal {
@@ -40,7 +58,6 @@ pub fn capture_rehearsal(
     let candidate = request.candidate;
     let source = request.source;
     let witness = request.witness;
-    let feedback = request.candidate_feedback;
     validate_capture_identity(request)?;
     let ReviewedPullState::Merged {
         merge_sha,
@@ -52,8 +69,7 @@ pub fn capture_rehearsal(
     let before_candidate =
         crate::crate_release_qualification_source::verify_pull_source(candidate, api)?;
     let before_source = crate::crate_release_qualification_source::verify_pull_source(source, api)?;
-    let before_feedback =
-        crate::crate_release_qualification_checks::verify_refreshed_feedback(api, api, feedback)?;
+    let before_feedback = verify_capture_proof(request, api)?;
     crate::crate_release_qualification_approval::verify_rehearsal_approval(
         witness,
         request.workflow_default_branch,
@@ -78,10 +94,7 @@ pub fn capture_rehearsal(
         != crate::crate_release_qualification_source::verify_pull_source(candidate, api)?
         || before_source
             != crate::crate_release_qualification_source::verify_pull_source(source, api)?
-        || before_feedback
-            != crate::crate_release_qualification_checks::verify_refreshed_feedback(
-                api, api, feedback,
-            )?
+        || before_feedback != verify_capture_proof(request, api)?
         || before_workflow
             != crate::crate_release_qualification_workflow::verify_canonical_rehearsal(
                 witness,
@@ -105,7 +118,6 @@ fn validate_capture_identity(request: &CaptureRequest<'_>) -> Result<(), Orchest
     let candidate = request.candidate;
     let source = request.source;
     let witness = request.witness;
-    let feedback = request.candidate_feedback;
     let policy = &witness
         .metadata
         .as_ref()
@@ -124,18 +136,48 @@ fn validate_capture_identity(request: &CaptureRequest<'_>) -> Result<(), Orchest
         || source.repository != witness.repository
         || source.repository_id != witness.repository_id
         || source.default_branch != request.workflow_default_branch
-        || feedback.repository != candidate.repository
-        || feedback.pull_request_number != candidate.pull_request
-        || feedback.head_sha != candidate.head_sha
-        || feedback.completion_app_id != policy.completion_app_id
-        || feedback.completion_check_name != policy.completion_check_name
-        || feedback.expected_reviewer_app_ids != &policy.reviewer_app_ids
         || !witness.output_bundle
         || witness.source_sha.as_deref() != Some(merge_sha)
     {
         return Err(internal("qualification_capture_identity"));
     }
+    match (&policy.review_proof, request.review_proof) {
+        (ReleaseReviewProof::DirectCodex, CaptureReviewProof::DirectCodex) => {}
+        (
+            ReleaseReviewProof::CompletionCheck {
+                completion_app_id,
+                completion_check_name,
+                reviewer_app_ids,
+            },
+            CaptureReviewProof::CompletionCheck(feedback),
+        ) if feedback.repository == candidate.repository
+            && feedback.pull_request_number == candidate.pull_request
+            && feedback.head_sha == candidate.head_sha
+            && feedback.completion_app_id == *completion_app_id
+            && feedback.completion_check_name == completion_check_name
+            && feedback.expected_reviewer_app_ids == reviewer_app_ids => {}
+        _ => return Err(internal("qualification_capture_identity")),
+    }
     Ok(())
+}
+
+fn verify_capture_proof(
+    request: &CaptureRequest<'_>,
+    api: &dyn QualificationRead,
+) -> Result<ProofEvidence, OrchestratorError> {
+    match request.review_proof {
+        CaptureReviewProof::CompletionCheck(feedback) => {
+            crate::crate_release_qualification_checks::verify_refreshed_feedback(api, api, feedback)
+                .map(ProofEvidence::CompletionCheck)
+        }
+        CaptureReviewProof::DirectCodex => {
+            crate::crate_release_qualification_provider::verify_direct_codex_feedback(
+                request.candidate,
+                api,
+            )
+            .map(ProofEvidence::DirectCodex)
+        }
+    }
 }
 
 fn verify_metadata_source(
