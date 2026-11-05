@@ -8,6 +8,28 @@ pub(super) fn is_sha256(value: &str) -> bool {
             .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
 }
 
+pub(super) fn hex_lower(bytes: &[u8]) -> String {
+    let mut result = String::with_capacity(bytes.len() * 2);
+    for byte in bytes {
+        result.push(hex_digit(byte >> 4));
+        result.push(hex_digit(byte & 0x0f));
+    }
+    result
+}
+
+pub(super) fn hex_digit(value: u8) -> char {
+    char::from(b"0123456789abcdef"[usize::from(value)])
+}
+
+pub(super) fn agent_config(tls: ureq::tls::TlsConfig) -> ureq::config::Config {
+    ureq::Agent::config_builder()
+        .tls_config(tls)
+        .proxy(None)
+        .timeout_global(Some(std::time::Duration::from_secs(30)))
+        .max_redirects(0)
+        .build()
+}
+
 #[cfg(test)]
 mod tests {
     use super::super::{
@@ -78,26 +100,4 @@ mod tests {
         }
         Ok(())
     }
-}
-
-pub(super) fn hex_lower(bytes: &[u8]) -> String {
-    let mut result = String::with_capacity(bytes.len() * 2);
-    for byte in bytes {
-        result.push(hex_digit(byte >> 4));
-        result.push(hex_digit(byte & 0x0f));
-    }
-    result
-}
-
-pub(super) fn hex_digit(value: u8) -> char {
-    char::from(b"0123456789abcdef"[usize::from(value)])
-}
-
-pub(super) fn agent_config(tls: ureq::tls::TlsConfig) -> ureq::config::Config {
-    ureq::Agent::config_builder()
-        .tls_config(tls)
-        .proxy(None)
-        .timeout_global(Some(std::time::Duration::from_secs(30)))
-        .max_redirects(0)
-        .build()
 }

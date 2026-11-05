@@ -173,12 +173,14 @@ fn spawn(
                     stream
                         .set_read_timeout(Some(Duration::from_secs(5)))
                         .expect("fixture timeout");
-                    if let Some(request) = read(&mut stream) {
-                        write(&mut stream, handle(request));
+                    if let Some(request) = read(&mut stream)
+                        && write(&mut stream, handle(request)).is_err()
+                    {
+                        thread::yield_now();
                     }
                 }
                 Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
-                    thread::sleep(Duration::from_millis(2))
+                    thread::sleep(Duration::from_millis(2));
                 }
                 Err(_) => break,
             }
@@ -234,7 +236,7 @@ fn read(stream: &mut TcpStream) -> Option<Request> {
     }
 }
 
-fn write(stream: &mut TcpStream, response: Response) {
+fn write(stream: &mut TcpStream, response: Response) -> std::io::Result<()> {
     let reason = match response.status {
         200 => "OK",
         302 => "Found",
@@ -248,9 +250,9 @@ fn write(stream: &mut TcpStream, response: Response) {
         response.status,
         response.body.len()
     );
-    let _ = stream
+    stream
         .write_all(headers.as_bytes())
-        .and_then(|()| stream.write_all(&response.body));
+        .and_then(|()| stream.write_all(&response.body))
 }
 
 #[path = "crate_release_qualification_native_state.rs"]
