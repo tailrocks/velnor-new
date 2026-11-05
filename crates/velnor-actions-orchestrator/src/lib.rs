@@ -31,6 +31,7 @@ pub mod crate_release_qualification_bundle;
 pub mod crate_release_qualification_checks;
 pub mod crate_release_qualification_observation;
 pub mod crate_release_qualification_package;
+pub mod crate_release_qualification_inputs;
 pub mod crate_release_qualification_source;
 pub mod crate_release_qualification_witness;
 pub mod crate_release_qualification_workflow;
