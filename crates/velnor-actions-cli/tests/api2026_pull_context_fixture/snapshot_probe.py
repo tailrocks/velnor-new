@@ -93,6 +93,14 @@ def main():
             (long_root / f"link{index:02}").symlink_to("./" * 400 + target)
         git(long_root, "add", ".")
         refuses(lambda: source_snapshot.collect(long_root, None, driver.read_tracked))
+        aggregate_root = pathlib.Path(temporary) / "aggregate"
+        aggregate_root.mkdir(); git(aggregate_root, "init")
+        (aggregate_root / "target").write_text("tracked")
+        for index in range(3):
+            (aggregate_root / f"link{index}").symlink_to("./" * 80 + "target")
+        git(aggregate_root, "add", ".")
+        source_snapshot.MAX_TOTAL_LINK_STEPS = 200
+        refuses(lambda: source_snapshot.collect(aggregate_root, None, driver.read_tracked))
 
 
 if __name__ == "__main__":

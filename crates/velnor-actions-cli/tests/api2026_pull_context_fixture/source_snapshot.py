@@ -13,6 +13,7 @@ MAX_ENTRIES = 100000
 MAX_LINK = 4096
 MAX_GIT_OUTPUT = 64 * 1024 * 1024
 MAX_LINK_STEPS = 8192
+MAX_TOTAL_LINK_STEPS = 1000000
 
 
 def git_output(args, env):
@@ -90,6 +91,7 @@ def directories(entries):
 
 def check_links(entries, dirs):
     directory_links = []
+    total_steps = 0
     for name, record in entries.items():
         if record[1] != b"link":
             continue
@@ -99,7 +101,8 @@ def check_links(entries, dirs):
         steps = 0
         while pending:
             steps += 1
-            if steps > MAX_LINK_STEPS:
+            total_steps += 1
+            if steps > MAX_LINK_STEPS or total_steps > MAX_TOTAL_LINK_STEPS:
                 raise RuntimeError("fixture link resolution exceeds its bound")
             part = pending.popleft()
             if part in (b"", b"."):
