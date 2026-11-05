@@ -17,15 +17,30 @@ pub struct HistoricalManifestRequest<'a> {
 #[derive(Debug)]
 pub struct HistoricalManifest {
     bytes: Vec<u8>,
-    pub source_sha: String,
-    pub run_id: u64,
-    pub run_attempt: u32,
+    source_sha: String,
+    run_id: u64,
+    run_attempt: u32,
 }
 
 impl HistoricalManifest {
     #[must_use]
     pub fn bytes(&self) -> &[u8] {
         &self.bytes
+    }
+
+    #[must_use]
+    pub fn source_sha(&self) -> &str {
+        &self.source_sha
+    }
+
+    #[must_use]
+    pub fn run_id(&self) -> u64 {
+        self.run_id
+    }
+
+    #[must_use]
+    pub fn run_attempt(&self) -> u32 {
+        self.run_attempt
     }
 }
 
