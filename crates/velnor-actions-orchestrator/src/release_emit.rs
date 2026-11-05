@@ -71,19 +71,17 @@ fn release_files_for_config(
     mise: &MiseSetup,
     release: &RustReleaseConfig,
 ) -> Result<Vec<RenderedFile>, OrchestratorError> {
-    let metadata = release_metadata_json(prep, release.manifest_path.as_str())?;
-    let known_manifests = tracked_manifests(&prep.root)?;
-    let selection = select_from_json_with_known(prep, release, &metadata, &known_manifests)?;
-    if selection.is_empty() {
-        return Err(OrchestratorError::Contract {
-            problem: "release_nothing_selected".to_owned(),
-        });
-    }
-    check_recovery_record(release, &selection)?;
-    check_creation_selection(release, &selection)?;
-    let registry = common_registry(&selection)?;
-    let repository = origin_repository(&prep.root)?;
-    let source_sha = approved_source(&prep.root, release)?;
+    let ReleaseIntentInputs {
+        metadata,
+        known,
+        selection,
+        registry,
+        repository,
+        source_sha,
+        pin,
+        config,
+        intent,
+    } = derive_release_inputs(prep, release)?;
     let plan_id = plan_id_for_source(&source_sha);
     let version = release
         .recovery
@@ -98,12 +96,6 @@ fn release_files_for_config(
         version,
         release.recovery.is_some() || release.new_crates.is_some(),
     );
-    let generator_version = env!("CARGO_PKG_VERSION");
-    let (generator_source_sha, generator_manifest_sha256) = reviewed_generator_manifest(
-        prep.discovery.consumer_manifest_json.as_deref(),
-        prep.discovery.consumer_manifest_stand_in,
-        generator_version,
-    )?;
     let jobs = build_release_jobs(
         prep,
         mise,
@@ -111,27 +103,16 @@ fn release_files_for_config(
         &registry,
         &repository,
         &plan,
-        (&generator_source_sha, &generator_manifest_sha256),
+        (&pin.0, &pin.1),
     )?;
     let concurrency = workspace_lock(
         &metadata,
         &prep.root,
         &release.manifest_path,
-        &known_manifests,
+        &known,
         &registry,
         &repository,
     )?;
-    let config = plz_config(release, &selection)?;
-    let paths = reviewed_pr_write_paths(prep, release, &metadata, &known_manifests)?;
-    let intent = crate_release_intent(
-        prep,
-        release,
-        &repository,
-        &registry,
-        (&generator_source_sha, &generator_manifest_sha256),
-        &config,
-        paths,
-    );
     let spec = ReleaseWorkflowSpec {
         name: RELEASE_WORKFLOW_NAME.to_owned(),
         repository,
@@ -262,8 +243,6 @@ fn crate_release_intent(
     }
 }
 
-/// Reconstruct release intent without rendering workflows or invoking a publisher.
-/// The caller must authenticate the source, configuration and generator manifest.
 pub(crate) fn derive_qualification_intent(
     prep: &GenerationPreparation,
 ) -> Result<CrateReleaseIntent, OrchestratorError> {
@@ -276,6 +255,25 @@ pub(crate) fn derive_qualification_intent(
             "registry is not crates.io",
         ));
     }
+    Ok(derive_release_inputs(prep, release)?.intent)
+}
+
+struct ReleaseIntentInputs {
+    metadata: String,
+    known: BTreeSet<String>,
+    selection: velnor_actions_rust::release_select::ReleaseSelection,
+    registry: String,
+    repository: String,
+    source_sha: String,
+    pin: (String, String),
+    config: velnor_actions_workflow_renderer::release_config::ReleasePlzConfig,
+    intent: CrateReleaseIntent,
+}
+
+fn derive_release_inputs(
+    prep: &GenerationPreparation,
+    release: &RustReleaseConfig,
+) -> Result<ReleaseIntentInputs, OrchestratorError> {
     let metadata = release_metadata_json(prep, release.manifest_path.as_str())?;
     let known = tracked_manifests(&prep.root)?;
     let selection = select_from_json_with_known(prep, release, &metadata, &known)?;
@@ -288,7 +286,7 @@ pub(crate) fn derive_qualification_intent(
     check_creation_selection(release, &selection)?;
     let registry = common_registry(&selection)?;
     let repository = origin_repository(&prep.root)?;
-    approved_source(&prep.root, release)?;
+    let source_sha = approved_source(&prep.root, release)?;
     let pin = reviewed_generator_manifest(
         prep.discovery.consumer_manifest_json.as_deref(),
         prep.discovery.consumer_manifest_stand_in,
@@ -296,7 +294,7 @@ pub(crate) fn derive_qualification_intent(
     )?;
     let config = plz_config(release, &selection)?;
     let paths = reviewed_pr_write_paths(prep, release, &metadata, &known)?;
-    Ok(crate_release_intent(
+    let intent = crate_release_intent(
         prep,
         release,
         &repository,
@@ -304,7 +302,18 @@ pub(crate) fn derive_qualification_intent(
         (&pin.0, &pin.1),
         &config,
         paths,
-    ))
+    );
+    Ok(ReleaseIntentInputs {
+        metadata,
+        known,
+        selection,
+        registry,
+        repository,
+        source_sha,
+        pin,
+        config,
+        intent,
+    })
 }
 
 fn reviewed_pr_write_paths(
