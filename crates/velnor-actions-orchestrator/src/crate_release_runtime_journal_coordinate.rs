@@ -13,7 +13,6 @@ pub(super) fn coordinate_journal(runtime: JournalRuntime<'_>) -> Result<(), Orch
     };
     use crate::crate_release_journal::{JournalIdentity, JournalStage, inspect_journal};
     use crate::crate_release_journal_adapter::JournalAdapter;
-    use velnor_actions_mise::command::CratePublishCredential;
 
     let identity = JournalIdentity {
         repository: runtime.request.repository.clone(),
@@ -40,6 +39,8 @@ pub(super) fn coordinate_journal(runtime: JournalRuntime<'_>) -> Result<(), Orch
         sequence: 1,
     };
     let runner_temp = required_path("RUNNER_TEMP")?;
+    let workflow_root = required_path("GITHUB_WORKSPACE")?;
+    let credential = upload_credentials(runtime.intent.authentication, required);
     coordinate_release(
         &input,
         |package| {
@@ -53,25 +54,21 @@ pub(super) fn coordinate_journal(runtime: JournalRuntime<'_>) -> Result<(), Orch
             )
         },
         |permit| {
-            let (token, url) = upload_credentials(runtime.intent.authentication)?;
-            let credential = match &url {
-                Some(request_url) => CratePublishCredential::Trusted {
-                    request_url,
-                    request_token: &token,
-                },
-                None => CratePublishCredential::Bootstrap {
-                    cargo_token: &token,
-                },
-            };
-            invoke_upload(&input, permit, &runner_temp, runtime.token, credential)
+            let credential = credential
+                .as_ref()
+                .map_err(|_| internal("crate_release_upload_credential_missing"))?;
+            invoke_upload(
+                &input,
+                permit,
+                &runner_temp,
+                runtime.token,
+                credential.as_publish_credential(),
+            )
         },
         || thread::sleep(coordinator_wait_duration()),
     )?;
-    let reviewed_manifest = read_manifest_at_workflow(
-        &required_path("GITHUB_WORKSPACE")?,
-        &runtime.request.workflow_sha,
-        runtime.git,
-    )?;
+    let reviewed_manifest =
+        read_manifest_at_workflow(&workflow_root, &runtime.request.workflow_sha, runtime.git)?;
     start_journal_with(
         &runner_temp.join("velnor/bootstrap"),
         runtime.intent,
@@ -98,15 +95,100 @@ pub(super) fn coordinator_wait_duration() -> Duration {
     Duration::from_secs(2)
 }
 
-pub(super) fn upload_credentials(
+enum UploadCredential {
+    Trusted {
+        request_token: String,
+        request_url: String,
+    },
+    Bootstrap {
+        cargo_token: String,
+    },
+}
+
+impl UploadCredential {
+    fn as_publish_credential(&self) -> velnor_actions_mise::command::CratePublishCredential<'_> {
+        use velnor_actions_mise::command::CratePublishCredential;
+        match self {
+            Self::Trusted {
+                request_url,
+                request_token,
+            } => CratePublishCredential::Trusted {
+                request_url,
+                request_token,
+            },
+            Self::Bootstrap { cargo_token } => CratePublishCredential::Bootstrap { cargo_token },
+        }
+    }
+}
+
+fn upload_credentials(
     authentication: velnor_actions_contract::config::ReleaseAuthentication,
-) -> Result<(String, Option<String>), OrchestratorError> {
+    mut read: impl FnMut(&str) -> Result<String, OrchestratorError>,
+) -> Result<UploadCredential, OrchestratorError> {
     use velnor_actions_contract::config::ReleaseAuthentication;
     match authentication {
-        ReleaseAuthentication::TrustedPublishing => Ok((
-            required("ACTIONS_ID_TOKEN_REQUEST_TOKEN")?,
-            Some(required("ACTIONS_ID_TOKEN_REQUEST_URL")?),
-        )),
-        ReleaseAuthentication::BootstrapToken => Ok((required("CARGO_REGISTRY_TOKEN")?, None)),
+        ReleaseAuthentication::TrustedPublishing => Ok(UploadCredential::Trusted {
+            request_token: read("ACTIONS_ID_TOKEN_REQUEST_TOKEN")?,
+            request_url: read("ACTIONS_ID_TOKEN_REQUEST_URL")?,
+        }),
+        ReleaseAuthentication::BootstrapToken => Ok(UploadCredential::Bootstrap {
+            cargo_token: read("CARGO_REGISTRY_TOKEN")?,
+        }),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{UploadCredential, upload_credentials};
+    use crate::internal::internal;
+    use std::collections::BTreeMap;
+    use velnor_actions_contract::config::ReleaseAuthentication;
+
+    #[test]
+    fn credential_capture_preserves_selected_mode_and_values()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let mut input = BTreeMap::from([
+            ("ACTIONS_ID_TOKEN_REQUEST_TOKEN", "oidc-fixture"),
+            (
+                "ACTIONS_ID_TOKEN_REQUEST_URL",
+                "https://fixture.invalid/request",
+            ),
+            ("CARGO_REGISTRY_TOKEN", "bootstrap-fixture"),
+        ]);
+        let read = |name: &str| {
+            input
+                .get(name)
+                .filter(|value| !value.is_empty())
+                .map(|value| (*value).to_owned())
+                .ok_or_else(|| internal("missing_fixture_credential"))
+        };
+        let trusted = upload_credentials(ReleaseAuthentication::TrustedPublishing, read)?;
+        let bootstrap = upload_credentials(ReleaseAuthentication::BootstrapToken, read)?;
+        input.insert("ACTIONS_ID_TOKEN_REQUEST_TOKEN", "changed-fixture");
+        input.insert("CARGO_REGISTRY_TOKEN", "changed-fixture");
+        assert!(
+            matches!(trusted, UploadCredential::Trusted { request_token, request_url }
+            if request_token == "oidc-fixture" && request_url == "https://fixture.invalid/request")
+        );
+        assert!(
+            matches!(bootstrap, UploadCredential::Bootstrap { cargo_token }
+            if cargo_token == "bootstrap-fixture")
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn publication_never_falls_back_to_another_authentication_mode() {
+        let read = |name: &str| match name {
+            "CARGO_REGISTRY_TOKEN" => Ok("bootstrap-fixture".to_owned()),
+            _ => Err(internal("missing_fixture_credential")),
+        };
+        assert!(upload_credentials(ReleaseAuthentication::TrustedPublishing, read).is_err());
+        let read = |name: &str| match name {
+            "ACTIONS_ID_TOKEN_REQUEST_TOKEN" => Ok("oidc-fixture".to_owned()),
+            "ACTIONS_ID_TOKEN_REQUEST_URL" => Ok("https://fixture.invalid/request".to_owned()),
+            _ => Err(internal("missing_fixture_credential")),
+        };
+        assert!(upload_credentials(ReleaseAuthentication::BootstrapToken, read).is_err());
     }
 }
