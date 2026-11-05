@@ -202,7 +202,7 @@ pub(super) fn verify_reconciled_candidate(
     };
     assert!(derive_reconciled_candidate(&wrong).is_err());
     let mut wrong_intent = input.intent.clone();
-    wrong_intent.rust_version = "1.99.1".into();
+    wrong_intent.rust_version = if wrong_intent.rust_version == "1.97.1" { "1.99.1" } else { "1.97.1" }.into();
     let wrong = velnor_actions_orchestrator::crate_release_controller::CrateReleaseObservation {
         intent: &wrong_intent,
         ..*input
