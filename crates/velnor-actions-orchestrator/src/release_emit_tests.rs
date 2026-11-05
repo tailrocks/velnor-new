@@ -291,6 +291,7 @@ fn configured_features_reach_release_plz_and_cargo_package()
         registry: ReleaseRegistry::CratesIo,
         packages: vec!["probe".into()],
         publish_features: [("probe".into(), vec!["pty".into()])].into(),
+        version_groups: [("shared".into(), vec!["probe".into()])].into(),
         ..RustReleaseConfig::default()
     };
     let config = super::config::plz_config(&release, &selected)?;
@@ -300,6 +301,7 @@ fn configured_features_reach_release_plz_and_cargo_package()
         env!("CARGO_PKG_VERSION"),
     )?;
     assert!(rendered.contains("publish_features = [\"pty\"]"));
+    assert!(rendered.contains("version_group = \"shared\""));
     let package = Command::new(env!("CARGO"))
         .args([
             "package",
@@ -319,6 +321,9 @@ fn configured_features_reach_release_plz_and_cargo_package()
         .current_dir(temp.path())
         .output()?;
     assert!(!missing.status.success());
+    let mut unknown_group = release.clone();
+    unknown_group.version_groups.insert("shared".into(), vec!["other".into()]);
+    assert!(super::config::plz_config(&unknown_group, &selected).is_err());
     let mut unknown = release;
     unknown
         .publish_features

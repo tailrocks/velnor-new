@@ -12,10 +12,12 @@ fn upload_config_selects_one_package_and_preserves_policy() -> Result<(), Box<dy
         semver_check: false,
         packages: vec![
             ReleasePlzPackage {
+                version_group: Some("shared".into()),
                 name: "velnor_probe_a".into(),
                 publish_features: vec!["demo".into()],
             },
             ReleasePlzPackage {
+                version_group: Some("shared".into()),
                 name: "velnor_probe_b".into(),
                 publish_features: vec![],
             },
@@ -35,6 +37,7 @@ fn upload_config_selects_one_package_and_preserves_policy() -> Result<(), Box<dy
         assert_eq!(packages.len(), 1);
         assert_eq!(packages[0]["name"].as_str(), Some("velnor_probe_a"));
         assert_eq!(packages[0]["release"].as_bool(), Some(true));
+        assert!(packages[0].get("version_group").is_none());
         assert_eq!(packages[0]["publish_features"][0].as_str(), Some("demo"));
     }
     assert!(render_single_package_upload_config(&config, "missing", "0.1.72").is_err());

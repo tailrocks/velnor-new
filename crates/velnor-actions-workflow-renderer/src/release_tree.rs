@@ -348,6 +348,10 @@ fn release_features_match(
     config.packages.len() == intent.publish_features.len()
         && config.packages.iter().all(|package| {
             intent.publish_features.get(&package.name) == Some(&package.publish_features)
+                && package.version_group
+                    == intent.version_groups.iter().find_map(|(group, members)| {
+                        members.contains(&package.name).then(|| group.clone())
+                    })
         })
 }
 

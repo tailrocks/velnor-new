@@ -53,6 +53,7 @@ fn intent(sha: &str) -> CrateReleaseIntent {
         registry: "crates-io".into(),
         packages: vec!["demo".into()],
         publish_features: BTreeMap::from([("demo".into(), vec![])]),
+        version_groups: std::collections::BTreeMap::new(),
         new_crates: None,
         tag_template: "{{ package }}-v{{ version }}".into(),
         journal_predecessor: None,

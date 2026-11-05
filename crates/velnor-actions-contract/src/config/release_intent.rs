@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use super::release_validation::{
     is_full_sha, is_package_name, validate_environment, validate_manifest_path, validate_packages,
-    validate_publish_features, validate_tag_name,
+    validate_publish_features, validate_tag_name, validate_version_groups,
 };
 use crate::errors::ContractError;
 
@@ -30,6 +30,8 @@ pub struct CrateReleaseIntent {
     pub registry: String,
     pub packages: Vec<String>,
     pub publish_features: std::collections::BTreeMap<String, Vec<String>>,
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub version_groups: std::collections::BTreeMap<String, Vec<String>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub new_crates: Option<super::NewCrateRelease>,
     pub tag_template: String,
@@ -155,6 +157,7 @@ fn validate_intent_packages(intent: &CrateReleaseIntent) -> Result<(), ContractE
     let file = "release_intent";
     validate_packages(file, &intent.packages, true, false)?;
     validate_publish_features(file, &intent.publish_features, &intent.packages, false)?;
+    validate_version_groups(file, &intent.version_groups, &intent.packages, false)?;
     super::release::validate_new_crates(file, intent.new_crates.as_ref(), &intent.packages, false)?;
     if intent.new_crates.is_some()
         && intent.authentication != super::ReleaseAuthentication::BootstrapToken

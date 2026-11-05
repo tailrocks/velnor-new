@@ -59,6 +59,7 @@ fn derives_reviewable_plan_from_verified_source_tree() -> Result<(), Orchestrato
         registry: "crates-io".into(),
         packages: vec!["sample".into()],
         publish_features: BTreeMap::new(),
+        version_groups: std::collections::BTreeMap::new(),
         new_crates: None,
         tag_template: "{{ crate }}-v{{ version }}".into(),
         recovery: None,

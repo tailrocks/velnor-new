@@ -56,12 +56,6 @@ pub(crate) fn release_files(
             "trusted publication is disabled until runtime admission and reconciliation are available",
         ));
     }
-    if !release.version_groups.is_empty() {
-        return Err(OrchestratorError::unsupported(
-            "version_groups",
-            "native groups need renderer config support: remove version_groups",
-        ));
-    }
     let mise = crate::pins::resolve_mise_setup(&prep.config, RELEASE_HOSTED_RUNNER)?;
     release_files_for_config(prep, &mise, release)
 }
@@ -234,6 +228,7 @@ fn crate_release_intent(
             .iter()
             .map(|package| (package.name.clone(), package.publish_features.clone()))
             .collect(),
+        version_groups: release.version_groups.clone(),
         new_crates: release.new_crates.clone(),
         tag_template: release.tag_name.clone(),
         journal_predecessor: release.journal_predecessor.clone(),

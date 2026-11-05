@@ -251,6 +251,10 @@ pub(super) fn single_package_config(
                 .cloned()
                 .ok_or_else(|| internal("crate_release_upload_unverified"))?;
             Ok(ReleasePlzPackage {
+                version_group: intent
+                    .version_groups
+                    .iter()
+                    .find_map(|(group, members)| members.contains(name).then(|| group.clone())),
                 name: name.clone(),
                 publish_features,
             })

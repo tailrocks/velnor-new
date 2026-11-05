@@ -24,7 +24,7 @@ Reference for the typed config in `velnor-actions-contract`
 | `tag_name` | string | `"{{ package }}-v{{ version }}"` | For crates.io, must be `{{ package }}-v{{ version }}` (whitespace-insensitive). Git-tag releases support safe templates containing both variables. |
 | `recovery` | table or absent | absent | Binds an exact package, version, and source for an approved recovery dispatch; push events are rejected. Cannot coexist with `new_crates`. Bootstrap-token authentication requires either `recovery` or `new_crates`. |
 | `journal_predecessor` | table or absent | absent | Binds a reviewed previous run ID, attempt, and workflow SHA for durable release recovery. Requires `recovery` or `new_crates` to bind the exact source; only attempt `1` is accepted. |
-| `version_groups` | string→string-list map | `{}` | Group names use package-name shape; members must be sorted, unique, listed in `packages`, and in at most one group. Non-lockstep: unchanged members are not forced to release. |
+| `version_groups` | string→string-list map | `{}` | Group names use package-name shape; members must be sorted, unique, listed in `packages`, and in at most one group. Native release-plz groups use the maximum next version across members; an otherwise unchanged member is updated when its current version differs from that maximum. |
 
 For example, to verify `demo-crate` with its `pty` feature during publication:
 
@@ -79,7 +79,7 @@ release_pr = true
 tag_name = "{{ package }}-v{{ version }}"
 ```
 
-Multi-crate with a version group (members coordinate, unchanged stay):
+Multi-crate with a version group (members converge to the maximum next version):
 
 ```toml
 [stacks.rust.release]

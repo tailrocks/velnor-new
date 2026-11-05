@@ -177,7 +177,7 @@ fn assert_workspace_resume(
     workspace_intent.packages.push("second".into());
     workspace_intent.publish_features.insert("second".into(), vec![]);
     let mut workspace_config = config.clone();
-    workspace_config.packages.push(ReleasePlzPackage { name: "second".into(), publish_features: vec![] });
+    workspace_config.packages.push(ReleasePlzPackage { version_group: None, name: "second".into(), publish_features: vec![] });
     assert!(render_release_files(&workspace_spec, ctx, &workspace_config, &workspace_intent).is_ok());
     workspace_spec.journal_predecessor = Some(velnor_actions_contract::config::CrateReleasePredecessor { run_id: 42, run_attempt: 2, workflow_sha: "d".repeat(40) });
     workspace_intent.journal_predecessor = workspace_spec.journal_predecessor.clone();

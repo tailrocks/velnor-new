@@ -85,6 +85,10 @@ fn prepare_pr_inner() -> Result<(), &'static str> {
             .packages
             .iter()
             .map(|name| ReleasePlzPackage {
+                version_group: intent
+                    .version_groups
+                    .iter()
+                    .find_map(|(group, members)| members.contains(name).then(|| group.clone())),
                 name: name.clone(),
                 publish_features: intent.publish_features[name].clone(),
             })

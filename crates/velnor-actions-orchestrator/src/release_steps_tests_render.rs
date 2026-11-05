@@ -117,8 +117,15 @@ fn rendered_files_reject_divergent_release_intent() -> Result<(), Box<dyn std::e
     use velnor_actions_workflow_renderer::release_tree::{render_release_files, ReleaseRenderContext};
     let (spec, rust) = fixture()?;
     let ctx = ReleaseRenderContext { generator_version: env!("CARGO_PKG_VERSION").into(), runs_on: "ubuntu-24.04".into() };
-    let config = ReleasePlzConfig { tag_pattern: "{{ package }}-v{{ version }}".into(), semver_check: true, packages: vec![ReleasePlzPackage { name: "example".into(), publish_features: vec![] }] };
-    let intent = CrateReleaseIntent { schema: 1, repository: "owner/project".into(), default_branch: "main".into(), environment: "release".into(), required_workflow_path: ".github/workflows/ci.yml".into(), trusted_reviewer_id: 1, rust_version: rust, generator_version: env!("CARGO_PKG_VERSION").into(), generator_source_sha: "b".repeat(40), generator_manifest_sha256: "c".repeat(64), release_plz_version: "0.4.3".into(), runner: "ubuntu-24.04".into(), authentication: velnor_actions_contract::config::ReleaseAuthentication::TrustedPublishing, manifest_path: "Cargo.toml".into(), pr_write_paths: vec!["Cargo.toml".into()], registry: "crates-io".into(), packages: vec!["example".into()], publish_features: BTreeMap::from([("example".into(), vec![])]), new_crates: None, tag_template: config.tag_pattern.clone(), journal_predecessor: None, recovery: Some(velnor_actions_contract::config::CrateReleaseRecovery { package: "example".into(), version: "0.1.1".into(), source_sha: "a".repeat(40) }) };
+    let config = ReleasePlzConfig { tag_pattern: "{{ package }}-v{{ version }}".into(), semver_check: true, packages: vec![ReleasePlzPackage { version_group: None, name: "example".into(), publish_features: vec![] }] };
+    let intent = CrateReleaseIntent { schema: 1, repository: "owner/project".into(), default_branch: "main".into(), environment: "release".into(), required_workflow_path: ".github/workflows/ci.yml".into(), trusted_reviewer_id: 1, rust_version: rust, generator_version: env!("CARGO_PKG_VERSION").into(), generator_source_sha: "b".repeat(40), generator_manifest_sha256: "c".repeat(64), release_plz_version: "0.4.3".into(), runner: "ubuntu-24.04".into(), authentication: velnor_actions_contract::config::ReleaseAuthentication::TrustedPublishing, manifest_path: "Cargo.toml".into(), pr_write_paths: vec!["Cargo.toml".into()], registry: "crates-io".into(), packages: vec!["example".into()], publish_features: BTreeMap::from([("example".into(), vec![])]), version_groups: std::collections::BTreeMap::new(), new_crates: None, tag_template: config.tag_pattern.clone(), journal_predecessor: None, recovery: Some(velnor_actions_contract::config::CrateReleaseRecovery { package: "example".into(), version: "0.1.1".into(), source_sha: "a".repeat(40) }) };
+    let mut mismatched_group = config.clone();
+    mismatched_group.packages[0].version_group = Some("shared".into());
+    assert!(render_release_files(&spec, &ctx, &mismatched_group, &intent).is_err());
+    let mut grouped_intent = intent.clone();
+    grouped_intent.version_groups.insert("shared".into(), vec!["example".into()]);
+    assert!(render_release_files(&spec, &ctx, &config, &grouped_intent).is_err());
+    assert!(render_release_files(&spec, &ctx, &mismatched_group, &grouped_intent).is_ok());
     assert_release_pins(&spec, &ctx, &config, &intent);
     assert_predecessor_binding(&spec, &ctx, &config, &intent)?;
     let mut wrong_auth = intent.clone();

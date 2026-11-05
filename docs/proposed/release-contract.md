@@ -104,9 +104,9 @@ MUST NOT invent publish cycles from the conservative CI graph.
 ## 5. Version-group semantics
 
 Default to independent crate versions. Native release-plz version groups are
-supported only with documented semantics: they do NOT necessarily force every
-unchanged member to release. Strict lockstep MUST NOT be advertised without
-an implemented and tested explicit contract.
+use the maximum next version of their members. A member whose current version
+differs from that maximum is updated even if its source is unchanged; a member
+already at the maximum is not forced to change solely by its group.
 
 ## 6. Effective release-plz configuration invariants
 

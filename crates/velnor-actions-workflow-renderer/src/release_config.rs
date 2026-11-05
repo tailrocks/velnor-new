@@ -9,6 +9,7 @@ use crate::{
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ReleasePlzPackage {
+    pub version_group: Option<String>,
     pub name: String,
     pub publish_features: Vec<String>,
 }
@@ -66,6 +67,9 @@ pub fn validate_tag_pattern(pattern: &str) -> Result<(), RenderError> {
 impl ReleasePlzPackage {
     pub fn validate(&self) -> Result<(), RenderError> {
         validate_package_name(&self.name)?;
+        if let Some(group) = &self.version_group {
+            validate_package_name(group)?;
+        }
         if self.publish_features.len() > 64 {
             return Err(RenderError::InvalidWorkflow(format!(
                 "bad_feature:{}:too_many",
@@ -137,6 +141,12 @@ fn toml_body(config: &ReleasePlzConfig, upload_only: bool) -> Result<String, Ren
             format_args!("name = \"{}\"\n", toml_escape(&package.name)),
         )?;
         out.push_str("release = true\npublish = true\ngit_only = false\n");
+        if !upload_only && let Some(group) = &package.version_group {
+            toml_line(
+                &mut out,
+                format_args!("version_group = \"{}\"\n", toml_escape(group)),
+            )?;
+        }
         if !package.publish_features.is_empty() {
             let features: Vec<String> = package
                 .publish_features

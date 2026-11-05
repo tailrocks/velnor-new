@@ -48,26 +48,39 @@ fn cargo_prerelease_version_can_be_selected() -> Result<(), Box<dyn std::error::
 }
 
 #[test]
-fn groups_order_unbounded_numeric_prereleases_and_ignore_build_metadata()
--> Result<(), Box<dyn std::error::Error>> {
+fn groups_order_versions_like_native_release_plz() -> Result<(), Box<dyn std::error::Error>> {
     let groups = vec![VersionGroup {
         name: "group".into(),
         members: vec!["a".into(), "b".into()],
     }];
     let current = BTreeMap::from([("a".into(), "1.0.0".into()), ("b".into(), "1.0.0".into())]);
-    let changed = BTreeSet::from(["a".into(), "b".into()]);
     let planned = BTreeMap::from([
         ("a".into(), "1.2.3-18446744073709551616".into()),
         ("b".into(), "1.2.3-9999999999999999999".into()),
     ]);
-    let resolved = resolve_version_groups(&groups, &current, &planned, &changed)?;
+    let resolved = resolve_version_groups(&groups, &current, &planned)?;
     assert_eq!(resolved["b"], planned["a"]);
     let planned = BTreeMap::from([
-        ("a".into(), "1.2.3+z".into()),
-        ("b".into(), "1.2.3+a".into()),
+        ("a".into(), "1.2.3+a".into()),
+        ("b".into(), "1.2.3+z".into()),
     ]);
-    let resolved = resolve_version_groups(&groups, &current, &planned, &changed)?;
-    assert_eq!(resolved["b"], planned["a"]);
+    let resolved = resolve_version_groups(&groups, &current, &planned)?;
+    assert_eq!(resolved["a"], planned["b"]);
+    Ok(())
+}
+
+#[test]
+fn grouped_unchanged_member_converges_to_native_group_maximum()
+-> Result<(), Box<dyn std::error::Error>> {
+    let groups = vec![VersionGroup {
+        name: "shared".into(),
+        members: vec!["a".into(), "b".into()],
+    }];
+    let current = BTreeMap::from([("a".into(), "1.0.0".into()), ("b".into(), "1.0.0".into())]);
+    let planned = BTreeMap::from([("a".into(), "1.1.0".into())]);
+    let resolved = resolve_version_groups(&groups, &current, &planned)?;
+    assert_eq!(resolved["a"], "1.1.0");
+    assert_eq!(resolved["b"], "1.1.0");
     Ok(())
 }
 

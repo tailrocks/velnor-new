@@ -172,7 +172,7 @@ fn git_tag_config(
         packages: selection
             .packages
             .iter()
-            .map(|package| ReleasePlzPackage {
+            .map(|package| ReleasePlzPackage { version_group: None,
                 name: package.name.clone(),
                 publish_features: Vec::new(),
             })

@@ -32,7 +32,6 @@ pub(crate) fn derive_intent_from_snapshot(
     if config.workflow.policy != WorkflowPolicy::ConsumerV1
         || !release.enabled
         || release.registry != ReleaseRegistry::CratesIo
-        || !release.version_groups.is_empty()
         || metadata_config.manifest_path != release.manifest_path
         || release
             .recovery

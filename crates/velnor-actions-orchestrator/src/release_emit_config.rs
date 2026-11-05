@@ -21,6 +21,14 @@ pub(super) fn plz_config(
             "feature package is not selected for release",
         ));
     }
+    if release.version_groups.values().flatten().any(|name| {
+        !selection.packages.iter().any(|package| &package.name == name)
+    }) {
+        return Err(OrchestratorError::unsupported(
+            "version_groups",
+            "group package is not selected for release",
+        ));
+    }
     Ok(ReleasePlzConfig {
         tag_pattern: release.tag_name.clone(),
         semver_check: true,
@@ -28,6 +36,7 @@ pub(super) fn plz_config(
             .packages
             .iter()
             .map(|package| ReleasePlzPackage {
+                version_group: release.version_groups.iter().find_map(|(group, members)| members.contains(&package.name).then(|| group.clone())),
                 name: package.name.clone(),
                 publish_features: release
                     .publish_features
