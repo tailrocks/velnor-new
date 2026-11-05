@@ -75,19 +75,19 @@ pub struct QualifiedGh {
     pub archive_sha256: &'static str,
 }
 
+pub const GH_VERSION: &str = "2.103.3";
 pub const QUALIFIED_GH_LINUX_AMD64: QualifiedGh = QualifiedGh {
-    version: "2.103.3",
+    version: GH_VERSION,
     platform: "linux_amd64",
     sha256: "b768184570b12536be4ac1528893f6340d1c6a7b40b56ad45bca9cd0e87ad34d",
     archive_sha256: "4c806978ffce1cec70853302a56d70ac6da4f19bae7adca4e1a8ab00633dd91d",
 };
 pub const QUALIFIED_GH_LINUX_ARM64: QualifiedGh = QualifiedGh {
-    version: QUALIFIED_GH_LINUX_AMD64.version,
+    version: GH_VERSION,
     platform: "linux_arm64",
     sha256: "a82a52e1bbe05bcd485f8cbbd5aa67e11a76fce6bdad394a2d179e1c24cfe367",
     archive_sha256: "ee32df2323c8847f5fac6cb6b4b69ca75828e9329a8f22f677021f7b3306ce63",
 };
-pub const GH_VERSION: &str = QUALIFIED_GH_LINUX_AMD64.version;
 pub use velnor_actions_contract::config::jactionlint_verifier::JACTIONLINT_VERSION;
 pub const SHELLCHECK_VERSION: &str = "0.11.0";
 pub const NEXTEST_VERSION: &str = "0.9.151";
