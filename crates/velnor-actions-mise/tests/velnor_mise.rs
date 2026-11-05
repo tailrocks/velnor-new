@@ -7,4 +7,6 @@ mod gc1_t17;
 mod gc1_t18;
 mod install_spec_subject;
 mod metadata_cwd;
+#[cfg(unix)]
+mod prepared_runner_stdin;
 mod rust_spec_kind;

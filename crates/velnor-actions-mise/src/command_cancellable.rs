@@ -36,6 +36,7 @@ pub fn run_prepared_quiescent_until(
     let pgid = anchor.as_ref().ok_or_else(invalid)?.pgid();
     let Ok(mut child) = command
         .process_group(pgid)
+        .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
