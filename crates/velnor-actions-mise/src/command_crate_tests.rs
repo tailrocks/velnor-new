@@ -364,6 +364,16 @@ fn gh_api_does_not_inherit_credentials_or_transport_overrides() {
         ("SSL_CERT_FILE".into(), "/tmp/fake-ca".into()),
     ];
     let child = crate::command::EnvPolicy::GhApi.child_env(&parent, &[]);
+    assert!(
+        child
+            .iter()
+            .any(|(key, value)| key == "HOME" && value == "/proc/self/fd")
+    );
+    assert!(
+        child
+            .iter()
+            .any(|(key, value)| key == "GH_CONFIG_DIR" && value == "/proc/self/fd")
+    );
     for key in ["GH_TOKEN", "GITHUB_TOKEN", "HTTPS_PROXY", "SSL_CERT_FILE"] {
         assert!(!child.iter().any(|(name, _)| name == key), "{key}");
     }

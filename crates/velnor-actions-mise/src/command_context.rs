@@ -32,7 +32,7 @@ pub(super) fn cleared_parent_passthrough(
         EnvPolicy::GhApi | EnvPolicy::GitHubToken => {
             let mut env: Vec<_> = parent
                 .iter()
-                .filter(|(key, _)| key == "PATH" || key == "HOME")
+                .filter(|(key, _)| key == "PATH")
                 .cloned()
                 .collect();
             let last_env = |name: &str| {
@@ -49,6 +49,11 @@ pub(super) fn cleared_parent_passthrough(
                         .map(|value| PathBuf::from(value).join("mise").into_os_string())
                 });
             env.extend(data_dir.map(|value| (OsString::from("MISE_DATA_DIR"), value)));
+            env.push((OsString::from("HOME"), OsString::from("/proc/self/fd")));
+            env.push((
+                OsString::from("GH_CONFIG_DIR"),
+                OsString::from("/proc/self/fd"),
+            ));
             env
         }
         policy if policy.allows_proxy_passthrough() => proxy_passthrough(parent),
