@@ -5,17 +5,27 @@ set -euo pipefail
 : "${GH_TOKEN:?}" "${VELNOR_UPGRADE_DIR:?}" "${VELNOR_UPGRADE_BRANCH:?}" "${VELNOR_DEFAULT_BRANCH:?}" "${GITHUB_REPOSITORY:?}" "${VELNOR_VERIFIED_TREE:?}"
 dir=$VELNOR_UPGRADE_DIR
 @VERIFIED_GH_FUNCTION@
+unset GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_CONFIG GIT_CONFIG_PARAMETERS GIT_CONFIG_SYSTEM GIT_TEMPLATE_DIR GIT_EXEC_PATH GIT_SSH GIT_SSH_COMMAND GIT_ASKPASS SSH_ASKPASS GIT_SSL_NO_VERIFY
+@VERIFIED_GIT_CREDENTIALS@
+local_git() { GH_TOKEN= GITHUB_TOKEN= git -c commit.gpgsign=false "$@"; }
 # The previous step, which held no token, left the index at exactly the tree
 # the verify job accepted; nothing else is ever committed.
-tree=$(git write-tree)
+tree=$(local_git write-tree)
 [ "$tree" = "$VELNOR_VERIFIED_TREE" ] || { echo "::error::upgrade_patch_unverified: the index is not the verified tree"; exit 1; }
-base=$(git rev-parse HEAD)
-velnor_gh auth setup-git --hostname github.com
+base=$(local_git rev-parse HEAD)
+objects=$(local_git rev-parse --path-format=absolute --git-path objects)
+transport=$(mktemp -d "$RUNNER_TEMP/velnor-upgrades-git.XXXXXXXX")
+trap 'rm -rf "$transport"' EXIT
+mkdir "$transport/template"
+export GIT_ALLOW_PROTOCOL=https
+git init --bare --quiet --template="$transport/template" "$transport/repo"
+remote_git() { GIT_OBJECT_DIRECTORY="$objects" git --git-dir="$transport/repo" "$@"; }
+remote_url="https://github.com/$GITHUB_REPOSITORY.git"
 parents=(-p "$base")
-if git ls-remote --exit-code --heads origin "$VELNOR_UPGRADE_BRANCH" >/dev/null 2>&1; then
-  git fetch --quiet --no-tags --depth=1 origin "refs/heads/$VELNOR_UPGRADE_BRANCH"
-  previous=$(git rev-parse FETCH_HEAD)
-  if [ "$(git rev-parse "FETCH_HEAD^{tree}")" = "$tree" ]; then
+if remote_git ls-remote --exit-code --heads "$remote_url" "$VELNOR_UPGRADE_BRANCH" >/dev/null 2>&1; then
+  remote_git fetch --quiet --no-tags --depth=1 "$remote_url" "refs/heads/$VELNOR_UPGRADE_BRANCH"
+  previous=$(remote_git rev-parse FETCH_HEAD)
+  if [ "$(remote_git rev-parse "FETCH_HEAD^{tree}")" = "$tree" ]; then
     echo "velnor: $VELNOR_UPGRADE_BRANCH already carries this upgrade"
     pushed=false
   else
@@ -38,8 +48,8 @@ if [ "$pushed" = true ]; then
     echo
     echo "Signed-off-by: $GIT_AUTHOR_NAME <$GIT_AUTHOR_EMAIL>"
   } > "$dir/message"
-  commit=$(git commit-tree "$tree" "${parents[@]}" -F "$dir/message")
-  git push --quiet origin "$commit:refs/heads/$VELNOR_UPGRADE_BRANCH"
+  commit=$(local_git commit-tree "$tree" "${parents[@]}" -F "$dir/message")
+  remote_git push --quiet "$remote_url" "$commit:refs/heads/$VELNOR_UPGRADE_BRANCH"
 fi
 number=$(velnor_gh pr list --repo "$GITHUB_REPOSITORY" --head "$VELNOR_UPGRADE_BRANCH" --state open --json number --jq '.[0].number // empty')
 if [ -n "$number" ]; then

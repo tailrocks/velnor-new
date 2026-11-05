@@ -145,3 +145,158 @@ fn qualified_archive_rejects_ambiguous_or_escaping_members()
     );
     Ok(())
 }
+
+#[test]
+fn bootstrap_gives_its_acquisition_process_only_safe_environment()
+-> Result<(), Box<dyn std::error::Error>> {
+    let temp = tempfile::tempdir()?;
+    let bootstrap = velnor_actions_workflow_renderer::verified_gh_shell::bootstrap();
+    let start = bootstrap
+        .find("exec(bytes.fromhex(\"")
+        .ok_or("missing program")?
+        + "exec(bytes.fromhex(\"".len();
+    let end = start
+        + bootstrap[start..]
+            .find("\"))")
+            .ok_or("missing program end")?;
+    let test_program = "import os\nassert set(os.environ) <= {'RUNNER_TEMP', 'PATH', 'LC_CTYPE', 'CPATH', 'LIBRARY_PATH', 'MANPATH', 'SDKROOT', '__CF_USER_TEXT_ENCODING'}\nassert not any(k in os.environ for k in ('GH_TOKEN', 'GIT_TOKEN', 'CARGO_REGISTRY_TOKEN', 'ACTIONS_ID_TOKEN_REQUEST_TOKEN', 'TMPDIR'))\nprint(os.environ['RUNNER_TEMP'])\n";
+    let mut encoded = String::new();
+    for byte in test_program.bytes() {
+        const DIGITS: &[u8; 16] = b"0123456789abcdef";
+        encoded.push(char::from(DIGITS[usize::from(byte >> 4)]));
+        encoded.push(char::from(DIGITS[usize::from(byte & 15)]));
+    }
+    let script = format!("{}{}{}", &bootstrap[..start], encoded, &bootstrap[end..]);
+    let output = std::process::Command::new("/bin/sh")
+        .arg("-c")
+        .arg(script)
+        .env_clear()
+        .env("RUNNER_TEMP", temp.path())
+        .env("TMPDIR", temp.path())
+        .env("GH_TOKEN", "fixture")
+        .env("GIT_TOKEN", "fixture")
+        .env("CARGO_REGISTRY_TOKEN", "fixture")
+        .env("ACTIONS_ID_TOKEN_REQUEST_TOKEN", "fixture")
+        .output()?;
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    Ok(())
+}
+
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+#[test]
+fn verified_helper_authenticates_real_git_without_untrusted_helpers()
+-> Result<(), Box<dyn std::error::Error>> {
+    use std::path::PathBuf;
+    let data = std::env::var_os("MISE_DATA_DIR")
+        .map(PathBuf::from)
+        .or_else(|| std::env::var_os("XDG_DATA_HOME").map(|v| PathBuf::from(v).join("mise")))
+        .or_else(|| std::env::var_os("HOME").map(|v| PathBuf::from(v).join(".local/share/mise")))
+        .ok_or("mise data")?;
+    let script =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/verified_gh_git_cases.py");
+    let status = std::process::Command::new("/usr/bin/python3")
+        .env_clear()
+        .env("PATH", "/usr/bin:/bin")
+        .env("MISE_DATA_DIR", data)
+        .env("GH_TOKEN", "offline-fixture")
+        .env(
+            "VELNOR_CONFIG",
+            velnor_actions_workflow_renderer::verified_gh_shell::git_credential_config(),
+        )
+        .env("VELNOR_PUBLISH", rendered_upgrade_publish_script()?)
+        .arg(script)
+        .status()?;
+    assert!(status.success(), "local Git authentication fixture failed");
+    Ok(())
+}
+
+fn rendered_upgrade_publish_script() -> Result<String, Box<dyn std::error::Error>> {
+    use velnor_actions_workflow_renderer::upgrades::{UpgradesSpec, render_upgrades_workflow};
+    let config = velnor_actions_contract::config::UpgradesConfig {
+        enabled: true,
+        ..Default::default()
+    };
+    let mise = velnor_actions_workflow_renderer::MiseSetup {
+        uses: format!(
+            "jdx/mise-action@{}",
+            velnor_actions_actionlint::actions::MISE_ACTION_SHA
+        ),
+        version: velnor_actions_mise::MISE_VERSION.to_owned(),
+        sha256: velnor_actions_workflow_renderer::setup::MISE_BINARY_SHA256_LINUX_X64.to_owned(),
+    };
+    let spec = UpgradesSpec {
+        config,
+        runs_on: "ubuntu-24.04".into(),
+        checkout_uses: velnor_actions_workflow_renderer::steps::CHECKOUT_USES.into(),
+        mise_setup: mise,
+        gh_version: velnor_actions_mise::catalog::QUALIFIED_GH_LINUX_AMD64
+            .version
+            .into(),
+        generator_version: "0.1.73".into(),
+        generate_tools: vec!["jactionlint@1.0.0".into()],
+        verify_rust_script: "${VELNOR_TOOL_RUST}".into(),
+        jactionlint_verify:
+            velnor_actions_contract::config::jactionlint_verifier::jactionlint_verifier_script(
+                "1.0.0",
+                velnor_actions_workflow_renderer::VERIFY_PATH,
+            ),
+    };
+    let rendered = render_upgrades_workflow(&spec)?;
+    let workflow: serde_json::Value = serde_saphyr::from_str(&rendered.bytes)?;
+    let steps = workflow["jobs"]["publish"]["steps"]
+        .as_array()
+        .ok_or("publish steps")?;
+    let step = steps
+        .iter()
+        .find(|step| step["name"] == "Push the upgrade branch and open or update its pull request")
+        .ok_or("publish step")?;
+    Ok(step["run"].as_str().ok_or("publish script")?.to_owned())
+}
+
+#[test]
+fn upgrades_publish_uses_an_isolated_transport() -> Result<(), Box<dyn std::error::Error>> {
+    let script = rendered_upgrade_publish_script()?;
+    assert!(script.contains("remote_git()"));
+    assert!(script.contains("GIT_ALLOW_PROTOCOL=https"));
+    assert!(!script.contains("auth setup-git"));
+    Ok(())
+}
+
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+#[test]
+fn verified_shell_checks_real_signed_attestation_without_writable_home()
+-> Result<(), Box<dyn std::error::Error>> {
+    use std::path::PathBuf;
+    let data = std::env::var_os("MISE_DATA_DIR")
+        .map(PathBuf::from)
+        .or_else(|| std::env::var_os("XDG_DATA_HOME").map(|v| PathBuf::from(v).join("mise")))
+        .or_else(|| std::env::var_os("HOME").map(|v| PathBuf::from(v).join(".local/share/mise")))
+        .ok_or("mise data")?;
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../velnor-actions-orchestrator/tests/attestation_fixtures/historical");
+    let shell = velnor_actions_workflow_renderer::publish_scripts::gh_function(&prefix())?;
+    let script = format!(
+        "{shell}\ngh attestation verify \"$1\" --bundle \"$2\" --custom-trusted-root \"$3\" --repo tailrocks/velnor-new --format json >/dev/null"
+    );
+    let output = std::process::Command::new("/bin/sh")
+        .arg("-c")
+        .arg(script)
+        .arg("gh-attestation")
+        .arg(root.join("release-manifest.json"))
+        .arg(root.join("release-manifest.json.intoto.jsonl"))
+        .arg(root.join("trusted-root.jsonl"))
+        .env_clear()
+        .env("PATH", "/usr/bin:/bin")
+        .env("MISE_DATA_DIR", data)
+        .output()?;
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    Ok(())
+}
