@@ -151,9 +151,12 @@
             .map_err(|_| invalid())?;
             Ok(())
         }
-        pub(super) fn finish_modes(&mut self) -> Result<(), OrchestratorError> {
+        pub(super) fn finish_modes(&mut self, deadline: Instant) -> Result<(), OrchestratorError> {
             self.modes.sort_by_key(|(k, _)| std::cmp::Reverse(k.len()));
             for (key, mode) in &self.modes {
+                if Instant::now() >= deadline {
+                    return Err(invalid());
+                }
                 fs::fchmod(
                     self.open_dir(key)?,
                     permissions(*mode),

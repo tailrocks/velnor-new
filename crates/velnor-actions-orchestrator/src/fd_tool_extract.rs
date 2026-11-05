@@ -13,7 +13,7 @@ mod unix {
         io::{self, BufReader, Read, Seek, SeekFrom, Write},
         path::{Component, Path},
         sync::atomic::{AtomicU64, Ordering},
-        time::{Duration, Instant},
+        time::Instant,
     };
 
     const MAX_ARCHIVE: u64 = 1024 * 1024 * 1024;
@@ -30,6 +30,7 @@ mod unix {
         sha256: &str,
         version: &str,
         destination: &Path,
+        deadline: Instant,
     ) -> Result<(), OrchestratorError> {
         if sha256.len() != 64
             || !sha256
@@ -45,9 +46,9 @@ mod unix {
             ("linux", "x86_64") => "x86_64-unknown-linux-gnu",
             _ => return Err(invalid()),
         };
-        let deadline = Instant::now()
-            .checked_add(Duration::from_mins(15))
-            .ok_or_else(invalid)?;
+        if Instant::now() >= deadline {
+            return Err(invalid());
+        }
         let mut input = archive.try_clone().map_err(|_| invalid())?;
         verify_digest(&mut input, sha256, deadline)?;
         let zip_deadline = velnor_actions_mise::CheckDeadline::after(
@@ -66,14 +67,23 @@ mod unix {
         let result = extract(&mut input, &mut tree, version, target, deadline)
             .map_err(|_| internal("fd_extract"))
             .and_then(|()| verify_digest(&mut input, sha256, deadline))
-            .and_then(|()| tree.finish_modes())
-            .and_then(|()| promote(&parent, &stage_name, name, &tree.root));
+            .and_then(|()| tree.finish_modes(deadline))
+            .and_then(|()| {
+                if Instant::now() >= deadline {
+                    return Err(invalid());
+                }
+                promote(&parent, &stage_name, name, &tree.root)
+            });
         if result.is_err() {
             tree.cleanup()?;
             fs::unlinkat(&parent, stage_name.as_str(), AtFlags::REMOVEDIR)
                 .map_err(|_| internal("fd_tool_extract_cleanup_failed"))?;
         }
-        result
+        result?;
+        if Instant::now() >= deadline {
+            return Err(internal("fd_tool_extract_deadline_after_promotion"));
+        }
+        Ok(())
     }
     fn verify_digest(
         file: &mut File,
@@ -307,6 +317,7 @@ pub fn extract_verified_tool_archive_file(
     _sha256: &str,
     _version: &str,
     _destination: &std::path::Path,
+    _deadline: std::time::Instant,
 ) -> Result<(), crate::OrchestratorError> {
     Err(crate::internal::internal(
         "fd_tool_extract_unsupported_platform",

@@ -60,7 +60,13 @@ pub fn stage_unverified_toolchain<
     if current_artifact(request, github, false)? != initial {
         return Err(invalid());
     }
-    extract_verified_tool_archive_file(&file, digest, &request.intent.rust_version, &destination)?;
+    extract_verified_tool_archive_file(
+        &file,
+        digest,
+        &request.intent.rust_version,
+        &destination,
+        request.deadline,
+    )?;
     Ok(destination)
 }
 

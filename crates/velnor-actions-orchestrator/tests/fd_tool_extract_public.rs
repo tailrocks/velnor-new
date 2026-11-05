@@ -40,14 +40,43 @@ fn verified_archive_installs_exact_tree_and_never_overwrites()
     fs::write(&archive, bytes)?;
     let file = fs::File::open(&archive)?;
     let dest = root.join("rustup");
-    assert!(extract_verified_tool_archive_file(&file, &"0".repeat(64), "1.97.1", &dest).is_err());
+    let before = fs::read_dir(&root)?.count();
+    assert!(
+        extract_verified_tool_archive_file(
+            &file,
+            &hash,
+            "1.97.1",
+            &dest,
+            std::time::Instant::now(),
+        )
+        .is_err(),
+        "expired artifact extraction was accepted"
+    );
     assert!(!dest.exists());
-    extract_verified_tool_archive_file(&file, &hash, "1.97.1", &dest)?;
+    assert_eq!(
+        fs::read_dir(&root)?.count(),
+        before,
+        "expired extraction left a staging tree"
+    );
+    assert!(
+        extract_verified_tool_archive_file(
+            &file,
+            &"0".repeat(64),
+            "1.97.1",
+            &dest,
+            tool_deadline()
+        )
+        .is_err()
+    );
+    assert!(!dest.exists());
+    extract_verified_tool_archive_file(&file, &hash, "1.97.1", &dest, tool_deadline())?;
     assert_eq!(
         fs::read(dest.join(format!("toolchains/1.97.1-{target}/bin/cargo")))?,
         b"fixture"
     );
-    assert!(extract_verified_tool_archive_file(&file, &hash, "1.97.1", &dest).is_err());
+    assert!(
+        extract_verified_tool_archive_file(&file, &hash, "1.97.1", &dest, tool_deadline()).is_err()
+    );
     Ok(())
 }
 
@@ -155,8 +184,14 @@ fn assert_rejected(
     fs::write(&archive, bytes)?;
     let dest = root.join(format!("dest-{case}"));
     assert!(
-        extract_verified_tool_archive_file(&fs::File::open(archive)?, &hash, "1.97.1", &dest)
-            .is_err(),
+        extract_verified_tool_archive_file(
+            &fs::File::open(archive)?,
+            &hash,
+            "1.97.1",
+            &dest,
+            tool_deadline()
+        )
+        .is_err(),
         "{case} must fail"
     );
     assert!(!dest.exists(), "{case} must not install a tree");
@@ -187,7 +222,13 @@ fn accepts_gnu_long_names_and_rejects_escaping_parent() -> Result<(), Box<dyn st
     let archive = root.join("long.zip");
     fs::write(&archive, bytes)?;
     let dest = root.join("long-dest");
-    extract_verified_tool_archive_file(&fs::File::open(&archive)?, &hash, "1.97.1", &dest)?;
+    extract_verified_tool_archive_file(
+        &fs::File::open(&archive)?,
+        &hash,
+        "1.97.1",
+        &dest,
+        tool_deadline(),
+    )?;
     assert_eq!(fs::read(dest.join(name))?, b"fixture");
     let outside = tempfile::tempdir()?;
     let alias = root.join("alias");
@@ -197,7 +238,8 @@ fn accepts_gnu_long_names_and_rejects_escaping_parent() -> Result<(), Box<dyn st
             &fs::File::open(&archive)?,
             &hash,
             "1.97.1",
-            &alias.join("rustup")
+            &alias.join("rustup"),
+            tool_deadline()
         )
         .is_err()
     );
@@ -236,7 +278,13 @@ fn pax_path_is_applied_but_conflicting_metadata_is_rejected()
     let archive = root.join("pax.zip");
     fs::write(&archive, bytes)?;
     let dest = root.join("pax-dest");
-    extract_verified_tool_archive_file(&fs::File::open(archive)?, &hash, "1.97.1", &dest)?;
+    extract_verified_tool_archive_file(
+        &fs::File::open(archive)?,
+        &hash,
+        "1.97.1",
+        &dest,
+        tool_deadline(),
+    )?;
     assert_eq!(fs::read(dest.join(&name))?, b"fixture");
     let traversal = format!("{name}/../../outside");
     assert_rejected(
@@ -312,7 +360,13 @@ fn many_directories_extract_without_holding_them_all_open() -> Result<(), Box<dy
     let archive = root.join("dirs.zip");
     fs::write(&archive, bytes)?;
     let dest = root.join("rustup");
-    extract_verified_tool_archive_file(&fs::File::open(archive)?, &hash, "1.97.1", &dest)?;
+    extract_verified_tool_archive_file(
+        &fs::File::open(archive)?,
+        &hash,
+        "1.97.1",
+        &dest,
+        tool_deadline(),
+    )?;
     assert_eq!(fs::read(dest.join(&entries[299].0))?, b"fixture");
     Ok(())
 }
@@ -343,8 +397,14 @@ fn archive_with_wrong_zip_crc_is_not_installed() -> Result<(), Box<dyn std::erro
     fs::write(&archive, bytes)?;
     let dest = root.join("rustup");
     assert!(
-        extract_verified_tool_archive_file(&fs::File::open(archive)?, &hash, "1.97.1", &dest)
-            .is_err()
+        extract_verified_tool_archive_file(
+            &fs::File::open(archive)?,
+            &hash,
+            "1.97.1",
+            &dest,
+            tool_deadline()
+        )
+        .is_err()
     );
     assert!(!dest.exists());
     Ok(())
@@ -377,9 +437,19 @@ fn outer_zip_special_file_is_not_installed() -> Result<(), Box<dyn std::error::E
     fs::write(&archive, bytes)?;
     let dest = root.join("rustup");
     assert!(
-        extract_verified_tool_archive_file(&fs::File::open(archive)?, &hash, "1.97.1", &dest)
-            .is_err()
+        extract_verified_tool_archive_file(
+            &fs::File::open(archive)?,
+            &hash,
+            "1.97.1",
+            &dest,
+            tool_deadline()
+        )
+        .is_err()
     );
     assert!(!dest.exists());
     Ok(())
+}
+
+fn tool_deadline() -> std::time::Instant {
+    std::time::Instant::now() + std::time::Duration::from_secs(60)
 }

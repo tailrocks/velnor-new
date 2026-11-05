@@ -70,6 +70,7 @@ fn tool_archive_requires_verified_single_tree_and_refuses_overwrite()
         &digest,
         "1.97.1",
         &other_destination,
+        tool_deadline(),
     )?;
     assert_eq!(
         fs::read(other_destination.join(format!("toolchains/1.97.1-{target}/bin/cargo")))?,
@@ -346,5 +347,10 @@ fn extract_fixture(
         digest,
         version,
         destination,
+        tool_deadline(),
     )
+}
+
+fn tool_deadline() -> std::time::Instant {
+    std::time::Instant::now() + std::time::Duration::from_secs(60)
 }
