@@ -352,6 +352,16 @@ fn render_job(
     if use_rust {
         steps.extend(rust_source_steps(input, model, needs_validators, private)?);
     }
+    if policy == WorkflowPolicy::VelnorRepositoryV1
+        && model.package_name == "velnor-actions-cli"
+        && model.obligations.iter().any(|obligation| obligation.run.iter().any(|arg| arg == "nextest"))
+    {
+        steps.push(velnor_actions_workflow_renderer::shell_step(
+            "Stage isolated GitHub CLI test tools",
+            vec!["python3".to_owned(), "-I".to_owned(), "scripts/prepare-gh-fixture-tools.py".to_owned()],
+            std::collections::BTreeMap::new(),
+        )?);
+    }
     steps.extend(crate::workflow::wire_w1::maybe_task_cache_steps(
         None,
         TaskCacheMode::Off,

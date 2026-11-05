@@ -319,3 +319,57 @@ fn an_install_only_mbx_selector_must_equal_the_catalog_version() -> Result<(), B
     assert!(message.contains(id.as_str()), "{message}");
     Ok(())
 }
+
+#[test]
+fn cli_test_job_requires_isolated_gh_fixture_staging() -> Result<(), Box<dyn Error>> {
+    let jobs = lane_jobs()?;
+    for job in jobs
+        .values()
+        .filter(|job| job.display_name.contains("velnor-actions-orchestrator"))
+    {
+        assert!(
+            !job.steps
+                .iter()
+                .any(|step| step.name == "Stage isolated GitHub CLI test tools")
+        );
+    }
+    let job = jobs
+        .values()
+        .find(|job| job.display_name.contains("velnor-actions-cli"))
+        .ok_or("CLI job")?;
+    let stage = job
+        .steps
+        .iter()
+        .position(|step| step.name == "Stage isolated GitHub CLI test tools")
+        .ok_or("missing fixture staging")?;
+    let fetch = job
+        .steps
+        .iter()
+        .position(|step| step.name.contains("Fetch") && step.name.contains("source"))
+        .ok_or("missing source fetch")?;
+    assert!(stage > fetch);
+    let StepKind::Shell { run, .. } = &job.steps[stage].kind else {
+        return Err("fixture staging must run".into());
+    };
+    assert!(run.ends_with(&[
+        "python3".to_owned(),
+        "-I".to_owned(),
+        "scripts/prepare-gh-fixture-tools.py".to_owned(),
+    ]));
+    Ok(())
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn gh_fixture_staging_rejects_unverified_tools_and_missing_docker() -> Result<(), Box<dyn Error>> {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .and_then(std::path::Path::parent)
+        .ok_or("workspace root")?;
+    let status = std::process::Command::new("python3")
+        .arg("-I")
+        .arg(root.join("scripts/test-prepare-gh-fixture-tools.py"))
+        .status()?;
+    assert!(status.success());
+    Ok(())
+}
