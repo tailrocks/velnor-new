@@ -6,8 +6,10 @@ import json
 import os
 from pathlib import Path
 import re
+import stat
 import subprocess
 import sys
+import tempfile
 import unittest
 
 
@@ -53,6 +55,57 @@ capability_v1 = {
     ("root-main-credential", "release_publish_entry_offline_test", "PublisherEntryOfflineTest", "test_main_passes_credential_to_real_bootstrap"),
 }
 
+stage_files = {
+    "src": ("release_generator_bootstrap.sh", "release_manager_bus.py", "release_manager_lifecycle.py",
+            "release_publish_entry.py", "release_supervisor_exec.py"),
+    "tests": ("release_manager_proxy_test.py", "release_manager_qualification.py",
+              "release_manager_scenario_controller.py", "release_manager_systemd_test.py",
+              "release_publish_entry_offline_test.py", "release_publish_entry_systemd_test.py",
+              "release_publish_entry_test.py"),
+}
+
+
+def stage_and_execute():
+    if os.geteuid() != 0:
+        raise SystemExit("qualification staging requires root")
+    source = root.parent
+    with tempfile.TemporaryDirectory(prefix="velnor-qualification-source-", dir="/run") as directory:
+        destination = Path(directory)
+        destination.chmod(0o755)
+        source_fd = os.open(source, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC)
+        try:
+            for subdirectory, names in stage_files.items():
+                target = destination / subdirectory
+                target.mkdir(mode=0o755)
+                parent = os.open(subdirectory, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC,
+                                 dir_fd=source_fd)
+                try:
+                    for name in names:
+                        descriptor = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC, dir_fd=parent)
+                        try:
+                            metadata = os.fstat(descriptor)
+                            if not stat.S_ISREG(metadata.st_mode) or metadata.st_size > 1024 * 1024:
+                                raise SystemExit("invalid qualification source")
+                            with os.fdopen(descriptor, "rb", closefd=False) as input_file:
+                                data = input_file.read(1024 * 1024 + 1)
+                            after = os.fstat(descriptor)
+                            if (len(data) != metadata.st_size or metadata.st_size != after.st_size
+                                    or metadata.st_mtime_ns != after.st_mtime_ns
+                                    or metadata.st_ctime_ns != after.st_ctime_ns):
+                                raise SystemExit("qualification source changed")
+                        finally:
+                            os.close(descriptor)
+                        (target / name).write_bytes(data)
+                        (target / name).chmod(0o444)
+                finally:
+                    os.close(parent)
+        finally:
+            os.close(source_fd)
+        subprocess.run(["/usr/bin/python3", "-I", "-S", "-B",
+                        str(destination / "tests/release_manager_qualification.py"), "--execute-staged"],
+                       stdin=subprocess.DEVNULL, env={"PATH": "/usr/bin:/bin", "HOME": "/nonexistent", "LANG": "C"},
+                       timeout=240, check=True)
+
 
 def execute():
     if {(name, *spec) for name, spec in scenarios.items()} != capability_v1:
@@ -92,6 +145,9 @@ def main():
         module.run(execute_scenarios, os.environ["VELNOR_SCENARIO_LEDGER"])
         return
     if sys.argv[1:] == ["--execute"]:
+        stage_and_execute()
+        return
+    if sys.argv[1:] == ["--execute-staged"]:
         execute()
         return
     if sys.argv[1:]:

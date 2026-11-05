@@ -10,6 +10,22 @@ import unittest
 
 
 class RunnerHomeTest(unittest.TestCase):
+    def test_complete_qualification_runs_when_checkout_parent_is_private(self):
+        source = Path(__file__).resolve().parents[1]
+        with tempfile.TemporaryDirectory(prefix="velnor-private-home-", dir="/run") as directory:
+            root = Path(directory)
+            os.chown(root, 65534, 65534)
+            root.chmod(0o750)
+            fixture = root / "renderer"
+            shutil.copytree(source / "src", fixture / "src")
+            shutil.copytree(source / "tests", fixture / "tests")
+            result = subprocess.run(["/usr/bin/python3", "-I", "-S", "-B",
+                                     str(fixture / "tests/release_manager_qualification.py"), "--execute"],
+                                    env={"PATH": "/usr/bin:/bin", "HOME": "/nonexistent", "LANG": "C"},
+                                    stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                                    stderr=subprocess.PIPE, timeout=240, check=False)
+            self.assertEqual(result.returncode, 0, result.stderr.decode("utf-8", "replace"))
+
     def test_nested_manager_uses_staged_source_when_checkout_parent_is_private(self):
         source = Path(__file__).resolve().parents[1]
         with tempfile.TemporaryDirectory(prefix="velnor-private-home-", dir="/run") as directory:
@@ -38,4 +54,10 @@ class RunnerHomeTest(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    unittest.main()
+    required = {"test_complete_qualification_runs_when_checkout_parent_is_private",
+                "test_nested_manager_uses_staged_source_when_checkout_parent_is_private"}
+    if set(unittest.defaultTestLoader.getTestCaseNames(RunnerHomeTest)) != required:
+        raise SystemExit("private home scenario inventory mismatch")
+    result = unittest.TextTestRunner(verbosity=1).run(unittest.defaultTestLoader.loadTestsFromTestCase(RunnerHomeTest))
+    if not result.wasSuccessful() or result.testsRun != len(required) or result.skipped or result.expectedFailures:
+        raise SystemExit("private home qualification failed")
