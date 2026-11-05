@@ -27,8 +27,11 @@ pub(super) fn reconciliation_accepts_completed_metadata_repairs()
                 &request,
                 &github,
                 &registry,
-                source.path(),
-                test_git()
+                crate::CrateSource::new(
+                    source.path(),
+                    test_git(),
+                    &crate::UnprivilegedSourceExecution
+                )
             )?
         );
     }

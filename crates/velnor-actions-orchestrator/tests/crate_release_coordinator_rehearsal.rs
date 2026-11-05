@@ -120,15 +120,8 @@ fn rendered_scripts() -> Result<Vec<(String, String)>, Box<dyn Error>> {
         .ok_or_else(|| "missing step script".into())
 }
 
-fn run_child(operation: &str) -> Result<(), Box<dyn Error>> {
-    let root = std::path::PathBuf::from(std::env::var_os("VELNOR_REHEARSAL_ROOT").ok_or("root")?);
-    let source = root.join("source");
-    let (intent, request): (CrateReleaseIntent, GitHubAdmissionRequest) =
-        serde_json::from_slice(&fs::read(root.join("request.json"))?)?;
-    let published = root.join("published.crate");
-    let previously_published = published.exists();
-    let metadata_completed = root.join("metadata-complete").exists();
-    let base = Github {
+fn rehearsal_github(request: &GitHubAdmissionRequest, metadata_completed: bool) -> Github {
+    Github {
         sha: request.source_sha.clone(),
         policy_sha: request.workflow_sha.clone(),
         approved: Cell::new(true),
@@ -143,7 +136,17 @@ fn run_child(operation: &str) -> Result<(), Box<dyn Error>> {
         mutate_after_download: Cell::new(0),
         artifact_receipt: Cell::new(false),
         before_metadata_write: RefCell::new(None),
-    };
+    }
+}
+
+fn run_child(operation: &str) -> Result<(), Box<dyn Error>> {
+    let root = std::path::PathBuf::from(std::env::var_os("VELNOR_REHEARSAL_ROOT").ok_or("root")?);
+    let source = root.join("source");
+    let (intent, request): (CrateReleaseIntent, GitHubAdmissionRequest) =
+        serde_json::from_slice(&fs::read(root.join("request.json"))?)?;
+    let published = root.join("published.crate");
+    let previously_published = published.exists();
+    let base = rehearsal_github(&request, root.join("metadata-complete").exists());
     let github = HistoricalAuthority {
         base: &base,
         workflow: request.workflow_sha.clone(),
@@ -176,6 +179,7 @@ fn run_child(operation: &str) -> Result<(), Box<dyn Error>> {
         };
         let generator = fixture_attested_generator();
         record_admitted_start(&AdmittedStart {
+            source_execution: &crate::UnprivilegedSourceExecution,
             journal: &journal,
             github: &github,
             registry: &registry,
@@ -229,6 +233,7 @@ fn coordinate(
     let already_completed = inspect_journal(journal, &identity, JournalStage::Completed)?.is_some();
     let pending = !already_completed && journal.refs.borrow().len() > 1;
     let input = CrateReleaseObservation {
+        source_execution: &crate::UnprivilegedSourceExecution,
         journal,
         identity: &identity,
         journal_receipt: &started.receipt,

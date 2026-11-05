@@ -21,8 +21,7 @@ pub(super) fn recovery_requires_fresh_human_approval_and_registry_absence()
             candidate,
             &github,
             &registry,
-            root,
-            test_git(),
+            crate::CrateSource::new(root, test_git(), &crate::UnprivilegedSourceExecution),
         )
     };
     let reconcile = || {
@@ -32,8 +31,7 @@ pub(super) fn recovery_requires_fresh_human_approval_and_registry_absence()
             &request,
             &github,
             &registry,
-            root,
-            test_git(),
+            crate::CrateSource::new(root, test_git(), &crate::UnprivilegedSourceExecution),
         )
     };
     assert!(verify(&request).is_err());
@@ -124,8 +122,11 @@ pub(super) fn receipt_acquire_requires_current_approval_and_matching_evidence()
         &request,
         &github,
         &registry,
-        source.path(),
-        test_git(),
+        crate::CrateSource::new(
+            source.path(),
+            test_git(),
+            &crate::UnprivilegedSourceExecution,
+        ),
     )?;
     receipt.semver_evidence = receipt
         .packages
@@ -134,7 +135,6 @@ pub(super) fn receipt_acquire_requires_current_approval_and_matching_evidence()
         .collect();
     *github.tool_archive.borrow_mut() = receipt_zip(&serde_json::to_vec(&receipt)?)?;
     let stage = ToolchainStageRequest {
-        git: test_git(),
         intent: &intent,
         github: &request,
         candidate: &receipt.github,
@@ -157,7 +157,17 @@ pub(super) fn receipt_acquire_requires_current_approval_and_matching_evidence()
             .is_err()
     );
     github.approved.set(true);
-    acquire_receipt_artifact(&stage, &github, &registry, &github, source.path())?;
+    acquire_receipt_artifact(
+        &stage,
+        &github,
+        &registry,
+        &github,
+        crate::CrateSource::new(
+            source.path(),
+            test_git(),
+            &crate::UnprivilegedSourceExecution,
+        ),
+    )?;
     assert_eq!(
         serde_json::from_slice::<
             velnor_actions_orchestrator::crate_release_controller::CrateReleaseAdmissionReceipt,
@@ -179,7 +189,7 @@ pub(super) fn check_receipt_denials(
     source: &Path,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let reconcile = || {
-        velnor_actions_orchestrator::crate_release_tool_artifact::acquire_reconciliation_receipt_artifact(stage, github, registry, github, source)
+        velnor_actions_orchestrator::crate_release_tool_artifact::acquire_reconciliation_receipt_artifact(stage, github, registry, github, crate::CrateSource::new(source, test_git(), &crate::UnprivilegedSourceExecution))
     };
     github.tag_exists.set(true);
     reconcile()?;
@@ -195,8 +205,7 @@ pub(super) fn check_receipt_denials(
             stage.github,
             github,
             registry,
-            source,
-            test_git(),
+            crate::CrateSource::new(source, test_git(), &crate::UnprivilegedSourceExecution)
         )?
     );
     registry.inconsistent.set(false);
@@ -211,7 +220,11 @@ pub(super) fn check_receipt_denials(
     *github.tool_archive.borrow_mut() = receipt_zip(&serde_json::to_vec_pretty(receipt)?)?;
     assert!(
         crate::crate_release_tool_artifact::fixture_acquire_receipt(
-            stage, github, registry, github, source
+            stage,
+            github,
+            registry,
+            github,
+            crate::CrateSource::new(source, test_git(), &crate::UnprivilegedSourceExecution)
         )
         .is_err()
     );
@@ -219,7 +232,11 @@ pub(super) fn check_receipt_denials(
     github.mutate_after_download.set(1);
     assert!(
         crate::crate_release_tool_artifact::fixture_acquire_receipt(
-            stage, github, registry, github, source
+            stage,
+            github,
+            registry,
+            github,
+            crate::CrateSource::new(source, test_git(), &crate::UnprivilegedSourceExecution)
         )
         .is_err()
     );
@@ -243,7 +260,16 @@ pub(super) fn check_receipt_revalidation(
     let mut forged = receipt.clone();
     forged.semver_evidence.clear();
     *github.tool_archive.borrow_mut() = receipt_zip(&serde_json::to_vec(&forged)?)?;
-    assert!(fixture_acquire_receipt(stage, github, registry, github, source).is_err());
+    assert!(
+        fixture_acquire_receipt(
+            stage,
+            github,
+            registry,
+            github,
+            crate::CrateSource::new(source, test_git(), &crate::UnprivilegedSourceExecution)
+        )
+        .is_err()
+    );
     assert!(
         !stage
             .runner_temp
@@ -253,15 +279,20 @@ pub(super) fn check_receipt_revalidation(
     *github.tool_archive.borrow_mut() = receipt_zip(&serde_json::to_vec(receipt)?)?;
     *registry.archive.borrow_mut() = fixture_archive(source)?;
     registry.absent.set(false);
-    fixture_acquire_receipt(stage, github, registry, github, source)?;
+    fixture_acquire_receipt(
+        stage,
+        github,
+        registry,
+        github,
+        crate::CrateSource::new(source, test_git(), &crate::UnprivilegedSourceExecution),
+    )?;
     verify_crate_release_admission(
         receipt,
         stage.intent,
         stage.github,
         github,
         registry,
-        source,
-        test_git(),
+        crate::CrateSource::new(source, test_git(), &crate::UnprivilegedSourceExecution),
     )?;
     fs::remove_file(stage.runner_temp.join("velnor-crate-release-receipt.json"))?;
     Ok(())
@@ -343,7 +374,6 @@ pub(super) fn toolchain_staging_requires_approved_same_run_artifact()
     let runner = temp.path().canonicalize()?.join("runner");
     fs::create_dir_all(runner.join("velnor"))?;
     let stage = ToolchainStageRequest {
-        git: test_git(),
         intent: &intent,
         github: &request,
         candidate: &candidate,

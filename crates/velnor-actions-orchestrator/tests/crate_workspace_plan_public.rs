@@ -89,6 +89,7 @@ fn workspace_plan_binds_source_and_recovery() -> Result<(), Box<dyn std::error::
         &intent,
         &NoRegistry,
         &test_git(),
+        &crate::UnprivilegedSourceExecution,
     )?;
     assert_eq!(result.plan.graph.order, vec!["demo"]);
     assert_eq!(result.plan.selection.packages[0].version, "0.1.1");
@@ -101,7 +102,8 @@ fn workspace_plan_binds_source_and_recovery() -> Result<(), Box<dyn std::error::
             &sha,
             &intent,
             &NoRegistry,
-            &test_git()
+            &test_git(),
+            &crate::UnprivilegedSourceExecution,
         )
         .is_err()
     );
@@ -155,16 +157,29 @@ fn workspace_members_and_project_configuration_are_bound_without_running_project
     let sha = git(root, &["rev-parse", "HEAD"])?;
     intent.packages = vec!["a".into(), "b".into()];
     intent.publish_features = [("a".into(), vec![]), ("b".into(), vec![])].into();
-    let plan =
-        crate_release_workspace_plan_with_registry(root, &sha, &intent, &NoRegistry, &test_git())?;
+    let plan = crate_release_workspace_plan_with_registry(
+        root,
+        &sha,
+        &intent,
+        &NoRegistry,
+        &test_git(),
+        &crate::UnprivilegedSourceExecution,
+    )?;
     assert_eq!(plan.plan.graph.order, vec!["b", "a"]);
     fs::write(
         root.join(".cargo/config.toml"),
         "[build]\nrustc-wrapper = \"/bin/true\"\n",
     )?;
     assert!(
-        crate_release_workspace_plan_with_registry(root, &sha, &intent, &NoRegistry, &test_git())
-            .is_err()
+        crate_release_workspace_plan_with_registry(
+            root,
+            &sha,
+            &intent,
+            &NoRegistry,
+            &test_git(),
+            &crate::UnprivilegedSourceExecution,
+        )
+        .is_err()
     );
     Ok(())
 }
@@ -203,6 +218,7 @@ fn workspace_plan_fetches_registry_prerequisites_and_rejects_yanked_or_denied()
             yanked: false,
         },
         &test_git(),
+        &crate::UnprivilegedSourceExecution,
     )?;
     assert_eq!(result.registry_evidence.len(), 1);
     assert_eq!(result.registry_evidence[0].package, "serde");
@@ -216,7 +232,8 @@ fn workspace_plan_fetches_registry_prerequisites_and_rejects_yanked_or_denied()
                 status: 200,
                 yanked: true
             },
-            &test_git()
+            &test_git(),
+            &crate::UnprivilegedSourceExecution,
         )
         .is_err()
     );
@@ -230,7 +247,8 @@ fn workspace_plan_fetches_registry_prerequisites_and_rejects_yanked_or_denied()
                     status,
                     yanked: false
                 },
-                &test_git()
+                &test_git(),
+                &crate::UnprivilegedSourceExecution,
             )
             .is_err(),
             "registry status {status} must not satisfy a dependency"

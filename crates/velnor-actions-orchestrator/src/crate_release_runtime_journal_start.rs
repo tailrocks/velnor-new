@@ -19,6 +19,7 @@ pub(super) struct JournalRuntime<'a> {
     pub(super) source: &'a Path,
     pub(super) token: &'a str,
     pub(super) git: &'a crate::crate_release_git::ReleaseGit,
+    pub(super) source_execution: &'a dyn crate::CrateSourceExecution,
 }
 
 pub(super) fn run_journal(
@@ -166,8 +167,7 @@ pub(super) fn start_journal(input: JournalRuntime<'_>) -> Result<(), Orchestrato
                 input.request,
                 input.github,
                 input.registry,
-                input.source,
-                input.git,
+                crate::CrateSource::new(input.source, input.git, input.source_execution),
             )?;
             observed.semver_evidence = crate::crate_release_semver::verify_preflight(
                 input.source,
@@ -175,6 +175,7 @@ pub(super) fn start_journal(input: JournalRuntime<'_>) -> Result<(), Orchestrato
                 input.registry,
                 &required_path("RUNNER_TEMP")?,
                 input.git,
+                input.source_execution,
             )?;
             crate::crate_release_controller::verify_observed_packages(&observed, &admission)?;
             if !crate::crate_release_semver::matches_revalidated_preflight(
@@ -186,6 +187,7 @@ pub(super) fn start_journal(input: JournalRuntime<'_>) -> Result<(), Orchestrato
             let journal =
                 JournalAdapter::new(NativeGitHubAdmissionRead::new(input.token.to_owned())?);
             record_admitted_start(&AdmittedStart {
+                source_execution: input.source_execution,
                 journal: &journal,
                 github: input.github,
                 registry: input.registry,
@@ -208,10 +210,20 @@ pub(super) fn write_admission(
     request: &GitHubAdmissionRequest,
     github: &NativeGitHubAdmissionRead,
     registry: &NativeCrateRegistryRead,
-    source: &Path,
-    git: &crate::crate_release_git::ReleaseGit,
+    source_context: crate::CrateSource<'_>,
 ) -> Result<(), OrchestratorError> {
-    let receipt = prepare_crate_release(intent, request, github, registry, source, git)?;
+    let crate::CrateSource {
+        root: source,
+        git,
+        execution: source_execution,
+    } = source_context;
+    let receipt = prepare_crate_release(
+        intent,
+        request,
+        github,
+        registry,
+        crate::CrateSource::new(source, git, source_execution),
+    )?;
     let data = serde_json::to_vec(&receipt).map_err(|_| internal("crate_release_receipt_write"))?;
     velnor_actions_contract::exclusive_write::write_exclusive(
         receipt_path,
@@ -238,12 +250,29 @@ pub(super) fn verify_admission_output(
     request: &GitHubAdmissionRequest,
     github: &NativeGitHubAdmissionRead,
     registry: &NativeCrateRegistryRead,
-    source: &Path,
-    git: &crate::crate_release_git::ReleaseGit,
+    source_context: crate::CrateSource<'_>,
 ) -> Result<(), OrchestratorError> {
+    let crate::CrateSource {
+        root: source,
+        git,
+        execution: source_execution,
+    } = source_context;
     let receipt = read_receipt(receipt_path)?;
-    verify_crate_release_admission(&receipt, intent, request, github, registry, source, git)?;
-    let fresh = prepare_crate_release(intent, request, github, registry, source, git)?;
+    verify_crate_release_admission(
+        &receipt,
+        intent,
+        request,
+        github,
+        registry,
+        crate::CrateSource::new(source, git, source_execution),
+    )?;
+    let fresh = prepare_crate_release(
+        intent,
+        request,
+        github,
+        registry,
+        crate::CrateSource::new(source, git, source_execution),
+    )?;
     crate::crate_release_controller::verify_observed_packages(&fresh, &receipt)?;
     crate::crate_release_github::authorize_github_candidate(request, &receipt.github, github)?;
     append_output(&format!("release_mode={}\n", release_mode(&fresh)))

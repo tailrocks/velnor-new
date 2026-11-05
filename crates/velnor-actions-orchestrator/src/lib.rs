@@ -57,7 +57,8 @@ pub use crate_release_source::{
     verify_crate_release_source, verify_journal_source, verify_owned_tool_homes,
 };
 pub use crate_release_workspace::{
-    CrateReleaseWorkspacePlan, crate_release_workspace_plan_with_registry,
+    CratePackageSource, CrateReleaseWorkspacePlan, CrateSemverSource, CrateSource,
+    CrateSourceExecution, UnprivilegedSourceExecution, crate_release_workspace_plan_with_registry,
 };
 #[expect(
     missing_debug_implementations,

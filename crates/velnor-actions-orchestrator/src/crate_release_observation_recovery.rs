@@ -64,8 +64,7 @@ pub(crate) fn observe_prior_recovery<
         input.request,
         input.github,
         input.registry,
-        input.source,
-        input.git,
+        crate::CrateSource::new(input.source, input.git, input.source_execution),
     )?;
     verify_observed_packages(&current, input.admission)?;
     let mut results = Vec::new();
@@ -99,8 +98,7 @@ pub(crate) fn observe_prior_recovery<
         input.request,
         input.github,
         input.registry,
-        input.source,
-        input.git,
+        crate::CrateSource::new(input.source, input.git, input.source_execution),
     )? != current
         || crate::crate_release_journal::inspect_prior_chain(
             input.journal,

@@ -13,14 +13,16 @@ pub fn acquire_reconciliation_receipt_artifact<
     github: &G,
     registry: &R,
     transport: &T,
-    source: &std::path::Path,
+    source_context: crate::CrateSource<'_>,
 ) -> Result<(), OrchestratorError> {
+    let source = source_context.root;
+    let source_execution = source_context.execution;
     acquire_receipt(
         request,
         github,
         registry,
         transport,
-        source,
+        source_context,
         true,
         |receipt| {
             crate::crate_release_semver::verify_preflight(
@@ -28,7 +30,8 @@ pub fn acquire_reconciliation_receipt_artifact<
                 receipt,
                 registry,
                 request.runner_temp,
-                request.git,
+                source_context.git,
+                source_execution,
             )
         },
     )
@@ -43,14 +46,16 @@ pub fn acquire_receipt_artifact<
     github: &G,
     registry: &R,
     transport: &T,
-    source: &std::path::Path,
+    source_context: crate::CrateSource<'_>,
 ) -> Result<(), OrchestratorError> {
+    let source = source_context.root;
+    let source_execution = source_context.execution;
     acquire_receipt(
         request,
         github,
         registry,
         transport,
-        source,
+        source_context,
         false,
         |receipt| {
             crate::crate_release_semver::verify_preflight(
@@ -58,7 +63,8 @@ pub fn acquire_receipt_artifact<
                 receipt,
                 registry,
                 request.runner_temp,
-                request.git,
+                source_context.git,
+                source_execution,
             )
         },
     )
@@ -73,7 +79,7 @@ fn acquire_receipt<
     github: &G,
     registry: &R,
     transport: &T,
-    source: &std::path::Path,
+    source_context: crate::CrateSource<'_>,
     reconciliation: bool,
     verify_semver: impl FnOnce(
         &crate::crate_release_controller::CrateReleaseAdmissionReceipt,
@@ -82,6 +88,8 @@ fn acquire_receipt<
         OrchestratorError,
     >,
 ) -> Result<(), OrchestratorError> {
+    let source = source_context.root;
+    let source_execution = source_context.execution;
     let authenticated = acquire_authenticated_receipt(request, github, transport)?;
     let AuthenticatedReceipt { bytes, receipt } = authenticated;
     let invalid = || internal("crate_release_receipt_acquire_invalid");
@@ -92,8 +100,7 @@ fn acquire_receipt<
             request.github,
             github,
             registry,
-            source,
-            request.git,
+            crate::CrateSource::new(source, source_context.git, source_execution),
         )?;
         if !visible {
             return Err(internal("crate_release_visibility_timeout"));
@@ -104,8 +111,7 @@ fn acquire_receipt<
             request.github,
             github,
             registry,
-            source,
-            request.git,
+            crate::CrateSource::new(source, source_context.git, source_execution),
         )?;
         fresh.semver_evidence = verify_semver(&fresh)?;
         crate::crate_release_controller::verify_observed_packages(&fresh, &receipt)?;
@@ -214,14 +220,14 @@ pub(crate) fn fixture_acquire_receipt<
     github: &G,
     registry: &R,
     transport: &T,
-    source: &std::path::Path,
+    source_context: crate::CrateSource<'_>,
 ) -> Result<(), OrchestratorError> {
     acquire_receipt(
         request,
         github,
         registry,
         transport,
-        source,
+        source_context,
         false,
         |receipt| {
             Ok(receipt

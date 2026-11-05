@@ -51,10 +51,10 @@ pub(super) fn explicitly_approved_new_crate_admission_records_unknown_ownership(
     assert_eq!(github.writes.get(), 0);
     let mut no_approval = intent.clone();
     no_approval.new_crates = None;
-    assert!(prepare_crate_release(&no_approval, &request, &github, &Absent, temp.path()).is_err());
+    assert!(prepare_crate_release(&no_approval, &request, &github, &Absent, temp.path(),).is_err());
     let mut non_dispatch = request.clone();
     non_dispatch.event = "push".into();
-    assert!(prepare_crate_release(&intent, &non_dispatch, &github, &Absent, temp.path()).is_err());
+    assert!(prepare_crate_release(&intent, &non_dispatch, &github, &Absent, temp.path(),).is_err());
     let mut wrong_version = intent.clone();
     wrong_version
         .new_crates
@@ -63,7 +63,7 @@ pub(super) fn explicitly_approved_new_crate_admission_records_unknown_ownership(
         .packages
         .insert("demo".into(), "0.1.2".into());
     assert!(
-        prepare_crate_release(&wrong_version, &request, &github, &Absent, temp.path()).is_err()
+        prepare_crate_release(&wrong_version, &request, &github, &Absent, temp.path(),).is_err()
     );
     assert_eq!(github.writes.get(), 0);
     Ok(())
@@ -106,6 +106,7 @@ pub(super) fn new_crate_upload_observation_requires_durable_intent_and_real_revi
     record_source_bound_start(&journal, &identity, &plan, root, test_git())?;
     let intended = new_crate_upload_intention();
     let obs = CrateReleaseObservation {
+        source_execution: &crate::UnprivilegedSourceExecution,
         git: test_git(),
         journal: &journal,
         identity: &identity,
@@ -274,8 +275,7 @@ pub(super) fn new_crate_reconciliation_accepts_verified_first_owner()
             &request,
             &github,
             &registry,
-            temp.path(),
-            test_git(),
+            crate::CrateSource::new(temp.path(), test_git(), &crate::UnprivilegedSourceExecution),
         )
     };
     assert!(check()?);
@@ -285,8 +285,7 @@ pub(super) fn new_crate_reconciliation_accepts_verified_first_owner()
         &request,
         &github,
         &registry,
-        temp.path(),
-        test_git(),
+        crate::CrateSource::new(temp.path(), test_git(), &crate::UnprivilegedSourceExecution),
     )?;
     assert_eq!(completed[0].tag_commit, request.source_sha);
     github.owner_match.set(false);
@@ -298,8 +297,7 @@ pub(super) fn new_crate_reconciliation_accepts_verified_first_owner()
             &request,
             &github,
             &registry,
-            temp.path(),
-            test_git(),
+            crate::CrateSource::new(temp.path(), test_git(), &crate::UnprivilegedSourceExecution)
         )
         .is_err()
     );
@@ -327,6 +325,7 @@ pub(super) fn missing_semver_baseline_requires_reviewed_new_crate()
             &receipt.packages[0],
             root,
             test_git(),
+            &crate::UnprivilegedSourceExecution,
         )
     };
     assert!(check(&existing).is_err());

@@ -3,7 +3,7 @@
 
 use super::{
     CrateReleaseAction, CrateReleaseAdmissionReceipt, VerifiedReleasePackage,
-    observe_crate_release, observe_package_state, package_source,
+    observe_crate_release, observe_package_state,
 };
 use crate::crate_release_github::{
     GitHubAdmissionRead, GitHubAdmissionRequest, authorize_github_candidate,
@@ -51,6 +51,7 @@ pub(crate) struct CrateReleaseObservation<'a, J, G, R> {
     pub registry: &'a R,
     pub source: &'a Path,
     pub git: &'a crate::crate_release_git::ReleaseGit,
+    pub source_execution: &'a dyn crate::CrateSourceExecution,
     pub sequence: u32,
 }
 

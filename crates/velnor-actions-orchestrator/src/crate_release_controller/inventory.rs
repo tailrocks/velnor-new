@@ -15,9 +15,16 @@ pub(super) fn workspace_inventory<R: CrateRegistryRead>(
     intent: &CrateReleaseIntent,
     registry: &R,
     git: &crate::crate_release_git::ReleaseGit,
+    source_execution: &dyn crate::CrateSourceExecution,
 ) -> Result<Vec<CrateReleaseSourcePackage>, OrchestratorError> {
-    let workspace =
-        crate_release_workspace_plan_with_registry(source, source_sha, intent, registry, git)?;
+    let workspace = crate_release_workspace_plan_with_registry(
+        source,
+        source_sha,
+        intent,
+        registry,
+        git,
+        source_execution,
+    )?;
     let plan = workspace.plan;
     plan.graph
         .order
@@ -38,7 +45,7 @@ pub(super) fn workspace_inventory<R: CrateRegistryRead>(
         .collect()
 }
 
-pub(crate) fn package_source(
+pub(crate) fn package_unprivileged(
     source: &Path,
     intent: &CrateReleaseIntent,
     package: &CrateReleaseSourcePackage,

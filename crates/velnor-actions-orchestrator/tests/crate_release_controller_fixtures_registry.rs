@@ -243,8 +243,7 @@ pub(super) fn exercise_repair(
             request,
             github,
             registry,
-            root,
-            test_git(),
+            crate::CrateSource::new(root, test_git(), &crate::UnprivilegedSourceExecution),
         )
     };
     assert!(matches!(

@@ -26,6 +26,7 @@ pub(super) fn observe_journal_operation(
         source,
         token,
         git,
+        source_execution,
     } = runtime;
     let value = required("VELNOR_JOURNAL_SEQUENCE")?;
     let sequence = value
@@ -46,6 +47,7 @@ pub(super) fn observe_journal_operation(
     let started = inspect_journal(&journal, &identity, JournalStage::Started)?
         .ok_or_else(|| internal("crate_release_journal_start_missing"))?;
     let input = CrateReleaseObservation {
+        source_execution,
         journal: &journal,
         identity: &identity,
         journal_receipt: &started.receipt,
@@ -68,6 +70,7 @@ pub(super) fn observe_journal_operation(
                 &required_path("RUNNER_TEMP")?,
                 &package,
                 git,
+                source_execution,
             )?;
             verify_and_record_upload_intent(&input, &package, semver)?;
         }
@@ -96,10 +99,12 @@ pub(super) fn verify_package(
     github: &NativeGitHubAdmissionRead,
     source: &Path,
     git: &crate::crate_release_git::ReleaseGit,
+    source_execution: &dyn crate::CrateSourceExecution,
 ) -> Result<(), OrchestratorError> {
     let receipt = read_receipt(receipt_path)?;
     let package = required("VELNOR_JOURNAL_PACKAGE")?;
     let input = crate::crate_release_controller::PackageVerification {
+        source_execution,
         receipt: &receipt,
         intent,
         request,
@@ -122,6 +127,7 @@ pub(super) fn reconcile_receipt(
     github: &NativeGitHubAdmissionRead,
     source: &Path,
     git: &crate::crate_release_git::ReleaseGit,
+    source_execution: &dyn crate::CrateSourceExecution,
 ) -> Result<(), OrchestratorError> {
     let receipt = read_receipt(receipt_path)?;
     let completed = reconcile_crate_release(
@@ -130,8 +136,7 @@ pub(super) fn reconcile_receipt(
         request,
         github,
         &NativeCrateRegistryRead,
-        source,
-        git,
+        crate::CrateSource::new(source, git, source_execution),
     )?;
     let body = serde_json::to_vec(&serde_json::json!({"schema":1,"stage":"reconciled","receipt":receipt,"packages":completed,"generator_version":env!("CARGO_PKG_VERSION"),"workflow_run":format!("https://github.com/{}/actions/runs/{}", request.repository, request.run_id)})).map_err(|_| internal("crate_release_checkpoint_write"))?;
     velnor_actions_contract::exclusive_write::write_exclusive(

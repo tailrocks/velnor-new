@@ -4,9 +4,9 @@
 use super::{
     CrateRegistryOwnership, CrateRegistryPresence, CrateRegistryRead, CrateReleaseAction,
     CrateReleaseAdmissionReceipt, CrateReleaseIntent, CrateReleaseSourcePackage, Deserialize,
-    GitHubAdmissionRead, GitHubAdmissionRequest, OrchestratorError, Path, Serialize,
+    GitHubAdmissionRead, GitHubAdmissionRequest, OrchestratorError, Serialize,
     authorize_github_candidate, effective_release_intent, inspect_crate_registry, internal,
-    package_source, prepare_crate_release, read_github_tag_evidence, require_reviewer_owner,
+    prepare_crate_release, read_github_tag_evidence, require_reviewer_owner,
     verify_github_evidence, verify_observed_packages, verify_request_intent, wait_for_release,
     wait_for_tag, workspace_inventory,
 };
@@ -17,9 +17,13 @@ pub fn validate_reconciliation_receipt<G: GitHubAdmissionRead, R: CrateRegistryR
     request: &GitHubAdmissionRequest,
     github: &G,
     registry: &R,
-    source: &Path,
-    git: &crate::crate_release_git::ReleaseGit,
+    source_context: crate::CrateSource<'_>,
 ) -> Result<bool, OrchestratorError> {
+    let crate::CrateSource {
+        root: source,
+        git,
+        execution: source_execution,
+    } = source_context;
     let invalid = || internal("crate_release_reconciliation_receipt_invalid");
     if receipt.schema != 1
         || &receipt.intent != intent
@@ -36,6 +40,7 @@ pub fn validate_reconciliation_receipt<G: GitHubAdmissionRead, R: CrateRegistryR
         &effective_intent,
         registry,
         git,
+        source_execution,
     )?;
     if inventory.len() != receipt.packages.len() || inventory.is_empty() {
         return Err(invalid());
@@ -146,14 +151,24 @@ pub fn verify_crate_release_admission<G: GitHubAdmissionRead, R: CrateRegistryRe
     request: &GitHubAdmissionRequest,
     github: &G,
     registry: &R,
-    source: &Path,
-    git: &crate::crate_release_git::ReleaseGit,
+    source_context: crate::CrateSource<'_>,
 ) -> Result<(), OrchestratorError> {
+    let crate::CrateSource {
+        root: source,
+        git,
+        execution: source_execution,
+    } = source_context;
     if receipt.schema != 1 || &receipt.intent != intent {
         return Err(internal("crate_release_receipt_mismatch"));
     }
     authorize_github_candidate(request, &receipt.github, github)?;
-    let fresh = prepare_crate_release(intent, request, github, registry, source, git)?;
+    let fresh = prepare_crate_release(
+        intent,
+        request,
+        github,
+        registry,
+        crate::CrateSource::new(source, git, source_execution),
+    )?;
     verify_observed_packages(&fresh, receipt)?;
     authorize_github_candidate(request, &receipt.github, github)?;
     Ok(())
@@ -177,9 +192,9 @@ pub fn reconcile_crate_release<G: GitHubAdmissionRead, R: CrateRegistryRead>(
     request: &GitHubAdmissionRequest,
     github: &G,
     registry: &R,
-    source: &Path,
-    git: &crate::crate_release_git::ReleaseGit,
+    source_context: crate::CrateSource<'_>,
 ) -> Result<Vec<CrateReleaseCompletedPackage>, OrchestratorError> {
+    let source = source_context.root;
     if receipt.schema != 1 || &receipt.intent != intent {
         return Err(internal("crate_release_receipt_mismatch"));
     }
@@ -192,7 +207,8 @@ pub fn reconcile_crate_release<G: GitHubAdmissionRead, R: CrateRegistryRead>(
         &request.source_sha,
         &effective_intent,
         registry,
-        git,
+        source_context.git,
+        source_context.execution,
     )?;
     if inventory.len() != receipt.packages.len()
         || inventory
@@ -215,14 +231,17 @@ pub fn reconcile_crate_release<G: GitHubAdmissionRead, R: CrateRegistryRead>(
             &package.tag,
             &request.source_sha,
         )?;
-        let archive = package_source(
-            source,
-            intent,
-            &package.source,
-            target.path(),
-            &request.source_sha,
-            false,
-            git,
+        let archive = crate::CrateSourceExecution::package(
+            source_context.execution,
+            &crate::CratePackageSource::new(
+                source,
+                intent,
+                &package.source,
+                target.path(),
+                &request.source_sha,
+                false,
+                source_context.git,
+            ),
         )?;
         crate::crate_release_registry::wait_for_crate_version(
             registry,

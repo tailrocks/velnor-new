@@ -248,7 +248,7 @@ pub(super) fn verify_after_index_visibility(
         .iter()
         .find(|p| p.source.name.ends_with("_a"))
         .ok_or("a")?;
-    *registry.archive.borrow_mut() = super::super::package_source(
+    *registry.archive.borrow_mut() = crate::crate_release_controller::package_unprivileged(
         root,
         intent,
         &source.source,

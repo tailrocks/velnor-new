@@ -51,14 +51,14 @@ pub(super) fn candidate_receipt(
     github: &NativeGitHubAdmissionRead,
     source: &Path,
     git: &crate::crate_release_git::ReleaseGit,
+    source_execution: &dyn crate::CrateSourceExecution,
 ) -> Result<(), OrchestratorError> {
     let mut receipt = crate::crate_release_controller::prepare_crate_release(
         intent,
         request,
         github,
         &NativeCrateRegistryRead,
-        source,
-        git,
+        crate::CrateSource::new(source, git, source_execution),
     )?;
     receipt.semver_evidence = crate::crate_release_semver::verify_preflight(
         source,
@@ -66,6 +66,7 @@ pub(super) fn candidate_receipt(
         &NativeCrateRegistryRead,
         &required_path("RUNNER_TEMP")?,
         git,
+        source_execution,
     )?;
     let data = serde_json::to_vec(&receipt).map_err(|_| internal("crate_release_receipt_write"))?;
     crate::crate_release_tool_artifact::write_receipt(&required_path("RUNNER_TEMP")?, &data)
@@ -83,7 +84,6 @@ pub(super) fn acquire_toolchain(
     request: &GitHubAdmissionRequest,
     github: &NativeGitHubAdmissionRead,
     token: &str,
-    git: &crate::crate_release_git::ReleaseGit,
 ) -> Result<(), OrchestratorError> {
     let artifact_id = required("VELNOR_RUST_ARTIFACT_ID")?
         .parse()
@@ -97,7 +97,6 @@ pub(super) fn acquire_toolchain(
             artifact_id,
             token,
             runner_temp: &required_path("RUNNER_TEMP")?,
-            git,
             deadline: Instant::now() + Duration::from_mins(15),
         },
         github,
@@ -111,9 +110,8 @@ pub(super) fn acquire_receipt(
     request: &GitHubAdmissionRequest,
     github: &NativeGitHubAdmissionRead,
     token: &str,
-    source: &std::path::Path,
+    source_context: crate::CrateSource<'_>,
     reconciliation: bool,
-    git: &crate::crate_release_git::ReleaseGit,
 ) -> Result<(), OrchestratorError> {
     let artifact_id = required("VELNOR_RECEIPT_ARTIFACT_ID")?
         .parse()
@@ -131,7 +129,6 @@ pub(super) fn acquire_receipt(
         artifact_id,
         token,
         runner_temp: &required_path("RUNNER_TEMP")?,
-        git,
         deadline: Instant::now() + Duration::from_mins(5),
     };
     if !reconciliation {
@@ -140,7 +137,7 @@ pub(super) fn acquire_receipt(
             github,
             &NativeCrateRegistryRead,
             &crate::crate_release_tool_download::NativeToolDownloadTransport,
-            source,
+            source_context,
         );
     }
     crate::crate_release_controller::wait_for_reconciliation_visibility(
@@ -150,7 +147,7 @@ pub(super) fn acquire_receipt(
             github,
             &NativeCrateRegistryRead,
             &crate::crate_release_tool_download::NativeToolDownloadTransport,
-            source,
+            source_context,
         ) {
             Ok(()) => Ok(true),
             Err(OrchestratorError::Internal { problem })

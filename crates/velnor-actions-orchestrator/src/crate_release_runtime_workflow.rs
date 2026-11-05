@@ -13,6 +13,7 @@ pub(crate) fn verify_workflow_concurrency<R: crate::crate_release_registry::Crat
     request: &GitHubAdmissionRequest,
     registry: &R,
     git: &crate::crate_release_git::ReleaseGit,
+    source_execution: &dyn crate::CrateSourceExecution,
 ) -> Result<(), OrchestratorError> {
     let effective_intent =
         crate::crate_release_controller::effective_release_intent(intent, request);
@@ -22,6 +23,7 @@ pub(crate) fn verify_workflow_concurrency<R: crate::crate_release_registry::Crat
         &effective_intent,
         registry,
         git,
+        source_execution,
     )?;
     let bytes = read_workflow_at(workspace, &request.workflow_sha, git)?;
     validate_workflow_concurrency(&bytes, &plan.concurrency_group)

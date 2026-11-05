@@ -35,6 +35,7 @@ pub(super) fn verify_created_crate_recovers_without_reupload(
     };
     let started = inspect_journal(journal, &identity, JournalStage::Started)?.ok_or("start")?;
     let observation = CrateReleaseObservation {
+        source_execution: &crate::UnprivilegedSourceExecution,
         git: test_git(),
         journal,
         identity: &identity,
@@ -145,6 +146,7 @@ pub(super) fn coordinator_completes_first_crate_with_durable_owners()
     let journal = JournalRegistryFake::default();
     record_source_bound_start(&journal, &identity, &plan, root, test_git())?;
     let input = CrateReleaseObservation {
+        source_execution: &crate::UnprivilegedSourceExecution,
         git: test_git(),
         journal: &journal,
         identity: &identity,

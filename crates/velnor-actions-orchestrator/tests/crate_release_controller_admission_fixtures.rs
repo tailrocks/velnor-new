@@ -165,6 +165,7 @@ pub(super) fn admitted_start_derives_receipt_and_rechecks_authority()
     let journal = JournalRegistryFake::default();
     let generator = fixture_attested_generator();
     let input = AdmittedStart {
+        source_execution: &crate::UnprivilegedSourceExecution,
         git: test_git(),
         journal: &journal,
         github: &github,

@@ -40,6 +40,7 @@ pub(super) fn metadata_repair_journals_each_create_before_and_after_write()
         );
     }));
     let input = CrateReleaseObservation {
+        source_execution: &crate::UnprivilegedSourceExecution,
         git: test_git(),
         journal: journal.as_ref(),
         identity: &identity,
@@ -111,6 +112,7 @@ pub(super) fn ambiguous_metadata_write_stops_with_durable_unresolved_intent()
     github.release_variant.set(4);
     github.write_error.set(3);
     let input = CrateReleaseObservation {
+        source_execution: &crate::UnprivilegedSourceExecution,
         git: test_git(),
         journal: &journal,
         identity: &identity,
@@ -156,6 +158,7 @@ pub(super) fn metadata_intent_requires_fresh_approval_after_state_observation()
     registry.absent.set(false);
     github.revoke_on_tag_read.set(true);
     let input = CrateReleaseObservation {
+        source_execution: &crate::UnprivilegedSourceExecution,
         git: test_git(),
         journal: &journal,
         identity: &identity,
@@ -218,6 +221,7 @@ pub(super) fn metadata_repair_stops_if_tag_or_registry_changes_after_intent()
             }
         }));
         let input = CrateReleaseObservation {
+            source_execution: &crate::UnprivilegedSourceExecution,
             git: test_git(),
             journal: &journal,
             identity: &identity,
@@ -264,6 +268,7 @@ pub(super) fn metadata_repair_stops_if_approval_changes_after_intent()
         }
     }));
     let input = CrateReleaseObservation {
+        source_execution: &crate::UnprivilegedSourceExecution,
         git: test_git(),
         journal: &journal,
         identity: &identity,

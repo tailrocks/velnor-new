@@ -94,8 +94,7 @@ where
         input.request,
         input.github,
         input.registry,
-        input.source,
-        input.git,
+        crate::CrateSource::new(input.source, input.git, input.source_execution),
     )?;
     verify_observed_packages_after_recorded_upload(
         &CrateReleaseObservation {
@@ -167,8 +166,7 @@ where
             input.request,
             input.github,
             input.registry,
-            input.source,
-            input.git,
+            crate::CrateSource::new(input.source, input.git, input.source_execution),
         )?;
         verify_observed_packages_after_recorded_upload(
             &CrateReleaseObservation {
@@ -215,6 +213,7 @@ pub(super) fn wait_for_predecessor_indexes<
         &effective,
         input.registry,
         input.git,
+        input.source_execution,
     )?;
     let predecessors: std::collections::BTreeSet<_> = workspace
         .plan
@@ -261,8 +260,7 @@ pub(super) fn ensure_package_reconciled<
         input.request,
         input.github,
         input.registry,
-        input.source,
-        input.git,
+        crate::CrateSource::new(input.source, input.git, input.source_execution),
     )?;
     verify_observed_packages_after_recorded_upload(input, &current)?;
     if !current.packages.iter().any(|item| {

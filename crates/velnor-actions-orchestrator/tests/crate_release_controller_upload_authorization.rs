@@ -21,6 +21,7 @@ pub(super) fn upload_intent_requires_fresh_admission_and_absent_publication()
     let journal = JournalRegistryFake::default();
     record_source_bound_start(&journal, &identity, &plan, root, test_git())?;
     let obs = CrateReleaseObservation {
+        source_execution: &crate::UnprivilegedSourceExecution,
         git: test_git(),
         journal: &journal,
         identity: &identity,

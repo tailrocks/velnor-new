@@ -56,7 +56,7 @@ pub(super) fn run_two_new_workspace_crates(
             .all(|p| p.owners == crate::crate_release_registry::CrateRegistryOwnership::NewCrate)
     );
     let target = tempfile::tempdir()?;
-    let first_archive = super::super::package_source(
+    let first_archive = crate::crate_release_controller::package_unprivileged(
         root,
         &intent,
         &admission.packages[0].source,
@@ -83,6 +83,7 @@ pub(super) fn run_two_new_workspace_crates(
     let journal = JournalRegistryFake::default();
     record_source_bound_start(&journal, &identity, &plan, root, test_git())?;
     let input = CrateReleaseObservation {
+        source_execution: &crate::UnprivilegedSourceExecution,
         git: test_git(),
         journal: &journal,
         identity: &identity,
@@ -142,7 +143,7 @@ pub(super) fn execute_two_new_workspace_crates(
                 let target = tempfile::tempdir().map_err(|_| OrchestratorError::Contract {
                     problem: "fixture".into(),
                 })?;
-                let archive = super::super::package_source(
+                let archive = crate::crate_release_controller::package_unprivileged(
                     root,
                     intent,
                     &admission.packages[1].source,

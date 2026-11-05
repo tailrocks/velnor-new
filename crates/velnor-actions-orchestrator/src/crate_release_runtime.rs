@@ -49,7 +49,12 @@ fn run_qualified_crate_release(operation: &str) -> Result<(), OrchestratorError>
         )
         .map_err(|_| internal("release_git_bundle_invalid"))?,
     );
-    run_qualified_crate_release_with_git(operation, &git, &workspace)
+    run_qualified_crate_release_with_git(
+        operation,
+        &git,
+        &workspace,
+        &crate::UnprivilegedSourceExecution,
+    )
 }
 
 #[cfg(test)]
@@ -59,6 +64,7 @@ fn run_qualified_with_fixture_git(operation: &str) -> Result<(), OrchestratorErr
         operation,
         &crate::crate_release_git::ReleaseGit::host_fixture(),
         &workspace,
+        &crate::UnprivilegedSourceExecution,
     )
 }
 
@@ -66,6 +72,7 @@ fn run_qualified_crate_release_with_git(
     operation: &str,
     git: &crate::crate_release_git::ReleaseGit,
     workspace: &Path,
+    source_execution: &dyn crate::CrateSourceExecution,
 ) -> Result<(), OrchestratorError> {
     let workflow_sha = required("GITHUB_SHA")?;
     let intent = read_intent_at_workflow(workspace, &workflow_sha, git)?;
@@ -85,23 +92,30 @@ fn run_qualified_crate_release_with_git(
             &request,
             &github,
             &token,
-            &source,
+            crate::CrateSource::new(&source, git, source_execution),
             operation == "reconciliation-receipt-acquire",
-            git,
         );
     }
     if operation == "candidate-receipt" {
-        return candidate_receipt(&intent, &request, &github, &source, git);
+        return candidate_receipt(&intent, &request, &github, &source, git, source_execution);
     }
     if operation == "toolchain-acquire" {
-        return acquire_toolchain(&intent, &request, &github, &token, git);
+        return acquire_toolchain(&intent, &request, &github, &token);
     }
     let registry = NativeCrateRegistryRead;
     verify_runtime_tool_homes(&source)?;
     if is_journal_operation(operation) {
         let candidate = crate::crate_release_github::verify_github_evidence(&request, &github)?;
         crate::crate_release_github::authorize_github_candidate(&request, &candidate, &github)?;
-        verify_workflow_concurrency(workspace, &source, &intent, &request, &registry, git)?;
+        verify_workflow_concurrency(
+            workspace,
+            &source,
+            &intent,
+            &request,
+            &registry,
+            git,
+            source_execution,
+        )?;
     }
     let receipt_path = required_path("RUNNER_TEMP")?.join("velnor-crate-release-receipt.json");
     dispatch_release_operation(
@@ -115,6 +129,7 @@ fn run_qualified_crate_release_with_git(
             source: &source,
             token: &token,
             git,
+            source_execution,
         },
     )
 }
@@ -131,19 +146,53 @@ fn dispatch_release_operation(
         registry,
         source,
         git,
+        source_execution,
         ..
     } = input;
     match operation {
-        "verify-package" => verify_package(receipt_path, intent, request, github, source, git),
-        "admit" => write_admission(receipt_path, intent, request, github, registry, source, git),
-        "verify-admission" => {
-            verify_admission_output(receipt_path, intent, request, github, registry, source, git)
-        }
-        "publication-started" => {
-            checkpoint_publication(receipt_path, intent, request, github, registry, source, git)
-        }
+        "verify-package" => verify_package(
+            receipt_path,
+            intent,
+            request,
+            github,
+            source,
+            git,
+            source_execution,
+        ),
+        "admit" => write_admission(
+            receipt_path,
+            intent,
+            request,
+            github,
+            registry,
+            crate::CrateSource::new(source, git, source_execution),
+        ),
+        "verify-admission" => verify_admission_output(
+            receipt_path,
+            intent,
+            request,
+            github,
+            registry,
+            crate::CrateSource::new(source, git, source_execution),
+        ),
+        "publication-started" => checkpoint_publication(
+            receipt_path,
+            intent,
+            request,
+            github,
+            registry,
+            crate::CrateSource::new(source, git, source_execution),
+        ),
         operation if is_journal_operation(operation) => run_journal(operation, input),
-        "reconcile" => reconcile_receipt(receipt_path, intent, request, github, source, git),
+        "reconcile" => reconcile_receipt(
+            receipt_path,
+            intent,
+            request,
+            github,
+            source,
+            git,
+            source_execution,
+        ),
         _ => Err(internal("crate_release_operation_invalid")),
     }
 }

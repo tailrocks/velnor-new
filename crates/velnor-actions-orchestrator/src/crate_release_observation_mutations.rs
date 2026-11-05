@@ -21,6 +21,7 @@ pub(crate) fn verify_and_record_upload_intent<
     semver: crate::crate_release_semver::VerifiedSemver,
 ) -> Result<UploadPermit, OrchestratorError> {
     let verification = super::super::PackageVerification {
+        source_execution: input.source_execution,
         receipt: input.admission,
         intent: input.intent,
         request: input.request,
@@ -58,9 +59,8 @@ pub(super) fn observe_input_state<J, G: GitHubAdmissionRead, R: CrateRegistryRea
         input.request,
         input.github,
         input.registry,
-        input.source,
+        crate::CrateSource::new(input.source, input.git, input.source_execution),
         &input.admission.github,
-        input.git,
     )
 }
 

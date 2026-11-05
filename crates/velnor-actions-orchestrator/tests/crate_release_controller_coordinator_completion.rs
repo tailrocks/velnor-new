@@ -1,6 +1,10 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::crate_release_journal::{
+    JournalMutationPhase, inspect_journal_mutation, record_source_bound_start,
+};
+
 use super::{
     Cell, Github, JournalRegistryFake, OrchestratorError, Registry, fixture_archive,
     fixture_journal_plan, fs, journal_existing_owners, make_fixture, make_workspace_order_fixture,
@@ -21,8 +25,7 @@ pub(super) fn workspace_receipt_rederives_ordered_source_before_publishing()
         &request,
         &github,
         &registry,
-        root,
-        test_git(),
+        crate::CrateSource::new(root, test_git(), &crate::UnprivilegedSourceExecution),
     )?;
     let mut reordered = receipt.clone();
     reordered.packages.swap(0, 1);
@@ -33,8 +36,7 @@ pub(super) fn workspace_receipt_rederives_ordered_source_before_publishing()
             &request,
             &github,
             &registry,
-            root,
-            test_git()
+            crate::CrateSource::new(root, test_git(), &crate::UnprivilegedSourceExecution)
         )
         .is_err()
     );
@@ -47,8 +49,7 @@ pub(super) fn workspace_receipt_rederives_ordered_source_before_publishing()
             &request,
             &github,
             &registry,
-            root,
-            test_git()
+            crate::CrateSource::new(root, test_git(), &crate::UnprivilegedSourceExecution)
         )
         .is_err()
     );
@@ -61,8 +62,7 @@ pub(super) fn workspace_receipt_rederives_ordered_source_before_publishing()
             &wrong,
             &github,
             &registry,
-            root,
-            test_git()
+            crate::CrateSource::new(root, test_git(), &crate::UnprivilegedSourceExecution)
         )
         .is_err()
     );
@@ -77,8 +77,7 @@ pub(super) fn workspace_receipt_rederives_ordered_source_before_publishing()
             &request,
             &github,
             &registry,
-            root,
-            test_git()
+            crate::CrateSource::new(root, test_git(), &crate::UnprivilegedSourceExecution)
         )
         .is_err()
     );
@@ -91,9 +90,6 @@ pub(super) fn serial_coordinator_records_upload_and_metadata_before_reconciling(
     use crate::crate_release_controller::{
         CrateReleaseObservation, UploadAttempt, coordinate_release,
     };
-    use crate::crate_release_journal::{
-        JournalMutationPhase, inspect_journal_mutation, record_source_bound_start,
-    };
     let temp = tempfile::tempdir()?;
     let root = temp.path();
     let (intent, request, github, registry) = make_fixture(root)?;
@@ -105,6 +101,7 @@ pub(super) fn serial_coordinator_records_upload_and_metadata_before_reconciling(
     record_source_bound_start(&journal, &identity, &plan, root, test_git())?;
     let archive = fixture_archive(root)?;
     let input = CrateReleaseObservation {
+        source_execution: &crate::UnprivilegedSourceExecution,
         git: test_git(),
         journal: &journal,
         identity: &identity,
@@ -189,6 +186,7 @@ pub(super) fn assert_semver_failure_writes_nothing(
             missing_checker.path(),
             "demo",
             test_git(),
+            &crate::UnprivilegedSourceExecution,
         )
         .is_err()
     );

@@ -4,10 +4,9 @@
 use super::{
     CrateRegistryOwnership, CrateRegistryPresence, CrateRegistryRead, CrateReleaseAction,
     CrateReleaseAdmissionReceipt, CrateReleaseIntent, CrateReleasePlannedPackage,
-    GitHubAdmissionRead, GitHubAdmissionRequest, GitHubCandidate, OrchestratorError, Path,
-    effective_release_intent, inspect_crate_registry, internal, package_source,
-    read_github_tag_evidence, verify_github_evidence, verify_release_ownership,
-    verify_request_intent, workspace_inventory,
+    GitHubAdmissionRead, GitHubAdmissionRequest, GitHubCandidate, OrchestratorError,
+    effective_release_intent, inspect_crate_registry, internal, read_github_tag_evidence,
+    verify_github_evidence, verify_release_ownership, verify_request_intent, workspace_inventory,
 };
 
 pub(super) fn observe_crate_release<G: GitHubAdmissionRead, R: CrateRegistryRead>(
@@ -15,15 +14,26 @@ pub(super) fn observe_crate_release<G: GitHubAdmissionRead, R: CrateRegistryRead
     request: &GitHubAdmissionRequest,
     github: &G,
     registry: &R,
-    source: &Path,
-    git: &crate::crate_release_git::ReleaseGit,
+    source_context: crate::CrateSource<'_>,
 ) -> Result<CrateReleaseAdmissionReceipt, OrchestratorError> {
+    let crate::CrateSource {
+        root: source,
+        git,
+        execution: source_execution,
+    } = source_context;
     intent
         .validate()
         .map_err(|_| internal("crate_release_intent_invalid"))?;
     verify_request_intent(intent, request)?;
     let admitted = verify_github_evidence(request, github)?;
-    observe_package_state(intent, request, github, registry, source, &admitted, git)
+    observe_package_state(
+        intent,
+        request,
+        github,
+        registry,
+        crate::CrateSource::new(source, git, source_execution),
+        &admitted,
+    )
 }
 
 pub(super) fn observe_package_state<G: GitHubAdmissionRead, R: CrateRegistryRead>(
@@ -31,10 +41,10 @@ pub(super) fn observe_package_state<G: GitHubAdmissionRead, R: CrateRegistryRead
     request: &GitHubAdmissionRequest,
     github: &G,
     registry: &R,
-    source: &Path,
+    source_context: crate::CrateSource<'_>,
     admitted: &GitHubCandidate,
-    git: &crate::crate_release_git::ReleaseGit,
 ) -> Result<CrateReleaseAdmissionReceipt, OrchestratorError> {
+    let source = source_context.root;
     intent
         .validate()
         .map_err(|_| internal("crate_release_intent_invalid"))?;
@@ -49,7 +59,8 @@ pub(super) fn observe_package_state<G: GitHubAdmissionRead, R: CrateRegistryRead
         &request.source_sha,
         &effective_intent,
         registry,
-        git,
+        source_context.git,
+        source_context.execution,
     )?;
     let target = tempfile::tempdir().map_err(|_| internal("crate_release_package_temp"))?;
     let mut packages = Vec::with_capacity(inventory.len());
@@ -64,14 +75,17 @@ pub(super) fn observe_package_state<G: GitHubAdmissionRead, R: CrateRegistryRead
                 return Err(internal("crate_release_tag_collision"));
             }
             (CrateRegistryPresence::Present, tag_sha) => {
-                let archive = package_source(
-                    source,
-                    &effective_intent,
-                    &package,
-                    target.path(),
-                    &request.source_sha,
-                    false,
-                    git,
+                let archive = crate::CrateSourceExecution::package(
+                    source_context.execution,
+                    &crate::CratePackageSource::new(
+                        source,
+                        &effective_intent,
+                        &package,
+                        target.path(),
+                        &request.source_sha,
+                        false,
+                        source_context.git,
+                    ),
                 )?;
                 let state = crate::crate_release_registry::reconcile_crate_registry(
                     registry,

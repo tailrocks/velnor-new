@@ -131,8 +131,7 @@ pub(crate) fn derive_reconciled_candidate<
         input.request,
         input.github,
         input.registry,
-        input.source,
-        input.git,
+        crate::CrateSource::new(input.source, input.git, input.source_execution),
     )?;
     let sequence = u32::try_from(history.len())
         .map_err(|_| invalid())?
@@ -150,8 +149,7 @@ pub(crate) fn derive_reconciled_candidate<
         input.request,
         input.github,
         input.registry,
-        input.source,
-        input.git,
+        crate::CrateSource::new(input.source, input.git, input.source_execution),
     )?;
     if packages.len() != input.admission.packages.len()
         || packages

@@ -12,6 +12,7 @@ pub(crate) struct AdmittedStart<'a, J, G, R> {
     pub(crate) admission: &'a crate::crate_release_controller::CrateReleaseAdmissionReceipt,
     pub(crate) source: &'a std::path::Path,
     pub(crate) git: &'a crate::crate_release_git::ReleaseGit,
+    pub(crate) source_execution: &'a dyn crate::CrateSourceExecution,
     pub(crate) workflow_root: &'a std::path::Path,
     pub(crate) generator: &'a AttestedLinuxGenerator,
 }
@@ -39,8 +40,7 @@ pub(crate) fn record_admitted_start<
         input.request,
         input.github,
         input.registry,
-        input.source,
-        input.git,
+        crate::CrateSource::new(input.source, input.git, input.source_execution),
     )?;
     crate::crate_release_controller::verify_observed_packages(&observed, input.admission)?;
     let receipt = derive_start_receipt(input, &observed)?;
@@ -65,8 +65,7 @@ pub(crate) fn record_admitted_start<
         input.request,
         input.github,
         input.registry,
-        input.source,
-        input.git,
+        crate::CrateSource::new(input.source, input.git, input.source_execution),
     )? != observed
     {
         return Err(internal("crate_release_start_state_changed"));

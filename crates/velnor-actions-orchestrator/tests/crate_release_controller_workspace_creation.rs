@@ -63,6 +63,7 @@ pub(super) fn two_new_workspace_crates_require_each_own_recorded_upload()
     )?;
     let pending = inspect_journal_mutation(&journal, &identity, 3)?.ok_or("intent")?;
     let input = CrateReleaseObservation {
+        source_execution: &crate::UnprivilegedSourceExecution,
         git: test_git(),
         journal: &journal,
         identity: &identity,
@@ -258,6 +259,7 @@ pub(super) fn first_crate_prior_upload_recovers_only_with_authenticated_intent_a
     admission.semver_evidence.insert("demo".into(), pending);
     let generator = fixture_attested_generator();
     let input = AdmittedStart {
+        source_execution: &crate::UnprivilegedSourceExecution,
         git: test_git(),
         journal: &journal,
         github: &auth,

@@ -249,7 +249,6 @@ pub struct ToolchainStageRequest<'a> {
     pub artifact_id: u64,
     pub token: &'a str,
     pub runner_temp: &'a std::path::Path,
-    pub git: &'a crate::crate_release_git::ReleaseGit,
     pub deadline: std::time::Instant,
 }
 

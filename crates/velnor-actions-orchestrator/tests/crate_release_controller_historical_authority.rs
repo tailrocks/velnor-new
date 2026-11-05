@@ -164,6 +164,7 @@ pub(super) fn exercise_historical_authority(
     };
     let generator = fixture_attested_generator();
     let input = AdmittedStart {
+        source_execution: &crate::UnprivilegedSourceExecution,
         git: test_git(),
         journal: &journal,
         github: &auth,
@@ -239,6 +240,7 @@ pub(super) fn workflow_lock_uses_event_scoped_recovery_and_committed_policy()
         &effective,
         &registry,
         test_git(),
+        &crate::UnprivilegedSourceExecution,
     )?;
     git(policy.path(), &["init", "-q"])?;
     fs::create_dir_all(policy.path().join(".github/workflows"))?;
@@ -271,6 +273,7 @@ pub(super) fn workflow_lock_uses_event_scoped_recovery_and_committed_policy()
         &request,
         &registry,
         test_git(),
+        &crate::UnprivilegedSourceExecution,
     )?;
     fs::write(source.path().join("src/lib.rs"), "pub fn modified() {}")?;
     assert!(
@@ -281,6 +284,7 @@ pub(super) fn workflow_lock_uses_event_scoped_recovery_and_committed_policy()
             &request,
             &registry,
             test_git(),
+            &crate::UnprivilegedSourceExecution,
         )
         .is_err()
     );
@@ -295,6 +299,7 @@ pub(super) fn workflow_lock_uses_event_scoped_recovery_and_committed_policy()
             &request,
             &registry,
             test_git(),
+            &crate::UnprivilegedSourceExecution,
         )
         .is_err()
     );

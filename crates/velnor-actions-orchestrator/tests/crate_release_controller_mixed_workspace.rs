@@ -20,7 +20,7 @@ pub(super) fn mixed_workspace_coordinator_repairs_predecessor_before_upload()
     let root = temp.path();
     let original = prepare_crate_release(&intent, &request, &original_github, &registry, root)?;
     let archive_dir = tempfile::tempdir()?;
-    let first_archive = super::super::package_source(
+    let first_archive = crate::crate_release_controller::package_unprivileged(
         root,
         &intent,
         &original.packages[0].source,
@@ -52,6 +52,7 @@ pub(super) fn mixed_workspace_coordinator_repairs_predecessor_before_upload()
     FIXTURE_SPARSE_INDEX.with(|value| *value.borrow_mut() = Some(server.url.clone()));
     let waits = Cell::new(0);
     let input = CrateReleaseObservation {
+        source_execution: &crate::UnprivilegedSourceExecution,
         git: test_git(),
         journal: &journal,
         identity: &identity,
@@ -73,7 +74,7 @@ pub(super) fn mixed_workspace_coordinator_repairs_predecessor_before_upload()
             let target = tempfile::tempdir().map_err(|_| OrchestratorError::Contract {
                 problem: "fixture".into(),
             })?;
-            let archive = super::super::package_source(
+            let archive = crate::crate_release_controller::package_unprivileged(
                 root,
                 &intent,
                 &admission.packages[1].source,
@@ -187,6 +188,7 @@ pub(super) fn serial_coordinator_recovers_pending_visible_tag_without_recreating
     registry.absent.set(false);
     github.tag_exists.set(true);
     let input = CrateReleaseObservation {
+        source_execution: &crate::UnprivilegedSourceExecution,
         git: test_git(),
         journal: &journal,
         identity: &identity,
@@ -268,6 +270,7 @@ pub(super) fn admitted_start_binds_previous_workflow_commit_and_reobserves_prior
         defect: Cell::new(0),
     };
     let input = AdmittedStart {
+        source_execution: &crate::UnprivilegedSourceExecution,
         git: test_git(),
         journal: &journal,
         github: &auth,

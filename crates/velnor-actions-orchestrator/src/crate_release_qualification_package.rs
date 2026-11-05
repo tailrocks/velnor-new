@@ -30,14 +30,17 @@ pub fn verify_reconstructed_archive(
     }
     crate::verify_crate_release_source(source, source_sha, git)?;
     let target = tempfile::tempdir().map_err(|_| invalid())?;
-    let expected = crate::crate_release_controller::package_source(
-        source,
-        intent,
-        package,
-        target.path(),
-        source_sha,
-        false,
-        git,
+    let expected = crate::CrateSourceExecution::package(
+        &crate::UnprivilegedSourceExecution,
+        &crate::CratePackageSource::new(
+            source,
+            intent,
+            package,
+            target.path(),
+            source_sha,
+            false,
+            git,
+        ),
     )?;
     crate::verify_archive_tracked_content(
         &expected,

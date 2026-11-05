@@ -22,6 +22,7 @@ pub(super) fn fixture_verify_release_package<G: GitHubAdmissionRead, R: CrateReg
     git: &crate::crate_release_git::ReleaseGit,
 ) -> Result<crate::crate_release_controller::VerifiedReleasePackage, OrchestratorError> {
     let input = super::super::PackageVerification {
+        source_execution: &crate::UnprivilegedSourceExecution,
         receipt,
         intent,
         request,
@@ -73,8 +74,13 @@ pub(super) fn prepare_crate_release<G: GitHubAdmissionRead, R: CrateRegistryRead
     registry: &R,
     source: &Path,
 ) -> Result<crate::crate_release_controller::CrateReleaseAdmissionReceipt, OrchestratorError> {
-    let mut receipt =
-        raw_prepare_crate_release(intent, request, github, registry, source, test_git())?;
+    let mut receipt = raw_prepare_crate_release(
+        intent,
+        request,
+        github,
+        registry,
+        crate::CrateSource::new(source, test_git(), &crate::UnprivilegedSourceExecution),
+    )?;
     receipt.semver_evidence = fixture_semver_map(&receipt)?;
     Ok(receipt)
 }

@@ -22,6 +22,7 @@ pub(super) fn reconcile_journal_evidence(
         source,
         token,
         git,
+        source_execution,
     } = input;
     let identity = JournalIdentity {
         repository: request.repository.clone(),
@@ -35,6 +36,7 @@ pub(super) fn reconcile_journal_evidence(
     let started = inspect_journal(&journal, &identity, JournalStage::Started)?
         .ok_or_else(|| internal("crate_release_journal_start_missing"))?;
     let input = CrateReleaseObservation {
+        source_execution,
         journal: &journal,
         identity: &identity,
         journal_receipt: &started.receipt,
@@ -72,6 +74,7 @@ pub(super) fn inspect_prior_journal(input: JournalRuntime<'_>) -> Result<(), Orc
         source,
         token,
         git,
+        source_execution,
     } = input;
     let run_text = required("VELNOR_PREVIOUS_RUN_ID")?;
     let run_id = run_text
@@ -107,6 +110,7 @@ pub(super) fn inspect_prior_journal(input: JournalRuntime<'_>) -> Result<(), Orc
     let started = inspect_journal(&journal, &identity, JournalStage::Started)?
         .ok_or_else(|| internal("crate_release_journal_start_missing"))?;
     let input = CrateReleaseObservation {
+        source_execution,
         journal: &journal,
         identity: &identity,
         journal_receipt: &started.receipt,
@@ -137,11 +141,22 @@ pub(super) fn checkpoint_publication(
     request: &GitHubAdmissionRequest,
     github: &NativeGitHubAdmissionRead,
     registry: &NativeCrateRegistryRead,
-    source: &Path,
-    git: &crate::crate_release_git::ReleaseGit,
+    source_context: crate::CrateSource<'_>,
 ) -> Result<(), OrchestratorError> {
+    let crate::CrateSource {
+        root: source,
+        git,
+        execution: source_execution,
+    } = source_context;
     let receipt = read_receipt(receipt_path)?;
-    verify_crate_release_admission(&receipt, intent, request, github, registry, source, git)?;
+    verify_crate_release_admission(
+        &receipt,
+        intent,
+        request,
+        github,
+        registry,
+        crate::CrateSource::new(source, git, source_execution),
+    )?;
     if release_mode(&receipt) == "none" {
         return Err(internal("crate_release_no_mutation"));
     }

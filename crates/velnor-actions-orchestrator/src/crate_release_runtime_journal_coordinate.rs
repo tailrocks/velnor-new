@@ -1,6 +1,10 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::crate_release_controller::{CrateReleaseObservation, coordinate_release, invoke_upload};
+use crate::crate_release_journal::{JournalIdentity, JournalStage, inspect_journal};
+use crate::crate_release_journal_adapter::JournalAdapter;
+
 use super::{
     Duration, JournalRuntime, NativeGitHubAdmissionRead, OrchestratorError, internal,
     read_manifest_at_workflow, read_receipt, required, required_path, start_journal_with, thread,
@@ -8,12 +12,6 @@ use super::{
 };
 
 pub(super) fn coordinate_journal(runtime: JournalRuntime<'_>) -> Result<(), OrchestratorError> {
-    use crate::crate_release_controller::{
-        CrateReleaseObservation, coordinate_release, invoke_upload,
-    };
-    use crate::crate_release_journal::{JournalIdentity, JournalStage, inspect_journal};
-    use crate::crate_release_journal_adapter::JournalAdapter;
-
     let identity = JournalIdentity {
         repository: runtime.request.repository.clone(),
         workflow_sha: runtime.request.workflow_sha.clone(),
@@ -26,6 +24,7 @@ pub(super) fn coordinate_journal(runtime: JournalRuntime<'_>) -> Result<(), Orch
     let started = inspect_journal(&journal, &identity, JournalStage::Started)?
         .ok_or_else(|| internal("crate_release_journal_start_missing"))?;
     let input = CrateReleaseObservation {
+        source_execution: runtime.source_execution,
         journal: &journal,
         identity: &identity,
         journal_receipt: &started.receipt,
@@ -54,6 +53,7 @@ pub(super) fn coordinate_journal(runtime: JournalRuntime<'_>) -> Result<(), Orch
                 &runner_temp,
                 package,
                 runtime.git,
+                runtime.source_execution,
             )
         },
         |permit| {

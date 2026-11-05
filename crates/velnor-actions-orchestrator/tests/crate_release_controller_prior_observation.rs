@@ -72,6 +72,7 @@ pub(super) fn prior_upload_recovery_reobserves_registry_without_writes()
     )?;
     record_source_bound_start(&journal, &identity, &current, root, test_git())?;
     let input = CrateReleaseObservation {
+        source_execution: &crate::UnprivilegedSourceExecution,
         git: test_git(),
         journal: &journal,
         identity: &identity,
@@ -276,6 +277,7 @@ pub(super) fn reconciled_candidate_allows_verified_state_without_mutation_histor
     registry.absent.set(false);
     github.tag_exists.set(true);
     let input = CrateReleaseObservation {
+        source_execution: &crate::UnprivilegedSourceExecution,
         git: test_git(),
         journal: &journal,
         identity: &identity,

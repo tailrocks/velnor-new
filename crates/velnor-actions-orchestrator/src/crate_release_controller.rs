@@ -25,7 +25,8 @@ pub(crate) use observation::{VerifiedMutation, verify_observed_packages};
 mod inventory;
 mod reconcile;
 mod state;
-pub(crate) use inventory::package_source;
+use crate::crate_release_workspace::CrateSourceExecution;
+pub(crate) use inventory::package_unprivileged;
 use inventory::{require_reviewer_owner, wait_for_release, wait_for_tag, workspace_inventory};
 pub(crate) use reconcile::same_observed_state;
 pub use reconcile::{
@@ -91,10 +92,20 @@ pub fn prepare_crate_release<G: GitHubAdmissionRead, R: CrateRegistryRead>(
     request: &GitHubAdmissionRequest,
     github: &G,
     registry: &R,
-    source: &Path,
-    git: &crate::crate_release_git::ReleaseGit,
+    source_context: crate::CrateSource<'_>,
 ) -> Result<CrateReleaseAdmissionReceipt, OrchestratorError> {
-    let observed = observe_crate_release(intent, request, github, registry, source, git)?;
+    let crate::CrateSource {
+        root: source,
+        git,
+        execution: source_execution,
+    } = source_context;
+    let observed = observe_crate_release(
+        intent,
+        request,
+        github,
+        registry,
+        crate::CrateSource::new(source, git, source_execution),
+    )?;
     if intent.journal_predecessor.is_none()
         && observed.packages.iter().any(|package| {
             intent
@@ -130,6 +141,7 @@ pub(super) struct PackageVerification<'a, G, R> {
     pub source: &'a Path,
     pub git: &'a crate::crate_release_git::ReleaseGit,
     pub package: &'a str,
+    pub source_execution: &'a dyn CrateSourceExecution,
 }
 
 pub(super) fn verify_release_package_with<G: GitHubAdmissionRead, R: CrateRegistryRead>(
@@ -145,12 +157,19 @@ pub(super) fn verify_release_package_with<G: GitHubAdmissionRead, R: CrateRegist
         source,
         git,
         package,
+        source_execution,
     } = *input;
     if receipt.schema != 1 || receipt.intent != *intent || receipt.github.request != *request {
         return Err(internal("crate_release_receipt_mismatch"));
     }
     authorize_github_candidate(request, &receipt.github, github)?;
-    let observed = observe_crate_release(intent, request, github, registry, source, git)?;
+    let observed = observe_crate_release(
+        intent,
+        request,
+        github,
+        registry,
+        crate::CrateSource::new(source, git, source_execution),
+    )?;
     validate(&observed)?;
     let index = observed
         .packages
@@ -166,7 +185,7 @@ pub(super) fn verify_release_package_with<G: GitHubAdmissionRead, R: CrateRegist
     }
     let target = tempfile::tempdir().map_err(|_| internal("crate_release_package_temp"))?;
     let effective_intent = effective_release_intent(intent, request);
-    package_source(
+    source_execution.package(&crate::CratePackageSource::new(
         source,
         &effective_intent,
         &observed.packages[index].source,
@@ -174,8 +193,15 @@ pub(super) fn verify_release_package_with<G: GitHubAdmissionRead, R: CrateRegist
         &request.source_sha,
         true,
         git,
-    )?;
-    if observe_crate_release(intent, request, github, registry, source, git)? != observed {
+    ))?;
+    if observe_crate_release(
+        intent,
+        request,
+        github,
+        registry,
+        crate::CrateSource::new(source, git, source_execution),
+    )? != observed
+    {
         return Err(internal("crate_release_package_state_changed"));
     }
     authorize_github_candidate(request, &receipt.github, github)?;
@@ -288,8 +314,7 @@ pub fn repair_crate_release<
     request: &GitHubAdmissionRequest,
     github: &G,
     registry: &R,
-    source: &Path,
-    git: &crate::crate_release_git::ReleaseGit,
+    source_context: crate::CrateSource<'_>,
 ) -> Result<(), OrchestratorError> {
     let recovery = intent
         .recovery
@@ -307,10 +332,8 @@ pub fn repair_crate_release<
         return Err(internal("crate_release_receipt_mismatch"));
     }
     authorize_github_candidate(request, &receipt.github, github)?;
-    if !same_observed_state(
-        &observe_crate_release(intent, request, github, registry, source, git)?,
-        receipt,
-    ) {
+    let observe = || observe_crate_release(intent, request, github, registry, source_context);
+    if !same_observed_state(&observe()?, receipt) {
         return Err(internal("crate_release_repair_state_changed"));
     }
     authorize_github_candidate(request, &receipt.github, github)?;
@@ -320,10 +343,10 @@ pub fn repair_crate_release<
             if let Err(error) =
                 github.create_tag(&intent.repository, &package.tag, &request.source_sha)
             {
-                observe_crate_release(intent, request, github, registry, source, git)?;
+                observe()?;
                 return Err(error);
             }
-            let observed = observe_crate_release(intent, request, github, registry, source, git)?;
+            let observed = observe()?;
             authorize_github_candidate(request, &receipt.github, github)?;
             if observed.github != receipt.github
                 || observed.packages.len() != 1
@@ -340,10 +363,10 @@ pub fn repair_crate_release<
     }
     if let Err(error) = github.create_release(&intent.repository, &package.tag, &request.source_sha)
     {
-        observe_crate_release(intent, request, github, registry, source, git)?;
+        observe()?;
         return Err(error);
     }
-    let observed = observe_crate_release(intent, request, github, registry, source, git)?;
+    let observed = observe()?;
     authorize_github_candidate(request, &receipt.github, github)?;
     let (CrateReleaseAction::RepairTag { registry: expected }
     | CrateReleaseAction::RepairRelease { registry: expected }) = &package.action

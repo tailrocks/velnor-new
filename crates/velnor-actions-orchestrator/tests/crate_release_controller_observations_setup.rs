@@ -219,6 +219,7 @@ pub(super) fn observed_upload_is_derived_from_current_registry()
     *registry.archive.borrow_mut() = fixture_archive(root)?;
     registry.absent.set(false);
     let obs = CrateReleaseObservation {
+        source_execution: &crate::UnprivilegedSourceExecution,
         git: test_git(),
         journal: &journal,
         identity: &identity,

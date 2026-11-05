@@ -6,6 +6,7 @@
 pub(crate) mod test_registry;
 
 mod checker;
+pub(crate) use checker::run_check;
 use checker::verify_checker;
 pub(crate) use checker::verify_one;
 
@@ -207,6 +208,7 @@ pub(crate) fn verify_preflight<R: CrateRegistryRead>(
     registry: &R,
     runner_temp: &Path,
     git: &crate::crate_release_git::ReleaseGit,
+    source_execution: &dyn crate::CrateSourceExecution,
 ) -> Result<std::collections::BTreeMap<String, SemverEvidence>, OrchestratorError> {
     let executable = verify_checker(receipt, runner_temp)?;
     crate::verify_crate_release_source(source, &receipt.github.request.source_sha, git)?;
@@ -220,6 +222,7 @@ pub(crate) fn verify_preflight<R: CrateRegistryRead>(
         &effective,
         registry,
         git,
+        source_execution,
     )?;
     let mut evidence = std::collections::BTreeMap::new();
     for package in &receipt.packages {
@@ -258,7 +261,15 @@ pub(crate) fn verify_preflight<R: CrateRegistryRead>(
         let item = if let Some(pending) = prior_no_baseline_pending(receipt, registry, package)? {
             pending
         } else {
-            verify_one(source, receipt, registry, package, &executable, git)?
+            verify_one(
+                source,
+                receipt,
+                registry,
+                package,
+                &executable,
+                git,
+                source_execution,
+            )?
         };
         evidence.insert(package.source.name.clone(), item);
     }
@@ -317,6 +328,7 @@ pub(crate) fn verify_before_upload<R: CrateRegistryRead>(
     runner_temp: &Path,
     name: &str,
     git: &crate::crate_release_git::ReleaseGit,
+    source_execution: &dyn crate::CrateSourceExecution,
 ) -> Result<VerifiedSemver, OrchestratorError> {
     let executable = verify_checker(receipt, runner_temp)?;
     crate::verify_crate_release_source(source, &receipt.github.request.source_sha, git)?;
@@ -325,7 +337,15 @@ pub(crate) fn verify_before_upload<R: CrateRegistryRead>(
         .iter()
         .find(|package| package.source.name == name)
         .ok_or_else(invalid)?;
-    let evidence = verify_one(source, receipt, registry, package, &executable, git)?;
+    let evidence = verify_one(
+        source,
+        receipt,
+        registry,
+        package,
+        &executable,
+        git,
+        source_execution,
+    )?;
     crate::verify_crate_release_source(source, &receipt.github.request.source_sha, git)?;
     let intent =
         velnor_actions_contract::canonical_json_bytes(&receipt.intent).map_err(|_| invalid())?;

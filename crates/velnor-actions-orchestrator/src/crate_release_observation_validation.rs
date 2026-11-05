@@ -5,7 +5,7 @@ use super::{
     CrateRegistryRead, CrateReleaseAction, CrateReleaseAdmissionReceipt, CrateReleaseObservation,
     GitHubAdmissionRead, JournalAuthentication, JournalFile, JournalFileKind, JournalIdentity,
     JournalIo, JournalMutation, JournalMutationKind, JournalMutationPhase, JournalMutationResult,
-    JournalOwnerKind, JournalReceipt, OrchestratorError, invalid, journal_owners, package_source,
+    JournalOwnerKind, JournalReceipt, OrchestratorError, invalid, journal_owners,
 };
 
 pub(crate) fn verify_binding<J: JournalIo, G: GitHubAdmissionRead, R: CrateRegistryRead>(
@@ -288,14 +288,17 @@ pub(super) fn derive_result<J: JournalIo, G: GitHubAdmissionRead, R: CrateRegist
             if input.request.event == "push" {
                 effective.recovery = None;
             }
-            let archive = package_source(
-                input.source,
-                &effective,
-                &package.source,
-                target.path(),
-                &input.request.source_sha,
-                false,
-                input.git,
+            let archive = crate::CrateSourceExecution::package(
+                input.source_execution,
+                &crate::CratePackageSource::new(
+                    input.source,
+                    &effective,
+                    &package.source,
+                    target.path(),
+                    &input.request.source_sha,
+                    false,
+                    input.git,
+                ),
             )?;
             let files = crate::crate_release_archive::crate_archive_inventory(
                 &archive,

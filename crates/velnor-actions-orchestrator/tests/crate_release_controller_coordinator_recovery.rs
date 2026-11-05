@@ -72,6 +72,7 @@ pub(super) fn serial_coordinator_leaves_uncertain_upload_pending_when_not_visibl
     let journal = JournalRegistryFake::default();
     record_source_bound_start(&journal, &identity, &plan, root, test_git())?;
     let input = CrateReleaseObservation {
+        source_execution: &crate::UnprivilegedSourceExecution,
         git: test_git(),
         journal: &journal,
         identity: &identity,
@@ -141,6 +142,7 @@ pub(super) fn serial_coordinator_recovers_pending_visible_upload_without_uploadi
     *registry.archive.borrow_mut() = fixture_archive(root)?;
     registry.absent.set(false);
     let input = CrateReleaseObservation {
+        source_execution: &crate::UnprivilegedSourceExecution,
         git: test_git(),
         journal: &journal,
         identity: &identity,
@@ -170,7 +172,7 @@ pub(super) fn mixed_workspace_admission_retains_publish_and_repair()
     let (temp, intent, request, github, registry) = make_workspace_order_fixture()?;
     let initial = prepare_crate_release(&intent, &request, &github, &registry, temp.path())?;
     let archive_dir = tempfile::tempdir()?;
-    *registry.archive.borrow_mut() = super::super::package_source(
+    *registry.archive.borrow_mut() = crate::crate_release_controller::package_unprivileged(
         temp.path(),
         &intent,
         &initial.packages[0].source,

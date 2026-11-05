@@ -96,6 +96,7 @@ fn planned_inventory(
         intent,
         &EmptyRegistry,
         &test_git(),
+        &crate::UnprivilegedSourceExecution,
     )?;
     Ok(plan
         .plan

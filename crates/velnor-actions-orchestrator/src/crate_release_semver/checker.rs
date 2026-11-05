@@ -29,6 +29,7 @@ pub(crate) fn verify_one<R: CrateRegistryRead>(
     package: &crate::crate_release_controller::CrateReleasePlannedPackage,
     executable: &Path,
     git: &crate::crate_release_git::ReleaseGit,
+    source_execution: &dyn crate::CrateSourceExecution,
 ) -> Result<SemverEvidence, OrchestratorError> {
     let checker_sha256 =
         velnor_actions_mise::catalog::qualified_cargo_semver_checks(&receipt.intent.runner)
@@ -61,15 +62,17 @@ pub(crate) fn verify_one<R: CrateRegistryRead>(
         .ok_or_else(invalid)?;
     let (archive, baseline_checksum) =
         download_baseline(registry, &package.source.name, &previous)?;
-    run_check(
+    source_execution.check_semver(&crate::CrateSemverSource {
         source,
-        &receipt.intent.rust_version,
-        &package.source.manifest,
-        &package.source.name,
-        (&previous, &archive),
-        (features, executable),
+        rust: &receipt.intent.rust_version,
+        manifest: &package.source.manifest,
+        package: &package.source.name,
+        baseline_version: &previous.version,
+        baseline_archive: &archive,
+        features,
+        executable,
         git,
-    )?;
+    })?;
     Ok(SemverEvidence::Checked {
         baseline: previous.version,
         baseline_checksum,
@@ -152,12 +155,12 @@ pub(super) fn extract_baseline(
     Ok(())
 }
 
-pub(super) fn run_check(
+pub(crate) fn run_check(
     source: &Path,
     rust: &str,
     manifest: &str,
     package: &str,
-    baseline: (&Baseline, &[u8]),
+    baseline: (&str, &[u8]),
     tools: (&[String], &Path),
     git: &crate::crate_release_git::ReleaseGit,
 ) -> Result<(), OrchestratorError> {
@@ -175,7 +178,7 @@ pub(super) fn run_check(
         };
     let baseline_root = temp.path().join("baseline");
     std::fs::create_dir(&baseline_root).map_err(|_| invalid())?;
-    extract_baseline(baseline.1, package, &baseline.0.version, &baseline_root)?;
+    extract_baseline(baseline.1, package, baseline.0, &baseline_root)?;
     let cargo = source_cargo_path(rust, temp.path())?;
     let mut args = vec![
         OsString::from("-i"),

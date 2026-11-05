@@ -206,8 +206,7 @@ pub(super) fn validate_upload<
         input.request,
         input.github,
         input.registry,
-        input.source,
-        input.git,
+        crate::CrateSource::new(input.source, input.git, input.source_execution),
     )?;
     let next_sequence = permit.sequence.checked_add(1).ok_or_else(invalid)?;
     verify_observed_packages_after_recorded_upload(

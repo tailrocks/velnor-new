@@ -53,6 +53,7 @@ pub(super) fn assert_two_link_recovery(
         inspect_journal(input.journal, &identity, JournalStage::Started)?.ok_or("start")?;
     assert_eq!(started.receipt.predecessor, Some(previous.identity.clone()));
     let observation = CrateReleaseObservation {
+        source_execution: &crate::UnprivilegedSourceExecution,
         git: test_git(),
         journal: input.journal,
         identity: &identity,
@@ -158,6 +159,7 @@ pub(super) fn admitted_start_rejects_forged_prior_intent_digest()
     let admission = prepare_crate_release(&intent, &request, &github, &registry, root)?;
     let generator = fixture_attested_generator();
     let input = AdmittedStart {
+        source_execution: &crate::UnprivilegedSourceExecution,
         git: test_git(),
         journal: &journal,
         github: &github,

@@ -25,6 +25,135 @@ pub struct CrateReleaseWorkspacePlan {
     pub(crate) concurrency_group: String,
 }
 
+#[derive(Clone, Copy)]
+pub struct CrateSource<'a> {
+    pub root: &'a Path,
+    pub git: &'a crate::crate_release_git::ReleaseGit,
+    pub execution: &'a dyn CrateSourceExecution,
+}
+
+impl std::fmt::Debug for CrateSource<'_> {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("CrateSource")
+            .field("root", &self.root)
+            .finish_non_exhaustive()
+    }
+}
+
+impl<'a> CrateSource<'a> {
+    #[must_use]
+    pub fn new(
+        root: &'a Path,
+        git: &'a crate::crate_release_git::ReleaseGit,
+        execution: &'a dyn CrateSourceExecution,
+    ) -> Self {
+        Self {
+            root,
+            git,
+            execution,
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct CrateSemverSource<'a> {
+    pub source: &'a Path,
+    pub rust: &'a str,
+    pub manifest: &'a str,
+    pub package: &'a str,
+    pub baseline_version: &'a str,
+    pub baseline_archive: &'a [u8],
+    pub features: &'a [String],
+    pub executable: &'a Path,
+    pub git: &'a crate::crate_release_git::ReleaseGit,
+}
+
+#[derive(Debug)]
+pub struct CratePackageSource<'a> {
+    pub source: &'a Path,
+    pub intent: &'a CrateReleaseIntent,
+    pub package: &'a crate::CrateReleaseSourcePackage,
+    pub target: &'a Path,
+    pub expected_sha: &'a str,
+    pub verify: bool,
+    pub git: &'a crate::crate_release_git::ReleaseGit,
+}
+
+impl<'a> CratePackageSource<'a> {
+    #[must_use]
+    pub fn new(
+        source: &'a Path,
+        intent: &'a CrateReleaseIntent,
+        package: &'a crate::CrateReleaseSourcePackage,
+        target: &'a Path,
+        expected_sha: &'a str,
+        verify: bool,
+        git: &'a crate::crate_release_git::ReleaseGit,
+    ) -> Self {
+        Self {
+            source,
+            intent,
+            package,
+            target,
+            expected_sha,
+            verify,
+            git,
+        }
+    }
+}
+
+pub trait CrateSourceExecution {
+    fn metadata(
+        &self,
+        root: &Path,
+        intent: &CrateReleaseIntent,
+        git: &crate::crate_release_git::ReleaseGit,
+    ) -> Result<String, OrchestratorError>;
+
+    fn package(&self, request: &CratePackageSource<'_>) -> Result<Vec<u8>, OrchestratorError>;
+
+    fn check_semver(&self, request: &CrateSemverSource<'_>) -> Result<(), OrchestratorError>;
+}
+
+#[derive(Debug)]
+pub struct UnprivilegedSourceExecution;
+
+impl CrateSourceExecution for UnprivilegedSourceExecution {
+    fn metadata(
+        &self,
+        root: &Path,
+        intent: &CrateReleaseIntent,
+        git: &crate::crate_release_git::ReleaseGit,
+    ) -> Result<String, OrchestratorError> {
+        workspace_metadata(root, intent, git)
+    }
+
+    fn package(&self, request: &CratePackageSource<'_>) -> Result<Vec<u8>, OrchestratorError> {
+        crate::crate_release_controller::package_unprivileged(
+            request.source,
+            request.intent,
+            request.package,
+            request.target,
+            request.expected_sha,
+            request.verify,
+            request.git,
+        )
+    }
+
+    fn check_semver(&self, request: &CrateSemverSource<'_>) -> Result<(), OrchestratorError> {
+        crate::crate_release_semver::run_check(
+            request.source,
+            request.rust,
+            request.manifest,
+            request.package,
+            (request.baseline_version, request.baseline_archive),
+            (request.features, request.executable),
+            request.git,
+        )
+    }
+}
+
 pub fn crate_release_workspace_plan_with_registry<
     R: crate::crate_release_registry::CrateRegistryRead,
 >(
@@ -33,6 +162,7 @@ pub fn crate_release_workspace_plan_with_registry<
     intent: &CrateReleaseIntent,
     registry: &R,
     git: &crate::crate_release_git::ReleaseGit,
+    source_execution: &dyn CrateSourceExecution,
 ) -> Result<CrateReleaseWorkspacePlan, OrchestratorError> {
     intent
         .validate()
@@ -54,13 +184,24 @@ pub fn crate_release_workspace_plan_with_registry<
     if !manifests.contains(&intent.manifest_path) {
         return Err(internal("crate_release_manifest_untracked"));
     }
-    let metadata = workspace_metadata(&canonical, intent, git)?;
+    let metadata = source_execution.metadata(&canonical, intent, git)?;
     verify_crate_release_source(&canonical, sha, git)?;
+    workspace_plan_from_metadata(&canonical, sha, intent, registry, &manifests, &metadata)
+}
+
+fn workspace_plan_from_metadata<R: crate::crate_release_registry::CrateRegistryRead>(
+    canonical: &Path,
+    sha: &str,
+    intent: &CrateReleaseIntent,
+    registry: &R,
+    manifests: &BTreeSet<String>,
+    metadata: &str,
+) -> Result<CrateReleaseWorkspacePlan, OrchestratorError> {
     let concurrency_group = crate::release_identity::workspace_lock(
-        &metadata,
-        &canonical,
+        metadata,
+        canonical,
         &intent.manifest_path,
-        &manifests,
+        manifests,
         &intent.registry,
         &intent.repository,
     )?
@@ -68,13 +209,13 @@ pub fn crate_release_workspace_plan_with_registry<
     let scope = ReleaseScope::Packages(intent.packages.clone());
     let affected = BTreeSet::new();
     let request = ReleaseRequest {
-        metadata_json: &metadata,
-        repo_root: &canonical,
+        metadata_json: metadata,
+        repo_root: canonical,
         manifest_hint: &intent.manifest_path,
         scope: &scope,
         enabled: true,
         affected: &affected,
-        known_manifests: &manifests,
+        known_manifests: manifests,
         supported_registries: &[],
     };
     let (state, registry_evidence) = registry_state(&request, registry)?;
