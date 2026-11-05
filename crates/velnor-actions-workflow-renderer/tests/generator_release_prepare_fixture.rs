@@ -25,7 +25,7 @@ const SOURCE_SHA: &str = "a97f3c482da31b6f91f83e28c4dca0217e5b6930";
 const REPOSITORY: &str = "tailrocks/velnor-new";
 const RUST_VERSION: &str = "1.99.1";
 const MBX_VERSION: &str = "1.29.2";
-const GH_VERSION: &str = "2.83.1";
+const GH_VERSION: &str = velnor_actions_mise::catalog::QUALIFIED_GH_LINUX_AMD64.version;
 
 pub(crate) struct Fixture {
     root: TempDir,
@@ -67,9 +67,15 @@ impl Fixture {
         permissions.set_mode(0o755);
         fs::set_permissions(&fake_gh, permissions)?;
 
-        let files = render_schema2_workflows(&request(&fake_gh)?)?;
+        let files = render_schema2_workflows(&request()?)?;
         let workflow = rendered_file(&files, PRODUCT_RELEASE_WORKFLOW)?;
         let (script, asset_names) = extract_prepare_script(workflow)?;
+        let quoted = format!("'{}'", fake_gh.display().to_string().replace('\'', "'\\''"));
+        let verified_command = velnor_actions_workflow_renderer::verified_gh_shell::command();
+        if !script.contains(&verified_command) {
+            return Err("verified gh function missing".into());
+        }
+        let script = script.replace(&verified_command, &quoted);
 
         create_release_assets(&release_assets)?;
         let manifest_assets = release_assets.join("manifest-assets");
@@ -134,7 +140,7 @@ impl Fixture {
     }
 }
 
-fn request(fake_gh: &Path) -> Result<Schema2WorkflowRequest, Box<dyn Error>> {
+fn request() -> Result<Schema2WorkflowRequest, Box<dyn Error>> {
     Ok(Schema2WorkflowRequest {
         version: "1".to_owned(),
         hosted_label: "ubuntu-26.04".to_owned(),
@@ -142,11 +148,11 @@ fn request(fake_gh: &Path) -> Result<Schema2WorkflowRequest, Box<dyn Error>> {
         workflows: BTreeSet::from([RoutingWorkflow::GeneratorRelease]),
         mbx_qualification: None,
         mise_pin_qualification: None,
-        product_release: Some(pins(fake_gh)),
+        product_release: Some(pins()),
     })
 }
 
-fn pins(fake_gh: &Path) -> ProductReleasePins {
+fn pins() -> ProductReleasePins {
     let setup = MiseSetup {
         uses: "jdx/mise-action@f1f6d8a6c2a1f6a79d5216a1d7e3f1b0e4d7c1a9".to_owned(),
         version: "2026.10.19".to_owned(),
@@ -181,7 +187,22 @@ fn pins(fake_gh: &Path) -> ProductReleasePins {
                 velnor_actions_workflow_renderer::VERIFY_PATH,
             ),
         ],
-        gh_argv: vec![fake_gh.display().to_string()],
+        gh_argv: [
+            "mise",
+            "--no-config",
+            "--no-env",
+            "--no-hooks",
+            "exec",
+            &format!(
+                "gh@{}",
+                velnor_actions_mise::catalog::QUALIFIED_GH_LINUX_AMD64.version
+            ),
+            "--",
+            "gh",
+        ]
+        .into_iter()
+        .map(str::to_owned)
+        .collect(),
         rust_version: RUST_VERSION.to_owned(),
         verify_rust_argv: vec![
             "sh".to_owned(),

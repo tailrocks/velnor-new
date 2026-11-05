@@ -56,8 +56,11 @@ impl Admit {
         let StepKind::Shell { run, .. } = &step.kind else {
             return Err(fail("admit step is not a shell step"));
         };
+        let script = run.get(2).cloned().ok_or_else(|| fail("no script"))?;
+        let command = velnor_actions_workflow_renderer::verified_gh_shell::command();
+        assert!(script.contains(&command));
         Ok(Self {
-            script: run.get(2).cloned().ok_or_else(|| fail("no script"))?,
+            script: script.replace(&command, "command gh"),
         })
     }
 

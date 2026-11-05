@@ -311,7 +311,22 @@ fn pins() -> ProductReleasePins {
         resource_probe_release_test_argv: argv(),
         lint_argv: argv(),
         verify_lint_argv: vec!["sh".to_owned(), "-c".to_owned(), verify_lint_script],
-        gh_argv: argv(),
+        gh_argv: [
+            "mise",
+            "--no-config",
+            "--no-env",
+            "--no-hooks",
+            "exec",
+            &format!(
+                "gh@{}",
+                velnor_actions_mise::catalog::QUALIFIED_GH_LINUX_AMD64.version
+            ),
+            "--",
+            "gh",
+        ]
+        .into_iter()
+        .map(str::to_owned)
+        .collect(),
         rust_version: "1.99.1".to_owned(),
         verify_rust_argv: vec![
             "sh".to_owned(),
@@ -322,7 +337,9 @@ fn pins() -> ProductReleasePins {
             ),
         ],
         mr_boxington_version: "1.29.2".to_owned(),
-        gh_version: "2.83.1".to_owned(),
+        gh_version: velnor_actions_mise::catalog::QUALIFIED_GH_LINUX_AMD64
+            .version
+            .to_owned(),
     }
 }
 

@@ -13,7 +13,7 @@ use crate::render::RenderedFile;
 use crate::yaml::quote_scalar;
 
 pub const CACHE_PRUNE_PATH: &str = ".github/workflows/cache-prune.yml";
-pub const CACHE_PRUNE_FALLBACK_RUNNER: &str = "ubuntu-latest";
+pub const CACHE_PRUNE_FALLBACK_RUNNER: &str = "ubuntu-24.04";
 pub const TOOLS_PRUNE_PREFIX: &str = "mise-tools-v2-";
 pub const TOOLS_PRUNE_UNIT: &str = "mise-tools-v2";
 pub const TOOLS_RETAINED_ENTRIES: u64 = 8;
@@ -94,7 +94,12 @@ pub fn prune_script() -> String {
         lines.push(format!("prune '{prefix}' {keep}"));
     }
     lines.push(format!("prune_state '{}'", state_prune_prefix()));
-    lines.join("; ")
+    format!(
+        "set -eu\n{}\ngh() {{ {} \"$@\"; }}\n{}",
+        crate::verified_gh_shell::bootstrap(),
+        crate::verified_gh_shell::command(),
+        lines.join("; ")
+    )
 }
 
 pub fn render_cache_prune_yml(
@@ -103,10 +108,8 @@ pub fn render_cache_prune_yml(
     workflow_name: &str,
     version: &str,
 ) -> Result<RenderedFile, RenderError> {
-    let label = match RunsOn::parse(runs_on).map_err(RenderError::Contract)? {
-        RunsOn::Hosted(label) => label,
-        RunsOn::ScaleSet(_) => CACHE_PRUNE_FALLBACK_RUNNER.to_owned(),
-    };
+    RunsOn::parse(runs_on).map_err(RenderError::Contract)?;
+    let label = CACHE_PRUNE_FALLBACK_RUNNER;
     let safe = !default_branch.is_empty()
         && default_branch
             .bytes()
@@ -118,9 +121,9 @@ pub fn render_cache_prune_yml(
     }
     let workflow = quote_scalar(workflow_name);
     let sealed = quote_scalar(STATE_SEAL_WORKFLOW_NAME);
-    let script = prune_script().replace('\\', "\\\\").replace('"', "\\\"");
+    let script = quote_scalar(&prune_script());
     let body = format!(
-        "name: Cache prune\n\"on\":\n  workflow_run:\n    workflows:\n      - {workflow} # zizmor: ignore[dangerous-triggers]\n      - {sealed} # zizmor: ignore[dangerous-triggers]\n    types:\n      - completed\n    branches:\n      - {default_branch}\npermissions: {{}}\ncache-mode: read\nconcurrency:\n  group: velnor-cache-prune\n  cancel-in-progress: false\njobs:\n  prune:\n    name: Prune superseded cache entries\n    if: github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == '{default_branch}' && github.event.workflow_run.head_repository.full_name == github.repository && github.event.workflow_run.conclusion != 'cancelled'\n    runs-on: {label}\n    timeout-minutes: 5\n    permissions:\n      actions: write\n      attestations: read\n    steps:\n      - name: Prune superseded cache entries\n        env:\n          GH_TOKEN: ${{{{ github.token }}}}\n          GH_REPO: ${{{{ github.repository }}}}\n          HEAD_BRANCH: ${{{{ github.event.workflow_run.head_branch }}}}\n        run: \"{script}\"\n"
+        "name: Cache prune\n\"on\":\n  workflow_run:\n    workflows:\n      - {workflow} # zizmor: ignore[dangerous-triggers]\n      - {sealed} # zizmor: ignore[dangerous-triggers]\n    types:\n      - completed\n    branches:\n      - {default_branch}\npermissions: {{}}\ncache-mode: read\nconcurrency:\n  group: velnor-cache-prune\n  cancel-in-progress: false\njobs:\n  prune:\n    name: Prune superseded cache entries\n    if: github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == '{default_branch}' && github.event.workflow_run.head_repository.full_name == github.repository && github.event.workflow_run.conclusion != 'cancelled'\n    runs-on: {label}\n    timeout-minutes: 5\n    permissions:\n      actions: write\n      attestations: read\n    steps:\n      - name: Prune superseded cache entries\n        env:\n          GH_TOKEN: ${{{{ github.token }}}}\n          GH_REPO: ${{{{ github.repository }}}}\n          HEAD_BRANCH: ${{{{ github.event.workflow_run.head_branch }}}}\n        run: {script}\n"
     );
     Ok(RenderedFile {
         path: CACHE_PRUNE_PATH.to_owned(),

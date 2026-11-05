@@ -4,7 +4,7 @@
 set -euo pipefail
 : "${GH_TOKEN:?}" "${VELNOR_UPGRADE_DIR:?}" "${VELNOR_UPGRADE_BRANCH:?}" "${VELNOR_DEFAULT_BRANCH:?}" "${GITHUB_REPOSITORY:?}" "${VELNOR_VERIFIED_TREE:?}"
 dir=$VELNOR_UPGRADE_DIR
-velnor_gh() { mise --no-config --no-env --no-hooks exec "gh@${VELNOR_GH_VERSION:?}" -- gh "$@"; }
+@VERIFIED_GH_FUNCTION@
 # The previous step, which held no token, left the index at exactly the tree
 # the verify job accepted; nothing else is ever committed.
 tree=$(git write-tree)

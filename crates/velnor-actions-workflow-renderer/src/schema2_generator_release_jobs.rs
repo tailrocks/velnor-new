@@ -66,7 +66,9 @@ pub(super) fn attest_job(
     let artifact_id = format!("${{{{ needs.{}.outputs.artifact_id }}}}", product.build_job);
     let downloads =
         assets::download_build_steps_for_id(product, "Download built asset files", &artifact_id);
-    let mut action_steps = vec![workflow_steps::mise_step(pins.setup_for(product.target))?];
+    let mut action_steps = vec![workflow_steps::mise_step(
+        pins.setup_for(ReleaseTarget::LinuxX86_64),
+    )?];
     action_steps.push(authority_gh_validation_step());
     action_steps.push(authority_gh_install_step()?);
     action_steps.extend(downloads);
@@ -80,7 +82,7 @@ pub(super) fn attest_job(
             "Verify downloaded checksum sidecar",
             &format!(
                 "set -eu\ncd {}\n{} {}",
-                product.directory, product.checksum_command, product.sidecar
+                product.directory, "sha256sum --check", product.sidecar
             ),
         ),
         workflow_steps::attest_step(&workflow_steps::subject_list(&files, product.directory)),

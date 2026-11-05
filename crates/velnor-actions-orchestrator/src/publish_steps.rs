@@ -202,7 +202,7 @@ pub(crate) fn gh_function(catalog: &ToolCatalog) -> Result<String, OrchestratorE
         })?;
     let prefix = strings_of(exec.argv(catalog))
         .map_err(|problem| OrchestratorError::Contract { problem })?;
-    Ok(script::gh_function(&prefix))
+    script::gh_function(&prefix).map_err(Into::into)
 }
 
 pub(crate) fn plain(step: Step) -> PublishStep {

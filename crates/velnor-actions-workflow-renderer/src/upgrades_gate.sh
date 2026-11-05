@@ -3,7 +3,7 @@
 
 set -euo pipefail
 : "${GH_TOKEN:?}" "${GITHUB_REPOSITORY:?}" "${VELNOR_UPGRADE_BRANCH:?}" "${VELNOR_STUCK_DAYS:?}"
-velnor_gh() { mise --no-config --no-env --no-hooks exec "gh@${VELNOR_GH_VERSION:?}" -- gh "$@"; }
+@VERIFIED_GH_FUNCTION@
 status=0
 case "${VELNOR_PREPARE_RESULT:-}" in
   success) ;;

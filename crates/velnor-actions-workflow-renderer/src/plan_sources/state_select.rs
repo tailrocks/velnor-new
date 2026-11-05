@@ -57,13 +57,12 @@ signer="$repo/@SIGNER_PATH@"
 limit="${@TIMEOUT_ENV@:-@TIMEOUT@}"
 shape='^s256-[0-9a-f]{64}-s256-[0-9a-f]{64}-s256-[0-9a-f]{64}$'
 run_gh() {
-  if command -v timeout >/dev/null 2>&1; then timeout "$limit" gh "$@"; else gh "$@"; fi
+  if command -v timeout >/dev/null 2>&1; then timeout "$limit" /bin/sh -c @GH_COMMAND@ velnor-gh "$@"; else /bin/sh -c @GH_COMMAND@ velnor-gh "$@"; fi
 }
 attested() {
   out="$d/$2"
   : > "$out"
   [ -n "$ref" ] && [ -n "$repo" ] && [ -n "$signer" ] || return 0
-  command -v gh >/dev/null 2>&1 || return 0
   run_gh cache list -R "$repo" --key "$1" --ref "$ref" --sort created_at --order desc --limit @LIST_LIMIT@ --json key,createdAt,id,sizeInBytes --jq '.[] | [.createdAt, .key, (.id | tostring), (.sizeInBytes | tostring)] | @tsv' > "$d/list" 2>/dev/null || return 0
   LC_ALL=C sort -r "$d/list" > "$d/sorted" || return 0
   n=
@@ -157,7 +156,17 @@ pub fn state_select_step(roots: &[SealRoot]) -> Result<Step, RenderError> {
         vec![
             "sh".to_owned(),
             "-c".to_owned(),
-            crate::state_script::one_line(&script),
+            format!(
+                "set -eu; {}; {}",
+                crate::verified_gh_shell::bootstrap(),
+                crate::state_script::one_line(&script).replace(
+                    "@GH_COMMAND@",
+                    &format!(
+                        "'{} \"$@\"'",
+                        crate::verified_gh_shell::command().replace('\'', "'\\''")
+                    )
+                )
+            ),
         ],
         env,
     )?;

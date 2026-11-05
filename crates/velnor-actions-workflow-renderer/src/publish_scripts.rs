@@ -13,9 +13,9 @@ pub mod provenance;
 const SEMVER_ERE: &str = r"(0|[1-9][0-9]*)(\.(0|[1-9][0-9]*)){2}";
 const ID_ERE: &str = "[a-z][a-z0-9]*(-[a-z0-9]+)*";
 
-#[must_use]
-pub fn gh_function(prefix: &[String]) -> String {
-    format!("gh() {{ {} \"$@\"; }}", prefix.join(" "))
+pub fn gh_function(prefix: &[String]) -> Result<String, crate::RenderError> {
+    let command = crate::verified_gh_shell::command_for(prefix)?;
+    Ok(format!("gh() {{ {command} \"$@\"; }}"))
 }
 
 #[must_use]

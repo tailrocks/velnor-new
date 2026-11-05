@@ -62,7 +62,7 @@ pub(super) fn gh_function(argv: &[String]) -> Result<String, RenderError> {
 }
 
 pub(super) fn gh_confirmation_function(argv: &[String]) -> Result<String, RenderError> {
-    let executable = join_argv_for_run(argv)?;
+    let executable = crate::verified_gh_shell::command_for(argv)?;
     Ok(r#"gh_until() {
   local _velnor_deadline="$1"
   shift
@@ -91,7 +91,7 @@ pub(super) fn gh_confirmation_function(argv: &[String]) -> Result<String, Render
 }
 
 fn gh_function_with_timeout(argv: &[String], timeout_seconds: u16) -> Result<String, RenderError> {
-    let executable = join_argv_for_run(argv)?;
+    let executable = crate::verified_gh_shell::command_for(argv)?;
     let kill_after_seconds = GH_COMMAND_KILL_AFTER_SECONDS;
     Ok(format!(
         "gh() {{\n  (\n    {executable} \"$@\" & _velnor_gh_pid=$!\n    ( sleep {timeout_seconds}; kill -TERM \"$_velnor_gh_pid\" 2>/dev/null; sleep {kill_after_seconds}; kill -KILL \"$_velnor_gh_pid\" 2>/dev/null ) </dev/null >/dev/null 2>&1 & _velnor_gh_watch=$!\n    _velnor_gh_status=0\n    wait \"$_velnor_gh_pid\" || _velnor_gh_status=$?\n    kill -KILL \"$_velnor_gh_watch\" 2>/dev/null || true\n    wait \"$_velnor_gh_watch\" 2>/dev/null || true\n    exit \"$_velnor_gh_status\"\n  ) </dev/null\n}}\nexport -f gh"

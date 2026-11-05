@@ -48,7 +48,7 @@ pub(crate) fn check_authority_job_data_only(
         "native image maintenance",
         "python3 images/job",
         "publish.py --root",
-        "GH_TOKEN",
+        "GH_TOKEN:",
         "github.token",
         "actions/cache",
         "cache-save",

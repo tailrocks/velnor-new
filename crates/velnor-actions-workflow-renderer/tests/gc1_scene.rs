@@ -131,6 +131,12 @@ impl Scene {
         unset: &[&str],
         fsize_blocks: Option<u64>,
     ) -> Result<String, Box<dyn Error>> {
+        let bootstrap = velnor_actions_workflow_renderer::verified_gh_shell::bootstrap();
+        let verified = velnor_actions_workflow_renderer::verified_gh_shell::command();
+        let script = script
+            .replace(&bootstrap, "VELNOR_VERIFIED_GH_DATA_DIR=/tmp")
+            .replace(&verified.replace('\'', "'\\''"), "command gh")
+            .replace(&verified, "command gh");
         let path = format!("{}:{}", self.bin.display(), std::env::var("PATH")?);
         let mut command = Command::new("sh");
         match fsize_blocks {
@@ -139,8 +145,8 @@ impl Scene {
                 .arg("ulimit -f \"$1\"; exec sh -c \"$2\"")
                 .arg("sh")
                 .arg(blocks.to_string())
-                .arg(script),
-            None => command.arg("-c").arg(script),
+                .arg(&script),
+            None => command.arg("-c").arg(&script),
         };
         self.base_env(&mut command, &path);
         for (name, value) in env {
@@ -164,6 +170,7 @@ impl Scene {
             .env("RUNNER_TEMP", &self.runner)
             .env("GITHUB_WORKSPACE", &self.workspace)
             .env("GITHUB_OUTPUT", &self.github_output)
+            .env("GITHUB_ENV", self.runner.join("github-env"))
             .env("GITHUB_EVENT_NAME", "push")
             .env("GITHUB_REF", "refs/heads/main")
             .env("GITHUB_REF_PROTECTED", "true")

@@ -85,12 +85,12 @@ fn pins() -> ProductReleasePins {
         linux_x86_64_setup: setup.clone(),
         macos_arm64_setup: setup.clone(),
         macos_x86_64_setup: setup,
-        install_gate_tools_argv: argv(&["mise", "install", "gh@2.103.2"]),
+        install_gate_tools_argv: argv(&["mise", "install", "gh@2.103.3"]),
         install_build_tools_argv: argv(&["mise", "install", "rust@1.91.0", "mr-boxington@1.0.0"]),
         install_qualify_tools_argv: argv(&["mise", "install", "opentofu@1.13.2"]),
         qualify_mbx_action_steps: [fixture_step(), fixture_step(), fixture_step()],
         install_runner_build_tools_argv: Vec::new(),
-        install_gh_argv: argv(&["mise", "install", "gh@2.103.2"]),
+        install_gh_argv: argv(&["mise", "install", "gh@2.103.3"]),
         build_argv: argv(&[
             "mbx",
             "build",
@@ -123,11 +123,23 @@ fn pins() -> ProductReleasePins {
         resource_probe_release_test_argv: Vec::new(),
         lint_argv: argv(&["bash", "-c", "exit 0"]),
         verify_lint_argv: verify_lint_argv(),
-        gh_argv: argv(&["gh"]),
+        gh_argv: argv(&[
+            "mise",
+            "--no-config",
+            "--no-env",
+            "--no-hooks",
+            "exec",
+            &format!(
+                "gh@{}",
+                velnor_actions_mise::catalog::QUALIFIED_GH_LINUX_AMD64.version
+            ),
+            "--",
+            "gh",
+        ]),
         rust_version: "1.91.0".to_owned(),
         verify_rust_argv: verify_rust_argv(),
         mr_boxington_version: "1.0.0".to_owned(),
-        gh_version: "2.103.2".to_owned(),
+        gh_version: "2.103.3".to_owned(),
     }
 }
 
@@ -371,5 +383,34 @@ fn gc1_t42_rejects_invalid_state() -> Result<(), Box<dyn Error>> {
     check_rejects_empty_build_argv()?;
     check_rejects_bad_mise_setup()?;
     check_rejects_bad_release_version()?;
+    Ok(())
+}
+
+#[test]
+fn macos_artifacts_attested_on_linux_with_same_run_custody() -> Result<(), Box<dyn Error>> {
+    let mut pins = pins();
+    pins.macos_arm64_setup.sha256 = "a".repeat(64);
+    pins.macos_x86_64_setup.sha256 = "b".repeat(64);
+    let files = rendered_with(pins)?;
+    let workflow = find_file(&files, ".github/workflows/product-release-generator.yml")?;
+    for (attest, build, qualify) in [
+        ("attest-macos", "build-macos", "qualify-macos"),
+        (
+            "attest-macos-intel",
+            "build-macos-intel",
+            "qualify-macos-intel",
+        ),
+    ] {
+        let job = job_section(workflow, attest)?;
+        require(job, "runs-on: ubuntu-26.04", attest)?;
+        require(job, MISE_BINARY_SHA256_LINUX_X64, attest)?;
+        require(job, &format!("needs.{build}.outputs.artifact_id"), attest)?;
+        require(job, build, attest)?;
+        require(job, qualify, attest)?;
+        require(job, "candidate-manifest", attest)?;
+        require(job, "sha256sum --check", attest)?;
+        require(job, "exec(bytes.fromhex", attest)?;
+        forbid(job, "actions/checkout", attest)?;
+    }
     Ok(())
 }
