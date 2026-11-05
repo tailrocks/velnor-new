@@ -22,9 +22,9 @@ fn check_restored(
     if record_field(&record, "decision") != Some(decision) {
         return Err(fail(&format!("recover misclassified {decision}: {record}")));
     }
-    let manifest = record_field(&record, "manifest").unwrap_or_default();
-    if manifest.len() != 64 || !manifest.bytes().all(|byte| byte.is_ascii_hexdigit()) {
-        return Err(fail(&format!("recover lost its manifest digest: {record}")));
+    let payload = record_field(&record, "payload").unwrap_or_default();
+    if payload.len() != 64 || !payload.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        return Err(fail(&format!("recover lost its payload digest: {record}")));
     }
     if record_field(&record, "size").is_none() {
         return Err(fail("recover lost its payload size"));
