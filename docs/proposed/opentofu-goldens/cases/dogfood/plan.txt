@@ -66,7 +66,7 @@ Workflow to generate
     - rust-velnor-actions-actionlint (29 steps)
     - rust-velnor-actions-ansible (29 steps)
     - rust-velnor-actions-bun (29 steps)
-    - rust-velnor-actions-cli (31 steps)
+    - rust-velnor-actions-cli (32 steps)
     - rust-velnor-actions-contract (30 steps)
     - rust-velnor-actions-dbt (29 steps)
     - rust-velnor-actions-gradle (29 steps)
