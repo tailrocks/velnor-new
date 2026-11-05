@@ -343,5 +343,18 @@ pub(super) fn missing_semver_baseline_requires_reviewed_new_crate()
     wrong.intent.authentication =
         velnor_actions_contract::config::ReleaseAuthentication::TrustedPublishing;
     assert!(check(&wrong).is_err());
+    let mut wrong = new.clone();
+    wrong.github.request.event = "push".into();
+    assert!(check(&wrong).is_err());
+    let mut wrong = new.clone();
+    wrong.packages[0].action = crate::crate_release_controller::CrateReleaseAction::RepairTag {
+        registry: crate::crate_release_registry::CrateRegistryReconciliation {
+            checksum: "a".repeat(64),
+            downloaded_checksum: "a".repeat(64),
+            owners: vec![],
+            features: std::collections::BTreeMap::new(),
+        },
+    };
+    assert!(check(&wrong).is_err());
     Ok(())
 }

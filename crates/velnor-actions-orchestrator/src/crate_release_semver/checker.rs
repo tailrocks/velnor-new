@@ -39,8 +39,12 @@ pub(crate) fn verify_one<R: CrateRegistryRead>(
         let approved_new = matches!(
             package.owners,
             crate::crate_release_registry::CrateRegistryOwnership::NewCrate
-        ) && receipt.intent.authentication
-            == velnor_actions_contract::config::ReleaseAuthentication::BootstrapToken
+        ) && matches!(
+            package.action,
+            crate::crate_release_controller::CrateReleaseAction::Publish
+        ) && receipt.github.request.event == "workflow_dispatch"
+            && receipt.intent.authentication
+                == velnor_actions_contract::config::ReleaseAuthentication::BootstrapToken
             && receipt.intent.new_crates.as_ref().is_some_and(|creation| {
                 creation.source_sha == receipt.github.request.source_sha
                     && creation.packages.get(&package.source.name) == Some(&package.source.version)
