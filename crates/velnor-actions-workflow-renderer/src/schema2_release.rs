@@ -8,7 +8,9 @@ use crate::steps::{ATTEST_BUILD_PROVENANCE_USES, DOWNLOAD_ARTIFACT_USES, UPLOAD_
 use crate::yaml::Yaml;
 use velnor_actions_contract::JobTimeout;
 
-use super::features::{CHECKOUT_USES, base, finish, identified_publish_step, run_step};
+use super::features::{
+    CHECKOUT_USES, base, finish, identified_publish_step, run_step, source_step,
+};
 use super::{Schema2WorkflowRequest, generator_release, product_release_family};
 use velnor_actions_contract::ReleaseTarget;
 
@@ -26,15 +28,21 @@ const NOTICE: &str = "NOTICE";
 
 const IMAGE_BUILD: &str = "\
 set -eu
-docker build --platform linux/amd64 -t velnor-runner:linux-amd64 images/runner/ubuntu-26.04
-docker build --platform linux/amd64 -t velnor-dind:linux-amd64 images/dind";
+: \"${VELNOR_SOURCE_SHA:?}\"
+docker build --platform linux/amd64 --build-arg VELNOR_SOURCE_SHA=\"$VELNOR_SOURCE_SHA\" -t velnor-runner:linux-amd64 images/runner/ubuntu-26.04
+docker build --platform linux/amd64 --build-arg VELNOR_SOURCE_SHA=\"$VELNOR_SOURCE_SHA\" -t velnor-dind:linux-amd64 images/dind";
 
 const IMAGE_VERIFY: &str = "\
 set -eu
+: \"${VELNOR_SOURCE_SHA:?}\"
 runner=\"$(docker image inspect --format '{{.Architecture}}' velnor-runner:linux-amd64)\"
 dind=\"$(docker image inspect --format '{{.Architecture}}' velnor-dind:linux-amd64)\"
 test \"$runner\" = amd64
-test \"$dind\" = amd64";
+test \"$dind\" = amd64
+runner_revision=\"$(docker image inspect --format '{{ index .Config.Labels \"org.opencontainers.image.revision\" }}' velnor-runner:linux-amd64)\"
+dind_revision=\"$(docker image inspect --format '{{ index .Config.Labels \"org.opencontainers.image.revision\" }}' velnor-dind:linux-amd64)\"
+test \"$runner_revision\" = \"$VELNOR_SOURCE_SHA\"
+test \"$dind_revision\" = \"$VELNOR_SOURCE_SHA\"";
 
 const IMAGE_SAVE: &str = "\
 set -eu
@@ -78,10 +86,10 @@ pub(super) fn image_release(request: &Schema2WorkflowRequest) -> Result<Yaml, Re
         NOTICE,
         CHECKSUMS,
     ];
-    let mut build_steps = vec![run_step("Build runner and DinD images", IMAGE_BUILD)];
+    let mut build_steps = vec![source_step("Build runner and DinD images", IMAGE_BUILD)];
     build_steps.extend(super::resource_probe_image::build_steps(pins)?);
     build_steps.extend([
-        run_step("Verify image architectures", IMAGE_VERIFY),
+        source_step("Verify image architectures and revisions", IMAGE_VERIFY),
         run_step("Save image archives", IMAGE_SAVE),
         run_step("Checksum built bytes", IMAGE_SUM),
     ]);

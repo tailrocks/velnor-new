@@ -196,4 +196,6 @@ RUN curl --retry 5 --retry-delay 2 --retry-all-errors -fsSL -o /tmp/node.tar.gz 
     && test "$(node -e 'console.log("js-action-ok")')" = js-action-ok
 
 USER runner
+ARG VELNOR_SOURCE_SHA
+LABEL io.velnor.image.kind="runner" org.opencontainers.image.revision="${VELNOR_SOURCE_SHA}"
 ENTRYPOINT ["/usr/local/bin/velnor-runner-entrypoint"]

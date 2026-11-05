@@ -79,6 +79,106 @@ pub(crate) fn request() -> Result<Schema2WorkflowRequest, Box<dyn Error>> {
     })
 }
 
+#[cfg(unix)]
+#[test]
+fn image_release_builds_both_images_with_the_approved_source_revision() -> Result<(), Box<dyn Error>>
+{
+    use std::os::unix::fs::PermissionsExt;
+
+    let files = render_schema2_workflows(&request()?)?;
+    let workflow = find_file(&files, ".github/workflows/product-release-images.yml")?;
+    let step = workflow
+        .split("- name: Build runner and DinD images")
+        .nth(1)
+        .and_then(|tail| tail.split("- name: ").next())
+        .ok_or_else(|| fail("image build step missing"))?;
+    assert!(step.contains("VELNOR_SOURCE_SHA: ${{ inputs.source_sha }}"));
+    let encoded = step
+        .lines()
+        .find_map(|line| line.trim_start().strip_prefix("run: "))
+        .ok_or_else(|| fail("image build command missing"))?;
+    let script: String = serde_json::from_str(encoded)?;
+    let dir = tempfile::tempdir()?;
+    let docker = dir.path().join("docker");
+    let log = dir.path().join("builds");
+    std::fs::write(
+        &docker,
+        "#!/bin/sh\nif [ \"$1\" = build ]; then printf '%s\\n' \"$*\" >> \"$BUILD_LOG\"; elif [ \"$4\" = '{{.Architecture}}' ]; then printf '%s\\n' amd64; elif [ \"$5\" = \"${BAD_IMAGE:-}\" ]; then printf '%s\\n' wrong; else printf '%s\\n' \"$VELNOR_SOURCE_SHA\"; fi\n",
+    )?;
+    std::fs::set_permissions(&docker, std::fs::Permissions::from_mode(0o700))?;
+    let source = "a97f3c482da31b6f91f83e28c4dca0217e5b6930";
+    let output = Command::new("/bin/sh")
+        .arg("-c")
+        .arg(&script)
+        .env("PATH", dir.path())
+        .env("BUILD_LOG", &log)
+        .env("VELNOR_SOURCE_SHA", source)
+        .output()?;
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let builds = std::fs::read_to_string(log)?;
+    for context in ["images/runner/ubuntu-26.04", "images/dind"] {
+        assert!(
+            builds.lines().any(|line| line
+                .contains(&format!("--build-arg VELNOR_SOURCE_SHA={source}"))
+                && line.ends_with(context)),
+            "missing source revision for {context}: {builds}"
+        );
+    }
+    let missing_log = dir.path().join("missing-source-builds");
+    assert!(
+        !Command::new("/bin/sh")
+            .arg("-c")
+            .arg(script)
+            .env("PATH", dir.path())
+            .env("BUILD_LOG", &missing_log)
+            .env_remove("VELNOR_SOURCE_SHA")
+            .output()?
+            .status
+            .success()
+    );
+    assert!(!missing_log.exists());
+    verify_revisions(workflow, dir.path(), source)
+}
+
+#[cfg(unix)]
+fn verify_revisions(workflow: &str, bin: &Path, source: &str) -> Result<(), Box<dyn Error>> {
+    let verify_marker = "- name: Verify image architectures and revisions";
+    let verify_start = workflow
+        .find(verify_marker)
+        .ok_or_else(|| fail("image verification step missing"))?;
+    let save_start = workflow
+        .find("- name: Save image archives")
+        .ok_or_else(|| fail("image save step missing"))?;
+    assert!(verify_start < save_start);
+    let verify_step = &workflow[verify_start..save_start];
+    assert!(verify_step.contains("VELNOR_SOURCE_SHA: ${{ inputs.source_sha }}"));
+    let encoded = verify_step
+        .lines()
+        .find_map(|line| line.trim_start().strip_prefix("run: "))
+        .ok_or_else(|| fail("image verification command missing"))?;
+    let verify_script: String = serde_json::from_str(encoded)?;
+    for bad_image in ["", "velnor-runner:linux-amd64", "velnor-dind:linux-amd64"] {
+        let result = Command::new("/bin/sh")
+            .arg("-c")
+            .arg(&verify_script)
+            .env("PATH", bin)
+            .env("VELNOR_SOURCE_SHA", source)
+            .env("BAD_IMAGE", bad_image)
+            .output()?;
+        assert_eq!(
+            result.status.success(),
+            bad_image.is_empty(),
+            "verification result for {bad_image}: {}",
+            String::from_utf8_lossy(&result.stderr)
+        );
+    }
+    Ok(())
+}
+
 pub(crate) fn find_file<'a>(
     files: &'a [RenderedFile],
     path: &str,
