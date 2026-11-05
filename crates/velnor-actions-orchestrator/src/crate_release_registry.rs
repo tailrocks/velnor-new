@@ -47,12 +47,16 @@ impl CrateRegistryRead for NativeCrateRegistryRead {
         {
             return Err(internal("crate_registry_path_invalid"));
         }
+        let timeout =
+            velnor_actions_mise::CheckDeadline::cap_to_scope(std::time::Duration::from_secs(30))
+                .map_err(|_| internal("crate_registry_deadline"))?;
         let mut response = crate::api::github_evidence_http::agent()?
             .get(format!("{origin}{remote_path}"))
             .header("User-Agent", "velnor-actions crate-release")
             .header("Accept-Encoding", "identity")
             .header("Cache-Control", "no-cache, no-store")
             .config()
+            .timeout_global(Some(timeout))
             .http_status_as_error(false)
             .max_redirects(0)
             .build()

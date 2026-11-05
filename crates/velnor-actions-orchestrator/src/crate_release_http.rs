@@ -169,7 +169,9 @@ impl GitHubAdmissionHttp {
         if !valid_post_route(route) {
             return Err(internal("crate_release_http_route"));
         }
-        let deadline = Instant::now() + self.timeout;
+        let timeout = velnor_actions_mise::CheckDeadline::cap_to_scope(self.timeout)
+            .map_err(|_| internal("crate_release_http_deadline"))?;
+        let deadline = Instant::now() + timeout;
         let remaining = deadline.saturating_duration_since(Instant::now());
         if remaining.is_zero() {
             return Err(internal("crate_release_http_deadline"));
@@ -210,7 +212,9 @@ impl GitHubAdmissionHttp {
         if !valid_route(route) {
             return Err(internal("crate_release_http_route"));
         }
-        let deadline = Instant::now() + self.timeout;
+        let timeout = velnor_actions_mise::CheckDeadline::cap_to_scope(self.timeout)
+            .map_err(|_| internal("crate_release_http_deadline"))?;
+        let deadline = Instant::now() + timeout;
         let remaining = deadline.saturating_duration_since(Instant::now());
         if remaining.is_zero() {
             return Err(internal("crate_release_http_deadline"));

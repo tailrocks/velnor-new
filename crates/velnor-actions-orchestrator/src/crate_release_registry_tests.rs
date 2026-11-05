@@ -34,6 +34,42 @@ fn fixture(replies: Vec<CrateRegistryResponse>) -> Registry {
 }
 
 #[test]
+fn native_registry_read_obeys_shared_deadline() -> Result<(), Box<dyn std::error::Error>> {
+    use std::io::{Read as _, Write as _};
+    use std::time::{Duration, Instant};
+    if std::env::var_os("VELNOR_TEST_REGISTRY_ORIGIN").is_some() {
+        let deadline = velnor_actions_mise::CheckDeadline::after(Duration::from_secs(1))?;
+        let started = Instant::now();
+        let result = deadline.scope(|| NativeCrateRegistryRead.get("/api/v1/crates/demo"));
+        assert!(!matches!(result, Ok(Ok(_))));
+        assert!(started.elapsed() < Duration::from_secs(2));
+        return Ok(());
+    }
+    let listener = std::net::TcpListener::bind("127.0.0.1:0")?;
+    let origin = format!("http://{}", listener.local_addr()?);
+    let worker = std::thread::spawn(move || -> Result<(), std::io::Error> {
+        let (mut stream, _) = listener.accept()?;
+        let mut buffer = [0; 4096];
+        if stream.read(&mut buffer)? == 0 {
+            return Err(std::io::Error::from(std::io::ErrorKind::UnexpectedEof));
+        }
+        stream.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 20\r\n\r\n{")?;
+        std::thread::sleep(Duration::from_secs(3));
+        Ok(())
+    });
+    let status = std::process::Command::new(std::env::current_exe()?)
+        .args([
+            "--exact",
+            "crate_release_registry::index_tests::native_registry_read_obeys_shared_deadline",
+        ])
+        .env("VELNOR_TEST_REGISTRY_ORIGIN", origin)
+        .status()?;
+    worker.join().map_err(|_| "server panic")??;
+    assert!(status.success());
+    Ok(())
+}
+
+#[test]
 fn sparse_index_waits_only_for_propagation_and_binds_checksum() {
     let checksum = "a".repeat(64);
     let matching =
