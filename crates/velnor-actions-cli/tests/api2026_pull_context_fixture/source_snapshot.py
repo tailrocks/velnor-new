@@ -6,11 +6,13 @@ import os
 import pathlib
 import stat
 import subprocess
+from collections import deque
 
 MAX_TOTAL = 512 * 1024 * 1024
 MAX_ENTRIES = 100000
 MAX_LINK = 4096
 MAX_GIT_OUTPUT = 64 * 1024 * 1024
+MAX_LINK_STEPS = 8192
 
 
 def git_output(args, env):
@@ -91,11 +93,15 @@ def check_links(entries, dirs):
     for name, record in entries.items():
         if record[1] != b"link":
             continue
-        pending = name.split(b"/")
+        pending = deque(name.split(b"/"))
         resolved = []
         hops = 0
+        steps = 0
         while pending:
-            part = pending.pop(0)
+            steps += 1
+            if steps > MAX_LINK_STEPS:
+                raise RuntimeError("fixture link resolution exceeds its bound")
+            part = pending.popleft()
             if part in (b"", b"."):
                 continue
             if part == b"..":
@@ -114,7 +120,7 @@ def check_links(entries, dirs):
                 if hops > 32:
                     raise RuntimeError("cyclic fixture link")
                 resolved.pop()
-                pending = target.split(b"/") + pending
+                pending.extendleft(reversed(target.split(b"/")))
         final = b"/".join(resolved)
         item = entries.get(final)
         if final and final not in dirs and (not item or item[1] != b"file"):

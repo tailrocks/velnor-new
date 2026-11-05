@@ -85,6 +85,14 @@ def main():
         (root / "right/link").symlink_to("../left")
         git(root, "add", "left", "right")
         refuses(lambda: source_snapshot.collect(root, None, driver.read_tracked))
+        long_root = pathlib.Path(temporary) / "long"
+        long_root.mkdir(); git(long_root, "init")
+        (long_root / "target").write_text("tracked")
+        for index in range(21):
+            target = f"link{index + 1:02}" if index < 20 else "target"
+            (long_root / f"link{index:02}").symlink_to("./" * 400 + target)
+        git(long_root, "add", ".")
+        refuses(lambda: source_snapshot.collect(long_root, None, driver.read_tracked))
 
 
 if __name__ == "__main__":
