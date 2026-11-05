@@ -127,6 +127,7 @@ fn qualification_intent_matches_rendered_intent_without_enabling_publishing()
     let manifest = std::fs::read(temp.path().join(".velnor/release-manifest.json"))?;
     let metadata_config = velnor_actions_contract::config::ReleaseRehearsalMetadataConfig {
         manifest_path: "Cargo.toml".into(),
+        intent_config_path: ".velnor/config.toml".into(),
         rust_version: prep
             .catalog
             .version(velnor_actions_mise::PinnedTool::Rust)
@@ -148,24 +149,7 @@ fn qualification_intent_matches_rendered_intent_without_enabling_publishing()
     let expected = crate::crate_release_runtime::parse_crate_release_intent(rendered.as_bytes())?;
     assert_eq!(toml::to_string(&actual)?, toml::to_string(&expected)?);
     assert!(super::release_files(&prep).is_err());
-    let mut forged: serde_json::Value = serde_json::from_str(&raw)?;
-    forged["packages"][0]["manifest_path"] = "/source/missing/Cargo.toml".into();
-    let forged = crate::crate_release_qualification_intent::remap_metadata(
-        serde_json::to_string(&forged)?.as_bytes(),
-        source.root(),
-    )?;
-    assert!(
-        super::derive_intent_from_snapshot(
-            &source,
-            &prep.config,
-            &forged,
-            &manifest,
-            &metadata_config,
-            "example/demo",
-            "main"
-        )
-        .is_err()
-    );
+    check_forged_metadata(&source, &prep.config, &raw, &manifest, &metadata_config)?;
     prep.config
         .stacks
         .rust
@@ -175,31 +159,43 @@ fn qualification_intent_matches_rendered_intent_without_enabling_publishing()
         .trusted_reviewer_id = 456;
     let changed = derive(&prep.config)?;
     assert_ne!(actual.trusted_reviewer_id, changed.trusted_reviewer_id);
-    let release = &mut prep
-        .config
-        .stacks
-        .rust
-        .as_mut()
-        .ok_or("missing Rust")?
-        .release;
-    release.recovery = Some(velnor_actions_contract::config::RecoveryRelease {
-        package: "demo".into(),
-        version: "0.1.0".into(),
-        source_sha: sha.to_owned(),
-    });
-    let recovery = derive(&prep.config)?;
-    assert_eq!(recovery.recovery.ok_or("missing recovery")?.source_sha, sha);
-    prep.config
-        .stacks
-        .rust
-        .as_mut()
-        .ok_or("missing Rust")?
-        .release
-        .recovery
-        .as_mut()
-        .ok_or("missing recovery")?
-        .source_sha = "0".repeat(40);
-    assert!(derive(&prep.config).is_err());
+    check_recovery(&mut prep.config, sha, &derive)?;
+    assert!(
+        crate::crate_release_qualification_snapshot::snapshot_approved_source(
+            temp.path(),
+            &"0".repeat(40),
+            &git
+        )
+        .is_err()
+    );
+    Ok(())
+}
+
+fn check_forged_metadata(
+    source: &crate::crate_release_qualification_snapshot::SourceSnapshot,
+    config: &velnor_actions_contract::VelnorConfig,
+    raw: &str,
+    manifest: &[u8],
+    metadata_config: &velnor_actions_contract::config::ReleaseRehearsalMetadataConfig,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let mut forged: serde_json::Value = serde_json::from_str(raw)?;
+    forged["packages"][0]["manifest_path"] = "/source/missing/Cargo.toml".into();
+    let forged = crate::crate_release_qualification_intent::remap_metadata(
+        serde_json::to_string(&forged)?.as_bytes(),
+        source.root(),
+    )?;
+    assert!(
+        super::derive_intent_from_snapshot(
+            source,
+            config,
+            &forged,
+            manifest,
+            metadata_config,
+            "example/demo",
+            "main"
+        )
+        .is_err()
+    );
     assert!(
         crate::crate_release_qualification_intent::remap_metadata(
             raw.replace("/source/Cargo.toml", "/source/../Cargo.toml")
@@ -215,14 +211,38 @@ fn qualification_intent_matches_rendered_intent_without_enabling_publishing()
         )
         .is_err()
     );
-    assert!(
-        crate::crate_release_qualification_snapshot::snapshot_approved_source(
-            temp.path(),
-            &"0".repeat(40),
-            &git
-        )
-        .is_err()
-    );
+    Ok(())
+}
+
+fn check_recovery(
+    config: &mut velnor_actions_contract::VelnorConfig,
+    sha: &str,
+    derive: &impl Fn(
+        &velnor_actions_contract::VelnorConfig,
+    ) -> Result<
+        velnor_actions_contract::config::CrateReleaseIntent,
+        crate::OrchestratorError,
+    >,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let release = &mut config.stacks.rust.as_mut().ok_or("missing Rust")?.release;
+    release.recovery = Some(velnor_actions_contract::config::RecoveryRelease {
+        package: "demo".into(),
+        version: "0.1.0".into(),
+        source_sha: sha.to_owned(),
+    });
+    let recovery = derive(config)?;
+    assert_eq!(recovery.recovery.ok_or("missing recovery")?.source_sha, sha);
+    config
+        .stacks
+        .rust
+        .as_mut()
+        .ok_or("missing Rust")?
+        .release
+        .recovery
+        .as_mut()
+        .ok_or("missing recovery")?
+        .source_sha = "0".repeat(40);
+    assert!(derive(config).is_err());
     Ok(())
 }
 

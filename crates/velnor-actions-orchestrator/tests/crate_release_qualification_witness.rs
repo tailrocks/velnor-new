@@ -16,6 +16,7 @@ fn metadata_requires_exact_witness_source_and_artifact_custody()
     f.request.metadata = Some(
         velnor_actions_contract::config::ReleaseRehearsalMetadataConfig {
             manifest_path: "Cargo.toml".into(),
+            intent_config_path: ".velnor/config.toml".into(),
             rust_version: "1.97.1".into(),
         },
     );
@@ -34,7 +35,7 @@ fn metadata_requires_exact_witness_source_and_artifact_custody()
     f.artifact.borrow_mut()["name"] = "approved-metadata-observation".into();
     f.artifact.borrow_mut()["size_in_bytes"] = f.bytes.len().into();
     f.artifact.borrow_mut()["digest"] = format!("sha256:{digest}").into();
-    f.log = format!("2026-11-05T00:00:00Z VELNOR_METADATA_SOURCE run=33 attempt=1 source={} tree={} sha256={}\n2026-11-05T00:00:00Z VELNOR_REHEARSAL_METADATA run=33 attempt=1 artifact=77 sha256={digest}\n", "d".repeat(40), "e".repeat(40), "f".repeat(64)).into_bytes();
+    f.log = format!("2026-11-05T00:00:00Z VELNOR_METADATA_SOURCE run=33 attempt=1 source={} config=.velnor/config.toml tree={} sha256={}\n2026-11-05T00:00:00Z VELNOR_REHEARSAL_METADATA run=33 attempt=1 artifact=77 sha256={digest}\n", "d".repeat(40), "e".repeat(40), "f".repeat(64)).into_bytes();
     let evidence = acquire_metadata(&f.request, &f)?;
     assert_eq!(evidence.bytes(), b"{}");
     assert_eq!(evidence.source_sha(), "d".repeat(40));
@@ -47,6 +48,17 @@ fn metadata_requires_exact_witness_source_and_artifact_custody()
         .into_bytes();
     assert!(acquire_metadata(&f.request, &f).is_err());
     f.log = original;
+    f.request
+        .metadata
+        .as_mut()
+        .ok_or("metadata")?
+        .intent_config_path = "other/config.toml".into();
+    assert!(acquire_metadata(&f.request, &f).is_err());
+    f.request
+        .metadata
+        .as_mut()
+        .ok_or("metadata")?
+        .intent_config_path = ".velnor/config.toml".into();
     f.job.borrow_mut()["steps"][2]["conclusion"] = "skipped".into();
     assert!(acquire_metadata(&f.request, &f).is_err());
     f.job.borrow_mut()["steps"][2]["conclusion"] = "success".into();

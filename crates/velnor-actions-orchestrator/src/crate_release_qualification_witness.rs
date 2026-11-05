@@ -109,6 +109,13 @@ pub fn verify_witness(
 }
 
 pub(crate) fn validate_request(r: &WitnessRequest) -> Result<(), OrchestratorError> {
+    let config = velnor_actions_contract::config::ReleaseRehearsalConfig {
+        script: r.script.clone(),
+        environment: r.environment.clone(),
+        reviewer_id: r.reviewer_id,
+        output_bundle: r.output_bundle,
+        metadata: r.metadata.clone(),
+    };
     if !velnor_actions_contract::vcs::is_safe_github_repository(&r.repository)
         || r.repository_id == 0
         || r.run_id == 0
@@ -124,6 +131,7 @@ pub(crate) fn validate_request(r: &WitnessRequest) -> Result<(), OrchestratorErr
         || !hex(&r.source_sha256, 64)
         || r.metadata.is_some() != r.source_sha.is_some()
         || r.source_sha.as_ref().is_some_and(|sha| !hex(sha, 40))
+        || config.validate("rehearsal").is_err()
     {
         return Err(invalid());
     }

@@ -26,6 +26,7 @@ pub fn derive_intent_from_evidence(
     {
         return Err(invalid());
     }
+    bind_config_path(inputs, metadata.metadata_config())?;
     let config = crate::config::load_config_from_text(inputs.config())?;
     if config
         .workflow
@@ -45,6 +46,16 @@ pub fn derive_intent_from_evidence(
         repository,
         default_branch,
     )
+}
+
+pub(crate) fn bind_config_path(
+    inputs: &CheckoutInputs,
+    metadata: &velnor_actions_contract::config::ReleaseRehearsalMetadataConfig,
+) -> Result<(), OrchestratorError> {
+    if inputs.config_path() != metadata.intent_config_path {
+        return Err(invalid());
+    }
+    Ok(())
 }
 
 pub(crate) fn remap_metadata(bytes: &[u8], root: &Path) -> Result<String, OrchestratorError> {

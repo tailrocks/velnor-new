@@ -26,6 +26,7 @@ fn metadata_is_opt_in_and_bound_to_an_isolated_reviewed_source_job()
     rehearsal.metadata = Some(
         velnor_actions_contract::config::ReleaseRehearsalMetadataConfig {
             manifest_path: "Cargo.toml".into(),
+            intent_config_path: ".velnor/config.toml".into(),
             rust_version: "1.97.1".into(),
         },
     );
@@ -69,6 +70,19 @@ fn metadata_is_opt_in_and_bound_to_an_isolated_reviewed_source_job()
             .iter()
             .any(|s| s["name"] == "Bind approved metadata source")
     );
+    let binding = workflow["jobs"]["witness"]["steps"]
+        .as_array()
+        .ok_or("witness steps")?
+        .iter()
+        .find(|s| s["name"] == "Bind approved metadata source")
+        .ok_or("binding")?;
+    assert_eq!(binding["env"]["INTENT_CONFIG_PATH"], ".velnor/config.toml");
+    rehearsal
+        .metadata
+        .as_mut()
+        .ok_or("metadata")?
+        .intent_config_path = "../secret.toml".into();
+    assert!(rehearsal::render(&rehearsal, "0.1.73").is_err());
     Ok(())
 }
 

@@ -153,8 +153,13 @@ fn metadata_source(
             {
                 return Err(invalid());
             }
+            let config_path = &request
+                .metadata
+                .as_ref()
+                .ok_or_else(invalid)?
+                .intent_config_path;
             let expected = format!(
-                "{prefix}run={} attempt=1 source={source} tree=",
+                "{prefix}run={} attempt=1 source={source} config={config_path} tree=",
                 request.run_id
             );
             let tail = body.strip_prefix(&expected).ok_or_else(invalid)?;

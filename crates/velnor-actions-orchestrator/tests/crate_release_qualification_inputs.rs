@@ -53,6 +53,18 @@ fn captures_exact_clean_checkout_inputs_and_rejects_changes() {
     };
     let pinned_git = ReleaseGit::host_fixture();
     let captured = capture_checkout_inputs(&request, &pinned_git).expect("capture");
+    let mut metadata = velnor_actions_contract::config::ReleaseRehearsalMetadataConfig {
+        manifest_path: "Cargo.toml".into(),
+        rust_version: "1.97.1".into(),
+        intent_config_path: "config.toml".into(),
+    };
+    assert!(
+        crate::crate_release_qualification_intent::bind_config_path(&captured, &metadata).is_ok()
+    );
+    metadata.intent_config_path = "other.toml".into();
+    assert!(
+        crate::crate_release_qualification_intent::bind_config_path(&captured, &metadata).is_err()
+    );
     assert_eq!(captured.config, "reviewed config");
     assert_eq!(captured.manifest, "reviewed manifest");
     let wrong = CheckoutInputRequest {

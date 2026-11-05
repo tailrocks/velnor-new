@@ -456,8 +456,8 @@ fn witness_job(config: &ReleaseRehearsalConfig) -> Yaml {
     if config.output_bundle {
         append_output_witness_steps(&mut steps);
     }
-    if config.metadata.is_some() {
-        append_metadata_witness_steps(&mut steps);
+    if let Some(metadata) = &config.metadata {
+        append_metadata_witness_steps(&mut steps, metadata);
     }
     let mut job = base_job(steps, map(vec![]));
     let mut needs = vec![Yaml::str("gate"), Yaml::str("execute")];
@@ -468,7 +468,10 @@ fn witness_job(config: &ReleaseRehearsalConfig) -> Yaml {
     map(job)
 }
 
-fn append_metadata_witness_steps(steps: &mut Vec<Yaml>) {
+fn append_metadata_witness_steps(
+    steps: &mut Vec<Yaml>,
+    metadata: &velnor_actions_contract::config::ReleaseRehearsalMetadataConfig,
+) {
     steps.push(map(vec![
         (
             "uses",
@@ -517,7 +520,7 @@ fn append_metadata_witness_steps(steps: &mut Vec<Yaml>) {
             ),
         ]),
     ));
-    steps.push(step("Bind approved metadata source", "set -euo pipefail\n[[ \"$SOURCE_SHA\" =~ ^[a-f0-9]{40}$ && \"$APPROVED_TREE\" =~ ^[a-f0-9]{40}$ && \"$APPROVED_SHA256\" =~ ^[a-f0-9]{64}$ ]]\nprintf 'VELNOR_METADATA_SOURCE run=%s attempt=%s source=%s tree=%s sha256=%s\\n' \"$GITHUB_RUN_ID\" \"$GITHUB_RUN_ATTEMPT\" \"$SOURCE_SHA\" \"$APPROVED_TREE\" \"$APPROVED_SHA256\"\n", map(vec![("SOURCE_SHA", Yaml::str("${{ inputs.source_sha }}")), ("APPROVED_SHA256", Yaml::str("${{ needs.gate.outputs.approved_sha256 }}")), ("APPROVED_TREE", Yaml::str("${{ needs.gate.outputs.approved_tree }}"))])));
+    steps.push(step("Bind approved metadata source", "set -euo pipefail\n[[ \"$SOURCE_SHA\" =~ ^[a-f0-9]{40}$ && \"$APPROVED_TREE\" =~ ^[a-f0-9]{40}$ && \"$APPROVED_SHA256\" =~ ^[a-f0-9]{64}$ ]]\nprintf 'VELNOR_METADATA_SOURCE run=%s attempt=%s source=%s config=%s tree=%s sha256=%s\\n' \"$GITHUB_RUN_ID\" \"$GITHUB_RUN_ATTEMPT\" \"$SOURCE_SHA\" \"$INTENT_CONFIG_PATH\" \"$APPROVED_TREE\" \"$APPROVED_SHA256\"\n", map(vec![("SOURCE_SHA", Yaml::str("${{ inputs.source_sha }}")), ("APPROVED_SHA256", Yaml::str("${{ needs.gate.outputs.approved_sha256 }}")), ("APPROVED_TREE", Yaml::str("${{ needs.gate.outputs.approved_tree }}")), ("INTENT_CONFIG_PATH", Yaml::str(&metadata.intent_config_path))])));
 }
 
 fn append_output_witness_steps(steps: &mut Vec<Yaml>) {

@@ -34,6 +34,7 @@ fn fixture(metadata: bool) -> Result<(WitnessRequest, Api), Box<dyn std::error::
         metadata: metadata.then(|| {
             velnor_actions_contract::config::ReleaseRehearsalMetadataConfig {
                 manifest_path: "Cargo.toml".into(),
+                intent_config_path: ".velnor/config.toml".into(),
                 rust_version: "1.97.1".into(),
             }
         }),
@@ -123,8 +124,19 @@ fn canonical_workflow_tree_and_successful_jobs_are_required()
 #[test]
 fn metadata_opt_in_requires_the_exact_successful_metadata_job()
 -> Result<(), Box<dyn std::error::Error>> {
-    let (request, mut api) = fixture(true)?;
+    let (mut request, mut api) = fixture(true)?;
     verify_canonical_rehearsal(&request, "main", &api)?;
+    request
+        .metadata
+        .as_mut()
+        .ok_or("metadata")?
+        .intent_config_path = "other/config.toml".into();
+    assert!(verify_canonical_rehearsal(&request, "main", &api).is_err());
+    request
+        .metadata
+        .as_mut()
+        .ok_or("metadata")?
+        .intent_config_path = ".velnor/config.toml".into();
     let jobs = api
         .0
         .get_mut("repos/owner/repo/actions/runs/42/attempts/1/jobs?per_page=100&page=1")
