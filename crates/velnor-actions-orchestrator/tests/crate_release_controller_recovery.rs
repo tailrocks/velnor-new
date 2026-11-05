@@ -356,22 +356,10 @@ pub(super) fn toolchain_staging_requires_approved_same_run_artifact()
         )))?,
         b"x"
     );
-    fs::remove_dir_all(&result)?;
-    let mut creation = intent.clone();
-    creation.recovery = None;
-    creation.authentication =
-        velnor_actions_contract::config::ReleaseAuthentication::BootstrapToken;
-    creation.new_crates = Some(velnor_actions_contract::config::NewCrateRelease {
-        source_sha: request.source_sha.clone(),
-        packages: [("demo".into(), "0.1.1".into())].into(),
-    });
-    let creation_stage = ToolchainStageRequest {
-        intent: &creation,
-        ..stage
-    };
-    assert_eq!(
-        stage_unverified_toolchain(&creation_stage, &github, &github)?,
-        result
-    );
+    creation_staging::check_creation_staging(&intent, &request, &github, &stage, &result)?;
     Ok(())
 }
+
+#[cfg(unix)]
+#[path = "crate_release_controller_creation_staging.rs"]
+mod creation_staging;

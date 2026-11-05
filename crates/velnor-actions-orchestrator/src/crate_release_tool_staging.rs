@@ -1,7 +1,11 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use super::*;
+use super::{
+    OrchestratorError, ToolArtifactMetadata, ToolchainStageRequest, check_real_directories,
+    extract_verified_tool_archive_file, internal, validate_receipt_artifact_metadata,
+    validate_tool_artifact_metadata,
+};
 
 pub fn stage_unverified_toolchain<
     G: crate::crate_release_github::GitHubAdmissionRead,
@@ -27,30 +31,7 @@ pub fn stage_unverified_toolchain<
     {
         return Err(invalid());
     }
-    let source_matches = match request.github.event.as_str() {
-        "workflow_dispatch" => request
-            .intent
-            .recovery
-            .as_ref()
-            .map(|recovery| recovery.source_sha.as_str())
-            .or_else(|| {
-                request
-                    .intent
-                    .new_crates
-                    .as_ref()
-                    .map(|creation| creation.source_sha.as_str())
-            })
-            .is_some_and(|source| {
-                request.github.source_sha == source
-                    && request.github.recovery_sha.as_deref() == Some(source)
-            }),
-        "push" => {
-            request.github.recovery_sha.is_none()
-                && request.github.source_sha == request.github.workflow_sha
-        }
-        _ => false,
-    };
-    if !source_matches {
+    if !source_matches(request) {
         return Err(invalid());
     }
     crate::crate_release_github::authorize_github_candidate(
@@ -91,6 +72,33 @@ pub fn stage_unverified_toolchain<
     }
     extract_verified_tool_archive_file(&file, digest, &request.intent.rust_version, &destination)?;
     Ok(destination)
+}
+
+fn source_matches(request: &ToolchainStageRequest<'_>) -> bool {
+    match request.github.event.as_str() {
+        "workflow_dispatch" => request
+            .intent
+            .recovery
+            .as_ref()
+            .map(|recovery| recovery.source_sha.as_str())
+            .or_else(|| {
+                request
+                    .intent
+                    .new_crates
+                    .as_ref()
+                    .map(|creation| creation.source_sha.as_str())
+            })
+            .is_some_and(|source| {
+                request.github.source_sha == source
+                    && request.github.recovery_sha.as_deref() == Some(source)
+            }),
+        "push" => {
+            request.intent.new_crates.is_none()
+                && request.github.recovery_sha.is_none()
+                && request.github.source_sha == request.github.workflow_sha
+        }
+        _ => false,
+    }
 }
 
 pub(super) fn current_artifact<G: crate::crate_release_github::GitHubAdmissionRead>(

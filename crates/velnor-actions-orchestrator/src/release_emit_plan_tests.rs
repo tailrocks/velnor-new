@@ -79,8 +79,8 @@ fn first_publication_is_dispatch_only() {
         dispatch: true,
     };
     let creation = release_triggers("main", &plan, true);
-    assert!(creation.push_branches.is_empty());
-    assert!(!creation.dispatch_inputs.is_empty());
+    assert_eq!(creation.push_branches, Vec::<String>::new());
+    assert_eq!(creation.dispatch_inputs.len(), 2);
     let recovery = release_triggers("main", &plan, false);
     assert_eq!(recovery.push_branches, ["main"]);
 }
