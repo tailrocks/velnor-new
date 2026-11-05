@@ -238,3 +238,6 @@ mod workspace_format;
 
 #[path = "workflow_configuration_public/release_tracked_manifests.rs"]
 mod release_tracked_manifests;
+
+#[path = "workflow_configuration_public/verdict_toolchain.rs"]
+mod verdict_toolchain;

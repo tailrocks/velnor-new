@@ -226,7 +226,7 @@ pub fn final_job(
     steps.push(prepare_pinned_tools_step(
         catalog,
         vec![PinnedTool::Gh],
-        true,
+        false,
     )?);
     steps.push(crate::steps_internal::group_ledger_steps::assemble_group_ledgers_step());
     steps.push(request_step(MERGE_OPERATION)?);
