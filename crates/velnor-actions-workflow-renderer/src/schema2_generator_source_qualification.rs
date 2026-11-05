@@ -1,7 +1,10 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_actions_contract::{JobTimeout, ReleaseTarget, RoutingWorkflow};
+use std::collections::BTreeMap;
+
+use velnor_actions_contract::{JobTimeout, ReleaseTarget, RoutingWorkflow, StepId};
+use velnor_actions_mise::ToolCatalog;
 
 use crate::yaml::Yaml;
 use crate::{ProductReleasePins, RenderError, Schema2WorkflowRequest};
@@ -10,11 +13,15 @@ use crate::{ProductReleasePins, RenderError, Schema2WorkflowRequest};
 mod jobs;
 
 use jobs::{
-    GATHER_JOB_ID, GATHER_JOB_NAME, GATHER_PHASE, PRELUDE_AFTER_MISE, PRELUDE_BEFORE_MISE,
-    PRODUCER_JOBS, Phase, ProducerJob,
+    GATHER_JOB_ID, GATHER_JOB_NAME, GATHER_PHASE, PREFETCH_PHASE,
+    PRELUDE_AFTER_MISE_BEFORE_PREFETCH, PRELUDE_AFTER_PREFETCH, PREPARE_PHASE, PRODUCER_JOBS,
+    Phase, ProducerJob, VERIFY_CHECKOUT_PHASE,
 };
 
 pub(super) const WORKFLOW_PATH: &str = ".github/workflows/source-qualification.yml";
+
+const SOURCES_FETCH_ROOTS: [&str; 2] = ["", "crates/velnor-runner"];
+const SOURCES_CARGO_HOME: &str = velnor_actions_contract::workflow::cache_family::CARGO_HOME_EXPR;
 
 pub(super) fn render(request: &Schema2WorkflowRequest) -> Result<Yaml, RenderError> {
     let pins = request.product_release.as_ref().ok_or_else(|| {
@@ -33,7 +40,7 @@ pub(super) fn render(request: &Schema2WorkflowRequest) -> Result<Yaml, RenderErr
     for producer in PRODUCER_JOBS {
         jobs.push((
             producer.id.to_owned(),
-            producer_job(&runner, pins, producer)?,
+            producer_job(&runner, &request.hosted_label, pins, producer)?,
         ));
     }
     jobs.push((GATHER_JOB_ID.to_owned(), gather_job(&runner)?));
@@ -67,13 +74,18 @@ fn read_permissions() -> Yaml {
 
 fn producer_job(
     runner: &super::RunnerSpec,
+    runner_label: &str,
     pins: &ProductReleasePins,
     producer: &ProducerJob,
 ) -> Result<Yaml, RenderError> {
     let mut steps = vec![checkout_step()];
-    steps.extend(phase_steps(PRELUDE_BEFORE_MISE));
+    steps.push(prepare_step());
+    steps.extend(phase_steps(&[VERIFY_CHECKOUT_PHASE]));
+    steps.extend(sources_restore_steps(producer.id, runner_label)?);
     steps.push(mise_step(pins)?);
-    steps.extend(phase_steps(PRELUDE_AFTER_MISE));
+    steps.extend(phase_steps(PRELUDE_AFTER_MISE_BEFORE_PREFETCH));
+    steps.push(prefetch_step());
+    steps.extend(phase_steps(PRELUDE_AFTER_PREFETCH));
     steps.extend(phase_steps(producer.phases));
     steps.push(upload_step(&producer_artifact(producer.id)));
     let mut fields = job_head(runner, producer.name, Vec::new())?;
@@ -83,6 +95,36 @@ fn producer_job(
     ]);
     runner.push_default_shell(&mut fields, false);
     Ok(Yaml::Map(fields))
+}
+
+fn sources_restore_steps(job_id: &str, runner_label: &str) -> Result<Vec<Yaml>, RenderError> {
+    let roots = SOURCES_FETCH_ROOTS.map(str::to_owned);
+    let steps = crate::plan_sources::cache_steps_for_plan(&ToolCatalog::pinned(), &roots, &[], &[])
+        .map_err(sources_restore_error)?;
+    steps
+        .into_iter()
+        .map(|mut step| {
+            if step.id == Some(StepId::SourcesRestore) {
+                step.condition = Some(crate::dispatch_cache_boundary::DISPATCH_DENY.to_owned());
+            }
+            crate::document_steps::non_internal_step_to_yaml(
+                job_id,
+                &step,
+                &BTreeMap::new(),
+                runner_label,
+            )
+        })
+        .collect()
+}
+
+fn sources_restore_error(error: crate::plan_sources::PlanSourcesError) -> RenderError {
+    use crate::plan_sources::PlanSourcesError;
+    match error {
+        PlanSourcesError::Render(error) | PlanSourcesError::ShellRender(error) => error,
+        PlanSourcesError::Contract(error) => RenderError::InvalidWorkflow(error.to_string()),
+        PlanSourcesError::CacheSourcesPolicy(problem)
+        | PlanSourcesError::CacheActionRef(problem) => RenderError::InvalidWorkflow(problem),
+    }
 }
 
 fn gather_job(runner: &super::RunnerSpec) -> Result<Yaml, RenderError> {
@@ -159,8 +201,32 @@ fn producer_artifact(job_id: &str) -> String {
 fn phase_steps(phases: &[Phase]) -> Vec<Yaml> {
     phases
         .iter()
-        .map(|(name, phase, always)| phase_step(name, phase, *always))
+        .map(|(name, phase, always)| phase_step(name, phase, *always, Vec::new()))
         .collect()
+}
+
+fn prepare_step() -> Yaml {
+    let (name, phase, always) = PREPARE_PHASE;
+    let env = vec![("CARGO_HOME".to_owned(), Yaml::str(SOURCES_CARGO_HOME))];
+    phase_step(name, phase, always, env)
+}
+
+fn prefetch_step() -> Yaml {
+    let (name, phase, always) = PREFETCH_PHASE;
+    let restore = StepId::SourcesRestore.as_str();
+    let env = vec![
+        (
+            "SOURCES_CACHE_HIT".to_owned(),
+            Yaml::str(format!("${{{{ steps.{restore}.outputs.cache-hit }}}}")),
+        ),
+        (
+            "SOURCES_CACHE_MATCHED_KEY".to_owned(),
+            Yaml::str(format!(
+                "${{{{ steps.{restore}.outputs.cache-matched-key }}}}"
+            )),
+        ),
+    ];
+    phase_step(name, phase, always, env)
 }
 
 fn job_env() -> Yaml {
@@ -212,10 +278,13 @@ fn mise_step(pins: &ProductReleasePins) -> Result<Yaml, RenderError> {
     Ok(step)
 }
 
-fn phase_step(name: &str, phase: &str, always: bool) -> Yaml {
+fn phase_step(name: &str, phase: &str, always: bool, env: Vec<(String, Yaml)>) -> Yaml {
     let mut fields = vec![("name".to_owned(), Yaml::str(name))];
     if always {
         fields.push(("if".to_owned(), Yaml::str("always()")));
+    }
+    if !env.is_empty() {
+        fields.push(("env".to_owned(), Yaml::Map(env)));
     }
     fields.extend([
         ("shell".to_owned(), Yaml::str("bash")),

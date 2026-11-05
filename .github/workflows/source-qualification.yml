@@ -32,11 +32,37 @@ jobs:
           persist-credentials: "false"
       - name: Prepare external evidence directories
         if: always()
+        env:
+          CARGO_HOME: ${{ runner.temp }}/velnor/cargo
         shell: bash
         run: bash scripts/generator-release/source-qualification.sh prepare-external-evidence-directories
       - name: Verify exact clean source checkout
         shell: bash
         run: bash scripts/generator-release/source-qualification.sh verify-exact-clean-source-checkout
+      - name: Compute cache keys
+        id: cache-keys
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+          ACTIONS_RUNTIME_TOKEN: ""
+          CARGO_REGISTRY_TOKEN: ""
+          GH_CONFIG_DIR: ""
+          GH_HOST: ""
+          GH_TOKEN: ""
+          GITHUB_TOKEN: ""
+          MISE_GITHUB_TOKEN: ""
+          NODE_AUTH_TOKEN: ""
+          NPM_TOKEN: ""
+          VELNOR_DEFAULT_REF: ${{ format('refs/heads/{0}', github.event.repository.default_branch) }}
+        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; case \"$RUNNER_TEMP\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''RUNNER_TEMP must be absolute'\\'' >&2; exit 1 ;; esac; d=\"$RUNNER_TEMP/velnor/cache-keys\"; rm -rf \"$d\"; mkdir -p \"$d\"; s256() { sha256sum \"$1\" > \"$d/sum\"; h=; rest=; read -r h rest < \"$d/sum\" || [ -n \"$h\" ]; case \"$h\" in '\\'''\\''|*[!0-9a-f]*) printf '\\''%s\\n'\\'' '\\''sha256sum returned no digest'\\'' >&2; exit 1 ;; esac; [ \"${#h}\" -eq 64 ] || exit 1; }; uname -s > \"$d/platform\"; uname -m >> \"$d/platform\"; default_ref=\"${VELNOR_DEFAULT_REF:-}\"; trust=none; if [ \"${GITHUB_EVENT_NAME:-}\" = push ] && [ -n \"${default_ref#refs/heads/}\" ] && [ \"${GITHUB_REF:-}\" = \"$default_ref\" ] && [ \"${GITHUB_REF_PROTECTED:-}\" = true ]; then trust=trusted; fi; check_key() { [ \"${#1}\" -le 512 ] || { printf '\\''cache key exceeds 512 bytes: %s\\n'\\'' \"$1\" >&2; exit 1; }; }; printf '\\''%s\\n'\\'' \"family=sources\" \"schema=2\" \"$RUNNER_TEMP/velnor/cargo/registry/index\" \"$RUNNER_TEMP/velnor/cargo/registry/cache\" \"$RUNNER_TEMP/velnor/cargo/git/db\" > \"$d/sources-compat\"; cat \"$d/platform\" >> \"$d/sources-compat\"; printf '\\''%s\\n'\\'' \"$RUNNER_TEMP/velnor/cargo\" >> \"$d/sources-compat\"; s256 \"$d/sources-compat\"; compat=\"s256-$h\"; : > \"$d/sources-locks\"; s256 \"$GITHUB_WORKSPACE/Cargo.lock\"; printf '\\''%s\\t%s\\n'\\'' \".\" \"$h\" >> \"$d/sources-locks\"; s256 \"$GITHUB_WORKSPACE/crates/velnor-runner/Cargo.lock\"; printf '\\''%s\\t%s\\n'\\'' \"crates/velnor-runner\" \"$h\" >> \"$d/sources-locks\"; LC_ALL=C sort \"$d/sources-locks\" > \"$d/sources-snapshot\"; s256 \"$d/sources-snapshot\"; snap=\"s256-$h\"; trusted=\"velnor-v2-sources-trusted-$compat-\"; key=\"$trusted$snap\"; check_key \"$key\"; save=false; [ \"$trust\" = none ] || save=true; printf '\\''%s\\n'\\'' \"sources_key=$key\" \"sources_save=$save\" \"sources_snapshot=$snap\" '\\''sources_restore_keys<<VELNOR_CACHE_KEYS_EOF'\\'' >> \"$GITHUB_OUTPUT\"; printf '\\''%s\\n'\\'' \"$trusted\" '\\''VELNOR_CACHE_KEYS_EOF'\\'' >> \"$GITHUB_OUTPUT\"; printf '\\''velnor: cache trust=%s sources key=%s save=%s\\n'\\'' \"$trust\" \"$key\" \"$save\"; printf '\\''%s\\n'\\'' \"trust=$trust\" >> \"$GITHUB_OUTPUT\"'"
+      - name: Restore Cargo sources
+        id: sources-restore
+        if: github.event_name != 'workflow_dispatch'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          key: ${{steps.cache-keys.outputs.sources_key}}
+          path: "${{ runner.temp }}/velnor/cargo/registry/index\n${{ runner.temp }}/velnor/cargo/registry/cache\n${{ runner.temp }}/velnor/cargo/git/db"
+          restore-keys: ${{steps.cache-keys.outputs.sources_restore_keys}}
       - name: Set up pinned Mise
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
@@ -56,6 +82,9 @@ jobs:
         shell: bash
         run: bash scripts/generator-release/source-qualification.sh record-installed-tool-identities
       - name: Prefetch locked sources for qualification workspaces
+        env:
+          SOURCES_CACHE_HIT: ${{ steps.sources-restore.outputs.cache-hit }}
+          SOURCES_CACHE_MATCHED_KEY: ${{ steps.sources-restore.outputs.cache-matched-key }}
         shell: bash
         run: bash scripts/generator-release/source-qualification.sh prefetch-locked-sources-for-qualification-workspaces
       - name: Install validator tools with native Mise checksums
@@ -110,11 +139,37 @@ jobs:
           persist-credentials: "false"
       - name: Prepare external evidence directories
         if: always()
+        env:
+          CARGO_HOME: ${{ runner.temp }}/velnor/cargo
         shell: bash
         run: bash scripts/generator-release/source-qualification.sh prepare-external-evidence-directories
       - name: Verify exact clean source checkout
         shell: bash
         run: bash scripts/generator-release/source-qualification.sh verify-exact-clean-source-checkout
+      - name: Compute cache keys
+        id: cache-keys
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+          ACTIONS_RUNTIME_TOKEN: ""
+          CARGO_REGISTRY_TOKEN: ""
+          GH_CONFIG_DIR: ""
+          GH_HOST: ""
+          GH_TOKEN: ""
+          GITHUB_TOKEN: ""
+          MISE_GITHUB_TOKEN: ""
+          NODE_AUTH_TOKEN: ""
+          NPM_TOKEN: ""
+          VELNOR_DEFAULT_REF: ${{ format('refs/heads/{0}', github.event.repository.default_branch) }}
+        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; case \"$RUNNER_TEMP\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''RUNNER_TEMP must be absolute'\\'' >&2; exit 1 ;; esac; d=\"$RUNNER_TEMP/velnor/cache-keys\"; rm -rf \"$d\"; mkdir -p \"$d\"; s256() { sha256sum \"$1\" > \"$d/sum\"; h=; rest=; read -r h rest < \"$d/sum\" || [ -n \"$h\" ]; case \"$h\" in '\\'''\\''|*[!0-9a-f]*) printf '\\''%s\\n'\\'' '\\''sha256sum returned no digest'\\'' >&2; exit 1 ;; esac; [ \"${#h}\" -eq 64 ] || exit 1; }; uname -s > \"$d/platform\"; uname -m >> \"$d/platform\"; default_ref=\"${VELNOR_DEFAULT_REF:-}\"; trust=none; if [ \"${GITHUB_EVENT_NAME:-}\" = push ] && [ -n \"${default_ref#refs/heads/}\" ] && [ \"${GITHUB_REF:-}\" = \"$default_ref\" ] && [ \"${GITHUB_REF_PROTECTED:-}\" = true ]; then trust=trusted; fi; check_key() { [ \"${#1}\" -le 512 ] || { printf '\\''cache key exceeds 512 bytes: %s\\n'\\'' \"$1\" >&2; exit 1; }; }; printf '\\''%s\\n'\\'' \"family=sources\" \"schema=2\" \"$RUNNER_TEMP/velnor/cargo/registry/index\" \"$RUNNER_TEMP/velnor/cargo/registry/cache\" \"$RUNNER_TEMP/velnor/cargo/git/db\" > \"$d/sources-compat\"; cat \"$d/platform\" >> \"$d/sources-compat\"; printf '\\''%s\\n'\\'' \"$RUNNER_TEMP/velnor/cargo\" >> \"$d/sources-compat\"; s256 \"$d/sources-compat\"; compat=\"s256-$h\"; : > \"$d/sources-locks\"; s256 \"$GITHUB_WORKSPACE/Cargo.lock\"; printf '\\''%s\\t%s\\n'\\'' \".\" \"$h\" >> \"$d/sources-locks\"; s256 \"$GITHUB_WORKSPACE/crates/velnor-runner/Cargo.lock\"; printf '\\''%s\\t%s\\n'\\'' \"crates/velnor-runner\" \"$h\" >> \"$d/sources-locks\"; LC_ALL=C sort \"$d/sources-locks\" > \"$d/sources-snapshot\"; s256 \"$d/sources-snapshot\"; snap=\"s256-$h\"; trusted=\"velnor-v2-sources-trusted-$compat-\"; key=\"$trusted$snap\"; check_key \"$key\"; save=false; [ \"$trust\" = none ] || save=true; printf '\\''%s\\n'\\'' \"sources_key=$key\" \"sources_save=$save\" \"sources_snapshot=$snap\" '\\''sources_restore_keys<<VELNOR_CACHE_KEYS_EOF'\\'' >> \"$GITHUB_OUTPUT\"; printf '\\''%s\\n'\\'' \"$trusted\" '\\''VELNOR_CACHE_KEYS_EOF'\\'' >> \"$GITHUB_OUTPUT\"; printf '\\''velnor: cache trust=%s sources key=%s save=%s\\n'\\'' \"$trust\" \"$key\" \"$save\"; printf '\\''%s\\n'\\'' \"trust=$trust\" >> \"$GITHUB_OUTPUT\"'"
+      - name: Restore Cargo sources
+        id: sources-restore
+        if: github.event_name != 'workflow_dispatch'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          key: ${{steps.cache-keys.outputs.sources_key}}
+          path: "${{ runner.temp }}/velnor/cargo/registry/index\n${{ runner.temp }}/velnor/cargo/registry/cache\n${{ runner.temp }}/velnor/cargo/git/db"
+          restore-keys: ${{steps.cache-keys.outputs.sources_restore_keys}}
       - name: Set up pinned Mise
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
@@ -134,6 +189,9 @@ jobs:
         shell: bash
         run: bash scripts/generator-release/source-qualification.sh record-installed-tool-identities
       - name: Prefetch locked sources for qualification workspaces
+        env:
+          SOURCES_CACHE_HIT: ${{ steps.sources-restore.outputs.cache-hit }}
+          SOURCES_CACHE_MATCHED_KEY: ${{ steps.sources-restore.outputs.cache-matched-key }}
         shell: bash
         run: bash scripts/generator-release/source-qualification.sh prefetch-locked-sources-for-qualification-workspaces
       - name: Install validator tools with native Mise checksums
@@ -188,11 +246,37 @@ jobs:
           persist-credentials: "false"
       - name: Prepare external evidence directories
         if: always()
+        env:
+          CARGO_HOME: ${{ runner.temp }}/velnor/cargo
         shell: bash
         run: bash scripts/generator-release/source-qualification.sh prepare-external-evidence-directories
       - name: Verify exact clean source checkout
         shell: bash
         run: bash scripts/generator-release/source-qualification.sh verify-exact-clean-source-checkout
+      - name: Compute cache keys
+        id: cache-keys
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+          ACTIONS_RUNTIME_TOKEN: ""
+          CARGO_REGISTRY_TOKEN: ""
+          GH_CONFIG_DIR: ""
+          GH_HOST: ""
+          GH_TOKEN: ""
+          GITHUB_TOKEN: ""
+          MISE_GITHUB_TOKEN: ""
+          NODE_AUTH_TOKEN: ""
+          NPM_TOKEN: ""
+          VELNOR_DEFAULT_REF: ${{ format('refs/heads/{0}', github.event.repository.default_branch) }}
+        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; case \"$RUNNER_TEMP\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''RUNNER_TEMP must be absolute'\\'' >&2; exit 1 ;; esac; d=\"$RUNNER_TEMP/velnor/cache-keys\"; rm -rf \"$d\"; mkdir -p \"$d\"; s256() { sha256sum \"$1\" > \"$d/sum\"; h=; rest=; read -r h rest < \"$d/sum\" || [ -n \"$h\" ]; case \"$h\" in '\\'''\\''|*[!0-9a-f]*) printf '\\''%s\\n'\\'' '\\''sha256sum returned no digest'\\'' >&2; exit 1 ;; esac; [ \"${#h}\" -eq 64 ] || exit 1; }; uname -s > \"$d/platform\"; uname -m >> \"$d/platform\"; default_ref=\"${VELNOR_DEFAULT_REF:-}\"; trust=none; if [ \"${GITHUB_EVENT_NAME:-}\" = push ] && [ -n \"${default_ref#refs/heads/}\" ] && [ \"${GITHUB_REF:-}\" = \"$default_ref\" ] && [ \"${GITHUB_REF_PROTECTED:-}\" = true ]; then trust=trusted; fi; check_key() { [ \"${#1}\" -le 512 ] || { printf '\\''cache key exceeds 512 bytes: %s\\n'\\'' \"$1\" >&2; exit 1; }; }; printf '\\''%s\\n'\\'' \"family=sources\" \"schema=2\" \"$RUNNER_TEMP/velnor/cargo/registry/index\" \"$RUNNER_TEMP/velnor/cargo/registry/cache\" \"$RUNNER_TEMP/velnor/cargo/git/db\" > \"$d/sources-compat\"; cat \"$d/platform\" >> \"$d/sources-compat\"; printf '\\''%s\\n'\\'' \"$RUNNER_TEMP/velnor/cargo\" >> \"$d/sources-compat\"; s256 \"$d/sources-compat\"; compat=\"s256-$h\"; : > \"$d/sources-locks\"; s256 \"$GITHUB_WORKSPACE/Cargo.lock\"; printf '\\''%s\\t%s\\n'\\'' \".\" \"$h\" >> \"$d/sources-locks\"; s256 \"$GITHUB_WORKSPACE/crates/velnor-runner/Cargo.lock\"; printf '\\''%s\\t%s\\n'\\'' \"crates/velnor-runner\" \"$h\" >> \"$d/sources-locks\"; LC_ALL=C sort \"$d/sources-locks\" > \"$d/sources-snapshot\"; s256 \"$d/sources-snapshot\"; snap=\"s256-$h\"; trusted=\"velnor-v2-sources-trusted-$compat-\"; key=\"$trusted$snap\"; check_key \"$key\"; save=false; [ \"$trust\" = none ] || save=true; printf '\\''%s\\n'\\'' \"sources_key=$key\" \"sources_save=$save\" \"sources_snapshot=$snap\" '\\''sources_restore_keys<<VELNOR_CACHE_KEYS_EOF'\\'' >> \"$GITHUB_OUTPUT\"; printf '\\''%s\\n'\\'' \"$trusted\" '\\''VELNOR_CACHE_KEYS_EOF'\\'' >> \"$GITHUB_OUTPUT\"; printf '\\''velnor: cache trust=%s sources key=%s save=%s\\n'\\'' \"$trust\" \"$key\" \"$save\"; printf '\\''%s\\n'\\'' \"trust=$trust\" >> \"$GITHUB_OUTPUT\"'"
+      - name: Restore Cargo sources
+        id: sources-restore
+        if: github.event_name != 'workflow_dispatch'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          key: ${{steps.cache-keys.outputs.sources_key}}
+          path: "${{ runner.temp }}/velnor/cargo/registry/index\n${{ runner.temp }}/velnor/cargo/registry/cache\n${{ runner.temp }}/velnor/cargo/git/db"
+          restore-keys: ${{steps.cache-keys.outputs.sources_restore_keys}}
       - name: Set up pinned Mise
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
@@ -212,6 +296,9 @@ jobs:
         shell: bash
         run: bash scripts/generator-release/source-qualification.sh record-installed-tool-identities
       - name: Prefetch locked sources for qualification workspaces
+        env:
+          SOURCES_CACHE_HIT: ${{ steps.sources-restore.outputs.cache-hit }}
+          SOURCES_CACHE_MATCHED_KEY: ${{ steps.sources-restore.outputs.cache-matched-key }}
         shell: bash
         run: bash scripts/generator-release/source-qualification.sh prefetch-locked-sources-for-qualification-workspaces
       - name: Install validator tools with native Mise checksums
