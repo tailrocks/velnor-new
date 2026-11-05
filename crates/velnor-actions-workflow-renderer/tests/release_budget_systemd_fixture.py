@@ -163,7 +163,7 @@ def main():
     invoke("cancel")
     invoke("orphan")
     evidence = {"schema": 1, "source": "mise-task-v1", "head": os.environ["VELNOR_CHECK_HEAD"], "check_id": os.environ["VELNOR_CHECK_ID"], "platform": os.environ["VELNOR_CHECK_PLATFORM"], "scenarios": [{"id": name, "executed": True, "status": "passed"} for name in ("cancellation", "no-credential-exposure", "orphan", "timeout", "ubuntu-24.04")]}
-    with open(".velnor/hosted-budget-evidence.json", "x", encoding="utf-8") as output:
+    with open("hosted-budget-evidence.json", "x", encoding="utf-8") as output:
         json.dump(evidence, output, separators=(",", ":"))
     print("hosted systemd timeout and cancellation removed escaped descendants")
 

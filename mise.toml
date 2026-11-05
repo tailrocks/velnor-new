@@ -75,3 +75,7 @@ done
 [tasks.test-hosted-budget-containment]
 description = "Verify hosted release budget isolation and cleanup"
 run = "python3 -I crates/velnor-actions-workflow-renderer/tests/release_budget_systemd_fixture.py"
+
+[tasks.test-hosted-gh-config-custody]
+description = "Verify hosted GitHub CLI configuration isolation"
+run = "python3 -I crates/velnor-actions-workflow-renderer/tests/hosted_gh_config_custody.py"

@@ -190,8 +190,22 @@ inputs = [".velnor/config.toml", "mise.toml", "crates/velnor-actions-workflow-re
 tools = []
 timeout_minutes = 5
 [checks.evidence]
-path = ".velnor/hosted-budget-evidence.json"
+path = "hosted-budget-evidence.json"
 expected_scenarios = ["cancellation", "no-credential-exposure", "orphan", "timeout", "ubuntu-24.04"]
+[checks.runner]
+label = "ubuntu-24.04"
+platform = "linux_x64"
+executor = "hosted"
+
+[[checks]]
+id = "hosted-gh-config-custody"
+task = "test-hosted-gh-config-custody"
+inputs = [".velnor/config.toml", "mise.toml", "crates/velnor-actions-workflow-renderer/tests/hosted_gh_config_custody.py"]
+tools = []
+timeout_minutes = 5
+[checks.evidence]
+path = "hosted-gh-config-evidence.json"
+expected_scenarios = ["sys-config-isolated", "ubuntu-24.04"]
 [checks.runner]
 label = "ubuntu-24.04"
 platform = "linux_x64"
