@@ -250,7 +250,7 @@ fn rehearse_candidate_denial() -> Result<(), Box<dyn Error>> {
     let temp = tempfile::tempdir()?;
     let root = temp.path();
     let source = "a".repeat(40);
-    let sha = committed_intent(root, &source)?;
+    let sha = committed_intent(root, &source, true)?;
     let listener = std::net::TcpListener::bind("127.0.0.1:0")?;
     listener.set_nonblocking(true)?;
     let origin = format!("http://{}", listener.local_addr()?);
@@ -303,7 +303,7 @@ fn rehearse_source_require(event: &str, denied: bool) -> Result<(), Box<dyn Erro
     let temp = tempfile::tempdir()?;
     let root = temp.path();
     let source = "a".repeat(40);
-    let sha = committed_intent(root, &source)?;
+    let sha = committed_intent(root, &source, event == "workflow_dispatch")?;
     let listener = std::net::TcpListener::bind("127.0.0.1:0")?;
     listener.set_nonblocking(true)?;
     let origin = format!("http://{}", listener.local_addr()?);
