@@ -11,10 +11,14 @@ use std::{
 use sha2::{Digest, Sha256};
 use tempfile::TempDir;
 
+#[path = "api2026_pull_context_fixture/driver.rs"]
+mod driver;
 #[path = "api2026_pull_context_fixture/git.rs"]
 mod git;
 #[path = "api2026_pull_context_fixture/provider.rs"]
 mod provider;
+#[path = "api2026_pull_context_fixture/server.rs"]
+mod server;
 
 #[derive(Clone, Copy)]
 pub(crate) enum Scenario {
@@ -47,6 +51,10 @@ impl Scenario {
 pub(crate) const REPOSITORY_ID: u64 = 819_273;
 
 pub(crate) fn run(scenario: Scenario, expected: &str) -> Result<(), Box<dyn Error>> {
+    if std::env::var_os("VELNOR_GH_FIXTURE_WORKER").is_none() {
+        return driver::dispatch(scenario);
+    }
+    driver::validate_worker(Some(scenario))?;
     let temp = tempfile::tempdir()?;
     let paths = Paths::new(&temp);
     fs::create_dir_all(&paths.repo)?;
@@ -59,6 +67,7 @@ pub(crate) fn run(scenario: Scenario, expected: &str) -> Result<(), Box<dyn Erro
     let identities = git.initialize(&digest, &commit)?;
     write_event(&paths, &identities)?;
     provider::write(&paths, &identities, scenario)?;
+    let _server = server::start(&paths, &identities)?;
     let output = invoke(&paths, &identities, scenario)?;
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert_eq!(
@@ -188,7 +197,8 @@ fn write_event(paths: &Paths, ids: &Identities) -> Result<(), Box<dyn Error>> {
 
 fn invoke(paths: &Paths, ids: &Identities, scenario: Scenario) -> Result<Output, Box<dyn Error>> {
     let cli = env!("CARGO_BIN_EXE_velnor-actions");
-    let path = format!("{}:/usr/bin:/bin", paths.root.join("bin").display());
+    let mise_data =
+        std::env::var_os("MISE_DATA_DIR").ok_or("qualified gh data directory missing")?;
     let request = paths
         .runner_temp
         .join("velnor/request/plan-v1-request.json");
@@ -223,7 +233,28 @@ fn invoke(paths: &Paths, ids: &Identities, scenario: Scenario) -> Result<Output,
             "VELNOR_API_DIAGNOSTIC_CHILD",
             if is_deadline { "1" } else { "0" },
         )
-        .env("PATH", path)
+        .env("PATH", "/usr/bin:/bin")
+        .env("MISE_DATA_DIR", mise_data)
+        .env(
+            "VELNOR_GH_FIXTURE_WORKER",
+            std::env::var("VELNOR_GH_FIXTURE_WORKER")?,
+        )
+        .env(
+            "VELNOR_GH_FIXTURE_SCENARIO",
+            std::env::var("VELNOR_GH_FIXTURE_SCENARIO")?,
+        )
+        .env(
+            "VELNOR_GH_FIXTURE_CACHE_KEY",
+            std::env::var("VELNOR_GH_FIXTURE_CACHE_KEY")?,
+        )
+        .env(
+            "VELNOR_GH_FIXTURE_ARCH",
+            std::env::var("VELNOR_GH_FIXTURE_ARCH")?,
+        )
+        .env(
+            "VELNOR_GH_TEST_TLS_ROOT",
+            std::env::var_os("VELNOR_GH_TEST_TLS_ROOT").ok_or("TLS root")?,
+        )
         .env("VELNOR_FIXTURE_STATE", paths.root.join("provider"))
         .env("VELNOR_FIXTURE_BASE", &ids.base)
         .env("VELNOR_FIXTURE_HEAD", &ids.head)
@@ -257,6 +288,7 @@ pub(crate) fn deadline_child() -> Result<bool, Box<dyn Error>> {
     if std::env::var("VELNOR_API_DIAGNOSTIC_CHILD").ok().as_deref() != Some("1") {
         return Ok(false);
     }
+    driver::validate_worker(None)?;
     let request = fs::read_to_string(std::env::var("VELNOR_REQUEST_FILE")?)?;
     let deadline = velnor_actions_mise::CheckDeadline::after(std::time::Duration::from_secs(5))?;
     let failure =

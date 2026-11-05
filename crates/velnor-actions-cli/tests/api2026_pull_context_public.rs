@@ -6,6 +6,54 @@ use std::error::Error;
 #[path = "api2026_pull_context_fixture.rs"]
 mod fixture;
 
+#[test]
+fn isolated_fixture_tools_match_qualified_catalog_and_lock() -> Result<(), Box<dyn Error>> {
+    let manifest: serde_json::Value =
+        serde_json::from_str(include_str!("api2026_pull_context_fixture/tools.json"))?;
+    let lock: toml::Value = toml::from_str(include_str!("../../../mise.lock"))?;
+    let nextest = &lock["tools"]["aqua:nextest-rs/nextest/cargo-nextest"][0];
+    assert_eq!(
+        manifest["nextest_version"].as_str(),
+        nextest["version"].as_str()
+    );
+    for (arch, platform, gh) in [
+        (
+            "x86_64",
+            "linux-x64",
+            velnor_actions_mise::catalog::QUALIFIED_GH_LINUX_AMD64,
+        ),
+        (
+            "aarch64",
+            "linux-arm64",
+            velnor_actions_mise::catalog::QUALIFIED_GH_LINUX_ARM64,
+        ),
+    ] {
+        assert_eq!(manifest["gh_version"].as_str(), Some(gh.version));
+        assert_eq!(manifest[arch]["tool_platform"].as_str(), Some(gh.platform));
+        assert_eq!(manifest[arch]["gh_sha256"].as_str(), Some(gh.sha256));
+        assert_eq!(
+            manifest[arch]["gh_archive_sha256"].as_str(),
+            Some(gh.archive_sha256)
+        );
+        let checksum = format!(
+            "sha256:{}",
+            manifest[arch]["nextest_archive_sha256"]
+                .as_str()
+                .ok_or("missing nextest checksum")?
+        );
+        assert_eq!(
+            nextest[format!("platforms.{platform}")]["checksum"].as_str(),
+            Some(checksum.as_str())
+        );
+    }
+    let image = manifest["image"].as_str().ok_or("missing fixture image")?;
+    assert!(
+        include_str!("../../velnor-actions-workflow-renderer/src/release_rehearsal_metadata.sh")
+            .contains(image)
+    );
+    Ok(())
+}
+
 #[cfg(not(debug_assertions))]
 #[test]
 fn release_consumer_manifest_sentinel_never_bypasses_executable_binding()

@@ -10,8 +10,6 @@ pub(crate) fn write(
     ids: &Identities,
     scenario: Scenario,
 ) -> Result<(), Box<dyn Error>> {
-    let bin = paths.root.join("bin");
-    fs::create_dir_all(&bin)?;
     let state = paths.root.join("provider");
     fs::create_dir_all(&state)?;
     let failure = match scenario {
@@ -38,7 +36,10 @@ pub(crate) fn write(
     write_merge(&state, ids, scenario)?;
     write_lineage(&state, ids)?;
     write_source_trees(&state, ids)?;
-    write_programs(&bin, &state)
+    fs::write(state.join("ref-count"), "0")?;
+    fs::write(state.join("pull-count"), "0")?;
+    fs::write(state.join("requests.log"), "")?;
+    Ok(())
 }
 
 fn write_identity(
@@ -146,23 +147,6 @@ fn write_source_trees(state: &Path, ids: &Identities) -> Result<(), Box<dyn Erro
     Ok(())
 }
 
-fn write_programs(bin: &Path, state: &Path) -> Result<(), Box<dyn Error>> {
-    fs::write(state.join("ref-count"), "0")?;
-    fs::write(state.join("pull-count"), "0")?;
-    fs::write(state.join("requests.log"), "")?;
-    fs::write(
-        bin.join("mise"),
-        MISE.replace(
-            "@VELNOR_GH_SELECTOR@",
-            &format!("gh@{}", velnor_actions_mise::catalog::GH_VERSION),
-        ),
-    )?;
-    fs::write(bin.join("gh"), GH)?;
-    executable(&bin.join("mise"))?;
-    executable(&bin.join("gh"))?;
-    Ok(())
-}
-
 fn refs(sha: &str) -> serde_json::Value {
     serde_json::json!([{"ref":"refs/pull/17/merge","object":{"sha":sha,"type":"commit"}}])
 }
@@ -183,104 +167,3 @@ fn response(state: &Path, name: &str, value: &serde_json::Value) -> Result<(), B
     fs::write(state.join(name), value.to_string())?;
     Ok(())
 }
-
-fn executable(path: &Path) -> Result<(), Box<dyn Error>> {
-    use std::os::unix::fs::PermissionsExt;
-    let mut permissions = fs::metadata(path)?.permissions();
-    permissions.set_mode(0o755);
-    fs::set_permissions(path, permissions)?;
-    Ok(())
-}
-
-const MISE: &str = r#"#!/bin/sh
-printf 'mise argc=%s prefix=%s,%s,%s,%s,%s,%s,%s\n' "$#" "${1-}" "${2-}" "${3-}" "${4-}" "${5-}" "${6-}" "${7-}" >> "$VELNOR_FIXTURE_STATE/requests.log"
-[ "$1" = "--no-config" ] && [ "$2" = "--no-env" ] && [ "$3" = "--no-hooks" ] && [ "$4" = "exec" ] || exit 91
-[ "$5" = "@VELNOR_GH_SELECTOR@" ] && [ "$6" = "--" ] && [ "$7" = "gh" ] || exit 92
-shift 6
-exec "$@"
-"#;
-
-const GH: &str = r#"#!/bin/sh
-printf 'gh argc=%s prefix=%s,%s,%s,%s,%s\n' "$#" "${1-}" "${2-}" "${3-}" "${4-}" "${5-}" >> "$VELNOR_FIXTURE_STATE/requests.log"
-[ "$#" -eq 10 ] || { printf 'gh argument count rejected: %s\n' "$#" >> "$VELNOR_FIXTURE_STATE/requests.log"; exit 82; }
-[ "$1" = "api" ] && [ "$2" = "-H" ] || exit 81
-accept=$3
-case "$accept" in
-  'Accept: application/vnd.github+json'|'Accept: application/vnd.github.sha') ;;
-  *) exit 81 ;;
-esac
-[ "$4" = "-H" ] && [ "$5" = "X-GitHub-Api-Version: 2026-03-10" ] || exit 85
-route=$6
-[ "$7" = "-H" ] && [ "$8" = "Cache-Control: no-cache, no-store" ] || exit 86
-[ "$9" = "-H" ] && [ "${10}" = "Pragma: no-cache" ] || exit 87
-strip_read_nonce() {
-  case "$route" in
-    *\&_velnor_read_nonce=*)
-      nonce=${route##*&_velnor_read_nonce=}
-      case "$nonce" in ''|*[!0123456789abcdef-]*) return 1 ;; esac
-      route=${route%&_velnor_read_nonce=$nonce}
-      ;;
-    *\?_velnor_read_nonce=*)
-      nonce=${route##*\?_velnor_read_nonce=}
-      case "$nonce" in ''|*[!0123456789abcdef-]*) return 1 ;; esac
-      route=${route%\?_velnor_read_nonce=$nonce}
-      ;;
-  esac
-}
-strip_read_nonce || exit 88
-printf 'route=%s\n' "$route" >> "$VELNOR_FIXTURE_STATE/requests.log"
-case "$route" in
-  repos/test-owner/test-tap/commits/$VELNOR_FIXTURE_HEAD) sha=$VELNOR_FIXTURE_HEAD ;;
-  repos/test-owner/test-tap/commits/$VELNOR_FIXTURE_BASE) sha=$VELNOR_FIXTURE_BASE ;;
-  repos/test-owner/test-tap/commits/$VELNOR_FIXTURE_MERGE) sha=$VELNOR_FIXTURE_MERGE ;;
-  *) sha= ;;
-esac
-if [ -n "$sha" ]; then
-  [ "$accept" = "Accept: application/vnd.github.sha" ] || exit 81
-  printf '%s\n' "$sha"
-  exit 0
-fi
-[ "$accept" = "Accept: application/vnd.github+json" ] || exit 81
-if [ "$route" = repos/test-owner/test-tap ]; then
-  case "$(cat "$VELNOR_FIXTURE_STATE/failure")" in
-    http)
-      printf 'gh: diagnostic fixture (HTTP 403)\nfixture-secret-canary https://redirect.invalid/private?credential=fixture-signed-canary\033[31m\n' >&2
-      exit 1
-      ;;
-    stdout) dd if=/dev/zero bs=1048577 count=1 2>/dev/null; exit 0 ;;
-    stderr) dd if=/dev/zero bs=1048577 count=1 1>&2 2>/dev/null; exit 1 ;;
-    deadline) exec /bin/sleep 15 ;;
-  esac
-fi
-case "$route" in
-  repos/test-owner/test-tap) file=repository.json ;;
-  repos/test-owner/test-tap/pulls/17)
-    count=$(cat "$VELNOR_FIXTURE_STATE/pull-count")
-    count=$((count + 1))
-    printf '%s' "$count" > "$VELNOR_FIXTURE_STATE/pull-count"
-    if [ "$(cat "$VELNOR_FIXTURE_STATE/failure")" = merge-api-deadline ] && [ "$count" -ge 2 ]; then exec /bin/sleep 15; fi
-    mode=$(cat "$VELNOR_FIXTURE_STATE/mergeability")
-    file=pull.json
-    if [ "$mode" != pending ] && [ "$mode" != none ] && [ "$count" -ge 3 ]; then file=pull-ready.json; fi
-    ;;
-  repos/test-owner/test-tap/git/matching-refs/pull/17/merge)
-    mode=$(cat "$VELNOR_FIXTURE_STATE/mergeability")
-    pull_count=$(cat "$VELNOR_FIXTURE_STATE/pull-count")
-    if [ "$mode" = false ] || { [ "$mode" != none ] && [ "$pull_count" -lt 3 ]; }; then printf '[]'; exit 0; fi
-    count=$(cat "$VELNOR_FIXTURE_STATE/ref-count")
-    count=$((count + 1))
-    printf '%s' "$count" > "$VELNOR_FIXTURE_STATE/ref-count"
-    if [ "$count" -eq 1 ]; then file=merge-ref-first.json; else file=merge-ref-second.json; fi
-    ;;
-  repos/test-owner/test-tap/git/commits/$VELNOR_FIXTURE_MERGE) file=merge-commit.json ;;
-  repos/test-owner/test-tap/git/commits/$VELNOR_FIXTURE_BASE) file=base-commit.json ;;
-  repos/test-owner/test-tap/git/commits/$VELNOR_FIXTURE_HEAD) file=head-commit.json ;;
-  repos/test-owner/test-tap/git/matching-refs/heads/main) file=main-ref.json ;;
-  repos/test-owner/test-tap/branches/main) file=branch.json ;;
-  repos/test-owner/test-tap/compare/$VELNOR_FIXTURE_BASE...$VELNOR_FIXTURE_HEAD\?per_page=1\&page=2) file=compare.json ;;
-  repos/test-owner/test-tap/git/trees/$VELNOR_FIXTURE_ROOT_TREE) file=root-tree.json ;;
-  repos/test-owner/test-tap/git/trees/$VELNOR_FIXTURE_VELNOR_TREE) file=velnor-tree.json ;;
-  *) printf 'unmapped route=%s\n' "$route" >> "$VELNOR_FIXTURE_STATE/requests.log"; exit 84 ;;
-esac
-cat "$VELNOR_FIXTURE_STATE/$file"
-"#;

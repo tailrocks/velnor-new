@@ -130,6 +130,20 @@ fn sealed_executable(path: &std::path::Path, expected_sha256: &str) -> Result<Fi
     Ok(file)
 }
 
+#[cfg(all(test, target_os = "macos"))]
+#[test]
+fn github_command_rejects_unsupported_platform() {
+    let command = IsolatedCommand {
+        program: "mise".into(),
+        args: Vec::new(),
+        cwd: None,
+        extra_env: Vec::new(),
+        policy: EnvPolicy::GhApi,
+        operator_guarded: false,
+    };
+    assert!(matches!(prepare(&command), Err(error) if error == "verified_gh_unsupported_platform"));
+}
+
 #[cfg(all(
     test,
     target_os = "linux",
