@@ -5,6 +5,65 @@ use std::error::Error;
 
 #[path = "api2026_pull_context_fixture.rs"]
 mod fixture;
+#[path = "api2026_pull_context_fixture/non_inputs.rs"]
+mod reviewed_input_helper;
+
+#[test]
+fn sparse_fixture_rejects_exclusion_overlapping_a_package() -> Result<(), Box<dyn Error>> {
+    let _ = reviewed_input_helper::reviewed_non_inputs()?;
+    let temporary = tempfile::tempdir()?;
+    let clone = temporary.path().join("repo");
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .and_then(std::path::Path::parent)
+        .ok_or("workspace root missing")?;
+    let status = std::process::Command::new("/usr/bin/git")
+        .args(["clone", "--quiet", "--shared"])
+        .arg(root)
+        .arg(&clone)
+        .status()?;
+    assert!(status.success());
+    let status = std::process::Command::new("/usr/bin/git")
+        .current_dir(&clone)
+        .args([
+            "remote",
+            "set-url",
+            "origin",
+            "https://github.com/tailrocks/velnor-new.git",
+        ])
+        .status()?;
+    assert!(status.success());
+    let path = clone.join(".velnor/config.toml");
+    let config = std::fs::read_to_string(&path)?;
+    let invalid = config.replace(
+        "[stacks.rust]\n",
+        "[stacks.rust]\nnon_inputs = [\"crates/**\"]\n",
+    );
+    assert_ne!(config, invalid);
+    std::fs::write(path, invalid)?;
+    let error = reviewed_input_helper::reviewed_non_inputs_from(&clone)
+        .expect_err("package exclusion must be refused");
+    assert!(
+        error
+            .to_string()
+            .contains("non_input_overlaps_claim:package_dir"),
+        "{error}"
+    );
+    Ok(())
+}
+
+#[test]
+fn sparse_source_snapshot_respects_only_reviewed_exclusions() -> Result<(), Box<dyn Error>> {
+    let status = std::process::Command::new("/usr/bin/python3")
+        .arg("-I")
+        .arg(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/api2026_pull_context_fixture/sparse_snapshot_probe.py"
+        ))
+        .status()?;
+    assert!(status.success());
+    Ok(())
+}
 
 #[test]
 fn isolated_source_snapshot_preserves_tracked_inputs_and_rejects_drift()

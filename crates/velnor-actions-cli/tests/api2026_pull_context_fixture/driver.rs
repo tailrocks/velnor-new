@@ -13,6 +13,10 @@ pub(super) fn dispatch(scenario: Scenario) -> Result<(), Box<dyn Error>> {
     let status = Command::new("/usr/bin/python3")
         .arg("-I")
         .arg(script)
+        .env(
+            "VELNOR_FIXTURE_NON_INPUTS",
+            crate::reviewed_input_helper::reviewed_non_inputs()?,
+        )
         .arg("cli")
         .arg(name)
         .arg(if cfg!(debug_assertions) {

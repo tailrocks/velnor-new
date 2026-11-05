@@ -11,6 +11,8 @@ use std::{
 
 use super::{seed_policy, workflow_run_event};
 
+#[path = "api2026_pull_context_fixture/non_inputs.rs"]
+mod non_inputs;
 #[path = "preview_source_selection_fixture/server.rs"]
 mod server;
 
@@ -53,6 +55,10 @@ pub(crate) fn enter(test: &str) -> TestResult<bool> {
     }
     let status = Command::new("/usr/bin/python3")
         .arg("-I")
+        .env(
+            "VELNOR_FIXTURE_NON_INPUTS",
+            non_inputs::reviewed_non_inputs()?,
+        )
         .arg(concat!(
             env!("CARGO_MANIFEST_DIR"),
             "/tests/api2026_pull_context_fixture/driver.py"

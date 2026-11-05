@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{error::Error, process::Command};
+#[path = "../api2026_pull_context_fixture/non_inputs.rs"]
+mod non_inputs;
 
 pub(crate) fn with_test(
     name: &str,
@@ -14,6 +16,10 @@ pub(crate) fn with_test(
     } else {
         let status = Command::new("/usr/bin/python3")
             .arg("-I")
+            .env(
+                "VELNOR_FIXTURE_NON_INPUTS",
+                non_inputs::reviewed_non_inputs()?,
+            )
             .arg(concat!(
                 env!("CARGO_MANIFEST_DIR"),
                 "/tests/api2026_pull_context_fixture/driver.py"

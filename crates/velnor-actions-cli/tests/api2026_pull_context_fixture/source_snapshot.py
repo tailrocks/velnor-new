@@ -4,6 +4,7 @@
 import hashlib
 import os
 import pathlib
+import re
 import stat
 import subprocess
 from collections import deque
@@ -29,16 +30,83 @@ def git_output(args, env):
     return data
 
 
-def git_inputs(root):
+def nul_records(data):
+    if not data:
+        return []
+    if not data.endswith(b"\0"):
+        raise RuntimeError("truncated fixture Git output")
+    records = data[:-1].split(b"\0")
+    if any(not record for record in records):
+        raise RuntimeError("invalid fixture Git output")
+    return records
+
+
+def git_inputs(root, patterns=()):
     env = {"PATH": "/usr/bin:/bin", "HOME": str(pathlib.Path.home()), "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": "/dev/null", "GIT_OPTIONAL_LOCKS": "0"}
-    base = ["/usr/bin/git", "-C", str(root), "ls-files", "-z"]
+    base = ["/usr/bin/git", "-c", "core.ignorecase=false", "-c", "core.fsmonitor=false", "-C", str(root), "ls-files", "-z"]
     tracked = git_output(base + ["--cached", "--stage"], env)
     if git_output(base + ["--others", "--exclude-standard"], env):
         raise RuntimeError("untracked workspace files prevent a complete fixture snapshot")
-    entries = list(filter(None, tracked.split(b"\0")))
+    entries = nul_records(tracked)
     if len(entries) > MAX_ENTRIES:
         raise RuntimeError("too many tracked fixture inputs")
-    return sorted(entries, key=lambda item: item.split(b"\t", 1)[1])
+    names = []
+    for item in entries:
+        metadata, separator, name = item.partition(b"\t")
+        fields = metadata.split(b" ")
+        if (not separator or len(fields) != 3 or fields[2] != b"0"
+                or not name or any(part in (b"", b".", b"..") for part in name.split(b"/"))):
+            raise RuntimeError("invalid tracked fixture input")
+        names.append(name)
+    if len(set(names)) != len(names):
+        raise RuntimeError("duplicate tracked fixture input")
+    flags = nul_records(git_output(base + ["-t", "--cached"], env))
+    states = {}
+    for item in flags:
+        if len(item) < 3 or item[1:2] != b" " or item[:1] not in (b"H", b"S") or item[2:] in states:
+            raise RuntimeError("invalid fixture index flags")
+        states[item[2:]] = item[:1]
+    if set(states) != set(names):
+        raise RuntimeError("fixture index changed during enumeration")
+    if len(set(patterns)) != len(patterns) or any(not isinstance(p, str) or not re.fullmatch(r"(?:[A-Za-z0-9._-]+|\*)(?:/(?:[A-Za-z0-9._-]+|\*))*/\*\*", p) or any(set(s) == {"."} for s in p[:-3].split("/")) for p in patterns):
+        raise RuntimeError("invalid reviewed fixture exclusions")
+    excluded = set()
+    if patterns:
+        matches = nul_records(git_output(base + ["--cached", "--", *[":(glob)" + p for p in patterns]], env))
+        excluded = set(matches)
+        if len(matches) != len(excluded) or not excluded.issubset(states):
+            raise RuntimeError("invalid fixture exclusion inventory")
+    result = []
+    for entry, name in zip(entries, names):
+        skip = states[name] == b"S"
+        if skip and name not in excluded:
+            raise RuntimeError("fixture skip-worktree is outside reviewed exclusions")
+        if skip:
+            if not excluded_absent(root, name):
+                raise RuntimeError("reviewed fixture exclusion is present")
+        else:
+            result.append(entry)
+    return sorted(result, key=lambda item: item.split(b"\t", 1)[1])
+
+
+def excluded_absent(root, name):
+    current = os.open(root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        parts = name.split(b"/")
+        for part in parts[:-1]:
+            try:
+                child = os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=current)
+            except FileNotFoundError:
+                return True
+            os.close(current)
+            current = child
+        try:
+            os.stat(parts[-1], dir_fd=current, follow_symlinks=False)
+        except FileNotFoundError:
+            return True
+        return False
+    finally:
+        os.close(current)
 
 
 def read_link(root, name):
@@ -80,8 +148,6 @@ def check_gitlink(root, name):
 def directories(entries):
     result = set()
     for name, record in entries.items():
-        if record[1] == b"missing":
-            continue
         parts = name.split(b"/")
         result.update(b"/".join(parts[:i]) for i in range(1, len(parts)))
         if record[1] == b"gitlink":
@@ -153,10 +219,10 @@ def check_links(entries, dirs):
         raise RuntimeError("cyclic fixture directory links")
 
 
-def collect(root, destination, read_tracked):
+def collect(root, destination, read_tracked, patterns=()):
     result = {}
     total = 0
-    for entry in git_inputs(root):
+    for entry in git_inputs(root, patterns):
         metadata, name = entry.split(b"\t", 1)
         mode, oid, stage = metadata.split(b" ")
         if stage != b"0" or any(part in (b"", b".", b"..") for part in name.split(b"/")):
@@ -168,8 +234,8 @@ def collect(root, destination, read_tracked):
         if mode == b"120000":
             try:
                 target = read_link(root, name)
-            except FileNotFoundError:
-                result[name] = (mode, b"missing", 0, 0, b"")
+            except FileNotFoundError as error:
+                raise RuntimeError("tracked fixture link is missing") from error
             else:
                 result[name] = (mode, b"link", 0, len(target), target)
             continue
@@ -177,9 +243,8 @@ def collect(root, destination, read_tracked):
             raise RuntimeError("unsupported tracked fixture input")
         try:
             data, file_mode = read_tracked(root, name)
-        except FileNotFoundError:
-            result[name] = (mode, b"missing", 0, 0, b"")
-            continue
+        except FileNotFoundError as error:
+            raise RuntimeError("tracked fixture input is missing") from error
         total += len(data)
         if total > MAX_TOTAL:
             raise RuntimeError("fixture workspace exceeds snapshot bound")

@@ -127,8 +127,8 @@ def fingerprint(entries, arch, profile, target_name, dependency_digest):
     return digest.hexdigest()
 
 
-def verify_sources(root, snapshot, entries):
-    if source_snapshot.collect(root, None, read_tracked) != entries:
+def verify_sources(root, snapshot, entries, patterns=()):
+    if source_snapshot.collect(root, None, read_tracked, patterns) != entries:
         raise RuntimeError("fixture tracked sources changed")
     source_snapshot.verify_snapshot(snapshot, entries, read_tracked)
 
@@ -167,6 +167,9 @@ def main():
     if len(sys.argv) != 4 or sys.argv[3] not in ("debug", "release"):
         raise RuntimeError("invalid isolated fixture invocation")
     kind, test, profile = sys.argv[1:]
+    patterns = json.loads(os.environ["VELNOR_FIXTURE_NON_INPUTS"])
+    if not isinstance(patterns, list) or len(patterns) > 1024:
+        raise RuntimeError("invalid reviewed fixture exclusions")
     targets = {
         "cli": ("velnor-actions-cli", "api2026_pull_context_public"),
         "task_report": ("velnor-actions-orchestrator", "task_report_public"),
@@ -215,8 +218,8 @@ def main():
         install_tool(source_tools / f"gh_{gh_platform}", tools / f"mise/installs/gh/{gh_version}/gh_{gh_version}_{gh_platform}/bin/gh", gh_digest)
         install_tool(source_tools / f"cargo-nextest_{gh_platform}", tools / "cargo-nextest", nextest_digest)
         verify_image(client, docker_env, IMAGE)
-        entries = source_snapshot.collect(root, snapshot, read_tracked)
-        verify_sources(root, snapshot, entries)
+        entries = source_snapshot.collect(root, snapshot, read_tracked, patterns)
+        verify_sources(root, snapshot, entries, patterns)
         metadata_target = cache / "metadata"; checked_directory(metadata_target)
         metadata_docker = docker_base(client, snapshot, metadata_target, tools, registry, image_platform)
         triple = "x86_64-unknown-linux-gnu" if arch == "x86_64" else "aarch64-unknown-linux-gnu"
@@ -237,12 +240,12 @@ def main():
             release = "--release" if profile == "release" else ""
             build = f'''set -eu; export HOME=/tmp PATH=/tools:/usr/local/cargo/bin:/usr/bin:/bin RUSTUP_TOOLCHAIN=1.99.1-{triple} CARGO_TARGET_DIR=/target CARGO_NET_OFFLINE=true; cargo metadata --locked --offline --all-features --filter-platform {triple} --format-version 1 > /target/fixture-cargo.tmp; /tools/cargo-nextest nextest list --locked --offline -p {package} --test {test_target} {release} --list-type binaries-only --message-format json > /target/fixture-binaries.tmp; mv /target/fixture-cargo.tmp /target/fixture-cargo.json; mv /target/fixture-binaries.tmp /target/fixture-binaries.json'''
             command(docker[:-1] + ["--user", f"{os.getuid()}:{os.getgid()}", IMAGE, "sh", "-c", build], env=docker_env)
-            verify_sources(root, snapshot, entries)
+            verify_sources(root, snapshot, entries, patterns)
             if fingerprint(entries, arch, profile, kind, registry_fingerprint(packages, registry)) != key:
                 binary_meta.unlink(missing_ok=True); cargo_meta.unlink(missing_ok=True)
                 raise RuntimeError("fixture sources changed during isolated build")
             (target / "fixture-key").write_text(key)
-        verify_sources(root, snapshot, entries)
+        verify_sources(root, snapshot, entries, patterns)
         if read_regular(target / "fixture-key", 64).decode() != key:
             raise RuntimeError("fixture cache identity mismatch")
         fcntl.flock(lock, fcntl.LOCK_UN)
@@ -256,7 +259,7 @@ def main():
                 raise RuntimeError("fixture worker success receipt does not match scenario")
         finally:
             receipt.unlink(missing_ok=True)
-        verify_sources(root, snapshot, entries)
+        verify_sources(root, snapshot, entries, patterns)
         if fingerprint(entries, arch, profile, kind, registry_fingerprint(packages, registry)) != key:
             raise RuntimeError("fixture sources changed during isolated execution")
     finally:
