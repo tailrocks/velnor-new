@@ -201,7 +201,7 @@ fn deadline_stops_a_stalled_response_body() {
     });
     let client = GitHubAdmissionHttp {
         token: TOKEN.to_owned(),
-        deadline: Instant::now() + Duration::from_secs(2),
+        timeout: Duration::from_secs(2),
         origin: format!("http://{address}"),
         responses: std::cell::RefCell::default(),
     };

@@ -324,7 +324,7 @@ fn post_deadline_bounds_stalled_response() {
     });
     let client = GitHubAdmissionHttp {
         token: TOKEN.to_owned(),
-        deadline: Instant::now() + Duration::from_secs(2),
+        timeout: Duration::from_secs(2),
         origin: format!("http://{address}"),
         responses: std::cell::RefCell::default(),
     };
@@ -338,4 +338,15 @@ fn post_deadline_bounds_stalled_response() {
             .is_err()
     );
     worker.join().expect("server");
+}
+
+#[test]
+fn aged_client_gets_fresh_bounded_request() -> Result<(), Box<dyn std::error::Error>> {
+    let (origin, worker) = server(vec![reply("200 OK", r#"{"ok":true}"#)]);
+    let mut client = client(origin);
+    client.timeout = Duration::from_secs(1);
+    std::thread::sleep(Duration::from_millis(1100));
+    assert_eq!(client.get("repos/acme/repo")?["ok"], true);
+    worker.join().map_err(|_| "server")?;
+    Ok(())
 }

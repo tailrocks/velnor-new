@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -60,9 +60,9 @@ impl std::fmt::Debug for NativeGitHubAdmissionRead {
 impl NativeGitHubAdmissionRead {
     pub fn new(token: String) -> Result<Self, OrchestratorError> {
         require(!token.is_empty(), "github_token_missing")?;
-        let deadline = Instant::now() + Duration::from_secs(180);
+        let timeout = Duration::from_secs(180);
         Ok(Self {
-            reader: crate::crate_release_http::GitHubAdmissionHttp::new(token, deadline)?,
+            reader: crate::crate_release_http::GitHubAdmissionHttp::new(token, timeout)?,
         })
     }
 }

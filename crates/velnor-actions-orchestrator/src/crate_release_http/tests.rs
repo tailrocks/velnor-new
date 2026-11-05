@@ -78,7 +78,7 @@ pub(super) fn reply(status: &str, body: &str) -> String {
 pub(super) fn client(origin: String) -> GitHubAdmissionHttp {
     GitHubAdmissionHttp {
         token: TOKEN.to_owned(),
-        deadline: Instant::now() + Duration::from_secs(5),
+        timeout: Duration::from_secs(5),
         origin,
         responses: std::cell::RefCell::default(),
     }

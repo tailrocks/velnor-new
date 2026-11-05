@@ -13,7 +13,7 @@ impl GitHubAdmissionHttp {
             repository,
             job_id,
             &self.token,
-            self.deadline,
+            std::time::Instant::now() + self.timeout,
         )
     }
 
@@ -30,7 +30,7 @@ impl GitHubAdmissionHttp {
             expected_size,
             expected_sha256,
             &self.token,
-            self.deadline,
+            std::time::Instant::now() + self.timeout,
         )
     }
 }

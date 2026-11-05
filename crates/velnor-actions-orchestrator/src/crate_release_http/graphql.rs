@@ -50,9 +50,8 @@ impl GitHubAdmissionHttp {
         {
             return Err(internal("qualification_graphql_input"));
         }
-        let remaining = self
-            .deadline
-            .saturating_duration_since(std::time::Instant::now());
+        let deadline = std::time::Instant::now() + self.timeout;
+        let remaining = deadline.saturating_duration_since(std::time::Instant::now());
         if remaining.is_zero() {
             return Err(internal("qualification_graphql_deadline"));
         }
@@ -76,7 +75,7 @@ impl GitHubAdmissionHttp {
         if response.status().as_u16() != 200 {
             return Err(internal("qualification_graphql_status"));
         }
-        let value = parse_json(response, self.deadline, JSON_LIMIT)?;
+        let value = parse_json(response, deadline, JSON_LIMIT)?;
         if value.get("errors").is_some() {
             return Err(internal("qualification_graphql_errors"));
         }

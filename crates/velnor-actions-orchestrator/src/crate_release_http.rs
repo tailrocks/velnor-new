@@ -33,7 +33,7 @@ struct ValidatedResponse {
 
 pub struct GitHubAdmissionHttp {
     token: String,
-    deadline: Instant,
+    timeout: std::time::Duration,
     origin: String,
     responses: RefCell<BTreeMap<(String, u64), ValidatedResponse>>,
 }
@@ -64,8 +64,11 @@ fn rehearsal_transport_error(error: &ureq::Error) -> OrchestratorError {
 }
 
 impl GitHubAdmissionHttp {
-    pub fn new(token: String, deadline: Instant) -> Result<Self, OrchestratorError> {
-        if token.is_empty() || token.bytes().any(|byte| byte.is_ascii_control()) {
+    pub fn new(token: String, timeout: std::time::Duration) -> Result<Self, OrchestratorError> {
+        if token.is_empty()
+            || timeout.is_zero()
+            || token.bytes().any(|byte| byte.is_ascii_control())
+        {
             return Err(internal("crate_release_http_token"));
         }
         #[cfg(test)]
@@ -75,7 +78,7 @@ impl GitHubAdmissionHttp {
         let origin = "https://api.github.com".to_owned();
         Ok(Self {
             token,
-            deadline,
+            timeout,
             origin,
             responses: RefCell::new(BTreeMap::new()),
         })
@@ -85,7 +88,7 @@ impl GitHubAdmissionHttp {
     pub(crate) fn test_client(origin: &str) -> Result<Self, OrchestratorError> {
         Ok(Self {
             token: "test-credential".to_owned(),
-            deadline: Instant::now() + std::time::Duration::from_secs(15),
+            timeout: std::time::Duration::from_secs(15),
             origin: parse_test_loopback_origin(origin)?,
             responses: RefCell::new(BTreeMap::new()),
         })
@@ -154,7 +157,8 @@ impl GitHubAdmissionHttp {
         if !valid_post_route(route) {
             return Err(internal("crate_release_http_route"));
         }
-        let remaining = self.deadline.saturating_duration_since(Instant::now());
+        let deadline = Instant::now() + self.timeout;
+        let remaining = deadline.saturating_duration_since(Instant::now());
         if remaining.is_zero() {
             return Err(internal("crate_release_http_deadline"));
         }
@@ -178,7 +182,7 @@ impl GitHubAdmissionHttp {
         if response.status().as_u16() != 201 {
             return Err(internal("crate_release_http_write_status"));
         }
-        parse_json(response, self.deadline, JSON_LIMIT)
+        parse_json(response, deadline, JSON_LIMIT)
     }
 
     fn request(&self, route: &str, optional: bool) -> Result<Option<Value>, OrchestratorError> {
@@ -194,7 +198,8 @@ impl GitHubAdmissionHttp {
         if !valid_route(route) {
             return Err(internal("crate_release_http_route"));
         }
-        let remaining = self.deadline.saturating_duration_since(Instant::now());
+        let deadline = Instant::now() + self.timeout;
+        let remaining = deadline.saturating_duration_since(Instant::now());
         if remaining.is_zero() {
             return Err(internal("crate_release_http_deadline"));
         }
@@ -240,7 +245,7 @@ impl GitHubAdmissionHttp {
                     .headers()
                     .get("etag")
                     .is_some_and(|etag| etag.to_str().ok() != Some(entry.etag.as_str()))
-                || Instant::now() >= self.deadline
+                || Instant::now() >= deadline
             {
                 self.responses.borrow_mut().remove(&key);
                 return Err(internal("crate_release_http_response"));
@@ -255,7 +260,7 @@ impl GitHubAdmissionHttp {
             return Err(internal("crate_release_http_response"));
         }
         let etag = response_etag(response.headers());
-        let body = parse_json(response, self.deadline, limit)?;
+        let body = parse_json(response, deadline, limit)?;
         if let Some(etag) = etag {
             let small = serde_json::to_vec(&body)
                 .is_ok_and(|bytes| bytes.len() <= MAX_VALIDATED_RESPONSE_BYTES);
