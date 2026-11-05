@@ -67,8 +67,11 @@ fn checkout_never_forwards_credentials_to_redirected_origin()
             "owner/demo",
             &"a".repeat(40),
             DUMMY,
-            &origin,
-            true
+            CheckoutContext {
+                origin: &origin,
+                test_http: true,
+                deadline: velnor_actions_mise::CheckDeadline::after(Duration::from_secs(30))?
+            }
         )
         .is_err()
     );
@@ -123,6 +126,7 @@ fn checkout_git_runs_only_the_supplied_tool_and_exec_path() -> Result<(), Box<dy
         None,
         "https://github.com",
         false,
+        velnor_actions_mise::CheckDeadline::after(Duration::from_secs(30))?,
     )?;
     assert_eq!(output, root.to_string_lossy());
     assert!(tool.verified.get());

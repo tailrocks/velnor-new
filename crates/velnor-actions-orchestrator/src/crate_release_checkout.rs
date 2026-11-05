@@ -84,9 +84,22 @@ pub fn checkout_from_environment(mode: &str) -> Result<(), OrchestratorError> {
         &repository,
         &sha,
         &token,
-        "https://github.com",
-        false,
+        CheckoutContext {
+            origin: "https://github.com",
+            test_http: false,
+            deadline: velnor_actions_mise::CheckDeadline::after(std::time::Duration::from_secs(
+                600,
+            ))
+            .map_err(|_| invalid())?,
+        },
     )
+}
+
+#[derive(Clone, Copy)]
+struct CheckoutContext<'a> {
+    origin: &'a str,
+    test_http: bool,
+    deadline: velnor_actions_mise::CheckDeadline,
 }
 
 fn checkout(
@@ -95,9 +108,13 @@ fn checkout(
     repository: &str,
     sha: &str,
     token: &str,
-    origin: &str,
-    test_http: bool,
+    context: CheckoutContext<'_>,
 ) -> Result<(), OrchestratorError> {
+    let CheckoutContext {
+        origin,
+        test_http,
+        deadline,
+    } = context;
     let invalid = || internal("release_checkout_invalid");
     let (owner, name) = repository.split_once('/').ok_or_else(invalid)?;
     if !velnor_actions_contract::config::is_valid_github_owner(owner)
@@ -127,6 +144,7 @@ fn checkout(
         None,
         origin,
         test_http,
+        deadline,
     )?;
     git(
         git_tool,
@@ -140,6 +158,7 @@ fn checkout(
         None,
         origin,
         test_http,
+        deadline,
     )?;
     git(
         git_tool,
@@ -156,6 +175,7 @@ fn checkout(
         Some(token),
         origin,
         test_http,
+        deadline,
     )?;
     git(
         git_tool,
@@ -169,6 +189,7 @@ fn checkout(
         None,
         origin,
         test_http,
+        deadline,
     )?;
     if git(
         git_tool,
@@ -177,6 +198,7 @@ fn checkout(
         None,
         origin,
         test_http,
+        deadline,
     )?
     .trim()
         != sha
@@ -191,6 +213,7 @@ fn checkout(
             None,
             origin,
             test_http,
+            deadline,
         )?
         .is_empty()
         || git(
@@ -200,6 +223,7 @@ fn checkout(
             None,
             origin,
             test_http,
+            deadline,
         )?
         .trim()
             != "false"
@@ -216,6 +240,7 @@ fn git(
     token: Option<&str>,
     origin: &str,
     test_http: bool,
+    deadline: velnor_actions_mise::CheckDeadline,
 ) -> Result<String, OrchestratorError> {
     let invalid = || internal("release_checkout_git_failed");
     let mut options = vec![
@@ -263,8 +288,21 @@ fn git(
             .env(format!("GIT_CONFIG_KEY_{index}"), key)
             .env(format!("GIT_CONFIG_VALUE_{index}"), value);
     }
-    let output = command.output().map_err(|_| invalid())?;
-    if !output.status.success() || output.stdout.len() > 1024 * 1024 {
+    let result = velnor_actions_mise::command::run_prepared_quiescent_until(
+        &mut command,
+        1024 * 1024,
+        deadline,
+    );
+    let verified = git_tool.verify();
+    let (output, _drained) = result.map_err(|error| {
+        if velnor_actions_mise::command::is_cleanup_failure(&error) {
+            internal("release_checkout_cleanup_uncertain")
+        } else {
+            invalid()
+        }
+    })?;
+    verified?;
+    if !output.success {
         return Err(invalid());
     }
     String::from_utf8(output.stdout).map_err(|_| invalid())

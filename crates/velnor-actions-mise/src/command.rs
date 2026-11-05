@@ -37,6 +37,7 @@ mod stream;
 mod tofu;
 #[path = "command_verified_gh.rs"]
 mod verified_gh;
+pub use cancellable::run_prepared_quiescent_until;
 pub use check::resolve_program as resolve_check_program;
 pub use crate_publish::CratePublishCredential;
 pub use credential::is_safe_credential_value;
