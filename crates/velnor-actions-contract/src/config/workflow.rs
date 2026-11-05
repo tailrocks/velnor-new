@@ -230,7 +230,7 @@ impl WorkflowConfig {
         }
         self.verify.validate(file)?;
         self.dispatch.validate(file)?;
-        validate_preserve_workflows(&self.preserve_workflows, file)?;
+        validate_preserve_workflows(&self.preserve_workflows, self.policy, file)?;
         Ok(())
     }
 

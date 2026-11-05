@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 
 use tempfile::TempDir;
 use velnor_actions_contract::{
-    RESERVED_SUITE_WORKFLOW_SLUGS, RustSuiteConfig, validate_preserve_workflows,
+    RESERVED_SUITE_WORKFLOW_SLUGS, RustSuiteConfig, WorkflowPolicy, validate_preserve_workflows,
     validate_rust_suites,
 };
 use velnor_actions_orchestrator::{GenerateOptions, generate, prepare, render_staged_tree};
@@ -107,9 +107,12 @@ fn generator_release_owns_source_qualification_lifecycle() -> Result<(), Box<dyn
 
 #[test]
 fn source_qualification_reservations_reject_collisions_and_allow_unrelated_entries() {
-    let preserve_error =
-        validate_preserve_workflows(&[WORKFLOW_PATH.to_owned()], ".velnor/config.toml")
-            .expect_err("generator-owned workflow must reject preserve_workflows collision");
+    let preserve_error = validate_preserve_workflows(
+        &[WORKFLOW_PATH.to_owned()],
+        WorkflowPolicy::VelnorRepositoryV1,
+        ".velnor/config.toml",
+    )
+    .expect_err("generator-owned workflow must reject preserve_workflows collision");
     assert!(
         preserve_error
             .to_string()
@@ -117,6 +120,7 @@ fn source_qualification_reservations_reject_collisions_and_allow_unrelated_entri
     );
     validate_preserve_workflows(
         &[".github/workflows/project-checks.yml".to_owned()],
+        WorkflowPolicy::VelnorRepositoryV1,
         ".velnor/config.toml",
     )
     .expect("unrelated workflow may remain preserved");

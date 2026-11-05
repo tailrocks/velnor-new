@@ -14,7 +14,7 @@ use super::rust_suites::{
     MAX_SUITE_TEST_THREADS, RESERVED_SUITE_IDS, RESERVED_SUITE_WORKFLOW_SLUGS, RustSuiteArtifact,
     RustSuiteConfig, RustSuiteTrigger, WorkflowDispatchConfig, WorkflowDispatchInputType,
 };
-use super::workflow::RUNNER_LABEL_CATALOG;
+use super::workflow::{RUNNER_LABEL_CATALOG, WorkflowPolicy};
 use rules::{
     is_valid_ascii_ident_with_hyphen, is_valid_dispatch_input_name, is_valid_workflow_slug,
     validate_dispatch_input, validate_suite_artifact, validate_suite_filters_and_dispatch,
@@ -177,7 +177,18 @@ impl WorkflowDispatchConfig {
     }
 }
 
-pub fn validate_preserve_workflows(entries: &[String], file: &str) -> Result<(), ContractError> {
+pub fn validate_preserve_workflows(
+    entries: &[String],
+    policy: WorkflowPolicy,
+    file: &str,
+) -> Result<(), ContractError> {
+    if policy == WorkflowPolicy::ConsumerV1 && !entries.is_empty() {
+        return Err(cfg_err(
+            file,
+            "workflow.preserve_workflows",
+            "preserve_workflows_not_allowed_under_consumer_v1",
+        ));
+    }
     let mut seen = BTreeSet::new();
     for entry in entries {
         let Some(filename) = entry.strip_prefix(".github/workflows/") else {

@@ -266,7 +266,11 @@ generated marker. Those paths are replaced when emitted and retired when a
 successful generation no longer emits them. The workflows namespace is fully
 generator-owned; manually maintained workflows placed there are retired unless
 explicitly allowlisted in `[workflow] preserve_workflows = [".github/workflows/<slug>.yml"]`.
-Each `preserve_workflows` entry MUST be an exact `.github/workflows/<slug>.yml`
+`consumer-v1` rejects a non-empty `preserve_workflows`
+(`preserve_workflows_not_allowed_under_consumer_v1`): every workflow of a
+consumer is generator output, so the `Check generated files` diff covers the
+whole namespace and no hand-owned workflow can hide from it. Under
+`velnor-repository-v1`, each `preserve_workflows` entry MUST be an exact `.github/workflows/<slug>.yml`
 path with a lowercase ASCII slug (`[a-z0-9][a-z0-9_-]*`), no duplicates, and
 MUST NOT name a generator-owned workflow (`ci.yml`, `freshness.yml`,
 `release.yml`, `publish.yml`, `binary-release.yml`, `binary-preview.yml`,
@@ -309,7 +313,7 @@ allow = [".github/CODEOWNERS", ".github/ISSUE_TEMPLATE"]
   with `contract: unmanaged_github_entries:<path>,...`, so the drift step fails.
 - Each `allow` entry MUST be a normalized path starting with `.github/`, without
   empty, `.` or `..` segments or backslashes, without duplicates, and not under
-  `.github/workflows/` (use `preserve_workflows`). It exempts that exact path and
+  `.github/workflows/` (only `velnor-repository-v1` may use `preserve_workflows`). It exempts that exact path and
   everything below it when it names a directory.
 - `velnor-actions unmanaged` prints the same list, one path per line on stdout,
   after applying both allowlists. It never writes, lists regardless of the
