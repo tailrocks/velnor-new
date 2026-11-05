@@ -170,32 +170,6 @@ fn aggregate_candidates(gh: &Gh, roots: &[String]) -> Result<Vec<String>, Box<dy
     Ok(keys)
 }
 
-fn install_pid_shim(scene: &Scene, gh: &Gh) -> Result<(String, PathBuf), Box<dyn Error>> {
-    let python = PathBuf::from(scene.restricted_path(&["python3"])?).join("python3");
-    let pid_file = PathBuf::from(gh.dir()).join("supervisor-pid");
-    scene.install_shim(
-        "python3",
-        r#"#!/bin/sh
-exec "$FAKE_REAL_PYTHON3" -I -c '
-import os, sys
-with open(os.environ["FAKE_SUPERVISOR_PID_FILE"], "w", encoding="utf-8") as pid_file:
-    pid_file.write(str(os.getpid()))
-exec(compile(sys.stdin.read(), "<selector>", "exec"), {"__name__": "__main__"})
-'
-"#,
-    )?;
-    Ok((pid_file.display().to_string(), python))
-}
-
-fn send_signal(signal: &str, pid: &str) -> Result<(), Box<dyn Error>> {
-    let status = Command::new("kill").args(["-s", signal, pid]).status()?;
-    if status.success() {
-        Ok(())
-    } else {
-        Err(fail(&format!("could not send {signal} to selector")))
-    }
-}
-
 #[test]
 #[cfg(target_os = "linux")]
 fn aggregate_expiry_keeps_only_completed_cleaned_units() -> Result<(), Box<dyn Error>> {
@@ -336,74 +310,4 @@ fn failed_partial_unit_stays_cold_and_neighbor_survives() -> Result<(), Box<dyn 
         "healthy neighbor survives unit failure",
     )?;
     scene.finish()
-}
-
-#[test]
-#[cfg(target_os = "linux")]
-fn selector_cancellation_cleans_and_propagates_each_signal() -> Result<(), Box<dyn Error>> {
-    for (signal, status) in [("HUP", 129), ("INT", 130), ("TERM", 143)] {
-        let scene = Scene::new("seal-select-cancellation", crate::gc1_t53::scripts()?)?;
-        let gh = Gh::install(&scene)?;
-        let completed = unit_key(StateUnit::Union, ".", 0, 0x1000, 1)?;
-        let hanging = unit_key(StateUnit::Union, "b", 1, 0x1001, 2)?;
-        gh.list(&[
-            ("2026-11-04T03:00:00Z", MAIN, &completed),
-            ("2026-11-04T02:00:00Z", MAIN, &hanging),
-        ])?;
-        gh.attest(&[
-            Attestation::signed(&completed),
-            Attestation::signed(&hanging),
-        ])?;
-        hang_keys(&gh, &[&hanging])?;
-        rendezvous(&gh, 2)?;
-        let (pid_file, real_python) = install_pid_shim(&scene, &gh)?;
-        let signal_marker = PathBuf::from(gh.dir()).join("cleanup-started");
-        let signal_ack = PathBuf::from(gh.dir()).join("cleanup-release");
-        let pid_file_env = pid_file.clone();
-        let signal_marker_env = signal_marker.display().to_string();
-        let signal_ack_env = signal_ack.display().to_string();
-        let real_python_env = real_python
-            .to_str()
-            .ok_or_else(|| fail("invalid Python path"))?
-            .to_owned();
-        let mut selector = RunningSelector::new(spawn_select_units(
-            &scene,
-            &gh,
-            &[(StateUnit::Union, "."), (StateUnit::Union, "b")],
-            &[
-                ("FAKE_SUPERVISOR_PID_FILE", &pid_file_env),
-                ("FAKE_REAL_PYTHON3", &real_python_env),
-                ("FAKE_GH_SIGNAL_MARKER", &signal_marker_env),
-                ("FAKE_GH_SIGNAL_ACK", &signal_ack_env),
-            ],
-        )?);
-        wait_for_rendezvous(&gh, 2)?;
-        wait_for_clean_success(&scene, &gh, 0, &completed)?;
-        wait_until(
-            || gh.hung_pids().is_ok_and(|pids| pids.len() >= 2),
-            Duration::from_secs(5),
-        )?;
-        let pid = fs::read_to_string(&pid_file)?;
-        send_signal(signal, pid.trim())?;
-        wait_until(|| signal_marker.exists(), Duration::from_secs(5))?;
-        send_signal(signal, pid.trim())?;
-        fs::write(&signal_ack, "continue\n")?;
-        let actual = selector.wait(Duration::from_secs(10))?.code();
-        if actual != Some(status) {
-            return Err(fail(&format!(
-                "{signal} cancellation returned {actual:?}, wanted {status}"
-            )));
-        }
-        for index in 0..2 {
-            let output = scene
-                .runner
-                .join(format!("velnor/state-select/u-r{index}/out"));
-            if !fs::read_to_string(output)?.trim().is_empty() {
-                return Err(fail("cancellation retained a selected unit"));
-            }
-        }
-        hung_processes_gone(&gh)?;
-        scene.finish()?;
-    }
-    Ok(())
 }

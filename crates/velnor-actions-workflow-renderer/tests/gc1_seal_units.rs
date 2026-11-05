@@ -53,8 +53,8 @@ def monotonic():
                 pass
     return real_monotonic() + elapsed[0]
 time.monotonic = monotonic
-exec(compile(sys.stdin.read(), "<selector>", "exec"), {"__name__": "__main__"})
-'
+exec(compile(sys.argv[1], "<selector>", "exec"), {"__name__": "__main__"})
+' "$3"
 "#,
         )?;
         Ok(Self {
@@ -240,7 +240,7 @@ pub(crate) fn run_select_units(
 ) -> Result<String, Box<dyn Error>> {
     let (script, env) = select_script_env(scene, gh, units, extra)?;
     let pairs: Vec<(&str, &str)> = env.iter().map(|(k, v)| (k.as_str(), v.as_str())).collect();
-    scene.run_script(&script, &pairs, None)
+    scene.run_runner_script(&runner_step_body(&script), &pairs)
 }
 
 #[cfg(target_os = "linux")]
@@ -252,7 +252,11 @@ pub(crate) fn spawn_select_units(
 ) -> Result<Child, Box<dyn Error>> {
     let (script, env) = select_script_env(scene, gh, units, extra)?;
     let pairs: Vec<(&str, &str)> = env.iter().map(|(k, v)| (k.as_str(), v.as_str())).collect();
-    scene.spawn_script(&script, &pairs)
+    scene.spawn_runner_script(&runner_step_body(&script), &pairs)
+}
+
+fn runner_step_body(script: &str) -> String {
+    format!("exec sh -c '{}'", script.replace('\'', "'\\''"))
 }
 
 fn select_script_env(

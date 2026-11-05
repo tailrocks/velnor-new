@@ -436,6 +436,18 @@ also permits a five-minute cancellation grace before server-forced termination.
 These mechanisms cannot substantiate a claim that all processes disappear
 exactly 300 seconds after job start.
 
+For shell steps, the pinned runner at commit
+[`cf65f3ec8100ee0046d735ac5d647e00f4b8e817`](https://github.com/actions/runner/commit/cf65f3ec8100ee0046d735ac5d647e00f4b8e817)
+sets `killProcessOnCancel` to `false` in
+[`ScriptHandler.cs`](https://github.com/actions/runner/blob/cf65f3ec8100ee0046d735ac5d647e00f4b8e817/src/Runner.Worker/Handlers/ScriptHandler.cs#L339-L349).
+[`ProcessInvoker.cs`](https://github.com/actions/runner/blob/cf65f3ec8100ee0046d735ac5d647e00f4b8e817/src/Runner.Sdk/ProcessInvoker.cs#L443-L481)
+sends SIGINT and SIGTERM to the step process, and its signal path calls
+`kill` with that process ID ([lines 829–845](https://github.com/actions/runner/blob/cf65f3ec8100ee0046d735ac5d647e00f4b8e817/src/Runner.Sdk/ProcessInvoker.cs#L829-L845)).
+Its signal windows are 7.5 seconds and 2.5 seconds ([lines 32–33](https://github.com/actions/runner/blob/cf65f3ec8100ee0046d735ac5d647e00f4b8e817/src/Runner.Sdk/ProcessInvoker.cs#L32-L33)).
+The runner does not establish process-group cleanup for a shell step. A
+supervisor that owns child groups must therefore remain the foreground step
+process and clean those groups after it receives cancellation.
+
 Native producer execution therefore needs its own monotonic deadline shared
 across preparation, acquisition, probes, task execution, and output admission,
 with process-group termination and bounded reaping reserved within that budget.
