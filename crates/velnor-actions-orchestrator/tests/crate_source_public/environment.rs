@@ -16,9 +16,11 @@ fn metadata_subprocess_drops_ambient_cargo_overrides() -> Result<(), Box<dyn std
         ("linux", "x86_64") => "x86_64-unknown-linux-gnu",
         _ => return Ok(()),
     };
-    let real_bin = home.join(format!("toolchains/1.97.1-{target}/bin"));
+    let catalog = velnor_actions_mise::ToolCatalog::pinned();
+    let rust = catalog.version(velnor_actions_mise::PinnedTool::Rust);
+    let real_bin = home.join(format!("toolchains/{rust}-{target}/bin"));
     let fake_home = root.join("rustup");
-    let fake_bin = fake_home.join(format!("toolchains/1.97.1-{target}/bin"));
+    let fake_bin = fake_home.join(format!("toolchains/{rust}-{target}/bin"));
     let fake_mise = root.join("mise-bin");
     fs::create_dir_all(&fake_bin)?;
     fs::create_dir_all(&fake_mise)?;
