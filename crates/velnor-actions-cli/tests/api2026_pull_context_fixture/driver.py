@@ -171,11 +171,12 @@ def main():
         "cli": ("velnor-actions-cli", "api2026_pull_context_public"),
         "task_report": ("velnor-actions-orchestrator", "task_report_public"),
         "preview": ("velnor-actions-cli", "preview_source_selection_public"),
+        "review": ("velnor-actions-cli", "review_completion_public"),
     }
     if kind not in targets or (kind == "task_report" and test != "shared_job_artifact_is_downloaded_once") or (kind == "preview" and test != "public_preview_selection_uses_sha_media_and_preserves_parent_proofs") or (kind == "cli" and test in ("shared_job_artifact_is_downloaded_once", "public_preview_selection_uses_sha_media_and_preserves_parent_proofs")):
         raise RuntimeError("fixture scenario does not belong to target")
     package, test_target = targets[kind]
-    if not test or any(c not in "abcdefghijklmnopqrstuvwxyz_" for c in test):
+    if not re.fullmatch(r"[a-z_]+(?:::[a-z_]+)*", test):
         raise RuntimeError("invalid isolated fixture scenario")
     machine = platform.machine().lower()
     arch = {"arm64":"aarch64", "aarch64":"aarch64", "x86_64":"x86_64", "amd64":"x86_64"}.get(machine)

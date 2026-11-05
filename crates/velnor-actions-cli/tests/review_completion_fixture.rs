@@ -6,10 +6,15 @@ use serde_json::{Value, json};
 use std::{
     error::Error,
     fs, io,
-    os::unix::fs::PermissionsExt,
     path::{Path, PathBuf},
     process::{Command, Output},
 };
+
+#[path = "review_completion_fixture/dispatch.rs"]
+mod dispatch;
+#[path = "review_completion_fixture/server.rs"]
+mod server;
+pub(crate) use dispatch::with_test;
 
 #[path = "review_completion_fixture/comment_editor.rs"]
 mod comment_editor;
@@ -26,6 +31,7 @@ const BASE: &str = "921858f118256e16d3dc312c407814ab0fd8ef52";
 const SONAR: &str = "## [![Quality Gate Passed](https://sonarsource.github.io/sonarcloud-github-static-resources/v2/checks/QualityGateBadge/qg-passed-20px.png 'Quality Gate Passed')](https://sonarcloud.io/dashboard?id=jackin-project_homebrew-tap&pullRequest=514) **Quality Gate passed**  \nIssues  \n![](https://sonarsource.github.io/sonarcloud-github-static-resources/v2/common/passed-16px.png '') [0 New issues](https://sonarcloud.io/project/issues?id=jackin-project_homebrew-tap&pullRequest=514&issueStatuses=OPEN,CONFIRMED&sinceLeakPeriod=true)  \n![](https://sonarsource.github.io/sonarcloud-github-static-resources/v2/common/accepted-16px.png '') [0 Accepted issues](https://sonarcloud.io/project/issues?id=jackin-project_homebrew-tap&pullRequest=514&issueStatuses=ACCEPTED)\n\nMeasures  \n![](https://sonarsource.github.io/sonarcloud-github-static-resources/v2/common/passed-16px.png '') [0 Security Hotspots](https://sonarcloud.io/project/security_hotspots?id=jackin-project_homebrew-tap&pullRequest=514&issueStatuses=OPEN,CONFIRMED&sinceLeakPeriod=true)  \n![](https://sonarsource.github.io/sonarcloud-github-static-resources/v2/common/passed-16px.png '') [0.0% Coverage on New Code](https://sonarcloud.io/component_measures?id=jackin-project_homebrew-tap&pullRequest=514&metric=new_coverage&view=list)  \n![](https://sonarsource.github.io/sonarcloud-github-static-resources/v2/common/passed-16px.png '') [0.0% Duplication on New Code](https://sonarcloud.io/component_measures?id=jackin-project_homebrew-tap&pullRequest=514&metric=new_duplicated_lines_density&view=list)  \n  \n<!-- sqra-placement-anchor -->\n[See analysis details on SonarQube Cloud](https://sonarcloud.io/dashboard?id=jackin-project_homebrew-tap&pullRequest=514)\n\n";
 
 struct Fixture {
+    _server: server::Server,
     _temp: tempfile::TempDir,
     root: PathBuf,
     home: PathBuf,
@@ -49,8 +55,7 @@ impl Fixture {
         fs::create_dir_all(&bin)?;
         fs::create_dir_all(runner.join("velnor"))?;
         write_fixture(&state, scenario)?;
-        write_executable(&bin.join("mise"), MISE)?;
-        write_executable(&bin.join("gh"), GH)?;
+        let server = server::start(&root, &home)?;
         let event = root.join("event.json");
         let value = json!({
             "action":event_action(scenario),
@@ -64,6 +69,7 @@ impl Fixture {
         let policy = runner.join("velnor/review-completion-policy.json");
         fs::write(&policy, br#"{"check_name":"Review completion","default_branch":"main","provider":"codex-v1","repository":"jackin-project/homebrew-tap","schema":"velnor.review-completion-policy.v1"}"#)?;
         Ok(Self {
+            _server: server,
             _temp: temp,
             root,
             home,
@@ -82,6 +88,7 @@ impl Fixture {
             .env_clear()
             .env("PATH", &self.path)
             .env("HOME", &self.home)
+            .env("MISE_DATA_DIR", "/tools/mise")
             .env("TMPDIR", &self.root)
             .env("RUNNER_TEMP", &self.runner)
             .env("GITHUB_OUTPUT", &self.output)
@@ -349,13 +356,6 @@ fn put_json(path: &Path, name: &str, value: &Value) -> Result<(), Box<dyn Error>
     Ok(())
 }
 
-fn write_executable(path: &Path, contents: &str) -> Result<(), io::Error> {
-    fs::write(path, contents)?;
-    let mut permissions = fs::metadata(path)?.permissions();
-    permissions.set_mode(0o755);
-    fs::set_permissions(path, permissions)
-}
-
 fn assert_success(output: &Output, label: &str) -> Result<(), io::Error> {
     if !output.status.success() {
         return Err(io::Error::other(format!(
@@ -376,13 +376,3 @@ fn assert_transport_clean(state: &Path) -> Result<(), io::Error> {
     }
     Ok(())
 }
-
-const MISE: &str = r#"#!/bin/sh
-[ "$1" = "--no-config" ] && [ "$2" = "--no-env" ] && [ "$3" = "--no-hooks" ] && [ "$4" = "exec" ] || exit 91
-case "$5" in gh@*) ;; *) exit 92 ;; esac
-[ "$6" = "--" ] && [ "$7" = "gh" ] || exit 93
-shift 6
-exec "$@"
-"#;
-
-const GH: &str = include_str!("review_completion_fixture/gh_transport.sh");

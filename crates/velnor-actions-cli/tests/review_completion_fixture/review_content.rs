@@ -208,35 +208,45 @@ fn thread_expanded(scenario: Scenario, review_id: u64) -> Value {
 
 #[test]
 fn codex_review_authenticates_canonical_full_database_id() -> Result<(), Box<dyn Error>> {
-    super::run(super::super::Scenario::ReviewFullDatabaseId, true, "ready")?;
-    super::run(
-        super::super::Scenario::ReviewMismatchedFullDatabaseId,
-        false,
-        "blocked",
+    crate::fixture::with_test(
+        "fixture::review_content::codex_review_authenticates_canonical_full_database_id",
+        || {
+            super::run(super::super::Scenario::ReviewFullDatabaseId, true, "ready")?;
+            super::run(
+                super::super::Scenario::ReviewMismatchedFullDatabaseId,
+                false,
+                "blocked",
+            )
+        },
     )
 }
 
 #[test]
 fn inline_review_comment_binds_canonical_ids_to_its_review() -> Result<(), Box<dyn Error>> {
-    for (scenario, success, state) in [
-        (super::super::Scenario::InlineFullDatabaseId, true, "ready"),
-        (
-            super::super::Scenario::InlineMismatchedParent,
-            false,
-            "blocked",
-        ),
-        (
-            super::super::Scenario::InlineNonCanonicalId,
-            false,
-            "blocked",
-        ),
-        (
-            super::super::Scenario::InlineDuplicateBijection,
-            false,
-            "blocked",
-        ),
-    ] {
-        super::run(scenario, success, state)?;
-    }
-    Ok(())
+    crate::fixture::with_test(
+        "fixture::review_content::inline_review_comment_binds_canonical_ids_to_its_review",
+        || {
+            for (scenario, success, state) in [
+                (super::super::Scenario::InlineFullDatabaseId, true, "ready"),
+                (
+                    super::super::Scenario::InlineMismatchedParent,
+                    false,
+                    "blocked",
+                ),
+                (
+                    super::super::Scenario::InlineNonCanonicalId,
+                    false,
+                    "blocked",
+                ),
+                (
+                    super::super::Scenario::InlineDuplicateBijection,
+                    false,
+                    "blocked",
+                ),
+            ] {
+                super::run(scenario, success, state)?;
+            }
+            Ok(())
+        },
+    )
 }
