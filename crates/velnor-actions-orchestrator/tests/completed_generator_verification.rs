@@ -213,7 +213,7 @@ fn render_pins() -> Result<velnor_actions_workflow_renderer::ProductReleasePins,
     .into_iter()
     .map(|value| value.into_string().map_err(|_| "nonutf8 gh argument"))
     .collect::<Result<Vec<_>, _>>()?;
-    pins.gh_version = velnor_actions_mise::catalog::GH_VERSION.to_owned();
+    velnor_actions_mise::catalog::GH_VERSION.clone_into(&mut pins.gh_version);
     pins.verify_rust_argv = verify_rust_argv(&catalog);
     pins.verify_lint_argv = jactionlint_verifier_argv(&catalog);
     Ok(pins)
