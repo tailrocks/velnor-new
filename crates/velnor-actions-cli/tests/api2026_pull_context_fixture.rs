@@ -8,8 +8,8 @@ use std::{
     process::{Command, Output},
 };
 
-use sha2::{Digest, Sha256};
 use tempfile::TempDir;
+use worker::sha256;
 
 #[path = "api2026_pull_context_fixture/driver.rs"]
 mod driver;
@@ -19,6 +19,8 @@ mod git;
 mod provider;
 #[path = "api2026_pull_context_fixture/server.rs"]
 mod server;
+#[path = "api2026_pull_context_fixture/worker.rs"]
+mod worker;
 
 #[derive(Clone, Copy)]
 pub(crate) enum Scenario {
@@ -274,6 +276,7 @@ fn pass_worker_environment(command: &mut Command) -> Result<(), Box<dyn Error>> 
     for key in [
         "VELNOR_GH_FIXTURE_WORKER",
         "VELNOR_GH_FIXTURE_SCENARIO",
+        "VELNOR_GH_FIXTURE_TARGET",
         "VELNOR_GH_FIXTURE_CACHE_KEY",
         "VELNOR_GH_FIXTURE_ARCH",
         "VELNOR_GH_TEST_TLS_ROOT",
@@ -312,16 +315,6 @@ pub(crate) fn deadline_child() -> Result<bool, Box<dyn Error>> {
     });
     assert!(expired.is_err(), "public operation deadline did not expire");
     Ok(true)
-}
-
-fn sha256(bytes: &[u8]) -> String {
-    const HEX: &[u8; 16] = b"0123456789abcdef";
-    let mut text = String::with_capacity(64);
-    for byte in Sha256::digest(bytes) {
-        text.push(char::from(HEX[usize::from(byte >> 4)]));
-        text.push(char::from(HEX[usize::from(byte & 0x0f)]));
-    }
-    text
 }
 
 fn expected_error(scenario: Scenario, stderr: &str, expected: &str) -> bool {

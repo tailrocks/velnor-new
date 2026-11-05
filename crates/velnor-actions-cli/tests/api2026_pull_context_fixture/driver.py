@@ -119,7 +119,7 @@ def dependency_packages(metadata):
     return packages
 
 
-def fingerprint(root, arch, profile, dependency_digest):
+def fingerprint(root, arch, profile, target_name, dependency_digest):
     git_env = {"PATH": "/usr/bin:/bin", "HOME": str(pathlib.Path.home()), "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": "/dev/null", "GIT_OPTIONAL_LOCKS": "0"}
     tracked = subprocess.check_output(["/usr/bin/git", "-C", str(root), "ls-files", "-z", "--cached", "--stage"], env=git_env)
     other = subprocess.check_output(["/usr/bin/git", "-C", str(root), "ls-files", "-z", "--others", "--exclude-standard"], env=git_env)
@@ -129,7 +129,7 @@ def fingerprint(root, arch, profile, dependency_digest):
     if ignored:
         raise RuntimeError("ignored workspace files outside the Cargo target directory prevent a complete fixture fingerprint")
     digest = hashlib.sha256()
-    digest.update(("velnor-gh-fixture-v1\0" + arch + "\0" + profile + "\0" + IMAGE + "\0").encode())
+    digest.update(("velnor-gh-fixture-v1\0" + arch + "\0" + profile + "\0" + target_name + "\0" + IMAGE + "\0").encode())
     digest.update(dependency_digest)
     total = 0
     for entry in sorted(filter(None, tracked.split(b"\0")), key=lambda value: value.split(b"\t", 1)[1]):
@@ -190,9 +190,16 @@ def docker_base(client, root, target, tools, registry, image_platform):
 
 
 def main():
-    if len(sys.argv) != 3 or sys.argv[2] not in ("debug", "release"):
+    if len(sys.argv) != 4 or sys.argv[3] not in ("debug", "release"):
         raise RuntimeError("invalid isolated fixture invocation")
-    test, profile = sys.argv[1:]
+    kind, test, profile = sys.argv[1:]
+    targets = {
+        "cli": ("velnor-actions-cli", "api2026_pull_context_public"),
+        "task_report": ("velnor-actions-orchestrator", "task_report_public"),
+    }
+    if kind not in targets or (kind == "task_report" and test != "shared_job_artifact_is_downloaded_once") or (kind == "cli" and test == "shared_job_artifact_is_downloaded_once"):
+        raise RuntimeError("fixture scenario does not belong to target")
+    package, test_target = targets[kind]
     if not test or any(c not in "abcdefghijklmnopqrstuvwxyz_" for c in test):
         raise RuntimeError("invalid isolated fixture scenario")
     machine = platform.machine().lower()
@@ -242,15 +249,15 @@ def main():
             raise RuntimeError("fixture dependency metadata exceeds its bound")
         packages = dependency_packages(json.loads(metadata_bytes))
         dependency_digest = registry_fingerprint(packages, registry)
-        key = fingerprint(root, arch, profile, dependency_digest)
+        key = fingerprint(root, arch, profile, kind, dependency_digest)
         target = cache / key; checked_directory(target)
         docker = docker_base(client, root, target, tools, registry, image_platform)
         binary_meta = target / "fixture-binaries.json"; cargo_meta = target / "fixture-cargo.json"
         if not binary_meta.is_file() or not cargo_meta.is_file():
             release = "--release" if profile == "release" else ""
-            build = f'''set -eu; export HOME=/tmp PATH=/tools:/usr/local/cargo/bin:/usr/bin:/bin RUSTUP_TOOLCHAIN=1.99.1-{triple} CARGO_TARGET_DIR=/target CARGO_NET_OFFLINE=true; cargo metadata --locked --offline --all-features --filter-platform {triple} --format-version 1 > /target/fixture-cargo.tmp; /tools/cargo-nextest nextest list --locked --offline -p velnor-actions-cli --test api2026_pull_context_public {release} --list-type binaries-only --message-format json > /target/fixture-binaries.tmp; mv /target/fixture-cargo.tmp /target/fixture-cargo.json; mv /target/fixture-binaries.tmp /target/fixture-binaries.json'''
+            build = f'''set -eu; export HOME=/tmp PATH=/tools:/usr/local/cargo/bin:/usr/bin:/bin RUSTUP_TOOLCHAIN=1.99.1-{triple} CARGO_TARGET_DIR=/target CARGO_NET_OFFLINE=true; cargo metadata --locked --offline --all-features --filter-platform {triple} --format-version 1 > /target/fixture-cargo.tmp; /tools/cargo-nextest nextest list --locked --offline -p {package} --test {test_target} {release} --list-type binaries-only --message-format json > /target/fixture-binaries.tmp; mv /target/fixture-cargo.tmp /target/fixture-cargo.json; mv /target/fixture-binaries.tmp /target/fixture-binaries.json'''
             command(docker[:-1] + ["--user", f"{os.getuid()}:{os.getgid()}", IMAGE, "sh", "-c", build], env=docker_env)
-            if fingerprint(root, arch, profile, registry_fingerprint(packages, registry)) != key:
+            if fingerprint(root, arch, profile, kind, registry_fingerprint(packages, registry)) != key:
                 binary_meta.unlink(missing_ok=True); cargo_meta.unlink(missing_ok=True)
                 raise RuntimeError("fixture sources changed during isolated build")
             (target / "fixture-key").write_text(key)
@@ -259,15 +266,15 @@ def main():
         fcntl.flock(lock, fcntl.LOCK_UN)
         nonce = secrets.token_hex(32)
         receipt = target / f"receipt-{nonce}"
-        script = f'''set -eu; mkdir /tmp/fixture-tls /tmp/fixture-home; openssl req -x509 -newkey rsa:2048 -nodes -keyout /tmp/fixture-tls/key.pem -out /tmp/fixture-tls/cert.pem -days 1 -subj /CN=api.github.com -addext subjectAltName=DNS:api.github.com >/dev/null 2>&1; cat /tmp/fixture-tls/cert.pem >> /etc/ssl/certs/ca-certificates.crt; chown -R {os.getuid()}:{os.getgid()} /tmp/fixture-tls /tmp/fixture-home; exec setpriv --reuid={os.getuid()} --regid={os.getgid()} --clear-groups /bin/sh -c 'export HOME=/tmp/fixture-home PATH=/tools:/usr/local/cargo/bin:/usr/bin:/bin MISE_DATA_DIR=/tools/mise VELNOR_GH_TEST_TLS_ROOT=/tmp/fixture-tls VELNOR_GH_FIXTURE_WORKER=container-v1 VELNOR_GH_FIXTURE_SCENARIO="$FIXTURE_SCENARIO" VELNOR_GH_FIXTURE_CACHE_KEY="$FIXTURE_KEY" VELNOR_GH_FIXTURE_ARCH="$FIXTURE_ARCH" VELNOR_GH_FIXTURE_NONCE="$FIXTURE_NONCE"; exec /tools/cargo-nextest nextest run --cargo-metadata /target/fixture-cargo.json --binaries-metadata /target/fixture-binaries.json -E "test(=$FIXTURE_SCENARIO)" --no-tests fail' '''
-        env_args = ["-e", f"FIXTURE_SCENARIO={test}", "-e", f"FIXTURE_KEY={key}", "-e", f"FIXTURE_ARCH={arch}", "-e", f"FIXTURE_NONCE={nonce}"]
+        script = f'''set -eu; mkdir /tmp/fixture-tls /tmp/fixture-home; openssl req -x509 -newkey rsa:2048 -nodes -keyout /tmp/fixture-tls/key.pem -out /tmp/fixture-tls/cert.pem -days 1 -subj /CN=api.github.com -addext subjectAltName=DNS:api.github.com >/dev/null 2>&1; cat /tmp/fixture-tls/cert.pem >> /etc/ssl/certs/ca-certificates.crt; chown -R {os.getuid()}:{os.getgid()} /tmp/fixture-tls /tmp/fixture-home; exec setpriv --reuid={os.getuid()} --regid={os.getgid()} --clear-groups /bin/sh -c 'export HOME=/tmp/fixture-home PATH=/tools:/usr/local/cargo/bin:/usr/bin:/bin MISE_DATA_DIR=/tools/mise VELNOR_GH_TEST_TLS_ROOT=/tmp/fixture-tls VELNOR_GH_FIXTURE_WORKER=container-v1 VELNOR_GH_FIXTURE_SCENARIO="$FIXTURE_SCENARIO" VELNOR_GH_FIXTURE_TARGET="$FIXTURE_TARGET" VELNOR_GH_FIXTURE_CACHE_KEY="$FIXTURE_KEY" VELNOR_GH_FIXTURE_ARCH="$FIXTURE_ARCH" VELNOR_GH_FIXTURE_NONCE="$FIXTURE_NONCE"; exec /tools/cargo-nextest nextest run --cargo-metadata /target/fixture-cargo.json --binaries-metadata /target/fixture-binaries.json -E "test(=$FIXTURE_SCENARIO)" --no-tests fail' '''
+        env_args = ["-e", f"FIXTURE_SCENARIO={test}", "-e", f"FIXTURE_TARGET={kind}", "-e", f"FIXTURE_KEY={key}", "-e", f"FIXTURE_ARCH={arch}", "-e", f"FIXTURE_NONCE={nonce}"]
         try:
             command(docker[:-1] + env_args + [IMAGE, "sh", "-c", script], env=docker_env)
-            if read_regular(receipt, 256).decode() != f"{nonce}\n{test}\n":
+            if read_regular(receipt, 256).decode() != f"{nonce}\n{kind}\n{test}\n":
                 raise RuntimeError("fixture worker success receipt does not match scenario")
         finally:
             receipt.unlink(missing_ok=True)
-        if fingerprint(root, arch, profile, registry_fingerprint(packages, registry)) != key:
+        if fingerprint(root, arch, profile, kind, registry_fingerprint(packages, registry)) != key:
             raise RuntimeError("fixture sources changed during isolated execution")
     finally:
         os.close(lock)
