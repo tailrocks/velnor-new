@@ -16,6 +16,7 @@ import sys
 import tempfile
 
 sys.dont_write_bytecode = True
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from docker_host import docker_environment, local_daemon, trusted_docker, verify_image
 
 MANIFEST = json.loads(pathlib.Path(__file__).with_name("tools.json").read_text())
@@ -119,11 +120,12 @@ def dependency_packages(metadata):
 
 
 def fingerprint(root, arch, profile, dependency_digest):
-    tracked = subprocess.check_output(["git", "-C", str(root), "ls-files", "-z", "--cached", "--stage"])
-    other = subprocess.check_output(["git", "-C", str(root), "ls-files", "-z", "--others", "--exclude-standard"])
+    git_env = {"PATH": "/usr/bin:/bin", "HOME": str(pathlib.Path.home()), "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": "/dev/null", "GIT_OPTIONAL_LOCKS": "0"}
+    tracked = subprocess.check_output(["/usr/bin/git", "-C", str(root), "ls-files", "-z", "--cached", "--stage"], env=git_env)
+    other = subprocess.check_output(["/usr/bin/git", "-C", str(root), "ls-files", "-z", "--others", "--exclude-standard"], env=git_env)
     if other:
         raise RuntimeError("untracked workspace files prevent a complete fixture fingerprint; stage or remove them")
-    ignored = subprocess.check_output(["git", "-C", str(root), "ls-files", "-z", "--others", "--ignored", "--exclude-standard", "--directory", "--", ".", ":(exclude)target", ":(exclude)target/**"])
+    ignored = subprocess.check_output(["/usr/bin/git", "-C", str(root), "ls-files", "-z", "--others", "--ignored", "--exclude-standard", "--directory", "--", ".", ":(exclude)target", ":(exclude)target/**"], env=git_env)
     if ignored:
         raise RuntimeError("ignored workspace files outside the Cargo target directory prevent a complete fixture fingerprint")
     digest = hashlib.sha256()

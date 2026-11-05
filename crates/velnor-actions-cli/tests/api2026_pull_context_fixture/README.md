@@ -1,7 +1,7 @@
 # Isolated GitHub CLI fixture
 
-These tests require Docker, the image and Linux executables pinned in `tools.json`,
-and an offline Cargo registry. CI prepares the tools under
+These tests require `/usr/bin/python3`, `/usr/bin/git`, Docker, the image and
+Linux executables pinned in `tools.json`, and an offline Cargo registry. CI prepares the tools under
 `$RUNNER_TEMP/velnor-gh-fixture-tools`. Local runs can set
 `VELNOR_GH_FIXTURE_TOOLS` to an absolute directory containing the matching
 `gh_linux_amd64` or `gh_linux_arm64` and `cargo-nextest_linux_amd64` or

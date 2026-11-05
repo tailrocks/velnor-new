@@ -10,7 +10,8 @@ pub(super) fn dispatch(scenario: Scenario) -> Result<(), Box<dyn Error>> {
         env!("CARGO_MANIFEST_DIR"),
         "/tests/api2026_pull_context_fixture/driver.py"
     );
-    let status = Command::new("python3")
+    let status = Command::new("/usr/bin/python3")
+        .arg("-I")
         .arg(script)
         .arg(name)
         .arg(if cfg!(debug_assertions) {
