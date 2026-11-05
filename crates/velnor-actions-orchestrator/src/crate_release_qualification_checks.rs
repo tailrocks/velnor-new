@@ -30,12 +30,13 @@ fn complete_check_runs(
             .as_u64()
             .filter(|v| *v <= 10_000)
             .ok_or_else(invalid)?;
+        let total_usize = usize::try_from(total).map_err(|_| invalid())?;
         if expected.is_some_and(|previous| previous != total) {
             return Err(invalid());
         }
         expected = Some(total);
         let checks = result["check_runs"].as_array().ok_or_else(invalid)?;
-        if checks.len() > 100 || (checks.is_empty() && values.len() < total as usize) {
+        if checks.len() > 100 || (checks.is_empty() && values.len() < total_usize) {
             return Err(invalid());
         }
         for check in checks {
@@ -48,10 +49,10 @@ fn complete_check_runs(
             }
             values.push(check.clone());
         }
-        if values.len() == total as usize {
+        if values.len() == total_usize {
             return Ok(values);
         }
-        if values.len() > total as usize {
+        if values.len() > total_usize {
             return Err(invalid());
         }
     }
