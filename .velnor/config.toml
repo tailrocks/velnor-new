@@ -183,6 +183,20 @@ label = "ubuntu-26.04"
 platform = "linux_x64"
 executor = "hosted"
 
+[[checks]]
+id = "hosted-budget-containment"
+task = "test-hosted-budget-containment"
+inputs = [".velnor/config.toml", "mise.toml", "crates/velnor-actions-workflow-renderer/tests/release_budget_systemd_fixture.py"]
+tools = []
+timeout_minutes = 5
+[checks.evidence]
+path = ".velnor/hosted-budget-evidence.json"
+expected_scenarios = ["cancellation", "no-credential-exposure", "orphan", "timeout", "ubuntu-24.04"]
+[checks.runner]
+label = "ubuntu-24.04"
+platform = "linux_x64"
+executor = "hosted"
+
 [[qualified_tools]]
 id = "cargo-nextest"
 backend = { kind = "aqua", package = "nextest-rs/nextest/cargo-nextest" }

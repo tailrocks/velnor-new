@@ -71,3 +71,7 @@ for package in velnor-actions-freshness velnor-archive-guard; do
   esac
 done
 '''
+
+[tasks.test-hosted-budget-containment]
+description = "Verify hosted release budget isolation and cleanup"
+run = "python3 -I crates/velnor-actions-workflow-renderer/tests/release_budget_systemd_fixture.py"
