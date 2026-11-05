@@ -3,7 +3,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use velnor_actions_contract::{ScheduleTrigger, is_valid_branch_name};
+use velnor_actions_contract::is_valid_branch_name;
 
 use crate::{RenderError, steps::scan_for_private_subcommands};
 
@@ -66,13 +66,14 @@ impl DispatchInput {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ReleaseTriggers {
     pub push_branches: Vec<String>,
-    pub schedule: Option<ScheduleTrigger>,
     pub dispatch_inputs: Vec<DispatchInput>,
 }
 
 impl ReleaseTriggers {
     pub fn validate(&self, plan: &ReleasePlan) -> Result<(), RenderError> {
-        if self.push_branches.len() != 1 {
+        if (plan.dispatch && !self.push_branches.is_empty())
+            || (!plan.dispatch && self.push_branches.len() != 1)
+        {
             return Err(RenderError::InvalidWorkflow(
                 "release_requires_one_default_branch".to_owned(),
             ));
@@ -84,9 +85,6 @@ impl ReleaseTriggers {
                 )));
             }
             scan_for_private_subcommands(branch)?;
-        }
-        if let Some(schedule) = &self.schedule {
-            schedule.validate().map_err(RenderError::Contract)?;
         }
         self.check_dispatch_binding(plan)
     }
@@ -181,12 +179,7 @@ impl ReleasePlan {
 }
 
 #[must_use]
-pub fn publish_gate_condition(
-    repository: &str,
-    branch: &str,
-    plan: &ReleasePlan,
-    allow_push: bool,
-) -> String {
+pub fn publish_gate_condition(repository: &str, branch: &str, plan: &ReleasePlan) -> String {
     let event = format!("github.event_name == 'push' && github.ref == 'refs/heads/{branch}'");
     let event = if plan.dispatch {
         let mut dispatch = format!(
@@ -198,11 +191,7 @@ pub fn publish_gate_condition(
             dispatch.push_str(version);
             dispatch.push('\'');
         }
-        if allow_push {
-            format!("({event} || ({dispatch}))")
-        } else {
-            dispatch
-        }
+        dispatch
     } else {
         event
     };

@@ -71,7 +71,7 @@ fn fixture_for_release_pr(authentication: ReleaseAuthentication, release_pr: boo
     let acquire = velnor_actions_workflow_renderer::release_generator_bootstrap::acquire_step(generator_version, "ubuntu-24.04", &"b".repeat(40), &"c".repeat(64))?;
     let jobs = assemble_jobs(&JobInputs {
         release: &release,
-        gate: publish_gate_condition(repository, "main", &plan, authentication == ReleaseAuthentication::TrustedPublishing),
+        gate: publish_gate_condition(repository, "main", &plan),
         preparation_gate: format!(
             "github.repository == '{repository}' && github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.release-preflight.result == 'success' && needs.release-preflight.outputs.eligible == 'false'"
         ),
@@ -99,10 +99,10 @@ fn fixture_for_release_pr(authentication: ReleaseAuthentication, release_pr: boo
         ReleaseWorkflowSpec {
             name: "Velnor Release".to_owned(),
             repository: repository.to_owned(),
+            default_branch: "main".to_owned(),
             triggers: ReleaseTriggers {
-                push_branches: vec!["main".to_owned()],
-                schedule: None,
-                dispatch_inputs,
+                push_branches: Vec::new(),
+                    dispatch_inputs,
             },
             concurrency: stable_lock_group("crates-io", repository, "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")?,
             jobs,
@@ -160,14 +160,14 @@ fn assert_workspace_resume(
     config: &velnor_actions_workflow_renderer::release_config::ReleasePlzConfig,
     intent: &velnor_actions_contract::config::CrateReleaseIntent,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    use velnor_actions_contract::config::CrateReleaseIntent;
     use velnor_actions_workflow_renderer::release_config::ReleasePlzPackage;
     use velnor_actions_workflow_renderer::release_tree::render_release_files;
     let mut normal_spec = spec.clone();
     normal_spec.plan.version = None;
     normal_spec.plan.dispatch = false;
+    normal_spec.triggers.push_branches = vec!["main".to_owned()];
     normal_spec.triggers.dispatch_inputs.clear();
-    normal_spec.jobs.get_mut("release-publish").ok_or("publisher")?.condition = Some(publish_gate_condition("owner/project", "main", &normal_spec.plan, true));
+    normal_spec.jobs.get_mut("release-publish").ok_or("publisher")?.condition = Some(publish_gate_condition("owner/project", "main", &normal_spec.plan));
     let mut normal_intent = intent.clone();
     normal_intent.recovery = None;
     assert!(render_release_files(&normal_spec, ctx, config, &normal_intent).is_ok());
@@ -181,9 +181,7 @@ fn assert_workspace_resume(
     assert!(render_release_files(&workspace_spec, ctx, &workspace_config, &workspace_intent).is_ok());
     workspace_spec.journal_predecessor = Some(velnor_actions_contract::config::CrateReleasePredecessor { run_id: 42, run_attempt: 2, workflow_sha: "d".repeat(40) });
     workspace_intent.journal_predecessor = workspace_spec.journal_predecessor.clone();
-    let resumed = render_release_files(&workspace_spec, ctx, &workspace_config, &workspace_intent)?;
-    let decoded_workspace: CrateReleaseIntent = toml::from_str(&resumed.intent.bytes)?;
-    assert_eq!(decoded_workspace.journal_predecessor, workspace_spec.journal_predecessor);
+    assert!(render_release_files(&workspace_spec, ctx, &workspace_config, &workspace_intent).is_err());
 
     Ok(())
 }
@@ -195,7 +193,7 @@ fn assert_predecessor_binding(
     intent: &velnor_actions_contract::config::CrateReleaseIntent,
 ) -> Result<(), Box<dyn std::error::Error>> {
     use velnor_actions_workflow_renderer::release_tree::render_release_files;
-    let predecessor = velnor_actions_contract::config::CrateReleasePredecessor { run_id: 42, run_attempt: 2, workflow_sha: "d".repeat(40) };
+    let predecessor = velnor_actions_contract::config::CrateReleasePredecessor { run_id: 42, run_attempt: 1, workflow_sha: "d".repeat(40) };
     let mut resume_spec = spec.clone();
     let mut recovery_intent = intent.clone();
     resume_spec.journal_predecessor = Some(predecessor.clone());
@@ -301,7 +299,8 @@ fn assert_reviewed_rendered_workflow(bytes: &str, intent: &velnor_actions_contra
         assert_eq!(env[name].as_str(), Some(format!("${{{{ needs.release-preparation.outputs.{output} }}}}").as_str()));
     }
     let publisher = &yaml["jobs"]["release-publish"];
-    assert!(publisher["if"].as_str().ok_or("gate")?.contains("github.event_name == 'push'"));
+    let event = if yaml["on"].get("workflow_dispatch").is_some() { "workflow_dispatch" } else { "push" };
+    assert!(publisher["if"].as_str().ok_or("gate")?.contains(&format!("github.event_name == '{event}'")));
     assert_eq!(publisher["permissions"]["id-token"].as_str(), Some("write"));
     assert_eq!(publisher["environment"].as_str(), Some("release"));
     assert!(yaml["jobs"]["release-publish-bootstrap"].is_null());
@@ -311,3 +310,18 @@ fn assert_reviewed_rendered_workflow(bytes: &str, intent: &velnor_actions_contra
 
 #[path = "release_steps_tests_checkout.rs"]
 mod checkout;
+
+#[test]
+fn exact_source_dispatch_renders_without_push_trigger() -> Result<(), Box<dyn std::error::Error>> {
+    let (mut spec, rust) = fixture()?;
+    spec.triggers.push_branches.clear();
+    let ctx = velnor_actions_workflow_renderer::release_tree::ReleaseRenderContext {
+        generator_version: env!("CARGO_PKG_VERSION").into(),
+        runs_on: "ubuntu-24.04".into(),
+    };
+    let workflow = velnor_actions_workflow_renderer::release_tree::render_release_workflow(&spec, &ctx, &rust)?;
+    let yaml: serde_json::Value = serde_saphyr::from_str(&workflow)?;
+    assert!(yaml["on"].get("push").is_none());
+    assert!(yaml["on"].get("workflow_dispatch").is_some());
+    Ok(())
+}

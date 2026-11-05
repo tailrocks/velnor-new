@@ -48,7 +48,7 @@ fn rendered_workflow_has_one_hosted_environment_publisher() -> Result<(), Box<dy
     assert_eq!(publisher.needs, ["release-preflight"]);
     assert_eq!(publisher.permissions.id_token, PermissionLevel::Write);
     assert_eq!(publisher.permissions.contents, PermissionLevel::Write);
-    assert_eq!(publisher.condition.as_deref(), Some(publish_gate_condition("owner/project", "main", &spec.plan, true).as_str()));
+    assert_eq!(publisher.condition.as_deref(), Some(publish_gate_condition("owner/project", "main", &spec.plan).as_str()));
     let position = |name: &str| publisher.steps.iter().position(|step| step.name == name);
     let source = position("Release source-require").ok_or("source admission")?;
     let verified = position("Release verify-admission").ok_or("verify admission")?;

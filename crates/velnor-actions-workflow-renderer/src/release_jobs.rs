@@ -180,6 +180,7 @@ impl ReleaseJobSpec {
 pub struct ReleaseWorkflowSpec {
     pub name: String,
     pub repository: String,
+    pub default_branch: String,
     pub triggers: ReleaseTriggers,
     pub concurrency: ReleaseConcurrency,
     pub jobs: BTreeMap<String, ReleaseJobSpec>,
@@ -207,6 +208,14 @@ impl ReleaseWorkflowSpec {
         validate_environment(&self.publish_environment)?;
         validate_environment(&self.bootstrap_environment)?;
         self.triggers.validate(&self.plan)?;
+        if !velnor_actions_contract::is_valid_branch_name(&self.default_branch)
+            || (!self.plan.dispatch
+                && self.triggers.push_branches.as_slice() != [self.default_branch.as_str()])
+        {
+            return Err(RenderError::InvalidWorkflow(
+                "release_default_branch_mismatch".to_owned(),
+            ));
+        }
         self.concurrency.validate()?;
         check_lock_anchor(&self.concurrency.group, &self.repository)?;
         check_role_set(&self.jobs)?;
@@ -217,7 +226,7 @@ impl ReleaseWorkflowSpec {
         check_role_conditions(
             &self.jobs,
             &self.repository,
-            &self.triggers.push_branches[0],
+            &self.default_branch,
             &self.plan,
         )?;
         check_publish_needs(&self.jobs)?;

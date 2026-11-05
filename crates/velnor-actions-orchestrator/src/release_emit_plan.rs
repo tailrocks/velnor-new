@@ -122,7 +122,6 @@ pub(super) fn release_triggers(branch: &str, plan: &ReleasePlan) -> ReleaseTrigg
     if !plan.dispatch {
         return ReleaseTriggers {
             push_branches: vec![branch.to_owned()],
-            schedule: None,
             dispatch_inputs: Vec::new(),
         };
     }
@@ -150,7 +149,6 @@ pub(super) fn release_triggers(branch: &str, plan: &ReleasePlan) -> ReleaseTrigg
     }
     ReleaseTriggers {
         push_branches: Vec::new(),
-        schedule: None,
         dispatch_inputs,
     }
 }

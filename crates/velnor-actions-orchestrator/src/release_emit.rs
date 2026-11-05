@@ -4,7 +4,7 @@ use std::collections::BTreeSet;
 
 use velnor_actions_contract::WorkflowPolicy;
 use velnor_actions_contract::config::{
-    CrateReleaseIntent, CrateReleaseRecovery, ReleaseAuthentication, ReleaseRegistry,
+    CrateReleaseIntent, CrateReleaseRecovery, ReleaseRegistry,
     RustReleaseConfig,
 };
 use velnor_actions_rust::release_select::DEFAULT_REGISTRY;
@@ -116,6 +116,7 @@ fn release_files_for_config(
     let spec = ReleaseWorkflowSpec {
         name: RELEASE_WORKFLOW_NAME.to_owned(),
         repository,
+        default_branch: prep.default_branch.clone(),
         triggers: release_triggers(&prep.default_branch, &plan),
         concurrency,
         jobs,
@@ -159,7 +160,6 @@ fn build_release_jobs(
         repository,
         &prep.default_branch,
         plan,
-        release.effective_authentication() == ReleaseAuthentication::TrustedPublishing,
     );
     let preparation_gate = format!(
         "github.repository == '{repository}' && github.event_name == 'push' && github.ref == 'refs/heads/{}' && needs.release-preflight.result == 'success' && needs.release-preflight.outputs.eligible == 'false'",

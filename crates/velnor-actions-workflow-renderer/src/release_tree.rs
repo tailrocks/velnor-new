@@ -119,17 +119,12 @@ fn release_triggers_to_yaml(triggers: &ReleaseTriggers) -> Yaml {
         .iter()
         .map(|branch| Yaml::str(branch.clone()))
         .collect();
-    let mut entries = vec![(
-        "push".to_owned(),
-        Yaml::Map(vec![("branches".to_owned(), Yaml::Seq(branches))]),
-    )];
-    if let Some(schedule) = &triggers.schedule {
-        let crons: Vec<Yaml> = schedule
-            .cron
-            .iter()
-            .map(|cron| Yaml::Map(vec![("cron".to_owned(), Yaml::str(cron.clone()))]))
-            .collect();
-        entries.push(("schedule".to_owned(), Yaml::Seq(crons)));
+    let mut entries = Vec::new();
+    if !branches.is_empty() {
+        entries.push((
+            "push".to_owned(),
+            Yaml::Map(vec![("branches".to_owned(), Yaml::Seq(branches))]),
+        ));
     }
     let mut inputs = Vec::with_capacity(triggers.dispatch_inputs.len());
     for input in &triggers.dispatch_inputs {
@@ -309,7 +304,7 @@ pub fn render_release_files(
         )
         .is_none()
         || intent.repository != spec.repository
-        || spec.triggers.push_branches.as_slice() != [intent.default_branch.as_str()]
+        || spec.default_branch != intent.default_branch
         || intent.environment != spec.publish_environment
         || intent.environment != spec.bootstrap_environment
         || intent.registry != spec.plan.registry

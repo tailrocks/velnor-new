@@ -120,7 +120,7 @@ fn workspace_creation_dispatch_binds_source_and_each_package()
     let catalog = ToolCatalog::pinned().with_export_rustup_toolchain(false);
     let mise = MiseSetup { uses: format!("jdx/mise-action@{}", velnor_actions_actionlint::actions::MISE_ACTION_SHA), version: MISE_VERSION.to_owned(), sha256: MISE_BINARY_SHA256_LINUX_X64.to_owned() };
     let acquire = velnor_actions_workflow_renderer::release_generator_bootstrap::acquire_step(env!("CARGO_PKG_VERSION"), "ubuntu-24.04", &"b".repeat(40), &"c".repeat(64))?;
-    spec.jobs = assemble_jobs(&JobInputs { release: &release, gate: publish_gate_condition(&spec.repository, "main", &spec.plan, false), preparation_gate: "github.repository == 'owner/project' && github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.release-preflight.result == 'success' && needs.release-preflight.outputs.eligible == 'false'".into(), registry: None, label: "ubuntu-24.04", mise: &mise, catalog: &catalog, acquire: &acquire, generator_version: env!("CARGO_PKG_VERSION") })?;
+    spec.jobs = assemble_jobs(&JobInputs { release: &release, gate: publish_gate_condition(&spec.repository, "main", &spec.plan), preparation_gate: "github.repository == 'owner/project' && github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.release-preflight.result == 'success' && needs.release-preflight.outputs.eligible == 'false'".into(), registry: None, label: "ubuntu-24.04", mise: &mise, catalog: &catalog, acquire: &acquire, generator_version: env!("CARGO_PKG_VERSION") })?;
     let config = ReleasePlzConfig { tag_pattern: "{{ package }}-v{{ version }}".into(), semver_check: true, packages: spec.plan.packages.keys().map(|name| ReleasePlzPackage { name: name.clone(), publish_features: vec![] }).collect() };
     let intent: CrateReleaseIntent = serde_json::from_value(serde_json::json!({"schema":1,"repository":"owner/project","default_branch":"main","environment":"release","required_workflow_path":".github/workflows/ci.yml","trusted_reviewer_id":1,"rust_version":rust,"generator_version":env!("CARGO_PKG_VERSION"),"generator_source_sha":"b".repeat(40),"generator_manifest_sha256":"c".repeat(64),"release_plz_version":"0.4.3","runner":"ubuntu-24.04","authentication":"bootstrap-token","manifest_path":"Cargo.toml","pr_write_paths":["CHANGELOG.md","Cargo.lock","Cargo.toml"],"registry":"crates-io","packages":["example","second"],"publish_features":{"example":[],"second":[]},"tag_template":"{{ package }}-v{{ version }}","new_crates":creation,"recovery":null}))?;
     let ctx = ReleaseRenderContext { generator_version: env!("CARGO_PKG_VERSION").into(), runs_on: "ubuntu-24.04".into() };
@@ -150,11 +150,12 @@ fn bootstrap_handover_renders_normal_trusted_publisher() -> Result<(), Box<dyn s
     use velnor_actions_workflow_renderer::release_tree::{render_release_files, ReleaseRenderContext};
     let (mut spec, rust) = fixture()?;
     spec.plan.dispatch = false;
+    spec.triggers.push_branches = vec!["main".into()];
     spec.plan.version = None;
     spec.plan.packages.insert("second".into(), "0.2.0".into());
     spec.triggers.dispatch_inputs.clear();
     spec.jobs.get_mut("release-publish").ok_or("publisher")?.condition =
-        Some(publish_gate_condition("owner/project", "main", &spec.plan, true));
+        Some(publish_gate_condition("owner/project", "main", &spec.plan));
     let config = ReleasePlzConfig {
         tag_pattern: "{{ package }}-v{{ version }}".into(),
         semver_check: true,

@@ -80,12 +80,7 @@ pub(super) fn check_role_conditions(
     for (id, job) in jobs {
         match job.role {
             ReleaseRole::PublishOidc | ReleaseRole::PublishBootstrap => {
-                let gate = publish_gate_condition(
-                    repository,
-                    branch,
-                    plan,
-                    job.role == ReleaseRole::PublishOidc,
-                );
+                let gate = publish_gate_condition(repository, branch, plan);
                 if job.condition.as_deref() != Some(gate.as_str()) {
                     return Err(RenderError::InvalidWorkflow(format!(
                         "publish_gate_mismatch:{id}"
