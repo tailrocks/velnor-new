@@ -96,6 +96,14 @@ impl GitFixture {
         &self.source_sha
     }
 
+    pub(crate) fn commit_all(&mut self) -> Result<(), Box<dyn Error>> {
+        run_git(self.root(), &["add", "-A"])?;
+        run_git(self.root(), &["commit", "--quiet", "-m", "fixture update"])?;
+        let head = String::from_utf8(run_git_output(self.root(), &["rev-parse", "HEAD"])?)?;
+        head.trim().clone_into(&mut self.source_sha);
+        Ok(())
+    }
+
     pub(crate) fn parent_sha(&self) -> &str {
         &self.parent_sha
     }

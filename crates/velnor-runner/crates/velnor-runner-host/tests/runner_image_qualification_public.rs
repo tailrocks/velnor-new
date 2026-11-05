@@ -7,6 +7,8 @@ mod extended;
 mod fixture;
 #[path = "runner_image_qualification_public/runtime.rs"]
 mod runtime;
+#[path = "runner_image_qualification_public/source.rs"]
+mod source;
 #[path = "runner_image_qualification_public/support.rs"]
 mod support;
 #[path = "runner_image_qualification_public/tool_versions.rs"]

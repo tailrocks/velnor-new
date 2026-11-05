@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
 use std::process::ExitStatus;
 use std::time::Duration;
@@ -92,9 +93,7 @@ async fn validate_source(root: &Path, source_sha: &str) -> Result<(), HostError>
     if one_line(&head.stdout)? != source_sha {
         return Err(HostError::Identity);
     }
-    let index = git(root, &["ls-files", "-v", "-z"]).await?;
-    require_success(&index)?;
-    validate_index_flags(&index.stdout)?;
+    validate_repository_configs(root).await?;
     let diff = git(
         root,
         &[
@@ -102,6 +101,7 @@ async fn validate_source(root: &Path, source_sha: &str) -> Result<(), HostError>
             "--quiet",
             "--no-ext-diff",
             "--no-textconv",
+            "--ignore-submodules=none",
             "HEAD",
             "--",
         ],
@@ -110,11 +110,96 @@ async fn validate_source(root: &Path, source_sha: &str) -> Result<(), HostError>
     if !diff.status.success() {
         return Err(HostError::Identity);
     }
-    let untracked = git(root, &["ls-files", "--others", "--exclude-standard", "-z"]).await?;
-    if !untracked.status.success() || !untracked.stdout.is_empty() {
-        return Err(HostError::Identity);
+    Ok(())
+}
+
+async fn validate_repository_configs(root: &Path) -> Result<(), HostError> {
+    let mut pending = vec![root.to_path_buf()];
+    let mut checked = 0_usize;
+    while let Some(repo) = pending.pop() {
+        checked += 1;
+        if checked > 4096 {
+            return Err(HostError::Identity);
+        }
+        let top = git(&repo, &["rev-parse", "--show-toplevel"]).await?;
+        require_success(&top)?;
+        if Path::new(one_line(&top.stdout)?) != repo {
+            return Err(HostError::Identity);
+        }
+        validate_local_attributes(&repo).await?;
+        let flags = git(&repo, &["ls-files", "-v", "-z"]).await?;
+        require_success(&flags)?;
+        if !flags.stdout.is_empty() || repo == root {
+            validate_index_flags(&flags.stdout)?;
+        }
+        let untracked = git(
+            &repo,
+            &[
+                "ls-files",
+                "--others",
+                "--exclude-per-directory=.gitignore",
+                "--exclude=!.gitignore",
+                "--exclude=!**/.gitignore",
+                "--exclude=!.gitattributes",
+                "--exclude=!**/.gitattributes",
+                "-z",
+            ],
+        )
+        .await?;
+        if !untracked.status.success() || !untracked.stdout.is_empty() {
+            return Err(HostError::Identity);
+        }
+        let filters = git(&repo, &["config", "--get-regexp", "^filter\\."]).await?;
+        if filters.status.code() != Some(1) {
+            return Err(HostError::Identity);
+        }
+        let index = git(&repo, &["ls-files", "--stage", "-z"]).await?;
+        require_success(&index)?;
+        for entry in index
+            .stdout
+            .split(|byte| *byte == 0)
+            .filter(|entry| !entry.is_empty())
+        {
+            let separator = entry
+                .iter()
+                .position(|byte| *byte == b'\t')
+                .ok_or(HostError::Identity)?;
+            let (header, path) = (&entry[..separator], &entry[separator + 1..]);
+            if header.starts_with(b"160000 ") {
+                let child = repo.join(std::ffi::OsStr::from_bytes(path));
+                if !child.join(".git").exists() {
+                    match std::fs::read_dir(&child) {
+                        Ok(mut entries) => {
+                            if entries.next().is_none() {
+                                continue;
+                            }
+                            return Err(HostError::Identity);
+                        }
+                        Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+                        _ => return Err(HostError::Identity),
+                    }
+                }
+                if child.canonicalize().map_err(|_| HostError::Identity)? != child
+                    || !child.starts_with(&repo)
+                {
+                    return Err(HostError::Identity);
+                }
+                pending.push(child);
+            }
+        }
     }
     Ok(())
+}
+
+async fn validate_local_attributes(repo: &Path) -> Result<(), HostError> {
+    let output = git(repo, &["rev-parse", "--git-path", "info/attributes"]).await?;
+    require_success(&output)?;
+    let path = repo.join(one_line(&output.stdout)?);
+    match std::fs::symlink_metadata(path) {
+        Ok(metadata) if metadata.is_file() && metadata.len() == 0 => Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        _ => Err(HostError::Identity),
+    }
 }
 
 fn validate_index_flags(output: &[u8]) -> Result<(), HostError> {
@@ -157,11 +242,10 @@ fn require_success(output: &CommandOutput) -> Result<(), HostError> {
 }
 
 async fn git(root: &Path, args: &[&str]) -> Result<CommandOutput, HostError> {
-    let path = std::env::var_os("PATH").ok_or(HostError::Identity)?;
-    let mut command = Command::new("git");
+    let mut command = Command::new("/usr/bin/git");
     command
         .env_clear()
-        .env("PATH", path)
+        .env("PATH", "/usr/bin:/bin:/usr/sbin:/sbin")
         .env("LC_ALL", "C")
         .env("GIT_CONFIG_NOSYSTEM", "1")
         .env("GIT_CONFIG_GLOBAL", "/dev/null")
@@ -169,10 +253,15 @@ async fn git(root: &Path, args: &[&str]) -> Result<CommandOutput, HostError> {
         .env("GIT_OPTIONAL_LOCKS", "0")
         .env("GIT_NO_REPLACE_OBJECTS", "1")
         .args([
+            "--attr-source=HEAD",
             "-c",
             "core.fsmonitor=false",
             "-c",
             "core.untrackedCache=false",
+            "-c",
+            "core.filemode=true",
+            "-c",
+            "core.attributesFile=/dev/null",
             "-C",
         ])
         .arg(root)
