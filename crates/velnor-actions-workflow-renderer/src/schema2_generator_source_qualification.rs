@@ -230,7 +230,9 @@ fn prefetch_step() -> Yaml {
 }
 
 fn job_env() -> Yaml {
+    let (auto_clean, auto_clean_value) = crate::toolchain_env::CARGO_AUTO_CLEAN_ENV;
     Yaml::Map(vec![
+        (auto_clean.to_owned(), Yaml::str(auto_clean_value)),
         ("MBX_GC_AUTO".to_owned(), Yaml::str("0")),
         (
             "MISE_BACKENDS_JACTIONLINT".to_owned(),

@@ -17,6 +17,7 @@ jobs:
     permissions:
       contents: read
     env:
+      CARGO_CACHE_AUTO_CLEAN_FREQUENCY: never
       MBX_GC_AUTO: "0"
       MISE_BACKENDS_JACTIONLINT: github:jdx/jactionlint
       MISE_BACKENDS_SHELLCHECK: github:koalaman/shellcheck
@@ -124,6 +125,7 @@ jobs:
     permissions:
       contents: read
     env:
+      CARGO_CACHE_AUTO_CLEAN_FREQUENCY: never
       MBX_GC_AUTO: "0"
       MISE_BACKENDS_JACTIONLINT: github:jdx/jactionlint
       MISE_BACKENDS_SHELLCHECK: github:koalaman/shellcheck
@@ -231,6 +233,7 @@ jobs:
     permissions:
       contents: read
     env:
+      CARGO_CACHE_AUTO_CLEAN_FREQUENCY: never
       MBX_GC_AUTO: "0"
       MISE_BACKENDS_JACTIONLINT: github:jdx/jactionlint
       MISE_BACKENDS_SHELLCHECK: github:koalaman/shellcheck

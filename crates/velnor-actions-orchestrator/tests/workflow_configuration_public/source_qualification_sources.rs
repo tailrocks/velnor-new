@@ -16,6 +16,30 @@ use super::source_qualification_sources_support::{
     producer_ids, render, runs_phase, sources_repo, steps_of, text, uses_prefix,
 };
 
+const AUTO_CLEAN: &str = "CARGO_CACHE_AUTO_CLEAN_FREQUENCY";
+
+fn assert_cargo_steps_never_auto_clean(sq: &Value, job: &str, steps: &[Value]) {
+    let phases = positions(steps, |s| {
+        text(&s["run"], "run").is_ok_and(|run| run.contains("source-qualification.sh "))
+    });
+    assert!(
+        phases.len() > 2,
+        "job {job} runs too few phases: {phases:?}"
+    );
+    for index in phases {
+        let effective = if steps[index]["env"][AUTO_CLEAN].is_null() {
+            &sq["jobs"][job]["env"][AUTO_CLEAN]
+        } else {
+            &steps[index]["env"][AUTO_CLEAN]
+        };
+        assert_eq!(
+            effective, "never",
+            "job {job} step {} sees {AUTO_CLEAN}={effective}",
+            steps[index]["name"]
+        );
+    }
+}
+
 #[test]
 fn every_harness_job_restores_the_sources_family_read_only_before_prefetch()
 -> Result<(), Box<dyn Error>> {
@@ -47,6 +71,7 @@ fn every_harness_job_restores_the_sources_family_read_only_before_prefetch()
         let cache_steps = positions(steps, |s| uses_prefix(s, "actions/cache"));
         assert_eq!(cache_steps, [restore], "job {job} touches the cache twice");
         assert_eq!(steps[restore]["id"], "sources-restore", "job {job}");
+        assert_cargo_steps_never_auto_clean(&sq, job, steps);
         assert_eq!(
             steps[restore]["if"], "github.event_name != 'workflow_dispatch'",
             "job {job} restore condition"
