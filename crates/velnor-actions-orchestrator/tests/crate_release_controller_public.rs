@@ -47,6 +47,8 @@ use fixtures_registry::{
 };
 #[path = "crate_release_controller_observations_setup.rs"]
 mod observations_setup;
+#[path = "crate_release_controller_reconcile_repairs.rs"]
+mod reconcile_repairs;
 #[path = "crate_release_controller_recovery.rs"]
 mod recovery;
 use observations_setup::{JournalRegistryFake, err};
