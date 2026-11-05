@@ -2,6 +2,10 @@ file Cargo.toml
 file Cargo.lock
 file .mise-version
 file .velnor/version-policy.toml
+file crates/velnor-actions-contract/Cargo.toml
+tree crates/velnor-actions-contract/src
+file crates/velnor-actions-mise/Cargo.toml
+tree crates/velnor-actions-mise/src
 file crates/velnor-archive-guard/Cargo.toml
 file crates/velnor-archive-guard/build.rs
 file crates/velnor-archive-guard/build_support/archive_guard_inputs.rs

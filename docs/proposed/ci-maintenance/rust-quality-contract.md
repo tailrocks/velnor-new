@@ -79,13 +79,17 @@ The `velnor-actions` binary is owned by package `velnor-actions-cli`. Future sta
 | `velnor-actions-cli` | Clap parser, typed dispatch, concise deterministic human plan renderer, generation output, and exit-code formatting; emits binary `velnor-actions` | Orchestration algorithms or Rust, Mise, and renderer domain rules; process creation or any `std::process` item but `ExitCode`, under any import spelling or namespace alias (checked on Rust syntax by `impl_repo_deps_process_policy.rs`) |
 | `velnor-actions-tofu` | All OpenToFu/HCL discovery, root/module interpretation, task payloads, affected selection, identity extensions | Rust/Cargo, Mise execution, workflow YAML, process details, non-tofu stacks |
 | `velnor-actions-freshness` (repository-only support) | Read-only repository freshness/pin/lock/advisory checks and bounded bootstrap metadata operations behind the existing CLI private gate | V1 planning, task graph or selection, runner behavior, product evidence claims, public commands, or workflow generation |
-| `velnor-archive-guard` (repository-only security utility) | Bounded validation of owned candidate and Cargo package archive bytes through its explicit modes | V1 stack behavior, task derivation, workflow generation, or product dependencies |
+| `velnor-archive-guard` (repository-only security utility) | Bounded validation of owned candidate and Cargo package archive bytes through its explicit modes; repository-only golden collection | V1 stack behavior, task derivation, workflow generation, or product dependencies |
 
 Both repository-only members are outside the eight-product V1 task graph. The
 CLI private gate consumes freshness at runtime, repository scripts provision
 archive guard, and the orchestrator links only archive guard's bounded, pure
-OCI validation API. Freshness stays outside the product dependency graph;
-archive guard owns no processes, workflow generation, or product tasks.
+OCI validation API. Freshness stays outside the product dependency graph.
+Archive validation remains pure. Its repository-only golden collector MAY
+reuse `velnor-actions-mise`'s bounded process-group owner for candidate version,
+plan, generation, output-binding, guard-fingerprint, and fixture-Git commands;
+it MUST NOT add a second process implementation. The collector remains outside
+V1 behavior, workflow generation, and product tasks.
 The canonical repository's `maintenance-helpers` named Mise check runs their
 package test suites independently of Rust task derivation and the product
 matrix; this repository's VelnorRepositoryV1 configuration makes it required.
@@ -150,7 +154,7 @@ Mise MUST execute Rust tooling locally and in CI. Generated commands use exact
 (any location Mise reads `[tools]` from, plus the Rust toolchain file Mise reads) declares takes the
 project's version, resolved at run time and never copied into generated text;
 every other tool takes the exact pin from the compiled-in generator catalog
-([hard decision 5](../hard-decisions.md)).
+([hard decision 5](../../hard-decisions.md)).
 Commands MUST NOT depend on consumer `.velnor/version-policy.toml`. Velnor's
 dogfood gates compare the catalog to its repository-owned version-policy
 mirror and recheck current releases.
@@ -164,7 +168,7 @@ Velnor MUST check for `rust-toolchain.toml`, `mise.toml`, and `mise.lock`; it
 MAY report their versions, components, tasks, lock coverage, and conflicts.
 They are never generated, synchronized, locked, or rewritten; their declared
 tool versions replace the corresponding Velnor pins (hard decision 5). Missing files produce manual recommendations, not
-automatic repair or generation failure; a malformed or unusable declaration (unparseable, loose, or disagreeing with another source) fails generation naming the file, because a Velnor pin must never silently replace it. See the [tooling input contract](tooling-input-contract.md).
+automatic repair or generation failure; a malformed or unusable declaration (unparseable, loose, or disagreeing with another source) fails generation naming the file, because a Velnor pin must never silently replace it. See the [tooling input contract](../tooling-input-contract.md).
 
 Every member MUST inherit the workspace metadata and lints:
 
@@ -179,7 +183,7 @@ workspace = true
 
 `Cargo.lock` MUST be committed and normal commands MUST use `--locked`. The
 latest-stable selection, freshness inventory, update cadence, exceptions, and
-required policy behavior is normative in the [version policy](version-policy.md).
+required policy behavior is normative in the [version policy](../version-policy.md).
 `Cargo.lock` MUST NOT remain stale merely because its current build passes.
 Optional `mise.lock` is repository-owned; Velnor reports findings but never
 creates or refreshes it.
@@ -196,7 +200,7 @@ Mise MUST install and execute Rust, components, MBX, selected Nextest, `gh`,
 policy tools, and Rust binaries. Exact pins come from the compiled catalog and
 explicit Mise arguments; Velnor's version-policy file mirrors them for
 freshness checks. Consumer `mise.toml` and `mise.lock` are optional,
-repository-owned, read-only inputs. See [version policy](version-policy.md).
+repository-owned, read-only inputs. See [version policy](../version-policy.md).
 An illustrative hand-maintained project config is:
 
 ```toml
@@ -228,7 +232,7 @@ profiles, and no second cache may archive its store.
 
 ## 4. Tests and source layout
 
-Detail lives in [rust-test-policy.md](rust-test-policy.md).
+Detail lives in [rust-test-policy.md](../rust-test-policy.md).
 
 ## 5. Size and architecture limits
 
@@ -333,7 +337,7 @@ stays in infrastructure owners.
 
 ## 7. Dependencies and supply chain
 
-Detail lives in [rust-dependency-policy.md](rust-dependency-policy.md). A
+Detail lives in [rust-dependency-policy.md](../rust-dependency-policy.md). A
 mature HCL parser MUST be researched and qualified for maintenance, license,
 MSRV, behavior, and build cost; do not hand-write a regex parser for HCL.
 
@@ -367,4 +371,4 @@ supports them.
 
 The binding task templates, test scope, workflow checks, and risk-triggered
 verification requirements are specified in the [Rust verification
-contract](rust-verification-contract.md).
+contract](../rust-verification-contract.md).

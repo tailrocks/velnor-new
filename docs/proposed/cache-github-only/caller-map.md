@@ -143,7 +143,7 @@ git diff --no-index --exit-code "$VELNOR_GENERATE_A/.github" "$VELNOR_GENERATE_B
 "$VELNOR_ACTIONS_BIN" generate
 ```
 
-Repository gates (root + nested runner; `docs/implemented/repo-verification.md`):
+Repository gates (root + nested runner; `docs/implemented/ci-maintenance/repo-verification.md`):
 
 ```bash
 export CARGO_TARGET_DIR="$PWD/.velnor-owned-verification-target"

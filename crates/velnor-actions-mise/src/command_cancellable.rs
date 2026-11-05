@@ -7,10 +7,14 @@ use super::process_group::{
 };
 #[cfg(unix)]
 use super::stream::Streams;
-use super::{CancelHandle, IsolatedCommand, ProcessOutput};
+use super::{CancelHandle, IsolatedCommand, ProcessFileOutput, ProcessOutput};
 use crate::CheckDeadline;
 use crate::error::MiseError;
 use std::time::{Duration, Instant};
+
+#[path = "command_cancellable_bounded.rs"]
+mod bounded;
+pub use bounded::run_command_bounded;
 
 #[cfg(unix)]
 #[path = "command_cancellable_helpers.rs"]
@@ -62,17 +66,7 @@ impl IsolatedCommand {
         deadline: CheckDeadline,
         cancel: &CancelHandle,
     ) -> Result<(ProcessOutput, super::ProcessGroupDrainReceipt), MiseError> {
-        let remaining = deadline.remaining()?;
-        let work = remaining
-            .checked_sub(Self::PROCESS_CLEANUP_GRACE)
-            .filter(|duration| !duration.is_zero())
-            .ok_or_else(|| {
-                crate::checks::invalid("check_timeout", "insufficient_cleanup_budget")
-            })?;
-        let work_deadline = CheckDeadline::after(work)?;
-        let cleanup_deadline = Instant::now()
-            .checked_add(remaining)
-            .ok_or_else(|| crate::checks::invalid("check_timeout", "deadline_overflow"))?;
+        let (work_deadline, cleanup_deadline) = quiescent_deadlines(deadline)?;
         let mut streams = Streams::memory(cap);
         let (mut output, receipt) = self.run_streams_with_policy(
             &mut streams,
@@ -89,6 +83,46 @@ impl IsolatedCommand {
                 program: self.program.to_string_lossy().into_owned(),
                 message: "quiescent_drain_receipt_missing".to_owned(),
             })
+    }
+
+    #[cfg(unix)]
+    pub fn run_quiescent_stdout_to_file_until(
+        &self,
+        output: &mut std::fs::File,
+        stdout_cap: u64,
+        stderr_cap: usize,
+        deadline: CheckDeadline,
+    ) -> Result<(ProcessFileOutput, super::ProcessGroupDrainReceipt), MiseError> {
+        if !output.metadata().is_ok_and(|metadata| metadata.is_file()) {
+            return Err(MiseError::SpawnFailed {
+                program: self.program.to_string_lossy().into_owned(),
+                message: "stdout_sink_requires_regular_file".to_owned(),
+            });
+        }
+        let (work_deadline, cleanup_deadline) = quiescent_deadlines(deadline)?;
+        let mut streams = Streams::file(output, stdout_cap, stderr_cap);
+        let (result, receipt) = self.run_streams_with_policy(
+            &mut streams,
+            work_deadline,
+            &CancelHandle::new(),
+            super::SPAWN_DEADLINE_MESSAGE,
+            true,
+            Some(cleanup_deadline),
+        )?;
+        let proof = receipt.ok_or_else(|| MiseError::SpawnFailed {
+            program: self.program.to_string_lossy().into_owned(),
+            message: "quiescent_drain_receipt_missing".to_owned(),
+        })?;
+        Ok((
+            ProcessFileOutput {
+                stdout_bytes: streams.stdout_bytes(),
+                stderr: result.stderr,
+                code: result.code,
+                signal: result.signal,
+                success: result.success,
+            },
+            proof,
+        ))
     }
 
     #[cfg(unix)]
@@ -225,4 +259,33 @@ impl IsolatedCommand {
     ) -> Result<(ProcessOutput, super::ProcessGroupDrainReceipt), MiseError> {
         self.run_quiescent_until(cap, deadline)
     }
+
+    #[cfg(not(unix))]
+    pub fn run_quiescent_stdout_to_file_until(
+        &self,
+        output: &mut std::fs::File,
+        stdout_cap: u64,
+        stderr_cap: usize,
+        deadline: CheckDeadline,
+    ) -> Result<(ProcessFileOutput, super::ProcessGroupDrainReceipt), MiseError> {
+        let _ = (output, stdout_cap, stderr_cap, deadline);
+        Err(MiseError::SpawnFailed {
+            program: self.program.to_string_lossy().into_owned(),
+            message: "quiescent_process_groups_require_unix".to_owned(),
+        })
+    }
+}
+
+#[cfg(unix)]
+fn quiescent_deadlines(deadline: CheckDeadline) -> Result<(CheckDeadline, Instant), MiseError> {
+    let remaining = deadline.remaining()?;
+    let work = remaining
+        .checked_sub(IsolatedCommand::PROCESS_CLEANUP_GRACE)
+        .filter(|duration| !duration.is_zero())
+        .ok_or_else(|| crate::checks::invalid("check_timeout", "insufficient_cleanup_budget"))?;
+    let work_deadline = CheckDeadline::after(work)?;
+    let cleanup_deadline = Instant::now()
+        .checked_add(remaining)
+        .ok_or_else(|| crate::checks::invalid("check_timeout", "deadline_overflow"))?;
+    Ok((work_deadline, cleanup_deadline))
 }

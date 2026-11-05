@@ -53,6 +53,8 @@ jobs:
     permissions:
       actions: write
       contents: read
+    outputs:
+      artifact_id: ${{ steps.upload-assets.outputs.artifact-id }}
     needs:
       - verify-release-caller
     if: inputs.release_action == 'build'
@@ -113,10 +115,11 @@ jobs:
       - name: Checksum built bytes
         run: "set -eu\nshasum -a 256 velnor-host velnor-runner-attestation-helper LICENSE NOTICE > SHA256SUMS"
       - name: Upload binary asset
+        id: upload-assets
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           if-no-files-found: error
-          name: binary-assets
+          name: binary-assets-${{ github.run_attempt }}
           path: "velnor-host\nvelnor-runner-attestation-helper\nLICENSE\nNOTICE\nSHA256SUMS"
           retention-days: 1
   attest-binary:
@@ -129,15 +132,24 @@ jobs:
       attestations: write
       contents: read
       id-token: write
+    outputs:
+      artifact_id: ${{ needs.build-binary.outputs.artifact_id }}
     needs:
       - verify-release-caller
       - build-binary
     if: inputs.release_action == 'build'
     steps:
+      - name: Validate producer artifact identity
+        id: validate-producer-artifact-identity
+        env:
+          ARTIFACT_ID: ${{ needs.build-binary.outputs.artifact_id }}
+        run: "set -eu\nexport LC_ALL=C\ncase \"$ARTIFACT_ID\" in ''|*[!0-9]*|0|0*) exit 1 ;; esac\nlength=\"${#ARTIFACT_ID}\"\nif [ \"$length\" -gt 16 ]; then exit 1; fi\nif [ \"$length\" -eq 16 ] && [ \"$ARTIFACT_ID\" -gt 9007199254740991 ]; then exit 1; fi"
       - name: Download built assets
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        env:
+          ARTIFACT_ID: ${{ needs.build-binary.outputs.artifact_id }}
         with:
-          name: binary-assets
+          artifact-ids: ${{ env.ARTIFACT_ID }}
           path: assets
       - name: Attest built artifacts
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8
@@ -174,10 +186,18 @@ jobs:
           fetch-depth: "1"
           persist-credentials: "false"
           ref: ${{ inputs.source_sha }}
+      - name: Validate producer artifact identity
+        id: validate-producer-artifact-identity
+        env:
+          ARTIFACT_ID: ${{ needs.attest-binary.outputs.artifact_id }}
+        run: "set -eu\nexport LC_ALL=C\ncase \"$ARTIFACT_ID\" in ''|*[!0-9]*|0|0*) exit 1 ;; esac\nlength=\"${#ARTIFACT_ID}\"\nif [ \"$length\" -gt 16 ]; then exit 1; fi\nif [ \"$length\" -eq 16 ] && [ \"$ARTIFACT_ID\" -gt 9007199254740991 ]; then exit 1; fi"
+        if: inputs.release_action == 'build'
       - name: Download built assets
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        env:
+          ARTIFACT_ID: ${{ needs.attest-binary.outputs.artifact_id }}
         with:
-          name: binary-assets
+          artifact-ids: ${{ env.ARTIFACT_ID }}
           path: assets
         if: inputs.release_action == 'build'
       - name: Publish GitHub release

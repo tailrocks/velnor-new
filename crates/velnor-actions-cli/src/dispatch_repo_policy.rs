@@ -5,7 +5,7 @@ use std::env;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
-use velnor_actions_freshness::{BaseRef, Operation};
+use velnor_actions_freshness::{BaseRef, CargoArtifactKind, Operation};
 
 const ACTION_ENV: &str = "VELNOR_REPO_POLICY_ACTION";
 const ROOT_ENV: &str = "VELNOR_REPO_POLICY_ROOT";
@@ -13,6 +13,7 @@ const UPSTREAM_ENV: &str = "VELNOR_REPO_POLICY_CHECK_UPSTREAM";
 const ADVISORIES_ENV: &str = "VELNOR_REPO_POLICY_WITH_ADVISORIES";
 const MANIFEST_PATH_ENV: &str = "VELNOR_REPO_POLICY_MANIFEST_PATH";
 const BASE_REF_ENV: &str = "VELNOR_REPO_POLICY_BASE_REF";
+const ARTIFACT_KIND_ENV: &str = "VELNOR_REPO_POLICY_ARTIFACT_KIND";
 
 pub(crate) fn gate_root() -> Option<PathBuf> {
     let action = env::var(ACTION_ENV).ok()?;
@@ -71,6 +72,7 @@ fn operation_from_environment() -> Result<Operation, String> {
             messages_path: required_path("VELNOR_REPO_POLICY_MESSAGES")?,
             manifest_path: required_path("VELNOR_REPO_POLICY_MANIFEST")?,
             target_name: required_text("VELNOR_REPO_POLICY_TARGET")?,
+            kind: optional_artifact_kind(ARTIFACT_KIND_ENV)?,
         }),
         _ => Err("invalid repository-policy action".to_owned()),
     }
@@ -107,6 +109,17 @@ fn required_text(name: &str) -> Result<String, String> {
 
 fn required_path(name: &str) -> Result<PathBuf, String> {
     required_text(name).map(PathBuf::from)
+}
+
+fn optional_artifact_kind(name: &str) -> Result<CargoArtifactKind, String> {
+    match env::var(name) {
+        Err(env::VarError::NotPresent) => Ok(CargoArtifactKind::Bin),
+        Ok(value) if value == "bin" => Ok(CargoArtifactKind::Bin),
+        Ok(value) if value == "example" => Ok(CargoArtifactKind::Example),
+        Ok(_) | Err(env::VarError::NotUnicode(_)) => {
+            Err(format!("{name} must be absent, bin, or example"))
+        }
+    }
 }
 
 fn optional_flag(name: &str) -> Result<bool, String> {

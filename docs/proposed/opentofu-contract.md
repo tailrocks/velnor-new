@@ -63,7 +63,7 @@ renderer}; all adapters → contract only. Tofu owns domain semantics; Mise
 owns execution; renderer owns representation; orchestrator composes.
 
 Rust constraints (spec §3 + hard invariants 10–12) hold throughout,
-detailed in `rust-quality-contract.md`: refactor-first with golden parity,
+detailed in `ci-maintenance/rust-quality-contract.md`: refactor-first with golden parity,
 KISS/YAGNI, `unsafe` forbidden, no product `unwrap`/`expect`/`panic!`,
 committed `Cargo.lock`, exact pins, 400/150/80 line gates,
 `deny_unknown_fields` strictness.
@@ -250,7 +250,7 @@ mirror; placeholder digest never proves the new tool (P03-8b).
 
 ### 4.4 Mise/cache/perf adoption (WS4 §§7–12)
 
-Ownership: `rust-quality-contract.md` owns the Rust quality rules; §§4.4–4.5
+Ownership: `ci-maintenance/rust-quality-contract.md` owns the Rust quality rules; §§4.4–4.5
 state tofu adoption deltas by reference, never restating them.
 Per-role tools: pure-tofu plan = opentofu + jactionlint/shellcheck
 (no Rust/MBX/Nextest/components/Cargo fetch); `tofu-<root>` jobs = opentofu
@@ -281,7 +281,7 @@ only on a miss, installs OpenTofu, recreates the plugin-cache leaf, runs
 readonly init and saves under the trusted-plan gate; restore still faces readonly init;
 hit MUST still run init+validate (T23). State, plans, and credentials remain
 outside the provider cache. Compiler reuse stays under
-`rust-quality-contract.md` §3 (MBX profiles); this layer caches provider
+`ci-maintenance/rust-quality-contract.md` §3 (MBX profiles); this layer caches provider
 artifacts only. Because `actions/cache/restore` may extract a prefix match
 even when `restore-keys` is omitted, the generated provider composite MUST
 admit bytes only when the same restore reports `cache-hit=true` and

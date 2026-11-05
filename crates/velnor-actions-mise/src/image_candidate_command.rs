@@ -92,12 +92,17 @@ impl ImageCandidateCommand {
         context: &Path,
         archive: &Path,
         docker_config: &Path,
+        source_commit: &str,
     ) -> Result<IsolatedCommand, MiseError> {
         if !context.is_absolute()
             || !archive.is_absolute()
             || !docker_config.is_absolute()
             || context == archive
             || archive.to_str().is_none_or(|path| path.contains(','))
+            || source_commit.len() != 40
+            || !source_commit
+                .bytes()
+                .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
         {
             return Err(invalid("image_candidate_build_paths"));
         }
@@ -112,6 +117,8 @@ impl ImageCandidateCommand {
             "linux/amd64".into(),
             "--file".into(),
             context.join("Dockerfile").into_os_string(),
+            "--build-arg".into(),
+            format!("VELNOR_SOURCE_SHA={source_commit}").into(),
             "--provenance=false".into(),
             "--output".into(),
             output.into(),

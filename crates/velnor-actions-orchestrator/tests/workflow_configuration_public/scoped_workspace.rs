@@ -258,6 +258,36 @@ pub(super) fn plan_request(request: &Value) -> Result<PlanRun, Box<dyn Error>> {
     Ok(PlanRun { response, value })
 }
 
+pub(super) fn qualification_plan_without_base(
+    repo: &ScopedRepo,
+    head: &str,
+) -> Result<PlanRun, Box<dyn Error>> {
+    let repository = "tailrocks/velnor-new";
+    plan_request(&json!({
+        "schema": 1,
+        "op": "plan-v1",
+        "run_key": "r190001-a1",
+        "base": null,
+        "head": head,
+        "event": "qualification",
+        "root": repo.root().to_string_lossy(),
+        "repository": repository,
+        "qualification": {
+            "campaign": "fixture",
+            "phase": "cold",
+            "repository": repository,
+            "default_branch": "testmain",
+            "git_ref": "refs/heads/testmain",
+            "ref_protected": true,
+            "workflow_ref": format!("{repository}/.github/workflows/ci.yml@refs/heads/testmain"),
+            "workflow_sha": head,
+            "source_sha": head,
+            "run_id": 190_001,
+            "run_attempt": 1,
+        },
+    }))
+}
+
 pub(super) fn merge_verdict(
     run: &PlanRun,
     event: &str,

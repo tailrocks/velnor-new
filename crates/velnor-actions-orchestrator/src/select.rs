@@ -187,6 +187,14 @@ fn affected_from_changed(
     ) else {
         return all_packages;
     };
+    if !rust_changed.is_empty() || toolfiles {
+        affected.extend(
+            discovery
+                .mise_checks
+                .iter()
+                .map(|check| check.check.id.clone()),
+        );
+    }
     affected.extend(tofu_affected);
     affected
 }
