@@ -325,7 +325,7 @@ fn add_artifacts(
     }
     writeln!(
         log,
-        "2026-11-05T00:00:00Z VELNOR_METADATA_SOURCE run=33 attempt=1 source={} tree={} sha256={}",
+        "2026-11-05T00:00:00Z VELNOR_METADATA_SOURCE run=33 attempt=1 source={} config=qualification/release.toml tree={} sha256={}",
         "c".repeat(40),
         "d".repeat(40),
         "9".repeat(64)
