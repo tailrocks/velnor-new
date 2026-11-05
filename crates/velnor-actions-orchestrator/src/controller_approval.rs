@@ -239,7 +239,7 @@ mod tests {
         );
         let text = std::fs::read_to_string(path).expect("approvals file must exist");
         let approval = ControllerApprovedRelease::from_approvals_text(&text).expect("must parse");
-        assert_eq!(approval.as_authority().manifest.version, "0.1.72");
+        assert_eq!(approval.as_authority().manifest.version, "0.1.74");
     }
 
     #[test]
@@ -250,16 +250,16 @@ mod tests {
         );
         let text = std::fs::read_to_string(path).expect("approvals file must exist");
         let rotated = text
-            .replacen("\"version\": \"0.1.72\"", "\"version\": \"0.1.73\"", 1)
-            .replace("v0.1.72", "v0.1.73")
-            .replace("0.1.72-", "0.1.73-")
+            .replacen("\"version\": \"0.1.74\"", "\"version\": \"0.1.75\"", 1)
+            .replace("v0.1.74", "v0.1.75")
+            .replace("0.1.74-", "0.1.75-")
             .replace(
-                "sha256:7c7d071da787e59450835409c579afaded201a624a0de6353688ab78d465089d",
-                "sha256:430dae86004b04c052817fe7a5e41792b638034d0183f6f98d7c13d87797c08b",
+                "sha256:fb43e14dc28afd2535e36bb71c129dbb7199b5a15dd26a853b010cb549b03e07",
+                "sha256:f50a97aa7d3e69bb6ae84ae69b2438e5e46c7a3ed3011445dd9c78b2208f55d6",
             );
         let approval =
             ControllerApprovedRelease::from_approvals_text(&rotated).expect("must parse");
-        assert_eq!(approval.as_authority().manifest.version, "0.1.73");
+        assert_eq!(approval.as_authority().manifest.version, "0.1.75");
     }
 
     #[test]
@@ -270,9 +270,9 @@ mod tests {
         );
         let text = std::fs::read_to_string(path).expect("approvals file must exist");
         let rotated = text
-            .replacen("\"version\": \"0.1.72\"", "\"version\": \"0.1.73\"", 1)
-            .replace("v0.1.72", "v0.1.73")
-            .replace("0.1.72-", "0.1.73-");
+            .replacen("\"version\": \"0.1.74\"", "\"version\": \"0.1.75\"", 1)
+            .replace("v0.1.74", "v0.1.75")
+            .replace("0.1.74-", "0.1.75-");
         let error = ControllerApprovedRelease::from_approvals_text(&rotated)
             .expect_err("stale digest must fail");
         assert!(
