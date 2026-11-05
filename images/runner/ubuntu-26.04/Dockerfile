@@ -4,7 +4,8 @@
 # Do not set RUNNER_ALLOW_RUNASROOT. The runner user is not root.
 FROM ubuntu:26.04@sha256:42527649dbc4f9197a6073f426f488cbff0e9cc9f2afce32d91c383e4875634a
 
-LABEL io.velnor.image.kind="runner"
+ARG VELNOR_SOURCE_SHA
+LABEL io.velnor.image.kind="runner" org.opencontainers.image.revision="${VELNOR_SOURCE_SHA}"
 
 ARG RUNNER_VERSION=2.338.0
 ARG RUNNER_SHA256=af4b794c1bc41d73d40535e3fe092a39f9679cd8d965954c2aca25a05ca41d32

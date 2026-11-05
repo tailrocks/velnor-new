@@ -3,7 +3,7 @@
 Platform: `linux/amd64`. ARM64 is not the baseline. One `dockerd` per worker.
 
 ```sh
-docker build --platform linux/amd64 -t velnor-dind:29.9.1 images/dind
+docker build --platform linux/amd64 --build-arg VELNOR_SOURCE_SHA="$(git rev-parse HEAD)" -t velnor-dind:29.9.1 images/dind
 ```
 
 Docker Engine `29.9.1` is the latest [Moby release](https://github.com/moby/moby/releases/tag/v29.9.1),
