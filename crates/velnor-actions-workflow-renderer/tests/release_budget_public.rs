@@ -49,7 +49,18 @@ fn hosted_supervisor_runs_candidate_scenarios_and_controller_regressions()
             .env("PATH", "/usr/bin:/bin")
             .env("HOME", "/nonexistent")
             .env("LANG", "C")
-            .args(["-n", "/usr/bin/python3", "-I", "-S", "-B"])
+            .args([
+                "-n",
+                "/usr/bin/env",
+                "-i",
+                "PATH=/usr/bin:/bin",
+                "HOME=/nonexistent",
+                "LANG=C",
+                "/usr/bin/python3",
+                "-I",
+                "-S",
+                "-B",
+            ])
             .arg(root.join(file))
             .args(arguments)
             .status()?;
