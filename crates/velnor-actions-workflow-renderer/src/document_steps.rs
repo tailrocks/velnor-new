@@ -37,7 +37,7 @@ fn action_step_to_yaml(
     job_env: &BTreeMap<String, String>,
     runs_on: Option<&str>,
 ) -> Result<Yaml, RenderError> {
-    let runtime_identity = validate_action_step(step, uses, with, env, runs_on)?;
+    validate_action_step(step, uses, with, env, runs_on)?;
     let mut entries = vec![("name".to_owned(), Yaml::str(step.name.clone()))];
     crate::step_ids::push_step_id(&mut entries, step);
     if let Some(condition) = &step.condition {
@@ -53,21 +53,7 @@ fn action_step_to_yaml(
     if job_id == FINAL_JOB_ID && is_verdict_download(step) {
         entries.push(("continue-on-error".to_owned(), Yaml::Bool(true)));
     }
-    let uses_value = if runtime_identity
-        || uses == crate::tool_seed::TOOL_SEED_USES
-        || uses == crate::cache_steps::TOOLS_RESTORE_USES
-        || uses == crate::tofu_cache::TOFU_PROVIDER_ADMISSION_USES
-        || velnor_actions_contract::workflow::RUST_VERIFIER_USES.contains(&uses)
-        || uses == velnor_actions_contract::workflow::JACTIONLINT_VERIFIER_USES
-        || crate::action_ref::is_generated_provider_prelude(uses)
-        || crate::action_ref::is_crate_obligation_action(uses)
-        || crate::action_ref::is_generated_declared_task(uses)
-    {
-        Yaml::annotated(uses, "zizmor: ignore[self-repository]")
-    } else {
-        Yaml::str(uses.to_owned())
-    };
-    entries.push(("uses".to_owned(), uses_value));
+    entries.push(("uses".to_owned(), Yaml::uses(uses)));
     if !with.is_empty() {
         let with_yaml = if crate::action_ref::is_generated_declared_task(uses) {
             Yaml::FlowMap(
@@ -97,7 +83,7 @@ fn validate_action_step(
     with: &BTreeMap<String, String>,
     env: &BTreeMap<String, String>,
     runs_on: Option<&str>,
-) -> Result<bool, RenderError> {
+) -> Result<(), RenderError> {
     crate::action_ref::validate_verifier_call(step, uses, with, env)?;
     let runtime_identity = step.role == Some(velnor_actions_contract::StepRole::ToolsCacheIdentity)
         || ["ubuntu-22.04", "ubuntu-24.04", "ubuntu-26.04"]
@@ -127,7 +113,7 @@ fn validate_action_step(
         steps::scan_for_private_subcommands(value)?;
     }
     commands::validate_env(env)?;
-    Ok(runtime_identity)
+    Ok(())
 }
 
 pub(crate) fn string_map_yaml(map: &BTreeMap<String, String>) -> Yaml {

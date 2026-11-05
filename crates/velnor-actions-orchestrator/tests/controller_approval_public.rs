@@ -393,3 +393,5 @@ fn symlinked_approvals_are_rejected() -> Result<(), Box<dyn Error>> {
 
 #[path = "controller_approval_public/runtime.rs"]
 mod runtime_public;
+#[path = "controller_approval_public/verdict.rs"]
+mod verdict_public;

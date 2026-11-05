@@ -40,8 +40,8 @@ f88495f45ef1db4cce243ad08f7ff99eff6fc3a9e326f5ea6bbcf378dccab788  ./dogfood/prev
 682b338534f10820b32950cf4be8b6a08265450d4c7e6e2b79c7c029d37aa59b  ./dogfood/preview/.github/workflows/product-release.yml
 688cb6fb7a70be4270cb23d7eba8c90db74c1ba04f65f6fa6dc50df2ceb5320a  ./dogfood/preview/.github/workflows/qualification.yml
 beea98f55a8d60a0f17e582c8e79c58dcd636bc3009a1f4e1ce4437dc8c62019  ./dogfood/preview/.github/workflows/source-qualification.yml
-896ae4fbc1b65d83e44716989d980f3e60b5c852ff525a9029b08cbe012350de  ./dogfood/preview/.github/workflows/state-seal.yml
-ccb0a583f3519b01be8e6bdfcd979d0aeb26198a32290f46f8f42f92c563df1d  ./dogfood/tree.sha256
+f68627ff892f67c65759bb1d7d95f1fe3cc1a5bcd52519afb9e86809ee1953e9  ./dogfood/preview/.github/workflows/state-seal.yml
+86c886c283f6368cf939d008a7eb6c1c983a76aa05a51c0a0ecf821be4f637b7  ./dogfood/tree.sha256
 9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  ./empty-suite/generate.exit
 7125dcf5a8d89819a0501cff72fe43cc145b74f36bcc6d7502f172343780ea23  ./empty-suite/generate.stderr.txt
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./empty-suite/generate.stdout.txt
@@ -64,8 +64,8 @@ ca4ca468341113bcc702fa935f93236ec738a202092b0af1d7ee6659f2b8096d  ./empty-suite/
 2feadd41bc2110d5fc1b6826451e32ac3e027e36603d8dda61279297f2548241  ./empty-suite/preview/.github/velnor/task-execution-manifest-v1.json
 35232983c51d8fb339ed7ecc0ee6f6c8db9dee6df6b9c073a6d8017c842e5060  ./empty-suite/preview/.github/workflows/cache-prune.yml
 1cc9e9beafe102ec3d3d35762a1f61ddfa5c6fda95e4231e4e382c8bc02313d4  ./empty-suite/preview/.github/workflows/ci.yml
-3080209ec062fc35210eac19ca75cd1d488007adbed0211b6b4c09bd4590ad8a  ./empty-suite/preview/.github/workflows/state-seal.yml
-0cc70278ab0d502f1c8fe47b1eb0cfbdb12aa0277c17f9385dbdba6192dffb76  ./empty-suite/tree.sha256
+20f1b9e33e00990f1d9722fcd3317fbfc1bc20acdfdcbefef49234e98912ebc4  ./empty-suite/preview/.github/workflows/state-seal.yml
+510f86dd3da8c3978dbeb22bc9ef17c6da47d55eca7c0e23d21d0896cca19478  ./empty-suite/tree.sha256
 9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  ./mbx-nextest/generate.exit
 fc2ba2de7b5537302fea2848a2684cdb44f14180a51404bd02b5129c4f0f2c75  ./mbx-nextest/generate.stderr.txt
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./mbx-nextest/generate.stdout.txt
@@ -88,8 +88,8 @@ ca4ca468341113bcc702fa935f93236ec738a202092b0af1d7ee6659f2b8096d  ./mbx-nextest/
 97779ef8cfba302fd0f87e9f0d0b70cd1b1e141617bdf276a0bcaecb05e30fa3  ./mbx-nextest/preview/.github/velnor/task-execution-manifest-v1.json
 35232983c51d8fb339ed7ecc0ee6f6c8db9dee6df6b9c073a6d8017c842e5060  ./mbx-nextest/preview/.github/workflows/cache-prune.yml
 01720fa103e65bcd308f5ffa8fd5e2e9b56756aa058a687d7988647ecd1f2b20  ./mbx-nextest/preview/.github/workflows/ci.yml
-6b2cfeee57dddf7262a1d0483aafff1ed05578f8c4256168c64523fd85e97b1e  ./mbx-nextest/preview/.github/workflows/state-seal.yml
-8cccd07dc847ef9f5574c66d863e2a95a9f32ef48e9612215e0852c1e01673bc  ./mbx-nextest/tree.sha256
+59a27e3c4044699beb822e697436e7a15d229595142d7d14fe87455790d3237b  ./mbx-nextest/preview/.github/workflows/state-seal.yml
+a0e2f79d2bcb0b1d15e9250aa0bf3fc8a97b4c7f574c66a1a385bc9f8bee55e2  ./mbx-nextest/tree.sha256
 9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  ./minimal-cargo/generate.exit
 f4af0b1e6e3e6bb0efe7f91f71c5203fe4ab2e3557db64f3c9a5539b2026234b  ./minimal-cargo/generate.stderr.txt
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./minimal-cargo/generate.stdout.txt
@@ -112,8 +112,8 @@ ca4ca468341113bcc702fa935f93236ec738a202092b0af1d7ee6659f2b8096d  ./minimal-carg
 8e2637d904b19be206527ca17a785582039199129d3d4639bcdae4ad9a4d0845  ./minimal-cargo/preview/.github/velnor/task-execution-manifest-v1.json
 35232983c51d8fb339ed7ecc0ee6f6c8db9dee6df6b9c073a6d8017c842e5060  ./minimal-cargo/preview/.github/workflows/cache-prune.yml
 8a07ef56a1844bc8de7b5c69f10d9c6c7af7cbe8f499bbf68e0b0e25d266e9b8  ./minimal-cargo/preview/.github/workflows/ci.yml
-a26dae5038b36c8b806317bf410679c6e8f8e7ad456d2892795f0de5318ffc4c  ./minimal-cargo/preview/.github/workflows/state-seal.yml
-c3b0f46240c4c7aed72e7cfa340c4cef3269b0c8af90aee10f66c2def43cfc4f  ./minimal-cargo/tree.sha256
+3634a3a2016ab858281220da0679033b8e2e224b330276cbd5478065d7894550  ./minimal-cargo/preview/.github/workflows/state-seal.yml
+3e4f3176b3077153782c32da197287c5a141c173462c7fde2775411ca3a5f179  ./minimal-cargo/tree.sha256
 9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  ./nested/generate.exit
 f4af0b1e6e3e6bb0efe7f91f71c5203fe4ab2e3557db64f3c9a5539b2026234b  ./nested/generate.stderr.txt
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./nested/generate.stdout.txt
@@ -136,5 +136,5 @@ ca4ca468341113bcc702fa935f93236ec738a202092b0af1d7ee6659f2b8096d  ./nested/previ
 5d83f14f02f116bc3005625e69866b9a0aeee44db623e649bc202948a59dc715  ./nested/preview/.github/velnor/task-execution-manifest-v1.json
 35232983c51d8fb339ed7ecc0ee6f6c8db9dee6df6b9c073a6d8017c842e5060  ./nested/preview/.github/workflows/cache-prune.yml
 3c9637f86eb4b012ee2100f8e81f58e107f4a3b17c373dacd7aae46ee3118a77  ./nested/preview/.github/workflows/ci.yml
-8ef363e985d509582dc14396bbd9b32793315ca82d455ba9031d932236c513a8  ./nested/preview/.github/workflows/state-seal.yml
-c4f359fa9d688bd6c39edb58e23d313bbb2ac31189921a2f18cc6f6e2241ff4a  ./nested/tree.sha256
+c8024d7b255be7b950e199c439ce22235ec1b4445796f8867b37b8798f4dabc2  ./nested/preview/.github/workflows/state-seal.yml
+97943f287d4508bf4fea21869475dcc3a965c7eff121a445ce8b6735b209128f  ./nested/tree.sha256

@@ -29,10 +29,7 @@ pub(crate) fn shared_call_named_with_inputs(
     }
     let mut fields = vec![
         ("name".to_owned(), Yaml::str(name.to_owned())),
-        (
-            "uses".to_owned(),
-            Yaml::annotated(uses, "zizmor: ignore[self-repository]"),
-        ),
+        ("uses".to_owned(), Yaml::uses(uses)),
     ];
     if !inputs.is_empty() {
         fields.push(("with".to_owned(), Yaml::Map(inputs)));

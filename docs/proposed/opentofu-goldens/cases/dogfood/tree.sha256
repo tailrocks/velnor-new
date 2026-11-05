@@ -32,4 +32,4 @@ f88495f45ef1db4cce243ad08f7ff99eff6fc3a9e326f5ea6bbcf378dccab788  ./.github/work
 682b338534f10820b32950cf4be8b6a08265450d4c7e6e2b79c7c029d37aa59b  ./.github/workflows/product-release.yml
 688cb6fb7a70be4270cb23d7eba8c90db74c1ba04f65f6fa6dc50df2ceb5320a  ./.github/workflows/qualification.yml
 beea98f55a8d60a0f17e582c8e79c58dcd636bc3009a1f4e1ce4437dc8c62019  ./.github/workflows/source-qualification.yml
-896ae4fbc1b65d83e44716989d980f3e60b5c852ff525a9029b08cbe012350de  ./.github/workflows/state-seal.yml
+f68627ff892f67c65759bb1d7d95f1fe3cc1a5bcd52519afb9e86809ee1953e9  ./.github/workflows/state-seal.yml
