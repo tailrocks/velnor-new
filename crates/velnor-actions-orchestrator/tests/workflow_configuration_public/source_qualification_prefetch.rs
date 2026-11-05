@@ -105,8 +105,18 @@ fn a_miss_fetches_from_the_network_without_trying_offline() -> Result<(), Box<dy
     Ok(())
 }
 
+fn warnings(outcome: &Outcome) -> Vec<&str> {
+    outcome
+        .stdout
+        .lines()
+        .filter(|line| line.starts_with("::warning::"))
+        .collect()
+}
+
+const ABSENT: &str = "registry/index=absent registry/cache=absent git/db=absent";
+
 #[test]
-fn a_prefix_hit_tries_offline_then_falls_back_to_the_network() -> Result<(), Box<dyn Error>> {
+fn a_prefix_hit_that_fails_offline_is_discarded_and_fetched_cold() -> Result<(), Box<dyn Error>> {
     let outcome = run(&scenario(
         "false",
         "velnor-v2-sources-trusted-older",
@@ -120,7 +130,6 @@ fn a_prefix_hit_tries_offline_then_falls_back_to_the_network() -> Result<(), Box
         [
             format!("offline {ROOT_MANIFEST}"),
             format!("network {ROOT_MANIFEST}"),
-            format!("offline {RUNNER_MANIFEST}"),
             format!("network {RUNNER_MANIFEST}"),
         ]
     );
@@ -134,8 +143,38 @@ fn a_prefix_hit_tries_offline_then_falls_back_to_the_network() -> Result<(), Box
     );
     assert_eq!(outcome.field("downloaded_crates"), Some("4"));
     assert_eq!(outcome.field("exact_hit_network_fetch"), None);
+    assert_eq!(
+        outcome.field("restored_sources_discarded"),
+        Some(ROOT_MANIFEST)
+    );
+    assert_eq!(warnings(&outcome).len(), 1, "{}", outcome.stdout);
+    Ok(())
+}
+
+#[test]
+fn a_corrupt_restored_entry_is_removed_before_the_network_retry() -> Result<(), Box<dyn Error>> {
+    let outcome = run(&scenario(
+        "false",
+        "velnor-v2-sources-trusted-older",
+        &[],
+        &[],
+    ))?;
+    assert_eq!(outcome.status, Some(0), "{}", outcome.stdout);
+    assert_eq!(
+        outcome.network_sightings,
+        [
+            format!("{ROOT_MANIFEST} {ABSENT}"),
+            format!("{RUNNER_MANIFEST} {ABSENT}"),
+        ]
+    );
+    assert_eq!(
+        outcome.field("restored_sources_discarded"),
+        Some(ROOT_MANIFEST)
+    );
     assert!(
-        !outcome.stdout.contains("::warning::"),
+        warnings(&outcome).iter().any(|line| line
+            .starts_with("::warning::restored Cargo sources discarded")
+            && line.contains(&format!("offline fetch of {ROOT_MANIFEST} failed"))),
         "{}",
         outcome.stdout
     );
@@ -143,7 +182,8 @@ fn a_prefix_hit_tries_offline_then_falls_back_to_the_network() -> Result<(), Box
 }
 
 #[test]
-fn a_mixed_restore_fetches_each_manifest_by_its_own_outcome() -> Result<(), Box<dyn Error>> {
+fn discarding_the_restore_refetches_what_was_already_fetched_offline() -> Result<(), Box<dyn Error>>
+{
     let outcome = run(&scenario(
         "false",
         "velnor-v2-sources-trusted-older",
@@ -157,18 +197,29 @@ fn a_mixed_restore_fetches_each_manifest_by_its_own_outcome() -> Result<(), Box<
         [
             format!("offline {ROOT_MANIFEST}"),
             format!("offline {RUNNER_MANIFEST}"),
+            format!("network {ROOT_MANIFEST}"),
             format!("network {RUNNER_MANIFEST}"),
         ]
     );
-    assert_eq!(outcome.network_calls, 1);
+    assert_eq!(
+        outcome.network_sightings,
+        [
+            format!("{ROOT_MANIFEST} {ABSENT}"),
+            format!("{RUNNER_MANIFEST} {ABSENT}"),
+        ]
+    );
     assert_eq!(
         outcome.fetch_modes(),
         [
-            format!("{ROOT_MANIFEST}:offline"),
+            format!("{ROOT_MANIFEST}:network"),
             format!("{RUNNER_MANIFEST}:network")
         ]
     );
-    assert_eq!(outcome.field("downloaded_crates"), Some("2"));
+    assert_eq!(
+        outcome.field("restored_sources_discarded"),
+        Some(RUNNER_MANIFEST)
+    );
+    assert_eq!(outcome.field("downloaded_crates"), Some("4"));
     Ok(())
 }
 
@@ -196,7 +247,7 @@ fn a_manifest_that_fails_offline_and_online_fails_the_phase_and_is_recorded()
 }
 
 #[test]
-fn an_exact_hit_that_needed_the_network_warns_and_records_the_manifest()
+fn an_exact_hit_that_needed_the_network_warns_and_records_the_manifests()
 -> Result<(), Box<dyn Error>> {
     let outcome = run(&scenario(
         "true",
@@ -209,25 +260,22 @@ fn an_exact_hit_that_needed_the_network_warns_and_records_the_manifest()
     assert_eq!(
         outcome.fetch_modes(),
         [
-            format!("{ROOT_MANIFEST}:offline"),
+            format!("{ROOT_MANIFEST}:network"),
             format!("{RUNNER_MANIFEST}:network")
         ]
     );
     assert_eq!(
         outcome.field("exact_hit_network_fetch"),
-        Some(RUNNER_MANIFEST)
+        Some(format!("{ROOT_MANIFEST},{RUNNER_MANIFEST}").as_str())
     );
-    let warnings: Vec<&str> = outcome
-        .stdout
-        .lines()
-        .filter(|line| line.starts_with("::warning::"))
+    let exact: Vec<&str> = warnings(&outcome)
+        .into_iter()
+        .filter(|line| line.starts_with("::warning::exact sources cache hit"))
         .collect();
-    assert_eq!(warnings.len(), 1, "{}", outcome.stdout);
+    assert_eq!(exact.len(), 1, "{}", outcome.stdout);
     assert_eq!(
-        warnings[0]
-            .rsplit_once(": ")
-            .map(|(_, manifests)| manifests),
-        Some(RUNNER_MANIFEST)
+        exact[0].rsplit_once(": ").map(|(_, manifests)| manifests),
+        Some(format!("{ROOT_MANIFEST},{RUNNER_MANIFEST}").as_str())
     );
     Ok(())
 }

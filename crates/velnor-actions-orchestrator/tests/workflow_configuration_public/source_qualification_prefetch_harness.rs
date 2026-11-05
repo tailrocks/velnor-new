@@ -30,6 +30,15 @@ if [ "$offline" = 1 ]; then
   printf 'error: failed to download from `https://index.crates.io/config.json`\n\nCaused by:\n  attempting to make an HTTP request, but --offline was specified\n' >&2
   exit 101
 fi
+seen=
+for restored in registry/index registry/cache git/db; do
+  if [ -e "$CARGO_HOME/$restored" ]; then seen="$seen $restored=present"; else seen="$seen $restored=absent"; fi
+done
+printf '%s%s\n' "$relative" "$seen" >> "$STUB_NETWORK_SEEN"
+if [ -e "$CARGO_HOME/registry/cache/corrupt.crate" ]; then
+  printf 'error: failed to unpack package `block-buffer v0.12.1`\n\nCaused by:\n  failed to iterate over archive\n' >&2
+  exit 101
+fi
 case " $STUB_NETWORK_FAIL " in
   *" $relative "*)
     printf 'error: failed to get `block-buffer` as a dependency\n' >&2
@@ -53,6 +62,7 @@ pub(super) struct Outcome {
     pub(super) stdout: String,
     pub(super) calls: Vec<String>,
     pub(super) network_calls: usize,
+    pub(super) network_sightings: Vec<String>,
     pub(super) identity: String,
     pub(super) lock_names: Vec<String>,
     workspace: String,
@@ -151,6 +161,18 @@ pub(super) fn run_prefetch(
     fs::create_dir_all(&stubs)?;
     fs::create_dir_all(&markers)?;
     fs::write(&log, "")?;
+    let seen = base.join("network-seen.log");
+    fs::write(&seen, "")?;
+    let cargo_home = base.join("cargo-home");
+    if !scenario.matched_key.is_empty() {
+        for restored in ["registry/index", "registry/cache", "git/db"] {
+            fs::create_dir_all(cargo_home.join(restored))?;
+        }
+        fs::write(
+            cargo_home.join("registry/cache/corrupt.crate"),
+            "not a crate",
+        )?;
+    }
     let stub = stubs.join("mise");
     fs::write(&stub, CARGO_STUB)?;
     fs::set_permissions(&stub, fs::Permissions::from_mode(0o755))?;
@@ -169,13 +191,14 @@ pub(super) fn run_prefetch(
         .env("RUNNER_TEMP", &runner_temp)
         .env("GITHUB_WORKSPACE", &workspace)
         .env("GITHUB_SHA", "0".repeat(40))
-        .env("CARGO_HOME", base.join("cargo-home"))
+        .env("CARGO_HOME", &cargo_home)
         .env("VELNOR_RUST_VERSION", "1.0.0")
         .env("VELNOR_MBX_VERSION", "1.0.0")
         .env("SOURCES_CACHE_HIT", scenario.cache_hit)
         .env("SOURCES_CACHE_MATCHED_KEY", scenario.matched_key)
         .env("STUB_LOG", &log)
         .env("STUB_MARKERS", &markers)
+        .env("STUB_NETWORK_SEEN", &seen)
         .env("STUB_OFFLINE_OK", scenario.offline_ok.join(" "))
         .env("STUB_NETWORK_FAIL", scenario.network_fails.join(" "))
         .output()?;
@@ -189,6 +212,10 @@ pub(super) fn run_prefetch(
             .map(str::to_owned)
             .collect(),
         network_calls: fs::read_dir(&markers)?.count(),
+        network_sightings: fs::read_to_string(&seen)?
+            .lines()
+            .map(str::to_owned)
+            .collect(),
         identity,
         lock_names,
         workspace: workspace.display().to_string(),
