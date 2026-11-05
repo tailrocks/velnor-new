@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import fcntl
+import ctypes
 import hashlib
 import os
 import re
@@ -55,10 +56,15 @@ if repository:
     if repository != os.environ.get("GITHUB_REPOSITORY") or re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository) is None or any(part in (".", "..") for part in repository.split("/")):
         raise SystemExit("verified_gh_invalid_repository")
     environment["GH_REPO"] = repository
-if not os.statvfs("/sys").f_flag & os.ST_RDONLY or any(os.path.lexists(os.path.join("/sys", name)) for name in ("config.yml", "hosts.yml")):
+config_dir = "/proc/self/fd"
+config_fd = os.open(config_dir, os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC)
+filesystem = ctypes.create_string_buffer(256)
+result = ctypes.CDLL(None, use_errno=True).fstatfs(config_fd, ctypes.byref(filesystem))
+os.close(config_fd)
+if result != 0 or ctypes.c_long.from_buffer(filesystem).value != 0x9FA0 or any(os.path.lexists(os.path.join(config_dir, name)) for name in ("config.yml", "hosts.yml", ".config", ".local")):
     raise SystemExit("verified_gh_config_not_isolated")
-environment["HOME"] = "/sys"
-environment["GH_CONFIG_DIR"] = "/sys"
+environment["HOME"] = config_dir
+environment["GH_CONFIG_DIR"] = config_dir
 environment["PATH"] = "/usr/bin:/bin"
 environment["GH_PROMPT_DISABLED"] = "1"
 os.execve(f"/proc/self/fd/{memfd}", ["gh", *sys.argv[1:]], environment)

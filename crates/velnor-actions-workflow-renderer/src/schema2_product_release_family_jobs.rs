@@ -186,7 +186,7 @@ pub(super) fn compose_job(
     if matches!(role, JobRole::Publish) {
         steps.splice(
             0..0,
-            generator_release::product_setup_steps(pins, family.runner_target())?,
+            generator_release::product_setup_steps(pins, ReleaseTarget::LinuxX86_64)?,
         );
     }
     let mut output = fields

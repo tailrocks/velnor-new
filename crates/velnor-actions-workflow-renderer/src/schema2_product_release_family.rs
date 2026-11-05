@@ -5,7 +5,6 @@ use std::collections::BTreeMap;
 
 use crate::RenderError;
 use crate::schema2::ProductReleasePins;
-use velnor_actions_contract::ReleaseTarget;
 
 use super::release_eligibility as eligibility;
 
@@ -82,13 +81,6 @@ impl Family {
             Self::Images => "release-images",
             Self::Binary => "release-binary",
             Self::Generator => "release-generator",
-        }
-    }
-
-    pub(super) const fn runner_target(self) -> ReleaseTarget {
-        match self {
-            Self::Images | Self::Generator => ReleaseTarget::LinuxX86_64,
-            Self::Binary => ReleaseTarget::MacosArm64,
         }
     }
 

@@ -278,7 +278,7 @@ fn extract_step(workflow: &str, name: &str) -> Result<String, Box<dyn Error>> {
     Ok(from_str(encoded)?)
 }
 
-fn pins() -> ProductReleasePins {
+pub(crate) fn pins() -> ProductReleasePins {
     let setup = MiseSetup {
         uses: "jdx/mise-action@f1f6d8a6c2a1f6a79d5216a1d7e3f1b0e4d7c1a9".to_owned(),
         version: "2026.10.19".to_owned(),

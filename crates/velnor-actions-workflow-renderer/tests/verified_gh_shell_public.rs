@@ -20,6 +20,37 @@ fn prefix() -> Vec<String> {
     .collect()
 }
 
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+#[test]
+fn procfs_config_custody_rejects_same_user_poisoning() -> Result<(), Box<dyn std::error::Error>> {
+    let pin = velnor_actions_mise::catalog::QUALIFIED_GH_LINUX_AMD64;
+    let source = std::env::var_os("MISE_DATA_DIR")
+        .map(std::path::PathBuf::from)
+        .or_else(|| {
+            std::env::var_os("HOME").map(|v| std::path::PathBuf::from(v).join(".local/share/mise"))
+        })
+        .ok_or("mise data")?;
+    let relative = format!(
+        "installs/gh/{0}/gh_{0}_{1}/bin/gh",
+        pin.version, pin.platform
+    );
+    let shell = velnor_actions_workflow_renderer::publish_scripts::gh_function(&prefix())?;
+    let fixture =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/verified_gh_procfs_cases.py");
+    let result = std::process::Command::new("/usr/bin/python3")
+        .arg(fixture)
+        .arg(shell)
+        .arg(source)
+        .arg(relative)
+        .output()?;
+    assert!(
+        result.status.success(),
+        "{}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+    Ok(())
+}
+
 #[test]
 fn rejects_unqualified_mise_arguments() {
     let mut argv = prefix();
