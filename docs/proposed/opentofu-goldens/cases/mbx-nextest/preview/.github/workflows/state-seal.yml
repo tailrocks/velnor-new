@@ -65,8 +65,8 @@ jobs:
           cache_save: "false"
           env: "false"
           install: "false"
-          sha256: 7129dbab31d698f9028db9374f7ba7987232b0426f837dcbce437130a61415f9
-          version: 2026.11.1
+          sha256: 5d362ecc578dc7c146679b841dda949d6472cbf86ff5635db7afdca1b6b3fd87
+          version: 2026.10.25
       - name: Resolve project tool versions
         env:
           ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
@@ -87,14 +87,14 @@ jobs:
         id: v2
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: a518576afe9c9dd4b4777d46edb1f95ce92483409362c5e01411a151f7440977-${{ env.VELNOR_TOOL_RUST }}-${{ env.VELNOR_TOOL_RUST_LOCK }}
+          d: 693100f77ca654436b358f5ace61dcde871d626a95626b178be2b1dd90406def-${{ env.VELNOR_TOOL_RUST }}-${{ env.VELNOR_TOOL_RUST_LOCK }}
       - name: Restore Mise tools
         id: tools-restore
         if: steps.v2.outputs.enabled == 'true'
         uses: ./.github/actions/velnor-tools-cache-restore # zizmor: ignore[self-repository]
         with:
           key: mise-tools-v2-${{steps.v2.outputs.identity}}
-          mise-sha256: 7129dbab31d698f9028db9374f7ba7987232b0426f837dcbce437130a61415f9
+          mise-sha256: 5d362ecc578dc7c146679b841dda949d6472cbf86ff5635db7afdca1b6b3fd87
           seed-admitted: ${{ steps.v2.outputs.seed_admitted }}
       - name: Verify restored Rust toolchain
         uses: ./.github/actions/velnor-verify-restored-rust # zizmor: ignore[self-repository]
@@ -202,8 +202,8 @@ jobs:
           cache_save: "false"
           env: "false"
           install: "false"
-          sha256: 7129dbab31d698f9028db9374f7ba7987232b0426f837dcbce437130a61415f9
-          version: 2026.11.1
+          sha256: 5d362ecc578dc7c146679b841dda949d6472cbf86ff5635db7afdca1b6b3fd87
+          version: 2026.10.25
       - name: Resolve project tool versions
         env:
           ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
@@ -224,14 +224,14 @@ jobs:
         id: v2
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: c645831b9e482858fc7c0dcbaa178276e71680505de41bb89324593e305e8303-${{ env.VELNOR_TOOL_RUST }}-${{ env.VELNOR_TOOL_RUST_LOCK }}
+          d: bcdf7cdd017204860384f42417b09c294bd9edd2ad01a15624c689e19b176930-${{ env.VELNOR_TOOL_RUST }}-${{ env.VELNOR_TOOL_RUST_LOCK }}
       - name: Restore Mise tools
         id: tools-restore
         if: steps.v2.outputs.enabled == 'true'
         uses: ./.github/actions/velnor-tools-cache-restore # zizmor: ignore[self-repository]
         with:
           key: mise-tools-v2-${{steps.v2.outputs.identity}}
-          mise-sha256: 7129dbab31d698f9028db9374f7ba7987232b0426f837dcbce437130a61415f9
+          mise-sha256: 5d362ecc578dc7c146679b841dda949d6472cbf86ff5635db7afdca1b6b3fd87
           seed-admitted: ${{ steps.v2.outputs.seed_admitted }}
       - name: Acquire Velnor
         timeout-minutes: 6
@@ -439,9 +439,9 @@ jobs:
     needs:
       - plan
       - state-producer-root
-      - tools-producer-36cc6f04
-      - tools-producer-a518576a
-      - tools-producer-c645831b
+      - tools-producer-18fa7d95
+      - tools-producer-693100f7
+      - tools-producer-bcdf7cdd
     if: "!cancelled() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && needs.state-producer-root.outputs.produced == 'true' && needs.state-producer-root.outputs.artifact_id != ''"
     steps:
       - name: Download sealed payload
@@ -502,8 +502,8 @@ jobs:
           VELNOR_STATE_SEAL_KEY: ${{steps.state-seal-subject.outputs.key}}
           VELNOR_STATE_SEAL_SCOPE: velnor-v4-state-trusted-union-root-
         run: "sh -c 'set -eu; case \"$RUNNER_TEMP\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''RUNNER_TEMP must be absolute'\\'' >&2; exit 1 ;; esac; payload=\"$RUNNER_TEMP/velnor-gc1/transport/state/payload.tar.zst\"; d=\"$RUNNER_TEMP/velnor/state-retire\"; rm -rf \"$d\"; mkdir -p \"$d\"; number() { case \"$1\" in '\\'''\\''|*[!0-9]*) return 1 ;; esac; }; bound_of() { awk -v n=\"$1\" '\\''BEGIN { b = int((n + 512 - 1) / 512) * 512; f = b + 6656; t = int((f + 10240 - 1) / 10240) * 10240; m = 0; if (t < 131072) m = int((131072 - t) / 2048); printf \"%.0f\\n\", t + int(t / 256) + m }'\\'' > \"$d/bound\" || return 1; bound=; read -r bound < \"$d/bound\" || return 1; number \"$bound\"; }; size=; if [ -L \"$payload\" ] || [ ! -f \"$payload\" ]; then size=; else wc -c < \"$payload\" > \"$d/size\" && read -r size < \"$d/size\" || size=; fi; skip() { printf '\\''%s\\n'\\'' \"::warning::cache_unavailable: state retire skipped ($1)\"; exit 0; }; key=\"${VELNOR_STATE_SEAL_KEY-}\"; scope=\"${VELNOR_STATE_SEAL_SCOPE-}\"; ref=\"${VELNOR_DEFAULT_REF-}\"; repo=\"${GITHUB_REPOSITORY-}\"; signer=\"$repo/.github/workflows/state-seal.yml\"; [ -n \"$key\" ] && [ -n \"$scope\" ] && [ -n \"$ref\" ] && [ -n \"$repo\" ] || skip identity_missing; number \"$size\" && [ \"$size\" -gt 0 ] || skip payload_unreadable; bound_of \"$size\" || skip bound_unavailable; subject=\"$RUNNER_TEMP/velnor/state-seal/subject\"; if [ -L \"$subject\" ] || [ ! -f \"$subject\" ]; then skip subject_missing; fi; sk=; sid=; stored=; read -r sk sid stored < \"$subject\" || skip subject_unreadable; [ \"$sk\" = \"$key\" ] || skip subject_key_mismatch; number \"$sid\" && number \"$stored\" && [ \"$stored\" -gt 0 ] && [ \"$stored\" -le \"$bound\" ] || skip \"size_out_of_bound stored=$stored bound=$bound\"; gh attestation verify \"$subject\" -R \"$repo\" --signer-workflow \"$signer\" --source-ref \"$ref\" --predicate-type '\\''https://velnor.dev/attestation/state-seal/v1'\\'' > /dev/null 2>&1 || skip attestation_unverified; shape='\\''^s256-[0-9a-f]{64}-s256-[0-9a-f]{64}-s256-[0-9a-f]{64}$'\\''; gh cache list -R \"$repo\" --key \"$scope\" --ref \"$ref\" --limit 100 --json key,id,sizeInBytes --jq '\\''.[] | [.key, (.id | tostring), (.sizeInBytes | tostring)] | @tsv'\\'' > \"$d/scope\" 2> /dev/null || skip scope_list_failed; while IFS='\\''\t'\\'' read -r k id rest; do case \"$k\" in \"$scope\"?*) ;; *) continue ;; esac; number \"$id\" || continue; printf '\\''%s\\n'\\'' \"${k#\"$scope\"}\" | grep -Eq \"$shape\" || continue; [ \"$k\" != \"$key\" ] || continue; if gh cache delete -R \"$repo\" \"$id\" > /dev/null 2>&1; then printf '\\''velnor: retired superseded state entry %s\\n'\\'' \"$k\"; else printf '\\''%s\\n'\\'' \"::warning::cache_unavailable: could not delete state entry $id\"; fi; done < \"$d/scope\"; printf '\\''velnor: state snapshot published (%s bytes, sha256:%s)\\n'\\'' \"$size\" \"${key##*-s256-}\"; artifact=\"${VELNOR_STATE_ARTIFACT_ID-}\"; if number \"$artifact\" && [ -n \"$artifact\" ]; then if gh api -X DELETE \"repos/$repo/actions/artifacts/$artifact\" > /dev/null 2>&1; then printf '\\''velnor: deleted handoff artifact %s\\n'\\'' \"$artifact\"; else printf '\\''%s\\n'\\'' \"::warning::cache_unavailable: could not delete handoff artifact $artifact\"; fi; fi'"
-  tools-producer-36cc6f04:
-    name: Tools producer / 36cc6f04
+  tools-producer-18fa7d95:
+    name: Tools producer / 18fa7d95
     runs-on: ubuntu-26.04
     timeout-minutes: 5
     continue-on-error: true
@@ -534,13 +534,13 @@ jobs:
           cache_save: "false"
           env: "false"
           install: "false"
-          sha256: 7129dbab31d698f9028db9374f7ba7987232b0426f837dcbce437130a61415f9
-          version: 2026.11.1
+          sha256: 5d362ecc578dc7c146679b841dda949d6472cbf86ff5635db7afdca1b6b3fd87
+          version: 2026.10.25
       - name: V2 identity
         id: v2
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: 36cc6f04cfd6a90146951553babc9b614ebf899d0f0210122f817d1097748c2c
+          d: 18fa7d952315e366530df4ebd0f2c8f3e29450541a2333a4d3a230ba27175f18
       - name: Probe Mise tools
         id: tools-restore
         if: steps.v2.outputs.enabled == 'true'
@@ -553,7 +553,7 @@ jobs:
         if: steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
         uses: ./.github/actions/velnor-tools-cache-scrub
         with:
-          mise-sha256: 7129dbab31d698f9028db9374f7ba7987232b0426f837dcbce437130a61415f9
+          mise-sha256: 5d362ecc578dc7c146679b841dda949d6472cbf86ff5635db7afdca1b6b3fd87
       - name: Prepare pinned tools
         if: steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
         run: mise --no-config --no-env --no-hooks install jactionlint@2.4.0 shellcheck@0.11.0
@@ -581,8 +581,8 @@ jobs:
       - name: Report optional cache save failure
         if: always() && !cancelled() && steps.velnor-optional-tools-save.outcome == 'failure'
         run: "printf '%s\\n' '::warning::cache_unavailable: optional save failed or timed out'"
-  tools-producer-a518576a:
-    name: Tools producer / a518576a
+  tools-producer-693100f7:
+    name: Tools producer / 693100f7
     runs-on: ubuntu-26.04
     timeout-minutes: 5
     continue-on-error: true
@@ -616,8 +616,8 @@ jobs:
           cache_save: "false"
           env: "false"
           install: "false"
-          sha256: 7129dbab31d698f9028db9374f7ba7987232b0426f837dcbce437130a61415f9
-          version: 2026.11.1
+          sha256: 5d362ecc578dc7c146679b841dda949d6472cbf86ff5635db7afdca1b6b3fd87
+          version: 2026.10.25
       - name: Resolve project tool versions
         env:
           ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
@@ -638,7 +638,7 @@ jobs:
         id: v2
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: a518576afe9c9dd4b4777d46edb1f95ce92483409362c5e01411a151f7440977-${{ env.VELNOR_TOOL_RUST }}-${{ env.VELNOR_TOOL_RUST_LOCK }}
+          d: 693100f77ca654436b358f5ace61dcde871d626a95626b178be2b1dd90406def-${{ env.VELNOR_TOOL_RUST }}-${{ env.VELNOR_TOOL_RUST_LOCK }}
       - name: Probe Mise tools
         id: tools-restore
         if: steps.v2.outputs.enabled == 'true'
@@ -651,7 +651,7 @@ jobs:
         if: steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
         uses: ./.github/actions/velnor-tools-cache-scrub
         with:
-          mise-sha256: 7129dbab31d698f9028db9374f7ba7987232b0426f837dcbce437130a61415f9
+          mise-sha256: 5d362ecc578dc7c146679b841dda949d6472cbf86ff5635db7afdca1b6b3fd87
       - name: Prepare pinned tools
         if: steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
         env:
@@ -687,8 +687,8 @@ jobs:
       - name: Report optional cache save failure
         if: always() && !cancelled() && steps.velnor-optional-tools-save.outcome == 'failure'
         run: "printf '%s\\n' '::warning::cache_unavailable: optional save failed or timed out'"
-  tools-producer-c645831b:
-    name: Tools producer / c645831b
+  tools-producer-bcdf7cdd:
+    name: Tools producer / bcdf7cdd
     runs-on: ubuntu-26.04
     timeout-minutes: 5
     continue-on-error: true
@@ -721,8 +721,8 @@ jobs:
           cache_save: "false"
           env: "false"
           install: "false"
-          sha256: 7129dbab31d698f9028db9374f7ba7987232b0426f837dcbce437130a61415f9
-          version: 2026.11.1
+          sha256: 5d362ecc578dc7c146679b841dda949d6472cbf86ff5635db7afdca1b6b3fd87
+          version: 2026.10.25
       - name: Resolve project tool versions
         env:
           ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
@@ -743,7 +743,7 @@ jobs:
         id: v2
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: c645831b9e482858fc7c0dcbaa178276e71680505de41bb89324593e305e8303-${{ env.VELNOR_TOOL_RUST }}-${{ env.VELNOR_TOOL_RUST_LOCK }}
+          d: bcdf7cdd017204860384f42417b09c294bd9edd2ad01a15624c689e19b176930-${{ env.VELNOR_TOOL_RUST }}-${{ env.VELNOR_TOOL_RUST_LOCK }}
       - name: Probe Mise tools
         id: tools-restore
         if: steps.v2.outputs.enabled == 'true'
@@ -756,7 +756,7 @@ jobs:
         if: steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
         uses: ./.github/actions/velnor-tools-cache-scrub
         with:
-          mise-sha256: 7129dbab31d698f9028db9374f7ba7987232b0426f837dcbce437130a61415f9
+          mise-sha256: 5d362ecc578dc7c146679b841dda949d6472cbf86ff5635db7afdca1b6b3fd87
       - name: Prepare pinned tools
         if: steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
         env:

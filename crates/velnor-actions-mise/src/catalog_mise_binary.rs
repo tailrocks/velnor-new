@@ -5,9 +5,9 @@ use super::{MISE_BINARY_SHA256_LINUX_X64, MISE_VERSION};
 use velnor_actions_contract::ReleaseTarget;
 
 pub const MISE_BINARY_SHA256_MACOS_ARM64: &str =
-    "9ca1005930fed90e0f4c30d9b13fe4530fe88d0549a71349716a3aab9051c627";
+    "8a3ef00765b009278197aba627ac00d6e9c63f6aeb04d4f4b2cfe0e59ddc2fd6";
 pub const MISE_BINARY_SHA256_MACOS_X64: &str =
-    "ead2414251e8f2909cc7564f8ab5fd1feea6962ed77d0177776d72e08ae747a0";
+    "e06eb3f0311dedbf65952ec2c0247398848653b302e6aad99d7371ad9ba33301";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct MiseBinaryIdentity<'a> {
@@ -19,9 +19,9 @@ pub struct MiseBinaryIdentity<'a> {
 #[must_use]
 pub fn current_mise_binary(target: ReleaseTarget) -> MiseBinaryIdentity<'static> {
     let (sha256, bytes) = match target {
-        ReleaseTarget::LinuxX86_64 => (MISE_BINARY_SHA256_LINUX_X64, 177_907_728),
-        ReleaseTarget::MacosArm64 => (MISE_BINARY_SHA256_MACOS_ARM64, 141_426_624),
-        ReleaseTarget::MacosX86_64 => (MISE_BINARY_SHA256_MACOS_X64, 172_294_368),
+        ReleaseTarget::LinuxX86_64 => (MISE_BINARY_SHA256_LINUX_X64, 176_351_376),
+        ReleaseTarget::MacosArm64 => (MISE_BINARY_SHA256_MACOS_ARM64, 140_146_464),
+        ReleaseTarget::MacosX86_64 => (MISE_BINARY_SHA256_MACOS_X64, 171_256_016),
     };
     MiseBinaryIdentity {
         version: MISE_VERSION,

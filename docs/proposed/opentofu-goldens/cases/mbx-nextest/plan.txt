@@ -24,9 +24,9 @@ Workflow to generate
     - rust-app (27 steps)
     - state-producer-root (35 steps)
     - state-seal-root (8 steps)
-    - tools-producer-36cc6f04 (9 steps)
-    - tools-producer-a518576a (10 steps)
-    - tools-producer-c645831b (11 steps)
+    - tools-producer-18fa7d95 (9 steps)
+    - tools-producer-693100f7 (10 steps)
+    - tools-producer-bcdf7cdd (11 steps)
     - 1 Rust crate job
       Timeout: 5 minutes per crate job
       Obligations: Clippy -> build -> run tests -> doctests -> doc build -> format check

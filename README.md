@@ -47,7 +47,7 @@ Historical freshness evidence checked on 2026-10-17 records Mise 2026.10.13,
 Rust 1.98.1, Nextest 0.9.148, and release-plz 0.3.172. The workflow
 pins in that evidence were `jdx/mise-action` v5.2.0 and `asamarts/alint` v0.18.4. See
 [`freshness-evidence-2026-10-17.md`](docs/implemented/freshness-evidence-2026-10-17.md).
-The current catalog selects Mise 2026.11.1, ALint 0.21.0, Rust 1.99.1,
+The current catalog selects Mise 2026.10.25, ALint 0.21.0, Rust 1.99.1,
 MBX 1.29.1, GitHub CLI 2.103.3, Nextest 0.9.151, and release-plz 0.4.3.
 The earlier Mise 2026.10.19 qualification record is retained in
 [`mise-2026-10-19-qualification.md`](docs/implemented/mise-2026-10-19-qualification.md).
