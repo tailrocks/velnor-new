@@ -16,7 +16,7 @@ result = subprocess.run(
     capture_output=True, timeout=780, check=False,
 )
 if result.returncode != 0 or len(result.stdout) > 65536:
-    raise SystemExit("hosted procfs GitHub CLI custody test failed")
+    raise SystemExit(f"hosted procfs GitHub CLI custody test failed: nextest_status={result.returncode} stdout_bytes={len(result.stdout)}")
 def unique(pairs):
     output = {}
     for key, value in pairs:
