@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{
-    FeedbackContext, FeedbackRead, MAX_FEEDBACK_RECORDS, Value, internal, paged_commit_comments,
+    FeedbackRead, FeedbackSubject, MAX_FEEDBACK_RECORDS, Value, internal, paged_commit_comments,
     paged_values,
 };
 use crate::OrchestratorError;
@@ -10,7 +10,7 @@ use std::collections::BTreeSet;
 
 pub(super) fn inventory(
     api: &dyn FeedbackRead,
-    context: &FeedbackContext<'_>,
+    context: &FeedbackSubject<'_>,
 ) -> Result<Vec<String>, OrchestratorError> {
     let pull: Value = api.feedback_get(&format!(
         "repos/{}/pulls/{}",
@@ -82,7 +82,7 @@ pub(super) fn comments(
 
 pub(super) fn require_head(
     api: &dyn FeedbackRead,
-    context: &FeedbackContext<'_>,
+    context: &FeedbackSubject<'_>,
     count: usize,
 ) -> Result<(), OrchestratorError> {
     let pull: Value = api.feedback_get(&format!(
@@ -94,7 +94,7 @@ pub(super) fn require_head(
 
 fn validate_head(
     pull: &Value,
-    context: &FeedbackContext<'_>,
+    context: &FeedbackSubject<'_>,
     count: usize,
 ) -> Result<(), OrchestratorError> {
     if pull["number"].as_u64() != Some(context.pull_request_number)

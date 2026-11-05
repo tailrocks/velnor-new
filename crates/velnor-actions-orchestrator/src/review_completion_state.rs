@@ -19,7 +19,7 @@ use velnor_actions_contract::{
 };
 use velnor_actions_mise::CheckDeadline;
 
-pub(super) const PROVIDER_APP: u64 = 1_144_995;
+pub(crate) const PROVIDER_APP: u64 = 1_144_995;
 pub(super) const PROVIDER_OWNER: u64 = 14_957_082;
 pub(super) const PROVIDER_BOT: u64 = 199_175_422;
 pub(super) const PROPOSAL_NAME: &str = "review-completion-proposal.json";
@@ -27,7 +27,7 @@ const MAX_BYTES: u64 = 16 * 1024 * 1024;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub(super) enum CompletionState {
+pub(crate) enum CompletionState {
     Pending,
     Blocked,
     Ready,

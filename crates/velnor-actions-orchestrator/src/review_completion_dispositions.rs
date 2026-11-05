@@ -1,12 +1,14 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use super::{FeedbackRecords, PROVIDER_BOT, TapMergeGitHub, authenticate_review, time};
+use super::{
+    FeedbackRecords, PROVIDER_BOT, ProviderQuery, ProviderRead, authenticate_review, time,
+};
 use crate::{OrchestratorError, internal::internal};
 use serde_json::Value;
 use std::collections::BTreeSet;
 
-const USER_REVIEW_EDITOR: &str = "query($id:ID!){node(id:$id){... on PullRequestReview{fullDatabaseId body submittedAt lastEditedAt commit{oid} author{__typename ... on User{databaseId} ... on Bot{databaseId}} editor{__typename ... on User{databaseId} ... on Bot{databaseId}}}}}";
+pub(super) const USER_REVIEW_EDITOR: &str = "query($id:ID!){node(id:$id){... on PullRequestReview{fullDatabaseId body submittedAt lastEditedAt commit{oid} author{__typename ... on User{databaseId} ... on Bot{databaseId}} editor{__typename ... on User{databaseId} ... on Bot{databaseId}}}}}";
 
 pub(super) struct Reply {
     pub(super) review_id: u64,
@@ -110,7 +112,7 @@ fn authenticate_reply_editor(
 }
 
 pub(super) fn authenticate_review_container(
-    api: &TapMergeGitHub,
+    api: &dyn ProviderRead,
     review: &Value,
     user_id: u64,
     latest_reply: time::Timestamp,
@@ -123,7 +125,10 @@ pub(super) fn authenticate_review_container(
     let node_id = review["node_id"]
         .as_str()
         .ok_or_else(|| internal("review_finding_review_node"))?;
-    let response: Value = api.graphql(USER_REVIEW_EDITOR, &[("id", node_id.to_owned())])?;
+    let response: Value = api.provider_graphql(
+        ProviderQuery::HumanReviewEditor,
+        &[("id", node_id.to_owned())],
+    )?;
     let node = &response["data"]["node"];
     let id = positive(review, "id")?;
     let commit = review["commit_id"].as_str();
@@ -196,7 +201,7 @@ fn valid_sha(value: &str) -> bool {
 }
 
 pub(super) fn authenticate_reviews(
-    api: &TapMergeGitHub,
+    api: &dyn ProviderRead,
     records: &FeedbackRecords,
     human_review_ids: &BTreeSet<u64>,
     terminal: (time::Timestamp, time::Timestamp),

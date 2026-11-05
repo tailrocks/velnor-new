@@ -113,6 +113,9 @@ pub(super) fn valid_route(route: &str) -> bool {
         return false;
     }
     let segments: Vec<&str> = path.split('/').collect();
+    if matches!(path, "apps/chatgpt-codex-connector" | "apps/sonarqubecloud") {
+        return query.is_empty();
+    }
     if let ["users", user] = segments.as_slice() {
         return query.is_empty() && valid_segment(user);
     }

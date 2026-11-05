@@ -4,10 +4,7 @@
 use crate::github_review_feedback::FeedbackRecords;
 #[path = "review_completion_time.rs"]
 mod time;
-use super::{
-    super::github::TapMergeGitHub,
-    state::{CompletionState, PROVIDER_APP, PROVIDER_BOT, PROVIDER_OWNER},
-};
+use super::state::{CompletionState, PROVIDER_APP, PROVIDER_BOT, PROVIDER_OWNER};
 use crate::{OrchestratorError, internal::internal};
 use serde::Deserialize;
 use serde_json::Value;
@@ -56,8 +53,12 @@ struct Role {
     status: Option<String>,
 }
 
-pub(super) fn inspect(
-    api: &TapMergeGitHub,
+#[path = "review_completion_provider_transport.rs"]
+mod transport;
+pub use transport::{ProviderApp, ProviderQuery, ProviderRead};
+
+pub(crate) fn inspect(
+    api: &dyn ProviderRead,
     head: &str,
     records: &FeedbackRecords,
     restart: Option<(&str, &str)>,
@@ -154,10 +155,10 @@ fn evidence_digest(
 type AuthenticatedSummary<'a> = (Value, &'a Value, Value);
 
 fn authenticate<'a>(
-    api: &TapMergeGitHub,
+    api: &dyn ProviderRead,
     records: &'a FeedbackRecords,
 ) -> Result<Option<AuthenticatedSummary<'a>>, OrchestratorError> {
-    let app: Value = api.get("apps/chatgpt-codex-connector")?;
+    let app: Value = api.provider_app(ProviderApp::Codex)?;
     if app["id"].as_u64() != Some(PROVIDER_APP)
         || app["slug"].as_str() != Some("chatgpt-codex-connector")
         || app.pointer("/owner/id").and_then(Value::as_u64) != Some(PROVIDER_OWNER)
@@ -177,13 +178,14 @@ fn authenticate<'a>(
     let node_id = summary["node_id"]
         .as_str()
         .ok_or_else(|| internal("review_provider_node"))?;
-    let editor: Value = api.graphql(EDITOR, &[("id", node_id.to_owned())])?;
+    let editor: Value =
+        api.provider_graphql(ProviderQuery::IssueEditor, &[("id", node_id.to_owned())])?;
     validate_editor(summary, &editor)?;
     Ok(Some((app, summary, editor)))
 }
 
 fn authenticate_review(
-    api: &TapMergeGitHub,
+    api: &dyn ProviderRead,
     review: &Value,
 ) -> Result<(Value, time::Timestamp), OrchestratorError> {
     let submitted = time::parse(
@@ -194,7 +196,8 @@ fn authenticate_review(
     let id = review["node_id"]
         .as_str()
         .ok_or_else(|| internal("review_provider_review_node"))?;
-    let response: Value = api.graphql(REVIEW_EDITOR, &[("id", id.to_owned())])?;
+    let response: Value =
+        api.provider_graphql(ProviderQuery::BotReviewEditor, &[("id", id.to_owned())])?;
     let node = &response["data"]["node"];
     if response.get("errors").is_some()
         || full_database_id(node).is_none_or(|id| review["id"].as_u64() != Some(id))

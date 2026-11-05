@@ -158,6 +158,29 @@ impl crate::github_review_feedback::FeedbackRead for NativeGitHubAdmissionRead {
     }
 }
 
+impl crate::tap_merge::review_completion::provider::ProviderRead for NativeGitHubAdmissionRead {
+    fn provider_app(
+        &self,
+        app: crate::tap_merge::review_completion::provider::ProviderApp,
+    ) -> Result<Value, OrchestratorError> {
+        self.reader.get(app.route())
+    }
+    fn provider_graphql(
+        &self,
+        query: crate::tap_merge::review_completion::provider::ProviderQuery,
+        fields: &[(&str, String)],
+    ) -> Result<Value, OrchestratorError> {
+        self.reader.qualification_provider_graphql(query, fields)
+    }
+    fn provider_check_runs(
+        &self,
+        repository: &str,
+        head: &str,
+    ) -> Result<Vec<Value>, OrchestratorError> {
+        crate::crate_release_qualification_checks::complete_check_runs(self, repository, head)
+    }
+}
+
 pub fn admit_github_evidence(
     request: &GitHubAdmissionRequest,
     api: &dyn GitHubAdmissionRead,

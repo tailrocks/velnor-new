@@ -66,10 +66,31 @@ pub struct FeedbackContext<'a> {
     pub expected_reviewer_app_ids: &'a std::collections::BTreeSet<u64>,
 }
 
+#[derive(Debug)]
+pub(crate) struct FeedbackSubject<'a> {
+    pub(crate) repository: &'a str,
+    pub(crate) pull_request_number: u64,
+    pub(crate) head_sha: &'a str,
+}
+
 pub(crate) fn capture_feedback(
     api: &dyn FeedbackRead,
     context: &FeedbackContext<'_>,
     check_runs: &[Value],
+) -> Result<CapturedFeedback, OrchestratorError> {
+    let subject = FeedbackSubject {
+        repository: context.repository,
+        pull_request_number: context.pull_request_number,
+        head_sha: context.head_sha,
+    };
+    let mut captured = capture_feedback_subject(api, &subject)?;
+    captured.completion = completion_from_checks(check_runs, context, &captured.snapshot)?;
+    Ok(captured)
+}
+
+pub(crate) fn capture_feedback_subject(
+    api: &dyn FeedbackRead,
+    context: &FeedbackSubject<'_>,
 ) -> Result<CapturedFeedback, OrchestratorError> {
     let commits = commit_inventory::inventory(api, context)?;
     let reviews = paged_values(
@@ -128,10 +149,9 @@ pub(crate) fn capture_feedback(
         outstanding_change_requests,
     };
     commit_inventory::require_head(api, context, commits.len())?;
-    let completion = completion_from_checks(check_runs, context, &snapshot)?;
     Ok(CapturedFeedback {
         snapshot,
-        completion,
+        completion: None,
         records,
     })
 }

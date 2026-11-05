@@ -5,7 +5,7 @@ use crate::{OrchestratorError, crate_release_github::GitHubAdmissionRead, intern
 use serde_json::Value;
 use std::collections::BTreeSet;
 
-fn complete_check_runs(
+pub(crate) fn complete_check_runs(
     api: &dyn GitHubAdmissionRead,
     repository: &str,
     sha: &str,
