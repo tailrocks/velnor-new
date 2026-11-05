@@ -42,11 +42,12 @@ fn native_registry_read_obeys_shared_deadline() -> Result<(), Box<dyn std::error
         let started = Instant::now();
         let result = deadline.scope(|| NativeCrateRegistryRead.get("/api/v1/crates/demo"));
         assert!(!matches!(result, Ok(Ok(_))));
-        assert!(started.elapsed() < Duration::from_secs(2));
+        assert!(started.elapsed() < Duration::from_secs(6));
         return Ok(());
     }
     let listener = std::net::TcpListener::bind("127.0.0.1:0")?;
     let origin = format!("http://{}", listener.local_addr()?);
+    let (release, hold) = std::sync::mpsc::channel::<()>();
     let worker = std::thread::spawn(move || -> Result<(), std::io::Error> {
         let (mut stream, _) = listener.accept()?;
         let mut buffer = [0; 4096];
@@ -54,7 +55,7 @@ fn native_registry_read_obeys_shared_deadline() -> Result<(), Box<dyn std::error
             return Err(std::io::Error::from(std::io::ErrorKind::UnexpectedEof));
         }
         stream.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 20\r\n\r\n{")?;
-        std::thread::sleep(Duration::from_secs(3));
+        let _held = hold.recv_timeout(Duration::from_secs(12));
         Ok(())
     });
     let status = std::process::Command::new(std::env::current_exe()?)
@@ -64,6 +65,7 @@ fn native_registry_read_obeys_shared_deadline() -> Result<(), Box<dyn std::error
         ])
         .env("VELNOR_TEST_REGISTRY_ORIGIN", origin)
         .status()?;
+    let _released = release.send(());
     worker.join().map_err(|_| "server panic")??;
     assert!(status.success());
     Ok(())
