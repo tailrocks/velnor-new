@@ -91,9 +91,6 @@ pub use super::extension_schemas::{
     task_stack_segment,
 };
 pub use super::finalized::finalized_jobs;
-pub use velnor_actions_workflow_renderer::{
-    ExecWord, WasteFinding, WasteFindings, WasteRule, waste_findings,
-};
 pub use super::generate::unmanaged::{UnmanagedReport, unmanaged_report};
 pub use super::generate::{
     GenerateOptions, GenerateReport, ToolSnapshot, generate, generate_dispatched,
@@ -119,7 +116,6 @@ pub use super::prepare::{
     GenerationPreparation, prepare_for_candidate as prepare,
     prepare_for_candidate_with_operator_guard as prepare_with_operator_guard,
 };
-pub use velnor_actions_mise::OperatorToolchainGuard;
 pub use super::preseed_manifest::{PRESEED_MANIFEST_OP, write_preseed_manifest};
 pub use super::preview_producer::{
     ACQUIRE_RELEASE_LEAVES_OP, ADMIT_RELEASE_AGGREGATE_OP, EXECUTE_RELEASE_PRODUCER_OP,
@@ -183,6 +179,10 @@ pub use velnor_actions_contract::workflow::{
     QUALIFICATION_CAMPAIGN_OUTPUT, QUALIFICATION_PHASE_OUTPUT,
 };
 pub use velnor_actions_contract::{DYNAMIC_MATRIX_OUTPUT_MODE, PLAN_MATRIX_OUTPUT_MODE_ENV};
+pub use velnor_actions_mise::OperatorToolchainGuard;
+pub use velnor_actions_workflow_renderer::{
+    ExecWord, WasteFinding, WasteFindings, WasteRule, waste_findings,
+};
 
 pub use super::package_publication::{
     PackagePublicationBackend, PackagePublicationOutcome, publish_package_release,
@@ -207,7 +207,10 @@ pub const ORCHESTRATOR_VERSION: u32 = 0;
 
 pub use crate::qualification_candidate::qualify_tools;
 
-pub use super::homebrew::qualification::execute_homebrew_qualification_from_env;
+pub use super::homebrew::qualification::{
+    admit_homebrew_qualification_from_env, execute_homebrew_qualification_from_env,
+    finalize_homebrew_qualification_from_env,
+};
 pub use super::homebrew::runtime::execute_native_homebrew_check_from_env;
 pub(crate) use super::package_release_publish::{release_policy_admission, stable_tag_origin};
 
