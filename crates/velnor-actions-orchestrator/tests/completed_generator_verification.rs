@@ -5,7 +5,6 @@ use std::{
     collections::BTreeSet,
     error::Error,
     fs,
-    path::Path,
     process::{Command, Output},
 };
 
@@ -74,7 +73,7 @@ impl Fixture {
             root.path().join("gh-transport.sh"),
             include_str!("completed_generator_verification/gh_transport.sh"),
         )?;
-        let run = reconcile_script(root.path())?;
+        let run = reconcile_script()?;
         fs::write(root.path().join("reconcile.sh"), run)?;
         Ok(Self { root })
     }
@@ -97,21 +96,15 @@ impl Fixture {
             .env("GITHUB_WORKFLOW_SHA", assets::SOURCE)
             .env("GITHUB_REPOSITORY", "tailrocks/velnor-new")
             .env("GITHUB_OUTPUT", root.join("output"))
+            .env("VELNOR_TEST_GH_TRANSPORT", root.join("gh-transport.sh"))
             .env("FIXTURE_RELEASES", root.join("releases.json"))
             .env("FIXTURE_ASSETS", root.join("assets"))
             .output()?)
     }
 }
 
-fn reconcile_script(root: &Path) -> Result<String, Box<dyn Error>> {
-    let mut pins = render_pins()?;
-    pins.gh_argv = vec![
-        "bash".to_owned(),
-        root.join("gh-transport.sh")
-            .to_str()
-            .ok_or("nonutf8 fixture path")?
-            .to_owned(),
-    ];
+fn reconcile_script() -> Result<String, Box<dyn Error>> {
+    let pins = render_pins()?;
     let request = Schema2WorkflowRequest {
         version: env!("CARGO_PKG_VERSION").to_owned(),
         hosted_label: "ubuntu-26.04".to_owned(),
@@ -143,7 +136,17 @@ fn reconcile_script(root: &Path) -> Result<String, Box<dyn Error>> {
         .lines()
         .find_map(|line| line.strip_prefix("        run: "))
         .ok_or("missing generator reconcile script")?;
-    Ok(serde_json::from_str(run)?)
+    let script: String = serde_json::from_str(run)?;
+    let (before, remainder) = script.split_once("gh() {\n").ok_or("missing gh boundary")?;
+    let (_, after) = remainder
+        .split_once("}\nexport -f gh")
+        .ok_or("missing gh boundary end")?;
+    if after.contains("gh() {\n") {
+        return Err("multiple gh boundaries".into());
+    }
+    Ok(format!(
+        "{before}gh() {{ bash \"$VELNOR_TEST_GH_TRANSPORT\" \"$@\"; }}\nexport -f gh{after}"
+    ))
 }
 
 fn assert_rejected(fixture: &Fixture, output: &Output) -> Result<(), Box<dyn Error>> {
@@ -201,6 +204,16 @@ fn render_pins() -> Result<velnor_actions_workflow_renderer::ProductReleasePins,
     ] {
         install.clone_into(argv);
     }
+    pins.gh_argv = velnor_actions_mise::PinnedToolExec::new(
+        vec![PinnedTool::Gh],
+        std::ffi::OsStr::new("gh"),
+        Vec::new(),
+    )?
+    .argv(&catalog)
+    .into_iter()
+    .map(|value| value.into_string().map_err(|_| "nonutf8 gh argument"))
+    .collect::<Result<Vec<_>, _>>()?;
+    pins.gh_version = velnor_actions_mise::catalog::GH_VERSION.to_owned();
     pins.verify_rust_argv = verify_rust_argv(&catalog);
     pins.verify_lint_argv = jactionlint_verifier_argv(&catalog);
     Ok(pins)
