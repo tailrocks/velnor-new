@@ -5,7 +5,7 @@
 eedeeadb7561e6d9be03444483668c41c2b92af1acddc6faa71f88ae27e64730  ./.github/actions/generator-release-build-linux/action.yml
 936f3f18572b5c8e1aa45167fc85bd0700077d26f5f7e78294c7cf1d7086ae7f  ./.github/actions/generator-release-build-macos-intel/action.yml
 42426a7fde8970f3b68f634d2b95d1a1c6113fdae9813d2218bd265d16b2c710  ./.github/actions/generator-release-build-macos/action.yml
-26bf76d8b5ef4ba52f148968967fcd900641fbd1eaf991c72843793cd42c45ae  ./.github/actions/generator-release-qualify-homebrew/action.yml
+dd8e402af6742ead88e4d6c1a3d0c080b3106bf4b50dea4c3e9c2f7313c9586f  ./.github/actions/generator-release-qualify-homebrew/action.yml
 3368523b8490baa8ae8bdc93942395210c20ad97e667d34a536e5077378bd847  ./.github/actions/generator-release-qualify-linux/action.yml
 df446757332bbe1b61530bbf9135ab476d7eda0f5d442db38889aced619ff305  ./.github/actions/generator-release-qualify-macos-intel/action.yml
 5b989cd88baea2c0f1e56b099148b93c2ab166a60cb3f7b5ac7741a40b719587  ./.github/actions/generator-release-qualify-macos/action.yml
@@ -27,7 +27,7 @@ df96be0bbfc433cf6e48208b299f77cc63aa5b854ab3e31157bfbcec5d2fd21f  ./.github/work
 60215285b83ae9d44f5fea647c280a4da72e0739675a2f7043c54f761896ea3e  ./.github/workflows/homebrew-adoption.yml
 ff37182e12cfeb46fe3836ddcf48e8e1021c43c5734e43d5e0166c2580f1bacd  ./.github/workflows/job-image-candidate.yml
 141173c314f4ef59faa97fa65df26add27df3e081befb2e05b790adb6a77e763  ./.github/workflows/product-release-binary.yml
-57677053a67a19c9f2a19492bde742a84c1afc27d04e37425d7583b1880797a8  ./.github/workflows/product-release-generator.yml
+c261d72af751dd938e014b9f316ae8277a27d11f7c720ea4dd1066f249210096  ./.github/workflows/product-release-generator.yml
 87bba73d2000b842c0556b3c6bb1fadc59cf0deee1e1713e1f48b85d9ee74dfb  ./.github/workflows/product-release-images.yml
 2b2bb2a2bd442a7a63b5a0842af1b08cb52ea33f8e25ac3a9786617f084433ed  ./.github/workflows/product-release.yml
 688cb6fb7a70be4270cb23d7eba8c90db74c1ba04f65f6fa6dc50df2ceb5320a  ./.github/workflows/qualification.yml
