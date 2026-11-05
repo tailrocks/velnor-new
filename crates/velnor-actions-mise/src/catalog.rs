@@ -45,9 +45,9 @@ pub use versions::{
     check_freshness_requirements, validate_concrete_exact_version, validate_exact_version,
 };
 
-#[path = "catalog_rust_manifests.rs"]
-mod rust_manifests;
-pub use rust_manifests::{RUST_CHANNEL_MANIFESTS, rust_channel_manifest_sha256};
+pub use velnor_actions_contract::config::rust_channel_manifests::{
+    RUST_CHANNEL_MANIFESTS, rust_channel_manifest_sha256,
+};
 
 pub use velnor_actions_contract::config::jactionlint_verifier::{
     JACTIONLINT_DIGESTS, JactionlintDigest, jactionlint_archive_sha256,

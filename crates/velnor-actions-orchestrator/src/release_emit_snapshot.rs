@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{
-    IntentSettings, check_creation_selection, check_recovery_record, common_registry,
+    IntentSettings, check_release_selection, check_recovery_record, common_registry,
     crate_release_intent, plz_config, reviewed_generator_manifest, reviewed_pr_write_paths,
     selection,
 };
@@ -59,7 +59,7 @@ pub(crate) fn derive_intent_from_snapshot(
         return Err(invalid());
     }
     check_recovery_record(release, &selection)?;
-    check_creation_selection(release, &selection)?;
+    check_release_selection(release, &selection)?;
     let registry = common_registry(&selection)?;
     let pin = reviewed_generator_manifest(
         Some(std::str::from_utf8(manifest).map_err(|_| invalid())?),

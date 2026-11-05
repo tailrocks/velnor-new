@@ -23,24 +23,17 @@ pub(super) fn request_from_environment(
     {
         return Err(internal("crate_release_workflow_identity"));
     }
-    if intent.new_crates.is_some() && event != "workflow_dispatch" {
-        return Err(internal("crate_release_creation_requires_dispatch"));
-    }
-    let recovery_sha = if event == "workflow_dispatch" {
-        Some(
+    let approved_source = intent
+        .recovery
+        .as_ref()
+        .map(|item| item.source_sha.as_str())
+        .or_else(|| {
             intent
-                .recovery
+                .new_crates
                 .as_ref()
-                .map(|item| &item.source_sha)
-                .or_else(|| intent.new_crates.as_ref().map(|item| &item.source_sha))
-                .ok_or_else(|| internal("crate_release_recovery_missing"))?
-                .clone(),
-        )
-    } else if event == "push" {
-        None
-    } else {
-        return Err(internal("crate_release_event_invalid"));
-    };
+                .map(|item| item.source_sha.as_str())
+        });
+    let recovery_sha = source_for_event(&event, approved_source)?;
     let source_sha = recovery_sha
         .clone()
         .unwrap_or_else(|| workflow_sha.to_owned());
@@ -64,6 +57,19 @@ pub(super) fn request_from_environment(
         source_sha,
         recovery_sha,
     })
+}
+
+fn source_for_event(
+    event: &str,
+    approved_source: Option<&str>,
+) -> Result<Option<String>, OrchestratorError> {
+    match (event, approved_source) {
+        ("workflow_dispatch", Some(source)) => Ok(Some(source.to_owned())),
+        ("push", None) => Ok(None),
+        ("push", Some(_)) => Err(internal("crate_release_exact_source_requires_dispatch")),
+        ("workflow_dispatch", None) => Err(internal("crate_release_recovery_missing")),
+        _ => Err(internal("crate_release_event_invalid")),
+    }
 }
 
 pub(super) fn source_admit(
@@ -183,5 +189,23 @@ pub(crate) fn release_mode(receipt: &CrateReleaseAdmissionReceipt) -> &'static s
         (true, false) => "publish",
         (false, true) => "repair",
         (false, false) => "none",
+    }
+}
+
+#[cfg(test)]
+mod exact_source_tests {
+    use super::source_for_event;
+
+    #[test]
+    fn exact_source_requires_dispatch() -> Result<(), Box<dyn std::error::Error>> {
+        let source = "a".repeat(40);
+        assert!(source_for_event("push", Some(&source)).is_err());
+        assert_eq!(
+            source_for_event("workflow_dispatch", Some(&source))?,
+            Some(source)
+        );
+        assert_eq!(source_for_event("push", None)?, None);
+        assert!(source_for_event("workflow_dispatch", None).is_err());
+        Ok(())
     }
 }

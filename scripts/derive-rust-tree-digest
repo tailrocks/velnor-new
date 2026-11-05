@@ -288,7 +288,7 @@ run_manifest() {
   esac
   script_dir=$(dirname -- "$0") || die "cannot locate $0"
   root=$(cd -P -- "$script_dir/.." && pwd -P) || die "cannot locate the repository root from $0"
-  catalog="$root/crates/velnor-actions-mise/src/catalog_rust_manifests.rs"
+  catalog="$root/crates/velnor-actions-contract/src/config/rust_channel_manifests.rs"
   want=$(manifest_digest "$version") || die "cannot read $catalog"
   case "$want" in
     *[!0-9a-f]* | "") die "rust $version has no channel manifest digest in $catalog" ;;

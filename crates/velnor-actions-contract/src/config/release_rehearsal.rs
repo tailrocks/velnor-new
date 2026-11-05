@@ -123,7 +123,11 @@ impl ReleaseRehearsalConfig {
                     "invalid_intent_config_path",
                 ));
             }
-            if !super::super::release_intent::is_cargo_version(&metadata.rust_version) {
+            if super::super::rust_channel_manifests::rust_channel_manifest_sha256(
+                &metadata.rust_version,
+            )
+            .is_none()
+            {
                 return Err(ContractError::config(
                     file,
                     "stacks.rust.release.rehearsal.metadata.rust_version",

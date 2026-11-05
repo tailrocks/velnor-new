@@ -135,10 +135,10 @@ impl Bundle {
 
     fn install_tool(&self, channel_sha256: &str) {
         let root = self.work.path();
-        let catalog = root.join("crates/velnor-actions-mise/src");
+        let catalog = root.join("crates/velnor-actions-contract/src/config");
         fs::create_dir_all(&catalog).expect("catalog dir");
         fs::write(
-            catalog.join("catalog_rust_manifests.rs"),
+            catalog.join("rust_channel_manifests.rs"),
             format!("(\n\"{VERSION}\",\n\"{channel_sha256}\",\n\"2026-10-15\",\n),\n"),
         )
         .expect("catalog");

@@ -10,6 +10,8 @@ fn bootstrap_versions_follow_cargo_semver() {
     let mut release = RustReleaseConfig {
         enabled: true,
         registry: ReleaseRegistry::CratesIo,
+        required_workflow_path: ".github/workflows/ci.yml".into(),
+        trusted_reviewer_id: 12345,
         packages: vec!["example".to_owned()],
         authentication: Some(ReleaseAuthentication::BootstrapToken),
         recovery: Some(RecoveryRelease {

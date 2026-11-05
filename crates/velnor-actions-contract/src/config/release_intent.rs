@@ -95,7 +95,11 @@ impl CrateReleaseIntent {
         validate_manifest_path(file, &self.manifest_path)?;
         validate_pr_write_paths(self)?;
         validate_intent_packages(self)?;
-        super::release::validate_journal_predecessor(file, self.journal_predecessor.as_ref())?;
+        super::release::validate_journal_predecessor(
+            file,
+            self.journal_predecessor.as_ref(),
+            self.recovery.is_some() || self.new_crates.is_some(),
+        )?;
         validate_tag_name(file, &self.tag_template)?;
         if !super::release_validation::supported_crate_tag_template(&self.tag_template) {
             return Err(invalid("tag_template", "unsupported_tag_template"));

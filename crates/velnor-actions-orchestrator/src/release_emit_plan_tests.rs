@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use super::{ReleasePlan, check_creation_selection, release_triggers};
+use super::{ReleasePlan, check_release_selection, release_triggers};
 use std::collections::{BTreeMap, BTreeSet};
 use velnor_actions_contract::config::{NewCrateRelease, RustReleaseConfig};
 use velnor_actions_rust::release_select::{ReleaseRequest, ReleaseScope, select_release_set};
@@ -56,14 +56,21 @@ fn bootstrap_scope_matches_every_expanded_workspace_package()
         }),
         ..RustReleaseConfig::default()
     };
-    assert!(check_creation_selection(&release, &selected).is_err());
+    assert!(check_release_selection(&release, &selected).is_err());
     release
         .new_crates
         .as_mut()
         .ok_or("creation")?
         .packages
         .insert("beta".into(), "0.1.0".into());
-    assert!(check_creation_selection(&release, &selected).is_ok());
+    assert!(check_release_selection(&release, &selected).is_ok());
+    release.new_crates = None;
+    release.registry = velnor_actions_contract::config::ReleaseRegistry::CratesIo;
+    let mut expanded = selected.clone();
+    expanded.packages.resize(65, selected.packages[0].clone());
+    assert!(check_release_selection(&release, &expanded).is_err());
+    expanded.packages.truncate(64);
+    assert!(check_release_selection(&release, &expanded).is_ok());
     Ok(())
 }
 
@@ -78,9 +85,11 @@ fn first_publication_is_dispatch_only() {
         version: None,
         dispatch: true,
     };
-    let creation = release_triggers("main", &plan, true);
+    let creation = release_triggers("main", &plan);
     assert_eq!(creation.push_branches, Vec::<String>::new());
     assert_eq!(creation.dispatch_inputs.len(), 2);
-    let recovery = release_triggers("main", &plan, false);
-    assert_eq!(recovery.push_branches, ["main"]);
+    let recovery = release_triggers("main", &plan);
+    assert_eq!(recovery.push_branches, Vec::<String>::new());
+    let ordinary = ReleasePlan { dispatch: false, ..plan };
+    assert_eq!(release_triggers("main", &ordinary).push_branches, ["main"]);
 }

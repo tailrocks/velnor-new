@@ -300,3 +300,17 @@ fn rehearsal_scripts_enforce_their_boundaries() -> Result<(), Box<dyn std::error
     assert!(status.success());
     Ok(())
 }
+
+#[test]
+fn metadata_rejects_rust_versions_without_a_verified_channel_manifest() {
+    let mut rehearsal = config();
+    rehearsal.metadata = Some(
+        velnor_actions_contract::config::ReleaseRehearsalMetadataConfig {
+            manifest_path: "Cargo.toml".into(),
+            intent_config_path: ".velnor/config.toml".into(),
+            qualification: policy(),
+            rust_version: "1.0.0".into(),
+        },
+    );
+    assert!(rehearsal.validate("test").is_err());
+}

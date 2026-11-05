@@ -249,7 +249,7 @@ pub(super) fn validate_publish_features(
     packages: &[String],
     publishable: bool,
 ) -> Result<(), ContractError> {
-    if features.len() > 64 {
+    if features.len() > super::release::MAX_CRATE_RELEASE_PACKAGES {
         return Err(ContractError::config(
             file,
             "publish_features",

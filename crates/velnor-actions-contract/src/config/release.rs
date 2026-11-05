@@ -9,6 +9,8 @@ use crate::errors::ContractError;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
+pub const MAX_CRATE_RELEASE_PACKAGES: usize = 64;
+
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum ReleaseAuthentication {
@@ -176,6 +178,15 @@ impl RustReleaseConfig {
             self.enabled,
             self.publishable_workspace,
         )?;
+        if self.registry == ReleaseRegistry::CratesIo
+            && self.packages.len() > MAX_CRATE_RELEASE_PACKAGES
+        {
+            return Err(ContractError::config(
+                file,
+                "stacks.rust.release.packages",
+                "too_many_packages",
+            ));
+        }
         validate_publish_features(
             file,
             &self.publish_features,
@@ -227,7 +238,11 @@ impl RustReleaseConfig {
         if let Some(recovery) = &self.recovery {
             validate_recovery(file, recovery)?;
         }
-        validate_journal_predecessor(file, self.journal_predecessor.as_ref())?;
+        validate_journal_predecessor(
+            file,
+            self.journal_predecessor.as_ref(),
+            self.recovery.is_some() || self.new_crates.is_some(),
+        )?;
         validate_version_groups(
             file,
             &self.version_groups,
@@ -306,9 +321,11 @@ impl RustReleaseConfig {
 pub(crate) fn validate_journal_predecessor(
     file: &str,
     predecessor: Option<&CrateReleasePredecessor>,
+    exact_source: bool,
 ) -> Result<(), ContractError> {
     if predecessor.is_some_and(|prior| {
-        prior.run_id == 0
+        !exact_source
+            || prior.run_id == 0
             || prior.run_attempt != 1
             || !super::release_validation::is_full_sha(&prior.workflow_sha)
     }) {

@@ -9,10 +9,15 @@ use velnor_actions_workflow_renderer::release_spec::{
     DispatchInput, ReleasePlan, ReleaseTriggers, validate_source_sha,
 };
 
-pub(super) fn check_creation_selection(
+pub(super) fn check_release_selection(
     release: &RustReleaseConfig,
     selection: &ReleaseSelection,
 ) -> Result<(), OrchestratorError> {
+    if release.registry == velnor_actions_contract::config::ReleaseRegistry::CratesIo
+        && selection.packages.len() > velnor_actions_contract::config::MAX_CRATE_RELEASE_PACKAGES
+    {
+        return Err(OrchestratorError::config(CONFIG_REL, "stacks.rust.release.packages", "too_many_packages"));
+    }
     if let Some(creation) = &release.new_crates {
         if creation.packages.len() != selection.packages.len() {
             return Err(OrchestratorError::config(
@@ -113,7 +118,7 @@ pub(super) fn release_plan(
     }
 }
 
-pub(super) fn release_triggers(branch: &str, plan: &ReleasePlan, creation: bool) -> ReleaseTriggers {
+pub(super) fn release_triggers(branch: &str, plan: &ReleasePlan) -> ReleaseTriggers {
     if !plan.dispatch {
         return ReleaseTriggers {
             push_branches: vec![branch.to_owned()],
@@ -144,7 +149,7 @@ pub(super) fn release_triggers(branch: &str, plan: &ReleasePlan, creation: bool)
         });
     }
     ReleaseTriggers {
-        push_branches: if creation { Vec::new() } else { vec![branch.to_owned()] },
+        push_branches: Vec::new(),
         schedule: None,
         dispatch_inputs,
     }

@@ -180,6 +180,12 @@ fn bootstrap_workspace_creation_has_explicit_source_and_each_version()
 fn predecessor_accepts_only_first_run_attempt() -> Result<(), Box<dyn std::error::Error>> {
     use velnor_actions_contract::config::RustReleaseConfig;
     let mut input = serde_json::json!({"enabled":true,"registry":"crates-io","packages":["demo"],"required_workflow_path":".github/workflows/ci.yml","trusted_reviewer_id":1,"journal_predecessor":{"run_id":12,"run_attempt":1,"workflow_sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}});
+    assert!(
+        serde_json::from_value::<RustReleaseConfig>(input.clone())?
+            .validate("test")
+            .is_err()
+    );
+    input["recovery"] = serde_json::json!({"package":"demo","version":"0.1.1","source_sha":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"});
     serde_json::from_value::<RustReleaseConfig>(input.clone())?.validate("test")?;
     for attempt in [0, 2] {
         input["journal_predecessor"]["run_attempt"] = attempt.into();
@@ -225,6 +231,19 @@ fn bootstrap_creation_cannot_include_undeclared_packages() -> Result<(), Box<dyn
 {
     use velnor_actions_contract::config::RustReleaseConfig;
     let input = serde_json::json!({"enabled":true,"registry":"crates-io","packages":["alpha","beta"],"required_workflow_path":".github/workflows/ci.yml","trusted_reviewer_id":1,"authentication":"bootstrap-token","new_crates":{"source_sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","packages":{"alpha":"0.1.0"}}});
+    assert!(
+        serde_json::from_value::<RustReleaseConfig>(input)?
+            .validate("test")
+            .is_err()
+    );
+    Ok(())
+}
+
+#[test]
+fn release_rejects_more_packages_than_intent_supports() -> Result<(), Box<dyn std::error::Error>> {
+    use velnor_actions_contract::config::RustReleaseConfig;
+    let packages: Vec<String> = (0..65).map(|n| format!("package-{n:02}")).collect();
+    let input = serde_json::json!({"enabled":true,"registry":"crates-io","packages":packages,"required_workflow_path":".github/workflows/ci.yml","trusted_reviewer_id":1});
     assert!(
         serde_json::from_value::<RustReleaseConfig>(input)?
             .validate("test")

@@ -11,8 +11,8 @@ Reference for the typed config in `velnor-actions-contract`
 |---|---|---|---|
 | `enabled` | bool | `false` | `false` emits no release work; `true` requires a nonempty `packages` allowlist unless `publishable_workspace` is enabled. |
 | `manifest_path` | string | `"Cargo.toml"` | Repo-relative, `[A-Za-z0-9/._-]`, no leading `/`, no empty/`..` segments, must be or end with `/Cargo.toml`. |
-| `packages` | string list | `[]` | Sorted, unique, never auto-expanded; each matches Cargo name shape (letter/`_` start, then alnum/`-`/`_`). |
-| `publishable_workspace` | bool | `false` | Select the publishable Cargo workspace packages instead of an explicit package allowlist. |
+| `packages` | string list | `[]` | For crates.io, at most 64 packages. Sorted, unique, never auto-expanded; each matches Cargo name shape (letter/`_` start, then alnum/`-`/`_`). |
+| `publishable_workspace` | bool | `false` | Select the publishable Cargo workspace packages instead of an explicit package allowlist; crates.io expansion is limited to 64. |
 | `publish_features` | package → string-list map | `{}` | Each key names a selected package. Feature selectors are sorted and unique; omitted packages use Cargo default features. Cargo validates feature existence during per-package verification. Not available for `git-tag`. |
 | `new_crates` | table or absent | absent | Explicit creation intent with a full `source_sha` and a `packages` map of selected crate names to exact versions. Permitted only for crates.io with `bootstrap-token`; cannot coexist with `recovery`. The plan binds every listed version and the source. Protected admission and post-upload owner verification are required. |
 | `environment` | string | `"release"` | Nonempty, unpadded, `[A-Za-z0-9-_/]` plus `.`, no empty/`..` segments. Binds the publish jobs. |
@@ -22,8 +22,8 @@ Reference for the typed config in `velnor-actions-contract`
 | `trusted_reviewer_id` | integer | `0` | Enabled crates.io releases require a nonzero GitHub user ID for the protected environment reviewer. |
 | `release_pr` | bool | `true` | Whether release-plz preparation PRs run (crates.io only; `git-tag` releases are prepared by a maintainer's version bump). |
 | `tag_name` | string | `"{{ package }}-v{{ version }}"` | For crates.io, must be `{{ package }}-v{{ version }}` (whitespace-insensitive). Git-tag releases support safe templates containing both variables. |
-| `recovery` | table or absent | absent | Binds an exact package, version, and source for an approved recovery dispatch. Cannot coexist with `new_crates`. Bootstrap-token authentication requires either `recovery` or `new_crates`. |
-| `journal_predecessor` | table or absent | absent | Binds a reviewed previous run ID, attempt, and workflow SHA for durable release recovery. Protected admission currently accepts only attempt `1`. |
+| `recovery` | table or absent | absent | Binds an exact package, version, and source for an approved recovery dispatch; push events are rejected. Cannot coexist with `new_crates`. Bootstrap-token authentication requires either `recovery` or `new_crates`. |
+| `journal_predecessor` | table or absent | absent | Binds a reviewed previous run ID, attempt, and workflow SHA for durable release recovery. Requires `recovery` or `new_crates` to bind the exact source; only attempt `1` is accepted. |
 | `version_groups` | string→string-list map | `{}` | Group names use package-name shape; members must be sorted, unique, listed in `packages`, and in at most one group. Non-lockstep: unchanged members are not forced to release. |
 
 For example, to verify `demo-crate` with its `pty` feature during publication:

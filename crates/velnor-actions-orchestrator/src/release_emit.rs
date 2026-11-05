@@ -30,7 +30,7 @@ use config::plz_config;
 #[path = "release_emit_plan.rs"]
 mod plan;
 use plan::{
-    approved_source, check_creation_selection, check_recovery_record, release_plan,
+    approved_source, check_release_selection, check_recovery_record, release_plan,
     release_triggers, reviewed_generator_manifest,
 };
 
@@ -116,7 +116,7 @@ fn release_files_for_config(
     let spec = ReleaseWorkflowSpec {
         name: RELEASE_WORKFLOW_NAME.to_owned(),
         repository,
-        triggers: release_triggers(&prep.default_branch, &plan, release.new_crates.is_some()),
+        triggers: release_triggers(&prep.default_branch, &plan),
         concurrency,
         jobs,
         plan,
@@ -277,7 +277,7 @@ fn derive_release_inputs(
         });
     }
     check_recovery_record(release, &selection)?;
-    check_creation_selection(release, &selection)?;
+    check_release_selection(release, &selection)?;
     let registry = common_registry(&selection)?;
     let repository = origin_repository(&prep.root)?;
     let source_sha = approved_source(&prep.root, release)?;
