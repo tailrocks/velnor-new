@@ -129,7 +129,6 @@ fn each_producer_leg_runs_exactly_the_lanes_of_its_own_slice() -> Result<(), Box
         "rust-bina" | "rust-binb" => "small".to_owned(),
         other => other.to_owned(),
     };
-    let lanes = task_ids(producer);
     for step in &producer.steps {
         let StepKind::TaskExecution { task_id, .. } = &step.kind else {
             continue;
@@ -152,15 +151,22 @@ fn each_producer_leg_runs_exactly_the_lanes_of_its_own_slice() -> Result<(), Box
         "a leg per ws slice"
     );
     for leg in legs_of(producer) {
-        let owned: usize = jobs
+        let tasks: BTreeSet<&str> = jobs
             .iter()
             .filter(|(id, _)| id.starts_with("rust-") && slice_of(id) == leg)
-            .map(|(_, job)| task_ids(job).intersection(&lanes).count())
-            .sum();
+            .flat_map(|(_, job)| task_ids(job))
+            .collect();
+        let owned = producer
+            .steps
+            .iter()
+            .filter(|step| {
+                matches!(&step.kind, StepKind::TaskExecution { task_id, .. } if tasks.contains(task_id.as_str()))
+            })
+            .count();
         assert_ne!(owned, 0, "{leg} owns no lane");
         assert_eq!(
             simulate_leg(producer, &leg, &HEALTHY)?.lanes,
-            2 * owned,
+            owned,
             "{leg} runs lanes of another slice"
         );
     }

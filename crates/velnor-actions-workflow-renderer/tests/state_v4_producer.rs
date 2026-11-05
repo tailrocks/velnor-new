@@ -268,13 +268,20 @@ fn plan_reserves_the_largest_later_bound_for_each_leg() -> Result<(), Box<dyn Er
         &[
             ("runner", "crates/velnor-runner"),
             ("first", "."),
+            ("second", "."),
+            ("last", "."),
             ("hit", "."),
         ],
         &["hit"],
     )?;
     assert_eq!(
         matrices["state_matrix_seal"],
-        legs(&[("runner", UNIT_BOUND), ("first", "0")]),
+        legs(&[
+            ("runner", UNIT_BOUND),
+            ("first", UNIT_BOUND),
+            ("second", UNIT_BOUND),
+            ("last", "0"),
+        ]),
         "a leg reserves the largest bound of the legs after it, and an exact hit is no leg"
     );
     scene.finish()

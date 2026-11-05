@@ -326,3 +326,36 @@ fn a_seal_leg_without_its_own_payload_saves_binds_attests_and_retires_nothing()
     );
     Ok(())
 }
+
+#[test]
+fn the_seal_job_still_runs_when_plan_skips_a_writer_it_needs() -> Result<(), Box<dyn Error>> {
+    let built = build()?;
+    let seal = job(&built.jobs, STATE_SEAL_JOB_ID)?;
+    let skippable: Vec<&str> = seal
+        .needs
+        .iter()
+        .filter(|need| {
+            built
+                .jobs
+                .get(need.as_str())
+                .and_then(|writer| writer.condition.as_deref())
+                .is_some_and(|condition| condition.contains("needs.plan.outputs."))
+        })
+        .map(String::as_str)
+        .collect();
+    assert!(
+        !skippable.is_empty(),
+        "the seal job needs no writer that plan can skip"
+    );
+    let block = rendered_job_block(text_of(&built, STATE_SEAL_JOB_ID), STATE_SEAL_JOB_ID)?;
+    let gate = block
+        .lines()
+        .find_map(|line| line.strip_prefix("    if: "))
+        .map(|gate| gate.trim_matches('"'))
+        .ok_or("the seal job renders no condition")?;
+    assert!(
+        gate.starts_with("!cancelled() && "),
+        "GitHub applies success() to `{gate}`, so a skipped {skippable:?} skips the seal"
+    );
+    Ok(())
+}

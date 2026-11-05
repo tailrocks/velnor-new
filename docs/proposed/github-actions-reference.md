@@ -284,6 +284,12 @@ Verdict key: TRUE, FALSE, PARTIAL (true with a stated correction or gap).
 - Velnor relies on both for the state handoff: one static output per slice, set only by that slice's leg ([compiled-state persistence](compiled-state-persistence.md), per-job slices).
 - The pinned jactionlint refuses a computed index such as `needs.<job>.outputs[format(...)]` (`[obfuscation]`), so the seal leg selects its output with a static `matrix.slice ==` chain.
 
+## Skipped needs and status checks (2026-11-05)
+
+- "If a job fails or is skipped, all jobs that need it are skipped unless the jobs use a conditional expression that causes the job to continue" ([github/docs `data/reusables/actions/jobs/section-using-jobs-in-a-workflow-needs.md:1` at `58b7b56aa507ad1269b9f8e9e89a172f0976c7ce`](https://github.com/github/docs/blob/58b7b56aa507ad1269b9f8e9e89a172f0976c7ce/data/reusables/actions/jobs/section-using-jobs-in-a-workflow-needs.md)).
+- "A default status check of `success()` is applied unless you include one of these functions" ([github/docs `content/actions/reference/workflows-and-actions/expressions.md:322` at `58b7b56aa507ad1269b9f8e9e89a172f0976c7ce`](https://github.com/github/docs/blob/58b7b56aa507ad1269b9f8e9e89a172f0976c7ce/content/actions/reference/workflows-and-actions/expressions.md)).
+- The state seal job needs writers that plan skips when they have nothing to produce, so its condition starts with `!cancelled()`.
+
 ## Native preview publication API boundaries (2026-10-18)
 
 The [workflow-jobs REST contract](https://docs.github.com/en/rest/actions/workflow-jobs#list-jobs-for-a-workflow-run-attempt)
