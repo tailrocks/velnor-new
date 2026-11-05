@@ -115,7 +115,7 @@ def invoke(mode):
         if canary in journal.stdout or canary in journal.stderr:
             raise RuntimeError("dummy credential appeared in completed journal")
         if (mode == "orphan" and process.returncode != 0) or (mode != "orphan" and process.returncode == 0) or (mode == "timeout" and elapsed < 8):
-            raise RuntimeError("service did not enforce timeout or cancellation")
+            raise RuntimeError(f"service outcome mismatch: mode={mode} status={process.returncode} elapsed={elapsed:.1f}")
         if not cgroup:
             state = subprocess.run(["/usr/bin/systemctl", "show", unit, "--value", "-p", "ActiveState"], capture_output=True, text=True, timeout=5, check=False)
             if state.returncode != 0 or state.stdout.strip() not in ("inactive", "failed"):
