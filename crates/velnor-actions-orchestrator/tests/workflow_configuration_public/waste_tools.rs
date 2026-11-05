@@ -328,7 +328,7 @@ fn cli_test_job_requires_isolated_gh_fixture_staging() -> Result<(), Box<dyn Err
         .filter(|job| job.display_name.contains("velnor-actions-orchestrator"))
     {
         assert!(
-            !job.steps
+            job.steps
                 .iter()
                 .any(|step| step.name == "Stage isolated GitHub CLI test tools")
         );

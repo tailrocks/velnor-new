@@ -353,7 +353,7 @@ fn render_job(
         steps.extend(rust_source_steps(input, model, needs_validators, private)?);
     }
     if policy == WorkflowPolicy::VelnorRepositoryV1
-        && model.package_name == "velnor-actions-cli"
+        && matches!(model.package_name.as_str(), "velnor-actions-cli" | "velnor-actions-orchestrator")
         && model.obligations.iter().any(|obligation| obligation.run.iter().any(|arg| arg == "nextest"))
     {
         steps.push(velnor_actions_workflow_renderer::shell_step(
