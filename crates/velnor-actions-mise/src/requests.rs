@@ -33,6 +33,23 @@ impl std::fmt::Debug for PinnedToolExec {
 
 const FORBIDDEN_PROGRAM_STEM: &str = "rustup";
 
+pub(crate) fn select_environment_token<'a>(
+    primary: Option<&'a str>,
+    fallback: Option<&'a str>,
+) -> Result<Option<&'a str>, MiseError> {
+    let token = [primary, fallback]
+        .into_iter()
+        .flatten()
+        .find(|value| !value.is_empty());
+    if token.is_some_and(|value| !crate::command::is_safe_credential_value(value)) {
+        return Err(MiseError::InvalidStepInput {
+            field: "GH_TOKEN".to_owned(),
+            value: "credential_rejected".to_owned(),
+        });
+    }
+    Ok(token)
+}
+
 impl PinnedToolExec {
     pub fn new(
         tools: Vec<PinnedTool>,
@@ -117,12 +134,11 @@ impl PinnedToolExec {
         &self,
         catalog: &ToolCatalog,
     ) -> Result<IsolatedCommand, MiseError> {
-        let token = std::env::var("GH_TOKEN")
-            .or_else(|_| std::env::var("GITHUB_TOKEN"))
-            .ok()
-            .filter(|value| !value.is_empty());
+        let primary = std::env::var("GH_TOKEN").ok();
+        let fallback = std::env::var("GITHUB_TOKEN").ok();
+        let token = select_environment_token(primary.as_deref(), fallback.as_deref())?;
         match token {
-            Some(token) => self.command_with_github_token(catalog, &token),
+            Some(token) => self.command_with_github_token(catalog, token),
             None => self.command(catalog),
         }
     }

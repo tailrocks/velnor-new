@@ -378,3 +378,21 @@ fn gh_api_does_not_inherit_credentials_or_transport_overrides() {
         assert!(!child.iter().any(|(name, _)| name == key), "{key}");
     }
 }
+
+#[test]
+fn github_environment_token_selection_rejects_invalid_and_falls_back_when_empty()
+-> Result<(), Box<dyn std::error::Error>> {
+    use crate::requests::select_environment_token;
+    assert_eq!(
+        select_environment_token(Some(""), Some("fallback-token"))?,
+        Some("fallback-token")
+    );
+    assert_eq!(select_environment_token(None, None)?, None);
+    assert_eq!(
+        select_environment_token(Some("primary-token"), Some("fallback-token"))?,
+        Some("primary-token")
+    );
+    assert!(select_environment_token(Some("bad token"), Some("fallback-token")).is_err());
+    assert!(select_environment_token(Some(""), Some("bad token")).is_err());
+    Ok(())
+}
