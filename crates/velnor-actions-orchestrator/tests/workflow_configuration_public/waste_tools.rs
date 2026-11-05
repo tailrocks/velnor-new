@@ -352,7 +352,7 @@ fn cli_test_job_requires_isolated_gh_fixture_staging() -> Result<(), Box<dyn Err
         return Err("fixture staging must run".into());
     };
     assert!(run.ends_with(&[
-        "python3".to_owned(),
+        "/usr/bin/python3".to_owned(),
         "-I".to_owned(),
         "scripts/prepare-gh-fixture-tools.py".to_owned(),
     ]));

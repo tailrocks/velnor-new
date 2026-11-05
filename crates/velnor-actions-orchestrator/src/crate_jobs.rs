@@ -358,7 +358,7 @@ fn render_job(
     {
         steps.push(velnor_actions_workflow_renderer::shell_step(
             "Stage isolated GitHub CLI test tools",
-            vec!["python3".to_owned(), "-I".to_owned(), "scripts/prepare-gh-fixture-tools.py".to_owned()],
+            vec!["/usr/bin/python3".to_owned(), "-I".to_owned(), "scripts/prepare-gh-fixture-tools.py".to_owned()],
             std::collections::BTreeMap::new(),
         )?);
     }
