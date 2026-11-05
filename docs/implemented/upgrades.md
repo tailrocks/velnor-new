@@ -50,6 +50,14 @@ There is no cooldown key: the job always runs with
 `MISE_MINIMUM_RELEASE_AGE=0s`. Unknown keys (`cooldown`, `scopes`,
 `minimum_release_age`) are rejected.
 
+The upgrade workflow requires a GitHub-hosted Linux x86-64 runner: `ubuntu-22.04`,
+`ubuntu-24.04`, or `ubuntu-26.04`. Its verified GitHub CLI launcher is qualified
+only for this platform. Other runner labels are rejected during generation. At
+runtime, the launcher requires a read-only `/sys` without GitHub CLI config
+files; it stops if that condition is not met. The publishing Git transport
+uses direct HTTPS and the runner's system trust store; it does not inherit proxy
+or custom certificate settings.
+
 ## What `upgrades.yml` does
 
 Triggers: `schedule` and `workflow_dispatch` only. Every job runs only on the

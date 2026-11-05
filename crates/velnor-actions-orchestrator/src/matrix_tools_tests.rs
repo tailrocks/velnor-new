@@ -59,7 +59,7 @@ fn gh_test_tool_is_provisioned_only_for_velnor() {
     let mut task = fixture_task("rust", "cargo", "cargo_nextest");
     let catalog = ToolCatalog::pinned();
     let has_gh = |policy, task: &ProposedTask| {
-        let lane = LaneTools::of_group(policy, &catalog, &[&task]);
+        let lane = LaneTools::of_group(policy, &catalog, &[task]);
         let step = prepare_crate_tools_step(&catalog, &lane).expect("render tool installation");
         let StepKind::Shell { run, .. } = step.kind else { panic!("expected shell step") };
         run.iter().any(|arg| arg.contains("gh@2.103.3"))

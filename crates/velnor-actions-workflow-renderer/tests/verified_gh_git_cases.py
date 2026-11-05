@@ -11,6 +11,32 @@ import threading
 import urllib.parse
 
 
+class CapturedExec(Exception):
+    pass
+
+
+def capture_exec(path, arguments, environment):
+    assert path == "/usr/bin/git"
+    assert os.environ["GH_TOKEN"] not in " ".join(arguments)
+    assert environment["GH_TOKEN"] == os.environ["GH_TOKEN"]
+    assert "CARGO_REGISTRY_TOKEN" not in environment
+    assert "ACTIONS_ID_TOKEN_REQUEST_TOKEN" not in environment
+    assert "HTTPS_PROXY" not in environment and "GIT_SSL_CAINFO" not in environment
+    raise CapturedExec()
+
+
+saved_exec = os.execve
+os.execve = capture_exec
+os.environ.update({"VELNOR_GIT_DIRECTORY": "/fixture/git", "CARGO_REGISTRY_TOKEN": "fixture", "ACTIONS_ID_TOKEN_REQUEST_TOKEN": "fixture", "HTTPS_PROXY": "fixture", "GIT_SSL_CAINFO": "fixture"})
+try:
+    exec(compile(os.environ["VELNOR_TRANSPORT_SOURCE"], "transport", "exec"), {})
+    raise AssertionError("Git transport did not execute")
+except CapturedExec:
+    pass
+finally:
+    os.execve = saved_exec
+
+
 def run(arguments, **kwargs):
     result = subprocess.run(arguments, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, **kwargs)
     if result.returncode:
@@ -63,6 +89,13 @@ with tempfile.TemporaryDirectory() as temporary:
                 self.send_header("Content-Length", "0")
                 self.end_headers()
                 return
+            encoded = base64.b64encode(("x-access-token:" + fixture_token).encode())
+            for process in pathlib.Path("/proc").glob("[0-9]*/cmdline"):
+                try:
+                    arguments = process.read_bytes()
+                except (OSError, PermissionError):
+                    continue
+                assert fixture_token.encode() not in arguments and encoded not in arguments
             parsed = urllib.parse.urlsplit(self.path)
             size = int(self.headers.get("Content-Length", "0"))
             env = {"PATH": "/usr/bin:/bin", "GIT_PROJECT_ROOT": str(repo.parent.parent), "GIT_HTTP_EXPORT_ALL": "1", "PATH_INFO": parsed.path, "QUERY_STRING": parsed.query, "REQUEST_METHOD": self.command, "CONTENT_TYPE": self.headers.get("Content-Type", ""), "CONTENT_LENGTH": str(size), "REMOTE_USER": "fixture"}
@@ -84,6 +117,11 @@ with tempfile.TemporaryDirectory() as temporary:
     thread.start()
     proxy = f"http://127.0.0.1:{server.server_port}"
     publish = os.environ["VELNOR_PUBLISH"]
+    anchor = b'    "GIT_ALLOW_PROTOCOL", "GIT_NO_REPLACE_OBJECTS", "GIT_TERMINAL_PROMPT",'.hex()
+    fixture = b'    "HTTPS_PROXY", "https_proxy", "GIT_SSL_CAINFO", "NO_PROXY", "no_proxy", "GIT_ALLOW_PROTOCOL", "GIT_NO_REPLACE_OBJECTS", "GIT_TERMINAL_PROMPT",'.hex()
+    if publish.count(anchor) != 1:
+        raise RuntimeError("transport network boundary missing")
+    publish = publish.replace(anchor, fixture)
     marker = "number=$(velnor_gh pr list"
     if publish.count(marker) != 1:
         raise RuntimeError("publish API boundary missing")
@@ -91,7 +129,7 @@ with tempfile.TemporaryDirectory() as temporary:
     upgrade = root / "upgrade"
     upgrade.mkdir()
     (upgrade / "summary.md").write_text("fixture\n", encoding="utf-8")
-    env = {"PATH": "/usr/bin:/bin", "HOME": str(home), "MISE_DATA_DIR": os.environ["MISE_DATA_DIR"], "GIT_TERMINAL_PROMPT": "0", "GIT_SSL_CAINFO": str(certificate), "HTTPS_PROXY": proxy, "https_proxy": proxy, "NO_PROXY": "", "no_proxy": "", "GH_TOKEN": fixture_token, "VELNOR_PUBLISH": publish, "WORK": str(work), "RUNNER_TEMP": str(root), "VELNOR_UPGRADE_DIR": str(upgrade), "VELNOR_UPGRADE_BRANCH": "upgrade", "VELNOR_DEFAULT_BRANCH": "main", "GITHUB_REPOSITORY": "owner/project", "VELNOR_GH_VERSION": "2.103.3"}
+    env = {"PATH": "/usr/bin:/bin", "HOME": str(home), "MISE_DATA_DIR": os.environ["MISE_DATA_DIR"], "GIT_TERMINAL_PROMPT": "0", "GIT_SSL_CAINFO": str(certificate), "HTTPS_PROXY": proxy, "https_proxy": proxy, "NO_PROXY": "", "no_proxy": "", "GH_TOKEN": fixture_token, "VELNOR_PUBLISH": publish, "WORK": str(work), "GITHUB_WORKSPACE": str(work), "RUNNER_TEMP": str(root), "VELNOR_UPGRADE_DIR": str(upgrade), "VELNOR_UPGRADE_BRANCH": "upgrade", "VELNOR_DEFAULT_BRANCH": "main", "GITHUB_REPOSITORY": "owner/project", "VELNOR_GH_VERSION": "2.103.3"}
     script = r'''set -eu
 cd "$WORK"
 git init -q
@@ -109,12 +147,21 @@ git commit -qm fixture
 git remote add origin ssh://invalid/project.git
 printf 'updated\n' > content
 git add content
-git config core.fsmonitor 'touch "$HOME/hostile-fsmonitor"'
-VELNOR_VERIFIED_TREE=$(git -c core.fsmonitor=false write-tree); export VELNOR_VERIFIED_TREE
+printf '#!/bin/sh\ntouch "$HOME/hostile-fsmonitor"\n' > "$HOME/fsmonitor"
+chmod +x "$HOME/fsmonitor"
+git config core.fsmonitor "$HOME/fsmonitor"
+git status --porcelain >/dev/null
+[ -e "$HOME/hostile-fsmonitor" ]; rm "$HOME/hostile-fsmonitor"
+VELNOR_VERIFIED_TREE=$(/usr/bin/git -c core.fsmonitor=false write-tree); export VELNOR_VERIFIED_TREE
+mkdir "$HOME/bin"
+printf '#!/bin/sh\ntouch "$HOME/hostile-git"\nexit 1\n' > "$HOME/bin/git"
+chmod +x "$HOME/bin/git"
+PATH="$HOME/bin:/usr/bin:/bin"; export PATH
+export GIT_DIR="$HOME/invalid" GIT_WORK_TREE="$HOME/invalid" GIT_COMMON_DIR="$HOME/invalid" GIT_INDEX_FILE="$HOME/invalid" GIT_OBJECT_DIRECTORY="$HOME/invalid" GIT_NAMESPACE=hostile GIT_SHALLOW_FILE="$HOME/invalid" GIT_REPLACE_REF_BASE=refs/hostile/
 eval "$VELNOR_PUBLISH"
-[ ! -e "$HOME/hostile-local" ] && [ ! -e "$HOME/hostile-global" ] && [ ! -e "$HOME/hostile-ssh" ] && [ ! -e "$HOME/hostile-hook" ] && [ ! -e "$HOME/hostile-fsmonitor" ]
+[ ! -e "$HOME/hostile-local" ] && [ ! -e "$HOME/hostile-global" ] && [ ! -e "$HOME/hostile-ssh" ] && [ ! -e "$HOME/hostile-hook" ] && [ ! -e "$HOME/hostile-fsmonitor" ] && [ ! -e "$HOME/hostile-git" ]
 if printf 'protocol=https\nhost=evil.example\n\n' | git credential fill >/dev/null 2>&1; then exit 1; fi
-[ ! -e "$HOME/hostile-local" ] && [ ! -e "$HOME/hostile-global" ] && [ ! -e "$HOME/hostile-ssh" ] && [ ! -e "$HOME/hostile-hook" ] && [ ! -e "$HOME/hostile-fsmonitor" ]
+[ ! -e "$HOME/hostile-local" ] && [ ! -e "$HOME/hostile-global" ] && [ ! -e "$HOME/hostile-ssh" ] && [ ! -e "$HOME/hostile-hook" ] && [ ! -e "$HOME/hostile-fsmonitor" ] && [ ! -e "$HOME/hostile-git" ]
 '''
     try:
         run(["/bin/bash", "-c", script], env=env)
@@ -134,7 +181,7 @@ if printf 'protocol=https\nhost=evil.example\n\n' | git credential fill >/dev/nu
         assert output(["git", f"--git-dir={repo}", "rev-parse", f"{ref}^{{tree}}"]) == output(["git", "-C", str(work), "-c", "core.fsmonitor=false", "write-tree"])
         assert output(["git", f"--git-dir={repo}", "rev-parse", f"{ref}^1"]) == first
         assert output(["git", f"--git-dir={repo}", "rev-parse", f"{ref}^2"]) == base
-        assert all(not (home / name).exists() for name in ("hostile-local", "hostile-global", "hostile-ssh", "hostile-hook", "hostile-fsmonitor"))
+        assert all(not (home / name).exists() for name in ("hostile-local", "hostile-global", "hostile-ssh", "hostile-hook", "hostile-fsmonitor", "hostile-git"))
         basic = base64.b64encode(("x-access-token:" + fixture_token).encode())
         for path in root.rglob("*"):
             if path.is_file() and not path.is_symlink():

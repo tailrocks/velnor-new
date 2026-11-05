@@ -198,16 +198,25 @@ fn verified_helper_authenticates_real_git_without_untrusted_helpers()
         .ok_or("mise data")?;
     let script =
         std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/verified_gh_git_cases.py");
+    let token_dir = tempfile::tempdir()?;
+    let fixture_token = format!(
+        "velnor-fixture-{}",
+        token_dir
+            .path()
+            .file_name()
+            .ok_or("fixture token")?
+            .to_string_lossy()
+    );
     let status = std::process::Command::new("/usr/bin/python3")
         .env_clear()
         .env("PATH", "/usr/bin:/bin")
         .env("MISE_DATA_DIR", data)
-        .env("GH_TOKEN", "offline-fixture")
-        .env(
-            "VELNOR_CONFIG",
-            velnor_actions_workflow_renderer::verified_gh_shell::git_credential_config(),
-        )
+        .env("GH_TOKEN", fixture_token)
         .env("VELNOR_PUBLISH", rendered_upgrade_publish_script()?)
+        .env(
+            "VELNOR_TRANSPORT_SOURCE",
+            include_str!("../src/verified_git_transport.py"),
+        )
         .arg(script)
         .status()?;
     assert!(status.success(), "local Git authentication fixture failed");
@@ -215,6 +224,10 @@ fn verified_helper_authenticates_real_git_without_untrusted_helpers()
 }
 
 fn rendered_upgrade_publish_script() -> Result<String, Box<dyn std::error::Error>> {
+    rendered_upgrade_publish_script_for("ubuntu-24.04")
+}
+
+fn rendered_upgrade_publish_script_for(runner: &str) -> Result<String, Box<dyn std::error::Error>> {
     use velnor_actions_workflow_renderer::upgrades::{UpgradesSpec, render_upgrades_workflow};
     let config = velnor_actions_contract::config::UpgradesConfig {
         enabled: true,
@@ -230,7 +243,7 @@ fn rendered_upgrade_publish_script() -> Result<String, Box<dyn std::error::Error
     };
     let spec = UpgradesSpec {
         config,
-        runs_on: "ubuntu-24.04".into(),
+        runs_on: runner.into(),
         checkout_uses: velnor_actions_workflow_renderer::steps::CHECKOUT_USES.into(),
         mise_setup: mise,
         gh_version: velnor_actions_mise::catalog::QUALIFIED_GH_LINUX_AMD64
@@ -254,7 +267,46 @@ fn rendered_upgrade_publish_script() -> Result<String, Box<dyn std::error::Error
         .iter()
         .find(|step| step["name"] == "Push the upgrade branch and open or update its pull request")
         .ok_or("publish step")?;
+    for name in [
+        "BASH_ENV",
+        "BASHOPTS",
+        "SHELLOPTS",
+        "ENV",
+        "LD_PRELOAD",
+        "LD_LIBRARY_PATH",
+        "LD_AUDIT",
+        "LD_DEBUG",
+        "LD_PROFILE",
+        "GCONV_PATH",
+        "LOCPATH",
+    ] {
+        assert_eq!(step["env"][name].as_str(), Some(""));
+    }
     Ok(step["run"].as_str().ok_or("publish script")?.to_owned())
+}
+
+#[test]
+fn upgrades_reject_unqualified_runner_platforms() -> Result<(), Box<dyn std::error::Error>> {
+    for runner in ["ubuntu-22.04", "ubuntu-24.04", "ubuntu-26.04"] {
+        rendered_upgrade_publish_script_for(runner)?;
+    }
+    for runner in [
+        "ubuntu-22.04-arm",
+        "ubuntu-24.04-arm",
+        "ubuntu-26.04-arm",
+        "macos-15",
+        "windows-2025",
+        "ubuntu-custom",
+    ] {
+        let error =
+            rendered_upgrade_publish_script_for(runner).expect_err("runner must be rejected");
+        assert!(
+            error
+                .to_string()
+                .contains("upgrades_requires_github_hosted_linux_amd64")
+        );
+    }
+    Ok(())
 }
 
 #[test]

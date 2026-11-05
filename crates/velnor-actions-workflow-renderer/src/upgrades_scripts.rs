@@ -37,7 +37,12 @@ pub(super) fn release_script() -> String {
 }
 pub(super) fn publish_script() -> String {
     let credentials = crate::verified_gh_shell::git_credential_config();
-    with_verified_gh(PUBLISH).replace("@VERIFIED_GIT_CREDENTIALS@", &credentials)
+    with_verified_gh(PUBLISH)
+        .replace("@VERIFIED_GIT_CREDENTIALS@", &credentials)
+        .replace(
+            "@VERIFIED_GIT_TRANSPORT@",
+            &crate::verified_gh_shell::git_transport_command(),
+        )
 }
 pub(super) fn gate_script() -> String {
     with_verified_gh(GATE)

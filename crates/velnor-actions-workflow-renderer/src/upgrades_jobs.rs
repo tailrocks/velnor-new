@@ -203,6 +203,17 @@ pub(super) fn publish_job(spec: &UpgradesSpec) -> Result<Yaml, RenderError> {
     push_env.extend(verified);
     push_env.extend([
         ("VELNOR_UPGRADE_BRANCH", UPGRADES_BRANCH),
+        ("BASH_ENV", ""),
+        ("BASHOPTS", ""),
+        ("SHELLOPTS", ""),
+        ("ENV", ""),
+        ("LD_PRELOAD", ""),
+        ("LD_LIBRARY_PATH", ""),
+        ("LD_AUDIT", ""),
+        ("LD_DEBUG", ""),
+        ("LD_PROFILE", ""),
+        ("GCONV_PATH", ""),
+        ("LOCPATH", ""),
         (
             "VELNOR_DEFAULT_BRANCH",
             "${{ github.event.repository.default_branch }}",
