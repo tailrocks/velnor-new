@@ -86,17 +86,17 @@ ledger-helper = ["dep:velnor-actions-contract"]
 
 [dependencies]
 serde_json = { workspace = true, optional = true }
-velnor-actions-contract = { version = "=0.1.74", path = "../velnor-actions-contract", optional = true }
-velnor-actions-orchestrator = { version = "=0.1.74", path = "../velnor-actions-orchestrator", optional = true }
-velnor-actions-freshness = { version = "=0.1.74", path = "../velnor-actions-freshness", optional = true }
+velnor-actions-contract = { version = "=0.1.75", path = "../velnor-actions-contract", optional = true }
+velnor-actions-orchestrator = { version = "=0.1.75", path = "../velnor-actions-orchestrator", optional = true }
+velnor-actions-freshness = { version = "=0.1.75", path = "../velnor-actions-freshness", optional = true }
 clap = { version = "=4.6.7", features = ["derive"], optional = true }
 
 [lints]
 workspace = true
 
 [dev-dependencies]
-velnor-actions-contract = { version = "=0.1.74", path = "../velnor-actions-contract" }
-velnor-actions-mise = { version = "=0.1.74", path = "../velnor-actions-mise" }
+velnor-actions-contract = { version = "=0.1.75", path = "../velnor-actions-contract" }
+velnor-actions-mise = { version = "=0.1.75", path = "../velnor-actions-mise" }
 proc-macro2 = "=1.0.107"
 flate2 = { version = "=1.1.10", default-features = false, features = ["rust_backend"] }
 rustix = { version = "=1.1.5", features = ["fs", "process"] }
