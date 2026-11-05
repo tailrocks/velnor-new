@@ -5,6 +5,7 @@ use crate::OrchestratorError;
 use velnor_actions_contract::config::RustReleaseConfig;
 use velnor_actions_rust::release_select::ReleaseSelection;
 use velnor_actions_workflow_renderer::release_config::{ReleasePlzConfig, ReleasePlzPackage};
+use velnor_actions_workflow_renderer::release_tree::{ReleaseRenderContext, RELEASE_HOSTED_RUNNER};
 
 pub(super) fn plz_config(
     release: &RustReleaseConfig,
@@ -48,7 +49,6 @@ pub(super) fn plz_config(
     })
 }
 
-use velnor_actions_workflow_renderer::release_tree::{ReleaseRenderContext, RELEASE_HOSTED_RUNNER};
 
 pub(super) fn release_render_context() -> ReleaseRenderContext {
     ReleaseRenderContext {
