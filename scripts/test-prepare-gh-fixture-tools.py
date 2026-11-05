@@ -35,6 +35,12 @@ def main():
         entry = {"tool_platform": tool_platform, "container_platform": container_platform, "gh_sha256": hashlib.sha256(gh.read_bytes()).hexdigest(), "nextest_sha256": hashlib.sha256(nextest.read_bytes()).hexdigest()}
         manifest = {"gh_version": "2.103.3", "nextest_version": "0.9.151", "image": "rust@sha256:" + "a" * 64, arch_name: entry}
         (config / "tools.json").write_text(json.dumps(manifest))
+        (config / "docker_host.py").write_text(
+            "import os\ndef trusted_docker(): return os.environ['PATH'].split(':')[0] + '/docker'\n"
+            "def docker_environment(): return {'PATH': os.environ['PATH']}\n"
+            "def local_daemon(client, env): pass\n"
+            "def verify_image(client, env, image): pass\n"
+        )
         mise = bindir / "mise"
         mise.write_text(f'#!/bin/sh\ncase "$*" in *cargo-nextest*) printf "%s\\n" "{nextest_root}";; *) printf "%s\\n" "{gh_root}";; esac\n')
         docker = bindir / "docker"

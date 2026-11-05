@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import hashlib
+import importlib.util
 import json
 import os
 import pathlib
@@ -91,11 +92,22 @@ def main():
     image = manifest["image"]
     if not isinstance(image, str) or not image.startswith("rust@sha256:") or len(image) != 76 or any(c not in "0123456789abcdef" for c in image[12:]):
         raise ValueError("invalid fixture image digest")
-    subprocess.run(["docker", "pull", "--platform", entry["container_platform"], image], env=env, check=True, timeout=600, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    sys.dont_write_bytecode = True
+    helper_path = root / "crates/velnor-actions-cli/tests/api2026_pull_context_fixture/docker_host.py"
+    spec = importlib.util.spec_from_file_location("velnor_fixture_docker_host", helper_path)
+    if spec is None or spec.loader is None:
+        raise ValueError("fixture Docker helper unavailable")
+    helper = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(helper)
+    docker = helper.trusted_docker()
+    docker_env = helper.docker_environment()
+    helper.local_daemon(docker, docker_env)
+    subprocess.run([docker, "pull", "--platform", entry["container_platform"], image], env=docker_env, check=True, timeout=600, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    helper.verify_image(docker, docker_env, image)
 
 
 if __name__ == "__main__":
     try:
         main()
-    except (OSError, KeyError, ValueError, subprocess.SubprocessError) as error:
+    except (OSError, KeyError, ValueError, RuntimeError, subprocess.SubprocessError) as error:
         raise SystemExit(f"fixture tool staging failed: {error}") from None
