@@ -44,6 +44,9 @@ pub(super) fn coordinate_journal(runtime: JournalRuntime<'_>) -> Result<(), Orch
     coordinate_release(
         &input,
         |package| {
+            credential
+                .as_ref()
+                .map_err(|_| internal("crate_release_upload_credential_missing"))?;
             crate::crate_release_semver::verify_before_upload(
                 runtime.source,
                 &admission,

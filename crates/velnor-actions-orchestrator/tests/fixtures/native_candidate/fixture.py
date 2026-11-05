@@ -125,6 +125,7 @@ if assets:
     generator_manifest_sha = hashlib.sha256(manifest_bytes).hexdigest()
     (root / ".velnor").mkdir()
     (root / ".velnor/release-manifest.json").write_bytes(manifest_bytes)
+authentication = "bootstrap-token" if os.environ.get("VELNOR_FIXTURE_FAILURE") == "coordinate-missing-bootstrap" else "trusted-publishing"
 intent = f'''schema = 1
 repository = "owner/project"
 default_branch = "main"
@@ -137,7 +138,7 @@ generator_source_sha = "{generator_source}"
 generator_manifest_sha256 = "{generator_manifest_sha}"
 release_plz_version = "0.4.3"
 runner = "ubuntu-24.04"
-authentication = "trusted-publishing"
+authentication = "{authentication}"
 manifest_path = "Cargo.toml"
 pr_write_paths = ["CHANGELOG.md", "Cargo.lock", "Cargo.toml"]
 registry = "crates-io"
@@ -205,6 +206,11 @@ def git_hash(kind, data):
 
 
 class Handler(http.server.BaseHTTPRequestHandler):
+    def end_headers(self):
+        self.send_header("Connection", "close")
+        self.close_connection = True
+        super().end_headers()
+
     def log_message(self, fmt, *args):
         sys.stderr.write("fixture: " + fmt % args + "\n")
 
@@ -450,7 +456,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 )
             published = data
             uploads += 1
-            if os.environ.get("VELNOR_FIXTURE_FAILURE") == "coordinate-crash":
+            if os.environ.get("VELNOR_FIXTURE_FAILURE") in ("coordinate-crash", "coordinate-crash-no-credentials"):
                 pid_path = pathlib.Path(os.environ["VELNOR_FIXTURE_CRASH_PID_PATH"])
                 os.kill(int(pid_path.read_text()), signal.SIGKILL)
             self.send_response(201)

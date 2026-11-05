@@ -92,6 +92,11 @@ counts = {"oidc": 0, "exchange": 0, "revoke": 0}
 
 
 class Handler(http.server.BaseHTTPRequestHandler):
+    def end_headers(self):
+        self.send_header("Connection", "close")
+        self.close_connection = True
+        super().end_headers()
+
     def log_message(self, fmt, *args):
         sys.stderr.write("https-fixture: " + fmt % args + "\n")
 

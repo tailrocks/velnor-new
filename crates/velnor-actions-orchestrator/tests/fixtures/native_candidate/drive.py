@@ -52,17 +52,25 @@ if journal:
         env["VELNOR_TEST_FAST_POLL"] = "1"
         env["VELNOR_NATIVE_COORDINATE_ERROR"] = (
             ""
-            if mode in ("coordinate", "coordinate-crash")
+            if mode in ("coordinate", "coordinate-crash", "coordinate-crash-no-credentials")
+            else "crate_release_upload_credential_missing"
+            if mode in ("coordinate-missing-oidc", "coordinate-missing-bootstrap")
             else "crate_registry_version_not_visible"
         )
-        if mode == "coordinate-crash":
+        if mode in ("coordinate-crash", "coordinate-crash-no-credentials"):
             env["VELNOR_NATIVE_COORDINATE_CRASH"] = "1"
             env["VELNOR_NATIVE_PID_FILE"] = str(runner / "coordinator.pid")
             env["VELNOR_FIXTURE_CRASH_PID_PATH"] = env["VELNOR_NATIVE_PID_FILE"]
+        if mode == "coordinate-crash-no-credentials":
+            env["VELNOR_NATIVE_NO_TOKEN_ON_RETRY"] = "1"
         env["ACTIONS_ID_TOKEN_REQUEST_URL"] = (
             "https://fixture.actions.githubusercontent.com/oidc"
         )
         env["ACTIONS_ID_TOKEN_REQUEST_TOKEN"] = "fixture-oidc"
+        if mode in ("coordinate-missing-oidc", "coordinate-missing-bootstrap"):
+            env.pop("ACTIONS_ID_TOKEN_REQUEST_TOKEN", None)
+            env.pop("CARGO_REGISTRY_TOKEN", None)
+            env["VELNOR_NATIVE_POISON_CHECKER"] = "1"
         release_plz = runner / "velnor-release-plz"
         release_plz.mkdir()
         shutil.copy("/assets/release-plz", release_plz / "release-plz")
@@ -198,7 +206,7 @@ try:
     )
     with urllib.request.urlopen(info["origin"] + "/__fixture/state") as response:
         state = json.load(response)
-    if mode in ("coordinate", "coordinate-crash"):
+    if mode in ("coordinate", "coordinate-crash", "coordinate-crash-no-credentials"):
         assert state["uploads"] == 1
         packed = read_bounded(runner / "fixture-package/package" / f"{info['package']}-{info['version']}.crate", 100 * 1024 * 1024)
         assert state["published_sha256"] == hashlib.sha256(packed).hexdigest()
@@ -228,11 +236,13 @@ try:
         assert f"refs/tags/{info['package']}-v{info['version']}" not in state["refs"]
         assert "refs/tags/velnor-receipt/12/1/publication-started" in state["refs"]
         assert "refs/tags/velnor-receipt/12/1/reconciled" not in state["refs"]
+        if mode in ("coordinate-missing-oidc", "coordinate-missing-bootstrap"):
+            assert not any("/operation-" in ref for ref in state["refs"])
         with urllib.request.urlopen(
             "https://fixture.actions.githubusercontent.com/__fixture/state"
         ) as response:
             counts = json.load(response)
-        assert counts["oidc"] == (0 if mode == "coordinate-skip" else 1)
+        assert counts["oidc"] == (0 if mode in ("coordinate-skip", "coordinate-missing-oidc", "coordinate-missing-bootstrap") else 1)
         assert counts["exchange"] == 0
     elif mode == "journal":
         assert state["mutations"] == 3

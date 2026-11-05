@@ -16,6 +16,8 @@ The `coordinate`, `coordinate-skip`, `coordinate-oidc-denied`, and `coordinate-c
 
 The `coordinate-corrupt-git` case modifies the acquired Git bundle and requires rejection before any publication or journal mutation.
 
+The `coordinate-missing-oidc` and `coordinate-missing-bootstrap` cases remove the selected credential and the SemVer checker after journal start. They require a missing-credential error before any upload intent or registry upload. They do not validate an OIDC exchange or token authorization. The `coordinate-crash-no-credentials` case removes OIDC variables on retry after the fixture accepted one upload. It checks that the same run can finish tag and release repair without uploading again.
+
 The coordinator rehearsal is in evidence quarantine because the 2026-11-04 `coordinate` case failed once with an unexplained HTTP transport error. Quarantine does not permit omitting cases or ignoring failures: a protected rehearsal must run the required cases explicitly and block on any failure. Later passes do not resolve the original failure. The upload fixture directly checks the approved source SHA and `src/lib.rs`; coordinator reconciliation performs the full archive comparison.
 
 Supplied-input mode supports a single recovery package on the `main` branch, the `release` environment, crates.io, and a root `Cargo.toml`. Other configurations fail closed. Supplied-input mode does not support the `source`, `checksum`, or `verify-source` fault-injection cases; those cases use the synthetic source.

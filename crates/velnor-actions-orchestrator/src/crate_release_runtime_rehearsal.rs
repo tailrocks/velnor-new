@@ -69,6 +69,14 @@ fn generated_candidate_receipt_rejects_unprotected_environment() -> Result<(), B
         assert!(matches!(super::run_crate_release(&operation),
             Err(crate::OrchestratorError::Internal { problem }) if problem == "crate_release_authority_not_qualified"));
         if operation == "journal-coordinate"
+            && std::env::var_os("VELNOR_NATIVE_NO_TOKEN_ON_RETRY").is_some()
+            && std::env::var_os("VELNOR_NATIVE_PID_FILE")
+                .is_some_and(|path| Path::new(&path).exists())
+        {
+            assert!(std::env::var_os("ACTIONS_ID_TOKEN_REQUEST_TOKEN").is_none());
+            assert!(std::env::var_os("ACTIONS_ID_TOKEN_REQUEST_URL").is_none());
+        }
+        if operation == "journal-coordinate"
             && let Some(path) = std::env::var_os("VELNOR_NATIVE_PID_FILE")
         {
             std::fs::write(path, std::process::id().to_string())?;
@@ -204,10 +212,18 @@ fn rehearse_journal_start(root: &Path) -> Result<(), Box<dyn Error>> {
 }
 
 fn rehearse_journal_coordinate(root: &Path) -> Result<(), Box<dyn Error>> {
+    if std::env::var_os("VELNOR_NATIVE_POISON_CHECKER").is_some() {
+        std::fs::remove_file(root.join("velnor-semver/cargo-semver-checks"))?;
+    }
     if std::env::var_os("VELNOR_NATIVE_COORDINATE_CRASH").is_some() {
         use std::os::unix::process::ExitStatusExt as _;
         let interrupted = supplied_step(root, "release-publish", "journal-coordinate")?;
-        assert!(interrupted.status.signal() == Some(9) || interrupted.status.code() == Some(137));
+        assert!(
+            interrupted.status.signal() == Some(9) || interrupted.status.code() == Some(137),
+            "{}{}",
+            String::from_utf8_lossy(&interrupted.stdout),
+            String::from_utf8_lossy(&interrupted.stderr)
+        );
     }
     let output = supplied_step(root, "release-publish", "journal-coordinate")?;
     let actual = String::from_utf8_lossy(&output.stdout).to_string()
@@ -242,6 +258,13 @@ fn supplied_step(
         .env("RUSTUP_AUTO_INSTALL", "0");
     if matches!(operation, "journal-start" | "journal-coordinate") {
         command.env("HOME", root).env("GH_TOKEN", "fixture");
+    }
+    if operation == "journal-coordinate"
+        && std::env::var_os("VELNOR_NATIVE_NO_TOKEN_ON_RETRY").is_some()
+        && root.join("coordinator.pid").exists()
+    {
+        command.env_remove("ACTIONS_ID_TOKEN_REQUEST_TOKEN");
+        command.env_remove("ACTIONS_ID_TOKEN_REQUEST_URL");
     }
     Ok(command.output()?)
 }
