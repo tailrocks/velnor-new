@@ -41,6 +41,42 @@ fn admission_mac_and_finalizer_are_bound_in_generated_graph() -> Result<(), Box<
                 .contains("steps.evidence_digest.outputs")
         );
     }
+    for job in ["qualify-homebrew-admit", "qualify-homebrew-macos"] {
+        assert!(
+            jobs[job]["outputs"]["artifact_digest"]
+                .as_str()
+                .ok_or("artifact digest")?
+                .contains("steps.upload.outputs.artifact-digest")
+        );
+        assert!(
+            jobs[job]["outputs"]["artifact_size"]
+                .as_str()
+                .ok_or("artifact size")?
+                .contains("steps.evidence_digest.outputs.artifact_size")
+        );
+    }
+    let final_steps = jobs["qualify-homebrew-finalize"]["steps"]
+        .as_array()
+        .ok_or("finalizer steps")?;
+    for name in ["Download exact admission", "Download exact Mac result"] {
+        let step = final_steps
+            .iter()
+            .find(|step| step["name"] == name)
+            .ok_or("raw download")?;
+        assert_eq!(step["with"]["skip-decompress"], true);
+    }
+    let action_text = super::find_file(
+        &files,
+        ".github/actions/generator-release-qualify-homebrew/action.yml",
+    )?;
+    let action: serde_json::Value = serde_saphyr::from_str(action_text)?;
+    let raw = action["runs"]["steps"]
+        .as_array()
+        .ok_or("action steps")?
+        .iter()
+        .find(|step| step["name"] == "Download exact admission")
+        .ok_or("raw admission")?;
+    assert_eq!(raw["with"]["skip-decompress"], true);
     let publish_condition = jobs["publish-generator"]["if"]
         .as_str()
         .ok_or("publish condition")?;
@@ -102,6 +138,8 @@ fn generated_mac_command_does_not_inherit_tokens() -> Result<(), Box<dyn Error>>
         .env("AWS_SECRET_ACCESS_KEY", "dummy")
         .env("GITHUB_APP_PRIVATE_KEY", "dummy")
         .env("VELNOR_HOME_ADMISSION_SHA256", "a".repeat(64))
+        .env("VELNOR_HOME_ADMISSION_ARCHIVE_SHA256", "d".repeat(64))
+        .env("VELNOR_HOME_ADMISSION_ARCHIVE_SIZE", "42")
         .env("VELNOR_RELEASE_MANIFEST_SHA256", "b".repeat(64))
         .env("VELNOR_HOME_BUDGET_DEADLINE_EPOCH", "123")
         .env("RUNNER_TEMP", temp.path())

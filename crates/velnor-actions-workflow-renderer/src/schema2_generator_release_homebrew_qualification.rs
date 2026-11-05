@@ -12,6 +12,23 @@ const RUNS_ON: &str = "macos-15";
 const JOB_TIMEOUT_MINUTES: u16 = 30;
 const ADMISSION_DIR: &str = "homebrew-admission";
 const RESULT_DIR: &str = "homebrew-result";
+const ADMISSION_ZIP_DIR: &str = "homebrew-admission-zip";
+const RESULT_ZIP_DIR: &str = "homebrew-result-zip";
+
+fn download_raw_step(name: &str, artifact_id: &str, path: &str) -> Yaml {
+    let mut step = workflow_steps::download_step_by_id(name, artifact_id, path);
+    if let Yaml::Map(fields) = &mut step {
+        for (key, value) in fields {
+            if key == "with" {
+                if let Yaml::Map(inputs) = value {
+                    inputs.push(("skip-decompress".to_owned(), Yaml::Bool(true)));
+                }
+                break;
+            }
+        }
+    }
+    step
+}
 
 pub(super) fn admission_job(pins: &ProductReleasePins) -> Result<(String, Yaml), RenderError> {
     linux_job(pins, false)
@@ -91,15 +108,15 @@ fn linux_steps(pins: &ProductReleasePins, finalizing: bool) -> Result<Vec<Yaml>,
     ]);
     if finalizing {
         steps.extend([
-            workflow_steps::download_step_by_id(
+            download_raw_step(
                 "Download exact admission",
                 "${{ needs.qualify-homebrew-admit.outputs.artifact_id }}",
-                ADMISSION_DIR,
+                ADMISSION_ZIP_DIR,
             ),
-            workflow_steps::download_step_by_id(
+            download_raw_step(
                 "Download exact Mac result",
                 "${{ needs.qualify-homebrew-macos.outputs.artifact_id }}",
-                RESULT_DIR,
+                RESULT_ZIP_DIR,
             ),
         ]);
     }
@@ -140,6 +157,22 @@ fn linux_operation_step(finalizing: bool) -> Yaml {
                 "VELNOR_HOME_RESULT_SHA256",
                 "${{ needs.qualify-homebrew-macos.outputs.result_sha256 }}",
             ),
+            (
+                "VELNOR_HOME_ADMISSION_ARCHIVE_SHA256",
+                "${{ needs.qualify-homebrew-admit.outputs.artifact_digest }}",
+            ),
+            (
+                "VELNOR_HOME_RESULT_ARCHIVE_SHA256",
+                "${{ needs.qualify-homebrew-macos.outputs.artifact_digest }}",
+            ),
+            (
+                "VELNOR_HOME_ADMISSION_ARCHIVE_SIZE",
+                "${{ needs.qualify-homebrew-admit.outputs.artifact_size }}",
+            ),
+            (
+                "VELNOR_HOME_RESULT_SIZE",
+                "${{ needs.qualify-homebrew-macos.outputs.artifact_size }}",
+            ),
         ]);
     }
     workflow_steps::bash_step_with_env(
@@ -159,6 +192,14 @@ fn artifact_outputs(digest: &str) -> Yaml {
             Yaml::str("${{ steps.upload.outputs.artifact-id }}"),
         ),
         (
+            "artifact_digest".to_owned(),
+            Yaml::str("${{ steps.upload.outputs.artifact-digest }}"),
+        ),
+        (
+            "artifact_size".to_owned(),
+            Yaml::str("${{ steps.evidence_digest.outputs.artifact_size }}"),
+        ),
+        (
             digest.to_owned(),
             Yaml::str(format!("${{{{ steps.evidence_digest.outputs.{digest} }}}}")),
         ),
@@ -166,20 +207,36 @@ fn artifact_outputs(digest: &str) -> Yaml {
 }
 
 fn evidence_steps(directory: &str, file: &str, digest: &str, hash: &str) -> Vec<Yaml> {
+    let upload_path = if file == "admission" {
+        format!("{directory}/admission.zip")
+    } else {
+        format!("{directory}/result.json")
+    };
+    let mut upload = workflow_steps::upload_step_with_id(
+        "upload",
+        "Upload bound evidence",
+        directory,
+        &[&upload_path],
+    );
+    if let Yaml::Map(fields) = &mut upload {
+        for (key, value) in fields {
+            if key == "with" {
+                if let Yaml::Map(inputs) = value {
+                    inputs.push(("archive".to_owned(), Yaml::Bool(false)));
+                }
+                break;
+            }
+        }
+    }
     vec![
         workflow_steps::bash_step_with_id(
             "evidence_digest",
             "Bind evidence bytes",
             &format!(
-                "set -eu\ntest -f {directory}/{file}.json && test ! -L {directory}/{file}.json\ndigest=\"$({hash} {directory}/{file}.json | awk 'NR == 1 {{print $1}}')\"\n[[ \"$digest\" =~ ^[0-9a-f]{{64}}$ ]]\nprintf '{digest}=%s\\n' \"$digest\" >> \"$GITHUB_OUTPUT\""
+                "set -eu\ntest -f {directory}/{file}.json && test ! -L {directory}/{file}.json\ndigest=\"$({hash} {directory}/{file}.json | awk 'NR == 1 {{print $1}}')\"\n[[ \"$digest\" =~ ^[0-9a-f]{{64}}$ ]]\nprintf '{digest}=%s\\n' \"$digest\" >> \"$GITHUB_OUTPUT\"\ntest -f {upload_path} && test ! -L {upload_path}\nsize=\"$(wc -c < {upload_path} | tr -d ' ')\"\n[[ \"$size\" =~ ^[1-9][0-9]*$ ]]\nprintf 'artifact_size=%s\\n' \"$size\" >> \"$GITHUB_OUTPUT\""
             ),
         ),
-        workflow_steps::upload_step_with_id(
-            "upload",
-            "Upload bound evidence",
-            directory,
-            &[directory],
-        ),
+        upload,
     ]
 }
 
@@ -214,6 +271,16 @@ pub(super) fn job(
                 "admission_artifact_id",
                 "Exact same-run admission artifact ID",
                 "${{ needs.qualify-homebrew-admit.outputs.artifact_id }}",
+            ),
+            (
+                "admission_archive_sha256",
+                "SHA-256 of the uploaded admission archive",
+                "${{ needs.qualify-homebrew-admit.outputs.artifact_digest }}",
+            ),
+            (
+                "admission_archive_size",
+                "Byte size of the uploaded admission archive",
+                "${{ needs.qualify-homebrew-admit.outputs.artifact_size }}",
             ),
             (
                 "admission_sha256",
@@ -271,10 +338,10 @@ fn candidate_steps(
         "Download exact ARM candidate artifact",
         "${{ inputs.artifact_id }}",
     ));
-    steps.push(workflow_steps::download_step_by_id(
+    steps.push(download_raw_step(
         "Download exact admission",
         "${{ inputs.admission_artifact_id }}",
-        ADMISSION_DIR,
+        ADMISSION_ZIP_DIR,
     ));
     steps.extend([
         workflow_steps::download_step_by_id(
@@ -303,9 +370,11 @@ fn candidate_steps(
         ),
         workflow_steps::bash_step_with_env(
             "Validate admission; install and test preserved Homebrew kegs",
-            &format!("set -eu\nenv -i PATH=\"$PATH\" HOME=\"$HOME\" TMPDIR=\"${{TMPDIR:-/tmp}}\" RUNNER_TEMP=\"$RUNNER_TEMP\" RUNNER_OS=\"$RUNNER_OS\" RUNNER_ARCH=\"$RUNNER_ARCH\" RUNNER_ENVIRONMENT=\"$RUNNER_ENVIRONMENT\" GITHUB_ACTIONS=\"$GITHUB_ACTIONS\" GITHUB_REPOSITORY=\"$GITHUB_REPOSITORY\" GITHUB_REPOSITORY_ID=\"$GITHUB_REPOSITORY_ID\" GITHUB_RUN_ID=\"$GITHUB_RUN_ID\" GITHUB_RUN_ATTEMPT=\"$GITHUB_RUN_ATTEMPT\" GITHUB_WORKFLOW_REF=\"$GITHUB_WORKFLOW_REF\" GITHUB_WORKFLOW_SHA=\"$GITHUB_WORKFLOW_SHA\" GITHUB_SHA=\"$GITHUB_SHA\" GITHUB_WORKSPACE=\"$GITHUB_WORKSPACE\" VELNOR_HOME_BUDGET_DEADLINE_EPOCH=\"$VELNOR_HOME_BUDGET_DEADLINE_EPOCH\" VELNOR_HOME_ADMISSION_SHA256=\"$VELNOR_HOME_ADMISSION_SHA256\" VELNOR_RELEASE_MANIFEST_SHA256=\"$VELNOR_RELEASE_MANIFEST_SHA256\" VELNOR_INTERNAL_OP=qualify-homebrew-v1 {candidate_path}"),
+            &format!("set -eu\nenv -i PATH=\"$PATH\" HOME=\"$HOME\" TMPDIR=\"${{TMPDIR:-/tmp}}\" RUNNER_TEMP=\"$RUNNER_TEMP\" RUNNER_OS=\"$RUNNER_OS\" RUNNER_ARCH=\"$RUNNER_ARCH\" RUNNER_ENVIRONMENT=\"$RUNNER_ENVIRONMENT\" GITHUB_ACTIONS=\"$GITHUB_ACTIONS\" GITHUB_REPOSITORY=\"$GITHUB_REPOSITORY\" GITHUB_REPOSITORY_ID=\"$GITHUB_REPOSITORY_ID\" GITHUB_RUN_ID=\"$GITHUB_RUN_ID\" GITHUB_RUN_ATTEMPT=\"$GITHUB_RUN_ATTEMPT\" GITHUB_WORKFLOW_REF=\"$GITHUB_WORKFLOW_REF\" GITHUB_WORKFLOW_SHA=\"$GITHUB_WORKFLOW_SHA\" GITHUB_SHA=\"$GITHUB_SHA\" GITHUB_WORKSPACE=\"$GITHUB_WORKSPACE\" VELNOR_HOME_BUDGET_DEADLINE_EPOCH=\"$VELNOR_HOME_BUDGET_DEADLINE_EPOCH\" VELNOR_HOME_ADMISSION_SHA256=\"$VELNOR_HOME_ADMISSION_SHA256\" VELNOR_HOME_ADMISSION_ARCHIVE_SHA256=\"$VELNOR_HOME_ADMISSION_ARCHIVE_SHA256\" VELNOR_HOME_ADMISSION_ARCHIVE_SIZE=\"$VELNOR_HOME_ADMISSION_ARCHIVE_SIZE\" VELNOR_RELEASE_MANIFEST_SHA256=\"$VELNOR_RELEASE_MANIFEST_SHA256\" VELNOR_INTERNAL_OP=qualify-homebrew-v1 {candidate_path}"),
             vec![
                 ("VELNOR_HOME_ADMISSION_SHA256", "${{ inputs.admission_sha256 }}"),
+                ("VELNOR_HOME_ADMISSION_ARCHIVE_SHA256", "${{ inputs.admission_archive_sha256 }}"),
+                ("VELNOR_HOME_ADMISSION_ARCHIVE_SIZE", "${{ inputs.admission_archive_size }}"),
                 ("BASH_ENV", ""),
                 ("ENV", ""),
                 ("LD_PRELOAD", ""),
