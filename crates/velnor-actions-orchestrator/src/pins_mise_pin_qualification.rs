@@ -5,9 +5,9 @@ use super::{OrchestratorError, mise_action_uses};
 use velnor_actions_contract::{ReleaseTarget, VelnorConfig};
 use velnor_actions_workflow_renderer::{MisePinQualificationPins, MiseSetup};
 
-const VERSION: &str = "2026.10.25";
-const LINUX_X64_SHA256: &str = "5d362ecc578dc7c146679b841dda949d6472cbf86ff5635db7afdca1b6b3fd87";
-const MACOS_X64_SHA256: &str = "e06eb3f0311dedbf65952ec2c0247398848653b302e6aad99d7371ad9ba33301";
+const VERSION: &str = "2026.11.1";
+const LINUX_X64_SHA256: &str = "7129dbab31d698f9028db9374f7ba7987232b0426f837dcbce437130a61415f9";
+const MACOS_X64_SHA256: &str = "ead2414251e8f2909cc7564f8ab5fd1feea6962ed77d0177776d72e08ae747a0";
 const LINUX_X64_RUNNER: &str = "ubuntu-26.04";
 const MACOS_X64_RUNNER: &str = "macos-15-intel";
 

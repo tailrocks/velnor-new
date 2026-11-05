@@ -40,24 +40,6 @@ pub const RESERVED_SUITE_WORKFLOW_SLUGS: &[&str] = &[
     "state-seal",
 ];
 
-pub const GENERATOR_OWNED_WORKFLOW_FILES: &[&str] = &[
-    "ci.yml",
-    "freshness.yml",
-    "release.yml",
-    "publish.yml",
-    "binary-preview.yml",
-    "binary-release.yml",
-    "tofu-apply.yml",
-    "review-completion.yml",
-    "preview-tap-reconcile.yml",
-    "qualification.yml",
-    "product-release.yml",
-    "monitoring.yml",
-    "source-qualification.yml",
-    "state-seal.yml",
-    "suites.yml",
-];
-
 const fn default_suite_partitions() -> u16 {
     DEFAULT_SUITE_PARTITIONS
 }

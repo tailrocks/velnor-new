@@ -22,7 +22,7 @@ targets = ["aarch64-unknown-linux-gnu", "x86_64-unknown-linux-gnu"]
 mr_boxington = true
 
 [tools.mr-boxington]
-version = "1.29.1"
+version = "1.29.2"
 
 [settings]
 lockfile = true

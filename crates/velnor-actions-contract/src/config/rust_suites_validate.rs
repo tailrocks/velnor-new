@@ -10,9 +10,9 @@ use crate::errors::ContractError;
 use crate::workflow::ScheduleTrigger;
 
 use super::rust_suites::{
-    DEFAULT_SUITE_WORKFLOW_SLUG, GENERATOR_OWNED_WORKFLOW_FILES, MAX_SUITE_PARTITIONS,
-    MAX_SUITE_TEST_THREADS, RESERVED_SUITE_IDS, RESERVED_SUITE_WORKFLOW_SLUGS, RustSuiteArtifact,
-    RustSuiteConfig, RustSuiteTrigger, WorkflowDispatchConfig, WorkflowDispatchInputType,
+    DEFAULT_SUITE_WORKFLOW_SLUG, MAX_SUITE_PARTITIONS, MAX_SUITE_TEST_THREADS, RESERVED_SUITE_IDS,
+    RESERVED_SUITE_WORKFLOW_SLUGS, RustSuiteArtifact, RustSuiteConfig, RustSuiteTrigger,
+    WorkflowDispatchConfig, WorkflowDispatchInputType,
 };
 use super::workflow::RUNNER_LABEL_CATALOG;
 use rules::{
@@ -175,48 +175,6 @@ impl WorkflowDispatchConfig {
         }
         Ok(())
     }
-}
-
-pub fn validate_preserve_workflows(entries: &[String], file: &str) -> Result<(), ContractError> {
-    let mut seen = BTreeSet::new();
-    for entry in entries {
-        let Some(filename) = entry.strip_prefix(".github/workflows/") else {
-            return Err(cfg_err(
-                file,
-                "workflow.preserve_workflows",
-                format!("bad_preserve_workflow:{entry}"),
-            ));
-        };
-        let Some(slug) = filename.strip_suffix(".yml") else {
-            return Err(cfg_err(
-                file,
-                "workflow.preserve_workflows",
-                format!("bad_preserve_workflow:{entry}"),
-            ));
-        };
-        if !is_valid_workflow_slug(slug) {
-            return Err(cfg_err(
-                file,
-                "workflow.preserve_workflows",
-                format!("bad_preserve_workflow:{entry}"),
-            ));
-        }
-        if GENERATOR_OWNED_WORKFLOW_FILES.contains(&filename) {
-            return Err(cfg_err(
-                file,
-                "workflow.preserve_workflows",
-                format!("cannot_preserve_generator_workflow:{entry}"),
-            ));
-        }
-        if !seen.insert(entry.as_str()) {
-            return Err(cfg_err(
-                file,
-                "workflow.preserve_workflows",
-                format!("duplicate_preserve_workflow:{entry}"),
-            ));
-        }
-    }
-    Ok(())
 }
 
 fn validate_suite_id<'a>(

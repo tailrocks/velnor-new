@@ -115,7 +115,9 @@ expected_scenarios = ["production-build", "production-smoke"]
 ```
 
 `directory` defaults to `.`; timeout defaults to five minutes and accepts 1–360.
-Inputs must be nonempty and unique; tool IDs must be unique. Select an explicitly
+Inputs must be nonempty and unique, and each must name an existing regular file:
+a directory is rejected during discovery with `check_input_is_directory:<path>`
+(list its files instead); tool IDs must be unique. Select an explicitly
 declared qualified Rust tool ID when a task needs Rust for FFI fixtures or
 helpers. Non-Rust qualified tools requiring Cargo source installation, exposing
 `cargo`/`rustc`, or declaring Nextest/Rustc probes must declare exactly one direct

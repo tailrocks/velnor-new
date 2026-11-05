@@ -45,6 +45,8 @@ mod bun_routing;
 mod bun_runtime;
 #[path = "workflow_configuration_public/cache_authority.rs"]
 mod cache_authority;
+#[path = "workflow_configuration_public/check_inputs.rs"]
+mod check_inputs;
 #[path = "workflow_configuration_public/checkout_history.rs"]
 mod checkout_history;
 #[path = "workflow_configuration_public/checkout_history_plan.rs"]

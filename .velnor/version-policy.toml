@@ -21,14 +21,14 @@ check_interval_hours = 24
 max_exception_days = 14
 
 [tools]
-mise = "2026.10.25"
+mise = "2026.11.1"
 rust = "1.99.1"
-mr-boxington = "1.29.1"
+mr-boxington = "1.29.2"
 gh = "2.103.3"
 jactionlint = "2.4.0"
 shellcheck = "0.11.0"
 nextest = "0.9.151"
-opentofu = "1.13.2"
+opentofu = "1.13.8"
 release-plz = "0.4.3"
 crane = "0.22.1"
 bun = "1.4.4"

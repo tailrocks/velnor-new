@@ -17,14 +17,6 @@ pub(super) fn validate(workflow: &WorkflowConfig, file: &str) -> Result<(), Cont
             return Err(ContractError::config(file, "workflow.task_suites", problem));
         }
         previous = Some(suite.id.as_str());
-        let path = format!(".github/workflows/{}.yml", suite.workflow);
-        if workflow.preserve_workflows.contains(&path) {
-            return Err(ContractError::config(
-                file,
-                "workflow.preserve_workflows",
-                format!("preserve_workflow_generator_owned:{path}"),
-            ));
-        }
     }
     for (index, suite) in workflow.task_suites.iter().enumerate() {
         if let Some(snapshot) = &suite.evidence_snapshot {

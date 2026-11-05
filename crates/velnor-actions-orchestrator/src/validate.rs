@@ -26,20 +26,22 @@ const ACTIONS_DIR: &str = ".github/actions/";
 
 const DIAG_CAP: usize = 4000;
 
-pub(crate) fn validate_staged(tree: &RenderedTree) -> Result<Vec<String>, OrchestratorError> {
+pub(crate) fn validate_staged(
+    tree: &RenderedTree,
+    catalog: &ToolCatalog,
+) -> Result<Vec<String>, OrchestratorError> {
     let staging = tempfile::tempdir().map_err(|err| {
         OrchestratorError::io(std::env::temp_dir().display().to_string(), err.to_string())
     })?;
     write_tree(&staging.path().join(".github"), tree)?;
     let workflows = staged_workflows(tree)?;
-    let catalog = ToolCatalog::pinned();
     run_jactionlint(
-        &catalog,
+        catalog,
         staging.path(),
         &staged_lint_files(tree, &workflows),
     )?;
-    run_shellcheck_probe(&catalog, staging.path())?;
-    run_shellcheck_bodies(&catalog, staging.path(), &workflows)?;
+    run_shellcheck_probe(catalog, staging.path())?;
+    run_shellcheck_bodies(catalog, staging.path(), &workflows)?;
     let mut validated = vec![
         catalog.tool_spec(PinnedTool::Jactionlint),
         catalog.tool_spec(PinnedTool::Shellcheck),

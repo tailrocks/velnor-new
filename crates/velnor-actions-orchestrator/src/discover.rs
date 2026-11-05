@@ -238,7 +238,6 @@ fn plan_workspaces(
             index,
             &record,
             config.stacks.rust.as_ref(),
-            &config.workflow.preserve_workflows,
         )?;
         planned.push(PlannedWorkspace {
             record,
