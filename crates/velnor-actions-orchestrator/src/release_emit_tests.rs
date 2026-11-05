@@ -321,15 +321,20 @@ fn configured_features_reach_release_plz_and_cargo_package()
         .current_dir(temp.path())
         .output()?;
     assert!(!missing.status.success());
-    let mut unknown_group = release.clone();
-    unknown_group.version_groups.insert("shared".into(), vec!["other".into()]);
-    assert!(super::config::plz_config(&unknown_group, &selected).is_err());
-    let mut unknown = release;
-    unknown
-        .publish_features
-        .insert("other".into(), vec!["pty".into()]);
-    assert!(super::config::plz_config(&unknown, &selected).is_err());
+    assert_unknown_inputs_rejected(&release, &selected);
     Ok(())
+}
+
+fn assert_unknown_inputs_rejected(
+    release: &velnor_actions_contract::config::RustReleaseConfig,
+    selected: &velnor_actions_rust::release_select::ReleaseSelection,
+) {
+    let mut unknown = release.clone();
+    unknown.version_groups.insert("shared".into(), vec!["other".into()]);
+    assert!(super::config::plz_config(&unknown, selected).is_err());
+    let mut unknown = release.clone();
+    unknown.publish_features.insert("other".into(), vec!["pty".into()]);
+    assert!(super::config::plz_config(&unknown, selected).is_err());
 }
 
 #[path = "release_emit_workspace_tests.rs"]

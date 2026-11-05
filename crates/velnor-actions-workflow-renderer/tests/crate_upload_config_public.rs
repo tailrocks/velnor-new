@@ -1,7 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 use velnor_actions_workflow_renderer::release_config::{
-    ReleasePlzConfig, ReleasePlzPackage, render_single_package_upload_config,
+    ReleasePlzConfig, ReleasePlzPackage, render_release_plz_config,
+    render_single_package_upload_config,
 };
 
 #[test]
@@ -23,6 +24,14 @@ fn upload_config_selects_one_package_and_preserves_policy() -> Result<(), Box<dy
             },
         ],
     };
+    let normal: toml::Value = toml::from_str(&render_release_plz_config(&config, "0.1.72")?)?;
+    let grouped = normal["package"].as_array().ok_or("missing packages")?;
+    assert_eq!(grouped.len(), 2);
+    for package in grouped {
+        assert_eq!(package["version_group"].as_str(), Some("shared"));
+        assert!(package.get("version").is_none());
+    }
+    assert!(normal["workspace"].get("version").is_none());
     {
         let text = render_single_package_upload_config(&config, "velnor_probe_a", "0.1.72")?;
         let value: toml::Value = toml::from_str(&text)?;

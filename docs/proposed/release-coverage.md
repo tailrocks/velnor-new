@@ -12,7 +12,7 @@ crate they cover; every file stays under the 400-line gate.
 | One-crate root package, default registry | `impl_rust_release::single_root_package_selects_with_default_registry` |
 | Virtual multi-member workspace | `impl_rust_release_modes::virtual_workspace_multi_member_selects_explicit` |
 | Independent versions unforced without groups | `impl_rust_release_modes::independent_versions_stay_unforced_without_groups` |
-| Groups take max, members converge | `crate_release_semver_public::grouped_unchanged_member_converges_to_native_group_maximum` |
+| Group assignments reach release-plz; single-package uploads omit groups | `crate_upload_config_public::upload_config_selects_one_package_and_preserves_policy` |
 | Explicit subset ignores CI affected-state | `impl_rust_release::explicit_subset_ignores_ci_affected_state` |
 | `publish = false` never publishes | `impl_rust_release::publishable_workspace_skips_private_helpers` |
 | Bad/restricted registries fail closed | `impl_rust_release::unsupported_registry_fails_closed_until_supported`, `impl_rust_release_modes::publishable_workspace_fails_on_restricted_registries` |

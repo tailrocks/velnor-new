@@ -111,11 +111,6 @@ pub enum ReleaseError {
     InvalidGroupName {
         group: String,
     },
-    InvalidGroupVersion {
-        group: String,
-        member: String,
-        version: String,
-    },
 }
 
 impl fmt::Display for ReleaseError {
@@ -191,13 +186,6 @@ impl fmt::Display for ReleaseError {
             Self::OverlappingGroups { member } => write!(f, "overlapping_groups:{member}"),
             Self::EmptyGroup { group } => write!(f, "empty_group:{group}"),
             Self::InvalidGroupName { group } => write!(f, "invalid_group_name:{group}"),
-            Self::InvalidGroupVersion {
-                group,
-                member,
-                version,
-            } => {
-                write!(f, "invalid_group_version:{group}:{member}:{version}")
-            }
         }
     }
 }

@@ -6,7 +6,6 @@ use std::collections::{BTreeMap, BTreeSet};
 use crate::release_error::ReleaseError;
 use crate::release_facts::validate_registry_name;
 use crate::release_select::ReleaseSelection;
-use semver::Version;
 
 pub const DEFAULT_TAG_PATTERN: &str = "{{ package }}-v{{ version }}";
 
@@ -153,53 +152,6 @@ fn check_groups<'a>(
         }
     }
     Ok(grouped)
-}
-
-pub fn resolve_version_groups(
-    groups: &[VersionGroup],
-    current: &BTreeMap<String, String>,
-    planned: &BTreeMap<String, String>,
-) -> Result<BTreeMap<String, String>, ReleaseError> {
-    let known: BTreeSet<&str> = current.keys().map(String::as_str).collect();
-    check_groups(groups, &known)?;
-    let mut resolved = BTreeMap::new();
-    for group in groups {
-        resolve_group(group, current, planned, &mut resolved)?;
-    }
-    Ok(resolved)
-}
-
-fn resolve_group(
-    group: &VersionGroup,
-    current: &BTreeMap<String, String>,
-    planned: &BTreeMap<String, String>,
-    resolved: &mut BTreeMap<String, String>,
-) -> Result<(), ReleaseError> {
-    let mut next: Option<(Version, String)> = None;
-    for member in &group.members {
-        let text = planned
-            .get(member)
-            .or_else(|| current.get(member))
-            .ok_or_else(|| ReleaseError::InvalidGroupVersion {
-                group: group.name.clone(),
-                member: member.clone(),
-                version: String::new(),
-            })?;
-        let parsed = Version::parse(text).map_err(|_| ReleaseError::InvalidGroupVersion {
-            group: group.name.clone(),
-            member: member.clone(),
-            version: text.clone(),
-        })?;
-        if next.as_ref().is_none_or(|(held, _)| parsed > *held) {
-            next = Some((parsed, text.clone()));
-        }
-    }
-    if let Some((_, winner)) = next {
-        for member in &group.members {
-            resolved.insert(member.clone(), winner.clone());
-        }
-    }
-    Ok(())
 }
 
 #[must_use]
