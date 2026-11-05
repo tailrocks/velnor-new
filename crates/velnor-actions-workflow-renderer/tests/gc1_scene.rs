@@ -353,6 +353,10 @@ impl Scene {
         gc1_mbx_stub::install_zstd_pad(&self.bin)
     }
 
+    pub(crate) fn shim_zstd_log(&self) -> Result<(), Box<dyn Error>> {
+        gc1_mbx_stub::install_zstd_log(&self.bin)
+    }
+
     pub(crate) fn shim_tar_log(&self) -> Result<(), Box<dyn Error>> {
         gc1_mbx_stub::install_tar_log(&self.bin)
     }
