@@ -37,6 +37,7 @@ fn hosted_supervisor_runs_candidate_scenarios_and_controller_regressions()
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests");
     for (file, arguments) in [
         ("release_manager_scenario_controller_test.py", &[][..]),
+        ("release_manager_home_access_test.py", &[][..]),
         (
             "release_manager_systemd_test.py",
             &["RealManagerTest.test_reobserved_cgroup_cannot_change_invocation"][..],

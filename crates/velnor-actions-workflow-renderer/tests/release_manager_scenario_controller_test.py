@@ -161,9 +161,10 @@ class ScenarioControllerTest(unittest.TestCase):
     def test_qualification_capability_does_not_reach_publisher_service(self):
         with tempfile.TemporaryDirectory(prefix="velnor-capabilities-", dir="/run") as directory:
             root = Path(directory)
-            source = Path(__file__).resolve().parents[1] / "src"
+            candidate_source = Path(__file__).resolve().parents[1] / "src"
+            source = root / "src"
             helper = root / "helper.py"
-            helper.write_bytes((source / "release_supervisor_exec.py").read_bytes())
+            helper.write_bytes((candidate_source / "release_supervisor_exec.py").read_bytes())
             helper.chmod(0o555)
             outer = root / "outer.json"
             inner = root / "inner.json"
@@ -177,7 +178,15 @@ class ScenarioControllerTest(unittest.TestCase):
                       "d=time.clock_gettime_ns(time.CLOCK_BOOTTIME)+45_000_000_000;"
                       "m=b.Manager(" + repr(str(helper)) + ",15,root_bootstrap=True);"
                       "l.supervise(m,struct.pack('>QQI',d,os.stat('/proc/self/ns/time').st_ino,len(p))+p,d);m.close()")
-            self.run_fixture(root, script)
+            failure = root / "child-error"
+            script = ("import pathlib,traceback\ntry:\n exec(" + repr(script) + ")\n"
+                      "except Exception:\n pathlib.Path(" + repr(str(failure))
+                      + ").write_text(traceback.format_exc()[:8192]); raise\n")
+            try:
+                self.run_fixture(root, script)
+            except Exception as error:
+                detail = failure.read_text() if failure.is_file() else "child diagnostic unavailable"
+                raise AssertionError("nested capability test failed: " + detail) from error
             def capabilities(path):
                 return {line.split(":", 1)[0]: line.split(":", 1)[1].strip()
                         for line in json.loads(path.read_text()) if ":" in line}
