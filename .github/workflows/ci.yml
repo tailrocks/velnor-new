@@ -445,9 +445,9 @@ jobs:
     env:
       CARGO_CACHE_AUTO_CLEAN_FREQUENCY: never
       RUSTUP_TOOLCHAIN: 1.99.1
-      VELNOR_ASSET_SHA256: ae9b45357917fb3dd279b2fb1d0f6df527ca1a3403fb4af3baf2043c56be4559
-      VELNOR_ASSET_URL: https://github.com/tailrocks/velnor-new/releases/download/v0.1.72/velnor-actions-0.1.72-x86_64-unknown-linux-gnu
-      VELNOR_RELEASE_COMMIT: ba363080a7707684fe8f2094851fa513687de73b
+      VELNOR_ASSET_SHA256: db7480b83238f85a2e4472d26ba57ca4ee4d6822353cbdaad690b1a2b963b26f
+      VELNOR_ASSET_URL: https://github.com/tailrocks/velnor-new/releases/download/v0.1.74/velnor-actions-0.1.74-x86_64-unknown-linux-gnu
+      VELNOR_RELEASE_COMMIT: c622bfb187556afb8d3ff3ca917a719e4bb7f32a
       VELNOR_RUN_KEY_ATTEMPT: ${{ needs.plan.outputs.plan_attempt || github.run_attempt }}
     permissions:
       contents: read
@@ -485,9 +485,7 @@ jobs:
           fetch-depth: ${{ github.event_name == 'push' && '1' || '2' }}
           persist-credentials: "false"
       - *s2
-      - name: Acquire Velnor
-        timeout-minutes: 6
-        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; d=\"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.72\"&&mkdir -p \"${d%/*}\"&&s=\"/opt/velnor/seed/generator/${d##*/}\"&&p=\"$VELNOR_ASSET_SHA256  \"&&if [ -f \"$s\" ]&&echo \"$p$s\"|sha256sum -c -;then cp \"$s\" \"$d\";else curl -fsSL --connect-timeout 15 --max-time 120 --retry 5 --retry-all-errors --retry-max-time 180 --proto '\\''=https'\\'' --tlsv1.2 \"$VELNOR_ASSET_URL\" -o \"$d\"&&echo \"$p$d\"|sha256sum -c -;fi&&chmod +x \"$d\"'"
+      - *s4
       - name: Prepare pinned tools
         env: *m9
         run: mise --no-config --no-env --no-hooks install gh@2.103.3
@@ -500,18 +498,18 @@ jobs:
           GH_REPO: ${{ github.repository }}
           GH_TOKEN: ${{ github.token }}
           VELNOR_INTERNAL_OP: fetch-reports-v1
-        run: &r7 "\"$RUNNER_TEMP\"'/velnor/bin/velnor-actions-0.1.72'"
+        run: *r6
       - name: Assemble group ledgers
         env:
           VELNOR_INTERNAL_OP: assemble-group-ledgers-v1
-        run: *r7
+        run: *r6
       - name: Write request
         env:
           VELNOR_INTERNAL_OP: write-request-v1
           VELNOR_NEEDS_JSON: ${{ toJSON(needs) }}
           VELNOR_NEEDS_EXPECTED: "[\"alint\",\"cargo-deny\",\"cargo-machete\",\"check-maintenance-helpers\",\"jactionlint\",\"plan\",\"rust-velnor-actions-actionlint\",\"rust-velnor-actions-ansible\",\"rust-velnor-actions-bun\",\"rust-velnor-actions-cli\",\"rust-velnor-actions-contract\",\"rust-velnor-actions-dbt\",\"rust-velnor-actions-gradle\",\"rust-velnor-actions-mise\",\"rust-velnor-actions-orchestrator\",\"rust-velnor-actions-rust\",\"rust-velnor-actions-tofu\",\"rust-velnor-actions-workflow-renderer\",\"rust-velnor-resource-probe\",\"rust-velnor-runner-attestation\",\"rust-velnor-runner-cli\",\"rust-velnor-runner-core\",\"rust-velnor-runner-github\",\"rust-velnor-runner-host\"]"
           VELNOR_REQUEST_FILE: ${{ runner.temp }}/velnor/request/merge-v1-request.json
-        run: *r7
+        run: *r6
       - name: Merge reports
         env:
           GH_TOKEN: ${{ github.token }}
@@ -519,7 +517,7 @@ jobs:
           VELNOR_NEEDS_JSON: ${{ toJSON(needs) }}
           VELNOR_NEEDS_EXPECTED: "[\"alint\",\"cargo-deny\",\"cargo-machete\",\"check-maintenance-helpers\",\"jactionlint\",\"plan\",\"rust-velnor-actions-actionlint\",\"rust-velnor-actions-ansible\",\"rust-velnor-actions-bun\",\"rust-velnor-actions-cli\",\"rust-velnor-actions-contract\",\"rust-velnor-actions-dbt\",\"rust-velnor-actions-gradle\",\"rust-velnor-actions-mise\",\"rust-velnor-actions-orchestrator\",\"rust-velnor-actions-rust\",\"rust-velnor-actions-tofu\",\"rust-velnor-actions-workflow-renderer\",\"rust-velnor-resource-probe\",\"rust-velnor-runner-attestation\",\"rust-velnor-runner-cli\",\"rust-velnor-runner-core\",\"rust-velnor-runner-github\",\"rust-velnor-runner-host\"]"
           VELNOR_REQUEST_FILE: ${{ runner.temp }}/velnor/request/merge-v1-request.json
-        run: *r7
+        run: *r6
       - name: Publish final report
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -661,7 +659,7 @@ jobs:
         env:
           VELNOR_MBX_STATS_JOB: rust-velnor-actions-actionlint
           VELNOR_MBX_STATS_WORKSPACE: api2026_pull_context_public build_script_build bun_assets_handoff_public bun_private_repository_public candidate_freshness_public check_runtime_identity_public controller_approval_public crate_bootstrap_version_public crate_release_semver_public crate_release_version_public generator_release_prepare_public homebrew_adoption_seed_public ledger_helper_public mbx_stats pin_mirror_public preview_source_selection_public product_release_binary_public prune_state prune_tools qualification_diagnostics release_workspace_cargo review_completion_public rust_tree_digest_pin task_report_public tracked_manifest_public velnor_actions velnor_actions_actionlint velnor_actions_ansible velnor_actions_bun velnor_actions_cli velnor_actions_contract velnor_actions_dbt velnor_actions_freshness velnor_actions_gradle velnor_actions_mise velnor_actions_orchestrator velnor_actions_rust velnor_actions_tofu velnor_actions_workflow_renderer velnor_archive_guard velnor_cli velnor_contract velnor_mise velnor_orchestrator velnor_rust velnor_workflow_renderer workflow_configuration_public
-        run: &r12 "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; job=\"${VELNOR_MBX_STATS_JOB-}\"; members=\"${VELNOR_MBX_STATS_WORKSPACE-}\"; out=\"${RUNNER_TEMP:?}/velnor-mbx-stats.line\"; set -- \"${MBX_CACHE_DIR-}\"/actions/sessions/v1/*.jsonl; if [ -z \"${MBX_CACHE_DIR-}\" ] || [ ! -f \"$1\" ]; then printf '\\''mbx-stats job=%s sessions=0\\n'\\'' \"$job\" > \"$out\"; else jq -r -n -R --arg job \"$job\" --arg members \"$members\" '\\''[inputs | fromjson? | select(type == \"object\" and .type == \"action\")] as $a | ($members | split(\" \") | map(select(length > 0) | {key: ., value: true}) | from_entries) as $m | def benign: .outcome.kind == \"bypass\" and (.outcome.reason == \"compiler-query\" or .outcome.reason == \"standard-input\"); def n($c; $k): [$a[] | select((benign | not) and .outcome.kind == $k and ((if $m[.crate_name // \"\"] then \"workspace\" else \"registry\" end) == $c))] | length; def group($c): \"\\($c) hit=\\(n($c; \"hit\")) miss=\\(n($c; \"miss\")) not_looked_up=\\(n($c; \"unconsulted\")) bypassed=\\(n($c; \"bypass\"))\"; def named: (.crate_name // \"unnamed\") | gsub(\" \"; \"_\"); def class: if $m[.crate_name // \"\"] then \"workspace\" else \"registry\" end; def outcome: if .outcome.kind == \"unconsulted\" then \"not_looked_up\" else .outcome.kind end; def bounded: unique | if length == 0 then \"none\" elif length > 40 then (.[:40] + [\"+\\(length - 40)\"]) | join(\",\") else join(\",\") end; [$a[] | select(benign | not)] as $c | \"mbx-stats job=\\($job) \\(group(\"registry\")) \\(group(\"workspace\")) bypassed_benign=\\([$a[] | select(benign)] | length) nonhit=\\([$c[] | select(.outcome.kind != \"hit\") | \"\\(class):\\(outcome):\\(named)\"] | bounded) bypass=\\([$c[] | select(.outcome.kind == \"bypass\") | \"\\(.outcome.reason // \"unrecorded\"):\\(named)\"] | bounded)\"'\\'' \"$@\" > \"$out\"; fi; read -r line < \"$out\"; printf '\\''%s\\n'\\'' \"$line\"; if [ -n \"${GITHUB_STEP_SUMMARY-}\" ]; then printf '\\''%s\\n'\\'' \"$line\" >> \"$GITHUB_STEP_SUMMARY\"; fi'"
+        run: &r11 "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; job=\"${VELNOR_MBX_STATS_JOB-}\"; members=\"${VELNOR_MBX_STATS_WORKSPACE-}\"; out=\"${RUNNER_TEMP:?}/velnor-mbx-stats.line\"; set -- \"${MBX_CACHE_DIR-}\"/actions/sessions/v1/*.jsonl; if [ -z \"${MBX_CACHE_DIR-}\" ] || [ ! -f \"$1\" ]; then printf '\\''mbx-stats job=%s sessions=0\\n'\\'' \"$job\" > \"$out\"; else jq -r -n -R --arg job \"$job\" --arg members \"$members\" '\\''[inputs | fromjson? | select(type == \"object\" and .type == \"action\")] as $a | ($members | split(\" \") | map(select(length > 0) | {key: ., value: true}) | from_entries) as $m | def benign: .outcome.kind == \"bypass\" and (.outcome.reason == \"compiler-query\" or .outcome.reason == \"standard-input\"); def n($c; $k): [$a[] | select((benign | not) and .outcome.kind == $k and ((if $m[.crate_name // \"\"] then \"workspace\" else \"registry\" end) == $c))] | length; def group($c): \"\\($c) hit=\\(n($c; \"hit\")) miss=\\(n($c; \"miss\")) not_looked_up=\\(n($c; \"unconsulted\")) bypassed=\\(n($c; \"bypass\"))\"; def named: (.crate_name // \"unnamed\") | gsub(\" \"; \"_\"); def class: if $m[.crate_name // \"\"] then \"workspace\" else \"registry\" end; def outcome: if .outcome.kind == \"unconsulted\" then \"not_looked_up\" else .outcome.kind end; def bounded: unique | if length == 0 then \"none\" elif length > 40 then (.[:40] + [\"+\\(length - 40)\"]) | join(\",\") else join(\",\") end; [$a[] | select(benign | not)] as $c | \"mbx-stats job=\\($job) \\(group(\"registry\")) \\(group(\"workspace\")) bypassed_benign=\\([$a[] | select(benign)] | length) nonhit=\\([$c[] | select(.outcome.kind != \"hit\") | \"\\(class):\\(outcome):\\(named)\"] | bounded) bypass=\\([$c[] | select(.outcome.kind == \"bypass\") | \"\\(.outcome.reason // \"unrecorded\"):\\(named)\"] | bounded)\"'\\'' \"$@\" > \"$out\"; fi; read -r line < \"$out\"; printf '\\''%s\\n'\\'' \"$line\"; if [ -n \"${GITHUB_STEP_SUMMARY-}\" ]; then printf '\\''%s\\n'\\'' \"$line\" >> \"$GITHUB_STEP_SUMMARY\"; fi'"
       - &s23
         name: Download ledger CLI
         if: always()
@@ -752,7 +750,7 @@ jobs:
         env:
           VELNOR_MBX_STATS_JOB: rust-velnor-actions-ansible
           VELNOR_MBX_STATS_WORKSPACE: api2026_pull_context_public build_script_build bun_assets_handoff_public bun_private_repository_public candidate_freshness_public check_runtime_identity_public controller_approval_public crate_bootstrap_version_public crate_release_semver_public crate_release_version_public generator_release_prepare_public homebrew_adoption_seed_public ledger_helper_public mbx_stats pin_mirror_public preview_source_selection_public product_release_binary_public prune_state prune_tools qualification_diagnostics release_workspace_cargo review_completion_public rust_tree_digest_pin task_report_public tracked_manifest_public velnor_actions velnor_actions_actionlint velnor_actions_ansible velnor_actions_bun velnor_actions_cli velnor_actions_contract velnor_actions_dbt velnor_actions_freshness velnor_actions_gradle velnor_actions_mise velnor_actions_orchestrator velnor_actions_rust velnor_actions_tofu velnor_actions_workflow_renderer velnor_archive_guard velnor_cli velnor_contract velnor_mise velnor_orchestrator velnor_rust velnor_workflow_renderer workflow_configuration_public
-        run: *r12
+        run: *r11
       - *s23
       - *s24
       - *s25
@@ -819,7 +817,7 @@ jobs:
         env:
           VELNOR_MBX_STATS_JOB: rust-velnor-actions-bun
           VELNOR_MBX_STATS_WORKSPACE: api2026_pull_context_public build_script_build bun_assets_handoff_public bun_private_repository_public candidate_freshness_public check_runtime_identity_public controller_approval_public crate_bootstrap_version_public crate_release_semver_public crate_release_version_public generator_release_prepare_public homebrew_adoption_seed_public ledger_helper_public mbx_stats pin_mirror_public preview_source_selection_public product_release_binary_public prune_state prune_tools qualification_diagnostics release_workspace_cargo review_completion_public rust_tree_digest_pin task_report_public tracked_manifest_public velnor_actions velnor_actions_actionlint velnor_actions_ansible velnor_actions_bun velnor_actions_cli velnor_actions_contract velnor_actions_dbt velnor_actions_freshness velnor_actions_gradle velnor_actions_mise velnor_actions_orchestrator velnor_actions_rust velnor_actions_tofu velnor_actions_workflow_renderer velnor_archive_guard velnor_cli velnor_contract velnor_mise velnor_orchestrator velnor_rust velnor_workflow_renderer workflow_configuration_public
-        run: *r12
+        run: *r11
       - *s23
       - *s24
       - *s25
@@ -891,7 +889,7 @@ jobs:
         env:
           VELNOR_MBX_STATS_JOB: rust-velnor-actions-cli
           VELNOR_MBX_STATS_WORKSPACE: api2026_pull_context_public build_script_build bun_assets_handoff_public bun_private_repository_public candidate_freshness_public check_runtime_identity_public controller_approval_public crate_bootstrap_version_public crate_release_semver_public crate_release_version_public generator_release_prepare_public homebrew_adoption_seed_public ledger_helper_public mbx_stats pin_mirror_public preview_source_selection_public product_release_binary_public prune_state prune_tools qualification_diagnostics release_workspace_cargo review_completion_public rust_tree_digest_pin task_report_public tracked_manifest_public velnor_actions velnor_actions_actionlint velnor_actions_ansible velnor_actions_bun velnor_actions_cli velnor_actions_contract velnor_actions_dbt velnor_actions_freshness velnor_actions_gradle velnor_actions_mise velnor_actions_orchestrator velnor_actions_rust velnor_actions_tofu velnor_actions_workflow_renderer velnor_archive_guard velnor_cli velnor_contract velnor_mise velnor_orchestrator velnor_rust velnor_workflow_renderer workflow_configuration_public
-        run: *r12
+        run: *r11
       - *s23
       - *s24
       - *s25
@@ -962,7 +960,7 @@ jobs:
         env:
           VELNOR_MBX_STATS_JOB: rust-velnor-actions-contract
           VELNOR_MBX_STATS_WORKSPACE: api2026_pull_context_public build_script_build bun_assets_handoff_public bun_private_repository_public candidate_freshness_public check_runtime_identity_public controller_approval_public crate_bootstrap_version_public crate_release_semver_public crate_release_version_public generator_release_prepare_public homebrew_adoption_seed_public ledger_helper_public mbx_stats pin_mirror_public preview_source_selection_public product_release_binary_public prune_state prune_tools qualification_diagnostics release_workspace_cargo review_completion_public rust_tree_digest_pin task_report_public tracked_manifest_public velnor_actions velnor_actions_actionlint velnor_actions_ansible velnor_actions_bun velnor_actions_cli velnor_actions_contract velnor_actions_dbt velnor_actions_freshness velnor_actions_gradle velnor_actions_mise velnor_actions_orchestrator velnor_actions_rust velnor_actions_tofu velnor_actions_workflow_renderer velnor_archive_guard velnor_cli velnor_contract velnor_mise velnor_orchestrator velnor_rust velnor_workflow_renderer workflow_configuration_public
-        run: *r12
+        run: *r11
       - *s23
       - *s24
       - *s25
@@ -1029,7 +1027,7 @@ jobs:
         env:
           VELNOR_MBX_STATS_JOB: rust-velnor-actions-dbt
           VELNOR_MBX_STATS_WORKSPACE: api2026_pull_context_public build_script_build bun_assets_handoff_public bun_private_repository_public candidate_freshness_public check_runtime_identity_public controller_approval_public crate_bootstrap_version_public crate_release_semver_public crate_release_version_public generator_release_prepare_public homebrew_adoption_seed_public ledger_helper_public mbx_stats pin_mirror_public preview_source_selection_public product_release_binary_public prune_state prune_tools qualification_diagnostics release_workspace_cargo review_completion_public rust_tree_digest_pin task_report_public tracked_manifest_public velnor_actions velnor_actions_actionlint velnor_actions_ansible velnor_actions_bun velnor_actions_cli velnor_actions_contract velnor_actions_dbt velnor_actions_freshness velnor_actions_gradle velnor_actions_mise velnor_actions_orchestrator velnor_actions_rust velnor_actions_tofu velnor_actions_workflow_renderer velnor_archive_guard velnor_cli velnor_contract velnor_mise velnor_orchestrator velnor_rust velnor_workflow_renderer workflow_configuration_public
-        run: *r12
+        run: *r11
       - *s23
       - *s24
       - *s25
@@ -1096,7 +1094,7 @@ jobs:
         env:
           VELNOR_MBX_STATS_JOB: rust-velnor-actions-gradle
           VELNOR_MBX_STATS_WORKSPACE: api2026_pull_context_public build_script_build bun_assets_handoff_public bun_private_repository_public candidate_freshness_public check_runtime_identity_public controller_approval_public crate_bootstrap_version_public crate_release_semver_public crate_release_version_public generator_release_prepare_public homebrew_adoption_seed_public ledger_helper_public mbx_stats pin_mirror_public preview_source_selection_public product_release_binary_public prune_state prune_tools qualification_diagnostics release_workspace_cargo review_completion_public rust_tree_digest_pin task_report_public tracked_manifest_public velnor_actions velnor_actions_actionlint velnor_actions_ansible velnor_actions_bun velnor_actions_cli velnor_actions_contract velnor_actions_dbt velnor_actions_freshness velnor_actions_gradle velnor_actions_mise velnor_actions_orchestrator velnor_actions_rust velnor_actions_tofu velnor_actions_workflow_renderer velnor_archive_guard velnor_cli velnor_contract velnor_mise velnor_orchestrator velnor_rust velnor_workflow_renderer workflow_configuration_public
-        run: *r12
+        run: *r11
       - *s23
       - *s24
       - *s25
@@ -1167,7 +1165,7 @@ jobs:
         env:
           VELNOR_MBX_STATS_JOB: rust-velnor-actions-mise
           VELNOR_MBX_STATS_WORKSPACE: api2026_pull_context_public build_script_build bun_assets_handoff_public bun_private_repository_public candidate_freshness_public check_runtime_identity_public controller_approval_public crate_bootstrap_version_public crate_release_semver_public crate_release_version_public generator_release_prepare_public homebrew_adoption_seed_public ledger_helper_public mbx_stats pin_mirror_public preview_source_selection_public product_release_binary_public prune_state prune_tools qualification_diagnostics release_workspace_cargo review_completion_public rust_tree_digest_pin task_report_public tracked_manifest_public velnor_actions velnor_actions_actionlint velnor_actions_ansible velnor_actions_bun velnor_actions_cli velnor_actions_contract velnor_actions_dbt velnor_actions_freshness velnor_actions_gradle velnor_actions_mise velnor_actions_orchestrator velnor_actions_rust velnor_actions_tofu velnor_actions_workflow_renderer velnor_archive_guard velnor_cli velnor_contract velnor_mise velnor_orchestrator velnor_rust velnor_workflow_renderer workflow_configuration_public
-        run: *r12
+        run: *r11
       - *s23
       - *s24
       - *s25
@@ -1239,7 +1237,7 @@ jobs:
         env:
           VELNOR_MBX_STATS_JOB: rust-velnor-actions-orchestrator
           VELNOR_MBX_STATS_WORKSPACE: api2026_pull_context_public build_script_build bun_assets_handoff_public bun_private_repository_public candidate_freshness_public check_runtime_identity_public controller_approval_public crate_bootstrap_version_public crate_release_semver_public crate_release_version_public generator_release_prepare_public homebrew_adoption_seed_public ledger_helper_public mbx_stats pin_mirror_public preview_source_selection_public product_release_binary_public prune_state prune_tools qualification_diagnostics release_workspace_cargo review_completion_public rust_tree_digest_pin task_report_public tracked_manifest_public velnor_actions velnor_actions_actionlint velnor_actions_ansible velnor_actions_bun velnor_actions_cli velnor_actions_contract velnor_actions_dbt velnor_actions_freshness velnor_actions_gradle velnor_actions_mise velnor_actions_orchestrator velnor_actions_rust velnor_actions_tofu velnor_actions_workflow_renderer velnor_archive_guard velnor_cli velnor_contract velnor_mise velnor_orchestrator velnor_rust velnor_workflow_renderer workflow_configuration_public
-        run: *r12
+        run: *r11
       - *s23
       - *s24
       - *s25
@@ -1310,7 +1308,7 @@ jobs:
         env:
           VELNOR_MBX_STATS_JOB: rust-velnor-actions-rust
           VELNOR_MBX_STATS_WORKSPACE: api2026_pull_context_public build_script_build bun_assets_handoff_public bun_private_repository_public candidate_freshness_public check_runtime_identity_public controller_approval_public crate_bootstrap_version_public crate_release_semver_public crate_release_version_public generator_release_prepare_public homebrew_adoption_seed_public ledger_helper_public mbx_stats pin_mirror_public preview_source_selection_public product_release_binary_public prune_state prune_tools qualification_diagnostics release_workspace_cargo review_completion_public rust_tree_digest_pin task_report_public tracked_manifest_public velnor_actions velnor_actions_actionlint velnor_actions_ansible velnor_actions_bun velnor_actions_cli velnor_actions_contract velnor_actions_dbt velnor_actions_freshness velnor_actions_gradle velnor_actions_mise velnor_actions_orchestrator velnor_actions_rust velnor_actions_tofu velnor_actions_workflow_renderer velnor_archive_guard velnor_cli velnor_contract velnor_mise velnor_orchestrator velnor_rust velnor_workflow_renderer workflow_configuration_public
-        run: *r12
+        run: *r11
       - *s23
       - *s24
       - *s25
@@ -1377,7 +1375,7 @@ jobs:
         env:
           VELNOR_MBX_STATS_JOB: rust-velnor-actions-tofu
           VELNOR_MBX_STATS_WORKSPACE: api2026_pull_context_public build_script_build bun_assets_handoff_public bun_private_repository_public candidate_freshness_public check_runtime_identity_public controller_approval_public crate_bootstrap_version_public crate_release_semver_public crate_release_version_public generator_release_prepare_public homebrew_adoption_seed_public ledger_helper_public mbx_stats pin_mirror_public preview_source_selection_public product_release_binary_public prune_state prune_tools qualification_diagnostics release_workspace_cargo review_completion_public rust_tree_digest_pin task_report_public tracked_manifest_public velnor_actions velnor_actions_actionlint velnor_actions_ansible velnor_actions_bun velnor_actions_cli velnor_actions_contract velnor_actions_dbt velnor_actions_freshness velnor_actions_gradle velnor_actions_mise velnor_actions_orchestrator velnor_actions_rust velnor_actions_tofu velnor_actions_workflow_renderer velnor_archive_guard velnor_cli velnor_contract velnor_mise velnor_orchestrator velnor_rust velnor_workflow_renderer workflow_configuration_public
-        run: *r12
+        run: *r11
       - *s23
       - *s24
       - *s25
@@ -1448,7 +1446,7 @@ jobs:
         env:
           VELNOR_MBX_STATS_JOB: rust-velnor-actions-workflow-renderer
           VELNOR_MBX_STATS_WORKSPACE: api2026_pull_context_public build_script_build bun_assets_handoff_public bun_private_repository_public candidate_freshness_public check_runtime_identity_public controller_approval_public crate_bootstrap_version_public crate_release_semver_public crate_release_version_public generator_release_prepare_public homebrew_adoption_seed_public ledger_helper_public mbx_stats pin_mirror_public preview_source_selection_public product_release_binary_public prune_state prune_tools qualification_diagnostics release_workspace_cargo review_completion_public rust_tree_digest_pin task_report_public tracked_manifest_public velnor_actions velnor_actions_actionlint velnor_actions_ansible velnor_actions_bun velnor_actions_cli velnor_actions_contract velnor_actions_dbt velnor_actions_freshness velnor_actions_gradle velnor_actions_mise velnor_actions_orchestrator velnor_actions_rust velnor_actions_tofu velnor_actions_workflow_renderer velnor_archive_guard velnor_cli velnor_contract velnor_mise velnor_orchestrator velnor_rust velnor_workflow_renderer workflow_configuration_public
-        run: *r12
+        run: *r11
       - *s23
       - *s24
       - *s25
@@ -1534,7 +1532,7 @@ jobs:
         env:
           VELNOR_MBX_STATS_JOB: rust-velnor-resource-probe
           VELNOR_MBX_STATS_WORKSPACE: build_script_build census_once ensure_set launch_once probe_once resource_probe_release_public stage_once velnor_host velnor_resource_probe velnor_resource_probe_release velnor_runner_attestation velnor_runner_attestation_helper velnor_runner_cli velnor_runner_core velnor_runner_github velnor_runner_host
-        run: *r12
+        run: *r11
       - *s23
       - *s24
       - *s25
@@ -1605,7 +1603,7 @@ jobs:
         env:
           VELNOR_MBX_STATS_JOB: rust-velnor-runner-attestation
           VELNOR_MBX_STATS_WORKSPACE: build_script_build census_once ensure_set launch_once probe_once resource_probe_release_public stage_once velnor_host velnor_resource_probe velnor_resource_probe_release velnor_runner_attestation velnor_runner_attestation_helper velnor_runner_cli velnor_runner_core velnor_runner_github velnor_runner_host
-        run: *r12
+        run: *r11
       - *s23
       - *s24
       - *s25
@@ -1672,7 +1670,7 @@ jobs:
         env:
           VELNOR_MBX_STATS_JOB: rust-velnor-runner-cli
           VELNOR_MBX_STATS_WORKSPACE: build_script_build census_once ensure_set launch_once probe_once resource_probe_release_public stage_once velnor_host velnor_resource_probe velnor_resource_probe_release velnor_runner_attestation velnor_runner_attestation_helper velnor_runner_cli velnor_runner_core velnor_runner_github velnor_runner_host
-        run: *r12
+        run: *r11
       - *s23
       - *s24
       - *s25
@@ -1739,7 +1737,7 @@ jobs:
         env:
           VELNOR_MBX_STATS_JOB: rust-velnor-runner-core
           VELNOR_MBX_STATS_WORKSPACE: build_script_build census_once ensure_set launch_once probe_once resource_probe_release_public stage_once velnor_host velnor_resource_probe velnor_resource_probe_release velnor_runner_attestation velnor_runner_attestation_helper velnor_runner_cli velnor_runner_core velnor_runner_github velnor_runner_host
-        run: *r12
+        run: *r11
       - *s23
       - *s24
       - *s25
@@ -1806,7 +1804,7 @@ jobs:
         env:
           VELNOR_MBX_STATS_JOB: rust-velnor-runner-github
           VELNOR_MBX_STATS_WORKSPACE: build_script_build census_once ensure_set launch_once probe_once resource_probe_release_public stage_once velnor_host velnor_resource_probe velnor_resource_probe_release velnor_runner_attestation velnor_runner_attestation_helper velnor_runner_cli velnor_runner_core velnor_runner_github velnor_runner_host
-        run: *r12
+        run: *r11
       - *s23
       - *s24
       - *s25
@@ -1877,7 +1875,7 @@ jobs:
         env:
           VELNOR_MBX_STATS_JOB: rust-velnor-runner-host
           VELNOR_MBX_STATS_WORKSPACE: build_script_build census_once ensure_set launch_once probe_once resource_probe_release_public stage_once velnor_host velnor_resource_probe velnor_resource_probe_release velnor_runner_attestation velnor_runner_attestation_helper velnor_runner_cli velnor_runner_core velnor_runner_github velnor_runner_host
-        run: *r12
+        run: *r11
       - *s23
       - *s24
       - *s25
