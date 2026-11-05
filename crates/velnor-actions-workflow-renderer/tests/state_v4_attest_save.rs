@@ -69,7 +69,7 @@ impl World {
             old: format!("{scope}{tail}"),
             neighbour: format!("{scope}extra-{tail}"),
             foreign: format!("{}{tail}", scope.replacen("-root-", "-other-", 1)),
-            suite: format!("{}{tail}", scope.replacen("-union-", "-suite-", 1)),
+            suite: format!("{}{tail}", scope.replacen("-slice-", "-suite-", 1)),
             key,
             scope,
             scene,

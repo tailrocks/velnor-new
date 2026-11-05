@@ -111,7 +111,7 @@ fn plan_selects_only_the_newest_attested_entry() -> Result<(), Box<dyn Error>> {
 
     let prefix = scope()?.prefix();
     let foreign = [
-        prefix.replacen("-union-", "-suite-", 1),
+        prefix.replacen("-slice-", "-suite-", 1),
         prefix.replacen("-trusted-", "-pr-", 1),
         prefix.replacen("-root-", "-other-", 1),
         format!("{prefix}s256-nothex"),

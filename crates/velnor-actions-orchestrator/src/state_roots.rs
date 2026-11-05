@@ -3,14 +3,14 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use velnor_actions_contract::workflow::cache_family::{RootSlug, S256, StateUnit};
+use velnor_actions_contract::workflow::cache_family::{RootSlug, S256, SliceId, StateUnit};
 use velnor_actions_contract::workflow::cache_family_mbx::{
     MBX_BUNDLE_ROOT_ENV, MBX_BUNDLE_SNAPSHOT_ENV,
 };
 use velnor_actions_contract::workflow::state_seal::state_producer_job_id;
 use velnor_actions_contract::{Job, StepKind, StepRole};
 use velnor_actions_workflow_renderer::plan_sources::cache_keys::StateRootPlan;
-use velnor_actions_workflow_renderer::plan_sources::state_select::{SealRoot, StateSealPlan};
+use velnor_actions_workflow_renderer::plan_sources::state_select::StateSealPlan;
 
 use crate::OrchestratorError;
 use crate::affected_inputs::InputRule;
@@ -24,7 +24,7 @@ pub(crate) fn plans(
 ) -> Result<Vec<StateRootPlan>, OrchestratorError> {
     let mut digests: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
     for job in jobs.values() {
-        let Some(root) = union_root(job) else {
+        let Some(root) = slice_root(job) else {
             continue;
         };
         let lines = digests.entry(root).or_default();
@@ -55,7 +55,7 @@ pub(crate) fn plans(
                 pathspecs: rust_inputs(discovery, repo_root),
                 task_set: S256::of(text.as_bytes()),
                 producer_recipe: recipes
-                    .get(&state_producer_job_id(&RootSlug::from_root(repo_root)?))
+                    .get(&state_producer_job_id(&SliceId::from_root(repo_root)?))
                     .copied()
                     .ok_or_else(|| OrchestratorError::Contract {
                         problem: format!("state_producer_recipe_missing:{root}"),
@@ -66,23 +66,20 @@ pub(crate) fn plans(
 }
 
 pub(crate) fn seal_plan(jobs: &BTreeMap<String, Job>) -> Result<StateSealPlan, OrchestratorError> {
-    let mut roots: Vec<SealRoot> = Vec::new();
+    let mut units: Vec<StateUnit> = Vec::new();
     for job in jobs.values() {
-        let Some(root) = union_root(job) else {
+        let Some(root) = slice_root(job) else {
             continue;
         };
-        let seal = SealRoot {
-            unit: StateUnit::Union,
-            slug: RootSlug::from_root(&root)?,
-        };
-        if !roots.contains(&seal) {
-            roots.push(seal);
+        let unit = StateUnit::slice_of_root(&root)?;
+        if !units.contains(&unit) {
+            units.push(unit);
         }
     }
-    Ok(StateSealPlan { roots })
+    Ok(StateSealPlan { units })
 }
 
-fn union_root(job: &Job) -> Option<String> {
+fn slice_root(job: &Job) -> Option<String> {
     job.steps.iter().find_map(|step| {
         if step.role != Some(StepRole::MbxBundleKey) {
             return None;

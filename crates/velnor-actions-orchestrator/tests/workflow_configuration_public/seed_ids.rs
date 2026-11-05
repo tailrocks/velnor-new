@@ -157,7 +157,7 @@ fn seed_ids_by_root<'a>(
         let workspace_root = key_env
             .get(root_env)
             .ok_or("seed bundle key omitted its workspace root")?;
-        assert_seed_bundle_key_unit(seed)?;
+        assert_seed_bundle_key_unit(seed, workspace_root)?;
         assert!(seed.display_name.contains(workspace_root));
         assert!(
             seed_ids_by_root
@@ -242,7 +242,7 @@ fn assert_rendered_seed_routing(
                 .first()
                 .copied()
                 .ok_or_else(|| format!("consumer bundle key is missing for {relative_root}"))?;
-            assert_seed_bundle_key_unit(consumer)?;
+            assert_seed_bundle_key_unit(consumer, relative_root)?;
             assert_eq!(consumer_key_env, seed_key_env);
             assert!(
                 consumer
@@ -270,7 +270,11 @@ fn mbx_bundle_key_envs(job: &Job) -> Vec<&BTreeMap<String, String>> {
         .collect()
 }
 
-fn assert_seed_bundle_key_unit(job: &Job) -> Result<(), Box<dyn Error>> {
+fn assert_seed_bundle_key_unit(job: &Job, root: &str) -> Result<(), Box<dyn Error>> {
+    let expected = format!(
+        "\"unit={}\"",
+        velnor_actions_contract::workflow::cache_family::StateUnit::slice_of_root(root)?.token()
+    );
     let key_steps: Vec<_> = job
         .steps
         .iter()
@@ -302,7 +306,7 @@ fn assert_seed_bundle_key_unit(job: &Job) -> Result<(), Box<dyn Error>> {
     assert_eq!(
         compatibility_write
             .split_whitespace()
-            .filter(|argument| *argument == "\"unit=union\"")
+            .filter(|argument| *argument == expected)
             .count(),
         1
     );

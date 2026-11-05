@@ -4,7 +4,7 @@
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::workflow::cache_family::{
-    COMPLETE_STATE_TRANSPORT_EXPR, CacheFamily, RUNNER_TEMP_EXPR, RUNNER_TEMP_SHELL, RootSlug,
+    COMPLETE_STATE_TRANSPORT_EXPR, CacheFamily, RUNNER_TEMP_EXPR, RUNNER_TEMP_SHELL,
     S256_DIGEST_BYTES, StateScope, StateTrust, StateUnit, state_snapshot_plan_expr,
 };
 use velnor_actions_contract::workflow::cache_family_mbx::{
@@ -110,7 +110,7 @@ impl StateCeilings {
     }
 }
 
-fn workspace_root(working_directory: Option<&str>) -> Result<String, RenderError> {
+pub(crate) fn workspace_root(working_directory: Option<&str>) -> Result<String, RenderError> {
     let Some(dir) = working_directory.filter(|dir| !dir.is_empty() && *dir != ".") else {
         return Ok(".".to_owned());
     };
@@ -140,7 +140,7 @@ fn split_shell(path: &str) -> Result<(String, String), RenderError> {
 }
 
 pub(crate) fn mbx_bundle_prelude(
-    unit: StateUnit,
+    unit: &StateUnit,
     mbx_version_expr: &str,
     toolchain_expr: &str,
     rust_toolchain: &str,
@@ -173,9 +173,9 @@ pub(crate) fn compat_head_lines(
     )
 }
 
-fn snapshot_source(unit: StateUnit, root_env: &str) -> Vec<String> {
+fn snapshot_source(unit: &StateUnit, root_env: &str) -> Vec<String> {
     match unit {
-        StateUnit::Union => vec![
+        StateUnit::Slice(_) | StateUnit::Cli => vec![
             format!("snap=\"${{{MBX_BUNDLE_SNAPSHOT_ENV}-}}\""),
             "case \"$snap\" in s256-*) [ \"${#snap}\" -eq 69 ] || snap= ;; *) snap= ;; esac"
                 .to_owned(),
@@ -184,7 +184,7 @@ fn snapshot_source(unit: StateUnit, root_env: &str) -> Vec<String> {
                 "if [ -z \"$snap\" ]; then rm -f \"{DISCOVERY_RECORD}\"; printf '%s\\n' 'reason=snapshot_missing' 'save=false' 'restore=false' >> \"$GITHUB_OUTPUT\"; printf '%s\\n' 'velnor: state snapshot disabled reason=snapshot_missing'; exit 0; fi"
             ),
         ],
-        StateUnit::Suite => {
+        StateUnit::Suite(_) => {
             let mut lines = vec![format!(
                 "lock=\"$GITHUB_WORKSPACE/${{{root_env}}}/Cargo.lock\""
             )];
@@ -203,17 +203,14 @@ fn snapshot_source(unit: StateUnit, root_env: &str) -> Vec<String> {
 }
 
 fn discover_step(
-    unit: StateUnit,
+    unit: &StateUnit,
     version: &str,
     toolchain: &str,
     root: &str,
 ) -> Result<Step, RenderError> {
-    let slug = RootSlug::from_root(root)
-        .map_err(|error| RenderError::InvalidWorkflow(format!("state_root:{error}")))?;
     let scope = StateScope {
         trust: StateTrust::Trusted,
-        unit,
-        root: slug.clone(),
+        unit: unit.clone(),
     };
     let scope_prefix = scope.prefix();
     let max_payload_segment = S256_DIGEST_BYTES;
@@ -234,7 +231,7 @@ fn discover_step(
         &format!("${{{VERSION_ENV}}}"),
         &format!("${{{TOOLCHAIN_ENV}}}"),
         &format!("${{{ROOT_ENV}}}"),
-        unit.as_str(),
+        &unit.token(),
     ));
     script.push("compat=\"s256-$h\"".to_owned());
     script.extend(snapshot_source(unit, ROOT_ENV));
@@ -252,7 +249,7 @@ fn discover_step(
         "if [ -n \"$restore_key\" ]; then restore_digest=\"s256-${restore_key##*-s256-}\"; case \"$restore_key\" in \"$snapshot_prefix\"?*) exact=true ;; esac; fi".to_owned(),
         "printf '%s\\n' \"key=$key\" \"save=$save\" \"restore=true\" \"provenance=$provenance\" \"decision=$decision\" \"restore_key=$restore_key\" \"restore_digest=$restore_digest\" \"exact=$exact\" >> \"$GITHUB_OUTPUT\"".to_owned(),
         format!("record=\"{DISCOVERY_RECORD}\""),
-        format!("printf '%s\\n' \"key=$key\" \"snapshot_prefix=$snapshot_prefix\" \"restore_prefix=$restore_prefix\" \"compat=$compat\" \"provenance=$provenance\" \"decision=$decision\" \"save=$save\" \"unit={}\" \"mbx_version=${{{VERSION_ENV}}}\" \"toolchain=${{{TOOLCHAIN_ENV}}}\" \"root=${{{ROOT_ENV}}}\" > \"$record\"", unit.as_str()),
+        format!("printf '%s\\n' \"key=$key\" \"snapshot_prefix=$snapshot_prefix\" \"restore_prefix=$restore_prefix\" \"compat=$compat\" \"provenance=$provenance\" \"decision=$decision\" \"save=$save\" \"unit={}\" \"mbx_version=${{{VERSION_ENV}}}\" \"toolchain=${{{TOOLCHAIN_ENV}}}\" \"root=${{{ROOT_ENV}}}\" > \"$record\"", unit.token()),
         "printf 'velnor: state snapshot trust=%s key=%s save=%s provenance=%s decision=%s\\n' \"$trust\" \"$key\" \"$save\" \"$provenance\" \"$decision\"".to_owned(),
     ]);
     let script = script.join("; ");
@@ -263,14 +260,14 @@ fn discover_step(
         (TOOLCHAIN_ENV.to_owned(), toolchain.to_owned()),
         (ROOT_ENV.to_owned(), root.to_owned()),
     ]);
-    if unit == StateUnit::Union {
+    if unit.is_attested() {
         env.insert(
             STATE_SEAL_ATTESTED_ENV.to_owned(),
-            state_attested_plan_expr(unit.as_str(), slug.as_str()),
+            state_attested_plan_expr(unit),
         );
         env.insert(
             MBX_BUNDLE_SNAPSHOT_ENV.to_owned(),
-            state_snapshot_plan_expr(&slug),
+            state_snapshot_plan_expr(unit),
         );
     }
     let mut step = shell_step(

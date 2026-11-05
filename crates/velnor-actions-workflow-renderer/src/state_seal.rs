@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use velnor_actions_actionlint::actions::ATTEST_USES;
 use velnor_actions_contract::workflow::cache_family::state_snapshot_plan_expr;
 use velnor_actions_contract::workflow::cache_family::{
-    COMPLETE_STATE_TRANSPORT_EXPR, CacheFamily, RUNNER_TEMP_EXPR, RUNNER_TEMP_SHELL, RootSlug,
+    COMPLETE_STATE_TRANSPORT_EXPR, CacheFamily, RUNNER_TEMP_EXPR, RUNNER_TEMP_SHELL, SliceId,
     StateScope, StateTrust, StateUnit, outer_entry_bound,
 };
 use velnor_actions_contract::workflow::cache_family_mbx::MBX_BUNDLE_ROOT_ENV;
@@ -45,7 +45,7 @@ pub mod skeleton;
 pub mod tip;
 
 struct ProducerRoot {
-    slug: RootSlug,
+    slice: SliceId,
     producer_id: String,
     runs_on: String,
 }
@@ -75,12 +75,12 @@ pub fn add_state_seal_jobs(jobs: &mut BTreeMap<String, Job>) -> Result<(), Rende
             .map(|later| {
                 format!(
                     "{}:{}",
-                    state_produce_plan_expr("union", later.slug.as_str()),
-                    scope_prefix(&later.slug)
+                    state_produce_plan_expr(&later.unit()),
+                    scope_prefix(&later.unit())
                 )
             })
             .collect();
-        let seal_id = state_seal_job_id(&root.slug);
+        let seal_id = state_seal_job_id(&root.slice);
         let mut needs = vec![PLAN_JOB_ID.to_owned(), root.producer_id.clone()];
         match &previous {
             Some(earlier) => needs.push(earlier.clone()),
@@ -124,12 +124,12 @@ fn producer_roots(jobs: &BTreeMap<String, Job>) -> Result<Vec<ProducerRoot>, Ren
                 _ => None,
             })
             .ok_or_else(|| invalid("producer_without_root"))?;
-        let slug = RootSlug::from_root(&root).map_err(RenderError::Contract)?;
-        if state_producer_job_id(&slug) != *id {
+        let slice = SliceId::from_root(&root).map_err(RenderError::Contract)?;
+        if state_producer_job_id(&slice) != *id {
             return Err(invalid("producer_id_root_mismatch"));
         }
         roots.push(ProducerRoot {
-            slug,
+            slice,
             producer_id: id.clone(),
             runs_on: job.runs_on.clone(),
         });
@@ -137,21 +137,26 @@ fn producer_roots(jobs: &BTreeMap<String, Job>) -> Result<Vec<ProducerRoot>, Ren
     Ok(roots)
 }
 
-fn scope_prefix(slug: &RootSlug) -> String {
+impl ProducerRoot {
+    fn unit(&self) -> StateUnit {
+        StateUnit::Slice(self.slice.clone())
+    }
+}
+
+fn scope_prefix(unit: &StateUnit) -> String {
     StateScope {
         trust: StateTrust::Trusted,
-        unit: StateUnit::Union,
-        root: slug.clone(),
+        unit: unit.clone(),
     }
     .prefix()
 }
 
-fn identity_prefix(slug: &RootSlug) -> String {
+fn identity_prefix(unit: &StateUnit) -> String {
     format!(
         "{}{}-{}-",
-        scope_prefix(slug),
-        state_compat_plan_expr(slug.as_str()),
-        state_snapshot_plan_expr(slug)
+        scope_prefix(unit),
+        state_compat_plan_expr(unit),
+        state_snapshot_plan_expr(unit)
     )
 }
 
@@ -175,7 +180,8 @@ fn seal_job(
         ]),
     )?;
     download.role = Some(StepRole::StateSealDownload);
-    let subject = state_seal_subject_step(&scope_prefix(&root.slug), &identity_prefix(&root.slug))?;
+    let subject =
+        state_seal_subject_step(&scope_prefix(&root.unit()), &identity_prefix(&root.unit()))?;
     let admit = crate::state_seal::save::state_seal_admit_step(pending, unit_bound)?;
     let bind = state_seal_bind_step()?;
     let tip = tip::state_seal_tip_step()?;
@@ -211,9 +217,9 @@ fn seal_job(
     save.role = Some(StepRole::StateSealSave);
     save.condition = Some(STATE_SEAL_SAVE_CONDITION.to_owned());
     let retire =
-        crate::state_seal::save::state_seal_retire_step(&scope_prefix(&root.slug), &artifact)?;
+        crate::state_seal::save::state_seal_retire_step(&scope_prefix(&root.unit()), &artifact)?;
     Ok(Job {
-        display_name: format!("{SEAL_DISPLAY_PREFIX}{}", root.slug),
+        display_name: format!("{SEAL_DISPLAY_PREFIX}{}", root.slice),
         runs_on: root.runs_on.clone(),
         check_runner: None,
         timeout_minutes: JobTimeout::try_from(JOB_MINUTES).map_err(RenderError::Contract)?,

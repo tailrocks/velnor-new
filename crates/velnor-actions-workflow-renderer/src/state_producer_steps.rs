@@ -3,7 +3,7 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::workflow::cache_family::{COMPLETE_STATE_TRANSPORT_EXPR, RootSlug};
+use velnor_actions_contract::workflow::cache_family::{COMPLETE_STATE_TRANSPORT_EXPR, SliceId};
 use velnor_actions_contract::workflow::state_seal::{
     STATE_PRODUCED_CONDITION, STATE_PRODUCER_ARTIFACT_OUTPUT, STATE_PRODUCER_PRODUCED_OUTPUT,
     STATE_SEAL_ARTIFACT_RETENTION_DAYS, STATE_UPLOAD_CONDITION,
@@ -13,7 +13,7 @@ use velnor_actions_contract::{Step, StepId, StepRole};
 use crate::RenderError;
 use crate::steps::{UPLOAD_ARTIFACT_USES, action_step, shell_step};
 
-pub fn state_payload_upload_step(root: &RootSlug) -> Result<Step, RenderError> {
+pub fn state_payload_upload_step(slice: &SliceId) -> Result<Step, RenderError> {
     let mut step = action_step(
         "Upload state payload",
         UPLOAD_ARTIFACT_USES,
@@ -21,7 +21,7 @@ pub fn state_payload_upload_step(root: &RootSlug) -> Result<Step, RenderError> {
             (
                 "name".to_owned(),
                 format!(
-                    "velnor-state-{root}-r${{{{ github.run_id }}}}-a${{{{ github.run_attempt }}}}"
+                    "velnor-state-{slice}-r${{{{ github.run_id }}}}-a${{{{ github.run_attempt }}}}"
                 ),
             ),
             ("path".to_owned(), COMPLETE_STATE_TRANSPORT_EXPR.to_owned()),

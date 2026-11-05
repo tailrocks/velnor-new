@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use super::cache_family::RootSlug;
+use super::cache_family::{SliceId, StateUnit, is_state_output_token};
 use super::producer::DEPENDENCY_SEED_JOB_CONDITION;
 
 pub const STATE_PRODUCER_JOB_ID_PREFIX: &str = "state-producer-";
@@ -115,20 +115,20 @@ pub fn state_seal_signer_workflow() -> String {
 }
 
 #[must_use]
-pub fn state_producer_job_id(root: &RootSlug) -> String {
-    format!("{STATE_PRODUCER_JOB_ID_PREFIX}{root}")
+pub fn state_producer_job_id(slice: &SliceId) -> String {
+    format!("{STATE_PRODUCER_JOB_ID_PREFIX}{slice}")
 }
 
 #[must_use]
-pub fn state_seal_job_id(root: &RootSlug) -> String {
-    format!("{STATE_SEAL_JOB_ID_PREFIX}{root}")
+pub fn state_seal_job_id(slice: &SliceId) -> String {
+    format!("{STATE_SEAL_JOB_ID_PREFIX}{slice}")
 }
 
 #[must_use]
-pub fn state_producer_condition(root: &str) -> String {
+pub fn state_producer_condition(slice: &SliceId) -> String {
     format!(
         "{DEPENDENCY_SEED_JOB_CONDITION} && {}",
-        state_produce_plan_test("union", root)
+        state_produce_plan_test(&StateUnit::Slice(slice.clone()))
     )
 }
 
@@ -139,96 +139,71 @@ pub fn state_seal_condition(producer_job_id: &str) -> String {
     )
 }
 
-#[must_use]
-pub fn state_attested_output(unit: &str, slug: &str) -> String {
+fn state_output(unit: &StateUnit, suffix: &str) -> String {
     format!(
-        "{STATE_SEAL_ATTESTED_PREFIX}{unit}_{}{STATE_SEAL_ATTESTED_SUFFIX}",
-        slug.replace('-', "_")
+        "{STATE_SEAL_ATTESTED_PREFIX}{}{suffix}",
+        unit.output_token()
     )
+}
+
+fn is_state_output(name: &str, suffix: &str) -> bool {
+    name.strip_prefix(STATE_SEAL_ATTESTED_PREFIX)
+        .and_then(|rest| rest.strip_suffix(suffix))
+        .is_some_and(is_state_output_token)
+}
+
+#[must_use]
+pub fn state_attested_output(unit: &StateUnit) -> String {
+    state_output(unit, STATE_SEAL_ATTESTED_SUFFIX)
 }
 
 #[must_use]
 pub fn is_state_attested_output(name: &str) -> bool {
-    name.strip_prefix(STATE_SEAL_ATTESTED_PREFIX)
-        .and_then(|rest| rest.strip_suffix(STATE_SEAL_ATTESTED_SUFFIX))
-        .is_some_and(|middle| {
-            ["union_", "suite_"].iter().any(|unit| {
-                middle.strip_prefix(unit).is_some_and(|slug| {
-                    !slug.is_empty()
-                        && slug
-                            .bytes()
-                            .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_')
-                })
-            })
-        })
+    is_state_output(name, STATE_SEAL_ATTESTED_SUFFIX)
 }
 
 #[must_use]
-pub fn state_attested_plan_expr(unit: &str, slug: &str) -> String {
+pub fn state_attested_plan_expr(unit: &StateUnit) -> String {
     format!(
         "${{{{needs.plan.outputs.{}}}}}",
-        state_attested_output(unit, slug)
+        state_attested_output(unit)
     )
-}
-
-fn state_name_valid(slug: &str) -> bool {
-    !slug.is_empty()
-        && slug
-            .bytes()
-            .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_')
 }
 
 #[must_use]
-pub fn state_produce_output(unit: &str, slug: &str) -> String {
-    format!(
-        "{STATE_SEAL_ATTESTED_PREFIX}{unit}_{}{STATE_SEAL_PRODUCE_SUFFIX}",
-        slug.replace('-', "_")
-    )
+pub fn state_produce_output(unit: &StateUnit) -> String {
+    state_output(unit, STATE_SEAL_PRODUCE_SUFFIX)
 }
 
 #[must_use]
 pub fn is_state_produce_output(name: &str) -> bool {
-    name.strip_prefix(STATE_SEAL_ATTESTED_PREFIX)
-        .and_then(|rest| rest.strip_suffix(STATE_SEAL_PRODUCE_SUFFIX))
-        .is_some_and(|middle| {
-            ["union_", "suite_"]
-                .iter()
-                .any(|unit| middle.strip_prefix(unit).is_some_and(state_name_valid))
-        })
+    is_state_output(name, STATE_SEAL_PRODUCE_SUFFIX)
 }
 
 #[must_use]
-pub fn state_produce_plan_expr(unit: &str, slug: &str) -> String {
-    format!(
-        "${{{{needs.plan.outputs.{}}}}}",
-        state_produce_output(unit, slug)
-    )
+pub fn state_produce_plan_expr(unit: &StateUnit) -> String {
+    format!("${{{{needs.plan.outputs.{}}}}}", state_produce_output(unit))
 }
 
 #[must_use]
-pub fn state_produce_plan_test(unit: &str, slug: &str) -> String {
+pub fn state_produce_plan_test(unit: &StateUnit) -> String {
     format!(
         "needs.plan.outputs.{} == 'true'",
-        state_produce_output(unit, slug)
+        state_produce_output(unit)
     )
 }
 
 #[must_use]
-pub fn state_compat_output(slug: &str) -> String {
-    format!(
-        "{STATE_SEAL_ATTESTED_PREFIX}{}{STATE_SEAL_COMPAT_SUFFIX}",
-        slug.replace('-', "_")
-    )
+pub fn state_compat_output(unit: &StateUnit) -> String {
+    state_output(unit, STATE_SEAL_COMPAT_SUFFIX)
 }
 
 #[must_use]
 pub fn is_state_compat_output(name: &str) -> bool {
-    name.strip_prefix(STATE_SEAL_ATTESTED_PREFIX)
-        .and_then(|rest| rest.strip_suffix(STATE_SEAL_COMPAT_SUFFIX))
-        .is_some_and(state_name_valid)
+    is_state_output(name, STATE_SEAL_COMPAT_SUFFIX)
 }
 
 #[must_use]
-pub fn state_compat_plan_expr(slug: &str) -> String {
-    format!("${{{{needs.plan.outputs.{}}}}}", state_compat_output(slug))
+pub fn state_compat_plan_expr(unit: &StateUnit) -> String {
+    format!("${{{{needs.plan.outputs.{}}}}}", state_compat_output(unit))
 }

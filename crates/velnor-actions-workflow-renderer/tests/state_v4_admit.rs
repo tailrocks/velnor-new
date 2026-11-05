@@ -3,7 +3,7 @@
 
 use std::error::Error;
 
-use velnor_actions_contract::workflow::cache_family::RootSlug;
+use velnor_actions_contract::workflow::cache_family::SliceId;
 use velnor_actions_contract::workflow::state_seal::{
     STATE_SEAL_KEY_ENV, STATE_SEAL_PENDING_BYTES_ENV, STATE_SEAL_PENDING_ENV, state_seal_job_id,
 };
@@ -46,7 +46,7 @@ impl Admit {
     pub(crate) fn new() -> Result<Self, Box<dyn Error>> {
         let jobs = seal_jobs(&["."])?;
         let job = jobs
-            .get(&state_seal_job_id(&RootSlug::from_root(".")?))
+            .get(&state_seal_job_id(&SliceId::from_root(".")?))
             .ok_or_else(|| fail("seal job missing"))?;
         let step = job
             .steps

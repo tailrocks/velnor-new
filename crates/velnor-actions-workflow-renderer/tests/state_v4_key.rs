@@ -10,7 +10,7 @@ use velnor_actions_workflow_renderer::steps::MbxTransport;
 use crate::gc1_mbx_stub::{UNAME_M_ENV, UNAME_S_ENV};
 use crate::gc1_scene::{DEFAULT_SNAPSHOT, Key, Scene, fail};
 
-const KEY_PREFIX: &str = "velnor-v4-state-trusted-union-root-";
+const KEY_PREFIX: &str = "velnor-v5-state-trusted-slice-root-";
 const OTHER_SNAPSHOT: &str =
     "s256-3333333333333333333333333333333333333333333333333333333333333333";
 
@@ -74,7 +74,7 @@ fn state_key_is_stable_and_binds_every_input() -> Result<(), Box<dyn Error>> {
         || parts.scope != KEY_PREFIX.trim_end_matches('-')
     {
         return Err(fail(&format!(
-            "key lost its v4 scope shape: {}",
+            "key lost its v5 scope shape: {}",
             first.snapshot_prefix
         )));
     }
@@ -106,10 +106,10 @@ fn state_key_is_stable_and_binds_every_input() -> Result<(), Box<dyn Error>> {
     let suite_key = scene.discover_script(&suite_script)?;
     if !suite_key
         .snapshot_prefix
-        .starts_with("velnor-v4-state-trusted-suite-root-")
+        .starts_with("velnor-v5-state-trusted-suite-root-")
         || segments(&suite_key.snapshot_prefix)?.compat == baseline
     {
-        return Err(fail("suite unit shares the union key"));
+        return Err(fail("suite unit shares the slice key"));
     }
     let second = Scene::new("v4-key-paths", crate::gc1_t53::scripts()?)?;
     if compat_of(&second, &[])? == baseline {
@@ -132,7 +132,7 @@ fn state_key_slugs_roots_and_stays_inside_the_cache_cap() -> Result<(), Box<dyn 
     )?;
     if !key
         .snapshot_prefix
-        .starts_with("velnor-v4-state-trusted-union-crates-velnor-runner-s256-")
+        .starts_with("velnor-v5-state-trusted-slice-crates-velnor-runner-s256-")
     {
         return Err(fail(&format!(
             "runner root lost its slug: {}",

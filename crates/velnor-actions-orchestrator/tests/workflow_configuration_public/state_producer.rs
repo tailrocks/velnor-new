@@ -339,7 +339,7 @@ fn only_attest_jobs_hold_actions_write() -> Result<(), Box<dyn Error>> {
     assert_eq!(
         pending(first_job),
         [(
-            "${{needs.plan.outputs.state_union_crates_a_c_produce}}:velnor-v4-state-trusted-union-crates-a-c-"
+            "${{needs.plan.outputs.state_slice_crates_a_c_produce}}:velnor-v5-state-trusted-slice-crates-a-c-"
                 .to_owned(),
             UNIT_BOUND.to_owned()
         )]

@@ -6,9 +6,9 @@ use std::collections::BTreeMap;
 use velnor_actions_contract::ContractError;
 use velnor_actions_contract::workflow::cache_family::StateUnit;
 use velnor_actions_contract::workflow::cache_family::{
-    CACHE_KEYS_STEP_NAME, CARGO_HOME_EXPR, CacheFamily, RUNNER_TEMP_EXPR, RUNNER_TEMP_SHELL,
-    RootSlug, S256, SOURCES_KEY_OUTPUT, SOURCES_RESTORE_KEYS_OUTPUT, SOURCES_SAVE_OUTPUT,
-    SOURCES_SNAPSHOT_OUTPUT, TRUST_OUTPUT, state_snapshot_output, tofu_providers_key_output,
+    CACHE_KEYS_STEP_NAME, CARGO_HOME_EXPR, CacheFamily, RUNNER_TEMP_EXPR, RUNNER_TEMP_SHELL, S256,
+    SOURCES_KEY_OUTPUT, SOURCES_RESTORE_KEYS_OUTPUT, SOURCES_SAVE_OUTPUT, SOURCES_SNAPSHOT_OUTPUT,
+    TRUST_OUTPUT, state_snapshot_output, tofu_providers_key_output,
 };
 use velnor_actions_contract::workflow::state_seal::state_compat_output;
 use velnor_actions_contract::{Step, StepId, StepRole, validate_fetch_root};
@@ -215,8 +215,8 @@ fn pathspec(spec: &str) -> Result<String, PlanSourcesError> {
 }
 
 fn state_commands(ordinal: usize, plan: &StateRootPlan) -> Result<Vec<String>, PlanSourcesError> {
-    let slug = RootSlug::from_root(&plan.root).map_err(PlanSourcesError::Contract)?;
-    let output = state_snapshot_output(&slug);
+    let unit = StateUnit::slice_of_root(&plan.root).map_err(PlanSourcesError::Contract)?;
+    let output = state_snapshot_output(&unit);
     let specs = plan
         .pathspecs
         .iter()
@@ -235,7 +235,7 @@ fn state_commands(ordinal: usize, plan: &StateRootPlan) -> Result<Vec<String>, P
         "lock_h",
     );
     script.push(format!(
-        "if (cd \"$GITHUB_WORKSPACE\" && git ls-files -s -- {specs}) > \"{file}\" 2>/dev/null; then s256 \"{file}\"; ri_h=\"s256-$h\"; {}; printf '%s\\n' \"{output}=$snap\" >> \"$GITHUB_OUTPUT\"; else printf '%s\\n' '::warning::state snapshot unavailable for root {}'; fi",
+        "if (cd \"$GITHUB_WORKSPACE\" && git ls-files -s -- {specs}) > \"{file}\" 2>/dev/null; then s256 \"{file}\"; ri_h=\"s256-$h\"; {}; printf '%s\\n' \"{output}=$snap\" >> \"$GITHUB_OUTPUT\"; else printf '%s\\n' '::warning::state snapshot unavailable for unit {}'; fi",
         snapshot_lines(
             "$d",
             "$lock_h",
@@ -244,18 +244,18 @@ fn state_commands(ordinal: usize, plan: &StateRootPlan) -> Result<Vec<String>, P
             &plan.producer_recipe.to_string(),
         )
         .join("; "),
-        slug,
+        unit,
     ));
     script.extend(crate::cache_steps::compat_head_lines(
         "$d",
         &format!("${{{VERSION_ENV}}}"),
         &format!("${{{TOOLCHAIN_ENV}}}"),
         compat_root,
-        StateUnit::Union.as_str(),
+        &unit.token(),
     ));
     script.push(format!(
         "printf '%s\\n' \"{}=s256-$h\" >> \"$GITHUB_OUTPUT\"",
-        state_compat_output(slug.as_str())
+        state_compat_output(&unit)
     ));
     Ok(script)
 }

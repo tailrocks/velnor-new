@@ -18,7 +18,7 @@ fn hash(c: char) -> String {
 
 fn state_key(trust: &str, unit: &str, root: &str, compat: char, payload: char) -> String {
     format!(
-        "velnor-v4-state-{trust}-{unit}-{root}-s256-{}-s256-{}-s256-{}",
+        "velnor-v5-state-{trust}-{unit}-{root}-s256-{}-s256-{}-s256-{}",
         hash(compat),
         hash('5'),
         hash(payload)
@@ -38,19 +38,19 @@ fn sorted(mut ids: Vec<u32>) -> Vec<u32> {
 fn prune_keeps_the_newest_attested_generation_and_everything_newer_per_root()
 -> Result<(), Box<dyn Error>> {
     let mut ledger = Ledger::new();
-    let g1 = ledger.add(901, MAIN, &trusted("union", "root", 'a', '1'));
-    let junk_old = ledger.add(902, MAIN, "velnor-v4-state-trusted-union-root-junk");
+    let g1 = ledger.add(901, MAIN, &trusted("slice", "root", 'a', '1'));
+    let junk_old = ledger.add(902, MAIN, "velnor-v5-state-trusted-slice-root-junk");
     let h1 = ledger.add(
         903,
         MAIN,
-        &trusted("union", "crates-velnor-runner", 'a', '1'),
+        &trusted("slice", "crates-velnor-runner", 'a', '1'),
     );
-    let g2 = ledger.add(904, MAIN, &trusted("union", "root", 'b', '2'));
-    let g3 = ledger.add(905, MAIN, &trusted("union", "root", 'c', '3'));
+    let g2 = ledger.add(904, MAIN, &trusted("slice", "root", 'b', '2'));
+    let g3 = ledger.add(905, MAIN, &trusted("slice", "root", 'c', '3'));
     let h2 = ledger.add(
         906,
         MAIN,
-        &trusted("union", "crates-velnor-runner", 'a', '2'),
+        &trusted("slice", "crates-velnor-runner", 'a', '2'),
     );
     ledger.attest(g3);
     ledger.attest(h2);
@@ -58,7 +58,7 @@ fn prune_keeps_the_newest_attested_generation_and_everything_newer_per_root()
         907,
         MAIN,
         &format!(
-            "velnor-v4-state-trusted-union-root-s256-{}-s256-{}",
+            "velnor-v5-state-trusted-slice-root-s256-{}-s256-{}",
             hash('c'),
             hash('5')
         ),
@@ -67,7 +67,7 @@ fn prune_keeps_the_newest_attested_generation_and_everything_newer_per_root()
         908,
         MAIN,
         &format!(
-            "velnor-v4-state-trusted-union-root-s256-{}-s256-{}-s256-{}",
+            "velnor-v5-state-trusted-slice-root-s256-{}-s256-{}-s256-{}",
             hash('c'),
             hash('5'),
             "d".repeat(63)
@@ -78,7 +78,7 @@ fn prune_keeps_the_newest_attested_generation_and_everything_newer_per_root()
         910,
         MAIN,
         &format!(
-            "velnor-v4-state-trusted-suite-incomplete-s256-{}",
+            "velnor-v5-state-trusted-suite-incomplete-s256-{}",
             hash('a')
         ),
     );
@@ -96,7 +96,7 @@ fn prune_keeps_the_newest_attested_generation_and_everything_newer_per_root()
 #[test]
 fn prune_groups_by_trust_unit_root_only() -> Result<(), Box<dyn Error>> {
     let mut ledger = Ledger::new();
-    let x1 = ledger.add(801, MAIN, &trusted("union", "x", 'a', '1'));
+    let x1 = ledger.add(801, MAIN, &trusted("slice", "x", 'a', '1'));
     ledger.add(802, MAIN, &trusted("suite", "x", 'a', '1'));
     ledger.add(
         803,
@@ -104,33 +104,33 @@ fn prune_groups_by_trust_unit_root_only() -> Result<(), Box<dyn Error>> {
         &format!("velnor-v2-sources-trusted-s256-{}", hash('a')),
     );
     ledger.add(804, MAIN, &format!("mise-tools-v2-{}", hash('a')));
-    ledger.add(805, MAIN, &state_key("pr", "union", "x", 'a', '1'));
-    ledger.add(806, MAIN, &state_key("pr", "union", "x", 'b', '2'));
-    let y1 = ledger.add(807, MAIN, &trusted("union", "y", 'a', '1'));
-    ledger.add(808, "refs/pull/7/merge", &trusted("union", "x", 'a', '3'));
-    ledger.add(809, "refs/pull/7/merge", &trusted("union", "y", 'a', '3'));
-    let x2 = ledger.add(810, MAIN, &trusted("union", "x", 'b', '2'));
-    let y2 = ledger.add(811, MAIN, &trusted("union", "y", 'b', '2'));
+    ledger.add(805, MAIN, &state_key("pr", "slice", "x", 'a', '1'));
+    ledger.add(806, MAIN, &state_key("pr", "slice", "x", 'b', '2'));
+    let y1 = ledger.add(807, MAIN, &trusted("slice", "y", 'a', '1'));
+    ledger.add(808, "refs/pull/7/merge", &trusted("slice", "x", 'a', '3'));
+    ledger.add(809, "refs/pull/7/merge", &trusted("slice", "y", 'a', '3'));
+    let x2 = ledger.add(810, MAIN, &trusted("slice", "x", 'b', '2'));
+    let y2 = ledger.add(811, MAIN, &trusted("slice", "y", 'b', '2'));
     ledger.attest(x2);
     ledger.attest(y2);
     let hostile_x = format!(
-        "velnor-v4-state-trusted-union-s256-x-s256-{}-s256-{}-s256-{}",
+        "velnor-v5-state-trusted-slice-s256-x-s256-{}-s256-{}-s256-{}",
         hash('f'),
         hash('5'),
         hash('f')
     );
-    let hostile_y = hostile_x.replace("union-s256-x", "union-s256-y");
+    let hostile_y = hostile_x.replace("slice-s256-x", "slice-s256-y");
     ledger.add(812, MAIN, &hostile_x);
     ledger.add(813, MAIN, &hostile_y);
-    ledger.add(814, "refs/pull/7/merge", &trusted("union", "x", 'c', '4'));
-    ledger.add(815, "refs/pull/7/merge", &trusted("union", "y", 'c', '4'));
+    ledger.add(814, "refs/pull/7/merge", &trusted("slice", "x", 'c', '4'));
+    ledger.add(815, "refs/pull/7/merge", &trusted("slice", "y", 'c', '4'));
     let fake = GhFake::new(&ledger)?;
     let run = fake.run_prune(MAIN)?;
     assert_eq!(run.status, Some(0), "stdout: {}", run.stdout);
     assert_eq!(
         sorted(run.attempted),
         sorted(vec![x1, y1]),
-        "only the superseded union/x and union/y generations on main may go; kept x2={x2} y2={y2}"
+        "only the superseded slice/x and slice/y generations on main may go; kept x2={x2} y2={y2}"
     );
     Ok(())
 }
@@ -138,16 +138,16 @@ fn prune_groups_by_trust_unit_root_only() -> Result<(), Box<dyn Error>> {
 #[test]
 fn prune_warns_and_exits_zero_on_gh_failure() -> Result<(), Box<dyn Error>> {
     let mut ledger = Ledger::new();
-    let a1 = ledger.add(701, MAIN, &trusted("union", "root", 'a', '1'));
-    let a2 = ledger.add(702, MAIN, &trusted("union", "root", 'b', '2'));
-    let a3 = ledger.add(703, MAIN, &trusted("union", "root", 'c', '3'));
+    let a1 = ledger.add(701, MAIN, &trusted("slice", "root", 'a', '1'));
+    let a2 = ledger.add(702, MAIN, &trusted("slice", "root", 'b', '2'));
+    let a3 = ledger.add(703, MAIN, &trusted("slice", "root", 'c', '3'));
     ledger.attest(a3);
     let list_down = GhFake::new(&ledger)?.failing_list();
     let run = list_down.run_prune(MAIN)?;
     assert_eq!(run.status, Some(0), "stdout: {}", run.stdout);
     assert!(
         run.stdout
-            .contains("::warning::cache_unavailable: could not list velnor-v4-state-trusted-"),
+            .contains("::warning::cache_unavailable: could not list velnor-v5-state-trusted-"),
         "stdout: {}",
         run.stdout
     );
@@ -210,7 +210,7 @@ fn retired_state_entries_are_all_pruned_and_current_ones_kept() -> Result<(), Bo
             &format!("velnor-v3-state-trusted-s256-{c}-s256-{b}"),
         ),
     ];
-    ledger.add(31, MAIN, &trusted("union", "root", 'a', 'b'));
+    ledger.add(31, MAIN, &trusted("slice", "root", 'a', 'b'));
     let fake = GhFake::new(&ledger)?;
     let run = fake.run_prune(MAIN)?;
     assert_eq!(run.status, Some(0), "stdout: {}", run.stdout);
@@ -226,9 +226,9 @@ fn retired_state_entries_are_all_pruned_and_current_ones_kept() -> Result<(), Bo
 fn prune_deletes_nothing_when_only_the_older_generation_is_attested() -> Result<(), Box<dyn Error>>
 {
     let mut ledger = Ledger::new();
-    let k1 = ledger.add(301, MAIN, &trusted("union", "root", 'a', '1'));
-    ledger.add(302, MAIN, &trusted("union", "root", 'b', '2'));
-    ledger.add(303, MAIN, &trusted("union", "root", 'c', '3'));
+    let k1 = ledger.add(301, MAIN, &trusted("slice", "root", 'a', '1'));
+    ledger.add(302, MAIN, &trusted("slice", "root", 'b', '2'));
+    ledger.add(303, MAIN, &trusted("slice", "root", 'c', '3'));
     ledger.attest(k1);
     let run = GhFake::new(&ledger)?.run_prune(MAIN)?;
     assert_eq!(run.status, Some(0), "stdout: {}", run.stdout);
@@ -244,10 +244,10 @@ fn prune_deletes_nothing_when_only_the_older_generation_is_attested() -> Result<
 fn prune_deletes_only_what_is_older_than_the_newest_attested_generation()
 -> Result<(), Box<dyn Error>> {
     let mut ledger = Ledger::new();
-    let k1 = ledger.add(301, MAIN, &trusted("union", "root", 'a', '1'));
-    let k2 = ledger.add(302, MAIN, &trusted("union", "root", 'b', '2'));
-    ledger.add(303, MAIN, &trusted("union", "root", 'c', '3'));
-    ledger.add(304, MAIN, &trusted("union", "root", 'd', '4'));
+    let k1 = ledger.add(301, MAIN, &trusted("slice", "root", 'a', '1'));
+    let k2 = ledger.add(302, MAIN, &trusted("slice", "root", 'b', '2'));
+    ledger.add(303, MAIN, &trusted("slice", "root", 'c', '3'));
+    ledger.add(304, MAIN, &trusted("slice", "root", 'd', '4'));
     ledger.attest(k1);
     ledger.attest(k2);
     let run = GhFake::new(&ledger)?.run_prune(MAIN)?;
@@ -264,19 +264,19 @@ fn prune_deletes_only_what_is_older_than_the_newest_attested_generation()
 fn prune_deletes_nothing_in_a_group_without_a_verified_anchor() -> Result<(), Box<dyn Error>> {
     let mut none = Ledger::new();
     for (id, compat) in [(401, 'a'), (402, 'b'), (403, 'c')] {
-        none.add(id, MAIN, &trusted("union", "root", compat, '1'));
+        none.add(id, MAIN, &trusted("slice", "root", compat, '1'));
     }
     let run = GhFake::new(&none)?.run_prune(MAIN)?;
     assert_eq!(run.status, Some(0), "stdout: {}", run.stdout);
     assert!(run.attempted.is_empty(), "deleted {:?}", run.attempted);
 
     let mut beyond_cap = Ledger::new();
-    let oldest = beyond_cap.add(500, MAIN, &trusted("union", "root", 'a', '1'));
+    let oldest = beyond_cap.add(500, MAIN, &trusted("slice", "root", 'a', '1'));
     beyond_cap.attest(oldest);
     for (id, compat) in [(501, 'b'), (502, 'c'), (503, 'd'), (504, 'e'), (505, 'f')] {
-        beyond_cap.add(id, MAIN, &trusted("union", "root", compat, '1'));
+        beyond_cap.add(id, MAIN, &trusted("slice", "root", compat, '1'));
     }
-    beyond_cap.add(506, MAIN, &trusted("union", "root", 'a', '2'));
+    beyond_cap.add(506, MAIN, &trusted("slice", "root", 'a', '2'));
     let run = GhFake::new(&beyond_cap)?.run_prune(MAIN)?;
     assert_eq!(run.status, Some(0), "stdout: {}", run.stdout);
     assert!(

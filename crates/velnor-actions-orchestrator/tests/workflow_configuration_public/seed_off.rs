@@ -15,7 +15,7 @@ use velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
 use super::workflow_configuration_fixture::{self, git_fixture};
 
 const OFF: &str = "\n[stacks.rust]\ncompiled_state = \"off\"\n";
-const PRODUCE: &str = "\n[stacks.rust]\ncompiled_state = \"union\"\n";
+const PRODUCE: &str = "\n[stacks.rust]\ncompiled_state = \"slices\"\n";
 
 pub(super) fn seed_repo(extra: &str) -> Result<tempfile::TempDir, Box<dyn Error>> {
     let mut config = workflow_configuration_fixture::config_with_verification_branch(None);

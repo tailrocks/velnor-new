@@ -3,7 +3,7 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::workflow::cache_family::{RootSlug, S256};
+use velnor_actions_contract::workflow::cache_family::{S256, SliceId};
 use velnor_actions_contract::workflow::state_seal::{
     STATE_PRODUCER_LANE_CONDITION, state_producer_condition, state_producer_job_id,
 };
@@ -43,10 +43,10 @@ pub(crate) fn state_producer_jobs(
     roots
         .iter()
         .map(|root| {
-            let slug = RootSlug::from_root(&root.root)?;
+            let slice = SliceId::from_root(&root.root)?;
             Ok((
-                state_producer_job_id(&slug),
-                producer_job(input, lane, root, &slug, private, timeout)?,
+                state_producer_job_id(&slice),
+                producer_job(input, lane, root, &slice, private, timeout)?,
             ))
         })
         .collect()
@@ -82,7 +82,7 @@ pub(crate) fn recipe_digests(
 pub(crate) fn producer_job_ids(roots: &[String]) -> Result<Vec<String>, OrchestratorError> {
     roots
         .iter()
-        .map(|root| Ok(state_producer_job_id(&RootSlug::from_root(root)?)))
+        .map(|root| Ok(state_producer_job_id(&SliceId::from_root(root)?)))
         .collect()
 }
 
@@ -90,7 +90,7 @@ fn producer_job(
     input: &CrateJobInputs<'_>,
     lane: &LaneTools,
     producer: &ProducerRoot,
-    slug: &RootSlug,
+    slice: &SliceId,
     private: Option<&PrivateWiring>,
     timeout: JobTimeout,
 ) -> Result<Job, OrchestratorError> {
@@ -137,7 +137,7 @@ fn producer_job(
     steps.push(state_skeleton_restore_step()?);
     steps.extend(lane_steps(&producer.lanes));
     steps.push(velnor_actions_workflow_renderer::mbx_stats::mbx_stats_step(
-        &state_producer_job_id(slug),
+        &state_producer_job_id(slice),
         &crate::source_prep::workspace_crate_names(&input.discovery.workspaces, &producer.root),
     )?);
     let mut mark = mbx_producer_mark_step()?;
@@ -148,7 +148,7 @@ fn producer_job(
         toolchain_env,
         StateCeilings::V3,
     )?);
-    steps.push(state_payload_upload_step(slug)?);
+    steps.push(state_payload_upload_step(slice)?);
     steps.push(state_produced_step()?);
     Ok(Job {
         services: Vec::new(),
@@ -158,7 +158,7 @@ fn producer_job(
         check_runner: None,
         timeout_minutes: timeout,
         needs: vec![velnor_actions_workflow_renderer::render::PLAN_JOB_ID.to_owned()],
-        condition: Some(state_producer_condition(slug.as_str())),
+        condition: Some(state_producer_condition(slice)),
         permissions: None,
         environment: None,
         env: JobEnv::Unset,

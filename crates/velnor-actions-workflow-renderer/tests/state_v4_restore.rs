@@ -154,7 +154,7 @@ fn restore_never_crosses_roots_that_share_a_name_prefix() -> Result<(), Box<dyn 
         "{}{SNAPSHOT_A}-{PAYLOAD_ONE}",
         short_key
             .restore_prefix
-            .replacen("-union-a-", "-union-a-b-", 1)
+            .replacen("-slice-a-", "-slice-a-b-", 1)
     );
     let own_entry = format!("{}{SNAPSHOT_A}-{PAYLOAD_TWO}", short_key.restore_prefix);
     let mut service = CacheService::new();

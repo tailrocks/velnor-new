@@ -96,18 +96,18 @@ const STATE_SNAPSHOT_OUTPUT_PREFIX: &str = "state_";
 const STATE_SNAPSHOT_OUTPUT_SUFFIX: &str = "_snapshot";
 
 #[must_use]
-pub fn state_snapshot_output(root: &super::RootSlug) -> String {
+pub fn state_snapshot_output(unit: &super::StateUnit) -> String {
     format!(
         "{STATE_SNAPSHOT_OUTPUT_PREFIX}{}{STATE_SNAPSHOT_OUTPUT_SUFFIX}",
-        root.as_str().replace('-', "_")
+        unit.output_token()
     )
 }
 
 #[must_use]
-pub fn state_snapshot_plan_expr(root: &super::RootSlug) -> String {
+pub fn state_snapshot_plan_expr(unit: &super::StateUnit) -> String {
     format!(
         "${{{{needs.plan.outputs.{}}}}}",
-        state_snapshot_output(root)
+        state_snapshot_output(unit)
     )
 }
 
@@ -115,12 +115,7 @@ pub fn state_snapshot_plan_expr(root: &super::RootSlug) -> String {
 pub fn is_state_snapshot_output(name: &str) -> bool {
     name.strip_prefix(STATE_SNAPSHOT_OUTPUT_PREFIX)
         .and_then(|rest| rest.strip_suffix(STATE_SNAPSHOT_OUTPUT_SUFFIX))
-        .is_some_and(|slug| {
-            !slug.is_empty()
-                && slug
-                    .bytes()
-                    .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_')
-        })
+        .is_some_and(super::is_state_output_token)
 }
 
 #[must_use]

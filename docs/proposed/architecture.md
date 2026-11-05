@@ -192,7 +192,7 @@ ignore = [] # example override: ["rust"] disables Rust planning/generation
 configurations = [{ name = "default", features = ["default"], target = "host" }]
 # compile_driver = "cargo" # optional sticky override: "cargo" | "mbx"
 # test_runner = "cargo_test" # optional sticky override: "cargo_test" | "cargo_nextest"
-# compiled_state = "off" # default "union"; "off" emits no state producer or state seal jobs
+# compiled_state = "off" # default "slices"; "off" emits no state producer or state seal jobs
 # seed_parallel_targets = true # opt-in missing parallel target copies; default false
 # clippy_all_features = true # opt-in: Clippy alone runs `--all-features`; default false
 # [[stacks.rust.configurations]] all_features = true # opt-in: every compiling task runs `--all-features`

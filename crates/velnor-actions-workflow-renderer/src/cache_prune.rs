@@ -18,10 +18,11 @@ pub const TOOLS_PRUNE_PREFIX: &str = "mise-tools-v2-";
 pub const TOOLS_PRUNE_UNIT: &str = "mise-tools-v2";
 pub const TOOLS_RETAINED_ENTRIES: u64 = 8;
 pub const STATE_PRUNE_VERIFY_CAP: usize = 5;
-pub const RETIRED_STATE_PRUNE_PREFIXES: [&str; 3] = [
+pub const RETIRED_STATE_PRUNE_PREFIXES: [&str; 4] = [
     "velnor-v1-state-trusted-",
     "velnor-v2-state-trusted-",
     "velnor-v3-state-trusted-",
+    "velnor-v4-state-trusted-",
 ];
 
 #[must_use]
@@ -53,7 +54,7 @@ pub fn state_prune_prefix() -> String {
 fn state_group_program() -> String {
     let prefix = state_prune_prefix();
     format!(
-        "{{ n = split($2, p, \"-s256-\"); if (n != 4 || p[1] !~ /^{prefix}(union|suite)-[a-z0-9][a-z0-9-]*$/) next; for (i = 2; i <= 4; i++) if (length(p[i]) != 64 || p[i] !~ /^[0-9a-f]+$/) next; print p[1], $1, $2, $3 }}"
+        "{{ n = split($2, p, \"-s256-\"); if (n != 4 || p[1] !~ /^{prefix}(slice-[a-z0-9][a-z0-9-]*|cli|suite-[a-z0-9][a-z0-9-]*)$/) next; for (i = 2; i <= 4; i++) if (length(p[i]) != 64 || p[i] !~ /^[0-9a-f]+$/) next; print p[1], $1, $2, $3 }}"
     )
 }
 

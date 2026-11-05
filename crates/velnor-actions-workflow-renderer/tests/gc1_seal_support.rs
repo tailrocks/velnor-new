@@ -4,14 +4,12 @@
 use std::error::Error;
 use std::path::PathBuf;
 
-use velnor_actions_contract::workflow::cache_family::{
-    RootSlug, S256, StateScope, StateTrust, StateUnit,
-};
+use velnor_actions_contract::workflow::cache_family::{S256, StateScope, StateTrust, StateUnit};
 use velnor_actions_contract::workflow::state_seal::{
     STATE_SEAL_PREDICATE_TYPE, state_attested_output,
 };
 use velnor_actions_contract::{Step, StepKind};
-use velnor_actions_workflow_renderer::plan_sources::state_select::{SealRoot, state_select_step};
+use velnor_actions_workflow_renderer::plan_sources::state_select::state_select_step;
 
 use crate::gc1_scene::{Scene, fail};
 
@@ -305,8 +303,7 @@ pub(crate) fn digest(fill: char) -> String {
 pub(crate) fn scope_of(root: &str) -> Result<StateScope, Box<dyn Error>> {
     Ok(StateScope {
         trust: StateTrust::Trusted,
-        unit: StateUnit::Union,
-        root: RootSlug::from_root(root)?,
+        unit: StateUnit::slice_of_root(root)?,
     })
 }
 
@@ -335,11 +332,7 @@ pub(crate) fn script_of(step: &Step) -> Result<String, Box<dyn Error>> {
 }
 
 pub(crate) fn select_script(root: &str) -> Result<String, Box<dyn Error>> {
-    let root = SealRoot {
-        unit: StateUnit::Union,
-        slug: RootSlug::from_root(root)?,
-    };
-    script_of(&state_select_step(&[root])?)
+    script_of(&state_select_step(&[StateUnit::slice_of_root(root)?])?)
 }
 
 pub(crate) fn run_select(
@@ -364,9 +357,5 @@ pub(crate) fn run_select(
 }
 
 pub(crate) fn selected(scene: &Scene, root: &str) -> Result<Vec<String>, Box<dyn Error>> {
-    let slug = RootSlug::from_root(root)?;
-    scene.output_block(&state_attested_output(
-        StateUnit::Union.as_str(),
-        slug.as_str(),
-    ))
+    scene.output_block(&state_attested_output(&StateUnit::slice_of_root(root)?))
 }

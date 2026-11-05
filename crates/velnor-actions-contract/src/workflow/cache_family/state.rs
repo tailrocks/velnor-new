@@ -8,6 +8,7 @@ use sha2::{Digest, Sha256};
 use crate::errors::ContractError;
 
 use super::CacheFamily;
+use super::state_unit::{SLICE_ID_MAX_BYTES, SliceId, StateUnit};
 
 pub const MBX_COMPILE_ENV: [(&str, &str); 3] = [
     ("MBX_SHARE_OUT_DIR", "1"),
@@ -128,22 +129,6 @@ impl fmt::Display for RootSlug {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum StateUnit {
-    Union,
-    Suite,
-}
-
-impl StateUnit {
-    #[must_use]
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::Union => "union",
-            Self::Suite => "suite",
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StateTrust {
     Trusted,
     Pr,
@@ -163,18 +148,16 @@ impl StateTrust {
 pub struct StateScope {
     pub trust: StateTrust,
     pub unit: StateUnit,
-    pub root: RootSlug,
 }
 
 impl StateScope {
     #[must_use]
     pub fn prefix(&self) -> String {
         format!(
-            "{}{}-{}-{}-",
+            "{}{}-{}-",
             CacheFamily::MbxBundle.key_prefix(),
             self.trust.as_str(),
-            self.unit.as_str(),
-            self.root
+            self.unit
         )
     }
 
@@ -305,13 +288,12 @@ fn digest_of_lines(lines: &[String]) -> S256 {
 
 pub(super) fn widest_entry_key_bytes() -> usize {
     let zero = S256::of(b"");
-    let slug = RootSlug("a".repeat(ROOT_SLUG_MAX_BYTES));
+    let widest = "a".repeat(SLICE_ID_MAX_BYTES.max(ROOT_SLUG_MAX_BYTES));
     let key = StateEntryKey {
         identity: StateIdentity {
             scope: StateScope {
                 trust: StateTrust::Trusted,
-                unit: StateUnit::Union,
-                root: slug,
+                unit: StateUnit::Slice(SliceId(widest)),
             },
             compat: zero,
             snapshot: zero,

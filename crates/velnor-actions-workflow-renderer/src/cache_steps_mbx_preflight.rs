@@ -7,7 +7,9 @@ use super::{CompileDriver, MBX_ACTION_NAME};
 use crate::RenderError;
 use crate::steps::{action_owned_mbx_shell_step, action_step_with_env, shell_step, validate_uses};
 use velnor_actions_contract::workflow::MBX_WORKSPACE_CLEAN_CONDITION;
-use velnor_actions_contract::workflow::cache_family::{MBX_COMPILE_ENV as COMPILE_ENV, StateUnit};
+use velnor_actions_contract::workflow::cache_family::{
+    MBX_COMPILE_ENV as COMPILE_ENV, RootSlug, StateUnit,
+};
 use velnor_actions_contract::{Step, StepId, StepKind, StepRole};
 
 pub const MBX_PREFLIGHT_NAME: &str = "Verify Rust before MBX action";
@@ -64,9 +66,9 @@ pub fn mbx_steps_for_driver_bounded(
             let version_check =
                 mbx_version_check_step(mbx_version, rust_toolchain, action_env.clone())?;
             let mut steps = vec![preflight, action, version_check];
-            if let Some(unit) = transport.unit() {
+            if let Some(unit) = transport.unit(working_directory)? {
                 steps.extend(super::mbx_bundle::mbx_bundle_prelude(
-                    unit,
+                    &unit,
                     mbx_version,
                     rust_toolchain,
                     rust_toolchain,
@@ -89,11 +91,23 @@ pub enum MbxTransport {
 }
 
 impl MbxTransport {
-    pub(crate) const fn unit(self) -> Option<StateUnit> {
+    pub(crate) fn unit(
+        self,
+        working_directory: Option<&str>,
+    ) -> Result<Option<StateUnit>, RenderError> {
+        let invalid = |error| RenderError::InvalidWorkflow(format!("state_root:{error}"));
         match self {
-            Self::InstallOnly => None,
-            Self::SeedRead | Self::SeedWrite => Some(StateUnit::Union),
-            Self::SuiteBundle => Some(StateUnit::Suite),
+            Self::InstallOnly => Ok(None),
+            Self::SeedRead | Self::SeedWrite => {
+                let root = super::mbx_bundle::workspace_root(working_directory)?;
+                StateUnit::slice_of_root(&root).map(Some).map_err(invalid)
+            }
+            Self::SuiteBundle => {
+                let root = super::mbx_bundle::workspace_root(working_directory)?;
+                RootSlug::from_root(&root)
+                    .map(|slug| Some(StateUnit::Suite(slug)))
+                    .map_err(invalid)
+            }
         }
     }
 }

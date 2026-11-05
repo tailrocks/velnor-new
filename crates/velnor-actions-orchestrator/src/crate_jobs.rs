@@ -146,7 +146,7 @@ fn build_crate_jobs_with_seed_timeout(
         state_producer::state_producer_jobs(&input, &lane, &roots, private, seed_timeout)?;
     let state_recipes = state_producer::recipe_digests(&recipe_jobs, input.helper_version, input.generator_version)?;
     let producers = match input.compiled_state {
-        CompiledStateMode::Union => recipe_jobs,
+        CompiledStateMode::Slices => recipe_jobs,
         CompiledStateMode::Off => Vec::new(),
     };
     for (id, _) in &producers {

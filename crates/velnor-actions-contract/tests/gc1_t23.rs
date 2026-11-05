@@ -43,13 +43,13 @@ fn check_complete_state_binding() -> Result<(), Box<dyn Error>> {
             return Err(fail("persisted MBX path survived"));
         }
     }
-    if CacheFamily::MbxBundle.key_prefix() != "velnor-v4-state-" {
+    if CacheFamily::MbxBundle.key_prefix() != "velnor-v5-state-" {
         return Err(fail("complete-state key prefix drifted"));
     }
     if CacheFamily::MbxBundle.gc1_family() != Some(Gc1Family::State) {
         return Err(fail("complete-state family lost its contract identity"));
     }
-    if CacheFamily::for_key("velnor-v4-state-trusted-aabb-r0") != Some(CacheFamily::MbxBundle) {
+    if CacheFamily::for_key("velnor-v5-state-trusted-aabb-r0") != Some(CacheFamily::MbxBundle) {
         return Err(fail("complete-state discovery drifted"));
     }
     for retired in [

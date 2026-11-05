@@ -55,7 +55,7 @@ pub enum DeclaredCompileDriver {
 #[serde(rename_all = "snake_case")]
 pub enum CompiledStateMode {
     #[default]
-    Union,
+    Slices,
 
     Off,
 }
@@ -64,8 +64,8 @@ pub enum CompiledStateMode {
     clippy::trivially_copy_pass_by_ref,
     reason = "serde skip_serializing_if requires a borrowed value"
 )]
-fn is_union(value: &CompiledStateMode) -> bool {
-    *value == CompiledStateMode::Union
+fn is_slices(value: &CompiledStateMode) -> bool {
+    *value == CompiledStateMode::Slices
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -97,7 +97,7 @@ pub struct RustStackConfig {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub run_ignored: Option<String>,
 
-    #[serde(default, skip_serializing_if = "is_union")]
+    #[serde(default, skip_serializing_if = "is_slices")]
     pub compiled_state: CompiledStateMode,
 
     #[serde(default, skip_serializing_if = "is_false")]
@@ -197,7 +197,7 @@ impl RustStackConfig {
             compile_driver: None,
             test_runner: None,
             run_ignored: None,
-            compiled_state: CompiledStateMode::Union,
+            compiled_state: CompiledStateMode::Slices,
             seed_parallel_targets: false,
             clippy_all_features: false,
             allow_empty_test_suite: false,

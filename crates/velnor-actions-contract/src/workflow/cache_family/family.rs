@@ -158,7 +158,7 @@ const ANSIBLE_COLLECTIONS: FamilySpec = FamilySpec {
 
 const MBX_BUNDLE: FamilySpec = FamilySpec {
     layer: "state",
-    schema: 4,
+    schema: 5,
     paths: &STATE_PATHS,
     ceiling: Ceiling::StoredAndExtracted {
         stored: GIB + GIB / 2,

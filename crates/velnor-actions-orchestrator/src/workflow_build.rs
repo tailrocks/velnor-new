@@ -258,7 +258,7 @@ fn attach_state_roots(
 ) -> Result<(), OrchestratorError> {
     let state_roots = crate::state_roots::plans(input.discovery, jobs, &prepared.state_recipes)?;
     let seal = crate::state_roots::seal_plan(jobs)?;
-    if state_roots.is_empty() && seal.roots.is_empty() {
+    if state_roots.is_empty() && seal.units.is_empty() {
         return Ok(());
     }
     let tofu_roots = crate::tofu_cache::tofu_cache_roots(input.discovery)?;

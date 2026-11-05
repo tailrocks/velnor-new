@@ -20,7 +20,7 @@ use crate::state_v4_seal::seal_job;
 
 const AT: &str = "2026-11-04T01:00:00Z";
 const ROOT: &str = ".";
-const PRODUCE: &str = "state_union_root_produce";
+const PRODUCE: &str = "state_slice_root_produce";
 
 struct Cache {
     dir: PathBuf,

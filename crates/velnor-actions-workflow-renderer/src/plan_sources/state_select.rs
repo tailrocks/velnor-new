@@ -4,8 +4,7 @@
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::workflow::cache_family::{
-    CacheFamily, RootSlug, StateScope, StateTrust, StateUnit, outer_entry_bound,
-    state_snapshot_output,
+    CacheFamily, StateScope, StateTrust, StateUnit, outer_entry_bound, state_snapshot_output,
 };
 use velnor_actions_contract::workflow::state_seal::{
     STATE_SEAL_LIST_LIMIT, STATE_SEAL_LIST_TAB, STATE_SEAL_PREDICATE_TYPE,
@@ -27,26 +26,17 @@ const STEP_NAME: &str = "Select attested state";
 const OUTPUT_DELIMITER: &str = "VELNOR_STATE_ATTESTED_EOF";
 const CACHE_KEYS_OUTPUTS: &str = "steps.cache-keys.outputs";
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SealRoot {
-    pub unit: StateUnit,
-    pub slug: RootSlug,
-}
-
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct StateSealPlan {
-    pub roots: Vec<SealRoot>,
+    pub units: Vec<StateUnit>,
 }
 
-impl SealRoot {
-    fn prefix(&self) -> String {
-        StateScope {
-            trust: StateTrust::Trusted,
-            unit: self.unit,
-            root: self.slug.clone(),
-        }
-        .prefix()
+fn unit_prefix(unit: &StateUnit) -> String {
+    StateScope {
+        trust: StateTrust::Trusted,
+        unit: unit.clone(),
     }
+    .prefix()
 }
 
 const RUN_GH: &str = r#"run_gh() {
@@ -153,7 +143,7 @@ fn head(outer_bound: u64) -> Result<String, RenderError> {
         .replace("@SIGNER_PATH@", STATE_SEAL_WORKFLOW_PATH))
 }
 
-pub fn state_select_step(roots: &[SealRoot]) -> Result<Step, RenderError> {
+pub fn state_select_step(units: &[StateUnit]) -> Result<Step, RenderError> {
     let outer_bound = outer_entry_bound(CacheFamily::MbxBundle.spec().ceiling.stored())
         .ok_or_else(|| {
             RenderError::InvalidWorkflow("state_select:outer_bound_unbounded".to_owned())
@@ -171,30 +161,30 @@ pub fn state_select_step(roots: &[SealRoot]) -> Result<Step, RenderError> {
             STATE_SEAL_UNIT_TIMEOUT_SECONDS.to_string(),
         ),
     ]);
-    let mut decisions = Vec::with_capacity(roots.len());
-    for (ordinal, root) in roots.iter().enumerate() {
+    let mut decisions = Vec::with_capacity(units.len());
+    for (ordinal, unit) in units.iter().enumerate() {
         let compat_env = format!("VELNOR_STATE_COMPAT_R{ordinal}");
         let snapshot_env = format!("VELNOR_STATE_SNAPSHOT_R{ordinal}");
         env.insert(
             compat_env.clone(),
             format!(
                 "${{{{ {CACHE_KEYS_OUTPUTS}.{} }}}}",
-                state_compat_output(root.slug.as_str())
+                state_compat_output(unit)
             ),
         );
         env.insert(
             snapshot_env.clone(),
             format!(
                 "${{{{ {CACHE_KEYS_OUTPUTS}.{} }}}}",
-                state_snapshot_output(&root.slug)
+                state_snapshot_output(unit)
             ),
         );
-        sections.push(format!("unit '{}' r{ordinal}\n", root.prefix()));
+        sections.push(format!("unit '{}' r{ordinal}\n", unit_prefix(unit)));
         decisions.push(format!(
             "emit {} r{ordinal}\ndecide {} r{ordinal} '{}' \"${{{compat_env}-}}\" \"${{{snapshot_env}-}}\"\n",
-            state_attested_output(root.unit.as_str(), root.slug.as_str()),
-            state_produce_output(root.unit.as_str(), root.slug.as_str()),
-            root.prefix(),
+            state_attested_output(unit),
+            state_produce_output(unit),
+            unit_prefix(unit),
         ));
     }
     sections.push("select_all\n".to_owned());

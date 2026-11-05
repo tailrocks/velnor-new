@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::cache_access::{CacheAccess, CacheWriter, SOURCES_PRODUCER_JOB_ID};
+use super::cache_family::SliceId;
 use super::crate_job::{TOFU_PROVIDERS_PRODUCER_JOB_ID_PREFIX, TOOLS_PRODUCER_JOB_ID_PREFIX};
 use super::producer_order::{sources_order_ok, tofu_lane_needs_ok, tofu_order_ok, tools_order_ok};
 use super::producer_roles::{
@@ -208,9 +209,14 @@ impl ProducerKind {
             Self::TofuProviders => CacheWriter::TofuProvidersProducer.admits(id, condition),
             Self::ToolsIdentity => CacheWriter::ToolsProducer.admits(id, condition),
             Self::StateSeal => CacheWriter::StateSeal.admits(id, condition),
-            Self::StateProducer => id
-                .strip_prefix(STATE_PRODUCER_JOB_ID_PREFIX)
-                .is_some_and(|root| condition == Some(state_producer_condition(root).as_str())),
+            Self::StateProducer => {
+                id.strip_prefix(STATE_PRODUCER_JOB_ID_PREFIX)
+                    .is_some_and(|slice| {
+                        SliceId::parse(slice).is_ok_and(|slice| {
+                            condition == Some(state_producer_condition(&slice).as_str())
+                        })
+                    })
+            }
         }
     }
 

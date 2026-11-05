@@ -6,6 +6,7 @@ mod family;
 mod outer;
 mod outputs;
 mod state;
+mod state_unit;
 
 pub use admission::{
     FAMILY_BLOCKED_EXCEEDS_HARD_CEILING, FAMILY_BLOCKED_UNKNOWN_BOUND,
@@ -37,5 +38,6 @@ pub use outputs::{
 pub use state::{
     MBX_BSE_COMPAT, MBX_BSE_CONSUMER, MBX_BSE_ENV, MBX_BSE_PRODUCER, MBX_BSE_SKELETON,
     MBX_COMPILE_ENV, ROOT_SLUG_MAX_BYTES, RootSlug, S256, StateCompat, StateEntryKey,
-    StateIdentity, StateScope, StateSnapshot, StateTrust, StateUnit,
+    StateIdentity, StateScope, StateSnapshot, StateTrust,
 };
+pub use state_unit::{SLICE_ID_MAX_BYTES, SliceId, StateUnit, is_state_output_token};

@@ -308,11 +308,11 @@ fn both_plans_compute_byte_identical_cache_keys() -> Result<(), Box<dyn Error>> 
     let from_ci = cache_keys_outputs(&ci, repo.path(), temp.path())?;
     let from_sealed = cache_keys_outputs(&sealed, repo.path(), temp.path())?;
     assert!(
-        from_ci.contains("state_crates_nested_compat=s256-"),
+        from_ci.contains("state_slice_crates_nested_compat=s256-"),
         "{from_ci}"
     );
     assert!(
-        from_ci.contains("state_crates_nested_snapshot=s256-"),
+        from_ci.contains("state_slice_crates_nested_snapshot=s256-"),
         "{from_ci}"
     );
     assert_eq!(from_ci, from_sealed);

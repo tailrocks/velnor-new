@@ -158,8 +158,8 @@ fn append(repo: &Path, path: &str) -> Result<(), Box<dyn Error>> {
 
 type Row = (&'static str, Edit, &'static [&'static str]);
 
-const ONLY_A: &[&str] = &["state_ws_a_snapshot"];
-const ONLY_B: &[&str] = &["state_ws_b_snapshot"];
+const ONLY_A: &[&str] = &["state_slice_ws_a_snapshot"];
+const ONLY_B: &[&str] = &["state_slice_ws_b_snapshot"];
 const NONE: &[&str] = &[];
 
 fn rows() -> [Row; 12] {

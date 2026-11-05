@@ -3,7 +3,7 @@
 
 use std::error::Error;
 
-use velnor_actions_contract::workflow::cache_family::RootSlug;
+use velnor_actions_contract::workflow::cache_family::SliceId;
 use velnor_actions_contract::workflow::state_seal::{
     STATE_SEAL_PENDING_BYTES_ENV, STATE_SEAL_PENDING_ENV, state_seal_job_id,
 };
@@ -18,7 +18,7 @@ use crate::state_v4_seal::seal_jobs;
 const ROOT: &str = ".";
 const T1: &str = "2026-11-04T01:00:00Z";
 const T2: &str = "2026-11-04T02:00:00Z";
-const PRODUCE: &str = "state_union_root_produce";
+const PRODUCE: &str = "state_slice_root_produce";
 const UNIT_BOUND: &str = "1616920640";
 
 fn produce_with(
@@ -162,12 +162,12 @@ fn eligibility_ignores_entries_of_other_identities_and_unusable_inputs()
 fn plan_reserves_only_the_later_eligible_roots() -> Result<(), Box<dyn Error>> {
     let jobs = seal_jobs(&["crates/velnor-runner", "."])?;
     let first = jobs
-        .get(&state_seal_job_id(&RootSlug::from_root(
+        .get(&state_seal_job_id(&SliceId::from_root(
             "crates/velnor-runner",
         )?))
         .ok_or_else(|| fail("first seal job missing"))?;
     let second = jobs
-        .get(&state_seal_job_id(&RootSlug::from_root(".")?))
+        .get(&state_seal_job_id(&SliceId::from_root(".")?))
         .ok_or_else(|| fail("second seal job missing"))?;
     let reservation =
         |job: &velnor_actions_contract::Job| -> Result<(String, String), Box<dyn Error>> {
@@ -185,7 +185,7 @@ fn plan_reserves_only_the_later_eligible_roots() -> Result<(), Box<dyn Error>> {
         };
     let (pending, bytes) = reservation(first)?;
     if pending
-        != "${{needs.plan.outputs.state_union_root_produce}}:velnor-v4-state-trusted-union-root-"
+        != "${{needs.plan.outputs.state_slice_root_produce}}:velnor-v5-state-trusted-slice-root-"
         || bytes != UNIT_BOUND
     {
         return Err(fail(&format!(

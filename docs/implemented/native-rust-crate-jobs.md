@@ -70,7 +70,7 @@ documentation and doctests lane records twice, first over a dependency skeleton 
 switch between the phases deletes the first phase's task reports, which the
 controller writes once per task), records the producer marker, and exports one
 bundle that the `State seal` job saves and attests ([cache decisions](../proposed/cache-decisions.md) 1 to 3).
-`union` is the default `compiled_state`, so velnor-new sets nothing; see
+`slices` is the default `compiled_state`, so velnor-new sets nothing; see
 [compiled-state persistence](../proposed/compiled-state-persistence.md). MBX shares
 one compiler CPU/memory budget and deduplicates identical in-flight
 compilations across target directories (upstream "Parallel Cargo steps"
