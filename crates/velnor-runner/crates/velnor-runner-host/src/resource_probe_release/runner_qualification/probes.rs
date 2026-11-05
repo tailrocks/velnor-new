@@ -157,9 +157,16 @@ pub(super) async fn wait_inner_daemon(
         }
         let attempt = READINESS_ATTEMPT_TIMEOUT.min(end.saturating_duration_since(now));
         if let Ok(Ok(id)) = deadline(exec_daemon_id(docker, dind_container_id), attempt).await {
-            let id = single_line_optional(&id)?;
-            if !id.is_empty() {
-                return Ok(id);
+            let info = single_line_optional(&id)?;
+            if !info.is_empty() {
+                let mut fields = info.split('|');
+                let id = fields.next().filter(|id| !id.is_empty());
+                if let (Some(id), Some("/var/lib/docker"), Some("vfs"), None) =
+                    (id, fields.next(), fields.next(), fields.next())
+                {
+                    return Ok(id.to_owned());
+                }
+                return Err(HostError::Identity);
             }
         }
         let remaining = end.saturating_duration_since(Instant::now());
@@ -181,7 +188,7 @@ async fn exec_daemon_id(docker: &Docker, container_id: &str) -> Result<Vec<u8>, 
             "unix:///var/run/docker.sock".to_owned(),
             "info".to_owned(),
             "--format".to_owned(),
-            "{{.ID}}".to_owned(),
+            "{{.ID}}|{{.DockerRootDir}}|{{.Driver}}".to_owned(),
         ]),
         ..Default::default()
     };

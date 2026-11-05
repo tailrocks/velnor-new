@@ -37,7 +37,7 @@ fn create_exec(request: &Request, path: &str, state: &mut State) -> Reply {
             "unix:///var/run/docker.sock",
             "info",
             "--format",
-            "{{.ID}}"
+            "{{.ID}}|{{.DockerRootDir}}|{{.Driver}}"
         ])
         && dind_socket_is_owned(&container_id, state);
     state.fault_reached |= valid_command && state.plan.inner_id == state.plan.outer_id;
@@ -50,7 +50,11 @@ fn create_exec(request: &Request, path: &str, state: &mut State) -> Reply {
     let output = if !valid_command || empty_first {
         Vec::new()
     } else {
-        format!("{}\n", state.plan.inner_id).into_bytes()
+        format!(
+            "{}|{}|{}\n",
+            state.plan.inner_id, state.plan.inner_root, state.plan.inner_driver
+        )
+        .into_bytes()
     };
     let id = state.next_exec_id();
     let unfinished = valid_command && state.plan.fault == Some(ApiFault::UnfinishedExec);

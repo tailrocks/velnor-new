@@ -113,15 +113,24 @@ fn validate_image(
     {
         return Err(HostError::Identity);
     }
-    let revision = image
-        .config
+    let config = image.config.as_ref().ok_or(HostError::Identity)?;
+    let (expected_user, expected_entrypoint) = match expected_kind {
+        "runner" => ("runner", "/usr/local/bin/velnor-runner-entrypoint"),
+        "dind" => ("", "/usr/local/bin/velnor-dind-entrypoint"),
+        _ => return Err(HostError::Identity),
+    };
+    if config.user.as_deref().unwrap_or("") != expected_user
+        || config.entrypoint.as_deref() != Some(&[expected_entrypoint.to_owned()][..])
+    {
+        return Err(HostError::Identity);
+    }
+    let revision = config
+        .labels
         .as_ref()
-        .and_then(|config| config.labels.as_ref())
         .and_then(|labels| labels.get(SOURCE_LABEL));
-    let image_kind = image
-        .config
+    let image_kind = config
+        .labels
         .as_ref()
-        .and_then(|config| config.labels.as_ref())
         .and_then(|labels| labels.get(IMAGE_KIND_LABEL));
     if revision.map(String::as_str) != Some(source.source_sha.as_str())
         || image_kind.map(String::as_str) != Some(expected_kind)

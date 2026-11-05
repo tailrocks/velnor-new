@@ -4,9 +4,6 @@
 # Do not set RUNNER_ALLOW_RUNASROOT. The runner user is not root.
 FROM ubuntu:26.04@sha256:42527649dbc4f9197a6073f426f488cbff0e9cc9f2afce32d91c383e4875634a
 
-ARG VELNOR_SOURCE_SHA
-LABEL io.velnor.image.kind="runner" org.opencontainers.image.revision="${VELNOR_SOURCE_SHA}"
-
 ARG RUNNER_VERSION=2.338.0
 ARG RUNNER_SHA256=af4b794c1bc41d73d40535e3fe092a39f9679cd8d965954c2aca25a05ca41d32
 ARG DOCKER_VERSION=29.9.1
@@ -199,4 +196,6 @@ RUN curl --retry 5 --retry-delay 2 --retry-all-errors -fsSL -o /tmp/node.tar.gz 
     && test "$(node -e 'console.log("js-action-ok")')" = js-action-ok
 
 USER runner
+ARG VELNOR_SOURCE_SHA
+LABEL io.velnor.image.kind="runner" org.opencontainers.image.revision="${VELNOR_SOURCE_SHA}"
 ENTRYPOINT ["/usr/local/bin/velnor-runner-entrypoint"]

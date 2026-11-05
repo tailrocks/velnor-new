@@ -78,6 +78,7 @@ fn inspect_image(path: &str, state: &mut State) -> Reply {
         ImageRole::Runner => "runner",
         ImageRole::Dind => "dind",
     };
+    let (user, entrypoint, runtime_fault) = runtime_config(role, state.plan.image_fault);
     let fault_reached = match state.plan.image_fault {
         Some((target, ImageFault::Id)) if target == role => {
             reported_id = digest_id('c');
@@ -101,7 +102,7 @@ fn inspect_image(path: &str, state: &mut State) -> Reply {
         }
         _ => false,
     };
-    state.fault_reached |= fault_reached;
+    state.fault_reached |= fault_reached || runtime_fault;
     if let Some(lock) = state.plan.mutate_lock_on_first_image_inspect.take() {
         state.fault_reached = true;
         if let Ok(mut bytes) = fs::read(&lock) {
@@ -121,7 +122,7 @@ fn inspect_image(path: &str, state: &mut State) -> Reply {
             "Os": "linux",
             "Architecture": architecture,
             "Variant": "",
-            "Config": {"Labels": {
+            "Config": {"User": user, "Entrypoint": entrypoint.map(|value| vec![value]), "Labels": {
                 "org.opencontainers.image.revision": revision,
                 "io.velnor.image.kind": image_kind
             }}
@@ -131,6 +132,27 @@ fn inspect_image(path: &str, state: &mut State) -> Reply {
         reply.with_delay(Duration::from_secs(6))
     } else {
         reply
+    }
+}
+
+fn runtime_config(
+    role: ImageRole,
+    fault: Option<(ImageRole, ImageFault)>,
+) -> (Option<&'static str>, Option<&'static str>, bool) {
+    let (user, entrypoint) = match role {
+        ImageRole::Runner => ("runner", "/usr/local/bin/velnor-runner-entrypoint"),
+        ImageRole::Dind => ("", "/usr/local/bin/velnor-dind-entrypoint"),
+    };
+    match fault {
+        Some((target, ImageFault::User)) if target == role => {
+            (Some("unexpected"), Some(entrypoint), true)
+        }
+        Some((target, ImageFault::MissingUser)) if target == role => (None, Some(entrypoint), true),
+        Some((target, ImageFault::Entrypoint)) if target == role => {
+            (Some(user), Some("/unexpected"), true)
+        }
+        Some((target, ImageFault::MissingEntrypoint)) if target == role => (Some(user), None, true),
+        _ => (Some(user), Some(entrypoint), false),
     }
 }
 

@@ -35,6 +35,10 @@ pub(crate) enum ImageFault {
     Platform,
     Source,
     Kind,
+    User,
+    MissingUser,
+    Entrypoint,
+    MissingEntrypoint,
     Reinspection,
 }
 
@@ -102,6 +106,8 @@ pub(crate) struct ApiPlan {
     pub(crate) readiness_empty_first: bool,
     pub(crate) outer_id: String,
     pub(crate) inner_id: String,
+    pub(crate) inner_root: String,
+    pub(crate) inner_driver: String,
     pub(crate) outer_root: String,
     pub(crate) runner_socket_id: Option<String>,
     pub(crate) outer_mutation: OuterMutation,
@@ -133,6 +139,8 @@ impl ApiPlan {
             readiness_empty_first: true,
             outer_id: "outer-daemon-id".to_owned(),
             inner_id: "inner-daemon-id".to_owned(),
+            inner_root: "/var/lib/docker".to_owned(),
+            inner_driver: "vfs".to_owned(),
             outer_root: "/var/lib/docker".to_owned(),
             runner_socket_id: None,
             outer_mutation: OuterMutation::None,

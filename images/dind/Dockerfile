@@ -4,9 +4,6 @@
 # This image does not set privileged. The controller supplies runtime privileges.
 FROM ubuntu:26.04@sha256:42527649dbc4f9197a6073f426f488cbff0e9cc9f2afce32d91c383e4875634a
 
-ARG VELNOR_SOURCE_SHA
-LABEL io.velnor.image.kind="dind" org.opencontainers.image.revision="${VELNOR_SOURCE_SHA}"
-
 ARG DOCKER_VERSION=29.9.1
 ARG DOCKER_SHA256=c158ecc55adb3afb01bbd3539ed3b997d20c26dbdc418080506cc1bf5243ff57
 ARG DEBIAN_FRONTEND=noninteractive
@@ -61,4 +58,6 @@ COPY cgroup-v2-delegation.sh /usr/local/libexec/velnor/cgroup-v2-delegation.sh
 COPY entrypoint.sh /usr/local/bin/velnor-dind-entrypoint
 COPY LICENSE-moby /usr/share/doc/velnor-dind/LICENSE-moby
 RUN chmod 0755 /usr/local/bin/velnor-dind-entrypoint
+ARG VELNOR_SOURCE_SHA
+LABEL io.velnor.image.kind="dind" org.opencontainers.image.revision="${VELNOR_SOURCE_SHA}"
 ENTRYPOINT ["/usr/local/bin/velnor-dind-entrypoint"]
