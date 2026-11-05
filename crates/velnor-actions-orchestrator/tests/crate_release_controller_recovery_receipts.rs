@@ -133,3 +133,43 @@ pub(super) fn receipt_zip(bytes: &[u8]) -> Result<Vec<u8>, Box<dyn std::error::E
     zip.write_all(bytes)?;
     Ok(zip.finish()?.into_inner())
 }
+
+pub(super) fn check_authentication_denials(
+    stage: &crate::crate_release_tool_artifact::ToolchainStageRequest<'_>,
+    github: &Github,
+    receipt: &crate::crate_release_controller::CrateReleaseAdmissionReceipt,
+) -> Result<(), Box<dyn std::error::Error>> {
+    use crate::crate_release_tool_artifact::ToolchainStageRequest;
+    let mut wrong_intent_receipt = receipt.clone();
+    wrong_intent_receipt.intent.manifest_path = "other/Cargo.toml".to_owned();
+    *github.tool_archive.borrow_mut() = receipt_zip(&serde_json::to_vec(&wrong_intent_receipt)?)?;
+    assert!(
+        crate::crate_release_tool_artifact::fixture_authenticate_receipt(stage, github, github)
+            .is_err()
+    );
+    let mut wrong_link_intent = stage.intent.clone();
+    wrong_link_intent.environment = "different".to_owned();
+    let mut wrong_link_receipt = receipt.clone();
+    wrong_link_receipt.intent = wrong_link_intent.clone();
+    *github.tool_archive.borrow_mut() = receipt_zip(&serde_json::to_vec(&wrong_link_receipt)?)?;
+    let wrong_link_stage = ToolchainStageRequest {
+        intent: &wrong_link_intent,
+        ..*stage
+    };
+    assert!(
+        crate::crate_release_tool_artifact::fixture_authenticate_receipt(
+            &wrong_link_stage,
+            github,
+            github
+        )
+        .is_err()
+    );
+    let mut wrong_schema_receipt = receipt.clone();
+    wrong_schema_receipt.schema = 2;
+    *github.tool_archive.borrow_mut() = receipt_zip(&serde_json::to_vec(&wrong_schema_receipt)?)?;
+    assert!(
+        crate::crate_release_tool_artifact::fixture_authenticate_receipt(stage, github, github)
+            .is_err()
+    );
+    Ok(())
+}

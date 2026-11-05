@@ -21,6 +21,7 @@ fn sparse_fixture_rejects_exclusion_overlapping_a_package() -> Result<(), Box<dy
         .ok_or("workspace root missing")?;
     let status = std::process::Command::new("/usr/bin/git")
         .args(["clone", "--quiet", "--shared"])
+        .env("GIT_LFS_SKIP_SMUDGE", "1")
         .arg(root)
         .arg(&clone)
         .status()?;

@@ -9,7 +9,9 @@ use super::{
 
 #[path = "crate_release_controller_recovery_receipts.rs"]
 mod receipts;
-use receipts::{check_receipt_denials, check_receipt_revalidation, receipt_zip};
+use receipts::{
+    check_authentication_denials, check_receipt_denials, check_receipt_revalidation, receipt_zip,
+};
 
 #[test]
 pub(super) fn recovery_requires_fresh_human_approval_and_registry_absence()
@@ -150,37 +152,7 @@ pub(super) fn receipt_acquire_requires_current_approval_and_matching_evidence()
     let authenticated =
         crate::crate_release_tool_artifact::fixture_authenticate_receipt(&stage, &github, &github)?;
     assert_eq!(authenticated, receipt);
-    let mut wrong_intent_receipt = receipt.clone();
-    wrong_intent_receipt.intent.manifest_path = "other/Cargo.toml".to_owned();
-    *github.tool_archive.borrow_mut() = receipt_zip(&serde_json::to_vec(&wrong_intent_receipt)?)?;
-    assert!(
-        crate::crate_release_tool_artifact::fixture_authenticate_receipt(&stage, &github, &github)
-            .is_err()
-    );
-    let mut wrong_link_intent = intent.clone();
-    wrong_link_intent.environment = "different".to_owned();
-    let mut wrong_link_receipt = receipt.clone();
-    wrong_link_receipt.intent = wrong_link_intent.clone();
-    *github.tool_archive.borrow_mut() = receipt_zip(&serde_json::to_vec(&wrong_link_receipt)?)?;
-    let wrong_link_stage = ToolchainStageRequest {
-        intent: &wrong_link_intent,
-        ..stage
-    };
-    assert!(
-        crate::crate_release_tool_artifact::fixture_authenticate_receipt(
-            &wrong_link_stage,
-            &github,
-            &github
-        )
-        .is_err()
-    );
-    let mut wrong_schema_receipt = receipt.clone();
-    wrong_schema_receipt.schema = 2;
-    *github.tool_archive.borrow_mut() = receipt_zip(&serde_json::to_vec(&wrong_schema_receipt)?)?;
-    assert!(
-        crate::crate_release_tool_artifact::fixture_authenticate_receipt(&stage, &github, &github)
-            .is_err()
-    );
+    check_authentication_denials(&stage, &github, &receipt)?;
     *github.tool_archive.borrow_mut() = receipt_zip(&serde_json::to_vec(&receipt)?)?;
     assert!(
         !runner_path
