@@ -352,3 +352,93 @@ fn verified_shell_checks_real_signed_attestation_without_writable_home()
     );
     Ok(())
 }
+
+#[cfg(unix)]
+#[test]
+fn upgrade_git_init_receives_no_credentials() -> Result<(), Box<dyn std::error::Error>> {
+    use std::os::unix::fs::PermissionsExt as _;
+    let script = rendered_upgrade_publish_script()?;
+    assert!(script.contains("local_git init --bare"));
+    let function = script
+        .lines()
+        .find(|line| line.starts_with("local_git()"))
+        .ok_or("local git function")?;
+    let temp = tempfile::tempdir()?;
+    let fake = temp.path().join("git");
+    std::fs::write(&fake, b"#!/bin/sh\ntest -z \"${GH_TOKEN+x}${GITHUB_TOKEN+x}${CARGO_REGISTRY_TOKEN+x}${ACTIONS_ID_TOKEN_REQUEST_TOKEN+x}\"\n")?;
+    std::fs::set_permissions(&fake, std::fs::Permissions::from_mode(0o755))?;
+    let replacement = fake.to_str().ok_or("fixture path")?;
+    let body = format!(
+        "{}\nlocal_git init --bare",
+        function.replace("/usr/bin/git", replacement)
+    );
+    let output = std::process::Command::new("/bin/sh")
+        .arg("-c")
+        .arg(body)
+        .env("GH_TOKEN", "fixture")
+        .env("GITHUB_TOKEN", "fixture")
+        .env("CARGO_REGISTRY_TOKEN", "fixture")
+        .env("ACTIONS_ID_TOKEN_REQUEST_TOKEN", "fixture")
+        .output()?;
+    assert!(output.status.success(), "local Git inherited credentials");
+    Ok(())
+}
+
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+#[test]
+fn upgrade_git_init_ignores_hostile_loader() -> Result<(), Box<dyn std::error::Error>> {
+    let temp = tempfile::tempdir()?;
+    let library = temp.path().join("adversary.so");
+    let source =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/verified_gh_preload.c");
+    let compiled = std::process::Command::new("/usr/bin/cc")
+        .args(["-shared", "-fPIC", "-o"])
+        .arg(&library)
+        .arg(source)
+        .status()?;
+    assert!(compiled.success());
+    let marker = temp.path().join("executed");
+    let run = |body: &str| -> Result<std::process::Output, Box<dyn std::error::Error>> {
+        Ok(std::process::Command::new("/bin/sh")
+            .arg("-c")
+            .arg(body)
+            .arg("fixture")
+            .arg(&library)
+            .env_clear()
+            .env("PATH", "/usr/bin:/bin")
+            .env("GH_TOKEN", "offline-fixture")
+            .env("MARKER", &marker)
+            .output()?)
+    };
+    assert!(
+        run("export LD_PRELOAD=\"$1\"; /usr/bin/true")?
+            .status
+            .success()
+    );
+    assert!(marker.exists(), "preload adversary did not execute");
+    std::fs::remove_file(&marker)?;
+    let script = rendered_upgrade_publish_script()?;
+    let function = script
+        .lines()
+        .find(|line| line.starts_with("local_git()"))
+        .ok_or("local git function")?;
+    let body =
+        format!("export LD_PRELOAD=\"$1\"; {function}\nlocal_git init --bare --quiet \"$2\"");
+    let output = std::process::Command::new("/bin/sh")
+        .arg("-c")
+        .arg(body)
+        .arg("fixture")
+        .arg(&library)
+        .arg(temp.path().join("repo"))
+        .env_clear()
+        .env("PATH", "/usr/bin:/bin")
+        .env("GH_TOKEN", "offline-fixture")
+        .env("MARKER", &marker)
+        .output()?;
+    assert!(output.status.success(), "isolated Git init failed");
+    assert!(
+        !marker.exists(),
+        "loader adversary reached credentialed Git init"
+    );
+    Ok(())
+}

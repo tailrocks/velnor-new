@@ -21,7 +21,7 @@ transport=$(mktemp -d "$RUNNER_TEMP/velnor-upgrades-git.XXXXXXXX")
 trap 'rm -rf "$transport"' EXIT
 mkdir "$transport/template"
 export GIT_ALLOW_PROTOCOL=https
-/usr/bin/git init --bare --quiet --template="$transport/template" "$transport/repo"
+local_git init --bare --quiet --template="$transport/template" "$transport/repo"
 remote_git() { GIT_OBJECT_DIRECTORY="$objects" VELNOR_GIT_DIRECTORY="$transport/repo" @VERIFIED_GIT_TRANSPORT@ "$@"; }
 remote_url="https://github.com/$GITHUB_REPOSITORY.git"
 parents=(-p "$base")
