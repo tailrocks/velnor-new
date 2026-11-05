@@ -240,12 +240,7 @@ pub(super) fn observed_upload_is_derived_from_current_registry()
     assert!(record_verified_mutation(&wrong).is_err());
     reject_wrong_authentication(&obs);
     let mut wrong_intent = intent.clone();
-    wrong_intent.rust_version = if wrong_intent.rust_version == "1.97.1" {
-        "1.99.1"
-    } else {
-        "1.97.1"
-    }
-    .into();
+    wrong_intent.rust_version = "1.0.0".into();
     let wrong = CrateReleaseObservation {
         intent: &wrong_intent,
         ..obs
