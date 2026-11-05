@@ -279,8 +279,30 @@ pub(super) fn new_crate_reconciliation_accepts_verified_first_owner()
         )
     };
     assert!(check()?);
+    let completed = velnor_actions_orchestrator::crate_release_controller::reconcile_crate_release(
+        &receipt,
+        &intent,
+        &request,
+        &github,
+        &registry,
+        temp.path(),
+        test_git(),
+    )?;
+    assert_eq!(completed[0].tag_commit, request.source_sha);
     github.owner_match.set(false);
     assert!(check().is_err());
+    assert!(
+        velnor_actions_orchestrator::crate_release_controller::reconcile_crate_release(
+            &receipt,
+            &intent,
+            &request,
+            &github,
+            &registry,
+            temp.path(),
+            test_git(),
+        )
+        .is_err()
+    );
     Ok(())
 }
 

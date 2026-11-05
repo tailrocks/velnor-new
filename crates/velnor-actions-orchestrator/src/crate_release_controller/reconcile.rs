@@ -65,20 +65,32 @@ pub fn validate_reconciliation_receipt<G: GitHubAdmissionRead, R: CrateRegistryR
         if let CrateRegistryOwnership::Existing { owners } = &owners {
             require_reviewer_owner(github, owners, intent.trusted_reviewer_id)?;
         }
-        let approved_creation = matches!(planned.owners, CrateRegistryOwnership::NewCrate)
-            && matches!(owners, CrateRegistryOwnership::Existing { .. })
-            && planned.action == CrateReleaseAction::Publish
-            && intent
-                .new_crates
-                .as_ref()
-                .and_then(|creation| creation.packages.get(&package.name))
-                == Some(&package.version);
-        if planned.owners != owners && !approved_creation {
-            return Err(invalid());
-        }
+        verify_reconciliation_owners(intent, request, planned, &owners)?;
         all_visible &= observed_tag.is_some() && presence == CrateRegistryPresence::Present;
     }
     Ok(all_visible)
+}
+
+fn verify_reconciliation_owners(
+    intent: &CrateReleaseIntent,
+    request: &GitHubAdmissionRequest,
+    planned: &super::CrateReleasePlannedPackage,
+    observed: &CrateRegistryOwnership,
+) -> Result<(), OrchestratorError> {
+    let approved_creation = matches!(planned.owners, CrateRegistryOwnership::NewCrate)
+        && matches!(observed, CrateRegistryOwnership::Existing { .. })
+        && planned.action == CrateReleaseAction::Publish
+        && request.event == "workflow_dispatch"
+        && intent.authentication
+            == velnor_actions_contract::config::ReleaseAuthentication::BootstrapToken
+        && intent.new_crates.as_ref().is_some_and(|creation| {
+            creation.source_sha == request.source_sha
+                && creation.packages.get(&planned.source.name) == Some(&planned.source.version)
+        });
+    if planned.owners != *observed && !approved_creation {
+        return Err(internal("crate_release_reconciliation_receipt_invalid"));
+    }
+    Ok(())
 }
 
 pub fn wait_for_reconciliation_visibility(
@@ -176,7 +188,10 @@ pub fn reconcile_crate_release<G: GitHubAdmissionRead, R: CrateRegistryRead>(
     let target = tempfile::tempdir().map_err(|_| internal("crate_release_package_temp"))?;
     let mut completed = Vec::with_capacity(receipt.packages.len());
     for package in &receipt.packages {
-        let CrateRegistryOwnership::Existing { owners } = &package.owners else {
+        let (observed, _) =
+            inspect_crate_registry(registry, &package.source.name, &package.source.version)?;
+        verify_reconciliation_owners(intent, request, package, &observed)?;
+        let CrateRegistryOwnership::Existing { owners } = &observed else {
             return Err(internal("crate_release_new_owner_unverified"));
         };
         require_reviewer_owner(github, owners, intent.trusted_reviewer_id)?;
