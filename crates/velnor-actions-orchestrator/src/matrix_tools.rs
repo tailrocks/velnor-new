@@ -81,9 +81,9 @@ impl CrateSuite {
 }
 
 const NO_SUITE_TOOLS: &[SuiteTool] = &[];
-const GENERATE_VALIDATOR_TOOLS: &[SuiteTool] = &[SuiteTool::GenerateValidators];
 const OPENTOFU_TOOLS: &[SuiteTool] = &[SuiteTool::OpenTofuExecution];
 const GH_TOOLS: &[SuiteTool] = &[SuiteTool::GhExecution];
+const CLI_TOOLS: &[SuiteTool] = &[SuiteTool::GenerateValidators, SuiteTool::GhExecution];
 const ORCHESTRATOR_TOOLS: &[SuiteTool] = &[SuiteTool::GenerateValidators, SuiteTool::BunExecution, SuiteTool::GhExecution];
 
 const SUITE_TOOL_OWNERS: [CrateSuite; 14] = [
@@ -93,7 +93,7 @@ const SUITE_TOOL_OWNERS: [CrateSuite; 14] = [
     },
     CrateSuite {
         name: SuiteName::Cli,
-        tools: GENERATE_VALIDATOR_TOOLS,
+        tools: CLI_TOOLS,
     },
     CrateSuite {
         name: SuiteName::Contract,

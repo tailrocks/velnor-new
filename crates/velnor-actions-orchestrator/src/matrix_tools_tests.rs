@@ -64,7 +64,7 @@ fn gh_test_tool_is_provisioned_only_for_velnor() {
         let StepKind::Shell { run, .. } = step.kind else { panic!("expected shell step") };
         run.iter().any(|arg| arg.contains("gh@2.103.3"))
     };
-    for package in ["velnor-actions-orchestrator", "velnor-actions-workflow-renderer"] {
+    for package in ["velnor-actions-orchestrator", "velnor-actions-workflow-renderer", "velnor-actions-cli"] {
         task.display_name = package.to_owned();
         assert!(has_gh(WorkflowPolicy::VelnorRepositoryV1, &task));
         assert!(!has_gh(WorkflowPolicy::ConsumerV1, &task));
