@@ -3,15 +3,18 @@
 
 use std::path::Path;
 
+use crate::gc1_mbx_stub::{TAR_LIST_LOG_ENV, TAR_LOG_ENV};
 use crate::gc1_scene::Scene;
 use crate::gc1_ustar::{
-    Archive, long_window_frame, skippable_only, skippable_prefix, truncate_to, wrap_zstd,
+    Archive, decode_zstd, long_window_frame, skippable_only, skippable_prefix, truncate_to,
+    wrap_zstd,
 };
 
 use super::*;
 
 const SHADOW: &str = "refused-shadow";
 const UNREADABLE: &str = "payload unreadable";
+const NO_FILE: &str = "no regular file";
 const FORMAT: &str = "refused-format";
 const MEMBER_BOUND: u32 = 100_000;
 const ZERO_TAR: u64 = 10 * 1024;
@@ -37,9 +40,15 @@ enum Row {
     OuterGzip,
     TooManyMembers,
     V7Tar,
+    BeyondCalendarName,
+    DirsOnly,
+    TruncatedTar,
+    ListingDisagrees,
+    NamesListingFails,
+    TypesListingFails,
 }
 
-const ROWS: [Row; 19] = [
+const ROWS: [Row; 25] = [
     Row::SiblingFamily,
     Row::ParentTraversal,
     Row::SymlinkWriteThrough,
@@ -59,12 +68,35 @@ const ROWS: [Row; 19] = [
     Row::OuterGzip,
     Row::TooManyMembers,
     Row::V7Tar,
+    Row::BeyondCalendarName,
+    Row::DirsOnly,
+    Row::TruncatedTar,
+    Row::ListingDisagrees,
+    Row::NamesListingFails,
+    Row::TypesListingFails,
 ];
+
+fn gated(row: Row) -> bool {
+    matches!(
+        row,
+        Row::NestedGzipInZstd
+            | Row::NestedZstdInZstd
+            | Row::EmptyTar
+            | Row::ZeroTar
+            | Row::V7Tar
+            | Row::LongWindow31
+    )
+}
 
 fn token(row: Row) -> &'static str {
     match row {
         Row::NotZstd | Row::SkippableOnly | Row::OuterGzip => FORMAT,
-        Row::TruncatedFrame | Row::LongWindow31 => UNREADABLE,
+        Row::TruncatedFrame
+        | Row::LongWindow31
+        | Row::TruncatedTar
+        | Row::NamesListingFails
+        | Row::TypesListingFails => UNREADABLE,
+        Row::DirsOnly => NO_FILE,
         _ => SHADOW,
     }
 }
@@ -153,6 +185,9 @@ fn build_members(row: Row, scene: &Scene, outside: &Path) -> Result<(), Box<dyn 
             archive.hardlink("state/hl", "state/obj")?;
         }
         Row::NewlineName => archive.file("state/a\nb", b"must never land")?,
+        Row::BeyondCalendarName => {
+            archive.file_beyond_calendar("zz state/f", b"must never land")?;
+        }
         Row::AbsoluteName => archive.file(&absolute_target(), b"must never land")?,
         Row::Fifo => archive.fifo("state/pipe")?,
         Row::TooManyMembers => {
@@ -166,6 +201,14 @@ fn build_members(row: Row, scene: &Scene, outside: &Path) -> Result<(), Box<dyn 
     Ok(())
 }
 
+fn build_dirs(scene: &Scene) -> Result<(), Box<dyn Error>> {
+    let mut archive = Archive::create(&scene.payload())?;
+    archive.dir("state/")?;
+    archive.dir("state/cas/")?;
+    archive.finish()?;
+    Ok(())
+}
+
 fn build(row: Row, scene: &Scene, outside: &Path) -> Result<(), Box<dyn Error>> {
     std::fs::create_dir_all(scene.payload().parent().ok_or_else(|| fail("no parent"))?)?;
     match row {
@@ -174,6 +217,32 @@ fn build(row: Row, scene: &Scene, outside: &Path) -> Result<(), Box<dyn Error>> 
         }
         Row::EmptyTar | Row::ZeroTar => build_bare(row, scene),
         Row::V7Tar => build_v7(scene),
+        Row::DirsOnly => build_dirs(scene),
+        Row::TruncatedTar => {
+            let mut archive = Archive::create(&scene.payload())?;
+            archive.state_layout("old")?;
+            archive.file("state/cas/big", &vec![7u8; 100 * 1024])?;
+            archive.finish()?;
+            let plain = scene.scratch.join("plain.tar");
+            let cut = scene.scratch.join("cut.tar");
+            decode_zstd(&scene.payload(), &plain)?;
+            let keep = usize::try_from(std::fs::metadata(&plain)?.len() * 6 / 10)?;
+            truncate_to(&plain, &cut, keep)?;
+            wrap_zstd(&cut, &scene.payload())
+        }
+        Row::NamesListingFails | Row::TypesListingFails => {
+            let mut archive = Archive::create(&scene.payload())?;
+            archive.state_layout("old")?;
+            archive.finish()?;
+            Ok(())
+        }
+        Row::ListingDisagrees => {
+            let mut archive = Archive::create(&scene.payload())?;
+            archive.state_layout("old")?;
+            archive.symlink("state/lnk", "x")?;
+            archive.finish()?;
+            Ok(())
+        }
         Row::NotZstd
         | Row::SkippableOnly
         | Row::TruncatedFrame
@@ -189,9 +258,40 @@ fn check_row(row: Row) -> Result<(), Box<dyn Error>> {
     std::fs::create_dir_all(&outside)?;
     let key = scene.discover()?;
     build(row, &scene, &outside)?;
+    let extracts = matches!(row, Row::DirsOnly);
+    if !extracts {
+        scene.shim_tar_log()?;
+    }
+    if matches!(row, Row::ListingDisagrees) {
+        let real = std::env::var("PATH")?
+            .split(':')
+            .map(|d| format!("{d}/tar"))
+            .find(|p| Path::new(p).is_file())
+            .ok_or_else(|| fail("no tar"))?;
+        scene.install_shim("tar", &format!("#!/bin/sh\nfor a in \"$@\"; do case \"$a\" in -xf) printf 'extract\\n' >> \"$VELNOR_STUB_TAR_LOG\" ;; esac; done\ncase \" $* \" in *\" -tvf \"*) {real} \"$@\" | sed '$d' ;; *) exec {real} \"$@\" ;; esac\n"))?;
+    }
+    if let Row::NamesListingFails | Row::TypesListingFails = row {
+        let real = std::env::var("PATH")?
+            .split(':')
+            .map(|d| format!("{d}/tar"))
+            .find(|p| Path::new(p).is_file())
+            .ok_or_else(|| fail("no tar"))?;
+        let mode = if matches!(row, Row::NamesListingFails) {
+            "-tf"
+        } else {
+            "-tvf"
+        };
+        scene.install_shim("tar", &format!("#!/bin/sh\nfor a in \"$@\"; do case \"$a\" in -xf) printf 'extract\\n' >> \"$VELNOR_STUB_TAR_LOG\" ;; esac; done\ncase \" $* \" in *\" {mode} \"*) {real} \"$@\"; exit 2 ;; *) exec {real} \"$@\" ;; esac\n"))?;
+    }
     let before = scene.tree()?;
+    let log = scene.scratch.join("tar.log").display().to_string();
+    let listing = scene.scratch.join("tar.list").display().to_string();
+    let mut env = vec![(TAR_LOG_ENV, log.as_str())];
+    if gated(row) {
+        env.push((TAR_LIST_LOG_ENV, listing.as_str()));
+    }
     let output = scene
-        .recover(&key.exact(), &[], None)
+        .recover(&key.exact(), &env, None)
         .map_err(|error| fail(&format!("{row:?}: {error}")))?;
     scene
         .assert_cold(&output, token(row))
@@ -201,6 +301,14 @@ fn check_row(row: Row) -> Result<(), Box<dyn Error>> {
         .map_err(|error| fail(&format!("{row:?}: {error}")))?;
     if Path::new(&absolute_target()).exists() {
         return Err(fail(&format!("{row:?}: wrote to an absolute path")));
+    }
+    if gated(row) && scene.scratch.join("tar.list").exists() {
+        return Err(fail(&format!(
+            "{row:?}: listed before the first-header gate"
+        )));
+    }
+    if !extracts && scene.scratch.join("tar.log").exists() {
+        return Err(fail(&format!("{row:?}: reached the extraction")));
     }
     scene.finish()
 }
@@ -217,4 +325,42 @@ fn gc1_t53_recover_refuses_hostile_archives() -> Result<(), Box<dyn Error>> {
     } else {
         Err(fail(&failures.join(" | ")))
     }
+}
+
+#[test]
+#[cfg(target_os = "linux")]
+fn gc1_t53_recover_imports_names_that_look_like_columns() -> Result<(), Box<dyn Error>> {
+    let scene = Scene::new("lookalike", crate::gc1_t53::scripts()?)?;
+    let key = scene.discover()?;
+    std::fs::create_dir_all(scene.payload().parent().ok_or_else(|| fail("no parent"))?)?;
+    let names = [
+        "state/cas/2026-01-01 00:00 x",
+        "state/cas/with space",
+        "state/cas/ led",
+        "state/cas/trail ",
+        "state/cas/a 2026-01-01 00:00 x",
+    ];
+    let mut archive = Archive::create(&scene.payload())?;
+    archive.state_layout("old")?;
+    for name in names {
+        archive.file(name, b"kept")?;
+    }
+    archive.finish()?;
+    let output = scene.recover(&key.exact(), &[], None)?;
+    let record = std::fs::read_to_string(scene.recovery_record())
+        .map_err(|error| fail(&format!("recover wrote no record ({error}): {output}")))?;
+    if !record.contains("decision=exact-hit") {
+        return Err(fail(&format!(
+            "recover refused the names: {record}: {output}"
+        )));
+    }
+    for name in names {
+        let landed = scene.store().join(name.trim_start_matches("state/"));
+        let content = std::fs::read_to_string(&landed)
+            .map_err(|error| fail(&format!("the store lost {name:?} ({error}): {output}")))?;
+        if content != "kept" {
+            return Err(fail(&format!("the store changed {name:?}: {output}")));
+        }
+    }
+    scene.finish()
 }

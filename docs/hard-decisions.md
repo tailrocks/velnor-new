@@ -22,6 +22,14 @@ Clippy, Documentation, Unit and integration tests, and Doctests then run as
 parallel steps inside that job, using GitHub Actions native step concurrency
 (`background: true` members joined by one `wait-all`).
 
+**Amendment (doctests off).** No crate job has a Doctests step now. Every lib
+sets `doctest = false`, and the generator drops the Doctests lane for a
+package that has no doctest target. The `no-doctests` alint rule
+(`.alint.yml`) fails on a doc code fence, an indented doc code block or a
+`#[doc]` include in `crates/**/src/**/*.rs`. The lane comes back automatically
+when a doctest target appears. Owner standing grant 2026-11-02, velnor-fast-ci
+GOAL.md, decision X76.
+
 **Rationale.** Version 0.1.20 split every crate into Lint, Tests and
 Documentation jobs. Each repeated checkout, tool setup, cache restore and
 compilation, and the jobs ran as a chain (Tests needed Lint; Documentation
@@ -40,9 +48,10 @@ and overlaps the independent checks.
   (`target/velnor-clippy`, `target/velnor-doc`, seeded from the
   compiled-state family; owner standing grant 2026-11-02, velnor-fast-ci
   GOAL.md, decisions X61, X64 and X73) so Cargo's target-directory lock never
-  serializes test execution behind them. Doctests compile in their own lane
-  `target/velnor-doctest`. The compiled-state producer runs the crate jobs'
-  doctests lane record too. Tests reuse the built executables. Amended for decision X70
+  serializes test execution behind them. When a package has a doctest target,
+  doctests compile in their own lane `target/velnor-doctest`, and the
+  compiled-state producer runs the crate jobs' doctests lane record too (owner
+  standing grant 2026-11-02, velnor-fast-ci GOAL.md, decision X76). Tests reuse the built executables. Amended for decision X70
   (owner standing grant 2026-11-02, velnor-fast-ci GOAL.md, decisions.tsv X70):
   doctests used to share `target/` with the tests. On a filesystem without
   reflinks, MBX restores replayed outputs as hard links to one store object,

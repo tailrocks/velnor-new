@@ -24,8 +24,12 @@ MUST NOT become an unreviewed escape hatch.
 
 Integration tests SHOULD use a small declared entry point, such as
 `tests/integration.rs`, with related cases in `tests/cases/`. Do not create one
-Cargo test binary per case file. Doctests MUST run in a separate gate because
-Nextest does not execute them.
+Cargo test binary per case file. Doctests are off: every lib sets
+`doctest = false` and the `no-doctests` alint rule fails on a doc fence (owner
+standing grant 2026-11-02, velnor-fast-ci GOAL.md, decision X76; see
+[hard decision 1](../hard-decisions.md#1-one-job-per-crate-with-parallel-check-steps)).
+If a package gains a doctest target, doctests MUST run in a separate gate
+because Nextest does not execute them, and the generator adds that lane.
 
 ## Required behavior and test evidence
 

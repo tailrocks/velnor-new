@@ -8,6 +8,7 @@ use std::process::{Child, ChildStdin, Command, Stdio};
 
 const BLOCK: usize = 512;
 const ZERO_CHUNK: usize = 1024 * 1024;
+const BEYOND_CALENDAR_MTIME: u64 = 99_999_999_999_999_999;
 
 const SKIPPABLE_MAGIC: [u8; 4] = [0x50, 0x2a, 0x4d, 0x18];
 const SKIPPABLE_HEADER: usize = 8;
@@ -52,19 +53,23 @@ fn header(
     octal(&mut block[116..124], 0);
     octal(&mut block[124..136], size);
     octal(&mut block[136..148], 0);
-    block[148..156].fill(b' ');
     block[156] = typeflag;
     block[157..157 + link.len()].copy_from_slice(link.as_bytes());
     if ustar {
         block[257..263].copy_from_slice(b"ustar\0");
         block[263..265].copy_from_slice(b"00");
     }
+    seal(&mut block);
+    Ok(block)
+}
+
+fn seal(block: &mut [u8; BLOCK]) {
+    block[148..156].fill(b' ');
     let sum: u32 = block.iter().map(|byte| u32::from(*byte)).sum();
     let digits = format!("{sum:06o}");
     block[148..154].copy_from_slice(digits.as_bytes());
     block[154] = 0;
     block[155] = b' ';
-    Ok(block)
 }
 
 #[derive(Clone, Copy)]
@@ -180,6 +185,23 @@ impl Archive {
             content.len().next_multiple_of(BLOCK) - content.len()
         ])?;
         Ok(())
+    }
+
+    pub(crate) fn file_beyond_calendar(
+        &mut self,
+        name: &str,
+        content: &[u8],
+    ) -> Result<(), Box<dyn Error>> {
+        let mut block = header(name, b'0', content.len() as u64, "", 0o644, self.ustar)?;
+        block[136] = 0x80;
+        block[137..148].copy_from_slice(&u128::from(BEYOND_CALENDAR_MTIME).to_be_bytes()[5..16]);
+        seal(&mut block);
+        self.put(&block)?;
+        self.put(content)?;
+        self.put(&vec![
+            0u8;
+            content.len().next_multiple_of(BLOCK) - content.len()
+        ])
     }
 
     pub(crate) fn symlink(&mut self, name: &str, target: &str) -> Result<(), Box<dyn Error>> {
