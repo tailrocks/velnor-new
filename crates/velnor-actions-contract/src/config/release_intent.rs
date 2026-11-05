@@ -89,18 +89,7 @@ impl CrateReleaseIntent {
         if self.trusted_reviewer_id == 0 {
             return Err(invalid("trusted_reviewer_id", "invalid_reviewer"));
         }
-        let workflow = self
-            .required_workflow_path
-            .strip_prefix(".github/workflows/");
-        if !workflow.is_some_and(|name| {
-            !name.starts_with('.')
-                && std::path::Path::new(name)
-                    .extension()
-                    .is_some_and(|ext| ext == "yml" || ext == "yaml")
-                && name
-                    .bytes()
-                    .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b'.'))
-        }) {
+        if !super::release_validation::valid_release_workflow_path(&self.required_workflow_path) {
             return Err(invalid("required_workflow_path", "invalid_workflow_path"));
         }
         validate_manifest_path(file, &self.manifest_path)?;
@@ -108,12 +97,7 @@ impl CrateReleaseIntent {
         validate_intent_packages(self)?;
         super::release::validate_journal_predecessor(file, self.journal_predecessor.as_ref())?;
         validate_tag_name(file, &self.tag_template)?;
-        let compact: String = self
-            .tag_template
-            .chars()
-            .filter(|c| !c.is_whitespace())
-            .collect();
-        if compact != "{{package}}-v{{version}}" {
+        if !super::release_validation::supported_crate_tag_template(&self.tag_template) {
             return Err(invalid("tag_template", "unsupported_tag_template"));
         }
         if let Some(recovery) = &self.recovery

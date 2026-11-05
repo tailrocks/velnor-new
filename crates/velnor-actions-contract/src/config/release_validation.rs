@@ -279,3 +279,22 @@ pub(super) fn validate_publish_features(
     }
     Ok(())
 }
+
+pub(super) fn valid_release_workflow_path(path: &str) -> bool {
+    path.strip_prefix(".github/workflows/").is_some_and(|name| {
+        !name.starts_with('.')
+            && std::path::Path::new(name)
+                .extension()
+                .is_some_and(|ext| ext == "yml" || ext == "yaml")
+            && name
+                .bytes()
+                .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b'.'))
+    })
+}
+
+pub(super) fn supported_crate_tag_template(tag: &str) -> bool {
+    tag.chars()
+        .filter(|c| !c.is_whitespace())
+        .collect::<String>()
+        == "{{package}}-v{{version}}"
+}

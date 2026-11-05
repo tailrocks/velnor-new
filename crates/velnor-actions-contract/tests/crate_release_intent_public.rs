@@ -175,3 +175,47 @@ fn bootstrap_workspace_creation_has_explicit_source_and_each_version()
     config.validate("test")?;
     Ok(())
 }
+
+#[test]
+fn predecessor_accepts_only_first_run_attempt() -> Result<(), Box<dyn std::error::Error>> {
+    use velnor_actions_contract::config::RustReleaseConfig;
+    let mut input = serde_json::json!({"enabled":true,"registry":"crates-io","packages":["demo"],"required_workflow_path":".github/workflows/ci.yml","trusted_reviewer_id":1,"journal_predecessor":{"run_id":12,"run_attempt":1,"workflow_sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}});
+    serde_json::from_value::<RustReleaseConfig>(input.clone())?.validate("test")?;
+    for attempt in [0, 2] {
+        input["journal_predecessor"]["run_attempt"] = attempt.into();
+        assert!(
+            serde_json::from_value::<RustReleaseConfig>(input.clone())?
+                .validate("test")
+                .is_err()
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn release_config_rejects_unusable_admission_and_tag_settings()
+-> Result<(), Box<dyn std::error::Error>> {
+    use velnor_actions_contract::config::RustReleaseConfig;
+    let mut input = serde_json::json!({"enabled":true,"registry":"crates-io","packages":["demo"],"required_workflow_path":".github/workflows/ci.yml","trusted_reviewer_id":1});
+    serde_json::from_value::<RustReleaseConfig>(input.clone())?.validate("test")?;
+    for (field, value) in [
+        ("trusted_reviewer_id", serde_json::json!(0)),
+        ("required_workflow_path", serde_json::json!("../../ci.yml")),
+        (
+            "tag_name",
+            serde_json::json!("release/{{ package }}-{{ version }}"),
+        ),
+    ] {
+        let mut invalid = input.clone();
+        invalid[field] = value;
+        assert!(
+            serde_json::from_value::<RustReleaseConfig>(invalid)?
+                .validate("test")
+                .is_err()
+        );
+    }
+    input["enabled"] = false.into();
+    input["trusted_reviewer_id"] = 0.into();
+    serde_json::from_value::<RustReleaseConfig>(input)?.validate("test")?;
+    Ok(())
+}

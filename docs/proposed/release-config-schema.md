@@ -18,8 +18,10 @@ Reference for the typed config in `velnor-actions-contract`
 | `environment` | string | `"release"` | Nonempty, unpadded, `[A-Za-z0-9-_/]` plus `.`, no empty/`..` segments. Binds the publish jobs. |
 | `registry` | enum | `"crates-io"` | `"crates-io"` or `"git-tag"`. `git-tag` creates tags and GitHub releases only; see [git-tag mode](#git-tag-mode). |
 | `authentication` | enum | absent (`"trusted-publishing"` on crates.io) | `"trusted-publishing"` or `"bootstrap-token"` (kebab-case). Exactly one mode; modes never mix. Forbidden with `registry = "git-tag"` (`contradictory_authentication`). |
+| `required_workflow_path` | string | empty | Enabled crates.io releases require a workflow path under `.github/workflows/`, ending in `.yml` or `.yaml`. |
+| `trusted_reviewer_id` | integer | `0` | Enabled crates.io releases require a nonzero GitHub user ID for the protected environment reviewer. |
 | `release_pr` | bool | `true` | Whether release-plz preparation PRs run (crates.io only; `git-tag` releases are prepared by a maintainer's version bump). |
-| `tag_name` | string | `"{{ package }}-v{{ version }}"` | Safe charset, balanced braces, must contain both `{{package}}` and `{{version}}` (whitespace-insensitive). |
+| `tag_name` | string | `"{{ package }}-v{{ version }}"` | For crates.io, must be `{{ package }}-v{{ version }}` (whitespace-insensitive). Git-tag releases support safe templates containing both variables. |
 | `recovery` | table or absent | absent | Binds an exact package, version, and source for an approved recovery dispatch. Cannot coexist with `new_crates`. Bootstrap-token authentication requires either `recovery` or `new_crates`. |
 | `journal_predecessor` | table or absent | absent | Binds a reviewed previous run ID, attempt, and workflow SHA for durable release recovery. Protected admission currently accepts only attempt `1`. |
 | `version_groups` | string→string-list map | `{}` | Group names use package-name shape; members must be sorted, unique, listed in `packages`, and in at most one group. Non-lockstep: unchanged members are not forced to release. |
@@ -69,6 +71,8 @@ Single crate on trusted publishing:
 enabled = true
 manifest_path = "Cargo.toml"
 packages = ["demo-crate"]
+required_workflow_path = ".github/workflows/ci.yml"
+trusted_reviewer_id = 12345
 environment = "release"
 authentication = "trusted-publishing"
 release_pr = true
@@ -81,6 +85,8 @@ Multi-crate with a version group (members coordinate, unchanged stay):
 [stacks.rust.release]
 enabled = true
 packages = ["aaa-crate", "demo-crate"]
+required_workflow_path = ".github/workflows/ci.yml"
+trusted_reviewer_id = 12345
 
 [stacks.rust.release.version_groups]
 core = ["aaa-crate", "demo-crate"]
@@ -92,6 +98,8 @@ Bootstrap first publication:
 [stacks.rust.release]
 enabled = true
 packages = ["demo-crate"]
+required_workflow_path = ".github/workflows/ci.yml"
+trusted_reviewer_id = 12345
 authentication = "bootstrap-token"
 
 [stacks.rust.release.new_crates]

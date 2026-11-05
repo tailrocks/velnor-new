@@ -204,6 +204,26 @@ impl RustReleaseConfig {
         }
         self.validate_authentication(file)?;
         validate_tag_name(file, &self.tag_name)?;
+        if self.enabled && self.registry == ReleaseRegistry::CratesIo {
+            if self.trusted_reviewer_id == 0
+                || !super::release_validation::valid_release_workflow_path(
+                    &self.required_workflow_path,
+                )
+            {
+                return Err(ContractError::config(
+                    file,
+                    "stacks.rust.release",
+                    "invalid_release_admission",
+                ));
+            }
+            if !super::release_validation::supported_crate_tag_template(&self.tag_name) {
+                return Err(ContractError::config(
+                    file,
+                    "stacks.rust.release.tag_name",
+                    "unsupported_tag_template",
+                ));
+            }
+        }
         if let Some(recovery) = &self.recovery {
             validate_recovery(file, recovery)?;
         }
@@ -289,7 +309,7 @@ pub(crate) fn validate_journal_predecessor(
 ) -> Result<(), ContractError> {
     if predecessor.is_some_and(|prior| {
         prior.run_id == 0
-            || prior.run_attempt == 0
+            || prior.run_attempt != 1
             || !super::release_validation::is_full_sha(&prior.workflow_sha)
     }) {
         return Err(ContractError::config(
