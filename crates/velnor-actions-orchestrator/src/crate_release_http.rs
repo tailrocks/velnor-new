@@ -46,6 +46,18 @@ impl std::fmt::Debug for GitHubAdmissionHttp {
     }
 }
 
+fn has_unverified_pagination(route: &str, headers: &ureq::http::HeaderMap) -> bool {
+    let unpaginated_pulls = route.split_once('?').is_some_and(|(path, query)| {
+        path.ends_with("/pulls")
+            && path.bytes().filter(|byte| *byte == b'/').count() == 3
+            && !query.contains("&page=")
+    });
+    (route.contains("/git/matching-refs/")
+        || unpaginated_pulls
+        || (route.contains("/jobs?") && !route.contains("&page=")))
+        && headers.contains_key("link")
+}
+
 fn rehearsal_transport_error(error: &ureq::Error) -> OrchestratorError {
     #[cfg(test)]
     match error {
@@ -225,16 +237,7 @@ impl GitHubAdmissionHttp {
             .build()
             .call()
             .map_err(|error| rehearsal_transport_error(&error))?;
-        let unpaginated_pulls = route.split_once('?').is_some_and(|(path, query)| {
-            path.ends_with("/pulls")
-                && path.bytes().filter(|byte| *byte == b'/').count() == 3
-                && !query.contains("&page=")
-        });
-        if (route.contains("/git/matching-refs/")
-            || unpaginated_pulls
-            || (route.contains("/jobs?") && !route.contains("&page=")))
-            && response.headers().contains_key("link")
-        {
+        if has_unverified_pagination(route, response.headers()) {
             self.responses.borrow_mut().remove(&key);
             return Err(internal("crate_release_http_pagination_unverified"));
         }
