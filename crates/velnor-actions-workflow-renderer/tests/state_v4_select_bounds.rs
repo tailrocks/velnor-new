@@ -253,7 +253,13 @@ fn state_v4_select_supervisor_rejects_invalid_bounds_and_missing_python()
         )?;
     }
 
-    let path_without_python = scene.restricted_path(&["cat", "mkdir", "rm"])?;
+    let path_without_python =
+        scene.restricted_path(&["sh", "bash", "cat", "mkdir", "rm", "sort", "head"])?;
+    let gh_bin = std::path::Path::new(&gh.dir())
+        .parent()
+        .ok_or_else(|| fail("fake GH directory has no parent"))?
+        .join("bin");
+    let path_without_python = format!("{path_without_python}:{}", gh_bin.display());
     run_select_units(
         &scene,
         &gh,
