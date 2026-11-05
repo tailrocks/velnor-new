@@ -136,9 +136,9 @@ jobs:
     runs-on: ubuntu-26.04
     timeout-minutes: 5
     env:
-      VELNOR_ASSET_SHA256: ae9b45357917fb3dd279b2fb1d0f6df527ca1a3403fb4af3baf2043c56be4559
-      VELNOR_ASSET_URL: https://github.com/tailrocks/velnor-new/releases/download/v0.1.72/velnor-actions-0.1.72-x86_64-unknown-linux-gnu
-      VELNOR_RELEASE_COMMIT: ba363080a7707684fe8f2094851fa513687de73b
+      VELNOR_ASSET_SHA256: db7480b83238f85a2e4472d26ba57ca4ee4d6822353cbdaad690b1a2b963b26f
+      VELNOR_ASSET_URL: https://github.com/tailrocks/velnor-new/releases/download/v0.1.74/velnor-actions-0.1.74-x86_64-unknown-linux-gnu
+      VELNOR_RELEASE_COMMIT: c622bfb187556afb8d3ff3ca917a719e4bb7f32a
       VELNOR_RUN_KEY_ATTEMPT: ${{ needs.plan.outputs.plan_attempt || github.run_attempt }}
     permissions:
       contents: read
@@ -162,7 +162,7 @@ jobs:
       - &s4
         name: Acquire Velnor
         timeout-minutes: 6
-        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; d=\"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.72\"&&mkdir -p \"${d%/*}\"&&s=\"/opt/velnor/seed/generator/${d##*/}\"&&p=\"$VELNOR_ASSET_SHA256  \"&&if [ -f \"$s\" ]&&echo \"$p$s\"|sha256sum -c -;then cp \"$s\" \"$d\";else curl -fsSL --connect-timeout 15 --max-time 120 --retry 5 --retry-all-errors --retry-max-time 180 --proto '\\''=https'\\'' --tlsv1.2 \"$VELNOR_ASSET_URL\" -o \"$d\"&&echo \"$p$d\"|sha256sum -c -;fi&&chmod +x \"$d\"'"
+        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; d=\"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.74\"&&mkdir -p \"${d%/*}\"&&s=\"/opt/velnor/seed/generator/${d##*/}\"&&p=\"$VELNOR_ASSET_SHA256  \"&&if [ -f \"$s\" ]&&echo \"$p$s\"|sha256sum -c -;then cp \"$s\" \"$d\";else curl -fsSL --connect-timeout 15 --max-time 120 --retry 5 --retry-all-errors --retry-max-time 180 --proto '\\''=https'\\'' --tlsv1.2 \"$VELNOR_ASSET_URL\" -o \"$d\"&&echo \"$p$d\"|sha256sum -c -;fi&&chmod +x \"$d\"'"
       - &s5
         name: Download plan
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
@@ -176,7 +176,7 @@ jobs:
           VELNOR_CHECK_LANE_VARIANT: single
           VELNOR_INTERNAL_OP: execute-check-v1
           VELNOR_TASK_ID: stack/mise/maintenance-helpers/check/default
-        run: "env -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR \"$RUNNER_TEMP\"'/velnor/bin/velnor-actions-0.1.72'"
+        run: "env -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR \"$RUNNER_TEMP\"'/velnor/bin/velnor-actions-0.1.74'"
       - name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -229,9 +229,9 @@ jobs:
     timeout-minutes: 10
     env: &m7
       RUSTUP_AUTO_INSTALL: "0"
-      VELNOR_ASSET_SHA256: ae9b45357917fb3dd279b2fb1d0f6df527ca1a3403fb4af3baf2043c56be4559
-      VELNOR_ASSET_URL: https://github.com/tailrocks/velnor-new/releases/download/v0.1.72/velnor-actions-0.1.72-x86_64-unknown-linux-gnu
-      VELNOR_RELEASE_COMMIT: ba363080a7707684fe8f2094851fa513687de73b
+      VELNOR_ASSET_SHA256: db7480b83238f85a2e4472d26ba57ca4ee4d6822353cbdaad690b1a2b963b26f
+      VELNOR_ASSET_URL: https://github.com/tailrocks/velnor-new/releases/download/v0.1.74/velnor-actions-0.1.74-x86_64-unknown-linux-gnu
+      VELNOR_RELEASE_COMMIT: c622bfb187556afb8d3ff3ca917a719e4bb7f32a
       VELNOR_RUN_KEY_ATTEMPT: ${{ github.run_attempt }}
     permissions:
       contents: read
@@ -388,7 +388,7 @@ jobs:
           VELNOR_DEFAULT_REF: ${{ format('refs/heads/{0}', github.event.repository.default_branch) }}
           VELNOR_MBX_BUNDLE_TOOLCHAIN: ${{ env.VELNOR_TOOL_RUST }}
           VELNOR_MBX_BUNDLE_VERSION: ${{ env.VELNOR_TOOL_MR_BOXINGTON }}
-        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; case \"$RUNNER_TEMP\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''RUNNER_TEMP must be absolute'\\'' >&2; exit 1 ;; esac; d=\"$RUNNER_TEMP/velnor/cache-keys\"; rm -rf \"$d\"; mkdir -p \"$d\"; s256() { sha256sum \"$1\" > \"$d/sum\"; h=; rest=; read -r h rest < \"$d/sum\" || [ -n \"$h\" ]; case \"$h\" in '\\'''\\''|*[!0-9a-f]*) printf '\\''%s\\n'\\'' '\\''sha256sum returned no digest'\\'' >&2; exit 1 ;; esac; [ \"${#h}\" -eq 64 ] || exit 1; }; uname -s > \"$d/platform\"; uname -m >> \"$d/platform\"; default_ref=\"${VELNOR_DEFAULT_REF:-}\"; trust=none; if [ \"${GITHUB_EVENT_NAME:-}\" = push ] && [ -n \"${default_ref#refs/heads/}\" ] && [ \"${GITHUB_REF:-}\" = \"$default_ref\" ] && [ \"${GITHUB_REF_PROTECTED:-}\" = true ]; then trust=trusted; fi; check_key() { [ \"${#1}\" -le 512 ] || { printf '\\''cache key exceeds 512 bytes: %s\\n'\\'' \"$1\" >&2; exit 1; }; }; printf '\\''%s\\n'\\'' \"family=sources\" \"schema=2\" \"$RUNNER_TEMP/velnor/cargo/registry/index\" \"$RUNNER_TEMP/velnor/cargo/registry/cache\" \"$RUNNER_TEMP/velnor/cargo/git/db\" > \"$d/sources-compat\"; cat \"$d/platform\" >> \"$d/sources-compat\"; printf '\\''%s\\n'\\'' \"$RUNNER_TEMP/velnor/cargo\" >> \"$d/sources-compat\"; s256 \"$d/sources-compat\"; compat=\"s256-$h\"; : > \"$d/sources-locks\"; s256 \"$GITHUB_WORKSPACE/Cargo.lock\"; printf '\\''%s\\t%s\\n'\\'' \".\" \"$h\" >> \"$d/sources-locks\"; s256 \"$GITHUB_WORKSPACE/crates/velnor-runner/Cargo.lock\"; printf '\\''%s\\t%s\\n'\\'' \"crates/velnor-runner\" \"$h\" >> \"$d/sources-locks\"; LC_ALL=C sort \"$d/sources-locks\" > \"$d/sources-snapshot\"; s256 \"$d/sources-snapshot\"; snap=\"s256-$h\"; trusted=\"velnor-v2-sources-trusted-$compat-\"; key=\"$trusted$snap\"; check_key \"$key\"; save=false; [ \"$trust\" = none ] || save=true; printf '\\''%s\\n'\\'' \"sources_key=$key\" \"sources_save=$save\" \"sources_snapshot=$snap\" '\\''sources_restore_keys<<VELNOR_CACHE_KEYS_EOF'\\'' >> \"$GITHUB_OUTPUT\"; printf '\\''%s\\n'\\'' \"$trusted\" '\\''VELNOR_CACHE_KEYS_EOF'\\'' >> \"$GITHUB_OUTPUT\"; printf '\\''velnor: cache trust=%s sources key=%s save=%s\\n'\\'' \"$trust\" \"$key\" \"$save\"; lock_h=; if [ -f \"$GITHUB_WORKSPACE/Cargo.lock\" ] && [ ! -L \"$GITHUB_WORKSPACE/Cargo.lock\" ]; then s256 \"$GITHUB_WORKSPACE/Cargo.lock\"; lock_h=\"s256-$h\"; fi; if [ -z \"$lock_h\" ]; then printf '\\''%s\\n'\\'' absent > \"$d/absent\"; s256 \"$d/absent\"; lock_h=\"s256-$h\"; fi; if (cd \"$GITHUB_WORKSPACE\" && git ls-files -s -- '\\''.cargo'\\'' '\\'':(glob)crates/velnor-actions-*/**'\\'' '\\'':(glob)crates/velnor-archive-guard/**'\\'' '\\'':(glob)crates/velnor-runner/Cargo.toml'\\'' '\\'':(glob)crates/velnor-runner/crates/*/**'\\'' '\\'':(glob)rust-toolchain*'\\'' '\\''Cargo.toml'\\'' '\\''crates/velnor-actions-actionlint'\\'' '\\''crates/velnor-actions-ansible'\\'' '\\''crates/velnor-actions-bun'\\'' '\\''crates/velnor-actions-cli'\\'' '\\''crates/velnor-actions-contract'\\'' '\\''crates/velnor-actions-dbt'\\'' '\\''crates/velnor-actions-freshness'\\'' '\\''crates/velnor-actions-gradle'\\'' '\\''crates/velnor-actions-mise'\\'' '\\''crates/velnor-actions-orchestrator'\\'' '\\''crates/velnor-actions-rust'\\'' '\\''crates/velnor-actions-tofu'\\'' '\\''crates/velnor-actions-workflow-renderer'\\'' '\\''crates/velnor-archive-guard'\\'') > \"$d/rust-inputs-0\" 2>/dev/null; then s256 \"$d/rust-inputs-0\"; ri_h=\"s256-$h\"; printf '\\''%s\\n'\\'' \"lock=$lock_h\" \"rust_inputs=$ri_h\" \"task_set=s256-72d71456e7875d08eab731ac8fac1f652852127ce0d7f34cbe8c2cbb601e6c30\" \"producer_recipe=s256-70a5a93d547409f91f665adbcc632822dfda46ea7d1a357b6cd2fbf7c0d00a84\" > \"$d/snapshot\"; s256 \"$d/snapshot\"; snap=\"s256-$h\"; printf '\\''%s\\n'\\'' \"state_root_snapshot=$snap\" >> \"$GITHUB_OUTPUT\"; else printf '\\''%s\\n'\\'' '\\''::warning::state snapshot unavailable for root root'\\''; fi; uname -s > \"$d/uname_s\" || :; uname_s=; read -r uname_s < \"$d/uname_s\" || :; uname -m > \"$d/uname_m\" || :; uname_m=; read -r uname_m < \"$d/uname_m\" || :; printf '\\''%s\\n'\\'' \"family=state\" \"schema=4\" '\\''$RUNNER_TEMP/velnor-gc1/state'\\'' \"unit=union\" \"mbx=${VELNOR_MBX_BUNDLE_VERSION}\" \"toolchain=${VELNOR_MBX_BUNDLE_TOOLCHAIN}\" \"root=.\" \"MBX_SHARE_OUT_DIR=1\" \"MBX_CC=0\" \"SOURCE_DATE_EPOCH=0\" \"MBX_BUILD_SCRIPT_EXECUTION=hybrid\" \"uname_s=$uname_s\" \"uname_m=$uname_m\" \"ImageOS=${ImageOS-}\" \"store=$RUNNER_TEMP/velnor/mbx\" \"checkout=$GITHUB_WORKSPACE\" > \"$d/compat\"; s256 \"$d/compat\"; printf '\\''%s\\n'\\'' \"state_root_compat=s256-$h\" >> \"$GITHUB_OUTPUT\"; lock_h=; if [ -f \"$GITHUB_WORKSPACE/crates/velnor-runner/Cargo.lock\" ] && [ ! -L \"$GITHUB_WORKSPACE/crates/velnor-runner/Cargo.lock\" ]; then s256 \"$GITHUB_WORKSPACE/crates/velnor-runner/Cargo.lock\"; lock_h=\"s256-$h\"; fi; if [ -z \"$lock_h\" ]; then printf '\\''%s\\n'\\'' absent > \"$d/absent\"; s256 \"$d/absent\"; lock_h=\"s256-$h\"; fi; if (cd \"$GITHUB_WORKSPACE\" && git ls-files -s -- '\\''.cargo'\\'' '\\'':(glob)crates/rust-toolchain*'\\'' '\\'':(glob)crates/velnor-runner/rust-toolchain*'\\'' '\\'':(glob)rust-toolchain*'\\'' '\\''crates/.cargo'\\'' '\\''crates/velnor-runner/.cargo'\\'' '\\''crates/velnor-runner/Cargo.toml'\\'' '\\''crates/velnor-runner/crates/velnor-resource-probe'\\'' '\\''crates/velnor-runner/crates/velnor-runner-attestation'\\'' '\\''crates/velnor-runner/crates/velnor-runner-cli'\\'' '\\''crates/velnor-runner/crates/velnor-runner-core'\\'' '\\''crates/velnor-runner/crates/velnor-runner-github'\\'' '\\''crates/velnor-runner/crates/velnor-runner-host'\\'') > \"$d/rust-inputs-1\" 2>/dev/null; then s256 \"$d/rust-inputs-1\"; ri_h=\"s256-$h\"; printf '\\''%s\\n'\\'' \"lock=$lock_h\" \"rust_inputs=$ri_h\" \"task_set=s256-7552a0c8f0ae217c82b73fb3b6ef8e15d8f32e826405e163b82fb907e41d41c1\" \"producer_recipe=s256-e05ded4d244123c50bb3b1279d638f1930068f8d03f647b4f635d652fd282ec2\" > \"$d/snapshot\"; s256 \"$d/snapshot\"; snap=\"s256-$h\"; printf '\\''%s\\n'\\'' \"state_crates_velnor_runner_snapshot=$snap\" >> \"$GITHUB_OUTPUT\"; else printf '\\''%s\\n'\\'' '\\''::warning::state snapshot unavailable for root crates-velnor-runner'\\''; fi; uname -s > \"$d/uname_s\" || :; uname_s=; read -r uname_s < \"$d/uname_s\" || :; uname -m > \"$d/uname_m\" || :; uname_m=; read -r uname_m < \"$d/uname_m\" || :; printf '\\''%s\\n'\\'' \"family=state\" \"schema=4\" '\\''$RUNNER_TEMP/velnor-gc1/state'\\'' \"unit=union\" \"mbx=${VELNOR_MBX_BUNDLE_VERSION}\" \"toolchain=${VELNOR_MBX_BUNDLE_TOOLCHAIN}\" \"root=crates/velnor-runner\" \"MBX_SHARE_OUT_DIR=1\" \"MBX_CC=0\" \"SOURCE_DATE_EPOCH=0\" \"MBX_BUILD_SCRIPT_EXECUTION=hybrid\" \"uname_s=$uname_s\" \"uname_m=$uname_m\" \"ImageOS=${ImageOS-}\" \"store=$RUNNER_TEMP/velnor/mbx\" \"checkout=$GITHUB_WORKSPACE\" > \"$d/compat\"; s256 \"$d/compat\"; printf '\\''%s\\n'\\'' \"state_crates_velnor_runner_compat=s256-$h\" >> \"$GITHUB_OUTPUT\"; printf '\\''%s\\n'\\'' \"trust=$trust\" >> \"$GITHUB_OUTPUT\"'"
+        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; case \"$RUNNER_TEMP\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''RUNNER_TEMP must be absolute'\\'' >&2; exit 1 ;; esac; d=\"$RUNNER_TEMP/velnor/cache-keys\"; rm -rf \"$d\"; mkdir -p \"$d\"; s256() { sha256sum \"$1\" > \"$d/sum\"; h=; rest=; read -r h rest < \"$d/sum\" || [ -n \"$h\" ]; case \"$h\" in '\\'''\\''|*[!0-9a-f]*) printf '\\''%s\\n'\\'' '\\''sha256sum returned no digest'\\'' >&2; exit 1 ;; esac; [ \"${#h}\" -eq 64 ] || exit 1; }; uname -s > \"$d/platform\"; uname -m >> \"$d/platform\"; default_ref=\"${VELNOR_DEFAULT_REF:-}\"; trust=none; if [ \"${GITHUB_EVENT_NAME:-}\" = push ] && [ -n \"${default_ref#refs/heads/}\" ] && [ \"${GITHUB_REF:-}\" = \"$default_ref\" ] && [ \"${GITHUB_REF_PROTECTED:-}\" = true ]; then trust=trusted; fi; check_key() { [ \"${#1}\" -le 512 ] || { printf '\\''cache key exceeds 512 bytes: %s\\n'\\'' \"$1\" >&2; exit 1; }; }; printf '\\''%s\\n'\\'' \"family=sources\" \"schema=2\" \"$RUNNER_TEMP/velnor/cargo/registry/index\" \"$RUNNER_TEMP/velnor/cargo/registry/cache\" \"$RUNNER_TEMP/velnor/cargo/git/db\" > \"$d/sources-compat\"; cat \"$d/platform\" >> \"$d/sources-compat\"; printf '\\''%s\\n'\\'' \"$RUNNER_TEMP/velnor/cargo\" >> \"$d/sources-compat\"; s256 \"$d/sources-compat\"; compat=\"s256-$h\"; : > \"$d/sources-locks\"; s256 \"$GITHUB_WORKSPACE/Cargo.lock\"; printf '\\''%s\\t%s\\n'\\'' \".\" \"$h\" >> \"$d/sources-locks\"; s256 \"$GITHUB_WORKSPACE/crates/velnor-runner/Cargo.lock\"; printf '\\''%s\\t%s\\n'\\'' \"crates/velnor-runner\" \"$h\" >> \"$d/sources-locks\"; LC_ALL=C sort \"$d/sources-locks\" > \"$d/sources-snapshot\"; s256 \"$d/sources-snapshot\"; snap=\"s256-$h\"; trusted=\"velnor-v2-sources-trusted-$compat-\"; key=\"$trusted$snap\"; check_key \"$key\"; save=false; [ \"$trust\" = none ] || save=true; printf '\\''%s\\n'\\'' \"sources_key=$key\" \"sources_save=$save\" \"sources_snapshot=$snap\" '\\''sources_restore_keys<<VELNOR_CACHE_KEYS_EOF'\\'' >> \"$GITHUB_OUTPUT\"; printf '\\''%s\\n'\\'' \"$trusted\" '\\''VELNOR_CACHE_KEYS_EOF'\\'' >> \"$GITHUB_OUTPUT\"; printf '\\''velnor: cache trust=%s sources key=%s save=%s\\n'\\'' \"$trust\" \"$key\" \"$save\"; lock_h=; if [ -f \"$GITHUB_WORKSPACE/Cargo.lock\" ] && [ ! -L \"$GITHUB_WORKSPACE/Cargo.lock\" ]; then s256 \"$GITHUB_WORKSPACE/Cargo.lock\"; lock_h=\"s256-$h\"; fi; if [ -z \"$lock_h\" ]; then printf '\\''%s\\n'\\'' absent > \"$d/absent\"; s256 \"$d/absent\"; lock_h=\"s256-$h\"; fi; if (cd \"$GITHUB_WORKSPACE\" && git ls-files -s -- '\\''.cargo'\\'' '\\'':(glob)crates/velnor-actions-*/**'\\'' '\\'':(glob)crates/velnor-archive-guard/**'\\'' '\\'':(glob)crates/velnor-runner/Cargo.toml'\\'' '\\'':(glob)crates/velnor-runner/crates/*/**'\\'' '\\'':(glob)rust-toolchain*'\\'' '\\''Cargo.toml'\\'' '\\''crates/velnor-actions-actionlint'\\'' '\\''crates/velnor-actions-ansible'\\'' '\\''crates/velnor-actions-bun'\\'' '\\''crates/velnor-actions-cli'\\'' '\\''crates/velnor-actions-contract'\\'' '\\''crates/velnor-actions-dbt'\\'' '\\''crates/velnor-actions-freshness'\\'' '\\''crates/velnor-actions-gradle'\\'' '\\''crates/velnor-actions-mise'\\'' '\\''crates/velnor-actions-orchestrator'\\'' '\\''crates/velnor-actions-rust'\\'' '\\''crates/velnor-actions-tofu'\\'' '\\''crates/velnor-actions-workflow-renderer'\\'' '\\''crates/velnor-archive-guard'\\'') > \"$d/rust-inputs-0\" 2>/dev/null; then s256 \"$d/rust-inputs-0\"; ri_h=\"s256-$h\"; printf '\\''%s\\n'\\'' \"lock=$lock_h\" \"rust_inputs=$ri_h\" \"task_set=s256-72d71456e7875d08eab731ac8fac1f652852127ce0d7f34cbe8c2cbb601e6c30\" \"producer_recipe=s256-c5964c9c5b5cf6acce56cc22cb287d74323ea643254b9eaf2468127e332ead26\" > \"$d/snapshot\"; s256 \"$d/snapshot\"; snap=\"s256-$h\"; printf '\\''%s\\n'\\'' \"state_root_snapshot=$snap\" >> \"$GITHUB_OUTPUT\"; else printf '\\''%s\\n'\\'' '\\''::warning::state snapshot unavailable for root root'\\''; fi; uname -s > \"$d/uname_s\" || :; uname_s=; read -r uname_s < \"$d/uname_s\" || :; uname -m > \"$d/uname_m\" || :; uname_m=; read -r uname_m < \"$d/uname_m\" || :; printf '\\''%s\\n'\\'' \"family=state\" \"schema=4\" '\\''$RUNNER_TEMP/velnor-gc1/state'\\'' \"unit=union\" \"mbx=${VELNOR_MBX_BUNDLE_VERSION}\" \"toolchain=${VELNOR_MBX_BUNDLE_TOOLCHAIN}\" \"root=.\" \"MBX_SHARE_OUT_DIR=1\" \"MBX_CC=0\" \"SOURCE_DATE_EPOCH=0\" \"MBX_BUILD_SCRIPT_EXECUTION=hybrid\" \"uname_s=$uname_s\" \"uname_m=$uname_m\" \"ImageOS=${ImageOS-}\" \"store=$RUNNER_TEMP/velnor/mbx\" \"checkout=$GITHUB_WORKSPACE\" > \"$d/compat\"; s256 \"$d/compat\"; printf '\\''%s\\n'\\'' \"state_root_compat=s256-$h\" >> \"$GITHUB_OUTPUT\"; lock_h=; if [ -f \"$GITHUB_WORKSPACE/crates/velnor-runner/Cargo.lock\" ] && [ ! -L \"$GITHUB_WORKSPACE/crates/velnor-runner/Cargo.lock\" ]; then s256 \"$GITHUB_WORKSPACE/crates/velnor-runner/Cargo.lock\"; lock_h=\"s256-$h\"; fi; if [ -z \"$lock_h\" ]; then printf '\\''%s\\n'\\'' absent > \"$d/absent\"; s256 \"$d/absent\"; lock_h=\"s256-$h\"; fi; if (cd \"$GITHUB_WORKSPACE\" && git ls-files -s -- '\\''.cargo'\\'' '\\'':(glob)crates/rust-toolchain*'\\'' '\\'':(glob)crates/velnor-runner/rust-toolchain*'\\'' '\\'':(glob)rust-toolchain*'\\'' '\\''crates/.cargo'\\'' '\\''crates/velnor-runner/.cargo'\\'' '\\''crates/velnor-runner/Cargo.toml'\\'' '\\''crates/velnor-runner/crates/velnor-resource-probe'\\'' '\\''crates/velnor-runner/crates/velnor-runner-attestation'\\'' '\\''crates/velnor-runner/crates/velnor-runner-cli'\\'' '\\''crates/velnor-runner/crates/velnor-runner-core'\\'' '\\''crates/velnor-runner/crates/velnor-runner-github'\\'' '\\''crates/velnor-runner/crates/velnor-runner-host'\\'') > \"$d/rust-inputs-1\" 2>/dev/null; then s256 \"$d/rust-inputs-1\"; ri_h=\"s256-$h\"; printf '\\''%s\\n'\\'' \"lock=$lock_h\" \"rust_inputs=$ri_h\" \"task_set=s256-7552a0c8f0ae217c82b73fb3b6ef8e15d8f32e826405e163b82fb907e41d41c1\" \"producer_recipe=s256-8e3332e9faef4ea7a788992d51f3a0f91a560a22855422ae077fb33b0a498de1\" > \"$d/snapshot\"; s256 \"$d/snapshot\"; snap=\"s256-$h\"; printf '\\''%s\\n'\\'' \"state_crates_velnor_runner_snapshot=$snap\" >> \"$GITHUB_OUTPUT\"; else printf '\\''%s\\n'\\'' '\\''::warning::state snapshot unavailable for root crates-velnor-runner'\\''; fi; uname -s > \"$d/uname_s\" || :; uname_s=; read -r uname_s < \"$d/uname_s\" || :; uname -m > \"$d/uname_m\" || :; uname_m=; read -r uname_m < \"$d/uname_m\" || :; printf '\\''%s\\n'\\'' \"family=state\" \"schema=4\" '\\''$RUNNER_TEMP/velnor-gc1/state'\\'' \"unit=union\" \"mbx=${VELNOR_MBX_BUNDLE_VERSION}\" \"toolchain=${VELNOR_MBX_BUNDLE_TOOLCHAIN}\" \"root=crates/velnor-runner\" \"MBX_SHARE_OUT_DIR=1\" \"MBX_CC=0\" \"SOURCE_DATE_EPOCH=0\" \"MBX_BUILD_SCRIPT_EXECUTION=hybrid\" \"uname_s=$uname_s\" \"uname_m=$uname_m\" \"ImageOS=${ImageOS-}\" \"store=$RUNNER_TEMP/velnor/mbx\" \"checkout=$GITHUB_WORKSPACE\" > \"$d/compat\"; s256 \"$d/compat\"; printf '\\''%s\\n'\\'' \"state_crates_velnor_runner_compat=s256-$h\" >> \"$GITHUB_OUTPUT\"; printf '\\''%s\\n'\\'' \"trust=$trust\" >> \"$GITHUB_OUTPUT\"'"
       - name: Select attested state
         id: state-select
         env:
@@ -411,7 +411,7 @@ jobs:
           VELNOR_INTERNAL_OP: write-request-v1
           VELNOR_REQUEST_FILE: ${{ runner.temp }}/velnor/request/plan-v1-request.json
           VELNOR_NAMED_CHECK_LANES_JSON: "{\"check-maintenance-helpers\":[{\"job_id\":\"check-maintenance-helpers\"}]}"
-        run: &r6 "\"$RUNNER_TEMP\"'/velnor/bin/velnor-actions-0.1.72'"
+        run: &r6 "\"$RUNNER_TEMP\"'/velnor/bin/velnor-actions-0.1.74'"
       - name: Resolve qualification predecessor
         if: github.event_name == 'workflow_dispatch'
         env:
@@ -485,7 +485,9 @@ jobs:
           fetch-depth: ${{ github.event_name == 'push' && '1' || '2' }}
           persist-credentials: "false"
       - *s2
-      - *s4
+      - name: Acquire Velnor
+        timeout-minutes: 6
+        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; d=\"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.72\"&&mkdir -p \"${d%/*}\"&&s=\"/opt/velnor/seed/generator/${d##*/}\"&&p=\"$VELNOR_ASSET_SHA256  \"&&if [ -f \"$s\" ]&&echo \"$p$s\"|sha256sum -c -;then cp \"$s\" \"$d\";else curl -fsSL --connect-timeout 15 --max-time 120 --retry 5 --retry-all-errors --retry-max-time 180 --proto '\\''=https'\\'' --tlsv1.2 \"$VELNOR_ASSET_URL\" -o \"$d\"&&echo \"$p$d\"|sha256sum -c -;fi&&chmod +x \"$d\"'"
       - name: Prepare pinned tools
         env: *m9
         run: mise --no-config --no-env --no-hooks install gh@2.103.3
@@ -498,18 +500,18 @@ jobs:
           GH_REPO: ${{ github.repository }}
           GH_TOKEN: ${{ github.token }}
           VELNOR_INTERNAL_OP: fetch-reports-v1
-        run: *r6
+        run: &r7 "\"$RUNNER_TEMP\"'/velnor/bin/velnor-actions-0.1.72'"
       - name: Assemble group ledgers
         env:
           VELNOR_INTERNAL_OP: assemble-group-ledgers-v1
-        run: *r6
+        run: *r7
       - name: Write request
         env:
           VELNOR_INTERNAL_OP: write-request-v1
           VELNOR_NEEDS_JSON: ${{ toJSON(needs) }}
           VELNOR_NEEDS_EXPECTED: "[\"alint\",\"cargo-deny\",\"cargo-machete\",\"check-maintenance-helpers\",\"jactionlint\",\"plan\",\"rust-velnor-actions-actionlint\",\"rust-velnor-actions-ansible\",\"rust-velnor-actions-bun\",\"rust-velnor-actions-cli\",\"rust-velnor-actions-contract\",\"rust-velnor-actions-dbt\",\"rust-velnor-actions-gradle\",\"rust-velnor-actions-mise\",\"rust-velnor-actions-orchestrator\",\"rust-velnor-actions-rust\",\"rust-velnor-actions-tofu\",\"rust-velnor-actions-workflow-renderer\",\"rust-velnor-resource-probe\",\"rust-velnor-runner-attestation\",\"rust-velnor-runner-cli\",\"rust-velnor-runner-core\",\"rust-velnor-runner-github\",\"rust-velnor-runner-host\"]"
           VELNOR_REQUEST_FILE: ${{ runner.temp }}/velnor/request/merge-v1-request.json
-        run: *r6
+        run: *r7
       - name: Merge reports
         env:
           GH_TOKEN: ${{ github.token }}
@@ -517,7 +519,7 @@ jobs:
           VELNOR_NEEDS_JSON: ${{ toJSON(needs) }}
           VELNOR_NEEDS_EXPECTED: "[\"alint\",\"cargo-deny\",\"cargo-machete\",\"check-maintenance-helpers\",\"jactionlint\",\"plan\",\"rust-velnor-actions-actionlint\",\"rust-velnor-actions-ansible\",\"rust-velnor-actions-bun\",\"rust-velnor-actions-cli\",\"rust-velnor-actions-contract\",\"rust-velnor-actions-dbt\",\"rust-velnor-actions-gradle\",\"rust-velnor-actions-mise\",\"rust-velnor-actions-orchestrator\",\"rust-velnor-actions-rust\",\"rust-velnor-actions-tofu\",\"rust-velnor-actions-workflow-renderer\",\"rust-velnor-resource-probe\",\"rust-velnor-runner-attestation\",\"rust-velnor-runner-cli\",\"rust-velnor-runner-core\",\"rust-velnor-runner-github\",\"rust-velnor-runner-host\"]"
           VELNOR_REQUEST_FILE: ${{ runner.temp }}/velnor/request/merge-v1-request.json
-        run: *r6
+        run: *r7
       - name: Publish final report
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -551,9 +553,9 @@ jobs:
       MBX_SUMMARY: ci
       RUSTUP_AUTO_INSTALL: "0"
       SOURCE_DATE_EPOCH: "0"
-      VELNOR_ASSET_SHA256: ae9b45357917fb3dd279b2fb1d0f6df527ca1a3403fb4af3baf2043c56be4559
-      VELNOR_ASSET_URL: https://github.com/tailrocks/velnor-new/releases/download/v0.1.72/velnor-actions-0.1.72-x86_64-unknown-linux-gnu
-      VELNOR_RELEASE_COMMIT: ba363080a7707684fe8f2094851fa513687de73b
+      VELNOR_ASSET_SHA256: db7480b83238f85a2e4472d26ba57ca4ee4d6822353cbdaad690b1a2b963b26f
+      VELNOR_ASSET_URL: https://github.com/tailrocks/velnor-new/releases/download/v0.1.74/velnor-actions-0.1.74-x86_64-unknown-linux-gnu
+      VELNOR_RELEASE_COMMIT: c622bfb187556afb8d3ff3ca917a719e4bb7f32a
       VELNOR_RUN_KEY_ATTEMPT: ${{ needs.plan.outputs.plan_attempt || github.run_attempt }}
     needs:
       - ledger-cli
@@ -638,19 +640,19 @@ jobs:
       - *s14
       - name: Build test executables
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-54cd5cee17de21c9d5ee81860e34e5ae130e912df03fee4d7bfd4aaaae2a65f2"}
+        with: {"digest": "b3-c6117b4f921f160db1c2c7123bf0ea982ebe327e7af37a516f02f82da07b908c"}
       - name: Format
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-b63a00e8c855fff09b2622e4e67b40a278fbdb05e9733f0f6d285fdd9047b2ca"}
+        with: {"digest": "b3-a9d43b67284e33f8a883d73d57a6c418529c66d3f70c378c6df22c183b4182af"}
       - name: Clippy
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-1ea73c9afabe472a278252d3ca53094adc9b85b25378a4391c94c2cb0c135589"}
+        with: {"digest": "b3-817dfe79257fc9e5a964b10224265595ab35fb6a521a1447c09d311c2a22ebf1"}
       - name: Documentation
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-93c389474beec2e41c33470192fe9d7955750ed18eeaaeb04ec36a3af69ec478"}
+        with: {"digest": "b3-2398997dbca2c8eaea4bfda7701aa4d07a5b6b99f3891dac65344b096bf6009a"}
       - name: Wait for parallel checks
         wait-all:
       - name: MBX stats
@@ -659,7 +661,7 @@ jobs:
         env:
           VELNOR_MBX_STATS_JOB: rust-velnor-actions-actionlint
           VELNOR_MBX_STATS_WORKSPACE: api2026_pull_context_public build_script_build bun_assets_handoff_public bun_private_repository_public candidate_freshness_public check_runtime_identity_public controller_approval_public crate_bootstrap_version_public crate_release_semver_public crate_release_version_public generator_release_prepare_public homebrew_adoption_seed_public ledger_helper_public mbx_stats pin_mirror_public preview_source_selection_public product_release_binary_public prune_state prune_tools qualification_diagnostics release_workspace_cargo review_completion_public rust_tree_digest_pin task_report_public tracked_manifest_public velnor_actions velnor_actions_actionlint velnor_actions_ansible velnor_actions_bun velnor_actions_cli velnor_actions_contract velnor_actions_dbt velnor_actions_freshness velnor_actions_gradle velnor_actions_mise velnor_actions_orchestrator velnor_actions_rust velnor_actions_tofu velnor_actions_workflow_renderer velnor_archive_guard velnor_cli velnor_contract velnor_mise velnor_orchestrator velnor_rust velnor_workflow_renderer workflow_configuration_public
-        run: &r11 "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; job=\"${VELNOR_MBX_STATS_JOB-}\"; members=\"${VELNOR_MBX_STATS_WORKSPACE-}\"; out=\"${RUNNER_TEMP:?}/velnor-mbx-stats.line\"; set -- \"${MBX_CACHE_DIR-}\"/actions/sessions/v1/*.jsonl; if [ -z \"${MBX_CACHE_DIR-}\" ] || [ ! -f \"$1\" ]; then printf '\\''mbx-stats job=%s sessions=0\\n'\\'' \"$job\" > \"$out\"; else jq -r -n -R --arg job \"$job\" --arg members \"$members\" '\\''[inputs | fromjson? | select(type == \"object\" and .type == \"action\")] as $a | ($members | split(\" \") | map(select(length > 0) | {key: ., value: true}) | from_entries) as $m | def benign: .outcome.kind == \"bypass\" and (.outcome.reason == \"compiler-query\" or .outcome.reason == \"standard-input\"); def n($c; $k): [$a[] | select((benign | not) and .outcome.kind == $k and ((if $m[.crate_name // \"\"] then \"workspace\" else \"registry\" end) == $c))] | length; def group($c): \"\\($c) hit=\\(n($c; \"hit\")) miss=\\(n($c; \"miss\")) not_looked_up=\\(n($c; \"unconsulted\")) bypassed=\\(n($c; \"bypass\"))\"; def named: (.crate_name // \"unnamed\") | gsub(\" \"; \"_\"); def class: if $m[.crate_name // \"\"] then \"workspace\" else \"registry\" end; def outcome: if .outcome.kind == \"unconsulted\" then \"not_looked_up\" else .outcome.kind end; def bounded: unique | if length == 0 then \"none\" elif length > 40 then (.[:40] + [\"+\\(length - 40)\"]) | join(\",\") else join(\",\") end; [$a[] | select(benign | not)] as $c | \"mbx-stats job=\\($job) \\(group(\"registry\")) \\(group(\"workspace\")) bypassed_benign=\\([$a[] | select(benign)] | length) nonhit=\\([$c[] | select(.outcome.kind != \"hit\") | \"\\(class):\\(outcome):\\(named)\"] | bounded) bypass=\\([$c[] | select(.outcome.kind == \"bypass\") | \"\\(.outcome.reason // \"unrecorded\"):\\(named)\"] | bounded)\"'\\'' \"$@\" > \"$out\"; fi; read -r line < \"$out\"; printf '\\''%s\\n'\\'' \"$line\"; if [ -n \"${GITHUB_STEP_SUMMARY-}\" ]; then printf '\\''%s\\n'\\'' \"$line\" >> \"$GITHUB_STEP_SUMMARY\"; fi'"
+        run: &r12 "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; job=\"${VELNOR_MBX_STATS_JOB-}\"; members=\"${VELNOR_MBX_STATS_WORKSPACE-}\"; out=\"${RUNNER_TEMP:?}/velnor-mbx-stats.line\"; set -- \"${MBX_CACHE_DIR-}\"/actions/sessions/v1/*.jsonl; if [ -z \"${MBX_CACHE_DIR-}\" ] || [ ! -f \"$1\" ]; then printf '\\''mbx-stats job=%s sessions=0\\n'\\'' \"$job\" > \"$out\"; else jq -r -n -R --arg job \"$job\" --arg members \"$members\" '\\''[inputs | fromjson? | select(type == \"object\" and .type == \"action\")] as $a | ($members | split(\" \") | map(select(length > 0) | {key: ., value: true}) | from_entries) as $m | def benign: .outcome.kind == \"bypass\" and (.outcome.reason == \"compiler-query\" or .outcome.reason == \"standard-input\"); def n($c; $k): [$a[] | select((benign | not) and .outcome.kind == $k and ((if $m[.crate_name // \"\"] then \"workspace\" else \"registry\" end) == $c))] | length; def group($c): \"\\($c) hit=\\(n($c; \"hit\")) miss=\\(n($c; \"miss\")) not_looked_up=\\(n($c; \"unconsulted\")) bypassed=\\(n($c; \"bypass\"))\"; def named: (.crate_name // \"unnamed\") | gsub(\" \"; \"_\"); def class: if $m[.crate_name // \"\"] then \"workspace\" else \"registry\" end; def outcome: if .outcome.kind == \"unconsulted\" then \"not_looked_up\" else .outcome.kind end; def bounded: unique | if length == 0 then \"none\" elif length > 40 then (.[:40] + [\"+\\(length - 40)\"]) | join(\",\") else join(\",\") end; [$a[] | select(benign | not)] as $c | \"mbx-stats job=\\($job) \\(group(\"registry\")) \\(group(\"workspace\")) bypassed_benign=\\([$a[] | select(benign)] | length) nonhit=\\([$c[] | select(.outcome.kind != \"hit\") | \"\\(class):\\(outcome):\\(named)\"] | bounded) bypass=\\([$c[] | select(.outcome.kind == \"bypass\") | \"\\(.outcome.reason // \"unrecorded\"):\\(named)\"] | bounded)\"'\\'' \"$@\" > \"$out\"; fi; read -r line < \"$out\"; printf '\\''%s\\n'\\'' \"$line\"; if [ -n \"${GITHUB_STEP_SUMMARY-}\" ]; then printf '\\''%s\\n'\\'' \"$line\" >> \"$GITHUB_STEP_SUMMARY\"; fi'"
       - &s23
         name: Download ledger CLI
         if: always()
@@ -729,19 +731,19 @@ jobs:
       - *s14
       - name: Build test executables
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-e3718a2f82a166ec6cf5208c8521e24bd0950451127cbc4b962bf013fdf31b14"}
+        with: {"digest": "b3-0dc39c351a5c4b99632453d85efd23a4f65f649d17df397c0f7ff21638fb27ee"}
       - name: Format
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-f3cc578f8cbf6916e605d9729f3175d753de777538fe167e431986a71732abd8"}
+        with: {"digest": "b3-4a40ac10980b674244c7c15325450f42feb6ba6cd12794acd47b8603723d92de"}
       - name: Clippy
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-d2ac4204ae08d3169276d402d3b46da66383a7ab21f067e8d21d214f4051c167"}
+        with: {"digest": "b3-6882b5f68686e09ab19679ae74ea7eb01244efb6420e2722a942af5ffc940ebe"}
       - name: Documentation
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-15b4e7ea6def66a87085e196c4b4f79de1ce14f7725db1d68b9666941ce3e73e"}
+        with: {"digest": "b3-82924aa8289d495e56570e12f836354273189fa41ffa1ac1cb73c6ad02219da8"}
       - name: Wait for parallel checks
         wait-all:
       - name: MBX stats
@@ -750,7 +752,7 @@ jobs:
         env:
           VELNOR_MBX_STATS_JOB: rust-velnor-actions-ansible
           VELNOR_MBX_STATS_WORKSPACE: api2026_pull_context_public build_script_build bun_assets_handoff_public bun_private_repository_public candidate_freshness_public check_runtime_identity_public controller_approval_public crate_bootstrap_version_public crate_release_semver_public crate_release_version_public generator_release_prepare_public homebrew_adoption_seed_public ledger_helper_public mbx_stats pin_mirror_public preview_source_selection_public product_release_binary_public prune_state prune_tools qualification_diagnostics release_workspace_cargo review_completion_public rust_tree_digest_pin task_report_public tracked_manifest_public velnor_actions velnor_actions_actionlint velnor_actions_ansible velnor_actions_bun velnor_actions_cli velnor_actions_contract velnor_actions_dbt velnor_actions_freshness velnor_actions_gradle velnor_actions_mise velnor_actions_orchestrator velnor_actions_rust velnor_actions_tofu velnor_actions_workflow_renderer velnor_archive_guard velnor_cli velnor_contract velnor_mise velnor_orchestrator velnor_rust velnor_workflow_renderer workflow_configuration_public
-        run: *r11
+        run: *r12
       - *s23
       - *s24
       - *s25
@@ -796,19 +798,19 @@ jobs:
       - *s14
       - name: Build test executables
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-dea5d8f91d4bde3d5849db4377b85813e028db5d53619cf866c5b9eede05272e"}
+        with: {"digest": "b3-24de241115e95b957384c281f22d656a6c7c356e0d9070f1c03c9461908d1124"}
       - name: Format
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-7c0ab799398782210088483e1a13e4c68ac6acf9a5c0339ffb1ff333f434cd81"}
+        with: {"digest": "b3-a57f9315c7f909f8a2321c9dee1dd297eac7c37519acaa60c4379f647a6c05c8"}
       - name: Clippy
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-caee46d1356bdd9d85c580b5c7d56ec9839b6b047908fce9fc7854d565ff7f2f"}
+        with: {"digest": "b3-715c9ade86031bfb26a0c72b75146ffed202703ea6fd5362624835899056b3bb"}
       - name: Documentation
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-7a3612e07f3bd0fe844d8cb328a4c81d482e456521c6e13a8b7fef77b9a2ddbd"}
+        with: {"digest": "b3-df1198b4e979d036fe53a8a6b22e8ed0bf94834bdaca8819905bb648b240b297"}
       - name: Wait for parallel checks
         wait-all:
       - name: MBX stats
@@ -817,7 +819,7 @@ jobs:
         env:
           VELNOR_MBX_STATS_JOB: rust-velnor-actions-bun
           VELNOR_MBX_STATS_WORKSPACE: api2026_pull_context_public build_script_build bun_assets_handoff_public bun_private_repository_public candidate_freshness_public check_runtime_identity_public controller_approval_public crate_bootstrap_version_public crate_release_semver_public crate_release_version_public generator_release_prepare_public homebrew_adoption_seed_public ledger_helper_public mbx_stats pin_mirror_public preview_source_selection_public product_release_binary_public prune_state prune_tools qualification_diagnostics release_workspace_cargo review_completion_public rust_tree_digest_pin task_report_public tracked_manifest_public velnor_actions velnor_actions_actionlint velnor_actions_ansible velnor_actions_bun velnor_actions_cli velnor_actions_contract velnor_actions_dbt velnor_actions_freshness velnor_actions_gradle velnor_actions_mise velnor_actions_orchestrator velnor_actions_rust velnor_actions_tofu velnor_actions_workflow_renderer velnor_archive_guard velnor_cli velnor_contract velnor_mise velnor_orchestrator velnor_rust velnor_workflow_renderer workflow_configuration_public
-        run: *r11
+        run: *r12
       - *s23
       - *s24
       - *s25
@@ -864,23 +866,23 @@ jobs:
       - *s15
       - name: Build test executables
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-f05cdf24f424eebee7fff010713c76e77b1e93047ff27b087f1551a52297232b"}
+        with: {"digest": "b3-d40845ae3812ea99f47a064b9ce41403dcdc3ebb35ce4d84fb332605bc9355a7"}
       - name: Format
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-75061b3cfc3b2e34c289c0218170bc22d7ff4ad173b2c432d83f4cfe0f8ad935"}
+        with: {"digest": "b3-26aab5cc0269e13bbcd75f522dbdf488e493496d0ea5f550bf3eedb172298b8f"}
       - name: Clippy
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-1feaf9f1e30fb316dae8bd87653bef35f9ff4628ef89aee47a10ecc53f442d07"}
+        with: {"digest": "b3-d5fa206ed4f9768b2884792d59bf72b3926082eaf78deeb068306e4cbb5c34aa"}
       - name: Unit and integration tests
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-e32da1b3f237cbf0ba511b3b7a10549e4fe04c88da6f2d951afac3b57d136153"}
+        with: {"digest": "b3-42cbf76255be35e5924c41bdddca201134c28c94a62f678dbe23dd8163e7ae07"}
       - name: Documentation
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-b8e78f5f06008504cdb3b8fae00c9bbe2c4ba08ce323acdf4a5d37e81132f7c6"}
+        with: {"digest": "b3-1192b04f3f08fda852c48ce411f870f90574df53199ebf63e8fda6b70a4bd45f"}
       - name: Wait for parallel checks
         wait-all:
       - name: MBX stats
@@ -889,7 +891,7 @@ jobs:
         env:
           VELNOR_MBX_STATS_JOB: rust-velnor-actions-cli
           VELNOR_MBX_STATS_WORKSPACE: api2026_pull_context_public build_script_build bun_assets_handoff_public bun_private_repository_public candidate_freshness_public check_runtime_identity_public controller_approval_public crate_bootstrap_version_public crate_release_semver_public crate_release_version_public generator_release_prepare_public homebrew_adoption_seed_public ledger_helper_public mbx_stats pin_mirror_public preview_source_selection_public product_release_binary_public prune_state prune_tools qualification_diagnostics release_workspace_cargo review_completion_public rust_tree_digest_pin task_report_public tracked_manifest_public velnor_actions velnor_actions_actionlint velnor_actions_ansible velnor_actions_bun velnor_actions_cli velnor_actions_contract velnor_actions_dbt velnor_actions_freshness velnor_actions_gradle velnor_actions_mise velnor_actions_orchestrator velnor_actions_rust velnor_actions_tofu velnor_actions_workflow_renderer velnor_archive_guard velnor_cli velnor_contract velnor_mise velnor_orchestrator velnor_rust velnor_workflow_renderer workflow_configuration_public
-        run: *r11
+        run: *r12
       - *s23
       - *s24
       - *s25
@@ -935,23 +937,23 @@ jobs:
       - *s14
       - name: Build test executables
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-e2fa187bbe8208aff10632cdb24662677a0fab05350b66100afead8e9fbd4525"}
+        with: {"digest": "b3-f1fa47968da226286471d68959094a391a50203c9404f3dfa84f8490960bec30"}
       - name: Format
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-a1588cc451457558abf849e954622f649c3c1b4ab68024b69e047bc64988ea2c"}
+        with: {"digest": "b3-473383850ac70b2806ca91b3cce263b76dfce8b994f68e9079e3473b654c7f80"}
       - name: Clippy
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-7a806cf4f58f22997895bc68e9f1352b0a3b62efbac16efc29282884babf26bd"}
+        with: {"digest": "b3-d1a4838c4ff975ddfa1186ed303a7820a0d1b063c4a557daf37a0847dd15f0c8"}
       - name: Unit and integration tests
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-5407569b50fbe581e960509604ec3a3d96dd5078cd4bb9bfa5fc56566888c82b"}
+        with: {"digest": "b3-0fb3cca5ae4f8900bb9da266cc32b75960b741a4e620b19b3b507c34b40778d7"}
       - name: Documentation
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-12bc88e3e6c6bbb504d39b08639e74e5b7ee0e34ce2aea11156a36fcec421fcd"}
+        with: {"digest": "b3-cfa9353c56e56ce5bc4aa689e568543c27b99c4ef206518400c01dafe59713ab"}
       - name: Wait for parallel checks
         wait-all:
       - name: MBX stats
@@ -960,7 +962,7 @@ jobs:
         env:
           VELNOR_MBX_STATS_JOB: rust-velnor-actions-contract
           VELNOR_MBX_STATS_WORKSPACE: api2026_pull_context_public build_script_build bun_assets_handoff_public bun_private_repository_public candidate_freshness_public check_runtime_identity_public controller_approval_public crate_bootstrap_version_public crate_release_semver_public crate_release_version_public generator_release_prepare_public homebrew_adoption_seed_public ledger_helper_public mbx_stats pin_mirror_public preview_source_selection_public product_release_binary_public prune_state prune_tools qualification_diagnostics release_workspace_cargo review_completion_public rust_tree_digest_pin task_report_public tracked_manifest_public velnor_actions velnor_actions_actionlint velnor_actions_ansible velnor_actions_bun velnor_actions_cli velnor_actions_contract velnor_actions_dbt velnor_actions_freshness velnor_actions_gradle velnor_actions_mise velnor_actions_orchestrator velnor_actions_rust velnor_actions_tofu velnor_actions_workflow_renderer velnor_archive_guard velnor_cli velnor_contract velnor_mise velnor_orchestrator velnor_rust velnor_workflow_renderer workflow_configuration_public
-        run: *r11
+        run: *r12
       - *s23
       - *s24
       - *s25
@@ -1006,19 +1008,19 @@ jobs:
       - *s14
       - name: Build test executables
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-03f504f46a77f4735d15be9e04fdbc3c4818d603614f5e8ab8bbe5504540efe2"}
+        with: {"digest": "b3-b143927f94e01c6773c24b24850a18eee8ef83f31078224408084b2c219858e3"}
       - name: Format
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-b4d315cf99b3a91788daadc527d3fd1fa4a2d27e24df2902e712fe59c7763e5f"}
+        with: {"digest": "b3-3b6b96f93fa10cd860ec865b749673c6cc4616df65c55e7b698b88056d9741ac"}
       - name: Clippy
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-43042c0677eedb286f7603a36e7638d58983e59559a6b437a70ccdb388efab9d"}
+        with: {"digest": "b3-4b6e9f02ff51efd37449d09f2e24bb900fd8e3bf5ceb7d6719ef26ac767817a9"}
       - name: Documentation
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-8b9133c7e2296748dfbf41218e227168d5644fdd45f0d20ca74d80fc8dff427a"}
+        with: {"digest": "b3-3e760974daff93ae996b1d132ef82b95961e1d7770a76d3b13e8b6490087d476"}
       - name: Wait for parallel checks
         wait-all:
       - name: MBX stats
@@ -1027,7 +1029,7 @@ jobs:
         env:
           VELNOR_MBX_STATS_JOB: rust-velnor-actions-dbt
           VELNOR_MBX_STATS_WORKSPACE: api2026_pull_context_public build_script_build bun_assets_handoff_public bun_private_repository_public candidate_freshness_public check_runtime_identity_public controller_approval_public crate_bootstrap_version_public crate_release_semver_public crate_release_version_public generator_release_prepare_public homebrew_adoption_seed_public ledger_helper_public mbx_stats pin_mirror_public preview_source_selection_public product_release_binary_public prune_state prune_tools qualification_diagnostics release_workspace_cargo review_completion_public rust_tree_digest_pin task_report_public tracked_manifest_public velnor_actions velnor_actions_actionlint velnor_actions_ansible velnor_actions_bun velnor_actions_cli velnor_actions_contract velnor_actions_dbt velnor_actions_freshness velnor_actions_gradle velnor_actions_mise velnor_actions_orchestrator velnor_actions_rust velnor_actions_tofu velnor_actions_workflow_renderer velnor_archive_guard velnor_cli velnor_contract velnor_mise velnor_orchestrator velnor_rust velnor_workflow_renderer workflow_configuration_public
-        run: *r11
+        run: *r12
       - *s23
       - *s24
       - *s25
@@ -1073,19 +1075,19 @@ jobs:
       - *s14
       - name: Build test executables
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-2ea7c0d37f15291843f1b13df25f09f7f3026551a295e35a16dc21c2e9412e3c"}
+        with: {"digest": "b3-e15ec9142c667759ced08066deb09b8a42fdb2bf5ffcbee3121cbb326990c557"}
       - name: Format
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-e1db9de1701da3cd9a936f1e63c672442eb59e39ca018e04ce59ae4d09cbdb7b"}
+        with: {"digest": "b3-3d08f96053ffa8af14bb933ceebc0965832df8a61b88667c644b7a16a3a397bd"}
       - name: Clippy
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-93ddaa7e9d1205f23d5de7cd349b822dfc660e6bb1b035cc64f4fd86d2b0c3b4"}
+        with: {"digest": "b3-6041c41327e6ae26bbd6e59102fda61028b5f2a5c9c2282ac41bc02c28679f4f"}
       - name: Documentation
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-25807a59a1fa09abba302f1740d611b973eae09b6bb802a276501e8ab5a5e91c"}
+        with: {"digest": "b3-18d3347856bf4249c39033a5c50799d5050ec28c94d8f100bbf6ab1cf6f69715"}
       - name: Wait for parallel checks
         wait-all:
       - name: MBX stats
@@ -1094,7 +1096,7 @@ jobs:
         env:
           VELNOR_MBX_STATS_JOB: rust-velnor-actions-gradle
           VELNOR_MBX_STATS_WORKSPACE: api2026_pull_context_public build_script_build bun_assets_handoff_public bun_private_repository_public candidate_freshness_public check_runtime_identity_public controller_approval_public crate_bootstrap_version_public crate_release_semver_public crate_release_version_public generator_release_prepare_public homebrew_adoption_seed_public ledger_helper_public mbx_stats pin_mirror_public preview_source_selection_public product_release_binary_public prune_state prune_tools qualification_diagnostics release_workspace_cargo review_completion_public rust_tree_digest_pin task_report_public tracked_manifest_public velnor_actions velnor_actions_actionlint velnor_actions_ansible velnor_actions_bun velnor_actions_cli velnor_actions_contract velnor_actions_dbt velnor_actions_freshness velnor_actions_gradle velnor_actions_mise velnor_actions_orchestrator velnor_actions_rust velnor_actions_tofu velnor_actions_workflow_renderer velnor_archive_guard velnor_cli velnor_contract velnor_mise velnor_orchestrator velnor_rust velnor_workflow_renderer workflow_configuration_public
-        run: *r11
+        run: *r12
       - *s23
       - *s24
       - *s25
@@ -1140,23 +1142,23 @@ jobs:
       - *s14
       - name: Build test executables
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-f893ff445bb325376ffecd7858c51c89d1cf484ebe8101de392985a8e217eb18"}
+        with: {"digest": "b3-4413d85ee2d7d48198d4262245740a4fee80bd850c87b9fca598250fbdf294ea"}
       - name: Format
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-e9d0288ba451405b222b52b3be66ec804ff7beea6c125bfc583e207d95dffedf"}
+        with: {"digest": "b3-661fa7902859f36c4df554f29246e34d59274e997a80a6451d48a32e60c2caf5"}
       - name: Clippy
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-06e63359b3ac9ea1538cb68219f2f5214bc3889399f032b9cd5cffbc3af3e0de"}
+        with: {"digest": "b3-4bc4b385ce0f8380cea98570886535cfb1c8df4fb72b7f98be1eda1393cb7de5"}
       - name: Unit and integration tests
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-df7baccb85de51a0aeb6c20c61a85c5e053bdd267aa29795afc16338ed87b0b6"}
+        with: {"digest": "b3-9b1947133ea581107dd51b334dcd9dcf93e0390e1813b298a8c8025f07d7be27"}
       - name: Documentation
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-9111bc09f480debea0c9836b1a9e938c7537c803a8d254459438c28d83335a47"}
+        with: {"digest": "b3-b7bbef9ba30be1e0b880c09e19ff7be225e0a229ee5663a01263f3507221200c"}
       - name: Wait for parallel checks
         wait-all:
       - name: MBX stats
@@ -1165,7 +1167,7 @@ jobs:
         env:
           VELNOR_MBX_STATS_JOB: rust-velnor-actions-mise
           VELNOR_MBX_STATS_WORKSPACE: api2026_pull_context_public build_script_build bun_assets_handoff_public bun_private_repository_public candidate_freshness_public check_runtime_identity_public controller_approval_public crate_bootstrap_version_public crate_release_semver_public crate_release_version_public generator_release_prepare_public homebrew_adoption_seed_public ledger_helper_public mbx_stats pin_mirror_public preview_source_selection_public product_release_binary_public prune_state prune_tools qualification_diagnostics release_workspace_cargo review_completion_public rust_tree_digest_pin task_report_public tracked_manifest_public velnor_actions velnor_actions_actionlint velnor_actions_ansible velnor_actions_bun velnor_actions_cli velnor_actions_contract velnor_actions_dbt velnor_actions_freshness velnor_actions_gradle velnor_actions_mise velnor_actions_orchestrator velnor_actions_rust velnor_actions_tofu velnor_actions_workflow_renderer velnor_archive_guard velnor_cli velnor_contract velnor_mise velnor_orchestrator velnor_rust velnor_workflow_renderer workflow_configuration_public
-        run: *r11
+        run: *r12
       - *s23
       - *s24
       - *s25
@@ -1212,23 +1214,23 @@ jobs:
       - *s15
       - name: Build test executables
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-515b1b91baa9ed8a1eb0126ab7229b9d91edecd856df1dc0b50e4a55826180b6"}
+        with: {"digest": "b3-642242656a3a1e84348fefdd2c526c73cfb929a71534b4763e570a21af534823"}
       - name: Format
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-bf124739e93338c3f31ad47b804a182986ae968d8bdc24eab52557a7e253dd82"}
+        with: {"digest": "b3-5292ae1db50b5ab987d47c656bc74a1809a7a1de6dc5e688469d98a64f6ce327"}
       - name: Clippy
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-1f087d64cdc850c9a54cbb5c687164ecbcc9bb6cd5a23aafb25e4949416d97f0"}
+        with: {"digest": "b3-7ddca3d3f898a1561cfa4798c861a4ce98fe8e188f795d7f905a36a41501b5f3"}
       - name: Unit and integration tests
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-b1076578adbd9406a119e34d60be399ed4936dd91cabbd1ccc2c410d2600905f"}
+        with: {"digest": "b3-ba70e26f28afc41d14a7b1f377b6dafe6c0fbfb0eda06f827250302d8fa5831a"}
       - name: Documentation
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-7bdf1d86fd8b1a1d706408fce026796e76303e6ba7783022c74f23605c34b7aa"}
+        with: {"digest": "b3-643a6dd220319bb0b8f0a60581e2b3e30127110da6bf6ee85cd11f1e7ff180a9"}
       - name: Wait for parallel checks
         wait-all:
       - name: MBX stats
@@ -1237,7 +1239,7 @@ jobs:
         env:
           VELNOR_MBX_STATS_JOB: rust-velnor-actions-orchestrator
           VELNOR_MBX_STATS_WORKSPACE: api2026_pull_context_public build_script_build bun_assets_handoff_public bun_private_repository_public candidate_freshness_public check_runtime_identity_public controller_approval_public crate_bootstrap_version_public crate_release_semver_public crate_release_version_public generator_release_prepare_public homebrew_adoption_seed_public ledger_helper_public mbx_stats pin_mirror_public preview_source_selection_public product_release_binary_public prune_state prune_tools qualification_diagnostics release_workspace_cargo review_completion_public rust_tree_digest_pin task_report_public tracked_manifest_public velnor_actions velnor_actions_actionlint velnor_actions_ansible velnor_actions_bun velnor_actions_cli velnor_actions_contract velnor_actions_dbt velnor_actions_freshness velnor_actions_gradle velnor_actions_mise velnor_actions_orchestrator velnor_actions_rust velnor_actions_tofu velnor_actions_workflow_renderer velnor_archive_guard velnor_cli velnor_contract velnor_mise velnor_orchestrator velnor_rust velnor_workflow_renderer workflow_configuration_public
-        run: *r11
+        run: *r12
       - *s23
       - *s24
       - *s25
@@ -1283,23 +1285,23 @@ jobs:
       - *s14
       - name: Build test executables
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-df4e58e74a90102b08f5ee48e49aa6329193309a1eb680a6b0dd764a96048f1f"}
+        with: {"digest": "b3-6477e3cf20aecd3ca4a86f7bdb0dea5bfba6cea82802f9f402d1ba797a3cb162"}
       - name: Format
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-5a1416e7f6b3d03f8dd7d95838a71871db761dc96f0021903e86aa0d211176b7"}
+        with: {"digest": "b3-1334670982210f7b144b3e5f6e5f0ae0648b73b2b163dfbeb2c83491b2f03ead"}
       - name: Clippy
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-7797a79c94bec58af70c7c6724740a54ad155feb1672c4de9ffb4e5f7cc076bd"}
+        with: {"digest": "b3-236a4c5e3e555b3b68a530805aeb1f08eaada481cbf5c3c7335aa3f9f7d32c2e"}
       - name: Unit and integration tests
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-0a186b91e5a14e1dddfaf0c24cb19b9c9f34ddcadc2399d205c4ffa56a64a61e"}
+        with: {"digest": "b3-540a42e73035d16755d8c4eac7c4331e6db02f4045ae466ce9dac6f35c9d3105"}
       - name: Documentation
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-b6bb95bdad77490bafa27d62552761c8e4ee2a14d5c92e275c2fd9f8c3e6e79e"}
+        with: {"digest": "b3-daa609a12415f20b43473ee25d4b831d8c7eaaec52186186a0787e69cd22aa07"}
       - name: Wait for parallel checks
         wait-all:
       - name: MBX stats
@@ -1308,7 +1310,7 @@ jobs:
         env:
           VELNOR_MBX_STATS_JOB: rust-velnor-actions-rust
           VELNOR_MBX_STATS_WORKSPACE: api2026_pull_context_public build_script_build bun_assets_handoff_public bun_private_repository_public candidate_freshness_public check_runtime_identity_public controller_approval_public crate_bootstrap_version_public crate_release_semver_public crate_release_version_public generator_release_prepare_public homebrew_adoption_seed_public ledger_helper_public mbx_stats pin_mirror_public preview_source_selection_public product_release_binary_public prune_state prune_tools qualification_diagnostics release_workspace_cargo review_completion_public rust_tree_digest_pin task_report_public tracked_manifest_public velnor_actions velnor_actions_actionlint velnor_actions_ansible velnor_actions_bun velnor_actions_cli velnor_actions_contract velnor_actions_dbt velnor_actions_freshness velnor_actions_gradle velnor_actions_mise velnor_actions_orchestrator velnor_actions_rust velnor_actions_tofu velnor_actions_workflow_renderer velnor_archive_guard velnor_cli velnor_contract velnor_mise velnor_orchestrator velnor_rust velnor_workflow_renderer workflow_configuration_public
-        run: *r11
+        run: *r12
       - *s23
       - *s24
       - *s25
@@ -1354,19 +1356,19 @@ jobs:
       - *s14
       - name: Build test executables
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-f0e6706042cecfed48f7440dcd310876f39082c58d610c6964e34a5e2cea321f"}
+        with: {"digest": "b3-ec234187d721238768c12a91793ed7795344b84fdf054267620118f9550c8369"}
       - name: Format
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-b126ef8fd266c9b6f8ca9ff5db09e8a6e391a47ce10b9b96bfd63d06a87091da"}
+        with: {"digest": "b3-ba699cbfccb9de07aee65965047a22115c472c40b047300e26cd3ac9ce78958d"}
       - name: Clippy
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-a63253391d1fbdfda2ea66c3b08404b429138217443d29835e09c2a586e9de43"}
+        with: {"digest": "b3-7c71c42a87518cc3e19d8c5b0a8e6ddf5cc9b75aa0ca776819bb1f4445027b94"}
       - name: Documentation
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-67204f1b03beffc9b082f8223981a56a62871600bae59ff800237057e80dc456"}
+        with: {"digest": "b3-6bb56cb25d18920a38bd2a9462553a1a5ac5f218026e333292754fbf517f99ff"}
       - name: Wait for parallel checks
         wait-all:
       - name: MBX stats
@@ -1375,7 +1377,7 @@ jobs:
         env:
           VELNOR_MBX_STATS_JOB: rust-velnor-actions-tofu
           VELNOR_MBX_STATS_WORKSPACE: api2026_pull_context_public build_script_build bun_assets_handoff_public bun_private_repository_public candidate_freshness_public check_runtime_identity_public controller_approval_public crate_bootstrap_version_public crate_release_semver_public crate_release_version_public generator_release_prepare_public homebrew_adoption_seed_public ledger_helper_public mbx_stats pin_mirror_public preview_source_selection_public product_release_binary_public prune_state prune_tools qualification_diagnostics release_workspace_cargo review_completion_public rust_tree_digest_pin task_report_public tracked_manifest_public velnor_actions velnor_actions_actionlint velnor_actions_ansible velnor_actions_bun velnor_actions_cli velnor_actions_contract velnor_actions_dbt velnor_actions_freshness velnor_actions_gradle velnor_actions_mise velnor_actions_orchestrator velnor_actions_rust velnor_actions_tofu velnor_actions_workflow_renderer velnor_archive_guard velnor_cli velnor_contract velnor_mise velnor_orchestrator velnor_rust velnor_workflow_renderer workflow_configuration_public
-        run: *r11
+        run: *r12
       - *s23
       - *s24
       - *s25
@@ -1421,23 +1423,23 @@ jobs:
       - *s14
       - name: Build test executables
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-d41ce5f501a4ceb23062e23348e7a2428a2e6ec2819965a2228fbaa69c5accbe"}
+        with: {"digest": "b3-6990fea3ba0464fec1ff0d45764ad2b1025e7241038e8f91ef9f017f63308295"}
       - name: Format
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-ccf4445767e13ee6c9635decb4822f25b43197c3324d75d984335747b844bfe3"}
+        with: {"digest": "b3-b89bb4b3f11536c4d5f91ebcbccb9ddcadd43c23949dd445fb7ae4d43997a7f3"}
       - name: Clippy
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-94490c835d235f8cdbf41e9416f061d4c668f100158a07c6439f374bab0bb7b9"}
+        with: {"digest": "b3-deb58fa0e89300b18c7c8901b22e014601b2725697a33ad7740285f2e77ab6d4"}
       - name: Unit and integration tests
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-23d5443339df9a94f2af012333a82e27bb5ca129df26f07a7f061b04a920432d"}
+        with: {"digest": "b3-55a08230aaea8ad97e7f03a79189fea9e94b680bef7a860db0efb9854dc11748"}
       - name: Documentation
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-2863e280197b6a5645a481bc27c0a824bb399df359c4f77f1886307f40f707fb"}
+        with: {"digest": "b3-de141d6a101ff542574c3c66798127161d66267ffb421791a50065f7883565d3"}
       - name: Wait for parallel checks
         wait-all:
       - name: MBX stats
@@ -1446,7 +1448,7 @@ jobs:
         env:
           VELNOR_MBX_STATS_JOB: rust-velnor-actions-workflow-renderer
           VELNOR_MBX_STATS_WORKSPACE: api2026_pull_context_public build_script_build bun_assets_handoff_public bun_private_repository_public candidate_freshness_public check_runtime_identity_public controller_approval_public crate_bootstrap_version_public crate_release_semver_public crate_release_version_public generator_release_prepare_public homebrew_adoption_seed_public ledger_helper_public mbx_stats pin_mirror_public preview_source_selection_public product_release_binary_public prune_state prune_tools qualification_diagnostics release_workspace_cargo review_completion_public rust_tree_digest_pin task_report_public tracked_manifest_public velnor_actions velnor_actions_actionlint velnor_actions_ansible velnor_actions_bun velnor_actions_cli velnor_actions_contract velnor_actions_dbt velnor_actions_freshness velnor_actions_gradle velnor_actions_mise velnor_actions_orchestrator velnor_actions_rust velnor_actions_tofu velnor_actions_workflow_renderer velnor_archive_guard velnor_cli velnor_contract velnor_mise velnor_orchestrator velnor_rust velnor_workflow_renderer workflow_configuration_public
-        run: *r11
+        run: *r12
       - *s23
       - *s24
       - *s25
@@ -1511,19 +1513,19 @@ jobs:
       - *s15
       - name: Build test executables
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-109eca40e2475235c7733e9b31188b68b52519c8383ba425b2fb6c58990a5456"}
+        with: {"digest": "b3-a6829e90469a65595a1885e825b95abd30224f57e4af61754591343ad41be323"}
       - name: Format
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-04e46fc164d16281d52f2db15602c282b844155da1d94da8a56335a6d7d626d7"}
+        with: {"digest": "b3-6f045537a1de1fb79972780d7946c80818ab884148b11b36b7d92e422a9f7f47"}
       - name: Clippy
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-27698586a8d8f5a1583cd99f7a62be678c771f9733a5ce40fe2d3d1a5e38d33e"}
+        with: {"digest": "b3-f8ef0832986457c33365b1cd2e84ddb2b6272ef611c6d162b8b229c775a331c6"}
       - name: Documentation
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-e8f4899e1ebb179e2f4ee9c8ab214d469f67991b583f7388d62bc4e581d7e15e"}
+        with: {"digest": "b3-8228cb017373dd1e8eb7541c59a10f93a645f1719c8a984795505b04c41371f0"}
       - name: Wait for parallel checks
         wait-all:
       - name: MBX stats
@@ -1532,7 +1534,7 @@ jobs:
         env:
           VELNOR_MBX_STATS_JOB: rust-velnor-resource-probe
           VELNOR_MBX_STATS_WORKSPACE: build_script_build census_once ensure_set launch_once probe_once resource_probe_release_public stage_once velnor_host velnor_resource_probe velnor_resource_probe_release velnor_runner_attestation velnor_runner_attestation_helper velnor_runner_cli velnor_runner_core velnor_runner_github velnor_runner_host
-        run: *r11
+        run: *r12
       - *s23
       - *s24
       - *s25
@@ -1582,19 +1584,19 @@ jobs:
       - *s15
       - name: Build test executables
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-52c8bf4dbe103f573995543c741eaabc69fcf338c87a6140cd34d0664cc507d7"}
+        with: {"digest": "b3-1e24b9e061ed42ca37d954cb05bb57424817799b850df470501b320006e72140"}
       - name: Format
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-8ab1ded09ba18779c81d20e9a982dad4b220901b62b8f1a410dc8e7032332f09"}
+        with: {"digest": "b3-ee524bc2420dc9af4d2c55b28345e13d9e7d1e7566380ed80cd4eb5d20740928"}
       - name: Clippy
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-7d8eb68ebe23ea94b5e73f3b805eb572f48a0446fb3e539b353e5ac098e4abe3"}
+        with: {"digest": "b3-7f862609faaa4a30976f25779466dbb04e614798a1c446e5205d2ad400a374ad"}
       - name: Documentation
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-41af867cbe83c9c14757dc3f2ae0f13bea2da31f2c4fbb5070a67763b37f5d5c"}
+        with: {"digest": "b3-e1ce5f83220968467fdb3bdb314ce8f529d2ff8c6be4de2d79299857810809ef"}
       - name: Wait for parallel checks
         wait-all:
       - name: MBX stats
@@ -1603,7 +1605,7 @@ jobs:
         env:
           VELNOR_MBX_STATS_JOB: rust-velnor-runner-attestation
           VELNOR_MBX_STATS_WORKSPACE: build_script_build census_once ensure_set launch_once probe_once resource_probe_release_public stage_once velnor_host velnor_resource_probe velnor_resource_probe_release velnor_runner_attestation velnor_runner_attestation_helper velnor_runner_cli velnor_runner_core velnor_runner_github velnor_runner_host
-        run: *r11
+        run: *r12
       - *s23
       - *s24
       - *s25
@@ -1649,19 +1651,19 @@ jobs:
       - *s15
       - name: Build test executables
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-dda63f2ea5f0325f446e600ac8ce502c57698193e3cd3c98c0c746cd207bec88"}
+        with: {"digest": "b3-39896efc9e096980ec9c682947f3b2001eb7193ed7063a22b8b0bae7df43c626"}
       - name: Format
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-e7b055c3fd7d63a5e9a39489fb21fdac97e477c952b97b3ddb3e72f0d2bdd323"}
+        with: {"digest": "b3-851a762f4c5a8b4eeb8d5c5795ec3d3f8de553a8f90a84999d0ccf7c1475a274"}
       - name: Clippy
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-5b08e7d383fec2811d6921334b9cedfbe4a583439cbfe32788d4b604186b4ed7"}
+        with: {"digest": "b3-67fc9c3acf36742b1a56862d31daeab8ec1b1efa8a7a45036d52eda32f38bbc2"}
       - name: Documentation
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-397ccddc9863152d5435aca0abf7b7b57b369cd1e1ea28ce026e1a7d07382111"}
+        with: {"digest": "b3-04eca2b72fbd65e65ac75988dde3e50252fe39fbacc7727f2b229457ec2c876f"}
       - name: Wait for parallel checks
         wait-all:
       - name: MBX stats
@@ -1670,7 +1672,7 @@ jobs:
         env:
           VELNOR_MBX_STATS_JOB: rust-velnor-runner-cli
           VELNOR_MBX_STATS_WORKSPACE: build_script_build census_once ensure_set launch_once probe_once resource_probe_release_public stage_once velnor_host velnor_resource_probe velnor_resource_probe_release velnor_runner_attestation velnor_runner_attestation_helper velnor_runner_cli velnor_runner_core velnor_runner_github velnor_runner_host
-        run: *r11
+        run: *r12
       - *s23
       - *s24
       - *s25
@@ -1716,19 +1718,19 @@ jobs:
       - *s15
       - name: Build test executables
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-971c988b5b8a932e0733be8412910526a6ff6c2423820c5adb29e0016609b75c"}
+        with: {"digest": "b3-ba79df7cb2b279f97ad06b3a18c127ba48d5749a57cfbf79d6ab25b5cc32d79b"}
       - name: Format
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-5db9c7751550e532eb63ecd581caed6f5a50faa2bb4f72f330a88df4848df1da"}
+        with: {"digest": "b3-fe8a78ebbb32d8e30b0304ddbcbb579b7ee21f522d084e57b72a9ca3970f37b8"}
       - name: Clippy
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-c9ad1fdb570bb03ab744c3782d6b691a5d095ab92acfca81e6ce39bf6d2e02d7"}
+        with: {"digest": "b3-2675aa2e26855025fc070b113fc96a51a9f99956935b39d464e1723de5880571"}
       - name: Documentation
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-03b67d946e9b9dab3b1b3f559979d9f9937de61815c46337af4274bf4b8d1f87"}
+        with: {"digest": "b3-e56b10e5c678a6e417fbdfe32bd3c76d3093e31abb658fd62e6bf2ab40b0244b"}
       - name: Wait for parallel checks
         wait-all:
       - name: MBX stats
@@ -1737,7 +1739,7 @@ jobs:
         env:
           VELNOR_MBX_STATS_JOB: rust-velnor-runner-core
           VELNOR_MBX_STATS_WORKSPACE: build_script_build census_once ensure_set launch_once probe_once resource_probe_release_public stage_once velnor_host velnor_resource_probe velnor_resource_probe_release velnor_runner_attestation velnor_runner_attestation_helper velnor_runner_cli velnor_runner_core velnor_runner_github velnor_runner_host
-        run: *r11
+        run: *r12
       - *s23
       - *s24
       - *s25
@@ -1783,19 +1785,19 @@ jobs:
       - *s15
       - name: Build test executables
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-232133bd94f62f5e083d93413031a03fb9466a1039287a40a0fa2c58b964d0f5"}
+        with: {"digest": "b3-7618e5104ccd77d9a437d36b6349701c37a11bedc3c9dbd6c5484623400d97b3"}
       - name: Format
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-3faf526af0ca63d3a22fc82167670b8582c82ed08849c1b953f75bb6833786b1"}
+        with: {"digest": "b3-e9f9155ff0bc91fc4a481724f679c911b7c1e1a42fcd2dad707c06ea7c304089"}
       - name: Clippy
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-453d5dbbc394cc4fb51d23f0e715c2b1d25ea68726389ec26c64d21a9c170562"}
+        with: {"digest": "b3-ac23baf1c131babb21c00ecc36137a267c62acedc69abca852472c8a577d9262"}
       - name: Documentation
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-e1491b51e90e714cacf5a80e3010a2c430dc1f7d38831a083267f6a197e46ce2"}
+        with: {"digest": "b3-37518757405b4de6c638d964056e436401ac80167dd5af73ba2d4340ca7ea895"}
       - name: Wait for parallel checks
         wait-all:
       - name: MBX stats
@@ -1804,7 +1806,7 @@ jobs:
         env:
           VELNOR_MBX_STATS_JOB: rust-velnor-runner-github
           VELNOR_MBX_STATS_WORKSPACE: build_script_build census_once ensure_set launch_once probe_once resource_probe_release_public stage_once velnor_host velnor_resource_probe velnor_resource_probe_release velnor_runner_attestation velnor_runner_attestation_helper velnor_runner_cli velnor_runner_core velnor_runner_github velnor_runner_host
-        run: *r11
+        run: *r12
       - *s23
       - *s24
       - *s25
@@ -1850,23 +1852,23 @@ jobs:
       - *s15
       - name: Build test executables
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-0f2025bb4a82a169daeef3d817368df7d271279fee304681c4104c3c641d0b1c"}
+        with: {"digest": "b3-c11a2569dfb758c4b0858bd825ef5058ce7e912794e697a566ba6c436d70efa6"}
       - name: Format
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-f7cabbb8ff1a660a2b960bad133f4b5370bdb449f20f7c0376b5c752a4d33ca4"}
+        with: {"digest": "b3-bf22d51d60c49a1ce83dc1da9fb3242e5e08d52db334634a42ae91741110f6f0"}
       - name: Clippy
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-1c767304176d57ba72dee2af06b2cad679c44ff46914ebe04aa19a11cd9d9ab2"}
+        with: {"digest": "b3-438eff5d77380f480d74b7775082588f1b20a9a5ad159d7b8e15d58947a9c35c"}
       - name: Unit and integration tests
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-a8793f4b47069b1f8b604592184dcd533e8e08f753a7cfee4ef47dd8d37dc124"}
+        with: {"digest": "b3-7e187b972de146f6ae045f02be0b4dc477597e4dd6214673139b3bb169f4e350"}
       - name: Documentation
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-34e3d7d4ece76911a9a2b16d20b5fa4caaa09338f502e28df7fb0217c6675f59"}
+        with: {"digest": "b3-08f79f5b7b099efc1e29e77a7fba9e60870f91332e24e8c154c6bca83660bc41"}
       - name: Wait for parallel checks
         wait-all:
       - name: MBX stats
@@ -1875,7 +1877,7 @@ jobs:
         env:
           VELNOR_MBX_STATS_JOB: rust-velnor-runner-host
           VELNOR_MBX_STATS_WORKSPACE: build_script_build census_once ensure_set launch_once probe_once resource_probe_release_public stage_once velnor_host velnor_resource_probe velnor_resource_probe_release velnor_runner_attestation velnor_runner_attestation_helper velnor_runner_cli velnor_runner_core velnor_runner_github velnor_runner_host
-        run: *r11
+        run: *r12
       - *s23
       - *s24
       - *s25
