@@ -16,7 +16,7 @@ use velnor_actions_contract::workflow::state_seal::{
 use crate::gc1_scene::{Scene, fail};
 use crate::gc1_seal_support::{Attestation, Gh, REPO};
 #[cfg(target_os = "linux")]
-use crate::gc1_seal_units::hung_processes_gone;
+use crate::gc1_seal_units::{hang_keys, hung_processes_gone};
 use crate::gc1_seal_units::{
     at, expect, expect_flag, produce_flag, rendezvous, rows_of, run_select_units, selected_unit,
     unit_key, unit_scope,

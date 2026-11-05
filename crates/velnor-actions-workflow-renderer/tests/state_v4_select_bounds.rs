@@ -12,6 +12,8 @@ use crate::gc1_seal_support::{Attestation, Gh};
 use crate::gc1_seal_units::{
     at, expect, hang_keys, rows_of, run_select_units, selected_unit, unit_key,
 };
+#[cfg(unix)]
+use crate::gc1_seal_units::expect_flag;
 #[cfg(target_os = "linux")]
 use crate::gc1_seal_units::{hung_processes_gone, process_is_running};
 
@@ -167,7 +169,8 @@ fn state_v4_select_listing_deadline_starts_no_verifier() -> Result<(), Box<dyn E
             &format!("listing hang for {root}"),
         )?;
     }
-    let dir = std::path::Path::new(&gh.dir());
+    let gh_dir = gh.dir();
+    let dir = std::path::Path::new(&gh_dir);
     if dir.join("verify-pids").exists() {
         return Err(fail("the selector started verification after listing hung"));
     }
