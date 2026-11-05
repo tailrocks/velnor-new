@@ -32,6 +32,11 @@ case "$mode" in
   fail) exit 1 ;;
   hang) sleep 30; exit 0 ;;
 esac
+printf '%s\n' + >> "$d/activity"
+tracked=1
+finish() { [ "$tracked" -eq 1 ] || return 0; printf '%s\n' - >> "$d/activity"; tracked=0; }
+trap finish EXIT
+trap 'finish; exit 143' TERM INT HUP
 verb="$1 $2"
 shift 2
 case "$verb" in
@@ -43,6 +48,7 @@ case "$verb" in
       shift
     done
     [ -n "$repo" ] || exit 1
+    if [ "$mode" = list-hang ]; then printf '%s\n' "$$" > "$d/list-pid"; sleep 30; exit 0; fi
     if [ -f "$d/lag" ]; then
       read -r lag < "$d/lag"
       if [ "$lag" -gt 0 ]; then printf '%s\n' "$((lag - 1))" > "$d/lag"; exit 0; fi
@@ -104,7 +110,7 @@ case "$verb" in
     file=$1
     shift
     read -r skey sid ssize < "$file"
-    if [ -f "$d/hang-keys" ] && grep -qxF "$skey" "$d/hang-keys"; then sleep 10; exit 1; fi
+    printf '%s\n' "$$" >> "$d/verify-pids"
     if [ -f "$d/rendezvous" ]; then
       read -r want < "$d/rendezvous"
       slot=1
@@ -116,6 +122,18 @@ case "$verb" in
         fi
         slot=$((slot + 1))
       done
+    fi
+    if [ -f "$d/hang-keys" ] && grep -qxF "$skey" "$d/hang-keys"; then
+      (
+        trap '' TERM
+        (trap '' TERM; while :; do sleep 1; done) &
+        printf '%s\n' "$!" >> "$d/hung-pids"
+        while :; do sleep 1; done
+      ) &
+      child=$!
+      printf '%s\n' "$child" >> "$d/hung-pids"
+      wait "$child"
+      exit 1
     fi
     repo=; signer=; sref=; pred=
     while [ $# -gt 0 ]; do
@@ -131,6 +149,12 @@ case "$verb" in
       [ -z "$signer" ] || [ "$signer" = "$tsigner" ] || continue
       [ -z "$sref" ] || [ "$sref" = "$tref" ] || continue
       [ -z "$pred" ] || [ "$pred" = "$tpred" ] || continue
+      printf '%s\n' "$skey" >> "$d/completed"
+      if [ -f "$d/hung-pids" ]; then
+        while IFS= read -r pid; do
+          if kill -0 "$pid" 2>/dev/null; then : > "$d/healthy-while-hung"; break; fi
+        done < "$d/hung-pids"
+      fi
       exit 0
     done < "$d/attest"
     exit 1
@@ -210,6 +234,27 @@ impl Gh {
 
     pub(crate) fn sleeps(&self) -> usize {
         std::fs::read_to_string(self.dir.join("sleeps")).map_or(0, |text| text.lines().count())
+    }
+
+    pub(crate) fn peak(&self) -> Result<usize, Box<dyn Error>> {
+        let mut active = 0usize;
+        let mut peak = 0usize;
+        for event in std::fs::read_to_string(self.dir.join("activity"))?.lines() {
+            match event {
+                "+" => active += 1,
+                "-" => active = active.saturating_sub(1),
+                _ => return Err(fail("invalid fake GH activity event")),
+            }
+            peak = peak.max(active);
+        }
+        Ok(peak)
+    }
+
+    pub(crate) fn hung_pids(&self) -> Result<Vec<u32>, Box<dyn Error>> {
+        Ok(std::fs::read_to_string(self.dir.join("hung-pids"))?
+            .lines()
+            .map(str::parse)
+            .collect::<Result<_, _>>()?)
     }
 
     pub(crate) fn dir(&self) -> String {

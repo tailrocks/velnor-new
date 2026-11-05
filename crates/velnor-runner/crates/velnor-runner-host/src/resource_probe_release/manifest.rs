@@ -87,7 +87,7 @@ fn load_inputs(inspect_path: &Path, archive_path: &Path) -> Result<ReleaseInputs
     })
 }
 
-fn validate_workflow_identity(source: &str, authority: &str) -> Result<(), HostError> {
+pub(super) fn validate_workflow_identity(source: &str, authority: &str) -> Result<(), HostError> {
     if !is_lower_hex(source, 40)
         || !is_lower_hex(authority, 40)
         || source != authority

@@ -3,6 +3,10 @@
 
 use std::error::Error;
 use std::path::PathBuf;
+#[cfg(target_os = "linux")]
+use std::thread;
+#[cfg(target_os = "linux")]
+use std::time::{Duration, Instant};
 
 use velnor_actions_contract::JobTimeout;
 use velnor_actions_contract::workflow::cache_family::{
@@ -19,6 +23,44 @@ pub(crate) fn hang_keys(gh: &Gh, keys: &[&str]) -> Result<(), Box<dyn Error>> {
     let text = format!("{}\n", keys.join("\n"));
     std::fs::write(PathBuf::from(gh.dir()).join("hang-keys"), text)?;
     Ok(())
+}
+
+#[cfg(target_os = "linux")]
+pub(crate) fn hung_processes_gone(gh: &Gh) -> Result<(), Box<dyn Error>> {
+    let pids = gh.hung_pids()?;
+    if pids.len() < 2 {
+        return Err(fail(
+            "the hung verifier did not spawn a child and grandchild",
+        ));
+    }
+    let end = Instant::now() + Duration::from_secs(3);
+    loop {
+        let alive: Vec<u32> = pids
+            .iter()
+            .copied()
+            .filter(|pid| process_is_running(*pid))
+            .collect();
+        if alive.is_empty() {
+            return Ok(());
+        }
+        if Instant::now() >= end {
+            return Err(fail(&format!(
+                "hung verifier descendants remain alive: {alive:?}"
+            )));
+        }
+        thread::sleep(Duration::from_millis(20));
+    }
+}
+
+#[cfg(target_os = "linux")]
+pub(crate) fn process_is_running(pid: u32) -> bool {
+    std::fs::read_to_string(format!("/proc/{pid}/stat"))
+        .ok()
+        .and_then(|stat| {
+            stat.rsplit_once(") ")
+                .map(|(_, rest)| rest.starts_with('Z'))
+        })
+        .is_some_and(|zombie| !zombie)
 }
 
 pub(crate) fn rendezvous(gh: &Gh, calls: usize) -> Result<(), Box<dyn Error>> {

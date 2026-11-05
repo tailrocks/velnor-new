@@ -12,6 +12,8 @@ use crate::gc1_seal_support::{Attestation, Gh};
 use crate::gc1_seal_units::{
     at, expect, hang_keys, rows_of, run_select_units, selected_unit, unit_key,
 };
+#[cfg(target_os = "linux")]
+use crate::gc1_seal_units::{hung_processes_gone, process_is_running};
 
 #[test]
 fn plan_gives_a_hung_unit_no_selection_and_leaves_the_others() -> Result<(), Box<dyn Error>> {
@@ -110,7 +112,7 @@ fn plan_stays_within_its_aggregate_deadline_when_every_verifier_hangs() -> Resul
         &gh,
         &units,
         &[
-            ("VELNOR_STATE_GH_TIMEOUT", "60"),
+            ("VELNOR_STATE_GH_TIMEOUT", "120"),
             ("VELNOR_STATE_UNIT_TIMEOUT", "60"),
             ("VELNOR_STATE_SELECT_DEADLINE", "3"),
         ],
@@ -128,5 +130,153 @@ fn plan_stays_within_its_aggregate_deadline_when_every_verifier_hangs() -> Resul
             "the select outlived its aggregate deadline: {elapsed:?}"
         )));
     }
+    #[cfg(target_os = "linux")]
+    hung_processes_gone(&gh)?;
+    scene.finish()
+}
+
+#[test]
+#[cfg(target_os = "linux")]
+fn state_v4_select_listing_deadline_starts_no_verifier() -> Result<(), Box<dyn Error>> {
+    let scene = Scene::new("seal-select-list-hang", crate::gc1_t53::scripts()?)?;
+    let gh = Gh::install(&scene)?;
+    let units = [(StateUnit::Union, "."), (StateUnit::Union, "b")];
+    let first = unit_key(StateUnit::Union, ".", 0, 0x1000, 1)?;
+    let second = unit_key(StateUnit::Union, "b", 1, 0x1001, 1)?;
+    gh.list(&rows_of(&[(at(0), first.clone()), (at(1), second.clone())]))?;
+    gh.attest(&[Attestation::signed(&first), Attestation::signed(&second)])?;
+    gh.mode("list-hang")?;
+
+    let started = Instant::now();
+    run_select_units(
+        &scene,
+        &gh,
+        &units,
+        &[
+            ("VELNOR_STATE_GH_TIMEOUT", "30"),
+            ("VELNOR_STATE_UNIT_TIMEOUT", "20"),
+            ("VELNOR_STATE_SELECT_DEADLINE", "2"),
+        ],
+    )?;
+    let elapsed = started.elapsed();
+
+    for (unit, root) in units {
+        expect(
+            &selected_unit(&scene, unit, root)?,
+            &[],
+            &format!("listing hang for {root}"),
+        )?;
+    }
+    let dir = std::path::Path::new(&gh.dir());
+    if dir.join("verify-pids").exists() {
+        return Err(fail("the selector started verification after listing hung"));
+    }
+    let list_pid: u32 = std::fs::read_to_string(dir.join("list-pid"))?
+        .trim()
+        .parse()?;
+    let end = Instant::now() + Duration::from_secs(2);
+    while process_is_running(list_pid) && Instant::now() < end {
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    if process_is_running(list_pid) {
+        return Err(fail(
+            "the cache-list process remained alive after its deadline",
+        ));
+    }
+    if elapsed > Duration::from_secs(4) {
+        return Err(fail(&format!(
+            "the listing exceeded its deadline: {elapsed:?}"
+        )));
+    }
+    scene.finish()
+}
+
+#[test]
+#[cfg(unix)]
+fn state_v4_select_supervisor_rejects_invalid_bounds_and_missing_python()
+-> Result<(), Box<dyn Error>> {
+    let scene = Scene::new("seal-select-supervisor-inputs", crate::gc1_t53::scripts()?)?;
+    let gh = Gh::install(&scene)?;
+    let units = [(StateUnit::Union, ".")];
+    let valid = unit_key(StateUnit::Union, ".", 0, 0x1000, 1)?;
+    gh.list(&rows_of(&[(at(0), valid.clone())]))?;
+    gh.attest(&[Attestation::signed(&valid)])?;
+
+    run_select_units(
+        &scene,
+        &gh,
+        &units,
+        &[
+            ("VELNOR_STATE_GH_TIMEOUT", "30"),
+            ("VELNOR_STATE_UNIT_TIMEOUT", "2"),
+            ("VELNOR_STATE_SELECT_DEADLINE", "4"),
+        ],
+    )?;
+    expect(
+        &selected_unit(&scene, StateUnit::Union, ".")?,
+        std::slice::from_ref(&valid),
+        "valid supervisor bounds",
+    )?;
+
+    for (name, value) in [
+        ("VELNOR_STATE_SELECT_DEADLINE", "invalid"),
+        ("VELNOR_STATE_SELECT_DEADLINE", "NaN"),
+        ("VELNOR_STATE_SELECT_DEADLINE", "Infinity"),
+        ("VELNOR_STATE_SELECT_DEADLINE", "0"),
+        ("VELNOR_STATE_SELECT_DEADLINE", "-1"),
+        ("VELNOR_STATE_SELECT_DEADLINE", "3601"),
+        ("VELNOR_STATE_UNIT_TIMEOUT", "invalid"),
+        ("VELNOR_STATE_UNIT_TIMEOUT", "NaN"),
+        ("VELNOR_STATE_UNIT_TIMEOUT", "Infinity"),
+        ("VELNOR_STATE_UNIT_TIMEOUT", "0"),
+        ("VELNOR_STATE_UNIT_TIMEOUT", "-1"),
+        ("VELNOR_STATE_UNIT_TIMEOUT", "3601"),
+    ] {
+        run_select_units(
+            &scene,
+            &gh,
+            &units,
+            &[("VELNOR_STATE_GH_TIMEOUT", "30"), (name, value)],
+        )?;
+        expect(
+            &selected_unit(&scene, StateUnit::Union, ".")?,
+            &[],
+            &format!("invalid {name}={value}"),
+        )?;
+        expect_flag(
+            &crate::gc1_seal_units::produce_flag(&scene, StateUnit::Union, ".")?,
+            "true",
+            &format!("invalid {name}={value}"),
+        )?;
+    }
+
+    let path_without_python = scene.restricted_path(&["cat", "mkdir", "rm"])?;
+    run_select_units(
+        &scene,
+        &gh,
+        &units,
+        &[
+            ("VELNOR_STATE_GH_TIMEOUT", "30"),
+            ("PATH", path_without_python.as_str()),
+        ],
+    )?;
+    expect(
+        &selected_unit(&scene, StateUnit::Union, ".")?,
+        &[],
+        "missing Python",
+    )?;
+
+    scene.install_shim("python3", "#!/bin/sh\nexit 17\n")?;
+    run_select_units(&scene, &gh, &units, &[("VELNOR_STATE_GH_TIMEOUT", "30")])?;
+    expect(
+        &selected_unit(&scene, StateUnit::Union, ".")?,
+        &[],
+        "failed Python",
+    )?;
+    expect_flag(
+        &crate::gc1_seal_units::produce_flag(&scene, StateUnit::Union, ".")?,
+        "true",
+        "failed Python",
+    )?;
     scene.finish()
 }

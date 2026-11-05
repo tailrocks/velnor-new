@@ -2,6 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::error::Error;
+#[cfg(target_os = "linux")]
+use std::fs;
+#[cfg(target_os = "linux")]
+use std::time::{Duration, Instant};
 
 use velnor_actions_contract::workflow::cache_family::StateUnit;
 use velnor_actions_contract::workflow::state_seal::{
@@ -11,6 +15,8 @@ use velnor_actions_contract::workflow::state_seal::{
 
 use crate::gc1_scene::{Scene, fail};
 use crate::gc1_seal_support::{Attestation, Gh, REPO};
+#[cfg(target_os = "linux")]
+use crate::gc1_seal_units::hung_processes_gone;
 use crate::gc1_seal_units::{
     at, expect, expect_flag, produce_flag, rendezvous, rows_of, run_select_units, selected_unit,
     unit_key, unit_scope,
@@ -111,6 +117,104 @@ fn plan_never_selects_another_units_attestation_for_a_forged_entry() -> Result<(
     }
     if !mismatches.is_empty() {
         return Err(fail(&mismatches.join("\n")));
+    }
+    scene.finish()
+}
+
+#[test]
+#[cfg(target_os = "linux")]
+fn state_v4_select_many_units_reaps_a_hung_verifiers_descendants() -> Result<(), Box<dyn Error>> {
+    let scene = Scene::new("seal-select-many-hung", crate::gc1_t53::scripts()?)?;
+    let gh = Gh::install(&scene)?;
+    let roots: Vec<String> = (0..65).map(|ordinal| format!("u{ordinal:02}")).collect();
+    let units: Vec<(StateUnit, &str)> = roots
+        .iter()
+        .map(|root| (StateUnit::Union, root.as_str()))
+        .collect();
+    let hung = unit_key(StateUnit::Union, &roots[0], 0, 0x1000, 1)?;
+    let mut rows = vec![(at(0), hung.clone())];
+    let mut attested = Vec::new();
+    for (index, root) in roots.iter().enumerate().skip(1) {
+        let key = unit_key(
+            StateUnit::Union,
+            root,
+            index as u64,
+            0x1000 + index as u64,
+            1,
+        )?;
+        rows.push((at(index), key.clone()));
+        attested.push(Attestation::signed(&key));
+    }
+    attested.push(Attestation::signed(&hung));
+    gh.list(&rows_of(&rows))?;
+    gh.attest(&attested)?;
+    hang_keys(&gh, &[&hung])?;
+    rendezvous(&gh, STATE_SEAL_SELECT_MAX_PARALLELISM)?;
+
+    let started = Instant::now();
+    run_select_units(
+        &scene,
+        &gh,
+        &units,
+        &[
+            ("VELNOR_STATE_GH_TIMEOUT", "30"),
+            ("VELNOR_STATE_UNIT_TIMEOUT", "3"),
+            ("VELNOR_STATE_SELECT_DEADLINE", "8"),
+        ],
+    )?;
+    let elapsed = started.elapsed();
+
+    expect(
+        &selected_unit(&scene, StateUnit::Union, &roots[0])?,
+        &[],
+        "hung unit stays cold",
+    )?;
+    expect_flag(
+        &produce_flag(&scene, StateUnit::Union, &roots[0])?,
+        "true",
+        "hung unit",
+    )?;
+    for (index, root) in roots.iter().enumerate().skip(1) {
+        let key = unit_key(
+            StateUnit::Union,
+            root,
+            index as u64,
+            0x1000 + index as u64,
+            1,
+        )?;
+        expect(
+            &selected_unit(&scene, StateUnit::Union, root)?,
+            &[key],
+            &format!("healthy unit {root}"),
+        )?;
+        expect_flag(
+            &produce_flag(&scene, StateUnit::Union, root)?,
+            "false",
+            root,
+        )?;
+    }
+    if !std::path::Path::new(&gh.dir())
+        .join("healthy-while-hung")
+        .exists()
+    {
+        return Err(fail(
+            "healthy verification did not finish while the hung descendant was alive",
+        ));
+    }
+    let rendezvous_count = fs::read_dir(std::path::Path::new(&gh.dir()).join("rv"))?.count();
+    if rendezvous_count < STATE_SEAL_SELECT_MAX_PARALLELISM {
+        return Err(fail(
+            "the selector did not reach the configured concurrency",
+        ));
+    }
+    if gh.peak()? > STATE_SEAL_SELECT_MAX_PARALLELISM {
+        return Err(fail("the selector exceeded its configured concurrency"));
+    }
+    hung_processes_gone(&gh)?;
+    if elapsed > Duration::from_secs(8) {
+        return Err(fail(&format!(
+            "selection exceeded its deadline: {elapsed:?}"
+        )));
     }
     scene.finish()
 }

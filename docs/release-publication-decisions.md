@@ -1,5 +1,35 @@
 # Release Publication Decisions
 
+**Runner image distribution through GHCR (2026-10-28).** The owner requires
+Runner, DinD, and resource-probe images at
+`ghcr.io/tailrocks/velnor-runner`, `ghcr.io/tailrocks/velnor-dind`, and
+`ghcr.io/tailrocks/velnor-resource-probe`. Each image is built once from the
+selected source commit. Qualification and publication consume those same
+bytes through the existing GHCR transport. Publication keeps the protected
+main/source/workflow authority checks; pull requests do not gain publication
+authority. Normal local builds remain ordinary `docker build` commands.
+
+The immutable `runner-${source_sha}` release contains one attested
+`RUNNER_IMAGE_MANIFEST.json`, `SHA256SUMS`, `LICENSE`, and `NOTICE`. Manifest
+schema 2 binds the exact source and workflow identities, all three image
+repositories and full-source tags, registry and platform-manifest digests,
+config digests, `linux/amd64`, lock-derived component versions, and the fixed
+probe execution contract. This profile publishes a single platform manifest
+directly, so its registry and platform-manifest digests must agree. A Docker
+image ID remains a separate, daemon-specific identity. Consumers authenticate
+the manifest and pull by recorded digest; mutable tags never select runtime
+images. Package visibility must permit anonymous pulls on both a hosted
+runner and the Mac.
+
+This replaces image archive publication and loading, without an archive
+fallback. Complete the producer and consumer together, verify protected-main
+publication and anonymous digest pulls, then remove unreachable archive
+helpers in the same migration. Historical published releases remain intact.
+macOS host and helper binaries remain GitHub Release assets with their existing
+source and helper compatibility checks. PR #415 is refactored for this design;
+its useful source, version, private-DinD, timeout, and owned-cleanup checks must
+survive in separate qualification steps.
+
 **Release-asset Maven bundle choice.** Adopted per the split brief; owner may
 revisit. GitHub Packages Maven is repository-scoped and cannot serve private
 cross-repository consumers with a scoped CI credential, so Java libraries

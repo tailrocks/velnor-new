@@ -349,6 +349,24 @@ impl Scene {
         gc1_mbx_stub::write_executable(&self.bin.join(tool), body)
     }
 
+    pub(crate) fn restricted_path(&self, commands: &[&str]) -> Result<String, Box<dyn Error>> {
+        use std::os::unix::fs::symlink;
+
+        let directory = self.scratch.join("restricted-bin");
+        std::fs::create_dir_all(&directory)?;
+        let paths: Vec<PathBuf> =
+            std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default()).collect();
+        for command in commands {
+            let source = paths
+                .iter()
+                .map(|path| path.join(command))
+                .find(|path| path.is_file())
+                .ok_or_else(|| fail(&format!("cannot find fixture command {command}")))?;
+            symlink(source, directory.join(command))?;
+        }
+        Ok(directory.display().to_string())
+    }
+
     pub(crate) fn install_zstd_pad(&self) -> Result<(), Box<dyn Error>> {
         gc1_mbx_stub::install_zstd_pad(&self.bin)
     }
