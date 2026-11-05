@@ -75,7 +75,7 @@ impl Fixture {
             ),
         )?;
         Self::write_metadata(&workspace, &root)?;
-        mise::write(&root, &workspace)?;
+        mise::write(&root, &workspace, None)?;
         Self::write_guard(&guard, "exec \"$@\"\n")?;
         git(&repo, &["init", "-b", "main"])?;
         git(
@@ -189,6 +189,35 @@ impl Fixture {
             ],
             true,
         )
+    }
+
+    pub(super) fn pin_jactionlint(&self, version: &str) -> Result<(), Box<dyn Error>> {
+        let manifest = self.repo.join("mise.toml");
+        let mut contents = fs::read_to_string(&manifest)?;
+        writeln!(contents, "\n[tools]\njactionlint = \"{version}\"")?;
+        fs::write(manifest, contents)?;
+        mise::write(&self.root, &self.workspace, Some(version))?;
+        git(&self.repo, &["add", "mise.toml"])?;
+        git(
+            &self.repo,
+            &[
+                "-c",
+                "user.name=Fixture",
+                "-c",
+                "user.email=fixture@example.invalid",
+                "commit",
+                "-m",
+                "pin jactionlint",
+            ],
+        )
+    }
+
+    pub(super) fn jactionlint_specs_run(&self) -> Result<Vec<String>, Box<dyn Error>> {
+        match fs::read_to_string(self.root.join("bin/jactionlint-spec")) {
+            Ok(text) => Ok(text.lines().map(str::to_owned).collect()),
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(Vec::new()),
+            Err(err) => Err(err.into()),
+        }
     }
 
     pub(super) fn fail_qualification(&self, stderr: &str) -> Result<(), Box<dyn Error>> {

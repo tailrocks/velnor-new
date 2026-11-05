@@ -16,7 +16,8 @@ if [ "$1" = "ls" ]; then
 fi
 [ "$1" = "exec" ] || exit 93
 shift
-if [ "$1" = "@JACTIONLINT_SPEC@" ]; then
+if [ "$1" = "@JACTIONLINT_SPEC@" ] || [ "$1" = "@DEFAULT_JACTIONLINT_SPEC@" ]; then
+  printf '%s\n' "$1" >> "$(dirname "$0")/jactionlint-spec"
   shift
   [ "$1" = "@SHELLCHECK_SPEC@" ] || exit 94
   shift
