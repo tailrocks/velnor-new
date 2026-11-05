@@ -264,6 +264,51 @@ fn state_snapshot_moves_with_the_lane_task_digest() -> Result<(), Box<dyn Error>
 }
 
 #[test]
+fn a_cargo_build_jobs_change_invalidates_only_its_roots_state_on_purpose()
+-> Result<(), Box<dyn Error>> {
+    let repo = declared_input_repo()?;
+    let root = repo.path();
+    let jobs = finalized_jobs(&prepare(root)?)?;
+    let names = snapshot_names(&jobs);
+    let base = state_snapshots(&jobs, root)?;
+    let config = root.join(".velnor/config.toml");
+    let original = fs::read_to_string(&config)?;
+    let cases = [
+        (
+            "build_jobs",
+            format!("{original}\n[stacks.rust.crates.nested]\nbuild_jobs = 1\n"),
+            vec!["crates/nested"],
+        ),
+        (
+            "state_producer_timeout_minutes",
+            original.replacen(
+                "plan_timeout_minutes = 15\n",
+                "plan_timeout_minutes = 15\nstate_producer_timeout_minutes = 17\n",
+                1,
+            ),
+            vec![],
+        ),
+    ];
+    for (label, edited, expected) in cases {
+        if edited == original {
+            return Err(format!("{label}: the config edit did not apply").into());
+        }
+        fs::write(&config, &edited)?;
+        let changed = finalized_jobs(&prepare(root)?)?;
+        let got = moved_roots(&names, &base, &state_snapshots(&changed, root)?);
+        if got != expected {
+            return Err(format!("{label} moved {got:?}, wanted {expected:?}").into());
+        }
+    }
+    fs::write(&config, &original)?;
+    let restored = finalized_jobs(&prepare(root)?)?;
+    if state_snapshots(&restored, root)? != base {
+        return Err("restoring the config did not restore the snapshots".into());
+    }
+    Ok(())
+}
+
+#[test]
 fn state_snapshot_follows_targets_outside_the_package_directory() -> Result<(), Box<dyn Error>> {
     let repo = declared_input_repo()?;
     let root = repo.path();

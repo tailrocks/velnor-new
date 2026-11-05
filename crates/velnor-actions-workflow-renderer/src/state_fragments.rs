@@ -74,11 +74,12 @@ pub(crate) fn snapshot_lines(
     lock: &str,
     rust_inputs: &str,
     task_set: &str,
+    producer_recipe: &str,
 ) -> Vec<String> {
-    let [lock_name, rust_name, task_name] = StateSnapshot::LINE_NAMES;
+    let [lock_name, rust_name, task_name, recipe_name] = StateSnapshot::LINE_NAMES;
     vec![
         format!(
-            "printf '%s\\n' \"{lock_name}={lock}\" \"{rust_name}={rust_inputs}\" \"{task_name}={task_set}\" > \"{dir}/snapshot\""
+            "printf '%s\\n' \"{lock_name}={lock}\" \"{rust_name}={rust_inputs}\" \"{task_name}={task_set}\" \"{recipe_name}={producer_recipe}\" > \"{dir}/snapshot\""
         ),
         format!("s256 \"{dir}/snapshot\"; snap=\"s256-$h\""),
     ]
