@@ -237,8 +237,10 @@ fn approved_source_must_be_exact_clean_repository() -> Result<(), Box<dyn std::e
     )?;
     let sha = git(root, &["rev-parse", "HEAD"])?;
     verify_crate_release_source(root, &sha, &test_git())?;
+    let catalog = velnor_actions_mise::ToolCatalog::pinned();
+    let rust = catalog.version(velnor_actions_mise::PinnedTool::Rust);
     let intent: CrateReleaseIntent = serde_json::from_value(
-        serde_json::json!({"schema": 1, "repository": "tailrocks/demo", "default_branch": "main", "environment": "release", "required_workflow_path": ".github/workflows/ci.yml", "trusted_reviewer_id": 139_017, "generator_version":"0.1.72","generator_source_sha":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","generator_manifest_sha256":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc","release_plz_version":"0.4.3","runner":"ubuntu-24.04","authentication":"trusted-publishing","rust_version": "1.97.1", "manifest_path": "Cargo.toml", "pr_write_paths": ["CHANGELOG.md", "Cargo.lock", "Cargo.toml"], "registry": "crates-io", "packages": ["demo"], "publish_features": {"demo":[]}, "tag_template": "{{ package }}-v{{ version }}", "recovery": {"package": "demo", "version": "0.1.1", "source_sha": sha}}),
+        serde_json::json!({"schema": 1, "repository": "tailrocks/demo", "default_branch": "main", "environment": "release", "required_workflow_path": ".github/workflows/ci.yml", "trusted_reviewer_id": 139_017, "generator_version":"0.1.72","generator_source_sha":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","generator_manifest_sha256":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc","release_plz_version":"0.4.3","runner":"ubuntu-24.04","authentication":"trusted-publishing","rust_version": rust, "manifest_path": "Cargo.toml", "pr_write_paths": ["CHANGELOG.md", "Cargo.lock", "Cargo.toml"], "registry": "crates-io", "packages": ["demo"], "publish_features": {"demo":[]}, "tag_template": "{{ package }}-v{{ version }}", "recovery": {"package": "demo", "version": "0.1.1", "source_sha": sha}}),
     )?;
     let packages = planned_inventory(root, &sha, &intent)?;
     assert_eq!(packages.len(), 1);
