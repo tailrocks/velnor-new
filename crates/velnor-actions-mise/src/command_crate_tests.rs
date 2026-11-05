@@ -396,3 +396,24 @@ fn github_environment_token_selection_rejects_invalid_and_falls_back_when_empty(
     assert!(select_environment_token(Some(""), Some("bad token")).is_err());
     Ok(())
 }
+
+#[test]
+fn github_commands_reject_explicit_transport_overrides() -> Result<(), Box<dyn std::error::Error>> {
+    use std::ffi::OsStr;
+    let exec = crate::PinnedToolExec::new(
+        vec![crate::PinnedTool::Gh],
+        OsStr::new("gh"),
+        vec!["api".into(), "user".into()],
+    )?;
+    let catalog = crate::ToolCatalog::pinned();
+    for key in ["HTTPS_PROXY", "SSL_CERT_FILE", "SSL_CERT_DIR", "LD_PRELOAD"] {
+        let overlay = [(key.into(), "untrusted".into())];
+        assert!(exec.command(&catalog)?.with_env(&overlay).is_err());
+        assert!(
+            exec.command_with_github_token(&catalog, "dummy-token")?
+                .with_env(&overlay)
+                .is_err()
+        );
+    }
+    Ok(())
+}

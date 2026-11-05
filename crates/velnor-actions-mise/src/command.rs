@@ -191,7 +191,8 @@ impl IsolatedCommand {
     pub fn with_env(mut self, extra: &[(OsString, OsString)]) -> Result<Self, MiseError> {
         for pair in extra {
             let key = pair.0.to_string_lossy();
-            if is_reserved_env_key(&key)
+            if matches!(self.policy, EnvPolicy::GhApi | EnvPolicy::GitHubToken)
+                || is_reserved_env_key(&key)
                 || (self.policy == EnvPolicy::Discovery
                     && self.program == "git"
                     && key == "GIT_OPTIONAL_LOCKS")
