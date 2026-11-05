@@ -24,7 +24,7 @@ mod fixture_pins;
 const SOURCE_SHA: &str = "a97f3c482da31b6f91f83e28c4dca0217e5b6930";
 const REPOSITORY: &str = "tailrocks/velnor-new";
 const RUST_VERSION: &str = "1.99.1";
-const MBX_VERSION: &str = "1.29.1";
+const MBX_VERSION: &str = "1.29.2";
 const GH_VERSION: &str = "2.83.1";
 
 pub(crate) struct Fixture {
