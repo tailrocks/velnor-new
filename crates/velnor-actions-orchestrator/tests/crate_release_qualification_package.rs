@@ -39,7 +39,9 @@ fn intent(sha: &str) -> CrateReleaseIntent {
         environment: "release".into(),
         required_workflow_path: ".github/workflows/ci.yml".into(),
         trusted_reviewer_id: 1,
-        rust_version: "1.97.1".into(),
+        rust_version: velnor_actions_mise::ToolCatalog::pinned()
+            .version(velnor_actions_mise::PinnedTool::Rust)
+            .into(),
         generator_version: env!("CARGO_PKG_VERSION").into(),
         generator_source_sha: "a".repeat(40),
         generator_manifest_sha256: "b".repeat(64),
@@ -96,7 +98,7 @@ fn fixture(root: &Path) -> Result<Fixture, Box<dyn std::error::Error>> {
         manifest: "Cargo.toml".into(),
     };
     let target = tempfile::tempdir()?;
-    let cargo = crate::crate_release_source::source_cargo_path("1.97.1", root)?;
+    let cargo = crate::crate_release_source::source_cargo_path(&intent.rust_version, root)?;
     let output = Command::new(cargo)
         .args([
             "package",
