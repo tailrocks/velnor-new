@@ -57,6 +57,7 @@ enum SuiteTool {
     GenerateValidators,
     OpenTofuExecution,
     BunExecution,
+    GhExecution,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -82,7 +83,7 @@ impl CrateSuite {
 const NO_SUITE_TOOLS: &[SuiteTool] = &[];
 const GENERATE_VALIDATOR_TOOLS: &[SuiteTool] = &[SuiteTool::GenerateValidators];
 const OPENTOFU_TOOLS: &[SuiteTool] = &[SuiteTool::OpenTofuExecution];
-const ORCHESTRATOR_TOOLS: &[SuiteTool] = &[SuiteTool::GenerateValidators, SuiteTool::BunExecution];
+const ORCHESTRATOR_TOOLS: &[SuiteTool] = &[SuiteTool::GenerateValidators, SuiteTool::BunExecution, SuiteTool::GhExecution];
 
 const SUITE_TOOL_OWNERS: [CrateSuite; 14] = [
     CrateSuite {
@@ -216,6 +217,9 @@ impl LaneTools {
         if policy == WorkflowPolicy::VelnorRepositoryV1 && suite.is_some_and(CrateSuite::owns_bun) {
             tools.insert(PinnedTool::Bun);
         }
+        if policy == WorkflowPolicy::VelnorRepositoryV1 && suite.is_some_and(|suite| suite.owns(SuiteTool::GhExecution)) {
+            tools.insert(PinnedTool::Gh);
+        }
         Self(tools)
     }
 
@@ -268,3 +272,7 @@ pub(crate) fn prepare_crate_tools_step(
     step.role = Some(StepRole::PreparePinnedTools);
     Ok(step)
 }
+
+#[cfg(test)]
+#[path = "matrix_tools_tests.rs"]
+mod tests;
