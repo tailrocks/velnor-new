@@ -83,6 +83,7 @@ impl Ledger {
 pub(crate) struct PruneRun {
     pub(crate) status: Option<i32>,
     pub(crate) stdout: String,
+    pub(crate) stderr: String,
     pub(crate) attempted: Vec<u32>,
 }
 
@@ -173,6 +174,7 @@ impl GhFake {
         Ok(PruneRun {
             status: output.status.code(),
             stdout: String::from_utf8(output.stdout)?,
+            stderr: String::from_utf8(output.stderr)?,
             attempted,
         })
     }

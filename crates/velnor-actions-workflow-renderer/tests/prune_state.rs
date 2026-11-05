@@ -320,9 +320,9 @@ fn prune_refuses_a_head_branch_that_could_inject_shell() -> Result<(), Box<dyn E
         assert_ne!(run.status, Some(0), "accepted {hostile:?}");
         assert!(run.attempted.is_empty(), "deleted {:?}", run.attempted);
         assert!(
-            run.stdout.is_empty() || run.stdout.contains("cache_prune_head_branch_invalid"),
-            "stdout: {}",
-            run.stdout
+            run.stderr.contains("cache_prune_head_branch_invalid"),
+            "stderr: {}",
+            run.stderr
         );
     }
     assert!(!fake.root().join("pwned").exists());
