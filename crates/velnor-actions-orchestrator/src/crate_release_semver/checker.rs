@@ -22,7 +22,7 @@ pub(super) fn verify_checker(
     Ok(runner_temp.join(relative))
 }
 
-pub(super) fn verify_one<R: CrateRegistryRead>(
+pub(crate) fn verify_one<R: CrateRegistryRead>(
     source: &Path,
     receipt: &CrateReleaseAdmissionReceipt,
     registry: &R,
@@ -36,6 +36,18 @@ pub(super) fn verify_one<R: CrateRegistryRead>(
             .executable_sha256
             .to_owned();
     let Some(previous) = baseline(registry, &package.source.name, &package.source.version)? else {
+        let approved_new = matches!(
+            package.owners,
+            crate::crate_release_registry::CrateRegistryOwnership::NewCrate
+        ) && receipt.intent.authentication
+            == velnor_actions_contract::config::ReleaseAuthentication::BootstrapToken
+            && receipt.intent.new_crates.as_ref().is_some_and(|creation| {
+                creation.source_sha == receipt.github.request.source_sha
+                    && creation.packages.get(&package.source.name) == Some(&package.source.version)
+            });
+        if !approved_new {
+            return Err(invalid());
+        }
         return Ok(SemverEvidence::NoBaseline { checker_sha256 });
     };
     let features = receipt

@@ -283,3 +283,65 @@ pub(super) fn new_crate_reconciliation_accepts_verified_first_owner()
     assert!(check().is_err());
     Ok(())
 }
+
+#[test]
+pub(super) fn missing_semver_baseline_requires_reviewed_new_crate()
+-> Result<(), Box<dyn std::error::Error>> {
+    let temp = tempfile::tempdir()?;
+    let root = temp.path();
+    let (mut intent, request, github, base) = make_fixture(root)?;
+    github.approved.set(true);
+    let existing = prepare_crate_release(&intent, &request, &github, &base, root)?;
+    let registry = NewRegistry {
+        base,
+        visible: Cell::new(false),
+        owner_changed: Cell::new(false),
+    };
+    let check = |receipt: &crate::crate_release_controller::CrateReleaseAdmissionReceipt| {
+        crate::crate_release_semver::verify_one(
+            root,
+            receipt,
+            &registry,
+            &receipt.packages[0],
+            root,
+            test_git(),
+        )
+    };
+    assert!(check(&existing).is_err());
+    intent.authentication = velnor_actions_contract::config::ReleaseAuthentication::BootstrapToken;
+    intent.recovery = None;
+    intent.new_crates = Some(velnor_actions_contract::config::NewCrateRelease {
+        source_sha: request.source_sha.clone(),
+        packages: std::collections::BTreeMap::from([("demo".into(), "0.1.1".into())]),
+    });
+    let new = prepare_crate_release(&intent, &request, &github, &registry, root)?;
+    assert!(matches!(
+        check(&new)?,
+        crate::crate_release_semver::SemverEvidence::NoBaseline { .. }
+    ));
+    let mut wrong = new.clone();
+    wrong
+        .intent
+        .new_crates
+        .as_mut()
+        .ok_or("creation")?
+        .packages
+        .insert("demo".into(), "0.1.2".into());
+    assert!(check(&wrong).is_err());
+    let mut wrong = new.clone();
+    wrong
+        .intent
+        .new_crates
+        .as_mut()
+        .ok_or("creation")?
+        .source_sha = "f".repeat(40);
+    assert!(check(&wrong).is_err());
+    let mut wrong = new.clone();
+    wrong.intent.new_crates = None;
+    assert!(check(&wrong).is_err());
+    let mut wrong = new.clone();
+    wrong.intent.authentication =
+        velnor_actions_contract::config::ReleaseAuthentication::TrustedPublishing;
+    assert!(check(&wrong).is_err());
+    Ok(())
+}

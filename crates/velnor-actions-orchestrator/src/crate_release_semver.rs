@@ -6,7 +6,8 @@
 pub(crate) mod test_registry;
 
 mod checker;
-use checker::{verify_checker, verify_one};
+use checker::verify_checker;
+pub(crate) use checker::verify_one;
 
 use std::{cmp::Ordering, ffi::OsString, io::Write as _, path::Path, time::Duration};
 
