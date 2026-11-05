@@ -82,6 +82,56 @@ fn acquire_receipt<
         OrchestratorError,
     >,
 ) -> Result<(), OrchestratorError> {
+    let authenticated = acquire_authenticated_receipt(request, github, transport)?;
+    let AuthenticatedReceipt { bytes, receipt } = authenticated;
+    let invalid = || internal("crate_release_receipt_acquire_invalid");
+    if reconciliation {
+        let visible = crate::crate_release_controller::validate_reconciliation_receipt(
+            &receipt,
+            request.intent,
+            request.github,
+            github,
+            registry,
+            source,
+            request.git,
+        )?;
+        if !visible {
+            return Err(internal("crate_release_visibility_timeout"));
+        }
+    } else {
+        let mut fresh = crate::crate_release_controller::prepare_crate_release(
+            request.intent,
+            request.github,
+            github,
+            registry,
+            source,
+            request.git,
+        )?;
+        fresh.semver_evidence = verify_semver(&fresh)?;
+        crate::crate_release_controller::verify_observed_packages(&fresh, &receipt)?;
+        if !crate::crate_release_semver::matches_revalidated_preflight(
+            &receipt.semver_evidence,
+            &fresh.semver_evidence,
+        ) {
+            return Err(invalid());
+        }
+    }
+    write_receipt(request.runner_temp, &bytes)
+}
+
+struct AuthenticatedReceipt {
+    bytes: Vec<u8>,
+    receipt: crate::crate_release_controller::CrateReleaseAdmissionReceipt,
+}
+
+fn acquire_authenticated_receipt<
+    G: crate::crate_release_github::GitHubAdmissionRead,
+    T: crate::crate_release_tool_download::ToolDownloadTransport,
+>(
+    request: &ToolchainStageRequest<'_>,
+    github: &G,
+    transport: &T,
+) -> Result<AuthenticatedReceipt, OrchestratorError> {
     let invalid = || internal("crate_release_receipt_acquire_invalid");
     if request.github.run_attempt != 1
         || request.token.is_empty()
@@ -125,38 +175,19 @@ fn acquire_receipt<
     }
     let bytes = read_receipt_archive(&file)?;
     let receipt = decode_receipt(&bytes, request.candidate)?;
-    if reconciliation {
-        let visible = crate::crate_release_controller::validate_reconciliation_receipt(
-            &receipt,
-            request.intent,
-            request.github,
-            github,
-            registry,
-            source,
-            request.git,
-        )?;
-        if !visible {
-            return Err(internal("crate_release_visibility_timeout"));
-        }
-    } else {
-        let mut fresh = crate::crate_release_controller::prepare_crate_release(
-            request.intent,
-            request.github,
-            github,
-            registry,
-            source,
-            request.git,
-        )?;
-        fresh.semver_evidence = verify_semver(&fresh)?;
-        crate::crate_release_controller::verify_observed_packages(&fresh, &receipt)?;
-        if !crate::crate_release_semver::matches_revalidated_preflight(
-            &receipt.semver_evidence,
-            &fresh.semver_evidence,
-        ) {
-            return Err(invalid());
-        }
-    }
-    write_receipt(request.runner_temp, &bytes)
+    Ok(AuthenticatedReceipt { bytes, receipt })
+}
+
+#[cfg(test)]
+pub(crate) fn fixture_authenticate_receipt<
+    G: crate::crate_release_github::GitHubAdmissionRead,
+    T: crate::crate_release_tool_download::ToolDownloadTransport,
+>(
+    request: &ToolchainStageRequest<'_>,
+    github: &G,
+    transport: &T,
+) -> Result<crate::crate_release_controller::CrateReleaseAdmissionReceipt, OrchestratorError> {
+    acquire_authenticated_receipt(request, github, transport).map(|value| value.receipt)
 }
 
 fn decode_receipt(

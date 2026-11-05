@@ -256,10 +256,10 @@ pub struct ToolchainStageRequest<'a> {
 #[path = "crate_release_tool_receipt.rs"]
 mod receipt;
 use receipt::check_real_directories;
-#[cfg(test)]
-pub(crate) use receipt::fixture_acquire_receipt;
 pub(crate) use receipt::write_receipt;
 pub use receipt::{acquire_receipt_artifact, acquire_reconciliation_receipt_artifact};
+#[cfg(test)]
+pub(crate) use receipt::{fixture_acquire_receipt, fixture_authenticate_receipt};
 
 impl std::fmt::Debug for ToolchainStageRequest<'_> {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

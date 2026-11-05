@@ -143,6 +143,20 @@ pub(super) fn receipt_acquire_requires_current_approval_and_matching_evidence()
         runner_temp: &runner_path,
         deadline: std::time::Instant::now() + std::time::Duration::from_secs(30),
     };
+    let authenticated =
+        crate::crate_release_tool_artifact::fixture_authenticate_receipt(&stage, &github, &github)?;
+    assert_eq!(authenticated, receipt);
+    assert!(
+        !runner_path
+            .join("velnor-crate-release-receipt.json")
+            .exists()
+    );
+    github.approved.set(false);
+    assert!(
+        crate::crate_release_tool_artifact::fixture_authenticate_receipt(&stage, &github, &github,)
+            .is_err()
+    );
+    github.approved.set(true);
     acquire_receipt_artifact(&stage, &github, &registry, &github, source.path())?;
     assert_eq!(
         serde_json::from_slice::<
