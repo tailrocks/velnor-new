@@ -247,7 +247,7 @@ fn current_preparation_artifact<G: crate::crate_release_github::GitHubAdmissionR
     )
 }
 
-fn read_reviewed_file<G: crate::crate_release_github::GitHubAdmissionRead>(
+pub(crate) fn read_reviewed_file<G: crate::crate_release_github::GitHubAdmissionRead + ?Sized>(
     github: &G,
     trees: &crate::crate_release_pr_tree::GitHubTrees<'_>,
     root: &str,
