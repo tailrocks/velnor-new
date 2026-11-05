@@ -118,7 +118,7 @@ def invoke(mode):
             raise RuntimeError("service did not enforce timeout or cancellation")
         if not cgroup:
             state = subprocess.run(["/usr/bin/systemctl", "show", unit, "--value", "-p", "ActiveState"], capture_output=True, text=True, timeout=5, check=False)
-            if state.stdout.strip() not in ("inactive", "failed") and state.returncode == 0:
+            if state.returncode != 0 or state.stdout.strip() not in ("inactive", "failed"):
                 raise RuntimeError("unit teardown was not confirmed")
         for _ in range(50):
             events = "/sys/fs/cgroup" + cgroup + "/cgroup.events"
