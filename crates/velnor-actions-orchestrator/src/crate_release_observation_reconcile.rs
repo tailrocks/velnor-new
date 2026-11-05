@@ -18,9 +18,7 @@ pub(crate) struct ReconciledCandidate {
 pub(crate) fn reconciled_completion_packages(
     candidate: &ReconciledCandidate,
 ) -> Result<Vec<crate::crate_release_journal::JournalPublishedPackage>, OrchestratorError> {
-    use crate::crate_release_journal::{
-        JournalFile, JournalFileKind, JournalOperation, JournalPublishedPackage,
-    };
+    use crate::crate_release_journal::{JournalFile, JournalFileKind, JournalPublishedPackage};
     candidate
         .packages
         .iter()
@@ -46,10 +44,45 @@ pub(crate) fn reconciled_completion_packages(
                     })
                     .collect(),
                 features: package.registry.features.clone(),
-                operations: vec![JournalOperation::ObservedPresent],
+                operations: verified_operations(
+                    &candidate.history,
+                    &package.source.name,
+                    &package.source.version,
+                ),
             })
         })
         .collect()
+}
+
+fn verified_operations(
+    history: &[JournalMutation],
+    package: &str,
+    version: &str,
+) -> Vec<crate::crate_release_journal::JournalOperation> {
+    use crate::crate_release_journal::{
+        JournalMutationKind, JournalMutationPhase, JournalOperation,
+    };
+    let mut operations = Vec::new();
+    for mutation in history {
+        if mutation.package != package
+            || mutation.version != version
+            || !matches!(mutation.phase, JournalMutationPhase::Observed { .. })
+        {
+            continue;
+        }
+        let operation = match mutation.kind {
+            JournalMutationKind::Upload => JournalOperation::Published,
+            JournalMutationKind::CreateTag => JournalOperation::TagRepaired,
+            JournalMutationKind::CreateRelease => JournalOperation::ReleaseRepaired,
+        };
+        if !operations.contains(&operation) {
+            operations.push(operation);
+        }
+    }
+    if operations.is_empty() {
+        operations.push(JournalOperation::ObservedPresent);
+    }
+    operations
 }
 
 pub(super) fn journal_owners(

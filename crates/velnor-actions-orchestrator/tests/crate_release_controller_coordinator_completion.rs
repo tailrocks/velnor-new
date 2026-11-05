@@ -149,7 +149,11 @@ pub(super) fn serial_coordinator_records_upload_and_metadata_before_reconciling(
     );
     assert_eq!(
         completed[0].operations,
-        vec![crate::crate_release_journal::JournalOperation::ObservedPresent]
+        vec![
+            crate::crate_release_journal::JournalOperation::Published,
+            crate::crate_release_journal::JournalOperation::TagRepaired,
+            crate::crate_release_journal::JournalOperation::ReleaseRepaired,
+        ]
     );
     assert_eq!(
         completed[0].registry_checksum,
@@ -256,7 +260,11 @@ pub(super) fn check_completion_retry(
     .expect("completion");
     assert_eq!(
         completion.completion.expect("result").packages[0].operations,
-        vec![crate::crate_release_journal::JournalOperation::ObservedPresent]
+        vec![
+            crate::crate_release_journal::JournalOperation::Published,
+            crate::crate_release_journal::JournalOperation::TagRepaired,
+            crate::crate_release_journal::JournalOperation::ReleaseRepaired,
+        ]
     );
     let journal_writes = input.journal.write_calls.get();
     let retried = coordinate_release(
