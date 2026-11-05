@@ -213,10 +213,11 @@ impl Fixture {
     }
 
     pub(super) fn jactionlint_specs_run(&self) -> Result<Vec<String>, Box<dyn Error>> {
-        Ok(fs::read_to_string(self.root.join("bin/jactionlint-spec"))?
-            .lines()
-            .map(str::to_owned)
-            .collect())
+        match fs::read_to_string(self.root.join("bin/jactionlint-spec")) {
+            Ok(text) => Ok(text.lines().map(str::to_owned).collect()),
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(Vec::new()),
+            Err(err) => Err(err.into()),
+        }
     }
 
     pub(super) fn fail_qualification(&self, stderr: &str) -> Result<(), Box<dyn Error>> {
