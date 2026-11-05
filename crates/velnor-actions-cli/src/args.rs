@@ -213,6 +213,7 @@ pub(crate) enum CrateReleaseCommand {
     CheckoutPolicy,
     CheckoutSource,
     PreparePr,
+    ReleasePrCreate,
     #[command(about = "Validate release source authority")]
     SourceAdmit,
     CandidateReceipt,

@@ -145,6 +145,7 @@ fn run_crate_release_command(command: &crate::args::CrateReleaseCommand) -> Exit
         crate::args::CrateReleaseCommand::PreparePr
         | crate::args::CrateReleaseCommand::CheckoutPolicy
         | crate::args::CrateReleaseCommand::CheckoutSource => unreachable!(),
+        crate::args::CrateReleaseCommand::ReleasePrCreate => "release-pr-create",
         crate::args::CrateReleaseCommand::SourceAdmit => "source-admit",
         crate::args::CrateReleaseCommand::CandidateReceipt => "candidate-receipt",
         crate::args::CrateReleaseCommand::ReceiptAcquire => "receipt-acquire",
