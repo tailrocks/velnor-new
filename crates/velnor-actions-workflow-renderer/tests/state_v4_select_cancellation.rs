@@ -3,7 +3,7 @@
 
 use std::error::Error;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Child, Command, ExitStatus};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -138,16 +138,27 @@ fn send_signal(signal: &str, pid: &str) -> Result<(), Box<dyn Error>> {
     }
 }
 
+struct CancellationBarrier<'a> {
+    scene: &'a Scene,
+    gh: &'a Gh,
+    selector: &'a mut RunningSelector,
+    signal_marker: &'a Path,
+    signal_ack: &'a Path,
+}
+
 fn barrier_failure(
-    scene: &Scene,
-    gh: &Gh,
     signal: &str,
     iteration: usize,
     barrier: &str,
-    selector: &mut RunningSelector,
-    signal_marker: &PathBuf,
-    signal_ack: &PathBuf,
+    context: CancellationBarrier<'_>,
 ) -> Box<dyn Error> {
+    let CancellationBarrier {
+        scene,
+        gh,
+        selector,
+        signal_marker,
+        signal_ack,
+    } = context;
     let pid = selector.child.id();
     let process_state = fs::read_to_string(format!("/proc/{pid}/status"))
         .ok()
@@ -158,7 +169,7 @@ fn barrier_failure(
                 .map(str::to_owned)
         });
     let rendezvous = fs::read_dir(PathBuf::from(gh.dir()).join("rv"))
-        .map(|entries| entries.count())
+        .map(Iterator::count)
         .ok();
     let verified = fs::read_to_string(PathBuf::from(gh.dir()).join("verified")).ok();
     let hung = gh.hung_pids().ok();
@@ -193,106 +204,93 @@ fn selector_cancellation_cleans_and_propagates_each_signal() -> Result<(), Box<d
         .into_iter()
         .enumerate()
     {
-        let scene = Scene::new("seal-select-cancellation", crate::gc1_t53::scripts()?)?;
-        let gh = Gh::install(&scene)?;
-        let completed = unit_key(StateUnit::Union, ".", 0, 0x1000, 1)?;
-        let hanging = unit_key(StateUnit::Union, "b", 1, 0x1001, 2)?;
-        gh.list(&[
-            ("2026-11-04T03:00:00Z", MAIN, &completed),
-            ("2026-11-04T02:00:00Z", MAIN, &hanging),
-        ])?;
-        gh.attest(&[
-            Attestation::signed(&completed),
-            Attestation::signed(&hanging),
-        ])?;
-        hang_keys(&gh, &[&hanging])?;
-        rendezvous(&gh, 2)?;
-        let signal_marker = PathBuf::from(gh.dir()).join("cleanup-started");
-        let signal_ack = PathBuf::from(gh.dir()).join("cleanup-release");
-        let signal_marker_env = signal_marker.display().to_string();
-        let signal_ack_env = signal_ack.display().to_string();
-        let mut selector = RunningSelector::new(spawn_select_units(
-            &scene,
-            &gh,
-            &[(StateUnit::Union, "."), (StateUnit::Union, "b")],
-            &[
-                ("FAKE_GH_SIGNAL_MARKER", &signal_marker_env),
-                ("FAKE_GH_SIGNAL_ACK", &signal_ack_env),
-            ],
-        )?);
-        if wait_for_rendezvous(&gh, 2).is_err() {
-            return Err(barrier_failure(
-                &scene,
-                &gh,
-                signal,
-                iteration,
-                "verifier rendezvous",
-                &mut selector,
-                &signal_marker,
-                &signal_ack,
-            ));
-        }
-        if wait_for_clean_success(&scene, &gh, 0, &completed).is_err() {
-            return Err(barrier_failure(
-                &scene,
-                &gh,
-                signal,
-                iteration,
-                "completed-unit cleanup",
-                &mut selector,
-                &signal_marker,
-                &signal_ack,
-            ));
-        }
-        if wait_until(
-            || gh.hung_pids().is_ok_and(|pids| pids.len() >= 2),
-            Duration::from_secs(5),
-        )
-        .is_err()
-        {
-            return Err(barrier_failure(
-                &scene,
-                &gh,
-                signal,
-                iteration,
-                "hanging-verifier startup",
-                &mut selector,
-                &signal_marker,
-                &signal_ack,
-            ));
-        }
-        let pid = selector.child.id().to_string();
-        send_signal(signal, &pid)?;
-        if wait_until(|| signal_marker.exists(), Duration::from_secs(5)).is_err() {
-            return Err(barrier_failure(
-                &scene,
-                &gh,
-                signal,
-                iteration,
-                "cleanup handler start",
-                &mut selector,
-                &signal_marker,
-                &signal_ack,
-            ));
-        }
-        send_signal(signal, &pid)?;
-        fs::write(&signal_ack, "continue\n")?;
-        let actual = selector.wait(Duration::from_secs(10))?.code();
-        if actual != Some(status) {
-            return Err(fail(&format!(
-                "{signal} cancellation returned {actual:?}, wanted {status}"
-            )));
-        }
-        for index in 0..2 {
-            let output = scene
-                .runner
-                .join(format!("velnor/state-select/u-r{index}/out"));
-            if !fs::read_to_string(output)?.trim().is_empty() {
-                return Err(fail("cancellation retained a selected unit"));
-            }
-        }
-        hung_processes_gone(&gh)?;
-        scene.finish()?;
+        run_cancellation_case(iteration, signal, status)?;
     }
+    Ok(())
+}
+
+fn run_cancellation_case(
+    iteration: usize,
+    signal: &str,
+    status: i32,
+) -> Result<(), Box<dyn Error>> {
+    let scene = Scene::new("seal-select-cancellation", crate::gc1_t53::scripts()?)?;
+    let gh = Gh::install(&scene)?;
+    let completed = unit_key(StateUnit::Union, ".", 0, 0x1000, 1)?;
+    let hanging = unit_key(StateUnit::Union, "b", 1, 0x1001, 2)?;
+    gh.list(&[
+        ("2026-11-04T03:00:00Z", MAIN, &completed),
+        ("2026-11-04T02:00:00Z", MAIN, &hanging),
+    ])?;
+    gh.attest(&[
+        Attestation::signed(&completed),
+        Attestation::signed(&hanging),
+    ])?;
+    hang_keys(&gh, &[&hanging])?;
+    rendezvous(&gh, 2)?;
+    let signal_marker = PathBuf::from(gh.dir()).join("cleanup-started");
+    let signal_ack = PathBuf::from(gh.dir()).join("cleanup-release");
+    let signal_marker_env = signal_marker.display().to_string();
+    let signal_ack_env = signal_ack.display().to_string();
+    let mut selector = RunningSelector::new(spawn_select_units(
+        &scene,
+        &gh,
+        &[(StateUnit::Union, "."), (StateUnit::Union, "b")],
+        &[
+            ("FAKE_GH_SIGNAL_MARKER", &signal_marker_env),
+            ("FAKE_GH_SIGNAL_ACK", &signal_ack_env),
+        ],
+    )?);
+    let diagnostic = |barrier: &str, selector: &mut RunningSelector| {
+        barrier_failure(
+            signal,
+            iteration,
+            barrier,
+            CancellationBarrier {
+                scene: &scene,
+                gh: &gh,
+                selector,
+                signal_marker: &signal_marker,
+                signal_ack: &signal_ack,
+            },
+        )
+    };
+    if wait_for_rendezvous(&gh, 2).is_err() {
+        return Err(diagnostic("verifier rendezvous", &mut selector));
+    }
+    if wait_for_clean_success(&scene, &gh, 0, &completed).is_err() {
+        return Err(diagnostic("completed-unit cleanup", &mut selector));
+    }
+    if wait_until(
+        || gh.hung_pids().is_ok_and(|pids| pids.len() >= 2),
+        Duration::from_secs(5),
+    )
+    .is_err()
+    {
+        return Err(diagnostic("hanging-verifier startup", &mut selector));
+    }
+    let pid = selector.child.id().to_string();
+    send_signal(signal, &pid)?;
+    if wait_until(|| signal_marker.exists(), Duration::from_secs(5)).is_err() {
+        return Err(diagnostic("cleanup handler start", &mut selector));
+    }
+    send_signal(signal, &pid)?;
+    fs::write(&signal_ack, "continue\n")?;
+    let actual = selector.wait(Duration::from_secs(10))?.code();
+    if actual != Some(status) {
+        return Err(fail(&format!(
+            "{signal} cancellation returned {actual:?}, wanted {status}"
+        )));
+    }
+    for index in 0..2 {
+        let output = scene
+            .runner
+            .join(format!("velnor/state-select/u-r{index}/out"));
+        if !fs::read_to_string(output)?.trim().is_empty() {
+            return Err(fail("cancellation retained a selected unit"));
+        }
+    }
+    hung_processes_gone(&gh)?;
+    scene.finish()?;
     Ok(())
 }

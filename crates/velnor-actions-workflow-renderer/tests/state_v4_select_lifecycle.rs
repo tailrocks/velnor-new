@@ -198,101 +198,117 @@ fn state_v4_select_many_units_reaps_a_hung_verifiers_descendants() -> Result<(),
 fn selector_does_not_accept_a_status_first_observed_after_unit_expiry() -> Result<(), Box<dyn Error>>
 {
     for (label, advance_seconds) in [("equal", 1), ("late", 2)] {
-        let scene = Scene::new("seal-select-late-unit", crate::gc1_t53::scripts()?)?;
-        let gh = Gh::install(&scene)?;
-        let completed = unit_key(StateUnit::Union, ".", 0, 0x1000, 1)?;
-        let delayed = unit_key(StateUnit::Union, "b", 1, 0x1001, 1)?;
-        gh.list(&[(T3, MAIN, &completed), (T1, MAIN, &delayed)])?;
-        gh.attest(&[
-            Attestation::signed(&completed),
-            Attestation::signed(&delayed),
-        ])?;
-        let clock = SupervisorClock::install(&scene, &gh)?;
-        let real_python = clock
-            .real_python()
-            .to_str()
-            .ok_or_else(|| fail("invalid Python path"))?;
-        let gate = PathBuf::from(gh.dir()).join("verify-release");
-        let started = PathBuf::from(gh.dir()).join("verify-started");
-        let gate_value = gate.to_string_lossy().into_owned();
-        let started_value = started.to_string_lossy().into_owned();
-        let mut selector = RunningSelector::new(spawn_select_units(
-            &scene,
-            &gh,
-            &[(StateUnit::Union, "."), (StateUnit::Union, "b")],
-            &[
-                ("VELNOR_STATE_GH_TIMEOUT", "30"),
-                ("VELNOR_STATE_UNIT_TIMEOUT", "1"),
-                ("VELNOR_STATE_SELECT_DEADLINE", "10"),
-                ("FAKE_REAL_PYTHON3", real_python),
-                ("FAKE_GH_VERIFY_GATE", &gate_value),
-                ("FAKE_GH_VERIFY_GATE_KEY", &delayed),
-                ("FAKE_GH_VERIFY_STARTED", &started_value),
-                ("FAKE_SUPERVISOR_CLOCK_FREEZE", "1"),
-            ],
-        )?);
-        wait_until(|| started.exists(), Duration::from_secs(10))?;
-        let completed_output = scene.runner.join("velnor/state-select/u-r0/out");
-        let verified = PathBuf::from(gh.dir()).join("verified");
-        let state_dir = scene.runner.join("velnor/state-select");
-        wait_until(
-            || {
-                let Ok(records) = fs::read_to_string(&verified) else {
-                    return false;
-                };
-                let Some(pgid) = records.lines().find_map(|line| {
-                    let mut fields = line.split_whitespace();
-                    let candidate = fields.next()?;
-                    let _pid = fields.next()?;
-                    let group = fields.next()?.parse::<u32>().ok()?;
-                    (candidate == completed).then_some(group)
-                }) else {
-                    return false;
-                };
-                fs::read_to_string(&completed_output)
-                    .is_ok_and(|contents| contents.lines().any(|candidate| candidate == completed))
-                    && !group_is_live(pgid)
-                    && process_is_reaped(pgid)
-                    && !state_dir.join("status-u0").exists()
-            },
-            Duration::from_secs(20),
-        )?;
-        clock.block(label)?;
-        clock.wait_for_block(label, Duration::from_secs(10))?;
-        fs::write(&gate, "release\n")?;
-        wait_until(
-            || state_dir.join("status-u1").exists(),
-            Duration::from_secs(10),
-        )?;
-        clock.advance(label, advance_seconds)?;
-        clock.release_block(label)?;
-        clock.wait_for_advance(label, Duration::from_secs(10))?;
-        if !selector.wait(Duration::from_secs(10))?.success() {
-            return Err(fail("unit expiry failed the selector step"));
-        }
-        expect(
-            &selected_unit(&scene, StateUnit::Union, ".")?,
-            std::slice::from_ref(&completed),
-            "completed neighbor survives late status",
-        )?;
-        expect_flag(
-            &produce_flag(&scene, StateUnit::Union, ".")?,
-            "false",
-            "completed neighbor",
-        )?;
-        expect(
-            &selected_unit(&scene, StateUnit::Union, "b")?,
-            &[],
-            "late status remains cold",
-        )?;
-        expect_flag(
-            &produce_flag(&scene, StateUnit::Union, "b")?,
-            "true",
-            "late status",
-        )?;
-        scene.finish()?;
+        run_late_status_case(label, advance_seconds)?;
     }
     Ok(())
+}
+
+#[cfg(target_os = "linux")]
+fn run_late_status_case(label: &str, advance_seconds: u64) -> Result<(), Box<dyn Error>> {
+    let scene = Scene::new("seal-select-late-unit", crate::gc1_t53::scripts()?)?;
+    let gh = Gh::install(&scene)?;
+    let completed = unit_key(StateUnit::Union, ".", 0, 0x1000, 1)?;
+    let delayed = unit_key(StateUnit::Union, "b", 1, 0x1001, 1)?;
+    gh.list(&[(T3, MAIN, &completed), (T1, MAIN, &delayed)])?;
+    gh.attest(&[
+        Attestation::signed(&completed),
+        Attestation::signed(&delayed),
+    ])?;
+    let clock = SupervisorClock::install(&scene, &gh)?;
+    let real_python = clock
+        .real_python()
+        .to_str()
+        .ok_or_else(|| fail("invalid Python path"))?;
+    let gate = PathBuf::from(gh.dir()).join("verify-release");
+    let started = PathBuf::from(gh.dir()).join("verify-started");
+    let gate_value = gate.to_string_lossy().into_owned();
+    let started_value = started.to_string_lossy().into_owned();
+    let mut selector = RunningSelector::new(spawn_select_units(
+        &scene,
+        &gh,
+        &[(StateUnit::Union, "."), (StateUnit::Union, "b")],
+        &[
+            ("VELNOR_STATE_GH_TIMEOUT", "30"),
+            ("VELNOR_STATE_UNIT_TIMEOUT", "1"),
+            ("VELNOR_STATE_SELECT_DEADLINE", "10"),
+            ("FAKE_REAL_PYTHON3", real_python),
+            ("FAKE_GH_VERIFY_GATE", &gate_value),
+            ("FAKE_GH_VERIFY_GATE_KEY", &delayed),
+            ("FAKE_GH_VERIFY_STARTED", &started_value),
+            ("FAKE_SUPERVISOR_CLOCK_FREEZE", "1"),
+        ],
+    )?);
+    wait_until(|| started.exists(), Duration::from_secs(10))?;
+    wait_for_completed_neighbor(&scene, &gh, &completed)?;
+    let state_dir = scene.runner.join("velnor/state-select");
+    clock.block(label)?;
+    clock.wait_for_block(label, Duration::from_secs(10))?;
+    fs::write(&gate, "release\n")?;
+    wait_until(
+        || state_dir.join("status-u1").exists(),
+        Duration::from_secs(10),
+    )?;
+    clock.advance(label, advance_seconds)?;
+    clock.release_block(label)?;
+    clock.wait_for_advance(label, Duration::from_secs(10))?;
+    if !selector.wait(Duration::from_secs(10))?.success() {
+        return Err(fail("unit expiry failed the selector step"));
+    }
+    expect(
+        &selected_unit(&scene, StateUnit::Union, ".")?,
+        std::slice::from_ref(&completed),
+        "completed neighbor survives late status",
+    )?;
+    expect_flag(
+        &produce_flag(&scene, StateUnit::Union, ".")?,
+        "false",
+        "completed neighbor",
+    )?;
+    expect(
+        &selected_unit(&scene, StateUnit::Union, "b")?,
+        &[],
+        "late status remains cold",
+    )?;
+    expect_flag(
+        &produce_flag(&scene, StateUnit::Union, "b")?,
+        "true",
+        "late status",
+    )?;
+    scene.finish()?;
+    Ok(())
+}
+
+#[cfg(target_os = "linux")]
+fn wait_for_completed_neighbor(
+    scene: &Scene,
+    gh: &Gh,
+    completed: &str,
+) -> Result<(), Box<dyn Error>> {
+    let completed_output = scene.runner.join("velnor/state-select/u-r0/out");
+    let verified = PathBuf::from(gh.dir()).join("verified");
+    let state_dir = scene.runner.join("velnor/state-select");
+    wait_until(
+        || {
+            let Ok(records) = fs::read_to_string(&verified) else {
+                return false;
+            };
+            let Some(pgid) = records.lines().find_map(|line| {
+                let mut fields = line.split_whitespace();
+                let candidate = fields.next()?;
+                let _pid = fields.next()?;
+                let group = fields.next()?.parse::<u32>().ok()?;
+                (candidate == completed).then_some(group)
+            }) else {
+                return false;
+            };
+            fs::read_to_string(&completed_output)
+                .is_ok_and(|contents| contents.lines().any(|candidate| candidate == completed))
+                && !group_is_live(pgid)
+                && process_is_reaped(pgid)
+                && !state_dir.join("status-u0").exists()
+        },
+        Duration::from_secs(20),
+    )
 }
 
 #[cfg(target_os = "linux")]
