@@ -2,7 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::error::Error;
+#[cfg(target_os = "linux")]
+use std::path::Path;
 use std::path::PathBuf;
+#[cfg(target_os = "linux")]
+use std::process::Child;
 #[cfg(target_os = "linux")]
 use std::thread;
 #[cfg(target_os = "linux")]
@@ -17,6 +21,83 @@ use velnor_actions_workflow_renderer::plan_sources::state_select::{SealRoot, sta
 
 use crate::gc1_scene::{Scene, fail};
 use crate::gc1_seal_support::{Gh, MAIN, OTHER_WORKFLOW_REF, REPO, script_of};
+
+type SelectCommand = (String, Vec<(String, String)>);
+#[cfg(target_os = "linux")]
+pub(crate) struct SupervisorClock {
+    directory: PathBuf,
+    real_python: PathBuf,
+}
+
+#[cfg(target_os = "linux")]
+impl SupervisorClock {
+    pub(crate) fn install(scene: &Scene, gh: &Gh) -> Result<Self, Box<dyn Error>> {
+        let real_python = PathBuf::from(scene.restricted_path(&["python3"])?).join("python3");
+        scene.install_shim(
+            "python3",
+            r#"#!/bin/sh
+exec "$FAKE_REAL_PYTHON3" -I -c '
+import glob, os, sys, time
+elapsed = [0.0]
+real_monotonic = time.monotonic
+directory = os.environ["FAKE_GH_DIR"]
+def monotonic():
+    for marker in glob.glob(os.path.join(directory, "clock-marker-*")):
+        if marker.endswith(".next"):
+            continue
+        ack = marker.replace("clock-marker-", "clock-ack-", 1)
+        if not os.path.exists(ack):
+            with open(marker, encoding="utf-8") as request:
+                elapsed[0] += float(request.read().strip())
+            with open(ack, "x", encoding="utf-8"):
+                pass
+    return real_monotonic() + elapsed[0]
+time.monotonic = monotonic
+exec(compile(sys.stdin.read(), "<selector>", "exec"), {"__name__": "__main__"})
+'
+"#,
+        )?;
+        Ok(Self {
+            directory: PathBuf::from(gh.dir()),
+            real_python,
+        })
+    }
+
+    pub(crate) fn real_python(&self) -> &Path {
+        &self.real_python
+    }
+
+    pub(crate) fn advance(&self, label: &str, seconds: u64) -> Result<(), Box<dyn Error>> {
+        if seconds == 0
+            || !label
+                .chars()
+                .all(|character| character.is_ascii_alphanumeric() || character == '-')
+        {
+            return Err(fail("invalid supervisor clock advance"));
+        }
+        let marker = self.directory.join(format!("clock-marker-control-{label}"));
+        let pending = marker.with_extension("next");
+        std::fs::write(&pending, format!("{seconds}\n"))?;
+        std::fs::rename(pending, marker)?;
+        Ok(())
+    }
+
+    pub(crate) fn wait_for_advance(
+        &self,
+        label: &str,
+        limit: Duration,
+    ) -> Result<(), Box<dyn Error>> {
+        let ack = self.directory.join(format!("clock-ack-control-{label}"));
+        let deadline = Instant::now() + limit;
+        while Instant::now() < deadline {
+            if ack.exists() {
+                return Ok(());
+            }
+            thread::sleep(Duration::from_millis(10));
+        }
+        Err(fail("supervisor did not acknowledge the clock advance"))
+    }
+}
 
 #[cfg(target_os = "linux")]
 pub(crate) fn hang_keys(gh: &Gh, keys: &[&str]) -> Result<(), Box<dyn Error>> {
@@ -61,6 +142,46 @@ pub(crate) fn process_is_running(pid: u32) -> bool {
                 .map(|(_, rest)| rest.starts_with('Z'))
         })
         .is_some_and(|zombie| !zombie)
+}
+
+#[cfg(target_os = "linux")]
+pub(crate) fn group_is_live(pgid: u32) -> bool {
+    let Ok(entries) = std::fs::read_dir("/proc") else {
+        return true;
+    };
+    entries.filter_map(Result::ok).any(|entry| {
+        let Ok(process_id) = entry.file_name().to_string_lossy().parse::<u32>() else {
+            return false;
+        };
+        let Ok(stat) = std::fs::read_to_string(format!("/proc/{process_id}/stat")) else {
+            return false;
+        };
+        let Some((_, fields)) = stat.rsplit_once(") ") else {
+            return false;
+        };
+        let mut fields = fields.split_whitespace();
+        let state = fields.next().unwrap_or_default();
+        let _parent = fields.next();
+        fields
+            .next()
+            .and_then(|value| value.parse::<u32>().ok())
+            .is_some_and(|group| group == pgid && state != "Z")
+    })
+}
+
+#[cfg(target_os = "linux")]
+pub(crate) fn process_group(pid: u32) -> Option<u32> {
+    let stat = std::fs::read_to_string(format!("/proc/{pid}/stat")).ok()?;
+    let (_, fields) = stat.rsplit_once(") ")?;
+    let mut fields = fields.split_whitespace();
+    fields.next()?;
+    fields.next()?;
+    fields.next()?.parse().ok()
+}
+
+#[cfg(target_os = "linux")]
+pub(crate) fn process_is_reaped(pid: u32) -> bool {
+    !Path::new(&format!("/proc/{pid}/stat")).exists()
 }
 
 pub(crate) fn rendezvous(gh: &Gh, calls: usize) -> Result<(), Box<dyn Error>> {
@@ -117,6 +238,29 @@ pub(crate) fn run_select_units(
     units: &[(StateUnit, &str)],
     extra: &[(&str, &str)],
 ) -> Result<String, Box<dyn Error>> {
+    let (script, env) = select_script_env(scene, gh, units, extra)?;
+    let pairs: Vec<(&str, &str)> = env.iter().map(|(k, v)| (k.as_str(), v.as_str())).collect();
+    scene.run_script(&script, &pairs, None)
+}
+
+#[cfg(target_os = "linux")]
+pub(crate) fn spawn_select_units(
+    scene: &Scene,
+    gh: &Gh,
+    units: &[(StateUnit, &str)],
+    extra: &[(&str, &str)],
+) -> Result<Child, Box<dyn Error>> {
+    let (script, env) = select_script_env(scene, gh, units, extra)?;
+    let pairs: Vec<(&str, &str)> = env.iter().map(|(k, v)| (k.as_str(), v.as_str())).collect();
+    scene.spawn_script(&script, &pairs)
+}
+
+fn select_script_env(
+    scene: &Scene,
+    gh: &Gh,
+    units: &[(StateUnit, &str)],
+    extra: &[(&str, &str)],
+) -> Result<SelectCommand, Box<dyn Error>> {
     match std::fs::remove_file(&scene.github_output) {
         Err(error) if error.kind() != std::io::ErrorKind::NotFound => return Err(error.into()),
         _ => {}
@@ -156,8 +300,7 @@ pub(crate) fn run_select_units(
             .iter()
             .map(|(k, v)| ((*k).to_owned(), (*v).to_owned())),
     );
-    let pairs: Vec<(&str, &str)> = env.iter().map(|(k, v)| (k.as_str(), v.as_str())).collect();
-    scene.run_script(&script, &pairs, None)
+    Ok((script, env))
 }
 
 pub(crate) fn selected_unit(

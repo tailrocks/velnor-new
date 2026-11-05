@@ -36,7 +36,7 @@ printf '%s\n' + >> "$d/activity"
 tracked=1
 finish() { [ "$tracked" -eq 1 ] || return 0; printf '%s\n' - >> "$d/activity"; tracked=0; }
 trap finish EXIT
-trap 'finish; exit 143' TERM INT HUP
+trap 'if [ -n "${FAKE_GH_SIGNAL_MARKER-}" ]; then : > "$FAKE_GH_SIGNAL_MARKER"; fi; if [ -n "${FAKE_GH_SIGNAL_ACK-}" ]; then while [ ! -f "$FAKE_GH_SIGNAL_ACK" ]; do sleep 0.01; done; fi; finish; exit 143' TERM INT HUP
 verb="$1 $2"
 shift 2
 case "$verb" in
@@ -135,6 +135,21 @@ case "$verb" in
       wait "$child"
       exit 1
     fi
+    if [ -f "$d/fail-keys" ] && grep -qxF "$skey" "$d/fail-keys"; then
+      : > "$d/failed-$skey"
+      exit 124
+    fi
+    if [ "${FAKE_GH_CLOCK-}" = 1 ]; then
+      clock_id=$(printf '%s' "$skey" | sha256sum)
+      clock_id=${clock_id%% *}
+      marker="$d/clock-marker-$clock_id"
+      ack="$d/clock-ack-$clock_id"
+      printf '%s\n' "${FAKE_GH_CLOCK_STEP:?}" > "$marker.next"
+      mv -f "$marker.next" "$marker"
+      waited=0
+      while [ ! -f "$ack" ] && [ "$waited" -lt 100 ]; do sleep 0.01; waited=$((waited + 1)); done
+      [ -f "$ack" ] || exit 1
+    fi
     repo=; signer=; sref=; pred=
     while [ $# -gt 0 ]; do
       case "$1" in -R) repo=$2; shift ;; --signer-workflow) signer=$2; shift ;; --source-ref) sref=$2; shift ;; --predicate-type) pred=$2; shift ;; esac
@@ -150,6 +165,8 @@ case "$verb" in
       [ -z "$sref" ] || [ "$sref" = "$tref" ] || continue
       [ -z "$pred" ] || [ "$pred" = "$tpred" ] || continue
       printf '%s\n' "$skey" >> "$d/completed"
+      pgid=$(ps -o pgid= -p "$$" | tr -d ' ')
+      printf '%s %s %s\n' "$skey" "$$" "$pgid" >> "$d/verified"
       if [ -f "$d/hung-pids" ]; then
         while IFS= read -r pid; do
           if kill -0 "$pid" 2>/dev/null; then : > "$d/healthy-while-hung"; break; fi
@@ -224,6 +241,12 @@ impl Gh {
 
     pub(crate) fn tip(&self, sha: &str) -> Result<(), Box<dyn Error>> {
         std::fs::write(self.dir.join("tip"), format!("{sha}\n"))?;
+        Ok(())
+    }
+
+    #[cfg(target_os = "linux")]
+    pub(crate) fn fail_keys(&self, keys: &[&str]) -> Result<(), Box<dyn Error>> {
+        std::fs::write(self.dir.join("fail-keys"), format!("{}\n", keys.join("\n")))?;
         Ok(())
     }
 

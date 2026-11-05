@@ -59,7 +59,11 @@ mod state_v4_restore;
 mod state_v4_seal;
 mod state_v4_select;
 #[cfg(target_os = "linux")]
+mod state_v4_select_aggregate;
+#[cfg(target_os = "linux")]
 mod state_v4_select_bounds;
+#[cfg(target_os = "linux")]
+mod state_v4_select_default_deadline;
 mod state_v4_select_units;
 mod state_v4_snapshot;
 mod state_v4_tip;

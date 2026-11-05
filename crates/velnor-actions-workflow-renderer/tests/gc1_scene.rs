@@ -124,6 +124,28 @@ impl Scene {
         self.run_script_unset(script, env, &[], fsize_blocks)
     }
 
+    #[cfg(target_os = "linux")]
+    pub(crate) fn spawn_script(
+        &self,
+        script: &str,
+        env: &[(&str, &str)],
+    ) -> Result<std::process::Child, Box<dyn Error>> {
+        let path = format!("{}:{}", self.bin.display(), std::env::var("PATH")?);
+        let mut command = Command::new("sh");
+        command
+            .arg("-c")
+            .arg(script)
+            .process_group(0)
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null());
+        self.base_env(&mut command, &path);
+        for (name, value) in env {
+            command.env(name, value);
+        }
+        Ok(command.spawn()?)
+    }
+
     pub(crate) fn run_script_unset(
         &self,
         script: &str,

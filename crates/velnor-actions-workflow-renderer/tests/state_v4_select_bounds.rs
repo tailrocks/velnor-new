@@ -9,11 +9,11 @@ use velnor_actions_contract::workflow::state_seal::STATE_SEAL_SELECT_MAX_PARALLE
 
 use crate::gc1_scene::{Scene, fail};
 use crate::gc1_seal_support::{Attestation, Gh};
+#[cfg(unix)]
+use crate::gc1_seal_units::expect_flag;
 use crate::gc1_seal_units::{
     at, expect, hang_keys, rows_of, run_select_units, selected_unit, unit_key,
 };
-#[cfg(unix)]
-use crate::gc1_seal_units::expect_flag;
 #[cfg(target_os = "linux")]
 use crate::gc1_seal_units::{hung_processes_gone, process_is_running};
 
@@ -201,25 +201,7 @@ fn state_v4_select_supervisor_rejects_invalid_bounds_and_missing_python()
     let scene = Scene::new("seal-select-supervisor-inputs", crate::gc1_t53::scripts()?)?;
     let gh = Gh::install(&scene)?;
     let units = [(StateUnit::Union, ".")];
-    let valid = unit_key(StateUnit::Union, ".", 0, 0x1000, 1)?;
-    gh.list(&rows_of(&[(at(0), valid.clone())]))?;
-    gh.attest(&[Attestation::signed(&valid)])?;
-
-    run_select_units(
-        &scene,
-        &gh,
-        &units,
-        &[
-            ("VELNOR_STATE_GH_TIMEOUT", "30"),
-            ("VELNOR_STATE_UNIT_TIMEOUT", "2"),
-            ("VELNOR_STATE_SELECT_DEADLINE", "4"),
-        ],
-    )?;
-    expect(
-        &selected_unit(&scene, StateUnit::Union, ".")?,
-        std::slice::from_ref(&valid),
-        "valid supervisor bounds",
-    )?;
+    assert_valid_supervisor_bounds(&scene, &gh, &units)?;
 
     for (name, value) in [
         ("VELNOR_STATE_SELECT_DEADLINE", "invalid"),
@@ -288,4 +270,30 @@ fn state_v4_select_supervisor_rejects_invalid_bounds_and_missing_python()
         "failed Python",
     )?;
     scene.finish()
+}
+
+#[cfg(unix)]
+fn assert_valid_supervisor_bounds(
+    scene: &Scene,
+    gh: &Gh,
+    units: &[(StateUnit, &str)],
+) -> Result<(), Box<dyn Error>> {
+    let valid = unit_key(StateUnit::Union, ".", 0, 0x1000, 1)?;
+    gh.list(&rows_of(&[(at(0), valid.clone())]))?;
+    gh.attest(&[Attestation::signed(&valid)])?;
+    run_select_units(
+        scene,
+        gh,
+        units,
+        &[
+            ("VELNOR_STATE_GH_TIMEOUT", "30"),
+            ("VELNOR_STATE_UNIT_TIMEOUT", "2"),
+            ("VELNOR_STATE_SELECT_DEADLINE", "4"),
+        ],
+    )?;
+    expect(
+        &selected_unit(scene, StateUnit::Union, ".")?,
+        std::slice::from_ref(&valid),
+        "valid supervisor bounds",
+    )
 }
