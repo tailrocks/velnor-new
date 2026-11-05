@@ -151,8 +151,8 @@ fn bootstrap_rotation_accepts_only_matching_lock_without_changing_runtime_output
     assert_runtime_identities(&ci, "2026.10.19", CURRENT_RUNTIME_SHA256)?;
 
     let stale_lock = super::lock_with_mise_bootstrap(
-        "2026.10.25",
-        "5d362ecc578dc7c146679b841dda949d6472cbf86ff5635db7afdca1b6b3fd87",
+        "2026.11.1",
+        "7129dbab31d698f9028db9374f7ba7987232b0426f837dcbce437130a61415f9",
     );
     let temp = fixture(Some(&approvals), &stale_lock)?;
     let error = prepare_error(temp.path())?;
