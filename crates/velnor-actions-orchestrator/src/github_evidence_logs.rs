@@ -308,4 +308,22 @@ mod tests {
             .is_err()
         );
     }
+    #[test]
+    fn production_storage_allowlist_rejects_non_github_redirects() {
+        use super::checked_storage_uri;
+        assert!(
+            checked_storage_uri(
+                "https://productionresultssa0.blob.core.windows.net/container/blob?sig=fixture"
+            )
+            .is_ok()
+        );
+        for url in [
+            "http://productionresultssa0.blob.core.windows.net/blob",
+            "https://productionresultssa0.blob.core.windows.net.attacker.invalid/blob",
+            "https://user@productionresultssa0.blob.core.windows.net/blob",
+            "https://productionresultssa0.blob.core.windows.net:8443/blob",
+        ] {
+            assert!(checked_storage_uri(url).is_err(), "{url}");
+        }
+    }
 }
