@@ -5,8 +5,16 @@ use std::{error::Error, fs, os::unix::fs::PermissionsExt, path::Path};
 
 use velnor_actions_mise::{PinnedTool, ToolCatalog};
 
-pub(super) fn write(root: &Path, repo: &Path) -> Result<(), Box<dyn Error>> {
-    let catalog = ToolCatalog::pinned();
+pub(super) fn write(
+    root: &Path,
+    repo: &Path,
+    jactionlint: Option<&str>,
+) -> Result<(), Box<dyn Error>> {
+    let default_jactionlint = ToolCatalog::pinned().tool_spec(PinnedTool::Jactionlint);
+    let mut catalog = ToolCatalog::pinned();
+    if let Some(version) = jactionlint {
+        catalog = catalog.with_project_tool(PinnedTool::Jactionlint, version)?;
+    }
     let script = include_str!("mise.sh")
         .replace("@RUST_VERSION@", catalog.version(PinnedTool::Rust))
         .replace("@MBX_VERSION@", catalog.version(PinnedTool::MrBoxington))
@@ -20,6 +28,7 @@ pub(super) fn write(root: &Path, repo: &Path) -> Result<(), Box<dyn Error>> {
             "@JACTIONLINT_SPEC@",
             &catalog.tool_spec(PinnedTool::Jactionlint),
         )
+        .replace("@DEFAULT_JACTIONLINT_SPEC@", &default_jactionlint)
         .replace(
             "@SHELLCHECK_SPEC@",
             &catalog.tool_spec(PinnedTool::Shellcheck),

@@ -4,8 +4,8 @@
 use crate::errors::ContractError;
 
 use super::{
-    DEFAULT_SUITE_WORKFLOW_SLUG, VelnorConfig, check_receipt_budget, validate_images,
-    validate_qualified_tools, validate_suites_with_dispatch,
+    VelnorConfig, check_receipt_budget, validate_images, validate_qualified_tools,
+    validate_suites_with_dispatch,
 };
 
 impl VelnorConfig {
@@ -29,20 +29,6 @@ impl VelnorConfig {
         self.check_toolchain_consistency(file)?;
         let suites = self.stacks.rust.as_ref().map_or(&[][..], |r| &r.suites);
         validate_suites_with_dispatch(suites, &self.workflow.dispatch, file)?;
-        for suite in suites {
-            let slug = suite
-                .workflow
-                .as_deref()
-                .unwrap_or(DEFAULT_SUITE_WORKFLOW_SLUG);
-            let path = format!(".github/workflows/{slug}.yml");
-            if self.workflow.preserve_workflows.contains(&path) {
-                return Err(ContractError::config(
-                    file,
-                    "workflow.preserve_workflows",
-                    format!("preserve_workflow_generator_owned:{path}"),
-                ));
-            }
-        }
         super::mise_task_suites::validate_rust_suite_slug_collisions(
             suites,
             &self.workflow.task_suites,

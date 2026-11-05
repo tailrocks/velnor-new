@@ -25,3 +25,28 @@ fn prune_script_emits_tools_retention() {
         "prune script is missing the tools retention call"
     );
 }
+
+#[test]
+fn rendered_workflow_hands_the_head_branch_to_the_script_through_env()
+-> Result<(), Box<dyn std::error::Error>> {
+    let file = velnor_actions_workflow_renderer::cache_prune::render_cache_prune_yml(
+        "ubuntu-26.04",
+        "main",
+        "CI",
+        "0.0.0",
+    )?;
+    let yaml = file.bytes;
+    assert!(
+        yaml.contains("          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}\n"),
+        "head branch is not mapped into the step environment"
+    );
+    let run = yaml
+        .lines()
+        .find(|line| line.trim_start().starts_with("run: "))
+        .ok_or("rendered workflow has no run step")?;
+    assert!(
+        !run.contains("${{"),
+        "event data must not be interpolated into the shell body"
+    );
+    Ok(())
+}
