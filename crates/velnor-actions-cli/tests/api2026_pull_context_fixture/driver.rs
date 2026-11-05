@@ -2,21 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::Scenario;
-use std::{error::Error, process::Command};
+use std::error::Error;
 
 pub(super) fn dispatch(scenario: Scenario) -> Result<(), Box<dyn Error>> {
     let name = scenario.test_name();
-    let script = concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/tests/api2026_pull_context_fixture/driver.py"
-    );
-    let status = Command::new("/usr/bin/python3")
-        .arg("-I")
-        .arg(script)
-        .env(
-            "VELNOR_FIXTURE_NON_INPUTS",
-            crate::reviewed_input_helper::reviewed_non_inputs()?,
-        )
+    let source = crate::reviewed_input_helper::prepare_source()?;
+    let status = source
+        .command()
         .arg("cli")
         .arg(name)
         .arg(if cfg!(debug_assertions) {

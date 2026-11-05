@@ -3,6 +3,9 @@
 
 use std::error::Error;
 
+#[cfg(unix)]
+#[path = "api2026_pull_context_fixture/capture_race_tests.rs"]
+mod capture_race_tests;
 #[path = "api2026_pull_context_fixture.rs"]
 mod fixture;
 #[path = "api2026_pull_context_fixture/non_inputs.rs"]
@@ -10,7 +13,6 @@ mod reviewed_input_helper;
 
 #[test]
 fn sparse_fixture_rejects_exclusion_overlapping_a_package() -> Result<(), Box<dyn Error>> {
-    let _ = reviewed_input_helper::reviewed_non_inputs()?;
     let temporary = tempfile::tempdir()?;
     let clone = temporary.path().join("repo");
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -49,6 +51,19 @@ fn sparse_fixture_rejects_exclusion_overlapping_a_package() -> Result<(), Box<dy
             .contains("non_input_overlaps_claim:package_dir"),
         "{error}"
     );
+    Ok(())
+}
+
+#[test]
+fn frozen_capture_preserves_indexed_and_dirty_source() -> Result<(), Box<dyn Error>> {
+    let status = std::process::Command::new("/usr/bin/python3")
+        .args(["-I", "-S", "-B"])
+        .arg(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/api2026_pull_context_fixture/raw_capture_probe.py"
+        ))
+        .status()?;
+    assert!(status.success());
     Ok(())
 }
 

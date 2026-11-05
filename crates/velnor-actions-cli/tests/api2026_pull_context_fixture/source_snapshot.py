@@ -5,8 +5,10 @@ import hashlib
 import os
 import pathlib
 import re
+import select
 import stat
 import subprocess
+import time
 from collections import deque
 
 MAX_TOTAL = 512 * 1024 * 1024
@@ -19,15 +21,27 @@ MAX_TOTAL_LINK_STEPS = 1000000
 
 def git_output(args, env):
     with subprocess.Popen(args, env=env, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL) as child:
-        data = child.stdout.read(MAX_GIT_OUTPUT + 1)
-        if len(data) > MAX_GIT_OUTPUT:
-            child.kill()
-        status = child.wait()
-    if len(data) > MAX_GIT_OUTPUT:
-        raise RuntimeError("fixture Git input exceeds its bound")
+        try:
+            deadline = time.monotonic() + 30
+            data = bytearray()
+            while True:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0 or not select.select([child.stdout], [], [], remaining)[0]:
+                    raise RuntimeError("fixture Git input timed out")
+                chunk = os.read(child.stdout.fileno(), min(65536, MAX_GIT_OUTPUT + 1 - len(data)))
+                if not chunk:
+                    break
+                data.extend(chunk)
+                if len(data) > MAX_GIT_OUTPUT:
+                    raise RuntimeError("fixture Git input exceeds its bound")
+            status = child.wait(timeout=max(0.001, deadline - time.monotonic()))
+        finally:
+            if child.poll() is None:
+                child.kill()
+                child.wait()
     if status:
         raise RuntimeError("fixture Git input enumeration failed")
-    return data
+    return bytes(data)
 
 
 def nul_records(data):

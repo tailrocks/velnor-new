@@ -31,6 +31,8 @@ trusted. The fixture rejects Docker endpoint overrides and requires a local
 Unix socket, but it does not defend against a compromised host or daemon. The
 worker runs with no network, using a disposable local TLS service and synthetic
 credentials. It verifies the qualified executable and exercises the owned CLI.
+Other processes running as the same user are also trusted: they can alter the
+private validation capture while the fixture runs.
 
 The worker builds from a private snapshot containing the working-tree bytes and
 modes of tracked files, including dirty changes. Nonignored untracked files fail

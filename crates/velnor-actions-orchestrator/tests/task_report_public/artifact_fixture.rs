@@ -14,16 +14,9 @@ use std::{
 mod non_inputs;
 
 pub(super) fn dispatch(test: &str) -> Result<(), Box<dyn Error>> {
-    let status = Command::new("/usr/bin/python3")
-        .arg("-I")
-        .env(
-            "VELNOR_FIXTURE_NON_INPUTS",
-            non_inputs::reviewed_non_inputs()?,
-        )
-        .arg(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/../velnor-actions-cli/tests/api2026_pull_context_fixture/driver.py"
-        ))
+    let source = non_inputs::prepare_source()?;
+    let status = source
+        .command()
         .args([
             "task_report",
             test,

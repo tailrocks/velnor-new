@@ -196,7 +196,20 @@ def main():
     client = trusted_docker()
     docker_env = docker_environment()
     local_daemon(client, docker_env)
-    root = pathlib.Path(__file__).resolve().parents[4]
+    root = pathlib.Path(os.environ["VELNOR_FIXTURE_LIVE_ROOT"])
+    validation = pathlib.Path(os.environ["VELNOR_FIXTURE_VALIDATION_ROOT"])
+    manifest_path = pathlib.Path(os.environ["VELNOR_FIXTURE_CAPTURE_MANIFEST"])
+    if not root.is_absolute() or not validation.is_absolute() or not manifest_path.is_absolute():
+        raise RuntimeError("invalid captured fixture paths")
+    def unique_pairs(pairs):
+        result = {}
+        for key, value in pairs:
+            if key in result:
+                raise RuntimeError("duplicate captured fixture manifest key")
+            result[key] = value
+        return result
+    manifest = json.loads(read_regular(manifest_path, 64 * 1024 * 1024), object_pairs_hook=unique_pairs)
+    import raw_capture
     configured_tools = os.environ.get("VELNOR_GH_FIXTURE_TOOLS")
     if not configured_tools and os.environ.get("RUNNER_TEMP"):
         configured_tools = str(pathlib.Path(os.environ["RUNNER_TEMP"]) / "velnor-gh-fixture-tools")
@@ -218,7 +231,7 @@ def main():
         install_tool(source_tools / f"gh_{gh_platform}", tools / f"mise/installs/gh/{gh_version}/gh_{gh_version}_{gh_platform}/bin/gh", gh_digest)
         install_tool(source_tools / f"cargo-nextest_{gh_platform}", tools / "cargo-nextest", nextest_digest)
         verify_image(client, docker_env, IMAGE)
-        entries = source_snapshot.collect(root, snapshot, read_tracked, patterns)
+        entries = raw_capture.project(validation, snapshot, manifest, patterns)
         verify_sources(root, snapshot, entries, patterns)
         metadata_target = cache / "metadata"; checked_directory(metadata_target)
         metadata_docker = docker_base(client, snapshot, metadata_target, tools, registry, image_platform)
