@@ -76,7 +76,9 @@ pub fn checkout_from_environment(mode: &str) -> Result<(), OrchestratorError> {
     };
     let repository = required("GITHUB_REPOSITORY")?;
     let runner_temp = PathBuf::from(required("RUNNER_TEMP")?);
-    let verified_git = crate::crate_release_git_bundle::acquire(&runner_temp)?;
+    let deadline = velnor_actions_mise::CheckDeadline::after(std::time::Duration::from_secs(600))
+        .map_err(|_| invalid())?;
+    let verified_git = crate::crate_release_git_bundle::acquire(&runner_temp, deadline)?;
     let token = required("GIT_TOKEN")?;
     checkout(
         &verified_git,
@@ -87,10 +89,7 @@ pub fn checkout_from_environment(mode: &str) -> Result<(), OrchestratorError> {
         CheckoutContext {
             origin: "https://github.com",
             test_http: false,
-            deadline: velnor_actions_mise::CheckDeadline::after(std::time::Duration::from_secs(
-                600,
-            ))
-            .map_err(|_| invalid())?,
+            deadline,
         },
     )
 }

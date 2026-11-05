@@ -52,7 +52,10 @@ fn generated_source_require_rehearsal() -> Result<(), Box<dyn Error>> {
 fn generated_candidate_receipt_rejects_unprotected_environment() -> Result<(), Box<dyn Error>> {
     if let Some(temp) = std::env::var_os("VELNOR_NATIVE_ACQUIRE_GIT") {
         let root = std::path::PathBuf::from(temp);
-        let git = crate::crate_release_git_bundle::acquire(&root)?;
+        let git = crate::crate_release_git_bundle::acquire(
+            &root,
+            velnor_actions_mise::CheckDeadline::after(Duration::from_secs(600))?,
+        )?;
         assert_eq!(git.exec_path(), root.join("velnor/git-bundle"));
         return Ok(());
     }
