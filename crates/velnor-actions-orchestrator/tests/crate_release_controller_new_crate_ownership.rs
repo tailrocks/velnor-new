@@ -244,3 +244,42 @@ pub(super) fn verify_new_crate_metadata(
     assert_eq!(candidate.packages.len(), 1);
     Ok(())
 }
+
+#[test]
+pub(super) fn new_crate_reconciliation_accepts_verified_first_owner()
+-> Result<(), Box<dyn std::error::Error>> {
+    let temp = tempfile::tempdir()?;
+    let (mut intent, request, github, base) = make_fixture(temp.path())?;
+    intent.authentication = velnor_actions_contract::config::ReleaseAuthentication::BootstrapToken;
+    intent.recovery = None;
+    intent.new_crates = Some(velnor_actions_contract::config::NewCrateRelease {
+        source_sha: request.source_sha.clone(),
+        packages: std::collections::BTreeMap::from([("demo".into(), "0.1.1".into())]),
+    });
+    github.approved.set(true);
+    let registry = NewRegistry {
+        base,
+        visible: Cell::new(false),
+        owner_changed: Cell::new(false),
+    };
+    let receipt = prepare_crate_release(&intent, &request, &github, &registry, temp.path())?;
+    *registry.base.archive.borrow_mut() = fixture_archive(temp.path())?;
+    registry.base.absent.set(false);
+    registry.visible.set(true);
+    github.tag_exists.set(true);
+    let check = || {
+        velnor_actions_orchestrator::crate_release_controller::validate_reconciliation_receipt(
+            &receipt,
+            &intent,
+            &request,
+            &github,
+            &registry,
+            temp.path(),
+            test_git(),
+        )
+    };
+    assert!(check()?);
+    github.owner_match.set(false);
+    assert!(check().is_err());
+    Ok(())
+}

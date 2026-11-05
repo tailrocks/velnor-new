@@ -43,10 +43,7 @@ pub fn validate_reconciliation_receipt<G: GitHubAdmissionRead, R: CrateRegistryR
     let mut all_visible = true;
     for (package, planned) in inventory.iter().zip(&receipt.packages) {
         let tag = format!("{}-v{}", package.name, package.version);
-        if planned.source != *package
-            || planned.tag != tag
-            || planned.action != CrateReleaseAction::Publish
-        {
+        if planned.source != *package || planned.tag != tag {
             return Err(invalid());
         }
         let observed_tag = read_github_tag_evidence(&intent.repository, &tag, github)?;
@@ -68,7 +65,15 @@ pub fn validate_reconciliation_receipt<G: GitHubAdmissionRead, R: CrateRegistryR
         if let CrateRegistryOwnership::Existing { owners } = &owners {
             require_reviewer_owner(github, owners, intent.trusted_reviewer_id)?;
         }
-        if planned.owners != owners {
+        let approved_creation = matches!(planned.owners, CrateRegistryOwnership::NewCrate)
+            && matches!(owners, CrateRegistryOwnership::Existing { .. })
+            && planned.action == CrateReleaseAction::Publish
+            && intent
+                .new_crates
+                .as_ref()
+                .and_then(|creation| creation.packages.get(&package.name))
+                == Some(&package.version);
+        if planned.owners != owners && !approved_creation {
             return Err(invalid());
         }
         all_visible &= observed_tag.is_some() && presence == CrateRegistryPresence::Present;
