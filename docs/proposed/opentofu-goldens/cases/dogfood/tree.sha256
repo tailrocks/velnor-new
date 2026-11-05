@@ -22,10 +22,10 @@ b8a1a5fded44dd1e2f71477b1b00b8d87f26b72f552e3b031114cdf1c68108bd  ./.github/jact
 ca4ca468341113bcc702fa935f93236ec738a202092b0af1d7ee6659f2b8096d  ./.github/scripts/velnor-tools-cache-identity.sh
 c954cac8bc0dc15a1e008df68784915309c407560db3d709cb20802b6aa6441d  ./.github/velnor/task-execution-manifest-v1.json
 a5def8f94d8b08e8e1f50083b8cd70d1371dfe5effad8bf499c1e12e87f83805  ./.github/workflows/cache-prune.yml
-0d2d647339d4543d1ccbabb104ac85d71d949cffc2a887bb63ada6fbc2a97210  ./.github/workflows/ci.yml
+ef96584b3ee4ce17da51e0a7ce0a4a9ec336c3bd85087581e06f1acae48a8ed5  ./.github/workflows/ci.yml
 df96be0bbfc433cf6e48208b299f77cc63aa5b854ab3e31157bfbcec5d2fd21f  ./.github/workflows/freshness.yml
 60215285b83ae9d44f5fea647c280a4da72e0739675a2f7043c54f761896ea3e  ./.github/workflows/homebrew-adoption.yml
-ff37182e12cfeb46fe3836ddcf48e8e1021c43c5734e43d5e0166c2580f1bacd  ./.github/workflows/job-image-candidate.yml
+7a8789c34ea2c6cce00e2fff3014bc43d4ca1a869622aa082cbcca9c0fe13530  ./.github/workflows/job-image-candidate.yml
 141173c314f4ef59faa97fa65df26add27df3e081befb2e05b790adb6a77e763  ./.github/workflows/product-release-binary.yml
 4339b1bd7161a71cebd224effbe04a13f4bc8f62bc362b34527589582bcbf0a2  ./.github/workflows/product-release-generator.yml
 fae8ad1da9df5fc2f1a4a645e91d9903bb0736a1c20aa4e0e8299be8ecff3067  ./.github/workflows/product-release-images.yml

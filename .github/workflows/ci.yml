@@ -928,7 +928,8 @@ jobs:
       - *s24
       - *s16
       - *s17
-      - name: Stage isolated GitHub CLI test tools
+      - &s29
+        name: Stage isolated GitHub CLI test tools
         run: env -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR /usr/bin/python3 -I scripts/prepare-gh-fixture-tools.py
       - name: Build test executables
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
@@ -1278,6 +1279,7 @@ jobs:
       - *s24
       - *s16
       - *s17
+      - *s29
       - name: Build test executables
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-642242656a3a1e84348fefdd2c526c73cfb929a71534b4763e570a21af534823"}
@@ -1552,7 +1554,7 @@ jobs:
       - *s14
       - *s18
       - *s19
-      - &s29
+      - &s30
         name: Set up MBX
         uses: jdx/mr-boxington-action@88acf2bb50552c7c508cbac13e5f8c576b95b1de
         with:
@@ -1562,7 +1564,7 @@ jobs:
           working-directory: crates/velnor-runner
         env: *m17
       - *s21
-      - &s30
+      - &s31
         name: Compute state snapshot key
         id: mbx-bundle-key
         env:
@@ -1613,7 +1615,7 @@ jobs:
           overwrite: "true"
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
           retention-days: "30"
-      - &s31
+      - &s32
         name: Clean MBX workspace outputs
         if: always() && steps.mbx-ready.outcome == 'success'
         env: *m17
@@ -1642,9 +1644,9 @@ jobs:
       - *s14
       - *s18
       - *s19
-      - *s29
-      - *s21
       - *s30
+      - *s21
+      - *s31
       - *s23
       - *s24
       - *s17
@@ -1684,7 +1686,7 @@ jobs:
           overwrite: "true"
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
           retention-days: "30"
-      - *s31
+      - *s32
   rust-velnor-runner-cli:
     name: Rust / velnor-runner-cli
     runs-on: ubuntu-26.04
@@ -1709,9 +1711,9 @@ jobs:
       - *s14
       - *s18
       - *s19
-      - *s29
-      - *s21
       - *s30
+      - *s21
+      - *s31
       - *s23
       - *s24
       - *s17
@@ -1751,7 +1753,7 @@ jobs:
           overwrite: "true"
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
           retention-days: "30"
-      - *s31
+      - *s32
   rust-velnor-runner-core:
     name: Rust / velnor-runner-core
     runs-on: ubuntu-26.04
@@ -1776,9 +1778,9 @@ jobs:
       - *s14
       - *s18
       - *s19
-      - *s29
-      - *s21
       - *s30
+      - *s21
+      - *s31
       - *s23
       - *s24
       - *s17
@@ -1818,7 +1820,7 @@ jobs:
           overwrite: "true"
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
           retention-days: "30"
-      - *s31
+      - *s32
   rust-velnor-runner-github:
     name: Rust / velnor-runner-github
     runs-on: ubuntu-26.04
@@ -1843,9 +1845,9 @@ jobs:
       - *s14
       - *s18
       - *s19
-      - *s29
-      - *s21
       - *s30
+      - *s21
+      - *s31
       - *s23
       - *s24
       - *s17
@@ -1885,7 +1887,7 @@ jobs:
           overwrite: "true"
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
           retention-days: "30"
-      - *s31
+      - *s32
   rust-velnor-runner-host:
     name: Rust / velnor-runner-host
     runs-on: ubuntu-26.04
@@ -1910,9 +1912,9 @@ jobs:
       - *s14
       - *s18
       - *s19
-      - *s29
-      - *s21
       - *s30
+      - *s21
+      - *s31
       - *s23
       - *s24
       - *s17
@@ -1956,4 +1958,4 @@ jobs:
           overwrite: "true"
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
           retention-days: "30"
-      - *s31
+      - *s32
