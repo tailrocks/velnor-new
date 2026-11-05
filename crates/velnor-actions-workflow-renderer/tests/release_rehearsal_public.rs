@@ -92,6 +92,43 @@ fn output_bundle_uses_separate_untrusted_and_witness_artifacts()
     Ok(())
 }
 
+#[cfg(unix)]
+#[test]
+fn output_validation_rejects_symlink_and_oversized_file() -> Result<(), Box<dyn std::error::Error>>
+{
+    use std::os::unix::fs::symlink;
+    let mut rehearsal = config();
+    rehearsal.output_bundle = true;
+    let rendered = rehearsal::render(&rehearsal, "0.1.73")?;
+    let workflow: serde_json::Value = serde_saphyr::from_str(&rendered.bytes)?;
+    let steps = workflow["jobs"]["execute"]["steps"]
+        .as_array()
+        .ok_or("missing steps")?;
+    let script = steps
+        .iter()
+        .find(|step| step["name"] == "Validate untrusted rehearsal output")
+        .and_then(|step| step["run"].as_str())
+        .ok_or("missing validator")?;
+    let temp = tempfile::tempdir()?;
+    let output = temp.path().join("rehearsal-output.tar");
+    let run = || {
+        std::process::Command::new("bash")
+            .arg("-c")
+            .arg(script)
+            .env("RUNNER_TEMP", temp.path())
+            .status()
+    };
+    std::fs::write(&output, b"bundle")?;
+    assert!(run()?.success());
+    std::fs::remove_file(&output)?;
+    symlink("elsewhere", &output)?;
+    assert!(!run()?.success());
+    std::fs::remove_file(&output)?;
+    std::fs::File::create(&output)?.set_len(100 * 1024 * 1024 + 1)?;
+    assert!(!run()?.success());
+    Ok(())
+}
+
 #[test]
 fn rehearsal_rejects_unsafe_script_paths_and_unbound_reviewer() {
     for script in [
