@@ -28,7 +28,10 @@ fn restore(
     let mut pairs = vec![("VELNOR_STATE_ATTESTED", list.as_str())];
     pairs.extend_from_slice(env);
     scene.discover_with(&pairs)?;
-    let with = crate::gc1_t53::restore_with(MbxTransport::SeedRead, root)?;
+    let with = crate::gc1_t53::restore_with(
+        MbxTransport::SeedRead(crate::gc1_seal_support::slice_of(root.unwrap_or("."))?),
+        root,
+    )?;
     if with.contains_key("restore-keys") {
         return Err(fail("restore step kept a prefix fallback"));
     }
@@ -146,7 +149,10 @@ fn restore_takes_only_the_key_plan_selected() -> Result<(), Box<dyn Error>> {
 fn restore_never_crosses_roots_that_share_a_name_prefix() -> Result<(), Box<dyn Error>> {
     let short = Scene::new(
         "v4-root-a",
-        crate::gc1_t53::scripts_for(MbxTransport::SeedRead, Some("a"))?,
+        crate::gc1_t53::scripts_for(
+            MbxTransport::SeedRead(crate::gc1_seal_support::slice_of("a")?),
+            Some("a"),
+        )?,
     )?;
     let gh = Gh::install(&short)?;
     let short_key: Key = short.discover_with(&[("VELNOR_MBX_BUNDLE_ROOT", "a")])?;

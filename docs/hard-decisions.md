@@ -74,8 +74,10 @@ and overlaps the independent checks.
   `[stacks.rust] compiled_state`, so velnor-new sets nothing (owner standing
   grant 2026-11-02, velnor-fast-ci GOAL.md, decisions.tsv X64; the default was
   `union` before owner standing grant 2026-11-02, velnor-fast-ci GOAL.md, decision X81). It adds one
-  non-crate `state-producer-<root>` job and one `state-seal-<root>` job per
-  Cargo root, both outside Required and `continue-on-error`. Crate jobs stay
+  non-crate `state-producer-<root>` matrix job per Cargo root (one leg per
+  changed slice; a slice is one crate job's state, or a bin of small jobs, owner
+  standing grant 2026-11-02, velnor-fast-ci GOAL.md, decision X81) and one
+  `state-seal` matrix job, all outside Required and `continue-on-error`. Crate jobs stay
   read-only and run `MBX_BUILD_SCRIPT_EXECUTION=1` (decisions.tsv X61, which
   amends X48). Owner standing grant 2026-11-02 and X50. Setting `off` removes
   the jobs.

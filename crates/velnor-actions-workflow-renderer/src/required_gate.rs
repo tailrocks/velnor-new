@@ -27,6 +27,7 @@ fn required_gate_job(runs_on: &str) -> Result<Job, RenderError> {
         crate::steps::shell_step(GATE_STEP_NAME, vec!["false".to_owned()], BTreeMap::new())?;
     step.condition = Some(REQUIRED_GATE_FAIL_CONDITION.to_owned());
     Ok(Job {
+        matrix: None,
         services: Vec::new(),
         outputs: BTreeMap::new(),
         display_name: REQUIRED_DISPLAY_NAME.to_owned(),
@@ -46,6 +47,7 @@ fn required_gate_job(runs_on: &str) -> Result<Job, RenderError> {
 pub(crate) fn required_gate_job_yaml(runs_on: &str) -> Result<(String, Yaml), RenderError> {
     let job = required_gate_job(runs_on)?;
     let verdict = Job {
+        matrix: None,
         services: Vec::new(),
         outputs: BTreeMap::new(),
         display_name: REQUIRED_VERDICT_DISPLAY_NAME.to_owned(),

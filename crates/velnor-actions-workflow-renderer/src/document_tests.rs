@@ -7,6 +7,7 @@ use velnor_actions_contract::{CacheAccess, CacheWriter, Job, JobTimeout};
 
 fn job_with(cache_access: CacheAccess) -> Job {
     Job {
+        matrix: None,
         display_name: "Job".to_owned(),
         runs_on: "ubuntu-24.04".to_owned(),
         check_runner: None,

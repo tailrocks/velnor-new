@@ -124,6 +124,7 @@ fn native_check_job(
             problem: format!("check_timeout_out_of_range:{}", check.id),
         })?;
     Ok(Job {
+        matrix: None,
         services: Vec::new(),
         outputs: BTreeMap::new(),
         display_name: format!("Homebrew / {}", check.id),
@@ -160,6 +161,7 @@ fn check_job(
             problem: format!("check_timeout_out_of_range:{}", check.id),
         })?;
     Ok(Job {
+        matrix: None,
         services: Vec::new(),
         outputs: BTreeMap::new(),
         display_name: format!("Check / {}", check.id),

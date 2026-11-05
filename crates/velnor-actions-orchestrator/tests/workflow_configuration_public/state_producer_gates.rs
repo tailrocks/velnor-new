@@ -3,47 +3,11 @@
 
 use std::error::Error;
 
-use velnor_actions_contract::workflow::state_seal::{
-    STATE_PRODUCER_ARTIFACT_OUTPUT, STATE_PRODUCER_PRODUCED_OUTPUT,
-};
 use velnor_actions_contract::{Job, Step, StepRole};
 
 use super::state_producer::{ROOTS, build, job, text_of};
-use super::state_producer_eval::{
-    seal_runs, seal_steps_run, simulate, simulate_run, writer_roles_run,
-};
+use super::state_producer_eval::{seal_runs, seal_steps_run, simulate_run, writer_roles_run};
 use super::support::rendered_job_block;
-
-#[test]
-fn the_seal_needs_both_the_produced_flag_and_the_artifact_id() -> Result<(), Box<dyn Error>> {
-    let built = build()?;
-    let (producer_id, seal_id) = ROOTS[0];
-    let producer = job(&built.jobs, producer_id)?;
-    let seal = job(&built.jobs, seal_id)?;
-    let healthy = simulate(producer, None, false)?;
-    assert!(
-        seal_runs(seal, producer_id, &healthy)?,
-        "a healthy producer must seal"
-    );
-    for (output, label) in [
-        (
-            STATE_PRODUCER_ARTIFACT_OUTPUT,
-            "an artifact id without produced",
-        ),
-        (
-            STATE_PRODUCER_PRODUCED_OUTPUT,
-            "produced without an artifact id",
-        ),
-    ] {
-        let mut outputs = healthy.clone();
-        outputs.insert(output.to_owned(), String::new());
-        assert!(
-            !seal_runs(seal, producer_id, &outputs)?,
-            "{label}: the seal ran"
-        );
-    }
-    Ok(())
-}
 
 #[test]
 fn a_seal_job_with_retire_before_save_or_attest_is_refused() -> Result<(), Box<dyn Error>> {
@@ -208,7 +172,7 @@ fn a_stale_head_runs_no_producer_lane_and_the_seal_does_not_run() -> Result<(), 
             "{producer_id}: a stale head set produced"
         );
         assert!(
-            !seal_runs(seal, producer_id, &stale)?,
+            !seal_runs(seal, &stale)?,
             "{producer_id}: a stale head was sealed"
         );
     }

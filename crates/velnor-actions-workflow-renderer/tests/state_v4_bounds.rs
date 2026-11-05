@@ -16,8 +16,8 @@ pub(crate) const KIB: u64 = 1024;
 const STORED: u64 = 4 * KIB;
 pub(crate) const EXTRACTED: u64 = 1024 * KIB;
 pub(crate) const MEMBERS: u64 = 1_000;
-const SHIPPED_STORED: u64 = 1_610_612_736;
-const SHIPPED_EXTRACTED: u64 = 12_884_901_888;
+const SHIPPED_STORED: u64 = 805_306_368;
+const SHIPPED_EXTRACTED: u64 = 6_442_450_944;
 const SHIPPED_MEMBERS: u64 = 100_000;
 
 pub(crate) fn bounded(
@@ -252,7 +252,7 @@ fn recover_stream_bomb() -> Result<(), Box<dyn Error>> {
 
 #[test]
 fn shipped_ceilings_refuse_at_documented_bytes() -> Result<(), Box<dyn Error>> {
-    let shipped = StateCeilings::V3;
+    let shipped = StateCeilings::SLICE;
     if (shipped.stored(), shipped.extracted(), shipped.members())
         != (SHIPPED_STORED, SHIPPED_EXTRACTED, SHIPPED_MEMBERS)
     {

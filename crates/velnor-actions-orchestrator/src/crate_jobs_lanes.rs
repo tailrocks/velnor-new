@@ -4,7 +4,9 @@
 use velnor_actions_contract::{CrateJob, Job, Step, StepKind};
 
 pub(super) struct ProducerLanes {
+    pub(super) slice: velnor_actions_contract::workflow::cache_family::SliceId,
     pub(super) root: String,
+    pub(super) package_id: String,
     pub(super) lanes: Vec<Step>,
 }
 

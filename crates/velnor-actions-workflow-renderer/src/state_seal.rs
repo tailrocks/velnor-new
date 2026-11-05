@@ -1,25 +1,24 @@
 use std::collections::BTreeMap;
 
 use velnor_actions_actionlint::actions::ATTEST_USES;
-use velnor_actions_contract::workflow::cache_family::state_snapshot_plan_expr;
 use velnor_actions_contract::workflow::cache_family::{
-    COMPLETE_STATE_TRANSPORT_EXPR, CacheFamily, RUNNER_TEMP_EXPR, RUNNER_TEMP_SHELL, SliceId,
-    StateScope, StateTrust, StateUnit, outer_entry_bound,
+    COMPLETE_STATE_TRANSPORT_EXPR, CacheFamily, RUNNER_TEMP_EXPR, RUNNER_TEMP_SHELL, SLICE_CEILING,
+    StateTrust, TOOLS_LAYER_ALLOWANCE_BYTES,
 };
-use velnor_actions_contract::workflow::cache_family_mbx::MBX_BUNDLE_ROOT_ENV;
 use velnor_actions_contract::workflow::state_seal::{
-    STATE_PRODUCER_ARTIFACT_OUTPUT, STATE_SEAL_ATTEST_CONDITION, STATE_SEAL_BIND_ATTEMPTS,
-    STATE_SEAL_BIND_CONDITION, STATE_SEAL_BIND_PAUSE_SECONDS, STATE_SEAL_KEY_ENV,
-    STATE_SEAL_KEY_EXPR, STATE_SEAL_LIST_FIELDS, STATE_SEAL_LIST_JQ, STATE_SEAL_LIST_LIMIT,
-    STATE_SEAL_LIST_TAB, STATE_SEAL_PREDICATE, STATE_SEAL_PREDICATE_TYPE, STATE_SEAL_PREFIX_ENV,
-    STATE_SEAL_SAVE_CONDITION, STATE_SEAL_SUBJECT_EXPR, STATE_SEAL_SUBJECT_REL,
-    state_compat_plan_expr, state_produce_plan_expr, state_producer_job_id, state_seal_condition,
-    state_seal_job_id,
+    STATE_MATRIX_COMPAT, STATE_MATRIX_PENDING, STATE_MATRIX_SLICE, STATE_MATRIX_SNAPSHOT,
+    STATE_PRODUCER_JOB_ID_PREFIX, STATE_SEAL_ATTEST_CONDITION, STATE_SEAL_BIND_ATTEMPTS,
+    STATE_SEAL_BIND_CONDITION, STATE_SEAL_BIND_PAUSE_SECONDS, STATE_SEAL_JOB_ID,
+    STATE_SEAL_KEY_ENV, STATE_SEAL_KEY_EXPR, STATE_SEAL_LIST_FIELDS, STATE_SEAL_LIST_JQ,
+    STATE_SEAL_LIST_LIMIT, STATE_SEAL_LIST_TAB, STATE_SEAL_MATRIX_OUTPUT, STATE_SEAL_MAX_PARALLEL,
+    STATE_SEAL_PREDICATE, STATE_SEAL_PREDICATE_TYPE, STATE_SEAL_PREFIX_ENV,
+    STATE_SEAL_SAVE_CONDITION, STATE_SEAL_SUBJECT_EXPR, STATE_SEAL_SUBJECT_REL, state_matrix_expr,
+    state_payload_artifact_name, state_seal_condition,
 };
 use velnor_actions_contract::workflow::{ProducerKind, SOURCES_PRODUCER_JOB_ID};
 use velnor_actions_contract::{
-    CacheAccess, CacheWriter, Job, JobEnv, JobTimeout, PermissionLevel, Permissions, Step, StepId,
-    StepKind, StepRole,
+    CacheAccess, CacheWriter, Job, JobEnv, JobMatrix, JobTimeout, PermissionLevel, Permissions,
+    Step, StepId, StepRole,
 };
 
 use crate::RenderError;
@@ -28,7 +27,7 @@ use crate::steps::{
     DOWNLOAD_ARTIFACT_USES, TOOLS_SAVE_USES, action_step, ambient_shell_step, shell_step,
 };
 
-const SEAL_DISPLAY_PREFIX: &str = "State seal / ";
+const SEAL_DISPLAY_NAME: &str = "State seal";
 const JOB_MINUTES: u32 = 15;
 const SEALED_OUTPUT: &str = "sealed";
 const BOUND_OUTPUT: &str = "bound";
@@ -44,57 +43,63 @@ pub mod skeleton;
 #[path = "state_seal_tip.rs"]
 pub mod tip;
 
-struct ProducerRoot {
-    slice: SliceId,
-    producer_id: String,
-    runs_on: String,
-}
-
 pub fn add_state_seal_jobs(jobs: &mut BTreeMap<String, Job>) -> Result<(), RenderError> {
-    let roots = producer_roots(jobs)?;
-    if roots.is_empty() {
+    let producers: Vec<(&String, &Job)> = jobs
+        .iter()
+        .filter(|(_, job)| job.producer_kind() == Some(ProducerKind::StateProducer))
+        .collect();
+    let Some((_, first)) = producers.first() else {
         return Ok(());
+    };
+    let runs_on = first.runs_on.clone();
+    let mut legs = 0_u32;
+    let mut needs = vec![PLAN_JOB_ID.to_owned()];
+    for (id, job) in &producers {
+        if !id.starts_with(STATE_PRODUCER_JOB_ID_PREFIX) {
+            return Err(invalid("producer_id"));
+        }
+        let matrix = job
+            .matrix
+            .as_ref()
+            .ok_or_else(|| invalid("producer_without_matrix"))?;
+        legs = legs
+            .checked_add(matrix.legs)
+            .ok_or_else(|| invalid("legs_overflow"))?;
+        needs.push((*id).clone());
     }
     let writers: Vec<String> = jobs
         .iter()
-        .filter(|(id, job)| {
+        .filter(|(_, job)| {
             matches!(
                 job.producer_kind(),
                 Some(ProducerKind::SourcesProducer | ProducerKind::ToolsIdentity)
-            ) && !id.is_empty()
+            )
         })
         .map(|(id, _)| id.clone())
         .collect();
+    let writer_bytes = writers_bound(jobs);
+    needs.extend(writers);
     chain_tools_after_sources(jobs);
-    let mut previous: Option<String> = None;
-    let unit_bound = outer_entry_bound(CacheFamily::MbxBundle.spec().ceiling.stored())
-        .ok_or_else(|| invalid("outer_bound_unbounded"))?;
-    for (index, root) in roots.iter().enumerate() {
-        let pending: Vec<String> = roots[index + 1..]
-            .iter()
-            .map(|later| {
-                format!(
-                    "{}:{}",
-                    state_produce_plan_expr(&later.unit()),
-                    scope_prefix(&later.unit())
-                )
-            })
-            .collect();
-        let seal_id = state_seal_job_id(&root.slice);
-        let mut needs = vec![PLAN_JOB_ID.to_owned(), root.producer_id.clone()];
-        match &previous {
-            Some(earlier) => needs.push(earlier.clone()),
-            None => needs.extend(writers.iter().cloned()),
-        }
-        let job = seal_job(root, needs, &pending, unit_bound)?;
-        velnor_actions_contract::workflow::validate_job_id(&seal_id)
-            .map_err(RenderError::Contract)?;
-        if jobs.insert(seal_id.clone(), job).is_some() {
-            return Err(invalid("id_collision"));
-        }
-        previous = Some(seal_id);
+    let job = seal_job(runs_on, needs, legs, writer_bytes)?;
+    if jobs.insert(STATE_SEAL_JOB_ID.to_owned(), job).is_some() {
+        return Err(invalid("id_collision"));
     }
     Ok(())
+}
+
+fn writers_bound(jobs: &BTreeMap<String, Job>) -> u64 {
+    let kinds: Vec<ProducerKind> = jobs.values().filter_map(Job::producer_kind).collect();
+    let sources = if kinds.contains(&ProducerKind::SourcesProducer) {
+        CacheFamily::Sources.spec().ceiling.stored()
+    } else {
+        0
+    };
+    let tools = if kinds.contains(&ProducerKind::ToolsIdentity) {
+        TOOLS_LAYER_ALLOWANCE_BYTES
+    } else {
+        0
+    };
+    sources + tools
 }
 
 fn chain_tools_after_sources(jobs: &mut BTreeMap<String, Job>) {
@@ -108,81 +113,45 @@ fn chain_tools_after_sources(jobs: &mut BTreeMap<String, Job>) {
     }
 }
 
-fn producer_roots(jobs: &BTreeMap<String, Job>) -> Result<Vec<ProducerRoot>, RenderError> {
-    let mut roots = Vec::new();
-    for (id, job) in jobs {
-        if job.producer_kind() != Some(ProducerKind::StateProducer) {
-            continue;
-        }
-        let root = job
-            .steps
-            .iter()
-            .find_map(|step| match (&step.role, &step.kind) {
-                (Some(StepRole::MbxBundleKey), StepKind::Shell { env, .. }) => {
-                    env.get(MBX_BUNDLE_ROOT_ENV).cloned()
-                }
-                _ => None,
-            })
-            .ok_or_else(|| invalid("producer_without_root"))?;
-        let slice = SliceId::from_root(&root).map_err(RenderError::Contract)?;
-        if state_producer_job_id(&slice) != *id {
-            return Err(invalid("producer_id_root_mismatch"));
-        }
-        roots.push(ProducerRoot {
-            slice,
-            producer_id: id.clone(),
-            runs_on: job.runs_on.clone(),
-        });
-    }
-    Ok(roots)
+fn matrix_scope() -> String {
+    format!(
+        "{}{}-slice-{}-",
+        CacheFamily::MbxBundle.key_prefix(),
+        StateTrust::Trusted.as_str(),
+        state_matrix_expr(STATE_MATRIX_SLICE)
+    )
 }
 
-impl ProducerRoot {
-    fn unit(&self) -> StateUnit {
-        StateUnit::Slice(self.slice.clone())
-    }
-}
-
-fn scope_prefix(unit: &StateUnit) -> String {
-    StateScope {
-        trust: StateTrust::Trusted,
-        unit: unit.clone(),
-    }
-    .prefix()
-}
-
-fn identity_prefix(unit: &StateUnit) -> String {
+fn matrix_identity_prefix() -> String {
     format!(
         "{}{}-{}-",
-        scope_prefix(unit),
-        state_compat_plan_expr(unit),
-        state_snapshot_plan_expr(unit)
+        matrix_scope(),
+        state_matrix_expr(STATE_MATRIX_COMPAT),
+        state_matrix_expr(STATE_MATRIX_SNAPSHOT)
     )
 }
 
 fn seal_job(
-    root: &ProducerRoot,
+    runs_on: String,
     needs: Vec<String>,
-    pending: &[String],
-    unit_bound: u64,
+    legs: u32,
+    writer_bytes: u64,
 ) -> Result<Job, RenderError> {
-    let artifact = format!(
-        "${{{{ needs.{}.outputs.{STATE_PRODUCER_ARTIFACT_OUTPUT} }}}}",
-        root.producer_id
-    );
+    let artifact = state_payload_artifact_name();
     let mut download = action_step(
         "Download sealed payload",
         DOWNLOAD_ARTIFACT_USES,
         BTreeMap::from([
-            ("artifact-ids".to_owned(), artifact.clone()),
-            ("merge-multiple".to_owned(), "true".to_owned()),
+            ("name".to_owned(), artifact.clone()),
             ("path".to_owned(), transport_dir()?),
         ]),
     )?;
     download.role = Some(StepRole::StateSealDownload);
-    let subject =
-        state_seal_subject_step(&scope_prefix(&root.unit()), &identity_prefix(&root.unit()))?;
-    let admit = crate::state_seal::save::state_seal_admit_step(pending, unit_bound)?;
+    let subject = state_seal_subject_step(&matrix_scope(), &matrix_identity_prefix())?;
+    let admit = crate::state_seal::save::state_seal_admit_step(
+        &state_matrix_expr(STATE_MATRIX_PENDING),
+        writer_bytes,
+    )?;
     let bind = state_seal_bind_step()?;
     let tip = tip::state_seal_tip_step()?;
     let mut attest = action_step(
@@ -206,25 +175,21 @@ fn seal_job(
         "Save sealed payload",
         TOOLS_SAVE_USES,
         BTreeMap::from([
-            (
-                "key".to_owned(),
-                velnor_actions_contract::workflow::state_seal::STATE_SEAL_KEY_EXPR.to_owned(),
-            ),
+            ("key".to_owned(), STATE_SEAL_KEY_EXPR.to_owned()),
             ("path".to_owned(), COMPLETE_STATE_TRANSPORT_EXPR.to_owned()),
         ]),
     )?;
     save.id = Some(StepId::StateSealSave);
     save.role = Some(StepRole::StateSealSave);
     save.condition = Some(STATE_SEAL_SAVE_CONDITION.to_owned());
-    let retire =
-        crate::state_seal::save::state_seal_retire_step(&scope_prefix(&root.unit()), &artifact)?;
+    let retire = crate::state_seal::save::state_seal_retire_step(&matrix_scope(), &artifact)?;
     Ok(Job {
-        display_name: format!("{SEAL_DISPLAY_PREFIX}{}", root.slice),
-        runs_on: root.runs_on.clone(),
+        display_name: SEAL_DISPLAY_NAME.to_owned(),
+        runs_on,
         check_runner: None,
         timeout_minutes: JobTimeout::try_from(JOB_MINUTES).map_err(RenderError::Contract)?,
         needs,
-        condition: Some(state_seal_condition(&root.producer_id)),
+        condition: Some(state_seal_condition()),
         permissions: Some(Permissions {
             contents: PermissionLevel::Read,
             pull_requests: PermissionLevel::None,
@@ -238,6 +203,11 @@ fn seal_job(
         services: Vec::new(),
         outputs: BTreeMap::new(),
         env: JobEnv::Unset,
+        matrix: Some(JobMatrix {
+            include_output: STATE_SEAL_MATRIX_OUTPUT.to_owned(),
+            max_parallel: STATE_SEAL_MAX_PARALLEL,
+            legs,
+        }),
         steps: vec![download, subject, tip, admit, save, bind, attest, retire],
     })
 }
@@ -328,7 +298,12 @@ printf 'velnor: state seal subject %s %s %s\n' "$key" "$id" "$stored"
 }
 
 pub fn state_seal_subject_step(scope: &str, prefix: &str) -> Result<Step, RenderError> {
-    let stored = CacheFamily::MbxBundle.spec().ceiling.stored();
+    let stored = SLICE_CEILING.stored();
+    let trusted = format!(
+        "{}{}-",
+        CacheFamily::MbxBundle.key_prefix(),
+        StateTrust::Trusted.as_str()
+    );
     let script = format!(
         r#"set -eu
 {GUARD}
@@ -341,6 +316,8 @@ s256() {{ sha256sum "$1" > "$d/sum" || return 1; h=; rest=; read -r h rest < "$d
 prefix="${{{prefix_env}-}}"
 scope="${{{scope_env}-}}"
 [ -n "$prefix" ] && [ -n "$scope" ] || refuse prefix_missing
+case "$scope" in "{trusted}"?*-) ;; *) refuse scope_shape ;; esac
+case "${{scope#"{trusted}"}}" in *[!a-z0-9-]*) refuse scope_shape ;; esac
 case "$prefix" in "$scope"?*) ;; *) refuse prefix_scope ;; esac
 printf '%s\n' "${{prefix#"$scope"}}" | grep -Eq '^s256-[0-9a-f]{{64}}-s256-[0-9a-f]{{64}}-$' || refuse prefix_shape
 if [ -L "$payload" ] || [ ! -f "$payload" ]; then refuse payload_not_regular; fi

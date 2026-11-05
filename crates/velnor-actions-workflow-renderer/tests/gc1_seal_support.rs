@@ -4,12 +4,14 @@
 use std::error::Error;
 use std::path::PathBuf;
 
-use velnor_actions_contract::workflow::cache_family::{S256, StateScope, StateTrust, StateUnit};
+use velnor_actions_contract::workflow::cache_family::{
+    RootSlug, S256, SliceId, StateScope, StateTrust, StateUnit,
+};
 use velnor_actions_contract::workflow::state_seal::{
     STATE_SEAL_PREDICATE_TYPE, state_attested_output,
 };
 use velnor_actions_contract::{Step, StepKind};
-use velnor_actions_workflow_renderer::plan_sources::state_select::state_select_step;
+use velnor_actions_workflow_renderer::plan_sources::state_select::{SealUnit, state_select_step};
 
 use crate::gc1_scene::{Scene, fail};
 
@@ -78,6 +80,13 @@ case "$verb" in
     [ "$mode" = usage_fail ] && exit 1
     read -r usage < "$d/usage"
     printf '%s\n' "$usage"
+    ;;
+  "api repos/${GITHUB_REPOSITORY:?}/actions/runs/"*)
+    query=${verb#*artifacts?name=}
+    named=
+    [ -f "$d/artifact_name" ] && read -r named < "$d/artifact_name"
+    [ -n "$named" ] && [ "$query" = "$named" ] || exit 0
+    cat "$d/artifacts"
     ;;
   "api repos/${GITHUB_REPOSITORY:?}/git/ref/"*)
     [ "$mode" = tip_fail ] && exit 1
@@ -255,6 +264,11 @@ impl Gh {
         Ok(())
     }
 
+    pub(crate) fn artifact_name(&self, name: &str) -> Result<(), Box<dyn Error>> {
+        std::fs::write(self.dir.join("artifact_name"), format!("{name}\n"))?;
+        Ok(())
+    }
+
     pub(crate) fn refuse_delete(&self, ids: &[u64]) -> Result<(), Box<dyn Error>> {
         let text = ids.iter().fold(String::new(), |mut text, id| {
             text.push_str(&id.to_string());
@@ -300,10 +314,14 @@ pub(crate) fn digest(fill: char) -> String {
     format!("s256-{}", fill.to_string().repeat(64))
 }
 
+pub(crate) fn slice_of(root: &str) -> Result<SliceId, Box<dyn Error>> {
+    Ok(SliceId::parse(RootSlug::from_root(root)?.as_str())?)
+}
+
 pub(crate) fn scope_of(root: &str) -> Result<StateScope, Box<dyn Error>> {
     Ok(StateScope {
         trust: StateTrust::Trusted,
-        unit: StateUnit::slice_of_root(root)?,
+        unit: StateUnit::Slice(slice_of(root)?),
     })
 }
 
@@ -332,7 +350,10 @@ pub(crate) fn script_of(step: &Step) -> Result<String, Box<dyn Error>> {
 }
 
 pub(crate) fn select_script(root: &str) -> Result<String, Box<dyn Error>> {
-    script_of(&state_select_step(&[StateUnit::slice_of_root(root)?])?)
+    script_of(&state_select_step(&[SealUnit {
+        slice: slice_of(root)?,
+        root: RootSlug::from_root(root)?,
+    }])?)
 }
 
 pub(crate) fn run_select(
@@ -357,5 +378,5 @@ pub(crate) fn run_select(
 }
 
 pub(crate) fn selected(scene: &Scene, root: &str) -> Result<Vec<String>, Box<dyn Error>> {
-    scene.output_block(&state_attested_output(&StateUnit::slice_of_root(root)?))
+    scene.output_block(&state_attested_output(&StateUnit::Slice(slice_of(root)?)))
 }

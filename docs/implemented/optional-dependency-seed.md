@@ -1,19 +1,22 @@
 # Optional state producer failure isolation
 
-The state producer (`state-producer-<root>`) and the state seal job
-(`state-seal-<root>`) stay outside Required and carry `continue-on-error: true`.
+The state producer (`state-producer-<root>`, one matrix leg per slice) and the
+state seal job (`state-seal`, one matrix leg per slice) stay outside Required
+and carry `continue-on-error: true`.
 A failed optional cache build must not turn otherwise successful CI into a failed
 workflow. Crate checks, opaque checks, Plan, Required, signing and publication
 remain strict.
 
 `continue-on-error` makes `needs.<producer>.result` read `success` for a
-producer whose compile failed, so the seal job never reads the result. The
-producer sets the job output `produced` to `true` in its last step, after the
-export, the pack and the artifact upload all succeeded, and every earlier step
-runs under the default `success()`. A failed lane, a refused export or a failed
-upload therefore leaves `produced` empty, and the seal job's condition
-(`needs.<producer>.outputs.produced == 'true'`) keeps it from attesting or
-saving anything.
+producer whose compile failed, so the seal job never reads the result. Matrix
+legs share one set of job outputs, so a producer leg hands its payload to the
+seal leg of the same slice only through the artifact name
+`velnor-state-<slice>-r<run id>-a<plan attempt>`. The leg uploads it after the
+export and the pack succeeded, and every earlier step runs under the default
+`success()`. A failed lane, a refused export or a failed upload therefore
+leaves no artifact of that name: the seal leg's download continues on error,
+its subject step finds no payload and refuses (`payload_not_regular`), and the
+leg attests and saves nothing.
 
 The typed `ProducerKind::StateProducer` identifies a producer. Workflow
 validation rejects mixed roles, parallel steps outside the lane records,

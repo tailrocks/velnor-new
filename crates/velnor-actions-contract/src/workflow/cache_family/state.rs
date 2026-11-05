@@ -80,6 +80,14 @@ impl RootSlug {
                 })
                 .collect(),
         };
+        Self::checked(slug, root)
+    }
+
+    pub fn from_slug(slug: &str) -> Result<Self, ContractError> {
+        Self::checked(slug.to_owned(), slug)
+    }
+
+    fn checked(slug: String, root: &str) -> Result<Self, ContractError> {
         let shaped = !slug.is_empty()
             && slug.len() <= ROOT_SLUG_MAX_BYTES
             && slug.starts_with(|c: char| c.is_ascii_lowercase() || c.is_ascii_digit())

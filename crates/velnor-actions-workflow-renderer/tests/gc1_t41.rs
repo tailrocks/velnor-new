@@ -48,6 +48,7 @@ fn native_check_step(check_id: &str, task_id: &str) -> Step {
 
 fn native_check_job(step: Step) -> Job {
     Job {
+        matrix: None,
         display_name: "Native check".to_owned(),
         runs_on: "ubuntu-24.04".to_owned(),
         check_runner: Some(CheckRunner {

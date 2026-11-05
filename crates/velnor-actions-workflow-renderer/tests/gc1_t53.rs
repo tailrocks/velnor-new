@@ -219,7 +219,7 @@ fn check_recover_bounds_uncompressed() -> Result<(), Box<dyn Error>> {
         "1.2.3",
         "1.89.0",
         driver_env()?,
-        MbxTransport::SeedRead,
+        MbxTransport::SeedRead(crate::gc1_seal_support::slice_of(".")?),
         None,
     )?
     .ok_or_else(|| fail("mbx driver produced no steps"))?;
@@ -280,12 +280,15 @@ fn publish_step() -> Result<velnor_actions_contract::Step, Box<dyn Error>> {
     Ok(mbx_bundle_publish_bounded(
         "1.89.0",
         driver_env()?,
-        StateCeilings::V3,
+        StateCeilings::SLICE,
     )?)
 }
 
 pub(crate) fn scripts() -> Result<crate::gc1_scene::Scripts, Box<dyn Error>> {
-    scripts_for(MbxTransport::SeedRead, None)
+    scripts_for(
+        MbxTransport::SeedRead(crate::gc1_seal_support::slice_of(".")?),
+        None,
+    )
 }
 
 pub(crate) fn scripts_for(

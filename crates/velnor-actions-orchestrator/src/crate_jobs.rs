@@ -7,7 +7,7 @@ use velnor_actions_contract::{
     CacheAccess, CompiledStateMode, CrateJob, Job, JobTimeout, ProposedTask, Stack, Step,
     VelnorConfig, WorkflowPolicy, crate_display_name, tofu_display_name,
 };
-use velnor_actions_contract::workflow::cache_family::S256;
+use velnor_actions_contract::workflow::cache_family::SliceId;
 use velnor_actions_contract::workflow::ledger_cli::{LEDGER_CLI_JOB_ID, LedgerCliSource};
 use velnor_actions_mise::{TaskCacheMode, ToolCatalog};
 use velnor_actions_workflow_renderer::steps::CompileDriver as RenderDriver;
@@ -54,7 +54,7 @@ pub(crate) use stage::{is_mbx, is_nextest, is_opentofu, is_rust};
 pub(crate) struct CrateBuild {
     pub(crate) ledger_cli: Option<(String, Job)>,
     pub(crate) producers: Vec<(String, Job)>,
-    pub(crate) state_recipes: BTreeMap<String, S256>,
+    pub(crate) state: crate::state_slices::SliceBuild,
     pub(crate) jobs: Vec<(String, Job)>,
     pub(crate) drivers: BTreeMap<String, RenderDriver>,
 }
@@ -81,6 +81,8 @@ pub(crate) fn build_for_workflow(
         .as_ref()
         .map_or(&no_crates, |rust| &rust.crates);
     reject_unknown_crates(crates, discovery)?;
+    let state_slices =
+        crate::state_slices::SliceAssignment::from_config(config.stacks.rust.as_ref(), discovery)?;
     build_crate_jobs_with_seed_timeout(
         CrateJobInputs {
             label,
@@ -94,6 +96,7 @@ pub(crate) fn build_for_workflow(
             helper_version,
             generator_version,
             crates,
+            state_slices: &state_slices,
             compiled_state: config.stacks.compiled_state(),
             seed_parallel_targets: config
                 .stacks
@@ -117,22 +120,20 @@ fn build_crate_jobs_with_seed_timeout(
     let mut jobs = Vec::with_capacity(grouped.len());
     let mut drivers = BTreeMap::new();
     let lane = crate::matrix_step::LaneTools::union(input.policy, input.catalog, &grouped);
-    let mut producer_roots: BTreeMap<String, state_producer::ProducerRoot> = BTreeMap::new();
+    let mut producer_slices = state_producer::ProducerSlices::default();
+    let mut state = crate::state_slices::SliceBuild::default();
     for (key, tasks) in &grouped {
         let output = build_group_job(&input, &lane, &owners, key, tasks, private)?;
         if let Some(lanes) = output.producer {
-            let entry = producer_roots
-                .entry(lanes.root.clone())
-                .or_insert_with(|| state_producer::ProducerRoot {
-                    root: lanes.root.clone(),
-                    lanes: Vec::new(),
-                });
-            entry.lanes.extend(lanes.lanes);
+            producer_slices.add(&mut state, &output.job_id, lanes)?;
         }
         drivers.insert(output.job_id.clone(), output.driver);
         jobs.push((output.job_id, output.job));
     }
     jobs.sort_by(|left, right| left.0.cmp(&right.0));
+    input
+        .state_slices
+        .check_disjoint(&jobs.iter().map(|(id, _)| id.as_str()).collect())?;
     let ledger_cli = (LedgerCliSource::for_policy(input.policy) == LedgerCliSource::SameRunBuild
         && !jobs.is_empty())
     .then(|| ledger_cli::ledger_cli_job(&input, &lane, private))
@@ -141,10 +142,14 @@ fn build_crate_jobs_with_seed_timeout(
     if let Some((id, _)) = &ledger_cli {
         drivers.insert(id.clone(), RenderDriver::Cargo);
     }
-    let roots: Vec<_> = producer_roots.into_values().collect();
+    let slices = producer_slices.into_slices();
     let recipe_jobs =
-        state_producer::state_producer_jobs(&input, &lane, &roots, private, seed_timeout)?;
-    let state_recipes = state_producer::recipe_digests(&recipe_jobs, input.helper_version, input.generator_version)?;
+        state_producer::state_producer_jobs(&input, &lane, &slices, private, seed_timeout)?;
+    state.recipes = state_producer::recipe_digests(
+        &state_producer::slice_views(&recipe_jobs, &slices)?,
+        input.helper_version,
+        input.generator_version,
+    )?;
     let producers = match input.compiled_state {
         CompiledStateMode::Slices => recipe_jobs,
         CompiledStateMode::Off => Vec::new(),
@@ -155,7 +160,7 @@ fn build_crate_jobs_with_seed_timeout(
     Ok(CrateBuild {
         ledger_cli,
         producers,
-        state_recipes,
+        state,
         jobs,
         drivers,
     })
@@ -191,6 +196,9 @@ fn build_group_job(
     let use_rust = tasks.iter().any(|task| is_rust(task));
     let use_mbx = tasks.iter().any(|task| is_mbx(task));
     let use_opentofu = tasks.iter().any(|task| is_opentofu(task));
+    let slice = use_mbx
+        .then(|| input.state_slices.slice_for(&job_id, &first.display_name))
+        .transpose()?;
     let model = CrateJob {
         job_id: job_id.clone(),
         display_name: display,
@@ -220,7 +228,7 @@ fn build_group_job(
         input,
         &model,
         use_rust,
-        use_mbx,
+        slice.as_ref(),
         use_opentofu,
         &tools,
         needs,
@@ -232,8 +240,10 @@ fn build_group_job(
     } else {
         RenderDriver::Cargo
     };
-    let producer = use_mbx.then(|| ProducerLanes {
+    let producer = slice.map(|slice| ProducerLanes {
+        slice,
         root: workspace_root.to_owned(),
+        package_id: model.package_id.clone(),
         lanes: lane_records(&job, &model),
     });
     Ok(GroupOutput {
@@ -283,7 +293,7 @@ fn rust_source_steps(
 fn stack_cache_steps(
     input: &CrateJobInputs<'_>,
     model: &CrateJob,
-    use_mbx: bool,
+    slice: Option<&SliceId>,
     use_opentofu: bool,
 ) -> Result<Vec<Step>, OrchestratorError> {
     let mut steps = Vec::new();
@@ -294,13 +304,13 @@ fn stack_cache_steps(
             &root, &roots,
         )?);
     }
-    if use_mbx {
+    if let Some(slice) = slice {
         let root =
             crate::source_prep::workspace_root_for_manifest(&model.manifest, input.fetch_roots);
         let working_dir = (!root.is_empty()).then_some(root);
         steps.extend(crate::mbx_preflight::steps_for_catalog(
             input.catalog,
-            velnor_actions_workflow_renderer::steps::MbxTransport::SeedRead,
+            velnor_actions_workflow_renderer::steps::MbxTransport::SeedRead(slice.clone()),
             working_dir,
         )?);
     }
@@ -315,7 +325,7 @@ fn render_job(
     input: &CrateJobInputs<'_>,
     model: &CrateJob,
     use_rust: bool,
-    use_mbx: bool,
+    slice: Option<&SliceId>,
     use_opentofu: bool,
     tools: &crate::matrix_step::LaneTools,
     needs: Vec<String>,
@@ -348,7 +358,7 @@ fn render_job(
         fetch_roots,
         use_rust,
     )?);
-    steps.extend(stack_cache_steps(input, model, use_mbx, use_opentofu)?);
+    steps.extend(stack_cache_steps(input, model, slice, use_opentofu)?);
     if use_rust {
         steps.extend(rust_source_steps(input, model, needs_validators, private)?);
     }
@@ -370,6 +380,7 @@ fn render_job(
     )?);
     steps.push(crate::matrix_step::crate_upload_step(&model.job_id)?);
     Ok(Job {
+        matrix: None,
         services: Vec::new(),
         outputs: BTreeMap::new(),
         display_name: model.display_name.clone(),

@@ -176,11 +176,15 @@ selects:
 
 - the MBX compile driver in every crate job, and in the state producer job
   when `[stacks.rust] compiled_state` is not `"off"`;
-- the compiled-state writer: when the producer is generated, one
-  `state-producer-<root>` job per Cargo root compiles the crate jobs' lane
-  records and uploads one handoff artifact, and one `state-seal-<root>` job
-  saves, attests and retires the previous generation, on trusted pushes;
-  crate jobs restore and import read-only with
+- the compiled-state writer: when the producer is generated, each crate job
+  owns one state slice (several small jobs can share one through
+  `[stacks.rust] state_slices`, a map from a slice id to package names in one
+  Cargo root). One `state-producer-<root>` matrix job per Cargo root compiles
+  each changed slice of that root in its own leg on a fresh runner and uploads
+  one handoff artifact per slice, and one `state-seal` matrix job
+  (`max-parallel: 1`) saves, attests and retires the previous generation of
+  each slice in turn, on trusted pushes; each crate job restores and imports
+  only its own slice, read-only, with
   `MBX_BUILD_SCRIPT_EXECUTION=1`; see
   [compiled-state persistence](../proposed/compiled-state-persistence.md);
 - the opaque bundle transport: `mbx cache export --group velnor --format

@@ -19,7 +19,7 @@ const CI_PATH: &str = ".github/workflows/ci.yml";
 const STATE_SEAL_PATH: &str = ".github/workflows/state-seal.yml";
 const QUALIFICATION_PATH: &str = ".github/workflows/qualification.yml";
 const SOURCES_PRODUCER: &str = "sources-producer";
-const STATE_SEAL_PREFIX: &str = "state-seal-";
+const STATE_SEAL_ID: &str = "state-seal";
 const QUALIFICATION_WRITERS: [&str; 4] = [
     "cache-scale-set",
     "empty-cache-hosted",
@@ -116,9 +116,7 @@ fn expected_writer(path: &str, id: &str) -> bool {
         return QUALIFICATION_WRITERS.contains(&id);
     }
     if path == STATE_SEAL_PATH {
-        return id.starts_with("tools-producer-")
-            || id == SOURCES_PRODUCER
-            || id.starts_with(STATE_SEAL_PREFIX);
+        return id.starts_with("tools-producer-") || id == SOURCES_PRODUCER || id == STATE_SEAL_ID;
     }
     id.starts_with("providers-producer-")
 }

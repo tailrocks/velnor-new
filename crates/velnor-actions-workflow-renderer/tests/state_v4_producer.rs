@@ -3,23 +3,20 @@
 
 use std::error::Error;
 
-use velnor_actions_contract::workflow::cache_family::SliceId;
-use velnor_actions_contract::workflow::state_seal::{
-    STATE_SEAL_PENDING_BYTES_ENV, STATE_SEAL_PENDING_ENV, state_seal_job_id,
-};
-use velnor_actions_contract::{StepKind, StepRole};
+use velnor_actions_contract::workflow::cache_family::RootSlug;
+use velnor_actions_contract::workflow::state_seal::STATE_SEAL_MATRIX_OUTPUT;
+use velnor_actions_workflow_renderer::plan_sources::state_select::{SealUnit, state_select_step};
 
 use crate::gc1_scene::{Scene, fail};
 use crate::gc1_seal_support::{
-    Attestation, Gh, MAIN, PULL, digest, key, run_select, scope, selected,
+    Attestation, Gh, MAIN, PULL, REPO, digest, key, run_select, scope, script_of, selected,
+    slice_of,
 };
-use crate::state_v4_seal::seal_jobs;
 
 const ROOT: &str = ".";
 const T1: &str = "2026-11-04T01:00:00Z";
 const T2: &str = "2026-11-04T02:00:00Z";
-const PRODUCE: &str = "state_slice_root_produce";
-const UNIT_BOUND: &str = "1616920640";
+const UNIT_BOUND: &str = "808460320";
 
 fn produce_with(
     scene: &Scene,
@@ -36,7 +33,7 @@ fn produce_with(
             ("VELNOR_STATE_SNAPSHOT_R0", snapshot),
         ],
     )?;
-    scene.output_value(PRODUCE)
+    Ok((!scene.output_value(STATE_SEAL_MATRIX_OUTPUT)?.is_empty()).to_string())
 }
 
 fn expect(got: &str, want: &str, label: &str) -> Result<(), Box<dyn Error>> {
@@ -159,44 +156,58 @@ fn eligibility_ignores_entries_of_other_identities_and_unusable_inputs()
 }
 
 #[test]
+#[cfg(unix)]
 fn plan_reserves_only_the_later_eligible_roots() -> Result<(), Box<dyn Error>> {
-    let jobs = seal_jobs(&["crates/velnor-runner", "."])?;
-    let first = jobs
-        .get(&state_seal_job_id(&SliceId::from_root(
-            "crates/velnor-runner",
-        )?))
-        .ok_or_else(|| fail("first seal job missing"))?;
-    let second = jobs
-        .get(&state_seal_job_id(&SliceId::from_root(".")?))
-        .ok_or_else(|| fail("second seal job missing"))?;
-    let reservation =
-        |job: &velnor_actions_contract::Job| -> Result<(String, String), Box<dyn Error>> {
-            job.steps
-                .iter()
-                .find(|step| step.role == Some(StepRole::StateSealAdmit))
-                .and_then(|step| match &step.kind {
-                    StepKind::Shell { env, .. } => Some((
-                        env.get(STATE_SEAL_PENDING_ENV)?.clone(),
-                        env.get(STATE_SEAL_PENDING_BYTES_ENV)?.clone(),
-                    )),
-                    _ => None,
-                })
-                .ok_or_else(|| fail("admit step lost its reservation"))
-        };
-    let (pending, bytes) = reservation(first)?;
+    let scene = Scene::new("producer-reserve", crate::gc1_t53::scripts()?)?;
+    let gh = Gh::install(&scene)?;
+    gh.list(&[])?;
+    let units = ["crates/velnor-runner", "."]
+        .iter()
+        .map(|root| {
+            Ok(SealUnit {
+                slice: slice_of(root)?,
+                root: RootSlug::from_root(root)?,
+            })
+        })
+        .collect::<Result<Vec<_>, Box<dyn Error>>>()?;
+    let script = script_of(&state_select_step(&units)?)?;
+    let (compat, snapshot) = (digest('a'), digest('1'));
+    let dir = gh.dir();
+    scene.run_script(
+        &script,
+        &[
+            ("FAKE_GH_DIR", dir.as_str()),
+            ("GITHUB_REPOSITORY", REPO),
+            ("GH_TOKEN", "fixture"),
+            ("VELNOR_STATE_COMPAT_R0", compat.as_str()),
+            ("VELNOR_STATE_SNAPSHOT_R0", snapshot.as_str()),
+            ("VELNOR_STATE_COMPAT_R1", compat.as_str()),
+            ("VELNOR_STATE_SNAPSHOT_R1", snapshot.as_str()),
+        ],
+        None,
+    )?;
+    let matrix: serde_json::Value =
+        serde_json::from_str(&scene.output_value(STATE_SEAL_MATRIX_OUTPUT)?)?;
+    let pending: Vec<(String, String)> = matrix["include"]
+        .as_array()
+        .ok_or_else(|| fail("the seal matrix has no include list"))?
+        .iter()
+        .map(|leg| {
+            (
+                leg["slice"].as_str().unwrap_or_default().to_owned(),
+                leg["pending"].as_str().unwrap_or_default().to_owned(),
+            )
+        })
+        .collect();
     if pending
-        != "${{needs.plan.outputs.state_slice_root_produce}}:velnor-v5-state-trusted-slice-root-"
-        || bytes != UNIT_BOUND
+        != [
+            ("crates-velnor-runner".to_owned(), UNIT_BOUND.to_owned()),
+            ("root".to_owned(), "0".to_owned()),
+        ]
     {
         return Err(fail(&format!(
-            "the first root must reserve the second: {pending} {bytes}"
+            "the first root must reserve the second and the last nothing: {pending:?}"
         )));
     }
-    let (pending, bytes) = reservation(second)?;
-    if !pending.is_empty() || bytes != UNIT_BOUND {
-        return Err(fail(&format!(
-            "the last root reserves nothing: {pending} {bytes}"
-        )));
-    }
-    Ok(())
+    scene.finish()
 }

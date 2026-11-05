@@ -42,7 +42,7 @@ fn transport_steps() -> Result<Vec<Step>, Box<dyn Error>> {
         "1.2.3",
         "1.89.0",
         driver_env()?,
-        MbxTransport::SeedRead,
+        MbxTransport::SeedRead(crate::gc1_seal_support::slice_of(".")?),
         None,
     )?
     .ok_or_else(|| fail("mbx driver produced no steps"))?;
@@ -82,6 +82,7 @@ fn check_shell_syntax(step: &Step, label: &str) -> Result<(), Box<dyn Error>> {
 
 fn job_with(steps: Vec<Step>) -> Job {
     Job {
+        matrix: None,
         display_name: "gc1-t30".to_owned(),
         runs_on: "ubuntu-24.04".to_owned(),
         check_runner: None,

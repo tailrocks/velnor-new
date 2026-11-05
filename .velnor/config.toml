@@ -56,6 +56,21 @@ globs = [
 packages = ["velnor-actions-cli"]
 complete = true
 
+[stacks.rust.state_slices]
+actions-small = [
+  "velnor-actions-actionlint",
+  "velnor-actions-ansible",
+  "velnor-actions-bun",
+  "velnor-actions-dbt",
+  "velnor-actions-gradle",
+  "velnor-actions-tofu",
+]
+runner-small = [
+  "velnor-resource-probe",
+  "velnor-runner-core",
+  "velnor-runner-github",
+]
+
 [[stacks.rust.configurations]]
 name = "default"
 features = ["default"]

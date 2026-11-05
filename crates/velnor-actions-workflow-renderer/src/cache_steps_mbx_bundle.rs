@@ -5,14 +5,12 @@ use std::collections::BTreeMap;
 
 use velnor_actions_contract::workflow::cache_family::{
     COMPLETE_STATE_TRANSPORT_EXPR, CacheFamily, RUNNER_TEMP_EXPR, RUNNER_TEMP_SHELL,
-    S256_DIGEST_BYTES, StateScope, StateTrust, StateUnit, state_snapshot_plan_expr,
+    S256_DIGEST_BYTES, SLICE_CEILING, StateTrust, StateUnit,
 };
 use velnor_actions_contract::workflow::cache_family_mbx::{
     MBX_BUNDLE_KEY_EXPR, MBX_BUNDLE_RESTORE_CONDITION, MBX_BUNDLE_ROOT_ENV, MBX_BUNDLE_SNAPSHOT_ENV,
 };
-use velnor_actions_contract::workflow::state_seal::{
-    STATE_SEAL_ATTESTED_ENV, state_attested_plan_expr,
-};
+use velnor_actions_contract::workflow::state_seal::STATE_SEAL_ATTESTED_ENV;
 use velnor_actions_contract::{Step, StepId, StepKind, StepRole};
 
 use crate::RenderError;
@@ -25,9 +23,13 @@ use crate::steps::shell_step;
 mod publish;
 #[path = "cache_steps_mbx_bundle_recover.rs"]
 mod recover;
+#[path = "cache_steps_mbx_bundle_unit.rs"]
+mod unit;
 
 pub use publish::mbx_bundle_publish_bounded;
 pub use recover::mbx_producer_mark_step;
+pub use unit::MbxTransport;
+pub(crate) use unit::UnitBinding;
 
 pub const MBX_BUNDLE_KEY_NAME: &str = "Compute state snapshot key";
 pub const MBX_BUNDLE_RESTORE_NAME: &str = "Restore state snapshot";
@@ -74,11 +76,25 @@ pub struct StateCeilings {
 }
 
 impl StateCeilings {
-    pub const V3: Self = Self::new(
-        CacheFamily::MbxBundle.spec().ceiling.stored(),
-        CacheFamily::MbxBundle.spec().ceiling.extracted(),
+    #[must_use]
+    pub const fn of_unit(unit: &StateUnit) -> Self {
+        let ceiling = unit.ceiling();
+        Self::new(ceiling.stored(), ceiling.extracted(), MAX_ARCHIVE_MEMBERS)
+    }
+
+    pub const SLICE: Self = Self::new(
+        SLICE_CEILING.stored(),
+        SLICE_CEILING.extracted(),
         MAX_ARCHIVE_MEMBERS,
     );
+
+    #[must_use]
+    pub(crate) const fn of_binding(binding: &UnitBinding) -> Self {
+        match binding {
+            UnitBinding::Fixed(unit) => Self::of_unit(unit),
+            UnitBinding::ProducerMatrix => Self::SLICE,
+        }
+    }
 
     #[must_use]
     pub const fn new(stored: u64, extracted: u64, members: u64) -> Self {
@@ -140,7 +156,7 @@ fn split_shell(path: &str) -> Result<(String, String), RenderError> {
 }
 
 pub(crate) fn mbx_bundle_prelude(
-    unit: &StateUnit,
+    unit: &UnitBinding,
     mbx_version_expr: &str,
     toolchain_expr: &str,
     rust_toolchain: &str,
@@ -173,9 +189,9 @@ pub(crate) fn compat_head_lines(
     )
 }
 
-fn snapshot_source(unit: &StateUnit, root_env: &str) -> Vec<String> {
-    match unit {
-        StateUnit::Slice(_) | StateUnit::Cli => vec![
+fn snapshot_source(unit: &UnitBinding, root_env: &str) -> Vec<String> {
+    if unit.snapshot_from_plan() {
+        vec![
             format!("snap=\"${{{MBX_BUNDLE_SNAPSHOT_ENV}-}}\""),
             "case \"$snap\" in s256-*) [ \"${#snap}\" -eq 69 ] || snap= ;; *) snap= ;; esac"
                 .to_owned(),
@@ -183,36 +199,36 @@ fn snapshot_source(unit: &StateUnit, root_env: &str) -> Vec<String> {
             format!(
                 "if [ -z \"$snap\" ]; then rm -f \"{DISCOVERY_RECORD}\"; printf '%s\\n' 'reason=snapshot_missing' 'save=false' 'restore=false' >> \"$GITHUB_OUTPUT\"; printf '%s\\n' 'velnor: state snapshot disabled reason=snapshot_missing'; exit 0; fi"
             ),
-        ],
-        StateUnit::Suite(_) => {
-            let mut lines = vec![format!(
-                "lock=\"$GITHUB_WORKSPACE/${{{root_env}}}/Cargo.lock\""
-            )];
-            lines.extend(lock_digest_lines("$d", "$lock", "lock_h"));
-            lines.extend(absent_digest_lines("$d", "absent_h"));
-            lines.extend(snapshot_lines(
-                "$d",
-                "$lock_h",
-                "$absent_h",
-                "$absent_h",
-                "$absent_h",
-            ));
-            lines
-        }
+        ]
+    } else {
+        let mut lines = vec![format!(
+            "lock=\"$GITHUB_WORKSPACE/${{{root_env}}}/Cargo.lock\""
+        )];
+        lines.extend(lock_digest_lines("$d", "$lock", "lock_h"));
+        lines.extend(absent_digest_lines("$d", "absent_h"));
+        lines.extend(snapshot_lines(
+            "$d",
+            "$lock_h",
+            "$absent_h",
+            "$absent_h",
+            "$absent_h",
+        ));
+        lines
     }
 }
 
 fn discover_step(
-    unit: &StateUnit,
+    unit: &UnitBinding,
     version: &str,
     toolchain: &str,
     root: &str,
 ) -> Result<Step, RenderError> {
-    let scope = StateScope {
-        trust: StateTrust::Trusted,
-        unit: unit.clone(),
-    };
-    let scope_prefix = scope.prefix();
+    let scope_prefix = format!(
+        "{}{}-{}-",
+        CacheFamily::MbxBundle.key_prefix(),
+        StateTrust::Trusted.as_str(),
+        unit.token()
+    );
     let max_payload_segment = S256_DIGEST_BYTES;
     let mut script = vec![
         "set -eu".to_owned(),
@@ -226,6 +242,7 @@ fn discover_step(
         "trust=none".to_owned(),
         "if [ \"${GITHUB_EVENT_NAME:-}\" = push ] && [ -n \"${default_ref#refs/heads/}\" ] && [ \"${GITHUB_REF:-}\" = \"$default_ref\" ] && [ \"${GITHUB_REF_PROTECTED:-}\" = true ]; then trust=trusted; fi".to_owned(),
     ];
+    script.extend(unit.unit_lines());
     script.extend(compat_head_lines(
         "$d",
         &format!("${{{VERSION_ENV}}}"),
@@ -260,16 +277,7 @@ fn discover_step(
         (TOOLCHAIN_ENV.to_owned(), toolchain.to_owned()),
         (ROOT_ENV.to_owned(), root.to_owned()),
     ]);
-    if unit.is_attested() {
-        env.insert(
-            STATE_SEAL_ATTESTED_ENV.to_owned(),
-            state_attested_plan_expr(unit),
-        );
-        env.insert(
-            MBX_BUNDLE_SNAPSHOT_ENV.to_owned(),
-            state_snapshot_plan_expr(unit),
-        );
-    }
+    env.extend(unit.env());
     let mut step = shell_step(
         MBX_BUNDLE_KEY_NAME,
         vec!["sh".to_owned(), "-c".to_owned(), script],

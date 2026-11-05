@@ -2,13 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::cache_access::SOURCES_PRODUCER_JOB_ID;
+use super::cache_family::RootSlug;
 use super::crate_job::TOOLS_PRODUCER_JOB_ID_PREFIX;
 use super::state_seal::{
-    STATE_PRODUCER_JOB_ID_PREFIX, STATE_SEAL_ADMIT_CONDITION, STATE_SEAL_ATTEST_CONDITION,
-    STATE_SEAL_BIND_CONDITION, STATE_SEAL_JOB_ID_PREFIX, STATE_SEAL_SAVE_CONDITION,
-    STATE_SEAL_TIP_CONDITION,
+    STATE_PRODUCER_JOB_ID_PREFIX, STATE_PRODUCER_MAX_PARALLEL, STATE_SEAL_ADMIT_CONDITION,
+    STATE_SEAL_ATTEST_CONDITION, STATE_SEAL_BIND_CONDITION, STATE_SEAL_JOB_ID,
+    STATE_SEAL_MATRIX_OUTPUT, STATE_SEAL_MAX_PARALLEL, STATE_SEAL_SAVE_CONDITION,
+    STATE_SEAL_TIP_CONDITION, state_producer_matrix_output,
 };
-use super::{Job, PLAN_JOB_ID, Step, StepKind, StepRole};
+use super::{Job, JobMatrix, PLAN_JOB_ID, Step, StepKind, StepRole};
 
 const PRODUCER_SEQUENCE: [StepRole; 7] = [
     StepRole::MbxBundleImport,
@@ -41,18 +43,37 @@ fn position(steps: &[Step], role: StepRole) -> Option<usize> {
     found.next().is_none().then_some(first)
 }
 
-fn lane_digests(steps: &[Step]) -> Vec<&str> {
+fn lane_digests(steps: &[Step]) -> Vec<(&str, Option<&str>)> {
     steps
         .iter()
         .filter_map(|step| match &step.kind {
-            StepKind::TaskExecution { task_digest, .. } => Some(task_digest.as_str()),
+            StepKind::TaskExecution { task_digest, .. } => {
+                Some((task_digest.as_str(), step.condition.as_deref()))
+            }
             _ => None,
         })
         .collect()
 }
 
-pub(super) fn state_producer_shape_ok(job: &Job) -> bool {
-    if job.needs != [PLAN_JOB_ID] {
+fn matrix_ok(job: &Job, output: &str, max_parallel: u32) -> bool {
+    matches!(&job.matrix, Some(JobMatrix { include_output, max_parallel: cap, legs })
+        if include_output == output && *cap == max_parallel && *legs >= 1)
+}
+
+pub(super) fn state_producer_shape_ok(id: &str, job: &Job) -> bool {
+    let Some(root) = id
+        .strip_prefix(STATE_PRODUCER_JOB_ID_PREFIX)
+        .and_then(|root| RootSlug::from_slug(root).ok())
+    else {
+        return false;
+    };
+    if job.needs != [PLAN_JOB_ID]
+        || !matrix_ok(
+            job,
+            &state_producer_matrix_output(&root),
+            STATE_PRODUCER_MAX_PARALLEL,
+        )
+    {
         return false;
     }
     let steps = &job.steps;
@@ -77,19 +98,19 @@ pub(super) fn state_producer_shape_ok(job: &Job) -> bool {
 }
 
 pub(super) fn state_seal_shape_ok(id: &str, job: &Job) -> bool {
-    let Some(root) = id.strip_prefix(STATE_SEAL_JOB_ID_PREFIX) else {
+    let [plan, rest @ ..] = job.needs.as_slice() else {
         return false;
     };
-    let producer = format!("{STATE_PRODUCER_JOB_ID_PREFIX}{root}");
-    let [plan, built, rest @ ..] = job.needs.as_slice() else {
-        return false;
-    };
-    plan == PLAN_JOB_ID
-        && *built == producer
+    id == STATE_SEAL_JOB_ID
+        && plan == PLAN_JOB_ID
+        && matrix_ok(job, STATE_SEAL_MATRIX_OUTPUT, STATE_SEAL_MAX_PARALLEL)
+        && rest
+            .iter()
+            .any(|need| need.starts_with(STATE_PRODUCER_JOB_ID_PREFIX))
         && rest.iter().all(|need| {
             need == SOURCES_PRODUCER_JOB_ID
                 || need.starts_with(TOOLS_PRODUCER_JOB_ID_PREFIX)
-                || (need.starts_with(STATE_SEAL_JOB_ID_PREFIX) && need != id)
+                || need.starts_with(STATE_PRODUCER_JOB_ID_PREFIX)
         })
         && job.steps.len() == SEAL_SEQUENCE.len()
         && job

@@ -151,6 +151,7 @@ mod gc1_t56 {
 
     fn required_job(steps: Vec<Step>) -> Job {
         Job {
+            matrix: None,
             display_name: "Required".to_owned(),
             runs_on: "ubuntu-24.04".to_owned(),
             check_runner: None,

@@ -117,7 +117,7 @@ fn an_existing_entry_ends_the_run_and_only_an_unattested_one_is_deleted()
     let forged = format!("{sealed} 99 1");
     let at = "2026-11-04T01:00:00Z";
     let size = u64::try_from(FIXTURE.len())?;
-    let admitted = |gh: &Gh| admit.run_keyed(&scene, gh, Some(size), "", 0, &sealed);
+    let admitted = |gh: &Gh| admit.run_keyed(&scene, gh, Some(size), 0, &sealed);
 
     gh.list_entries(&[])?;
     if !admitted(&gh)?.0 {

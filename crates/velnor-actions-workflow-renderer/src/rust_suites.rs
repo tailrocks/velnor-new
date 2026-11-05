@@ -364,6 +364,7 @@ fn suite_job_record(
     steps: Vec<Step>,
 ) -> Job {
     Job {
+        matrix: None,
         services: Vec::new(),
         outputs: BTreeMap::new(),
         display_name,

@@ -137,6 +137,7 @@ pub fn build_bun_assets_job(
         all.push(step.clone());
     }
     Ok(Job {
+        matrix: None,
         services: Vec::new(),
         outputs: BTreeMap::new(),
         display_name: format!("Bun / {} / assets", policy.member),

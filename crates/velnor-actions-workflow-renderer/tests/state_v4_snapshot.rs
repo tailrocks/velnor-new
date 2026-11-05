@@ -7,9 +7,9 @@ use std::path::Path;
 use std::process::Command;
 
 use velnor_actions_contract::StepKind;
-use velnor_actions_contract::workflow::cache_family::S256;
+use velnor_actions_contract::workflow::cache_family::{S256, SliceId, StateUnit};
 use velnor_actions_mise::ToolCatalog;
-use velnor_actions_workflow_renderer::plan_sources::cache_keys::{StateRootPlan, cache_keys_step};
+use velnor_actions_workflow_renderer::plan_sources::cache_keys::{StateUnitPlan, cache_keys_step};
 
 use crate::gc1_scene::fail;
 
@@ -77,20 +77,23 @@ fn fixture(repo: &Path) -> Result<(), Box<dyn Error>> {
     commit(repo)
 }
 
-fn plans(task_set: &str, recipe: &str) -> Vec<StateRootPlan> {
+fn plans(task_set: &str, recipe: &str) -> Result<Vec<StateUnitPlan>, Box<dyn Error>> {
     ROOTS
         .iter()
-        .map(|root| StateRootPlan {
-            root: (*root).to_owned(),
-            pathspecs: vec![
-                format!("{root}/Cargo.toml"),
-                format!("{root}/.cargo"),
-                format!(":(glob){root}/rust-toolchain*"),
-                format!("{root}/crates/m"),
-                format!(":(glob){root}/declared/**"),
-            ],
-            task_set: S256::of(format!("{root}{task_set}").as_bytes()),
-            producer_recipe: S256::of(format!("{root}{recipe}").as_bytes()),
+        .map(|root| {
+            Ok(StateUnitPlan {
+                unit: StateUnit::Slice(SliceId::parse(root)?),
+                root: (*root).to_owned(),
+                pathspecs: vec![
+                    format!("{root}/Cargo.toml"),
+                    format!("{root}/.cargo"),
+                    format!(":(glob){root}/rust-toolchain*"),
+                    format!("{root}/crates/m"),
+                    format!(":(glob){root}/declared/**"),
+                ],
+                task_set: S256::of(format!("{root}{task_set}").as_bytes()),
+                producer_recipe: S256::of(format!("{root}{recipe}").as_bytes()),
+            })
         })
         .collect()
 }
@@ -106,7 +109,7 @@ fn snapshots(
         &ToolCatalog::pinned(),
         &roots,
         &[],
-        &plans(task_set, recipe),
+        &plans(task_set, recipe)?,
     )
     .map_err(|error| fail(&format!("{error:?}")))?
     .ok_or_else(|| fail("cache keys step vanished"))?;

@@ -50,6 +50,7 @@ mod rust_toolchain_source;
 
 pub mod selected_mise;
 mod stacks;
+mod stacks_state_slices;
 mod task_source;
 mod tofu;
 mod tofu_apply;

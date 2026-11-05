@@ -3,18 +3,21 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::workflow::cache_family::{S256, SliceId};
+use velnor_actions_contract::workflow::cache_family::{RootSlug, S256, SliceId};
 use velnor_actions_contract::workflow::state_seal::{
-    STATE_PRODUCER_LANE_CONDITION, state_producer_condition, state_producer_job_id,
+    STATE_PRODUCER_LANE_CONDITION, STATE_PRODUCER_MAX_PARALLEL, state_producer_condition,
+    state_producer_job_id, state_producer_lane_condition, state_producer_lane_slice,
+    state_producer_matrix_output,
 };
 use velnor_actions_contract::{
-    CacheAccess, Job, JobEnv, JobTimeout, Step, StepKind, StepRole, canonical_json_bytes,
+    CacheAccess, Job, JobEnv, JobMatrix, JobTimeout, Step, StepKind, StepRole,
+    canonical_json_bytes,
 };
 use velnor_actions_mise::PinnedTool;
-use velnor_actions_workflow_renderer::state_seal::producer_steps::{
-    state_payload_upload_step, state_produced_step, state_producer_outputs,
-};
 use velnor_actions_workflow_renderer::declared_task_wrapper_digest;
+use velnor_actions_workflow_renderer::state_seal::producer_steps::{
+    state_payload_upload_step, state_produced_step,
+};
 use velnor_actions_workflow_renderer::state_seal::skeleton::{
     state_skeleton_restore_step, state_skeleton_step,
 };
@@ -28,26 +31,92 @@ use crate::config::private_wiring::PrivateWiring;
 use crate::matrix_step::LaneTools;
 
 #[derive(Debug, Clone)]
-pub(crate) struct ProducerRoot {
+pub(crate) struct ProducerSlice {
+    pub(crate) slice: SliceId,
     pub(crate) root: String,
     pub(crate) lanes: Vec<Step>,
+}
+
+#[derive(Debug, Default)]
+pub(crate) struct ProducerSlices(BTreeMap<SliceId, ProducerSlice>);
+
+impl ProducerSlices {
+    pub(super) fn add(
+        &mut self,
+        state: &mut crate::state_slices::SliceBuild,
+        job_id: &str,
+        lanes: super::lanes::ProducerLanes,
+    ) -> Result<(), OrchestratorError> {
+        let entry = self
+            .0
+            .entry(lanes.slice.clone())
+            .or_insert_with(|| ProducerSlice {
+                slice: lanes.slice.clone(),
+                root: lanes.root.clone(),
+                lanes: Vec::new(),
+            });
+        if entry.root != lanes.root {
+            return Err(OrchestratorError::config(
+                crate::config::CONFIG_REL,
+                format!("stacks.rust.state_slices.{}", lanes.slice),
+                "state_slice_spans_cargo_roots",
+            ));
+        }
+        entry.lanes.extend(lanes.lanes);
+        state.assign(job_id, &lanes.slice, &lanes.package_id);
+        Ok(())
+    }
+
+    pub(super) fn into_slices(self) -> Vec<ProducerSlice> {
+        self.0.into_values().collect()
+    }
 }
 
 pub(crate) fn state_producer_jobs(
     input: &CrateJobInputs<'_>,
     lane: &LaneTools,
-    roots: &[ProducerRoot],
+    slices: &[ProducerSlice],
     private: Option<&PrivateWiring>,
     timeout: JobTimeout,
 ) -> Result<Vec<(String, Job)>, OrchestratorError> {
+    let mut roots: BTreeMap<&str, Vec<&ProducerSlice>> = BTreeMap::new();
+    for slice in slices {
+        roots.entry(slice.root.as_str()).or_default().push(slice);
+    }
     roots
-        .iter()
-        .map(|root| {
-            let slice = SliceId::from_root(&root.root)?;
+        .into_iter()
+        .map(|(root, slices)| {
+            let slug = RootSlug::from_root(root)?;
             Ok((
-                state_producer_job_id(&slice),
-                producer_job(input, lane, root, &slice, private, timeout)?,
+                state_producer_job_id(&slug),
+                producer_job(input, lane, root, &slug, &slices, private, timeout)?,
             ))
+        })
+        .collect()
+}
+
+pub(crate) fn slice_views(
+    producers: &[(String, Job)],
+    slices: &[ProducerSlice],
+) -> Result<Vec<(String, Job)>, OrchestratorError> {
+    slices
+        .iter()
+        .map(|slice| {
+            let id = state_producer_job_id(&RootSlug::from_root(&slice.root)?);
+            let (_, job) = producers
+                .iter()
+                .find(|(producer, _)| *producer == id)
+                .ok_or_else(|| OrchestratorError::Contract {
+                    problem: format!("state_producer_missing:{}", slice.slice),
+                })?;
+            let mut view = job.clone();
+            view.steps.retain(|step| {
+                step.condition
+                    .as_deref()
+                    .and_then(state_producer_lane_slice)
+                    .is_none_or(|owner| owner == slice.slice)
+            });
+            Ok((slice.slice.to_string(), view))
         })
         .collect()
 }
@@ -82,20 +151,22 @@ pub(crate) fn recipe_digests(
 pub(crate) fn producer_job_ids(roots: &[String]) -> Result<Vec<String>, OrchestratorError> {
     roots
         .iter()
-        .map(|root| Ok(state_producer_job_id(&SliceId::from_root(root)?)))
+        .map(|root| Ok(state_producer_job_id(&RootSlug::from_root(root)?)))
         .collect()
 }
 
 fn producer_job(
     input: &CrateJobInputs<'_>,
     lane: &LaneTools,
-    producer: &ProducerRoot,
-    slice: &SliceId,
+    root: &str,
+    slug: &RootSlug,
+    slices: &[&ProducerSlice],
     private: Option<&PrivateWiring>,
     timeout: JobTimeout,
 ) -> Result<Job, OrchestratorError> {
     let catalog = input.catalog;
-    crate::source_prep::validate_root(&producer.root)?;
+    crate::source_prep::validate_root(root)?;
+    let id = state_producer_job_id(slug);
     let mut steps = vec![
         velnor_actions_workflow_renderer::state_seal::tip::stale_tip_stops_job_step()?,
         crate::workflow::wire_w1::checkout_step()?,
@@ -111,34 +182,34 @@ fn producer_job(
         input.fetch_roots,
         true,
     )?);
-    let working_dir = (!producer.root.is_empty()).then_some(producer.root.as_str());
+    let working_dir = (!root.is_empty()).then_some(root);
     steps.extend(crate::mbx_preflight::steps_for_catalog(
         catalog,
-        MbxTransport::SeedRead,
+        MbxTransport::ProducerMatrix,
         working_dir,
     )?);
-    let roots = vec![producer.root.clone()];
+    let roots = vec![root.to_owned()];
     if let Some(private) = private {
         steps.extend(private.steps_for_roots(&roots)?);
     }
     steps.extend(crate::source_prep::fetch_steps_for_crate(
         catalog,
         &roots,
-        lanes_use_all_features(&producer.lanes),
+        slices.iter().any(|slice| lanes_use_all_features(&slice.lanes)),
     )?);
     let toolchain = catalog.version(PinnedTool::Rust).to_owned();
     let toolchain_env = crate::matrix_step::task_step_env(catalog, &BTreeMap::new(), true)?;
     steps.push(state_skeleton_step(
         &toolchain,
-        &producer.root_argument(),
+        &root_argument(root),
         toolchain_env.clone(),
     )?);
-    steps.extend(lane_steps(&producer.lanes));
+    steps.extend(slices.iter().flat_map(|slice| lane_steps(slice)));
     steps.push(state_skeleton_restore_step()?);
-    steps.extend(lane_steps(&producer.lanes));
+    steps.extend(slices.iter().flat_map(|slice| lane_steps(slice)));
     steps.push(velnor_actions_workflow_renderer::mbx_stats::mbx_stats_step(
-        &state_producer_job_id(slice),
-        &crate::source_prep::workspace_crate_names(&input.discovery.workspaces, &producer.root),
+        &id,
+        &crate::source_prep::workspace_crate_names(&input.discovery.workspaces, root),
     )?);
     let mut mark = mbx_producer_mark_step()?;
     mark.condition = Some(STATE_PRODUCER_LANE_CONDITION.to_owned());
@@ -146,41 +217,47 @@ fn producer_job(
     steps.push(mbx_bundle_publish_bounded(
         &toolchain,
         toolchain_env,
-        StateCeilings::V3,
+        StateCeilings::SLICE,
     )?);
-    steps.push(state_payload_upload_step(slice)?);
+    steps.push(state_payload_upload_step()?);
     steps.push(state_produced_step()?);
     Ok(Job {
         services: Vec::new(),
-        outputs: state_producer_outputs(),
-        display_name: display_name(&producer.root),
+        outputs: BTreeMap::new(),
+        display_name: display_name(root),
         runs_on: input.label.to_owned(),
         check_runner: None,
         timeout_minutes: timeout,
         needs: vec![velnor_actions_workflow_renderer::render::PLAN_JOB_ID.to_owned()],
-        condition: Some(state_producer_condition(slice)),
+        condition: Some(state_producer_condition(slug)),
         permissions: None,
         environment: None,
         env: JobEnv::Unset,
+        matrix: Some(JobMatrix {
+            include_output: state_producer_matrix_output(slug),
+            max_parallel: STATE_PRODUCER_MAX_PARALLEL,
+            legs: u32::try_from(slices.len()).map_err(|_| OrchestratorError::Contract {
+                problem: format!("state_producer_legs_overflow:{id}"),
+            })?,
+        }),
         steps,
         cache_access: CacheAccess::Read,
     })
 }
 
-impl ProducerRoot {
-    fn root_argument(&self) -> String {
-        if self.root.is_empty() {
-            ".".to_owned()
-        } else {
-            self.root.clone()
-        }
+fn root_argument(root: &str) -> String {
+    if root.is_empty() {
+        ".".to_owned()
+    } else {
+        root.to_owned()
     }
 }
 
-fn lane_steps(lanes: &[Step]) -> impl Iterator<Item = Step> + '_ {
-    lanes.iter().map(|lane| {
+fn lane_steps(slice: &ProducerSlice) -> impl Iterator<Item = Step> + '_ {
+    let condition = state_producer_lane_condition(&slice.slice);
+    slice.lanes.iter().map(move |lane| {
         let mut step = lane.clone();
-        step.condition = Some(STATE_PRODUCER_LANE_CONDITION.to_owned());
+        step.condition = Some(condition.clone());
         step
     })
 }
@@ -258,6 +335,7 @@ mod tests {
             permissions: None,
             environment: None,
             env: JobEnv::Unset,
+            matrix: None,
             steps,
             cache_access: CacheAccess::Read,
         };

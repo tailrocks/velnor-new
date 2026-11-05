@@ -97,7 +97,7 @@ pub(crate) fn check_rejects_bad_transport_inputs() -> Result<(), Box<dyn Error>>
         "1.2.3",
         "not-a-toolchain",
         driver_env()?,
-        MbxTransport::SeedRead,
+        MbxTransport::SeedRead(crate::gc1_seal_support::slice_of(".")?),
         None,
     )
     .is_ok()
@@ -110,7 +110,7 @@ pub(crate) fn check_rejects_bad_transport_inputs() -> Result<(), Box<dyn Error>>
         "not-a-version",
         "1.89.0",
         driver_env()?,
-        MbxTransport::SeedRead,
+        MbxTransport::SeedRead(crate::gc1_seal_support::slice_of(".")?),
         None,
     )
     .is_ok()

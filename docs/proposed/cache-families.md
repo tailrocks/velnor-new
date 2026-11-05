@@ -97,12 +97,12 @@ output across trust scopes.
   and the key changes only when the lock, toolchain, MBX version or platform
   changes. The `unit` token keeps the slice, `cli` and suite bundles apart and is prefix-free.
 - `slices` is the default `compiled_state` (owner standing grant 2026-11-02, velnor-fast-ci GOAL.md, decision X81), so velnor-new sets nothing: one
-  `state-producer-<id>` job per slice compiles, one `state-seal-<id>`
-  job saves and attests the entry, and crate jobs restore it read-only. Each Cargo root is one slice whose id is the root slug. The
+  `state-producer-<root>` matrix job per Cargo root compiles each changed slice in its own leg, one `state-seal`
+  matrix job saves and attests each entry in turn, and each crate job restores only its own slice read-only. A slice is one crate job's state; its id is the job id unless `[stacks.rust] state_slices` bins the job's package with others of the same Cargo root (decision X81). The
   design is [compiled-state persistence](compiled-state-persistence.md).
 - Units are the key schema of decision 2. `slice-<id>` is written only by the
   non-crate `State seal` job of a slice (protected default-branch pushes only,
-  outside `Required`) from the bytes of that root's `State producer` job; crate
+  outside `Required`) from the bytes of that slice's `State producer` leg; crate
   jobs restore it read-only and never mark a producer, export or save. No job
   writes a `suite` entry, because a suite bundle binds the root workspace and
   not the manifest the suite selects.
@@ -141,7 +141,7 @@ and fails when it exceeds 85 % of the 10 GiB quota.
 | `python-venv` | 384 MiB | 2 | requirements file | 1 | 768 MiB | not measured; ceiling is a placeholder to revise with data |
 | `ansible-collections` | 128 MiB | 2 | collection set | 1 | 256 MiB | not measured; ceiling is a placeholder to revise with data |
 | `playwright-browsers` | 512 MiB | 2 | Playwright version | 1 | 1 GiB | 328 MB of Chromium archives (Chromium, headless shell, ffmpeg; Playwright 1.64.1) |
-| `mbx-bundle` | 1.5 GiB stored, 12 GiB extracted | 1 | Cargo workspace and unit | 3 (slice, cli, suite) | 3 GiB stored | 63.7 MiB (root workspace) and 12.8 MiB (nested runner workspace) stored, first main push after #278 (run 39575862041); later seed exports reported (author-quoted, #437) at 5.9 GiB and 3.5 GiB uncompressed and were refused; the former `target` payload was 770 MiB |
+| `mbx-bundle` | per unit: 768 MiB stored and 6 GiB extracted for a slice, 1.5 GiB stored and 12 GiB extracted for `cli` and `suite` (decision X81) | 1 | Cargo workspace and unit | 3 (slice, cli, suite) | 3 GiB stored | 63.7 MiB (root workspace) and 12.8 MiB (nested runner workspace) stored, first main push after #278 (run 39575862041); later seed exports reported (author-quoted, #437) at 5.9 GiB and 3.5 GiB uncompressed and were refused; the former `target` payload was 770 MiB |
 
 The reference total with the tools allowance is about 9.88 GiB (the state family
 counts its 1.5 GiB stored bound twice and its 12 GiB extracted bound not at

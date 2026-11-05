@@ -301,6 +301,7 @@ pub(crate) fn bind_and_check(jobs: &mut BTreeMap<String, Job>) -> Result<(), Ren
 
 pub(crate) fn bind_and_check_standalone(id: &str, steps: &[Step]) -> Result<JobEnv, RenderError> {
     let job = Job {
+        matrix: None,
         display_name: id.to_owned(),
         runs_on: String::new(),
         check_runner: None,

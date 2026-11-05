@@ -26,7 +26,8 @@ const TOOLCHAIN_ENV: &str = "VELNOR_MBX_BUNDLE_TOOLCHAIN";
 const MAX_KEY: usize = velnor_actions_contract::cachekey::MAX_CACHE_KEY_BYTES;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct StateRootPlan {
+pub struct StateUnitPlan {
+    pub unit: StateUnit,
     pub root: String,
     pub pathspecs: Vec<String>,
     pub task_set: S256,
@@ -37,7 +38,7 @@ pub fn cache_keys_step(
     catalog: &ToolCatalog,
     fetch_roots: &[String],
     tofu_roots: &[String],
-    state_roots: &[StateRootPlan],
+    state_roots: &[StateUnitPlan],
 ) -> Result<Option<Step>, PlanSourcesError> {
     if fetch_roots.is_empty() && tofu_roots.is_empty() && state_roots.is_empty() {
         return Ok(None);
@@ -214,9 +215,9 @@ fn pathspec(spec: &str) -> Result<String, PlanSourcesError> {
     }
 }
 
-fn state_commands(ordinal: usize, plan: &StateRootPlan) -> Result<Vec<String>, PlanSourcesError> {
-    let unit = StateUnit::slice_of_root(&plan.root).map_err(PlanSourcesError::Contract)?;
-    let output = state_snapshot_output(&unit);
+fn state_commands(ordinal: usize, plan: &StateUnitPlan) -> Result<Vec<String>, PlanSourcesError> {
+    let unit = &plan.unit;
+    let output = state_snapshot_output(unit);
     let specs = plan
         .pathspecs
         .iter()
@@ -255,7 +256,7 @@ fn state_commands(ordinal: usize, plan: &StateRootPlan) -> Result<Vec<String>, P
     ));
     script.push(format!(
         "printf '%s\\n' \"{}=s256-$h\" >> \"$GITHUB_OUTPUT\"",
-        state_compat_output(&unit)
+        state_compat_output(unit)
     ));
     Ok(script)
 }

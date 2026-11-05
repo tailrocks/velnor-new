@@ -89,6 +89,7 @@ pub fn build_image_build_job(
     policy.validate()?;
     let timeout = JobTimeout::new(policy.image.timeout_minutes).map_err(RenderError::Contract)?;
     Ok(Job {
+        matrix: None,
         services: Vec::new(),
         outputs: BTreeMap::new(),
         display_name: format!(

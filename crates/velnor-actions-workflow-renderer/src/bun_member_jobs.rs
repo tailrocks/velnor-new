@@ -258,6 +258,7 @@ pub fn build_bun_member_job(
     let mut needs = vec![crate::render::PLAN_JOB_ID.to_owned()];
     needs.extend(policy.assets.iter().cloned());
     Ok(Job {
+        matrix: None,
         services: Vec::new(),
         outputs: BTreeMap::new(),
         display_name: format!("Bun / {}", policy.name),

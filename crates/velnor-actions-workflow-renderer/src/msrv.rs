@@ -77,6 +77,7 @@ pub fn msrv_job(
 ) -> Result<Job, RenderError> {
     spec.validate()?;
     Ok(Job {
+        matrix: None,
         services: Vec::new(),
         outputs: BTreeMap::new(),
         display_name: format!("MSRV {}", spec.package),

@@ -3,13 +3,12 @@
 
 use std::collections::BTreeMap;
 
+use super::mbx_bundle::MbxTransport;
 use super::{CompileDriver, MBX_ACTION_NAME};
 use crate::RenderError;
 use crate::steps::{action_owned_mbx_shell_step, action_step_with_env, shell_step, validate_uses};
 use velnor_actions_contract::workflow::MBX_WORKSPACE_CLEAN_CONDITION;
-use velnor_actions_contract::workflow::cache_family::{
-    MBX_COMPILE_ENV as COMPILE_ENV, RootSlug, StateUnit,
-};
+use velnor_actions_contract::workflow::cache_family::MBX_COMPILE_ENV as COMPILE_ENV;
 use velnor_actions_contract::{Step, StepId, StepKind, StepRole};
 
 pub const MBX_PREFLIGHT_NAME: &str = "Verify Rust before MBX action";
@@ -23,7 +22,7 @@ pub fn mbx_steps_for_driver(
     transport: MbxTransport,
     working_directory: Option<&str>,
 ) -> Result<Option<Vec<Step>>, RenderError> {
-    mbx_steps_for_driver_bounded(
+    driver_steps(
         uses,
         driver,
         mbx_version,
@@ -31,7 +30,7 @@ pub fn mbx_steps_for_driver(
         env,
         transport,
         working_directory,
-        super::mbx_bundle::StateCeilings::V3,
+        None,
     )
 }
 
@@ -48,6 +47,32 @@ pub fn mbx_steps_for_driver_bounded(
     transport: MbxTransport,
     working_directory: Option<&str>,
     ceilings: super::mbx_bundle::StateCeilings,
+) -> Result<Option<Vec<Step>>, RenderError> {
+    driver_steps(
+        uses,
+        driver,
+        mbx_version,
+        rust_toolchain,
+        env,
+        transport,
+        working_directory,
+        Some(ceilings),
+    )
+}
+
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the shared body of the two public driver entry points"
+)]
+fn driver_steps(
+    uses: &str,
+    driver: CompileDriver,
+    mbx_version: &str,
+    rust_toolchain: &str,
+    env: BTreeMap<String, String>,
+    transport: MbxTransport,
+    working_directory: Option<&str>,
+    ceilings: Option<super::mbx_bundle::StateCeilings>,
 ) -> Result<Option<Vec<Step>>, RenderError> {
     match driver {
         CompileDriver::Cargo => Ok(None),
@@ -67,6 +92,8 @@ pub fn mbx_steps_for_driver_bounded(
                 mbx_version_check_step(mbx_version, rust_toolchain, action_env.clone())?;
             let mut steps = vec![preflight, action, version_check];
             if let Some(unit) = transport.unit(working_directory)? {
+                let ceilings =
+                    ceilings.unwrap_or_else(|| super::mbx_bundle::StateCeilings::of_binding(&unit));
                 steps.extend(super::mbx_bundle::mbx_bundle_prelude(
                     &unit,
                     mbx_version,
@@ -78,36 +105,6 @@ pub fn mbx_steps_for_driver_bounded(
                 )?);
             }
             Ok(Some(steps))
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum MbxTransport {
-    InstallOnly,
-    SeedRead,
-    SeedWrite,
-    SuiteBundle,
-}
-
-impl MbxTransport {
-    pub(crate) fn unit(
-        self,
-        working_directory: Option<&str>,
-    ) -> Result<Option<StateUnit>, RenderError> {
-        let invalid = |error| RenderError::InvalidWorkflow(format!("state_root:{error}"));
-        match self {
-            Self::InstallOnly => Ok(None),
-            Self::SeedRead | Self::SeedWrite => {
-                let root = super::mbx_bundle::workspace_root(working_directory)?;
-                StateUnit::slice_of_root(&root).map(Some).map_err(invalid)
-            }
-            Self::SuiteBundle => {
-                let root = super::mbx_bundle::workspace_root(working_directory)?;
-                RootSlug::from_root(&root)
-                    .map(|slug| Some(StateUnit::Suite(slug)))
-                    .map_err(invalid)
-            }
         }
     }
 }

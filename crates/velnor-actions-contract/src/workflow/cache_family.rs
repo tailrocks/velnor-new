@@ -17,7 +17,7 @@ pub use family::{
     CARGO_HOME_EXPR, COMPLETE_STATE_ROOT_EXPR, COMPLETE_STATE_TRANSPORT_EXPR, CacheFamily, Ceiling,
     FamilySpec, GC1_HARD_CEILING_BYTES, GC1_MAX_GENERATION_SLOTS, ROOT_PLACEHOLDER,
     RUNNER_TEMP_EXPR, RUNNER_TEMP_SHELL, RUSTUP_HOME_EXPR, SOURCE_SUBSET,
-    TOFU_PROVIDER_CACHE_BASE_EXPR,
+    TOFU_PROVIDER_CACHE_BASE_EXPR, TOOLS_LAYER_ALLOWANCE_BYTES,
 };
 pub use outer::{
     OUTER_ENTRY_HEADER_BYTES, OUTER_ENTRY_NAME_RESERVE_BYTES, TAR_BLOCK_BYTES,
@@ -40,4 +40,6 @@ pub use state::{
     MBX_COMPILE_ENV, ROOT_SLUG_MAX_BYTES, RootSlug, S256, StateCompat, StateEntryKey,
     StateIdentity, StateScope, StateSnapshot, StateTrust,
 };
-pub use state_unit::{SLICE_ID_MAX_BYTES, SliceId, StateUnit, is_state_output_token};
+pub use state_unit::{
+    SLICE_CEILING, SLICE_ID_MAX_BYTES, SliceId, StateUnit, is_state_output_token,
+};

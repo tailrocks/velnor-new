@@ -5,9 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use super::cache_family::SOURCES_PRODUCE_PLAN_TEST;
 use super::producer::{DEPENDENCY_SEED_JOB_CONDITION, LANE_SURVIVAL_CONDITION, ProducerKind};
-use super::state_seal::{
-    STATE_PRODUCER_JOB_ID_PREFIX, STATE_SEAL_JOB_ID_PREFIX, state_seal_condition,
-};
+use super::state_seal::{STATE_SEAL_JOB_ID, state_seal_condition};
 use super::{Job, StepKind};
 use crate::ContractError;
 
@@ -163,12 +161,7 @@ impl CacheWriter {
             return false;
         };
         if self == Self::StateSeal {
-            return id
-                .strip_prefix(STATE_SEAL_JOB_ID_PREFIX)
-                .is_some_and(|root| {
-                    condition
-                        == state_seal_condition(&format!("{STATE_PRODUCER_JOB_ID_PREFIX}{root}"))
-                });
+            return id == STATE_SEAL_JOB_ID && condition == state_seal_condition();
         }
         let gate = self.condition();
         condition == gate

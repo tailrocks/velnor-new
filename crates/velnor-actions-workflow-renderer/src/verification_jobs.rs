@@ -152,6 +152,7 @@ pub fn build_verification_task_job(
     let timeout = JobTimeout::new(policy.task.timeout_minutes).map_err(RenderError::Contract)?;
     let steps = verification_steps(policy, checkout_uses)?;
     Ok(Job {
+        matrix: None,
         services: Vec::new(),
         outputs: BTreeMap::new(),
         display_name: format!("Verify {}", policy.task.id),

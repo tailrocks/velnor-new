@@ -1,7 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use super::state_seal::STATE_PRODUCER_LANE_CONDITION;
 use super::step_identity::{MBX_WORKSPACE_CLEAN_CONDITION, StepId, StepRole, verifier_action_role};
 use crate::errors::ContractError;
 use serde::{Deserialize, Serialize};
@@ -112,10 +111,9 @@ impl Step {
         if matches!(&self.kind, StepKind::TaskExecution { .. })
             && (self.id.is_some()
                 || self.role.is_some()
-                || self
-                    .condition
-                    .as_deref()
-                    .is_some_and(|condition| condition != STATE_PRODUCER_LANE_CONDITION))
+                || self.condition.as_deref().is_some_and(|condition| {
+                    super::state_seal::state_producer_lane_slice(condition).is_none()
+                }))
         {
             return Err(ContractError::identity(
                 "step.task",

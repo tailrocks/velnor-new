@@ -84,7 +84,7 @@ pub use cache_policy::{
 pub use crate_job::{CrateJob, CrateObligation};
 pub use dispatch::{DispatchInput, DispatchInputType, WorkflowDispatch};
 pub use execute::{ExecuteTaskIds, ExecuteTaskRef};
-pub use ir::{Concurrency, Job, ScheduleTrigger, Trigger, WorkflowIr};
+pub use ir::{Concurrency, Job, JobMatrix, ScheduleTrigger, Trigger, WorkflowIr};
 pub use job_env::{HomeKey, JobEnv, RUSTUP_AUTO_INSTALL_DISABLED, RUSTUP_AUTO_INSTALL_ENV};
 pub use jobs::{
     CI_WORKFLOW_PATH, CRATE_JOB_ID_PREFIX, FRESHNESS_CRON_WEEKLY, FRESHNESS_WORKFLOW_PATH,

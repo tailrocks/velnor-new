@@ -55,7 +55,7 @@ struct PreparedWorkflow {
     acquire: Option<Step>,
     format: Option<Step>,
     needs: PlanJobToolNeeds,
-    state_recipes: BTreeMap<String, velnor_actions_contract::workflow::cache_family::S256>,
+    state: crate::state_slices::SliceBuild,
 }
 
 pub(crate) fn build_workflow_for_consumer_release(
@@ -206,7 +206,7 @@ fn prepare_workflow(input: &WorkflowBuildInput<'_>) -> Result<PreparedWorkflow, 
         acquire,
         format,
         needs,
-        state_recipes: BTreeMap::new(),
+        state: crate::state_slices::SliceBuild::default(),
     })
 }
 
@@ -256,8 +256,8 @@ fn attach_state_roots(
     prepared: &PreparedWorkflow,
     jobs: &mut BTreeMap<String, Job>,
 ) -> Result<(), OrchestratorError> {
-    let state_roots = crate::state_roots::plans(input.discovery, jobs, &prepared.state_recipes)?;
-    let seal = crate::state_roots::seal_plan(jobs)?;
+    let state_roots = crate::state_roots::plans(input.discovery, jobs, &prepared.state)?;
+    let seal = crate::state_roots::seal_plan(jobs, &prepared.state.assignment)?;
     if state_roots.is_empty() && seal.units.is_empty() {
         return Ok(());
     }
@@ -303,7 +303,7 @@ fn build_workflow_jobs(
     for (id, job) in built.jobs {
         jobs.insert(id, job);
     }
-    prepared.state_recipes = built.state_recipes;
+    prepared.state = built.state;
     for (id, job) in built.producers.into_iter().chain(built.ledger_cli) {
         jobs.insert(id, job);
     }

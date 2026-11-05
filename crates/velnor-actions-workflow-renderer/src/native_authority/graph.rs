@@ -316,6 +316,7 @@ fn projection(
                 metadata.services.clear();
                 metadata.timeout_minutes = JobTimeout::DEFAULT;
                 metadata.condition = None;
+                metadata.matrix = None;
                 metadata.permissions = None;
                 metadata.environment = None;
                 metadata.cache_access = velnor_actions_contract::CacheAccess::Read;
@@ -363,6 +364,7 @@ fn validators(
 
 fn metadata(runner: &str) -> Job {
     Job {
+        matrix: None,
         services: Vec::new(),
         outputs: BTreeMap::new(),
         display_name: "Plan".to_owned(),

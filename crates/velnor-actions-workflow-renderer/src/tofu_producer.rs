@@ -126,6 +126,7 @@ fn build(plan: &ProviderProducerPlan<'_>) -> Result<Job, RenderError> {
     steps.push(fetch_step(donor, &plan.id)?);
     steps.push(tofu_providers_save_step(&plan.key, &plan.path)?);
     Ok(Job {
+        matrix: None,
         display_name: format!(
             "{PRODUCER_DISPLAY_PREFIX}{}",
             plan.id

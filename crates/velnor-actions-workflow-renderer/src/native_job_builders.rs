@@ -70,7 +70,7 @@ pub fn plan_state_roots(
     catalog: &ToolCatalog,
     fetch_roots: &[String],
     tofu_roots: &[String],
-    state_roots: &[plan_sources::cache_keys::StateRootPlan],
+    state_roots: &[plan_sources::cache_keys::StateUnitPlan],
     seal: &plan_sources::state_select::StateSealPlan,
 ) -> Result<(), NativeJobBuilderError> {
     let selecting = !seal.units.is_empty();
@@ -193,6 +193,7 @@ pub fn plan_job(
     }
     steps.push(plan_step());
     Ok(Job {
+        matrix: None,
         services: Vec::new(),
         outputs: BTreeMap::new(),
         display_name: "Plan".to_owned(),
@@ -232,6 +233,7 @@ pub fn final_job(
     steps.push(request_step(MERGE_OPERATION)?);
     steps.push(merge_step());
     Ok(Job {
+        matrix: None,
         services: Vec::new(),
         outputs: BTreeMap::new(),
         display_name: FINAL_DISPLAY_NAME.to_owned(),

@@ -43,9 +43,11 @@ pub const GC1_HARD_CEILING_BYTES: u64 = 10_000_000_000;
 
 pub const GC1_MAX_GENERATION_SLOTS: u64 = 2;
 
-const MIB: u64 = 1024 * 1024;
+pub(super) const MIB: u64 = 1024 * 1024;
 
-const GIB: u64 = 1024 * MIB;
+pub(super) const GIB: u64 = 1024 * MIB;
+
+pub const TOOLS_LAYER_ALLOWANCE_BYTES: u64 = GIB + GIB / 2;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum CacheFamily {

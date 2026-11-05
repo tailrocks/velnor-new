@@ -3,7 +3,7 @@
 
 use std::error::Error;
 
-use velnor_actions_contract::workflow::cache_family::{CacheFamily, outer_entry_bound};
+use velnor_actions_contract::workflow::cache_family::{SLICE_CEILING, outer_entry_bound};
 use velnor_actions_contract::workflow::state_seal::{
     STATE_SEAL_LIST_LIMIT, STATE_SEAL_VERIFY_LIMIT,
 };
@@ -297,7 +297,7 @@ fn plan_lists_by_creation_not_by_last_access() -> Result<(), Box<dyn Error>> {
 fn plan_skips_entries_above_the_outer_bound() -> Result<(), Box<dyn Error>> {
     let scene = Scene::new("seal-outer-bound", crate::gc1_t53::scripts()?)?;
     let gh = Gh::install(&scene)?;
-    let bound = outer_entry_bound(CacheFamily::MbxBundle.spec().ceiling.stored())
+    let bound = outer_entry_bound(SLICE_CEILING.stored())
         .ok_or_else(|| fail("the outer bound is unbounded"))?;
     let over = key('a', '1', '1')?;
     let at = key('a', '1', '2')?;

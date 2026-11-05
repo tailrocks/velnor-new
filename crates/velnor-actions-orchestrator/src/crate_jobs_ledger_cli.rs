@@ -58,6 +58,7 @@ pub(super) fn ledger_cli_job(
             .map_err(OrchestratorError::from)?,
     );
     Ok(Job {
+        matrix: None,
         services: Vec::new(),
         outputs: BTreeMap::from([
             (

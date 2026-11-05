@@ -23,4 +23,5 @@ pub(crate) struct CrateJobInputs<'a> {
     pub(crate) compiled_state: CompiledStateMode,
     pub(crate) seed_parallel_targets: bool,
     pub(crate) crates: &'a BTreeMap<String, RustCrateConfig>,
+    pub(crate) state_slices: &'a crate::state_slices::SliceAssignment,
 }

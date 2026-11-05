@@ -129,7 +129,7 @@ fn gc1_t08_preserves_contract() -> Result<(), Box<dyn Error>> {
     check_group_needs()?;
     check_grouped_deadlines()?;
     if !is_producer_job_id("state-producer-root")
-        || !is_producer_job_id("state-seal-root")
+        || !is_producer_job_id("state-seal")
         || is_producer_job_id("rust-demo")
     {
         return Err(io::Error::other("seed job guard misclassifies ids").into());
@@ -243,7 +243,7 @@ fn check_rejects_seed_race() -> Result<(), Box<dyn Error>> {
     let job = fixture_job()?;
     for seed in [
         "state-producer-root".to_owned(),
-        "state-seal-root".to_owned(),
+        "state-seal".to_owned(),
         format!("{TOOLS_PRODUCER_JOB_ID_PREFIX}0123abcd"),
     ] {
         if validate_group_needs(&["plan".to_owned(), seed.clone()], &job.job_id).is_ok() {

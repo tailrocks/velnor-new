@@ -22,7 +22,7 @@ pub(crate) fn scripts_with(ceilings: StateCeilings) -> Result<Scripts, Box<dyn E
         "1.2.3",
         RUST_VERSION,
         driver_env()?,
-        MbxTransport::SeedRead,
+        MbxTransport::SeedRead(crate::gc1_seal_support::slice_of(".")?),
         None,
         ceilings,
     )?

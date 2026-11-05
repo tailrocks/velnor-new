@@ -1,16 +1,32 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use super::cache_family::{SliceId, StateUnit, is_state_output_token};
+use super::cache_family::{RootSlug, SliceId, StateUnit, is_state_output_token};
 use super::producer::DEPENDENCY_SEED_JOB_CONDITION;
 
 pub const STATE_PRODUCER_JOB_ID_PREFIX: &str = "state-producer-";
 
-pub const STATE_SEAL_JOB_ID_PREFIX: &str = "state-seal-";
-
-pub const STATE_PRODUCER_ARTIFACT_OUTPUT: &str = "artifact_id";
+pub const STATE_SEAL_JOB_ID: &str = "state-seal";
 
 pub const STATE_PRODUCER_PRODUCED_OUTPUT: &str = "produced";
+
+pub const STATE_PRODUCER_MAX_PARALLEL: u32 = 2;
+
+pub const STATE_SEAL_MAX_PARALLEL: u32 = 1;
+
+pub const STATE_SEAL_MATRIX_OUTPUT: &str = "state_matrix_seal";
+
+const STATE_PRODUCER_MATRIX_OUTPUT_PREFIX: &str = "state_matrix_producer_";
+
+pub const STATE_MATRIX_SLICE: &str = "slice";
+
+pub const STATE_MATRIX_ATTESTED: &str = "attested";
+
+pub const STATE_MATRIX_SNAPSHOT: &str = "snapshot";
+
+pub const STATE_MATRIX_COMPAT: &str = "compat";
+
+pub const STATE_MATRIX_PENDING: &str = "pending";
 
 pub const STATE_PRODUCER_LANE_CONDITION: &str =
     "steps.mbx-bundle-import.outputs.producer_skip != 'true'";
@@ -25,13 +41,11 @@ pub const STATE_SEAL_BUDGET_BYTES: u64 = 8_000_000_000;
 
 pub const STATE_SEAL_SCOPE_ENV: &str = "VELNOR_STATE_SEAL_SCOPE";
 
-pub const STATE_SEAL_PENDING_ENV: &str = "VELNOR_STATE_PENDING";
-
 pub const STATE_SEAL_PENDING_BYTES_ENV: &str = "VELNOR_STATE_PENDING_BYTES";
 
-pub const STATE_SEAL_ARTIFACT_ENV: &str = "VELNOR_STATE_ARTIFACT_ID";
+pub const STATE_SEAL_WRITERS_BYTES_ENV: &str = "VELNOR_STATE_WRITERS_BYTES";
 
-pub const STATE_SEAL_PRODUCE_SUFFIX: &str = "_produce";
+pub const STATE_SEAL_ARTIFACT_ENV: &str = "VELNOR_STATE_ARTIFACT_NAME";
 
 pub const STATE_SEAL_COMPAT_SUFFIX: &str = "_compat";
 
@@ -115,27 +129,70 @@ pub fn state_seal_signer_workflow() -> String {
 }
 
 #[must_use]
-pub fn state_producer_job_id(slice: &SliceId) -> String {
-    format!("{STATE_PRODUCER_JOB_ID_PREFIX}{slice}")
+pub fn state_producer_job_id(root: &RootSlug) -> String {
+    format!("{STATE_PRODUCER_JOB_ID_PREFIX}{root}")
 }
 
 #[must_use]
-pub fn state_seal_job_id(slice: &SliceId) -> String {
-    format!("{STATE_SEAL_JOB_ID_PREFIX}{slice}")
+pub fn state_matrix_expr(key: &str) -> String {
+    format!("${{{{ matrix.{key} }}}}")
 }
 
 #[must_use]
-pub fn state_producer_condition(slice: &SliceId) -> String {
+pub fn state_producer_matrix_output(root: &RootSlug) -> String {
     format!(
-        "{DEPENDENCY_SEED_JOB_CONDITION} && {}",
-        state_produce_plan_test(&StateUnit::Slice(slice.clone()))
+        "{STATE_PRODUCER_MATRIX_OUTPUT_PREFIX}{}",
+        root.as_str().replace('-', "_")
     )
 }
 
 #[must_use]
-pub fn state_seal_condition(producer_job_id: &str) -> String {
+pub fn is_state_matrix_output(name: &str) -> bool {
+    name == STATE_SEAL_MATRIX_OUTPUT
+        || name
+            .strip_prefix(STATE_PRODUCER_MATRIX_OUTPUT_PREFIX)
+            .is_some_and(|root| {
+                !root.is_empty()
+                    && root
+                        .bytes()
+                        .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_')
+            })
+}
+
+#[must_use]
+pub fn state_producer_condition(root: &RootSlug) -> String {
     format!(
-        "!cancelled() && {DEPENDENCY_SEED_JOB_CONDITION} && needs.{producer_job_id}.outputs.{STATE_PRODUCER_PRODUCED_OUTPUT} == 'true' && needs.{producer_job_id}.outputs.{STATE_PRODUCER_ARTIFACT_OUTPUT} != ''"
+        "{DEPENDENCY_SEED_JOB_CONDITION} && needs.plan.outputs.{} != ''",
+        state_producer_matrix_output(root)
+    )
+}
+
+#[must_use]
+pub fn state_producer_lane_condition(slice: &SliceId) -> String {
+    format!("matrix.{STATE_MATRIX_SLICE} == '{slice}' && {STATE_PRODUCER_LANE_CONDITION}")
+}
+
+#[must_use]
+pub fn state_producer_lane_slice(condition: &str) -> Option<SliceId> {
+    condition
+        .strip_prefix(&format!("matrix.{STATE_MATRIX_SLICE} == '"))
+        .and_then(|rest| rest.strip_suffix(&format!(" && {STATE_PRODUCER_LANE_CONDITION}")))
+        .and_then(|rest| rest.strip_suffix('\''))
+        .and_then(|slice| SliceId::parse(slice).ok())
+}
+
+#[must_use]
+pub fn state_payload_artifact_name() -> String {
+    format!(
+        "velnor-state-{}-r${{{{ github.run_id }}}}-a${{{{ env.VELNOR_RUN_KEY_ATTEMPT }}}}",
+        state_matrix_expr(STATE_MATRIX_SLICE)
+    )
+}
+
+#[must_use]
+pub fn state_seal_condition() -> String {
+    format!(
+        "!cancelled() && {DEPENDENCY_SEED_JOB_CONDITION} && needs.plan.outputs.{STATE_SEAL_MATRIX_OUTPUT} != ''"
     )
 }
 
@@ -167,29 +224,6 @@ pub fn state_attested_plan_expr(unit: &StateUnit) -> String {
     format!(
         "${{{{needs.plan.outputs.{}}}}}",
         state_attested_output(unit)
-    )
-}
-
-#[must_use]
-pub fn state_produce_output(unit: &StateUnit) -> String {
-    state_output(unit, STATE_SEAL_PRODUCE_SUFFIX)
-}
-
-#[must_use]
-pub fn is_state_produce_output(name: &str) -> bool {
-    is_state_output(name, STATE_SEAL_PRODUCE_SUFFIX)
-}
-
-#[must_use]
-pub fn state_produce_plan_expr(unit: &StateUnit) -> String {
-    format!("${{{{needs.plan.outputs.{}}}}}", state_produce_output(unit))
-}
-
-#[must_use]
-pub fn state_produce_plan_test(unit: &StateUnit) -> String {
-    format!(
-        "needs.plan.outputs.{} == 'true'",
-        state_produce_output(unit)
     )
 }
 

@@ -296,6 +296,19 @@ pub(super) fn append_job_options(
         steps::scan_for_private_subcommands(condition)?;
         entries.push(("if".to_owned(), Yaml::str(condition.clone())));
     }
+    if let Some(matrix) = &job.matrix {
+        entries.push((
+            "strategy".to_owned(),
+            Yaml::Map(vec![
+                ("fail-fast".to_owned(), Yaml::Bool(false)),
+                (
+                    "max-parallel".to_owned(),
+                    Yaml::Int(i64::from(matrix.max_parallel)),
+                ),
+                ("matrix".to_owned(), Yaml::str(matrix.expression())),
+            ]),
+        ));
+    }
     Ok(())
 }
 

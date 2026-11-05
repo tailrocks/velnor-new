@@ -4,7 +4,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_actions_contract::workflow::cache_family::S256;
-use velnor_actions_contract::workflow::state_seal::STATE_PRODUCER_LANE_CONDITION;
+use velnor_actions_contract::workflow::state_seal::state_producer_lane_slice;
 use velnor_actions_contract::{
     Job, RunsOn, ScaleSetSelector, Step, StepKind, StepRole, TASK_EXECUTION_MANIFEST_PATH,
     TASK_EXECUTION_MANIFEST_SCHEMA, TaskExecutionManifestEntryV1, TaskExecutionManifestV1,
@@ -215,7 +215,7 @@ fn validate_task_job_scope(job_id: &str, job: &Job, step: &Step) -> Result<(), R
         || step
             .condition
             .as_deref()
-            .is_some_and(|condition| condition != STATE_PRODUCER_LANE_CONDITION)
+            .is_some_and(|condition| state_producer_lane_slice(condition).is_none())
     {
         return Err(RenderError::InvalidWorkflow(format!(
             "declared_task_authority_mismatch:{job_id}"

@@ -57,6 +57,7 @@ fn build(plan: &Job) -> Result<Job, RenderError> {
     );
     steps.push(save);
     Ok(Job {
+        matrix: None,
         display_name: DISPLAY_NAME.to_owned(),
         runs_on: plan.runs_on.clone(),
         check_runner: None,

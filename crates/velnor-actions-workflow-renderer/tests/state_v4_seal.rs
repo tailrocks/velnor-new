@@ -6,14 +6,14 @@ use std::error::Error;
 use std::path::Path;
 
 use velnor_actions_contract::workflow::cache_family::{
-    COMPLETE_STATE_TRANSPORT_EXPR, CacheFamily, S256, SliceId,
+    COMPLETE_STATE_TRANSPORT_EXPR, RootSlug, S256, SLICE_CEILING,
 };
 use velnor_actions_contract::workflow::state_seal::{
-    STATE_SEAL_KEY_EXPR, STATE_SEAL_PREFIX_ENV, STATE_SEAL_SUBJECT_REL, state_producer_job_id,
-    state_seal_job_id,
+    STATE_PRODUCER_MAX_PARALLEL, STATE_SEAL_JOB_ID, STATE_SEAL_KEY_EXPR, STATE_SEAL_PREFIX_ENV,
+    STATE_SEAL_SUBJECT_REL, state_producer_job_id, state_producer_matrix_output,
 };
 use velnor_actions_contract::{
-    CacheAccess, Job, JobEnv, JobTimeout, Step, StepId, StepKind, StepRole,
+    CacheAccess, Job, JobEnv, JobMatrix, JobTimeout, Step, StepId, StepKind, StepRole,
 };
 use velnor_actions_workflow_renderer::state_seal::add_state_seal_jobs;
 
@@ -39,6 +39,7 @@ fn shell_step(role: StepRole, id: StepId, env: BTreeMap<String, String>) -> Step
 
 fn producer_fixture() -> Job {
     Job {
+        matrix: None,
         display_name: "producer".to_owned(),
         runs_on: "ubuntu-26.04".to_owned(),
         check_runner: None,
@@ -69,8 +70,13 @@ fn producer_fixture() -> Job {
 pub(crate) fn seal_jobs(roots: &[&str]) -> Result<BTreeMap<String, Job>, Box<dyn Error>> {
     let mut jobs = BTreeMap::new();
     for root in roots {
-        let slug = SliceId::from_root(root)?;
+        let slug = RootSlug::from_root(root)?;
         let mut producer = producer_fixture();
+        producer.matrix = Some(JobMatrix {
+            include_output: state_producer_matrix_output(&slug),
+            max_parallel: STATE_PRODUCER_MAX_PARALLEL,
+            legs: 1,
+        });
         for step in &mut producer.steps {
             if let StepKind::Shell { env, .. } = &mut step.kind
                 && env.contains_key("VELNOR_MBX_BUNDLE_ROOT")
@@ -86,7 +92,7 @@ pub(crate) fn seal_jobs(roots: &[&str]) -> Result<BTreeMap<String, Job>, Box<dyn
 
 pub(crate) fn seal_job() -> Result<Job, Box<dyn Error>> {
     let mut jobs = seal_jobs(&[ROOT])?;
-    jobs.remove(&state_seal_job_id(&SliceId::from_root(ROOT)?))
+    jobs.remove(STATE_SEAL_JOB_ID)
         .ok_or_else(|| fail("the seal job was not generated"))
 }
 
@@ -103,14 +109,9 @@ pub(crate) fn identity_expression() -> Result<String, Box<dyn Error>> {
 
 pub(crate) fn resolved_prefix(expression: &str) -> String {
     expression
-        .replace(
-            "${{needs.plan.outputs.state_slice_root_compat}}",
-            &S256::of(b"compat").to_string(),
-        )
-        .replace(
-            "${{needs.plan.outputs.state_slice_root_snapshot}}",
-            &S256::of(b"snapshot").to_string(),
-        )
+        .replace("${{ matrix.slice }}", "root")
+        .replace("${{ matrix.compat }}", &S256::of(b"compat").to_string())
+        .replace("${{ matrix.snapshot }}", &S256::of(b"snapshot").to_string())
 }
 
 pub(crate) fn step_of(job: &Job, role: StepRole) -> Result<&Step, Box<dyn Error>> {
@@ -225,7 +226,7 @@ fn attest_job_binds_key_to_stored_file() -> Result<(), Box<dyn Error>> {
         ));
     }
 
-    let ceiling = CacheFamily::MbxBundle.spec().ceiling.stored();
+    let ceiling = SLICE_CEILING.stored();
     reset_payload(&scene)?;
     std::fs::File::create(scene.payload())?.set_len(ceiling + 1)?;
     let output = run_subject(&scene, &job)?;

@@ -17,7 +17,7 @@ use velnor_actions_contract::workflow::cache_family_steps::{
     STACK_FAMILIES, family_key_expr, family_save_condition,
 };
 use velnor_actions_contract::workflow::state_seal::{
-    STATE_SEAL_JOB_ID_PREFIX, STATE_SEAL_KEY_EXPR, STATE_SEAL_SAVE_CONDITION,
+    STATE_SEAL_JOB_ID, STATE_SEAL_KEY_EXPR, STATE_SEAL_SAVE_CONDITION,
 };
 use velnor_actions_contract::workflow::step_identity::TOFU_PROVIDER_ADMISSION_USES;
 use velnor_actions_contract::{Job, PullRequestCachePolicy, Step, StepKind};
@@ -328,7 +328,7 @@ fn check_save(job: &str, step: &Step, family: Family) -> Result<(), RenderError>
         }
         Family::Runtime(CacheFamily::TofuProviders) => condition == TOFU_PROVIDERS_SAVE_CONDITION,
         Family::Runtime(CacheFamily::MbxBundle) => {
-            condition == STATE_SEAL_SAVE_CONDITION && job.starts_with(STATE_SEAL_JOB_ID_PREFIX)
+            condition == STATE_SEAL_SAVE_CONDITION && job == STATE_SEAL_JOB_ID
         }
         Family::Runtime(
             family @ (CacheFamily::BunInstall

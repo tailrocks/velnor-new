@@ -79,7 +79,30 @@ pub struct Job {
     #[serde(default, skip_serializing_if = "super::job_env::JobEnv::is_unset")]
     pub env: super::job_env::JobEnv,
 
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub matrix: Option<JobMatrix>,
+
     pub steps: Vec<Step>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct JobMatrix {
+    pub include_output: String,
+
+    pub max_parallel: u32,
+
+    pub legs: u32,
+}
+
+impl JobMatrix {
+    #[must_use]
+    pub fn expression(&self) -> String {
+        format!(
+            "${{{{ fromJSON(needs.{}.outputs.{}) }}}}",
+            super::PLAN_JOB_ID,
+            self.include_output
+        )
+    }
 }
 
 pub const CACHE_SAVE_CONDITION: &str = "success() && github.event_name == 'push'";

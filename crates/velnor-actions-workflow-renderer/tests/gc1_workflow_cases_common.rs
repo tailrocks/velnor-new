@@ -56,6 +56,7 @@ pub(crate) fn job_with(
     condition: Option<String>,
 ) -> Job {
     Job {
+        matrix: None,
         display_name: display.to_owned(),
         runs_on: "ubuntu-24.04".to_owned(),
         check_runner: None,

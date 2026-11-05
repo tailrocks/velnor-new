@@ -7,6 +7,8 @@ pub const MBX_BUNDLE_KEY_EXPR: &str = "${{steps.mbx-bundle-key.outputs.restore_k
 
 pub const MBX_BUNDLE_ROOT_ENV: &str = "VELNOR_MBX_BUNDLE_ROOT";
 
+pub const MBX_BUNDLE_UNIT_ENV: &str = "VELNOR_MBX_BUNDLE_UNIT";
+
 pub const MBX_BUNDLE_SNAPSHOT_ENV: &str = "VELNOR_STATE_SNAPSHOT";
 
 pub const MBX_BUNDLE_PRODUCER_SKIP_OUTPUT: &str = "producer_skip";

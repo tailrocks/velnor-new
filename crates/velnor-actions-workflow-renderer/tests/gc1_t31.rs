@@ -54,6 +54,7 @@ fn job_with(
     steps: Vec<Step>,
 ) -> Job {
     Job {
+        matrix: None,
         display_name: display.to_owned(),
         runs_on: "ubuntu-24.04".to_owned(),
         check_runner: None,

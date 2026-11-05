@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::cache_access::{CacheAccess, CacheWriter, SOURCES_PRODUCER_JOB_ID};
-use super::cache_family::SliceId;
+use super::cache_family::RootSlug;
 use super::crate_job::{TOFU_PROVIDERS_PRODUCER_JOB_ID_PREFIX, TOOLS_PRODUCER_JOB_ID_PREFIX};
 use super::producer_order::{sources_order_ok, tofu_lane_needs_ok, tofu_order_ok, tools_order_ok};
 use super::producer_roles::{
@@ -10,8 +10,8 @@ use super::producer_roles::{
 };
 use super::producer_state::{state_producer_shape_ok, state_seal_shape_ok};
 use super::state_seal::{
-    STATE_PRODUCER_ARTIFACT_OUTPUT, STATE_PRODUCER_JOB_ID_PREFIX, STATE_PRODUCER_LANE_CONDITION,
-    STATE_PRODUCER_PRODUCED_OUTPUT, STATE_SEAL_JOB_ID_PREFIX, state_producer_condition,
+    STATE_PRODUCER_JOB_ID_PREFIX, STATE_SEAL_JOB_ID, state_producer_condition,
+    state_producer_lane_slice,
 };
 use super::step_identity::ToolsRestoreForm;
 use super::step_protocol::ProviderRestoreForm;
@@ -117,7 +117,7 @@ pub(super) fn validate_job(
             != (kind == Some(ProducerKind::TofuProviders))
         || id.starts_with(STATE_PRODUCER_JOB_ID_PREFIX)
             != (kind == Some(ProducerKind::StateProducer))
-        || id.starts_with(STATE_SEAL_JOB_ID_PREFIX) != (kind == Some(ProducerKind::StateSeal))
+        || (id == STATE_SEAL_JOB_ID) != (kind == Some(ProducerKind::StateSeal))
     {
         return Err(invalid(id));
     }
@@ -128,7 +128,7 @@ pub(super) fn validate_job(
         && job.environment.is_none()
         && job.check_runner.is_none()
         && job.services.is_empty()
-        && kind.outputs_ok(job)
+        && job.outputs.is_empty()
         && kind.permissions_ok(effective)
         && job.steps.iter().all(|step| kind.step_ok(step))
         && kind.shape_ok(id, job);
@@ -151,17 +151,6 @@ impl ProducerKind {
             Self::TofuProviders => CacheAccess::Writer(CacheWriter::TofuProvidersProducer),
             Self::SourcesProducer => CacheAccess::Writer(CacheWriter::SourcesProducer),
             Self::StateSeal => CacheAccess::Writer(CacheWriter::StateSeal),
-        }
-    }
-
-    fn outputs_ok(self, job: &Job) -> bool {
-        match self {
-            Self::StateProducer => {
-                job.outputs.len() == 2
-                    && job.outputs.contains_key(STATE_PRODUCER_ARTIFACT_OUTPUT)
-                    && job.outputs.contains_key(STATE_PRODUCER_PRODUCED_OUTPUT)
-            }
-            _ => job.outputs.is_empty(),
         }
     }
 
@@ -188,7 +177,11 @@ impl ProducerKind {
     fn step_ok(self, step: &Step) -> bool {
         if matches!(step.kind, StepKind::TaskExecution { .. }) {
             return self == Self::StateProducer
-                && step.condition.as_deref() == Some(STATE_PRODUCER_LANE_CONDITION);
+                && step
+                    .condition
+                    .as_deref()
+                    .and_then(state_producer_lane_slice)
+                    .is_some();
         }
         !step.parallel && step.role.is_some_and(|role| self.allows(role))
     }
@@ -209,14 +202,10 @@ impl ProducerKind {
             Self::TofuProviders => CacheWriter::TofuProvidersProducer.admits(id, condition),
             Self::ToolsIdentity => CacheWriter::ToolsProducer.admits(id, condition),
             Self::StateSeal => CacheWriter::StateSeal.admits(id, condition),
-            Self::StateProducer => {
-                id.strip_prefix(STATE_PRODUCER_JOB_ID_PREFIX)
-                    .is_some_and(|slice| {
-                        SliceId::parse(slice).is_ok_and(|slice| {
-                            condition == Some(state_producer_condition(&slice).as_str())
-                        })
-                    })
-            }
+            Self::StateProducer => id
+                .strip_prefix(STATE_PRODUCER_JOB_ID_PREFIX)
+                .and_then(|root| RootSlug::from_slug(root).ok())
+                .is_some_and(|root| condition == Some(state_producer_condition(&root).as_str())),
         }
     }
 
@@ -228,7 +217,7 @@ impl ProducerKind {
                 .count()
         };
         match self {
-            Self::StateProducer => state_producer_shape_ok(job),
+            Self::StateProducer => state_producer_shape_ok(id, job),
             Self::ToolsIdentity => {
                 (job.needs.is_empty() || job.needs == [SOURCES_PRODUCER_JOB_ID])
                     && count(StepRole::Checkout) == 1

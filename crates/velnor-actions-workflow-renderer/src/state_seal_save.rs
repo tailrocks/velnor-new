@@ -10,8 +10,8 @@ use velnor_actions_contract::workflow::state_seal::{
     STATE_SEAL_ADMITTED_OUTPUT, STATE_SEAL_ARTIFACT_ENV, STATE_SEAL_BUDGET_BYTES,
     STATE_SEAL_KEY_ENV, STATE_SEAL_KEY_EXPR, STATE_SEAL_LIST_FIELDS, STATE_SEAL_LIST_JQ,
     STATE_SEAL_LIST_LIMIT, STATE_SEAL_LIST_TAB, STATE_SEAL_PENDING_BYTES_ENV,
-    STATE_SEAL_PENDING_ENV, STATE_SEAL_PREDICATE_TYPE, STATE_SEAL_RETIRE_CONDITION,
-    STATE_SEAL_SCOPE_ENV, STATE_SEAL_SUBJECT_REL, STATE_SEAL_WORKFLOW_PATH,
+    STATE_SEAL_PREDICATE_TYPE, STATE_SEAL_RETIRE_CONDITION, STATE_SEAL_SCOPE_ENV,
+    STATE_SEAL_SUBJECT_REL, STATE_SEAL_WORKFLOW_PATH, STATE_SEAL_WRITERS_BYTES_ENV,
 };
 use velnor_actions_contract::{Step, StepRole};
 
@@ -65,26 +65,13 @@ gh api "repos/$GITHUB_REPOSITORY/actions/cache/usage" --jq .active_caches_size_i
 usage=
 read -r usage < "$d/usage" || usage=
 number "$usage" || refuse usage_unreadable
-unit="${@PENDING_BYTES@:-0}"
-number "$unit" || refuse pending_unreadable
-printf '%s\n' "${@PENDING@-}" | tr ' ' '\n' > "$d/pending"
-shape='^s256-[0-9a-f]{64}-s256-[0-9a-f]{64}-s256-[0-9a-f]{64}$'
-reserved=0
-while IFS= read -r item || [ -n "$item" ]; do
-  [ "${item%%:*}" = true ] || continue
-  later="${item#*:}"
-  gh cache list -R "$repo" --key "$later" --ref "$ref" --limit @LIMIT@ --json @FIELDS@ --jq '@JQ@' > "$d/later" 2> /dev/null || refuse reserve_unlistable
-  : > "$d/held"
-  while IFS='@TAB@' read -r k i s; do
-    case "$k" in "$later"?*) ;; *) continue ;; esac
-    printf '%s\n' "${k#"$later"}" | grep -Eq "$shape" || continue
-    number "$s" || continue
-    printf '%s\n' "$s" >> "$d/held"
-  done < "$d/later"
-  awk -v unit="$unit" -v r="$reserved" '{ h += $1 } END { if (h < unit) r += unit - h; printf "%.0f\n", r }' "$d/held" > "$d/reserved" || refuse reserve_unreadable
-  reserved=; read -r reserved < "$d/reserved" || reserved=
-  number "$reserved" || refuse reserve_unreadable
-done < "$d/pending"
+pending="${@PENDING_BYTES@-}"
+number "$pending" || refuse pending_unreadable
+writers="${@WRITERS_BYTES@-}"
+number "$writers" || refuse writers_unreadable
+awk -v p="$pending" -v w="$writers" 'BEGIN { printf "%.0f\n", p + w }' > "$d/reserved" || refuse reserve_unreadable
+reserved=; read -r reserved < "$d/reserved" || reserved=
+number "$reserved" || refuse reserve_unreadable
 awk -v u="$usage" -v b="$bound" -v r="$reserved" 'BEGIN { exit !(u + b + r <= @BUDGET@) }' || refuse "over_budget usage=$usage bound=$bound reserved=$reserved budget=@BUDGET@"
 printf '%s\n' '@ADMITTED@=true' >> "$GITHUB_OUTPUT"
 printf 'velnor: state save admitted usage=%s bound=%s reserved=%s budget=%s\n' "$usage" "$bound" "$reserved" @BUDGET@
@@ -116,10 +103,15 @@ while IFS='@TAB@' read -r k id rest; do
   if gh cache delete -R "$repo" "$id" > /dev/null 2>&1; then printf 'velnor: retired superseded state entry %s\n' "$k"; else printf '%s\n' "::warning::cache_unavailable: could not delete state entry $id"; fi
 done < "$d/scope"
 printf 'velnor: state snapshot published (%s bytes, sha256:%s)\n' "$size" "${key##*-s256-}"
-artifact="${@ARTIFACT@-}"
-if number "$artifact" && [ -n "$artifact" ]; then
+name="${@ARTIFACT@-}"
+run="${GITHUB_RUN_ID-}"
+case "$name" in ''|*[!a-z0-9-]*) skip artifact_name_malformed ;; esac
+number "$run" || skip run_id_malformed
+gh api "repos/$repo/actions/runs/$run/artifacts?name=$name" --jq '.artifacts[].id' > "$d/artifacts" 2> /dev/null || skip artifact_unlistable
+while IFS= read -r artifact || [ -n "$artifact" ]; do
+  number "$artifact" || continue
   if gh api -X DELETE "repos/$repo/actions/artifacts/$artifact" > /dev/null 2>&1; then printf 'velnor: deleted handoff artifact %s\n' "$artifact"; else printf '%s\n' "::warning::cache_unavailable: could not delete handoff artifact $artifact"; fi
-fi
+done < "$d/artifacts"
 "#;
 
 pub(crate) fn head(dir: &str) -> String {
@@ -149,7 +141,7 @@ fn gh_step(name: &str, script: &str, env: BTreeMap<String, String>) -> Result<St
     )
 }
 
-pub fn state_seal_admit_step(pending: &[String], pending_bytes: u64) -> Result<Step, RenderError> {
+pub fn state_seal_admit_step(pending_bytes: &str, writer_bytes: u64) -> Result<Step, RenderError> {
     let script = format!(
         "{}{}",
         head("state-admit"),
@@ -163,7 +155,7 @@ pub fn state_seal_admit_step(pending: &[String], pending_bytes: u64) -> Result<S
             .replace("@SIGNER_PATH@", STATE_SEAL_WORKFLOW_PATH)
             .replace("@ADMITTED@", STATE_SEAL_ADMITTED_OUTPUT)
             .replace("@PENDING_BYTES@", STATE_SEAL_PENDING_BYTES_ENV)
-            .replace("@PENDING@", STATE_SEAL_PENDING_ENV)
+            .replace("@WRITERS_BYTES@", STATE_SEAL_WRITERS_BYTES_ENV)
             .replace("@BUDGET@", &STATE_SEAL_BUDGET_BYTES.to_string())
     );
     let mut step = gh_step(
@@ -174,10 +166,13 @@ pub fn state_seal_admit_step(pending: &[String], pending_bytes: u64) -> Result<S
                 STATE_SEAL_KEY_ENV.to_owned(),
                 STATE_SEAL_KEY_EXPR.to_owned(),
             ),
-            (STATE_SEAL_PENDING_ENV.to_owned(), pending.join(" ")),
             (
                 STATE_SEAL_PENDING_BYTES_ENV.to_owned(),
-                pending_bytes.to_string(),
+                pending_bytes.to_owned(),
+            ),
+            (
+                STATE_SEAL_WRITERS_BYTES_ENV.to_owned(),
+                writer_bytes.to_string(),
             ),
         ]),
     )?;
@@ -188,7 +183,7 @@ pub fn state_seal_admit_step(pending: &[String], pending_bytes: u64) -> Result<S
     Ok(step)
 }
 
-pub fn state_seal_retire_step(scope: &str, artifact_expr: &str) -> Result<Step, RenderError> {
+pub fn state_seal_retire_step(scope: &str, artifact_name: &str) -> Result<Step, RenderError> {
     let script = format!(
         "{}{}",
         head("state-retire"),
@@ -215,7 +210,7 @@ pub fn state_seal_retire_step(scope: &str, artifact_expr: &str) -> Result<Step, 
             ),
             (STATE_SEAL_SCOPE_ENV.to_owned(), scope.to_owned()),
             (DEFAULT_REF_ENV.to_owned(), DEFAULT_REF_EXPR.to_owned()),
-            (STATE_SEAL_ARTIFACT_ENV.to_owned(), artifact_expr.to_owned()),
+            (STATE_SEAL_ARTIFACT_ENV.to_owned(), artifact_name.to_owned()),
         ]),
     )?;
     step.role = Some(StepRole::StateSealRetire);

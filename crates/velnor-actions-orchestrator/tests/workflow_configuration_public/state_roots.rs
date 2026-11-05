@@ -67,11 +67,11 @@ fn generation_rejects_colliding_or_delimiter_roots() -> Result<(), Box<dyn Error
     let wanted = [
         (
             "crates/nested",
-            "${{needs.plan.outputs.state_slice_crates_nested_snapshot}}",
+            "${{needs.plan.outputs.state_slice_rust_nested_snapshot}}",
         ),
         (
             widest.as_str(),
-            &format!("${{{{needs.plan.outputs.state_slice_{widest}_snapshot}}}}"),
+            "${{needs.plan.outputs.state_slice_rust_extra0_snapshot}}",
         ),
     ];
     for (root, expr) in wanted {

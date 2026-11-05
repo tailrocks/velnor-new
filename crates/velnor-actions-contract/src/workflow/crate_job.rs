@@ -217,7 +217,7 @@ impl CrateGroupPlan {
 pub fn is_producer_job_id(job_id: &str) -> bool {
     job_id == super::cache_access::SOURCES_PRODUCER_JOB_ID
         || job_id.starts_with(super::state_seal::STATE_PRODUCER_JOB_ID_PREFIX)
-        || job_id.starts_with(super::state_seal::STATE_SEAL_JOB_ID_PREFIX)
+        || job_id == super::state_seal::STATE_SEAL_JOB_ID
         || job_id.starts_with(TOOLS_PRODUCER_JOB_ID_PREFIX)
         || job_id.starts_with(TOFU_PROVIDERS_PRODUCER_JOB_ID_PREFIX)
 }

@@ -19,6 +19,7 @@ use crate::state_v4_seal::{FIXTURE, resolved_prefix, seal_job, step_of};
 const OLD_ID: u64 = 11;
 const NEW_ID: u64 = 20;
 const ARTIFACT: u64 = 7001;
+const ARTIFACT_NAME: &str = "velnor-state-root-r7-a1";
 const STORED: u64 = 4096;
 pub(crate) const BOUND: u64 = 10_339;
 const AT: &str = "2026-11-04T01:00:00Z";
@@ -91,6 +92,7 @@ impl World {
         }
         self.gh.list_entries(&rows)?;
         self.gh.artifacts(&[ARTIFACT])?;
+        self.gh.artifact_name(ARTIFACT_NAME)?;
         self.gh.attest(&[Attestation::bound(&self.key, id, size)])?;
         self.gh.clear_log()
     }
@@ -102,7 +104,6 @@ impl World {
     fn retire(&self) -> Result<String, Box<dyn Error>> {
         let (script, env) = script_and_env(&self.job, StepRole::StateSealRetire)?;
         let dir = self.gh.dir();
-        let artifact = ARTIFACT.to_string();
         let mut pairs: Vec<(&str, &str)> = env
             .iter()
             .filter(|(name, _)| {
@@ -122,7 +123,8 @@ impl World {
             ("GH_TOKEN", "fixture"),
             ("VELNOR_DEFAULT_REF", MAIN),
             (STATE_SEAL_KEY_ENV, self.key.as_str()),
-            (STATE_SEAL_ARTIFACT_ENV, artifact.as_str()),
+            (STATE_SEAL_ARTIFACT_ENV, ARTIFACT_NAME),
+            ("GITHUB_RUN_ID", "7"),
             (STATE_SEAL_SCOPE_ENV, self.scope.as_str()),
         ]);
         self.scene.run_script(&script, &pairs, None)

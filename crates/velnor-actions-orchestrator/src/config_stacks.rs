@@ -48,6 +48,8 @@ pub(crate) struct PartialRustStack {
     #[serde(default)]
     crates: std::collections::BTreeMap<String, velnor_actions_contract::RustCrateConfig>,
     #[serde(default)]
+    state_slices: std::collections::BTreeMap<String, Vec<String>>,
+    #[serde(default)]
     inputs: Vec<velnor_actions_contract::RustInputRule>,
     #[serde(default)]
     non_inputs: velnor_actions_contract::NonInputs,
@@ -78,6 +80,7 @@ impl PartialStacks {
                 toolchain: stack.toolchain,
                 toolchain_source: stack.toolchain_source,
                 crates: stack.crates,
+                state_slices: stack.state_slices,
                 inputs: stack.inputs,
                 non_inputs: stack.non_inputs,
             }

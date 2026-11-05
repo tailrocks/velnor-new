@@ -9,7 +9,8 @@ use velnor_actions_contract::workflow::cache_family::{
     is_plan_cache_output, is_state_snapshot_output,
 };
 use velnor_actions_contract::workflow::state_seal::{
-    is_state_attested_output, is_state_compat_output, is_state_produce_output,
+    STATE_SEAL_MATRIX_OUTPUT, is_state_attested_output, is_state_compat_output,
+    is_state_matrix_output,
 };
 use velnor_actions_contract::{Job, Step, StepId, StepKind};
 
@@ -24,11 +25,19 @@ pub(crate) fn consumed(
     trust_always: bool,
 ) -> Result<Vec<(String, String)>, RenderError> {
     let mut names = BTreeSet::new();
+    let matrices: Vec<String> = jobs
+        .values()
+        .filter_map(|job| {
+            job.matrix
+                .as_ref()
+                .map(velnor_actions_contract::JobMatrix::expression)
+        })
+        .collect();
     let texts = jobs.values().flat_map(|job| {
         let steps = job.steps.iter().flat_map(step_texts);
         job.condition.as_deref().into_iter().chain(steps)
     });
-    for text in texts {
+    for text in texts.chain(matrices.iter().map(String::as_str)) {
         let mut rest = text;
         while let Some(at) = rest.find(NEEDS_PLAN) {
             rest = &rest[at + NEEDS_PLAN.len()..];
@@ -57,7 +66,8 @@ pub(crate) fn consumed(
         ));
     }
     let (tofu, state, attested) = output_counts(&names);
-    if cache_output_reserve_utf16_bytes(tofu, state, attested)
+    let legs = matrix_legs(jobs, &names);
+    if cache_output_reserve_utf16_bytes(tofu, state, attested, legs)
         > PLAN_CACHE_OUTPUTS_RESERVE_UTF16_BYTES
     {
         return Err(RenderError::InvalidWorkflow(format!(
@@ -69,7 +79,7 @@ pub(crate) fn consumed(
         .map(|name| {
             let expression = if name == SOURCES_PRODUCE_OUTPUT {
                 SOURCES_PRODUCE_STEP_EXPR.to_owned()
-            } else if is_state_attested_output(&name) || is_state_produce_output(&name) {
+            } else if is_state_attested_output(&name) || is_state_matrix_output(&name) {
                 format!(
                     "${{{{ steps.{}.outputs.{name} }}}}",
                     velnor_actions_contract::StepId::StateSelect.as_str()
@@ -89,18 +99,32 @@ pub(crate) fn consumed(
         .collect())
 }
 
+fn matrix_legs(jobs: &BTreeMap<String, Job>, names: &BTreeSet<String>) -> (usize, usize) {
+    jobs.values()
+        .filter_map(|job| job.matrix.as_ref())
+        .filter(|matrix| names.contains(&matrix.include_output))
+        .fold((0, 0), |(producer, seal), matrix| {
+            let legs = matrix.legs as usize;
+            if matrix.include_output == STATE_SEAL_MATRIX_OUTPUT {
+                (producer, seal + legs)
+            } else {
+                (producer + legs, seal)
+            }
+        })
+}
+
 fn output_counts(names: &BTreeSet<String>) -> (usize, usize, usize) {
     let state = names
         .iter()
-        .filter(|name| {
-            is_state_snapshot_output(name)
-                || is_state_compat_output(name)
-                || is_state_produce_output(name)
-        })
+        .filter(|name| is_state_snapshot_output(name) || is_state_compat_output(name))
         .count();
     let attested = names
         .iter()
         .filter(|name| is_state_attested_output(name))
+        .count();
+    let matrices = names
+        .iter()
+        .filter(|name| is_state_matrix_output(name))
         .count();
     let tofu = names
         .iter()
@@ -110,7 +134,8 @@ fn output_counts(names: &BTreeSet<String>) -> (usize, usize, usize) {
         })
         .count()
         - state
-        - attested;
+        - attested
+        - matrices;
     (tofu, state, attested)
 }
 

@@ -117,8 +117,8 @@ fn plan_computes_the_compat_the_crate_job_recomputes() -> Result<(), Box<dyn Err
     let temp = tempfile::tempdir()?;
     let outputs = plan_outputs(&jobs, root, temp.path())?;
     for (dir, name) in [
-        ("crates/nested", "state_slice_crates_nested_compat"),
-        ("other", "state_slice_other_compat"),
+        ("crates/nested", "state_slice_rust_nested_compat"),
+        ("other", "state_slice_rust_other_compat"),
     ] {
         let planned = outputs
             .lines()

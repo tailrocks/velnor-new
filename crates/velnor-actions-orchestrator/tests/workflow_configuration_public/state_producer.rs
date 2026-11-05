@@ -7,7 +7,7 @@ use std::error::Error;
 use velnor_actions_contract::workflow::ProducerKind;
 use velnor_actions_contract::workflow::state_seal::STATE_SEAL_WORKFLOW_PATH;
 use velnor_actions_contract::workflow::state_seal::{
-    STATE_PRODUCER_LANE_CONDITION, STATE_SEAL_PENDING_BYTES_ENV, STATE_SEAL_PENDING_ENV,
+    STATE_SEAL_JOB_ID, STATE_SEAL_MAX_PARALLEL, state_producer_lane_slice,
 };
 use velnor_actions_contract::{
     CacheAccess, Job, PermissionLevel, Permissions, REQUIRED_JOB_ID, Step, StepKind, StepRole,
@@ -22,8 +22,8 @@ use super::support::rendered_job_block;
 use super::waste_oracle::{Files, files_of};
 
 pub(super) const ROOTS: [(&str, &str); 2] = [
-    ("state-producer-crates-a-b", "state-seal-crates-a-b"),
-    ("state-producer-crates-a-c", "state-seal-crates-a-c"),
+    ("state-producer-crates-a-b", STATE_SEAL_JOB_ID),
+    ("state-producer-crates-a-c", STATE_SEAL_JOB_ID),
 ];
 const LANE_NAMES: [&str; 4] = [
     "Build test executables",
@@ -31,7 +31,6 @@ const LANE_NAMES: [&str; 4] = [
     "Doctests",
     "Documentation",
 ];
-const UNIT_BOUND: &str = "1616920640";
 
 pub(super) struct Built {
     pub(super) ir: WorkflowIr,
@@ -163,10 +162,11 @@ fn producer_runs_the_crate_job_lane_records() -> Result<(), Box<dyn Error>> {
         for step in &producer.steps {
             if let StepKind::TaskExecution { task_id, .. } = &step.kind {
                 assert!(ids.contains(task_id), "{root}: foreign task {task_id}");
-                assert_eq!(
-                    step.condition.as_deref(),
-                    Some(STATE_PRODUCER_LANE_CONDITION)
-                );
+                let gated = step
+                    .condition
+                    .as_deref()
+                    .and_then(state_producer_lane_slice);
+                assert!(gated.is_some(), "{root}: a lane is not gated to its slice");
             }
         }
         let uploads = producer
@@ -222,14 +222,19 @@ fn writers_are_chained_by_needs_without_concurrency() -> Result<(), Box<dyn Erro
         .filter(|id| id.as_str() == "sources-producer" || id.starts_with("tools-producer-"))
         .collect();
     assert!(writers.len() >= 2, "expected sources and tools writers");
-    let [(_, first), (_, second)] = ROOTS;
     for writer in &writers {
-        assert!(reaches(&built.jobs, writer, first), "{writer} -> {first}");
+        assert!(
+            reaches(&built.jobs, writer, STATE_SEAL_JOB_ID),
+            "{writer} -> {STATE_SEAL_JOB_ID}"
+        );
     }
-    assert!(reaches(&built.jobs, first, second), "{first} -> {second}");
-    assert!(
-        !reaches(&built.jobs, second, first),
-        "the chain must be one-way"
+    assert_eq!(
+        job(&built.jobs, STATE_SEAL_JOB_ID)?
+            .matrix
+            .as_ref()
+            .map(|matrix| matrix.max_parallel),
+        Some(STATE_SEAL_MAX_PARALLEL),
+        "the seal legs must run one at a time"
     );
     for (producer, seal) in ROOTS {
         assert!(
@@ -277,7 +282,7 @@ fn writers_are_chained_by_needs_without_concurrency() -> Result<(), Box<dyn Erro
 #[test]
 fn only_attest_jobs_hold_actions_write() -> Result<(), Box<dyn Error>> {
     let built = build()?;
-    let seals: Vec<&str> = ROOTS.iter().map(|(_, seal)| *seal).collect();
+    let seals: Vec<&str> = vec![STATE_SEAL_JOB_ID];
     for (id, candidate) in &built.jobs {
         let permissions = effective(candidate, &built.ir);
         let writes = permissions.actions == PermissionLevel::Write;
@@ -321,33 +326,6 @@ fn only_attest_jobs_hold_actions_write() -> Result<(), Box<dyn Error>> {
         "a producer with actions: write validated"
     );
 
-    let [(_, first), (_, second)] = ROOTS;
-    let first_job = job(&built.jobs, first)?;
-    let second_job = job(&built.jobs, second)?;
-    let pending = |seal: &Job| -> Vec<(String, String)> {
-        seal.steps
-            .iter()
-            .filter_map(|step| match &step.kind {
-                StepKind::Shell { env, .. } if env.contains_key(STATE_SEAL_PENDING_ENV) => Some((
-                    env[STATE_SEAL_PENDING_ENV].clone(),
-                    env[STATE_SEAL_PENDING_BYTES_ENV].clone(),
-                )),
-                _ => None,
-            })
-            .collect()
-    };
-    assert_eq!(
-        pending(first_job),
-        [(
-            "${{needs.plan.outputs.state_slice_crates_a_c_produce}}:velnor-v5-state-trusted-slice-crates-a-c-"
-                .to_owned(),
-            UNIT_BOUND.to_owned()
-        )]
-    );
-    assert_eq!(
-        pending(second_job),
-        [(String::new(), UNIT_BOUND.to_owned())]
-    );
     Ok(())
 }
 
@@ -368,10 +346,7 @@ fn a_failed_producer_lane_leaves_no_produced_output_and_the_seal_does_not_run()
 
     let healthy = simulate(producer, None, false)?;
     assert_eq!(flag(&healthy).as_deref(), Some("true"));
-    assert!(
-        seal_runs(seal, producer_id, &healthy)?,
-        "a healthy producer must seal"
-    );
+    assert!(seal_runs(seal, &healthy)?, "a healthy producer must seal");
 
     let lane_steps = producer
         .steps
@@ -387,14 +362,11 @@ fn a_failed_producer_lane_leaves_no_produced_output_and_the_seal_does_not_run()
             "lane {failing} failed but produced was set"
         );
         assert!(
-            !seal_runs(seal, producer_id, &outputs)?,
+            !seal_runs(seal, &outputs)?,
             "lane {failing} failed and the seal ran"
         );
     }
     let refused = simulate(producer, None, true)?;
-    assert!(
-        !seal_runs(seal, producer_id, &refused)?,
-        "a refused export was sealed"
-    );
+    assert!(!seal_runs(seal, &refused)?, "a refused export was sealed");
     Ok(())
 }

@@ -124,7 +124,10 @@ fn state_key_is_stable_and_binds_every_input() -> Result<(), Box<dyn Error>> {
 fn state_key_slugs_roots_and_stays_inside_the_cache_cap() -> Result<(), Box<dyn Error>> {
     let runner = Scene::new(
         "v4-key-root",
-        crate::gc1_t53::scripts_for(MbxTransport::SeedRead, Some("crates/velnor-runner"))?,
+        crate::gc1_t53::scripts_for(
+            MbxTransport::SeedRead(crate::gc1_seal_support::slice_of("crates/velnor-runner")?),
+            Some("crates/velnor-runner"),
+        )?,
     )?;
     let key = keyed(
         &runner,
@@ -142,7 +145,10 @@ fn state_key_slugs_roots_and_stays_inside_the_cache_cap() -> Result<(), Box<dyn 
     let widest_root = "d".repeat(48);
     let widest = Scene::new(
         "v4-key-widest",
-        crate::gc1_t53::scripts_for(MbxTransport::SeedRead, Some(&widest_root))?,
+        crate::gc1_t53::scripts_for(
+            MbxTransport::SeedRead(crate::gc1_seal_support::slice_of(&widest_root)?),
+            Some(&widest_root),
+        )?,
     )?;
     let long = keyed(&widest, &[("VELNOR_MBX_BUNDLE_ROOT", &widest_root)])?;
     let entry = long.exact().len();

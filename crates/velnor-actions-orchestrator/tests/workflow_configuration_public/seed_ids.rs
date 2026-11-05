@@ -157,7 +157,7 @@ fn seed_ids_by_root<'a>(
         let workspace_root = key_env
             .get(root_env)
             .ok_or("seed bundle key omitted its workspace root")?;
-        assert_seed_bundle_key_unit(seed, workspace_root)?;
+        assert_seed_bundle_key_unit(seed, "$unit")?;
         assert!(seed.display_name.contains(workspace_root));
         assert!(
             seed_ids_by_root
@@ -242,8 +242,8 @@ fn assert_rendered_seed_routing(
                 .first()
                 .copied()
                 .ok_or_else(|| format!("consumer bundle key is missing for {relative_root}"))?;
-            assert_seed_bundle_key_unit(consumer, relative_root)?;
-            assert_eq!(consumer_key_env, seed_key_env);
+            assert_seed_bundle_key_unit(consumer, &format!("slice-{consumer_id}"))?;
+            assert_eq!(unit_free(consumer_key_env), unit_free(seed_key_env));
             assert!(
                 consumer
                     .steps
@@ -270,11 +270,22 @@ fn mbx_bundle_key_envs(job: &Job) -> Vec<&BTreeMap<String, String>> {
         .collect()
 }
 
-fn assert_seed_bundle_key_unit(job: &Job, root: &str) -> Result<(), Box<dyn Error>> {
-    let expected = format!(
-        "\"unit={}\"",
-        velnor_actions_contract::workflow::cache_family::StateUnit::slice_of_root(root)?.token()
-    );
+fn unit_free(env: &BTreeMap<String, String>) -> BTreeMap<&str, &str> {
+    env.iter()
+        .filter(|(name, _)| {
+            ![
+                "VELNOR_MBX_BUNDLE_UNIT",
+                "VELNOR_STATE_ATTESTED",
+                "VELNOR_STATE_SNAPSHOT",
+            ]
+            .contains(&name.as_str())
+        })
+        .map(|(name, value)| (name.as_str(), value.as_str()))
+        .collect()
+}
+
+fn assert_seed_bundle_key_unit(job: &Job, token: &str) -> Result<(), Box<dyn Error>> {
+    let expected = format!("\"unit={token}\"");
     let key_steps: Vec<_> = job
         .steps
         .iter()

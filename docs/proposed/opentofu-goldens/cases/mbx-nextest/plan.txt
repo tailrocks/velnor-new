@@ -23,7 +23,7 @@ Workflow to generate
     - required-gate (1 steps)
     - rust-app (27 steps)
     - state-producer-root (35 steps)
-    - state-seal-root (8 steps)
+    - state-seal (8 steps)
     - tools-producer-18fa7d95 (9 steps)
     - tools-producer-693100f7 (10 steps)
     - tools-producer-bcdf7cdd (11 steps)

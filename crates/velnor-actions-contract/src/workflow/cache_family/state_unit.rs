@@ -5,9 +5,15 @@ use std::fmt;
 
 use crate::errors::ContractError;
 
+use super::family::{CacheFamily, Ceiling, GIB, MIB};
 use super::state::RootSlug;
 
 pub const SLICE_ID_MAX_BYTES: usize = 48;
+
+pub const SLICE_CEILING: Ceiling = Ceiling::StoredAndExtracted {
+    stored: 768 * MIB,
+    extracted: 6 * GIB,
+};
 
 const SLICE_TOKEN: &str = "slice-";
 const CLI_TOKEN: &str = "cli";
@@ -39,10 +45,6 @@ impl SliceId {
         Ok(Self(text.to_owned()))
     }
 
-    pub fn from_root(root: &str) -> Result<Self, ContractError> {
-        RootSlug::from_root(root).map(|slug| Self(slug.as_str().to_owned()))
-    }
-
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
@@ -63,10 +65,6 @@ pub enum StateUnit {
 }
 
 impl StateUnit {
-    pub fn slice_of_root(root: &str) -> Result<Self, ContractError> {
-        SliceId::from_root(root).map(Self::Slice)
-    }
-
     #[must_use]
     pub fn token(&self) -> String {
         match self {
@@ -79,6 +77,14 @@ impl StateUnit {
     #[must_use]
     pub fn output_token(&self) -> String {
         self.token().replace('-', "_")
+    }
+
+    #[must_use]
+    pub const fn ceiling(&self) -> Ceiling {
+        match self {
+            Self::Slice(_) => SLICE_CEILING,
+            Self::Cli | Self::Suite(_) => CacheFamily::MbxBundle.spec().ceiling,
+        }
     }
 
     #[must_use]

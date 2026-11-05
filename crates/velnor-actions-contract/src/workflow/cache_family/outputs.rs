@@ -1,10 +1,10 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use super::{CacheFamily, ROOT_SLUG_MAX_BYTES};
+use super::{CacheFamily, ROOT_SLUG_MAX_BYTES, SLICE_ID_MAX_BYTES};
 use crate::workflow::state_seal::{
     STATE_SEAL_VERIFY_LIMIT, is_state_attested_output, is_state_compat_output,
-    is_state_produce_output,
+    is_state_matrix_output,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -124,7 +124,7 @@ pub fn is_plan_cache_output(name: &str) -> bool {
         || is_state_snapshot_output(name)
         || is_state_attested_output(name)
         || is_state_compat_output(name)
-        || is_state_produce_output(name)
+        || is_state_matrix_output(name)
         || name == SOURCES_PRODUCE_OUTPUT
         || name
             .strip_prefix(TOFU_PROVIDERS_KEY_OUTPUT_PREFIX)
@@ -135,11 +135,22 @@ pub fn is_plan_cache_output(name: &str) -> bool {
 
 pub const PLAN_CACHE_OUTPUTS_RESERVE_UTF16_BYTES: usize = 64 * 1024;
 
+const STATE_MATRIX_FIELDS_BYTES: usize = 96;
+
+const STATE_PRODUCER_LEG_BYTES: usize = SLICE_ID_MAX_BYTES
+    + S256_DIGEST_BYTES
+    + STATE_SEAL_VERIFY_LIMIT * (MAX_KEY_LINE_BYTES + 2)
+    + STATE_MATRIX_FIELDS_BYTES;
+
+const STATE_SEAL_LEG_BYTES: usize =
+    SLICE_ID_MAX_BYTES + 2 * S256_DIGEST_BYTES + 20 + STATE_MATRIX_FIELDS_BYTES;
+
 #[must_use]
 pub fn cache_output_reserve_utf16_bytes(
     tofu_roots: usize,
     state_roots: usize,
     attested_outputs: usize,
+    (producer_legs, seal_legs): (usize, usize),
 ) -> usize {
     let record = |name: &str, value: usize| (name.len() + 1 + value + 1) * 2;
     let sources = CacheFamily::Sources.max_key_bytes();
@@ -154,4 +165,5 @@ pub fn cache_output_reserve_utf16_bytes(
                 &"s".repeat(ROOT_SLUG_MAX_BYTES + 32),
                 STATE_SEAL_VERIFY_LIMIT * (MAX_KEY_LINE_BYTES + 1),
             )
+        + (producer_legs * STATE_PRODUCER_LEG_BYTES + seal_legs * STATE_SEAL_LEG_BYTES) * 2
 }

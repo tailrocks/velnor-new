@@ -121,6 +121,9 @@ pub struct RustStackConfig {
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub crates: BTreeMap<String, RustCrateConfig>,
 
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub state_slices: BTreeMap<String, Vec<String>>,
+
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub inputs: Vec<RustInputRule>,
 
@@ -205,6 +208,7 @@ impl RustStackConfig {
             binary_release: RustBinaryReleaseConfig::default(),
             suites: Vec::new(),
             crates: BTreeMap::new(),
+            state_slices: BTreeMap::new(),
             inputs: Vec::new(),
             non_inputs: NonInputs::default(),
         }
@@ -351,7 +355,8 @@ impl RustStackConfig {
         validate_rust_suites(&self.suites, file)?;
         super::rust_inputs::validate_rust_inputs(&self.inputs, file)?;
         self.non_inputs.validate(file)?;
-        self.validate_crates(file)
+        self.validate_crates(file)?;
+        self.validate_state_slices(file)
     }
 
     fn validate_crates(&self, file: &str) -> Result<(), ContractError> {

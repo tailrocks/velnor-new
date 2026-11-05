@@ -142,13 +142,11 @@ fn state_seal_workflow_is_push_only_and_owns_every_writer() -> Result<(), Box<dy
         if id.starts_with("state-producer-") || id == "sources-producer" {
             assert_eq!(needs, ["plan"], "{id}");
         }
-        if let Some(root) = id.strip_prefix("state-seal-") {
+        if id == "state-seal" {
             assert_eq!(needs.first().map(String::as_str), Some("plan"), "{id}");
-            assert_eq!(
-                needs.get(1).map(String::as_str),
-                Some(format!("state-producer-{root}").as_str()),
-                "{id}"
-            );
+            for producer in all.keys().filter(|id| id.starts_with("state-producer-")) {
+                assert!(needs.contains(producer), "{id} does not need {producer}");
+            }
             assert_eq!(
                 job["permissions"],
                 json!({
@@ -170,9 +168,9 @@ fn state_seal_workflow_is_push_only_and_owns_every_writer() -> Result<(), Box<dy
     }
     let seal_ids: Vec<&String> = all
         .keys()
-        .filter(|id| id.starts_with("state-seal-"))
+        .filter(|id| id.starts_with("state-seal"))
         .collect();
-    assert_eq!(seal_ids.len(), 2);
+    assert_eq!(seal_ids.len(), 1);
     let ci_ids: BTreeSet<&String> = jobs(&pair.ci)?.keys().collect();
     for id in &pair.moved {
         assert!(!ci_ids.contains(id), "{id} is written by both workflows");
@@ -308,11 +306,11 @@ fn both_plans_compute_byte_identical_cache_keys() -> Result<(), Box<dyn Error>> 
     let from_ci = cache_keys_outputs(&ci, repo.path(), temp.path())?;
     let from_sealed = cache_keys_outputs(&sealed, repo.path(), temp.path())?;
     assert!(
-        from_ci.contains("state_slice_crates_nested_compat=s256-"),
+        from_ci.contains("state_slice_rust_nested_compat=s256-"),
         "{from_ci}"
     );
     assert!(
-        from_ci.contains("state_slice_crates_nested_snapshot=s256-"),
+        from_ci.contains("state_slice_rust_nested_snapshot=s256-"),
         "{from_ci}"
     );
     assert_eq!(from_ci, from_sealed);

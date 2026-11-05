@@ -4,14 +4,14 @@
 use super::{LogicalJobSource, NativeAuthorityError, NativeAuthorityInput, fetch_roots, invalid};
 use std::collections::BTreeSet;
 use velnor_actions_contract::CompiledStateMode;
-use velnor_actions_contract::workflow::cache_family::SliceId;
+use velnor_actions_contract::workflow::cache_family::RootSlug;
 use velnor_actions_contract::workflow::state_seal::state_producer_job_id;
 
 pub fn state_producer_job_ids(roots: &[String]) -> Result<Vec<String>, NativeAuthorityError> {
     roots
         .iter()
         .map(|root| {
-            SliceId::from_root(root)
+            RootSlug::from_root(root)
                 .map(|slug| state_producer_job_id(&slug))
                 .map_err(|_| invalid("native_state_root_slug"))
         })

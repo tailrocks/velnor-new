@@ -68,6 +68,7 @@ pub fn build_build_task_job(
     validate_policy(policy)?;
     let timeout = JobTimeout::new(policy.task.timeout_minutes).map_err(RenderError::Contract)?;
     Ok(Job {
+        matrix: None,
         services: Vec::new(),
         outputs: BTreeMap::new(),
         display_name: format!("Build {}", policy.task.id),

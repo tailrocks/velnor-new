@@ -50,7 +50,9 @@ fn action_step_to_yaml(
         ));
     }
     crate::cache_save_budget::decorate(step, &mut entries, runs_on.is_some())?;
-    if job_id == FINAL_JOB_ID && is_verdict_download(step) {
+    if (job_id == FINAL_JOB_ID && is_verdict_download(step))
+        || step.role == Some(velnor_actions_contract::StepRole::StateSealDownload)
+    {
         entries.push(("continue-on-error".to_owned(), Yaml::Bool(true)));
     }
     let uses_value = if runtime_identity

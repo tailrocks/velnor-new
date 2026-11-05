@@ -100,6 +100,7 @@ fn build(plan: &ToolsProducerPlan, policy: PullRequestCachePolicy) -> Result<Job
         Some(crate::cache_p08::tools_cache_save_condition(policy)),
     )?);
     Ok(Job {
+        matrix: None,
         display_name: format!("{PRODUCER_DISPLAY_PREFIX}{}", plan.digest.short()),
         runs_on: donor.runs_on.clone(),
         check_runner: None,

@@ -24,7 +24,7 @@ pub fn cache_steps_for_plan(
     catalog: &ToolCatalog,
     fetch_roots: &[String],
     tofu_roots: &[String],
-    state_roots: &[cache_keys::StateRootPlan],
+    state_roots: &[cache_keys::StateUnitPlan],
 ) -> Result<Vec<Step>, PlanSourcesError> {
     let mut restore = Vec::new();
     restore.extend(cache_keys::cache_keys_step(

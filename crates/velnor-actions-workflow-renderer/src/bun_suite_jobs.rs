@@ -130,6 +130,7 @@ pub fn build_bun_suite_job(
     let mut all = vec![steps::checkout_step(checkout_uses)?];
     all.extend(policy.marked_steps());
     Ok(Job {
+        matrix: None,
         services: Vec::new(),
         outputs: BTreeMap::new(),
         display_name: format!("Bun / {} / {}", policy.member, policy.suite),
@@ -170,6 +171,7 @@ pub fn build_bun_report_job(
         )));
     }
     Ok(Job {
+        matrix: None,
         services: Vec::new(),
         outputs: BTreeMap::new(),
         display_name: format!("Bun / {} / {} / report", policy.member, policy.suite),

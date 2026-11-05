@@ -208,6 +208,7 @@ pub(crate) fn build_jobs(
             jobs.push((
                 job_id(&root.root, project),
                 Job {
+                    matrix: None,
                     services,
                     outputs: BTreeMap::new(),
                     check_runner: None,
