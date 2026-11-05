@@ -197,142 +197,17 @@ fn job_section<'a>(workflow: &'a str, job_id: &str) -> Result<&'a str, Box<dyn E
     Ok(&rest[..end])
 }
 
-fn build_target_of(job: &str) -> Result<ReleaseTarget, Box<dyn Error>> {
-    match job {
-        "build-linux" => Ok(ReleaseTarget::LinuxX86_64),
-        "build-macos" => Ok(ReleaseTarget::MacosArm64),
-        "build-macos-intel" => Ok(ReleaseTarget::MacosX86_64),
-        _ => Err(fail(&format!("unknown release build job:{job}"))),
-    }
-}
-
-fn check_build_jobs_share_context(workflow: &str) -> Result<(), Box<dyn Error>> {
-    for job in ["build-linux", "build-macos", "build-macos-intel"] {
-        let section = job_section(workflow, job)?;
-        let lane = format!(
-            "$RUNNER_TEMP/velnor/target/release-{}",
-            build_target_of(job)?.triple()
-        );
-        require(section, "CARGO_TARGET_DIR", job)?;
-        require(section, &lane, job)?;
-        require(section, "verify-release-source", job)?;
-    }
-    Ok(())
-}
-
-fn check_native_action(
-    files: &[RenderedFile],
-    logical: &str,
-    command: &str,
-) -> Result<(), Box<dyn Error>> {
-    let action = find_file(files, &format!(".github/actions/{logical}/action.yml"))?;
-    require(action, command, logical)?;
-    require(action, "$CARGO_TARGET_DIR/release/velnor-actions", logical)?;
-    require(action, "missing shared release target dir", logical)?;
-    forbid(action, "cp target/release/velnor-actions", logical)?;
-    forbid(
-        action,
-        "cp target/x86_64-apple-darwin/release/velnor-actions",
-        logical,
-    )?;
-    Ok(())
-}
-
-fn check_build_actions_bind_outputs(files: &[RenderedFile]) -> Result<(), Box<dyn Error>> {
-    let native_command =
-        "mbx build --release --locked --package velnor-actions-cli --bin velnor-actions";
-    check_native_action(files, "generator-release-build-linux", native_command)?;
-    check_native_action(files, "generator-release-build-macos", native_command)?;
-    let intel = find_file(
-        files,
-        ".github/actions/generator-release-build-macos-intel/action.yml",
-    )?;
-    require(
-        intel,
-        "mbx build --release --locked --package velnor-actions-cli --bin velnor-actions --target x86_64-apple-darwin",
-        "generator-release-build-macos-intel",
-    )?;
-    require(
-        intel,
-        "rustup target add x86_64-apple-darwin",
-        "intel target",
-    )?;
-    require(
-        intel,
-        "Install x86_64-apple-darwin Rust target",
-        "intel target",
-    )?;
-    require(
-        intel,
-        "$CARGO_TARGET_DIR/x86_64-apple-darwin/release/velnor-actions",
-        "generator-release-build-macos-intel",
-    )?;
-    forbid(
-        intel,
-        "$CARGO_TARGET_DIR/release/velnor-actions",
-        "generator-release-build-macos-intel",
-    )?;
-    require(intel, "missing shared release target dir", "intel target")?;
-    Ok(())
-}
-
-fn check_signers_publishers_free(workflow: &str) -> Result<(), Box<dyn Error>> {
-    for job in [
-        "attest-linux",
-        "attest-macos",
-        "attest-macos-intel",
-        "attest-manifest",
-        "publish-generator",
-    ] {
-        let section = job_section(workflow, job)?;
-        for marker in [
-            "actions/cache/restore",
-            "actions/cache/save",
-            "CARGO_TARGET_DIR",
-            "CARGO_HOME",
-            "RUSTUP_HOME",
-            "MISE_CARGO_HOME",
-            "MISE_RUSTUP_HOME",
-        ] {
-            forbid(section, marker, job)?;
-        }
-    }
-    Ok(())
-}
-
-fn check_eligibility_and_qualification_retained(workflow: &str) -> Result<(), Box<dyn Error>> {
-    for job in [
-        "verify-release-source",
-        "candidate-manifest",
-        "qualify-linux",
-        "qualify-macos",
-        "qualify-macos-intel",
-        "qualify-homebrew-macos",
-        "attest-linux",
-        "attest-macos",
-        "attest-macos-intel",
-        "attest-manifest",
-        "publish-generator",
-        "build-linux",
-        "build-macos",
-        "build-macos-intel",
-    ] {
-        job_section(workflow, job)?;
-    }
-    let qualify = job_section(workflow, "qualify-linux")?;
-    require(qualify, "build-linux", "qualify-linux")?;
-    require(qualify, "candidate-manifest", "qualify-linux")?;
-    Ok(())
-}
+#[path = "gc1_t42_checks.rs"]
+mod checks;
 
 #[test]
 fn gc1_t42_preserves_contract() -> Result<(), Box<dyn Error>> {
     let files = rendered()?;
     let workflow = find_file(&files, ".github/workflows/product-release-generator.yml")?;
-    check_build_jobs_share_context(workflow)?;
-    check_build_actions_bind_outputs(&files)?;
-    check_signers_publishers_free(workflow)?;
-    check_eligibility_and_qualification_retained(workflow)?;
+    checks::check_build_jobs_share_context(workflow)?;
+    checks::check_build_actions_bind_outputs(&files)?;
+    checks::check_signers_publishers_free(workflow)?;
+    checks::check_eligibility_and_qualification_retained(workflow)?;
     let again = rendered()?;
     let repeat = find_file(&again, ".github/workflows/product-release-generator.yml")?;
     if workflow != repeat {
