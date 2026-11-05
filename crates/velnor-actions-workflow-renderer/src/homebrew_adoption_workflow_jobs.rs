@@ -313,7 +313,7 @@ fn action_step(name: &str, uses: &str, with: Vec<(&str, &str)>, always: bool) ->
     if name == "Download plan" {
         fields.push(("continue-on-error".to_owned(), Yaml::Bool(true)));
     }
-    fields.push(("uses".to_owned(), Yaml::str(uses)));
+    fields.push(("uses".to_owned(), Yaml::uses(uses)));
     fields.push((
         "with".to_owned(),
         Yaml::Map(

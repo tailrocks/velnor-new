@@ -15,10 +15,7 @@ pub(super) fn reusable_workflow_call(family: Family) -> (String, Yaml) {
         ),
         (
             "uses".to_owned(),
-            Yaml::annotated(
-                format!("./{}", family.workflow_path()),
-                "zizmor: ignore[self-repository]",
-            ),
+            Yaml::uses(format!("./{}", family.workflow_path())),
         ),
         (
             "needs".to_owned(),
