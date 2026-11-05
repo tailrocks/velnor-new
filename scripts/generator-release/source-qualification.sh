@@ -522,6 +522,17 @@ elif [ -f "$before" ] && ! cmp -s "$before" "$after"; then
   printf 'lockfile hashes changed during cargo fetch\n' >>"$log"
 fi
 downloaded_crates="$(grep -Ec '^ *Downloaded [^ ]+ v[0-9]' "$log" || true)"
+exact_hit_network_fetch=""
+if [ "${SOURCES_CACHE_HIT:-}" = true ]; then
+  for entry in ${fetch_modes[@]+"${fetch_modes[@]}"}; do
+    if [ "${entry##*:}" = network ]; then
+      exact_hit_network_fetch="${exact_hit_network_fetch:+$exact_hit_network_fetch,}${entry%:*}"
+    fi
+  done
+fi
+if [ -n "$exact_hit_network_fetch" ]; then
+  printf '::warning::exact sources cache hit but cargo fetch used the network for: %s\n' "$exact_hit_network_fetch"
+fi
 {
   printf 'source_head=%s\n' "$GITHUB_SHA"
   printf 'fetch_scope=root-and-runner\n'
@@ -532,6 +543,7 @@ downloaded_crates="$(grep -Ec '^ *Downloaded [^ ]+ v[0-9]' "$log" || true)"
   printf 'sources_cache_matched_key=%s\n' "${SOURCES_CACHE_MATCHED_KEY:-}"
   printf 'fetch_mode=%s\n' ${fetch_modes[@]+"${fetch_modes[@]}"}
   printf 'downloaded_crates=%s\n' "$downloaded_crates"
+  if [ -n "$exact_hit_network_fetch" ]; then printf 'exact_hit_network_fetch=%s\n' "$exact_hit_network_fetch"; fi
   printf 'before_sha256\n'
   cat "$before"
   printf 'after_sha256\n'
