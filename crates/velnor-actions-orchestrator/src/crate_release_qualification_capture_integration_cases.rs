@@ -26,6 +26,33 @@ fn captures_coherent_evidence_and_rejects_mid_capture_source_change()
     let result = capture_rehearsal(&request, &api)?;
     assert_eq!(result.bundle, b"fixture-output");
     assert_eq!(result.metadata.source_sha(), "c".repeat(40));
+    let mut wrong_candidate = candidate.clone();
+    wrong_candidate.repository_id += 1;
+    assert!(
+        capture_rehearsal(
+            &CaptureRequest {
+                candidate: &wrong_candidate,
+                ..request
+            },
+            &api
+        )
+        .is_err()
+    );
+    let wrong_reviewers = BTreeSet::from([91]);
+    let wrong_feedback = FeedbackContext {
+        expected_reviewer_app_ids: &wrong_reviewers,
+        ..feedback
+    };
+    assert!(
+        capture_rehearsal(
+            &CaptureRequest {
+                candidate_feedback: &wrong_feedback,
+                ..request
+            },
+            &api
+        )
+        .is_err()
+    );
     let original_log = api.log.clone();
     api.log = String::from_utf8(api.log)?
         .replace(

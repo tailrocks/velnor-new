@@ -41,6 +41,11 @@ pub fn capture_rehearsal(
     let source = request.source;
     let witness = request.witness;
     let feedback = request.candidate_feedback;
+    let policy = &witness
+        .metadata
+        .as_ref()
+        .ok_or_else(|| internal("qualification_capture_identity"))?
+        .qualification;
     let ReviewedPullState::Merged {
         merge_sha,
         merge_tree_sha,
@@ -51,13 +56,20 @@ pub fn capture_rehearsal(
     if !matches!(candidate.state, ReviewedPullState::OpenHead)
         || candidate.pull_request != witness.candidate_pr
         || candidate.head_sha != witness.candidate_sha
+        || candidate.repository != policy.candidate_repository
+        || candidate.repository_id != policy.candidate_repository_id
+        || candidate.default_branch != policy.candidate_default_branch
+        || candidate.required_workflow_path != policy.candidate_required_workflow_path
         || source.repository != witness.repository
         || source.repository_id != witness.repository_id
+        || source.default_branch != request.workflow_default_branch
         || feedback.repository != candidate.repository
         || feedback.pull_request_number != candidate.pull_request
         || feedback.head_sha != candidate.head_sha
+        || feedback.completion_app_id != policy.completion_app_id
+        || feedback.completion_check_name != policy.completion_check_name
+        || feedback.expected_reviewer_app_ids != &policy.reviewer_app_ids
         || !witness.output_bundle
-        || witness.metadata.is_none()
         || witness.source_sha.as_deref() != Some(merge_sha)
     {
         return Err(internal("qualification_capture_identity"));
