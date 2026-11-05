@@ -48,6 +48,10 @@ the host's `xcode-select` setting.
 
 ## Compatibility Rules and Verification Procedures
 
+### Actions cache timestamps (checked 2026-11-06)
+
+The official [List GitHub Actions caches endpoint](https://docs.github.com/en/rest/actions/cache#list-github-actions-caches-for-a-repository) returns `created_at` as a timestamp; its response example uses `2019-01-24T22:45:36.000Z`. A live `gh cache list -R tailrocks/velnor-new --limit 5 --json createdAt --jq '.[].createdAt'` returned fractional seconds with suffixes `.202349Z`, `.519529Z`, and `.31624Z`. The state selector accepts strict RFC 3339 offsets and arbitrary fractional precision, normalizes timestamps for chronological ordering, and preserves the original row fields for attestation verification.
+
 ### Ledger event and source identity (checked 2026-10-28)
 
 The runner's [`GitHubContext.GetRuntimeEnvironmentVariables`](https://github.com/actions/runner/blob/1ba885c2065fd9be317808ab3fd406f392635cf7/src/Runner.Worker/GitHubContext.cs)

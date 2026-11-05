@@ -70,6 +70,8 @@ mod state_v4_select_cancellation;
 mod state_v4_select_default_deadline;
 #[cfg(target_os = "linux")]
 mod state_v4_select_lifecycle;
+#[cfg(target_os = "linux")]
+mod state_v4_select_protocol;
 mod state_v4_select_units;
 mod state_v4_snapshot;
 mod state_v4_tip;

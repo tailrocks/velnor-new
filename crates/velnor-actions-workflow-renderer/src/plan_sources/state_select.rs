@@ -167,7 +167,7 @@ fn head(outer_bound: u64, bounds: &SelectBounds) -> Result<String, RenderError> 
     Ok(SELECT_HEAD
         .replace("@RUN_GH@", RUN_GH)
         .replace("@WORKER@", &worker(outer_bound)?)
-        .replace("@SUPERVISOR_COMMAND@", &supervisor_command())
+        .replace("@SUPERVISOR_COMMAND@", &supervisor_command(bounds))
         .replace("@TIMEOUT_ENV@", STATE_SEAL_VERIFY_TIMEOUT_ENV)
         .replace("@TIMEOUT@", &STATE_SEAL_VERIFY_TIMEOUT_SECONDS.to_string())
         .replace("@UNIT_TIMEOUT_ENV@", STATE_SEAL_UNIT_TIMEOUT_ENV)
@@ -181,13 +181,15 @@ fn head(outer_bound: u64, bounds: &SelectBounds) -> Result<String, RenderError> 
         .replace("@SIGNER_PATH@", STATE_SEAL_WORKFLOW_PATH))
 }
 
-fn supervisor_command() -> String {
-    let mut source = String::with_capacity(SUPERVISOR.len() * 2);
-    for byte in SUPERVISOR.bytes() {
-        source.push(char::from_digit(u32::from(byte >> 4), 16).unwrap_or_default());
-        source.push(char::from_digit(u32::from(byte & 0x0f), 16).unwrap_or_default());
+fn supervisor_command(bounds: &SelectBounds) -> String {
+    let trusted_deadline_ceiling = 3600_u64.max(bounds.deadline_seconds);
+    let source = SUPERVISOR.replace("@MAX_DEADLINE@", &trusted_deadline_ceiling.to_string());
+    let mut encoded = String::with_capacity(source.len() * 2);
+    for byte in source.bytes() {
+        encoded.push(char::from_digit(u32::from(byte >> 4), 16).unwrap_or_default());
+        encoded.push(char::from_digit(u32::from(byte & 0x0f), 16).unwrap_or_default());
     }
-    format!("python3 -I -c 'exec(bytes.fromhex(\"{source}\"))'")
+    format!("python3 -I -c 'exec(bytes.fromhex(\"{encoded}\"))'")
 }
 
 pub fn state_select_step(

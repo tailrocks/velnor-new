@@ -4,12 +4,16 @@
 pub(super) const SUPERVISOR: &str = r#"import os
 import math
 import pathlib
+import re
 import signal
 import subprocess
 import sys
 import time
+import calendar
+import datetime
 
 d = pathlib.Path(os.environ["VELNOR_STATE_SELECT_DIR"])
+MAX_DEADLINE = @MAX_DEADLINE@
 started = time.monotonic()
 active = {}
 guardian = """d=$VELNOR_STATE_SELECT_DIR
@@ -99,6 +103,23 @@ for sig in handled_signals:
 def reset_child_signals():
     signal.pthread_sigmask(signal.SIG_SETMASK, set())
 
+def timestamp_key(value):
+    match = re.fullmatch(r"([0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2})(?:\.([0-9]+))?(Z|[+-][0-9]{2}:[0-9]{2})", value)
+    if match is None:
+        raise ValueError("timestamp")
+    whole, fraction, zone = match.groups()
+    instant = datetime.datetime.strptime(whole, "%Y-%m-%dT%H:%M:%S")
+    offset = 0
+    if zone != "Z":
+        hours = int(zone[1:3])
+        minutes = int(zone[4:6])
+        if hours > 23 or minutes > 59 or zone == "-00:00":
+            raise ValueError("timezone")
+        offset = (hours * 60 + minutes) * (1 if zone[0] == "+" else -1)
+    seconds = calendar.timegm(instant.timetuple()) - offset * 60
+    fraction = (fraction or "").rstrip("0")
+    return seconds, fraction
+
 def launch(tag, kind, prefix="", unit=""):
     old_mask = signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGTERM, signal.SIGINT, signal.SIGHUP})
     try:
@@ -148,7 +169,7 @@ def main():
     unit_timeout = float(os.environ["VELNOR_STATE_UNIT_TIMEOUT"])
     parallelism = int(os.environ["VELNOR_STATE_PARALLELISM"])
     list_limit = int(os.environ["VELNOR_STATE_SELECT_LIST_LIMIT"])
-    if not math.isfinite(deadline) or not math.isfinite(unit_timeout) or not 0 < deadline <= 3600 or not 0 < unit_timeout <= 3600 or not 1 <= parallelism <= 32 or not 0 < list_limit <= 1000:
+    if not math.isfinite(deadline) or not math.isfinite(unit_timeout) or not 0 < deadline <= MAX_DEADLINE or not 0 < unit_timeout <= 3600 or not 1 <= parallelism <= 32 or not 0 < list_limit <= 1000:
         return
     launch("list", "list")
     list_status = await_group("list")
@@ -162,15 +183,15 @@ def main():
             if len(fields) != 4 or any(not field for field in fields):
                 return
             created, key, identifier, size = fields
-            time.strptime(created, "%Y-%m-%dT%H:%M:%SZ")
+            chronological = timestamp_key(created)
             if not identifier.isascii() or not identifier.isdecimal() or not size.isascii() or not size.isdecimal():
                 return
-            rows.append((created, key, identifier, size))
+            rows.append((created, key, identifier, size, (*chronological, key, identifier, size)))
     except (OSError, ValueError):
         return
     if len(rows) >= list_limit:
         return
-    (d / "sorted").write_text("\n".join("\t".join(row) for row in sorted(rows, reverse=True)) + ("\n" if rows else ""))
+    (d / "sorted").write_text("\n".join("\t".join(row[:4]) for row in sorted(rows, key=lambda row: row[4], reverse=True)) + ("\n" if rows else ""))
     units = [line.split(" ") for line in (d / "units").read_text().splitlines()]
     if any(len(unit) != 6 for unit in units):
         return

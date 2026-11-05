@@ -88,6 +88,7 @@ case "$verb" in
     file=$1
     shift
     read -r skey sid ssize < "$file"
+    cat "$file" >> "$d/subjects"
     printf '%s\n' "$$" >> "$d/verify-pids"
     if [ -f "$d/rendezvous" ]; then
       read -r want < "$d/rendezvous"

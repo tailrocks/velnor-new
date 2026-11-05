@@ -49,6 +49,10 @@ impl Attestation {
     }
 
     pub(crate) fn bound(key: &str, id: u64, size: u64) -> Self {
+        Self::bound_text(key, &id.to_string(), &size.to_string())
+    }
+
+    pub(crate) fn bound_text(key: &str, id: &str, size: &str) -> Self {
         Self {
             subject: format!("{key} {id} {size}\n"),
             repo: REPO.to_owned(),

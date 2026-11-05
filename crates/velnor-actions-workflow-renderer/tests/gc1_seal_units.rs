@@ -164,7 +164,17 @@ pub(crate) fn run_select_units(
     units: &[(StateUnit, &str)],
     extra: &[(&str, &str)],
 ) -> Result<String, Box<dyn Error>> {
-    let (script, env) = select_script_env(scene, gh, units, extra)?;
+    run_select_units_with_timeout(scene, gh, units, extra, JobTimeout::PLAN)
+}
+
+pub(crate) fn run_select_units_with_timeout(
+    scene: &Scene,
+    gh: &Gh,
+    units: &[(StateUnit, &str)],
+    extra: &[(&str, &str)],
+    timeout: JobTimeout,
+) -> Result<String, Box<dyn Error>> {
+    let (script, env) = select_script_env(scene, gh, units, extra, timeout)?;
     let pairs: Vec<(&str, &str)> = env.iter().map(|(k, v)| (k.as_str(), v.as_str())).collect();
     scene.run_runner_script(&script, &pairs)
 }
@@ -176,7 +186,7 @@ pub(crate) fn spawn_select_units(
     units: &[(StateUnit, &str)],
     extra: &[(&str, &str)],
 ) -> Result<Child, Box<dyn Error>> {
-    let (script, env) = select_script_env(scene, gh, units, extra)?;
+    let (script, env) = select_script_env(scene, gh, units, extra, JobTimeout::PLAN)?;
     let pairs: Vec<(&str, &str)> = env.iter().map(|(k, v)| (k.as_str(), v.as_str())).collect();
     scene.spawn_runner_script(&script, &pairs)
 }
@@ -186,6 +196,7 @@ fn select_script_env(
     gh: &Gh,
     units: &[(StateUnit, &str)],
     extra: &[(&str, &str)],
+    timeout: JobTimeout,
 ) -> Result<SelectCommand, Box<dyn Error>> {
     match std::fs::remove_file(&scene.github_output) {
         Err(error) if error.kind() != std::io::ErrorKind::NotFound => return Err(error.into()),
@@ -200,7 +211,7 @@ fn select_script_env(
             })
         })
         .collect::<Result<Vec<_>, Box<dyn Error>>>()?;
-    let step = state_select_step(&roots, JobTimeout::PLAN)?;
+    let step = state_select_step(&roots, timeout)?;
     let StepKind::Shell { run, .. } = &step.kind else {
         return Err(fail("expected a shell step"));
     };
