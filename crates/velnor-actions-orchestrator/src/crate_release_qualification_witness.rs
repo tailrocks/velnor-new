@@ -98,7 +98,7 @@ pub fn verify_witness(
     })
 }
 
-fn validate_request(r: &WitnessRequest) -> Result<(), OrchestratorError> {
+pub(crate) fn validate_request(r: &WitnessRequest) -> Result<(), OrchestratorError> {
     if !velnor_actions_contract::vcs::is_safe_github_repository(&r.repository)
         || r.repository_id == 0
         || r.run_id == 0
@@ -124,7 +124,7 @@ fn hex(s: &str, len: usize) -> bool {
             .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
 }
 
-fn verify_run(run: &Value, r: &WitnessRequest) -> Result<(), OrchestratorError> {
+pub(crate) fn verify_run(run: &Value, r: &WitnessRequest) -> Result<(), OrchestratorError> {
     if run["id"].as_u64() != Some(r.run_id)
         || run["run_attempt"].as_u64() != Some(1)
         || run["head_sha"].as_str() != Some(r.workflow_sha.as_str())
@@ -211,7 +211,7 @@ fn marker(log: &[u8], r: &WitnessRequest) -> Result<(u64, String), OrchestratorE
     Ok((id, digest.to_owned()))
 }
 
-fn valid_log_time(value: &str) -> bool {
+pub(crate) fn valid_log_time(value: &str) -> bool {
     let Some(base) = value.strip_suffix('Z') else {
         return false;
     };
