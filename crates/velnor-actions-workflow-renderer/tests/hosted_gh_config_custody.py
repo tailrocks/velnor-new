@@ -2,15 +2,42 @@
 # SPDX-License-Identifier: Apache-2.0
 import json
 import os
+import subprocess
 
 with open("/etc/os-release", encoding="utf-8") as info:
     release = info.read().splitlines()
 if "ID=ubuntu" not in release or 'VERSION_ID="24.04"' not in release:
     raise SystemExit("unexpected operating system image")
-readonly = bool(os.statvfs("/sys").f_flag & os.ST_RDONLY)
-config_absent = all(not os.path.lexists(os.path.join("/sys", name)) for name in ("config.yml", "hosts.yml"))
-if not readonly or not config_absent:
-    raise SystemExit(f"hosted /sys isolation failed: readonly={readonly} config_absent={config_absent}")
+result = subprocess.run(
+    ["cargo", "nextest", "run", "--locked", "-p", "velnor-actions-workflow-renderer", "--test",
+     "verified_gh_shell_public", "-E", "test(procfs_config_custody_rejects_same_user_poisoning)",
+     "--message-format", "libtest-json"],
+    env={**os.environ, "NEXTEST_EXPERIMENTAL_LIBTEST_JSON": "1"},
+    capture_output=True, timeout=780, check=False,
+)
+if result.returncode != 0 or len(result.stdout) > 65536:
+    raise SystemExit("hosted procfs GitHub CLI custody test failed")
+def unique(pairs):
+    output = {}
+    for key, value in pairs:
+        if key in output:
+            raise ValueError("duplicate result key")
+        output[key] = value
+    return output
+
+try:
+    records = [json.loads(line, object_pairs_hook=unique) for line in result.stdout.splitlines()]
+    target = "velnor-actions-workflow-renderer::verified_gh_shell_public$procfs_config_custody_rejects_same_user_poisoning"
+    if (len(records) != 4 or [(record.get("type"), record.get("event")) for record in records]
+            != [("suite", "started"), ("test", "started"), ("test", "ok"), ("suite", "ok")]
+            or type(records[0].get("test_count")) is not int or records[0].get("test_count") != 1
+            or records[1].get("name") != target
+            or records[2].get("name") != target or records[3].get("passed") != 1
+            or type(records[3].get("passed")) is not int or records[3].get("failed") != 0
+            or type(records[3].get("failed")) is not int):
+        raise ValueError("unexpected results")
+except (ValueError, TypeError, AttributeError):
+    raise SystemExit("hosted procfs GitHub CLI custody test failed") from None
 evidence = {
     "schema": 1,
     "source": "mise-task-v1",
@@ -18,7 +45,7 @@ evidence = {
     "check_id": os.environ["VELNOR_CHECK_ID"],
     "platform": os.environ["VELNOR_CHECK_PLATFORM"],
     "scenarios": [
-        {"id": "sys-config-isolated", "executed": True, "status": "passed"},
+        {"id": "procfs-gh-custody", "executed": True, "status": "passed"},
         {"id": "ubuntu-24.04", "executed": True, "status": "passed"},
     ],
 }

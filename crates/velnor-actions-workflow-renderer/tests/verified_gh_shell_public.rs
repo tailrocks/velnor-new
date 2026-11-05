@@ -24,16 +24,33 @@ fn prefix() -> Vec<String> {
 #[test]
 fn procfs_config_custody_rejects_same_user_poisoning() -> Result<(), Box<dyn std::error::Error>> {
     let pin = velnor_actions_mise::catalog::QUALIFIED_GH_LINUX_AMD64;
-    let source = std::env::var_os("MISE_DATA_DIR")
+    let fallback = tempfile::tempdir()?;
+    let mut source = std::env::var_os("MISE_DATA_DIR")
         .map(std::path::PathBuf::from)
         .or_else(|| {
             std::env::var_os("HOME").map(|v| std::path::PathBuf::from(v).join(".local/share/mise"))
         })
-        .ok_or("mise data")?;
+        .unwrap_or_else(|| fallback.path().to_path_buf());
     let relative = format!(
         "installs/gh/{0}/gh_{0}_{1}/bin/gh",
         pin.version, pin.platform
     );
+    if !source.join(&relative).is_file() {
+        let bootstrap = velnor_actions_workflow_renderer::verified_gh_shell::bootstrap();
+        let output = std::process::Command::new("/bin/sh")
+            .arg("-c")
+            .arg(format!(
+                "{bootstrap}; printf '%s' \"$VELNOR_VERIFIED_GH_DATA_DIR\""
+            ))
+            .env_clear()
+            .env("PATH", "/usr/bin:/bin")
+            .env("RUNNER_TEMP", fallback.path())
+            .output()?;
+        if !output.status.success() {
+            return Err("pinned GitHub CLI bootstrap failed".into());
+        }
+        source = std::path::PathBuf::from(std::str::from_utf8(&output.stdout)?);
+    }
     let shell = velnor_actions_workflow_renderer::publish_scripts::gh_function(&prefix())?;
     let fixture =
         std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/verified_gh_procfs_cases.py");

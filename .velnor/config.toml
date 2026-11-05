@@ -200,12 +200,12 @@ executor = "hosted"
 [[checks]]
 id = "hosted-gh-config-custody"
 task = "test-hosted-gh-config-custody"
-inputs = [".velnor/config.toml", "mise.toml", "crates/velnor-actions-workflow-renderer/tests/hosted_gh_config_custody.py"]
-tools = []
-timeout_minutes = 5
+inputs = [".config/nextest.toml", ".velnor/config.toml", "Cargo.lock", "Cargo.toml", "crates/velnor-actions-contract/Cargo.toml", "crates/velnor-actions-mise/Cargo.toml", "crates/velnor-actions-mise/src/catalog.rs", "crates/velnor-actions-workflow-renderer/Cargo.toml", "crates/velnor-actions-workflow-renderer/src/lib.rs", "crates/velnor-actions-workflow-renderer/src/publish_scripts.rs", "crates/velnor-actions-workflow-renderer/src/verified_gh_acquire.py", "crates/velnor-actions-workflow-renderer/src/verified_gh_launcher.py", "crates/velnor-actions-workflow-renderer/src/verified_gh_shell.rs", "crates/velnor-actions-workflow-renderer/tests/hosted_gh_config_custody.py", "crates/velnor-actions-workflow-renderer/tests/verified_gh_procfs_cases.py", "crates/velnor-actions-workflow-renderer/tests/verified_gh_shell_public.rs", "mise.toml", "rust-toolchain.toml"]
+tools = ["cargo-nextest", "rust"]
+timeout_minutes = 15
 [checks.evidence]
 path = "hosted-gh-config-evidence.json"
-expected_scenarios = ["sys-config-isolated", "ubuntu-24.04"]
+expected_scenarios = ["procfs-gh-custody", "ubuntu-24.04"]
 [checks.runner]
 label = "ubuntu-24.04"
 platform = "linux_x64"
