@@ -4,7 +4,6 @@
 use super::{BTreeMap, GitHubAdmissionRead, GitHubAdmissionRequest, OrchestratorError, internal};
 
 struct ReviewDecision {
-    id: u64,
     user_id: u64,
     state: String,
     commit: String,
@@ -61,6 +60,8 @@ fn collect_review_decisions(
     merged: &str,
 ) -> Result<BTreeMap<String, ReviewDecision>, OrchestratorError> {
     let mut latest: BTreeMap<String, ReviewDecision> = BTreeMap::new();
+    let mut ambiguous = std::collections::BTreeSet::new();
+    let mut seen_ids = std::collections::BTreeSet::new();
     for page in 1..=100 {
         let response = api.get(&format!(
             "{prefix}/pulls/{number}/reviews?per_page=100&page={page}"
@@ -86,6 +87,7 @@ fn collect_review_decisions(
             let id = review["id"]
                 .as_u64()
                 .ok_or_else(|| internal("crate_release_review_id"))?;
+            require(id > 0 && seen_ids.insert(id), "review_id_duplicate")?;
             let state = review["state"].as_str().unwrap_or_default();
             if state == "PENDING" || state == "COMMENTED" {
                 continue;
@@ -101,17 +103,17 @@ fn collect_review_decisions(
             let login = login.to_ascii_lowercase();
             if let Some(previous) = latest.get(&login) {
                 if previous.submitted == submitted {
-                    require(previous.id == id, "review_order_ambiguous")?;
+                    ambiguous.insert(login.clone());
                     continue;
                 }
                 if previous.submitted.as_str() > submitted {
                     continue;
                 }
             }
+            ambiguous.remove(&login);
             latest.insert(
                 login,
                 ReviewDecision {
-                    id,
                     user_id,
                     state: state.to_owned(),
                     commit: commit.to_owned(),
@@ -126,6 +128,7 @@ fn collect_review_decisions(
         }
         require(page < 100, "reviews_limit")?;
     }
+    require(ambiguous.is_empty(), "review_order_ambiguous")?;
     Ok(latest)
 }
 

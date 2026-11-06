@@ -371,3 +371,6 @@ mod authorization;
 
 #[path = "crate_release_github_public/required_provenance.rs"]
 mod required_provenance;
+
+#[path = "crate_release_github_public/review_ties.rs"]
+mod review_ties;
