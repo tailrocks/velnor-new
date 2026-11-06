@@ -239,7 +239,10 @@ pub(super) fn validate_human_environment_settings(
         let kind = rule.get("type").and_then(Value::as_str).ok_or(())?;
         if kind == "required_reviewers" {
             let entries = rule.get("reviewers").and_then(Value::as_array).ok_or(())?;
-            if entries.is_empty()
+            if rule
+                .get("prevent_self_review")
+                .is_some_and(|value| !value.is_boolean())
+                || entries.is_empty()
                 || entries
                     .iter()
                     .any(|entry| !valid_environment_reviewer(entry))

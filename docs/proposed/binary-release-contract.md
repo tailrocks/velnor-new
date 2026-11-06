@@ -40,9 +40,11 @@ PR gates and complete feedback disposition still apply.
 `release` authenticates the actual manual default-branch workflow authority and
 source, the selected Cargo package version, and successful full CI/Required for
 that exact source. The protected stable environment must enforce a required
-human reviewer, prevented self-review and protected-branch restrictions before
-permanent tag authority is used. Configuration or a dispatch actor is not proof
-that those protections exist. Missing authority fails before any tag mutation.
+human reviewer, `can_admins_bypass = false`, and protected-branch restrictions
+before permanent tag authority is used; `prevent_self_review` is not required so
+single-contributor repositories can approve their own deployments. Configuration
+or a dispatch actor is not proof that those protections exist. Missing authority
+fails before any tag mutation.
 
 Release-plz owns version/changelog PR preparation, not permanent tag mutation.
 Its native effective preparation config sets `git_only = true`, `publish = false`,
