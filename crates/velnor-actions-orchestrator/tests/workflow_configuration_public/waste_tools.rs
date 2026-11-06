@@ -200,7 +200,8 @@ fn w7_refuses_two_tools_identities_in_one_lane() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
-fn unqualified_lane_rejects_tools_identity_and_same_lane_stays_bound() -> Result<(), Box<dyn Error>> {
+fn unqualified_lane_rejects_tools_identity_and_same_lane_stays_bound() -> Result<(), Box<dyn Error>>
+{
     let mut jobs = lane_jobs()?;
     let id = crate_id(&jobs)?;
     let own = identity_digest(&jobs[&id])
@@ -222,7 +223,11 @@ fn unqualified_lane_rejects_tools_identity_and_same_lane_stays_bound() -> Result
     let unqualified = of(&jobs, WasteRule::SplitToolsIdentity);
     assert_eq!(unqualified.len(), 1, "{unqualified:?}");
     assert!(unqualified[0].to_string().contains("rust-other-lane"));
-    assert!(unqualified[0].to_string().contains("tools_cache_identity_shape"));
+    assert!(
+        unqualified[0]
+            .to_string()
+            .contains("tools_cache_identity_shape")
+    );
     jobs.remove("rust-other-lane");
     jobs.insert("rust-same-lane".to_owned(), same_lane);
     let found = of(&jobs, WasteRule::SplitToolsIdentity);
