@@ -33,6 +33,10 @@ enum FreshnessChange {
 #[test]
 fn public_publication_requires_one_successful_required_job_with_complete_identity()
 -> Result<(), Box<dyn Error>> {
+    let scenario = "required_ci::public_publication_requires_one_successful_required_job_with_complete_identity";
+    if !super::begin_isolated(scenario)? {
+        return Ok(());
+    }
     for profile in [FixtureProfile::Job, FixtureProfile::Runner] {
         for (failure, expected) in [
             (
@@ -85,6 +89,7 @@ fn public_publication_requires_one_successful_required_job_with_complete_identit
             assert_eq!(fs::read_dir(&fixture.scratch)?.count(), 1);
         }
     }
+    super::isolated_worker::record_success("image_publication", scenario)?;
     Ok(())
 }
 

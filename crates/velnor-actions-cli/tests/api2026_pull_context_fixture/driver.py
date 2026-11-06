@@ -187,7 +187,10 @@ def main():
     }
     if kind == "image_attestation" and test not in image_attestation_tests:
         raise RuntimeError("fixture scenario does not belong to target")
-    if kind == "image_publication" and test != "attempt_identity::public_runner_publication_rejects_artifacts_from_other_or_ambiguous_attempts":
+    if kind == "image_publication" and test not in (
+        "attempt_identity::public_runner_publication_rejects_artifacts_from_other_or_ambiguous_attempts",
+        "required_ci::public_publication_requires_one_successful_required_job_with_complete_identity",
+    ):
         raise RuntimeError("fixture scenario does not belong to target")
     if not re.fullmatch(r"[a-z_]+(?:::[a-z_]+)*", test):
         raise RuntimeError("invalid isolated fixture scenario")
