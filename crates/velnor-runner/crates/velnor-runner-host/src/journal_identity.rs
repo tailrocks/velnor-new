@@ -13,14 +13,15 @@ use crate::journal_sql::{one_row, token_rejected};
 use crate::launch_identity::LaunchIdentity;
 
 #[derive(Debug)]
-struct JournalProcessState {
+pub(crate) struct JournalProcessState {
     lineage_guard: Mutex<Option<EngineLineageGuard>>,
     write_lock: Arc<tokio::sync::Mutex<()>>,
+    probe_execution_lock: Arc<tokio::sync::Mutex<()>>,
 }
 
 static STATES: OnceLock<Mutex<HashMap<PathBuf, Arc<JournalProcessState>>>> = OnceLock::new();
 
-fn process_state(path: &Path) -> Result<Arc<JournalProcessState>, HostError> {
+pub(crate) fn process_state(path: &Path) -> Result<Arc<JournalProcessState>, HostError> {
     let states = STATES.get_or_init(|| Mutex::new(HashMap::new()));
     let mut states = states.lock().map_err(|_| HostError::Lock)?;
     if let Some(state) = states.get(path) {
@@ -29,26 +30,40 @@ fn process_state(path: &Path) -> Result<Arc<JournalProcessState>, HostError> {
     let state = Arc::new(JournalProcessState {
         lineage_guard: Mutex::new(None),
         write_lock: Arc::new(tokio::sync::Mutex::new(())),
+        probe_execution_lock: Arc::new(tokio::sync::Mutex::new(())),
     });
     states.insert(path.to_path_buf(), Arc::clone(&state));
     Ok(state)
 }
 
-fn release_process_state(path: &Path) {
+pub(crate) fn release_process_state(path: &Path, handle: &Arc<JournalProcessState>) {
     if let Some(states) = STATES.get()
         && let Ok(mut states) = states.lock()
+        && let Some(current) = states.get(path)
+        && Arc::ptr_eq(current, handle)
+        && Arc::strong_count(current) == 2
     {
         states.remove(path);
     }
 }
 
-impl Drop for Journal {
-    fn drop(&mut self) {
-        release_process_state(self.path());
-    }
-}
-
 impl Journal {
+    pub(crate) async fn probe_execution_lock(
+        &self,
+    ) -> Result<tokio::sync::OwnedMutexGuard<()>, HostError> {
+        let lock =
+            process_state(self.path()).map(|state| Arc::clone(&state.probe_execution_lock))?;
+        Ok(lock.lock_owned().await)
+    }
+
+    pub(crate) fn try_probe_execution_lock(
+        &self,
+    ) -> Result<Option<tokio::sync::OwnedMutexGuard<()>>, HostError> {
+        let lock =
+            process_state(self.path()).map(|state| Arc::clone(&state.probe_execution_lock))?;
+        Ok(lock.try_lock_owned().ok())
+    }
+
     pub(crate) fn attach_lineage_guard(&self, guard: EngineLineageGuard) -> Result<(), HostError> {
         let state = process_state(self.path())?;
         let mut current = state.lineage_guard.lock().map_err(|_| HostError::Lock)?;
@@ -106,6 +121,34 @@ impl Journal {
     pub(crate) async fn revision(&self) -> Result<u64, HostError> {
         let conn = self.connection().await?;
         journal_schema::revision(&conn).await
+    }
+
+    pub(crate) async fn validate_startup_attachment(
+        &self,
+        canonical_path: &Path,
+        instance_id: &str,
+        engine_id: &str,
+        revision: u64,
+        guard: &EngineLineageGuard,
+    ) -> Result<(), HostError> {
+        if self.path() != canonical_path {
+            return Err(HostError::Journal);
+        }
+        let state = process_state(self.path())?;
+        let attached = state
+            .lineage_guard
+            .lock()
+            .map_err(|_| HostError::Lock)?
+            .as_ref()
+            .is_some_and(|current| current.same_guard(guard));
+        if !attached
+            || self.instance_id().await? != instance_id
+            || self.engine_id().await? != engine_id
+            || self.revision().await? != revision
+        {
+            return Err(HostError::Journal);
+        }
+        guard.verify_lineage(canonical_path, instance_id, revision)
     }
 
     pub async fn launch_identity(&self, id: i64) -> Result<LaunchIdentity, HostError> {

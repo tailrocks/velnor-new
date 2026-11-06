@@ -7,6 +7,11 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+autotests = false
+
+[[test]]
+name = "job_hook_public"
+path = "tests/job_hook_public.rs"
 
 [lib]
 doctest = false
@@ -17,10 +22,21 @@ name = "velnor-resource-probe"
 path = "src/main.rs"
 test = false
 
+[[bin]]
+name = "velnor-storage-init"
+path = "src/bin/velnor_storage_init.rs"
+test = false
+
+[[bin]]
+name = "velnor-job-start-hook"
+path = "src/bin/velnor_job_start_hook.rs"
+test = false
+
 [dependencies]
 rustix.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+sha2.workspace = true
 
 [lints]
 workspace = true

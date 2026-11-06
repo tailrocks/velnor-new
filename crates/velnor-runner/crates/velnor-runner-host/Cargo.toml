@@ -21,6 +21,10 @@ path = "tests/runner_image_manifest_public.rs"
 name = "runner_image_qualification_public"
 path = "tests/runner_image_qualification_public.rs"
 
+[[test]]
+name = "scaleset_installation_public"
+path = "tests/scaleset_installation_public.rs"
+
 [[bin]]
 name = "velnor-resource-probe-release"
 path = "src/bin/velnor_resource_probe_release.rs"
@@ -34,12 +38,14 @@ test = false
 workspace = true
 
 [dependencies]
-base64 = { version = "=0.23.1" }
+base64 = { workspace = true }
 bollard = { workspace = true }
+bytes = { version = "=1.12.1" }
 flate2 = { workspace = true }
 futures-util = { version = "=0.3.34" }
 getrandom = { workspace = true }
-libc = { workspace = true }
+httpdate = "=1.0.3"
+libc = { version = "=0.2.191" }
 reqwest = { version = "=0.13.5", default-features = false, features = ["native-tls", "system-proxy", "stream"] }
 rustix = { workspace = true, features = ["process"] }
 serde = { workspace = true }
@@ -47,13 +53,14 @@ serde_json = { workspace = true }
 sha2 = { workspace = true }
 tar = { version = "=0.4.46" }
 thiserror = { workspace = true }
-tokio = { workspace = true }
+tokio = { workspace = true, features = ["fs"] }
 toml = { workspace = true }
 turso = { workspace = true }
 uuid = { version = "=1.28.0", features = ["v4"] }
 zeroize = { workspace = true }
 velnor-runner-core = { version = "=0.1.0", path = "../velnor-runner-core" }
 velnor-runner-github = { version = "=0.1.0", path = "../velnor-runner-github" }
+velnor-resource-probe = { version = "=0.1.0", path = "../velnor-resource-probe" }
 
 [dev-dependencies]
 tempfile = { version = "=3.27.0" }

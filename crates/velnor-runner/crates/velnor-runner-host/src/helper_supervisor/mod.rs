@@ -46,6 +46,7 @@ pub(super) async fn verify_checksum_target(
 
 async fn run_helper(helper: snapshot::SnapshotLease, input: Vec<u8>) -> Result<(), HostError> {
     let (cancel_sender, cancel_receiver) = oneshot::channel();
+
     let task = tokio::spawn(supervise(helper, input, cancel_receiver));
     await_helper(task, cancel_sender).await
 }
@@ -67,6 +68,7 @@ async fn supervise(
 ) -> Result<(), HostError> {
     let result = supervise_inner(&helper, input, &mut cancelled).await;
     drop(helper);
+
     result
 }
 
@@ -83,6 +85,7 @@ async fn supervise_inner(
     };
     let stdout = spawn_capture(stdout_pipe);
     let stderr = spawn_capture(stderr_pipe);
+
     let write = write_request(&mut child, &input, deadline, cancelled);
     if write.await.is_err() {
         cleanup_cancelled_child(&mut child, stdout, stderr).await?;

@@ -6,6 +6,9 @@ use serde_json::Value;
 
 use crate::error::WireError;
 
+mod statistics_wire;
+pub use statistics_wire::Statistics;
+
 pub const MAX_POLL_BODY_BYTES: usize = 256 * 1024;
 
 pub const MAX_POLL_MESSAGES: usize = 50;
@@ -121,31 +124,6 @@ fn non_empty(value: Option<&str>) -> Option<&str> {
     value.filter(|text| !text.trim().is_empty())
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Statistics {
-    pub total_available_jobs: i64,
-
-    pub total_acquired_jobs: i64,
-
-    pub total_assigned_jobs: i64,
-
-    pub total_running_jobs: i64,
-
-    pub total_registered_runners: i64,
-
-    pub total_busy_runners: i64,
-
-    pub total_idle_runners: i64,
-}
-
-impl Statistics {
-    #[must_use]
-    pub const fn assigned_population(&self) -> i64 {
-        self.total_assigned_jobs
-    }
-}
-
 #[derive(Debug, Deserialize)]
 struct Envelope {
     #[serde(rename = "messageId")]
@@ -154,7 +132,7 @@ struct Envelope {
     message_type: String,
     body: Option<String>,
     #[serde(default)]
-    statistics: Option<Statistics>,
+    statistics: Option<statistics_wire::StatisticsWire>,
 }
 
 pub fn parse_poll(status: u16, body: &str) -> Result<Poll, WireError> {
@@ -186,7 +164,10 @@ fn parse_envelope(body: &str) -> Result<Poll, WireError> {
         Ok(jobs) => Ok(Poll::Batch(ParsedBatch {
             message_id: envelope.message_id,
             raw_body,
-            statistics: envelope.statistics,
+            statistics: envelope
+                .statistics
+                .as_ref()
+                .and_then(statistics_wire::to_statistics),
             jobs,
         })),
         Err(_error) => Ok(Poll::Quarantined(QuarantinedBatch {

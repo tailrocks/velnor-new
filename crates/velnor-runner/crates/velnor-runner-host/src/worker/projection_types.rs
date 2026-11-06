@@ -48,6 +48,25 @@ pub struct BindMount {
     pub target: String,
 
     pub read_only: bool,
+
+    pub(super) kind: BindMountKind,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum BindMountKind {
+    ActionArchive,
+    GuestImage,
+}
+
+impl BindMount {
+    pub(super) fn guest_image(source: String) -> Self {
+        Self {
+            source,
+            target: "/opt/velnor/guest-image.json".to_owned(),
+            read_only: true,
+            kind: BindMountKind::GuestImage,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

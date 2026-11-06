@@ -51,4 +51,53 @@ docker image load --platform linux/amd64 --input "$archive"
 docker image inspect --platform linux/amd64 "$image" > "$inspect_json"
 "$release_validator" write-manifest "$inspect_json" "$archive" RESOURCE_PROBE_MANIFEST.json
 
+if docker image inspect --platform linux/amd64 velnor-runner:linux-amd64 >/dev/null 2>&1 \
+  && docker image inspect --platform linux/amd64 velnor-dind:linux-amd64 >/dev/null 2>&1; then
+  if [[ ! -x "$target_dir/x86_64-unknown-linux-musl/release/velnor-storage-init" || ! -x "$target_dir/x86_64-unknown-linux-musl/release/velnor-job-start-hook" ]]; then
+    cargo build --manifest-path crates/velnor-runner/Cargo.toml --locked --release --target x86_64-unknown-linux-musl -p velnor-resource-probe --bin velnor-storage-init --bin velnor-job-start-hook
+  fi
+  stage_root="$workdir/stages"
+  mkdir -m 0755 \
+    "$stage_root" \
+    "$stage_root/resource-probe" \
+    "$stage_root/storage-init" \
+    "$stage_root/job-start-hook" \
+    "$stage_root/job-started-hook"
+  cp "$context/resource-probe" "$stage_root/resource-probe/resource-probe"
+  cp "$target_dir/x86_64-unknown-linux-musl/release/velnor-storage-init" "$stage_root/storage-init/storage-init"
+  cp "$target_dir/x86_64-unknown-linux-musl/release/velnor-job-start-hook" "$stage_root/job-start-hook/job-start-hook"
+  printf '#!/bin/sh\nset -eu\nexec /velnor/job-start-hook "$@"\n' > "$stage_root/job-started-hook/velnor-job-start-hook.sh"
+  chmod 0555 \
+    "$stage_root/resource-probe/resource-probe" \
+    "$stage_root/storage-init/storage-init" \
+    "$stage_root/job-start-hook/job-start-hook" \
+    "$stage_root/job-started-hook/velnor-job-start-hook.sh"
+  for helper_bin in "$stage_root/storage-init/storage-init" "$stage_root/job-start-hook/job-start-hook"; do
+    helper_desc="$(file -b "$helper_bin")"
+    case "$helper_desc" in
+      *'ELF 64-bit LSB'*x86-64*static*) ;;
+      *) printf 'worker helper is not a static ELF64 x86-64 executable: %s\n' "$helper_desc" >&2; exit 1 ;;
+    esac
+  done
+  docker buildx build \
+    --provenance=mode=max \
+    --platform linux/amd64 \
+    --build-arg "VELNOR_SOURCE_SHA=$source_sha" \
+    --build-context "resource_probe=$stage_root/resource-probe" \
+    --build-context "storage_init=$stage_root/storage-init" \
+    --build-context "job_start_hook=$stage_root/job-start-hook" \
+    --build-context "job_started_hook=$stage_root/job-started-hook" \
+    --tag velnor-runner:linux-amd64 \
+    --load \
+    images/runner/ubuntu-26.04
+  docker buildx build \
+    --provenance=mode=max \
+    --platform linux/amd64 \
+    --build-arg "VELNOR_SOURCE_SHA=$source_sha" \
+    --build-context "resource_probe=$stage_root/resource-probe" \
+    --tag velnor-dind:linux-amd64 \
+    --load \
+    images/dind
+fi
+
 printf 'validated linux/amd64 resource probe image %s\n' "$source_sha"

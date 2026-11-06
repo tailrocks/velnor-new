@@ -1,23 +1,25 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-const GROW_LOAD_PER_CPU_MILLIS: u32 = 750;
-const SHRINK_LOAD_PER_CPU_MILLIS: u32 = 1150;
+const GROW_LOAD_PER_CPU_MILLIS: u64 = 750;
+const SHRINK_LOAD_PER_CPU_MILLIS: u64 = 1_150;
 const GIB: u64 = 1024 * 1024 * 1024;
-const GROW_MEM: u64 = 8 * GIB;
-const SHRINK_MEM: u64 = 4 * GIB;
-const GROW_DISK: u64 = 20 * GIB;
-const SHRINK_DISK: u64 = 10 * GIB;
+const GROW_MEMORY_BYTES: u64 = 8 * GIB;
+const SHRINK_MEMORY_BYTES: u64 = 4 * GIB;
+const GROW_DISK_BYTES: u64 = 20 * GIB;
+const SHRINK_DISK_BYTES: u64 = 10 * GIB;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct Sample {
-    pub load_millis: u32,
+    pub load_milli: u64,
+    pub cpus: u32,
+    pub memory_available_bytes: u64,
+    pub docker_root_free_bytes: Option<u64>,
+}
 
-    pub ncpu: u32,
-
-    pub mem_available: u64,
-
-    pub disk_free: u64,
+#[must_use]
+pub(crate) const fn advertise(ceiling: u32) -> u32 {
+    floor_of(1, ceiling)
 }
 
 #[must_use]
@@ -36,15 +38,17 @@ pub(crate) const fn floor_of(running: u32, ceiling: u32) -> u32 {
 pub(crate) fn decide(current: u32, running: u32, ceiling: u32, sample: Option<Sample>) -> u32 {
     let ceiling = clamp_ceiling(ceiling);
     let floor = floor_of(running, ceiling);
-    match sample {
-        Some(sample) => step(current, floor, ceiling, sample),
-        None => clamp_range(current, floor, ceiling),
+    let current = current.clamp(floor, ceiling);
+    let Some(sample) = sample else {
+        return current;
+    };
+    if saturated(sample) {
+        current.saturating_sub(1).max(floor)
+    } else if has_room(sample) && current < ceiling {
+        current + 1
+    } else {
+        current
     }
-}
-
-#[must_use]
-pub(crate) fn advertise(ceiling: u32) -> u32 {
-    floor_of(1, ceiling)
 }
 
 #[must_use]
@@ -57,44 +61,24 @@ pub(crate) fn adjust_with_sample(
     decide(current, running, ceiling, sample)
 }
 
-fn step(current: u32, floor: u32, ceiling: u32, sample: Sample) -> u32 {
-    let current = clamp_range(current, floor, ceiling);
-    if saturated(sample) {
-        return current.saturating_sub(1).max(floor);
-    }
-    if room(sample) && current < ceiling {
-        return current + 1;
-    }
-    current
-}
-
-fn clamp_range(current: u32, floor: u32, ceiling: u32) -> u32 {
-    current.clamp(floor, ceiling)
-}
-
 const fn saturated(sample: Sample) -> bool {
     load_per_cpu(sample) > SHRINK_LOAD_PER_CPU_MILLIS
-        || sample.mem_available < SHRINK_MEM
-        || disk_low(sample)
+        || sample.memory_available_bytes < SHRINK_MEMORY_BYTES
+        || matches!(sample.docker_root_free_bytes, Some(disk_free) if disk_free < SHRINK_DISK_BYTES)
 }
 
-const fn room(sample: Sample) -> bool {
+const fn has_room(sample: Sample) -> bool {
     load_per_cpu(sample) <= GROW_LOAD_PER_CPU_MILLIS
-        && sample.mem_available >= GROW_MEM
-        && disk_ok(sample)
+        && sample.memory_available_bytes >= GROW_MEMORY_BYTES
+        && match sample.docker_root_free_bytes {
+            Some(disk_free) => disk_free >= GROW_DISK_BYTES,
+            None => true,
+        }
 }
 
-const fn disk_low(sample: Sample) -> bool {
-    sample.disk_free != u64::MAX && sample.disk_free < SHRINK_DISK
-}
-
-const fn disk_ok(sample: Sample) -> bool {
-    sample.disk_free == u64::MAX || sample.disk_free >= GROW_DISK
-}
-
-const fn load_per_cpu(sample: Sample) -> u32 {
-    match sample.load_millis.checked_div(sample.ncpu) {
+const fn load_per_cpu(sample: Sample) -> u64 {
+    match sample.load_milli.checked_div(sample.cpus as u64) {
         Some(value) => value,
-        None => u32::MAX,
+        None => u64::MAX,
     }
 }
