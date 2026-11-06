@@ -94,10 +94,14 @@ fn selector_keeps_supervisor_in_static_environment_and_loader_in_run() -> Result
     }
     let script = run.last().ok_or_else(|| fail("selector run is empty"))?;
     if script.contains(payload)
-        || !script.contains("python3 -I -c 'import os; exec(bytes.fromhex(os.environ.pop")
+        || !script.contains("python3 -I -c")
+        || !script.contains(concat!(
+            "os.environ.pop(\"VELNOR_STATE_SELECT_",
+            "SUPERVISOR_HEX\")"
+        ))
     {
         return Err(fail(
-            "selector run does not load and remove its static payload",
+            "selector run does not isolate and remove its static payload",
         ));
     }
     Ok(())
