@@ -17,9 +17,9 @@ if fault not in ('', 'git-lock', 'outside-workspace'):
 unit='velnor-release-'+secrets.token_hex(16)+'.service'
 subprocess.run(['/usr/bin/systemd-run','--quiet','--unit='+unit,'--property=Type=exec','/bin/sleep','500'],check=True)
 helper='/run/velnor-nested-helper-'+secrets.token_hex(12)
-shutil.copyfile(modules/'release_supervisor_exec.py',helper)
-os.chmod(helper,0o555)
 try:
+ shutil.copyfile(modules/'release_supervisor_exec.py',helper)
+ os.chmod(helper,0o555)
  with tempfile.TemporaryDirectory(dir='/run',prefix='velnor-publisher-') as tmp:
   root=pathlib.Path(tmp)
   root.chmod(0o711)
@@ -80,7 +80,7 @@ try:
   context=executor.read_context(descriptor)
   os.close(descriptor)
   end=time.clock_gettime_ns(time.CLOCK_BOOTTIME)+300_000_000_000
-  manager=bus.Manager(helper,240,bind_to=unit,deny_unix=True)
+  manager=bus.Manager(helper,240,bind_to=unit,deny_unix=True,deny_network=True)
   manager.subscribe(end)
   locator=bus.Manager(helper,240,bind_to=unit,deny_unix=True,deny_network=True)
   locator.subscribe(end)
@@ -110,5 +110,7 @@ try:
    locator.close()
    manager.close()
 finally:
- subprocess.run(['/usr/bin/systemctl','stop',unit],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
- os.unlink(helper)
+ try:
+  subprocess.run(['/usr/bin/systemctl','stop',unit],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,check=True)
+ finally:
+  pathlib.Path(helper).unlink(missing_ok=True)

@@ -70,6 +70,7 @@ fn hosted_supervisor_runs_candidate_scenarios_and_controller_regressions()
             "hosted supervisor qualification failed: {file}"
         );
     }
+    hosted_nested_workspace_qualification(&root)?;
     let workspace = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .and_then(std::path::Path::parent)
@@ -96,6 +97,56 @@ fn hosted_supervisor_runs_candidate_scenarios_and_controller_regressions()
         result.success(),
         "hosted managed-export qualification failed"
     );
+    Ok(())
+}
+
+fn hosted_nested_workspace_qualification(
+    root: &std::path::Path,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let version = std::process::Command::new("rustc")
+        .arg("--version")
+        .output()?;
+    if !version.status.success()
+        || !std::str::from_utf8(&version.stdout)?.starts_with("rustc 1.99.1 ")
+    {
+        return Err("qualified Rust 1.99.1 is unavailable".into());
+    }
+    let output = std::process::Command::new("rustc")
+        .args(["--print", "sysroot"])
+        .output()?;
+    if !output.status.success() {
+        return Err("pinned Rust toolchain is unavailable".into());
+    }
+    let toolchain = std::str::from_utf8(&output.stdout)?.trim();
+    if !std::path::Path::new(toolchain).is_absolute() {
+        return Err("Rust toolchain path is not absolute".into());
+    }
+    for fault in ["", "git-lock", "outside-workspace"] {
+        let status = std::process::Command::new("/usr/bin/sudo")
+            .env_clear()
+            .args([
+                "-n",
+                "/usr/bin/env",
+                "-i",
+                "PATH=/usr/bin:/bin",
+                "HOME=/nonexistent",
+                "LANG=C",
+                &format!("VELNOR_SOURCE_TEST_TOOLCHAIN={toolchain}"),
+                "VELNOR_TEST_PINNED_GIT=/usr/bin/git",
+                "VELNOR_TEST_PINNED_GIT_HTTP=/usr/lib/git-core/git-remote-http",
+                "VELNOR_TEST_SEMVER=/usr/bin/false",
+                &format!("VELNOR_SOURCE_TEST_FAULT={fault}"),
+                "/usr/bin/python3",
+                "-I",
+                "-S",
+                "-B",
+            ])
+            .arg(root.join("release_source_nested_workspace_systemd_test.py"))
+            .status()?;
+        if !status.success() {
+            return Err(format!("nested source qualification failed: {fault}").into());
+        }
+    }
     Ok(())
 }
 
