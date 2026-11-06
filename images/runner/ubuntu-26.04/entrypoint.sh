@@ -11,7 +11,17 @@ root="/home/runner"
 work="${root}/_work"
 listener="${root}/bin/Runner.Listener"
 entrypoint_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
-max=131071
+jit_env_name='ACTIONS_RUNNER_INPUT_JITCONFIG'
+max=$((131072 - ${#jit_env_name} - 2))
+
+if [[ "${ACTIONS_RUNNER_INPUT_JITCONFIG+x}" ]]; then
+  echo "jit must arrive through private input" >&2
+  exit 2
+fi
+
+if [[ ! -x "$listener" && -x /opt/runner/bin/Runner.Listener ]]; then
+  cp -a /opt/runner/. "$root/"
+fi
 
 if [[ ! -x "$listener" ]]; then
   echo "runner listener missing" >&2
@@ -54,4 +64,5 @@ cd "$root"
 /usr/local/bin/wait-docker-sock
 /usr/local/bin/clear-dockerenv
 "${entrypoint_dir}/velnor-wait-docker-api" "unix:///var/run/docker.sock"
-exec "$listener" run --jitconfig "$payload"
+export ACTIONS_RUNNER_HOOK_JOB_STARTED="/usr/local/bin/velnor-job-start-hook.sh"
+ACTIONS_RUNNER_INPUT_JITCONFIG="$payload" exec "$listener" run

@@ -62,6 +62,10 @@ impl TufCache {
         let target_value = Self::read_target(&repository, target_name, validate_target).await?;
         cache.commit_generation(generation, base, &root_chain, &tuf_path)?;
         Ok(TufRefresh {
+
+
+
+
             target_value,
         })
     }

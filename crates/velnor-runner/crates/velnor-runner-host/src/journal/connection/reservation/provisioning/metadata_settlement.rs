@@ -1,0 +1,63 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
+use std::time::Instant;
+
+use crate::error::HostError;
+use crate::journal::connection::ConnectionJournal;
+use crate::journal::connection::reservation::provisioning::admission;
+use crate::journal::connection::storage::in_transaction;
+use crate::journal::resource_probe::ProbeSeed;
+
+use super::super::storage_budget::{StorageAdmissionSample, StorageMedium};
+
+const MAX_SETTLEMENT_GENERATION: i64 = 1024;
+
+pub(crate) struct StorageMetadataSettlementClaim {
+    connection_id: String,
+    reservation_id: i64,
+    generation: i64,
+    operation_id: i64,
+    scale_set_id: i64,
+    instance_id: String,
+    probe_operation_id: String,
+    profile_generation_id: String,
+    profile_digest: String,
+    engine_id: String,
+    docker_root_digest: String,
+    instance_binding_digest: String,
+    claimed_at: Instant,
+}
+
+impl StorageMetadataSettlementClaim {
+    pub(crate) fn probe_operation_id(&self) -> &str {
+        &self.probe_operation_id
+    }
+
+    pub(crate) fn profile_generation_id(&self) -> &str {
+        &self.profile_generation_id
+    }
+
+    pub(crate) fn profile_digest(&self) -> &str {
+        &self.profile_digest
+    }
+
+    pub(crate) fn engine_id(&self) -> &str {
+        &self.engine_id
+    }
+
+    pub(crate) fn docker_root_digest(&self) -> &str {
+        &self.docker_root_digest
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum MetadataSettlementResult {
+    Settled,
+
+    HeldAtCapacity,
+}
+
+include!("metadata_settlement/claim.rs");
+include!("metadata_settlement/record.rs");
+include!("metadata_settlement/validation.rs");
