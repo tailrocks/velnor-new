@@ -1,0 +1,38 @@
+﻿2026-11-06T07:42:37.3593748Z Current runner version: '2.338.2'
+2026-11-06T07:42:37.3618986Z ##[group]Runner Image Provisioner
+2026-11-06T07:42:37.3619724Z Hosted Compute Agent
+2026-11-06T07:42:37.3620209Z Version: 20261028.624
+2026-11-06T07:42:37.3620854Z Commit: 54898b74c23fde5556c9b3c3a2290865feef0dfe
+2026-11-06T07:42:37.3621460Z Build Date: 2026-10-28T21:51:42Z
+2026-11-06T07:42:37.3622015Z Worker ID: {89ecd5d7-80af-478d-8c8c-cbd54063dc4d}
+2026-11-06T07:42:37.3622702Z Region: centralus
+2026-11-06T07:42:37.3623160Z Cloud: Azure
+2026-11-06T07:42:37.3623750Z ##[endgroup]
+2026-11-06T07:42:37.3625021Z ##[group]Operating System
+2026-11-06T07:42:37.3625533Z Ubuntu
+2026-11-06T07:42:37.3626048Z 26.04.1
+2026-11-06T07:42:37.3626473Z LTS
+2026-11-06T07:42:37.3626988Z ##[endgroup]
+2026-11-06T07:42:37.3627461Z ##[group]Runner Image
+2026-11-06T07:42:37.3628140Z Image: ubuntu-26.04
+2026-11-06T07:42:37.3628665Z Version: 20261101.186.1
+2026-11-06T07:42:37.3629797Z Included Software: https://github.com/actions/runner-images/blob/ubuntu26/20261101.186/images/ubuntu/Ubuntu2604-Readme.md
+2026-11-06T07:42:37.3631162Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu26%2F20261101.186
+2026-11-06T07:42:37.3631969Z ##[endgroup]
+2026-11-06T07:42:37.3633256Z ##[group]GITHUB_TOKEN Permissions
+2026-11-06T07:42:37.3635577Z Actions: read
+2026-11-06T07:42:37.3636169Z ArtifactMetadata: read
+2026-11-06T07:42:37.3636659Z Attestations: read
+2026-11-06T07:42:37.3637178Z Contents: read
+2026-11-06T07:42:37.3637651Z Metadata: read
+2026-11-06T07:42:37.3638332Z ##[endgroup]
+2026-11-06T07:42:37.3640632Z Secret source: Actions
+2026-11-06T07:42:37.3641404Z Cache mode: read
+2026-11-06T07:42:37.3642235Z Prepare workflow directory
+2026-11-06T07:42:37.3972974Z Prepare all required actions
+2026-11-06T07:42:37.4002302Z Getting action download info
+2026-11-06T07:42:37.6129037Z Download action repository 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1' (SHA:3d3c42e5aac5ba805825da76410c181273ba90b1)
+2026-11-06T07:42:37.7385399Z Download action repository 'jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c' (SHA:f5be966e4a917d54244728e6a5fdcd1d93a35e6c)
+2026-11-06T07:42:38.2096648Z Download action repository 'actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9' (SHA:55cc8345863c7cc4c66a329aec7e433d2d1c52a9)
+2026-11-06T07:42:38.3103418Z Download action repository 'actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9' (SHA:cf430e030ddbb5b0abf93d22962f4752f3646cd9)
+2026-11-06T07:42:38.4569972Z Complete job name: Plan
