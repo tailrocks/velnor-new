@@ -3,12 +3,12 @@
 
 use std::collections::BTreeMap;
 
+use velnor_actions_contract::workflow::cache_family::S256;
+use velnor_actions_contract::workflow::ledger_cli::{LEDGER_CLI_JOB_ID, LedgerCliSource};
 use velnor_actions_contract::{
     CacheAccess, CompiledStateMode, CrateJob, Job, JobTimeout, ProposedTask, Stack, Step,
     VelnorConfig, WorkflowPolicy, crate_display_name, tofu_display_name,
 };
-use velnor_actions_contract::workflow::cache_family::S256;
-use velnor_actions_contract::workflow::ledger_cli::{LEDGER_CLI_JOB_ID, LedgerCliSource};
 use velnor_actions_mise::{TaskCacheMode, ToolCatalog};
 use velnor_actions_workflow_renderer::steps::CompileDriver as RenderDriver;
 
@@ -46,9 +46,7 @@ mod ledger_cli;
 mod job_steps;
 #[path = "crate_jobs_obligations.rs"]
 mod obligations;
-use job_steps::{
-    image_publication_fixture_step, obligation_steps,
-};
+use job_steps::{image_publication_fixture_step, obligation_steps};
 use obligations::obligations_for;
 
 pub(crate) use stage::{is_mbx, is_nextest, is_opentofu, is_rust};
@@ -123,12 +121,12 @@ fn build_crate_jobs_with_seed_timeout(
     for (key, tasks) in &grouped {
         let output = build_group_job(&input, &lane, &owners, key, tasks, private)?;
         if let Some(lanes) = output.producer {
-            let entry = producer_roots
-                .entry(lanes.root.clone())
-                .or_insert_with(|| state_producer::ProducerRoot {
+            let entry = producer_roots.entry(lanes.root.clone()).or_insert_with(|| {
+                state_producer::ProducerRoot {
                     root: lanes.root.clone(),
                     lanes: Vec::new(),
-                });
+                }
+            });
             entry.lanes.extend(lanes.lanes);
         }
         drivers.insert(output.job_id.clone(), output.driver);
@@ -146,7 +144,11 @@ fn build_crate_jobs_with_seed_timeout(
     let roots: Vec<_> = producer_roots.into_values().collect();
     let recipe_jobs =
         state_producer::state_producer_jobs(&input, &lane, &roots, private, seed_timeout)?;
-    let state_recipes = state_producer::recipe_digests(&recipe_jobs, input.helper_version, input.generator_version)?;
+    let state_recipes = state_producer::recipe_digests(
+        &recipe_jobs,
+        input.helper_version,
+        input.generator_version,
+    )?;
     let producers = match input.compiled_state {
         CompiledStateMode::Union => recipe_jobs,
         CompiledStateMode::Off => Vec::new(),
@@ -169,7 +171,6 @@ struct GroupOutput {
     driver: RenderDriver,
     producer: Option<ProducerLanes>,
 }
-
 
 fn build_group_job(
     input: &CrateJobInputs<'_>,
@@ -340,8 +341,13 @@ fn render_job(
     if use_rust {
         steps.push(crate::workflow::verify_restored_rust_step(catalog));
     }
-    steps.push(crate::matrix_step::prepare_crate_tools_step(catalog, tools)?);
+    steps.push(crate::matrix_step::prepare_crate_tools_step(
+        catalog, tools,
+    )?);
     steps.extend(crate::matrix_step::verify_validators_step(catalog, tools));
+    steps.extend(crate::matrix_step::prepare_runtime_gh_step(
+        policy, suite, catalog,
+    )?);
     if use_rust {
         steps.push(crate::workflow::prepare_rust_components_step(catalog)?);
         steps.push(crate::workflow::verify_rust_manifest_step(catalog));

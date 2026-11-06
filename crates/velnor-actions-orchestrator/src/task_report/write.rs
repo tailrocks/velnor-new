@@ -141,6 +141,7 @@ pub(crate) fn load_plan(run_key: &str, runner_temp: &Path) -> Result<Plan, Orche
     let value = parse_strict_json(&text).map_err(|_| internal("unparsable_plan"))?;
     let plan: Plan = serde_json::from_value(value).map_err(|_| internal("unparsable_plan"))?;
     plan.validate().map_err(internal_contract)?;
+    crate::selected_preview_identity::check_ambient(&plan.generator)?;
     if plan.run_key != run_key {
         return Err(internal("report_run_mismatch"));
     }

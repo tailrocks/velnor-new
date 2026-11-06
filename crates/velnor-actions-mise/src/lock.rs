@@ -260,5 +260,65 @@ fn lock_from_doc(doc: &TomlDoc) -> Result<GeneratorLock, LockError> {
             sha256: entry(&bootstrap, "sha256")?,
         },
         actions,
+        source_preview: parse_source_preview(doc, "planner-preview")?,
+        staged_source_preview: parse_source_preview(doc, "planner-preview-staged")?,
     })
+}
+
+fn parse_source_preview(
+    doc: &TomlDoc,
+    section: &str,
+) -> Result<Option<velnor_actions_contract::source_preview::SourcePreviewLock>, LockError> {
+    use velnor_actions_contract::source_preview::{
+        SourcePreviewLock, SourcePreviewPayload, SourcePreviewReceipt, SourcePreviewRun,
+    };
+    let mut sections = doc.iter().filter(|(name, _)| name == section);
+    let Some((_, values)) = sections.next() else {
+        return Ok(None);
+    };
+    if sections.next().is_some() || values.len() != 27 {
+        return Err(invalid("invalid_planner_preview_section".to_owned()));
+    }
+    let number = |key: &str| -> Result<u64, LockError> {
+        entry(values, key)?
+            .parse()
+            .map_err(|_| invalid(format!("invalid_planner_preview_number:{key}")))
+    };
+    let run = |prefix: &str| -> Result<SourcePreviewRun, LockError> {
+        let field = |suffix: &str| format!("{prefix}_{suffix}");
+        Ok(SourcePreviewRun {
+            workflow_path: entry(values, &field("workflow_path"))?,
+            workflow_ref: entry(values, &field("workflow_ref"))?,
+            workflow_sha: entry(values, &field("workflow_sha"))?,
+            run_id: number(&field("run_id"))?,
+            run_attempt: u32::try_from(number(&field("run_attempt"))?)
+                .map_err(|_| invalid("invalid_planner_preview_attempt".to_owned()))?,
+        })
+    };
+    let preview = SourcePreviewLock {
+        receipt: SourcePreviewReceipt {
+            schema: u32::try_from(number("schema")?)
+                .map_err(|_| invalid("invalid_planner_preview_schema".to_owned()))?,
+            repository: entry(values, "repository")?,
+            version: entry(values, "version")?,
+            source_sha: entry(values, "source_sha")?,
+            tag: entry(values, "tag")?,
+            release_id: number("release_id")?,
+            signer: run("signer")?,
+            ci: run("ci")?,
+            qualification: run("qualification")?,
+            payload: SourcePreviewPayload {
+                target: entry(values, "payload_target")?,
+                name: entry(values, "payload_name")?,
+                size: number("payload_size")?,
+                sha256: entry(values, "payload_sha256")?,
+            },
+        },
+        receipt_sha256: entry(values, "receipt_sha256")?,
+        bundle_sha256: entry(values, "bundle_sha256")?,
+    };
+    preview
+        .validate_shape()
+        .map_err(|error| invalid(error.to_string()))?;
+    Ok(Some(preview))
 }

@@ -21,7 +21,7 @@ mod tofu_env;
 
 pub(crate) use tools::{
     CrateSuite, LaneTools, crate_needs_generate_validators, prepare_crate_tools_step,
-    suite_for_package, verify_validators_step,
+    prepare_runtime_gh_step, suite_for_package, verify_validators_step,
 };
 
 pub(crate) const OBLIGATION_TASK_ID_ENV: &str = "VELNOR_TASK_ID";

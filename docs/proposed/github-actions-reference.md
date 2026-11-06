@@ -553,3 +553,11 @@ GitHub's REST endpoints list [workflow-run artifacts](https://docs.github.com/en
 The image publisher requests 100 entries per page and admits at most 20 pages, 2,000 entries, and 16 MiB of cumulative serialized response JSON for an inventory. It requires the same `total_count` on every page, the expected number of entries per page, and unique nonzero IDs. Missing, inconsistent, duplicated, or over-budget evidence fails publication. Each API response is also bounded before JSON parsing.
 
 The [OCI Distribution Specification error table](https://github.com/opencontainers/distribution-spec/blob/4f7750b2ee7ab20238c4e866072e2178d746560b/spec.md#error-codes) distinguishes `NAME_UNKNOWN`, an unknown repository, from `MANIFEST_UNKNOWN`, an unknown manifest. Both represent absence for the authenticated image tag lookup; `UNAUTHORIZED` and `DENIED` do not. The pinned [Crane 0.22.1 error formatter](https://github.com/google/go-containerregistry/blob/v0.22.1/pkg/v1/remote/transport/error.go#L43-L70) prints a single structured error's code and message without its HTTP status. Velnor therefore binds the exact requested reference and manifest URL, accepts only those two absence codes with a bounded single-line message, and rejects other or ambiguous diagnostics. This relies on the registry's OCI error-code semantics; the Crane output does not establish that the response had a particular HTTP status.
+
+## Generator publication concurrency
+
+GitHub supports `queue: max` with `cancel-in-progress: false`, allowing up to
+100 pending runs per concurrency group. Generator publication separates main
+pushes, SDK preview tags, and reusable release calls into distinct groups; SDK
+preview publications remain serialized within their channel. See the
+[workflow concurrency reference](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#concurrency).

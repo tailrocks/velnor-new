@@ -311,7 +311,7 @@ fn internal_step_to_yaml(
         Yaml::str(commands::quote_run_arg(if job_id == FINAL_JOB_ID {
             ctx.authority_steps.required_staged_binary()
         } else {
-            &ctx.staged_binary
+            ctx.controller.path()
         })?),
     ));
     Ok(Yaml::Map(entries))

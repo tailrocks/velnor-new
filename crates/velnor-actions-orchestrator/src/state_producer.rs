@@ -11,10 +11,10 @@ use velnor_actions_contract::{
     CacheAccess, Job, JobEnv, JobTimeout, Step, StepKind, StepRole, canonical_json_bytes,
 };
 use velnor_actions_mise::PinnedTool;
+use velnor_actions_workflow_renderer::declared_task_wrapper_digest;
 use velnor_actions_workflow_renderer::state_seal::producer_steps::{
     state_payload_upload_step, state_produced_step, state_producer_outputs,
 };
-use velnor_actions_workflow_renderer::declared_task_wrapper_digest;
 use velnor_actions_workflow_renderer::state_seal::skeleton::{
     state_skeleton_restore_step, state_skeleton_step,
 };
@@ -242,10 +242,7 @@ mod tests {
         let catalog = ToolCatalog::pinned();
         let toolchain = catalog.version(PinnedTool::Rust).to_owned();
         let env = crate::matrix_step::task_step_env(&catalog, &BTreeMap::new(), true)?;
-        let steps = vec![
-            state_skeleton_step(&toolchain, ".", env)?,
-            lane(argv)?,
-        ];
+        let steps = vec![state_skeleton_step(&toolchain, ".", env)?, lane(argv)?];
         let job = Job {
             services: Vec::new(),
             outputs: BTreeMap::new(),

@@ -10,9 +10,8 @@ use crate::render::{FINAL_JOB_ID, PLAN_JOB_ID};
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CanonicalRuntimeInputs {
     plan_consumer_env: BTreeMap<String, String>,
-    report_helper_version: String,
-    staged_binary: String,
-    required_staged_binary: String,
+    controller: crate::render::ControllerLocator,
+    required_controller: crate::render::ControllerLocator,
     request_dir: String,
     checkout_uses: String,
     preseed: bool,
@@ -21,18 +20,17 @@ pub struct CanonicalRuntimeInputs {
 impl CanonicalRuntimeInputs {
     pub fn new(
         plan_consumer_env: BTreeMap<String, String>,
-        report_helper_version: String,
-        staged_binary: String,
+        controller: crate::render::ControllerLocator,
         request_dir: String,
         checkout_uses: String,
         preseed: bool,
     ) -> Result<Self, crate::RenderError> {
         validate_plan_consumer_env(&plan_consumer_env)?;
+        controller.validate()?;
         Ok(Self {
             plan_consumer_env,
-            report_helper_version,
-            required_staged_binary: staged_binary.clone(),
-            staged_binary,
+            required_controller: controller.clone(),
+            controller,
             request_dir,
             checkout_uses,
             preseed,
@@ -44,22 +42,30 @@ impl CanonicalRuntimeInputs {
     }
 
     #[must_use]
-    pub fn report_helper_version(&self) -> &str {
-        &self.report_helper_version
+    pub fn controller(&self) -> &crate::render::ControllerLocator {
+        &self.controller
     }
 
     #[must_use]
     pub fn staged_binary(&self) -> &str {
-        &self.staged_binary
+        self.controller.path()
     }
 
     pub(crate) fn with_required_helper_version(
         mut self,
         version: &str,
     ) -> Result<Self, crate::RenderError> {
-        let staged = format!("{}{version}", crate::steps::STAGED_BINARY_PREFIX);
-        crate::guard::validate_staged_binary(&staged, version)?;
-        self.required_staged_binary = staged;
+        if self.controller.pinned_version().is_none() {
+            return Err(crate::RenderError::InvalidWorkflow(
+                "pinned_required_helper_for_dispatch_controller".to_owned(),
+            ));
+        }
+        let controller = crate::render::ControllerLocator::PinnedRelease {
+            version: version.to_owned(),
+            path: format!("{}{version}", crate::steps::STAGED_BINARY_PREFIX),
+        };
+        controller.validate()?;
+        self.required_controller = controller;
         Ok(self)
     }
 
@@ -97,7 +103,7 @@ struct CanonicalAuthorityJobs {
 
 impl CanonicalAuthoritySteps {
     pub(crate) fn required_staged_binary(&self) -> &str {
-        &self.runtime.required_staged_binary
+        self.runtime.required_controller.path()
     }
 
     pub(crate) fn from_native_jobs_inner(
@@ -157,6 +163,11 @@ impl CanonicalAuthoritySteps {
         tool_pins: Vec<String>,
         runtime: CanonicalRuntimeInputs,
     ) -> Result<Self, crate::RenderError> {
+        if policy == WorkflowPolicy::ConsumerV1 && runtime.controller.pinned_version().is_none() {
+            return Err(crate::RenderError::InvalidWorkflow(
+                "consumer_requires_pinned_controller".to_owned(),
+            ));
+        }
         let binding = crate::native_authority::AuthorityBinding::qualify_direct(
             jobs, policy, config, runner, tool_pins,
         )?;
@@ -231,8 +242,7 @@ impl CanonicalAuthoritySteps {
 
     pub(super) fn matches_runtime(&self, context: &crate::render::RenderContext) -> bool {
         self.runtime.plan_consumer_env == context.plan_consumer_env
-            && self.runtime.report_helper_version == context.report_helper_version
-            && self.runtime.staged_binary == context.staged_binary
+            && self.runtime.controller == context.controller
             && self.runtime.request_dir == context.request_dir
             && self.runtime.checkout_uses == context.checkout_uses
             && self.runtime.preseed == context.preseed

@@ -147,6 +147,7 @@ fn fixture_plan(parts: &Parts) -> Result<Plan, HelperError> {
             version: "0.1.55".to_owned(),
             target: "x86_64-unknown-linux-gnu".to_owned(),
             sha256: "6dd871a3ac5736745b77359310384c1932ce0a7f921e06207a99d6710dcd47".to_owned(),
+            preview: None,
         },
         packages: Vec::new(),
         obligations: vec![PlanObligation {

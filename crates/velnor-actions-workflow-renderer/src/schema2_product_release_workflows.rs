@@ -75,14 +75,23 @@ pub(super) fn reusable_workflow_call(family: Family) -> (String, Yaml) {
 }
 
 pub(super) fn family_document_for_call(family: Family, jobs: Vec<(String, Yaml)>) -> Yaml {
-    let mut jobs_with_authority = vec![caller_validation_job()];
+    let mut caller = caller_validation_job();
+    if family == Family::Generator
+        && let Yaml::Map(fields) = &mut caller.1
+    {
+        fields.push((
+                "if".to_owned(),
+                Yaml::str("${{ github.event_name != 'push' || (github.workflow_ref != 'tailrocks/velnor-new/.github/workflows/product-release-generator.yml@refs/heads/main' && !startsWith(github.workflow_ref, 'tailrocks/velnor-new/.github/workflows/product-release-generator.yml@refs/tags/sdk-preview-')) }}"),
+            ));
+    }
+    let mut jobs_with_authority = vec![caller];
     jobs_with_authority.extend(jobs);
-    Yaml::Map(vec![
+    let mut document = vec![
         (
             "name".to_owned(),
             Yaml::str(format!("{} release jobs", family.label())),
         ),
-        ("on".to_owned(), workflow_call_trigger()),
+        ("on".to_owned(), family_triggers(family)),
         (
             "permissions".to_owned(),
             Yaml::Map(vec![("contents".to_owned(), Yaml::str("read"))]),
@@ -121,7 +130,43 @@ pub(super) fn family_document_for_call(family: Family, jobs: Vec<(String, Yaml)>
             ]),
         ),
         ("jobs".to_owned(), Yaml::Map(jobs_with_authority)),
+    ];
+    if family == Family::Generator {
+        document.push(("concurrency".to_owned(), generator_concurrency()));
+    }
+    Yaml::Map(document)
+}
+
+fn generator_concurrency() -> Yaml {
+    Yaml::Map(vec![
+        (
+            "group".to_owned(),
+            Yaml::str(
+                "${{ github.repository }}-generator-${{ github.event_name }}-${{ startsWith(github.ref, 'refs/tags/sdk-preview-') && 'sdk-preview' || github.ref }}",
+            ),
+        ),
+        ("cancel-in-progress".to_owned(), Yaml::Bool(false)),
+        ("queue".to_owned(), Yaml::str("max")),
     ])
+}
+
+fn family_triggers(family: Family) -> Yaml {
+    let mut triggers = workflow_call_trigger();
+    if family == Family::Generator
+        && let Yaml::Map(fields) = &mut triggers
+    {
+        fields.push((
+            "push".to_owned(),
+            Yaml::Map(vec![
+                ("branches".to_owned(), Yaml::Seq(vec![Yaml::str("main")])),
+                (
+                    "tags".to_owned(),
+                    Yaml::Seq(vec![Yaml::str("sdk-preview-*")]),
+                ),
+            ]),
+        ));
+    }
+    triggers
 }
 
 fn caller_validation_job() -> (String, Yaml) {

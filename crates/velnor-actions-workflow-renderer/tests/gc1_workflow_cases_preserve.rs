@@ -129,6 +129,7 @@ fn plan_with(dispositions: &[(&str, JobDisposition)]) -> Plan {
             version: "0.1.55".to_owned(),
             target: "x86_64-unknown-linux-gnu".to_owned(),
             sha256: "0".repeat(64),
+            preview: None,
         },
         packages: Vec::new(),
         obligations: vec![PlanObligation {

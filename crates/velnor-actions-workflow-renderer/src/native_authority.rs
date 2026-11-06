@@ -235,8 +235,10 @@ fn runtime(
     }
     crate::render::CanonicalRuntimeInputs::new(
         env,
-        version.to_owned(),
-        format!("{}{version}", crate::steps::STAGED_BINARY_PREFIX),
+        crate::render::ControllerLocator::PinnedRelease {
+            version: version.to_owned(),
+            path: format!("{}{version}", crate::steps::STAGED_BINARY_PREFIX),
+        },
         "${{ runner.temp }}/velnor/request".to_owned(),
         crate::steps::CHECKOUT_USES.to_owned(),
         false,

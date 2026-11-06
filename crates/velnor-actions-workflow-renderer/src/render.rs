@@ -16,6 +16,9 @@ mod execution_boundaries;
 #[path = "render_authority_steps.rs"]
 mod authority_steps;
 pub use authority_steps::{CanonicalAuthoritySteps, CanonicalRuntimeInputs};
+#[path = "controller_locator.rs"]
+mod controller_locator;
+pub use controller_locator::{ControllerLocator, PROTECTED_BASE_CONTROLLER_PATH};
 
 use execution_boundaries::ValidationPhase;
 
@@ -243,7 +246,7 @@ fn merged_jobs(
     support::check_candidate_invariants(&jobs)?;
     support::check_final_gate(&jobs)?;
     crate::required_gate::check_required_gate(&jobs)?;
-    support::check_token_hygiene(&jobs, &ctx.report_helper_version)?;
+    support::check_token_hygiene(&jobs, ctx.controller.require_pinned_version()?)?;
     Ok(jobs)
 }
 
@@ -275,7 +278,7 @@ fn render_merged(
         &jobs,
         &ctx.checkout_uses,
         &ctx.generator_version,
-        &ctx.report_helper_version,
+        ctx.controller.require_pinned_version()?,
         &ctx.workflow_tasks,
         ctx.bun_lane_plan.as_ref(),
         ctx.scale_set_selector.as_ref(),

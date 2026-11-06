@@ -119,6 +119,8 @@ mod non_inputs_selection;
 mod one_job_per_crate;
 #[path = "workflow_configuration_public/parallel_owners.rs"]
 mod parallel_owners;
+#[path = "workflow_configuration_public/preview_gh_lane.rs"]
+mod preview_gh_lane;
 #[path = "workflow_configuration_public/release_bun_prerequisite.rs"]
 mod release_bun_prerequisite;
 #[path = "workflow_configuration_public/report_upload.rs"]
@@ -127,6 +129,8 @@ mod report_upload;
 mod rust_tree_pin_jobs;
 #[path = "workflow_configuration_public/rust_tree_pin_rendered.rs"]
 mod rust_tree_pin_rendered;
+#[path = "workflow_configuration_public/scoped_check_selection.rs"]
+mod scoped_check_selection;
 #[path = "workflow_configuration_public/scoped_workspace.rs"]
 mod scoped_workspace;
 #[path = "workflow_configuration_public/seed_ids.rs"]

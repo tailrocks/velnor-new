@@ -23,8 +23,18 @@ mod manifest;
 mod qualification;
 #[path = "schema2_generator_release_source.rs"]
 mod source;
+#[path = "schema2_generator_source_preview.rs"]
+mod source_preview;
+#[path = "schema2_generator_source_preview_publication.rs"]
+mod source_preview_publication;
 #[path = "schema2_generator_release_workflow_steps.rs"]
 mod workflow_steps;
+
+pub(super) fn source_preview_jobs(
+    pins: &ProductReleasePins,
+) -> Result<Vec<(String, Yaml)>, RenderError> {
+    source_preview::jobs(pins)
+}
 
 pub(super) struct GeneratorRelease {
     pub workflow: Yaml,

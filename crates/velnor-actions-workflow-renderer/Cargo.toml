@@ -70,3 +70,15 @@ workspace = true
 [[test]]
 name = "crate_release_version_public"
 path = "tests/crate_release_version_public.rs"
+
+[[test]]
+name = "source_preview_bootstrap_public"
+path = "tests/source_preview_bootstrap_public.rs"
+
+[[test]]
+name = "source_preview_crypto_public"
+path = "tests/source_preview_crypto_public.rs"
+
+[[test]]
+name = "source_preview_exec_public"
+path = "tests/source_preview_exec_public.rs"

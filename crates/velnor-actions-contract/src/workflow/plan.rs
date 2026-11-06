@@ -93,6 +93,23 @@ pub struct PlanGenerator {
     pub target: String,
 
     pub sha256: String,
+
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub preview: Option<PlanPreviewIdentity>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PlanPreviewIdentity {
+    pub channel: PlanPreviewChannel,
+    pub source_sha: String,
+    pub receipt_sha256: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum PlanPreviewChannel {
+    SourcePreview,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -169,6 +186,23 @@ impl Plan {
         validate_run_key(&self.run_key)?;
         if plan_id_for_run(&self.run_key)? != self.plan_id {
             return Err(ContractError::identity("plan_id", "plan_mismatch"));
+        }
+        if let Some(preview) = &self.generator.preview {
+            let valid_hex = |value: &str, length: usize| {
+                value.len() == length
+                    && value
+                        .bytes()
+                        .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+            };
+            if !valid_hex(&preview.source_sha, 40)
+                || !valid_hex(&preview.receipt_sha256, 64)
+                || preview.source_sha == self.head
+            {
+                return Err(ContractError::identity(
+                    "generator.preview",
+                    "invalid_preview_identity",
+                ));
+            }
         }
         super::qualification_dispatch::validate_plan_qualification(self)?;
         self.runner.validate()?;

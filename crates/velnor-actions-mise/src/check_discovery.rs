@@ -78,6 +78,7 @@ pub fn discover_preview_producer(
             container: None,
         },
         inputs: producer.inputs.clone(),
+        selection: velnor_actions_contract::config::CheckSelection::default(),
         tools: producer.tools.clone(),
         system_tools: producer.system_tools.clone(),
         evidence: None,

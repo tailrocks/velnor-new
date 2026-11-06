@@ -110,6 +110,15 @@ pub fn render_staged_tree_with(
     prep: &GenerationPreparation,
     dispatch: Option<ExecutionMode>,
 ) -> Result<RenderedTree, OrchestratorError> {
+    if prep.config.checks.iter().any(|check| {
+        check.selection == velnor_actions_contract::config::CheckSelection::DeclaredInputs
+    }) {
+        return Err(OrchestratorError::config(
+            ".velnor/config.toml",
+            "checks.selection",
+            "declared_inputs_requires_approved_preview_controller",
+        ));
+    }
     let tree = render_all(prep, dispatch)?;
     check_tree_paths(&tree)?;
     Ok(tree)

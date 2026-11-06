@@ -65,7 +65,7 @@ private_mods!(prepare, preseed_manifest);
 private_mods!(preview_producer, product_release_pins);
 private_mods!(provenance, publish_emit);
 private_mods!(publish_release_steps, publish_steps);
-private_mods!(qualification_candidate);
+private_mods!(qualification_candidate, selected_preview_identity);
 private_mods!(qualification_resolver);
 private_mods!(qualify, recommendations);
 private_mods!(release_checkouts, release_emit);

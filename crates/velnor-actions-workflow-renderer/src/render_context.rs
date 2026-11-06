@@ -44,10 +44,9 @@ pub const ALINT_USES: &str = "asamarts/alint@d61e4c802b02ac811224b35c59a62cfe517
 pub struct RenderContext {
     pub authority_steps: super::CanonicalAuthoritySteps,
     pub generator_version: String,
-    pub report_helper_version: String,
+    pub controller: super::ControllerLocator,
     pub runs_on: String,
     pub scale_set_selector: Option<ScaleSetSelector>,
-    pub staged_binary: String,
     pub request_dir: String,
     pub checkout_uses: String,
     pub validator_commands: Vec<ValidatorCommand>,
@@ -79,9 +78,8 @@ impl RenderContext {
     pub fn validate(&self) -> Result<(), RenderError> {
         self.validate_runtime_authority()?;
         marker::validate_version(&self.generator_version)?;
-        marker::validate_version(&self.report_helper_version)?;
+        self.controller.validate()?;
         guard::validate_runs_on(&self.runs_on)?;
-        guard::validate_staged_binary(&self.staged_binary, &self.report_helper_version)?;
         guard::validate_request_dir(&self.request_dir)?;
         steps::checkout_step(&self.checkout_uses).map(|_| ())?;
         for command in &self.validator_commands {

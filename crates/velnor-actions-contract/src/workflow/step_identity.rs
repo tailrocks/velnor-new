@@ -90,6 +90,8 @@ pub enum StepRole {
 
     PreparePinnedTools,
 
+    PrepareRuntimeTools,
+
     PrepareRustComponents,
 
     VerifyRustManifest,
@@ -274,6 +276,7 @@ impl StepRole {
             Self::Checkout => valid_checkout_payload(kind),
             Self::ToolSeed => valid_tool_seed_payload(kind),
             Self::MiseSetup => valid_mise_setup(kind),
+            Self::PrepareRuntimeTools => Self::valid_runtime_tools(kind),
             Self::TofuProviderUse => super::step_protocol::valid_provider_use(kind),
             Self::PlanProducer => internal_operation(kind, "plan-v1"),
             Self::FetchReports => internal_operation(kind, "fetch-reports-v1"),

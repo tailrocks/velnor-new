@@ -109,8 +109,8 @@ pub use permissions::{PermissionLevel, Permissions};
 pub use plan::{
     DYNAMIC_MATRIX_OUTPUT_MODE, JobDisposition, MatrixEntry, ObligationDecision,
     PLAN_MATRIX_OUTPUT_MODE_ENV, Plan, PlanGenerator, PlanJob, PlanMatrix, PlanObligation,
-    PlanPackage, PlanRunner, WorkflowEvent, plan_skips_work, selects_affected_work,
-    validate_matrix_run,
+    PlanPackage, PlanPreviewChannel, PlanPreviewIdentity, PlanRunner, WorkflowEvent,
+    plan_skips_work, selects_affected_work, validate_matrix_run,
 };
 pub use platform::{
     PlannedPlatform, PlannedRunnerEnvironment, PlatformBinding, PlatformRunnerEnvironment,

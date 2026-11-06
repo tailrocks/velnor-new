@@ -18,6 +18,9 @@ use velnor_actions_workflow_renderer::render::{
 };
 use velnor_actions_workflow_renderer::steps::{REQUEST_DIR_PREFIX, STAGED_BINARY_PREFIX};
 
+#[path = "controller_locator_public.rs"]
+mod controller_locator_public;
+
 fn fail(message: &str) -> Box<dyn Error> {
     io::Error::other(message).into()
 }
@@ -49,9 +52,9 @@ fn native_check_step(check_id: &str, task_id: &str) -> Step {
 fn native_check_job(step: Step) -> Job {
     Job {
         display_name: "Native check".to_owned(),
-        runs_on: "ubuntu-24.04".to_owned(),
+        runs_on: "ubuntu-26.04".to_owned(),
         check_runner: Some(CheckRunner {
-            label: "ubuntu-24.04".to_owned(),
+            label: "ubuntu-26.04".to_owned(),
             platform: CheckPlatform::LinuxX64,
             executor: CheckExecutor::Hosted,
             container: None,
@@ -86,8 +89,10 @@ fn context(jobs: &BTreeMap<String, Job>) -> Result<RenderContext, Box<dyn Error>
     let config = repository_config()?;
     let runtime = CanonicalRuntimeInputs::new(
         plan_env(),
-        env!("CARGO_PKG_VERSION").to_owned(),
-        format!("{STAGED_BINARY_PREFIX}{}", env!("CARGO_PKG_VERSION")),
+        velnor_actions_workflow_renderer::render::ControllerLocator::PinnedRelease {
+            version: env!("CARGO_PKG_VERSION").to_owned(),
+            path: format!("{STAGED_BINARY_PREFIX}{}", env!("CARGO_PKG_VERSION")),
+        },
         format!("{REQUEST_DIR_PREFIX}request"),
         "actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683".to_owned(),
         false,
@@ -97,7 +102,7 @@ fn context(jobs: &BTreeMap<String, Job>) -> Result<RenderContext, Box<dyn Error>
         jobs,
         WorkflowPolicy::ConsumerV1,
         &config,
-        "ubuntu-24.04",
+        "ubuntu-26.04",
         Vec::new(),
         runtime,
     )
@@ -106,10 +111,12 @@ fn context(jobs: &BTreeMap<String, Job>) -> Result<RenderContext, Box<dyn Error>
         bun_lane_plan: None,
         authority_steps,
         generator_version: env!("CARGO_PKG_VERSION").to_owned(),
-        report_helper_version: env!("CARGO_PKG_VERSION").to_owned(),
-        runs_on: "ubuntu-24.04".to_owned(),
+        controller: velnor_actions_workflow_renderer::render::ControllerLocator::PinnedRelease {
+            version: env!("CARGO_PKG_VERSION").to_owned(),
+            path: format!("{STAGED_BINARY_PREFIX}{}", env!("CARGO_PKG_VERSION")),
+        },
+        runs_on: "ubuntu-26.04".to_owned(),
         scale_set_selector: None,
-        staged_binary: format!("{STAGED_BINARY_PREFIX}{}", env!("CARGO_PKG_VERSION")),
         request_dir: format!("{REQUEST_DIR_PREFIX}request"),
         checkout_uses: "actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683".to_owned(),
         validator_commands: Vec::new(),

@@ -100,6 +100,7 @@ pub fn merge_internal_with_context(
         }
         return encode_report(&diagnostic_without_plan(&request, tokens)?);
     };
+    crate::selected_preview_identity::check(&plan.generator, context.preview_identity())?;
     let final_report = build_final(&request, plan, context)?;
     final_report.validate().map_err(internal_contract)?;
     encode_report(&final_report)

@@ -234,7 +234,8 @@ fn build_plan(
         clippy::needless_option_as_deref,
         reason = "the original Option must remain available after this call"
     )]
-    let generator = default_generator_with_phase_timings(timings.as_deref_mut());
+    let mut generator = default_generator_with_phase_timings(timings.as_deref_mut());
+    crate::selected_preview_identity::bind_ambient(&mut generator)?;
     let snapshot = ExecutionSnapshot::build(discovery);
     let job_owners = crate::crate_job_ids::JobOwners::new(&discovery.proposals)?;
     let mut reads = velnor_actions_tofu::FileCache::new();

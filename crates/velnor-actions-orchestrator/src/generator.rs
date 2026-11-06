@@ -16,10 +16,13 @@ pub(crate) fn current_exe_sha256_with_phase_timings(
         phases.generator_sha_calls += 1;
     }
     let started = phases.as_ref().map(|_| Instant::now());
-    let digest = std::env::current_exe()
+    #[cfg(target_os = "linux")]
+    let bytes = std::fs::read("/proc/self/exe").ok();
+    #[cfg(not(target_os = "linux"))]
+    let bytes = std::env::current_exe()
         .ok()
-        .and_then(|exe| std::fs::read(exe).ok())
-        .map(|bytes| sha256_hex(&bytes));
+        .and_then(|exe| std::fs::read(exe).ok());
+    let digest = bytes.map(|bytes| sha256_hex(&bytes));
     #[expect(
         clippy::needless_option_as_deref,
         reason = "the original Option must remain available after this branch"

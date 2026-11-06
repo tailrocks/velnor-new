@@ -95,7 +95,7 @@ pub(crate) fn build_workflow_for_consumer_release(
         })
     {
         let check = velnor_actions_workflow_renderer::closure::freshness_step_with_claude_mode(
-            &context.staged_binary,
+            context.controller.path(),
             velnor_actions_workflow_renderer::closure::FRESHNESS_OUTDIR,
             &context.plan_consumer_env,
             input.config.agents.claude_md,

@@ -305,7 +305,11 @@ pub(crate) fn insert_plan_closure(
             .iter()
             .any(|step| step.role == Some(StepRole::CheckGenerated))
     {
-        let check = freshness_step(&ctx.staged_binary, FRESHNESS_OUTDIR, &ctx.plan_consumer_env)?;
+        let check = freshness_step(
+            ctx.controller.path(),
+            FRESHNESS_OUTDIR,
+            &ctx.plan_consumer_env,
+        )?;
         plan.steps.insert(at, check);
     }
     let Some(at) = plan.steps.iter().position(|step| {
