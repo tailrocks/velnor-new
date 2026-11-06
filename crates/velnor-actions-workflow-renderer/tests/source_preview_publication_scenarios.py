@@ -130,3 +130,72 @@ def symlink(root):
     file.unlink()
     file.symlink_to(root / "source-preview-metadata/source-preview-metadata.json")
 case("symlink payload", symlink, True)
+
+
+class ProtocolNetwork(ExternalNetwork):
+    mutate = None
+
+    def __init__(self, host, **kwargs):
+        self.host = host
+        self.response = None
+
+    def request(self, method, path, body=None, headers=None):
+        if self.host == "uploads.github.com":
+            assert method == "POST" and headers["Authorization"] == "Bearer fixture-token"
+            name = path.split("?name=", 1)[1]
+            asset = {"name": name, "state": "uploaded", "size": len(body), "digest": "sha256:" + publisher.digest(body)}
+            type(self).release["assets"].append(asset)
+            type(self).writes += 1
+            self.response = Response(201, asset)
+        elif method == "PATCH":
+            assert path.endswith("/releases/77") and json.loads(body) == {"draft": False}
+            type(self).writes += 1
+            type(self).release["draft"] = False
+            type(self).release["immutable"] = True
+            if self.mutate == "missing":
+                type(self).release["assets"].pop()
+            elif self.mutate == "changed":
+                type(self).release["assets"][0]["digest"] = "sha256:" + "f" * 64
+            self.response = Response(200, type(self).release)
+        else:
+            super().request(method, path, body, headers)
+
+
+publisher.http.client.HTTPSConnection = ProtocolNetwork
+payload = b"qualified-payload"
+receipt = dict(metadata, release_id=77, payload={"target": "x86_64-unknown-linux-gnu", "name": publisher.PAYLOAD, "size": len(payload), "sha256": publisher.digest(payload)})
+receipt_bytes = publisher.canonical(receipt)
+bundle = b"prevalidated bundle fixture"
+
+
+def protocol_case(mutate=None, published=False, partial=False, reject=False, corrupt_partial=False):
+    ProtocolNetwork.release = {"id": 77, "tag_name": metadata["tag"], "body": "velnor-source-preview:30:1:" + source, "draft": not published, "prerelease": True, "immutable": published, "assets": []}
+    ProtocolNetwork.writes = 0
+    ProtocolNetwork.mutate = mutate
+    expected = {publisher.RECEIPT: receipt_bytes, publisher.BUNDLE: bundle, publisher.PAYLOAD: payload}
+    if partial or published:
+        for name, data in list(expected.items())[:1 if partial else 3]:
+            ProtocolNetwork.release["assets"].append({"name": name, "state": "uploaded", "size": len(data), "digest": "sha256:" + publisher.digest(data)})
+    if published and mutate:
+        ProtocolNetwork.release["assets"].pop()
+    if corrupt_partial:
+        ProtocolNetwork.release["assets"][0]["digest"] = "sha256:" + "f" * 64
+    try:
+        publisher.publish_verified(publisher.GitHub(), metadata, receipt, receipt_bytes, bundle, payload)
+    except ValueError:
+        assert reject
+    else:
+        assert not reject
+        assert ProtocolNetwork.release["immutable"] is True
+        assert publisher.existing_assets(ProtocolNetwork.release, expected) == set(expected)
+    if published or corrupt_partial:
+        assert ProtocolNetwork.writes == 0
+
+
+protocol_case()
+protocol_case(partial=True)
+protocol_case(partial=True, corrupt_partial=True, reject=True)
+protocol_case(mutate="missing", reject=True)
+protocol_case(mutate="changed", reject=True)
+protocol_case(published=True)
+protocol_case(published=True, mutate="missing", reject=True)

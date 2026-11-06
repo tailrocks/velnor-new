@@ -20,6 +20,7 @@ spec = importlib.util.spec_from_file_location("sdk_tag_create", program)
 p = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(p)
 source = "a" * 40
+trusted_revision = "d" * 40
 tag = "sdk-preview-" + source
 repo = p.REPOSITORY
 prefix = "/repos/" + repo
@@ -70,6 +71,7 @@ class Network:
     writes = []
     archive_data = b""
     downloaded = False
+    candidate_code_reads = 0
     def __init__(self, host, **_):
         self.host = host
         self.sock = None
@@ -109,9 +111,17 @@ class Network:
             value = {"id": 24397132, "target": "tag", "enforcement": "active", "bypass_actors": [], "conditions": {"ref_name": {"include": ["~ALL"], "exclude": []}}, "rules": [{"type": "update"}, {"type": "deletion"}]}
         elif path == prefix + "/compare/" + source + "..." + source:
             value = {"status": "identical", "merge_base_commit": {"sha": source}}
+        elif path == prefix + "/compare/" + trusted_revision + "..." + source:
+            value = {"status": "diverged" if self.variant == "untrusted-revision" else "ahead", "merge_base_commit": {"sha": trusted_revision}}
         elif "/contents/crates/velnor-actions-workflow-renderer/src/" in path:
             name = path.split("/src/", 1)[1].split("?", 1)[0]
-            value = {"path": "crates/velnor-actions-workflow-renderer/src/" + name, "encoding": "base64", "content": base64.b64encode((program.parent / name).read_bytes()).decode()}
+            if path.endswith("?ref=" + source):
+                type(self).candidate_code_reads += 1
+                code = b"raise RuntimeError('candidate Python executed in tag authority')\n"
+            else:
+                assert path.endswith("?ref=" + trusted_revision)
+                code = (program.parent / name).read_bytes()
+            value = {"path": "crates/velnor-actions-workflow-renderer/src/" + name, "encoding": "base64", "content": base64.b64encode(code).decode()}
         elif path == prefix + "/contents/Cargo.toml?ref=" + source:
             value = {"path": "Cargo.toml", "encoding": "base64", "content": base64.b64encode(b'[workspace.package]\nversion="0.1.75"\n').decode()}
         elif "/actions/workflows/" in path:
@@ -165,9 +175,10 @@ with tempfile.TemporaryDirectory() as temporary:
     (Path(temporary) / "hosts.yml").write_text("github.com:\n  oauth_token: fixture-token\n  user: fixture\n")
     os.environ["GH_CONFIG_DIR"] = temporary
     gh = pinned_gh()
-    for variant in ("valid", "owner", "main", "rules", "rules-recheck", "producer", "payload-invalid", "producer-race", "artifact", "archive-digest", "existing", "immutable", "immutable-recheck", "ref-race", "post-ref-error", "stale"):
+    for variant in ("valid", "owner", "main", "untrusted-revision", "self-authority", "invalid-authority", "rules", "rules-recheck", "producer", "payload-invalid", "producer-race", "artifact", "archive-digest", "existing", "immutable", "immutable-recheck", "ref-race", "post-ref-error", "stale"):
         Network.variant, Network.object, Network.reference = variant, None, None
         Network.downloaded = False
+        Network.candidate_code_reads = 0
         Network.archive_data = archive(invalid=variant == "payload-invalid")
         Network.immutable_reads, Network.reference_reads, Network.rules_reads, Network.writes = 0, 0, 0, []
         clock_reads = [0]
@@ -177,12 +188,13 @@ with tempfile.TemporaryDirectory() as temporary:
             return datetime(2026, 11, 6, 0, 0, 0, tzinfo=timezone.utc) + timedelta(seconds=offset)
         p.now_utc = fixture_now
         try:
-            p.create(source, gh)
+            selected_authority = source if variant == "self-authority" else "main" if variant == "invalid-authority" else trusted_revision
+            p.create(source, gh, selected_authority)
         except (ValueError, OSError, KeyError, TypeError):
-            assert variant != "valid", "authorized tag was rejected"
+            assert variant not in ("valid", "producer-race"), "authorized tag was rejected"
         else:
-            assert variant == "valid", variant + " was accepted"
-        if variant == "valid":
+            assert variant in ("valid", "producer-race"), variant + " was accepted"
+        if variant in ("valid", "producer-race"):
             assert Network.reference == {"ref": "refs/tags/" + tag, "sha": "b" * 40}
             message = Network.object["message"]
             record = json.loads(message)
@@ -191,3 +203,4 @@ with tempfile.TemporaryDirectory() as temporary:
             assert record["immutability"] == {"enabled": True, "checked_at": "2026-11-06T00:00:00Z"}
         else:
             assert Network.reference is None, variant + " created a tag ref"
+        assert Network.candidate_code_reads == 0, "candidate Python reached the token-bearing owner process"

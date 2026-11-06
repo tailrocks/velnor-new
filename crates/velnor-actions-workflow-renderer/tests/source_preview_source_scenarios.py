@@ -37,7 +37,6 @@ with zipfile.ZipFile(archive_bytes, "w") as archive:
     archive.writestr(entry, PAYLOAD)
 ARCHIVE = archive_bytes.getvalue()
 ARCHIVE_SHA = hashlib.sha256(ARCHIVE).hexdigest()
-NOW = gate.checked_time("2026-11-06T00:00:10Z")
 NAMES = {10: ["Required verdict"], 20: ["Source qualification ordinary harness",
     "Source qualification keep harness", "Source qualification generation and repository checks",
     "Source qualification"], 90: ["Build source preview", "Qualify source preview"]}
@@ -85,6 +84,9 @@ def responses():
         "payload_archive_sha256": ARCHIVE_SHA,
         "immutability": {"enabled": True, "checked_at": "2026-11-06T00:00:00Z"}}
     data = {"/users/donbeave": {"login": "donbeave", "id": 139017},
+        PREFIX + "/actions/runs/30": {"id": 30, "run_attempt": 1, "head_sha": SOURCE,
+            "head_branch": TAG, "event": "push", "path": gate.WORKFLOW,
+            "head_repository": {"full_name": gate.REPOSITORY}, "created_at": "2026-11-06T00:00:10Z"},
         TAG_PATH: {"ref": "refs/tags/" + TAG, "object": {"type": "tag", "sha": TAG_SHA}},
         OBJECT_PATH: {"sha": TAG_SHA, "tag": TAG, "message": json.dumps(proof, sort_keys=True, separators=(",", ":")),
             "tagger": {"date": "2026-11-06T00:00:05Z"},
@@ -134,7 +136,7 @@ def admitted(values, reject=False, moved=False, downloads=0):
     with tempfile.TemporaryDirectory() as temporary:
         os.environ["RUNNER_TEMP"] = str(Path(temporary).resolve())
         try:
-            value = gate.admit(GitHubFixture(values, moved), NOW)
+            value = gate.admit(GitHubFixture(values, moved))
         except (ValueError, KeyError, OSError):
             if not reject:
                 raise
@@ -175,10 +177,29 @@ for record_path, field, bad in [(TAG_PATH, "object", {"type": "commit", "sha": S
     (OBJECT_PATH, "tag", "preview-" + SOURCE),
     (PREFIX + "/rulesets/26696396", "enforcement", "disabled"),
     (PREFIX + "/rulesets/24397132", "rules", [{"type": "update"}]),
-    (PREFIX + "/actions/runs/90", "run_attempt", 3)]:
+    (PREFIX + "/actions/runs/90/attempts/2", "conclusion", "failure"),
+    (PREFIX + "/actions/runs/30", "head_sha", "f" * 40)]:
     values = responses()
     values[record_path][field] = bad
     admitted(values, reject=True)
+values = responses()
+values[PREFIX + "/actions/runs/90"] = dict(values[PREFIX + "/actions/runs/90"], run_attempt=3)
+inventory = values[PREFIX + "/actions/runs/90/artifacts?per_page=100"]
+inventory["artifacts"].append(dict(inventory["artifacts"][0], id=701,
+    name="source-preview-payload-3", digest="sha256:" + "f" * 64))
+inventory["total_count"] = 2
+admitted(values)
+values = responses()
+values[PREFIX + "/actions/runs/30"]["run_attempt"] = 2
+os.environ["GITHUB_RUN_ATTEMPT"] = "2"
+admitted(values)
+os.environ["GITHUB_RUN_ATTEMPT"] = "1"
+values = responses()
+values[PREFIX + "/actions/runs/90/artifacts?per_page=100"]["artifacts"][0]["expired"] = True
+admitted(values, reject=True)
+values = responses()
+values[PREFIX + "/actions/runs/30"]["created_at"] = "2026-11-06T00:20:00Z"
+admitted(values, reject=True)
 for path in [key for key in responses() if "/jobs?" in key]:
     for mode in ("failed", "missing", "duplicate_name", "duplicate_id", "truncated", "wrong_source"):
         values = responses()

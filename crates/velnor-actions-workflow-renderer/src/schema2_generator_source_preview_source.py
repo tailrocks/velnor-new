@@ -143,9 +143,6 @@ def producer_artifact(client, source, run_id, attempt):
             or run.get("path", "").split("@", 1)[0] != WORKFLOW
             or run.get("head_repository", {}).get("full_name") != REPOSITORY):
         raise ValueError("SDK preview main producer identity")
-    latest = client.get(path)
-    if latest.get("run_attempt") != attempt or latest.get("conclusion") != "success":
-        raise ValueError("SDK preview producer attempt changed")
     verify_jobs(client, run, ("Build source preview", "Qualify source preview"))
     inventory = client.get(path + "/artifacts?per_page=100")
     artifacts = inventory.get("artifacts")
@@ -196,11 +193,9 @@ def producer_inputs(client, source):
             "payload_artifact_id": artifact["id"], "payload_archive_sha256": artifact["digest"][7:]}
 
 
-def admit(client, now=None):
+def admit(client):
     source = os.environ["GITHUB_SHA"]
-    proof, tag_sha, expected_ref = admit_tag(
-        client, source, now or datetime.now(timezone.utc)
-    )
+    proof, tag_sha, expected_ref = admit_tag(client, source)
     version = source_version(client, source)
     if version != proof["version"]:
         raise ValueError("SDK preview tag version mismatch")

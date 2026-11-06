@@ -100,11 +100,11 @@ def verified_gh(path, target):
     target.chmod(0o500)
 
 
-def authority(client, source):
+def authority(client, trusted_revision):
     root = "/repos/" + REPOSITORY + "/contents/crates/velnor-actions-workflow-renderer/src/"
     namespace = {"__name__": "protected_source_authority"}
     for name in ("schema2_generator_source_preview_artifact.py", "schema2_generator_source_preview_tag.py", "schema2_generator_source_preview_source.py"):
-        value = client.get(root + name + "?ref=" + source)
+        value = client.get(root + name + "?ref=" + trusted_revision)
         require(value.get("path") == "crates/velnor-actions-workflow-renderer/src/" + name and value.get("encoding") == "base64")
         code = base64.b64decode(value["content"], validate=False)
         require(len(code) <= 1048576)
@@ -121,10 +121,11 @@ def check_main(client, source):
     require(value.get("object", {}).get("type") == "commit" and value.get("object", {}).get("sha") == source)
 
 
-def create(source, gh):
+def create(source, gh, trusted_revision):
     signal.signal(signal.SIGALRM, lambda *_: (_ for _ in ()).throw(TimeoutError("SDK preview tag deadline")))
     signal.setitimer(signal.ITIMER_REAL, 300)
     require(re.fullmatch("[0-9a-f]{40}", source) is not None)
+    require(re.fullmatch("[0-9a-f]{40}", trusted_revision) is not None and trusted_revision != source)
     with tempfile.TemporaryDirectory(prefix="velnor-preview-tag-") as temporary:
         executable = Path(temporary).resolve() / "gh"
         verified_gh(gh, executable)
@@ -137,7 +138,9 @@ def create(source, gh):
         user = client.get("/user")
         require(user.get("id") == 139017 and user.get("login") == "donbeave")
         check_main(client, source)
-        gate = authority(client, source)
+        ancestry = client.get("/repos/" + REPOSITORY + "/compare/" + trusted_revision + "..." + source)
+        require(ancestry.get("status") == "ahead" and ancestry.get("merge_base_commit", {}).get("sha") == trusted_revision)
+        gate = authority(client, trusted_revision)
         gate["verify_tag_rules"](client)
         gate["verify_default_ancestry"](client, source)
         version = gate["source_version"](client, source)
@@ -175,8 +178,8 @@ def create(source, gh):
 
 if __name__ == "__main__":
     try:
-        require(len(sys.argv) == 4 and sys.argv[1] == "create")
-        create(sys.argv[2], sys.argv[3])
+        require(len(sys.argv) == 5 and sys.argv[1] == "create")
+        create(sys.argv[2], sys.argv[3], sys.argv[4])
     except (OSError, ValueError, KeyError, TypeError, TimeoutError, http.client.HTTPException, subprocess.SubprocessError):
         print("SDK preview tag precheck failed", file=sys.stderr)
         sys.exit(1)

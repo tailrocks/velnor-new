@@ -28,6 +28,13 @@ creation to that account and prohibit updates and deletion. Before creating a
 tag, the owner verifies repository release immutability through GitHub's
 administration API. The owner credential remains local.
 
+The owner runs the tag helper from an independently reviewed, protected revision
+and supplies that same revision as its verifier authority. The candidate must be
+a later commit descended from the authority. The helper loads verifier modules
+only from that authority; candidate files are data and never execute with the
+owner credential. Its arguments are `create <source-sha> <pinned-gh-path>
+<trusted-verifier-sha>`.
+
 The canonical tag annotation binds the source, package version, producer run and
 attempt, artifact ID, archive digest, and successful immutability precheck time.
 The tag authority verifies the authenticated push actor and rerun actor, the

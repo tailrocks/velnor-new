@@ -86,7 +86,7 @@ def verify_default_ancestry(client, source):
         raise ValueError("SDK preview source outside protected main")
 
 
-def admit_tag(client, source, now):
+def admit_tag(client, source):
     tag = "sdk-preview-" + source
     expected_ref = REPOSITORY + "/" + WORKFLOW + "@refs/tags/" + tag
     if (not re.fullmatch("[0-9a-f]{40}", source)
@@ -101,6 +101,15 @@ def admit_tag(client, source, now):
     owner = client.get("/users/" + OWNER_LOGIN)
     if owner.get("id") != OWNER_ID or owner.get("login") != OWNER_LOGIN:
         raise ValueError("SDK preview rerun authority")
+    run_id = positive(int(os.environ["GITHUB_RUN_ID"]))
+    attempt = positive(int(os.environ["GITHUB_RUN_ATTEMPT"]))
+    run = client.get("/repos/" + REPOSITORY + "/actions/runs/" + str(run_id))
+    if (run.get("id") != run_id or positive(run.get("run_attempt")) < attempt
+            or run.get("head_sha") != source or run.get("head_branch") != tag
+            or run.get("event") != "push" or run.get("path", "").split("@", 1)[0] != WORKFLOW
+            or run.get("head_repository", {}).get("full_name") != REPOSITORY):
+        raise ValueError("SDK preview tag run identity")
+    now = checked_time(run.get("created_at"))
     verify_tag_rules(client)
     tag_sha = tag_reference(client, source)
     value = client.get("/repos/" + REPOSITORY + "/git/tags/" + tag_sha)

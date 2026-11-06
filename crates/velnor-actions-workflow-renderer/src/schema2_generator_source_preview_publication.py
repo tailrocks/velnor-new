@@ -163,6 +163,27 @@ def verify_tag(client, source):
     require(comparison.get("status") in ("ahead", "identical") and comparison.get("merge_base_commit", {}).get("sha") == source)
 
 
+def publish_verified(client, source, receipt, receipt_bytes, bundle, payload):
+    expected = {RECEIPT: receipt_bytes, BUNDLE: bundle, PAYLOAD: payload}
+    state = client.api("GET", "/releases/" + str(positive(receipt["release_id"])))
+    if state.get("draft") is False:
+        published = release(client, receipt, False)
+        require(published.get("immutable") is True and existing_assets(published, expected) == set(expected))
+        return
+    present = existing_assets(release(client, receipt), expected)
+    for name, data in expected.items():
+        if name in present:
+            continue
+        item = client.request("POST", "uploads.github.com", "/repos/" + REPOSITORY + "/releases/" + str(receipt["release_id"]) + "/assets?name=" + name, data, "application/octet-stream", (201,))
+        require(item.get("name") == name and item.get("size") == len(data) and item.get("digest") == "sha256:" + digest(data) and item.get("state") == "uploaded")
+    item = release(client, receipt)
+    require(existing_assets(item, expected) == set(expected))
+    verify_tag(client, source["source_sha"])
+    client.api("PATCH", "/releases/" + str(receipt["release_id"]), canonical({"draft": False}), allowed=(200,))
+    published = release(client, receipt, False)
+    require(published.get("immutable") is True and existing_assets(published, expected) == set(expected))
+
+
 def main():
     signal.signal(signal.SIGALRM, lambda *_: (_ for _ in ()).throw(TimeoutError("preview publication deadline")))
     signal.setitimer(signal.ITIMER_REAL, 180)
@@ -194,23 +215,7 @@ def main():
     import source_preview_stage_verify as verifier
     preview = {"source_sha": source["source_sha"], "signer_workflow_path": WORKFLOW, "signer_run_id": source["signer"]["run_id"], "signer_run_attempt": source["signer"]["run_attempt"], "receipt_sha256": digest(receipt_bytes), "payload_name": PAYLOAD, "payload_sha256": digest(payload)}
     verifier.verify_attestation(os.environ["PREVIEW_GH"], receipt_bytes, bundle, preview, os.environ["RUNNER_TEMP"])
-    expected = {RECEIPT: receipt_bytes, BUNDLE: bundle, PAYLOAD: payload}
-    state = client.api("GET", "/releases/" + str(positive(receipt["release_id"])))
-    if state.get("draft") is False:
-        published = release(client, receipt, False)
-        require(published.get("immutable") is True and existing_assets(published, expected) == set(expected))
-        return
-    present = existing_assets(release(client, receipt), expected)
-    for name, data in expected.items():
-        if name in present:
-            continue
-        item = client.request("POST", "uploads.github.com", "/repos/" + REPOSITORY + "/releases/" + str(receipt["release_id"]) + "/assets?name=" + name, data, "application/octet-stream", (201,))
-        require(item.get("name") == name and item.get("size") == len(data) and item.get("digest") == "sha256:" + digest(data) and item.get("state") == "uploaded")
-    item = release(client, receipt)
-    require(existing_assets(item, expected) == set(expected))
-    verify_tag(client, source["source_sha"])
-    client.api("PATCH", "/releases/" + str(receipt["release_id"]), canonical({"draft": False}), allowed=(200,))
-    require(release(client, receipt, False).get("immutable") is True)
+    publish_verified(client, source, receipt, receipt_bytes, bundle, payload)
 
 
 if __name__ == "__main__":
