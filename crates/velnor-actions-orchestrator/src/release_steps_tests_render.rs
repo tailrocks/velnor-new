@@ -161,7 +161,7 @@ fn rendered_files_reject_divergent_release_intent() -> Result<(), Box<dyn std::e
     let mut wrong = intent.clone();
     wrong.recovery.as_mut().ok_or("recovery")?.version = "0.1.2".into();
     assert!(render_release_files(&spec, &ctx, &config, &wrong).is_err());
-    for (key, value) in [("generator", "0.1.99"), ("plz", "0.4.4"), ("runner", "ubuntu-26.04")] {
+    for (key, value) in [("generator", "0.1.99"), ("plz", "0.4.4"), ("runner", "ubuntu-24.04")] {
         let mut wrong = intent.clone();
         match key {
             "generator" => wrong.generator_version = value.into(),
