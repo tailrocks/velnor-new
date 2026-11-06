@@ -19,6 +19,8 @@ use crate::gc1_seal_support::{
 };
 use velnor_actions_workflow_renderer::plan_sources::state_select::{SealRoot, state_select_step};
 
+mod hex;
+
 const ROOT: &str = ".";
 const T1: &str = "2026-11-04T01:00:00Z";
 const T2: &str = "2026-11-04T02:00:00Z";
@@ -55,33 +57,7 @@ fn selector_keeps_supervisor_in_static_environment_and_loader_in_run() -> Result
     let payload = env
         .get("VELNOR_STATE_SELECT_SUPERVISOR_HEX")
         .ok_or_else(|| fail("selector supervisor environment is absent"))?;
-    if payload.len() > 49_152
-        || payload.is_empty()
-        || payload.len() % 2 != 0
-        || !payload
-            .bytes()
-            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
-    {
-        return Err(fail(
-            "selector supervisor environment is not bounded lowercase hex",
-        ));
-    }
-    let (pairs, remainder) = payload.as_bytes().as_chunks::<2>();
-    if !remainder.is_empty() {
-        return Err(fail("selector supervisor payload has an incomplete byte"));
-    }
-    let decoded = pairs
-        .iter()
-        .map(|pair| {
-            let high = char::from(pair[0])
-                .to_digit(16)
-                .ok_or_else(|| fail("bad supervisor hex"))?;
-            let low = char::from(pair[1])
-                .to_digit(16)
-                .ok_or_else(|| fail("bad supervisor hex"))?;
-            u8::try_from(high * 16 + low).map_err(|_| fail("supervisor byte is out of range"))
-        })
-        .collect::<Result<Vec<_>, Box<dyn Error>>>()?;
+    let decoded = hex::decode_supervisor_hex(payload)?;
     let source = String::from_utf8(decoded)?;
     let supervisor_file = include_str!("../src/plan_sources/state_select_supervisor.rs");
     let literal = supervisor_file
