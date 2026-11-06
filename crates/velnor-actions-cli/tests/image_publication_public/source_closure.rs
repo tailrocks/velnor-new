@@ -117,6 +117,10 @@ fn public_runner_family_rejects_drift_in_previously_omitted_copy_inputs()
 
 #[test]
 fn public_runner_family_rejects_unbound_dockerfile_context_sources() -> Result<(), Box<dyn Error>> {
+    let scenario = "source_closure::public_runner_family_rejects_unbound_dockerfile_context_sources";
+    if !super::begin_isolated(scenario)? {
+        return Ok(());
+    }
     for case in context_cases() {
         let fixture = Fixture::new_for(case.profile)?;
         let mut dockerfile = source_bytes(case.dockerfile)?;
@@ -139,6 +143,7 @@ fn public_runner_family_rejects_unbound_dockerfile_context_sources() -> Result<(
         assert!(!fixture.receipt.exists());
         assert_eq!(fixture.registry_state()?, registry_before);
     }
+    super::isolated_worker::record_success("image_publication", scenario)?;
     Ok(())
 }
 

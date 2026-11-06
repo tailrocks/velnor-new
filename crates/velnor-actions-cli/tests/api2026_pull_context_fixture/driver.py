@@ -193,6 +193,7 @@ def main():
         "required_ci::publication_requires_protected_default_branch_and_event_ref",
         "source_snapshot::rejects_untrusted_commit_snapshots_before_registry_mutation",
         "source_closure::public_runner_family_rejects_drift_in_previously_omitted_copy_inputs",
+        "source_closure::public_runner_family_rejects_unbound_dockerfile_context_sources",
     ):
         raise RuntimeError("fixture scenario does not belong to target")
     if not re.fullmatch(r"[a-z_]+(?:::[a-z_]+)*", test):
