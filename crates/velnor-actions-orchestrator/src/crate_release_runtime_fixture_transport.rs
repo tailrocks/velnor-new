@@ -76,6 +76,7 @@
         verify_test_admissions(&github)?;
         verify_test_previous_continuation(&github)?;
         verify_test_journal_refs(&journal)?;
+        verify_real_journal_continuation(&journal)?;
         Ok(())
     }
 
@@ -241,6 +242,8 @@
                 "200 OK",
                 serde_json::json!({"ok":true,"id":22,"full_name":"owner/project","owner":{"id":77,"login":"owner"},"default_branch":"main"}),
             ),
+            "GET /repos/owner/project/rulesets?targets=tag&includes_parents=true&per_page=100 HTTP/1.1" => ("200 OK", serde_json::json!([{"id":1}])),
+            "GET /repos/owner/project/rulesets/1 HTTP/1.1" => ("200 OK", serde_json::json!({"id":1,"target":"tag","enforcement":"active","bypass_actors":[],"conditions":{"ref_name":{"include":["~ALL"],"exclude":[]}},"rules":[{"type":"update","parameters":{"update_allows_fetch_and_merge":false}},{"type":"deletion"}]})),
             "GET /api/v1/crates/example HTTP/1.1" => (
                 "200 OK",
                 serde_json::json!({"crate":{"id":"example","name":"example","versions":[1]},"versions":[{"id":1,"crate":"example","num":"0.1.0","yanked":false}]}),
