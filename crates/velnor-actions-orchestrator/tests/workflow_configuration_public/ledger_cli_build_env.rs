@@ -228,22 +228,7 @@ fn assert_native_job_shape(files: &[(String, String)]) -> Result<String, Box<dyn
         env_values(&after_target.env, "CARGO_HOME"),
         ["${{ runner.temp }}/velnor/cargo"]
     );
-    let acquire = step_text(job, "Acquire approved check Mise")?;
-    for expected in [
-        "2026.10.19",
-        "3162760f40b6b5f706c60641e4ef5ee7322bc6c54f72fc26a7111b337aa18d9d",
-        "173449632",
-    ] {
-        assert!(
-            acquire.run.contains(expected),
-            "missing approved runtime {expected}"
-        );
-    }
-    let execute = step_text(job, "Execute named check")?;
-    assert_eq!(
-        env_values(&execute.env, "PATH"),
-        ["${{ runner.temp }}/velnor/check-mise/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"]
-    );
+    assert_approved_check_mise(job)?;
     for step in [
         "Build exact-source image maintenance",
         "Build locked resource probe",
@@ -258,6 +243,34 @@ fn assert_native_job_shape(files: &[(String, String)]) -> Result<String, Box<dyn
         );
     }
     Ok(job.to_owned())
+}
+
+fn assert_approved_check_mise(job: &str) -> Result<(), Box<dyn Error>> {
+    let acquire = step_text(job, "Acquire approved check Mise")?;
+    for expected in [
+        "2026.10.19",
+        "3162760f40b6b5f706c60641e4ef5ee7322bc6c54f72fc26a7111b337aa18d9d",
+        "173449632",
+    ] {
+        assert!(
+            acquire.run.contains(expected),
+            "missing approved runtime {expected}"
+        );
+    }
+    let execute = step_text(job, "Execute named check")?;
+    assert_eq!(env_values(&execute.env, "PATH"), [] as [&str; 0]);
+    for binding in [
+        "PATH=",
+        "check-mise/bin:",
+        "velnor-actions-0.1.74",
+        "-u GH_TOKEN",
+    ] {
+        assert!(
+            execute.run.contains(binding),
+            "missing execution binding {binding}"
+        );
+    }
+    Ok(())
 }
 
 #[cfg(unix)]

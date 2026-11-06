@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    ffi::OsString,
     fs::{self, File, OpenOptions},
     io::{Read, Seek, SeekFrom},
     os::unix::fs::MetadataExt,
@@ -59,10 +58,7 @@ pub(super) fn verify_remote_bytes(
     let immutable_reference = format!("{repository}@{expected_digest}");
     let remote_manifest = super::crane_run(
         docker_config,
-        vec![
-            OsString::from("manifest"),
-            OsString::from(immutable_reference),
-        ],
+        super::CraneOperation::Manifest(&immutable_reference),
         deadline,
     )?;
     if !remote_manifest.success
@@ -143,10 +139,9 @@ fn verify_blob(
         .open(&readback_path)
         .map_err(|_| internal("image_publication_readback_create"))?;
     let reference = format!("{repository}@{}", descriptor.digest);
-    let args = vec!["blob".into(), reference.into()];
     let (output, _drained) = super::crane_file(
         docker_config,
-        args,
+        &reference,
         &mut readback,
         descriptor.size,
         deadline,

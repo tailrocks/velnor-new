@@ -111,7 +111,10 @@ pub(super) fn create_runtime(
     fs::create_dir(&docker_config)?;
     fs::set_permissions(&docker_config, fs::Permissions::from_mode(0o700))?;
     let config = docker_config.join("config.json");
-    fs::write(&config, b"{}")?;
+    fs::write(
+        &config,
+        br#"{"auths":{"ghcr.io":{"auth":"Zml4dHVyZTpmaXh0dXJl"}}}"#,
+    )?;
     fs::set_permissions(config, fs::Permissions::from_mode(0o600))?;
     let bin = base.join("bin");
     fs::create_dir(&bin)?;

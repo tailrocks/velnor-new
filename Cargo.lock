@@ -1237,6 +1237,7 @@ version = "0.1.75"
 dependencies = [
  "base64",
  "flate2",
+ "httparse",
  "lzma-rust2",
  "proc-macro2",
  "rustix",

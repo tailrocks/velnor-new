@@ -22,6 +22,30 @@ pub(super) fn run(
     state: &mut Value,
     state_path: &Path,
 ) -> Result<ExitCode, Box<dyn Error>> {
+    let args = args
+        .strip_prefix(&[OsString::from("--insecure")])
+        .unwrap_or(args);
+    let local = args
+        .iter()
+        .filter_map(|arg| arg.to_str())
+        .find_map(|arg| {
+            arg.strip_prefix("127.0.0.1:")
+                .and_then(|rest| rest.split_once('/'))
+                .map(|(port, _)| format!("127.0.0.1:{port}"))
+        })
+        .ok_or("missing gateway reference")?;
+    let normalized = args
+        .iter()
+        .map(|arg| {
+            let value = arg.to_string_lossy();
+            OsString::from(
+                value
+                    .strip_prefix(&local)
+                    .map_or_else(|| value.to_string(), |rest| format!("ghcr.io{rest}")),
+            )
+        })
+        .collect::<Vec<_>>();
+    let args = normalized.as_slice();
     let command = args
         .first()
         .and_then(|arg| arg.to_str())
@@ -38,7 +62,7 @@ pub(super) fn run(
     match command {
         "push" if args.len() == 3 => push(args, state, state_path),
         "tag" if args.len() == 3 => tag(args, state, state_path),
-        "manifest" if args.len() == 2 => manifest(reference(args)?, state, state_path),
+        "manifest" if args.len() == 2 => manifest(reference(args)?, state, state_path, &local),
         "blob" if args.len() == 2 => blob(reference(args)?, state, state_path),
         other => Err(format!("unsupported crane command or argument count: {other}").into()),
     }
@@ -96,6 +120,7 @@ fn manifest(
     reference: &str,
     state: &mut Value,
     state_path: &Path,
+    local: &str,
 ) -> Result<ExitCode, Box<dyn Error>> {
     let is_source_tag = state["crane"]["tag_reference"].as_str() == Some(reference);
     let target_digest = state["crane"]["promotion_tags"][reference]
@@ -112,7 +137,7 @@ fn manifest(
             if !outcome.is_null() {
                 state["crane"]["tag_lookup_output_consumed"] = json!(true);
                 fs::write(state_path, serde_json::to_vec(state)?)?;
-                return replay(&outcome);
+                return replay(&outcome, local);
             }
         }
         if state["crane"]["tag_digest"].is_null() {
@@ -126,7 +151,8 @@ fn manifest(
             .ok_or("invalid registry reference")?;
         writeln!(
             io::stderr(),
-            "Error: fetching manifest {reference}: GET https://ghcr.io/v2/{repository}/manifests/{}: MANIFEST_UNKNOWN: manifest unknown",
+            "Error: fetching manifest {}: GET http://{local}/v2/{repository}/manifests/{}: MANIFEST_UNKNOWN: manifest unknown",
+            reference.replacen("ghcr.io", local, 1),
             reference.rsplit_once(':').map_or("", |(_, tag)| tag)
         )?;
         return Ok(ExitCode::from(1));
@@ -283,11 +309,14 @@ fn advance_tag_movement(state: &mut Value, state_path: &Path) -> Result<(), Box<
     Ok(())
 }
 
-fn replay(outcome: &Value) -> Result<ExitCode, Box<dyn Error>> {
+fn replay(outcome: &Value, local: &str) -> Result<ExitCode, Box<dyn Error>> {
     let code = u8::try_from(outcome["code"].as_u64().ok_or("missing replay exit code")?)?;
     let stdout = outcome["stdout"].as_str().ok_or("missing replay stdout")?;
     let stderr = outcome["stderr"].as_str().ok_or("missing replay stderr")?;
     io::stdout().write_all(stdout.as_bytes())?;
+    let stderr = stderr
+        .replace("https://ghcr.io/", &format!("http://{local}/"))
+        .replace("ghcr.io/", &format!("{local}/"));
     io::stderr().write_all(stderr.as_bytes())?;
     Ok(ExitCode::from(code))
 }

@@ -622,3 +622,17 @@ Ubuntu 24.04 or a moving `ubuntu-latest` label for Velnor execution. Both
 26.04 labels are generally available according to the upstream
 [runner-images announcement](https://github.com/actions/runner-images/issues/14747)
 and [runner label table](https://github.com/actions/runner-images/blob/main/README.md).
+
+## Check runtime selection after runner PATH injection
+
+GitHub Runner v2.338.0 prepends the job's accumulated `GITHUB_PATH` entries
+to a step's `PATH` before starting its process. A step-level `env.PATH`
+therefore does not make a separately acquired check runtime the first
+executable selected by the process. See
+[`Handler.AddPrependPathToEnvironment`](https://github.com/actions/runner/blob/v2.338.0/src/Runner.Worker/Handlers/Handler.cs#L190).
+
+The native image check binds the approved check Mise with `env PATH=...`
+in the execution command itself. This binding takes effect after runner PATH
+injection. It preserves the published controller and credential scrubbing,
+and applies only to that command. Subsequent image compiler and cache steps
+continue to use their current, independently verified toolchain.

@@ -110,6 +110,11 @@ pub mod local_release_manifest;
 pub(crate) mod project_tool_sources;
 pub(crate) mod rust_suites_emit;
 pub mod schedule;
+pub mod registry_gateway {
+    pub use crate::image_maintenance::{
+        RegistryGateway, RegistryIo, RegistryRequest, RegistryResponse,
+    };
+}
 pub(crate) mod task_report;
 pub(crate) mod tool_catalog_project;
 pub(crate) mod tool_catalog_resolve;

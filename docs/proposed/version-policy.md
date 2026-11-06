@@ -76,7 +76,7 @@ compiled-in Mise release record in generated workflow output.
 | Direct and transitive Rust crates | Workspace manifests, `Cargo.lock` | Newest stable graph; major updates included; all changed versions pass the full locked gate |
 | Velnor workflow bootstrap | Consumer output embeds the exact generating release version, immutable target asset URL, and binary SHA-256; Velnor dogfood validates an optional `.velnor/generator.lock`; when absent, it builds and verifies a same-source pre-seed helper | Latest qualified stable Velnor release for each supported target |
 | GitHub Actions | Compiled-in Velnor action registry; optional exact overrides in `.velnor/config.toml` | Default record is the latest reviewed stable release; workflow uses immutable full commit SHA |
-| Alint GitHub Action | Compiled-in Velnor action registry; emitted as a full-SHA pin like every other action | `v0.19.0` (`f39a25a7e061bb8738a87372561d8b9a6a29ca87`) is the current reviewed default as of 2026-10-19. No tag exception exists; changing the pin requires a reviewed Velnor version-policy update |
+| Alint GitHub Action | Compiled-in Velnor action registry; emitted as a full-SHA pin like every other action | `v0.21.1` (`1f235b300077205b05bf763f902aee274fdaccda`) is the current reviewed default as of 2026-11-06. No tag exception exists; changing the pin requires a reviewed Velnor version-policy update |
 | GitHub-hosted OS image | Generated `runs-on` label and recorded runner metadata | Latest stable supported Ubuntu image family after host qualification; exact versioned label is the pin. GitHub may update its image contents in place, so record `ImageOS` and `ImageVersion` as runtime evidence and cache identity, not as immutable pins |
 | Runner runtime inputs | `.velnor/runner.lock` | Latest qualified Docker Desktop/Engine, official runner, base-image digest, GitHub API version, protocol revision, and runner dependencies including Turso |
 
@@ -123,7 +123,7 @@ uses: jdx/mr-boxington-action@88acf2bb50552c7c508cbac13e5f8c576b95b1de # v1.7.3
 uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
 uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
 uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-uses: asamarts/alint@f39a25a7e061bb8738a87372561d8b9a6a29ca87 # v0.19.0
+uses: asamarts/alint@1f235b300077205b05bf763f902aee274fdaccda # v0.21.1
 ```
 
 Release records: [mise-action v5.2.3](https://github.com/jdx/mise-action/releases/tag/v5.2.3),
@@ -132,7 +132,7 @@ Release records: [mise-action v5.2.3](https://github.com/jdx/mise-action/release
 [mr-boxington-action v1.7.3](https://github.com/jdx/mr-boxington-action/releases/tag/v1.7.3),
 [cache v6.1.0](https://github.com/actions/cache/releases/tag/v6.1.0),
 [upload-artifact v7.0.2](https://github.com/actions/upload-artifact/releases/tag/v7.0.2),
-[Alint v0.19.0](https://github.com/asamarts/alint/releases/tag/v0.19.0).
+[Alint v0.21.1](https://github.com/asamarts/alint/releases/tag/v0.21.1).
 
 Checkout, Mise setup, cache restore/save, and artifact transfer are emitted
 where required by the workflow graph. The Mr. Boxington action is emitted only
@@ -141,15 +141,15 @@ exact-path `actions/cache` layer in every Rust mode. All references come from th
 `asamarts/alint` pin is emitted only by the separate Velnor
 repository-policy job.
 `taiki-e/install-action`, `actions/setup-*`, branch refs, unapproved tag refs,
-and floating action refs are forbidden. jactionlint v2.4.0 and ShellCheck
+and floating action refs are forbidden. jactionlint v2.5.0 and ShellCheck
 v0.11.0 are the verified stable tool defaults. Both are installed through
 Mise. `taiki-e/install-action` and other tool-installer actions are
 forbidden. V1 emits no Python run steps, so it does not install Pyflakes, and
 every jactionlint run passes `--pyflakes=` so no other `PATH` binary runs.
 
-jactionlint v2.4.0 (`jdx/jactionlint`, published 2026-10-29) is the catalog
+jactionlint v2.5.0 (`jdx/jactionlint`, published 2026-11-05) is the catalog
 pin for the workflow, composite action and Dependabot linter (checked
-2026-11-02). It installs through the Mise registry name `jactionlint`
+2026-11-06). It installs through the Mise registry name `jactionlint`
 (backend `github:jdx/jactionlint`), so the lock key, the project
 `[tools]` key and the CI install spec share one spelling; the
 `github:jdx/jactionlint` and `packslip:github.com/jdx/jactionlint` keys
@@ -177,8 +177,8 @@ and its matching stable version. Keys must be exact allowlisted action
 repositories, and the pair must appear in that action's bundled approved-pin
 catalog (latest release plus maintained compatibility pins). The Alint action
 is not a per-project override: Velnor emits exactly
-`asamarts/alint@f39a25a7e061bb8738a87372561d8b9a6a29ca87` with the binary input
-`version: v0.19.0`.
+`asamarts/alint@1f235b300077205b05bf763f902aee274fdaccda` with the binary input
+`version: v0.21.1`.
 Changing that pin is a Velnor version-policy change,
 not a consumer configuration change. Velnor validates every ordinary pair and
 the action's input/output schema before replacing generated output. Unknown
@@ -210,12 +210,12 @@ compatibility override, recorded as `config_override`. No config means the
 generator emits `default` and records `latest_default`. Unsupported or unversioned runner labels MUST block generation.
 
 Alint runs as a separate job only in Velnor's `velnor-repository-v1` profile,
-using the following action and binary pins (current as of 2026-10-19):
+using the following action and binary pins (current as of 2026-11-06):
 
 ```yaml
-- uses: asamarts/alint@f39a25a7e061bb8738a87372561d8b9a6a29ca87 # v0.19.0
+- uses: asamarts/alint@1f235b300077205b05bf763f902aee274fdaccda # v0.21.1
   with:
-    version: v0.19.0
+    version: v0.21.1
 ```
 
 It reads `.alint.yml` and enforces only the rules supported and explicitly

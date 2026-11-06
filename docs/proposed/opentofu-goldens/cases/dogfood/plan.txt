@@ -84,10 +84,10 @@ Workflow to generate
     - state-producer-root (101 steps)
     - state-seal-crates-velnor-runner (8 steps)
     - state-seal-root (8 steps)
-    - tools-producer-06f9acb0 (8 steps)
-    - tools-producer-924ced60 (11 steps)
-    - tools-producer-c957c0bd (8 steps)
-    - tools-producer-caf63d48 (9 steps)
+    - tools-producer-0d8ae154 (9 steps)
+    - tools-producer-126017c4 (11 steps)
+    - tools-producer-8c9de8db (8 steps)
+    - tools-producer-da614a7e (8 steps)
     - 18 Rust crate jobs
       Timeout: 15 minutes per crate job
       Obligations: Clippy -> build -> run tests -> doc build -> format check
@@ -194,7 +194,7 @@ Workflow to generate
   Critical path: stack/rust/crates/velnor-actions-cli/build/default -> stack/rust/crates/velnor-actions-cli/nextest/default (2 tasks)
   Clippy memory groups: 1; barriers: 0
   Cache layers: Mise tools, Cargo sources, MBX compilation objects
-  Jactionlint: 2.4.0 pinned, profile default
+  Jactionlint: 2.5.0 pinned, profile default
   Action pins: 9
     - actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6
     - actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
@@ -202,7 +202,7 @@ Workflow to generate
     - actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
     - actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
     - actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
-    - asamarts/alint@d61e4c802b02ac811224b35c59a62cfe5176f4d0
+    - asamarts/alint@1f235b300077205b05bf763f902aee274fdaccda
     - jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
     - jdx/mr-boxington-action@88acf2bb50552c7c508cbac13e5f8c576b95b1de
   Ineligible: stack/rust/crates/velnor-actions-actionlint/doctest/default has no test targets; no test command emitted

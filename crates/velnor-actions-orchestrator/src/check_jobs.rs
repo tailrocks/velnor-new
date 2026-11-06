@@ -192,7 +192,7 @@ fn check_job(
     steps.push(crate::matrix_step::download_plan_step()?);
     let image_check =
         policy == WorkflowPolicy::VelnorRepositoryV1 && check.id == "native-image-candidates";
-    let mut execute = execute_check_step(discovered, catalog, helper_version)?;
+    let execute = execute_check_step(discovered, catalog, helper_version, image_check)?;
     if image_check {
         if check.runner.platform.release_target()
             != velnor_actions_contract::ReleaseTarget::LinuxX86_64
@@ -212,9 +212,6 @@ fn check_job(
                 problem: "approved_check_mise_missing".to_owned(),
             })?;
         steps.push(approved_check_mise_step(runtime)?);
-        if let velnor_actions_contract::StepKind::Shell { env, .. } = &mut execute.kind {
-            env.insert("PATH".to_owned(), "${{ runner.temp }}/velnor/check-mise/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin".to_owned());
-        }
     }
     steps.push(execute);
     if image_check {
@@ -251,6 +248,17 @@ fn check_job(
     })
 }
 
+fn approved_check_mise_command(command: Vec<String>) -> Vec<String> {
+    [
+        "env".to_owned(),
+        "PATH=${RUNNER_TEMP}/velnor/check-mise/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+            .to_owned(),
+    ]
+    .into_iter()
+    .chain(command)
+    .collect()
+}
+
 fn named_check_condition(
     job_id: &str,
     check: &velnor_actions_contract::config::MiseCheck,
@@ -280,6 +288,7 @@ fn execute_check_step(
     discovered: &DiscoveredCheck,
     catalog: &ToolCatalog,
     helper_version: &str,
+    approved_runtime: bool,
 ) -> Result<Step, OrchestratorError> {
     let identity = BTreeMap::from([
         ("VELNOR_CHECK_ID".to_owned(), discovered.check.id.clone()),
@@ -295,12 +304,14 @@ fn execute_check_step(
         (INTERNAL_OP_ENV.to_owned(), "execute-check-v1".to_owned()),
     ]);
     let env = crate::matrix_step::task_step_env(catalog, &identity, false)?;
-    velnor_actions_workflow_renderer::shell_step(
-        "Execute named check",
-        vec![crate::matrix_step::helper_path_for_version(helper_version)],
-        env,
-    )
-    .map_err(OrchestratorError::from)
+    let command = vec![crate::matrix_step::helper_path_for_version(helper_version)];
+    let command = if approved_runtime {
+        approved_check_mise_command(command)
+    } else {
+        command
+    };
+    velnor_actions_workflow_renderer::shell_step("Execute named check", command, env)
+        .map_err(OrchestratorError::from)
 }
 
 fn approved_check_mise_step(

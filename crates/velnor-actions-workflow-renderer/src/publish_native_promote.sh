@@ -8,6 +8,8 @@ base="$RUNNER_TEMP/velnor-native-image-promote-$IMAGE_ID"
 umask 077
 mkdir -m 700 "$base"
 export DOCKER_CONFIG="$base"
-printf '%s' "$GH_TOKEN" | crane auth login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+registry_auth=$(printf '%s:%s' "$GITHUB_ACTOR" "$GH_TOKEN" | base64 | tr -d '\n')
+printf '{"auths":{"ghcr.io":{"auth":"%s"}}}\n' "$registry_auth" > "$DOCKER_CONFIG/config.json"
+unset registry_auth
 chmod 600 "$DOCKER_CONFIG/config.json"
 "$VELNOR_TRUSTED_ACTIONS" image-maintenance promote-image --image-id "$IMAGE_ID" --source-commit "$VELNOR_IMAGE_SOURCE_SHA"

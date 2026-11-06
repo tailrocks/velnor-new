@@ -62,7 +62,9 @@ if [ "$IMAGE_PROFILE" != job ]; then
 fi
 mkdir -m 700 "$base/docker" "$base/scratch"
 export DOCKER_CONFIG="$base/docker"
-printf '%s' "$GH_TOKEN" | crane auth login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+registry_auth=$(printf '%s:%s' "$GITHUB_ACTOR" "$GH_TOKEN" | base64 | tr -d '\n')
+printf '{"auths":{"ghcr.io":{"auth":"%s"}}}\n' "$registry_auth" > "$DOCKER_CONFIG/config.json"
+unset registry_auth
 chmod 600 "$DOCKER_CONFIG/config.json"
 printf 'DOCKER_CONFIG=%s\n' "$DOCKER_CONFIG" >> "$GITHUB_ENV"
 receipt="$RUNNER_TEMP/velnor-image-publication-$IMAGE_PROFILE.jsonl"

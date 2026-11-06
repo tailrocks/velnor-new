@@ -9,7 +9,7 @@ and the specification is the [workflow lint contract](../proposed/workflow-lint-
 - `.velnor/config.toml` sets `[workflow.lint] profile = "default"`, which
   turns on the security and policy rules. velnor-new is the first repository
   on that profile.
-- `mise.toml` declares `jactionlint = "2.4.0"` and `shellcheck = "0.11.0"`.
+- `mise.toml` declares `jactionlint = "2.5.0"` and `shellcheck = "0.11.0"`.
   Generated CI reads both at run time (hard decision 4), so CI, the release
   gates and a local `hk` run use one binary. `mise.lock` carries their
   checksums for `linux-x64`, `macos-arm64` and `macos-x64` (from
@@ -20,7 +20,7 @@ and the specification is the [workflow lint contract](../proposed/workflow-lint-
 
 ## Pinned release provenance
 
-The pinned release is `jdx/jactionlint` tag `v2.4.0`, published as a stable
+The previous release was `jdx/jactionlint` tag `v2.4.0`, published as a stable
 release on 2026-10-29. The latest-release API was checked on 2026-11-02. At
 this bump, both provenance checks below passed on 2026-11-02 for the four
 archives covered by the current
@@ -39,6 +39,8 @@ bump, repeat both checks for every table platform and record that version's
 source tag, check date, and outcomes here; the current release's evidence does
 not qualify a later version. The bump-time procedure is specified in the
 [jactionlint subsection of the version policy](../proposed/version-policy.md#2-authoritative-version-inventory).
+
+The current pin is [`v2.5.0`](https://github.com/jdx/jactionlint/releases/tag/v2.5.0), checked on 2026-11-06. The Linux amd64 and arm64 and Darwin amd64 and arm64 archives each passed both `cosign verify-blob-attestation` against the release's `packslip.sigstore.json` and `gh attestation verify` against `jdx/jactionlint/.github/workflows/release.yaml`. The cosign verification used the release workflow identity at `refs/tags/v2.5.0`, the `https://packslip.dev/release/v1` predicate, and the GitHub Actions OIDC issuer. The archive and extracted executable digests are recorded in `JACTIONLINT_DIGESTS`.
 
 ## Measurements
 

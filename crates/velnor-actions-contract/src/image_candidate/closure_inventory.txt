@@ -751,6 +751,10 @@ crates/velnor-actions-orchestrator/src/image_maintenance/publication_authority_o
 crates/velnor-actions-orchestrator/src/image_maintenance/publication_authority_source.rs
 crates/velnor-actions-orchestrator/src/image_maintenance/publication_crane.rs
 crates/velnor-actions-orchestrator/src/image_maintenance/publication_crane/blobs.rs
+crates/velnor-actions-orchestrator/src/image_maintenance/publication_crane/gateway.rs
+crates/velnor-actions-orchestrator/src/image_maintenance/publication_crane/gateway/http.rs
+crates/velnor-actions-orchestrator/src/image_maintenance/publication_crane/gateway/policy.rs
+crates/velnor-actions-orchestrator/src/image_maintenance/publication_crane/gateway/transport.rs
 crates/velnor-actions-orchestrator/src/image_maintenance/publication_crane/role.rs
 crates/velnor-actions-orchestrator/src/image_maintenance/publication_github.rs
 crates/velnor-actions-orchestrator/src/image_maintenance/publication_github/attestor.rs

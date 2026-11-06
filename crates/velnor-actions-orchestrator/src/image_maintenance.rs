@@ -19,6 +19,7 @@ mod validate;
 mod promotion;
 #[path = "image_maintenance/publication.rs"]
 mod publication;
+pub use publication::{RegistryGateway, RegistryIo, RegistryRequest, RegistryResponse};
 #[path = "image_maintenance/runner_admission.rs"]
 mod runner_admission;
 #[path = "image_maintenance/runner_profiles.rs"]
