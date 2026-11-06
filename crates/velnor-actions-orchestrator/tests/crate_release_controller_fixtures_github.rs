@@ -213,7 +213,7 @@ impl GitHubAdmissionRead for Github {
         } else if route.ends_with("/rulesets/1") {
             json!({"id":1,"target":"tag","enforcement":"active","bypass_actors":[],"conditions":{"ref_name":{"include":["~ALL"],"exclude":[]}},"rules":[{"type":"update","parameters":{"update_allows_fetch_and_merge":false}},{"type":"deletion"}]})
         } else if route == "repos/example/demo" {
-            json!({"id":22,"full_name":"example/demo","default_branch":"main"})
+            json!({"id":22,"full_name":"example/demo","owner":{"id":77,"login":"example"},"default_branch":"main"})
         } else if route.ends_with("/actions/runs/12/approvals") {
             if self.approved.get() {
                 json!([{"state":"approved","user":{"type":"User","id":139_017},"environments":[{"id":9,"name":"release"}],"comment":format!("I reviewed the complete release policy at {policy_sha} and source {sha}, and authorize this source for run 12.")}])
@@ -221,7 +221,7 @@ impl GitHubAdmissionRead for Github {
                 json!([])
             }
         } else if route.ends_with("/actions/runs/12") {
-            json!({"id":12,"run_attempt":1,"head_sha":policy_sha,"head_branch":"main","event":"workflow_dispatch","path":".github/workflows/release.yml","repository":{"id":22,"full_name":"example/demo"},"head_repository":{"id":22,"full_name":"example/demo"}})
+            json!({"id":12,"run_attempt":1,"head_sha":policy_sha,"head_branch":"main","event":"workflow_dispatch","path":".github/workflows/release.yml","repository":{"id":22,"full_name":"example/demo","owner":{"id":77,"login":"example"}},"head_repository":{"id":22,"full_name":"example/demo","owner":{"id":77,"login":"example"}}})
         } else if route.contains("/compare/") {
             json!({"status":"ahead"})
         } else if route.ends_with("/environments/release") {

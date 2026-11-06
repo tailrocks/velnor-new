@@ -15,12 +15,12 @@ impl GitHubAdmissionRead for WorkspaceGithub {
         let sha = &self.0.sha;
         if route.ends_with("/actions/runs/12") {
             return Ok(
-                json!({"id":12,"run_attempt":1,"head_sha":sha,"head_branch":"main","event":"push","path":".github/workflows/release.yml","repository":{"id":22,"full_name":"example/demo"},"head_repository":{"id":22,"full_name":"example/demo"}}),
+                json!({"id":12,"run_attempt":1,"head_sha":sha,"head_branch":"main","event":"push","path":".github/workflows/release.yml","repository":{"id":22,"full_name":"example/demo","owner":{"id":77,"login":"example"}},"head_repository":{"id":22,"full_name":"example/demo","owner":{"id":77,"login":"example"}}}),
             );
         }
         if route.contains("/pulls?per_page=100&page=1") {
             return Ok(
-                json!([{"number":17,"merged_at":"2026-11-03T16:00:00Z","merge_commit_sha":sha,"base":{"ref":"main","repo":{"full_name":"example/demo"}},"head":{"ref":"release-plz-1","repo":{"full_name":"example/demo"},"sha":sha},"user":{"login":"release-bot"}}]),
+                json!([{"number":17,"merged_at":"2026-11-03T16:00:00Z","merge_commit_sha":sha,"base":{"ref":"main","repo":{"full_name":"example/demo","owner":{"id":77,"login":"example"}}},"head":{"ref":"release-plz-1","repo":{"full_name":"example/demo","owner":{"id":77,"login":"example"}},"sha":sha},"user":{"login":"release-bot"}}]),
             );
         }
         if route.contains("/git/commits/") {

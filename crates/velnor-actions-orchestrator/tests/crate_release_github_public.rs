@@ -52,11 +52,11 @@ impl Fixture {
 impl GitHubAdmissionRead for Fixture {
     fn get(&self, route: &str) -> Result<Value, OrchestratorError> {
         let v = if route == "repos/example/crate" {
-            json!({"full_name":"example/crate","default_branch":"main"})
+            json!({"full_name":"example/crate","id":101,"owner":{"id":202,"login":"example"},"default_branch":"main"})
         } else if route.ends_with("/actions/runs/12/approvals") {
             json!(self.approvals)
         } else if route.ends_with("/actions/runs/12") {
-            json!({"id":12,"run_attempt":1,"head_sha":self.run_sha,"head_branch":"main","event":self.event,"path":".github/workflows/release.yml","repository":{"full_name":"example/crate"},"head_repository":{"full_name":"example/crate"}})
+            json!({"id":12,"run_attempt":1,"head_sha":self.run_sha,"head_branch":"main","event":self.event,"path":".github/workflows/release.yml","repository":{"full_name":"example/crate","id":101,"owner":{"id":202,"login":"example"}},"head_repository":{"full_name":"example/crate","id":101,"owner":{"id":202,"login":"example"}}})
         } else if route.contains("/compare/") {
             json!({"status":self.compare})
         } else if route.ends_with("/environments/release") {
@@ -87,7 +87,7 @@ impl GitHubAdmissionRead for Fixture {
             } else {
                 SOURCE
             };
-            json!([{"number":7,"merged_at":"2026-11-03T15:38:50Z","merge_commit_sha":commit,"user":{"login":"author"},"base":{"ref":"main","repo":{"full_name":"example/crate"}},"head":{"ref":self.release_branch,"sha":WORKFLOW,"repo":{"full_name":"example/crate"}}}])
+            json!([{"number":7,"merged_at":"2026-11-03T15:38:50Z","merge_commit_sha":commit,"user":{"login":"author"},"base":{"ref":"main","repo":{"full_name":"example/crate","id":101,"owner":{"id":202,"login":"example"}}},"head":{"ref":self.release_branch,"sha":WORKFLOW,"repo":{"full_name":"example/crate","id":101,"owner":{"id":202,"login":"example"}}}}])
         } else if route.ends_with(SOURCE) && route.contains("/git/commits/") {
             json!({"sha":SOURCE,"tree":{"sha":SOURCE}})
         } else if route.ends_with(WORKFLOW) && route.contains("/git/commits/") {
@@ -344,7 +344,9 @@ struct TagFixture {
 impl GitHubAdmissionRead for TagFixture {
     fn get(&self, route: &str) -> Result<Value, OrchestratorError> {
         if route == "repos/example/crate" {
-            Ok(json!({"full_name":"example/crate","default_branch":"main"}))
+            Ok(
+                json!({"full_name":"example/crate","id":101,"owner":{"id":202,"login":"example"},"default_branch":"main"}),
+            )
         } else if route.ends_with("git/ref/heads/main") && self.branch_readable {
             Ok(json!({"ref":"refs/heads/main","object":{"type":"commit","sha":SOURCE}}))
         } else if route.contains("/git/tags/") {

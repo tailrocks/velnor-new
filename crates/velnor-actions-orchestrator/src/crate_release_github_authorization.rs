@@ -10,12 +10,24 @@ use super::{
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GitHubAuthorized {
     candidate: GitHubCandidate,
+    repository_id: u64,
+    owner_id: u64,
 }
 
 impl GitHubAuthorized {
     #[must_use]
     pub fn candidate(&self) -> &GitHubCandidate {
         &self.candidate
+    }
+
+    #[must_use]
+    pub fn repository_id(&self) -> u64 {
+        self.repository_id
+    }
+
+    #[must_use]
+    pub fn owner_id(&self) -> u64 {
+        self.owner_id
     }
 }
 
@@ -24,10 +36,62 @@ pub fn authorize_github_candidate(
     candidate: &GitHubCandidate,
     api: &dyn GitHubAdmissionRead,
 ) -> Result<GitHubAuthorized, OrchestratorError> {
+    let identity = repository_identity(request, api)?;
     let fresh = verify_github_evidence(request, api)?;
     require(&fresh == candidate, "candidate_changed")?;
     verify_environment_approval(request, api)?;
-    Ok(GitHubAuthorized { candidate: fresh })
+    require(
+        repository_identity(request, api)? == identity,
+        "repository_identity_changed",
+    )?;
+    Ok(GitHubAuthorized {
+        candidate: fresh,
+        repository_id: identity.0,
+        owner_id: identity.1,
+    })
+}
+
+fn repository_identity(
+    request: &GitHubAdmissionRequest,
+    api: &dyn GitHubAdmissionRead,
+) -> Result<(u64, u64), OrchestratorError> {
+    validate_request(request)?;
+    let prefix = format!("repos/{}", request.repository);
+    let repository = api.get(&prefix)?;
+    let run = api.get(&format!("{prefix}/actions/runs/{}", request.run_id))?;
+    let repo_id = repository["id"]
+        .as_u64()
+        .filter(|id| *id > 0)
+        .ok_or_else(|| internal("crate_release_repository_id"))?;
+    let owner_id = repository["owner"]["id"]
+        .as_u64()
+        .filter(|id| *id > 0)
+        .ok_or_else(|| internal("crate_release_owner_id"))?;
+    let owner = request
+        .repository
+        .split_once('/')
+        .ok_or_else(|| internal("crate_release_repository"))?
+        .0;
+    require(
+        repository["full_name"].as_str() == Some(request.repository.as_str())
+            && repository["owner"]["login"].as_str() == Some(owner),
+        "repository_identity",
+    )?;
+    require(
+        run["id"].as_u64() == Some(request.run_id)
+            && run["run_attempt"].as_u64() == Some(u64::from(request.run_attempt)),
+        "run_identity",
+    )?;
+    for field in ["repository", "head_repository"] {
+        require(
+            run[field]["id"].as_u64() == Some(repo_id)
+                && run[field]["full_name"].as_str() == Some(request.repository.as_str())
+                && run[field]["owner"]["id"].as_u64() == Some(owner_id)
+                && run[field]["owner"]["login"].as_str() == Some(owner),
+            "workflow_repository_identity",
+        )?;
+    }
+    Ok((repo_id, owner_id))
 }
 
 pub fn verify_environment_approval(

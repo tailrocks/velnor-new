@@ -160,12 +160,15 @@ pub(crate) fn acquire_authenticated_receipt<
     {
         return Err(invalid());
     }
-    crate::crate_release_github::authorize_github_candidate(
+    let original_authority = crate::crate_release_github::authorize_github_candidate(
         request.github,
         request.candidate,
         github,
     )?;
     let initial = current_artifact(request, github, true)?;
+    if initial.workflow_run.repository_id != original_authority.repository_id() {
+        return Err(invalid());
+    }
     check_real_directories(request.runner_temp)?;
     let scratch = tempfile::Builder::new()
         .prefix(".velnor-receipt-")
@@ -189,12 +192,21 @@ pub(crate) fn acquire_authenticated_receipt<
         request.candidate,
         github,
     )?;
-    if current_artifact(request, github, true)? != initial {
+    if authority != original_authority || current_artifact(request, github, true)? != initial {
         return Err(invalid());
     }
     let bytes = read_receipt_archive(&file)?;
     let receipt = decode_receipt(&bytes, request.candidate)?;
     if receipt.schema != 1 || receipt.intent != *request.intent {
+        return Err(invalid());
+    }
+    if crate::crate_release_github::authorize_github_candidate(
+        request.github,
+        request.candidate,
+        github,
+    )? != authority
+        || current_artifact(request, github, true)? != initial
+    {
         return Err(invalid());
     }
     Ok(AuthenticatedReceipt {

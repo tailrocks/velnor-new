@@ -4,6 +4,102 @@
 use super::*;
 
 #[test]
+fn authorization_binds_repository_and_owner_ids_to_the_run() {
+    use velnor_actions_orchestrator::crate_release_github::authorize_github_candidate;
+    struct IdFixture {
+        change: Option<(&'static str, &'static str, Value)>,
+    }
+    impl GitHubAdmissionRead for IdFixture {
+        fn get(&self, route: &str) -> Result<Value, OrchestratorError> {
+            let mut value = Fixture::valid().get(route)?;
+            let key = if route == "repos/example/crate" {
+                value["id"] = json!(101);
+                value["owner"] = json!({"id":202,"login":"example"});
+                "repo"
+            } else if route.ends_with("/actions/runs/12") {
+                for field in ["repository", "head_repository"] {
+                    value[field]["id"] = json!(101);
+                    value[field]["owner"] = json!({"id":202,"login":"example"});
+                }
+                "run"
+            } else {
+                "other"
+            };
+            if let Some((target, pointer, replacement)) = &self.change {
+                if *target == key {
+                    *value.pointer_mut(pointer).expect("field") = replacement.clone();
+                }
+            }
+            Ok(value)
+        }
+        fn get_optional(&self, _: &str) -> Result<Option<Value>, OrchestratorError> {
+            Ok(None)
+        }
+    }
+    let input = request();
+    let valid = IdFixture { change: None };
+    let candidate = verify_github_evidence(&input, &valid).expect("candidate");
+    let authority = authorize_github_candidate(&input, &candidate, &valid).expect("authorization");
+    assert_eq!(
+        (authority.repository_id(), authority.owner_id()),
+        (101, 202)
+    );
+    for (target, pointer) in [
+        ("repo", "/id"),
+        ("repo", "/owner/id"),
+        ("run", "/repository/id"),
+        ("run", "/repository/owner/id"),
+        ("run", "/head_repository/id"),
+        ("run", "/head_repository/owner/id"),
+    ] {
+        for replacement in [json!(0), json!(999), Value::Null, json!("101")] {
+            let changed = IdFixture {
+                change: Some((target, pointer, replacement)),
+            };
+            assert!(
+                authorize_github_candidate(&input, &candidate, &changed).is_err(),
+                "{target}{pointer}"
+            );
+        }
+    }
+}
+
+#[test]
+fn authorization_rejects_repository_transfer_during_approval() {
+    use velnor_actions_orchestrator::crate_release_github::authorize_github_candidate;
+    struct Transfer {
+        approved: Cell<bool>,
+    }
+    impl GitHubAdmissionRead for Transfer {
+        fn get(&self, route: &str) -> Result<Value, OrchestratorError> {
+            let mut value = Fixture::valid().get(route)?;
+            if route.ends_with("/actions/runs/12/approvals") {
+                self.approved.set(true);
+            }
+            if self.approved.get() {
+                if route == "repos/example/crate" {
+                    value["id"] = json!(999);
+                }
+                if route.ends_with("/actions/runs/12") {
+                    value["repository"]["id"] = json!(999);
+                    value["head_repository"]["id"] = json!(999);
+                }
+            }
+            Ok(value)
+        }
+        fn get_optional(&self, _: &str) -> Result<Option<Value>, OrchestratorError> {
+            Ok(None)
+        }
+    }
+    let input = request();
+    let fixture = Transfer {
+        approved: Cell::new(false),
+    };
+    let candidate = verify_github_evidence(&input, &fixture).expect("candidate");
+    assert!(authorize_github_candidate(&input, &candidate, &fixture).is_err());
+}
+
+#[test]
 fn tag_lookup_distinguishes_absence_and_peeled_commit() {
     use velnor_actions_orchestrator::crate_release_github::read_github_tag_evidence;
     let mut fixture = TagFixture {

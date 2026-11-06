@@ -242,7 +242,7 @@
         let (status, value) = match line {
             "GET /repos/owner/project HTTP/1.1" => (
                 "200 OK",
-                serde_json::json!({"ok":true,"id":22,"full_name":"owner/project","default_branch":"main"}),
+                serde_json::json!({"ok":true,"id":22,"full_name":"owner/project","owner":{"id":77,"login":"owner"},"default_branch":"main"}),
             ),
             "GET /api/v1/crates/example HTTP/1.1" => (
                 "200 OK",

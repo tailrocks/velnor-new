@@ -237,7 +237,7 @@ impl GitHubAdmissionRead for HistoricalAuthority<'_> {
             .as_ref()
             .filter(|sha| route.contains(sha.as_str()))
             .unwrap_or(&self.workflow);
-        let run = || json!({"id":if defect == 1 { 99 } else { run_id },"run_attempt":if defect == 2 { 2 } else { 1 },"status":"completed","head_sha":if defect == 3 { "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee" } else { workflow },"head_branch":"main","event":if defect == 4 { "schedule" } else { self.event },"path":if defect == 5 { ".github/workflows/other.yml" } else { ".github/workflows/release.yml" },"repository":{"id":if defect == 6 { 99 } else { 22 },"full_name":"example/demo"},"head_repository":{"id":22,"full_name":"example/demo"}});
+        let run = || json!({"id":if defect == 1 { 99 } else { run_id },"run_attempt":if defect == 2 { 2 } else { 1 },"status":"completed","head_sha":if defect == 3 { "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee" } else { workflow },"head_branch":"main","event":if defect == 4 { "schedule" } else { self.event },"path":if defect == 5 { ".github/workflows/other.yml" } else { ".github/workflows/release.yml" },"repository":{"id":if defect == 6 { 99 } else { 22 },"full_name":"example/demo","owner":{"id":77,"login":"example"}},"head_repository":{"id":22,"full_name":"example/demo","owner":{"id":77,"login":"example"}}});
         if route.ends_with("/actions/runs/11/attempts/1")
             || route.ends_with("/actions/runs/11")
             || route.ends_with("/actions/runs/10/attempts/1")
@@ -272,7 +272,7 @@ impl GitHubAdmissionRead for HistoricalAuthority<'_> {
         }
         if route.contains("/commits/") && route.contains("/pulls?") {
             return Ok(
-                json!([{"number":7,"merged_at":"2026-11-03T15:38:50Z","merge_commit_sha":source,"user":{"login":"author"},"base":{"ref":"main","repo":{"full_name":"example/demo"}},"head":{"ref":"release-plz-test","sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","repo":{"full_name":"example/demo"}}}]),
+                json!([{"number":7,"merged_at":"2026-11-03T15:38:50Z","merge_commit_sha":source,"user":{"login":"author"},"base":{"ref":"main","repo":{"full_name":"example/demo","owner":{"id":77,"login":"example"}}},"head":{"ref":"release-plz-test","sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","repo":{"full_name":"example/demo","owner":{"id":77,"login":"example"}}}}]),
             );
         }
         if route.contains("/git/commits/") {

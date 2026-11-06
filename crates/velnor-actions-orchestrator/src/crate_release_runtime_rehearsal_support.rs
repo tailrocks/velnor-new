@@ -91,7 +91,7 @@ fn serve_admission(
             .map_err(|e| e.to_string())?;
         let (line, _) = super::tests::read_test_request(&mut stream)?;
         let mut value = if line == "GET /repos/owner/project HTTP/1.1" {
-            serde_json::json!({"id":22,"full_name":"owner/project","default_branch":"main"})
+            serde_json::json!({"id":22,"full_name":"owner/project","owner":{"id":77,"login":"owner"},"default_branch":"main"})
         } else {
             super::tests::test_github_admission_response(&line, policy, source)
                 .ok_or_else(|| format!("unexpected request {line}"))?
