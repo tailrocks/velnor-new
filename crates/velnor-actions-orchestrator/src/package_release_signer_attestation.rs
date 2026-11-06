@@ -358,12 +358,9 @@ fn parse_positive_canonical_integer(value: &str) -> Result<u64, OrchestratorErro
     Ok(parsed)
 }
 
-fn is_sha256(value: &str) -> bool {
-    value.len() == 64
-        && value
-            .bytes()
-            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
-}
+#[path = "package_release_signer_attestation_digest.rs"]
+mod digest;
+use digest::is_sha256;
 
 fn sha256(bytes: &[u8]) -> String {
     const HEX: &[u8; 16] = b"0123456789abcdef";

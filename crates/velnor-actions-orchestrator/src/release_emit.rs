@@ -355,29 +355,9 @@ fn reviewed_pr_write_paths(
     Ok(release_pr_write_paths(&record))
 }
 
-fn release_pr_write_paths(record: &velnor_actions_rust::metadata::WorkspaceRecord) -> Vec<String> {
-    let join = |dir: &str, file: &str| {
-        if dir.is_empty() {
-            file.to_owned()
-        } else {
-            format!("{dir}/{file}")
-        }
-    };
-    let mut paths = BTreeSet::new();
-    for name in ["Cargo.toml", "Cargo.lock", "CHANGELOG.md"] {
-        paths.insert(join(&record.workspace_root, name));
-    }
-    for package in record
-        .packages
-        .iter()
-        .filter(|package| package.in_workspace && !package.external)
-    {
-        paths.insert(package.manifest.clone());
-        let dir = package.manifest.rsplit_once('/').map_or("", |(dir, _)| dir);
-        paths.insert(join(dir, "CHANGELOG.md"));
-    }
-    paths.into_iter().collect()
-}
+#[path = "release_emit_write_paths.rs"]
+mod write_paths;
+use write_paths::release_pr_write_paths;
 
 pub(crate) fn enabled_release(
     prep: &GenerationPreparation,
