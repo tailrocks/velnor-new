@@ -98,7 +98,7 @@ fn check_host_distinctions_survive(setup: &MiseSetup) -> Result<(), Box<dyn Erro
     let base = base_payload(setup)?;
     let other_lane = payload(
         setup,
-        "ubuntu-26.04",
+        "scale-set:velnor+my-set",
         "x86_64-unknown-linux-gnu",
         &["gh@2.103.2", "opentofu@1.13.2"],
         None,

@@ -39,7 +39,7 @@ fn task_id() -> Result<String, Box<dyn Error>> {
 
 fn planned_platform() -> Result<PlannedPlatform, Box<dyn Error>> {
     Ok(PlannedPlatform::new(
-        "ubuntu-22.04",
+        "ubuntu-26.04",
         "x86_64-unknown-linux-gnu",
     )?)
 }
@@ -142,7 +142,7 @@ fn plan_with(
         event: WorkflowEvent::PullRequest,
         qualification: None,
         runner: PlanRunner {
-            label: "ubuntu-22.04".to_owned(),
+            label: "ubuntu-26.04".to_owned(),
             selection: RunnerSelection::LatestDefault,
         },
         trust: trust_for_event(WorkflowEvent::PullRequest),

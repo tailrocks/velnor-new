@@ -53,14 +53,24 @@ fn pin_mirror_rejects_catalog_drift_for_every_cosign_artifact() -> TestResult {
 #[test]
 fn pin_mirror_rejects_supported_runners_that_differ_from_the_compiled_catalog() -> TestResult {
     let fixture = Fixture::new()?;
-    fixture.rewrite(POLICY, |text| text.replacen(", \"ubuntu-22.04\"", "", 1))?;
+    fixture.rewrite(POLICY, |text| {
+        let changed = text.replacen(
+            "supported = [\"ubuntu-26.04\"]",
+            "supported = [\"ubuntu-26.04\", \"ubuntu-28.04\"]",
+            1,
+        );
+        assert_ne!(changed, text);
+        changed
+    })?;
     fixture.edit_inventory(|inventory| {
+        assert!(inventory["runner"]["supported"].is_array());
         if let Some(labels) = inventory["runner"]["supported"].as_array_mut() {
-            labels.retain(|label| label != "ubuntu-22.04");
+            assert!(!labels.iter().any(|label| label == "ubuntu-28.04"));
+            labels.push(serde_json::Value::String("ubuntu-28.04".to_owned()));
         }
     })?;
     let outcome = fixture.run(None)?;
-    assert!(!outcome.success, "mirrors dropped a compiled label");
+    assert!(!outcome.success, "mirrors added an uncompiled label");
     assert!(
         outcome.row("local-pin", "fail", "runner catalog").is_some(),
         "catalog drift not named: {:?}",
@@ -69,7 +79,13 @@ fn pin_mirror_rejects_supported_runners_that_differ_from_the_compiled_catalog() 
 
     let fixture = Fixture::new()?;
     fixture.rewrite(RUNNER_SOURCE, |text| {
-        text.replacen("[&str; 6] = [", "[&str; 7] = [\n    \"ubuntu-28.04\",", 1)
+        let changed = text.replacen(
+            "[&str; 2] = [\"ubuntu-26.04\", \"ubuntu-26.04-arm\"]",
+            "[&str; 3] = [\"ubuntu-26.04\", \"ubuntu-26.04-arm\", \"ubuntu-28.04\"]",
+            1,
+        );
+        assert_ne!(changed, text);
+        changed
     })?;
     let outcome = fixture.run(None)?;
     assert!(!outcome.success, "compiled label missing from mirrors");
