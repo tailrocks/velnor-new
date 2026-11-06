@@ -117,7 +117,8 @@ fn public_runner_family_rejects_drift_in_previously_omitted_copy_inputs()
 
 #[test]
 fn public_runner_family_rejects_unbound_dockerfile_context_sources() -> Result<(), Box<dyn Error>> {
-    let scenario = "source_closure::public_runner_family_rejects_unbound_dockerfile_context_sources";
+    let scenario =
+        "source_closure::public_runner_family_rejects_unbound_dockerfile_context_sources";
     if !super::begin_isolated(scenario)? {
         return Ok(());
     }
