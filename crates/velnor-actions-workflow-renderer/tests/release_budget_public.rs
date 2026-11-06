@@ -69,12 +69,40 @@ fn hosted_supervisor_runs_candidate_scenarios_and_controller_regressions()
             "hosted supervisor qualification failed: {file}"
         );
     }
+    let workspace = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .and_then(std::path::Path::parent)
+        .ok_or("workspace root")?;
+    let result = std::process::Command::new("cargo")
+        .args([
+            "nextest",
+            "run",
+            "--locked",
+            "-p",
+            "velnor-actions-cli",
+            "--test",
+            "crate_release_prepare_pr_public",
+            "--run-ignored",
+            "only",
+            "-E",
+            "test(hosted_managed_publisher_export_is_bounded_and_quiescent)",
+            "--no-tests",
+            "fail",
+        ])
+        .current_dir(workspace)
+        .status()?;
+    assert!(
+        result.success(),
+        "hosted managed-export qualification failed"
+    );
     Ok(())
 }
 
 #[test]
 fn publisher_step_fits_github_limit_and_binds_generator_pins()
 -> Result<(), Box<dyn std::error::Error>> {
+    use base64::Engine as _;
+    use std::io::Read as _;
     use velnor_actions_contract::StepKind;
     use velnor_actions_workflow_renderer::{
         join_argv_for_run, release_root_publisher::publisher_step,
@@ -87,6 +115,37 @@ fn publisher_step_fits_github_limit_and_binds_generator_pins()
             return Err("publisher step is not shell".into());
         };
         assert!(join_argv_for_run(&run)?.len() <= 21_000);
+        let encoded = run[6]
+            .split_once("base64.b64decode('")
+            .ok_or("missing encoded bundle")?
+            .1
+            .split_once("',validate=True)")
+            .ok_or("invalid encoded bundle")?
+            .0;
+        let compressed = base64::engine::general_purpose::STANDARD.decode(encoded)?;
+        let mut decoder = flate2::read::ZlibDecoder::new(compressed.as_slice());
+        let mut decoded = Vec::new();
+        decoder.read_to_end(&mut decoded)?;
+        let bundle: serde_json::Value = serde_json::from_slice(&decoded)?;
+        for (key, expected) in [
+            (
+                "stage",
+                include_str!("../src/release_publish_first_stage.py"),
+            ),
+            ("entry", include_str!("../src/release_publish_entry.py")),
+            (
+                "bootstrap",
+                include_str!("../src/release_generator_bootstrap.sh"),
+            ),
+            ("manager", include_str!("../src/release_manager_bus.py")),
+            (
+                "lifecycle",
+                include_str!("../src/release_manager_lifecycle.py"),
+            ),
+            ("helper", include_str!("../src/release_supervisor_exec.py")),
+        ] {
+            assert_eq!(bundle[key].as_str(), Some(expected));
+        }
         assert_eq!(run.last().map(String::as_str), Some(manifest.as_str()));
         assert_eq!(
             run.get(run.len() - 2).map(String::as_str),

@@ -256,3 +256,41 @@ fn publisher_entry_is_exported_without_granting_publication()
     assert_eq!(invalid.stdout, [] as [u8; 0]);
     Ok(())
 }
+
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+#[test]
+#[ignore = "requires a fresh Ubuntu 26.04 host with sudo and systemd"]
+fn hosted_managed_publisher_export_is_bounded_and_quiescent()
+-> Result<(), Box<dyn std::error::Error>> {
+    let temp = tempfile::tempdir()?;
+    let binary = temp.path().join("candidate");
+    let status = Command::new("/usr/bin/strip")
+        .args(["--strip-all", "-o"])
+        .arg(&binary)
+        .arg(env!("CARGO_BIN_EXE_velnor-actions"))
+        .status()?;
+    assert!(status.success(), "candidate strip failed");
+    let renderer = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .ok_or("workspace crates")?
+        .join("velnor-actions-workflow-renderer");
+    let status = Command::new("/usr/bin/sudo")
+        .args([
+            "-n",
+            "/usr/bin/env",
+            "-i",
+            "PATH=/usr/bin:/bin",
+            "HOME=/nonexistent",
+            "LANG=C",
+            "/usr/bin/python3",
+            "-I",
+            "-S",
+            "-B",
+        ])
+        .arg(renderer.join("tests/release_first_stage_systemd_test.py"))
+        .arg(renderer.join("src"))
+        .arg(binary)
+        .status()?;
+    assert!(status.success(), "managed publisher export failed");
+    Ok(())
+}
