@@ -11,10 +11,21 @@ steps are insufficient. Apply the [four review gates](ci-performance.md).
 - Report time to `Required`, end-to-end completion, summed runner time and relevant transfer/storage costs; include producers outside `Required`, repeat noisy measurements and report their spread.
 - State the expected benefit, measured result, regressions and tradeoffs; a faster step alone does not establish faster CI.
 
+## Prove job selection on every PR
+
+- Map changed paths to expected jobs through direct inputs, transitive dependencies or the minimal planning/final-status role; include support jobs only for selected consumers.
+- Link the plan and complete observed workflow/job inventory at the reviewed head, including branch-push and follow-on runs, not only checks labelled `pull_request`.
+- Reconcile expected, executed and skipped jobs; prove unrelated jobs never executed and required affected work was not skipped; unexplained jobs fail the gate.
+- Explain every broadening reason and prove both affected and unaffected cases; file extensions or missing input declarations do not establish independence from a changed file.
+
+[PR #529's baseline](pr-529-job-selection.md) records excessive selection and a
+template consumed by a real golden check; both must be accounted for.
+
 ## Prove the affected scenarios
 
 | Scenario | Required proof |
 |---|---|
+| Documentation/instruction/template only | Only checks with proven changed inputs and minimal planning/status work run; no unrelated Rust, dependency, maintenance, image or qualification jobs start. |
 | Cold | Empty-cache execution completes all required checks without relying on a previous runner. |
 | Warm, unchanged | After an authorized producer saves, the next run on a fresh runner restores/imports valid state and avoids unchanged dependency downloads and compilation. |
 | PR source-only change | Only affected work and its dependents run/rebuild; unchanged dependency/tool layers stay reusable. |
@@ -29,8 +40,9 @@ counters. Account for every remaining download/rebuild; a hit flag is not proof.
 
 Use existing relevant coverage for unaffected scenarios and identify it explicitly.
 New tests still require the reviewed plan and independent red/green proof mandated
-by root `AGENTS.md`. Documentation-only changes may explain why runtime evidence
-is inapplicable; executable changes cannot claim neutrality without proof.
+by root `AGENTS.md`. Documentation-only changes may justify omitting timing
+benchmarks, never job-selection evidence; executable changes cannot claim neutrality
+without proof.
 
 ## Prove the resource budget
 

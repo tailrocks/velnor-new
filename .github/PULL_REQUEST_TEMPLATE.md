@@ -7,7 +7,6 @@ PR authoring rules:
 - Add What this addresses only for a documented gap. Add Not included only for a concrete deferred item.
 - Add Migration notes only when `.velnor/` compatibility or schemas/contracts under `crates/velnor-actions-contract/` change.
 - Run `./scripts/verify-local.sh` for Rust, policy, or generated-workflow changes; it runs the repository's offline CI subset.
-- Include CI performance evidence for every PR; documentation-only changes must explain why runtime measurements are inapplicable.
 -->
 
 ## Related pull requests
@@ -24,13 +23,6 @@ PR authoring rules:
 
 - <Describe the user or maintainer capability now available.>
 - <Describe the configuration or workflow behavior that changes.>
-
-## CI performance evidence
-
-Follow [required developer evidence](https://github.com/tailrocks/velnor-new/blob/main/docs/reviews/ci-performance-evidence.md).
-
-- <Link baseline/head runs and logs proving cold correctness, warm reuse and relevant invalidation.>
-- <Report time to Required, total runner time, cache costs/budget and drawbacks; justify inapplicable measurements.>
 
 ## Behavior changes
 

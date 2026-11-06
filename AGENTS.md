@@ -36,4 +36,4 @@ Shared working agreement: keep this section byte-identical across projects. Proj
 
 ### Review guidelines
 
-- Authors and reviewers, including Codex, must read and enforce [CI performance review](docs/reviews/ci-performance.md) and [required developer evidence](docs/reviews/ci-performance-evidence.md) on every PR. Request changes for failed gates or missing proof; do not approve on promises.
+- Authors and reviewers, including Codex, must read and enforce [CI performance review](docs/reviews/ci-performance.md) and [required developer evidence](docs/reviews/ci-performance-evidence.md) on every PR. Request changes for unrelated scheduled jobs in any workflow, failed gates or missing proof; do not approve on promises.

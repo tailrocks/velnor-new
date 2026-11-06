@@ -8,11 +8,15 @@ Preserve the [hard decisions](../hard-decisions.md),
 [cache decisions](../proposed/cache-decisions.md) and
 [cache contract](../proposed/cache-contract.md); review guidance never overrides them.
 
-## 1. Do only necessary work
+## 1. Run only PR-related jobs
 
-- Trace repository detection, declared tools, lockfiles and transitive inputs into the plan; reject unaffected PR jobs, duplicate triggers/setup and unnecessary matrix legs.
+- Audit every workflow caused by a PR or its branch updates, including validators, declared checks, qualification, images and follow-on runs.
+- Require changed direct inputs or transitive dependencies for every workload job; a `required`/`global` label, broad directory match or warm cache never proves relevance.
+- Justify minimal planning/final-status work separately; reject setup or producer jobs whose consumers are all skipped.
+- Skip unrelated jobs at job level before runner allocation, checkout, setup or cache restore; skipping steps after starting a job is insufficient.
 - Preserve the adopted job topology and single planner: no second skip mechanism or GitHub `paths:` filters; default-branch pushes, merge groups and dispatches stay full.
-- Minimize time to `Required` and total runner time, including planning, setup, producers and transfers; reject needless serialization, resource contention and superseded work within the adopted concurrency rules.
+- Keep genuinely unknown inputs fail-closed; reject routine non-input documentation/instruction/template changes left unclassified instead of fixing the input model.
+- Minimize time to `Required` and total runner time; reject duplicate triggers/setup, unnecessary matrix legs, needless serialization and superseded work within the adopted concurrency rules.
 
 ## 2. Reuse completed work
 
