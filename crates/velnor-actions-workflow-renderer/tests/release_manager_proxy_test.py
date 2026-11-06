@@ -33,11 +33,13 @@ spec.loader.exec_module(lifecycle)
 
 
 class FaultProxy:
-    def __init__(self, path):
+    def __init__(self, path, method="StartTransientUnit"):
         self.listener = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         self.listener.bind(str(path))
         self.listener.listen(1)
         self.paused = threading.Event()
+        self.method = method.encode("ascii")
+        self.forward_lock = threading.Lock()
         self.peers = []
         self.thread = threading.Thread(target=self.serve, daemon=True)
         self.thread.start()
@@ -63,21 +65,23 @@ class FaultProxy:
                 data, ancillary, flags, _ = source.recvmsg(65536, socket.CMSG_SPACE(64 * array.array("i").itemsize))
                 if not data or flags & (socket.MSG_CTRUNC | socket.MSG_TRUNC):
                     break
-                if from_client:
-                    if b"StartTransientUnit" in previous + data:
+                with self.forward_lock:
+                    hit = from_client and self.method in previous + data
+                    if from_client:
+                        previous = (previous + data)[-32:]
+                    elif self.paused.is_set():
+                        break
+                    sent = target.sendmsg([data], ancillary)
+                    if sent < len(data):
+                        target.sendall(data[sent:])
+                    if hit:
                         self.paused.set()
-                    previous = (previous + data)[-32:]
-                elif self.paused.is_set():
-                    break
-                sent = target.sendmsg([data], ancillary)
                 for level, kind, payload in ancillary:
                     if level == socket.SOL_SOCKET and kind == socket.SCM_RIGHTS:
                         descriptors = array.array("i")
                         descriptors.frombytes(payload[:len(payload) - len(payload) % descriptors.itemsize])
                         for fd in descriptors:
                             os.close(fd)
-                if sent < len(data):
-                    target.sendall(data[sent:])
         except OSError:
             pass
 
@@ -123,6 +127,72 @@ class RealReplyLossTest(unittest.TestCase):
                 self.assertFalse(select.select([fake], [], [], 0)[0], "production manager connected to fake broker")
             finally:
                 fake.close()
+
+    def test_lost_unref_reply_never_reports_success(self):
+        with tempfile.TemporaryDirectory(prefix='velnor-unref-proxy-', dir='/run') as directory:
+            scratch = Path(directory)
+            scratch.chmod(0o755)
+            helper = scratch / 'helper.py'
+            shutil.copyfile(root / 'src/release_supervisor_exec.py', helper)
+            helper.chmod(0o555)
+            marker = scratch / 'executed'
+            ident = secrets.token_hex(16)
+            unit = 'velnor-release-' + ident + '.service'
+            unit_dir = Path('/run/systemd/system') / (unit + '.d')
+            proxy = FaultProxy(scratch / 'proxy', 'UnrefUnit')
+            wrapper = (
+                "import json,os,struct,sys,time;sys.path.insert(0,sys.argv[1]);"
+                "import release_manager_bus as b,release_manager_lifecycle as l;"
+                "from pathlib import Path;sys.path.insert(0,str(Path(sys.argv[1]).parent/'tests'));"
+                "from release_watch_fixture import RootWatch;address=os.environ.pop('DBUS_SYSTEM_BUS_ADDRESS');"
+                "watch=RootWatch(b,l,Path(sys.argv[1]));print('watch-ready',flush=True);sys.stdin.readline();"
+                "os.environ['DBUS_SYSTEM_BUS_ADDRESS']=address;l.secrets.token_hex=lambda _:sys.argv[3];"
+                "m=b.Manager(sys.argv[2],15,watch.authority,transport=lambda x:x._check(x.library.sd_bus_open_system(__import__('ctypes').byref(x.bus))),root_bootstrap=True);"
+                "command=\"import pathlib,sys;pathlib.Path(sys.argv[1]).write_text('complete')\";"
+                "p=json.dumps({'program':'/usr/bin/python3','args':['-I','-S','-c',command,sys.argv[4]],"
+                "'cwd':'/','env':{},'stdin':''}).encode();"
+                "d=time.clock_gettime_ns(time.CLOCK_BOOTTIME)+45_000_000_000;"
+                "\ntry: l.supervise(m,struct.pack('>QQI',d,os.stat('/proc/self/ns/time').st_ino,len(p))+p,d);print('unexpected success',flush=True)"
+                "\nexcept Exception as e: print(str(e),flush=True)"
+                "\nfinally: m.close();watch.close()"
+            )
+            parent = subprocess.Popen(['/usr/bin/python3', '-I', '-S', '-c', wrapper, str(root / 'src'),
+                str(helper), ident, str(marker)], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE, env={'DBUS_SYSTEM_BUS_ADDRESS': 'unix:path=' + str(scratch / 'proxy'),
+                                            'PATH': '/usr/bin:/bin'})
+            safe = False
+            try:
+                self.assertTrue(select.select([parent.stdout], [], [], 10)[0])
+                self.assertEqual(parent.stdout.readline(), b'watch-ready\n')
+                parent.stdin.write(b'start\n')
+                parent.stdin.flush()
+                self.assertTrue(proxy.paused.wait(10), 'UnrefUnit never reached the real bus')
+                output, _ = parent.communicate(timeout=15)
+                self.assertEqual(output.strip(), b'unit cleanup uncertain')
+                self.assertEqual(marker.read_text(), 'complete')
+                end = time.clock_gettime_ns(time.CLOCK_BOOTTIME) + 5_000_000_000
+                while True:
+                    result = subprocess.run(['/usr/bin/systemctl', 'show', unit, '--property=LoadState',
+                        '--property=ActiveState', '--property=Job', '--property=ControlGroup'],
+                        capture_output=True, text=True, check=True, timeout=5)
+                    values = dict(line.split('=', 1) for line in result.stdout.splitlines())
+                    group = Path('/sys/fs/cgroup/system.slice') / unit
+                    if (values.get('LoadState') == 'not-found' and values.get('ActiveState') == 'inactive'
+                            and not values.get('Job') and not values.get('ControlGroup') and not group.exists()):
+                        break
+                    if time.clock_gettime_ns(time.CLOCK_BOOTTIME) >= end:
+                        self.fail('unit state remained uncertain after lost UnrefUnit reply')
+                    time.sleep(0.01)
+                self.assertTrue((unit_dir / 'deadline.conf').is_file())
+                safe = True
+            finally:
+                proxy.drop()
+                if parent.poll() is None:
+                    parent.kill()
+                    parent.wait(timeout=5)
+                if safe:
+                    (unit_dir / 'deadline.conf').unlink()
+                    unit_dir.rmdir()
 
     def test_accepted_start_runs_late_after_reply_loss_without_input(self):
         if os.geteuid() != 0:
