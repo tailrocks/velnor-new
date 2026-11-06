@@ -349,7 +349,7 @@ pub(super) fn validate_new_crates(
     };
     if !super::release_validation::is_full_sha(&creation.source_sha)
         || creation.packages.is_empty()
-        || creation.packages.len() > 256
+        || creation.packages.len() > MAX_CRATE_RELEASE_PACKAGES
         || (!workspace && creation.packages.len() != packages.len())
         || creation.packages.iter().any(|(name, version)| {
             !super::release_validation::is_package_name(name)

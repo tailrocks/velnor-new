@@ -177,6 +177,24 @@ fn bootstrap_workspace_creation_has_explicit_source_and_each_version()
 }
 
 #[test]
+fn bootstrap_workspace_creation_respects_release_package_limit()
+-> Result<(), Box<dyn std::error::Error>> {
+    use velnor_actions_contract::config::{MAX_CRATE_RELEASE_PACKAGES, RustReleaseConfig};
+    let packages: serde_json::Map<String, serde_json::Value> = (0..MAX_CRATE_RELEASE_PACKAGES)
+        .map(|index| (format!("crate-{index}"), "0.1.0".into()))
+        .collect();
+    let mut input = serde_json::json!({"enabled":true,"registry":"crates-io","publishable_workspace":true,"required_workflow_path":".github/workflows/ci.yml","trusted_reviewer_id":1,"authentication":"bootstrap-token","new_crates":{"source_sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","packages":packages}});
+    serde_json::from_value::<RustReleaseConfig>(input.clone())?.validate("test")?;
+    input["new_crates"]["packages"]["crate-extra"] = "0.1.0".into();
+    assert!(
+        serde_json::from_value::<RustReleaseConfig>(input)?
+            .validate("test")
+            .is_err()
+    );
+    Ok(())
+}
+
+#[test]
 fn predecessor_accepts_only_first_run_attempt() -> Result<(), Box<dyn std::error::Error>> {
     use velnor_actions_contract::config::RustReleaseConfig;
     let mut input = serde_json::json!({"enabled":true,"registry":"crates-io","packages":["demo"],"required_workflow_path":".github/workflows/ci.yml","trusted_reviewer_id":1,"journal_predecessor":{"run_id":12,"run_attempt":1,"workflow_sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}});
