@@ -8,6 +8,7 @@
 
 use std::{
     error::Error,
+    fmt::Write as _,
     fs,
     path::Path,
     process::{Command, Output},
@@ -104,33 +105,28 @@ fn qualify_with_producer(
         .output()
 }
 
-#[test]
-fn qualified_runtime_is_bound_to_exact_ci_archives() -> Result<(), Box<dyn Error>> {
-    let fixture = AdmissionFixture::full()?;
-    let directory = fixture.image_dir.join("records");
-    fs::create_dir(&directory)?;
-    let produced = produce(&fixture, &directory)?;
-    assert!(
-        produced.status.success(),
-        "{}",
-        String::from_utf8_lossy(&produced.stderr)
-    );
-    let runtime = fixture.image_dir.join("runtime.json");
-    let output = fixture.image_dir.join("RUNNER_IMAGE_QUALIFICATION.json");
+fn lock_sha256(fixture: &AdmissionFixture) -> Result<String, Box<dyn Error>> {
     let lock = fs::read(fixture.root.join(".velnor/runner.lock"))?;
-    let lock_sha: String = Sha256::digest(lock)
-        .iter()
-        .map(|byte| format!("{byte:02x}"))
-        .collect();
-    let value = json!({"schema": "velnor.runner-image-runtime-qualification.v1", "source_commit": fixture.source,
-        "runner_lock_sha256": lock_sha, "images": {"runner": {"runtime_id": fixture.images.runner.config_digest, "identity_kind": "config"},
-        "dind": {"runtime_id": fixture.images.dind.config_digest, "identity_kind": "config"}, "resource_probe": {"runtime_id": fixture.images.resource_probe.config_digest, "identity_kind": "config"}}});
+    let mut digest = String::new();
+    for byte in Sha256::digest(lock) {
+        write!(digest, "{byte:02x}")?;
+    }
+    Ok(digest)
+}
+
+fn reject_runtime_mismatches(
+    fixture: &AdmissionFixture,
+    directory: &Path,
+    runtime: &Path,
+    output: &Path,
+    value: &serde_json::Value,
+) -> Result<(), Box<dyn Error>> {
     for field in ["runner", "dind", "resource_probe"] {
         let mut invalid = value.clone();
         invalid["images"][field]["runtime_id"] = json!(format!("sha256:{}", "0".repeat(64)));
-        fs::write(&runtime, serde_json::to_vec(&invalid)?)?;
+        fs::write(runtime, serde_json::to_vec(&invalid)?)?;
         assert!(
-            !qualify(&fixture, &directory, &runtime, &output)?
+            !qualify(fixture, directory, runtime, output)?
                 .status
                 .success()
         );
@@ -139,9 +135,9 @@ fn qualified_runtime_is_bound_to_exact_ci_archives() -> Result<(), Box<dyn Error
     for field in ["source_commit", "runner_lock_sha256"] {
         let mut invalid = value.clone();
         invalid[field] = json!("wrong");
-        fs::write(&runtime, serde_json::to_vec(&invalid)?)?;
+        fs::write(runtime, serde_json::to_vec(&invalid)?)?;
         assert!(
-            !qualify(&fixture, &directory, &runtime, &output)?
+            !qualify(fixture, directory, runtime, output)?
                 .status
                 .success()
         );
@@ -149,9 +145,9 @@ fn qualified_runtime_is_bound_to_exact_ci_archives() -> Result<(), Box<dyn Error
     }
     let mut extra = value.clone();
     extra["images"]["extra"] = json!("unexpected");
-    fs::write(&runtime, serde_json::to_vec(&extra)?)?;
+    fs::write(runtime, serde_json::to_vec(&extra)?)?;
     assert!(
-        !qualify(&fixture, &directory, &runtime, &output)?
+        !qualify(fixture, directory, runtime, output)?
             .status
             .success()
     );
@@ -160,43 +156,52 @@ fn qualified_runtime_is_bound_to_exact_ci_archives() -> Result<(), Box<dyn Error
         .as_object_mut()
         .ok_or("images not object")?
         .remove("dind");
-    fs::write(&runtime, serde_json::to_vec(&missing)?)?;
+    fs::write(runtime, serde_json::to_vec(&missing)?)?;
     assert!(
-        !qualify(&fixture, &directory, &runtime, &output)?
+        !qualify(fixture, directory, runtime, output)?
             .status
             .success()
     );
-    let duplicate = serde_json::to_string(&value)?
+    let duplicate = serde_json::to_string(value)?
         .replace("\"runner\":", "\"runner\":\"duplicate\",\"runner\":");
-    fs::write(&runtime, duplicate)?;
+    fs::write(runtime, duplicate)?;
     assert!(
-        !qualify(&fixture, &directory, &runtime, &output)?
+        !qualify(fixture, directory, runtime, output)?
             .status
             .success()
     );
-    fs::write(&runtime, serde_json::to_vec(&value)?)?;
+    fs::write(runtime, serde_json::to_vec(value)?)?;
     assert!(
-        !qualify_with_producer(&fixture, &directory, &runtime, &output, "222")?
+        !qualify_with_producer(fixture, directory, runtime, output, "222")?
             .status
             .success()
     );
+    Ok(())
+}
+
+fn reject_record_mismatches(
+    fixture: &AdmissionFixture,
+    directory: &Path,
+    runtime: &Path,
+    output: &Path,
+) -> Result<Vec<u8>, Box<dyn Error>> {
     let record_path = directory.join("runner-image-publication.json");
     let record = fs::read(&record_path)?;
     let mut wrong_run: serde_json::Value = serde_json::from_slice(&record)?;
     wrong_run["workflow"]["run_attempt"] = json!(3);
     fs::write(&record_path, serde_json::to_vec(&wrong_run)?)?;
     assert!(
-        !qualify(&fixture, &directory, &runtime, &output)?
+        !qualify(fixture, directory, runtime, output)?
             .status
             .success()
     );
-    fs::write(&record_path, record)?;
+    fs::write(&record_path, &record)?;
     let original_record = fs::read(&record_path)?;
     let mut wrong_source: serde_json::Value = serde_json::from_slice(&original_record)?;
     wrong_source["source"]["commit"] = json!("0".repeat(40));
     fs::write(&record_path, serde_json::to_vec(&wrong_source)?)?;
     assert!(
-        !qualify(&fixture, &directory, &runtime, &output)?
+        !qualify(fixture, directory, runtime, output)?
             .status
             .success()
     );
@@ -204,26 +209,29 @@ fn qualified_runtime_is_bound_to_exact_ci_archives() -> Result<(), Box<dyn Error
     wrong_lock["lock"]["sha256"] = json!("0".repeat(64));
     fs::write(&record_path, serde_json::to_vec(&wrong_lock)?)?;
     assert!(
-        !qualify(&fixture, &directory, &runtime, &output)?
+        !qualify(fixture, directory, runtime, output)?
             .status
             .success()
     );
-    fs::write(&record_path, original_record)?;
+    fs::write(&record_path, &original_record)?;
     let archive = fs::read(&fixture.images.runner.path)?;
     fs::write(&fixture.images.runner.path, b"corrupt")?;
     assert!(
-        !qualify(&fixture, &directory, &runtime, &output)?
+        !qualify(fixture, directory, runtime, output)?
             .status
             .success()
     );
     fs::write(&fixture.images.runner.path, archive)?;
-    let result = qualify(&fixture, &directory, &runtime, &output)?;
-    assert!(
-        result.status.success(),
-        "{}",
-        String::from_utf8_lossy(&result.stderr)
-    );
-    let proof = parse_runner_image_qualification(&fs::read(&output)?)?;
+    Ok(original_record)
+}
+
+fn assert_qualified_proof(
+    fixture: &AdmissionFixture,
+    directory: &Path,
+    output: &Path,
+    lock_sha: &str,
+) -> Result<(), Box<dyn Error>> {
+    let proof = parse_runner_image_qualification(&fs::read(output)?)?;
     assert_eq!(proof.source_commit, fixture.source);
     assert_eq!(proof.producer_run_id, 111);
     assert_eq!(proof.qualifier_run_id, 222);
@@ -244,6 +252,35 @@ fn qualified_runtime_is_bound_to_exact_ci_archives() -> Result<(), Box<dyn Error
         assert_eq!(image.archive, record.archive);
         assert_eq!(image.oci, record.oci);
     }
+    Ok(())
+}
+
+#[test]
+fn qualified_runtime_is_bound_to_exact_ci_archives() -> Result<(), Box<dyn Error>> {
+    let fixture = AdmissionFixture::full()?;
+    let directory = fixture.image_dir.join("records");
+    fs::create_dir(&directory)?;
+    let produced = produce(&fixture, &directory)?;
+    assert!(
+        produced.status.success(),
+        "{}",
+        String::from_utf8_lossy(&produced.stderr)
+    );
+    let runtime = fixture.image_dir.join("runtime.json");
+    let output = fixture.image_dir.join("RUNNER_IMAGE_QUALIFICATION.json");
+    let lock_sha = lock_sha256(&fixture)?;
+    let value = json!({"schema": "velnor.runner-image-runtime-qualification.v1", "source_commit": fixture.source,
+        "runner_lock_sha256": lock_sha, "images": {"runner": {"runtime_id": fixture.images.runner.config_digest, "identity_kind": "config"},
+        "dind": {"runtime_id": fixture.images.dind.config_digest, "identity_kind": "config"}, "resource_probe": {"runtime_id": fixture.images.resource_probe.config_digest, "identity_kind": "config"}}});
+    reject_runtime_mismatches(&fixture, &directory, &runtime, &output, &value)?;
+    reject_record_mismatches(&fixture, &directory, &runtime, &output)?;
+    let result = qualify(&fixture, &directory, &runtime, &output)?;
+    assert!(
+        result.status.success(),
+        "{}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+    assert_qualified_proof(&fixture, &directory, &output, &lock_sha)?;
     let manifest_output = fixture.image_dir.join("manifest-qualification.json");
     let mut manifest_runtime = value.clone();
     for (role, digest) in [

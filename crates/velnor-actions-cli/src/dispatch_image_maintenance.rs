@@ -108,36 +108,9 @@ fn run_with_deadline(
             output_directory: output_directory.clone(),
             deadline,
         }),
-        ImageMaintenanceCommand::WriteRunnerQualification {
-            root,
-            source_commit,
-            runner_archive,
-            runner_record,
-            dind_archive,
-            dind_record,
-            probe_archive,
-            probe_record,
-            runtime_result,
-            producer_run_id,
-            producer_run_attempt,
-            qualifier_job_id,
-            output,
-        } => write_runner_qualification(&WriteRunnerQualificationRequest {
-            root: root.clone(),
-            source_commit: source_commit.clone(),
-            runner_archive: runner_archive.clone(),
-            runner_record: runner_record.clone(),
-            dind_archive: dind_archive.clone(),
-            dind_record: dind_record.clone(),
-            probe_archive: probe_archive.clone(),
-            probe_record: probe_record.clone(),
-            runtime_result: runtime_result.clone(),
-            producer_run_id: *producer_run_id,
-            producer_run_attempt: *producer_run_attempt,
-            qualifier_job_id: *qualifier_job_id,
-            output: output.clone(),
-            deadline,
-        }),
+        ImageMaintenanceCommand::WriteRunnerQualification { .. } => {
+            write_qualification_request(command, deadline)
+        }
         ImageMaintenanceCommand::PromoteImage {
             image_id,
             source_commit,
@@ -148,6 +121,46 @@ fn run_with_deadline(
         }),
         ImageMaintenanceCommand::PublishImage { .. } => publish_request(command, deadline),
     }
+}
+
+fn write_qualification_request(
+    command: &ImageMaintenanceCommand,
+    deadline: CheckDeadline,
+) -> Result<(), OrchestratorError> {
+    let ImageMaintenanceCommand::WriteRunnerQualification {
+        root,
+        source_commit,
+        runner_archive,
+        runner_record,
+        dind_archive,
+        dind_record,
+        probe_archive,
+        probe_record,
+        runtime_result,
+        producer_run_id,
+        producer_run_attempt,
+        qualifier_job_id,
+        output,
+    } = command
+    else {
+        unreachable!()
+    };
+    write_runner_qualification(&WriteRunnerQualificationRequest {
+        root: root.clone(),
+        source_commit: source_commit.clone(),
+        runner_archive: runner_archive.clone(),
+        runner_record: runner_record.clone(),
+        dind_archive: dind_archive.clone(),
+        dind_record: dind_record.clone(),
+        probe_archive: probe_archive.clone(),
+        probe_record: probe_record.clone(),
+        runtime_result: runtime_result.clone(),
+        producer_run_id: *producer_run_id,
+        producer_run_attempt: *producer_run_attempt,
+        qualifier_job_id: *qualifier_job_id,
+        output: output.clone(),
+        deadline,
+    })
 }
 
 fn publish_request(
