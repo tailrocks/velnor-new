@@ -10,7 +10,7 @@ use crate::{RenderError, steps::scan_for_private_subcommands};
 #[path = "release_validators.rs"]
 mod validators;
 
-pub(crate) use validators::is_clean_text;
+pub(crate) use validators::{is_clean_text, validate_version_group};
 pub use validators::{
     validate_environment, validate_package_name, validate_package_version, validate_plan_id,
     validate_repository, validate_source_sha,

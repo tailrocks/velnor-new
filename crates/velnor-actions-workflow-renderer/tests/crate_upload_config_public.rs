@@ -56,3 +56,26 @@ fn upload_config_selects_one_package_and_preserves_policy() -> Result<(), Box<dy
     assert!(render_single_package_upload_config(&duplicate, "velnor_probe_a", "0.1.72").is_err());
     Ok(())
 }
+
+#[test]
+fn long_version_group_survives_rendering_but_long_package_is_rejected()
+-> Result<(), Box<dyn std::error::Error>> {
+    let group = "g".repeat(65);
+    let mut config = ReleasePlzConfig {
+        tag_pattern: "{{ package }}-v{{ version }}".into(),
+        semver_check: false,
+        packages: vec![ReleasePlzPackage {
+            version_group: Some(group.clone()),
+            name: "demo".into(),
+            publish_features: vec![],
+        }],
+    };
+    let rendered: toml::Value = toml::from_str(&render_release_plz_config(&config, "0.1.72")?)?;
+    assert_eq!(
+        rendered["package"][0]["version_group"].as_str(),
+        Some(group.as_str())
+    );
+    config.packages[0].name = "a".repeat(65);
+    assert!(render_release_plz_config(&config, "0.1.72").is_err());
+    Ok(())
+}

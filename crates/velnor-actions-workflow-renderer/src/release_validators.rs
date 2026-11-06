@@ -64,12 +64,20 @@ pub fn validate_plan_id(id: &str) -> Result<(), RenderError> {
 }
 
 pub fn validate_package_name(name: &str) -> Result<(), RenderError> {
+    validate_release_identifier(name, false)
+}
+
+pub(crate) fn validate_version_group(name: &str) -> Result<(), RenderError> {
+    validate_release_identifier(name, true)
+}
+
+fn validate_release_identifier(name: &str, allow_long: bool) -> Result<(), RenderError> {
     let mut bytes = name.bytes();
     let leading = bytes
         .next()
         .is_some_and(|b| b.is_ascii_alphabetic() || b == b'_');
     let rest = bytes.all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'-'));
-    if leading && rest && name.len() <= 64 {
+    if leading && rest && (allow_long || name.len() <= 64) {
         Ok(())
     } else {
         Err(RenderError::InvalidWorkflow(format!(

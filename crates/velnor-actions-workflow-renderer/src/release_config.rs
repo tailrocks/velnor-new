@@ -3,7 +3,7 @@
 
 use crate::{
     RenderError, marker,
-    release_spec::{is_clean_text, validate_package_name},
+    release_spec::{is_clean_text, validate_package_name, validate_version_group},
     steps::scan_for_private_subcommands,
 };
 
@@ -68,7 +68,7 @@ impl ReleasePlzPackage {
     pub fn validate(&self) -> Result<(), RenderError> {
         validate_package_name(&self.name)?;
         if let Some(group) = &self.version_group {
-            validate_package_name(group)?;
+            validate_version_group(group)?;
         }
         if self.publish_features.len() > 64 {
             return Err(RenderError::InvalidWorkflow(format!(

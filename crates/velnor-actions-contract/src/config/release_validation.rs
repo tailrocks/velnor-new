@@ -159,7 +159,7 @@ pub(super) fn validate_version_groups(
     let mut seen: BTreeSet<&str> = BTreeSet::new();
     for (group, members) in groups {
         let key = format!("stacks.rust.release.version_groups.{group}");
-        if !is_package_name(group) {
+        if !is_release_identifier(group) {
             return Err(ContractError::config(
                 file,
                 "stacks.rust.release.version_groups",
@@ -206,12 +206,15 @@ pub(super) fn validate_version_groups(
 }
 
 pub(super) fn is_package_name(name: &str) -> bool {
+    name.len() <= 64 && is_release_identifier(name)
+}
+
+fn is_release_identifier(name: &str) -> bool {
     let mut bytes = name.bytes();
     let Some(first) = bytes.next() else {
         return false;
     };
-    name.len() <= 64
-        && (first.is_ascii_alphabetic() || first == b'_')
+    (first.is_ascii_alphabetic() || first == b'_')
         && bytes.all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_'))
 }
 
