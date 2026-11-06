@@ -45,3 +45,13 @@ fn scheme_is(socket: &str, scheme: &str) -> bool {
         None => false,
     }
 }
+
+pub(crate) fn canonical_docker_root(path: &str) -> bool {
+    path.starts_with('/')
+        && path != "/"
+        && path.len() <= 4096
+        && !path.chars().any(char::is_control)
+        && path[1..]
+            .split('/')
+            .all(|part| !part.is_empty() && part != "." && part != "..")
+}

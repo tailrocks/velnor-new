@@ -34,6 +34,8 @@ pub(crate) struct Rest<'a> {
 
     pub(crate) pat: &'a str,
 
+    pub(crate) images: Option<&'a std::sync::Arc<crate::artifact_admission::BootstrapSlot>>,
+
     pub(crate) resource_budget: Option<ResourceBudget>,
 
     pub(crate) static_capacity: bool,
@@ -43,8 +45,8 @@ pub(crate) struct Rest<'a> {
 
 impl Rest<'_> {
     #[must_use]
-    pub(crate) const fn permits_start(self) -> bool {
-        self.static_capacity
+    pub(crate) fn permits_start(self) -> bool {
+        self.static_capacity && self.images.and_then(|slot| slot.images()).is_some()
     }
 }
 

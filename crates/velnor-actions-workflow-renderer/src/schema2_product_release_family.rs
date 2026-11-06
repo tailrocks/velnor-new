@@ -109,10 +109,7 @@ impl Family {
     fn asset_paths(self) -> Vec<String> {
         match self {
             Self::Images => [
-                "velnor-runner-linux-amd64.tar",
-                "velnor-dind-linux-amd64.tar",
-                "velnor-resource-probe-linux-amd64.tar",
-                "RESOURCE_PROBE_MANIFEST.json",
+                "RUNNER_IMAGE_MANIFEST.json",
                 "LICENSE",
                 "NOTICE",
                 "SHA256SUMS",
@@ -187,7 +184,11 @@ pub(super) fn publish_script(
         .replace("@GH_FUNCTION@", &gh_function)
         .replace(
             "@ELIGIBILITY_FUNCTION@",
-            &eligibility::publisher_definition(),
+            &if family == Family::Images {
+                super::release::image_release_eligibility()
+            } else {
+                eligibility::publisher_definition()
+            },
         )
         .replace("@PREPARE_SCRIPT@", &prepare_script(family, pins)?)
         .replace("@REPOSITORY@", eligibility::REPOSITORY)

@@ -5,7 +5,7 @@ use crate::{
     OrchestratorError,
     internal::internal,
     pins::{
-        consumer_acquire_for_runner, consumer_acquire_step, resolve_mise_setup_for_release_target,
+        consumer_acquire_for_runner, resolve_mise_setup_for_release_target,
         resolve_verification_mise_setup,
     },
     prepare::GenerationPreparation,
@@ -18,8 +18,8 @@ use std::{
     path::Path,
 };
 use velnor_actions_contract::{
-    PackageReleasePlanProduct, ReleaseTarget, package_release::PackageReleaseChannel,
-    package_release::PackageReleasePayloadFormat,
+    PackageReleasePlanProduct, ReleaseTarget, Step, WorkflowPolicy,
+    package_release::PackageReleaseChannel, package_release::PackageReleasePayloadFormat,
 };
 use velnor_actions_mise::{MiseInstall, PinnedTool, PinnedToolExec, ToolCatalog};
 use velnor_actions_rust::resolve_release_products;
@@ -35,19 +35,14 @@ use velnor_actions_workflow_renderer::{
 mod source_preparation;
 
 pub(crate) fn files(prep: &GenerationPreparation) -> Result<Vec<RenderedFile>, OrchestratorError> {
-    let Some(release) = prep
-        .config
-        .stacks
-        .rust
-        .as_ref()
-        .map(|rust| &rust.binary_release)
-    else {
+    if prep.config.stacks.rust.is_none() {
         return Ok(Vec::new());
-    };
+    }
+    let release = crate::sdk_preview_configuration::release(&prep.config)?;
     if !release.preview.enabled {
         return Ok(Vec::new());
     }
-    let spec = specification(prep, release, PackageReleaseChannel::Preview)?;
+    let spec = specification(prep, &release, PackageReleaseChannel::Preview)?;
     let mut files = vec![render_consumer_preview(&spec)?];
     if spec.homebrew_tap.is_some() {
         files.push(render_release_tap_reconcile(&spec)?);
@@ -67,21 +62,15 @@ pub(crate) fn specification(
     crate::binary_release_emit::require_tracked_lockfile(prep, release)?;
     let policy = release_policy(prep, release, channel)?;
     let version = env!("CARGO_PKG_VERSION");
-    let linux_acquire = consumer_acquire_step("ubuntu-26.04", version, &prep.discovery)?;
-    let producer_acquire =
-        consumer_acquire_step(release.producer.runner.runs_on(), version, &prep.discovery)?;
+    let linux_acquire = acquire(prep, ReleaseTarget::LinuxX86_64)?;
+    let producer_target = ReleaseTarget::for_runner_label(release.producer.runner.runs_on())
+        .ok_or_else(|| internal("preview_producer_target_unsupported"))?;
+    let producer_acquire = acquire(prep, producer_target)?;
     let mut producer_acquire_by_target = BTreeMap::new();
     let mut producer_setup_by_target = BTreeMap::new();
     if channel == PackageReleaseChannel::Preview {
         for target in ReleaseTarget::ALL {
-            producer_acquire_by_target.insert(
-                target,
-                crate::pins::consumer_acquire_for_target(
-                    target,
-                    version,
-                    prep.discovery.consumer_manifest_json.as_deref(),
-                )?,
-            );
+            producer_acquire_by_target.insert(target, acquire(prep, target)?);
             producer_setup_by_target.insert(
                 target,
                 resolve_mise_setup_for_release_target(&prep.config, target)?,
@@ -105,6 +94,8 @@ pub(crate) fn specification(
         &crate::source_prep::lockful_roots(&prep.root, &prep.discovery.workspaces),
     )?;
     let spec = ConsumerReleaseSpec {
+        sdk_source_bootstrap: prep.config.workflow.policy == WorkflowPolicy::VelnorRepositoryV1
+            && channel == PackageReleaseChannel::Preview,
         checkout_lfs: prep.config.workflow.checkout_lfs,
         generator_version: version.to_owned(),
         policy,
@@ -139,6 +130,25 @@ pub(crate) fn specification(
             .unwrap_or_default(),
     };
     Ok(spec)
+}
+
+fn acquire(prep: &GenerationPreparation, target: ReleaseTarget) -> Result<Step, OrchestratorError> {
+    let version = env!("CARGO_PKG_VERSION");
+    match prep.config.workflow.policy {
+        WorkflowPolicy::VelnorRepositoryV1 => {
+            let lock = prep
+                .published_generator_lock
+                .as_ref()
+                .ok_or_else(|| internal("preview_published_generator_lock_missing"))?;
+            let staged = format!("$RUNNER_TEMP/velnor/bin/velnor-actions-{version}");
+            crate::pins::lock_acquire_for_target(lock, target, &staged)
+        }
+        WorkflowPolicy::ConsumerV1 => crate::pins::consumer_acquire_for_target(
+            target,
+            version,
+            prep.discovery.consumer_manifest_json.as_deref(),
+        ),
+    }
 }
 
 fn tap_spec(

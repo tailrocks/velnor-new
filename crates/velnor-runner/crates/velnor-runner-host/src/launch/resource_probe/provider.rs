@@ -21,16 +21,3 @@ pub(super) trait ImageProvider {
         info: &SystemInfo,
     ) -> Result<Option<VerifiedCandidate>, HostError>;
 }
-
-pub(super) struct UnavailableImageProvider;
-
-impl ImageProvider for UnavailableImageProvider {
-    async fn verified_candidate(
-        &self,
-        _docker: &Docker,
-        _engine_id: &str,
-        _info: &SystemInfo,
-    ) -> Result<Option<VerifiedCandidate>, HostError> {
-        std::future::ready(Ok(None)).await
-    }
-}

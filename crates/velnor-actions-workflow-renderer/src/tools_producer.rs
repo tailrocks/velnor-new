@@ -57,7 +57,14 @@ fn plan(
             continue;
         }
         if let Some(digest) = tools_digest(id, job)? {
-            donors.entry(digest).or_insert(job);
+            donors
+                .entry(digest)
+                .and_modify(|selected| {
+                    if !has_canonical_install_roles(selected) && has_canonical_install_roles(job) {
+                        *selected = job;
+                    }
+                })
+                .or_insert(job);
         }
     }
     let mut plans = Vec::with_capacity(donors.len());
@@ -114,6 +121,13 @@ fn build(plan: &ToolsProducerPlan, policy: PullRequestCachePolicy) -> Result<Job
         env: velnor_actions_contract::JobEnv::Unset,
         steps,
     })
+}
+
+fn has_canonical_install_roles(job: &Job) -> bool {
+    job.steps
+        .iter()
+        .filter(|step| is_install_role(step.role))
+        .all(|step| producer_form(step, "donor").is_ok())
 }
 
 fn donor_step<'a>(donor: &'a Job, role: StepRole, id: &str) -> Result<&'a Step, RenderError> {

@@ -21,15 +21,19 @@ pub(in super::super) fn trigger(branch: &str) -> (String, Yaml) {
     )
 }
 
-pub(in super::super) fn validate(document: &Yaml, recovery: Yaml) -> Result<(), RenderError> {
+pub(in super::super) fn validate(
+    document: &Yaml,
+    recovery: Option<Yaml>,
+) -> Result<(), RenderError> {
     let Yaml::Map(fields) = document else {
         return Err(trigger_error());
     };
     let mut triggers = fields.iter().filter(|(key, _)| key == "on");
-    let expected = Yaml::Map(vec![
-        trigger("main"),
-        ("workflow_dispatch".to_owned(), recovery),
-    ]);
+    let mut expected = vec![trigger("main")];
+    if let Some(recovery) = recovery {
+        expected.push(("workflow_dispatch".to_owned(), recovery));
+    }
+    let expected = Yaml::Map(expected);
     match (triggers.next(), triggers.next()) {
         (Some((_, actual)), None) if actual == &expected => Ok(()),
         _ => Err(trigger_error()),

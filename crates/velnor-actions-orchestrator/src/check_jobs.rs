@@ -17,13 +17,24 @@ use velnor_actions_workflow_renderer::steps::INTERNAL_OP_ENV;
 use crate::OrchestratorError;
 use crate::discover::Discovery;
 
+#[cfg(all(test, unix))]
+#[path = "check_jobs_tests.rs"]
+mod tests;
+
 pub(crate) fn build_check_jobs(
     policy: WorkflowPolicy,
+    config: &velnor_actions_contract::VelnorConfig,
     discovery: &Discovery,
     catalog: &ToolCatalog,
     published_lock: Option<&velnor_actions_contract::GeneratorLock>,
+    approved_release: Option<velnor_actions_mise::catalog::lock::ApprovedGeneratorRelease<'_>>,
     helper_version: &str,
 ) -> Result<Vec<(String, Job)>, OrchestratorError> {
+    let lane = crate::matrix_step::LaneTools::union(
+        policy,
+        catalog,
+        &crate::crate_job_ids::group_runnable(&discovery.proposals)?,
+    );
     let mut jobs = Vec::with_capacity(discovery.mise_checks.len() + discovery.native_checks.len());
     for discovered in &discovery.mise_checks {
         let check = &discovered.check;
@@ -42,7 +53,19 @@ pub(crate) fn build_check_jobs(
         let id = format!("check-{}", check.id);
         jobs.push((
             id.clone(),
-            check_job(discovered, &id, acquire, catalog, helper_version)?,
+            check_job(
+                discovered,
+                &id,
+                acquire,
+                catalog,
+                helper_version,
+                &lane,
+                CheckContext {
+                    policy,
+                    config,
+                    approved_release,
+                },
+            )?,
         ));
     }
     for check in &discovery.native_checks {
@@ -111,7 +134,9 @@ fn native_check_job(
         vec![velnor_actions_mise::PinnedTool::Gh],
         false,
     )?;
-    let mut steps = vec![crate::workflow::wire_w1::checkout_step_for(CheckoutHistory::Full)?];
+    let mut steps = vec![crate::workflow::wire_w1::checkout_step_for(
+        CheckoutHistory::Full,
+    )?];
     steps.extend(acquire);
     steps.push(crate::matrix_step::download_plan_step()?);
     steps.push(prepare_gh);
@@ -140,18 +165,68 @@ fn native_check_job(
     })
 }
 
+#[derive(Clone, Copy)]
+struct CheckContext<'a> {
+    policy: WorkflowPolicy,
+    config: &'a velnor_actions_contract::VelnorConfig,
+    approved_release: Option<velnor_actions_mise::catalog::lock::ApprovedGeneratorRelease<'a>>,
+}
+
 fn check_job(
     discovered: &DiscoveredCheck,
     job_id: &str,
     acquire: Option<Step>,
     catalog: &ToolCatalog,
     helper_version: &str,
+    lane: &crate::matrix_step::LaneTools,
+    context: CheckContext<'_>,
 ) -> Result<Job, OrchestratorError> {
+    let CheckContext {
+        policy,
+        config,
+        approved_release,
+    } = context;
     let check = &discovered.check;
     let mut steps = vec![crate::workflow::wire_w1::checkout_step_for(check.history)?];
     steps.extend(acquire);
     steps.push(crate::matrix_step::download_plan_step()?);
-    steps.push(execute_check_step(discovered, catalog, helper_version)?);
+    let image_check =
+        policy == WorkflowPolicy::VelnorRepositoryV1 && check.id == "native-image-candidates";
+    let mut execute = execute_check_step(discovered, catalog, helper_version)?;
+    if image_check {
+        if check.runner.platform.release_target()
+            != velnor_actions_contract::ReleaseTarget::LinuxX86_64
+        {
+            return Err(OrchestratorError::Contract {
+                problem: "native_image_check_target".to_owned(),
+            });
+        }
+        let approved = approved_release.ok_or_else(|| OrchestratorError::Contract {
+            problem: "controller_approvals:missing_approval".to_owned(),
+        })?;
+        let runtime = approved
+            .mise_runtime
+            .iter()
+            .find(|runtime| runtime.target == velnor_actions_contract::ReleaseTarget::LinuxX86_64)
+            .ok_or_else(|| OrchestratorError::Contract {
+                problem: "approved_check_mise_missing".to_owned(),
+            })?;
+        steps.push(approved_check_mise_step(runtime)?);
+        if let velnor_actions_contract::StepKind::Shell { env, .. } = &mut execute.kind {
+            env.insert("PATH".to_owned(), "${{ runner.temp }}/velnor/check-mise/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin".to_owned());
+        }
+    }
+    steps.push(execute);
+    if image_check {
+        let pins = crate::product_release_pins::resolve(config, catalog)?;
+        steps.push(crate::workflow::verify_restored_rust_step(catalog));
+        steps.push(crate::matrix_step::prepare_crate_tools_step(catalog, lane)?);
+        steps.extend(crate::matrix_step::verify_validators_step(catalog, lane));
+        steps.push(crate::workflow::prepare_rust_components_step(catalog)?);
+        steps.push(crate::workflow::verify_rust_manifest_step(catalog));
+        steps
+            .extend(velnor_actions_workflow_renderer::schema2::sdk_ci_image_steps(&pins, catalog)?);
+    }
     let mut upload = crate::matrix_step::crate_upload_step(job_id)?;
     upload.condition = Some("always()".to_owned());
     steps.push(upload);
@@ -176,7 +251,10 @@ fn check_job(
     })
 }
 
-fn named_check_condition(job_id: &str, check: &velnor_actions_contract::config::MiseCheck) -> String {
+fn named_check_condition(
+    job_id: &str,
+    check: &velnor_actions_contract::config::MiseCheck,
+) -> String {
     let gate = velnor_actions_workflow_renderer::not_affected_gate(job_id);
     let needs_admission = check.runner.executor == CheckExecutor::EphemeralSelfHosted
         || RunsOn::parse(&check.runner.label).is_ok_and(|selector| selector.is_scale_set());
@@ -223,4 +301,62 @@ fn execute_check_step(
         env,
     )
     .map_err(OrchestratorError::from)
+}
+
+fn approved_check_mise_step(
+    runtime: &velnor_actions_mise::catalog::lock::ApprovedMiseRuntime,
+) -> Result<Step, OrchestratorError> {
+    let version = &runtime.version;
+    let hash = &runtime.sha256;
+    if version.split('.').count() != 3
+        || version
+            .split('.')
+            .any(|part| part.is_empty() || !part.bytes().all(|byte| byte.is_ascii_digit()))
+        || hash.len() != 64
+        || !hash
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+        || !(1..=268_435_456).contains(&runtime.bytes)
+    {
+        return Err(OrchestratorError::Contract {
+            problem: "invalid_approved_check_mise".to_owned(),
+        });
+    }
+    let size = runtime.bytes;
+    let script = format!(
+        "set -eu; umask 077; mkdir -p \"$RUNNER_TEMP/velnor\"; [ ! -L \"$RUNNER_TEMP/velnor\" ]; [ -O \"$RUNNER_TEMP/velnor\" ]; chmod 700 \"$RUNNER_TEMP/velnor\"; mkdir -m 700 \"$RUNNER_TEMP/velnor/check-mise\"; mkdir -m 700 \"$RUNNER_TEMP/velnor/check-mise/bin\"; /usr/bin/curl -q --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --tlsv1.2 --connect-timeout 15 --max-time 600 --max-filesize {size} 'https://github.com/jdx/mise/releases/download/v{version}/mise-v{version}-linux-x64' -o \"$RUNNER_TEMP/velnor/check-mise/bin/mise\"; /usr/bin/openssl dgst -sha256 -r \"$RUNNER_TEMP/velnor/check-mise/bin/mise\" | /usr/bin/grep -qxF \"{hash} *$RUNNER_TEMP/velnor/check-mise/bin/mise\"; /usr/bin/wc -c < \"$RUNNER_TEMP/velnor/check-mise/bin/mise\" | /usr/bin/tr -d '[:space:]' | /usr/bin/grep -qxF '{size}'; chmod 0500 \"$RUNNER_TEMP/velnor/check-mise/bin/mise\""
+    );
+    velnor_actions_workflow_renderer::shell_step(
+        "Acquire approved check Mise",
+        vec!["bash".to_owned(), "-c".to_owned(), script],
+        BTreeMap::new(),
+    )
+    .map_err(OrchestratorError::from)
+}
+
+pub(super) fn helper_catalog(
+    input: &super::workflow_build::WorkflowBuildInput<'_>,
+    catalog: &ToolCatalog,
+) -> Result<ToolCatalog, OrchestratorError> {
+    if input.config.workflow.policy != WorkflowPolicy::VelnorRepositoryV1 {
+        return Ok(catalog.clone());
+    }
+    let lock = input
+        .published_generator_lock
+        .ok_or_else(|| OrchestratorError::Contract {
+            problem: "required_verdict_requires_published_generator_lock".to_owned(),
+        })?;
+    let map_err =
+        |error: velnor_actions_mise::catalog::lock::LockError| OrchestratorError::Contract {
+            problem: error.to_string(),
+        };
+    match input.approved_release {
+        Some(approved) => velnor_actions_mise::catalog::lock::catalog_for_approved_generator(
+            lock, catalog, &approved,
+        )
+        .map_err(map_err),
+        None => Err(OrchestratorError::Contract {
+            problem: "controller_approvals:missing_approval".to_owned(),
+        }),
+    }
 }

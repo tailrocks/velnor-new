@@ -60,12 +60,7 @@ fn read_source_config(
 fn source_release_config(
     config: &velnor_actions_contract::config::VelnorConfig,
 ) -> Result<RustBinaryReleaseConfig, OrchestratorError> {
-    let release = config
-        .stacks
-        .rust
-        .as_ref()
-        .map(|rust| rust.binary_release.clone())
-        .ok_or_else(|| internal("preview_source_config_missing"))?;
+    let release = crate::sdk_preview_configuration::release(config)?;
     release.validate(".velnor/config.toml")?;
     if !release.channel_enabled(PackageReleaseChannel::Preview) {
         return Err(internal("preview_source_channel_disabled"));

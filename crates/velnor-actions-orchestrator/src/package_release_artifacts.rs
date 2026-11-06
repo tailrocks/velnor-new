@@ -315,3 +315,5 @@ fn invalid(problem: &str) -> OrchestratorError {
         problem: problem.to_owned(),
     }
 }
+
+pub(crate) use inventory::open_regular_nofollow;

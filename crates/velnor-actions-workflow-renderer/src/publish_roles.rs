@@ -13,6 +13,8 @@ pub enum PublishRole {
     ArtifactPublish,
     ImagePublish,
     ImagePromote,
+    NativeImagePublish,
+    NativeImagePromote,
     NpmPublish,
 }
 
@@ -28,6 +30,8 @@ impl PublishRole {
             Self::ArtifactPublish => "artifact-publish",
             Self::ImagePublish => "image-publish",
             Self::ImagePromote => "image-promote",
+            Self::NativeImagePublish => "native-image-publish",
+            Self::NativeImagePromote => "native-image-promote",
             Self::NpmPublish => "npm-publish",
         }
     }
@@ -35,7 +39,12 @@ impl PublishRole {
     pub(crate) fn rank(self) -> u8 {
         match self {
             Self::Authority | Self::BranchAuthority => 0,
-            Self::TagRelease | Self::ArtifactBuild | Self::ImagePublish | Self::ImagePromote => 1,
+            Self::TagRelease
+            | Self::ArtifactBuild
+            | Self::ImagePublish
+            | Self::ImagePromote
+            | Self::NativeImagePublish
+            | Self::NativeImagePromote => 1,
             Self::ArtifactAttest => 2,
             Self::ArtifactPublish => 3,
             Self::NpmPublish => 4,
@@ -53,12 +62,15 @@ impl PublishRole {
     pub(crate) fn gate(self) -> Option<Self> {
         match self {
             Self::Authority | Self::BranchAuthority => None,
-            Self::TagRelease | Self::ImagePublish => Some(Self::BranchAuthority),
+            Self::TagRelease | Self::ImagePublish | Self::NativeImagePublish => {
+                Some(Self::BranchAuthority)
+            }
             Self::ArtifactBuild
             | Self::ArtifactAttest
             | Self::ArtifactPublish
             | Self::NpmPublish
-            | Self::ImagePromote => Some(Self::Authority),
+            | Self::ImagePromote
+            | Self::NativeImagePromote => Some(Self::Authority),
         }
     }
 }
@@ -89,6 +101,8 @@ impl PublishPermissions {
                 PublishRole::ArtifactPublish => (Write, None, None, None, None, None, None),
                 PublishRole::ImagePublish => (Read, None, Write, Write, Write, Read, None),
                 PublishRole::ImagePromote => (Read, None, None, Read, Write, None, None),
+                PublishRole::NativeImagePublish => (Read, Read, Write, Write, Write, Read, None),
+                PublishRole::NativeImagePromote => (Read, Read, None, Read, Write, Read, None),
                 PublishRole::NpmPublish => (Read, None, None, None, Write, None, None),
             };
         Self {

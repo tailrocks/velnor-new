@@ -107,6 +107,11 @@ impl PublishJobSpec {
             StepKind::Internal { operation, .. }
                 if self.role == PublishRole::ArtifactBuild
                     && BUILD_INTERNAL_OPS.contains(&operation.as_str()) => {}
+            StepKind::Internal { operation, .. }
+                if (self.role == PublishRole::NativeImagePublish
+                    && operation == "native-image-publish-v1")
+                    || (self.role == PublishRole::NativeImagePromote
+                        && operation == "native-image-promote-v1") => {}
             StepKind::Internal { .. } | StepKind::TaskExecution { .. } => {
                 return Err(bad("publish_internal_op"));
             }
@@ -180,7 +185,7 @@ impl PublishWorkflowSpec {
         let internal = self.jobs.values().any(|job| {
             job.steps
                 .iter()
-                .any(|step| matches!(step.step.kind, StepKind::Internal { .. }))
+                .any(|step| matches!(&step.step.kind, StepKind::Internal { operation, .. } if BUILD_INTERNAL_OPS.contains(&operation.as_str())))
         });
         match (&self.staged_binary, internal) {
             (Some(path), true) if path.starts_with("$RUNNER_TEMP/velnor/bin/velnor-actions-") => {

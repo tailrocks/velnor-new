@@ -597,3 +597,28 @@ GitHub's REST endpoints list [workflow-run artifacts](https://docs.github.com/en
 The image publisher requests 100 entries per page and admits at most 20 pages, 2,000 entries, and 16 MiB of cumulative serialized response JSON for an inventory. It requires the same `total_count` on every page, the expected number of entries per page, and unique nonzero IDs. Missing, inconsistent, duplicated, or over-budget evidence fails publication. Each API response is also bounded before JSON parsing.
 
 The [OCI Distribution Specification error table](https://github.com/opencontainers/distribution-spec/blob/main/spec.md#error-codes) distinguishes `NAME_UNKNOWN`, an unknown repository, from `MANIFEST_UNKNOWN`, an unknown manifest. Both represent absence for the authenticated image tag lookup; `UNAUTHORIZED` and `DENIED` do not. The pinned [Crane 0.22.1 error formatter](https://github.com/google/go-containerregistry/blob/v0.22.1/pkg/v1/remote/transport/error.go#L43-L70) prints a single structured error's code and message without its HTTP status. Velnor therefore binds the exact requested reference and manifest URL, accepts only those two absence codes with a bounded single-line message, and rejects other or ambiguous diagnostics. This relies on the registry's OCI error-code semantics; the Crane output does not establish that the response had a particular HTTP status.
+
+## Image writer concurrency queue
+
+GitHub Actions supports a `queue: max` concurrency queue. Without this setting,
+only one pending member is retained and a newer pending member cancels the
+previous one, even when `cancel-in-progress` is false. Native image publication
+and promotion use the same repository-scoped job concurrency group with
+`queue: max` and `cancel-in-progress: false`. The release workflow's per-ref
+concurrency remains separate. See GitHub's [concurrency reference](https://docs.github.com/en/actions/concepts/workflows-and-actions/concurrency)
+and [queue configuration](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency).
+
+## Hosted image loading
+
+The [Ubuntu runner image installer](https://github.com/actions/runner-images/blob/main/images/ubuntu/scripts/build/install-docker.sh) installs Docker from Docker's Ubuntu repository on a fresh image. Docker documents the [containerd image store](https://docs.docker.com/engine/storage/containerd/) as the default for fresh Engine 29 and later installations. The qualifier loads the OCI candidate archives on the hosted runner and checks their config IDs before execution. This dependency must be verified on the actual hosted image; an installation upgraded from an older engine may retain the legacy store.
+
+On 2026-11-06, an OCI archive exported by Buildx and loaded into a local Docker Engine 29.8.2 containerd image store reported its platform-manifest digest as the image ID; looking up its distinct OCI configuration digest as an image ID failed. The qualifier therefore binds the engine's observed image ID to the authenticated archive's platform-manifest or configuration digest according to the store's reported identity. This local observation does not replace hosted runner verification.
+
+## Velnor Ubuntu runner selection
+
+Velnor Linux workflows select Ubuntu 26.04 explicitly. X64 jobs use
+`ubuntu-26.04`; owned ARM64 tool jobs use `ubuntu-26.04-arm`. Do not select
+Ubuntu 24.04 or a moving `ubuntu-latest` label for Velnor execution. Both
+26.04 labels are generally available according to the upstream
+[runner-images announcement](https://github.com/actions/runner-images/issues/14747)
+and [runner label table](https://github.com/actions/runner-images/blob/main/README.md).

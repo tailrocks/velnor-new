@@ -11,9 +11,7 @@ import os
 import sys
 sys.path.insert(0, sys.argv[1])
 from pathlib import Path
-import job_image_authority_identity as identity_module
 import job_image_authority_oci as oci_module
-import job_image_authority_publish as publish_module
 import job_image_authority_record as record_module
 record_path = Path(sys.argv[2])
 archive_path = Path(sys.argv[3])
@@ -26,7 +24,7 @@ with archive_path.open("rb") as archive_stream:
     while chunk := archive_stream.read(1048576):
         hasher.update(chunk)
         archive_size += len(chunk)
-publish_module.check_record_binding(
+record_module.check_record_binding(
     record,
     hasher.hexdigest(),
     archive_size,
@@ -36,7 +34,7 @@ try:
     expected_run_id = int(os.environ["VELNOR_EXPECTED_RUN_ID"])
     expected_run_attempt = int(os.environ["VELNOR_EXPECTED_RUN_ATTEMPT"])
 except ValueError as error:
-    raise publish_module.AuthorityError("Candidate run identity is incorrect.") from error
+    raise record_module.AuthorityError("Candidate run identity is incorrect.") from error
 identity = {
     "repository": os.environ["VELNOR_EXPECTED_REPOSITORY"],
     "event": os.environ["VELNOR_EXPECTED_EVENT"],
@@ -47,22 +45,22 @@ identity = {
     "run_attempt": expected_run_attempt,
     "source": os.environ["VELNOR_EXPECTED_SOURCE"],
 }
-identity_module.validate_same_run_candidate(record, identity)
+record_module.validate_ci_candidate(record, identity)
 if closure_path.is_symlink() or not closure_path.is_file():
-    raise publish_module.AuthorityError("Candidate source closure must be a regular file.")
+    raise record_module.AuthorityError("Candidate source closure must be a regular file.")
 if closure_path.stat().st_size > 1048576:
-    raise publish_module.AuthorityError("Candidate source closure exceeds its size limit.")
+    raise record_module.AuthorityError("Candidate source closure exceeds its size limit.")
 try:
     closure = json.loads(closure_path.read_bytes())
 except (UnicodeDecodeError, json.JSONDecodeError) as error:
-    raise publish_module.AuthorityError("Candidate source closure has an incorrect format.") from error
+    raise record_module.AuthorityError("Candidate source closure has an incorrect format.") from error
 if (
     not isinstance(closure, dict)
     or closure.get("schema") != "velnor.job-image-native-source-closure.v1"
 ):
-    raise publish_module.AuthorityError("Candidate source closure has an incorrect schema.")
+    raise record_module.AuthorityError("Candidate source closure has an incorrect schema.")
 if closure.get("source_commit") != os.environ["VELNOR_EXPECTED_SOURCE"]:
-    raise publish_module.AuthorityError("Candidate source closure is not the current run source.")
+    raise record_module.AuthorityError("Candidate source closure is not the current run source.")
 print("fixed authority body accepted the candidate bytes")
 "#;
 
@@ -97,17 +95,15 @@ pub(crate) fn verify_candidate_step(archive: &str, record: &str, closure: &str) 
                 ),
                 (
                     "VELNOR_EXPECTED_WORKFLOW_REF".to_owned(),
-                    Yaml::str(
-                        "${{ github.repository }}/.github/workflows/job-image-candidate.yml@${{ github.ref }}",
-                    ),
+                    Yaml::str("${{ github.repository }}/.github/workflows/ci.yml@refs/heads/main"),
                 ),
                 (
                     "VELNOR_EXPECTED_RUN_ID".to_owned(),
-                    Yaml::str("${{ github.run_id }}"),
+                    Yaml::str("${{ steps.locate.outputs.producer_run_id }}"),
                 ),
                 (
                     "VELNOR_EXPECTED_RUN_ATTEMPT".to_owned(),
-                    Yaml::str("${{ github.run_attempt }}"),
+                    Yaml::str("${{ steps.locate.outputs.producer_run_attempt }}"),
                 ),
             ]),
         ),

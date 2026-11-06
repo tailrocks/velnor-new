@@ -277,6 +277,9 @@ pub(crate) fn invoke(
     dind_id: &str,
     socket: &Path,
 ) -> Result<Output, Box<dyn Error>> {
+    let result_dir = tempfile::tempdir()?;
+    let result = result_dir.path().join("qualification.json");
+    let probe = format!("sha256:{}", "c".repeat(64));
     let child = Command::new(env!("CARGO_BIN_EXE_velnor-resource-probe-release"))
         .env_remove("GIT_NO_REPLACE_OBJECTS")
         .args([
@@ -285,7 +288,9 @@ pub(crate) fn invoke(
             source_sha,
             runner_id,
             dind_id,
+            &probe,
             socket.to_str().ok_or("socket path is not UTF-8")?,
+            result.to_str().ok_or("result path is not UTF-8")?,
         ])
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -314,6 +319,9 @@ pub(crate) fn invoke_with_timeout_timed(
     limit: Duration,
 ) -> Result<(Output, Duration), Box<dyn Error>> {
     let started = Instant::now();
+    let result_dir = tempfile::tempdir()?;
+    let result = result_dir.path().join("qualification.json");
+    let probe = format!("sha256:{}", "c".repeat(64));
     let child = Command::new(env!("CARGO_BIN_EXE_velnor-resource-probe-release"))
         .env_remove("GIT_NO_REPLACE_OBJECTS")
         .args([
@@ -322,7 +330,9 @@ pub(crate) fn invoke_with_timeout_timed(
             source_sha,
             runner_id,
             dind_id,
+            &probe,
             socket.to_str().ok_or("socket path is not UTF-8")?,
+            result.to_str().ok_or("result path is not UTF-8")?,
         ])
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())

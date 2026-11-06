@@ -44,6 +44,7 @@ pub fn render_publish_workflow(
             "concurrency".to_owned(),
             Yaml::Map(vec![
                 ("group".to_owned(), Yaml::str(PUBLISH_CONCURRENCY_GROUP)),
+                ("queue".to_owned(), Yaml::str("max")),
                 ("cancel-in-progress".to_owned(), Yaml::Bool(false)),
             ]),
         ),
@@ -125,8 +126,21 @@ fn internal_step_to_yaml(step: &Step, staged: &str) -> Result<Yaml, RenderError>
     Ok(Yaml::Map(entries))
 }
 
-fn step_to_yaml(step: &PublishStep, staged: Option<&str>) -> Result<Yaml, RenderError> {
+fn step_to_yaml(
+    step: &PublishStep,
+    staged: Option<&str>,
+    native: bool,
+) -> Result<Yaml, RenderError> {
     let rendered = match (&step.step.kind, staged) {
+        (StepKind::Internal { operation, env }, _)
+            if native
+                && matches!(
+                    operation.as_str(),
+                    "native-image-publish-v1" | "native-image-promote-v1"
+                ) =>
+        {
+            crate::publish_native_operation::render(&step.step, operation, env)?
+        }
         (StepKind::Internal { .. }, Some(staged)) => internal_step_to_yaml(&step.step, staged)?,
         _ => crate::steps_plain::plain_step_to_yaml(&step.step)?,
     };
@@ -151,6 +165,40 @@ fn job_to_yaml(job: &PublishJobSpec, staged: Option<&str>) -> Result<Yaml, Rende
     if let Some(environment) = &job.environment {
         entries.push(("environment".to_owned(), Yaml::str(environment.clone())));
     }
+    let native_image = matches!(
+        job.role,
+        crate::publish_spec::PublishRole::NativeImagePublish
+            | crate::publish_spec::PublishRole::NativeImagePromote
+    );
+    if native_image {
+        entries.push((
+            "concurrency".to_owned(),
+            Yaml::Map(vec![
+                (
+                    "group".to_owned(),
+                    Yaml::str("${{ github.repository }}-native-image-writers"),
+                ),
+                ("queue".to_owned(), Yaml::str("max")),
+                ("cancel-in-progress".to_owned(), Yaml::Bool(false)),
+            ]),
+        ));
+        entries.push((
+            "env".to_owned(),
+            Yaml::Map(vec![
+                (
+                    "VELNOR_IMAGE_SOURCE_SHA".to_owned(),
+                    Yaml::str("${{ github.sha }}"),
+                ),
+                (
+                    "VELNOR_TRUSTED_ACTIONS".to_owned(),
+                    Yaml::str(format!(
+                        "${{{{ runner.temp }}}}/velnor/bin/velnor-actions-{}",
+                        env!("CARGO_PKG_VERSION")
+                    )),
+                ),
+            ]),
+        ));
+    }
     entries.push(("permissions".to_owned(), permissions_to_yaml(job)));
     if !job.needs.is_empty() {
         let needs = job.needs.iter().map(|n| Yaml::str(n.clone())).collect();
@@ -168,8 +216,11 @@ fn job_to_yaml(job: &PublishJobSpec, staged: Option<&str>) -> Result<Yaml, Rende
         entries.push(("outputs".to_owned(), Yaml::Map(outputs)));
     }
     let mut rendered = Vec::with_capacity(job.steps.len());
-    for step in &job.steps {
-        rendered.push(step_to_yaml(step, staged)?);
+    for (index, step) in job.steps.iter().enumerate() {
+        rendered.push(step_to_yaml(step, staged, native_image)?);
+        if native_image && index == 0 {
+            rendered.push(crate::schema2::qualified_sdk_preview_acquire());
+        }
     }
     crate::document_services::push_services(&mut entries, &job.services);
     entries.push(("steps".to_owned(), Yaml::Seq(rendered)));

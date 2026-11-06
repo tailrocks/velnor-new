@@ -30,7 +30,15 @@ pub(super) fn verifier_positions(
     let mut positions = VerifierPositions::default();
     let allow_inline_plan_verifiers = policy == WorkflowPolicy::VelnorRepositoryV1
         && id == velnor_actions_workflow_renderer::render::PLAN_JOB_ID;
+    let mut cross_target_count = 0;
     for (index, step) in job.steps.iter().enumerate() {
+        if policy == WorkflowPolicy::VelnorRepositoryV1
+            && id == "check-native-image-candidates"
+            && *step == verifiers.cross_target_rust
+        {
+            cross_target_count += 1;
+            continue;
+        }
         let action = match &step.kind {
             StepKind::Action { uses, .. } => verifiers.by_uses(uses),
             StepKind::Shell { .. } if allow_inline_plan_verifiers => {
@@ -71,6 +79,12 @@ pub(super) fn verifier_positions(
         ) {
             blocking.push(format!("forged_verifier_call:{id}:{}", step.name));
         }
+    }
+    if policy == WorkflowPolicy::VelnorRepositoryV1
+        && id == "check-native-image-candidates"
+        && cross_target_count != 1
+    {
+        blocking.push(format!("cross_target_verifier_count:{id}"));
     }
     if positions.restored_rust.len() > 1 {
         blocking.push(format!("duplicate_verifier_call:{id}:restored-rust"));

@@ -36,6 +36,16 @@ class AuthorityError(ValueError):
     pass
 
 
+def check_record_binding(record, archive_digest, archive_size, oci):
+    if not isinstance(record, dict):
+        raise AuthorityError("Candidate record has an incorrect format.")
+    if record.get("archive") != {"sha256": archive_digest, "size_bytes": archive_size}:
+        raise AuthorityError("Candidate archive is not the same as the archive in its signed record.")
+    if record.get("oci") != oci:
+        raise AuthorityError("Candidate OCI graph is not the same as the graph in its signed record.")
+    return record
+
+
 def _unique_object(pairs):
     result = {}
     for key, value in pairs:
@@ -146,4 +156,36 @@ def validate_record(value):
         raise AuthorityError("OCI layer digest list is incorrect.")
     for digest in oci["layer_digests"]:
         _digest(digest, "OCI layer digest")
+    return record
+
+
+def validate_ci_candidate(record, identity):
+
+    if not isinstance(identity, dict):
+        raise AuthorityError("Attestation run identity has an incorrect format.")
+    for name in (
+        "repository", "event", "workflow_ref", "ref",
+        "authority_commit", "run_id", "run_attempt", "source",
+    ):
+        if name not in identity:
+            raise AuthorityError("Attestation run identity has unknown or missing fields.")
+    source = record.get("source") if isinstance(record, dict) else None
+    if (
+        not isinstance(source, dict)
+        or source.get("commit") != identity["source"]
+        or source.get("ref") != identity["ref"]
+    ):
+        raise AuthorityError("Candidate source is not the current run source.")
+    workflow = record.get("workflow") if isinstance(record, dict) else None
+    if (
+        not isinstance(workflow, dict)
+        or workflow.get("repository") != identity["repository"]
+        or workflow.get("repository_id") != 1390620900
+        or workflow.get("event") != identity["event"]
+        or workflow.get("workflow_ref") != identity["workflow_ref"]
+        or workflow.get("authority_commit") != identity["authority_commit"]
+        or workflow.get("run_id") != identity["run_id"]
+        or workflow.get("run_attempt") != identity["run_attempt"]
+    ):
+        raise AuthorityError("Candidate workflow is not the current run workflow.")
     return record

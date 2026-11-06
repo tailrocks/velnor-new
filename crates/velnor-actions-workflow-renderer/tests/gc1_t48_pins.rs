@@ -67,122 +67,8 @@ pub(crate) fn request() -> Result<Schema2WorkflowRequest, Box<dyn Error>> {
     })
 }
 
-#[cfg(unix)]
-#[test]
-fn image_release_builds_both_images_with_the_approved_source_revision() -> Result<(), Box<dyn Error>>
-{
-    use std::os::unix::fs::PermissionsExt;
-
-    let files = render_schema2_workflows(&request()?)?;
-    let workflow = find_file(&files, ".github/workflows/product-release-images.yml")?;
-    let step = workflow
-        .split("- name: Build runner and DinD images")
-        .nth(1)
-        .and_then(|tail| tail.split("- name: ").next())
-        .ok_or_else(|| fail("image build step missing"))?;
-    assert!(step.contains("VELNOR_SOURCE_SHA: ${{ inputs.source_sha }}"));
-    let encoded = step
-        .lines()
-        .find_map(|line| line.trim_start().strip_prefix("run: "))
-        .ok_or_else(|| fail("image build command missing"))?;
-    let script: String = serde_json::from_str(encoded)?;
-    let dir = tempfile::tempdir()?;
-    let docker = dir.path().join("docker");
-    let log = dir.path().join("builds");
-    std::fs::write(
-        &docker,
-        "#!/bin/sh\nif [ \"$1\" = build ]; then printf '%s\\n' \"$*\" >> \"$BUILD_LOG\"; elif [ \"$4\" = '{{.Architecture}}' ]; then printf '%s\\n' amd64; elif [ \"$5\" = \"${BAD_IMAGE:-}\" ]; then printf '%s\\n' wrong; else printf '%s\\n' \"$VELNOR_SOURCE_SHA\"; fi\n",
-    )?;
-    std::fs::set_permissions(&docker, std::fs::Permissions::from_mode(0o700))?;
-    let source = "a97f3c482da31b6f91f83e28c4dca0217e5b6930";
-    let output = Command::new("/bin/sh")
-        .arg("-c")
-        .arg(&script)
-        .env("PATH", dir.path())
-        .env("BUILD_LOG", &log)
-        .env("VELNOR_SOURCE_SHA", source)
-        .output()?;
-    assert!(
-        output.status.success(),
-        "{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    let builds = std::fs::read_to_string(log)?;
-    for context in ["images/runner/ubuntu-26.04", "images/dind"] {
-        assert!(
-            builds.lines().any(|line| line
-                .contains(&format!("--build-arg VELNOR_SOURCE_SHA={source}"))
-                && line.ends_with(context)),
-            "missing source revision for {context}: {builds}"
-        );
-    }
-    let missing_log = dir.path().join("missing-source-builds");
-    assert!(
-        !Command::new("/bin/sh")
-            .arg("-c")
-            .arg(script)
-            .env("PATH", dir.path())
-            .env("BUILD_LOG", &missing_log)
-            .env_remove("VELNOR_SOURCE_SHA")
-            .output()?
-            .status
-            .success()
-    );
-    assert!(!missing_log.exists());
-    verify_revisions(workflow, dir.path(), source)
-}
-
-#[test]
-#[cfg(unix)]
-fn release_consumers_keep_the_build_artifact_identity_on_job_reruns() -> Result<(), Box<dyn Error>>
-{
-    let files = render_schema2_workflows(&request()?)?;
-    let workflow = find_file(&files, ".github/workflows/product-release-images.yml")?;
-    let build = job_section(workflow, "build-images:", Some("attest-images:"))?;
-    assert!(build.contains("id: upload-assets"));
-    assert!(build.contains("name: image-assets-${{ github.run_attempt }}"));
-    assert!(build.contains("artifact_id: ${{ steps.upload-assets.outputs.artifact-id }}"));
-
-    let attest = job_section(workflow, "attest-images:", Some("publish-images:"))?;
-    assert!(attest.contains("- build-images"));
-    assert!(attest.contains("ARTIFACT_ID: ${{ needs.build-images.outputs.artifact_id }}"));
-    assert!(attest.contains("artifact-ids: ${{ env.ARTIFACT_ID }}"));
-    assert!(attest.contains("artifact_id: ${{ needs.build-images.outputs.artifact_id }}"));
-
-    let publish = job_section(workflow, "publish-images:", None)?;
-    assert!(publish.contains("- attest-images"));
-    assert!(publish.contains("ARTIFACT_ID: ${{ needs.attest-images.outputs.artifact_id }}"));
-    assert!(publish.contains("artifact-ids: ${{ env.ARTIFACT_ID }}"));
-    assert_eq!(workflow.matches("github.run_attempt").count(), 1);
-    assert_download_guard(workflow, "attest-images")?;
-    assert_download_guard(workflow, "publish-images")?;
-    assert_build_only_artifact_steps(workflow, "publish-images")?;
-
-    let binary_request = Schema2WorkflowRequest {
-        workflows: BTreeSet::from([RoutingWorkflow::MacosBinaryRelease]),
-        ..request()?
-    };
-    let binary_files = render_schema2_workflows(&binary_request)?;
-    let binary = find_file(
-        &binary_files,
-        ".github/workflows/product-release-binary.yml",
-    )?;
-    let build = job_section(binary, "build-binary:", Some("attest-binary:"))?;
-    assert!(build.contains("name: binary-assets-${{ github.run_attempt }}"));
-    assert!(build.contains("artifact_id: ${{ steps.upload-assets.outputs.artifact-id }}"));
-    let attest = job_section(binary, "attest-binary:", Some("publish-binary:"))?;
-    assert!(attest.contains("ARTIFACT_ID: ${{ needs.build-binary.outputs.artifact_id }}"));
-    assert!(attest.contains("artifact-ids: ${{ env.ARTIFACT_ID }}"));
-    assert!(attest.contains("artifact_id: ${{ needs.build-binary.outputs.artifact_id }}"));
-    let publish = job_section(binary, "publish-binary:", None)?;
-    assert!(publish.contains("ARTIFACT_ID: ${{ needs.attest-binary.outputs.artifact_id }}"));
-    assert!(publish.contains("artifact-ids: ${{ env.ARTIFACT_ID }}"));
-    assert_eq!(binary.matches("github.run_attempt").count(), 1);
-    assert_download_guard(binary, "attest-binary")?;
-    assert_download_guard(binary, "publish-binary")?;
-    assert_build_only_artifact_steps(binary, "publish-binary")?;
-    Ok(())
-}
+#[path = "gc1_t48_runner_images.rs"]
+mod runner_images;
 
 #[cfg(unix)]
 fn assert_download_guard(workflow: &str, job: &str) -> Result<(), Box<dyn Error>> {
@@ -256,41 +142,6 @@ fn assert_build_only_artifact_steps(workflow: &str, job: &str) -> Result<(), Box
     Ok(())
 }
 
-#[cfg(unix)]
-fn verify_revisions(workflow: &str, bin: &Path, source: &str) -> Result<(), Box<dyn Error>> {
-    let verify_marker = "- name: Verify image architectures and revisions";
-    let verify_start = workflow
-        .find(verify_marker)
-        .ok_or_else(|| fail("image verification step missing"))?;
-    let save_start = workflow
-        .find("- name: Save image archives")
-        .ok_or_else(|| fail("image save step missing"))?;
-    assert!(verify_start < save_start);
-    let verify_step = &workflow[verify_start..save_start];
-    assert!(verify_step.contains("VELNOR_SOURCE_SHA: ${{ inputs.source_sha }}"));
-    let encoded = verify_step
-        .lines()
-        .find_map(|line| line.trim_start().strip_prefix("run: "))
-        .ok_or_else(|| fail("image verification command missing"))?;
-    let verify_script: String = serde_json::from_str(encoded)?;
-    for bad_image in ["", "velnor-runner:linux-amd64", "velnor-dind:linux-amd64"] {
-        let result = Command::new("/bin/sh")
-            .arg("-c")
-            .arg(&verify_script)
-            .env("PATH", bin)
-            .env("VELNOR_SOURCE_SHA", source)
-            .env("BAD_IMAGE", bad_image)
-            .output()?;
-        assert_eq!(
-            result.status.success(),
-            bad_image.is_empty(),
-            "verification result for {bad_image}: {}",
-            String::from_utf8_lossy(&result.stderr)
-        );
-    }
-    Ok(())
-}
-
 pub(crate) fn find_file<'a>(
     files: &'a [RenderedFile],
     path: &str,
@@ -330,3 +181,176 @@ pub(crate) fn job_section<'a>(
 pub(crate) const SOURCE_SHA: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 pub(crate) const WORKFLOW_REF: &str =
     "tailrocks/velnor-new/.github/workflows/job-image-candidate.yml@refs/heads/main";
+
+#[test]
+fn runner_qualification_signs_only_the_exact_credential_free_runtime_proof()
+-> Result<(), Box<dyn Error>> {
+    let files = render_schema2_workflows(&request()?)?;
+    let caller = find_file(&files, ".github/workflows/runner-image-qualification.yml")?;
+    let signer = find_file(
+        &files,
+        ".github/workflows/runner-image-qualification-attest.yml",
+    )?;
+    let qualify = job_section(caller, "qualify-images:", Some("attest:"))?;
+    let permissions = qualify
+        .split("steps:")
+        .next()
+        .ok_or_else(|| fail("missing steps"))?;
+    assert!(!permissions.contains("id-token"));
+    assert!(!permissions.contains("attestations"));
+    assert!(!permissions.contains("write"));
+    for expected in [
+        "refs/heads/main",
+        "Fetch exact successful CI candidates",
+        "qualify-runner-images",
+        "write-runner-qualification",
+        "PRODUCER_RUN_ID",
+        "QUALIFIER_JOB_ID",
+        "*TOKEN*",
+        "*PASSWORD*",
+        "*SECRET*",
+        "RUNNER_IMAGE_QUALIFICATION.json",
+    ] {
+        assert!(qualify.contains(expected), "missing {expected}");
+    }
+    for role in ["runner.oci.tar", "dind.oci.tar", "resource-probe.oci.tar"] {
+        assert!(qualify.contains(role), "missing {role}");
+    }
+    assert!(caller.contains("./.github/workflows/runner-image-qualification-attest.yml"));
+    assert!(caller.contains("needs.qualify-images.outputs.artifact_id"));
+    assert!(signer.contains("inputs.artifact_id"));
+    assert!(signer.contains("RUNNER_IMAGE_QUALIFICATION.json"));
+    assert!(signer.contains(ATTEST_BUILD_PROVENANCE_USES));
+    assert!(!signer.contains(CHECKOUT_USES));
+    assert!(!signer.contains("run:"));
+    Ok(())
+}
+
+#[test]
+fn ci_job_image_attestor_binds_three_exact_subjects_before_signing() -> Result<(), Box<dyn Error>> {
+    let workflow = candidate_text()?;
+    let mut disabled = request()?;
+    disabled.workflows.clear();
+    assert!(
+        !render_schema2_workflows(&disabled)?
+            .iter()
+            .any(|file| file.path == CANDIDATE_PATH)
+    );
+    let mut unpinned = request()?;
+    unpinned.product_release = None;
+    assert!(render_schema2_workflows(&unpinned).is_err());
+    for expected in [
+        "Fetch exact successful CI candidates",
+        "validate_required",
+        "job-image.oci.tar",
+        "job-image-candidate.json",
+        "job-image-native-source-closure.json",
+        "record_module.check_record_binding",
+        "record_module.validate_ci_candidate",
+        "Verify candidate bytes with the fixed authority body",
+        ATTEST_BUILD_PROVENANCE_USES,
+    ] {
+        assert!(workflow.contains(expected), "missing {expected}");
+    }
+    assert!(
+        workflow.find("Verify candidate bytes with the fixed authority body")
+            < workflow.find(ATTEST_BUILD_PROVENANCE_USES)
+    );
+    assert!(!workflow.contains(CHECKOUT_USES));
+    assert!(!workflow.contains("publish-job-image"));
+    assert!(!workflow.contains("job_image_authority_publish.py"));
+    Ok(())
+}
+
+#[test]
+fn ci_job_attestor_checks_real_archive_and_source_before_signing() -> Result<(), Box<dyn Error>> {
+    let text = candidate_text()?;
+    let script = |name: &str| -> Result<String, Box<dyn Error>> {
+        let section = text.split_once(name).ok_or("step")?.1;
+        let line = section
+            .lines()
+            .find_map(|line| line.trim().strip_prefix("run: "))
+            .ok_or("run")?;
+        Ok(serde_json::from_str(line)?)
+    };
+    let materialize = script("Materialize fixed image authority implementation")?;
+    let verify = script("Verify candidate bytes with the fixed authority body")?;
+    let root = tempfile::tempdir()?;
+    let candidate = root.path().join("privatecandidate");
+    std::fs::create_dir(&candidate)?;
+    let output = Command::new("bash")
+        .arg("-c")
+        .arg(materialize)
+        .env("RUNNER_TEMP", root.path())
+        .env("GITHUB_ENV", root.path().join("github-env"))
+        .output()?;
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let parts = image_parts();
+    let archive = archive_bytes(&parts);
+    let archive_path = candidate.join("job-image.oci.tar");
+    let record_path = candidate.join("job-image-candidate.json");
+    let closure_path = candidate.join("job-image-native-source-closure.json");
+    let mut record: serde_json::Value = serde_json::from_str(&record_json(&parts, &archive))?;
+    record["workflow"]["repository_id"] = serde_json::json!(1390620900);
+    record["workflow"]["workflow_ref"] =
+        serde_json::json!("tailrocks/velnor-new/.github/workflows/ci.yml@refs/heads/main");
+    record["workflow"]["authority_commit"] = serde_json::json!(SOURCE_SHA);
+    std::fs::write(&archive_path, &archive)?;
+    std::fs::write(&record_path, serde_json::to_vec(&record)?)?;
+    std::fs::write(
+        &closure_path,
+        serde_json::to_vec(
+            &serde_json::json!({"schema":"velnor.job-image-native-source-closure.v1", "source_commit": SOURCE_SHA}),
+        )?,
+    )?;
+    let run = || {
+        Command::new("bash")
+            .arg("-c")
+            .arg(&verify)
+            .env("RUNNER_TEMP", root.path())
+            .env(
+                "VELNOR_IMAGE_AUTHORITY_DIR",
+                root.path().join("velnor-image-authority"),
+            )
+            .env("VELNOR_EXPECTED_SOURCE", SOURCE_SHA)
+            .env("VELNOR_EXPECTED_REF", "refs/heads/main")
+            .env("VELNOR_EXPECTED_REPOSITORY", "tailrocks/velnor-new")
+            .env("VELNOR_EXPECTED_EVENT", "push")
+            .env(
+                "VELNOR_EXPECTED_WORKFLOW_REF",
+                "tailrocks/velnor-new/.github/workflows/ci.yml@refs/heads/main",
+            )
+            .env("VELNOR_EXPECTED_RUN_ID", "1")
+            .env("VELNOR_EXPECTED_RUN_ATTEMPT", "1")
+            .output()
+    };
+    let valid = run()?;
+    assert!(
+        valid.status.success(),
+        "{}",
+        String::from_utf8_lossy(&valid.stderr)
+    );
+    record["workflow"]["repository_id"] = serde_json::json!(1);
+    std::fs::write(&record_path, serde_json::to_vec(&record)?)?;
+    assert!(!run()?.status.success());
+    record["workflow"]["repository_id"] = serde_json::json!(1390620900);
+    std::fs::write(&record_path, serde_json::to_vec(&record)?)?;
+    std::fs::write(&archive_path, b"corrupt")?;
+    assert!(!run()?.status.success());
+    std::fs::write(&archive_path, &archive)?;
+    record["workflow"]["run_attempt"] = serde_json::json!(2);
+    std::fs::write(&record_path, serde_json::to_vec(&record)?)?;
+    assert!(!run()?.status.success());
+    record["workflow"]["run_attempt"] = serde_json::json!(1);
+    std::fs::write(&record_path, serde_json::to_vec(&record)?)?;
+    std::fs::write(
+        &closure_path,
+        br#"{"schema":"velnor.job-image-native-source-closure.v1","source_commit":"wrong"}"#,
+    )?;
+    assert!(!run()?.status.success());
+    Ok(())
+}

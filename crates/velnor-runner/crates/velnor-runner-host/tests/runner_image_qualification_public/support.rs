@@ -87,9 +87,10 @@ pub(super) fn assert_success(output: &Output, state: &Snapshot) {
     ] {
         assert!(output.contains(evidence), "missing {evidence} in {output}");
     }
-    assert_eq!(state.images.len(), 2);
+    assert_eq!(state.images.len(), 3);
     assert!(state.images.contains(&digest_id('a')));
     assert!(state.images.contains(&digest_id('b')));
+    assert!(state.images.contains(&digest_id('c')));
     assert_eq!(
         state.containers.len(),
         usize::from(state.foreign_container_present)
@@ -142,14 +143,16 @@ pub(super) fn assert_failed_and_cleaned(output: &Output, state: &Snapshot) {
     assert!(state.fault_reached, "configured fault was not reached");
     assert!(state.containers.is_empty(), "owned containers remain");
     assert_eq!(state.volumes, Vec::<String>::new(), "owned volumes remain");
-    assert_eq!(state.images.len(), 2);
+    assert_eq!(state.images.len(), 3);
     assert!(state.images.contains(&digest_id('a')));
     assert!(state.images.contains(&digest_id('b')));
+    assert!(state.images.contains(&digest_id('c')));
 }
 
 pub(super) fn assert_private_configs(state: &Snapshot) -> TestResult<()> {
     assert!(state.created.len() >= 6);
     for role in [
+        "resource-probe",
         "runner-listener",
         "runner-docker-cli",
         "dind-docker-cli",
@@ -205,6 +208,7 @@ fn assert_host_config(container: &ContainerEvidence) {
 
 fn assert_image_command(container: &ContainerEvidence) -> TestResult<()> {
     let (image, entrypoint, command) = match container.role.as_str() {
+        "resource-probe" => ('c', "/velnor/resource-probe", serde_json::json!([])),
         "runner-listener" => (
             'a',
             "/home/runner/bin/Runner.Listener",
@@ -321,7 +325,7 @@ fn version_mismatch_issues(probe: Probe, output: &Output, state: &Snapshot) -> V
     {
         issues.push("owned cleanup or foreign sentinel state was wrong".to_owned());
     }
-    if state.images.len() != 2
+    if state.images.len() != 3
         || !state.images.contains(&digest_id('a'))
         || !state.images.contains(&digest_id('b'))
     {
@@ -346,6 +350,19 @@ fn assert_mount_config(container: &ContainerEvidence) {
         .cloned()
         .unwrap_or_default();
     match container.role.as_str() {
+        "resource-probe" => {
+            assert_eq!(mounts.len(), 1);
+            assert_eq!(mounts[0]["Type"], "bind");
+            assert_eq!(mounts[0]["Source"], "/var/lib/docker");
+            assert_eq!(mounts[0]["Target"], "/velnor/docker-root");
+            assert_eq!(mounts[0]["ReadOnly"], true);
+            assert_eq!(container.host_config["ReadonlyRootfs"], true);
+            assert_eq!(container.host_config["CapDrop"], serde_json::json!(["ALL"]));
+            assert_eq!(
+                container.host_config["SecurityOpt"],
+                serde_json::json!(["no-new-privileges:true"])
+            );
+        }
         "dind" => {
             assert_eq!(mounts.len(), 2);
             assert_eq!(mounts[0]["Target"], "/run");

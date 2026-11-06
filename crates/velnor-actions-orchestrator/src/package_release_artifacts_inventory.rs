@@ -268,7 +268,7 @@ fn copy_hash_file(
     Ok((copied, hex_lower(&hash.finalize())))
 }
 
-pub(super) fn open_regular_nofollow(path: &Path) -> Result<File, OrchestratorError> {
+pub(crate) fn open_regular_nofollow(path: &Path) -> Result<File, OrchestratorError> {
     let metadata = fs::symlink_metadata(path)
         .map_err(|error| OrchestratorError::io(path.display().to_string(), error.to_string()))?;
     if metadata.file_type().is_symlink() || !metadata.is_file() {

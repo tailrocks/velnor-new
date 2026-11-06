@@ -10,7 +10,7 @@ use sha2::{Digest, Sha256};
 use crate::error::HostError;
 
 use super::hash::lowercase_hex;
-use super::manifest::{ARCHIVE_FORMAT, IMAGE_TAG, MAX_MANIFEST_BYTES, PLATFORM, ProbeManifest};
+use super::manifest::{IMAGE_TAG, MAX_MANIFEST_BYTES};
 
 #[path = "archive/tar_archive.rs"]
 mod tar_archive;
@@ -32,28 +32,6 @@ pub(super) struct ArchiveIdentity {
     pub(super) image_manifest_size: u64,
     pub(super) config_digest: String,
     pub(super) config: ContainerConfig,
-}
-
-pub(super) fn validate(
-    archive: &[u8],
-    manifest: &ProbeManifest,
-) -> Result<ArchiveIdentity, HostError> {
-    if archive.is_empty()
-        || archive.len() > MAX_ARCHIVE_BYTES
-        || lowercase_hex(&Sha256::digest(archive)) != manifest.archive_sha256
-        || manifest.archive_format != ARCHIVE_FORMAT
-        || manifest.platform != PLATFORM
-    {
-        return Err(HostError::Identity);
-    }
-    let identity = inspect_for_release(archive, &manifest.source_commit)?;
-    if identity.oci_index_sha256 != manifest.oci_index_sha256
-        || identity.image_manifest_digest != manifest.image_manifest_digest
-        || identity.config_digest != manifest.config_digest
-    {
-        return Err(HostError::Identity);
-    }
-    Ok(identity)
 }
 
 pub(super) fn inspect_for_release(

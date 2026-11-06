@@ -56,6 +56,7 @@ fn create_container(request: &Request, state: &mut State) -> Reply {
             .to_owned(),
         labels: labels.clone(),
         host_config: host_config.clone(),
+        config: Box::new(value.clone()),
         entrypoint: value.get("Entrypoint").cloned().unwrap_or(Value::Null),
         command: value.get("Cmd").cloned().unwrap_or(Value::Null),
         running: false,
@@ -186,14 +187,16 @@ fn inspect_container(path: &str, state: &mut State) -> Reply {
         }
         _ => {}
     }
-    let state_value = json!({"Running": container.running, "ExitCode": container.exit_code});
+    let state_value = json!({"Running": container.running, "ExitCode": container.exit_code, "Status": if container.running { "running" } else { "exited" }});
+    let mut config = (*container.config).clone();
+    config["Labels"] = container.labels.clone();
     let reply = Reply::json(
         200,
         &json!({
             "Id": container.id,
             "Name": format!("/{}", container.name),
             "Image": container.image_id,
-            "Config": {"Labels": container.labels},
+            "Config": config,
             "HostConfig": host_config,
             "State": state_value
         }),

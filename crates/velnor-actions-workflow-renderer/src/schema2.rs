@@ -29,6 +29,14 @@ pub use consumer_preview::{
     ConsumerReleaseSpec, ConsumerReleaseTapSpec, render_consumer_preview,
     render_release_tap_reconcile,
 };
+#[path = "schema2_ci_image_fetch.rs"]
+mod ci_image_fetch;
+#[path = "schema2_ci_image_producer.rs"]
+mod ci_image_producer;
+pub use ci_image_producer::{
+    SDK_CI_IMAGE_ARTIFACT_SCRIPT, SDK_CI_IMAGE_DOWNLOAD_SCRIPT, SDK_CI_IMAGE_LOOKUP_SCRIPT,
+    sdk_ci_image_steps,
+};
 #[path = "schema2_ci_run_lookup.rs"]
 mod ci_run_lookup;
 pub(super) use ci_run_lookup::RETRY_DELAYS_SECONDS;
@@ -54,8 +62,8 @@ mod product_release_pins;
 mod release;
 #[path = "schema2_release_eligibility.rs"]
 pub mod release_eligibility;
-#[path = "schema2_resource_probe_image.rs"]
-mod resource_probe_image;
+#[path = "schema2_runner_qualification.rs"]
+mod runner_qualification;
 #[path = "schema2_generator_source_qualification.rs"]
 mod source_qualification;
 pub use product_release_pins::ProductReleasePins;
@@ -141,6 +149,12 @@ pub fn render_schema2_workflows(
     }
     if request.workflows.contains(&RoutingWorkflow::ImageRelease) {
         files.push(job_image_candidate::render_candidate_workflow(request)?);
+        files.extend(runner_qualification::render(request)?);
+        files.push(file(
+            ".github/workflows/runner-image-release.yml",
+            &request.version,
+            &release::image_release_caller(request)?,
+        )?);
     }
     if request.workflows.contains(&RoutingWorkflow::Monitoring) {
         files.push(file(
@@ -325,3 +339,7 @@ fn job(
     ));
     (id.to_owned(), Yaml::Map(fields))
 }
+
+#[path = "schema2_sdk_preview_bootstrap.rs"]
+mod sdk_preview_bootstrap;
+pub(crate) use sdk_preview_bootstrap::acquire as qualified_sdk_preview_acquire;

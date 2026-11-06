@@ -9,14 +9,18 @@ use bollard::models::{ContainerCreateBody, HostConfig, Mount as DockerMount, Mou
 use bollard::query_parameters::{CreateContainerOptions, RemoveContainerOptionsBuilder};
 use velnor_runner_core::runner_work_path;
 
-use crate::docker_spec::{RUNNER_IMAGE, RUNNER_PLATFORM, accepts_volume_name};
+use crate::docker_spec::{RUNNER_PLATFORM, accepts_volume_name};
 use crate::error::HostError;
 
 const ATTEMPTS: u32 = 40;
 const PAUSE: Duration = Duration::from_millis(500);
 
-pub(crate) async fn own_work_volume(docker: &Docker, volume: &str) -> Result<(), HostError> {
-    let config = chown_body(volume)?;
+pub(crate) async fn own_work_volume(
+    docker: &Docker,
+    volume: &str,
+    runner_image: &str,
+) -> Result<(), HostError> {
+    let config = chown_body(volume, runner_image)?;
     let options = CreateContainerOptions {
         name: None,
         platform: RUNNER_PLATFORM.to_owned(),
@@ -48,13 +52,16 @@ pub(crate) async fn own_work_volume(docker: &Docker, volume: &str) -> Result<(),
     }
 }
 
-pub(crate) fn chown_body(volume: &str) -> Result<ContainerCreateBody, HostError> {
+pub(crate) fn chown_body(
+    volume: &str,
+    runner_image: &str,
+) -> Result<ContainerCreateBody, HostError> {
     let name = work_volume(volume)?;
     let work = runner_work_path();
     let mut labels = HashMap::new();
     labels.insert("velnor.role".to_owned(), "work-owner".to_owned());
     Ok(ContainerCreateBody {
-        image: Some(RUNNER_IMAGE.to_owned()),
+        image: Some(runner_image.to_owned()),
         user: Some("0:0".to_owned()),
         entrypoint: Some(vec!["chown".to_owned()]),
         cmd: Some(vec!["runner:runner".to_owned(), work.clone()]),

@@ -37,7 +37,7 @@ pub(crate) use slot::HOLDS_ROWS_SQL;
 mod mint_origin;
 mod pressure;
 mod session;
-mod slot;
+pub(crate) mod slot;
 mod steady;
 mod steps;
 
@@ -67,6 +67,10 @@ pub async fn launch_once(
     let ceiling = job_capacity();
     let capacity = preflight::run(docker, docker, journal, resource_budget, ceiling).await?;
     let _capacity = install_job_capacity(capacity.poll_header());
+    let admission = match journal.state_directory() {
+        Ok(state) => crate::artifact_admission::start_bootstrap(pat, state, docker).ok(),
+        Err(_) => None,
+    };
     let set = ensure_product_scale_set(pat, owner, repo)?;
     if std::env::var("VELNOR_RECONCILE").ok().as_deref() == Some("1") {
         let decision = gate::reconcile_gate(journal, docker).await?;
@@ -86,6 +90,7 @@ pub async fn launch_once(
         owner,
         repo,
         pat,
+        images: admission.as_ref(),
         resource_budget: Some(resource_budget),
         static_capacity: capacity.permits_start(),
         guest_admission: drive::GuestAdmission::Unavailable,
@@ -172,6 +177,9 @@ async fn scale_session(
     if population <= 0 {
         return Ok(None);
     }
+    let Some(images) = rest.images.and_then(|slot| slot.images()) else {
+        return Ok(None);
+    };
     let resource_budget = rest.resource_budget.ok_or(EnsureError::Unexpected {
         status: 0,
         step: "resource budget",
@@ -204,7 +212,10 @@ async fn scale_session(
     steps::scale_unacked(&mut lane, &ctx, journal, &name, |volume, jit, bind| {
         let volume = volume.to_owned();
         let payload = jit.to_vec();
-        async move { bind::start_bound(docker, &volume, &payload, resource_budget, &bind).await }
+        let images = std::sync::Arc::clone(&images);
+        async move {
+            bind::start_bound(docker, &volume, &payload, resource_budget, &bind, &images).await
+        }
     })
     .await
 }
@@ -249,6 +260,9 @@ where
     if slot::busy_except(journal, docker, capacity, except.as_deref()).await? {
         return Ok(None);
     }
+    let Some(images) = rest.images.and_then(|slot| slot.images()) else {
+        return Ok(None);
+    };
     let resource_budget = rest.resource_budget.ok_or(EnsureError::Unexpected {
         status: 0,
         step: "resource budget",
@@ -274,7 +288,10 @@ where
     drive_offer(lane, &ctx, ready.polled, journal, |volume, jit, bind| {
         let volume = volume.to_owned();
         let payload = jit.to_vec();
-        async move { bind::start_bound(docker, &volume, &payload, resource_budget, &bind).await }
+        let images = std::sync::Arc::clone(&images);
+        async move {
+            bind::start_bound(docker, &volume, &payload, resource_budget, &bind, &images).await
+        }
     })
     .await
 }
@@ -305,6 +322,7 @@ fn ack_ready(
             owner: "",
             repo: "",
             pat: "",
+            images: None,
             resource_budget: None,
             static_capacity: false,
             guest_admission: drive::GuestAdmission::Unavailable,

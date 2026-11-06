@@ -8,9 +8,7 @@ use crate::steps::{ATTEST_BUILD_PROVENANCE_USES, DOWNLOAD_ARTIFACT_USES, UPLOAD_
 use crate::yaml::Yaml;
 use velnor_actions_contract::JobTimeout;
 
-use super::features::{
-    CHECKOUT_USES, base, finish, identified_publish_step, run_step, source_step,
-};
+use super::features::{CHECKOUT_USES, base, finish, identified_publish_step, run_step};
 use super::{
     Schema2WorkflowRequest, generator_release, product_release_family,
     product_release_family::ARTIFACT_ID_GUARD_STEP_ID,
@@ -28,52 +26,14 @@ use artifact_helpers::{
 const MACOS_RUNS_ON: &str = "macos-15";
 const ASSET_DIR: &str = "assets";
 const CHECKSUMS: &str = "SHA256SUMS";
-const RUNNER_TAR: &str = "velnor-runner-linux-amd64.tar";
-const DIND_TAR: &str = "velnor-dind-linux-amd64.tar";
-const RESOURCE_PROBE_TAR: &str = "velnor-resource-probe-linux-amd64.tar";
-const RESOURCE_PROBE_MANIFEST: &str = "RESOURCE_PROBE_MANIFEST.json";
-const IMAGE_ASSET_ARTIFACT: &str = "image-assets-${{ github.run_attempt }}";
 const BINARY_ASSET_ARTIFACT: &str = "binary-assets-${{ github.run_attempt }}";
 const UPLOAD_ASSETS_STEP_ID: &str = "upload-assets";
-const IMAGE_ASSET_ARTIFACT_ID: &str = "${{ needs.build-images.outputs.artifact_id }}";
 const BINARY_ASSET_ARTIFACT_ID: &str = "${{ needs.build-binary.outputs.artifact_id }}";
-const IMAGE_ATTESTED_ARTIFACT_ID: &str = "${{ needs.attest-images.outputs.artifact_id }}";
 const BINARY_ATTESTED_ARTIFACT_ID: &str = "${{ needs.attest-binary.outputs.artifact_id }}";
 const HOST_BIN: &str = "velnor-host";
 const ATTESTATION_HELPER_BIN: &str = "velnor-runner-attestation-helper";
 const LICENSE: &str = "LICENSE";
 const NOTICE: &str = "NOTICE";
-
-const IMAGE_BUILD: &str = "\
-set -eu
-: \"${VELNOR_SOURCE_SHA:?}\"
-docker build --platform linux/amd64 --build-arg VELNOR_SOURCE_SHA=\"$VELNOR_SOURCE_SHA\" -t velnor-runner:linux-amd64 images/runner/ubuntu-26.04
-docker build --platform linux/amd64 --build-arg VELNOR_SOURCE_SHA=\"$VELNOR_SOURCE_SHA\" -t velnor-dind:linux-amd64 images/dind";
-
-const IMAGE_VERIFY: &str = "\
-set -eu
-: \"${VELNOR_SOURCE_SHA:?}\"
-runner=\"$(docker image inspect --format '{{.Architecture}}' velnor-runner:linux-amd64)\"
-dind=\"$(docker image inspect --format '{{.Architecture}}' velnor-dind:linux-amd64)\"
-test \"$runner\" = amd64
-test \"$dind\" = amd64
-runner_revision=\"$(docker image inspect --format '{{ index .Config.Labels \"org.opencontainers.image.revision\" }}' velnor-runner:linux-amd64)\"
-dind_revision=\"$(docker image inspect --format '{{ index .Config.Labels \"org.opencontainers.image.revision\" }}' velnor-dind:linux-amd64)\"
-test \"$runner_revision\" = \"$VELNOR_SOURCE_SHA\"
-test \"$dind_revision\" = \"$VELNOR_SOURCE_SHA\"";
-
-const IMAGE_SAVE: &str = "\
-set -eu
-docker save --output velnor-runner-linux-amd64.tar velnor-runner:linux-amd64
-docker save --output velnor-dind-linux-amd64.tar velnor-dind:linux-amd64
-test -s velnor-runner-linux-amd64.tar
-test -s velnor-dind-linux-amd64.tar
-test -s velnor-resource-probe-linux-amd64.tar
-test -s RESOURCE_PROBE_MANIFEST.json";
-
-const IMAGE_SUM: &str = "\
-set -eu
-sha256sum velnor-runner-linux-amd64.tar velnor-dind-linux-amd64.tar velnor-resource-probe-linux-amd64.tar RESOURCE_PROBE_MANIFEST.json LICENSE NOTICE > SHA256SUMS";
 
 const BINARY_VERIFY: &str = "\
 set -eu
@@ -89,63 +49,19 @@ const BINARY_SUM: &str = "\
 set -eu
 shasum -a 256 velnor-host velnor-runner-attestation-helper LICENSE NOTICE > SHA256SUMS";
 
+#[path = "schema2_runner_image_release.rs"]
+mod runner_images;
+
 pub(super) fn image_release(request: &Schema2WorkflowRequest) -> Result<Yaml, RenderError> {
-    let pins = request
-        .product_release
-        .as_ref()
-        .ok_or_else(|| RenderError::InvalidWorkflow("product_release_pins_missing".to_owned()))?;
-    let hosted = runs_on_yaml(&request.hosted_label)?;
-    let files = [
-        RUNNER_TAR,
-        DIND_TAR,
-        RESOURCE_PROBE_TAR,
-        RESOURCE_PROBE_MANIFEST,
-        LICENSE,
-        NOTICE,
-        CHECKSUMS,
-    ];
-    let mut build_steps = vec![source_step("Build runner and DinD images", IMAGE_BUILD)];
-    build_steps.extend(super::resource_probe_image::build_steps(pins)?);
-    build_steps.extend([
-        source_step("Verify image architectures and revisions", IMAGE_VERIFY),
-        run_step("Save image archives", IMAGE_SAVE),
-        run_step("Checksum built bytes", IMAGE_SUM),
-    ]);
-    Ok(document(
-        "Image release",
-        vec![
-            build_job(BuildJob {
-                id: "build-images",
-                name: "Build runner images",
-                runs_on: hosted.clone(),
-                timeout: JobTimeout::PRODUCT_IMAGE_BUILD,
-                steps: build_steps,
-                upload_name: "Upload image assets",
-                artifact: IMAGE_ASSET_ARTIFACT,
-                files: &files,
-            }),
-            attest_job(
-                "attest-images",
-                "Attest runner images",
-                hosted.clone(),
-                "build-images",
-                IMAGE_ASSET_ARTIFACT_ID,
-                &files,
-            ),
-            publish_job(
-                hosted,
-                &Publish {
-                    id: "publish-images",
-                    name: "Publish runner images",
-                    needs: "attest-images",
-                    artifact: IMAGE_ATTESTED_ARTIFACT_ID,
-                    prefix: "runner",
-                    notes: "Runner image assets built from ${GITHUB_SHA}.",
-                    files: &files,
-                },
-            ),
-        ],
-    ))
+    runner_images::render(request)
+}
+
+pub(super) fn image_release_caller(request: &Schema2WorkflowRequest) -> Result<Yaml, RenderError> {
+    runner_images::caller(request)
+}
+
+pub(super) fn image_release_eligibility() -> String {
+    runner_images::eligibility()
 }
 
 pub(super) fn macos_binary_release(request: &Schema2WorkflowRequest) -> Result<Yaml, RenderError> {

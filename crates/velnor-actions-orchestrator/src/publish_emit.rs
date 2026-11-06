@@ -85,6 +85,7 @@ pub(crate) fn publish_files(
         maven: &maven_plans,
         git_tag_manifest: git_tag.map(|release| release.manifest_path.as_str()),
         images,
+        native_images: prep.config.workflow.policy == WorkflowPolicy::VelnorRepositoryV1,
         promotions: &promotions,
     })?;
     let spec = PublishWorkflowSpec {
@@ -123,6 +124,10 @@ fn require_consumer_policy(prep: &GenerationPreparation) -> Result<(), Orchestra
         "publish.npm"
     } else if !publish.maven.is_empty() {
         "publish.maven"
+    } else if !prep.config.images.is_empty()
+        && prep.config.workflow.policy == WorkflowPolicy::VelnorRepositoryV1
+    {
+        return crate::image_build_tasks::validate_native_sdk_images(&prep.config.images);
     } else if !prep.config.images.is_empty() {
         "images"
     } else {
@@ -143,8 +148,7 @@ fn git_tag_config(
     release: &RustReleaseConfig,
     repository: &str,
 ) -> Result<RenderedFile, OrchestratorError> {
-    let json =
-        crate::release_emit::release_metadata_json(prep, release.manifest_path.as_str())?;
+    let json = crate::release_emit::release_metadata_json(prep, release.manifest_path.as_str())?;
     let owner = repository.split('/').next().unwrap_or_default();
     let unpinned =
         unpinned_git_sources(&json, owner).map_err(|err| OrchestratorError::Contract {

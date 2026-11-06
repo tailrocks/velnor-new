@@ -70,3 +70,7 @@ workspace = true
 [[test]]
 name = "crate_release_version_public"
 path = "tests/crate_release_version_public.rs"
+
+[[test]]
+name = "native_image_operation_public"
+path = "tests/native_image_operation_public.rs"

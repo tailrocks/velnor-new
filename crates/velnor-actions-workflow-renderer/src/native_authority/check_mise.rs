@@ -20,6 +20,9 @@ impl CheckMiseSetups {
             .ok_or_else(|| invalid("required_verdict_requires_published_generator_lock"))?;
         let mut checks = BTreeMap::new();
         for check in &input.config.checks {
+            if check.id == "native-image-candidates" {
+                continue;
+            }
             let target = check.runner.platform.release_target();
             let current = super::tools::mise_setup(input.config, target)?;
             let setup = match input.approved_release {

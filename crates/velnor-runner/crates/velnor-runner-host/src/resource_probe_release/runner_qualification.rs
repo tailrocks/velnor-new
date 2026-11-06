@@ -135,6 +135,22 @@ pub(super) fn validate_host_config(
     {
         return Err(HostError::Ownership);
     }
+    if role == "resource-probe" {
+        let mounts = host.mounts.as_deref().ok_or(HostError::Ownership)?;
+        if volumes.len() != 1
+            || mounts.len() != 1
+            || mounts[0].typ != Some(MountType::BIND)
+            || mounts[0].source.as_deref() != volumes.first().copied()
+            || mounts[0].target.as_deref() != Some("/velnor/docker-root")
+            || mounts[0].read_only != Some(true)
+            || host.readonly_rootfs != Some(true)
+            || host.cap_drop.as_deref() != Some(&["ALL".to_owned()][..])
+            || host.security_opt.as_deref() != Some(&["no-new-privileges:true".to_owned()][..])
+        {
+            return Err(HostError::Ownership);
+        }
+        return Ok(());
+    }
     let expected_targets = match (role, volumes.len()) {
         ("dind", 2) => &["/run", "/var/lib/docker"][..],
         ("runner-socket-query", 1) => &["/run"][..],
@@ -194,20 +210,38 @@ pub(super) async fn qualify(
     source_sha: &str,
     runner_id: &str,
     dind_id: &str,
+    probe_id: &str,
     docker_socket: &str,
+    result_path: &Path,
 ) -> Result<(), HostError> {
     if !source::is_lower_hex(source_sha, 40)
         || !is_digest_id(runner_id)
         || !is_digest_id(dind_id)
+        || !is_digest_id(probe_id)
         || runner_id == dind_id
+        || runner_id == probe_id
+        || dind_id == probe_id
         || !valid_socket(docker_socket)
     {
         return Err(HostError::Identity);
     }
     let source = source::load(root, source_sha).await?;
     let docker = crate::docker_client::connect_unix(docker_socket)?;
-    let result = docker::qualify(&docker, &source, runner_id, dind_id).await?;
+    let result = docker::qualify(&docker, &source, runner_id, dind_id, probe_id).await?;
     source::revalidate(&source).await?;
+    let document = serde_json::json!({
+        "schema": "velnor.runner-image-runtime-qualification.v1",
+        "source_commit": source_sha,
+        "runner_lock_sha256": crate::artifact_admission::hash_release_bytes(&source.lock_bytes),
+        "images": {
+            "runner": {"runtime_id": runner_id, "identity_kind": result.runner_identity},
+            "dind": {"runtime_id": dind_id, "identity_kind": result.dind_identity},
+            "resource_probe": {"runtime_id": probe_id, "identity_kind": result.probe_identity}
+        }
+    });
+    let mut bytes = serde_json::to_vec(&document).map_err(|_| HostError::Identity)?;
+    bytes.push(b'\n');
+    super::files::create_new_regular(result_path, &bytes)?;
     println!(
         "runner_listener_version={} runner_docker_version={} dind_docker_version={} dind_daemon_version={} runner_buildx_version={} runner_compose_version={} runner_node_version={}",
         result.versions.runner_listener,

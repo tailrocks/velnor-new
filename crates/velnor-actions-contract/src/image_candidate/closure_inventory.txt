@@ -763,6 +763,8 @@ crates/velnor-actions-orchestrator/src/image_maintenance/publication_github_mode
 crates/velnor-actions-orchestrator/src/image_maintenance/publication_qualification.rs
 crates/velnor-actions-orchestrator/src/image_maintenance/runner_admission.rs
 crates/velnor-actions-orchestrator/src/image_maintenance/runner_profiles.rs
+crates/velnor-actions-orchestrator/src/image_maintenance/runner_qualification.rs
+crates/velnor-actions-orchestrator/src/image_maintenance/runner_records.rs
 crates/velnor-actions-orchestrator/src/image_maintenance/source.rs
 crates/velnor-actions-orchestrator/src/image_maintenance/validate.rs
 crates/velnor-actions-orchestrator/src/image_prebuilt.rs
@@ -974,6 +976,7 @@ crates/velnor-actions-orchestrator/src/publish_emit.rs
 crates/velnor-actions-orchestrator/src/publish_image_steps.rs
 crates/velnor-actions-orchestrator/src/publish_maven_emit.rs
 crates/velnor-actions-orchestrator/src/publish_maven_steps.rs
+crates/velnor-actions-orchestrator/src/publish_native_image_steps.rs
 crates/velnor-actions-orchestrator/src/publish_npm_emit.rs
 crates/velnor-actions-orchestrator/src/publish_npm_steps.rs
 crates/velnor-actions-orchestrator/src/publish_provenance_steps.rs
@@ -1033,6 +1036,9 @@ crates/velnor-actions-orchestrator/src/rust_manifest_step.rs
 crates/velnor-actions-orchestrator/src/rust_suites_emit.rs
 crates/velnor-actions-orchestrator/src/safe_read.rs
 crates/velnor-actions-orchestrator/src/schedule.rs
+crates/velnor-actions-orchestrator/src/sdk_preview_build.rs
+crates/velnor-actions-orchestrator/src/sdk_preview_configuration.rs
+crates/velnor-actions-orchestrator/src/sdk_preview_producer.rs
 crates/velnor-actions-orchestrator/src/select.rs
 crates/velnor-actions-orchestrator/src/select_affected.rs
 crates/velnor-actions-orchestrator/src/select_ansible.rs
@@ -1298,11 +1304,8 @@ crates/velnor-actions-workflow-renderer/src/homebrew_adoption_workflow_jobs.rs
 crates/velnor-actions-workflow-renderer/src/image_build_jobs.rs
 crates/velnor-actions-workflow-renderer/src/image_publish_scripts.rs
 crates/velnor-actions-workflow-renderer/src/job_image_authority.rs
-crates/velnor-actions-workflow-renderer/src/job_image_authority_identity.py
 crates/velnor-actions-workflow-renderer/src/job_image_authority_oci.py
-crates/velnor-actions-workflow-renderer/src/job_image_authority_publish.py
 crates/velnor-actions-workflow-renderer/src/job_image_authority_record.py
-crates/velnor-actions-workflow-renderer/src/job_image_authority_registry.py
 crates/velnor-actions-workflow-renderer/src/job_image_authority_tar.py
 crates/velnor-actions-workflow-renderer/src/job_image_authority_verify.rs
 crates/velnor-actions-workflow-renderer/src/lane_share.rs
@@ -1378,6 +1381,9 @@ crates/velnor-actions-workflow-renderer/src/project_tool_resolver_quote.rs
 crates/velnor-actions-workflow-renderer/src/project_tool_resolver_tree.rs
 crates/velnor-actions-workflow-renderer/src/project_tool_resolver_verifier.rs
 crates/velnor-actions-workflow-renderer/src/publish_maven_scripts.rs
+crates/velnor-actions-workflow-renderer/src/publish_native_image.sh
+crates/velnor-actions-workflow-renderer/src/publish_native_operation.rs
+crates/velnor-actions-workflow-renderer/src/publish_native_promote.sh
 crates/velnor-actions-workflow-renderer/src/publish_npm_scripts.rs
 crates/velnor-actions-workflow-renderer/src/publish_provenance_scripts.rs
 crates/velnor-actions-workflow-renderer/src/publish_render.rs
@@ -1416,6 +1422,11 @@ crates/velnor-actions-workflow-renderer/src/rust_suites_steps.rs
 crates/velnor-actions-workflow-renderer/src/rust_suites_triggers.rs
 crates/velnor-actions-workflow-renderer/src/schema2.rs
 crates/velnor-actions-workflow-renderer/src/schema2_cache_jobs.rs
+crates/velnor-actions-workflow-renderer/src/schema2_ci_image_artifact.py
+crates/velnor-actions-workflow-renderer/src/schema2_ci_image_download.sh
+crates/velnor-actions-workflow-renderer/src/schema2_ci_image_fetch.rs
+crates/velnor-actions-workflow-renderer/src/schema2_ci_image_lookup.sh
+crates/velnor-actions-workflow-renderer/src/schema2_ci_image_producer.rs
 crates/velnor-actions-workflow-renderer/src/schema2_ci_run_lookup.rs
 crates/velnor-actions-workflow-renderer/src/schema2_class_steps.rs
 crates/velnor-actions-workflow-renderer/src/schema2_classes.rs
@@ -1453,7 +1464,6 @@ crates/velnor-actions-workflow-renderer/src/schema2_generator_source_qualificati
 crates/velnor-actions-workflow-renderer/src/schema2_generator_source_qualification_jobs.rs
 crates/velnor-actions-workflow-renderer/src/schema2_job_image_candidate.rs
 crates/velnor-actions-workflow-renderer/src/schema2_job_image_native.rs
-crates/velnor-actions-workflow-renderer/src/schema2_job_image_steps.rs
 crates/velnor-actions-workflow-renderer/src/schema2_mbx_qualification.rs
 crates/velnor-actions-workflow-renderer/src/schema2_mise_pin_qualification.rs
 crates/velnor-actions-workflow-renderer/src/schema2_more.rs
@@ -1468,8 +1478,14 @@ crates/velnor-actions-workflow-renderer/src/schema2_release_artifact_helpers.rs
 crates/velnor-actions-workflow-renderer/src/schema2_release_eligibility.rs
 crates/velnor-actions-workflow-renderer/src/schema2_release_prepare.sh
 crates/velnor-actions-workflow-renderer/src/schema2_release_publish.sh
-crates/velnor-actions-workflow-renderer/src/schema2_resource_probe_image.rs
+crates/velnor-actions-workflow-renderer/src/schema2_runner_image_publication_policy.sh
+crates/velnor-actions-workflow-renderer/src/schema2_runner_image_release.rs
+crates/velnor-actions-workflow-renderer/src/schema2_runner_image_release.sh
+crates/velnor-actions-workflow-renderer/src/schema2_runner_qualification.rs
+crates/velnor-actions-workflow-renderer/src/schema2_runner_qualification.sh
 crates/velnor-actions-workflow-renderer/src/schema2_runner_spec.rs
+crates/velnor-actions-workflow-renderer/src/schema2_sdk_preview_bootstrap.py
+crates/velnor-actions-workflow-renderer/src/schema2_sdk_preview_bootstrap.rs
 crates/velnor-actions-workflow-renderer/src/selected_mise_verifier.rs
 crates/velnor-actions-workflow-renderer/src/setup.rs
 crates/velnor-actions-workflow-renderer/src/sources_producer.rs

@@ -91,6 +91,8 @@ mod native_artifacts_fixture;
 mod native_artifacts_suite_gate;
 #[path = "workflow_configuration_public/native_artifacts_suites.rs"]
 mod native_artifacts_suites;
+#[path = "workflow_configuration_public/native_image_artifact.rs"]
+mod native_image_artifact;
 #[path = "workflow_configuration_public/non_inputs_checkout.rs"]
 mod non_inputs_checkout;
 #[path = "workflow_configuration_public/non_inputs_checkout_support.rs"]

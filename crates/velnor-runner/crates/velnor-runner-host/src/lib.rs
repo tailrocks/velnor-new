@@ -42,6 +42,7 @@ mod stage;
 mod work_owner;
 mod worker;
 
+pub use artifact_admission::{AdmittedImages, admit_runner_images};
 pub use assign::{Offer, offer};
 pub use config::{DockerConfig, GithubSection, HostConfig, HostLimits, KeychainReference};
 pub use connect::{ConnectPlan, DisconnectEffect, SetOwnership, connect_plan, disconnect_effects};
@@ -65,8 +66,8 @@ pub use reconcile::{
     IntentRow, LaunchPhase, Reconcile, ReleaseFact, before_advertise, occupies, release_permitted,
 };
 pub use scale_set::{EnsureError, EnsuredSet, ensure_product_scale_set, product_runner_groups};
-pub use stage::{PairStop, PartialPair, remove_recorded, start_pair_until};
+pub use stage::remove_recorded;
 pub use worker::{
     BindMount, BollardCreate, CreateProjection, ResourceBudget, Started, bollard_create,
-    dind_create, runner_create, start_pair,
+    dind_create, runner_create,
 };

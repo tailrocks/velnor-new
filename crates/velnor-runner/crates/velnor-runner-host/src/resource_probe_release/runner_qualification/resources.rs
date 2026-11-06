@@ -274,6 +274,17 @@ impl OwnedResources {
         {
             return Err(HostError::Ownership);
         }
+        if role == "resource-probe" {
+            let config = inspect.config.as_ref().ok_or(HostError::Ownership)?;
+            if config.user.as_deref() != Some("65532:65532")
+                || config.working_dir.as_deref() != Some("/")
+                || config.entrypoint.as_deref() != Some(&["/velnor/resource-probe".to_owned()][..])
+                || config.cmd.as_deref() != Some(&[])
+                || config.network_disabled != Some(true)
+            {
+                return Err(HostError::Ownership);
+            }
+        }
         validate_host_config(inspect, role, volumes)?;
         Ok(())
     }

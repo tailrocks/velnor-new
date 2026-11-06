@@ -66,15 +66,6 @@ pub(crate) fn archive_bytes(parts: &ImageParts) -> Vec<u8> {
     ])
 }
 
-pub(crate) fn write_bytes(root: &Path, name: &str, bytes: &[u8]) -> Result<String, Box<dyn Error>> {
-    let path = root.join(name);
-    std::fs::write(&path, bytes)?;
-    Ok(path
-        .to_str()
-        .ok_or_else(|| fail("fixture path left its string shape"))?
-        .to_owned())
-}
-
 pub(crate) fn record_json(parts: &ImageParts, archive: &[u8]) -> String {
     format!(
         "{{\"schema\":\"velnor.job-image-candidate.v1\",\"source\":{{\"commit\":\"{}\",\"ref\":\"refs/heads/main\",\"inputs\":{{\".velnor/runner.lock\":\"{}\",\"images/job/ubuntu-26.04/Dockerfile\":\"{}\",\"images/job/ubuntu-26.04/README.md\":\"{}\",\"images/job/ubuntu-26.04/build-test.sh\":\"{}\",\"images/job/ubuntu-26.04/candidate/candidate.py\":\"{}\"}}}}",
@@ -97,57 +88,4 @@ pub(crate) fn record_json(parts: &ImageParts, archive: &[u8]) -> String {
         parts.config.len(),
         sha256_hex(&parts.layer),
     )
-}
-
-pub(crate) fn identity_envelope() -> String {
-    format!(
-        "{{\"source\":\"{SOURCE_SHA}\",\"workflow_ref\":\"{WORKFLOW_REF}\",\"run_id\":7,\"run_attempt\":2,\"artifact_id\":9}}",
-    )
-}
-
-pub(crate) struct Fixture {
-    pub(crate) root: tempfile::TempDir,
-    pub(crate) driver: std::path::PathBuf,
-}
-
-pub(crate) fn write_fixture_source(
-    root: &Path,
-    name: &str,
-    source: &str,
-) -> Result<(), Box<dyn Error>> {
-    std::fs::write(root.join(name), source)?;
-    Ok(())
-}
-
-pub(crate) fn fixture() -> Result<Fixture, Box<dyn Error>> {
-    let root = tempfile::tempdir()?;
-    write_fixture_source(root.path(), IDENTITY_FILE, IDENTITY_SOURCE)?;
-    write_fixture_source(root.path(), REGISTRY_FILE, REGISTRY_SOURCE)?;
-    write_fixture_source(root.path(), PUBLISH_FILE, PUBLISH_SOURCE)?;
-    write_fixture_source(root.path(), RECORD_FILE, RECORD_SOURCE)?;
-    write_fixture_source(root.path(), OCI_FILE, OCI_SOURCE)?;
-    write_fixture_source(root.path(), TAR_FILE, TAR_SOURCE)?;
-    let driver = root.path().join("gc1_t48_driver.py");
-    std::fs::write(&driver, DRIVER)?;
-    for name in [
-        IDENTITY_FILE,
-        REGISTRY_FILE,
-        PUBLISH_FILE,
-        RECORD_FILE,
-        OCI_FILE,
-        TAR_FILE,
-    ] {
-        let output = Command::new("python3")
-            .arg("-m")
-            .arg("py_compile")
-            .arg(root.path().join(name))
-            .output()?;
-        if !output.status.success() {
-            return Err(fail(&format!(
-                "{name} left compilable:{:?}",
-                String::from_utf8_lossy(&output.stderr)
-            )));
-        }
-    }
-    Ok(Fixture { root, driver })
 }

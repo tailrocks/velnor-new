@@ -45,18 +45,32 @@ async fn run() -> Result<(), HostError> {
                 &PathBuf::from(output.as_os_str()),
             )
         }
-        (Some("qualify-runner-images"), [root, source_sha, runner_id, dind_id, docker_socket]) => {
+        (
+            Some("qualify-runner-images"),
+            [
+                root,
+                source_sha,
+                runner_id,
+                dind_id,
+                probe_id,
+                docker_socket,
+                result_path,
+            ],
+        ) => {
             let root = PathBuf::from(root);
             let source_sha = source_sha.to_str().ok_or(HostError::Identity)?;
             let runner_id = runner_id.to_str().ok_or(HostError::Identity)?;
             let dind_id = dind_id.to_str().ok_or(HostError::Identity)?;
+            let probe_id = probe_id.to_str().ok_or(HostError::Identity)?;
             let docker_socket = docker_socket.to_str().ok_or(HostError::Identity)?;
             resource_probe_release::qualify_runner_images(
                 &root,
                 source_sha,
                 runner_id,
                 dind_id,
+                probe_id,
                 docker_socket,
+                &PathBuf::from(result_path),
             )
             .await
         }

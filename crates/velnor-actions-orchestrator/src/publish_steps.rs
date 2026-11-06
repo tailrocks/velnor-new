@@ -31,6 +31,8 @@ mod npm_steps;
 pub(crate) use npm_steps::NpmPlan;
 #[path = "publish_image_steps.rs"]
 pub(crate) mod image_steps;
+#[path = "publish_native_image_steps.rs"]
+mod native_image_steps;
 #[path = "publish_provenance_steps.rs"]
 mod provenance_steps;
 
@@ -61,6 +63,7 @@ pub(crate) struct Inputs<'a> {
     pub(crate) maven: &'a [MavenPlan<'a>],
     pub(crate) git_tag_manifest: Option<&'a str>,
     pub(crate) images: &'a [ImageConfig],
+    pub(crate) native_images: bool,
     pub(crate) promotions: &'a [PromotionPlan<'a>],
 }
 
@@ -127,13 +130,21 @@ pub(crate) fn assemble_jobs(
         for image in inputs.images {
             jobs.insert(
                 publish_job_id(image),
-                image_publish_job(inputs, image, &gh, &crane)?,
+                if inputs.native_images {
+                    native_image_steps::publish_job(inputs, image)?
+                } else {
+                    image_publish_job(inputs, image, &gh, &crane)?
+                },
             );
         }
         for plan in inputs.promotions {
             jobs.insert(
                 plan.image.promote_job_id(),
-                promote_job(inputs, plan.image, &gh, &crane)?,
+                if inputs.native_images {
+                    native_image_steps::promote_job(inputs, plan.image)?
+                } else {
+                    promote_job(inputs, plan.image, &gh, &crane)?
+                },
             );
         }
     }

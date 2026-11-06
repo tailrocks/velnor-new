@@ -42,6 +42,7 @@ pub(super) fn job(spec: &ConsumerReleaseSpec) -> Result<(String, Yaml), RenderEr
         "${{ steps.source-select.outputs.source_sha }}",
         "${{ steps.source-select.outputs.checkout_lfs }}",
     ));
+    job_steps.extend(super::steps::sdk_source_cli(spec)?);
     job_steps.push(finalize_step(spec)?);
     job_steps.push(source_admission_upload());
     fields.push(("outputs".to_owned(), job_outputs()));

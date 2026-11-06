@@ -374,3 +374,6 @@ fn reject_hidden_runner_dockerfile_change(index_flag: &str) -> Result<(), Box<dy
     fixture.preserve_hidden_runner_dockerfile_state(index_flag, &changed_bytes)?;
     Ok(())
 }
+
+#[path = "runner_image_admission_public/ci_records.rs"]
+mod ci_records;

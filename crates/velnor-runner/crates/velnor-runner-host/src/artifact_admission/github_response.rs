@@ -9,12 +9,11 @@ use serde_json::Value;
 use crate::error::HostError;
 
 use super::super::hash::is_sha256_digest;
-use super::super::manifest::{ARCHIVE_ASSET, CHECKSUM_ASSET, MANIFEST_ASSET, REPOSITORY};
+use super::super::manifest::REPOSITORY;
 use super::Asset;
 
 const PRODUCT_REPOSITORY_ID: u64 = 1_390_620_900;
-const MAX_ATTESTATIONS: usize = 16;
-const MAX_NON_PROBE_ASSET_BYTES: u64 = 4 * 1024 * 1024 * 1024;
+const MAX_ATTESTATIONS: usize = 100;
 
 #[derive(Deserialize)]
 struct Release {
@@ -35,7 +34,7 @@ struct ReleaseAsset {
     digest: String,
 }
 
-pub(super) fn parse_release(
+pub(super) fn parse_runner_release(
     source: &str,
     value: Value,
 ) -> Result<BTreeMap<String, Asset>, HostError> {
@@ -54,7 +53,7 @@ pub(super) fn parse_release(
         if asset.id == 0
             || asset.state != "uploaded"
             || asset.size == 0
-            || asset.size > MAX_NON_PROBE_ASSET_BYTES
+            || asset.size > 64 * 1024
             || !is_sha256_digest(&asset.digest)
             || assets
                 .insert(
@@ -72,21 +71,14 @@ pub(super) fn parse_release(
         }
     }
     let expected = BTreeSet::from([
-        "velnor-runner-linux-amd64.tar",
-        "velnor-dind-linux-amd64.tar",
-        ARCHIVE_ASSET,
-        MANIFEST_ASSET,
-        CHECKSUM_ASSET,
+        "RUNNER_IMAGE_MANIFEST.json",
+        "SHA256SUMS",
+        "LICENSE",
+        "NOTICE",
     ]);
     if assets.len() != expected.len() || assets.keys().any(|name| !expected.contains(name.as_str()))
     {
         return Err(HostError::Identity);
-    }
-    let archive = assets.get(ARCHIVE_ASSET).ok_or(HostError::Identity)?;
-    let manifest = assets.get(MANIFEST_ASSET).ok_or(HostError::Identity)?;
-    let checksum = assets.get(CHECKSUM_ASSET).ok_or(HostError::Identity)?;
-    if archive.size > 16 * 1024 * 1024 || manifest.size > 64 * 1024 || checksum.size > 64 * 1024 {
-        return Err(HostError::Frame);
     }
     Ok(assets)
 }
@@ -107,10 +99,10 @@ pub(super) fn parse_attestations(response: &Value) -> Result<Vec<Value>, HostErr
         .and_then(Value::as_array)
         .filter(|rows| !rows.is_empty() && rows.len() <= MAX_ATTESTATIONS)
         .ok_or(HostError::Identity)?;
-    rows.iter().map(parse_attestation).collect()
+    Ok(rows.clone())
 }
 
-fn parse_attestation(row: &Value) -> Result<Value, HostError> {
+pub(super) fn validate_attestation_repository(row: &Value) -> Result<(), HostError> {
     if row.get("repository_id").and_then(Value::as_u64) != Some(PRODUCT_REPOSITORY_ID)
         || row
             .get("repository")
@@ -119,6 +111,11 @@ fn parse_attestation(row: &Value) -> Result<Value, HostError> {
     {
         return Err(HostError::Identity);
     }
+    Ok(())
+}
+
+pub(super) fn parse_attestation(row: &Value) -> Result<Value, HostError> {
+    validate_attestation_repository(row)?;
     let bundle = row
         .get("bundle")
         .filter(|bundle| bundle.is_object())

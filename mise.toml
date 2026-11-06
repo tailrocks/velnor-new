@@ -98,3 +98,10 @@ for package in velnor-actions-freshness velnor-archive-guard; do
   esac
 done
 '''
+
+[tasks."sdk-preview:produce"]
+description = "Produce exact-source SDK preview payloads and aggregate admitted leaves"
+run = "bash scripts/sdk-preview-producer.sh"
+
+[tasks.validate-native-image-source]
+run = "python3 scripts/sync-native-image-check-inputs.py --check && bash images/job/ubuntu-26.04/build-test.sh"

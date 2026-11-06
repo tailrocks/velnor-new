@@ -153,10 +153,14 @@ fn producer_steps(
 ) -> Result<(Vec<Yaml>, Yaml), RenderError> {
     let mut steps = acquisition_steps(spec, id, pair.is_none() && !preview_matrix, preview_matrix)?;
     steps.extend(support::source_steps(spec, id)?);
+    steps.extend(super::steps::sdk_source_cli(spec)?);
     let (mut operation, public_plan) =
         production_operation(spec, "execute-release-producer-v1", false)?;
     support::bind_stage(&mut operation, spec, pair, preview_matrix)?;
     steps.push(operation);
+    if spec.sdk_source_bootstrap && preview_matrix {
+        steps.push(super::steps::sdk_inventory_gate());
+    }
     steps.push(upload(pair, preview_matrix));
     if spec.policy.channel == PackageReleaseChannel::Stable {
         for step in &mut steps {

@@ -89,7 +89,7 @@ pub(super) async fn release_exited<E: PairEngine + ?Sized>(
     Ok(())
 }
 
-async fn release_row<E: PairEngine + ?Sized>(
+pub(crate) async fn release_row<E: PairEngine + ?Sized>(
     journal: &Journal,
     engine: &E,
     row: &IntentRow,
@@ -104,15 +104,41 @@ async fn release_row<E: PairEngine + ?Sized>(
     let Some(volume) = row.worker_volume.as_deref() else {
         return Ok(());
     };
+    let (runner_engine, runner_root, runner_image) = journal
+        .worker_image(row.id, "runner")
+        .await
+        .map_err(map_journal)?;
+    let (dind_engine, dind_root, dind_image) = journal
+        .worker_image(row.id, "dind")
+        .await
+        .map_err(map_journal)?;
     let (runner, dind) = recover_pair(journal, engine, row).await?;
     if let Some(runner) = runner.as_deref()
         && (engine.running(runner).await.map_err(map_docker)?
-            || !delete_owned(engine, runner, volume, "runner").await?)
+            || !delete_owned(
+                engine,
+                runner,
+                volume,
+                "runner",
+                &runner_engine,
+                &runner_root,
+                &runner_image,
+            )
+            .await?)
     {
         return Ok(());
     }
     if let Some(dind) = dind.as_deref()
-        && !delete_owned(engine, dind, volume, "dind").await?
+        && !delete_owned(
+            engine,
+            dind,
+            volume,
+            "dind",
+            &dind_engine,
+            &dind_root,
+            &dind_image,
+        )
+        .await?
     {
         return Ok(());
     }
@@ -157,9 +183,13 @@ async fn recover_id<E: PairEngine + ?Sized>(
             });
         }
     };
+    let (engine_id, docker_root, image_id) = journal
+        .worker_image(row.id, role)
+        .await
+        .map_err(map_journal)?;
     let name = format!("{volume}-{role}");
     let observed = engine
-        .worker_id_for_name(&name, volume, role)
+        .worker_id_for_name(&name, volume, role, &engine_id, &docker_root, &image_id)
         .await
         .map_err(map_docker)?;
     if let Some(id) = recorded {
@@ -198,10 +228,13 @@ async fn delete_owned<E: PairEngine + ?Sized>(
     id: &str,
     volume: &str,
     role: &str,
+    engine_id: &str,
+    docker_root: &str,
+    image_id: &str,
 ) -> Result<bool, EnsureError> {
     let name = format!("{volume}-{role}");
     match engine
-        .worker_id_for_name(&name, volume, role)
+        .worker_id_for_name(&name, volume, role, engine_id, docker_root, image_id)
         .await
         .map_err(map_docker)?
     {
@@ -212,7 +245,7 @@ async fn delete_owned<E: PairEngine + ?Sized>(
         Some(found) if found == id => {
             engine.remove(id).await.map_err(map_docker)?;
             Ok(engine
-                .worker_id_for_name(&name, volume, role)
+                .worker_id_for_name(&name, volume, role, engine_id, docker_root, image_id)
                 .await
                 .map_err(map_docker)?
                 .is_none())

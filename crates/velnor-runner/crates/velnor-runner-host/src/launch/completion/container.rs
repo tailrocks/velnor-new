@@ -4,8 +4,8 @@
 use bollard::Docker;
 
 use super::{Context, EffectBudget, Failure, run_effect};
+use crate::docker_spec::runner_container_name;
 use crate::journal::{CleanupClaim, CompletedLaunch};
-use crate::runner_plan;
 use crate::stage::PairEngine;
 use crate::worker::dind_container_name;
 
@@ -20,13 +20,14 @@ pub(super) async fn cleanup(
         .worker_volume
         .as_deref()
         .ok_or_else(|| Failure::not_proven("worker identity"))?;
-    let runner = runner_plan(worker).map_err(|error| Failure::request("runner plan", error))?;
+    let runner_name =
+        runner_container_name(worker).map_err(|error| Failure::request("runner plan", error))?;
     let dind_name =
         dind_container_name(worker).map_err(|error| Failure::request("dind identity", error))?;
     let tasks = [
         ContainerCleanup {
             recorded_id: launch.intent.docker_id.as_deref(),
-            name: &runner.name,
+            name: &runner_name,
             volume: worker,
             role: "runner",
         },
@@ -138,6 +139,11 @@ async fn request_worker_id(
     task: &ContainerCleanup<'_>,
 ) -> Result<Option<String>, Failure> {
     let docker: &Docker = context.docker;
+    let (engine_id, docker_root, image_id) = context
+        .journal
+        .worker_image(intent_id, task.role)
+        .await
+        .map_err(|error| Failure::request("worker image identity", error))?;
     run_effect(
         context.journal,
         budget,
@@ -146,7 +152,14 @@ async fn request_worker_id(
         "container inspect",
         || async {
             docker
-                .worker_id_for_name(name, task.volume, task.role)
+                .worker_id_for_name(
+                    name,
+                    task.volume,
+                    task.role,
+                    &engine_id,
+                    &docker_root,
+                    &image_id,
+                )
                 .await
         },
     )

@@ -190,7 +190,7 @@ fn public_qualifier_recovers_late_container_and_volume_creates() -> TestResult<(
         assert_eq!(state.containers.len(), 1);
         assert_eq!(state.containers[0].name, "foreign-sentinel");
         assert_eq!(state.volumes, ["foreign-sentinel"]);
-        assert_eq!(state.images.len(), 2);
+        assert_eq!(state.images.len(), 3);
         assert!(state.images.contains(&digest_id('a')));
         assert!(state.images.contains(&digest_id('b')));
         if fault == ApiFault::LateContainerCreate {
@@ -257,7 +257,7 @@ fn public_qualifier_reconciles_disconnect_before_late_create_insertion() -> Test
                 .iter()
                 .any(|volume| volume == "foreign-sentinel")
         );
-        assert_eq!(state.images.len(), 2);
+        assert_eq!(state.images.len(), 3);
         assert!(state.images.contains(&digest_id('a')));
         assert!(state.images.contains(&digest_id('b')));
     }
@@ -353,7 +353,7 @@ fn public_qualifier_rejects_hidden_tracked_changes_during_inspection() -> TestRe
         assert_eq!(state.containers.len(), 1);
         assert_eq!(state.containers[0].name, "foreign-sentinel");
         assert_eq!(state.volumes, ["foreign-sentinel"]);
-        assert_eq!(state.images.len(), 2);
+        assert_eq!(state.images.len(), 3);
         assert!(state.images.contains(&digest_id('a')));
         assert!(state.images.contains(&digest_id('b')));
     }

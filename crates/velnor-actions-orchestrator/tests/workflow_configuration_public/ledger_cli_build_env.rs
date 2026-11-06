@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::error::Error;
+use std::{error::Error, os::unix::fs::PermissionsExt};
 
 use velnor_actions_contract::WorkflowPolicy;
 use velnor_actions_orchestrator::{prepare, render_staged_tree};
@@ -91,16 +91,13 @@ fn step_text(text: &str, name: &str) -> Result<StepText, Box<dyn Error>> {
             indent(line) > floor || (indent(line) == floor && !line.trim().starts_with("- "))
         })
         .collect();
-    let env_at = body
-        .iter()
-        .position(|line| line.trim().starts_with("env:"))
-        .ok_or_else(|| format!("{name}: step has no env"))?;
+    let env_at = body.iter().position(|line| line.trim().starts_with("env:"));
     let run = body
         .iter()
         .find_map(|line| line.trim().strip_prefix("run: "))
         .ok_or_else(|| format!("{name}: step has no run"))?;
     Ok(StepText {
-        env: env_entries(&body, env_at, name)?,
+        env: env_at.map_or_else(|| Ok(Vec::new()), |at| env_entries(&body, at, name))?,
         run: unquote(run)?,
     })
 }
@@ -170,6 +167,153 @@ fn lean_dev_profile_stays_on_the_ledger_cli_build() -> Result<(), Box<dyn Error>
     let consumer = render_tree_text(WorkflowPolicy::ConsumerV1)?;
     for (key, _) in LEAN_PROFILE {
         assert_eq!(occurrences(&consumer, key), 0, "{key} in consumer tree");
+    }
+    Ok(())
+}
+
+#[test]
+#[cfg(unix)]
+fn native_image_ci_producer_scrubs_credentials_and_uploads_only_on_success()
+-> Result<(), Box<dyn Error>> {
+    let repo = mbx_repo_for(false, WorkflowPolicy::VelnorRepositoryV1)?;
+    let config_path = repo.path().join(".velnor/config.toml");
+    let mut config = std::fs::read_to_string(&config_path)?;
+    let checkout = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let repository_config = std::fs::read_to_string(checkout.join(".velnor/config.toml"))?;
+    let image_blocks = repository_config
+        .split_once("[[images]]")
+        .ok_or("images")?
+        .1;
+    let image_blocks = image_blocks
+        .split_once("\n[[checks]]")
+        .ok_or("image end")?
+        .0;
+    config.push_str("\n[[images]]");
+    config.push_str(image_blocks);
+    let nested_manifest = repo.path().join("crates/velnor-runner/Cargo.toml");
+    std::fs::create_dir_all(nested_manifest.parent().ok_or("manifest parent")?)?;
+    std::fs::write(
+        nested_manifest,
+        "[workspace]\nmembers = []\n[workspace.package]\nversion = \"0.1.0\"\n",
+    )?;
+    config.push_str("\n[[checks]]\nid = \"native-image-candidates\"\ntask = \"fixture-image-check\"\ninputs = [\"Cargo.toml\"]\ntools = []\nrunner = { label = \"ubuntu-26.04\", platform = \"linux_x64\", executor = \"hosted\" }\n");
+    std::fs::write(config_path, config)?;
+    let mise = repo.path().join("mise.toml");
+    let mut task = std::fs::read_to_string(&mise).unwrap_or_default();
+    task.push_str("\n[tasks.fixture-image-check]\nrun = \"true\"\n");
+    std::fs::write(mise, task)?;
+    let tree = render_staged_tree(&prepare(repo.path())?)?;
+    let ci = tree
+        .files
+        .iter()
+        .find(|file| file.path == WORKFLOW_PATH)
+        .ok_or("CI")?
+        .bytes
+        .as_str();
+    for image in ["dind", "job", "resource-probe", "runner"] {
+        assert!(!ci.contains(&format!("image-{image}-amd64:")));
+    }
+    let job = ci
+        .split_once("check-native-image-candidates:")
+        .ok_or("native check job")?
+        .1;
+    let initial = job
+        .find("name: Verify Rust channel manifest")
+        .ok_or("initial verifier")?;
+    let install = job
+        .find("name: Install pinned Linux musl target")
+        .ok_or("target install")?;
+    let post_name = "Verify Rust toolchain after cross-target install";
+    let post = job
+        .find(&format!("name: {post_name}"))
+        .ok_or("post-target verifier")?;
+    let build = job
+        .find("name: Build locked resource probe")
+        .ok_or("probe build")?;
+    assert!(initial < install && install < post && post < build);
+    assert_eq!(ci.matches(&format!("name: {post_name}")).count(), 1);
+    let producers = tree
+        .files
+        .iter()
+        .filter(|file| file.bytes.contains("tools-producer-"));
+    assert!(producers.into_iter().any(|file| {
+        file.bytes
+            .contains("./.github/actions/velnor-verify-rust-manifest")
+    }));
+    let after_target = step_text(job, post_name)?;
+    assert!(after_target.run.contains("rust_toolchain_bytes_mismatch"));
+    assert!(after_target.run.contains("channel-rust-"));
+    assert_eq!(
+        env_values(&after_target.env, "RUSTUP_HOME"),
+        ["${{ runner.temp }}/velnor/rustup"]
+    );
+    assert_eq!(
+        env_values(&after_target.env, "CARGO_HOME"),
+        ["${{ runner.temp }}/velnor/cargo"]
+    );
+    let acquire = step_text(job, "Acquire approved check Mise")?;
+    for expected in [
+        "2026.10.19",
+        "3162760f40b6b5f706c60641e4ef5ee7322bc6c54f72fc26a7111b337aa18d9d",
+        "173449632",
+    ] {
+        assert!(
+            acquire.run.contains(expected),
+            "missing approved runtime {expected}"
+        );
+    }
+    let execute = step_text(job, "Execute named check")?;
+    assert_eq!(
+        env_values(&execute.env, "PATH"),
+        ["${{ runner.temp }}/velnor/check-mise/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"]
+    );
+    for step in [
+        "Build exact-source image maintenance",
+        "Build locked resource probe",
+        "Build and inspect CI image candidates",
+    ] {
+        let body = step_text(job, step)?;
+        assert!(
+            body.run
+                .contains("scripts/ci-native-image-credential-exec.sh"),
+            "{step}: {}",
+            body.run
+        );
+    }
+    let tools = tempfile::tempdir()?;
+    let fake_mise = tools.path().join("mise");
+    std::fs::write(&fake_mise, "#!/bin/sh\nenv\n")?;
+    std::fs::set_permissions(&fake_mise, std::fs::Permissions::from_mode(0o755))?;
+    let probe = step_text(job, "Build locked resource probe")?;
+    assert_eq!(env_values(&probe.env, "PATH").len(), 0);
+    let observed = std::process::Command::new("bash")
+        .args(["-c", &probe.run])
+        .current_dir(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."))
+        .env("PATH", format!("{}:/usr/bin:/bin", tools.path().display()))
+        .env("GITHUB_TOKEN", "sensitive-token")
+        .env("UNEXPECTED_SECRET", "sensitive-secret")
+        .env("TEST_PASSWORD", "sensitive-password")
+        .env("ACTIONS_ID_TOKEN_REQUEST_URL", "sensitive-url")
+        .output()?;
+    assert!(observed.status.success());
+    let output = String::from_utf8(observed.stdout)?;
+    assert!(
+        !output.contains("sensitive-"),
+        "credential reached build: {output}"
+    );
+    for artifact in ["velnor-job-image-candidate-", "image-assets-"] {
+        let line = job
+            .lines()
+            .position(|line| line.contains(artifact))
+            .ok_or("artifact")?;
+        let lines = job.lines().collect::<Vec<_>>();
+        let before = lines[line.saturating_sub(12)..line].join("\n");
+        assert!(
+            before.contains("success()")
+                && before.contains("refs/heads/main")
+                && before.contains("push"),
+            "{artifact}: {before}"
+        );
     }
     Ok(())
 }

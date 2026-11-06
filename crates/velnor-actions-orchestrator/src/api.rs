@@ -217,7 +217,8 @@ pub(crate) use super::package_release_publish::{release_policy_admission, stable
 pub use super::image_maintenance::{
     AdmitRunnerImagesRequest, BuildJobCandidateRequest, CheckJobSourceRequest,
     ImagePublicationProfile, InstallBuildxRequest, PromoteImageRequest, PublishImageRequest,
-    ValidateJobCandidateRequest, admit_runner_images, build_job_candidate, check_job_source,
-    install_buildx, promote_image, publish_image, validate_job_candidate,
+    RecordRunnerCandidatesRequest, ValidateJobCandidateRequest, WriteRunnerQualificationRequest,
+    admit_runner_images, build_job_candidate, check_job_source, install_buildx, promote_image,
+    publish_image, record_runner_candidates, validate_job_candidate, write_runner_qualification,
 };
 pub use velnor_actions_mise::CheckDeadline;

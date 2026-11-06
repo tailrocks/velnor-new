@@ -8,7 +8,7 @@ use super::super::release_eligibility;
 use super::{Family, HOSTED_RUNS_ON, RELEASE_CONCURRENCY};
 
 pub(super) fn reusable_workflow_call(family: Family) -> (String, Yaml) {
-    let fields = vec![
+    let mut fields = vec![
         (
             "name".to_owned(),
             Yaml::str(format!("Run {} release graph", family.label())),
@@ -71,11 +71,17 @@ pub(super) fn reusable_workflow_call(family: Family) -> (String, Yaml) {
             ]),
         ),
     ];
+    if family == Family::Images
+        && let Some((_, Yaml::Map(permissions))) =
+            fields.iter_mut().find(|(key, _)| key == "permissions")
+    {
+        permissions.push(("packages".to_owned(), Yaml::str("read")));
+    }
     (family.call_id().to_owned(), Yaml::Map(fields))
 }
 
 pub(super) fn family_document_for_call(family: Family, jobs: Vec<(String, Yaml)>) -> Yaml {
-    let mut jobs_with_authority = vec![caller_validation_job()];
+    let mut jobs_with_authority = vec![caller_validation_job(family)];
     jobs_with_authority.extend(jobs);
     Yaml::Map(vec![
         (
@@ -124,14 +130,22 @@ pub(super) fn family_document_for_call(family: Family, jobs: Vec<(String, Yaml)>
     ])
 }
 
-fn caller_validation_job() -> (String, Yaml) {
+fn caller_validation_job(family: Family) -> (String, Yaml) {
+    let script = if family == Family::Images {
+        DELEGATE_AUTHORITY_SCRIPT.replace(
+            "[[ \"$GITHUB_WORKFLOW_REF\" == 'tailrocks/velnor-new/.github/workflows/product-release.yml@refs/heads/main' ]]\n[[ \"$GITHUB_EVENT_NAME\" == 'workflow_dispatch' ]]",
+            "case \"$GITHUB_WORKFLOW_REF/$GITHUB_EVENT_NAME\" in\n tailrocks/velnor-new/.github/workflows/product-release.yml@refs/heads/main/workflow_dispatch|tailrocks/velnor-new/.github/workflows/runner-image-release.yml@refs/heads/main/push) ;;\n *) exit 1 ;;\nesac",
+        )
+    } else {
+        DELEGATE_AUTHORITY_SCRIPT.to_owned()
+    };
     let step = Yaml::Map(vec![
         (
             "name".to_owned(),
             Yaml::str("Verify delegated release authority"),
         ),
         ("shell".to_owned(), Yaml::str("bash")),
-        ("run".to_owned(), Yaml::str(DELEGATE_AUTHORITY_SCRIPT)),
+        ("run".to_owned(), Yaml::str(script)),
     ]);
     let job = Yaml::Map(vec![
         (
