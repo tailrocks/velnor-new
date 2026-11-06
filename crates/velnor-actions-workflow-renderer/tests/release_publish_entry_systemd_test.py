@@ -6,6 +6,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src'))
 
 import base64
+import json
 import os
 from pathlib import Path
 import secrets
@@ -32,6 +33,17 @@ for marker, name in (('__VELNOR_MANAGER_PAYLOAD__', 'release_manager_bus.py'),
                      ('__VELNOR_WATCH_CLAIM_PAYLOAD__', 'release_supervisor_claim.py')):
     source = source.replace(marker, base64.b64encode((source_root / name).read_bytes()).decode())
 source = source.replace('__VELNOR_JOB_TIMEOUT_SECONDS__', '1800')
+bundle = {key: base64.b64encode((source_root / name).read_bytes()).decode('ascii')
+          for key, name in (('coordinator', 'release_coordinator_exec.py'),
+                            ('retained', 'release_retained_parent.py'),
+                            ('source', 'release_source_executor.py'),
+                            ('channel', 'release_source_channel.py'),
+                            ('upload', 'release_upload_operation.py'),
+                            ('broker', 'release_forge_broker.py'))}
+marker = '__VELNOR_SUPERVISOR_PAYLOAD__'
+if source.count(marker) != 1:
+    raise ValueError('invalid supervisor payload marker')
+source = source.replace(marker, base64.b64encode(json.dumps(bundle).encode('utf-8')).decode('ascii'))
 entry = {'__name__': 'publisher_entry_fixture'}
 exec(compile(source, 'release_publish_entry.py', 'exec'), entry)
 
@@ -46,6 +58,17 @@ class PublisherEntrySystemdTest(unittest.TestCase):
 
     def test_root_bootstrap_finishes_only_after_unit_quiesces(self):
         self.assertEqual(os.geteuid(), 0)
+        payload = json.loads(base64.b64decode(entry['SUPERVISOR'], validate=True))
+        names = {'coordinator': 'release_coordinator_exec.py',
+                 'retained': 'release_retained_parent.py',
+                 'source': 'release_source_executor.py',
+                 'channel': 'release_source_channel.py',
+                 'upload': 'release_upload_operation.py',
+                 'broker': 'release_forge_broker.py'}
+        self.assertEqual(set(payload), set(names))
+        for key, name in names.items():
+            self.assertEqual(base64.b64decode(payload[key], validate=True), (source_root / name).read_bytes())
+        self.assertNotIn('__VELNOR_', source)
         with tempfile.TemporaryDirectory(prefix='velnor-entry-test-', dir='/run') as root:
             path = Path(root)
             ready = path / 'ready'
