@@ -7,10 +7,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src'))
 
 import os
 from pathlib import Path
-import shutil
 import subprocess
 import tempfile
 import unittest
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from release_qualification_source import stage
 
 
 class RunnerHomeTest(unittest.TestCase):
@@ -21,8 +23,8 @@ class RunnerHomeTest(unittest.TestCase):
             os.chown(root, 65534, 65534)
             root.chmod(0o750)
             fixture = root / "renderer"
-            shutil.copytree(source / "src", fixture / "src")
-            shutil.copytree(source / "tests", fixture / "tests")
+            fixture.mkdir()
+            stage(source, fixture)
             result = subprocess.run(["/usr/bin/python3", "-I", "-S", "-B",
                                      str(fixture / "tests/release_manager_qualification.py"), "--execute"],
                                     env={"PATH": "/usr/bin:/bin", "HOME": "/nonexistent", "LANG": "C"},
@@ -37,13 +39,8 @@ class RunnerHomeTest(unittest.TestCase):
             os.chown(root, 65534, 65534)
             root.chmod(0o750)
             fixture = root / "renderer"
-            for directory_name, names in (
-                ("src", ("release_manager_bus.py", "release_manager_lifecycle.py", "release_supervisor_exec.py")),
-                ("tests", ("release_manager_scenario_controller.py", "release_manager_scenario_controller_test.py")),
-            ):
-                (fixture / directory_name).mkdir(parents=True)
-                for name in names:
-                    shutil.copyfile(source / directory_name / name, fixture / directory_name / name)
+            fixture.mkdir()
+            stage(source, fixture)
             test = fixture / "tests/release_manager_scenario_controller_test.py"
             command = ("import importlib.util,unittest;"
                        "spec=importlib.util.spec_from_file_location('fixture'," + repr(str(test)) + ");"

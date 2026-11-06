@@ -75,10 +75,15 @@ class BootstrapWatchTest(unittest.TestCase):
             shutil.rmtree(Path('/run/systemd/system') / (identity['unit'] + '.d'))
             shutil.rmtree(identity['root'])
         finally:
-            if process.poll() is None:
-                process.kill()
-                process.wait(timeout=5)
-            cleanup_orphans(before)
+            try:
+                if process.poll() is None:
+                    process.kill()
+                    process.wait(timeout=5)
+                process.communicate(timeout=5)
+            finally:
+                process.stdout.close()
+                process.stderr.close()
+                cleanup_orphans(before)
 
 
     def test_handoff_preserves_identity_and_helpers_cannot_inherit_writer(self):

@@ -17,6 +17,9 @@ import tempfile
 import time
 import unittest
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from release_qualification_source import stage
+
 
 source = Path(__file__).resolve().with_name("release_manager_scenario_controller.py")
 spec = importlib.util.spec_from_file_location("scenario_controller", source)
@@ -27,16 +30,8 @@ spec.loader.exec_module(controller)
 class ScenarioControllerTest(unittest.TestCase):
     def run_fixture(self, root, script, start=True, synthetic_ledger=True):
         tests = root / "tests"
-        source = root / "src"
-        tests.mkdir()
-        source.mkdir()
-        original = Path(__file__).resolve().parents[1] / "src"
-        for name in ("release_manager_bus.py", "release_manager_lifecycle.py", "release_supervisor_exec.py",
-                     "release_bootstrap_watch.py", "release_watch_admission.py", "release_launcher_watch.py", "release_supervisor_claim.py"):
-            shutil.copyfile(original / name, source / name)
-        shutil.copyfile(Path(__file__).resolve().with_name("release_manager_scenario_controller.py"),
-                        tests / "release_manager_scenario_controller.py")
-        shutil.copyfile(Path(__file__).with_name("release_watch_fixture.py"), tests / "release_watch_fixture.py")
+        stage(Path(__file__).resolve().parents[1], root)
+        (tests / "release_manager_qualification.py").chmod(0o644)
         ledger = (("import os\nwith open(os.environ['VELNOR_SCENARIO_LEDGER'],'a') as f:\n"
                    " f.write('0'*32+chr(10)+'!00000001'+chr(10))\n") if synthetic_ledger else "")
         (tests / "release_manager_qualification.py").write_text(ledger + script)

@@ -2,6 +2,18 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #[test]
+fn qualification_staging_preserves_complete_trusted_source()
+-> Result<(), Box<dyn std::error::Error>> {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let status = std::process::Command::new("python3")
+        .args(["-I", "-S", "-B"])
+        .arg(root.join("tests/release_qualification_source_test.py"))
+        .status()?;
+    assert!(status.success());
+    Ok(())
+}
+
+#[test]
 fn budget_capture_binds_job_identity_and_original_start() -> Result<(), Box<dyn std::error::Error>>
 {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
