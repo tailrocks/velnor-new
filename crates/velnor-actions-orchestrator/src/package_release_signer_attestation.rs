@@ -374,7 +374,6 @@ fn sha256(bytes: &[u8]) -> String {
     }
     output
 }
-
 #[path = "package_release_signer_attestation_fetch.rs"]
 mod fetch;
 #[path = "package_release_signer_attestation_output.rs"]
@@ -393,7 +392,6 @@ mod image_transport_tests;
 pub(crate) use image::{ImageAttestationIdentity, verify_image_file_attestation};
 #[path = "package_release_signer_attestation_subjects.rs"]
 mod subjects;
-
 pub(crate) use sdk::{SdkManifestAttestationExpectation, verify_published_manifest_attestation};
 pub(crate) use sdk::{AdmittedStart, AttestedLinuxGenerator, MeasuredReleaseTools, measure_release_tools, record_admitted_start, verify_published_linux_binary_attestation};
 #[cfg(test)]
