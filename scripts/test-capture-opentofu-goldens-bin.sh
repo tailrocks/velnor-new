@@ -213,6 +213,8 @@ cleanup_work() {
   exit "$status"
 }
 trap cleanup_work EXIT
+python3 "$ROOT/scripts/generator-release/test-identity-guard.py" \
+  "$ARCHIVE_GUARD_INPUT_PATH" "$ARCHIVE_GUARD_INPUT_SHA256" || exit 1
 STUB_BIN="$WORK/stub bin"
 MARKER="$WORK/cargo-invoked"
 GUARD_RECEIPT="$WORK/cargo-guard-receipt"

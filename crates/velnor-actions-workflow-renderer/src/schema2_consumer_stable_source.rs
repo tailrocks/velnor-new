@@ -67,6 +67,7 @@ pub(super) fn job(spec: &ConsumerReleaseSpec) -> Result<(String, Yaml), RenderEr
                 "${{ inputs.original_run_attempt }}",
             ),
             ("GH_TOKEN", "${{ github.token }}"),
+            super::shared::steps::native_env::STATUS_TOKEN_BINDING,
         ],
     );
     Ok(finish(

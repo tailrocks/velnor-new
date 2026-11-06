@@ -9,6 +9,8 @@ mod gc1_t17;
 mod gc1_t18;
 mod install_spec_subject;
 mod metadata_cwd;
+#[cfg(target_os = "macos")]
+mod permission_retry_darwin;
 mod rust_spec_kind;
 
 #[test]

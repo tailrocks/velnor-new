@@ -132,7 +132,7 @@ pub(in crate::schema2) fn checkout_with_lfs(
 }
 
 #[path = "schema2_consumer_release_env.rs"]
-mod native_env;
+pub(in crate::schema2) mod native_env;
 
 pub(in crate::schema2) fn operation(
     spec: &ConsumerReleaseSpec,

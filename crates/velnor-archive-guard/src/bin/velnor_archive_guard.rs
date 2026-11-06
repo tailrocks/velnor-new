@@ -7,7 +7,7 @@
 )]
 use std::env;
 use std::ffi::OsString;
-use std::io;
+use std::io::{self, Write};
 use std::process::ExitCode;
 
 use velnor_archive_guard::owned_archive_guard;
@@ -57,44 +57,64 @@ fn run() -> Result<(), String> {
         println!("{fingerprint}");
         return Ok(());
     }
+    if mode == "tree-identity" || mode == "link-identity" {
+        let root = arguments
+            .next()
+            .ok_or_else(|| "tree path is required".to_owned())?;
+        if arguments.next().is_some() {
+            return Err("unexpected archive guard argument".to_owned());
+        }
+        let identity = velnor_archive_guard::golden_collector::tree_identity(
+            std::path::Path::new(&root),
+            mode == "link-identity",
+        )?;
+        return io::stdout()
+            .lock()
+            .write_all(&identity)
+            .map_err(|error| error.to_string());
+    }
     if let Some(result) = qualification_mode(&mode, &mut arguments) {
         return result;
     }
     if mode == "extract-candidate" {
-        let archive = arguments
-            .next()
-            .ok_or_else(|| "candidate archive path is required".to_owned())?;
-        let destination = arguments
-            .next()
-            .ok_or_else(|| "candidate output directory is required".to_owned())?;
-        let executable = arguments
-            .next()
-            .ok_or_else(|| "candidate executable member is required".to_owned())?
-            .into_string()
-            .map_err(|_| "candidate executable member is not UTF-8".to_owned())?;
-        let checksum = arguments
-            .next()
-            .ok_or_else(|| "candidate checksum member is required".to_owned())?
-            .into_string()
-            .map_err(|_| "candidate checksum member is not UTF-8".to_owned())?;
-        let provenance = arguments
-            .next()
-            .ok_or_else(|| "candidate provenance member is required".to_owned())?
-            .into_string()
-            .map_err(|_| "candidate provenance member is not UTF-8".to_owned())?;
-        if arguments.next().is_some() {
-            return Err("unexpected archive guard argument".to_owned());
-        }
-        return velnor_archive_guard::owned_archive_guard::extract_candidate(
-            std::path::Path::new(&archive),
-            std::path::Path::new(&destination),
-            [&executable, &checksum, &provenance],
-        );
+        return extract_candidate(&mut arguments);
     }
     if arguments.next().is_some() {
         return Err("unexpected archive guard argument".to_owned());
     }
     owned_archive_guard::validate(io::stdin().lock(), &mode)
+}
+
+fn extract_candidate(arguments: &mut impl Iterator<Item = OsString>) -> Result<(), String> {
+    let archive = arguments
+        .next()
+        .ok_or_else(|| "candidate archive path is required".to_owned())?;
+    let destination = arguments
+        .next()
+        .ok_or_else(|| "candidate output directory is required".to_owned())?;
+    let executable = arguments
+        .next()
+        .ok_or_else(|| "candidate executable member is required".to_owned())?
+        .into_string()
+        .map_err(|_| "candidate executable member is not UTF-8".to_owned())?;
+    let checksum = arguments
+        .next()
+        .ok_or_else(|| "candidate checksum member is required".to_owned())?
+        .into_string()
+        .map_err(|_| "candidate checksum member is not UTF-8".to_owned())?;
+    let provenance = arguments
+        .next()
+        .ok_or_else(|| "candidate provenance member is required".to_owned())?
+        .into_string()
+        .map_err(|_| "candidate provenance member is not UTF-8".to_owned())?;
+    if arguments.next().is_some() {
+        return Err("unexpected archive guard argument".to_owned());
+    }
+    velnor_archive_guard::owned_archive_guard::extract_candidate(
+        std::path::Path::new(&archive),
+        std::path::Path::new(&destination),
+        [&executable, &checksum, &provenance],
+    )
 }
 
 fn qualification_mode(
