@@ -90,6 +90,10 @@ fn public_runner_publication_selects_current_attestation_from_valid_history()
 #[test]
 fn public_runner_publication_rejects_artifacts_from_other_or_ambiguous_attempts()
 -> Result<(), Box<dyn Error>> {
+    let scenario = "attempt_identity::public_runner_publication_rejects_artifacts_from_other_or_ambiguous_attempts";
+    if !super::begin_isolated(scenario)? {
+        return Ok(());
+    }
     for (case, expected_error) in [
         (Case::OlderOnly, "image_publication_artifact_count"),
         (
@@ -155,6 +159,7 @@ fn public_runner_publication_rejects_artifacts_from_other_or_ambiguous_attempts(
             "scratch for {case:?}"
         );
     }
+    super::isolated_worker::record_success("image_publication", scenario)?;
     Ok(())
 }
 

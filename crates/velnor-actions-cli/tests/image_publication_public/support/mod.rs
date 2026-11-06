@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+mod api_server;
 mod ci_publication;
 mod encoding;
 mod journal;
@@ -261,6 +262,7 @@ impl Fixture {
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
             Err(error) => return Err(error),
         }
+        let _server = api_server::start_for_isolated_worker(self)?;
         runtime::publication_command(self)?.output()
     }
 

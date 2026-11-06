@@ -5,6 +5,8 @@ use std::{error::Error, fs};
 
 #[path = "image_publication_public/attempt_identity.rs"]
 mod attempt_identity;
+#[path = "api2026_pull_context_fixture/worker.rs"]
+mod isolated_worker;
 #[path = "image_publication_public/job_identity.rs"]
 mod job_identity;
 #[path = "image_publication_public/pagination.rs"]
@@ -19,6 +21,8 @@ mod readback_retention;
 mod registry_cases;
 #[path = "image_publication_public/required_ci.rs"]
 mod required_ci;
+#[path = "api2026_pull_context_fixture/non_inputs.rs"]
+mod reviewed_input_helper;
 #[path = "image_publication_public/runner_source.rs"]
 mod runner_source;
 #[path = "image_publication_public/source_closure.rs"]
@@ -27,6 +31,27 @@ mod source_closure;
 mod source_snapshot;
 #[path = "image_publication_public/support/mod.rs"]
 mod support;
+
+fn begin_isolated(scenario: &str) -> Result<bool, Box<dyn Error>> {
+    if std::env::var_os("VELNOR_GH_FIXTURE_WORKER").is_some() {
+        isolated_worker::validate_worker("image_publication", Some(scenario))?;
+        return Ok(true);
+    }
+    let source = reviewed_input_helper::prepare_source()?;
+    let profile = if cfg!(debug_assertions) {
+        "debug"
+    } else {
+        "release"
+    };
+    let status = source
+        .command()
+        .args(["image_publication", scenario, profile])
+        .status()?;
+    if !status.success() {
+        return Err(format!("isolated image publication fixture failed: {status}").into());
+    }
+    Ok(false)
+}
 
 #[test]
 fn public_job_publication_accepts_captured_missing_manifest_and_verifies_registry_state()

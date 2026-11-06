@@ -57,6 +57,9 @@ fn run() -> Result<ExitCode, Box<dyn std::error::Error>> {
     let mut state: serde_json::Value = serde_json::from_slice(&fs::read(&state_path)?)?;
     let result = match program {
         "gh" => gh(&payload[1..], &state).map(|()| ExitCode::SUCCESS),
+        "github-api" if payload.get(1).is_some_and(|argument| argument == "api") => {
+            gh(&payload[1..], &state).map(|()| ExitCode::SUCCESS)
+        }
         "crane" => crane::run(&payload[1..], &mut state, &state_path),
         other => Err(format!("unsupported fixture payload: {other}").into()),
     };
