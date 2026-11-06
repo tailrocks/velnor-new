@@ -118,7 +118,7 @@ fn from_job(record: ImageCandidateRecord) -> Result<CandidateRecord, Orchestrato
         || record.workflow.repository_id != IMAGE_REPOSITORY_ID
         || record.workflow.event != "push"
         || record.workflow.workflow_ref
-            != "tailrocks/velnor-new/.github/workflows/job-image-candidate.yml@refs/heads/main"
+            != "tailrocks/velnor-new/.github/workflows/ci.yml@refs/heads/main"
         || record.workflow.authority_commit != record.source.commit
     {
         return Err(internal("image_publication_job_record_authority"));
