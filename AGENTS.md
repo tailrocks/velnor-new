@@ -33,3 +33,7 @@ Shared working agreement: keep this section byte-identical across projects. Proj
 - Quality: enforced by CI and compiler gates; see `docs/proposed/ci-maintenance/rust-quality-contract.md`.
 - Verification gates: exact commands, purposes, and usage: `docs/implemented/ci-maintenance/repo-verification.md`.
 - Affected-only CI: generated workflows never run a build, test or lint job that the change does not affect; a docs-only pull request runs no Rust job. The one planner plans every job. GitHub `paths:` filters are never used. A path leaves a stack only through the typed `[stacks.rust] non_inputs` class, which config validation (`non_input_overlaps_claim`) and the checkout guard (`non_input_present`) enforce by keeping the path absent from the checkout. Pushes to the default branch, merge groups and dispatches stay full. The planner tests under `crates/velnor-actions-orchestrator/tests/workflow_configuration_public/` prove it. A waste-lint rule for unscoped jobs is planned. See hard decision 3.
+
+### Review guidelines
+
+- Authors and reviewers, including Codex, must read and enforce [CI performance review](docs/reviews/ci-performance.md) and [required developer evidence](docs/reviews/ci-performance-evidence.md) on every PR. Request changes for failed gates or missing proof; do not approve on promises.

@@ -48,6 +48,23 @@ the host's `xcode-select` setting.
 
 ## Compatibility Rules and Verification Procedures
 
+### Performance review sources (checked 2026-11-06)
+
+The [review gates](../reviews/ci-performance.md) use these primary sources:
+
+| Source | Review consequence |
+|---|---|
+| [Dependency caching reference](https://docs.github.com/en/actions/reference/workflows-and-actions/dependency-caching) | Entries are immutable and branch-scoped; eviction and service failure require cold correctness. GitHub's default is 10 GB per repository; paid expansion does not change Velnor's adopted budget. |
+| [Pinned cache restore implementation](https://github.com/actions/cache/blob/55cc8345863c7cc4c66a329aec7e433d2d1c52a9/src/restoreImpl.ts) and [save implementation](https://github.com/actions/cache/blob/55cc8345863c7cc4c66a329aec7e433d2d1c52a9/src/saveImpl.ts) | `cache-hit` reports exact key matching, not payload validity; partial matches need reconciliation, and unchanged exact entries need no save. |
+| [Separate cache save](https://github.com/actions/cache/blob/55cc8345863c7cc4c66a329aec7e433d2d1c52a9/save/README.md) | Save reusable state after successful production; unrelated later test failures must not discard it. Velnor's writer and cancellation rules still apply. |
+| [Workflow artifacts](https://docs.github.com/en/actions/tutorials/store-and-share-data) | Required job handoffs use explicit artifacts and identity/integrity checks; a best-effort cache is not a guaranteed handoff. |
+| [Required status checks](https://docs.github.com/en/pull-requests/how-tos/merge-and-close-pull-requests/troubleshooting-required-status-checks) | Skipped jobs can report success and filtered workflows can leave checks pending; preserve Velnor's planner and fail-closed `Required` aggregation. |
+| [Actions limits](https://docs.github.com/en/actions/reference/limits) | Verify current workflow, matrix, concurrency and cache request limits for representative consumer scale. |
+
+These are review criteria, not new runtime behavior or cache capacity. Existing
+[cache decisions](cache-decisions.md) and stricter
+[compiled-state admission](compiled-state-persistence.md#budget) remain binding.
+
 ### Ledger event and source identity (checked 2026-10-28)
 
 The runner's [`GitHubContext.GetRuntimeEnvironmentVariables`](https://github.com/actions/runner/blob/1ba885c2065fd9be317808ab3fd406f392635cf7/src/Runner.Worker/GitHubContext.cs)
