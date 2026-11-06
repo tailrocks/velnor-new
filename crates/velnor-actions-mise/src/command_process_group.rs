@@ -183,14 +183,21 @@ pub(super) fn terminate_unanchored(child: &mut Child, deadline: Instant) -> Resu
 fn wait_group_absent(pid: Pid, deadline: Instant) -> Result<(), String> {
     loop {
         match test_kill_process_group(pid) {
-            Ok(()) => {}
+            Ok(()) => {
+                if Instant::now() >= deadline {
+                    return Err("group_drain_deadline_exhausted".to_owned());
+                }
+                thread::sleep(Duration::from_millis(5));
+            }
             Err(rustix::io::Errno::SRCH) => return Ok(()),
-            Err(error) => return Err(format!("observe_group:{error}")),
+            Err(error) if error != rustix::io::Errno::PERM => {
+                return Err(format!("observe_group:{error}"));
+            }
+            Err(error) if Instant::now() >= deadline => {
+                return Err(format!("observe_group:{error}"));
+            }
+            Err(_) => thread::sleep(Duration::from_millis(5)),
         }
-        if Instant::now() >= deadline {
-            return Err("group_drain_deadline_exhausted".to_owned());
-        }
-        thread::sleep(Duration::from_millis(5));
     }
 }
 
