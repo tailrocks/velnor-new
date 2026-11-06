@@ -154,14 +154,20 @@ fn slsa_statement(image: WorkerImage, locals: &[&str], source_sha: &str) -> Valu
         ("locals".to_owned(), json!(locals_json)),
     ]);
     if locals.len() > 2 {
-        request.insert(
-            "args".to_owned(),
-            json!({
-                "build-arg:VELNOR_SOURCE_SHA": source_sha,
-                "context:resource_probe": "local:resource_probe",
-                "frontend.caps": "moby.buildkit.frontend.contexts+forward"
-            }),
-        );
+        let mut args = serde_json::Map::from_iter([
+            ("build-arg:VELNOR_SOURCE_SHA".to_owned(), json!(source_sha)),
+            (
+                "frontend.caps".to_owned(),
+                json!("moby.buildkit.frontend.contexts+forward"),
+            ),
+        ]);
+        for name in locals
+            .iter()
+            .filter(|name| !matches!(**name, "context" | "dockerfile"))
+        {
+            args.insert(format!("context:{name}"), json!(format!("local:{name}")));
+        }
+        request.insert("args".to_owned(), Value::Object(args));
     }
     json!({
         "_type": "https://in-toto.io/Statement/v0.1",

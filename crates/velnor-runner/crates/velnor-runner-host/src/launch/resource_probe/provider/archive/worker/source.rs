@@ -145,6 +145,7 @@ fn verify_build_metadata(
         || external.len() != 2
         || config_source.len() != 1
         || !valid_request_keys
+        || !valid_request_args(request, &local_names, source_sha)
         || build.len() != 4
         || builder_platform != Some(PLATFORM)
         || context != Some(image.source_context())
@@ -157,6 +158,56 @@ fn verify_build_metadata(
         return Err(ProviderFailure::Archive);
     }
     Ok(())
+}
+
+fn valid_request_args(
+    request: &Map<String, Value>,
+    local_names: &HashSet<&str>,
+    source_sha: &str,
+) -> bool {
+    let Some(args_value) = request.get("args") else {
+        return local_names.len() == 2;
+    };
+    let Some(args) = args_value.as_object() else {
+        return false;
+    };
+    if args
+        .get("build-arg:VELNOR_SOURCE_SHA")
+        .and_then(Value::as_str)
+        != Some(source_sha)
+    {
+        return false;
+    }
+    let has_named_contexts = local_names
+        .iter()
+        .filter(|name| !matches!(**name, "context" | "dockerfile"))
+        .all(|name| {
+            args.get(&format!("context:{name}")).and_then(Value::as_str)
+                == Some(format!("local:{name}").as_str())
+        });
+    if !has_named_contexts {
+        return false;
+    }
+    args.iter().all(|(key, value)| match key.as_str() {
+        "build-arg:VELNOR_SOURCE_SHA" => value.as_str() == Some(source_sha),
+        "frontend.caps" => {
+            local_names.len() > 2
+                && value.as_str() == Some("moby.buildkit.frontend.contexts+forward")
+        }
+        _ => {
+            if let Some(name) = key.strip_prefix("context:") {
+                !matches!(name, "context" | "dockerfile")
+                    && local_names.contains(name)
+                    && value.as_str() == Some(format!("local:{name}").as_str())
+            } else if let Some(name) = key.strip_prefix("sharedkey:localdir:") {
+                !matches!(name, "context" | "dockerfile")
+                    && local_names.contains(name)
+                    && value.as_str().is_some_and(|shared| !shared.is_empty())
+            } else {
+                false
+            }
+        }
+    })
 }
 
 fn vcs_keys(names: &HashSet<&str>) -> HashSet<String> {

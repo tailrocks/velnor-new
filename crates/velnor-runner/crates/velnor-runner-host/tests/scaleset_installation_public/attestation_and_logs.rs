@@ -156,6 +156,25 @@ fn public_verify_worker_attestation_accepts_legacy_and_oci_artifact_manifests_an
             Err(HostError::Docker)
         ));
     }
+    let mut injected_arg_statement = statement.clone();
+    injected_arg_statement
+        .pointer_mut("/predicate/buildDefinition/externalParameters/request/args")
+        .and_then(Value::as_object_mut)
+        .ok_or("args map")?
+        .insert("build-arg:RUNNER_VERSION".to_owned(), json!("2.999.0"));
+    assert!(matches!(
+        verify_worker_attestation_manifest(
+            WorkerImage::Runner,
+            SOURCE_SHA,
+            MANIFEST_DIGEST,
+            1024,
+            &oci_desc,
+            &oci_manifest,
+            &oci_config,
+            &injected_arg_statement
+        ),
+        Err(HostError::Docker)
+    ));
     Ok(())
 }
 
