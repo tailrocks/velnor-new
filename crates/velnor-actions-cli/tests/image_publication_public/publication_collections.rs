@@ -335,7 +335,22 @@ fn public_publication_rejects_saturated_filtered_ci_run_inventory_before_writing
     }
     let fixture = Fixture::new_for(FixtureProfile::Job)?;
     fixture.update_github_state(|state| {
-        state["ci_run_pages"] = json!([{"total_count":1000,"workflow_runs":[]}]);
+        let prototype = state["ci_run"].clone();
+        let pages = (0..10)
+            .map(|page| {
+                let runs = (0..100)
+                    .map(|index| {
+                        let mut run = prototype.clone();
+                        let number = page * 100 + index + 1;
+                        run["id"] = json!(number);
+                        run["run_number"] = json!(number);
+                        run
+                    })
+                    .collect::<Vec<_>>();
+                json!({"total_count":1000,"workflow_runs":runs})
+            })
+            .collect::<Vec<_>>();
+        state["ci_run_pages"] = json!(pages);
         Ok(())
     })?;
     assert_rejected_before_write(&fixture, "image_publication_ci_run_inventory")?;
