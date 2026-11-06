@@ -144,7 +144,7 @@ fn selector_treats_trailing_newlines_in_dynamic_metadata_as_cold() -> Result<(),
     )?;
 
     let unmatched = unit_key(StateUnit::Union, ".", 0, 0x1001, 2)?;
-    gh.list(&rows_of(&[(T3.to_owned(), unmatched)]))?;
+    gh.list(&rows_of(&[(T3.to_owned(), unmatched.clone())]))?;
     gh.attest(&[Attestation::signed(&unmatched)])?;
     run_select_units(&scene, &gh, &units, &[])?;
     expect_flag(
