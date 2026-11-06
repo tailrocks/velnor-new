@@ -77,6 +77,10 @@ fn public_runner_family_accepts_the_independent_complete_input_inventory()
 #[test]
 fn public_runner_family_rejects_drift_in_previously_omitted_copy_inputs()
 -> Result<(), Box<dyn Error>> {
+    let scenario = "source_closure::public_runner_family_rejects_drift_in_previously_omitted_copy_inputs";
+    if !super::begin_isolated(scenario)? {
+        return Ok(());
+    }
     for (profile, path) in [
         (
             FixtureProfile::Runner,
@@ -106,6 +110,7 @@ fn public_runner_family_rejects_drift_in_previously_omitted_copy_inputs()
         assert!(!fixture.receipt.exists());
         assert_eq!(fixture.registry_state()?, registry_before);
     }
+    super::isolated_worker::record_success("image_publication", scenario)?;
     Ok(())
 }
 
