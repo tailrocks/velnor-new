@@ -29,7 +29,9 @@ with tempfile.TemporaryDirectory() as directory:
     subprocess.run(["git", "-C", str(repository), "-c", "user.name=Alexey Zhokhov", "-c", "user.email=alexey@zhokhov.com", "commit", "--allow-empty", "-s", "-qm", "fixture", "-m", "Co-authored-by: Codex <codex@openai.com>"], check=True)
     candidate = subprocess.check_output(["git", "-C", str(repository), "rev-parse", "HEAD"], text=True).strip()
     sdk = os.environ.get("VELNOR_EXEC_FIXTURE")
-    fixture.PAYLOAD = Path(sdk or "/bin/echo").read_bytes()
+    fixture.PAYLOAD = Path(sdk or "/usr/bin/python3").read_bytes()
+    expected_output = subprocess.check_output([sdk, "--version"]) if sdk else b"approved-controller\n"
+    assert expected_output, "selected executable produced no version output"
     value, receipt = fixture.record()
     dot = repository / ".velnor"
     dot.mkdir()
@@ -66,13 +68,12 @@ with tempfile.TemporaryDirectory() as directory:
             os.close(read_end)
             os.dup2(write_end, 1)
             os.close(write_end)
-            args = ["velnor-actions", "--version"] if sdk else ["echo", "approved-controller"]
+            args = ["velnor-actions", "--version"] if sdk else ["python3", "-c", 'print("approved-controller")']
             os.execve(f"/proc/self/fd/{descriptor}", args, {})
         os.close(write_end)
         result = os.read(read_end, 1024)
         os.close(read_end)
         _, status = os.waitpid(child, 0)
-        expected_output = b"velnor-actions 0.1.75\n" if sdk else b"approved-controller\n"
         assert os.waitstatus_to_exitcode(status) == 0 and result == expected_output
         try:
             executor.sealed_controller(context, network)
