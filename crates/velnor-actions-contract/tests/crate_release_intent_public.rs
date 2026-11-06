@@ -7,42 +7,7 @@ use velnor_actions_contract::config::CrateReleaseIntent;
 fn intent_rejects_unapproved_or_ambiguous_release_inputs() -> Result<(), Box<dyn std::error::Error>>
 {
     let value = serde_json::json!({"schema": 1, "repository": "example/demo-crate", "default_branch": "main", "environment": "release", "required_workflow_path": ".github/workflows/ci.yml", "trusted_reviewer_id": 139_017, "generator_version":"0.1.72","generator_source_sha":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","generator_manifest_sha256":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc","release_plz_version":"0.4.3","runner":"ubuntu-26.04","authentication":"trusted-publishing","rust_version": "1.97.1", "manifest_path": "Cargo.toml", "pr_write_paths": ["Cargo.toml"], "registry": "crates-io", "packages": ["demo-crate"], "publish_features": {"demo-crate":[]}, "tag_template": "{{ package }}-v{{ version }}", "recovery": {"package": "demo-crate", "version": "0.1.1", "source_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}});
-    for template in ["{{package}}-v{{version}}", "{{ package }}-v{{ version }}"] {
-        let mut candidate = value.clone();
-        candidate["tag_template"] = template.into();
-        serde_json::from_value::<CrateReleaseIntent>(candidate)?.validate()?;
-    }
-    for template in [
-        " {{package}}-v{{version}}",
-        "{{package}} -v{{version}}",
-        "{{package}}-v{{version}} ",
-        "{{ pack age }}-v{{version}}",
-        "{{package}}-v{{version}}{{version}}",
-        "{{package}}\t-v{{version}}",
-        "{{package}}-v{{version}}\n",
-    ] {
-        let mut candidate = value.clone();
-        candidate["tag_template"] = template.into();
-        assert!(
-            serde_json::from_value::<CrateReleaseIntent>(candidate)?
-                .validate()
-                .is_err(),
-            "accepted {template:?}"
-        );
-    }
-    for (name, valid) in [("a".repeat(64), true), ("a".repeat(65), false)] {
-        let mut candidate = value.clone();
-        candidate["packages"] = serde_json::json!([name]);
-        candidate["publish_features"] = serde_json::json!({name.clone(): []});
-        candidate["recovery"]["package"] = name.clone().into();
-        assert_eq!(
-            serde_json::from_value::<CrateReleaseIntent>(candidate)?
-                .validate()
-                .is_ok(),
-            valid,
-            "{name}"
-        );
-    }
+    check_tag_and_package_boundaries(&value)?;
     let intent: CrateReleaseIntent = serde_json::from_value(value.clone())?;
     intent.validate()?;
     let mut hidden = intent.clone();
@@ -120,6 +85,48 @@ fn intent_rejects_unapproved_or_ambiguous_release_inputs() -> Result<(), Box<dyn
     let mut extra = value;
     extra["unexpected"] = serde_json::json!(true);
     assert!(serde_json::from_value::<CrateReleaseIntent>(extra).is_err());
+    Ok(())
+}
+
+fn check_tag_and_package_boundaries(
+    value: &serde_json::Value,
+) -> Result<(), Box<dyn std::error::Error>> {
+    for template in ["{{package}}-v{{version}}", "{{ package }}-v{{ version }}"] {
+        let mut candidate = value.clone();
+        candidate["tag_template"] = template.into();
+        serde_json::from_value::<CrateReleaseIntent>(candidate)?.validate()?;
+    }
+    for template in [
+        " {{package}}-v{{version}}",
+        "{{package}} -v{{version}}",
+        "{{package}}-v{{version}} ",
+        "{{ pack age }}-v{{version}}",
+        "{{package}}-v{{version}}{{version}}",
+        "{{package}}\t-v{{version}}",
+        "{{package}}-v{{version}}\n",
+    ] {
+        let mut candidate = value.clone();
+        candidate["tag_template"] = template.into();
+        assert!(
+            serde_json::from_value::<CrateReleaseIntent>(candidate)?
+                .validate()
+                .is_err(),
+            "accepted {template:?}"
+        );
+    }
+    for (name, valid) in [("a".repeat(64), true), ("a".repeat(65), false)] {
+        let mut candidate = value.clone();
+        candidate["packages"] = serde_json::json!([name]);
+        candidate["publish_features"] = serde_json::json!({name.clone(): []});
+        candidate["recovery"]["package"] = name.clone().into();
+        assert_eq!(
+            serde_json::from_value::<CrateReleaseIntent>(candidate)?
+                .validate()
+                .is_ok(),
+            valid,
+            "{name}"
+        );
+    }
     Ok(())
 }
 
