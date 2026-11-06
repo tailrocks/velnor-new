@@ -384,6 +384,9 @@ mod sdk;
 use output::validate_output_with_additional_names;
 #[path = "package_release_signer_attestation_image.rs"]
 mod image;
+#[cfg(test)]
+#[path = "package_release_signer_attestation_image_fixture_tests.rs"]
+mod image_fixture_tests;
 pub(crate) use image::{ImageAttestationIdentity, verify_image_file_attestation};
 #[path = "package_release_signer_attestation_subjects.rs"]
 mod subjects;
