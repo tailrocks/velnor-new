@@ -31,7 +31,7 @@ pub(crate) fn verify_and_record_upload_intent<
         git: input.git,
         package,
     };
-    let proof = super::super::verify_release_package_with(&verification, |observed| {
+    let proof = super::super::preflight::verify_release_package_with(&verification, |observed| {
         verify_observed_packages_after_recorded_upload(input, observed)
     })?;
     record_admitted_upload_intent(input, proof, semver)

@@ -63,6 +63,8 @@ use observation_validation::{
 #[path = "crate_release_controller_prior_observation.rs"]
 mod prior_observation;
 use prior_observation::verify_reconciled_candidate;
+#[path = "crate_release_controller_archive_preflight.rs"]
+mod archive_preflight;
 #[path = "crate_release_controller_upload_authorization.rs"]
 mod upload_authorization;
 #[path = "crate_release_controller_workspace_observation.rs"]

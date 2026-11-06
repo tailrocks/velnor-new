@@ -32,7 +32,7 @@ pub(super) fn fixture_verify_release_package<G: GitHubAdmissionRead, R: CrateReg
         git,
         package,
     };
-    super::super::verify_release_package_with(&input, |observed| {
+    super::super::preflight::verify_release_package_with(&input, |observed| {
         super::super::verify_observed_packages(observed, receipt)
     })
 }
