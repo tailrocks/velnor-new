@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{OrchestratorError, internal::internal};
+use crate::{OrchestratorError, implementation::internal::internal};
 use std::{fs, io::Read as _, path::Path, process::Command, time::Duration};
 use velnor_actions_mise::release_git_pin::{
     GIT_PACKAGE_SHA256, GIT_PACKAGE_URL, VerifiedGit, verify_bundle,
@@ -170,31 +170,60 @@ mod tests {
         Ok(())
     }
 
-    #[test]
-    fn stalled_download_body_obeys_deadline() -> Result<(), Box<dyn std::error::Error>> {
+    fn stalled_body_server(
+        listener: std::net::TcpListener,
+        observed: std::sync::mpsc::Sender<()>,
+        release: std::sync::mpsc::Receiver<()>,
+    ) -> std::io::Result<()> {
         use std::io::{Read as _, Write as _};
         use std::time::{Duration, Instant};
+        listener.set_nonblocking(true)?;
+        let deadline = Instant::now() + Duration::from_secs(5);
+        let mut socket = loop {
+            match listener.accept() {
+                Ok((socket, _)) => break socket,
+                Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                    if Instant::now() >= deadline {
+                        return Err(std::io::ErrorKind::TimedOut.into());
+                    }
+                    std::thread::sleep(Duration::from_millis(5));
+                }
+                Err(error) => return Err(error),
+            }
+        };
+        socket.set_read_timeout(Some(deadline.saturating_duration_since(Instant::now())))?;
+        socket.set_write_timeout(Some(Duration::from_secs(1)))?;
+        let mut request = [0_u8; 4096];
+        if socket.read(&mut request)? == 0 {
+            return Err(std::io::ErrorKind::UnexpectedEof.into());
+        }
+        socket.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 10\r\n\r\nx")?;
+        observed
+            .send(())
+            .map_err(|_| std::io::ErrorKind::BrokenPipe)?;
+        let _ = release.recv_timeout(Duration::from_secs(5));
+        Ok(())
+    }
+
+    #[test]
+    fn stalled_download_body_obeys_deadline() -> Result<(), Box<dyn std::error::Error>> {
+        use std::time::{Duration, Instant};
+        crate::api::github_evidence_http::agent()?;
         let listener = std::net::TcpListener::bind("127.0.0.1:0")?;
         let url = format!("http://{}/git.deb", listener.local_addr()?);
         let (release, wait) = std::sync::mpsc::channel();
-        let server = std::thread::spawn(move || -> std::io::Result<()> {
-            let (mut socket, _) = listener.accept()?;
-            let mut request = [0_u8; 4096];
-            if socket.read(&mut request)? == 0 {
-                return Err(std::io::ErrorKind::UnexpectedEof.into());
-            }
-            socket.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 10\r\n\r\nx")?;
-            if wait.recv_timeout(Duration::from_secs(5)).is_err() {
-                return Ok(());
-            }
-            Ok(())
-        });
+        let (observed, body) = std::sync::mpsc::channel();
+        let server = std::thread::spawn(move || stalled_body_server(listener, observed, wait));
         let deadline = velnor_actions_mise::CheckDeadline::after(Duration::from_millis(500))?;
         let started = Instant::now();
         let result = super::download_package(&url, deadline);
         let elapsed = started.elapsed();
         let released = release.send(()).is_ok();
         server.join().map_err(|_| "server panicked")??;
+        assert!(
+            body.try_recv().is_ok(),
+            "server never started the stalled body"
+        );
         assert!(
             elapsed < Duration::from_secs(3),
             "download ignored its deadline"
