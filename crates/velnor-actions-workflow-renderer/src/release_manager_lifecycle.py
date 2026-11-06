@@ -51,6 +51,22 @@ def write_frame(writer, frame, deadline):
         view = view[written:]
 
 
+def wait_quiescent(manager, owner, unit, invocation, deadline):
+    if not isinstance(invocation, str) or not re.fullmatch(r"[0-9a-f]{32}", invocation):
+        raise SupervisorError("unit cleanup identity unavailable")
+    while time.clock_gettime_ns(time.CLOCK_BOOTTIME) < deadline:
+        current = state(manager, owner, unit, deadline)
+        if current["invocation"] != invocation:
+            raise SupervisorError("unit identity changed")
+        if (current["active"] in ("inactive", "failed")
+                and current["job"] is None and not current["populated"]):
+            return
+        remaining = deadline - time.clock_gettime_ns(time.CLOCK_BOOTTIME)
+        if remaining > 0:
+            time.sleep(min(0.01, remaining / 1_000_000_000))
+    raise SupervisorError("unit cleanup exceeded deadline")
+
+
 def supervise(manager, frame, deadline, cleanup_reserve=25_000_000_000, output_fd=None):
     if (type(deadline) is not int or not 0 < deadline < 2**64 or type(frame) is not bytes
             or len(frame) < 20 or type(cleanup_reserve) is not int or cleanup_reserve <= 0):
@@ -71,6 +87,7 @@ def supervise(manager, frame, deadline, cleanup_reserve=25_000_000_000, output_f
         raise SupervisorError("manager identity unavailable")
     reader, writer = os.pipe()
     job = None
+    invocation = None
     released = False
     try:
         try:
@@ -124,10 +141,7 @@ def supervise(manager, frame, deadline, cleanup_reserve=25_000_000_000, output_f
             stop = manager.stop(unit, deadline)
             if not isinstance(stop, str) or not re.fullmatch(r"/org/freedesktop/systemd1/job/[0-9]+", stop):
                 raise SupervisorError("stop job unavailable")
-            wait_job(manager, unit, stop, deadline)
-            current = state(manager, owner, unit, deadline)
-            if current["active"] not in ("inactive", "failed") or current["job"] is not None or current["populated"]:
-                raise SupervisorError("unit cleanup uncertain")
+            wait_quiescent(manager, owner, unit, invocation, deadline)
             manager.release(unit, deadline)
             if time.clock_gettime_ns(time.CLOCK_BOOTTIME) >= deadline:
                 raise SupervisorError("unit cleanup exceeded deadline")
