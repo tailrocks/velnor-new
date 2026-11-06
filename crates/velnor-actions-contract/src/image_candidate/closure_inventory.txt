@@ -1088,7 +1088,6 @@ crates/velnor-actions-orchestrator/src/private_fetch_http.rs
 crates/velnor-actions-orchestrator/src/private_fetch_root.rs
 crates/velnor-actions-orchestrator/src/private_fetch_session.rs
 crates/velnor-actions-orchestrator/src/private_fetch_verified.rs
-crates/velnor-actions-orchestrator/src/private_modules.rs
 crates/velnor-actions-orchestrator/src/private_revoke.rs
 crates/velnor-actions-orchestrator/src/private_sources.rs
 crates/velnor-actions-orchestrator/src/private_wiring.rs
