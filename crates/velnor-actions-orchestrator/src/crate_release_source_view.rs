@@ -253,3 +253,5 @@ pub(crate) use execution::{
 };
 #[path = "crate_release_source_tools.rs"]
 mod tools;
+#[cfg(test)]
+pub(crate) use tools::ProjectedSourceTools;
