@@ -178,7 +178,7 @@ def main():
         "image_attestation": ("velnor-actions-orchestrator", None),
         "image_publication": ("velnor-actions-cli", "image_publication_public"),
     }
-    if kind not in targets or (kind == "task_report" and test != "shared_job_artifact_is_downloaded_once") or (kind == "preview" and test != "public_preview_selection_uses_sha_media_and_preserves_parent_proofs") or (kind == "cli" and test in ("shared_job_artifact_is_downloaded_once", "public_preview_selection_uses_sha_media_and_preserves_parent_proofs")):
+    if kind not in targets or (kind == "task_report" and test != "shared_job_artifact_is_downloaded_once") or (kind == "preview" and test not in ("public_preview_selection_uses_sha_media_and_preserves_parent_proofs", "public_stable_intent_accepts_disabled_self_review_and_rejects_unprotected_environment")) or (kind == "cli" and test in ("shared_job_artifact_is_downloaded_once", "public_preview_selection_uses_sha_media_and_preserves_parent_proofs", "public_stable_intent_accepts_disabled_self_review_and_rejects_unprotected_environment")):
         raise RuntimeError("fixture scenario does not belong to target")
     package, test_target = targets[kind]
     image_attestation_tests = {

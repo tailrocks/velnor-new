@@ -94,6 +94,38 @@ fn public_preview_selection_uses_sha_media_and_preserves_parent_proofs() -> Test
     worker::record_success("preview", TEST)?;
     Ok(())
 }
+
+#[test]
+fn public_stable_intent_accepts_disabled_self_review_and_rejects_unprotected_environment()
+-> TestResult<()> {
+    const TEST: &str =
+        "public_stable_intent_accepts_disabled_self_review_and_rejects_unprotected_environment";
+    if !preview_source_selection_fixture::enter(TEST)? {
+        return Ok(());
+    }
+    let accepted = invoke("stable-self-review-disabled")?;
+    assert!(
+        accepted.status.success(),
+        "stable tag intent must accept prevent_self_review=false when a required reviewer is configured; stderr={}, requests={}",
+        String::from_utf8_lossy(&accepted.stderr),
+        accepted.requests
+    );
+    assert_eq!(accepted.output, "resumed=false\n");
+
+    let rejected = invoke("stable-environment-unprotected")?;
+    assert!(
+        !rejected.status.success(),
+        "stable tag intent must reject an environment without a valid required reviewer"
+    );
+    assert!(
+        String::from_utf8_lossy(&rejected.stderr).contains("stable_tag_environment_unprotected"),
+        "expected stable_tag_environment_unprotected, got: {}",
+        String::from_utf8_lossy(&rejected.stderr)
+    );
+    assert_eq!(rejected.output, "");
+    worker::record_success("preview", TEST)?;
+    Ok(())
+}
 fn assert_identity_media(
     requests: &str,
     observed: &mut BTreeSet<String>,

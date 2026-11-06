@@ -23,6 +23,7 @@ pub(crate) const AUTHORITY_SHA: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
 pub(crate) const PROTECTED_SHA: &str = "cccccccccccccccccccccccccccccccccccccccc";
 pub(crate) const CI_RUN_ID: u64 = 100;
 const PREVIEW_RUN_ID: u64 = 200;
+const STABLE_WORKFLOW_PATH: &str = ".github/workflows/binary-release.yml";
 const PREVIEW_WORKFLOW_PATH: &str = ".github/workflows/binary-preview.yml";
 
 pub(crate) type TestResult<T> = Result<T, Box<dyn std::error::Error>>;
@@ -74,12 +75,12 @@ pub(crate) fn enter(test: &str) -> TestResult<bool> {
 
 pub(crate) fn invoke(scenario: &str) -> TestResult<Invocation> {
     let temp = tempfile::tempdir()?;
-    let fixture = prepare_fixture(temp.path())?;
+    let fixture = prepare_fixture(temp.path(), scenario)?;
     let _server = server::start(temp.path(), scenario)?;
-    run_cli(&fixture)
+    run_cli(&fixture, scenario)
 }
 
-fn prepare_fixture(root: &Path) -> TestResult<PreparedFixture> {
+fn prepare_fixture(root: &Path, scenario: &str) -> TestResult<PreparedFixture> {
     let runner_temp = root.join("runner");
     let policy_dir = runner_temp.join("velnor");
     let home = root.join("home");
@@ -88,8 +89,16 @@ fn prepare_fixture(root: &Path) -> TestResult<PreparedFixture> {
     fs::create_dir_all(&policy_dir)?;
     fs::create_dir_all(&home)?;
 
-    let policy = seed_policy().canonical_bytes()?;
-    let policy_path = policy_dir.join("preview-source-seed-policy.json");
+    let mut policy_model = seed_policy();
+    let policy_file = if scenario.starts_with("stable-") {
+        policy_model.channel =
+            velnor_actions_contract::package_release::PackageReleaseChannel::Stable;
+        "package-release-policy.json"
+    } else {
+        "preview-source-seed-policy.json"
+    };
+    let policy = policy_model.canonical_bytes()?;
+    let policy_path = policy_dir.join(policy_file);
     fs::write(&policy_path, &policy)?;
     let event_path = root.join("workflow-run-event.json");
     fs::write(&event_path, serde_json::to_vec(&workflow_run_event())?)?;
@@ -111,9 +120,21 @@ fn prepare_fixture(root: &Path) -> TestResult<PreparedFixture> {
     })
 }
 
-fn run_cli(fixture: &PreparedFixture) -> TestResult<Invocation> {
-    let output = Command::new(env!("CARGO_BIN_EXE_velnor-actions"))
-        .env_clear()
+fn run_cli(fixture: &PreparedFixture, scenario: &str) -> TestResult<Invocation> {
+    let stable = scenario.starts_with("stable-");
+    let sha = if stable { SOURCE_SHA } else { AUTHORITY_SHA };
+    let wf_path = if stable {
+        STABLE_WORKFLOW_PATH
+    } else {
+        PREVIEW_WORKFLOW_PATH
+    };
+    let mut command = Command::new(env!("CARGO_BIN_EXE_velnor-actions"));
+    command.env_clear();
+    if stable {
+        command.env("VELNOR_RELEASE_CI_RUN_ID", CI_RUN_ID.to_string());
+        command.env("VELNOR_RELEASE_CI_RUN_ATTEMPT", "1");
+    }
+    let output = command
         .env("PATH", &fixture.path)
         .env("HOME", &fixture.home)
         .env("MISE_DATA_DIR", &fixture.mise_data_dir)
@@ -124,25 +145,46 @@ fn run_cli(fixture: &PreparedFixture) -> TestResult<Invocation> {
         .env("MISE_LOCKFILE", "0")
         .env("MISE_AUTO_INSTALL", "false")
         .env("MISE_EXEC_AUTO_INSTALL", "false")
-        .env("VELNOR_INTERNAL_OP", "select-preview-source-v1")
+        .env(
+            "VELNOR_INTERNAL_OP",
+            if stable {
+                "write-stable-tag-intent-v1"
+            } else {
+                "select-preview-source-v1"
+            },
+        )
         .env("RUNNER_TEMP", &fixture.runner_temp)
         .env("VELNOR_REQUEST_FILE", &fixture.policy_path)
         .env("VELNOR_RELEASE_POLICY", &fixture.policy_text)
         .env("VELNOR_RELEASE_STATUS_TOKEN", "fixture-status-read-token")
         .env("GITHUB_REPOSITORY", REPOSITORY)
         .env("GITHUB_REPOSITORY_ID", REPOSITORY_ID.to_string())
-        .env("GITHUB_SHA", AUTHORITY_SHA)
-        .env("GITHUB_WORKFLOW_SHA", AUTHORITY_SHA)
+        .env("GITHUB_SHA", sha)
+        .env("GITHUB_WORKFLOW_SHA", sha)
         .env("GITHUB_REF", "refs/heads/main")
         .env(
             "GITHUB_WORKFLOW_REF",
-            format!("{REPOSITORY}/{PREVIEW_WORKFLOW_PATH}@refs/heads/main"),
+            format!("{REPOSITORY}/{wf_path}@refs/heads/main"),
         )
-        .env("GITHUB_EVENT_NAME", "workflow_run")
+        .env(
+            "GITHUB_EVENT_NAME",
+            if stable {
+                "workflow_dispatch"
+            } else {
+                "workflow_run"
+            },
+        )
         .env("GITHUB_EVENT_PATH", &fixture.event_path)
         .env("GITHUB_RUN_ID", PREVIEW_RUN_ID.to_string())
         .env("GITHUB_RUN_ATTEMPT", "1")
-        .env("GITHUB_JOB", "preview-eligibility")
+        .env(
+            "GITHUB_JOB",
+            if stable {
+                "stable-tag"
+            } else {
+                "preview-eligibility"
+            },
+        )
         .env("GITHUB_OUTPUT", &fixture.github_output)
         .output()?;
     let requests = fs::read_to_string(&fixture.request_log).unwrap_or_default();

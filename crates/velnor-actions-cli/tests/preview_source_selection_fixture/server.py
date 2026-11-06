@@ -12,20 +12,21 @@ root = pathlib.Path(sys.argv[1])
 tls = pathlib.Path(sys.argv[2])
 scenario = sys.argv[3]
 source, authority, protected, wrong = (letter * 40 for letter in "abcd")
-tree, manifest, main = "e" * 40, "f" * 40, "0" * 40
+tree, manifest, main = "e" * 40, "8be92e4be7f922af2ea48734bded9c06748e9da7", "0" * 40
 base = "/repos/test-owner/test-tap"
 repo = {"id": 819273, "full_name": "test-owner/test-tap"}
 
 
 def run(run_id, workflow_id, workflow, sha, event, status, conclusion=None):
     return {"id": run_id, "run_attempt": 1, "run_number": run_id, "workflow_id": workflow_id,
-            "name": workflow, "path": ".github/workflows/" + ("ci.yml" if workflow_id == 10 else "binary-preview.yml"),
+            "name": workflow, "path": ".github/workflows/" + ({10: "ci.yml", 20: "binary-preview.yml", 30: "binary-release.yml"}[workflow_id]),
             "head_sha": sha, "head_branch": "main", "event": event, "status": status,
             "conclusion": conclusion, "repository": repo, "head_repository": repo}
 
 
 ci_run = run(100, 10, "CI", source, "push", "completed", "success")
 preview_run = run(200, 20, "Rust binary preview", authority, "workflow_run", "in_progress")
+stable_run = run(200, 30, "Rust binary release", source, "workflow_dispatch", "in_progress")
 
 
 class Handler(http.server.BaseHTTPRequestHandler):
@@ -43,6 +44,17 @@ class Handler(http.server.BaseHTTPRequestHandler):
         path = parsed.path
         if path == base:
             body = {**repo, "id": 819274 if scenario == "wrong-repository" else 819273, "default_branch": "main"}
+        elif path == base + "/immutable-releases":
+            body = {"enabled": True}
+        elif path == base + "/git/matching-refs/tags/v0.1.0":
+            body = []
+        elif path == base + "/environments/release":
+            reviewers = [{"type": "User", "reviewer": {"id": 139017}}] if scenario == "stable-self-review-disabled" else []
+            body = {"name": "release", "can_admins_bypass": False, "deployment_branch_policy": {"protected_branches": True, "custom_branch_policies": False}, "protection_rules": [{"type": "required_reviewers", "prevent_self_review": False, "reviewers": reviewers}, {"type": "branch_policy"}]}
+        elif path == base + "/git/ref/heads/main":
+            body = {"ref": "refs/heads/main", "object": {"type": "commit", "sha": source}}
+        elif path.startswith(base + "/git/blobs/"):
+            body = {"sha": manifest, "size": 68, "encoding": "base64", "content": "W3BhY2thZ2VdCm5hbWUgPSAicHJldmlldy1wcm9iZSIKdmVyc2lvbiA9ICIwLjEuMCIKZWRpdGlvbiA9ICIyMDI0Igo="}
         elif path == base + "/rules/branches/main":
             body = [{"type": "pull_request", "parameters": {"required_approving_review_count": 1, "required_review_thread_resolution": True}}, {"type": "required_status_checks", "parameters": {"required_status_checks": [{"context": "Required"}]}}, {"type": "non_fast_forward"}, {"type": "deletion"}]
         elif path == base + "/branches/main/protection":
@@ -79,9 +91,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 self.send_error(404); return
         elif path.startswith(base + "/git/trees/"):
             body = {"sha": tree, "truncated": False, "tree": [{"path": "Cargo.toml", "mode": "100644", "type": "blob", "sha": manifest}, {"path": "src/main.rs", "mode": "100644", "type": "blob", "sha": main}]}
-        elif path in (base + "/actions/workflows/ci.yml", base + "/actions/workflows/binary-preview.yml"):
-            is_ci = path.endswith("ci.yml")
-            body = {"id": 10 if is_ci else 20, "name": "CI" if is_ci else "Rust binary preview", "path": ".github/workflows/" + ("ci.yml" if is_ci else "binary-preview.yml"), "state": "active"}
+        elif path in (base + "/actions/workflows/ci.yml", base + "/actions/workflows/binary-preview.yml", base + "/actions/workflows/binary-release.yml"):
+            name = path.rsplit("/", 1)[-1]
+            workflow_id, workflow_name = {"ci.yml": (10, "CI"), "binary-preview.yml": (20, "Rust binary preview"), "binary-release.yml": (30, "Rust binary release")}[name]
+            body = {"id": workflow_id, "name": workflow_name, "path": ".github/workflows/" + name, "state": "active"}
         elif path in (base + "/actions/runs/100/attempts/1", base + "/actions/runs/100"):
             body = ci_run
         elif path == base + "/actions/runs/100/attempts/1/jobs":
@@ -89,13 +102,26 @@ class Handler(http.server.BaseHTTPRequestHandler):
         elif path == base + "/actions/workflows/10/runs":
             body = {"workflow_runs": [ci_run]}
         elif path in (base + "/actions/runs/200/attempts/1", base + "/actions/runs/200"):
-            body = preview_run
+            body = stable_run if scenario.startswith("stable-") else preview_run
+        elif path == base + "/actions/runs/200/artifacts":
+            body = {"total_count": 0, "artifacts": []}
         elif path == base + "/actions/runs/200/attempts/1/jobs":
-            body = {"total_count": 1, "jobs": [{"id": 201, "run_id": 200, "name": "Select authenticated main source for preview", "head_sha": authority, "status": "in_progress", "started_at": "2026-10-27T00:00:00Z"}]}
+            stable = scenario.startswith("stable-")
+            body = {"total_count": 1, "jobs": [{"id": 201, "run_id": 200, "name": "Authorize the permanent stable tag" if stable else "Select authenticated main source for preview", "head_sha": source if stable else authority, "status": "in_progress", "started_at": "2026-10-27T00:00:00Z"}]}
         else:
             self.send_error(404)
             return
         self.respond(200, body)
+
+    def do_POST(self):
+        parsed = urllib.parse.urlsplit(self.path)
+        with (root / "requests.tsv").open("a") as log:
+            log.write(self.headers.get("Accept", "") + "\t" + self.path.lstrip("/") + "\n")
+        if self.headers.get("Authorization") != "token fixture_token" or parsed.path != base + "/git/tags":
+            self.send_error(404)
+            return
+        data = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+        self.respond(201, {"sha": "1" * 40, "tag": "v0.1.0", "message": data["message"], "object": {"type": "commit", "sha": source}})
 
     def respond(self, status, body, content_type="application/json"):
         data = body.encode() if isinstance(body, str) else json.dumps(body, separators=(",", ":")).encode()
