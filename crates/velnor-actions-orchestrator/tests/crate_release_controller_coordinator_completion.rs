@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::crate_release_journal::{
-    JournalMutationPhase, inspect_journal_mutation, record_source_bound_start,
+    JournalMutationPhase, fixture_storage::seed_started_record, inspect_journal_mutation,
 };
 
 use super::{
@@ -98,7 +98,7 @@ pub(super) fn serial_coordinator_records_upload_and_metadata_before_reconciling(
     let admission = prepare_crate_release(&intent, &request, &github, &registry, root)?;
     let (identity, plan) = fixture_journal_plan(root, &intent, &request, &admission)?;
     let journal = JournalRegistryFake::default();
-    record_source_bound_start(&journal, &identity, &plan, root, test_git())?;
+    seed_started_record(&journal, &identity, &plan)?;
     let archive = fixture_archive(root)?;
     let input = CrateReleaseObservation {
         source_execution: &crate::UnprivilegedSourceExecution,

@@ -120,7 +120,7 @@ pub(super) fn coordinator_completes_first_crate_with_durable_owners()
 -> Result<(), Box<dyn std::error::Error>> {
     use crate::crate_release_controller::{CrateReleaseObservation, coordinate_release};
     use crate::crate_release_journal::{
-        JournalAuthentication, JournalOwnership, record_source_bound_start,
+        JournalAuthentication, JournalOwnership, fixture_storage::seed_started_record,
     };
     let temp = tempfile::tempdir()?;
     let root = temp.path();
@@ -144,7 +144,7 @@ pub(super) fn coordinator_completes_first_crate_with_durable_owners()
     plan.authentication = JournalAuthentication::BootstrapToken;
     plan.packages[0].owners = JournalOwnership::NewCrate;
     let journal = JournalRegistryFake::default();
-    record_source_bound_start(&journal, &identity, &plan, root, test_git())?;
+    seed_started_record(&journal, &identity, &plan)?;
     let input = CrateReleaseObservation {
         source_execution: &crate::UnprivilegedSourceExecution,
         git: test_git(),

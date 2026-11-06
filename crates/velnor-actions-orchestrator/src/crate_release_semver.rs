@@ -6,6 +6,9 @@
 pub(crate) mod test_registry;
 
 mod checker;
+mod evidence;
+mod metadata;
+pub(crate) use metadata::{matches_revalidated_preflight, verify_observed_evidence};
 
 pub(crate) use checker::run_check;
 use checker::verify_checker;
@@ -43,6 +46,13 @@ pub enum SemverEvidence {
         checker_sha256: String,
         target_checksum: String,
     },
+    MetadataOnly {
+        package: String,
+        version: String,
+        source_sha: String,
+        intent_sha256: String,
+        target_checksum: String,
+    },
 }
 
 pub(crate) struct VerifiedSemver {
@@ -78,67 +88,6 @@ impl VerifiedSemver {
         }
         Ok(self.evidence)
     }
-}
-
-impl SemverEvidence {
-    pub(crate) fn valid_for(&self, version: &str) -> bool {
-        if !self.is_final() {
-            return false;
-        }
-        match self {
-            Self::Checked { baseline, .. } => semver::Version::parse(baseline)
-                .ok()
-                .zip(semver::Version::parse(version).ok())
-                .is_some_and(|(baseline, target)| {
-                    baseline.cmp_precedence(&target) == Ordering::Less
-                }),
-            Self::NoBaseline { .. } => semver::Version::parse(version).is_ok(),
-            Self::Deferred { .. } | Self::PriorNoBaselinePending { .. } => false,
-        }
-    }
-
-    pub(crate) fn is_final(&self) -> bool {
-        let Some(expected) =
-            velnor_actions_mise::catalog::qualified_cargo_semver_checks("ubuntu-26.04")
-        else {
-            return false;
-        };
-        match self {
-            Self::Checked {
-                baseline,
-                baseline_checksum,
-                checker_sha256,
-            } => {
-                semver::Version::parse(baseline).is_ok()
-                    && baseline_checksum.len() == 64
-                    && baseline_checksum
-                        .bytes()
-                        .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
-                    && checker_sha256 == expected.executable_sha256
-            }
-            Self::NoBaseline { checker_sha256 } => checker_sha256 == expected.executable_sha256,
-            Self::Deferred { .. } | Self::PriorNoBaselinePending { .. } => false,
-        }
-    }
-}
-
-pub(crate) fn matches_revalidated_preflight(
-    prior: &std::collections::BTreeMap<String, SemverEvidence>,
-    fresh: &std::collections::BTreeMap<String, SemverEvidence>,
-) -> bool {
-    prior.len() == fresh.len()
-        && prior.iter().all(|(name, old)| {
-            fresh.get(name).is_some_and(|new| {
-                old == new
-                    || matches!(
-                        (old, new),
-                        (
-                            SemverEvidence::Deferred { .. },
-                            SemverEvidence::Checked { .. } | SemverEvidence::NoBaseline { .. }
-                        )
-                    )
-            })
-        })
 }
 
 fn invalid() -> OrchestratorError {
@@ -216,7 +165,17 @@ pub(crate) fn verify_preflight<R: CrateRegistryRead>(
     git: &crate::crate_release_git::ReleaseGit,
     source_execution: &dyn crate::CrateSourceExecution,
 ) -> Result<std::collections::BTreeMap<String, SemverEvidence>, OrchestratorError> {
-    let executable = verify_checker(receipt, runner_temp)?;
+    let executable = receipt
+        .packages
+        .iter()
+        .any(|package| {
+            matches!(
+                package.action,
+                crate::crate_release_controller::CrateReleaseAction::Publish
+            )
+        })
+        .then(|| verify_checker(receipt, runner_temp))
+        .transpose()?;
     crate::verify_crate_release_source(source, &receipt.github.request.source_sha, git)?;
     let effective = crate::crate_release_controller::effective_release_intent(
         &receipt.intent,
@@ -232,25 +191,17 @@ pub(crate) fn verify_preflight<R: CrateRegistryRead>(
     )?;
     let mut evidence = std::collections::BTreeMap::new();
     for package in &receipt.packages {
-        let mut blocked: Vec<String> = workspace
-            .plan
-            .graph
-            .edges
-            .iter()
-            .filter(|edge| edge.from == package.source.name)
-            .filter(|edge| {
-                receipt.packages.iter().any(|other| {
-                    other.source.name == edge.to
-                        && matches!(
-                            other.action,
-                            crate::crate_release_controller::CrateReleaseAction::Publish
-                        )
-                })
-            })
-            .map(|edge| edge.to.clone())
-            .collect();
-        blocked.sort();
-        blocked.dedup();
+        if !matches!(
+            package.action,
+            crate::crate_release_controller::CrateReleaseAction::Publish
+        ) {
+            evidence.insert(
+                package.source.name.clone(),
+                metadata::verify(source, receipt, registry, package, git, source_execution)?,
+            );
+            continue;
+        }
+        let blocked = unpublished_dependencies(receipt, package, &workspace);
         if !blocked.is_empty() {
             eprintln!(
                 "SemVer check deferred until selected prerequisite is published: {}",
@@ -272,7 +223,7 @@ pub(crate) fn verify_preflight<R: CrateRegistryRead>(
                 receipt,
                 registry,
                 package,
-                &executable,
+                executable.as_deref().ok_or_else(invalid)?,
                 git,
                 source_execution,
             )?
@@ -281,6 +232,33 @@ pub(crate) fn verify_preflight<R: CrateRegistryRead>(
     }
     crate::verify_crate_release_source(source, &receipt.github.request.source_sha, git)?;
     Ok(evidence)
+}
+
+fn unpublished_dependencies(
+    receipt: &CrateReleaseAdmissionReceipt,
+    package: &crate::crate_release_controller::CrateReleasePlannedPackage,
+    workspace: &crate::crate_release_workspace::CrateReleaseWorkspacePlan,
+) -> Vec<String> {
+    let mut blocked: Vec<String> = workspace
+        .plan
+        .graph
+        .edges
+        .iter()
+        .filter(|edge| edge.from == package.source.name)
+        .filter(|edge| {
+            receipt.packages.iter().any(|other| {
+                other.source.name == edge.to
+                    && matches!(
+                        other.action,
+                        crate::crate_release_controller::CrateReleaseAction::Publish
+                    )
+            })
+        })
+        .map(|edge| edge.to.clone())
+        .collect();
+    blocked.sort();
+    blocked.dedup();
+    blocked
 }
 
 pub(crate) fn prior_no_baseline_pending<R: CrateRegistryRead>(

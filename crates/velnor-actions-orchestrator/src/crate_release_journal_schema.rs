@@ -198,6 +198,20 @@ fn valid_semver_evidence(receipt: &JournalReceipt) -> bool {
                     && velnor_actions_mise::catalog::qualified_cargo_semver_checks("ubuntu-26.04")
                         .is_some_and(|tool| checker_sha256 == tool.executable_sha256)
             }
+            crate::crate_release_semver::SemverEvidence::MetadataOnly {
+                package: name,
+                version,
+                source_sha,
+                intent_sha256,
+                target_checksum,
+            } => {
+                name == &package.name
+                    && version == &package.version
+                    && source_sha == &receipt.identity.source_sha
+                    && intent_sha256 == &receipt.intent_sha256
+                    && matches!(package.owners, JournalOwnership::Existing { .. })
+                    && valid_sha256(target_checksum)
+            }
             _ => evidence.valid_for(&package.version),
         }
     })

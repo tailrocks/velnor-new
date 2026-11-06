@@ -17,15 +17,15 @@ pub(super) fn verify_new_crate_prior_intention(
     root: &std::path::Path,
 ) -> Result<(), Box<dyn std::error::Error>> {
     use crate::crate_release_journal::{
-        JournalIntendedMutation, JournalMutationKind, JournalOwnership, record_journal_intent,
-        record_source_bound_start,
+        JournalIntendedMutation, JournalMutationKind, JournalOwnership,
+        fixture_storage::seed_started_record, record_journal_intent,
     };
     use crate::crate_release_semver::SemverEvidence;
     let journal = Registry::default();
     let mut prior = plan.clone();
     prior.authentication = JournalAuthentication::BootstrapToken;
     prior.packages[0].owners = JournalOwnership::NewCrate;
-    record_source_bound_start(&journal, &prior.identity, &prior, root, test_git())?;
+    seed_started_record(&journal, &prior.identity, &prior)?;
     let mut current = prior.clone();
     current.identity.run_id += 1;
     current.workflow_run_url = "https://github.com/example/demo-crate/actions/runs/43".into();
@@ -86,21 +86,20 @@ pub(super) fn verify_new_crate_prior_intention(
     )?;
     assert!(inspect_prior_history(&journal, &prior.identity, &current, root, test_git()).is_ok());
     reject_changed_new_crate_result(&journal, &prior, &current, root)?;
-    reject_pending_upload(&journal, &current, root)?;
+    reject_pending_upload(&journal, &current)?;
     Ok(())
 }
 
 fn reject_pending_upload(
     journal: &Registry,
     current: &JournalReceipt,
-    root: &std::path::Path,
 ) -> Result<(), Box<dyn std::error::Error>> {
     use crate::crate_release_journal::{
-        JournalIntendedMutation, JournalMutationKind, record_journal_intent,
-        record_source_bound_start,
+        JournalIntendedMutation, JournalMutationKind, fixture_storage::seed_started_record,
+        record_journal_intent,
     };
     use crate::crate_release_semver::SemverEvidence;
-    record_source_bound_start(journal, &current.identity, current, root, test_git())?;
+    seed_started_record(journal, &current.identity, current)?;
     let counts = (
         journal.refs.borrow().len(),
         journal.tags.borrow().len(),
@@ -192,20 +191,14 @@ pub(super) fn reject_forged_new_crate_prior(
     root: &std::path::Path,
 ) -> Result<(), Box<dyn std::error::Error>> {
     use crate::crate_release_journal::{
-        JournalIntendedMutation, JournalMutationKind, record_journal_intent,
-        record_source_bound_start,
+        JournalIntendedMutation, JournalMutationKind, fixture_storage::seed_started_record,
+        record_journal_intent,
     };
     use crate::crate_release_semver::SemverEvidence;
     let forged_journal = Registry::default();
     let mut existing_prior = prior.clone();
     existing_prior.packages[0].owners = plan.packages[0].owners.clone();
-    record_source_bound_start(
-        &forged_journal,
-        &existing_prior.identity,
-        &existing_prior,
-        root,
-        test_git(),
-    )?;
+    seed_started_record(&forged_journal, &existing_prior.identity, &existing_prior)?;
     record_journal_intent(
         &forged_journal,
         &existing_prior.identity,

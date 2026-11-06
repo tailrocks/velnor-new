@@ -183,7 +183,8 @@ pub(crate) use mutation::{
     mutation_name, record_journal_intent, record_verified_observation, valid_journal_phase,
 };
 pub(crate) use records::record_frozen_completion;
-pub use records::{JournalEvidence, inspect_journal, record_source_bound_start};
+pub(crate) use records::record_validated_start;
+pub use records::{JournalEvidence, inspect_journal};
 use records::{create_content_addressed_tag, journal_name, read_record};
 
 fn validate_identity(identity: &JournalIdentity) -> Result<(), OrchestratorError> {
@@ -282,3 +283,7 @@ use records::record_journal;
 
 #[cfg(test)]
 pub(crate) use records::record_unprivileged_completion;
+
+#[cfg(test)]
+#[path = "../tests/support/journal_storage.rs"]
+pub(crate) mod fixture_storage;

@@ -17,8 +17,8 @@ use velnor_actions_orchestrator::{
         JournalAuthentication, JournalCompletion, JournalFile, JournalFileKind, JournalIdentity,
         JournalIo, JournalOperation, JournalOperationRefs, JournalOwner, JournalOwnerKind,
         JournalPackage, JournalPublishedPackage, JournalReceipt, JournalRegistry, JournalStage,
-        JournalTag, JournalToolPins, inspect_journal, inspect_prior_history,
-        inspect_prior_incomplete_evidence, record_journal, record_source_bound_start,
+        JournalTag, JournalToolPins, fixture_storage::seed_started_record, inspect_journal,
+        inspect_prior_history, inspect_prior_incomplete_evidence, record_journal,
     },
 };
 

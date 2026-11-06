@@ -21,7 +21,8 @@ fn verifies_public_manifest_and_linux_binary() -> Result<(), Box<dyn std::error:
         return Ok(());
     }
     super::super::image_transport_tests::validate(TEST)?;
-    let network = std::net::UdpSocket::bind("127.0.0.1:0").expect_err("attestation child must deny network");
+    let network =
+        std::net::UdpSocket::bind("127.0.0.1:0").expect_err("attestation child must deny network");
     assert_eq!(network.kind(), std::io::ErrorKind::PermissionDenied);
     verify_binary_fixture()
 }

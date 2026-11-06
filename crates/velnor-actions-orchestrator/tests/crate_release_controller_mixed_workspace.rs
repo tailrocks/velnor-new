@@ -15,7 +15,7 @@ pub(super) fn mixed_workspace_coordinator_repairs_predecessor_before_upload()
     use crate::crate_release_controller::{
         CrateReleaseObservation, UploadAttempt, coordinate_release,
     };
-    use crate::crate_release_journal::record_source_bound_start;
+    use crate::crate_release_journal::fixture_storage::seed_started_record;
     let (temp, intent, request, original_github, registry) = make_workspace_order_fixture()?;
     let root = temp.path();
     let original = prepare_crate_release(&intent, &request, &original_github, &registry, root)?;
@@ -47,7 +47,7 @@ pub(super) fn mixed_workspace_coordinator_repairs_predecessor_before_upload()
     let (identity, mut plan) = fixture_journal_plan(root, &intent, &request, &admission)?;
     set_workspace_journal_packages(&mut plan, &admission);
     let journal = JournalRegistryFake::default();
-    record_source_bound_start(&journal, &identity, &plan, root, test_git())?;
+    seed_started_record(&journal, &identity, &plan)?;
     let server = SparseFixture::start("velnor_fixture_order_20261104_a", first_archive)?;
     FIXTURE_SPARSE_INDEX.with(|value| *value.borrow_mut() = Some(server.url.clone()));
     let waits = Cell::new(0);
@@ -160,8 +160,8 @@ pub(super) fn serial_coordinator_recovers_pending_visible_tag_without_recreating
 -> Result<(), Box<dyn std::error::Error>> {
     use crate::crate_release_controller::{CrateReleaseObservation, coordinate_release};
     use crate::crate_release_journal::{
-        JournalIntendedMutation, JournalMutationKind, record_journal_intent,
-        record_source_bound_start,
+        JournalIntendedMutation, JournalMutationKind, fixture_storage::seed_started_record,
+        record_journal_intent,
     };
     let temp = tempfile::tempdir()?;
     let root = temp.path();
@@ -171,7 +171,7 @@ pub(super) fn serial_coordinator_recovers_pending_visible_tag_without_recreating
     let admission = prepare_crate_release(&intent, &request, &github, &registry, root)?;
     let (identity, plan) = fixture_journal_plan(root, &intent, &request, &admission)?;
     let journal = JournalRegistryFake::default();
-    record_source_bound_start(&journal, &identity, &plan, root, test_git())?;
+    seed_started_record(&journal, &identity, &plan)?;
     record_journal_intent(
         &journal,
         &identity,
@@ -215,7 +215,9 @@ pub(super) fn serial_coordinator_recovers_pending_visible_tag_without_recreating
 #[test]
 pub(super) fn admitted_start_binds_previous_workflow_commit_and_reobserves_prior_upload()
 -> Result<(), Box<dyn std::error::Error>> {
-    use crate::crate_release_journal::{record_journal_intent, record_source_bound_start};
+    use crate::crate_release_journal::{
+        fixture_storage::seed_started_record, record_journal_intent,
+    };
     use crate::package_release_signer::{
         AdmittedStart, fixture_attested_generator, record_admitted_start,
     };
@@ -234,7 +236,7 @@ pub(super) fn admitted_start_binds_previous_workflow_commit_and_reobserves_prior
     older.identity.workflow_sha = older_workflow_sha.clone();
     older.workflow_run_url = "https://github.com/example/demo/actions/runs/10".into();
     let journal = JournalRegistryFake::default();
-    record_source_bound_start(&journal, &older.identity, &older, root, test_git())?;
+    seed_started_record(&journal, &older.identity, &older)?;
     record_journal_intent(
         &journal,
         &older.identity,
@@ -254,7 +256,7 @@ pub(super) fn admitted_start_binds_previous_workflow_commit_and_reobserves_prior
     previous.identity.workflow_sha = previous_workflow_sha.clone();
     previous.workflow_run_url = "https://github.com/example/demo/actions/runs/11".into();
     previous.predecessor = Some(older.identity.clone());
-    record_source_bound_start(&journal, &previous.identity, &previous, root, test_git())?;
+    seed_started_record(&journal, &previous.identity, &previous)?;
     intent.journal_predecessor = Some(velnor_actions_contract::config::CrateReleasePredecessor {
         run_id: 11,
         run_attempt: 1,

@@ -60,30 +60,18 @@ pub(super) fn verify_chain_and_rerun(
         "https://github.com/{}/actions/runs/{}",
         older.identity.repository, older.identity.run_id
     );
-    record_source_bound_start(&chained_journal, &older.identity, &older, root, test_git())?;
+    seed_started_record(&chained_journal, &older.identity, &older)?;
     let mut chained = plan.clone();
     chained.predecessor = Some(older.identity.clone());
-    record_source_bound_start(
-        &chained_journal,
-        &chained.identity,
-        &chained,
-        root,
-        test_git(),
-    )?;
+    seed_started_record(&chained_journal, &chained.identity, &chained)?;
     assert_eq!(
         super::super::inspect_prior_chain(&chained_journal, current, root, test_git())?.len(),
         2
     );
     let cyclic_journal = Registry::default();
     older.predecessor = Some(chained.identity.clone());
-    record_source_bound_start(&cyclic_journal, &older.identity, &older, root, test_git())?;
-    record_source_bound_start(
-        &cyclic_journal,
-        &chained.identity,
-        &chained,
-        root,
-        test_git(),
-    )?;
+    seed_started_record(&cyclic_journal, &older.identity, &older)?;
+    seed_started_record(&cyclic_journal, &chained.identity, &chained)?;
     assert!(super::super::inspect_prior_chain(&cyclic_journal, current, root, test_git()).is_err());
     let mut rerun = current.clone();
     rerun.identity.run_id = plan.identity.run_id;

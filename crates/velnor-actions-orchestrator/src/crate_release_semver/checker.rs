@@ -31,6 +31,12 @@ pub(crate) fn verify_one<R: CrateRegistryRead>(
     git: &crate::crate_release_git::ReleaseGit,
     source_execution: &dyn crate::CrateSourceExecution,
 ) -> Result<SemverEvidence, OrchestratorError> {
+    if !matches!(
+        package.action,
+        crate::crate_release_controller::CrateReleaseAction::Publish
+    ) {
+        return super::metadata::verify(source, receipt, registry, package, git, source_execution);
+    }
     let checker_sha256 =
         velnor_actions_mise::catalog::qualified_cargo_semver_checks(&receipt.intent.runner)
             .ok_or_else(invalid)?

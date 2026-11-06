@@ -232,12 +232,10 @@ fn seed_supervised_journal(
     execution: &crate::crate_release_source_view::SupervisedSourceExecution,
     git: &crate::crate_release_git::ReleaseGit,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    crate::crate_release_journal::record_source_bound_start(
+    crate::crate_release_journal::fixture_storage::seed_started_record(
         journal,
         &prior.identity,
         prior,
-        execution.root(),
-        git,
     )?;
     crate::crate_release_journal::record_journal_intent(
         journal,

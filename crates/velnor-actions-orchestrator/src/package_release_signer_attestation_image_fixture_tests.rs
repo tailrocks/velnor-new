@@ -196,10 +196,19 @@ fn check_certificate_fields(
         return Err("expected one verified image attestation".into());
     };
     for field in [
-        "issuer", "subjectAlternativeName", "sourceRepositoryURI",
-        "sourceRepositoryOwnerURI", "sourceRepositoryIdentifier", "sourceRepositoryDigest",
-        "sourceRepositoryRef", "buildSignerURI", "buildSignerDigest", "buildConfigURI",
-        "buildConfigDigest", "buildTrigger", "runnerEnvironment",
+        "issuer",
+        "subjectAlternativeName",
+        "sourceRepositoryURI",
+        "sourceRepositoryOwnerURI",
+        "sourceRepositoryIdentifier",
+        "sourceRepositoryDigest",
+        "sourceRepositoryRef",
+        "buildSignerURI",
+        "buildSignerDigest",
+        "buildConfigURI",
+        "buildConfigDigest",
+        "buildTrigger",
+        "runnerEnvironment",
     ] {
         let mut invalid = valid.clone();
         invalid["verificationResult"]["signature"]["certificate"][field] =
@@ -210,10 +219,18 @@ fn check_certificate_fields(
             vec![valid.clone(), invalid],
         ] {
             let error = validate_output_with_additional_names(
-                &serde_json::to_vec(&entries)?, subjects, &[], &expectation(),
-            ).expect_err("invalid verified certificate field must be rejected");
-            assert!(error.to_string().contains("package_attestation_identity_mismatch"),
-                "unexpected rejection for {field}: {error}");
+                &serde_json::to_vec(&entries)?,
+                subjects,
+                &[],
+                &expectation(),
+            )
+            .expect_err("invalid verified certificate field must be rejected");
+            assert!(
+                error
+                    .to_string()
+                    .contains("package_attestation_identity_mismatch"),
+                "unexpected rejection for {field}: {error}"
+            );
         }
     }
     Ok(())

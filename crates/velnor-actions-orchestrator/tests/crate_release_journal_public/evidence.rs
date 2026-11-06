@@ -231,15 +231,13 @@ fn journal_source_binding_requires_exact_approved_tree() -> Result<(), Box<dyn s
     let mut journal = Registry::default();
     let mut forged = plan.clone();
     forged.source_files[0].sha256 = "f".repeat(64);
-    assert!(
-        record_source_bound_start(&journal, &plan.identity, &forged, root, test_git()).is_err()
-    );
-    assert!(journal.refs.borrow().is_empty());
+    assert!(verify_journal_source(root, &forged, test_git()).is_err());
     let mut wrong_identity = plan.identity.clone();
     wrong_identity.source_sha = "0".repeat(40);
-    assert!(record_source_bound_start(&journal, &wrong_identity, &plan, root, test_git()).is_err());
-    assert!(journal.refs.borrow().is_empty());
-    record_source_bound_start(&journal, &plan.identity, &plan, root, test_git())?;
+    let mut wrong_source = plan.clone();
+    wrong_source.identity = wrong_identity;
+    assert!(verify_journal_source(root, &wrong_source, test_git()).is_err());
+    seed_started_record(&journal, &plan.identity, &plan)?;
     assert_eq!(journal.refs.borrow().len(), 1);
     verify_prior_run_cases(&mut journal, &plan, root)?;
     verify_new_crate_prior_intention(&plan, root)?;

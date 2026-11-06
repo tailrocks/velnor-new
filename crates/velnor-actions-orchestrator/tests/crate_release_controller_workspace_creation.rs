@@ -14,8 +14,8 @@ pub(super) fn two_new_workspace_crates_require_each_own_recorded_upload()
 -> Result<(), Box<dyn std::error::Error>> {
     use crate::crate_release_controller::CrateReleaseObservation;
     use crate::crate_release_journal::{
-        JournalAuthentication, JournalOwnership, inspect_journal_mutation, record_journal_intent,
-        record_source_bound_start,
+        JournalAuthentication, JournalOwnership, fixture_storage::seed_started_record,
+        inspect_journal_mutation, record_journal_intent,
     };
     let (temp, mut intent, mut request, github, registry) = make_workspace_order_fixture()?;
     let root = temp.path();
@@ -45,7 +45,7 @@ pub(super) fn two_new_workspace_crates_require_each_own_recorded_upload()
         package.owners = JournalOwnership::NewCrate;
     }
     let journal = JournalRegistryFake::default();
-    record_source_bound_start(&journal, &identity, &plan, root, test_git())?;
+    seed_started_record(&journal, &identity, &plan)?;
     let first = &admission.packages[0].source;
     let second = &admission.packages[1].source;
     record_journal_intent(
@@ -201,7 +201,7 @@ pub(super) fn record_first_created_workspace_crate(
 pub(super) fn first_crate_prior_upload_recovers_only_with_authenticated_intent_and_owner()
 -> Result<(), Box<dyn std::error::Error>> {
     use crate::crate_release_journal::{
-        JournalAuthentication, JournalOwnership, record_source_bound_start,
+        JournalAuthentication, JournalOwnership, fixture_storage::seed_started_record,
     };
     use crate::package_release_signer::{
         AdmittedStart, fixture_attested_generator, record_admitted_start,
@@ -233,7 +233,7 @@ pub(super) fn first_crate_prior_upload_recovers_only_with_authenticated_intent_a
     prior.authentication = JournalAuthentication::BootstrapToken;
     prior.packages[0].owners = JournalOwnership::NewCrate;
     let journal = JournalRegistryFake::default();
-    record_source_bound_start(&journal, &prior.identity, &prior, root, test_git())?;
+    seed_started_record(&journal, &prior.identity, &prior)?;
     *registry.base.archive.borrow_mut() = fixture_archive(root)?;
     registry.base.absent.set(false);
     registry.visible.set(true);
@@ -250,14 +250,19 @@ pub(super) fn first_crate_prior_upload_recovers_only_with_authenticated_intent_a
         defect: Cell::new(0),
     };
     let mut admission = prepare_crate_release(&intent, &request, &auth, &registry, root)?;
-    let pending = crate::crate_release_semver::prior_no_baseline_pending(
+    let tools = tempfile::tempdir()?;
+    admission.semver_evidence = crate::crate_release_semver::verify_preflight(
+        root,
         &admission,
         &registry,
-        &admission.packages[0],
-    )?
-    .ok_or("pending")?;
-    admission.semver_evidence.insert("demo".into(), pending);
-    let generator = fixture_attested_generator();
+        tools.path(),
+        test_git(),
+        &crate::UnprivilegedSourceExecution,
+    )?;
+    assert!(matches!(
+        admission.semver_evidence.get("demo"),
+        Some(crate::crate_release_semver::SemverEvidence::MetadataOnly { .. })
+    ));
     let input = AdmittedStart {
         source_execution: &crate::UnprivilegedSourceExecution,
         git: test_git(),
@@ -269,7 +274,7 @@ pub(super) fn first_crate_prior_upload_recovers_only_with_authenticated_intent_a
         admission: &admission,
         source: root,
         workflow_root: workflow.path(),
-        generator: &generator,
+        generator: &fixture_attested_generator(),
     };
     reject_untrusted_prior_creation(&input, &prior)?;
     record_admitted_start(&input)?;

@@ -288,8 +288,8 @@ pub(super) fn observed_upload_is_derived_from_current_registry()
         CrateReleaseObservation, record_verified_mutation,
     };
     use velnor_actions_orchestrator::crate_release_journal::{
-        JournalIntendedMutation, JournalMutationKind, inspect_journal_mutation,
-        record_journal_intent, record_source_bound_start,
+        JournalIntendedMutation, JournalMutationKind, fixture_storage::seed_started_record,
+        inspect_journal_mutation, record_journal_intent,
     };
     let temp = tempfile::tempdir()?;
     let root = temp.path();
@@ -298,7 +298,7 @@ pub(super) fn observed_upload_is_derived_from_current_registry()
     let admission = prepare_crate_release(&intent, &request, &github, &registry, root)?;
     let (identity, plan) = fixture_journal_plan(root, &intent, &request, &admission)?;
     let journal = JournalRegistryFake::default();
-    record_source_bound_start(&journal, &identity, &plan, root, test_git())?;
+    seed_started_record(&journal, &identity, &plan)?;
     record_journal_intent(
         &journal,
         &identity,

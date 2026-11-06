@@ -76,8 +76,8 @@ pub(super) fn new_crate_upload_observation_requires_durable_intent_and_real_revi
         CrateReleaseObservation, record_verified_mutation,
     };
     use velnor_actions_orchestrator::crate_release_journal::{
-        JournalAuthentication, JournalMutationKind, JournalOwnership, record_journal_intent,
-        record_source_bound_start,
+        JournalAuthentication, JournalMutationKind, JournalOwnership,
+        fixture_storage::seed_started_record, record_journal_intent,
     };
     let temp = tempfile::tempdir()?;
     let root = temp.path();
@@ -103,7 +103,7 @@ pub(super) fn new_crate_upload_observation_requires_durable_intent_and_real_revi
     plan.authentication = JournalAuthentication::BootstrapToken;
     plan.packages[0].owners = JournalOwnership::NewCrate;
     let journal = JournalRegistryFake::default();
-    record_source_bound_start(&journal, &identity, &plan, root, test_git())?;
+    seed_started_record(&journal, &identity, &plan)?;
     let intended = new_crate_upload_intention();
     let obs = CrateReleaseObservation {
         source_execution: &crate::UnprivilegedSourceExecution,

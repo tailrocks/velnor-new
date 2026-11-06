@@ -221,6 +221,9 @@ pub(super) fn prior_packages_compatible(
     prior.packages.len() == current.packages.len() && prior.packages.iter().zip(&current.packages).all(|(old, now)| {
         if old.name != now.name || old.version != now.version || old.manifest != now.manifest || old.tag != now.tag { return false; }
         if old.owners == now.owners {
+            if let Some(crate::crate_release_semver::SemverEvidence::MetadataOnly { target_checksum: old_checksum, .. }) = prior.semver_evidence.get(&old.name) {
+                return matches!(current.semver_evidence.get(&now.name), Some(crate::crate_release_semver::SemverEvidence::MetadataOnly { target_checksum, .. }) if target_checksum == old_checksum);
+            }
             if matches!(current.semver_evidence.get(&now.name), Some(crate::crate_release_semver::SemverEvidence::PriorNoBaselinePending { .. })) {
                 return prior.predecessor.is_some() && prior.semver_evidence.get(&old.name) == current.semver_evidence.get(&now.name);
             }
@@ -230,7 +233,7 @@ pub(super) fn prior_packages_compatible(
             && matches!(old.owners, JournalOwnership::NewCrate)
             && matches!(now.owners, JournalOwnership::Existing { .. })
             && matches!(prior.semver_evidence.get(&old.name), Some(crate::crate_release_semver::SemverEvidence::NoBaseline { .. }))
-            && matches!(current.semver_evidence.get(&now.name), Some(crate::crate_release_semver::SemverEvidence::PriorNoBaselinePending { .. }))
+            && matches!(current.semver_evidence.get(&now.name), Some(crate::crate_release_semver::SemverEvidence::PriorNoBaselinePending { .. } | crate::crate_release_semver::SemverEvidence::MetadataOnly { .. }))
     })
 }
 
@@ -250,16 +253,16 @@ pub(super) fn verify_new_crate_prior_intentions(
         else {
             return Err(invalid());
         };
-        let Some(SemverEvidence::PriorNoBaselinePending {
-            checker_sha256,
-            target_checksum,
-        }) = current.semver_evidence.get(&now.name)
-        else {
-            return Err(invalid());
+        let target_checksum = match current.semver_evidence.get(&now.name) {
+            Some(SemverEvidence::PriorNoBaselinePending {
+                checker_sha256,
+                target_checksum,
+            }) if prior_checker == checker_sha256 => target_checksum,
+            Some(SemverEvidence::MetadataOnly {
+                target_checksum, ..
+            }) => target_checksum,
+            _ => return Err(invalid()),
         };
-        if prior_checker != checker_sha256 {
-            return Err(invalid());
-        }
         let candidates: Vec<_> = mutations
             .iter()
             .enumerate()

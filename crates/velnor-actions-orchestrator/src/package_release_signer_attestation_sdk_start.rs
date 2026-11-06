@@ -3,6 +3,24 @@
 
 use super::{AttestedLinuxGenerator, OrchestratorError, internal};
 
+pub(crate) struct ValidatedStart<'a> {
+    receipt: &'a crate::crate_release_journal::JournalReceipt,
+    source: &'a std::path::Path,
+    git: &'a crate::crate_release_git::ReleaseGit,
+}
+
+impl<'a> ValidatedStart<'a> {
+    pub(crate) fn into_parts(
+        self,
+    ) -> (
+        &'a crate::crate_release_journal::JournalReceipt,
+        &'a std::path::Path,
+        &'a crate::crate_release_git::ReleaseGit,
+    ) {
+        (self.receipt, self.source, self.git)
+    }
+}
+
 pub(crate) struct AdmittedStart<'a, J, G, R> {
     pub(crate) journal: &'a J,
     pub(crate) github: &'a G,
@@ -35,12 +53,14 @@ pub(crate) fn record_admitted_start<
         &input.admission.github,
         input.github,
     )?;
-    let observed = crate::crate_release_controller::reprepare_crate_release(input.admission,
+    let observed = crate::crate_release_controller::reprepare_crate_release(
+        input.admission,
         input.github,
         input.registry,
         crate::CrateSource::new(input.source, input.git, input.source_execution),
     )?;
     crate::crate_release_controller::verify_observed_packages(&observed, input.admission)?;
+    crate::crate_release_semver::verify_observed_evidence(input.admission, &observed)?;
     let receipt = derive_start_receipt(input, &observed)?;
     let prior_history = verified_prior_chain(input, &receipt)?;
     crate::crate_release_github::authorize_github_candidate(
@@ -48,17 +68,19 @@ pub(crate) fn record_admitted_start<
         &input.admission.github,
         input.github,
     )?;
-    let result = crate::crate_release_journal::record_source_bound_start(
+    let result = crate::crate_release_journal::record_validated_start(
         input.journal,
-        &receipt.identity,
-        &receipt,
-        input.source,
-        input.git,
+        ValidatedStart {
+            receipt: &receipt,
+            source: input.source,
+            git: input.git,
+        },
     )?;
     if verified_prior_chain(input, &receipt)? != prior_history {
         return Err(internal("crate_release_previous_changed"));
     }
-    if crate::crate_release_controller::reprepare_crate_release(input.admission,
+    if crate::crate_release_controller::reprepare_crate_release(
+        input.admission,
         input.github,
         input.registry,
         crate::CrateSource::new(input.source, input.git, input.source_execution),
@@ -88,7 +110,9 @@ where
         input.source,
         input.git,
         Some(&crate::crate_release_journal::PriorTransition {
-            source_execution: input.source_execution, request: input.request, github: input.github,
+            source_execution: input.source_execution,
+            request: input.request,
+            github: input.github,
         }),
     )?;
     for prior in &chain {
@@ -99,7 +123,9 @@ where
             input.git,
         ) {
             Ok(intent) => intent,
-            Err(_) => input.source_execution.historical_intent_reader()?
+            Err(_) => input
+                .source_execution
+                .historical_intent_reader()?
                 .verify_prior(previous, input.request, input.github)?,
         };
         let bytes = velnor_actions_contract::canonical_json_bytes(&intent)

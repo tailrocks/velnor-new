@@ -97,7 +97,8 @@ mod start;
 #[cfg(test)]
 pub(crate) use start::fixture_measured_tools;
 pub(crate) use start::{
-    AdmittedStart, MeasuredReleaseTools, measure_release_tools, record_admitted_start,
+    AdmittedStart, MeasuredReleaseTools, ValidatedStart, measure_release_tools,
+    record_admitted_start,
 };
 #[cfg(test)]
 use start::{derive_attested_tool_expectations, match_attested_tool_expectations};

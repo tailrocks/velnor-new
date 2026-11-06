@@ -10,7 +10,15 @@ use super::{
     verify_raw_tag,
 };
 
-pub fn record_source_bound_start<I: JournalIo>(
+pub(crate) fn record_validated_start<I: JournalIo>(
+    io: &I,
+    validated: crate::package_release_signer::ValidatedStart<'_>,
+) -> Result<String, OrchestratorError> {
+    let (receipt, source, git) = validated.into_parts();
+    source_bound_start(io, &receipt.identity, receipt, source, git)
+}
+
+fn source_bound_start<I: JournalIo>(
     io: &I,
     identity: &JournalIdentity,
     receipt: &JournalReceipt,

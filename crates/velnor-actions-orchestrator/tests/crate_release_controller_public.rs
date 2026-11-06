@@ -76,6 +76,8 @@ use admission_fixtures::{SparseFixture, reject_invalid_metadata_prerequisites};
 mod coordinator_completion;
 #[path = "crate_release_controller_coordinator_recovery.rs"]
 mod coordinator_recovery;
+#[path = "crate_release_controller_metadata_preflight.rs"]
+mod metadata_preflight;
 #[path = "crate_release_controller_metadata_repair.rs"]
 mod metadata_repair;
 use coordinator_recovery::{MixedGithub, MixedRegistry, reject_bad_completion_evidence};

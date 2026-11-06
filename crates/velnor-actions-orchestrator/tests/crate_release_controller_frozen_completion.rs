@@ -3,7 +3,9 @@
 
 use super::{Github, JournalRegistryFake, Registry, fixture_journal_plan, test_git};
 use crate::crate_release_controller::{CrateReleaseObservation, FrozenCompletion};
-use crate::crate_release_journal::{JournalStage, inspect_journal, record_source_bound_start};
+use crate::crate_release_journal::{
+    JournalStage, fixture_storage::seed_started_record, inspect_journal,
+};
 
 #[test]
 fn completion_rejects_predecessor_drift_after_source_freeze()
@@ -19,7 +21,7 @@ fn completion_rejects_predecessor_drift_after_source_freeze()
     let admission = super::prepare_crate_release(&intent, &request, &github, &registry, source)?;
     let (identity, receipt) = fixture_journal_plan(source, &intent, &request, &admission)?;
     let journal = JournalRegistryFake::default();
-    record_source_bound_start(&journal, &identity, &receipt, source, test_git())?;
+    seed_started_record(&journal, &identity, &receipt)?;
     let input = CrateReleaseObservation {
         source_execution: &crate::UnprivilegedSourceExecution,
         journal: &journal,
@@ -47,7 +49,7 @@ pub(super) fn reject_prior_history_drift(
         "https://github.com/{}/actions/runs/{}",
         prior.identity.repository, prior.identity.run_id
     );
-    record_source_bound_start(&journal, &prior.identity, &prior, input.source, test_git())?;
+    seed_started_record(&journal, &prior.identity, &prior)?;
     let mut intent = input.intent.clone();
     intent.journal_predecessor = Some(velnor_actions_contract::config::CrateReleasePredecessor {
         run_id: prior.identity.run_id,
@@ -59,7 +61,7 @@ pub(super) fn reject_prior_history_drift(
     let (identity, mut receipt) =
         fixture_journal_plan(input.source, &intent, input.request, &admission)?;
     receipt.predecessor = Some(prior.identity.clone());
-    record_source_bound_start(&journal, &identity, &receipt, input.source, test_git())?;
+    seed_started_record(&journal, &identity, &receipt)?;
     let observation = CrateReleaseObservation {
         journal: &journal,
         identity: &identity,

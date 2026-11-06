@@ -11,8 +11,8 @@ pub(super) fn metadata_repair_journals_each_create_before_and_after_write()
 -> Result<(), Box<dyn std::error::Error>> {
     use crate::crate_release_controller::{CrateReleaseObservation, repair_verified_metadata};
     use crate::crate_release_journal::{
-        JournalMutationKind, JournalMutationPhase, inspect_journal_mutation,
-        record_source_bound_start,
+        JournalMutationKind, JournalMutationPhase, fixture_storage::seed_started_record,
+        inspect_journal_mutation,
     };
     let temp = tempfile::tempdir()?;
     let root = temp.path();
@@ -21,7 +21,7 @@ pub(super) fn metadata_repair_journals_each_create_before_and_after_write()
     let admission = prepare_crate_release(&intent, &request, &github, &registry, root)?;
     let (identity, plan) = fixture_journal_plan(root, &intent, &request, &admission)?;
     let journal = std::rc::Rc::new(JournalRegistryFake::default());
-    record_source_bound_start(journal.as_ref(), &identity, &plan, root, test_git())?;
+    seed_started_record(journal.as_ref(), &identity, &plan)?;
     *registry.archive.borrow_mut() = fixture_archive(root)?;
     registry.absent.set(false);
     github.release_variant.set(4);
@@ -96,8 +96,8 @@ pub(super) fn ambiguous_metadata_write_stops_with_durable_unresolved_intent()
 -> Result<(), Box<dyn std::error::Error>> {
     use crate::crate_release_controller::{CrateReleaseObservation, repair_verified_metadata};
     use crate::crate_release_journal::{
-        JournalMutationKind, JournalMutationPhase, inspect_journal_mutation,
-        record_source_bound_start,
+        JournalMutationKind, JournalMutationPhase, fixture_storage::seed_started_record,
+        inspect_journal_mutation,
     };
     let temp = tempfile::tempdir()?;
     let root = temp.path();
@@ -106,7 +106,7 @@ pub(super) fn ambiguous_metadata_write_stops_with_durable_unresolved_intent()
     let admission = prepare_crate_release(&intent, &request, &github, &registry, root)?;
     let (identity, plan) = fixture_journal_plan(root, &intent, &request, &admission)?;
     let journal = JournalRegistryFake::default();
-    record_source_bound_start(&journal, &identity, &plan, root, test_git())?;
+    seed_started_record(&journal, &identity, &plan)?;
     *registry.archive.borrow_mut() = fixture_archive(root)?;
     registry.absent.set(false);
     github.release_variant.set(4);
@@ -144,7 +144,7 @@ pub(super) fn metadata_intent_requires_fresh_approval_after_state_observation()
 -> Result<(), Box<dyn std::error::Error>> {
     use crate::crate_release_controller::{CrateReleaseObservation, repair_verified_metadata};
     use crate::crate_release_journal::{
-        JournalMutationKind, inspect_journal_mutation, record_source_bound_start,
+        JournalMutationKind, fixture_storage::seed_started_record, inspect_journal_mutation,
     };
     let temp = tempfile::tempdir()?;
     let root = temp.path();
@@ -153,7 +153,7 @@ pub(super) fn metadata_intent_requires_fresh_approval_after_state_observation()
     let admission = prepare_crate_release(&intent, &request, &github, &registry, root)?;
     let (identity, plan) = fixture_journal_plan(root, &intent, &request, &admission)?;
     let journal = JournalRegistryFake::default();
-    record_source_bound_start(&journal, &identity, &plan, root, test_git())?;
+    seed_started_record(&journal, &identity, &plan)?;
     *registry.archive.borrow_mut() = fixture_archive(root)?;
     registry.absent.set(false);
     github.revoke_on_tag_read.set(true);
@@ -185,7 +185,7 @@ pub(super) fn metadata_repair_stops_if_tag_or_registry_changes_after_intent()
 -> Result<(), Box<dyn std::error::Error>> {
     use crate::crate_release_controller::{CrateReleaseObservation, repair_verified_metadata};
     use crate::crate_release_journal::{
-        JournalMutationKind, inspect_journal_mutation, record_source_bound_start,
+        JournalMutationKind, fixture_storage::seed_started_record, inspect_journal_mutation,
     };
     for (kind, change_tag) in [
         (JournalMutationKind::CreateTag, true),
@@ -202,7 +202,7 @@ pub(super) fn metadata_repair_stops_if_tag_or_registry_changes_after_intent()
             prepare_crate_release(&intent, &request, github.as_ref(), registry.as_ref(), root)?;
         let (identity, plan) = fixture_journal_plan(root, &intent, &request, &admission)?;
         let journal = JournalRegistryFake::default();
-        record_source_bound_start(&journal, &identity, &plan, root, test_git())?;
+        seed_started_record(&journal, &identity, &plan)?;
         *registry.archive.borrow_mut() = fixture_archive(root)?;
         registry.absent.set(false);
         if kind == JournalMutationKind::CreateRelease {
@@ -247,8 +247,8 @@ pub(super) fn metadata_repair_stops_if_approval_changes_after_intent()
 -> Result<(), Box<dyn std::error::Error>> {
     use crate::crate_release_controller::{CrateReleaseObservation, repair_verified_metadata};
     use crate::crate_release_journal::{
-        JournalMutationKind, JournalMutationPhase, inspect_journal_mutation,
-        record_source_bound_start,
+        JournalMutationKind, JournalMutationPhase, fixture_storage::seed_started_record,
+        inspect_journal_mutation,
     };
     let temp = tempfile::tempdir()?;
     let root = temp.path();
@@ -258,7 +258,7 @@ pub(super) fn metadata_repair_stops_if_approval_changes_after_intent()
     let admission = prepare_crate_release(&intent, &request, github.as_ref(), &registry, root)?;
     let (identity, plan) = fixture_journal_plan(root, &intent, &request, &admission)?;
     let journal = JournalRegistryFake::default();
-    record_source_bound_start(&journal, &identity, &plan, root, test_git())?;
+    seed_started_record(&journal, &identity, &plan)?;
     *registry.archive.borrow_mut() = fixture_archive(root)?;
     registry.absent.set(false);
     let observed_github = github.clone();

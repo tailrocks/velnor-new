@@ -20,7 +20,7 @@ pub(super) fn run_two_new_workspace_crates(
 ) -> Result<(), Box<dyn std::error::Error>> {
     use crate::crate_release_controller::CrateReleaseObservation;
     use crate::crate_release_journal::{
-        JournalAuthentication, JournalOwnership, record_source_bound_start,
+        JournalAuthentication, JournalOwnership, fixture_storage::seed_started_record,
     };
     let (temp, mut intent, mut request, original_github, first) = make_workspace_order_fixture()?;
     let root = temp.path();
@@ -81,7 +81,7 @@ pub(super) fn run_two_new_workspace_crates(
         package.owners = JournalOwnership::NewCrate;
     }
     let journal = JournalRegistryFake::default();
-    record_source_bound_start(&journal, &identity, &plan, root, test_git())?;
+    seed_started_record(&journal, &identity, &plan)?;
     let input = CrateReleaseObservation {
         source_execution: &crate::UnprivilegedSourceExecution,
         git: test_git(),

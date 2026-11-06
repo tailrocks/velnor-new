@@ -11,7 +11,7 @@ use super::{
 pub(super) fn upload_intent_requires_fresh_admission_and_absent_publication()
 -> Result<(), Box<dyn std::error::Error>> {
     use velnor_actions_orchestrator::crate_release_controller::CrateReleaseObservation;
-    use velnor_actions_orchestrator::crate_release_journal::record_source_bound_start;
+    use velnor_actions_orchestrator::crate_release_journal::fixture_storage::seed_started_record;
     let temp = tempfile::tempdir()?;
     let root = temp.path();
     let (intent, request, github, registry) = make_fixture(root)?;
@@ -19,7 +19,7 @@ pub(super) fn upload_intent_requires_fresh_admission_and_absent_publication()
     let admission = prepare_crate_release(&intent, &request, &github, &registry, root)?;
     let (identity, plan) = fixture_journal_plan(root, &intent, &request, &admission)?;
     let journal = JournalRegistryFake::default();
-    record_source_bound_start(&journal, &identity, &plan, root, test_git())?;
+    seed_started_record(&journal, &identity, &plan)?;
     let obs = CrateReleaseObservation {
         source_execution: &crate::UnprivilegedSourceExecution,
         git: test_git(),

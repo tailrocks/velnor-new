@@ -115,8 +115,8 @@ pub(super) fn exercise_historical_authority(
     bad_recovery: u8,
 ) -> Result<(), Box<dyn std::error::Error>> {
     use crate::crate_release_journal::{
-        JournalIntendedMutation, JournalMutationKind, record_journal_intent,
-        record_source_bound_start,
+        JournalIntendedMutation, JournalMutationKind, fixture_storage::seed_started_record,
+        record_journal_intent,
     };
     use crate::package_release_signer::{AdmittedStart, fixture_attested_generator};
     let HistoricalFixture {
@@ -136,7 +136,7 @@ pub(super) fn exercise_historical_authority(
     prior.identity.workflow_sha.clone_from(&prior_sha);
     prior.workflow_run_url = "https://github.com/example/demo/actions/runs/11".into();
     let journal = JournalRegistryFake::default();
-    record_source_bound_start(&journal, &prior.identity, &prior, source, test_git())?;
+    seed_started_record(&journal, &prior.identity, &prior)?;
     record_journal_intent(
         &journal,
         &prior.identity,

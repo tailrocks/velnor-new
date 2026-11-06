@@ -108,7 +108,9 @@ pub(super) fn assert_two_link_recovery(
 #[test]
 pub(super) fn admitted_start_rejects_forged_prior_intent_digest()
 -> Result<(), Box<dyn std::error::Error>> {
-    use crate::crate_release_journal::{record_journal_intent, record_source_bound_start};
+    use crate::crate_release_journal::{
+        fixture_storage::seed_started_record, record_journal_intent,
+    };
     use crate::package_release_signer::{
         AdmittedStart, fixture_attested_generator, record_admitted_start,
     };
@@ -144,7 +146,7 @@ pub(super) fn admitted_start_rejects_forged_prior_intent_digest()
     previous.workflow_run_url = "https://github.com/example/demo/actions/runs/11".into();
     let journal = JournalRegistryFake::default();
     previous.intent_sha256 = "d".repeat(64);
-    record_source_bound_start(&journal, &previous.identity, &previous, root, test_git())?;
+    seed_started_record(&journal, &previous.identity, &previous)?;
     record_journal_intent(
         &journal,
         &previous.identity,

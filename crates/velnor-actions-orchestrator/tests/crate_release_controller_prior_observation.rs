@@ -34,8 +34,8 @@ pub(super) fn prior_upload_recovery_reobserves_registry_without_writes()
 -> Result<(), Box<dyn std::error::Error>> {
     use velnor_actions_orchestrator::crate_release_controller::CrateReleaseObservation;
     use velnor_actions_orchestrator::crate_release_journal::{
-        JournalIntendedMutation, JournalMutationKind, record_journal_intent,
-        record_source_bound_start,
+        JournalIntendedMutation, JournalMutationKind, fixture_storage::seed_started_record,
+        record_journal_intent,
     };
     let temp = tempfile::tempdir()?;
     let root = temp.path();
@@ -57,7 +57,7 @@ pub(super) fn prior_upload_recovery_reobserves_registry_without_writes()
         velnor_actions_contract::canonical_json_bytes(&intent)?,
     ));
     let journal = JournalRegistryFake::default();
-    record_source_bound_start(&journal, &previous.identity, &previous, root, test_git())?;
+    seed_started_record(&journal, &previous.identity, &previous)?;
     record_journal_intent(
         &journal,
         &previous.identity,
@@ -70,7 +70,7 @@ pub(super) fn prior_upload_recovery_reobserves_registry_without_writes()
             kind: JournalMutationKind::Upload,
         },
     )?;
-    record_source_bound_start(&journal, &identity, &current, root, test_git())?;
+    seed_started_record(&journal, &identity, &current)?;
     let input = CrateReleaseObservation {
         source_execution: &crate::UnprivilegedSourceExecution,
         git: test_git(),
@@ -264,7 +264,7 @@ pub(super) fn reconciled_candidate_allows_verified_state_without_mutation_histor
     use velnor_actions_orchestrator::crate_release_controller::{
         CrateReleaseObservation, derive_reconciled_candidate,
     };
-    use velnor_actions_orchestrator::crate_release_journal::record_source_bound_start;
+    use velnor_actions_orchestrator::crate_release_journal::fixture_storage::seed_started_record;
     let temp = tempfile::tempdir()?;
     let root = temp.path();
     let (intent, request, github, registry) = make_fixture(root)?;
@@ -272,7 +272,7 @@ pub(super) fn reconciled_candidate_allows_verified_state_without_mutation_histor
     let admission = prepare_crate_release(&intent, &request, &github, &registry, root)?;
     let (identity, plan) = fixture_journal_plan(root, &intent, &request, &admission)?;
     let journal = JournalRegistryFake::default();
-    record_source_bound_start(&journal, &identity, &plan, root, test_git())?;
+    seed_started_record(&journal, &identity, &plan)?;
     *registry.archive.borrow_mut() = fixture_archive(root)?;
     registry.absent.set(false);
     github.tag_exists.set(true);

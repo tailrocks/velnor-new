@@ -61,7 +61,7 @@ pub(super) fn serial_coordinator_leaves_uncertain_upload_pending_when_not_visibl
         CrateReleaseObservation, UploadAttempt, coordinate_release,
     };
     use crate::crate_release_journal::{
-        JournalMutationPhase, inspect_journal_mutation, record_source_bound_start,
+        JournalMutationPhase, fixture_storage::seed_started_record, inspect_journal_mutation,
     };
     let temp = tempfile::tempdir()?;
     let root = temp.path();
@@ -70,7 +70,7 @@ pub(super) fn serial_coordinator_leaves_uncertain_upload_pending_when_not_visibl
     let admission = prepare_crate_release(&intent, &request, &github, &registry, root)?;
     let (identity, plan) = fixture_journal_plan(root, &intent, &request, &admission)?;
     let journal = JournalRegistryFake::default();
-    record_source_bound_start(&journal, &identity, &plan, root, test_git())?;
+    seed_started_record(&journal, &identity, &plan)?;
     let input = CrateReleaseObservation {
         source_execution: &crate::UnprivilegedSourceExecution,
         git: test_git(),
@@ -115,8 +115,8 @@ pub(super) fn serial_coordinator_recovers_pending_visible_upload_without_uploadi
 -> Result<(), Box<dyn std::error::Error>> {
     use crate::crate_release_controller::{CrateReleaseObservation, coordinate_release};
     use crate::crate_release_journal::{
-        JournalIntendedMutation, JournalMutationKind, record_journal_intent,
-        record_source_bound_start,
+        JournalIntendedMutation, JournalMutationKind, fixture_storage::seed_started_record,
+        record_journal_intent,
     };
     let temp = tempfile::tempdir()?;
     let root = temp.path();
@@ -126,7 +126,7 @@ pub(super) fn serial_coordinator_recovers_pending_visible_upload_without_uploadi
     let admission = prepare_crate_release(&intent, &request, &github, &registry, root)?;
     let (identity, plan) = fixture_journal_plan(root, &intent, &request, &admission)?;
     let journal = JournalRegistryFake::default();
-    record_source_bound_start(&journal, &identity, &plan, root, test_git())?;
+    seed_started_record(&journal, &identity, &plan)?;
     record_journal_intent(
         &journal,
         &identity,

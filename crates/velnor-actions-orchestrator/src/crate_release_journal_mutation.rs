@@ -204,7 +204,10 @@ pub(super) fn valid_mutation(
     if item.kind == JournalMutationKind::Upload
         && matches!(
             receipt.semver_evidence.get(&item.package),
-            Some(crate::crate_release_semver::SemverEvidence::PriorNoBaselinePending { .. })
+            Some(
+                crate::crate_release_semver::SemverEvidence::MetadataOnly { .. }
+                    | crate::crate_release_semver::SemverEvidence::PriorNoBaselinePending { .. }
+            )
         )
     {
         return false;
