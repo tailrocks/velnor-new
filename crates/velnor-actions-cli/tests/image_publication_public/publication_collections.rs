@@ -47,6 +47,10 @@ fn public_publication_selects_the_attempt_artifact_from_later_pages() -> Result<
 #[test]
 fn public_publication_rejects_incomplete_and_ambiguous_artifact_pages_before_writing()
 -> Result<(), Box<dyn Error>> {
+    let scenario = "publication_collections::public_publication_rejects_incomplete_and_ambiguous_artifact_pages_before_writing";
+    if !super::begin_isolated(scenario)? {
+        return Ok(());
+    }
     let cases = [
         (
             json!([{"total_count":2001,"artifacts":[]}]),
@@ -112,6 +116,7 @@ fn public_publication_rejects_incomplete_and_ambiguous_artifact_pages_before_wri
         Ok(())
     })?;
     assert_rejected_before_write(&fixture, "image_publication_artifact_identity")?;
+    super::isolated_worker::record_success("image_publication", scenario)?;
     Ok(())
 }
 
