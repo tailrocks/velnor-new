@@ -29,7 +29,6 @@ enum FreshnessChange {
     FailedRun,
     FailedRequired,
 }
-
 #[test]
 fn public_publication_requires_one_successful_required_job_with_complete_identity()
 -> Result<(), Box<dyn Error>> {
@@ -92,7 +91,6 @@ fn public_publication_requires_one_successful_required_job_with_complete_identit
     super::isolated_worker::record_success("image_publication", scenario)?;
     Ok(())
 }
-
 #[test]
 fn public_publication_reads_all_required_ci_job_pages_and_rejects_cross_page_duplicates()
 -> Result<(), Box<dyn Error>> {
@@ -135,7 +133,6 @@ fn public_publication_reads_all_required_ci_job_pages_and_rejects_cross_page_dup
     assert_eq!(fs::read_dir(&fixture.scratch)?.count(), 1);
     Ok(())
 }
-
 #[test]
 fn public_publication_revalidates_ci_and_main_after_manifest_lookup() -> Result<(), Box<dyn Error>>
 {
@@ -181,7 +178,6 @@ fn public_publication_revalidates_ci_and_main_after_manifest_lookup() -> Result<
     }
     Ok(())
 }
-
 #[test]
 fn public_idempotent_publication_revalidates_before_accepting_existing_tag()
 -> Result<(), Box<dyn Error>> {
