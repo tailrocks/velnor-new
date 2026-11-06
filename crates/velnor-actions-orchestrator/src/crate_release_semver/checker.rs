@@ -101,7 +101,6 @@ pub(super) fn download_baseline<R: CrateRegistryRead>(
         || item.id != baseline.id
         || item.package != package
         || item.num != baseline.version
-        || item.yanked
     {
         return Err(invalid());
     }

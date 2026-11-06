@@ -162,7 +162,8 @@ struct BaselineVersion {
     #[serde(rename = "crate")]
     package: String,
     num: String,
-    yanked: bool,
+    #[serde(rename = "yanked")]
+    _yanked: bool,
     checksum: String,
 }
 
@@ -177,19 +178,14 @@ fn baseline<R: CrateRegistryRead>(
         Err(CrateInventoryError::NotFound) => return Ok(None),
         Err(_) => return Err(invalid()),
     };
-    let versions: Vec<_> = inventory
-        .versions
-        .into_iter()
-        .filter(|(_, entry)| !entry.yanked)
-        .collect();
-    if versions.is_empty() {
+    if inventory.versions.is_empty() {
         return Err(invalid());
     }
     let mut earlier = Vec::new();
-    for (value, entry) in versions {
+    for (value, entry) in inventory.versions {
         let parsed = semver::Version::parse(&value).map_err(|_| invalid())?;
         if parsed.cmp_precedence(&target) == Ordering::Less {
-            earlier.push((parsed, value, entry.id));
+            earlier.push((parsed, value, entry.id, entry.yanked));
         }
     }
     earlier.sort_by(|left, right| left.0.cmp_precedence(&right.0));
@@ -199,9 +195,15 @@ fn baseline<R: CrateRegistryRead>(
     {
         return Err(invalid());
     }
-    earlier
-        .pop()
-        .map(|(_, version, id)| Some(Baseline { version, id }))
+    let selected = earlier
+        .iter()
+        .rposition(|entry| !entry.3)
+        .or_else(|| earlier.len().checked_sub(1));
+    selected
+        .map(|index| {
+            let (_, version, id, _) = earlier.swap_remove(index);
+            Some(Baseline { version, id })
+        })
         .ok_or_else(invalid)
 }
 

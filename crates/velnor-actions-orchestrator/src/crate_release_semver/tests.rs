@@ -48,8 +48,8 @@ fn baseline_requires_authoritative_registry_and_uses_latest_previous_version()
         })
     );
     assert!(baseline(&registry, "demo", "0.0.1").is_err());
-    let yanked = serde_json::json!({"crate":{"id":"demo","name":"demo","versions":[1]},"versions":[{"id":1,"crate":"demo","num":"0.1.0","yanked":true}]}).to_string().into_bytes();
-    assert!(
+    let yanked = serde_json::json!({"crate":{"id":"demo","name":"demo","versions":[1,2,3]},"versions":[{"id":2,"crate":"demo","num":"0.0.9","yanked":true},{"id":3,"crate":"demo","num":"0.2.0","yanked":true},{"id":1,"crate":"demo","num":"0.1.0","yanked":true}]}).to_string().into_bytes();
+    assert_eq!(
         baseline(
             &Registry {
                 status: 200,
@@ -57,8 +57,11 @@ fn baseline_requires_authoritative_registry_and_uses_latest_previous_version()
             },
             "demo",
             "0.1.1"
-        )
-        .is_err()
+        )?,
+        Some(Baseline {
+            version: "0.1.0".into(),
+            id: 1
+        })
     );
     let ambiguous = serde_json::json!({"crate":{"id":"demo","name":"demo","versions":[1,2]},"versions":[{"id":1,"crate":"demo","num":"0.1.0+one","yanked":false},{"id":2,"crate":"demo","num":"0.1.0+two","yanked":false}]}).to_string().into_bytes();
     assert!(
@@ -166,11 +169,14 @@ fn baseline_archive_is_bound_to_registry_identity_and_checksum()
     extract_baseline(&bytes, "demo", "0.1.0", temp.path())?;
     assert_eq!(std::fs::read(temp.path().join("Cargo.toml"))?, manifest);
     let original = registry.detail.clone();
+    let mut yanked_detail: serde_json::Value = serde_json::from_slice(&original)?;
+    yanked_detail["version"]["yanked"] = serde_json::json!(true);
+    registry.detail = serde_json::to_vec(&yanked_detail)?;
+    assert_eq!(download_baseline(&registry, "demo", &previous)?.1, checksum);
     for (field, value) in [
         ("id", serde_json::json!(2)),
         ("crate", serde_json::json!("other")),
         ("num", serde_json::json!("0.1.1")),
-        ("yanked", serde_json::json!(true)),
         ("checksum", serde_json::json!("a".repeat(64))),
     ] {
         let mut detail: serde_json::Value = serde_json::from_slice(&original)?;
