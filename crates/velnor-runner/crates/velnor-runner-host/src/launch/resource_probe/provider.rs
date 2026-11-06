@@ -12,7 +12,10 @@ use crate::error::HostError;
 use crate::journal::{ImageImportState, Journal};
 
 mod archive;
-pub use archive::worker::{WorkerImage, verify_worker_build_source, verify_worker_runtime_config};
+pub use archive::worker::{
+    WorkerImage, verify_worker_attestation_manifest, verify_worker_build_source,
+    verify_worker_runtime_config,
+};
 mod evidence;
 mod failure;
 mod identity;

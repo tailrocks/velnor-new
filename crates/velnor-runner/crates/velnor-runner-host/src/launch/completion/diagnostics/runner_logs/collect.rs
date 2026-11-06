@@ -132,7 +132,7 @@ pub(in crate::launch) fn validate_exec_exit(
     }
     match result.exit_code {
         Some(0) if !archive.is_empty() && archive.len() <= MAX_ARCHIVE_BYTES => Ok(archive),
-        Some(3) if archive.is_empty() => empty_root_archive(),
+        Some(3 | 24) if archive.is_empty() => empty_root_archive(),
         _ => Err(HostError::Docker),
     }
 }

@@ -24,21 +24,21 @@ pub(crate) struct ImageImportIdentity {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ImageImportRequest {
-    pub(super) engine_id: String,
-    pub(super) docker_root_digest: String,
-    pub(super) daemon_architecture: String,
-    pub(super) source_sha: String,
-    pub(super) archive_sha256: String,
-    pub(super) archive_index_digest: String,
-    pub(super) platform: String,
-    pub(super) manifest_digest: String,
-    pub(super) manifest_size: u64,
-    pub(super) config_digest: String,
-    pub(super) image_index_digest: Option<String>,
-    pub(super) image_index_size: Option<u64>,
-    pub(super) load_archive_sha256: Option<String>,
-    pub(super) load_archive_index_digest: Option<String>,
-    pub(super) image_reference: String,
+    pub(crate) engine_id: String,
+    pub(crate) docker_root_digest: String,
+    pub(crate) daemon_architecture: String,
+    pub(crate) source_sha: String,
+    pub(crate) archive_sha256: String,
+    pub(crate) archive_index_digest: String,
+    pub(crate) platform: String,
+    pub(crate) manifest_digest: String,
+    pub(crate) manifest_size: u64,
+    pub(crate) config_digest: String,
+    pub(crate) image_index_digest: Option<String>,
+    pub(crate) image_index_size: Option<u64>,
+    pub(crate) load_archive_sha256: Option<String>,
+    pub(crate) load_archive_index_digest: Option<String>,
+    pub(crate) image_reference: String,
 }
 
 impl ImageImportRequest {

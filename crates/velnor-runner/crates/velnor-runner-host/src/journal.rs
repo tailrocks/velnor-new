@@ -78,7 +78,7 @@ pub(crate) use doctor_probe::{
 };
 pub(crate) use image_import::{
     ImageImportDescriptor, ImageImportIdentity, ImageImportInspection, ImageImportObservation,
-    ImageImportRequest, ImageImportState,
+    ImageImportRecord, ImageImportRequest, ImageImportState,
 };
 pub(crate) use scale_set_create::{
     CreatedScaleSetResponse, ExistingScaleSetObservation, ScaleSetCreateNoEffect,

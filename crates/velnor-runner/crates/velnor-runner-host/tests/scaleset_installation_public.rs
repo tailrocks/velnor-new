@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+#[path = "scaleset_installation_public/attestation_and_logs.rs"]
+mod attestation_and_logs;
 #[path = "scaleset_installation_public/runtime_and_policy.rs"]
 mod runtime_and_policy;
 
@@ -147,6 +149,27 @@ fn slsa_statement(image: WorkerImage, locals: &[&str], source_sha: &str) -> Valu
         };
         vcs.insert(format!("localdir:{name}"), json!(dir_value));
     }
+    let mut request = serde_json::Map::from_iter([
+        ("frontend".to_owned(), json!("dockerfile.v0")),
+        ("locals".to_owned(), json!(locals_json)),
+    ]);
+    if locals.len() > 2 {
+        let mut args = serde_json::Map::from_iter([
+            ("build-arg:VELNOR_SOURCE_SHA".to_owned(), json!(source_sha)),
+            (
+                "frontend.caps".to_owned(),
+                json!("moby.buildkit.frontend.contexts+forward"),
+            ),
+        ]);
+        for name in locals
+            .iter()
+            .filter(|name| !matches!(**name, "context" | "dockerfile"))
+        {
+            args.insert(format!("context:{name}"), json!(format!("local:{name}")));
+        }
+        request.insert("args".to_owned(), Value::Object(args));
+        request.insert("compatibilityVersion".to_owned(), json!(30));
+    }
     json!({
         "_type": "https://in-toto.io/Statement/v0.1",
         "predicateType": "https://slsa.dev/provenance/v1",
@@ -163,10 +186,7 @@ fn slsa_statement(image: WorkerImage, locals: &[&str], source_sha: &str) -> Valu
                     "configSource": {
                         "path": "Dockerfile"
                     },
-                    "request": {
-                        "frontend": "dockerfile.v0",
-                        "locals": locals_json
-                    }
+                    "request": Value::Object(request)
                 },
                 "internalParameters": {
                     "builderPlatform": "linux/amd64"
@@ -196,62 +216,42 @@ const RUNNER_NAMED_LOCALS: [&str; 6] = [
 #[test]
 fn public_verify_worker_build_source_accepts_base_and_named_contexts_and_rejects_mismatches()
 -> TestResult<()> {
-    let runner_base = slsa_statement(WorkerImage::Runner, &["context", "dockerfile"], SOURCE_SHA);
-    verify_worker_build_source(
-        &runner_base,
-        WorkerImage::Runner,
-        SOURCE_SHA,
-        MANIFEST_DIGEST,
-        1024,
-    )?;
-
+    for (image, locals) in [
+        (WorkerImage::Runner, ["context", "dockerfile"].as_slice()),
+        (WorkerImage::Runner, &RUNNER_NAMED_LOCALS),
+        (
+            WorkerImage::Dind,
+            ["context", "dockerfile", "resource_probe"].as_slice(),
+        ),
+    ] {
+        let statement = slsa_statement(image, locals, SOURCE_SHA);
+        verify_worker_build_source(&statement, image, SOURCE_SHA, MANIFEST_DIGEST, 1024)?;
+    }
     let runner_named = slsa_statement(WorkerImage::Runner, &RUNNER_NAMED_LOCALS, SOURCE_SHA);
-    verify_worker_build_source(
-        &runner_named,
-        WorkerImage::Runner,
-        SOURCE_SHA,
-        MANIFEST_DIGEST,
-        1024,
-    )?;
-
-    let dind_named = slsa_statement(
-        WorkerImage::Dind,
-        &["context", "dockerfile", "resource_probe"],
-        SOURCE_SHA,
-    );
-    verify_worker_build_source(
-        &dind_named,
-        WorkerImage::Dind,
-        SOURCE_SHA,
-        MANIFEST_DIGEST,
-        1024,
-    )?;
 
     let dind_with_runner_contexts =
         slsa_statement(WorkerImage::Dind, &RUNNER_NAMED_LOCALS, SOURCE_SHA);
-    assert!(matches!(
-        verify_worker_build_source(
-            &dind_with_runner_contexts,
-            WorkerImage::Dind,
-            SOURCE_SHA,
-            MANIFEST_DIGEST,
-            1024
-        ),
-        Err(HostError::Docker)
-    ));
-
     let mut missing_localdir = runner_named.clone();
     missing_localdir
         .pointer_mut("/predicate/runDetails/metadata/buildkit_metadata/vcs")
         .and_then(Value::as_object_mut)
-        .ok_or_else(|| std::io::Error::other("vcs map"))?
+        .ok_or("vcs map")?
         .remove("localdir:job_start_hook");
-    for (statement, sha) in [
-        (&missing_localdir, SOURCE_SHA),
-        (&runner_named, WRONG_SOURCE_SHA),
+    let mut unexpected_request_key = runner_named.clone();
+    unexpected_request_key["predicate"]["buildDefinition"]["externalParameters"]["request"]["unexpected"] =
+        json!(true);
+    let mut wrong_compat_version = runner_named.clone();
+    wrong_compat_version["predicate"]["buildDefinition"]["externalParameters"]["request"]["compatibilityVersion"] =
+        json!(20);
+    for (image, statement, sha) in [
+        (WorkerImage::Dind, &dind_with_runner_contexts, SOURCE_SHA),
+        (WorkerImage::Runner, &missing_localdir, SOURCE_SHA),
+        (WorkerImage::Runner, &unexpected_request_key, SOURCE_SHA),
+        (WorkerImage::Runner, &wrong_compat_version, SOURCE_SHA),
+        (WorkerImage::Runner, &runner_named, WRONG_SOURCE_SHA),
     ] {
         assert!(matches!(
-            verify_worker_build_source(statement, WorkerImage::Runner, sha, MANIFEST_DIGEST, 1024),
+            verify_worker_build_source(statement, image, sha, MANIFEST_DIGEST, 1024),
             Err(HostError::Docker)
         ));
     }

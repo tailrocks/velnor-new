@@ -9,7 +9,10 @@ use crate::worker::ResourceBudget;
 
 pub(crate) use self::provider::ImageProvider;
 use self::provider::ReleaseImageProvider;
-pub use self::provider::{WorkerImage, verify_worker_build_source, verify_worker_runtime_config};
+pub use self::provider::{
+    WorkerImage, verify_worker_attestation_manifest, verify_worker_build_source,
+    verify_worker_runtime_config,
+};
 
 pub(crate) use self::sample::FreshPressureSample;
 pub(crate) use self::sample::RecoveryObservation;

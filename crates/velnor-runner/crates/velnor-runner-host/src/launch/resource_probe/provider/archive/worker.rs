@@ -17,6 +17,7 @@ pub use model::WorkerImage;
 pub(in crate::launch::resource_probe::provider) use model::{
     DerivedLoadArchive, MAX_WORKER_ARCHIVE_BYTES, ParsedWorkerArchive,
 };
+pub use provenance::verify_worker_attestation_manifest;
 pub use runtime::verify_worker_runtime_config;
 pub use source::verify_worker_build_source;
 pub(in crate::launch::resource_probe::provider) use verify::verify;
