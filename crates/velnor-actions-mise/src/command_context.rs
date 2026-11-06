@@ -3,6 +3,12 @@
 
 use super::{EnvPolicy, MiseError, OsString, PathBuf, proxy_passthrough};
 
+pub(super) const GH_ISOLATION_ENV: [(&str, &str); 3] = [
+    ("HOME", "/proc/self/fd"),
+    ("GH_CONFIG_DIR", "/proc/self/fd"),
+    ("CODESPACES", "true"),
+];
+
 pub(super) fn with_pinned_git(
     env: &[(OsString, OsString)],
     git: &crate::release_git_pin::VerifiedGit,
@@ -49,11 +55,7 @@ pub(super) fn cleared_parent_passthrough(
                         .map(|value| PathBuf::from(value).join("mise").into_os_string())
                 });
             env.extend(data_dir.map(|value| (OsString::from("MISE_DATA_DIR"), value)));
-            env.push((OsString::from("HOME"), OsString::from("/proc/self/fd")));
-            env.push((
-                OsString::from("GH_CONFIG_DIR"),
-                OsString::from("/proc/self/fd"),
-            ));
+            env.extend(super::pairs_of(&GH_ISOLATION_ENV));
             env
         }
         policy if policy.allows_proxy_passthrough() => proxy_passthrough(parent),

@@ -6,6 +6,7 @@ fn gh_api_does_not_inherit_credentials_or_transport_overrides() {
     let parent = [
         ("PATH".into(), "/usr/bin".into()),
         ("HOME".into(), "/tmp/untrusted".into()),
+        ("CODESPACES".into(), "false".into()),
         ("GH_TOKEN".into(), "dummy".into()),
         ("GITHUB_TOKEN".into(), "dummy".into()),
         ("HTTPS_PROXY".into(), "http://127.0.0.1:1234".into()),
@@ -22,9 +23,60 @@ fn gh_api_does_not_inherit_credentials_or_transport_overrides() {
             .iter()
             .any(|(key, value)| key == "GH_CONFIG_DIR" && value == "/proc/self/fd")
     );
+    assert!(
+        child
+            .iter()
+            .any(|(key, value)| key == "CODESPACES" && value == "true")
+    );
     for key in ["GH_TOKEN", "GITHUB_TOKEN", "HTTPS_PROXY", "SSL_CERT_FILE"] {
         assert!(!child.iter().any(|(name, _)| name == key), "{key}");
     }
+}
+
+#[test]
+fn sealed_github_commands_disable_disk_cache_in_both_execution_paths()
+-> Result<(), Box<dyn std::error::Error>> {
+    use std::ffi::OsStr;
+    let exec = crate::PinnedToolExec::new(
+        vec![crate::PinnedTool::Gh],
+        OsStr::new("gh"),
+        vec!["api".into(), "user".into()],
+    )?;
+    let catalog = crate::ToolCatalog::pinned();
+    for command in [
+        exec.command(&catalog)?,
+        exec.command_with_github_token(&catalog, "dummy-token")?,
+    ] {
+        let spawned = command.spawn_env(&[("CODESPACES".into(), "false".into())]);
+        let output = std::process::Command::new("/usr/bin/env")
+            .arg("-0")
+            .env_clear()
+            .envs(spawned)
+            .output()?;
+        assert!(output.status.success());
+        assert!(
+            output
+                .stdout
+                .split(|byte| *byte == 0)
+                .any(|entry| entry == b"CODESPACES=true")
+        );
+        let output = command
+            .command_for(OsStr::new("/usr/bin/env"), &["-0".into()])
+            .output()?;
+        assert!(output.status.success());
+        assert!(
+            output
+                .stdout
+                .split(|byte| *byte == 0)
+                .any(|entry| entry == b"CODESPACES=true")
+        );
+        assert!(
+            command
+                .with_env(&[("CODESPACES".into(), "false".into())])
+                .is_err()
+        );
+    }
+    Ok(())
 }
 
 #[test]
