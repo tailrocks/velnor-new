@@ -25,6 +25,9 @@ use supervisor::SUPERVISOR;
 #[path = "state_select_supervisor.rs"]
 mod supervisor;
 
+#[path = "state_select_units.rs"]
+mod units;
+
 const DEFAULT_REF_EXPR: &str =
     "${{ format('refs/heads/{0}', github.event.repository.default_branch) }}";
 const TOKEN_EXPR: &str = "${{ github.token }}";
@@ -63,6 +66,7 @@ const RUN_GH: &str = r#"run_gh() {
 "#;
 
 const SELECT_HEAD: &str = r#"set -eu
+command -v printenv >/dev/null 2>&1 || exit 1
 case "$RUNNER_TEMP" in /*) ;; *) printf '%s\n' 'RUNNER_TEMP must be absolute' >&2; exit 1 ;; esac
 d="$RUNNER_TEMP/velnor/state-select"
 rm -rf "$d"
@@ -75,6 +79,7 @@ unit_limit="${@UNIT_TIMEOUT_ENV@:-@UNIT_TIMEOUT@}"
 deadline="${@DEADLINE_ENV@:-@DEADLINE@}"
 shape='^s256-[0-9a-f]{64}-s256-[0-9a-f]{64}-s256-[0-9a-f]{64}$'
 export d ref repo signer limit shape unit_limit deadline
+case "${VELNOR_STATE_SELECT_UNIT_COUNT:-}" in @UNIT_COUNT@) ;; *) exit 1 ;; esac
 @RUN_GH@worker='@WORKER@'
 export worker
 unit() {
@@ -87,6 +92,7 @@ select_all() {
   command -v python3 >/dev/null 2>&1 || return 0
   command -v bash >/dev/null 2>&1 || return 0
   python3 -I -c 'import math, os, pathlib, signal, subprocess, sys, time' >/dev/null 2>&1 || return 0
+@REMOVE_UNIT_ENV@
   export VELNOR_STATE_SELECT_DEADLINE="$deadline" VELNOR_STATE_UNIT_TIMEOUT="$unit_limit" VELNOR_STATE_PARALLELISM=@PARALLELISM@ VELNOR_STATE_SELECT_DIR="$d" VELNOR_STATE_SELECT_PREFIX='@STATE_PREFIX@' VELNOR_STATE_SELECT_LIST_LIMIT=@SELECT_LIMIT@
   exec python3 -I -c 'import os; exec(bytes.fromhex(os.environ.pop("VELNOR_STATE_SELECT_SUPERVISOR_HEX")))'
 }
@@ -144,6 +150,7 @@ fn worker(outer_bound: u64) -> Result<String, RenderError> {
 }
 
 struct SelectBounds {
+    units: usize,
     parallelism: usize,
     unit_seconds: u64,
     deadline_seconds: u64,
@@ -159,6 +166,7 @@ impl SelectBounds {
             .min(deadline_seconds / batches)
             .max(1);
         Self {
+            units,
             parallelism,
             unit_seconds,
             deadline_seconds,
@@ -179,6 +187,8 @@ fn head(outer_bound: u64, bounds: &SelectBounds) -> Result<String, RenderError> 
         .replace("@STATE_PREFIX@", &state_prune_prefix())
         .replace("@SELECT_LIMIT@", &STATE_SEAL_SELECT_LIST_LIMIT.to_string())
         .replace("@PARALLELISM@", &bounds.parallelism.to_string())
+        .replace("@UNIT_COUNT@", &bounds.units.to_string())
+        .replace("@REMOVE_UNIT_ENV@", units::REMOVE_UNIT_ENV)
         .replace("@DELIMITER@", OUTPUT_DELIMITER)
         .replace("@SIGNER_PATH@", STATE_SEAL_WORKFLOW_PATH))
 }
@@ -241,7 +251,6 @@ pub fn state_select_step(
         ),
     ]);
     env.insert(SUPERVISOR_ENV.to_owned(), supervisor_hex(&bounds)?);
-    let mut decisions = Vec::with_capacity(roots.len());
     for (ordinal, root) in roots.iter().enumerate() {
         let compat_env = format!("VELNOR_STATE_COMPAT_R{ordinal}");
         let snapshot_env = format!("VELNOR_STATE_SNAPSHOT_R{ordinal}");
@@ -259,21 +268,26 @@ pub fn state_select_step(
                 state_snapshot_output(&root.slug)
             ),
         );
-        decisions.push(format!(
-            "emit {} r{ordinal}\ndecide {} r{ordinal} '{}' \"${{{compat_env}-}}\" \"${{{snapshot_env}-}}\"\n",
-            state_attested_output(root.unit.as_str(), root.slug.as_str()),
-            state_produce_output(root.unit.as_str(), root.slug.as_str()),
-            root.prefix(),
-        ));
-        sections.push(format!(
-            "unit '{}' r{ordinal} '{}' '{}' \"${{{compat_env}-}}\" \"${{{snapshot_env}-}}\"\n",
+        let record = format!(
+            "{} {} {}",
             root.prefix(),
             state_attested_output(root.unit.as_str(), root.slug.as_str()),
             state_produce_output(root.unit.as_str(), root.slug.as_str()),
-        ));
+        );
+        if record.len() > 512 {
+            return Err(RenderError::InvalidWorkflow(
+                "state_select:unit_record_too_large".to_owned(),
+            ));
+        }
+        env.insert(format!("VELNOR_STATE_SELECT_UNIT_R{ordinal}"), record);
     }
+    env.insert(
+        "VELNOR_STATE_SELECT_UNIT_COUNT".to_owned(),
+        roots.len().to_string(),
+    );
+    sections.push(units::PREPARE_UNITS.to_owned());
     sections.push("select_all\n".to_owned());
-    sections.extend(decisions);
+    sections.push(units::COLD_UNITS.to_owned());
     let script = sections.concat();
     let mut step = crate::steps::ambient_shell_step(
         STEP_NAME,

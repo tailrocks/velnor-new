@@ -4,6 +4,15 @@
 pub(super) const GH: &str = r#"#!/bin/sh
 d="${FAKE_GH_DIR:?}"
 [ -z "${VELNOR_STATE_SELECT_SUPERVISOR_HEX-}" ] || : > "$d/supervisor-payload-leaked"
+[ -n "${GH_TOKEN-}" ] || : > "$d/supervisor-payload-leaked"
+i=0
+while [ "$i" -lt 65 ]; do
+  for name in "VELNOR_STATE_SELECT_UNIT_R$i" "VELNOR_STATE_COMPAT_R$i" "VELNOR_STATE_SNAPSHOT_R$i"; do
+    if printenv "$name" >/dev/null 2>&1; then : > "$d/supervisor-payload-leaked"; fi
+  done
+  i=$((i + 1))
+done
+[ -z "${VELNOR_STATE_SELECT_UNIT_COUNT-}" ] || : > "$d/supervisor-payload-leaked"
 mode=ok
 [ -f "$d/mode" ] && read -r mode < "$d/mode"
 case "$mode" in

@@ -12,7 +12,7 @@ use velnor_actions_workflow_renderer::plan_sources::state_select::{SealRoot, sta
 use crate::gc1_scene::{Scene, fail};
 #[cfg(target_os = "linux")]
 use crate::gc1_seal_clock::SupervisorClock;
-use crate::gc1_seal_support::{Attestation, Gh, MAIN, REPO, script_of};
+use crate::gc1_seal_support::{Attestation, Gh, MAIN, REPO, script_and_env_of};
 use crate::gc1_seal_units::{unit_compat, unit_key, unit_snapshot};
 
 #[test]
@@ -37,31 +37,41 @@ fn default_unit_deadline_keeps_valid_candidates_after_eighty_seconds() -> Result
         unit: StateUnit::Union,
         slug: root_slug.clone(),
     }];
-    let script = script_of(&state_select_step(&roots, JobTimeout::new(10)?)?)?;
+    let (script, step_env) = script_and_env_of(&state_select_step(&roots, JobTimeout::new(10)?)?)?;
     let dir = gh.dir();
     let compat = unit_compat(0);
     let snapshot = unit_snapshot(0);
-    let env = [
-        ("FAKE_GH_DIR", dir.as_str()),
-        ("FAKE_GH_CLOCK", "1"),
-        ("FAKE_GH_CLOCK_STEP", "40"),
+    let mut env = vec![
+        ("FAKE_GH_DIR".to_owned(), dir),
+        ("FAKE_GH_CLOCK".to_owned(), "1".to_owned()),
+        ("FAKE_GH_CLOCK_STEP".to_owned(), "40".to_owned()),
         (
-            "FAKE_REAL_PYTHON3",
+            "FAKE_REAL_PYTHON3".to_owned(),
             clock
                 .real_python()
                 .to_str()
-                .ok_or_else(|| fail("invalid Python path"))?,
+                .ok_or_else(|| fail("invalid Python path"))?
+                .to_owned(),
         ),
-        ("GITHUB_REPOSITORY", REPO),
+        ("GITHUB_REPOSITORY".to_owned(), REPO.to_owned()),
         (
-            "GITHUB_WORKFLOW_REF",
-            "tailrocks/velnor-new/.github/workflows/ci.yml@refs/heads/main",
+            "GITHUB_WORKFLOW_REF".to_owned(),
+            "tailrocks/velnor-new/.github/workflows/ci.yml@refs/heads/main".to_owned(),
         ),
-        ("GH_TOKEN", "fixture"),
-        ("VELNOR_STATE_COMPAT_R0", compat.as_str()),
-        ("VELNOR_STATE_SNAPSHOT_R0", snapshot.as_str()),
+        ("GH_TOKEN".to_owned(), "fixture".to_owned()),
+        (
+            "VELNOR_DEFAULT_REF".to_owned(),
+            "refs/heads/main".to_owned(),
+        ),
+        ("VELNOR_STATE_COMPAT_R0".to_owned(), compat),
+        ("VELNOR_STATE_SNAPSHOT_R0".to_owned(), snapshot),
     ];
-    scene.run_script(&script, &env, None)?;
+    env.extend(step_env);
+    let pairs: Vec<(&str, &str)> = env
+        .iter()
+        .map(|(key, value)| (key.as_str(), value.as_str()))
+        .collect();
+    scene.run_script(&script, &pairs, None)?;
 
     let acknowledgments = fs::read_dir(gh.dir())?
         .filter_map(Result::ok)

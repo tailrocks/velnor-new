@@ -258,22 +258,32 @@ pub(crate) fn key(compat: char, snapshot: char, payload: char) -> Result<String,
     ))
 }
 
-pub(crate) fn script_of(step: &Step) -> Result<String, Box<dyn Error>> {
+pub(crate) fn script_and_env_of(
+    step: &Step,
+) -> Result<(String, Vec<(String, String)>), Box<dyn Error>> {
     match &step.kind {
-        StepKind::Shell { run, .. } => run
-            .get(3)
-            .cloned()
-            .ok_or_else(|| fail("shell step lost its script")),
+        StepKind::Shell { run, env } => {
+            let script = run
+                .get(3)
+                .cloned()
+                .ok_or_else(|| fail("shell step lost its script"))?;
+            let env = env
+                .iter()
+                .filter(|(_, value)| !value.contains("${{"))
+                .map(|(key, value)| (key.clone(), value.clone()))
+                .collect();
+            Ok((script, env))
+        }
         _ => Err(fail("expected a shell step")),
     }
 }
 
-pub(crate) fn select_script(root: &str) -> Result<String, Box<dyn Error>> {
+pub(crate) fn select_script(root: &str) -> Result<(String, Vec<(String, String)>), Box<dyn Error>> {
     let root = SealRoot {
         unit: StateUnit::Union,
         slug: RootSlug::from_root(root)?,
     };
-    script_of(&state_select_step(&[root], JobTimeout::PLAN)?)
+    script_and_env_of(&state_select_step(&[root], JobTimeout::PLAN)?)
 }
 
 pub(crate) fn run_select(
@@ -286,15 +296,35 @@ pub(crate) fn run_select(
         Err(error) if error.kind() != std::io::ErrorKind::NotFound => return Err(error.into()),
         _ => {}
     }
-    let dir = gh.dir();
+    let (script, step_env) = select_script(root)?;
     let mut env = vec![
-        ("FAKE_GH_DIR", dir.as_str()),
-        ("GITHUB_REPOSITORY", REPO),
-        ("GITHUB_WORKFLOW_REF", OTHER_WORKFLOW_REF),
-        ("GH_TOKEN", "fixture"),
+        ("FAKE_GH_DIR".to_owned(), gh.dir()),
+        ("GITHUB_REPOSITORY".to_owned(), REPO.to_owned()),
+        (
+            "GITHUB_WORKFLOW_REF".to_owned(),
+            OTHER_WORKFLOW_REF.to_owned(),
+        ),
+        ("GH_TOKEN".to_owned(), "fixture".to_owned()),
+        ("VELNOR_DEFAULT_REF".to_owned(), MAIN.to_owned()),
     ];
-    env.extend_from_slice(extra);
-    scene.run_script(&select_script(root)?, &env, None)
+    env.extend(step_env);
+    env.extend(
+        extra
+            .iter()
+            .map(|(key, value)| ((*key).to_owned(), (*value).to_owned())),
+    );
+    let pairs: Vec<(&str, &str)> = env
+        .iter()
+        .map(|(key, value)| (key.as_str(), value.as_str()))
+        .collect();
+    let output = scene.run_script(&script, &pairs, None)?;
+    if PathBuf::from(gh.dir())
+        .join("supervisor-payload-leaked")
+        .exists()
+    {
+        return Err(fail("selector internal environment reached a gh child"));
+    }
+    Ok(output)
 }
 
 pub(crate) fn selected(scene: &Scene, root: &str) -> Result<Vec<String>, Box<dyn Error>> {

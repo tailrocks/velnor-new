@@ -181,7 +181,7 @@ pub(crate) fn run_select_units_with_timeout(
         .join("supervisor-payload-leaked")
         .exists()
     {
-        return Err(fail("the supervisor payload reached a gh child"));
+        return Err(fail("selector internal environment reached a gh child"));
     }
     Ok(output)
 }
@@ -232,6 +232,10 @@ fn select_script_env(
             OTHER_WORKFLOW_REF.to_owned(),
         ),
         ("GH_TOKEN".to_owned(), "fixture".to_owned()),
+        (
+            "VELNOR_DEFAULT_REF".to_owned(),
+            "refs/heads/main".to_owned(),
+        ),
     ];
     env.extend(
         step_env

@@ -9,7 +9,7 @@ use velnor_actions_contract::workflow::cache_family::{
     CacheFamily, RootSlug, StateUnit, outer_entry_bound,
 };
 use velnor_actions_contract::workflow::state_seal::{
-    STATE_SEAL_LIST_LIMIT, STATE_SEAL_VERIFY_LIMIT,
+    STATE_SEAL_LIST_LIMIT, STATE_SEAL_VERIFY_LIMIT, state_attested_output, state_produce_output,
 };
 
 use crate::gc1_scene::{Scene, fail};
@@ -37,6 +37,21 @@ fn selector_keeps_supervisor_in_static_environment_and_loader_in_run() -> Result
     let StepKind::Shell { run, env } = step.kind else {
         return Err(fail("selector step is not a shell step"));
     };
+    let expected_record = format!(
+        "{} {} {}",
+        scope(StateUnit::Union, ROOT)?.prefix(),
+        state_attested_output("union", "root"),
+        state_produce_output("union", "root")
+    );
+    if env
+        .get("VELNOR_STATE_SELECT_UNIT_COUNT")
+        .map(String::as_str)
+        != Some("1")
+        || env.get("VELNOR_STATE_SELECT_UNIT_R0").map(String::as_str)
+            != Some(expected_record.as_str())
+    {
+        return Err(fail("selector typed unit manifest differs from its root"));
+    }
     let payload = env
         .get("VELNOR_STATE_SELECT_SUPERVISOR_HEX")
         .ok_or_else(|| fail("selector supervisor environment is absent"))?;

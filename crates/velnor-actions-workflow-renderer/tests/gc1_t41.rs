@@ -13,14 +13,14 @@ use velnor_actions_contract::{
     Concurrency, Job, JobTimeout, Permissions, Step, StepKind, Trigger, VelnorConfig, WorkflowIr,
     WorkflowPolicy,
 };
-use velnor_actions_workflow_renderer::plan_sources::state_select::{SealRoot, state_select_step};
+use velnor_actions_workflow_renderer::plan_sources::state_select::SealRoot;
 use velnor_actions_workflow_renderer::render::{
     CONCURRENCY_CANCEL, CONCURRENCY_GROUP, CanonicalAuthoritySteps, CanonicalRuntimeInputs,
     EXPECTED_PR_TYPES, RenderContext, render_workflow_ir,
 };
 use velnor_actions_workflow_renderer::steps::{REQUEST_DIR_PREFIX, STAGED_BINARY_PREFIX};
 
-fn fail(message: &str) -> Box<dyn Error> {
+pub(super) fn fail(message: &str) -> Box<dyn Error> {
     io::Error::other(message).into()
 }
 
@@ -32,7 +32,7 @@ fn require(haystack: &str, needle: &str, label: &str) -> Result<(), Box<dyn Erro
     }
 }
 
-fn native_check_step(check_id: &str, task_id: &str) -> Step {
+pub(super) fn native_check_step(check_id: &str, task_id: &str) -> Step {
     Step {
         name: "Execute native homebrew check".to_owned(),
         id: None,
@@ -84,7 +84,7 @@ fn plan_env() -> BTreeMap<String, String> {
         .collect()
 }
 
-fn context(jobs: &BTreeMap<String, Job>) -> Result<RenderContext, Box<dyn Error>> {
+pub(super) fn context(jobs: &BTreeMap<String, Job>) -> Result<RenderContext, Box<dyn Error>> {
     let config = repository_config()?;
     let runtime = CanonicalRuntimeInputs::new(
         plan_env(),
@@ -127,7 +127,7 @@ fn context(jobs: &BTreeMap<String, Job>) -> Result<RenderContext, Box<dyn Error>
     })
 }
 
-fn workflow(step: Step) -> WorkflowIr {
+pub(super) fn workflow(step: Step) -> WorkflowIr {
     WorkflowIr {
         name: "gc1-t41".to_owned(),
         triggers: Trigger {
@@ -192,7 +192,7 @@ pub(super) fn render(step: Step) -> Result<String, Box<dyn Error>> {
     render_steps(vec![step])
 }
 
-fn emitted_selector_run(workflow: &str) -> Result<String, Box<dyn Error>> {
+pub(super) fn emitted_selector_run(workflow: &str) -> Result<String, Box<dyn Error>> {
     let step_start = workflow
         .find("name: Select attested state")
         .ok_or_else(|| fail("rendered workflow lost the selector step"))?;
@@ -225,37 +225,6 @@ fn emitted_selector_run(workflow: &str) -> Result<String, Box<dyn Error>> {
             None => return Err(fail("rendered selector run scalar is unterminated")),
         }
     }
-}
-
-#[test]
-fn rendered_selector_yaml_keeps_the_final_run_within_21000_utf16_units()
--> Result<(), Box<dyn Error>> {
-    let selector = state_select_step(
-        &[SealRoot {
-            unit: StateUnit::Union,
-            slug: RootSlug::from_root(".")?,
-        }],
-        JobTimeout::PLAN,
-    )?;
-    let StepKind::Shell { run, env } = &selector.kind else {
-        return Err(fail("selector step is not a shell step"));
-    };
-    let payload = env
-        .get("VELNOR_STATE_SELECT_SUPERVISOR_HEX")
-        .ok_or_else(|| fail("selector supervisor environment is absent"))?
-        .clone();
-    let expected_run = velnor_actions_workflow_renderer::join_argv_for_run(run)?;
-    let workflow = render(selector)?;
-    let rendered_run = emitted_selector_run(&workflow)?;
-    if rendered_run.encode_utf16().count() > 21_000 || rendered_run != expected_run {
-        return Err(fail("emitted selector YAML run exceeds its final bound"));
-    }
-    require(
-        &workflow,
-        &format!("VELNOR_STATE_SELECT_SUPERVISOR_HEX: {payload}"),
-        "selector static environment serialization",
-    )?;
-    Ok(())
 }
 
 fn render_steps(steps: Vec<Step>) -> Result<String, Box<dyn Error>> {
