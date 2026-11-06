@@ -201,6 +201,14 @@ pub(super) fn valid_mutation(
     receipt: &JournalReceipt,
     previous: Option<&JournalMutation>,
 ) -> bool {
+    if item.kind == JournalMutationKind::Upload
+        && matches!(
+            receipt.semver_evidence.get(&item.package),
+            Some(crate::crate_release_semver::SemverEvidence::PriorNoBaselinePending { .. })
+        )
+    {
+        return false;
+    }
     match (&item.phase, item.kind, &item.semver_evidence) {
         (JournalMutationPhase::Intended, JournalMutationKind::Upload, Some(evidence))
             if evidence.valid_for(&item.version) => {}

@@ -86,6 +86,48 @@ pub(super) fn verify_new_crate_prior_intention(
     )?;
     assert!(inspect_prior_history(&journal, &prior.identity, &current, root, test_git()).is_ok());
     reject_changed_new_crate_result(&journal, &prior, &current, root)?;
+    reject_pending_upload(&journal, &current, root)?;
+    Ok(())
+}
+
+fn reject_pending_upload(
+    journal: &Registry,
+    current: &JournalReceipt,
+    root: &std::path::Path,
+) -> Result<(), Box<dyn std::error::Error>> {
+    use crate::crate_release_journal::{
+        JournalIntendedMutation, JournalMutationKind, record_journal_intent,
+        record_source_bound_start,
+    };
+    use crate::crate_release_semver::SemverEvidence;
+    record_source_bound_start(journal, &current.identity, current, root, test_git())?;
+    let counts = (
+        journal.refs.borrow().len(),
+        journal.tags.borrow().len(),
+        journal.blobs.borrow().len(),
+    );
+    let forged = JournalIntendedMutation {
+        sequence: 1,
+        package: "demo-crate".into(),
+        version: "0.1.1".into(),
+        kind: JournalMutationKind::Upload,
+        semver_evidence: Some(SemverEvidence::NoBaseline {
+            checker_sha256: "bc9eb06ce04e97d6160c875ffdee1f6e56793e423dea025f344826be03e66829"
+                .into(),
+        }),
+    };
+    assert!(
+        record_journal_intent(journal, &current.identity, current, &forged).is_err(),
+        "pending historical upload must not authorize another upload"
+    );
+    assert_eq!(
+        counts,
+        (
+            journal.refs.borrow().len(),
+            journal.tags.borrow().len(),
+            journal.blobs.borrow().len()
+        )
+    );
     Ok(())
 }
 
