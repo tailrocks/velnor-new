@@ -50,7 +50,12 @@ pub(super) fn build_job_candidate(
         .map_err(|_| internal("image_candidate_deadline"))?;
     let inputs = prepare_inputs(request)?;
     let context = prepare_context(&inputs)?;
-    let builder = run_build(&context, &inputs.lock, request.deadline)?;
+    let builder = run_build(
+        &context,
+        &inputs.lock,
+        &request.source_commit,
+        request.deadline,
+    )?;
     let record = build_record(request, inputs, &context.archive, builder)?;
     publish_candidate(&context, request, &record)
 }
@@ -132,6 +137,7 @@ fn prepare_context(inputs: &CandidateInputs) -> Result<BuildContext, Orchestrato
 fn run_build(
     context: &BuildContext,
     lock: &BuildxLock,
+    source_commit: &str,
     deadline: CheckDeadline,
 ) -> Result<String, OrchestratorError> {
     let version = ImageCandidateCommand::buildx_version(&context.docker_config)
@@ -159,6 +165,7 @@ fn run_build(
             .ok_or_else(|| internal("image_candidate_context"))?,
         &context.archive,
         &context.docker_config,
+        source_commit,
     )
     .map_err(|_| internal("image_candidate_build_command"))?;
     ImageCandidateCommand::run(&command, deadline)

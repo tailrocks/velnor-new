@@ -11,8 +11,19 @@ use velnor_actions_contract::JobTimeout;
 use super::features::{
     CHECKOUT_USES, base, finish, identified_publish_step, run_step, source_step,
 };
-use super::{Schema2WorkflowRequest, generator_release, product_release_family};
+use super::{
+    Schema2WorkflowRequest, generator_release, product_release_family,
+    product_release_family::ARTIFACT_ID_GUARD_STEP_ID,
+};
 use velnor_actions_contract::ReleaseTarget;
+
+#[path = "schema2_release_artifact_helpers.rs"]
+mod artifact_helpers;
+use artifact_helpers::{
+    attest_permissions, attest_step, build_permissions, checkout_step, document,
+    download_by_id_step, publish_permissions, release_command, subject_list, upload_step,
+    validate_artifact_id_step, with_needs, with_permissions,
+};
 
 const MACOS_RUNS_ON: &str = "macos-15";
 const ASSET_DIR: &str = "assets";
@@ -21,6 +32,13 @@ const RUNNER_TAR: &str = "velnor-runner-linux-amd64.tar";
 const DIND_TAR: &str = "velnor-dind-linux-amd64.tar";
 const RESOURCE_PROBE_TAR: &str = "velnor-resource-probe-linux-amd64.tar";
 const RESOURCE_PROBE_MANIFEST: &str = "RESOURCE_PROBE_MANIFEST.json";
+const IMAGE_ASSET_ARTIFACT: &str = "image-assets-${{ github.run_attempt }}";
+const BINARY_ASSET_ARTIFACT: &str = "binary-assets-${{ github.run_attempt }}";
+const UPLOAD_ASSETS_STEP_ID: &str = "upload-assets";
+const IMAGE_ASSET_ARTIFACT_ID: &str = "${{ needs.build-images.outputs.artifact_id }}";
+const BINARY_ASSET_ARTIFACT_ID: &str = "${{ needs.build-binary.outputs.artifact_id }}";
+const IMAGE_ATTESTED_ARTIFACT_ID: &str = "${{ needs.attest-images.outputs.artifact_id }}";
+const BINARY_ATTESTED_ARTIFACT_ID: &str = "${{ needs.attest-binary.outputs.artifact_id }}";
 const HOST_BIN: &str = "velnor-host";
 const ATTESTATION_HELPER_BIN: &str = "velnor-runner-attestation-helper";
 const LICENSE: &str = "LICENSE";
@@ -96,21 +114,22 @@ pub(super) fn image_release(request: &Schema2WorkflowRequest) -> Result<Yaml, Re
     Ok(document(
         "Image release",
         vec![
-            build_job(
-                "build-images",
-                "Build runner images",
-                hosted.clone(),
-                JobTimeout::PRODUCT_IMAGE_BUILD,
-                build_steps,
-                "Upload image assets",
-                &files,
-            ),
+            build_job(BuildJob {
+                id: "build-images",
+                name: "Build runner images",
+                runs_on: hosted.clone(),
+                timeout: JobTimeout::PRODUCT_IMAGE_BUILD,
+                steps: build_steps,
+                upload_name: "Upload image assets",
+                artifact: IMAGE_ASSET_ARTIFACT,
+                files: &files,
+            }),
             attest_job(
                 "attest-images",
                 "Attest runner images",
                 hosted.clone(),
                 "build-images",
-                "image-assets",
+                IMAGE_ASSET_ARTIFACT_ID,
                 &files,
             ),
             publish_job(
@@ -119,7 +138,7 @@ pub(super) fn image_release(request: &Schema2WorkflowRequest) -> Result<Yaml, Re
                     id: "publish-images",
                     name: "Publish runner images",
                     needs: "attest-images",
-                    artifact: "image-assets",
+                    artifact: IMAGE_ATTESTED_ARTIFACT_ID,
                     prefix: "runner",
                     notes: "Runner image assets built from ${GITHUB_SHA}.",
                     files: &files,
@@ -145,12 +164,12 @@ pub(super) fn macos_binary_release(request: &Schema2WorkflowRequest) -> Result<Y
     Ok(document(
         "macOS binary release",
         vec![
-            build_job(
-                "build-binary",
-                "Build velnor-host",
-                macos.clone(),
-                JobTimeout::PRODUCT_COMPILER,
-                vec![
+            build_job(BuildJob {
+                id: "build-binary",
+                name: "Build velnor-host",
+                runs_on: macos.clone(),
+                timeout: JobTimeout::PRODUCT_COMPILER,
+                steps: vec![
                     generator_release::mise_setup_step(pins, ReleaseTarget::MacosArm64)?,
                     run_step("Install pinned Rust and MBX", &install),
                     generator_release::verify_rust_step(pins)?,
@@ -158,15 +177,16 @@ pub(super) fn macos_binary_release(request: &Schema2WorkflowRequest) -> Result<Y
                     run_step("Verify Mach-O architecture", BINARY_VERIFY),
                     run_step("Checksum built bytes", BINARY_SUM),
                 ],
-                "Upload binary asset",
-                &files,
-            ),
+                upload_name: "Upload binary asset",
+                artifact: BINARY_ASSET_ARTIFACT,
+                files: &files,
+            }),
             attest_job(
                 "attest-binary",
                 "Attest velnor-host",
                 macos.clone(),
                 "build-binary",
-                "binary-assets",
+                BINARY_ASSET_ARTIFACT_ID,
                 &files,
             ),
             publish_job(
@@ -175,7 +195,7 @@ pub(super) fn macos_binary_release(request: &Schema2WorkflowRequest) -> Result<Y
                     id: "publish-binary",
                     name: "Publish velnor-host",
                     needs: "attest-binary",
-                    artifact: "binary-assets",
+                    artifact: BINARY_ATTESTED_ARTIFACT_ID,
                     prefix: "binary",
                     notes: "velnor-host built from ${GITHUB_SHA}.",
                     files: &files,
@@ -185,23 +205,35 @@ pub(super) fn macos_binary_release(request: &Schema2WorkflowRequest) -> Result<Y
     ))
 }
 
-fn build_job(
-    id: &str,
-    name: &str,
+struct BuildJob<'a> {
+    id: &'a str,
+    name: &'a str,
     runs_on: Yaml,
     timeout: JobTimeout,
-    mut steps: Vec<Yaml>,
-    upload_name: &str,
-    files: &[&str],
-) -> (String, Yaml) {
+    steps: Vec<Yaml>,
+    upload_name: &'a str,
+    artifact: &'a str,
+    files: &'a [&'a str],
+}
+
+fn build_job(spec: BuildJob<'_>) -> (String, Yaml) {
     let mut prefixed = vec![checkout_step()];
-    prefixed.append(&mut steps);
-    prefixed.push(upload_step(upload_name, artifact_name(id), files));
-    finish(
-        id,
-        with_permissions(base(name, runs_on, timeout), build_permissions()),
-        prefixed,
-    )
+    prefixed.extend(spec.steps);
+    prefixed.push(upload_step(spec.upload_name, spec.artifact, spec.files));
+    let mut fields = with_permissions(
+        base(spec.name, spec.runs_on, spec.timeout),
+        build_permissions(),
+    );
+    fields.push((
+        "outputs".to_owned(),
+        Yaml::Map(vec![(
+            "artifact_id".to_owned(),
+            Yaml::str(format!(
+                "${{{{ steps.{UPLOAD_ASSETS_STEP_ID}.outputs.artifact-id }}}}"
+            )),
+        )]),
+    ));
+    finish(spec.id, fields, prefixed)
 }
 
 fn attest_job(
@@ -212,16 +244,25 @@ fn attest_job(
     artifact: &str,
     files: &[&str],
 ) -> (String, Yaml) {
+    let mut fields = with_needs(
+        with_permissions(
+            base(name, runs_on, JobTimeout::DEFAULT),
+            attest_permissions(),
+        ),
+        needs,
+    );
+    fields.push((
+        "outputs".to_owned(),
+        Yaml::Map(vec![("artifact_id".to_owned(), Yaml::str(artifact))]),
+    ));
     finish(
         id,
-        with_needs(
-            with_permissions(
-                base(name, runs_on, JobTimeout::DEFAULT),
-                attest_permissions(),
-            ),
-            needs,
-        ),
-        vec![download_step(artifact), attest_step(&subject_list(files))],
+        fields,
+        vec![
+            validate_artifact_id_step(artifact),
+            download_by_id_step(artifact),
+            attest_step(&subject_list(files)),
+        ],
     )
 }
 
@@ -247,148 +288,12 @@ fn publish_job(runs_on: Yaml, spec: &Publish<'_>) -> (String, Yaml) {
         ),
         vec![
             checkout_step(),
-            download_step(spec.artifact),
+            validate_artifact_id_step(spec.artifact),
+            download_by_id_step(spec.artifact),
             identified_publish_step(
                 product_release_family::PUBLISH_STEP_ID,
                 &release_command(spec.prefix, spec.notes, spec.files),
             ),
         ],
     )
-}
-
-fn artifact_name(build_id: &str) -> &'static str {
-    if build_id.ends_with("images") {
-        "image-assets"
-    } else {
-        "binary-assets"
-    }
-}
-
-fn checkout_step() -> Yaml {
-    Yaml::Map(vec![
-        ("name".to_owned(), Yaml::str("Check out")),
-        ("uses".to_owned(), Yaml::str(CHECKOUT_USES)),
-        (
-            "with".to_owned(),
-            Yaml::Map(vec![
-                ("fetch-depth".to_owned(), Yaml::str("1")),
-                ("persist-credentials".to_owned(), Yaml::str("false")),
-            ]),
-        ),
-    ])
-}
-
-fn upload_step(name: &str, artifact: &str, files: &[&str]) -> Yaml {
-    Yaml::Map(vec![
-        ("name".to_owned(), Yaml::str(name)),
-        ("uses".to_owned(), Yaml::str(UPLOAD_ARTIFACT_USES)),
-        (
-            "with".to_owned(),
-            Yaml::Map(vec![
-                ("if-no-files-found".to_owned(), Yaml::str("error")),
-                ("name".to_owned(), Yaml::str(artifact)),
-                ("path".to_owned(), Yaml::str(newline_list(files))),
-                ("retention-days".to_owned(), Yaml::Int(1)),
-            ]),
-        ),
-    ])
-}
-
-fn download_step(artifact: &str) -> Yaml {
-    Yaml::Map(vec![
-        ("name".to_owned(), Yaml::str("Download built assets")),
-        ("uses".to_owned(), Yaml::str(DOWNLOAD_ARTIFACT_USES)),
-        (
-            "with".to_owned(),
-            Yaml::Map(vec![
-                ("name".to_owned(), Yaml::str(artifact)),
-                ("path".to_owned(), Yaml::str(ASSET_DIR)),
-            ]),
-        ),
-    ])
-}
-
-fn attest_step(subjects: &str) -> Yaml {
-    Yaml::Map(vec![
-        ("name".to_owned(), Yaml::str("Attest built artifacts")),
-        ("uses".to_owned(), Yaml::str(ATTEST_BUILD_PROVENANCE_USES)),
-        (
-            "with".to_owned(),
-            Yaml::Map(vec![("subject-path".to_owned(), Yaml::str(subjects))]),
-        ),
-    ])
-}
-
-fn with_permissions(mut fields: Vec<(String, Yaml)>, perms: Yaml) -> Vec<(String, Yaml)> {
-    fields.push(("permissions".to_owned(), perms));
-    fields
-}
-
-fn with_needs(mut fields: Vec<(String, Yaml)>, needs: &str) -> Vec<(String, Yaml)> {
-    fields.push((
-        "needs".to_owned(),
-        Yaml::Seq(vec![Yaml::str(needs.to_owned())]),
-    ));
-    fields
-}
-
-fn build_permissions() -> Yaml {
-    perm(&[("actions", "write"), ("contents", "read")])
-}
-
-fn attest_permissions() -> Yaml {
-    perm(&[
-        ("actions", "read"),
-        ("artifact-metadata", "write"),
-        ("attestations", "write"),
-        ("contents", "read"),
-        ("id-token", "write"),
-    ])
-}
-
-fn publish_permissions() -> Yaml {
-    perm(&[("actions", "read"), ("contents", "write")])
-}
-
-fn perm(pairs: &[(&str, &str)]) -> Yaml {
-    Yaml::Map(
-        pairs
-            .iter()
-            .map(|(key, value)| ((*key).to_owned(), Yaml::str(*value)))
-            .collect(),
-    )
-}
-
-fn subject_list(files: &[&str]) -> String {
-    files
-        .iter()
-        .map(|file| format!("{ASSET_DIR}/{file}"))
-        .collect::<Vec<_>>()
-        .join("\n")
-}
-
-fn newline_list(files: &[&str]) -> String {
-    files.join("\n")
-}
-
-fn release_command(prefix: &str, notes: &str, files: &[&str]) -> String {
-    format!(
-        "set -eu\ncd {ASSET_DIR}\ntag=\"{prefix}-${{GITHUB_SHA}}\"\ngh release create \"$tag\" -R \"${{GITHUB_REPOSITORY}}\" --target \"$GITHUB_SHA\" --title \"$tag\" --latest=false --notes \"{notes}\" {}",
-        files.join(" ")
-    )
-}
-
-fn document(name: &str, jobs: Vec<(String, Yaml)>) -> Yaml {
-    Yaml::Map(vec![
-        ("name".to_owned(), Yaml::str(name)),
-        (
-            "on".to_owned(),
-            Yaml::Map(vec![("workflow_dispatch".to_owned(), Yaml::Map(vec![]))]),
-        ),
-        (
-            "permissions".to_owned(),
-            Yaml::Map(vec![("contents".to_owned(), Yaml::str("read"))]),
-        ),
-        ("jobs".to_owned(), Yaml::Map(jobs)),
-    ])
 }

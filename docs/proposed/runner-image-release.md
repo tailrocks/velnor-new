@@ -34,8 +34,10 @@ docker build --platform linux/amd64 -t velnor-dind:29.9.1 images/dind
 Publication uses the shared Rust `image-maintenance publish-image` operation
 for these three packages and `ghcr.io/tailrocks/velnor-job`. It reuses the
 existing pinned Crane tool, credential login, bounded process runner, and OCI
-archive guard. Job-image evidence keeps its strict legacy source/workflow
-contract. The current GitHub Release workflow remains active until the new
+archive guard. Job-image publication authenticates a successful CI producer
+and a separate existing candidate attestor that signs the exact CI artifact,
+record, and source closure. The attestor must consume that artifact without
+rebuilding it. The current GitHub Release workflow remains active until the new
 Runner-family producer and consumer are wired together; it is not a fallback
 after GHCR cutover.
 
@@ -43,15 +45,24 @@ The producer writes one `velnor.runner-image-publication.v1` record per image:
 `runner-image-publication.json`, `dind-image-publication.json`, or
 `resource-probe-image-publication.json`. Each closed record binds its archive
 and OCI graph to the selected source inputs and exact committed runner lock.
-Its `workflow` names the `product-release.yml` caller run, and
-`referenced_workflow` names the `product-release-images.yml` callee ref and
-resolved SHA. The attestation signer is the callee. Verification binds
-`buildSignerURI` and the certificate subject alternative name to the callee
-workflow ref, and binds `buildConfigURI` and `sourceRepositoryDigest` to the
-caller run. The selected image source is bound separately by the record, lock,
-OCI revision, and successful same-source CI run. Its qualification tuple must name the successful `qualify-images`
-job from that same run and attempt. The archive and record subjects must both
-appear in the producer's verified provenance.
+Its `workflow` identifies the successful default-branch push of `ci.yml` at
+that exact source commit. The publication record does not assert qualification.
+
+A separate default-branch push of `runner-image-qualification.yml` downloads
+the exact CI artifact and qualifies the same Runner and DinD image identities
+and the resource probe. After qualification succeeds, a no-checkout attestation
+job calls the pinned `runner-image-qualification-attest.yml` signer. It signs
+`RUNNER_IMAGE_QUALIFICATION.json`, which contains the source commit and ref,
+runner-lock SHA-256, producer run ID and attempt, qualification run ID and
+attempt, qualification job ID, and the archive and OCI identities for all
+three images. The publisher authenticates the qualifier run and job, verifies
+the exact receipt subject and dedicated signer, and compares each candidate's
+archive, OCI graph, source and lock to the signed receipt. A workflow run tuple
+or an artifact name alone does not bind the job to image bytes. The qualifier
+workflow must use an unambiguous job dependency and artifact path so its signer
+attests only the receipt produced by the successful qualification job. The CI
+producer remains credential-free, and candidate images run without signing or
+publication credentials.
 
 Each image receives `sha-<full-source-commit>` after qualification. A tag that
 already names the same digest is idempotent; a tag naming different bytes is

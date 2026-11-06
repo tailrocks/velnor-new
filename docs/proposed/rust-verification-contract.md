@@ -1,6 +1,6 @@
 # Velnor V1 Rust Verification Contract
 
-This is a binding extension of the [Rust quality contract](rust-quality-contract.md).
+This is a binding extension of the [Rust quality contract](ci-maintenance/rust-quality-contract.md).
 
 ## Required verification
 

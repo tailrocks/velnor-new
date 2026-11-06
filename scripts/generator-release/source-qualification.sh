@@ -153,6 +153,13 @@ mise --no-config --no-env --no-hooks exec \
   --example qualification-diagnostics \
   >"$evidence/logs/cli-build.log" 2>&1
 command_status=$?
+if [ "$command_status" -eq 0 ]; then
+  mise --no-config --no-env --no-hooks exec \
+    "rust@$VELNOR_RUST_VERSION" "mr-boxington@$VELNOR_MBX_VERSION" -- \
+    mbx build --locked --release --package velnor-archive-guard --bin velnor-golden-collector \
+    >>"$evidence/logs/cli-build.log" 2>&1
+  command_status=$?
+fi
 identity_status=0
 artifact_status=0
 binary="$CARGO_TARGET_DIR/release/velnor-actions"
@@ -354,7 +361,8 @@ test ! -s "$evidence/checkout-status.txt"
       scripts/generator-release/test-plan-diagnostics.sh scripts/generator-release/test-qualification-output-bindings.sh \
       scripts/generator-release/test-rust-verifier-retries.cjs \
       scripts/generator-release/qualification-validator-tools.cjs \
-      scripts/generator-release/test-qualification-validator-tools.cjs; do
+      scripts/generator-release/test-qualification-validator-tools.cjs \
+      scripts/generator-release/source-qualification-validator-recipes.json; do
   if [ -f "$path" ] && [ ! -L "$path" ]; then
     sha256sum "$path" >>"$evidence/source-inputs.sha256"
   else
@@ -850,6 +858,12 @@ printf '%s\n' "$command_status" >"$evidence/logs/external-capture.command.exit"
 printf '%s\n' "$artifact_status" >"$evidence/logs/external-capture.artifact.exit"
 printf '%s\n' "$final_status" >"$evidence/logs/external-capture.exit"
 exit "$final_status"
+    ;;
+  qualify-linux-x64-native-validator-tools)
+if [ "${GITHUB_EVENT_NAME:-}" != workflow_dispatch ]; then printf 'FATAL: native validator authoring requires a workflow_dispatch event\n' >&2; exit 64; fi
+for path in "${RUNNER_TEMP:-}" "${CARGO_TARGET_DIR:-}"; do case "$path" in /*) ;; *) printf 'FATAL: qualification paths must be absolute\n' >&2; exit 1 ;; esac; done
+umask 077
+VELNOR_INTERNAL_OP=qualify-validator-tools-v1 "$CARGO_TARGET_DIR/release/velnor-actions"
     ;;
   repeat-check-against-external-oracle)
 set -uo pipefail
@@ -1348,7 +1362,8 @@ exit "$final_status"
 set -uo pipefail
 evidence="$RUNNER_TEMP/source-qualification-artifacts"
 binary="$CARGO_TARGET_DIR/release/velnor-actions"
-if [ ! -x "$binary" ]; then
+collector="$CARGO_TARGET_DIR/release/velnor-golden-collector"
+if [ ! -x "$binary" ] || [ ! -f "$collector" ] || [ -L "$collector" ] || [ ! -x "$collector" ]; then
   printf 'CLI binary unavailable; repository oracle check not run\n' >"$evidence/logs/repository-oracle-check.log"
   printf '1\n' >"$evidence/logs/repository-oracle-check.command.exit"
   printf '0\n' >"$evidence/logs/repository-oracle-check.artifact.exit"
@@ -1358,14 +1373,14 @@ if [ ! -x "$binary" ]; then
 fi
 set +e
 env -u VELNOR_GOLDEN_DIR TMPDIR="$RUNNER_TEMP/velnor-source-qualification-tmp" \
-  VELNOR_GOLDEN_KEEP_WORK=1 scripts/capture-opentofu-goldens.sh \
+  VELNOR_GOLDEN_KEEP_WORK=1 "$collector" check --root "$PWD" --cli "$binary" \
   --archive-guard "$VELNOR_QUALIFICATION_ARCHIVE_GUARD" \
-  --archive-guard-sha256 "$VELNOR_QUALIFICATION_ARCHIVE_GUARD_SHA256" check "$binary" \
+  --archive-guard-sha256 "$VELNOR_QUALIFICATION_ARCHIVE_GUARD_SHA256" \
   >"$evidence/logs/repository-oracle-check.log" 2>&1
 command_status=$?
 artifact_status=0
 cat "$evidence/logs/repository-oracle-check.log"
-workspace="$(sed -n 's/^retaining \(successful golden evidence\|failed golden\) workspace: //p' "$evidence/logs/repository-oracle-check.log" | tail -n 1)"
+workspace="$(sed -n 's/^retaining golden evidence workspace: //p' "$evidence/logs/repository-oracle-check.log" | tail -n 1)"
 printf '%s\n' "$workspace" >"$evidence/logs/repository-oracle-workspace.txt"
 case "$workspace" in
   "$RUNNER_TEMP"/velnor-source-qualification-tmp/velnor-goldens-work.*)
@@ -1452,6 +1467,17 @@ for job in ordinary-harness keep-harness generation-checks; do
     fi
   done
   if [ "$job" = generation-checks ]; then
+    qualification_dir="$job_dir/native-validator-tool-qualification"
+    if [ "${GITHUB_EVENT_NAME:-}" = workflow_dispatch ]; then
+      if [ -L "$qualification_dir" ] || [ ! -d "$qualification_dir" ] \
+        || [ -L "$qualification_dir/status.txt" ] || [ ! -f "$qualification_dir/status.txt" ] \
+        || ! grep -Fxq 'result=success' "$qualification_dir/status.txt"; then
+        final_status=1
+      fi
+    fi
+    if [ -e "$qualification_dir" ] || [ -L "$qualification_dir" ]; then
+      members+=("$job/native-validator-tool-qualification")
+    fi
     preview_status="$job_dir/logs/root-preview.exit"
     if [ ! -f "$preview_status" ] || [ -L "$preview_status" ] \
       || ! grep -Fxq 'generate_statuses=0,0 identity_status=0 diff_statuses=0,0' "$preview_status"; then

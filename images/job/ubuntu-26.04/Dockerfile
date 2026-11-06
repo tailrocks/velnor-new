@@ -2,6 +2,8 @@ FROM --platform=linux/amd64 ubuntu:26.04@sha256:42527649dbc4f9197a6073f426f488cb
 
 SHELL ["/bin/bash", "-e", "-u", "-o", "pipefail", "-c"]
 
+ARG VELNOR_SOURCE_SHA
+
 ARG DEBIAN_FRONTEND=noninteractive
 
 RUN test "$(dpkg --print-architecture)" = amd64 \
@@ -71,3 +73,5 @@ RUN [[ "$(docker --version)" == 'Docker version 29.9.1, build '* ]] \
     && [[ "$(tar --version)" == 'tar (GNU tar)'* ]] \
     && [[ "$(node --version)" == v26.12.0 ]] \
     && for command in bash git curl python3 gzip tar unzip xz zstd nc; do command -v "$command" >/dev/null; done
+
+LABEL io.velnor.image.kind="job" org.opencontainers.image.revision="${VELNOR_SOURCE_SHA}"

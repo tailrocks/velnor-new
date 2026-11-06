@@ -16,6 +16,7 @@ pub(super) fn uses_runner_temp_gate(op: InternalOp) -> bool {
             | InternalOp::AdmitHomebrewQualification
             | InternalOp::FinalizeHomebrewQualification
             | InternalOp::SeedParallelTargets
+            | InternalOp::NativeValidatorToolQualification
             | InternalOp::Fetch
             | InternalOp::Report
             | InternalOp::ExecuteCheck
@@ -64,6 +65,12 @@ pub(super) fn gate_runner_temp_operation(op: InternalOp) -> Option<InternalReque
         | InternalOp::BunAssetsPrepare
         | InternalOp::BunAssetsImport
         | InternalOp::PreseedManifest => {
+            runner_velnor_dir().map(|path| InternalRequest { op, path })
+        }
+        InternalOp::NativeValidatorToolQualification
+            if env::var("GITHUB_RUN_ID")
+                .is_ok_and(|id| id.parse::<u64>().is_ok_and(|id| id > 0)) =>
+        {
             runner_velnor_dir().map(|path| InternalRequest { op, path })
         }
         InternalOp::GitHubEvidenceFetch | InternalOp::GitHubEvidenceImport

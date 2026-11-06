@@ -9,6 +9,11 @@ pub(crate) fn check_producer_job_kept(text: &str) -> Result<(), Box<dyn Error>> 
         "build-image-candidate",
         Some("attest-image-candidate"),
     )?;
+    require(
+        build,
+        "runs-on: ubuntu-26.04",
+        "producer Linux build target",
+    )?;
     require(build, CHECKOUT_USES, "producer checkout")?;
     require(
         build,
@@ -20,6 +25,56 @@ pub(crate) fn check_producer_job_kept(text: &str) -> Result<(), Box<dyn Error>> 
         "image-maintenance build-job-candidate",
         "producer build command",
     )?;
+    require(
+        build,
+        "cargo metadata --locked --format-version=1 --filter-platform x86_64-unknown-linux-gnu",
+        "producer dependency metadata",
+    )?;
+    require(
+        build,
+        "cargo metadata --locked --format-version=1 --filter-platform x86_64-unknown-linux-gnu > \\\"$metadata_file\\\"",
+        "producer dependency metadata capture",
+    )?;
+    require(
+        build,
+        "--message-format=json > \\\"$artifacts_file\\\"",
+        "producer compiler artifact stream",
+    )?;
+    require(
+        build,
+        "native-image-candidate-inventory.py --check --root \\\"$GITHUB_WORKSPACE\\\" --metadata \\\"$metadata_file\\\" --artifacts \\\"$artifacts_file\\\" --target x86_64-unknown-linux-gnu",
+        "producer source inventory validation",
+    )?;
+    require(
+        build,
+        "--package velnor-actions-cli --bin velnor-actions",
+        "producer candidate binary selection",
+    )?;
+    require(
+        build,
+        "--target x86_64-unknown-linux-gnu",
+        "producer source inventory target",
+    )?;
+    require_order(
+        build,
+        "cargo metadata --locked --format-version=1 --filter-platform x86_64-unknown-linux-gnu > \\\"$metadata_file\\\"",
+        "--message-format=json > \\\"$artifacts_file\\\"",
+        "producer source inventory build order",
+    )?;
+    require_order(
+        build,
+        "--message-format=json > \\\"$artifacts_file\\\"",
+        "native-image-candidate-inventory.py --check",
+        "producer source inventory validation order",
+    )?;
+    require_order(
+        build,
+        "native-image-candidate-inventory.py --check",
+        "cat target/release/velnor-actions",
+        "producer binary copy order",
+    )?;
+    forbid(build, "--all-features", "producer build feature set")?;
+    forbid(build, "--no-default-features", "producer build feature set")?;
     require(
         build,
         "$VELNOR_NATIVE_IMAGE_ACTIONS",

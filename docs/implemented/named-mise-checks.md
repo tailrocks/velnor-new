@@ -305,8 +305,12 @@ duplicate, or foreign proofs fail Required.
 Named checks are opaque: declared inputs bind identity but do not prove a
 complete input closure. Compilation reuse, task-result reuse, native Mise
 task caching, reusable artifact publication, and trusted-baseline coverage
-are disabled. Every configured check remains an Execute obligation even when
-source inputs are unchanged. Reused or empty-partition reports for named
+are disabled. A known empty pull request diff, or a diff whose every path is
+validated as a typed Rust `non_inputs` path, may omit the named check from the
+plan. Any Rust-visible or unclassified path, tool or configuration change,
+full-run event, or unavailable diff keeps every configured check as an Execute
+obligation. This is planner exclusion only; it does not reuse a result or
+establish a complete input closure. Reused or empty-partition reports for named
 checks are rejected at the final fold.
 
 ## Recorded host observation scope

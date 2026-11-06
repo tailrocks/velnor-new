@@ -27,6 +27,8 @@ pub(super) enum InternalOp {
 
     SeedParallelTargets,
 
+    NativeValidatorToolQualification,
+
     TapContinuation,
 
     CaptureReviewCompletion,
@@ -120,6 +122,9 @@ pub(super) fn from_env() -> Option<InternalOp> {
     Some(match env::var(OP_ENV).as_deref() {
         Ok("execute-native-homebrew-check-v1") => InternalOp::ExecuteNativeHomebrewCheck,
         Ok("seed-parallel-targets-v1") => InternalOp::SeedParallelTargets,
+        Ok(tag) if tag == velnor_actions_orchestrator::NATIVE_VALIDATOR_TOOL_QUALIFICATION_OP => {
+            InternalOp::NativeValidatorToolQualification
+        }
         Ok("qualify-homebrew-v1") => InternalOp::QualifyHomebrew,
         Ok("admit-homebrew-qualification-v1") => InternalOp::AdmitHomebrewQualification,
         Ok("finalize-homebrew-qualification-v1") => InternalOp::FinalizeHomebrewQualification,

@@ -17,6 +17,9 @@ pub(crate) use logs::{qualification_artifact_bytes, qualification_job_log};
 mod route;
 #[path = "github_evidence_http_validation.rs"]
 mod validation;
+#[path = "github_evidence_http_attestation.rs"]
+mod attestation;
+pub(crate) use attestation::fetch_attestation_bundle;
 pub(super) use route::EvidenceRoute;
 use validation::{agent_config, hex_digit, hex_lower, is_sha256};
 

@@ -38,7 +38,8 @@ mod publication;
 #[path = "package_release_signer_receipt.rs"]
 mod receipt;
 pub(crate) use attestation::{
-    SdkManifestAttestationExpectation, verify_published_manifest_attestation,
+    ImageAttestationIdentity, SdkManifestAttestationExpectation,
+    verify_image_file_attestation, verify_published_manifest_attestation,
 };
 pub(crate) use attestation::{AdmittedStart, AttestedLinuxGenerator, MeasuredReleaseTools, measure_release_tools, record_admitted_start, verify_published_linux_binary_attestation};
 #[cfg(test)]

@@ -77,3 +77,5 @@ private_mods!(validators, vectors);
 private_mods!(verification_tasks, verify);
 private_mods!(workflow, workflow_jobs);
 private_mods!(workflow_task_jobs);
+
+private_mods!(native_validator_tool_qualification);

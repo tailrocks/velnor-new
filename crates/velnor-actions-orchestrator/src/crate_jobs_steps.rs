@@ -3,8 +3,92 @@
 
 use super::{CrateJobInputs, build_jobs::cap_cargo_jobs};
 use crate::{OrchestratorError, internal::internal};
-use std::collections::BTreeSet;
-use velnor_actions_contract::{CrateJob, CrateObligation, Step};
+use std::collections::{BTreeMap, BTreeSet};
+use velnor_actions_contract::{CrateJob, CrateObligation, Step, WorkflowPolicy};
+use velnor_actions_mise::{PinnedTool, ToolCatalog};
+
+pub(super) fn gh_fixture_step(
+    policy: WorkflowPolicy,
+    model: &CrateJob,
+) -> Result<Option<Step>, OrchestratorError> {
+    if policy == WorkflowPolicy::VelnorRepositoryV1
+        && matches!(model.package_name.as_str(), "velnor-actions-cli" | "velnor-actions-orchestrator")
+        && model.obligations.iter().any(|obligation| obligation.run.iter().any(|arg| arg == "nextest"))
+    {
+        return Ok(Some(velnor_actions_workflow_renderer::shell_step(
+            "Stage isolated GitHub CLI test tools",
+            vec!["/usr/bin/python3".to_owned(), "-I".to_owned(), "scripts/prepare-gh-fixture-tools.py".to_owned()],
+            BTreeMap::new(),
+        )?));
+    }
+    Ok(None)
+}
+
+pub(super) fn image_publication_fixture_step(
+    input: &CrateJobInputs<'_>,
+    model: &CrateJob,
+) -> Result<Vec<Step>, OrchestratorError> {
+    if input.policy != WorkflowPolicy::VelnorRepositoryV1
+        || model.package_name != "velnor-actions-cli"
+    {
+        return Ok(Vec::new());
+    }
+    let env = crate::matrix_step::task_step_env(
+        input.catalog,
+        &BTreeMap::new(),
+        true,
+    )?;
+    let build = mbx_image_fixture_argv(
+        input.catalog,
+        &[
+            "build",
+            "--locked",
+            "-p",
+            "velnor-actions-cli",
+            "--example",
+            "image-publication-fixture",
+            "--message-format=json",
+        ],
+    )?;
+    let resolve = mbx_image_fixture_argv(
+        input.catalog,
+        &[
+            "run",
+            "--quiet",
+            "--locked",
+            "-p",
+            "velnor-actions-cli",
+            "--bin",
+            "velnor-actions",
+        ],
+    )?;
+    let script = format!(
+        r#"set -eu; cd "${{GITHUB_WORKSPACE:?}}"; trap 'rm -f "$RUNNER_TEMP/velnor-image-publication-fixture-artifacts.json" "$RUNNER_TEMP/velnor-image-publication-fixture-path.txt"' EXIT; {build} > "$RUNNER_TEMP/velnor-image-publication-fixture-artifacts.json"; VELNOR_INTERNAL_OP=repo-policy-v1 VELNOR_REPO_POLICY_ACTION=artifact-executable VELNOR_REPO_POLICY_ROOT="$GITHUB_WORKSPACE" VELNOR_REPO_POLICY_MESSAGES="$RUNNER_TEMP/velnor-image-publication-fixture-artifacts.json" VELNOR_REPO_POLICY_MANIFEST=crates/velnor-actions-cli/Cargo.toml VELNOR_REPO_POLICY_TARGET=image-publication-fixture VELNOR_REPO_POLICY_ARTIFACT_KIND=example {resolve} > "$RUNNER_TEMP/velnor-image-publication-fixture-path.txt"; IFS= read -r fixture < "$RUNNER_TEMP/velnor-image-publication-fixture-path.txt"; case "$fixture" in /*) test -x "$fixture"; printf 'VELNOR_IMAGE_PUBLICATION_FIXTURE=%s\n' "$fixture" >> "$GITHUB_ENV" ;; *) printf '%s\n' 'Cargo did not select an absolute image publication fixture' >&2; exit 1 ;; esac"#
+    );
+    let step = velnor_actions_workflow_renderer::shell_step(
+        "Prepare image publication fixture",
+        vec![
+            "bash".to_owned(),
+            "-c".to_owned(),
+            script,
+        ],
+        env,
+    )?;
+    Ok(vec![step])
+}
+
+fn mbx_image_fixture_argv(
+    catalog: &ToolCatalog,
+    cargo_args: &[&str],
+) -> Result<String, OrchestratorError> {
+    let argv = crate::product_release_pins::exec_argv(
+        &[PinnedTool::Rust],
+        "mbx",
+        cargo_args,
+        catalog,
+    )?;
+    velnor_actions_workflow_renderer::join_argv_for_run(&argv).map_err(OrchestratorError::from)
+}
 
 pub(super) fn obligation_steps(
     input: &CrateJobInputs<'_>,

@@ -51,12 +51,16 @@ mod check_inputs;
 mod checkout_history;
 #[path = "workflow_configuration_public/checkout_history_plan.rs"]
 mod checkout_history_plan;
+#[path = "workflow_configuration_public/crane_prerequisite.rs"]
+mod crane_prerequisite;
 #[path = "workflow_configuration_public/empty_suite.rs"]
 mod empty_suite;
 #[path = "workflow_configuration_public/family_save_suppression.rs"]
 mod family_save_suppression;
 #[path = "workflow_configuration_public/feature_toggles.rs"]
 mod feature_toggles;
+#[path = "workflow_configuration_public/final_fanin.rs"]
+mod final_fanin;
 #[path = "workflow_configuration_public/install_profile.rs"]
 mod install_profile;
 #[path = "workflow_configuration_public/ledger_cli_build_env.rs"]
@@ -71,6 +75,8 @@ mod ledger_cli_validator;
 mod ledger_cli_verify_script;
 #[path = "workflow_configuration_public/local_action_annotation.rs"]
 mod local_action_annotation;
+#[path = "workflow_configuration_public/maintenance_check_inputs.rs"]
+mod maintenance_check_inputs;
 #[path = "workflow_configuration_public/maintenance_features.rs"]
 mod maintenance_features;
 #[path = "workflow_configuration_public/mbx_job_env.rs"]
@@ -137,6 +143,8 @@ mod source_qualification_build;
 mod source_qualification_checkout;
 #[path = "workflow_configuration_public/source_qualification_jobs.rs"]
 mod source_qualification_jobs;
+#[path = "workflow_configuration_public/source_qualification_manual_dispatch.rs"]
+mod source_qualification_manual_dispatch;
 #[path = "workflow_configuration_public/source_qualification_prefetch.rs"]
 mod source_qualification_prefetch;
 #[path = "workflow_configuration_public/source_qualification_prefetch_harness.rs"]

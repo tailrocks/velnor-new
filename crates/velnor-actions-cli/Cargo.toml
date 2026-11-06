@@ -15,9 +15,20 @@ path = "src/main.rs"
 test = false
 
 [[example]]
+name = "image-publication-fixture"
+path = "examples/image_publication_fixture.rs"
+test = false
+required-features = ["generator"]
+
+[[example]]
 name = "qualification-diagnostics"
 path = "examples/qualification_diagnostics.rs"
 test = false
+required-features = ["generator"]
+
+[[test]]
+name = "native_image_candidate_inventory_public"
+path = "tests/native_image_candidate_inventory_public.rs"
 required-features = ["generator"]
 
 [[test]]
@@ -84,6 +95,21 @@ generator = [
 ]
 ledger-helper = ["dep:velnor-actions-contract"]
 
+[[test]]
+name = "runner_image_admission_public"
+path = "tests/runner_image_admission_public.rs"
+required-features = ["generator"]
+
+[[test]]
+name = "check_job_source_public"
+path = "tests/check_job_source_public.rs"
+required-features = ["generator"]
+
+[[test]]
+name = "image_publication_public"
+path = "tests/image_publication_public.rs"
+required-features = ["generator"]
+
 [dependencies]
 serde_json = { workspace = true, optional = true }
 velnor-actions-contract = { version = "=0.1.75", path = "../velnor-actions-contract", optional = true }
@@ -95,10 +121,12 @@ clap = { version = "=4.6.7", features = ["derive"], optional = true }
 workspace = true
 
 [dev-dependencies]
+base64 = { workspace = true }
 velnor-actions-contract = { version = "=0.1.75", path = "../velnor-actions-contract" }
 velnor-actions-mise = { version = "=0.1.75", path = "../velnor-actions-mise" }
 proc-macro2 = "=1.0.107"
 flate2 = { version = "=1.1.10", default-features = false, features = ["rust_backend"] }
+tar = { version = "=0.4.46", default-features = false }
 rustix = { version = "=1.1.5", features = ["fs", "process"] }
 sha1-checked = { version = "=0.10.0", default-features = false }
 sha2 = "=0.11.1"

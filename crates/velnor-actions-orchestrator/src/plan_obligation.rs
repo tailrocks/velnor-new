@@ -156,7 +156,7 @@ fn plan_named_mise_group(
         inputs.policy,
         item.check.runner.platform,
     )?;
-    crate::internal_plan::named_checks::plan::derive_lanes(
+    let (mut obligation, entries) = crate::internal_plan::named_checks::plan::derive_lanes(
         inputs.root,
         item,
         inputs.run_key,
@@ -164,7 +164,18 @@ fn plan_named_mise_group(
         inputs.catalog,
         &runtime,
         check_lanes,
-    )
+    )?;
+    if !inputs.changed
+        && matches!(
+            inputs.wire.event,
+            velnor_actions_contract::WorkflowEvent::PullRequest
+                | velnor_actions_contract::WorkflowEvent::Fork
+        )
+    {
+        obligation.decision = velnor_actions_contract::ObligationDecision::NotAffected;
+        wire_w2::NOT_AFFECTED_REASON.clone_into(&mut obligation.reason);
+    }
+    Ok((obligation, entries))
 }
 
 fn complete_group(

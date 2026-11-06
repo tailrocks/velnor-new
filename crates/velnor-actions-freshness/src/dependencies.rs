@@ -4,8 +4,9 @@
 mod lock;
 mod workspace;
 
+use std::collections::BTreeMap;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use toml::Value;
 
@@ -19,14 +20,57 @@ pub(super) struct DeclaredDependency {
     pub(super) subject: String,
     pub(super) name: String,
     pub(super) requirement: String,
+    pub(super) path: Option<DeclaredPath>,
+}
+
+#[derive(Debug, Clone)]
+pub(super) struct DeclaredPath {
+    pub(super) path: PathBuf,
+    pub(super) base: PathBuf,
+}
+
+pub(super) struct InvalidDeclaredPath;
+
+#[derive(Clone)]
+pub(super) struct MemberWorkspace {
+    pub(super) root: PathBuf,
+    pub(super) document: Value,
+}
+
+pub(super) type MemberOwners = BTreeMap<PathBuf, Vec<MemberWorkspace>>;
+
+pub(super) fn declared_path(
+    ctx: &mut FreshnessContext,
+    subject: &str,
+    spec: &toml::map::Map<String, Value>,
+    base: &Path,
+) -> Result<Option<DeclaredPath>, InvalidDeclaredPath> {
+    let Some(path) = spec.get("path") else {
+        return Ok(None);
+    };
+    let Some(path) = path.as_str() else {
+        ctx.fail_row(
+            "lock-staleness",
+            subject,
+            &format!("path dependency has invalid path {path:?}"),
+        );
+        return Err(InvalidDeclaredPath);
+    };
+    Ok(Some(DeclaredPath {
+        path: PathBuf::from(path),
+        base: base.to_path_buf(),
+    }))
 }
 
 pub(crate) fn check_effective_identity(ctx: &mut FreshnessContext) {
     ctx.workspace_roots = workspace::discover_workspaces(ctx);
+    let manifests = workspace::all_member_manifests(ctx);
+    let owners = workspace::member_owners(ctx, &manifests);
     ctx.locked.clear();
     ctx.member_names.clear();
     for (relative, document) in ctx.workspace_roots.clone() {
-        let locked = lock::check_workspace(ctx, &relative, &document);
+        let workspace_manifests = manifests.get(&relative).map_or(&[][..], Vec::as_slice);
+        let locked = lock::check_workspace(ctx, &relative, &document, &owners, workspace_manifests);
         ctx.locked.extend(locked.clone());
         for entry in locked {
             if entry.get("source").and_then(Value::as_str).is_none()

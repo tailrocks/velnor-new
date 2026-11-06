@@ -37,6 +37,9 @@ mod bun_assets;
 mod cache;
 #[path = "dispatch/fileless.rs"]
 mod fileless;
+#[path = "dispatch/native_validator_tool_qualification.rs"]
+mod native_validator_tool_qualification;
+use native_validator_tool_qualification::run as qualify_validator_tools;
 #[path = "dispatch_preview_production.rs"]
 mod preview_production;
 #[path = "dispatch/public.rs"]
@@ -170,8 +173,8 @@ fn gate_file_request(op: InternalOp, path: PathBuf) -> Option<InternalRequest> {
         | InternalOp::PlaywrightInstall
         | InternalOp::PrivateFetch
         | InternalOp::PrivateRevoke
-        | InternalOp::PreseedManifest
-        | InternalOp::RepoPolicy
+        | InternalOp::PreseedManifest | InternalOp::RepoPolicy
+        | InternalOp::NativeValidatorToolQualification
         | InternalOp::ExecuteCheck
         | InternalOp::ExecuteNativeHomebrewCheck
         | InternalOp::QualifyHomebrew
@@ -217,6 +220,7 @@ fn run_internal(request: &InternalRequest) -> ExitCode {
         InternalOp::QualifyHomebrew => unit_exit(execute_homebrew_qualification_from_env()),
         InternalOp::AdmitHomebrewQualification => unit_exit(admit_homebrew_qualification()),
         InternalOp::FinalizeHomebrewQualification => unit_exit(finalize_homebrew_qualification()),
+        InternalOp::NativeValidatorToolQualification => qualify_validator_tools(),
         InternalOp::ExecuteNativeHomebrewCheck => unit_exit(
             velnor_actions_orchestrator::execute_native_homebrew_check_from_env().map(|_| ()),
         ),

@@ -144,6 +144,130 @@ fn image_release_builds_both_images_with_the_approved_source_revision() -> Resul
     verify_revisions(workflow, dir.path(), source)
 }
 
+#[test]
+#[cfg(unix)]
+fn release_consumers_keep_the_build_artifact_identity_on_job_reruns() -> Result<(), Box<dyn Error>>
+{
+    let files = render_schema2_workflows(&request()?)?;
+    let workflow = find_file(&files, ".github/workflows/product-release-images.yml")?;
+    let build = job_section(workflow, "build-images:", Some("attest-images:"))?;
+    assert!(build.contains("id: upload-assets"));
+    assert!(build.contains("name: image-assets-${{ github.run_attempt }}"));
+    assert!(build.contains("artifact_id: ${{ steps.upload-assets.outputs.artifact-id }}"));
+
+    let attest = job_section(workflow, "attest-images:", Some("publish-images:"))?;
+    assert!(attest.contains("- build-images"));
+    assert!(attest.contains("ARTIFACT_ID: ${{ needs.build-images.outputs.artifact_id }}"));
+    assert!(attest.contains("artifact-ids: ${{ env.ARTIFACT_ID }}"));
+    assert!(attest.contains("artifact_id: ${{ needs.build-images.outputs.artifact_id }}"));
+
+    let publish = job_section(workflow, "publish-images:", None)?;
+    assert!(publish.contains("- attest-images"));
+    assert!(publish.contains("ARTIFACT_ID: ${{ needs.attest-images.outputs.artifact_id }}"));
+    assert!(publish.contains("artifact-ids: ${{ env.ARTIFACT_ID }}"));
+    assert_eq!(workflow.matches("github.run_attempt").count(), 1);
+    assert_download_guard(workflow, "attest-images")?;
+    assert_download_guard(workflow, "publish-images")?;
+    assert_build_only_artifact_steps(workflow, "publish-images")?;
+
+    let binary_request = Schema2WorkflowRequest {
+        workflows: BTreeSet::from([RoutingWorkflow::MacosBinaryRelease]),
+        ..request()?
+    };
+    let binary_files = render_schema2_workflows(&binary_request)?;
+    let binary = find_file(
+        &binary_files,
+        ".github/workflows/product-release-binary.yml",
+    )?;
+    let build = job_section(binary, "build-binary:", Some("attest-binary:"))?;
+    assert!(build.contains("name: binary-assets-${{ github.run_attempt }}"));
+    assert!(build.contains("artifact_id: ${{ steps.upload-assets.outputs.artifact-id }}"));
+    let attest = job_section(binary, "attest-binary:", Some("publish-binary:"))?;
+    assert!(attest.contains("ARTIFACT_ID: ${{ needs.build-binary.outputs.artifact_id }}"));
+    assert!(attest.contains("artifact-ids: ${{ env.ARTIFACT_ID }}"));
+    assert!(attest.contains("artifact_id: ${{ needs.build-binary.outputs.artifact_id }}"));
+    let publish = job_section(binary, "publish-binary:", None)?;
+    assert!(publish.contains("ARTIFACT_ID: ${{ needs.attest-binary.outputs.artifact_id }}"));
+    assert!(publish.contains("artifact-ids: ${{ env.ARTIFACT_ID }}"));
+    assert_eq!(binary.matches("github.run_attempt").count(), 1);
+    assert_download_guard(binary, "attest-binary")?;
+    assert_download_guard(binary, "publish-binary")?;
+    assert_build_only_artifact_steps(binary, "publish-binary")?;
+    Ok(())
+}
+
+#[cfg(unix)]
+fn assert_download_guard(workflow: &str, job: &str) -> Result<(), Box<dyn Error>> {
+    let section = job_section(workflow, &format!("{job}:"), None)?;
+    let guard_marker = "- name: Validate producer artifact identity";
+    let guard = section
+        .split(guard_marker)
+        .nth(1)
+        .and_then(|tail| tail.split("- name: ").next())
+        .ok_or_else(|| fail("artifact identity guard missing"))?;
+    let download = section
+        .find("- name: Download built assets")
+        .ok_or_else(|| fail("artifact download missing"))?;
+    let guard_index = section
+        .find(guard_marker)
+        .ok_or_else(|| fail("artifact identity guard missing"))?;
+    assert!(
+        guard_index < download,
+        "guard must precede artifact download"
+    );
+    assert!(guard.contains("ARTIFACT_ID: ${{ needs."));
+    let encoded = guard
+        .lines()
+        .find_map(|line| line.trim_start().strip_prefix("run: "))
+        .ok_or_else(|| fail("artifact identity guard command missing"))?;
+    let script: String = serde_json::from_str(encoded)?;
+    for (id, expected) in [
+        ("1", true),
+        ("9007199254740991", true),
+        ("", false),
+        ("0", false),
+        ("01", false),
+        ("1x", false),
+        ("9007199254740992", false),
+    ] {
+        let result = Command::new("/bin/bash")
+            .arg("-c")
+            .arg(&script)
+            .env("ARTIFACT_ID", id)
+            .output()?;
+        assert_eq!(
+            result.status.success(),
+            expected,
+            "artifact identity guard result for {id:?}: {}",
+            String::from_utf8_lossy(&result.stderr)
+        );
+    }
+    let download_section = &section[download..];
+    assert!(download_section.contains("ARTIFACT_ID: ${{ needs."));
+    assert!(download_section.contains("artifact-ids: ${{ env.ARTIFACT_ID }}"));
+    Ok(())
+}
+
+#[cfg(unix)]
+fn assert_build_only_artifact_steps(workflow: &str, job: &str) -> Result<(), Box<dyn Error>> {
+    let section = job_section(workflow, &format!("{job}:"), None)?;
+    for marker in [
+        "- name: Validate producer artifact identity",
+        "- name: Download built assets",
+    ] {
+        let step = section
+            .split(marker)
+            .nth(1)
+            .and_then(|tail| tail.split("- name: ").next())
+            .ok_or_else(|| fail("build-only release step missing"))?;
+        assert!(
+            step.contains("if: inputs.release_action == 'build'"),
+            "complete release must skip {marker}"
+        );
+    }
+    Ok(())
+}
+
 #[cfg(unix)]
 fn verify_revisions(workflow: &str, bin: &Path, source: &str) -> Result<(), Box<dyn Error>> {
     let verify_marker = "- name: Verify image architectures and revisions";

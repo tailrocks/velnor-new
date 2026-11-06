@@ -55,7 +55,13 @@ pub(crate) fn verify_published_manifest_attestation(
         source_ref,
         source_token: &source_token,
     };
-    let raw = verify_one_with_bundle(path, Some(bundle_path), &identity, deadline)?;
+    let raw = verify_one_with_bundle(
+        path,
+        bundle_path,
+        &identity,
+        deadline,
+        super::VerificationPolicy::ExactSigner,
+    )?;
     parse_verified_manifest_attestation(
         &raw,
         expectation.repository,
@@ -140,7 +146,13 @@ pub(crate) fn verify_published_linux_binary_attestation(
         source_ref: "refs/heads/main",
         source_token: &source_token,
     };
-    let raw = verify_one_with_bundle(path, Some(bundle_path), &identity, deadline)?;
+    let raw = verify_one_with_bundle(
+        path,
+        bundle_path,
+        &identity,
+        deadline,
+        super::VerificationPolicy::ExactSigner,
+    )?;
     let binary = parse_verified_release_attestation(
         &raw,
         "tailrocks/velnor-new",

@@ -14,6 +14,7 @@ use super::{
     MAX_OCI_CANDIDATE_LAYER_MEMBERS, MAX_OCI_CANDIDATE_UNCOMPRESSED_BYTES, OciCandidateError,
     Result,
     archive::{Blob, OciArchive},
+    check_deadline,
 };
 
 const LAYER_PATH_LIMIT: usize = 4096;
@@ -38,6 +39,7 @@ pub(super) fn verify_layers(
     let mut total_size = 0_u64;
     let mut total_members = 0_usize;
     for (layer, expected) in layers.iter().zip(expected_diff_ids) {
+        check_deadline()?;
         let blob = archive
             .blobs
             .get(&layer.digest)
@@ -94,6 +96,7 @@ fn inspect_layer(
             .map_err(|_| OciCandidateError("oci_layer_tar"))?;
         let mut names = BTreeSet::new();
         for entry in entries {
+            check_deadline()?;
             if names.len() + previous_members >= MAX_OCI_CANDIDATE_LAYER_MEMBERS {
                 return Err(OciCandidateError("oci_layer_member_limit"));
             }
@@ -124,6 +127,7 @@ fn open_layer<'a>(file: &'a mut File, blob: &Blob, gzip: bool) -> Result<Box<dyn
     file.seek(SeekFrom::Start(blob.offset))
         .map_err(|_| OciCandidateError("oci_layer_seek"))?;
     let limited = file.take(blob.size);
+    let limited = DeadlineReader::new(limited);
     Ok(if gzip {
         Box::new(MultiGzDecoder::new(limited))
     } else {
@@ -136,6 +140,7 @@ fn scan_extensions(file: &mut File, blob: &Blob, gzip: bool, limit: u64) -> Resu
     let mut total = 0_u64;
     let mut header = [0_u8; TAR_BLOCK];
     loop {
+        check_deadline()?;
         let mut filled = 0;
         while filled < header.len() {
             let count = source
@@ -176,6 +181,7 @@ fn validate_terminator_and_padding<R: Read>(source: &mut R) -> Result<()> {
     let mut second = [0_u8; TAR_BLOCK];
     let mut filled = 0;
     while filled < second.len() {
+        check_deadline()?;
         let count = source
             .read(&mut second[filled..])
             .map_err(|_| OciCandidateError("oci_layer_terminator_read"))?;
@@ -190,6 +196,7 @@ fn validate_terminator_and_padding<R: Read>(source: &mut R) -> Result<()> {
 
     let mut padding = vec![0_u8; 64 * 1024];
     loop {
+        check_deadline()?;
         let count = source
             .read(&mut padding)
             .map_err(|_| OciCandidateError("oci_layer_terminator_read"))?;
@@ -205,6 +212,7 @@ fn validate_terminator_and_padding<R: Read>(source: &mut R) -> Result<()> {
 fn skip_bytes<R: Read>(reader: &mut R, mut remaining: u64) -> Result<()> {
     let mut buffer = vec![0_u8; 64 * 1024];
     while remaining > 0 {
+        check_deadline()?;
         let amount = usize::try_from(remaining.min(buffer.len() as u64))
             .map_err(|_| OciCandidateError("oci_layer_tar_size"))?;
         let count = reader
@@ -270,6 +278,25 @@ struct HashLimitReader<R> {
     limit: u64,
 }
 
+struct DeadlineReader<R> {
+    inner: R,
+}
+
+impl<R> DeadlineReader<R> {
+    fn new(inner: R) -> Self {
+        Self { inner }
+    }
+}
+
+impl<R: Read> Read for DeadlineReader<R> {
+    fn read(&mut self, buffer: &mut [u8]) -> io::Result<usize> {
+        check_deadline().map_err(|_| io::Error::other("oci_deadline_exceeded"))?;
+        let count = self.inner.read(buffer)?;
+        check_deadline().map_err(|_| io::Error::other("oci_deadline_exceeded"))?;
+        Ok(count)
+    }
+}
+
 impl<R> HashLimitReader<R> {
     fn new(inner: R, limit: u64) -> Self {
         Self {
@@ -293,7 +320,9 @@ impl<R> HashLimitReader<R> {
 
 impl<R: Read> Read for HashLimitReader<R> {
     fn read(&mut self, buffer: &mut [u8]) -> io::Result<usize> {
+        check_deadline().map_err(|_| io::Error::other("oci_deadline_exceeded"))?;
         let count = self.inner.read(buffer)?;
+        check_deadline().map_err(|_| io::Error::other("oci_deadline_exceeded"))?;
         self.size = self
             .size
             .checked_add(count as u64)

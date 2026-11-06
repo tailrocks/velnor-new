@@ -64,7 +64,7 @@ The generator crates MUST NOT implement a runner, a Scale Set client, or an Acti
    See also [cache decisions](cache-decisions.md): the owner-adopted cache redesign (producer-scoped saves, dependency seed, opaque MBX bundles, family pruning, PR-scoped sources, no ImageVersion). Family specs, keys, writers and size ceilings: [cache families](cache-families.md). Why compiled state does not carry between runs, and the storage design that would: [compiled-state persistence](compiled-state-persistence.md).
 8. [Host-image seed admission contract](host-seed-contract.md) defines trusted preinstalled seed inputs and fail-cold admission.
 9. [Parallelism and affected-work contract](parallelism-and-selection-contract.md) defines dependency-aware selection, not-affected crate jobs (hard decision 4), native background/wait steps, bounded concurrency, and complete test partitioning.
-10. [Rust quality contract](rust-quality-contract.md) defines crate ownership, lints, file limits, dependencies, and repository-policy protection.
+10. [Rust quality contract](ci-maintenance/rust-quality-contract.md) defines crate ownership, lints, file limits, dependencies, and repository-policy protection.
 11. [Agent and performance contract](agent-and-performance-contract.md) defines agent instructions, performance measurements, acceptance budgets, and readiness evidence.
 12. [Tooling input contract](tooling-input-contract.md) defines read-only inspection and human recommendations for Rust/Mise tool files.
 13. [Version policy](version-policy.md) defines latest-stable tool pins, freshness checks, exception expiry, and V2 version inventory.
@@ -77,7 +77,7 @@ The generator crates MUST NOT implement a runner, a Scale Set client, or an Acti
 20. [Rust test policy](rust-test-policy.md) defines test layout, integration entry points, doctest separation, fixture independence, and snapshot review (companion to the quality contract §4).
 21. [Rust verification contract](rust-verification-contract.md) defines the required focused task templates, workflow verification, and risk-triggered checks (binding extension of the quality contract §9).
 22. [macOS Scale Set runner](macos-scaleset-runner.md) is the active runner specification. It supersedes conflicting deferred roadmap clauses.
-23. [Resource probe image artifact](resource-probe-artifact.md) defines the trusted probe image, archive, manifest, and publication contract.
+23. [Resource probe image artifact](resource-probe-artifact.md) defines the probe protocol and fixed execution contract; [Runner image release](runner-image-release.md) defines GHCR distribution and the shared source-bound manifest.
 24. [Resource probe controller](resource-probe-controller.md) defines controller-side guest probe execution and parsing.
 25. [Runner resource admission](runner-resource-admission.md) defines candidate job admission and resource enforcement.
 26. [GitHub Actions reference](github-actions-reference.md) defines source repository requirements and fidelity contracts.

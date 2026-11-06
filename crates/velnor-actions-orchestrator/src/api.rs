@@ -205,6 +205,9 @@ pub use super::package_release_signer::{SIGN_PACKAGE_RELEASE_OP, sign_package_re
 
 pub const ORCHESTRATOR_VERSION: u32 = 0;
 
+pub use crate::native_validator_tool_qualification::{
+    NATIVE_VALIDATOR_TOOL_QUALIFICATION_OP, run_native_validator_tool_qualification_from_env,
+};
 pub use crate::qualification_candidate::qualify_tools;
 
 pub use super::homebrew::qualification::{
@@ -215,8 +218,9 @@ pub use super::homebrew::runtime::execute_native_homebrew_check_from_env;
 pub(crate) use super::package_release_publish::{release_policy_admission, stable_tag_origin};
 
 pub use super::image_maintenance::{
-    BuildJobCandidateRequest, CheckJobSourceRequest, InstallBuildxRequest,
-    ValidateJobCandidateRequest, build_job_candidate, check_job_source, install_buildx,
-    validate_job_candidate,
+    AdmitRunnerImagesRequest, BuildJobCandidateRequest, CheckJobSourceRequest,
+    ImagePublicationProfile, InstallBuildxRequest, PromoteImageRequest, PublishImageRequest,
+    ValidateJobCandidateRequest, admit_runner_images, build_job_candidate, check_job_source,
+    install_buildx, promote_image, publish_image, validate_job_candidate,
 };
 pub use velnor_actions_mise::CheckDeadline;

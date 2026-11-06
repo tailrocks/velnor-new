@@ -39,6 +39,8 @@ fn generator_release_owns_source_qualification_lifecycle() -> Result<(), Box<dyn
     assert!(rendered.contains("permissions:\n  contents: read"));
     assert!(!rendered.contains("contents: write"));
     assert!(!rendered.contains("stale generated workflow"));
+    assert!(!rendered.contains("stale user-owned workflow"));
+    assert_manual_native_validator_step(rendered)?;
 
     let previews = tempfile::tempdir()?;
     let first = preview_generation(&prepared, previews.path().join("enabled-first"))?;
@@ -135,6 +137,36 @@ fn source_qualification_reservations_reject_collisions_and_allow_unrelated_entri
 pub(super) fn generator_repo(enabled: bool) -> Result<TempDir, Box<dyn Error>> {
     let repo = workflow_configuration_fixture::make_repo(&generator_config(enabled))?;
     Ok(repo)
+}
+
+fn assert_manual_native_validator_step(rendered: &str) -> Result<(), Box<dyn Error>> {
+    let build_step = rendered
+        .find("- name: Build source CLI and archive guard concurrently")
+        .ok_or("source CLI build step was not rendered")?;
+    let qualification_step = rendered
+        .find("- name: Author Linux x64 native validator candidates")
+        .ok_or("manual native validator qualification step was not rendered")?;
+    let capture_step = rendered
+        .find("- name: Capture all five external goldens")
+        .ok_or("external golden capture step was not rendered")?;
+    assert!(build_step < capture_step && capture_step < qualification_step);
+    assert_eq!(
+        rendered
+            .matches("- name: Author Linux x64 native validator candidates")
+            .count(),
+        1
+    );
+    let end = rendered[qualification_step + 1..]
+        .find("\n      - name:")
+        .map_or(rendered.len(), |offset| qualification_step + 1 + offset);
+    let manual_qualification = &rendered[qualification_step..end];
+    assert!(
+        manual_qualification.contains("if: success() && github.event_name == 'workflow_dispatch'")
+    );
+    assert!(manual_qualification.contains(
+        "run: bash scripts/generator-release/source-qualification.sh qualify-linux-x64-native-validator-tools"
+    ));
+    Ok(())
 }
 
 fn generator_config(enabled: bool) -> String {
