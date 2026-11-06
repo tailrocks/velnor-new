@@ -156,7 +156,7 @@ fn workflow_with_steps(steps: Vec<Step>) -> WorkflowIr {
         Vec::new(),
         None,
     );
-    job.runs_on = "ubuntu-26.04".to_owned();
+    "ubuntu-26.04".clone_into(&mut job.runs_on);
     job.steps = steps;
     ir.jobs.clear();
     ir.jobs.insert("shells".to_owned(), job);

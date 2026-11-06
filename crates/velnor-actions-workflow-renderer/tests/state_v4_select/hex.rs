@@ -8,7 +8,7 @@ use crate::gc1_scene::fail;
 pub(super) fn decode_supervisor_hex(payload: &str) -> Result<Vec<u8>, Box<dyn Error>> {
     if payload.len() > 49_152
         || payload.is_empty()
-        || payload.len() % 2 != 0
+        || !payload.len().is_multiple_of(2)
         || !payload
             .bytes()
             .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
