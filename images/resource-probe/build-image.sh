@@ -85,7 +85,7 @@ if docker image inspect --platform linux/amd64 velnor-runner:linux-amd64 >/dev/n
   done
   export BUILDX_NO_DEFAULT_OCI_ARTIFACT=1
   docker buildx build \
-    --provenance=mode=min \
+    --provenance=mode=max \
     --platform linux/amd64 \
     --build-arg "VELNOR_SOURCE_SHA=$source_sha" \
     --build-context "resource_probe=$stage_root/resource-probe" \
@@ -96,7 +96,7 @@ if docker image inspect --platform linux/amd64 velnor-runner:linux-amd64 >/dev/n
     --load \
     images/runner/ubuntu-26.04
   docker buildx build \
-    --provenance=mode=min \
+    --provenance=mode=max \
     --platform linux/amd64 \
     --build-arg "VELNOR_SOURCE_SHA=$source_sha" \
     --build-context "resource_probe=$stage_root/resource-probe" \

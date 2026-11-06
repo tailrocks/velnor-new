@@ -115,11 +115,7 @@ fn verify_build_metadata(
         .and_then(Value::as_str);
     let context = vcs.get("localdir:context").and_then(Value::as_str);
     let base_locals = HashSet::from(["context", "dockerfile"]);
-    let named_locals = image
-        .allowed_local_names()
-        .iter()
-        .copied()
-        .collect::<HashSet<_>>();
+    let named_locals: HashSet<_> = image.allowed_local_names().iter().copied().collect();
     let valid_locals = (locals.len() == base_locals.len() && local_names == base_locals)
         || (locals.len() == named_locals.len() && local_names == named_locals);
     let actual_vcs_keys = vcs.keys().cloned().collect::<HashSet<_>>();
@@ -136,6 +132,10 @@ fn verify_build_metadata(
     let valid_request_keys = request.keys().all(|key| {
         ["frontend", "locals", "args", "root", "compatibilityVersion"].contains(&key.as_str())
     });
+    let source_url = vcs
+        .get("source")
+        .and_then(Value::as_str)
+        .map(|url| url.strip_suffix(".git").unwrap_or(url));
     if !valid_statement_type
         || statement.get("predicateType").and_then(Value::as_str) != Some(SLSA_PREDICATE)
         || build.get("buildType").and_then(Value::as_str) != Some(BUILD_KIT_TYPE)
@@ -151,9 +151,8 @@ fn verify_build_metadata(
         || !valid_vcs_keys
         || !valid_localdirs
         || vcs.get("revision").and_then(Value::as_str) != Some(source_sha)
-        || vcs.get("source").and_then(Value::as_str) != Some(SOURCE_REPOSITORY_URL)
-        || vcs.get("localdir:context").and_then(Value::as_str)
-            != vcs.get("localdir:dockerfile").and_then(Value::as_str)
+        || source_url != Some(SOURCE_REPOSITORY_URL)
+        || context != vcs.get("localdir:dockerfile").and_then(Value::as_str)
     {
         return Err(ProviderFailure::Archive);
     }
