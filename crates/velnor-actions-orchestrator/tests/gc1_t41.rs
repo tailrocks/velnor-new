@@ -35,7 +35,7 @@ fn hosted_macos() -> CheckRunner {
 
 fn hosted_linux() -> CheckRunner {
     CheckRunner {
-        label: "ubuntu-24.04".to_owned(),
+        label: "ubuntu-26.04".to_owned(),
         platform: CheckPlatform::LinuxX64,
         executor: CheckExecutor::Hosted,
         container: None,

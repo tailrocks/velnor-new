@@ -152,7 +152,7 @@ fn discovered() -> DiscoveredCheck {
         task: "lint".to_owned(),
         directory: ".".to_owned(),
         runner: CheckRunner {
-            label: "ubuntu-24.04".to_owned(),
+            label: "ubuntu-26.04".to_owned(),
             platform: CheckPlatform::LinuxX64,
             executor: CheckExecutor::Hosted,
             container: None,
