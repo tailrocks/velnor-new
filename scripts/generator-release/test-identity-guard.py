@@ -48,14 +48,15 @@ else
 fi
 printf 'IDENTITY PUBLISHED\\n'
 '''
-            process = subprocess.Popen(["bash", "-c", script], env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             fd = os.open(fifo, os.O_RDONLY | os.O_NONBLOCK)
-            if hasattr(fcntl, "F_SETPIPE_SZ"):
-                fcntl.fcntl(fd, fcntl.F_SETPIPE_SZ, 4096)
-            data = bytearray()
-            deadline = time.monotonic() + 60
-            replaced = False
+            process = None
             try:
+                if hasattr(fcntl, "F_SETPIPE_SZ"):
+                    fcntl.fcntl(fd, fcntl.F_SETPIPE_SZ, 4096)
+                process = subprocess.Popen(["bash", "-c", script], env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                data = bytearray()
+                deadline = time.monotonic() + 60
+                replaced = False
                 while time.monotonic() < deadline:
                     readable, _, _ = select.select([fd], [], [], 0.1)
                     if readable:
@@ -83,7 +84,7 @@ printf 'IDENTITY PUBLISHED\\n'
                     assert b"IDENTITY PUBLISHED" in stdout, stdout
             finally:
                 os.close(fd)
-                if process.poll() is None:
+                if process is not None and process.poll() is None:
                     process.kill()
                     process.communicate()
 print("passed identity guard custody and fail-closed publication")
