@@ -9,9 +9,8 @@ use velnor_actions_contract::{
     serialize_image_candidate_source_closure,
 };
 
-const SIGNED_CLOSURE: &[u8] = include_bytes!(
-    "fixtures/image-job/job-image-native-source-closure.json"
-);
+const SIGNED_CLOSURE: &[u8] =
+    include_bytes!("fixtures/image-job/job-image-native-source-closure.json");
 
 #[test]
 fn historical_signed_source_inventory_remains_verifiable_after_generator_changes()

@@ -52,8 +52,8 @@ pub(super) fn source_files(
     deadline: CheckDeadline,
 ) -> Result<BTreeMap<String, Vec<u8>>, OrchestratorError> {
     let tree = load_tree(source, token, deadline)?;
-    let bytes = download(source, token, deadline)?;
     let inventory_ids = select_tree_paths(&tree, &[IMAGE_NATIVE_INVENTORY_PATH])?;
+    let bytes = download(source, token, deadline)?;
     let inventory_files = read_archive(&bytes, &inventory_ids, source, deadline)?;
     let inventory_bytes = inventory_files
         .get(IMAGE_NATIVE_INVENTORY_PATH)
