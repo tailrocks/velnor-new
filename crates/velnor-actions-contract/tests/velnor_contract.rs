@@ -5,5 +5,6 @@ mod gc1_t04;
 mod gc1_t05;
 mod gc1_t23;
 mod group_ledger;
+mod image_source_inventory;
 mod mbx_generation;
 mod runner_image_publication;

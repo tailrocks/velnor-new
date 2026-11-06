@@ -10,7 +10,9 @@ mod inventory;
 
 pub const IMAGE_NATIVE_CLOSURE_SCHEMA: &str = "velnor.job-image-native-source-closure.v1";
 
-pub use inventory::native_image_candidate_inputs;
+pub use inventory::{
+    IMAGE_NATIVE_INVENTORY_PATH, NativeImageSourceInventory, native_image_candidate_inputs,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -27,6 +29,23 @@ impl ImageCandidateSourceClosure {
         source_commit: String,
         inputs: BTreeMap<String, String>,
     ) -> Result<Self, ContractError> {
+        Self::from_source_inventory(
+            source_commit,
+            inputs,
+            &NativeImageSourceInventory::parse(include_bytes!("closure_inventory.txt"))?,
+        )
+    }
+
+    pub fn from_source_inventory(
+        source_commit: String,
+        inputs: BTreeMap<String, String>,
+        inventory: &NativeImageSourceInventory,
+    ) -> Result<Self, ContractError> {
+        if inputs.keys().map(String::as_str).ne(inventory.paths()) {
+            return Err(ContractError::CanonicalJson(
+                "image_candidate_closure_inventory".to_owned(),
+            ));
+        }
         let closure = Self {
             schema: IMAGE_NATIVE_CLOSURE_SCHEMA.to_owned(),
             source_commit,
@@ -51,14 +70,16 @@ pub fn parse_image_candidate_source_closure(
 pub fn validate_image_candidate_source_closure(
     closure: &ImageCandidateSourceClosure,
 ) -> Result<(), ContractError> {
-    let expected = native_image_candidate_inputs()
-        .iter()
-        .map(|path| (*path).to_owned())
-        .collect::<BTreeSet<_>>();
     let actual = closure.inputs.keys().cloned().collect::<BTreeSet<_>>();
     if closure.schema != IMAGE_NATIVE_CLOSURE_SCHEMA
         || !is_hex(&closure.source_commit, 40)
-        || actual != expected
+        || actual.len() > 10_000
+        || actual
+            .iter()
+            .any(|path| !inventory::valid_source_path(path))
+        || !std::iter::once(IMAGE_NATIVE_INVENTORY_PATH)
+            .chain(super::IMAGE_CANDIDATE_SOURCE_INPUTS)
+            .all(|path| actual.contains(path))
         || closure.inputs.values().any(|digest| !is_hex(digest, 64))
     {
         return Err(ContractError::CanonicalJson(

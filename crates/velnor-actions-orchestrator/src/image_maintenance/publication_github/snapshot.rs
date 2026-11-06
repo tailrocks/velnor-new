@@ -12,6 +12,7 @@ use std::{
     io::{Cursor, Read},
     path::{Component, Path},
 };
+use velnor_actions_contract::{IMAGE_NATIVE_INVENTORY_PATH, NativeImageSourceInventory};
 use velnor_actions_mise::{CheckDeadline, PinnedTool, PinnedToolExec, ToolCatalog};
 
 const HEX: &[u8; 16] = b"0123456789abcdef";
@@ -47,21 +48,28 @@ struct Entry {
 
 pub(super) fn source_files(
     source: &str,
-    paths: &[&str],
     token: &str,
     deadline: CheckDeadline,
 ) -> Result<BTreeMap<String, Vec<u8>>, OrchestratorError> {
-    let ids = load_tree(source, paths, token, deadline)?;
+    let tree = load_tree(source, token, deadline)?;
     let bytes = download(source, token, deadline)?;
-    read_archive(bytes, &ids, source, deadline)
+    let inventory_ids = select_tree_paths(&tree, &[IMAGE_NATIVE_INVENTORY_PATH])?;
+    let inventory_files = read_archive(&bytes, &inventory_ids, source, deadline)?;
+    let inventory_bytes = inventory_files
+        .get(IMAGE_NATIVE_INVENTORY_PATH)
+        .ok_or_else(|| internal("image_publication_source_inventory"))?;
+    let inventory = NativeImageSourceInventory::parse(inventory_bytes)
+        .map_err(|_| internal("image_publication_source_inventory"))?;
+    let paths = inventory.paths().collect::<Vec<_>>();
+    let ids = select_tree_paths(&tree, &paths)?;
+    read_archive(&bytes, &ids, source, deadline)
 }
 
 fn load_tree(
     source: &str,
-    paths: &[&str],
     token: &str,
     deadline: CheckDeadline,
-) -> Result<BTreeMap<String, (String, String)>, OrchestratorError> {
+) -> Result<Tree, OrchestratorError> {
     let commit: Commit = get_json(
         &format!("repos/tailrocks/velnor-new/git/commits/{source}"),
         token,
@@ -81,17 +89,26 @@ fn load_tree(
     if tree.sha != commit.tree.sha || tree.truncated || tree.entries.len() > 100_000 {
         return Err(internal("image_publication_source_tree"));
     }
+    Ok(tree)
+}
+
+fn select_tree_paths(
+    tree: &Tree,
+    paths: &[&str],
+) -> Result<BTreeMap<String, (String, String)>, OrchestratorError> {
     let wanted = paths.iter().copied().collect::<BTreeSet<_>>();
     if wanted.len() != paths.len() {
         return Err(internal("image_publication_source_inventory"));
     }
     let mut ids = BTreeMap::new();
-    for entry in tree.entries {
+    for entry in &tree.entries {
         if wanted.contains(entry.path.as_str())
             && (entry.kind != "blob"
                 || !matches!(entry.mode.as_str(), "100644" | "100755")
                 || !super::is_sha1(&entry.sha)
-                || ids.insert(entry.path, (entry.sha, entry.mode)).is_some())
+                || ids
+                    .insert(entry.path.clone(), (entry.sha.clone(), entry.mode.clone()))
+                    .is_some())
         {
             return Err(internal("image_publication_source_tree"));
         }
@@ -124,7 +141,7 @@ fn download(
 }
 
 fn read_archive(
-    bytes: Vec<u8>,
+    bytes: &[u8],
     ids: &BTreeMap<String, (String, String)>,
     source: &str,
     deadline: CheckDeadline,

@@ -54,7 +54,9 @@ pub(super) fn authenticate(
     validate_producer_run(request, candidate, &run)?;
     validate_artifact(request, candidate, &run, &token, deadline)?;
     let ci = ci::authenticate(request, &token, deadline)?;
-    if ci.id != run.id || ci.attempt != run.attempt {
+    if request.profile != ImagePublicationProfile::Job
+        && (ci.id != run.id || ci.attempt != run.attempt)
+    {
         return Err(internal("image_publication_producer_ci_mismatch"));
     }
     let source_files = source_files(request, &token, deadline)?;
@@ -176,7 +178,10 @@ fn validate_producer_run(
     candidate: &authority::CandidateRecord,
     run: &Run,
 ) -> Result<(), OrchestratorError> {
-    let path = CI_WORKFLOW;
+    let path = match request.profile {
+        ImagePublicationProfile::Job => ".github/workflows/job-image-candidate.yml",
+        _ => CI_WORKFLOW,
+    };
     let repository = run.head_repository.as_ref();
     if run.id != request.producer_run_id
         || run.attempt != request.producer_run_attempt
@@ -272,12 +277,7 @@ fn source_files(
     deadline: CheckDeadline,
 ) -> Result<BTreeMap<String, Vec<u8>>, OrchestratorError> {
     if request.profile == ImagePublicationProfile::Job {
-        return snapshot::source_files(
-            &request.source_commit,
-            authority::source_paths(request.profile),
-            token,
-            deadline,
-        );
+        return snapshot::source_files(&request.source_commit, token, deadline);
     }
     authority::source_paths(request.profile)
         .iter()
