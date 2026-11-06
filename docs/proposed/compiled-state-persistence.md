@@ -59,7 +59,7 @@ Reuse inside a job works; reuse across jobs and runs does not exist.
 
 ## GitHub cache rules that bind
 
-Each rule below was checked on 2026-11-04 against the original sources, and [the cache entry in the GitHub Actions reference](github-actions-reference.md#5-cache-rules-verified-against-original-sources-checked-2026-11-04) holds the full evidence with file and line citations. The sources are the GitHub docs pages `dependency-caching`, `workflow-syntax` and `limits`, the REST cache API page, `actions/cache` at the pinned commit `55cc834` (tag `v6`, bundling `@actions/cache` 6.1.0), and the `actions/toolkit` source for that package (commit `0786132e`, `packages/cache/src`). The numbers in brackets point to entries 5.1 to 5.9 of the reference.
+The rules below follow the original sources, and [the cache entry in the GitHub Actions reference](github-actions-reference.md#5-cache-rules-verified-against-original-sources) documents their compatibility constraints and pinned source references. The sources are the GitHub docs pages `dependency-caching`, `workflow-syntax` and `limits`, the REST cache API page, `actions/cache` at the pinned commit `55cc834` (tag `v6`, bundling `@actions/cache` 6.1.0), and the `actions/toolkit` source for that package (commit `0786132e`, `packages/cache/src`). The numbers in brackets point to entries 5.1 to 5.9 of the reference.
 
 - An entry is immutable. A new save needs a new key, and a save to an existing key is refused and logged at info level while the step succeeds [5.2].
 - `restore-keys` is a prefix match and returns the most recently created match, not the highest generation. The server does the matching, so only the docs prove the order [5.3].
@@ -245,7 +245,7 @@ About 4 registry units stay bypassed as `unsupported-crate-type` (an mbx 1.29.1 
 
 Today ten jobs write the main cache scope: Plan, alint, deny, machete, jactionlint, maintenance-helpers, both Required jobs, and the tools producers, plus the freshness and job-image-candidate jobs. Most of them run third-party code, and an entry from such a job can be poisoned. The design sets `cache-mode: read` at workflow level and grants write only to jobs that run no third-party code: the sources and tools producers and job A. Job A uses `write-only`, since it checks out nothing and restores nothing.
 
-Two limits from [the reference entry](github-actions-reference.md#5-cache-rules-verified-against-original-sources-checked-2026-11-04) apply. The pinned `actions/cache` does not read `ACTIONS_CACHE_MODE` [5.5], so the denial for a `read` job is a service response, logged as a warning, not an informational skip. A reusable workflow cannot raise its caller's explicit mode [5.5]. Whether `cache-mode` accepts expressions is unconfirmed, so the workflow uses literals.
+Two limits from [the reference entry](github-actions-reference.md#5-cache-rules-verified-against-original-sources) apply. The pinned `actions/cache` does not read `ACTIONS_CACHE_MODE` [5.5], so the denial for a `read` job is a service response, logged as a warning, not an informational skip. A reusable workflow cannot raise its caller's explicit mode [5.5]. Whether `cache-mode` accepts expressions is unconfirmed, so the workflow uses literals.
 
 ## Restore hardening and attestation
 
