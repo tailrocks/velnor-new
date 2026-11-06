@@ -413,13 +413,11 @@ NODE
 }
 
 hash_tree() {
-  verify_qualification_guard || return 1
-  "$QUALIFICATION_GUARD_BIN" tree-identity "$1" >"$2"
+  run_qualification_candidate "$QUALIFICATION_GUARD_BIN" tree-identity "$1" >"$2" || exit 2
 }
 
 link_identity() {
-  verify_qualification_guard || return 1
-  "$QUALIFICATION_GUARD_BIN" link-identity "$1"
+  run_qualification_candidate "$QUALIFICATION_GUARD_BIN" link-identity "$1"
 }
 
 build_bin() {
