@@ -412,38 +412,6 @@ fs.writeFileSync(file, content);
 NODE
 }
 
-# Deterministic content+link pin of a tree: sha256 per regular file
-# (sorted) plus one `link <path> -> <target>` line per symlink (sorted).
-# `find -type f` alone skips links, leaving targets unpinned.
-hash_tree() {
-  (cd "$1" && {
-    files="$(find . -type f | LC_ALL=C sort)" || exit 1
-    if [ -n "$files" ]; then
-      if command -v sha256sum >/dev/null 2>&1; then
-        printf '%s\n' "$files" | tr '\n' '\0' | xargs -0 sha256sum || exit 1
-      elif command -v shasum >/dev/null 2>&1; then
-        printf '%s\n' "$files" | tr '\n' '\0' | xargs -0 shasum -a 256 || exit 1
-      else
-        echo "FATAL: no SHA-256 utility is available" >&2
-        exit 1
-      fi
-    fi
-    find . -type l | sort | while IFS= read -r link; do
-      printf 'link %s -> %s\n' "$link" "$(readlink "$link")"
-    done
-  } >"$2")
-}
-
-# Deterministic symlink identity of a tree, one `<path> -> <target>`
-# line per link, sorted. `diff -r` follows links on both BSD and GNU,
-# so a link-vs-materialized-file pair with equal bytes compares silent
-# (proven on BSD); check mode diffs this listing explicitly.
-link_identity() {
-  (cd "$1" && find . -type l | sort | while IFS= read -r link; do
-    printf '%s -> %s\n' "$link" "$(readlink "$link")"
-  done)
-}
-
 build_bin() {
   if [ "$BIN_EXPLICIT" -eq 1 ]; then
     if [ ! -f "$BIN" ] || [ ! -x "$BIN" ]; then
