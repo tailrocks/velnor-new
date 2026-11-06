@@ -12,7 +12,7 @@ use velnor_actions_contract::{
 };
 
 use crate::OrchestratorError;
-use crate::config_stacks::PartialStacks;
+use crate::planner::config_stacks::PartialStacks;
 #[path = "config_workflow.rs"]
 mod workflow;
 use workflow::PartialWorkflow;

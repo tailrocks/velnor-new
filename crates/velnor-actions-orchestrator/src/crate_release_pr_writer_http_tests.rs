@@ -9,7 +9,7 @@ use super::*;
     reason = "The complete verified input is visible in one fixture"
 )]
 fn derives_reviewable_plan_from_verified_source_tree() -> Result<(), OrchestratorError> {
-    use crate::crate_release_pr_tree::{GitHubTrees, TreeItem, git_tree_sha};
+    use crate::release::crate_release_pr_tree::{GitHubTrees, TreeItem, git_tree_sha};
     struct Api {
         sha: String,
         blob: String,
@@ -76,7 +76,7 @@ fn derives_reviewable_plan_from_verified_source_tree() -> Result<(), Orchestrato
         },
         files: vec![crate::crate_release_pr_artifact::PreparedFile {
             path: "Cargo.toml".into(),
-            sha256: crate::generator::sha256_hex(b"new"),
+            sha256: crate::planner::generator::sha256_hex(b"new"),
             bytes: b"new".to_vec(),
         }],
     };

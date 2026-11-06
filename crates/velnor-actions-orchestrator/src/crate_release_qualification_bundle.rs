@@ -90,7 +90,7 @@ pub fn acquire_metadata(
         32 * 1024 * 1024,
     )?;
     let bytes = api.artifact_bytes(&request.repository, id, size, &digest)?;
-    if bytes.len() as u64 != size || crate::generator::sha256_hex(&bytes) != digest {
+    if bytes.len() as u64 != size || crate::planner::generator::sha256_hex(&bytes) != digest {
         return Err(invalid());
     }
     let mut zip = zip::ZipArchive::new(Cursor::new(bytes)).map_err(|_| invalid())?;
@@ -220,7 +220,7 @@ pub fn acquire_output_bundle(
         256 * 1024 * 1024,
     )?;
     let bytes = api.artifact_bytes(&request.repository, id, size, &digest)?;
-    if bytes.len() as u64 != size || crate::generator::sha256_hex(&bytes) != digest {
+    if bytes.len() as u64 != size || crate::planner::generator::sha256_hex(&bytes) != digest {
         return Err(invalid());
     }
     let mut zip = zip::ZipArchive::new(Cursor::new(bytes)).map_err(|_| invalid())?;

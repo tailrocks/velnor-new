@@ -7,8 +7,8 @@ use velnor_actions_contract::{ExecuteTaskRef, ObligationDecision, Plan};
 
 use super::super::MergeRequest;
 use crate::OrchestratorError;
-use crate::cover::Signals;
 use crate::internal::{SCHEMA, internal_contract};
+use crate::planner::cover::Signals;
 
 pub(crate) fn check_agreement(
     matrix: Option<&velnor_actions_contract::PlanMatrix>,

@@ -43,7 +43,9 @@ pub fn plan_outputs_with_admission(
         matrix: canonical_json_str(&response.plan.matrix).map_err(internal_contract)?,
         plan_id: response.plan.plan_id.clone(),
         run_key: response.plan.run_key.clone(),
-        not_affected_jobs: crate::plan_dispositions::encode_not_affected_jobs(&response.plan.jobs),
+        not_affected_jobs: crate::planner::plan_dispositions::encode_not_affected_jobs(
+            &response.plan.jobs,
+        ),
         qualification_campaign: qualification
             .map_or_else(String::new, |value| value.campaign.clone()),
         qualification_phase: qualification
@@ -74,8 +76,10 @@ pub fn plan_outputs_from_staged_admission(
     mode: PlanOutputMode,
     runner_temp: &std::path::Path,
 ) -> Result<PlanOutputs, OrchestratorError> {
-    let admission =
-        crate::qualification_resolver::read_qualification_admission(response_json, runner_temp)?;
+    let admission = crate::release::qualification_resolver::read_qualification_admission(
+        response_json,
+        runner_temp,
+    )?;
     plan_outputs_with_admission(response_json, mode, admission.as_ref())
 }
 

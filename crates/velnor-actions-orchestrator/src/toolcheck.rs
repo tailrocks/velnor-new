@@ -4,7 +4,7 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 
-use crate::native_tool_input::{
+use crate::planner::native_tool_input::{
     NativeToolInput, NativeToolSource, flatten_json, native_mise_source, toml_to_json,
 };
 use velnor_actions_contract::digest_b3;
@@ -105,7 +105,7 @@ fn check_toolchain(path: &str, content: Option<&str>) -> ToolInputCheck {
         digest,
         codes: finding_codes(&inspection.findings),
         native: content.map(|text| NativeToolInput {
-            sha256: crate::generator::sha256_hex(text.as_bytes()),
+            sha256: crate::planner::generator::sha256_hex(text.as_bytes()),
             source: NativeToolSource::RustToolchain,
         }),
     }

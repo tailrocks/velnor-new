@@ -14,7 +14,7 @@ use crate::crate_release_controller::reprepare_crate_release;
 pub(crate) enum UploadRuntime<'a> {
     Unprivileged(&'a crate::UnprivilegedSourceExecution),
     #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
-    Supervised(&'a crate::crate_release_source_view::SupervisedSourceExecution),
+    Supervised(&'a crate::release::crate_release_source_view::SupervisedSourceExecution),
 }
 
 impl<'a> UploadRuntime<'a> {
@@ -91,7 +91,7 @@ pub(super) fn load_bootstrap(
         .map_err(|_| internal("crate_release_bootstrap_manifest_invalid"))?;
     if manifest.version != intent.generator_version
         || manifest.commit != intent.generator_source_sha
-        || crate::generator::sha256_hex(&bytes) != intent.generator_manifest_sha256
+        || crate::planner::generator::sha256_hex(&bytes) != intent.generator_manifest_sha256
         || manifest.repository != "tailrocks/velnor-new"
     {
         return Err(internal("crate_release_bootstrap_manifest_mismatch"));
@@ -104,7 +104,7 @@ pub(super) fn load_bootstrap(
         manifest.version
     );
     let binary = read(&name, 128 * 1024 * 1024)?;
-    if crate::generator::sha256_hex(&binary) != target.sha256 {
+    if crate::planner::generator::sha256_hex(&binary) != target.sha256 {
         return Err(internal("crate_release_bootstrap_binary_mismatch"));
     }
     read("release-manifest.json.intoto.jsonl", 4 * 1024 * 1024)?;
@@ -138,8 +138,8 @@ pub(super) fn start_journal_with<T>(
 
 pub(super) fn verify_bootstrap_attestation(
     files: &BootstrapInput,
-) -> Result<crate::package_release_signer::AttestedLinuxGenerator, OrchestratorError> {
-    use crate::package_release_signer::{
+) -> Result<crate::release::package_release_signer::AttestedLinuxGenerator, OrchestratorError> {
+    use crate::release::package_release_signer::{
         SdkManifestAttestationExpectation, verify_published_linux_binary_attestation,
         verify_published_manifest_attestation,
     };
@@ -153,7 +153,7 @@ pub(super) fn verify_bootstrap_attestation(
             repository_id: 1_390_620_900,
             owner_id: 78_806_509,
             source_sha: &files.manifest.commit,
-            manifest_sha256: &crate::generator::sha256_hex(&files.bytes),
+            manifest_sha256: &crate::planner::generator::sha256_hex(&files.bytes),
         },
         deadline,
     )?;
@@ -168,7 +168,7 @@ pub(super) fn verify_bootstrap_attestation(
 
 pub(super) fn start_journal(input: JournalRuntime<'_>) -> Result<(), OrchestratorError> {
     use crate::crate_release_journal_adapter::JournalAdapter;
-    use crate::package_release_signer::{AdmittedStart, record_admitted_start};
+    use crate::release::package_release_signer::{AdmittedStart, record_admitted_start};
     let source_execution = input.upload.source_execution();
     let bootstrap = input.runner_temp.join("velnor/bootstrap");
     let reviewed_manifest =
@@ -186,7 +186,7 @@ pub(super) fn start_journal(input: JournalRuntime<'_>) -> Result<(), Orchestrato
                 input.registry,
                 crate::CrateSource::new(input.source, input.git, source_execution),
             )?;
-            observed.semver_evidence = crate::crate_release_semver::verify_preflight(
+            observed.semver_evidence = crate::release::crate_release_semver::verify_preflight(
                 input.source,
                 &observed,
                 input.registry,
@@ -195,7 +195,7 @@ pub(super) fn start_journal(input: JournalRuntime<'_>) -> Result<(), Orchestrato
                 source_execution,
             )?;
             crate::crate_release_controller::verify_observed_packages(&observed, &admission)?;
-            if !crate::crate_release_semver::matches_revalidated_preflight(
+            if !crate::release::crate_release_semver::matches_revalidated_preflight(
                 &admission.semver_evidence,
                 &observed.semver_evidence,
             ) {

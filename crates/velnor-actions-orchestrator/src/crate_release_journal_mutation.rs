@@ -46,7 +46,7 @@ pub struct JournalIntendedMutation {
     pub package: String,
     pub version: String,
     pub kind: JournalMutationKind,
-    pub semver_evidence: Option<crate::crate_release_semver::SemverEvidence>,
+    pub semver_evidence: Option<crate::release::crate_release_semver::SemverEvidence>,
 }
 
 pub(crate) fn record_journal_intent<I: JournalIo>(
@@ -205,8 +205,8 @@ pub(super) fn valid_mutation(
         && matches!(
             receipt.semver_evidence.get(&item.package),
             Some(
-                crate::crate_release_semver::SemverEvidence::MetadataOnly { .. }
-                    | crate::crate_release_semver::SemverEvidence::PriorNoBaselinePending { .. }
+                crate::release::crate_release_semver::SemverEvidence::MetadataOnly { .. }
+                    | crate::release::crate_release_semver::SemverEvidence::PriorNoBaselinePending { .. }
             )
         )
     {

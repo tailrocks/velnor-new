@@ -189,7 +189,7 @@ impl SourceResolver for GhResolver {
         let route = format!("repos/{repository}/releases/assets/{}", found.id);
         let content = self.api(&route, "application/octet-stream", MAX_ASSET_HASH_BYTES)?;
         Ok(AssetObservation {
-            sha256: crate::generator::sha256_hex(&content),
+            sha256: crate::planner::generator::sha256_hex(&content),
         })
     }
 }

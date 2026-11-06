@@ -5,9 +5,9 @@ use std::path::Path;
 
 use velnor_actions_contract::{WorkflowEvent, selects_affected_work};
 
-use crate::discover::Discovery;
-use crate::select_affected::Ownership;
-use crate::select_symlinks::{ResolvedLink, tracked_links};
+use crate::planner::discover::Discovery;
+use crate::planner::select_affected::Ownership;
+use crate::planner::select_symlinks::{ResolvedLink, tracked_links};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum SelectionMode {

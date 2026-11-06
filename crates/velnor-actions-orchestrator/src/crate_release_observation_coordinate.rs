@@ -15,7 +15,7 @@ pub(crate) fn coordinate_release<J, G, R>(
     mut verify_semver: impl FnMut(
         &str,
     ) -> Result<
-        crate::crate_release_semver::VerifiedSemver,
+        crate::release::crate_release_semver::VerifiedSemver,
         OrchestratorError,
     >,
     mut upload: impl FnMut(UploadPermit) -> Result<UploadAttempt, OrchestratorError>,
@@ -78,7 +78,7 @@ pub(super) fn coordinate_package<J, G, R>(
     verify_semver: &mut impl FnMut(
         &str,
     ) -> Result<
-        crate::crate_release_semver::VerifiedSemver,
+        crate::release::crate_release_semver::VerifiedSemver,
         OrchestratorError,
     >,
     upload: &mut impl FnMut(UploadPermit) -> Result<UploadAttempt, OrchestratorError>,
@@ -209,14 +209,15 @@ pub(super) fn wait_for_predecessor_indexes<
     wait: &mut impl FnMut(),
 ) -> Result<(), OrchestratorError> {
     let effective = super::super::effective_release_intent(input.intent, input.request);
-    let workspace = crate::crate_release_workspace::crate_release_workspace_plan_with_registry(
-        input.source,
-        &input.request.source_sha,
-        &effective,
-        input.registry,
-        input.git,
-        input.source_execution,
-    )?;
+    let workspace =
+        crate::release::crate_release_workspace::crate_release_workspace_plan_with_registry(
+            input.source,
+            &input.request.source_sha,
+            &effective,
+            input.registry,
+            input.git,
+            input.source_execution,
+        )?;
     let predecessors: std::collections::BTreeSet<_> = workspace
         .plan
         .graph

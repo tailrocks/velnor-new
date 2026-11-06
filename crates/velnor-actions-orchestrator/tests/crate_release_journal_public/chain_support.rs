@@ -209,14 +209,16 @@ pub(super) fn verify_prior_operation_chain(
         record_journal_mutation,
     };
     let mut mutation = JournalMutation {
-        semver_evidence: Some(crate::crate_release_semver::SemverEvidence::NoBaseline {
-            checker_sha256: velnor_actions_mise::catalog::qualified_cargo_semver_checks(
-                "ubuntu-26.04",
-            )
-            .expect("qualified checker")
-            .executable_sha256
-            .into(),
-        }),
+        semver_evidence: Some(
+            crate::release::crate_release_semver::SemverEvidence::NoBaseline {
+                checker_sha256: velnor_actions_mise::catalog::qualified_cargo_semver_checks(
+                    "ubuntu-26.04",
+                )
+                .expect("qualified checker")
+                .executable_sha256
+                .into(),
+            },
+        ),
         sequence: 1,
         package: "demo-crate".into(),
         version: "0.1.1".into(),

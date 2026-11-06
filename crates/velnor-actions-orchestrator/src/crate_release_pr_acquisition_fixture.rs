@@ -335,9 +335,12 @@ pub(crate) fn exercise(
     let values = runtime_values(&request);
     let mut bad_values = values.clone();
     bad_values.insert("VELNOR_PR_CONTENT_SHA256", "0".repeat(64));
-    let bad_context =
-        crate::crate_release_pr_run::Context::from_values(|name| bad_values.get(name).cloned())?;
-    assert!(crate::crate_release_pr_run::run_with(&bad_context, &github, &download).is_err());
+    let bad_context = crate::release::crate_release_pr_run::Context::from_values(|name| {
+        bad_values.get(name).cloned()
+    })?;
+    assert!(
+        crate::release::crate_release_pr_run::run_with(&bad_context, &github, &download).is_err()
+    );
     assert!(
         events
             .lock()
@@ -345,9 +348,10 @@ pub(crate) fn exercise(
             .iter()
             .all(|(route, _)| !route.starts_with("POST "))
     );
-    let context =
-        crate::crate_release_pr_run::Context::from_values(|name| values.get(name).cloned())?;
-    crate::crate_release_pr_run::run_with(&context, &github, &download)?;
+    let context = crate::release::crate_release_pr_run::Context::from_values(|name| {
+        values.get(name).cloned()
+    })?;
+    crate::release::crate_release_pr_run::run_with(&context, &github, &download)?;
     assert_writer_calls(&events, &artifact, &root, &expected_tree, &sha, intent)?;
     assert_rejections(&request, &github, &download, &routes, &prefix, intent);
     stop.store(true, Ordering::Relaxed);

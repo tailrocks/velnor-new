@@ -57,7 +57,7 @@ pub(crate) fn package_unprivileged(
     use std::ffi::{OsStr, OsString};
     use velnor_actions_mise::{PinnedTool, PinnedToolExec};
     crate::verify_crate_release_source(source, expected_sha, git)?;
-    crate::crate_release_source::verify_toolchain_source_separation(source)?;
+    crate::release::crate_release_source::verify_toolchain_source_separation(source)?;
     let mut args = vec![
         OsString::from("package"),
         OsString::from("--locked"),
@@ -86,7 +86,7 @@ pub(crate) fn package_unprivileged(
     tests::configure_test_registry(&cargo_home)?;
     #[cfg(all(test, unix))]
     let fixture_registry = seed_package_fixture(&cargo_home)?;
-    let catalog = crate::crate_release_source::source_tool_catalog(&intent.rust_version)
+    let catalog = crate::release::crate_release_source::source_tool_catalog(&intent.rust_version)
         .map_err(|_| internal("crate_release_toolchain_invalid"))?;
     let mut isolated_args = vec![
         OsString::from("-i"),
@@ -97,13 +97,16 @@ pub(crate) fn package_unprivileged(
     if fixture_registry {
         isolated_args.push(OsString::from("CARGO_NET_OFFLINE=true"));
     }
-    isolated_args.extend(crate::crate_release_source::source_compiler_env(
+    isolated_args.extend(crate::release::crate_release_source::source_compiler_env(
         &intent.rust_version,
         git,
     )?);
     isolated_args.push(
-        crate::crate_release_source::source_cargo_path(&intent.rust_version, sterile.path())?
-            .into_os_string(),
+        crate::release::crate_release_source::source_cargo_path(
+            &intent.rust_version,
+            sterile.path(),
+        )?
+        .into_os_string(),
     );
     isolated_args.extend(args);
     let exec = PinnedToolExec::new(vec![PinnedTool::Rust], OsStr::new("env"), isolated_args)
@@ -134,7 +137,7 @@ pub(super) fn seed_package_fixture(home: &Path) -> Result<bool, OrchestratorErro
     let Some(snapshot) = std::env::var_os("VELNOR_NATIVE_REGISTRY_SNAPSHOT") else {
         return Ok(false);
     };
-    crate::crate_release_semver::test_registry::copy_snapshot(Path::new(&snapshot), home)
+    crate::release::crate_release_semver::test_registry::copy_snapshot(Path::new(&snapshot), home)
         .map_err(|_| internal("crate_release_package_temp"))?;
     Ok(true)
 }

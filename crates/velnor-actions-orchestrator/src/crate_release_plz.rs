@@ -65,7 +65,7 @@ pub(crate) fn invoke_upload<
     std::fs::create_dir(&cargo_home).map_err(|_| invalid())?;
     #[cfg(all(test, unix))]
     if let Some(snapshot) = std::env::var_os("VELNOR_NATIVE_REGISTRY_SNAPSHOT") {
-        crate::crate_release_semver::test_registry::copy_snapshot(
+        crate::release::crate_release_semver::test_registry::copy_snapshot(
             Path::new(&snapshot),
             &cargo_home,
         )
@@ -124,20 +124,22 @@ pub(crate) fn invoke_supervised_upload<
 >(
     input: &CrateReleaseObservation<'_, J, G, R>,
     permit: UploadPermit,
-    execution: &crate::crate_release_source_view::SupervisedSourceExecution,
+    execution: &crate::release::crate_release_source_view::SupervisedSourceExecution,
 ) -> Result<UploadAttempt, OrchestratorError> {
     let qualified = validate_upload_permit(input, &permit)?;
     let package = permit.package;
     let version = permit.version;
-    execution.upload(&crate::crate_release_source_view::SupervisedUpload {
-        root: input.source,
-        intent: input.intent,
-        git: input.git,
-        package: &package,
-        version: &version,
-        sequence: permit.sequence,
-        release_plz_sha256: qualified.executable_sha256,
-    })?;
+    execution.upload(
+        &crate::release::crate_release_source_view::SupervisedUpload {
+            root: input.source,
+            intent: input.intent,
+            git: input.git,
+            package: &package,
+            version: &version,
+            sequence: permit.sequence,
+            release_plz_sha256: qualified.executable_sha256,
+        },
+    )?;
     Ok(UploadAttempt::ExitedSuccess)
 }
 
@@ -145,7 +147,8 @@ fn upload_rust_tools(
     home: &Path,
     version: &str,
 ) -> Result<[std::path::PathBuf; 3], OrchestratorError> {
-    let tool = |name| crate::crate_release_source::verified_rust_tool_path(home, version, name);
+    let tool =
+        |name| crate::release::crate_release_source::verified_rust_tool_path(home, version, name);
     Ok([tool("cargo")?, tool("rustc")?, tool("rustdoc")?])
 }
 
@@ -170,7 +173,7 @@ fn verified_release_plz(
         crate::safe_read::RepoBytes::Bytes(bytes) => bytes,
         crate::safe_read::RepoBytes::Absent => return Err(invalid()),
     };
-    if crate::generator::sha256_hex(&bytes) != expected {
+    if crate::planner::generator::sha256_hex(&bytes) != expected {
         return Err(invalid());
     }
     Ok(runner_temp.join(relative))
@@ -214,7 +217,7 @@ pub(super) fn validate_upload_permit<
     verify_binding(input)?;
     let bytes =
         velnor_actions_contract::canonical_json_bytes(input.intent).map_err(|_| invalid())?;
-    if permit.intent_sha256 != crate::generator::sha256_hex(&bytes)
+    if permit.intent_sha256 != crate::planner::generator::sha256_hex(&bytes)
         || permit.repository != input.request.repository
         || permit.workflow_sha != input.request.workflow_sha
         || permit.source_sha != input.request.source_sha

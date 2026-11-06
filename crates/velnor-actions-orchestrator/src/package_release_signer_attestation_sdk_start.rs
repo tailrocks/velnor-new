@@ -60,7 +60,7 @@ pub(crate) fn record_admitted_start<
         crate::CrateSource::new(input.source, input.git, input.source_execution),
     )?;
     crate::crate_release_controller::verify_observed_packages(&observed, input.admission)?;
-    crate::crate_release_semver::verify_observed_evidence(input.admission, &observed)?;
+    crate::release::crate_release_semver::verify_observed_evidence(input.admission, &observed)?;
     let receipt = derive_start_receipt(input, &observed)?;
     let prior_history = verified_prior_chain(input, &receipt)?;
     crate::crate_release_github::authorize_github_candidate(
@@ -117,7 +117,7 @@ where
     )?;
     for prior in &chain {
         let previous = &prior.start.receipt;
-        let intent = match crate::crate_release_runtime::read_intent_at_workflow(
+        let intent = match crate::release::crate_release_runtime::read_intent_at_workflow(
             input.workflow_root,
             &previous.identity.workflow_sha,
             input.git,
@@ -139,7 +139,7 @@ where
                 run_attempt: item.run_attempt,
             }
         });
-        if crate::generator::sha256_hex(&bytes) != previous.intent_sha256
+        if crate::planner::generator::sha256_hex(&bytes) != previous.intent_sha256
             || crate::crate_release_journal::release_base_intent_sha256(&intent)?
                 != previous.base_intent_sha256
             || expected_predecessor != previous.predecessor
@@ -196,7 +196,7 @@ fn derive_start_receipt<
             }
         }),
         identity: identity.clone(),
-        intent_sha256: crate::generator::sha256_hex(&intent_bytes),
+        intent_sha256: crate::planner::generator::sha256_hex(&intent_bytes),
         base_intent_sha256: crate::crate_release_journal::release_base_intent_sha256(input.intent)?,
         registry: JournalRegistry::CratesIo,
         generator_version: input.intent.generator_version.clone(),
@@ -332,7 +332,9 @@ pub(crate) fn measure_release_tools(
         relative,
         limit,
     )? {
-        crate::safe_read::RepoBytes::Bytes(bytes) => Ok(crate::generator::sha256_hex(&bytes)),
+        crate::safe_read::RepoBytes::Bytes(bytes) => {
+            Ok(crate::planner::generator::sha256_hex(&bytes))
+        }
         crate::safe_read::RepoBytes::Absent => {
             Err(internal("crate_release_tool_measurement_missing"))
         }

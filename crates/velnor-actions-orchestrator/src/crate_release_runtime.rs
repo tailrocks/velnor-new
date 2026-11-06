@@ -40,7 +40,7 @@ pub fn run_crate_release(operation: &str) -> Result<(), OrchestratorError> {
         return supervised::run();
     }
     if operation == "release-pr-create" {
-        return crate::crate_release_pr_run::run_from_environment();
+        return crate::release::crate_release_pr_run::run_from_environment();
     }
     run_qualified_crate_release(operation)
 }
@@ -289,7 +289,7 @@ mod tests {
         let done = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
         let server_done = std::sync::Arc::clone(&done);
         let server = std::thread::spawn(move || serve_test_transport(&listener, &server_done));
-        let (spec, rust) = crate::release_steps::tests::fixture()?;
+        let (spec, rust) = crate::release::release_steps::tests::fixture()?;
         let workflow = velnor_actions_workflow_renderer::release_tree::render_release_workflow(
             &spec,
             &velnor_actions_workflow_renderer::release_tree::ReleaseRenderContext {
@@ -315,7 +315,7 @@ mod tests {
         let status = std::process::Command::new(std::env::current_exe()?)
             .args([
                 "--exact",
-                "crate_release_runtime::tests::test_only_dispatch_and_loopback_transport",
+                "release::crate_release_runtime::tests::test_only_dispatch_and_loopback_transport",
             ])
             .env("VELNOR_TEST_TRANSPORT_CHILD", "1")
             .env("VELNOR_TEST_GITHUB_ORIGIN", &origin)

@@ -13,7 +13,7 @@ use velnor_actions_contract::{CacheAccess, Job, JobTimeout, Permissions};
 use super::CrateJobInputs;
 use crate::OrchestratorError;
 use crate::config::private_wiring::PrivateWiring;
-use crate::matrix_step::LaneTools;
+use crate::planner::matrix_step::LaneTools;
 
 pub(super) fn ledger_cli_job(
     input: &CrateJobInputs<'_>,
@@ -24,7 +24,7 @@ pub(super) fn ledger_cli_job(
         label, fetch_roots, ..
     } = input;
     let catalog = &input.catalog.clone().with_rust_mr_boxington(false);
-    let roots = crate::source_prep::crate_fetch_roots("", fetch_roots, false);
+    let roots = crate::planner::source_prep::crate_fetch_roots("", fetch_roots, false);
     if roots.is_empty() {
         return Err(OrchestratorError::Contract {
             problem: "ledger_cli_requires_root_cargo_lock".to_owned(),
@@ -33,18 +33,24 @@ pub(super) fn ledger_cli_job(
     let mut steps = vec![crate::workflow::wire_w1::checkout_step()?];
     steps.extend(input.acquire.cloned());
     steps.push(crate::workflow::verify_restored_rust_step(catalog));
-    steps.push(crate::matrix_step::prepare_crate_tools_step(catalog, lane)?);
-    steps.extend(crate::matrix_step::verify_validators_step(catalog, lane));
+    steps.push(crate::planner::matrix_step::prepare_crate_tools_step(
+        catalog, lane,
+    )?);
+    steps.extend(crate::planner::matrix_step::verify_validators_step(
+        catalog, lane,
+    ));
     steps.push(crate::workflow::prepare_rust_components_step(catalog)?);
     steps.push(crate::workflow::verify_rust_manifest_step(catalog));
-    steps.extend(crate::source_cache::keyed_restore_steps(catalog, &roots)?);
+    steps.extend(crate::planner::source_cache::keyed_restore_steps(
+        catalog, &roots,
+    )?);
     if let Some(private) = private {
         steps.extend(private.steps_for_roots(&roots)?);
     }
-    steps.extend(crate::source_prep::fetch_steps_for_crate(
+    steps.extend(crate::planner::source_prep::fetch_steps_for_crate(
         catalog, &roots, false,
     )?);
-    let env = crate::matrix_step::task_step_env(catalog, &BTreeMap::new(), true)?;
+    let env = crate::planner::matrix_step::task_step_env(catalog, &BTreeMap::new(), true)?;
     steps.push(
         velnor_actions_workflow_renderer::ledger_cli_build_step(catalog, &env)
             .map_err(OrchestratorError::from)?,

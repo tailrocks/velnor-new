@@ -54,9 +54,9 @@ struct Plan {
 
 pub(crate) fn write_prepared_pr(
     github: &crate::crate_release_github::NativeGitHubAdmissionRead,
-    preparation: &crate::crate_release_pr_acquisition::VerifiedPreparation,
+    preparation: &crate::release::crate_release_pr_acquisition::VerifiedPreparation,
 ) -> Result<(), OrchestratorError> {
-    let trees = crate::crate_release_pr_tree::GitHubTrees {
+    let trees = crate::release::crate_release_pr_tree::GitHubTrees {
         api: github,
         repository: &preparation.artifact.binding.repository,
     };
@@ -72,7 +72,7 @@ pub(crate) fn write_prepared_pr(
     Ok(())
 }
 
-fn build_plan<R: crate::crate_release_pr_tree::TreeRead>(
+fn build_plan<R: crate::release::crate_release_pr_tree::TreeRead>(
     trees: &R,
     intent: &velnor_actions_contract::config::CrateReleaseIntent,
     source_sha: &str,
@@ -80,8 +80,10 @@ fn build_plan<R: crate::crate_release_pr_tree::TreeRead>(
     artifact: &crate::crate_release_pr_artifact::PreparationArtifact,
 ) -> Result<Plan, OrchestratorError> {
     let invalid = || internal("release_pr_plan_invalid");
-    if !crate::release_identity::same_repository(&artifact.binding.repository, &intent.repository)
-        || artifact.binding.source_sha != source_sha
+    if !crate::release::release_identity::same_repository(
+        &artifact.binding.repository,
+        &intent.repository,
+    ) || artifact.binding.source_sha != source_sha
         || artifact.binding.workflow_sha != source_sha
         || artifact.binding.run_attempt != 1
         || artifact.binding.run_id == 0
@@ -95,8 +97,11 @@ fn build_plan<R: crate::crate_release_pr_tree::TreeRead>(
         if !allowed_paths.contains(&file.path) {
             return Err(invalid());
         }
-        let mode =
-            crate::crate_release_pr_tree::regular_file_mode(trees, source_tree_sha, &file.path)?;
+        let mode = crate::release::crate_release_pr_tree::regular_file_mode(
+            trees,
+            source_tree_sha,
+            &file.path,
+        )?;
         let sha = crate::release_policy_admission::git_blob_sha1(&file.bytes)?;
         if changes
             .insert(file.path.clone(), (mode.clone(), file.bytes.clone()))
@@ -106,11 +111,11 @@ fn build_plan<R: crate::crate_release_pr_tree::TreeRead>(
         }
         overlay.insert(
             file.path.clone(),
-            crate::crate_release_pr_tree::Change { mode, sha },
+            crate::release::crate_release_pr_tree::Change { mode, sha },
         );
     }
     let expected_tree =
-        crate::crate_release_pr_tree::overlay_tree(trees, source_tree_sha, &overlay)?;
+        crate::release::crate_release_pr_tree::overlay_tree(trees, source_tree_sha, &overlay)?;
     let plan = Plan {
         repository: artifact.binding.repository.clone(),
         base: intent.default_branch.clone(),

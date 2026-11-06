@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{OrchestratorError, prepare::GenerationPreparation};
+use crate::{OrchestratorError, planner::prepare::GenerationPreparation};
 use std::collections::BTreeSet;
 use velnor_actions_contract::config::{ReleaseRegistry, RustReleaseConfig};
 use velnor_actions_mise::{GitRequest, MetadataDiscovery};
@@ -125,7 +125,7 @@ pub(super) fn release_metadata_json_at(
     manifest: &str,
 ) -> Result<String, OrchestratorError> {
     if let Some(guard) = prep.operator_toolchain_guard() {
-        crate::inventory::require_metadata_tools(catalog, Some(guard))?;
+        crate::planner::inventory::require_metadata_tools(catalog, Some(guard))?;
         return MetadataDiscovery::new(root.join(manifest))
             .and_then(|request| request.run_with_operator_guard(catalog, guard))
             .map_err(|_| OrchestratorError::ToolchainGuard {
@@ -136,7 +136,8 @@ pub(super) fn release_metadata_json_at(
         manifest: manifest.to_owned(),
         problem,
     };
-    crate::inventory::require_rust_pin(catalog).map_err(|err| incomplete(err.to_string()))?;
+    crate::planner::inventory::require_rust_pin(catalog)
+        .map_err(|err| incomplete(err.to_string()))?;
     let request =
         MetadataDiscovery::new(root.join(manifest)).map_err(|err| incomplete(err.to_string()))?;
     let command = request

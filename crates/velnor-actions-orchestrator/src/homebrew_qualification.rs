@@ -91,21 +91,22 @@ fn verify_historical_pair(
     deadline: CheckDeadline,
 ) -> Result<
     (
-        crate::package_release_public::VerifiedPublicPackageRelease,
-        crate::package_release_public::VerifiedPublicPackageRelease,
+        crate::release::package_release_public::VerifiedPublicPackageRelease,
+        crate::release::package_release_public::VerifiedPublicPackageRelease,
     ),
     OrchestratorError,
 > {
-    let current_main = crate::package_release_publish::verify_public_protected_main_lineage(
-        REPOSITORY,
-        REPOSITORY_ID,
-        "main",
-        &a.release.source_sha,
-        &a.producer.authority_sha,
-        deadline,
-    )?;
+    let current_main =
+        crate::release::package_release_publish::verify_public_protected_main_lineage(
+            REPOSITORY,
+            REPOSITORY_ID,
+            "main",
+            &a.release.source_sha,
+            &a.producer.authority_sha,
+            deadline,
+        )?;
     let policy =
-        crate::package_release_public::PackageReleasePublicPolicy::from_trusted_source_authority(
+        crate::release::package_release_public::PackageReleasePublicPolicy::from_trusted_source_authority(
             plan.clone(),
             REPOSITORY_ID,
             current_main.clone(),
@@ -119,7 +120,7 @@ fn verify_historical_pair(
     verify_custody_pair(plan, &verified_a, &verified_d, &current_main)?;
     check_receipt(&verified_a, a)?;
     check_receipt(&verified_d, d)?;
-    let final_main = crate::package_release_publish::verify_public_protected_main_lineage(
+    let final_main = crate::release::package_release_publish::verify_public_protected_main_lineage(
         REPOSITORY,
         REPOSITORY_ID,
         "main",
@@ -135,8 +136,8 @@ fn verify_historical_pair(
 
 fn verify_custody_pair(
     plan: &velnor_actions_contract::PackageReleasePlan,
-    verified_a: &crate::package_release_public::VerifiedPublicPackageRelease,
-    verified_d: &crate::package_release_public::VerifiedPublicPackageRelease,
+    verified_a: &crate::release::package_release_public::VerifiedPublicPackageRelease,
+    verified_d: &crate::release::package_release_public::VerifiedPublicPackageRelease,
     current_main: &str,
 ) -> Result<(), OrchestratorError> {
     if !verified_a.is_historical_admission()
@@ -328,20 +329,23 @@ fn validate_record_release(
 }
 
 fn verify(
-    policy: &crate::package_release_public::PackageReleasePublicPolicy,
+    policy: &crate::release::package_release_public::PackageReleasePublicPolicy,
     record: &HistoricalRecord,
     deadline: CheckDeadline,
-) -> Result<crate::package_release_public::VerifiedPublicPackageRelease, OrchestratorError> {
-    let selection = crate::package_release_public::PackageReleasePublicSelection::new(
+) -> Result<crate::release::package_release_public::VerifiedPublicPackageRelease, OrchestratorError>
+{
+    let selection = crate::release::package_release_public::PackageReleasePublicSelection::new(
         PackageReleaseChannel::Preview,
         record.release.tag.clone(),
         record.release.source_sha.clone(),
     )?;
-    crate::package_release_public::verify_public_package_release(policy, &selection, deadline)
+    crate::release::package_release_public::verify_public_package_release(
+        policy, &selection, deadline,
+    )
 }
 
 fn check_receipt(
-    verified: &crate::package_release_public::VerifiedPublicPackageRelease,
+    verified: &crate::release::package_release_public::VerifiedPublicPackageRelease,
     record: &HistoricalRecord,
 ) -> Result<(), OrchestratorError> {
     let receipt = verified.receipt();

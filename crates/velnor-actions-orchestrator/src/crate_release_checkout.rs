@@ -78,7 +78,7 @@ pub fn checkout_from_environment(mode: &str) -> Result<(), OrchestratorError> {
     let runner_temp = PathBuf::from(required("RUNNER_TEMP")?);
     let deadline = velnor_actions_mise::CheckDeadline::after(std::time::Duration::from_secs(600))
         .map_err(|_| invalid())?;
-    let verified_git = crate::crate_release_git_bundle::acquire(&runner_temp, deadline)?;
+    let verified_git = crate::release::crate_release_git_bundle::acquire(&runner_temp, deadline)?;
     let token = required("GIT_TOKEN")?;
     checkout(
         &verified_git,
@@ -96,7 +96,7 @@ pub fn checkout_from_environment(mode: &str) -> Result<(), OrchestratorError> {
 
 #[cfg(target_os = "linux")]
 pub(crate) fn checkout_policy(
-    root: &crate::crate_release_custody::PublisherRoot,
+    root: &crate::release::crate_release_custody::PublisherRoot,
     git: &crate::crate_release_git::ReleaseGit,
     repository: &str,
     workflow_sha: &str,
@@ -127,7 +127,7 @@ pub(crate) fn checkout_policy(
 
 #[cfg(target_os = "linux")]
 pub(crate) fn checkout_authorized_source(
-    view: &crate::crate_release_custody::PublisherView,
+    view: &crate::release::crate_release_custody::PublisherView,
     authority: &crate::crate_release_github::GitHubAuthorized,
     git: &crate::crate_release_git::ReleaseGit,
     token: &str,

@@ -5,7 +5,7 @@ use serde::Deserialize;
 use velnor_actions_contract::{QualificationDispatch, RequiredJobResult, WorkflowEvent};
 
 use super::MergeRequest;
-use crate::cover::shard::{ResourceLimits, ShardProof};
+use crate::planner::cover::shard::{ResourceLimits, ShardProof};
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]

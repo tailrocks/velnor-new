@@ -20,15 +20,16 @@ use velnor_actions_rust::{
 };
 
 use crate::OrchestratorError;
-use crate::clippy_groups::{ClippyMemoryPlan, clippy_memory_groups};
 use crate::config::gradle_jobs;
-use crate::discover_index::build_file_index;
 use crate::internal::phase_timing::PlanPhaseTimings;
-use crate::recommendations::collect_recommendations;
+use crate::planner::clippy_groups::{ClippyMemoryPlan, clippy_memory_groups};
+use crate::planner::discover_index::build_file_index;
+use crate::planner::recommendations::collect_recommendations;
+use crate::planner::{affected_inputs, inventory};
 #[path = "consumer_manifest.rs"]
 mod consumer_manifest;
 use crate::toolcheck::{ToolInputCheck, check_tool_inputs_with_paths};
-use crate::{discover_tofu::qualify_tofu_step, evidence::profile_for_workspace};
+use crate::{planner::discover_tofu::qualify_tofu_step, planner::evidence::profile_for_workspace};
 
 #[derive(Debug, Clone)]
 pub struct PlannedWorkspace {
@@ -46,7 +47,7 @@ pub struct Discovery {
     pub statuses: Vec<DetectionStatus>,
     pub workspaces: Vec<PlannedWorkspace>,
     pub proposals: Vec<ProposedTask>,
-    pub feature_fallbacks: Vec<crate::derive_groups::FeatureFallback>,
+    pub feature_fallbacks: Vec<crate::planner::derive_groups::FeatureFallback>,
     pub tool_checks: Vec<ToolInputCheck>,
     pub clippy_memory: ClippyMemoryPlan,
     pub recommendations: Vec<String>,
@@ -54,8 +55,8 @@ pub struct Discovery {
     pub consumer_manifest_stand_in: bool,
     pub skipped_non_utf8: bool,
     pub tofu_note: Option<velnor_actions_tofu::TofuNote>,
-    pub tofu_units: Vec<crate::select_tofu::TofuSelectionUnit>,
-    pub affected: crate::affected_inputs::AffectedInputs,
+    pub tofu_units: Vec<crate::planner::select_tofu::TofuSelectionUnit>,
+    pub affected: affected_inputs::AffectedInputs,
     pub(crate) bun: crate::workflow_task_jobs::bun_inventory::BunInventory,
     pub(crate) dbt: crate::workflow_task_jobs::dbt_inventory::DbtInventory,
     pub(crate) ansible: crate::workflow_task_jobs::ansible_inventory::AnsibleInventory,
@@ -96,7 +97,7 @@ pub(crate) fn discover_with_options(
         problem: err.to_string(),
     })?;
     let initial = apply_stack_ignores(projects, &config.stacks.ignore);
-    let ((outcomes, inventories), tofu_units) = crate::inventory::run_inventories_with_options(
+    let ((outcomes, inventories), tofu_units) = inventory::run_inventories_with_options(
         root,
         &candidates,
         index.files(),
@@ -111,10 +112,8 @@ pub(crate) fn discover_with_options(
         }
     })?;
     let workspaces = plan_workspaces(root, &index, &statuses, inventories, config)?;
-    let resolves =
-        crate::inventory::qualify_workspaces_with_guard(root, &workspaces, catalog, guard)?;
-    let rules =
-        crate::affected_inputs::resolve_input_rules(config.stacks.rust.as_ref(), &workspaces)?;
+    let resolves = inventory::qualify_workspaces_with_guard(root, &workspaces, catalog, guard)?;
+    let rules = affected_inputs::resolve_input_rules(config.stacks.rust.as_ref(), &workspaces)?;
     let (mut proposals, fallbacks) = derive_all(config, &index, &workspaces, &statuses)?;
     let mise_checks =
         velnor_actions_mise::discover_checks(root, &config.checks, &config.qualified_tools)
@@ -153,7 +152,7 @@ pub(crate) fn discover_with_options(
         skipped_non_utf8,
         tofu_note: tofu_step.note,
         tofu_units,
-        affected: crate::affected_inputs::AffectedInputs::new(
+        affected: affected_inputs::AffectedInputs::new(
             resolves,
             rules,
             config.stacks.rust.as_ref(),
@@ -162,7 +161,7 @@ pub(crate) fn discover_with_options(
         dbt,
         ansible,
     };
-    crate::non_inputs::validate(root, config, &discovery)?;
+    crate::planner::non_inputs::validate(root, config, &discovery)?;
     Ok(discovery)
 }
 
@@ -253,7 +252,7 @@ fn derive_all(
 ) -> Result<
     (
         Vec<ProposedTask>,
-        Vec<crate::derive_groups::FeatureFallback>,
+        Vec<crate::planner::derive_groups::FeatureFallback>,
     ),
     OrchestratorError,
 > {
@@ -263,13 +262,14 @@ fn derive_all(
         .clone()
         .unwrap_or_else(RustStackConfig::default_config);
     let explicit_fmt = true;
-    let union = crate::derive_groups::declared_union(workspaces, index, config.workflow.policy);
+    let union =
+        crate::planner::derive_groups::declared_union(workspaces, index, config.workflow.policy);
     let mut groups = Vec::new();
     let mut fallbacks = Vec::new();
     let mut archives = ArchivePlan::new();
     for workspace in workspaces {
         for config_name in &rust.configurations {
-            let (derived, narrowed) = crate::derive_groups::derive_for_config(
+            let (derived, narrowed) = crate::planner::derive_groups::derive_for_config(
                 config,
                 index,
                 workspace,
@@ -288,7 +288,10 @@ fn derive_all(
         task.validate()?;
         proposals.push(task);
     }
-    proposals.extend(crate::select_tofu::derive_tofu(statuses, index.files())?);
+    proposals.extend(crate::planner::select_tofu::derive_tofu(
+        statuses,
+        index.files(),
+    )?);
     proposals.sort_by(|left, right| left.task_id.cmp(&right.task_id));
     Ok((proposals, fallbacks))
 }

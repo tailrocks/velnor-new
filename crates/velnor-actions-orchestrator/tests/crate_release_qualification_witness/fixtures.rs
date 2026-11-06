@@ -47,7 +47,7 @@ impl Fixture {
         )?;
         archive.write_all(serde_json::to_string(&observation)?.as_bytes())?;
         let bytes = archive.finish()?.into_inner();
-        let digest = crate::generator::sha256_hex(&bytes);
+        let digest = crate::planner::generator::sha256_hex(&bytes);
         let run = json!({"id":33,"run_attempt":1,"head_sha":request.workflow_sha,"repository":{"id":12},"head_repository":{"id":12},"path":request.workflow_path,"event":"workflow_dispatch","status":"completed","conclusion":"success"});
         let job = json!({"id":44,"run_id":33,"run_attempt":1,"head_sha":request.workflow_sha,"name":"witness","status":"completed","conclusion":"success","steps":[{"name":"Bind observation artifact","status":"completed","conclusion":"success"}]});
         let artifact = json!({"id":77,"name":"rehearsal-observation","expired":false,"size_in_bytes":bytes.len(),"digest":format!("sha256:{digest}"),"workflow_run":{"id":33,"repository_id":12,"head_repository_id":12,"head_sha":request.workflow_sha}});

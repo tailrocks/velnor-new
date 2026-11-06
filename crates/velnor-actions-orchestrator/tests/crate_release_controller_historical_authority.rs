@@ -118,7 +118,7 @@ pub(super) fn exercise_historical_authority(
         JournalIntendedMutation, JournalMutationKind, fixture_storage::seed_started_record,
         record_journal_intent,
     };
-    use crate::package_release_signer::{AdmittedStart, fixture_attested_generator};
+    use crate::release::package_release_signer::{AdmittedStart, fixture_attested_generator};
     let HistoricalFixture {
         temp,
         workflow,
@@ -181,7 +181,7 @@ pub(super) fn exercise_historical_authority(
 }
 
 pub(super) fn check_historical_authority(
-    input: &crate::package_release_signer::AdmittedStart<
+    input: &crate::release::package_release_signer::AdmittedStart<
         '_,
         JournalRegistryFake,
         HistoricalAuthority<'_>,
@@ -190,7 +190,7 @@ pub(super) fn check_historical_authority(
     event: &str,
     bad_recovery: u8,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    use crate::package_release_signer::record_admitted_start;
+    use crate::release::package_release_signer::record_admitted_start;
     for defect in 1..=if event == "push" { 9 } else { 8 } {
         input.github.defect.set(defect);
         let writes = input.journal.write_calls.get();
@@ -236,7 +236,7 @@ pub(super) fn workflow_lock_uses_event_scoped_recovery_and_committed_policy()
     request.event = "push".into();
     request.recovery_sha = None;
     let effective = super::super::effective_release_intent(&intent, &request);
-    let plan = crate::crate_release_workspace::crate_release_workspace_plan_with_registry(
+    let plan = crate::release::crate_release_workspace::crate_release_workspace_plan_with_registry(
         source.path(),
         &request.source_sha,
         &effective,
@@ -268,7 +268,7 @@ pub(super) fn workflow_lock_uses_event_scoped_recovery_and_committed_policy()
         ],
     )?;
     request.workflow_sha = git(policy.path(), &["rev-parse", "HEAD"])?;
-    crate::crate_release_runtime::verify_workflow_concurrency(
+    crate::release::crate_release_runtime::verify_workflow_concurrency(
         policy.path(),
         source.path(),
         &intent,
@@ -279,7 +279,7 @@ pub(super) fn workflow_lock_uses_event_scoped_recovery_and_committed_policy()
     )?;
     fs::write(source.path().join("src/lib.rs"), "pub fn modified() {}")?;
     assert!(
-        crate::crate_release_runtime::verify_workflow_concurrency(
+        crate::release::crate_release_runtime::verify_workflow_concurrency(
             policy.path(),
             source.path(),
             &intent,
@@ -294,7 +294,7 @@ pub(super) fn workflow_lock_uses_event_scoped_recovery_and_committed_policy()
     request.event = "workflow_dispatch".into();
     request.recovery_sha = Some("f".repeat(40));
     assert!(
-        crate::crate_release_runtime::verify_workflow_concurrency(
+        crate::release::crate_release_runtime::verify_workflow_concurrency(
             policy.path(),
             source.path(),
             &intent,

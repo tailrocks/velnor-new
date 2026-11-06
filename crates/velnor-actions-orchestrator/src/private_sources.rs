@@ -9,8 +9,8 @@ use velnor_actions_contract::config::PrivateSourcesConfig;
 use velnor_actions_contract::deps_lock::DepsLock;
 
 use crate::OrchestratorError;
-use crate::discover::workspace_lock;
 use crate::internal::internal;
+use crate::planner::discover::workspace_lock;
 use crate::safe_read::{MAX_REPO_FILE_BYTES, RepoRead, read_repo_file};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]

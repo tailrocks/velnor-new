@@ -185,7 +185,7 @@ fn restore(
         }
         total = total
             .checked_add(proof.size)
-            .filter(|size| *size <= crate::package_release_artifacts::MAX_TOTAL_BYTES)
+            .filter(|size| *size <= crate::release::package_release_artifacts::MAX_TOTAL_BYTES)
             .ok_or_else(|| internal("preview_leaf_asset_total"))?;
         pinned.push(HeldFile::new(
             Path::new(&input.path),

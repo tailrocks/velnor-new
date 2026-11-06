@@ -183,9 +183,9 @@ def main():
     package, test_target = targets[kind]
     image_attestation_tests = {
         "crate_release_qualification_manifest::tests::authenticates_real_historical_manifest_and_rejects_mutations",
-        "package_release_signer::attestation::sdk::fixture_tests::verifies_public_manifest_and_linux_binary",
-        "package_release_signer::attestation::image_transport_tests::real_github_transport_verifies_the_signed_record",
-        "package_release_signer::attestation::image_fixture_tests::signed_image_record_binds_source_run_and_subjects",
+        "release::package_release_signer::attestation::sdk::fixture_tests::verifies_public_manifest_and_linux_binary",
+        "release::package_release_signer::attestation::image_transport_tests::real_github_transport_verifies_the_signed_record",
+        "release::package_release_signer::attestation::image_fixture_tests::signed_image_record_binds_source_run_and_subjects",
     }
     if kind == "image_attestation" and test not in image_attestation_tests:
         raise RuntimeError("fixture scenario does not belong to target")

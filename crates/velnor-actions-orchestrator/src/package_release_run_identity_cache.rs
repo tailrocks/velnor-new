@@ -6,7 +6,7 @@ use crate::{OrchestratorError, internal::internal};
 use std::collections::{BTreeMap, BTreeSet};
 
 #[derive(Default)]
-pub(in crate::package_release_publish) struct RunIdentityCache {
+pub(in crate::release::package_release_publish) struct RunIdentityCache {
     workflows: Vec<(u64, String, String)>,
     completed: BTreeSet<CompletedAttempt>,
     active_jobs: BTreeMap<(CompletedAttempt, String), u64>,

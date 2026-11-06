@@ -10,8 +10,8 @@ use velnor_actions_mise::{CheckDeadline, IsolatedCommand};
 
 use super::{Archive, append_log, create_private_file, io_error};
 use crate::OrchestratorError;
-use crate::check_runtime::preparation::acquisition::archive::MAX_ARCHIVE_BYTES;
 use crate::internal::internal;
+use crate::planner::check_runtime::preparation::acquisition::archive::MAX_ARCHIVE_BYTES;
 
 const CURL: &str = "/usr/bin/curl";
 const PROCESS_OUTPUT_BYTES: usize = 64 * 1024;

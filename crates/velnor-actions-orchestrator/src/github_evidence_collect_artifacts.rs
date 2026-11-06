@@ -260,10 +260,12 @@ impl<R: GitHubEvidenceRead> Collector<'_, R> {
         .map_err(|_| internal("github_evidence_archive_deadline"))?;
         let mut archive = std::fs::File::open(&destination)
             .map_err(|_| internal("github_evidence_archive_read"))?;
-        let Ok(unpacked) = crate::package_release_publish::artifact_zip::validate_evidence_archive(
-            &mut archive,
-            zip_deadline,
-        ) else {
+        let Ok(unpacked) =
+            crate::release::package_release_publish::artifact_zip::validate_evidence_archive(
+                &mut archive,
+                zip_deadline,
+            )
+        else {
             drop(std::fs::remove_file(&destination));
             return Err(internal("github_evidence_archive_invalid"));
         };

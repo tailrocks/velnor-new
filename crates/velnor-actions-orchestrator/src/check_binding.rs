@@ -5,7 +5,7 @@ use std::path::Path;
 use velnor_actions_contract::{MatrixEntry, Plan};
 use velnor_actions_mise::{CheckDeadline, DiscoveredCheck, ToolCatalog};
 
-use crate::check_runtime::ApprovedMiseRuntime;
+use crate::planner::check_runtime::ApprovedMiseRuntime;
 
 #[derive(Clone, Copy)]
 pub(super) struct CheckBinding<'a> {

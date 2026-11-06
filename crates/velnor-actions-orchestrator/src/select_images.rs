@@ -9,7 +9,7 @@ use velnor_actions_contract::{
     ImageConfig, ImagePrebuilt, JobDisposition, PlanJob, WorkflowEvent, selects_affected_work,
 };
 
-use crate::discover::Discovery;
+use crate::planner::discover::Discovery;
 use crate::safe_read::{RepoRead, read_repo_file};
 
 const MAX_DOCKERFILE_BYTES: u64 = 1024 * 1024;

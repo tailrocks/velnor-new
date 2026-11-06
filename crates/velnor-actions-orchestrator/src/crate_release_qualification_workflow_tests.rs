@@ -19,7 +19,7 @@ impl GitHubAdmissionRead for Api {
 }
 
 fn fixture(metadata: bool) -> Result<(WitnessRequest, Api), Box<dyn std::error::Error>> {
-    use crate::crate_release_pr_tree::{TreeItem, git_tree_sha};
+    use crate::release::crate_release_pr_tree::{TreeItem, git_tree_sha};
     let request = WitnessRequest {
         repository: "owner/repo".into(),
         repository_id: 7,

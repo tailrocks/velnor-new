@@ -6,7 +6,7 @@ use velnor_actions_mise::ToolCatalog;
 use velnor_actions_rust::TestRunner;
 
 use crate::OrchestratorError;
-use crate::discover::Discovery;
+use crate::planner::discover::Discovery;
 
 #[path = "jactionlint_verify_step.rs"]
 pub(crate) mod jactionlint_verify_step;

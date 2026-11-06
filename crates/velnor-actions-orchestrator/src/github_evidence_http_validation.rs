@@ -70,9 +70,9 @@ mod tests {
         use std::thread;
         let temp = tempfile::tempdir()?;
         for (index, (size, digest, accepted)) in [
-            (3, crate::generator::sha256_hex(b"abc"), true),
+            (3, crate::planner::generator::sha256_hex(b"abc"), true),
             (3, "0".repeat(64), false),
-            (4, crate::generator::sha256_hex(b"abc"), false),
+            (4, crate::planner::generator::sha256_hex(b"abc"), false),
         ]
         .into_iter()
         .enumerate()

@@ -10,7 +10,7 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use velnor_actions_mise::CheckDeadline;
 
-pub(in crate::check_runtime::preparation::container::bundle) fn populate_until(
+pub(in crate::planner::check_runtime::preparation::container::bundle) fn populate_until(
     destination: &Path,
     entries: &[Entry],
     deadline: Option<CheckDeadline>,
@@ -48,7 +48,7 @@ pub(in crate::check_runtime::preparation::container::bundle) fn populate_until(
     super::checkpoint(deadline)
 }
 
-pub(in crate::check_runtime::preparation::container::bundle) fn create_destination(
+pub(in crate::planner::check_runtime::preparation::container::bundle) fn create_destination(
     path: &Path,
 ) -> Result<(), OrchestratorError> {
     super::super::reject_links(path.parent().unwrap_or_else(|| Path::new("/")))?;
@@ -63,14 +63,14 @@ pub(in crate::check_runtime::preparation::container::bundle) fn create_destinati
     }
 }
 
-pub(in crate::check_runtime::preparation::container::bundle) fn set_directory_mode(
+pub(in crate::planner::check_runtime::preparation::container::bundle) fn set_directory_mode(
     path: &Path,
     value: u32,
 ) -> Result<(), OrchestratorError> {
     set_mode(path, value, true)
 }
 
-pub(in crate::check_runtime::preparation::container::bundle) fn verify_owned_root(
+pub(in crate::planner::check_runtime::preparation::container::bundle) fn verify_owned_root(
     path: &Path,
 ) -> Result<(), OrchestratorError> {
     let metadata = fs::symlink_metadata(path).map_err(|error| super::io_error(path, error))?;

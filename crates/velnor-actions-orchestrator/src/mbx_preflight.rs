@@ -23,7 +23,7 @@ pub(crate) fn steps_for_catalog(
         MR_BOXINGTON_ACTION_VERSION,
     )?
     .uses_value();
-    let env = crate::matrix_step::task_step_env(catalog, &BTreeMap::new(), true)?;
+    let env = crate::planner::matrix_step::task_step_env(catalog, &BTreeMap::new(), true)?;
     let steps = mbx_steps_for_driver(
         &uses,
         CompileDriver::Mbx,

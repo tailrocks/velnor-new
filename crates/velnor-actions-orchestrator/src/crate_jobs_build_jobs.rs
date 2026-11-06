@@ -10,7 +10,7 @@ use velnor_actions_contract::{CrateJob, JobTimeout, RustCrateConfig, Step, StepK
 
 use super::is_rust;
 use crate::OrchestratorError;
-use crate::discover::Discovery;
+use crate::planner::discover::Discovery;
 
 pub(super) fn group_plan_for(
     model: &CrateJob,

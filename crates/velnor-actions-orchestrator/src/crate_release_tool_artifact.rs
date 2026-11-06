@@ -65,7 +65,7 @@ fn read_single_file_archive(
     input.rewind().map_err(|_| invalid())?;
     let deadline = velnor_actions_mise::CheckDeadline::after(std::time::Duration::from_secs(30))
         .map_err(|_| invalid())?;
-    crate::check_runtime::preparation::acquisition::archive::preflight_zip_file(
+    crate::planner::check_runtime::preparation::acquisition::archive::preflight_zip_file(
         &mut input, deadline,
     )?;
     input.rewind().map_err(|_| invalid())?;

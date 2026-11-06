@@ -118,7 +118,7 @@ where
         .as_str()
         .ok_or_else(invalid)?
         .to_owned();
-    let trees = crate::crate_release_pr_tree::GitHubTrees {
+    let trees = crate::release::crate_release_pr_tree::GitHubTrees {
         api: github,
         repository: request.binding.repository,
     };
@@ -129,8 +129,10 @@ where
         ".github/velnor-release-intent.toml",
     )?;
     let intent = crate::parse_crate_release_intent(&intent_bytes)?;
-    if !crate::release_identity::same_repository(&intent.repository, request.binding.repository)
-        || intent.default_branch != request.binding.branch
+    if !crate::release::release_identity::same_repository(
+        &intent.repository,
+        request.binding.repository,
+    ) || intent.default_branch != request.binding.branch
     {
         return Err(invalid());
     }
@@ -228,7 +230,7 @@ fn current_preparation_artifact<G: crate::crate_release_github::GitHubAdmissionR
     repository_id: u64,
 ) -> Result<crate::crate_release_tool_artifact::ToolArtifactMetadata, OrchestratorError> {
     let prefix = format!("repos/{}", request.binding.repository);
-    let list = crate::crate_release_artifact_pages::list_artifacts(
+    let list = crate::release::crate_release_artifact_pages::list_artifacts(
         github,
         &prefix,
         request.binding.run_id,
@@ -250,11 +252,11 @@ fn current_preparation_artifact<G: crate::crate_release_github::GitHubAdmissionR
 
 pub(crate) fn read_reviewed_file<G: crate::crate_release_github::GitHubAdmissionRead + ?Sized>(
     github: &G,
-    trees: &crate::crate_release_pr_tree::GitHubTrees<'_>,
+    trees: &crate::release::crate_release_pr_tree::GitHubTrees<'_>,
     root: &str,
     path: &str,
 ) -> Result<Vec<u8>, OrchestratorError> {
-    use crate::crate_release_pr_tree::TreeRead as _;
+    use crate::release::crate_release_pr_tree::TreeRead as _;
     use base64::Engine as _;
     let invalid = || internal("release_pr_reviewed_file_invalid");
     let mut tree = root.to_owned();
@@ -308,7 +310,7 @@ pub(crate) fn read_reviewed_file<G: crate::crate_release_github::GitHubAdmission
 
 #[cfg(test)]
 #[path = "crate_release_pr_acquisition_fixture.rs"]
-pub(super) mod integration_fixture;
+pub(crate) mod integration_fixture;
 
 #[cfg(test)]
 mod tests {

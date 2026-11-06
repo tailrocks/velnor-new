@@ -15,7 +15,7 @@ use velnor_actions_contract::strict_json::parse_strict_json_bytes;
 use super::PackedArchive;
 use crate::OrchestratorError;
 use crate::internal::{internal, internal_contract};
-use crate::source_prep::cache_source_projection::{sha256_hex, validate_sha256};
+use crate::planner::source_prep::cache_source_projection::{sha256_hex, validate_sha256};
 
 pub const ENVELOPE_SCHEMA: u32 = 1;
 

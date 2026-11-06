@@ -2,10 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::OrchestratorError;
-use crate::check_evidence::reject_link_components;
-use crate::check_runtime::preparation::{RestoredGroupContext, prepare_check_with_context};
 use crate::internal::internal;
-use crate::release_task_identity::ReleaseTaskIdentity;
+use crate::planner::check_evidence::reject_link_components;
+use crate::planner::check_runtime::preparation::{
+    RestoredGroupContext, prepare_check_with_context,
+};
+use crate::release::release_task_identity::ReleaseTaskIdentity;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 use std::ffi::OsString;
@@ -34,7 +36,7 @@ pub use entry::{
 };
 
 pub const PREVIEW_CACHE_RECIPE_KEY: &str =
-    super::product_release_pins::cache_recipes::PREVIEW_PRODUCER_RECIPE_KEY;
+    crate::release::product_release_pins::cache_recipes::PREVIEW_PRODUCER_RECIPE_KEY;
 
 pub(crate) fn release_workflow_context(
     plan: &velnor_actions_contract::PackageReleasePlan,
@@ -66,7 +68,7 @@ pub(crate) struct PreviewProducerProof {
     pub output_manifest: String,
     pub qualification_digest: String,
     pub system_tools: Vec<velnor_actions_mise::checks::SystemToolProof>,
-    pub qualified_tools: Vec<crate::check_evidence::gate::tools::QualifiedToolReceipt>,
+    pub qualified_tools: Vec<crate::planner::check_evidence::gate::tools::QualifiedToolReceipt>,
 }
 
 fn execute_preview_task(
@@ -103,7 +105,7 @@ fn execute_preview_task(
     {
         return Err(internal("preview_producer_host_platform"));
     }
-    let closure_tools = crate::native_mise_tasks::resolve_preview_producer_tools(
+    let closure_tools = crate::planner::native_mise_tasks::resolve_preview_producer_tools(
         &discovered.config_source,
         &producer.task,
     )

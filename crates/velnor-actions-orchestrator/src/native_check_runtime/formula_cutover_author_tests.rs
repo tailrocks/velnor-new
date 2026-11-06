@@ -11,7 +11,7 @@ use crate::{
     internal_plan::native_homebrew_checks::{
         NativeCheckAuthorityIdentity, NativeCheckIdentityExtension,
     },
-    package_release_publish::PublicPullRequestSnapshot,
+    release::package_release_publish::PublicPullRequestSnapshot,
 };
 use tempfile::TempDir;
 use velnor_actions_contract::{

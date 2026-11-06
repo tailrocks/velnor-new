@@ -19,9 +19,11 @@ use velnor_actions_workflow_renderer::{MiseSetup, render::RenderedFile};
 use crate::OrchestratorError;
 use crate::config::CONFIG_REL;
 use crate::config::private_wiring::PrivateWiring;
-use crate::prepare::GenerationPreparation;
-use crate::publish_steps::{BundlePlan, Inputs, PromotionPlan, VersionCheck, assemble_jobs};
-use crate::release_identity::origin_repository;
+use crate::planner::prepare::GenerationPreparation;
+use crate::release::publish_steps::{
+    BundlePlan, Inputs, PromotionPlan, VersionCheck, assemble_jobs,
+};
+use crate::release::release_identity::origin_repository;
 
 #[path = "publish_maven_emit.rs"]
 mod maven_emit;
@@ -39,7 +41,7 @@ pub(crate) fn publish_files(
     let npm = &prep.config.publish.npm;
     let maven = &prep.config.publish.maven;
     let images = &prep.config.images;
-    let git_tag = crate::release_emit::git_tag_release(prep)?;
+    let git_tag = crate::release::release_emit::git_tag_release(prep)?;
     if bundles.is_empty()
         && npm.is_empty()
         && maven.is_empty()
@@ -143,7 +145,8 @@ fn git_tag_config(
     release: &RustReleaseConfig,
     repository: &str,
 ) -> Result<RenderedFile, OrchestratorError> {
-    let json = crate::release_emit::release_metadata_json(prep, release.manifest_path.as_str())?;
+    let json =
+        crate::release::release_emit::release_metadata_json(prep, release.manifest_path.as_str())?;
     let owner = repository.split('/').next().unwrap_or_default();
     let unpinned =
         unpinned_git_sources(&json, owner).map_err(|err| OrchestratorError::Contract {
@@ -159,7 +162,7 @@ fn git_tag_config(
             ),
         ));
     }
-    let selection = crate::release_emit::select_from_json(prep, release, &json)?;
+    let selection = crate::release::release_emit::select_from_json(prep, release, &json)?;
     if selection.is_empty() {
         return Err(OrchestratorError::Contract {
             problem: "release_nothing_selected".to_owned(),

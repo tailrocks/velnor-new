@@ -8,8 +8,8 @@ use velnor_actions_contract::{
 };
 
 use super::MergeRequest;
-use crate::cover::Signals;
 use crate::internal::internal_contract;
+use crate::planner::cover::Signals;
 
 pub(crate) fn check_required_evidence(
     plan: &Plan,

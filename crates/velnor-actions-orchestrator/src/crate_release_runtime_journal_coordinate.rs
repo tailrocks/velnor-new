@@ -70,7 +70,7 @@ pub(super) fn prepare_coordinate_journal(
         &reviewed_manifest,
         verify_bootstrap_attestation,
         |generator| {
-            let tools = crate::package_release_signer::measure_release_tools(
+            let tools = crate::release::package_release_signer::measure_release_tools(
                 runner_temp,
                 runtime.intent,
                 &started.receipt,
@@ -130,7 +130,7 @@ fn coordinate_operations<
                     execution.credential_preflight(runtime.source, runtime.intent, runtime.git)?;
                 }
             }
-            crate::crate_release_semver::verify_before_upload(
+            crate::release::crate_release_semver::verify_before_upload(
                 runtime.source,
                 input.admission,
                 runtime.registry,
@@ -167,7 +167,7 @@ fn coordinate_operations<
 
 #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
 pub(super) fn complete_journal(
-    completion: crate::crate_release_source_view::ClosedCompletion,
+    completion: crate::release::crate_release_source_view::ClosedCompletion,
     token: &str,
     github: &NativeGitHubAdmissionRead,
     registry: &super::NativeCrateRegistryRead,

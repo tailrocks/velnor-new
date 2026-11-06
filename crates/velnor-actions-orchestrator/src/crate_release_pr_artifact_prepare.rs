@@ -65,7 +65,7 @@ fn prepare_pr_inner() -> Result<(), &'static str> {
         .map_err(|_| invalid())?;
     let repository = required("GITHUB_REPOSITORY")?;
     if required("GITHUB_EVENT_NAME")? != "push"
-        || !crate::release_identity::same_repository(&repository, &intent.repository)
+        || !crate::release::release_identity::same_repository(&repository, &intent.repository)
         || required("GITHUB_REF")? != format!("refs/heads/{}", intent.default_branch)
         || run_attempt != 1
     {
@@ -162,19 +162,19 @@ fn run_preparation_update(
     check_pinned_executable(&plz, plz_pin.executable_sha256)?;
     check_pinned_executable(&semver, semver_pin.executable_sha256)?;
     let rustup = temp.join("velnor/rustup");
-    let cargo = crate::crate_release_source::verified_rust_tool_path(
+    let cargo = crate::release::crate_release_source::verified_rust_tool_path(
         &rustup,
         &intent.rust_version,
         "cargo",
     )
     .map_err(|_| invalid())?;
-    let rustc = crate::crate_release_source::verified_rust_tool_path(
+    let rustc = crate::release::crate_release_source::verified_rust_tool_path(
         &rustup,
         &intent.rust_version,
         "rustc",
     )
     .map_err(|_| invalid())?;
-    let rustdoc = crate::crate_release_source::verified_rust_tool_path(
+    let rustdoc = crate::release::crate_release_source::verified_rust_tool_path(
         &rustup,
         &intent.rust_version,
         "rustdoc",

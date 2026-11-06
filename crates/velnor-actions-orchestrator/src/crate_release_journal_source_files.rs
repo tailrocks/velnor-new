@@ -22,7 +22,7 @@ pub(crate) fn valid_source_files(files: &[JournalFile]) -> bool {
             match &current.kind {
                 JournalFileKind::Regular { .. } => return true,
                 JournalFileKind::Symlink { target } => {
-                    if crate::generator::sha256_hex(target.as_bytes()) != current.sha256 {
+                    if crate::planner::generator::sha256_hex(target.as_bytes()) != current.sha256 {
                         return false;
                     }
                     let Some(resolved) = resolve_link(&current.path, target) else {

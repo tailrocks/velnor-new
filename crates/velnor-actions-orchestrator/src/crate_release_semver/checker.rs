@@ -16,7 +16,7 @@ pub(super) fn verify_checker(
         crate::safe_read::RepoBytes::Bytes(bytes) if !bytes.is_empty() => bytes,
         _ => return Err(invalid()),
     };
-    if crate::generator::sha256_hex(&binary) != qualified.executable_sha256 {
+    if crate::planner::generator::sha256_hex(&binary) != qualified.executable_sha256 {
         return Err(invalid());
     }
     Ok(runner_temp.join(relative))
@@ -113,7 +113,7 @@ pub(super) fn download_baseline<R: CrateRegistryRead>(
     let archive = registry.get(&format!("/crates/{package}/{package}-{version}.crate"))?;
     if archive.status != 200
         || archive.body.len() > 64 * 1024 * 1024
-        || crate::generator::sha256_hex(&archive.body) != *checksum
+        || crate::planner::generator::sha256_hex(&archive.body) != *checksum
     {
         return Err(invalid());
     }
@@ -126,8 +126,10 @@ pub(super) fn extract_baseline(
     version: &str,
     destination: &Path,
 ) -> Result<(), OrchestratorError> {
-    let files =
-        crate::crate_release_archive::read_archive(bytes, &format!("{package}-{version}/"))?;
+    let files = crate::release::crate_release_archive::read_archive(
+        bytes,
+        &format!("{package}-{version}/"),
+    )?;
     let manifest = files.get("Cargo.toml").ok_or_else(invalid)?;
     let manifest: toml::Value =
         toml::from_str(std::str::from_utf8(&manifest.1).map_err(|_| invalid())?)
@@ -271,14 +273,14 @@ pub(crate) fn supervised_projection(
 ) -> Result<
     (
         serde_json::Value,
-        crate::crate_release_archive::ArchiveFiles,
+        crate::release::crate_release_archive::ArchiveFiles,
     ),
     OrchestratorError,
 > {
-    if crate::generator::sha256_hex(request.archive) != request.checksum {
+    if crate::planner::generator::sha256_hex(request.archive) != request.checksum {
         return Err(invalid());
     }
-    let files = crate::crate_release_archive::read_archive(
+    let files = crate::release::crate_release_archive::read_archive(
         request.archive,
         &format!("{}-{}/", request.package, request.baseline_version),
     )?;
@@ -296,7 +298,7 @@ pub(crate) fn supervised_projection(
         .map(|(path, (mode, bytes))| {
             serde_json::json!({
                 "path": path,
-                "sha256": crate::generator::sha256_hex(bytes),
+                "sha256": crate::planner::generator::sha256_hex(bytes),
                 "kind": {"type": "regular", "executable": *mode != 0},
             })
         })

@@ -173,11 +173,11 @@ fn bootstrap_handover_renders_normal_trusted_publisher() -> Result<(), Box<dyn s
     let decoded: CrateReleaseIntent = toml::from_str(&files.intent.bytes)?;
     assert_eq!(decoded, intent);
     assert!(decoded.new_crates.is_none());
-    crate::crate_release_pr_acquisition::verify_reviewed_workflow(
+    crate::release::crate_release_pr_acquisition::verify_reviewed_workflow(
         files.workflow.bytes.as_bytes(),
         &intent,
     )?;
-    crate::crate_release_pr_acquisition::integration_fixture::exercise(
+    crate::release::crate_release_pr_acquisition::integration_fixture::exercise(
         &intent,
         &files.intent.bytes,
         &files.workflow.bytes,
@@ -200,7 +200,7 @@ fn bootstrap_handover_renders_normal_trusted_publisher() -> Result<(), Box<dyn s
     let mut mixed_intent = intent.clone();
     mixed_intent.repository = "OWNER/PROJECT".into();
     let mixed_files = render_release_files(&mixed_spec, &ctx, &config, &mixed_intent)?;
-    crate::crate_release_pr_acquisition::integration_fixture::exercise(
+    crate::release::crate_release_pr_acquisition::integration_fixture::exercise(
         &mixed_intent,
         &mixed_files.intent.bytes,
         &mixed_files.workflow.bytes,

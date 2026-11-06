@@ -29,8 +29,8 @@ impl TransferLedger {
     }
 }
 use crate::OrchestratorError;
-use crate::check_evidence::reject_link_components;
 use crate::internal::internal;
+use crate::planner::check_evidence::reject_link_components;
 use std::ffi::OsStr;
 use std::ops::Deref;
 use std::path::{Path, PathBuf};
@@ -97,7 +97,8 @@ pub(crate) struct OwnedCheck {
     home: PathBuf,
     pub(super) container: Option<container::OwnedContainer>,
     pub(crate) system_tools: Vec<SystemToolProof>,
-    pub(crate) qualified_tools: Vec<crate::check_evidence::gate::tools::QualifiedToolReceipt>,
+    pub(crate) qualified_tools:
+        Vec<crate::planner::check_evidence::gate::tools::QualifiedToolReceipt>,
     observation: Option<ObservationSession>,
     transfers: TransferLedger,
 }
@@ -105,7 +106,7 @@ struct PreparedParts {
     qualified: QualifiedCheck,
     container: Option<container::OwnedContainer>,
     system_tools: Vec<SystemToolProof>,
-    qualified_tools: Vec<crate::check_evidence::gate::tools::QualifiedToolReceipt>,
+    qualified_tools: Vec<crate::planner::check_evidence::gate::tools::QualifiedToolReceipt>,
     transfers: TransferLedger,
 }
 impl Deref for OwnedCheck {

@@ -199,7 +199,7 @@ pub fn verify_crate_archive(
         || !checksum
             .bytes()
             .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
-        || crate::generator::sha256_hex(published) != checksum
+        || crate::planner::generator::sha256_hex(published) != checksum
     {
         return Err(internal("crate_registry_checksum_mismatch"));
     }
@@ -338,6 +338,11 @@ pub(crate) fn crate_archive_inventory(
 ) -> Result<BTreeMap<String, (u32, String)>, OrchestratorError> {
     Ok(read_archive(bytes, &format!("{package}-{version}/"))?
         .into_iter()
-        .map(|(path, (mode, content))| (path, (mode, crate::generator::sha256_hex(&content))))
+        .map(|(path, (mode, content))| {
+            (
+                path,
+                (mode, crate::planner::generator::sha256_hex(&content)),
+            )
+        })
         .collect())
 }

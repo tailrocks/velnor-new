@@ -62,7 +62,7 @@ fn observe(
         pull_request_number: candidate.pull_request,
         head_sha: &candidate.head_sha,
     };
-    crate::crate_release_qualification_deletions::require_no_deleted_comments(
+    crate::release::crate_release_qualification_deletions::require_no_deleted_comments(
         candidate,
         provider_api,
     )?;

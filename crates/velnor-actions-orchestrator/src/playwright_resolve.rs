@@ -18,9 +18,11 @@ use velnor_actions_mise::{CheckDeadline, IsolatedCommand, PinnedTool, PinnedTool
 
 use super::playwright_lock::{CoreRequest, core_requests, hash_file, render_playwright_lock};
 use crate::OrchestratorError;
-use crate::check_runtime::preparation::acquisition::archive::{ArchiveBudget, extract_archive};
 use crate::config::{config_error, load_config};
 use crate::internal::internal;
+use crate::planner::check_runtime::preparation::acquisition::archive::{
+    ArchiveBudget, extract_archive,
+};
 
 const NPM_REGISTRY: &str = "https://registry.npmjs.org";
 const CORE_MAX_BYTES: u64 = 64 * 1024 * 1024;

@@ -37,8 +37,8 @@ pub(super) fn fixture_verify_release_package<G: GitHubAdmissionRead, R: CrateReg
     })
 }
 
-pub(super) fn fixture_no_baseline() -> crate::crate_release_semver::SemverEvidence {
-    crate::crate_release_semver::SemverEvidence::NoBaseline {
+pub(super) fn fixture_no_baseline() -> crate::release::crate_release_semver::SemverEvidence {
+    crate::release::crate_release_semver::SemverEvidence::NoBaseline {
         checker_sha256: "bc9eb06ce04e97d6160c875ffdee1f6e56793e423dea025f344826be03e66829".into(),
     }
 }
@@ -46,7 +46,7 @@ pub(super) fn fixture_no_baseline() -> crate::crate_release_semver::SemverEviden
 pub(super) fn fixture_semver_map(
     receipt: &crate::crate_release_controller::CrateReleaseAdmissionReceipt,
 ) -> Result<
-    std::collections::BTreeMap<String, crate::crate_release_semver::SemverEvidence>,
+    std::collections::BTreeMap<String, crate::release::crate_release_semver::SemverEvidence>,
     OrchestratorError,
 > {
     let checker = velnor_actions_mise::catalog::qualified_cargo_semver_checks("ubuntu-26.04")
@@ -59,7 +59,7 @@ pub(super) fn fixture_semver_map(
         .map(|p| {
             (
                 p.source.name.clone(),
-                crate::crate_release_semver::SemverEvidence::NoBaseline {
+                crate::release::crate_release_semver::SemverEvidence::NoBaseline {
                     checker_sha256: checker.executable_sha256.into(),
                 },
             )

@@ -9,7 +9,11 @@ fn release_tool_expectations_require_a_valid_consumer_manifest()
     let version = env!("CARGO_PKG_VERSION");
     let raw = consumer_manifest(version);
     let acquire = |json: &str| {
-        crate::pins::consumer_acquire_step_with_manifest("ubuntu-26.04", version, Some(json))
+        crate::planner::pins::consumer_acquire_step_with_manifest(
+            "ubuntu-26.04",
+            version,
+            Some(json),
+        )
     };
     assert!(acquire(&raw).is_ok());
     let mut wrong: serde_json::Value = serde_json::from_str(&raw)?;

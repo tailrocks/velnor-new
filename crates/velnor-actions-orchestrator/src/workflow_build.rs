@@ -13,8 +13,8 @@ use velnor_actions_workflow_renderer::render::PLAN_JOB_ID;
 use velnor_actions_workflow_renderer::verification_jobs::WorkflowTaskPolicy;
 
 use crate::OrchestratorError;
-use crate::discover::Discovery;
-use crate::pins::consumer_acquire_step;
+use crate::planner::discover::Discovery;
+use crate::planner::pins::consumer_acquire_step;
 use crate::workflow_jobs::{PlanJobToolNeeds, PlanRustNeed, plan_job};
 
 #[path = "workflow_native_authority.rs"]
@@ -119,10 +119,10 @@ fn lane_workflow_tasks(
     Vec<velnor_actions_workflow_renderer::verification_jobs::WorkflowTaskPolicy>,
     OrchestratorError,
 > {
-    let lane = crate::matrix_step::LaneTools::union(
+    let lane = crate::planner::matrix_step::LaneTools::union(
         input.config.workflow.policy,
         input.catalog,
-        &crate::crate_job_ids::group_runnable(&input.discovery.proposals)?,
+        &crate::planner::crate_job_ids::group_runnable(&input.discovery.proposals)?,
     );
     crate::workflow_task_jobs::policies(
         input.root,
@@ -171,7 +171,7 @@ fn prepare_workflow(input: &WorkflowBuildInput<'_>) -> Result<PreparedWorkflow, 
                     .ok_or_else(|| OrchestratorError::Contract {
                         problem: "required_verdict_requires_published_generator_lock".to_owned(),
                     })?;
-            Some(crate::attach::published_lock_acquire_step(
+            Some(crate::planner::attach::published_lock_acquire_step(
                 lock,
                 input.label,
                 &lock.generator.version,
@@ -291,7 +291,7 @@ fn build_workflow_jobs(
 ) -> Result<BTreeMap<String, Job>, OrchestratorError> {
     let mut jobs = BTreeMap::new();
     jobs.insert(PLAN_JOB_ID.to_owned(), plan);
-    let built = crate::crate_jobs::build_for_workflow(
+    let built = crate::planner::crate_jobs::build_for_workflow(
         input.config,
         input.label,
         input.discovery,

@@ -23,7 +23,7 @@ fn qualified_runtime_rejects_missing_git_without_fallback() -> Result<(), Box<dy
     let temp = tempfile::tempdir()?;
     let status = std::process::Command::new(std::env::current_exe()?)
         .arg("--exact")
-        .arg("crate_release_runtime::rehearsal::qualified_runtime_rejects_missing_git_without_fallback")
+        .arg("release::crate_release_runtime::rehearsal::qualified_runtime_rejects_missing_git_without_fallback")
         .env("VELNOR_MISSING_GIT_CHILD", "1")
         .env("RUNNER_TEMP", temp.path())
         .env("GITHUB_WORKSPACE", temp.path())
@@ -52,7 +52,7 @@ fn generated_source_require_rehearsal() -> Result<(), Box<dyn Error>> {
 fn generated_candidate_receipt_rejects_unprotected_environment() -> Result<(), Box<dyn Error>> {
     if let Some(temp) = std::env::var_os("VELNOR_NATIVE_ACQUIRE_GIT") {
         let root = std::path::PathBuf::from(temp);
-        let git = crate::crate_release_git_bundle::acquire(
+        let git = crate::release::crate_release_git_bundle::acquire(
             &root,
             velnor_actions_mise::CheckDeadline::after(Duration::from_secs(600))?,
         )?;
@@ -116,7 +116,7 @@ fn rehearse_supplied_candidate() -> Result<(), Box<dyn Error>> {
     let executable = bin.join(format!("velnor-actions-{}", env!("CARGO_PKG_VERSION")));
     std::fs::write(
         &executable,
-        "#!/bin/sh\nexport VELNOR_TEST_COMMAND_ARGS=\"$*\"\nexec \"$VELNOR_TEST_BINARY\" --exact crate_release_runtime::rehearsal::generated_candidate_receipt_rejects_unprotected_environment\n",
+        "#!/bin/sh\nexport VELNOR_TEST_COMMAND_ARGS=\"$*\"\nexec \"$VELNOR_TEST_BINARY\" --exact release::crate_release_runtime::rehearsal::generated_candidate_receipt_rejects_unprotected_environment\n",
     )?;
     std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o755))?;
     let output = supplied_step(&root, "release-preflight", "candidate-receipt")?;
@@ -159,7 +159,7 @@ fn rehearse_supplied_candidate() -> Result<(), Box<dyn Error>> {
     );
     assert!(
         matches!(receipt.semver_evidence.get(&receipt.packages[0].source.name),
-        Some(crate::crate_release_semver::SemverEvidence::Checked { baseline, baseline_checksum, checker_sha256 })
+        Some(crate::release::crate_release_semver::SemverEvidence::Checked { baseline, baseline_checksum, checker_sha256 })
         if baseline == &std::env::var("VELNOR_NATIVE_EXPECT_BASELINE")?
         && baseline_checksum == &std::env::var("VELNOR_NATIVE_EXPECT_CHECKSUM")?
         && checker_sha256 == velnor_actions_mise::catalog::qualified_cargo_semver_checks("ubuntu-26.04").ok_or("checker")?.executable_sha256)
@@ -263,7 +263,7 @@ fn rehearse_candidate_denial() -> Result<(), Box<dyn Error>> {
     let executable = bin.join(format!("velnor-actions-{}", env!("CARGO_PKG_VERSION")));
     std::fs::write(
         &executable,
-        "#!/bin/sh\nexport VELNOR_TEST_COMMAND_ARGS=\"$*\"\nexec \"$VELNOR_TEST_BINARY\" --exact crate_release_runtime::rehearsal::generated_candidate_receipt_rejects_unprotected_environment\n",
+        "#!/bin/sh\nexport VELNOR_TEST_COMMAND_ARGS=\"$*\"\nexec \"$VELNOR_TEST_BINARY\" --exact release::crate_release_runtime::rehearsal::generated_candidate_receipt_rejects_unprotected_environment\n",
     )?;
     std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o755))?;
     let script = generated_script("release-preflight", "Release candidate-receipt")?;
@@ -319,7 +319,7 @@ fn rehearse_source_require(event: &str, denied: bool) -> Result<(), Box<dyn Erro
     let executable = bin.join(format!("velnor-actions-{}", env!("CARGO_PKG_VERSION")));
     std::fs::write(
         &executable,
-        "#!/bin/sh\nexport VELNOR_TEST_COMMAND_ARGS=\"$*\"\nexec \"$VELNOR_TEST_BINARY\" --exact crate_release_runtime::rehearsal::generated_source_require_rehearsal\n",
+        "#!/bin/sh\nexport VELNOR_TEST_COMMAND_ARGS=\"$*\"\nexec \"$VELNOR_TEST_BINARY\" --exact release::crate_release_runtime::rehearsal::generated_source_require_rehearsal\n",
     )?;
     std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o755))?;
     let status = std::process::Command::new("bash")

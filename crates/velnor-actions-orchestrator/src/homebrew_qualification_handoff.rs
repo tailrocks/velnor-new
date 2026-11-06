@@ -13,7 +13,7 @@ use velnor_actions_contract::{
 use super::{HistoricalRecord, absolute_deadline, load_catalog, sha256, verify_historical_pair};
 use crate::{
     OrchestratorError, homebrew::hosted_profile::VerifiedReleaseQualificationCandidate,
-    internal::internal, package_release_public::VerifiedPublicPackageRelease,
+    internal::internal, release::package_release_public::VerifiedPublicPackageRelease,
 };
 
 #[path = "homebrew_qualification_handoff_fs.rs"]

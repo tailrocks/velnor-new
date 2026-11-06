@@ -32,7 +32,7 @@ pub(crate) fn verify_public_historical_release_recovery(
     default_branch: &str,
     receipt: &PackageReleaseReceipt,
     plan: &PackageReleasePlan,
-    recovery: &crate::package_release_public::HistoricalPackageReleaseRecovery,
+    recovery: &crate::release::package_release_public::HistoricalPackageReleaseRecovery,
     deadline: CheckDeadline,
 ) -> Result<(), OrchestratorError> {
     verify_public_release_runs_inner(
@@ -52,7 +52,7 @@ fn verify_public_release_runs_inner(
     receipt: &PackageReleaseReceipt,
     recovery: Option<(
         &PackageReleasePlan,
-        &crate::package_release_public::HistoricalPackageReleaseRecovery,
+        &crate::release::package_release_public::HistoricalPackageReleaseRecovery,
     )>,
     deadline: CheckDeadline,
 ) -> Result<(), OrchestratorError> {

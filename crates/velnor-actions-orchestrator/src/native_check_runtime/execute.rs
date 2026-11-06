@@ -11,7 +11,7 @@ use velnor_actions_contract::{
 };
 use velnor_actions_mise::CheckDeadline;
 
-use crate::check_runtime::preparation::RestoredGroupContext;
+use crate::planner::check_runtime::preparation::RestoredGroupContext;
 use crate::{OrchestratorError, internal::internal};
 
 use super::formula::verify_formula;
@@ -368,7 +368,7 @@ fn write_execution_receipt(
 ) -> Result<(), OrchestratorError> {
     let result: NativeCheckResult = serde_json::from_slice(result_bytes)
         .map_err(|_| internal("native_check_result_invalid"))?;
-    let receipt = crate::check_evidence::gate::native_execution_receipt(
+    let receipt = crate::planner::check_evidence::gate::native_execution_receipt(
         &loaded.plan,
         &loaded.entry,
         &result,

@@ -66,7 +66,7 @@ fn run_operation(
 }
 
 fn assert_generated_publisher() -> Result<(), Box<dyn Error>> {
-    let (spec, rust) = crate::release_steps::tests::fixture()?;
+    let (spec, rust) = crate::release::release_steps::tests::fixture()?;
     let workflow = velnor_actions_workflow_renderer::release_tree::render_release_workflow(
         &spec,
         &velnor_actions_workflow_renderer::release_tree::ReleaseRenderContext {
@@ -159,7 +159,7 @@ fn run_child(operation: &str) -> Result<(), Box<dyn Error>> {
     };
     let journal = JournalRegistryFake::default();
     if operation == "journal-start" {
-        use crate::package_release_signer::{
+        use crate::release::package_release_signer::{
             AdmittedStart, fixture_attested_generator, record_admitted_start,
         };
         let generator = fixture_attested_generator();
@@ -235,7 +235,7 @@ fn coordinate(
     let uploads = Cell::new(0);
     let result = coordinate_release(
         &input,
-        |name| crate::crate_release_semver::fixture_verified_semver(admission, name),
+        |name| crate::release::crate_release_semver::fixture_verified_semver(admission, name),
         |_| {
             uploads.set(uploads.get() + 1);
             *registry.archive.borrow_mut() = archive.clone();
@@ -255,7 +255,7 @@ fn coordinate(
         github.base.writes.get(),
         if already_completed { 0 } else { 2 }
     );
-    let tools = crate::package_release_signer::fixture_measured_tools(
+    let tools = crate::release::package_release_signer::fixture_measured_tools(
         started.receipt.expected_tools.clone(),
     );
     crate::crate_release_journal::record_unprivileged_completion(&input, tools)?;

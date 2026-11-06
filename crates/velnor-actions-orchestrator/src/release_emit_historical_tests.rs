@@ -197,7 +197,7 @@ fn check_authority(
         .env("GITHUB_WORKFLOW_SHA", authority_b)
         .env("GITHUB_RUN_ID", "1")
         .env("GITHUB_RUN_ATTEMPT", "1")
-        .args(["--exact", "release_emit::tests::historical::recovery_generation_and_qualification_use_historical_source_not_current_checkout", "--nocapture"])
+        .args(["--exact", "release::release_emit::tests::historical::recovery_generation_and_qualification_use_historical_source_not_current_checkout", "--nocapture"])
         .output()?;
     assert!(
         child.status.success(),
@@ -241,8 +241,9 @@ fn recovery_generation_and_qualification_use_historical_source_not_current_check
         let intent = toml::from_str(&fs::read_to_string(path)?)?;
         let authority = std::env::var("VELNOR_TEST_AUTHORITY")?;
         let source = std::env::var("VELNOR_TEST_SOURCE")?;
-        let request =
-            crate::crate_release_runtime::test_request_from_environment(&intent, &authority)?;
+        let request = crate::release::crate_release_runtime::test_request_from_environment(
+            &intent, &authority,
+        )?;
         assert_eq!(request.workflow_sha, authority);
         assert_eq!(request.source_sha, source);
         return Ok(());
@@ -251,7 +252,7 @@ fn recovery_generation_and_qualification_use_historical_source_not_current_check
     let root = temp.path();
     let (source_a, authority_b, config_before) = setup_history(root)?;
     let config_path = root.join(".velnor/config.toml");
-    let prep = crate::prepare::prepare_for_candidate(root)?;
+    let prep = crate::planner::prepare::prepare_for_candidate(root)?;
     let release_config = release::enabled_release(&prep)?.ok_or("release missing")?;
     let derived = release::derive_release_inputs(&prep, release_config)?;
     assert_eq!(derived.source_sha, source_a);
@@ -280,7 +281,7 @@ fn recovery_generation_and_qualification_use_historical_source_not_current_check
             "https://github.com/EXAMPLE/DEMO.git",
         ],
     )?;
-    let mixed_prep = crate::prepare::prepare_for_candidate(root)?;
+    let mixed_prep = crate::planner::prepare::prepare_for_candidate(root)?;
     let mixed_config = release::enabled_release(&mixed_prep)?.ok_or("release missing")?;
     let mixed = release::derive_release_inputs(&mixed_prep, mixed_config)?;
     assert_eq!(mixed.intent.repository, "EXAMPLE/DEMO");
@@ -295,7 +296,8 @@ fn recovery_generation_and_qualification_use_historical_source_not_current_check
         ],
     )?;
     check_missing_and_creation(&prep, release_config, &source_a)?;
-    let mise = crate::pins::resolve_mise_setup(&prep.config, release::RELEASE_HOSTED_RUNNER)?;
+    let mise =
+        crate::planner::pins::resolve_mise_setup(&prep.config, release::RELEASE_HOSTED_RUNNER)?;
     let files = release::release_files_for_config(&prep, &mise, release_config)?;
     let workflow = files
         .iter()
@@ -343,7 +345,7 @@ fn historical_object_snapshot_rejects_escape_and_ignores_path_git() -> TestResul
         .env("PATH", &bin)
         .env("VELNOR_TEST_OBJECT_REPO", &root)
         .env("VELNOR_TEST_OBJECT_SHA", &source)
-        .args(["--exact", "release_emit::tests::historical::historical_object_snapshot_rejects_escape_and_ignores_path_git", "--nocapture"])
+        .args(["--exact", "release::release_emit::tests::historical::historical_object_snapshot_rejects_escape_and_ignores_path_git", "--nocapture"])
         .output()?;
     assert!(
         child.status.success(),
@@ -372,7 +374,7 @@ fn check_historical_workspace_lock(
         .source_snapshot
         .as_ref()
         .ok_or("source snapshot missing")?;
-    let source_lock = crate::release_identity::workspace_lock(
+    let source_lock = crate::release::release_identity::workspace_lock(
         &derived.metadata,
         snapshot.root(),
         &release_config.manifest_path,
@@ -382,7 +384,7 @@ fn check_historical_workspace_lock(
     )?;
     let live_metadata = release::release_metadata_json(prep, &release_config.manifest_path)?;
     let live_known = release::selection::tracked_manifests(root)?;
-    let live_lock = crate::release_identity::workspace_lock(
+    let live_lock = crate::release::release_identity::workspace_lock(
         &live_metadata,
         root,
         &release_config.manifest_path,

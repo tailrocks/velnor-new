@@ -65,18 +65,18 @@ pub(crate) fn render_current_preview_formula(
     let projection = validate_homebrew_projection(authority.spec(), &release_plan)
         .map_err(|_| internal("native_check_formula_projection"))?;
     let source_sha = authority.authority_sha().to_owned();
-    let selection = crate::package_release_public::PackageReleasePublicSelection::new(
+    let selection = crate::release::package_release_public::PackageReleasePublicSelection::new(
         PackageReleaseChannel::Preview,
         format!("preview-{source_sha}"),
         source_sha,
     )?;
     let policy =
-        crate::package_release_public::PackageReleasePublicPolicy::from_trusted_source_authority(
+        crate::release::package_release_public::PackageReleasePublicPolicy::from_trusted_source_authority(
             release_plan,
             authority.source_repository_id(),
             authority.authority_sha().to_owned(),
         )?;
-    let release = crate::package_release_public::verify_public_package_release(
+    let release = crate::release::package_release_public::verify_public_package_release(
         &policy, &selection, deadline,
     )?;
     let literals = super::formula_release_literals(authority, &projection, &release)?;

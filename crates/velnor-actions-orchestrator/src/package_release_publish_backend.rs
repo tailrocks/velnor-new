@@ -23,7 +23,7 @@ impl PackagePublicationBackend for GitHubPackagePublisher {
         self.original_closure.verify()?;
         match &self.original_verification {
             OriginalVerification::RunnerEnvironment => {
-                crate::package_release_signer::recheck_publisher_context(&self.signed)?;
+                crate::release::package_release_signer::recheck_publisher_context(&self.signed)?;
             }
             OriginalVerification::RetainedRun {
                 directory,
@@ -35,7 +35,10 @@ impl PackagePublicationBackend for GitHubPackagePublisher {
                 {
                     return Err(internal("package_publish_original_changed"));
                 }
-                crate::package_release_signer::require_retained_identity(&self.signed, identity)?;
+                crate::release::package_release_signer::require_retained_identity(
+                    &self.signed,
+                    identity,
+                )?;
             }
         }
         let identity = local_identity(&self.signed)?;

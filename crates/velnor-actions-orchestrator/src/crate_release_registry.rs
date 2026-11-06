@@ -201,8 +201,11 @@ pub fn reconcile_crate_registry<R: CrateRegistryRead>(
     {
         return Err(internal("crate_registry_identity_invalid"));
     }
-    let expected_features =
-        crate::crate_release_archive::crate_archive_features(expected_archive, name, version)?;
+    let expected_features = crate::release::crate_release_archive::crate_archive_features(
+        expected_archive,
+        name,
+        version,
+    )?;
     let mut actual_features: std::collections::BTreeMap<String, Vec<String>> =
         serde_json::from_value(item["features"].clone())
             .map_err(|_| internal("crate_registry_features_invalid"))?;
@@ -225,7 +228,7 @@ pub fn reconcile_crate_registry<R: CrateRegistryRead>(
     verify_crate_archive(expected_archive, &archive.body, name, version, checksum)?;
     Ok(CrateRegistryReconciliation {
         checksum: checksum.to_owned(),
-        downloaded_checksum: crate::generator::sha256_hex(&archive.body),
+        downloaded_checksum: crate::planner::generator::sha256_hex(&archive.body),
         owners: expected_owners.to_vec(),
         features: actual_features,
     })

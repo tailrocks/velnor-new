@@ -158,7 +158,7 @@ pub(super) fn record_first_created_workspace_crate(
     journal: &JournalRegistryFake,
     identity: &crate::crate_release_journal::JournalIdentity,
     plan: &crate::crate_release_journal::JournalReceipt,
-    first: &crate::crate_release_source::CrateReleaseSourcePackage,
+    first: &crate::release::crate_release_source::CrateReleaseSourcePackage,
 ) -> Result<(), Box<dyn std::error::Error>> {
     use crate::crate_release_journal::{
         JournalFile, JournalFileKind, JournalMutation, JournalMutationKind, JournalMutationPhase,
@@ -203,7 +203,7 @@ pub(super) fn first_crate_prior_upload_recovers_only_with_authenticated_intent_a
     use crate::crate_release_journal::{
         JournalAuthentication, JournalOwnership, fixture_storage::seed_started_record,
     };
-    use crate::package_release_signer::{
+    use crate::release::package_release_signer::{
         AdmittedStart, fixture_attested_generator, record_admitted_start,
     };
     let temp = tempfile::tempdir()?;
@@ -251,7 +251,7 @@ pub(super) fn first_crate_prior_upload_recovers_only_with_authenticated_intent_a
     };
     let mut admission = prepare_crate_release(&intent, &request, &auth, &registry, root)?;
     let tools = tempfile::tempdir()?;
-    admission.semver_evidence = crate::crate_release_semver::verify_preflight(
+    admission.semver_evidence = crate::release::crate_release_semver::verify_preflight(
         root,
         &admission,
         &registry,
@@ -261,7 +261,7 @@ pub(super) fn first_crate_prior_upload_recovers_only_with_authenticated_intent_a
     )?;
     assert!(matches!(
         admission.semver_evidence.get("demo"),
-        Some(crate::crate_release_semver::SemverEvidence::MetadataOnly { .. })
+        Some(crate::release::crate_release_semver::SemverEvidence::MetadataOnly { .. })
     ));
     let input = AdmittedStart {
         source_execution: &crate::UnprivilegedSourceExecution,

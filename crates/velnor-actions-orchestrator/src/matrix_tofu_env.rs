@@ -49,7 +49,7 @@ fn tofu_root_for_extra(
     if super::obligation_stack(task_id) != Some(Stack::Tofu) {
         return Ok(None);
     }
-    let key = crate::extension_schemas::task_key_segment(task_id)
+    let key = crate::planner::extension_schemas::task_key_segment(task_id)
         .ok_or_else(|| crate::internal::internal("tofu_unparsable_key"))?;
     velnor_actions_tofu::root_for_key(&key)
         .map(Some)

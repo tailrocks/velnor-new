@@ -55,7 +55,7 @@ pub(crate) fn extra_files(
         .workflows
         .contains(&RoutingWorkflow::GeneratorRelease)
     {
-        let pins = crate::product_release_pins::homebrew_adoption_pins()?;
+        let pins = crate::release::product_release_pins::homebrew_adoption_pins()?;
         files.push(
             velnor_actions_workflow_renderer::render_homebrew_adoption_callee(version, &pins)
                 .map_err(|err| OrchestratorError::Render {
@@ -131,7 +131,7 @@ fn workflow_request(
         )?;
         let tool_catalog = catalog;
         Some(MbxQualificationPins {
-            mise_setup: crate::pins::resolve_mise_setup(config, &hosted)?,
+            mise_setup: crate::planner::pins::resolve_mise_setup(config, &hosted)?,
             candidate_action_uses: mbx_action.uses_value(),
             mbx_version: tool_catalog
                 .version(velnor_actions_mise::PinnedTool::MrBoxington)
@@ -147,7 +147,7 @@ fn workflow_request(
     let mise_pin_qualification = execution
         .workflows
         .contains(&RoutingWorkflow::Qualification)
-        .then(|| crate::pins::resolve_mise_pin_qualification(config))
+        .then(|| crate::planner::pins::resolve_mise_pin_qualification(config))
         .transpose()?;
     let product_release_requested = [
         RoutingWorkflow::ImageRelease,
@@ -157,7 +157,7 @@ fn workflow_request(
     .iter()
     .any(|workflow| execution.workflows.contains(workflow));
     let product_release = product_release_requested
-        .then(|| crate::product_release_pins::resolve(config, catalog))
+        .then(|| crate::release::product_release_pins::resolve(config, catalog))
         .transpose()?;
     Ok(Schema2WorkflowRequest {
         version: version.to_owned(),

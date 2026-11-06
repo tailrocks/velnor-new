@@ -73,7 +73,9 @@ pub(super) fn reject_prior_history_drift(
     let original_refs = journal.refs.borrow().clone();
     FrozenCompletion::prepare_unprivileged(
         &observation,
-        crate::package_release_signer::fixture_measured_tools(receipt.expected_tools.clone()),
+        crate::release::package_release_signer::fixture_measured_tools(
+            receipt.expected_tools.clone(),
+        ),
         &crate::UnprivilegedSourceExecution,
     )?
     .record_unprivileged(
@@ -87,7 +89,9 @@ pub(super) fn reject_prior_history_drift(
     for scenario in 0..3 {
         let frozen = FrozenCompletion::prepare_unprivileged(
             &observation,
-            crate::package_release_signer::fixture_measured_tools(receipt.expected_tools.clone()),
+            crate::release::package_release_signer::fixture_measured_tools(
+                receipt.expected_tools.clone(),
+            ),
             &crate::UnprivilegedSourceExecution,
         )?;
         let refs = journal.refs.borrow().clone();
@@ -145,7 +149,7 @@ pub(super) fn reject_post_freeze_drift(
     for scenario in 0..8 {
         let frozen = crate::crate_release_controller::FrozenCompletion::prepare_unprivileged(
             input,
-            crate::package_release_signer::fixture_measured_tools(
+            crate::release::package_release_signer::fixture_measured_tools(
                 input.journal_receipt.expected_tools.clone(),
             ),
             &crate::UnprivilegedSourceExecution,
@@ -213,7 +217,7 @@ pub(super) fn completion_recovers_lost_write_response(
     let freeze = || {
         FrozenCompletion::prepare_unprivileged(
             &observation,
-            crate::package_release_signer::fixture_measured_tools(
+            crate::release::package_release_signer::fixture_measured_tools(
                 input.journal_receipt.expected_tools.clone(),
             ),
             &crate::UnprivilegedSourceExecution,

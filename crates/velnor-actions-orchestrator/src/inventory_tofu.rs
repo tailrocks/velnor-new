@@ -5,8 +5,8 @@ use std::path::Path;
 
 use velnor_actions_contract::CandidateOutcome;
 
+use crate::planner::select_tofu::TofuSelectionUnit;
 use crate::safe_read::read_repo_file_cached;
-use crate::select_tofu::TofuSelectionUnit;
 
 use super::ok_outcome;
 

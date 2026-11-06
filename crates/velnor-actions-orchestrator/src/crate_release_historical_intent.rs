@@ -11,7 +11,7 @@ fn read_historical_intent(
     commit: &str,
     git: &ReleaseGit,
     deadline: CheckDeadline,
-    wire: &crate::crate_release_source_wire::SourceWire,
+    wire: &crate::release::crate_release_source_wire::SourceWire,
 ) -> Result<CrateReleaseIntent, OrchestratorError> {
     let invalid = || internal("crate_release_historical_intent_invalid");
     wire.remaining().map_err(|_| invalid())?;
@@ -48,7 +48,7 @@ fn object(
     id: &str,
     git: &ReleaseGit,
     deadline: CheckDeadline,
-    wire: &crate::crate_release_source_wire::SourceWire,
+    wire: &crate::release::crate_release_source_wire::SourceWire,
     cap: usize,
 ) -> Result<Vec<u8>, OrchestratorError> {
     let invalid = || internal("crate_release_historical_object_invalid");
@@ -112,7 +112,7 @@ fn verify_object_store(
     root: &Path,
     git: &ReleaseGit,
     deadline: CheckDeadline,
-    wire: &crate::crate_release_source_wire::SourceWire,
+    wire: &crate::release::crate_release_source_wire::SourceWire,
 ) -> Result<(), OrchestratorError> {
     let invalid = || internal("crate_release_historical_store_invalid");
     wire.remaining().map_err(|_| invalid())?;
@@ -195,7 +195,7 @@ pub(crate) fn verify_runner_transition(
     github: &dyn crate::crate_release_github::GitHubAdmissionRead,
     git: &ReleaseGit,
     deadline: CheckDeadline,
-    wire: &crate::crate_release_source_wire::SourceWire,
+    wire: &crate::release::crate_release_source_wire::SourceWire,
 ) -> Result<(), OrchestratorError> {
     let TransitionReceipts {
         prior,
@@ -261,11 +261,11 @@ fn verify_receipt_intent(
             run_attempt: item.run_attempt,
         }
     });
-    if crate::generator::sha256_hex(&bytes) != receipt.intent_sha256
+    if crate::planner::generator::sha256_hex(&bytes) != receipt.intent_sha256
         || crate::crate_release_journal::release_base_intent_sha256(intent)?
             != receipt.base_intent_sha256
         || predecessor != receipt.predecessor
-        || !crate::release_identity::same_repository(
+        || !crate::release::release_identity::same_repository(
             &intent.repository,
             &receipt.identity.repository,
         )
@@ -282,7 +282,7 @@ pub(crate) fn verify_prior_bound(
     github: &dyn crate::crate_release_github::GitHubAdmissionRead,
     git: &ReleaseGit,
     deadline: CheckDeadline,
-    wire: &crate::crate_release_source_wire::SourceWire,
+    wire: &crate::release::crate_release_source_wire::SourceWire,
 ) -> Result<CrateReleaseIntent, OrchestratorError> {
     let intent = read_historical_intent(root, &prior.identity.workflow_sha, git, deadline, wire)?;
     verify_receipt_intent(prior, &intent)?;

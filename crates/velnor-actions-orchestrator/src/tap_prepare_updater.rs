@@ -11,7 +11,7 @@ use velnor_actions_contract::{PackageReleasePlan, VerifiedPackageRelease, canoni
 use velnor_actions_mise::{CheckDeadline, DiscoveredCheck};
 
 use super::{OrchestratorError, TASK_OUTPUT_LIMIT, internal, sha256};
-use crate::check_runtime::preparation::prepare_check;
+use crate::planner::check_runtime::preparation::prepare_check;
 
 pub(super) fn prepare_receipt_handoff(
     temp: &Path,

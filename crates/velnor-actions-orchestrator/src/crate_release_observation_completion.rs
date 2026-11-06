@@ -17,10 +17,10 @@ pub(crate) struct FrozenCompletion {
     archives: Vec<Vec<u8>>,
     predecessors: Vec<PriorHistoryEvidence>,
     completed: Option<JournalEvidence>,
-    tools: crate::package_release_signer::MeasuredReleaseTools,
+    tools: crate::release::package_release_signer::MeasuredReleaseTools,
     supervised: bool,
     #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
-    session: Option<crate::crate_release_source_view::SourceSessionId>,
+    session: Option<crate::release::crate_release_source_view::SourceSessionId>,
 }
 
 impl FrozenCompletion {
@@ -30,7 +30,7 @@ impl FrozenCompletion {
         R: CrateRegistryRead,
     >(
         input: &CrateReleaseObservation<'_, J, G, R>,
-        tools: crate::package_release_signer::MeasuredReleaseTools,
+        tools: crate::release::package_release_signer::MeasuredReleaseTools,
         execution: &crate::UnprivilegedSourceExecution,
     ) -> Result<Self, OrchestratorError> {
         Self::prepare(
@@ -50,8 +50,8 @@ impl FrozenCompletion {
         R: CrateRegistryRead,
     >(
         input: &CrateReleaseObservation<'_, J, G, R>,
-        tools: crate::package_release_signer::MeasuredReleaseTools,
-        execution: &crate::crate_release_source_view::SupervisedSourceExecution,
+        tools: crate::release::package_release_signer::MeasuredReleaseTools,
+        execution: &crate::release::crate_release_source_view::SupervisedSourceExecution,
     ) -> Result<Self, OrchestratorError> {
         let mut frozen = Self::prepare(
             &CrateReleaseObservation {
@@ -71,7 +71,7 @@ impl FrozenCompletion {
         R: CrateRegistryRead,
     >(
         input: &CrateReleaseObservation<'_, J, G, R>,
-        tools: crate::package_release_signer::MeasuredReleaseTools,
+        tools: crate::release::package_release_signer::MeasuredReleaseTools,
         supervised: bool,
     ) -> Result<Self, OrchestratorError> {
         let candidate = super::derive_reconciled_candidate(input)?;
@@ -105,7 +105,7 @@ impl FrozenCompletion {
                 .checked_add(archive.len())
                 .filter(|total| *total <= 512 * 1024 * 1024)
                 .ok_or_else(invalid)?;
-            if crate::crate_release_archive::crate_archive_inventory(
+            if crate::release::crate_release_archive::crate_archive_inventory(
                 &archive,
                 &package.source.name,
                 &package.source.version,
@@ -153,7 +153,7 @@ impl FrozenCompletion {
     #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
     pub(crate) fn is_bound_to(
         &self,
-        session: &crate::crate_release_source_view::SourceSessionId,
+        session: &crate::release::crate_release_source_view::SourceSessionId,
     ) -> bool {
         self.session
             .as_ref()
@@ -228,7 +228,7 @@ impl FrozenCompletion {
         R: CrateRegistryRead,
     >(
         self,
-        closed: crate::crate_release_source_view::ClosedSourceSession,
+        closed: crate::release::crate_release_source_view::ClosedSourceSession,
         journal: &J,
         github: &G,
         registry: &R,

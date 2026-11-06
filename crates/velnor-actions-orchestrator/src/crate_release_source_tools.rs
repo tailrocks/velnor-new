@@ -19,7 +19,7 @@ pub(crate) struct ProjectedSourceTools {
 impl SealedSourceView {
     pub(crate) fn project_source_tools(
         self,
-        private: &crate::crate_release_custody::PublisherRoot,
+        private: &crate::release::crate_release_custody::PublisherRoot,
     ) -> Result<ProjectedSourceTools, OrchestratorError> {
         use velnor_actions_mise::release_git_pin::{GIT_HTTP_SHA256, GIT_SHA256};
         let invalid = || internal("crate_release_source_tools_invalid");
@@ -41,7 +41,7 @@ impl SealedSourceView {
             crate::safe_read::RepoBytes::Bytes(bytes) if !bytes.is_empty() => bytes,
             _ => return Err(invalid()),
         };
-        if crate::generator::sha256_hex(&checker_bytes) != checker.executable_sha256 {
+        if crate::planner::generator::sha256_hex(&checker_bytes) != checker.executable_sha256 {
             return Err(invalid());
         }
         let release_plz = velnor_actions_mise::catalog::qualified_release_plz(
@@ -58,7 +58,9 @@ impl SealedSourceView {
             crate::safe_read::RepoBytes::Bytes(bytes) if !bytes.is_empty() => bytes,
             _ => return Err(invalid()),
         };
-        if crate::generator::sha256_hex(&release_plz_bytes) != release_plz.executable_sha256 {
+        if crate::planner::generator::sha256_hex(&release_plz_bytes)
+            != release_plz.executable_sha256
+        {
             return Err(invalid());
         }
         let git_bytes = read_checked_executable(
@@ -183,7 +185,7 @@ fn read_checked_executable(
         after.len(),
         after.mtime(),
         after.ctime(),
-    ) || crate::generator::sha256_hex(&bytes) != expected
+    ) || crate::planner::generator::sha256_hex(&bytes) != expected
     {
         return Err(invalid());
     }
@@ -265,5 +267,5 @@ fn hash_host_compiler(path: &Path, deadline: CheckDeadline) -> Result<String, Or
         return Err(invalid());
     }
     deadline.remaining().map_err(|_| invalid())?;
-    Ok(crate::generator::sha256_hex(&bytes))
+    Ok(crate::planner::generator::sha256_hex(&bytes))
 }

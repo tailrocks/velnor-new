@@ -13,7 +13,8 @@ fn write_rust_verifier(
         verifier_builders::{ToolchainPhase, rust_verifier_shell_step},
         verifier_composite::verifier_shell_run_scalar,
     };
-    let intent = crate::crate_release_runtime::parse_crate_release_intent(&std::fs::read(intent)?)?;
+    let intent =
+        crate::release::crate_release_runtime::parse_crate_release_intent(&std::fs::read(intent)?)?;
     rust_channel_manifest_sha256(&intent.rust_version).ok_or("unknown Rust channel")?;
     let catalog =
         ToolCatalog::pinned().with_project_tool(PinnedTool::Rust, &intent.rust_version)?;
@@ -58,8 +59,9 @@ fn supplied_intent_renders_rust_verifier() -> Result<(), Box<dyn std::error::Err
     let missing = temp.path().join("missing.sh");
     assert!(write_rust_verifier(&invalid, &missing).is_err());
     assert!(!missing.exists());
-    let mut unknown =
-        crate::crate_release_runtime::parse_crate_release_intent(&std::fs::read(&intent)?)?;
+    let mut unknown = crate::release::crate_release_runtime::parse_crate_release_intent(
+        &std::fs::read(&intent)?,
+    )?;
     unknown.rust_version = "1.2.3".to_owned();
     std::fs::write(&invalid, toml::to_string(&unknown)?)?;
     assert!(write_rust_verifier(&invalid, &missing).is_err());
@@ -72,7 +74,7 @@ fn supplied_intent_renders_rust_verifier() -> Result<(), Box<dyn std::error::Err
 }
 
 fn preview_consumer_intent(root: &std::path::Path) -> Result<String, crate::OrchestratorError> {
-    let prep = crate::prepare::prepare_for_candidate(root)?;
+    let prep = crate::planner::prepare::prepare_for_candidate(root)?;
     let release = super::enabled_release(&prep)?.ok_or_else(|| {
         crate::OrchestratorError::unsupported("crate_release_preview", "release is not enabled")
     })?;
@@ -82,7 +84,8 @@ fn preview_consumer_intent(root: &std::path::Path) -> Result<String, crate::Orch
             "registry is not crates.io",
         ));
     }
-    let mise = crate::pins::resolve_mise_setup(&prep.config, super::RELEASE_HOSTED_RUNNER)?;
+    let mise =
+        crate::planner::pins::resolve_mise_setup(&prep.config, super::RELEASE_HOSTED_RUNNER)?;
     let files = super::release_files_for_config(&prep, &mise, release)?;
     let mut matching = files.into_iter().filter(|file| {
         file.path == velnor_actions_workflow_renderer::release_tree::RELEASE_INTENT_PATH
@@ -96,7 +99,7 @@ fn preview_consumer_intent(root: &std::path::Path) -> Result<String, crate::Orch
             "duplicate intent",
         ));
     }
-    crate::crate_release_runtime::parse_crate_release_intent(intent.bytes.as_bytes())?;
+    crate::release::crate_release_runtime::parse_crate_release_intent(intent.bytes.as_bytes())?;
     Ok(intent.bytes)
 }
 
@@ -182,11 +185,12 @@ fn supplied_consumer_intent_preview() -> Result<(), Box<dyn std::error::Error>> 
     let checkout = temp.path().join("checkout");
     std::fs::create_dir(&checkout)?;
     preview_fixture(&checkout)?;
-    let prep = crate::prepare::prepare_for_candidate(&checkout)?;
+    let prep = crate::planner::prepare::prepare_for_candidate(&checkout)?;
     assert!(super::release_files(&prep).is_err());
     write_consumer_intent(&checkout, &output)?;
-    let intent =
-        crate::crate_release_runtime::parse_crate_release_intent(&std::fs::read(&output)?)?;
+    let intent = crate::release::crate_release_runtime::parse_crate_release_intent(
+        &std::fs::read(&output)?,
+    )?;
     assert_eq!(intent.packages, ["demo"]);
     assert_eq!(
         intent.pr_write_paths,

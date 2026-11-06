@@ -198,7 +198,7 @@ fn archive(names: &[&str]) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
 fn local_payload_preflight_rejects_duplicate_and_traversing_archive_members() -> TestResult {
     let expected = BTreeSet::from(["jackin".to_owned()]);
     let valid = archive(&["jackin"])?;
-    let contents = crate::package_release_artifacts::extract_tar_gz_members(
+    let contents = crate::release::package_release_artifacts::extract_tar_gz_members(
         &valid,
         &expected,
         Instant::now(),
@@ -211,7 +211,7 @@ fn local_payload_preflight_rejects_duplicate_and_traversing_archive_members() ->
         vec!["/jackin"],
     ] {
         assert!(
-            crate::package_release_artifacts::extract_tar_gz_members(
+            crate::release::package_release_artifacts::extract_tar_gz_members(
                 &archive(&members)?,
                 &expected,
                 Instant::now()

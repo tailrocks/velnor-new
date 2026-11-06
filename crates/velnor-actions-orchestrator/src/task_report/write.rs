@@ -37,13 +37,13 @@ pub fn write_task_report() -> Result<usize, OrchestratorError> {
         .ok()
         .filter(|value| !value.is_empty())
         .ok_or_else(|| internal("missing_exit_code"))?;
-    let reason = crate::noop_report::noop_reason_present();
-    let digest = env::var(crate::noop_report::TASK_DIGEST_ENV).ok();
+    let reason = crate::planner::noop_report::noop_reason_present();
+    let digest = env::var(crate::planner::noop_report::TASK_DIGEST_ENV).ok();
     let exit_code = parse_exit_code(&exit_raw)?;
     if let Some(request) =
-        crate::noop_report::parse_noop_request(reason.as_deref(), digest.as_deref())?
+        crate::planner::noop_report::parse_noop_request(reason.as_deref(), digest.as_deref())?
     {
-        return crate::noop_report::write_noop_report_to(
+        return crate::planner::noop_report::write_noop_report_to(
             &run_key,
             &task_id,
             exit_code,
@@ -107,8 +107,12 @@ pub(crate) fn write_task_report_to(
         } else {
             downstream.to_vec()
         };
-        reported +=
-            crate::noop_report::write_skip_reports(&plan, task_id, &downstream_tasks, runner_temp)?;
+        reported += crate::planner::noop_report::write_skip_reports(
+            &plan,
+            task_id,
+            &downstream_tasks,
+            runner_temp,
+        )?;
     }
     Ok(reported)
 }
@@ -127,7 +131,7 @@ fn parse_downstream(raw: Option<&str>) -> Vec<String> {
 
 pub(crate) fn load_plan(run_key: &str, runner_temp: &Path) -> Result<Plan, OrchestratorError> {
     let path = plan_path(runner_temp, run_key);
-    let bound = crate::retrieve_reports::MAX_RETRIEVE_PLAN_BYTES;
+    let bound = crate::planner::retrieve_reports::MAX_RETRIEVE_PLAN_BYTES;
     let text = match velnor_actions_contract::staged_reads::read_staged_text(&path, bound) {
         Ok(text) => text,
         Err("missing") => {

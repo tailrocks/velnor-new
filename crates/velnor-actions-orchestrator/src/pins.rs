@@ -12,7 +12,7 @@ use velnor_actions_mise::MISE_VERSION;
 use velnor_actions_workflow_renderer::{MiseSetup, release_helpers};
 
 use crate::OrchestratorError;
-use crate::discover::Discovery;
+use crate::planner::discover::Discovery;
 
 const MISE_ACTION_KEY: &str = "jdx/mise-action";
 
@@ -26,7 +26,7 @@ pub(crate) use consumer_evidence::consumer_evidence_helper;
 
 #[path = "pins_mise_pin_qualification.rs"]
 mod mise_pin_qualification;
-pub(super) use mise_pin_qualification::resolve as resolve_mise_pin_qualification;
+pub(crate) use mise_pin_qualification::resolve as resolve_mise_pin_qualification;
 
 pub(crate) fn resolve_mise_setup(
     config: &VelnorConfig,

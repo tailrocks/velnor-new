@@ -3,7 +3,7 @@
 
 use velnor_actions_workflow_renderer::render::RenderedFile;
 
-use crate::{OrchestratorError, prepare::GenerationPreparation};
+use crate::{OrchestratorError, planner::prepare::GenerationPreparation};
 
 pub(crate) fn files(prep: &GenerationPreparation) -> Result<Vec<RenderedFile>, OrchestratorError> {
     let stacks = &prep.config.stacks;

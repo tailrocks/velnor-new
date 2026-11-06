@@ -3,7 +3,9 @@
 
 use super::{NewRegistry, fixture_archive, make_fixture, raw_prepare_crate_release, test_git};
 use crate::crate_release_controller::CrateReleaseAdmissionReceipt;
-use crate::crate_release_semver::{SemverEvidence, verify_observed_evidence, verify_preflight};
+use crate::release::crate_release_semver::{
+    SemverEvidence, verify_observed_evidence, verify_preflight,
+};
 use std::cell::Cell;
 
 #[test]
@@ -62,7 +64,7 @@ fn existing_first_version_derives_metadata_evidence_without_checker_or_baseline(
         assert!(
             matches!(evidence, SemverEvidence::MetadataOnly { package, version, source_sha, target_checksum, .. }
             if package == "demo" && version == "0.1.1" && source_sha == &request.source_sha
-            && target_checksum == &crate::generator::sha256_hex(&registry.base.archive.borrow()))
+            && target_checksum == &crate::planner::generator::sha256_hex(&registry.base.archive.borrow()))
         );
         verify_observed_evidence(&admission, &admission)?;
         reject_evidence_substitution(&admission);

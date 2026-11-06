@@ -10,7 +10,7 @@ use velnor_actions_rust::release_select::ReleaseSelection;
 use velnor_actions_workflow_renderer::release_spec::validate_source_sha;
 
 use crate::OrchestratorError;
-use crate::origin::origin_url_via_git;
+use crate::planner::origin::origin_url_via_git;
 
 pub(crate) fn origin_repository(root: &Path) -> Result<String, OrchestratorError> {
     let Some(url) = origin_url_via_git(root) else {
@@ -27,7 +27,7 @@ pub(crate) fn origin_repository(root: &Path) -> Result<String, OrchestratorError
 fn normalize_origin(url: &str) -> Option<String> {
     let trimmed = url.trim().trim_end_matches('/');
     let base = trimmed.strip_suffix(".git").unwrap_or(trimmed);
-    if let Some((host, path)) = crate::prepare::split_host_path(base) {
+    if let Some((host, path)) = crate::planner::prepare::split_host_path(base) {
         if host.eq_ignore_ascii_case("github.com") && is_owner_repo(path) {
             return Some(path.to_owned());
         }

@@ -170,7 +170,7 @@ pub(crate) fn build_jobs(
     let acquire = acquire.ok_or_else(|| OrchestratorError::Contract {
         problem: "gradle_requires_consumer_policy".to_owned(),
     })?;
-    let setup = crate::pins::resolve_mise_setup_for_release_target(
+    let setup = crate::planner::pins::resolve_mise_setup_for_release_target(
         config,
         velnor_actions_contract::ReleaseTarget::LinuxX86_64,
     )?;

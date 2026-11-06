@@ -135,7 +135,7 @@ pub(crate) fn verify_published_linux_binary_attestation(
         crate::safe_read::RepoBytes::Bytes(bytes) => bytes,
         crate::safe_read::RepoBytes::Absent => return Err(internal("sdk_binary_missing")),
     };
-    if crate::generator::sha256_hex(&bytes) != target.sha256 {
+    if crate::planner::generator::sha256_hex(&bytes) != target.sha256 {
         return Err(internal("sdk_binary_digest_mismatch"));
     }
     let source_token = source_attestation_token()?;
@@ -183,7 +183,7 @@ fn bound_release_manifest(
     attestation: &VerifiedManifestAttestation,
 ) -> Result<velnor_actions_contract::ReleaseManifest, OrchestratorError> {
     if bytes.len() > 1024 * 1024
-        || crate::generator::sha256_hex(bytes) != attestation.subject_sha256
+        || crate::planner::generator::sha256_hex(bytes) != attestation.subject_sha256
     {
         return Err(internal("sdk_binary_manifest_mismatch"));
     }

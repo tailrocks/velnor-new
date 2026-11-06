@@ -172,7 +172,7 @@ fn baseline_archive_is_bound_to_registry_identity_and_checksum()
     lock_header.set_cksum();
     tar.append_data(&mut lock_header, "demo-0.1.0/Cargo.lock", lock.as_slice())?;
     let archive = tar.into_inner()?.finish()?;
-    let checksum = crate::generator::sha256_hex(&archive);
+    let checksum = crate::planner::generator::sha256_hex(&archive);
     let detail = serde_json::json!({"version":{"id":1,"crate":"demo","num":"0.1.0","yanked":false,"checksum":checksum}}).to_string().into_bytes();
     let mut registry = ArchiveRegistry { detail, archive };
     let previous = Baseline {
@@ -258,7 +258,7 @@ fn historical_lockless_archive_remains_bound_to_registry_checksum()
         source.as_slice(),
     )?;
     let archive = tar.into_inner()?.finish()?;
-    let checksum = crate::generator::sha256_hex(&archive);
+    let checksum = crate::planner::generator::sha256_hex(&archive);
     let input = super::checker::ProjectionInput {
         archive: &archive,
         checksum: &checksum,

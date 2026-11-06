@@ -27,7 +27,7 @@ impl ProjectedSourceTools {
         boot_deadline: u64,
         #[cfg(test)] after_chmod: impl FnOnce() -> Result<(), &'static str>,
     ) -> Result<SupervisedSourceExecution, OrchestratorError> {
-        use crate::crate_release_source_wire::{SourceOperation, SourceWire};
+        use crate::release::crate_release_source_wire::{SourceOperation, SourceWire};
         let invalid = || internal("crate_release_source_channel_invalid");
         self.sealed.deadline.remaining().map_err(|_| invalid())?;
         self.sealed.tools.revalidate_view(&self.sealed.view)?;
@@ -88,7 +88,7 @@ impl ProjectedSourceTools {
                     "version": if bound { Some(&package.source.version) } else { None },
                     "manifest": if bound { Some(&package.source.manifest) } else { None },
                     "features": features,
-                "upload_config_sha256": crate::generator::sha256_hex(
+                "upload_config_sha256": crate::planner::generator::sha256_hex(
                     crate::crate_release_controller::single_package_config(&receipt.intent, &package.source.name)?.as_bytes()
                 ),
                 }))
@@ -105,7 +105,7 @@ impl ProjectedSourceTools {
                 "run_id": request.run_id,
                 "run_attempt": request.run_attempt,
                 "workflow_sha": request.workflow_sha,
-                "intent_sha256": crate::generator::sha256_hex(&intent),
+                "intent_sha256": crate::planner::generator::sha256_hex(&intent),
             },
             "source_sha": request.source_sha,
             "authentication": receipt.intent.authentication,

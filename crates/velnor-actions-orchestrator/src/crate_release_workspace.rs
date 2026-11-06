@@ -11,11 +11,11 @@ use velnor_actions_rust::{
 
 use crate::{
     OrchestratorError,
-    crate_release_source::{
+    internal::internal,
+    release::crate_release_source::{
         source_cargo_path, source_compiler_env, source_tool_catalog, verify_crate_release_source,
         verify_toolchain_source_separation,
     },
-    internal::internal,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -106,7 +106,7 @@ impl<'a> CratePackageSource<'a> {
 
 pub struct HistoricalIntentReader<'a> {
     #[cfg(target_os = "linux")]
-    pub(crate) execution: &'a crate::crate_release_source_view::SupervisedSourceExecution,
+    pub(crate) execution: &'a crate::release::crate_release_source_view::SupervisedSourceExecution,
     #[cfg(not(target_os = "linux"))]
     marker: std::marker::PhantomData<&'a ()>,
     #[cfg(not(target_os = "linux"))]
@@ -184,7 +184,7 @@ impl CrateSourceExecution for UnprivilegedSourceExecution {
     }
 
     fn check_semver(&self, request: &CrateSemverSource<'_>) -> Result<(), OrchestratorError> {
-        crate::crate_release_semver::run_check(
+        crate::release::crate_release_semver::run_check(
             request.source,
             request.rust,
             request.manifest,
@@ -239,7 +239,7 @@ fn workspace_plan_from_metadata<R: crate::crate_release_registry::CrateRegistryR
     manifests: &BTreeSet<String>,
     metadata: &str,
 ) -> Result<CrateReleaseWorkspacePlan, OrchestratorError> {
-    let concurrency_group = crate::release_identity::workspace_lock(
+    let concurrency_group = crate::release::release_identity::workspace_lock(
         metadata,
         canonical,
         &intent.manifest_path,

@@ -9,7 +9,7 @@ use velnor_actions_contract::{
 use velnor_actions_dbt::{affected_projects, job_id};
 
 use super::ChangeEvidence;
-use crate::discover::Discovery;
+use crate::planner::discover::Discovery;
 
 pub(crate) fn dispositions(
     config: &VelnorConfig,

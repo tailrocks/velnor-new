@@ -20,7 +20,7 @@ pub(super) fn reject_bad_completion_evidence(
     let try_complete = || {
         crate::crate_release_journal::record_unprivileged_completion(
             input,
-            crate::package_release_signer::fixture_measured_tools(
+            crate::release::package_release_signer::fixture_measured_tools(
                 input.journal_receipt.expected_tools.clone(),
             ),
         )
@@ -89,7 +89,10 @@ pub(super) fn serial_coordinator_leaves_uncertain_upload_pending_when_not_visibl
     assert!(
         coordinate_release(
             &input,
-            |name| crate::crate_release_semver::fixture_verified_semver(input.admission, name),
+            |name| crate::release::crate_release_semver::fixture_verified_semver(
+                input.admission,
+                name
+            ),
             |_| {
                 calls.set(calls.get() + 1);
                 Ok(UploadAttempt::Uncertain)
@@ -157,7 +160,7 @@ pub(super) fn serial_coordinator_recovers_pending_visible_upload_without_uploadi
     };
     let result = coordinate_release(
         &input,
-        |name| crate::crate_release_semver::fixture_verified_semver(input.admission, name),
+        |name| crate::release::crate_release_semver::fixture_verified_semver(input.admission, name),
         |_| panic!("must not upload an existing version"),
         || {},
     )?;
@@ -188,7 +191,10 @@ pub(super) fn mixed_workspace_admission_retains_publish_and_repair()
         CrateReleaseAction::RepairTag { .. }
     ));
     assert_eq!(mixed.packages[1].action, CrateReleaseAction::Publish);
-    assert_eq!(crate::crate_release_runtime::release_mode(&mixed), "mixed");
+    assert_eq!(
+        crate::release::crate_release_runtime::release_mode(&mixed),
+        "mixed"
+    );
     Ok(())
 }
 

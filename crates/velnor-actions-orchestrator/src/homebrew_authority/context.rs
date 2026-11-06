@@ -4,7 +4,7 @@
 use std::path::Path;
 
 use super::{CheckDeadline, OrchestratorError, WorkflowEvent, internal};
-use crate::package_release_publish::MergeGroupSelection;
+use crate::release::package_release_publish::MergeGroupSelection;
 
 #[path = "merge_group.rs"]
 mod merge_group;
@@ -50,10 +50,11 @@ pub(super) fn authenticate_tap_context(
     expected_head: &str,
     deadline: CheckDeadline,
 ) -> Result<TapContext, OrchestratorError> {
-    let tap_repository_id = crate::package_release_publish::read_public_repository_identity(
-        expected_tap_repository,
-        deadline,
-    )?;
+    let tap_repository_id =
+        crate::release::package_release_publish::read_public_repository_identity(
+            expected_tap_repository,
+            deadline,
+        )?;
     let checkout_head = read_git_value(root, "HEAD", deadline)?;
     let admission = authenticate_event(
         &AdmissionRequest {
@@ -188,7 +189,7 @@ fn authenticate_push(
     deadline: CheckDeadline,
 ) -> Result<EventAdmission, OrchestratorError> {
     reject_pull_number(request.pull_request)?;
-    let tip = crate::package_release_publish::verify_public_protected_main_lineage(
+    let tip = crate::release::package_release_publish::verify_public_protected_main_lineage(
         request.repository,
         request.repository_id,
         "main",
@@ -322,14 +323,15 @@ fn recheck_event_context(
         }
         WorkflowEvent::Push => {
             reject_pull_number(pull_request)?;
-            let tip = crate::package_release_publish::verify_public_protected_main_lineage(
-                expected_tap_repository,
-                *tap_repository_id,
-                "main",
-                expected_head,
-                expected_head,
-                deadline,
-            )?;
+            let tip =
+                crate::release::package_release_publish::verify_public_protected_main_lineage(
+                    expected_tap_repository,
+                    *tap_repository_id,
+                    "main",
+                    expected_head,
+                    expected_head,
+                    deadline,
+                )?;
             if !push_context_matches(&tip, authenticated_head, checkout_head) {
                 return Err(internal("homebrew_authority_push_context_changed"));
             }
@@ -340,7 +342,9 @@ fn recheck_event_context(
             let selection = merge_group
                 .as_ref()
                 .ok_or_else(|| internal("homebrew_authority_merge_group_missing"))?;
-            crate::package_release_publish::verify_public_merge_group_context(selection, deadline)?;
+            crate::release::package_release_publish::verify_public_merge_group_context(
+                selection, deadline,
+            )?;
             if selection.head_sha() != checkout_head {
                 return Err(internal("homebrew_authority_merge_group_checkout"));
             }

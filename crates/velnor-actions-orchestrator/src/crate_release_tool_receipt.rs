@@ -25,7 +25,7 @@ pub fn acquire_reconciliation_receipt_artifact<
         source_context,
         true,
         |receipt| {
-            crate::crate_release_semver::verify_preflight(
+            crate::release::crate_release_semver::verify_preflight(
                 source,
                 receipt,
                 registry,
@@ -58,7 +58,7 @@ pub fn acquire_receipt_artifact<
         source_context,
         false,
         |receipt| {
-            crate::crate_release_semver::verify_preflight(
+            crate::release::crate_release_semver::verify_preflight(
                 source,
                 receipt,
                 registry,
@@ -84,7 +84,7 @@ fn acquire_receipt<
     verify_semver: impl FnOnce(
         &crate::crate_release_controller::CrateReleaseAdmissionReceipt,
     ) -> Result<
-        std::collections::BTreeMap<String, crate::crate_release_semver::SemverEvidence>,
+        std::collections::BTreeMap<String, crate::release::crate_release_semver::SemverEvidence>,
         OrchestratorError,
     >,
 ) -> Result<(), OrchestratorError> {
@@ -114,7 +114,7 @@ fn acquire_receipt<
         )?;
         fresh.semver_evidence = verify_semver(&fresh)?;
         crate::crate_release_controller::verify_observed_packages(&fresh, &receipt)?;
-        if !crate::crate_release_semver::matches_revalidated_preflight(
+        if !crate::release::crate_release_semver::matches_revalidated_preflight(
             &receipt.semver_evidence,
             &fresh.semver_evidence,
         ) {
@@ -326,7 +326,7 @@ pub(crate) fn fixture_acquire_receipt<
                 .map(|p| {
                     (
                         p.source.name.clone(),
-                        crate::crate_release_semver::SemverEvidence::NoBaseline {
+                        crate::release::crate_release_semver::SemverEvidence::NoBaseline {
                             checker_sha256:
                                 velnor_actions_mise::catalog::qualified_cargo_semver_checks(
                                     "ubuntu-26.04",

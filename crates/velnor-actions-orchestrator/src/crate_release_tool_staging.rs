@@ -134,7 +134,7 @@ pub fn stage_unverified_toolchain<
 
 pub(super) fn authority_matches(request: &ToolchainStageRequest<'_>) -> bool {
     request.intent.validate().is_ok()
-        && crate::release_identity::same_repository(
+        && crate::release::release_identity::same_repository(
             &request.github.repository,
             &request.intent.repository,
         )
@@ -198,7 +198,7 @@ pub(super) fn current_artifact<G: crate::crate_release_github::GitHubAdmissionRe
     {
         return Err(invalid());
     }
-    let list = crate::crate_release_artifact_pages::list_artifacts(
+    let list = crate::release::crate_release_artifact_pages::list_artifacts(
         github,
         &prefix,
         request.github.run_id,

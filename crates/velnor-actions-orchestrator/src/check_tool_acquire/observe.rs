@@ -54,7 +54,7 @@ pub(super) fn observe_executables(
     };
     let mut proofs = Vec::new();
     for executable in &qualified.executables {
-        crate::check_evidence::reject_link_components(prefix, &executable.path)?;
+        crate::planner::check_evidence::reject_link_components(prefix, &executable.path)?;
         let path = prefix.join(&executable.path);
         let bytes = read_with_deadline(&path, 256 * 1024 * 1024, deadline)
             .map_err(|error| staged_read_error(error, "qualified_tool_executable_unreadable"))?;
@@ -113,7 +113,7 @@ pub(crate) fn executable_sha256(
     relative: &str,
     deadline: CheckDeadline,
 ) -> Result<String, OrchestratorError> {
-    crate::check_evidence::reject_link_components(prefix, relative)?;
+    crate::planner::check_evidence::reject_link_components(prefix, relative)?;
     let path = prefix.join(relative);
     let bytes = read_with_deadline(&path, 256 * 1024 * 1024, deadline)
         .map_err(|error| staged_read_error(error, "qualified_tool_executable_unreadable"))?;

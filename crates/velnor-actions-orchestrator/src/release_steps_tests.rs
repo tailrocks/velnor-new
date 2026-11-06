@@ -183,15 +183,18 @@ fn assert_committed_workflow_lock(
         &path,
         workflow.replace("cancel-in-progress: false", "cancel-in-progress: true"),
     )?;
-    let committed = crate::crate_release_runtime::read_workflow_at(
+    let committed = crate::release::crate_release_runtime::read_workflow_at(
         temp.path(),
         sha,
         &crate::crate_release_git::ReleaseGit::host_fixture(),
     )?;
-    crate::crate_release_runtime::validate_workflow_concurrency(&committed, group)?;
+    crate::release::crate_release_runtime::validate_workflow_concurrency(&committed, group)?;
     assert!(
-        crate::crate_release_runtime::validate_workflow_concurrency(&std::fs::read(path)?, group)
-            .is_err()
+        crate::release::crate_release_runtime::validate_workflow_concurrency(
+            &std::fs::read(path)?,
+            group
+        )
+        .is_err()
     );
     Ok(())
 }

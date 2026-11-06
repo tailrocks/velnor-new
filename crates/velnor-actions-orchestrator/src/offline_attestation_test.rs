@@ -12,7 +12,7 @@ pub(crate) fn run_validated_worker(
     fixture: &Path,
     trusted_root: &Path,
 ) -> Result<Output, Box<dyn std::error::Error>> {
-    crate::package_release_signer::image_transport_tests::validate(test)?;
+    crate::release::package_release_signer::image_transport_tests::validate(test)?;
     let home = tempfile::tempdir()?;
     let mise_data = std::env::var_os("MISE_DATA_DIR")
         .map(std::path::PathBuf::from)

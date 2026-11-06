@@ -50,7 +50,7 @@ pub(super) enum ReleaseConsumer {
     Signer,
 }
 impl ReleaseConsumer {
-    pub(in crate::package_release_publish) fn job_name(
+    pub(in crate::release::package_release_publish) fn job_name(
         self,
         channel: velnor_actions_contract::package_release::PackageReleaseChannel,
     ) -> &'static str {

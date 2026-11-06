@@ -66,7 +66,7 @@ pub(super) fn verify<R: CrateRegistryRead>(
         package: package.source.name.clone(),
         version: package.source.version.clone(),
         source_sha: receipt.github.request.source_sha.clone(),
-        intent_sha256: crate::generator::sha256_hex(&bytes),
+        intent_sha256: crate::planner::generator::sha256_hex(&bytes),
         target_checksum: observed.checksum,
     })
 }
@@ -85,7 +85,7 @@ pub(crate) fn verify_observed_evidence(
     }
     let intent =
         velnor_actions_contract::canonical_json_bytes(&admission.intent).map_err(|_| invalid())?;
-    let intent_sha256 = crate::generator::sha256_hex(&intent);
+    let intent_sha256 = crate::planner::generator::sha256_hex(&intent);
     let mut seen = std::collections::BTreeSet::new();
     for admitted in &admission.packages {
         let name = &admitted.source.name;

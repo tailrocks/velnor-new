@@ -105,7 +105,7 @@ fn install_noreplace(_: &Path, _: &Path) -> Result<(), OrchestratorError> {
 }
 
 fn verify_package(bytes: &[u8], expected: &str) -> Result<(), OrchestratorError> {
-    if bytes.len() > 8 * 1024 * 1024 || crate::generator::sha256_hex(bytes) != expected {
+    if bytes.len() > 8 * 1024 * 1024 || crate::planner::generator::sha256_hex(bytes) != expected {
         return Err(internal("release_git_bundle_invalid"));
     }
     Ok(())
@@ -251,10 +251,10 @@ mod tests {
     #[test]
     fn rejects_changed_or_oversized_package_before_extraction() {
         let bytes = b"fixture-package";
-        let sha = crate::generator::sha256_hex(bytes);
+        let sha = crate::planner::generator::sha256_hex(bytes);
         assert!(verify_package(bytes, &sha).is_ok());
         assert!(verify_package(b"fixture-tampered", &sha).is_err());
         let large = vec![0; 8 * 1024 * 1024 + 1];
-        assert!(verify_package(&large, &crate::generator::sha256_hex(&large)).is_err());
+        assert!(verify_package(&large, &crate::planner::generator::sha256_hex(&large)).is_err());
     }
 }

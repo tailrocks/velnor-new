@@ -9,7 +9,7 @@ fn qualification_intent_matches_rendered_intent_without_enabling_publishing()
 -> Result<(), Box<dyn std::error::Error>> {
     let temp = tempfile::tempdir()?;
     preview_fixture(temp.path())?;
-    let mut prep = crate::prepare::prepare_for_candidate(temp.path())?;
+    let mut prep = crate::planner::prepare::prepare_for_candidate(temp.path())?;
     let git = crate::crate_release_git::ReleaseGit::host_fixture();
     let sha = std::process::Command::new("git")
         .args(["rev-parse", "HEAD"])
@@ -44,7 +44,8 @@ fn qualification_intent_matches_rendered_intent_without_enabling_publishing()
     };
     let actual = derive(&prep.config)?;
     let rendered = preview_consumer_intent(temp.path())?;
-    let expected = crate::crate_release_runtime::parse_crate_release_intent(rendered.as_bytes())?;
+    let expected =
+        crate::release::crate_release_runtime::parse_crate_release_intent(rendered.as_bytes())?;
     assert_eq!(toml::to_string(&actual)?, toml::to_string(&expected)?);
     assert!(parent::release_files(&prep).is_err());
     check_forged_metadata(&source, &prep.config, &raw, &manifest, &metadata_config)?;

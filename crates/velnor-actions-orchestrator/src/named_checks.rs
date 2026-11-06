@@ -3,7 +3,7 @@
 
 #[path = "named_check_plan.rs"]
 pub(crate) mod plan;
-use crate::discover::Discovery;
+use crate::planner::discover::Discovery;
 use crate::safe_read::{MAX_REPO_FILE_BYTES, RepoBytes, read_repo_bytes};
 use std::path::Path;
 use velnor_actions_contract::cachekey::ToolchainInputs;

@@ -42,10 +42,10 @@ pub(super) struct Registry {
 impl CrateRegistryRead for Registry {
     fn get(&self, path: &str) -> Result<CrateRegistryResponse, OrchestratorError> {
         if path == "/index/de/mo/demo" {
-            return Ok(CrateRegistryResponse { status: 200, body: json!({"name":"demo", "vers":"0.1.1", "cksum":crate::generator::sha256_hex(&self.archive.borrow()), "yanked":false}).to_string().into_bytes() });
+            return Ok(CrateRegistryResponse { status: 200, body: json!({"name":"demo", "vers":"0.1.1", "cksum":crate::planner::generator::sha256_hex(&self.archive.borrow()), "yanked":false}).to_string().into_bytes() });
         }
         if path == "/api/v1/crates/demo/0.1.0" && !self.baseline.borrow().is_empty() {
-            let checksum = crate::generator::sha256_hex(&self.baseline.borrow());
+            let checksum = crate::planner::generator::sha256_hex(&self.baseline.borrow());
             return Ok(CrateRegistryResponse { status: 200, body: json!({"version":{"id":1,"crate":"demo","num":"0.1.0","checksum":checksum,"yanked":false,"features":{"demo-feature":[]}}}).to_string().into_bytes() });
         }
         if path == "/crates/demo/demo-0.1.0.crate" && !self.baseline.borrow().is_empty() {

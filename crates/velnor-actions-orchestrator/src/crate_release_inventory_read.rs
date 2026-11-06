@@ -29,7 +29,7 @@ pub(crate) fn read_inventory(
             .to_owned();
         return Ok((
             u64::try_from(bytes.len()).map_err(|_| invalid())?,
-            crate::generator::sha256_hex(bytes),
+            crate::planner::generator::sha256_hex(bytes),
             Some(target),
         ));
     }

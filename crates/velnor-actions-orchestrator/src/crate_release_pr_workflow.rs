@@ -112,19 +112,20 @@ fn verify_reviewed_jobs(
         "github.repository == '{}' && github.event_name == 'push' && github.ref == 'refs/heads/{}' && needs.release-preflight.result == 'success' && needs.release-preflight.outputs.eligible == 'false'",
         intent.repository, intent.default_branch
     );
-    let jobs = crate::release_steps::assemble_jobs(&crate::release_steps::JobInputs {
-        release: &release,
-        gate: String::new(),
-        preparation_gate,
-        registry: None,
-        label: &intent.runner,
-        mise: &mise,
-        catalog: &catalog,
-        acquire: &acquire,
-        generator_version: &intent.generator_version,
-        generator_source_sha: &intent.generator_source_sha,
-        generator_manifest_sha256: &intent.generator_manifest_sha256,
-    })?;
+    let jobs =
+        crate::release::release_steps::assemble_jobs(&crate::release::release_steps::JobInputs {
+            release: &release,
+            gate: String::new(),
+            preparation_gate,
+            registry: None,
+            label: &intent.runner,
+            mise: &mise,
+            catalog: &catalog,
+            acquire: &acquire,
+            generator_version: &intent.generator_version,
+            generator_source_sha: &intent.generator_source_sha,
+            generator_manifest_sha256: &intent.generator_manifest_sha256,
+        })?;
     for id in [
         "release-preflight",
         "release-preparation",

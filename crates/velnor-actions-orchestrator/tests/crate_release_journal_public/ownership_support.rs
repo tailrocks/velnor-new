@@ -20,7 +20,7 @@ pub(super) fn verify_new_crate_prior_intention(
         JournalIntendedMutation, JournalMutationKind, JournalOwnership,
         fixture_storage::seed_started_record, record_journal_intent,
     };
-    use crate::crate_release_semver::SemverEvidence;
+    use crate::release::crate_release_semver::SemverEvidence;
     let journal = Registry::default();
     let mut prior = plan.clone();
     prior.authentication = JournalAuthentication::BootstrapToken;
@@ -98,7 +98,7 @@ fn reject_pending_upload(
         JournalIntendedMutation, JournalMutationKind, fixture_storage::seed_started_record,
         record_journal_intent,
     };
-    use crate::crate_release_semver::SemverEvidence;
+    use crate::release::crate_release_semver::SemverEvidence;
     seed_started_record(journal, &current.identity, current)?;
     let counts = (
         journal.refs.borrow().len(),
@@ -157,7 +157,7 @@ pub(super) fn reject_changed_new_crate_result(
     root: &std::path::Path,
 ) -> Result<(), Box<dyn std::error::Error>> {
     use crate::crate_release_journal::JournalOwnership;
-    use crate::crate_release_semver::SemverEvidence;
+    use crate::release::crate_release_semver::SemverEvidence;
     let mut wrong_checksum = current.clone();
     wrong_checksum.semver_evidence.insert(
         "demo-crate".into(),
@@ -194,7 +194,7 @@ pub(super) fn reject_forged_new_crate_prior(
         JournalIntendedMutation, JournalMutationKind, fixture_storage::seed_started_record,
         record_journal_intent,
     };
-    use crate::crate_release_semver::SemverEvidence;
+    use crate::release::crate_release_semver::SemverEvidence;
     let forged_journal = Registry::default();
     let mut existing_prior = prior.clone();
     existing_prior.packages[0].owners = plan.packages[0].owners.clone();

@@ -118,7 +118,7 @@ pub(super) fn serial_coordinator_records_upload_and_metadata_before_reconciling(
     assert_semver_failure_writes_nothing(&input)?;
     let result = coordinate_release(
         &input,
-        |name| crate::crate_release_semver::fixture_verified_semver(input.admission, name),
+        |name| crate::release::crate_release_semver::fixture_verified_semver(input.admission, name),
         |permit| {
             assert_eq!(permit.package, "demo");
             assert!(matches!(
@@ -179,7 +179,7 @@ pub(super) fn assert_semver_failure_writes_nothing(
     let before = input.journal.write_calls.get();
     let missing_checker = tempfile::tempdir()?;
     assert!(
-        crate::crate_release_semver::verify_before_upload(
+        crate::release::crate_release_semver::verify_before_upload(
             input.source,
             input.admission,
             input.registry,
@@ -221,7 +221,7 @@ pub(super) fn check_completion_retry(
     super::frozen_completion::completion_recovers_lost_write_response(input)?;
     let frozen = crate::crate_release_controller::FrozenCompletion::prepare_unprivileged(
         input,
-        crate::package_release_signer::fixture_measured_tools(
+        crate::release::package_release_signer::fixture_measured_tools(
             input.journal_receipt.expected_tools.clone(),
         ),
         &crate::UnprivilegedSourceExecution,
@@ -253,14 +253,14 @@ pub(super) fn check_completion_retry(
     let journal_writes = input.journal.write_calls.get();
     let retried = coordinate_release(
         input,
-        |name| crate::crate_release_semver::fixture_verified_semver(input.admission, name),
+        |name| crate::release::crate_release_semver::fixture_verified_semver(input.admission, name),
         |_| panic!("completed run must not upload"),
         || {},
     )?;
     assert_eq!(retried.history.len(), 6);
     crate::crate_release_journal::record_unprivileged_completion(
         input,
-        crate::package_release_signer::fixture_measured_tools(
+        crate::release::package_release_signer::fixture_measured_tools(
             input.journal_receipt.expected_tools.clone(),
         ),
     )?;
@@ -283,7 +283,7 @@ fn check_completion_retry_denials(
     assert!(
         crate::crate_release_journal::record_unprivileged_completion(
             input,
-            crate::package_release_signer::fixture_measured_tools(wrong_pins)
+            crate::release::package_release_signer::fixture_measured_tools(wrong_pins)
         )
         .is_err()
     );
@@ -299,7 +299,7 @@ fn check_completion_retry_denials(
     assert!(
         crate::crate_release_journal::record_unprivileged_completion(
             input,
-            crate::package_release_signer::fixture_measured_tools(
+            crate::release::package_release_signer::fixture_measured_tools(
                 input.journal_receipt.expected_tools.clone()
             )
         )
@@ -323,7 +323,10 @@ pub(super) fn check_stale_completed_retry(
     assert!(
         coordinate_release(
             input,
-            |name| crate::crate_release_semver::fixture_verified_semver(input.admission, name),
+            |name| crate::release::crate_release_semver::fixture_verified_semver(
+                input.admission,
+                name
+            ),
             |_| panic!("completed run must not upload"),
             || {}
         )
@@ -335,7 +338,7 @@ pub(super) fn check_stale_completed_retry(
     assert!(
         crate::crate_release_journal::record_unprivileged_completion(
             input,
-            crate::package_release_signer::fixture_measured_tools(stale_pins)
+            crate::release::package_release_signer::fixture_measured_tools(stale_pins)
         )
         .is_err()
     );

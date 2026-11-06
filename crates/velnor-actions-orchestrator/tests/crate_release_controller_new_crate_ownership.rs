@@ -318,7 +318,7 @@ pub(super) fn missing_semver_baseline_requires_reviewed_new_crate()
         owner_changed: Cell::new(false),
     };
     let check = |receipt: &crate::crate_release_controller::CrateReleaseAdmissionReceipt| {
-        crate::crate_release_semver::verify_one(
+        crate::release::crate_release_semver::verify_one(
             root,
             receipt,
             &registry,
@@ -338,7 +338,7 @@ pub(super) fn missing_semver_baseline_requires_reviewed_new_crate()
     let new = prepare_crate_release(&intent, &request, &github, &registry, root)?;
     assert!(matches!(
         check(&new)?,
-        crate::crate_release_semver::SemverEvidence::NoBaseline { .. }
+        crate::release::crate_release_semver::SemverEvidence::NoBaseline { .. }
     ));
     let mut wrong = new.clone();
     wrong

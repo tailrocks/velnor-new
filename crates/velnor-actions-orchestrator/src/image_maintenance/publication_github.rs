@@ -61,7 +61,7 @@ pub(super) fn authenticate(
     authority::verify_source_inputs(candidate, &source_files)?;
     if let Some(proof) = proof {
         let qualifier = attestor::runner(request, proof, &token, deadline)?;
-        let identity = crate::package_release_signer::ImageAttestationIdentity {
+        let identity = crate::release::package_release_signer::ImageAttestationIdentity {
             repository: authority::IMAGE_REPOSITORY,
             repository_id: authority::IMAGE_REPOSITORY_ID,
             caller_workflow_path: &qualifier.path,
@@ -75,7 +75,7 @@ pub(super) fn authenticate(
             run_id: qualifier.id,
             run_attempt: qualifier.attempt,
         };
-        crate::package_release_signer::verify_image_file_attestation(
+        crate::release::package_release_signer::verify_image_file_attestation(
             &proof.path,
             &identity,
             &super::qualification::expected_subject(proof),

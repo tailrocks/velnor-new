@@ -17,8 +17,8 @@ use velnor_actions_workflow_renderer::guard;
 use velnor_actions_workflow_renderer::render::RenderedTree;
 
 use crate::OrchestratorError;
-use crate::prepare::GenerationPreparation;
-use crate::provenance::{ProfileProvenance, profile_provenance};
+use crate::planner::prepare::GenerationPreparation;
+use crate::release::provenance::{ProfileProvenance, profile_provenance};
 use crate::validate::validate_staged;
 
 #[path = "generate_guards.rs"]
@@ -81,7 +81,7 @@ pub fn generate_dispatched(
     preflight::fail_on_blocking_findings(prep)?;
     let notices = preflight::unmanaged_notices(prep)?;
     let tools = ToolSnapshot::capture(&prep.root);
-    let tofu_roots = crate::select_tofu::tofu_selected_roots(&prep.discovery.statuses);
+    let tofu_roots = crate::planner::select_tofu::tofu_selected_roots(&prep.discovery.statuses);
     let tofu_locks = velnor_actions_tofu::TofuLockSnapshot::capture(&prep.root, &tofu_roots);
     let tree = render_staged_tree_with(prep, dispatch)?;
     let validated_by = validate_staged(&tree, &prep.catalog)?;

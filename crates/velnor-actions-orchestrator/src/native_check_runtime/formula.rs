@@ -52,7 +52,7 @@ pub(crate) fn verify_formula(
             event,
             authority.merge_group(),
             deadline,
-            crate::package_release_publish::read_merge_group_pull_request_responses,
+            crate::release::package_release_publish::read_merge_group_pull_request_responses,
         )?;
         crate::homebrew::structural_cutover::validate_structural_candidate(
             root, &authority, &witness, deadline,
@@ -285,15 +285,15 @@ fn verify_formula_release(
 > {
     let (tag, source_sha) = selector;
     let policy =
-        crate::package_release_public::PackageReleasePublicPolicy::from_trusted_source_authority(
+        crate::release::package_release_public::PackageReleasePublicPolicy::from_trusted_source_authority(
             release_plan,
             authority.source_repository_id(),
             authority.authority_sha().to_owned(),
         )?;
-    let selection = crate::package_release_public::PackageReleasePublicSelection::new(
+    let selection = crate::release::package_release_public::PackageReleasePublicSelection::new(
         channel, tag, source_sha,
     )?;
-    let release = crate::package_release_public::verify_public_package_release(
+    let release = crate::release::package_release_public::verify_public_package_release(
         &policy, &selection, deadline,
     )?;
     let literals = formula_release_literals(authority, projection, &release)?;
@@ -319,7 +319,7 @@ fn verify_formula_release(
 pub(super) fn formula_release_literals(
     authority: &crate::homebrew::authority::VerifiedHomebrewAuthority,
     projection: &velnor_actions_contract::homebrew_spec::ValidatedHomebrewProjection,
-    release: &crate::package_release_public::VerifiedPublicPackageRelease,
+    release: &crate::release::package_release_public::VerifiedPublicPackageRelease,
 ) -> Result<HomebrewFormulaReleaseLiterals, OrchestratorError> {
     let mut asset_hashes = BTreeMap::new();
     for selected in projection.selected_payloads() {

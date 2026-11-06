@@ -33,7 +33,7 @@ pub(super) fn authenticate(
         return Err(internal("homebrew_authority_qualification_checkout"));
     }
     let selection = public_selection(&dispatch, repository_id);
-    crate::package_release_publish::verify_public_qualification_run(&selection, deadline)?;
+    crate::release::package_release_publish::verify_public_qualification_run(&selection, deadline)?;
     Ok(QualificationSelection {
         dispatch,
         repository_id,
@@ -57,7 +57,7 @@ pub(super) fn recheck(
     if observed != selection.dispatch {
         return Err(internal("homebrew_authority_qualification_runner_changed"));
     }
-    crate::package_release_publish::verify_public_qualification_run(
+    crate::release::package_release_publish::verify_public_qualification_run(
         &public_selection(&observed, repository_id),
         deadline,
     )
@@ -127,8 +127,8 @@ fn dispatch_is_admitted(
 fn public_selection(
     dispatch: &QualificationDispatch,
     repository_id: u64,
-) -> crate::package_release_publish::QualificationRunSelection {
-    crate::package_release_publish::QualificationRunSelection::new(
+) -> crate::release::package_release_publish::QualificationRunSelection {
+    crate::release::package_release_publish::QualificationRunSelection::new(
         dispatch.repository.clone(),
         repository_id,
         dispatch.source_sha.clone(),

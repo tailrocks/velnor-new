@@ -11,13 +11,14 @@ use velnor_actions_contract::{
 use crate::{
     OrchestratorError,
     internal::internal,
-    package_release_artifacts::{
+    release::package_release_artifacts::{
         PackageOutputIdentity, VerifiedPackageArtifact, verify_package_output,
     },
 };
 
 #[path = "package_release_signer_request.rs"]
 mod request;
+#[path = "package_release_signer/runtime.rs"]
 mod runtime;
 #[path = "package_release_signer_subjects.rs"]
 mod subjects;
@@ -146,7 +147,7 @@ pub(crate) fn verify_attested_signed_package_from_env_with_deadline(
 ) -> Result<VerifiedAttestedSignedPackage, OrchestratorError> {
     match request::verification_route()? {
         request::VerificationRoute::Retained => {
-            crate::package_release_publish::verify_original_for_promotion()
+            crate::release::package_release_publish::verify_original_for_promotion()
         }
         request::VerificationRoute::DirectTap => {
             let root = absolute_env("RUNNER_TEMP")?.join("velnor");
@@ -238,7 +239,7 @@ pub(crate) fn verify_signer_input(
     plan: &PackageReleasePlan,
     identity: &PackageReleaseSigningIdentity,
     root: &Path,
-) -> Result<crate::package_release_artifacts::VerifiedPackageOutput, OrchestratorError> {
+) -> Result<crate::release::package_release_artifacts::VerifiedPackageOutput, OrchestratorError> {
     let input_dir = root.join(SIGNER_INPUT_DIR);
     require_private_directory(&input_dir)?;
     let (version, _, _, _) = release_version(plan, identity)?;

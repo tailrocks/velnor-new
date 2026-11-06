@@ -154,7 +154,7 @@ impl Drop for SparseFixture {
 pub(super) fn admitted_start_derives_receipt_and_rechecks_authority()
 -> Result<(), Box<dyn std::error::Error>> {
     use crate::crate_release_journal::{JournalAuthentication, JournalStage, inspect_journal};
-    use crate::package_release_signer::{
+    use crate::release::package_release_signer::{
         AdmittedStart, fixture_attested_generator, record_admitted_start,
     };
     let temp = tempfile::tempdir()?;

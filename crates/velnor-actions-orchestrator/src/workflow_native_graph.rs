@@ -77,19 +77,19 @@ pub(super) fn graph(
 fn task_inventory<'a>(
     input: &'a WorkflowBuildInput<'_>,
 ) -> Result<TaskInventory<'a>, OrchestratorError> {
-    let owners = crate::crate_job_ids::JobOwners::new(&input.discovery.proposals)?;
+    let owners = crate::planner::crate_job_ids::JobOwners::new(&input.discovery.proposals)?;
     let mut tasks = BTreeMap::<String, Vec<&velnor_actions_contract::ProposedTask>>::new();
     let mut seed_roots = BTreeSet::new();
     for task in input
         .discovery
         .proposals
         .iter()
-        .filter(|task| crate::crate_jobs::is_runnable(task))
+        .filter(|task| crate::planner::crate_jobs::is_runnable(task))
     {
         if let Some(id) = owners.for_member(task)? {
             if task.identity.compile_driver == "mbx" {
                 seed_roots.insert(
-                    crate::source_prep::workspace_root_for_manifest(
+                    crate::planner::source_prep::workspace_root_for_manifest(
                         &task.identity.unit_path,
                         input.fetch_roots,
                     )
@@ -100,7 +100,7 @@ fn task_inventory<'a>(
         }
     }
     let roots: Vec<String> = seed_roots.into_iter().collect();
-    let seed_ids = crate::crate_jobs::state_producer::producer_job_ids(&roots)?
+    let seed_ids = crate::planner::crate_jobs::state_producer::producer_job_ids(&roots)?
         .into_iter()
         .zip(roots)
         .collect::<BTreeMap<_, _>>();

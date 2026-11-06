@@ -7,10 +7,10 @@ use std::path::Path;
 
 use velnor_actions_mise::GitRequest;
 
-use crate::discover::Discovery;
 use crate::git_paths::split_nul_paths;
-use crate::select_affected::Ownership;
-use crate::select_reads_scan::{ReadTarget, SourceRead, scan_source};
+use crate::planner::discover::Discovery;
+use crate::planner::select_affected::Ownership;
+use crate::planner::select_reads_scan::{ReadTarget, SourceRead, scan_source};
 
 pub(crate) type Forced = BTreeMap<String, String>;
 

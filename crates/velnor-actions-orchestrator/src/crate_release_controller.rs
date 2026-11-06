@@ -37,7 +37,7 @@ use crate::crate_release_registry::{
     CrateRegistryOwner, CrateRegistryOwnership, CrateRegistryPresence, CrateRegistryRead,
     CrateRegistryReconciliation, inspect_crate_registry,
 };
-use crate::crate_release_workspace::CrateSourceExecution;
+use crate::release::{crate_release_workspace::CrateSourceExecution, release_identity};
 use crate::{
     CrateReleaseSourcePackage, OrchestratorError, crate_release_workspace_plan_with_registry,
     internal::internal,
@@ -89,7 +89,7 @@ pub struct CrateReleaseAdmissionReceipt {
     pub github: GitHubCandidate,
     pub packages: Vec<CrateReleasePlannedPackage>,
     pub semver_evidence:
-        std::collections::BTreeMap<String, crate::crate_release_semver::SemverEvidence>,
+        std::collections::BTreeMap<String, crate::release::crate_release_semver::SemverEvidence>,
 }
 
 pub fn prepare_crate_release<G: GitHubAdmissionRead, R: CrateRegistryRead>(
@@ -204,7 +204,7 @@ pub(super) fn verify_release_package_with<G: GitHubAdmissionRead, R: CrateRegist
     let intent_bytes = velnor_actions_contract::canonical_json_bytes(intent)
         .map_err(|_| internal("crate_release_intent_invalid"))?;
     Ok(VerifiedReleasePackage {
-        intent_sha256: crate::generator::sha256_hex(&intent_bytes),
+        intent_sha256: crate::planner::generator::sha256_hex(&intent_bytes),
         repository: request.repository.clone(),
         workflow_sha: request.workflow_sha.clone(),
         source_sha: request.source_sha.clone(),
@@ -273,7 +273,7 @@ fn verify_request_intent(
         None
     };
     if (intent.new_crates.is_some() && request.event != "workflow_dispatch")
-        || !crate::release_identity::same_repository(&request.repository, &intent.repository)
+        || !release_identity::same_repository(&request.repository, &intent.repository)
         || request.default_branch != intent.default_branch
         || request.environment != intent.environment
         || request.workflow_path != ".github/workflows/release.yml"

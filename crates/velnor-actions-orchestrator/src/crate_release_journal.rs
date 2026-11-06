@@ -22,7 +22,7 @@ pub(crate) fn release_base_intent_sha256(
     base.journal_predecessor = None;
     base.recovery = None;
     let bytes = velnor_actions_contract::canonical_json_bytes(&base).map_err(|_| invalid())?;
-    Ok(crate::generator::sha256_hex(&bytes))
+    Ok(crate::planner::generator::sha256_hex(&bytes))
 }
 
 const MAX_RECORD_BYTES: usize = 32 * 1024 * 1024;
@@ -147,7 +147,7 @@ pub struct JournalMutation {
     pub package: String,
     pub version: String,
     pub kind: JournalMutationKind,
-    pub semver_evidence: Option<crate::crate_release_semver::SemverEvidence>,
+    pub semver_evidence: Option<crate::release::crate_release_semver::SemverEvidence>,
     pub phase: JournalMutationPhase,
 }
 

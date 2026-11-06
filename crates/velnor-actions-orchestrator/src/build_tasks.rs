@@ -8,7 +8,7 @@ use velnor_actions_mise::catalog::{MR_BOXINGTON_VERSION, RUST_VERSION};
 use velnor_actions_workflow_renderer::verification_jobs::BuildTaskTool;
 
 use crate::OrchestratorError;
-use crate::native_tool_input::NativeMiseConfig;
+use crate::planner::native_tool_input::NativeMiseConfig;
 use crate::toolcheck::{ToolInputCheck, ToolParse};
 #[path = "build_task_lock_validation.rs"]
 mod build_task_lock_validation;

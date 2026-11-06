@@ -7,7 +7,7 @@ use velnor_actions_workflow_renderer::freshness::{FreshnessSpec, render_freshnes
 use velnor_actions_workflow_renderer::render::RenderedFile;
 
 use crate::OrchestratorError;
-use crate::prepare::GenerationPreparation;
+use crate::planner::prepare::GenerationPreparation;
 use crate::workflow::CHECKOUT_USES;
 
 #[path = "upgrades_emit.rs"]
@@ -23,7 +23,7 @@ pub(crate) fn freshness_files(
     if !freshness_enabled(prep) {
         return Ok(Vec::new());
     }
-    let mise_setup = crate::pins::resolve_mise_setup(&prep.config, &prep.runner_label)?;
+    let mise_setup = crate::planner::pins::resolve_mise_setup(&prep.config, &prep.runner_label)?;
     let emission = prep.emission_catalog();
     let spec = FreshnessSpec {
         schedule: ScheduleTrigger {

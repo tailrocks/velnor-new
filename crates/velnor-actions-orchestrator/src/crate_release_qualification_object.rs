@@ -148,7 +148,7 @@ impl Material {
         };
         self.files.push(JournalFile {
             path,
-            sha256: crate::generator::sha256_hex(data),
+            sha256: crate::planner::generator::sha256_hex(data),
             kind,
         });
         Ok(())

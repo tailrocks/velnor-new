@@ -8,7 +8,7 @@ use velnor_actions_contract::Step;
 use velnor_actions_mise::ToolCatalog;
 
 use crate::OrchestratorError;
-use crate::discover::{PlannedWorkspace, workspace_lock};
+use crate::planner::discover::{PlannedWorkspace, workspace_lock};
 
 #[path = "cache_source_projection.rs"]
 pub(crate) mod cache_source_projection;
@@ -79,7 +79,7 @@ pub(crate) fn fetch_steps_for_crate(
     roots: &[String],
     all_features: bool,
 ) -> Result<Vec<Step>, OrchestratorError> {
-    let env = crate::matrix_step::task_step_env(catalog, &BTreeMap::new(), true)?;
+    let env = crate::planner::matrix_step::task_step_env(catalog, &BTreeMap::new(), true)?;
     fetch_steps_with(catalog, roots, &env, false, all_features)
 }
 

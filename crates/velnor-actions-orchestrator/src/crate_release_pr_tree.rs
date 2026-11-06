@@ -4,23 +4,23 @@
 use crate::{OrchestratorError, internal::internal};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(super) struct TreeItem {
+pub(crate) struct TreeItem {
     pub name: String,
     pub mode: String,
     pub sha: String,
 }
 
 #[derive(Clone)]
-pub(super) struct Change {
+pub(crate) struct Change {
     pub mode: String,
     pub sha: String,
 }
 
-pub(super) trait TreeRead {
+pub(crate) trait TreeRead {
     fn read_tree(&self, sha: &str) -> Result<Vec<TreeItem>, OrchestratorError>;
 }
 
-pub(super) struct GitHubTrees<'a> {
+pub(crate) struct GitHubTrees<'a> {
     pub api: &'a dyn crate::crate_release_github::GitHubAdmissionRead,
     pub repository: &'a str,
 }
@@ -75,7 +75,7 @@ impl TreeRead for GitHubTrees<'_> {
     }
 }
 
-pub(super) fn regular_file_mode<R: TreeRead>(
+pub(crate) fn regular_file_mode<R: TreeRead>(
     reader: &R,
     root: &str,
     path: &str,
@@ -114,7 +114,7 @@ pub(super) fn regular_file_mode<R: TreeRead>(
     Err(invalid())
 }
 
-pub(super) fn overlay_tree<R: TreeRead>(
+pub(crate) fn overlay_tree<R: TreeRead>(
     reader: &R,
     root: &str,
     changes: &std::collections::BTreeMap<String, Change>,
@@ -213,7 +213,7 @@ fn overlay_directory<R: TreeRead>(
     git_tree_sha(&by_name.into_values().collect::<Vec<_>>())
 }
 
-pub(super) fn git_tree_sha(entries: &[TreeItem]) -> Result<String, OrchestratorError> {
+pub(crate) fn git_tree_sha(entries: &[TreeItem]) -> Result<String, OrchestratorError> {
     use sha1_checked::{Digest as _, Sha1};
     const HEX: &[u8; 16] = b"0123456789abcdef";
     let invalid = || internal("release_pr_tree_invalid");

@@ -59,11 +59,11 @@ pub fn verify_canonical_rehearsal(
     if commit["sha"].as_str() != Some(&request.workflow_sha) {
         return Err(invalid());
     }
-    let trees = crate::crate_release_pr_tree::GitHubTrees {
+    let trees = crate::release::crate_release_pr_tree::GitHubTrees {
         api,
         repository: &request.repository,
     };
-    let bytes = crate::crate_release_pr_acquisition::read_reviewed_file(
+    let bytes = crate::release::crate_release_pr_acquisition::read_reviewed_file(
         api,
         &trees,
         tree_sha,
@@ -85,7 +85,7 @@ pub fn verify_canonical_rehearsal(
         return Err(internal("qualification_workflow_changed"));
     }
     Ok(CanonicalWorkflowEvidence {
-        workflow_sha256: crate::generator::sha256_hex(&bytes),
+        workflow_sha256: crate::planner::generator::sha256_hex(&bytes),
         tree_sha: tree_sha.to_owned(),
     })
 }

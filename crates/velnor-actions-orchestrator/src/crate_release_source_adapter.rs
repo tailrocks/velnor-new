@@ -7,7 +7,10 @@ use super::{OrchestratorError, Path, ReleaseGit, SupervisedSourceExecution, inte
 impl crate::CrateSourceExecution for SupervisedSourceExecution {
     fn historical_intent_reader(
         &self,
-    ) -> Result<crate::crate_release_workspace::HistoricalIntentReader<'_>, OrchestratorError> {
+    ) -> Result<
+        crate::release::crate_release_workspace::HistoricalIntentReader<'_>,
+        OrchestratorError,
+    > {
         let invalid = || internal("crate_release_history_custody_required");
         let receipt = self.projected.sealed.source.receipt().data();
         let mut wire = self.wire.lock().map_err(|_| invalid())?;
@@ -19,7 +22,7 @@ impl crate::CrateSourceExecution for SupervisedSourceExecution {
             wire.poison();
             return Err(invalid());
         }
-        Ok(crate::crate_release_workspace::HistoricalIntentReader { execution: self })
+        Ok(crate::release::crate_release_workspace::HistoricalIntentReader { execution: self })
     }
 
     fn verify_toolchain_separation(
@@ -51,7 +54,7 @@ impl crate::CrateSourceExecution for SupervisedSourceExecution {
         intent: &velnor_actions_contract::config::CrateReleaseIntent,
         git: &ReleaseGit,
     ) -> Result<String, OrchestratorError> {
-        use crate::crate_release_source_wire::SourceOperation;
+        use crate::release::crate_release_source_wire::SourceOperation;
         let invalid = || internal("crate_release_source_channel_invalid");
         let mut wire = self.wire.lock().map_err(|_| invalid())?;
         if self.validate(root, intent, git).is_err() {
@@ -77,7 +80,7 @@ impl crate::CrateSourceExecution for SupervisedSourceExecution {
         &self,
         request: &crate::CratePackageSource<'_>,
     ) -> Result<Vec<u8>, OrchestratorError> {
-        use crate::crate_release_source_wire::SourceOperation;
+        use crate::release::crate_release_source_wire::SourceOperation;
         let invalid = || internal("crate_release_source_channel_invalid");
         let mut wire = self.wire.lock().map_err(|_| invalid())?;
         if self
@@ -120,7 +123,7 @@ impl crate::CrateSourceExecution for SupervisedSourceExecution {
         &self,
         request: &crate::CrateSemverSource<'_>,
     ) -> Result<(), OrchestratorError> {
-        use crate::crate_release_source_wire::SourceOperation;
+        use crate::release::crate_release_source_wire::SourceOperation;
         let invalid = || internal("crate_release_source_semver_invalid");
         let receipt = self.projected.sealed.source.receipt().data();
         let mut wire = self.wire.lock().map_err(|_| invalid())?;
@@ -154,7 +157,7 @@ impl crate::CrateSourceExecution for SupervisedSourceExecution {
         {
             return Err(invalid());
         }
-        let input = crate::crate_release_semver::ProjectionInput {
+        let input = crate::release::crate_release_semver::ProjectionInput {
             archive: request.baseline_archive,
             checksum: request.baseline_checksum,
             package: request.package,
@@ -164,7 +167,7 @@ impl crate::CrateSourceExecution for SupervisedSourceExecution {
             manifest: request.manifest,
             features: request.features,
         };
-        let (context, files) = crate::crate_release_semver::supervised_projection(&input)?;
+        let (context, files) = crate::release::crate_release_semver::supervised_projection(&input)?;
         let encoded = serde_json::to_vec(&context).map_err(|_| invalid())?;
         stage_baseline(
             self.projected.sealed.view.path(),

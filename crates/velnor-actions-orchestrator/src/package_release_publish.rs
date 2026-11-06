@@ -5,7 +5,7 @@ use crate::{
     OrchestratorError,
     internal::internal,
     package_publication::{PackagePublicationOutcome, publish_package_release},
-    package_release_signer::{
+    release::package_release_signer::{
         PackageReleaseSigningIdentity, VerifiedAttestedSignedPackage,
         verify_attested_signed_package_from_env_with_deadline,
     },

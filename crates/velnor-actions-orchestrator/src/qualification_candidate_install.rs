@@ -127,7 +127,7 @@ pub(super) fn executable_hash(
     relative: &str,
     deadline: CheckDeadline,
 ) -> Result<String, OrchestratorError> {
-    crate::check_evidence::reject_link_components(prefix, relative)?;
+    crate::planner::check_evidence::reject_link_components(prefix, relative)?;
     let path = prefix.join(relative);
     let metadata = std::fs::symlink_metadata(&path)
         .map_err(|_| internal("qualification_executable_unreadable"))?;

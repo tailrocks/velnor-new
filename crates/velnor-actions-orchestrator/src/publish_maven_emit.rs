@@ -11,8 +11,8 @@ use crate::OrchestratorError;
 use crate::config::CONFIG_REL;
 use crate::config::gradle_jobs::run_step_for;
 use crate::config::private_wiring::PrivateWiring;
-use crate::prepare::GenerationPreparation;
-use crate::publish_steps::{MavenPlan, VersionCheck};
+use crate::planner::prepare::GenerationPreparation;
+use crate::release::publish_steps::{MavenPlan, VersionCheck};
 use crate::safe_read::{MAX_REPO_FILE_BYTES, RepoRead, read_repo_file};
 
 fn failure(index: usize, field: &str, problem: &str) -> OrchestratorError {
@@ -66,7 +66,7 @@ pub(crate) fn resolve<'a>(
             &format!("version_not_literal:{version_file}"),
         ));
     }
-    let acquire = crate::pins::consumer_acquire_step(
+    let acquire = crate::planner::pins::consumer_acquire_step(
         &prep.runner_label,
         env!("CARGO_PKG_VERSION"),
         &prep.discovery,

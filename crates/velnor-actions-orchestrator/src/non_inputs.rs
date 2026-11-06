@@ -17,11 +17,11 @@ use velnor_actions_rust::{SelectionBroadening, is_known_toolfile, selection_broa
 
 use crate::OrchestratorError;
 use crate::config::CONFIG_REL;
-use crate::discover::Discovery;
 use crate::git_paths::split_nul_paths;
-use crate::select_affected::Ownership;
-use crate::select_reads::{UnverifiedKind, read_summary};
-use crate::select_symlinks::tracked_links;
+use crate::planner::discover::Discovery;
+use crate::planner::select_affected::Ownership;
+use crate::planner::select_reads::{UnverifiedKind, read_summary};
+use crate::planner::select_symlinks::tracked_links;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Overlap {

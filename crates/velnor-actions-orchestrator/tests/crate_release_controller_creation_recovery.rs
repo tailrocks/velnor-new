@@ -9,7 +9,7 @@ use super::{
 };
 
 pub(super) fn verify_created_crate_recovers_without_reupload(
-    input: &crate::package_release_signer::AdmittedStart<
+    input: &crate::release::package_release_signer::AdmittedStart<
         '_,
         JournalRegistryFake,
         HistoricalAuthority<'_>,
@@ -52,7 +52,7 @@ pub(super) fn verify_created_crate_recovers_without_reupload(
     let attempted = Cell::new(false);
     let result = coordinate_release(
         &observation,
-        |name| crate::crate_release_semver::fixture_verified_semver(admission, name),
+        |name| crate::release::crate_release_semver::fixture_verified_semver(admission, name),
         |_| {
             attempted.set(true);
             Err(OrchestratorError::Contract {
@@ -67,7 +67,7 @@ pub(super) fn verify_created_crate_recovers_without_reupload(
 }
 
 pub(super) fn reject_untrusted_prior_creation(
-    input: &crate::package_release_signer::AdmittedStart<
+    input: &crate::release::package_release_signer::AdmittedStart<
         '_,
         JournalRegistryFake,
         HistoricalAuthority<'_>,
@@ -78,7 +78,7 @@ pub(super) fn reject_untrusted_prior_creation(
     use crate::crate_release_journal::{
         JournalIntendedMutation, JournalMutationKind, record_journal_intent,
     };
-    use crate::package_release_signer::record_admitted_start;
+    use crate::release::package_release_signer::record_admitted_start;
     let journal = input.journal;
     let auth = input.github;
     let registry = input.registry;
@@ -162,7 +162,7 @@ pub(super) fn coordinator_completes_first_crate_with_durable_owners()
     let uploads = Cell::new(0);
     let result = coordinate_release(
         &input,
-        |name| crate::crate_release_semver::fixture_verified_semver(&admission, name),
+        |name| crate::release::crate_release_semver::fixture_verified_semver(&admission, name),
         |_| {
             uploads.set(uploads.get() + 1);
             registry.base.absent.set(false);
@@ -174,7 +174,8 @@ pub(super) fn coordinator_completes_first_crate_with_durable_owners()
     assert_eq!(uploads.get(), 1);
     assert_eq!(github.writes.get(), 2);
     assert_eq!(result.packages.len(), 1);
-    let tools = crate::package_release_signer::fixture_measured_tools(plan.expected_tools.clone());
+    let tools =
+        crate::release::package_release_signer::fixture_measured_tools(plan.expected_tools.clone());
     crate::crate_release_journal::record_unprivileged_completion(&input, tools)?;
     let completed = crate::crate_release_journal::inspect_journal(
         &journal,
@@ -188,7 +189,8 @@ pub(super) fn coordinator_completes_first_crate_with_durable_owners()
     assert_eq!(completed.packages[0].owners[0].id, 370_532);
     assert_eq!(completed.packages[0].owners[0].login, "owner");
     let writes = journal.write_calls.get();
-    let tools = crate::package_release_signer::fixture_measured_tools(plan.expected_tools.clone());
+    let tools =
+        crate::release::package_release_signer::fixture_measured_tools(plan.expected_tools.clone());
     crate::crate_release_journal::record_unprivileged_completion(&input, tools)?;
     assert_eq!(journal.write_calls.get(), writes);
     assert_eq!(github.writes.get(), 2);
@@ -206,13 +208,13 @@ pub(super) fn reject_changed_first_crate_completion(
     writes: usize,
 ) {
     input.registry.owner_changed.set(true);
-    let tools = crate::package_release_signer::fixture_measured_tools(
+    let tools = crate::release::package_release_signer::fixture_measured_tools(
         input.journal_receipt.expected_tools.clone(),
     );
     assert!(crate::crate_release_journal::record_unprivileged_completion(input, tools).is_err());
     input.registry.owner_changed.set(false);
     input.registry.base.archive.borrow_mut().push(0);
-    let tools = crate::package_release_signer::fixture_measured_tools(
+    let tools = crate::release::package_release_signer::fixture_measured_tools(
         input.journal_receipt.expected_tools.clone(),
     );
     assert!(crate::crate_release_journal::record_unprivileged_completion(input, tools).is_err());

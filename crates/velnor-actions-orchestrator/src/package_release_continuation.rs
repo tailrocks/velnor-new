@@ -8,7 +8,8 @@ use super::{
     run_identity::RunSource,
 };
 use crate::{
-    OrchestratorError, internal::internal, package_release_signer::VerifiedAttestedSignedPackage,
+    OrchestratorError, internal::internal,
+    release::package_release_signer::VerifiedAttestedSignedPackage,
 };
 use std::{env, path::PathBuf, time::Duration};
 use velnor_actions_contract::{

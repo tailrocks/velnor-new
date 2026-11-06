@@ -254,7 +254,7 @@ pub fn reconcile_crate_release<G: GitHubAdmissionRead, R: CrateRegistryRead>(
             60,
             || std::thread::sleep(std::time::Duration::from_secs(2)),
         )?;
-        let source_inventory = crate::crate_release_archive::crate_archive_inventory(
+        let source_inventory = crate::release::crate_release_archive::crate_archive_inventory(
             &archive,
             &package.source.name,
             &package.source.version,

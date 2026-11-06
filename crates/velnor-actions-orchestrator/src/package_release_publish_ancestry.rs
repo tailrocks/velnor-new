@@ -21,7 +21,7 @@ struct PublicBranchCommit {
     sha: String,
 }
 
-pub(in crate::package_release_publish) fn verify_public_preview_main_ancestry(
+pub(in crate::release::package_release_publish) fn verify_public_preview_main_ancestry(
     api: &GitHubApi,
     repository_id: u64,
     branch: &str,
@@ -49,7 +49,7 @@ pub(in crate::package_release_publish) fn verify_public_preview_main_ancestry(
     Ok(captured_tip)
 }
 
-pub(in crate::package_release_publish) fn verify_public_pull_request_lineage(
+pub(in crate::release::package_release_publish) fn verify_public_pull_request_lineage(
     api: &GitHubApi,
     repository_id: u64,
     branch: &str,

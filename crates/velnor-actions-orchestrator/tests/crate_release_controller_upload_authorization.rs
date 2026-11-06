@@ -65,7 +65,7 @@ pub(super) fn check_upload_authorization(
         record_admitted_upload_intent(
             obs,
             verified,
-            crate::crate_release_semver::fixture_verified_semver(admission, "demo")?
+            crate::release::crate_release_semver::fixture_verified_semver(admission, "demo")?
         )
         .is_err()
     );
@@ -77,7 +77,7 @@ pub(super) fn check_upload_authorization(
         record_admitted_upload_intent(
             obs,
             verified,
-            crate::crate_release_semver::fixture_verified_semver(admission, "demo")?
+            crate::release::crate_release_semver::fixture_verified_semver(admission, "demo")?
         )
         .is_err()
     );
@@ -88,7 +88,7 @@ pub(super) fn check_upload_authorization(
         record_admitted_upload_intent(
             obs,
             verified,
-            crate::crate_release_semver::fixture_verified_semver(admission, "demo")?
+            crate::release::crate_release_semver::fixture_verified_semver(admission, "demo")?
         )
         .is_err()
     );
@@ -101,7 +101,7 @@ pub(super) fn check_upload_authorization(
         verify_and_record_upload_intent(
             obs,
             "other",
-            crate::crate_release_semver::fixture_verified_semver(admission, "demo")?
+            crate::release::crate_release_semver::fixture_verified_semver(admission, "demo")?
         )
         .is_err()
     );
@@ -109,7 +109,7 @@ pub(super) fn check_upload_authorization(
     verify_and_record_upload_intent(
         obs,
         "demo",
-        crate::crate_release_semver::fixture_verified_semver(admission, "demo")?,
+        crate::release::crate_release_semver::fixture_verified_semver(admission, "demo")?,
     )?;
     assert!(matches!(
         inspect_journal_mutation(journal, identity, 1)?
@@ -182,7 +182,7 @@ pub(super) fn check_upload_identity_rejections(
         record_admitted_upload_intent(
             &wrong,
             verified,
-            crate::crate_release_semver::fixture_verified_semver(admission, "demo")?
+            crate::release::crate_release_semver::fixture_verified_semver(admission, "demo")?
         )
         .is_err()
     );
@@ -200,7 +200,7 @@ pub(super) fn check_upload_identity_rejections(
             record_admitted_upload_intent(
                 obs,
                 verified,
-                crate::crate_release_semver::fixture_verified_semver(admission, "demo")?
+                crate::release::crate_release_semver::fixture_verified_semver(admission, "demo")?
             )
             .is_err()
         );
@@ -222,9 +222,11 @@ pub(super) fn check_upload_semver_rejections(
     };
     for evidence in [
         None,
-        Some(crate::crate_release_semver::SemverEvidence::Deferred {
-            predecessors: vec!["other".into()],
-        }),
+        Some(
+            crate::release::crate_release_semver::SemverEvidence::Deferred {
+                predecessors: vec!["other".into()],
+            },
+        ),
     ] {
         let intended = JournalIntendedMutation {
             sequence: 1,
@@ -242,7 +244,7 @@ pub(super) fn check_upload_semver_rejections(
     }
     let mut forged = obs.admission.clone();
     forged.github.request.source_sha = "f".repeat(40);
-    let semver = crate::crate_release_semver::fixture_verified_semver(&forged, "demo")?;
+    let semver = crate::release::crate_release_semver::fixture_verified_semver(&forged, "demo")?;
     let verified = fixture_verify_release_package(
         obs.admission,
         obs.intent,

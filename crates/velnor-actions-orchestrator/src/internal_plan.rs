@@ -30,8 +30,8 @@ use velnor_actions_contract::{
 use velnor_actions_mise::ToolCatalog;
 use velnor_actions_rust::{CompileDriver, Evidence, entry_metadata_for_task};
 
-use crate::discover::Discovery;
 use crate::internal_plan::identities::ExtensionBundle;
+use crate::planner::discover::Discovery;
 
 pub(crate) fn tofu_extension_for(
     task: &ProposedTask,
@@ -265,7 +265,7 @@ pub(crate) fn default_generator_with_phase_timings(
     PlanGenerator {
         version: env!("CARGO_PKG_VERSION").to_owned(),
         target: snapshot::map_release_triple(std::env::consts::ARCH, std::env::consts::OS),
-        sha256: crate::generator::current_exe_sha256_with_phase_timings(phases)
+        sha256: crate::planner::generator::current_exe_sha256_with_phase_timings(phases)
             .unwrap_or_else(|| snapshot::UNRESOLVED_GENERATOR_SHA.to_owned()),
     }
 }

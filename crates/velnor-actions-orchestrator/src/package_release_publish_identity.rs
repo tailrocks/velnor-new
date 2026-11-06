@@ -7,7 +7,8 @@ use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use velnor_actions_contract::publication_retry::PublicationIdentity;
 
 use crate::{
-    OrchestratorError, internal::internal, package_release_signer::VerifiedAttestedSignedPackage,
+    OrchestratorError, internal::internal,
+    release::package_release_signer::VerifiedAttestedSignedPackage,
 };
 
 use super::github::{GITHUB_ACTIONS_BOT_ID, ReleaseAuthor, sha256};

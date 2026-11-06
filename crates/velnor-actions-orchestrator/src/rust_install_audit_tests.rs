@@ -13,7 +13,7 @@ use velnor_actions_workflow_renderer::render::{RenderedFile, WORKFLOW_PATH};
 use super::audit_with_verifiers;
 use crate::OrchestratorError;
 use crate::git_fixture;
-use crate::prepare::prepare_for_candidate as prepare;
+use crate::planner::prepare::prepare_for_candidate as prepare;
 use crate::workflow::verifier_actions::VerifierActionSet;
 
 const RUST_CONFIG: &str = "schema = 1\n[workflow]\nname = \"CI\"\ndefault_branch = \"testmain\"\n\n[[stacks.rust.configurations]]\nname = \"default\"\nfeatures = []\nall_features = false\ntarget = \"host\"\n";
@@ -64,7 +64,7 @@ fn write_task(root: &Path) -> Result<(), Box<dyn Error>> {
 fn rendered() -> Result<Rendered, Box<dyn Error>> {
     let repo = make_repo()?;
     let prep = prepare(repo.path())?;
-    let tree = crate::generate::render_staged_tree(&prep)?;
+    let tree = crate::planner::generate::render_staged_tree(&prep)?;
     let verifiers = VerifierActionSet::build(&prep.emission_catalog(), env!("CARGO_PKG_VERSION"))?;
     Ok(Rendered {
         files: tree.files,

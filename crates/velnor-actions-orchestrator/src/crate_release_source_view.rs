@@ -3,14 +3,14 @@
 
 use crate::{
     OrchestratorError,
-    crate_release_custody::PublisherView,
     crate_release_git::ReleaseGit,
     crate_release_github::{
         GitHubAdmissionRead, authorize_github_candidate, verify_immutable_tag_rules,
     },
-    crate_release_projected_tools::ProjectedToolchain,
     crate_release_tool_artifact::receipt::AuthenticatedSource,
     internal::internal,
+    release::crate_release_custody::PublisherView,
+    release::crate_release_projected_tools::ProjectedToolchain,
 };
 use std::{
     os::unix::fs::{MetadataExt, PermissionsExt},
@@ -51,14 +51,18 @@ impl SealedSourceView {
         let checkout = view.path().join("source");
         let sha = &source.receipt().authority().candidate().request.source_sha;
         let files = deadline
-            .scope(|| crate::crate_release_source::journal_source_inventory(&checkout, sha, &git))
+            .scope(|| {
+                crate::release::crate_release_source::journal_source_inventory(&checkout, sha, &git)
+            })
             .map_err(|_| invalid())??;
         if files != source.source().files() {
             return Err(invalid());
         }
         freeze_checkout(&checkout, deadline)?;
         let frozen = deadline
-            .scope(|| crate::crate_release_source::journal_source_inventory(&checkout, sha, &git))
+            .scope(|| {
+                crate::release::crate_release_source::journal_source_inventory(&checkout, sha, &git)
+            })
             .map_err(|_| invalid())??;
         if frozen != source.source().files() {
             return Err(invalid());
@@ -95,7 +99,7 @@ impl SealedSourceView {
         })
     }
 
-    pub(super) fn revalidate_source(&self) -> Result<(), OrchestratorError> {
+    pub(crate) fn revalidate_source(&self) -> Result<(), OrchestratorError> {
         let invalid = || internal("crate_release_source_view_invalid");
         self.tools.revalidate_view(&self.view)?;
         let descriptor = rustix::fs::openat(

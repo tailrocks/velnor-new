@@ -3,8 +3,8 @@
 
 use std::collections::BTreeMap;
 
-use crate::native_mise_version::{NativeMiseMinimum, NativeMiseVersion};
-use crate::native_tool_lock::{NativeMiseLock, parse_native_mise_lock};
+use crate::planner::native_mise_version::{NativeMiseMinimum, NativeMiseVersion};
+use crate::planner::native_tool_lock::{NativeMiseLock, parse_native_mise_lock};
 
 const MAX_VALUES: usize = 64;
 
@@ -94,7 +94,7 @@ pub(crate) fn native_mise_source(
         _ => return None,
     };
     Some(NativeToolInput {
-        sha256: crate::generator::sha256_hex(bytes),
+        sha256: crate::planner::generator::sha256_hex(bytes),
         source,
     })
 }
@@ -115,9 +115,10 @@ fn parse_native_mise_config(value: &toml::Value) -> Option<NativeMiseConfig> {
     }
     if let Some(tasks) = root.get("tasks") {
         for (name, value) in tasks.as_table()? {
-            config
-                .tasks
-                .insert(name.clone(), crate::native_mise_tasks::parse_task(value));
+            config.tasks.insert(
+                name.clone(),
+                crate::planner::native_mise_tasks::parse_task(value),
+            );
         }
     }
     if let Some(settings) = root.get("settings") {

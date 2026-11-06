@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::OrchestratorError;
-use crate::generator::sha256_hex;
 use crate::internal::internal;
+use crate::planner::generator::sha256_hex;
 use serde_json::json;
 use sha2::{Digest, Sha256};
 use std::fs;

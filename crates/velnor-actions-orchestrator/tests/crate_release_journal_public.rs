@@ -223,7 +223,7 @@ fn receipt(version: &str) -> JournalReceipt {
     JournalReceipt {
         semver_evidence: BTreeMap::from([(
             "demo-crate".into(),
-            crate::crate_release_semver::SemverEvidence::NoBaseline {
+            crate::release::crate_release_semver::SemverEvidence::NoBaseline {
                 checker_sha256: "bc9eb06ce04e97d6160c875ffdee1f6e56793e423dea025f344826be03e66829"
                     .into(),
             },

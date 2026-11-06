@@ -32,12 +32,19 @@ pub(crate) fn verify_preview_source_is_current(
     {
         return Err(internal("tap_source_read_token_reused"));
     }
-    let tip =
-        crate::package_release_publish::verify_preview_main_tip(repository, repository_id, branch)?;
+    let tip = crate::release::package_release_publish::verify_preview_main_tip(
+        repository,
+        repository_id,
+        branch,
+    )?;
     if !is_current_preview_tip(expected_sha, &tip) {
         return Ok(false);
     }
-    crate::package_release_publish::verify_current_source(repository, branch, expected_sha)?;
+    crate::release::package_release_publish::verify_current_source(
+        repository,
+        branch,
+        expected_sha,
+    )?;
     Ok(true)
 }
 

@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{OrchestratorError, prepare::GenerationPreparation};
+use crate::{OrchestratorError, planner::prepare::GenerationPreparation};
 use velnor_actions_contract::{
     ReleaseTarget,
     config::{CheckExecutor, CheckPlatform, CheckRunner},
@@ -27,18 +27,18 @@ pub(crate) fn files(prep: &GenerationPreparation) -> Result<Vec<RenderedFile>, O
     let spec = ReviewCompletionSpec {
         policy: ReviewCompletionPolicy {
             schema: REVIEW_COMPLETION_POLICY_SCHEMA.to_owned(),
-            repository: crate::release_identity::origin_repository(&prep.root)?,
+            repository: crate::release::release_identity::origin_repository(&prep.root)?,
             default_branch: prep.default_branch.clone(),
             provider: config.provider,
             check_name: config.check_name.clone(),
         },
         config: config.clone(),
         generator_version: env!("CARGO_PKG_VERSION").to_owned(),
-        setup: crate::pins::resolve_mise_setup_for_release_target(
+        setup: crate::planner::pins::resolve_mise_setup_for_release_target(
             &prep.config,
             ReleaseTarget::LinuxX86_64,
         )?,
-        acquire: crate::pins::consumer_acquire_for_runner(
+        acquire: crate::planner::pins::consumer_acquire_for_runner(
             &runner,
             env!("CARGO_PKG_VERSION"),
             prep.discovery.consumer_manifest_json.as_deref(),

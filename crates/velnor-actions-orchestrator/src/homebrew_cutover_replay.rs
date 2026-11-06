@@ -42,7 +42,7 @@ pub(super) fn verify(
         return Err(internal("homebrew_cutover_initialization_binding"));
     }
     verify_sdk(&marker.seed, input.sdk_artifact_digest, deadline)?;
-    let tree = crate::package_release_publish::read_protected_source_tree_identity(
+    let tree = crate::release::package_release_publish::read_protected_source_tree_identity(
         &input.policy.repository,
         repository_id,
         &pull.head,

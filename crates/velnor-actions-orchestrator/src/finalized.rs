@@ -7,8 +7,8 @@ use velnor_actions_contract::{Job, expand_workflow_with_bun_plan};
 use velnor_actions_workflow_renderer::finalize_jobs as finalize_render_jobs;
 
 use crate::OrchestratorError;
-use crate::pins::resolve_mise_setup;
-use crate::prepare::GenerationPreparation;
+use crate::planner::pins::resolve_mise_setup;
+use crate::planner::prepare::GenerationPreparation;
 
 pub(crate) fn validate_approved_generator_lock(
     lock: &velnor_actions_contract::GeneratorLock,

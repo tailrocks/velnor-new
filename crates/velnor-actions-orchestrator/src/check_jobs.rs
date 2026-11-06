@@ -15,7 +15,7 @@ use velnor_actions_workflow_renderer::render::PLAN_JOB_ID;
 use velnor_actions_workflow_renderer::steps::INTERNAL_OP_ENV;
 
 use crate::OrchestratorError;
-use crate::discover::Discovery;
+use crate::planner::discover::Discovery;
 
 pub(crate) fn build_check_jobs(
     policy: WorkflowPolicy,
@@ -28,7 +28,7 @@ pub(crate) fn build_check_jobs(
     for discovered in &discovery.mise_checks {
         let check = &discovered.check;
         let acquire = match policy {
-            WorkflowPolicy::ConsumerV1 => Some(crate::pins::consumer_acquire_for_runner(
+            WorkflowPolicy::ConsumerV1 => Some(crate::planner::pins::consumer_acquire_for_runner(
                 &check.runner,
                 env!("CARGO_PKG_VERSION"),
                 discovery.consumer_manifest_json.as_deref(),
@@ -48,7 +48,7 @@ pub(crate) fn build_check_jobs(
     for check in &discovery.native_checks {
         let id = format!("check-{}", check.id);
         let acquire = match policy {
-            WorkflowPolicy::ConsumerV1 => Some(crate::pins::consumer_acquire_for_runner(
+            WorkflowPolicy::ConsumerV1 => Some(crate::planner::pins::consumer_acquire_for_runner(
                 &check.runner,
                 env!("CARGO_PKG_VERSION"),
                 discovery.consumer_manifest_json.as_deref(),
@@ -115,10 +115,10 @@ fn native_check_job(
         CheckoutHistory::Full,
     )?];
     steps.extend(acquire);
-    steps.push(crate::matrix_step::download_plan_step()?);
+    steps.push(crate::planner::matrix_step::download_plan_step()?);
     steps.push(prepare_gh);
     steps.push(step);
-    let mut upload = crate::matrix_step::crate_upload_step(job_id)?;
+    let mut upload = crate::planner::matrix_step::crate_upload_step(job_id)?;
     upload.condition = Some("always()".to_owned());
     steps.push(upload);
     let minutes =
@@ -152,9 +152,9 @@ fn check_job(
     let check = &discovered.check;
     let mut steps = vec![crate::workflow::wire_w1::checkout_step_for(check.history)?];
     steps.extend(acquire);
-    steps.push(crate::matrix_step::download_plan_step()?);
+    steps.push(crate::planner::matrix_step::download_plan_step()?);
     steps.push(execute_check_step(discovered, catalog, helper_version)?);
-    let mut upload = crate::matrix_step::crate_upload_step(job_id)?;
+    let mut upload = crate::planner::matrix_step::crate_upload_step(job_id)?;
     upload.condition = Some("always()".to_owned());
     steps.push(upload);
     let minutes =
@@ -200,7 +200,7 @@ fn published_lock_acquire_for_runner(
     let lock = lock.ok_or_else(|| OrchestratorError::Contract {
         problem: "required_verdict_requires_published_generator_lock".to_owned(),
     })?;
-    crate::attach::published_lock_acquire_for_runner(lock, runner, helper_version)
+    crate::planner::attach::published_lock_acquire_for_runner(lock, runner, helper_version)
 }
 
 fn execute_check_step(
@@ -221,10 +221,12 @@ fn execute_check_step(
         ),
         (INTERNAL_OP_ENV.to_owned(), "execute-check-v1".to_owned()),
     ]);
-    let env = crate::matrix_step::task_step_env(catalog, &identity, false)?;
+    let env = crate::planner::matrix_step::task_step_env(catalog, &identity, false)?;
     velnor_actions_workflow_renderer::shell_step(
         "Execute named check",
-        vec![crate::matrix_step::helper_path_for_version(helper_version)],
+        vec![crate::planner::matrix_step::helper_path_for_version(
+            helper_version,
+        )],
         env,
     )
     .map_err(OrchestratorError::from)

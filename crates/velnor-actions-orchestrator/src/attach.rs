@@ -4,7 +4,7 @@
 use velnor_actions_contract::{GeneratorLock, Step};
 
 use crate::OrchestratorError;
-use crate::pins::{lock_acquire_for_runner, lock_acquire_step};
+use crate::planner::pins::{lock_acquire_for_runner, lock_acquire_step};
 use velnor_actions_workflow_renderer::steps::STAGED_BINARY_PREFIX;
 
 pub(crate) fn published_lock_acquire_step(

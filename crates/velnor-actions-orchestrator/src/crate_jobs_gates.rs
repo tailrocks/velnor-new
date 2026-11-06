@@ -8,8 +8,8 @@ use velnor_actions_contract::workflow::ledger_cli::{LEDGER_CLI_JOB_ID, LedgerCli
 use velnor_actions_workflow_renderer::render::PLAN_JOB_ID;
 
 use crate::OrchestratorError;
-use crate::crate_job_ids::JobOwners;
 use crate::internal::internal;
+use crate::planner::crate_job_ids::JobOwners;
 
 pub(super) fn external_needs(
     tasks: &[&ProposedTask],

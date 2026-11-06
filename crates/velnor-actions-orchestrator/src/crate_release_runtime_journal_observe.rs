@@ -64,7 +64,7 @@ pub(super) fn observe_journal_operation(
     match operation {
         "journal-upload-intent" => {
             let package = required("VELNOR_JOURNAL_PACKAGE")?;
-            let semver = crate::crate_release_semver::verify_before_upload(
+            let semver = crate::release::crate_release_semver::verify_before_upload(
                 source,
                 &admission,
                 registry,

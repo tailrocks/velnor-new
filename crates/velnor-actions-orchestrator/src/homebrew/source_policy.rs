@@ -12,7 +12,7 @@ use velnor_actions_mise::OperatorToolchainGuard;
 use crate::{
     OrchestratorError,
     internal::internal,
-    prepare::{
+    planner::prepare::{
         GenerationPreparation, prepare_for_candidate, prepare_for_candidate_with_operator_guard,
     },
     safe_read::{MAX_REPO_FILE_BYTES, RepoBytes, read_repo_bytes},
@@ -112,8 +112,11 @@ fn source_policy_bytes(prep: &GenerationPreparation) -> Result<Vec<u8>, Orchestr
         .map(|rust| &rust.binary_release)
         .filter(|release| release.preview.enabled)
         .ok_or_else(|| internal("homebrew_source_policy_preview_disabled"))?;
-    let policy =
-        crate::binary_preview_emit::release_policy(prep, release, PackageReleaseChannel::Preview)?;
+    let policy = crate::release::binary_preview_emit::release_policy(
+        prep,
+        release,
+        PackageReleaseChannel::Preview,
+    )?;
     policy
         .canonical_bytes()
         .map_err(|error| internal(&error.to_string()))

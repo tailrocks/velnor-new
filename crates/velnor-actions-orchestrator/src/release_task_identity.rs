@@ -6,7 +6,7 @@ use velnor_actions_contract::{
     PackageReleasePlan, package_release::PackageReleaseChannel, preview_identity::PreviewIdentity,
 };
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(super) struct ReleaseTaskIdentity {
+pub(crate) struct ReleaseTaskIdentity {
     pub channel: PackageReleaseChannel,
     pub base_version: String,
     pub version: String,
@@ -15,7 +15,7 @@ pub(super) struct ReleaseTaskIdentity {
     pub commit_count: u64,
 }
 impl ReleaseTaskIdentity {
-    pub(super) fn derive(
+    pub(crate) fn derive(
         plan: &PackageReleasePlan,
         sha: &str,
         count: u64,
@@ -39,7 +39,7 @@ impl ReleaseTaskIdentity {
             commit_count: count,
         })
     }
-    pub(super) fn canonical(&self) -> bool {
+    pub(crate) fn canonical(&self) -> bool {
         match self.channel {
             PackageReleaseChannel::Preview => {
                 PreviewIdentity::derive(&self.base_version, &self.source_sha, self.commit_count)

@@ -3,7 +3,8 @@
 
 use crate::filesystem_owner::held_file::HeldFile;
 use crate::{
-    OrchestratorError, internal::internal, package_release_artifacts::VerifiedPackageArtifact,
+    OrchestratorError, internal::internal,
+    release::package_release_artifacts::VerifiedPackageArtifact,
 };
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -23,7 +24,7 @@ pub(super) const PRODUCTION_REQUEST: &str = "release-production-request.json";
 pub(crate) const LEAF_MANIFEST: &str = "release-payload.json";
 pub(crate) const AGGREGATE_MANIFEST: &str = "release-aggregate.json";
 pub(crate) const MAX_NATIVE_MANIFEST: u64 =
-    crate::package_release_publish::artifact_zip::NATIVE_MANIFEST_BYTES;
+    crate::release::package_release_publish::artifact_zip::NATIVE_MANIFEST_BYTES;
 #[path = "preview_production_handoff_copy.rs"]
 mod copy;
 pub(super) use copy::copy_verified;

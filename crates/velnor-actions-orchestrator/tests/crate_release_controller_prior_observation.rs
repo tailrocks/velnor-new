@@ -19,7 +19,7 @@ pub(super) fn journal_observation_runtime_is_blocked_until_authority_is_qualifie
         "journal-recovery-inspect",
         "journal-reconcile-evidence",
     ] {
-        let error = crate::crate_release_runtime::run_crate_release(operation)
+        let error = crate::release::crate_release_runtime::run_crate_release(operation)
             .expect_err("guard must reject");
         assert!(
             error

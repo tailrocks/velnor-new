@@ -49,7 +49,7 @@ fn metadata_requires_exact_witness_source_and_artifact_custody()
     archive.start_file("metadata.json", zip::write::SimpleFileOptions::default())?;
     archive.write_all(b"{}")?;
     f.bytes = archive.finish()?.into_inner();
-    let digest = crate::generator::sha256_hex(&f.bytes);
+    let digest = crate::planner::generator::sha256_hex(&f.bytes);
     f.artifact.borrow_mut()["name"] = "approved-metadata-observation".into();
     f.artifact.borrow_mut()["size_in_bytes"] = f.bytes.len().into();
     f.artifact.borrow_mut()["digest"] = format!("sha256:{digest}").into();
@@ -158,7 +158,7 @@ fn output_bundle_requires_witness_custody_and_exact_bytes() -> Result<(), Box<dy
     )?;
     archive.write_all(b"untrusted tar")?;
     f.bytes = archive.finish()?.into_inner();
-    let digest = crate::generator::sha256_hex(&f.bytes);
+    let digest = crate::planner::generator::sha256_hex(&f.bytes);
     f.artifact.borrow_mut()["name"] = "rehearsal-output-observation".into();
     f.artifact.borrow_mut()["size_in_bytes"] = f.bytes.len().into();
     f.artifact.borrow_mut()["digest"] = format!("sha256:{digest}").into();

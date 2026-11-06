@@ -23,7 +23,7 @@ fn supervised_fixture_baseline() -> Result<Vec<u8>, Box<dyn std::error::Error>> 
 
 #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
 struct SupervisedFixture {
-    custody: crate::crate_release_custody::CustodiedChannel,
+    custody: crate::release::crate_release_custody::CustodiedChannel,
     fixture: tempfile::TempDir,
     original: std::path::PathBuf,
     intent: velnor_actions_contract::config::CrateReleaseIntent,
@@ -49,7 +49,7 @@ fn supervised_fixture() -> Result<SupervisedFixture, Box<dyn std::error::Error>>
     let clock = rustix::time::clock_gettime(rustix::time::ClockId::Boottime);
     let boot_deadline =
         (u64::try_from(clock.tv_sec)? + 480) * 1_000_000_000 + u64::try_from(clock.tv_nsec)?;
-    let custody = crate::crate_release_custody::CustodiedChannel::take(boot_deadline)?;
+    let custody = crate::release::crate_release_custody::CustodiedChannel::take(boot_deadline)?;
     let fixture = tempfile::tempdir_in(custody.root.path())?;
     let original = fixture.path().join("source-original");
     fs::create_dir(&original)?;

@@ -10,8 +10,8 @@ use velnor_actions_tofu::{
 };
 
 use crate::OrchestratorError;
-use crate::discover::Discovery;
-use crate::select_edges::{added_files, base_manifests, deleted_files};
+use crate::planner::discover::Discovery;
+use crate::planner::select_edges::{added_files, base_manifests, deleted_files};
 
 #[derive(Debug, Clone)]
 pub struct TofuSelectionUnit {

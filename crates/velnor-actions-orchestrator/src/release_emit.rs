@@ -14,11 +14,11 @@ use velnor_actions_workflow_renderer::{MiseSetup, render::RenderedFile};
 
 use crate::OrchestratorError;
 use crate::config::CONFIG_REL;
-use crate::prepare::GenerationPreparation;
-use crate::release_identity::{
+use crate::planner::prepare::GenerationPreparation;
+use crate::release::release_identity::{
     common_registry, origin_repository, plan_id_for_source, workspace_lock,
 };
-use crate::release_steps::{JobInputs, assemble_jobs};
+use crate::release::release_steps::{JobInputs, assemble_jobs};
 
 #[path = "release_emit_config.rs"]
 mod config;
@@ -53,7 +53,7 @@ pub(crate) fn release_files(
             "trusted publication is disabled until runtime admission and reconciliation are available",
         ));
     }
-    let mise = crate::pins::resolve_mise_setup(&prep.config, RELEASE_HOSTED_RUNNER)?;
+    let mise = crate::planner::pins::resolve_mise_setup(&prep.config, RELEASE_HOSTED_RUNNER)?;
     release_files_for_config(prep, &mise, release)
 }
 

@@ -9,7 +9,7 @@ use crate::{
 };
 use std::collections::BTreeSet;
 
-pub(super) fn require_no_deleted_comments(
+pub(crate) fn require_no_deleted_comments(
     candidate: &ReviewedSourceRequest,
     api: &dyn ProviderRead,
 ) -> Result<(), OrchestratorError> {

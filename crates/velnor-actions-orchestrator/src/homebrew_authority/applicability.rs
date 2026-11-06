@@ -3,7 +3,7 @@
 
 use super::{OrchestratorError, internal};
 
-use crate::package_release_publish::PublicRepositorySnapshot;
+use crate::release::package_release_publish::PublicRepositorySnapshot;
 
 pub(super) fn confirm_locator_absence(
     expected_repository: &str,

@@ -221,10 +221,10 @@ pub(super) fn prior_packages_compatible(
     prior.packages.len() == current.packages.len() && prior.packages.iter().zip(&current.packages).all(|(old, now)| {
         if old.name != now.name || old.version != now.version || old.manifest != now.manifest || old.tag != now.tag { return false; }
         if old.owners == now.owners {
-            if let Some(crate::crate_release_semver::SemverEvidence::MetadataOnly { target_checksum: old_checksum, .. }) = prior.semver_evidence.get(&old.name) {
-                return matches!(current.semver_evidence.get(&now.name), Some(crate::crate_release_semver::SemverEvidence::MetadataOnly { target_checksum, .. }) if target_checksum == old_checksum);
+            if let Some(crate::release::crate_release_semver::SemverEvidence::MetadataOnly { target_checksum: old_checksum, .. }) = prior.semver_evidence.get(&old.name) {
+                return matches!(current.semver_evidence.get(&now.name), Some(crate::release::crate_release_semver::SemverEvidence::MetadataOnly { target_checksum, .. }) if target_checksum == old_checksum);
             }
-            if matches!(current.semver_evidence.get(&now.name), Some(crate::crate_release_semver::SemverEvidence::PriorNoBaselinePending { .. })) {
+            if matches!(current.semver_evidence.get(&now.name), Some(crate::release::crate_release_semver::SemverEvidence::PriorNoBaselinePending { .. })) {
                 return prior.predecessor.is_some() && prior.semver_evidence.get(&old.name) == current.semver_evidence.get(&now.name);
             }
             return true;
@@ -232,8 +232,8 @@ pub(super) fn prior_packages_compatible(
         allow_creation_transition && prior.authentication == JournalAuthentication::BootstrapToken
             && matches!(old.owners, JournalOwnership::NewCrate)
             && matches!(now.owners, JournalOwnership::Existing { .. })
-            && matches!(prior.semver_evidence.get(&old.name), Some(crate::crate_release_semver::SemverEvidence::NoBaseline { .. }))
-            && matches!(current.semver_evidence.get(&now.name), Some(crate::crate_release_semver::SemverEvidence::PriorNoBaselinePending { .. } | crate::crate_release_semver::SemverEvidence::MetadataOnly { .. }))
+            && matches!(prior.semver_evidence.get(&old.name), Some(crate::release::crate_release_semver::SemverEvidence::NoBaseline { .. }))
+            && matches!(current.semver_evidence.get(&now.name), Some(crate::release::crate_release_semver::SemverEvidence::PriorNoBaselinePending { .. } | crate::release::crate_release_semver::SemverEvidence::MetadataOnly { .. }))
     })
 }
 
@@ -242,7 +242,7 @@ pub(super) fn verify_new_crate_prior_intentions(
     current: &JournalReceipt,
     mutations: &[JournalMutation],
 ) -> Result<(), OrchestratorError> {
-    use crate::crate_release_semver::SemverEvidence;
+    use crate::release::crate_release_semver::SemverEvidence;
     for (old, now) in prior.packages.iter().zip(&current.packages) {
         if old.owners == now.owners {
             continue;

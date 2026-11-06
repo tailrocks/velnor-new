@@ -18,8 +18,8 @@ use super::observe::{
 use super::shared::{fetch_archives, publish_shared_prefix};
 use super::{archive, layout, tree};
 use crate::OrchestratorError;
-use crate::check_evidence::gate::tools::{QualifiedToolReceipt, receipt};
 use crate::internal::internal;
+use crate::planner::check_evidence::gate::tools::{QualifiedToolReceipt, receipt};
 
 pub(crate) fn acquire(
     handle: &QualifiedCheck,

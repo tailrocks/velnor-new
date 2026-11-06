@@ -15,7 +15,7 @@ pub(super) fn assert_reviewed_rendered_workflow(
             .ok_or("workflow")?
             .insert(key.into(), serde_json::json!({"PATH": "/tmp/forged"}));
         assert!(
-            crate::crate_release_pr_acquisition::verify_reviewed_workflow(
+            crate::release::crate_release_pr_acquisition::verify_reviewed_workflow(
                 serde_json::to_string(&tampered)?.as_bytes(),
                 intent
             )
@@ -47,7 +47,7 @@ pub(super) fn assert_reviewed_rendered_workflow(
         let mut tampered = yaml.clone();
         *tampered.pointer_mut(path).ok_or("workflow field")? = value;
         assert!(
-            crate::crate_release_pr_acquisition::verify_reviewed_workflow(
+            crate::release::crate_release_pr_acquisition::verify_reviewed_workflow(
                 serde_json::to_string(&tampered)?.as_bytes(),
                 intent
             )
@@ -87,7 +87,7 @@ fn assert_reviewed_nested_lock(
         "release-crates-io-owner/project-bed46b222d05fcf033c7a100925229762295940199bb5c2e0aba841333bfa949"
     );
     assert!(
-        crate::crate_release_pr_acquisition::verify_reviewed_workflow(
+        crate::release::crate_release_pr_acquisition::verify_reviewed_workflow(
             serde_json::to_string(&nested_workflow)?.as_bytes(),
             &nested_intent
         )
@@ -95,7 +95,7 @@ fn assert_reviewed_nested_lock(
     );
     nested_intent.pr_write_paths.clear();
     assert!(
-        crate::crate_release_pr_acquisition::verify_reviewed_workflow(
+        crate::release::crate_release_pr_acquisition::verify_reviewed_workflow(
             serde_json::to_string(&nested_workflow)?.as_bytes(),
             &nested_intent
         )
@@ -103,7 +103,7 @@ fn assert_reviewed_nested_lock(
     );
     nested_intent.pr_write_paths = vec!["Cargo.lock".into(), "nested/workspace/Cargo.lock".into()];
     assert!(
-        crate::crate_release_pr_acquisition::verify_reviewed_workflow(
+        crate::release::crate_release_pr_acquisition::verify_reviewed_workflow(
             serde_json::to_string(&nested_workflow)?.as_bytes(),
             &nested_intent
         )

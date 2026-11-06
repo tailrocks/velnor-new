@@ -335,7 +335,7 @@ pub struct DetectorInfo {
 
 #[must_use]
 pub fn detector_registry() -> Vec<DetectorInfo> {
-    crate::discover::detector_entries()
+    crate::planner::discover::detector_entries()
         .into_iter()
         .map(|(stack_id, schema)| DetectorInfo { stack_id, schema })
         .collect()

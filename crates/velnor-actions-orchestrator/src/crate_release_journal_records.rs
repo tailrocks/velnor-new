@@ -12,7 +12,7 @@ use super::{
 
 pub(crate) fn record_validated_start<I: JournalIo>(
     io: &I,
-    validated: crate::package_release_signer::ValidatedStart<'_>,
+    validated: crate::release::package_release_signer::ValidatedStart<'_>,
 ) -> Result<String, OrchestratorError> {
     let (receipt, source, git) = validated.into_parts();
     source_bound_start(io, &receipt.identity, receipt, source, git)
@@ -35,7 +35,7 @@ fn source_bound_start<I: JournalIo>(
 #[cfg(test)]
 pub(crate) fn record_unprivileged_completion<J, G, R>(
     input: &crate::crate_release_controller::CrateReleaseObservation<'_, J, G, R>,
-    tools: crate::package_release_signer::MeasuredReleaseTools,
+    tools: crate::release::package_release_signer::MeasuredReleaseTools,
 ) -> Result<String, OrchestratorError>
 where
     J: JournalIo + JournalOperationRefs,

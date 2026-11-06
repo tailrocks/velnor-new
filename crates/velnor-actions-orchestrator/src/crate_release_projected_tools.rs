@@ -13,10 +13,10 @@ use sha2::{Digest, Sha256};
 
 use crate::{
     OrchestratorError,
-    crate_release_custody::{PublisherRoot, PublisherView},
     crate_release_github::GitHubAuthorized,
     crate_release_tool_artifact::StagedToolchain,
     internal::internal,
+    release::crate_release_custody::{PublisherRoot, PublisherView},
 };
 
 pub(crate) struct ProjectedToolchain {
@@ -162,7 +162,7 @@ fn verify_installed(
         ToolchainPhase, verify_rust_owned_argv,
     };
     let invalid = || internal("crate_release_rust_verification_failed");
-    let catalog = crate::crate_release_source::source_tool_catalog(&intent.rust_version)
+    let catalog = crate::release::crate_release_source::source_tool_catalog(&intent.rust_version)
         .map_err(|_| invalid())?;
     let argv = verify_rust_owned_argv(&catalog, ToolchainPhase::Installed);
     if argv.len() != 3 || argv[0] != "sh" || argv[1] != "-c" {

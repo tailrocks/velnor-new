@@ -11,10 +11,10 @@ use velnor_actions_rust::{WorkspaceRecord, parse_metadata_json};
 
 use crate::OrchestratorError;
 use crate::decisions::{MetadataFailure, classify_metadata_failure, transient_problem};
-use crate::generate::ToolSnapshot;
 use crate::internal::phase_timing::PlanPhaseTimings;
-use crate::inventory_reuse::MemberIndex;
-use crate::select_tofu::TofuSelectionUnit;
+use crate::planner::generate::ToolSnapshot;
+use crate::planner::inventory_reuse::MemberIndex;
+use crate::planner::select_tofu::TofuSelectionUnit;
 #[path = "inventory_tofu.rs"]
 mod tofu;
 use self::tofu::analyze_tofu_unit;

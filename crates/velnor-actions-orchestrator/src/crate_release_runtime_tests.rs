@@ -83,9 +83,9 @@
         let mut manifest: serde_json::Value = serde_json::from_slice(include_bytes!(
             "../tests/attestation_fixtures/release-manifest.json"
         ))?;
-        manifest["targets"][0]["sha256"] = serde_json::json!(crate::generator::sha256_hex(binary));
+        manifest["targets"][0]["sha256"] = serde_json::json!(crate::planner::generator::sha256_hex(binary));
         let manifest = serde_json::to_vec(&manifest)?;
-        intent.generator_manifest_sha256 = crate::generator::sha256_hex(&manifest);
+        intent.generator_manifest_sha256 = crate::planner::generator::sha256_hex(&manifest);
         let name = "velnor-actions-0.1.5-x86_64-unknown-linux-gnu";
         fs::write(root.join("release-manifest.json"), &manifest)?;
         fs::write(

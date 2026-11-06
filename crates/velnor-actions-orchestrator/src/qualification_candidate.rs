@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::OrchestratorError;
-use crate::check_runtime::preparation::acquisition;
 use crate::internal::internal;
+use crate::planner::check_runtime::preparation::acquisition;
 use serde::Serialize;
 use std::path::Path;
 use std::time::Duration;

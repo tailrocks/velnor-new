@@ -8,8 +8,8 @@ use velnor_actions_contract::{
 };
 
 use super::super::MergeRequest;
-use crate::cover::Signals;
-use crate::cover::shard::{check_entry_shards, validate_budgets};
+use crate::planner::cover::Signals;
+use crate::planner::cover::shard::{check_entry_shards, validate_budgets};
 
 pub(crate) fn plan_entries(plan: &Plan) -> BTreeMap<&str, &MatrixEntry> {
     plan.matrix

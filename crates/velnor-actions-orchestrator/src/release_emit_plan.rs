@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{OrchestratorError, config::CONFIG_REL, release_identity::head_sha};
+use crate::{OrchestratorError, config::CONFIG_REL, release::release_identity::head_sha};
 use std::collections::BTreeMap;
 use velnor_actions_contract::config::RustReleaseConfig;
 use velnor_actions_rust::release_select::ReleaseSelection;

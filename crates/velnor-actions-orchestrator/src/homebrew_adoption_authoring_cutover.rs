@@ -24,7 +24,7 @@ pub(super) fn author(
     if !manifest_path.is_absolute() {
         return Err(internal("homebrew_adoption_sdk_manifest_path"));
     }
-    let root = crate::root::resolve_root(
+    let root = crate::planner::root::resolve_root(
         &std::env::current_dir().map_err(|_| internal("homebrew_adoption_current_directory"))?,
     )?;
     let (parent, target) = output::fresh_output_path(output_dir, &root)?;
@@ -32,7 +32,7 @@ pub(super) fn author(
     let manifest =
         crate::safe_read::read_event_file(manifest_path, MAX_MANIFEST_BYTES)?.into_bytes();
     let manifest_identity = seed::authenticate_sdk(&transition, &manifest, deadline)?;
-    let tip = crate::package_release_publish::read_public_branch_tip(
+    let tip = crate::release::package_release_publish::read_public_branch_tip(
         &transition.tap_repository,
         transition.tap_repository_id,
         "main",
@@ -51,7 +51,7 @@ pub(super) fn author(
         verified_seed_witness(&root, &authority, &transition, &manifest_identity, deadline)?;
     let (base_tree, files, deleted) =
         build_cutover_overlay(&root, &authority, &transition, &witness, deadline)?;
-    let final_tip = crate::package_release_publish::read_public_branch_tip(
+    let final_tip = crate::release::package_release_publish::read_public_branch_tip(
         &transition.tap_repository,
         transition.tap_repository_id,
         "main",
@@ -131,7 +131,7 @@ fn build_cutover_overlay(
     let expected = crate::homebrew::structural_cutover::expected_structural_output_tree(
         root, authority, witness, &preview, deadline,
     )?;
-    let base = crate::package_release_publish::read_protected_source_tree_identity(
+    let base = crate::release::package_release_publish::read_protected_source_tree_identity(
         &transition.tap_repository,
         transition.tap_repository_id,
         authority.tap_base_sha(),

@@ -3,7 +3,7 @@
 
 #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
 struct SupervisedScenario<'a> {
-    execution: crate::crate_release_source_view::SupervisedSourceExecution,
+    execution: crate::release::crate_release_source_view::SupervisedSourceExecution,
     intent: &'a velnor_actions_contract::config::CrateReleaseIntent,
     git: &'a crate::crate_release_git::ReleaseGit,
     previous_intent: &'a velnor_actions_contract::config::CrateReleaseIntent,
@@ -14,7 +14,7 @@ struct SupervisedScenario<'a> {
     registry: &'a Registry,
     fixture: &'a tempfile::TempDir,
     original: &'a Path,
-    root: &'a crate::crate_release_custody::PublisherRoot,
+    root: &'a crate::release::crate_release_custody::PublisherRoot,
     package: &'a crate::CrateReleaseSourcePackage,
 }
 
@@ -112,9 +112,9 @@ type FixtureObservation<'a> = crate::crate_release_controller::CrateReleaseObser
 #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
 fn supervised_package_and_semver(
     observation: &FixtureObservation<'_>,
-    execution: &crate::crate_release_source_view::SupervisedSourceExecution,
+    execution: &crate::release::crate_release_source_view::SupervisedSourceExecution,
     fixture: &tempfile::TempDir,
-    root: &crate::crate_release_custody::PublisherRoot,
+    root: &crate::release::crate_release_custody::PublisherRoot,
     package: &crate::CrateReleaseSourcePackage,
 ) -> Result<(Vec<u8>, Vec<u8>), Box<dyn std::error::Error>> {
     use crate::CrateSourceExecution as _;
@@ -131,7 +131,7 @@ fn supervised_package_and_semver(
         false,
         observation.git,
     ))?;
-    let files = crate::crate_release_archive::read_archive(&archive, "demo-0.1.1/")?;
+    let files = crate::release::crate_release_archive::read_archive(&archive, "demo-0.1.1/")?;
     if files.get("src/lib.rs").map(|entry| entry.1.as_slice())
         != Some(b"pub fn demo() {}".as_slice())
     {
@@ -141,7 +141,7 @@ fn supervised_package_and_semver(
         fs::write(root.path().join("expected-demo.crate"), &archive)?;
     }
     let baseline = supervised_fixture_baseline()?;
-    let checksum = crate::generator::sha256_hex(&baseline);
+    let checksum = crate::planner::generator::sha256_hex(&baseline);
     let features: Vec<String> = Vec::new();
     execution.check_semver(&crate::CrateSemverSource {
         source: execution.root(),
@@ -161,14 +161,14 @@ fn supervised_package_and_semver(
 #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
 fn supervised_maybe_upload(
     observation: &FixtureObservation<'_>,
-    execution: &crate::crate_release_source_view::SupervisedSourceExecution,
-    root: &crate::crate_release_custody::PublisherRoot,
+    execution: &crate::release::crate_release_source_view::SupervisedSourceExecution,
+    root: &crate::release::crate_release_custody::PublisherRoot,
     baseline: Vec<u8>,
 ) -> Result<bool, Box<dyn std::error::Error>> {
     if std::env::var_os("VELNOR_TEST_UPLOAD_FULL").is_some() {
         *observation.registry.baseline.borrow_mut() = baseline;
         execution.credential_preflight(execution.root(), observation.intent, observation.git)?;
-        let verified = crate::crate_release_semver::verify_before_upload(
+        let verified = crate::release::crate_release_semver::verify_before_upload(
             execution.root(),
             observation.admission,
             observation.registry,
@@ -252,7 +252,7 @@ fn seed_supervised_journal(
 
 #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
 struct FinishFixture<'a> {
-    execution: crate::crate_release_source_view::SupervisedSourceExecution,
+    execution: crate::release::crate_release_source_view::SupervisedSourceExecution,
     intent: &'a velnor_actions_contract::config::CrateReleaseIntent,
     git: &'a crate::crate_release_git::ReleaseGit,
     request: &'a GitHubAdmissionRequest,
@@ -261,7 +261,7 @@ struct FinishFixture<'a> {
     registry: &'a Registry,
     fixture: &'a tempfile::TempDir,
     original: &'a Path,
-    root: &'a crate::crate_release_custody::PublisherRoot,
+    root: &'a crate::release::crate_release_custody::PublisherRoot,
     package: &'a crate::CrateReleaseSourcePackage,
     prior: crate::crate_release_journal::JournalReceipt,
     current: crate::crate_release_journal::JournalReceipt,
@@ -332,7 +332,7 @@ fn supervised_finish_scenario(input: FinishFixture<'_>) -> Result<(), Box<dyn st
     )?;
     let frozen = crate::crate_release_controller::FrozenCompletion::prepare_supervised(
         &observation,
-        crate::package_release_signer::fixture_measured_tools(
+        crate::release::package_release_signer::fixture_measured_tools(
             started.receipt.expected_tools.clone(),
         ),
         &execution,
@@ -349,8 +349,8 @@ fn start_supervised_journal(
     journal: &super::JournalRegistryFake,
 ) -> Result<crate::crate_release_journal::JournalEvidence, Box<dyn std::error::Error>> {
     seed_supervised_journal(journal, &input.prior)?;
-    let generator = crate::package_release_signer::fixture_attested_generator();
-    let start = crate::package_release_signer::AdmittedStart {
+    let generator = crate::release::package_release_signer::fixture_attested_generator();
+    let start = crate::release::package_release_signer::AdmittedStart {
         journal,
         github: &input.history_api,
         registry: input.registry,
@@ -363,7 +363,7 @@ fn start_supervised_journal(
         workflow_root: input.original,
         generator: &generator,
     };
-    crate::package_release_signer::record_admitted_start(&start)?;
+    crate::release::package_release_signer::record_admitted_start(&start)?;
     Ok(crate::crate_release_journal::inspect_journal(
         journal,
         &input.current.identity,

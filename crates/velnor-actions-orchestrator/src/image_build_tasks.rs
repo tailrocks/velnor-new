@@ -13,7 +13,7 @@ use velnor_actions_workflow_renderer::verification_jobs::ImageBuildPolicy;
 
 use crate::OrchestratorError;
 use crate::config::private_wiring::PrivateWiring;
-use crate::discover::Discovery;
+use crate::planner::discover::Discovery;
 use crate::safe_read::{RepoRead, read_repo_file};
 
 const MAX_DOCKERFILE_BYTES: u64 = 1024 * 1024;
@@ -33,7 +33,7 @@ pub(crate) fn policies(
 pub(crate) struct PrebuiltInputs<'a> {
     pub(crate) discovery: &'a Discovery,
     pub(crate) catalog: &'a ToolCatalog,
-    pub(crate) lane: &'a crate::matrix_step::LaneTools,
+    pub(crate) lane: &'a crate::planner::matrix_step::LaneTools,
     pub(crate) fetch_roots: &'a [String],
     pub(crate) acquire: Option<&'a Step>,
     pub(crate) private: Option<&'a PrivateWiring>,
@@ -59,7 +59,10 @@ fn resolve(
         let facts =
             analyze_dockerfile(&text).map_err(|problem| failure(&image.id, &problem.code()))?;
         require_stage_copied(image, &facts.context_sources)?;
-        dockerfile_sha256.insert(*platform, crate::generator::sha256_hex(text.as_bytes()));
+        dockerfile_sha256.insert(
+            *platform,
+            crate::planner::generator::sha256_hex(text.as_bytes()),
+        );
     }
     if image.context != "." {
         require_plain_path(root, &image.context, false, &image.id)?;

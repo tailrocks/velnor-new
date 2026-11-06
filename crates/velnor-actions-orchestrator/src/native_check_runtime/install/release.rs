@@ -28,7 +28,7 @@ pub(super) struct InstallSource {
     pub(super) formula_bytes: Vec<u8>,
     pub(super) projection: velnor_actions_contract::homebrew_spec::ValidatedHomebrewProjection,
     pub(super) literals: HomebrewFormulaReleaseLiterals,
-    pub(super) release: crate::package_release_public::VerifiedPublicPackageRelease,
+    pub(super) release: crate::release::package_release_public::VerifiedPublicPackageRelease,
     pub(super) receipt_digest: String,
 }
 
@@ -125,15 +125,15 @@ fn verify_install_release(
         return Err(internal("native_check_formula_selector_mismatch"));
     }
     let policy =
-        crate::package_release_public::PackageReleasePublicPolicy::from_trusted_source_authority(
+        crate::release::package_release_public::PackageReleasePublicPolicy::from_trusted_source_authority(
             release_plan,
             authority.source_repository_id(),
             authority.authority_sha().to_owned(),
         )?;
-    let selection = crate::package_release_public::PackageReleasePublicSelection::new(
+    let selection = crate::release::package_release_public::PackageReleasePublicSelection::new(
         channel, tag, source_sha,
     )?;
-    let release = crate::package_release_public::verify_public_package_release(
+    let release = crate::release::package_release_public::verify_public_package_release(
         &policy, &selection, deadline,
     )?;
     let literals = install_release_literals(&authority, &projection, &release)?;
@@ -191,7 +191,7 @@ fn install_formula_tag(
 fn install_release_literals(
     authority: &crate::homebrew::authority::VerifiedHomebrewAuthority,
     projection: &velnor_actions_contract::homebrew_spec::ValidatedHomebrewProjection,
-    release: &crate::package_release_public::VerifiedPublicPackageRelease,
+    release: &crate::release::package_release_public::VerifiedPublicPackageRelease,
 ) -> Result<HomebrewFormulaReleaseLiterals, OrchestratorError> {
     use crate::internal::internal;
 

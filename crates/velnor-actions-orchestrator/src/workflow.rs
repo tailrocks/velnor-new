@@ -32,7 +32,7 @@ use velnor_actions_workflow_renderer::render::{
 use velnor_actions_workflow_renderer::steps::PLAN_OPERATION;
 
 use crate::OrchestratorError;
-use crate::discover::Discovery;
+use crate::planner::discover::Discovery;
 use crate::workflow_jobs::{final_job, lint_job};
 
 #[path = "workflow_policy.rs"]

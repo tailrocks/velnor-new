@@ -20,7 +20,7 @@ use super::{
     VerifiedNativeHomebrewInstall,
 };
 use crate::OrchestratorError;
-use crate::check_runtime::preparation::{
+use crate::planner::check_runtime::preparation::{
     RestoredGroupContext,
     cache_execution_context::{OBSERVATION_DIR, OWNED_ROOT_DIR},
 };
@@ -157,13 +157,13 @@ fn expected_asset_members(
 }
 
 fn extract_archive_members(
-    release: &crate::package_release_public::VerifiedPublicPackageRelease,
+    release: &crate::release::package_release_public::VerifiedPublicPackageRelease,
     expected: BTreeMap<String, BTreeSet<String>>,
 ) -> Result<BTreeMap<(String, String), Vec<u8>>, OrchestratorError> {
     let mut extracted = BTreeMap::new();
     for (asset, members) in expected {
         let archive_bytes = release.asset_bytes(&asset)?;
-        let archive_members = crate::package_release_artifacts::extract_tar_gz_members(
+        let archive_members = crate::release::package_release_artifacts::extract_tar_gz_members(
             &archive_bytes,
             &members,
             Instant::now(),

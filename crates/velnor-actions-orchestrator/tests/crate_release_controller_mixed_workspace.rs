@@ -42,7 +42,7 @@ pub(super) fn mixed_workspace_coordinator_repairs_predecessor_before_upload()
         second: RefCell::new(None),
     };
     let admission = prepare_crate_release(&intent, &request, &github, &registry, root)?;
-    let mode = crate::crate_release_runtime::release_mode(&admission);
+    let mode = crate::release::crate_release_runtime::release_mode(&admission);
     assert_eq!(mode, "mixed");
     let (identity, mut plan) = fixture_journal_plan(root, &intent, &request, &admission)?;
     set_workspace_journal_packages(&mut plan, &admission);
@@ -99,7 +99,7 @@ pub(super) fn mixed_verified_semver(
     github: &MixedGithub,
     server: &SparseFixture,
     name: &str,
-) -> Result<crate::crate_release_semver::VerifiedSemver, OrchestratorError> {
+) -> Result<crate::release::crate_release_semver::VerifiedSemver, OrchestratorError> {
     assert_eq!(name, "velnor_fixture_order_20261104_b");
     assert_eq!(&*github.writes.borrow(), &["tag-0", "release-0"]);
     assert!(
@@ -107,7 +107,7 @@ pub(super) fn mixed_verified_semver(
             .index_visible
             .load(std::sync::atomic::Ordering::SeqCst)
     );
-    crate::crate_release_semver::fixture_verified_semver(admission, name)
+    crate::release::crate_release_semver::fixture_verified_semver(admission, name)
 }
 
 pub(super) fn propagate_sparse_index(
@@ -203,7 +203,7 @@ pub(super) fn serial_coordinator_recovers_pending_visible_tag_without_recreating
     };
     let result = coordinate_release(
         &input,
-        |name| crate::crate_release_semver::fixture_verified_semver(input.admission, name),
+        |name| crate::release::crate_release_semver::fixture_verified_semver(input.admission, name),
         |_| panic!("must not upload an existing version"),
         || {},
     )?;
@@ -218,7 +218,7 @@ pub(super) fn admitted_start_binds_previous_workflow_commit_and_reobserves_prior
     use crate::crate_release_journal::{
         fixture_storage::seed_started_record, record_journal_intent,
     };
-    use crate::package_release_signer::{
+    use crate::release::package_release_signer::{
         AdmittedStart, fixture_attested_generator, record_admitted_start,
     };
     let temp = tempfile::tempdir()?;

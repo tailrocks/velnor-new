@@ -12,7 +12,7 @@ use velnor_actions_mise::CheckDeadline;
 
 use crate::{
     OrchestratorError,
-    package_release_signer::{ImageAttestationIdentity, verify_image_file_attestation},
+    release::package_release_signer::{ImageAttestationIdentity, verify_image_file_attestation},
 };
 
 use super::{ImagePublicationProfile, PublishImageRequest, authority};

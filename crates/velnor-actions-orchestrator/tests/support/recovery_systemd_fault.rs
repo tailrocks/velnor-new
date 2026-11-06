@@ -4,7 +4,7 @@
 #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
 #[derive(Clone, Copy)]
 struct FaultFixture<'a> {
-    execution: &'a crate::crate_release_source_view::SupervisedSourceExecution,
+    execution: &'a crate::release::crate_release_source_view::SupervisedSourceExecution,
     intent: &'a velnor_actions_contract::config::CrateReleaseIntent,
     git: &'a crate::crate_release_git::ReleaseGit,
     request: &'a GitHubAdmissionRequest,
@@ -14,7 +14,7 @@ struct FaultFixture<'a> {
     prior: &'a crate::crate_release_journal::JournalReceipt,
     current: &'a crate::crate_release_journal::JournalReceipt,
     history_api: &'a super::HistoricalAuthority<'a>,
-    reader: &'a crate::crate_release_workspace::HistoricalIntentReader<'a>,
+    reader: &'a crate::release::crate_release_workspace::HistoricalIntentReader<'a>,
 }
 
 #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
@@ -34,8 +34,8 @@ fn check_supervised_fault(input: FaultFixture<'_>) -> Result<bool, Box<dyn std::
     if let Ok(fault) = std::env::var("VELNOR_TEST_CUSTODY_FAULT") {
         let journal = super::JournalRegistryFake::default();
         induce_supervised_fault(&fault, input)?;
-        let generator = crate::package_release_signer::fixture_attested_generator();
-        let attempted = crate::package_release_signer::AdmittedStart {
+        let generator = crate::release::package_release_signer::fixture_attested_generator();
+        let attempted = crate::release::package_release_signer::AdmittedStart {
             journal: &journal,
             github: history_api,
             registry,
@@ -49,7 +49,7 @@ fn check_supervised_fault(input: FaultFixture<'_>) -> Result<bool, Box<dyn std::
             generator: &generator,
         };
         assert!(
-            crate::package_release_signer::record_admitted_start(&attempted).is_err(),
+            crate::release::package_release_signer::record_admitted_start(&attempted).is_err(),
             "journal start accepted poisoned custody"
         );
         assert_eq!(

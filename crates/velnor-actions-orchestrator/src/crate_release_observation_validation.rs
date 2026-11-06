@@ -54,7 +54,7 @@ pub(crate) fn verify_binding<J: JournalIo, G: GitHubAdmissionRead, R: CrateRegis
     }
     let intent_bytes =
         velnor_actions_contract::canonical_json_bytes(input.intent).map_err(|_| invalid())?;
-    if input.journal_receipt.intent_sha256 != crate::generator::sha256_hex(&intent_bytes) {
+    if input.journal_receipt.intent_sha256 != crate::planner::generator::sha256_hex(&intent_bytes) {
         return Err(invalid());
     }
     crate::verify_journal_source(input.source, input.journal_receipt, input.git)?;
@@ -300,7 +300,7 @@ pub(super) fn derive_result<J: JournalIo, G: GitHubAdmissionRead, R: CrateRegist
                     input.git,
                 ),
             )?;
-            let files = crate::crate_release_archive::crate_archive_inventory(
+            let files = crate::release::crate_release_archive::crate_archive_inventory(
                 &archive,
                 &package.source.name,
                 &package.source.version,

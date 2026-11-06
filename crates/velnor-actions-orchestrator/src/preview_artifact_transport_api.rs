@@ -12,13 +12,13 @@ use velnor_actions_contract::{
     preview_production::ReleaseProductionContext,
 };
 
-pub(in crate::package_release_publish) struct ReleaseArtifactApi {
+pub(in crate::release::package_release_publish) struct ReleaseArtifactApi {
     api: GitHubApi,
     repository: String,
 }
 
 impl ReleaseArtifactApi {
-    pub(in crate::package_release_publish) fn new(repository: &str) -> Self {
+    pub(in crate::release::package_release_publish) fn new(repository: &str) -> Self {
         Self {
             api: GitHubApi::new(repository.into()),
             repository: repository.into(),

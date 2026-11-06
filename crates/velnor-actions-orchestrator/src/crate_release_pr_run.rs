@@ -111,8 +111,8 @@ pub(crate) fn run_with<T: crate::crate_release_tool_download::ToolDownloadTransp
     github: &crate::crate_release_github::NativeGitHubAdmissionRead,
     transport: &T,
 ) -> Result<(), OrchestratorError> {
-    let request = crate::crate_release_pr_acquisition::AcquisitionRequest {
-        binding: crate::crate_release_pr_acquisition::RunBinding {
+    let request = crate::release::crate_release_pr_acquisition::AcquisitionRequest {
+        binding: crate::release::crate_release_pr_acquisition::RunBinding {
             repository: &context.repository,
             branch: &context.branch,
             sha: &context.sha,
@@ -126,12 +126,13 @@ pub(crate) fn run_with<T: crate::crate_release_tool_download::ToolDownloadTransp
         runner_temp: &context.runner_temp,
         deadline: Instant::now() + Duration::from_secs(180),
     };
-    let preparation =
-        crate::crate_release_pr_acquisition::acquire_preparation(&request, github, transport)?;
+    let preparation = crate::release::crate_release_pr_acquisition::acquire_preparation(
+        &request, github, transport,
+    )?;
     if preparation.repository_id != context.repository_id {
         return Err(internal("release_pr_environment_invalid"));
     }
-    crate::crate_release_pr_writer::write_prepared_pr(github, &preparation)
+    crate::release::crate_release_pr_writer::write_prepared_pr(github, &preparation)
 }
 
 #[cfg(test)]

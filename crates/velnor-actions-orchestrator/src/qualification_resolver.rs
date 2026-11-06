@@ -21,7 +21,7 @@ use velnor_actions_contract::{
 
 use crate::OrchestratorError;
 use crate::internal::internal;
-use crate::root::resolve_root;
+use crate::planner::root::resolve_root;
 
 pub const QUALIFICATION_ADMISSION_FILENAME: &str = "qualification-cache-admission.json";
 pub const QUALIFICATION_RESOLVER_OP: &str = "resolve-qualification-v1";

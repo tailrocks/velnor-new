@@ -18,7 +18,7 @@ pub(crate) fn verify_and_record_upload_intent<
 >(
     input: &CrateReleaseObservation<'_, J, G, R>,
     package: &str,
-    semver: crate::crate_release_semver::VerifiedSemver,
+    semver: crate::release::crate_release_semver::VerifiedSemver,
 ) -> Result<UploadPermit, OrchestratorError> {
     let verification = super::super::PackageVerification {
         source_execution: input.source_execution,
@@ -38,16 +38,16 @@ pub(crate) fn verify_and_record_upload_intent<
 }
 
 pub(super) fn bind_semver(
-    evidence: crate::crate_release_semver::VerifiedSemver,
+    evidence: crate::release::crate_release_semver::VerifiedSemver,
     package: &super::super::VerifiedReleasePackage,
     request: &crate::crate_release_github::GitHubAdmissionRequest,
     intent: &[u8],
-) -> Result<crate::crate_release_semver::SemverEvidence, OrchestratorError> {
+) -> Result<crate::release::crate_release_semver::SemverEvidence, OrchestratorError> {
     evidence.into_bound_evidence(
         &package.package,
         &package.version,
         &request.source_sha,
-        &crate::generator::sha256_hex(intent),
+        &crate::planner::generator::sha256_hex(intent),
     )
 }
 
@@ -71,13 +71,13 @@ pub(crate) fn record_admitted_upload_intent<
 >(
     input: &CrateReleaseObservation<'_, J, G, R>,
     verified: VerifiedReleasePackage,
-    semver: crate::crate_release_semver::VerifiedSemver,
+    semver: crate::release::crate_release_semver::VerifiedSemver,
 ) -> Result<UploadPermit, OrchestratorError> {
     verify_binding(input)?;
     let intent_bytes =
         velnor_actions_contract::canonical_json_bytes(input.intent).map_err(|_| invalid())?;
     let semver_evidence = bind_semver(semver, &verified, input.request, &intent_bytes)?;
-    if verified.intent_sha256 != crate::generator::sha256_hex(&intent_bytes)
+    if verified.intent_sha256 != crate::planner::generator::sha256_hex(&intent_bytes)
         || verified.repository != input.request.repository
         || verified.workflow_sha != input.request.workflow_sha
         || verified.source_sha != input.request.source_sha

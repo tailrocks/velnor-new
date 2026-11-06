@@ -30,7 +30,8 @@ fn release_intent_includes_nested_auto_workspace_members() -> Result<(), Box<dyn
     )?;
     commit_fixture(&root, "workspace")?;
     let intent = preview_consumer_intent(&root)?;
-    let intent = crate::crate_release_runtime::parse_crate_release_intent(intent.as_bytes())?;
+    let intent =
+        crate::release::crate_release_runtime::parse_crate_release_intent(intent.as_bytes())?;
     assert_eq!(
         intent.pr_write_paths,
         [
@@ -52,7 +53,8 @@ fn release_intent_includes_nested_auto_workspace_members() -> Result<(), Box<dyn
     )?;
     commit_fixture(&root, "nested manifest")?;
     let nested = preview_consumer_intent(&root)?;
-    let nested = crate::crate_release_runtime::parse_crate_release_intent(nested.as_bytes())?;
+    let nested =
+        crate::release::crate_release_runtime::parse_crate_release_intent(nested.as_bytes())?;
     assert_eq!(nested.manifest_path, ".private/dependency/Cargo.toml");
     assert_eq!(nested.pr_write_paths, intent.pr_write_paths);
     Ok(())

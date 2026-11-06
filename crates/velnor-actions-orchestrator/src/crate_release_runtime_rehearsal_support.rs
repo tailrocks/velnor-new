@@ -46,7 +46,7 @@ fn source_require_script() -> Result<String, Box<dyn Error>> {
 }
 
 fn generated_script(job: &str, name: &str) -> Result<String, Box<dyn Error>> {
-    let (spec, rust) = crate::release_steps::tests::fixture()?;
+    let (spec, rust) = crate::release::release_steps::tests::fixture()?;
     let workflow = velnor_actions_workflow_renderer::release_tree::render_release_workflow(
         &spec,
         &velnor_actions_workflow_renderer::release_tree::ReleaseRenderContext {
@@ -122,7 +122,7 @@ fn supplied_step(
             return Err("unexpected publisher operation".into());
         }
         let mut command = std::process::Command::new(std::env::current_exe()?);
-        command.args(["--exact", "crate_release_runtime::rehearsal::generated_candidate_receipt_rejects_unprotected_environment"]);
+        command.args(["--exact", "release::crate_release_runtime::rehearsal::generated_candidate_receipt_rejects_unprotected_environment"]);
         command.env(
             "VELNOR_TEST_COMMAND_ARGS",
             format!("crate-release {operation}"),

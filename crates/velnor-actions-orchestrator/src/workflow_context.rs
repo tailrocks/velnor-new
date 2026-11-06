@@ -14,7 +14,7 @@ use velnor_actions_workflow_renderer::steps::{
 use velnor_actions_workflow_renderer::verification_jobs::WorkflowTaskPolicy;
 
 use crate::OrchestratorError;
-use crate::discover::Discovery;
+use crate::planner::discover::Discovery;
 use crate::vectors::{deny_argv, machete_argv, machete_install_argv};
 
 use super::REQUEST_DIR;

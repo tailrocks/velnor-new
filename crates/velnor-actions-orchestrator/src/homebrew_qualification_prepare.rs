@@ -127,7 +127,7 @@ fn extract_expected_members(
     let mut extracted = BTreeMap::new();
     for (asset, members) in grouped {
         let bytes = release.asset_bytes(&asset)?;
-        for (member, contents) in crate::package_release_artifacts::extract_tar_gz_members(
+        for (member, contents) in crate::release::package_release_artifacts::extract_tar_gz_members(
             &bytes,
             &members,
             Instant::now(),

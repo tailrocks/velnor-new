@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::OrchestratorError;
-use crate::generator::sha256_hex;
 use crate::internal::internal;
+use crate::planner::generator::sha256_hex;
 use serde::Deserialize;
 use serde_json::{Map, Value};
 use std::collections::BTreeSet;
@@ -14,7 +14,7 @@ use velnor_actions_contract::config::{
 };
 use velnor_actions_mise::checks::ContainerObservation;
 
-pub(crate) use crate::check_runtime::preparation::container::runtime::{
+pub(crate) use crate::planner::check_runtime::preparation::container::runtime::{
     RuntimeObservation, RuntimeRootEvidence, SocketEvidence,
 };
 

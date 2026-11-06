@@ -60,7 +60,7 @@ pub(super) fn candidate_receipt(
         &NativeCrateRegistryRead,
         crate::CrateSource::new(source, git, source_execution),
     )?;
-    receipt.semver_evidence = crate::crate_release_semver::verify_preflight(
+    receipt.semver_evidence = crate::release::crate_release_semver::verify_preflight(
         source,
         &receipt,
         &NativeCrateRegistryRead,

@@ -41,7 +41,7 @@ fn step_env(
         "DBT_SEND_ANONYMOUS_USAGE_STATS".to_owned(),
         "false".to_owned(),
     );
-    crate::matrix_step::task_step_env(catalog, &extra, false)
+    crate::planner::matrix_step::task_step_env(catalog, &extra, false)
 }
 
 fn install_step(

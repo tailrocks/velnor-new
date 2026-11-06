@@ -17,7 +17,7 @@ pub(crate) fn verify_workflow_concurrency<R: crate::crate_release_registry::Crat
 ) -> Result<(), OrchestratorError> {
     let effective_intent =
         crate::crate_release_controller::effective_release_intent(intent, request);
-    let plan = crate::crate_release_workspace::crate_release_workspace_plan_with_registry(
+    let plan = crate::release::crate_release_workspace::crate_release_workspace_plan_with_registry(
         source,
         &request.source_sha,
         &effective_intent,

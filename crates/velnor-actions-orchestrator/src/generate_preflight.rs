@@ -4,12 +4,12 @@
 use velnor_actions_contract::UnmanagedPolicy;
 
 use crate::OrchestratorError;
-use crate::prepare::GenerationPreparation;
+use crate::planner::prepare::GenerationPreparation;
 
 pub(super) fn fail_on_blocking_findings(
     prep: &GenerationPreparation,
 ) -> Result<(), OrchestratorError> {
-    let blockers = crate::evidence::blocking_findings(&prep.discovery.workspaces);
+    let blockers = crate::planner::evidence::blocking_findings(&prep.discovery.workspaces);
     if !blockers.is_empty() {
         return Err(OrchestratorError::Profile {
             problem: format!(

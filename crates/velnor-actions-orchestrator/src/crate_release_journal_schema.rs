@@ -73,7 +73,7 @@ pub struct JournalReceipt {
     pub source_files: Vec<JournalFile>,
     pub packages: Vec<JournalPackage>,
     pub semver_evidence:
-        std::collections::BTreeMap<String, crate::crate_release_semver::SemverEvidence>,
+        std::collections::BTreeMap<String, crate::release::crate_release_semver::SemverEvidence>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -177,7 +177,7 @@ fn valid_semver_evidence(receipt: &JournalReceipt) -> bool {
             return false;
         };
         match evidence {
-            crate::crate_release_semver::SemverEvidence::Deferred { predecessors } => {
+            crate::release::crate_release_semver::SemverEvidence::Deferred { predecessors } => {
                 !predecessors.is_empty()
                     && predecessors.len() <= index
                     && predecessors.windows(2).all(|pair| pair[0] < pair[1])
@@ -187,7 +187,7 @@ fn valid_semver_evidence(receipt: &JournalReceipt) -> bool {
                             .any(|prior| &prior.name == name)
                     })
             }
-            crate::crate_release_semver::SemverEvidence::PriorNoBaselinePending {
+            crate::release::crate_release_semver::SemverEvidence::PriorNoBaselinePending {
                 checker_sha256,
                 target_checksum,
             } => {
@@ -198,7 +198,7 @@ fn valid_semver_evidence(receipt: &JournalReceipt) -> bool {
                     && velnor_actions_mise::catalog::qualified_cargo_semver_checks("ubuntu-26.04")
                         .is_some_and(|tool| checker_sha256 == tool.executable_sha256)
             }
-            crate::crate_release_semver::SemverEvidence::MetadataOnly {
+            crate::release::crate_release_semver::SemverEvidence::MetadataOnly {
                 package: name,
                 version,
                 source_sha,

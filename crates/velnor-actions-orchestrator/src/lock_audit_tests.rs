@@ -6,8 +6,8 @@ use std::error::Error;
 use velnor_actions_contract::{StepKind, StepRole};
 
 use super::{InstallAuditAuthority, audit_prepare_installs_with_catalog_and_verifiers};
-use crate::generate::rust_install_audit::tests::make_repo;
-use crate::prepare::{GenerationPreparation, prepare_for_candidate as prepare};
+use crate::planner::generate::rust_install_audit::tests::make_repo;
+use crate::planner::prepare::{GenerationPreparation, prepare_for_candidate as prepare};
 use crate::workflow::verifier_actions::VerifierActionSet;
 
 const FINDING: &str = "rust_profile_not_minimal";

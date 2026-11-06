@@ -17,7 +17,7 @@ use super::types::{
 };
 use crate::OrchestratorError;
 use crate::internal::{internal, internal_contract};
-use crate::source_prep::cache_source_projection::{
+use crate::planner::source_prep::cache_source_projection::{
     EntryKind, is_git_path, sha256_hex, validate_link_target, validate_link_target_in_root,
     validate_relative_path,
 };

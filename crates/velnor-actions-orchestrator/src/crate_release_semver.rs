@@ -5,8 +5,11 @@
 #[path = "crate_release_semver_test_registry.rs"]
 pub(crate) mod test_registry;
 
+#[path = "crate_release_semver/checker.rs"]
 mod checker;
+#[path = "crate_release_semver/evidence.rs"]
 mod evidence;
+#[path = "crate_release_semver/metadata.rs"]
 mod metadata;
 pub(crate) use metadata::{matches_revalidated_preflight, verify_observed_evidence};
 
@@ -23,8 +26,8 @@ use crate::{
     crate_registry_inventory::{CrateInventoryError, inspect_crate_versions},
     crate_release_controller::CrateReleaseAdmissionReceipt,
     crate_release_registry::CrateRegistryRead,
-    crate_release_source::{source_cargo_path, source_compiler_env, source_tool_catalog},
     internal::internal,
+    release::crate_release_source::{source_cargo_path, source_compiler_env, source_tool_catalog},
 };
 use velnor_actions_mise::{PinnedTool, PinnedToolExec};
 
@@ -181,14 +184,15 @@ pub(crate) fn verify_preflight<R: CrateRegistryRead>(
         &receipt.intent,
         &receipt.github.request,
     );
-    let workspace = crate::crate_release_workspace::crate_release_workspace_plan_with_registry(
-        source,
-        &receipt.github.request.source_sha,
-        &effective,
-        registry,
-        git,
-        source_execution,
-    )?;
+    let workspace =
+        crate::release::crate_release_workspace::crate_release_workspace_plan_with_registry(
+            source,
+            &receipt.github.request.source_sha,
+            &effective,
+            registry,
+            git,
+            source_execution,
+        )?;
     let mut evidence = std::collections::BTreeMap::new();
     for package in &receipt.packages {
         if !matches!(
@@ -237,7 +241,7 @@ pub(crate) fn verify_preflight<R: CrateRegistryRead>(
 fn unpublished_dependencies(
     receipt: &CrateReleaseAdmissionReceipt,
     package: &crate::crate_release_controller::CrateReleasePlannedPackage,
-    workspace: &crate::crate_release_workspace::CrateReleaseWorkspacePlan,
+    workspace: &crate::release::crate_release_workspace::CrateReleaseWorkspacePlan,
 ) -> Vec<String> {
     let mut blocked: Vec<String> = workspace
         .plan
@@ -337,12 +341,13 @@ pub(crate) fn verify_before_upload<R: CrateRegistryRead>(
         package: package.source.name.clone(),
         version: package.source.version.clone(),
         source_sha: receipt.github.request.source_sha.clone(),
-        intent_sha256: crate::generator::sha256_hex(&intent),
+        intent_sha256: crate::planner::generator::sha256_hex(&intent),
         evidence,
     })
 }
 
 #[cfg(test)]
+#[path = "crate_release_semver/tests.rs"]
 mod tests;
 
 #[cfg(test)]
@@ -361,7 +366,7 @@ pub(crate) fn fixture_verified_semver(
         package: name.to_owned(),
         version: package.source.version.clone(),
         source_sha: receipt.github.request.source_sha.clone(),
-        intent_sha256: crate::generator::sha256_hex(&intent),
+        intent_sha256: crate::planner::generator::sha256_hex(&intent),
         evidence: SemverEvidence::NoBaseline {
             checker_sha256: velnor_actions_mise::catalog::qualified_cargo_semver_checks(
                 "ubuntu-26.04",
@@ -374,4 +379,5 @@ pub(crate) fn fixture_verified_semver(
 }
 
 #[cfg(test)]
+#[path = "crate_release_semver/evidence_tests.rs"]
 mod evidence_tests;

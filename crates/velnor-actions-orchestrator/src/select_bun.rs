@@ -13,7 +13,7 @@ use velnor_actions_contract::{
 use velnor_actions_workflow_renderer::verification_jobs::BUN_ASSETS_SUFFIX;
 
 use super::ChangeEvidence;
-use crate::discover::Discovery;
+use crate::planner::discover::Discovery;
 
 pub(crate) fn dispositions(
     config: &VelnorConfig,

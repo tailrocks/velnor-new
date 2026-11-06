@@ -9,22 +9,23 @@ use crate::{OrchestratorError, internal::internal};
 use velnor_actions_contract::{PackageReleasePlan, package_release::PackageReleaseChannel};
 
 #[derive(Clone, Copy)]
-pub(in crate::package_release_publish) enum Purpose {
+pub(in crate::release::package_release_publish) enum Purpose {
     PublicationRecovery,
     TapPromotion,
 }
 
-pub(in crate::package_release_publish) struct Invocation {
-    pub(in crate::package_release_publish) repository: String,
-    pub(in crate::package_release_publish) source_ref: String,
-    pub(in crate::package_release_publish) source_sha: String,
-    pub(in crate::package_release_publish) workflow_ref: String,
-    pub(in crate::package_release_publish) workflow_sha: String,
-    pub(in crate::package_release_publish) event: String,
+pub(in crate::release::package_release_publish) struct Invocation {
+    pub(in crate::release::package_release_publish) repository: String,
+    pub(in crate::release::package_release_publish) source_ref: String,
+    pub(in crate::release::package_release_publish) source_sha: String,
+    pub(in crate::release::package_release_publish) workflow_ref: String,
+    pub(in crate::release::package_release_publish) workflow_sha: String,
+    pub(in crate::release::package_release_publish) event: String,
 }
 
 impl Invocation {
-    pub(in crate::package_release_publish) fn from_env() -> Result<Self, OrchestratorError> {
+    pub(in crate::release::package_release_publish) fn from_env() -> Result<Self, OrchestratorError>
+    {
         Ok(Self {
             repository: super::env_text("GITHUB_REPOSITORY")?,
             source_ref: super::env_text("GITHUB_REF")?,
@@ -35,7 +36,7 @@ impl Invocation {
         })
     }
 
-    pub(in crate::package_release_publish) fn continuation(
+    pub(in crate::release::package_release_publish) fn continuation(
         &self,
         plan: &PackageReleasePlan,
     ) -> bool {
@@ -44,7 +45,7 @@ impl Invocation {
                 == Self::expected_workflow(plan, plan.channel.tap_reconcile_workflow_path())
     }
 
-    pub(in crate::package_release_publish) fn validate(
+    pub(in crate::release::package_release_publish) fn validate(
         &self,
         plan: &PackageReleasePlan,
         purpose: Purpose,
@@ -64,7 +65,7 @@ impl Invocation {
         Ok(())
     }
 
-    pub(in crate::package_release_publish) fn authenticate_continuation(
+    pub(in crate::release::package_release_publish) fn authenticate_continuation(
         &self,
         plan: &PackageReleasePlan,
         api: &GitHubApi,
@@ -98,7 +99,7 @@ impl Invocation {
         Ok(())
     }
 
-    pub(in crate::package_release_publish) fn authenticate_recovery(
+    pub(in crate::release::package_release_publish) fn authenticate_recovery(
         &self,
         plan: &PackageReleasePlan,
         api: &GitHubApi,

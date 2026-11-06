@@ -6,8 +6,8 @@ use velnor_actions_workflow_renderer::render::RenderedFile;
 use velnor_actions_workflow_renderer::{TofuApplySpec, render_tofu_apply_workflow};
 
 use crate::OrchestratorError;
-use crate::pins::resolve_mise_setup;
-use crate::prepare::GenerationPreparation;
+use crate::planner::pins::resolve_mise_setup;
+use crate::planner::prepare::GenerationPreparation;
 use crate::workflow::CHECKOUT_USES;
 
 pub(crate) fn tofu_apply_enabled(prep: &GenerationPreparation) -> bool {

@@ -10,11 +10,11 @@ use super::{
 use crate::{
     OrchestratorError,
     internal::internal,
-    package_release_artifacts::{
+    planner::retrieve_reports::MAX_RETRIEVE_PLAN_BYTES,
+    preview_producer::{PreviewTaskSpec, execute_preview_task},
+    release::package_release_artifacts::{
         PackageOutputIdentity, preview_payload::verify_payload_output, verify_package_output,
     },
-    preview_producer::{PreviewTaskSpec, execute_preview_task},
-    retrieve_reports::MAX_RETRIEVE_PLAN_BYTES,
 };
 use std::path::Path;
 use velnor_actions_contract::staged_reads::read_staged_bytes_until;
@@ -60,12 +60,12 @@ pub(super) fn execute(
             .map_or(&[], |leaves| leaves.inputs.as_slice()),
         deadline,
     )?;
-    let identity = crate::release_task_identity::ReleaseTaskIdentity::derive(
+    let identity = crate::release::release_task_identity::ReleaseTaskIdentity::derive(
         &execution_request.plan,
         &execution_request.context.source_sha,
         execution_request.context.commit_count,
     )?;
-    let group = crate::check_runtime::preparation::RestoredGroupContext::resolve(temp)?;
+    let group = crate::planner::check_runtime::preparation::RestoredGroupContext::resolve(temp)?;
     let producer = execute_preview_task(
         root,
         &group,

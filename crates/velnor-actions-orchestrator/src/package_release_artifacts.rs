@@ -31,6 +31,7 @@ mod inventory;
 mod public_content;
 use identity::{validate_expected_identity, validate_manifest_identity};
 pub(crate) use public_content::validate_authenticated_release_content;
+#[path = "package_release_artifacts/preview_payload.rs"]
 pub(crate) mod preview_payload;
 
 const HANDOFF_SCHEMA: &str = "velnor.package-output.v1";

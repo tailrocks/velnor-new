@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::verify_reconstructed_archive;
-use crate::{crate_release_git::ReleaseGit, crate_release_source::CrateReleaseSourcePackage};
+use crate::{
+    crate_release_git::ReleaseGit, release::crate_release_source::CrateReleaseSourcePackage,
+};
 use std::{
     collections::BTreeMap,
     io::{Cursor, Read},
@@ -99,7 +101,8 @@ fn fixture(root: &Path) -> Result<Fixture, Box<dyn std::error::Error>> {
         manifest: "Cargo.toml".into(),
     };
     let target = tempfile::tempdir()?;
-    let cargo = crate::crate_release_source::source_cargo_path(&intent.rust_version, root)?;
+    let cargo =
+        crate::release::crate_release_source::source_cargo_path(&intent.rust_version, root)?;
     let output = Command::new(cargo)
         .args([
             "package",

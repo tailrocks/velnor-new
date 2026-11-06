@@ -13,14 +13,16 @@ fn mutation_records_require_a_contiguous_immutable_chain() -> Result<(), Box<dyn
     let remote = Registry::default();
     let plan = receipt("0.1.1");
     let mut item = JournalMutation {
-        semver_evidence: Some(crate::crate_release_semver::SemverEvidence::NoBaseline {
-            checker_sha256: velnor_actions_mise::catalog::qualified_cargo_semver_checks(
-                "ubuntu-26.04",
-            )
-            .expect("qualified checker")
-            .executable_sha256
-            .into(),
-        }),
+        semver_evidence: Some(
+            crate::release::crate_release_semver::SemverEvidence::NoBaseline {
+                checker_sha256: velnor_actions_mise::catalog::qualified_cargo_semver_checks(
+                    "ubuntu-26.04",
+                )
+                .expect("qualified checker")
+                .executable_sha256
+                .into(),
+            },
+        ),
         sequence: 1,
         package: "demo-crate".into(),
         version: "0.1.1".into(),
@@ -77,14 +79,16 @@ fn completion_rejects_a_pending_mutation() -> Result<(), Box<dyn std::error::Err
     let plan = receipt("0.1.1");
     record_journal(&remote, &identity(), JournalStage::Started, &plan, None)?;
     let mut mutation = JournalMutation {
-        semver_evidence: Some(crate::crate_release_semver::SemverEvidence::NoBaseline {
-            checker_sha256: velnor_actions_mise::catalog::qualified_cargo_semver_checks(
-                "ubuntu-26.04",
-            )
-            .expect("qualified checker")
-            .executable_sha256
-            .into(),
-        }),
+        semver_evidence: Some(
+            crate::release::crate_release_semver::SemverEvidence::NoBaseline {
+                checker_sha256: velnor_actions_mise::catalog::qualified_cargo_semver_checks(
+                    "ubuntu-26.04",
+                )
+                .expect("qualified checker")
+                .executable_sha256
+                .into(),
+            },
+        ),
         sequence: 1,
         package: "demo-crate".into(),
         version: "0.1.1".into(),
@@ -143,14 +147,16 @@ fn mutation_record_retry_reads_back_exact_ambiguous_write() -> Result<(), Box<dy
     let plan = receipt("0.1.1");
     record_journal(&remote, &identity(), JournalStage::Started, &plan, None)?;
     let mutation = JournalMutation {
-        semver_evidence: Some(crate::crate_release_semver::SemverEvidence::NoBaseline {
-            checker_sha256: velnor_actions_mise::catalog::qualified_cargo_semver_checks(
-                "ubuntu-26.04",
-            )
-            .expect("qualified checker")
-            .executable_sha256
-            .into(),
-        }),
+        semver_evidence: Some(
+            crate::release::crate_release_semver::SemverEvidence::NoBaseline {
+                checker_sha256: velnor_actions_mise::catalog::qualified_cargo_semver_checks(
+                    "ubuntu-26.04",
+                )
+                .expect("qualified checker")
+                .executable_sha256
+                .into(),
+            },
+        ),
         sequence: 1,
         package: "demo-crate".into(),
         version: "0.1.1".into(),
@@ -184,14 +190,16 @@ fn mutation_results_match_package_operation_and_verified_shape()
     let plan = receipt("0.1.1");
     record_journal(&remote, &identity(), JournalStage::Started, &plan, None)?;
     let mut item = JournalMutation {
-        semver_evidence: Some(crate::crate_release_semver::SemverEvidence::NoBaseline {
-            checker_sha256: velnor_actions_mise::catalog::qualified_cargo_semver_checks(
-                "ubuntu-26.04",
-            )
-            .expect("qualified checker")
-            .executable_sha256
-            .into(),
-        }),
+        semver_evidence: Some(
+            crate::release::crate_release_semver::SemverEvidence::NoBaseline {
+                checker_sha256: velnor_actions_mise::catalog::qualified_cargo_semver_checks(
+                    "ubuntu-26.04",
+                )
+                .expect("qualified checker")
+                .executable_sha256
+                .into(),
+            },
+        ),
         sequence: 1,
         package: "demo-crate".into(),
         version: "0.1.1".into(),

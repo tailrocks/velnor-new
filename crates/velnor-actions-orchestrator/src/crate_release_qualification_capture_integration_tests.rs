@@ -249,7 +249,7 @@ fn add_workflow(
     values: &mut BTreeMap<String, Value>,
     witness: &WitnessRequest,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    use crate::crate_release_pr_tree::{TreeItem, git_tree_sha};
+    use crate::release::crate_release_pr_tree::{TreeItem, git_tree_sha};
     let p = "repos/acme/consumer";
     let config = ReleaseRehearsalConfig {
         script: witness.script.clone(),
@@ -334,7 +334,7 @@ fn add_artifacts(
         ),
     ] {
         let data = &archives[&id];
-        let digest = crate::generator::sha256_hex(data);
+        let digest = crate::planner::generator::sha256_hex(data);
         values.insert(format!("{p}/actions/artifacts/{id}"),json!({"id":id,"name":name,"expired":false,"size_in_bytes":data.len(),"digest":format!("sha256:{digest}"),"workflow_run":{"id":33,"repository_id":12,"head_repository_id":12,"head_sha":witness.workflow_sha}}));
         writeln!(
             log,

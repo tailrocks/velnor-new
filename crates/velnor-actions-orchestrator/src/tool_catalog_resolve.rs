@@ -19,7 +19,7 @@ use velnor_actions_rust::{
 
 use crate::OrchestratorError;
 use crate::config::CONFIG_REL;
-use crate::native_tool_input::{NativeToolSelector, parse_native_tool_selector};
+use crate::planner::native_tool_input::{NativeToolSelector, parse_native_tool_selector};
 use crate::project_tool_sources::{read_nested_toolchains, read_project_sources};
 use crate::safe_read::{MAX_REPO_FILE_BYTES, RepoRead, read_repo_file};
 use crate::tool_catalog_project::{PinInputs, apply_declarations, contract, project_declarations};

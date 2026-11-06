@@ -13,7 +13,6 @@ use velnor_actions_mise::ToolCatalog;
 use velnor_actions_mise::restore::probe_tool_availability;
 
 use crate::OrchestratorError;
-use crate::discover::Discovery;
 use crate::internal::{internal, internal_contract};
 use crate::internal_plan::identities::platform_id_for_group;
 use crate::internal_plan::snapshot::{ExecutionSnapshot, platform_target_for_group};
@@ -22,8 +21,9 @@ use crate::internal_plan::{
     adapter_metadata, cache_ids_for, evidence_for_group, execute_ids, record_task_cache,
     toolchain_id,
 };
+use crate::planner::discover::Discovery;
+use crate::planner::select::group_changed;
 use crate::schedule::assign_lanes;
-use crate::select::group_changed;
 
 #[path = "plan_obligation_identity.rs"]
 mod identity;
@@ -32,7 +32,7 @@ use identity::planned_identity;
 
 pub(crate) struct GroupInputs<'a> {
     pub(crate) discovery: &'a Discovery,
-    pub(crate) job_owners: &'a crate::crate_job_ids::JobOwners<'a>,
+    pub(crate) job_owners: &'a crate::planner::crate_job_ids::JobOwners<'a>,
     pub(crate) task: &'a ProposedTask,
     pub(crate) run_key: &'a str,
     pub(crate) policy: WorkflowPolicy,
@@ -151,7 +151,7 @@ fn plan_named_mise_group(
         .named_check_lanes
         .get(&job_id)
         .ok_or_else(|| internal("named_check_lane_missing"))?;
-    let runtime = crate::check_runtime::preparation::resolve_mise_runtime_for_platform(
+    let runtime = crate::planner::check_runtime::preparation::resolve_mise_runtime_for_platform(
         inputs.root,
         inputs.policy,
         item.check.runner.platform,

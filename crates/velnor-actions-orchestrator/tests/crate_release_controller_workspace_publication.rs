@@ -121,7 +121,7 @@ pub(super) fn execute_two_new_workspace_crates(
     let uploads = RefCell::new(Vec::new());
     let result = coordinate_release(
         input,
-        |name| crate::crate_release_semver::fixture_verified_semver(admission, name),
+        |name| crate::release::crate_release_semver::fixture_verified_semver(admission, name),
         |permit| {
             let rendered = super::super::fixture_upload_config(intent, &permit.package)?;
             let config: toml::Value = toml::from_str(&rendered).map_err(|_| err())?;
@@ -192,7 +192,7 @@ pub(super) fn render_supplied_upload_config(
     bytes: &[u8],
     package: &str,
 ) -> Result<String, OrchestratorError> {
-    let intent = crate::crate_release_runtime::parse_crate_release_intent(bytes)?;
+    let intent = crate::release::crate_release_runtime::parse_crate_release_intent(bytes)?;
     super::super::fixture_upload_config(&intent, package)
 }
 

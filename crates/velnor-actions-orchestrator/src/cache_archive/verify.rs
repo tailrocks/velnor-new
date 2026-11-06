@@ -17,7 +17,7 @@ use crate::cache_snapshot::{
     state_index_digest,
 };
 use crate::internal::internal;
-use crate::source_prep::cache_source_projection::{
+use crate::planner::source_prep::cache_source_projection::{
     EntryKind, ProjectionEntry, restore_directory_times, restore_times,
 };
 

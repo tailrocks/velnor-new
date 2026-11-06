@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{OrchestratorError, crate_release_custody::PublisherRoot, internal::internal};
+use crate::{OrchestratorError, internal::internal, release::crate_release_custody::PublisherRoot};
 use std::{
     io::{Read as _, Write as _},
     os::unix::fs::{DirBuilderExt as _, OpenOptionsExt as _, PermissionsExt as _},
@@ -118,11 +118,11 @@ fn acquire_one(
         crate::safe_read::RepoBytes::Bytes(bytes) if !bytes.is_empty() => bytes,
         _ => return Err(invalid()),
     };
-    if crate::generator::sha256_hex(&archive) != archive_sha {
+    if crate::planner::generator::sha256_hex(&archive) != archive_sha {
         return Err(invalid());
     }
     let bytes = extract_single_binary(&archive, binary, deadline)?;
-    if crate::generator::sha256_hex(&bytes) != executable_sha {
+    if crate::planner::generator::sha256_hex(&bytes) != executable_sha {
         return Err(invalid());
     }
     let mut file = std::fs::OpenOptions::new()

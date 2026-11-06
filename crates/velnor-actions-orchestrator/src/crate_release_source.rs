@@ -28,12 +28,13 @@ pub fn journal_source_inventory(
     if entries.is_empty() || entries.len() > 100_000 {
         return Err(internal("crate_release_journal_inventory_invalid"));
     }
-    let anchor = crate::crate_release_inventory_read::open_root(root)?;
+    let anchor = crate::release::crate_release_inventory_read::open_root(root)?;
     let mut total_bytes = 0_u64;
     let mut files = Vec::with_capacity(entries.len());
     for (path, mode, object) in entries {
-        let (size, sha256, target) =
-            crate::crate_release_inventory_read::read_inventory(&anchor, &path, &mode, &object)?;
+        let (size, sha256, target) = crate::release::crate_release_inventory_read::read_inventory(
+            &anchor, &path, &mode, &object,
+        )?;
         let kind = match (mode.as_str(), target) {
             ("100644" | "100755", None) => JournalFileKind::Regular {
                 executable: mode == "100755",

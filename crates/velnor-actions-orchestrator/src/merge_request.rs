@@ -53,13 +53,13 @@ pub(crate) fn assemble_with_needs(
     let actual_qualification = resolve_actual_qualification(event_name, event_payload, &mut errors);
     let plan = read_json(run_dir, "plan.json", "plan", true, &mut errors);
     let matrix = read_json(run_dir, "matrix.json", "matrix", true, &mut errors);
-    let (reports, task_reports) = crate::retrieve_reports::read_staged_reports(
+    let (reports, task_reports) = crate::planner::retrieve_reports::read_staged_reports(
         run_key,
         &plan,
         &run_dir.join("reports"),
         &mut errors,
     );
-    let check_proofs = crate::check_evidence::gate::read_proofs(
+    let check_proofs = crate::planner::check_evidence::gate::read_proofs(
         &plan,
         &run_dir.join("reports"),
         &task_reports,

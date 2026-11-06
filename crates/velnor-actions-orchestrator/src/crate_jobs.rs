@@ -14,9 +14,10 @@ use velnor_actions_workflow_renderer::steps::CompileDriver as RenderDriver;
 
 use crate::OrchestratorError;
 use crate::config::private_wiring::PrivateWiring;
-use crate::crate_job_ids::{CrateGroupKey, JobOwners, group_is_tofu, group_runnable};
-use crate::discover::Discovery;
 use crate::internal::internal;
+use crate::planner::crate_job_ids::{CrateGroupKey, JobOwners, group_is_tofu, group_runnable};
+use crate::planner::discover::Discovery;
+use crate::planner::{matrix_step, source_prep};
 
 #[path = "crate_jobs_inputs.rs"]
 mod inputs;
@@ -116,7 +117,7 @@ fn build_crate_jobs_with_seed_timeout(
     let owners = JobOwners::from_grouped(&discovery.proposals, &grouped)?;
     let mut jobs = Vec::with_capacity(grouped.len());
     let mut drivers = BTreeMap::new();
-    let lane = crate::matrix_step::LaneTools::union(input.policy, input.catalog, &grouped);
+    let lane = matrix_step::LaneTools::union(input.policy, input.catalog, &grouped);
     let mut producer_roots: BTreeMap<String, state_producer::ProducerRoot> = BTreeMap::new();
     for (key, tasks) in &grouped {
         let output = build_group_job(&input, &lane, &owners, key, tasks, private)?;
@@ -174,7 +175,7 @@ struct GroupOutput {
 
 fn build_group_job(
     input: &CrateJobInputs<'_>,
-    lane: &crate::matrix_step::LaneTools,
+    lane: &matrix_step::LaneTools,
     owners: &JobOwners<'_>,
     key: &CrateGroupKey,
     tasks: &[&ProposedTask],
@@ -212,12 +213,12 @@ fn build_group_job(
     )?;
     reject_seed_needs(&needs, &job_id)?;
     let workspace_root =
-        crate::source_prep::workspace_root_for_manifest(&model.manifest, input.fetch_roots);
+        source_prep::workspace_root_for_manifest(&model.manifest, input.fetch_roots);
     let plan = group_plan_for(&model, workspace_root, input.label, input.timeout)?;
     let tools = if use_rust {
         lane.clone()
     } else {
-        crate::matrix_step::LaneTools::of_group(input.policy, input.catalog, tasks)
+        matrix_step::LaneTools::of_group(input.policy, input.catalog, tasks)
     };
     let job = render_job(
         input,
@@ -262,7 +263,7 @@ fn rust_source_steps(
     needs_validators: bool,
     private: Option<&PrivateWiring>,
 ) -> Result<Vec<Step>, OrchestratorError> {
-    let scoped_roots = crate::source_prep::crate_fetch_roots(
+    let scoped_roots = source_prep::crate_fetch_roots(
         &model.manifest,
         input.fetch_roots,
         input.policy == WorkflowPolicy::VelnorRepositoryV1 && needs_validators,
@@ -275,7 +276,7 @@ fn rust_source_steps(
         Some(private) => private.steps_for_roots(&scoped_roots)?,
         None => Vec::new(),
     };
-    steps.extend(crate::source_prep::fetch_steps_for_crate(
+    steps.extend(source_prep::fetch_steps_for_crate(
         input.catalog,
         &scoped_roots,
         all_features,
@@ -298,8 +299,7 @@ fn stack_cache_steps(
         )?);
     }
     if use_mbx {
-        let root =
-            crate::source_prep::workspace_root_for_manifest(&model.manifest, input.fetch_roots);
+        let root = source_prep::workspace_root_for_manifest(&model.manifest, input.fetch_roots);
         let working_dir = (!root.is_empty()).then_some(root);
         steps.extend(crate::mbx_preflight::steps_for_catalog(
             input.catalog,
@@ -320,7 +320,7 @@ fn render_job(
     use_rust: bool,
     use_mbx: bool,
     use_opentofu: bool,
-    tools: &crate::matrix_step::LaneTools,
+    tools: &matrix_step::LaneTools,
     needs: Vec<String>,
     timeout: JobTimeout,
     private: Option<&PrivateWiring>,
@@ -335,22 +335,20 @@ fn render_job(
     let gh_fixture = job_steps::gh_fixture_step(policy, model)?;
     let mut steps = vec![job_steps::fixture_checkout(gh_fixture.is_some())?];
     steps.extend(input.acquire.cloned());
-    steps.push(crate::matrix_step::download_plan_step()?);
-    let suite: Option<crate::matrix_step::CrateSuite> =
-        crate::matrix_step::suite_for_package(&model.package_name);
-    let needs_validators = crate::matrix_step::crate_needs_generate_validators(policy, suite);
+    steps.push(matrix_step::download_plan_step()?);
+    let suite: Option<matrix_step::CrateSuite> =
+        matrix_step::suite_for_package(&model.package_name);
+    let needs_validators = matrix_step::crate_needs_generate_validators(policy, suite);
     if use_rust {
         steps.push(crate::workflow::verify_restored_rust_step(catalog));
     }
-    steps.push(crate::matrix_step::prepare_crate_tools_step(
-        catalog, tools,
-    )?);
-    steps.extend(crate::matrix_step::verify_validators_step(catalog, tools));
+    steps.push(matrix_step::prepare_crate_tools_step(catalog, tools)?);
+    steps.extend(matrix_step::verify_validators_step(catalog, tools));
     if use_rust {
         steps.push(crate::workflow::prepare_rust_components_step(catalog)?);
         steps.push(crate::workflow::verify_rust_manifest_step(catalog));
     }
-    steps.extend(crate::source_cache::restore_step_for_crate(
+    steps.extend(crate::planner::source_cache::restore_step_for_crate(
         fetch_roots,
         use_rust,
     )?);
@@ -367,16 +365,16 @@ fn render_job(
     steps.extend(image_publication_fixture_step(input, model)?);
     steps.extend(obligation_steps(input, model, use_opentofu)?);
     if use_rust {
-        let root = crate::source_prep::workspace_root_for_manifest(&model.manifest, fetch_roots);
+        let root = source_prep::workspace_root_for_manifest(&model.manifest, fetch_roots);
         steps.push(velnor_actions_workflow_renderer::mbx_stats::mbx_stats_step(
             &model.job_id,
-            &crate::source_prep::workspace_crate_names(&input.discovery.workspaces, root),
+            &source_prep::workspace_crate_names(&input.discovery.workspaces, root),
         )?);
     }
     steps.extend(velnor_actions_workflow_renderer::crate_group_ledger_steps(
         policy,
     )?);
-    steps.push(crate::matrix_step::crate_upload_step(&model.job_id)?);
+    steps.push(matrix_step::crate_upload_step(&model.job_id)?);
     Ok(Job {
         services: Vec::new(),
         outputs: BTreeMap::new(),

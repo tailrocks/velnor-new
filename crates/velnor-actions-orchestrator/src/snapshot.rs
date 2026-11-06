@@ -83,7 +83,7 @@ pub(crate) struct ExecutionSnapshot {
 }
 
 impl ExecutionSnapshot {
-    pub(crate) fn build(discovery: &crate::discover::Discovery) -> Self {
+    pub(crate) fn build(discovery: &crate::planner::discover::Discovery) -> Self {
         let mut graph_digests = std::collections::BTreeMap::new();
         let mut workspace_ids = std::collections::BTreeMap::new();
         let mut member_index = std::collections::BTreeMap::new();

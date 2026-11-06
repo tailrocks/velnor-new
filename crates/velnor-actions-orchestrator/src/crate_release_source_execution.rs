@@ -6,7 +6,7 @@ use super::{OrchestratorError, Path, PathBuf, ReleaseGit, ReleaseGitExecutable, 
 
 pub(crate) struct SupervisedSourceExecution {
     projected: ProjectedSourceTools,
-    wire: std::sync::Mutex<crate::crate_release_source_wire::SourceWire>,
+    wire: std::sync::Mutex<crate::release::crate_release_source_wire::SourceWire>,
     root: PathBuf,
     session: SourceSessionId,
     boot_deadline: u64,
@@ -57,7 +57,7 @@ impl SupervisedSourceExecution {
             velnor_actions_contract::canonical_json_bytes(intent).map_err(|_| invalid())?;
         let context = serde_json::to_vec(&serde_json::json!({
             "source_sha": receipt.github.request.source_sha,
-            "intent_sha256": crate::generator::sha256_hex(&intent_bytes),
+            "intent_sha256": crate::planner::generator::sha256_hex(&intent_bytes),
             "package": package,
             "version": version,
             "features": features,
@@ -67,7 +67,7 @@ impl SupervisedSourceExecution {
         }))
         .map_err(|_| invalid())?;
         wire.request(
-            crate::crate_release_source_wire::SourceOperation::Upload { index },
+            crate::release::crate_release_source_wire::SourceOperation::Upload { index },
             Some(&context),
         )
         .map_err(|_| invalid())?;
@@ -91,7 +91,7 @@ impl SupervisedSourceExecution {
             return Err(invalid());
         }
         wire.request(
-            crate::crate_release_source_wire::SourceOperation::CredentialPreflight,
+            crate::release::crate_release_source_wire::SourceOperation::CredentialPreflight,
             None,
         )
         .map_err(|_| invalid())?;
@@ -127,7 +127,7 @@ impl SupervisedSourceExecution {
             return Err(invalid());
         }
         wire.request(
-            crate::crate_release_source_wire::SourceOperation::Close,
+            crate::release::crate_release_source_wire::SourceOperation::Close,
             None,
         )
         .map_err(|_| invalid())?;
@@ -169,7 +169,7 @@ impl SupervisedSourceExecution {
     }
 }
 
-impl crate::crate_release_workspace::HistoricalIntentReader<'_> {
+impl crate::release::crate_release_workspace::HistoricalIntentReader<'_> {
     pub(crate) fn verify_prior(
         &self,
         prior: &crate::crate_release_journal::JournalReceipt,
@@ -201,7 +201,7 @@ impl crate::crate_release_workspace::HistoricalIntentReader<'_> {
             github,
             wire: &wire,
         };
-        let result = crate::crate_release_historical_intent::verify_prior_bound(
+        let result = crate::release::crate_release_historical_intent::verify_prior_bound(
             &execution.root,
             prior,
             request,
@@ -258,9 +258,9 @@ impl crate::crate_release_workspace::HistoricalIntentReader<'_> {
             github,
             wire: &wire,
         };
-        let result = crate::crate_release_historical_intent::verify_runner_transition(
+        let result = crate::release::crate_release_historical_intent::verify_runner_transition(
             &execution.root,
-            crate::crate_release_historical_intent::TransitionReceipts {
+            crate::release::crate_release_historical_intent::TransitionReceipts {
                 prior,
                 current,
                 current_intent: &receipt.intent,
@@ -290,7 +290,7 @@ impl crate::crate_release_workspace::HistoricalIntentReader<'_> {
 
 struct DeadlineGithub<'a> {
     github: &'a dyn crate::crate_release_github::GitHubAdmissionRead,
-    wire: &'a crate::crate_release_source_wire::SourceWire,
+    wire: &'a crate::release::crate_release_source_wire::SourceWire,
 }
 
 impl crate::crate_release_github::GitHubAdmissionRead for DeadlineGithub<'_> {

@@ -53,7 +53,7 @@ impl CrateRegistryInventory {
             canonical.push(if entry.yanked { '1' } else { '0' });
             canonical.push('\n');
         }
-        crate::generator::sha256_hex(canonical.as_bytes())
+        crate::planner::generator::sha256_hex(canonical.as_bytes())
     }
     #[must_use]
     pub fn available_versions(&self) -> BTreeSet<String> {
@@ -156,7 +156,7 @@ pub fn inspect_crate_versions<R: CrateRegistryRead>(
     Ok(CrateRegistryInventory {
         registry: "crates-io".into(),
         package: name.into(),
-        response_sha256: crate::generator::sha256_hex(&response.body),
+        response_sha256: crate::planner::generator::sha256_hex(&response.body),
         versions,
     })
 }

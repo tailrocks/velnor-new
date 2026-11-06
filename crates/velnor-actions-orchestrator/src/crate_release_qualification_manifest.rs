@@ -48,14 +48,14 @@ pub fn verify_historical_manifest(
     request: &HistoricalManifestRequest<'_>,
     deadline: CheckDeadline,
 ) -> Result<HistoricalManifest, OrchestratorError> {
-    use crate::package_release_signer::{
+    use crate::release::package_release_signer::{
         SdkManifestAttestationExpectation, verify_published_manifest_attestation,
     };
     if request.manifest.is_empty()
         || request.manifest.len() > 1024 * 1024
         || request.bundle.is_empty()
         || request.bundle.len() > 4 * 1024 * 1024
-        || crate::generator::sha256_hex(request.manifest) != request.manifest_sha256
+        || crate::planner::generator::sha256_hex(request.manifest) != request.manifest_sha256
     {
         return Err(invalid());
     }
@@ -95,8 +95,8 @@ pub fn verify_historical_manifest(
     {
         return Err(invalid());
     }
-    crate::package_release_publish::verify_public_sdk_release_producer(
-        &crate::package_release_publish::PublicSdkProducerSelection {
+    crate::release::package_release_publish::verify_public_sdk_release_producer(
+        &crate::release::package_release_publish::PublicSdkProducerSelection {
             repository: "tailrocks/velnor-new".to_owned(),
             repository_id: 1_390_620_900,
             source_sha: request.source_sha.to_owned(),
@@ -143,13 +143,17 @@ mod tests {
         const TEST: &str = "crate_release_qualification_manifest::tests::authenticates_real_historical_manifest_and_rejects_mutations";
         if std::env::var_os("VELNOR_HISTORICAL_FIXTURE_CHILD").is_none() {
             if std::env::var_os("VELNOR_GH_FIXTURE_WORKER").is_none() {
-                return crate::package_release_signer::image_transport_tests::dispatch(TEST);
+                return crate::release::package_release_signer::image_transport_tests::dispatch(
+                    TEST,
+                );
             }
-            crate::package_release_signer::image_transport_tests::validate(TEST)?;
+            crate::release::package_release_signer::image_transport_tests::validate(TEST)?;
             let fixture =
                 Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/attestation_fixtures/historical");
             assert_eq!(
-                crate::generator::sha256_hex(&std::fs::read(fixture.join("trusted-root.jsonl"))?),
+                crate::planner::generator::sha256_hex(&std::fs::read(
+                    fixture.join("trusted-root.jsonl")
+                )?),
                 "65ca537f6ed8a47fd0e560c421baa1f6c1efb8b25fc200d8c5c02c0e92eb2b9c"
             );
             let output = crate::offline_attestation_test::run_validated_worker(
@@ -169,10 +173,10 @@ mod tests {
                 "{}",
                 String::from_utf8_lossy(&output.stdout)
             );
-            crate::package_release_signer::image_transport_tests::record_success(TEST)?;
+            crate::release::package_release_signer::image_transport_tests::record_success(TEST)?;
             return Ok(());
         }
-        crate::package_release_signer::image_transport_tests::validate(TEST)?;
+        crate::release::package_release_signer::image_transport_tests::validate(TEST)?;
         let network = std::net::UdpSocket::bind("127.0.0.1:0")
             .expect_err("attestation child must deny network");
         assert_eq!(network.kind(), std::io::ErrorKind::PermissionDenied);
@@ -181,7 +185,7 @@ mod tests {
 
     fn verify_manifest_fixture() -> Result<(), Box<dyn std::error::Error>> {
         let mut responses = fixture_responses();
-        crate::package_release_publish::set_github_read_fixture(responses.clone());
+        crate::release::package_release_publish::set_github_read_fixture(responses.clone());
         let dir = std::env::var_os("VELNOR_ATTESTATION_TEST_DIR").ok_or("missing asset dir")?;
         let manifest = std::fs::read(Path::new(&dir).join("release-manifest.json"))?;
         let bundle = std::fs::read(Path::new(&dir).join("release-manifest.json.intoto.jsonl"))?;
@@ -199,9 +203,9 @@ mod tests {
         let mut run: serde_json::Value = serde_json::from_slice(&responses[route])?;
         run["conclusion"] = "failure".into();
         responses.insert(route.into(), serde_json::to_vec(&run)?);
-        crate::package_release_publish::set_github_read_fixture(responses);
+        crate::release::package_release_publish::set_github_read_fixture(responses);
         assert!(verify_historical_manifest(&expected, deadline()?).is_err());
-        crate::package_release_publish::set_github_read_fixture(fixture_responses());
+        crate::release::package_release_publish::set_github_read_fixture(fixture_responses());
         let mut forged = manifest.clone();
         forged.push(b' ');
         assert!(

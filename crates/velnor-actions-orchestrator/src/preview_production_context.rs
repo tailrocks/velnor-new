@@ -85,7 +85,7 @@ pub(super) fn derive_context(
     deadline: CheckDeadline,
 ) -> Result<ReleaseProductionContext, OrchestratorError> {
     let context = workflow_context(plan, deadline)?;
-    let identity = crate::release_task_identity::ReleaseTaskIdentity::derive(
+    let identity = crate::release::release_task_identity::ReleaseTaskIdentity::derive(
         plan,
         &context.source_sha,
         context.commit_count,

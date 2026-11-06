@@ -86,7 +86,7 @@ pub(super) fn image_publication_fixture_step(
     {
         return Ok(Vec::new());
     }
-    let env = crate::matrix_step::task_step_env(input.catalog, &BTreeMap::new(), true)?;
+    let env = crate::planner::matrix_step::task_step_env(input.catalog, &BTreeMap::new(), true)?;
     let build = mbx_image_fixture_argv(
         input.catalog,
         &[
@@ -126,8 +126,12 @@ fn mbx_image_fixture_argv(
     catalog: &ToolCatalog,
     cargo_args: &[&str],
 ) -> Result<String, OrchestratorError> {
-    let argv =
-        crate::product_release_pins::exec_argv(&[PinnedTool::Rust], "mbx", cargo_args, catalog)?;
+    let argv = crate::release::product_release_pins::exec_argv(
+        &[PinnedTool::Rust],
+        "mbx",
+        cargo_args,
+        catalog,
+    )?;
     velnor_actions_workflow_renderer::join_argv_for_run(&argv).map_err(OrchestratorError::from)
 }
 
@@ -152,8 +156,10 @@ pub(super) fn obligation_steps(
         .filter(|obligation| concurrent && !sequential(obligation))
         .map(|obligation| obligation.task_id.as_str())
         .collect();
-    let target_root =
-        crate::source_prep::workspace_root_for_manifest(&model.manifest, input.fetch_roots);
+    let target_root = crate::planner::source_prep::workspace_root_for_manifest(
+        &model.manifest,
+        input.fetch_roots,
+    );
     let seed = seed_step(input, model, concurrent, target_root)?;
     let mut steps = Vec::with_capacity(model.obligations.len() + usize::from(seed.is_some()));
     let mut seed = seed;
@@ -182,7 +188,7 @@ pub(super) fn obligation_steps(
             .map(|later| later.task_id.clone())
             .collect();
         let cap = (index == 0 && use_opentofu).then_some(input.max_parallel_jobs);
-        let mut step = crate::matrix_step::obligation_step(
+        let mut step = crate::planner::matrix_step::obligation_step(
             obligation,
             input.catalog,
             &downstream,

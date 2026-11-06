@@ -38,7 +38,7 @@ pub fn derive_intent_from_evidence(
         return Err(invalid());
     }
     let mapped = remap_metadata(metadata.bytes(), source.root())?;
-    crate::release_emit::derive_intent_from_snapshot(
+    crate::release::release_emit::derive_intent_from_snapshot(
         source,
         &config,
         &mapped,
@@ -65,7 +65,8 @@ fn bind_manifest_values(
     bytes: &[u8],
     source: &str,
 ) -> Result<(), OrchestratorError> {
-    if source != policy.source_sha || crate::generator::sha256_hex(bytes) != policy.sha256 {
+    if source != policy.source_sha || crate::planner::generator::sha256_hex(bytes) != policy.sha256
+    {
         return Err(invalid());
     }
     let raw = std::str::from_utf8(bytes).map_err(|_| invalid())?;

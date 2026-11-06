@@ -217,7 +217,7 @@ fn receipt_schema_rejects_unknown_fields_and_mismatched_results()
 
 #[test]
 fn semver_receipt_rejects_missing_forged_or_impossible_evidence() {
-    use crate::crate_release_semver::SemverEvidence;
+    use crate::release::crate_release_semver::SemverEvidence;
     let good = receipt("0.1.1");
     let mut bad = Vec::new();
     let mut missing = good.clone();

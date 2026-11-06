@@ -15,7 +15,7 @@ use velnor_actions_workflow_renderer::owned_tool_publication::{
     render_owned_publication_files,
 };
 
-use crate::{OrchestratorError, prepare::GenerationPreparation, workflow::CHECKOUT_USES};
+use crate::{OrchestratorError, planner::prepare::GenerationPreparation, workflow::CHECKOUT_USES};
 
 pub(crate) const SOURCE_APPROVAL_PATH: &str = ".velnor/owned-tool-sources.json";
 

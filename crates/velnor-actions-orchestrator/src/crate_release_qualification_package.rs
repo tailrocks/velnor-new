@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    OrchestratorError, crate_release_git::ReleaseGit,
-    crate_release_source::CrateReleaseSourcePackage, internal::internal,
+    OrchestratorError, crate_release_git::ReleaseGit, internal::internal,
+    release::crate_release_source::CrateReleaseSourcePackage,
 };
 use std::path::Path;
 use velnor_actions_contract::config::CrateReleaseIntent;
@@ -51,7 +51,7 @@ pub fn verify_reconstructed_archive(
         &package.version,
         git,
     )?;
-    let checksum = crate::generator::sha256_hex(observed);
+    let checksum = crate::planner::generator::sha256_hex(observed);
     crate::verify_crate_archive(
         &expected,
         observed,

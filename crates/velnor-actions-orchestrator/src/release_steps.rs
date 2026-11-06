@@ -17,7 +17,7 @@ use velnor_actions_workflow_renderer::{
 };
 
 use crate::OrchestratorError;
-use crate::release_checkouts::forge_env;
+use crate::release::release_checkouts::forge_env;
 use crate::utf8::{strings_of, strings_of_env};
 use velnor_actions_workflow_renderer::release_checkout_gates::{policy_checkout, source_checkout};
 

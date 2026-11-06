@@ -47,7 +47,7 @@ fn sealed_source_adapter_runs_real_supervised_package() -> Result<(), Box<dyn st
     let staged =
         crate::crate_release_tool_artifact::stage_unverified_toolchain(&stage, &github, &github)?;
     let authorized = staged.authorization().clone();
-    let projected = crate::crate_release_projected_tools::ProjectedToolchain::project(
+    let projected = crate::release::crate_release_projected_tools::ProjectedToolchain::project(
         &custody.root,
         &custody.view,
         staged,
@@ -55,7 +55,7 @@ fn sealed_source_adapter_runs_real_supervised_package() -> Result<(), Box<dyn st
         &intent,
     )?;
     let view_path = custody.view.path().to_owned();
-    let sealed = crate::crate_release_source_view::SealedSourceView::seal(
+    let sealed = crate::release::crate_release_source_view::SealedSourceView::seal(
         snapshot,
         custody.view,
         projected,
@@ -88,13 +88,13 @@ fn sealed_source_adapter_runs_real_supervised_package() -> Result<(), Box<dyn st
 
 #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
 fn connect_supervised_fixture(
-    tools: crate::crate_release_source_view::ProjectedSourceTools,
+    tools: crate::release::crate_release_source_view::ProjectedSourceTools,
     view_path: std::path::PathBuf,
     socket: std::os::unix::net::UnixStream,
     boot_deadline: u64,
     intent: &velnor_actions_contract::config::CrateReleaseIntent,
 ) -> Result<
-    Option<crate::crate_release_source_view::SupervisedSourceExecution>,
+    Option<crate::release::crate_release_source_view::SupervisedSourceExecution>,
     Box<dyn std::error::Error>,
 > {
     use std::os::unix::fs::PermissionsExt as _;
@@ -102,7 +102,7 @@ fn connect_supervised_fixture(
     let canonical_intent = velnor_actions_contract::canonical_json_bytes(intent)?;
     assert_eq!(
         context["identity"]["intent_sha256"],
-        crate::generator::sha256_hex(&canonical_intent),
+        crate::planner::generator::sha256_hex(&canonical_intent),
         "source session and upload permit must bind the same approved intent"
     );
     if std::env::var("VELNOR_TEST_CUSTODY_FAULT").as_deref() == Ok("expose") {

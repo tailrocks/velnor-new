@@ -6,8 +6,8 @@ use velnor_actions_workflow_renderer::{
 };
 
 use crate::OrchestratorError;
-use crate::pins::resolve_verification_mise_setup;
-use crate::prepare::GenerationPreparation;
+use crate::planner::pins::resolve_verification_mise_setup;
+use crate::planner::prepare::GenerationPreparation;
 
 pub(crate) fn suite_workflow_files(
     prep: &GenerationPreparation,
@@ -26,7 +26,7 @@ pub(crate) fn suite_workflow_files(
                 &suite.id,
                 &prep.default_branch,
             )?;
-            let helper = crate::pins::consumer_evidence_helper(
+            let helper = crate::planner::pins::consumer_evidence_helper(
                 suite.runner.runs_on(),
                 env!("CARGO_PKG_VERSION"),
                 &prep.discovery,

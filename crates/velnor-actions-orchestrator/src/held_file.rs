@@ -181,7 +181,7 @@ pub(crate) fn checkpoint(deadline: CheckDeadline) -> Result<(), OrchestratorErro
         .map_err(|_| invalid("deadline"))
 }
 fn reject_links(path: &Path) -> Result<(), OrchestratorError> {
-    crate::check_evidence::reject_link_components(
+    crate::planner::check_evidence::reject_link_components(
         Path::new("/"),
         path.strip_prefix("/")
             .ok()

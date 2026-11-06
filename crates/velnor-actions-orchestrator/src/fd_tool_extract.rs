@@ -55,7 +55,7 @@ mod unix {
             deadline.saturating_duration_since(Instant::now()),
         )
         .map_err(|_| invalid())?;
-        crate::check_runtime::preparation::acquisition::archive::preflight_zip_file(
+        crate::planner::check_runtime::preparation::acquisition::archive::preflight_zip_file(
             &mut input,
             zip_deadline,
         )?;

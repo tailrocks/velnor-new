@@ -15,7 +15,8 @@ pub(super) struct RecoveryAdmissionContext<'a> {
     pub(super) default_branch: &'a str,
     pub(super) receipt: &'a PackageReleaseReceipt,
     pub(super) plan: &'a PackageReleasePlan,
-    pub(super) recovery: &'a crate::package_release_public::HistoricalPackageReleaseRecovery,
+    pub(super) recovery:
+        &'a crate::release::package_release_public::HistoricalPackageReleaseRecovery,
     pub(super) deadline: CheckDeadline,
 }
 
@@ -117,15 +118,15 @@ pub(super) fn verify_public_recovery_admission(
 fn read_recovery_projection(
     context: &RecoveryAdmissionContext<'_>,
 ) -> Result<
-    crate::package_release_publish::release_policy_admission::PublicHistoricalAdmissionProjection,
+    crate::release::package_release_publish::release_policy_admission::PublicHistoricalAdmissionProjection,
     OrchestratorError,
-> {
+>{
     context
         .deadline
         .remaining()
         .map_err(|_| internal("package_public_verification_deadline"))?;
     let recovery = context.recovery;
-    crate::package_release_publish::release_policy_admission::project_public_historical_admission(
+    crate::release::package_release_publish::release_policy_admission::project_public_historical_admission(
         &recovery.admission_bytes,
         &recovery.admission_sha256,
     )
@@ -133,7 +134,7 @@ fn read_recovery_projection(
 
 pub(super) fn verify_public_recovery_jobs(
     jobs: &[github::WorkflowJob],
-    recovery: &crate::package_release_public::HistoricalPackageReleaseRecovery,
+    recovery: &crate::release::package_release_public::HistoricalPackageReleaseRecovery,
 ) -> Result<(), OrchestratorError> {
     let matching_job = |name: &str| {
         jobs.iter()

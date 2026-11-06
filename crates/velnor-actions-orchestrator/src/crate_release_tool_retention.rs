@@ -48,7 +48,8 @@ pub(crate) fn verify_preflight_retention(
     let limit = started
         .checked_add(MAX_WORKFLOW_SECONDS)
         .ok_or_else(invalid)?;
-    let list = crate::crate_release_artifact_pages::list_artifacts(api, &prefix, request.run_id)?;
+    let list =
+        crate::release::crate_release_artifact_pages::list_artifacts(api, &prefix, request.run_id)?;
     for (id, receipt) in [(receipt_id, true), (rust_id, false)] {
         let detail = api.get(&format!("{prefix}/actions/artifacts/{id}"))?;
         let validate = if receipt {

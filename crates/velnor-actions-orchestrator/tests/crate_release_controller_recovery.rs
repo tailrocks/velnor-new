@@ -355,7 +355,7 @@ fn projected_toolchain_installed_verifier_accepts_real_archive()
     let boot = rustix::time::clock_gettime(rustix::time::ClockId::Boottime);
     let deadline =
         (u64::try_from(boot.tv_sec)? + 300) * 1_000_000_000 + u64::try_from(boot.tv_nsec)?;
-    let custody = crate::crate_release_custody::CustodiedChannel::take(deadline)?;
+    let custody = crate::release::crate_release_custody::CustodiedChannel::take(deadline)?;
     let fixture = tempfile::tempdir_in(custody.root.path())?;
     let source = fixture.path().join("source");
     fs::create_dir(&source)?;
@@ -377,7 +377,7 @@ fn projected_toolchain_installed_verifier_accepts_real_archive()
     let staged =
         crate::crate_release_tool_artifact::stage_unverified_toolchain(&stage, &github, &github)?;
     let approved = staged.authorization().clone();
-    let projected = crate::crate_release_projected_tools::ProjectedToolchain::project(
+    let projected = crate::release::crate_release_projected_tools::ProjectedToolchain::project(
         &custody.root,
         &custody.view,
         staged,

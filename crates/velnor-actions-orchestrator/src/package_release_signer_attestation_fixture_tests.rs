@@ -10,7 +10,7 @@ const BINARY: &str = "velnor-actions-0.1.5-x86_64-unknown-linux-gnu";
 
 #[test]
 fn verifies_public_manifest_and_linux_binary() -> Result<(), Box<dyn std::error::Error>> {
-    const TEST: &str = "package_release_signer::attestation::sdk::fixture_tests::verifies_public_manifest_and_linux_binary";
+    const TEST: &str = "release::package_release_signer::attestation::sdk::fixture_tests::verifies_public_manifest_and_linux_binary";
     if std::env::var_os("VELNOR_BINARY_FIXTURE_CHILD").is_none() {
         if std::env::var_os("VELNOR_GH_FIXTURE_WORKER").is_none() {
             return super::super::image_transport_tests::dispatch(TEST);
@@ -123,13 +123,13 @@ fn run_binary_fixture() -> Result<(), Box<dyn std::error::Error>> {
         std::fs::copy(fixture.join(name), temp.path().join(name))?;
     }
     assert_eq!(
-        crate::generator::sha256_hex(&std::fs::read(
+        crate::planner::generator::sha256_hex(&std::fs::read(
             fixture.join("historical/trusted-root.jsonl")
         )?),
         "65ca537f6ed8a47fd0e560c421baa1f6c1efb8b25fc200d8c5c02c0e92eb2b9c"
     );
     let output = crate::offline_attestation_test::run_validated_worker(
-        "package_release_signer::attestation::sdk::fixture_tests::verifies_public_manifest_and_linux_binary",
+        "release::package_release_signer::attestation::sdk::fixture_tests::verifies_public_manifest_and_linux_binary",
         "VELNOR_BINARY_FIXTURE_CHILD",
         temp.path(),
         &fixture.join("historical/trusted-root.jsonl"),

@@ -15,7 +15,7 @@ use velnor_actions_mise::ToolCatalog;
 
 use crate::OrchestratorError;
 use crate::internal::{internal, internal_contract};
-use crate::retrieve_retry::download_with_retry;
+use crate::planner::retrieve_retry::download_with_retry;
 
 pub use velnor_actions_workflow_renderer::steps::FETCH_OPERATION as FETCH_OP;
 
@@ -39,7 +39,7 @@ pub(crate) fn retrieve_reports_to(run_id: u64, run_dir: &Path) -> usize {
     let Some(plan) = plan else {
         return 0;
     };
-    let repo = std::env::var(crate::origin::GITHUB_REPOSITORY_ENV)
+    let repo = std::env::var(crate::planner::origin::GITHUB_REPOSITORY_ENV)
         .ok()
         .and_then(|raw| velnor_actions_contract::validate_repository_slug(&raw));
     let Some(repo) = repo else {

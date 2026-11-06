@@ -19,7 +19,7 @@ use super::types::{
 };
 use crate::OrchestratorError;
 use crate::internal::{internal, internal_contract};
-use crate::source_prep::cache_source_projection::EntryKind;
+use crate::planner::source_prep::cache_source_projection::EntryKind;
 
 fn planned_payload_bytes(
     planned: &[PlannedProjectionEntry],

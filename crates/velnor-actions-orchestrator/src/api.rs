@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 pub fn seed_parallel_targets_from_env() -> Result<(), super::OrchestratorError> {
-    super::parallel_target_seed::seed_parallel_targets_from_env().map(|_| ())
+    crate::planner::parallel_target_seed::seed_parallel_targets_from_env().map(|_| ())
 }
 
 pub use super::homebrew::authoring::{
@@ -69,8 +69,6 @@ pub use super::cache_snapshot::{
     plan_projection_payload, projection_index_digest, required_output_index_digest,
     state_index_digest, validate_required_outputs, validate_state_index,
 };
-pub use super::check_runtime::{EXECUTE_CHECK_OP, execute_check};
-pub use super::clippy_groups::{ClippyMemoryPlan, clippy_memory_groups};
 pub use super::config::bun_registry_install::{BUN_REGISTRY_INSTALL_OP, run_bun_registry_install};
 pub use super::config::deps_lock::{lock_private_sources, read_deps_lock, render_lock};
 pub use super::config::gradle_run::{GRADLE_RUN_OP, run_gradle_run};
@@ -79,23 +77,7 @@ pub use super::config::playwright_lock::{read_playwright_lock, render_playwright
 pub use super::config::playwright_resolve::lock_playwright_browsers;
 pub use super::config::private_fetch::{PRIVATE_FETCH_OP, PRIVATE_REVOKE_OP, run_private_fetch};
 pub use super::config::private_revoke::run_private_revoke;
-pub use super::critical_path::{
-    CriticalPath, critical_path, critical_path_for_groups, critical_path_line,
-    critical_path_structural, render_critical_path,
-};
-pub use super::derive_groups::FeatureFallback;
-pub use super::discover::{Discovery, PlannedWorkspace};
 pub use super::error::{OrchestratorError, WarmRemedy};
-pub use super::extension_schemas::{
-    extension_schema_for_stack, reuse_eligible_for_schema, task_key_segment, task_kind_segment,
-    task_stack_segment,
-};
-pub use super::finalized::finalized_jobs;
-pub use super::generate::unmanaged::{UnmanagedReport, unmanaged_report};
-pub use super::generate::{
-    GenerateOptions, GenerateReport, ToolSnapshot, generate, generate_dispatched,
-    render_staged_tree, render_staged_tree_with,
-};
 pub use super::init::{InitReport, init_config};
 #[doc(hidden)]
 pub use super::internal::phase_timing::{PlanPhaseTimings, plan_internal_with_phase_timings};
@@ -106,42 +88,10 @@ pub use super::internal::{
     publish_final_report, publish_plan_files, response_path_for, write_request,
     write_request_parts,
 };
-pub use super::merge::{MergeContext, merge_internal, merge_internal_with_context};
-pub use super::merge_request::assemble_merge_request;
-pub use super::owned_tool_preview::{SourceQualificationTrigger, preview_owned_tool_candidates};
-pub use super::pins::{acquire_script_argv, consumer_acquire_step_with_manifest};
-pub use super::plan::{plan_text, plan_text_checked};
-pub use super::plan_output_limits::{JOB_OUTPUTS_BUDGET_UTF16_BYTES, PlanOutputMode};
-pub use super::prepare::{
-    GenerationPreparation, prepare_for_candidate as prepare,
-    prepare_for_candidate_with_operator_guard as prepare_with_operator_guard,
-};
-pub use super::preseed_manifest::{PRESEED_MANIFEST_OP, write_preseed_manifest};
 pub use super::preview_producer::{
     ACQUIRE_RELEASE_LEAVES_OP, ADMIT_RELEASE_AGGREGATE_OP, EXECUTE_RELEASE_PRODUCER_OP,
     PREVIEW_CACHE_RECIPE_KEY, acquire_release_leaves, admit_release_aggregate,
     execute_release_producer,
-};
-pub use super::product_release_pins::cache_recipes::{
-    CacheRecipe, CacheRecipeError, CacheRecipeKind, PREVIEW_PRODUCER_RECIPE_KEY, all_recipes,
-    lookup_recipe, parse_kind, recipes_of, validate_catalog, validate_catalog_slice,
-    validate_recipe,
-};
-pub use super::provenance::{EvidenceProvenance, ProfileProvenance};
-pub use super::qualification_resolver::{
-    QUALIFICATION_ADMISSION_FILENAME, QUALIFICATION_RESOLVER_OP, read_qualification_admission,
-    resolve_qualification_admission,
-};
-pub use super::qualify::qualify_argv_staged;
-pub use super::retrieve_reports::{FETCH_OP, retrieve_reports};
-pub use super::root::resolve_root;
-pub use super::routing::{migrate_config, parse_dispatch_mode};
-pub use super::source_prep::cache_source_projection::{
-    CheckoutState, EntryKind, InstallOutcome, ProjectionEntry, RealMtime, RestoreDecision,
-    authenticate_entry, checkout_metadata_matches, decide, install_staged_file,
-    install_staged_symlink, is_git_path, reconcile, reject_link_parents, restore_directory_times,
-    restore_times, sha256_hex, sort_deepest_first, staged_path, validate_link_target,
-    validate_link_target_in_root, validate_relative_path, validate_sha256, verify_times,
 };
 pub use super::tap_merge::review_completion::{
     CAPTURE_REVIEW_COMPLETION_OP, EMIT_REVIEW_COMPLETION_OP, capture_review_completion,
@@ -169,6 +119,58 @@ pub use super::validators::{
     validate_select_diff_args, validate_select_show_args, validate_show_args, validate_show_path,
 };
 pub use super::workflow::{CHECKOUT_USES, DEFAULT_RUNNER_LABEL, WorkflowPlan};
+pub use crate::planner::check_runtime::{EXECUTE_CHECK_OP, execute_check};
+pub use crate::planner::clippy_groups::{ClippyMemoryPlan, clippy_memory_groups};
+pub use crate::planner::critical_path::{
+    CriticalPath, critical_path, critical_path_for_groups, critical_path_line,
+    critical_path_structural, render_critical_path,
+};
+pub use crate::planner::derive_groups::FeatureFallback;
+pub use crate::planner::discover::{Discovery, PlannedWorkspace};
+pub use crate::planner::extension_schemas::{
+    extension_schema_for_stack, reuse_eligible_for_schema, task_key_segment, task_kind_segment,
+    task_stack_segment,
+};
+pub use crate::planner::finalized::finalized_jobs;
+pub use crate::planner::generate::unmanaged::{UnmanagedReport, unmanaged_report};
+pub use crate::planner::generate::{
+    GenerateOptions, GenerateReport, ToolSnapshot, generate, generate_dispatched,
+    render_staged_tree, render_staged_tree_with,
+};
+pub use crate::planner::merge::{MergeContext, merge_internal, merge_internal_with_context};
+pub use crate::planner::merge_request::assemble_merge_request;
+pub use crate::planner::pins::{acquire_script_argv, consumer_acquire_step_with_manifest};
+pub use crate::planner::plan::{plan_text, plan_text_checked};
+pub use crate::planner::plan_output_limits::{JOB_OUTPUTS_BUDGET_UTF16_BYTES, PlanOutputMode};
+pub use crate::planner::prepare::{
+    GenerationPreparation, prepare_for_candidate as prepare,
+    prepare_for_candidate_with_operator_guard as prepare_with_operator_guard,
+};
+pub use crate::planner::preseed_manifest::{PRESEED_MANIFEST_OP, write_preseed_manifest};
+pub use crate::planner::retrieve_reports::{FETCH_OP, retrieve_reports};
+pub use crate::planner::root::resolve_root;
+pub use crate::planner::routing::{migrate_config, parse_dispatch_mode};
+pub use crate::planner::source_prep::cache_source_projection::{
+    CheckoutState, EntryKind, InstallOutcome, ProjectionEntry, RealMtime, RestoreDecision,
+    authenticate_entry, checkout_metadata_matches, decide, install_staged_file,
+    install_staged_symlink, is_git_path, reconcile, reject_link_parents, restore_directory_times,
+    restore_times, sha256_hex, sort_deepest_first, staged_path, validate_link_target,
+    validate_link_target_in_root, validate_relative_path, validate_sha256, verify_times,
+};
+pub use crate::release::owned_tool_preview::{
+    SourceQualificationTrigger, preview_owned_tool_candidates,
+};
+pub use crate::release::product_release_pins::cache_recipes::{
+    CacheRecipe, CacheRecipeError, CacheRecipeKind, PREVIEW_PRODUCER_RECIPE_KEY, all_recipes,
+    lookup_recipe, parse_kind, recipes_of, validate_catalog, validate_catalog_slice,
+    validate_recipe,
+};
+pub use crate::release::provenance::{EvidenceProvenance, ProfileProvenance};
+pub use crate::release::qualification_resolver::{
+    QUALIFICATION_ADMISSION_FILENAME, QUALIFICATION_RESOLVER_OP, read_qualification_admission,
+    resolve_qualification_admission,
+};
+pub use crate::release::qualify::qualify_argv_staged;
 pub use github_evidence::{
     GITHUB_EVIDENCE_FETCH_OP, GITHUB_EVIDENCE_IMPORT_OP, run_github_evidence_fetch,
     run_github_evidence_import,
@@ -187,12 +189,12 @@ pub use velnor_actions_workflow_renderer::{
 pub use super::package_publication::{
     PackagePublicationBackend, PackagePublicationOutcome, publish_package_release,
 };
-pub use super::package_release_publish::release_policy_admission::{
+pub use crate::release::package_release_publish::release_policy_admission::{
     ACQUIRE_PREVIEW_SOURCE_OP, FINALIZE_PREVIEW_SOURCE_OP, SELECT_PREVIEW_SOURCE_OP,
     acquire_preview_source_from_env, finalize_preview_source_from_env,
     select_preview_source_from_env,
 };
-pub use super::package_release_publish::{
+pub use crate::release::package_release_publish::{
     ADMIT_STABLE_TAG_ORIGIN_OP, PUBLISH_PACKAGE_RELEASE_OP, RECOVER_PACKAGE_RELEASE_OP,
     ReleaseTapContinuationSelection, SELECT_RELEASE_TAP_CONTINUATION_OP,
     SELECT_STABLE_RELEASE_SOURCE_OP, WRITE_STABLE_TAG_INTENT_OP, WRITE_STABLE_TAG_ORIGIN_OP,
@@ -201,21 +203,25 @@ pub use super::package_release_publish::{
     select_stable_release_source_from_env, write_stable_tag_intent_from_env,
     write_stable_tag_origin_from_env,
 };
-pub use super::package_release_signer::{SIGN_PACKAGE_RELEASE_OP, sign_package_release_from_env};
+pub use crate::release::package_release_signer::{
+    SIGN_PACKAGE_RELEASE_OP, sign_package_release_from_env,
+};
 
 pub const ORCHESTRATOR_VERSION: u32 = 0;
 
-pub use crate::native_validator_tool_qualification::{
+pub use crate::planner::native_validator_tool_qualification::{
     NATIVE_VALIDATOR_TOOL_QUALIFICATION_OP, run_native_validator_tool_qualification_from_env,
 };
-pub use crate::qualification_candidate::qualify_tools;
+pub use crate::release::qualification_candidate::qualify_tools;
 
 pub use super::homebrew::qualification::{
     admit_homebrew_qualification_from_env, execute_homebrew_qualification_from_env,
     finalize_homebrew_qualification_from_env,
 };
 pub use super::homebrew::runtime::execute_native_homebrew_check_from_env;
-pub(crate) use super::package_release_publish::{release_policy_admission, stable_tag_origin};
+pub(crate) use crate::release::package_release_publish::{
+    release_policy_admission, stable_tag_origin,
+};
 
 pub use super::image_maintenance::{
     AdmitRunnerImagesRequest, BuildJobCandidateRequest, CheckJobSourceRequest,
@@ -224,3 +230,22 @@ pub use super::image_maintenance::{
     install_buildx, promote_image, publish_image, validate_job_candidate,
 };
 pub use velnor_actions_mise::CheckDeadline;
+
+pub fn render_crate_publisher_entry(
+    timeout_seconds: u32,
+) -> Result<String, super::OrchestratorError> {
+    Ok(velnor_actions_workflow_renderer::release_root_publisher::render_entry(timeout_seconds)?)
+}
+
+pub use crate::release::crate_release_archive::{
+    verify_archive_tracked_content, verify_crate_archive,
+};
+pub use crate::release::crate_release_source::{
+    CrateReleaseSourcePackage, journal_source_inventory, verified_rust_tool_path,
+    verify_crate_release_source, verify_journal_source, verify_owned_tool_homes,
+};
+pub use crate::release::crate_release_workspace::{
+    CratePackageSource, CrateReleaseWorkspacePlan, CrateSemverSource, CrateSource,
+    CrateSourceExecution, HistoricalIntentReader, UnprivilegedSourceExecution,
+    crate_release_workspace_plan_with_registry,
+};

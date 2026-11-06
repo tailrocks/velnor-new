@@ -12,10 +12,10 @@ use velnor_actions_workflow_renderer::action_pins;
 use velnor_actions_workflow_renderer::render::{JACTIONLINT_PATH, WORKFLOW_PATH};
 
 use crate::OrchestratorError;
-use crate::finalized::finalized_jobs;
-use crate::generate::render_staged_tree;
-use crate::plan_stacks::stacks_section;
-use crate::prepare::GenerationPreparation;
+use crate::planner::finalized::finalized_jobs;
+use crate::planner::generate::render_staged_tree;
+use crate::planner::plan_stacks::stacks_section;
+use crate::planner::prepare::GenerationPreparation;
 
 #[path = "plan_companions.rs"]
 mod companions;
@@ -156,7 +156,7 @@ fn crate_lines(out: &mut String, prep: &GenerationPreparation, jobs: &BTreeMap<S
         .discovery
         .proposals
         .iter()
-        .filter(|task| crate::crate_jobs::is_runnable(task))
+        .filter(|task| crate::planner::crate_jobs::is_runnable(task))
         .map(|task| task.task_id.as_str())
         .collect();
     obligations.sort_unstable();
@@ -183,7 +183,7 @@ fn present_kinds(tasks: &[ProposedTask]) -> Vec<&'static str> {
     for (kind, word) in words {
         if tasks
             .iter()
-            .any(|task| task.task_kind == kind && crate::crate_jobs::is_runnable(task))
+            .any(|task| task.task_kind == kind && crate::planner::crate_jobs::is_runnable(task))
             && !kinds.contains(&word)
         {
             kinds.push(word);
@@ -200,10 +200,13 @@ fn critical_path_lines(out: &mut String, prep: &GenerationPreparation) {
         .filter(|task| !task.no_targets)
         .cloned()
         .collect();
-    let path = crate::critical_path::critical_path_structural(&eligible);
+    let path = crate::planner::critical_path::critical_path_structural(&eligible);
     push(
         out,
-        &format!("  {}", crate::critical_path::critical_path_line(&path)),
+        &format!(
+            "  {}",
+            crate::planner::critical_path::critical_path_line(&path)
+        ),
     );
 }
 
@@ -221,7 +224,9 @@ fn clippy_lines(out: &mut String, prep: &GenerationPreparation) {
 
 fn cache_layers(prep: &GenerationPreparation) -> String {
     let mut layers = vec!["Mise tools"];
-    if !crate::source_prep::lockful_roots(&prep.root, &prep.discovery.workspaces).is_empty() {
+    if !crate::planner::source_prep::lockful_roots(&prep.root, &prep.discovery.workspaces)
+        .is_empty()
+    {
         layers.push("Cargo sources");
     }
     if prep.discovery.workspaces.iter().any(|workspace| {

@@ -173,9 +173,9 @@ pub fn read_github_tag_evidence(
     let prefix = format!("repos/{repository}");
     let repository_info: Value = api.get(&prefix)?;
     require(
-        repository_info["full_name"]
-            .as_str()
-            .is_some_and(|actual| crate::release_identity::same_repository(actual, repository)),
+        repository_info["full_name"].as_str().is_some_and(|actual| {
+            crate::release::release_identity::same_repository(actual, repository)
+        }),
         "repository",
     )?;
     let branch = repository_info["default_branch"]

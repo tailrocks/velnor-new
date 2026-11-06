@@ -74,7 +74,7 @@ impl PrivateWiring {
             None => {}
         }
         check_private_asset_layout(private, lock.as_ref())?;
-        let all = crate::matrix_step::task_step_env(catalog, &BTreeMap::new(), true)?;
+        let all = crate::planner::matrix_step::task_step_env(catalog, &BTreeMap::new(), true)?;
         let toolchain_env = all
             .into_iter()
             .filter(|(key, _)| OWNED_KEYS.contains(&key.as_str()))
@@ -293,7 +293,7 @@ fn private_asset_object(id: &str, repository: &str, sha256: &str) -> ImmutableSo
 }
 
 fn stable_private_path(path: &str) -> Result<(), OrchestratorError> {
-    crate::source_prep::cache_source_projection::validate_relative_path(path)?;
+    crate::planner::source_prep::cache_source_projection::validate_relative_path(path)?;
     if is_never_archive_path(path) {
         return Err(internal("private_asset_credential_path"));
     }

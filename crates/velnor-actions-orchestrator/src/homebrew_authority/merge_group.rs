@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::package_release_publish::MergeGroupSelection;
+use crate::release::package_release_publish::MergeGroupSelection;
 use serde_json::Value;
 use std::collections::BTreeMap;
 use velnor_actions_contract::vcs::VcsInputs;
@@ -22,7 +22,9 @@ pub(super) fn authenticate(
         return Err(internal("homebrew_authority_unexpected_pull_request"));
     }
     let selection = capture(repository, repository_id, expected_head)?;
-    crate::package_release_publish::verify_public_merge_group_context(&selection, deadline)?;
+    crate::release::package_release_publish::verify_public_merge_group_context(
+        &selection, deadline,
+    )?;
     Ok(selection)
 }
 
@@ -119,7 +121,7 @@ pub(crate) fn parse(
         return Err(internal("homebrew_merge_group_payload_mismatch"));
     }
     Ok(MergeGroupSelection::new(
-        crate::package_release_publish::MergeGroupFacts {
+        crate::release::package_release_publish::MergeGroupFacts {
             repository: expected_repository.to_owned(),
             repository_id,
             base_sha: base_sha.to_owned(),

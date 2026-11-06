@@ -32,7 +32,7 @@ pub(super) fn commit_history_intent(
 }
 
 pub(super) fn assert_two_link_recovery(
-    input: &crate::package_release_signer::AdmittedStart<
+    input: &crate::release::package_release_signer::AdmittedStart<
         '_,
         JournalRegistryFake,
         HistoricalAuthority<'_>,
@@ -71,7 +71,10 @@ pub(super) fn assert_two_link_recovery(
     assert!(
         coordinate_release(
             &observation,
-            |name| crate::crate_release_semver::fixture_verified_semver(input.admission, name),
+            |name| crate::release::crate_release_semver::fixture_verified_semver(
+                input.admission,
+                name
+            ),
             |_| {
                 attempted.set(true);
                 Err(OrchestratorError::Contract {
@@ -90,7 +93,7 @@ pub(super) fn assert_two_link_recovery(
     input.github.base.release_variant.set(4);
     let result = coordinate_release(
         &observation,
-        |name| crate::crate_release_semver::fixture_verified_semver(input.admission, name),
+        |name| crate::release::crate_release_semver::fixture_verified_semver(input.admission, name),
         |_| {
             attempted.set(true);
             Err(OrchestratorError::Contract {
@@ -111,7 +114,7 @@ pub(super) fn admitted_start_rejects_forged_prior_intent_digest()
     use crate::crate_release_journal::{
         fixture_storage::seed_started_record, record_journal_intent,
     };
-    use crate::package_release_signer::{
+    use crate::release::package_release_signer::{
         AdmittedStart, fixture_attested_generator, record_admitted_start,
     };
     let temp = tempfile::tempdir()?;

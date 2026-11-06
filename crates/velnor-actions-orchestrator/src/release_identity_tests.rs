@@ -54,7 +54,7 @@ fn actual_cargo_workspace_root_controls_rendered_lock() -> Result<(), Box<dyn st
     assert_eq!(root_lock, lock("b/Cargo.toml")?);
     assert_ne!(root_lock.group, lock("other/Cargo.toml")?.group);
     assert!(!root_lock.cancel_in_progress);
-    let (mut spec, rust) = crate::release_steps::tests::fixture()?;
+    let (mut spec, rust) = crate::release::release_steps::tests::fixture()?;
     spec.concurrency = root_lock.clone();
     let ctx = ReleaseRenderContext {
         generator_version: env!("CARGO_PKG_VERSION").into(),

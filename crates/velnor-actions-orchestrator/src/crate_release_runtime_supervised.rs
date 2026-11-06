@@ -13,8 +13,8 @@ use velnor_actions_mise::CheckDeadline;
 pub(super) fn run() -> Result<(), OrchestratorError> {
     let invalid = || internal("crate_release_supervisor_invalid");
     let (absolute, deadline, instant) = operation_deadline()?;
-    let custody =
-        crate::crate_release_custody::CustodiedChannel::take(absolute).map_err(|_| invalid())?;
+    let custody = crate::release::crate_release_custody::CustodiedChannel::take(absolute)
+        .map_err(|_| invalid())?;
     custody.root.revalidate().map_err(|_| invalid())?;
     let admission = admit_workflow(&custody.root, deadline)?;
     let (receipt_id, rust_id) = preflight_artifact_ids()?;
@@ -52,15 +52,19 @@ pub(super) fn run() -> Result<(), OrchestratorError> {
         &admission.github,
         &transport,
     )?;
-    crate::crate_release_pinned_download::acquire(&custody.root, &admission.intent, deadline)?;
-    let projected = crate::crate_release_projected_tools::ProjectedToolchain::project(
+    crate::release::crate_release_pinned_download::acquire(
+        &custody.root,
+        &admission.intent,
+        deadline,
+    )?;
+    let projected = crate::release::crate_release_projected_tools::ProjectedToolchain::project(
         &custody.root,
         &custody.view,
         staged,
         &admission.authority,
         &admission.intent,
     )?;
-    let sealed = crate::crate_release_source_view::SealedSourceView::seal(
+    let sealed = crate::release::crate_release_source_view::SealedSourceView::seal(
         snapshot,
         custody.view,
         projected,
@@ -84,8 +88,8 @@ pub(super) fn run() -> Result<(), OrchestratorError> {
 
 fn prepare_journal(
     admission: &WorkflowAdmission,
-    root: &crate::crate_release_custody::PublisherRoot,
-    execution: &crate::crate_release_source_view::SupervisedSourceExecution,
+    root: &crate::release::crate_release_custody::PublisherRoot,
+    execution: &crate::release::crate_release_source_view::SupervisedSourceExecution,
     registry: &NativeCrateRegistryRead,
 ) -> Result<crate::crate_release_controller::FrozenCompletion, OrchestratorError> {
     verify_workflow_concurrency(
@@ -127,16 +131,15 @@ struct WorkflowAdmission {
 }
 
 fn admit_workflow(
-    root: &crate::crate_release_custody::PublisherRoot,
+    root: &crate::release::crate_release_custody::PublisherRoot,
     deadline: CheckDeadline,
 ) -> Result<WorkflowAdmission, OrchestratorError> {
     let token = required("GIT_TOKEN")?;
     let repository = required("GITHUB_REPOSITORY")?;
     let workflow_sha = required("GITHUB_WORKFLOW_SHA")?;
-    let git = crate::crate_release_git::ReleaseGit::new(crate::crate_release_git_bundle::acquire(
-        root.path(),
-        deadline,
-    )?);
+    let git = crate::crate_release_git::ReleaseGit::new(
+        crate::release::crate_release_git_bundle::acquire(root.path(), deadline)?,
+    );
     let policy = crate::crate_release_checkout::checkout_policy(
         root,
         &git,
@@ -191,7 +194,7 @@ fn acquire_source_snapshot(
     github: &NativeGitHubAdmissionRead,
     transport: &crate::crate_release_tool_download::NativeToolDownloadTransport,
     authority: &crate::crate_release_github::GitHubAuthorized,
-    view: &crate::crate_release_custody::PublisherView,
+    view: &crate::release::crate_release_custody::PublisherView,
     git: &crate::crate_release_git::ReleaseGit,
     deadline: CheckDeadline,
 ) -> Result<AuthenticatedSource, OrchestratorError> {

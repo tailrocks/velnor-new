@@ -19,7 +19,7 @@ use crate::cache_snapshot::{
     validate_state_index,
 };
 use crate::internal::{internal, internal_contract};
-use crate::source_prep::cache_source_projection::{
+use crate::planner::source_prep::cache_source_projection::{
     EntryKind, ProjectionEntry, sha256_hex, validate_link_target_in_root,
 };
 

@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{OrchestratorError, prepare::GenerationPreparation};
+use crate::{OrchestratorError, planner::prepare::GenerationPreparation};
 use std::{fs, path::Path};
 use velnor_actions_contract::config::RustBinaryReleaseConfig;
 use velnor_actions_contract::package_release::PackageReleaseChannel;
@@ -19,13 +19,16 @@ pub(crate) fn files(prep: &GenerationPreparation) -> Result<Vec<RenderedFile>, O
     if !release.stable.enabled {
         return Ok(Vec::new());
     }
-    let mut spec =
-        crate::binary_preview_emit::specification(prep, release, PackageReleaseChannel::Stable)?;
+    let mut spec = crate::release::binary_preview_emit::specification(
+        prep,
+        release,
+        PackageReleaseChannel::Stable,
+    )?;
     spec.stable = Some(ConsumerStableReleaseSpec {
         version_package: release.version_package.clone(),
         release_pr: rust.release.release_pr,
         manifest_path: release.manifest_path.clone(),
-        release_plz_argv: crate::stable_release_emit::release_plz_argv(prep)?,
+        release_plz_argv: crate::release::stable_release_emit::release_plz_argv(prep)?,
     });
     let mut files = vec![render_consumer_binary_release(&spec)?];
     if spec.homebrew_tap.is_some() {

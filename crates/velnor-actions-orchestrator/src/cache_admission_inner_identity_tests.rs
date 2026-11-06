@@ -8,7 +8,7 @@ use crate::cache_archive::cache_archive_envelope::{
     PreflightMeasurement, measure_envelope,
 };
 use crate::cache_inventory::measured_bytes;
-use crate::source_prep::cache_source_projection::sha256_hex;
+use crate::planner::source_prep::cache_source_projection::sha256_hex;
 
 const SMALL_INNER: u64 = 1024;
 const LARGE_CANDIDATE: u64 = 6_000_000_000;

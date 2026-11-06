@@ -26,9 +26,9 @@ use self::required_evidence::{
     check_required_evidence, diagnostic_without_plan, reported_job_results,
 };
 use crate::OrchestratorError;
-use crate::cover::shard::{ResourceLimits, ShardProof};
-use crate::cover::{CoverSinks, Fold, Signals, cover_entry, partition_reports};
 use crate::internal::{SCHEMA, check_schema, internal_contract};
+use crate::planner::cover::shard::{ResourceLimits, ShardProof};
+use crate::planner::cover::{CoverSinks, Fold, Signals, cover_entry, partition_reports};
 
 #[path = "merge_context.rs"]
 mod context;
@@ -252,7 +252,7 @@ fn check_final_inputs(
                     signals.planning_failed = true;
                     miss_reasons.insert("cache_corrupt".to_owned());
                 }
-                if !crate::check_evidence::gate::validate_proofs(
+                if !crate::planner::check_evidence::gate::validate_proofs(
                     plan,
                     &request.task_reports,
                     &request.check_proofs,
@@ -267,7 +267,7 @@ fn check_final_inputs(
                 miss_reasons.insert("cache_corrupt".to_owned());
             }
         }
-    } else if !crate::check_evidence::gate::validate_proofs(
+    } else if !crate::planner::check_evidence::gate::validate_proofs(
         plan,
         &request.task_reports,
         &request.check_proofs,
@@ -279,7 +279,7 @@ fn check_final_inputs(
     Ok(())
 }
 
-pub(super) fn workspace_validation_required(plan: &Plan, context: &MergeContext) -> bool {
+pub(crate) fn workspace_validation_required(plan: &Plan, context: &MergeContext) -> bool {
     context.repository_present()
         || plan
             .matrix

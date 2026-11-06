@@ -1053,6 +1053,7 @@ crates/velnor-actions-orchestrator/src/plan_obligation_identity.rs
 crates/velnor-actions-orchestrator/src/plan_output_limits.rs
 crates/velnor-actions-orchestrator/src/plan_response.rs
 crates/velnor-actions-orchestrator/src/plan_stacks.rs
+crates/velnor-actions-orchestrator/src/planner.rs
 crates/velnor-actions-orchestrator/src/playwright_install.rs
 crates/velnor-actions-orchestrator/src/playwright_lock.rs
 crates/velnor-actions-orchestrator/src/playwright_resolve.rs
@@ -1121,6 +1122,7 @@ crates/velnor-actions-orchestrator/src/qualification_resolver/request.rs
 crates/velnor-actions-orchestrator/src/qualification_resolver/wire.rs
 crates/velnor-actions-orchestrator/src/qualify.rs
 crates/velnor-actions-orchestrator/src/recommendations.rs
+crates/velnor-actions-orchestrator/src/release.rs
 crates/velnor-actions-orchestrator/src/release_checkouts.rs
 crates/velnor-actions-orchestrator/src/release_emit.rs
 crates/velnor-actions-orchestrator/src/release_emit_config.rs

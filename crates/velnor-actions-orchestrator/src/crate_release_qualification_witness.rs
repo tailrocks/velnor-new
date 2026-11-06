@@ -294,7 +294,7 @@ fn read_observation(
     size: u64,
     digest: &str,
 ) -> Result<WitnessRecord, OrchestratorError> {
-    if archive.len() as u64 != size || crate::generator::sha256_hex(archive) != digest {
+    if archive.len() as u64 != size || crate::planner::generator::sha256_hex(archive) != digest {
         return Err(invalid());
     }
     let mut zip = zip::ZipArchive::new(Cursor::new(archive)).map_err(|_| invalid())?;

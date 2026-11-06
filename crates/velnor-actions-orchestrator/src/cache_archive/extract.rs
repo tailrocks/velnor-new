@@ -19,7 +19,7 @@ use crate::cache_snapshot::{
     REQUIRED_OUTPUT_INDEX_ARCHIVE_MEMBER, STATE_ARCHIVE_PREFIX, STATE_INDEX_ARCHIVE_MEMBER,
 };
 use crate::internal::internal;
-use crate::source_prep::cache_source_projection::{
+use crate::planner::source_prep::cache_source_projection::{
     is_git_path, reject_link_parents, sha256_hex, validate_link_target,
     validate_link_target_in_root, validate_relative_path,
 };
