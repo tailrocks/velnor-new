@@ -256,6 +256,7 @@ crates/velnor-actions-contract/src/request_event.rs
 crates/velnor-actions-contract/src/review_completion.rs
 crates/velnor-actions-contract/src/run_key_env.rs
 crates/velnor-actions-contract/src/secrets.rs
+crates/velnor-actions-contract/src/source_preview.rs
 crates/velnor-actions-contract/src/staged_reads.rs
 crates/velnor-actions-contract/src/strict_json.rs
 crates/velnor-actions-contract/src/targets.rs
@@ -1050,6 +1051,7 @@ crates/velnor-actions-orchestrator/src/select_reads_scan.rs
 crates/velnor-actions-orchestrator/src/select_symlinks.rs
 crates/velnor-actions-orchestrator/src/select_tofu.rs
 crates/velnor-actions-orchestrator/src/select_tool_sources.rs
+crates/velnor-actions-orchestrator/src/selected_preview_identity.rs
 crates/velnor-actions-orchestrator/src/shard.rs
 crates/velnor-actions-orchestrator/src/snapshot.rs
 crates/velnor-actions-orchestrator/src/source_cache.rs
@@ -1273,6 +1275,7 @@ crates/velnor-actions-workflow-renderer/src/commands.rs
 crates/velnor-actions-workflow-renderer/src/commands_env.rs
 crates/velnor-actions-workflow-renderer/src/commands_scan.rs
 crates/velnor-actions-workflow-renderer/src/composite.rs
+crates/velnor-actions-workflow-renderer/src/controller_locator.rs
 crates/velnor-actions-workflow-renderer/src/crate_obligations.rs
 crates/velnor-actions-workflow-renderer/src/dco.rs
 crates/velnor-actions-workflow-renderer/src/dispatch_cache_boundary.rs
@@ -1347,6 +1350,8 @@ crates/velnor-actions-workflow-renderer/src/native_helper/acquire.rs
 crates/velnor-actions-workflow-renderer/src/native_helper/consumer_evidence.rs
 crates/velnor-actions-workflow-renderer/src/native_helper/published_lock.rs
 crates/velnor-actions-workflow-renderer/src/native_helper/release_binary.rs
+crates/velnor-actions-workflow-renderer/src/native_helper/source_preview_bootstrap.py
+crates/velnor-actions-workflow-renderer/src/native_helper/source_preview_stage_verify.py
 crates/velnor-actions-workflow-renderer/src/native_image_jobs.rs
 crates/velnor-actions-workflow-renderer/src/native_job_builders.rs
 crates/velnor-actions-workflow-renderer/src/native_verifiers.rs
@@ -1449,6 +1454,12 @@ crates/velnor-actions-workflow-renderer/src/schema2_generator_release_manifest_p
 crates/velnor-actions-workflow-renderer/src/schema2_generator_release_qualification.rs
 crates/velnor-actions-workflow-renderer/src/schema2_generator_release_source.rs
 crates/velnor-actions-workflow-renderer/src/schema2_generator_release_workflow_steps.rs
+crates/velnor-actions-workflow-renderer/src/schema2_generator_source_preview.rs
+crates/velnor-actions-workflow-renderer/src/schema2_generator_source_preview_artifact.py
+crates/velnor-actions-workflow-renderer/src/schema2_generator_source_preview_publication.py
+crates/velnor-actions-workflow-renderer/src/schema2_generator_source_preview_publication.rs
+crates/velnor-actions-workflow-renderer/src/schema2_generator_source_preview_source.py
+crates/velnor-actions-workflow-renderer/src/schema2_generator_source_preview_tag.py
 crates/velnor-actions-workflow-renderer/src/schema2_generator_source_qualification.rs
 crates/velnor-actions-workflow-renderer/src/schema2_generator_source_qualification_jobs.rs
 crates/velnor-actions-workflow-renderer/src/schema2_job_image_candidate.rs

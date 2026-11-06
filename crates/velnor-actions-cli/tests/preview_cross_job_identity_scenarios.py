@@ -14,7 +14,6 @@ import tempfile
 
 root = Path(sys.argv[1]).resolve()
 sdk_path = Path(sys.argv[2]).resolve()
-sdk = sdk_path.read_bytes()
 expected_version = sys.argv[3]
 version = subprocess.run([str(sdk_path), "--version"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
 assert version.returncode == 0 and version.stdout == f"velnor-actions {expected_version}\n".encode(), "selected SDK does not start with the expected version"
@@ -26,6 +25,18 @@ sys.argv = [str(renderer / "tests/source_preview_bootstrap_scenarios.py"), str(r
 spec.loader.exec_module(fixture)
 import source_preview_bootstrap as bootstrap
 import source_preview_exec as executor
+
+sdk_temporary = None
+if sdk_path.stat().st_size > bootstrap.MAX_PAYLOAD:
+    sdk_temporary = tempfile.TemporaryDirectory(prefix="source-preview-sdk-")
+    bounded_sdk = Path(sdk_temporary.name) / "velnor-actions"
+    subprocess.run(["/usr/bin/strip", "--strip-debug", "--output=" + str(bounded_sdk), str(sdk_path)], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    bounded_sdk.chmod(0o700)
+    sdk_path = bounded_sdk
+    version = subprocess.run([str(sdk_path), "--version"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+    assert version.returncode == 0 and version.stdout == f"velnor-actions {expected_version}\n".encode(), "stripped genuine SDK changed version or failed to start"
+sdk = sdk_path.read_bytes()
+assert 0 < len(sdk) <= bootstrap.MAX_PAYLOAD and sdk[:7] == b"\x7fELF\x02\x01\x01" and sdk[18:20] == b"\x3e\x00", "genuine SDK does not satisfy the bounded Linux x64 payload contract"
 
 CONFIG = '''schema = 2
 [workflow]

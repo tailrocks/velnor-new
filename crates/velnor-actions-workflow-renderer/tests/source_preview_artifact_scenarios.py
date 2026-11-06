@@ -27,7 +27,7 @@ def archive(payload=elf, entry=name, extra=False, mode=stat.S_IFREG | 0o644, com
         item.external_attr = mode << 16
         output.writestr(item, payload)
         if extra:
-            output.writestr(extra if isinstance(extra, str) else "other", b"foreign")
+            output.writestr(zipfile.ZipInfo(extra if isinstance(extra, str) else "other"), b"foreign")
     return buffer.getvalue()
 
 class Client:
