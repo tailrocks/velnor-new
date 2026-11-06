@@ -6,31 +6,13 @@ use std::{
     process::{Command, Output},
 };
 
-pub(crate) fn run(
-    test: &str,
-    marker: &str,
-    fixture: &Path,
-    trusted_root: &Path,
-) -> Result<Output, Box<dyn std::error::Error>> {
-    run_inner(test, marker, fixture, trusted_root, false)
-}
-
 pub(crate) fn run_validated_worker(
     test: &str,
     marker: &str,
     fixture: &Path,
     trusted_root: &Path,
 ) -> Result<Output, Box<dyn std::error::Error>> {
-    run_inner(test, marker, fixture, trusted_root, true)
-}
-
-fn run_inner(
-    test: &str,
-    marker: &str,
-    fixture: &Path,
-    trusted_root: &Path,
-    worker: bool,
-) -> Result<Output, Box<dyn std::error::Error>> {
+    crate::package_release_signer::image_transport_tests::validate(test)?;
     let home = tempfile::tempdir()?;
     let mise_data = std::env::var_os("MISE_DATA_DIR")
         .map(std::path::PathBuf::from)
@@ -56,34 +38,21 @@ fn run_inner(
         .env("VELNOR_TEST_ATTESTATION_ROOT", trusted_root)
         .env("GH_TOKEN", "offline-fixture")
         .args(["--exact", test]);
-    if worker {
-        for name in [
-            "VELNOR_GH_FIXTURE_WORKER",
-            "VELNOR_GH_FIXTURE_TARGET",
-            "VELNOR_GH_FIXTURE_SCENARIO",
-            "VELNOR_GH_FIXTURE_NONCE",
-            "VELNOR_GH_FIXTURE_CACHE_KEY",
-            "VELNOR_GH_FIXTURE_ARCH",
-            "VELNOR_GH_TEST_TLS_ROOT",
-        ] {
-            command.env(
-                name,
-                std::env::var_os(name).ok_or("missing validated worker context")?,
-            );
-        }
+    for name in [
+        "VELNOR_GH_FIXTURE_WORKER",
+        "VELNOR_GH_FIXTURE_TARGET",
+        "VELNOR_GH_FIXTURE_SCENARIO",
+        "VELNOR_GH_FIXTURE_NONCE",
+        "VELNOR_GH_FIXTURE_CACHE_KEY",
+        "VELNOR_GH_FIXTURE_ARCH",
+        "VELNOR_GH_TEST_TLS_ROOT",
+    ] {
+        command.env(
+            name,
+            std::env::var_os(name).ok_or("missing validated worker context")?,
+        );
     }
     command.output().map_err(Into::into)
-}
-
-#[cfg(target_os = "macos")]
-fn offline_command(executable: &Path) -> Result<Command, Box<dyn std::error::Error>> {
-    if !Path::new("/usr/bin/sandbox-exec").is_file() {
-        return Err("network sandbox unavailable".into());
-    }
-    let mut command = Command::new("/usr/bin/sandbox-exec");
-    command.args(["-p", "(version 1)(allow default)(deny network*)"]);
-    command.arg(executable);
-    Ok(command)
 }
 
 #[cfg(target_os = "linux")]
@@ -99,7 +68,7 @@ fn offline_command(executable: &Path) -> Result<Command, Box<dyn std::error::Err
     Ok(command)
 }
 
-#[cfg(not(any(target_os = "linux", target_os = "macos")))]
+#[cfg(not(target_os = "linux"))]
 fn offline_command(_: &Path) -> Result<Command, Box<dyn std::error::Error>> {
     Err("network isolation unavailable on this platform".into())
 }

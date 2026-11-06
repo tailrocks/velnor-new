@@ -30,6 +30,8 @@ use subjects::append_attestation_subject_paths;
 
 #[path = "package_release_signer_attestation.rs"]
 mod attestation;
+#[cfg(test)]
+pub(crate) use attestation::image_transport_tests;
 #[path = "package_release_signer_cosign.rs"]
 mod cosign;
 #[path = "package_release_signer_publication.rs"]

@@ -73,7 +73,7 @@ fn real_github_transport_verifies_the_signed_record() -> Result<(), Box<dyn Erro
     Ok(())
 }
 
-pub(super) fn dispatch(scenario: &str) -> Result<(), Box<dyn Error>> {
+pub(crate) fn dispatch(scenario: &str) -> Result<(), Box<dyn Error>> {
     let source = non_inputs::prepare_source()?;
     let status = source
         .command()
@@ -93,7 +93,7 @@ pub(super) fn dispatch(scenario: &str) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-pub(super) fn validate(scenario: &str) -> Result<(), Box<dyn Error>> {
+pub(crate) fn validate(scenario: &str) -> Result<(), Box<dyn Error>> {
     worker::validate_worker("image_attestation", Some(scenario))
 }
 
@@ -101,7 +101,7 @@ pub(super) fn validate_probe_context(scenario: &str) -> Result<(), Box<dyn Error
     worker::validate_worker_with_nonce("image_attestation", Some(scenario), Some(&"a".repeat(64)))
 }
 
-pub(super) fn record_success(scenario: &str) -> Result<(), Box<dyn Error>> {
+pub(crate) fn record_success(scenario: &str) -> Result<(), Box<dyn Error>> {
     worker::record_success("image_attestation", scenario)
 }
 

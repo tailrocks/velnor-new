@@ -140,14 +140,19 @@ mod tests {
     #[test]
     fn authenticates_real_historical_manifest_and_rejects_mutations()
     -> Result<(), Box<dyn std::error::Error>> {
+        const TEST: &str = "crate_release_qualification_manifest::tests::authenticates_real_historical_manifest_and_rejects_mutations";
         if std::env::var_os("VELNOR_HISTORICAL_FIXTURE_CHILD").is_none() {
+            if std::env::var_os("VELNOR_GH_FIXTURE_WORKER").is_none() {
+                return crate::package_release_signer::image_transport_tests::dispatch(TEST);
+            }
+            crate::package_release_signer::image_transport_tests::validate(TEST)?;
             let fixture =
                 Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/attestation_fixtures/historical");
             assert_eq!(
                 crate::generator::sha256_hex(&std::fs::read(fixture.join("trusted-root.jsonl"))?),
                 "65ca537f6ed8a47fd0e560c421baa1f6c1efb8b25fc200d8c5c02c0e92eb2b9c"
             );
-            let output = crate::offline_attestation_test::run(
+            let output = crate::offline_attestation_test::run_validated_worker(
                 "crate_release_qualification_manifest::tests::authenticates_real_historical_manifest_and_rejects_mutations",
                 "VELNOR_HISTORICAL_FIXTURE_CHILD",
                 &fixture,
@@ -164,8 +169,17 @@ mod tests {
                 "{}",
                 String::from_utf8_lossy(&output.stdout)
             );
+            crate::package_release_signer::image_transport_tests::record_success(TEST)?;
             return Ok(());
         }
+        crate::package_release_signer::image_transport_tests::validate(TEST)?;
+        let network = std::net::UdpSocket::bind("127.0.0.1:0")
+            .expect_err("attestation child must deny network");
+        assert_eq!(network.kind(), std::io::ErrorKind::PermissionDenied);
+        verify_manifest_fixture()
+    }
+
+    fn verify_manifest_fixture() -> Result<(), Box<dyn std::error::Error>> {
         let mut responses = fixture_responses();
         crate::package_release_publish::set_github_read_fixture(responses.clone());
         let dir = std::env::var_os("VELNOR_ATTESTATION_TEST_DIR").ok_or("missing asset dir")?;

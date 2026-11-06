@@ -10,10 +10,24 @@ const BINARY: &str = "velnor-actions-0.1.5-x86_64-unknown-linux-gnu";
 
 #[test]
 fn verifies_public_manifest_and_linux_binary() -> Result<(), Box<dyn std::error::Error>> {
-    use std::io::Write as _;
+    const TEST: &str = "package_release_signer::attestation::sdk::fixture_tests::verifies_public_manifest_and_linux_binary";
     if std::env::var_os("VELNOR_BINARY_FIXTURE_CHILD").is_none() {
-        return run_binary_fixture();
+        if std::env::var_os("VELNOR_GH_FIXTURE_WORKER").is_none() {
+            return super::super::image_transport_tests::dispatch(TEST);
+        }
+        super::super::image_transport_tests::validate(TEST)?;
+        run_binary_fixture()?;
+        super::super::image_transport_tests::record_success(TEST)?;
+        return Ok(());
     }
+    super::super::image_transport_tests::validate(TEST)?;
+    let network = std::net::UdpSocket::bind("127.0.0.1:0").expect_err("attestation child must deny network");
+    assert_eq!(network.kind(), std::io::ErrorKind::PermissionDenied);
+    verify_binary_fixture()
+}
+
+fn verify_binary_fixture() -> Result<(), Box<dyn std::error::Error>> {
+    use std::io::Write as _;
     let fixture =
         std::env::var_os("VELNOR_ATTESTATION_TEST_DIR").ok_or("missing fixture directory")?;
     let root = std::path::Path::new(&fixture);
@@ -113,7 +127,7 @@ fn run_binary_fixture() -> Result<(), Box<dyn std::error::Error>> {
         )?),
         "65ca537f6ed8a47fd0e560c421baa1f6c1efb8b25fc200d8c5c02c0e92eb2b9c"
     );
-    let output = crate::offline_attestation_test::run(
+    let output = crate::offline_attestation_test::run_validated_worker(
         "package_release_signer::attestation::sdk::fixture_tests::verifies_public_manifest_and_linux_binary",
         "VELNOR_BINARY_FIXTURE_CHILD",
         temp.path(),
