@@ -124,9 +124,9 @@ fn publisher_step_fits_github_limit_and_binds_generator_pins()
             .0;
         let compressed = base64::engine::general_purpose::STANDARD.decode(encoded)?;
         let mut decoder = flate2::read::ZlibDecoder::new(compressed.as_slice());
-        let mut decoded = Vec::new();
-        decoder.read_to_end(&mut decoded)?;
-        let bundle: serde_json::Value = serde_json::from_slice(&decoded)?;
+        let mut payload = Vec::new();
+        decoder.read_to_end(&mut payload)?;
+        let bundle: serde_json::Value = serde_json::from_slice(&payload)?;
         for (key, expected) in [
             (
                 "stage",
