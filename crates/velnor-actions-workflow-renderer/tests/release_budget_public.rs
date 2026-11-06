@@ -102,7 +102,7 @@ fn hosted_supervisor_runs_candidate_scenarios_and_controller_regressions()
 fn publisher_step_fits_github_limit_and_binds_generator_pins()
 -> Result<(), Box<dyn std::error::Error>> {
     use base64::Engine as _;
-    use std::io::Read as _;
+    use std::io::{Read as _, Write as _};
     use velnor_actions_contract::StepKind;
     use velnor_actions_workflow_renderer::{
         join_argv_for_run, release_root_publisher::publisher_step,
@@ -114,7 +114,21 @@ fn publisher_step_fits_github_limit_and_binds_generator_pins()
         let StepKind::Shell { run, env } = step.kind else {
             return Err("publisher step is not shell".into());
         };
-        assert!(join_argv_for_run(&run)?.len() <= 21_000);
+        let command = join_argv_for_run(&run)?;
+        assert!(command.len() <= 21_000);
+        let mut shell = std::process::Command::new("/bin/bash")
+            .arg("-n")
+            .stdin(std::process::Stdio::piped())
+            .spawn()?;
+        shell
+            .stdin
+            .take()
+            .ok_or("missing shell stdin")?
+            .write_all(command.as_bytes())?;
+        assert!(
+            shell.wait()?.success(),
+            "generated publisher command is invalid shell"
+        );
         let encoded = run[6]
             .split_once("base64.b64decode('")
             .ok_or("missing encoded bundle")?
@@ -166,5 +180,26 @@ fn publisher_step_fits_github_limit_and_binds_generator_pins()
         );
     }
     assert!(publisher_step(false, "0.1.75", "invalid", &manifest).is_err());
+    Ok(())
+}
+
+#[test]
+fn generated_shell_arguments_preserve_apostrophes() -> Result<(), Box<dyn std::error::Error>> {
+    for value in ["'", "''", "a'b", "a'b c", "'leading", "trailing'"] {
+        let command = velnor_actions_workflow_renderer::join_argv_for_run(&[
+            "/usr/bin/printf".to_owned(),
+            "%s".to_owned(),
+            value.to_owned(),
+        ])?;
+        let output = std::process::Command::new("/bin/bash")
+            .args(["-c", &command])
+            .env_clear()
+            .output()?;
+        assert!(
+            output.status.success(),
+            "generated shell failed for {value:?}"
+        );
+        assert_eq!(output.stdout, value.as_bytes());
+    }
     Ok(())
 }
