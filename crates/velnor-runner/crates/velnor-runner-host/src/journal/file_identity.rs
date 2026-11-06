@@ -3,7 +3,7 @@
 
 use std::fs::{self, File, OpenOptions};
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use crate::error::HostError;
 
@@ -12,7 +12,7 @@ pub(super) struct JournalFile {
     path: PathBuf,
     identity: FileIdentity,
     anchor: Arc<File>,
-    database: turso::Database,
+    database: Arc<Mutex<Option<turso::Database>>>,
     process_state: Arc<crate::journal_identity::JournalProcessState>,
 }
 
@@ -44,22 +44,37 @@ impl JournalFile {
             path: canonical,
             identity,
             anchor,
-            database,
+            database: Arc::new(Mutex::new(Some(database))),
             process_state,
         };
         file.verify()?;
         Ok(file)
     }
 
-    pub(super) fn connection(
-        &self,
-    ) -> impl std::future::Future<Output = Result<turso::Connection, HostError>> + '_ {
-        std::future::poll_fn(|_| std::task::Poll::Ready(self.connect_verified()))
+    pub(super) fn reset_after_bootstrap(&self) -> Result<(), HostError> {
+        *self.database.lock().map_err(|_| HostError::Lock)? = None;
+        Ok(())
     }
 
-    fn connect_verified(&self) -> Result<turso::Connection, HostError> {
+    pub(super) async fn connection(&self) -> Result<turso::Connection, HostError> {
         self.verify()?;
-        let connection = self.database.connect().map_err(|_| HostError::Journal)?;
+        if let Some(database) = self.database.lock().map_err(|_| HostError::Lock)?.as_ref() {
+            let connection = database.connect().map_err(|_| HostError::Journal)?;
+            self.verify()?;
+            return Ok(connection);
+        }
+        let text = self.path.to_str().ok_or(HostError::Path)?;
+        let database = turso::Builder::new_local(text)
+            .build()
+            .await
+            .map_err(|_| HostError::Journal)?;
+        let connection = {
+            let mut guard = self.database.lock().map_err(|_| HostError::Lock)?;
+            guard
+                .get_or_insert(database)
+                .connect()
+                .map_err(|_| HostError::Journal)?
+        };
         self.verify()?;
         Ok(connection)
     }

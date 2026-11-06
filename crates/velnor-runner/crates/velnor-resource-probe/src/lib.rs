@@ -23,6 +23,9 @@ pub mod execution_channel;
 
 pub mod execution_channel_wire;
 pub mod execution_publication;
+#[cfg(unix)]
+#[path = "execution_channel/request.rs"]
+pub mod execution_request;
 mod filesystem;
 pub mod job_facts;
 pub mod job_facts_wire;
