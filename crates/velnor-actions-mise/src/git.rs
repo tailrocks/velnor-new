@@ -171,6 +171,17 @@ impl GitRequest {
         cap: usize,
         timeout: std::time::Duration,
     ) -> Result<ProcessOutput, MiseError> {
+        self.run_release_in_until(cwd, git, cap, CheckDeadline::after(timeout)?)
+    }
+
+    pub fn run_release_in_until(
+        &self,
+        cwd: &Path,
+        git: &impl crate::release_git_pin::ReleaseGitExecutable,
+        cap: usize,
+        deadline: CheckDeadline,
+    ) -> Result<ProcessOutput, MiseError> {
+        deadline.remaining()?;
         git.revalidate().map_err(|_| MiseError::InvalidStepInput {
             field: "release_git".to_owned(),
             value: "unverified_bundle".to_owned(),
@@ -197,7 +208,9 @@ impl GitRequest {
                 ("GIT_TERMINAL_PROMPT".into(), "0".into()),
             ])?;
         }
-        command.run_bounded(cap, timeout)
+        let (output, _drain) = command.run_quiescent_until(cap, deadline)?;
+        deadline.remaining()?;
+        Ok(output)
     }
 
     pub fn run_in_until(

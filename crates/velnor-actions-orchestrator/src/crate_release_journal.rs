@@ -166,12 +166,14 @@ mod history;
 mod mutation;
 #[path = "crate_release_journal_records.rs"]
 mod records;
+#[cfg(test)]
+pub(crate) use history::inspect_prior_chain;
 pub use history::{
     JournalOperationRefs, PriorHistoryEvidence, inspect_prior_history,
     inspect_prior_incomplete_evidence,
 };
 pub(crate) use history::{
-    inspect_current_history, inspect_prior_chain, inspect_recoverable_history,
+    PriorTransition, inspect_current_history, inspect_prior_chain_with, inspect_recoverable_history,
 };
 #[cfg(test)]
 use mutation::record_journal_mutation;
@@ -180,7 +182,7 @@ use mutation::{ensure_no_pending_mutation, read_mutation_at, valid_mutation};
 pub(crate) use mutation::{
     mutation_name, record_journal_intent, record_verified_observation, valid_journal_phase,
 };
-pub(crate) use records::record_reconciled_completion;
+pub(crate) use records::record_frozen_completion;
 pub use records::{JournalEvidence, inspect_journal, record_source_bound_start};
 use records::{create_content_addressed_tag, journal_name, read_record};
 
@@ -277,3 +279,6 @@ pub(crate) fn fixture_record_journal_mutation<I: JournalIo>(
 
 #[cfg(test)]
 use records::record_journal;
+
+#[cfg(test)]
+pub(crate) use records::record_unprivileged_completion;

@@ -272,4 +272,4 @@ impl std::fmt::Debug for ToolchainStageRequest<'_> {
 #[path = "crate_release_tool_staging.rs"]
 mod staging;
 use staging::current_artifact;
-pub use staging::stage_unverified_toolchain;
+pub use staging::{StagedToolchain, stage_unverified_toolchain};

@@ -12,6 +12,8 @@ const MAX_ARCHIVE: usize = 64 * 1024 * 1024;
 const MAX_UNPACKED: u64 = 256 * 1024 * 1024;
 const MAX_ENTRIES: usize = 16_384;
 
+pub(crate) type ArchiveFiles = BTreeMap<String, (u32, Vec<u8>)>;
+
 pub fn verify_archive_tracked_content(
     archive: &[u8],
     root: &std::path::Path,
@@ -210,10 +212,7 @@ pub fn verify_crate_archive(
     Ok(())
 }
 
-pub(crate) fn read_archive(
-    bytes: &[u8],
-    prefix: &str,
-) -> Result<BTreeMap<String, (u32, Vec<u8>)>, OrchestratorError> {
+pub(crate) fn read_archive(bytes: &[u8], prefix: &str) -> Result<ArchiveFiles, OrchestratorError> {
     if bytes.is_empty() || bytes.len() > MAX_ARCHIVE {
         return Err(internal("crate_archive_size_invalid"));
     }

@@ -10,8 +10,27 @@ use super::{
 };
 
 #[derive(Clone, Copy)]
+pub(crate) enum UploadRuntime<'a> {
+    Unprivileged(&'a crate::UnprivilegedSourceExecution),
+    #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+    Supervised(&'a crate::crate_release_source_view::SupervisedSourceExecution),
+}
+
+impl<'a> UploadRuntime<'a> {
+    pub(super) fn source_execution(self) -> &'a dyn crate::CrateSourceExecution {
+        match self {
+            Self::Unprivileged(execution) => execution,
+            #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+            Self::Supervised(execution) => execution,
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
 pub(super) struct JournalRuntime<'a> {
     pub(super) receipt_path: &'a Path,
+    pub(super) workflow_root: &'a Path,
+    pub(super) runner_temp: &'a Path,
     pub(super) intent: &'a CrateReleaseIntent,
     pub(super) request: &'a GitHubAdmissionRequest,
     pub(super) github: &'a NativeGitHubAdmissionRead,
@@ -19,7 +38,7 @@ pub(super) struct JournalRuntime<'a> {
     pub(super) source: &'a Path,
     pub(super) token: &'a str,
     pub(super) git: &'a crate::crate_release_git::ReleaseGit,
-    pub(super) source_execution: &'a dyn crate::CrateSourceExecution,
+    pub(super) upload: UploadRuntime<'a>,
 }
 
 pub(super) fn run_journal(
@@ -149,12 +168,10 @@ pub(super) fn verify_bootstrap_attestation(
 pub(super) fn start_journal(input: JournalRuntime<'_>) -> Result<(), OrchestratorError> {
     use crate::crate_release_journal_adapter::JournalAdapter;
     use crate::package_release_signer::{AdmittedStart, record_admitted_start};
-    let bootstrap = required_path("RUNNER_TEMP")?.join("velnor/bootstrap");
-    let reviewed_manifest = read_manifest_at_workflow(
-        &required_path("GITHUB_WORKSPACE")?,
-        &input.request.workflow_sha,
-        input.git,
-    )?;
+    let source_execution = input.upload.source_execution();
+    let bootstrap = input.runner_temp.join("velnor/bootstrap");
+    let reviewed_manifest =
+        read_manifest_at_workflow(input.workflow_root, &input.request.workflow_sha, input.git)?;
     start_journal_with(
         &bootstrap,
         input.intent,
@@ -167,15 +184,15 @@ pub(super) fn start_journal(input: JournalRuntime<'_>) -> Result<(), Orchestrato
                 input.request,
                 input.github,
                 input.registry,
-                crate::CrateSource::new(input.source, input.git, input.source_execution),
+                crate::CrateSource::new(input.source, input.git, source_execution),
             )?;
             observed.semver_evidence = crate::crate_release_semver::verify_preflight(
                 input.source,
                 &observed,
                 input.registry,
-                &required_path("RUNNER_TEMP")?,
+                input.runner_temp,
                 input.git,
-                input.source_execution,
+                source_execution,
             )?;
             crate::crate_release_controller::verify_observed_packages(&observed, &admission)?;
             if !crate::crate_release_semver::matches_revalidated_preflight(
@@ -187,7 +204,7 @@ pub(super) fn start_journal(input: JournalRuntime<'_>) -> Result<(), Orchestrato
             let journal =
                 JournalAdapter::new(NativeGitHubAdmissionRead::new(input.token.to_owned())?);
             record_admitted_start(&AdmittedStart {
-                source_execution: input.source_execution,
+                source_execution,
                 journal: &journal,
                 github: input.github,
                 registry: input.registry,
@@ -196,7 +213,7 @@ pub(super) fn start_journal(input: JournalRuntime<'_>) -> Result<(), Orchestrato
                 admission: &admission,
                 source: input.source,
                 git: input.git,
-                workflow_root: &required_path("GITHUB_WORKSPACE")?,
+                workflow_root: input.workflow_root,
                 generator: &generator,
             })?;
             Ok(())

@@ -8,7 +8,7 @@ use crate::{
     crate_release_journal::{JournalFile, JournalFileKind},
 };
 use sha1_checked::{Digest as _, Sha1};
-use std::{collections::BTreeSet, io::Write as _, path::Path, time::Duration};
+use std::{collections::BTreeSet, io::Write as _, path::Path};
 use velnor_actions_mise::GitRequest;
 
 const MAX_OBJECT: usize = 256 * 1024 * 1024;
@@ -20,9 +20,10 @@ pub(super) fn snapshot(
     root: &Path,
     sha: &str,
     git: &ReleaseGit,
+    deadline: velnor_actions_mise::CheckDeadline,
 ) -> Result<SourceSnapshot, OrchestratorError> {
     let mut total = 0usize;
-    let commit = read_object(root, "commit", sha, git, &mut total)?;
+    let commit = read_object(root, "commit", sha, git, &mut total, deadline)?;
     let first = commit
         .split(|byte| *byte == b'\n')
         .next()
@@ -35,10 +36,11 @@ pub(super) fn snapshot(
     let mut material = Material::default();
     let mut entries = 0usize;
     while let Some((prefix, tree, depth)) = stack.pop() {
+        deadline.remaining().map_err(|_| invalid())?;
         if depth > MAX_DEPTH {
             return Err(invalid());
         }
-        let bytes = read_object(root, "tree", &tree, git, &mut total)?;
+        let bytes = read_object(root, "tree", &tree, git, &mut total, deadline)?;
         let mut rest = bytes.as_slice();
         while !rest.is_empty() {
             let end = rest
@@ -71,7 +73,7 @@ pub(super) fn snapshot(
             if !matches!(mode, "100644" | "100755" | "120000") {
                 return Err(invalid());
             }
-            let data = read_object(root, "blob", &id, git, &mut total)?;
+            let data = read_object(root, "blob", &id, git, &mut total, deadline)?;
             material.add(directory.path(), path, mode, &data)?;
         }
     }
@@ -79,14 +81,19 @@ pub(super) fn snapshot(
     if !crate::crate_release_journal::valid_source_files(&material.files) {
         return Err(invalid());
     }
+    deadline.remaining().map_err(|_| invalid())?;
     for (path, target) in &material.links {
+        deadline.remaining().map_err(|_| invalid())?;
         std::fs::create_dir_all(path.parent().ok_or_else(invalid)?).map_err(|_| invalid())?;
         create_link(path, target)?;
     }
+    deadline.remaining().map_err(|_| invalid())?;
     Ok(SourceSnapshot {
         directory,
         source_sha: sha.to_owned(),
         tree_sha: tree_sha.to_owned(),
+        #[cfg(target_os = "linux")]
+        files: material.files,
         manifests: material.manifests,
         nested_toolchains: material.nested_toolchains,
     })
@@ -154,11 +161,12 @@ fn read_object(
     id: &str,
     git: &ReleaseGit,
     total: &mut usize,
+    deadline: velnor_actions_mise::CheckDeadline,
 ) -> Result<Vec<u8>, OrchestratorError> {
     validate_sha(id)?;
     let output = GitRequest::object(kind, id)
         .map_err(|_| invalid())?
-        .run_release_in_bounded(root, git, MAX_OBJECT, Duration::from_secs(90))
+        .run_release_in_until(root, git, MAX_OBJECT, deadline)
         .map_err(|_| invalid())?;
     if !output.success {
         return Err(invalid());
@@ -167,10 +175,11 @@ fn read_object(
     if *total > MAX_TOTAL || object_sha(kind, &output.stdout)? != id {
         return Err(invalid());
     }
+    deadline.remaining().map_err(|_| invalid())?;
     Ok(output.stdout)
 }
 
-fn object_sha(kind: &str, bytes: &[u8]) -> Result<String, OrchestratorError> {
+pub(crate) fn object_sha(kind: &str, bytes: &[u8]) -> Result<String, OrchestratorError> {
     let mut digest = Sha1::new();
     digest.update(format!("{kind} {}\0", bytes.len()).as_bytes());
     digest.update(bytes);

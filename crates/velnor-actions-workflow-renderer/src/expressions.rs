@@ -170,6 +170,18 @@ fn check_env_value_with_scope(key: &str, value: &str, composite: bool) -> Result
                     "VELNOR_RELEASE_BUDGET",
                     "steps.release-budget.outputs.budget"
                 ) | (
+                    "VELNOR_PREFLIGHT_ELIGIBLE",
+                    "needs.release-preflight.outputs.eligible"
+                ) | (
+                    "VELNOR_PREFLIGHT_SOURCE_SHA",
+                    "needs.release-preflight.outputs.source_sha"
+                ) | (
+                    "VELNOR_PREFLIGHT_RECEIPT_ARTIFACT_ID",
+                    "needs.release-preflight.outputs.receipt_artifact_id"
+                ) | (
+                    "VELNOR_PREFLIGHT_RUST_ARTIFACT_ID",
+                    "needs.release-preflight.outputs.rust_artifact_id"
+                ) | (
                     "VELNOR_SOURCE_SHA",
                     "steps.release-admission.outputs.source_sha"
                 ) | (

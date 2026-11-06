@@ -64,6 +64,7 @@ pub struct CrateSemverSource<'a> {
     pub package: &'a str,
     pub baseline_version: &'a str,
     pub baseline_archive: &'a [u8],
+    pub baseline_checksum: &'a str,
     pub features: &'a [String],
     pub executable: &'a Path,
     pub git: &'a crate::crate_release_git::ReleaseGit,
@@ -103,7 +104,33 @@ impl<'a> CratePackageSource<'a> {
     }
 }
 
+pub struct HistoricalIntentReader<'a> {
+    #[cfg(target_os = "linux")]
+    pub(crate) execution: &'a crate::crate_release_source_view::SupervisedSourceExecution,
+    #[cfg(not(target_os = "linux"))]
+    marker: std::marker::PhantomData<&'a ()>,
+    #[cfg(not(target_os = "linux"))]
+    unavailable: std::convert::Infallible,
+}
+
+impl std::fmt::Debug for HistoricalIntentReader<'_> {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("HistoricalIntentReader")
+            .finish_non_exhaustive()
+    }
+}
+
 pub trait CrateSourceExecution {
+    fn historical_intent_reader(&self) -> Result<HistoricalIntentReader<'_>, OrchestratorError>;
+
+    fn verify_toolchain_separation(
+        &self,
+        root: &Path,
+        intent: &CrateReleaseIntent,
+        git: &crate::crate_release_git::ReleaseGit,
+    ) -> Result<(), OrchestratorError>;
+
     fn metadata(
         &self,
         root: &Path,
@@ -120,6 +147,21 @@ pub trait CrateSourceExecution {
 pub struct UnprivilegedSourceExecution;
 
 impl CrateSourceExecution for UnprivilegedSourceExecution {
+    fn historical_intent_reader(&self) -> Result<HistoricalIntentReader<'_>, OrchestratorError> {
+        Err(crate::internal::internal(
+            "crate_release_history_custody_required",
+        ))
+    }
+
+    fn verify_toolchain_separation(
+        &self,
+        root: &Path,
+        _intent: &CrateReleaseIntent,
+        _git: &crate::crate_release_git::ReleaseGit,
+    ) -> Result<(), OrchestratorError> {
+        verify_toolchain_source_separation(root)
+    }
+
     fn metadata(
         &self,
         root: &Path,
@@ -168,7 +210,7 @@ pub fn crate_release_workspace_plan_with_registry<
         .validate()
         .map_err(|_| internal("crate_release_intent_invalid"))?;
     verify_crate_release_source(root, sha, git)?;
-    verify_toolchain_source_separation(root)?;
+    source_execution.verify_toolchain_separation(root, intent, git)?;
     let canonical = root
         .canonicalize()
         .map_err(|_| internal("crate_release_source_root_invalid"))?;
@@ -339,3 +381,7 @@ fn workspace_metadata(
         .stdout_text("cargo")
         .map_err(|_| internal("crate_release_metadata_failed"))
 }
+
+#[cfg(not(target_os = "linux"))]
+#[path = "crate_release_workspace_unavailable.rs"]
+mod unavailable;

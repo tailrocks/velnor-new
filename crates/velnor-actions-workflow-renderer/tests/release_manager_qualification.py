@@ -22,6 +22,7 @@ scenarios = {
     "staging-symlink-refusal": ("release_manager_systemd_test", "RealManagerTest", "test_root_owned_staging_rejects_preexisting_symlink"),
     "fake-broker-refusal": ("release_manager_proxy_test", "RealReplyLossTest", "test_production_constructor_rejects_inherited_fake_broker"),
     "reply-loss-late-start": ("release_manager_proxy_test", "RealReplyLossTest", "test_accepted_start_runs_late_after_reply_loss_without_input"),
+    "root-original-budget": ("release_publish_entry_test", "PublisherEntryTest", "test_deadline_uses_the_original_job_budget"),
     "root-context-modes": ("release_publish_entry_test", "PublisherEntryTest", "test_context_accepts_only_matching_release_modes"),
     "root-context-rejections": ("release_publish_entry_test", "PublisherEntryTest", "test_context_rejects_unapproved_identity_and_credentials"),
     "root-context-ref": ("release_publish_entry_test", "PublisherEntryTest", "test_context_rejects_invalid_branch_even_when_workflow_ref_matches"),
@@ -30,6 +31,13 @@ scenarios = {
     "root-unit-descendant": ("release_publish_entry_systemd_test", "PublisherEntrySystemdTest", "test_root_bootstrap_kills_detached_descendant_before_return"),
     "root-unit-parent-death": ("release_publish_entry_systemd_test", "PublisherEntrySystemdTest", "test_root_bootstrap_manager_reaps_child_after_parent_death"),
     "root-main-credential": ("release_publish_entry_offline_test", "PublisherEntryOfflineTest", "test_main_passes_credential_to_real_bootstrap"),
+    "root-coordinator-credential-boundary": ("release_coordinator_exec_test", "CoordinatorChannelTest", "test_coordinator_rejects_publishing_credentials_in_bootstrap"),
+    "root-retained-credential-boundary": ("release_retained_entry_systemd_test", "RetainedEntryTest", "test_parent_strips_publish_credentials_and_reaps_units"),
+    "root-coordinator-channel": ("release_coordinator_exec_test", "CoordinatorChannelTest", "test_root_coordinator_keeps_bidirectional_channel"),
+    "root-bound-unit-parent-death": ("release_coordinator_exec_test", "CoordinatorChannelTest", "test_bound_unit_stops_when_supervisor_unit_dies"),
+    "root-one-shot-reactivation": ("release_coordinator_exec_test", "CoordinatorChannelTest", "test_preclaim_rejects_late_reactivation"),
+    "root-source-process-isolation": ("release_retained_entry_systemd_test", "RetainedEntryTest", "test_source_unit_uses_private_tmp_and_denies_unix_sockets"),
+    "root-source-network-isolation": ("release_retained_entry_systemd_test", "RetainedEntryTest", "test_source_unit_denies_network_when_requested"),
 }
 
 
@@ -43,6 +51,7 @@ capability_v1 = {
     ("staging-symlink-refusal", "release_manager_systemd_test", "RealManagerTest", "test_root_owned_staging_rejects_preexisting_symlink"),
     ("fake-broker-refusal", "release_manager_proxy_test", "RealReplyLossTest", "test_production_constructor_rejects_inherited_fake_broker"),
     ("reply-loss-late-start", "release_manager_proxy_test", "RealReplyLossTest", "test_accepted_start_runs_late_after_reply_loss_without_input"),
+    ("root-original-budget", "release_publish_entry_test", "PublisherEntryTest", "test_deadline_uses_the_original_job_budget"),
     ("root-context-modes", "release_publish_entry_test", "PublisherEntryTest", "test_context_accepts_only_matching_release_modes"),
     ("root-context-rejections", "release_publish_entry_test", "PublisherEntryTest", "test_context_rejects_unapproved_identity_and_credentials"),
     ("root-context-ref", "release_publish_entry_test", "PublisherEntryTest", "test_context_rejects_invalid_branch_even_when_workflow_ref_matches"),
@@ -51,15 +60,25 @@ capability_v1 = {
     ("root-unit-descendant", "release_publish_entry_systemd_test", "PublisherEntrySystemdTest", "test_root_bootstrap_kills_detached_descendant_before_return"),
     ("root-unit-parent-death", "release_publish_entry_systemd_test", "PublisherEntrySystemdTest", "test_root_bootstrap_manager_reaps_child_after_parent_death"),
     ("root-main-credential", "release_publish_entry_offline_test", "PublisherEntryOfflineTest", "test_main_passes_credential_to_real_bootstrap"),
+    ("root-coordinator-credential-boundary", "release_coordinator_exec_test", "CoordinatorChannelTest", "test_coordinator_rejects_publishing_credentials_in_bootstrap"),
+    ("root-retained-credential-boundary", "release_retained_entry_systemd_test", "RetainedEntryTest", "test_parent_strips_publish_credentials_and_reaps_units"),
+    ("root-coordinator-channel", "release_coordinator_exec_test", "CoordinatorChannelTest", "test_root_coordinator_keeps_bidirectional_channel"),
+    ("root-bound-unit-parent-death", "release_coordinator_exec_test", "CoordinatorChannelTest", "test_bound_unit_stops_when_supervisor_unit_dies"),
+    ("root-one-shot-reactivation", "release_coordinator_exec_test", "CoordinatorChannelTest", "test_preclaim_rejects_late_reactivation"),
+    ("root-source-process-isolation", "release_retained_entry_systemd_test", "RetainedEntryTest", "test_source_unit_uses_private_tmp_and_denies_unix_sockets"),
+    ("root-source-network-isolation", "release_retained_entry_systemd_test", "RetainedEntryTest", "test_source_unit_denies_network_when_requested"),
 }
 
 stage_files = {
     "src": ("release_generator_bootstrap.sh", "release_manager_bus.py", "release_manager_lifecycle.py",
-            "release_publish_entry.py", "release_supervisor_exec.py"),
+            "release_publish_entry.py", "release_supervisor_exec.py", "release_coordinator_exec.py",
+            "release_launcher_watch.py", "release_supervisor_claim.py", "release_retained_parent.py",
+            "release_source_channel.py"),
     "tests": ("release_manager_proxy_test.py", "release_manager_qualification.py",
               "release_manager_scenario_controller.py", "release_manager_systemd_test.py",
               "release_publish_entry_offline_test.py", "release_publish_entry_systemd_test.py",
-              "release_publish_entry_test.py"),
+              "release_publish_entry_test.py", "release_coordinator_exec_test.py",
+              "release_retained_entry_systemd_test.py"),
 }
 
 

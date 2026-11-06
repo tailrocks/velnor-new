@@ -86,6 +86,7 @@ pub mod release_helpers;
 pub mod release_jobs;
 pub mod release_permissions;
 pub mod release_plz_acquire;
+pub mod release_root_publisher;
 pub mod release_spec;
 pub mod release_tree;
 pub mod render;

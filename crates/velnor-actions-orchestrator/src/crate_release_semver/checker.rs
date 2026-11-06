@@ -69,6 +69,7 @@ pub(crate) fn verify_one<R: CrateRegistryRead>(
         package: &package.source.name,
         baseline_version: &previous.version,
         baseline_archive: &archive,
+        baseline_checksum: &baseline_checksum,
         features,
         executable,
         git,
@@ -244,4 +245,67 @@ pub(crate) fn run_check(
     velnor_actions_mise::release_git_pin::ReleaseGitExecutable::revalidate(git)
         .map_err(|_| invalid())?;
     Ok(())
+}
+
+#[cfg(any(target_os = "linux", test))]
+#[derive(Clone, Copy)]
+pub(crate) struct ProjectionInput<'a> {
+    pub archive: &'a [u8],
+    pub checksum: &'a str,
+    pub package: &'a str,
+    pub baseline_version: &'a str,
+    pub source_sha: &'a str,
+    pub target_version: &'a str,
+    pub manifest: &'a str,
+    pub features: &'a [String],
+}
+
+#[cfg(any(target_os = "linux", test))]
+pub(crate) fn supervised_projection(
+    request: &ProjectionInput<'_>,
+) -> Result<
+    (
+        serde_json::Value,
+        crate::crate_release_archive::ArchiveFiles,
+    ),
+    OrchestratorError,
+> {
+    if crate::generator::sha256_hex(request.archive) != request.checksum {
+        return Err(invalid());
+    }
+    let files = crate::crate_release_archive::read_archive(
+        request.archive,
+        &format!("{}-{}/", request.package, request.baseline_version),
+    )?;
+    let manifest = files.get("Cargo.toml").ok_or_else(invalid)?;
+    let manifest: toml::Value =
+        toml::from_str(std::str::from_utf8(&manifest.1).map_err(|_| invalid())?)
+            .map_err(|_| invalid())?;
+    if manifest["package"]["name"].as_str() != Some(request.package)
+        || manifest["package"]["version"].as_str() != Some(request.baseline_version)
+        || !files.contains_key("Cargo.lock")
+    {
+        return Err(invalid());
+    }
+    let inventory: Vec<_> = files
+        .iter()
+        .map(|(path, (mode, bytes))| {
+            serde_json::json!({
+                "path": path,
+                "sha256": crate::generator::sha256_hex(bytes),
+                "kind": {"type": "regular", "executable": *mode != 0},
+            })
+        })
+        .collect();
+    let context = serde_json::json!({
+        "source_sha": request.source_sha,
+        "package": request.package,
+        "target_version": request.target_version,
+        "manifest": request.manifest,
+        "features": request.features,
+        "baseline_version": request.baseline_version,
+        "baseline_checksum": request.checksum,
+        "files": inventory,
+    });
+    Ok((context, files))
 }

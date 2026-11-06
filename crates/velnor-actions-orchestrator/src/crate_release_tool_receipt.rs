@@ -131,7 +131,58 @@ pub(crate) struct AuthenticatedReceipt {
     authority: crate::crate_release_github::GitHubAuthorized,
 }
 
+#[cfg(target_os = "linux")]
+pub(crate) struct AuthenticatedSource {
+    receipt: AuthenticatedReceipt,
+    source: crate::crate_release_qualification_snapshot::SourceSnapshot,
+}
+
+#[cfg(target_os = "linux")]
+impl AuthenticatedSource {
+    pub(crate) fn snapshot(
+        receipt: AuthenticatedReceipt,
+        repository: &std::path::Path,
+        git: &crate::crate_release_git::ReleaseGit,
+        deadline: velnor_actions_mise::CheckDeadline,
+    ) -> Result<Self, OrchestratorError> {
+        use velnor_actions_mise::release_git_pin::ReleaseGitExecutable;
+        let invalid = || internal("crate_release_authenticated_source_invalid");
+        if git.verified().is_none() {
+            return Err(invalid());
+        }
+        git.revalidate().map_err(|_| invalid())?;
+        let source = crate::crate_release_qualification_snapshot::snapshot_git_objects_until(
+            repository,
+            &receipt.authority.candidate().request.source_sha,
+            git,
+            deadline,
+        )?;
+        git.revalidate().map_err(|_| invalid())?;
+        Ok(Self { receipt, source })
+    }
+
+    pub(crate) fn receipt(&self) -> &AuthenticatedReceipt {
+        &self.receipt
+    }
+
+    pub(crate) fn source(&self) -> &crate::crate_release_qualification_snapshot::SourceSnapshot {
+        &self.source
+    }
+}
+
 impl AuthenticatedReceipt {
+    #[cfg(target_os = "linux")]
+    pub(crate) fn bytes(&self) -> &[u8] {
+        &self.bytes
+    }
+    #[cfg(target_os = "linux")]
+    pub(crate) fn data(&self) -> &crate::crate_release_controller::CrateReleaseAdmissionReceipt {
+        &self.receipt
+    }
+    #[cfg(target_os = "linux")]
+    pub(crate) fn authority(&self) -> &crate::crate_release_github::GitHubAuthorized {
+        &self.authority
+    }
     pub(crate) fn into_parts(
         self,
     ) -> (

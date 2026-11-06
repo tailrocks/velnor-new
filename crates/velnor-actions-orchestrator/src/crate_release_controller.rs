@@ -3,7 +3,11 @@
 
 #[path = "crate_release_plz.rs"]
 mod plz;
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+pub(crate) use plz::invoke_supervised_upload;
 pub(crate) use plz::invoke_upload;
+#[cfg(target_os = "linux")]
+pub(crate) use plz::single_package_config;
 #[cfg(test)]
 pub(crate) fn fixture_upload_config(
     intent: &CrateReleaseIntent,
@@ -14,12 +18,12 @@ pub(crate) fn fixture_upload_config(
 #[path = "crate_release_observation.rs"]
 mod observation;
 pub(crate) use observation::{
-    CrateReleaseObservation, coordinate_release, derive_reconciled_candidate,
-    observe_prior_recovery, reconciled_completion_packages, record_verified_mutation,
+    CrateReleaseObservation, FrozenCompletion, ValidatedCompletion, coordinate_release,
+    derive_reconciled_candidate, observe_prior_recovery, record_verified_mutation,
     repair_verified_metadata, verify_and_record_upload_intent,
 };
 #[cfg(test)]
-pub(crate) use observation::{RecoveryState, UploadAttempt};
+pub(crate) use observation::{RecoveryState, UploadAttempt, reconciled_completion_packages};
 pub(crate) use observation::{VerifiedMutation, verify_observed_packages};
 
 mod inventory;
@@ -27,7 +31,8 @@ mod reconcile;
 mod state;
 use crate::crate_release_workspace::CrateSourceExecution;
 pub(crate) use inventory::package_unprivileged;
-use inventory::{require_reviewer_owner, wait_for_release, wait_for_tag, workspace_inventory};
+use inventory::require_reviewer_owner;
+use inventory::{wait_for_release, wait_for_tag, workspace_inventory};
 pub(crate) use reconcile::same_observed_state;
 pub use reconcile::{
     CrateReleaseCompletedPackage, reconcile_crate_release, validate_reconciliation_receipt,

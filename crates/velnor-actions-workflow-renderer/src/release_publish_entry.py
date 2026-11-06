@@ -6,13 +6,13 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import stat
 import struct
 import sys
 import tempfile
 import time
 import types
-import urllib.parse
 
 
 CONTEXT = (
@@ -30,6 +30,7 @@ BOOTSTRAP = '__VELNOR_BOOTSTRAP_PAYLOAD__'
 MANAGER = '__VELNOR_MANAGER_PAYLOAD__'
 LIFECYCLE = '__VELNOR_LIFECYCLE_PAYLOAD__'
 HELPER = '__VELNOR_HELPER_PAYLOAD__'
+SUPERVISOR = '__VELNOR_SUPERVISOR_PAYLOAD__'
 JOB_TIMEOUT_SECONDS = int('__VELNOR_JOB_TIMEOUT_SECONDS__')
 CLEANUP_RESERVE_NS = 25_000_000_000
 
@@ -48,12 +49,15 @@ def valid_branch_ref(value):
 
 def read_context(mode):
     result = {}
-    secrets = ('GH_TOKEN',) + (OIDC_SECRETS if mode == 'trusted-publishing' else ('CARGO_REGISTRY_TOKEN',))
-    for name in CONTEXT + secrets:
+    for name in CONTEXT + ('GH_TOKEN',):
         value = os.environ.get(name)
         if not value or len(value) > 8192 or any(ord(c) < 32 or ord(c) == 127 for c in value):
             invalid()
         result[name] = value
+    credentials = OIDC_SECRETS if mode == 'trusted-publishing' else ('CARGO_REGISTRY_TOKEN',)
+    for name in credentials:
+        if name in os.environ:
+            result[name] = os.environ[name]
     for name in ('GITHUB_REPOSITORY_ID', 'GITHUB_REPOSITORY_OWNER_ID', 'GITHUB_RUN_ID',
                  'GITHUB_RUN_ATTEMPT', 'VELNOR_PREFLIGHT_RECEIPT_ARTIFACT_ID',
                  'VELNOR_PREFLIGHT_RUST_ARTIFACT_ID'):
@@ -75,12 +79,22 @@ def read_context(mode):
             or result['VELNOR_PREFLIGHT_ELIGIBLE'] != 'true'
             or result['VELNOR_PREFLIGHT_RECEIPT_ARTIFACT_ID'] == result['VELNOR_PREFLIGHT_RUST_ARTIFACT_ID']):
         invalid()
-    if mode == 'trusted-publishing':
-        url = urllib.parse.urlsplit(result['ACTIONS_ID_TOKEN_REQUEST_URL'])
-        if (url.scheme != 'https' or not url.hostname or not url.hostname.endswith('.actions.githubusercontent.com')
-                or url.username or url.password or url.fragment or url.port not in (None, 443)):
-            invalid()
     return result
+
+
+def bound_deadline(context, budget):
+    if not isinstance(budget, str):
+        invalid()
+    parts = budget.split(':')
+    if (len(parts) != 5 or parts[:4] != ['v1', context['GITHUB_RUN_ID'],
+            context['GITHUB_RUN_ATTEMPT'], context['GITHUB_JOB']]
+            or not re.fullmatch(r'[1-9][0-9]{0,19}', parts[4])):
+        invalid()
+    deadline = int(parts[4])
+    now = time.clock_gettime_ns(time.CLOCK_BOOTTIME)
+    if deadline <= now or deadline > now + JOB_TIMEOUT_SECONDS * 1_000_000_000:
+        invalid()
+    return deadline
 
 
 def read_verified_binary(path, digest):
@@ -119,14 +133,19 @@ def unique_object(pairs):
 
 def decoded(value):
     result = base64.b64decode(value, validate=True)
-    if not result or len(result) > 128 * 1024 or b'\0' in result:
+    if not result or len(result) > 512 * 1024 or b'\0' in result:
         invalid()
     return result
 
 
 def module(name, payload):
     result = types.ModuleType(name)
-    exec(compile(decoded(payload), name, 'exec'), result.__dict__)
+    sys.modules[name] = result
+    try:
+        exec(compile(decoded(payload), name, 'exec'), result.__dict__)
+    except BaseException:
+        del sys.modules[name]
+        raise
     return result
 
 
@@ -141,9 +160,32 @@ def fixed_helper(root):
             if written <= 0:
                 invalid()
             view = view[written:]
+        os.fchmod(fd, 0o500)
         info = os.fstat(fd)
         if (not stat.S_ISREG(info.st_mode) or info.st_uid != 0 or info.st_nlink != 1
                 or stat.S_IMODE(info.st_mode) != 0o500 or info.st_size != len(content)):
+            invalid()
+    finally:
+        os.close(fd)
+    return path
+
+
+def stage_fixed(root, name, content, mode):
+    if not re.fullmatch(r'release_[a-z_]+\.py', name) or mode not in (0o500, 0o555):
+        invalid()
+    path = os.path.join(root, name)
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_CLOEXEC | os.O_NOFOLLOW, mode)
+    try:
+        view = memoryview(content)
+        while view:
+            written = os.write(fd, view)
+            if written <= 0:
+                invalid()
+            view = view[written:]
+        os.fchmod(fd, mode)
+        info = os.fstat(fd)
+        if (not stat.S_ISREG(info.st_mode) or info.st_uid != 0 or info.st_nlink != 1
+                or stat.S_IMODE(info.st_mode) != mode or info.st_size != len(content)):
             invalid()
     finally:
         os.close(fd)
@@ -167,19 +209,7 @@ def acquire(root, script, env, deadline):
         manager.close()
 
 
-def main():
-    if (os.geteuid() != 0 or sys.platform != 'linux' or len(sys.argv) != 5
-            or os.uname().machine != 'x86_64' or not 60 < JOB_TIMEOUT_SECONDS <= 21600):
-        invalid()
-    deadline = time.clock_gettime_ns(time.CLOCK_BOOTTIME) + JOB_TIMEOUT_SECONDS * 1_000_000_000
-    mode, version, source_sha, manifest_sha = sys.argv[1:]
-    if mode not in ('trusted-publishing', 'bootstrap'):
-        invalid()
-    context = read_context(mode)
-    if (not re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+', version)
-            or not re.fullmatch(r'[a-f0-9]{40}', source_sha)
-            or not re.fullmatch(r'[a-f0-9]{64}', manifest_sha)):
-        invalid()
+def prepare_binary(context, version, source_sha, manifest_sha, deadline):
     script = decoded(BOOTSTRAP).decode('utf-8')
     run = os.stat('/run', follow_symlinks=False)
     if not stat.S_ISDIR(run.st_mode) or run.st_uid != 0 or run.st_mode & 0o022:
@@ -207,14 +237,58 @@ def main():
     if len(targets) != 1 or parsed.get('version') != version or parsed.get('commit') != source_sha:
         invalid()
     binary = os.path.join(root, 'velnor', 'bin', 'velnor-actions-' + version)
-    fd = read_verified_binary(binary, targets[0].get('sha256', ''))
+    digest = targets[0].get('sha256', '')
+    fd = read_verified_binary(binary, digest)
+    os.close(fd)
+    return root, binary, digest
+
+
+def main():
+    if (os.geteuid() != 0 or sys.platform != 'linux' or len(sys.argv) != 5
+            or os.uname().machine != 'x86_64' or not 60 < JOB_TIMEOUT_SECONDS <= 21600):
+        invalid()
+    mode, version, source_sha, manifest_sha = sys.argv[1:]
+    if mode not in ('trusted-publishing', 'bootstrap'):
+        invalid()
+    context = read_context(mode)
+    deadline = bound_deadline(context, os.environ.get("VELNOR_RELEASE_BUDGET"))
+    if (not re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+', version)
+            or not re.fullmatch(r'[a-f0-9]{40}', source_sha)
+            or not re.fullmatch(r'[a-f0-9]{64}', manifest_sha)):
+        invalid()
+    root, binary, digest = prepare_binary(context, version, source_sha, manifest_sha, deadline)
     child = dict(context)
-    child.update({'PATH': '/usr/bin:/bin', 'HOME': root, 'TMPDIR': root, 'RUNNER_TEMP': root,
-                  'GIT_TOKEN': context['GH_TOKEN'], 'VELNOR_OPERATION_DEADLINE_BOOTTIME_NS': str(deadline)})
+    child.update({'GIT_TOKEN': context['GH_TOKEN'], 'VELNOR_GENERATOR_VERSION': version,
+                  'VELNOR_GENERATOR_SOURCE_SHA': source_sha, 'VELNOR_GENERATOR_MANIFEST_SHA256': manifest_sha})
     child.pop('GH_TOKEN')
     if time.clock_gettime_ns(time.CLOCK_BOOTTIME) >= deadline:
         invalid()
-    os.execve(fd, [binary, 'crate-release', 'publish-supervise'], child)
+    bundle = json.loads(decoded(SUPERVISOR), object_pairs_hook=unique_object)
+    names = ('coordinator', 'watch', 'claim', 'retained', 'source', 'channel', 'upload', 'broker')
+    if not isinstance(bundle, dict) or set(bundle) != set(names) or not all(isinstance(bundle[name], str) for name in names):
+        invalid()
+    view = tempfile.mkdtemp(prefix='velnor-publisher-view-', dir='/run')
+    completed = False
+    try:
+        stage_fixed(root, 'release_coordinator_exec.py', decoded(bundle['coordinator']), 0o500)
+        stage_fixed(root, 'release_launcher_watch.py', decoded(bundle['watch']), 0o500)
+        stage_fixed(root, 'release_supervisor_claim.py', decoded(bundle['claim']), 0o500)
+        helper = decoded(HELPER)
+        stage_fixed(view, 'release_supervisor_exec.py', helper, 0o555)
+        manager = module('velnor_publisher_manager', MANAGER)
+        lifecycle = module('velnor_publisher_lifecycle', LIFECYCLE)
+        retained = module('velnor_publisher_retained', bundle['retained'])
+        source = module('velnor_publisher_source', bundle['source'])
+        channel = module('velnor_publisher_channel', bundle['channel'])
+        uploader = module('velnor_publisher_upload', bundle['upload'])
+        broker = module('velnor_publisher_broker', bundle['broker'])
+        retained.run(root, view, hashlib.sha256(helper).hexdigest(), version, digest, child,
+                     deadline, manager, lifecycle, channel, source, uploader, broker)
+        completed = True
+    finally:
+        if completed:
+            shutil.rmtree(view)
+            shutil.rmtree(root)
 
 
 if __name__ == '__main__':

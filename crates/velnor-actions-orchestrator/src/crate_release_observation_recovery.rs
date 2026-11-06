@@ -53,11 +53,16 @@ pub(crate) fn observe_prior_recovery<
     if input.journal_receipt.predecessor.as_ref() != Some(previous) {
         return Err(invalid());
     }
-    let history = crate::crate_release_journal::inspect_prior_chain(
+    let history = crate::crate_release_journal::inspect_prior_chain_with(
         input.journal,
         input.journal_receipt,
         input.source,
         input.git,
+        Some(&crate::crate_release_journal::PriorTransition {
+            source_execution: input.source_execution,
+            request: input.request,
+            github: input.github,
+        }),
     )?;
     let current = observe_crate_release(
         input.intent,
@@ -100,11 +105,16 @@ pub(crate) fn observe_prior_recovery<
         input.registry,
         crate::CrateSource::new(input.source, input.git, input.source_execution),
     )? != current
-        || crate::crate_release_journal::inspect_prior_chain(
+        || crate::crate_release_journal::inspect_prior_chain_with(
             input.journal,
             input.journal_receipt,
             input.source,
             input.git,
+            Some(&crate::crate_release_journal::PriorTransition {
+                source_execution: input.source_execution,
+                request: input.request,
+                github: input.github,
+            }),
         )? != history
     {
         return Err(invalid());

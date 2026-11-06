@@ -1289,6 +1289,7 @@ name = "velnor-actions-workflow-renderer"
 version = "0.1.75"
 dependencies = [
  "base64",
+ "flate2",
  "rustix",
  "semver",
  "serde",

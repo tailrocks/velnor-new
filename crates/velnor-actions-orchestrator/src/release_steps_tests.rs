@@ -81,6 +81,8 @@ fn fixture_for_release_pr(authentication: ReleaseAuthentication, release_pr: boo
         catalog: &catalog,
         acquire: &acquire,
         generator_version,
+        generator_source_sha: &"b".repeat(40),
+        generator_manifest_sha256: &"c".repeat(64),
     })?;
     let dispatch_inputs = [
         ("plan", plan.plan_id.as_str()),
@@ -123,6 +125,8 @@ fn valid(spec: &ReleaseWorkflowSpec, rust: &str) -> bool {
             spec,
             &ReleaseConfigBinding {
                 generator_version: env!("CARGO_PKG_VERSION"),
+                generator_source_sha: &"b".repeat(40),
+                generator_manifest_sha256: &"c".repeat(64),
                 release_plz_version: &spec.release_plz_version,
                 rust_version: rust,
             },

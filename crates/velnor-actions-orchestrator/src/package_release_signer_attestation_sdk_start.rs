@@ -86,19 +86,26 @@ where
     J: crate::crate_release_journal::JournalIo + crate::crate_release_journal::JournalOperationRefs,
     G: crate::crate_release_github::GitHubAdmissionRead,
 {
-    let chain = crate::crate_release_journal::inspect_prior_chain(
+    let chain = crate::crate_release_journal::inspect_prior_chain_with(
         input.journal,
         receipt,
         input.source,
         input.git,
+        Some(&crate::crate_release_journal::PriorTransition {
+            source_execution: input.source_execution, request: input.request, github: input.github,
+        }),
     )?;
     for prior in &chain {
         let previous = &prior.start.receipt;
-        let intent = crate::crate_release_runtime::read_intent_at_workflow(
+        let intent = match crate::crate_release_runtime::read_intent_at_workflow(
             input.workflow_root,
             &previous.identity.workflow_sha,
             input.git,
-        )?;
+        ) {
+            Ok(intent) => intent,
+            Err(_) => input.source_execution.historical_intent_reader()?
+                .verify_prior(previous, input.request, input.github)?,
+        };
         let bytes = velnor_actions_contract::canonical_json_bytes(&intent)
             .map_err(|_| internal("crate_release_previous_invalid"))?;
         let expected_predecessor = intent.journal_predecessor.as_ref().map(|item| {

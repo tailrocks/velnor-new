@@ -18,7 +18,7 @@ pub(super) fn reject_bad_completion_evidence(
     >,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let try_complete = || {
-        crate::crate_release_journal::record_reconciled_completion(
+        crate::crate_release_journal::record_unprivileged_completion(
             input,
             crate::package_release_signer::fixture_measured_tools(
                 input.journal_receipt.expected_tools.clone(),

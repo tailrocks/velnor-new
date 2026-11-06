@@ -71,3 +71,41 @@ fn hosted_supervisor_runs_candidate_scenarios_and_controller_regressions()
     }
     Ok(())
 }
+
+#[test]
+fn publisher_step_fits_github_limit_and_binds_generator_pins()
+-> Result<(), Box<dyn std::error::Error>> {
+    use velnor_actions_contract::StepKind;
+    use velnor_actions_workflow_renderer::{
+        join_argv_for_run, release_root_publisher::publisher_step,
+    };
+    let source = "a".repeat(40);
+    let manifest = "b".repeat(64);
+    for bootstrap in [false, true] {
+        let step = publisher_step(bootstrap, "0.1.75", &source, &manifest)?;
+        let StepKind::Shell { run, env } = step.kind else {
+            return Err("publisher step is not shell".into());
+        };
+        assert!(join_argv_for_run(&run)?.len() <= 21_000);
+        assert_eq!(run.last().map(String::as_str), Some(manifest.as_str()));
+        assert_eq!(
+            run.get(run.len() - 2).map(String::as_str),
+            Some(source.as_str())
+        );
+        assert_eq!(env.contains_key("CARGO_REGISTRY_TOKEN"), bootstrap);
+        assert_eq!(
+            env.get("VELNOR_RELEASE_BUDGET").map(String::as_str),
+            Some("${{ steps.release-budget.outputs.budget }}")
+        );
+        let rejected = std::process::Command::new(&run[3])
+            .args(&run[4..])
+            .env_clear()
+            .output()?;
+        assert!(!rejected.status.success());
+        assert!(
+            String::from_utf8_lossy(&rejected.stderr).contains("publisher first stage rejected")
+        );
+    }
+    assert!(publisher_step(false, "0.1.75", "invalid", &manifest).is_err());
+    Ok(())
+}

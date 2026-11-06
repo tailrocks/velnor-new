@@ -43,27 +43,6 @@ pub fn check_checkout_shape(
     version: &str,
 ) -> Result<(), RenderError> {
     let invalid = || RenderError::InvalidWorkflow(format!("release_checkout_invalid:{id}"));
-    let publisher = matches!(
-        role,
-        ReleaseRole::PublishOidc | ReleaseRole::PublishBootstrap
-    );
-    let mut owned = steps.to_vec();
-    if publisher {
-        if owned.first() != Some(&crate::release_budget::capture_step()?) {
-            return Err(invalid());
-        }
-        owned.remove(0);
-        for step in &mut owned {
-            if let StepKind::Shell { run, env } = &mut step.kind
-                && run.get(1).is_some_and(|arg| arg == "crate-release")
-                && env.remove("VELNOR_RELEASE_BUDGET").as_deref()
-                    != Some("${{ steps.release-budget.outputs.budget }}")
-            {
-                return Err(invalid());
-            }
-        }
-    }
-    let steps = owned.as_slice();
     if steps.iter().any(|step| matches!(&step.kind, StepKind::Action { uses, .. } if uses.starts_with("actions/checkout@")))
         || steps.first().is_none_or(|step| step.role != Some(StepRole::AcquireVelnor))
         || steps.get(1) != Some(&policy_checkout(version)?)

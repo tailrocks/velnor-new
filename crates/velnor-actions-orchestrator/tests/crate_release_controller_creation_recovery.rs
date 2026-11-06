@@ -175,7 +175,7 @@ pub(super) fn coordinator_completes_first_crate_with_durable_owners()
     assert_eq!(github.writes.get(), 2);
     assert_eq!(result.packages.len(), 1);
     let tools = crate::package_release_signer::fixture_measured_tools(plan.expected_tools.clone());
-    crate::crate_release_journal::record_reconciled_completion(&input, tools)?;
+    crate::crate_release_journal::record_unprivileged_completion(&input, tools)?;
     let completed = crate::crate_release_journal::inspect_journal(
         &journal,
         &identity,
@@ -189,7 +189,7 @@ pub(super) fn coordinator_completes_first_crate_with_durable_owners()
     assert_eq!(completed.packages[0].owners[0].login, "owner");
     let writes = journal.write_calls.get();
     let tools = crate::package_release_signer::fixture_measured_tools(plan.expected_tools.clone());
-    crate::crate_release_journal::record_reconciled_completion(&input, tools)?;
+    crate::crate_release_journal::record_unprivileged_completion(&input, tools)?;
     assert_eq!(journal.write_calls.get(), writes);
     assert_eq!(github.writes.get(), 2);
     reject_changed_first_crate_completion(&input, writes);
@@ -209,13 +209,13 @@ pub(super) fn reject_changed_first_crate_completion(
     let tools = crate::package_release_signer::fixture_measured_tools(
         input.journal_receipt.expected_tools.clone(),
     );
-    assert!(crate::crate_release_journal::record_reconciled_completion(input, tools).is_err());
+    assert!(crate::crate_release_journal::record_unprivileged_completion(input, tools).is_err());
     input.registry.owner_changed.set(false);
     input.registry.base.archive.borrow_mut().push(0);
     let tools = crate::package_release_signer::fixture_measured_tools(
         input.journal_receipt.expected_tools.clone(),
     );
-    assert!(crate::crate_release_journal::record_reconciled_completion(input, tools).is_err());
+    assert!(crate::crate_release_journal::record_unprivileged_completion(input, tools).is_err());
     assert_eq!(input.journal.write_calls.get(), writes);
     assert_eq!(input.github.writes.get(), 2);
 }

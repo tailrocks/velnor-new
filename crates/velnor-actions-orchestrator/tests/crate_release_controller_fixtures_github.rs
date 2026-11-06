@@ -135,6 +135,12 @@ pub(super) struct Github {
     pub(super) writes: Cell<u32>,
     pub(super) tool_archive: RefCell<Vec<u8>>,
     pub(super) mutate_after_download: Cell<u8>,
+    pub(super) ruleset_reads: Cell<u32>,
+    pub(super) revoke_at_ruleset: Cell<u32>,
+    pub(super) approval_reads: Cell<u32>,
+    pub(super) revoke_at_approval: Cell<u32>,
+    pub(super) artifact_reads: Cell<u32>,
+    pub(super) alter_at_artifact: Cell<u32>,
     pub(super) artifact_receipt: Cell<bool>,
     pub(super) before_metadata_write: RefCell<Option<MetadataWriteHook>>,
 }
@@ -145,6 +151,11 @@ impl Github {
         for byte in Sha256::digest(&*bytes) {
             digest.push(char::from(b"0123456789abcdef"[usize::from(byte >> 4)]));
             digest.push(char::from(b"0123456789abcdef"[usize::from(byte & 15)]));
+        }
+        let reads = self.artifact_reads.get() + 1;
+        self.artifact_reads.set(reads);
+        if self.alter_at_artifact.get() != 0 && reads >= self.alter_at_artifact.get() {
+            digest = format!("sha256:{}", "a".repeat(64));
         }
         json!({"id":10,"name":if self.artifact_receipt.get() { "velnor-release-receipt-12-1" } else { "velnor-release-rust-12-1" },"digest":digest,"size_in_bytes":bytes.len(),"expired":false,"workflow_run":{"id":12,"repository_id":22,"head_repository_id":22,"head_sha":self.policy_sha}})
     }
@@ -211,10 +222,18 @@ impl GitHubAdmissionRead for Github {
         } else if route.ends_with("/rulesets?targets=tag&includes_parents=true&per_page=100") {
             json!([{"id":1}])
         } else if route.ends_with("/rulesets/1") {
-            json!({"id":1,"target":"tag","enforcement":"active","bypass_actors":[],"conditions":{"ref_name":{"include":["~ALL"],"exclude":[]}},"rules":[{"type":"update","parameters":{"update_allows_fetch_and_merge":false}},{"type":"deletion"}]})
+            let reads = self.ruleset_reads.get() + 1;
+            self.ruleset_reads.set(reads);
+            let active = self.revoke_at_ruleset.get() == 0 || reads < self.revoke_at_ruleset.get();
+            json!({"id":1,"target":"tag","enforcement":if active { "active" } else { "disabled" },"bypass_actors":[],"conditions":{"ref_name":{"include":["~ALL"],"exclude":[]}},"rules":[{"type":"update","parameters":{"update_allows_fetch_and_merge":false}},{"type":"deletion"}]})
         } else if route == "repos/example/demo" {
             json!({"id":22,"full_name":"example/demo","owner":{"id":77,"login":"example"},"default_branch":"main"})
         } else if route.ends_with("/actions/runs/12/approvals") {
+            let reads = self.approval_reads.get() + 1;
+            self.approval_reads.set(reads);
+            if self.revoke_at_approval.get() != 0 && reads >= self.revoke_at_approval.get() {
+                self.approved.set(false);
+            }
             if self.approved.get() {
                 json!([{"state":"approved","user":{"type":"User","id":139_017},"environments":[{"id":9,"name":"release"}],"comment":format!("I reviewed the complete release policy at {policy_sha} and source {sha}, and authorize this source for run 12.")}])
             } else {

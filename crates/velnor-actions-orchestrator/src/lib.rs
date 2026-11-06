@@ -20,14 +20,22 @@ include!("private_modules.rs");
 mod crate_release_archive;
 pub mod crate_release_checkout;
 pub mod crate_release_controller;
+#[cfg(target_os = "linux")]
+mod crate_release_custody;
 mod crate_release_git_bundle;
 pub mod crate_release_github;
+#[cfg(target_os = "linux")]
+mod crate_release_historical_intent;
 pub mod crate_release_http;
+#[cfg(target_os = "linux")]
+mod crate_release_pinned_download;
 mod crate_release_pr_acquisition;
 pub mod crate_release_pr_artifact;
 mod crate_release_pr_run;
 mod crate_release_pr_tree;
 mod crate_release_pr_writer;
+#[cfg(target_os = "linux")]
+mod crate_release_projected_tools;
 pub mod crate_release_qualification_approval;
 pub mod crate_release_qualification_bundle;
 pub mod crate_release_qualification_capture;
@@ -46,10 +54,19 @@ pub mod crate_release_qualification_workflow;
 pub mod crate_release_registry;
 mod crate_release_runtime;
 mod crate_release_semver;
+#[cfg(target_os = "linux")]
+mod crate_release_source_view;
+#[cfg(target_os = "linux")]
+mod crate_release_source_wire;
 pub mod crate_release_tool_artifact;
 pub mod crate_release_tool_download;
 pub mod github_review_feedback;
 pub use crate_release_runtime::{parse_crate_release_intent, run_crate_release};
+
+pub fn render_crate_publisher_entry(timeout_seconds: u32) -> Result<String, OrchestratorError> {
+    Ok(velnor_actions_workflow_renderer::release_root_publisher::render_entry(timeout_seconds)?)
+}
+
 pub mod crate_release_git;
 mod crate_release_source;
 mod crate_release_workspace;
@@ -60,7 +77,8 @@ pub use crate_release_source::{
 };
 pub use crate_release_workspace::{
     CratePackageSource, CrateReleaseWorkspacePlan, CrateSemverSource, CrateSource,
-    CrateSourceExecution, UnprivilegedSourceExecution, crate_release_workspace_plan_with_registry,
+    CrateSourceExecution, HistoricalIntentReader, UnprivilegedSourceExecution,
+    crate_release_workspace_plan_with_registry,
 };
 #[expect(
     missing_debug_implementations,

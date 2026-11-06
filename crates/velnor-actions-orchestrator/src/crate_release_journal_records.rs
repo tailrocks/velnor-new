@@ -1,11 +1,13 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+#[cfg(test)]
+use super::JournalOperationRefs;
 use super::{
-    JournalCompletion, JournalIdentity, JournalIo, JournalOperationRefs, JournalReceipt,
-    JournalRecord, JournalStage, JournalTag, MAX_RECORD_BYTES, OrchestratorError, TAG_MESSAGE,
-    ensure_no_pending_mutation, internal, invalid, read_ref, valid_completion, valid_receipt,
-    valid_sha, validate_identity, verify_raw_tag,
+    JournalCompletion, JournalIdentity, JournalIo, JournalReceipt, JournalRecord, JournalStage,
+    JournalTag, MAX_RECORD_BYTES, OrchestratorError, TAG_MESSAGE, ensure_no_pending_mutation,
+    internal, invalid, read_ref, valid_completion, valid_receipt, valid_sha, validate_identity,
+    verify_raw_tag,
 };
 
 pub fn record_source_bound_start<I: JournalIo>(
@@ -22,7 +24,8 @@ pub fn record_source_bound_start<I: JournalIo>(
     record_journal(io, identity, JournalStage::Started, receipt, None)
 }
 
-pub(crate) fn record_reconciled_completion<J, G, R>(
+#[cfg(test)]
+pub(crate) fn record_unprivileged_completion<J, G, R>(
     input: &crate::crate_release_controller::CrateReleaseObservation<'_, J, G, R>,
     tools: crate::package_release_signer::MeasuredReleaseTools,
 ) -> Result<String, OrchestratorError>
@@ -31,17 +34,31 @@ where
     G: crate::crate_release_github::GitHubAdmissionRead,
     R: crate::crate_release_registry::CrateRegistryRead,
 {
-    let candidate = crate::crate_release_controller::derive_reconciled_candidate(input)?;
-    let completion = JournalCompletion {
-        packages: crate::crate_release_controller::reconciled_completion_packages(&candidate)?,
-        post_publication_file_hashes: tools.into_pins(),
-    };
-    record_journal(
+    crate::crate_release_controller::FrozenCompletion::prepare_unprivileged(
+        input,
+        tools,
+        &crate::UnprivilegedSourceExecution,
+    )?
+    .record_unprivileged(
+        &crate::UnprivilegedSourceExecution,
         input.journal,
-        input.identity,
+        input.github,
+        input.registry,
+    )
+}
+
+pub(crate) fn record_frozen_completion<J: JournalIo>(
+    journal: &J,
+    validated: crate::crate_release_controller::ValidatedCompletion<'_>,
+) -> Result<String, OrchestratorError> {
+    let (receipt, completion, before_write) = validated.into_parts();
+    record_journal_guarded(
+        journal,
+        &receipt.identity,
         JournalStage::Completed,
-        input.journal_receipt,
+        &receipt,
         Some(&completion),
+        before_write,
     )
 }
 
@@ -51,6 +68,17 @@ pub(super) fn record_journal<I: JournalIo>(
     stage: JournalStage,
     receipt: &JournalReceipt,
     completion: Option<&JournalCompletion>,
+) -> Result<String, OrchestratorError> {
+    record_journal_guarded(io, identity, stage, receipt, completion, &|| Ok(()))
+}
+
+fn record_journal_guarded<I: JournalIo>(
+    io: &I,
+    identity: &JournalIdentity,
+    stage: JournalStage,
+    receipt: &JournalReceipt,
+    completion: Option<&JournalCompletion>,
+    before_write: &dyn Fn() -> Result<(), OrchestratorError>,
 ) -> Result<String, OrchestratorError> {
     validate_identity(identity)?;
     if !valid_receipt(receipt, identity)
@@ -105,6 +133,7 @@ pub(super) fn record_journal<I: JournalIo>(
     let tag_sha = create_content_addressed_tag(io, identity, &name, &bytes)?;
     io.check_tag_rules(&identity.repository)
         .map_err(|_| invalid())?;
+    before_write()?;
     if io
         .create_ref(&identity.repository, &name, &tag_sha)
         .is_err()

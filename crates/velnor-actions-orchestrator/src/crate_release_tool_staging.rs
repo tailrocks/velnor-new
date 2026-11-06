@@ -7,6 +7,43 @@ use super::{
     validate_tool_artifact_metadata,
 };
 
+#[derive(Debug)]
+pub struct StagedToolchain {
+    path: std::path::PathBuf,
+    intent: velnor_actions_contract::config::CrateReleaseIntent,
+    authorization: crate::crate_release_github::GitHubAuthorized,
+    artifact: ToolArtifactMetadata,
+    #[cfg(target_os = "linux")]
+    deadline: std::time::Instant,
+}
+
+impl StagedToolchain {
+    #[must_use]
+    pub fn path(&self) -> &std::path::Path {
+        &self.path
+    }
+
+    #[must_use]
+    pub fn intent(&self) -> &velnor_actions_contract::config::CrateReleaseIntent {
+        &self.intent
+    }
+
+    #[must_use]
+    pub fn authorization(&self) -> &crate::crate_release_github::GitHubAuthorized {
+        &self.authorization
+    }
+
+    #[must_use]
+    pub fn artifact(&self) -> &ToolArtifactMetadata {
+        &self.artifact
+    }
+
+    #[cfg(target_os = "linux")]
+    pub(crate) fn deadline(&self) -> std::time::Instant {
+        self.deadline
+    }
+}
+
 pub fn stage_unverified_toolchain<
     G: crate::crate_release_github::GitHubAdmissionRead,
     T: crate::crate_release_tool_download::ToolDownloadTransport,
@@ -14,7 +51,7 @@ pub fn stage_unverified_toolchain<
     request: &ToolchainStageRequest<'_>,
     github: &G,
     transport: &T,
-) -> Result<std::path::PathBuf, OrchestratorError> {
+) -> Result<StagedToolchain, OrchestratorError> {
     let invalid = || internal("crate_release_toolchain_staging_invalid");
     if !authority_matches(request)
         || request.token.is_empty()
@@ -24,14 +61,14 @@ pub fn stage_unverified_toolchain<
     {
         return Err(invalid());
     }
-    let authority = crate::crate_release_github::authorize_github_candidate(
+    let original_authority = crate::crate_release_github::authorize_github_candidate(
         request.github,
         request.candidate,
         github,
     )?;
     crate::crate_release_github::verify_immutable_tag_rules(&request.intent.repository, github)?;
     let initial = current_artifact(request, github, false)?;
-    if initial.workflow_run.repository_id != authority.repository_id() {
+    if initial.workflow_run.repository_id != original_authority.repository_id() {
         return Err(invalid());
     }
     let parent = request.runner_temp.join("velnor");
@@ -60,7 +97,7 @@ pub fn stage_unverified_toolchain<
         github,
     )?;
     crate::crate_release_github::verify_immutable_tag_rules(&request.intent.repository, github)?;
-    if refreshed != authority || current_artifact(request, github, false)? != initial {
+    if refreshed != original_authority || current_artifact(request, github, false)? != initial {
         return Err(invalid());
     }
     extract_verified_tool_archive_file(
@@ -70,7 +107,29 @@ pub fn stage_unverified_toolchain<
         &destination,
         request.deadline,
     )?;
-    Ok(destination)
+    if std::time::Instant::now() >= request.deadline {
+        return Err(invalid());
+    }
+    let authorization = crate::crate_release_github::authorize_github_candidate(
+        request.github,
+        request.candidate,
+        github,
+    )?;
+    crate::crate_release_github::verify_immutable_tag_rules(&request.intent.repository, github)?;
+    if authorization != original_authority
+        || current_artifact(request, github, false)? != initial
+        || std::time::Instant::now() >= request.deadline
+    {
+        return Err(invalid());
+    }
+    Ok(StagedToolchain {
+        path: destination,
+        intent: request.intent.clone(),
+        authorization,
+        artifact: initial,
+        #[cfg(target_os = "linux")]
+        deadline: request.deadline,
+    })
 }
 
 pub(super) fn authority_matches(request: &ToolchainStageRequest<'_>) -> bool {

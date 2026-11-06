@@ -9,6 +9,8 @@ pub struct SourceSnapshot {
     directory: tempfile::TempDir,
     source_sha: String,
     tree_sha: String,
+    #[cfg(target_os = "linux")]
+    files: Vec<crate::crate_release_journal::JournalFile>,
     manifests: std::collections::BTreeSet<String>,
     nested_toolchains: Vec<String>,
 }
@@ -17,6 +19,10 @@ impl SourceSnapshot {
     #[must_use]
     pub(crate) fn root(&self) -> &Path {
         self.directory.path()
+    }
+    #[cfg(target_os = "linux")]
+    pub(crate) fn files(&self) -> &[crate::crate_release_journal::JournalFile] {
+        &self.files
     }
     #[must_use]
     pub fn source_sha(&self) -> &str {
@@ -35,7 +41,7 @@ impl SourceSnapshot {
 }
 
 #[path = "crate_release_qualification_object.rs"]
-mod object;
+pub(crate) mod object;
 
 pub fn snapshot_approved_source(
     source: &Path,
@@ -43,7 +49,9 @@ pub fn snapshot_approved_source(
     git: &ReleaseGit,
 ) -> Result<SourceSnapshot, OrchestratorError> {
     crate::verify_crate_release_source(source, sha, git)?;
-    let snapshot = object::snapshot(source, sha, git)?;
+    let deadline = velnor_actions_mise::CheckDeadline::after(std::time::Duration::from_secs(90))
+        .map_err(|_| invalid())?;
+    let snapshot = object::snapshot(source, sha, git, deadline)?;
     crate::verify_crate_release_source(source, sha, git)?;
     Ok(snapshot)
 }
@@ -53,7 +61,18 @@ pub(crate) fn snapshot_git_objects(
     sha: &str,
     git: &ReleaseGit,
 ) -> Result<SourceSnapshot, OrchestratorError> {
-    object::snapshot(source, sha, git)
+    let deadline = velnor_actions_mise::CheckDeadline::after(std::time::Duration::from_secs(90))
+        .map_err(|_| invalid())?;
+    snapshot_git_objects_until(source, sha, git, deadline)
+}
+
+pub(crate) fn snapshot_git_objects_until(
+    source: &Path,
+    sha: &str,
+    git: &ReleaseGit,
+    deadline: velnor_actions_mise::CheckDeadline,
+) -> Result<SourceSnapshot, OrchestratorError> {
+    object::snapshot(source, sha, git, deadline)
 }
 
 #[cfg(unix)]

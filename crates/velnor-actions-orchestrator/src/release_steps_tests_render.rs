@@ -40,8 +40,7 @@ fn rendered_workflow_has_one_hosted_environment_publisher() -> Result<(), Box<dy
     assert!(!workflow.contains("release-publish-bootstrap:"));
     assert!(!workflow.contains("secrets.CARGO_REGISTRY_TOKEN"));
     assert!(!workflow.contains("release-plz release"));
-    assert!(workflow.contains("crate-release journal-start"));
-    assert!(workflow.contains("crate-release journal-coordinate"));
+    assert!(workflow.contains("Publish approved Rust crate"));
     let publisher = spec.jobs.get("release-publish").ok_or("publisher")?;
     assert_eq!(publisher.runs_on, "ubuntu-26.04");
     assert_eq!(publisher.environment.as_deref(), Some("release"));
@@ -49,13 +48,9 @@ fn rendered_workflow_has_one_hosted_environment_publisher() -> Result<(), Box<dy
     assert_eq!(publisher.permissions.id_token, PermissionLevel::Write);
     assert_eq!(publisher.permissions.contents, PermissionLevel::Write);
     assert_eq!(publisher.condition.as_deref(), Some(publish_gate_condition("owner/project", "main", &spec.plan).as_str()));
-    let position = |name: &str| publisher.steps.iter().position(|step| step.name == name);
-    let source = position("Release source-require").ok_or("source admission")?;
-    let verified = position("Release verify-admission").ok_or("verify admission")?;
-    let acquire = position("Acquire release-plz").ok_or("acquire release-plz")?;
-    let publish = position("Release journal-coordinate").ok_or("publish release")?;
-    assert!(source < verified && verified < acquire && acquire < publish);
-    assert!(publisher.steps.iter().find(|step| step.name == "Release journal-coordinate").is_some_and(|step| step.condition.as_deref() == Some(velnor_actions_workflow_renderer::release_gates::COORDINATE_CONDITION)));
+    assert_eq!(publisher.steps.iter().map(|step| step.name.as_str()).collect::<Vec<_>>(),
+        ["Capture release budget", "Publish approved Rust crate"]);
+    assert!(publisher.steps[1].condition.is_none());
     assert!(workflow.contains("id-token: write"));
     assert!(workflow.contains("needs: release-preflight") || workflow.contains("- release-preflight"));
     let mut no_oidc = spec.clone();
@@ -91,8 +86,7 @@ fn rendered_bootstrap_has_only_token_publisher() -> Result<(), Box<dyn std::erro
     assert!(!workflow.contains("release-publish:"));
     assert!(workflow.contains("secrets.CARGO_REGISTRY_TOKEN"));
     assert!(!workflow.contains("release-plz release"));
-    assert!(workflow.contains("crate-release journal-start"));
-    assert!(workflow.contains("crate-release journal-coordinate"));
+    assert!(workflow.contains("Publish approved Rust crate"));
     let publisher = spec.jobs.get("release-publish-bootstrap").ok_or("publisher")?;
     assert_eq!(publisher.environment.as_deref(), Some("release"));
     assert_eq!(publisher.needs, ["release-preflight"]);
@@ -103,7 +97,7 @@ fn rendered_bootstrap_has_only_token_publisher() -> Result<(), Box<dyn std::erro
                 && env.values().any(|value| value.contains("secrets.CARGO_REGISTRY_TOKEN"))
             {
                 assert_eq!(id, "release-publish-bootstrap");
-                assert_eq!(step.name, "Release journal-coordinate");
+                assert_eq!(step.name, "Publish approved Rust crate");
             }
         }
     }
@@ -216,7 +210,7 @@ fn publisher_budget_is_first_and_cannot_be_forged() -> Result<(), Box<dyn std::e
     assert!(render_release_workflow(&short_timeout, &context, &rust).is_err());
     let mut forged = spec.clone();
     let steps = &mut forged.jobs.get_mut("release-publish").ok_or("publisher")?.steps;
-    let step = steps.iter_mut().find(|step| step.name == "Release journal-coordinate").ok_or("coordinate")?;
+    let step = steps.iter_mut().find(|step| step.name == "Publish approved Rust crate").ok_or("coordinate")?;
     if let StepKind::Shell { env, .. } = &mut step.kind { env.insert("VELNOR_RELEASE_BUDGET".into(), "forged".into()); } else { return Err("shell".into()); }
     assert!(render_release_workflow(&forged, &context, &rust).is_err());
     Ok(())

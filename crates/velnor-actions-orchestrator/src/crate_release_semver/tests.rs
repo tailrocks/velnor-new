@@ -9,6 +9,23 @@ struct Registry {
     status: u16,
     body: Vec<u8>,
 }
+
+struct ArchiveRegistry {
+    detail: Vec<u8>,
+    archive: Vec<u8>,
+}
+impl CrateRegistryRead for ArchiveRegistry {
+    fn get(&self, path: &str) -> Result<CrateRegistryResponse, OrchestratorError> {
+        let body = if path == "/api/v1/crates/demo/0.1.0" {
+            self.detail.clone()
+        } else if path == "/crates/demo/demo-0.1.0.crate" {
+            self.archive.clone()
+        } else {
+            return Err(invalid());
+        };
+        Ok(CrateRegistryResponse { status: 200, body })
+    }
+}
 impl CrateRegistryRead for Registry {
     fn get(&self, _path: &str) -> Result<CrateRegistryResponse, OrchestratorError> {
         Ok(CrateRegistryResponse {
@@ -96,22 +113,6 @@ fn baseline_requires_authoritative_registry_and_uses_latest_previous_version()
 #[test]
 fn baseline_archive_is_bound_to_registry_identity_and_checksum()
 -> Result<(), Box<dyn std::error::Error>> {
-    struct ArchiveRegistry {
-        detail: Vec<u8>,
-        archive: Vec<u8>,
-    }
-    impl CrateRegistryRead for ArchiveRegistry {
-        fn get(&self, path: &str) -> Result<CrateRegistryResponse, OrchestratorError> {
-            let body = if path == "/api/v1/crates/demo/0.1.0" {
-                self.detail.clone()
-            } else if path == "/crates/demo/demo-0.1.0.crate" {
-                self.archive.clone()
-            } else {
-                return Err(invalid());
-            };
-            Ok(CrateRegistryResponse { status: 200, body })
-        }
-    }
     let encoder = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
     let mut tar = tar::Builder::new(encoder);
     let manifest = b"[package]\nname='demo'\nversion='0.1.0'\n";
@@ -120,6 +121,12 @@ fn baseline_archive_is_bound_to_registry_identity_and_checksum()
     header.set_mode(0o644);
     header.set_cksum();
     tar.append_data(&mut header, "demo-0.1.0/Cargo.toml", manifest.as_slice())?;
+    let lock = b"version = 4\n";
+    let mut lock_header = tar::Header::new_gnu();
+    lock_header.set_size(lock.len() as u64);
+    lock_header.set_mode(0o644);
+    lock_header.set_cksum();
+    tar.append_data(&mut lock_header, "demo-0.1.0/Cargo.lock", lock.as_slice())?;
     let archive = tar.into_inner()?.finish()?;
     let checksum = crate::generator::sha256_hex(&archive);
     let detail = serde_json::json!({"version":{"id":1,"crate":"demo","num":"0.1.0","yanked":false,"checksum":checksum}}).to_string().into_bytes();
@@ -130,6 +137,31 @@ fn baseline_archive_is_bound_to_registry_identity_and_checksum()
     };
     let (bytes, observed) = download_baseline(&registry, "demo", &previous)?;
     assert_eq!(observed, checksum);
+    let input = super::checker::ProjectionInput {
+        archive: &bytes,
+        checksum: &observed,
+        package: "demo",
+        baseline_version: "0.1.0",
+        source_sha: "0123456789012345678901234567890123456789",
+        target_version: "0.1.1",
+        manifest: "Cargo.toml",
+        features: &[],
+    };
+    let (projection, files) = super::checker::supervised_projection(&input)?;
+    assert_eq!(files["Cargo.toml"].1, manifest);
+    assert_eq!(files["Cargo.lock"].1, lock);
+    assert_eq!(projection["baseline_checksum"], observed);
+    let bad_checksum = super::checker::ProjectionInput {
+        checksum: &"a".repeat(64),
+        ..input
+    };
+    assert!(super::checker::supervised_projection(&bad_checksum).is_err());
+    let bad_version = super::checker::ProjectionInput {
+        baseline_version: "0.1.1",
+        ..input
+    };
+    assert!(super::checker::supervised_projection(&bad_version).is_err());
+
     let temp = tempfile::tempdir()?;
     extract_baseline(&bytes, "demo", "0.1.0", temp.path())?;
     assert_eq!(std::fs::read(temp.path().join("Cargo.toml"))?, manifest);

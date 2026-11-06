@@ -36,21 +36,6 @@ fn runtime_step_names(role: ReleaseRole) -> &'static [&'static str] {
             "Archive release Rust toolchain",
             "Upload release Rust toolchain",
         ],
-        ReleaseRole::PublishOidc | ReleaseRole::PublishBootstrap => &[
-            "Acquire Velnor",
-            "Checkout",
-            "Release source-require",
-            "Checkout exact source",
-            "Release toolchain-acquire",
-            "Verify Rust channel manifest",
-            "Acquire cargo-semver-checks",
-            "Release receipt-acquire",
-            "Release verify-admission",
-            "Reject unsupported release action",
-            "Acquire release-plz",
-            "Release journal-start",
-            "Release journal-coordinate",
-        ],
         ReleaseRole::Reconcile => &[
             "Acquire Velnor",
             "Checkout",
@@ -62,7 +47,10 @@ fn runtime_step_names(role: ReleaseRole) -> &'static [&'static str] {
             "Release reconcile",
             "Upload reconciliation record",
         ],
-        ReleaseRole::Preparation | ReleaseRole::PrCreate => &[],
+        ReleaseRole::Preparation
+        | ReleaseRole::PrCreate
+        | ReleaseRole::PublishOidc
+        | ReleaseRole::PublishBootstrap => &[],
     }
 }
 
@@ -72,18 +60,7 @@ pub(super) fn check_runtime_steps(
     version: &str,
     plz_version: Option<&str>,
 ) -> Result<(), RenderError> {
-    let publisher = matches!(
-        job.role,
-        ReleaseRole::PublishOidc | ReleaseRole::PublishBootstrap
-    );
-    let steps = if publisher {
-        if job.steps.first() != Some(&crate::release_budget::capture_step()?) {
-            return Err(RenderError::InvalidWorkflow(format!("release_budget:{id}")));
-        }
-        &job.steps[1..]
-    } else {
-        &job.steps[..]
-    };
+    let steps = &job.steps[..];
     let expected = runtime_step_names(job.role);
     if steps.len() != expected.len()
         || steps

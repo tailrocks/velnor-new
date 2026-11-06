@@ -97,37 +97,11 @@ fn rust_artifact_custody_must_precede_publishing() -> Result<(), Box<dyn std::er
         valid(&spec, &rust),
         "generated release should satisfy custody"
     );
-    let mut absent = spec.clone();
-    absent
-        .jobs
-        .get_mut("release-publish")
-        .ok_or("publisher")?
-        .steps
-        .retain(|step| step.name != "Verify Rust channel manifest");
-    assert!(
-        !valid(&absent, &rust),
-        "publisher must verify the toolchain"
-    );
-    let mut reordered = spec.clone();
-    let job = reordered
-        .jobs
-        .get_mut("release-publish")
-        .ok_or("publisher")?;
-    let acquire = job
-        .steps
-        .iter()
-        .position(|step| step.name == "Release toolchain-acquire")
-        .ok_or("acquire")?;
-    let verify = job
-        .steps
-        .iter()
-        .position(|step| step.name == "Verify Rust channel manifest")
-        .ok_or("verify")?;
-    job.steps.swap(acquire, verify);
-    assert!(
-        !valid(&reordered, &rust),
-        "verification must follow acquisition"
-    );
+    let mut forged = spec.clone();
+    let publisher = forged.jobs.get_mut("release-publish").ok_or("publisher")?;
+    let StepKind::Shell { env, .. } = &mut publisher.steps[1].kind else { return Err("publisher shell".into()); };
+    env.insert("VELNOR_PREFLIGHT_RUST_ARTIFACT_ID".into(), "forged".into());
+    assert!(!valid(&forged, &rust), "publisher must bind the verified Rust artifact");
     let mut missing_id = spec.clone();
     missing_id
         .jobs
@@ -161,7 +135,7 @@ fn semver_tool_is_required_before_preparation_and_candidate_receipt()
 -> Result<(), Box<dyn std::error::Error>> {
     let (spec, rust) = fixture()?;
     assert!(valid(&spec, &rust));
-    for id in ["release-preparation", "release-preflight", "release-publish"] {
+    for id in ["release-preparation", "release-preflight"] {
         let mut missing = spec.clone();
         let job = missing.jobs.get_mut(id).ok_or("job")?;
         let index = job.steps.iter().position(|step| step.name == "Acquire cargo-semver-checks").ok_or("semver acquisition")?;
@@ -189,13 +163,13 @@ fn consumer_and_reconciliation_depend_on_verified_preflight()
         .ok_or("publisher")?
         .steps
         .iter_mut()
-        .find(|step| step.name == "Release toolchain-acquire")
+        .find(|step| step.name == "Publish approved Rust crate")
         .ok_or("acquire")?;
     let StepKind::Shell { env, .. } = &mut acquire.kind else {
         return Err("acquire is not a shell step".into());
     };
     env.insert(
-        "VELNOR_RUST_ARTIFACT_ID".to_owned(),
+        "VELNOR_PREFLIGHT_RUST_ARTIFACT_ID".to_owned(),
         "${{ inputs.artifact_id }}".to_owned(),
     );
     assert!(
@@ -247,10 +221,14 @@ fn consumers_acquire_the_receipt_bound_to_preflight() -> Result<(), Box<dyn std:
         Some("${{ steps.release-receipt-upload.outputs.artifact-id }}"),
         "preflight must expose the actual receipt upload ID"
     );
-    for consumer in ["release-publish", "release-reconcile"] {
-        let job = spec.jobs.get(consumer).ok_or("consumer")?;
+    let publisher = spec.jobs.get("release-publish").ok_or("publisher")?;
+    assert!(publisher.needs.iter().any(|need| need == "release-preflight"));
+    let StepKind::Shell { env, .. } = &publisher.steps[1].kind else { return Err("publisher shell".into()); };
+    assert_eq!(env.get("VELNOR_PREFLIGHT_RECEIPT_ARTIFACT_ID").map(String::as_str), Some("${{ needs.release-preflight.outputs.receipt_artifact_id }}"));
+    {
+        let job = spec.jobs.get("release-reconcile").ok_or("consumer")?;
         assert!(job.needs.iter().any(|need| need == "release-preflight"));
-        let operation = if consumer == "release-reconcile" { "reconciliation-receipt-acquire" } else { "receipt-acquire" };
+        let operation = "reconciliation-receipt-acquire";
         let acquire = job.steps.iter().find(|step| step.name == format!("Release {operation}")).ok_or("receipt acquisition")?;
         let StepKind::Shell { run, env } = &acquire.kind else {
             return Err("receipt acquisition is not a shell step".into());
@@ -261,9 +239,9 @@ fn consumers_acquire_the_receipt_bound_to_preflight() -> Result<(), Box<dyn std:
     }
     assert!(valid(&spec, &rust));
     let mut forged_id = spec.clone();
-    let acquire = forged_id.jobs.get_mut("release-publish").ok_or("publisher")?.steps.iter_mut().find(|step| step.name == "Release receipt-acquire").ok_or("acquire")?;
+    let acquire = forged_id.jobs.get_mut("release-publish").ok_or("publisher")?.steps.iter_mut().find(|step| step.name == "Publish approved Rust crate").ok_or("acquire")?;
     let StepKind::Shell { env, .. } = &mut acquire.kind else { return Err("acquire shell".into()); };
-    env.insert("VELNOR_RECEIPT_ARTIFACT_ID".to_owned(), "${{ inputs.artifact_id }}".to_owned());
+    env.insert("VELNOR_PREFLIGHT_RECEIPT_ARTIFACT_ID".to_owned(), "${{ inputs.artifact_id }}".to_owned());
     assert!(!valid(&forged_id, &rust), "receipt artifact must come from this preflight");
 
     let mut altered_upload = spec.clone();

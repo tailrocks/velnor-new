@@ -6,9 +6,12 @@
 pub(crate) mod test_registry;
 
 mod checker;
+
 pub(crate) use checker::run_check;
 use checker::verify_checker;
 pub(crate) use checker::verify_one;
+#[cfg(target_os = "linux")]
+pub(crate) use checker::{ProjectionInput, supervised_projection};
 
 use std::{cmp::Ordering, ffi::OsString, io::Write as _, path::Path, time::Duration};
 

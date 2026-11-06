@@ -6,7 +6,7 @@ use std::ffi::{OsStr, OsString};
 use std::path::PathBuf;
 
 use velnor_actions_contract::config::{ReleaseAuthentication, RustReleaseConfig};
-use velnor_actions_contract::{JobTimeout, Step, StepId, StepKind, StepRole};
+use velnor_actions_contract::{JobTimeout, Step, StepId, StepRole};
 use velnor_actions_mise::catalog::release_plz::ReleaseRequest as PlzRelease;
 use velnor_actions_mise::{PinnedTool, PinnedToolExec, ToolCatalog, ToolHomes};
 use velnor_actions_workflow_renderer::release_jobs::{ReleaseJobSpec, ReleaseRole};
@@ -21,9 +21,6 @@ use crate::OrchestratorError;
 use crate::release_checkouts::forge_env;
 use velnor_actions_workflow_renderer::release_checkout_gates::{policy_checkout, source_checkout};
 use crate::utf8::{strings_of, strings_of_env};
-
-const BOOTSTRAP_TOKEN_ENV: &str = "CARGO_REGISTRY_TOKEN";
-const BOOTSTRAP_SECRET_REF: &str = "${{ secrets.CARGO_REGISTRY_TOKEN }}";
 
 pub(crate) enum Phase {
     Publish,
@@ -40,6 +37,8 @@ pub(crate) struct JobInputs<'a> {
     pub(crate) catalog: &'a ToolCatalog,
     pub(crate) acquire: &'a Step,
     pub(crate) generator_version: &'a str,
+    pub(crate) generator_source_sha: &'a str,
+    pub(crate) generator_manifest_sha256: &'a str,
 }
 
 struct JobParts<'a> {
@@ -58,6 +57,8 @@ struct JobParts<'a> {
     environment: &'a str,
     acquire: Step,
     generator_version: &'a str,
+    generator_source_sha: &'a str,
+    generator_manifest_sha256: &'a str,
     rust_version: &'a str,
 }
 
@@ -91,6 +92,8 @@ pub(crate) fn assemble_jobs(
         environment: &inputs.release.environment,
         acquire: inputs.acquire.clone(),
         generator_version: inputs.generator_version,
+        generator_source_sha: inputs.generator_source_sha,
+        generator_manifest_sha256: inputs.generator_manifest_sha256,
         rust_version: inputs.catalog.version(PinnedTool::Rust),
     };
     let bootstrap =

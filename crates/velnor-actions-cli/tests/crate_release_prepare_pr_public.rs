@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{fs, path::Path, process::Command};
+use std::{fs, io::Write as _, path::Path, process::Command};
 
 fn git(root: &Path, args: &[&str]) -> Result<String, Box<dyn std::error::Error>> {
     let output = Command::new("git").current_dir(root).args(args).output()?;
@@ -202,5 +202,57 @@ fn prepare_pr_rejects_changed_generated_config() -> Result<(), Box<dyn std::erro
     );
     assert_eq!(fs::read(&output_file)?, Vec::<u8>::new());
     assert!(!runner.join("velnor-release-pr-preparation.json").exists());
+    Ok(())
+}
+
+#[test]
+fn publisher_entry_is_exported_without_granting_publication()
+-> Result<(), Box<dyn std::error::Error>> {
+    let binary = env!("CARGO_BIN_EXE_velnor-actions");
+    let output = Command::new(binary)
+        .env_clear()
+        .args([
+            "crate-release",
+            "publisher-entry",
+            "--timeout-seconds",
+            "1800",
+        ])
+        .output()?;
+    assert!(output.status.success(), "publisher entry export failed");
+    assert!(!output.stdout.is_empty() && output.stdout.len() <= 512 * 1024);
+    let mut python = Command::new("python3")
+        .args([
+            "-I",
+            "-S",
+            "-c",
+            "import sys; compile(sys.stdin.read(), '<entry>', 'exec')",
+        ])
+        .stdin(std::process::Stdio::piped())
+        .spawn()?;
+    python
+        .stdin
+        .take()
+        .ok_or("missing stdin")?
+        .write_all(&output.stdout)?;
+    assert!(python.wait()?.success());
+    let rejected = Command::new(binary)
+        .env_clear()
+        .args(["crate-release", "publish-supervise"])
+        .output()?;
+    assert!(!rejected.status.success());
+    assert!(
+        String::from_utf8_lossy(&rejected.stderr).contains("crate_release_authority_not_qualified")
+    );
+    let invalid = Command::new(binary)
+        .env_clear()
+        .args([
+            "crate-release",
+            "publisher-entry",
+            "--timeout-seconds",
+            "60",
+        ])
+        .output()?;
+    assert!(!invalid.status.success());
+    assert_eq!(invalid.stdout, [] as [u8; 0]);
     Ok(())
 }

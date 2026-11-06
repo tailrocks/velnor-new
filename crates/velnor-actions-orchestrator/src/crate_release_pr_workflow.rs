@@ -122,6 +122,8 @@ fn verify_reviewed_jobs(
         catalog: &catalog,
         acquire: &acquire,
         generator_version: &intent.generator_version,
+        generator_source_sha: &intent.generator_source_sha,
+        generator_manifest_sha256: &intent.generator_manifest_sha256,
     })?;
     for id in [
         "release-preflight",

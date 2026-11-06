@@ -215,41 +215,27 @@ pub(super) fn check_completion_retry(
     >,
 ) -> Result<(), Box<dyn std::error::Error>> {
     use crate::crate_release_controller::coordinate_release;
-    let mut wrong_pins = input.journal_receipt.expected_tools.clone();
-    wrong_pins.rust_manifest_sha256 = "0".repeat(64);
-    assert!(
-        crate::crate_release_journal::record_reconciled_completion(
-            input,
-            crate::package_release_signer::fixture_measured_tools(wrong_pins)
-        )
-        .is_err()
-    );
-    assert!(
-        crate::crate_release_journal::inspect_journal(
-            input.journal,
-            input.identity,
-            crate::crate_release_journal::JournalStage::Completed
-        )?
-        .is_none()
-    );
-    input.github.approved.set(false);
-    assert!(
-        crate::crate_release_journal::record_reconciled_completion(
-            input,
-            crate::package_release_signer::fixture_measured_tools(
-                input.journal_receipt.expected_tools.clone()
-            )
-        )
-        .is_err()
-    );
-    input.github.approved.set(true);
+    check_completion_retry_denials(input)?;
     reject_bad_completion_evidence(input)?;
-    crate::crate_release_journal::record_reconciled_completion(
+    super::frozen_completion::reject_post_freeze_drift(input)?;
+    super::frozen_completion::completion_recovers_lost_write_response(input)?;
+    let frozen = crate::crate_release_controller::FrozenCompletion::prepare_unprivileged(
         input,
         crate::package_release_signer::fixture_measured_tools(
             input.journal_receipt.expected_tools.clone(),
         ),
+        &crate::UnprivilegedSourceExecution,
     )?;
+    let detached = input.source.with_extension("frozen-source");
+    fs::rename(input.source, &detached)?;
+    let result = frozen.record_unprivileged(
+        &crate::UnprivilegedSourceExecution,
+        input.journal,
+        input.github,
+        input.registry,
+    );
+    fs::rename(&detached, input.source)?;
+    result?;
     let completion = crate::crate_release_journal::inspect_journal(
         input.journal,
         input.identity,
@@ -272,7 +258,7 @@ pub(super) fn check_completion_retry(
         || {},
     )?;
     assert_eq!(retried.history.len(), 6);
-    crate::crate_release_journal::record_reconciled_completion(
+    crate::crate_release_journal::record_unprivileged_completion(
         input,
         crate::package_release_signer::fixture_measured_tools(
             input.journal_receipt.expected_tools.clone(),
@@ -281,6 +267,45 @@ pub(super) fn check_completion_retry(
     assert_eq!(input.github.writes.get(), 2);
     assert_eq!(input.journal.write_calls.get(), journal_writes);
     check_stale_completed_retry(input, journal_writes);
+    Ok(())
+}
+
+fn check_completion_retry_denials(
+    input: &crate::crate_release_controller::CrateReleaseObservation<
+        '_,
+        JournalRegistryFake,
+        Github,
+        Registry,
+    >,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let mut wrong_pins = input.journal_receipt.expected_tools.clone();
+    wrong_pins.rust_manifest_sha256 = "0".repeat(64);
+    assert!(
+        crate::crate_release_journal::record_unprivileged_completion(
+            input,
+            crate::package_release_signer::fixture_measured_tools(wrong_pins)
+        )
+        .is_err()
+    );
+    assert!(
+        crate::crate_release_journal::inspect_journal(
+            input.journal,
+            input.identity,
+            crate::crate_release_journal::JournalStage::Completed
+        )?
+        .is_none()
+    );
+    input.github.approved.set(false);
+    assert!(
+        crate::crate_release_journal::record_unprivileged_completion(
+            input,
+            crate::package_release_signer::fixture_measured_tools(
+                input.journal_receipt.expected_tools.clone()
+            )
+        )
+        .is_err()
+    );
+    input.github.approved.set(true);
     Ok(())
 }
 
@@ -308,7 +333,7 @@ pub(super) fn check_stale_completed_retry(
     let mut stale_pins = input.journal_receipt.expected_tools.clone();
     stale_pins.release_plz_sha256 = "0".repeat(64);
     assert!(
-        crate::crate_release_journal::record_reconciled_completion(
+        crate::crate_release_journal::record_unprivileged_completion(
             input,
             crate::package_release_signer::fixture_measured_tools(stale_pins)
         )

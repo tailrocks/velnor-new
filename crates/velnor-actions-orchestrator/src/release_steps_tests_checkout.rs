@@ -31,7 +31,12 @@ fn crate_release_checkouts_use_attested_file_free_git() -> Result<(), Box<dyn st
             let (spec, rust) = fixture_for_release_pr(authentication, release_pr)?;
             assert!(valid(&spec, &rust));
             for job in spec.jobs.values().filter(|job| job.role != ReleaseRole::PrCreate) {
-                let offset = usize::from(matches!(job.role, ReleaseRole::PublishOidc | ReleaseRole::PublishBootstrap));
+                if matches!(job.role, ReleaseRole::PublishOidc | ReleaseRole::PublishBootstrap) {
+                    assert_eq!(job.steps.len(), 2);
+                    assert!(!job.steps.iter().any(|step| step.name.contains("Checkout")));
+                    continue;
+                }
+                let offset = 0;
                 assert_eq!(job.steps[offset].name, "Acquire Velnor");
                 assert_eq!(job.steps[offset + 1].name, "Checkout");
                 let StepKind::Shell { run, env } = &job.steps[offset + 1].kind else { return Err("policy checkout is not Velnor".into()); };

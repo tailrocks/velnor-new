@@ -16,16 +16,26 @@ class ManagerError(OSError):
 
 
 class Manager:
-    def __init__(self, helper, runtime_seconds, transport=None, root_bootstrap=False):
+    def __init__(self, helper, runtime_seconds, transport=None, root_bootstrap=False, bind_to=None, claim_helper=None, deny_network=False, deny_unix=False):
         if (not os.path.isabs(helper) or type(runtime_seconds) is not int
                 or not 1 <= runtime_seconds <= 86400 or type(root_bootstrap) is not bool
-                or (root_bootstrap and os.geteuid() != 0)):
+                or (root_bootstrap and os.geteuid() != 0)
+                or type(deny_network) is not bool or type(deny_unix) is not bool
+                or ((deny_network or deny_unix) and root_bootstrap)
+                or (claim_helper is not None and (not root_bootstrap
+                    or not isinstance(claim_helper, str) or not os.path.isabs(claim_helper)))
+                or (bind_to is not None and (not isinstance(bind_to, str)
+                    or not re.fullmatch(r"velnor-release-[0-9a-f]{32}\.service", bind_to)))):
             raise ManagerError("invalid manager request")
         if transport is None and (os.geteuid() != 0 or "DBUS_SYSTEM_BUS_ADDRESS" in os.environ):
             raise ManagerError("untrusted system bus environment")
         self.helper = helper
         self.runtime_seconds = runtime_seconds
         self.root_bootstrap = root_bootstrap
+        self.bind_to = bind_to
+        self.claim_helper = claim_helper
+        self.deny_network = deny_network
+        self.deny_unix = deny_unix
         self.library = ctypes.CDLL("libsystemd.so.0")
         self.bus = ctypes.c_void_p()
         self.events = []
@@ -199,7 +209,12 @@ class Manager:
         if remaining <= 0:
             raise ManagerError("system bus deadline")
         self._check(self.library.sd_bus_set_method_call_timeout(self.bus, max(1, int(remaining // 1_000))))
-        self.owner = self._owner(deadline)
+        current_owner = self._owner(deadline)
+        if self.slot.value is not None:
+            if current_owner != self.owner:
+                raise ManagerError("manager owner changed")
+            return self.owner
+        self.owner = current_owner
         callback_type = ctypes.CFUNCTYPE(ctypes.c_int, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p)
 
         def callback(message, _userdata, _error):
@@ -290,7 +305,7 @@ class Manager:
         self.dropin_parent = None
         self.dropin_name = None
 
-    def start(self, unit, reader, deadline):
+    def start(self, unit, reader, deadline, output_fd=None):
         self._prepare_unit(unit)
         message = self._message(self.owner, "/org/freedesktop/systemd1", "org.freedesktop.systemd1.Manager",
                                 "StartTransientUnit")
@@ -304,10 +319,56 @@ class Manager:
                 ("CapabilityBoundingSet", "t", 0), ("AmbientCapabilities", "t", 0), ("LimitCORE", "t", 0),
                 ("TimeoutStartUSec", "t", 5_000_000), ("TimeoutStopUSec", "t", 20_000_000),
                 ("RuntimeMaxUSec", "t", self.runtime_seconds * 1_000_000),
-                ("KillMode", "s", "control-group"), ("StandardOutput", "s", "null"),
+                ("KillMode", "s", "control-group"),
                 ("StandardError", "s", "null"), ("StandardInputFileDescriptor", "h", reader),
             ):
                 self._property(message, name, kind, value)
+            if not self.root_bootstrap:
+                self._property(message, "PrivateTmp", "b", 1)
+            if self.deny_network:
+                self._property(message, "PrivateNetwork", "b", 1)
+            if self.deny_unix:
+                self._open(message, "r", "sv")
+                self._append(message, "s", "RestrictAddressFamilies")
+                self._open(message, "v", "(bas)")
+                self._open(message, "r", "bas")
+                self._append(message, "b", 0)
+                self._open(message, "a", "s")
+                self._append(message, "s", "AF_UNIX")
+                self._close(message)
+                self._close(message)
+                self._close(message)
+                self._close(message)
+            if output_fd is None:
+                self._property(message, "StandardOutput", "s", "null")
+            elif type(output_fd) is int and output_fd >= 0:
+                self._property(message, "StandardOutputFileDescriptor", "h", output_fd)
+            else:
+                raise ManagerError("invalid output descriptor")
+            if self.bind_to is not None:
+                for property_name in ("BindsTo", "After"):
+                    self._open(message, "r", "sv")
+                    self._append(message, "s", property_name)
+                    self._open(message, "v", "as")
+                    self._open(message, "a", "s")
+                    self._append(message, "s", self.bind_to)
+                    self._close(message)
+                    self._close(message)
+                    self._close(message)
+            if self.claim_helper is not None:
+                self._open(message, "r", "sv")
+                self._append(message, "s", "ExecStartPre")
+                self._open(message, "v", "a(sasb)")
+                self._open(message, "a", "(sasb)")
+                self._open(message, "r", "sasb")
+                self._append(message, "s", "/usr/bin/python3")
+                self._open(message, "a", "s")
+                for arg in ("/usr/bin/python3", "-I", "-S", self.claim_helper):
+                    self._append(message, "s", arg)
+                self._close(message)
+                self._append(message, "b", 0)
+                for _ in range(4):
+                    self._close(message)
             self._open(message, "r", "sv")
             self._append(message, "s", "ExecStart")
             self._open(message, "v", "a(sasb)")

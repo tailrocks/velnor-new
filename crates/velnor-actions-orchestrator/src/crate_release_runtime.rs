@@ -35,11 +35,19 @@ pub fn parse_crate_release_intent(bytes: &[u8]) -> Result<CrateReleaseIntent, Or
 
 pub fn run_crate_release(operation: &str) -> Result<(), OrchestratorError> {
     require_authority_implementation()?;
+    #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+    if operation == "publish-supervise" {
+        return supervised::run();
+    }
     if operation == "release-pr-create" {
         return crate::crate_release_pr_run::run_from_environment();
     }
     run_qualified_crate_release(operation)
 }
+
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+#[path = "crate_release_runtime_supervised.rs"]
+mod supervised;
 
 fn run_qualified_crate_release(operation: &str) -> Result<(), OrchestratorError> {
     let workspace = required_path("GITHUB_WORKSPACE")?;
@@ -72,7 +80,7 @@ fn run_qualified_crate_release_with_git(
     operation: &str,
     git: &crate::crate_release_git::ReleaseGit,
     workspace: &Path,
-    source_execution: &dyn crate::CrateSourceExecution,
+    source_execution: &crate::UnprivilegedSourceExecution,
 ) -> Result<(), OrchestratorError> {
     let workflow_sha = required("GITHUB_SHA")?;
     let intent = read_intent_at_workflow(workspace, &workflow_sha, git)?;
@@ -117,11 +125,14 @@ fn run_qualified_crate_release_with_git(
             source_execution,
         )?;
     }
-    let receipt_path = required_path("RUNNER_TEMP")?.join("velnor-crate-release-receipt.json");
+    let runner_temp = required_path("RUNNER_TEMP")?;
+    let receipt_path = runner_temp.join("velnor-crate-release-receipt.json");
     dispatch_release_operation(
         operation,
         JournalRuntime {
             receipt_path: &receipt_path,
+            workflow_root: workspace,
+            runner_temp: &runner_temp,
             intent: &intent,
             request: &request,
             github: &github,
@@ -129,7 +140,7 @@ fn run_qualified_crate_release_with_git(
             source: &source,
             token: &token,
             git,
-            source_execution,
+            upload: journal_start::UploadRuntime::Unprivileged(source_execution),
         },
     )
 }
@@ -138,6 +149,7 @@ fn dispatch_release_operation(
     operation: &str,
     input: JournalRuntime<'_>,
 ) -> Result<(), OrchestratorError> {
+    let source_execution = input.upload.source_execution();
     let JournalRuntime {
         receipt_path,
         intent,
@@ -146,7 +158,6 @@ fn dispatch_release_operation(
         registry,
         source,
         git,
-        source_execution,
         ..
     } = input;
     match operation {

@@ -103,3 +103,7 @@ impl<J, G, R> std::fmt::Debug for CrateReleaseObservation<'_, J, G, R> {
 
 #[cfg(test)]
 pub(super) use mutations::record_admitted_upload_intent;
+
+#[path = "crate_release_observation_completion.rs"]
+mod completion;
+pub(crate) use completion::{FrozenCompletion, ValidatedCompletion};

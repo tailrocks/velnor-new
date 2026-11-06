@@ -94,6 +94,68 @@ pub fn checkout_from_environment(mode: &str) -> Result<(), OrchestratorError> {
     )
 }
 
+#[cfg(target_os = "linux")]
+pub(crate) fn checkout_policy(
+    root: &crate::crate_release_custody::PublisherRoot,
+    git: &crate::crate_release_git::ReleaseGit,
+    repository: &str,
+    workflow_sha: &str,
+    token: &str,
+    deadline: velnor_actions_mise::CheckDeadline,
+) -> Result<std::path::PathBuf, OrchestratorError> {
+    use rustix::fs::{self as rfs, Mode};
+    let invalid = || internal("release_checkout_policy_invalid");
+    root.revalidate().map_err(|_| invalid())?;
+    let pinned = git.verified().ok_or_else(invalid)?;
+    rfs::mkdirat(root.descriptor(), "policy", Mode::from_raw_mode(0o700)).map_err(|_| invalid())?;
+    let policy = root.path().join("policy");
+    checkout(
+        pinned,
+        &policy,
+        repository,
+        workflow_sha,
+        token,
+        CheckoutContext {
+            origin: "https://github.com",
+            test_http: false,
+            deadline,
+        },
+    )?;
+    root.revalidate().map_err(|_| invalid())?;
+    Ok(policy)
+}
+
+#[cfg(target_os = "linux")]
+pub(crate) fn checkout_authorized_source(
+    view: &crate::crate_release_custody::PublisherView,
+    authority: &crate::crate_release_github::GitHubAuthorized,
+    git: &crate::crate_release_git::ReleaseGit,
+    token: &str,
+    deadline: velnor_actions_mise::CheckDeadline,
+) -> Result<std::path::PathBuf, OrchestratorError> {
+    use rustix::fs::{self as rfs, Mode};
+    let invalid = || internal("release_checkout_authorized_source_invalid");
+    view.revalidate().map_err(|_| invalid())?;
+    let pinned = git.verified().ok_or_else(invalid)?;
+    let request = &authority.candidate().request;
+    rfs::mkdirat(view.descriptor(), "source", Mode::from_raw_mode(0o700)).map_err(|_| invalid())?;
+    let source = view.path().join("source");
+    checkout(
+        pinned,
+        &source,
+        &request.repository,
+        &request.source_sha,
+        token,
+        CheckoutContext {
+            origin: "https://github.com",
+            test_http: false,
+            deadline,
+        },
+    )?;
+    view.revalidate().map_err(|_| invalid())?;
+    Ok(source)
+}
+
 #[derive(Clone, Copy)]
 struct CheckoutContext<'a> {
     origin: &'a str,

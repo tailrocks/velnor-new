@@ -134,6 +134,12 @@ fn rehearsal_github(request: &GitHubAdmissionRequest, metadata_completed: bool) 
         writes: Cell::new(0),
         tool_archive: RefCell::new(Vec::new()),
         mutate_after_download: Cell::new(0),
+        ruleset_reads: Cell::new(0),
+        revoke_at_ruleset: Cell::new(0),
+        approval_reads: Cell::new(0),
+        revoke_at_approval: Cell::new(0),
+        artifact_reads: Cell::new(0),
+        alter_at_artifact: Cell::new(0),
         artifact_receipt: Cell::new(false),
         before_metadata_write: RefCell::new(None),
     }
@@ -166,6 +172,7 @@ fn run_child(operation: &str) -> Result<(), Box<dyn Error>> {
         } else {
             Vec::new()
         }),
+        baseline: RefCell::new(Vec::new()),
     };
     let admission = if operation == "journal-start" {
         prepare_crate_release(&intent, &request, &github, &registry, &source)?
@@ -273,7 +280,7 @@ fn coordinate(
     let tools = crate::package_release_signer::fixture_measured_tools(
         started.receipt.expected_tools.clone(),
     );
-    crate::crate_release_journal::record_reconciled_completion(&input, tools)?;
+    crate::crate_release_journal::record_unprivileged_completion(&input, tools)?;
     assert!(inspect_journal(journal, &identity, JournalStage::Completed)?.is_some());
     let prior = journal.write_calls.get();
     coordinate_release(&input, |_| Err(err()), |_| Err(err()), || {})?;

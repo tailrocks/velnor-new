@@ -45,7 +45,7 @@ pub(super) fn check_creation_staging(
         ..*stage
     };
     assert_eq!(
-        stage_unverified_toolchain(&creation_stage, github, github)?,
+        stage_unverified_toolchain(&creation_stage, github, github)?.path(),
         result
     );
     Ok(())

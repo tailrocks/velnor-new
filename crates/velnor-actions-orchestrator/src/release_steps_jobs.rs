@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use super::{JobParts, Step, OrchestratorError, controller_step, conditional, ReleaseJobSpec, receipt_step, action_step, UPLOAD_ARTIFACT_USES, BTreeMap, RUST_ARTIFACT, RUST_ARCHIVE, StepId, StepRole, ReleaseRole, JobTimeout, JobPermissions, ambient_shell_step, StepKind, BOOTSTRAP_TOKEN_ENV, BOOTSTRAP_SECRET_REF, upload_record_step};
+use super::{JobParts, Step, OrchestratorError, controller_step, conditional, ReleaseJobSpec, receipt_step, action_step, UPLOAD_ARTIFACT_USES, BTreeMap, RUST_ARTIFACT, RUST_ARCHIVE, StepId, StepRole, ReleaseRole, JobTimeout, JobPermissions, upload_record_step};
 
 fn common_source_steps(
     parts: &JobParts<'_>,
@@ -83,41 +83,15 @@ fn publish_steps(
     parts: &JobParts<'_>,
     bootstrap: bool,
 ) -> Result<Vec<Step>, OrchestratorError> {
-    let mut steps = common_source_steps(parts, true)?;
-    steps.insert(0, velnor_actions_workflow_renderer::release_budget::capture_step()?);
-    steps.push(conditional(parts.semver.clone()));
-    steps.push(controller_step(parts, "receipt-acquire")?);
-    steps.push(controller_step(parts, "verify-admission")?);
-    let coordinate = velnor_actions_workflow_renderer::release_gates::COORDINATE_CONDITION;
-    let mut reject = ambient_shell_step(
-        "Reject unsupported release action",
-        vec!["false".to_owned()],
-        BTreeMap::new(),
-    )?;
-    reject.condition = Some(velnor_actions_workflow_renderer::release_gates::REJECT_MODE_CONDITION.to_owned());
-    steps.push(reject);
-    let mut acquire_release_plz = parts.release_plz.clone();
-    acquire_release_plz.condition = Some(coordinate.to_owned());
-    steps.push(acquire_release_plz);
-    for operation in ["journal-start", "journal-coordinate"] {
-        let mut step = controller_step(parts, operation)?;
-        step.condition = Some(coordinate.to_owned());
-        if let StepKind::Shell { env, .. } = &mut step.kind {
-            env.insert("GH_TOKEN".to_owned(), "${{ secrets.GITHUB_TOKEN }}".to_owned());
-            if bootstrap && operation == "journal-coordinate" {
-                env.insert(BOOTSTRAP_TOKEN_ENV.to_owned(), BOOTSTRAP_SECRET_REF.to_owned());
-            }
-        }
-        steps.push(step);
-    }
-    for step in &mut steps {
-        if let StepKind::Shell { run, env } = &mut step.kind
-            && run.get(1).is_some_and(|arg| arg == "crate-release")
-        {
-            env.insert("VELNOR_RELEASE_BUDGET".to_owned(), "${{ steps.release-budget.outputs.budget }}".to_owned());
-        }
-    }
-    Ok(steps)
+    Ok(vec![
+        velnor_actions_workflow_renderer::release_budget::capture_step()?,
+        velnor_actions_workflow_renderer::release_root_publisher::publisher_step(
+            bootstrap,
+            parts.generator_version,
+            parts.generator_source_sha,
+            parts.generator_manifest_sha256,
+        )?,
+    ])
 }
 
 pub(super) fn publish_job(

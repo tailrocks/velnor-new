@@ -174,6 +174,8 @@ fn build_release_jobs(
         catalog: &catalog,
         acquire: &acquire,
         generator_version,
+        generator_source_sha: generator.0,
+        generator_manifest_sha256: generator.1,
     })
 }
 

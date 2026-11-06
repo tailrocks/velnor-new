@@ -51,7 +51,7 @@ def write_frame(writer, frame, deadline):
         view = view[written:]
 
 
-def supervise(manager, frame, deadline, cleanup_reserve=25_000_000_000):
+def supervise(manager, frame, deadline, cleanup_reserve=25_000_000_000, output_fd=None):
     if (type(deadline) is not int or not 0 < deadline < 2**64 or type(frame) is not bytes
             or len(frame) < 20 or type(cleanup_reserve) is not int or cleanup_reserve <= 0):
         raise SupervisorError("invalid frame deadline")
@@ -74,7 +74,10 @@ def supervise(manager, frame, deadline, cleanup_reserve=25_000_000_000):
     released = False
     try:
         try:
-            start_job = manager.start(unit, reader, work_deadline)
+            if output_fd is None:
+                start_job = manager.start(unit, reader, work_deadline)
+            else:
+                start_job = manager.start(unit, reader, work_deadline, output_fd=output_fd)
         finally:
             os.close(reader)
         if not isinstance(start_job, str) or not re.fullmatch(r"/org/freedesktop/systemd1/job/[0-9]+", start_job):

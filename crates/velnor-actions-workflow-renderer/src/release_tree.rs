@@ -68,8 +68,33 @@ pub fn render_release_workflow(
             return Err(RenderError::InvalidWorkflow(format!("label_mismatch:{id}")));
         }
     }
+    let acquire = spec
+        .jobs
+        .values()
+        .find(|job| job.role == ReleaseRole::Preflight)
+        .and_then(|job| {
+            job.steps
+                .iter()
+                .find(|step| step.role == Some(velnor_actions_contract::StepRole::AcquireVelnor))
+        })
+        .ok_or_else(|| {
+            RenderError::InvalidWorkflow("release_generator_acquire_missing".to_owned())
+        })?;
+    let velnor_actions_contract::StepKind::Shell { env, .. } = &acquire.kind else {
+        return Err(RenderError::InvalidWorkflow(
+            "release_generator_acquire_invalid".to_owned(),
+        ));
+    };
+    let source = env.get("VELNOR_GENERATOR_SOURCE_SHA").ok_or_else(|| {
+        RenderError::InvalidWorkflow("release_generator_source_missing".to_owned())
+    })?;
+    let manifest = env.get("VELNOR_GENERATOR_MANIFEST_SHA256").ok_or_else(|| {
+        RenderError::InvalidWorkflow("release_generator_manifest_missing".to_owned())
+    })?;
     let binding = ReleaseConfigBinding {
         generator_version: &ctx.generator_version,
+        generator_source_sha: source,
+        generator_manifest_sha256: manifest,
         release_plz_version: &spec.release_plz_version,
         rust_version,
     };
@@ -359,7 +384,7 @@ fn release_pin_matches(
     spec: &ReleaseWorkflowSpec,
     intent: &velnor_actions_contract::config::CrateReleaseIntent,
 ) -> bool {
-    spec.jobs.values().filter(|job| matches!(job.role, ReleaseRole::Preflight | ReleaseRole::PublishOidc | ReleaseRole::PublishBootstrap | ReleaseRole::Reconcile)).all(|job| {
+    spec.jobs.values().filter(|job| matches!(job.role, ReleaseRole::Preflight | ReleaseRole::Reconcile)).all(|job| {
         matches!(job.steps.iter().find(|step| step.role == Some(velnor_actions_contract::StepRole::AcquireVelnor)).map(|step| &step.kind), Some(velnor_actions_contract::StepKind::Shell { env, .. })
             if env.get("VELNOR_GENERATOR_SOURCE_SHA") == Some(&intent.generator_source_sha)
             && env.get("VELNOR_GENERATOR_MANIFEST_SHA256") == Some(&intent.generator_manifest_sha256))

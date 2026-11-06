@@ -105,3 +105,6 @@ use creation_recovery::{
 
 #[path = "crate_release_controller_workspace_publication.rs"]
 mod workspace_publication;
+
+#[path = "crate_release_controller_frozen_completion.rs"]
+mod frozen_completion;

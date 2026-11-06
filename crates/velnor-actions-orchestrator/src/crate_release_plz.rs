@@ -116,6 +116,29 @@ pub(crate) fn invoke_upload<
     Ok(attempt)
 }
 
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+pub(crate) fn invoke_supervised_upload<
+    J: JournalIo + crate::crate_release_journal::JournalOperationRefs,
+    G: GitHubAdmissionRead,
+    R: CrateRegistryRead,
+>(
+    input: &CrateReleaseObservation<'_, J, G, R>,
+    permit: UploadPermit,
+    execution: &crate::crate_release_source_view::SupervisedSourceExecution,
+) -> Result<UploadAttempt, OrchestratorError> {
+    let qualified = validate_upload_permit(input, &permit)?;
+    execution.upload(&crate::crate_release_source_view::SupervisedUpload {
+        root: input.source,
+        intent: input.intent,
+        git: input.git,
+        package: &permit.package,
+        version: &permit.version,
+        sequence: permit.sequence,
+        release_plz_sha256: qualified.executable_sha256,
+    })?;
+    Ok(UploadAttempt::ExitedSuccess)
+}
+
 fn upload_rust_tools(
     home: &Path,
     version: &str,
@@ -161,6 +184,30 @@ pub(super) fn validate_upload<
     credential: &CratePublishCredential<'_>,
 ) -> Result<velnor_actions_mise::catalog::QualifiedReleasePlz, OrchestratorError> {
     let invalid = || internal("crate_release_upload_unverified");
+    if !matches!(
+        (credential, input.intent.authentication),
+        (
+            CratePublishCredential::Trusted { .. },
+            ReleaseAuthentication::TrustedPublishing
+        ) | (
+            CratePublishCredential::Bootstrap { .. },
+            ReleaseAuthentication::BootstrapToken
+        )
+    ) {
+        return Err(invalid());
+    }
+    validate_upload_permit(input, permit)
+}
+
+pub(super) fn validate_upload_permit<
+    J: JournalIo + crate::crate_release_journal::JournalOperationRefs,
+    G: GitHubAdmissionRead,
+    R: CrateRegistryRead,
+>(
+    input: &CrateReleaseObservation<'_, J, G, R>,
+    permit: &UploadPermit,
+) -> Result<velnor_actions_mise::catalog::QualifiedReleasePlz, OrchestratorError> {
+    let invalid = || internal("crate_release_upload_unverified");
     input.intent.validate().map_err(|_| invalid())?;
     verify_binding(input)?;
     let bytes =
@@ -173,16 +220,6 @@ pub(super) fn validate_upload<
         || permit.run_attempt != input.request.run_attempt
         || permit.intention_ref != mutation_name(input.identity, permit.sequence)
         || !input.intent.packages.contains(&permit.package)
-        || !matches!(
-            (credential, input.intent.authentication),
-            (
-                CratePublishCredential::Trusted { .. },
-                ReleaseAuthentication::TrustedPublishing
-            ) | (
-                CratePublishCredential::Bootstrap { .. },
-                ReleaseAuthentication::BootstrapToken
-            )
-        )
     {
         return Err(invalid());
     }
@@ -236,7 +273,7 @@ pub(super) fn validate_upload<
     Ok(qualified)
 }
 
-pub(super) fn single_package_config(
+pub(crate) fn single_package_config(
     intent: &CrateReleaseIntent,
     package: &str,
 ) -> Result<String, OrchestratorError> {
