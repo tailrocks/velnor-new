@@ -271,6 +271,16 @@ fn seed_remote(
     git_fixture(source, &["add", "."])?;
     git_fixture(source, &["commit", "-qm", "fixture"])?;
     git_fixture(source, &["tag", "v0.1.0"])?;
+    git_fixture(
+        source,
+        &[
+            "tag",
+            "-a",
+            "velnor-receipt/12/1/operation-1",
+            "-m",
+            "private journal fixture",
+        ],
+    )?;
     let sha = git_fixture(source, &["rev-parse", "HEAD"])?;
     fs::write(source.join("README.md"), "later commit\n")?;
     git_fixture(source, &["add", "README.md"])?;
@@ -317,6 +327,10 @@ fn checkout_fetches_exact_private_source_without_credential_files()
         git_fixture(&destination, &["rev-parse", "refs/tags/v0.1.0"])?,
         sha
     );
+    let journal_ref = "refs/tags/velnor-receipt/12/1/operation-1";
+    let journal_object = git_fixture(&source, &["rev-parse", journal_ref])?;
+    assert!(git_fixture(&destination, &["rev-parse", "--verify", journal_ref]).is_err());
+    assert!(git_fixture(&destination, &["cat-file", "-e", &journal_object]).is_err());
     assert_eq!(git_fixture(&destination, &["status", "--porcelain"])?, "");
     assert_eq!(
         git_fixture(&destination, &["rev-parse", "refs/remotes/origin/main"])?,

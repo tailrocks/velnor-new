@@ -170,6 +170,7 @@ fn checkout(
             "origin".into(),
             "refs/heads/*:refs/remotes/origin/*".into(),
             "refs/tags/*:refs/tags/*".into(),
+            "^refs/tags/velnor-receipt/*".into(),
         ],
         Some(token),
         origin,
