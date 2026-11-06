@@ -25,9 +25,12 @@ pub(super) fn validate(output: &Path, root: &Path) -> Result<(), HostError> {
         return Err(HostError::Path);
     }
     let bytes = read_output(output)?;
-    let record = parse_record(&bytes)?;
-    validate_record(&record)?;
-    Ok(())
+    validate_bytes(&bytes)
+}
+
+pub(super) fn validate_bytes(bytes: &[u8]) -> Result<(), HostError> {
+    let record = parse_record(bytes)?;
+    validate_record(&record)
 }
 
 fn read_output(path: &Path) -> Result<Vec<u8>, HostError> {

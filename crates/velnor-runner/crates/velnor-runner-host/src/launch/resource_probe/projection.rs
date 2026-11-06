@@ -114,7 +114,7 @@ impl fmt::Debug for DockerRoot {
 
 impl DockerRoot {
     pub(super) fn parse(path: &str) -> Result<Self, HostError> {
-        if !canonical_absolute_nonroot(path) {
+        if !crate::docker_client::canonical_docker_root(path) {
             return Err(HostError::Path);
         }
         let mut hasher = Sha256::new();
@@ -267,16 +267,6 @@ fn projection_digest(
     config: &ContainerCreateBody,
 ) -> Result<String, HostError> {
     canonical::pair(options, config).map(|bytes| digest_text(&bytes))
-}
-
-fn canonical_absolute_nonroot(path: &str) -> bool {
-    path.starts_with('/')
-        && path != "/"
-        && path.len() <= 4096
-        && !path.chars().any(char::is_control)
-        && path[1..]
-            .split('/')
-            .all(|part| !part.is_empty() && part != "." && part != "..")
 }
 
 fn digest_reference(value: &str) -> bool {

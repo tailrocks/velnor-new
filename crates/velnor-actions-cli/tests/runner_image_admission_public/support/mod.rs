@@ -33,6 +33,22 @@ pub(crate) struct ImageSet {
 }
 
 impl AdmissionFixture {
+    pub(crate) fn full() -> Result<Self, Box<dyn Error>> {
+        let mut fixture = Self::new()?;
+        let source_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        for path in velnor_actions_contract::RUNNER_PUBLICATION_SOURCE_INPUTS {
+            if path == ".velnor/runner.lock" {
+                continue;
+            }
+            let output = fixture.root.join(path);
+            fs::create_dir_all(output.parent().ok_or("missing parent")?)?;
+            fs::copy(source_root.join(path), output)?;
+        }
+        fixture.repository.commit_all()?;
+        fixture.source = fixture.repository.head()?;
+        fixture.images = oci::admission_images(&fixture.image_dir, &fixture.source)?;
+        Ok(fixture)
+    }
     pub(crate) fn new() -> Result<Self, Box<dyn Error>> {
         let temp = tempfile::tempdir()?;
         let base = temp.path().canonicalize()?;

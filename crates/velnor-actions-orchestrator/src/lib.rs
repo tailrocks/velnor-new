@@ -75,6 +75,7 @@ private_mods!(required_dispositions);
 private_mods!(retrieve_reports, retrieve_retry);
 private_mods!(review_completion_workflow_emit);
 private_mods!(root, routing, safe_read);
+private_mods!(sdk_preview_configuration);
 private_mods!(select, select_affected);
 private_mods!(select_edges, select_reads);
 private_mods!(select_reads_lex, select_reads_scan);
@@ -109,8 +110,16 @@ pub mod local_release_manifest;
 pub(crate) mod project_tool_sources;
 pub(crate) mod rust_suites_emit;
 pub mod schedule;
+pub mod registry_gateway {
+    pub use crate::image_maintenance::{
+        RegistryGateway, RegistryIo, RegistryRequest, RegistryResponse,
+    };
+}
 pub(crate) mod task_report;
 pub(crate) mod tool_catalog_project;
 pub(crate) mod tool_catalog_resolve;
 
 pub use api::*;
+
+mod sdk_preview_producer;
+pub use sdk_preview_producer::produce_sdk_preview;

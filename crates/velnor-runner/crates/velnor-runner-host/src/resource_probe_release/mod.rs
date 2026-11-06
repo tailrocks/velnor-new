@@ -36,12 +36,31 @@ pub fn write_runner_image_manifest(
     runner_manifest::write(descriptors, runner_lock, output)
 }
 
+pub fn validate_runner_image_manifest(
+    bytes: &[u8],
+    source_commit: &str,
+    runner_lock: &[u8],
+) -> Result<(), HostError> {
+    runner_manifest::parse_for_source(bytes, source_commit, runner_lock).map(|_| ())
+}
+
 pub async fn qualify_runner_images(
     root: &Path,
     source_sha: &str,
     runner_id: &str,
     dind_id: &str,
+    probe_id: &str,
     docker_socket: &str,
+    result_path: &Path,
 ) -> Result<(), HostError> {
-    runner_qualification::qualify(root, source_sha, runner_id, dind_id, docker_socket).await
+    runner_qualification::qualify(
+        root,
+        source_sha,
+        runner_id,
+        dind_id,
+        probe_id,
+        docker_socket,
+        result_path,
+    )
+    .await
 }

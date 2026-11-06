@@ -175,7 +175,12 @@ fn check_files(label: &str, files: &Files) -> BTreeMap<String, BTreeSet<String>>
 
 fn fixture(policy: WorkflowPolicy) -> Result<tempfile::TempDir, Box<dyn Error>> {
     let repo = owner_feature_repo(policy, false, "default", "default")?;
-    workflow_configuration_fixture::write_root_cargo_lock(repo.path(), &["demo", "maintenance"])?;
+    if policy == WorkflowPolicy::ConsumerV1 {
+        workflow_configuration_fixture::write_root_cargo_lock(
+            repo.path(),
+            &["demo", "maintenance"],
+        )?;
+    }
     Ok(repo)
 }
 

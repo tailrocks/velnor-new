@@ -19,10 +19,15 @@ mod validate;
 mod promotion;
 #[path = "image_maintenance/publication.rs"]
 mod publication;
+pub use publication::{RegistryGateway, RegistryIo, RegistryRequest, RegistryResponse};
 #[path = "image_maintenance/runner_admission.rs"]
 mod runner_admission;
 #[path = "image_maintenance/runner_profiles.rs"]
 mod runner_profiles;
+#[path = "image_maintenance/runner_qualification.rs"]
+mod runner_qualification;
+#[path = "image_maintenance/runner_records.rs"]
+mod runner_records;
 
 #[derive(Debug, Clone)]
 pub struct InstallBuildxRequest {
@@ -68,6 +73,47 @@ pub struct AdmitRunnerImagesRequest {
     pub probe_archive: PathBuf,
     pub descriptors_output: PathBuf,
     pub deadline: CheckDeadline,
+}
+
+#[derive(Debug, Clone)]
+pub struct RecordRunnerCandidatesRequest {
+    pub root: PathBuf,
+    pub source_commit: String,
+    pub runner_archive: PathBuf,
+    pub dind_archive: PathBuf,
+    pub probe_archive: PathBuf,
+    pub output_directory: PathBuf,
+    pub deadline: CheckDeadline,
+}
+
+pub fn record_runner_candidates(
+    request: &RecordRunnerCandidatesRequest,
+) -> Result<(), OrchestratorError> {
+    runner_records::record(request)
+}
+
+#[derive(Debug, Clone)]
+pub struct WriteRunnerQualificationRequest {
+    pub root: PathBuf,
+    pub source_commit: String,
+    pub runner_archive: PathBuf,
+    pub runner_record: PathBuf,
+    pub dind_archive: PathBuf,
+    pub dind_record: PathBuf,
+    pub probe_archive: PathBuf,
+    pub probe_record: PathBuf,
+    pub runtime_result: PathBuf,
+    pub producer_run_id: u64,
+    pub producer_run_attempt: u32,
+    pub qualifier_job_id: u64,
+    pub output: PathBuf,
+    pub deadline: CheckDeadline,
+}
+
+pub fn write_runner_qualification(
+    request: &WriteRunnerQualificationRequest,
+) -> Result<(), OrchestratorError> {
+    runner_qualification::write(request)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

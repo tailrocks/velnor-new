@@ -46,15 +46,55 @@ pub(super) fn valid_pat(pat: &str) -> bool {
     !pat.is_empty() && pat.len() <= 4096 && !pat.chars().any(char::is_control)
 }
 
-pub(super) async fn release(
+pub(super) async fn runner_release(
     client: &Client,
     pat: &str,
     source: &str,
 ) -> Result<BTreeMap<String, Asset>, HostError> {
-    let tag = format!("runner-{source}");
-    let path = format!("repos/{REPOSITORY}/releases/tags/{tag}");
+    let path = format!("repos/{REPOSITORY}/releases/tags/runner-{source}");
     let value = get_api_json(client, pat, &path, MAX_RELEASE_BYTES).await?;
-    response::parse_release(source, value)
+    let assets = response::parse_runner_release(source, value)?;
+    let reference = format!("repos/{REPOSITORY}/git/ref/tags/runner-{source}");
+    let value = get_api_json(client, pat, &reference, MAX_RELEASE_BYTES).await?;
+    let object = value
+        .get("object")
+        .and_then(Value::as_object)
+        .ok_or(HostError::Identity)?;
+    let kind = object
+        .get("type")
+        .and_then(Value::as_str)
+        .ok_or(HostError::Identity)?;
+    let sha = object
+        .get("sha")
+        .and_then(Value::as_str)
+        .ok_or(HostError::Identity)?;
+    let target = if kind == "tag" {
+        if !super::hash::is_lower_hex(sha, 40) {
+            return Err(HostError::Identity);
+        }
+        let path = format!("repos/{REPOSITORY}/git/tags/{sha}");
+        let tag = get_api_json(client, pat, &path, MAX_RELEASE_BYTES).await?;
+        let object = tag
+            .get("object")
+            .and_then(Value::as_object)
+            .ok_or(HostError::Identity)?;
+        if object.get("type").and_then(Value::as_str) != Some("commit") {
+            return Err(HostError::Identity);
+        }
+        object
+            .get("sha")
+            .and_then(Value::as_str)
+            .ok_or(HostError::Identity)?
+            .to_owned()
+    } else if kind == "commit" {
+        sha.to_owned()
+    } else {
+        return Err(HostError::Identity);
+    };
+    if target != source {
+        return Err(HostError::Identity);
+    }
+    Ok(assets)
 }
 
 pub(super) async fn download_asset(
@@ -124,9 +164,158 @@ pub(super) async fn attestations(
     pat: &str,
     checksum_digest: &str,
 ) -> Result<Vec<Value>, HostError> {
-    let path = response::attestation_path(checksum_digest)?;
-    let response = get_api_json(client, pat, &path, MAX_ATTESTATION_BYTES).await?;
-    response::parse_attestations(&response)
+    let route = response::attestation_path(checksum_digest)?;
+    let mut bundles = Vec::new();
+    let mut total_bytes = 0_usize;
+    let mut path = format!("{route}?per_page=100");
+    let mut visited = std::collections::BTreeSet::new();
+    for _ in 0..20_usize {
+        if !visited.insert(path.clone()) {
+            return Err(HostError::Identity);
+        }
+        let response = api_request(client, pat, &path)?
+            .send()
+            .await
+            .map_err(|_| HostError::Identity)?;
+        if response.status() != StatusCode::OK {
+            return Err(HostError::Identity);
+        }
+        let next = next_page(response.headers(), &route)?;
+        let bytes = read_limited(response, MAX_ATTESTATION_BYTES).await?;
+        total_bytes = total_bytes
+            .checked_add(bytes.len())
+            .filter(|size| *size <= MAX_ATTESTATION_BYTES)
+            .ok_or(HostError::Frame)?;
+        let value = strict_json::parse(&bytes)?;
+        let rows = response::parse_attestations(&value)?;
+        for mut row in rows {
+            response::validate_attestation_repository(&row)?;
+            if row.get("bundle").is_none_or(Value::is_null) {
+                let url = row
+                    .get("bundle_url")
+                    .and_then(Value::as_str)
+                    .ok_or(HostError::Identity)?;
+                let bundle = fetch_bundle(client, url).await?;
+                let size = serde_json::to_vec(&bundle)
+                    .map_err(|_| HostError::Identity)?
+                    .len();
+                total_bytes = total_bytes
+                    .checked_add(size)
+                    .filter(|size| *size <= MAX_ATTESTATION_BYTES)
+                    .ok_or(HostError::Frame)?;
+                row.as_object_mut()
+                    .ok_or(HostError::Identity)?
+                    .insert("bundle".to_owned(), bundle);
+            }
+            bundles.push(response::parse_attestation(&row)?);
+        }
+        match next {
+            Some(next) => path = next,
+            None => return Ok(bundles),
+        }
+    }
+    Err(HostError::Identity)
+}
+
+async fn fetch_bundle(client: &Client, value: &str) -> Result<Value, HostError> {
+    let url = Url::parse(value).map_err(|_| HostError::Identity)?;
+    let host = url.host_str().ok_or(HostError::Identity)?;
+    if url.scheme() != "https"
+        || url.port_or_known_default() != Some(443)
+        || !url.username().is_empty()
+        || url.password().is_some()
+        || url.fragment().is_some()
+        || !(host.ends_with(".blob.core.windows.net")
+            || host.ends_with(".actions.githubusercontent.com"))
+    {
+        return Err(HostError::Identity);
+    }
+    let response = client
+        .get(url)
+        .header(reqwest::header::ACCEPT_ENCODING, "identity")
+        .send()
+        .await
+        .map_err(|_| HostError::Identity)?;
+    if response.status() != StatusCode::OK
+        || response
+            .headers()
+            .get(reqwest::header::CONTENT_ENCODING)
+            .is_some_and(|value| value.as_bytes() != b"identity")
+    {
+        return Err(HostError::Identity);
+    }
+    let compressed = read_limited(response, MAX_ATTESTATION_BYTES).await?;
+    let size = snap::raw::decompress_len(&compressed).map_err(|_| HostError::Identity)?;
+    if size == 0 || size > MAX_ATTESTATION_BYTES {
+        return Err(HostError::Frame);
+    }
+    let bytes = snap::raw::Decoder::new()
+        .decompress_vec(&compressed)
+        .map_err(|_| HostError::Identity)?;
+    strict_json::parse(&bytes)
+}
+
+fn next_page(headers: &HeaderMap, route: &str) -> Result<Option<String>, HostError> {
+    let mut next = None;
+    for header in headers.get_all(reqwest::header::LINK) {
+        let link = header.to_str().map_err(|_| HostError::Identity)?;
+        for part in link.split(',') {
+            let (url, params) = part.trim().split_once(';').ok_or(HostError::Identity)?;
+            let url = url
+                .trim()
+                .strip_prefix('<')
+                .and_then(|url| url.strip_suffix('>'))
+                .ok_or(HostError::Identity)?;
+            let relations = params
+                .split(';')
+                .map(str::trim)
+                .filter_map(|param| param.strip_prefix("rel="))
+                .collect::<Vec<_>>();
+            if relations.len() != 1 {
+                return Err(HostError::Identity);
+            }
+            if relations[0] != "\"next\"" {
+                continue;
+            }
+            if next.is_some() {
+                return Err(HostError::Identity);
+            }
+            let url = Url::parse(url).map_err(|_| HostError::Identity)?;
+            let subject = route
+                .strip_prefix("repos/tailrocks/velnor-new/attestations/")
+                .ok_or(HostError::Identity)?;
+            let expected_path = format!("/repositories/1390620900/attestations/{subject}");
+            let original_path = format!("/{route}");
+            let query = url.query_pairs().collect::<Vec<_>>();
+            if url.scheme() != "https"
+                || url.host_str() != Some("api.github.com")
+                || url.port_or_known_default() != Some(443)
+                || !url.username().is_empty()
+                || url.password().is_some()
+                || url.fragment().is_some()
+                || (url.path() != expected_path && url.path() != original_path)
+                || query.len() != 2
+                || !query
+                    .iter()
+                    .any(|(key, value)| key == "per_page" && value == "100")
+                || !query.iter().any(|(key, value)| {
+                    key == "after"
+                        && !value.is_empty()
+                        && value.len() <= 512
+                        && !value.chars().any(char::is_control)
+                })
+            {
+                return Err(HostError::Identity);
+            }
+            let path = url
+                .as_str()
+                .strip_prefix(API_ROOT)
+                .ok_or(HostError::Identity)?
+                .to_owned();
+            next = Some(path);
+        }
+    }
+    Ok(next)
 }
 
 async fn get_api_json(
@@ -170,7 +359,7 @@ fn api_request(client: &Client, pat: &str, path: &str) -> Result<RequestBuilder,
     Ok(client.get(url).headers(headers).bearer_auth(pat))
 }
 
-async fn read_limited(response: Response, limit: usize) -> Result<Vec<u8>, HostError> {
+pub(super) async fn read_limited(response: Response, limit: usize) -> Result<Vec<u8>, HostError> {
     let content_limit = u64::try_from(limit).map_err(|_| HostError::Frame)?;
     if response
         .content_length()

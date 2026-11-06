@@ -12,6 +12,11 @@ pub(super) struct GitFixture {
 }
 
 impl GitFixture {
+    pub(super) fn commit_all(&self) -> Result<(), Box<dyn Error>> {
+        self.git(&["add", "--all"])?;
+        self.git(&["commit", "--quiet", "-m", "complete source"])?;
+        Ok(())
+    }
     pub(super) fn new(root: PathBuf) -> Result<Self, Box<dyn Error>> {
         fs::create_dir_all(root.join(".velnor"))?;
         fs::create_dir_all(root.join("images/runner/ubuntu-26.04"))?;

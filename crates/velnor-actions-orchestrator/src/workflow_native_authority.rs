@@ -114,3 +114,27 @@ fn problem(problem: impl Into<String>) -> OrchestratorError {
         problem: problem.into(),
     }
 }
+
+pub(super) fn required_catalog_and_acquire(
+    input: &WorkflowBuildInput<'_>,
+    prepared: &mut PreparedWorkflow,
+) -> Result<(super::ToolCatalog, Option<velnor_actions_contract::Step>), OrchestratorError> {
+    Ok(
+        if prepared.policy == super::WorkflowPolicy::VelnorRepositoryV1 {
+            let target = velnor_actions_contract::ReleaseTarget::for_runner_label(input.label)
+                .ok_or_else(|| OrchestratorError::Contract {
+                    problem: format!("unsupported_target_for_runner:{}", input.label),
+                })?;
+            (
+            velnor_actions_mise::catalog::lock::catalog_for_published_verdict(&super::ToolCatalog::pinned()),
+            Some(velnor_actions_workflow_renderer::release_helpers::published_verdict_acquire_for_target(target)
+                .map_err(crate::local_release_manifest::map_release_helper_error)?),
+        )
+        } else {
+            (
+                super::check_jobs::helper_catalog(input, &super::ToolCatalog::pinned())?,
+                prepared.acquire.take(),
+            )
+        },
+    )
+}

@@ -162,6 +162,10 @@ fn crate_and_tofu_jobs_fetch_verify_then_emit() -> Result<(), Box<dyn Error>> {
                 "{name}: {id} needs"
             );
             for step in &job.steps {
+                if step.name == "Prepare image publication fixture" {
+                    super::crane_prerequisite::assert_image_publication_fixture(job, true)?;
+                    continue;
+                }
                 if let StepKind::Shell { run, .. } = &step.kind {
                     let command = run.join(" ");
                     assert!(

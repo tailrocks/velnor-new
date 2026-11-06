@@ -359,7 +359,7 @@ fn valid_completion(launch: &CompletedLaunch) -> bool {
             .intent
             .worker_volume
             .as_deref()
-            .is_some_and(|worker| crate::runner_plan(worker).is_ok())
+            .is_some_and(|worker| crate::docker_spec::runner_container_name(worker).is_ok())
 }
 
 fn retry_delay_seconds(attempt: u32) -> i64 {

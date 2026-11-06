@@ -184,6 +184,11 @@ impl Turn<'_> {
         if intake.wake_cleanup {
             self.completion.notify();
         }
+        if let Some(slot) = self.rest.images
+            && slot.retry(self.rest.pat, self.docker).is_err()
+        {
+            slot.invalidate();
+        }
         if intake.completion_only || !self.rest.permits_start() {
             return Ok(false);
         }

@@ -73,6 +73,7 @@ pub mod private_source_steps;
 mod project_tool_resolver;
 pub use project_tool_resolver::quote_project_tool_run_refs;
 mod ledger_cli_steps;
+mod publish_native_operation;
 pub mod publish_render;
 pub mod publish_roles;
 pub mod publish_scripts;

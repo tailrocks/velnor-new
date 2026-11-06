@@ -22,6 +22,7 @@ Repository: <repo>
 .github/jactionlint.yaml
 .github/scripts/velnor-tools-cache-identity.sh
 .github/velnor/task-execution-manifest-v1.json
+.github/workflows/binary-preview.yml
 .github/workflows/cache-prune.yml
 .github/workflows/ci.yml
 .github/workflows/freshness.yml
@@ -31,7 +32,11 @@ Repository: <repo>
 .github/workflows/product-release-generator.yml
 .github/workflows/product-release-images.yml
 .github/workflows/product-release.yml
+.github/workflows/publish.yml
 .github/workflows/qualification.yml
+.github/workflows/runner-image-qualification-attest.yml
+.github/workflows/runner-image-qualification.yml
+.github/workflows/runner-image-release.yml
 .github/workflows/source-qualification.yml
 .github/workflows/state-seal.yml
 mise.lock is read-only input; Velnor never modifies it

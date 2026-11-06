@@ -8,9 +8,10 @@ use bollard::query_parameters::{AttachContainerOptionsBuilder, StartContainerOpt
 use tokio::io::AsyncWriteExt;
 
 use crate::docker_client::docker_deadline;
-use crate::docker_spec::{ContainerPlan, Mount, audit_plan, runner_mounts, runner_plan};
+use crate::docker_spec::{
+    ContainerPlan, Mount, audit_plan, runner_container_name, runner_mounts, worker_mounts,
+};
 use crate::error::HostError;
-use crate::stage::PairStop;
 
 pub(crate) mod resources;
 mod volumes;
@@ -28,7 +29,6 @@ pub use resource_budget::ResourceBudget;
 pub(crate) use resource_budget::ResourceBudgetConfig;
 
 const PLATFORM: &str = "linux/amd64";
-const DIND_IMAGE: &str = "velnor-dind:29.9.1";
 const IDENTITY_HEX: &[u8; 16] = b"0123456789abcdef";
 
 pub use projection_types::{BindMount, BollardCreate, CreateProjection, Started};
@@ -58,8 +58,9 @@ fn push_nibble(name: &mut String, nibble: u8) -> Result<(), HostError> {
 pub fn runner_create(
     plan: &ContainerPlan,
     resource_budget: ResourceBudget,
+    images: &crate::AdmittedImages,
 ) -> Result<CreateProjection, HostError> {
-    audit_plan(plan)?;
+    audit_plan(plan, images)?;
     if plan.cmd.iter().any(|item| cmd_names_jit(item)) {
         return Err(HostError::ForbiddenMount);
     }
@@ -100,9 +101,9 @@ fn dind_container_id(id: &str) -> bool {
 pub fn dind_create(
     private_volume: &str,
     resource_budget: ResourceBudget,
+    images: &crate::AdmittedImages,
 ) -> Result<CreateProjection, HostError> {
-    let runner = runner_plan(private_volume)?;
-    let mounts = dind_mounts_for(private_volume, runner.mounts);
+    let mounts = dind_mounts_for(private_volume, worker_mounts(private_volume)?);
     let mut labels = vec![
         "velnor.role=dind".to_owned(),
         format!("velnor.volume={private_volume}"),
@@ -111,8 +112,8 @@ pub fn dind_create(
     labels.sort_unstable();
     Ok(CreateProjection {
         name: format!("{private_volume}-dind"),
-        image: DIND_IMAGE.to_owned(),
-        platform: runner.platform,
+        image: images.dind.clone(),
+        platform: PLATFORM.to_owned(),
         env: Vec::new(),
         cmd: Vec::new(),
         entrypoint: Vec::new(),
@@ -129,8 +130,10 @@ pub fn dind_create(
 }
 
 pub(crate) fn dind_mounts(private_volume: &str) -> Result<Vec<Mount>, HostError> {
-    let runner = runner_plan(private_volume)?;
-    Ok(dind_mounts_for(private_volume, runner.mounts))
+    Ok(dind_mounts_for(
+        private_volume,
+        worker_mounts(private_volume)?,
+    ))
 }
 
 fn dind_mounts_for(private_volume: &str, mut mounts: Vec<Mount>) -> Vec<Mount> {
@@ -142,7 +145,7 @@ fn dind_mounts_for(private_volume: &str, mut mounts: Vec<Mount>) -> Vec<Mount> {
 }
 
 pub(crate) fn dind_container_name(private_volume: &str) -> Result<String, HostError> {
-    runner_plan(private_volume)?;
+    runner_container_name(private_volume)?;
     Ok(format!("{private_volume}-dind"))
 }
 
@@ -170,26 +173,6 @@ pub fn bollard_create(spec: &CreateProjection) -> Result<BollardCreate, HostErro
     })
 }
 
-pub async fn start_pair(
-    docker: &Docker,
-    private_volume: &str,
-    resource_budget: ResourceBudget,
-    jit: &[u8],
-) -> Result<Started, HostError> {
-    let partial = Box::pin(crate::stage::start_pair_until(
-        docker,
-        private_volume,
-        resource_budget,
-        jit,
-        PairStop::Jit,
-    ))
-    .await?;
-    Ok(Started {
-        dind_id: partial.dind_id.ok_or(HostError::Docker)?,
-        runner_id: partial.runner_id.ok_or(HostError::Docker)?,
-    })
-}
-
 fn cmd_names_jit(item: &str) -> bool {
     item.to_ascii_lowercase().contains("jit")
 }
@@ -207,12 +190,19 @@ pub(crate) async fn worker_id_for_name(
     name: &str,
     volume: &str,
     role: &str,
+    engine_id: &str,
+    docker_root: &str,
+    image_id: &str,
 ) -> Result<Option<String>, HostError> {
+    verify_worker_engine(docker, engine_id, docker_root).await?;
     if name.is_empty() || volume.is_empty() || role.is_empty() {
         return Err(HostError::Docker);
     }
     match Box::pin(docker_deadline(docker.inspect_container(name, None))).await? {
         Ok(body) => {
+            if body.image.as_deref() != Some(image_id) {
+                return Err(HostError::Identity);
+            }
             let id = body
                 .id
                 .filter(|id| !id.is_empty())
@@ -227,13 +217,32 @@ pub(crate) async fn worker_id_for_name(
             {
                 return Err(HostError::Docker);
             }
+            verify_worker_engine(docker, engine_id, docker_root).await?;
             Ok(Some(id))
         }
         Err(bollard::errors::Error::DockerResponseServerError {
             status_code: 404, ..
-        }) => Ok(None),
+        }) => {
+            verify_worker_engine(docker, engine_id, docker_root).await?;
+            Ok(None)
+        }
         Err(_) => Err(HostError::Docker),
     }
+}
+
+async fn verify_worker_engine(
+    docker: &Docker,
+    engine_id: &str,
+    docker_root: &str,
+) -> Result<(), HostError> {
+    let info = Box::pin(docker_deadline(docker.info()))
+        .await?
+        .map_err(|_| HostError::Docker)?;
+    if info.id.as_deref() != Some(engine_id) || info.docker_root_dir.as_deref() != Some(docker_root)
+    {
+        return Err(HostError::Identity);
+    }
+    Ok(())
 }
 
 pub(crate) async fn create_only(

@@ -1,0 +1,152 @@
+[
+  {
+    "subject": "mise",
+    "pinned": "2026.11.1",
+    "observed": "v2026.11.2",
+    "match": false
+  },
+  {
+    "subject": "rust",
+    "pinned": "1.99.1",
+    "observed": "1.99.1",
+    "match": true
+  },
+  {
+    "subject": "mr-boxington",
+    "pinned": "1.29.2",
+    "observed": "v1.29.2",
+    "match": true
+  },
+  {
+    "subject": "gh",
+    "pinned": "2.103.3",
+    "observed": "v2.103.3",
+    "match": true
+  },
+  {
+    "subject": "jactionlint",
+    "pinned": "2.4.0",
+    "observed": "v2.5.0",
+    "match": false
+  },
+  {
+    "subject": "shellcheck",
+    "pinned": "0.11.0",
+    "observed": "v0.11.0",
+    "match": true
+  },
+  {
+    "subject": "nextest",
+    "pinned": "0.9.151",
+    "observed": "0.9.151",
+    "match": true
+  },
+  {
+    "subject": "opentofu",
+    "pinned": "1.13.8",
+    "observed": "v1.13.9",
+    "match": false
+  },
+  {
+    "subject": "release-plz",
+    "pinned": "0.4.3",
+    "observed": "0.4.3",
+    "match": true
+  },
+  {
+    "subject": "crane",
+    "pinned": "0.22.1",
+    "observed": "v0.22.1",
+    "match": true
+  },
+  {
+    "subject": "bun",
+    "pinned": "1.4.4",
+    "observed": "bun-v1.4.4",
+    "match": true
+  },
+  {
+    "subject": "cosign",
+    "pinned": "3.1.4",
+    "observed": "v3.1.4",
+    "match": true
+  },
+  {
+    "subject": "actions/attest",
+    "pinned": "v4.2.2",
+    "observed": "v4.2.2",
+    "match": true
+  },
+  {
+    "subject": "actions/attest-build-provenance",
+    "pinned": "v4.2.2",
+    "observed": "v4.2.2",
+    "match": true
+  },
+  {
+    "subject": "actions/cache/restore",
+    "pinned": "v6.1.0",
+    "observed": "v6.1.0",
+    "match": true
+  },
+  {
+    "subject": "actions/cache/save",
+    "pinned": "v6.1.0",
+    "observed": "v6.1.0",
+    "match": true
+  },
+  {
+    "subject": "actions/checkout",
+    "pinned": "v7.0.1",
+    "observed": "v7.0.1",
+    "match": true
+  },
+  {
+    "subject": "actions/create-github-app-token",
+    "pinned": "v3.3.0",
+    "observed": "v3.3.0",
+    "match": true
+  },
+  {
+    "subject": "actions/download-artifact",
+    "pinned": "v8.0.2",
+    "observed": "v8.0.2",
+    "match": true
+  },
+  {
+    "subject": "actions/github-script",
+    "pinned": "v9.0.0",
+    "observed": "v9.0.0",
+    "match": true
+  },
+  {
+    "subject": "actions/upload-artifact",
+    "pinned": "v7.0.2",
+    "observed": "v7.0.2",
+    "match": true
+  },
+  {
+    "subject": "asamarts/alint",
+    "pinned": "v0.21.0",
+    "observed": "v0.21.1",
+    "match": false
+  },
+  {
+    "subject": "aws-actions/configure-aws-credentials",
+    "pinned": "v6.3.0",
+    "observed": "v6.3.0",
+    "match": true
+  },
+  {
+    "subject": "jdx/mise-action",
+    "pinned": "v5.2.6",
+    "observed": "v5.2.6",
+    "match": true
+  },
+  {
+    "subject": "jdx/mr-boxington-action",
+    "pinned": "v1.7.3",
+    "observed": "v1.7.3",
+    "match": true
+  }
+]

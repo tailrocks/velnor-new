@@ -29,6 +29,7 @@ fn job_block<'a>(workflow: &'a str, job: &str) -> Result<&'a str, Box<dyn Error>
 #[test]
 fn required_verdict_controller_is_the_active_approved_release() -> Result<(), Box<dyn Error>> {
     let temp = fixture(Some(BASE_APPROVALS), BASE_LOCK)?;
+    super::runtime_public::add_sdk_workspace(temp.path())?;
     let tree = render_staged_tree(&prepare(temp.path())?)?;
     let workflow = tree
         .get(WORKFLOW_PATH)

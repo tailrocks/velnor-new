@@ -2,13 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use bollard::Docker;
-use std::path::Path;
+use std::sync::Arc;
 
 use crate::journal::Journal;
 use crate::scale_set::EnsureError;
 use crate::worker::ResourceBudget;
 
-use self::provider::UnavailableImageProvider;
 pub(super) use self::sample::StartPermit;
 use super::Rest;
 
@@ -30,8 +29,18 @@ pub(super) async fn start_permit(
 ) -> Option<StartPermit> {
     let _ = rest.guest_admission;
 
-    Box::pin(collect(docker, journal, rest.pat))
-        .await
+    let result = Box::pin(collect(
+        docker,
+        journal,
+        rest.images.and_then(|slot| slot.images()),
+    ))
+    .await;
+    if result.is_err()
+        && let Some(slot) = rest.images
+    {
+        slot.invalidate();
+    }
+    result
         .ok()
         .flatten()
         .and_then(|sample| sample.into_start_permit(budget))
@@ -42,59 +51,39 @@ pub(super) async fn pressure_sample(
     journal: &Journal,
     rest: Rest<'_>,
 ) -> Option<super::pressure::Sample> {
-    Box::pin(collect(docker, journal, rest.pat))
-        .await
+    let result = Box::pin(collect(
+        docker,
+        journal,
+        rest.images.and_then(|slot| slot.images()),
+    ))
+    .await;
+    if result.is_err()
+        && let Some(slot) = rest.images
+    {
+        slot.invalidate();
+    }
+    result
         .ok()
         .flatten()
         .and_then(sample::Observation::pressure)
 }
 
 struct ArtifactImageProvider<'a> {
-    inner: crate::artifact_admission::NativeArtifactProvider<'a>,
-}
-
-impl<'a> ArtifactImageProvider<'a> {
-    fn from_rest(pat: &'a str, state_directory: &Path) -> Result<Self, crate::error::HostError> {
-        crate::artifact_admission::NativeArtifactProvider::from_compiled_release_identity(
-            pat,
-            state_directory,
-        )
-        .map(|inner| Self { inner })
-    }
+    images: &'a crate::artifact_admission::AdmittedImages,
 }
 
 async fn collect(
     docker: &Docker,
     journal: &Journal,
-    pat: &str,
+    images: Option<Arc<crate::artifact_admission::AdmittedImages>>,
 ) -> Result<Option<sample::Observation>, crate::error::HostError> {
-    let state_directory = journal.state_directory()?;
-    let provider = provider_for_build(
-        pat,
-        state_directory,
-        crate::compile_identity::compiled_release_identity().is_some(),
-    )?;
-    let Some(provider) = provider else {
-        return Box::pin(lifecycle::collect(
-            docker,
-            journal,
-            &UnavailableImageProvider,
-        ))
-        .await;
-    };
-    Box::pin(lifecycle::collect(docker, journal, &provider)).await
-}
-
-fn provider_for_build<'a>(
-    pat: &'a str,
-    state_directory: &Path,
-    has_compiled_identity: bool,
-) -> Result<Option<ArtifactImageProvider<'a>>, crate::error::HostError> {
-    if has_compiled_identity {
-        ArtifactImageProvider::from_rest(pat, state_directory).map(Some)
-    } else {
-        Ok(None)
-    }
+    let images = images.ok_or(crate::error::HostError::Identity)?;
+    Box::pin(lifecycle::collect(
+        docker,
+        journal,
+        &ArtifactImageProvider { images: &images },
+    ))
+    .await
 }
 
 impl provider::ImageProvider for ArtifactImageProvider<'_> {
@@ -104,13 +93,14 @@ impl provider::ImageProvider for ArtifactImageProvider<'_> {
         engine_id: &str,
         info: &bollard::models::SystemInfo,
     ) -> Result<Option<provider::VerifiedCandidate>, crate::error::HostError> {
-        let Some(candidate) = self
-            .inner
-            .verified_candidate(docker, engine_id, info)
-            .await?
-        else {
-            return Ok(None);
-        };
+        self.images.verify_engine(docker).await?;
+        if engine_id != self.images.engine_id
+            || info.id.as_deref() != Some(engine_id)
+            || info.docker_root_dir.as_deref() != Some(self.images.docker_root.as_str())
+        {
+            return Err(crate::error::HostError::Identity);
+        }
+        let candidate = self.images.probe.clone();
         Ok(Some(provider::VerifiedCandidate {
             runtime_id: candidate.runtime_id,
             platform: candidate.platform,

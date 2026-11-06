@@ -22,9 +22,9 @@ Workflow to generate
     - rust-a (21 steps)
     - rust-lib (21 steps)
     - sources-producer (12 steps)
-    - tools-producer-36cc6f04 (9 steps)
-    - tools-producer-67ffdb60 (10 steps)
-    - tools-producer-dc27f1ea (11 steps)
+    - tools-producer-c008f663 (9 steps)
+    - tools-producer-cc0b6e7c (10 steps)
+    - tools-producer-f06fa8aa (11 steps)
     - 2 Rust crate jobs
       Timeout: 5 minutes per crate job
       Obligations: Clippy -> run tests -> doctests -> doc build -> format check
@@ -46,7 +46,7 @@ Workflow to generate
   Critical path: stack/rust/crates/a/clippy/default (1 tasks)
   Clippy memory groups: 1; barriers: 0
   Cache layers: Mise tools, Cargo sources
-  Jactionlint: 2.4.0 pinned, profile correctness
+  Jactionlint: 2.5.0 pinned, profile correctness
   Action pins: 6
     - actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
     - actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9

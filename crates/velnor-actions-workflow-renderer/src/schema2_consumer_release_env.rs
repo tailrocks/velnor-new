@@ -105,7 +105,7 @@ fn release_context_bindings(
             | "merge-homebrew-tap-pr-v1"
     ) {
         for (key, value) in context.original() {
-            push(env, key, value);
+            push(env, key, if spec.sdk_source_bootstrap { "" } else { value });
         }
     }
     Ok(())

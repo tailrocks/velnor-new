@@ -3,7 +3,7 @@
 
 use crate::error::HostError;
 use crate::journal::Journal;
-use crate::stage::{PairSink, PairStop, drive};
+use crate::stage::{PairSink, drive};
 use crate::worker::{ResourceBudget, Started};
 
 #[derive(Debug, Clone)]
@@ -41,16 +41,11 @@ pub(super) async fn start_bound(
     jit: &[u8],
     resource_budget: ResourceBudget,
     bind: &Bind,
+    images: &crate::AdmittedImages,
 ) -> Result<Started, HostError> {
-    let partial = Box::pin(drive(
-        docker,
-        volume,
-        resource_budget,
-        jit,
-        PairStop::Jit,
-        bind,
-    ))
-    .await?;
+    images.verify_engine(docker).await?;
+    bind.journal.bind_worker_images(bind.row, images).await?;
+    let partial = Box::pin(drive(docker, volume, resource_budget, jit, bind, images)).await?;
     Ok(Started {
         dind_id: partial.dind_id.ok_or(HostError::Docker)?,
         runner_id: partial.runner_id.ok_or(HostError::Docker)?,

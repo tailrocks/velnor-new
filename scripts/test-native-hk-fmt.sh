@@ -87,6 +87,31 @@ cp "$nested_source" "$tmp_root/nested-unformatted.rs"
 git -C "$fixture" add .
 staged_tree=$(git -C "$fixture" write-tree)
 
+format_bin="$tmp_root/format external tools"
+mkdir -p "$format_bin"
+VELNOR_HK_FORMAT_MISE=$(command -v mise)
+[[ "$VELNOR_HK_FORMAT_MISE" == /* && -x "$VELNOR_HK_FORMAT_MISE" ]]
+export VELNOR_HK_FORMAT_MISE
+cat >"$format_bin/rust-build-guard" <<'SH'
+#!/bin/sh
+set -eu
+if { [ "$#" -ne 7 ] && [ "$#" -ne 8 ]; } ||
+  [ "$1" != -- ] || [ "$2" != mise ] || [ "$3" != exec ] ||
+  [ "$4" != -- ] || [ "$5" != cargo ] || [ "$6" != fmt ] ||
+  [ "$7" != --all ]; then
+  printf '%s\n' 'unexpected formatting admission command' >&2
+  exit 64
+fi
+if [ "$#" -eq 8 ] && [ "$8" != --check ]; then
+  printf '%s\n' 'unexpected formatting admission option' >&2
+  exit 64
+fi
+shift 2
+exec "$VELNOR_HK_FORMAT_MISE" "$@"
+SH
+chmod 0700 "$format_bin/rust-build-guard"
+export PATH="$format_bin:$PATH"
+
 "$hk_bin" --cd "$fixture" fix --all --step cargo_fmt --no-stage --no-progress
 if cmp -s "$root_source" "$tmp_root/root-unformatted.rs" ||
   cmp -s "$nested_source" "$tmp_root/nested-unformatted.rs"; then

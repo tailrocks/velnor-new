@@ -264,7 +264,69 @@ async fn validate_current_schema(conn: &turso::Connection) -> Result<(), HostErr
     {
         return Err(HostError::Journal);
     }
+    validate_worker_image_bindings(conn).await?;
     if !has_canonical_id_column(conn).await? || has_primary_key_index(conn).await? {
+        return Err(HostError::Journal);
+    }
+    Ok(())
+}
+
+async fn validate_worker_image_bindings(conn: &turso::Connection) -> Result<(), HostError> {
+    let mut rows = conn
+        .query("PRAGMA table_info(worker_image_bindings)", ())
+        .await
+        .map_err(|_| HostError::Journal)?;
+    let expected = [
+        ("intent_id", "INTEGER", false, 1_i64),
+        ("engine_id", "TEXT", true, 0_i64),
+        ("docker_root", "TEXT", true, 0_i64),
+        ("runner_image", "TEXT", true, 0_i64),
+        ("dind_image", "TEXT", true, 0_i64),
+    ];
+    for (name, typ, not_null, primary_key) in expected {
+        let row = rows
+            .next()
+            .await
+            .map_err(|_| HostError::Journal)?
+            .ok_or(HostError::Journal)?;
+        let actual_name: String = row.get(1).map_err(|_| HostError::Journal)?;
+        let actual_type: String = row.get(2).map_err(|_| HostError::Journal)?;
+        let actual_not_null: i64 = row.get(3).map_err(|_| HostError::Journal)?;
+        let default: Option<String> = row.get(4).map_err(|_| HostError::Journal)?;
+        let actual_primary_key: i64 = row.get(5).map_err(|_| HostError::Journal)?;
+        if actual_name != name
+            || !actual_type.eq_ignore_ascii_case(typ)
+            || (actual_not_null != 0) != not_null
+            || default.is_some()
+            || actual_primary_key != primary_key
+        {
+            return Err(HostError::Journal);
+        }
+    }
+    if rows.next().await.map_err(|_| HostError::Journal)?.is_some() {
+        return Err(HostError::Journal);
+    }
+    let mut foreign_keys = conn
+        .query("PRAGMA foreign_key_list(worker_image_bindings)", ())
+        .await
+        .map_err(|_| HostError::Journal)?;
+    let row = foreign_keys
+        .next()
+        .await
+        .map_err(|_| HostError::Journal)?
+        .ok_or(HostError::Journal)?;
+    let table: String = row.get(2).map_err(|_| HostError::Journal)?;
+    let source: String = row.get(3).map_err(|_| HostError::Journal)?;
+    let target: String = row.get(4).map_err(|_| HostError::Journal)?;
+    if table != "intents"
+        || source != "intent_id"
+        || target != "id"
+        || foreign_keys
+            .next()
+            .await
+            .map_err(|_| HostError::Journal)?
+            .is_some()
+    {
         return Err(HostError::Journal);
     }
     Ok(())

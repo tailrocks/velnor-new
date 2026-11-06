@@ -43,8 +43,8 @@ struct ImageEntry<'a> {
     config_digest: &'a str,
 }
 
-struct InspectedImage {
-    evidence: OciCandidateEvidence,
+pub(super) struct InspectedImage {
+    pub(super) evidence: OciCandidateEvidence,
 }
 
 pub(super) fn admit_runner_images(
@@ -92,7 +92,7 @@ pub(super) fn admit_runner_images(
     source::write_new_file(&request.descriptors_output, &bytes)
 }
 
-fn inspect_image(
+pub(super) fn inspect_image(
     path: &Path,
     kind: ImageKind,
     source_commit: &str,
@@ -176,7 +176,7 @@ fn image_entry<'a>(
     }
 }
 
-fn read_exact_lock(
+pub(super) fn read_exact_lock(
     root: &Path,
     source_commit: &str,
     deadline: CheckDeadline,

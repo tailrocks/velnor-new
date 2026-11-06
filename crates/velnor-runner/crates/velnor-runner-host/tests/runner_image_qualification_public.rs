@@ -16,6 +16,8 @@ mod tool_versions;
 #[path = "runner_image_qualification_public/uncertain_cleanup.rs"]
 mod uncertain_cleanup;
 
+use sha2::Digest;
+use std::fmt::Write as _;
 use std::time::Duration;
 use std::{error::Error, fs};
 
@@ -154,7 +156,7 @@ fn public_qualifier_rejects_wrong_image_kind_before_resources() -> TestResult<()
     assert_eq!(state.containers.len(), 1);
     assert_eq!(state.containers[0].name, "foreign-sentinel");
     assert_eq!(state.volumes, ["foreign-sentinel"]);
-    assert_eq!(state.images.len(), 2);
+    assert_eq!(state.images.len(), 3);
     assert!(state.images.contains(&digest_id('a')));
     assert!(state.images.contains(&digest_id('b')));
     Ok(())
@@ -222,7 +224,7 @@ fn public_qualifier_rejects_wrong_daemon_relationships_and_changes() -> TestResu
         assert_eq!(state.containers.len(), 1);
         assert_eq!(state.containers[0].name, "foreign-sentinel");
         assert_eq!(state.volumes, ["foreign-sentinel"]);
-        assert_eq!(state.images.len(), 2);
+        assert_eq!(state.images.len(), 3);
         assert!(state.images.contains(&digest_id('a')));
         assert!(state.images.contains(&digest_id('b')));
     }
@@ -370,3 +372,9 @@ fn public_qualifier_bounds_docker_operations_and_streams() -> TestResult<()> {
     }
     Ok(())
 }
+
+#[path = "runner_image_qualification_public/admission.rs"]
+mod admission;
+
+#[path = "runner_image_qualification_public/pending.rs"]
+mod pending;

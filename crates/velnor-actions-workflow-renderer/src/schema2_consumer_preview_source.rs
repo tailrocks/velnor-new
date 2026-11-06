@@ -28,6 +28,12 @@ pub(super) fn job(spec: &ConsumerReleaseSpec) -> Result<(String, Yaml), RenderEr
         "permissions".to_owned(),
         permissions(&[("actions", "read"), ("contents", "read")]),
     ));
+    if spec.sdk_source_bootstrap {
+        fields.push((
+            "env".to_owned(),
+            permissions(&velnor_actions_contract::JobEnv::RustToolchain.pairs()),
+        ));
+    }
     let mut job_steps = vec![
         setup(&spec.linux_setup),
         run_step(
@@ -37,11 +43,15 @@ pub(super) fn job(spec: &ConsumerReleaseSpec) -> Result<(String, Yaml), RenderEr
         acquire(&spec.linux_acquire, "preview-eligibility", "ubuntu-26.04")?,
         source_select_step(spec)?,
     ];
-    job_steps.push(steps::checkout_with_lfs(
-        spec,
-        "${{ steps.source-select.outputs.source_sha }}",
-        "${{ steps.source-select.outputs.checkout_lfs }}",
+    job_steps.extend(crate::non_input_checkout::restrict_checkout_yaml(
+        steps::checkout_with_lfs(
+            spec,
+            "${{ steps.source-select.outputs.source_sha }}",
+            "${{ steps.source-select.outputs.checkout_lfs }}",
+        ),
+        &spec.non_inputs,
     ));
+    job_steps.extend(super::steps::sdk_source_cli(spec)?);
     job_steps.push(finalize_step(spec)?);
     job_steps.push(source_admission_upload());
     fields.push(("outputs".to_owned(), job_outputs()));

@@ -333,3 +333,55 @@ fn qualification_plan(repo: &ScopedRepo, tip: &str) -> Result<PlanRun, Box<dyn E
     });
     plan_request(&request)
 }
+
+#[test]
+fn native_image_candidate_check_tracks_declared_source_and_skips_docs() -> TestResult {
+    let checkout = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let config: toml::Value =
+        toml::from_str(&fs::read_to_string(checkout.join(".velnor/config.toml"))?)?;
+    let check = config["checks"]
+        .as_array()
+        .ok_or("checks")?
+        .iter()
+        .find(|item| item["id"].as_str() == Some("native-image-candidates"))
+        .ok_or("native check")?;
+    let inputs = check["inputs"]
+        .as_array()
+        .ok_or("inputs")?
+        .iter()
+        .map(|v| v.as_str().ok_or("input"))
+        .collect::<Result<Vec<_>, _>>()?;
+    let extra = format!(
+        "{DOCS_CONFIG}\n[[stacks.rust.inputs]]\nglobs = [\"crates/velnor-actions-cli/**\"]\npackages = [\"core\"]\n[discovery]\nexclude = [\"crates/**\"]\n[[checks]]\nid = \"native-image-candidates\"\ntask = \"fixture-check\"\ninputs = {}\ntools = []\n[checks.runner]\nlabel = \"ubuntu-26.04\"\nplatform = \"linux_x64\"\nexecutor = \"hosted\"\n",
+        serde_json::to_string(&inputs)?
+    );
+    for (path, expected) in [
+        ("docs/guide.md", "not_affected"),
+        ("images/runner/ubuntu-26.04/Dockerfile", "run"),
+        ("crates/velnor-actions-cli/src/main.rs", "run"),
+    ] {
+        let mut repo = scoped_workspace(&extra)?;
+        put(
+            repo.root(),
+            "mise.toml",
+            "[tasks.fixture-check]\nrun = \"true\"\n",
+        )?;
+        for input in &inputs {
+            if !repo.root().join(input).exists() {
+                let destination = repo.root().join(input);
+                fs::create_dir_all(destination.parent().ok_or("input parent")?)?;
+                fs::copy(checkout.join(input), destination)?;
+            }
+        }
+        repo.base = commit(repo.root(), "configure check")?;
+        let run = change_and_plan(&repo, "pull_request", &[(path, "changed\n")])?;
+        assert_eq!(
+            run.jobs()?
+                .get("check-native-image-candidates")
+                .map(String::as_str),
+            Some(expected),
+            "{path}"
+        );
+    }
+    Ok(())
+}

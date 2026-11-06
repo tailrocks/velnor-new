@@ -26,7 +26,7 @@ fn public_qualifier_removes_volumes_only_after_uncertain_container_absence() -> 
         assert!(state.fault_reached);
         assert_eq!(state.pending_mutations, 1);
         assert!(state.foreign_container_present && state.foreign_volume_present);
-        assert_eq!(state.images.len(), 2);
+        assert_eq!(state.images.len(), 3);
         assert!(state.images.contains(&digest_id('a')));
         assert!(state.images.contains(&digest_id('b')));
         let dind = state

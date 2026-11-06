@@ -230,12 +230,16 @@ impl RegisteredSources {
                 )
             })
             .collect::<BTreeSet<_>>();
-        workflow.extend(input.config.images.iter().flat_map(|image| {
-            image
-                .platforms
-                .iter()
-                .map(|platform| image.build_job_id(*platform))
-        }));
+        if input.config.workflow.policy
+            != velnor_actions_contract::WorkflowPolicy::VelnorRepositoryV1
+        {
+            workflow.extend(input.config.images.iter().flat_map(|image| {
+                image
+                    .platforms
+                    .iter()
+                    .map(|platform| image.build_job_id(*platform))
+            }));
+        }
         if self.seen_workflow != workflow {
             return Err(invalid("native_graph_incomplete_workflow_tasks"));
         }

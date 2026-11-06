@@ -68,3 +68,52 @@ fn a_bare_rust_install_is_a_blocking_lock_audit_finding() -> Result<(), Box<dyn 
     assert_eq!(findings(&dirty), [format!("{FINDING}:{job}")], "{dirty:?}");
     Ok(())
 }
+
+#[test]
+fn cross_target_verifier_requires_exact_candidate_identity() -> Result<(), Box<dyn Error>> {
+    use velnor_actions_contract::WorkflowPolicy;
+
+    let repo = make_repo()?;
+    let prep = prepare(repo.path())?;
+    let verifiers = VerifierActionSet::build(&prep.emission_catalog(), env!("CARGO_PKG_VERSION"))?;
+    let mut job = prep.workflow.ir.jobs.values().next().ok_or("job")?.clone();
+    job.steps = vec![verifiers.cross_target_rust.clone()];
+    let audit = |candidate: &velnor_actions_contract::Job, id, policy| {
+        let mut blocking = Vec::new();
+        super::prepare_sequence::verifier_positions(
+            id,
+            candidate,
+            &verifiers,
+            policy,
+            &mut blocking,
+        );
+        blocking
+    };
+    let id = "check-native-image-candidates";
+    let policy = WorkflowPolicy::VelnorRepositoryV1;
+    assert_eq!(audit(&job, id, policy), [] as [String; 0]);
+    let mut changed = job.clone();
+    if let StepKind::Shell { run, .. } = &mut changed.steps[0].kind {
+        run[2].push('x');
+    } else {
+        return Err("expected shell verifier".into());
+    }
+    assert_ne!(audit(&changed, id, policy), [] as [String; 0]);
+    changed = job.clone();
+    if let StepKind::Shell { env, .. } = &mut changed.steps[0].kind {
+        env.insert("CARGO_HOME".to_owned(), "/tmp/other".to_owned());
+    }
+    assert_ne!(audit(&changed, id, policy), [] as [String; 0]);
+    changed = job.clone();
+    changed.steps[0].condition = Some("always()".to_owned());
+    assert_ne!(audit(&changed, id, policy), [] as [String; 0]);
+    changed = job.clone();
+    changed.steps.clear();
+    assert_ne!(audit(&changed, id, policy), [] as [String; 0]);
+    changed = job.clone();
+    changed.steps.push(verifiers.cross_target_rust.clone());
+    assert_ne!(audit(&changed, id, policy), [] as [String; 0]);
+    assert_ne!(audit(&job, id, WorkflowPolicy::ConsumerV1), [] as [String; 0]);
+    assert_ne!(audit(&job, "another-job", policy), [] as [String; 0]);
+    Ok(())
+}

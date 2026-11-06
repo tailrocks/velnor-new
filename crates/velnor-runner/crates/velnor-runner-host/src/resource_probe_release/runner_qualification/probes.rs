@@ -35,6 +35,7 @@ pub(super) struct CommandSpec<'a> {
     pub(super) command: &'a [&'a str],
     pub(super) socket_volume: Option<&'a str>,
     pub(super) timeout: Duration,
+    pub(super) probe_root: Option<&'a str>,
 }
 
 pub(super) async fn inspect_outer(docker: &Docker) -> Result<DaemonIdentity, HostError> {
@@ -53,7 +54,11 @@ pub(super) async fn run_command(
     command: CommandSpec<'_>,
 ) -> Result<Vec<u8>, HostError> {
     let end = Instant::now() + command.timeout;
-    let volumes = command.socket_volume.into_iter().collect::<Vec<_>>();
+    let volumes = command
+        .socket_volume
+        .or(command.probe_root)
+        .into_iter()
+        .collect::<Vec<_>>();
     let name = resources.register_container(command.role)?;
     let config = command_config(resources, &command);
     let client = docker.clone();
@@ -115,12 +120,25 @@ pub(super) async fn run_command(
 }
 
 fn command_config(resources: &OwnedResources, command: &CommandSpec<'_>) -> ContainerCreateBody {
-    let mounts = command
-        .socket_volume
-        .map(|volume| vec![mount(volume, "/run")])
-        .unwrap_or_default();
+    let mounts = if let Some(root) = command.probe_root {
+        vec![bollard::models::Mount {
+            typ: Some(bollard::models::MountType::BIND),
+            source: Some(root.to_owned()),
+            target: Some("/velnor/docker-root".to_owned()),
+            read_only: Some(true),
+            ..Default::default()
+        }]
+    } else {
+        command
+            .socket_volume
+            .map(|volume| vec![mount(volume, "/run")])
+            .unwrap_or_default()
+    };
     ContainerCreateBody {
         image: Some(command.image_id.to_owned()),
+        user: command.probe_root.map(|_| "65532:65532".to_owned()),
+        working_dir: command.probe_root.map(|_| "/".to_owned()),
+        network_disabled: command.probe_root.map(|_| true),
         entrypoint: Some(vec![command.entrypoint.to_owned()]),
         cmd: Some(
             command
@@ -135,6 +153,11 @@ fn command_config(resources: &OwnedResources, command: &CommandSpec<'_>) -> Cont
         labels: Some(resources.labels(command.role)),
         host_config: Some(HostConfig {
             privileged: Some(false),
+            cap_drop: command.probe_root.map(|_| vec!["ALL".to_owned()]),
+            readonly_rootfs: command.probe_root.map(|_| true),
+            security_opt: command
+                .probe_root
+                .map(|_| vec!["no-new-privileges:true".to_owned()]),
             network_mode: Some("none".to_owned()),
             port_bindings: None,
             mounts: (!mounts.is_empty()).then_some(mounts),
@@ -260,6 +283,7 @@ pub(super) async fn query_runner_daemon(
             ],
             socket_volume: Some(socket_volume),
             timeout: RUNNER_QUERY_TIMEOUT,
+            probe_root: None,
         },
     )
     .await?;

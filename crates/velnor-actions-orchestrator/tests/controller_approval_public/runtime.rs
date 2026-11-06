@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{error::Error, io};
+use std::{error::Error, fs, io, path::Path};
 
 use serde_json::Value;
 use velnor_actions_orchestrator::{prepare, render_staged_tree};
@@ -24,11 +24,43 @@ const ROTATED_RUNTIME_SHA256: [&str; 3] = [
 
 fn rendered_ci(approvals: &str, lock: &str) -> Result<String, Box<dyn Error>> {
     let temp = fixture(Some(approvals), lock)?;
+    add_sdk_workspace(temp.path())?;
     let prep = prepare(temp.path())?;
     let tree = render_staged_tree(&prep)?;
     tree.get(".github/workflows/ci.yml")
         .map(str::to_owned)
         .ok_or_else(|| io::Error::other("rendered ci workflow missing").into())
+}
+
+pub(super) fn add_sdk_workspace(root: &Path) -> Result<(), Box<dyn Error>> {
+    let manifest = root.join("Cargo.toml");
+    let mut contents = fs::read_to_string(&manifest)?;
+    contents.push_str("\n[workspace]\nmembers = [\"crates/velnor-actions-cli\", \"crates/velnor-archive-guard\"]\n");
+    fs::write(manifest, contents)?;
+    for (package, binary) in [
+        ("velnor-actions-cli", "velnor-actions"),
+        ("velnor-archive-guard", "velnor-archive-guard"),
+    ] {
+        let directory = root.join("crates").join(package);
+        fs::create_dir_all(directory.join("src"))?;
+        fs::write(
+            directory.join("Cargo.toml"),
+            format!(
+                "[package]\nname = \"{package}\"\nversion = \"0.1.0\"\nedition = \"2024\"\n\n[[bin]]\nname = \"{binary}\"\npath = \"src/main.rs\"\n"
+            ),
+        )?;
+        fs::write(directory.join("src/main.rs"), "fn main() {}\n")?;
+    }
+    super::root_cargo_lock::write_root_cargo_lock(
+        root,
+        &[
+            "approval-fixture",
+            "velnor-actions-cli",
+            "velnor-archive-guard",
+        ],
+    )?;
+    super::git(&["add", "Cargo.toml", "Cargo.lock", "crates"], root)?;
+    super::git(&["commit", "-m", "add SDK release products"], root)
 }
 
 fn assert_runtime_identities(

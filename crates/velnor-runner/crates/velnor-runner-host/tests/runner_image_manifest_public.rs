@@ -349,3 +349,6 @@ fn public_write_runner_manifest_preserves_existing_output() -> TestResult<()> {
     assert_eq!(fs::read(manifest_path)?, b"preserve this file");
     Ok(())
 }
+
+#[path = "runner_image_manifest_public/admission.rs"]
+mod admission;

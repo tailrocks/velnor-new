@@ -211,7 +211,12 @@ fn qualifier_ignores_untrusted_git_on_path() -> TestResult<()> {
                 fixture.source_sha(),
                 &digest_id('a'),
                 &digest_id('b'),
+                &digest_id('c'),
                 api.socket().to_str().ok_or("socket")?,
+                temp.path()
+                    .join(if dirty { "dirty-result" } else { "result" })
+                    .to_str()
+                    .ok_or("result")?,
             ])
             .output()?;
         let state = api.snapshot()?;

@@ -62,26 +62,26 @@ fn inspect_image(path: &str, state: &mut State) -> Reply {
     let delayed = state.take_fault(ApiFault::StallImageInspect);
     let count = state.image_inspections.entry(image_id.clone()).or_default();
     *count += 1;
-    let role = if image_id == state.plan.runner_id {
-        ImageRole::Runner
-    } else {
-        ImageRole::Dind
-    };
+    let count = *count;
+    let role = image_role(&image_id, &state.plan.runner_id, &state.plan.dind_id);
     let expected = match role {
         ImageRole::Runner => state.plan.runner_id.as_str(),
         ImageRole::Dind => state.plan.dind_id.as_str(),
+        ImageRole::ResourceProbe => state.plan.probe_id.as_str(),
     };
     let mut reported_id = expected.to_owned();
     let mut architecture = "amd64";
     let mut revision = state.plan.source_sha.clone();
+    let mut working_dir = "/";
     let mut image_kind = match role {
         ImageRole::Runner => "runner",
         ImageRole::Dind => "dind",
+        ImageRole::ResourceProbe => "resource-probe",
     };
     let (user, entrypoint, runtime_fault) = runtime_config(role, state.plan.image_fault);
     let fault_reached = match state.plan.image_fault {
         Some((target, ImageFault::Id)) if target == role => {
-            reported_id = digest_id('c');
+            reported_id = digest_id('d');
             true
         }
         Some((target, ImageFault::Platform)) if target == role => {
@@ -96,13 +96,85 @@ fn inspect_image(path: &str, state: &mut State) -> Reply {
             image_kind = wrong_image_kind(role);
             true
         }
-        Some((target, ImageFault::Reinspection)) if target == role && *count > 1 => {
-            reported_id = digest_id('c');
+        Some((target, ImageFault::WorkingDir)) if target == role => {
+            working_dir = "/unexpected";
+            true
+        }
+        Some((target, ImageFault::Reinspection)) if target == role && count > 1 => {
+            reported_id = digest_id('d');
             true
         }
         _ => false,
     };
-    state.fault_reached |= fault_reached || runtime_fault;
+    let (descriptor, descriptor_fault) = image_descriptor(
+        &image_id,
+        role,
+        state.plan.manifest_store,
+        state.plan.image_fault,
+        count,
+    );
+    state.fault_reached |= fault_reached || runtime_fault || descriptor_fault;
+    mutate_source(state);
+    let value = json!({
+        "Id": reported_id,
+        "Descriptor": descriptor,
+        "Os": "linux",
+        "Architecture": architecture,
+        "Variant": "",
+        "Config": {"User": user, "WorkingDir": working_dir, "Entrypoint": entrypoint.map(|value| vec![value]), "Labels": {
+            "org.opencontainers.image.revision": revision,
+            "io.velnor.image.kind": image_kind
+        }}
+    });
+    let reply = Reply::json(200, &value);
+    if delayed {
+        reply.with_delay(Duration::from_secs(6))
+    } else {
+        reply
+    }
+}
+
+fn image_role(image_id: &str, runner_id: &str, dind_id: &str) -> ImageRole {
+    if image_id == runner_id {
+        ImageRole::Runner
+    } else if image_id == dind_id {
+        ImageRole::Dind
+    } else {
+        ImageRole::ResourceProbe
+    }
+}
+
+fn image_descriptor(
+    image_id: &str,
+    role: ImageRole,
+    manifest_store: Option<()>,
+    fault: Option<(ImageRole, ImageFault)>,
+    count: usize,
+) -> (serde_json::Value, bool) {
+    let mut descriptor = if manifest_store.is_some() {
+        json!({"mediaType":"application/vnd.oci.image.manifest.v1+json", "digest":image_id, "size":123})
+    } else {
+        serde_json::Value::Null
+    };
+    let reached = match fault {
+        Some((target, ImageFault::DescriptorDigest)) if target == role => {
+            descriptor["digest"] = json!(digest_id('e'));
+            true
+        }
+        Some((target, ImageFault::DescriptorPlatform)) if target == role => {
+            descriptor["platform"] = json!({"os":"linux", "architecture":"arm64"});
+            true
+        }
+        Some((target, ImageFault::DescriptorReinspection)) if target == role && count > 1 => {
+            descriptor = serde_json::Value::Null;
+            true
+        }
+        _ => false,
+    };
+    (descriptor, reached)
+}
+
+fn mutate_source(state: &mut State) {
     if let Some(lock) = state.plan.mutate_lock_on_first_image_inspect.take() {
         state.fault_reached = true;
         if let Ok(mut bytes) = fs::read(&lock) {
@@ -115,24 +187,6 @@ fn inspect_image(path: &str, state: &mut State) -> Reply {
         drop(fs::write(source_file, "changed during qualification\n"));
     }
     mutate_hidden_index_on_first_image_inspect(state);
-    let reply = Reply::json(
-        200,
-        &json!({
-            "Id": reported_id,
-            "Os": "linux",
-            "Architecture": architecture,
-            "Variant": "",
-            "Config": {"User": user, "Entrypoint": entrypoint.map(|value| vec![value]), "Labels": {
-                "org.opencontainers.image.revision": revision,
-                "io.velnor.image.kind": image_kind
-            }}
-        }),
-    );
-    if delayed {
-        reply.with_delay(Duration::from_secs(6))
-    } else {
-        reply
-    }
 }
 
 fn runtime_config(
@@ -142,6 +196,7 @@ fn runtime_config(
     let (user, entrypoint) = match role {
         ImageRole::Runner => ("runner", "/usr/local/bin/velnor-runner-entrypoint"),
         ImageRole::Dind => ("", "/usr/local/bin/velnor-dind-entrypoint"),
+        ImageRole::ResourceProbe => ("65532:65532", "/velnor/resource-probe"),
     };
     match fault {
         Some((target, ImageFault::User)) if target == role => {
@@ -159,7 +214,7 @@ fn runtime_config(
 fn wrong_image_kind(role: ImageRole) -> &'static str {
     match role {
         ImageRole::Runner => "dind",
-        ImageRole::Dind => "runner",
+        ImageRole::Dind | ImageRole::ResourceProbe => "runner",
     }
 }
 

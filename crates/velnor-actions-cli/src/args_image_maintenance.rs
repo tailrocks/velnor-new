@@ -66,6 +66,52 @@ pub(crate) enum ImageMaintenanceCommand {
         #[arg(long)]
         descriptors_output: PathBuf,
     },
+    #[command(
+        about = "Record the exact CI-produced Runner, DinD, and resource-probe OCI candidates."
+    )]
+    RecordRunnerCandidates {
+        #[arg(long)]
+        root: PathBuf,
+        #[arg(long)]
+        source_commit: String,
+        #[arg(long)]
+        runner_archive: PathBuf,
+        #[arg(long)]
+        dind_archive: PathBuf,
+        #[arg(long)]
+        probe_archive: PathBuf,
+        #[arg(long)]
+        output_directory: PathBuf,
+    },
+    #[command(about = "Bind qualified runtime images to their exact CI candidates.")]
+    WriteRunnerQualification {
+        #[arg(long)]
+        root: PathBuf,
+        #[arg(long)]
+        source_commit: String,
+        #[arg(long)]
+        runner_archive: PathBuf,
+        #[arg(long)]
+        runner_record: PathBuf,
+        #[arg(long)]
+        dind_archive: PathBuf,
+        #[arg(long)]
+        dind_record: PathBuf,
+        #[arg(long)]
+        probe_archive: PathBuf,
+        #[arg(long)]
+        probe_record: PathBuf,
+        #[arg(long)]
+        runtime_result: PathBuf,
+        #[arg(long)]
+        producer_run_id: u64,
+        #[arg(long)]
+        producer_run_attempt: u32,
+        #[arg(long)]
+        qualifier_job_id: u64,
+        #[arg(long)]
+        output: PathBuf,
+    },
     /// Promote a verified source digest to its approved version tag.
     PromoteImage {
         #[arg(long)]

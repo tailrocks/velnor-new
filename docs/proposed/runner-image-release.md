@@ -5,13 +5,13 @@ on 2026-10-28. This is the target for their GitHub Release archive distribution.
 macOS host and attestation-helper binaries retain their existing GitHub Release
 distribution and exact-source compatibility checks.
 
-The current product-release image producer still writes Docker-save archives,
-attests the shared `image-assets` artifact, and has no per-image publication
-record or `qualify-images` job. The native OCI publisher therefore rejects its
-current Runner-family output. Keep the existing release workflow active until
-the producer emits the closed records below and OCI-layout archives from the
-same image builds. Do not add a rebuild or a Docker-save conversion in the
-privileged publisher.
+The successful default-branch CI run produces OCI-layout archives and closed
+publication records. Qualification consumes those exact archives. The native
+publisher writes the admitted digests to GHCR. The image-only
+`runner-image-release.yml` caller then assembles and signs the immutable
+manifest through `product-release-images.yml`. It does not invoke the manually
+approved stable SDK release route. No Docker-save conversion or rebuild occurs
+in a privileged job.
 
 ## Image family
 
@@ -37,9 +37,8 @@ existing pinned Crane tool, credential login, bounded process runner, and OCI
 archive guard. Job-image publication authenticates a successful CI producer
 and a separate existing candidate attestor that signs the exact CI artifact,
 record, and source closure. The attestor must consume that artifact without
-rebuilding it. The current GitHub Release workflow remains active until the new
-Runner-family producer and consumer are wired together; it is not a fallback
-after GHCR cutover.
+rebuilding it. Runtime image selection uses the authenticated GHCR manifest;
+Docker-save release archives are not a fallback.
 
 The producer writes one `velnor.runner-image-publication.v1` record per image:
 `runner-image-publication.json`, `dind-image-publication.json`, or
@@ -63,6 +62,12 @@ workflow must use an unambiguous job dependency and artifact path so its signer
 attests only the receipt produced by the successful qualification job. The CI
 producer remains credential-free, and candidate images run without signing or
 publication credentials.
+
+Runtime qualification records each engine-visible ID together with its identity
+kind. A classic Docker store can expose the config digest; a containerd store
+can expose the platform-manifest digest. The proof assembler compares the ID
+to the corresponding digest from the authenticated archive. These local IDs
+never enter the portable release manifest.
 
 Each image receives `sha-<full-source-commit>` after qualification. A tag that
 already names the same digest is idempotent; a tag naming different bytes is
@@ -91,8 +96,9 @@ error identifies the destination for recovery. Existing destinations are
 never reused, overwritten or removed.
 
 Source-tag publication requires exclusive writer authority. Keep every
-Runner-family tag writer under the protected product-release concurrency group
-`${{ github.repository }}-product-release` with `cancel-in-progress: false`,
+Runner-family GHCR tag writer under the shared native-image writer queue
+`${{ github.repository }}-native-image-writers` with `queue: max` and
+`cancel-in-progress: false`,
 and confirm package write access does not introduce another publication path.
 The shared publisher's HEAD/PUT checks are not atomic registry create semantics;
 another HEAD does not prevent a competing writer. Do not claim immutable tags
@@ -105,7 +111,13 @@ The `runner-${source_sha}` GitHub Release contains exactly
 `RUNNER_IMAGE_MANIFEST.json`, `SHA256SUMS`, `LICENSE`, and `NOTICE`. Existing
 checksum, asset-inventory, attestation, immutable-release, and source/workflow
 verification apply to those exact bytes. Published historical releases remain
-unchanged.
+unchanged. The manifest producer authenticates the exact successful publisher
+run, attempt and role job, joins each journal to its CI archive, and verifies
+the GHCR digest attestation from that publisher. The source-built formatter
+runs after registry credentials are removed, with credentials stripped from
+its environment. One source-free signing invocation attests both the manifest
+and `SHA256SUMS`, together with `LICENSE` and `NOTICE`. The source-free publisher
+retains exact-source, protected-main, successful-CI and immutable-asset checks.
 
 Manifest schema version 2 requires these fields:
 

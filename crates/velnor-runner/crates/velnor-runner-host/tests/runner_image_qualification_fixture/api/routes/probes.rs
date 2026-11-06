@@ -45,6 +45,8 @@ pub(super) fn probe_output(container: &FakeContainer, state: &State) -> (Vec<u8>
         state.plan.node_version.as_str()
     };
     let output = match role {
+        "resource-probe" if state.plan.malformed_resource_probe => "{}\n".to_owned(),
+        "resource-probe" => "{\"schema_version\":1,\"docker_root_free_bytes\":10,\"docker_root_total_bytes\":20,\"memory_available_bytes\":30,\"load_milli\":40,\"memory_psi_some_avg10_bps\":null}\n".to_owned(),
         "runner-listener" => format!("{runner_version}\n"),
         "runner-docker-cli" | "dind-docker-cli" | "dind-dockerd" => {
             format!("{docker_version}\n")
@@ -99,6 +101,11 @@ fn valid_probe_config(container: &FakeContainer, state: &State, role: &str) -> b
 
 fn expected_probe(role: &str, state: &State) -> Option<(String, &'static str, Value)> {
     match role {
+        "resource-probe" => Some((
+            state.plan.probe_id.clone(),
+            "/velnor/resource-probe",
+            json!([]),
+        )),
         "runner-listener" => Some((
             state.plan.runner_id.clone(),
             "/home/runner/bin/Runner.Listener",

@@ -293,6 +293,10 @@ fn pin_diff_reports_cosign_digest_and_runner_label_changes() -> TestResult {
     );
 
     let fixture = Fixture::new()?;
+    fixture.edit_inventory(|inventory| {
+        inventory["runner"]["supported"] =
+            serde_json::json!(["ubuntu-26.04", "ubuntu-24.04", "ubuntu-22.04"]);
+    })?;
     fixture.commit_all()?;
     fixture.rewrite(POLICY, |text| text.replacen(", \"ubuntu-22.04\"", "", 1))?;
     fixture.edit_inventory(|inventory| {

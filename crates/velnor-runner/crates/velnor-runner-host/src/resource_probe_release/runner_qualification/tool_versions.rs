@@ -88,6 +88,7 @@ async fn probe_existing_versions(
             command: &["--version"],
             socket_volume: None,
             timeout: DOCKER_TIMEOUT,
+            probe_root: None,
         },
     )
     .await?;
@@ -198,6 +199,7 @@ async fn runner_tool_probe(
             command,
             socket_volume: None,
             timeout: DOCKER_TIMEOUT,
+            probe_root: None,
         },
     )
     .await

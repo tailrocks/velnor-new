@@ -82,6 +82,38 @@ fn load_manifest(
     ))
 }
 
+pub(crate) fn parse_for_source(
+    bytes: &[u8],
+    source_commit: &str,
+    runner_lock: &[u8],
+) -> Result<RunnerImageManifest, HostError> {
+    if bytes.is_empty() || bytes.len() > MANIFEST_LIMIT || runner_lock.len() > MANIFEST_LIMIT {
+        return Err(HostError::Frame);
+    }
+    if source_commit.len() != 40
+        || !source_commit
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+    {
+        return Err(HostError::Identity);
+    }
+    let value = crate::artifact_admission::parse_release_json(bytes)?;
+    let parsed: RunnerImageManifest =
+        serde_json::from_value(value).map_err(|_| HostError::Identity)?;
+    validate_images(&parsed.images, source_commit)?;
+    let actual = serde_json::to_value(&parsed).map_err(|_| HostError::Identity)?;
+    let expected = manifest(
+        parsed.images,
+        source_commit.to_owned(),
+        source_commit.to_owned(),
+        read_versions(runner_lock)?,
+    );
+    if actual != serde_json::to_value(&expected).map_err(|_| HostError::Identity)? {
+        return Err(HostError::Identity);
+    }
+    Ok(expected)
+}
+
 fn validate_descriptors(
     descriptors: &DescriptorDocument,
     source_commit: &str,
@@ -113,6 +145,7 @@ fn validate_image(
         || !is_digest(&image.platform_manifest_digest)
         || !is_digest(&image.config_digest)
         || image.registry_digest != image.platform_manifest_digest
+        || image.config_digest == image.registry_digest
     {
         return Err(HostError::Identity);
     }

@@ -380,11 +380,11 @@ nextest="$(mise --no-config --no-env --no-hooks config get -f mise.toml 'tools."
 jactionlint="$(mise --no-config --no-env --no-hooks config get -f mise.toml tools.jactionlint)"
 shellcheck="$(mise --no-config --no-env --no-hooks config get -f mise.toml tools.shellcheck)"
 channel="$(mise --no-config --no-env --no-hooks config get -f rust-toolchain.toml toolchain.channel)"
-expected_mise=2026.11.1
+expected_mise=2026.11.2
 expected_rust=1.99.1
 expected_mbx=1.29.2
 expected_nextest=0.9.151
-expected_jactionlint=2.4.0
+expected_jactionlint=2.5.0
 expected_shellcheck=0.11.0
 if [ "$mise_version" != "$expected_mise" ] || [ "$rust" != "$expected_rust" ] \
   || [ "$mbx" != "$expected_mbx" ] || [ "$nextest" != "$expected_nextest" ] \
@@ -613,7 +613,7 @@ validator_jactionlint="$(MISE_NO_CONFIG=1 mise --no-config --no-env --no-hooks c
   -f mise.toml tools.jactionlint)"
 validator_shellcheck="$(MISE_NO_CONFIG=1 mise --no-config --no-env --no-hooks config get \
   -f mise.toml tools.shellcheck)"
-if [ "$validator_jactionlint" != 2.4.0 ] || [ "$validator_shellcheck" != 0.11.0 ]; then
+if [ "$validator_jactionlint" != 2.5.0 ] || [ "$validator_shellcheck" != 0.11.0 ]; then
   printf 'FATAL: committed validator Mise pins differ from qualification pins\n' >"$log"
   printf '1\n' >"$status_file"
   exit 1
@@ -672,18 +672,18 @@ if [ "$command_status" -eq 0 ]; then
   if MISE_NO_CONFIG=1 MISE_BACKENDS_JACTIONLINT=github:jdx/jactionlint \
     MISE_BACKENDS_SHELLCHECK=github:koalaman/shellcheck \
     mise --no-config --no-env --no-hooks which --tool \
-    jactionlint@2.4.0 jactionlint >"$evidence/logs/jactionlint-which.log" 2>&1; then
+    jactionlint@2.5.0 jactionlint >"$evidence/logs/jactionlint-which.log" 2>&1; then
     jactionlint_which="$(cat "$evidence/logs/jactionlint-which.log")"
     if [ -f "$jactionlint_which" ] && [ ! -L "$jactionlint_which" ] \
       && [ -x "$jactionlint_which" ] \
       && MISE_NO_CONFIG=1 MISE_BACKENDS_JACTIONLINT=github:jdx/jactionlint \
       MISE_BACKENDS_SHELLCHECK=github:koalaman/shellcheck \
       mise --no-config --no-env --no-hooks exec \
-      jactionlint@2.4.0 -- jactionlint --version \
+      jactionlint@2.5.0 -- jactionlint --version \
       >"$evidence/logs/jactionlint-version.log" 2>&1 \
       && IFS= read -r jactionlint_version \
         <"$evidence/logs/jactionlint-version.log" \
-      && [ "$jactionlint_version" = 2.4.0 ]; then
+      && [ "$jactionlint_version" = 2.5.0 ]; then
       if ! jactionlint_binary_sha="$(sha256sum "$jactionlint_which" | awk '{print $1}')" \
         || [[ ! "$jactionlint_binary_sha" =~ ^[0-9a-f]{64}$ ]]; then
         identity_status=1

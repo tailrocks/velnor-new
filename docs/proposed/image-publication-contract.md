@@ -247,8 +247,30 @@ four code points above and running the hosted qualification unblocks it.
 
 The [Runner image release contract](runner-image-release.md) defines the
 owner-approved GHCR profile for Runner, DinD, and the resource probe. It reuses
-the existing fixed image-authority registry transport and exact-byte publisher,
-with explicit package scope and source-SHA tags. Its single-platform manifest
+the native registry transport and exact-byte publisher, with explicit package
+scope and source-SHA tags. Its single-platform manifest
 and authenticated GitHub Release inventory are distinct from job-candidate
 evidence and the general multi-platform `[[images]]` promotion contract above.
 Neither existing publication path is duplicated or weakened for that profile.
+
+The native publisher runs pinned Crane through a publication-scoped loopback
+registry gateway. The Rust gateway obtains the repository-scoped token from
+`https://ghcr.io/token` and sends authenticated requests only to the selected
+GHCR repository. Crane receives an empty private Docker configuration and no
+registry credential. The command type permits only local-layout push,
+manifest retrieval, blob retrieval, and tag promotion.
+
+The gateway validates and rewrites upload continuation locations. It does not
+forward unused terminal upload locations, authentication challenges, or
+upstream redirects to Crane. It consumes an allowed digest-specific blob
+redirect to `pkg-containers.githubusercontent.com` without authorization;
+other destinations and further redirects fail closed. Streaming and worker
+shutdown retain the publication deadline and existing byte bounds. The
+publisher independently verifies the final digest, remote bytes, and tag.
+
+This boundary preserves the previous publisher's origin restrictions.
+Crane v0.22.1's
+[bearer transport](https://github.com/google/go-containerregistry/blob/v0.22.1/pkg/v1/remote/transport/bearer.go)
+and [upload transport](https://github.com/google/go-containerregistry/blob/v0.22.1/pkg/v1/remote/write.go)
+accept broader authentication realms and upload locations than this profile.
+The native gateway enforces the profile while Crane performs the publication.

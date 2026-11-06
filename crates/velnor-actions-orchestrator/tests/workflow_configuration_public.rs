@@ -79,6 +79,8 @@ mod local_action_annotation;
 mod maintenance_check_inputs;
 #[path = "workflow_configuration_public/maintenance_features.rs"]
 mod maintenance_features;
+#[path = "workflow_configuration_public/maintenance_features_fixture.rs"]
+mod maintenance_features_fixture;
 #[path = "workflow_configuration_public/mbx_job_env.rs"]
 mod mbx_job_env;
 #[path = "workflow_configuration_public/mbx_lineage_format.rs"]
@@ -91,6 +93,10 @@ mod native_artifacts_fixture;
 mod native_artifacts_suite_gate;
 #[path = "workflow_configuration_public/native_artifacts_suites.rs"]
 mod native_artifacts_suites;
+#[path = "workflow_configuration_public/native_image_artifact.rs"]
+mod native_image_artifact;
+#[path = "workflow_configuration_public/native_image_target.rs"]
+mod native_image_target;
 #[path = "workflow_configuration_public/non_inputs_checkout.rs"]
 mod non_inputs_checkout;
 #[path = "workflow_configuration_public/non_inputs_checkout_support.rs"]

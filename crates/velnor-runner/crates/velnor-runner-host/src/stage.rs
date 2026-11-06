@@ -14,30 +14,15 @@ use crate::worker::{
     remove_worker_volumes, runner_create, start_id, verify_worker_volume,
 };
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum PairStop {
-    Volumes,
-
-    DindCreated,
-
-    DindStarted,
-
-    RunnerCreated,
-
-    RunnerStarted,
-
-    Jit,
-}
-
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PartialPair {
+pub(crate) struct PartialPair {
     pub dind_id: Option<String>,
 
     pub runner_id: Option<String>,
 }
 
 pub(crate) trait PairEngine {
-    async fn prepare_volumes(&self, volume: &str) -> Result<(), HostError>;
+    async fn prepare_volumes(&self, volume: &str, runner_image: &str) -> Result<(), HostError>;
     async fn create(&self, spec: &CreateProjection) -> Result<String, HostError>;
     async fn start(&self, id: &str) -> Result<(), HostError>;
     async fn write_jit(&self, id: &str, jit: &[u8]) -> Result<(), HostError>;
@@ -48,6 +33,9 @@ pub(crate) trait PairEngine {
         name: &str,
         volume: &str,
         role: &str,
+        engine_id: &str,
+        docker_root: &str,
+        image_id: &str,
     ) -> Result<Option<String>, HostError>;
     async fn verify_volume(
         &self,
@@ -64,32 +52,11 @@ pub(crate) trait PairSink {
     async fn runner(&self, id: &str) -> Result<(), HostError>;
 }
 
-#[derive(Debug, Clone, Copy)]
-pub(crate) struct Forget;
-
-#[expect(
-    clippy::unused_async_trait_impl,
-    reason = "sink matches the async trait and does not await"
-)]
-impl PairSink for Forget {
-    async fn volume(&self, _volume: &str) -> Result<(), HostError> {
-        Ok(())
-    }
-
-    async fn dind(&self, _id: &str) -> Result<(), HostError> {
-        Ok(())
-    }
-
-    async fn runner(&self, _id: &str) -> Result<(), HostError> {
-        Ok(())
-    }
-}
-
 impl PairEngine for Docker {
-    async fn prepare_volumes(&self, volume: &str) -> Result<(), HostError> {
+    async fn prepare_volumes(&self, volume: &str, runner_image: &str) -> Result<(), HostError> {
         let mounts = crate::worker::dind_mounts(volume)?;
         Box::pin(docker_deadline(create_named_volumes(self, volume, &mounts))).await??;
-        crate::work_owner::own_work_volume(self, &format!("{volume}-work")).await
+        crate::work_owner::own_work_volume(self, &format!("{volume}-work"), runner_image).await
     }
 
     async fn create(&self, spec: &CreateProjection) -> Result<String, HostError> {
@@ -133,8 +100,20 @@ impl PairEngine for Docker {
         name: &str,
         volume: &str,
         role: &str,
+        engine_id: &str,
+        docker_root: &str,
+        image_id: &str,
     ) -> Result<Option<String>, HostError> {
-        crate::worker::worker_id_for_name(self, name, volume, role).await
+        crate::worker::worker_id_for_name(
+            self,
+            name,
+            volume,
+            role,
+            engine_id,
+            docker_root,
+            image_id,
+        )
+        .await
     }
 
     async fn verify_volume(
@@ -158,53 +137,32 @@ impl PairEngine for Docker {
     }
 }
 
-pub async fn start_pair_until(
-    docker: &Docker,
-    private_volume: &str,
-    resource_budget: ResourceBudget,
-    jit: &[u8],
-    stop: PairStop,
-) -> Result<PartialPair, HostError> {
-    Box::pin(drive(
-        docker,
-        private_volume,
-        resource_budget,
-        jit,
-        stop,
-        &Forget,
-    ))
-    .await
-}
-
 pub(crate) async fn drive<E: PairEngine, S: PairSink>(
     engine: &E,
     private_volume: &str,
     resource_budget: ResourceBudget,
     jit: &[u8],
-    stop: PairStop,
     sink: &S,
+    images: &crate::AdmittedImages,
 ) -> Result<PartialPair, HostError> {
     if jit.is_empty() {
         return Err(HostError::EmptyJit);
     }
-    let runner = runner_create(&runner_plan(private_volume)?, resource_budget)?;
-    let dind = dind_create(private_volume, resource_budget)?;
+    let runner = runner_create(
+        &runner_plan(private_volume, images)?,
+        resource_budget,
+        images,
+    )?;
+    let dind = dind_create(private_volume, resource_budget, images)?;
     sink.volume(private_volume).await?;
-    engine.prepare_volumes(private_volume).await?;
-    if stop == PairStop::Volumes {
-        return Ok(PartialPair::none());
-    }
+    engine
+        .prepare_volumes(private_volume, &images.runner)
+        .await?;
     let dind_id = engine.create(&dind).await?;
     if let Err(error) = sink.dind(&dind_id).await {
         return drop_id(engine, &dind_id, error).await;
     }
-    if stop == PairStop::DindCreated {
-        return Ok(PartialPair::dind(dind_id));
-    }
     start_or_drop(engine, &dind_id).await?;
-    if stop == PairStop::DindStarted {
-        return Ok(PartialPair::dind(dind_id));
-    }
     let spec = join_or_drop(engine, runner, &dind_id).await?;
     let runner_id = match engine.create(&spec).await {
         Ok(id) => id,
@@ -213,14 +171,8 @@ pub(crate) async fn drive<E: PairEngine, S: PairSink>(
     if let Err(error) = sink.runner(&runner_id).await {
         return drop_both(engine, &dind_id, &runner_id, error).await;
     }
-    if stop == PairStop::RunnerCreated {
-        return Ok(PartialPair::both(dind_id, runner_id));
-    }
     if let Err(error) = engine.start(&runner_id).await {
         return drop_both(engine, &dind_id, &runner_id, error).await;
-    }
-    if stop == PairStop::RunnerStarted {
-        return Ok(PartialPair::both(dind_id, runner_id));
     }
     if let Err(error) = engine.write_jit(&runner_id, jit).await {
         return drop_both(engine, &dind_id, &runner_id, error).await;
@@ -230,10 +182,44 @@ pub(crate) async fn drive<E: PairEngine, S: PairSink>(
 
 pub async fn remove_recorded(
     docker: &Docker,
-    owned_id: &str,
-    name: &str,
+    journal_path: &std::path::Path,
+    intent_id: i64,
 ) -> Result<DeleteDecision, HostError> {
-    decide(docker, owned_id, name).await
+    let info = Box::pin(docker_deadline(docker.info()))
+        .await?
+        .map_err(|_| HostError::Docker)?;
+    let engine_id = info.id.ok_or(HostError::Docker)?;
+    let path = crate::daemon_lock::canonical_journal_path(journal_path)?;
+    let guard = crate::daemon_lock::EngineLineageGuard::acquire(&engine_id)?;
+    let journal = crate::journal::Journal::open(&path).await?;
+    journal.bind_engine(&engine_id).await?;
+    let instance = journal.instance_id().await?;
+    guard.verify_lineage(&path, &instance, journal.revision().await?)?;
+    journal.attach_lineage_guard(guard.clone())?;
+    let row = journal
+        .rows()
+        .await?
+        .into_iter()
+        .find(|row| row.id == intent_id)
+        .ok_or(HostError::Journal)?;
+    if row.cleanup_proven {
+        return Ok(DeleteDecision::NotDeleted);
+    }
+    crate::launch::slot::release_row(&journal, docker, &row)
+        .await
+        .map_err(|_| HostError::Ownership)?;
+    let updated = journal
+        .rows()
+        .await?
+        .into_iter()
+        .find(|row| row.id == intent_id)
+        .ok_or(HostError::Journal)?;
+    guard.advance_revision(journal.revision().await?)?;
+    Ok(if updated.cleanup_proven {
+        DeleteDecision::Delete
+    } else {
+        DeleteDecision::KeepForeign
+    })
 }
 
 pub(crate) async fn decide<E: PairEngine + ?Sized>(
@@ -283,20 +269,6 @@ async fn drop_both<E: PairEngine, T>(
 }
 
 impl PartialPair {
-    fn none() -> Self {
-        Self {
-            dind_id: None,
-            runner_id: None,
-        }
-    }
-
-    fn dind(dind_id: String) -> Self {
-        Self {
-            dind_id: Some(dind_id),
-            runner_id: None,
-        }
-    }
-
     fn both(dind_id: String, runner_id: String) -> Self {
         Self {
             dind_id: Some(dind_id),

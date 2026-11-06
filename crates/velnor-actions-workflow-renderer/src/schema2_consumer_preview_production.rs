@@ -130,19 +130,41 @@ fn producer(
     }
     let access = vec![("actions", "read"), ("contents", "read")];
     fields.push(("permissions".to_owned(), permissions(&access)));
-    fields.push((
-        "outputs".to_owned(),
-        permissions(&[
-            ("artifact_id", "${{ steps.upload.outputs.artifact-id }}"),
-            (
-                "artifact_digest",
-                "${{ steps.upload.outputs.artifact-digest }}",
-            ),
-        ]),
-    ));
+    if !preview_matrix {
+        fields.push((
+            "outputs".to_owned(),
+            permissions(&[
+                ("artifact_id", "${{ steps.upload.outputs.artifact-id }}"),
+                (
+                    "artifact_digest",
+                    "${{ steps.upload.outputs.artifact-digest }}",
+                ),
+            ]),
+        ));
+    }
     let (steps, public_plan) = producer_steps(spec, id, pair, preview_matrix)?;
-    fields.push(("env".to_owned(), public_plan));
+    fields.push(("env".to_owned(), producer_job_env(spec, public_plan)?));
     Ok(finish(id, fields, steps))
+}
+
+fn producer_job_env(
+    spec: &ConsumerReleaseSpec,
+    mut public_plan: Yaml,
+) -> Result<Yaml, RenderError> {
+    if spec.sdk_source_bootstrap {
+        let Yaml::Map(env) = &mut public_plan else {
+            return Err(RenderError::InvalidWorkflow(
+                "preview_job_env_not_map".to_owned(),
+            ));
+        };
+        env.extend(
+            velnor_actions_contract::JobEnv::RustToolchain
+                .pairs()
+                .into_iter()
+                .map(|(key, value)| (key.to_owned(), Yaml::str(value))),
+        );
+    }
+    Ok(public_plan)
 }
 
 fn producer_steps(
@@ -153,10 +175,14 @@ fn producer_steps(
 ) -> Result<(Vec<Yaml>, Yaml), RenderError> {
     let mut steps = acquisition_steps(spec, id, pair.is_none() && !preview_matrix, preview_matrix)?;
     steps.extend(support::source_steps(spec, id)?);
+    steps.extend(super::steps::sdk_source_cli(spec)?);
     let (mut operation, public_plan) =
         production_operation(spec, "execute-release-producer-v1", false)?;
     support::bind_stage(&mut operation, spec, pair, preview_matrix)?;
     steps.push(operation);
+    if spec.sdk_source_bootstrap && preview_matrix {
+        steps.push(super::steps::sdk_inventory_gate());
+    }
     steps.push(upload(pair, preview_matrix));
     if spec.policy.channel == PackageReleaseChannel::Stable {
         for step in &mut steps {

@@ -59,12 +59,7 @@ fn prepare_finalization(deadline: CheckDeadline) -> Result<Finalization, Orchest
     verify_checkout(&workspace, &source_sha, deadline)?;
     let count = crate::preview_producer::source_commit_count(&workspace, &source_sha, deadline)?;
     let config = crate::config::load_config(&workspace)?;
-    let release = config
-        .stacks
-        .rust
-        .as_ref()
-        .map(|rust| rust.binary_release.clone())
-        .ok_or_else(|| internal("preview_source_config_missing"))?;
+    let release = crate::sdk_preview_configuration::release(&config)?;
     release.validate(".velnor/config.toml")?;
     if !release.channel_enabled(PackageReleaseChannel::Preview) {
         return Err(internal("preview_source_channel_disabled"));

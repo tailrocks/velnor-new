@@ -30,7 +30,7 @@ const options = {
   timeout: 30000,
 };
 
-function run(bytes, platform, name, versions = ["2.4.0", "0.11.0"]) {
+function run(bytes, platform, name, versions = ["2.5.0", "0.11.0"]) {
   const fixture = path.join(root, `${name}.toml`);
   const receipt = path.join(root, `${name}.json`);
   fs.writeFileSync(fixture, bytes, { flag: "wx", mode: 0o600 });
@@ -38,7 +38,7 @@ function run(bytes, platform, name, versions = ["2.4.0", "0.11.0"]) {
   return { fixture, receipt, result };
 }
 
-function reject(bytes, platform, name, versions = ["2.4.0", "0.11.0"]) {
+function reject(bytes, platform, name, versions = ["2.5.0", "0.11.0"]) {
   const { receipt, result } = run(bytes, platform, name, versions);
   assert.notEqual(result.status, 0, `${name} must fail closed`);
   assert.equal(result.stdout, "", `${name} must not emit install specs`);
@@ -74,7 +74,7 @@ function removeBlock(text, header) {
 try {
   const source = new TextDecoder("utf-8", { fatal: true }).decode(original);
   const url = {
-    jactionlint: "https://github.com/jdx/jactionlint/releases/download/v2.4.0/jactionlint_2.4.0_linux_amd64.tar.gz",
+    jactionlint: "https://github.com/jdx/jactionlint/releases/download/v2.5.0/jactionlint_2.5.0_linux_amd64.tar.gz",
     shellcheck: "https://github.com/koalaman/shellcheck/releases/download/v0.11.0/shellcheck-v0.11.0.linux.x86_64.tar.xz",
   };
 
@@ -85,7 +85,7 @@ try {
     assert.equal(result.stdout.endsWith("\n"), true);
     const specs = result.stdout.slice(0, -1).split("\n");
     assert.equal(specs.length, 2);
-    assert.match(specs[0], /^jactionlint\[platform_(linux_x64|macos_arm64)_url=https:\/\/github\.com\/jdx\/jactionlint\/releases\/download\/v2\.4\.0\/.+,checksum=sha256:[0-9a-f]{64}\]@2\.4\.0$/);
+    assert.match(specs[0], /^jactionlint\[platform_(linux_x64|macos_arm64)_url=https:\/\/github\.com\/jdx\/jactionlint\/releases\/download\/v2\.5\.0\/.+,checksum=sha256:[0-9a-f]{64}\]@2\.5\.0$/);
     assert.match(specs[1], /^shellcheck\[platform_(linux_x64|macos_arm64)_url=https:\/\/github\.com\/koalaman\/shellcheck\/releases\/download\/v0\.11\.0\/.+,checksum=sha256:[0-9a-f]{64}\]@0\.11\.0$/);
     const parsed = JSON.parse(fs.readFileSync(receipt, "utf8"));
     assert.equal(parsed.lock_sha256, crypto.createHash("sha256").update(bytes).digest("hex"));
@@ -107,7 +107,7 @@ try {
     ]);
     assert.equal(parsed.tools[0].url, platform === "linux-x64"
       ? url.jactionlint
-      : "https://github.com/jdx/jactionlint/releases/download/v2.4.0/jactionlint_2.4.0_darwin_arm64.tar.gz");
+      : "https://github.com/jdx/jactionlint/releases/download/v2.5.0/jactionlint_2.5.0_darwin_arm64.tar.gz");
     assert.equal(parsed.tools[1].url, platform === "linux-x64"
       ? url.shellcheck
       : "https://github.com/koalaman/shellcheck/releases/download/v0.11.0/shellcheck-v0.11.0.darwin.aarch64.tar.xz");
@@ -119,7 +119,7 @@ try {
   const commentHeader = replaceOnce(source, "[[tools.jactionlint]]\n", "[[tools.jactionlint]] # valid TOML comment\n");
   positive(Buffer.from(commentHeader), "linux-x64", "positive-comment-header");
 
-  const singleQuotedKeys = replaceOnce(source, 'version = "2.4.0"\n', "'version' = \"2.4.0\"\n");
+  const singleQuotedKeys = replaceOnce(source, 'version = "2.5.0"\n', "'version' = \"2.5.0\"\n");
   const singleQuotedBoth = replaceOnce(singleQuotedKeys, 'backend = "github:jdx/jactionlint"\n', "'backend' = \"github:jdx/jactionlint\"\n");
   positive(Buffer.from(singleQuotedBoth), "linux-x64", "positive-single-quoted-keys");
 
@@ -131,12 +131,12 @@ try {
   const jactionlintUrlLine = `url = "${url.jactionlint}"`;
   const jactionlintUrlHeader = `${jactionlintPlatformHeader}${checksumLine}\n${jactionlintUrlLine}`;
 
-  reject(Buffer.from(replaceOnce(source, `${jactionlintHeader}version = "2.4.0"\n`, `${jactionlintHeader}version = "2.4.0"\n"version" = "9.9.9"\n`)), "linux-x64", "duplicate-quoted-version");
-  reject(Buffer.from(replaceOnce(source, `${jactionlintHeader}version = "2.4.0"\n`, `${jactionlintHeader}version = "2.4.0"\n'version' = "9.9.9"\n`)), "linux-x64", "duplicate-single-quoted-version");
+  reject(Buffer.from(replaceOnce(source, `${jactionlintHeader}version = "2.5.0"\n`, `${jactionlintHeader}version = "2.5.0"\n"version" = "9.9.9"\n`)), "linux-x64", "duplicate-quoted-version");
+  reject(Buffer.from(replaceOnce(source, `${jactionlintHeader}version = "2.5.0"\n`, `${jactionlintHeader}version = "2.5.0"\n'version' = "9.9.9"\n`)), "linux-x64", "duplicate-single-quoted-version");
   reject(Buffer.from(`${source}\n[[tools.jactionlint]] # duplicate\nversion = "9.9.9"\nbackend = "github:attacker/tool"\n`), "linux-x64", "duplicate-commented-table");
 
   reject(Buffer.from(replaceOnce(source, `${jactionlintPlatformHeader}checksum =`, `${jactionlintPlatformHeader}url = "https://attacker.invalid/tool.tar.gz" # duplicate\nchecksum =`)), "linux-x64", "duplicate-url-inline-comment");
-  reject(Buffer.from(replaceOnce(source, `${jactionlintHeader}version = "2.4.0"\n`, `${jactionlintHeader}version = "2.4.0"\nversion = "9.9.9" # duplicate\n`)), "linux-x64", "duplicate-version-inline-comment");
+  reject(Buffer.from(replaceOnce(source, `${jactionlintHeader}version = "2.5.0"\n`, `${jactionlintHeader}version = "2.5.0"\nversion = "9.9.9" # duplicate\n`)), "linux-x64", "duplicate-version-inline-comment");
   reject(Buffer.from(source.replace('backend = "aqua:koalaman/shellcheck"', 'backend = "core:asdf"')), "linux-x64", "wrong-backend");
   reject(original, "linux-x64", "wrong-configured-version", ["2.3.1", "0.11.0"]);
   reject(original, "windows-x64", "unsupported-platform");
@@ -161,7 +161,7 @@ try {
   const symlink = path.join(root, "linked.toml");
   fs.symlinkSync(path.resolve(lockPath), symlink);
   const linkedReceipt = path.join(root, "linked.json");
-  const linked = spawnSync(process.execPath, [helper, "plan", symlink, "linux-x64", "2.4.0", "0.11.0", linkedReceipt], options);
+  const linked = spawnSync(process.execPath, [helper, "plan", symlink, "linux-x64", "2.5.0", "0.11.0", linkedReceipt], options);
   assert.notEqual(linked.status, 0);
   assert.equal(linked.stdout, "");
   assert.equal(linked.stderr, "validator tool lock rejected\n");

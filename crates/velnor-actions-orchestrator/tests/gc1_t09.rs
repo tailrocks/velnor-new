@@ -257,7 +257,13 @@ fn check_projection_preserves_task_bytes() -> Result<(), Box<dyn Error>> {
 fn stage_command(qualified: &QualifiedCheck, home: &Path) -> Result<(), Box<dyn Error>> {
     fs::create_dir_all(home.join("bin"))?;
     let mise = home.join("bin/mise");
-    fs::write(&mise, "#!/bin/sh\necho \"2026.11.1 fake\"\n")?;
+    fs::write(
+        &mise,
+        format!(
+            "#!/bin/sh\necho \"{} fake\"\n",
+            velnor_actions_mise::MISE_VERSION
+        ),
+    )?;
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;

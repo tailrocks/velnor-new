@@ -15,7 +15,7 @@ use velnor_actions_contract::{
 use velnor_actions_orchestrator::{finalized_jobs, prepare};
 use velnor_actions_workflow_renderer::{INTERNAL_OP_ENV, not_affected_gate};
 
-use super::maintenance_features::owner_feature_repo;
+use super::maintenance_features::{owner_feature_repo, write_sdk_workspace};
 use super::support::config_with_timeouts;
 use super::tools_producers::{POLICIES, is_upload};
 use super::workflow_configuration_fixture;
@@ -67,6 +67,11 @@ pub(super) fn mbx_repo_with_crate_timeout(
     let mut config = config_with_timeouts(15, crate_timeout)?;
     if policy == WorkflowPolicy::VelnorRepositoryV1 {
         config = config.replacen(
+            "default_branch = \"testmain\"",
+            "default_branch = \"main\"",
+            1,
+        );
+        config = config.replacen(
             "name = \"CI\"\n",
             "name = \"CI\"\npolicy = \"velnor-repository-v1\"\n",
             1,
@@ -92,6 +97,7 @@ pub(super) fn mbx_repo_with_crate_timeout(
         )?;
     }
     if policy == WorkflowPolicy::VelnorRepositoryV1 {
+        workflow_configuration_fixture::git(&["branch", "-m", "main"], root)?;
         workflow_configuration_fixture::git(
             &[
                 "remote",
@@ -109,7 +115,24 @@ pub(super) fn mbx_repo_with_crate_timeout(
             root.join(".velnor/controller-approvals.json"),
             include_str!("../../../../.velnor/controller-approvals.json"),
         )?;
-        workflow_configuration_fixture::write_root_cargo_lock(root, &["demo"])?;
+        write_sdk_workspace(root, &["demo"])?;
+        let manifest = root.join("Cargo.toml");
+        let mut contents = fs::read_to_string(&manifest)?;
+        contents.push_str(
+            "\n[workspace]\nmembers = [\"crates/velnor-actions-cli\", \"crates/velnor-archive-guard\"]\nresolver = \"2\"\n",
+        );
+        fs::write(manifest, contents)?;
+        workflow_configuration_fixture::git(
+            &[
+                "add",
+                "--",
+                "Cargo.toml",
+                "Cargo.lock",
+                "crates/velnor-actions-cli",
+                "crates/velnor-archive-guard",
+            ],
+            root,
+        )?;
     }
     Ok(repo)
 }

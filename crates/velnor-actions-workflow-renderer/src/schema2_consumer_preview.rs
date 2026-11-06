@@ -44,6 +44,7 @@ use admission::{aggregate_admission, finish_policy_job, policy_admission};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ConsumerReleaseSpec {
+    pub sdk_source_bootstrap: bool,
     pub generator_version: String,
     pub checkout_lfs: bool,
     pub policy: PackageReleasePolicy,
@@ -100,31 +101,34 @@ pub fn render_consumer_preview(spec: &ConsumerReleaseSpec) -> Result<RenderedFil
     }
     let mut jobs = vec![source::job(spec)?];
     jobs.extend(production::jobs(spec)?);
-    jobs.extend([signer(spec)?, publisher(spec)?, recovery(spec)?]);
+    jobs.extend([signer(spec)?, publisher(spec)?]);
+    if !spec.sdk_source_bootstrap {
+        jobs.push(recovery(spec)?);
+    }
     if let Some(tap) = &spec.homebrew_tap {
         jobs.extend(tap::jobs(spec, tap, TapInvocationContext::Preview)?);
+    }
+    let mut triggers = vec![preview_trigger::trigger(&spec.policy.default_branch)];
+    if !spec.sdk_source_bootstrap {
+        triggers.push(("workflow_dispatch".to_owned(), steps::recovery_inputs()));
     }
     let document = Yaml::Map(vec![
         (
             "name".to_owned(),
             Yaml::str(spec.policy.channel.workflow_name()),
         ),
-        (
-            "on".to_owned(),
-            Yaml::Map(vec![
-                preview_trigger::trigger(&spec.policy.default_branch),
-                ("workflow_dispatch".to_owned(), steps::recovery_inputs()),
-            ]),
-        ),
+        ("on".to_owned(), Yaml::Map(triggers)),
         ("permissions".to_owned(), Yaml::Map(Vec::new())),
         (
             "concurrency".to_owned(),
             Yaml::Map(vec![
                 (
                     "group".to_owned(),
-                    Yaml::str(
-                        "native-preview-${{ github.repository }}-${{ github.event.workflow_run.head_sha || inputs.original_run_id }}",
-                    ),
+                    Yaml::str(if spec.sdk_source_bootstrap {
+                        "native-preview-${{ github.repository }}-${{ github.event.workflow_run.head_sha }}"
+                    } else {
+                        "native-preview-${{ github.repository }}-${{ github.event.workflow_run.head_sha || inputs.original_run_id }}"
+                    }),
                 ),
                 ("cancel-in-progress".to_owned(), Yaml::Bool(false)),
             ]),
@@ -141,7 +145,10 @@ fn render_preview_document(
     spec: &ConsumerReleaseSpec,
     document: &Yaml,
 ) -> Result<String, RenderError> {
-    preview_trigger::validate(document, steps::recovery_inputs())?;
+    preview_trigger::validate(
+        document,
+        (!spec.sdk_source_bootstrap).then(steps::recovery_inputs),
+    )?;
     crate::render::fallback::render_checked_workflow(
         PackageReleaseChannel::Preview.workflow_path(),
         document,

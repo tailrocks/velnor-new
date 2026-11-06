@@ -7,7 +7,7 @@
       "recipe": {
         "id": "jactionlint-linux-x64",
         "backend": { "kind": "aqua", "package": "jdx/jactionlint" },
-        "version": "2.4.0",
+        "version": "2.5.0",
         "options": { "kind": "default" },
         "depends_on": [],
         "platforms": [
@@ -19,7 +19,7 @@
               {
                 "name": "jactionlint",
                 "path": "jactionlint",
-                "probe": { "kind": "version", "expected": "2.4.0" }
+                "probe": { "kind": "version", "expected": "2.5.0" }
               }
             ]
           }

@@ -97,8 +97,8 @@ pub(crate) fn guard_script(non_inputs: &NonInputs) -> String {
             "read -r list; trap 'rm -f \"$list\"' EXIT; ",
             "git ls-files -z -- {} > \"$list\"; ",
             "xargs -0 sh -c ",
-            "'for p; do if [ -e \"$p\" ] || [ -L \"$p\" ]; then ",
-            "printf \"non_input_present:%s\\n\" \"$p\" >&2; exit 1; fi; done' sh ",
+            "\"for p; do if [ -e \\\"\\$p\\\" ] || [ -L \\\"\\$p\\\" ]; then ",
+            "printf 'non_input_present:%s\\\\n' \\\"\\$p\\\" >&2; exit 1; fi; done\" sh ",
             "< \"$list\"; exit; }}",
         ),
         specs

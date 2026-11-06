@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::schema2::features::run_step;
+
 use super::{ConsumerReleaseSpec, MiseSetup, PackageReleasePolicy, RenderError, Yaml};
 use crate::steps::CHECKOUT_USES;
 
@@ -165,7 +167,16 @@ pub(in crate::schema2) fn operation(
     };
     let run = format!(
         "set -euo pipefail\numask 077\nmkdir -p \"$RUNNER_TEMP/velnor\"\n{materialize}\"$RUNNER_TEMP/velnor/bin/velnor-actions-{}\"\n",
-        spec.generator_version
+        if spec.sdk_source_bootstrap
+            && matches!(
+                op,
+                "finalize-preview-source-v1" | "execute-release-producer-v1"
+            )
+        {
+            "source"
+        } else {
+            &spec.generator_version
+        }
     );
     let run = source_operation_script(op, run);
     let mut step = script("Execute native release operation", "release", &run, &[]);
@@ -267,4 +278,65 @@ pub(in crate::schema2) fn recovery_inputs() -> Yaml {
     })
     .collect();
     Yaml::Map(vec![("inputs".to_owned(), Yaml::Map(inputs))])
+}
+
+pub(super) fn sdk_source_cli(spec: &ConsumerReleaseSpec) -> Result<Vec<Yaml>, RenderError> {
+    if !spec.sdk_source_bootstrap {
+        return Ok(Vec::new());
+    }
+    let verify = crate::verifier_composite::verifier_shell_step(
+        velnor_actions_contract::StepRole::VerifyRustManifest,
+        crate::VERIFY_RUST_TOOLCHAIN_STEP,
+        spec.verify_rust_argv.clone(),
+        std::collections::BTreeMap::new(),
+    )?;
+    let verify = crate::document_steps::verifier_shell_step_to_yaml(&verify)?;
+    let mut steps = vec![
+        run_step(
+            "Install source SDK toolchain",
+            &crate::commands::join_argv_for_run(&spec.install_rust_argv)?,
+        ),
+        verify,
+        run_step(
+            "Build exact-source SDK for read-only preview production",
+            &format!(
+                r#"set -euo pipefail
+umask 077
+mkdir -p "$RUNNER_TEMP/velnor/sdk-source"
+export CARGO_TARGET_DIR="$RUNNER_TEMP/velnor/sdk-source/target"
+cargo build --locked --release --package velnor-actions-cli --bin velnor-actions --message-format=json > "$RUNNER_TEMP/velnor/sdk-source/artifacts.jsonl"
+source_cli="$(VELNOR_INTERNAL_OP=repo-policy-v1 VELNOR_REPO_POLICY_ACTION=artifact-executable VELNOR_REPO_POLICY_ROOT="$GITHUB_WORKSPACE" VELNOR_REPO_POLICY_MESSAGES="$RUNNER_TEMP/velnor/sdk-source/artifacts.jsonl" VELNOR_REPO_POLICY_MANIFEST=crates/velnor-actions-cli/Cargo.toml VELNOR_REPO_POLICY_TARGET=velnor-actions VELNOR_REPO_POLICY_ARTIFACT_KIND=bin "$RUNNER_TEMP/velnor/bin/velnor-actions-{}")"
+case "$source_cli" in /*) ;; *) exit 1 ;; esac
+[ -f "$source_cli" ] && [ ! -L "$source_cli" ] && [ -x "$source_cli" ]
+install -m 0755 "$source_cli" "$RUNNER_TEMP/velnor/bin/velnor-actions-source"
+"#,
+                spec.generator_version
+            ),
+        ),
+    ];
+    if let Some(Yaml::Map(fields)) = steps.last_mut()
+        && let Some((_, Yaml::Str(run))) = fields.iter_mut().find(|(key, _)| key == "run")
+    {
+        *run = crate::toolchain_env::with_credential_unset_script(run);
+    }
+    for step in &mut steps {
+        with_producer_homes(step, &spec.producer_cargo_env)?;
+    }
+    Ok(steps)
+}
+
+pub(super) fn sdk_inventory_gate() -> Yaml {
+    let version = crate::schema2::sdk_preview_bootstrap::PYTHON_VERSION;
+    let script = format!(
+        r#"set -euo pipefail
+mise --no-config --no-env --no-hooks install python@{version}
+python="$(mise --no-config --no-env --no-hooks which python --tool python@{version})"
+[ "$("$python" --version)" = 'Python {version}' ]
+"$python" scripts/native-image-candidate-inventory.py --check --root "$GITHUB_WORKSPACE" --metadata "$RUNNER_TEMP/velnor/sdk-preview-build/evidence/metadata.json" --artifacts "$RUNNER_TEMP/velnor/sdk-preview-build/evidence/artifacts.jsonl" --target x86_64-unknown-linux-gnu
+"#
+    );
+    run_step(
+        "Verify exact SDK compiler input inventory",
+        &crate::toolchain_env::with_credential_unset_script(&script),
+    )
 }

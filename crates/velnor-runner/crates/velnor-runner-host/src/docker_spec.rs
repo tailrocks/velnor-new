@@ -40,7 +40,6 @@ pub enum DeleteDecision {
 }
 
 pub(crate) const RUNNER_PLATFORM: &str = "linux/amd64";
-pub(crate) const RUNNER_IMAGE: &str = "velnor-runner:ubuntu-26.04-2.338.0";
 const ENTRYPOINT: &str = "/usr/local/bin/velnor-runner-entrypoint";
 const SOCKET_TARGET: &str = "/run";
 
@@ -55,7 +54,10 @@ const HOST_NEEDLES: &[&str] = &[
     "docker.sock",
 ];
 
-pub fn runner_plan(private_volume: &str) -> Result<ContainerPlan, HostError> {
+pub fn runner_plan(
+    private_volume: &str,
+    images: &crate::AdmittedImages,
+) -> Result<ContainerPlan, HostError> {
     if !private_volume_name(private_volume) {
         return Err(HostError::ForbiddenMount);
     }
@@ -64,7 +66,7 @@ pub fn runner_plan(private_volume: &str) -> Result<ContainerPlan, HostError> {
         name: format!("{private_volume}-runner"),
         privileged: false,
         platform: RUNNER_PLATFORM.to_owned(),
-        image: RUNNER_IMAGE.to_owned(),
+        image: images.runner.clone(),
         env: Vec::new(),
         cmd: vec![ENTRYPOINT.to_owned()],
         labels: vec![
@@ -83,6 +85,27 @@ pub fn runner_plan(private_volume: &str) -> Result<ContainerPlan, HostError> {
             },
         ],
     })
+}
+
+pub(crate) fn runner_container_name(private_volume: &str) -> Result<String, HostError> {
+    if !private_volume_name(private_volume) {
+        return Err(HostError::ForbiddenMount);
+    }
+    Ok(format!("{private_volume}-runner"))
+}
+
+pub(crate) fn worker_mounts(private_volume: &str) -> Result<Vec<Mount>, HostError> {
+    runner_container_name(private_volume)?;
+    Ok(vec![
+        Mount {
+            source: format!("volume:{private_volume}"),
+            target: SOCKET_TARGET.to_owned(),
+        },
+        Mount {
+            source: format!("volume:{private_volume}-work"),
+            target: runner_work_path(),
+        },
+    ])
 }
 
 pub(crate) const SEED_VOLUME: &str = "volume:velnor-seed";
@@ -110,11 +133,11 @@ pub(crate) fn runner_mounts(mounts: &[Mount]) -> Result<Vec<Mount>, HostError> {
     Ok(out)
 }
 
-pub fn audit_plan(plan: &ContainerPlan) -> Result<(), HostError> {
+pub fn audit_plan(plan: &ContainerPlan, images: &crate::AdmittedImages) -> Result<(), HostError> {
     if plan.privileged {
         return Err(HostError::PrivilegedRunner);
     }
-    if shape_rejected(plan) || plan.env.iter().any(|entry| env_forbidden(entry)) {
+    if shape_rejected(plan, images) || plan.env.iter().any(|entry| env_forbidden(entry)) {
         return Err(HostError::ForbiddenMount);
     }
     for mount in &plan.mounts {
@@ -123,17 +146,13 @@ pub fn audit_plan(plan: &ContainerPlan) -> Result<(), HostError> {
     Ok(())
 }
 
-fn shape_rejected(plan: &ContainerPlan) -> bool {
+fn shape_rejected(plan: &ContainerPlan, images: &crate::AdmittedImages) -> bool {
     !private_volume_name(&plan.name)
         || plan.platform != RUNNER_PLATFORM
-        || image_rejected(&plan.image)
+        || plan.image != images.runner
         || contains_jit(&plan.env)
         || contains_jit(&plan.cmd)
         || contains_jit(&plan.labels)
-}
-
-fn image_rejected(image: &str) -> bool {
-    image != RUNNER_IMAGE
 }
 
 fn contains_jit(items: &[String]) -> bool {

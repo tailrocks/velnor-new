@@ -7,7 +7,7 @@ use std::fs;
 use std::path::{Component, Path};
 
 use velnor_actions_contract::config::analyze_dockerfile;
-use velnor_actions_contract::{ImageConfig, ImagePrebuilt, Step, VelnorConfig};
+use velnor_actions_contract::{ImageConfig, ImagePrebuilt, Step, VelnorConfig, WorkflowPolicy};
 use velnor_actions_mise::{GitRequest, ToolCatalog};
 use velnor_actions_workflow_renderer::verification_jobs::ImageBuildPolicy;
 
@@ -23,11 +23,52 @@ pub(crate) fn policies(
     config: &VelnorConfig,
     prebuilt: &PrebuiltInputs<'_>,
 ) -> Result<Vec<ImageBuildPolicy>, OrchestratorError> {
+    if config.workflow.policy == WorkflowPolicy::VelnorRepositoryV1 && !config.images.is_empty() {
+        validate_native_sdk_images(&config.images)?;
+        return Ok(Vec::new());
+    }
     config
         .images
         .iter()
         .map(|image| resolve(root, image, prebuilt))
         .collect()
+}
+
+pub(crate) fn validate_native_sdk_images(images: &[ImageConfig]) -> Result<(), OrchestratorError> {
+    use velnor_actions_contract::config::ImagePlatform;
+    let expected = [
+        ("dind", "images/dind", "crates/velnor-runner/Cargo.toml"),
+        ("job", "images/job/ubuntu-26.04", "Cargo.toml"),
+        (
+            "resource-probe",
+            "images/resource-probe",
+            "crates/velnor-runner/Cargo.toml",
+        ),
+        (
+            "runner",
+            "images/runner/ubuntu-26.04",
+            "crates/velnor-runner/Cargo.toml",
+        ),
+    ];
+    if images.len() != expected.len() {
+        return Err(failure("native-sdk", "native_image_inventory"));
+    }
+    for (id, context, version) in expected {
+        let Some(image) = images.iter().find(|image| image.id == id) else {
+            return Err(failure(id, "native_image_missing"));
+        };
+        if image.repository != format!("ghcr.io/tailrocks/velnor-{id}")
+            || image.context != context
+            || image.dockerfile.for_platform(ImagePlatform::LinuxAmd64)
+                != Some(format!("{context}/Dockerfile").as_str())
+            || image.platforms != [ImagePlatform::LinuxAmd64]
+            || image.version_file.as_deref() != Some(version)
+            || image.prebuilt.is_some()
+        {
+            return Err(failure(id, "native_image_identity"));
+        }
+    }
+    Ok(())
 }
 
 pub(crate) struct PrebuiltInputs<'a> {

@@ -10,7 +10,18 @@ pub(crate) fn assert_lock_trust_rejections(
     lock_path: &Path,
     original: &str,
 ) -> Result<(), Box<dyn Error>> {
-    let (mise_url, version_line, stale_problem) = current_mise_mutation_values();
+    let bootstrap = approved_mise_bootstrap(root)?;
+    let version = bootstrap["version"]
+        .as_str()
+        .ok_or("approved Mise version missing")?;
+    let mise_url = bootstrap["artifact"]
+        .as_str()
+        .ok_or("approved Mise artifact missing")?;
+    let mise_digest = bootstrap["sha256"]
+        .as_str()
+        .ok_or("approved Mise digest missing")?;
+    let version_line = format!("version = \"{version}\"");
+    let stale_problem = format!("lock_mismatch:mise_bootstrap:2026.10.18:{version}");
     let mutations = [
         (
             "alternate published version",
@@ -44,13 +55,13 @@ pub(crate) fn assert_lock_trust_rejections(
         ),
         (
             "Mise URL at the pinned version",
-            mise_url.as_str(),
+            mise_url,
             "https://github.com/jdx/mise/releases/download/v2026.10.18/mise-v2026.10.18-linux-x64",
             "lock_mismatch:mise_bootstrap_artifact",
         ),
         (
             "Mise digest at the pinned version",
-            velnor_actions_mise::MISE_BINARY_SHA256_LINUX_X64,
+            mise_digest,
             "4162760f40b6b5f706c60641e4ef5ee7322bc6c54f72fc26a7111b337aa18d9d",
             "lock_mismatch:mise_bootstrap_sha256",
         ),
@@ -81,13 +92,12 @@ pub(crate) fn assert_lock_trust_rejections(
     Ok(())
 }
 
-fn current_mise_mutation_values() -> (String, String, String) {
-    let version = velnor_actions_mise::MISE_VERSION;
-    (
-        format!(
-            "https://github.com/jdx/mise/releases/download/v{version}/mise-v{version}-linux-x64"
-        ),
-        format!("version = \"{version}\""),
-        format!("lock_mismatch:mise_bootstrap:2026.10.18:{version}"),
-    )
+fn approved_mise_bootstrap(root: &Path) -> Result<serde_json::Value, Box<dyn Error>> {
+    let approvals: serde_json::Value = serde_json::from_slice(&std::fs::read(
+        root.join(".velnor/controller-approvals.json"),
+    )?)?;
+    approvals
+        .pointer("/active/mise_bootstrap")
+        .cloned()
+        .ok_or_else(|| "active Mise bootstrap approval missing".into())
 }

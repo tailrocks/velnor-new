@@ -37,6 +37,7 @@ pub struct GenerationPreparation {
     pub runner_image: RunnerImageEvidence,
     pub lock_audit_blocking: Vec<String>,
     pub catalog: ToolCatalog,
+    pub(crate) published_generator_lock: Option<GeneratorLock>,
     operator_toolchain_guard: Option<OperatorToolchainGuard>,
 }
 
@@ -167,6 +168,7 @@ fn prepare_inner(
         runner_image,
         lock_audit_blocking: audit.blocking,
         catalog,
+        published_generator_lock,
         operator_toolchain_guard: guard.cloned(),
     })
 }

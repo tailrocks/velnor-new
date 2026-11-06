@@ -1,15 +1,13 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_actions_contract::exclusive_write::create_dir_no_symlink;
 use super::PreviewProducerProof;
-use crate::{
-    OrchestratorError, internal::internal, prepare::prepare_for_candidate_with_config,
-};
+use crate::{OrchestratorError, internal::internal, prepare::prepare_for_candidate_with_config};
 use std::{
     path::{Path, PathBuf},
     time::{Duration, Instant},
 };
+use velnor_actions_contract::exclusive_write::create_dir_no_symlink;
 use velnor_actions_contract::{
     PackageReleasePlan, PackageReleasePolicy,
     config::{RustBinaryReleaseConfig, RustBinaryReleaseProducer},
@@ -58,12 +56,7 @@ pub fn execute_release_producer() -> Result<(), OrchestratorError> {
             .scope(|| {
                 let (workspace, temp) = workflow_context()?;
                 let config = crate::config::load_config(&workspace)?;
-                let minutes = config
-                    .stacks
-                    .rust
-                    .as_ref()
-                    .ok_or_else(|| internal("preview_config_missing"))?
-                    .binary_release
+                let minutes = crate::sdk_preview_configuration::release(&config)?
                     .producer
                     .timeout_minutes;
                 let deadline = producer_deadline(started, minutes)?;
@@ -126,19 +119,13 @@ fn source_preview(
     policy: &PackageReleasePolicy,
     plan: &PackageReleasePlan,
 ) -> Result<RustBinaryReleaseConfig, OrchestratorError> {
-    let release = prep
-        .config
-        .stacks
-        .rust
-        .as_ref()
-        .map(|rust| &rust.binary_release)
-        .ok_or_else(|| internal("preview_config_missing"))?;
+    let release = crate::sdk_preview_configuration::release(&prep.config)?;
     release.validate(".velnor/config.toml")?;
-    let expected = crate::binary_preview_emit::release_policy(prep, release, plan.channel)?;
+    let expected = crate::binary_preview_emit::release_policy(prep, &release, plan.channel)?;
     if !release.channel_enabled(plan.channel) || policy != &expected {
         return Err(internal("preview_plan_config_mismatch"));
     }
-    Ok(release.clone())
+    Ok(release)
 }
 
 fn admitted_preview_config(
@@ -146,12 +133,7 @@ fn admitted_preview_config(
     policy: &PackageReleasePolicy,
     plan: &PackageReleasePlan,
 ) -> Result<RustBinaryReleaseConfig, OrchestratorError> {
-    let release = config
-        .stacks
-        .rust
-        .as_ref()
-        .map(|rust| &rust.binary_release)
-        .ok_or_else(|| internal("preview_config_missing"))?;
+    let release = crate::sdk_preview_configuration::release(config)?;
     if plan.channel != PackageReleaseChannel::Preview
         || policy.channel != PackageReleaseChannel::Preview
         || !release.channel_enabled(PackageReleaseChannel::Preview)
@@ -162,7 +144,7 @@ fn admitted_preview_config(
     policy
         .validate_plan(plan)
         .map_err(|_| internal("preview_plan_config_mismatch"))?;
-    Ok(release.clone())
+    Ok(release)
 }
 
 fn preflight_preview_source(
@@ -175,18 +157,13 @@ fn preflight_preview_source(
     if plan.channel != velnor_actions_contract::package_release::PackageReleaseChannel::Preview {
         return Ok(());
     }
-    let release = config
-        .stacks
-        .rust
-        .as_ref()
-        .map(|rust| &rust.binary_release)
-        .ok_or_else(|| internal("preview_config_missing"))?;
+    let release = crate::sdk_preview_configuration::release(config)?;
     release.validate(".velnor/config.toml")?;
     context::derive_context(workspace, plan, deadline)?;
     crate::release_policy_admission::validate_admitted_source_checkout(
         temp,
         workspace,
-        release,
+        &release,
         &config.qualified_tools,
         deadline,
     )

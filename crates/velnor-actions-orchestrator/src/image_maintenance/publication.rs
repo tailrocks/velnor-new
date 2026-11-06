@@ -16,6 +16,7 @@ mod attestation;
 mod authority;
 #[path = "publication_crane.rs"]
 pub(super) mod crane;
+pub use crane::{RegistryGateway, RegistryIo, RegistryRequest, RegistryResponse};
 #[path = "publication_github.rs"]
 pub(super) mod github;
 #[path = "publication_qualification.rs"]
@@ -43,7 +44,6 @@ struct PendingReceipt<'a> {
     archive_sha256: &'a str,
     record_sha256: &'a str,
 }
-
 
 #[derive(Serialize)]
 struct PublicationReceipt<'a> {
@@ -107,7 +107,10 @@ pub(super) fn publish_image(request: &PublishImageRequest) -> Result<(), Orchest
         exclusive_write::verify_reserved(&receipt_file, &request.receipt_output)?;
         append_receipt(&mut receipt_file, &pending_bytes)?;
         journal_started = true;
-        let parent = request.receipt_output.parent().unwrap_or_else(|| Path::new("."));
+        let parent = request
+            .receipt_output
+            .parent()
+            .unwrap_or_else(|| Path::new("."));
         fs::File::open(parent)
             .and_then(|directory| directory.sync_all())
             .map_err(|_| internal("image_publication_receipt_unwritable"))?;
@@ -133,7 +136,8 @@ pub(super) fn publish_image(request: &PublishImageRequest) -> Result<(), Orchest
         exclusive_write::verify_reserved(&receipt_file, &request.receipt_output)?;
         Ok(())
     });
-    if result.is_err() && !journal_started
+    if result.is_err()
+        && !journal_started
         && exclusive_write::verify_reserved(&receipt_file, &request.receipt_output).is_ok()
     {
         fs::remove_file(&request.receipt_output)

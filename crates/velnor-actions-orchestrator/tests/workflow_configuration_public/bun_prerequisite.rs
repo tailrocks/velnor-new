@@ -13,7 +13,7 @@ use velnor_actions_orchestrator::{
 };
 use velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
 
-use super::maintenance_features::owner_feature_repo;
+use super::maintenance_features::{owner_feature_repo, rename_root_as_cli};
 
 #[test]
 fn repository_orchestrator_tests_prepare_bun_without_changing_the_official_task_record()
@@ -246,6 +246,10 @@ fn repository_orchestrator_repo(sharded: bool) -> Result<tempfile::TempDir, Box<
 }
 
 fn rename_root_package(root: &Path, name: &str) -> Result<(), Box<dyn Error>> {
+    if name == "velnor-actions-cli" && root.join("Cargo.lock").is_file() {
+        rename_root_as_cli(root)?;
+        return Ok(());
+    }
     let manifest = root.join("Cargo.toml");
     let contents = fs::read_to_string(&manifest)?;
     let renamed = |text: &str| text.replacen("name = \"demo\"", &format!("name = \"{name}\""), 1);

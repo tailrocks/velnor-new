@@ -6,8 +6,10 @@ use std::{fmt::Display, path::Path, process::ExitCode, time::Duration};
 use velnor_actions_orchestrator::{
     AdmitRunnerImagesRequest, BuildJobCandidateRequest, CheckDeadline, CheckJobSourceRequest,
     ImagePublicationProfile, InstallBuildxRequest, OrchestratorError, PromoteImageRequest,
-    PublishImageRequest, ValidateJobCandidateRequest, admit_runner_images, build_job_candidate,
-    check_job_source, install_buildx, promote_image, publish_image, validate_job_candidate,
+    PublishImageRequest, RecordRunnerCandidatesRequest, ValidateJobCandidateRequest,
+    WriteRunnerQualificationRequest, admit_runner_images, build_job_candidate, check_job_source,
+    install_buildx, promote_image, publish_image, record_runner_candidates, validate_job_candidate,
+    write_runner_qualification,
 };
 
 struct PublishImageArguments<'a> {
@@ -90,6 +92,12 @@ fn run_with_deadline(
             descriptors_output,
             deadline,
         ),
+        ImageMaintenanceCommand::RecordRunnerCandidates { .. } => {
+            record_candidate_request(command, deadline)
+        }
+        ImageMaintenanceCommand::WriteRunnerQualification { .. } => {
+            write_qualification_request(command, deadline)
+        }
         ImageMaintenanceCommand::PromoteImage {
             image_id,
             source_commit,
@@ -100,6 +108,72 @@ fn run_with_deadline(
         }),
         ImageMaintenanceCommand::PublishImage { .. } => publish_request(command, deadline),
     }
+}
+
+fn record_candidate_request(
+    command: &ImageMaintenanceCommand,
+    deadline: CheckDeadline,
+) -> Result<(), OrchestratorError> {
+    let ImageMaintenanceCommand::RecordRunnerCandidates {
+        root,
+        source_commit,
+        runner_archive,
+        dind_archive,
+        probe_archive,
+        output_directory,
+    } = command
+    else {
+        unreachable!()
+    };
+    record_runner_candidates(&RecordRunnerCandidatesRequest {
+        root: root.to_owned(),
+        source_commit: source_commit.to_owned(),
+        runner_archive: runner_archive.to_owned(),
+        dind_archive: dind_archive.to_owned(),
+        probe_archive: probe_archive.to_owned(),
+        output_directory: output_directory.to_owned(),
+        deadline,
+    })
+}
+
+fn write_qualification_request(
+    command: &ImageMaintenanceCommand,
+    deadline: CheckDeadline,
+) -> Result<(), OrchestratorError> {
+    let ImageMaintenanceCommand::WriteRunnerQualification {
+        root,
+        source_commit,
+        runner_archive,
+        runner_record,
+        dind_archive,
+        dind_record,
+        probe_archive,
+        probe_record,
+        runtime_result,
+        producer_run_id,
+        producer_run_attempt,
+        qualifier_job_id,
+        output,
+    } = command
+    else {
+        unreachable!()
+    };
+    write_runner_qualification(&WriteRunnerQualificationRequest {
+        root: root.clone(),
+        source_commit: source_commit.clone(),
+        runner_archive: runner_archive.clone(),
+        runner_record: runner_record.clone(),
+        dind_archive: dind_archive.clone(),
+        dind_record: dind_record.clone(),
+        probe_archive: probe_archive.clone(),
+        probe_record: probe_record.clone(),
+        runtime_result: runtime_result.clone(),
+        producer_run_id: *producer_run_id,
+        producer_run_attempt: *producer_run_attempt,
+        qualifier_job_id: *qualifier_job_id,
+        output: output.clone(),
+        deadline,
+    })
 }
 
 fn publish_request(

@@ -18,6 +18,9 @@ use crate::{OrchestratorError, internal::internal};
 
 #[path = "publication_crane/blobs.rs"]
 mod blobs;
+#[path = "publication_crane/gateway.rs"]
+mod gateway;
+pub use gateway::{RegistryGateway, RegistryIo, RegistryRequest, RegistryResponse};
 #[path = "publication_crane/role.rs"]
 mod role;
 pub(in crate::image_maintenance) use role::verify_native_role;
@@ -52,7 +55,10 @@ pub(super) fn publish(
     deadline: CheckDeadline,
     mut revalidate: impl FnMut() -> Result<(), OrchestratorError>,
 ) -> Result<PublishedImage, OrchestratorError> {
-    let docker_config = private_docker_config()?;
+    let config = private_docker_config()?;
+    let gateway = gateway::RegistryGateway::start(&config, repository, deadline)?;
+    let docker_config = gateway.config();
+    let repository = gateway.repository(repository);
     let reference = format!("{repository}:{tag}");
     let expected_digest = expected.platform_manifest_digest.clone();
     let current = inspect_tag(&docker_config, &reference, deadline)?;
@@ -61,11 +67,7 @@ pub(super) fn publish(
             revalidate()?;
             crane_ok(
                 &docker_config,
-                vec![
-                    OsString::from("push"),
-                    layout.as_os_str().to_owned(),
-                    OsString::from(&reference),
-                ],
+                CraneOperation::Push(layout, &reference),
                 deadline,
                 "image_publication_crane_push",
             )?;
@@ -84,7 +86,7 @@ pub(super) fn publish(
     verify_remote_bytes(
         layout,
         &docker_config,
-        repository,
+        &repository,
         &expected_digest,
         expected,
         deadline,
@@ -106,7 +108,10 @@ pub(in crate::image_maintenance) fn promote(
     deadline: CheckDeadline,
     mut authorize: impl FnMut(&str) -> Result<(), OrchestratorError>,
 ) -> Result<(), OrchestratorError> {
-    let docker_config = private_docker_config()?;
+    let config = private_docker_config()?;
+    let gateway = gateway::RegistryGateway::start(&config, repository, deadline)?;
+    let docker_config = gateway.config();
+    let repository = gateway.repository(repository);
     let source = format!("{repository}:{source_tag}");
     let target = format!("{repository}:{version}");
     let expected = read_tag_digest(&docker_config, &source, deadline)?;
@@ -120,11 +125,7 @@ pub(in crate::image_maintenance) fn promote(
             match inspect_tag(&docker_config, &target, deadline)? {
                 TagState::Missing => crane_ok(
                     &docker_config,
-                    vec![
-                        OsString::from("tag"),
-                        OsString::from(format!("{repository}@{expected}")),
-                        OsString::from(version),
-                    ],
+                    CraneOperation::Tag(&format!("{repository}@{expected}"), version),
                     deadline,
                     "image_publication_crane_tag",
                 )?,
@@ -154,8 +155,7 @@ fn inspect_tag(
     reference: &str,
     deadline: CheckDeadline,
 ) -> Result<TagState, OrchestratorError> {
-    let args = vec![OsString::from("manifest"), OsString::from(reference)];
-    let output = crane_run(docker_config, args, deadline)?;
+    let output = crane_run(docker_config, CraneOperation::Manifest(reference), deadline)?;
     if output.success {
         return Ok(TagState::Digest(digest(&output.stdout)));
     }
@@ -170,11 +170,7 @@ fn read_tag_digest(
     reference: &str,
     deadline: CheckDeadline,
 ) -> Result<String, OrchestratorError> {
-    let output = crane_run(
-        docker_config,
-        vec![OsString::from("manifest"), OsString::from(reference)],
-        deadline,
-    )?;
+    let output = crane_run(docker_config, CraneOperation::Manifest(reference), deadline)?;
     if !output.success {
         return Err(internal("image_publication_tag_digest"));
     }
@@ -186,11 +182,11 @@ fn read_tag_digest(
 
 fn crane_ok(
     docker_config: &Path,
-    args: Vec<OsString>,
+    operation: CraneOperation<'_>,
     deadline: CheckDeadline,
     failure: &'static str,
 ) -> Result<(), OrchestratorError> {
-    let output = crane_run(docker_config, args, deadline)?;
+    let output = crane_run(docker_config, operation, deadline)?;
     if !output.success || output.code != Some(0) || output.signal.is_some() {
         return Err(internal(failure));
     }
@@ -215,24 +211,39 @@ fn verify_remote_bytes(
     )
 }
 
+enum CraneOperation<'a> {
+    Manifest(&'a str),
+    Blob(&'a str),
+    Push(&'a Path, &'a str),
+    Tag(&'a str, &'a str),
+}
+
+impl CraneOperation<'_> {
+    fn arguments(self) -> Vec<OsString> {
+        let mut args = vec![OsString::from("--insecure")];
+        match self {
+            Self::Manifest(reference) => args.extend(["manifest".into(), reference.into()]),
+            Self::Blob(reference) => args.extend(["blob".into(), reference.into()]),
+            Self::Push(layout, reference) => args.extend([
+                "push".into(),
+                layout.as_os_str().to_owned(),
+                reference.into(),
+            ]),
+            Self::Tag(reference, tag) => args.extend(["tag".into(), reference.into(), tag.into()]),
+        }
+        args
+    }
+}
+
 fn crane_run(
     docker_config: &Path,
-    args: Vec<OsString>,
+    operation: CraneOperation<'_>,
     deadline: CheckDeadline,
 ) -> Result<velnor_actions_mise::ProcessOutput, OrchestratorError> {
     deadline
         .remaining()
         .map_err(|_| internal("image_publication_deadline"))?;
-    let command = PinnedToolExec::new(vec![PinnedTool::Crane], OsStr::new("crane"), args)
-        .map_err(|_| internal("image_publication_crane_unavailable"))?
-        .command(&ToolCatalog::pinned())
-        .and_then(|command| {
-            command.with_env(&[(
-                OsString::from("DOCKER_CONFIG"),
-                docker_config.as_os_str().to_owned(),
-            )])
-        })
-        .map_err(|_| internal("image_publication_crane_environment"))?;
+    let command = crane_command(docker_config, operation)?;
     let (output, _) = command
         .run_quiescent_until(OUTPUT_LIMIT, deadline)
         .map_err(|_| internal("image_publication_crane_process"))?;
@@ -241,7 +252,7 @@ fn crane_run(
 
 pub(super) fn crane_file(
     docker_config: &Path,
-    args: Vec<OsString>,
+    reference: &str,
     output: &mut fs::File,
     stdout_cap: u64,
     deadline: CheckDeadline,
@@ -255,7 +266,7 @@ pub(super) fn crane_file(
     deadline
         .remaining()
         .map_err(|_| internal("image_publication_deadline"))?;
-    let command = crane_command(docker_config, args)?;
+    let command = crane_command(docker_config, CraneOperation::Blob(reference))?;
     let result = command
         .run_quiescent_stdout_to_file_until(output, stdout_cap, OUTPUT_LIMIT, deadline)
         .map_err(|_| internal("image_publication_crane_process"))?;
@@ -264,18 +275,22 @@ pub(super) fn crane_file(
 
 fn crane_command(
     docker_config: &Path,
-    args: Vec<OsString>,
+    operation: CraneOperation<'_>,
 ) -> Result<velnor_actions_mise::IsolatedCommand, OrchestratorError> {
-    PinnedToolExec::new(vec![PinnedTool::Crane], OsStr::new("crane"), args)
-        .map_err(|_| internal("image_publication_crane_unavailable"))?
-        .command(&ToolCatalog::pinned())
-        .and_then(|command| {
-            command.with_env(&[(
-                OsString::from("DOCKER_CONFIG"),
-                docker_config.as_os_str().to_owned(),
-            )])
-        })
-        .map_err(|_| internal("image_publication_crane_environment"))
+    PinnedToolExec::new(
+        vec![PinnedTool::Crane],
+        OsStr::new("crane"),
+        operation.arguments(),
+    )
+    .map_err(|_| internal("image_publication_crane_unavailable"))?
+    .command(&ToolCatalog::pinned())
+    .and_then(|command| {
+        command.with_env(&[(
+            OsString::from("DOCKER_CONFIG"),
+            docker_config.as_os_str().to_owned(),
+        )])
+    })
+    .map_err(|_| internal("image_publication_crane_environment"))
 }
 
 fn private_docker_config() -> Result<std::path::PathBuf, OrchestratorError> {
@@ -312,9 +327,12 @@ fn is_missing_tag(output: &velnor_actions_mise::ProcessOutput, reference: &str) 
     {
         return false;
     }
-    let Some(image) = reference.strip_prefix("ghcr.io/") else {
+    let Some((host, image)) = reference.split_once('/') else {
         return false;
     };
+    if !host.starts_with("127.0.0.1:") {
+        return false;
+    }
     let Some((repository, tag)) = image.split_once(':') else {
         return false;
     };
@@ -322,7 +340,7 @@ fn is_missing_tag(output: &velnor_actions_mise::ProcessOutput, reference: &str) 
         return false;
     }
     let prefix = format!(
-        "Error: fetching manifest {reference}: GET https://ghcr.io/v2/{repository}/manifests/{tag}: "
+        "Error: fetching manifest {reference}: GET http://{host}/v2/{repository}/manifests/{tag}: "
     );
     let Some(detail) = output
         .stderr

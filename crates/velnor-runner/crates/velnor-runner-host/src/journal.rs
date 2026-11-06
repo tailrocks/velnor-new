@@ -82,6 +82,52 @@ impl Journal {
         Ok(journal)
     }
 
+    pub(crate) async fn bind_worker_images(
+        &self,
+        id: i64,
+        images: &crate::AdmittedImages,
+    ) -> Result<(), HostError> {
+        let _write = self.write_guard().await;
+        self.sync_lineage().await?;
+        let connection = self.connection().await?;
+        let result = connection.execute(
+            "INSERT INTO worker_image_bindings (intent_id, engine_id, docker_root, runner_image, dind_image) SELECT id, ?1, ?2, ?3, ?4 FROM intents WHERE id = ?5 AND kind = 'launch' AND cleanup_proven = 0 AND EXISTS (SELECT 1 FROM journal_meta WHERE singleton = 1 AND engine_id = ?1) ON CONFLICT(intent_id) DO UPDATE SET engine_id = excluded.engine_id WHERE worker_image_bindings.engine_id = excluded.engine_id AND worker_image_bindings.docker_root = excluded.docker_root AND worker_image_bindings.runner_image = excluded.runner_image AND worker_image_bindings.dind_image = excluded.dind_image",
+            (images.engine_id.clone(), images.docker_root.clone(), images.runner.clone(), images.dind.clone(), id),
+        ).await.map_err(|_| HostError::Journal).and_then(one_row);
+        self.sync_after(result).await
+    }
+
+    pub(crate) async fn worker_image(
+        &self,
+        id: i64,
+        role: &str,
+    ) -> Result<(String, String, String), HostError> {
+        let connection = self.connection().await?;
+        let mut rows = connection.query(
+            "SELECT engine_id, docker_root, runner_image, dind_image FROM worker_image_bindings WHERE intent_id = ?1", [id],
+        ).await.map_err(|_| HostError::Journal)?;
+        let row = rows
+            .next()
+            .await
+            .map_err(|_| HostError::Journal)?
+            .ok_or(HostError::Journal)?;
+        let engine: String = row.get(0).map_err(|_| HostError::Journal)?;
+        let root: String = row.get(1).map_err(|_| HostError::Journal)?;
+        let image: String = match role {
+            "runner" => row.get(2),
+            "dind" => row.get(3),
+            _ => return Err(HostError::Journal),
+        }
+        .map_err(|_| HostError::Journal)?;
+        if !crate::artifact_admission::valid_runtime_image_id(&image)
+            || engine.is_empty()
+            || !crate::docker_client::canonical_docker_root(&root)
+        {
+            return Err(HostError::Journal);
+        }
+        Ok((engine, root, image))
+    }
+
     pub async fn begin(&self, kind: &str, subject: &str) -> Result<i64, HostError> {
         if token_rejected(kind) || token_rejected(subject) {
             return Err(HostError::Journal);

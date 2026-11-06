@@ -38,7 +38,7 @@ pub const UPLOAD_STEP_CONDITION: &str = "always()";
 pub const PLAN_JOB_ID: &str = CONTRACT_PLAN_JOB_ID;
 pub const TASK_JOB_ID: &str = "velnor-task";
 pub const CANDIDATE_JOB_ID: &str = "candidate";
-pub const ALINT_USES: &str = "asamarts/alint@d61e4c802b02ac811224b35c59a62cfe5176f4d0";
+pub const ALINT_USES: &str = "asamarts/alint@1f235b300077205b05bf763f902aee274fdaccda";
 
 #[derive(Debug, Clone)]
 pub struct RenderContext {

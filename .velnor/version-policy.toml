@@ -21,14 +21,14 @@ check_interval_hours = 24
 max_exception_days = 14
 
 [tools]
-mise = "2026.11.1"
+mise = "2026.11.2"
 rust = "1.99.1"
 mr-boxington = "1.29.2"
 gh = "2.103.3"
-jactionlint = "2.4.0"
+jactionlint = "2.5.0"
 shellcheck = "0.11.0"
 nextest = "0.9.151"
-opentofu = "1.13.8"
+opentofu = "1.13.9"
 release-plz = "0.4.3"
 crane = "0.22.1"
 bun = "1.4.4"
@@ -82,9 +82,9 @@ reviewed = "2026-10-26"
 
 [[actions]]
 name = "asamarts/alint"
-version = "v0.21.0"
-sha = "d61e4c802b02ac811224b35c59a62cfe5176f4d0"
-reviewed = "2026-11-02"
+version = "v0.21.1"
+sha = "1f235b300077205b05bf763f902aee274fdaccda"
+reviewed = "2026-11-06"
 
 [[actions]]
 name = "aws-actions/configure-aws-credentials"

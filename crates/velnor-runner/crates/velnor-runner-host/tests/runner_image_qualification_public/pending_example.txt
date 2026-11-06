@@ -1,0 +1,15 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
+use std::path::Path;
+use velnor_runner_host::{HostConfig, launch_blocking};
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let socket = std::env::var("FIXTURE_SOCKET")?;
+    let journal = std::env::var("FIXTURE_JOURNAL")?;
+    let config = HostConfig::parse(&format!("schema = 1\n[github]\nrepository = \"owner/repo\"\nscale_set_name = \"ubuntu-26.04-scale-set\"\ncredential_ref = \"keychain:velnor/token\"\n[host]\nmax_jobs = 1\n[host.resources]\nrunner_cpu_millicores = 1000\nrunner_memory_bytes = 1073741824\ndind_cpu_millicores = 1000\ndind_memory_bytes = 1073741824\n[docker]\ncontext = \"fixture\"\nplatform = \"linux/amd64\"\nendpoint = \"unix://{socket}\"\n"))?;
+    let result = launch_blocking("fixture-token", "owner", "repo", &socket, Path::new(&journal), 1, config.resource_budget()?);
+    eprintln!("{result:?}");
+    result?;
+    Ok(())
+}

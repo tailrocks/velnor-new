@@ -1,7 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_actions_contract::exclusive_write::write_exclusive_until;
 use super::{context, handoff, leaf_manifest::PreviewAggregateManifest};
 use crate::{
     OrchestratorError,
@@ -16,6 +15,7 @@ use std::{
     path::Path,
     time::{Duration, Instant},
 };
+use velnor_actions_contract::exclusive_write::write_exclusive_until;
 use velnor_actions_mise::CheckDeadline;
 
 pub const ADMIT_RELEASE_AGGREGATE_OP: &str = "admit-release-aggregate-v1";

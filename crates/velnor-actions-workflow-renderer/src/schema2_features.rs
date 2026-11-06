@@ -221,20 +221,6 @@ pub(super) fn run_step(name: &str, run: &str) -> Yaml {
     ])
 }
 
-pub(super) fn source_step(name: &str, run: &str) -> Yaml {
-    Yaml::Map(vec![
-        ("name".to_owned(), Yaml::str(name)),
-        (
-            "env".to_owned(),
-            Yaml::Map(vec![(
-                "VELNOR_SOURCE_SHA".to_owned(),
-                Yaml::str("${{ inputs.source_sha }}"),
-            )]),
-        ),
-        ("run".to_owned(), Yaml::str(run)),
-    ])
-}
-
 pub(super) fn identified_publish_step(id: &str, run: &str) -> Yaml {
     let fields = vec![
         ("name".to_owned(), Yaml::str("Publish GitHub release")),

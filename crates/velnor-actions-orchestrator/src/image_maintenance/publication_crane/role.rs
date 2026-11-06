@@ -18,10 +18,13 @@ pub(in crate::image_maintenance) fn verify_native_role(
         "ghcr.io/tailrocks/velnor-resource-probe" => "resource_probe",
         _ => return Ok(()),
     };
-    let docker_config = private_docker_config()?;
+    let config = private_docker_config()?;
+    let gateway = super::gateway::RegistryGateway::start(&config, repository, deadline)?;
+    let docker_config = gateway.config();
+    let repository = gateway.repository(repository);
     let manifest_output = crane_run(
         &docker_config,
-        vec!["manifest".into(), format!("{repository}@{digest}").into()],
+        super::CraneOperation::Manifest(&format!("{repository}@{digest}")),
         deadline,
     )?;
     if !manifest_output.success
@@ -38,10 +41,7 @@ pub(in crate::image_maintenance) fn verify_native_role(
     }
     let config_output = crane_run(
         &docker_config,
-        vec![
-            "blob".into(),
-            format!("{repository}@{}", manifest.config.digest).into(),
-        ],
+        super::CraneOperation::Blob(&format!("{repository}@{}", manifest.config.digest)),
         deadline,
     )?;
     if !config_output.success

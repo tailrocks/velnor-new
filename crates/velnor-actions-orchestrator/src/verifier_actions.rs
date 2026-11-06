@@ -84,6 +84,7 @@ pub(crate) struct VerifierActionSet {
     pub(crate) installed_rust: VerifierAction,
     pub(crate) jactionlint: VerifierAction,
     inline_verifier_steps: [Step; 3],
+    pub(crate) cross_target_rust: Step,
     pub(crate) inline_rust_templates: BTreeMap<&'static str, Vec<InlineVerifierTemplate>>,
     pub(crate) inline_installed_rust_templates: Vec<InlineVerifierTemplate>,
     pub(crate) inline_jactionlint_templates: Vec<InlineVerifierTemplate>,
@@ -94,6 +95,7 @@ struct VerifierSteps {
     installed_rust: Step,
     jactionlint: Step,
     default_home_rust: Step,
+    isolated_home_rust: Step,
     producer_home_rust: Step,
     inline_jactionlint: Step,
 }
@@ -111,7 +113,10 @@ impl VerifierActionSet {
     ) -> Result<Self, OrchestratorError> {
         let steps = verifier_steps(catalog)?;
         let inline_templates = inline_templates(&steps)?;
+        let mut cross_target_rust = steps.isolated_home_rust.clone();
+        "Verify Rust toolchain after cross-target install".clone_into(&mut cross_target_rust.name);
         Ok(Self {
+            cross_target_rust,
             inline_verifier_steps: [
                 steps.restored_rust.clone(),
                 steps.installed_rust.clone(),
@@ -203,6 +208,17 @@ fn verifier_steps(catalog: &ToolCatalog) -> Result<VerifierSteps, OrchestratorEr
             crate::workflow::verify_rust_argv(catalog),
             producer_cargo_env(catalog)?,
         )?;
+    let homes = velnor_actions_mise::ToolHomes::runner_temp();
+    let isolated_home_rust =
+        velnor_actions_workflow_renderer::verifier_composite::verifier_shell_step(
+            StepRole::VerifyRustManifest,
+            crate::workflow::VERIFY_RUST_MANIFEST_STEP,
+            crate::workflow::verify_rust_argv(catalog),
+            BTreeMap::from([
+                ("RUSTUP_HOME".to_owned(), homes.rustup_home().to_owned()),
+                ("CARGO_HOME".to_owned(), homes.cargo_home().to_owned()),
+            ]),
+        )?;
     let inline_jactionlint =
         velnor_actions_workflow_renderer::verifier_composite::verifier_shell_step(
             StepRole::VerifyJactionlint,
@@ -215,6 +231,7 @@ fn verifier_steps(catalog: &ToolCatalog) -> Result<VerifierSteps, OrchestratorEr
         installed_rust,
         jactionlint,
         default_home_rust,
+        isolated_home_rust,
         producer_home_rust,
         inline_jactionlint,
     })
@@ -238,6 +255,10 @@ fn inline_templates(steps: &VerifierSteps) -> Result<InlineVerifierTemplates, Or
         vec![
             InlineVerifierTemplate::wrapped(&steps.installed_rust, &["RUSTUP_HOME", "CARGO_HOME"])?,
             InlineVerifierTemplate::wrapped(&steps.default_home_rust, &[])?,
+            InlineVerifierTemplate::wrapped(
+                &steps.isolated_home_rust,
+                &["RUSTUP_HOME", "CARGO_HOME"],
+            )?,
             producer_home_template.clone(),
         ],
     );
@@ -248,6 +269,7 @@ fn inline_templates(steps: &VerifierSteps) -> Result<InlineVerifierTemplates, Or
     let inline_installed_rust_templates = vec![
         InlineVerifierTemplate::wrapped(&steps.installed_rust, &["RUSTUP_HOME", "CARGO_HOME"])?,
         InlineVerifierTemplate::wrapped(&steps.default_home_rust, &[])?,
+        InlineVerifierTemplate::wrapped(&steps.isolated_home_rust, &["RUSTUP_HOME", "CARGO_HOME"])?,
         producer_home_template,
     ];
     Ok(InlineVerifierTemplates {
