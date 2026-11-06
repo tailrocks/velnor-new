@@ -3,10 +3,9 @@
 
 use super::*;
 use std::error::Error;
-use std::os::unix::fs::PermissionsExt as _;
 
 #[test]
-fn generated_start_and_coordinate_rehearsal() -> Result<(), Box<dyn Error>> {
+fn controller_rehearsal_and_generated_publisher_shape() -> Result<(), Box<dyn Error>> {
     if let Some(operation) = std::env::var_os("VELNOR_COORDINATOR_CHILD") {
         return run_child(&operation.to_string_lossy());
     }
@@ -33,66 +32,40 @@ fn rehearse(event: &str, interrupted: bool) -> Result<(), Box<dyn Error>> {
         temp.path().join("request.json"),
         serde_json::to_vec(&(intent, request))?,
     )?;
-    let runner = temp.path().join("runner");
-    let bin = runner.join("velnor/bin");
-    fs::create_dir_all(&bin)?;
-    let executable = bin.join(format!("velnor-actions-{}", env!("CARGO_PKG_VERSION")));
-    fs::write(
-        &executable,
-        "#!/bin/sh\nexport VELNOR_COORDINATOR_CHILD=\"$2\"\nexec \"$VELNOR_TEST_BINARY\" --exact crate_release_controller::tests::coordinator_rehearsal::generated_start_and_coordinate_rehearsal\n",
-    )?;
-    fs::set_permissions(executable, fs::Permissions::from_mode(0o755))?;
-    let steps = rendered_scripts()?;
-    assert_eq!(
-        steps
-            .iter()
-            .map(|(name, _)| name.as_str())
-            .collect::<Vec<_>>(),
-        ["Release journal-start", "Release journal-coordinate"]
-    );
-    for (step, script) in &steps {
-        let crash = interrupted && step == "Release journal-coordinate";
-        let status = run_script(script, &runner, temp.path(), crash)?;
-        if crash {
-            assert!(!status.success(), "{event}: simulated interrupted upload");
-            continue;
-        }
-        assert!(status.success(), "{event}: {step}");
-    }
-    let script = &steps.last().ok_or("coordinate step")?.1;
-    assert!(run_script(script, &runner, temp.path(), false)?.success());
+    assert_generated_publisher()?;
+    assert!(run_operation("journal-start", temp.path(), false)?.success());
     if interrupted {
-        assert!(run_script(script, &runner, temp.path(), false)?.success());
+        assert!(
+            !run_operation("journal-coordinate", temp.path(), true)?.success(),
+            "{event}: simulated interrupted upload"
+        );
     }
+    assert!(run_operation("journal-coordinate", temp.path(), false)?.success());
+    assert!(run_operation("journal-coordinate", temp.path(), false)?.success());
     let journal = fs::read(temp.path().join("journal.json"))?;
     let published = temp.path().join("published.crate");
     let mut archive = fs::read(&published)?;
     archive.push(0);
     fs::write(published, archive)?;
-    assert!(!run_script(script, &runner, temp.path(), false)?.success());
+    assert!(!run_operation("journal-coordinate", temp.path(), false)?.success());
     assert_eq!(fs::read(temp.path().join("journal.json"))?, journal);
     Ok(())
 }
 
-fn run_script(
-    script: &str,
-    runner: &Path,
+fn run_operation(
+    operation: &str,
     root: &Path,
     interrupted: bool,
 ) -> Result<std::process::ExitStatus, Box<dyn Error>> {
-    Ok(Command::new("bash")
-        .args(["-e", "-c", script])
-        .env("RUNNER_TEMP", runner)
-        .env("VELNOR_TEST_BINARY", std::env::current_exe()?)
+    Ok(Command::new(std::env::current_exe()?)
+        .args(["--exact", "crate_release_controller::tests::coordinator_rehearsal::controller_rehearsal_and_generated_publisher_shape"])
+        .env("VELNOR_COORDINATOR_CHILD", operation)
         .env("VELNOR_REHEARSAL_ROOT", root)
-        .env(
-            "VELNOR_REHEARSAL_INTERRUPTED",
-            if interrupted { "1" } else { "0" },
-        )
+        .env("VELNOR_REHEARSAL_INTERRUPTED", if interrupted { "1" } else { "0" })
         .status()?)
 }
 
-fn rendered_scripts() -> Result<Vec<(String, String)>, Box<dyn Error>> {
+fn assert_generated_publisher() -> Result<(), Box<dyn Error>> {
     let (spec, rust) = crate::release_steps::tests::fixture()?;
     let workflow = velnor_actions_workflow_renderer::release_tree::render_release_workflow(
         &spec,
@@ -106,18 +79,21 @@ fn rendered_scripts() -> Result<Vec<(String, String)>, Box<dyn Error>> {
     let steps = workflow["jobs"]["release-publish"]["steps"]
         .as_array()
         .ok_or("publisher steps")?;
-    steps
+    let names = steps
         .iter()
-        .filter_map(|step| {
-            let name = step["name"].as_str()?;
-            matches!(name, "Release journal-start" | "Release journal-coordinate").then(|| {
-                step["run"]
-                    .as_str()
-                    .map(|script| (name.to_owned(), script.to_owned()))
-            })
-        })
+        .map(|step| step["name"].as_str())
         .collect::<Option<Vec<_>>>()
-        .ok_or_else(|| "missing step script".into())
+        .ok_or("step name")?;
+    assert_eq!(
+        names,
+        ["Capture release budget", "Publish approved Rust crate"]
+    );
+    let publisher = steps[1]["run"].as_str().ok_or("publisher script")?;
+    assert!(publisher.contains("/usr/bin/sudo"));
+    assert!(publisher.contains("/usr/bin/python3"));
+    assert!(!publisher.contains("journal-start"));
+    assert!(!publisher.contains("journal-coordinate"));
+    Ok(())
 }
 
 fn rehearsal_github(request: &GitHubAdmissionRequest, metadata_completed: bool) -> Github {
