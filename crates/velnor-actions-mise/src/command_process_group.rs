@@ -181,20 +181,81 @@ pub(super) fn terminate_unanchored(child: &mut Child, deadline: Instant) -> Resu
 }
 
 fn wait_group_absent(pid: Pid, deadline: Instant) -> Result<(), String> {
+    wait_for_group_absence(
+        || test_kill_process_group(pid),
+        || Instant::now() >= deadline,
+        || thread::sleep(Duration::from_millis(5)),
+    )
+}
+
+fn wait_for_group_absence(
+    mut observe: impl FnMut() -> Result<(), rustix::io::Errno>,
+    mut expired: impl FnMut() -> bool,
+    mut pause: impl FnMut(),
+) -> Result<(), String> {
     loop {
-        match test_kill_process_group(pid) {
-            Ok(()) => {}
+        match observe() {
+            Ok(()) | Err(rustix::io::Errno::PERM) => {}
             Err(rustix::io::Errno::SRCH) => return Ok(()),
             Err(error) => return Err(format!("observe_group:{error}")),
         }
-        if Instant::now() >= deadline {
+        if expired() {
             return Err("group_drain_deadline_exhausted".to_owned());
         }
-        thread::sleep(Duration::from_millis(5));
+        pause();
     }
 }
 
 fn child_pid(child: &Child) -> Result<Pid, String> {
     let raw = i32::try_from(child.id()).map_err(|_| "child_pid_overflow".to_owned())?;
     Pid::from_raw(raw).ok_or_else(|| "child_pid_invalid".to_owned())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::wait_for_group_absence;
+    use rustix::io::Errno;
+    use std::cell::Cell;
+
+    #[test]
+    fn transient_indeterminate_group_probe_requires_confirmed_absence() {
+        let polls = Cell::new(0);
+        let ticks = Cell::new(0);
+        let confirmed_absent = Cell::new(false);
+        let result = wait_for_group_absence(
+            || {
+                let count = polls.get();
+                polls.set(count + 1);
+                match count {
+                    0 | 1 => Err(Errno::PERM),
+                    _ => {
+                        confirmed_absent.set(true);
+                        Err(Errno::SRCH)
+                    }
+                }
+            },
+            || ticks.get() >= 3,
+            || ticks.set(ticks.get() + 1),
+        );
+        assert!(result.is_ok(), "only ESRCH establishes absence: {result:?}");
+        assert!(
+            confirmed_absent.get(),
+            "success requires external absence evidence"
+        );
+    }
+
+    #[test]
+    fn persistent_indeterminate_group_probe_exhausts_the_existing_deadline() {
+        let ticks = Cell::new(0);
+        let result = wait_for_group_absence(
+            || Err(Errno::PERM),
+            || ticks.get() >= 2,
+            || ticks.set(ticks.get() + 1),
+        );
+        assert_eq!(result, Err("group_drain_deadline_exhausted".to_owned()));
+        assert!(
+            ticks.get() >= 2,
+            "indeterminate state must wait for the deadline"
+        );
+    }
 }
