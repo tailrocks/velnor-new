@@ -11,6 +11,23 @@ mod fixture;
 #[path = "api2026_pull_context_fixture/non_inputs.rs"]
 mod reviewed_input_helper;
 
+fn add_non_input(config: &str, pattern: &str) -> Result<String, Box<dyn Error>> {
+    let mut document: toml::Value = toml::from_str(config)?;
+    let rust = document
+        .get_mut("stacks")
+        .and_then(|v| v.get_mut("rust"))
+        .and_then(toml::Value::as_table_mut)
+        .ok_or("missing Rust stack")?;
+    let inputs = rust
+        .entry("non_inputs")
+        .or_insert_with(|| toml::Value::Array(Vec::new()));
+    inputs
+        .as_array_mut()
+        .ok_or("invalid non_inputs")?
+        .push(pattern.into());
+    Ok(toml::to_string(&document)?)
+}
+
 #[test]
 fn sparse_fixture_rejects_exclusion_overlapping_a_package() -> Result<(), Box<dyn Error>> {
     let temporary = tempfile::tempdir()?;
@@ -38,10 +55,7 @@ fn sparse_fixture_rejects_exclusion_overlapping_a_package() -> Result<(), Box<dy
     assert!(status.success());
     let path = clone.join(".velnor/config.toml");
     let config = std::fs::read_to_string(&path)?;
-    let invalid = config.replace(
-        "[stacks.rust]\n",
-        "[stacks.rust]\nnon_inputs = [\"crates/**\"]\n",
-    );
+    let invalid = add_non_input(&config, "crates/**")?;
     assert_ne!(config, invalid);
     std::fs::write(path, invalid)?;
     let error = reviewed_input_helper::reviewed_non_inputs_from(&clone)

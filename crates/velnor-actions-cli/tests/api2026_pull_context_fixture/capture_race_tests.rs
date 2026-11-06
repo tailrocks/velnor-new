@@ -64,13 +64,10 @@ fn captured_planner_isolated_from_live_edits_and_hydrates_symlink_target()
     )?;
     let config_path = repo.join(".velnor/config.toml");
     let original = std::fs::read_to_string(&config_path)?;
-    let config = original.replace(
-        "[stacks.rust]\n",
-        "[stacks.rust]\nnon_inputs = [\"docs/implemented/**\"]\n",
-    );
+    let config = crate::add_non_input(&original, "docs/implemented/**")?;
     let config = config.replace("[[stacks.rust.configurations]]", concat!(
         "[[stacks.rust.inputs]]\n",
-        "globs = [\"*\", \".cargo/**\", \".config/**\", \".github/**\", \".mise/**\", \".velnor/**\", \"LICENSES/**\", \"crates/**\", \"docs/*\", \"docs/content/**\", \"docs/deferred/**\", \"docs/proposed/**\", \"docs/reviews/**\", \"fixtures/**\", \"images/**\", \"qualification/**\", \"scripts/**\"]\n",
+        "globs = [\"*\", \".cargo/**\", \".config/**\", \".github/**\", \".mise/**\", \".velnor/**\", \"LICENSES/**\", \"crates/**\", \"docs/*\", \"docs/content/**\", \"docs/deferred/**\", \"docs/reviews/**\", \"fixtures/**\", \"images/**\", \"qualification/**\", \"scripts/**\"]\n",
         "packages = [\"velnor-actions-contract\", \"velnor-actions-freshness\", \"velnor-actions-mise\", \"velnor-actions-orchestrator\", \"velnor-actions-rust\", \"velnor-actions-workflow-renderer\", \"velnor-archive-guard\", \"velnor-runner-attestation\"]\ncomplete = true\n\n[[stacks.rust.configurations]]"
     ));
     assert_ne!(original, config);
@@ -86,7 +83,12 @@ fn captured_planner_isolated_from_live_edits_and_hydrates_symlink_target()
         b"live source changed",
     )?;
     let patterns = crate::reviewed_input_helper::reviewed_non_inputs_from(&first)?;
-    assert_eq!(patterns, "[\"docs/implemented/**\"]");
+    let captured_patterns: Vec<String> = serde_json::from_str(&patterns)?;
+    assert!(
+        captured_patterns
+            .iter()
+            .any(|pattern| pattern == "docs/implemented/**")
+    );
     assert_eq!(
         std::fs::read_to_string(first.join(".velnor/config.toml"))?,
         config
