@@ -13,6 +13,9 @@ while [ "$i" -lt 65 ]; do
   i=$((i + 1))
 done
 [ -z "${VELNOR_STATE_SELECT_UNIT_COUNT-}" ] || : > "$d/supervisor-payload-leaked"
+for name in ordinals i seen line record_name record prefix rest attested produce unit_name root slug remaining character compat_name snapshot_name compat snapshot result extra ordinal state_prefix IFS VELNOR_STATE_SELECT_TAG VELNOR_STATE_SELECT_KIND VELNOR_STATE_SELECT_UNIT_PREFIX VELNOR_STATE_SELECT_UNIT; do
+  if printenv "$name" >/dev/null 2>&1; then : > "$d/supervisor-payload-leaked"; fi
+done
 mode=ok
 [ -f "$d/mode" ] && read -r mode < "$d/mode"
 case "$mode" in

@@ -85,8 +85,13 @@ fn malformed_records(record: &str) -> Result<Vec<(&'static str, String)>, Box<dy
     let foreign_family = format!("{}trusted-union-root-", CacheFamily::Sources.key_prefix());
     Ok(vec![
         ("trailing LF", format!("{record}\n")),
+        ("embedded LF", format!("{prefix}\n{attested} {produce}")),
         ("empty record", String::new()),
         ("invalid record", "bad record".to_owned()),
+        (
+            "invalid delimiter",
+            format!("{prefix}; {attested} {produce}"),
+        ),
         ("overlong record", "x".repeat(513)),
         (
             "foreign family",

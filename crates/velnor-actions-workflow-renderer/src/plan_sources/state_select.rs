@@ -66,11 +66,17 @@ const RUN_GH: &str = r#"run_gh() {
 "#;
 
 const SELECT_HEAD: &str = r#"set -eu
+unset i seen line record_name record prefix rest attested produce unit_name root slug remaining character compat_name snapshot_name compat snapshot result extra ordinal state_prefix IFS
 command -v printenv >/dev/null 2>&1 || exit 1
 case "$RUNNER_TEMP" in /*) ;; *) printf '%s\n' 'RUNNER_TEMP must be absolute' >&2; exit 1 ;; esac
+umask 077
 d="$RUNNER_TEMP/velnor/state-select"
 rm -rf "$d"
 mkdir -p "$d"
+chmod 700 "$d"
+unset ordinals
+ordinals='@ORDINALS@'
+IFS=' '
 ref="${VELNOR_DEFAULT_REF:-}"
 repo="${GITHUB_REPOSITORY:-}"
 signer="$repo/@SIGNER_PATH@"
@@ -103,6 +109,7 @@ emit() {
 "#;
 
 const WORKER: &str = r#"set -eu
+unset VELNOR_STATE_SELECT_TAG VELNOR_STATE_SELECT_KIND VELNOR_STATE_SELECT_UNIT_PREFIX VELNOR_STATE_SELECT_UNIT
 @RUN_GH@w="$d/u-$2"
 : > "$w/part"
 m=
@@ -186,6 +193,13 @@ fn head(outer_bound: u64, bounds: &SelectBounds) -> Result<String, RenderError> 
         .replace("@DEADLINE_ENV@", STATE_SEAL_SELECT_DEADLINE_ENV)
         .replace("@DEADLINE@", &bounds.deadline_seconds.to_string())
         .replace("@STATE_PREFIX@", &state_prune_prefix())
+        .replace(
+            "@ORDINALS@",
+            &(0..bounds.units)
+                .map(|ordinal| ordinal.to_string())
+                .collect::<Vec<_>>()
+                .join(" "),
+        )
         .replace("@SELECT_LIMIT@", &STATE_SEAL_SELECT_LIST_LIMIT.to_string())
         .replace("@PARALLELISM@", &bounds.parallelism.to_string())
         .replace("@UNIT_COUNT@", &bounds.units.to_string())

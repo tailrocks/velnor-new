@@ -235,8 +235,9 @@ fn state_v4_select_supervisor_rejects_invalid_bounds_and_missing_python()
         )?;
     }
 
-    let path_without_python =
-        scene.restricted_path(&["sh", "bash", "cat", "mkdir", "rm", "sort", "head"])?;
+    let path_without_python = scene.restricted_path(&[
+        "sh", "bash", "cat", "mkdir", "rm", "chmod", "printenv", "sort", "head",
+    ])?;
     let gh_bin = std::path::Path::new(&gh.dir())
         .parent()
         .ok_or_else(|| fail("fake GH directory has no parent"))?
@@ -254,6 +255,11 @@ fn state_v4_select_supervisor_rejects_invalid_bounds_and_missing_python()
     expect(
         &selected_unit(&scene, StateUnit::Union, ".")?,
         &[],
+        "missing Python",
+    )?;
+    expect_flag(
+        &crate::gc1_seal_units::produce_flag(&scene, StateUnit::Union, ".")?,
+        "true",
         "missing Python",
     )?;
 
