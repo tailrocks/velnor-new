@@ -19,7 +19,7 @@ Four upstream releases were published on `2026-11-05` within the repository 3-da
 
 ## Runner observation
 
-Successful `main` CI run `42182644618` (`Plan` job `127775581179`, source `1168644a27c6a23f78a408c9ae13bd99c04f3ce2`) and the GitHub hosted-runner reference (`runner-doc.html`, SHA-256 `3b68d3e3d160390cc41a24288511f7f44c9a5de3906629f17030e7e0f1959aba`) are recorded under `docs/implemented/evidence/freshness-2026-11-06/runner/`:
+Successful `main` CI run `42182644618` (`Plan` job `127775581179`, source `1168644a27c6a23f78a408c9ae13bd99c04f3ce2`, full log `ci-job.log` SHA-256 `f1e5701ff3c5e4f2a64c39f2f5f5c40ac1a145e1a987cae773218eb7b1afe4ad`, API receipt `ci-job.json` SHA-256 `c1a607edc5eebfd29909fb0d2d1339ccb18a878cc2937846b62d1002bafa9d8c` with `status: "completed"` and `conclusion: "success"`) and the GitHub hosted-runner reference (`runner-doc.html`, SHA-256 `3b68d3e3d160390cc41a24288511f7f44c9a5de3906629f17030e7e0f1959aba`) are recorded under `docs/implemented/evidence/freshness-2026-11-06/runner/`:
 
 - image `ubuntu-26.04`, version `20261101.186.1`
 - runner `2.338.2`

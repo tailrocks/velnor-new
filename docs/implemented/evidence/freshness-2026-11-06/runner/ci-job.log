@@ -1,38 +1,1092 @@
-﻿2026-11-06T07:42:37.3593748Z Current runner version: '2.338.2'
-2026-11-06T07:42:37.3618986Z ##[group]Runner Image Provisioner
-2026-11-06T07:42:37.3619724Z Hosted Compute Agent
-2026-11-06T07:42:37.3620209Z Version: 20261028.624
-2026-11-06T07:42:37.3620854Z Commit: 54898b74c23fde5556c9b3c3a2290865feef0dfe
-2026-11-06T07:42:37.3621460Z Build Date: 2026-10-28T21:51:42Z
-2026-11-06T07:42:37.3622015Z Worker ID: {89ecd5d7-80af-478d-8c8c-cbd54063dc4d}
-2026-11-06T07:42:37.3622702Z Region: centralus
-2026-11-06T07:42:37.3623160Z Cloud: Azure
-2026-11-06T07:42:37.3623750Z ##[endgroup]
-2026-11-06T07:42:37.3625021Z ##[group]Operating System
-2026-11-06T07:42:37.3625533Z Ubuntu
-2026-11-06T07:42:37.3626048Z 26.04.1
-2026-11-06T07:42:37.3626473Z LTS
-2026-11-06T07:42:37.3626988Z ##[endgroup]
-2026-11-06T07:42:37.3627461Z ##[group]Runner Image
-2026-11-06T07:42:37.3628140Z Image: ubuntu-26.04
-2026-11-06T07:42:37.3628665Z Version: 20261101.186.1
-2026-11-06T07:42:37.3629797Z Included Software: https://github.com/actions/runner-images/blob/ubuntu26/20261101.186/images/ubuntu/Ubuntu2604-Readme.md
-2026-11-06T07:42:37.3631162Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu26%2F20261101.186
-2026-11-06T07:42:37.3631969Z ##[endgroup]
-2026-11-06T07:42:37.3633256Z ##[group]GITHUB_TOKEN Permissions
-2026-11-06T07:42:37.3635577Z Actions: read
-2026-11-06T07:42:37.3636169Z ArtifactMetadata: read
-2026-11-06T07:42:37.3636659Z Attestations: read
-2026-11-06T07:42:37.3637178Z Contents: read
-2026-11-06T07:42:37.3637651Z Metadata: read
-2026-11-06T07:42:37.3638332Z ##[endgroup]
-2026-11-06T07:42:37.3640632Z Secret source: Actions
-2026-11-06T07:42:37.3641404Z Cache mode: read
-2026-11-06T07:42:37.3642235Z Prepare workflow directory
-2026-11-06T07:42:37.3972974Z Prepare all required actions
-2026-11-06T07:42:37.4002302Z Getting action download info
-2026-11-06T07:42:37.6129037Z Download action repository 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1' (SHA:3d3c42e5aac5ba805825da76410c181273ba90b1)
-2026-11-06T07:42:37.7385399Z Download action repository 'jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c' (SHA:f5be966e4a917d54244728e6a5fdcd1d93a35e6c)
-2026-11-06T07:42:38.2096648Z Download action repository 'actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9' (SHA:55cc8345863c7cc4c66a329aec7e433d2d1c52a9)
-2026-11-06T07:42:38.3103418Z Download action repository 'actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9' (SHA:cf430e030ddbb5b0abf93d22962f4752f3646cd9)
-2026-11-06T07:42:38.4569972Z Complete job name: Plan
+Plan	UNKNOWN STEP	﻿2026-11-06T07:42:37.3593748Z Current runner version: '2.338.2'
+Plan	UNKNOWN STEP	2026-11-06T07:42:37.3618986Z ##[group]Runner Image Provisioner
+Plan	UNKNOWN STEP	2026-11-06T07:42:37.3619724Z Hosted Compute Agent
+Plan	UNKNOWN STEP	2026-11-06T07:42:37.3620209Z Version: 20261028.624
+Plan	UNKNOWN STEP	2026-11-06T07:42:37.3620854Z Commit: 54898b74c23fde5556c9b3c3a2290865feef0dfe
+Plan	UNKNOWN STEP	2026-11-06T07:42:37.3621460Z Build Date: 2026-10-28T21:51:42Z
+Plan	UNKNOWN STEP	2026-11-06T07:42:37.3622015Z Worker ID: {89ecd5d7-80af-478d-8c8c-cbd54063dc4d}
+Plan	UNKNOWN STEP	2026-11-06T07:42:37.3622702Z Region: centralus
+Plan	UNKNOWN STEP	2026-11-06T07:42:37.3623160Z Cloud: Azure
+Plan	UNKNOWN STEP	2026-11-06T07:42:37.3623750Z ##[endgroup]
+Plan	UNKNOWN STEP	2026-11-06T07:42:37.3625021Z ##[group]Operating System
+Plan	UNKNOWN STEP	2026-11-06T07:42:37.3625533Z Ubuntu
+Plan	UNKNOWN STEP	2026-11-06T07:42:37.3626048Z 26.04.1
+Plan	UNKNOWN STEP	2026-11-06T07:42:37.3626473Z LTS
+Plan	UNKNOWN STEP	2026-11-06T07:42:37.3626988Z ##[endgroup]
+Plan	UNKNOWN STEP	2026-11-06T07:42:37.3627461Z ##[group]Runner Image
+Plan	UNKNOWN STEP	2026-11-06T07:42:37.3628140Z Image: ubuntu-26.04
+Plan	UNKNOWN STEP	2026-11-06T07:42:37.3628665Z Version: 20261101.186.1
+Plan	UNKNOWN STEP	2026-11-06T07:42:37.3629797Z Included Software: https://github.com/actions/runner-images/blob/ubuntu26/20261101.186/images/ubuntu/Ubuntu2604-Readme.md
+Plan	UNKNOWN STEP	2026-11-06T07:42:37.3631162Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu26%2F20261101.186
+Plan	UNKNOWN STEP	2026-11-06T07:42:37.3631969Z ##[endgroup]
+Plan	UNKNOWN STEP	2026-11-06T07:42:37.3633256Z ##[group]GITHUB_TOKEN Permissions
+Plan	UNKNOWN STEP	2026-11-06T07:42:37.3635577Z Actions: read
+Plan	UNKNOWN STEP	2026-11-06T07:42:37.3636169Z ArtifactMetadata: read
+Plan	UNKNOWN STEP	2026-11-06T07:42:37.3636659Z Attestations: read
+Plan	UNKNOWN STEP	2026-11-06T07:42:37.3637178Z Contents: read
+Plan	UNKNOWN STEP	2026-11-06T07:42:37.3637651Z Metadata: read
+Plan	UNKNOWN STEP	2026-11-06T07:42:37.3638332Z ##[endgroup]
+Plan	UNKNOWN STEP	2026-11-06T07:42:37.3640632Z Secret source: Actions
+Plan	UNKNOWN STEP	2026-11-06T07:42:37.3641404Z Cache mode: read
+Plan	UNKNOWN STEP	2026-11-06T07:42:37.3642235Z Prepare workflow directory
+Plan	UNKNOWN STEP	2026-11-06T07:42:37.3972974Z Prepare all required actions
+Plan	UNKNOWN STEP	2026-11-06T07:42:37.4002302Z Getting action download info
+Plan	UNKNOWN STEP	2026-11-06T07:42:37.6129037Z Download action repository 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1' (SHA:3d3c42e5aac5ba805825da76410c181273ba90b1)
+Plan	UNKNOWN STEP	2026-11-06T07:42:37.7385399Z Download action repository 'jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c' (SHA:f5be966e4a917d54244728e6a5fdcd1d93a35e6c)
+Plan	UNKNOWN STEP	2026-11-06T07:42:38.2096648Z Download action repository 'actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9' (SHA:55cc8345863c7cc4c66a329aec7e433d2d1c52a9)
+Plan	UNKNOWN STEP	2026-11-06T07:42:38.3103418Z Download action repository 'actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9' (SHA:cf430e030ddbb5b0abf93d22962f4752f3646cd9)
+Plan	UNKNOWN STEP	2026-11-06T07:42:38.4569972Z Complete job name: Plan
+Plan	UNKNOWN STEP	2026-11-06T07:42:38.5207592Z ##[group]Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+Plan	UNKNOWN STEP	2026-11-06T07:42:38.5208328Z with:
+Plan	UNKNOWN STEP	2026-11-06T07:42:38.5208575Z   fetch-depth: 1
+Plan	UNKNOWN STEP	2026-11-06T07:42:38.5208838Z   persist-credentials: false
+Plan	UNKNOWN STEP	2026-11-06T07:42:38.5209149Z   repository: tailrocks/velnor-new
+Plan	UNKNOWN STEP	2026-11-06T07:42:38.5211769Z   token: ***
+Plan	UNKNOWN STEP	2026-11-06T07:42:38.5212009Z   ssh-strict: true
+Plan	UNKNOWN STEP	2026-11-06T07:42:38.5212260Z   ssh-user: git
+Plan	UNKNOWN STEP	2026-11-06T07:42:38.5212512Z   clean: true
+Plan	UNKNOWN STEP	2026-11-06T07:42:38.5212770Z   sparse-checkout-cone-mode: true
+Plan	UNKNOWN STEP	2026-11-06T07:42:38.5213103Z   fetch-tags: false
+Plan	UNKNOWN STEP	2026-11-06T07:42:38.5213364Z   show-progress: true
+Plan	UNKNOWN STEP	2026-11-06T07:42:38.5213630Z   lfs: false
+Plan	UNKNOWN STEP	2026-11-06T07:42:38.5213866Z   submodules: false
+Plan	UNKNOWN STEP	2026-11-06T07:42:38.5214123Z   set-safe-directory: true
+Plan	UNKNOWN STEP	2026-11-06T07:42:38.5214416Z   allow-unsafe-pr-checkout: false
+Plan	UNKNOWN STEP	2026-11-06T07:42:38.5214790Z env:
+Plan	UNKNOWN STEP	2026-11-06T07:42:38.5215027Z   ACTIONS_ID_TOKEN_REQUEST_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:38.5215343Z   ACTIONS_ID_TOKEN_REQUEST_URL: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:38.5215681Z   ACTIONS_RUNTIME_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:38.5215956Z   CARGO_REGISTRY_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:38.5216222Z   GH_CONFIG_DIR: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:38.5216462Z   GH_HOST: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:38.5216683Z   GH_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:38.5216916Z   GITHUB_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:38.5217164Z   MISE_AUTO_INSTALL: false
+Plan	UNKNOWN STEP	2026-11-06T07:42:38.5217463Z   MISE_EXEC_AUTO_INSTALL: false
+Plan	UNKNOWN STEP	2026-11-06T07:42:38.5217774Z   MISE_GITHUB_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:38.5218274Z   MISE_LOCKFILE: 0
+Plan	UNKNOWN STEP	2026-11-06T07:42:38.5218522Z   MISE_NO_CONFIG: 1
+Plan	UNKNOWN STEP	2026-11-06T07:42:38.5218989Z   MISE_NO_ENV: 1
+Plan	UNKNOWN STEP	2026-11-06T07:42:38.5219231Z   MISE_NO_HOOKS: 1
+Plan	UNKNOWN STEP	2026-11-06T07:42:38.5219473Z   MISE_QUIET: 1
+Plan	UNKNOWN STEP	2026-11-06T07:42:38.5219714Z   NODE_AUTH_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:38.5219960Z   NPM_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:38.5220202Z   RUSTUP_AUTO_INSTALL: 0
+Plan	UNKNOWN STEP	2026-11-06T07:42:38.5220647Z   VELNOR_ASSET_SHA256: db7480b83238f85a2e4472d26ba57ca4ee4d6822353cbdaad690b1a2b963b26f
+Plan	UNKNOWN STEP	2026-11-06T07:42:38.5221533Z   VELNOR_ASSET_URL: https://github.com/tailrocks/velnor-new/releases/download/v0.1.74/velnor-actions-0.1.74-x86_64-unknown-linux-gnu
+Plan	UNKNOWN STEP	2026-11-06T07:42:38.5222304Z   VELNOR_RELEASE_COMMIT: c622bfb187556afb8d3ff3ca917a719e4bb7f32a
+Plan	UNKNOWN STEP	2026-11-06T07:42:38.5222724Z   VELNOR_RUN_KEY_ATTEMPT: 1
+Plan	UNKNOWN STEP	2026-11-06T07:42:38.5223003Z ##[endgroup]
+Plan	UNKNOWN STEP	2026-11-06T07:42:38.7552567Z Syncing repository: tailrocks/velnor-new
+Plan	UNKNOWN STEP	2026-11-06T07:42:38.7554648Z ##[group]Getting Git version info
+Plan	UNKNOWN STEP	2026-11-06T07:42:38.7555407Z Working directory is '/home/runner/work/velnor-new/velnor-new'
+Plan	UNKNOWN STEP	2026-11-06T07:42:38.7556500Z [command]/usr/bin/git version
+Plan	UNKNOWN STEP	2026-11-06T07:42:38.7557366Z git version 2.56.0
+Plan	UNKNOWN STEP	2026-11-06T07:42:38.7569449Z ##[endgroup]
+Plan	UNKNOWN STEP	2026-11-06T07:42:38.7575975Z Temporarily overriding HOME='/home/runner/work/_temp/b64b847e-d9a1-48e3-84d7-606647d64a1a' before making global git config changes
+Plan	UNKNOWN STEP	2026-11-06T07:42:38.7578037Z Adding repository directory to the temporary git global config as a safe directory
+Plan	UNKNOWN STEP	2026-11-06T07:42:38.7579930Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/velnor-new/velnor-new
+Plan	UNKNOWN STEP	2026-11-06T07:42:38.7638668Z Deleting the contents of '/home/runner/work/velnor-new/velnor-new'
+Plan	UNKNOWN STEP	2026-11-06T07:42:38.7640780Z ##[group]Determining repository object format
+Plan	UNKNOWN STEP	2026-11-06T07:42:38.7642278Z ##[endgroup]
+Plan	UNKNOWN STEP	2026-11-06T07:42:38.7643416Z ##[group]Initializing the repository
+Plan	UNKNOWN STEP	2026-11-06T07:42:38.7644792Z [command]/usr/bin/git init /home/runner/work/velnor-new/velnor-new
+Plan	UNKNOWN STEP	2026-11-06T07:42:38.7739156Z hint: Using 'master' as the name for the initial branch. This default branch name
+Plan	UNKNOWN STEP	2026-11-06T07:42:38.7741059Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+Plan	UNKNOWN STEP	2026-11-06T07:42:38.7742448Z hint: to use in all of your new repositories, which will suppress this warning,
+Plan	UNKNOWN STEP	2026-11-06T07:42:38.7743456Z hint: call:
+Plan	UNKNOWN STEP	2026-11-06T07:42:38.7743999Z hint:
+Plan	UNKNOWN STEP	2026-11-06T07:42:38.7744676Z hint: 	git config --global init.defaultBranch <name>
+Plan	UNKNOWN STEP	2026-11-06T07:42:38.7745517Z hint:
+Plan	UNKNOWN STEP	2026-11-06T07:42:38.7746350Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+Plan	UNKNOWN STEP	2026-11-06T07:42:38.7748156Z hint: 'development'. The just-created branch can be renamed via this command:
+Plan	UNKNOWN STEP	2026-11-06T07:42:38.7749295Z hint:
+Plan	UNKNOWN STEP	2026-11-06T07:42:38.7749861Z hint: 	git branch -m <name>
+Plan	UNKNOWN STEP	2026-11-06T07:42:38.7750542Z hint:
+Plan	UNKNOWN STEP	2026-11-06T07:42:38.7751694Z hint: Disable this message with "git config set advice.defaultBranchName false"
+Plan	UNKNOWN STEP	2026-11-06T07:42:38.7753898Z Initialized empty Git repository in /home/runner/work/velnor-new/velnor-new/.git/
+Plan	UNKNOWN STEP	2026-11-06T07:42:38.7760770Z [command]/usr/bin/git remote add origin https://github.com/tailrocks/velnor-new
+Plan	UNKNOWN STEP	2026-11-06T07:42:38.7806503Z ##[endgroup]
+Plan	UNKNOWN STEP	2026-11-06T07:42:38.7808113Z ##[group]Disabling automatic garbage collection
+Plan	UNKNOWN STEP	2026-11-06T07:42:38.7809494Z [command]/usr/bin/git config --local gc.auto 0
+Plan	UNKNOWN STEP	2026-11-06T07:42:38.7838526Z ##[endgroup]
+Plan	UNKNOWN STEP	2026-11-06T07:42:38.7839918Z ##[group]Setting up auth
+Plan	UNKNOWN STEP	2026-11-06T07:42:38.7840953Z Removing SSH command configuration
+Plan	UNKNOWN STEP	2026-11-06T07:42:38.7842533Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+Plan	UNKNOWN STEP	2026-11-06T07:42:38.7871294Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+Plan	UNKNOWN STEP	2026-11-06T07:42:38.8245481Z Removing HTTP extra header
+Plan	UNKNOWN STEP	2026-11-06T07:42:38.8249762Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+Plan	UNKNOWN STEP	2026-11-06T07:42:38.8276289Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+Plan	UNKNOWN STEP	2026-11-06T07:42:38.8479574Z Removing includeIf entries pointing to credentials config files
+Plan	UNKNOWN STEP	2026-11-06T07:42:38.8483157Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+Plan	UNKNOWN STEP	2026-11-06T07:42:38.8508655Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+Plan	UNKNOWN STEP	2026-11-06T07:42:38.8711434Z [command]/usr/bin/git config --file /home/runner/work/_temp/git-credentials-1c7b99ca-6bac-4c93-9789-e13bf9150472.config http.https://github.com/.extraheader AUTHORIZATION: basic ***
+Plan	UNKNOWN STEP	2026-11-06T07:42:38.8739087Z [command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/velnor-new/velnor-new/.git.path /home/runner/work/_temp/git-credentials-1c7b99ca-6bac-4c93-9789-e13bf9150472.config
+Plan	UNKNOWN STEP	2026-11-06T07:42:38.8764113Z [command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/velnor-new/velnor-new/.git/worktrees/*.path /home/runner/work/_temp/git-credentials-1c7b99ca-6bac-4c93-9789-e13bf9150472.config
+Plan	UNKNOWN STEP	2026-11-06T07:42:38.8791237Z [command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git.path /github/runner_temp/git-credentials-1c7b99ca-6bac-4c93-9789-e13bf9150472.config
+Plan	UNKNOWN STEP	2026-11-06T07:42:38.8815554Z [command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git/worktrees/*.path /github/runner_temp/git-credentials-1c7b99ca-6bac-4c93-9789-e13bf9150472.config
+Plan	UNKNOWN STEP	2026-11-06T07:42:38.8839471Z ##[endgroup]
+Plan	UNKNOWN STEP	2026-11-06T07:42:38.8840358Z ##[group]Fetching the repository
+Plan	UNKNOWN STEP	2026-11-06T07:42:38.8843349Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +1168644a27c6a23f78a408c9ae13bd99c04f3ce2:refs/remotes/origin/main
+Plan	UNKNOWN STEP	2026-11-06T07:42:40.7374907Z From https://github.com/tailrocks/velnor-new
+Plan	UNKNOWN STEP	2026-11-06T07:42:40.7377027Z  * [new ref]         1168644a27c6a23f78a408c9ae13bd99c04f3ce2 -> origin/main
+Plan	UNKNOWN STEP	2026-11-06T07:42:40.7382786Z [command]/usr/bin/git branch --list --remote origin/main
+Plan	UNKNOWN STEP	2026-11-06T07:42:40.7407120Z   origin/main
+Plan	UNKNOWN STEP	2026-11-06T07:42:40.7412480Z [command]/usr/bin/git rev-parse refs/remotes/origin/main
+Plan	UNKNOWN STEP	2026-11-06T07:42:40.7431865Z 1168644a27c6a23f78a408c9ae13bd99c04f3ce2
+Plan	UNKNOWN STEP	2026-11-06T07:42:40.7434883Z ##[endgroup]
+Plan	UNKNOWN STEP	2026-11-06T07:42:40.7435342Z ##[group]Determining the checkout info
+Plan	UNKNOWN STEP	2026-11-06T07:42:40.7435795Z ##[endgroup]
+Plan	UNKNOWN STEP	2026-11-06T07:42:40.7439015Z [command]/usr/bin/git sparse-checkout disable
+Plan	UNKNOWN STEP	2026-11-06T07:42:40.7481152Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+Plan	UNKNOWN STEP	2026-11-06T07:42:40.7504904Z ##[group]Checking out the ref
+Plan	UNKNOWN STEP	2026-11-06T07:42:40.7507482Z [command]/usr/bin/git checkout --progress --force -B main refs/remotes/origin/main
+Plan	UNKNOWN STEP	2026-11-06T07:42:41.0878843Z Switched to a new branch 'main'
+Plan	UNKNOWN STEP	2026-11-06T07:42:41.0882383Z branch 'main' set up to track 'origin/main'.
+Plan	UNKNOWN STEP	2026-11-06T07:42:41.1317973Z ##[endgroup]
+Plan	UNKNOWN STEP	2026-11-06T07:42:41.1359389Z [command]/usr/bin/git log -1 --format=%H
+Plan	UNKNOWN STEP	2026-11-06T07:42:41.1383667Z 1168644a27c6a23f78a408c9ae13bd99c04f3ce2
+Plan	UNKNOWN STEP	2026-11-06T07:42:41.1395925Z ##[group]Removing auth
+Plan	UNKNOWN STEP	2026-11-06T07:42:41.1396300Z Removing SSH command configuration
+Plan	UNKNOWN STEP	2026-11-06T07:42:41.1396696Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+Plan	UNKNOWN STEP	2026-11-06T07:42:41.1425092Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+Plan	UNKNOWN STEP	2026-11-06T07:42:41.1650160Z Removing HTTP extra header
+Plan	UNKNOWN STEP	2026-11-06T07:42:41.1653633Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+Plan	UNKNOWN STEP	2026-11-06T07:42:41.1699846Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+Plan	UNKNOWN STEP	2026-11-06T07:42:41.1897390Z Removing includeIf entries pointing to credentials config files
+Plan	UNKNOWN STEP	2026-11-06T07:42:41.1908579Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+Plan	UNKNOWN STEP	2026-11-06T07:42:41.1940067Z includeif.gitdir:/home/runner/work/velnor-new/velnor-new/.git.path
+Plan	UNKNOWN STEP	2026-11-06T07:42:41.1940524Z includeif.gitdir:/home/runner/work/velnor-new/velnor-new/.git/worktrees/*.path
+Plan	UNKNOWN STEP	2026-11-06T07:42:41.1940835Z includeif.gitdir:/github/workspace/.git.path
+Plan	UNKNOWN STEP	2026-11-06T07:42:41.1941220Z includeif.gitdir:/github/workspace/.git/worktrees/*.path
+Plan	UNKNOWN STEP	2026-11-06T07:42:41.1942189Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/velnor-new/velnor-new/.git.path
+Plan	UNKNOWN STEP	2026-11-06T07:42:41.1965275Z /home/runner/work/_temp/git-credentials-1c7b99ca-6bac-4c93-9789-e13bf9150472.config
+Plan	UNKNOWN STEP	2026-11-06T07:42:41.1972510Z [command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/velnor-new/velnor-new/.git.path \/home\/runner\/work\/_temp\/git\-credentials\-1c7b99ca\-6bac\-4c93\-9789\-e13bf9150472\.config
+Plan	UNKNOWN STEP	2026-11-06T07:42:41.2007213Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/velnor-new/velnor-new/.git/worktrees/*.path
+Plan	UNKNOWN STEP	2026-11-06T07:42:41.2020402Z /home/runner/work/_temp/git-credentials-1c7b99ca-6bac-4c93-9789-e13bf9150472.config
+Plan	UNKNOWN STEP	2026-11-06T07:42:41.2026779Z [command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/velnor-new/velnor-new/.git/worktrees/*.path \/home\/runner\/work\/_temp\/git\-credentials\-1c7b99ca\-6bac\-4c93\-9789\-e13bf9150472\.config
+Plan	UNKNOWN STEP	2026-11-06T07:42:41.2056985Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/.git.path
+Plan	UNKNOWN STEP	2026-11-06T07:42:41.2077648Z /github/runner_temp/git-credentials-1c7b99ca-6bac-4c93-9789-e13bf9150472.config
+Plan	UNKNOWN STEP	2026-11-06T07:42:41.2088578Z [command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/.git.path \/github\/runner_temp\/git\-credentials\-1c7b99ca\-6bac\-4c93\-9789\-e13bf9150472\.config
+Plan	UNKNOWN STEP	2026-11-06T07:42:41.2116827Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/.git/worktrees/*.path
+Plan	UNKNOWN STEP	2026-11-06T07:42:41.2135388Z /github/runner_temp/git-credentials-1c7b99ca-6bac-4c93-9789-e13bf9150472.config
+Plan	UNKNOWN STEP	2026-11-06T07:42:41.2140682Z [command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/.git/worktrees/*.path \/github\/runner_temp\/git\-credentials\-1c7b99ca\-6bac\-4c93\-9789\-e13bf9150472\.config
+Plan	UNKNOWN STEP	2026-11-06T07:42:41.2167493Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+Plan	UNKNOWN STEP	2026-11-06T07:42:41.2377505Z Removing credentials config '/home/runner/work/_temp/git-credentials-1c7b99ca-6bac-4c93-9789-e13bf9150472.config'
+Plan	UNKNOWN STEP	2026-11-06T07:42:41.2385671Z ##[endgroup]
+Plan	UNKNOWN STEP	2026-11-06T07:42:41.2592346Z ##[group]Run jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
+Plan	UNKNOWN STEP	2026-11-06T07:42:41.2592546Z with:
+Plan	UNKNOWN STEP	2026-11-06T07:42:41.2592660Z   cache: false
+Plan	UNKNOWN STEP	2026-11-06T07:42:41.2592775Z   cache_save: false
+Plan	UNKNOWN STEP	2026-11-06T07:42:41.2592890Z   env: false
+Plan	UNKNOWN STEP	2026-11-06T07:42:41.2592999Z   install: false
+Plan	UNKNOWN STEP	2026-11-06T07:42:41.2593175Z   sha256: 7129dbab31d698f9028db9374f7ba7987232b0426f837dcbce437130a61415f9
+Plan	UNKNOWN STEP	2026-11-06T07:42:41.2593402Z   version: 2026.11.1
+Plan	UNKNOWN STEP	2026-11-06T07:42:41.2593521Z   auto_update: false
+Plan	UNKNOWN STEP	2026-11-06T07:42:41.2593651Z   minimum_release_age: 24h
+Plan	UNKNOWN STEP	2026-11-06T07:42:41.2593780Z   monorepo: true
+Plan	UNKNOWN STEP	2026-11-06T07:42:41.2593891Z   bootstrap: false
+Plan	UNKNOWN STEP	2026-11-06T07:42:41.2594008Z   cache_save_post: false
+Plan	UNKNOWN STEP	2026-11-06T07:42:41.2594138Z   cache_restore_retry_budget: 0s
+Plan	UNKNOWN STEP	2026-11-06T07:42:41.2594282Z   cache_save_retry_budget: 0s
+Plan	UNKNOWN STEP	2026-11-06T07:42:41.2594419Z   cache_key_prefix: mise-v1
+Plan	UNKNOWN STEP	2026-11-06T07:42:41.2594552Z   cache_max_age_days: 30
+Plan	UNKNOWN STEP	2026-11-06T07:42:41.2594674Z   experimental: false
+Plan	UNKNOWN STEP	2026-11-06T07:42:41.2594825Z   log_level: info
+Plan	UNKNOWN STEP	2026-11-06T07:42:41.2594937Z   reshim: false
+Plan	UNKNOWN STEP	2026-11-06T07:42:41.2595050Z   add_shims_to_path: true
+Plan	UNKNOWN STEP	2026-11-06T07:42:41.2596477Z   github_token: ***
+Plan	UNKNOWN STEP	2026-11-06T07:42:41.2596599Z   persist_github_token: false
+Plan	UNKNOWN STEP	2026-11-06T07:42:41.2596738Z   fetch_from_github: true
+Plan	UNKNOWN STEP	2026-11-06T07:42:41.2596864Z   export_path: true
+Plan	UNKNOWN STEP	2026-11-06T07:42:41.2597092Z   wings_enabled: false
+Plan	UNKNOWN STEP	2026-11-06T07:42:41.2597210Z env:
+Plan	UNKNOWN STEP	2026-11-06T07:42:41.2597328Z   ACTIONS_ID_TOKEN_REQUEST_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:41.2597472Z   ACTIONS_ID_TOKEN_REQUEST_URL: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:41.2597610Z   ACTIONS_RUNTIME_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:41.2597736Z   CARGO_REGISTRY_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:41.2598012Z   GH_CONFIG_DIR: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:41.2598134Z   GH_HOST: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:41.2598236Z   GH_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:41.2598373Z   GITHUB_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:41.2598508Z   MISE_AUTO_INSTALL: false
+Plan	UNKNOWN STEP	2026-11-06T07:42:41.2598640Z   MISE_EXEC_AUTO_INSTALL: false
+Plan	UNKNOWN STEP	2026-11-06T07:42:41.2598775Z   MISE_GITHUB_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:41.2598893Z   MISE_LOCKFILE: 0
+Plan	UNKNOWN STEP	2026-11-06T07:42:41.2599002Z   MISE_NO_CONFIG: 1
+Plan	UNKNOWN STEP	2026-11-06T07:42:41.2599113Z   MISE_NO_ENV: 1
+Plan	UNKNOWN STEP	2026-11-06T07:42:41.2599222Z   MISE_NO_HOOKS: 1
+Plan	UNKNOWN STEP	2026-11-06T07:42:41.2599335Z   MISE_QUIET: 1
+Plan	UNKNOWN STEP	2026-11-06T07:42:41.2599445Z   NODE_AUTH_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:41.2599554Z   NPM_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:41.2599674Z   RUSTUP_AUTO_INSTALL: 0
+Plan	UNKNOWN STEP	2026-11-06T07:42:41.2599886Z   VELNOR_ASSET_SHA256: db7480b83238f85a2e4472d26ba57ca4ee4d6822353cbdaad690b1a2b963b26f
+Plan	UNKNOWN STEP	2026-11-06T07:42:41.2600292Z   VELNOR_ASSET_URL: https://github.com/tailrocks/velnor-new/releases/download/v0.1.74/velnor-actions-0.1.74-x86_64-unknown-linux-gnu
+Plan	UNKNOWN STEP	2026-11-06T07:42:41.2600636Z   VELNOR_RELEASE_COMMIT: c622bfb187556afb8d3ff3ca917a719e4bb7f32a
+Plan	UNKNOWN STEP	2026-11-06T07:42:41.2600831Z   VELNOR_RUN_KEY_ATTEMPT: 1
+Plan	UNKNOWN STEP	2026-11-06T07:42:41.2600963Z ##[endgroup]
+Plan	UNKNOWN STEP	2026-11-06T07:42:41.3754394Z `minimum_release_age` is ignored because an explicit mise version was provided
+Plan	UNKNOWN STEP	2026-11-06T07:42:41.3776940Z [command]/usr/bin/ldd --version
+Plan	UNKNOWN STEP	2026-11-06T07:42:41.3825165Z ldd (Ubuntu GLIBC 2.43-2ubuntu2.4) 2.43
+Plan	UNKNOWN STEP	2026-11-06T07:42:41.3826312Z Copyright (C) 2024 Free Software Foundation, Inc.
+Plan	UNKNOWN STEP	2026-11-06T07:42:41.3826681Z This is free software; see the source for copying conditions.  There is NO
+Plan	UNKNOWN STEP	2026-11-06T07:42:41.3827168Z warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+Plan	UNKNOWN STEP	2026-11-06T07:42:41.3827571Z Written by Roland McGrath and Ulrich Drepper.
+Plan	UNKNOWN STEP	2026-11-06T07:42:41.3838079Z ##[group]Download mise@2026.11.1
+Plan	UNKNOWN STEP	2026-11-06T07:42:41.3858279Z [command]/usr/local/bin/zstd --version
+Plan	UNKNOWN STEP	2026-11-06T07:42:41.3883307Z *** Zstandard CLI (64-bit) v1.5.7, by Yann Collet ***
+Plan	UNKNOWN STEP	2026-11-06T07:42:41.3891818Z [command]/usr/bin/tar --zstd --version
+Plan	UNKNOWN STEP	2026-11-06T07:42:41.3923312Z tar (GNU tar) 1.35
+Plan	UNKNOWN STEP	2026-11-06T07:42:41.3929736Z Copyright (C) 2023 Free Software Foundation, Inc.
+Plan	UNKNOWN STEP	2026-11-06T07:42:41.3930088Z License GPLv3+: GNU GPL version 3 or later <https://gnu.org/licenses/gpl.html>.
+Plan	UNKNOWN STEP	2026-11-06T07:42:41.3931843Z This is free software: you are free to change and redistribute it.
+Plan	UNKNOWN STEP	2026-11-06T07:42:41.3932183Z There is NO WARRANTY, to the extent permitted by law.
+Plan	UNKNOWN STEP	2026-11-06T07:42:41.3932384Z 
+Plan	UNKNOWN STEP	2026-11-06T07:42:41.3933068Z Written by John Gilmore and Jay Fenlason.
+Plan	UNKNOWN STEP	2026-11-06T07:42:41.3939249Z Using curl to download mise
+Plan	UNKNOWN STEP	2026-11-06T07:42:41.3946365Z [command]/usr/bin/curl -fsSL https://github.com/jdx/mise/releases/download/v2026.11.1/mise-v2026.11.1-linux-x64.tar.zst --output /tmp/mise-action-a7RTC9/mise-v2026.11.1-linux-x64.tar.zst
+Plan	UNKNOWN STEP	2026-11-06T07:42:41.7084650Z [command]/usr/bin/tar --zstd -xf /tmp/mise-action-a7RTC9/mise-v2026.11.1-linux-x64.tar.zst -C /tmp/mise-action-a7RTC9
+Plan	UNKNOWN STEP	2026-11-06T07:42:41.9122945Z [command]/usr/bin/mv /tmp/mise-action-a7RTC9/mise/bin/mise /home/runner/.local/share/mise/bin/mise
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.0876182Z ##[group]Setting env vars
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.0876589Z Setting MISE_LOG_LEVEL=info
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.0878505Z Setting MISE_TRUSTED_CONFIG_PATHS=/home/runner/work/velnor-new/velnor-new
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.0878912Z Setting MISE_YES=1
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.0879174Z Adding /home/runner/.local/share/mise/shims to PATH
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.0880129Z ##[group]Running mise --version
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.0893313Z [command]/home/runner/.local/share/mise/bin/mise --version
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1017272Z 2026.11.1 linux-x64 (2026-11-04)
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1037388Z ##[endgroup]
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1040544Z ##[group]Running mise ls
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1051481Z [command]/home/runner/.local/share/mise/bin/mise ls
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1190466Z ##[endgroup]
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1548755Z ##[group]Run function_env_unset=(); function_env_scan_complete=0; while IFS= read -r -d '' env_entry; do case "$env_entry" in BASH_FUNC_*=*) function_env_unset+=(-u "${env_entry%%=*}");; VELNOR_VERIFIER_ENV_SCAN_COMPLETE) function_env_scan_complete=$((function_env_scan_complete + 1));; esac; done < <({ /usr/bin/env -0 && printf '%s\000' 'VELNOR_VERIFIER_ENV_SCAN_COMPLETE'; }); [ "$function_env_scan_complete" -eq 1 ] || exit 1; exec /usr/bin/env "${function_env_unset[@]}" -u BASH_ENV -u ENV -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR PATH=/usr/bin:/bin:/usr/sbin:/sbin /bin/bash --noprofile --norc -p -e -o pipefail -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1551971Z ^[[36;1mfunction_env_unset=(); function_env_scan_complete=0; while IFS= read -r -d '' env_entry; do case "$env_entry" in BASH_FUNC_*=*) function_env_unset+=(-u "${env_entry%%=*}");; VELNOR_VERIFIER_ENV_SCAN_COMPLETE) function_env_scan_complete=$((function_env_scan_complete + 1));; esac; done < <({ /usr/bin/env -0 && printf '%s\000' 'VELNOR_VERIFIER_ENV_SCAN_COMPLETE'; }); [ "$function_env_scan_complete" -eq 1 ] || exit 1; exec /usr/bin/env "${function_env_unset[@]}" -u BASH_ENV -u ENV -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR PATH=/usr/bin:/bin:/usr/sbin:/sbin /bin/bash --noprofile --norc -p -e -o pipefail -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1553406Z ^[[36;1m: "${GITHUB_ENV:?missing GITHUB_ENV}"^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1553583Z ^[[36;1m: "${RUNNER_TEMP:?missing RUNNER_TEMP}"^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1553774Z ^[[36;1mvelnor_dir="$RUNNER_TEMP/velnor-project-tool"^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1553953Z ^[[36;1mvelnor_db="$velnor_dir/declared"^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1554118Z ^[[36;1mvelnor_tab=$(printf '\''\t'\'')^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1554348Z ^[[36;1mvelnor_safe() { printf '\''%s'\'' "$1" | cut -c1-64 | tr -c '\''A-Za-z0-9._/@+-'\'' '\''?'\''; }^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1554612Z ^[[36;1mvelnor_fail() { printf '\''velnor: %s\n'\'' "$1" >&2; exit 1; }^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1554805Z ^[[36;1mvelnor_capture_physical_path() {^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1554956Z ^[[36;1m  [ "$#" -eq 2 ] || return 1^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1555118Z ^[[36;1m  (cd -P "$1" && pwd -P) > "$2" || return 1^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1555278Z ^[[36;1m  resolved_path=^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1555407Z ^[[36;1m  newline='\''^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1555525Z ^[[36;1m'\''^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1555653Z ^[[36;1m  while IFS= read -r path_line; do^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1555843Z ^[[36;1m    resolved_path=$resolved_path$path_line"$newline"^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1577066Z ^[[36;1m  done < "$2"^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1577226Z ^[[36;1m  case "$resolved_path" in^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1577420Z ^[[36;1m    *"$newline") resolved_path=${resolved_path%"$newline"} ;;^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1577614Z ^[[36;1m    *) return 1 ;;^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1577744Z ^[[36;1m  esac^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1578055Z ^[[36;1m  printf '\''%s\n'\'' "$resolved_path" > "$2" || return 1^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1579671Z ^[[36;1m}; velnor_bind_selected_mise() { [ "$#" -eq 1 ] || return 5; mise_data_dir=${MISE_DATA_DIR-}; if [ -z "$mise_data_dir" ]; then if [ -n "${XDG_DATA_HOME-}" ]; then mise_data_dir="$XDG_DATA_HOME/mise"; elif [ -n "${HOME-}" ]; then mise_data_dir="$HOME/.local/share/mise"; else return 1; fi; fi; case "$mise_data_dir" in /*) ;; *) mise_data_dir=./$mise_data_dir;; esac; case "$mise_data_dir" in /) ;; */) mise_data_dir=${mise_data_dir%/};; esac; [ -d "$mise_data_dir" ] || return 2; velnor_capture_physical_path "$mise_data_dir" "$1" || return 3; resolved_mise_data_dir=$resolved_path; [ -d "$resolved_mise_data_dir/bin" ] || return 4; velnor_capture_physical_path "$resolved_mise_data_dir/bin" "$1" || return 4; resolved_mise_bin_dir=$resolved_path; mise_bin="$resolved_mise_bin_dir/mise"; [ -f "$mise_bin" ] && [ -x "$mise_bin" ] && [ ! -L "$mise_bin" ] || return 4; MISE_DATA_DIR="$resolved_mise_data_dir"; export MISE_DATA_DIR; return 0; }^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1581200Z ^[[36;1mvelnor_mise() { "$mise_bin" --no-config --no-env --no-hooks "$@"; }^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1581404Z ^[[36;1mrm -rf "$velnor_dir"^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1581544Z ^[[36;1mmkdir -p "$velnor_dir"^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1581699Z ^[[36;1m: > "$velnor_db"^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1582061Z ^[[36;1mvelnor_bind_selected_mise "$velnor_dir/mise-data-dir" || { velnor_mise_status=$?; velnor_fail "Setup Mise data directory or binary is invalid (status $velnor_mise_status)"; }^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1582426Z ^[[36;1mvelnor_regular() {^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1582620Z ^[[36;1m  if [ -L "$1" ] || [ ! -f "$1" ]; then velnor_fail "$1 must be a regular file"; fi^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1582812Z ^[[36;1m}^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1582921Z ^[[36;1mvelnor_toml() {^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1583060Z ^[[36;1m  cp -- "$1" "$velnor_dir/src.toml"^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1583320Z ^[[36;1m  velnor_mise config get -f "$velnor_dir/src.toml" > /dev/null 2>&1 || velnor_fail "$1 is not valid TOML"^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1583566Z ^[[36;1m}^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1583674Z ^[[36;1mvelnor_tools() {^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1583801Z ^[[36;1m  velnor_toml "$1"^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1584029Z ^[[36;1m  if velnor_mise config get -f "$velnor_dir/src.toml" tools > "$velnor_dir/tools" 2>/dev/null; then^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1584292Z ^[[36;1m    awk -v file="$1" '\''^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1584436Z ^[[36;1mfunction unq(s) {^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1584638Z ^[[36;1m  if (s ~ /^"[^"\\]*"$/ || s ~ /^\047[^\047]*\047$/) { return substr(s, 2, length(s) - 2) }^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1584839Z ^[[36;1m  return s^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1584953Z ^[[36;1m}^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1585087Z ^[[36;1mBEGIN { OFS = "\t"; cur = ""; multi = "" }^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1585241Z ^[[36;1m{^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1585349Z ^[[36;1m  line = $0^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1585517Z ^[[36;1m  if (multi != "") { if (index(line, multi) > 0) { multi = "" } next }^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1585713Z ^[[36;1m  if (line ~ /^[ \t]*(#|$)/) { next }^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1585874Z ^[[36;1m  if (line ~ /^[ \t]*\[/) {^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1586010Z ^[[36;1m    hdr = line^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1586143Z ^[[36;1m    sub(/^[ \t]*\[+[ \t]*/, "", hdr)^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1586301Z ^[[36;1m    sub(/[ \t]*\]+[ \t]*$/, "", hdr)^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1586454Z ^[[36;1m    cur = unq(hdr)^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1586590Z ^[[36;1m    if (cur == "") { cur = "?" }^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1586730Z ^[[36;1m    next^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1586845Z ^[[36;1m  }^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1586958Z ^[[36;1m  eq = index(line, " = ")^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1587102Z ^[[36;1m  if (eq == 0) { next }^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1587252Z ^[[36;1m  k = unq(substr(line, 1, eq - 1))^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1587408Z ^[[36;1m  v = substr(line, eq + 3)^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1587561Z ^[[36;1m  if (v ~ /^"""/ || v ~ /^\047\047\047/) {^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1587717Z ^[[36;1m    d = substr(v, 1, 3)^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1588018Z ^[[36;1m    if (index(substr(v, 4), d) == 0) { multi = d }^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1588182Z ^[[36;1m    v = d^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1588297Z ^[[36;1m  } else {^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1588414Z ^[[36;1m    v = unq(v)^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1588533Z ^[[36;1m  }^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1588705Z ^[[36;1m  if (cur == "") { print file, k, v } else if (k == "version") { print file, cur, v }^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1588928Z ^[[36;1m}'\'' "$velnor_dir/tools" >> "$velnor_db"^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1589078Z ^[[36;1m  fi^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1589184Z ^[[36;1m}^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1589303Z ^[[36;1mvelnor_tool_versions() {^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1589558Z ^[[36;1m  awk -v file="$1" '\''^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1589695Z ^[[36;1mBEGIN { OFS = "\t" }^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1589916Z ^[[36;1m{^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1590026Z ^[[36;1m  sub(/[ \t]*#.*$/, "")^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1590164Z ^[[36;1m  if ($0 ~ /^[ \t]*$/) { next }^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1590302Z ^[[36;1m  line = $0^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1590421Z ^[[36;1m  sub(/^[ \t]+/, "", line)^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1590549Z ^[[36;1m  k = line^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1590670Z ^[[36;1m  sub(/[ \t].*$/, "", k)^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1590796Z ^[[36;1m  v = line^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1590967Z ^[[36;1m  if (v == k) { v = "" } else { sub(/^[^ \t]+[ \t]+/, "", v); sub(/[ \t]+$/, "", v) }^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1591160Z ^[[36;1m  print file, k, v^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1591296Z ^[[36;1m}'\'' "$1" >> "$velnor_db"^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1591431Z ^[[36;1m}^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1591547Z ^[[36;1mvelnor_toolchain() {^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1591703Z ^[[36;1m  if grep -q '\''^[[:space:]]*\['\'' "$1"; then^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1591865Z ^[[36;1m    velnor_toml "$1"^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1592123Z ^[[36;1m    if velnor_mise config get -f "$velnor_dir/src.toml" toolchain.channel > "$velnor_dir/channel" 2>/dev/null; then^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1592541Z ^[[36;1m      awk -v file="$1" '\''BEGIN { OFS = "\t" } NR == 1 { v = $0; next } { v = v " " $0 } END { print file, "rust", v }'\'' "$velnor_dir/channel" >> "$velnor_db"^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1592819Z ^[[36;1m    fi^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1592927Z ^[[36;1m  else^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1593102Z ^[[36;1m    printf '\''%s\t%s\t%s\n'\'' "$1" rust "$(tr -d '\'' \t\r\n'\'' < "$1")" >> "$velnor_db"^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1593300Z ^[[36;1m  fi^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1593409Z ^[[36;1m}^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1593523Z ^[[36;1mvelnor_exact() {^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1593654Z ^[[36;1m  case "$2" in^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1593920Z ^[[36;1m    '\'''\''|*[!0-9.]*|.*|*.|*..*|*.*.*.*|0[0-9]*|*.0[0-9]*) velnor_fail "$1 must declare one exact X.Y.Z version, not '\''$(velnor_safe "$2")'\''" ;;^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1594189Z ^[[36;1m    *.*.*) ;;^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1594401Z ^[[36;1m    *) velnor_fail "$1 must declare one exact X.Y.Z version, not '\''$(velnor_safe "$2")'\''" ;;^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1594624Z ^[[36;1m  esac^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1594730Z ^[[36;1m}^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1594837Z ^[[36;1mvelnor_tool() {^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1594961Z ^[[36;1m  name=$1^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1595074Z ^[[36;1m  shift^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1595185Z ^[[36;1m  resolved=^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1595302Z ^[[36;1m  origin=^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1595455Z ^[[36;1m  while IFS="$velnor_tab" read -r file key value; do^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1595626Z ^[[36;1m    matched=0^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1595750Z ^[[36;1m    for want in "$@"; do^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1595907Z ^[[36;1m      if [ "$key" = "$want" ]; then matched=1; fi^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1596067Z ^[[36;1m    done^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1596201Z ^[[36;1m    if [ "$matched" = 0 ]; then continue; fi^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1596371Z ^[[36;1m    velnor_exact "$file $key" "$value"^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1596562Z ^[[36;1m    if [ -n "$resolved" ] && [ "$resolved" != "$value" ]; then^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1596811Z ^[[36;1m      velnor_fail "$name: $file $key declares $value, $origin declares $resolved"^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1597018Z ^[[36;1m    fi^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1597160Z ^[[36;1m    if [ -z "$resolved" ]; then origin="$file $key"; fi^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1597334Z ^[[36;1m    resolved=$value^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1597469Z ^[[36;1m  done < "$velnor_db"^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1597729Z ^[[36;1m  [ -n "$resolved" ] || velnor_fail "$name: the project config no longer declares this tool; regenerate the workflow"^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1598169Z ^[[36;1m  printf '\''%s=%s\n'\'' "$name" "$resolved" >> "$GITHUB_ENV"^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1598500Z ^[[36;1m  if [ "$name" = VELNOR_TOOL_RUST ] && [ "${velnor_export_rustup-0}" = 1 ]; then^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1598768Z ^[[36;1m    printf '\''RUSTUP_TOOLCHAIN=%s\n'\'' "$resolved" >> "$GITHUB_ENV"^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1599060Z ^[[36;1m  fi^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1599276Z ^[[36;1m  printf '\''velnor: %s=%s\n'\'' "$name" "$resolved"^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1599439Z ^[[36;1m}^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1599624Z ^[[36;1m# shellcheck disable=SC2016 # awk program text: awk, not the shell, expands it^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1600341Z ^[[36;1mvelnor_lock_awk='\''BEGIN { q = "\""; e1 = "[[tools." key "]]"; e2 = "[[tools." q key q "]]"; e3 = "[tools." key "]"; e4 = "[tools." q key q "]"; s1 = "[tools." key "."; s2 = "[tools." q key q "."; p1 = s1 q "platforms." platform q "]"; p2 = s2 q "platforms." platform q "]"; p3 = s1 "platforms." platform "]"; p4 = s2 "platforms." platform "]"; want = "version = " q version q; inline = q "platforms." platform q " = {"; state = 0 }^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1601010Z ^[[36;1m{ line = $0; sub(/^[ \t]+/, "", line); sub(/[ \t\r]+$/, "", line) }^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1601211Z ^[[36;1mline == "" || substr(line, 1, 1) == "#" { next }^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1601382Z ^[[36;1msubstr(line, 1, 1) == "[" {^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1601596Z ^[[36;1m  matched = state == 2 || state == 3 || state == 4; other = state == 1 || state == 5^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1601847Z ^[[36;1m  if (line == e1 || line == e2 || line == e3 || line == e4) state = 1^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1602117Z ^[[36;1m  else if (line == p1 || line == p2 || line == p3 || line == p4) state = matched ? 3 : (other ? 5 : 0)^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1602416Z ^[[36;1m  else if (index(line, s1) == 1 || index(line, s2) == 1) state = matched ? 4 : (other ? 5 : 0)^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1602639Z ^[[36;1m  else state = 0^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1602770Z ^[[36;1m  next^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1602880Z ^[[36;1m}^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1603031Z ^[[36;1mstate == 1 && line == want { state = 2; next }^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1603317Z ^[[36;1mstate == 3 && (index(line, "checksum = ") == 1 || index(line, "url = ") == 1) { print lock " " key " " line; next }^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1603582Z ^[[36;1mstate == 2 && index(line, inline) == 1 {^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1603819Z ^[[36;1m  if (match(line, /checksum = "[^"]*"/)) print lock " " key " " substr(line, RSTART, RLENGTH)^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1604114Z ^[[36;1m  if (match(line, /[{ ,]url = "[^"]*"/)) print lock " " key " " substr(line, RSTART + 1, RLENGTH - 1)^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1604330Z ^[[36;1m}'\''^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1604444Z ^[[36;1mvelnor_lock() {^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1604568Z ^[[36;1m  name=$1^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1604693Z ^[[36;1m  shift^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1604826Z ^[[36;1m  case "${RUNNER_OS-}:${RUNNER_ARCH-}" in^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1605004Z ^[[36;1m    Linux:X64) platform=linux-x64 ;;^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1605174Z ^[[36;1m    Linux:ARM64) platform=linux-arm64 ;;^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1605340Z ^[[36;1m    macOS:X64) platform=macos-x64 ;;^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1605504Z ^[[36;1m    macOS:ARM64) platform=macos-arm64 ;;^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1605671Z ^[[36;1m    Windows:X64) platform=windows-x64 ;;^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1605845Z ^[[36;1m    Windows:ARM64) platform=windows-arm64 ;;^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1606118Z ^[[36;1m    *) velnor_fail "$name: unsupported runner platform '\''${RUNNER_OS-}:${RUNNER_ARCH-}'\''" ;;^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1606352Z ^[[36;1m  esac^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1606469Z ^[[36;1m  : > "$velnor_dir/lock"^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1606614Z ^[[36;1m  for lock in $velnor_locks; do^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1606796Z ^[[36;1m    if [ ! -e "$lock" ] && [ ! -L "$lock" ]; then continue; fi^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1606979Z ^[[36;1m    velnor_regular "$lock"^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1607130Z ^[[36;1m    for key in "$@"; do^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1607484Z ^[[36;1m      awk -v lock="$lock" -v key="$key" -v version="$resolved" -v platform="$platform" "$velnor_lock_awk" "$lock" >> "$velnor_dir/lock" || velnor_fail "$lock could not be read"^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1607949Z ^[[36;1m    done^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1608068Z ^[[36;1m  done^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1608185Z ^[[36;1m  lock_digest=unlocked^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1608335Z ^[[36;1m  if [ -s "$velnor_dir/lock" ]; then^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1608604Z ^[[36;1m    if command -v sha256sum >/dev/null 2>&1; then^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1608937Z ^[[36;1m      lock_digest=$(sha256sum < "$velnor_dir/lock") || velnor_fail "$name: lock digest failed"^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1609170Z ^[[36;1m    else^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1609374Z ^[[36;1m      lock_digest=$(shasum -a 256 < "$velnor_dir/lock") || velnor_fail "$name: lock digest failed"^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1609599Z ^[[36;1m    fi^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1609724Z ^[[36;1m    lock_digest=${lock_digest%% *}^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1609882Z ^[[36;1m    case "$lock_digest" in^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1610076Z ^[[36;1m      *[!0-9a-f]*) velnor_fail "$name: lock digest is not hexadecimal" ;;^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1610274Z ^[[36;1m    esac^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1610450Z ^[[36;1m    [ "${#lock_digest}" -eq 64 ] || velnor_fail "$name: lock digest is not SHA-256"^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1610657Z ^[[36;1m  fi^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1610810Z ^[[36;1m  printf '\''%s=%s\n'\'' "$name" "$lock_digest" >> "$GITHUB_ENV"^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1611025Z ^[[36;1m  printf '\''velnor: %s=%s\n'\'' "$name" "$lock_digest"^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1611192Z ^[[36;1m}^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1611323Z ^[[36;1mvelnor_locks='\''mise.lock .mise.lock'\''^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1611840Z ^[[36;1mfor velnor_file in mise.toml .mise.toml mise.*.toml .mise.*.toml .config/mise.toml .config/mise.*.toml .config/mise/config.toml .config/mise/config.*.toml .config/mise/conf.d/*.toml mise/config.toml mise/config.*.toml .mise/config.toml .mise/config.*.toml; do^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1612379Z ^[[36;1m  if [ ! -e "$velnor_file" ] && [ ! -L "$velnor_file" ]; then continue; fi^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1612594Z ^[[36;1m  velnor_regular "$velnor_file"^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1612746Z ^[[36;1m  velnor_tools "$velnor_file"^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1612885Z ^[[36;1mdone^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1613034Z ^[[36;1mif [ -e .tool-versions ] || [ -L .tool-versions ]; then^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1613222Z ^[[36;1m  velnor_regular .tool-versions^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1613381Z ^[[36;1m  velnor_tool_versions .tool-versions^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1613534Z ^[[36;1mfi^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1613699Z ^[[36;1mif [ -e rust-toolchain.toml ] || [ -L rust-toolchain.toml ]; then^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1613911Z ^[[36;1m  velnor_regular rust-toolchain.toml^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1614081Z ^[[36;1m  velnor_toolchain rust-toolchain.toml^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1614235Z ^[[36;1mfi^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1614381Z ^[[36;1mif [ -e rust-toolchain ] || [ -L rust-toolchain ]; then^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1614563Z ^[[36;1m  velnor_regular rust-toolchain^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1614722Z ^[[36;1m  velnor_toolchain rust-toolchain^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1614862Z ^[[36;1mfi^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1615129Z ^[[36;1mvelnor_tool VELNOR_TOOL_JACTIONLINT '\''jactionlint'\'' '\''github:jdx/jactionlint'\'' '\''packslip:github.com/jdx/jactionlint'\''^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1615600Z ^[[36;1mvelnor_tool VELNOR_TOOL_MR_BOXINGTON '\''mr-boxington'\'' '\''mbx'\'' '\''github:jdx/mr-boxington'\'' '\''packslip:github.com/jdx/mr-boxington'\''^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1616157Z ^[[36;1mvelnor_tool VELNOR_TOOL_NEXTEST '\''aqua:nextest-rs/nextest/cargo-nextest'\'' '\''cargo-nextest'\'' '\''cargo:cargo-nextest'\'' '\''github:nextest-rs/nextest'\'' '\''ubi:nextest-rs/nextest'\''^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1616581Z ^[[36;1mvelnor_tool VELNOR_TOOL_RUST '\''rust'\'' '\''core:rust'\''^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1616854Z ^[[36;1mvelnor_tool VELNOR_TOOL_SHELLCHECK '\''shellcheck'\'' '\''aqua:koalaman/shellcheck'\''^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1617089Z ^[[36;1mrm -rf "$velnor_dir"^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1617217Z ^[[36;1m'^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1620354Z shell: /bin/bash --noprofile --norc -p -e -o pipefail {0}
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1620544Z env:
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1620664Z   ACTIONS_ID_TOKEN_REQUEST_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1620807Z   ACTIONS_ID_TOKEN_REQUEST_URL: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1620947Z   ACTIONS_RUNTIME_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1621074Z   CARGO_REGISTRY_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1621196Z   GH_CONFIG_DIR: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1621305Z   GH_HOST: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1621523Z   GH_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1621626Z   GITHUB_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1621744Z   MISE_AUTO_INSTALL: false
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1621970Z   MISE_EXEC_AUTO_INSTALL: false
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1622104Z   MISE_GITHUB_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1622223Z   MISE_LOCKFILE: 0
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1622337Z   MISE_NO_CONFIG: 1
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1622451Z   MISE_NO_ENV: 1
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1622559Z   MISE_NO_HOOKS: 1
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1622667Z   MISE_QUIET: 1
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1622780Z   NODE_AUTH_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1622892Z   NPM_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1623011Z   RUSTUP_AUTO_INSTALL: 0
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1623219Z   VELNOR_ASSET_SHA256: db7480b83238f85a2e4472d26ba57ca4ee4d6822353cbdaad690b1a2b963b26f
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1623635Z   VELNOR_ASSET_URL: https://github.com/tailrocks/velnor-new/releases/download/v0.1.74/velnor-actions-0.1.74-x86_64-unknown-linux-gnu
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1623980Z   VELNOR_RELEASE_COMMIT: c622bfb187556afb8d3ff3ca917a719e4bb7f32a
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1624170Z   VELNOR_RUN_KEY_ATTEMPT: 1
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1624305Z   MISE_LOG_LEVEL: info
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1624481Z   MISE_TRUSTED_CONFIG_PATHS: /home/runner/work/velnor-new/velnor-new
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1624666Z   MISE_YES: 1
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1624790Z   PATH: /usr/bin:/bin:/usr/sbin:/sbin
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.1624932Z ##[endgroup]
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.2016956Z velnor: VELNOR_TOOL_JACTIONLINT=2.4.0
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.2019644Z velnor: VELNOR_TOOL_MR_BOXINGTON=1.29.2
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.2023008Z velnor: VELNOR_TOOL_NEXTEST=0.9.151
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.2025351Z velnor: VELNOR_TOOL_RUST=1.99.1
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.2027590Z velnor: VELNOR_TOOL_SHELLCHECK=0.11.0
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.2068485Z ##[group]Run sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; d="$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.74"&&mkdir -p "${d%/*}"&&s="/opt/velnor/seed/generator/${d##*/}"&&p="$VELNOR_ASSET_SHA256  "&&if [ -f "$s" ]&&echo "$p$s"|sha256sum -c -;then cp "$s" "$d";else curl -fsSL --connect-timeout 15 --max-time 120 --retry 5 --retry-all-errors --retry-max-time 180 --proto '\''=https'\'' --tlsv1.2 "$VELNOR_ASSET_URL" -o "$d"&&echo "$p$d"|sha256sum -c -;fi&&chmod +x "$d"'
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.2070276Z ^[[36;1msh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; d="$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.74"&&mkdir -p "${d%/*}"&&s="/opt/velnor/seed/generator/${d##*/}"&&p="$VELNOR_ASSET_SHA256  "&&if [ -f "$s" ]&&echo "$p$s"|sha256sum -c -;then cp "$s" "$d";else curl -fsSL --connect-timeout 15 --max-time 120 --retry 5 --retry-all-errors --retry-max-time 180 --proto '\''=https'\'' --tlsv1.2 "$VELNOR_ASSET_URL" -o "$d"&&echo "$p$d"|sha256sum -c -;fi&&chmod +x "$d"'^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.2112052Z shell: /usr/bin/bash -e {0}
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.2112188Z env:
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.2112309Z   ACTIONS_ID_TOKEN_REQUEST_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.2112465Z   ACTIONS_ID_TOKEN_REQUEST_URL: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.2112603Z   ACTIONS_RUNTIME_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.2112736Z   CARGO_REGISTRY_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.2112857Z   GH_CONFIG_DIR: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.2112968Z   GH_HOST: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.2113073Z   GH_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.2113181Z   GITHUB_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.2113297Z   MISE_AUTO_INSTALL: false
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.2113427Z   MISE_EXEC_AUTO_INSTALL: false
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.2113557Z   MISE_GITHUB_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.2113686Z   MISE_LOCKFILE: 0
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.2113796Z   MISE_NO_CONFIG: 1
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.2113912Z   MISE_NO_ENV: 1
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.2114029Z   MISE_NO_HOOKS: 1
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.2114139Z   MISE_QUIET: 1
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.2114245Z   NODE_AUTH_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.2114354Z   NPM_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.2114467Z   RUSTUP_AUTO_INSTALL: 0
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.2114680Z   VELNOR_ASSET_SHA256: db7480b83238f85a2e4472d26ba57ca4ee4d6822353cbdaad690b1a2b963b26f
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.2115224Z   VELNOR_ASSET_URL: https://github.com/tailrocks/velnor-new/releases/download/v0.1.74/velnor-actions-0.1.74-x86_64-unknown-linux-gnu
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.2115572Z   VELNOR_RELEASE_COMMIT: c622bfb187556afb8d3ff3ca917a719e4bb7f32a
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.2115769Z   VELNOR_RUN_KEY_ATTEMPT: 1
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.2115902Z   MISE_LOG_LEVEL: info
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.2116070Z   MISE_TRUSTED_CONFIG_PATHS: /home/runner/work/velnor-new/velnor-new
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.2116257Z   MISE_YES: 1
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.2116374Z   VELNOR_TOOL_JACTIONLINT: 2.4.0
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.2116513Z   VELNOR_TOOL_MR_BOXINGTON: 1.29.2
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.2116658Z   VELNOR_TOOL_NEXTEST: 0.9.151
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.2116790Z   VELNOR_TOOL_RUST: 1.99.1
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.2116917Z   VELNOR_TOOL_SHELLCHECK: 0.11.0
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.2117052Z ##[endgroup]
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.6667613Z /home/runner/work/_temp/velnor/bin/velnor-actions-0.1.74: OK
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.6754702Z ##[group]Run function_env_unset=(); function_env_scan_complete=0; while IFS= read -r -d '' env_entry; do case "$env_entry" in BASH_FUNC_*=*) function_env_unset+=(-u "${env_entry%%=*}");; VELNOR_VERIFIER_ENV_SCAN_COMPLETE) function_env_scan_complete=$((function_env_scan_complete + 1));; esac; done < <({ /usr/bin/env -0 && printf '%s\000' 'VELNOR_VERIFIER_ENV_SCAN_COMPLETE'; }); [ "$function_env_scan_complete" -eq 1 ] || exit 1; exec /usr/bin/env "${function_env_unset[@]}" -u BASH_ENV -u ENV -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR PATH=/usr/bin:/bin:/usr/sbin:/sbin /bin/bash --noprofile --norc -p -e -o pipefail -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; PATH=/usr/bin:/bin:/usr/sbin:/sbin; export PATH; ev() { /usr/bin/env -i LC_ALL=C ${PATH+PATH="$PATH"} ${HOME+HOME="$HOME"} ${RUNNER_TEMP+RUNNER_TEMP="$RUNNER_TEMP"} ${RUSTUP_HOME+RUSTUP_HOME="$RUSTUP_HOME"} ${MISE_RUSTUP_HOME+MISE_RUSTUP_HOME="$MISE_RUSTUP_HOME"} ${CARGO_HOME+CARGO_HOME="$CARGO_HOME"} '"${VELNOR_TOOL_RUST+VELNOR_TOOL_RUST="$VELNOR_TOOL_RUST"}"' ${HTTPS_PROXY+HTTPS_PROXY="$HTTPS_PROXY"} ${https_proxy+https_proxy="$https_proxy"} ${HTTP_PROXY+HTTP_PROXY="$HTTP_PROXY"} ${http_proxy+http_proxy="$http_proxy"} ${NO_PROXY+NO_PROXY="$NO_PROXY"} ${no_proxy+no_proxy="$no_proxy"} ${ALL_PROXY+ALL_PROXY="$ALL_PROXY"} ${all_proxy+all_proxy="$all_proxy"} ${SSL_CERT_FILE+SSL_CERT_FILE="$SSL_CERT_FILE"} ${SSL_CERT_DIR+SSL_CERT_DIR="$SSL_CERT_DIR"} ${CURL_CA_BUNDLE+CURL_CA_BUNDLE="$CURL_CA_BUNDLE"} "$@"; }; v="'"${VELNOR_TOOL_RUST}"'"; fail() { printf "%s\n" "::error::$1" >&2; exit 1; }; case "$v" in 1.85.0) want=009e8b5ff43f12bf644b5e5b9fd89f96453072062a450c623882f64e85405da5;; 1.85.1) want=1e7dae690cd12e27405a97e64704917489a27c650201bf47780a936055d67909;; 1.86.0) want=5ffe190473b7896d1f39e9d0ddfa04bec72000f25897669bb296814e10ceba42;; 1.87.0) want=2949b5ea91e3f9c45e75ff2fc6cfc7776616c693ab599ed43abc2120b7522415;; 1.88.0) want=431b7c5c0b9a511d8e31d29b378bbc74124e8521f14beb92d3a5a5f7e7e55449;; 1.89.0) want=fbd1662e100e7b305908ece23b441cb7534eadfa6336c5f173ff08d1cec174a1;; 1.90.0) want=489c19f20d331765ab2835661eb546de90f6446a107a8db83045e7371e45cae2;; 1.91.0) want=d9e59cdf15532aa839c0a4871b0b755e833f914042eb2dcc59f2a0ef8667f9f6;; 1.91.1) want=483bb8b271168ee654e3be4f111beefa23b9d0c8b7f4a563a8278978dbe982e5;; 1.92.0) want=b2a49624353173ecdacf59c158c00929300606e1963f6e4609fb483a508402d0;; 1.93.0) want=beb6ba4e41c84e9c11c80e6804a007497d0c8ba0810cd403fabc8f4a9c45b1f8;; 1.93.1) want=4812a3c610bacc74eed12c89c312e540722dccccd867bd55096402da13b3a516;; 1.94.0) want=aaa177def36e01d539bee6bde95295230b9ce378f81057845db8d0ebe97898ee;; 1.94.1) want=cc2f04dfc883549d683c8cc2a9393f523a3dfbd931f5d5eaef00303cca64a60d;; 1.95.0) want=821ff14e4c4a1cbe1e8915f35aff0a3fbbdf8d293ad48ab8f31e3b0440c581f9;; 1.96.0) want=9af50610e1d82699f78a40b985c9277ae1a2c5a0bec86ae430cfe58832038285;; 1.96.1) want=87eb76c53073e72b766083bed5530820694253b832a762d8385bda5759f03975;; 1.97.0) want=3804d2666f7c12ce64205baa69b6be52f910b45b158091013264beb7aa1de7f5;; 1.97.1) want=03569b1886ceb5c05276b50c8431ab111de944cd6140fe1fa7d821dd8e0f29cf;; 1.98.0) want=3f7d139b73bbbd0004ef6e58b430831c68cdad2b1f64ee2eb35d54c09199489a;; 1.98.1) want=a7c8774a5fd8441c997d94c029776cbc5eb111e9d72ab5d256fa69866644347e;; 1.99.0) want=ce6dddc886364f8d786514771212cebe9b731ba82d6b859951c6b0ccc516b6a2;; 1.99.1) want=fb152be80975c194aa5fc684b2aec3a6e14e2b855efe2faa4e5f8ae6e590f463;; *) fail "rust_channel_manifest_not_catalogued: Rust $v has no channel-manifest digest in this Velnor catalog; upgrade velnor-actions or pin a catalogued Rust";; esac; rh="${RUSTUP_HOME:-${MISE_RUSTUP_HOME:-$HOME/.rustup}}"; r="$RUNNER_TEMP/velnor/rust-verified"; d="$RUNNER_TEMP/velnor/rust-manifest"; ev rm -rf "$d"; ev rm -rf "$r"; ev mkdir -p "$d" "$r"; ev rm -rf "${CARGO_HOME:?}/bin"; real() { if [ -e "$1" ] || [ -L "$1" ]; then { [ -d "$1" ] && [ ! -L "$1" ]; } || fail "rust_toolchain_path_unexpected: $1 is not a real directory"; fi; }; real "$rh/toolchains"; pm() { printf "%s\n" "::notice::pin_mismatch: $1"; }; pinned=0; case "$v" in 1.99.1) pinned=1;; esac; [ "$pinned" = 0 ] || { set --; for e in "$rh/toolchains"/* "$rh/toolchains"/.[!.]* "$rh/toolchains"/..?*; do if [ -e "$e" ] || [ -L "$e" ]; then set -- "$@" "$e"; fi; done; if [ "$#" -eq 1 ] && case "$1" in "$rh/toolchains/$v-x86_64-unknown-linux-gnu") false;; "$rh/toolchains/$v-"*-*-*) true;; *) false;; esac; then pinned=0; else [ "$#" -eq 0 ] || { [ "$#" -eq 1 ] && [ "$1" = "$rh/toolchains/$v-x86_64-unknown-linux-gnu" ]; } || { pm toolchains_differ; fail "rust_tree_digest_mismatch: $rh/toolchains holds an entry other than the pinned Rust $v-x86_64-unknown-linux-gnu toolchain; the pin_mismatch notice above names the check that failed"; }; fi; }; set -- "$rh/toolchains/$v"-*; if [ "$#" -eq 1 ] && [ ! -e "$1" ] && [ ! -L "$1" ]; then printf "%s\n" "velnor: no restored Rust $v toolchain; the install verifies the fresh one"; exit 0; fi; { [ "$#" -eq 1 ] && [ -d "$1" ] && [ ! -L "$1" ]; } || fail "rust_toolchain_missing: $rh/toolchains holds no single real Rust $v toolchain directory"; t="$1"; real "$t/lib"; real "$t/lib/rustlib"; m="$t/lib/rustlib/multirust-channel-manifest.toml"; if command -v sha256sum >/dev/null 2>&1; then hb="sha256sum"; else hb="shasum -a 256"; fi; h="ev $hb"; test -f "$t/lib/rustlib/components" || fail "rust_installed_manifest_missing: $t/lib/rustlib/components"; ev find "$t" ! -type f ! -type d > "$d/special"; test ! -s "$d/special" || fail "rust_toolchain_file_unexpected: $t holds a symlink or a special file"; get() { ev curl -q --proto "=https" --proto-redir "=https" --tlsv1.2 --fail --silent --show-error --location --retry 3 --retry-all-errors --connect-timeout 20 --max-time 120 --retry-max-time 180 --output "$1" "$2"; }; put() { [ ! -d "$2" ] && ev rm -f "$2.new" && ev cp "$1" "$2.new" && ev chmod 0644 "$2.new" && ev mv -f "$2.new" "$2" || { ev rm -f "$2.new"; return 1; }; }; channel_ok() { printf "%s  %s\n" "$want" "$d/channel.toml" > "$d/channel.sha256"; $h -c "$d/channel.sha256" >/dev/null 2>&1; }; verified_channel() { s="$r/channel-rust-$v.toml"; if [ -f "$s" ] && [ ! -L "$s" ] && ev cp "$s" "$d/channel.toml" && channel_ok; then return 0; fi; get "$d/channel.toml" "https://static.rust-lang.org/dist/channel-rust-$v.toml"; channel_ok || fail "rust_channel_manifest_digest_mismatch: channel-rust-$v.toml is not SHA-256 $want"; put "$d/channel.toml" "$s" || :; }; install_manifest() { [ ! -d "$m" ] || fail "rust_toolchain_file_unexpected: $m is a directory"; verified_channel; put "$d/channel.toml" "$m" || fail "rust_installed_manifest_unwritable: $m"; }; pin_check() ( ev sort "$t/lib/rustlib/components" | $h > "$d/pin.cs"; read -r cs rest < "$d/pin.cs" || cs=unreadable; [ "$pinned" = 1 ] || { pm "no_pin components=$cs"; return 1; }; pin=""; case "$v:$cs" in 1.99.1:e3808a4c78c316b41a42ed88010c6bbf24ae24a348a5a22b8e3bc62328db1981) pin=f9eeeb78948257bc3c861d018ecf4d22f16e38fbc8ba4a97c1126a1a1c45bb25;; 1.99.1:a13769c18a7a74ea492ab633b644d6c238ae81e536d30d3f168eddb57e86000e) pin=56452430d3faa33fd43083ef5dc0d3fb5da905f35515e6f174e46ecd3a607dea;; *) ;; esac; [ -n "$pin" ] || { pm "components_not_pinned components=$cs"; return 2; }; (cd "$t" && ev find . -name "*[!A-Za-z0-9._+-]*") > "$d/pin.unsafe" || { pm tree_unreadable; return 2; }; [ ! -s "$d/pin.unsafe" ] || { pm unsafe_name; return 2; }; (cd "$t" && ev find . -type f -exec $hb {} +) > "$d/pin.sums" || { pm tree_unreadable; return 2; }; (cd "$t" && ev find . -printf "%y %#m %s %p\n") > "$d/pin.modes" || { pm tree_unreadable; return 2; }; ev awk -v cs="$cs" -v cap=4194304 '\''NR == FNR { dg[$2] = $1; next } { k = $1; mode = $2; p = $4; if (k != "f" && k != "d") exit 2; r = (p == ".") ? "." : substr(p, 3); if (k == "d") { print "d", mode, "-", r; next } if (r == "lib/rustlib/multirust-config.toml") { if ($3 + 0 > cap + 0) exit 3; print "b", mode, "-", r; next } if (r == "lib/rustlib/components") { print "f", mode, cs, r; next } if (!(p in dg)) exit 4; print "f", mode, dg[p], r }'\'' "$d/pin.sums" "$d/pin.modes" > "$d/pin.list" || { pm listing_failed; return 2; }; ev sort -k4,4 "$d/pin.list" | ev tr "\n" "\000" | $h > "$d/pin.got"; read -r got rest < "$d/pin.got" || { pm tree_unreadable; return 2; }; [ "$got" = "$pin" ] || { pm tree_differs; return 2; } ); rc=0; pin_check || rc=$?; case "$rc" in 0) put "$m" "$r/channel-rust-$v.toml" || :; printf "%s\n" "velnor: Rust $v toolchain matches pinned tree digest"; exit 0;; 1) ;; *) fail "rust_tree_digest_mismatch: $t differs from the pinned tree digest of Rust $v; the pin_mismatch notice above names the check that failed" ;; esac; install_manifest; ev awk -v comps="$t/lib/rustlib/components" '\''BEGIN { while ((getline line < comps) > 0) if (line != "") want[line] = 1 } /^\[/ { key = ""; if ($0 ~ /^\[pkg\.[^]]*\.target\.[^]]*\]$/) { s = substr($0, 6, length($0) - 6); p = index(s, ".target."); k = substr(s, 1, p - 1) "-" substr(s, p + 8); if (k in want) key = k } next } key != "" && $1 == "xz_url" { u = $3; gsub(/"/, "", u); url[key] = u } key != "" && $1 == "xz_hash" { h = $3; gsub(/"/, "", h); hash[key] = h } END { for (k in want) { if (!(k in url) || !(k in hash)) exit 1; print k, url[k], hash[k] } }'\'' "$d/channel.toml" > "$d/tarballs" || fail "rust_component_not_in_manifest: $t lists a component the verified channel-rust-$v.toml does not ship"; test -s "$d/tarballs" || fail "rust_installed_manifest_empty: $t lists no component"; : > "$d/expected"; while read -r comp url hash; do case "$comp" in *[!A-Za-z0-9._-]*|"") fail "rust_component_name_invalid: $comp";; esac; case "$url" in https://static.rust-lang.org/dist/*.tar.xz) ;; *) fail "rust_component_url_untrusted: $url";; esac; if [ ! -f "$r/$comp.$hash" ]; then get "$d/c.tar.xz" "$url"; printf "%s  %s\n" "$hash" "$d/c.tar.xz" > "$d/c.sha256"; $h -c "$d/c.sha256" >/dev/null || fail "rust_component_tarball_digest_mismatch: $comp"; ev rm -rf "$d/x"; ev mkdir "$d/x"; ev tar -xJf "$d/c.tar.xz" -C "$d/x" --strip-components=1; ev rm -f "$d/c.tar.xz"; : > "$d/c.sums"; while read -r sub; do case "$sub" in *[!A-Za-z0-9._-]*|""|.|..) fail "rust_component_name_invalid: $sub";; esac; (cd "$d/x/$sub" && ev find . -type f ! -path ./manifest.in -exec $hb {} +) >> "$d/c.sums"; done < "$d/x/components"; ev mv "$d/c.sums" "$r/$comp.$hash"; fi; ev cat "$r/$comp.$hash" >> "$d/expected"; done < "$d/tarballs"; (cd "$t" && ev find . -type f ! -path ./lib/rustlib/components ! \( -path "./lib/rustlib/manifest-*" ! -path "./lib/rustlib/manifest-*/*" \) ! -path ./lib/rustlib/multirust-channel-manifest.toml ! -path ./lib/rustlib/multirust-config.toml ! -path ./lib/rustlib/rust-installer-version -exec $hb {} +) > "$d/installed"; ev sort -k2 "$d/expected" > "$d/expected.sorted"; ev sort -k2 "$d/installed" > "$d/installed.sorted"; if ! ev cmp -s "$d/expected.sorted" "$d/installed.sorted"; then ev diff "$d/expected.sorted" "$d/installed.sorted" | ev head -n 20 >&2 || true; fail "rust_toolchain_bytes_mismatch: $t differs from the component tarballs of the verified channel-rust-$v.toml"; fi; printf "%s\n" "velnor: Rust $v toolchain verified file by file against the component tarballs of channel-rust-$v.toml (SHA-256 $want)"'
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.6789198Z ^[[36;1mfunction_env_unset=(); function_env_scan_complete=0; while IFS= read -r -d '' env_entry; do case "$env_entry" in BASH_FUNC_*=*) function_env_unset+=(-u "${env_entry%%=*}");; VELNOR_VERIFIER_ENV_SCAN_COMPLETE) function_env_scan_complete=$((function_env_scan_complete + 1));; esac; done < <({ /usr/bin/env -0 && printf '%s\000' 'VELNOR_VERIFIER_ENV_SCAN_COMPLETE'; }); [ "$function_env_scan_complete" -eq 1 ] || exit 1; exec /usr/bin/env "${function_env_unset[@]}" -u BASH_ENV -u ENV -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR PATH=/usr/bin:/bin:/usr/sbin:/sbin /bin/bash --noprofile --norc -p -e -o pipefail -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; PATH=/usr/bin:/bin:/usr/sbin:/sbin; export PATH; ev() { /usr/bin/env -i LC_ALL=C ${PATH+PATH="$PATH"} ${HOME+HOME="$HOME"} ${RUNNER_TEMP+RUNNER_TEMP="$RUNNER_TEMP"} ${RUSTUP_HOME+RUSTUP_HOME="$RUSTUP_HOME"} ${MISE_RUSTUP_HOME+MISE_RUSTUP_HOME="$MISE_RUSTUP_HOME"} ${CARGO_HOME+CARGO_HOME="$CARGO_HOME"} '"${VELNOR_TOOL_RUST+VELNOR_TOOL_RUST="$VELNOR_TOOL_RUST"}"' ${HTTPS_PROXY+HTTPS_PROXY="$HTTPS_PROXY"} ${https_proxy+https_proxy="$https_proxy"} ${HTTP_PROXY+HTTP_PROXY="$HTTP_PROXY"} ${http_proxy+http_proxy="$http_proxy"} ${NO_PROXY+NO_PROXY="$NO_PROXY"} ${no_proxy+no_proxy="$no_proxy"} ${ALL_PROXY+ALL_PROXY="$ALL_PROXY"} ${all_proxy+all_proxy="$all_proxy"} ${SSL_CERT_FILE+SSL_CERT_FILE="$SSL_CERT_FILE"} ${SSL_CERT_DIR+SSL_CERT_DIR="$SSL_CERT_DIR"} ${CURL_CA_BUNDLE+CURL_CA_BUNDLE="$CURL_CA_BUNDLE"} "$@"; }; v="'"${VELNOR_TOOL_RUST}"'"; fail() { printf "%s\n" "::error::$1" >&2; exit 1; }; case "$v" in 1.85.0) want=009e8b5ff43f12bf644b5e5b9fd89f96453072062a450c623882f64e85405da5;; 1.85.1) want=1e7dae690cd12e27405a97e64704917489a27c650201bf47780a936055d67909;; 1.86.0) want=5ffe190473b7896d1f39e9d0ddfa04bec72000f25897669bb296814e10ceba42;; 1.87.0) want=2949b5ea91e3f9c45e75ff2fc6cfc7776616c693ab599ed43abc2120b7522415;; 1.88.0) want=431b7c5c0b9a511d8e31d29b378bbc74124e8521f14beb92d3a5a5f7e7e55449;; 1.89.0) want=fbd1662e100e7b305908ece23b441cb7534eadfa6336c5f173ff08d1cec174a1;; 1.90.0) want=489c19f20d331765ab2835661eb546de90f6446a107a8db83045e7371e45cae2;; 1.91.0) want=d9e59cdf15532aa839c0a4871b0b755e833f914042eb2dcc59f2a0ef8667f9f6;; 1.91.1) want=483bb8b271168ee654e3be4f111beefa23b9d0c8b7f4a563a8278978dbe982e5;; 1.92.0) want=b2a49624353173ecdacf59c158c00929300606e1963f6e4609fb483a508402d0;; 1.93.0) want=beb6ba4e41c84e9c11c80e6804a007497d0c8ba0810cd403fabc8f4a9c45b1f8;; 1.93.1) want=4812a3c610bacc74eed12c89c312e540722dccccd867bd55096402da13b3a516;; 1.94.0) want=aaa177def36e01d539bee6bde95295230b9ce378f81057845db8d0ebe97898ee;; 1.94.1) want=cc2f04dfc883549d683c8cc2a9393f523a3dfbd931f5d5eaef00303cca64a60d;; 1.95.0) want=821ff14e4c4a1cbe1e8915f35aff0a3fbbdf8d293ad48ab8f31e3b0440c581f9;; 1.96.0) want=9af50610e1d82699f78a40b985c9277ae1a2c5a0bec86ae430cfe58832038285;; 1.96.1) want=87eb76c53073e72b766083bed5530820694253b832a762d8385bda5759f03975;; 1.97.0) want=3804d2666f7c12ce64205baa69b6be52f910b45b158091013264beb7aa1de7f5;; 1.97.1) want=03569b1886ceb5c05276b50c8431ab111de944cd6140fe1fa7d821dd8e0f29cf;; 1.98.0) want=3f7d139b73bbbd0004ef6e58b430831c68cdad2b1f64ee2eb35d54c09199489a;; 1.98.1) want=a7c8774a5fd8441c997d94c029776cbc5eb111e9d72ab5d256fa69866644347e;; 1.99.0) want=ce6dddc886364f8d786514771212cebe9b731ba82d6b859951c6b0ccc516b6a2;; 1.99.1) want=fb152be80975c194aa5fc684b2aec3a6e14e2b855efe2faa4e5f8ae6e590f463;; *) fail "rust_channel_manifest_not_catalogued: Rust $v has no channel-manifest digest in this Velnor catalog; upgrade velnor-actions or pin a catalogued Rust";; esac; rh="${RUSTUP_HOME:-${MISE_RUSTUP_HOME:-$HOME/.rustup}}"; r="$RUNNER_TEMP/velnor/rust-verified"; d="$RUNNER_TEMP/velnor/rust-manifest"; ev rm -rf "$d"; ev rm -rf "$r"; ev mkdir -p "$d" "$r"; ev rm -rf "${CARGO_HOME:?}/bin"; real() { if [ -e "$1" ] || [ -L "$1" ]; then { [ -d "$1" ] && [ ! -L "$1" ]; } || fail "rust_toolchain_path_unexpected: $1 is not a real directory"; fi; }; real "$rh/toolchains"; pm() { printf "%s\n" "::notice::pin_mismatch: $1"; }; pinned=0; case "$v" in 1.99.1) pinned=1;; esac; [ "$pinned" = 0 ] || { set --; for e in "$rh/toolchains"/* "$rh/toolchains"/.[!.]* "$rh/toolchains"/..?*; do if [ -e "$e" ] || [ -L "$e" ]; then set -- "$@" "$e"; fi; done; if [ "$#" -eq 1 ] && case "$1" in "$rh/toolchains/$v-x86_64-unknown-linux-gnu") false;; "$rh/toolchains/$v-"*-*-*) true;; *) false;; esac; then pinned=0; else [ "$#" -eq 0 ] || { [ "$#" -eq 1 ] && [ "$1" = "$rh/toolchains/$v-x86_64-unknown-linux-gnu" ]; } || { pm toolchains_differ; fail "rust_tree_digest_mismatch: $rh/toolchains holds an entry other than the pinned Rust $v-x86_64-unknown-linux-gnu toolchain; the pin_mismatch notice above names the check that failed"; }; fi; }; set -- "$rh/toolchains/$v"-*; if [ "$#" -eq 1 ] && [ ! -e "$1" ] && [ ! -L "$1" ]; then printf "%s\n" "velnor: no restored Rust $v toolchain; the install verifies the fresh one"; exit 0; fi; { [ "$#" -eq 1 ] && [ -d "$1" ] && [ ! -L "$1" ]; } || fail "rust_toolchain_missing: $rh/toolchains holds no single real Rust $v toolchain directory"; t="$1"; real "$t/lib"; real "$t/lib/rustlib"; m="$t/lib/rustlib/multirust-channel-manifest.toml"; if command -v sha256sum >/dev/null 2>&1; then hb="sha256sum"; else hb="shasum -a 256"; fi; h="ev $hb"; test -f "$t/lib/rustlib/components" || fail "rust_installed_manifest_missing: $t/lib/rustlib/components"; ev find "$t" ! -type f ! -type d > "$d/special"; test ! -s "$d/special" || fail "rust_toolchain_file_unexpected: $t holds a symlink or a special file"; get() { ev curl -q --proto "=https" --proto-redir "=https" --tlsv1.2 --fail --silent --show-error --location --retry 3 --retry-all-errors --connect-timeout 20 --max-time 120 --retry-max-time 180 --output "$1" "$2"; }; put() { [ ! -d "$2" ] && ev rm -f "$2.new" && ev cp "$1" "$2.new" && ev chmod 0644 "$2.new" && ev mv -f "$2.new" "$2" || { ev rm -f "$2.new"; return 1; }; }; channel_ok() { printf "%s  %s\n" "$want" "$d/channel.toml" > "$d/channel.sha256"; $h -c "$d/channel.sha256" >/dev/null 2>&1; }; verified_channel() { s="$r/channel-rust-$v.toml"; if [ -f "$s" ] && [ ! -L "$s" ] && ev cp "$s" "$d/channel.toml" && channel_ok; then return 0; fi; get "$d/channel.toml" "https://static.rust-lang.org/dist/channel-rust-$v.toml"; channel_ok || fail "rust_channel_manifest_digest_mismatch: channel-rust-$v.toml is not SHA-256 $want"; put "$d/channel.toml" "$s" || :; }; install_manifest() { [ ! -d "$m" ] || fail "rust_toolchain_file_unexpected: $m is a directory"; verified_channel; put "$d/channel.toml" "$m" || fail "rust_installed_manifest_unwritable: $m"; }; pin_check() ( ev sort "$t/lib/rustlib/components" | $h > "$d/pin.cs"; read -r cs rest < "$d/pin.cs" || cs=unreadable; [ "$pinned" = 1 ] || { pm "no_pin components=$cs"; return 1; }; pin=""; case "$v:$cs" in 1.99.1:e3808a4c78c316b41a42ed88010c6bbf24ae24a348a5a22b8e3bc62328db1981) pin=f9eeeb78948257bc3c861d018ecf4d22f16e38fbc8ba4a97c1126a1a1c45bb25;; 1.99.1:a13769c18a7a74ea492ab633b644d6c238ae81e536d30d3f168eddb57e86000e) pin=56452430d3faa33fd43083ef5dc0d3fb5da905f35515e6f174e46ecd3a607dea;; *) ;; esac; [ -n "$pin" ] || { pm "components_not_pinned components=$cs"; return 2; }; (cd "$t" && ev find . -name "*[!A-Za-z0-9._+-]*") > "$d/pin.unsafe" || { pm tree_unreadable; return 2; }; [ ! -s "$d/pin.unsafe" ] || { pm unsafe_name; return 2; }; (cd "$t" && ev find . -type f -exec $hb {} +) > "$d/pin.sums" || { pm tree_unreadable; return 2; }; (cd "$t" && ev find . -printf "%y %#m %s %p\n") > "$d/pin.modes" || { pm tree_unreadable; return 2; }; ev awk -v cs="$cs" -v cap=4194304 '\''NR == FNR { dg[$2] = $1; next } { k = $1; mode = $2; p = $4; if (k != "f" && k != "d") exit 2; r = (p == ".") ? "." : substr(p, 3); if (k == "d") { print "d", mode, "-", r; next } if (r == "lib/rustlib/multirust-config.toml") { if ($3 + 0 > cap + 0) exit 3; print "b", mode, "-", r; next } if (r == "lib/rustlib/components") { print "f", mode, cs, r; next } if (!(p in dg)) exit 4; print "f", mode, dg[p], r }'\'' "$d/pin.sums" "$d/pin.modes" > "$d/pin.list" || { pm listing_failed; return 2; }; ev sort -k4,4 "$d/pin.list" | ev tr "\n" "\000" | $h > "$d/pin.got"; read -r got rest < "$d/pin.got" || { pm tree_unreadable; return 2; }; [ "$got" = "$pin" ] || { pm tree_differs; return 2; } ); rc=0; pin_check || rc=$?; case "$rc" in 0) put "$m" "$r/channel-rust-$v.toml" || :; printf "%s\n" "velnor: Rust $v toolchain matches pinned tree digest"; exit 0;; 1) ;; *) fail "rust_tree_digest_mismatch: $t differs from the pinned tree digest of Rust $v; the pin_mismatch notice above names the check that failed" ;; esac; install_manifest; ev awk -v comps="$t/lib/rustlib/components" '\''BEGIN { while ((getline line < comps) > 0) if (line != "") want[line] = 1 } /^\[/ { key = ""; if ($0 ~ /^\[pkg\.[^]]*\.target\.[^]]*\]$/) { s = substr($0, 6, length($0) - 6); p = index(s, ".target."); k = substr(s, 1, p - 1) "-" substr(s, p + 8); if (k in want) key = k } next } key != "" && $1 == "xz_url" { u = $3; gsub(/"/, "", u); url[key] = u } key != "" && $1 == "xz_hash" { h = $3; gsub(/"/, "", h); hash[key] = h } END { for (k in want) { if (!(k in url) || !(k in hash)) exit 1; print k, url[k], hash[k] } }'\'' "$d/channel.toml" > "$d/tarballs" || fail "rust_component_not_in_manifest: $t lists a component the verified channel-rust-$v.toml does not ship"; test -s "$d/tarballs" || fail "rust_installed_manifest_empty: $t lists no component"; : > "$d/expected"; while read -r comp url hash; do case "$comp" in *[!A-Za-z0-9._-]*|"") fail "rust_component_name_invalid: $comp";; esac; case "$url" in https://static.rust-lang.org/dist/*.tar.xz) ;; *) fail "rust_component_url_untrusted: $url";; esac; if [ ! -f "$r/$comp.$hash" ]; then get "$d/c.tar.xz" "$url"; printf "%s  %s\n" "$hash" "$d/c.tar.xz" > "$d/c.sha256"; $h -c "$d/c.sha256" >/dev/null || fail "rust_component_tarball_digest_mismatch: $comp"; ev rm -rf "$d/x"; ev mkdir "$d/x"; ev tar -xJf "$d/c.tar.xz" -C "$d/x" --strip-components=1; ev rm -f "$d/c.tar.xz"; : > "$d/c.sums"; while read -r sub; do case "$sub" in *[!A-Za-z0-9._-]*|""|.|..) fail "rust_component_name_invalid: $sub";; esac; (cd "$d/x/$sub" && ev find . -type f ! -path ./manifest.in -exec $hb {} +) >> "$d/c.sums"; done < "$d/x/components"; ev mv "$d/c.sums" "$r/$comp.$hash"; fi; ev cat "$r/$comp.$hash" >> "$d/expected"; done < "$d/tarballs"; (cd "$t" && ev find . -type f ! -path ./lib/rustlib/components ! \( -path "./lib/rustlib/manifest-*" ! -path "./lib/rustlib/manifest-*/*" \) ! -path ./lib/rustlib/multirust-channel-manifest.toml ! -path ./lib/rustlib/multirust-config.toml ! -path ./lib/rustlib/rust-installer-version -exec $hb {} +) > "$d/installed"; ev sort -k2 "$d/expected" > "$d/expected.sorted"; ev sort -k2 "$d/installed" > "$d/installed.sorted"; if ! ev cmp -s "$d/expected.sorted" "$d/installed.sorted"; then ev diff "$d/expected.sorted" "$d/installed.sorted" | ev head -n 20 >&2 || true; fail "rust_toolchain_bytes_mismatch: $t differs from the component tarballs of the verified channel-rust-$v.toml"; fi; printf "%s\n" "velnor: Rust $v toolchain verified file by file against the component tarballs of channel-rust-$v.toml (SHA-256 $want)"'^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.6806622Z shell: /bin/bash --noprofile --norc -p -e -o pipefail {0}
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.6806802Z env:
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.6806923Z   ACTIONS_ID_TOKEN_REQUEST_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.6807072Z   ACTIONS_ID_TOKEN_REQUEST_URL: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.6807211Z   ACTIONS_RUNTIME_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.6807345Z   CARGO_REGISTRY_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.6807490Z   GH_CONFIG_DIR: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.6807603Z   GH_HOST: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.6807710Z   GH_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.6807822Z   GITHUB_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.6808078Z   MISE_AUTO_INSTALL: false
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.6808212Z   MISE_EXEC_AUTO_INSTALL: false
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.6808352Z   MISE_GITHUB_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.6808473Z   MISE_LOCKFILE: 0
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.6808681Z   MISE_NO_CONFIG: 1
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.6808797Z   MISE_NO_ENV: 1
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.6808907Z   MISE_NO_HOOKS: 1
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.6809018Z   MISE_QUIET: 1
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.6809132Z   NODE_AUTH_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.6809244Z   NPM_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.6809367Z   RUSTUP_AUTO_INSTALL: 0
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.6809581Z   VELNOR_ASSET_SHA256: db7480b83238f85a2e4472d26ba57ca4ee4d6822353cbdaad690b1a2b963b26f
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.6809987Z   VELNOR_ASSET_URL: https://github.com/tailrocks/velnor-new/releases/download/v0.1.74/velnor-actions-0.1.74-x86_64-unknown-linux-gnu
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.6810346Z   VELNOR_RELEASE_COMMIT: c622bfb187556afb8d3ff3ca917a719e4bb7f32a
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.6810543Z   VELNOR_RUN_KEY_ATTEMPT: 1
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.6810677Z   MISE_LOG_LEVEL: info
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.6810851Z   MISE_TRUSTED_CONFIG_PATHS: /home/runner/work/velnor-new/velnor-new
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.6811117Z   MISE_YES: 1
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.6811241Z   VELNOR_TOOL_JACTIONLINT: 2.4.0
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.6811391Z   VELNOR_TOOL_MR_BOXINGTON: 1.29.2
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.6811536Z   VELNOR_TOOL_NEXTEST: 0.9.151
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.6811676Z   VELNOR_TOOL_RUST: 1.99.1
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.6811809Z   VELNOR_TOOL_SHELLCHECK: 0.11.0
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.6811963Z   CARGO_HOME: /home/runner/work/_temp/velnor/cargo
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.6812137Z   PATH: /usr/bin:/bin:/usr/sbin:/sbin
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.6812306Z   RUSTUP_HOME: /home/runner/work/_temp/velnor/rustup
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.6812474Z ##[endgroup]
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.7023393Z velnor: no restored Rust 1.99.1 toolchain; the install verifies the fresh one
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.7047045Z ##[group]Run mise --no-config --no-env --no-hooks install 'rust[profile=minimal]@'"${VELNOR_TOOL_RUST}" 'jactionlint@'"${VELNOR_TOOL_JACTIONLINT}" 'shellcheck@'"${VELNOR_TOOL_SHELLCHECK}" 'aqua:nextest-rs/nextest/cargo-nextest@'"${VELNOR_TOOL_NEXTEST}" gh@2.103.2
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.7048108Z ^[[36;1mmise --no-config --no-env --no-hooks install 'rust[profile=minimal]@'"${VELNOR_TOOL_RUST}" 'jactionlint@'"${VELNOR_TOOL_JACTIONLINT}" 'shellcheck@'"${VELNOR_TOOL_SHELLCHECK}" 'aqua:nextest-rs/nextest/cargo-nextest@'"${VELNOR_TOOL_NEXTEST}" gh@2.103.2^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.7088690Z shell: /usr/bin/bash -e {0}
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.7088827Z env:
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.7088944Z   ACTIONS_ID_TOKEN_REQUEST_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.7089096Z   ACTIONS_ID_TOKEN_REQUEST_URL: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.7089237Z   ACTIONS_RUNTIME_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.7089367Z   CARGO_REGISTRY_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.7089488Z   GH_CONFIG_DIR: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.7089597Z   GH_HOST: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.7089733Z   GH_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.7089842Z   GITHUB_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.7089959Z   MISE_AUTO_INSTALL: false
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.7090094Z   MISE_EXEC_AUTO_INSTALL: false
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.7090230Z   MISE_GITHUB_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.7090347Z   MISE_LOCKFILE: 0
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.7090458Z   MISE_NO_CONFIG: 1
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.7090571Z   MISE_NO_ENV: 1
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.7090680Z   MISE_NO_HOOKS: 1
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.7090801Z   MISE_QUIET: 1
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.7090908Z   NODE_AUTH_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.7091019Z   NPM_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.7091132Z   RUSTUP_AUTO_INSTALL: 0
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.7091347Z   VELNOR_ASSET_SHA256: db7480b83238f85a2e4472d26ba57ca4ee4d6822353cbdaad690b1a2b963b26f
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.7091758Z   VELNOR_ASSET_URL: https://github.com/tailrocks/velnor-new/releases/download/v0.1.74/velnor-actions-0.1.74-x86_64-unknown-linux-gnu
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.7092131Z   VELNOR_RELEASE_COMMIT: c622bfb187556afb8d3ff3ca917a719e4bb7f32a
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.7092329Z   VELNOR_RUN_KEY_ATTEMPT: 1
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.7092458Z   MISE_LOG_LEVEL: info
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.7092631Z   MISE_TRUSTED_CONFIG_PATHS: /home/runner/work/velnor-new/velnor-new
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.7092820Z   MISE_YES: 1
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.7092938Z   VELNOR_TOOL_JACTIONLINT: 2.4.0
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.7093079Z   VELNOR_TOOL_MR_BOXINGTON: 1.29.2
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.7093221Z   VELNOR_TOOL_NEXTEST: 0.9.151
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.7093467Z   VELNOR_TOOL_RUST: 1.99.1
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.7093597Z   VELNOR_TOOL_SHELLCHECK: 0.11.0
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.7093755Z   CARGO_HOME: /home/runner/work/_temp/velnor/cargo
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.7093943Z   MISE_CARGO_HOME: /home/runner/work/_temp/velnor/cargo
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.7094142Z   MISE_RUSTUP_HOME: /home/runner/work/_temp/velnor/rustup
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.7094332Z   RUSTUP_HOME: /home/runner/work/_temp/velnor/rustup
+Plan	UNKNOWN STEP	2026-11-06T07:42:42.7094494Z ##[endgroup]
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.3751942Z ##[group]Run function_env_unset=(); function_env_scan_complete=0; while IFS= read -r -d '' env_entry; do case "$env_entry" in BASH_FUNC_*=*) function_env_unset+=(-u "${env_entry%%=*}");; VELNOR_VERIFIER_ENV_SCAN_COMPLETE) function_env_scan_complete=$((function_env_scan_complete + 1));; esac; done < <({ /usr/bin/env -0 && printf '%s\000' 'VELNOR_VERIFIER_ENV_SCAN_COMPLETE'; }); [ "$function_env_scan_complete" -eq 1 ] || exit 1; exec /usr/bin/env "${function_env_unset[@]}" -u BASH_ENV -u ENV -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR PATH=/usr/bin:/bin:/usr/sbin:/sbin /bin/bash --noprofile --norc -p -e -o pipefail -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; PATH="/usr/bin:/bin:/usr/sbin:/sbin"; export PATH; v="'"${VELNOR_TOOL_JACTIONLINT}"'"; case "${RUNNER_OS-}-${RUNNER_ARCH-}" in Linux-X64) p=linux-x64;; Linux-ARM64) p=linux-arm64;; macOS-ARM64) p=macos-arm64;; macOS-X64) p=macos-x64;; *) p=unsupported;; esac; case "$v/$p" in 2.4.0/linux-arm64) want=5be2560b719b1764a7ff9a5983cd47dd0bd0f538cb35baed8d598c536e0cee35;; 2.4.0/linux-x64) want=70e41eb37cdd89a305f9a433e230976732fe2ef5f674bbea8d68322ae583bdd0;; 2.4.0/macos-arm64) want=4dff3e799bd47c5b19363c1c7d6f86d09cc2ce41112aede55fb1bfc982eb8643;; 2.4.0/macos-x64) want=39bbd9e4bf6302fa92bc12cebf933b26fad58b6e76d8468c464ae3880f2ef453;; *) want=;; esac; if [ -z "$want" ]; then if [ "$v" = "2.4.0" ]; then printf "%s\n" "::error::jactionlint_executable_not_catalogued: jactionlint $v on $p has no executable digest in this Velnor catalog" >&2; exit 1; fi; printf "%s\n" "::notice::jactionlint $v on $p has no Velnor executable digest; the Mise release digest and GitHub attestation checks still applied"; exit 0; fi; d="$RUNNER_TEMP/velnor/jactionlint-verify"; rm -rf "$d"; mkdir -p "$d"; velnor_capture_physical_path() {
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.3758702Z ^[[36;1mfunction_env_unset=(); function_env_scan_complete=0; while IFS= read -r -d '' env_entry; do case "$env_entry" in BASH_FUNC_*=*) function_env_unset+=(-u "${env_entry%%=*}");; VELNOR_VERIFIER_ENV_SCAN_COMPLETE) function_env_scan_complete=$((function_env_scan_complete + 1));; esac; done < <({ /usr/bin/env -0 && printf '%s\000' 'VELNOR_VERIFIER_ENV_SCAN_COMPLETE'; }); [ "$function_env_scan_complete" -eq 1 ] || exit 1; exec /usr/bin/env "${function_env_unset[@]}" -u BASH_ENV -u ENV -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR PATH=/usr/bin:/bin:/usr/sbin:/sbin /bin/bash --noprofile --norc -p -e -o pipefail -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; PATH="/usr/bin:/bin:/usr/sbin:/sbin"; export PATH; v="'"${VELNOR_TOOL_JACTIONLINT}"'"; case "${RUNNER_OS-}-${RUNNER_ARCH-}" in Linux-X64) p=linux-x64;; Linux-ARM64) p=linux-arm64;; macOS-ARM64) p=macos-arm64;; macOS-X64) p=macos-x64;; *) p=unsupported;; esac; case "$v/$p" in 2.4.0/linux-arm64) want=5be2560b719b1764a7ff9a5983cd47dd0bd0f538cb35baed8d598c536e0cee35;; 2.4.0/linux-x64) want=70e41eb37cdd89a305f9a433e230976732fe2ef5f674bbea8d68322ae583bdd0;; 2.4.0/macos-arm64) want=4dff3e799bd47c5b19363c1c7d6f86d09cc2ce41112aede55fb1bfc982eb8643;; 2.4.0/macos-x64) want=39bbd9e4bf6302fa92bc12cebf933b26fad58b6e76d8468c464ae3880f2ef453;; *) want=;; esac; if [ -z "$want" ]; then if [ "$v" = "2.4.0" ]; then printf "%s\n" "::error::jactionlint_executable_not_catalogued: jactionlint $v on $p has no executable digest in this Velnor catalog" >&2; exit 1; fi; printf "%s\n" "::notice::jactionlint $v on $p has no Velnor executable digest; the Mise release digest and GitHub attestation checks still applied"; exit 0; fi; d="$RUNNER_TEMP/velnor/jactionlint-verify"; rm -rf "$d"; mkdir -p "$d"; velnor_capture_physical_path() {^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.3762162Z ^[[36;1m  [ "$#" -eq 2 ] || return 1^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.3762334Z ^[[36;1m  (cd -P "$1" && pwd -P) > "$2" || return 1^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.3762502Z ^[[36;1m  resolved_path=^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.3762635Z ^[[36;1m  newline='\''^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.3762762Z ^[[36;1m'\''^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.3762889Z ^[[36;1m  while IFS= read -r path_line; do^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.3763079Z ^[[36;1m    resolved_path=$resolved_path$path_line"$newline"^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.3763255Z ^[[36;1m  done < "$2"^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.3763394Z ^[[36;1m  case "$resolved_path" in^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.3763577Z ^[[36;1m    *"$newline") resolved_path=${resolved_path%"$newline"} ;;^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.3763763Z ^[[36;1m    *) return 1 ;;^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.3763888Z ^[[36;1m  esac^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.3764034Z ^[[36;1m  printf '\''%s\n'\'' "$resolved_path" > "$2" || return 1^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.3767505Z ^[[36;1m}; velnor_bind_selected_mise() { [ "$#" -eq 1 ] || return 5; mise_data_dir=${MISE_DATA_DIR-}; if [ -z "$mise_data_dir" ]; then if [ -n "${XDG_DATA_HOME-}" ]; then mise_data_dir="$XDG_DATA_HOME/mise"; elif [ -n "${HOME-}" ]; then mise_data_dir="$HOME/.local/share/mise"; else return 1; fi; fi; case "$mise_data_dir" in /*) ;; *) mise_data_dir=./$mise_data_dir;; esac; case "$mise_data_dir" in /) ;; */) mise_data_dir=${mise_data_dir%/};; esac; [ -d "$mise_data_dir" ] || return 2; velnor_capture_physical_path "$mise_data_dir" "$1" || return 3; resolved_mise_data_dir=$resolved_path; [ -d "$resolved_mise_data_dir/bin" ] || return 4; velnor_capture_physical_path "$resolved_mise_data_dir/bin" "$1" || return 4; resolved_mise_bin_dir=$resolved_path; mise_bin="$resolved_mise_bin_dir/mise"; [ -f "$mise_bin" ] && [ -x "$mise_bin" ] && [ ! -L "$mise_bin" ] || return 4; MISE_DATA_DIR="$resolved_mise_data_dir"; export MISE_DATA_DIR; return 0; }; if velnor_bind_selected_mise "$d/mise-data-dir"; then :; else bind_status=$?; case "$bind_status" in 1) printf "%s\n" "::error::jactionlint_mise_data_dir_missing: no Setup Mise data directory is selected" >&2;; 2) printf "%s\n" "::error::jactionlint_mise_data_dir_invalid: Setup Mise data directory is missing" >&2;; 3) printf "%s\n" "::error::jactionlint_mise_data_dir_unresolvable: Setup Mise data directory cannot be resolved" >&2;; *) printf "%s\n" "::error::jactionlint_mise_binary_invalid: Setup Mise binary is missing, not executable, or a symlink" >&2;; esac; exit 1; fi; MISE_DATA_DIR="$resolved_mise_data_dir" "$mise_bin" --no-config --no-env --no-hooks which --tool "jactionlint@$v" jactionlint > "$d/path" || { printf "%s\n" "::error::jactionlint_not_installed: jactionlint@$v" >&2; exit 1; }; IFS= read -r exe < "$d/path"; test -f "$exe" || { printf "%s\n" "::error::jactionlint_executable_missing: $exe" >&2; exit 1; }; printf "%s  %s\n" "$want" "$exe" > "$d/executable.sha256"; if command -v sha256sum >/dev/null 2>&1; then sha256sum -c "$d/executable.sha256" >/dev/null; else shasum -a 256 -c "$d/executable.sha256" >/dev/null; fi || { printf "%s\n" "::error::jactionlint_executable_digest_mismatch: $exe is not SHA-256 $want" >&2; exit 1; }; printf "%s\n" "velnor: jactionlint $v ($p) executable SHA-256 $want verified"'^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.3771884Z shell: /bin/bash --noprofile --norc -p -e -o pipefail {0}
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.3772065Z env:
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.3772186Z   ACTIONS_ID_TOKEN_REQUEST_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.3772329Z   ACTIONS_ID_TOKEN_REQUEST_URL: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.3772466Z   ACTIONS_RUNTIME_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.3772590Z   CARGO_REGISTRY_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.3772806Z   GH_CONFIG_DIR: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.3772919Z   GH_HOST: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.3773020Z   GH_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.3773124Z   GITHUB_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.3773245Z   MISE_AUTO_INSTALL: false
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.3773377Z   MISE_EXEC_AUTO_INSTALL: false
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.3773506Z   MISE_GITHUB_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.3773621Z   MISE_LOCKFILE: 0
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.3773729Z   MISE_NO_CONFIG: 1
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.3773839Z   MISE_NO_ENV: 1
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.3774029Z   MISE_NO_HOOKS: 1
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.3774137Z   MISE_QUIET: 1
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.3774248Z   NODE_AUTH_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.3774357Z   NPM_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.3774469Z   RUSTUP_AUTO_INSTALL: 0
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.3774675Z   VELNOR_ASSET_SHA256: db7480b83238f85a2e4472d26ba57ca4ee4d6822353cbdaad690b1a2b963b26f
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.3775087Z   VELNOR_ASSET_URL: https://github.com/tailrocks/velnor-new/releases/download/v0.1.74/velnor-actions-0.1.74-x86_64-unknown-linux-gnu
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.3775444Z   VELNOR_RELEASE_COMMIT: c622bfb187556afb8d3ff3ca917a719e4bb7f32a
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.3775642Z   VELNOR_RUN_KEY_ATTEMPT: 1
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.3775773Z   MISE_LOG_LEVEL: info
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.3775948Z   MISE_TRUSTED_CONFIG_PATHS: /home/runner/work/velnor-new/velnor-new
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.3776132Z   MISE_YES: 1
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.3776249Z   VELNOR_TOOL_JACTIONLINT: 2.4.0
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.3776391Z   VELNOR_TOOL_MR_BOXINGTON: 1.29.2
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.3776537Z   VELNOR_TOOL_NEXTEST: 0.9.151
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.3776669Z   VELNOR_TOOL_RUST: 1.99.1
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.3776801Z   VELNOR_TOOL_SHELLCHECK: 0.11.0
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.3776942Z   PATH: /usr/bin:/bin:/usr/sbin:/sbin
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.3777084Z ##[endgroup]
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.4164870Z velnor: jactionlint 2.4.0 (linux-x64) executable SHA-256 70e41eb37cdd89a305f9a433e230976732fe2ef5f674bbea8d68322ae583bdd0 verified
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.4207120Z ##[group]Run function_env_unset=(); function_env_scan_complete=0; while IFS= read -r -d '' env_entry; do case "$env_entry" in BASH_FUNC_*=*) function_env_unset+=(-u "${env_entry%%=*}");; VELNOR_VERIFIER_ENV_SCAN_COMPLETE) function_env_scan_complete=$((function_env_scan_complete + 1));; esac; done < <({ /usr/bin/env -0 && printf '%s\000' 'VELNOR_VERIFIER_ENV_SCAN_COMPLETE'; }); [ "$function_env_scan_complete" -eq 1 ] || exit 1; exec /usr/bin/env "${function_env_unset[@]}" -u BASH_ENV -u ENV -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR PATH=/usr/bin:/bin:/usr/sbin:/sbin /bin/bash --noprofile --norc -p -e -o pipefail -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; PATH=/usr/bin:/bin:/usr/sbin:/sbin; export PATH; ev() { /usr/bin/env -i LC_ALL=C ${PATH+PATH="$PATH"} ${HOME+HOME="$HOME"} ${RUNNER_TEMP+RUNNER_TEMP="$RUNNER_TEMP"} ${RUSTUP_HOME+RUSTUP_HOME="$RUSTUP_HOME"} ${MISE_RUSTUP_HOME+MISE_RUSTUP_HOME="$MISE_RUSTUP_HOME"} ${CARGO_HOME+CARGO_HOME="$CARGO_HOME"} '"${VELNOR_TOOL_RUST+VELNOR_TOOL_RUST="$VELNOR_TOOL_RUST"}"' ${HTTPS_PROXY+HTTPS_PROXY="$HTTPS_PROXY"} ${https_proxy+https_proxy="$https_proxy"} ${HTTP_PROXY+HTTP_PROXY="$HTTP_PROXY"} ${http_proxy+http_proxy="$http_proxy"} ${NO_PROXY+NO_PROXY="$NO_PROXY"} ${no_proxy+no_proxy="$no_proxy"} ${ALL_PROXY+ALL_PROXY="$ALL_PROXY"} ${all_proxy+all_proxy="$all_proxy"} ${SSL_CERT_FILE+SSL_CERT_FILE="$SSL_CERT_FILE"} ${SSL_CERT_DIR+SSL_CERT_DIR="$SSL_CERT_DIR"} ${CURL_CA_BUNDLE+CURL_CA_BUNDLE="$CURL_CA_BUNDLE"} "$@"; }; v="'"${VELNOR_TOOL_RUST}"'"; fail() { printf "%s\n" "::error::$1" >&2; exit 1; }; case "$v" in 1.85.0) want=009e8b5ff43f12bf644b5e5b9fd89f96453072062a450c623882f64e85405da5;; 1.85.1) want=1e7dae690cd12e27405a97e64704917489a27c650201bf47780a936055d67909;; 1.86.0) want=5ffe190473b7896d1f39e9d0ddfa04bec72000f25897669bb296814e10ceba42;; 1.87.0) want=2949b5ea91e3f9c45e75ff2fc6cfc7776616c693ab599ed43abc2120b7522415;; 1.88.0) want=431b7c5c0b9a511d8e31d29b378bbc74124e8521f14beb92d3a5a5f7e7e55449;; 1.89.0) want=fbd1662e100e7b305908ece23b441cb7534eadfa6336c5f173ff08d1cec174a1;; 1.90.0) want=489c19f20d331765ab2835661eb546de90f6446a107a8db83045e7371e45cae2;; 1.91.0) want=d9e59cdf15532aa839c0a4871b0b755e833f914042eb2dcc59f2a0ef8667f9f6;; 1.91.1) want=483bb8b271168ee654e3be4f111beefa23b9d0c8b7f4a563a8278978dbe982e5;; 1.92.0) want=b2a49624353173ecdacf59c158c00929300606e1963f6e4609fb483a508402d0;; 1.93.0) want=beb6ba4e41c84e9c11c80e6804a007497d0c8ba0810cd403fabc8f4a9c45b1f8;; 1.93.1) want=4812a3c610bacc74eed12c89c312e540722dccccd867bd55096402da13b3a516;; 1.94.0) want=aaa177def36e01d539bee6bde95295230b9ce378f81057845db8d0ebe97898ee;; 1.94.1) want=cc2f04dfc883549d683c8cc2a9393f523a3dfbd931f5d5eaef00303cca64a60d;; 1.95.0) want=821ff14e4c4a1cbe1e8915f35aff0a3fbbdf8d293ad48ab8f31e3b0440c581f9;; 1.96.0) want=9af50610e1d82699f78a40b985c9277ae1a2c5a0bec86ae430cfe58832038285;; 1.96.1) want=87eb76c53073e72b766083bed5530820694253b832a762d8385bda5759f03975;; 1.97.0) want=3804d2666f7c12ce64205baa69b6be52f910b45b158091013264beb7aa1de7f5;; 1.97.1) want=03569b1886ceb5c05276b50c8431ab111de944cd6140fe1fa7d821dd8e0f29cf;; 1.98.0) want=3f7d139b73bbbd0004ef6e58b430831c68cdad2b1f64ee2eb35d54c09199489a;; 1.98.1) want=a7c8774a5fd8441c997d94c029776cbc5eb111e9d72ab5d256fa69866644347e;; 1.99.0) want=ce6dddc886364f8d786514771212cebe9b731ba82d6b859951c6b0ccc516b6a2;; 1.99.1) want=fb152be80975c194aa5fc684b2aec3a6e14e2b855efe2faa4e5f8ae6e590f463;; *) fail "rust_channel_manifest_not_catalogued: Rust $v has no channel-manifest digest in this Velnor catalog; upgrade velnor-actions or pin a catalogued Rust";; esac; rh="${RUSTUP_HOME:-${MISE_RUSTUP_HOME:-$HOME/.rustup}}"; r="$RUNNER_TEMP/velnor/rust-verified"; d="$RUNNER_TEMP/velnor/rust-manifest"; ev rm -rf "$d"; ev mkdir -p "$d" "$r"; real() { if [ -e "$1" ] || [ -L "$1" ]; then { [ -d "$1" ] && [ ! -L "$1" ]; } || fail "rust_toolchain_path_unexpected: $1 is not a real directory"; fi; }; real "$rh/toolchains"; pm() { printf "%s\n" "::notice::pin_mismatch: $1"; }; pinned=0; case "$v" in 1.99.1) pinned=1;; esac; [ "$pinned" = 0 ] || { set --; for e in "$rh/toolchains"/* "$rh/toolchains"/.[!.]* "$rh/toolchains"/..?*; do if [ -e "$e" ] || [ -L "$e" ]; then set -- "$@" "$e"; fi; done; if [ "$#" -eq 1 ] && case "$1" in "$rh/toolchains/$v-x86_64-unknown-linux-gnu") false;; "$rh/toolchains/$v-"*-*-*) true;; *) false;; esac; then pinned=0; else [ "$#" -eq 0 ] || { [ "$#" -eq 1 ] && [ "$1" = "$rh/toolchains/$v-x86_64-unknown-linux-gnu" ]; } || { pm toolchains_differ; fail "rust_tree_digest_mismatch: $rh/toolchains holds an entry other than the pinned Rust $v-x86_64-unknown-linux-gnu toolchain; the pin_mismatch notice above names the check that failed"; }; fi; }; set -- "$rh/toolchains/$v"-*; { [ "$#" -eq 1 ] && [ -d "$1" ] && [ ! -L "$1" ]; } || fail "rust_toolchain_missing: $rh/toolchains holds no single real Rust $v toolchain directory"; t="$1"; real "$t/lib"; real "$t/lib/rustlib"; m="$t/lib/rustlib/multirust-channel-manifest.toml"; if command -v sha256sum >/dev/null 2>&1; then hb="sha256sum"; else hb="shasum -a 256"; fi; h="ev $hb"; test -f "$t/lib/rustlib/components" || fail "rust_installed_manifest_missing: $t/lib/rustlib/components"; ev find "$t" ! -type f ! -type d > "$d/special"; test ! -s "$d/special" || fail "rust_toolchain_file_unexpected: $t holds a symlink or a special file"; get() { ev curl -q --proto "=https" --proto-redir "=https" --tlsv1.2 --fail --silent --show-error --location --retry 3 --retry-all-errors --connect-timeout 20 --max-time 120 --retry-max-time 180 --output "$1" "$2"; }; put() { [ ! -d "$2" ] && ev rm -f "$2.new" && ev cp "$1" "$2.new" && ev chmod 0644 "$2.new" && ev mv -f "$2.new" "$2" || { ev rm -f "$2.new"; return 1; }; }; channel_ok() { printf "%s  %s\n" "$want" "$d/channel.toml" > "$d/channel.sha256"; $h -c "$d/channel.sha256" >/dev/null 2>&1; }; verified_channel() { s="$r/channel-rust-$v.toml"; if [ -f "$s" ] && [ ! -L "$s" ] && ev cp "$s" "$d/channel.toml" && channel_ok; then return 0; fi; get "$d/channel.toml" "https://static.rust-lang.org/dist/channel-rust-$v.toml"; channel_ok || fail "rust_channel_manifest_digest_mismatch: channel-rust-$v.toml is not SHA-256 $want"; put "$d/channel.toml" "$s" || :; }; install_manifest() { [ ! -d "$m" ] || fail "rust_toolchain_file_unexpected: $m is a directory"; verified_channel; put "$d/channel.toml" "$m" || fail "rust_installed_manifest_unwritable: $m"; }; install_manifest; pin_check() ( ev sort "$t/lib/rustlib/components" | $h > "$d/pin.cs"; read -r cs rest < "$d/pin.cs" || cs=unreadable; [ "$pinned" = 1 ] || { pm "no_pin components=$cs"; return 1; }; pin=""; case "$v:$cs" in 1.99.1:e3808a4c78c316b41a42ed88010c6bbf24ae24a348a5a22b8e3bc62328db1981) pin=f9eeeb78948257bc3c861d018ecf4d22f16e38fbc8ba4a97c1126a1a1c45bb25;; 1.99.1:a13769c18a7a74ea492ab633b644d6c238ae81e536d30d3f168eddb57e86000e) pin=56452430d3faa33fd43083ef5dc0d3fb5da905f35515e6f174e46ecd3a607dea;; *) ;; esac; [ -n "$pin" ] || { pm "components_not_pinned components=$cs"; return 2; }; (cd "$t" && ev find . -name "*[!A-Za-z0-9._+-]*") > "$d/pin.unsafe" || { pm tree_unreadable; return 2; }; [ ! -s "$d/pin.unsafe" ] || { pm unsafe_name; return 2; }; (cd "$t" && ev find . -type f -exec $hb {} +) > "$d/pin.sums" || { pm tree_unreadable; return 2; }; (cd "$t" && ev find . -printf "%y %#m %s %p\n") > "$d/pin.modes" || { pm tree_unreadable; return 2; }; ev awk -v cs="$cs" -v cap=4194304 '\''NR == FNR { dg[$2] = $1; next } { k = $1; mode = $2; p = $4; if (k != "f" && k != "d") exit 2; r = (p == ".") ? "." : substr(p, 3); if (k == "d") { print "d", mode, "-", r; next } if (r == "lib/rustlib/multirust-config.toml") { if ($3 + 0 > cap + 0) exit 3; print "b", mode, "-", r; next } if (r == "lib/rustlib/components") { print "f", mode, cs, r; next } if (!(p in dg)) exit 4; print "f", mode, dg[p], r }'\'' "$d/pin.sums" "$d/pin.modes" > "$d/pin.list" || { pm listing_failed; return 2; }; ev sort -k4,4 "$d/pin.list" | ev tr "\n" "\000" | $h > "$d/pin.got"; read -r got rest < "$d/pin.got" || { pm tree_unreadable; return 2; }; [ "$got" = "$pin" ] || { pm tree_differs; return 2; } ); rc=0; pin_check || rc=$?; case "$rc" in 0) printf "%s\n" "velnor: Rust $v toolchain matches pinned tree digest"; exit 0;; 1) ;; *) fail "rust_tree_digest_mismatch: $t differs from the pinned tree digest of Rust $v; the pin_mismatch notice above names the check that failed" ;; esac; ev awk -v comps="$t/lib/rustlib/components" '\''BEGIN { while ((getline line < comps) > 0) if (line != "") want[line] = 1 } /^\[/ { key = ""; if ($0 ~ /^\[pkg\.[^]]*\.target\.[^]]*\]$/) { s = substr($0, 6, length($0) - 6); p = index(s, ".target."); k = substr(s, 1, p - 1) "-" substr(s, p + 8); if (k in want) key = k } next } key != "" && $1 == "xz_url" { u = $3; gsub(/"/, "", u); url[key] = u } key != "" && $1 == "xz_hash" { h = $3; gsub(/"/, "", h); hash[key] = h } END { for (k in want) { if (!(k in url) || !(k in hash)) exit 1; print k, url[k], hash[k] } }'\'' "$d/channel.toml" > "$d/tarballs" || fail "rust_component_not_in_manifest: $t lists a component the verified channel-rust-$v.toml does not ship"; test -s "$d/tarballs" || fail "rust_installed_manifest_empty: $t lists no component"; : > "$d/expected"; while read -r comp url hash; do case "$comp" in *[!A-Za-z0-9._-]*|"") fail "rust_component_name_invalid: $comp";; esac; case "$url" in https://static.rust-lang.org/dist/*.tar.xz) ;; *) fail "rust_component_url_untrusted: $url";; esac; if [ ! -f "$r/$comp.$hash" ]; then get "$d/c.tar.xz" "$url"; printf "%s  %s\n" "$hash" "$d/c.tar.xz" > "$d/c.sha256"; $h -c "$d/c.sha256" >/dev/null || fail "rust_component_tarball_digest_mismatch: $comp"; ev rm -rf "$d/x"; ev mkdir "$d/x"; ev tar -xJf "$d/c.tar.xz" -C "$d/x" --strip-components=1; ev rm -f "$d/c.tar.xz"; : > "$d/c.sums"; while read -r sub; do case "$sub" in *[!A-Za-z0-9._-]*|""|.|..) fail "rust_component_name_invalid: $sub";; esac; (cd "$d/x/$sub" && ev find . -type f ! -path ./manifest.in -exec $hb {} +) >> "$d/c.sums"; done < "$d/x/components"; ev mv "$d/c.sums" "$r/$comp.$hash"; fi; ev cat "$r/$comp.$hash" >> "$d/expected"; done < "$d/tarballs"; (cd "$t" && ev find . -type f ! -path ./lib/rustlib/components ! \( -path "./lib/rustlib/manifest-*" ! -path "./lib/rustlib/manifest-*/*" \) ! -path ./lib/rustlib/multirust-channel-manifest.toml ! -path ./lib/rustlib/multirust-config.toml ! -path ./lib/rustlib/rust-installer-version -exec $hb {} +) > "$d/installed"; ev sort -k2 "$d/expected" > "$d/expected.sorted"; ev sort -k2 "$d/installed" > "$d/installed.sorted"; if ! ev cmp -s "$d/expected.sorted" "$d/installed.sorted"; then ev diff "$d/expected.sorted" "$d/installed.sorted" | ev head -n 20 >&2 || true; fail "rust_toolchain_bytes_mismatch: $t differs from the component tarballs of the verified channel-rust-$v.toml"; fi; printf "%s\n" "velnor: Rust $v toolchain verified file by file against the component tarballs of channel-rust-$v.toml (SHA-256 $want)"'
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.4240716Z ^[[36;1mfunction_env_unset=(); function_env_scan_complete=0; while IFS= read -r -d '' env_entry; do case "$env_entry" in BASH_FUNC_*=*) function_env_unset+=(-u "${env_entry%%=*}");; VELNOR_VERIFIER_ENV_SCAN_COMPLETE) function_env_scan_complete=$((function_env_scan_complete + 1));; esac; done < <({ /usr/bin/env -0 && printf '%s\000' 'VELNOR_VERIFIER_ENV_SCAN_COMPLETE'; }); [ "$function_env_scan_complete" -eq 1 ] || exit 1; exec /usr/bin/env "${function_env_unset[@]}" -u BASH_ENV -u ENV -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR PATH=/usr/bin:/bin:/usr/sbin:/sbin /bin/bash --noprofile --norc -p -e -o pipefail -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; PATH=/usr/bin:/bin:/usr/sbin:/sbin; export PATH; ev() { /usr/bin/env -i LC_ALL=C ${PATH+PATH="$PATH"} ${HOME+HOME="$HOME"} ${RUNNER_TEMP+RUNNER_TEMP="$RUNNER_TEMP"} ${RUSTUP_HOME+RUSTUP_HOME="$RUSTUP_HOME"} ${MISE_RUSTUP_HOME+MISE_RUSTUP_HOME="$MISE_RUSTUP_HOME"} ${CARGO_HOME+CARGO_HOME="$CARGO_HOME"} '"${VELNOR_TOOL_RUST+VELNOR_TOOL_RUST="$VELNOR_TOOL_RUST"}"' ${HTTPS_PROXY+HTTPS_PROXY="$HTTPS_PROXY"} ${https_proxy+https_proxy="$https_proxy"} ${HTTP_PROXY+HTTP_PROXY="$HTTP_PROXY"} ${http_proxy+http_proxy="$http_proxy"} ${NO_PROXY+NO_PROXY="$NO_PROXY"} ${no_proxy+no_proxy="$no_proxy"} ${ALL_PROXY+ALL_PROXY="$ALL_PROXY"} ${all_proxy+all_proxy="$all_proxy"} ${SSL_CERT_FILE+SSL_CERT_FILE="$SSL_CERT_FILE"} ${SSL_CERT_DIR+SSL_CERT_DIR="$SSL_CERT_DIR"} ${CURL_CA_BUNDLE+CURL_CA_BUNDLE="$CURL_CA_BUNDLE"} "$@"; }; v="'"${VELNOR_TOOL_RUST}"'"; fail() { printf "%s\n" "::error::$1" >&2; exit 1; }; case "$v" in 1.85.0) want=009e8b5ff43f12bf644b5e5b9fd89f96453072062a450c623882f64e85405da5;; 1.85.1) want=1e7dae690cd12e27405a97e64704917489a27c650201bf47780a936055d67909;; 1.86.0) want=5ffe190473b7896d1f39e9d0ddfa04bec72000f25897669bb296814e10ceba42;; 1.87.0) want=2949b5ea91e3f9c45e75ff2fc6cfc7776616c693ab599ed43abc2120b7522415;; 1.88.0) want=431b7c5c0b9a511d8e31d29b378bbc74124e8521f14beb92d3a5a5f7e7e55449;; 1.89.0) want=fbd1662e100e7b305908ece23b441cb7534eadfa6336c5f173ff08d1cec174a1;; 1.90.0) want=489c19f20d331765ab2835661eb546de90f6446a107a8db83045e7371e45cae2;; 1.91.0) want=d9e59cdf15532aa839c0a4871b0b755e833f914042eb2dcc59f2a0ef8667f9f6;; 1.91.1) want=483bb8b271168ee654e3be4f111beefa23b9d0c8b7f4a563a8278978dbe982e5;; 1.92.0) want=b2a49624353173ecdacf59c158c00929300606e1963f6e4609fb483a508402d0;; 1.93.0) want=beb6ba4e41c84e9c11c80e6804a007497d0c8ba0810cd403fabc8f4a9c45b1f8;; 1.93.1) want=4812a3c610bacc74eed12c89c312e540722dccccd867bd55096402da13b3a516;; 1.94.0) want=aaa177def36e01d539bee6bde95295230b9ce378f81057845db8d0ebe97898ee;; 1.94.1) want=cc2f04dfc883549d683c8cc2a9393f523a3dfbd931f5d5eaef00303cca64a60d;; 1.95.0) want=821ff14e4c4a1cbe1e8915f35aff0a3fbbdf8d293ad48ab8f31e3b0440c581f9;; 1.96.0) want=9af50610e1d82699f78a40b985c9277ae1a2c5a0bec86ae430cfe58832038285;; 1.96.1) want=87eb76c53073e72b766083bed5530820694253b832a762d8385bda5759f03975;; 1.97.0) want=3804d2666f7c12ce64205baa69b6be52f910b45b158091013264beb7aa1de7f5;; 1.97.1) want=03569b1886ceb5c05276b50c8431ab111de944cd6140fe1fa7d821dd8e0f29cf;; 1.98.0) want=3f7d139b73bbbd0004ef6e58b430831c68cdad2b1f64ee2eb35d54c09199489a;; 1.98.1) want=a7c8774a5fd8441c997d94c029776cbc5eb111e9d72ab5d256fa69866644347e;; 1.99.0) want=ce6dddc886364f8d786514771212cebe9b731ba82d6b859951c6b0ccc516b6a2;; 1.99.1) want=fb152be80975c194aa5fc684b2aec3a6e14e2b855efe2faa4e5f8ae6e590f463;; *) fail "rust_channel_manifest_not_catalogued: Rust $v has no channel-manifest digest in this Velnor catalog; upgrade velnor-actions or pin a catalogued Rust";; esac; rh="${RUSTUP_HOME:-${MISE_RUSTUP_HOME:-$HOME/.rustup}}"; r="$RUNNER_TEMP/velnor/rust-verified"; d="$RUNNER_TEMP/velnor/rust-manifest"; ev rm -rf "$d"; ev mkdir -p "$d" "$r"; real() { if [ -e "$1" ] || [ -L "$1" ]; then { [ -d "$1" ] && [ ! -L "$1" ]; } || fail "rust_toolchain_path_unexpected: $1 is not a real directory"; fi; }; real "$rh/toolchains"; pm() { printf "%s\n" "::notice::pin_mismatch: $1"; }; pinned=0; case "$v" in 1.99.1) pinned=1;; esac; [ "$pinned" = 0 ] || { set --; for e in "$rh/toolchains"/* "$rh/toolchains"/.[!.]* "$rh/toolchains"/..?*; do if [ -e "$e" ] || [ -L "$e" ]; then set -- "$@" "$e"; fi; done; if [ "$#" -eq 1 ] && case "$1" in "$rh/toolchains/$v-x86_64-unknown-linux-gnu") false;; "$rh/toolchains/$v-"*-*-*) true;; *) false;; esac; then pinned=0; else [ "$#" -eq 0 ] || { [ "$#" -eq 1 ] && [ "$1" = "$rh/toolchains/$v-x86_64-unknown-linux-gnu" ]; } || { pm toolchains_differ; fail "rust_tree_digest_mismatch: $rh/toolchains holds an entry other than the pinned Rust $v-x86_64-unknown-linux-gnu toolchain; the pin_mismatch notice above names the check that failed"; }; fi; }; set -- "$rh/toolchains/$v"-*; { [ "$#" -eq 1 ] && [ -d "$1" ] && [ ! -L "$1" ]; } || fail "rust_toolchain_missing: $rh/toolchains holds no single real Rust $v toolchain directory"; t="$1"; real "$t/lib"; real "$t/lib/rustlib"; m="$t/lib/rustlib/multirust-channel-manifest.toml"; if command -v sha256sum >/dev/null 2>&1; then hb="sha256sum"; else hb="shasum -a 256"; fi; h="ev $hb"; test -f "$t/lib/rustlib/components" || fail "rust_installed_manifest_missing: $t/lib/rustlib/components"; ev find "$t" ! -type f ! -type d > "$d/special"; test ! -s "$d/special" || fail "rust_toolchain_file_unexpected: $t holds a symlink or a special file"; get() { ev curl -q --proto "=https" --proto-redir "=https" --tlsv1.2 --fail --silent --show-error --location --retry 3 --retry-all-errors --connect-timeout 20 --max-time 120 --retry-max-time 180 --output "$1" "$2"; }; put() { [ ! -d "$2" ] && ev rm -f "$2.new" && ev cp "$1" "$2.new" && ev chmod 0644 "$2.new" && ev mv -f "$2.new" "$2" || { ev rm -f "$2.new"; return 1; }; }; channel_ok() { printf "%s  %s\n" "$want" "$d/channel.toml" > "$d/channel.sha256"; $h -c "$d/channel.sha256" >/dev/null 2>&1; }; verified_channel() { s="$r/channel-rust-$v.toml"; if [ -f "$s" ] && [ ! -L "$s" ] && ev cp "$s" "$d/channel.toml" && channel_ok; then return 0; fi; get "$d/channel.toml" "https://static.rust-lang.org/dist/channel-rust-$v.toml"; channel_ok || fail "rust_channel_manifest_digest_mismatch: channel-rust-$v.toml is not SHA-256 $want"; put "$d/channel.toml" "$s" || :; }; install_manifest() { [ ! -d "$m" ] || fail "rust_toolchain_file_unexpected: $m is a directory"; verified_channel; put "$d/channel.toml" "$m" || fail "rust_installed_manifest_unwritable: $m"; }; install_manifest; pin_check() ( ev sort "$t/lib/rustlib/components" | $h > "$d/pin.cs"; read -r cs rest < "$d/pin.cs" || cs=unreadable; [ "$pinned" = 1 ] || { pm "no_pin components=$cs"; return 1; }; pin=""; case "$v:$cs" in 1.99.1:e3808a4c78c316b41a42ed88010c6bbf24ae24a348a5a22b8e3bc62328db1981) pin=f9eeeb78948257bc3c861d018ecf4d22f16e38fbc8ba4a97c1126a1a1c45bb25;; 1.99.1:a13769c18a7a74ea492ab633b644d6c238ae81e536d30d3f168eddb57e86000e) pin=56452430d3faa33fd43083ef5dc0d3fb5da905f35515e6f174e46ecd3a607dea;; *) ;; esac; [ -n "$pin" ] || { pm "components_not_pinned components=$cs"; return 2; }; (cd "$t" && ev find . -name "*[!A-Za-z0-9._+-]*") > "$d/pin.unsafe" || { pm tree_unreadable; return 2; }; [ ! -s "$d/pin.unsafe" ] || { pm unsafe_name; return 2; }; (cd "$t" && ev find . -type f -exec $hb {} +) > "$d/pin.sums" || { pm tree_unreadable; return 2; }; (cd "$t" && ev find . -printf "%y %#m %s %p\n") > "$d/pin.modes" || { pm tree_unreadable; return 2; }; ev awk -v cs="$cs" -v cap=4194304 '\''NR == FNR { dg[$2] = $1; next } { k = $1; mode = $2; p = $4; if (k != "f" && k != "d") exit 2; r = (p == ".") ? "." : substr(p, 3); if (k == "d") { print "d", mode, "-", r; next } if (r == "lib/rustlib/multirust-config.toml") { if ($3 + 0 > cap + 0) exit 3; print "b", mode, "-", r; next } if (r == "lib/rustlib/components") { print "f", mode, cs, r; next } if (!(p in dg)) exit 4; print "f", mode, dg[p], r }'\'' "$d/pin.sums" "$d/pin.modes" > "$d/pin.list" || { pm listing_failed; return 2; }; ev sort -k4,4 "$d/pin.list" | ev tr "\n" "\000" | $h > "$d/pin.got"; read -r got rest < "$d/pin.got" || { pm tree_unreadable; return 2; }; [ "$got" = "$pin" ] || { pm tree_differs; return 2; } ); rc=0; pin_check || rc=$?; case "$rc" in 0) printf "%s\n" "velnor: Rust $v toolchain matches pinned tree digest"; exit 0;; 1) ;; *) fail "rust_tree_digest_mismatch: $t differs from the pinned tree digest of Rust $v; the pin_mismatch notice above names the check that failed" ;; esac; ev awk -v comps="$t/lib/rustlib/components" '\''BEGIN { while ((getline line < comps) > 0) if (line != "") want[line] = 1 } /^\[/ { key = ""; if ($0 ~ /^\[pkg\.[^]]*\.target\.[^]]*\]$/) { s = substr($0, 6, length($0) - 6); p = index(s, ".target."); k = substr(s, 1, p - 1) "-" substr(s, p + 8); if (k in want) key = k } next } key != "" && $1 == "xz_url" { u = $3; gsub(/"/, "", u); url[key] = u } key != "" && $1 == "xz_hash" { h = $3; gsub(/"/, "", h); hash[key] = h } END { for (k in want) { if (!(k in url) || !(k in hash)) exit 1; print k, url[k], hash[k] } }'\'' "$d/channel.toml" > "$d/tarballs" || fail "rust_component_not_in_manifest: $t lists a component the verified channel-rust-$v.toml does not ship"; test -s "$d/tarballs" || fail "rust_installed_manifest_empty: $t lists no component"; : > "$d/expected"; while read -r comp url hash; do case "$comp" in *[!A-Za-z0-9._-]*|"") fail "rust_component_name_invalid: $comp";; esac; case "$url" in https://static.rust-lang.org/dist/*.tar.xz) ;; *) fail "rust_component_url_untrusted: $url";; esac; if [ ! -f "$r/$comp.$hash" ]; then get "$d/c.tar.xz" "$url"; printf "%s  %s\n" "$hash" "$d/c.tar.xz" > "$d/c.sha256"; $h -c "$d/c.sha256" >/dev/null || fail "rust_component_tarball_digest_mismatch: $comp"; ev rm -rf "$d/x"; ev mkdir "$d/x"; ev tar -xJf "$d/c.tar.xz" -C "$d/x" --strip-components=1; ev rm -f "$d/c.tar.xz"; : > "$d/c.sums"; while read -r sub; do case "$sub" in *[!A-Za-z0-9._-]*|""|.|..) fail "rust_component_name_invalid: $sub";; esac; (cd "$d/x/$sub" && ev find . -type f ! -path ./manifest.in -exec $hb {} +) >> "$d/c.sums"; done < "$d/x/components"; ev mv "$d/c.sums" "$r/$comp.$hash"; fi; ev cat "$r/$comp.$hash" >> "$d/expected"; done < "$d/tarballs"; (cd "$t" && ev find . -type f ! -path ./lib/rustlib/components ! \( -path "./lib/rustlib/manifest-*" ! -path "./lib/rustlib/manifest-*/*" \) ! -path ./lib/rustlib/multirust-channel-manifest.toml ! -path ./lib/rustlib/multirust-config.toml ! -path ./lib/rustlib/rust-installer-version -exec $hb {} +) > "$d/installed"; ev sort -k2 "$d/expected" > "$d/expected.sorted"; ev sort -k2 "$d/installed" > "$d/installed.sorted"; if ! ev cmp -s "$d/expected.sorted" "$d/installed.sorted"; then ev diff "$d/expected.sorted" "$d/installed.sorted" | ev head -n 20 >&2 || true; fail "rust_toolchain_bytes_mismatch: $t differs from the component tarballs of the verified channel-rust-$v.toml"; fi; printf "%s\n" "velnor: Rust $v toolchain verified file by file against the component tarballs of channel-rust-$v.toml (SHA-256 $want)"'^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.4257363Z shell: /bin/bash --noprofile --norc -p -e -o pipefail {0}
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.4257566Z env:
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.4257689Z   ACTIONS_ID_TOKEN_REQUEST_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.4257942Z   ACTIONS_ID_TOKEN_REQUEST_URL: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.4258242Z   ACTIONS_RUNTIME_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.4258371Z   CARGO_REGISTRY_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.4258494Z   GH_CONFIG_DIR: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.4258604Z   GH_HOST: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.4258710Z   GH_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.4258816Z   GITHUB_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.4258932Z   MISE_AUTO_INSTALL: false
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.4259061Z   MISE_EXEC_AUTO_INSTALL: false
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.4259196Z   MISE_GITHUB_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.4259317Z   MISE_LOCKFILE: 0
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.4259426Z   MISE_NO_CONFIG: 1
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.4259535Z   MISE_NO_ENV: 1
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.4259643Z   MISE_NO_HOOKS: 1
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.4259750Z   MISE_QUIET: 1
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.4259858Z   NODE_AUTH_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.4259965Z   NPM_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.4260077Z   RUSTUP_AUTO_INSTALL: 0
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.4260287Z   VELNOR_ASSET_SHA256: db7480b83238f85a2e4472d26ba57ca4ee4d6822353cbdaad690b1a2b963b26f
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.4260681Z   VELNOR_ASSET_URL: https://github.com/tailrocks/velnor-new/releases/download/v0.1.74/velnor-actions-0.1.74-x86_64-unknown-linux-gnu
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.4261029Z   VELNOR_RELEASE_COMMIT: c622bfb187556afb8d3ff3ca917a719e4bb7f32a
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.4261221Z   VELNOR_RUN_KEY_ATTEMPT: 1
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.4261351Z   MISE_LOG_LEVEL: info
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.4261518Z   MISE_TRUSTED_CONFIG_PATHS: /home/runner/work/velnor-new/velnor-new
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.4261700Z   MISE_YES: 1
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.4261816Z   VELNOR_TOOL_JACTIONLINT: 2.4.0
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.4261958Z   VELNOR_TOOL_MR_BOXINGTON: 1.29.2
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.4262097Z   VELNOR_TOOL_NEXTEST: 0.9.151
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.4262226Z   VELNOR_TOOL_RUST: 1.99.1
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.4262353Z   VELNOR_TOOL_SHELLCHECK: 0.11.0
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.4262502Z   CARGO_HOME: /home/runner/work/_temp/velnor/cargo
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.4262669Z   PATH: /usr/bin:/bin:/usr/sbin:/sbin
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.4262920Z   RUSTUP_HOME: /home/runner/work/_temp/velnor/rustup
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.4263081Z ##[endgroup]
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.9492172Z velnor: Rust 1.99.1 toolchain matches pinned tree digest
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.9532768Z ##[group]Run sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; case "$RUNNER_TEMP" in /*) ;; *) printf '\''%s\n'\'' '\''RUNNER_TEMP must be absolute'\'' >&2; exit 1 ;; esac; d="$RUNNER_TEMP/velnor/cache-keys"; rm -rf "$d"; mkdir -p "$d"; s256() { sha256sum "$1" > "$d/sum"; h=; rest=; read -r h rest < "$d/sum" || [ -n "$h" ]; case "$h" in '\'''\''|*[!0-9a-f]*) printf '\''%s\n'\'' '\''sha256sum returned no digest'\'' >&2; exit 1 ;; esac; [ "${#h}" -eq 64 ] || exit 1; }; uname -s > "$d/platform"; uname -m >> "$d/platform"; default_ref="${VELNOR_DEFAULT_REF:-}"; trust=none; if [ "${GITHUB_EVENT_NAME:-}" = push ] && [ -n "${default_ref#refs/heads/}" ] && [ "${GITHUB_REF:-}" = "$default_ref" ] && [ "${GITHUB_REF_PROTECTED:-}" = true ]; then trust=trusted; fi; check_key() { [ "${#1}" -le 512 ] || { printf '\''cache key exceeds 512 bytes: %s\n'\'' "$1" >&2; exit 1; }; }; printf '\''%s\n'\'' "family=sources" "schema=2" "$RUNNER_TEMP/velnor/cargo/registry/index" "$RUNNER_TEMP/velnor/cargo/registry/cache" "$RUNNER_TEMP/velnor/cargo/git/db" > "$d/sources-compat"; cat "$d/platform" >> "$d/sources-compat"; printf '\''%s\n'\'' "$RUNNER_TEMP/velnor/cargo" >> "$d/sources-compat"; s256 "$d/sources-compat"; compat="s256-$h"; : > "$d/sources-locks"; s256 "$GITHUB_WORKSPACE/Cargo.lock"; printf '\''%s\t%s\n'\'' "." "$h" >> "$d/sources-locks"; s256 "$GITHUB_WORKSPACE/crates/velnor-runner/Cargo.lock"; printf '\''%s\t%s\n'\'' "crates/velnor-runner" "$h" >> "$d/sources-locks"; LC_ALL=C sort "$d/sources-locks" > "$d/sources-snapshot"; s256 "$d/sources-snapshot"; snap="s256-$h"; trusted="velnor-v2-sources-trusted-$compat-"; key="$trusted$snap"; check_key "$key"; save=false; [ "$trust" = none ] || save=true; printf '\''%s\n'\'' "sources_key=$key" "sources_save=$save" "sources_snapshot=$snap" '\''sources_restore_keys<<VELNOR_CACHE_KEYS_EOF'\'' >> "$GITHUB_OUTPUT"; printf '\''%s\n'\'' "$trusted" '\''VELNOR_CACHE_KEYS_EOF'\'' >> "$GITHUB_OUTPUT"; printf '\''velnor: cache trust=%s sources key=%s save=%s\n'\'' "$trust" "$key" "$save"; lock_h=; if [ -f "$GITHUB_WORKSPACE/Cargo.lock" ] && [ ! -L "$GITHUB_WORKSPACE/Cargo.lock" ]; then s256 "$GITHUB_WORKSPACE/Cargo.lock"; lock_h="s256-$h"; fi; if [ -z "$lock_h" ]; then printf '\''%s\n'\'' absent > "$d/absent"; s256 "$d/absent"; lock_h="s256-$h"; fi; if (cd "$GITHUB_WORKSPACE" && git ls-files -s -- '\''.cargo'\'' '\'':(glob).cargo/config'\'' '\'':(glob).cargo/config.toml'\'' '\'':(glob).cargo/mutants.toml'\'' '\'':(glob).config/**'\'' '\'':(glob).github/**'\'' '\'':(glob).github/workflows/**'\'' '\'':(glob).gitignore'\'' '\'':(glob).mise-version'\'' '\'':(glob).velnor/**'\'' '\'':(glob).velnor/config.toml'\'' '\'':(glob).velnor/controller-approvals.json'\'' '\'':(glob).velnor/freshness-inventory.json'\'' '\'':(glob).velnor/generator.lock'\'' '\'':(glob).velnor/qualification/**'\'' '\'':(glob).velnor/version-policy.toml'\'' '\'':(glob)Cargo.lock'\'' '\'':(glob)Cargo.toml'\'' '\'':(glob)LICENSE'\'' '\'':(glob)NOTICE'\'' '\'':(glob)crates/**'\'' '\'':(glob)crates/**/Cargo.lock'\'' '\'':(glob)crates/**/Cargo.toml'\'' '\'':(glob)crates/**/benches/*.rs'\'' '\'':(glob)crates/**/benches/*/main.rs'\'' '\'':(glob)crates/**/build.rs'\'' '\'':(glob)crates/**/deny.toml'\'' '\'':(glob)crates/**/examples/*.rs'\'' '\'':(glob)crates/**/examples/*/main.rs'\'' '\'':(glob)crates/**/src/bin/*.rs'\'' '\'':(glob)crates/**/src/bin/*/main.rs'\'' '\'':(glob)crates/**/src/lib.rs'\'' '\'':(glob)crates/**/src/main.rs'\'' '\'':(glob)crates/**/tests/*.rs'\'' '\'':(glob)crates/**/tests/*/main.rs'\'' '\'':(glob)crates/velnor-actions-*/**'\'' '\'':(glob)crates/velnor-actions-contract/**'\'' '\'':(glob)crates/velnor-actions-freshness/**'\'' '\'':(glob)crates/velnor-actions-mise/**'\'' '\'':(glob)crates/velnor-actions-orchestrator/**'\'' '\'':(glob)crates/velnor-actions-rust/**'\'' '\'':(glob)crates/velnor-actions-workflow-renderer/**'\'' '\'':(glob)crates/velnor-archive-guard/**'\'' '\'':(glob)crates/velnor-runner/Cargo.toml'\'' '\'':(glob)crates/velnor-runner/crates/*/**'\'' '\'':(glob)deny.toml'\'' '\'':(glob)docs/proposed/opentofu-goldens/**'\'' '\'':(glob)fixtures/**'\'' '\'':(glob)fixtures/bun-install-lifecycle-runtime/legacy-install-step.sh'\'' '\'':(glob)fixtures/bun-workspace-suites/input/.velnor/config.toml'\'' '\'':(glob)images/**'\'' '\'':(glob)mise.lock'\'' '\'':(glob)mise.toml'\'' '\'':(glob)rust-toolchain'\'' '\'':(glob)rust-toolchain*'\'' '\'':(glob)rust-toolchain.toml'\'' '\'':(glob)scripts/**'\'' '\'':(glob)scripts/derive-rust-tree-digest'\'' '\'':(glob)scripts/generator-release/create-release-manifest.sh'\'' '\'':(glob)scripts/generator-release/preflight-release-tag.sh'\'' '\'':(glob)scripts/generator-release/source-qualification-validator-recipes.json'\'' '\'':(glob)scripts/native-image-candidate-inventory.py'\'' '\'':(glob)scripts/upgrades/bump-gradle-catalog.py'\'' '\''Cargo.toml'\'' '\''crates/velnor-actions-actionlint'\'' '\''crates/velnor-actions-ansible'\'' '\''crates/velnor-actions-bun'\'' '\''crates/velnor-actions-cli'\'' '\''crates/velnor-actions-contract'\'' '\''crates/velnor-actions-dbt'\'' '\''crates/velnor-actions-freshness'\'' '\''crates/velnor-actions-gradle'\'' '\''crates/velnor-actions-mise'\'' '\''crates/velnor-actions-orchestrator'\'' '\''crates/velnor-actions-rust'\'' '\''crates/velnor-actions-tofu'\'' '\''crates/velnor-actions-workflow-renderer'\'' '\''crates/velnor-archive-guard'\'') > "$d/rust-inputs-0" 2>/dev/null; then s256 "$d/rust-inputs-0"; ri_h="s256-$h"; printf '\''%s\n'\'' "lock=$lock_h" "rust_inputs=$ri_h" "task_set=s256-72d71456e7875d08eab731ac8fac1f652852127ce0d7f34cbe8c2cbb601e6c30" "producer_recipe=s256-cff90678998e4bafcbe2adc7fcf190c98c24bda9a67df70a8a99c2135a7fc8a6" > "$d/snapshot"; s256 "$d/snapshot"; snap="s256-$h"; printf '\''%s\n'\'' "state_root_snapshot=$snap" >> "$GITHUB_OUTPUT"; else printf '\''%s\n'\'' '\''::warning::state snapshot unavailable for root root'\''; fi; uname -s > "$d/uname_s" || :; uname_s=; read -r uname_s < "$d/uname_s" || :; uname -m > "$d/uname_m" || :; uname_m=; read -r uname_m < "$d/uname_m" || :; printf '\''%s\n'\'' "family=state" "schema=4" '\''$RUNNER_TEMP/velnor-gc1/state'\'' "unit=union" "mbx=${VELNOR_MBX_BUNDLE_VERSION}" "toolchain=${VELNOR_MBX_BUNDLE_TOOLCHAIN}" "root=." "MBX_SHARE_OUT_DIR=1" "MBX_CC=0" "SOURCE_DATE_EPOCH=0" "MBX_BUILD_SCRIPT_EXECUTION=hybrid" "uname_s=$uname_s" "uname_m=$uname_m" "ImageOS=${ImageOS-}" "store=$RUNNER_TEMP/velnor/mbx" "checkout=$GITHUB_WORKSPACE" > "$d/compat"; s256 "$d/compat"; printf '\''%s\n'\'' "state_root_compat=s256-$h" >> "$GITHUB_OUTPUT"; lock_h=; if [ -f "$GITHUB_WORKSPACE/crates/velnor-runner/Cargo.lock" ] && [ ! -L "$GITHUB_WORKSPACE/crates/velnor-runner/Cargo.lock" ]; then s256 "$GITHUB_WORKSPACE/crates/velnor-runner/Cargo.lock"; lock_h="s256-$h"; fi; if [ -z "$lock_h" ]; then printf '\''%s\n'\'' absent > "$d/absent"; s256 "$d/absent"; lock_h="s256-$h"; fi; if (cd "$GITHUB_WORKSPACE" && git ls-files -s -- '\''.cargo'\'' '\'':(glob)crates/rust-toolchain*'\'' '\'':(glob)crates/velnor-runner/Cargo.lock'\'' '\'':(glob)crates/velnor-runner/Cargo.toml'\'' '\'':(glob)crates/velnor-runner/crates/velnor-runner-attestation/**'\'' '\'':(glob)crates/velnor-runner/rust-toolchain*'\'' '\'':(glob)rust-toolchain*'\'' '\''crates/.cargo'\'' '\''crates/velnor-runner/.cargo'\'' '\''crates/velnor-runner/Cargo.toml'\'' '\''crates/velnor-runner/crates/velnor-resource-probe'\'' '\''crates/velnor-runner/crates/velnor-runner-attestation'\'' '\''crates/velnor-runner/crates/velnor-runner-cli'\'' '\''crates/velnor-runner/crates/velnor-runner-core'\'' '\''crates/velnor-runner/crates/velnor-runner-github'\'' '\''crates/velnor-runner/crates/velnor-runner-host'\'') > "$d/rust-inputs-1" 2>/dev/null; then s256 "$d/rust-inputs-1"; ri_h="s256-$h"; printf '\''%s\n'\'' "lock=$lock_h" "rust_inputs=$ri_h" "task_set=s256-9bbb6771f86a83c5d3becb8b033935cfc4cb2230f06c4df19f622523566f5223" "producer_recipe=s256-79bcd96526808a5cb8995e1901e89f63ecd93552709c8248c5aead07cf007276" > "$d/snapshot"; s256 "$d/snapshot"; snap="s256-$h"; printf '\''%s\n'\'' "state_crates_velnor_runner_snapshot=$snap" >> "$GITHUB_OUTPUT"; else printf '\''%s\n'\'' '\''::warning::state snapshot unavailable for root crates-velnor-runner'\''; fi; uname -s > "$d/uname_s" || :; uname_s=; read -r uname_s < "$d/uname_s" || :; uname -m > "$d/uname_m" || :; uname_m=; read -r uname_m < "$d/uname_m" || :; printf '\''%s\n'\'' "family=state" "schema=4" '\''$RUNNER_TEMP/velnor-gc1/state'\'' "unit=union" "mbx=${VELNOR_MBX_BUNDLE_VERSION}" "toolchain=${VELNOR_MBX_BUNDLE_TOOLCHAIN}" "root=crates/velnor-runner" "MBX_SHARE_OUT_DIR=1" "MBX_CC=0" "SOURCE_DATE_EPOCH=0" "MBX_BUILD_SCRIPT_EXECUTION=hybrid" "uname_s=$uname_s" "uname_m=$uname_m" "ImageOS=${ImageOS-}" "store=$RUNNER_TEMP/velnor/mbx" "checkout=$GITHUB_WORKSPACE" > "$d/compat"; s256 "$d/compat"; printf '\''%s\n'\'' "state_crates_velnor_runner_compat=s256-$h" >> "$GITHUB_OUTPUT"; printf '\''%s\n'\'' "trust=$trust" >> "$GITHUB_OUTPUT"'
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.9560297Z ^[[36;1msh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; case "$RUNNER_TEMP" in /*) ;; *) printf '\''%s\n'\'' '\''RUNNER_TEMP must be absolute'\'' >&2; exit 1 ;; esac; d="$RUNNER_TEMP/velnor/cache-keys"; rm -rf "$d"; mkdir -p "$d"; s256() { sha256sum "$1" > "$d/sum"; h=; rest=; read -r h rest < "$d/sum" || [ -n "$h" ]; case "$h" in '\'''\''|*[!0-9a-f]*) printf '\''%s\n'\'' '\''sha256sum returned no digest'\'' >&2; exit 1 ;; esac; [ "${#h}" -eq 64 ] || exit 1; }; uname -s > "$d/platform"; uname -m >> "$d/platform"; default_ref="${VELNOR_DEFAULT_REF:-}"; trust=none; if [ "${GITHUB_EVENT_NAME:-}" = push ] && [ -n "${default_ref#refs/heads/}" ] && [ "${GITHUB_REF:-}" = "$default_ref" ] && [ "${GITHUB_REF_PROTECTED:-}" = true ]; then trust=trusted; fi; check_key() { [ "${#1}" -le 512 ] || { printf '\''cache key exceeds 512 bytes: %s\n'\'' "$1" >&2; exit 1; }; }; printf '\''%s\n'\'' "family=sources" "schema=2" "$RUNNER_TEMP/velnor/cargo/registry/index" "$RUNNER_TEMP/velnor/cargo/registry/cache" "$RUNNER_TEMP/velnor/cargo/git/db" > "$d/sources-compat"; cat "$d/platform" >> "$d/sources-compat"; printf '\''%s\n'\'' "$RUNNER_TEMP/velnor/cargo" >> "$d/sources-compat"; s256 "$d/sources-compat"; compat="s256-$h"; : > "$d/sources-locks"; s256 "$GITHUB_WORKSPACE/Cargo.lock"; printf '\''%s\t%s\n'\'' "." "$h" >> "$d/sources-locks"; s256 "$GITHUB_WORKSPACE/crates/velnor-runner/Cargo.lock"; printf '\''%s\t%s\n'\'' "crates/velnor-runner" "$h" >> "$d/sources-locks"; LC_ALL=C sort "$d/sources-locks" > "$d/sources-snapshot"; s256 "$d/sources-snapshot"; snap="s256-$h"; trusted="velnor-v2-sources-trusted-$compat-"; key="$trusted$snap"; check_key "$key"; save=false; [ "$trust" = none ] || save=true; printf '\''%s\n'\'' "sources_key=$key" "sources_save=$save" "sources_snapshot=$snap" '\''sources_restore_keys<<VELNOR_CACHE_KEYS_EOF'\'' >> "$GITHUB_OUTPUT"; printf '\''%s\n'\'' "$trusted" '\''VELNOR_CACHE_KEYS_EOF'\'' >> "$GITHUB_OUTPUT"; printf '\''velnor: cache trust=%s sources key=%s save=%s\n'\'' "$trust" "$key" "$save"; lock_h=; if [ -f "$GITHUB_WORKSPACE/Cargo.lock" ] && [ ! -L "$GITHUB_WORKSPACE/Cargo.lock" ]; then s256 "$GITHUB_WORKSPACE/Cargo.lock"; lock_h="s256-$h"; fi; if [ -z "$lock_h" ]; then printf '\''%s\n'\'' absent > "$d/absent"; s256 "$d/absent"; lock_h="s256-$h"; fi; if (cd "$GITHUB_WORKSPACE" && git ls-files -s -- '\''.cargo'\'' '\'':(glob).cargo/config'\'' '\'':(glob).cargo/config.toml'\'' '\'':(glob).cargo/mutants.toml'\'' '\'':(glob).config/**'\'' '\'':(glob).github/**'\'' '\'':(glob).github/workflows/**'\'' '\'':(glob).gitignore'\'' '\'':(glob).mise-version'\'' '\'':(glob).velnor/**'\'' '\'':(glob).velnor/config.toml'\'' '\'':(glob).velnor/controller-approvals.json'\'' '\'':(glob).velnor/freshness-inventory.json'\'' '\'':(glob).velnor/generator.lock'\'' '\'':(glob).velnor/qualification/**'\'' '\'':(glob).velnor/version-policy.toml'\'' '\'':(glob)Cargo.lock'\'' '\'':(glob)Cargo.toml'\'' '\'':(glob)LICENSE'\'' '\'':(glob)NOTICE'\'' '\'':(glob)crates/**'\'' '\'':(glob)crates/**/Cargo.lock'\'' '\'':(glob)crates/**/Cargo.toml'\'' '\'':(glob)crates/**/benches/*.rs'\'' '\'':(glob)crates/**/benches/*/main.rs'\'' '\'':(glob)crates/**/build.rs'\'' '\'':(glob)crates/**/deny.toml'\'' '\'':(glob)crates/**/examples/*.rs'\'' '\'':(glob)crates/**/examples/*/main.rs'\'' '\'':(glob)crates/**/src/bin/*.rs'\'' '\'':(glob)crates/**/src/bin/*/main.rs'\'' '\'':(glob)crates/**/src/lib.rs'\'' '\'':(glob)crates/**/src/main.rs'\'' '\'':(glob)crates/**/tests/*.rs'\'' '\'':(glob)crates/**/tests/*/main.rs'\'' '\'':(glob)crates/velnor-actions-*/**'\'' '\'':(glob)crates/velnor-actions-contract/**'\'' '\'':(glob)crates/velnor-actions-freshness/**'\'' '\'':(glob)crates/velnor-actions-mise/**'\'' '\'':(glob)crates/velnor-actions-orchestrator/**'\'' '\'':(glob)crates/velnor-actions-rust/**'\'' '\'':(glob)crates/velnor-actions-workflow-renderer/**'\'' '\'':(glob)crates/velnor-archive-guard/**'\'' '\'':(glob)crates/velnor-runner/Cargo.toml'\'' '\'':(glob)crates/velnor-runner/crates/*/**'\'' '\'':(glob)deny.toml'\'' '\'':(glob)docs/proposed/opentofu-goldens/**'\'' '\'':(glob)fixtures/**'\'' '\'':(glob)fixtures/bun-install-lifecycle-runtime/legacy-install-step.sh'\'' '\'':(glob)fixtures/bun-workspace-suites/input/.velnor/config.toml'\'' '\'':(glob)images/**'\'' '\'':(glob)mise.lock'\'' '\'':(glob)mise.toml'\'' '\'':(glob)rust-toolchain'\'' '\'':(glob)rust-toolchain*'\'' '\'':(glob)rust-toolchain.toml'\'' '\'':(glob)scripts/**'\'' '\'':(glob)scripts/derive-rust-tree-digest'\'' '\'':(glob)scripts/generator-release/create-release-manifest.sh'\'' '\'':(glob)scripts/generator-release/preflight-release-tag.sh'\'' '\'':(glob)scripts/generator-release/source-qualification-validator-recipes.json'\'' '\'':(glob)scripts/native-image-candidate-inventory.py'\'' '\'':(glob)scripts/upgrades/bump-gradle-catalog.py'\'' '\''Cargo.toml'\'' '\''crates/velnor-actions-actionlint'\'' '\''crates/velnor-actions-ansible'\'' '\''crates/velnor-actions-bun'\'' '\''crates/velnor-actions-cli'\'' '\''crates/velnor-actions-contract'\'' '\''crates/velnor-actions-dbt'\'' '\''crates/velnor-actions-freshness'\'' '\''crates/velnor-actions-gradle'\'' '\''crates/velnor-actions-mise'\'' '\''crates/velnor-actions-orchestrator'\'' '\''crates/velnor-actions-rust'\'' '\''crates/velnor-actions-tofu'\'' '\''crates/velnor-actions-workflow-renderer'\'' '\''crates/velnor-archive-guard'\'') > "$d/rust-inputs-0" 2>/dev/null; then s256 "$d/rust-inputs-0"; ri_h="s256-$h"; printf '\''%s\n'\'' "lock=$lock_h" "rust_inputs=$ri_h" "task_set=s256-72d71456e7875d08eab731ac8fac1f652852127ce0d7f34cbe8c2cbb601e6c30" "producer_recipe=s256-cff90678998e4bafcbe2adc7fcf190c98c24bda9a67df70a8a99c2135a7fc8a6" > "$d/snapshot"; s256 "$d/snapshot"; snap="s256-$h"; printf '\''%s\n'\'' "state_root_snapshot=$snap" >> "$GITHUB_OUTPUT"; else printf '\''%s\n'\'' '\''::warning::state snapshot unavailable for root root'\''; fi; uname -s > "$d/uname_s" || :; uname_s=; read -r uname_s < "$d/uname_s" || :; uname -m > "$d/uname_m" || :; uname_m=; read -r uname_m < "$d/uname_m" || :; printf '\''%s\n'\'' "family=state" "schema=4" '\''$RUNNER_TEMP/velnor-gc1/state'\'' "unit=union" "mbx=${VELNOR_MBX_BUNDLE_VERSION}" "toolchain=${VELNOR_MBX_BUNDLE_TOOLCHAIN}" "root=." "MBX_SHARE_OUT_DIR=1" "MBX_CC=0" "SOURCE_DATE_EPOCH=0" "MBX_BUILD_SCRIPT_EXECUTION=hybrid" "uname_s=$uname_s" "uname_m=$uname_m" "ImageOS=${ImageOS-}" "store=$RUNNER_TEMP/velnor/mbx" "checkout=$GITHUB_WORKSPACE" > "$d/compat"; s256 "$d/compat"; printf '\''%s\n'\'' "state_root_compat=s256-$h" >> "$GITHUB_OUTPUT"; lock_h=; if [ -f "$GITHUB_WORKSPACE/crates/velnor-runner/Cargo.lock" ] && [ ! -L "$GITHUB_WORKSPACE/crates/velnor-runner/Cargo.lock" ]; then s256 "$GITHUB_WORKSPACE/crates/velnor-runner/Cargo.lock"; lock_h="s256-$h"; fi; if [ -z "$lock_h" ]; then printf '\''%s\n'\'' absent > "$d/absent"; s256 "$d/absent"; lock_h="s256-$h"; fi; if (cd "$GITHUB_WORKSPACE" && git ls-files -s -- '\''.cargo'\'' '\'':(glob)crates/rust-toolchain*'\'' '\'':(glob)crates/velnor-runner/Cargo.lock'\'' '\'':(glob)crates/velnor-runner/Cargo.toml'\'' '\'':(glob)crates/velnor-runner/crates/velnor-runner-attestation/**'\'' '\'':(glob)crates/velnor-runner/rust-toolchain*'\'' '\'':(glob)rust-toolchain*'\'' '\''crates/.cargo'\'' '\''crates/velnor-runner/.cargo'\'' '\''crates/velnor-runner/Cargo.toml'\'' '\''crates/velnor-runner/crates/velnor-resource-probe'\'' '\''crates/velnor-runner/crates/velnor-runner-attestation'\'' '\''crates/velnor-runner/crates/velnor-runner-cli'\'' '\''crates/velnor-runner/crates/velnor-runner-core'\'' '\''crates/velnor-runner/crates/velnor-runner-github'\'' '\''crates/velnor-runner/crates/velnor-runner-host'\'') > "$d/rust-inputs-1" 2>/dev/null; then s256 "$d/rust-inputs-1"; ri_h="s256-$h"; printf '\''%s\n'\'' "lock=$lock_h" "rust_inputs=$ri_h" "task_set=s256-9bbb6771f86a83c5d3becb8b033935cfc4cb2230f06c4df19f622523566f5223" "producer_recipe=s256-79bcd96526808a5cb8995e1901e89f63ecd93552709c8248c5aead07cf007276" > "$d/snapshot"; s256 "$d/snapshot"; snap="s256-$h"; printf '\''%s\n'\'' "state_crates_velnor_runner_snapshot=$snap" >> "$GITHUB_OUTPUT"; else printf '\''%s\n'\'' '\''::warning::state snapshot unavailable for root crates-velnor-runner'\''; fi; uname -s > "$d/uname_s" || :; uname_s=; read -r uname_s < "$d/uname_s" || :; uname -m > "$d/uname_m" || :; uname_m=; read -r uname_m < "$d/uname_m" || :; printf '\''%s\n'\'' "family=state" "schema=4" '\''$RUNNER_TEMP/velnor-gc1/state'\'' "unit=union" "mbx=${VELNOR_MBX_BUNDLE_VERSION}" "toolchain=${VELNOR_MBX_BUNDLE_TOOLCHAIN}" "root=crates/velnor-runner" "MBX_SHARE_OUT_DIR=1" "MBX_CC=0" "SOURCE_DATE_EPOCH=0" "MBX_BUILD_SCRIPT_EXECUTION=hybrid" "uname_s=$uname_s" "uname_m=$uname_m" "ImageOS=${ImageOS-}" "store=$RUNNER_TEMP/velnor/mbx" "checkout=$GITHUB_WORKSPACE" > "$d/compat"; s256 "$d/compat"; printf '\''%s\n'\'' "state_crates_velnor_runner_compat=s256-$h" >> "$GITHUB_OUTPUT"; printf '\''%s\n'\'' "trust=$trust" >> "$GITHUB_OUTPUT"'^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.9614469Z shell: /usr/bin/bash -e {0}
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.9614608Z env:
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.9614724Z   ACTIONS_ID_TOKEN_REQUEST_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.9614969Z   ACTIONS_ID_TOKEN_REQUEST_URL: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.9615109Z   ACTIONS_RUNTIME_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.9615239Z   CARGO_REGISTRY_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.9615360Z   GH_CONFIG_DIR: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.9615468Z   GH_HOST: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.9615569Z   GH_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.9615670Z   GITHUB_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.9615788Z   MISE_AUTO_INSTALL: false
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.9615922Z   MISE_EXEC_AUTO_INSTALL: false
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.9616053Z   MISE_GITHUB_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.9616177Z   MISE_LOCKFILE: 0
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.9616302Z   MISE_NO_CONFIG: 1
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.9616424Z   MISE_NO_ENV: 1
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.9616538Z   MISE_NO_HOOKS: 1
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.9616654Z   MISE_QUIET: 1
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.9616768Z   NODE_AUTH_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.9616876Z   NPM_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.9616991Z   RUSTUP_AUTO_INSTALL: 0
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.9617220Z   VELNOR_ASSET_SHA256: db7480b83238f85a2e4472d26ba57ca4ee4d6822353cbdaad690b1a2b963b26f
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.9617685Z   VELNOR_ASSET_URL: https://github.com/tailrocks/velnor-new/releases/download/v0.1.74/velnor-actions-0.1.74-x86_64-unknown-linux-gnu
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.9618245Z   VELNOR_RELEASE_COMMIT: c622bfb187556afb8d3ff3ca917a719e4bb7f32a
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.9618452Z   VELNOR_RUN_KEY_ATTEMPT: 1
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.9618585Z   MISE_LOG_LEVEL: info
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.9618770Z   MISE_TRUSTED_CONFIG_PATHS: /home/runner/work/velnor-new/velnor-new
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.9618980Z   MISE_YES: 1
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.9619106Z   VELNOR_TOOL_JACTIONLINT: 2.4.0
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.9619260Z   VELNOR_TOOL_MR_BOXINGTON: 1.29.2
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.9619418Z   VELNOR_TOOL_NEXTEST: 0.9.151
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.9619571Z   VELNOR_TOOL_RUST: 1.99.1
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.9619710Z   VELNOR_TOOL_SHELLCHECK: 0.11.0
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.9619867Z   VELNOR_DEFAULT_REF: refs/heads/main
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.9620030Z   VELNOR_MBX_BUNDLE_TOOLCHAIN: 1.99.1
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.9620191Z   VELNOR_MBX_BUNDLE_VERSION: 1.29.2
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.9620354Z ##[endgroup]
+Plan	UNKNOWN STEP	2026-11-06T07:42:50.9879601Z velnor: cache trust=trusted sources key=velnor-v2-sources-trusted-s256-e32b46924cd679f385a2d1a7e3c22253aa3c0be67fb101bb0e636963ba16b528-s256-8df98908d1457c1f5b8991f7bc35534e9675ab9d5a7cdda75c03190ee5a1ca9e save=true
+Plan	UNKNOWN STEP	2026-11-06T07:42:51.0284866Z ##[group]Run sh -c 'set -eu; case "$RUNNER_TEMP" in /*) ;; *) printf '\''%s\n'\'' '\''RUNNER_TEMP must be absolute'\'' >&2; exit 1 ;; esac; d="$RUNNER_TEMP/velnor/state-select"; rm -rf "$d"; mkdir -p "$d"; ref="${VELNOR_DEFAULT_REF:-}"; repo="${GITHUB_REPOSITORY:-}"; signer="$repo/.github/workflows/state-seal.yml"; limit="${VELNOR_STATE_GH_TIMEOUT:-60}"; shape='\''^s256-[0-9a-f]{64}-s256-[0-9a-f]{64}-s256-[0-9a-f]{64}$'\''; run_gh() { if command -v timeout >/dev/null 2>&1; then timeout "$limit" gh "$@"; else gh "$@"; fi; }; attested() { out="$d/$2"; : > "$out"; [ -n "$ref" ] && [ -n "$repo" ] && [ -n "$signer" ] || return 0; command -v gh >/dev/null 2>&1 || return 0; run_gh cache list -R "$repo" --key "$1" --ref "$ref" --sort created_at --order desc --limit 100 --json key,createdAt,id,sizeInBytes --jq '\''.[] | [.createdAt, .key, (.id | tostring), (.sizeInBytes | tostring)] | @tsv'\'' > "$d/list" 2>/dev/null || return 0; LC_ALL=C sort -r "$d/list" > "$d/sorted" || return 0; n=; v=; while IFS='\''	'\'' read -r created key id size; do [ "${#v}" -lt 3 ] && [ "${#n}" -lt 100 ] || break; case "$key" in *[[:space:]]*) continue ;; esac; case "$id" in '\'''\''|*[!0-9]*) continue ;; esac; case "$size" in '\'''\''|*[!0-9]*) continue ;; esac; [ "$size" -le 1616920640 ] || continue; case "$key" in "$1"?*) ;; *) continue ;; esac; printf '\''%s\n'\'' "${key#"$1"}" | grep -Eq "$shape" || continue; printf '\''%s %s %s\n'\'' "$key" "$id" "$size" > "$d/subject"; n="${n}x"; if run_gh attestation verify "$d/subject" -R "$repo" --signer-workflow "$signer" --source-ref "$ref" --predicate-type '\''https://velnor.dev/attestation/state-seal/v1'\'' >/dev/null 2>&1; then printf '\''%s\n'\'' "$key" >> "$out"; v="${v}x"; fi; done < "$d/sorted"; }; emit() { { printf '\''%s\n'\'' "$1<<VELNOR_STATE_ATTESTED_EOF"; cat "$d/$2"; printf '\''%s\n'\'' VELNOR_STATE_ATTESTED_EOF; } >> "$GITHUB_OUTPUT"; }; decide() { want=false; if [ -n "$4" ] && [ -n "$5" ]; then want=true; prefix="$3$4-$5-"; while IFS= read -r cand || [ -n "$cand" ]; do case "$cand" in "$prefix"?*) want=false ;; esac; done < "$d/$2"; fi; printf '\''%s\n'\'' "$1=$want" >> "$GITHUB_OUTPUT"; }; attested '\''velnor-v4-state-trusted-union-root-'\'' r0; emit state_union_root_attested r0; decide state_union_root_produce r0 '\''velnor-v4-state-trusted-union-root-'\'' "${VELNOR_STATE_COMPAT_R0-}" "${VELNOR_STATE_SNAPSHOT_R0-}"; attested '\''velnor-v4-state-trusted-union-crates-velnor-runner-'\'' r1; emit state_union_crates_velnor_runner_attested r1; decide state_union_crates_velnor_runner_produce r1 '\''velnor-v4-state-trusted-union-crates-velnor-runner-'\'' "${VELNOR_STATE_COMPAT_R1-}" "${VELNOR_STATE_SNAPSHOT_R1-}"'
+Plan	UNKNOWN STEP	2026-11-06T07:42:51.0293252Z ^[[36;1msh -c 'set -eu; case "$RUNNER_TEMP" in /*) ;; *) printf '\''%s\n'\'' '\''RUNNER_TEMP must be absolute'\'' >&2; exit 1 ;; esac; d="$RUNNER_TEMP/velnor/state-select"; rm -rf "$d"; mkdir -p "$d"; ref="${VELNOR_DEFAULT_REF:-}"; repo="${GITHUB_REPOSITORY:-}"; signer="$repo/.github/workflows/state-seal.yml"; limit="${VELNOR_STATE_GH_TIMEOUT:-60}"; shape='\''^s256-[0-9a-f]{64}-s256-[0-9a-f]{64}-s256-[0-9a-f]{64}$'\''; run_gh() { if command -v timeout >/dev/null 2>&1; then timeout "$limit" gh "$@"; else gh "$@"; fi; }; attested() { out="$d/$2"; : > "$out"; [ -n "$ref" ] && [ -n "$repo" ] && [ -n "$signer" ] || return 0; command -v gh >/dev/null 2>&1 || return 0; run_gh cache list -R "$repo" --key "$1" --ref "$ref" --sort created_at --order desc --limit 100 --json key,createdAt,id,sizeInBytes --jq '\''.[] | [.createdAt, .key, (.id | tostring), (.sizeInBytes | tostring)] | @tsv'\'' > "$d/list" 2>/dev/null || return 0; LC_ALL=C sort -r "$d/list" > "$d/sorted" || return 0; n=; v=; while IFS='\''	'\'' read -r created key id size; do [ "${#v}" -lt 3 ] && [ "${#n}" -lt 100 ] || break; case "$key" in *[[:space:]]*) continue ;; esac; case "$id" in '\'''\''|*[!0-9]*) continue ;; esac; case "$size" in '\'''\''|*[!0-9]*) continue ;; esac; [ "$size" -le 1616920640 ] || continue; case "$key" in "$1"?*) ;; *) continue ;; esac; printf '\''%s\n'\'' "${key#"$1"}" | grep -Eq "$shape" || continue; printf '\''%s %s %s\n'\'' "$key" "$id" "$size" > "$d/subject"; n="${n}x"; if run_gh attestation verify "$d/subject" -R "$repo" --signer-workflow "$signer" --source-ref "$ref" --predicate-type '\''https://velnor.dev/attestation/state-seal/v1'\'' >/dev/null 2>&1; then printf '\''%s\n'\'' "$key" >> "$out"; v="${v}x"; fi; done < "$d/sorted"; }; emit() { { printf '\''%s\n'\'' "$1<<VELNOR_STATE_ATTESTED_EOF"; cat "$d/$2"; printf '\''%s\n'\'' VELNOR_STATE_ATTESTED_EOF; } >> "$GITHUB_OUTPUT"; }; decide() { want=false; if [ -n "$4" ] && [ -n "$5" ]; then want=true; prefix="$3$4-$5-"; while IFS= read -r cand || [ -n "$cand" ]; do case "$cand" in "$prefix"?*) want=false ;; esac; done < "$d/$2"; fi; printf '\''%s\n'\'' "$1=$want" >> "$GITHUB_OUTPUT"; }; attested '\''velnor-v4-state-trusted-union-root-'\'' r0; emit state_union_root_attested r0; decide state_union_root_produce r0 '\''velnor-v4-state-trusted-union-root-'\'' "${VELNOR_STATE_COMPAT_R0-}" "${VELNOR_STATE_SNAPSHOT_R0-}"; attested '\''velnor-v4-state-trusted-union-crates-velnor-runner-'\'' r1; emit state_union_crates_velnor_runner_attested r1; decide state_union_crates_velnor_runner_produce r1 '\''velnor-v4-state-trusted-union-crates-velnor-runner-'\'' "${VELNOR_STATE_COMPAT_R1-}" "${VELNOR_STATE_SNAPSHOT_R1-}"'^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:42:51.0340682Z shell: /usr/bin/bash -e {0}
+Plan	UNKNOWN STEP	2026-11-06T07:42:51.0340834Z env:
+Plan	UNKNOWN STEP	2026-11-06T07:42:51.0340963Z   ACTIONS_ID_TOKEN_REQUEST_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:51.0341124Z   ACTIONS_ID_TOKEN_REQUEST_URL: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:51.0341274Z   ACTIONS_RUNTIME_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:51.0341416Z   CARGO_REGISTRY_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:51.0341550Z   GH_CONFIG_DIR: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:51.0341669Z   GH_HOST: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:51.0343723Z   GH_TOKEN: ***
+Plan	UNKNOWN STEP	2026-11-06T07:42:51.0343852Z   GITHUB_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:51.0343981Z   MISE_AUTO_INSTALL: false
+Plan	UNKNOWN STEP	2026-11-06T07:42:51.0344127Z   MISE_EXEC_AUTO_INSTALL: false
+Plan	UNKNOWN STEP	2026-11-06T07:42:51.0344273Z   MISE_GITHUB_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:51.0344407Z   MISE_LOCKFILE: 0
+Plan	UNKNOWN STEP	2026-11-06T07:42:51.0344532Z   MISE_NO_CONFIG: 1
+Plan	UNKNOWN STEP	2026-11-06T07:42:51.0344651Z   MISE_NO_ENV: 1
+Plan	UNKNOWN STEP	2026-11-06T07:42:51.0344767Z   MISE_NO_HOOKS: 1
+Plan	UNKNOWN STEP	2026-11-06T07:42:51.0344885Z   MISE_QUIET: 1
+Plan	UNKNOWN STEP	2026-11-06T07:42:51.0345002Z   NODE_AUTH_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:51.0345120Z   NPM_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:51.0345241Z   RUSTUP_AUTO_INSTALL: 0
+Plan	UNKNOWN STEP	2026-11-06T07:42:51.0345474Z   VELNOR_ASSET_SHA256: db7480b83238f85a2e4472d26ba57ca4ee4d6822353cbdaad690b1a2b963b26f
+Plan	UNKNOWN STEP	2026-11-06T07:42:51.0345907Z   VELNOR_ASSET_URL: https://github.com/tailrocks/velnor-new/releases/download/v0.1.74/velnor-actions-0.1.74-x86_64-unknown-linux-gnu
+Plan	UNKNOWN STEP	2026-11-06T07:42:51.0346292Z   VELNOR_RELEASE_COMMIT: c622bfb187556afb8d3ff3ca917a719e4bb7f32a
+Plan	UNKNOWN STEP	2026-11-06T07:42:51.0346501Z   VELNOR_RUN_KEY_ATTEMPT: 1
+Plan	UNKNOWN STEP	2026-11-06T07:42:51.0346641Z   MISE_LOG_LEVEL: info
+Plan	UNKNOWN STEP	2026-11-06T07:42:51.0346824Z   MISE_TRUSTED_CONFIG_PATHS: /home/runner/work/velnor-new/velnor-new
+Plan	UNKNOWN STEP	2026-11-06T07:42:51.0347027Z   MISE_YES: 1
+Plan	UNKNOWN STEP	2026-11-06T07:42:51.0347161Z   VELNOR_TOOL_JACTIONLINT: 2.4.0
+Plan	UNKNOWN STEP	2026-11-06T07:42:51.0347314Z   VELNOR_TOOL_MR_BOXINGTON: 1.29.2
+Plan	UNKNOWN STEP	2026-11-06T07:42:51.0347466Z   VELNOR_TOOL_NEXTEST: 0.9.151
+Plan	UNKNOWN STEP	2026-11-06T07:42:51.0347610Z   VELNOR_TOOL_RUST: 1.99.1
+Plan	UNKNOWN STEP	2026-11-06T07:42:51.0347749Z   VELNOR_TOOL_SHELLCHECK: 0.11.0
+Plan	UNKNOWN STEP	2026-11-06T07:42:51.0348001Z   VELNOR_DEFAULT_REF: refs/heads/main
+Plan	UNKNOWN STEP	2026-11-06T07:42:51.0348265Z   VELNOR_STATE_COMPAT_R0: s256-5b6d0b80604733ba245e8e1421d5b16b059b5265e2bd6fa0bff55c3637645bf9
+Plan	UNKNOWN STEP	2026-11-06T07:42:51.0348622Z   VELNOR_STATE_COMPAT_R1: s256-b121cd917b9a47844ca8f827c428319e538280b29ad69c6543e3afc2b3e0e2f7
+Plan	UNKNOWN STEP	2026-11-06T07:42:51.0348884Z   VELNOR_STATE_GH_TIMEOUT: 60
+Plan	UNKNOWN STEP	2026-11-06T07:42:51.0349132Z   VELNOR_STATE_SNAPSHOT_R0: s256-855948e78213beaa3a2709ec1e3917b1f3c37d6983a807721ad309bc59381810
+Plan	UNKNOWN STEP	2026-11-06T07:42:51.0349491Z   VELNOR_STATE_SNAPSHOT_R1: s256-3d2a4d030a8c37f77d8384f1d85e48d42da0a485a507446006a2e10089dfe912
+Plan	UNKNOWN STEP	2026-11-06T07:42:51.0349750Z ##[endgroup]
+Plan	UNKNOWN STEP	2026-11-06T07:42:58.6186371Z ##[group]Run actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+Plan	UNKNOWN STEP	2026-11-06T07:42:58.6186593Z with:
+Plan	UNKNOWN STEP	2026-11-06T07:42:58.6187012Z   key: velnor-v2-sources-trusted-s256-e32b46924cd679f385a2d1a7e3c22253aa3c0be67fb101bb0e636963ba16b528-s256-8df98908d1457c1f5b8991f7bc35534e9675ab9d5a7cdda75c03190ee5a1ca9e
+Plan	UNKNOWN STEP	2026-11-06T07:42:58.6187651Z   path: /home/runner/work/_temp/velnor/cargo/registry/index
+Plan	UNKNOWN STEP	/home/runner/work/_temp/velnor/cargo/registry/cache
+Plan	UNKNOWN STEP	/home/runner/work/_temp/velnor/cargo/git/db
+Plan	UNKNOWN STEP	2026-11-06T07:42:58.6188405Z   restore-keys: velnor-v2-sources-trusted-s256-e32b46924cd679f385a2d1a7e3c22253aa3c0be67fb101bb0e636963ba16b528-
+Plan	UNKNOWN STEP	2026-11-06T07:42:58.6188711Z   enableCrossOsArchive: false
+Plan	UNKNOWN STEP	2026-11-06T07:42:58.6188860Z   fail-on-cache-miss: false
+Plan	UNKNOWN STEP	2026-11-06T07:42:58.6188993Z   lookup-only: false
+Plan	UNKNOWN STEP	2026-11-06T07:42:58.6189127Z env:
+Plan	UNKNOWN STEP	2026-11-06T07:42:58.6189240Z   ACTIONS_ID_TOKEN_REQUEST_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:58.6189387Z   ACTIONS_ID_TOKEN_REQUEST_URL: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:58.6189554Z   ACTIONS_RUNTIME_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:58.6189685Z   CARGO_REGISTRY_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:58.6189808Z   GH_CONFIG_DIR: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:58.6189920Z   GH_HOST: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:58.6190023Z   GH_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:58.6190131Z   GITHUB_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:58.6190248Z   MISE_AUTO_INSTALL: false
+Plan	UNKNOWN STEP	2026-11-06T07:42:58.6190383Z   MISE_EXEC_AUTO_INSTALL: false
+Plan	UNKNOWN STEP	2026-11-06T07:42:58.6190519Z   MISE_GITHUB_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:58.6190645Z   MISE_LOCKFILE: 0
+Plan	UNKNOWN STEP	2026-11-06T07:42:58.6190755Z   MISE_NO_CONFIG: 1
+Plan	UNKNOWN STEP	2026-11-06T07:42:58.6190869Z   MISE_NO_ENV: 1
+Plan	UNKNOWN STEP	2026-11-06T07:42:58.6190978Z   MISE_NO_HOOKS: 1
+Plan	UNKNOWN STEP	2026-11-06T07:42:58.6191091Z   MISE_QUIET: 1
+Plan	UNKNOWN STEP	2026-11-06T07:42:58.6191200Z   NODE_AUTH_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:58.6191311Z   NPM_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:42:58.6191425Z   RUSTUP_AUTO_INSTALL: 0
+Plan	UNKNOWN STEP	2026-11-06T07:42:58.6191635Z   VELNOR_ASSET_SHA256: db7480b83238f85a2e4472d26ba57ca4ee4d6822353cbdaad690b1a2b963b26f
+Plan	UNKNOWN STEP	2026-11-06T07:42:58.6192167Z   VELNOR_ASSET_URL: https://github.com/tailrocks/velnor-new/releases/download/v0.1.74/velnor-actions-0.1.74-x86_64-unknown-linux-gnu
+Plan	UNKNOWN STEP	2026-11-06T07:42:58.6192521Z   VELNOR_RELEASE_COMMIT: c622bfb187556afb8d3ff3ca917a719e4bb7f32a
+Plan	UNKNOWN STEP	2026-11-06T07:42:58.6192716Z   VELNOR_RUN_KEY_ATTEMPT: 1
+Plan	UNKNOWN STEP	2026-11-06T07:42:58.6192848Z   MISE_LOG_LEVEL: info
+Plan	UNKNOWN STEP	2026-11-06T07:42:58.6193018Z   MISE_TRUSTED_CONFIG_PATHS: /home/runner/work/velnor-new/velnor-new
+Plan	UNKNOWN STEP	2026-11-06T07:42:58.6193205Z   MISE_YES: 1
+Plan	UNKNOWN STEP	2026-11-06T07:42:58.6193323Z   VELNOR_TOOL_JACTIONLINT: 2.4.0
+Plan	UNKNOWN STEP	2026-11-06T07:42:58.6193463Z   VELNOR_TOOL_MR_BOXINGTON: 1.29.2
+Plan	UNKNOWN STEP	2026-11-06T07:42:58.6193603Z   VELNOR_TOOL_NEXTEST: 0.9.151
+Plan	UNKNOWN STEP	2026-11-06T07:42:58.6193738Z   VELNOR_TOOL_RUST: 1.99.1
+Plan	UNKNOWN STEP	2026-11-06T07:42:58.6193873Z   VELNOR_TOOL_SHELLCHECK: 0.11.0
+Plan	UNKNOWN STEP	2026-11-06T07:42:58.6194008Z ##[endgroup]
+Plan	UNKNOWN STEP	2026-11-06T07:42:58.8422565Z Cache hit for restore-key: velnor-v2-sources-trusted-s256-e32b46924cd679f385a2d1a7e3c22253aa3c0be67fb101bb0e636963ba16b528-s256-569956fc78c6cf870ea81b3b8e1ac38deaf810556274be717ccc803769c40427
+Plan	UNKNOWN STEP	2026-11-06T07:42:59.8591200Z Received 76297026 of 76297026 (100.0%), 87.7 MBs/sec
+Plan	UNKNOWN STEP	2026-11-06T07:42:59.8592850Z Cache Size: ~73 MB (76297026 B)
+Plan	UNKNOWN STEP	2026-11-06T07:42:59.8673500Z [command]/usr/bin/tar -xf /home/runner/work/_temp/f68ecd51-9160-4a18-a543-fc08ddb068ed/cache.tzst -P -C /home/runner/work/velnor-new/velnor-new --use-compress-program unzstd
+Plan	UNKNOWN STEP	2026-11-06T07:42:59.9849761Z Cache restored successfully
+Plan	UNKNOWN STEP	2026-11-06T07:43:00.0025906Z Cache restored from key: velnor-v2-sources-trusted-s256-e32b46924cd679f385a2d1a7e3c22253aa3c0be67fb101bb0e636963ba16b528-s256-569956fc78c6cf870ea81b3b8e1ac38deaf810556274be717ccc803769c40427
+Plan	UNKNOWN STEP	2026-11-06T07:43:00.0139982Z ##[group]Run sh -c 'mkdir -p "$RUNNER_TEMP/velnor/cargo-clean" && cd "$RUNNER_TEMP/velnor/cargo-clean" && if mise --no-config --no-env --no-hooks exec rust@'"${VELNOR_TOOL_RUST}"' -- cargo metadata --locked --offline --manifest-path "$GITHUB_WORKSPACE/Cargo.toml" >/dev/null 2>&1; then echo "velnor: sources hit, skipping fetch"; echo "velnor: sources downloaded=0"; else echo "velnor: sources miss (source_missing), fetching"; status=0; mise --no-config --no-env --no-hooks exec rust@'"${VELNOR_TOOL_RUST}"' -- cargo fetch --locked --manifest-path "$GITHUB_WORKSPACE/Cargo.toml" 2> "$RUNNER_TEMP/velnor/cargo-clean/fetch-stderr.log" || status=$?; cat "$RUNNER_TEMP/velnor/cargo-clean/fetch-stderr.log" >&2; grep -Ec '\''^ *Downloaded [^ ]+ v[0-9]'\'' "$RUNNER_TEMP/velnor/cargo-clean/fetch-stderr.log" > "$RUNNER_TEMP/velnor/cargo-clean/fetch-downloads" || true; n=; read -r n < "$RUNNER_TEMP/velnor/cargo-clean/fetch-downloads" || true; echo "velnor: sources downloaded=${n:-0}"; exit $status; fi'
+Plan	UNKNOWN STEP	2026-11-06T07:43:00.0143048Z ^[[36;1msh -c 'mkdir -p "$RUNNER_TEMP/velnor/cargo-clean" && cd "$RUNNER_TEMP/velnor/cargo-clean" && if mise --no-config --no-env --no-hooks exec rust@'"${VELNOR_TOOL_RUST}"' -- cargo metadata --locked --offline --manifest-path "$GITHUB_WORKSPACE/Cargo.toml" >/dev/null 2>&1; then echo "velnor: sources hit, skipping fetch"; echo "velnor: sources downloaded=0"; else echo "velnor: sources miss (source_missing), fetching"; status=0; mise --no-config --no-env --no-hooks exec rust@'"${VELNOR_TOOL_RUST}"' -- cargo fetch --locked --manifest-path "$GITHUB_WORKSPACE/Cargo.toml" 2> "$RUNNER_TEMP/velnor/cargo-clean/fetch-stderr.log" || status=$?; cat "$RUNNER_TEMP/velnor/cargo-clean/fetch-stderr.log" >&2; grep -Ec '\''^ *Downloaded [^ ]+ v[0-9]'\'' "$RUNNER_TEMP/velnor/cargo-clean/fetch-stderr.log" > "$RUNNER_TEMP/velnor/cargo-clean/fetch-downloads" || true; n=; read -r n < "$RUNNER_TEMP/velnor/cargo-clean/fetch-downloads" || true; echo "velnor: sources downloaded=${n:-0}"; exit $status; fi'^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:43:00.0184237Z shell: /usr/bin/bash -e {0}
+Plan	UNKNOWN STEP	2026-11-06T07:43:00.0184380Z env:
+Plan	UNKNOWN STEP	2026-11-06T07:43:00.0184506Z   ACTIONS_ID_TOKEN_REQUEST_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:43:00.0184681Z   ACTIONS_ID_TOKEN_REQUEST_URL: 
+Plan	UNKNOWN STEP	2026-11-06T07:43:00.0184825Z   ACTIONS_RUNTIME_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:43:00.0185073Z   CARGO_REGISTRY_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:43:00.0185199Z   GH_CONFIG_DIR: 
+Plan	UNKNOWN STEP	2026-11-06T07:43:00.0185311Z   GH_HOST: 
+Plan	UNKNOWN STEP	2026-11-06T07:43:00.0185416Z   GH_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:43:00.0185525Z   GITHUB_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:43:00.0185641Z   MISE_AUTO_INSTALL: false
+Plan	UNKNOWN STEP	2026-11-06T07:43:00.0185780Z   MISE_EXEC_AUTO_INSTALL: false
+Plan	UNKNOWN STEP	2026-11-06T07:43:00.0185913Z   MISE_GITHUB_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:43:00.0186029Z   MISE_LOCKFILE: 0
+Plan	UNKNOWN STEP	2026-11-06T07:43:00.0186141Z   MISE_NO_CONFIG: 1
+Plan	UNKNOWN STEP	2026-11-06T07:43:00.0186258Z   MISE_NO_ENV: 1
+Plan	UNKNOWN STEP	2026-11-06T07:43:00.0186364Z   MISE_NO_HOOKS: 1
+Plan	UNKNOWN STEP	2026-11-06T07:43:00.0186473Z   MISE_QUIET: 1
+Plan	UNKNOWN STEP	2026-11-06T07:43:00.0186581Z   NODE_AUTH_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:43:00.0186696Z   NPM_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:43:00.0186817Z   RUSTUP_AUTO_INSTALL: 0
+Plan	UNKNOWN STEP	2026-11-06T07:43:00.0187030Z   VELNOR_ASSET_SHA256: db7480b83238f85a2e4472d26ba57ca4ee4d6822353cbdaad690b1a2b963b26f
+Plan	UNKNOWN STEP	2026-11-06T07:43:00.0187436Z   VELNOR_ASSET_URL: https://github.com/tailrocks/velnor-new/releases/download/v0.1.74/velnor-actions-0.1.74-x86_64-unknown-linux-gnu
+Plan	UNKNOWN STEP	2026-11-06T07:43:00.0187792Z   VELNOR_RELEASE_COMMIT: c622bfb187556afb8d3ff3ca917a719e4bb7f32a
+Plan	UNKNOWN STEP	2026-11-06T07:43:00.0188073Z   VELNOR_RUN_KEY_ATTEMPT: 1
+Plan	UNKNOWN STEP	2026-11-06T07:43:00.0188209Z   MISE_LOG_LEVEL: info
+Plan	UNKNOWN STEP	2026-11-06T07:43:00.0188379Z   MISE_TRUSTED_CONFIG_PATHS: /home/runner/work/velnor-new/velnor-new
+Plan	UNKNOWN STEP	2026-11-06T07:43:00.0188568Z   MISE_YES: 1
+Plan	UNKNOWN STEP	2026-11-06T07:43:00.0188687Z   VELNOR_TOOL_JACTIONLINT: 2.4.0
+Plan	UNKNOWN STEP	2026-11-06T07:43:00.0188827Z   VELNOR_TOOL_MR_BOXINGTON: 1.29.2
+Plan	UNKNOWN STEP	2026-11-06T07:43:00.0188972Z   VELNOR_TOOL_NEXTEST: 0.9.151
+Plan	UNKNOWN STEP	2026-11-06T07:43:00.0189112Z   VELNOR_TOOL_RUST: 1.99.1
+Plan	UNKNOWN STEP	2026-11-06T07:43:00.0189244Z   VELNOR_TOOL_SHELLCHECK: 0.11.0
+Plan	UNKNOWN STEP	2026-11-06T07:43:00.0189523Z   CARGO_HOME: /home/runner/work/_temp/velnor/cargo
+Plan	UNKNOWN STEP	2026-11-06T07:43:00.0189709Z   MISE_CARGO_HOME: /home/runner/work/_temp/velnor/cargo
+Plan	UNKNOWN STEP	2026-11-06T07:43:00.0189907Z   MISE_RUSTUP_HOME: /home/runner/work/_temp/velnor/rustup
+Plan	UNKNOWN STEP	2026-11-06T07:43:00.0190096Z   RUSTUP_HOME: /home/runner/work/_temp/velnor/rustup
+Plan	UNKNOWN STEP	2026-11-06T07:43:00.0190263Z ##[endgroup]
+Plan	UNKNOWN STEP	2026-11-06T07:43:00.7436400Z velnor: sources hit, skipping fetch
+Plan	UNKNOWN STEP	2026-11-06T07:43:00.7436724Z velnor: sources downloaded=0
+Plan	UNKNOWN STEP	2026-11-06T07:43:00.7465264Z ##[group]Run sh -c 'mkdir -p "$RUNNER_TEMP/velnor/cargo-clean" && cd "$RUNNER_TEMP/velnor/cargo-clean" && if mise --no-config --no-env --no-hooks exec rust@'"${VELNOR_TOOL_RUST}"' -- cargo metadata --locked --offline --manifest-path "$GITHUB_WORKSPACE/crates/velnor-runner/Cargo.toml" >/dev/null 2>&1; then echo "velnor: sources hit, skipping fetch"; echo "velnor: sources downloaded=0"; else echo "velnor: sources miss (source_missing), fetching"; status=0; mise --no-config --no-env --no-hooks exec rust@'"${VELNOR_TOOL_RUST}"' -- cargo fetch --locked --manifest-path "$GITHUB_WORKSPACE/crates/velnor-runner/Cargo.toml" 2> "$RUNNER_TEMP/velnor/cargo-clean/fetch-stderr.log" || status=$?; cat "$RUNNER_TEMP/velnor/cargo-clean/fetch-stderr.log" >&2; grep -Ec '\''^ *Downloaded [^ ]+ v[0-9]'\'' "$RUNNER_TEMP/velnor/cargo-clean/fetch-stderr.log" > "$RUNNER_TEMP/velnor/cargo-clean/fetch-downloads" || true; n=; read -r n < "$RUNNER_TEMP/velnor/cargo-clean/fetch-downloads" || true; echo "velnor: sources downloaded=${n:-0}"; exit $status; fi'
+Plan	UNKNOWN STEP	2026-11-06T07:43:00.7468749Z ^[[36;1msh -c 'mkdir -p "$RUNNER_TEMP/velnor/cargo-clean" && cd "$RUNNER_TEMP/velnor/cargo-clean" && if mise --no-config --no-env --no-hooks exec rust@'"${VELNOR_TOOL_RUST}"' -- cargo metadata --locked --offline --manifest-path "$GITHUB_WORKSPACE/crates/velnor-runner/Cargo.toml" >/dev/null 2>&1; then echo "velnor: sources hit, skipping fetch"; echo "velnor: sources downloaded=0"; else echo "velnor: sources miss (source_missing), fetching"; status=0; mise --no-config --no-env --no-hooks exec rust@'"${VELNOR_TOOL_RUST}"' -- cargo fetch --locked --manifest-path "$GITHUB_WORKSPACE/crates/velnor-runner/Cargo.toml" 2> "$RUNNER_TEMP/velnor/cargo-clean/fetch-stderr.log" || status=$?; cat "$RUNNER_TEMP/velnor/cargo-clean/fetch-stderr.log" >&2; grep -Ec '\''^ *Downloaded [^ ]+ v[0-9]'\'' "$RUNNER_TEMP/velnor/cargo-clean/fetch-stderr.log" > "$RUNNER_TEMP/velnor/cargo-clean/fetch-downloads" || true; n=; read -r n < "$RUNNER_TEMP/velnor/cargo-clean/fetch-downloads" || true; echo "velnor: sources downloaded=${n:-0}"; exit $status; fi'^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:43:00.7510295Z shell: /usr/bin/bash -e {0}
+Plan	UNKNOWN STEP	2026-11-06T07:43:00.7510439Z env:
+Plan	UNKNOWN STEP	2026-11-06T07:43:00.7510564Z   ACTIONS_ID_TOKEN_REQUEST_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:43:00.7510720Z   ACTIONS_ID_TOKEN_REQUEST_URL: 
+Plan	UNKNOWN STEP	2026-11-06T07:43:00.7510864Z   ACTIONS_RUNTIME_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:43:00.7510999Z   CARGO_REGISTRY_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:43:00.7511131Z   GH_CONFIG_DIR: 
+Plan	UNKNOWN STEP	2026-11-06T07:43:00.7511245Z   GH_HOST: 
+Plan	UNKNOWN STEP	2026-11-06T07:43:00.7511351Z   GH_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:43:00.7511459Z   GITHUB_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:43:00.7511583Z   MISE_AUTO_INSTALL: false
+Plan	UNKNOWN STEP	2026-11-06T07:43:00.7511721Z   MISE_EXEC_AUTO_INSTALL: false
+Plan	UNKNOWN STEP	2026-11-06T07:43:00.7511857Z   MISE_GITHUB_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:43:00.7511979Z   MISE_LOCKFILE: 0
+Plan	UNKNOWN STEP	2026-11-06T07:43:00.7512095Z   MISE_NO_CONFIG: 1
+Plan	UNKNOWN STEP	2026-11-06T07:43:00.7512222Z   MISE_NO_ENV: 1
+Plan	UNKNOWN STEP	2026-11-06T07:43:00.7512333Z   MISE_NO_HOOKS: 1
+Plan	UNKNOWN STEP	2026-11-06T07:43:00.7512446Z   MISE_QUIET: 1
+Plan	UNKNOWN STEP	2026-11-06T07:43:00.7512565Z   NODE_AUTH_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:43:00.7512686Z   NPM_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:43:00.7512805Z   RUSTUP_AUTO_INSTALL: 0
+Plan	UNKNOWN STEP	2026-11-06T07:43:00.7513021Z   VELNOR_ASSET_SHA256: db7480b83238f85a2e4472d26ba57ca4ee4d6822353cbdaad690b1a2b963b26f
+Plan	UNKNOWN STEP	2026-11-06T07:43:00.7513433Z   VELNOR_ASSET_URL: https://github.com/tailrocks/velnor-new/releases/download/v0.1.74/velnor-actions-0.1.74-x86_64-unknown-linux-gnu
+Plan	UNKNOWN STEP	2026-11-06T07:43:00.7513796Z   VELNOR_RELEASE_COMMIT: c622bfb187556afb8d3ff3ca917a719e4bb7f32a
+Plan	UNKNOWN STEP	2026-11-06T07:43:00.7513997Z   VELNOR_RUN_KEY_ATTEMPT: 1
+Plan	UNKNOWN STEP	2026-11-06T07:43:00.7514133Z   MISE_LOG_LEVEL: info
+Plan	UNKNOWN STEP	2026-11-06T07:43:00.7514308Z   MISE_TRUSTED_CONFIG_PATHS: /home/runner/work/velnor-new/velnor-new
+Plan	UNKNOWN STEP	2026-11-06T07:43:00.7514503Z   MISE_YES: 1
+Plan	UNKNOWN STEP	2026-11-06T07:43:00.7514624Z   VELNOR_TOOL_JACTIONLINT: 2.4.0
+Plan	UNKNOWN STEP	2026-11-06T07:43:00.7514773Z   VELNOR_TOOL_MR_BOXINGTON: 1.29.2
+Plan	UNKNOWN STEP	2026-11-06T07:43:00.7514920Z   VELNOR_TOOL_NEXTEST: 0.9.151
+Plan	UNKNOWN STEP	2026-11-06T07:43:00.7515062Z   VELNOR_TOOL_RUST: 1.99.1
+Plan	UNKNOWN STEP	2026-11-06T07:43:00.7515341Z   VELNOR_TOOL_SHELLCHECK: 0.11.0
+Plan	UNKNOWN STEP	2026-11-06T07:43:00.7515503Z   CARGO_HOME: /home/runner/work/_temp/velnor/cargo
+Plan	UNKNOWN STEP	2026-11-06T07:43:00.7515698Z   MISE_CARGO_HOME: /home/runner/work/_temp/velnor/cargo
+Plan	UNKNOWN STEP	2026-11-06T07:43:00.7515905Z   MISE_RUSTUP_HOME: /home/runner/work/_temp/velnor/rustup
+Plan	UNKNOWN STEP	2026-11-06T07:43:00.7516097Z   RUSTUP_HOME: /home/runner/work/_temp/velnor/rustup
+Plan	UNKNOWN STEP	2026-11-06T07:43:00.7516263Z ##[endgroup]
+Plan	UNKNOWN STEP	2026-11-06T07:43:02.7340554Z velnor: sources hit, skipping fetch
+Plan	UNKNOWN STEP	2026-11-06T07:43:02.7340789Z velnor: sources downloaded=0
+Plan	UNKNOWN STEP	2026-11-06T07:43:02.7742774Z ##[group]Run "$RUNNER_TEMP"'/velnor/bin/velnor-actions-0.1.74'
+Plan	UNKNOWN STEP	2026-11-06T07:43:02.7743054Z ^[[36;1m"$RUNNER_TEMP"'/velnor/bin/velnor-actions-0.1.74'^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:43:02.7782703Z shell: /usr/bin/bash -e {0}
+Plan	UNKNOWN STEP	2026-11-06T07:43:02.7782926Z env:
+Plan	UNKNOWN STEP	2026-11-06T07:43:02.7783110Z   ACTIONS_ID_TOKEN_REQUEST_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:43:02.7783359Z   ACTIONS_ID_TOKEN_REQUEST_URL: 
+Plan	UNKNOWN STEP	2026-11-06T07:43:02.7783578Z   ACTIONS_RUNTIME_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:43:02.7783781Z   CARGO_REGISTRY_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:43:02.7783985Z   GH_CONFIG_DIR: 
+Plan	UNKNOWN STEP	2026-11-06T07:43:02.7784162Z   GH_HOST: 
+Plan	UNKNOWN STEP	2026-11-06T07:43:02.7784327Z   GH_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:43:02.7784499Z   GITHUB_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:43:02.7784691Z   MISE_AUTO_INSTALL: false
+Plan	UNKNOWN STEP	2026-11-06T07:43:02.7784900Z   MISE_EXEC_AUTO_INSTALL: false
+Plan	UNKNOWN STEP	2026-11-06T07:43:02.7785056Z   MISE_GITHUB_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:43:02.7785176Z   MISE_LOCKFILE: 0
+Plan	UNKNOWN STEP	2026-11-06T07:43:02.7785287Z   MISE_NO_CONFIG: 1
+Plan	UNKNOWN STEP	2026-11-06T07:43:02.7785402Z   MISE_NO_ENV: 1
+Plan	UNKNOWN STEP	2026-11-06T07:43:02.7785549Z   MISE_NO_HOOKS: 1
+Plan	UNKNOWN STEP	2026-11-06T07:43:02.7785662Z   MISE_QUIET: 1
+Plan	UNKNOWN STEP	2026-11-06T07:43:02.7785771Z   NODE_AUTH_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:43:02.7785883Z   NPM_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:43:02.7786002Z   RUSTUP_AUTO_INSTALL: 0
+Plan	UNKNOWN STEP	2026-11-06T07:43:02.7786222Z   VELNOR_ASSET_SHA256: db7480b83238f85a2e4472d26ba57ca4ee4d6822353cbdaad690b1a2b963b26f
+Plan	UNKNOWN STEP	2026-11-06T07:43:02.7786807Z   VELNOR_ASSET_URL: https://github.com/tailrocks/velnor-new/releases/download/v0.1.74/velnor-actions-0.1.74-x86_64-unknown-linux-gnu
+Plan	UNKNOWN STEP	2026-11-06T07:43:02.7787164Z   VELNOR_RELEASE_COMMIT: c622bfb187556afb8d3ff3ca917a719e4bb7f32a
+Plan	UNKNOWN STEP	2026-11-06T07:43:02.7787364Z   VELNOR_RUN_KEY_ATTEMPT: 1
+Plan	UNKNOWN STEP	2026-11-06T07:43:02.7787497Z   MISE_LOG_LEVEL: info
+Plan	UNKNOWN STEP	2026-11-06T07:43:02.7787674Z   MISE_TRUSTED_CONFIG_PATHS: /home/runner/work/velnor-new/velnor-new
+Plan	UNKNOWN STEP	2026-11-06T07:43:02.7788028Z   MISE_YES: 1
+Plan	UNKNOWN STEP	2026-11-06T07:43:02.7788174Z   VELNOR_TOOL_JACTIONLINT: 2.4.0
+Plan	UNKNOWN STEP	2026-11-06T07:43:02.7788319Z   VELNOR_TOOL_MR_BOXINGTON: 1.29.2
+Plan	UNKNOWN STEP	2026-11-06T07:43:02.7788469Z   VELNOR_TOOL_NEXTEST: 0.9.151
+Plan	UNKNOWN STEP	2026-11-06T07:43:02.7788609Z   VELNOR_TOOL_RUST: 1.99.1
+Plan	UNKNOWN STEP	2026-11-06T07:43:02.7788750Z   VELNOR_TOOL_SHELLCHECK: 0.11.0
+Plan	UNKNOWN STEP	2026-11-06T07:43:02.7788899Z   VELNOR_INTERNAL_OP: write-request-v1
+Plan	UNKNOWN STEP	2026-11-06T07:43:02.7789123Z   VELNOR_REQUEST_FILE: /home/runner/work/_temp/velnor/request/plan-v1-request.json
+Plan	UNKNOWN STEP	2026-11-06T07:43:02.7789457Z   VELNOR_NAMED_CHECK_LANES_JSON: {"check-maintenance-helpers":[{"job_id":"check-maintenance-helpers"}]}
+Plan	UNKNOWN STEP	2026-11-06T07:43:02.7789724Z ##[endgroup]
+Plan	UNKNOWN STEP	2026-11-06T07:43:02.9105830Z ##[group]Run "$RUNNER_TEMP"'/velnor/bin/velnor-actions-0.1.74'
+Plan	UNKNOWN STEP	2026-11-06T07:43:02.9106071Z ^[[36;1m"$RUNNER_TEMP"'/velnor/bin/velnor-actions-0.1.74'^[[0m
+Plan	UNKNOWN STEP	2026-11-06T07:43:02.9138603Z shell: /usr/bin/bash -e {0}
+Plan	UNKNOWN STEP	2026-11-06T07:43:02.9138739Z env:
+Plan	UNKNOWN STEP	2026-11-06T07:43:02.9138857Z   ACTIONS_ID_TOKEN_REQUEST_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:43:02.9139012Z   ACTIONS_ID_TOKEN_REQUEST_URL: 
+Plan	UNKNOWN STEP	2026-11-06T07:43:02.9139150Z   ACTIONS_RUNTIME_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:43:02.9139282Z   CARGO_REGISTRY_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:43:02.9139405Z   GH_CONFIG_DIR: 
+Plan	UNKNOWN STEP	2026-11-06T07:43:02.9139519Z   GH_HOST: 
+Plan	UNKNOWN STEP	2026-11-06T07:43:02.9140982Z   GH_TOKEN: ***
+Plan	UNKNOWN STEP	2026-11-06T07:43:02.9141096Z   GITHUB_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:43:02.9141218Z   MISE_AUTO_INSTALL: false
+Plan	UNKNOWN STEP	2026-11-06T07:43:02.9141351Z   MISE_EXEC_AUTO_INSTALL: false
+Plan	UNKNOWN STEP	2026-11-06T07:43:02.9141483Z   MISE_GITHUB_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:43:02.9141600Z   MISE_LOCKFILE: 0
+Plan	UNKNOWN STEP	2026-11-06T07:43:02.9141724Z   MISE_NO_CONFIG: 1
+Plan	UNKNOWN STEP	2026-11-06T07:43:02.9141836Z   MISE_NO_ENV: 1
+Plan	UNKNOWN STEP	2026-11-06T07:43:02.9141967Z   MISE_NO_HOOKS: 1
+Plan	UNKNOWN STEP	2026-11-06T07:43:02.9142081Z   MISE_QUIET: 1
+Plan	UNKNOWN STEP	2026-11-06T07:43:02.9142189Z   NODE_AUTH_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:43:02.9142303Z   NPM_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:43:02.9142422Z   RUSTUP_AUTO_INSTALL: 0
+Plan	UNKNOWN STEP	2026-11-06T07:43:02.9142632Z   VELNOR_ASSET_SHA256: db7480b83238f85a2e4472d26ba57ca4ee4d6822353cbdaad690b1a2b963b26f
+Plan	UNKNOWN STEP	2026-11-06T07:43:02.9143029Z   VELNOR_ASSET_URL: https://github.com/tailrocks/velnor-new/releases/download/v0.1.74/velnor-actions-0.1.74-x86_64-unknown-linux-gnu
+Plan	UNKNOWN STEP	2026-11-06T07:43:02.9143383Z   VELNOR_RELEASE_COMMIT: c622bfb187556afb8d3ff3ca917a719e4bb7f32a
+Plan	UNKNOWN STEP	2026-11-06T07:43:02.9143572Z   VELNOR_RUN_KEY_ATTEMPT: 1
+Plan	UNKNOWN STEP	2026-11-06T07:43:02.9143704Z   MISE_LOG_LEVEL: info
+Plan	UNKNOWN STEP	2026-11-06T07:43:02.9143874Z   MISE_TRUSTED_CONFIG_PATHS: /home/runner/work/velnor-new/velnor-new
+Plan	UNKNOWN STEP	2026-11-06T07:43:02.9144063Z   MISE_YES: 1
+Plan	UNKNOWN STEP	2026-11-06T07:43:02.9144181Z   VELNOR_TOOL_JACTIONLINT: 2.4.0
+Plan	UNKNOWN STEP	2026-11-06T07:43:02.9144331Z   VELNOR_TOOL_MR_BOXINGTON: 1.29.2
+Plan	UNKNOWN STEP	2026-11-06T07:43:02.9144476Z   VELNOR_TOOL_NEXTEST: 0.9.151
+Plan	UNKNOWN STEP	2026-11-06T07:43:02.9144612Z   VELNOR_TOOL_RUST: 1.99.1
+Plan	UNKNOWN STEP	2026-11-06T07:43:02.9144748Z   VELNOR_TOOL_SHELLCHECK: 0.11.0
+Plan	UNKNOWN STEP	2026-11-06T07:43:02.9144891Z   VELNOR_INTERNAL_OP: plan-v1
+Plan	UNKNOWN STEP	2026-11-06T07:43:02.9145102Z   VELNOR_REQUEST_FILE: /home/runner/work/_temp/velnor/request/plan-v1-request.json
+Plan	UNKNOWN STEP	2026-11-06T07:43:02.9145335Z   CARGO_HOME: /home/runner/work/_temp/velnor/cargo
+Plan	UNKNOWN STEP	2026-11-06T07:43:02.9145527Z   MISE_CARGO_HOME: /home/runner/work/_temp/velnor/cargo
+Plan	UNKNOWN STEP	2026-11-06T07:43:02.9145738Z   MISE_RUSTUP_HOME: /home/runner/work/_temp/velnor/rustup
+Plan	UNKNOWN STEP	2026-11-06T07:43:02.9145932Z   RUSTUP_HOME: /home/runner/work/_temp/velnor/rustup
+Plan	UNKNOWN STEP	2026-11-06T07:43:02.9146095Z ##[endgroup]
+Plan	UNKNOWN STEP	2026-11-06T07:43:04.6454816Z ##[group]Run actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+Plan	UNKNOWN STEP	2026-11-06T07:43:04.6455038Z with:
+Plan	UNKNOWN STEP	2026-11-06T07:43:04.6455153Z   if-no-files-found: error
+Plan	UNKNOWN STEP	2026-11-06T07:43:04.6455420Z   name: velnor-plan-r42182644618-a1
+Plan	UNKNOWN STEP	2026-11-06T07:43:04.6455596Z   path: /home/runner/work/_temp/velnor/r42182644618-a1
+Plan	UNKNOWN STEP	2026-11-06T07:43:04.6455762Z   retention-days: 30
+Plan	UNKNOWN STEP	2026-11-06T07:43:04.6455886Z   compression-level: 6
+Plan	UNKNOWN STEP	2026-11-06T07:43:04.6456009Z   overwrite: false
+Plan	UNKNOWN STEP	2026-11-06T07:43:04.6456132Z   include-hidden-files: false
+Plan	UNKNOWN STEP	2026-11-06T07:43:04.6456264Z   archive: true
+Plan	UNKNOWN STEP	2026-11-06T07:43:04.6456374Z env:
+Plan	UNKNOWN STEP	2026-11-06T07:43:04.6456488Z   ACTIONS_ID_TOKEN_REQUEST_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:43:04.6456637Z   ACTIONS_ID_TOKEN_REQUEST_URL: 
+Plan	UNKNOWN STEP	2026-11-06T07:43:04.6456774Z   ACTIONS_RUNTIME_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:43:04.6456900Z   CARGO_REGISTRY_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:43:04.6457020Z   GH_CONFIG_DIR: 
+Plan	UNKNOWN STEP	2026-11-06T07:43:04.6457132Z   GH_HOST: 
+Plan	UNKNOWN STEP	2026-11-06T07:43:04.6457233Z   GH_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:43:04.6457368Z   GITHUB_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:43:04.6457481Z   MISE_AUTO_INSTALL: false
+Plan	UNKNOWN STEP	2026-11-06T07:43:04.6457612Z   MISE_EXEC_AUTO_INSTALL: false
+Plan	UNKNOWN STEP	2026-11-06T07:43:04.6457743Z   MISE_GITHUB_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:43:04.6458030Z   MISE_LOCKFILE: 0
+Plan	UNKNOWN STEP	2026-11-06T07:43:04.6458158Z   MISE_NO_CONFIG: 1
+Plan	UNKNOWN STEP	2026-11-06T07:43:04.6458268Z   MISE_NO_ENV: 1
+Plan	UNKNOWN STEP	2026-11-06T07:43:04.6458376Z   MISE_NO_HOOKS: 1
+Plan	UNKNOWN STEP	2026-11-06T07:43:04.6458486Z   MISE_QUIET: 1
+Plan	UNKNOWN STEP	2026-11-06T07:43:04.6458592Z   NODE_AUTH_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:43:04.6458700Z   NPM_TOKEN: 
+Plan	UNKNOWN STEP	2026-11-06T07:43:04.6458813Z   RUSTUP_AUTO_INSTALL: 0
+Plan	UNKNOWN STEP	2026-11-06T07:43:04.6459047Z   VELNOR_ASSET_SHA256: db7480b83238f85a2e4472d26ba57ca4ee4d6822353cbdaad690b1a2b963b26f
+Plan	UNKNOWN STEP	2026-11-06T07:43:04.6459440Z   VELNOR_ASSET_URL: https://github.com/tailrocks/velnor-new/releases/download/v0.1.74/velnor-actions-0.1.74-x86_64-unknown-linux-gnu
+Plan	UNKNOWN STEP	2026-11-06T07:43:04.6459789Z   VELNOR_RELEASE_COMMIT: c622bfb187556afb8d3ff3ca917a719e4bb7f32a
+Plan	UNKNOWN STEP	2026-11-06T07:43:04.6459976Z   VELNOR_RUN_KEY_ATTEMPT: 1
+Plan	UNKNOWN STEP	2026-11-06T07:43:04.6460108Z   MISE_LOG_LEVEL: info
+Plan	UNKNOWN STEP	2026-11-06T07:43:04.6460274Z   MISE_TRUSTED_CONFIG_PATHS: /home/runner/work/velnor-new/velnor-new
+Plan	UNKNOWN STEP	2026-11-06T07:43:04.6460467Z   MISE_YES: 1
+Plan	UNKNOWN STEP	2026-11-06T07:43:04.6460581Z   VELNOR_TOOL_JACTIONLINT: 2.4.0
+Plan	UNKNOWN STEP	2026-11-06T07:43:04.6460724Z   VELNOR_TOOL_MR_BOXINGTON: 1.29.2
+Plan	UNKNOWN STEP	2026-11-06T07:43:04.6460865Z   VELNOR_TOOL_NEXTEST: 0.9.151
+Plan	UNKNOWN STEP	2026-11-06T07:43:04.6460995Z   VELNOR_TOOL_RUST: 1.99.1
+Plan	UNKNOWN STEP	2026-11-06T07:43:04.6461126Z   VELNOR_TOOL_SHELLCHECK: 0.11.0
+Plan	UNKNOWN STEP	2026-11-06T07:43:04.6461262Z ##[endgroup]
+Plan	UNKNOWN STEP	2026-11-06T07:43:04.7359974Z With the provided path, there will be 2 files uploaded
+Plan	UNKNOWN STEP	2026-11-06T07:43:04.7388243Z Artifact name is valid!
+Plan	UNKNOWN STEP	2026-11-06T07:43:04.7388502Z Root directory input is valid!
+Plan	UNKNOWN STEP	2026-11-06T07:43:05.0037455Z Uploading artifact: velnor-plan-r42182644618-a1.zip
+Plan	UNKNOWN STEP	2026-11-06T07:43:05.0060963Z Beginning upload of artifact content to blob storage
+Plan	UNKNOWN STEP	2026-11-06T07:43:05.2019612Z Uploaded bytes 49043
+Plan	UNKNOWN STEP	2026-11-06T07:43:05.2380043Z Finished uploading artifact content to blob storage!
+Plan	UNKNOWN STEP	2026-11-06T07:43:05.2380674Z SHA256 digest of uploaded artifact is ae6d997f8e73bb473071acbf6888b03f53df678a1e925a8c08132b449cd5fce9
+Plan	UNKNOWN STEP	2026-11-06T07:43:05.2381096Z Finalizing artifact upload
+Plan	UNKNOWN STEP	2026-11-06T07:43:05.7261092Z Artifact velnor-plan-r42182644618-a1 successfully finalized. Artifact ID 13485354393
+Plan	UNKNOWN STEP	2026-11-06T07:43:05.7261773Z Artifact velnor-plan-r42182644618-a1 has been successfully uploaded! Final size is 49043 bytes. Artifact ID is 13485354393
+Plan	UNKNOWN STEP	2026-11-06T07:43:05.7264072Z Artifact download URL: https://github.com/tailrocks/velnor-new/actions/runs/42182644618/artifacts/13485354393
+Plan	UNKNOWN STEP	2026-11-06T07:43:05.7408473Z Post job cleanup.
+Plan	UNKNOWN STEP	2026-11-06T07:43:05.8618363Z Post job cleanup.
+Plan	UNKNOWN STEP	2026-11-06T07:43:05.9131650Z [command]/usr/bin/git version
+Plan	UNKNOWN STEP	2026-11-06T07:43:05.9166436Z git version 2.56.0
+Plan	UNKNOWN STEP	2026-11-06T07:43:05.9188013Z Temporarily overriding HOME='/home/runner/work/_temp/9f167d70-1175-408b-86ca-a1bf76b54b9f' before making global git config changes
+Plan	UNKNOWN STEP	2026-11-06T07:43:05.9188648Z Adding repository directory to the temporary git global config as a safe directory
+Plan	UNKNOWN STEP	2026-11-06T07:43:05.9193047Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/velnor-new/velnor-new
+Plan	UNKNOWN STEP	2026-11-06T07:43:05.9223410Z Removing SSH command configuration
+Plan	UNKNOWN STEP	2026-11-06T07:43:05.9230402Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+Plan	UNKNOWN STEP	2026-11-06T07:43:05.9258452Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+Plan	UNKNOWN STEP	2026-11-06T07:43:05.9485391Z Removing HTTP extra header
+Plan	UNKNOWN STEP	2026-11-06T07:43:05.9485891Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+Plan	UNKNOWN STEP	2026-11-06T07:43:05.9518309Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+Plan	UNKNOWN STEP	2026-11-06T07:43:05.9754868Z Removing includeIf entries pointing to credentials config files
+Plan	UNKNOWN STEP	2026-11-06T07:43:05.9760621Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+Plan	UNKNOWN STEP	2026-11-06T07:43:05.9788259Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+Plan	UNKNOWN STEP	2026-11-06T07:43:06.0133095Z Evaluate and set job outputs
+Plan	UNKNOWN STEP	2026-11-06T07:43:06.0138233Z Set output 'qualification_cache_enabled'
+Plan	UNKNOWN STEP	2026-11-06T07:43:06.0139283Z Set output 'qualification_cache_write'
+Plan	UNKNOWN STEP	2026-11-06T07:43:06.0139782Z Set output 'plan_attempt'
+Plan	UNKNOWN STEP	2026-11-06T07:43:06.0139966Z Set output 'cache_trust'
+Plan	UNKNOWN STEP	2026-11-06T07:43:06.0140433Z Set output 'sources_key'
+Plan	UNKNOWN STEP	2026-11-06T07:43:06.0140745Z Set output 'sources_restore_keys'
+Plan	UNKNOWN STEP	2026-11-06T07:43:06.0141019Z Set output 'state_crates_velnor_runner_snapshot'
+Plan	UNKNOWN STEP	2026-11-06T07:43:06.0141304Z Set output 'state_root_snapshot'
+Plan	UNKNOWN STEP	2026-11-06T07:43:06.0142054Z Set output 'state_union_crates_velnor_runner_attested'
+Plan	UNKNOWN STEP	2026-11-06T07:43:06.0142754Z Set output 'state_union_root_attested'
+Plan	UNKNOWN STEP	2026-11-06T07:43:06.0143110Z Cleaning up orphan processes
