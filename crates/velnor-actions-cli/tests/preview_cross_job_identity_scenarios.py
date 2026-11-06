@@ -13,6 +13,7 @@ import subprocess
 import sys
 import tempfile
 import tomllib
+import traceback
 
 root = Path(sys.argv[1]).resolve()
 sdk_path = Path(sys.argv[2]).resolve()
@@ -86,9 +87,11 @@ def selection(repo, temporary, payload, selected_source, receipt_variant=False):
     fixture.PAYLOAD = payload
     value, receipt = fixture.record(selected_source)
     value["version"] = expected_version
+    baseline_receipt = json.dumps(bootstrap.receipt_from_record(value), sort_keys=True, separators=(",", ":")).encode()
     if receipt_variant:
-        value["signer_run_attempt"] = 2
+        value["signer_run_attempt"] = value["publisher_run_attempt"]
     receipt = json.dumps(bootstrap.receipt_from_record(value), sort_keys=True, separators=(",", ":")).encode()
+    assert not receipt_variant or receipt != baseline_receipt, "different-receipt fixture did not change the canonical receipt"
     value["receipt_sha256"] = hashlib.sha256(receipt).hexdigest()
     base_lock = (root / ".velnor/generator.lock").read_bytes()
     lock = base_lock + b"\n" + fixture.lock(value, "planner-preview")
@@ -114,8 +117,9 @@ def launch(context, network, repo, temporary, operation, extra):
             os.close(descriptor)
             os.chdir(repo)
             executor.execute_controller(context, bootstrap.preview_identity(network.value), ["velnor-actions"], environment)
-        except BaseException as error:
-            print(str(error), file=sys.stderr)
+        except BaseException:
+            traceback.print_exc(file=sys.stderr)
+            sys.stderr.flush()
             os._exit(125)
     _, status = os.waitpid(pid, 0)
     return os.waitstatus_to_exitcode(status), output.read_text(errors="replace")
@@ -141,8 +145,9 @@ def launch_wrong_executable_with_good_fd(network, repo, temporary, request):
             environment = {"PATH": "/usr/bin:/bin", "GITHUB_REPOSITORY": bootstrap.REPOSITORY, "GITHUB_WORKSPACE": str(repo), "RUNNER_TEMP": str(temporary), "GITHUB_RUN_ID": "260001", "GITHUB_RUN_ATTEMPT": "1", "GITHUB_OUTPUT": str(temporary / "github-output"), "VELNOR_INTERNAL_OP": "plan-v1", "VELNOR_REQUEST_FILE": str(request), "VELNOR_SELECTED_PREVIEW_IDENTITY": json.dumps(bootstrap.preview_identity(network.value), sort_keys=True, separators=(",", ":"))}
             os.chdir(repo)
             os.execve(f"/proc/self/fd/{fds[1]}", [f"/proc/self/fd/{fds[0]}"], environment)
-        except BaseException as error:
-            print(str(error), file=sys.stderr)
+        except BaseException:
+            traceback.print_exc(file=sys.stderr)
+            sys.stderr.flush()
             os._exit(125)
     _, status = os.waitpid(pid, 0)
     return os.waitstatus_to_exitcode(status), output.read_text(errors="replace")
@@ -220,7 +225,7 @@ with tempfile.TemporaryDirectory() as directory:
     attack_request = attack_temp / "plan-v1-request.json"
     attack_request.write_text(json.dumps({"schema": 1, "op": "plan-v1", "run_key": RUN_KEY, "base": base, "head": head, "event": "pull_request", "root": str(repo)}))
     attack_status, attack_log = launch_wrong_executable_with_good_fd(attack_network, repo, attack_temp, attack_request)
-    assert attack_status != 0 and "preview_controller_identity_mismatch" in attack_log, "wrong executable crossed Plan using a good fd and forged argv: " + attack_log
+    assert attack_status != 0 and "preview_controller_identity_mismatch" in attack_log, f"wrong executable crossed Plan using a good fd and forged argv (status={attack_status}): {attack_log}"
     assert not (attack_temp / "velnor" / RUN_KEY / "plan.json").exists(), "wrong executable wrote a Plan"
     obligation = next(row for row in plan["obligations"] if row["job_id"] == "check-runtime-fixture")
     task_id = obligation["task_id"]
@@ -231,13 +236,13 @@ with tempfile.TemporaryDirectory() as directory:
         if match:
             assert status == 0 and reports, "matching approved SDK did not write its failed-task report: " + log
         else:
-            assert status != 0 and "preview_controller_identity_mismatch" in log and not reports, label + " wrote a task report: " + log
+            assert status != 0 and "preview_controller_identity_mismatch" in log and not reports, f"{label} crossed a task-report boundary (status={status}, reports={reports}): {log}"
         if not match:
             merge_context, merge_network, merge_temp = prepare(repo, temporary, label + "-required", payload, selected_source, receipt_variant, plan_bytes)
             merge = merge_temp / "merge-v1-request.json"
             merge.write_text(json.dumps(merge_request(plan)))
             result, merge_log = launch(merge_context, merge_network, repo, merge_temp, "merge-v1", {"VELNOR_REQUEST_FILE": str(merge)})
-            assert result != 0 and "preview_controller_identity_mismatch" in merge_log, label + " crossed Required: " + merge_log
+            assert result != 0 and "preview_controller_identity_mismatch" in merge_log, f"{label} crossed Required (status={result}): {merge_log}"
     unresolved = copy.deepcopy(plan)
     unresolved["generator"]["sha256"] = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     unresolved_bytes = json.dumps(unresolved, sort_keys=True, separators=(",", ":")).encode()

@@ -39,6 +39,8 @@ pub(crate) fn current_exe_sha256_with_phase_timings(
 fn sealed_execution_bytes() -> Option<Vec<u8>> {
     use std::io::{Read, Seek};
 
+    const MAX_BYTES: u64 = 256 * 1024 * 1024;
+
     let path = rustix::param::linux_execfn().to_str().ok()?;
     let raw_fd = path.strip_prefix("/proc/self/fd/")?;
     let fd = raw_fd.parse::<u32>().ok()?;
@@ -47,7 +49,6 @@ fn sealed_execution_bytes() -> Option<Vec<u8>> {
     }
     let mut file = std::fs::File::open(path).ok()?;
     let metadata = file.metadata().ok()?;
-    const MAX_BYTES: u64 = 256 * 1024 * 1024;
     if !metadata.is_file() || metadata.len() == 0 || metadata.len() > MAX_BYTES {
         return None;
     }
