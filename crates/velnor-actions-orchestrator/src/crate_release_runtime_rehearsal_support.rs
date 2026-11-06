@@ -42,7 +42,7 @@ fn git(root: &Path, args: &[&str]) -> Result<String, Box<dyn Error>> {
 }
 
 fn source_require_script() -> Result<String, Box<dyn Error>> {
-    generated_script("release-publish", "Release source-require")
+    generated_script("release-reconcile", "Release source-require")
 }
 
 fn generated_script(job: &str, name: &str) -> Result<String, Box<dyn Error>> {
