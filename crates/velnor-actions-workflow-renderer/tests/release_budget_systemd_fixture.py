@@ -155,14 +155,14 @@ def invoke(mode):
 def main():
     with open("/etc/os-release", encoding="utf-8") as info:
         release = info.read()
-    if 'ID=ubuntu' not in release.splitlines() or 'VERSION_ID="24.04"' not in release.splitlines():
+    if 'ID=ubuntu' not in release.splitlines() or 'VERSION_ID="26.04"' not in release.splitlines():
         raise SystemExit("unexpected operating system image")
-    print("operating system: ubuntu-24.04", flush=True)
+    print("operating system: ubuntu-26.04", flush=True)
 
     invoke("timeout")
     invoke("cancel")
     invoke("orphan")
-    evidence = {"schema": 1, "source": "mise-task-v1", "head": os.environ["VELNOR_CHECK_HEAD"], "check_id": os.environ["VELNOR_CHECK_ID"], "platform": os.environ["VELNOR_CHECK_PLATFORM"], "scenarios": [{"id": name, "executed": True, "status": "passed"} for name in ("cancellation", "no-credential-exposure", "orphan", "timeout", "ubuntu-24.04")]}
+    evidence = {"schema": 1, "source": "mise-task-v1", "head": os.environ["VELNOR_CHECK_HEAD"], "check_id": os.environ["VELNOR_CHECK_ID"], "platform": os.environ["VELNOR_CHECK_PLATFORM"], "scenarios": [{"id": name, "executed": True, "status": "passed"} for name in ("cancellation", "no-credential-exposure", "orphan", "timeout", "ubuntu-26.04")]}
     with open("hosted-budget-evidence.json", "x", encoding="utf-8") as output:
         json.dump(evidence, output, separators=(",", ":"))
     print("hosted systemd timeout and cancellation removed escaped descendants")

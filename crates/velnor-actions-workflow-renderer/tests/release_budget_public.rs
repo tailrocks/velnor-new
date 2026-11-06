@@ -33,7 +33,7 @@ fn hosted_supervisor_runs_candidate_scenarios_and_controller_regressions()
         return Err("hosted supervisor qualification requires Linux x86_64".into());
     }
     assert!(release.lines().any(|line| line == "ID=ubuntu"));
-    assert!(release.lines().any(|line| line == "VERSION_ID=\"24.04\""));
+    assert!(release.lines().any(|line| line == "VERSION_ID=\"26.04\""));
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests");
     for (file, arguments) in [
         ("release_manager_scenario_controller_test.py", &[][..]),

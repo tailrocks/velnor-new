@@ -6,7 +6,7 @@ import subprocess
 
 with open("/etc/os-release", encoding="utf-8") as info:
     release = info.read().splitlines()
-if "ID=ubuntu" not in release or 'VERSION_ID="24.04"' not in release:
+if "ID=ubuntu" not in release or 'VERSION_ID="26.04"' not in release:
     raise SystemExit("unexpected operating system image")
 result = subprocess.run(
     ["cargo", "nextest", "run", "--locked", "-p", "velnor-actions-workflow-renderer", "--test",
@@ -46,7 +46,7 @@ evidence = {
     "platform": os.environ["VELNOR_CHECK_PLATFORM"],
     "scenarios": [
         {"id": "procfs-gh-custody", "executed": True, "status": "passed"},
-        {"id": "ubuntu-24.04", "executed": True, "status": "passed"},
+        {"id": "ubuntu-26.04", "executed": True, "status": "passed"},
     ],
 }
 with open("hosted-gh-config-evidence.json", "x", encoding="utf-8") as output:

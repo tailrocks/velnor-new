@@ -42,7 +42,7 @@ class HostedCustodyTest(unittest.TestCase):
                     actual_open = open
                     def fixture_open(path, *args, **kwargs):
                         if path == "/etc/os-release":
-                            return io.StringIO('ID=ubuntu\nVERSION_ID="24.04"\n')
+                            return io.StringIO('ID=ubuntu\nVERSION_ID="26.04"\n')
                         return actual_open(path, *args, **kwargs)
                     with patch("builtins.open", side_effect=fixture_open), \
                             patch("subprocess.run", return_value=Completed(output, status)), \
