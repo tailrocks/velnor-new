@@ -165,7 +165,6 @@ fn verify_gitlink(root: &Path, raw: &[u8]) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-/// Independently bind every hydrated Git object and all captured bytes before validation.
 #[cfg(unix)]
 pub(crate) fn verify_capture(root: &Path, manifest: &str) -> Result<(), Box<dyn Error>> {
     use std::os::unix::ffi::OsStringExt;
