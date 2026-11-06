@@ -24,7 +24,7 @@ fn release_tool_acquisition_checks_download_and_archive_before_use()
     };
     for (label, target, executable) in [
         (
-            "ubuntu-24.04",
+            "ubuntu-26.04",
             "x86_64-unknown-linux-musl",
             "678330a1f03330fb375d15be8d6e094d0f65d2b70e2af417c69fcec78fa74466",
         ),
@@ -160,11 +160,11 @@ with Server(('127.0.0.1',0),Handler) as server, tempfile.TemporaryDirectory() as
 #[test]
 fn semver_acquisition_rejects_modified_archive_and_executable()
 -> Result<(), Box<dyn std::error::Error>> {
-    let tool = velnor_actions_mise::catalog::qualified_cargo_semver_checks("ubuntu-24.04")
+    let tool = velnor_actions_mise::catalog::qualified_cargo_semver_checks("ubuntu-26.04")
         .ok_or("tool")?;
     assert!(velnor_actions_mise::catalog::qualified_cargo_semver_checks("self-hosted").is_none());
     let step =
-        velnor_actions_workflow_renderer::release_plz_acquire::acquire_semver_step("ubuntu-24.04")?;
+        velnor_actions_workflow_renderer::release_plz_acquire::acquire_semver_step("ubuntu-26.04")?;
     let StepKind::Shell { run, env } = step.kind else {
         return Err("shell".into());
     };

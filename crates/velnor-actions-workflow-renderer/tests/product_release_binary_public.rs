@@ -54,7 +54,7 @@ fn binary_publisher_uses_linux_setup_while_build_remains_macos()
         .ok_or("missing attest end")?;
     assert!(build.contains("macos-15"));
     assert!(attest.contains("macos-15"));
-    assert!(publish.contains("ubuntu-24.04"));
+    assert!(publish.contains("ubuntu-26.04"));
     assert!(publish.contains(&"a".repeat(64)));
     assert!(!publish.contains(&"b".repeat(64)));
     Ok(())
@@ -68,7 +68,7 @@ fn release_authority_jobs_use_qualified_linux_for_all_hosted_labels()
     use velnor_actions_workflow_renderer::schema2::{
         Schema2WorkflowRequest, render_schema2_workflows,
     };
-    for label in ["ubuntu-22.04", "ubuntu-26.04", "ubuntu-24.04-arm"] {
+    for label in ["ubuntu-26.04", "ubuntu-26.04-arm"] {
         let request = Schema2WorkflowRequest {
             version: env!("CARGO_PKG_VERSION").to_owned(),
             hosted_label: label.to_owned(),
@@ -103,7 +103,7 @@ fn release_authority_jobs_use_qualified_linux_for_all_hosted_labels()
             let workflow: serde_json::Value = serde_saphyr::from_str(&file.bytes)?;
             for job in jobs {
                 assert_eq!(
-                    workflow["jobs"][*job]["runs-on"], "ubuntu-24.04",
+                    workflow["jobs"][*job]["runs-on"], "ubuntu-26.04",
                     "{path}:{job} for {label}"
                 );
             }

@@ -40,7 +40,7 @@ pub(crate) fn check_rejects_bad_lanes_and_targets(setup: &MiseSetup) -> Result<(
     reject_payload(
         setup,
         "bad target",
-        "ubuntu-24.04",
+        "ubuntu-26.04",
         "not-a-target",
         &["gh@2.103.2"],
         None,
@@ -49,7 +49,7 @@ pub(crate) fn check_rejects_bad_lanes_and_targets(setup: &MiseSetup) -> Result<(
     reject_payload(
         setup,
         "empty specs",
-        "ubuntu-24.04",
+        "ubuntu-26.04",
         "x86_64-unknown-linux-gnu",
         &[],
         None,
@@ -62,7 +62,7 @@ pub(crate) fn check_rejects_bad_specs(setup: &MiseSetup) -> Result<(), Box<dyn E
     reject_payload(
         setup,
         "spec without version",
-        "ubuntu-24.04",
+        "ubuntu-26.04",
         "x86_64-unknown-linux-gnu",
         &["gh"],
         None,
@@ -71,7 +71,7 @@ pub(crate) fn check_rejects_bad_specs(setup: &MiseSetup) -> Result<(), Box<dyn E
     reject_payload(
         setup,
         "conflicting specs",
-        "ubuntu-24.04",
+        "ubuntu-26.04",
         "x86_64-unknown-linux-gnu",
         &["gh@2.103.2", "gh@2.103.3"],
         None,
@@ -80,7 +80,7 @@ pub(crate) fn check_rejects_bad_specs(setup: &MiseSetup) -> Result<(), Box<dyn E
     reject_payload(
         setup,
         "rust without toolchain",
-        "ubuntu-24.04",
+        "ubuntu-26.04",
         "x86_64-unknown-linux-gnu",
         &["rust@1.99.1"],
         None,
@@ -89,7 +89,7 @@ pub(crate) fn check_rejects_bad_specs(setup: &MiseSetup) -> Result<(), Box<dyn E
     reject_payload(
         setup,
         "toolchain without rust",
-        "ubuntu-24.04",
+        "ubuntu-26.04",
         "x86_64-unknown-linux-gnu",
         &["gh@2.103.2"],
         Some("1.99.1"),
@@ -98,7 +98,7 @@ pub(crate) fn check_rejects_bad_specs(setup: &MiseSetup) -> Result<(), Box<dyn E
     reject_payload(
         setup,
         "components without rust",
-        "ubuntu-24.04",
+        "ubuntu-26.04",
         "x86_64-unknown-linux-gnu",
         &["gh@2.103.2"],
         None,
@@ -107,7 +107,7 @@ pub(crate) fn check_rejects_bad_specs(setup: &MiseSetup) -> Result<(), Box<dyn E
     reject_payload(
         setup,
         "unknown component",
-        "ubuntu-24.04",
+        "ubuntu-26.04",
         "x86_64-unknown-linux-gnu",
         &["rust@1.99.1"],
         Some("1.99.1"),
@@ -136,7 +136,7 @@ pub(crate) fn check_rejects_decorated_rust_specs(setup: &MiseSetup) -> Result<()
         reject_payload(
             setup,
             label,
-            "ubuntu-24.04",
+            "ubuntu-26.04",
             "x86_64-unknown-linux-gnu",
             &[spec],
             None,
@@ -154,7 +154,7 @@ pub(crate) fn check_rejects_bad_setup_and_identity(
     reject_payload(
         &bad_setup,
         "bad mise sha",
-        "ubuntu-24.04",
+        "ubuntu-26.04",
         "x86_64-unknown-linux-gnu",
         &["gh@2.103.2"],
         None,
@@ -168,7 +168,7 @@ pub(crate) fn check_rejects_bad_setup_and_identity(
     }
     let unsupported = payload(
         setup,
-        "ubuntu-20.04",
+        "macos-15",
         "x86_64-unknown-linux-gnu",
         &["gh@2.103.2", "opentofu@1.13.2"],
         None,

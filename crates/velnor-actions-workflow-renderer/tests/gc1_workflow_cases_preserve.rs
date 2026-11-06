@@ -121,7 +121,7 @@ fn plan_with(dispositions: &[(&str, JobDisposition)]) -> Plan {
         event: WorkflowEvent::PullRequest,
         qualification: None,
         runner: PlanRunner {
-            label: "ubuntu-24.04".to_owned(),
+            label: "ubuntu-26.04".to_owned(),
             selection: RunnerSelection::LatestDefault,
         },
         trust: Trust::Pr,
@@ -240,7 +240,7 @@ fn check_shadow_guard() -> Result<(), Box<dyn Error>> {
 }
 
 fn check_denied_saves_repair_cleanup_lag() -> Result<(), Box<dyn Error>> {
-    let rendered = render_cache_cleanup_yml("ubuntu-24.04", "0.1.55")
+    let rendered = render_cache_cleanup_yml("ubuntu-26.04", "0.1.55")
         .map_err(|error| fail(&format!("cleanup render rejected its lag job:{error}")))?;
     if rendered.path != CACHE_CLEANUP_PATH {
         return Err(fail("cleanup render left its workflow path"));
@@ -304,8 +304,8 @@ fn check_static_branching_ledgers_platform_limits() -> Result<(), Box<dyn Error>
     if MAX_WORKFLOW_BYTES != 500_000 {
         return Err(fail("platform limit left its workflow byte ceiling"));
     }
-    if !RunsOn::parse("ubuntu-24.04")?.is_scale_set()
-        && RunsOn::parse("ubuntu-24.04")?.hosted_label() != Some("ubuntu-24.04")
+    if !RunsOn::parse("ubuntu-26.04")?.is_scale_set()
+        && RunsOn::parse("ubuntu-26.04")?.hosted_label() != Some("ubuntu-26.04")
     {
         return Err(fail("platform limit lost its hosted runner"));
     }

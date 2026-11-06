@@ -37,9 +37,9 @@ fn release_tool_runs_only_with_the_verified_toolchain_and_allowed_environment()
             .into_owned(),
     ];
     let argv = isolated_release_plz_argv(payload, ReleasePlzAuth::Trusted);
-    let env = release_executable_env("1.97.1", "ubuntu-24.04")?;
+    let env = release_executable_env("1.97.1", "ubuntu-26.04")?;
     assert!(release_executable_env("1.97.1", "self-hosted").is_err());
-    assert!(release_executable_env("../../hostile", "ubuntu-24.04").is_err());
+    assert!(release_executable_env("../../hostile", "ubuntu-26.04").is_err());
     let mut command = Command::new("/bin/sh");
     command.current_dir(root.path());
     command.arg("-c").arg(render_release_plz_argv(&argv)?);

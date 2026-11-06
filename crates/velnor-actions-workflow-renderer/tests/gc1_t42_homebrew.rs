@@ -9,9 +9,9 @@ fn admission_mac_and_finalizer_are_bound_in_generated_graph() -> Result<(), Box<
     let text = super::find_file(&files, ".github/workflows/product-release-generator.yml")?;
     let workflow: serde_json::Value = serde_saphyr::from_str(text)?;
     let jobs = &workflow["jobs"];
-    assert_eq!(jobs["qualify-homebrew-admit"]["runs-on"], "ubuntu-24.04");
+    assert_eq!(jobs["qualify-homebrew-admit"]["runs-on"], "ubuntu-26.04");
     assert_eq!(jobs["qualify-homebrew-macos"]["runs-on"], "macos-15");
-    assert_eq!(jobs["qualify-homebrew-finalize"]["runs-on"], "ubuntu-24.04");
+    assert_eq!(jobs["qualify-homebrew-finalize"]["runs-on"], "ubuntu-26.04");
     for (job, expected) in [
         ("qualify-homebrew-macos", "qualify-homebrew-admit"),
         ("qualify-homebrew-finalize", "qualify-homebrew-macos"),

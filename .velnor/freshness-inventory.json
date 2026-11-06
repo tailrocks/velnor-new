@@ -154,9 +154,7 @@
     "source": "https://docs.github.com/en/actions/reference/runners/github-hosted-runners",
     "status": "current",
     "supported": [
-      "ubuntu-26.04",
-      "ubuntu-24.04",
-      "ubuntu-22.04"
+      "ubuntu-26.04"
     ],
     "checked_at": "2026-11-05T04:35:18Z"
   },
