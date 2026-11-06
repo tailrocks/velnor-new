@@ -89,6 +89,7 @@ def main():
     nextest = installed(f"aqua:nextest-rs/nextest/cargo-nextest@{nextest_version}") / "cargo-nextest"
     copy_verified(gh, destination / f"gh_{entry['tool_platform']}", entry["gh_sha256"])
     copy_verified(nextest, destination / f"cargo-nextest_{entry['tool_platform']}", entry["nextest_sha256"])
+    subprocess.run([sys.executable, str(root / "scripts/prepare-image-attestation-tuf.py"), "--gh", str(gh), "--cache-root", str(destination / "image-attestation-tuf")], check=True, timeout=900)
     image = manifest["image"]
     if not isinstance(image, str) or not image.startswith("rust@sha256:") or len(image) != 76 or any(c not in "0123456789abcdef" for c in image[12:]):
         raise ValueError("invalid fixture image digest")

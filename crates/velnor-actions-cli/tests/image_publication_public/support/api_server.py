@@ -1,8 +1,13 @@
 # SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 # SPDX-License-Identifier: Apache-2.0
 
+import datetime
+import hashlib
 import http.server
+import json
+import os
 import pathlib
+import stat
 import re
 import ssl
 import subprocess
@@ -16,6 +21,18 @@ tls = pathlib.Path(sys.argv[2])
 backend = pathlib.Path(sys.argv[3])
 
 
+def bounded(path, maximum):
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+    with os.fdopen(fd, "rb") as stream:
+        metadata = os.fstat(stream.fileno())
+        if not stat.S_ISREG(metadata.st_mode) or not 0 < metadata.st_size <= maximum:
+            raise RuntimeError("TUF snapshot file is not bounded regular data")
+        data = stream.read(maximum + 1)
+    if len(data) != metadata.st_size:
+        raise RuntimeError("TUF snapshot file changed")
+    return data
+
+
 class Handler(http.server.BaseHTTPRequestHandler):
     def setup(self):
         super().setup()
@@ -24,8 +41,48 @@ class Handler(http.server.BaseHTTPRequestHandler):
     def log_message(self, *_args):
         pass
 
+    def tuf_GET(self, host, parsed):
+        if self.headers.get("Authorization") or parsed.query:
+            self.send_error(400)
+            return
+        root = pathlib.Path("/tools/image-attestation-tuf")
+        identity = bounded(root / "selected", 64).decode()
+        if not re.fullmatch(r"[0-9a-f]{64}", identity):
+            raise RuntimeError("invalid TUF snapshot identity")
+        snapshot = root / identity
+        payload = bounded(snapshot / "manifest.json", 65536)
+        if len(payload) > 65536 or hashlib.sha256(payload).hexdigest() != identity:
+            raise RuntimeError("TUF snapshot manifest mismatch")
+        manifest = json.loads(payload)
+        entry = manifest["hosts"][host]
+        expiry = datetime.datetime.fromisoformat(entry["expires"].replace("Z", "+00:00"))
+        if expiry <= datetime.datetime.now(datetime.timezone.utc):
+            raise RuntimeError("TUF snapshot expired; provision before suite")
+        if parsed.path == f"/{entry['next_root']}.root.json":
+            self.send_error(404)
+            return
+        expected = entry["routes"].get(parsed.path)
+        if expected is None or not re.fullmatch(r"[0-9a-f]{64}", expected["sha256"]):
+            self.send_error(404)
+            return
+        body = bounded(snapshot / "objects" / expected["sha256"], 1024 * 1024)
+        if len(body) != expected["size"] or len(body) > 1024 * 1024 or hashlib.sha256(body).hexdigest() != expected["sha256"]:
+            raise RuntimeError("TUF snapshot response mismatch")
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
     def do_GET(self):
         parsed = urllib.parse.urlsplit(self.path)
+        host = self.headers.get("Host", "")
+        if host in ("tuf-repo.github.com", "tuf-repo-cdn.sigstore.dev"):
+            self.tuf_GET(host, parsed)
+            return
+        if host != "api.github.com":
+            self.send_error(404)
+            return
         query = urllib.parse.parse_qsl(parsed.query, keep_blank_values=True)
         nonces = [value for key, value in query if key == "_velnor_read_nonce"]
         if (not parsed.path.startswith("/repos/tailrocks/velnor-new/")
@@ -80,7 +137,7 @@ server.socket = context.wrap_socket(server.socket, server_side=True)
 (home / "api-ready").write_text("ready")
 server.timeout = 5
 deadline = time.monotonic() + 90
-for _ in range(64):
+for _ in range(128):
     if time.monotonic() >= deadline:
         break
     server.handle_request()

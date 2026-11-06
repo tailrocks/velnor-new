@@ -316,6 +316,9 @@ fn attestation_pages(
         .split_once("sha256:")
         .map(|(_, digest)| digest)
         .ok_or("attestation digest is missing")?;
+    if let Some(pages) = state.get("signed_attestation_pages") {
+        return Ok(pages.clone());
+    }
     let qualification = state
         .get("qualification_attestation")
         .and_then(serde_json::Value::as_array)
