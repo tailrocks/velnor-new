@@ -278,6 +278,18 @@ fn run_cancellation_case(
     fs::write(&signal_ack, "continue\n")?;
     let exit_status = selector.wait(Duration::from_secs(10))?;
     check_selector_markers(&gh)?;
+    assert_cancellation_result(&scene, exit_status, signal, status)?;
+    hung_processes_gone(&gh)?;
+    scene.finish()?;
+    Ok(())
+}
+
+fn assert_cancellation_result(
+    scene: &Scene,
+    exit_status: ExitStatus,
+    signal: &str,
+    status: i32,
+) -> Result<(), Box<dyn Error>> {
     let actual = exit_status.code();
     if actual != Some(status) {
         return Err(fail(&format!(
@@ -292,7 +304,5 @@ fn run_cancellation_case(
             return Err(fail("cancellation retained a selected unit"));
         }
     }
-    hung_processes_gone(&gh)?;
-    scene.finish()?;
     Ok(())
 }

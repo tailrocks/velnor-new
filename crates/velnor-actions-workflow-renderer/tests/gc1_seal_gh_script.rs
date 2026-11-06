@@ -3,6 +3,7 @@
 
 pub(super) const GH: &str = r#"#!/bin/sh
 d="${FAKE_GH_DIR:?}"
+printf '%s\n' "$*" >> "$d/invocations"
 [ -n "${GH_TOKEN-}" ] || : > "$d/token-missing"
 env | while IFS= read -r entry; do
   name=${entry%%=*}
@@ -33,6 +34,10 @@ case "$verb" in
       shift
     done
     [ -n "$repo" ] || exit 1
+    if [ -n "${FAKE_GH_LIST_GATE-}" ]; then
+      : > "${FAKE_GH_LIST_STARTED:?}"
+      while [ ! -e "$FAKE_GH_LIST_GATE" ]; do sleep 0.01; done
+    fi
     if [ "$mode" = list-hang ]; then printf '%s\n' "$$" > "$d/list-pid"; sleep 30; exit 0; fi
     if [ -f "$d/list-output-override" ]; then cat "$d/list-output-override"; exit 0; fi
     if [ -f "$d/lag" ]; then
@@ -110,6 +115,18 @@ case "$verb" in
         slot=$((slot + 1))
       done
     fi
+    if [ -f "$d/resistant-keys" ] && grep -qxF "$skey" "$d/resistant-keys"; then
+      trap '' TERM
+      (
+        trap '' TERM
+        while [ ! -e "$d/publication-observed" ]; do sleep 0.01; done
+        : > "$d/post-publication-write"
+      ) &
+      printf '%s\n' "$!" > "$d/resistant-child"
+      printf '%s\n' "$$" > "$d/resistant-verifier"
+      wait "$!"
+      exit 1
+    fi
     if [ -f "$d/hang-keys" ] && grep -qxF "$skey" "$d/hang-keys"; then
       (
         trap '' TERM
@@ -126,7 +143,12 @@ case "$verb" in
       : > "$d/failed-$skey"
       exit 124
     fi
-    if [ -n "${FAKE_GH_VERIFY_GATE-}" ] && [ "$skey" = "${FAKE_GH_VERIFY_GATE_KEY-}" ]; then
+    if [ -f "$d/fail-statuses" ]; then
+      while IFS=' ' read -r failed_key failed_status; do
+        if [ "$failed_key" = "$skey" ]; then exit "$failed_status"; fi
+      done < "$d/fail-statuses"
+    fi
+    if [ -n "${FAKE_GH_VERIFY_GATE-}" ] && { [ "$skey" = "${FAKE_GH_VERIFY_GATE_KEY-}" ] || { [ -n "${FAKE_GH_VERIFY_GATE_EXCEPT-}" ] && [ "$skey" != "$FAKE_GH_VERIFY_GATE_EXCEPT" ]; }; }; then
       : > "${FAKE_GH_VERIFY_STARTED:?}"
       while [ ! -e "$FAKE_GH_VERIFY_GATE" ]; do sleep 0.01; done
     fi

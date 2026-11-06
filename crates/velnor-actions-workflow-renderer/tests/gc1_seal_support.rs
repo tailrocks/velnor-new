@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::error::Error;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use velnor_actions_contract::workflow::cache_family::{
     RootSlug, S256, StateScope, StateTrust, StateUnit,
@@ -308,8 +308,12 @@ pub(crate) fn clear_selector_markers(gh: &Gh) -> Result<(), Box<dyn Error>> {
 }
 
 pub(crate) fn check_selector_markers(gh: &Gh) -> Result<(), Box<dyn Error>> {
+    check_selector_markers_at(Path::new(&gh.dir()))
+}
+
+pub(crate) fn check_selector_markers_at(dir: &Path) -> Result<(), Box<dyn Error>> {
     for (marker, message) in SELECTOR_MARKERS {
-        match std::fs::symlink_metadata(PathBuf::from(gh.dir()).join(marker)) {
+        match std::fs::symlink_metadata(dir.join(marker)) {
             Ok(_) => return Err(fail(message)),
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
             Err(error) => return Err(error.into()),

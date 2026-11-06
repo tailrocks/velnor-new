@@ -61,7 +61,7 @@ impl SealRoot {
 }
 
 const RUN_GH: &str = r#"run_gh() {
-  if command -v timeout >/dev/null 2>&1; then timeout --foreground "$limit" gh "$@"; else gh "$@"; fi
+  timeout --foreground --kill-after=0.2s "$limit" gh "$@"
 }
 "#;
 
@@ -100,7 +100,7 @@ select_all() {
   command -v bash >/dev/null 2>&1 || return 0
   python3 -I -c 'import math, os, pathlib, signal, subprocess, sys, time' >/dev/null 2>&1 || return 0
 @REMOVE_UNIT_ENV@
-  export VELNOR_STATE_SELECT_DEADLINE="$deadline" VELNOR_STATE_UNIT_TIMEOUT="$unit_limit" VELNOR_STATE_PARALLELISM=@PARALLELISM@ VELNOR_STATE_SELECT_DIR="$d" VELNOR_STATE_SELECT_PREFIX="$state_prefix" VELNOR_STATE_SELECT_LIST_LIMIT=@SELECT_LIMIT@
+  export VELNOR_STATE_SELECT_DEADLINE="$deadline" VELNOR_STATE_UNIT_TIMEOUT="$unit_limit" VELNOR_STATE_GH_TIMEOUT="$limit" VELNOR_STATE_PARALLELISM=@PARALLELISM@ VELNOR_STATE_SELECT_DIR="$d" VELNOR_STATE_SELECT_PREFIX="$state_prefix" VELNOR_STATE_SELECT_LIST_LIMIT=@SELECT_LIMIT@
   unset i seen line record_name record prefix rest attested produce unit_name root slug remaining character compat_name snapshot_name compat snapshot result extra ordinal state_prefix IFS
   unset VELNOR_STATE_SELECT_TAG VELNOR_STATE_SELECT_KIND VELNOR_STATE_SELECT_UNIT_PREFIX VELNOR_STATE_SELECT_UNIT
   exec python3 -I -c 'import os; payload = os.environ.pop("VELNOR_STATE_SELECT_SUPERVISOR_HEX"); [os.environ.pop(k) for k in list(os.environ) if k.startswith(("VELNOR_STATE_SELECT_UNIT_R", "VELNOR_STATE_COMPAT_R", "VELNOR_STATE_SNAPSHOT_R"))]; exec(bytes.fromhex(payload))'
@@ -125,7 +125,7 @@ while IFS="@TAB@" read -r created key id size; do
   case "$size" in ""|*[!0-9]*) continue ;; esac
   [ "$size" -le @OUTER_BOUND@ ] || continue
   printf "%s %s %s\n" "$key" "$id" "$size" > "$w/subject"
-  if run_gh attestation verify "$w/subject" -R "$repo" --signer-workflow "$signer" --source-ref "$ref" --predicate-type "@PREDICATE@" >/dev/null 2>&1; then printf "%s\n" "$key" >> "$w/part"; v="${v}x"; else status=$?; [ "$status" -ne 124 ] || exit "$status"; fi
+  if run_gh attestation verify "$w/subject" -R "$repo" --signer-workflow "$signer" --source-ref "$ref" --predicate-type "@PREDICATE@" >/dev/null 2>&1; then printf "%s\n" "$key" >> "$w/part"; v="${v}x"; else status=$?; case "$status" in 124|125|126|127|137) exit "$status" ;; esac; fi
 done < "$d/sorted"
 mv -f "$w/part" "$w/out"
 "#;

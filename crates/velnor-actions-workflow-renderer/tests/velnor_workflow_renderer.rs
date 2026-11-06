@@ -66,6 +66,8 @@ mod state_v4_select_aggregate;
 #[cfg(target_os = "linux")]
 mod state_v4_select_bounds;
 #[cfg(target_os = "linux")]
+mod state_v4_select_call_bounds;
+#[cfg(target_os = "linux")]
 mod state_v4_select_cancellation;
 #[cfg(target_os = "linux")]
 mod state_v4_select_default_deadline;

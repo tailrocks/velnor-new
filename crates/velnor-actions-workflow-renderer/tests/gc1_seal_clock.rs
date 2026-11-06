@@ -21,7 +21,45 @@ impl SupervisorClock {
             "python3",
             r#"#!/bin/sh
 exec "$FAKE_REAL_PYTHON3" -I -c '
-import glob, os, sys, time
+import glob, os, signal, subprocess, sys, time
+real_popen = subprocess.Popen
+class BarrierPopen(real_popen):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        env = kwargs.get("env", {})
+        gate = os.environ.get("FAKE_SUPERVISOR_LAUNCH_GATE")
+        if gate and env.get("VELNOR_STATE_SELECT_TAG") == os.environ.get("FAKE_SUPERVISOR_LAUNCH_TAG", "u1"):
+            with open(gate + ".started", "w", encoding="utf-8") as record:
+                record.write(str(self.pid))
+            while not os.path.exists(gate):
+                time.sleep(0.01)
+subprocess.Popen = BarrierPopen
+real_killpg = os.killpg
+def killpg(group, signum):
+    launch_gate = os.environ.get("FAKE_SUPERVISOR_LAUNCH_GATE")
+    launch_key = os.environ.get("FAKE_SUPERVISOR_LAUNCH_KEY")
+    if launch_gate and launch_key and signum == signal.SIGTERM:
+        started = launch_gate + ".started"
+        if os.path.exists(started) and open(started, encoding="utf-8").read() == str(group):
+            subjects = os.path.join(os.environ["FAKE_GH_DIR"], "subjects")
+            end = real_monotonic() + 1
+            while real_monotonic() < end:
+                if os.path.exists(subjects) and launch_key in open(subjects, encoding="utf-8").read():
+                    break
+                time.sleep(0.01)
+    log = os.environ.get("FAKE_SUPERVISOR_GROUP_LOG")
+    if log and signum == signal.SIGKILL:
+        with open(log, "a", encoding="utf-8") as record:
+            record.write(str(group) + "\n")
+    gate = os.environ.get("FAKE_SUPERVISOR_CLEANUP_GATE")
+    state = os.environ.get("VELNOR_STATE_SELECT_DIR")
+    if gate and signum == signal.SIGKILL and os.path.exists(os.path.join(state, "status-u0")):
+        with open(gate + ".blocked", "w", encoding="utf-8"):
+            pass
+        while not os.path.exists(gate):
+            time.sleep(0.01)
+    return real_killpg(group, signum)
+os.killpg = killpg
 elapsed = [0.0]
 real_monotonic = time.monotonic
 base_monotonic = real_monotonic()
@@ -71,6 +109,12 @@ exec(compile(sys.argv[1], "<selector>", "exec"), {"__name__": "__main__"})
             return Err(fail("invalid supervisor clock advance"));
         }
         let marker = self.directory.join(format!("clock-marker-control-{label}"));
+        let ack = self.directory.join(format!("clock-ack-control-{label}"));
+        if marker.exists() || ack.exists() {
+            return Err(fail(&format!(
+                "duplicate supervisor clock advance label {label}; use a unique label"
+            )));
+        }
         let pending = marker.with_extension("next");
         std::fs::write(&pending, format!("{seconds}\n"))?;
         std::fs::rename(pending, marker)?;

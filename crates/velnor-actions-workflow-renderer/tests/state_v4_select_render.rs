@@ -59,28 +59,28 @@ fn rendered_selector_yaml_accepts_zero_one_and_65_roots() -> Result<(), Box<dyn 
 #[test]
 fn rendered_selector_uses_the_largest_public_root_count_within_existing_bounds()
 -> Result<(), Box<dyn Error>> {
-    let fixed_valid = rendered_short_roots(243)?;
+    let fixed_valid = rendered_short_roots(241)?;
     let fixed_valid_run_units = fixed_valid.run.encode_utf16().count();
     if fixed_valid.workflow_bytes > velnor_actions_workflow_renderer::MAX_WORKFLOW_BYTES
         || fixed_valid_run_units > 21_000
     {
         return Err(fail(&format!(
-            "fixed valid selector fixture exceeds existing bounds: roots=243 workflow_bytes={} run_utf16_units={fixed_valid_run_units}",
+            "fixed valid selector fixture exceeds existing bounds: roots=241 workflow_bytes={} run_utf16_units={fixed_valid_run_units}",
             fixed_valid.workflow_bytes
         )));
     }
-    let fixed_oversized = rendered_short_roots(244)
+    let fixed_oversized = rendered_short_roots(242)
         .expect_err("the fixed oversized fixture must cross the document boundary");
     if !fixed_oversized.to_string().contains("workflow_too_large:") {
         return Err(fail(&format!(
-            "fixed oversized selector fixture did not reach the document guard: roots=244 rejection={fixed_oversized}"
+            "fixed oversized selector fixture did not reach the document guard: roots=242 rejection={fixed_oversized}"
         )));
     }
     println!(
-        "fixed valid selector fixture roots=243 workflow_bytes={} run_utf16_units={fixed_valid_run_units}",
+        "fixed valid selector fixture roots=241 workflow_bytes={} run_utf16_units={fixed_valid_run_units}",
         fixed_valid.workflow_bytes
     );
-    println!("fixed oversized selector fixture roots=244 rejection={fixed_oversized}");
+    println!("fixed oversized selector fixture roots=242 rejection={fixed_oversized}");
 
     let mut accepted = 0;
     let mut rejected = 1;

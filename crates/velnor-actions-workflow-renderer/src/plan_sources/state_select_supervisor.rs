@@ -6,6 +6,7 @@ import math
 import pathlib
 import re
 import signal
+import shutil
 import subprocess
 import sys
 import time
@@ -16,7 +17,12 @@ d = pathlib.Path(os.environ["VELNOR_STATE_SELECT_DIR"])
 MAX_DEADLINE = @MAX_DEADLINE@
 started = time.monotonic()
 active = {}
+completed_units = set()
+observed_successes = {}
 guardian = """d=$VELNOR_STATE_SELECT_DIR
+timeout_path=$VELNOR_STATE_TIMEOUT_PATH
+unset VELNOR_STATE_GH_TIMEOUT
+unset VELNOR_STATE_TIMEOUT_PATH
 tag=$VELNOR_STATE_SELECT_TAG
 kind=$VELNOR_STATE_SELECT_KIND
 prefix=$VELNOR_STATE_SELECT_UNIT_PREFIX
@@ -24,7 +30,10 @@ unit=$VELNOR_STATE_SELECT_UNIT
 pgid=$$
 trap ':' TERM
 while [ ! -e "$d/ready-$pgid" ]; do sleep 0.01; done
-if [ "$kind" = list ]; then
+if [ "$kind" = probe ]; then
+  "$timeout_path" --version > "$d/timeout-version" 2>&1
+  result=$?
+elif [ "$kind" = list ]; then
   gh cache list -R "$GITHUB_REPOSITORY" --key "$VELNOR_STATE_SELECT_PREFIX" --ref "$VELNOR_DEFAULT_REF" --sort created_at --order desc --limit "$VELNOR_STATE_SELECT_LIST_LIMIT" --json key,createdAt,id,sizeInBytes --jq '.[] | [.createdAt, .key, (.id | tostring), (.sizeInBytes | tostring)] | @tsv' > "$d/list" 2>/dev/null
   result=$?
 else
@@ -37,6 +46,9 @@ while [ ! -e "$d/release-$pgid" ]; do sleep 0.01; done
 exit 0"""
 
 class AggregateExpired(Exception):
+    pass
+
+class ListingExpired(Exception):
     pass
 
 class Cancelled(Exception):
@@ -140,6 +152,7 @@ def launch(tag, kind, prefix="", unit=""):
             preexec_fn=reset_child_signals,
         )
         active[tag] = (proc, time.monotonic())
+        check_deadline()
         (d / f"ready-{proc.pid}").touch()
     finally:
         signal.pthread_sigmask(signal.SIG_SETMASK, old_mask)
@@ -148,6 +161,23 @@ def launch(tag, kind, prefix="", unit=""):
 def check_deadline():
     if time.monotonic() - started >= deadline:
         raise AggregateExpired()
+
+def await_listing(tag, spawned):
+    while True:
+        check_deadline()
+        if time.monotonic() - spawned >= call_timeout:
+            raise ListingExpired()
+        status_path = d / f"status-{tag}"
+        if status_path.exists():
+            try:
+                status = int(status_path.read_text().strip())
+            except ValueError:
+                status = 1
+            check_deadline()
+            if time.monotonic() - spawned >= call_timeout:
+                raise ListingExpired()
+            return status
+        time.sleep(0.01)
 
 def await_group(tag):
     while True:
@@ -164,15 +194,27 @@ def finish(tags):
     return stop_groups(tags)
 
 def main():
-    global deadline, unit_timeout, parallelism, list_limit, listing_ok, all_units
+    global deadline, unit_timeout, call_timeout, parallelism, list_limit, listing_ok, all_units, completed_units, observed_successes
     deadline = float(os.environ["VELNOR_STATE_SELECT_DEADLINE"])
     unit_timeout = float(os.environ["VELNOR_STATE_UNIT_TIMEOUT"])
+    call_timeout = float(os.environ["VELNOR_STATE_GH_TIMEOUT"])
     parallelism = int(os.environ["VELNOR_STATE_PARALLELISM"])
     list_limit = int(os.environ["VELNOR_STATE_SELECT_LIST_LIMIT"])
-    if not math.isfinite(deadline) or not math.isfinite(unit_timeout) or not 0 < deadline <= MAX_DEADLINE or not 0 < unit_timeout <= 3600 or not 1 <= parallelism <= 32 or not 0 < list_limit <= 1000:
+    if not math.isfinite(deadline) or not math.isfinite(unit_timeout) or not math.isfinite(call_timeout) or not 0 < deadline <= MAX_DEADLINE or not 0 < unit_timeout <= 3600 or not 0 < call_timeout <= 3600 or not 1 <= parallelism <= 32 or not 0 < list_limit <= 1000:
         return
+    timeout_path = shutil.which("timeout")
+    if timeout_path is None:
+        return
+    os.environ["VELNOR_STATE_TIMEOUT_PATH"] = timeout_path
+    launch("probe", "probe")
+    probe_status = await_listing("probe", active["probe"][1])
+    finish(["probe"])
+    if probe_status != 0 or not (d / "timeout-version").read_text().startswith("timeout (GNU coreutils)"):
+        return
+    os.environ["limit"] = format(call_timeout, ".17g")
+    check_deadline()
     launch("list", "list")
-    list_status = await_group("list")
+    list_status = await_listing("list", active["list"][1])
     finish(["list"])
     if list_status != 0:
         return
@@ -197,10 +239,13 @@ def main():
         return
     all_units = [unit[1] for unit in units]
     listing_ok = True
+    completed_units = set()
+    observed_successes = {}
     next_unit = 0
     while next_unit < len(units) or active:
         check_deadline()
         while next_unit < len(units) and len(active) < parallelism:
+            check_deadline()
             prefix, unit = units[next_unit][0:2]
             tag = f"u{next_unit}"
             (d / f"u-{unit}" / "out").write_text("")
@@ -208,15 +253,27 @@ def main():
             next_unit += 1
         finished = []
         expired_units = []
-        now = time.monotonic()
         for tag, (_, spawned) in list(active.items()):
             status = d / f"status-{tag}"
+            now = time.monotonic()
             if tag != "list" and now - spawned >= unit_timeout:
                 unit = units[int(tag[1:])][1]
                 finished.append((tag, None))
                 expired_units.append(unit)
             elif status.exists():
-                finished.append((tag, observed_status(tag)))
+                check_deadline()
+                status_value = observed_status(tag)
+                now = time.monotonic()
+                if now - started >= deadline:
+                    raise AggregateExpired()
+                if tag != "list" and now - spawned >= unit_timeout:
+                    unit = units[int(tag[1:])][1]
+                    finished.append((tag, None))
+                    expired_units.append(unit)
+                else:
+                    finished.append((tag, status_value))
+                    if tag != "list" and status_value == 0:
+                        observed_successes[tag] = units[int(tag[1:])][1]
         if finished:
             finish([tag for tag, _ in finished])
             for tag, status in finished:
@@ -225,6 +282,9 @@ def main():
                 unit = units[int(tag[1:])][1]
                 if status != 0:
                     clear_units([unit])
+                else:
+                    completed_units.add(unit)
+                    observed_successes.pop(tag, None)
             for unit in expired_units:
                 clear_units([unit])
         elif active:
@@ -252,11 +312,18 @@ try:
 except AggregateExpired:
     for sig in handled_signals:
         signal.signal(sig, signal.SIG_IGN)
-    unfinished = [all_units[int(tag[1:])] for tag in active if tag.startswith("u")]
     stop_groups(list(active))
-    clear_units(unfinished)
+    retained = set(completed_units) | set(observed_successes.values())
+    clear_units([unit for unit in all_units if unit not in retained])
     if not listing_ok:
         clear_outputs()
+    publish_outputs()
+    sys.exit(0)
+except ListingExpired:
+    for sig in handled_signals:
+        signal.signal(sig, signal.SIG_IGN)
+    stop_groups(list(active))
+    clear_outputs()
     publish_outputs()
     sys.exit(0)
 except Cancelled as cancelled:
