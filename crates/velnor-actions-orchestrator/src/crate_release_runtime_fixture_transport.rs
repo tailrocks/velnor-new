@@ -34,7 +34,7 @@
                 .ok_or("missing tag")?["object"]["sha"],
             sha
         );
-        github.create_release("owner/project", "demo-v0.1.1", &sha)?;
+        github.create_release("owner/project", "demo-v0.1.1", &sha, "0.1.1")?;
         assert_eq!(
             github
                 .get_optional("repos/owner/project/releases/tags/demo-v0.1.1")?

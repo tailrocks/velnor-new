@@ -147,9 +147,11 @@ impl GitHubAdmissionHttp {
         repository: &str,
         tag: &str,
         source_sha: &str,
+        version: &str,
     ) -> Result<(), OrchestratorError> {
         validate_write(repository, tag, source_sha)?;
-        let body = serde_json::json!({"tag_name": tag, "name": tag, "target_commitish": source_sha, "make_latest": "false"});
+        let prerelease = crate::crate_release_github::release_is_prerelease(version)?;
+        let body = serde_json::json!({"tag_name": tag, "name": tag, "target_commitish": source_sha, "make_latest": "false", "prerelease": prerelease});
         let result = self.post(&format!("repos/{repository}/releases"), &body)?;
         let expected = format!("https://github.com/{repository}/releases/tag/{tag}");
         let expected_encoded = format!(
@@ -158,6 +160,7 @@ impl GitHubAdmissionHttp {
         );
         if result["tag_name"].as_str() != Some(tag)
             || result["draft"].as_bool() != Some(false)
+            || result["prerelease"].as_bool() != Some(prerelease)
             || !matches!(result["html_url"].as_str(), Some(url) if url == expected || url == expected_encoded)
         {
             return Err(internal("crate_release_http_write_identity"));

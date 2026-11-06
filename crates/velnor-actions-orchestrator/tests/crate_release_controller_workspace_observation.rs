@@ -41,7 +41,7 @@ impl GitHubAdmissionRead for WorkspaceGithub {
             let tag = "velnor_fixture_order_20261104_a-v0.1.1";
             if route.contains("/releases/tags/") {
                 return Ok(Some(
-                    json!({"id":12,"tag_name":tag,"draft":false,"html_url":format!("https://github.com/example/demo/releases/tag/{tag}")}),
+                    json!({"id":12,"tag_name":tag,"draft":false,"prerelease":false,"html_url":format!("https://github.com/example/demo/releases/tag/{tag}")}),
                 ));
             }
             return Ok(Some(

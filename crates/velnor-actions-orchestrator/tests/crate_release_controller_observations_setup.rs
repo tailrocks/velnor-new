@@ -18,16 +18,18 @@ pub(super) fn github_release_evidence_requires_a_positive_numeric_id()
         velnor_actions_orchestrator::crate_release_github::read_github_release_evidence(
             "example/demo",
             "demo-v0.1.1",
+            "0.1.1",
             &github
         )?
         .is_some()
     );
-    for variant in [5, 6, 7, 8, 9] {
+    for variant in [5, 6, 7, 8, 9, 10, 11] {
         github.release_variant.set(variant);
         assert!(
             velnor_actions_orchestrator::crate_release_github::read_github_release_evidence(
                 "example/demo",
                 "demo-v0.1.1",
+                "0.1.1",
                 &github
             )
             .is_err()

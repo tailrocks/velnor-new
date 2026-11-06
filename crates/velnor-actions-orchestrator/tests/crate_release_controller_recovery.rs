@@ -65,7 +65,7 @@ pub(super) fn recovery_requires_fresh_human_approval_and_registry_absence()
     );
     assert_eq!(completed[0].tag_commit, request.source_sha);
     assert!(completed[0].source_inventory.contains_key("src/lib.rs"));
-    for variant in [1, 2, 3] {
+    for variant in [1, 2, 3, 10] {
         github.release_variant.set(variant);
         assert!(reconcile().is_err());
     }
@@ -74,6 +74,7 @@ pub(super) fn recovery_requires_fresh_human_approval_and_registry_absence()
         velnor_actions_orchestrator::crate_release_github::read_github_release_evidence(
             "example/demo",
             "demo-v0.1.1",
+            "0.1.1",
             &github
         )?
         .is_none()

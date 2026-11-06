@@ -262,7 +262,7 @@ pub fn reconcile_crate_release<G: GitHubAdmissionRead, R: CrateRegistryRead>(
             &owners,
             &archive,
         )?;
-        let release = wait_for_release(github, &intent.repository, &package.tag)?;
+        let release = wait_for_release(github, &intent.repository, package)?;
         completed.push(CrateReleaseCompletedPackage {
             source: package.source.clone(),
             tag: package.tag.clone(),

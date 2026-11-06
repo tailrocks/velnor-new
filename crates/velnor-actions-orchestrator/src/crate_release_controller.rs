@@ -302,6 +302,7 @@ pub trait CrateReleaseRepairWrite {
         repository: &str,
         tag: &str,
         source_sha: &str,
+        version: &str,
     ) -> Result<(), OrchestratorError>;
 }
 
@@ -361,8 +362,12 @@ pub fn repair_crate_release<
         CrateReleaseAction::RepairRelease { .. } => {}
         _ => return Err(internal("crate_release_repair_action_invalid")),
     }
-    if let Err(error) = github.create_release(&intent.repository, &package.tag, &request.source_sha)
-    {
+    if let Err(error) = github.create_release(
+        &intent.repository,
+        &package.tag,
+        &request.source_sha,
+        &package.source.version,
+    ) {
         observe()?;
         return Err(error);
     }

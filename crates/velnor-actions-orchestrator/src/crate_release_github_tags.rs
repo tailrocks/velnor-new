@@ -10,11 +10,22 @@ pub struct GitHubReleaseEvidence {
     pub url: String,
 }
 
+pub(crate) fn release_is_prerelease(version: &str) -> Result<bool, OrchestratorError> {
+    let parsed =
+        semver::Version::parse(version).map_err(|_| internal("crate_release_release_version"))?;
+    if parsed.to_string() != version {
+        return Err(internal("crate_release_release_version"));
+    }
+    Ok(!parsed.pre.is_empty())
+}
+
 pub fn read_github_release_evidence(
     repository: &str,
     tag: &str,
+    version: &str,
     api: &dyn GitHubAdmissionRead,
 ) -> Result<Option<GitHubReleaseEvidence>, OrchestratorError> {
+    let prerelease = release_is_prerelease(version)?;
     let Some(release) =
         api.get_optional(&format!("repos/{repository}/releases/tags/{}", encode(tag)))?
     else {
@@ -35,6 +46,7 @@ pub fn read_github_release_evidence(
     require(
         release["tag_name"].as_str() == Some(tag)
             && release["draft"].as_bool() == Some(false)
+            && release["prerelease"].as_bool() == Some(prerelease)
             && (url == raw || url == encoded),
         "release_identity",
     )?;

@@ -5,7 +5,7 @@
     fn test_metadata_responses(sha: &str) -> (serde_json::Value, serde_json::Value) {
         (
             serde_json::json!({"ref":"refs/tags/demo-v0.1.1","object":{"type":"commit","sha":sha}}),
-            serde_json::json!({"id":12,"tag_name":"demo-v0.1.1","draft":false,"html_url":"https://github.com/owner/project/releases/tag/demo-v0.1.1"}),
+            serde_json::json!({"id":12,"tag_name":"demo-v0.1.1","draft":false,"prerelease":false,"html_url":"https://github.com/owner/project/releases/tag/demo-v0.1.1"}),
         )
     }
 

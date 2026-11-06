@@ -103,6 +103,7 @@ pub(super) fn observe_package_state<G: GitHubAdmissionRead, R: CrateRegistryRead
                     github,
                     &intent.repository,
                     &tag,
+                    &package.version,
                     &request.source_sha,
                     tag_sha,
                     state,
@@ -129,6 +130,7 @@ pub(super) fn package_action_for_tag<G: GitHubAdmissionRead>(
     github: &G,
     repository: &str,
     tag: &str,
+    version: &str,
     source_sha: &str,
     tag_sha: Option<String>,
     state: crate::crate_release_registry::CrateRegistryReconciliation,
@@ -137,7 +139,7 @@ pub(super) fn package_action_for_tag<G: GitHubAdmissionRead>(
         None => Ok(CrateReleaseAction::RepairTag { registry: state }),
         Some(sha) if sha == source_sha => {
             match crate::crate_release_github::read_github_release_evidence(
-                repository, tag, github,
+                repository, tag, version, github,
             )? {
                 None => Ok(CrateReleaseAction::RepairRelease { registry: state }),
                 Some(release) => Ok(CrateReleaseAction::Reconciled {

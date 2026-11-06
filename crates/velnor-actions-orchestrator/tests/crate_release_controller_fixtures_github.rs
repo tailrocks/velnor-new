@@ -272,9 +272,11 @@ impl GitHubAdmissionRead for Github {
                 9 => json!(18_446_744_073_709_551_616.0_f64),
                 _ => json!(12),
             };
-            return Ok(Some(
-                json!({"id":id,"tag_name":tag,"draft":self.release_variant.get() == 1,"html_url":url}),
-            ));
+            let mut result = json!({"id":id,"tag_name":tag,"draft":self.release_variant.get() == 1,"prerelease":self.release_variant.get() == 10,"html_url":url});
+            if self.release_variant.get() == 11 {
+                result.as_object_mut().expect("object").remove("prerelease");
+            }
+            return Ok(Some(result));
         }
         Ok(Some(
             json!({"ref":"refs/tags/demo-v0.1.1","object":{"type":"commit","sha":if self.tag_wrong.get() {"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"} else {&self.sha}}}),
@@ -311,6 +313,7 @@ impl CrateReleaseRepairWrite for Github {
         _repository: &str,
         _tag: &str,
         source_sha: &str,
+        _version: &str,
     ) -> Result<(), OrchestratorError> {
         assert_eq!(source_sha, self.sha);
         if let Some(hook) = self.before_metadata_write.borrow().as_ref() {

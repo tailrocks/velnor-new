@@ -81,8 +81,10 @@ impl crate::crate_release_controller::CrateReleaseRepairWrite for NativeGitHubAd
         repository: &str,
         tag: &str,
         source_sha: &str,
+        version: &str,
     ) -> Result<(), OrchestratorError> {
-        self.reader.create_release(repository, tag, source_sha)
+        self.reader
+            .create_release(repository, tag, source_sha, version)
     }
 }
 
@@ -384,4 +386,5 @@ pub use authorization::{
     GitHubAuthorized, authorize_github_candidate, read_github_tag, read_github_tag_evidence,
     verify_environment_approval,
 };
+pub(crate) use tags::release_is_prerelease;
 pub use tags::{GitHubReleaseEvidence, read_github_release_evidence, verify_immutable_tag_rules};

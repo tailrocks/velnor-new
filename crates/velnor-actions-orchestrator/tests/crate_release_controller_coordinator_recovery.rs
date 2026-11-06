@@ -207,7 +207,7 @@ impl GitHubAdmissionRead for MixedGithub {
             let tag = format!("velnor_fixture_order_20261104_{suffix}-v0.1.1");
             if route.contains(&tag) {
                 if route.contains("/releases/tags/") {
-                    return Ok(self.releases[i].get().then(|| json!({"id":12+i,"tag_name":tag,"draft":false,"html_url":format!("https://github.com/example/demo/releases/tag/{tag}")})));
+                    return Ok(self.releases[i].get().then(|| json!({"id":12+i,"tag_name":tag,"draft":false,"prerelease":false,"html_url":format!("https://github.com/example/demo/releases/tag/{tag}")})));
                 }
                 return Ok(self.tags[i].get().then(|| json!({"ref":format!("refs/tags/{tag}"),"object":{"type":"commit","sha":self.inner.0.sha}})));
             }
@@ -222,7 +222,13 @@ impl CrateReleaseRepairWrite for MixedGithub {
         self.tags[i].set(true);
         Ok(())
     }
-    fn create_release(&self, _: &str, tag: &str, _: &str) -> Result<(), OrchestratorError> {
+    fn create_release(
+        &self,
+        _: &str,
+        tag: &str,
+        _: &str,
+        _: &str,
+    ) -> Result<(), OrchestratorError> {
         let i = usize::from(tag.contains("_b-v"));
         self.writes.borrow_mut().push(format!("release-{i}"));
         self.releases[i].set(true);

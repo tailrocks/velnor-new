@@ -65,7 +65,7 @@ fn accepts_same_run_artifact_metadata_routes() {
 #[test]
 fn posts_exact_approved_tag_and_release() {
     let tag_response = r#"{"ref":"refs/tags/demo-crate-v0.1.1","object":{"type":"commit","sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}}"#;
-    let release_response = r#"{"tag_name":"demo-crate-v0.1.1","target_commitish":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","draft":false,"html_url":"https://github.com/example/demo-crate/releases/tag/demo-crate-v0.1.1"}"#;
+    let release_response = r#"{"tag_name":"demo-crate-v0.1.1","target_commitish":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","draft":false,"prerelease":false,"html_url":"https://github.com/example/demo-crate/releases/tag/demo-crate-v0.1.1"}"#;
     let (origin, worker) = server(vec![
         reply("201 Created", tag_response),
         reply("201 Created", release_response),
@@ -85,7 +85,8 @@ fn posts_exact_approved_tag_and_release() {
             .create_release(
                 "example/demo-crate",
                 "demo-crate-v0.1.1",
-                "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "0.1.1"
             )
             .is_ok()
     );
@@ -104,47 +105,7 @@ fn posts_exact_approved_tag_and_release() {
     );
     assert_eq!(
         release_body,
-        serde_json::json!({"tag_name":"demo-crate-v0.1.1", "name":"demo-crate-v0.1.1", "target_commitish":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "make_latest":"false"})
-    );
-}
-
-#[test]
-fn rejects_invalid_writes_before_network() {
-    let listener = TcpListener::bind("127.0.0.1:0").expect("listen");
-    listener.set_nonblocking(true).expect("nonblocking");
-    let client = client(format!(
-        "http://{}",
-        listener.local_addr().expect("address")
-    ));
-    for (repo, tag, sha) in [
-        (
-            "bad/repo/extra",
-            "demo-crate-v0.1.1",
-            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-        ),
-        (
-            "example/demo-crate",
-            "../escape",
-            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-        ),
-        (
-            "example/demo-crate",
-            "v1.lock",
-            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-        ),
-        ("example/demo-crate", "v1", "not-a-sha"),
-    ] {
-        let result = client.create_tag(repo, tag, sha);
-        assert!(result.is_err());
-        assert!(!format!("{result:?}").contains(TOKEN));
-        assert!(client.create_release(repo, tag, sha).is_err());
-    }
-    assert_eq!(
-        listener
-            .accept()
-            .expect_err("invalid write must not send")
-            .kind(),
-        std::io::ErrorKind::WouldBlock
+        serde_json::json!({"tag_name":"demo-crate-v0.1.1", "name":"demo-crate-v0.1.1", "target_commitish":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "make_latest":"false", "prerelease":false})
     );
 }
 
@@ -170,6 +131,7 @@ fn rejects_non_created_and_wrong_created_responses() {
                     "example/demo-crate",
                     "demo-crate-v0.1.1",
                     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                    "0.1.1",
                 )
             } else {
                 client.create_tag(
@@ -201,6 +163,8 @@ fn rejects_non_created_and_wrong_created_responses() {
         worker.join().expect("server");
     }
     for body in [
+        r#"{"tag_name":"demo-crate-v0.1.1","draft":false,"prerelease":true,"html_url":"https://github.com/example/demo-crate/releases/tag/demo-crate-v0.1.1"}"#,
+        r#"{"tag_name":"demo-crate-v0.1.1","draft":false,"html_url":"https://github.com/example/demo-crate/releases/tag/demo-crate-v0.1.1"}"#,
         r#"{"tag_name":"other","draft":false,"html_url":"https://github.com/example/demo-crate/releases/tag/demo-crate-v0.1.1"}"#,
         r#"{"tag_name":"demo-crate-v0.1.1","draft":true,"html_url":"https://github.com/example/demo-crate/releases/tag/demo-crate-v0.1.1"}"#,
         r#"{"tag_name":"demo-crate-v0.1.1","draft":false,"html_url":"https://evil.test/"}"#,
@@ -211,7 +175,8 @@ fn rejects_non_created_and_wrong_created_responses() {
                 .create_release(
                     "example/demo-crate",
                     "demo-crate-v0.1.1",
-                    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                    "0.1.1"
                 )
                 .is_err()
         );

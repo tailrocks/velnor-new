@@ -204,6 +204,7 @@ pub(crate) fn repair_verified_metadata<
             &input.intent.repository,
             &selected.tag,
             &input.request.source_sha,
+            &selected.source.version,
         )?,
         JournalMutationKind::Upload => return Err(invalid()),
     }

@@ -4,9 +4,9 @@
 #[cfg(test)]
 use super::tests;
 use super::{
-    CrateRegistryOwner, CrateRegistryRead, CrateReleaseIntent, CrateReleaseSourcePackage,
-    GitHubAdmissionRead, OrchestratorError, Path, crate_release_workspace_plan_with_registry,
-    internal, read_github_tag_evidence,
+    CrateRegistryOwner, CrateRegistryRead, CrateReleaseIntent, CrateReleasePlannedPackage,
+    CrateReleaseSourcePackage, GitHubAdmissionRead, OrchestratorError, Path,
+    crate_release_workspace_plan_with_registry, internal, read_github_tag_evidence,
 };
 
 pub(super) fn workspace_inventory<R: CrateRegistryRead>(
@@ -183,10 +183,15 @@ pub(super) fn wait_for_tag<G: GitHubAdmissionRead>(
 pub(super) fn wait_for_release<G: GitHubAdmissionRead>(
     github: &G,
     repository: &str,
-    tag: &str,
+    package: &CrateReleasePlannedPackage,
 ) -> Result<crate::crate_release_github::GitHubReleaseEvidence, OrchestratorError> {
     for attempt in 0..60 {
-        match crate::crate_release_github::read_github_release_evidence(repository, tag, github)? {
+        match crate::crate_release_github::read_github_release_evidence(
+            repository,
+            &package.tag,
+            &package.source.version,
+            github,
+        )? {
             Some(url) => return Ok(url),
             None if attempt < 59 => std::thread::sleep(std::time::Duration::from_secs(2)),
             None => return Err(internal("crate_release_github_release_missing")),

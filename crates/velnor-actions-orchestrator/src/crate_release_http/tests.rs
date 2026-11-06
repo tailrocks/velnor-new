@@ -15,6 +15,7 @@ mod conditional;
 mod deadline;
 mod errors;
 mod journal;
+mod prerelease;
 mod requests;
 
 pub(super) fn server(replies: Vec<String>) -> (String, thread::JoinHandle<Vec<String>>) {

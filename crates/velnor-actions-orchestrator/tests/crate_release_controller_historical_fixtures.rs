@@ -216,8 +216,10 @@ impl CrateReleaseRepairWrite for HistoricalAuthority<'_> {
         repository: &str,
         tag: &str,
         source_sha: &str,
+        version: &str,
     ) -> Result<(), OrchestratorError> {
-        self.base.create_release(repository, tag, source_sha)
+        self.base
+            .create_release(repository, tag, source_sha, version)
     }
 }
 

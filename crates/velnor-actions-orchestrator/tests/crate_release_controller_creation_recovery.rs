@@ -237,8 +237,14 @@ impl CrateReleaseRepairWrite for CreationWorkspaceGithub {
     fn create_tag(&self, repo: &str, tag: &str, sha: &str) -> Result<(), OrchestratorError> {
         self.0.create_tag(repo, tag, sha)
     }
-    fn create_release(&self, repo: &str, tag: &str, sha: &str) -> Result<(), OrchestratorError> {
-        self.0.create_release(repo, tag, sha)
+    fn create_release(
+        &self,
+        repo: &str,
+        tag: &str,
+        sha: &str,
+        version: &str,
+    ) -> Result<(), OrchestratorError> {
+        self.0.create_release(repo, tag, sha, version)
     }
 }
 pub(super) struct CreationWorkspaceRegistry {
