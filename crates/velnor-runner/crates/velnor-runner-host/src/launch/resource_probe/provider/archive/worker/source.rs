@@ -129,9 +129,9 @@ fn verify_build_metadata(
         statement.get("_type").and_then(Value::as_str),
         Some("https://in-toto.io/Statement/v0.1" | "https://in-toto.io/Statement/v1")
     );
-    let valid_request_keys = request.keys().all(|key| {
-        ["frontend", "locals", "args", "root", "compatibilityVersion"].contains(&key.as_str())
-    });
+    let valid_request_keys = request
+        .keys()
+        .all(|key| ["frontend", "locals", "args", "compatibilityVersion"].contains(&key.as_str()));
     let source_url = vcs
         .get("source")
         .and_then(Value::as_str)

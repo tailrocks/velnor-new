@@ -2,22 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::path::Path;
-use std::time::Duration;
 
 use sha2::{Digest, Sha256};
 use velnor_runner_host::RepositoryConnection;
 
 use super::super::TestResult;
-use super::{
-    DIND_ID, DIND_IMAGE_ID, DIND_IMAGE_REF, PRIVATE_VOLUME, RUNNER_ID, RUNNER_IMAGE_ID,
-    RUNNER_IMAGE_REF,
-};
+use super::{DIND_ID, DIND_IMAGE_ID, PRIVATE_VOLUME, RUNNER_ID, RUNNER_IMAGE_ID};
 
-const SOURCE_SHA: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
-const RUNNER_IMAGE_ARCHIVE_SHA: &str =
-    "1111111111111111111111111111111111111111111111111111111111111111";
-const DIND_IMAGE_ARCHIVE_SHA: &str =
-    "9999999999999999999999999999999999999999999999999999999999999999";
 const RUNNER_NAME: &str = "v0123456789abcdef0123456789abcdef";
 const BOOT_ID: &str = "01234567-89ab-cdef-0123-456789abcdef";
 
@@ -106,54 +97,59 @@ pub(super) async fn seed_completed_launch(
 }
 
 async fn seed_worker_images(conn: &turso::Connection, root_digest: &str) -> TestResult<()> {
-    for (
-        archive_sha,
-        index_ch,
-        manifest_ch,
-        config_id,
-        idx_ch,
-        load_sha_ch,
-        load_idx_ch,
-        image_ref,
-    ) in [
+    for (role, sha_ch, arch_ch, idx_ch, man_ch, cfg_id, iidx_ch, lsha_ch, lidx_ch) in [
         (
-            RUNNER_IMAGE_ARCHIVE_SHA,
+            "velnor-runner",
+            "a",
+            "1",
             "2",
             "3",
             RUNNER_IMAGE_ID,
             "5",
             "6",
             "7",
-            RUNNER_IMAGE_REF,
         ),
         (
-            DIND_IMAGE_ARCHIVE_SHA,
+            "velnor-dind",
+            "a",
+            "9",
             "a",
             "b",
             DIND_IMAGE_ID,
             "c",
             "d",
             "e",
-            DIND_IMAGE_REF,
+        ),
+        (
+            "velnor-runner",
+            "b",
+            "7",
+            "2",
+            "3",
+            RUNNER_IMAGE_ID,
+            "5",
+            "6",
+            "7",
         ),
     ] {
-        let receipt = format!(
-            r#"{{"store":"classic","image_id":"{config_id}","repo_tags":["{image_ref}"]}}"#
-        );
+        let (sha, arch_sha) = (sha_ch.repeat(40), arch_ch.repeat(64));
+        let image_ref = format!("{role}:v{sha}-{arch_sha}");
+        let receipt =
+            format!(r#"{{"store":"classic","image_id":"{cfg_id}","repo_tags":["{image_ref}"]}}"#);
         conn.execute(
             "INSERT INTO image_imports (engine_id, docker_root_digest, daemon_architecture, source_sha, archive_sha256, index_digest, platform, manifest_digest, config_digest, attempt, state, image_id, image_index_digest, image_index_size, manifest_size, load_archive_sha256, load_archive_index_digest, image_reference, receipt) VALUES ('engine-1', ?1, 'aarch64', ?2, ?3, ?4, 'linux/amd64', ?5, ?6, 1, 'completed', ?7, ?8, 256, 512, ?9, ?10, ?11, ?12)",
             (
                 root_digest,
-                SOURCE_SHA,
-                archive_sha,
-                index_ch.repeat(64).as_str(),
-                format!("sha256:{}", manifest_ch.repeat(64)).as_str(),
-                config_id,
-                config_id,
-                format!("sha256:{}", idx_ch.repeat(64)).as_str(),
-                load_sha_ch.repeat(64).as_str(),
-                load_idx_ch.repeat(64).as_str(),
-                image_ref,
+                sha.as_str(),
+                arch_sha.as_str(),
+                idx_ch.repeat(64).as_str(),
+                format!("sha256:{}", man_ch.repeat(64)).as_str(),
+                cfg_id,
+                cfg_id,
+                format!("sha256:{}", iidx_ch.repeat(64)).as_str(),
+                lsha_ch.repeat(64).as_str(),
+                lidx_ch.repeat(64).as_str(),
+                image_ref.as_str(),
                 receipt.as_str(),
             ),
         )
@@ -345,53 +341,6 @@ async fn seed_cleanup_witness(
             binding_json.as_str(),
             binding_sha256.as_str(),
         ),
-    )
-    .await?;
-    Ok(())
-}
-
-pub(super) async fn wait_for_cleanup_attempt(
-    journal_path: &Path,
-    expected_generation: i64,
-) -> TestResult<()> {
-    let canonical = std::fs::canonicalize(journal_path)?;
-    let path_str = canonical
-        .to_str()
-        .ok_or_else(|| std::io::Error::other("journal path utf8"))?;
-    for _ in 0..200 {
-        tokio::time::sleep(Duration::from_millis(50)).await;
-        let db = turso::Builder::new_local(path_str).build().await?;
-        let conn = db.connect()?;
-        let mut rows = conn
-            .query(
-                "SELECT claim_generation, lease_until FROM connection_completion_cleanup WHERE intent_id = 1",
-                (),
-            )
-            .await?;
-        if let Some(row) = rows.next().await? {
-            let generation: i64 = row.get(0)?;
-            let lease_until: i64 = row.get(1)?;
-            if generation >= expected_generation && lease_until == 0 {
-                return Ok(());
-            }
-        }
-    }
-    Err("timed out waiting for CompletionWorker cleanup attempt".into())
-}
-
-pub(super) async fn reset_cleanup_retry_after(journal_path: &Path) -> TestResult<()> {
-    let canonical = std::fs::canonicalize(journal_path)?;
-    let db = turso::Builder::new_local(
-        canonical
-            .to_str()
-            .ok_or_else(|| std::io::Error::other("journal path utf8"))?,
-    )
-    .build()
-    .await?;
-    let conn = db.connect()?;
-    conn.execute(
-        "UPDATE connection_completion_cleanup SET retry_after = 0 WHERE intent_id = 1",
-        (),
     )
     .await?;
     Ok(())

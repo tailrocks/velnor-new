@@ -12,7 +12,7 @@ pub(super) struct JournalFile {
     path: PathBuf,
     identity: FileIdentity,
     anchor: Arc<File>,
-    database: Arc<Mutex<turso::Database>>,
+    database: Arc<Mutex<Option<turso::Database>>>,
     process_state: Arc<crate::journal_identity::JournalProcessState>,
 }
 
@@ -44,22 +44,37 @@ impl JournalFile {
             path: canonical,
             identity,
             anchor,
-            database: Arc::new(Mutex::new(database)),
+            database: Arc::new(Mutex::new(Some(database))),
             process_state,
         };
         file.verify()?;
         Ok(file)
     }
 
+    pub(super) fn reset_after_bootstrap(&self) -> Result<(), HostError> {
+        *self.database.lock().map_err(|_| HostError::Lock)? = None;
+        Ok(())
+    }
+
     pub(super) async fn connection(&self) -> Result<turso::Connection, HostError> {
         self.verify()?;
+        if let Some(database) = self.database.lock().map_err(|_| HostError::Lock)?.as_ref() {
+            let connection = database.connect().map_err(|_| HostError::Journal)?;
+            self.verify()?;
+            return Ok(connection);
+        }
         let text = self.path.to_str().ok_or(HostError::Path)?;
         let database = turso::Builder::new_local(text)
             .build()
             .await
             .map_err(|_| HostError::Journal)?;
-        let connection = database.connect().map_err(|_| HostError::Journal)?;
-        *self.database.lock().map_err(|_| HostError::Lock)? = database;
+        let connection = {
+            let mut guard = self.database.lock().map_err(|_| HostError::Lock)?;
+            guard
+                .get_or_insert(database)
+                .connect()
+                .map_err(|_| HostError::Journal)?
+        };
         self.verify()?;
         Ok(connection)
     }

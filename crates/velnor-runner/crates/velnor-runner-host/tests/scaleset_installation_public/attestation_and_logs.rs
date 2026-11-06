@@ -136,10 +136,24 @@ fn public_verify_worker_attestation_accepts_legacy_and_oci_artifact_manifests_an
     let (wrong_artifact_manifest, _) =
         oci_artifact_attestation_manifest(MANIFEST_DIGEST, "application/vnd.unknown.manifest+json");
     let non_empty_config = json!({"unexpected": 1});
-    for (manifest, config) in [
-        (&wrong_subject_manifest, &oci_config),
-        (&wrong_artifact_manifest, &oci_config),
-        (&oci_manifest, &non_empty_config),
+    let mut injected_arg_statement = statement.clone();
+    injected_arg_statement
+        .pointer_mut("/predicate/buildDefinition/externalParameters/request/args")
+        .and_then(Value::as_object_mut)
+        .ok_or("args map")?
+        .insert("build-arg:RUNNER_VERSION".to_owned(), json!("2.999.0"));
+    let mut injected_root_statement = statement.clone();
+    injected_root_statement
+        .pointer_mut("/predicate/buildDefinition/externalParameters/request")
+        .and_then(Value::as_object_mut)
+        .ok_or("request map")?
+        .insert("root".to_owned(), json!({"request": {}}));
+    for (manifest, config, stmt) in [
+        (&wrong_subject_manifest, &oci_config, &statement),
+        (&wrong_artifact_manifest, &oci_config, &statement),
+        (&oci_manifest, &non_empty_config, &statement),
+        (&oci_manifest, &oci_config, &injected_arg_statement),
+        (&oci_manifest, &oci_config, &injected_root_statement),
     ] {
         assert!(matches!(
             verify_worker_attestation_manifest(
@@ -150,30 +164,11 @@ fn public_verify_worker_attestation_accepts_legacy_and_oci_artifact_manifests_an
                 &oci_desc,
                 manifest,
                 config,
-                &statement
+                stmt
             ),
             Err(HostError::Docker)
         ));
     }
-    let mut injected_arg_statement = statement.clone();
-    injected_arg_statement
-        .pointer_mut("/predicate/buildDefinition/externalParameters/request/args")
-        .and_then(Value::as_object_mut)
-        .ok_or("args map")?
-        .insert("build-arg:RUNNER_VERSION".to_owned(), json!("2.999.0"));
-    assert!(matches!(
-        verify_worker_attestation_manifest(
-            WorkerImage::Runner,
-            SOURCE_SHA,
-            MANIFEST_DIGEST,
-            1024,
-            &oci_desc,
-            &oci_manifest,
-            &oci_config,
-            &injected_arg_statement
-        ),
-        Err(HostError::Docker)
-    ));
     Ok(())
 }
 

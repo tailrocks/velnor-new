@@ -46,6 +46,7 @@ struct StubState {
     archive: Vec<u8>,
     runner_present: bool,
     exec_creates: usize,
+    exec_inspected: usize,
 }
 
 struct LocalDockerStub {
@@ -81,6 +82,7 @@ fn spawn_docker_stub(
         archive,
         runner_present: true,
         exec_creates: 0,
+        exec_inspected: 0,
     }));
     let (thread_stop, thread_entered, thread_release, thread_state) = (
         Arc::clone(&stopping),
@@ -253,7 +255,7 @@ fn write_exec_response(
     stream: &mut UnixStream,
     method: &str,
     path: &str,
-    state: &StubState,
+    state: &mut StubState,
 ) -> std::io::Result<()> {
     match (method, path) {
         ("POST", p) if p.starts_with("exec/") && p.ends_with("/start") => {
@@ -274,6 +276,7 @@ fn write_exec_response(
                 .strip_prefix("exec/")
                 .and_then(|rest| rest.strip_suffix("/json"))
                 .unwrap_or_default();
+            state.exec_inspected += 1;
             let body = json!({"ID": exec_id, "ContainerID": DIND_ID, "Running": false, "ExitCode": state.exit_code});
             write_json(stream, 200, "OK", &body)
         }
@@ -284,12 +287,14 @@ fn write_exec_response(
 async fn run_one_worker_pass(
     ctx: (&Journal, &RepositoryConnection, &Path, &LocalDockerStub),
     docker: bollard::Docker,
-    expected_generation: i64,
 ) -> TestResult<Result<(), HostError>> {
     let (journal, connection, state_dir, stub) = ctx;
-    let journal_path = state_dir.join("journal.db");
     stub.dind_stop_entered.store(false, Ordering::Release);
     stub.release_dind_stop.store(false, Ordering::Release);
+    stub.state
+        .lock()
+        .map_err(|_| std::io::Error::other("stub state poisoned"))?
+        .exec_inspected = 0;
     let worker = CompletionWorker::start_for_connection(
         journal,
         connection,
@@ -300,17 +305,24 @@ async fn run_one_worker_pass(
         state_dir,
     )
     .await?;
-    tokio::select! {
-        res = seed::wait_for_cleanup_attempt(&journal_path, expected_generation) => res?,
-        () = async {
-            while !stub.dind_stop_entered.load(Ordering::Acquire) {
-                tokio::time::sleep(Duration::from_millis(5)).await;
-            }
-        } => {}
+    while !stub.dind_stop_entered.load(Ordering::Acquire) {
+        let bad_exit_done = {
+            let g = stub
+                .state
+                .lock()
+                .map_err(|_| std::io::Error::other("stub state poisoned"))?;
+            (g.exit_code == 1 && g.exec_inspected >= 3)
+                || (!g.archive.is_empty() && g.exit_code != 0 && g.exec_inspected >= 1)
+        };
+        if bad_exit_done {
+            tokio::time::sleep(Duration::from_millis(50)).await;
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(5)).await;
     }
     let release = Arc::clone(&stub.release_dind_stop);
     let releaser = tokio::spawn(async move {
-        tokio::task::yield_now().await;
+        tokio::time::sleep(Duration::from_millis(10)).await;
         release.store(true, Ordering::Release);
     });
     let outcome = worker.shutdown().await;
@@ -339,10 +351,9 @@ pub(super) fn run_runner_log_cleanup_scenario(
             .ok_or_else(|| std::io::Error::other("socket utf8"))?;
         let docker = connect_unix(sock)?;
         let ctx = (&journal, &connection, state_dir.as_path(), &stub);
-        let first = run_one_worker_pass(ctx, docker.clone(), 1).await?;
+        let first = run_one_worker_pass(ctx, docker.clone()).await?;
         let replay = if first.is_ok() {
-            seed::reset_cleanup_retry_after(&journal_path).await?;
-            Some(run_one_worker_pass(ctx, docker, 2).await?)
+            Some(run_one_worker_pass(ctx, docker).await?)
         } else {
             None
         };

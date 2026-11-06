@@ -146,21 +146,19 @@ impl Journal {
         storage::complete_preloaded(self, id, request, inspection).await
     }
 
-    pub(crate) async fn latest_completed_image_import(
+    pub(crate) async fn latest_completed_worker_image_pair(
         &self,
         engine_id: &str,
         docker_root_digest: &str,
         daemon_architecture: &str,
         platform: &str,
-        reference_prefix: &str,
-    ) -> Result<Option<ImageImportRecord>, HostError> {
-        storage::latest_completed_for_prefix(
+    ) -> Result<Option<(ImageImportRecord, ImageImportRecord)>, HostError> {
+        storage::latest_completed_worker_pair(
             self,
             engine_id,
             docker_root_digest,
             daemon_architecture,
             platform,
-            reference_prefix,
         )
         .await
     }

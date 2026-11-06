@@ -58,23 +58,12 @@ impl VerifiedWorkerImages {
         docker: &Docker,
         expected: &SelectedEngineContext,
     ) -> Result<Self, HostError> {
-        let runner_record = journal
-            .latest_completed_image_import(
+        let (runner_record, dind_record) = journal
+            .latest_completed_worker_image_pair(
                 expected.engine_id(),
                 expected.docker_root_digest(),
                 expected.daemon_architecture(),
                 expected.platform(),
-                "velnor-runner:v",
-            )
-            .await?
-            .ok_or(HostError::Identity)?;
-        let dind_record = journal
-            .latest_completed_image_import(
-                expected.engine_id(),
-                expected.docker_root_digest(),
-                expected.daemon_architecture(),
-                expected.platform(),
-                "velnor-dind:v",
             )
             .await?
             .ok_or(HostError::Identity)?;

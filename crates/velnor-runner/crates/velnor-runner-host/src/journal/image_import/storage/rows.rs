@@ -55,14 +55,13 @@ pub(super) async fn latest_for_request(
     Ok(Some(parse_record(&row, request)?))
 }
 
-pub(super) async fn latest_completed_by_prefix(
+pub(super) async fn latest_completed_worker_pair_rows(
     connection: &turso::Connection,
     engine_id: &str,
     docker_root_digest: &str,
     daemon_architecture: &str,
     platform: &str,
-    reference_prefix: &str,
-) -> Result<Option<ImageImportRecord>, HostError> {
+) -> Result<Option<(ImageImportRecord, ImageImportRecord)>, HostError> {
     let mut rows = connection
         .query(
             "SELECT id, attempt, state, image_id, image_index_digest, image_index_size, manifest_size, load_archive_sha256, load_archive_index_digest, image_reference, receipt, source_sha, archive_sha256, index_digest, manifest_digest, config_digest FROM image_imports WHERE engine_id = ?1 AND docker_root_digest = ?2 AND daemon_architecture = ?3 AND platform = ?4 AND state = 'completed' ORDER BY id DESC",
@@ -75,12 +74,16 @@ pub(super) async fn latest_completed_by_prefix(
         )
         .await
         .map_err(|_| HostError::Journal)?;
+    let mut runners = std::collections::HashMap::<String, ImageImportRecord>::new();
+    let mut dinds = std::collections::HashMap::<String, ImageImportRecord>::new();
     while let Some(row) = rows.next().await.map_err(|_| HostError::Journal)? {
         let image_reference: Option<String> = row.get(9).map_err(|_| HostError::Journal)?;
         let Some(image_reference) = image_reference else {
             continue;
         };
-        if !image_reference.starts_with(reference_prefix) {
+        let is_runner = image_reference.starts_with("velnor-runner:v");
+        let is_dind = image_reference.starts_with("velnor-dind:v");
+        if !is_runner && !is_dind {
             continue;
         }
         let image_index_digest: Option<String> = row.get(4).map_err(|_| HostError::Journal)?;
@@ -89,11 +92,12 @@ pub(super) async fn latest_completed_by_prefix(
         let load_archive_sha256: Option<String> = row.get(7).map_err(|_| HostError::Journal)?;
         let load_archive_index_digest: Option<String> =
             row.get(8).map_err(|_| HostError::Journal)?;
+        let source_sha: String = row.get(11).map_err(|_| HostError::Journal)?;
         let request = ImageImportRequest::new(ImageImportIdentity {
             engine_id: engine_id.to_owned(),
             docker_root_digest: docker_root_digest.to_owned(),
             daemon_architecture: daemon_architecture.to_owned(),
-            source_sha: row.get(11).map_err(|_| HostError::Journal)?,
+            source_sha: source_sha.clone(),
             archive_sha256: row.get(12).map_err(|_| HostError::Journal)?,
             archive_index_digest: row.get(13).map_err(|_| HostError::Journal)?,
             platform: platform.to_owned(),
@@ -111,7 +115,15 @@ pub(super) async fn latest_completed_by_prefix(
             load_archive_index_digest,
             image_reference,
         })?;
-        return Ok(Some(parse_record(&row, &request)?));
+        let record = parse_record(&row, &request)?;
+        if is_runner {
+            runners.entry(source_sha.clone()).or_insert(record);
+        } else {
+            dinds.entry(source_sha.clone()).or_insert(record);
+        }
+        if let (Some(runner), Some(dind)) = (runners.get(&source_sha), dinds.get(&source_sha)) {
+            return Ok(Some((runner.clone(), dind.clone())));
+        }
     }
     Ok(None)
 }
