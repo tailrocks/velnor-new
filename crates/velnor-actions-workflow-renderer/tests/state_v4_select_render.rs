@@ -108,7 +108,7 @@ fn rendered_selector_uses_the_largest_public_root_count_within_existing_bounds()
     }
     let fixed_oversized = rendered_short_roots(2_050)
         .expect_err("the fixed oversized fixture must cross the document boundary");
-    if !fixed_oversized.contains("workflow_too_large:") {
+    if !fixed_oversized.to_string().contains("workflow_too_large:") {
         return Err(fail(&format!(
             "fixed oversized selector fixture did not reach the document guard: roots=2050 rejection={fixed_oversized}"
         )));
