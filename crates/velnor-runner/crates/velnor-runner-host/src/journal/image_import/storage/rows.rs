@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::super::{
-    ImageImportId, ImageImportObservation, ImageImportRecord, ImageImportRequest, ImageImportState,
+    ImageImportId, ImageImportIdentity, ImageImportObservation, ImageImportRecord,
+    ImageImportRequest, ImageImportState,
 };
 use crate::error::HostError;
 
@@ -52,6 +53,67 @@ pub(super) async fn latest_for_request(
         return Ok(None);
     };
     Ok(Some(parse_record(&row, request)?))
+}
+
+pub(super) async fn latest_completed_by_prefix(
+    connection: &turso::Connection,
+    engine_id: &str,
+    docker_root_digest: &str,
+    daemon_architecture: &str,
+    platform: &str,
+    reference_prefix: &str,
+) -> Result<Option<ImageImportRecord>, HostError> {
+    let mut rows = connection
+        .query(
+            "SELECT id, attempt, state, image_id, image_index_digest, image_index_size, manifest_size, load_archive_sha256, load_archive_index_digest, image_reference, receipt, source_sha, archive_sha256, index_digest, manifest_digest, config_digest FROM image_imports WHERE engine_id = ?1 AND docker_root_digest = ?2 AND daemon_architecture = ?3 AND platform = ?4 AND state = 'completed' ORDER BY id DESC",
+            (
+                engine_id,
+                docker_root_digest,
+                daemon_architecture,
+                platform,
+            ),
+        )
+        .await
+        .map_err(|_| HostError::Journal)?;
+    while let Some(row) = rows.next().await.map_err(|_| HostError::Journal)? {
+        let image_reference: Option<String> = row.get(9).map_err(|_| HostError::Journal)?;
+        let Some(image_reference) = image_reference else {
+            continue;
+        };
+        if !image_reference.starts_with(reference_prefix) {
+            continue;
+        }
+        let image_index_digest: Option<String> = row.get(4).map_err(|_| HostError::Journal)?;
+        let image_index_size: Option<i64> = row.get(5).map_err(|_| HostError::Journal)?;
+        let manifest_size: Option<i64> = row.get(6).map_err(|_| HostError::Journal)?;
+        let load_archive_sha256: Option<String> = row.get(7).map_err(|_| HostError::Journal)?;
+        let load_archive_index_digest: Option<String> =
+            row.get(8).map_err(|_| HostError::Journal)?;
+        let request = ImageImportRequest::new(ImageImportIdentity {
+            engine_id: engine_id.to_owned(),
+            docker_root_digest: docker_root_digest.to_owned(),
+            daemon_architecture: daemon_architecture.to_owned(),
+            source_sha: row.get(11).map_err(|_| HostError::Journal)?,
+            archive_sha256: row.get(12).map_err(|_| HostError::Journal)?,
+            archive_index_digest: row.get(13).map_err(|_| HostError::Journal)?,
+            platform: platform.to_owned(),
+            manifest_digest: row.get(14).map_err(|_| HostError::Journal)?,
+            manifest_size: manifest_size
+                .and_then(|size| u64::try_from(size).ok())
+                .ok_or(HostError::Journal)?,
+            config_digest: row.get(15).map_err(|_| HostError::Journal)?,
+            image_index_digest,
+            image_index_size: image_index_size
+                .map(u64::try_from)
+                .transpose()
+                .map_err(|_| HostError::Journal)?,
+            load_archive_sha256,
+            load_archive_index_digest,
+            image_reference,
+        })?;
+        return Ok(Some(parse_record(&row, &request)?));
+    }
+    Ok(None)
 }
 
 pub(super) async fn record_by_id(

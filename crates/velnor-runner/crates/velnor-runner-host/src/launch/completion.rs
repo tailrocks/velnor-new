@@ -6,7 +6,6 @@ mod diagnostics;
 mod journal_ref;
 mod reaper;
 
-pub use cleanup::remove_completed_runner_container;
 pub(in crate::launch) use cleanup::{
     remove_owned_resources_for_jit_conflict, remove_owned_resources_for_retirement,
 };
@@ -57,7 +56,8 @@ struct StartWithJournalInput<'a> {
     selected_engine: SelectedEngineContext,
 }
 
-pub(crate) struct CompletionWorker {
+#[derive(Debug)]
+pub struct CompletionWorker {
     wake: SyncSender<()>,
     stopping: Arc<AtomicBool>,
     thread: Option<JoinHandle<()>>,
@@ -65,6 +65,47 @@ pub(crate) struct CompletionWorker {
 }
 
 impl CompletionWorker {
+    pub async fn start_for_connection(
+        journal: &crate::journal::Journal,
+        binding: &crate::config::RepositoryConnection,
+        docker: Docker,
+        admin_base: &str,
+        admin_token: String,
+        release_read_token: &str,
+        state: &Path,
+    ) -> Result<Self, HostError> {
+        let scope = journal.existing_connection_scope(binding).await?;
+        let engine_context = scope.engine_context().await?.ok_or(HostError::Ownership)?;
+        let bounded = bounded_docker(docker);
+        let info = tokio::time::timeout(CLEANUP_DOCKER_REQUEST_TIMEOUT, bounded.info())
+            .await
+            .map_err(|_| HostError::Docker)?
+            .map_err(|_| HostError::Docker)?;
+        let selected = SelectedEngineContext::capture(&engine_context, &info)?;
+        let worker_images = crate::launch::VerifiedWorkerImages::from_journal_for_engine(
+            journal, &bounded, &selected,
+        )
+        .await?;
+        let release_secret = Arc::new(crate::launch::ReleaseReadSecret::parse(release_read_token)?);
+        let native_cleanup = NativeCleanupRuntime::new(
+            bounded.clone(),
+            journal.clone(),
+            engine_context,
+            selected.clone(),
+            worker_images,
+            release_secret,
+        )?;
+        Self::start_scoped(
+            scope,
+            native_cleanup,
+            bounded,
+            selected,
+            admin_base,
+            admin_token,
+            state,
+        )
+    }
+
     pub(crate) fn start_scoped(
         journal: ConnectionJournal,
         native_cleanup: NativeCleanupRuntime,
@@ -148,11 +189,11 @@ impl CompletionWorker {
         })
     }
 
-    pub(crate) fn notify(&self) {
+    pub fn notify(&self) {
         wake(&self.wake);
     }
 
-    pub(crate) async fn shutdown(mut self) -> Result<(), HostError> {
+    pub async fn shutdown(mut self) -> Result<(), HostError> {
         self.request_stop();
         let finished = match self.finished.as_mut() {
             Some(receiver) => (&mut *receiver).await.map_err(|_| HostError::Journal),

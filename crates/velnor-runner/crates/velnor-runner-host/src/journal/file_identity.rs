@@ -3,7 +3,7 @@
 
 use std::fs::{self, File, OpenOptions};
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use crate::error::HostError;
 
@@ -12,7 +12,7 @@ pub(super) struct JournalFile {
     path: PathBuf,
     identity: FileIdentity,
     anchor: Arc<File>,
-    database: turso::Database,
+    database: Arc<Mutex<turso::Database>>,
     process_state: Arc<crate::journal_identity::JournalProcessState>,
 }
 
@@ -44,22 +44,22 @@ impl JournalFile {
             path: canonical,
             identity,
             anchor,
-            database,
+            database: Arc::new(Mutex::new(database)),
             process_state,
         };
         file.verify()?;
         Ok(file)
     }
 
-    pub(super) fn connection(
-        &self,
-    ) -> impl std::future::Future<Output = Result<turso::Connection, HostError>> + '_ {
-        std::future::poll_fn(|_| std::task::Poll::Ready(self.connect_verified()))
-    }
-
-    fn connect_verified(&self) -> Result<turso::Connection, HostError> {
+    pub(super) async fn connection(&self) -> Result<turso::Connection, HostError> {
         self.verify()?;
-        let connection = self.database.connect().map_err(|_| HostError::Journal)?;
+        let text = self.path.to_str().ok_or(HostError::Path)?;
+        let database = turso::Builder::new_local(text)
+            .build()
+            .await
+            .map_err(|_| HostError::Journal)?;
+        let connection = database.connect().map_err(|_| HostError::Journal)?;
+        *self.database.lock().map_err(|_| HostError::Lock)? = database;
         self.verify()?;
         Ok(connection)
     }

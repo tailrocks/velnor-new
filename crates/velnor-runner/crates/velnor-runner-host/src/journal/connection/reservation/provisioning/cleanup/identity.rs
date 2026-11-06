@@ -25,37 +25,6 @@ pub(crate) struct StorageCleanupIdentity {
 }
 
 impl StorageCleanupIdentity {
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "the eight fields independently bind reservation, operation, engine, container, and volume identities"
-    )]
-    pub(crate) fn new_runner_cleanup(
-        reservation_id: i64,
-        operation_id: i64,
-        engine_id: String,
-        docker_root_digest: String,
-        runner_container_id: String,
-        dind_container_id: String,
-        private_volume: String,
-        runner_home_volume: String,
-    ) -> Self {
-        Self {
-            reservation_id,
-            operation_id,
-            engine_id,
-            docker_root_digest,
-            runner_container_id,
-            dind_container_id,
-            instance_binding_digest: String::new(),
-            topology_version: 2,
-            private_volume,
-            guest_boot_id: String::new(),
-            volumes: vec![(StorageRole::RunnerHome, runner_home_volume)],
-            mounts: Vec::new(),
-            cgroups: Vec::new(),
-        }
-    }
-
     pub(crate) const fn reservation_id(&self) -> i64 {
         self.reservation_id
     }

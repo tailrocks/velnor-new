@@ -53,6 +53,54 @@ impl VerifiedWorkerImages {
         })
     }
 
+    pub(crate) async fn from_journal_for_engine(
+        journal: &crate::journal::Journal,
+        docker: &Docker,
+        expected: &SelectedEngineContext,
+    ) -> Result<Self, HostError> {
+        let runner_record = journal
+            .latest_completed_image_import(
+                expected.engine_id(),
+                expected.docker_root_digest(),
+                expected.daemon_architecture(),
+                expected.platform(),
+                "velnor-runner:v",
+            )
+            .await?
+            .ok_or(HostError::Identity)?;
+        let dind_record = journal
+            .latest_completed_image_import(
+                expected.engine_id(),
+                expected.docker_root_digest(),
+                expected.daemon_architecture(),
+                expected.platform(),
+                "velnor-dind:v",
+            )
+            .await?
+            .ok_or(HostError::Identity)?;
+        let source_sha = runner_record.request.source_sha.clone();
+        if expected.platform() != "linux/amd64"
+            || !lower_hex(&source_sha, 40)
+            || !lower_hex(expected.docker_root_digest(), 64)
+            || !matches!(expected.daemon_architecture(), "aarch64" | "x86_64")
+            || dind_record.request.source_sha != source_sha
+        {
+            return Err(HostError::Identity);
+        }
+        let images = Self {
+            engine_id: expected.engine_id().to_owned(),
+            docker_root_digest: expected.docker_root_digest().to_owned(),
+            daemon_architecture: expected.daemon_architecture().to_owned(),
+            source_sha,
+            platform: expected.platform().to_owned(),
+            release_workspace_cleanup: VerifiedWorkspaceCleanup::for_path(journal.path()),
+            runner: VerifiedImageIdentity::from_record(runner_record)?,
+            dind: VerifiedImageIdentity::from_record(dind_record)?,
+        };
+        images.verify_for_engine(docker, expected).await?;
+        Ok(images)
+    }
+
     pub(crate) async fn verify_for_engine(
         &self,
         docker: &Docker,
@@ -139,6 +187,38 @@ impl VerifiedImageIdentity {
             manifest_digest: proof.manifest_digest().to_owned(),
             manifest_size: proof.manifest_size(),
             config_digest,
+        })
+    }
+
+    fn from_record(record: crate::journal::ImageImportRecord) -> Result<Self, HostError> {
+        if record.state != crate::journal::ImageImportState::Completed {
+            return Err(HostError::Identity);
+        }
+        let runtime_id = record.image_id.ok_or(HostError::Identity)?;
+        let request = record.request;
+        let image_index_digest = request.image_index_digest.ok_or(HostError::Identity)?;
+        let image_index_size = request.image_index_size.ok_or(HostError::Identity)?;
+        if !sha256_digest(&runtime_id)
+            || !sha256_digest(&image_index_digest)
+            || !sha256_digest(&request.manifest_digest)
+            || !sha256_digest(&request.config_digest)
+            || (runtime_id != image_index_digest && runtime_id != request.config_digest)
+            || !lower_hex(&request.archive_sha256, 64)
+            || !lower_hex(&request.archive_index_digest, 64)
+            || image_index_size == 0
+            || request.manifest_size == 0
+        {
+            return Err(HostError::Identity);
+        }
+        Ok(Self {
+            runtime_id,
+            archive_sha256: request.archive_sha256,
+            archive_index_digest: request.archive_index_digest,
+            image_index_digest: Some(image_index_digest),
+            image_index_size: Some(image_index_size),
+            manifest_digest: request.manifest_digest,
+            manifest_size: request.manifest_size,
+            config_digest: request.config_digest,
         })
     }
 

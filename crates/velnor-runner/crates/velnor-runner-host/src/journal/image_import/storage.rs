@@ -9,9 +9,9 @@ use super::{
     ImageImportClaim, ImageImportId, ImageImportInspection, ImageImportRecord, ImageImportRequest,
     ImageImportState,
 };
-use crate::journal::connection::storage::in_transaction;
+use crate::journal::connection::storage::{in_transaction, read_transaction};
 use crate::journal::sql::one_row;
-use rows::{insert_prepared, latest_for_request, record_by_id};
+use rows::{insert_prepared, latest_completed_by_prefix, latest_for_request, record_by_id};
 
 pub(super) async fn prepare(
     journal: &crate::journal::Journal,
@@ -160,6 +160,31 @@ pub(super) async fn complete_preloaded(
             .await
             .map_err(|_| HostError::Journal)?;
         one_row(changed)
+    })
+    .await
+}
+
+pub(super) async fn latest_completed_for_prefix(
+    journal: &crate::journal::Journal,
+    engine_id: &str,
+    docker_root_digest: &str,
+    daemon_architecture: &str,
+    platform: &str,
+    reference_prefix: &str,
+) -> Result<Option<ImageImportRecord>, HostError> {
+    read_transaction(journal, async |connection| {
+        if crate::journal_schema::engine_id(connection).await? != engine_id {
+            return Err(HostError::Journal);
+        }
+        latest_completed_by_prefix(
+            connection,
+            engine_id,
+            docker_root_digest,
+            daemon_architecture,
+            platform,
+            reference_prefix,
+        )
+        .await
     })
     .await
 }

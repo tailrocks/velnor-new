@@ -19,6 +19,12 @@ impl ReleaseReadSecret {
         Ok(Self(bytes))
     }
 
+    pub(crate) fn parse(token: &str) -> Result<Self, HostError> {
+        let bytes = Zeroizing::new(token.as_bytes().to_vec());
+        token_text(&bytes)?;
+        Ok(Self(bytes))
+    }
+
     pub(in crate::launch::resource_probe) fn as_provider_token(&self) -> Result<&str, HostError> {
         token_text(&self.0)
     }

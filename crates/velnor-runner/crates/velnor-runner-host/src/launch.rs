@@ -79,8 +79,7 @@ mod turn;
 pub(crate) mod verified_images;
 
 pub use bootstrap::{BootstrapContainerRole, runner_pair_environment};
-pub(crate) use completion::CompletionWorker;
-pub use completion::remove_completed_runner_container;
+pub use completion::CompletionWorker;
 pub use execution_authorization::verify_persisted_execution_source_role;
 pub(crate) use gate::{gate_line, reconcile_gate};
 pub(crate) use resource_probe::prepare_worker_images;
