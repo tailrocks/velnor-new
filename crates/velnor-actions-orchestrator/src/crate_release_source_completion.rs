@@ -43,6 +43,7 @@ impl ClosedSourceSession {
     }
 }
 
+#[cfg(target_arch = "x86_64")]
 impl ClosedCompletion {
     pub(crate) fn complete<
         J: crate::crate_release_journal::JournalIo

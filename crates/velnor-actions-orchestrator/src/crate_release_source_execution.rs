@@ -105,6 +105,7 @@ impl SupervisedSourceExecution {
         &self.root
     }
 
+    #[cfg(target_arch = "x86_64")]
     pub(crate) fn finish(
         self,
         completion: crate::crate_release_controller::FrozenCompletion,
