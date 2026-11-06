@@ -232,3 +232,6 @@ fn admits_both_supported_thin_macho_architectures_and_rejects_unknown_architectu
     );
     Ok(())
 }
+
+#[path = "golden_collector_public/release_tree_identity.rs"]
+mod release_tree_identity;

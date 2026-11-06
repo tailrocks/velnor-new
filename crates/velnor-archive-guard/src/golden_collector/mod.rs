@@ -29,6 +29,15 @@ pub fn run_cli() -> u8 {
     }
 }
 
+pub fn tree_identity(root: &std::path::Path, links_only: bool) -> Result<Vec<u8>, String> {
+    let tree = filesystem::read_tree(root).map_err(|error| error.to_string())?;
+    Ok(if links_only {
+        filesystem::link_identity(&tree)
+    } else {
+        filesystem::tree_hash(&tree)
+    })
+}
+
 #[derive(Debug)]
 struct Arguments {
     mode: Mode,
