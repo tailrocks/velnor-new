@@ -10,7 +10,8 @@ use super::{
 #[path = "crate_release_controller_recovery_receipts.rs"]
 mod receipts;
 use receipts::{
-    check_authentication_denials, check_receipt_denials, check_receipt_revalidation, receipt_zip,
+    check_authentication_denials, check_receipt_denials, check_receipt_revalidation,
+    check_transient_repository, receipt_zip,
 };
 
 #[test]
@@ -152,6 +153,7 @@ pub(super) fn receipt_acquire_requires_current_approval_and_matching_evidence()
     let authenticated =
         crate::crate_release_tool_artifact::fixture_authenticate_receipt(&stage, &github, &github)?;
     assert_eq!(authenticated, receipt);
+    check_transient_repository(&stage, &github);
     check_authentication_denials(&stage, &github, &receipt)?;
     *github.tool_archive.borrow_mut() = receipt_zip(&serde_json::to_vec(&receipt)?)?;
     assert!(
