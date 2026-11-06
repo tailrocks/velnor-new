@@ -96,7 +96,7 @@ fn rendered_selector_uses_the_largest_public_root_count_within_existing_bounds()
         accepted + 1
     );
 
-    let fixed_valid = rendered_short_roots(1_000)?;
+    let fixed_valid = rendered_short_roots(243)?;
     let fixed_valid_run_units = fixed_valid.run.encode_utf16().count();
     if fixed_valid.workflow_bytes > velnor_actions_workflow_renderer::MAX_WORKFLOW_BYTES
         || fixed_valid_run_units > 21_000
@@ -106,7 +106,7 @@ fn rendered_selector_uses_the_largest_public_root_count_within_existing_bounds()
             fixed_valid.workflow_bytes
         )));
     }
-    let fixed_oversized = rendered_short_roots(2_050)
+    let fixed_oversized = rendered_short_roots(244)
         .expect_err("the fixed oversized fixture must cross the document boundary");
     if !fixed_oversized.to_string().contains("workflow_too_large:") {
         return Err(fail(&format!(
