@@ -147,5 +147,4 @@ mod root_api;
 pub use self::root_api::*;
 
 pub mod review_completion;
-
 pub mod verified_gh_shell;
