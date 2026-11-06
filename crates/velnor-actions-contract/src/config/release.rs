@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::release_validation::{
-    validate_environment, validate_manifest_path, validate_packages, validate_publish_features,
-    validate_recovery, validate_tag_name, validate_version_groups,
+    validate_continuation_source, validate_environment, validate_exact_source_agreement,
+    validate_journal_predecessor, validate_manifest_path, validate_packages,
+    validate_publish_features, validate_recovery, validate_tag_name, validate_version_groups,
 };
 use crate::errors::ContractError;
 use serde::{Deserialize, Serialize};
@@ -363,60 +364,6 @@ impl RustReleaseConfig {
         }
         Ok(())
     }
-}
-
-pub(crate) fn validate_journal_predecessor(
-    file: &str,
-    predecessor: Option<&CrateReleasePredecessor>,
-    exact_source: bool,
-) -> Result<(), ContractError> {
-    if predecessor.is_some_and(|prior| {
-        !exact_source
-            || prior.run_id == 0
-            || prior.run_attempt != 1
-            || !super::release_validation::is_full_sha(&prior.workflow_sha)
-    }) {
-        return Err(ContractError::config(
-            file,
-            "journal_predecessor",
-            "invalid_predecessor",
-        ));
-    }
-    Ok(())
-}
-
-pub(crate) fn validate_continuation_source(
-    file: &str,
-    source: Option<&str>,
-    predecessor: bool,
-) -> Result<(), ContractError> {
-    if source.is_some_and(|value| !predecessor || !super::release_validation::is_full_sha(value)) {
-        return Err(ContractError::config(
-            file,
-            "continuation_source_sha",
-            "invalid_continuation_source",
-        ));
-    }
-    Ok(())
-}
-
-pub(crate) fn validate_exact_source_agreement(
-    file: &str,
-    recovery: Option<&str>,
-    creation: Option<&str>,
-    predecessor: Option<&str>,
-) -> Result<(), ContractError> {
-    let mut sources = [recovery, creation, predecessor].into_iter().flatten();
-    if let Some(first) = sources.next()
-        && sources.any(|source| source != first)
-    {
-        return Err(ContractError::config(
-            file,
-            "journal_predecessor",
-            "source_mismatch",
-        ));
-    }
-    Ok(())
 }
 
 pub(super) fn validate_new_crates(

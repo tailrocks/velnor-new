@@ -107,17 +107,17 @@ impl CrateReleaseIntent {
         validate_manifest_path(file, &self.manifest_path)?;
         validate_pr_write_paths(self)?;
         validate_intent_packages(self)?;
-        super::release::validate_journal_predecessor(
+        super::release_validation::validate_journal_predecessor(
             file,
             self.journal_predecessor.as_ref(),
             self.exact_source_sha().is_some(),
         )?;
-        super::release::validate_continuation_source(
+        super::release_validation::validate_continuation_source(
             file,
             self.continuation_source_sha.as_deref(),
             self.journal_predecessor.is_some(),
         )?;
-        super::release::validate_exact_source_agreement(
+        super::release_validation::validate_exact_source_agreement(
             file,
             self.recovery.as_ref().map(|r| r.source_sha.as_str()),
             self.new_crates.as_ref().map(|r| r.source_sha.as_str()),

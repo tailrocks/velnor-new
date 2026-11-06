@@ -4,7 +4,7 @@
 use crate::errors::ContractError;
 use std::collections::{BTreeMap, BTreeSet};
 
-use super::release::RecoveryRelease;
+use super::release::{CrateReleasePredecessor, RecoveryRelease};
 
 pub(super) fn validate_manifest_path(file: &str, path: &str) -> Result<(), ContractError> {
     let key = "stacks.rust.release.manifest_path";
@@ -306,4 +306,58 @@ pub(super) fn supported_crate_tag_template(tag: &str) -> bool {
         .is_some_and(|(package, version)| {
             package.trim_matches(' ') == "package" && version.trim_matches(' ') == "version"
         })
+}
+
+pub(crate) fn validate_journal_predecessor(
+    file: &str,
+    predecessor: Option<&CrateReleasePredecessor>,
+    exact_source: bool,
+) -> Result<(), ContractError> {
+    if predecessor.is_some_and(|prior| {
+        !exact_source
+            || prior.run_id == 0
+            || prior.run_attempt != 1
+            || !is_full_sha(&prior.workflow_sha)
+    }) {
+        return Err(ContractError::config(
+            file,
+            "journal_predecessor",
+            "invalid_predecessor",
+        ));
+    }
+    Ok(())
+}
+
+pub(crate) fn validate_continuation_source(
+    file: &str,
+    source: Option<&str>,
+    predecessor: bool,
+) -> Result<(), ContractError> {
+    if source.is_some_and(|value| !predecessor || !is_full_sha(value)) {
+        return Err(ContractError::config(
+            file,
+            "continuation_source_sha",
+            "invalid_continuation_source",
+        ));
+    }
+    Ok(())
+}
+
+pub(crate) fn validate_exact_source_agreement(
+    file: &str,
+    recovery: Option<&str>,
+    creation: Option<&str>,
+    predecessor: Option<&str>,
+) -> Result<(), ContractError> {
+    let mut sources = [recovery, creation, predecessor].into_iter().flatten();
+    if let Some(first) = sources.next()
+        && sources.any(|source| source != first)
+    {
+        return Err(ContractError::config(
+            file,
+            "journal_predecessor",
+            "source_mismatch",
+        ));
+    }
+    Ok(())
 }
