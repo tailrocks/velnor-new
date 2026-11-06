@@ -258,6 +258,10 @@ const RUST_ARCHIVE: &str = "${{ runner.temp }}/velnor-rust-toolchain.tar.gz";
 
 fn controller_step(parts: &JobParts<'_>, operation: &str) -> Result<Step, OrchestratorError> {
     let mut env = release_env(parts);
+    if operation == "verify-preflight-retention" {
+        env.insert("VELNOR_RECEIPT_ARTIFACT_ID".to_owned(), "${{ steps.release-receipt-upload.outputs.artifact-id }}".to_owned());
+        env.insert("VELNOR_RUST_ARTIFACT_ID".to_owned(), "${{ steps.release-rust-upload.outputs.artifact-id }}".to_owned());
+    }
     if operation == "toolchain-acquire" {
         env.insert(
             "VELNOR_RUST_ARTIFACT_ID".to_owned(),
@@ -311,7 +315,7 @@ fn receipt_step() -> Result<Step, OrchestratorError> {
     let mut inputs = BTreeMap::from([("name".to_owned(), RECEIPT_ARTIFACT.to_owned())]);
     inputs.insert("path".to_owned(), RECEIPT_PATH.to_owned());
     inputs.insert("if-no-files-found".to_owned(), "error".to_owned());
-    inputs.insert("retention-days".to_owned(), "7".to_owned());
+    inputs.insert("retention-days".to_owned(), "36".to_owned());
     let mut step = action_step("Upload release receipt", UPLOAD_ARTIFACT_USES, inputs)?;
     step.id = Some(StepId::ReleaseReceiptUpload);
     step.role = Some(StepRole::ReleaseReceiptUpload);

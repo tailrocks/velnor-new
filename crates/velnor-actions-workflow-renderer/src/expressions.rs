@@ -161,9 +161,17 @@ fn check_env_value_with_scope(key: &str, value: &str, composite: bool) -> Result
             && !is_plan_gh_token_binding(key, inner)
             && !is_mbx_bundle_key_binding(key, inner)
             && !(key == "VELNOR_RUST_ARTIFACT_ID"
-                && inner == "needs.release-preflight.outputs.rust_artifact_id")
+                && matches!(
+                    inner,
+                    "needs.release-preflight.outputs.rust_artifact_id"
+                        | "steps.release-rust-upload.outputs.artifact-id"
+                ))
             && !(key == "VELNOR_RECEIPT_ARTIFACT_ID"
-                && inner == "needs.release-preflight.outputs.receipt_artifact_id")
+                && matches!(
+                    inner,
+                    "needs.release-preflight.outputs.receipt_artifact_id"
+                        | "steps.release-receipt-upload.outputs.artifact-id"
+                ))
             && !matches!(
                 (key, inner),
                 (

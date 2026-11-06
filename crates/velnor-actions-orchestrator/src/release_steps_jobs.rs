@@ -48,12 +48,13 @@ pub(super) fn preflight_job(parts: &JobParts<'_>) -> Result<ReleaseJobSpec, Orch
             ("name".to_owned(), RUST_ARTIFACT.to_owned()),
             ("path".to_owned(), RUST_ARCHIVE.to_owned()),
             ("if-no-files-found".to_owned(), "error".to_owned()),
-            ("retention-days".to_owned(), "7".to_owned()),
+            ("retention-days".to_owned(), "36".to_owned()),
         ]),
     )?;
     upload.id = Some(StepId::ReleaseRustUpload);
     upload.role = Some(StepRole::ReleaseRustUpload);
     steps.push(conditional(upload));
+    steps.push(controller_step(parts, "verify-preflight-retention")?);
     Ok(ReleaseJobSpec {
         role: ReleaseRole::Preflight,
         display_name: "Release preflight".to_owned(),

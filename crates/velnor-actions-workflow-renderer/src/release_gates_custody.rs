@@ -115,7 +115,7 @@ fn check_release_rust_artifact(
                 "${{ runner.temp }}/velnor-rust-toolchain.tar.gz".to_owned(),
             ),
             ("if-no-files-found".to_owned(), "error".to_owned()),
-            ("retention-days".to_owned(), "7".to_owned()),
+            ("retention-days".to_owned(), "36".to_owned()),
         ]),
     )?;
     upload.id = Some(StepId::ReleaseRustUpload);
@@ -166,6 +166,19 @@ fn release_tool_environment(
     Ok(expected_env)
 }
 
+fn add_retention_env(step: &str, expected: &mut std::collections::BTreeMap<String, String>) {
+    if step == "Release verify-preflight-retention" {
+        expected.insert(
+            "VELNOR_RECEIPT_ARTIFACT_ID".to_owned(),
+            "${{ steps.release-receipt-upload.outputs.artifact-id }}".to_owned(),
+        );
+        expected.insert(
+            "VELNOR_RUST_ARTIFACT_ID".to_owned(),
+            "${{ steps.release-rust-upload.outputs.artifact-id }}".to_owned(),
+        );
+    }
+}
+
 fn check_release_tool_environment(
     id: &str,
     job: &ReleaseJobSpec,
@@ -190,6 +203,7 @@ fn check_release_tool_environment(
                     "${{ steps.release-budget.outputs.budget }}".to_owned(),
                 );
             }
+            add_retention_env(&step.name, &mut expected);
             if step.name == "Release toolchain-acquire" {
                 expected.insert(
                     "VELNOR_RUST_ARTIFACT_ID".to_owned(),

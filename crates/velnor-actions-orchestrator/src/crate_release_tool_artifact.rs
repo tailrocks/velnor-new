@@ -273,3 +273,7 @@ impl std::fmt::Debug for ToolchainStageRequest<'_> {
 mod staging;
 use staging::current_artifact;
 pub use staging::{StagedToolchain, stage_unverified_toolchain};
+
+#[path = "crate_release_tool_retention.rs"]
+mod retention;
+pub(crate) use retention::verify_preflight_retention_now;

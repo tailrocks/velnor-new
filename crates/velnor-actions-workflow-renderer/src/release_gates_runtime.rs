@@ -35,6 +35,7 @@ fn runtime_step_names(role: ReleaseRole) -> &'static [&'static str] {
             "Upload release receipt",
             "Archive release Rust toolchain",
             "Upload release Rust toolchain",
+            "Release verify-preflight-retention",
         ],
         ReleaseRole::Reconcile => &[
             "Acquire Velnor",
@@ -176,6 +177,7 @@ fn check_runtime_payload(
         "Release receipt-acquire" => Some("receipt-acquire"),
         "Release reconciliation-receipt-acquire" => Some("reconciliation-receipt-acquire"),
         "Release candidate-receipt" => Some("candidate-receipt"),
+        "Release verify-preflight-retention" => Some("verify-preflight-retention"),
         "Release verify-admission" => Some("verify-admission"),
         "Release journal-start" => Some("journal-start"),
         "Release journal-coordinate" => Some("journal-coordinate"),
@@ -239,7 +241,12 @@ fn check_receipt_step(id: &str, step: &Step) -> Result<(), RenderError> {
         || with.get("path").map(String::as_str) != Some(expected_path)
         || with.len() != 4
         || with.get("if-no-files-found").map(String::as_str) != Some("error")
-        || with.get("retention-days").map(String::as_str) != Some("7")
+        || with.get("retention-days").map(String::as_str)
+            != Some(if step.name == "Upload release receipt" {
+                "36"
+            } else {
+                "7"
+            })
         || (step.name == "Upload release receipt"
             && (step.id != Some(StepId::ReleaseReceiptUpload)
                 || step.role != Some(StepRole::ReleaseReceiptUpload)))

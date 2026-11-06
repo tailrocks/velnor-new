@@ -107,6 +107,18 @@ fn run_qualified_crate_release_with_git(
     if operation == "candidate-receipt" {
         return candidate_receipt(&intent, &request, &github, &source, git, source_execution);
     }
+    if operation == "verify-preflight-retention" {
+        let receipt_id = required("VELNOR_RECEIPT_ARTIFACT_ID")?
+            .parse()
+            .map_err(|_| internal("crate_release_retention_receipt_id"))?;
+        let rust_id = required("VELNOR_RUST_ARTIFACT_ID")?
+            .parse()
+            .map_err(|_| internal("crate_release_retention_rust_id"))?;
+        crate::crate_release_github::verify_github_evidence(&request, &github)?;
+        return crate::crate_release_tool_artifact::verify_preflight_retention_now(
+            &request, &github, receipt_id, rust_id,
+        );
+    }
     if operation == "toolchain-acquire" {
         return acquire_toolchain(&intent, &request, &github, &token);
     }

@@ -18,6 +18,16 @@ pub(super) fn run() -> Result<(), OrchestratorError> {
     custody.root.revalidate().map_err(|_| invalid())?;
     let admission = admit_workflow(&custody.root, deadline)?;
     let (receipt_id, rust_id) = preflight_artifact_ids()?;
+    deadline
+        .scope(|| {
+            crate::crate_release_tool_artifact::verify_preflight_retention_now(
+                &admission.request,
+                &admission.github,
+                receipt_id,
+                rust_id,
+            )
+        })
+        .map_err(|_| invalid())??;
     let stage = |artifact_id| ToolchainStageRequest {
         intent: &admission.intent,
         github: &admission.request,

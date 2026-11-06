@@ -222,6 +222,7 @@ pub(crate) enum CrateReleaseCommand {
     #[command(about = "Validate release source authority")]
     SourceAdmit,
     CandidateReceipt,
+    VerifyPreflightRetention,
     ReceiptAcquire,
     ReconciliationReceiptAcquire,
     VerifyPackage,

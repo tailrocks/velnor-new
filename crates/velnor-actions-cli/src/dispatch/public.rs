@@ -160,6 +160,7 @@ fn run_crate_release_command(command: &crate::args::CrateReleaseCommand) -> Exit
         crate::args::CrateReleaseCommand::ReleasePrCreate => "release-pr-create",
         crate::args::CrateReleaseCommand::SourceAdmit => "source-admit",
         crate::args::CrateReleaseCommand::CandidateReceipt => "candidate-receipt",
+        crate::args::CrateReleaseCommand::VerifyPreflightRetention => "verify-preflight-retention",
         crate::args::CrateReleaseCommand::ReceiptAcquire => "receipt-acquire",
         crate::args::CrateReleaseCommand::ReconciliationReceiptAcquire => {
             "reconciliation-receipt-acquire"

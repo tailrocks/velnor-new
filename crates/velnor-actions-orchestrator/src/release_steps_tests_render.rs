@@ -215,3 +215,32 @@ fn publisher_budget_is_first_and_cannot_be_forged() -> Result<(), Box<dyn std::e
     assert!(render_release_workflow(&forged, &context, &rust).is_err());
     Ok(())
 }
+
+#[test]
+fn preflight_artifacts_cover_workflow_lifetime() -> Result<(), Box<dyn std::error::Error>> {
+    use velnor_actions_workflow_renderer::release_tree::{ReleaseRenderContext, render_release_workflow};
+    let (spec, rust) = fixture()?;
+    let context = ReleaseRenderContext {
+        generator_version: env!("CARGO_PKG_VERSION").to_owned(),
+        runs_on: "ubuntu-26.04".to_owned(),
+    };
+    let rendered = render_release_workflow(&spec, &context, &rust)?;
+    let workflow: serde_json::Value = serde_saphyr::from_str(&rendered)?;
+    let steps = workflow["jobs"]["release-preflight"]["steps"].as_array().ok_or("preflight steps")?;
+    for id in ["release-receipt-upload", "release-rust-upload"] {
+        let step = steps.iter().find(|step| step["id"].as_str() == Some(id)).ok_or("upload step")?;
+        let value = &step["with"]["retention-days"];
+        let days = value.as_u64().or_else(|| value.as_str().and_then(|raw| raw.parse().ok())).ok_or("retention days")?;
+        assert!(days >= 35, "{id} expires before the full workflow lifetime");
+    }
+    let verify_index = steps.iter().position(|step| step["name"].as_str() == Some("Release verify-preflight-retention")).ok_or("retention verification")?;
+    assert_eq!(steps[verify_index]["if"].as_str(), Some("steps.release-admission.outputs.eligible == 'true'"));
+    for (id, env_key) in [("release-receipt-upload", "VELNOR_RECEIPT_ARTIFACT_ID"), ("release-rust-upload", "VELNOR_RUST_ARTIFACT_ID")] {
+        let index = steps.iter().position(|step| step["id"].as_str() == Some(id)).ok_or("upload")?;
+        assert!(index < verify_index);
+        assert_eq!(steps[verify_index]["env"][env_key].as_str(), Some(format!("${{{{ steps.{id}.outputs.artifact-id }}}}").as_str()));
+    }
+    assert_eq!(workflow["jobs"]["release-preflight"]["permissions"]["actions"].as_str(), Some("read"));
+    assert_ne!(workflow["jobs"]["release-preflight"]["permissions"]["id-token"].as_str(), Some("write"));
+    Ok(())
+}
