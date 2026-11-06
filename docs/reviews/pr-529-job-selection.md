@@ -1,5 +1,10 @@
 # PR #529 job-selection baseline
 
+Final-head inventory and review dispositions belong in the
+[review evidence thread](https://github.com/tailrocks/velnor-new/pull/529#discussion_r4488983545),
+bound to the exact reviewed SHA. The snapshots below are historical and cannot
+establish current-head compliance.
+
 Observed at initial head `979fa475eae32c4a11f1fecf650853f66f6d7819`.
 The [five-file diff](https://github.com/tailrocks/velnor-new/compare/55b31ce8ade5f560bcdd2db7e521f5c0baf41496...979fa475eae32c4a11f1fecf650853f66f6d7819)
 changed root `AGENTS.md`, the PR template and three review/reference documents.
