@@ -148,6 +148,7 @@ def run(root, view, helper_sha, version, digest, env, deadline, bus, lifecycle, 
     cancel = threading.Event()
     monitor = None
     source = None
+    locator = None
 
     def coordinate():
         manager = None
@@ -248,6 +249,9 @@ def run(root, view, helper_sha, version, digest, env, deadline, bus, lifecycle, 
         source = bus.Manager(source_helper, int(_remaining(work_deadline)),
                              bind_to=watch_unit, deny_unix=True)
         source.subscribe(work_deadline)
+        locator = bus.Manager(source_helper, int(_remaining(work_deadline)),
+                              bind_to=watch_unit, deny_unix=True, deny_network=True)
+        locator.subscribe(work_deadline)
         def credentials(mode):
             if mode == 'trusted-publishing':
                 return {'github_token': env.get('GIT_TOKEN'), 'oidc_token': env.get('ACTIONS_ID_TOKEN_REQUEST_TOKEN'),
@@ -255,7 +259,7 @@ def run(root, view, helper_sha, version, digest, env, deadline, bus, lifecycle, 
             if mode == 'bootstrap-token':
                 return {'github_token': env.get('GIT_TOKEN'), 'cargo_token': env.get('CARGO_REGISTRY_TOKEN')}
             raise ParentError('invalid upload mode')
-        channel.serve(parent, source, lifecycle, executor, uploader, broker, credentials,
+        channel.serve(parent, source, locator, lifecycle, executor, uploader, broker, credentials,
                       view, work_deadline, (view_info.st_dev, view_info.st_ino))
         result = finished.get(timeout=_remaining(work_deadline))
         if result is not None:
@@ -274,13 +278,14 @@ def run(root, view, helper_sha, version, digest, env, deadline, bus, lifecycle, 
         raise
     finally:
         cleanup_error = False
-        if source is not None:
-            if source.dropin_name is not None:
-                cleanup_error = True
-            try:
-                source.close()
-            except Exception:
-                cleanup_error = True
+        for manager in (source, locator):
+            if manager is not None:
+                if manager.dropin_name is not None:
+                    cleanup_error = True
+                try:
+                    manager.close()
+                except Exception:
+                    cleanup_error = True
         parent.close()
         child.close()
         if monitor is not None:

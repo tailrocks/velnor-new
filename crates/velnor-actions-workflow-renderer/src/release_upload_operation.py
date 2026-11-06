@@ -124,7 +124,8 @@ def validate_custody(session, executor):
     executor.verify_immutable_tree(source, deadline, True)
     executor.verify_detached_head(source, context.source_sha)
     executor.verify_source_inventory(source, context.source_files, deadline)
-    executor.validate_source_model(source, context.manifest)
+    executor.validate_source_manifests(source, context.manifest)
+    executor.validate_source_lock(source, session.workspace)
     for directory in (toolchain, root + '/release-plz'):
         executor.verify_immutable_tree(directory, deadline, False)
     executor.verify_immutable_tree(root + '/git', deadline, True)

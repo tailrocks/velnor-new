@@ -134,13 +134,13 @@ def response(control, sequence, data, deadline):
         raise SourceChannelError('source channel deadline')
 
 
-def serve(control, manager, lifecycle, executor, uploader, broker, secrets, root, deadline, view_identity):
+def serve(control, manager, locator, lifecycle, executor, uploader, broker, secrets, root, deadline, view_identity):
     sequence = 1
     first = request(control, sequence, deadline)
     if first['op'] != 'init':
         raise SourceChannelError('source context required')
     initial = receive_context(control, executor.read_context, deadline)
-    session = executor.SourceSession(manager, lifecycle, root, initial, deadline, view_identity)
+    session = executor.SourceSession(manager, locator, lifecycle, root, initial, deadline, view_identity)
     response(control, sequence, b'', deadline)
     while True:
         sequence += 1
@@ -168,9 +168,10 @@ def serve(control, manager, lifecycle, executor, uploader, broker, secrets, root
             data = b''
         elif op == 'close':
             session.verify_view()
-            if manager.dropin_name is not None:
+            if manager.dropin_name is not None or locator.dropin_name is not None:
                 raise SourceChannelError('source cleanup uncertain')
             manager.close()
+            locator.close()
             response(control, sequence, b'', deadline)
             return
         else:

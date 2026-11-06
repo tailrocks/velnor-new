@@ -555,19 +555,10 @@ def validate_manifest(root, path, value):
                 source_path(root, base, spec['path'], True)
 
 
-def validate_source_model(root, manifest):
+def validate_source_manifests(root, manifest):
     resolved = os.path.realpath(os.path.join(root, manifest))
     if os.path.commonpath((root, resolved)) != root or not os.path.isfile(resolved):
         raise SourceExecutorError('invalid manifest')
-    locks = []
-    directory = os.path.dirname(resolved)
-    while True:
-        candidate = os.path.join(directory, 'Cargo.lock')
-        if os.path.isfile(candidate):
-            locks.append(candidate)
-        if directory == root:
-            break
-        directory = os.path.dirname(directory)
     def fail(error):
         raise SourceExecutorError('invalid source model') from error
     for current, directories, files in os.walk(root, topdown=True, onerror=fail, followlinks=False):
@@ -588,10 +579,17 @@ def validate_source_model(root, manifest):
             except (OSError, tomllib.TOMLDecodeError):
                 raise SourceExecutorError('invalid source model') from None
             validate_manifest(root, path, manifest_value)
-    if len(locks) != 1 or os.path.getsize(locks[0]) > 16 * 1024 * 1024:
+
+
+def validate_source_lock(root, workspace):
+    if (not isinstance(workspace, str) or not os.path.isabs(workspace)
+            or os.path.commonpath((root, workspace)) != root):
+        raise SourceExecutorError('invalid workspace')
+    lock_path = os.path.join(workspace, 'Cargo.lock')
+    if not os.path.isfile(lock_path) or os.path.getsize(lock_path) > 16 * 1024 * 1024:
         raise SourceExecutorError('lockfile unsupported')
     try:
-        with open(locks[0], 'rb') as stream:
+        with open(lock_path, 'rb') as stream:
             lock = tomllib.load(stream)
     except (OSError, tomllib.TOMLDecodeError):
         raise SourceExecutorError('lockfile unsupported') from None
@@ -610,13 +608,14 @@ def validate_source_model(root, manifest):
             raise SourceExecutorError('dependency source unsupported')
 
 
-def _source_operation(manager, lifecycle, root, context, operation, package_index, deadline, baseline=None):
+def _source_operation(manager, lifecycle, root, context, operation, package_index, deadline, baseline=None, workspace=None):
     if (os.geteuid() != 0 or type(context) is not SealedSourceContext
             or manager.root_bootstrap or not manager.deny_unix
             or not manager.bind_to or not os.path.isabs(root) or os.path.dirname(root) != '/run'
             or not re.fullmatch(r'velnor-publisher-[a-zA-Z0-9_-]+', os.path.basename(root))
-            or operation not in ('metadata', 'package', 'package-verify', 'semver')
-            or (operation == 'metadata' and package_index is not None)
+            or operation not in ('locate', 'metadata', 'package', 'package-verify', 'semver')
+            or (operation == 'locate' and not manager.deny_network)
+            or (operation in ('locate', 'metadata') and package_index is not None)
             or (operation in ('package', 'package-verify', 'semver') and (type(package_index) is not int
                 or not 0 <= package_index < len(context.packages)))):
         raise SourceExecutorError('invalid source operation')
@@ -638,7 +637,9 @@ def _source_operation(manager, lifecycle, root, context, operation, package_inde
     verify_immutable_tree(source, deadline, True)
     verify_detached_head(source, context.source_sha)
     verify_source_inventory(source, context.source_files, deadline)
-    validate_source_model(source, context.manifest)
+    validate_source_manifests(source, context.manifest)
+    if operation != 'locate':
+        validate_source_lock(source, workspace)
     verify_immutable_tree(toolchain, deadline, False)
     tools = {name: toolbin + '/' + name for name in ('cargo', 'rustc', 'rustdoc')}
     if 'semver' in dict(context.tools):
@@ -663,7 +664,11 @@ def _source_operation(manager, lifecycle, root, context, operation, package_inde
            'RUSTC': tools['rustc'], 'RUSTDOC': tools['rustdoc'],
            'GIT_CONFIG_NOSYSTEM': '1', 'GIT_CONFIG_GLOBAL': '/dev/null', 'GIT_TERMINAL_PROMPT': '0',
            'GIT_CONFIG_COUNT': '1', 'GIT_CONFIG_KEY_0': 'safe.directory', 'GIT_CONFIG_VALUE_0': source}
-    if operation == 'metadata':
+    if operation == 'locate':
+        program = tools['cargo']
+        args = ['locate-project', '--workspace', '--offline', '--message-format', 'plain', '--manifest-path', manifest]
+        cap = 16 * 1024
+    elif operation == 'metadata':
         program = tools['cargo']
         args = ['metadata', '--locked', '--format-version', '1', '--no-deps', '--manifest-path', manifest]
         cap = 16 * 1024 * 1024
@@ -732,7 +737,7 @@ def _source_operation(manager, lifecycle, root, context, operation, package_inde
 
 
 class SourceSession:
-    def __init__(self, manager, lifecycle, root, initial, deadline, view_identity):
+    def __init__(self, manager, locator, lifecycle, root, initial, deadline, view_identity):
         if (type(deadline) is not int or not 0 < deadline < 2**64
                 or time.clock_gettime_ns(time.CLOCK_BOOTTIME) >= deadline
                 or type(initial) is not SealedSourceContext
@@ -745,6 +750,8 @@ class SourceSession:
         self.root = root
         self.verify_view()
         self.manager = manager
+        self.locator = locator
+        self.workspace = None
         self.lifecycle = lifecycle
         self.initial = initial
         self._deadline = deadline
@@ -763,7 +770,24 @@ class SourceSession:
         if self.poisoned or time.clock_gettime_ns(time.CLOCK_BOOTTIME) >= self._deadline:
             raise SourceExecutorError('source session deadline')
         self.verify_view()
-        data = _source_operation(self.manager, self.lifecycle, self.root, self.initial, 'metadata', None, self._deadline)
+        source = self.root + '/source'
+        location = _source_operation(self.locator, self.lifecycle, self.root, self.initial, 'locate', None, self._deadline)
+        try:
+            location = location.decode('utf-8').strip()
+        except UnicodeError:
+            raise SourceExecutorError('invalid workspace') from None
+        if not os.path.isabs(location) or '\n' in location or '\0' in location:
+            raise SourceExecutorError('invalid workspace')
+        workspace_manifest = os.path.realpath(location)
+        if (os.path.commonpath((source, workspace_manifest)) != source
+                or os.path.basename(workspace_manifest) != 'Cargo.toml'
+                or os.path.relpath(workspace_manifest, source) not in {item.path for item in self.initial.source_files}):
+            raise SourceExecutorError('invalid workspace')
+        workspace = os.path.dirname(workspace_manifest)
+        if self.workspace is not None and self.workspace != workspace:
+            raise SourceExecutorError('workspace changed')
+        validate_source_lock(source, workspace)
+        data = _source_operation(self.manager, self.lifecycle, self.root, self.initial, 'metadata', None, self._deadline, workspace=workspace)
         self.verify_view()
         if not isinstance(data, bytes) or not 0 < len(data) < 16 * 1024 * 1024:
             raise SourceExecutorError('invalid workspace metadata')
@@ -784,6 +808,8 @@ class SourceSession:
         workspace = os.path.realpath(workspace)
         if os.path.commonpath((source, workspace)) != source:
             raise SourceExecutorError('workspace outside source')
+        if workspace != os.path.dirname(workspace_manifest):
+            raise SourceExecutorError('workspace changed')
         workspace_manifest = os.path.relpath(os.path.join(workspace, 'Cargo.toml'), source)
         if workspace_manifest not in {entry.path for entry in self.initial.source_files}:
             raise SourceExecutorError('workspace manifest untracked')
@@ -814,6 +840,7 @@ class SourceSession:
             packages[name] = (version, relative)
         if not set(members).issubset(seen_ids) or any(package.name not in packages for package in self.initial.packages):
             raise SourceExecutorError('workspace package missing')
+        self.workspace = workspace
         self.metadata_bytes = data
         self.metadata_packages = packages
         return data
@@ -845,7 +872,7 @@ class SourceSession:
             raise SourceExecutorError('package context unavailable')
         self.verify_view()
         operation = 'package-verify' if verify else 'package'
-        result = _source_operation(self.manager, self.lifecycle, self.root, self.bound, operation, index, self._deadline)
+        result = _source_operation(self.manager, self.lifecycle, self.root, self.bound, operation, index, self._deadline, workspace=self.workspace)
         self.verify_view()
         return result
 
@@ -856,7 +883,7 @@ class SourceSession:
         self.verify_view()
         self.poisoned = True
         result = _source_operation(self.manager, self.lifecycle, self.root, self.bound,
-                                   'semver', index, self._deadline, baseline)
+                                   'semver', index, self._deadline, baseline, self.workspace)
         self.verify_view()
         self.poisoned = False
         return result
