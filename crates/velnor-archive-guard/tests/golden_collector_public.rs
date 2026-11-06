@@ -6,6 +6,8 @@ use std::fs;
 use std::os::unix::fs::symlink;
 use std::process::Command;
 
+#[path = "golden_identity_public.rs"]
+mod golden_identity_public;
 #[path = "golden_collector_public/bounded.rs"]
 mod bounded;
 #[path = "golden_collector_public/executable_custody.rs"]

@@ -126,6 +126,22 @@ fn qualification_mode(
                 std::path::Path::new(&root),
             )
         }
+        "qualification-golden-tree" | "qualification-golden-links" => {
+            let Some(root) = arguments.next() else {
+                return Some(Err("golden tree root is required".into()));
+            };
+            if arguments.next().is_some() {
+                return Some(Err("unexpected archive guard argument".into()));
+            }
+            velnor_archive_guard::golden_collector::qualification_tree_identity(
+                std::path::Path::new(&root),
+                mode == "qualification-golden-links",
+            )
+            .and_then(|bytes| {
+                io::Write::write_all(&mut io::stdout().lock(), &bytes)
+                    .map_err(|error| error.to_string())
+            })
+        }
         _ => return None,
     };
     Some(result)

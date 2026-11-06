@@ -19,6 +19,15 @@ const DEFAULT_OUTPUT_CAP_BYTES: usize = 8 * 1024 * 1024;
 const MAX_OUTPUT_CAP_BYTES: usize = 64 * 1024 * 1024;
 const COMMAND_CLEANUP_BUDGET: Duration = Duration::from_secs(2);
 
+pub fn qualification_tree_identity(root: &std::path::Path, links: bool) -> Result<Vec<u8>, String> {
+    let tree = filesystem::read_tree(root).map_err(|error| error.to_string())?;
+    Ok(if links {
+        filesystem::link_identity(&tree)
+    } else {
+        filesystem::tree_hash(&tree)
+    })
+}
+
 pub fn run_cli() -> u8 {
     match parse_args(env::args_os().skip(1)).and_then(run) {
         Ok(()) => 0,
