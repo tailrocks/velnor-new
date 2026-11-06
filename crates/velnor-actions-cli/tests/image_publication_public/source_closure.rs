@@ -77,7 +77,8 @@ fn public_runner_family_accepts_the_independent_complete_input_inventory()
 #[test]
 fn public_runner_family_rejects_drift_in_previously_omitted_copy_inputs()
 -> Result<(), Box<dyn Error>> {
-    let scenario = "source_closure::public_runner_family_rejects_drift_in_previously_omitted_copy_inputs";
+    let scenario =
+        "source_closure::public_runner_family_rejects_drift_in_previously_omitted_copy_inputs";
     if !super::begin_isolated(scenario)? {
         return Ok(());
     }
