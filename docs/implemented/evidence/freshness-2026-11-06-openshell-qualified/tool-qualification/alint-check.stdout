@@ -1,0 +1,26 @@
+--- Repository-level -----------------------------------------------------------
+  i  info     oss-security-policy-exists
+              Consider adding a SECURITY.md so vulnerability reporters know
+              where to disclose.
+              docs: https://docs.github.com/en/code-security/getting-started/adding-a-security-policy-to-your-repository
+  i  info     oss-code-of-conduct-exists
+              Consider adding a CODE_OF_CONDUCT.md.
+              docs: https://www.contributor-covenant.org/
+
+--- docs/proposed/cache-contract.md --------------------------------------------
+  i  info     oss-final-newline   fixable
+              file does not end with a newline
+
+--- docs/proposed/cache-decisions.md -------------------------------------------
+  i  info     oss-final-newline   fixable
+              file does not end with a newline
+
+--- docs/proposed/cache-families.md --------------------------------------------
+  i  info     oss-final-newline   fixable
+              file does not end with a newline
+
+Summary (5 violations):
+  i 5 info
+  52 passing * 3 failing * 3 auto-fixable
+
+  -> run `alint fix` to resolve 3 fixable violations.

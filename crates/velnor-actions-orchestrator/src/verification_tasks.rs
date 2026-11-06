@@ -330,6 +330,7 @@ fn resolve_tool(
                 .checksum
                 .clone()
                 .ok_or_else(|| failure("verification_tool_platform_artifact"))?,
+            checksum_source: locked_artifact.checksum_source.clone(),
             url: locked_artifact
                 .url
                 .clone()
@@ -337,6 +338,17 @@ fn resolve_tool(
             url_api: locked_artifact.url_api.clone(),
             signer: locked_artifact.signer.clone(),
             provenance: locked_artifact.provenance.clone(),
+            provenance_verified: locked_artifact.provenance_verified,
+            repository_ids: locked_artifact.repository_ids.as_ref().map(|ids| {
+                let mut result = BTreeMap::new();
+                if let Some(repository) = &ids.repository {
+                    result.insert("repository".to_owned(), repository.clone());
+                }
+                if let Some(owner) = &ids.owner {
+                    result.insert("owner".to_owned(), owner.clone());
+                }
+                result
+            }),
         })
     };
     Ok(BuildTaskTool {

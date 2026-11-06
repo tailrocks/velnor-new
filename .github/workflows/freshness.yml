@@ -32,8 +32,8 @@ jobs:
           cache_save: "false"
           env: "false"
           install: "false"
-          sha256: 7129dbab31d698f9028db9374f7ba7987232b0426f837dcbce437130a61415f9
-          version: 2026.11.1
+          sha256: c2f7e814cb39f60b7f67a0ff36cb805e94128bf2dff09d175309d0f095b8cc3b
+          version: 2026.11.3
       - name: Resolve project tool versions
         env:
           ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
@@ -103,4 +103,12 @@ jobs:
           NODE_AUTH_TOKEN: ""
           NPM_TOKEN: ""
           RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
-        run: "env -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR mise --no-config --no-env --no-hooks exec 'rust@'\"${VELNOR_TOOL_RUST}\" -- bash scripts/check-freshness.sh --check-upstream"
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -e;probe_log=\"$RUNNER_TEMP/velnor/freshness/probe.log\";mkdir -p \"$RUNNER_TEMP/velnor/freshness\";probe_status=0;if mise --no-config --no-env --no-hooks exec rust@'\"${VELNOR_TOOL_RUST}\"' -- bash scripts/check-freshness.sh --check-upstream >\"$probe_log\" 2>&1;then :;else probe_status=$?;fi;cat \"$probe_log\";exit \"$probe_status\"'"
+      - name: Upload freshness probe
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          if-no-files-found: error
+          name: velnor-freshness-r${{ github.run_id }}-a${{ github.run_attempt }}
+          path: ${{ runner.temp }}/velnor/freshness/probe.log
+          retention-days: "30"

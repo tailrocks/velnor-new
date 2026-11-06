@@ -1,0 +1,8 @@
+cdd02200a144aad877a95c5749b120608c87c0c1f4d35729f086374ef1af2039  /Users/donbeave/Projects/jackin-project/handoff/state-2026-11-05/current/tool-qualification/velnor-v3-macos-arm64-output/assets/alint.tar.gz
+15b47d53e3b1aafbd674cca0e8fff0d5952f3cf2a7d7501a8f67576ef76397b4  /Users/donbeave/Projects/jackin-project/handoff/state-2026-11-05/current/tool-qualification/velnor-v3-macos-arm64-output/assets/jactionlint.tar.gz
+56affdd8de5527894dca6dc3d7e0a99a873b0f004d7aabc30ae407d3f48b0a79  /Users/donbeave/Projects/jackin-project/handoff/state-2026-11-05/current/tool-qualification/velnor-v3-macos-arm64-output/assets/shellcheck.tar.xz
+496f4c3064b5c3bff79174b3dae4faaf65a66774eb8e2bf074f895412c5f124f  /Users/donbeave/Projects/jackin-project/handoff/state-2026-11-05/current/tool-qualification/velnor-v3-macos-arm64-output/assets/tofu.tar.gz
+dd2bfb1b93a1128d24e1891fb74352fafc06bbb4f11736b15a0243f30a849a10  /Users/donbeave/Projects/jackin-project/handoff/state-2026-11-05/current/tool-qualification/velnor-v3-macos-arm64-output/bin/alint
+73109c50a819c00d816fa9a0ed3ec6b49233060b617a4a2b27438a437b063020  /Users/donbeave/Projects/jackin-project/handoff/state-2026-11-05/current/tool-qualification/velnor-v3-macos-arm64-output/bin/jactionlint
+61c17246d69f012cd458ae82f244c46023dac75d1b69733ca1cc7d28fb270fd7  /Users/donbeave/Projects/jackin-project/handoff/state-2026-11-05/current/tool-qualification/velnor-v3-macos-arm64-output/bin/shellcheck
+650a88f830c7e46975eb6aa8e36c0df7ff66e040a3a1914ba195ee722b0b913e  /Users/donbeave/Projects/jackin-project/handoff/state-2026-11-05/current/tool-qualification/velnor-v3-macos-arm64-output/bin/tofu

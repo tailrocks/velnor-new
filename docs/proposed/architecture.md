@@ -175,7 +175,7 @@ policy = "consumer-v1"
 # default_branch = "main" # Optional: origin/HEAD, then the CI event payload, are used when omitted.
 generator_validation = "bootstrap"
 max_parallel_jobs = 2
-# runner_label = "ubuntu-24.04" # optional older pinned override; omit for latest
+# runner_label = "ubuntu-26.04" # Only supported Ubuntu runner; omit for latest
 
 [resources]
 compiler_process_budget = 2
@@ -210,11 +210,13 @@ In CI check `GITHUB_REPOSITORY`; locally normalize `origin`. Missing or
 mismatched identity fails validation. The policy does not select a stack.
 
 `workflow.runner_label` is optional. If omitted, generation MUST use the
-latest pinned label in its compiled-in release catalog. An explicit value MUST
-exactly match that catalog's supported-label list; it is the only
-runner-version compatibility override and is recorded as `config_override`.
-The plan records `latest_default` when no override is present. Velnor's own
-`.velnor/version-policy.toml` mirrors the catalog and CI checks equality.
+latest pinned label in its compiled-in release catalog. Generated Ubuntu jobs
+always use `ubuntu-26.04`; older Ubuntu labels are rejected. Supported macOS
+and other platform labels remain available for matching targets. An explicit
+value MUST exactly match that catalog's supported-label list and is recorded as
+`config_override`. The plan records `latest_default` when no override is
+present. Velnor's own `.velnor/version-policy.toml` mirrors the catalog and CI
+checks equality.
 `workflow.name` is the display name. If `workflow.default_branch` is omitted,
 resolve the branch named by local symbolic ref `refs/remotes/origin/HEAD`; if
 that ref is absent or invalid, generation fails and instructs the user to set

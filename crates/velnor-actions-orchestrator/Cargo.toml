@@ -54,6 +54,7 @@ velnor-actions-tofu = { version = "=0.1.77", path = "../velnor-actions-tofu" }
 velnor-actions-gradle = { version = "=0.1.77", path = "../velnor-actions-gradle" }
 velnor-actions-workflow-renderer = { version = "=0.1.77", path = "../velnor-actions-workflow-renderer" }
 rustix = { version = "=1.1.5", features = ["fs", "process"] }
+getrandom = { version = "=0.4.3" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }

@@ -224,14 +224,6 @@ impl ExecutionConfig {
                 "profile_kind_mismatch",
             ));
         }
-        let label = hosted.label.as_deref().unwrap_or("");
-        if !RUNNER_LABEL_CATALOG.contains(&label) {
-            return Err(ContractError::config(
-                file,
-                "execution.profiles.hosted.label",
-                format!("unsupported_label:{label}"),
-            ));
-        }
         if hosted.name.is_some() || !hosted.labels.is_empty() || scale.label.is_some() {
             return Err(ContractError::config(
                 file,
@@ -244,6 +236,14 @@ impl ExecutionConfig {
                 file,
                 "execution.profiles.platform",
                 "platform_mismatch",
+            ));
+        }
+        let label = hosted.label.as_deref().unwrap_or("");
+        if !is_supported_hosted_profile_label(label) {
+            return Err(ContractError::config(
+                file,
+                "execution.profiles.hosted.label",
+                format!("unsupported_label:{label}"),
             ));
         }
         self.check_default(file)?;
@@ -273,7 +273,7 @@ impl ExecutionConfig {
 
 impl ExecutionProfile {
     pub fn hosted(label: &str) -> Result<Self, ContractError> {
-        if !RUNNER_LABEL_CATALOG.contains(&label) || !is_hosted_catalog(label) {
+        if !is_supported_hosted_profile_label(label) {
             return Err(ContractError::config(
                 "config.toml",
                 "execution.profiles.hosted.label",
@@ -301,6 +301,13 @@ impl ExecutionProfile {
             capability_profile: None,
         }
     }
+}
+
+fn is_supported_hosted_profile_label(label: &str) -> bool {
+    RUNNER_LABEL_CATALOG.contains(&label)
+        && is_hosted_catalog(label)
+        && crate::targets::ReleaseTarget::for_runner_label(label)
+            == Some(crate::targets::ReleaseTarget::LinuxX86_64)
 }
 
 fn missing(key: &str) -> ContractError {

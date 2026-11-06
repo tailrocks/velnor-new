@@ -6,9 +6,7 @@ use std::error::Error;
 use std::fs;
 
 use velnor_actions_contract::workflow::ledger_cli::LEDGER_CLI_JOB_ID;
-use velnor_actions_contract::workflow::step_identity::{
-    TOOLS_CACHE_IDENTITY_DIGEST_INPUT, TOOLS_CACHE_PRELUDE_USES,
-};
+use velnor_actions_contract::workflow::step_identity::TOOLS_CACHE_IDENTITY_DIGEST_INPUT;
 use velnor_actions_contract::workflow::{ProducerKind, SOURCES_PRODUCER_JOB_ID};
 use velnor_actions_contract::{
     CRATE_JOB_ID_PREFIX, Job, PLAN_JOB_ID, StepKind, StepRole, TOFU_JOB_ID_PREFIX, WorkflowPolicy,
@@ -34,8 +32,7 @@ const LANE_TOOLS: [&str; 7] = [
     " bun@",
 ];
 
-const OTHER_LANE_USES: &str = TOOLS_CACHE_PRELUDE_USES[1];
-const OTHER_LANE_RUNS_ON: &str = "ubuntu-24.04";
+const OTHER_LANE_RUNS_ON: &str = "macos-26";
 
 pub(super) fn lane_jobs() -> Result<BTreeMap<String, Job>, Box<dyn Error>> {
     Ok(lane_jobs_with_catalog()?.0)
@@ -200,7 +197,8 @@ fn w7_refuses_two_tools_identities_in_one_lane() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
-fn a_rust_job_in_another_lane_keeps_its_own_identity() -> Result<(), Box<dyn Error>> {
+fn a_rust_job_without_runtime_identity_does_not_split_the_supported_lane()
+-> Result<(), Box<dyn Error>> {
     let mut jobs = lane_jobs()?;
     let id = crate_id(&jobs)?;
     let own = identity_digest(&jobs[&id])
@@ -211,13 +209,12 @@ fn a_rust_job_in_another_lane_keeps_its_own_identity() -> Result<(), Box<dyn Err
     set_digest(&mut same_lane, &other)?;
     let mut other_lane = same_lane.clone();
     other_lane.runs_on = OTHER_LANE_RUNS_ON.to_owned();
-    for step in &mut other_lane.steps {
-        if let (Some(StepRole::ToolsCacheIdentity), StepKind::Action { uses, .. }) =
-            (&step.role, &mut step.kind)
-        {
-            OTHER_LANE_USES.clone_into(uses);
-        }
-    }
+    other_lane.steps.retain(|step| {
+        !matches!(
+            step.role,
+            Some(StepRole::ToolsCacheIdentity | StepRole::ToolsCacheRestore)
+        )
+    });
     jobs.insert("rust-other-lane".to_owned(), other_lane);
     assert_eq!(of(&jobs, WasteRule::SplitToolsIdentity), Vec::new());
     jobs.insert("rust-same-lane".to_owned(), same_lane);

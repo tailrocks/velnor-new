@@ -8,7 +8,7 @@ use crate::marker::with_marker;
 use crate::render::RenderedFile;
 
 pub const CACHE_CLEANUP_PATH: &str = ".github/workflows/cache-cleanup.yml";
-pub const CACHE_CLEANUP_FALLBACK_RUNNER: &str = "ubuntu-latest";
+pub const CACHE_CLEANUP_FALLBACK_RUNNER: &str = "ubuntu-26.04";
 
 const BODY: &str = r#"name: Cache cleanup
 "on":

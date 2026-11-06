@@ -250,7 +250,7 @@ mod tests {
             services: Vec::new(),
             outputs: BTreeMap::new(),
             display_name: id.to_owned(),
-            runs_on: "ubuntu-24.04".to_owned(),
+            runs_on: "ubuntu-26.04".to_owned(),
             check_runner: None,
             timeout_minutes: JobTimeout::new(30)?,
             needs: Vec::new(),

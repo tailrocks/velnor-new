@@ -152,7 +152,7 @@ fn discovered() -> DiscoveredCheck {
         task: "lint".to_owned(),
         directory: ".".to_owned(),
         runner: CheckRunner {
-            label: "ubuntu-24.04".to_owned(),
+            label: "ubuntu-26.04".to_owned(),
             platform: CheckPlatform::LinuxX64,
             executor: CheckExecutor::Hosted,
             container: None,
@@ -257,7 +257,7 @@ fn check_projection_preserves_task_bytes() -> Result<(), Box<dyn Error>> {
 fn stage_command(qualified: &QualifiedCheck, home: &Path) -> Result<(), Box<dyn Error>> {
     fs::create_dir_all(home.join("bin"))?;
     let mise = home.join("bin/mise");
-    fs::write(&mise, "#!/bin/sh\necho \"2026.11.1 fake\"\n")?;
+    fs::write(&mise, "#!/bin/sh\necho \"2026.11.2 fake\"\n")?;
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;

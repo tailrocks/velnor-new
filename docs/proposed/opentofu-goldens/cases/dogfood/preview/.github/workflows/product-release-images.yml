@@ -72,8 +72,8 @@ jobs:
       - name: Setup Mise
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
-          version: 2026.11.1
-          sha256: 7129dbab31d698f9028db9374f7ba7987232b0426f837dcbce437130a61415f9
+          version: 2026.11.3
+          sha256: c2f7e814cb39f60b7f67a0ff36cb805e94128bf2dff09d175309d0f095b8cc3b
           install: "false"
           env: "false"
           cache: "false"
@@ -195,8 +195,8 @@ jobs:
       - name: Setup Mise
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
-          version: 2026.11.1
-          sha256: 7129dbab31d698f9028db9374f7ba7987232b0426f837dcbce437130a61415f9
+          version: 2026.11.3
+          sha256: c2f7e814cb39f60b7f67a0ff36cb805e94128bf2dff09d175309d0f095b8cc3b
           install: "false"
           env: "false"
           cache: "false"

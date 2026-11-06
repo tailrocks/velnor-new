@@ -206,11 +206,11 @@ fi
 pass "toolchain"
 
 stage fmt "${MISE_EXEC[@]}" cargo fmt --all --check
-HK_BIN="$(MISE_AUTO_INSTALL=false MISE_OFFLINE=true mise which hk --tool hk@2.8.0 2>>"$TOOLCHAIN_LOG" || true)"
+HK_BIN="$(MISE_AUTO_INSTALL=false MISE_OFFLINE=true mise which hk --tool hk@2.11.1 2>>"$TOOLCHAIN_LOG" || true)"
 if [[ "$HK_BIN" == /* && -x "$HK_BIN" ]]; then
   stage hk-native-fmt env HK_BIN="$HK_BIN" bash scripts/test-native-hk-fmt.sh
 else
-  fail "hk-native-fmt (installed hk 2.8.0 is unavailable; log: $TOOLCHAIN_LOG)"
+  fail "hk-native-fmt (installed hk 2.11.1 is unavailable; log: $TOOLCHAIN_LOG)"
 fi
 
 RUNNER_MANIFEST="crates/velnor-runner/Cargo.toml"

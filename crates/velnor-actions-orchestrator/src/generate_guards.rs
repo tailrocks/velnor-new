@@ -64,34 +64,131 @@ impl ToolSnapshot {
     }
 }
 
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 const GENERATE_LOCK_NAME: &str = ".github.velnor-generate.lock";
 
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 #[derive(Debug)]
-pub(crate) struct GenerateOwnership {
-    path: PathBuf,
+pub(super) struct GenerateOwnership<'root> {
+    root: &'root super::stage_root::RootDirectory,
+    identity: super::stage_root::FsIdentity,
+    active: bool,
 }
 
-impl GenerateOwnership {
-    pub(crate) fn acquire(root: &Path) -> Result<Self, OrchestratorError> {
-        let path = root.join(GENERATE_LOCK_NAME);
-        match std::fs::create_dir(&path) {
-            Ok(()) => Ok(Self { path }),
-            Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => {
-                Err(OrchestratorError::Contract {
-                    problem: format!("concurrent_generate:{}", path.display()),
-                })
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+impl<'root> GenerateOwnership<'root> {
+    pub(super) fn acquire(
+        root: &'root super::stage_root::RootDirectory,
+    ) -> Result<Self, OrchestratorError> {
+        use crate::generation_filesystem::FilesystemObjectType;
+        use std::ffi::OsStr;
+
+        root.verify_location()?;
+        let directory = root.directory();
+        let name = OsStr::new(GENERATE_LOCK_NAME);
+        let identity = match directory.create_dir_raw(name, 0o700) {
+            Ok(identity) => super::stage_root::FsIdentity::from_created_directory(identity),
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
+                return Err(OrchestratorError::Contract {
+                    problem: format!(
+                        "concurrent_generate:{}",
+                        directory.child_path(name).display()
+                    ),
+                });
             }
-            Err(err) => Err(OrchestratorError::io(
-                path.display().to_string(),
-                err.to_string(),
-            )),
+            Err(error) => {
+                return Err(OrchestratorError::io(
+                    directory.child_path(name).display().to_string(),
+                    error.to_string(),
+                ));
+            }
+        };
+        let mut ownership = Self {
+            root,
+            identity,
+            active: true,
+        };
+        let result = (|| {
+            let lock = directory.open_dir(name)?;
+            lock.set_mode(0o700)?;
+            let metadata = lock.metadata()?;
+            if super::stage_root::FsIdentity::from_metadata(&metadata) != ownership.identity
+                || metadata.object_type != FilesystemObjectType::Directory
+                || metadata.owner != root.owner()
+                || metadata.mode != 0o700
+            {
+                return Err(OrchestratorError::UnsafePath {
+                    path: lock.path().display().to_string(),
+                    reason: "generation_lock_metadata_mismatch".to_owned(),
+                });
+            }
+            root.verify_mount(lock.path(), lock.as_ref())?;
+            Ok(())
+        })();
+        match result {
+            Ok(()) => Ok(ownership),
+            Err(error) => Err(ownership.abort(error)),
         }
+    }
+
+    fn abort(&mut self, cause: OrchestratorError) -> OrchestratorError {
+        match self.cleanup() {
+            Ok(()) => cause,
+            Err(cleanup) => OrchestratorError::io(
+                self.root
+                    .directory()
+                    .child_path(std::ffi::OsStr::new(GENERATE_LOCK_NAME))
+                    .display()
+                    .to_string(),
+                format!("generation_aborted:{cause}; generation_lock_cleanup_failed:{cleanup}"),
+            ),
+        }
+    }
+
+    fn cleanup(&mut self) -> Result<(), OrchestratorError> {
+        use crate::generation_filesystem::FilesystemObjectType;
+        use std::ffi::OsStr;
+
+        let directory = self.root.directory();
+        let name = OsStr::new(GENERATE_LOCK_NAME);
+        let identity = self.identity;
+        let Some(stat) = directory.stat_opt(name)? else {
+            self.active = false;
+            return Ok(());
+        };
+        if stat.object_type != FilesystemObjectType::Directory
+            || super::stage_root::FsIdentity::from_metadata(&stat) != identity
+            || stat.owner != self.root.owner()
+        {
+            return Err(OrchestratorError::UnsafePath {
+                path: directory.child_path(name).display().to_string(),
+                reason: "generation_lock_identity_changed".to_owned(),
+            });
+        }
+        let lock = directory.open_dir(name)?;
+        let opened = lock.metadata()?;
+        if super::stage_root::FsIdentity::from_metadata(&opened) != identity
+            || opened.owner != self.root.owner()
+        {
+            return Err(OrchestratorError::UnsafePath {
+                path: lock.path().display().to_string(),
+                reason: "generation_lock_identity_changed".to_owned(),
+            });
+        }
+        self.root.verify_mount(lock.path(), lock.as_ref())?;
+        drop(lock);
+        directory.remove_dir(name)?;
+        self.active = false;
+        Ok(())
     }
 }
 
-impl Drop for GenerateOwnership {
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+impl Drop for GenerateOwnership<'_> {
     fn drop(&mut self) {
-        let _removed = std::fs::remove_dir(&self.path);
+        if self.active {
+            let _cleanup = self.cleanup();
+        }
     }
 }
 

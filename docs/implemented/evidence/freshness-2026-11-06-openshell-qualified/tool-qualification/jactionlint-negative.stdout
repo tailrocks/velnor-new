@@ -1,0 +1,1 @@
+../velnor-v3-macos-arm64-output/fixtures/workflow-bad/bad.yml:2:1: could not parse as YAML: did not find expected node content [yaml-syntax]

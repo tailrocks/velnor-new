@@ -1,0 +1,30 @@
+   Compiling velnor-archive-guard v0.1.75 (/Users/donbeave/Projects/jackin-project/wt/velnor-s3-fresh-main-55b31/crates/velnor-archive-guard)
+   Compiling velnor-actions-workflow-renderer v0.1.75 (/Users/donbeave/Projects/jackin-project/wt/velnor-s3-fresh-main-55b31/crates/velnor-actions-workflow-renderer)
+   Compiling velnor-actions-orchestrator v0.1.75 (/Users/donbeave/Projects/jackin-project/wt/velnor-s3-fresh-main-55b31/crates/velnor-actions-orchestrator)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 11.91s
+────────────
+ Nextest run ID d655a0fc-de5e-4f8e-a151-ee2988366216 with nextest profile: default
+    Starting 1 test across 1 binary (331 tests skipped)
+        FAIL [   1.995s] (1/1) velnor-actions-orchestrator::workflow_configuration_public ubuntu_runner_policy::staged_consumer_and_conditional_release_workflows_select_only_ubuntu_26_04
+  stdout ───
+
+    running 1 test
+    test ubuntu_runner_policy::staged_consumer_and_conditional_release_workflows_select_only_ubuntu_26_04 ... FAILED
+
+    failures:
+
+    failures:
+        ubuntu_runner_policy::staged_consumer_and_conditional_release_workflows_select_only_ubuntu_26_04
+
+    test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 331 filtered out; finished in 1.98s
+
+  stderr ───
+    Error: ".github/workflows/product-release-binary.yml job verify-release-caller selects forbidden Ubuntu runner ubuntu-26.04-arm"
+
+  Cancelling due to test failure
+────────────
+     Summary [   1.996s] 1 test run: 0 passed, 1 failed, 331 skipped
+        FAIL [   1.995s] (1/1) velnor-actions-orchestrator::workflow_configuration_public ubuntu_runner_policy::staged_consumer_and_conditional_release_workflows_select_only_ubuntu_26_04
+error: test run failed
+mbx[cache]: 1 hits, 0 misses, 4 not looked up, 4 incremental; 0 B downloaded, 0 B uploaded, 0 B stored locally
+mbx[savings]: 1.7 TiB of outputs exist once and appear everywhere. do not tell the checkouts.

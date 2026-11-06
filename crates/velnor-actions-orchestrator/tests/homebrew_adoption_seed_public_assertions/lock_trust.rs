@@ -10,7 +10,14 @@ pub(crate) fn assert_lock_trust_rejections(
     lock_path: &Path,
     original: &str,
 ) -> Result<(), Box<dyn Error>> {
-    let (mise_url, version_line, stale_problem) = current_mise_mutation_values();
+    let approved = velnor_actions_mise::catalog::lock::parse_generator_lock(original)?;
+    let bootstrap = &approved.mise_bootstrap;
+    let mise_url = &bootstrap.artifact;
+    let version_line = format!("version = \"{}\"", bootstrap.version);
+    let stale_problem = format!(
+        "lock_mismatch:mise_bootstrap:2026.10.18:{}",
+        bootstrap.version
+    );
     let mutations = [
         (
             "alternate published version",
@@ -50,7 +57,7 @@ pub(crate) fn assert_lock_trust_rejections(
         ),
         (
             "Mise digest at the pinned version",
-            velnor_actions_mise::MISE_BINARY_SHA256_LINUX_X64,
+            bootstrap.sha256.as_str(),
             "4162760f40b6b5f706c60641e4ef5ee7322bc6c54f72fc26a7111b337aa18d9d",
             "lock_mismatch:mise_bootstrap_sha256",
         ),
@@ -79,15 +86,4 @@ pub(crate) fn assert_lock_trust_rejections(
     }
     std::fs::write(lock_path, original)?;
     Ok(())
-}
-
-fn current_mise_mutation_values() -> (String, String, String) {
-    let version = velnor_actions_mise::MISE_VERSION;
-    (
-        format!(
-            "https://github.com/jdx/mise/releases/download/v{version}/mise-v{version}-linux-x64"
-        ),
-        format!("version = \"{version}\""),
-        format!("lock_mismatch:mise_bootstrap:2026.10.18:{version}"),
-    )
 }

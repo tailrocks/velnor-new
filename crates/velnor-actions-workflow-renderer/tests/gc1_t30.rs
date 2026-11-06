@@ -83,7 +83,7 @@ fn check_shell_syntax(step: &Step, label: &str) -> Result<(), Box<dyn Error>> {
 fn job_with(steps: Vec<Step>) -> Job {
     Job {
         display_name: "gc1-t30".to_owned(),
-        runs_on: "ubuntu-24.04".to_owned(),
+        runs_on: "ubuntu-26.04".to_owned(),
         check_runner: None,
         timeout_minutes: JobTimeout::DEFAULT,
         needs: Vec::new(),

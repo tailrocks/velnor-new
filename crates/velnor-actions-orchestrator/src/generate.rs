@@ -1,7 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
+use std::sync::Arc;
 
 #[path = "rust_install_audit.rs"]
 pub(crate) mod rust_install_audit;
@@ -17,6 +18,7 @@ use velnor_actions_workflow_renderer::guard;
 use velnor_actions_workflow_renderer::render::RenderedTree;
 
 use crate::OrchestratorError;
+use crate::generation_filesystem::{GenerationFilesystem, HostGenerationFilesystem};
 use crate::prepare::GenerationPreparation;
 use crate::provenance::{ProfileProvenance, profile_provenance};
 use crate::validate::validate_staged;
@@ -43,17 +45,32 @@ pub(crate) mod unmanaged;
 #[path = "generate_preview.rs"]
 mod preview;
 
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[path = "generate_fd.rs"]
+mod fd;
+
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 #[path = "generate_stage_root.rs"]
 mod stage_root;
 
 pub use guards::ToolSnapshot;
 
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 use guards::GenerateOwnership;
-use leaf_links::check_no_symlink_or_emitted_leaf;
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct GenerateOptions {
     pub output_dir: Option<PathBuf>,
+    pub filesystem: Arc<dyn GenerationFilesystem>,
+}
+
+impl Default for GenerateOptions {
+    fn default() -> Self {
+        Self {
+            output_dir: None,
+            filesystem: Arc::new(HostGenerationFilesystem::new()),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -89,7 +106,7 @@ pub fn generate_dispatched(
         .verify(&prep.root)
         .map_err(|problem| OrchestratorError::Contract { problem })?;
     let mut warnings = match &opts.output_dir {
-        None => replace_in_place(prep, &tree)?,
+        None => replace_in_place(prep, &tree, opts.filesystem.clone())?,
         Some(dir) => preview::write_preview(prep, dir, &tree)?,
     };
     warnings.extend(notices);
@@ -115,141 +132,79 @@ pub fn render_staged_tree_with(
     Ok(tree)
 }
 
-fn reject_symlink(path: &Path) -> Result<(), OrchestratorError> {
-    if let Ok(meta) = std::fs::symlink_metadata(path)
-        && meta.is_symlink()
-    {
-        return Err(OrchestratorError::UnsafePath {
-            path: path.display().to_string(),
-            reason: "symlink_refused".to_owned(),
-        });
-    }
-    Ok(())
-}
-
 #[path = "cache_cleanup_emit.rs"]
 mod cache_cleanup_emit;
 
 #[path = "generate_leaf_links.rs"]
 mod leaf_links;
 
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 fn replace_in_place(
     prep: &GenerationPreparation,
     tree: &RenderedTree,
+    filesystem: Arc<dyn GenerationFilesystem>,
 ) -> Result<Vec<String>, OrchestratorError> {
-    let root = &prep.root;
-    let _ownership = GenerateOwnership::acquire(root)?;
-    let target = root.join(".github");
-    reject_symlink(&target)?;
-    let staging = stage_root::StageRoot::open(root)?;
-    let target_identity = staging.validate_target(&target)?;
-    staging.validate_target_directories(&target, target_identity)?;
-    reject_symlink(&target.join("workflows"))?;
-    for rel in check_tree_paths(tree)? {
-        check_no_symlink_or_emitted_leaf(root, &rel)?;
-    }
-    staging.clear_spare_before_staging()?;
-    let staged = match preserve::stage_in_place(&target, staging.spare(), tree) {
-        Ok(path) => path,
+    let root = stage_root::RootDirectory::open(&prep.root, filesystem)?;
+    let _ownership = GenerateOwnership::acquire(&root)?;
+    root.verify_location()?;
+    let mut staging = stage_root::StageRoot::open(&root)?;
+    let paths = check_tree_paths(tree)?;
+    staging.verify_generated_paths(&paths)?;
+    let source = match staging.target_directory() {
+        Ok(source) => source,
         Err(error) => return Err(staging.abort_before_commit(error)),
     };
-    if let Err(error) = staging.validate_staged(&target, target_identity, &staged) {
+    let staged = match staging.create_staged_github() {
+        Ok(staged) => staged,
+        Err(error) => return Err(staging.abort_before_commit(error)),
+    };
+    if let Err(error) =
+        preserve::stage_in_place(source.as_ref(), &staged, tree, staging.target_mode())
+    {
         return Err(staging.abort_before_commit(error));
     }
-    publish_in_place(&staging, &target, target_identity, &staged)
-}
-
-fn publish_in_place(
-    staging: &stage_root::StageRoot,
-    target: &Path,
-    target_identity: Option<stage_root::FsIdentity>,
-    staged: &Path,
-) -> Result<Vec<String>, OrchestratorError> {
-    match target_identity {
-        Some(retired) => publish_existing_in_place(staging, target, retired, staged),
-        None => publish_first_in_place(staging, target, staged),
-    }
-}
-
-fn publish_existing_in_place(
-    staging: &stage_root::StageRoot,
-    target: &Path,
-    retired: stage_root::FsIdentity,
-    staged: &Path,
-) -> Result<Vec<String>, OrchestratorError> {
-    if let Err(error) = staging.validate_target_directories(target, Some(retired)) {
+    if let Err(error) = staging.validate_staged(&staged) {
         return Err(staging.abort_before_commit(error));
     }
-    if let Err(error) = exchange_directories(staged, target) {
-        return Err(staging.abort_before_commit(OrchestratorError::io(
-            target.display().to_string(),
-            error.to_string(),
-        )));
-    }
-    match staging.clean_retired_root(retired) {
-        Ok(()) => Ok(Vec::new()),
-        Err(error) => Ok(vec![format!("backup_cleanup_failed:{error}")]),
-    }
-}
-
-fn publish_first_in_place(
-    staging: &stage_root::StageRoot,
-    target: &Path,
-    staged: &Path,
-) -> Result<Vec<String>, OrchestratorError> {
-    match std::fs::rename(staged, target) {
-        Ok(()) => Ok(Vec::new()),
-        Err(error) => Err(staging.abort_before_commit(OrchestratorError::io(
-            target.display().to_string(),
-            error.to_string(),
-        ))),
-    }
-}
-
-fn swap_directories(
-    _root: &Path,
-    target: &Path,
-    staged: &Path,
-) -> Result<Vec<String>, OrchestratorError> {
-    let label = target.display().to_string();
-    if !target.exists() {
-        return match std::fs::rename(staged, target) {
-            Ok(()) => Ok(Vec::new()),
-            Err(err) => Err(OrchestratorError::io(label, err.to_string())),
-        };
-    }
-    swap_existing_directory(target, staged, exchange_directories)
-}
-
-fn swap_existing_directory(
-    target: &Path,
-    staged: &Path,
-    exchange: impl FnOnce(&Path, &Path) -> std::io::Result<()>,
-) -> Result<Vec<String>, OrchestratorError> {
-    let label = target.display().to_string();
-    exchange(staged, target).map_err(|err| OrchestratorError::io(label, err.to_string()))?;
-    let old = staged.display().to_string();
-    match std::fs::remove_dir_all(staged) {
-        Ok(()) => Ok(Vec::new()),
-        Err(cleanup) => Ok(vec![format!("backup_cleanup_failed:{old}:{cleanup}")]),
-    }
-}
-
-#[cfg(any(target_os = "linux", target_os = "macos"))]
-fn exchange_directories(staged: &Path, target: &Path) -> std::io::Result<()> {
-    use rustix::fs::{CWD, RenameFlags, renameat_with};
-    renameat_with(CWD, staged, CWD, target, RenameFlags::EXCHANGE).map_err(std::io::Error::from)
+    publish_in_place(&mut staging)
 }
 
 #[cfg(not(any(target_os = "linux", target_os = "macos")))]
-fn exchange_directories(_staged: &Path, _target: &Path) -> std::io::Result<()> {
-    Err(std::io::Error::new(
-        std::io::ErrorKind::Unsupported,
-        "atomic directory exchange is unsupported on this platform",
+fn replace_in_place(
+    _prep: &GenerationPreparation,
+    _tree: &RenderedTree,
+    _filesystem: Arc<dyn GenerationFilesystem>,
+) -> Result<Vec<String>, OrchestratorError> {
+    Err(OrchestratorError::unsupported(
+        "in_place_generation",
+        "atomic_directory_exchange_requires_linux_or_macos",
     ))
+}
+
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+fn publish_in_place(
+    staging: &mut stage_root::StageRoot<'_>,
+) -> Result<Vec<String>, OrchestratorError> {
+    if staging.target_identity().is_some() {
+        if let Err(error) = staging.publish_existing() {
+            return Err(staging.abort_before_commit(error));
+        }
+        match staging.cleanup_retired() {
+            Ok(()) => Ok(Vec::new()),
+            Err(error) => Ok(vec![format!("backup_cleanup_failed:{error}")]),
+        }
+    } else {
+        if let Err(error) = staging.publish_first() {
+            return Err(staging.abort_before_commit(error));
+        }
+        match staging.cleanup_after_first_publish() {
+            Ok(()) => Ok(Vec::new()),
+            Err(error) => Ok(vec![format!("backup_cleanup_failed:{error}")]),
+        }
+    }
 }
 
 #[path = "generate_write.rs"]
 pub(crate) mod write;
 
-pub(crate) use write::write_tree;
+pub(crate) use write::{write_tree, write_tree_at};

@@ -33,6 +33,7 @@ private_mods!(discover_tofu, error, evidence);
 private_mods!(extension_schemas);
 private_mods!(filesystem_owner, finalized);
 private_mods!(freshness_emit, generate);
+pub mod generation_filesystem;
 private_mods!(generator, gh_download, git_paths);
 #[cfg(test)]
 mod git_fixture;
@@ -112,5 +113,4 @@ pub mod schedule;
 pub(crate) mod task_report;
 pub(crate) mod tool_catalog_project;
 pub(crate) mod tool_catalog_resolve;
-
 pub use api::*;

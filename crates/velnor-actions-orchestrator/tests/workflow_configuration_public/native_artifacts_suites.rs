@@ -5,13 +5,16 @@ use std::collections::BTreeMap;
 use std::error::Error;
 
 use velnor_actions_contract::{Job, REQUIRED_JOB_ID, StepKind, StepRole};
-use velnor_actions_orchestrator::{GenerationPreparation, finalized_jobs, render_staged_tree};
+use velnor_actions_orchestrator::{
+    GenerationPreparation, finalized_jobs, prepare, render_staged_tree,
+};
 use velnor_actions_workflow_renderer::{
     CompileDriver, render::WORKFLOW_PATH, steps::check_mbx_gating,
 };
 
-use super::native_artifacts_fixture::repo_with_rust_suite;
+use super::native_artifacts_fixture::{repo_with_rust_suite, rust_suite_config};
 use super::support::rendered_job_block;
+use super::workflow_configuration_fixture;
 
 const SUITE_ID: &str = "suite-proof-suite";
 const BUILD_ID: &str = "suite-build-proof-suite";
@@ -25,6 +28,28 @@ fn public_rust_suite_jobs_keep_their_effective_compile_driver() -> Result<(), Bo
             ("archive", 2, "archive"),
         ] {
             assert_suite_jobs(driver, expected_driver, mode, partitions, build)?;
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn public_rust_suite_rejects_arm_runner_override_before_render() -> Result<(), Box<dyn Error>> {
+    let mut config = rust_suite_config("cargo", 1, "inline");
+    config.push_str("runner_label = \"ubuntu-26.04-arm\"\n");
+    let repo = workflow_configuration_fixture::make_repo(&config)?;
+    let error = match prepare(repo.path()) {
+        Ok(_) => return Err("prepare accepted ARM as a Rust-suite runner override".into()),
+        Err(error) => error.to_string(),
+    };
+    for expected in [
+        ".velnor/config.toml",
+        "stacks.rust.suites[0].runner_label",
+        "unsupported_label",
+        "ubuntu-26.04-arm",
+    ] {
+        if !error.contains(expected) {
+            return Err(format!("Rust-suite ARM diagnostic omitted {expected}: {error}").into());
         }
     }
     Ok(())
@@ -59,6 +84,7 @@ fn assert_suite_jobs(
     let tree = render_staged_tree(&prepared)?;
     let workflow = tree.get(WORKFLOW_PATH).ok_or("generated CI is missing")?;
     let suite_block = rendered_job_block(workflow, SUITE_ID)?;
+    assert!(suite_block.contains("runs-on: ubuntu-26.04"));
     assert!(suite_block.contains("if: failure()"));
     assert!(suite_block.contains("if-no-files-found: warn"));
     assert!(!suite_block.contains("include-hidden-files"));

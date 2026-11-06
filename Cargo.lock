@@ -1209,6 +1209,7 @@ dependencies = [
  "syn",
  "toml",
  "ureq",
+ "velnor-actions-contract",
 ]
 
 [[package]]
@@ -1237,6 +1238,7 @@ version = "0.1.77"
 dependencies = [
  "base64",
  "flate2",
+ "getrandom 0.4.3",
  "lzma-rust2",
  "proc-macro2",
  "rustix",

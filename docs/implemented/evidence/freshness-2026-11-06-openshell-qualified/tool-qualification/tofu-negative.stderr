@@ -1,0 +1,7 @@
+
+Error: Invalid expression
+
+  on main.tf line 2, in output "broken":
+   2: output "broken" { value = }
+
+Expected the start of an expression, but found an invalid expression token.

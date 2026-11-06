@@ -61,6 +61,8 @@ mod family_save_suppression;
 mod feature_toggles;
 #[path = "workflow_configuration_public/final_fanin.rs"]
 mod final_fanin;
+#[path = "workflow_configuration_public/freshness_scheduled_capture.rs"]
+mod freshness_scheduled_capture;
 #[path = "workflow_configuration_public/install_profile.rs"]
 mod install_profile;
 #[path = "workflow_configuration_public/ledger_cli_build_env.rs"]
@@ -157,6 +159,9 @@ mod source_qualification_sources;
 mod source_qualification_sources_keys;
 #[path = "workflow_configuration_public/source_qualification_sources_support.rs"]
 mod source_qualification_sources_support;
+#[cfg(unix)]
+#[path = "workflow_configuration_public/stage_isolation.rs"]
+mod stage_isolation;
 #[path = "workflow_configuration_public/state_compat.rs"]
 mod state_compat;
 #[path = "workflow_configuration_public/state_producer.rs"]
@@ -221,8 +226,16 @@ mod tools_producers_mutations;
 mod tools_producers_scope;
 #[path = "workflow_configuration_public/topology_e797385c74.rs"]
 mod topology_e797385c74;
+#[path = "workflow_configuration_public/ubuntu_runner_policy.rs"]
+mod ubuntu_runner_policy;
 #[path = "workflow_configuration_public/verification_tools.rs"]
 mod verification_tools;
+#[path = "workflow_configuration_public/verification_tools_fixture.rs"]
+mod verification_tools_fixture;
+#[path = "workflow_configuration_public/verification_tools_reject.rs"]
+mod verification_tools_reject;
+#[path = "workflow_configuration_public/verification_tools_renderer.rs"]
+mod verification_tools_renderer;
 #[path = "workflow_configuration_public/waste_graph.rs"]
 mod waste_graph;
 #[path = "workflow_configuration_public/waste_lint.rs"]

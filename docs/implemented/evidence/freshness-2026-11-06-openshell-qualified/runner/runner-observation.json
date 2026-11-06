@@ -1,0 +1,29 @@
+{
+  "schema": 1,
+  "official_runner_reference": "https://docs.github.com/en/actions/reference/runners/github-hosted-runners",
+  "runner_reference_date": "2026-11-06T05:43:04Z",
+  "runner_reference_sha256": "01e21d250318143d6640a35c3eb1571ca90089b3f1e75cfc1b0ca578c65dff27",
+  "main_ci_run": {
+    "url": "https://github.com/tailrocks/velnor-new/actions/runs/42153644842",
+    "conclusion": "success",
+    "head_sha": "55b31ce8ade5f560bcdd2db7e521f5c0baf41496",
+    "created_at": "2026-11-06T02:58:27Z",
+    "updated_at": "2026-11-06T03:11:17Z",
+    "plan_job_url": "https://github.com/tailrocks/velnor-new/actions/runs/42153644842/job/127682550715",
+    "plan_job_id": 127682550715,
+    "plan_job_conclusion": "success",
+    "plan_log_sha256": "2a16ffd97f27211b89ea32c4fee0e491728061c7753d4fe27d63f2d887f862ad",
+    "runner_version": "2.338.2",
+    "image": "ubuntu-26.04",
+    "image_version": "20261101.186.1",
+    "image_release": "ubuntu26/20261101.186",
+    "provisioner_version": "20261028.624"
+  },
+  "receipts": {
+    "runner-doc.html": "01e21d250318143d6640a35c3eb1571ca90089b3f1e75cfc1b0ca578c65dff27",
+    "runner-doc.headers": "ba99818b0f2114b34cfc90c5a52c102e3bff4e5578b8a1c58f2771102795751c",
+    "main-ci-jobs.json": "dfcf1b4742504f7e8ae9f001cf1dad0a41142aecf6b1f5ac8377a04b4b45f3e7",
+    "main-ci-plan-job.json": "cca253fb868596346ebdbf2c8a6ee9f282230846c0476ece97b4f335199713cf",
+    "main-ci-plan.log": "2a16ffd97f27211b89ea32c4fee0e491728061c7753d4fe27d63f2d887f862ad"
+  }
+}

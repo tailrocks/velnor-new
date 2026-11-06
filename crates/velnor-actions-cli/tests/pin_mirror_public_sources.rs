@@ -51,30 +51,56 @@ fn pin_mirror_rejects_catalog_drift_for_every_cosign_artifact() -> TestResult {
 }
 
 #[test]
-fn pin_mirror_rejects_supported_runners_that_differ_from_the_compiled_catalog() -> TestResult {
+fn pin_mirror_rejects_x64_catalog_drift() -> TestResult {
     let fixture = Fixture::new()?;
-    fixture.rewrite(POLICY, |text| text.replacen(", \"ubuntu-22.04\"", "", 1))?;
+    fixture.rewrite(POLICY, |text| {
+        text.replacen(
+            "supported = [\"ubuntu-26.04\"]",
+            "supported = [\"ubuntu-26.04\", \"ubuntu-26.04-arm\"]",
+            1,
+        )
+    })?;
     fixture.edit_inventory(|inventory| {
         if let Some(labels) = inventory["runner"]["supported"].as_array_mut() {
-            labels.retain(|label| label != "ubuntu-22.04");
+            labels.push(serde_json::Value::String("ubuntu-26.04-arm".to_owned()));
         }
     })?;
     let outcome = fixture.run(None)?;
-    assert!(!outcome.success, "mirrors dropped a compiled label");
+    assert!(!outcome.success, "ARM label accepted in x64 inventory");
     assert!(
-        outcome.row("local-pin", "fail", "runner catalog").is_some(),
+        outcome
+            .row(
+                "local-pin",
+                "fail",
+                "runner catalog x64 labels (workflow.rs::RUNNER_LABEL_CATALOG)"
+            )
+            .is_some(),
         "catalog drift not named: {:?}",
         outcome.rows
     );
 
     let fixture = Fixture::new()?;
     fixture.rewrite(RUNNER_SOURCE, |text| {
-        text.replacen("[&str; 6] = [", "[&str; 7] = [\n    \"ubuntu-28.04\",", 1)
+        let old = "[&str; 2] = [\"ubuntu-26.04\", \"ubuntu-26.04-arm\"]";
+        assert_eq!(text.matches(old).count(), 1);
+        let changed = text.replacen(
+            old,
+            "[&str; 3] = [\"ubuntu-26.04\", \"ubuntu-26.04-arm\", \"ubuntu-28.04\"]",
+            1,
+        );
+        assert_ne!(changed, text);
+        changed
     })?;
     let outcome = fixture.run(None)?;
-    assert!(!outcome.success, "compiled label missing from mirrors");
+    assert!(!outcome.success, "source x64 label missing from mirrors");
     assert!(
-        outcome.row("local-pin", "fail", "runner catalog").is_some(),
+        outcome
+            .row(
+                "local-pin",
+                "fail",
+                "runner catalog x64 labels (workflow.rs::RUNNER_LABEL_CATALOG)"
+            )
+            .is_some(),
         "catalog drift not named: {:?}",
         outcome.rows
     );

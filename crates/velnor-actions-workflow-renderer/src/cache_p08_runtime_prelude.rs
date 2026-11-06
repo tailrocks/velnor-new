@@ -12,11 +12,7 @@ use crate::{
     yaml::{Yaml, render_yaml},
 };
 
-const ACTIONS: [(&str, &str); 3] = [
-    ("./.github/actions/u22", TOOLS_CACHE_PRELUDE_USES[0]),
-    ("./.github/actions/u24", TOOLS_CACHE_PRELUDE_USES[1]),
-    ("./.github/actions/u26", TOOLS_CACHE_PRELUDE_USES[2]),
-];
+const ACTIONS: [(&str, &str); 1] = [("./.github/actions/u26", TOOLS_CACHE_PRELUDE_USES[0])];
 
 pub(super) fn action_uses(runs_on: &str) -> Option<&'static str> {
     let identity = super::runtime_identity::action_uses(runs_on)?;

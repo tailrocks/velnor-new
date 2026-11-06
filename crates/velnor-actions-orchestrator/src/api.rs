@@ -96,6 +96,11 @@ pub use super::generate::{
     GenerateOptions, GenerateReport, ToolSnapshot, generate, generate_dispatched,
     render_staged_tree, render_staged_tree_with,
 };
+pub use super::generation_filesystem::{
+    FilesystemMetadata, FilesystemObjectType, GenerationBackendId, GenerationDirectory,
+    GenerationFile, GenerationFileOpen, GenerationFilesystem, GenerationRename,
+    HostGenerationFilesystem, MountIdentity,
+};
 pub use super::init::{InitReport, init_config};
 #[doc(hidden)]
 pub use super::internal::phase_timing::{PlanPhaseTimings, plan_internal_with_phase_timings};
