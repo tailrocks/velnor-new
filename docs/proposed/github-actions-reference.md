@@ -37,22 +37,37 @@ When designing workflows in the Velnor V1 generator or implementing runner infra
   - Pre-installed utility versions, PATH layouts, and environment configurations.
   - OS-specific tool locations for Ubuntu Linux and macOS runner images.
 
-The official [`xcode-27` runner image inventory](https://github.com/actions/runner-images/blob/main/images/macos/xcode-27-arm64-Readme.md)
-identifies an ARM64 macOS 27.0.1 host and lists Xcode 27.1 build `27A9275` at `/Applications/Xcode_27.1_Release_Candidate.app`. Velnor represents this
-host as the typed `xcode-27-arm64` runner (`runs-on: xcode-27`) and binds consumer qualification to the exact Xcode version/build through `system_tools`.
-The image's default Xcode is 27.0, so a task needing Xcode 27.1 pins `version = "27.1"`, `build = "27A9275"`, `sdk_version = "27.0"`, and
-`developer_dir = "/Applications/Xcode_27.1_Release_Candidate.app/Contents/Developer"`. Velnor probes and runs the named task with that `DEVELOPER_DIR` and never changes
-the host's `xcode-select` setting.
+The pinned [`xcode-27` runner image inventory](https://github.com/actions/runner-images/blob/9329c776c4a38d3dcb31fc78b8180005041c07fb/images/macos/xcode-27-arm64-Readme.md)
+defines the available macOS/Xcode versions and installation paths. Velnor represents this ARM64 image as the typed `xcode-27-arm64` runner (`runs-on: xcode-27`).
+Consumer qualification binds the exact `version`, `build`, `sdk_version` and `developer_dir` through `system_tools`; the image's default Xcode is not a substitute.
+Velnor probes and runs the named task with that `DEVELOPER_DIR` and never changes the host's `xcode-select` setting.
 
 ---
 
 ## Compatibility Rules and Verification Procedures
 
-### Actions cache timestamps (checked 2026-11-06)
+### Actions cache timestamps
 
-The official [List GitHub Actions caches endpoint](https://docs.github.com/en/rest/actions/cache#list-github-actions-caches-for-a-repository) returns `created_at` as a timestamp; its response example uses `2019-01-24T22:45:36.000Z`. A live `gh cache list -R tailrocks/velnor-new --limit 5 --json createdAt --jq '.[].createdAt'` returned fractional seconds with suffixes `.202349Z`, `.519529Z`, and `.31624Z`. The state selector accepts strict RFC 3339 offsets and arbitrary fractional precision, normalizes timestamps for chronological ordering, and preserves the original row fields for attestation verification.
+GitHub's [List GitHub Actions caches endpoint](https://docs.github.com/en/rest/actions/cache#list-github-actions-caches-for-a-repository) returns `created_at` timestamps. Velnor's selector accepts RFC 3339 offsets and fractional seconds at arbitrary precision, normalizes timestamps for chronological ordering, and preserves the original row fields for attestation verification.
 
-### Ledger event and source identity (checked 2026-10-28)
+### Performance review sources
+
+The [review gates](../reviews/ci-performance.md) use these primary sources:
+
+| Source | Review consequence |
+|---|---|
+| [Dependency caching reference](https://docs.github.com/en/actions/reference/workflows-and-actions/dependency-caching) | Entries are immutable and branch-scoped; eviction and service failure require cold correctness. GitHub's default is 10 GB per repository; paid expansion does not change Velnor's adopted budget. |
+| [Pinned cache restore implementation](https://github.com/actions/cache/blob/55cc8345863c7cc4c66a329aec7e433d2d1c52a9/src/restoreImpl.ts) and [save implementation](https://github.com/actions/cache/blob/55cc8345863c7cc4c66a329aec7e433d2d1c52a9/src/saveImpl.ts) | `cache-hit` reports exact key matching, not payload validity; partial matches need reconciliation, and unchanged exact entries need no save. |
+| [Separate cache save](https://github.com/actions/cache/blob/55cc8345863c7cc4c66a329aec7e433d2d1c52a9/save/README.md) | Save reusable state after successful production; unrelated later test failures must not discard it. Velnor's writer and cancellation rules still apply. |
+| [Job outputs](https://docs.github.com/en/actions/how-tos/write-workflows/choose-what-workflows-do/pass-job-outputs) and [workflow artifacts](https://docs.github.com/en/actions/tutorials/store-and-share-data) | Use validated job outputs for bounded metadata and identity-checked artifacts for files; never use a best-effort cache as the sole required handoff. |
+| [Required status checks](https://docs.github.com/en/pull-requests/how-tos/merge-and-close-pull-requests/troubleshooting-required-status-checks) | Skipped jobs can report success and filtered workflows can leave checks pending; preserve Velnor's planner and fail-closed `Required` aggregation. |
+| [Actions limits](https://docs.github.com/en/actions/reference/limits) | Verify current workflow, matrix, concurrency and cache request limits for representative consumer scale. |
+
+These are review criteria, not new runtime behavior or cache capacity. Existing
+[cache decisions](cache-decisions.md) and stricter
+[compiled-state admission](compiled-state-persistence.md#budget) remain binding.
+
+### Ledger event and source identity
 
 The runner's [`GitHubContext.GetRuntimeEnvironmentVariables`](https://github.com/actions/runner/blob/1ba885c2065fd9be317808ab3fd406f392635cf7/src/Runner.Worker/GitHubContext.cs)
 exports the supplied `sha`, `workflow_sha`, `event_name`, and `event_path` context values as environment variables.
@@ -67,20 +82,20 @@ Fork pull requests use the contract event `fork`; `workflow_dispatch` uses `qual
 The original runner ref and workflow SHA remain unchanged, and Required keeps its strict source and event comparisons.
 Public CLI regressions cover a synthetic merge SHA distinct from the logical head, both event normalizations, and rejection without a ledger when event context is missing, malformed, or changed.
 
-### Native release job authority (checked 2026-10-21)
+### Native release job authority
 
-Jackin run `39495895585`, attempt 1, demonstrated executing producer jobs while the aggregate run remained `queued`; requiring only `in_progress` incorrectly rejected them before checkout. Aggregate status alone never establishes caller authority.
-The official [attempt-specific jobs endpoint](https://docs.github.com/en/rest/actions/workflow-jobs#list-jobs-for-a-workflow-run-attempt) supplies the bounded complete inventory selecting one generated role's positive job ID. The [individual job endpoint](https://docs.github.com/en/rest/actions/workflow-jobs#get-a-job-for-a-workflow-run) refreshes its identity, status and conclusion using existing Actions read permissions. The runner's [GitHubContext export](https://github.com/actions/runner/blob/main/src/Runner.Worker/GitHubContext.cs) exports `GITHUB_JOB`; Velnor maps this machine identifier to the generated display name through a closed mapping checked against actual rendered jobs.
+Aggregate workflow status alone never establishes caller authority; verify the expected producer job independently.
+The official [attempt-specific jobs endpoint](https://docs.github.com/en/rest/actions/workflow-jobs#list-jobs-for-a-workflow-run-attempt) supplies the bounded complete inventory selecting one generated role's positive job ID. The [individual job endpoint](https://docs.github.com/en/rest/actions/workflow-jobs#get-a-job-for-a-workflow-run) refreshes its identity, status and conclusion using existing Actions read permissions. The runner's [GitHubContext export](https://github.com/actions/runner/blob/1ba885c2065fd9be317808ab3fd406f392635cf7/src/Runner.Worker/GitHubContext.cs) exports `GITHUB_JOB`; Velnor maps this machine identifier to the generated display name through a closed mapping checked against actual rendered jobs.
 Native guards authenticate exact source, workflow, run and attempt; aggregate `queued` or `in_progress` requires no conclusion plus the unique expected job executing with no conclusion. Only immutable locators are cached; subsequent guards fetch the individual job again. Historical signed-run evidence remains separate from the current publisher, recovery or tap caller's authority.
 
-### Reusable workflow signer identity (checked 2026-10-28)
+### Reusable workflow signer identity
 
 The [GitHub CLI attestation verifier](https://cli.github.com/manual/gh_attestation_verify)
 supports a reusable workflow as the signer through `--signer-workflow`. GitHub's
 [OIDC claim reference](https://docs.github.com/en/actions/reference/security/oidc)
 defines `job_workflow_ref` and `job_workflow_sha` for the reusable workflow,
 while `workflow_ref` and `workflow_sha` identify the caller workflow. Fulcio's
-[official identity template](https://github.com/sigstore/fulcio/blob/main/config/identity/config.yaml)
+[official identity template](https://github.com/sigstore/fulcio/blob/e8104e83e11a651c7e9e712c02a57d5b43d19d5d/config/identity/config.yaml)
 maps the reusable workflow claims to `buildSignerURI`/`buildSignerDigest`,
 builds the certificate subject alternative name from the reusable workflow ref,
 and maps caller claims to `buildConfigURI`/`buildConfigDigest`. The source
@@ -94,11 +109,11 @@ caller's workflow-head SHA, so source identity comes from the closed producer
 record, committed lock, OCI revision and successful same-source CI run rather
 than from the certificate's caller source digest.
 
-### Step shell resolution and `addPath` (checked 2026-10-22)
+### Step shell resolution and `addPath`
 
 [`ScriptHandler.cs`](https://github.com/actions/runner/blob/4c989f2f108bb6798e07ea5935bc8bc4aab7de2f/src/Runner.Worker/Handlers/ScriptHandler.cs) resolves a step's shell with `WhichUtil.Which(command, …, prependPath)`, where `prependPath` holds every `core.addPath`/`GITHUB_PATH` entry ahead of the job `PATH`. In a composite action (`IsActionStep`) even `shell: bash` takes this route. [`WhichUtil.cs`](https://github.com/actions/runner/blob/4c989f2f108bb6798e07ea5935bc8bc4aab7de2f/src/Runner.Sdk/Util/WhichUtil.cs) returns a fully qualified command as given when the file exists and never searches `PATH` for it; a custom shell string is split at its first space and must contain `{0}`. `jdx/mise-action` adds the Mise `bin/` and, by default, `shims/` with `core.addPath`, so after a tools-cache restore a bare shell or helper name can resolve to restored bytes. Velnor's restore checks therefore use `/bin/bash --noprofile --norc -p -e -o pipefail {0}` and reset `PATH` to `/usr/bin:/bin:/usr/sbin:/sbin` first ([hermetic checks](tools-cache-v2.md#the-checks-run-hermetically)).
 
-### Workflow YAML sharing (checked 2026-10-19)
+### Workflow YAML sharing
 
 GitHub's official [workflow reuse reference](https://docs.github.com/en/actions/reference/workflows-and-actions/reusing-workflow-configurations#yaml-anchors-and-aliases) documents same-document environment mapping aliases and an entire job alias containing a steps sequence. These are YAML node substitution, not a reusable
 workflow or composite-action call: expressions and environment values retain
@@ -112,7 +127,7 @@ normalizes only those emitted forms before its existing ancestry, effective-shel
 and normalization work to 262,144 nodes and 16 MiB; merge keys, tags on shared nodes, forward/cyclic references and other alias scopes fail closed.
 
 This Velnor admission does **not** extend to local action manifests. The original
-runner's [legacy `YamlObjectReader.EvaluateCurrent`](https://github.com/actions/runner/blob/main/src/Sdk/DTPipelines/Pipelines/ObjectTemplating/YamlObjectReader.cs)
+runner's [legacy `YamlObjectReader.EvaluateCurrent`](https://github.com/actions/runner/blob/397b032cbf865e9c3ddfab89d533ec19325e1273/src/Sdk/DTPipelines/Pipelines/ObjectTemplating/YamlObjectReader.cs)
 rejects scalar/mapping/sequence anchors and alias events, but
 [`ActionManifestManager` at runner v2.337.0](https://github.com/actions/runner/blob/v2.337.0/src/Runner.Worker/ActionManifestManager.cs)
 loads action manifests through the separate `GitHub.Actions.WorkflowParser`
@@ -134,9 +149,9 @@ change; Velnor emits no new aliases into composite `action.yml` files.
 
 ---
 
-## 2026 GitHub Actions & Dependabot Platform Contracts
+## GitHub Actions & Dependabot Platform Contracts
 
-### 1. Native Step Concurrency (`background`, `wait`, `wait-all`, `cancel`, `parallel`) — `2026-06-25`
+### 1. Native Step Concurrency (`background`, `wait`, `wait-all`, `cancel`, `parallel`)
 
 - **Upstream Contract** ([Changelog](https://github.blog/changelog/2026-06-25-actions-steps-can-now-be-run-in-parallel/), [workflow syntax](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idstepsbackground), `actions/runner` v2.335.0+; pinned runner v2.338.0 `src/Runner.Worker/BackgroundStepCoordinator.cs`, `JobExtension.cs`):
   - `background: true` on a `run` or `uses` step starts it asynchronously; the job continues to the next step. A composite action may run as a background step but cannot declare background steps or `parallel:` internally.
@@ -150,7 +165,7 @@ change; Velnor emits no new aliases into composite `action.yml` files.
   - Each Rust crate job uses one such group for its checks (see [hard decisions](../hard-decisions.md#1-one-job-per-crate-with-parallel-check-steps) and [native Rust crate jobs](../implemented/native-rust-crate-jobs.md)).
   - Pinned `jactionlint` v2.3.0 parses and validates `background:` members and the body-less `wait-all` join natively (rejecting `background: "yes"`, a `wait-all` with `run:`, and a step with neither `run` nor `uses`), so generation-time and CI lint pass no ignore pattern ([hard decision 10](../jactionlint-decision.md)). The superseded actionlint v1.7.12 could not parse the keys (rhysd/actionlint#693). Pinned `zizmor` v1.31.1 (support since v1.27.0) parses the syntax.
 
-### 2. Workflow Execution Protections — `2026-09-17`
+### 2. Workflow Execution Protections
 
 - **Upstream Contract** ([Changelog](https://github.blog/changelog/2026-09-17-actions-new-workflow-execution-protections/)):
   - GitHub separates general workflow execution permissions from **restricted untrusted-actor triggers** that can run workflow code on a privileged ref or react to untrusted public events:
@@ -170,12 +185,12 @@ change; Velnor emits no new aliases into composite `action.yml` files.
   - `velnor-actions-contract` defines `ALLOWED_WORKFLOW_EVENTS` (`pull_request`, `push`, `merge_group`, `workflow_dispatch`, `schedule`), `RESTRICTED_ACTION_EVENTS` (the 11 restricted triggers above), and `DEFAULT_BLOCKED_PUBLIC_REPO_EVENTS`, along with `is_allowed_workflow_event`, `is_restricted_action_event`, `validate_workflow_trigger_event`, and `validate_workflow_trigger_events`.
   - Velnor's `Trigger` IR is structurally disjoint from `RESTRICTED_ACTION_EVENTS`: generic generated workflows never emit `pull_request_target`, `workflow_run`, or comment/issue triggers, ensuring public-repository forks execute under `pull_request` with read-only permissions and no secrets without requiring manual maintainer approval for restricted triggers.
 
-### 3. Cache Access Control (`cache-mode`) — `2026-09-10`
+### 3. Cache Access Control (`cache-mode`)
 
 - **Upstream Contract** ([Changelog](https://github.blog/changelog/2026-09-10-control-github-actions-cache-access-with-cache-mode)):
   - Workflows and jobs can declare `cache-mode` at the workflow root or per job (`jobs.<job_id>.cache-mode`) to enforce runtime-level GitHub Actions cache service permissions:
     - `write`: read and write cache entries (default on standard events).
-    - `read`: read-only cache access; cache writes are skipped/ignored without failing the job.
+    - `read`: permit cache restores and deny saves at the service boundary; pinned-client handling is specified below.
     - `write-only`: write cache entries without restoring existing entries.
     - `none`: disable all cache reads and writes.
   - Whether `cache-mode` accepts `${{ }}` expressions is UNCONFIRMED: the workflow-syntax and dependency-caching pages list only the four literals. Details and the enforcement and default rules are in entry 5 below.
@@ -184,7 +199,7 @@ change; Velnor emits no new aliases into composite `action.yml` files.
   - `velnor-actions-workflow-renderer` emits top-level and job-level `cache-mode:` when `cache_mode` is `Some(...)` and omits it when `None`.
   - Pinned `jactionlint` v2.3.0 parses workflow- and job-level `cache-mode` literals (`read`, `write`, `write-only`, `none`) and rejects any other value, including a `${{ }}` expression; `JactionlintCapabilities::check_step_syntax(StepSyntax::CacheMode)` records the capability and generation vets it.
 
-### 4. Dependabot Default Package Cooldown & Velnor Freshness — `2026-07-14`
+### 4. Dependabot Default Package Cooldown & Velnor Freshness
 
 - **Upstream Contract** ([Changelog](https://github.blog/changelog/2026-07-14-supply-chain-defense-by-default-dependabot-adds-3-day-package-cooldown/)):
   - Dependabot applies a **3-day default cooldown** (`cooldown.default-days: 3`, configurable from `1` to `90` days) to newly published package versions for version updates, reducing exposure to compromised releases during the initial publication window while keeping **security updates immediate**.
@@ -193,116 +208,79 @@ change; Velnor emits no new aliases into composite `action.yml` files.
   - When `default_cooldown_days` is omitted from `.velnor/version-policy.toml`, the freshness policy header check defaults to `3` days; values outside `1..=90` or non-integers fail the `policy-header` gate.
   - Security advisory scanning via `cargo-deny` remains immediate and is never delayed by `default_cooldown_days`.
 
-#### 5.5 Cache rules verified against original sources (checked 2026-11-04)
+### 5. Cache rules verified against original sources
 
-Pinned action: `actions/cache` `55cc8345863c7cc4c66a329aec7e433d2d1c52a9` (tag `v6`, `package.json` 6.1.0, line 3), which bundles `@actions/cache` 6.1.0
-(`package-lock.json:41-42`). Toolkit source read at `actions/toolkit@0786132e6a1a4451c2d392bbbf481c2b172d4312` (commit "Bump cache package to v6.1.0"),
-paths `packages/cache/src/...`. Docs read from `github/docs@main` (raw Markdown, fetched 2026-11-04):
-`content/actions/reference/workflows-and-actions/dependency-caching.md` (call it DC), `.../workflow-syntax.md` (WS), `content/actions/reference/limits.md` (LIM).
-Line numbers for DC, WS, LIM are into those files as fetched; they drift. Cited docs pages:
-[dependency caching](https://docs.github.com/en/actions/reference/workflows-and-actions/dependency-caching),
-[limits](https://docs.github.com/en/actions/reference/limits), [REST cache API](https://docs.github.com/en/rest/actions/cache).
+Client behavior below is bound to [`actions/cache` at `55cc8345863c7cc4c66a329aec7e433d2d1c52a9`](https://github.com/actions/cache/tree/55cc8345863c7cc4c66a329aec7e433d2d1c52a9), which bundles `@actions/cache` 6.1.0, and the corresponding [toolkit source at `0786132e6a1a4451c2d392bbbf481c2b172d4312`](https://github.com/actions/toolkit/tree/0786132e6a1a4451c2d392bbbf481c2b172d4312/packages/cache/src).
+Platform behavior comes from GitHub's [dependency caching reference](https://docs.github.com/en/actions/reference/workflows-and-actions/dependency-caching), [workflow syntax](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax), [Actions limits](https://docs.github.com/en/actions/reference/limits) and [REST cache API](https://docs.github.com/en/rest/actions/cache). Requalify client behavior when its pin changes and verify current service limits before relying on them.
 
-Verdict key: TRUE, FALSE, PARTIAL (true with a stated correction or gap).
+#### 5.1 Storage limits, eviction and retention
 
-#### 5.1 Size limit, eviction, 7-day expiry: PARTIAL (the 10 GB figure is a default, not a hard limit)
+- GitHub defaults to 10 GB per repository and seven days without access; administrators can configure storage and retention. Storage above the free allowance is billed. Velnor's adopted quota remains binding regardless of paid platform expansion.
+- Eviction removes least-recently-accessed entries. An over-limit save can succeed before eviction; successful saving therefore does not prove sufficient admission headroom.
+- Billing-budget exhaustion can make caches read-only. Never assume a larger configured quota guarantees a successful write.
+- The REST API exposes storage- and retention-limit controls. Resolve their documented routes and permissions before implementing administration; do not infer them from the cache data-plane API.
 
-- DC:356 "GitHub will remove any cache entries that have not been accessed in over 7 days. There is no limit on the number of caches you can store, but the total size of all caches in a repository is limited. By default, the limit is 10 GB per repository, but this limit can be increased by enterprise owners, organization owners, or repository administrators. Any usage beyond 10 GB is billed to your account."
-- Eviction: reusable `cache-eviction-policy.md` "the cache eviction policy will create space by deleting the caches in order of last access date, from oldest to most recent." and "If you exceed the limit, GitHub will save the new cache but will begin evicting caches until the total size is less than the repository limit." (`github/docs@main:data/reusables/actions/cache-eviction-policy.md`, `cache-eviction-process.md`). So LRU by last access, and the over-limit save still succeeds first.
-- 2025-2026 change: [changelog 2025-11-20](https://github.blog/changelog/2025-11-20-github-actions-cache-size-can-now-exceed-10-gb-per-repository/) (summarised by fetch, not verbatim): admins can raise the size limit past 10 GB, pay as you go; every repository keeps 10 GB free; defaults are 10 GB and 7 days; a retention limit (days) is now configurable and cascades enterprise to organization to repository.
-- DC:367 "Repositories owned by users can configure up to 10 TB per repository. ... Increasing the limit beyond the default 10 GB will incur additional costs, if that storage is used."
-- DC:374 "If you have limits configured, and you exceed a budget, your cache will become read-only until your billing status is resolved, or your usage goes beneath the free limit of 10GB". So a Velnor design must not assume 10 GB is fixed, and a repository above 10 GB can be read-only under a budget.
-- REST has repository cache storage-limit and retention-limit get/set endpoints (page lists "Gets GitHub Actions cache storage limit for a repository" and "Sets ... retention limit"). Exact endpoint paths not recorded; see Not verified.
-- The 7-day rule is the default retention, not a constant: a configured retention limit changes it.
+#### 5.2 Immutable entries and save ownership
 
-#### 5.2 Key immutability: TRUE (client behavior inferred for the refusal path)
+- Existing cache contents cannot be updated. Identity includes key, version and scope; the same key can identify distinct entries in different scopes or versions.
+- The pinned action [skips saving an exact primary-key hit](https://github.com/actions/cache/blob/55cc8345863c7cc4c66a329aec7e433d2d1c52a9/src/saveImpl.ts). Concurrent reservation refusal is a nonfatal save outcome; it does not prove which producer supplied complete state.
+- The [version hash](https://github.com/actions/toolkit/blob/0786132e6a1a4451c2d392bbbf481c2b172d4312/packages/cache/src/internal/cacheUtils.ts) includes paths, compression, platform-specific settings and a salt. Review writer ownership against the complete identity.
+- The combined action defaults to [`post-if: success()`](https://github.com/actions/cache/blob/55cc8345863c7cc4c66a329aec7e433d2d1c52a9/action.yml); `save-always` is deprecated. Use a separately guarded save when successful production must survive unrelated later validation failures.
 
-- DC:34 "You cannot change the contents of an existing cache. Instead, you can create a new cache with a new key."
-- `actions/cache@55cc834:tips-and-workarounds.md:11` "A cache today is immutable and cannot be updated."
-- Client: `toolkit@0786132e:packages/cache/src/cache.ts:513-515` (v1) and `:649-651` / `cache.ts` v2 `CreateCacheEntry` failure: `Unable to reserve cache with key ${key}, another job may be creating this cache.` The save is logged at info level (`cache.ts:529-531`, `core.info('Failed to save: ...')`) and the step succeeds. The server decision (reserve refused because key+version+scope exists) is server-side and not in client source; the client treats any non-ok reservation as a refused save.
-- `actions/cache@55cc834:src/saveImpl.ts:50-54` skips saving when the restore step reported an exact primary-key hit: "Cache hit occurred on the primary key ${primaryKey}, not saving cache."
-- Uniqueness is key plus version plus scope (`cacheUtils.ts:136-158` version hash of paths, compression, `windows-only`, salt; docs DC:170 scope). The same key can exist once per ref and per version.
+#### 5.3 Restore matching
 
-#### 5.3 Restore order: PARTIAL (the stated order omits key-prefix matching and the branch-outer loop)
+- Search tries an exact primary key, partial primary-key matches and ordered restore-key prefixes within the current branch before repeating on the default branch. For multiple partial matches, newest means creation time, not last access.
+- Matching order is a documented service contract; the client only sends keys and version. A partial match requires payload reconciliation before use.
+- The pinned client permits at most ten total keys, at most 512 characters per key and no commas. A restore must match the cache version; gzip and zstd entries do not cross-restore.
+- `cache-hit` proves only an exact primary-key match, never validity, completeness or current-source validation.
 
-- DC:28-30 "First, it searches for an exact match to your provided `key`. If no exact match is found, it will search for partial matches of the `key`. If there is still no match found, and you've provided `restore-keys`, these keys will be checked sequentially for partial matches."
-- DC:174 "The `cache` action searches the `restore-keys` in sequential order. When a key doesn't match directly, the action searches for keys prefixed with the restore key. If there are multiple partial matches for a restore key, the action returns the most recently created cache." Newest means most recently created, not most recently accessed.
-- DC:170 "searches for cache hits for `key` and the cache version in the branch containing the workflow run ... If there are still no hits in the current branch, the `cache` action retries the same steps on the default branch." DC example "Example of search priority" lists all of key, prefix 1, prefix 2 on the feature branch before the same list on `main`.
-- Client passes `key` and `restoreKeys` unchanged to the server: `cache.ts:312-320` (`GetCacheEntryDownloadURLRequest {key, restoreKeys, version}`); proto comment `generated/results/api/v1/cache.ts:127` "Restore keys used for prefix searching". Ordering logic is server-side, so only the docs prove it.
-- Limits (client): at most 10 keys in total (`cache.ts:181-185`, `:293-297`), key length at most 512 and no commas (`cache.ts:81-93`). A hit needs the same `version` (paths plus compression method), so a Gzip entry never serves a zstd restore and the reverse.
-- `cache-hit` is true only for an exact `key` match (`action.yml` output description "an exact match was found for the primary key").
+#### 5.4 Cache scope and trust
 
-#### 5.4 Scope: PARTIAL (each clause below; the last point is inferred, not documented)
+- Runs can restore current-branch and default-branch caches; pull requests can also restore their base-branch scope. Child, sibling and unrelated tag scopes are isolated.
+- Pull-request writes belong to `refs/pull/<number>/merge`, not the default branch, and cannot be restored by the base branch or other pull requests.
+- Reuse across later pushes to the same pull request is inferred from its stable merge-ref scope. Require producer/consumer logs proving that path before claiming it works; same-run access does not establish it.
+- Fork pull requests can read base/default-branch caches. Never place secrets or private state there, and preserve Velnor's read-only trust policy.
 
-- DC:243 "Workflow runs can restore caches created in either the current branch or the default branch (usually `main`). If a workflow run is triggered for a pull request, it can also restore caches created in the base branch, including base branches of forked repositories."
-- DC:245 "Workflow runs cannot restore caches created for child branches or sibling branches." Tags are likewise isolated from other tags.
-- DC:247 "When a cache is created by a workflow run triggered on a pull request, the cache is created for the merge ref (`refs/pull/.../merge`). Because of this, the cache will have a limited scope and can only be restored by re-runs of the pull request. It cannot be restored by the base branch or other pull requests targeting that base branch." So "main cannot read it" is TRUE.
-- DC:279 "Caches created by a `pull_request` run are already scoped to the merge ref (`refs/pull/.../merge`) and cannot be written to the default branch's scope."
-- `actions/cache@55cc834:README.md:113` "The cache is scoped to the key, version, and branch. The default branch cache is available to other branches."
-- A later push to the same PR: NOT stated by any official source. The docs say only "re-runs of the pull request". Evidence for restore: scope is the ref name (`cacheHttpClient.ts:134` prints `scope ${process.env['GITHUB_REF']}`; REST docs: "To reference a pull request use refs/pull/<number>/merge"), and the ref name `refs/pull/N/merge` does not change between pushes while only the merge SHA does. By that mechanism a later push can restore an earlier push's entry. Verdict: INFERRED TRUE, not proven. Live check on `tailrocks/velnor-new`: one entry `refs/pull/414/merge` created 2026-10-27T17:37:07Z, last accessed 17:38:58Z (`gh api repos/tailrocks/velnor-new/actions/caches`), too close to separate a same-run read from a later-push read. Settling it needs two pushes to one PR with a restore log; no such run was made for this entry.
-- Fork PR runs also use `refs/pull/N/merge` and can read the base and default branch scope; DC:69 warns that anyone who can open a PR can read base-branch caches.
+#### 5.5 `cache-mode` and client enforcement
 
-#### 5.5 `cache-mode`: PARTIAL (values and precedence TRUE; the pinned client does not read the variable)
+- Accepted literals are `read`, `write`, `write-only` and `none`; a job-level setting overrides its workflow setting. The service enforces the effective mode through scoped tokens.
+- Trusted triggers default to `write` and restricted low-trust triggers to `read`. The documented default does not establish `pull_request` behavior; use explicit Velnor policy.
+- Pinned toolkit 6.1.0 does not inspect `ACTIONS_CACHE_MODE`. A denied save still attempts reservation and emits a warning; denied restore uses its generic failure path. Do not mistake service denial for skipped client work.
+- A reusable workflow cannot exceed its caller's explicit mode; without one, a callee can request `write`. Explicit write access on a restricted trigger restores poisoning risk.
+- Expression support remains unqualified: the platform references list literals, and pinned `jactionlint` rejects expressions. Velnor must use qualified syntax.
 
-- DC:289-300 "Use the `cache-mode` workflow key to grant jobs the least amount of cache access they need. You can set `cache-mode` at the workflow level, at the job level, or both. A job-level value overrides the workflow-level value for that job." WS:521 "A value set here overrides any workflow-level `cache-mode` for this job only."
-- Values (DC:293-298, WS:415-420): `read` restore yes, save no; `write` yes, yes; `write-only` restore no, save yes; `none` no, no. WS:523 "The accepted values are `read`, `write`, `write-only`, and `none`".
-- Default when omitted (DC:306-307): trusted trigger `write`, low-trust trigger `read`. Trusted triggers (DC:268-275): `push`, `workflow_dispatch`, `repository_dispatch`, `delete`, `registry_package`, `page_build`, `schedule`. `pull_request` is "not affected" (DC:279) and is not placed in either column; its effective default is not stated (a PR run does write to its merge-ref scope today).
-- Enforcement is server-side: WS:413 "Access is enforced with scoped cache tokens, so a job cannot restore or save caches beyond the mode it is granted." DC:315 "The runner exposes the effective mode in the `ACTIONS_CACHE_MODE` environment variable, and the `actions/cache` action and the `@actions/cache` toolkit honor it."
-- Pinned-version gap: `ACTIONS_CACHE_MODE` handling arrived in `@actions/cache` 6.2.0 (`toolkit@main:packages/cache/RELEASES.md` "6.2.0 - Honor the `ACTIONS_CACHE_MODE` environment variable"). Pinned 6.1.0 has only the write-denied handling: `cache.ts:42` `CACHE_WRITE_DENIED_PREFIX = 'cache write denied:'`, `:502-512` surfaced as `core.warning` (`:74`). `grep -c ACTIONS_CACHE_MODE` on `dist/save/index.js` and `dist/restore/index.js` at the pinned SHA returns 0. Under `read`, a save at the pinned SHA still attempts a reserve, is denied by the service, and logs a warning, not an informational skip. Under `write-only` or `none`, restore handling at 6.1.0 is a service-side read denial, surfaced by 6.2.0+ code as a "cache read denied:" warning; at 6.1.0 it falls into the generic `Failed to restore:` warning path (`cache.ts` catch at `:236-251`).
-- Reusable workflows (DC:318-324): a caller's explicit mode caps the called workflow; over-request fails validation; with no explicit caller mode the callee can request `write`.
-- A write-capable mode on a low-trust trigger overrides the read-only default (DC "Bypassing the default untrusted-trigger cache restriction") and reintroduces poisoning risk.
-- Expressions: no official page read documents `${{ }}` in `cache-mode`. WS and DC list only the four literals. Expressions in `cache-mode` are UNCONFIRMED, and the pinned `jactionlint` rejects them (see entry 3). The earlier changelog URL returned HTTP 404 on 2026-11-04; the live page is the [cache-mode changelog](https://github.blog/changelog/2026-09-10-control-github-actions-cache-access-with-cache-mode) (found by search, content not fetched).
+#### 5.6 Compression and archive construction
 
-#### 5.6 Compression: PARTIAL (zstd default; the `--long=30` flag is NOT used for saves in the pinned version)
+- The pinned [compression selector](https://github.com/actions/toolkit/blob/0786132e6a1a4451c2d392bbbf481c2b172d4312/packages/cache/src/internal/cacheUtils.ts) chooses `ZstdWithoutLong` when zstd is available, otherwise gzip. It does not select the legacy `--long=30` variant for new saves.
+- [Tar construction](https://github.com/actions/toolkit/blob/0786132e6a1a4451c2d392bbbf481c2b172d4312/packages/cache/src/internal/tar.ts) uses `zstdmt` on non-Windows and `zstd -T0` on Windows, with no compression-level flag. Qualify the actual zstd default before budgeting it.
+- Readers retain support for the legacy `--long=30` format, whose window can require 1 GB. Archive names are `cache.tzst` or `cache.tgz`, and compression participates in version identity.
+- Creation uses `tar --posix -P` and a manifest. Absolute path forms are retained; platform-specific flags include delayed directory restore on macOS and GNU tar's `--force-local` on Windows.
 
-- `cacheUtils.ts:102-112` `getCompressionMethod`: runs `zstd --quiet` for the version; empty output returns `CompressionMethod.Gzip`, otherwise returns `CompressionMethod.ZstdWithoutLong`. It never returns `CompressionMethod.Zstd` (the `--long` variant), though the enum and code paths exist (`constants.ts:6-12`). Same logic in `actions/cache@55cc834:dist/save/index.js:43381-43392`.
-- Create command (`tar.ts:225-241`): non-Windows `--use-compress-program 'zstdmt'` for `ZstdWithoutLong`; Windows `"zstd -T0"`; with the (unused) `Zstd` variant `zstdmt --long=30`. Comment at `tar.ts:208-212` "zstdmt is equivalent to 'zstd -T0' ... --long=# ... Maximum is 30 (1GB) on 32-bit OS and 31 (2GB) on 64-bit. Using 30 here because we also support 32-bit self-hosted runners."
-- Level: no `-#` flag is passed anywhere in `tar.ts`, so zstd's own default level applies (3 per zstd's manual; not re-fetched, see Not verified). Threads: `-T0`.
-- Decompress (`tar.ts:175-203`): `unzstd` (non-Windows, `ZstdWithoutLong`) or `unzstd --long=30` for the `Zstd` variant. A reader must handle both; a `--long=30` entry needs window up to 1 GB.
-- Fallback when zstd is absent: gzip via tar `-z`, file `cache.tgz` (`tar.ts:202-204`, `:242-244`; `constants.ts:1-4`). Archive names: `cache.tzst` or `cache.tgz`. Compression method is hashed into the cache version, so the two do not cross-restore.
-- Tar create flags (`tar.ts:73-88`): `--posix -cf <cache.tzst> --exclude <cache.tzst> -P -C <GITHUB_WORKSPACE|cwd> --files-from manifest.txt`; darwin adds `--delay-directory-restore`, Windows GNU tar `--force-local`. Archive entries therefore keep the path forms given in the manifest, including absolute paths.
+#### 5.7 Extraction and failure handling
 
-#### 5.7 Extraction: TRUE for "extracted in the restore step, no inspection point"; no size limit found
+- Restore downloads and extracts within one action step using `tar -xf ... -P -C ...`. No user inspection step runs between download and extraction; debug listing is not filtering.
+- The pinned extraction path has no expanded-size, entry-count or free-space admission and does not prevent absolute paths or overwriting existing files. Download completeness checks do not provide these protections.
+- Cache contents are unsigned. Verify restored paths and executable state before use; a cache hit does not authenticate them.
+- Restore errors return a miss after logging; partial extraction is not rolled back. Cold fallback must handle that partially materialized state safely.
 
-- Extract command (`tar.ts:90-99`): `tar -xf <archive> -P -C <workingDirectory>` plus the decompress program (`--use-compress-program unzstd`) and the platform extras (`--delay-directory-restore` on darwin). `-P` (`--absolute-names`) keeps absolute names and leading `/`, so an entry can write outside the workspace; `-C` is `GITHUB_WORKSPACE` (`tar.ts:165`). No `--no-same-owner`, `--no-overwrite-dir`, `--keep-old-files`, or `--exclude` is passed, so existing files are overwritten.
-- Order in `restoreCacheV2` (`cache.ts:344-364` of the 6.1.0 source): download to a temp dir, then `extractTar(archivePath, compressionMethod)` inside the same action step, then `core.info('Cache restored successfully')`. `listTar` runs only when `core.isDebug()` and only after download, before extract; it prints names, it does not filter. The restore step is a single process: no user step runs between download and extraction. Inspection is only possible after extraction, by a later user step.
-- Size during extraction: `grep` of `tar.ts`, `cache.ts`, `downloadUtils.ts` finds no check of uncompressed size, entry count, or free space. The only size figures are the compressed archive size log line (`cache.ts:225-230`) and a download completeness check (`downloadUtils.ts:187-196`, "Incomplete download. Expected file size: ..."). A zstd bomb is bounded only by the runner disk.
-- Cache contents are not signed (DC "Best practices": "Cache contents are not signed or verified, and any workflow run that can read a cache may extract its contents. Extracted caches may modify files that are subsequently executed in a workflow run").
-- Failure handling: any restore error, including a `tar` failure, is a warning (or `core.error` for HTTP 5xx) and the step returns a miss (`cache.ts:236-251`). The partial extraction is not rolled back.
+#### 5.8 Entry size, request limits and retries
 
-#### 5.8 Per-entry size and rate limits: PARTIAL (a 10 GiB per-archive check exists only in the legacy v1 client path; rates TRUE)
+- Only the legacy v1 save path checks a 10 GiB compressed archive limit, with a GitHub Enterprise Server exception. The v2 client has no equivalent check; a service-side v2 per-entry cap is unqualified. Repository quota is a separate constraint.
+- Documented per-repository rates are 200 new-entry uploads, 1,500 downloads and 400 deletions per minute. Account for all writers, readers and pruning together.
+- The pinned client reports `retry-after` on HTTP 429 and throws without retry. Its retryable statuses are 502/503/504, with two default retries and a 5,000 ms delay. A nonfatal save failure does not establish successful persistence.
 
-- Per-archive limit: `cache.ts:467` (inside `saveCacheV1`, which starts at `:435`; `saveCacheV2` at `:564` has no such check) `const fileSizeLimit = 10 * 1024 * 1024 * 1024 // 10GB per repo limit` and `:472-477` "Cache size of ~N MB (B B) is over the 10GB limit, not saving cache." skipped when `isGhes()`. `constants.ts:40` `CacheFileSizeLimit = 10 * Math.pow(1024, 3) // 10GiB per repository`. This is a 10 GiB cap on one compressed archive, only on the v1 service path (the v1 client is chosen by `getCacheServiceVersion()`). The v2 save path has no client check; any per-entry limit in the v2 service is not documented, and the docs state only the per-repository limit. A server 400 on reserve is reported as "is over the data cap limit, not saving cache" (`cache.ts:496-498`).
-- Rates: LIM:52-54 "Each repository is limited to 200 cache entry uploads per minute. If this limit is exceeded, subsequent cache upload attempts will fail until the rate limit resets." "Each repository is limited to 1500 cache entry downloads per minute." "Each repository is limited to 400 cache delete operations per minute." Same figures at DC:363. Only new-entry uploads count, not job-run downloads for upload ([changelog 2026-01-16](https://github.blog/changelog/2026-01-16-rate-limiting-for-actions-cache-entries/), page shows "Retired"; fetched summary).
-- Client on 429: `internal/shared/cacheTwirpClient.ts:115-127` reads `retry-after`, logs "You've hit a rate limit, your rate limit will reset in N seconds", and throws `RateLimitError` without retry. Retryable statuses are 502/503/504 (`requestUtils.ts:24-34`); defaults 2 retries, 5000 ms (`constants.ts:20-23`). A failed save is a warning, so a 429 never fails the job.
-- Key limits: 512 characters, no commas, at most 10 keys per restore (`cache.ts:81-93`, `:181-185`).
+#### 5.9 Authorized writers
 
-#### 5.9 Which runs can save: PARTIAL (the answer depends on the scope the run writes to)
+- Default-branch writes are permitted by default for `push`, `workflow_dispatch`, `repository_dispatch`, `delete`, `registry_package`, `page_build` and `schedule`. Other events resolving to that branch, including `pull_request_target`, `issue_comment` and `workflow_run`, default to read-only; an explicit write-capable mode changes that boundary.
+- Dispatches to another ref write to that ref's scope. Pull-request writes are confined to their merge ref.
+- Fork pull-request save behavior, merge-group save behavior and the pull-request default mode remain unqualified service behavior. Velnor keeps PR/fork/merge-group jobs read-only regardless.
+- The pinned action's [event gate](https://github.com/actions/cache/blob/55cc8345863c7cc4c66a329aec7e433d2d1c52a9/src/utils/actionUtils.ts) checks only that `GITHUB_REF` exists. Enforce Velnor's writer policy independently of client permissiveness.
 
-- Default-branch scope (DC:268-277): only `push`, `workflow_dispatch`, `repository_dispatch`, `delete`, `registry_package`, `page_build`, `schedule` can create or overwrite. "Runs triggered by any other event that resolves to the default branch are given read-only access ... such as `pull_request_target`, `issue_comment`, and `workflow_run`." So `workflow_run` saving to the default-branch scope: FALSE by default; TRUE only with an explicit write-capable `cache-mode` (DC "Bypassing" section).
-- `schedule` and `workflow_dispatch`: TRUE (listed as trusted). A `workflow_dispatch` on a non-default ref writes to that ref's scope.
-- `pull_request`: writes to `refs/pull/N/merge` only (DC:247, :279).
-- Fork `pull_request`: `actions/cache@55cc834:README.md:119-121` "A common case is a workflow triggered by a pull request from a fork: such runs can restore existing caches but may not be permitted to save new ones." and "the save step does not fail the job ... reports the denial once as a warning". No official page states the fork-PR rule as always-denied or always-allowed; do not assume either. Treat fork-PR saves as unproven.
-- `merge_group`: not covered by the docs read. Not in the trusted list; its ref is `refs/heads/gh-readonly-queue/...`, so scope would be that ref (inferred). Velnor's cache-decisions row 5 already assumes merge groups never write.
-- Client gate: `actions/cache@55cc834:src/utils/actionUtils.ts:35-37` `isValidEvent()` is only `GITHUB_REF` being set, so the action itself imposes no event limit; denial comes from the service token.
+#### Qualification boundaries
 
-#### Version notes
+Service matching and scope rules rely on official documentation, not public service implementation. Require live qualification for same-PR cross-push reuse, service-specific size limits and warning behavior before making acceptance claims. Upgrading an action or toolkit version requires rechecking cache-mode handling, archive flags and failure outcomes; newer-client behavior does not qualify the pinned client.
 
-- Pinned `@actions/cache` 6.1.0; latest at `toolkit@main` is 6.3.0 (`packages/cache/RELEASES.md`): 6.2.0 adds `ACTIONS_CACHE_MODE` honoring and a "cache read denied:" warning; 6.3.0 isolates Windows BSD tar scratch files. Neither changes tar flags or compression selection in the files read.
-- `actions/cache` v6 default `post-if: success()` and `save-always` deprecated (`action.yml`), unrelated to the rules above.
-
-#### Not verified
-
-- Server-side matching order and "newest wins" were verified from docs only; the service source is not public.
-- Zstd default level 3 comes from zstd's manual, not re-fetched here.
-- Exact REST paths for repository cache storage and retention limits; DC and the REST page confirm they exist.
-- Whether the service rejects an entry over 10 GiB on a repository with a raised limit.
-- Later push to the same PR restoring an earlier push's entry: inferred from the ref-keyed scope, no direct experiment (no run was made).
-- Fork `pull_request` save behavior, `merge_group` save behavior, and `pull_request` default `cache-mode` value are not documented.
-- The 2025-11-20 and 2026-01-16 changelogs were read through a summarizing fetch, not verbatim; the 2026-09-10 changelog was not read (only its search snippet).
-- Did not run live a restore on the pinned SHA to see the `read`-mode warning text.
-
-## Native preview publication API boundaries (2026-10-18)
+## Native preview publication API boundaries
 
 The [workflow-jobs REST contract](https://docs.github.com/en/rest/actions/workflow-jobs#list-jobs-for-a-workflow-run-attempt)
 provides the attempt-specific endpoint
@@ -330,8 +308,8 @@ environment secret only for this fixed settings route, while release mutations
 continue using the workflow token. The settings credential is never forwarded
 to repository tasks, the signer, or tap promotion.
 
-Release responses do not include `make_latest` (confirmed against the official
-Velnor v0.1.12 API response). It is a request-only string enum. `gh api --field`
+Release responses do not include `make_latest`; it is a request-only string enum.
+`gh api --field`
 converts literal booleans and expands `@file` values, so native release requests
 use `--raw-field` for string fields and `--field` only for draft/prerelease
 booleans. Both channels publish with `make_latest: false`; preview releases are
@@ -340,7 +318,7 @@ forced to latest. The release response has no `make_latest` field, so Velnor
 verifies the returned draft/prerelease/immutable state and exact assets without
 assuming that a newly published stable release becomes latest.
 
-### Review-completion provider qualification (2026-10-18)
+### Review-completion provider qualification
 
 The [official Codex GitHub review guide](https://learn.chatgpt.com/docs/third-party/github)
 documents requested and automatic reviews, but does not establish a supported
@@ -348,13 +326,9 @@ machine-state completion protocol. Native merge admission therefore continues
 to require the separately authenticated `velnor.review-completion.v1` check;
 reactions, table prose, and an absent finding are not substitutes.
 
-Observed Codex App `1144995` records do not yet qualify an adapter. Jackin tap
-PR 508 reports failed review because of usage limits. Public OpenAI repository
-records sampled during this investigation carried running or incomplete state.
-The [App-authored unsloth summary](https://github.com/unslothai/unsloth/pull/10502#issuecomment-5584670251)
-contains a completed security marker, but its merge gate is disabled and it
-does not bind complete code and security finding dispositions to one full head.
-These are observed implementation bytes, not a supported provider API.
+A provider summary or completion marker does not qualify an adapter. Require a
+supported completion contract binding the full head to complete code and security
+finding dispositions; observed App implementation details are insufficient.
 
 GitHub's [IssueComment GraphQL fields](https://docs.github.com/en/graphql/reference/issues#issuecomment)
 expose the latest editor and edit time. Any future adapter must authenticate
@@ -362,7 +336,7 @@ the actual numeric App, author, and latest editor, independently fetch the PR's
 full current head, parse closed machine fields, and revalidate all current
 feedback. Positive exact-head completion and forged/edited-state rejection
 remain deployment gates. Unattended merging stays disabled until that proof
-exists; this research does not authorize a guessed success enum.
+exists; an unsupported success enum must fail closed.
 
 The [required-review documentation](https://docs.github.com/en/pull-requests/how-tos/review-pull-requests/approving-a-pull-request-with-required-reviews)
 distinguishes a comment from approval: a blocking change request requires the
@@ -373,20 +347,15 @@ GitHub also exposes [current per-user review connections](https://docs.github.co
 any server-side opinion query must retain complete pagination and bind the same
 PR/head as the full feedback snapshot.
 
-Live GraphQL qualification confirmed the distinction. On `rust-lang/rust`
-PR 164353, the opinionated connection retained an approval and omitted a later
-comment review. On [godotengine/godot PR 118057](https://github.com/godotengine/godot/pull/118057),
-the complete reviews connection retained a dismissed review while the opinionated
-connection was empty. On [github-linguist/linguist PR 7763](https://github.com/github-linguist/linguist/pull/7763),
-the opinionated connection retained only the latest active change request and
-excluded a different reviewer's dismissed request. Native capture uses this
-paginated server-derived state alongside all underlying feedback records.
-Unexpected opinionated states still fail closed.
+Native capture uses paginated, server-derived opinionated state alongside all
+underlying feedback records. Comment reviews and dismissed reviews must not be
+mistaken for an active approval or change request. Unexpected opinionated states
+still fail closed.
 
-### Historical pull-request response boundaries
+### Pull-request response boundaries
 
-Live tap API responses confirm that the pull-request listing omits the `merged`
-boolean. Native completed reconciliation must fetch each matching PR's detail
+The pull-request listing omits the `merged` Boolean. Native completed
+reconciliation must fetch each matching PR's detail
 before trusting that state. A non-null merge SHA alone is insufficient because
 the [pull-request API](https://docs.github.com/en/rest/pulls/pulls#get-a-pull-request)
 also uses that field for a synthetic test merge before completion.
@@ -400,10 +369,9 @@ PRs must match that original base. A closed, unmerged historical PR may have
 observed a later base without losing its original proof or feedback obligations.
 
 The exact-head feedback query includes numeric actor identity for both `User` and
-`Bot` in `latestOpinionatedReviews`. Live GitHub GraphQL introspection on
-2026-10-18 confirmed `Bot.databaseId`; selecting only the `User` fragment would
-make a bot's opinionated review unidentifiable and block otherwise valid review
-history. A scripted protocol test exercises a bot's outstanding change request.
+`Bot` in `latestOpinionatedReviews`, including `Bot.databaseId`. Selecting only the
+`User` fragment makes bot reviews unidentifiable. Protocol coverage must include
+a bot's outstanding change request.
 
 GitHub documents that applicable rulesets layer with classic branch protections;
 rules are aggregated and the most restrictive duplicated rule applies. A strict
@@ -425,11 +393,9 @@ require the PR branch to be current before merging. Therefore a workflow whose
 contract promises PR-only promotion must independently require the server-side
 pull-request rule; required checks and a client-side PR workflow are insufficient.
 
-## Job budgets and cancellation (2026-10-18, range widened 2026-10-19)
+## Job budgets and cancellation
 
-Compatibility was checked against original `actions/runner` commit
-[`9abfe11d2abd9de09d3a8d933d7ed701ea0518a3`](https://github.com/actions/runner/commit/9abfe11d2abd9de09d3a8d933d7ed701ea0518a3).
-The runner's [executable-job schema](https://github.com/actions/runner/blob/9abfe11d2abd9de09d3a8d933d7ed701ea0518a3/src/Sdk/DTPipelines/workflow-v1.0.json#L55-L75)
+The pinned runner's [executable-job schema](https://github.com/actions/runner/blob/9abfe11d2abd9de09d3a8d933d7ed701ea0518a3/src/Sdk/DTPipelines/workflow-v1.0.json#L55-L75)
 accepts `timeout-minutes` on a job with `runs-on`. GitHub's
 [job-timeout contract](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idtimeout-minutes)
 says expiration automatically cancels that job; its default is 360 minutes.
@@ -461,18 +427,6 @@ also permits a five-minute cancellation grace before server-forced termination.
 These mechanisms cannot substantiate a claim that all processes disappear
 exactly 300 seconds after job start.
 
-For shell steps, the pinned runner at commit
-[`cf65f3ec8100ee0046d735ac5d647e00f4b8e817`](https://github.com/actions/runner/commit/cf65f3ec8100ee0046d735ac5d647e00f4b8e817)
-sets `killProcessOnCancel` to `false` in
-[`ScriptHandler.cs`](https://github.com/actions/runner/blob/cf65f3ec8100ee0046d735ac5d647e00f4b8e817/src/Runner.Worker/Handlers/ScriptHandler.cs#L339-L349).
-[`ProcessInvoker.cs`](https://github.com/actions/runner/blob/cf65f3ec8100ee0046d735ac5d647e00f4b8e817/src/Runner.Sdk/ProcessInvoker.cs#L443-L481)
-sends SIGINT and SIGTERM to the step process, and its signal path calls
-`kill` with that process ID ([lines 829–845](https://github.com/actions/runner/blob/cf65f3ec8100ee0046d735ac5d647e00f4b8e817/src/Runner.Sdk/ProcessInvoker.cs#L829-L845)).
-Its signal windows are 7.5 seconds and 2.5 seconds ([lines 32–33](https://github.com/actions/runner/blob/cf65f3ec8100ee0046d735ac5d647e00f4b8e817/src/Runner.Sdk/ProcessInvoker.cs#L32-L33)).
-The runner does not establish process-group cleanup for a shell step. A
-supervisor that owns child groups must therefore remain the foreground step
-process and clean those groups after it receives cancellation.
-
 Native producer execution therefore needs its own monotonic deadline shared
 across preparation, acquisition, probes, task execution, and output admission,
 with process-group termination and bounded reaping reserved within that budget.
@@ -480,7 +434,7 @@ Starting a fresh timeout for each phase would permit cumulative overruns.
 Expiration must prevent a success proof or publication handoff; GitHub's outer
 job limit additionally bounds checkout, tool installation, and source fetch.
 
-## Native preview after completed CI (2026-10-18)
+## Native preview after completed CI
 
 The dedicated native preview renderer admits only the canonical CI completion
 trigger, outside the generic trigger IR. GitHub documents that `workflow_run`
@@ -488,7 +442,7 @@ uses the default-branch commit/ref, can receive write tokens, and also fires for
 unsuccessful upstream completions. Its name and branch filters do not establish
 trusted source identity. See the [official event contract](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#workflow_run).
 
-Original runner commit
+Pinned runner commit
 [`9abfe11d2abd9de09d3a8d933d7ed701ea0518a3`](https://github.com/actions/runner/commit/9abfe11d2abd9de09d3a8d933d7ed701ea0518a3)
 exports the actual [event, ref, SHA, and workflow SHA](https://github.com/actions/runner/blob/9abfe11d2abd9de09d3a8d933d7ed701ea0518a3/src/Runner.Worker/GitHubContext.cs#L14-L67)
 and [writes the webhook payload](https://github.com/actions/runner/blob/9abfe11d2abd9de09d3a8d933d7ed701ea0518a3/src/Runner.Worker/ExecutionContext.cs#L1320-L1337).
@@ -504,16 +458,14 @@ isolated permissions and independent revalidation. Receipts bind source A;
 certificates and standard SLSA workflow claims bind B's producing `workflow_run`.
 See [provider A/B evidence](../implemented/immutable-preview-api-qualification.md#workflow-run-source-and-authority-observation).
 
-The payload shape was checked against original `octokit/webhooks` commit
-`aa80c24a3f55354465b8b1438d33dd5602956d0d`: the
-[completed-event schema](https://github.com/octokit/webhooks/blob/aa80c24a3f55354465b8b1438d33dd5602956d0d/payload-schemas/api.github.com/workflow_run/completed.schema.json)
+The pinned [completed-event schema](https://github.com/octokit/webhooks/blob/aa80c24a3f55354465b8b1438d33dd5602956d0d/payload-schemas/api.github.com/workflow_run/completed.schema.json)
 requires the event action, repository, workflow, and workflow-run envelope; the
 [run schema](https://github.com/octokit/webhooks/blob/aa80c24a3f55354465b8b1438d33dd5602956d0d/payload-schemas/api.github.com/common/workflow-run.schema.json)
 provides the workflow ID/path/name, repository and head repository, attempt,
 source, and terminal status used by admission. The envelope's workflow identity
 must agree with independently fetched canonical CI metadata.
 
-## Native completion trigger scanner disposition (2026-10-18)
+## Native completion trigger scanner disposition
 
 Pinned zizmor 1.31.1 (since [retired](../jactionlint-decision.md#zizmor-is-retired); jactionlint honours the annotation), original commit
 `effdb35fa7868863f11655db256d9008922fa427`, emits `dangerous-triggers`
@@ -521,8 +473,8 @@ Pinned zizmor 1.31.1 (since [retired](../jactionlint-decision.md#zizmor-is-retir
 The rule includes a hidden location covering the entire `on` block. Its inline
 annotation can therefore suppress a dangerous sibling trigger as well; placement
 on the canonical CI scalar does not narrow that upstream suppression scope.
-Independent pinned-binary controls confirmed that sibling behavior and verified
-that unrelated template-injection findings remain active.
+Qualification must cover sibling suppression and prove that unrelated
+template-injection findings remain active.
 
 Velnor accepts this finding only for its dedicated authenticated native completion
 protocol. Production structural admission requires exactly the native completion
@@ -532,18 +484,14 @@ annotation and require rejection before output. The generic restricted-event
 policy, full staged scanner invocation, and other audits remain unchanged. An
 inline annotation alone is never sufficient release authority.
 
-## Recursive MBX input matching qualification (2026-10-19)
+## Recursive MBX input matching qualification
 
-The runner's original [hashFiles implementation](https://github.com/actions/runner/blob/397b032cbf865e9c3ddfab89d533ec19325e1273/src/Misc/layoutbin/hashFiles/index.js)
-from v2.337.0 was fetched by exact commit and checked against Git blob
-`8313c78812fa4c034608950617523d6769b3f87e` and SHA-256
-`fbcad57b299a699a29f1c750949073d2b9c7ad4b3b742ca3355947f99fcf7e56`.
-Its unmodified bundled matching engine ran offline on Node 26.11.1 with a clean
-environment and temporary workspace. The root and scoped pattern sets cover deep
-Cargo members, custom member paths, build scripts and source members named
-`target` below another directory. Seventeen independent mutations check digest
-changes, actual workspace target exclusion and scoped sibling isolation. This
-qualifies pattern behavior, not hosted performance or Cargo artifact reuse.
+Use the pinned runner v2.337.0 [hashFiles implementation](https://github.com/actions/runner/blob/397b032cbf865e9c3ddfab89d533ec19325e1273/src/Misc/layoutbin/hashFiles/index.js)
+to qualify root and scoped patterns against deep Cargo members, custom member
+paths, build scripts and source members named `target` below another directory.
+Coverage must prove digest changes, actual workspace target exclusion and scoped
+sibling isolation. Pattern compatibility does not establish hosted performance or
+Cargo artifact reuse.
 
 GitHub's [expression reference](https://docs.github.com/en/actions/reference/workflows-and-actions/expressions#hashfiles)
 specifies recursive `**` patterns and ordered `!` exclusions. The patterns exclude
@@ -562,21 +510,17 @@ See [explicit-token tool launch](../implemented/explicit-token-tool-launch.md).
 
 ## Pull Request Merge References
 
-Checked against [GitHub's mergeability guidance](https://docs.github.com/en/rest/guides/using-the-rest-api-to-interact-with-your-git-database#checking-mergeability-of-pull-requests) on 2026-10-26 UTC.
-
-A REST pull-request GET starts asynchronous calculation of the test merge commit. GitHub requires polling that endpoint until `mergeable` is `true` or `false` before reading the merge reference. Two equal reference observations while `mergeable` is null do not establish freshness.
+[GitHub's mergeability guidance](https://docs.github.com/en/rest/guides/using-the-rest-api-to-interact-with-your-git-database#checking-mergeability-of-pull-requests) defines asynchronous calculation of the test merge commit after a REST pull-request GET. GitHub requires polling that endpoint until `mergeable` is `true` or `false` before reading the merge reference. Two equal reference observations while `mergeable` is null do not establish freshness.
 
 Velnor bounds this polling by attempts and the existing public-operation deadline. Each response must retain the original pull-request identity, repository identities, base and head, state, draft status, and merge status. After calculation finishes, Velnor retains the exact-reference checks, ordered base/head parent checks, and unchanged-reference recheck. The merge reference does not replace the independently verified pull-request context.
 
 ## Merge queue entry identity
 
-Checked against GitHub's [MergeQueueEntry schema](https://docs.github.com/en/enterprise-cloud%40latest/graphql/reference/pulls#mergequeueentry) and a live public queue response on 2026-10-27 UTC.
-
-The captured entry for [DataFusion pull request 26770](https://github.com/apache/datafusion/pull/26770) identified base commit `c18e5d974c49382ba892fa9f89ce71d3aa0ab8ae`, queue head commit `97ff724f2c20f906277dc29fa8ba66a5824538a7`, and original pull-request head `a8448250c3fea792fcbe17130de5a6eed35aef9b`. GitHub's merge-group workflow runs used the queue head, not the original pull-request head. The queue commit had one parent, the base commit. These observations cover one queue entry; they do not establish batching behavior.
+Use GitHub's [MergeQueueEntry schema](https://docs.github.com/en/enterprise-cloud%40latest/graphql/reference/pulls#mergequeueentry) to authenticate the current queue entry. Keep its base and queue head distinct from the original pull-request head; do not infer queue topology or batching from one observed commit.
 
 A cutover author check must bind the current queue entry's base and head to the authenticated merge-group context, then authenticate the associated pull request and its current author. A queue branch name alone is not author evidence. The pull-request test merge reference and an assumed two-parent queue commit are not substitutes for queue membership. Missing, stale, ambiguous or truncated membership must fail closed.
 
-## Private Bun artifact admission (2026-10-27)
+## Private Bun artifact admission
 
 GitHub documents that authenticated users with repository read access can
 download workflow artifacts. Artifact retention does not restrict that audience.
@@ -592,13 +536,13 @@ workflow-token authentication and a deadline. Source:
 
 ## Local reusable workflow identity
 
-The GitHub Actions workflow-run response for [run 41979375157](https://github.com/tailrocks/velnor-new/actions/runs/41979375157) records its same-repository reusable `product-release-images.yml` workflow with a `referenced_workflows` path ending in `@c622bfb187556afb8d3ff3ca917a719e4bb7f32a`, matching its resolved `sha`, and `ref` equal to `refs/heads/main`. The caller uses the local `./.github/workflows/...` form. The [workflow-run API](https://docs.github.com/en/rest/actions/workflow-runs#get-a-workflow-run) separately illustrates a SHA-pinned reusable workflow without a `ref` field. These observations identify the referenced workflow; the signed attestation must independently bind the workflow and source digests.
+The [workflow-run API](https://docs.github.com/en/rest/actions/workflow-runs#get-a-workflow-run) identifies reusable workflows through `referenced_workflows`, including their path and resolved `sha`; a SHA-pinned entry can omit `ref`. Bind the resolved workflow identity independently of the caller's source identity and do not require optional fields to establish a SHA-pinned reference.
 
-The decoded certificate in the v0.1.74 release attestation for that run identifies the local reusable signer with `@refs/heads/main` and carries its resolved workflow SHA separately. The certificate also records the caller workflow and SHA, event, run ID and attempt. Certificate decoding establishes field representation only; admission must verify the signed attestation and its trusted issuer.
+A reusable signer's certificate URI can use a branch-qualified ref while its resolved workflow SHA is carried separately. The certificate also identifies the caller workflow and SHA, event, run ID and attempt. Field decoding establishes representation only: admission must verify the signed attestation, trusted issuer and exact workflow/source digests.
 
 ## Commit archive retrieval
 
-GitHub's [repository tarball API](https://docs.github.com/en/rest/repos/contents#download-a-repository-archive-tar) responds with a redirect. On 2026-11-05, the pinned `gh` client followed that redirect for this repository's immutable commit `358e1c6075ceeec94178d94f271a4526ef778da2` and returned a 9.7 MiB gzip tarball with 4,901 entries and 73.9 MB of declared file content; non-executable regular files appeared with tar mode `0664`. GitHub CLI's [redirect discussion](https://github.com/cli/cli/issues/8055) describes that behavior. Publication independently verifies selected archive bytes and executable modes against the authenticated commit tree; the archive response alone is not the source identity. It caps the compressed response at 64 MiB, expanded stream at 256 MiB, each selected file at 16 MiB, and selected content at 128 MiB. The expanded cap exceeds the observed archive by more than three times.
+GitHub's [repository tarball API](https://docs.github.com/en/rest/repos/contents#download-a-repository-archive-tar) responds with a redirect, which the pinned `gh` client follows. GitHub CLI's [redirect discussion](https://github.com/cli/cli/issues/8055) describes that behavior. Publication independently verifies selected archive bytes and executable modes against the authenticated commit tree; archive permission metadata and a successful download alone do not establish source identity. Limits are 64 MiB for the compressed response, 256 MiB for the expanded stream, 16 MiB per selected file and 128 MiB for selected content.
 
 ## Attestation history and bundle retrieval
 
@@ -612,4 +556,4 @@ GitHub's REST endpoints list [workflow-run artifacts](https://docs.github.com/en
 
 The image publisher requests 100 entries per page and admits at most 20 pages, 2,000 entries, and 16 MiB of cumulative serialized response JSON for an inventory. It requires the same `total_count` on every page, the expected number of entries per page, and unique nonzero IDs. Missing, inconsistent, duplicated, or over-budget evidence fails publication. Each API response is also bounded before JSON parsing.
 
-The [OCI Distribution Specification error table](https://github.com/opencontainers/distribution-spec/blob/main/spec.md#error-codes) distinguishes `NAME_UNKNOWN`, an unknown repository, from `MANIFEST_UNKNOWN`, an unknown manifest. Both represent absence for the authenticated image tag lookup; `UNAUTHORIZED` and `DENIED` do not. The pinned [Crane 0.22.1 error formatter](https://github.com/google/go-containerregistry/blob/v0.22.1/pkg/v1/remote/transport/error.go#L43-L70) prints a single structured error's code and message without its HTTP status. Velnor therefore binds the exact requested reference and manifest URL, accepts only those two absence codes with a bounded single-line message, and rejects other or ambiguous diagnostics. This relies on the registry's OCI error-code semantics; the Crane output does not establish that the response had a particular HTTP status.
+The [OCI Distribution Specification error table](https://github.com/opencontainers/distribution-spec/blob/4f7750b2ee7ab20238c4e866072e2178d746560b/spec.md#error-codes) distinguishes `NAME_UNKNOWN`, an unknown repository, from `MANIFEST_UNKNOWN`, an unknown manifest. Both represent absence for the authenticated image tag lookup; `UNAUTHORIZED` and `DENIED` do not. The pinned [Crane 0.22.1 error formatter](https://github.com/google/go-containerregistry/blob/v0.22.1/pkg/v1/remote/transport/error.go#L43-L70) prints a single structured error's code and message without its HTTP status. Velnor therefore binds the exact requested reference and manifest URL, accepts only those two absence codes with a bounded single-line message, and rejects other or ambiguous diagnostics. This relies on the registry's OCI error-code semantics; the Crane output does not establish that the response had a particular HTTP status.

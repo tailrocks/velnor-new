@@ -76,7 +76,7 @@ job in the exact run attempt. Aggregate `queued` is permitted only with this
 job-level proof, because GitHub can report it while some producer jobs execute.
 Only immutable job locators are cached; later guards refresh the individual job.
 Original signed-run evidence does not confer authority on a recovery or tap
-caller. See the [official compatibility sources](../proposed/github-actions-reference.md#native-release-job-authority-checked-2026-10-21).
+caller. See the [official compatibility sources](../proposed/github-actions-reference.md#native-release-job-authority).
 
 Runtime implementations independently validate archive contents, canonical
 receipts, Cosign signatures, GitHub attestations, interrupted tag/draft state,
