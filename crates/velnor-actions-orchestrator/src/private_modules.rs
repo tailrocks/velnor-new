@@ -79,3 +79,5 @@ private_mods!(workflow, workflow_jobs);
 private_mods!(workflow_task_jobs);
 
 private_mods!(native_validator_tool_qualification);
+
+private_mods!(crate_release_artifact_pages);

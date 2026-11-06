@@ -302,6 +302,18 @@ impl crate::crate_release_github::GitHubAdmissionRead for DeadlineGithub<'_> {
         Ok(value)
     }
 
+    fn get_artifact_page(
+        &self,
+        route: &str,
+        limit: u64,
+    ) -> Result<(serde_json::Value, u64), OrchestratorError> {
+        let invalid = || internal("crate_release_history_deadline");
+        self.wire.remaining().map_err(|_| invalid())?;
+        let value = self.github.get_artifact_page(route, limit)?;
+        self.wire.remaining().map_err(|_| invalid())?;
+        Ok(value)
+    }
+
     fn get_optional(&self, route: &str) -> Result<Option<serde_json::Value>, OrchestratorError> {
         let invalid = || internal("crate_release_history_deadline");
         self.wire.remaining().map_err(|_| invalid())?;

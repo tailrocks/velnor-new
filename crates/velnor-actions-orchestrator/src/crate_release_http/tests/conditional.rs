@@ -176,3 +176,28 @@ fn conditional_reads_bound_response_storage() {
     let requests = worker.join().expect("server");
     assert!(!requests[65].to_ascii_lowercase().contains("if-none-match:"));
 }
+
+#[test]
+fn cached_artifact_page_charges_original_wire_bytes_and_limit() {
+    let body = format!("{}{{}}", " ".repeat(1024));
+    let (origin, worker) = server(vec![
+        tagged_reply("200 OK", "\"v1\"", &body),
+        tagged_reply("304 Not Modified", "\"v1\"", ""),
+        tagged_reply("304 Not Modified", "\"v1\"", ""),
+    ]);
+    let reader = client(origin);
+    let route = "repos/example/demo-crate/actions/runs/123/artifacts?per_page=100";
+    let first = reader.get_artifact_page(route, 4096).expect("first");
+    let cached = reader.get_artifact_page(route, 4096).expect("cached");
+    assert_eq!(first.0, serde_json::json!({}));
+    assert_eq!(first.1, body.len() as u64);
+    assert_eq!(cached, first);
+    assert!(reader.get_artifact_page(route, 100).is_err());
+    let requests = worker.join().expect("server");
+    assert!(
+        requests[1]
+            .to_ascii_lowercase()
+            .contains("if-none-match: \"v1\"")
+    );
+    assert!(!requests[2].to_ascii_lowercase().contains("if-none-match:"));
+}

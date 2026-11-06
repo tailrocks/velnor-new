@@ -8,6 +8,14 @@ pub(super) fn parse_json(
     deadline: Instant,
     limit: u64,
 ) -> Result<Value, OrchestratorError> {
+    parse_json_counted(response, deadline, limit).map(|(value, _)| value)
+}
+
+pub(super) fn parse_json_counted(
+    response: ureq::http::Response<ureq::Body>,
+    deadline: Instant,
+    limit: u64,
+) -> Result<(Value, u64), OrchestratorError> {
     if !valid_headers(response.headers(), limit) {
         return Err(internal("crate_release_http_response"));
     }
@@ -22,8 +30,10 @@ pub(super) fn parse_json(
         return Err(internal("crate_release_http_body"));
     }
     let limit = usize::try_from(limit).map_err(|_| internal("crate_release_http_json"))?;
-    velnor_actions_contract::strict_json::parse_strict_json_bytes(&bytes, limit)
-        .map_err(|_| internal("crate_release_http_json"))
+    let length = u64::try_from(bytes.len()).map_err(|_| internal("crate_release_http_json"))?;
+    let value = velnor_actions_contract::strict_json::parse_strict_json_bytes(&bytes, limit)
+        .map_err(|_| internal("crate_release_http_json"))?;
+    Ok((value, length))
 }
 
 pub(super) fn no_store(headers: &ureq::http::HeaderMap) -> bool {

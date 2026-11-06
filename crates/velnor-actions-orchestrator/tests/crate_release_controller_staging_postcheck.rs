@@ -50,3 +50,29 @@ pub(super) fn check_post_extraction(
     github.revoke_at_ruleset.set(0);
     Ok(())
 }
+
+pub(super) fn check_paginated(
+    stage: &ToolchainStageRequest<'_>,
+    github: &Github,
+    parent: &std::path::Path,
+    host: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let runner = parent.canonicalize()?.join("paginated-runner");
+    fs::create_dir_all(runner.join("velnor"))?;
+    let request = ToolchainStageRequest {
+        runner_temp: &runner,
+        ..*stage
+    };
+    github.paginated_artifacts.set(true);
+    let result = stage_unverified_toolchain(&request, github, github)?;
+    assert_eq!(result.artifact().id, 10);
+    assert_eq!(
+        fs::read(result.path().join(format!(
+            "toolchains/{}-{host}/bin/cargo",
+            stage.intent.rust_version
+        )))?,
+        b"x"
+    );
+    github.paginated_artifacts.set(false);
+    Ok(())
+}

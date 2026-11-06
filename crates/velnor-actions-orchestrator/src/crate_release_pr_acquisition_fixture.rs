@@ -7,6 +7,8 @@ use std::io::Write as _;
 
 #[path = "crate_release_pr_acquisition_fixture_assertions.rs"]
 mod assertions;
+#[path = "crate_release_pr_acquisition_fixture_paginated.rs"]
+mod paginated;
 #[path = "crate_release_pr_acquisition_fixture_server.rs"]
 mod server;
 use assertions::{assert_rejections, assert_writer_calls};
@@ -329,6 +331,7 @@ pub(crate) fn exercise(
     assert_eq!(verified.intent, *intent);
     assert_eq!(verified.source_tree, root);
     assert_eq!(verified.artifact, artifact);
+    paginated::check(&request, &github, &download, &routes, &prefix, &artifact)?;
     let values = runtime_values(&request);
     let mut bad_values = values.clone();
     bad_values.insert("VELNOR_PR_CONTENT_SHA256", "0".repeat(64));

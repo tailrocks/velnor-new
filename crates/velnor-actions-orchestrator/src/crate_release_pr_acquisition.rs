@@ -228,10 +228,11 @@ fn current_preparation_artifact<G: crate::crate_release_github::GitHubAdmissionR
     repository_id: u64,
 ) -> Result<crate::crate_release_tool_artifact::ToolArtifactMetadata, OrchestratorError> {
     let prefix = format!("repos/{}", request.binding.repository);
-    let list = github.get(&format!(
-        "{prefix}/actions/runs/{}/artifacts?per_page=100",
-        request.binding.run_id
-    ))?;
+    let list = crate::crate_release_artifact_pages::list_artifacts(
+        github,
+        &prefix,
+        request.binding.run_id,
+    )?;
     let detail = github.get(&format!(
         "{prefix}/actions/artifacts/{}",
         request.artifact_id

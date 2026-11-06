@@ -42,6 +42,31 @@ pub enum GitHubAdmissionOutcome {
 
 pub trait GitHubAdmissionRead {
     fn get(&self, route: &str) -> Result<Value, OrchestratorError>;
+    fn get_artifact_page(
+        &self,
+        route: &str,
+        limit: u64,
+    ) -> Result<(Value, u64), OrchestratorError> {
+        #[cfg(test)]
+        {
+            let value = self.get(route)?;
+            let length = u64::try_from(
+                serde_json::to_vec(&value)
+                    .map_err(|_| internal("crate_release_artifact_pages_invalid"))?
+                    .len(),
+            )
+            .map_err(|_| internal("crate_release_artifact_pages_invalid"))?;
+            if length == 0 || length > limit {
+                return Err(internal("crate_release_artifact_pages_invalid"));
+            }
+            Ok((value, length))
+        }
+        #[cfg(not(test))]
+        {
+            let _ = (route, limit);
+            Err(internal("crate_release_artifact_pages_unavailable"))
+        }
+    }
     fn get_optional(&self, route: &str) -> Result<Option<Value>, OrchestratorError>;
 }
 
@@ -91,6 +116,13 @@ impl crate::crate_release_controller::CrateReleaseRepairWrite for NativeGitHubAd
 impl GitHubAdmissionRead for NativeGitHubAdmissionRead {
     fn get(&self, route: &str) -> Result<Value, OrchestratorError> {
         self.reader.get(route)
+    }
+    fn get_artifact_page(
+        &self,
+        route: &str,
+        limit: u64,
+    ) -> Result<(Value, u64), OrchestratorError> {
+        self.reader.get_artifact_page(route, limit)
     }
     fn get_optional(&self, route: &str) -> Result<Option<Value>, OrchestratorError> {
         self.reader.get_optional(route)

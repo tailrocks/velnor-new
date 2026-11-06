@@ -16,8 +16,8 @@ mod validation;
 pub(crate) use routes::encode;
 use routes::{optional_route, valid_headers, valid_post_route, valid_route, valid_sha};
 use validation::{
-    journal_tag_hash, no_store, parse_json, response_etag, validate_journal_name,
-    validate_journal_tag_response, validate_repository, validate_write,
+    journal_tag_hash, no_store, parse_json, parse_json_counted, response_etag,
+    validate_journal_name, validate_journal_tag_response, validate_repository, validate_write,
 };
 
 const JSON_LIMIT: u64 = 8 * 1024 * 1024;
@@ -29,6 +29,7 @@ const MAX_VALIDATED_RESPONSE_BYTES: usize = 256 * 1024;
 struct ValidatedResponse {
     etag: String,
     body: Value,
+    raw_len: u64,
 }
 
 pub struct GitHubAdmissionHttp {
@@ -109,6 +110,18 @@ impl GitHubAdmissionHttp {
 
     pub fn get(&self, route: &str) -> Result<Value, OrchestratorError> {
         self.request(route, false)?
+            .ok_or_else(|| internal("crate_release_http_status"))
+    }
+
+    pub(crate) fn get_artifact_page(
+        &self,
+        route: &str,
+        limit: u64,
+    ) -> Result<(Value, u64), OrchestratorError> {
+        if limit == 0 {
+            return Err(internal("crate_release_http_body"));
+        }
+        self.request_with_limit_counted(route, false, limit.min(JSON_LIMIT))?
             .ok_or_else(|| internal("crate_release_http_status"))
     }
 
@@ -212,6 +225,16 @@ impl GitHubAdmissionHttp {
         optional: bool,
         limit: u64,
     ) -> Result<Option<Value>, OrchestratorError> {
+        self.request_with_limit_counted(route, optional, limit)
+            .map(|value| value.map(|(body, _)| body))
+    }
+
+    fn request_with_limit_counted(
+        &self,
+        route: &str,
+        optional: bool,
+        limit: u64,
+    ) -> Result<Option<(Value, u64)>, OrchestratorError> {
         if !valid_route(route) {
             return Err(internal("crate_release_http_route"));
         }
@@ -260,7 +283,7 @@ impl GitHubAdmissionHttp {
                 self.responses.borrow_mut().remove(&key);
                 return Err(internal("crate_release_http_response"));
             }
-            return Ok(Some(entry.body));
+            return Ok(Some((entry.body, entry.raw_len)));
         }
         self.responses.borrow_mut().remove(&key);
         if optional && response.status().as_u16() == 404 {
@@ -270,7 +293,7 @@ impl GitHubAdmissionHttp {
             return Err(internal("crate_release_http_response"));
         }
         let etag = response_etag(response.headers());
-        let body = parse_json(response, deadline, limit)?;
+        let (body, raw_len) = parse_json_counted(response, deadline, limit)?;
         if let Some(etag) = etag {
             let small = serde_json::to_vec(&body)
                 .is_ok_and(|bytes| bytes.len() <= MAX_VALIDATED_RESPONSE_BYTES);
@@ -281,11 +304,12 @@ impl GitHubAdmissionHttp {
                     ValidatedResponse {
                         etag,
                         body: body.clone(),
+                        raw_len,
                     },
                 );
             }
         }
-        Ok(Some(body))
+        Ok(Some((body, raw_len)))
     }
 
     fn verify_repository_access(&self, route: &str) -> Result<(), OrchestratorError> {

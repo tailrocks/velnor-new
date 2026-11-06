@@ -142,6 +142,7 @@ pub(super) struct Github {
     pub(super) artifact_reads: Cell<u32>,
     pub(super) alter_at_artifact: Cell<u32>,
     pub(super) artifact_receipt: Cell<bool>,
+    pub(super) paginated_artifacts: Cell<bool>,
     pub(super) before_metadata_write: RefCell<Option<MetadataWriteHook>>,
 }
 impl Github {
@@ -215,7 +216,21 @@ impl GitHubAdmissionRead for Github {
         } else {
             sha
         };
-        let data = if route.ends_with("/actions/runs/12/artifacts?per_page=100") {
+        let data = if self.paginated_artifacts.get()
+            && route.contains("/actions/runs/12/artifacts?per_page=100")
+        {
+            let page = route
+                .split_once("&page=")
+                .and_then(|(_, value)| value.parse::<usize>().ok())
+                .unwrap_or(1);
+            let mut items: Vec<Value> = (0..200)
+                .map(|i| json!({"id": 1000 + i, "name": format!("other-{i}")}))
+                .collect();
+            items.push(self.tool_metadata());
+            let start = (page - 1) * 100;
+            let end = items.len().min(start + 100);
+            json!({"total_count":items.len(),"artifacts":items.get(start..end).unwrap_or_default()})
+        } else if route.ends_with("/actions/runs/12/artifacts?per_page=100") {
             json!({"total_count":1,"artifacts":[self.tool_metadata()]})
         } else if route.ends_with("/actions/artifacts/10") {
             self.tool_metadata()

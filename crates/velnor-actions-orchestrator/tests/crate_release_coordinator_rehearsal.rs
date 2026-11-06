@@ -117,6 +117,7 @@ fn rehearsal_github(request: &GitHubAdmissionRequest, metadata_completed: bool) 
         artifact_reads: Cell::new(0),
         alter_at_artifact: Cell::new(0),
         artifact_receipt: Cell::new(false),
+        paginated_artifacts: Cell::new(false),
         before_metadata_write: RefCell::new(None),
     }
 }

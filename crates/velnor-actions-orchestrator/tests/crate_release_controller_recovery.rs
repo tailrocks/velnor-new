@@ -152,6 +152,11 @@ pub(super) fn receipt_acquire_requires_current_approval_and_matching_evidence()
     let authenticated =
         crate::crate_release_tool_artifact::fixture_authenticate_receipt(&stage, &github, &github)?;
     assert_eq!(authenticated, receipt);
+    github.paginated_artifacts.set(true);
+    let paginated =
+        crate::crate_release_tool_artifact::fixture_authenticate_receipt(&stage, &github, &github)?;
+    assert_eq!(paginated, receipt);
+    github.paginated_artifacts.set(false);
     check_transient_repository(&stage, &github, false);
     check_authentication_denials(&stage, &github, &receipt)?;
     *github.tool_archive.borrow_mut() = receipt_zip(&serde_json::to_vec(&receipt)?)?;
@@ -302,6 +307,7 @@ pub(super) fn toolchain_staging_requires_approved_same_run_artifact()
         )))?,
         b"x"
     );
+    staging_postcheck::check_paginated(&stage, &github, temp.path(), host)?;
     creation_staging::check_creation_staging(&intent, &request, &github, &stage, result.path())?;
     Ok(())
 }

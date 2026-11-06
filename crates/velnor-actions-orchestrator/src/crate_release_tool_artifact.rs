@@ -189,7 +189,7 @@ fn validate_artifact_metadata(
         .get("artifacts")
         .and_then(Value::as_array)
         .ok_or_else(invalid)?;
-    if entries.len() >= 100
+    if entries.len() > 10_000
         || list.get("total_count").and_then(Value::as_u64) != Some(entries.len() as u64)
     {
         return Err(invalid());

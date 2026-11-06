@@ -198,10 +198,11 @@ pub(super) fn current_artifact<G: crate::crate_release_github::GitHubAdmissionRe
     {
         return Err(invalid());
     }
-    let list = github.get(&format!(
-        "{prefix}/actions/runs/{}/artifacts?per_page=100",
-        request.github.run_id
-    ))?;
+    let list = crate::crate_release_artifact_pages::list_artifacts(
+        github,
+        &prefix,
+        request.github.run_id,
+    )?;
     let detail = github.get(&format!(
         "{prefix}/actions/artifacts/{}",
         request.artifact_id
