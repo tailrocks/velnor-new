@@ -1,6 +1,10 @@
 # SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 # SPDX-License-Identifier: Apache-2.0
 
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src'))
+
 import hashlib
 import importlib.util
 import json
@@ -14,6 +18,9 @@ import subprocess
 import tempfile
 import time
 import unittest
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from release_watch_fixture import RootWatch, snapshot_roots, cleanup_orphans
 
 root = Path(__file__).resolve().parents[1]
 
@@ -27,6 +34,12 @@ bus = load('release_manager_bus')
 lifecycle = load('release_manager_lifecycle')
 
 class CoordinatorChannelTest(unittest.TestCase):
+    def setUp(self):
+        existing = snapshot_roots()
+        self.addCleanup(cleanup_orphans, existing)
+        self.watch = RootWatch(bus, lifecycle, root / "src")
+        self.addCleanup(self.watch.close)
+
     def test_coordinator_rejects_publishing_credentials_in_bootstrap(self):
         self.assert_bootstrap_rejects(None)
         for key in ('CARGO_REGISTRY_TOKEN', 'ACTIONS_ID_TOKEN_REQUEST_TOKEN', 'ACTIONS_ID_TOKEN_REQUEST_URL'):
@@ -57,7 +70,7 @@ class CoordinatorChannelTest(unittest.TestCase):
                 subprocess.run(['/usr/bin/cc', str(source), '-o', str(binary)], check=True)
             binary.chmod(0o500)
             parent, child = socket.socketpair()
-            manager = bus.Manager(str(helper), 10, root_bootstrap=True)
+            manager = bus.Manager(str(helper), 10, self.watch.authority, root_bootstrap=True)
             unit = 'velnor-release-' + secrets.token_hex(16) + '.service'
             end = time.clock_gettime_ns(time.CLOCK_BOOTTIME) + 35_000_000_000
             try:
@@ -120,7 +133,7 @@ class CoordinatorChannelTest(unittest.TestCase):
             binary.chmod(0o500)
             digest = hashlib.sha256(binary.read_bytes()).hexdigest()
             parent, child = socket.socketpair()
-            manager = bus.Manager(str(helper), 10, root_bootstrap=True)
+            manager = bus.Manager(str(helper), 10, self.watch.authority, root_bootstrap=True)
             unit = 'velnor-release-' + secrets.token_hex(16) + '.service'
             end = time.clock_gettime_ns(time.CLOCK_BOOTTIME) + 35_000_000_000
             try:
@@ -160,11 +173,9 @@ class CoordinatorChannelTest(unittest.TestCase):
             helper = directory / 'source-helper.py'
             shutil.copyfile(root / 'src/release_supervisor_exec.py', helper)
             helper.chmod(0o500)
-            parent = 'velnor-release-' + secrets.token_hex(16) + '.service'
+            parent = self.watch.unit
             unit = 'velnor-release-' + secrets.token_hex(16) + '.service'
-            subprocess.run(['/usr/bin/systemd-run', '--unit=' + parent, '--property=Type=exec',
-                            '/bin/sleep', '60'], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            manager = bus.Manager(str(helper), 10, root_bootstrap=True, bind_to=parent)
+            manager = bus.Manager(str(helper), 10, self.watch.authority, root_bootstrap=True)
             reader, writer = os.pipe()
             end = time.clock_gettime_ns(time.CLOCK_BOOTTIME) + 35_000_000_000
             try:
@@ -196,56 +207,32 @@ class CoordinatorChannelTest(unittest.TestCase):
                 manager.close()
 
     def test_preclaim_rejects_late_reactivation(self):
-        with tempfile.TemporaryDirectory(dir='/run', prefix='velnor-publisher-') as directory:
-            directory = Path(directory)
-            helper = directory / 'source-helper.py'
-            claim = directory / 'claim-helper.py'
-            shutil.copyfile(root / 'src/release_supervisor_exec.py', helper)
-            shutil.copyfile(root / 'src/release_supervisor_claim.py', claim)
-            helper.chmod(0o500)
-            claim.chmod(0o500)
-            supervisor = 'velnor-release-' + secrets.token_hex(16) + '.service'
-            late = 'velnor-release-' + secrets.token_hex(16) + '.service'
-            parent = bus.Manager(str(helper), 10, root_bootstrap=True, claim_helper=str(claim))
-            dependent = bus.Manager(str(helper), 10, root_bootstrap=True, bind_to=supervisor)
-            reader, writer = os.pipe()
-            late_reader, late_writer = os.pipe()
-            end = time.clock_gettime_ns(time.CLOCK_BOOTTIME) + 35_000_000_000
-            try:
-                parent.subscribe(end)
-                job = parent.start(supervisor, reader, end)
-                lifecycle.wait_job(parent, supervisor, job, end)
-                body = json.dumps({'program':'/bin/sleep','args':['60'],'cwd':'/','env':{},'stdin':''}).encode()
-                lifecycle.write_frame(writer, struct.pack('>QQI', end, os.stat('/proc/self/ns/time').st_ino, len(body)) + body, end)
-                os.close(writer)
-                writer = None
-                self.assertTrue((directory / 'supervisor.claim').is_file())
-                subprocess.run(['/usr/bin/systemctl', 'kill', '--kill-whom=main', '-s', 'KILL', supervisor],
-                               check=True, timeout=10)
-                until = time.monotonic() + 10
-                while time.monotonic() < until:
-                    if parent.state(supervisor, end)['active'] in ('failed', 'inactive'):
-                        break
-                    time.sleep(.01)
-                dependent.subscribe(end)
-                with self.assertRaises(Exception):
-                    late_job = dependent.start(late, late_reader, end)
-                    lifecycle.wait_job(dependent, late, late_job, end)
-                self.assertIn(parent.state(supervisor, end)['active'], ('failed', 'inactive'))
-                self.assertTrue((directory / 'supervisor.claim').is_file())
-            finally:
-                os.close(reader)
-                if writer is not None:
-                    os.close(writer)
-                os.close(late_reader)
-                os.close(late_writer)
-                subprocess.run(['/usr/bin/systemctl', 'stop', supervisor, late], check=False,
-                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10)
-                if parent.dropin_name:
-                    parent.release(supervisor, time.clock_gettime_ns(time.CLOCK_BOOTTIME) + 10_000_000_000)
-                parent.close()
-                dependent.close()
-                shutil.rmtree('/run/systemd/system/' + late + '.d', ignore_errors=True)
+        late = 'velnor-release-' + secrets.token_hex(16) + '.service'
+        claim = self.watch.directory / 'supervisor.claim'
+        self.assertTrue(claim.is_file())
+        manager = bus.Manager(str(root / 'src/release_supervisor_exec.py'), 10,
+                              self.watch.authority, root_bootstrap=True)
+        reader, writer = os.pipe()
+        end = time.clock_gettime_ns(time.CLOCK_BOOTTIME) + 35_000_000_000
+        try:
+            subprocess.run(['/usr/bin/systemctl', 'kill', '--kill-whom=main', '-s', 'KILL', self.watch.unit],
+                           check=True, timeout=10)
+            while time.clock_gettime_ns(time.CLOCK_BOOTTIME) < end:
+                state = self.watch.watch.manager.state(self.watch.unit, end)
+                if state['active'] in ('failed', 'inactive') and not state['populated']:
+                    break
+                time.sleep(.01)
+            else:
+                self.fail('watch did not stop')
+            manager.subscribe(end)
+            with self.assertRaises(bus.ManagerError):
+                manager.start(late, reader, end)
+            self.assertFalse(Path('/run/systemd/system', late + '.d').exists())
+            self.assertTrue(claim.is_file())
+        finally:
+            os.close(reader)
+            os.close(writer)
+            manager.close()
 
     def test_parent_death_stops_coordinator(self):
         with tempfile.TemporaryDirectory(dir='/run', prefix='velnor-publisher-') as directory:
@@ -270,8 +257,11 @@ class CoordinatorChannelTest(unittest.TestCase):
             if child_pid == 0:
                 try:
                     os.close(report_read)
+                    os.close(self.watch.authority[0])
+                    os.close(self.watch.authority[1])
+                    child_watch = RootWatch(bus, lifecycle, root / "src")
                     parent, child = socket.socketpair()
-                    manager = bus.Manager(str(helper), 10, root_bootstrap=True)
+                    manager = bus.Manager(str(helper), 10, child_watch.authority, root_bootstrap=True)
                     end = time.clock_gettime_ns(time.CLOCK_BOOTTIME) + 30_000_000_000
                     manager.subscribe(end)
                     job = manager.start(unit, child.fileno(), end)

@@ -16,7 +16,8 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).parent))
 from release_publish_entry_test import context
-from release_publish_entry_systemd_test import entry
+from release_publish_entry_systemd_test import entry, source_root
+from release_watch_fixture import RootWatch
 
 
 class PublisherEntryOfflineTest(unittest.TestCase):
@@ -29,7 +30,9 @@ class PublisherEntryOfflineTest(unittest.TestCase):
         try:
             with dropin.open('x', encoding='ascii') as output:
                 output.write('[Service]\nPrivateNetwork=yes\n')
-            with tempfile.TemporaryDirectory(prefix='velnor-net-proof-', dir='/run') as root:
+            bus = entry["module"]("offline_bus", entry["MANAGER"])
+            lifecycle = entry["module"]("offline_lifecycle", entry["LIFECYCLE"])
+            with RootWatch(bus, lifecycle, source_root) as watch, tempfile.TemporaryDirectory(prefix='velnor-net-proof-', dir='/run') as root:
                 listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 listener.bind(('127.0.0.1', 0))
                 listener.listen(1)
@@ -43,7 +46,7 @@ class PublisherEntryOfflineTest(unittest.TestCase):
                 deadline = time.clock_gettime_ns(time.CLOCK_BOOTTIME) + 60_000_000_000
                 safe = False
                 try:
-                    entry['acquire'](root, script, {'PATH': '/usr/bin:/bin', 'HOME': root}, deadline)
+                    entry['acquire'](root, script, {'PATH': '/usr/bin:/bin', 'HOME': root}, deadline, watch.watch)
                 except Exception as error:
                     safe = str(error) == 'unit failed after verified cleanup'
                     raise
@@ -55,11 +58,16 @@ class PublisherEntryOfflineTest(unittest.TestCase):
             before = set(Path('/run').glob('velnor-publisher-*'))
             arguments = ['entry', 'trusted-publishing', '0.1.73', 'a' * 40, 'b' * 64]
             safe = False
-            with patch.dict(os.environ, context('trusted-publishing'), clear=True), \
+            handoff = RootWatch(bus, lifecycle, source_root, seconds=60)
+            values = context('trusted-publishing')
+            values['VELNOR_RELEASE_BUDGET'] = values['VELNOR_RELEASE_BUDGET'].rsplit(':', 1)[0] + ':' + str(handoff.deadline)
+            values.update(handoff.watch.prepare_exec_environment())
+            with patch.dict(os.environ, values, clear=True), \
                     patch.object(os, 'uname', return_value=types.SimpleNamespace(machine='x86_64')), \
                     patch.object(sys, 'argv', arguments):
                 with self.assertRaises(Exception) as failure:
                     entry['main']()
+            handoff.watch.manager.close()
             self.assertEqual(str(failure.exception), 'unit failed after verified cleanup')
             safe = True
             created = set(Path('/run').glob('velnor-publisher-*')) - before

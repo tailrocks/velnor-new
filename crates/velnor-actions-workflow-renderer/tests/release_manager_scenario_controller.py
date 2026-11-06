@@ -1,6 +1,10 @@
 # SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 # SPDX-License-Identifier: Apache-2.0
 
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src'))
+
 import os
 from pathlib import Path
 import re
@@ -176,6 +180,7 @@ def run_fixed():
     if os.path.lexists("/run/systemd/system/velnor-release-.service.d"):
         raise ScenarioError("scenario prefix staging already exists")
     source = Path(__file__).resolve().parents[1] / "src"
+    RootWatch = load("scenario_watch_fixture", Path(__file__).with_name("release_watch_fixture.py")).RootWatch
     program = Path(__file__).resolve().with_name("release_manager_qualification.py")
     manager = load("scenario_manager", source / "release_manager_bus.py")
     lifecycle = load("scenario_lifecycle", source / "release_manager_lifecycle.py")
@@ -189,7 +194,8 @@ def run_fixed():
     inventory = UnitInventory()
     inventory.verify_namespace()
     deadline = time.clock_gettime_ns(time.CLOCK_BOOTTIME) + DEADLINE_SECONDS * 1_000_000_000
-    with tempfile.TemporaryDirectory(prefix="velnor-scenario-controller-", dir="/run") as directory:
+    with RootWatch(manager, lifecycle, source, seconds=DEADLINE_SECONDS + 60) as watch, \
+            tempfile.TemporaryDirectory(prefix="velnor-scenario-controller-", dir="/run") as directory:
         helper = Path(directory) / "helper.py"
         shutil.copyfile(source / "release_supervisor_exec.py", helper)
         helper.chmod(0o555)
@@ -200,7 +206,7 @@ def run_fixed():
                           "HOME": "/nonexistent", "LANG": "C", "VELNOR_SCENARIO_LEDGER": str(ledger_path)},
                           "stdin": ""}).encode()
         frame = struct.pack(">QQI", deadline, os.stat("/proc/self/ns/time").st_ino, len(body)) + body
-        connection = QualificationManager(str(helper), RUNTIME_SECONDS, root_bootstrap=True)
+        connection = QualificationManager(str(helper), RUNTIME_SECONDS, watch.authority, root_bootstrap=True)
         try:
             lifecycle.supervise(connection, frame, deadline)
             os.lseek(ledger, 0, os.SEEK_SET)
@@ -218,7 +224,7 @@ def run_fixed():
         finally:
             connection.close()
             os.close(ledger)
-        inventory.verify()
+    inventory.verify()
 
 
 def load(name, path):

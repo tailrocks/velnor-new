@@ -3,19 +3,13 @@
 
 use crate::RenderError;
 use base64::{Engine, engine::general_purpose::STANDARD};
+use sha2::{Digest as _, Sha256};
 use std::{collections::BTreeMap, io::Write as _};
 use velnor_actions_contract::Step;
 
 pub fn render_entry(timeout_seconds: u32) -> Result<String, RenderError> {
-    if !(61..=21_600).contains(&timeout_seconds) {
-        return Err(RenderError::InvalidWorkflow(
-            "publisher_timeout_invalid".to_owned(),
-        ));
-    }
     let bundle = serde_json::json!({
         "coordinator": STANDARD.encode(include_bytes!("release_coordinator_exec.py")),
-        "watch": STANDARD.encode(include_bytes!("release_launcher_watch.py")),
-        "claim": STANDARD.encode(include_bytes!("release_supervisor_claim.py")),
         "retained": STANDARD.encode(include_bytes!("release_retained_parent.py")),
         "source": STANDARD.encode(include_bytes!("release_source_executor.py")),
         "channel": STANDARD.encode(include_bytes!("release_source_channel.py")),
@@ -27,6 +21,20 @@ pub fn render_entry(timeout_seconds: u32) -> Result<String, RenderError> {
             .encode(serde_json::to_vec(&bundle).map_err(|_| {
                 RenderError::InvalidWorkflow("publisher_bundle_invalid".to_owned())
             })?);
+    Ok(render_helpers(timeout_seconds)?
+        .replace("SUPERVISOR = 'e30='", &format!("SUPERVISOR = '{encoded}'")))
+}
+
+pub(crate) fn render_helpers(timeout_seconds: u32) -> Result<String, RenderError> {
+    render_source(timeout_seconds, &STANDARD.encode(b"{}"))
+}
+
+fn render_source(timeout_seconds: u32, encoded: &str) -> Result<String, RenderError> {
+    if !(61..=21_600).contains(&timeout_seconds) {
+        return Err(RenderError::InvalidWorkflow(
+            "publisher_timeout_invalid".to_owned(),
+        ));
+    }
     let entry = include_str!("release_publish_entry.py")
         .replace(
             "__VELNOR_BOOTSTRAP_PAYLOAD__",
@@ -37,6 +45,10 @@ pub fn render_entry(timeout_seconds: u32) -> Result<String, RenderError> {
             &STANDARD.encode(include_bytes!("release_manager_bus.py")),
         )
         .replace(
+            "__VELNOR_WATCH_ADMISSION_PAYLOAD__",
+            &STANDARD.encode(include_bytes!("release_watch_admission.py")),
+        )
+        .replace(
             "__VELNOR_LIFECYCLE_PAYLOAD__",
             &STANDARD.encode(include_bytes!("release_manager_lifecycle.py")),
         )
@@ -44,7 +56,19 @@ pub fn render_entry(timeout_seconds: u32) -> Result<String, RenderError> {
             "__VELNOR_HELPER_PAYLOAD__",
             &STANDARD.encode(include_bytes!("release_supervisor_exec.py")),
         )
-        .replace("__VELNOR_SUPERVISOR_PAYLOAD__", &encoded)
+        .replace(
+            "__VELNOR_WATCH_BOOTSTRAP_PAYLOAD__",
+            &STANDARD.encode(include_bytes!("release_bootstrap_watch.py")),
+        )
+        .replace(
+            "__VELNOR_WATCH_PROGRAM_PAYLOAD__",
+            &STANDARD.encode(include_bytes!("release_launcher_watch.py")),
+        )
+        .replace(
+            "__VELNOR_WATCH_CLAIM_PAYLOAD__",
+            &STANDARD.encode(include_bytes!("release_supervisor_claim.py")),
+        )
+        .replace("__VELNOR_SUPERVISOR_PAYLOAD__", encoded)
         .replace(
             "__VELNOR_JOB_TIMEOUT_SECONDS__",
             &timeout_seconds.to_string(),
@@ -70,9 +94,7 @@ pub fn publisher_step(
         manifest_sha256,
     )?;
     let encoded = publisher_bundle()?;
-    let script = format!(
-        "import base64,json,zlib;bundle=json.loads(zlib.decompress(base64.b64decode('{encoded}',validate=True)));exec(compile(bundle['stage'],'<publisher>','exec'),{{'bundle':bundle,'__name__':'__main__'}})"
-    );
+    let script = bootstrap_payload_script(&encoded)?;
     let preserve = concat!(
         "GH_TOKEN,GITHUB_REPOSITORY,GITHUB_REPOSITORY_ID,GITHUB_REPOSITORY_OWNER_ID,",
         "GITHUB_RUN_ID,GITHUB_RUN_ATTEMPT,GITHUB_JOB,GITHUB_SHA,GITHUB_REF,",
@@ -94,7 +116,7 @@ pub fn publisher_step(
     let argv = vec![
         "/usr/bin/sudo".to_owned(),
         "-n".to_owned(),
-        format!("--preserve-env={preserve},{credentials}"),
+        format!("--preserve-env={preserve},{credentials},VELNOR_RELEASE_BOOTSTRAP_PAYLOAD"),
         "/usr/bin/python3".to_owned(),
         "-I".to_owned(),
         "-c".to_owned(),
@@ -109,8 +131,27 @@ pub fn publisher_step(
             "publisher_step_too_large".to_owned(),
         ));
     }
-    let env = publisher_environment(bootstrap);
+    let mut env = publisher_environment(bootstrap);
+    env.insert("VELNOR_RELEASE_BOOTSTRAP_PAYLOAD".to_owned(), encoded);
     crate::ambient_shell_step("Publish approved Rust crate", argv, env)
+}
+
+pub(crate) fn bootstrap_payload_script(encoded: &str) -> Result<String, RenderError> {
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    if encoded.is_empty() || encoded.len() > 32 * 1024 {
+        return Err(RenderError::InvalidWorkflow(
+            "publisher_bundle_invalid".to_owned(),
+        ));
+    }
+    let mut digest = String::with_capacity(64);
+    for byte in Sha256::digest(encoded.as_bytes()) {
+        digest.push(char::from(HEX[usize::from(byte >> 4)]));
+        digest.push(char::from(HEX[usize::from(byte & 0x0f)]));
+    }
+    let script = format!(
+        "import base64,hashlib,json,os,zlib\ntry:\n payload=os.environ.pop('VELNOR_RELEASE_BOOTSTRAP_PAYLOAD')\n if not 0<len(payload)<=32768 or hashlib.sha256(payload.encode('ascii')).hexdigest()!='{digest}': raise ValueError('payload')\n decoder=zlib.decompressobj()\n raw=decoder.decompress(base64.b64decode(payload,validate=True),524289)\n if len(raw)>524288 or not decoder.eof or decoder.unused_data or decoder.unconsumed_tail: raise ValueError('payload')\n bundle=json.loads(raw)\nexcept Exception:\n raise SystemExit('release bootstrap payload rejected') from None\nexec(compile(bundle['stage'],'<release-bootstrap>','exec'),{{'bundle':bundle,'__name__':'__main__'}})"
+    );
+    Ok(format!("exec({script:?})"))
 }
 
 fn publisher_bundle() -> Result<String, RenderError> {
@@ -119,11 +160,20 @@ fn publisher_bundle() -> Result<String, RenderError> {
         "entry": include_str!("release_publish_entry.py"),
         "bootstrap": include_str!("release_generator_bootstrap.sh"),
         "manager": include_str!("release_manager_bus.py"),
+        "watch_admission": include_str!("release_watch_admission.py"),
         "lifecycle": include_str!("release_manager_lifecycle.py"),
         "helper": include_str!("release_supervisor_exec.py"),
+        "bootstrap_watch": include_str!("release_bootstrap_watch.py"),
+        "watch_program": include_str!("release_launcher_watch.py"),
+        "claim": include_str!("release_supervisor_claim.py"),
     });
     let raw = serde_json::to_vec(&bundle)
         .map_err(|_| RenderError::InvalidWorkflow("publisher_bundle_invalid".to_owned()))?;
+    if raw.len() > 512 * 1024 {
+        return Err(RenderError::InvalidWorkflow(
+            "publisher_bundle_invalid".to_owned(),
+        ));
+    }
     let mut compressor = flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::best());
     compressor
         .write_all(&raw)

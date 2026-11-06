@@ -1,6 +1,10 @@
 # SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 # SPDX-License-Identifier: Apache-2.0
 
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src'))
+
 import hashlib
 import builtins
 import errno
@@ -24,6 +28,7 @@ from unittest.mock import patch
 root = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from release_manager_scenario_controller import finish_blocker, start_blocker
+from release_watch_fixture import RootWatch, snapshot_roots, cleanup_orphans
 
 
 def load(name):
@@ -56,6 +61,12 @@ class RealManagerTest(unittest.TestCase):
     def tearDownClass(cls):
         shutil.rmtree(cls.directory)
 
+    def setUp(self):
+        existing = snapshot_roots()
+        self.addCleanup(cleanup_orphans, existing)
+        self.watch = RootWatch(bus, lifecycle, root / "src")
+        self.addCleanup(self.watch.close)
+
     def test_root_owned_staging_rejects_preexisting_symlink(self):
         unit = "velnor-release-" + secrets.token_hex(16) + ".service"
         directory = Path("/run/systemd/system") / (unit + ".d")
@@ -65,7 +76,7 @@ class RealManagerTest(unittest.TestCase):
         sentinel.write_text("unchanged", encoding="ascii")
         directory.symlink_to(target, target_is_directory=True)
         self.addCleanup(directory.unlink, missing_ok=True)
-        manager = bus.Manager(str(self.helper), 10)
+        manager = bus.Manager(str(self.helper), 10, self.watch.authority)
         reader, writer = os.pipe()
         try:
             manager.subscribe(deadline(5))
@@ -77,7 +88,7 @@ class RealManagerTest(unittest.TestCase):
             os.close(writer)
             manager.close()
             directory.unlink()
-        manager = bus.Manager(str(self.helper), 10)
+        manager = bus.Manager(str(self.helper), 10, self.watch.authority)
         reader, writer = os.pipe()
         try:
             end = deadline(10)
@@ -105,7 +116,7 @@ class RealManagerTest(unittest.TestCase):
     def test_malformed_kernel_cgroup_state_cannot_verify_cleanup(self):
         unit = "velnor-release-" + secrets.token_hex(16) + ".service"
         unit_dir = Path("/run/systemd/system") / (unit + ".d")
-        manager = bus.Manager(str(self.helper), 10)
+        manager = bus.Manager(str(self.helper), 10, self.watch.authority)
         reader, writer = os.pipe()
         try:
             end = deadline(10)
@@ -166,7 +177,7 @@ class RealManagerTest(unittest.TestCase):
                    "assert all(value not in x.encode() for x in os.environ.values())")
         body = json.dumps({"program": "/usr/bin/python3", "args": ["-I", "-S", "-c", command, digest],
                            "cwd": "/", "env": {}, "stdin": "dummy-credential"}).encode()
-        manager = bus.Manager(str(self.helper), 10)
+        manager = bus.Manager(str(self.helper), 10, self.watch.authority)
         try:
             end = deadline(45)
             frame = struct.pack(">QQI", end, os.stat("/proc/self/ns/time").st_ino, len(body)) + body
@@ -178,7 +189,7 @@ class RealManagerTest(unittest.TestCase):
     def test_reobserved_cgroup_cannot_change_invocation(self):
         unit = "velnor-release-" + secrets.token_hex(16) + ".service"
         unit_dir = Path("/run/systemd/system") / (unit + ".d")
-        manager = bus.Manager(str(self.helper), 10)
+        manager = bus.Manager(str(self.helper), 10, self.watch.authority)
         readers = []
         writers = []
         real_open = builtins.open
@@ -237,7 +248,7 @@ class RealManagerTest(unittest.TestCase):
                            str(self.directory / "descendant")], "cwd": "/", "env": {}, "stdin": ""}).encode()
         end = deadline(80)
         frame = struct.pack(">QQI", end, os.stat("/proc/self/ns/time").st_ino, len(body)) + body
-        manager = bus.Manager(str(self.helper), 30)
+        manager = bus.Manager(str(self.helper), 30, self.watch.authority)
         try:
             with patch.object(lifecycle.secrets, "token_hex", return_value=ident):
                 try:
@@ -270,8 +281,9 @@ class RealManagerTest(unittest.TestCase):
         wrapper = (
             "import json,os,struct,sys,time; sys.path.insert(0,sys.argv[1]); "
             "import release_manager_bus as b,release_manager_lifecycle as l; "
-            "l.secrets.token_hex=lambda _:sys.argv[3]; "
-            "m=b.Manager(sys.argv[2],6); "
+            "sys.path.insert(0,os.path.join(sys.argv[1],'../tests')); from pathlib import Path; "
+            "from release_watch_fixture import RootWatch, snapshot_roots, cleanup_orphans; w=RootWatch(b,l,Path(sys.argv[1])); l.secrets.token_hex=lambda _:sys.argv[3]; "
+            "m=b.Manager(sys.argv[2],6,w.authority); "
             "p=json.dumps({'program':'/usr/bin/python3','args':['-I','-S','-c','import time; time.sleep(300)'],"
             "'cwd':'/','env':{},'stdin':'dummy-credential'}).encode(); "
             "d=time.clock_gettime_ns(time.CLOCK_BOOTTIME)+45_000_000_000; "
@@ -321,7 +333,9 @@ class RealManagerTest(unittest.TestCase):
         unit_dir = Path("/run/systemd/system") / (unit + ".d")
         wrapper = (
             "import os,sys,time; sys.path.insert(0,sys.argv[1]); import release_manager_bus as b; "
-            "m=b.Manager(sys.argv[2],2); d=time.clock_gettime_ns(time.CLOCK_BOOTTIME)+10_000_000_000; "
+            "import release_manager_lifecycle as l; from pathlib import Path; "
+            "sys.path.insert(0,os.path.join(sys.argv[1],'../tests')); from release_watch_fixture import RootWatch, snapshot_roots, cleanup_orphans; "
+            "watch=RootWatch(b,l,Path(sys.argv[1])); m=b.Manager(sys.argv[2],2,watch.authority); d=time.clock_gettime_ns(time.CLOCK_BOOTTIME)+10_000_000_000; "
             "m.subscribe(d); r,w=os.pipe(); job=m.start(sys.argv[3],r,d); os.close(r); "
             "print(job,flush=True); time.sleep(300)"
         )
@@ -378,7 +392,7 @@ class RealManagerTest(unittest.TestCase):
             (shared / "wait.conf").write_text("[Unit]\nRequires=" + blocker + "\nAfter=" + blocker + "\n", encoding="ascii")
             start_blocker(blocker, 20)
             blocker_started = True
-            manager = bus.Manager(str(self.helper), 2)
+            manager = bus.Manager(str(self.helper), 2, self.watch.authority)
             end = deadline(15)
             owner = manager.subscribe(end)
             reader, writer = os.pipe()

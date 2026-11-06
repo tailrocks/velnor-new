@@ -1,6 +1,10 @@
 # SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 # SPDX-License-Identifier: Apache-2.0
 
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src'))
+
 import importlib.util
 import json
 import os
@@ -27,10 +31,12 @@ class ScenarioControllerTest(unittest.TestCase):
         tests.mkdir()
         source.mkdir()
         original = Path(__file__).resolve().parents[1] / "src"
-        for name in ("release_manager_bus.py", "release_manager_lifecycle.py", "release_supervisor_exec.py"):
+        for name in ("release_manager_bus.py", "release_manager_lifecycle.py", "release_supervisor_exec.py",
+                     "release_bootstrap_watch.py", "release_watch_admission.py", "release_launcher_watch.py", "release_supervisor_claim.py"):
             shutil.copyfile(original / name, source / name)
         shutil.copyfile(Path(__file__).resolve().with_name("release_manager_scenario_controller.py"),
                         tests / "release_manager_scenario_controller.py")
+        shutil.copyfile(Path(__file__).with_name("release_watch_fixture.py"), tests / "release_watch_fixture.py")
         ledger = (("import os\nwith open(os.environ['VELNOR_SCENARIO_LEDGER'],'a') as f:\n"
                    " f.write('0'*32+chr(10)+'!00000001'+chr(10))\n") if synthetic_ledger else "")
         (tests / "release_manager_qualification.py").write_text(ledger + script)
@@ -176,8 +182,10 @@ class ScenarioControllerTest(unittest.TestCase):
                       "p=json.dumps({'program':'/usr/bin/python3','args':['-I','-S','-c'," + repr(child) + "],"
                       "'cwd':'/','env':{},'stdin':''}).encode();"
                       "d=time.clock_gettime_ns(time.CLOCK_BOOTTIME)+45_000_000_000;"
-                      "m=b.Manager(" + repr(str(helper)) + ",15,root_bootstrap=True);"
-                      "l.supervise(m,struct.pack('>QQI',d,os.stat('/proc/self/ns/time').st_ino,len(p))+p,d);m.close()")
+                      "sys.path.insert(0," + repr(str(root / "tests")) + ");from release_watch_fixture import RootWatch;"
+                      "watch=RootWatch(b,l,pathlib.Path(" + repr(str(source)) + "));"
+                      "m=b.Manager(" + repr(str(helper)) + ",15,watch.authority,root_bootstrap=True);"
+                      "l.supervise(m,struct.pack('>QQI',d,os.stat('/proc/self/ns/time').st_ino,len(p))+p,d);m.close();watch.close()")
             failure = root / "child-error"
             script = ("import pathlib,traceback\ntry:\n exec(" + repr(script) + ")\n"
                       "except Exception:\n pathlib.Path(" + repr(str(failure))

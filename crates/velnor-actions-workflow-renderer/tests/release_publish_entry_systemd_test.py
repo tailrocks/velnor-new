@@ -1,6 +1,10 @@
 # SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 # SPDX-License-Identifier: Apache-2.0
 
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src'))
+
 import base64
 import os
 from pathlib import Path
@@ -11,14 +15,21 @@ import subprocess
 import tempfile
 import time
 import unittest
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from release_watch_fixture import RootWatch, snapshot_roots, cleanup_orphans
 
 
 source_root = Path(__file__).resolve().parents[1] / 'src'
 source = (source_root / 'release_publish_entry.py').read_text()
 for marker, name in (('__VELNOR_MANAGER_PAYLOAD__', 'release_manager_bus.py'),
+                     ('__VELNOR_WATCH_ADMISSION_PAYLOAD__', 'release_watch_admission.py'),
                      ('__VELNOR_LIFECYCLE_PAYLOAD__', 'release_manager_lifecycle.py'),
                      ('__VELNOR_HELPER_PAYLOAD__', 'release_supervisor_exec.py'),
-                     ('__VELNOR_BOOTSTRAP_PAYLOAD__', 'release_generator_bootstrap.sh')):
+                     ('__VELNOR_BOOTSTRAP_PAYLOAD__', 'release_generator_bootstrap.sh'),
+                     ('__VELNOR_WATCH_BOOTSTRAP_PAYLOAD__', 'release_bootstrap_watch.py'),
+                     ('__VELNOR_WATCH_PROGRAM_PAYLOAD__', 'release_launcher_watch.py'),
+                     ('__VELNOR_WATCH_CLAIM_PAYLOAD__', 'release_supervisor_claim.py')):
     source = source.replace(marker, base64.b64encode((source_root / name).read_bytes()).decode())
 source = source.replace('__VELNOR_JOB_TIMEOUT_SECONDS__', '1800')
 entry = {'__name__': 'publisher_entry_fixture'}
@@ -26,6 +37,13 @@ exec(compile(source, 'release_publish_entry.py', 'exec'), entry)
 
 
 class PublisherEntrySystemdTest(unittest.TestCase):
+    def setUp(self):
+        existing = snapshot_roots()
+        self.addCleanup(cleanup_orphans, existing)
+        self.watch = RootWatch(entry["module"]("test_bus", entry["MANAGER"]),
+                               entry["module"]("test_lifecycle", entry["LIFECYCLE"]), source_root)
+        self.addCleanup(self.watch.close)
+
     def test_root_bootstrap_finishes_only_after_unit_quiesces(self):
         self.assertEqual(os.geteuid(), 0)
         with tempfile.TemporaryDirectory(prefix='velnor-entry-test-', dir='/run') as root:
@@ -34,7 +52,7 @@ class PublisherEntrySystemdTest(unittest.TestCase):
             token = 'fixture-not-a-real-credential'
             script = 'test -n "$GH_TOKEN" && printf complete > "$HOME/ready"'
             deadline = time.clock_gettime_ns(time.CLOCK_BOOTTIME) + 60_000_000_000
-            entry['acquire'](root, script, {'PATH': '/usr/bin:/bin', 'HOME': root, 'GH_TOKEN': token}, deadline)
+            entry['acquire'](root, script, {'PATH': '/usr/bin:/bin', 'HOME': root, 'GH_TOKEN': token}, deadline, self.watch.watch)
             self.assertEqual(ready.read_text(), 'complete')
             for file in path.rglob('*'):
                 if file.is_file():
@@ -52,7 +70,7 @@ class PublisherEntrySystemdTest(unittest.TestCase):
             script = '/usr/bin/python3 -I -S -c ' + __import__('shlex').quote(code)
             deadline = time.clock_gettime_ns(time.CLOCK_BOOTTIME) + 75_000_000_000
             try:
-                entry['acquire'](root, script, {'PATH': '/usr/bin:/bin', 'HOME': root}, deadline)
+                entry['acquire'](root, script, {'PATH': '/usr/bin:/bin', 'HOME': root}, deadline, self.watch.watch)
             except Exception:
                 pass
             self.assertTrue(pidfile.is_file())
@@ -75,8 +93,10 @@ class PublisherEntrySystemdTest(unittest.TestCase):
             wrapper = (
                 'import json,os,struct,sys,time;sys.path.insert(0,sys.argv[1]);'
                 'import release_manager_bus as b,release_manager_lifecycle as l;'
+                'from pathlib import Path;sys.path.insert(0,str(Path(sys.argv[1]).parent/"tests"));'
+                'from release_watch_fixture import RootWatch, snapshot_roots, cleanup_orphans;watch=RootWatch(b,l,Path(sys.argv[1]));'
                 'l.secrets.token_hex=lambda _:sys.argv[3];'
-                'm=b.Manager(sys.argv[2],2,root_bootstrap=True);'
+                'm=b.Manager(sys.argv[2],2,watch.authority,root_bootstrap=True);'
                 'p=json.dumps({"program":"/usr/bin/python3","args":["-I","-S","-c",sys.argv[4],sys.argv[5]],'
                 '"cwd":"/","env":{},"stdin":""}).encode();'
                 'd=time.clock_gettime_ns(time.CLOCK_BOOTTIME)+45_000_000_000;'

@@ -1,15 +1,23 @@
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src'))
+
 import ast, base64, fcntl, hashlib, importlib.util, json, os, pathlib, shutil, struct, subprocess, sys, tempfile, time
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+from release_watch_fixture import RootWatch
 root = pathlib.Path(sys.argv[1]).resolve(strict=True)
 source = (root / 'release_publish_entry.py').read_text().replace('__VELNOR_JOB_TIMEOUT_SECONDS__', '1800')
-for key, path in [('MANAGER','release_manager_bus.py'),('LIFECYCLE','release_manager_lifecycle.py'),('HELPER','release_supervisor_exec.py')]:
+for key, path in [('MANAGER','release_manager_bus.py'),('WATCH_ADMISSION','release_watch_admission.py'),('LIFECYCLE','release_manager_lifecycle.py'),('HELPER','release_supervisor_exec.py'),('WATCH_BOOTSTRAP','release_bootstrap_watch.py'),('WATCH_PROGRAM','release_launcher_watch.py'),('WATCH_CLAIM','release_supervisor_claim.py')]:
     source = source.replace('__VELNOR_' + key + '_PAYLOAD__', base64.b64encode((root / path).read_bytes()).decode())
 entry={'__name__':'test_entry'}; exec(compile(source, '<entry>', 'exec'), entry)
 spec=importlib.util.spec_from_file_location('first_stage', root / 'release_publish_first_stage.py')
 stage=importlib.util.module_from_spec(spec); spec.loader.exec_module(stage)
-with tempfile.TemporaryDirectory(prefix='velnor-publisher-', dir='/run') as private:
+manager=entry['module']('fixture_manager',entry['MANAGER'])
+lifecycle=entry['module']('fixture_lifecycle',entry['LIFECYCLE'])
+with RootWatch(manager,lifecycle,root) as watch, tempfile.TemporaryDirectory(prefix='velnor-publisher-', dir='/run') as private:
     binary=pathlib.Path(private)/'generator'; shutil.copyfile(sys.argv[2], binary); binary.chmod(0o500)
     digest=hashlib.sha256(binary.read_bytes()).hexdigest(); deadline=time.clock_gettime_ns(time.CLOCK_BOOTTIME)+120_000_000_000
-    fd=stage.export_verified(entry, private, str(binary), digest, deadline)
+    fd=stage.export_verified(entry, private, str(binary), digest, deadline, watch.watch)
     try:
         actual=os.read(fd,512*1024+1)
         direct=subprocess.run([str(binary),'crate-release','publisher-entry','--timeout-seconds','1800'],env={'PATH':'/usr/bin:/bin','HOME':private,'LANG':'C'},stdout=subprocess.PIPE,check=True).stdout
@@ -18,18 +26,18 @@ with tempfile.TemporaryDirectory(prefix='velnor-publisher-', dir='/run') as priv
                        for node in ast.parse(actual).body
                        if isinstance(node, ast.Assign) and len(node.targets) == 1
                        and isinstance(node.targets[0], ast.Name)
-                       and node.targets[0].id in {'MANAGER', 'LIFECYCLE', 'HELPER', 'SUPERVISOR'}}
-        for key, filename in [('MANAGER', 'release_manager_bus.py'), ('LIFECYCLE', 'release_manager_lifecycle.py'), ('HELPER', 'release_supervisor_exec.py')]:
+                       and node.targets[0].id in {'MANAGER', 'WATCH_ADMISSION', 'LIFECYCLE', 'HELPER', 'SUPERVISOR', 'WATCH_BOOTSTRAP', 'WATCH_PROGRAM', 'CLAIM'}}
+        for key, filename in [('MANAGER', 'release_manager_bus.py'), ('WATCH_ADMISSION', 'release_watch_admission.py'), ('LIFECYCLE', 'release_manager_lifecycle.py'), ('HELPER', 'release_supervisor_exec.py'), ('WATCH_BOOTSTRAP', 'release_bootstrap_watch.py'), ('WATCH_PROGRAM', 'release_launcher_watch.py'), ('CLAIM', 'release_supervisor_claim.py')]:
             assert base64.b64decode(assignments[key], validate=True) == (root / filename).read_bytes()
         embedded = json.loads(base64.b64decode(assignments['SUPERVISOR'], validate=True))
-        for key, filename in [('coordinator','release_coordinator_exec.py'), ('watch','release_launcher_watch.py'), ('claim','release_supervisor_claim.py'), ('retained','release_retained_parent.py'), ('source','release_source_executor.py'), ('channel','release_source_channel.py'), ('upload','release_upload_operation.py'), ('broker','release_forge_broker.py')]:
+        for key, filename in [('coordinator','release_coordinator_exec.py'), ('retained','release_retained_parent.py'), ('source','release_source_executor.py'), ('channel','release_source_channel.py'), ('upload','release_upload_operation.py'), ('broker','release_forge_broker.py')]:
             assert base64.b64decode(embedded[key], validate=True) == (root / filename).read_bytes()
         try: os.write(fd,b'x')
         except OSError: pass
         else: raise AssertionError('export memfd remained writable')
         print('real managed exporter output matches and memfd is sealed',flush=True)
     finally: os.close(fd)
-    try: stage.export_verified(entry, private, str(binary), '0'*64, deadline)
+    try: stage.export_verified(entry, private, str(binary), '0'*64, deadline, watch.watch)
     except ValueError: pass
     else: raise AssertionError('mismatched binary accepted')
 
@@ -41,7 +49,7 @@ with tempfile.TemporaryDirectory(prefix='velnor-publisher-', dir='/run') as priv
         os.ftruncate(fd,512*1024); fcntl.fcntl(fd,fcntl.F_ADD_SEALS,fcntl.F_SEAL_GROW)
         body=json.dumps({'program':'/usr/bin/head','args':['-c','524289','/dev/zero'],'cwd':private,'env':{'PATH':'/usr/bin:/bin','HOME':private},'stdin':''},separators=(',',':')).encode()
         frame=struct.pack('>QQI',deadline,os.stat('/proc/self/ns/time').st_ino,len(body))+body
-        service=manager.Manager(helper,120,root_bootstrap=True)
+        service=manager.Manager(helper,120,watch.authority,root_bootstrap=True)
         try:
             try: lifecycle.supervise(service,frame,deadline,output_fd=fd)
             except lifecycle.SupervisorError as error:
@@ -63,7 +71,7 @@ with tempfile.TemporaryDirectory(prefix='velnor-publisher-', dir='/run') as priv
                        'cwd':private,'env':{'PATH':'/usr/bin:/bin','HOME':private},'stdin':''},
                       separators=(',',':')).encode()
     frame=struct.pack('>QQI',timeout,os.stat('/proc/self/ns/time').st_ino,len(body))+body
-    service=manager.Manager(helper,40,root_bootstrap=True)
+    service=manager.Manager(helper,40,watch.authority,root_bootstrap=True)
     try:
         try: lifecycle.supervise(service,frame,timeout)
         except lifecycle.SupervisorError as error:

@@ -18,6 +18,9 @@ import tarfile
 import tempfile
 import threading
 import time
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from release_watch_fixture import RootWatch
 
 source_dir = Path(__file__).resolve().parents[1] / 'src'
 
@@ -234,12 +237,11 @@ def main():
         context = {'source_sha': sha, 'package': package['name'], 'target_version': package['version'],
                    'manifest': package['manifest'], 'features': package['features'], 'baseline_version': '0.1.0',
                    'baseline_checksum': good_checksum, 'files': good_files}
-        supervisor = 'velnor-release-' + secrets.token_hex(16) + '.service'
-        subprocess.run(['/usr/bin/systemd-run', '--unit=' + supervisor, '--property=Type=exec', '/bin/sleep', '900'],
-                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+        watch = RootWatch(bus, lifecycle, source_dir)
+        supervisor = watch.unit
         manager = None
         try:
-            manager = bus.Manager(str(helper), 300, bind_to=supervisor, deny_unix=True)
+            manager = bus.Manager(str(helper), 300, watch=watch.authority, deny_unix=True)
             source_lock = (source / 'Cargo.lock').read_bytes()
             baseline_lock = (good_root / 'Cargo.lock').read_bytes()
             exercise(manager, root, initial, bound, context, True)
@@ -356,8 +358,7 @@ def main():
         finally:
             if manager is not None:
                 manager.close()
-            subprocess.run(['/usr/bin/systemctl', 'stop', supervisor], stdout=subprocess.DEVNULL,
-                           stderr=subprocess.DEVNULL, check=False)
+            watch.close()
     print('supervised semver: compatible accepted; incompatible and substituted contexts rejected', flush=True)
 
 

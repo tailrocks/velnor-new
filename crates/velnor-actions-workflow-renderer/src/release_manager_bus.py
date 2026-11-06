@@ -11,12 +11,19 @@ import struct
 import time
 
 
-class ManagerError(OSError):
-    pass
+from release_watch_admission import ManagerError, read_watch, watch_staging, verify_programs, open_dropin
 
 
 class Manager:
-    def __init__(self, helper, runtime_seconds, transport=None, root_bootstrap=False, bind_to=None, claim_helper=None, deny_network=False, deny_unix=False):
+    def __init__(self, helper, runtime_seconds, watch, transport=None, root_bootstrap=False, claim_helper=None, deny_network=False, deny_unix=False):
+        data = read_watch(watch)
+        self._initialize(helper, runtime_seconds, transport, root_bootstrap, claim_helper, deny_network, deny_unix)
+        self.watch = watch
+        self._watch_data = data
+        self._watch_unit = None
+        self._watch_start_allowed = False
+
+    def _initialize(self, helper, runtime_seconds, transport, root_bootstrap, claim_helper, deny_network, deny_unix):
         if (not os.path.isabs(helper) or type(runtime_seconds) is not int
                 or not 1 <= runtime_seconds <= 86400 or type(root_bootstrap) is not bool
                 or (root_bootstrap and os.geteuid() != 0)
@@ -24,15 +31,13 @@ class Manager:
                 or ((deny_network or deny_unix) and root_bootstrap)
                 or (claim_helper is not None and (not root_bootstrap
                     or not isinstance(claim_helper, str) or not os.path.isabs(claim_helper)))
-                or (bind_to is not None and (not isinstance(bind_to, str)
-                    or not re.fullmatch(r"velnor-release-[0-9a-f]{32}\.service", bind_to)))):
+                ):
             raise ManagerError("invalid manager request")
         if transport is None and (os.geteuid() != 0 or "DBUS_SYSTEM_BUS_ADDRESS" in os.environ):
             raise ManagerError("untrusted system bus environment")
         self.helper = helper
         self.runtime_seconds = runtime_seconds
         self.root_bootstrap = root_bootstrap
-        self.bind_to = bind_to
         self.claim_helper = claim_helper
         self.deny_network = deny_network
         self.deny_unix = deny_unix
@@ -40,7 +45,6 @@ class Manager:
         self.bus = ctypes.c_void_p()
         self.events = []
         self.owner = None
-        self.unit_path = None
         self.dropin_parent = None
         self.dropin_name = None
         self.slot = ctypes.c_void_p()
@@ -55,6 +59,52 @@ class Manager:
         except Exception:
             self.close()
             raise
+
+    @property
+    def bind_to(self):
+        return None if self._watch_unit is not None else self._watch_data['unit']
+
+    @classmethod
+    def watch_manager(cls, helper, claim_helper, runtime_seconds, unit, program_sha256, claim_sha256):
+        verify_programs(helper, claim_helper, unit, program_sha256, claim_sha256)
+        result = cls.__new__(cls)
+        result._initialize(helper, runtime_seconds, None, True, claim_helper, False, False)
+        result.watch = None
+        result._watch_data = None
+        result._watch_unit = unit
+        result._watch_start_allowed = True
+        return result
+
+    @classmethod
+    def reclaim_watch(cls, authority, deadline):
+        data = read_watch(authority)
+        result = cls.__new__(cls)
+        result._initialize('/nonexistent', data['runtime_seconds'], None, True, None, False, False)
+        result.watch = authority
+        result._watch_data = data
+        result._watch_unit = data['unit']
+        result._watch_start_allowed = False
+        result.subscribe(deadline)
+        try:
+            result.dropin_parent, result.dropin_name = open_dropin(data)
+        except BaseException:
+            result.close()
+            raise
+        result._method(result.owner, '/org/freedesktop/systemd1', 'org.freedesktop.systemd1.Manager',
+                       'RefUnit', [('s', data['unit'])], deadline)
+        result.validate_watch(deadline)
+        return result
+
+    def validate_watch(self, deadline):
+        data = read_watch(self.watch)
+        if data != self._watch_data or deadline > data['deadline']:
+            raise ManagerError('watch deadline or identity changed')
+        current = self.state(data['unit'], deadline)
+        if (current['invocation'] != data['invocation'] or current['active'] != 'active'
+                or current['job'] is not None or not current['populated']
+                or current['control_group'] != '/system.slice/' + data['unit']):
+            raise ManagerError('watch invocation unavailable')
+        return data
 
     def _connect_system(self):
         flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
@@ -248,7 +298,7 @@ class Manager:
         self._close(message)
         self._close(message)
 
-    def _prepare_unit(self, unit):
+    def _prepare_unit(self, unit, runtime_seconds):
         if os.geteuid() != 0 or not re.fullmatch(r"velnor-release-[0-9a-f]{32}\.service", unit):
             raise ManagerError("invalid unit staging")
         flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
@@ -274,7 +324,7 @@ class Manager:
                 fd = os.open("deadline.conf", os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC,
                              0o600, dir_fd=child)
                 try:
-                    data = ("[Unit]\nJobTimeoutSec=" + str(self.runtime_seconds) + "s\n").encode("ascii")
+                    data = ("[Unit]\nJobTimeoutSec=" + str(runtime_seconds) + "s\n").encode("ascii")
                     while data:
                         written = os.write(fd, data)
                         if not written:
@@ -306,7 +356,15 @@ class Manager:
         self.dropin_name = None
 
     def start(self, unit, reader, deadline, output_fd=None):
-        self._prepare_unit(unit)
+        if self._watch_unit is None:
+            self.validate_watch(deadline)
+        elif not self._watch_start_allowed or unit != self._watch_unit:
+            raise ManagerError('watch unit cannot be replaced')
+        remaining = (deadline - time.clock_gettime_ns(time.CLOCK_BOOTTIME)) // 1_000_000_000
+        runtime_seconds = min(self.runtime_seconds, remaining)
+        if runtime_seconds < 1:
+            raise ManagerError('unit deadline unavailable')
+        self._prepare_unit(unit, runtime_seconds)
         message = self._message(self.owner, "/org/freedesktop/systemd1", "org.freedesktop.systemd1.Manager",
                                 "StartTransientUnit")
         reply = None
@@ -318,7 +376,7 @@ class Manager:
                 ("AddRef", "b", 1), ("DynamicUser", "b", int(not self.root_bootstrap)), ("NoNewPrivileges", "b", 1), ("Delegate", "b", 0),
                 ("CapabilityBoundingSet", "t", 0), ("AmbientCapabilities", "t", 0), ("LimitCORE", "t", 0),
                 ("TimeoutStartUSec", "t", 5_000_000), ("TimeoutStopUSec", "t", 20_000_000),
-                ("RuntimeMaxUSec", "t", self.runtime_seconds * 1_000_000),
+                ("RuntimeMaxUSec", "t", runtime_seconds * 1_000_000),
                 ("KillMode", "s", "control-group"),
                 ("StandardError", "s", "null"), ("StandardInputFileDescriptor", "h", reader),
             ):
@@ -391,10 +449,14 @@ class Manager:
             if reply:
                 self.library.sd_bus_message_unref(reply)
             self.library.sd_bus_message_unref(message)
-        self.unit_path = self._method(self.owner, "/org/freedesktop/systemd1", "org.freedesktop.systemd1.Manager",
+        unit_path = self._method(self.owner, "/org/freedesktop/systemd1", "org.freedesktop.systemd1.Manager",
                                       "GetUnit", [("s", unit)], deadline, "o")
-        if self._get("org.freedesktop.systemd1.Unit", "JobTimeoutUSec", "t", deadline) != self.runtime_seconds * 1_000_000:
+        if self._get(unit_path, "org.freedesktop.systemd1.Unit", "JobTimeoutUSec", "t", deadline) != runtime_seconds * 1_000_000:
             raise ManagerError("unit deadline unverified")
+        if self._watch_unit is None:
+            self.validate_watch(deadline)
+        else:
+            self._watch_runtime_seconds = runtime_seconds
         return job
 
     def event(self, deadline):
@@ -410,14 +472,25 @@ class Manager:
         return self._method(self.owner, "/org/freedesktop/systemd1", "org.freedesktop.systemd1.Manager",
                             "StopUnit", [("s", unit), ("s", "replace")], deadline, "o")
 
-    def _get(self, interface, name, kind, deadline):
-        message = self._message(self.owner, self.unit_path, "org.freedesktop.DBus.Properties", "Get")
+    def _get(self, unit_path, interface, name, kind, deadline):
+        message = self._message(self.owner, unit_path, "org.freedesktop.DBus.Properties", "Get")
         reply = None
         try:
             self._append(message, "s", interface)
             self._append(message, "s", name)
             reply = self._call(message, deadline)
             self._enter(reply, "v", kind)
+            if kind == "as":
+                self._enter(reply, "a", "s")
+                items = []
+                while True:
+                    item = ctypes.c_char_p()
+                    count = self._check(self.library.sd_bus_message_read_basic(reply, b"s", ctypes.byref(item)))
+                    if count == 0:
+                        return items
+                    if count != 1 or len(items) >= 1024:
+                        raise ManagerError('invalid unit relationship')
+                    items.append(item.value.decode('utf-8', 'strict'))
             if kind == "ay":
                 pointer = ctypes.c_void_p()
                 size = ctypes.c_size_t()
@@ -445,15 +518,17 @@ class Manager:
             if time.clock_gettime_ns(time.CLOCK_BOOTTIME) >= deadline:
                 raise ManagerError("unit state deadline")
             owner = self._owner(deadline)
+            unit_path = self._method(owner, '/org/freedesktop/systemd1', 'org.freedesktop.systemd1.Manager',
+                                     'GetUnit', [('s', unit)], deadline, 'o')
             value = {
                 "owner": owner,
-                "invocation": self._get(unit_interface, "InvocationID", "ay", deadline),
-                "control_group": self._get(service, "ControlGroup", "s", deadline),
-                "active": self._get(unit_interface, "ActiveState", "s", deadline),
-                "job": self._get(unit_interface, "Job", "(uo)", deadline),
-                "result": self._get(service, "Result", "s", deadline),
-                "exec_code": self._get(service, "ExecMainCode", "i", deadline),
-                "exec_status": self._get(service, "ExecMainStatus", "i", deadline),
+                "invocation": self._get(unit_path, unit_interface, "InvocationID", "ay", deadline),
+                "control_group": self._get(unit_path, service, "ControlGroup", "s", deadline),
+                "active": self._get(unit_path, unit_interface, "ActiveState", "s", deadline),
+                "job": self._get(unit_path, unit_interface, "Job", "(uo)", deadline),
+                "result": self._get(unit_path, service, "Result", "s", deadline),
+                "exec_code": self._get(unit_path, service, "ExecMainCode", "i", deadline),
+                "exec_status": self._get(unit_path, service, "ExecMainStatus", "i", deadline),
             }
             current = (owner, value["invocation"])
             if identity is not None and identity != current:
@@ -479,6 +554,16 @@ class Manager:
                 raise ManagerError("manager owner changed")
             return value
         raise ManagerError("unit state remained unavailable")
+
+    def bound_units(self, unit, deadline):
+        if not re.fullmatch(r"velnor-release-[0-9a-f]{32}\.service", unit):
+            raise ManagerError('invalid watch unit')
+        path = self._method(self.owner, '/org/freedesktop/systemd1', 'org.freedesktop.systemd1.Manager',
+                            'GetUnit', [('s', unit)], deadline, 'o')
+        values = self._get(path, 'org.freedesktop.systemd1.Unit', 'BoundBy', 'as', deadline)
+        if len(values) != len(set(values)) or any(not re.fullmatch(r"velnor-release-[0-9a-f]{32}\.service", item) for item in values):
+            raise ManagerError('untrusted watch dependency')
+        return values
 
     def close(self):
         if self.dropin_parent is not None:

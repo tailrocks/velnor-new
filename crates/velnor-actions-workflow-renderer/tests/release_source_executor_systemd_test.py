@@ -1,6 +1,10 @@
 # SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 # SPDX-License-Identifier: Apache-2.0
 
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src'))
+
 import array, struct, threading
 import fcntl, hashlib, importlib.util, io, json, os, pathlib, secrets, shutil, socket, subprocess, tarfile, tempfile, time
 root=pathlib.Path(__file__).resolve().parents[1]/'src'
@@ -9,6 +13,9 @@ def load(name):
  obj=importlib.util.module_from_spec(spec)
  spec.loader.exec_module(obj)
  return obj
+import sys
+sys.path.insert(0,str(pathlib.Path(__file__).resolve().parent))
+from release_watch_fixture import RootWatch
 bus=load('release_manager_bus')
 lifecycle=load('release_manager_lifecycle')
 executor=load('release_source_executor')
@@ -126,9 +133,8 @@ with tempfile.TemporaryDirectory(dir='/run',prefix='velnor-publisher-') as tmp:
     result[key]=(info.st_mode & 0o777,content)
   return result
  before=snapshot()
- supervisor='velnor-release-'+secrets.token_hex(16)+'.service'
- subprocess.run(['/usr/bin/systemd-run','--unit='+supervisor,'--property=Type=exec','/bin/sleep','90'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,check=True)
- manager=bus.Manager(str(helper),60,bind_to=supervisor,deny_unix=True)
+ watch=RootWatch(bus,lifecycle,root)
+ manager=bus.Manager(str(helper),60,watch.authority,deny_unix=True)
  try:
   end=time.clock_gettime_ns(time.CLOCK_BOOTTIME)+120_000_000_000
   initial=seal_context(dict(value,packages=[dict(value['packages'][0],version=None,manifest=None)]))
@@ -412,4 +418,4 @@ with tempfile.TemporaryDirectory(dir='/run',prefix='velnor-publisher-') as tmp:
   listener.close()
   tcp_listener.close()
   os.close(context_fd)
-  subprocess.run(['/usr/bin/systemctl','stop',supervisor],check=False,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=10)
+  watch.close()

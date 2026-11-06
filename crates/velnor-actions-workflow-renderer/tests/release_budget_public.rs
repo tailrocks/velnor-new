@@ -36,6 +36,7 @@ fn hosted_supervisor_runs_candidate_scenarios_and_controller_regressions()
     assert!(release.lines().any(|line| line == "VERSION_ID=\"26.04\""));
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests");
     for (file, arguments) in [
+        ("release_bootstrap_watch_systemd_test.py", &[][..]),
         ("release_manager_scenario_controller_test.py", &[][..]),
         ("release_manager_home_access_test.py", &[][..]),
         ("release_source_names_test.py", &[][..]),
@@ -181,13 +182,10 @@ fn publisher_step_fits_github_limit_and_binds_generator_pins()
             shell.wait()?.success(),
             "generated publisher command is invalid shell"
         );
-        let encoded = run[6]
-            .split_once("base64.b64decode('")
-            .ok_or("missing encoded bundle")?
-            .1
-            .split_once("',validate=True)")
-            .ok_or("invalid encoded bundle")?
-            .0;
+        let encoded = env
+            .get("VELNOR_RELEASE_BOOTSTRAP_PAYLOAD")
+            .ok_or("missing literal bundle")?;
+        assert!(encoded.len() <= 32 * 1024);
         let compressed = base64::engine::general_purpose::STANDARD.decode(encoded)?;
         let mut decoder = flate2::read::ZlibDecoder::new(compressed.as_slice());
         let mut payload = Vec::new();
@@ -204,6 +202,10 @@ fn publisher_step_fits_github_limit_and_binds_generator_pins()
                 include_str!("../src/release_generator_bootstrap.sh"),
             ),
             ("manager", include_str!("../src/release_manager_bus.py")),
+            (
+                "watch_admission",
+                include_str!("../src/release_watch_admission.py"),
+            ),
             (
                 "lifecycle",
                 include_str!("../src/release_manager_lifecycle.py"),
@@ -222,16 +224,39 @@ fn publisher_step_fits_github_limit_and_binds_generator_pins()
             env.get("VELNOR_RELEASE_BUDGET").map(String::as_str),
             Some("${{ steps.release-budget.outputs.budget }}")
         );
-        let rejected = std::process::Command::new(&run[3])
-            .args(&run[4..])
-            .env_clear()
-            .output()?;
-        assert!(!rejected.status.success());
-        assert!(
-            String::from_utf8_lossy(&rejected.stderr).contains("publisher first stage rejected")
-        );
+        assert_bootstrap_transport(&run, encoded)?;
     }
     assert!(publisher_step(false, "0.1.75", "invalid", &manifest).is_err());
+    Ok(())
+}
+
+fn assert_bootstrap_transport(
+    run: &[String],
+    encoded: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let rejected = std::process::Command::new(&run[3])
+        .args(&run[4..])
+        .env_clear()
+        .env("VELNOR_RELEASE_BOOTSTRAP_PAYLOAD", encoded)
+        .output()?;
+    assert!(!rejected.status.success());
+    assert!(String::from_utf8_lossy(&rejected.stderr).contains("publisher first stage rejected"));
+    for invalid in [
+        None,
+        Some("A".repeat(33 * 1024)),
+        Some(format!("A{encoded}")),
+    ] {
+        let mut child = std::process::Command::new(&run[3]);
+        child.args(&run[4..]).env_clear();
+        if let Some(value) = invalid {
+            child.env("VELNOR_RELEASE_BOOTSTRAP_PAYLOAD", value);
+        }
+        let result = child.output()?;
+        assert!(!result.status.success());
+        assert!(
+            String::from_utf8_lossy(&result.stderr).contains("release bootstrap payload rejected")
+        );
+    }
     Ok(())
 }
 

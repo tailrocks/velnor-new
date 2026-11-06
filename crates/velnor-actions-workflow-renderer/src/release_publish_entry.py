@@ -28,9 +28,15 @@ OIDC_SECRETS = ('ACTIONS_ID_TOKEN_REQUEST_TOKEN', 'ACTIONS_ID_TOKEN_REQUEST_URL'
 MAX_BINARY = 100 * 1024 * 1024
 BOOTSTRAP = '__VELNOR_BOOTSTRAP_PAYLOAD__'
 MANAGER = '__VELNOR_MANAGER_PAYLOAD__'
+WATCH_ADMISSION = '__VELNOR_WATCH_ADMISSION_PAYLOAD__'
 LIFECYCLE = '__VELNOR_LIFECYCLE_PAYLOAD__'
 HELPER = '__VELNOR_HELPER_PAYLOAD__'
 SUPERVISOR = '__VELNOR_SUPERVISOR_PAYLOAD__'
+WATCH_BOOTSTRAP = '__VELNOR_WATCH_BOOTSTRAP_PAYLOAD__'
+WATCH_PROGRAM = '__VELNOR_WATCH_PROGRAM_PAYLOAD__'
+CLAIM = '__VELNOR_WATCH_CLAIM_PAYLOAD__'
+WATCH_CONTRACT = 'velnor.root-watch.v1'
+WATCH_OPERATION = 'publish'
 JOB_TIMEOUT_SECONDS = int('__VELNOR_JOB_TIMEOUT_SECONDS__')
 CLEANUP_RESERVE_NS = 25_000_000_000
 
@@ -139,6 +145,8 @@ def decoded(value):
 
 
 def module(name, payload):
+    if payload == MANAGER:
+        module('release_watch_admission', WATCH_ADMISSION)
     result = types.ModuleType(name)
     sys.modules[name] = result
     try:
@@ -192,7 +200,7 @@ def stage_fixed(root, name, content, mode):
     return path
 
 
-def acquire(root, script, env, deadline):
+def acquire(root, script, env, deadline, watch):
     manager_module = module('velnor_root_manager', MANAGER)
     lifecycle = module('velnor_root_lifecycle', LIFECYCLE)
     helper = fixed_helper(root)
@@ -202,26 +210,25 @@ def acquire(root, script, env, deadline):
         invalid()
     namespace = os.stat('/proc/self/ns/time').st_ino
     frame = struct.pack('>QQI', deadline, namespace, len(body)) + body
-    manager = manager_module.Manager(helper, JOB_TIMEOUT_SECONDS, root_bootstrap=True)
+    manager = manager_module.Manager(helper, JOB_TIMEOUT_SECONDS, watch.authority, root_bootstrap=True)
     try:
         lifecycle.supervise(manager, frame, deadline, cleanup_reserve=CLEANUP_RESERVE_NS)
     finally:
         manager.close()
 
 
-def prepare_binary(context, version, source_sha, manifest_sha, deadline):
+def prepare_binary(context, version, source_sha, manifest_sha, deadline, root, watch):
     script = decoded(BOOTSTRAP).decode('utf-8')
     run = os.stat('/run', follow_symlinks=False)
     if not stat.S_ISDIR(run.st_mode) or run.st_uid != 0 or run.st_mode & 0o022:
         invalid()
-    root = tempfile.mkdtemp(prefix='velnor-publisher-', dir='/run')
     info = os.stat(root, follow_symlinks=False)
     if info.st_uid != 0 or stat.S_IMODE(info.st_mode) != 0o700:
         invalid()
     clean = {'PATH': '/usr/bin:/bin', 'HOME': root, 'TMPDIR': root, 'RUNNER_TEMP': root,
              'GH_TOKEN': context['GH_TOKEN'], 'VELNOR_GENERATOR_VERSION': version,
              'VELNOR_GENERATOR_SOURCE_SHA': source_sha, 'VELNOR_GENERATOR_MANIFEST_SHA256': manifest_sha}
-    acquire(root, script, clean, deadline)
+    acquire(root, script, clean, deadline, watch)
     manifest = os.path.join(root, 'velnor', 'bootstrap', 'release-manifest.json')
     manifest_fd = os.open(manifest, os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW)
     with os.fdopen(manifest_fd, 'rb') as file:
@@ -240,7 +247,7 @@ def prepare_binary(context, version, source_sha, manifest_sha, deadline):
     digest = targets[0].get('sha256', '')
     fd = read_verified_binary(binary, digest)
     os.close(fd)
-    return root, binary, digest
+    return binary, digest
 
 
 def main():
@@ -256,36 +263,40 @@ def main():
             or not re.fullmatch(r'[a-f0-9]{40}', source_sha)
             or not re.fullmatch(r'[a-f0-9]{64}', manifest_sha)):
         invalid()
-    root, binary, digest = prepare_binary(context, version, source_sha, manifest_sha, deadline)
-    child = dict(context)
-    child.update({'GIT_TOKEN': context['GH_TOKEN'], 'VELNOR_GENERATOR_VERSION': version,
-                  'VELNOR_GENERATOR_SOURCE_SHA': source_sha, 'VELNOR_GENERATOR_MANIFEST_SHA256': manifest_sha})
-    child.pop('GH_TOKEN')
-    if time.clock_gettime_ns(time.CLOCK_BOOTTIME) >= deadline:
-        invalid()
-    bundle = json.loads(decoded(SUPERVISOR), object_pairs_hook=unique_object)
-    names = ('coordinator', 'watch', 'claim', 'retained', 'source', 'channel', 'upload', 'broker')
-    if not isinstance(bundle, dict) or set(bundle) != set(names) or not all(isinstance(bundle[name], str) for name in names):
-        invalid()
-    view = tempfile.mkdtemp(prefix='velnor-publisher-view-', dir='/run')
+    manager = module('velnor_publisher_manager', MANAGER)
+    lifecycle = module('velnor_publisher_lifecycle', LIFECYCLE)
+    watch_module = module('velnor_bootstrap_watch', WATCH_BOOTSTRAP)
+    watch = watch_module.reclaim(manager, lifecycle, deadline, WATCH_OPERATION, decoded(WATCH_PROGRAM), decoded(CLAIM))
+    root = None
+    view = None
     completed = False
     try:
+        root = tempfile.mkdtemp(prefix='velnor-publisher-', dir='/run')
+        child = dict(context)
+        child.update({'GIT_TOKEN': context['GH_TOKEN'], 'VELNOR_GENERATOR_VERSION': version,
+                      'VELNOR_GENERATOR_SOURCE_SHA': source_sha, 'VELNOR_GENERATOR_MANIFEST_SHA256': manifest_sha})
+        child.pop('GH_TOKEN')
+        if time.clock_gettime_ns(time.CLOCK_BOOTTIME) >= deadline:
+            invalid()
+        bundle = json.loads(decoded(SUPERVISOR), object_pairs_hook=unique_object)
+        names = ('coordinator', 'retained', 'source', 'channel', 'upload', 'broker')
+        if not isinstance(bundle, dict) or set(bundle) != set(names) or not all(isinstance(bundle[name], str) for name in names):
+            invalid()
+        binary, digest = prepare_binary(context, version, source_sha, manifest_sha, deadline, root, watch)
+        view = tempfile.mkdtemp(prefix='velnor-publisher-view-', dir='/run')
         stage_fixed(root, 'release_coordinator_exec.py', decoded(bundle['coordinator']), 0o500)
-        stage_fixed(root, 'release_launcher_watch.py', decoded(bundle['watch']), 0o500)
-        stage_fixed(root, 'release_supervisor_claim.py', decoded(bundle['claim']), 0o500)
         helper = decoded(HELPER)
         stage_fixed(view, 'release_supervisor_exec.py', helper, 0o555)
-        manager = module('velnor_publisher_manager', MANAGER)
-        lifecycle = module('velnor_publisher_lifecycle', LIFECYCLE)
         retained = module('velnor_publisher_retained', bundle['retained'])
         source = module('velnor_publisher_source', bundle['source'])
         channel = module('velnor_publisher_channel', bundle['channel'])
         uploader = module('velnor_publisher_upload', bundle['upload'])
         broker = module('velnor_publisher_broker', bundle['broker'])
         retained.run(root, view, hashlib.sha256(helper).hexdigest(), version, digest, child,
-                     deadline, manager, lifecycle, channel, source, uploader, broker)
+                     deadline, manager, lifecycle, channel, source, uploader, broker, watch)
         completed = True
     finally:
+        watch.close(deadline)
         if completed:
             shutil.rmtree(view)
             shutil.rmtree(root)

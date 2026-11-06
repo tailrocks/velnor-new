@@ -1,6 +1,10 @@
 # SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 # SPDX-License-Identifier: Apache-2.0
 
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src'))
+
 import fcntl, hashlib, importlib.util, io, json, os, pathlib, secrets, shutil, subprocess, tarfile, tempfile, time
 modules=pathlib.Path(os.environ.get('VELNOR_SOURCE_TEST_RENDERER') or pathlib.Path(__file__).resolve().parents[1]/'src')
 def load(name):
@@ -14,8 +18,10 @@ executor=load('release_source_executor')
 fault=os.environ.get('VELNOR_SOURCE_TEST_FAULT','')
 if fault not in ('', 'git-lock', 'outside-workspace'):
  raise RuntimeError('invalid fixture fault')
-unit='velnor-release-'+secrets.token_hex(16)+'.service'
-subprocess.run(['/usr/bin/systemd-run','--quiet','--unit='+unit,'--property=Type=exec','/bin/sleep','500'],check=True)
+import sys
+sys.path.insert(0,str(pathlib.Path(__file__).resolve().parent))
+from release_watch_fixture import RootWatch
+watch=RootWatch(bus,lifecycle,modules)
 helper='/run/velnor-nested-helper-'+secrets.token_hex(12)
 try:
  shutil.copyfile(modules/'release_supervisor_exec.py',helper)
@@ -80,9 +86,9 @@ try:
   context=executor.read_context(descriptor)
   os.close(descriptor)
   end=time.clock_gettime_ns(time.CLOCK_BOOTTIME)+300_000_000_000
-  manager=bus.Manager(helper,240,bind_to=unit,deny_unix=True,deny_network=True)
+  manager=bus.Manager(helper,240,watch=watch.authority,deny_unix=True,deny_network=True)
   manager.subscribe(end)
-  locator=bus.Manager(helper,240,bind_to=unit,deny_unix=True,deny_network=True)
+  locator=bus.Manager(helper,240,watch=watch.authority,deny_unix=True,deny_network=True)
   locator.subscribe(end)
   try:
    session=executor.SourceSession(manager,locator,lifecycle,str(root),context,end,(root.stat().st_dev,root.stat().st_ino))
@@ -111,6 +117,6 @@ try:
    manager.close()
 finally:
  try:
-  subprocess.run(['/usr/bin/systemctl','stop',unit],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,check=True)
+  watch.close()
  finally:
   pathlib.Path(helper).unlink(missing_ok=True)

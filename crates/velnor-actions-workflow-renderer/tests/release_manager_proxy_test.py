@@ -1,6 +1,10 @@
 # SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 # SPDX-License-Identifier: Apache-2.0
 
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src'))
+
 import array
 import importlib.util
 import os
@@ -19,9 +23,13 @@ import unittest
 root = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from release_manager_scenario_controller import finish_blocker, start_blocker
+from release_watch_fixture import RootWatch, snapshot_roots, cleanup_orphans
 spec = importlib.util.spec_from_file_location("release_manager_bus", root / "src/release_manager_bus.py")
 bus = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(bus)
+spec = importlib.util.spec_from_file_location("release_manager_lifecycle", root / "src/release_manager_lifecycle.py")
+lifecycle = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(lifecycle)
 
 
 class FaultProxy:
@@ -87,6 +95,12 @@ class FaultProxy:
 
 
 class RealReplyLossTest(unittest.TestCase):
+    def setUp(self):
+        existing = snapshot_roots()
+        self.addCleanup(cleanup_orphans, existing)
+        self.watch = RootWatch(bus, lifecycle, root / "src")
+        self.addCleanup(self.watch.close)
+
     def test_production_constructor_rejects_inherited_fake_broker(self):
         with tempfile.TemporaryDirectory(prefix="velnor-fake-broker-", dir="/run") as directory:
             path = Path(directory) / "socket"
@@ -95,7 +109,12 @@ class RealReplyLossTest(unittest.TestCase):
             fake.listen(1)
             try:
                 program = ("import sys;sys.path.insert(0,sys.argv[1]);import release_manager_bus as b; "
-                           "b.Manager('/usr/bin/true',10)")
+                           "import os,pathlib;sys.path.insert(0,str(pathlib.Path(sys.argv[1]).parent/'tests')); "
+                           "from release_watch_fixture import RootWatch, snapshot_roots, cleanup_orphans;import release_manager_lifecycle as l; "
+                           "address=os.environ.pop('DBUS_SYSTEM_BUS_ADDRESS');watch=RootWatch(b,l,pathlib.Path(sys.argv[1])); "
+                           "os.environ['DBUS_SYSTEM_BUS_ADDRESS']=address; "
+                           "\ntry: b.Manager('/usr/bin/true',10,watch.authority)"
+                           "\nfinally: watch.close()")
                 result = subprocess.run(["/usr/bin/python3", "-I", "-S", "-c", program, str(root / "src")],
                                         stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                         env={"DBUS_SYSTEM_BUS_ADDRESS": "unix:path=" + str(path),
@@ -132,7 +151,7 @@ class RealReplyLossTest(unittest.TestCase):
         sentinel.listen(1)
         proxy = FaultProxy(scratch / "proxy")
         self.addCleanup(proxy.drop)
-        observer = bus.Manager(str(helper), 15)
+        observer = bus.Manager(str(helper), 15, self.watch.authority)
         parent = None
         blocker_started = False
         try:
@@ -144,15 +163,18 @@ class RealReplyLossTest(unittest.TestCase):
             wrapper = (
                 "import json,os,struct,sys,time; sys.path.insert(0,sys.argv[1]); "
                 "import release_manager_bus as b,release_manager_lifecycle as l; "
+                "from pathlib import Path;sys.path.insert(0,str(Path(sys.argv[1]).parent/'tests')); "
+                "from release_watch_fixture import RootWatch, snapshot_roots, cleanup_orphans;address=os.environ.pop('DBUS_SYSTEM_BUS_ADDRESS'); "
+                "watch=RootWatch(b,l,Path(sys.argv[1]));os.environ['DBUS_SYSTEM_BUS_ADDRESS']=address; "
                 "l.secrets.token_hex=lambda _:sys.argv[3]; "
-                "m=b.Manager(sys.argv[2],15,transport=lambda x:x._check(x.library.sd_bus_open_system(__import__('ctypes').byref(x.bus))),root_bootstrap=True); "
+                "m=b.Manager(sys.argv[2],15,watch.authority,transport=lambda x:x._check(x.library.sd_bus_open_system(__import__('ctypes').byref(x.bus))),root_bootstrap=True); "
                 "command=\"import socket,sys;s=socket.socket(socket.AF_UNIX);s.connect(sys.argv[1]);s.send(b'x')\"; "
                 "p=json.dumps({'program':'/usr/bin/python3','args':['-I','-S','-c',command,sys.argv[4]],"
                 "'cwd':'/','env':{},'stdin':'dummy-credential'}).encode(); "
                 "d=time.clock_gettime_ns(time.CLOCK_BOOTTIME)+45_000_000_000; "
                 "\ntry: l.supervise(m,struct.pack('>QQI',d,os.stat('/proc/self/ns/time').st_ino,len(p))+p,d)"
                 "\nexcept Exception as e: print(str(e),flush=True)"
-                "\nfinally: m.close(); time.sleep(15)"
+                "\nfinally: m.close(); watch.close(); time.sleep(15)"
             )
             environment = {"DBUS_SYSTEM_BUS_ADDRESS": "unix:path=" + str(scratch / "proxy"), "PATH": "/usr/bin:/bin"}
             parent = subprocess.Popen(["/usr/bin/python3", "-I", "-S", "-c", wrapper, str(root / "src"),

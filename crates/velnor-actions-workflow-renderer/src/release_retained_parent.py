@@ -111,7 +111,33 @@ def _view_helper(view, expected):
     return view + '/release_supervisor_exec.py', directory
 
 
-def run(root, view, helper_sha, version, digest, env, deadline, bus, lifecycle, channel, executor, uploader, broker):
+def run(root, view, helper_sha, version, digest, env, deadline, bus, lifecycle, channel, executor, uploader, broker, watch):
+    if watch.data['operation'] != 'publish' or env.get('GITHUB_JOB') not in ('release-publish', 'release-publish-bootstrap'):
+        raise ParentError('publisher role invalid')
+    def serve(parent, source, locator, work_deadline, identity):
+        def credentials(mode):
+            if mode == 'trusted-publishing':
+                return {'github_token': env.get('GIT_TOKEN'), 'oidc_token': env.get('ACTIONS_ID_TOKEN_REQUEST_TOKEN'),
+                        'oidc_url': env.get('ACTIONS_ID_TOKEN_REQUEST_URL')}
+            if mode == 'bootstrap-token':
+                return {'github_token': env.get('GIT_TOKEN'), 'cargo_token': env.get('CARGO_REGISTRY_TOKEN')}
+            raise ParentError('invalid upload mode')
+        return channel.serve(parent, source, locator, lifecycle, executor, uploader, broker, credentials,
+                             view, work_deadline, identity)
+    return _run(root, view, helper_sha, version, digest, env, deadline, bus, lifecycle, channel,
+                watch, 'release_coordinator_exec.py', serve)
+
+
+def run_preflight(root, view, helper_sha, version, digest, env, deadline, bus, lifecycle, channel, executor, watch):
+    if watch.data['operation'] != 'preflight' or env.get('GITHUB_JOB') not in ('release-preflight', 'release-reconcile'):
+        raise ParentError('preflight role invalid')
+    def serve(parent, source, locator, work_deadline, identity):
+        return channel.serve_preflight(parent, source, locator, lifecycle, executor, view, work_deadline, identity)
+    return _run(root, view, helper_sha, version, digest, env, deadline, bus, lifecycle, channel,
+                watch, 'release_preflight_coordinator_exec.py', serve)
+
+
+def _run(root, view, helper_sha, version, digest, env, deadline, bus, lifecycle, channel, watch, coordinator_name, serve):
     if os.geteuid() != 0 or type(deadline) is not int or _remaining(deadline) <= 25:
         raise ParentError('publisher unavailable')
     work_deadline = deadline - 25_000_000_000
@@ -127,19 +153,9 @@ def run(root, view, helper_sha, version, digest, env, deadline, bus, lifecycle, 
         os.close(view_fd)
         raise ParentError('publisher roots overlap')
     try:
-        watcher = bus.Manager(root + '/release_launcher_watch.py', int(_remaining(work_deadline)),
-                              root_bootstrap=True, claim_helper=root + '/release_supervisor_claim.py')
-    except BaseException:
-        os.close(root_fd)
-        os.close(view_fd)
-        raise
-    watch_unit = _unit()
-    watch_owner = None
-    watch_parent = watch_child = None
-    try:
+        watch.manager.validate_watch(work_deadline)
         parent, child = socket.socketpair()
     except BaseException:
-        watcher.close()
         os.close(root_fd)
         os.close(view_fd)
         raise
@@ -156,8 +172,8 @@ def run(root, view, helper_sha, version, digest, env, deadline, bus, lifecycle, 
         unit = _unit()
         attempted = False
         try:
-            manager = bus.Manager(root + '/release_coordinator_exec.py', int(_remaining(work_deadline)),
-                                  root_bootstrap=True, bind_to=watch_unit)
+            manager = bus.Manager(root + '/' + coordinator_name, int(_remaining(work_deadline)),
+                                  watch=watch.authority, root_bootstrap=True)
             owner = manager.subscribe(work_deadline)
             attempted = True
             job = manager.start(unit, child.fileno(), work_deadline)
@@ -195,11 +211,7 @@ def run(root, view, helper_sha, version, digest, env, deadline, bus, lifecycle, 
                 parent.shutdown(socket.SHUT_RDWR)
             except OSError:
                 pass
-            if watch_parent is not None:
-                try:
-                    watch_parent.shutdown(socket.SHUT_WR)
-                except OSError:
-                    pass
+            watch.end_liveness()
             if manager is not None and owner is not None and attempted:
                 try:
                     _stop(manager, lifecycle, owner, unit, deadline)
@@ -212,29 +224,12 @@ def run(root, view, helper_sha, version, digest, env, deadline, bus, lifecycle, 
                 manager.close()
 
     try:
-        watch_owner = watcher.subscribe(work_deadline)
-        watch_parent, watch_child = socket.socketpair()
-        try:
-            job = watcher.start(watch_unit, watch_child.fileno(), work_deadline)
-        finally:
-            watch_child.close()
-            watch_child = None
-        lifecycle.wait_job(watcher, watch_unit, job, work_deadline)
-        current = lifecycle.state(watcher, watch_owner, watch_unit, work_deadline)
-        watch_invocation = current['invocation']
-        if (not re.fullmatch(r'[0-9a-f]{32}', watch_invocation)
-                or current['control_group'] != '/system.slice/' + watch_unit
-                or current['active'] != 'active' or current['job'] is not None or not current['populated']):
-            raise ParentError('launcher watchdog unavailable')
-        watch_parent.settimeout(_remaining(work_deadline))
-        watch_parent.sendall(struct.pack('>QQ', deadline, os.stat('/proc/self/ns/time').st_ino))
+        watch.manager.validate_watch(work_deadline)
         monitor = threading.Thread(target=coordinate)
         monitor.start()
         if not started.get(timeout=_remaining(work_deadline)):
             raise ParentError('coordinator unavailable')
-        current = lifecycle.state(watcher, watch_owner, watch_unit, work_deadline)
-        if current['invocation'] != watch_invocation or current['active'] != 'active':
-            raise ParentError('launcher watchdog changed')
+        watch.manager.validate_watch(work_deadline)
         context = {key: value for key, value in env.items() if key in COORDINATOR_CONTEXT}
         body = json.dumps({'version': version, 'sha256': digest, 'env': context}, separators=(',', ':')).encode()
         if not 0 < len(body) <= 1024 * 1024:
@@ -247,30 +242,18 @@ def run(root, view, helper_sha, version, digest, env, deadline, bus, lifecycle, 
             raise ParentError('publisher custody transfer failed')
         channel.ready(parent, work_deadline, False)
         source = bus.Manager(source_helper, int(_remaining(work_deadline)),
-                             bind_to=watch_unit, deny_unix=True)
+                             watch=watch.authority, deny_unix=True)
         source.subscribe(work_deadline)
         locator = bus.Manager(source_helper, int(_remaining(work_deadline)),
-                              bind_to=watch_unit, deny_unix=True, deny_network=True)
+                              watch=watch.authority, deny_unix=True, deny_network=True)
         locator.subscribe(work_deadline)
-        def credentials(mode):
-            if mode == 'trusted-publishing':
-                return {'github_token': env.get('GIT_TOKEN'), 'oidc_token': env.get('ACTIONS_ID_TOKEN_REQUEST_TOKEN'),
-                        'oidc_url': env.get('ACTIONS_ID_TOKEN_REQUEST_URL')}
-            if mode == 'bootstrap-token':
-                return {'github_token': env.get('GIT_TOKEN'), 'cargo_token': env.get('CARGO_REGISTRY_TOKEN')}
-            raise ParentError('invalid upload mode')
-        channel.serve(parent, source, locator, lifecycle, executor, uploader, broker, credentials,
-                      view, work_deadline, (view_info.st_dev, view_info.st_ino))
+        serve(parent, source, locator, work_deadline, (view_info.st_dev, view_info.st_ino))
         result = finished.get(timeout=_remaining(work_deadline))
         if result is not None:
             raise ParentError('coordinator failed') from result
     except BaseException:
         cancel.set()
-        if watch_parent is not None:
-            try:
-                watch_parent.shutdown(socket.SHUT_WR)
-            except OSError:
-                pass
+        watch.end_liveness()
         try:
             parent.shutdown(socket.SHUT_RDWR)
         except OSError:
@@ -293,20 +276,7 @@ def run(root, view, helper_sha, version, digest, env, deadline, bus, lifecycle, 
             monitor.join(timeout=remaining)
             if monitor.is_alive():
                 cleanup_error = True
-        if watch_parent is not None:
-            watch_parent.close()
-        if watch_child is not None:
-            watch_child.close()
         os.close(root_fd)
         os.close(view_fd)
-        if watch_owner is not None:
-            try:
-                _stop(watcher, lifecycle, watch_owner, watch_unit, deadline)
-            except Exception:
-                cleanup_error = True
-        try:
-            watcher.close()
-        except Exception:
-            cleanup_error = True
         if cleanup_error:
             raise ParentError('publisher cleanup uncertain') from None

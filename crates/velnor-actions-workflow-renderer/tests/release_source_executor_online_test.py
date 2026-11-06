@@ -1,6 +1,10 @@
 # SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 # SPDX-License-Identifier: Apache-2.0
 
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src'))
+
 import fcntl
 import hashlib
 import importlib.util
@@ -16,6 +20,9 @@ import subprocess
 import tarfile
 import tempfile
 import time
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from release_watch_fixture import RootWatch
 
 root = Path(__file__).resolve().parents[1] / 'src'
 toolchain = os.environ['VELNOR_SOURCE_TEST_TOOLCHAIN']
@@ -146,10 +153,8 @@ with tempfile.TemporaryDirectory(dir='/run', prefix='velnor-publisher-') as temp
     helper = directory / 'source-helper.py'
     shutil.copyfile(root / 'release_supervisor_exec.py', helper)
     helper.chmod(0o555)
-    supervisor = 'velnor-release-' + secrets.token_hex(16) + '.service'
-    subprocess.run(['/usr/bin/systemd-run', '--unit=' + supervisor, '--property=Type=exec',
-                    '/bin/sleep', '480'], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    manager = bus.Manager(str(helper), 180, bind_to=supervisor, deny_unix=True)
+    watch = RootWatch(bus, lifecycle, root)
+    manager = bus.Manager(str(helper), 180, watch.authority, deny_unix=True)
     source = directory / 'source'
     end = time.clock_gettime_ns(time.CLOCK_BOOTTIME) + 420_000_000_000
     try:
@@ -206,7 +211,7 @@ with tempfile.TemporaryDirectory(dir='/run', prefix='velnor-publisher-') as temp
         shutil.rmtree(source)
         shutil.copytree(base, source, symlinks=True)
         modes(source, False)
-        denied = bus.Manager(str(helper), 60, bind_to=supervisor, deny_network=True, deny_unix=True)
+        denied = bus.Manager(str(helper), 60, watch=watch.authority, deny_network=True, deny_unix=True)
         try:
             try:
                 denied_session = executor.SourceSession(denied, lifecycle, str(directory), good, end, (directory.stat().st_dev, directory.stat().st_ino))
@@ -225,5 +230,4 @@ with tempfile.TemporaryDirectory(dir='/run', prefix='velnor-publisher-') as temp
         manager.close()
         listener.close()
         host_sentinel.unlink(missing_ok=True)
-        subprocess.run(['/usr/bin/systemctl', 'stop', supervisor], check=False,
-                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10)
+        watch.close()

@@ -1,6 +1,10 @@
 # SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 # SPDX-License-Identifier: Apache-2.0
 
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src'))
+
 import hashlib
 import importlib.util
 import json
@@ -13,6 +17,9 @@ import struct
 import tempfile
 import time
 import unittest
+import sys
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+from release_watch_fixture import RootWatch
 
 root = pathlib.Path(__file__).resolve().parents[1] / 'src'
 
@@ -25,6 +32,10 @@ def load(name):
 
 
 class RetainedEntryTest(unittest.TestCase):
+    def setUp(self):
+        self.watch = RootWatch(load("release_manager_bus"), load("release_manager_lifecycle"), root)
+        self.addCleanup(self.watch.close)
+
     def test_source_unit_denies_network_when_requested(self):
         bus = load('release_manager_bus')
         lifecycle = load('release_manager_lifecycle')
@@ -37,7 +48,7 @@ class RetainedEntryTest(unittest.TestCase):
             listener.bind(('127.0.0.1', 0))
             listener.listen(1)
             output = os.memfd_create('fixture-output', os.MFD_CLOEXEC)
-            manager = bus.Manager(str(helper), 20, deny_network=True)
+            manager = bus.Manager(str(helper), 20, self.watch.authority, deny_network=True)
             deadline = time.clock_gettime_ns(time.CLOCK_BOOTTIME) + 45_000_000_000
             code = ('import socket,sys; s=socket.socket(); s.settimeout(1); '
                     'assert s.connect_ex(("127.0.0.1",int(sys.argv[1]))) != 0; print("isolated")')
@@ -64,7 +75,7 @@ class RetainedEntryTest(unittest.TestCase):
             shutil.copyfile(root / 'release_supervisor_exec.py', helper)
             helper.chmod(0o555)
             output = os.memfd_create('fixture-output', os.MFD_CLOEXEC)
-            manager = bus.Manager(str(helper), 20, deny_unix=True)
+            manager = bus.Manager(str(helper), 20, self.watch.authority, deny_unix=True)
             deadline = time.clock_gettime_ns(time.CLOCK_BOOTTIME) + 45_000_000_000
             code = ('import os,socket,sys; assert not os.path.exists(sys.argv[1]); '
                     'failed=False; '
@@ -111,13 +122,13 @@ class RetainedEntryTest(unittest.TestCase):
             subprocess.run(['/usr/bin/cc', str(source), '-o', str(binary)], check=True)
             binary.chmod(0o500)
             before = {p.name for p in pathlib.Path('/sys/fs/cgroup/system.slice').glob('velnor-release-*.service')}
-            env = {'CARGO_REGISTRY_TOKEN': 'synthetic-canary', 'ACTIONS_ID_TOKEN_REQUEST_TOKEN': 'synthetic-canary',
+            env = {'GITHUB_JOB': 'release-publish', 'CARGO_REGISTRY_TOKEN': 'synthetic-canary', 'ACTIONS_ID_TOKEN_REQUEST_TOKEN': 'synthetic-canary',
                    'ACTIONS_ID_TOKEN_REQUEST_URL': 'synthetic-canary'}
             with self.assertRaises(Exception):
                 retained.run(str(private), str(view), hashlib.sha256(helper.read_bytes()).hexdigest(),
                              '0.1.74', hashlib.sha256(binary.read_bytes()).hexdigest(), env,
                              time.clock_gettime_ns(time.CLOCK_BOOTTIME) + 80_000_000_000,
-                             bus, lifecycle, channel, None, None, None)
+                             bus, lifecycle, channel, None, None, None, self.watch.watch)
             self.assertTrue((private / 'clean-env').is_file(), 'coordinator did not run with a clean environment')
             after = {p.name for p in pathlib.Path('/sys/fs/cgroup/system.slice').glob('velnor-release-*.service')}
             self.assertFalse(after - before, 'retained parent left an active service cgroup')
