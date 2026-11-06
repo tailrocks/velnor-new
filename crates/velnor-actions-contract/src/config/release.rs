@@ -235,6 +235,22 @@ impl RustReleaseConfig {
                 ));
             }
         }
+        self.validate_recovery_selection(file)?;
+        validate_journal_predecessor(
+            file,
+            self.journal_predecessor.as_ref(),
+            self.recovery.is_some() || self.new_crates.is_some(),
+        )?;
+        validate_version_groups(
+            file,
+            &self.version_groups,
+            &self.packages,
+            self.publishable_workspace,
+        )?;
+        Ok(())
+    }
+
+    fn validate_recovery_selection(&self, file: &str) -> Result<(), ContractError> {
         if let Some(recovery) = &self.recovery {
             validate_recovery(file, recovery)?;
             if !self.publishable_workspace
@@ -247,17 +263,6 @@ impl RustReleaseConfig {
                 ));
             }
         }
-        validate_journal_predecessor(
-            file,
-            self.journal_predecessor.as_ref(),
-            self.recovery.is_some() || self.new_crates.is_some(),
-        )?;
-        validate_version_groups(
-            file,
-            &self.version_groups,
-            &self.packages,
-            self.publishable_workspace,
-        )?;
         Ok(())
     }
 
