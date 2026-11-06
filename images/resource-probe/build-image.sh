@@ -42,8 +42,14 @@ esac
 
 docker build --platform linux/amd64 --network none --build-arg "SOURCE_SHA=$source_sha" --tag "$image" "$context"
 chmod 0755 "$smoke_root"
-docker run --rm --pull=never --platform linux/amd64 --cgroupns=host --pid=host --network none --read-only --cap-drop=ALL --security-opt no-new-privileges:true --user 65532:65532 --mount "type=bind,source=$smoke_root,target=/velnor/docker-root,readonly" "$image" > "$smoke_output" 2> "$smoke_error"
-test ! -s "$smoke_error"
+if ! docker run --rm --pull=never --platform linux/amd64 --cgroupns=host --pid=host --network none --read-only --cap-drop=ALL --security-opt no-new-privileges:true --user 65532:65532 --mount "type=bind,source=$smoke_root,target=/velnor/docker-root,readonly" --mount "type=bind,source=/sys/fs/cgroup,target=/sys/fs/cgroup,readonly" "$image" > "$smoke_output" 2> "$smoke_error"; then
+  cat "$smoke_error" >&2
+  exit 1
+fi
+if [[ -s "$smoke_error" ]]; then
+  cat "$smoke_error" >&2
+  exit 1
+fi
 "$release_validator" validate-smoke "$smoke_output" "$smoke_root"
 docker image save --platform linux/amd64 --output "$archive" "$image"
 test -s "$archive"
