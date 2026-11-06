@@ -8,10 +8,6 @@
         use crate::crate_release_journal::JournalIo as _;
         use crate::crate_release_registry::CrateRegistryRead as _;
 
-        assert_eq!(
-            std::env::var("VELNOR_TEST_COMMAND_ARGS")?,
-            "crate-release journal-start"
-        );
         assert!(matches!(
             super::run_crate_release("journal-start"),
             Err(crate::OrchestratorError::Internal { problem })

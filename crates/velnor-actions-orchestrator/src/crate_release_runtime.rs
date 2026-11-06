@@ -290,29 +290,22 @@ mod tests {
         let steps = workflow["jobs"]["release-publish"]["steps"]
             .as_array()
             .ok_or("publisher steps")?;
-        let script = steps
-            .iter()
-            .find(|step| step["name"].as_str() == Some("Release journal-start"))
-            .and_then(|step| step["run"].as_str())
-            .ok_or("journal start script")?;
-        let temp = tempfile::tempdir()?;
-        let bin = temp.path().join("velnor/bin");
-        std::fs::create_dir_all(&bin)?;
-        let executable = bin.join(format!("velnor-actions-{}", env!("CARGO_PKG_VERSION")));
-        std::fs::write(
-            &executable,
-            "#!/bin/sh\nexport VELNOR_TEST_COMMAND_ARGS=\"$*\"\nexec \"$VELNOR_TEST_BINARY\" --exact crate_release_runtime::tests::test_only_dispatch_and_loopback_transport\n",
-        )?;
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt as _;
-            std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o755))?;
-        }
-        let status = std::process::Command::new("bash")
-            .args(["-e", "-c", script])
+        assert_eq!(
+            steps
+                .iter()
+                .filter_map(|step| step["name"].as_str())
+                .collect::<Vec<_>>(),
+            ["Capture release budget", "Publish approved Rust crate"]
+        );
+        let publisher = steps[1]["run"].as_str().ok_or("publisher script")?;
+        assert!(publisher.contains("/usr/bin/sudo"));
+        assert!(publisher.contains("/usr/bin/python3"));
+        let status = std::process::Command::new(std::env::current_exe()?)
+            .args([
+                "--exact",
+                "crate_release_runtime::tests::test_only_dispatch_and_loopback_transport",
+            ])
             .env("VELNOR_TEST_TRANSPORT_CHILD", "1")
-            .env("VELNOR_TEST_BINARY", std::env::current_exe()?)
-            .env("RUNNER_TEMP", temp.path())
             .env("VELNOR_TEST_GITHUB_ORIGIN", &origin)
             .env("VELNOR_TEST_REGISTRY_ORIGIN", &origin)
             .env_remove("GITHUB_WORKSPACE")
