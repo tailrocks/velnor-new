@@ -66,7 +66,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.send_error(500)
             return
         self.send_response(200)
-        self.send_header("Content-Type", "application/json")
+        content_type = "application/octet-stream" if "/tarball/" in parsed.path else "application/json"
+        self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
