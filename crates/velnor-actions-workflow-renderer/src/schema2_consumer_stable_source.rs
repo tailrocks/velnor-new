@@ -67,10 +67,7 @@ pub(super) fn job(spec: &ConsumerReleaseSpec) -> Result<(String, Yaml), RenderEr
                 "${{ inputs.original_run_attempt }}",
             ),
             ("GH_TOKEN", "${{ github.token }}"),
-            (
-                "VELNOR_RELEASE_STATUS_TOKEN",
-                "${{ secrets.RELEASE_STATUS_READ_TOKEN }}",
-            ),
+            super::shared::steps::native_env::STATUS_TOKEN_BINDING,
         ],
     );
     Ok(finish(
