@@ -6,12 +6,12 @@ use std::{
     io::{Cursor, Read, Write},
 };
 
-use super::{ASSET_LIMIT, Admission, JSON_LIMIT, safe_file, sha256};
+use super::{ASSET_LIMIT, Admission, FILE_LIMIT, JSON_LIMIT, safe_file, sha256};
 use crate::{OrchestratorError, internal::internal};
 use zip::{ZipArchive, ZipWriter, write::SimpleFileOptions};
 
 pub(super) const RAW_LIMIT: u64 = 2 * 1024 * 1024 * 1024;
-const ENTRY_LIMIT: usize = 16;
+const ENTRY_LIMIT: usize = FILE_LIMIT + 1;
 const DIRECTORY_LIMIT: u64 = 64 * 1024;
 const TOTAL_LIMIT: u64 = 2 * 1024 * 1024 * 1024;
 

@@ -12,6 +12,53 @@ use std::{
 };
 use zip::{ZipWriter, write::SimpleFileOptions};
 
+#[test]
+fn selected_asset_handoffs_preserve_all_files_at_the_admission_limit() -> TestResult {
+    let (base_plan, base_spec, _, _) = super::super::super::load_catalog()?;
+    for additional in [5, 13] {
+        let mut plan = base_plan.clone();
+        let mut spec = base_spec.clone();
+        for index in 0..additional {
+            let name = format!("extra-{index}");
+            let mut product = plan.products[1].clone();
+            product.id.clone_from(&name);
+            product.package.clone_from(&name);
+            product.bins = vec![name.clone()];
+            plan.products.push(product);
+            let mut auxiliary = spec.auxiliaries[0].clone();
+            auxiliary.product.clone_from(&name);
+            for file in &mut auxiliary.files {
+                file.member.clone_from(&name);
+                file.destination = format!("{name}/{}", file.target);
+            }
+            spec.auxiliaries.push(auxiliary);
+        }
+        plan.products.sort_by(|a, b| a.id.cmp(&b.id));
+        spec.auxiliaries.sort_by(|a, b| a.product.cmp(&b.product));
+        plan.validate()?;
+        spec.validate()?;
+        let assets = super::super::selected_assets(&spec, &plan)?;
+        assert_eq!(assets.len(), 2 + additional);
+        let (mut admission, context, catalog) = fixture();
+        let mut files = BTreeMap::new();
+        for label in ["A", "D"] {
+            files.insert(format!("{label}/release.json"), b"receipt".to_vec());
+            for asset in &assets {
+                files.insert(format!("{label}/{asset}"), asset.as_bytes().to_vec());
+            }
+        }
+        admission.files = files.iter().map(|(name, bytes)| (name.clone(), super::super::FileIdentity {
+            size: bytes.len() as u64,
+            sha256: sha256(bytes),
+        })).collect();
+        let json = encode(&admission)?;
+        super::super::validate_admission(&json, &sha256(&json), &context, &catalog)?;
+        let raw = super::super::bundle::encode_bundle(&json, files.clone())?;
+        assert_eq!(read_admitted_files(&mut open_bundle(&raw)?, &admission)?, files);
+    }
+    Ok(())
+}
+
 pub(super) fn fixture_bundle(
     files: &[(&str, &[u8])],
 ) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
@@ -101,6 +148,10 @@ fn raw_bundle_refuses_duplicate_traversal_symlink_and_compressed_entries() -> Te
 
 #[test]
 fn raw_bundle_limits_directory_count_declared_sizes_and_actual_bytes() -> TestResult {
+    let names = (0..34).map(|n| format!("A/file-{n}")).collect::<Vec<_>>();
+    let entries = names.iter().map(|name| (name.as_str(), &b"payload"[..])).collect::<Vec<_>>();
+    assert!(open_bundle(&fixture_bundle(&entries[..33])?).is_ok());
+    assert!(open_bundle(&fixture_bundle(&entries)?).is_err());
     let raw = fixture_bundle(&[("A/payload", b"payload")])?;
     let eocd = raw.len() - 22;
     let mut count = raw.clone();

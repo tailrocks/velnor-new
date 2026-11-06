@@ -32,6 +32,7 @@ const ADMISSION_DIR: &str = "homebrew-admission";
 const RESULT_DIR: &str = "homebrew-result";
 const JSON_LIMIT: u64 = 1024 * 1024;
 const ASSET_LIMIT: u64 = 256 * 1024 * 1024;
+const FILE_LIMIT: usize = 32;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -202,7 +203,7 @@ fn validate_admission(
         || &admission.context != context
         || &admission.catalog != catalog
         || !is_sha1(&admission.authority_sha)
-        || admission.files.len() > 32
+        || admission.files.len() > FILE_LIMIT
         || admission.files.iter().any(|(name, file)| {
             !safe_file(name)
                 || file.size == 0
