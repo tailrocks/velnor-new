@@ -414,7 +414,7 @@ fn sealed_source_adapter_runs_real_supervised_package() -> Result<(), Box<dyn st
             tag: "demo-v0.1.1".into(),
             owners: crate::crate_release_registry::CrateRegistryOwnership::Existing {
                 owners: vec![crate::crate_release_registry::CrateRegistryOwner {
-                    id: 370532,
+                    id: 370_532,
                     login: "owner".into(),
                     kind: "user".into(),
                 }],
