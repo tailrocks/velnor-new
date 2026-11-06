@@ -197,7 +197,8 @@ fn baseline<R: CrateRegistryRead>(
     }
     let selected = earlier
         .iter()
-        .rposition(|entry| !entry.3)
+        .rposition(|entry| entry.0.pre.is_empty() && !entry.3)
+        .or_else(|| earlier.iter().rposition(|entry| !entry.3))
         .or_else(|| earlier.len().checked_sub(1));
     selected
         .map(|index| {

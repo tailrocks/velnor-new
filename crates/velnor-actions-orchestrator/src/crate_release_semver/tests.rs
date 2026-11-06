@@ -114,6 +114,47 @@ fn baseline_requires_authoritative_registry_and_uses_latest_previous_version()
 }
 
 #[test]
+fn baseline_prefers_the_latest_released_stable_version() -> Result<(), Box<dyn std::error::Error>> {
+    for (versions, target, expected) in [
+        (
+            vec![("1.1.0-rc.1", false), ("1.0.9", false), ("1.2.0", false)],
+            "1.1.0",
+            "1.0.9",
+        ),
+        (
+            vec![("1.1.0-rc.1", false), ("1.0.9", false)],
+            "1.1.0-rc.2",
+            "1.0.9",
+        ),
+        (
+            vec![("1.0.9", true), ("1.1.0-rc.1", false)],
+            "1.1.0",
+            "1.1.0-rc.1",
+        ),
+        (
+            vec![("1.0.9", true), ("1.1.0-rc.1", true)],
+            "1.1.0",
+            "1.1.0-rc.1",
+        ),
+        (
+            vec![("1.1.0-rc.1", false), ("1.1.0-beta.1", false)],
+            "1.1.0",
+            "1.1.0-rc.1",
+        ),
+    ] {
+        let entries: Vec<_> = versions.iter().enumerate().map(|(index, (version, yanked))| {
+            serde_json::json!({"id":index + 1,"crate":"demo","num":version,"yanked":yanked})
+        }).collect();
+        let ids: Vec<_> = (1..=versions.len()).collect();
+        let body = serde_json::json!({"crate":{"id":"demo","name":"demo","versions":ids},"versions":entries}).to_string().into_bytes();
+        let actual = baseline(&Registry { status: 200, body }, "demo", target)?
+            .ok_or("existing crate has no baseline")?;
+        assert_eq!(actual.version, expected, "baseline for {target}");
+    }
+    Ok(())
+}
+
+#[test]
 fn baseline_archive_is_bound_to_registry_identity_and_checksum()
 -> Result<(), Box<dyn std::error::Error>> {
     let encoder = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
