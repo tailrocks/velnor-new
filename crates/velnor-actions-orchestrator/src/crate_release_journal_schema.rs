@@ -235,7 +235,30 @@ pub(super) fn valid_owners(owners: &[JournalOwner]) -> bool {
         && owners
             .iter()
             .all(|owner| owner.id > 0 && valid_owner(&owner.login))
-        && owners.windows(2).all(|pair| pair[0].id < pair[1].id)
+        && owners.windows(2).all(|pair| {
+            (
+                pair[0].id,
+                pair[0].login.as_str(),
+                owner_kind_key(pair[0].kind),
+            ) < (
+                pair[1].id,
+                pair[1].login.as_str(),
+                owner_kind_key(pair[1].kind),
+            )
+        })
+        && owners
+            .iter()
+            .map(|owner| (owner.id, owner_kind_key(owner.kind)))
+            .collect::<BTreeSet<_>>()
+            .len()
+            == owners.len()
+}
+
+fn owner_kind_key(kind: JournalOwnerKind) -> &'static str {
+    match kind {
+        JournalOwnerKind::User => "user",
+        JournalOwnerKind::Team => "team",
+    }
 }
 
 pub(super) fn valid_completion(

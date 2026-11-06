@@ -117,3 +117,46 @@ fn sparse_index_waits_only_for_propagation_and_binds_checksum() {
     let registry = fixture(vec![response(200, ""), response(404, "")]);
     assert!(wait_for_crate_index(&registry, "demo", "0.1.1", &checksum, 2, || {}).is_err());
 }
+
+#[test]
+fn native_registry_linked_account_request_is_restricted() -> Result<(), Box<dyn std::error::Error>>
+{
+    use std::io::{Read as _, Write as _};
+    if std::env::var_os("VELNOR_TEST_REGISTRY_ORIGIN").is_some() {
+        let response =
+            NativeCrateRegistryRead.get("/api/v1/users/donbeave?include=linked_accounts")?;
+        assert_eq!(response.status, 200);
+        for path in [
+            "/api/v1/users/donbeave",
+            "/api/v1/users/donbeave?include=linked_accounts&extra=1",
+            "/api/v1/users/../donbeave?include=linked_accounts",
+            "/api/v1/users/donbeave%2Fother?include=linked_accounts",
+        ] {
+            assert!(NativeCrateRegistryRead.get(path).is_err(), "{path}");
+        }
+        return Ok(());
+    }
+    let listener = std::net::TcpListener::bind("127.0.0.1:0")?;
+    let origin = format!("http://{}", listener.local_addr()?);
+    let worker = std::thread::spawn(move || -> Result<String, std::io::Error> {
+        let (mut stream, _) = listener.accept()?;
+        let mut buffer = [0; 4096];
+        let length = stream.read(&mut buffer)?;
+        let request = String::from_utf8_lossy(&buffer[..length]).into_owned();
+        stream.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\n{}")?;
+        Ok(request)
+    });
+    let status = std::process::Command::new(std::env::current_exe()?)
+        .args(["--exact", "crate_release_registry::index_tests::native_registry_linked_account_request_is_restricted"])
+        .env("VELNOR_TEST_REGISTRY_ORIGIN", origin)
+        .status()?;
+    let request = worker.join().map_err(|_| "server panic")??;
+    assert!(status.success());
+    assert!(request.starts_with("GET /api/v1/users/donbeave?include=linked_accounts HTTP/1.1\r\n"));
+    assert!(
+        request
+            .to_ascii_lowercase()
+            .contains("cache-control: no-cache")
+    );
+    Ok(())
+}

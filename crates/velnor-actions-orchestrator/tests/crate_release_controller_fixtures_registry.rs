@@ -34,6 +34,7 @@ impl CrateRegistryRead for NewRegistry {
 }
 
 pub(super) struct Registry {
+    pub(super) owner_match: std::rc::Rc<Cell<bool>>,
     pub(super) absent: Cell<bool>,
     pub(super) inconsistent: Cell<bool>,
     pub(super) archive: RefCell<Vec<u8>>,
@@ -41,6 +42,9 @@ pub(super) struct Registry {
 }
 impl CrateRegistryRead for Registry {
     fn get(&self, path: &str) -> Result<CrateRegistryResponse, OrchestratorError> {
+        if path == "/api/v1/users/owner?include=linked_accounts" {
+            return Ok(CrateRegistryResponse { status: 200, body: json!({"user":{"id":370_532,"login":"owner"},"linked_accounts":[{"provider":"github","account_id":if self.owner_match.get() {"139017"} else {"999"},"login":"owner"}]}).to_string().into_bytes() });
+        }
         if path == "/index/de/mo/demo" {
             return Ok(CrateRegistryResponse { status: 200, body: json!({"name":"demo", "vers":"0.1.1", "cksum":crate::planner::generator::sha256_hex(&self.archive.borrow()), "yanked":false}).to_string().into_bytes() });
         }
@@ -178,7 +182,7 @@ pub(super) fn make_fixture(
         revoke_on_tag_read: Cell::new(false),
         tag_exists: Cell::new(false),
         tag_wrong: Cell::new(false),
-        owner_match: Cell::new(true),
+        owner_match: std::rc::Rc::new(Cell::new(true)),
         release_variant: Cell::new(0),
         write_error: Cell::new(0),
         writes: Cell::new(0),
@@ -195,6 +199,7 @@ pub(super) fn make_fixture(
         before_metadata_write: RefCell::new(None),
     };
     let registry = Registry {
+        owner_match: github.owner_match.clone(),
         absent: Cell::new(true),
         inconsistent: Cell::new(false),
         archive: RefCell::new(Vec::new()),

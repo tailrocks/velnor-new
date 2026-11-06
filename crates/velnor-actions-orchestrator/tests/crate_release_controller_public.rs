@@ -47,6 +47,8 @@ use fixtures_registry::{
 };
 #[path = "crate_release_controller_observations_setup.rs"]
 mod observations_setup;
+#[path = "crate_release_controller_owner_identity.rs"]
+mod owner_identity;
 #[path = "crate_release_controller_reconcile_repairs.rs"]
 mod reconcile_repairs;
 #[path = "crate_release_controller_recovery.rs"]

@@ -226,16 +226,16 @@ pub(crate) fn effective_release_intent(
     effective
 }
 
-fn verify_release_ownership<G: GitHubAdmissionRead>(
+fn verify_release_ownership<R: CrateRegistryRead>(
     intent: &CrateReleaseIntent,
     request: &GitHubAdmissionRequest,
-    github: &G,
+    registry: &R,
     package: &CrateReleaseSourcePackage,
     owners: &CrateRegistryOwnership,
 ) -> Result<(), OrchestratorError> {
     match owners {
         CrateRegistryOwnership::Existing { owners } => {
-            require_reviewer_owner(github, owners, intent.trusted_reviewer_id)?;
+            require_reviewer_owner(registry, owners, intent.trusted_reviewer_id)?;
         }
         CrateRegistryOwnership::NewCrate => {
             if intent.authentication

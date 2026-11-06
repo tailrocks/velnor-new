@@ -105,7 +105,7 @@ fn rehearsal_github(request: &GitHubAdmissionRequest, metadata_completed: bool) 
         revoke_on_tag_read: Cell::new(false),
         tag_exists: Cell::new(metadata_completed),
         tag_wrong: Cell::new(false),
-        owner_match: Cell::new(true),
+        owner_match: std::rc::Rc::new(Cell::new(true)),
         release_variant: Cell::new(if metadata_completed { 0 } else { 4 }),
         write_error: Cell::new(0),
         writes: Cell::new(0),
@@ -143,6 +143,7 @@ fn run_child(operation: &str) -> Result<(), Box<dyn Error>> {
         defect: Cell::new(0),
     };
     let registry = Registry {
+        owner_match: base.owner_match.clone(),
         absent: Cell::new(!previously_published),
         inconsistent: Cell::new(false),
         archive: RefCell::new(if previously_published {

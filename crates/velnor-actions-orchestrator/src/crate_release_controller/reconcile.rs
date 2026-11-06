@@ -73,7 +73,7 @@ pub fn validate_reconciliation_receipt<G: GitHubAdmissionRead, R: CrateRegistryR
                 result => result?,
             };
         if let CrateRegistryOwnership::Existing { owners } = &owners {
-            require_reviewer_owner(github, owners, intent.trusted_reviewer_id)?;
+            require_reviewer_owner(registry, owners, intent.trusted_reviewer_id)?;
         }
         verify_reconciliation_owners(intent, request, planned, &owners)?;
         all_visible &= observed_tag.is_some() && presence == CrateRegistryPresence::Present;
@@ -103,12 +103,11 @@ fn verify_reconciliation_owners(
     Ok(())
 }
 
-fn reconciliation_owners<G: GitHubAdmissionRead, R: CrateRegistryRead>(
+fn reconciliation_owners<R: CrateRegistryRead>(
     intent: &CrateReleaseIntent,
     request: &GitHubAdmissionRequest,
     package: &super::CrateReleasePlannedPackage,
     registry: &R,
-    github: &G,
 ) -> Result<Vec<crate::crate_release_registry::CrateRegistryOwner>, OrchestratorError> {
     let (observed, _) =
         inspect_crate_registry(registry, &package.source.name, &package.source.version)?;
@@ -116,7 +115,7 @@ fn reconciliation_owners<G: GitHubAdmissionRead, R: CrateRegistryRead>(
     let CrateRegistryOwnership::Existing { owners } = observed else {
         return Err(internal("crate_release_new_owner_unverified"));
     };
-    require_reviewer_owner(github, &owners, intent.trusted_reviewer_id)?;
+    require_reviewer_owner(registry, &owners, intent.trusted_reviewer_id)?;
     Ok(owners)
 }
 
@@ -225,7 +224,7 @@ pub fn reconcile_crate_release<G: GitHubAdmissionRead, R: CrateRegistryRead>(
     let target = tempfile::tempdir().map_err(|_| internal("crate_release_package_temp"))?;
     let mut completed = Vec::with_capacity(receipt.packages.len());
     for package in &receipt.packages {
-        let owners = reconciliation_owners(intent, request, package, registry, github)?;
+        let owners = reconciliation_owners(intent, request, package, registry)?;
         if package.tag != format!("{}-v{}", package.source.name, package.source.version) {
             return Err(internal("crate_release_tag_mismatch"));
         }

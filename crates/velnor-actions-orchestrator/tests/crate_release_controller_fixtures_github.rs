@@ -130,7 +130,7 @@ pub(super) struct Github {
     pub(super) revoke_on_tag_read: Cell<bool>,
     pub(super) tag_exists: Cell<bool>,
     pub(super) tag_wrong: Cell<bool>,
-    pub(super) owner_match: Cell<bool>,
+    pub(super) owner_match: std::rc::Rc<Cell<bool>>,
     pub(super) release_variant: Cell<u8>,
     pub(super) write_error: Cell<u8>,
     pub(super) writes: Cell<u32>,
