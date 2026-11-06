@@ -7,6 +7,10 @@ use std::collections::{BTreeMap, BTreeSet};
 use velnor_actions_contract::{CrateJob, CrateObligation, Step, StepKind, WorkflowPolicy};
 use velnor_actions_mise::{PinnedTool, ToolCatalog};
 
+#[cfg(test)]
+#[path = "crate_jobs_steps_tuf_tests.rs"]
+mod tuf_tests;
+
 pub(super) fn fixture_checkout(needs_fixture: bool) -> Result<Step, OrchestratorError> {
     let mut checkout = crate::workflow::wire_w1::checkout_step()?;
     if needs_fixture {
@@ -33,22 +37,44 @@ pub(super) fn gh_fixture_step(
             model.package_name.as_str(),
             "velnor-actions-cli" | "velnor-actions-orchestrator"
         )
-        && model
-            .obligations
-            .iter()
-            .any(|obligation| obligation.run.iter().any(|arg| arg == "nextest"))
+        && model.obligations.iter().any(|obligation| {
+            obligation.kind == "test" || obligation.run.iter().any(|arg| arg == "nextest")
+        })
     {
+        let mut argv = vec![
+            "/usr/bin/python3".to_owned(),
+            "-I".to_owned(),
+            "scripts/prepare-gh-fixture-tools.py".to_owned(),
+        ];
+        if model.package_name == "velnor-actions-cli"
+            && model.obligations.iter().any(image_publication_test)
+        {
+            argv.push("--with-image-tuf".to_owned());
+        }
         return Ok(Some(velnor_actions_workflow_renderer::shell_step(
             "Stage isolated GitHub CLI test tools",
-            vec![
-                "/usr/bin/python3".to_owned(),
-                "-I".to_owned(),
-                "scripts/prepare-gh-fixture-tools.py".to_owned(),
-            ],
+            argv,
             BTreeMap::new(),
         )?));
     }
     Ok(None)
+}
+
+fn image_publication_test(obligation: &CrateObligation) -> bool {
+    if obligation.kind == "nextest" {
+        return true;
+    }
+    if obligation.kind != "test" {
+        return false;
+    }
+    obligation.run.iter().any(|arg| {
+        matches!(arg.as_str(), "--tests" | "--test" | "--all-targets") || arg.starts_with("--test=")
+    }) || !obligation.run.iter().any(|arg| {
+        matches!(
+            arg.as_str(),
+            "--lib" | "--bins" | "--examples" | "--benches"
+        )
+    })
 }
 
 pub(super) fn image_publication_fixture_step(

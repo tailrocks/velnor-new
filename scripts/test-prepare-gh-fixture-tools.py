@@ -51,6 +51,10 @@ def main():
         temp.mkdir()
         env = {"PATH": f"{bindir}:/usr/bin:/bin", "HOME": str(root), "RUNNER_TEMP": str(temp)}
         args = ["python3", "-I", str(scripts / "prepare-gh-fixture-tools.py")]
+        invalid = subprocess.run([*args, "--unknown"], env=env, capture_output=True)
+        assert invalid.returncode != 0
+        assert b"unsupported fixture staging arguments" in invalid.stderr
+        assert not (temp / "velnor-gh-fixture-tools").exists()
         subprocess.run(args, env=env, check=True, capture_output=True)
         dest = temp / "velnor-gh-fixture-tools"
         assert (dest / f"gh_{tool_platform}").read_bytes() == b"fixture-gh"

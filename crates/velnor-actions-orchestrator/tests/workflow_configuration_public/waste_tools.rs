@@ -42,15 +42,40 @@ pub(super) fn lane_jobs() -> Result<BTreeMap<String, Job>, Box<dyn Error>> {
 }
 
 fn lane_jobs_with_catalog() -> Result<(BTreeMap<String, Job>, ToolCatalog), Box<dyn Error>> {
+    lane_jobs_for_runner(false)
+}
+
+fn lane_jobs_for_runner(
+    cargo_test: bool,
+) -> Result<(BTreeMap<String, Job>, ToolCatalog), Box<dyn Error>> {
     let repo = mbx_repo_for(true, WorkflowPolicy::VelnorRepositoryV1)?;
     let root = repo.path();
+    if cargo_test {
+        let path = root.join(".velnor/config.toml");
+        let config = fs::read_to_string(&path)?;
+        fs::write(
+            path,
+            format!("{config}\n[stacks.rust]\ntest_runner = \"cargo_test\"\n"),
+        )?;
+        fs::remove_file(root.join(".mise/tasks/test"))?;
+        fs::remove_file(root.join("crates/nested/.mise/tasks/test"))?;
+    }
     for (dir, name) in [
         ("crates/cli", "velnor-actions-cli"),
         ("crates/orchestrator", "velnor-actions-orchestrator"),
         ("crates/mise", "velnor-actions-mise"),
     ] {
         workflow_configuration_fixture::add_independent_mbx_package(root, dir, name)?;
-        workflow_configuration_fixture::write_nextest_task(&root.join(dir))?;
+        if !cargo_test {
+            workflow_configuration_fixture::write_nextest_task(&root.join(dir))?;
+        }
+    }
+    if cargo_test {
+        fs::create_dir_all(root.join("crates/cli/tests"))?;
+        fs::write(
+            root.join("crates/cli/tests/image_publication_public.rs"),
+            "#[test] fn fixture() {}\n",
+        )?;
     }
     fs::write(
         root.join("mise.toml"),
@@ -61,6 +86,13 @@ fn lane_jobs_with_catalog() -> Result<(BTreeMap<String, Job>, ToolCatalog), Box<
         include_str!("../../../../mise.lock"),
     )?;
     let prepared = prepare(root)?;
+    if cargo_test {
+        assert!(prepared.discovery.proposals.iter().any(|task| {
+            task.identity.unit_path == "crates/cli/Cargo.toml"
+                && task.task_kind == "test"
+                && task.payload.iter().any(|arg| arg == "--tests")
+        }));
+    }
     Ok((finalized_jobs(&prepared)?, prepared.emission_catalog()))
 }
 
@@ -329,56 +361,5 @@ fn an_install_only_mbx_selector_must_equal_the_catalog_version() -> Result<(), B
     Ok(())
 }
 
-#[test]
-fn gh_fixture_test_jobs_require_isolated_tool_staging() -> Result<(), Box<dyn Error>> {
-    let jobs = lane_jobs()?;
-    for job in jobs
-        .values()
-        .filter(|job| job.display_name.contains("velnor-actions-orchestrator"))
-    {
-        assert!(
-            job.steps
-                .iter()
-                .any(|step| step.name == "Stage isolated GitHub CLI test tools")
-        );
-    }
-    let job = jobs
-        .values()
-        .find(|job| job.display_name.contains("velnor-actions-cli"))
-        .ok_or("CLI job")?;
-    let stage = job
-        .steps
-        .iter()
-        .position(|step| step.name == "Stage isolated GitHub CLI test tools")
-        .ok_or("missing fixture staging")?;
-    let fetch = job
-        .steps
-        .iter()
-        .position(|step| step.name.contains("Fetch") && step.name.contains("source"))
-        .ok_or("missing source fetch")?;
-    assert!(stage > fetch);
-    let StepKind::Shell { run, .. } = &job.steps[stage].kind else {
-        return Err("fixture staging must run".into());
-    };
-    assert!(run.ends_with(&[
-        "/usr/bin/python3".to_owned(),
-        "-I".to_owned(),
-        "scripts/prepare-gh-fixture-tools.py".to_owned(),
-    ]));
-    Ok(())
-}
-
-#[cfg(target_os = "linux")]
-#[test]
-fn gh_fixture_staging_rejects_unverified_tools_and_missing_docker() -> Result<(), Box<dyn Error>> {
-    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .and_then(std::path::Path::parent)
-        .ok_or("workspace root")?;
-    let status = std::process::Command::new("python3")
-        .arg("-I")
-        .arg(root.join("scripts/test-prepare-gh-fixture-tools.py"))
-        .status()?;
-    assert!(status.success());
-    Ok(())
-}
+#[path = "waste_tools_fixture.rs"]
+mod fixture;
