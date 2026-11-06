@@ -21,7 +21,7 @@ impl SealedSourceView {
         self,
         private: &crate::crate_release_custody::PublisherRoot,
     ) -> Result<ProjectedSourceTools, OrchestratorError> {
-        use velnor_actions_mise::release_git_pin::{GIT_HTTP_SHA256, GIT_SHA256, verify_bundle};
+        use velnor_actions_mise::release_git_pin::{GIT_HTTP_SHA256, GIT_SHA256};
         let invalid = || internal("crate_release_source_tools_invalid");
         self.deadline.remaining().map_err(|_| invalid())?;
         private.revalidate().map_err(|_| invalid())?;
@@ -62,7 +62,7 @@ impl SealedSourceView {
             return Err(invalid());
         }
         let git_bytes = read_checked_executable(
-            &git.executable(),
+            git.executable(),
             GIT_SHA256,
             16 * 1024 * 1024,
             self.deadline,
@@ -73,35 +73,14 @@ impl SealedSourceView {
             16 * 1024 * 1024,
             self.deadline,
         )?;
-        let semver_dir = self.view.path().join("semver");
-        let git_dir = self.view.path().join("git");
-        let plz_dir = self.view.path().join("release-plz");
-        std::fs::create_dir(&semver_dir).map_err(|_| invalid())?;
-        std::fs::create_dir(&git_dir).map_err(|_| invalid())?;
-        std::fs::create_dir(&plz_dir).map_err(|_| invalid())?;
-        for directory in [&semver_dir, &git_dir, &plz_dir] {
-            std::fs::set_permissions(directory, std::fs::Permissions::from_mode(0o755))
-                .map_err(|_| invalid())?;
-        }
-        write_projected_executable(
-            &semver_dir.join("cargo-semver-checks"),
+        project_executables(
+            self.view.path(),
             &checker_bytes,
-            self.deadline,
-        )?;
-        write_projected_executable(
-            &plz_dir.join("release-plz"),
             &release_plz_bytes,
-            self.deadline,
-        )?;
-        write_projected_executable(&git_dir.join("git"), &git_bytes, self.deadline)?;
-        write_projected_executable(
-            &git_dir.join("git-remote-http"),
+            &git_bytes,
             &helper_bytes,
             self.deadline,
         )?;
-        std::os::unix::fs::symlink("git-remote-http", git_dir.join("git-remote-https"))
-            .map_err(|_| invalid())?;
-        verify_bundle(&git_dir).map_err(|_| invalid())?;
         git.revalidate().map_err(|_| invalid())?;
         let compiler_path = std::fs::canonicalize("/usr/bin/cc").map_err(|_| invalid())?;
         let compiler_sha256 = hash_host_compiler(&compiler_path, self.deadline)?;
@@ -118,6 +97,39 @@ impl SealedSourceView {
             checker_original: private.path().join("velnor-semver/cargo-semver-checks"),
         })
     }
+}
+
+fn project_executables(
+    view: &Path,
+    checker_bytes: &[u8],
+    release_plz_bytes: &[u8],
+    git_bytes: &[u8],
+    helper_bytes: &[u8],
+    deadline: CheckDeadline,
+) -> Result<(), OrchestratorError> {
+    let invalid = || internal("crate_release_source_tools_invalid");
+    let semver_dir = view.join("semver");
+    let git_dir = view.join("git");
+    let plz_dir = view.join("release-plz");
+    std::fs::create_dir(&semver_dir).map_err(|_| invalid())?;
+    std::fs::create_dir(&git_dir).map_err(|_| invalid())?;
+    std::fs::create_dir(&plz_dir).map_err(|_| invalid())?;
+    for directory in [&semver_dir, &git_dir, &plz_dir] {
+        std::fs::set_permissions(directory, std::fs::Permissions::from_mode(0o755))
+            .map_err(|_| invalid())?;
+    }
+    write_projected_executable(
+        &semver_dir.join("cargo-semver-checks"),
+        checker_bytes,
+        deadline,
+    )?;
+    write_projected_executable(&plz_dir.join("release-plz"), release_plz_bytes, deadline)?;
+    write_projected_executable(&git_dir.join("git"), git_bytes, deadline)?;
+    write_projected_executable(&git_dir.join("git-remote-http"), helper_bytes, deadline)?;
+    std::os::unix::fs::symlink("git-remote-http", git_dir.join("git-remote-https"))
+        .map_err(|_| invalid())?;
+    velnor_actions_mise::release_git_pin::verify_bundle(&git_dir).map_err(|_| invalid())?;
+    Ok(())
 }
 
 fn read_checked_executable(
@@ -146,7 +158,7 @@ fn read_checked_executable(
         return Err(invalid());
     }
     let mut bytes = Vec::new();
-    let mut buffer = [0_u8; 32768];
+    let mut buffer = vec![0_u8; 32768];
     loop {
         deadline.remaining().map_err(|_| invalid())?;
         let count = file.read(&mut buffer).map_err(|_| invalid())?;
@@ -221,7 +233,7 @@ fn hash_host_compiler(path: &Path, deadline: CheckDeadline) -> Result<String, Or
         return Err(invalid());
     }
     let mut bytes = Vec::new();
-    let mut buffer = [0_u8; 32768];
+    let mut buffer = vec![0_u8; 32768];
     loop {
         deadline.remaining().map_err(|_| invalid())?;
         let count = file.read(&mut buffer).map_err(|_| invalid())?;

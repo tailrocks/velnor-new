@@ -259,9 +259,11 @@ impl crate::crate_release_workspace::HistoricalIntentReader<'_> {
         };
         let result = crate::crate_release_historical_intent::verify_runner_transition(
             &execution.root,
-            prior,
-            current,
-            &receipt.intent,
+            crate::crate_release_historical_intent::TransitionReceipts {
+                prior,
+                current,
+                current_intent: &receipt.intent,
+            },
             request,
             &checked,
             &execution.projected.sealed.git,

@@ -3,7 +3,7 @@
 
 use crate::{OrchestratorError, crate_release_custody::PublisherRoot, internal::internal};
 use std::{
-    io::Read as _,
+    io::{Read as _, Write as _},
     os::unix::fs::{DirBuilderExt as _, OpenOptionsExt as _, PermissionsExt as _},
     path::Path,
 };
@@ -131,7 +131,6 @@ fn acquire_one(
         .mode(0o600)
         .open(directory_path.join(binary))
         .map_err(|_| invalid())?;
-    use std::io::Write as _;
     for chunk in bytes.chunks(32768) {
         deadline.remaining().map_err(|_| invalid())?;
         file.write_all(chunk).map_err(|_| invalid())?;

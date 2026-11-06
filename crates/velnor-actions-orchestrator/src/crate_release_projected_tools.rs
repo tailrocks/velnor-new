@@ -222,7 +222,7 @@ fn hash_tool(bin: &impl AsFd, name: &str, deadline: Instant) -> Result<String, O
     .map_err(|_| invalid())?;
     let metadata = fs::fstat(&fd).map_err(|_| invalid())?;
     if metadata.st_uid != 0
-        || metadata.st_mode & 0o170000 != 0o100000
+        || metadata.st_mode & 0o170_000 != 0o100_000
         || metadata.st_mode & 0o022 != 0
         || metadata.st_mode & 0o111 == 0
         || metadata.st_nlink != 1
@@ -233,7 +233,7 @@ fn hash_tool(bin: &impl AsFd, name: &str, deadline: Instant) -> Result<String, O
     }
     let mut file = std::fs::File::from(fd);
     let mut hasher = Sha256::new();
-    let mut bytes = [0_u8; 32768];
+    let mut bytes = vec![0_u8; 32768];
     loop {
         if Instant::now() >= deadline {
             return Err(invalid());

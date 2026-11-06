@@ -65,12 +65,11 @@ impl crate::CrateSourceExecution for SupervisedSourceExecution {
             wire.poison();
             return Err(invalid());
         }
-        match String::from_utf8(bytes) {
-            Ok(value) => Ok(value),
-            Err(_) => {
-                wire.poison();
-                Err(invalid())
-            }
+        if let Ok(value) = String::from_utf8(bytes) {
+            Ok(value)
+        } else {
+            wire.poison();
+            Err(invalid())
         }
     }
 

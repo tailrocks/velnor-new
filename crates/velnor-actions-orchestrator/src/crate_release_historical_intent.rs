@@ -35,7 +35,7 @@ fn read_historical_intent(
         return Err(invalid());
     }
     let mut validated = original.clone();
-    validated.runner = "ubuntu-26.04".to_owned();
+    "ubuntu-26.04".clone_into(&mut validated.runner);
     validated.validate().map_err(|_| invalid())?;
     verify_object_store(root, git, deadline, wire)?;
     wire.remaining().map_err(|_| invalid())?;
@@ -93,7 +93,13 @@ fn tree_entry(bytes: &[u8], wanted: &str, wanted_mode: &str) -> Result<String, O
             found = Some(
                 remaining[end + 1..end + 21]
                     .iter()
-                    .map(|byte| format!("{byte:02x}"))
+                    .flat_map(|byte| {
+                        const HEX: &[u8; 16] = b"0123456789abcdef";
+                        [
+                            char::from(HEX[usize::from(byte >> 4)]),
+                            char::from(HEX[usize::from(byte & 15)]),
+                        ]
+                    })
                     .collect(),
             );
         }
@@ -175,17 +181,27 @@ fn verify_object_store(
     Ok(())
 }
 
+#[derive(Clone, Copy)]
+pub(crate) struct TransitionReceipts<'a> {
+    pub prior: &'a crate::crate_release_journal::JournalReceipt,
+    pub current: &'a crate::crate_release_journal::JournalReceipt,
+    pub current_intent: &'a CrateReleaseIntent,
+}
+
 pub(crate) fn verify_runner_transition(
     root: &Path,
-    prior: &crate::crate_release_journal::JournalReceipt,
-    current: &crate::crate_release_journal::JournalReceipt,
-    current_intent: &CrateReleaseIntent,
+    receipts: TransitionReceipts<'_>,
     request: &crate::crate_release_github::GitHubAdmissionRequest,
     github: &dyn crate::crate_release_github::GitHubAdmissionRead,
     git: &ReleaseGit,
     deadline: CheckDeadline,
     wire: &crate::crate_release_source_wire::SourceWire,
 ) -> Result<(), OrchestratorError> {
+    let TransitionReceipts {
+        prior,
+        current,
+        current_intent,
+    } = receipts;
     let invalid = || internal("crate_release_historical_transition_invalid");
     current_intent.validate().map_err(|_| invalid())?;
     if current_intent.runner != "ubuntu-26.04"
@@ -220,7 +236,7 @@ pub(crate) fn verify_runner_transition(
     }
     verify_receipt_intent(prior, &historical)?;
     let mut normalized = historical.clone();
-    normalized.runner = "ubuntu-26.04".to_owned();
+    "ubuntu-26.04".clone_into(&mut normalized.runner);
     if crate::crate_release_journal::release_base_intent_sha256(&normalized)?
         != current.base_intent_sha256
     {

@@ -127,12 +127,14 @@ pub(crate) fn invoke_supervised_upload<
     execution: &crate::crate_release_source_view::SupervisedSourceExecution,
 ) -> Result<UploadAttempt, OrchestratorError> {
     let qualified = validate_upload_permit(input, &permit)?;
+    let package = permit.package;
+    let version = permit.version;
     execution.upload(&crate::crate_release_source_view::SupervisedUpload {
         root: input.source,
         intent: input.intent,
         git: input.git,
-        package: &permit.package,
-        version: &permit.version,
+        package: &package,
+        version: &version,
         sequence: permit.sequence,
         release_plz_sha256: qualified.executable_sha256,
     })?;

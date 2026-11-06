@@ -12,7 +12,6 @@ pub(super) fn stage_baseline(
     deadline: CheckDeadline,
 ) -> Result<(), OrchestratorError> {
     use std::{
-        collections::BTreeSet,
         io::Write as _,
         os::unix::fs::{DirBuilderExt as _, OpenOptionsExt as _},
     };
@@ -76,7 +75,17 @@ pub(super) fn stage_baseline(
         }
         freeze_checkout(&root, deadline)?;
     }
-    let root_meta = std::fs::symlink_metadata(&root).map_err(|_| invalid())?;
+    verify_baseline(&root, files, deadline)
+}
+
+fn verify_baseline(
+    root: &Path,
+    files: &std::collections::BTreeMap<String, (u32, Vec<u8>)>,
+    deadline: CheckDeadline,
+) -> Result<(), OrchestratorError> {
+    use std::collections::BTreeSet;
+    let invalid = || internal("crate_release_source_baseline_invalid");
+    let root_meta = std::fs::symlink_metadata(root).map_err(|_| invalid())?;
     if !root_meta.is_dir()
         || root_meta.file_type().is_symlink()
         || root_meta.uid() != 0
@@ -97,13 +106,13 @@ pub(super) fn stage_baseline(
     }
     let mut seen_files = BTreeSet::new();
     let mut seen_dirs = BTreeSet::new();
-    let mut pending = vec![root.clone()];
+    let mut pending = vec![root.to_path_buf()];
     while let Some(directory) = pending.pop() {
         for entry in std::fs::read_dir(directory).map_err(|_| invalid())? {
             deadline.remaining().map_err(|_| invalid())?;
             let path = entry.map_err(|_| invalid())?.path();
             let relative = path
-                .strip_prefix(&root)
+                .strip_prefix(root)
                 .map_err(|_| invalid())?
                 .to_path_buf();
             let metadata = std::fs::symlink_metadata(&path).map_err(|_| invalid())?;

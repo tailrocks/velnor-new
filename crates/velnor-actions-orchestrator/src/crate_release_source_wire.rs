@@ -20,6 +20,7 @@ use rustix::{
 const MAX_CONTEXT: usize = 32 * 1024 * 1024;
 const MAX_RESPONSE: usize = 64 * 1024 * 1024;
 
+#[derive(Clone, Copy)]
 pub(crate) enum SourceOperation {
     Init,
     Metadata,
@@ -199,7 +200,7 @@ impl SourceWire {
                     data = &mut data[result.bytes..];
                 }
                 Err(rustix::io::Errno::AGAIN | rustix::io::Errno::INTR) => {
-                    std::thread::sleep(Duration::from_millis(5))
+                    std::thread::sleep(Duration::from_millis(5));
                 }
                 Err(_) => return Err("source_channel_closed"),
             }
