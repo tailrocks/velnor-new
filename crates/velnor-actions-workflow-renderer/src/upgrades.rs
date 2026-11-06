@@ -44,10 +44,7 @@ impl UpgradesSpec {
             return Err(RenderError::InvalidWorkflow("upgrades_disabled".to_owned()));
         }
         marker::validate_version(&self.generator_version)?;
-        if !matches!(
-            self.runs_on.as_str(),
-            "ubuntu-22.04" | "ubuntu-24.04" | "ubuntu-26.04"
-        ) {
+        if !matches!(self.runs_on.as_str(), "ubuntu-26.04") {
             return Err(RenderError::InvalidWorkflow(format!(
                 "upgrades_requires_github_hosted_linux_amd64:{}",
                 self.runs_on

@@ -15,7 +15,7 @@ use crate::{
 #[path = "release_rehearsal.rs"]
 pub mod rehearsal;
 
-pub const RELEASE_HOSTED_RUNNER: &str = "ubuntu-24.04";
+pub const RELEASE_HOSTED_RUNNER: &str = "ubuntu-26.04";
 pub const RELEASE_WORKFLOW_PATH: &str = ".github/workflows/release.yml";
 pub const RELEASE_INTENT_PATH: &str = ".github/velnor-release-intent.toml";
 pub const RELEASE_CONFIG_PATH: &str = ".github/release-plz.toml";

@@ -33,7 +33,7 @@ pub(super) fn metadata_job(
             "metadata",
             step,
             &std::collections::BTreeMap::new(),
-            "ubuntu-24.04",
+            "ubuntu-26.04",
         )
     };
     let download = map(vec![

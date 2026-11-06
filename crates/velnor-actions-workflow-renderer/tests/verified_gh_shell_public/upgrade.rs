@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 pub(super) fn rendered_upgrade_publish_script() -> Result<String, Box<dyn std::error::Error>> {
-    rendered_upgrade_publish_script_for("ubuntu-24.04")
+    rendered_upgrade_publish_script_for("ubuntu-26.04")
 }
 
 fn rendered_upgrade_publish_script_for(runner: &str) -> Result<String, Box<dyn std::error::Error>> {
@@ -65,10 +65,10 @@ fn rendered_upgrade_publish_script_for(runner: &str) -> Result<String, Box<dyn s
 
 #[test]
 fn upgrades_reject_unqualified_runner_platforms() -> Result<(), Box<dyn std::error::Error>> {
-    for runner in ["ubuntu-22.04", "ubuntu-24.04", "ubuntu-26.04"] {
-        rendered_upgrade_publish_script_for(runner)?;
-    }
+    rendered_upgrade_publish_script_for("ubuntu-26.04")?;
     for runner in [
+        "ubuntu-22.04",
+        "ubuntu-24.04",
         "ubuntu-22.04-arm",
         "ubuntu-24.04-arm",
         "ubuntu-26.04-arm",

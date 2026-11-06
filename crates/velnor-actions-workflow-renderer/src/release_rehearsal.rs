@@ -31,7 +31,7 @@ fn step(name: &str, script: &str, env: Yaml) -> Yaml {
 }
 fn base_job(steps: Vec<Yaml>, permissions: Yaml) -> Vec<(&'static str, Yaml)> {
     vec![
-        ("runs-on", Yaml::str("ubuntu-24.04")),
+        ("runs-on", Yaml::str("ubuntu-26.04")),
         ("timeout-minutes", Yaml::Int(45)),
         ("permissions", permissions),
         ("steps", Yaml::Seq(steps)),

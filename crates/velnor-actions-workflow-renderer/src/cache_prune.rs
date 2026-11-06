@@ -13,7 +13,7 @@ use crate::render::RenderedFile;
 use crate::yaml::quote_scalar;
 
 pub const CACHE_PRUNE_PATH: &str = ".github/workflows/cache-prune.yml";
-pub const CACHE_PRUNE_FALLBACK_RUNNER: &str = "ubuntu-24.04";
+pub const CACHE_PRUNE_FALLBACK_RUNNER: &str = "ubuntu-26.04";
 pub const TOOLS_PRUNE_PREFIX: &str = "mise-tools-v2-";
 pub const TOOLS_PRUNE_UNIT: &str = "mise-tools-v2";
 pub const TOOLS_RETAINED_ENTRIES: u64 = 8;

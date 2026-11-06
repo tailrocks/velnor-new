@@ -9,7 +9,7 @@ use crate::render::RenderedFile;
 use crate::yaml::quote_scalar;
 
 pub const CACHE_CLEANUP_PATH: &str = ".github/workflows/cache-cleanup.yml";
-pub const CACHE_CLEANUP_FALLBACK_RUNNER: &str = "ubuntu-24.04";
+pub const CACHE_CLEANUP_FALLBACK_RUNNER: &str = "ubuntu-26.04";
 
 const BODY: &str = r#"name: Cache cleanup
 "on":
