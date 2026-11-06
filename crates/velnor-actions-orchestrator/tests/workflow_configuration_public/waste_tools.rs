@@ -34,8 +34,8 @@ const LANE_TOOLS: [&str; 7] = [
     " bun@",
 ];
 
-const OTHER_LANE_USES: &str = TOOLS_CACHE_PRELUDE_USES[1];
-const OTHER_LANE_RUNS_ON: &str = "ubuntu-24.04";
+const OTHER_LANE_USES: &str = TOOLS_CACHE_PRELUDE_USES[2];
+const OTHER_LANE_RUNS_ON: &str = "scale-set:velnor+ubuntu-26.04-scale-set";
 
 pub(super) fn lane_jobs() -> Result<BTreeMap<String, Job>, Box<dyn Error>> {
     Ok(lane_jobs_with_catalog()?.0)
@@ -200,7 +200,7 @@ fn w7_refuses_two_tools_identities_in_one_lane() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
-fn a_rust_job_in_another_lane_keeps_its_own_identity() -> Result<(), Box<dyn Error>> {
+fn unqualified_lane_rejects_tools_identity_and_same_lane_stays_bound() -> Result<(), Box<dyn Error>> {
     let mut jobs = lane_jobs()?;
     let id = crate_id(&jobs)?;
     let own = identity_digest(&jobs[&id])
@@ -219,7 +219,11 @@ fn a_rust_job_in_another_lane_keeps_its_own_identity() -> Result<(), Box<dyn Err
         }
     }
     jobs.insert("rust-other-lane".to_owned(), other_lane);
-    assert_eq!(of(&jobs, WasteRule::SplitToolsIdentity), Vec::new());
+    let unqualified = of(&jobs, WasteRule::SplitToolsIdentity);
+    assert_eq!(unqualified.len(), 1, "{unqualified:?}");
+    assert!(unqualified[0].to_string().contains("rust-other-lane"));
+    assert!(unqualified[0].to_string().contains("tools_cache_identity_shape"));
+    jobs.remove("rust-other-lane");
     jobs.insert("rust-same-lane".to_owned(), same_lane);
     let found = of(&jobs, WasteRule::SplitToolsIdentity);
     assert_eq!(found.len(), 1, "{found:?}");
