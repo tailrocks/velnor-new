@@ -102,7 +102,7 @@ fn rendered_selector_uses_the_largest_public_root_count_within_existing_bounds()
         || fixed_valid_run_units > 21_000
     {
         return Err(fail(&format!(
-            "fixed valid selector fixture exceeds existing bounds: roots=1000 workflow_bytes={} run_utf16_units={fixed_valid_run_units}",
+            "fixed valid selector fixture exceeds existing bounds: roots=243 workflow_bytes={} run_utf16_units={fixed_valid_run_units}",
             fixed_valid.workflow_bytes
         )));
     }
@@ -110,14 +110,14 @@ fn rendered_selector_uses_the_largest_public_root_count_within_existing_bounds()
         .expect_err("the fixed oversized fixture must cross the document boundary");
     if !fixed_oversized.to_string().contains("workflow_too_large:") {
         return Err(fail(&format!(
-            "fixed oversized selector fixture did not reach the document guard: roots=2050 rejection={fixed_oversized}"
+            "fixed oversized selector fixture did not reach the document guard: roots=244 rejection={fixed_oversized}"
         )));
     }
     println!(
-        "fixed valid selector fixture roots=1000 workflow_bytes={} run_utf16_units={fixed_valid_run_units}",
+        "fixed valid selector fixture roots=243 workflow_bytes={} run_utf16_units={fixed_valid_run_units}",
         fixed_valid.workflow_bytes
     );
-    println!("fixed oversized selector fixture roots=2050 rejection={fixed_oversized}");
+    println!("fixed oversized selector fixture roots=244 rejection={fixed_oversized}");
     Ok(())
 }
 
