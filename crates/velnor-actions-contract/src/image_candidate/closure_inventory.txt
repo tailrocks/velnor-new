@@ -642,6 +642,7 @@ crates/velnor-actions-orchestrator/src/crate_jobs_stage.rs
 crates/velnor-actions-orchestrator/src/crate_jobs_steps.rs
 crates/velnor-actions-orchestrator/src/crate_registry_inventory.rs
 crates/velnor-actions-orchestrator/src/crate_release_archive.rs
+crates/velnor-actions-orchestrator/src/crate_release_artifact_pages.rs
 crates/velnor-actions-orchestrator/src/crate_release_checkout.rs
 crates/velnor-actions-orchestrator/src/crate_release_controller.rs
 crates/velnor-actions-orchestrator/src/crate_release_controller/inventory.rs
@@ -654,6 +655,7 @@ crates/velnor-actions-orchestrator/src/crate_release_github.rs
 crates/velnor-actions-orchestrator/src/crate_release_github_authority.rs
 crates/velnor-actions-orchestrator/src/crate_release_github_authorization.rs
 crates/velnor-actions-orchestrator/src/crate_release_github_checks.rs
+crates/velnor-actions-orchestrator/src/crate_release_github_native.rs
 crates/velnor-actions-orchestrator/src/crate_release_github_reviews.rs
 crates/velnor-actions-orchestrator/src/crate_release_github_tags.rs
 crates/velnor-actions-orchestrator/src/crate_release_historical_intent.rs
