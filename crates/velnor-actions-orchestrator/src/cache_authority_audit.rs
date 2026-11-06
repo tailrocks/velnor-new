@@ -4,25 +4,21 @@
 use velnor_actions_contract::workflow::crate_job::{
     TOFU_PROVIDERS_PRODUCER_JOB_ID_PREFIX, TOOLS_PRODUCER_JOB_ID_PREFIX,
 };
+use velnor_actions_contract::workflow::state_seal::STATE_SEAL_JOB_ID_PREFIX;
 use velnor_actions_contract::workflow::{
     CacheWriter, QUALIFICATION_CACHE_WRITER_IDS, QUALIFICATION_WRITER_GATE,
     SOURCES_PRODUCER_JOB_ID, WORKFLOW_CACHE_MODE, WRITER_CACHE_MODE, WRITER_MISE_ENV,
 };
-use velnor_actions_contract::workflow::state_seal::STATE_SEAL_JOB_ID_PREFIX;
 use velnor_actions_workflow_renderer::render::RenderedFile;
 use velnor_actions_workflow_renderer::schema2::QUALIFICATION_WORKFLOW;
 
 use std::collections::BTreeMap;
 
-use crate::OrchestratorError;
 use super::rust_install_audit::parse::step_lists;
+use crate::OrchestratorError;
 
 const WORKFLOW_DIR: &str = ".github/workflows/";
-const CACHE_MODE_KEY: &str = "cache-mode:";
-const CONDITION_KEY: &str = "if:";
 const BACKGROUND_KEY: &str = "background";
-const JOBS_KEY: &str = "jobs:";
-const ENV_KEY: &str = "env:";
 
 struct JobHeader {
     id: String,
@@ -51,9 +47,19 @@ pub(crate) fn audit(files: &[RenderedFile]) -> Result<(), OrchestratorError> {
         if !workflow {
             continue;
         }
-        let scan = scan(&file.bytes);
+        let scan = scan(&file.bytes).map_err(|problem| {
+            violation(
+                &file.path,
+                "workflow",
+                &format!("cache_writer_invalid_yaml:{problem}"),
+            )
+        })?;
         if scan.workflow_modes != [WORKFLOW_CACHE_MODE] {
-            return Err(violation(&file.path, "workflow", "workflow_cache_mode_not_read"));
+            return Err(violation(
+                &file.path,
+                "workflow",
+                "workflow_cache_mode_not_read",
+            ));
         }
         for job in &scan.jobs {
             let Some(mode) = job.cache_mode.as_deref() else {
@@ -163,72 +169,72 @@ fn role_of(path: &str, id: &str) -> Option<Role> {
     (id == SOURCES_PRODUCER_JOB_ID).then_some(Role::Producer(CacheWriter::SourcesProducer))
 }
 
-fn scan(text: &str) -> Scan {
-    let mut scan = Scan {
-        workflow_modes: Vec::new(),
-        workflow_env: BTreeMap::new(),
-        jobs: Vec::new(),
-    };
-    let mut in_jobs = false;
-    let mut in_workflow_env = false;
-    let mut in_job_env = false;
-    for line in text.lines() {
-        let indent = line.len() - line.trim_start().len();
-        let content = line.trim();
-        if indent == 0 {
-            in_jobs = content == JOBS_KEY;
-            in_workflow_env = content == ENV_KEY;
-            if let Some(value) = content.strip_prefix(CACHE_MODE_KEY) {
-                scan.workflow_modes.push(scalar(value));
-            }
-            continue;
-        }
-        if !in_jobs {
-            if in_workflow_env && indent == 2 {
-                insert_entry(&mut scan.workflow_env, content);
-            }
-            continue;
-        }
-        if indent == 2 && content.contains(':') {
-            in_job_env = false;
-            scan.jobs.push(JobHeader {
-                id: content.split(':').next().unwrap_or_default().to_owned(),
-                cache_mode: None,
-                condition: None,
-                env: BTreeMap::new(),
-            });
-        } else if indent == 4
-            && let Some(job) = scan.jobs.last_mut()
-        {
-            in_job_env = content == ENV_KEY;
-            if let Some(value) = content.strip_prefix(CACHE_MODE_KEY) {
-                job.cache_mode = Some(scalar(value));
-            } else if let Some(value) = content.strip_prefix(CONDITION_KEY) {
-                job.condition = Some(scalar(value));
-            }
-        } else if indent == 6
-            && in_job_env
-            && let Some(job) = scan.jobs.last_mut()
-        {
-            insert_entry(&mut job.env, content);
-        }
-    }
-    scan
+#[derive(serde::Deserialize)]
+struct WorkflowHeader {
+    #[serde(rename = "cache-mode")]
+    cache_mode: Option<String>,
+    #[serde(default)]
+    env: BTreeMap<String, serde_json::Value>,
+    jobs: BTreeMap<String, Header>,
 }
 
-fn insert_entry(env: &mut BTreeMap<String, String>, content: &str) {
-    if let Some((key, value)) = content.split_once(':') {
-        env.insert(scalar(key), scalar(value));
-    }
+#[derive(serde::Deserialize)]
+struct Header {
+    #[serde(rename = "cache-mode")]
+    cache_mode: Option<String>,
+    #[serde(rename = "if")]
+    condition: Option<String>,
+    #[serde(default)]
+    env: BTreeMap<String, serde_json::Value>,
 }
 
-fn scalar(value: &str) -> String {
-    let value = value.trim();
-    value
-        .strip_prefix('"')
-        .and_then(|rest| rest.strip_suffix('"'))
-        .unwrap_or(value)
-        .to_owned()
+fn scan(text: &str) -> Result<Scan, String> {
+    if text.len() > 16 * 1024 * 1024
+        || !super::rust_install_audit::parse::duplicate_anchor_names(text).is_empty()
+    {
+        return Err("input_or_duplicate_anchor".to_owned());
+    }
+    let mut options = serde_saphyr::Options::default();
+    options.strict_indentation = true;
+    options.with_snippet = false;
+    if let Some(budget) = options.budget.as_mut() {
+        budget.alias_anchor_ratio_multiplier = 100;
+    }
+    options.merge_keys = serde_saphyr::MergeKeyPolicy::Error;
+    options.reject_unsupported_tags = true;
+    options.reject_tagged_field_names = true;
+    let header: WorkflowHeader =
+        serde_saphyr::from_str_with_options(text, options).map_err(|error| error.to_string())?;
+    let jobs = header
+        .jobs
+        .into_iter()
+        .map(|(id, job)| {
+            Ok(JobHeader {
+                id,
+                cache_mode: job.cache_mode,
+                condition: job.condition,
+                env: string_env(job.env)?,
+            })
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+    Ok(Scan {
+        workflow_modes: header.cache_mode.into_iter().collect(),
+        workflow_env: string_env(header.env)?,
+        jobs,
+    })
+}
+
+fn string_env(
+    env: BTreeMap<String, serde_json::Value>,
+) -> Result<BTreeMap<String, String>, String> {
+    env.into_iter()
+        .map(|(key, value)| {
+            value
+                .as_str()
+                .map(|value| (key.clone(), value.to_owned()))
+                .ok_or_else(|| format!("non_string_env:{key}"))
+        })
+        .collect()
 }
 
 fn violation(path: &str, subject: &str, rule: &str) -> OrchestratorError {

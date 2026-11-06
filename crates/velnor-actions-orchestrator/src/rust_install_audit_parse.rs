@@ -112,7 +112,7 @@ pub(crate) fn step_lists(text: &str) -> Vec<(String, Vec<StepText>)> {
     lists
 }
 
-pub(super) fn duplicate_anchor_names(text: &str) -> BTreeSet<String> {
+pub(crate) fn duplicate_anchor_names(text: &str) -> BTreeSet<String> {
     find_duplicate_anchor_names(text)
 }
 
