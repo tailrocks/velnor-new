@@ -18,7 +18,8 @@ case "${{RUNNER_OS-}}/${{RUNNER_ARCH-}}" in Linux/X64) ;; *) exit 1 ;; esac
 mise --no-config --no-env --no-hooks install 'gh@{GH_VERSION}' python@{PYTHON_VERSION}
 python="$(mise --no-config --no-env --no-hooks which python --tool python@{PYTHON_VERSION})"
 [ "$("$python" --version)" = 'Python {PYTHON_VERSION}' ]
-export VELNOR_BOOTSTRAP_GH="$(mise --no-config --no-env --no-hooks which gh --tool 'gh@{GH_VERSION}')"
+VELNOR_BOOTSTRAP_GH="$(mise --no-config --no-env --no-hooks which gh --tool 'gh@{GH_VERSION}')"
+export VELNOR_BOOTSTRAP_GH
 bootstrap="$(mktemp -d "$RUNNER_TEMP/velnor-sdk-bootstrap.XXXXXXXX")"
 trap 'rm -rf "$bootstrap"' EXIT
 curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --tlsv1.2 --connect-timeout 15 --max-time 120 --retry 5 --retry-all-errors --retry-max-time 180 --max-filesize {COSIGN_LINUX_AMD64_BYTES} 'https://github.com/sigstore/cosign/releases/download/v{COSIGN_VERSION}/cosign-linux-amd64' -o "$bootstrap/cosign"

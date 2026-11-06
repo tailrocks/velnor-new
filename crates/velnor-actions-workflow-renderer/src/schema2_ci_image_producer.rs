@@ -13,7 +13,7 @@ const MAIN_PUSH: &str = "github.event_name == 'push' && github.ref == 'refs/head
 pub const SDK_CI_IMAGE_LOOKUP_SCRIPT: &str = include_str!("schema2_ci_image_lookup.sh");
 pub const SDK_CI_IMAGE_ARTIFACT_SCRIPT: &str = include_str!("schema2_ci_image_artifact.py");
 pub const SDK_CI_IMAGE_DOWNLOAD_SCRIPT: &str = include_str!("schema2_ci_image_download.sh");
-pub(super) const SCRUB_EXEC: &str = r#"unset_args=(); while IFS= read -r -d '' entry; do name=${entry%%=*}; case "$name" in *TOKEN*|*PASSWORD*|*SECRET*|ACTIONS_ID_TOKEN_REQUEST_URL|GH_HOST|GH_CONFIG_DIR|BASH_ENV|ENV|BASH_FUNC_*) unset_args+=(-u "$name");; esac; done < <(/usr/bin/env -0); exec /usr/bin/env "${unset_args[@]}" "$@""#;
+pub(super) const SCRUB_EXEC: &str = r#"unset_args=(); while IFS= read -r -d '' entry; do name=${entry%%=*}; case "$name" in *TOKEN*|*PASSWORD*|*SECRET*|GH_HOST|GH_CONFIG_DIR|BASH_ENV|ENV|BASH_FUNC_*) unset_args+=(-u "$name");; esac; done < <(/usr/bin/env -0); exec /usr/bin/env "${unset_args[@]}" "$@""#;
 
 fn build_argvs(rust: &str) -> (Vec<String>, Vec<String>) {
     let prefix = ["mise", "--no-config", "--no-env", "--no-hooks", "exec"]

@@ -130,16 +130,18 @@ fn producer(
     }
     let access = vec![("actions", "read"), ("contents", "read")];
     fields.push(("permissions".to_owned(), permissions(&access)));
-    fields.push((
-        "outputs".to_owned(),
-        permissions(&[
-            ("artifact_id", "${{ steps.upload.outputs.artifact-id }}"),
-            (
-                "artifact_digest",
-                "${{ steps.upload.outputs.artifact-digest }}",
-            ),
-        ]),
-    ));
+    if !preview_matrix {
+        fields.push((
+            "outputs".to_owned(),
+            permissions(&[
+                ("artifact_id", "${{ steps.upload.outputs.artifact-id }}"),
+                (
+                    "artifact_digest",
+                    "${{ steps.upload.outputs.artifact-digest }}",
+                ),
+            ]),
+        ));
+    }
     let (steps, public_plan) = producer_steps(spec, id, pair, preview_matrix)?;
     fields.push(("env".to_owned(), public_plan));
     Ok(finish(id, fields, steps))

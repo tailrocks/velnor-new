@@ -114,7 +114,7 @@ impl VerifierActionSet {
         let steps = verifier_steps(catalog)?;
         let inline_templates = inline_templates(&steps)?;
         let mut cross_target_rust = steps.isolated_home_rust.clone();
-        cross_target_rust.name = "Verify Rust toolchain after cross-target install".to_owned();
+        "Verify Rust toolchain after cross-target install".clone_into(&mut cross_target_rust.name);
         Ok(Self {
             cross_target_rust,
             inline_verifier_steps: [

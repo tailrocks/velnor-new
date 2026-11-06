@@ -77,17 +77,25 @@ pub(super) fn render(
     Ok(Yaml::Map(vec![
         ("name".to_owned(), Yaml::str(name)),
         ("shell".to_owned(), Yaml::str("bash")),
-        (
-            "env".to_owned(),
-            Yaml::Map(vec![
-                (
-                    "GH_TOKEN".to_owned(),
-                    Yaml::str("${{ secrets.GITHUB_TOKEN }}"),
-                ),
-                (key.to_owned(), Yaml::str(profile)),
-                ("IMAGE_REPOSITORY".to_owned(), Yaml::str(repository)),
-            ]),
-        ),
+        ("env".to_owned(), operation_env(key, profile, repository)),
         ("run".to_owned(), Yaml::str(run)),
     ]))
+}
+
+fn operation_env(key: &str, profile: &str, repository: &str) -> Yaml {
+    Yaml::Map(vec![
+        (
+            "GH_TOKEN".to_owned(),
+            Yaml::str("${{ secrets.GITHUB_TOKEN }}"),
+        ),
+        (
+            "VELNOR_TRUSTED_ACTIONS".to_owned(),
+            Yaml::str(format!(
+                "${{{{ runner.temp }}}}/velnor/bin/velnor-actions-{}",
+                env!("CARGO_PKG_VERSION")
+            )),
+        ),
+        (key.to_owned(), Yaml::str(profile)),
+        ("IMAGE_REPOSITORY".to_owned(), Yaml::str(repository)),
+    ])
 }

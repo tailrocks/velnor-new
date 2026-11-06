@@ -6,6 +6,7 @@ Detected stacks
   Tofu: not detected (strong evidence; add [stacks.tofu] roots to enable)
     evidence: mise-tool:opentofu
   Mise check maintenance-helpers: test-maintenance-helpers (runner: ubuntu-26.04, target: x86_64-unknown-linux-gnu)
+  Mise check native-image-candidates: validate-native-image-source (runner: ubuntu-26.04, target: x86_64-unknown-linux-gnu)
   Workspace crates: 20
     - velnor-actions-actionlint (crates/velnor-actions-actionlint/Cargo.toml) [lib; depends on velnor-actions-contract]
     - velnor-actions-ansible (crates/velnor-actions-ansible/Cargo.toml) [lib; depends on velnor-actions-contract]
@@ -54,6 +55,7 @@ Workflow to generate
     - cargo-deny (6 steps)
     - cargo-machete (7 steps)
     - check-maintenance-helpers (7 steps)
+    - check-native-image-candidates (22 steps)
     - jactionlint (7 steps)
     - ledger-cli (17 steps)
     - plan (16 steps)

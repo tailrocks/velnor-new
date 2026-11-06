@@ -78,7 +78,12 @@ pub(super) fn render_candidate_workflow(
         ),
         ("steps".to_owned(), Yaml::Seq(steps)),
     ]);
-    let workflow = Yaml::Map(vec![
+    let workflow = candidate_document(job);
+    super::file(WORKFLOW_PATH, &request.version, &workflow)
+}
+
+fn candidate_document(job: Yaml) -> Yaml {
+    Yaml::Map(vec![
         ("name".to_owned(), Yaml::str("Job image candidate")),
         (
             "on".to_owned(),
@@ -91,6 +96,16 @@ pub(super) fn render_candidate_workflow(
             )]),
         ),
         (
+            "concurrency".to_owned(),
+            Yaml::Map(vec![
+                (
+                    "group".to_owned(),
+                    Yaml::str("${{ github.workflow }}-${{ github.ref }}"),
+                ),
+                ("cancel-in-progress".to_owned(), Yaml::Bool(true)),
+            ]),
+        ),
+        (
             "permissions".to_owned(),
             Yaml::Map(vec![("contents".to_owned(), Yaml::str("read"))]),
         ),
@@ -98,6 +113,5 @@ pub(super) fn render_candidate_workflow(
             "jobs".to_owned(),
             Yaml::Map(vec![("attest-image-candidate".to_owned(), job)]),
         ),
-    ]);
-    super::file(WORKFLOW_PATH, &request.version, &workflow)
+    ])
 }

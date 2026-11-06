@@ -184,19 +184,10 @@ fn job_to_yaml(job: &PublishJobSpec, staged: Option<&str>) -> Result<Yaml, Rende
         ));
         entries.push((
             "env".to_owned(),
-            Yaml::Map(vec![
-                (
-                    "VELNOR_IMAGE_SOURCE_SHA".to_owned(),
-                    Yaml::str("${{ github.sha }}"),
-                ),
-                (
-                    "VELNOR_TRUSTED_ACTIONS".to_owned(),
-                    Yaml::str(format!(
-                        "${{{{ runner.temp }}}}/velnor/bin/velnor-actions-{}",
-                        env!("CARGO_PKG_VERSION")
-                    )),
-                ),
-            ]),
+            Yaml::Map(vec![(
+                "VELNOR_IMAGE_SOURCE_SHA".to_owned(),
+                Yaml::str("${{ github.sha }}"),
+            )]),
         ));
     }
     entries.push(("permissions".to_owned(), permissions_to_yaml(job)));

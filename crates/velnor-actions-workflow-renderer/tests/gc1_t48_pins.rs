@@ -191,7 +191,23 @@ fn runner_qualification_signs_only_the_exact_credential_free_runtime_proof()
         &files,
         ".github/workflows/runner-image-qualification-attest.yml",
     )?;
+    assert!(caller.contains("group: ${{ github.workflow }}-caller-${{ github.ref }}"));
+    assert!(caller.contains("cancel-in-progress: true"));
+    assert!(!signer.contains("-caller-${{ github.ref }}"));
     let qualify = job_section(caller, "qualify-images:", Some("attest:"))?;
+    let install = qualify
+        .find("Install pinned resource probe tools")
+        .ok_or_else(|| fail("missing install"))?;
+    let verified = qualify
+        .find("Verify Rust channel manifest")
+        .ok_or_else(|| fail("missing verifier"))?;
+    for name in [
+        "Build exact-source image maintenance",
+        "Build exact-source runtime qualifier",
+    ] {
+        let build = qualify.find(name).ok_or_else(|| fail("missing build"))?;
+        assert!(install < verified && verified < build);
+    }
     let permissions = qualify
         .split("steps:")
         .next()
@@ -229,6 +245,8 @@ fn runner_qualification_signs_only_the_exact_credential_free_runtime_proof()
 #[test]
 fn ci_job_image_attestor_binds_three_exact_subjects_before_signing() -> Result<(), Box<dyn Error>> {
     let workflow = candidate_text()?;
+    assert!(workflow.contains("group: ${{ github.workflow }}-${{ github.ref }}"));
+    assert!(workflow.contains("cancel-in-progress: true"));
     let mut disabled = request()?;
     disabled.workflows.clear();
     assert!(
@@ -265,37 +283,21 @@ fn ci_job_image_attestor_binds_three_exact_subjects_before_signing() -> Result<(
 #[test]
 fn ci_job_attestor_checks_real_archive_and_source_before_signing() -> Result<(), Box<dyn Error>> {
     let text = candidate_text()?;
-    let script = |name: &str| -> Result<String, Box<dyn Error>> {
-        let section = text.split_once(name).ok_or("step")?.1;
-        let line = section
-            .lines()
-            .find_map(|line| line.trim().strip_prefix("run: "))
-            .ok_or("run")?;
-        Ok(serde_json::from_str(line)?)
-    };
-    let materialize = script("Materialize fixed image authority implementation")?;
-    let verify = script("Verify candidate bytes with the fixed authority body")?;
+    let verify = authority_script(
+        &text,
+        "Verify candidate bytes with the fixed authority body",
+    )?;
     let root = tempfile::tempdir()?;
     let candidate = root.path().join("privatecandidate");
     std::fs::create_dir(&candidate)?;
-    let output = Command::new("bash")
-        .arg("-c")
-        .arg(materialize)
-        .env("RUNNER_TEMP", root.path())
-        .env("GITHUB_ENV", root.path().join("github-env"))
-        .output()?;
-    assert!(
-        output.status.success(),
-        "{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
+    materialize_authority(&text, root.path())?;
     let parts = image_parts();
     let archive = archive_bytes(&parts);
     let archive_path = candidate.join("job-image.oci.tar");
     let record_path = candidate.join("job-image-candidate.json");
     let closure_path = candidate.join("job-image-native-source-closure.json");
     let mut record: serde_json::Value = serde_json::from_str(&record_json(&parts, &archive))?;
-    record["workflow"]["repository_id"] = serde_json::json!(1390620900);
+    record["workflow"]["repository_id"] = serde_json::json!(1_390_620_900);
     record["workflow"]["workflow_ref"] =
         serde_json::json!("tailrocks/velnor-new/.github/workflows/ci.yml@refs/heads/main");
     record["workflow"]["authority_commit"] = serde_json::json!(SOURCE_SHA);
@@ -337,7 +339,7 @@ fn ci_job_attestor_checks_real_archive_and_source_before_signing() -> Result<(),
     record["workflow"]["repository_id"] = serde_json::json!(1);
     std::fs::write(&record_path, serde_json::to_vec(&record)?)?;
     assert!(!run()?.status.success());
-    record["workflow"]["repository_id"] = serde_json::json!(1390620900);
+    record["workflow"]["repository_id"] = serde_json::json!(1_390_620_900);
     std::fs::write(&record_path, serde_json::to_vec(&record)?)?;
     std::fs::write(&archive_path, b"corrupt")?;
     assert!(!run()?.status.success());
@@ -352,5 +354,32 @@ fn ci_job_attestor_checks_real_archive_and_source_before_signing() -> Result<(),
         br#"{"schema":"velnor.job-image-native-source-closure.v1","source_commit":"wrong"}"#,
     )?;
     assert!(!run()?.status.success());
+    Ok(())
+}
+
+fn authority_script(text: &str, name: &str) -> Result<String, Box<dyn Error>> {
+    let section = text.split_once(name).ok_or("step")?.1;
+    let line = section
+        .lines()
+        .find_map(|line| line.trim().strip_prefix("run: "))
+        .ok_or("run")?;
+    Ok(serde_json::from_str(line)?)
+}
+
+fn materialize_authority(text: &str, root: &std::path::Path) -> Result<(), Box<dyn Error>> {
+    let output = Command::new("bash")
+        .arg("-c")
+        .arg(authority_script(
+            text,
+            "Materialize fixed image authority implementation",
+        )?)
+        .env("RUNNER_TEMP", root)
+        .env("GITHUB_ENV", root.join("github-env"))
+        .output()?;
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     Ok(())
 }

@@ -127,6 +127,7 @@ fn qualifier_job(
             &pins.install_resource_probe_release_tools_argv,
         )?,
         generator_release::mise_install_step("Install pinned GitHub CLI", &pins.install_gh_argv)?,
+        generator_release::verify_rust_step(pins)?,
         scrubbed(
             "Build exact-source image maintenance",
             &native::build_script(pins)?,
@@ -204,6 +205,16 @@ fn caller_workflow(qualifier: Yaml) -> Yaml {
                 "push",
                 map(vec![("branches", Yaml::Seq(vec![string("main")]))]),
             )]),
+        ),
+        (
+            "concurrency",
+            map(vec![
+                (
+                    "group",
+                    string("${{ github.workflow }}-caller-${{ github.ref }}"),
+                ),
+                ("cancel-in-progress", Yaml::Bool(true)),
+            ]),
         ),
         ("permissions", map(vec![("contents", string("read"))])),
         (

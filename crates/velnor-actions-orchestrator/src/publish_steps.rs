@@ -287,7 +287,16 @@ fn authority_job(inputs: &Inputs<'_>, gh: &str) -> Result<PublishJobSpec, Orches
         let step = script_step(&format!("{name} ({id})"), body, token)?;
         steps.push(plain(when_artifact(step, id)));
     }
-    let outputs = ["artifact", "version"]
+    let output_names: &[&str] = if inputs.native_images
+        && inputs.bundles.is_empty()
+        && inputs.npm.is_empty()
+        && inputs.maven.is_empty()
+    {
+        &["artifact"]
+    } else {
+        &["artifact", "version"]
+    };
+    let outputs = output_names
         .iter()
         .map(|name| {
             (
