@@ -12,10 +12,10 @@ Four upstream releases were published on `2026-11-05` within the repository 3-da
 
 | Subject | Pinned | Upstream latest | Published |
 |---|---|---|---|
-| `mise` | `2026.11.1` | `v2026.11.2` | `2026-11-05T19:41:55Z` |
-| `jactionlint` | `2.4.0` | `v2.5.0` | `2026-11-05T14:15:39Z` |
-| `opentofu` | `1.13.8` | `v1.13.9` | `2026-11-05T14:52:48Z` |
-| `asamarts/alint` | `v0.21.0` | `v0.21.1` | `2026-11-05T21:19:00Z` |
+| `mise` | `2026.11.1` | `v2026.11.2` | `2026-11-05T12:19:06Z` |
+| `jactionlint` | `2.4.0` | `v2.5.0` | `2026-11-05T18:00:01Z` |
+| `opentofu` | `1.13.8` | `v1.13.9` | `2026-11-05T19:09:38Z` |
+| `asamarts/alint` | `v0.21.0` | `v0.21.1` | `2026-11-05T19:46:05Z` |
 
 ## Runner observation
 

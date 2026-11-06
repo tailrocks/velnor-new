@@ -167,7 +167,7 @@
       "held_version": "2026.11.1",
       "owner": "Alexey Zhokhov",
       "issue": "https://github.com/tailrocks/velnor-new/issues/531",
-      "reason": "Controller-visible bootstrap pin in .velnor/generator.lock and .velnor/controller-approvals.json (controller 0.1.75) and developer-selected tool in mise.toml (VER-3.4, VER-4.4 forbid editing mise.toml/mise.lock in an ordinary freshness refresh); v2026.11.2 published 2026-11-05T19:41:55Z is within the 3-day default_cooldown_days window.",
+      "reason": "Controller-visible bootstrap pin in .velnor/generator.lock and .velnor/controller-approvals.json (controller 0.1.75) and developer-selected tool in mise.toml (VER-3.4, VER-4.4 forbid editing mise.toml/mise.lock in an ordinary freshness refresh); v2026.11.2 published 2026-11-05T12:19:06Z is within the 3-day default_cooldown_days window.",
       "granted": "2026-11-06",
       "expires": "2026-11-20"
     },
@@ -176,7 +176,7 @@
       "held_version": "2.4.0",
       "owner": "Alexey Zhokhov",
       "issue": "https://github.com/tailrocks/velnor-new/issues/531",
-      "reason": "Developer-selected tool in mise.toml (VER-3.4, VER-4.4 forbid editing mise.toml/mise.lock in an ordinary freshness refresh); v2.5.0 published 2026-11-05T14:15:39Z is within the 3-day default_cooldown_days window and requires a dedicated toolchain migration and workflow/golden regeneration.",
+      "reason": "Developer-selected tool in mise.toml (VER-3.4, VER-4.4 forbid editing mise.toml/mise.lock in an ordinary freshness refresh); v2.5.0 published 2026-11-05T18:00:01Z is within the 3-day default_cooldown_days window and requires a dedicated toolchain migration and workflow/golden regeneration.",
       "granted": "2026-11-06",
       "expires": "2026-11-20"
     },
@@ -185,7 +185,7 @@
       "held_version": "1.13.8",
       "owner": "Alexey Zhokhov",
       "issue": "https://github.com/tailrocks/velnor-new/issues/531",
-      "reason": "Developer-selected tool in mise.toml (VER-3.4, VER-4.4 forbid editing mise.toml/mise.lock in an ordinary freshness refresh); v1.13.9 published 2026-11-05T14:52:48Z is within the 3-day default_cooldown_days window and requires a dedicated toolchain migration, cosign checksum verification, and OpenTofu golden regeneration.",
+      "reason": "Developer-selected tool in mise.toml (VER-3.4, VER-4.4 forbid editing mise.toml/mise.lock in an ordinary freshness refresh); v1.13.9 published 2026-11-05T19:09:38Z is within the 3-day default_cooldown_days window and requires a dedicated toolchain migration, cosign checksum verification, and OpenTofu golden regeneration.",
       "granted": "2026-11-06",
       "expires": "2026-11-20"
     },
@@ -194,7 +194,7 @@
       "held_version": "v0.21.0",
       "owner": "Alexey Zhokhov",
       "issue": "https://github.com/tailrocks/velnor-new/issues/531",
-      "reason": "v0.21.1 published 2026-11-05T21:19:00Z is within the 3-day default_cooldown_days window (.velnor/version-policy.toml) and requires action qualification, workflow regeneration, and OpenTofu golden updates in the paired dependency update set.",
+      "reason": "v0.21.1 published 2026-11-05T19:46:05Z is within the 3-day default_cooldown_days window (.velnor/version-policy.toml) and requires action qualification, workflow regeneration, and OpenTofu golden updates in the paired dependency update set.",
       "granted": "2026-11-06",
       "expires": "2026-11-20"
     }
