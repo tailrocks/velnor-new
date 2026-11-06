@@ -4,9 +4,9 @@
 use super::checkout_history::CheckoutHistory;
 use super::step::StepKind;
 use super::step_identity::{
-    TOOL_SEED_USES, TOOLS_CACHE_IDENTITY_DIGEST_INPUT, TOOLS_CACHE_PATHS, TOOLS_CACHE_PRELUDE_USES,
-    TOOLS_CACHE_RESTORE_ACTION_USES, TOOLS_CACHE_RESTORE_USES, TOOLS_CACHE_SCRUB_USES,
-    TOOLS_CACHE_V2_KEY_EXPRESSION,
+    FIXTURE_CHECKOUT_BLOB_FILTER, TOOL_SEED_USES, TOOLS_CACHE_IDENTITY_DIGEST_INPUT,
+    TOOLS_CACHE_PATHS, TOOLS_CACHE_PRELUDE_USES, TOOLS_CACHE_RESTORE_ACTION_USES,
+    TOOLS_CACHE_RESTORE_USES, TOOLS_CACHE_SCRUB_USES, TOOLS_CACHE_V2_KEY_EXPRESSION,
 };
 
 pub const TOOLS_RESTORE_LOOKUP_ONLY_INPUT: &str = "lookup-only";
@@ -94,6 +94,7 @@ pub(super) fn valid_configured_checkout_payload(kind: &StepKind) -> bool {
                 "fetch-depth" => CheckoutHistory::parse_fetch_depth(value).is_some(),
                 "lfs" => value == "true",
                 "sparse-checkout" => crate::config::is_sparse_checkout_exclusion(value),
+                "filter" => value == FIXTURE_CHECKOUT_BLOB_FILTER,
                 _ => false,
             })
             && env.is_empty())

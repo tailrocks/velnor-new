@@ -12,6 +12,10 @@ When designing workflows in the Velnor V1 generator or implementing runner infra
 
 GitHub's [push filter syntax](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#onpushbranchestagsbranches-ignoretags-ignore) says a branch-only filter does not run for tag pushes. Its [filter pattern reference](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#filter-pattern-cheat-sheet) defines `**` to include slash-separated names. The job-image candidate workflow uses `branches: ["**"]` to retain branch candidate runs without rebuilding or attesting on a tag push. Manual dispatch remains available; publication retains its separate main-branch dispatch gate.
 
+### Sparse checkout with complete blobs (checked 2026-11-06)
+
+At pinned checkout commit `3d3c42e5aac5ba805825da76410c181273ba90b1`, the [source fetch logic](https://github.com/actions/checkout/blob/3d3c42e5aac5ba805825da76410c181273ba90b1/src/git-source-provider.ts) and [shipped bundle](https://github.com/actions/checkout/blob/3d3c42e5aac5ba805825da76410c181273ba90b1/dist/index.js) select an explicit `filter` before the implicit `blob:none` filter, then separately configure sparse checkout. A real GitHub sparse clone using `blob:limit=18446744073709551615` retained excluded paths as absent while their indexed blobs remained readable with lazy fetching disabled. Checkout retains its existing `persist-credentials: false` setting.
+
 ## Official Source Repositories
 
 ### 1. Runner Core & Execution Protocol

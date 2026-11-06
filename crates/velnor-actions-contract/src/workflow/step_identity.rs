@@ -8,6 +8,8 @@ pub(super) use super::step_payloads::{valid_tools_cache_identity, valid_tools_ca
 use crate::errors::ContractError;
 use serde::{Deserialize, Serialize};
 
+pub const FIXTURE_CHECKOUT_BLOB_FILTER: &str = "blob:limit=18446744073709551615";
+
 #[path = "step_identity_payload.rs"]
 mod payload;
 #[path = "step_identity_sequence.rs"]

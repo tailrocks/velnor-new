@@ -331,7 +331,8 @@ fn render_job(
         fetch_roots,
         ..
     } = input;
-    let mut steps = vec![crate::workflow::wire_w1::checkout_step()?];
+    let gh_fixture = job_steps::gh_fixture_step(policy, model)?;
+    let mut steps = vec![job_steps::fixture_checkout(gh_fixture.is_some())?];
     steps.extend(input.acquire.cloned());
     steps.push(crate::matrix_step::download_plan_step()?);
     let suite: Option<crate::matrix_step::CrateSuite> =
@@ -354,7 +355,7 @@ fn render_job(
     if use_rust {
         steps.extend(rust_source_steps(input, model, needs_validators, private)?);
     }
-    steps.extend(job_steps::gh_fixture_step(policy, model)?);
+    steps.extend(gh_fixture);
     steps.extend(crate::workflow::wire_w1::maybe_task_cache_steps(
         None,
         TaskCacheMode::Off,

@@ -4,8 +4,24 @@
 use super::{CrateJobInputs, build_jobs::cap_cargo_jobs};
 use crate::{OrchestratorError, internal::internal};
 use std::collections::{BTreeMap, BTreeSet};
-use velnor_actions_contract::{CrateJob, CrateObligation, Step, WorkflowPolicy};
+use velnor_actions_contract::{CrateJob, CrateObligation, Step, StepKind, WorkflowPolicy};
 use velnor_actions_mise::{PinnedTool, ToolCatalog};
+
+pub(super) fn fixture_checkout(needs_fixture: bool) -> Result<Step, OrchestratorError> {
+    let mut checkout = crate::workflow::wire_w1::checkout_step()?;
+    if needs_fixture {
+        let StepKind::Action { with, .. } = &mut checkout.kind else {
+            return Err(OrchestratorError::Contract {
+                problem: "fixture checkout is not an action".to_owned(),
+            });
+        };
+        with.insert(
+            "filter".to_owned(),
+            velnor_actions_contract::workflow::step_identity::FIXTURE_CHECKOUT_BLOB_FILTER.to_owned(),
+        );
+    }
+    Ok(checkout)
+}
 
 pub(super) fn gh_fixture_step(
     policy: WorkflowPolicy,

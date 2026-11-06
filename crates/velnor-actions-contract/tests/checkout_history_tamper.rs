@@ -58,3 +58,29 @@ fn configured_checkout_accepts_only_the_three_promised_fetch_depths() {
         );
     }
 }
+
+#[test]
+fn configured_checkout_accepts_only_the_qualified_fixture_blob_filter()
+-> Result<(), Box<dyn std::error::Error>> {
+    use velnor_actions_contract::workflow::step_identity::FIXTURE_CHECKOUT_BLOB_FILTER;
+    let mut checkout = checkout_with_depth("0");
+    let StepKind::Action { with, .. } = &mut checkout.kind else {
+        return Err("expected checkout action".into());
+    };
+    with.insert("filter".to_owned(), FIXTURE_CHECKOUT_BLOB_FILTER.to_owned());
+    assert!(is_configured_checkout(&checkout, CHECKOUT_USES));
+    for rejected in [
+        "blob:none",
+        "tree:0",
+        "blob:limit=1",
+        "",
+        "blob:limit=18446744073709551614",
+    ] {
+        let StepKind::Action { with, .. } = &mut checkout.kind else {
+            return Err("expected checkout action".into());
+        };
+        with.insert("filter".to_owned(), rejected.to_owned());
+        assert!(!is_configured_checkout(&checkout, CHECKOUT_USES));
+    }
+    Ok(())
+}
