@@ -15,11 +15,12 @@ use zip::{ZipWriter, write::SimpleFileOptions};
 #[test]
 fn selected_asset_handoffs_preserve_all_files_at_the_admission_limit() -> TestResult {
     let (base_plan, base_spec, _, _) = super::super::super::load_catalog()?;
-    for additional in [5, 13] {
+    for additional in [14, 62] {
         let mut plan = base_plan.clone();
         let mut spec = base_spec.clone();
         for index in 0..additional {
-            let name = format!("extra-{index}");
+            let name = format!("extra-{index:02}-{}", "x".repeat(91));
+            assert_eq!(name.len(), 100);
             let mut product = plan.products[1].clone();
             product.id.clone_from(&name);
             product.package.clone_from(&name);
@@ -55,6 +56,15 @@ fn selected_asset_handoffs_preserve_all_files_at_the_admission_limit() -> TestRe
         super::super::validate_admission(&json, &sha256(&json), &context, &catalog)?;
         let raw = super::super::bundle::encode_bundle(&json, files.clone())?;
         assert_eq!(read_admitted_files(&mut open_bundle(&raw)?, &admission)?, files);
+        if additional == 62 {
+            let mut extra = plan.products[0].clone();
+            extra.id = "overflow".to_owned();
+            extra.package.clone_from(&extra.id);
+            extra.bins = vec![extra.id.clone()];
+            plan.products.push(extra);
+            plan.products.sort_by(|a, b| a.id.cmp(&b.id));
+            assert!(plan.validate().is_err());
+        }
     }
     Ok(())
 }
@@ -148,9 +158,9 @@ fn raw_bundle_refuses_duplicate_traversal_symlink_and_compressed_entries() -> Te
 
 #[test]
 fn raw_bundle_limits_directory_count_declared_sizes_and_actual_bytes() -> TestResult {
-    let names = (0..34).map(|n| format!("A/file-{n}")).collect::<Vec<_>>();
+    let names = (0..132).map(|n| format!("A/file-{n}")).collect::<Vec<_>>();
     let entries = names.iter().map(|name| (name.as_str(), &b"payload"[..])).collect::<Vec<_>>();
-    assert!(open_bundle(&fixture_bundle(&entries[..33])?).is_ok());
+    assert!(open_bundle(&fixture_bundle(&entries[..131])?).is_ok());
     assert!(open_bundle(&fixture_bundle(&entries)?).is_err());
     let raw = fixture_bundle(&[("A/payload", b"payload")])?;
     let eocd = raw.len() - 22;
