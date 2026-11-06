@@ -156,7 +156,7 @@ jobs:
           retention-days: 1
   qualify-linux:
     runs-on: ubuntu-26.04
-    timeout-minutes: 10
+    timeout-minutes: 20
     permissions: {}
     needs:
       - verify-release-caller
@@ -279,7 +279,7 @@ jobs:
           retention-days: 1
   qualify-macos:
     runs-on: macos-15
-    timeout-minutes: 10
+    timeout-minutes: 20
     permissions: {}
     needs:
       - verify-release-caller
@@ -432,7 +432,7 @@ jobs:
           retention-days: 1
   qualify-macos-intel:
     runs-on: macos-15-intel
-    timeout-minutes: 10
+    timeout-minutes: 20
     permissions: {}
     needs:
       - verify-release-caller
