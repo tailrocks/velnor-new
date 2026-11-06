@@ -43,7 +43,40 @@ def deadline(seconds=30):
     return time.clock_gettime_ns(time.CLOCK_BOOTTIME) + seconds * 1_000_000_000
 
 
+MARKER_WRITER = ("def publish_marker(path, values, ready=None, proceed=None):\n"
+                 " temporary=path+'.tmp'\n"
+                 " with open(temporary,'x') as stream: json.dump(values,stream)\n"
+                 " if ready is not None:\n  os.write(ready,b'1'); os.read(proceed,1)\n"
+                 " os.replace(temporary,path)\n")
+
+
 class BootstrapWatchTest(unittest.TestCase):
+    def test_worker_marker_is_published_only_after_complete_write(self):
+        with tempfile.TemporaryDirectory(prefix='velnor-marker-', dir='/run') as root:
+            marker = Path(root) / 'workers.json'
+            ready_read, ready_write = os.pipe()
+            proceed_read, proceed_write = os.pipe()
+            code = ('import json,os,sys\n' + MARKER_WRITER +
+                    'publish_marker(sys.argv[1],[12,34],int(sys.argv[2]),int(sys.argv[3]))\n')
+            process = subprocess.Popen(['/usr/bin/python3', '-I', '-S', '-c', code,
+                                        str(marker), str(ready_write), str(proceed_read)],
+                                       pass_fds=(ready_write, proceed_read))
+            os.close(ready_write)
+            os.close(proceed_read)
+            try:
+                self.assertTrue(select.select([ready_read], [], [], 5)[0])
+                self.assertEqual(os.read(ready_read, 1), b'1')
+                self.assertFalse(marker.exists())
+                os.write(proceed_write, b'1')
+                self.assertEqual(process.wait(timeout=5), 0)
+                self.assertEqual(json.loads(marker.read_text()), [12, 34])
+            finally:
+                os.close(ready_read)
+                os.close(proceed_write)
+                if process.poll() is None:
+                    process.kill()
+                    process.wait(timeout=5)
+
     def test_root_death_drains_detached_workers_before_and_after_exec(self):
         for handoff in (False, True):
             with self.subTest(handoff=handoff):
@@ -174,14 +207,14 @@ def watch_worker(handoff, saved=None):
     helper.chmod(0o500)
     marker = root / 'workers.json'
     pipe = os.fstat(watch.authority[1])
-    code = ("import json,os,signal,sys,time\n"
+    code = ("import json,os,signal,sys,time\n" + MARKER_WRITER +
             "for n in os.listdir('/proc/self/fd'):\n"
             " try: f=os.fstat(int(n))\n"
             " except OSError: continue\n"
             f" if (f.st_dev,f.st_ino)==({pipe.st_dev},{pipe.st_ino}): raise SystemExit(9)\n"
             "pid=os.fork()\n"
             "if pid == 0:\n os.setsid(); signal.signal(signal.SIGTERM,signal.SIG_IGN); time.sleep(300)\n"
-            "else:\n open(sys.argv[1],'w').write(json.dumps([os.getpid(),pid])); time.sleep(300)\n")
+            "else:\n publish_marker(sys.argv[1],[os.getpid(),pid]); time.sleep(300)\n")
     body = json.dumps({'program': '/usr/bin/python3', 'args': ['-I', '-S', '-c', code, str(marker)],
                        'cwd': '/', 'env': {'PATH': '/usr/bin:/bin'}, 'stdin': ''}).encode()
     manager = bus.Manager(str(helper), 300, watch.authority, root_bootstrap=True)
