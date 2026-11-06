@@ -721,6 +721,8 @@ crates/velnor-actions-orchestrator/src/crate_release_runtime_supervised.rs
 crates/velnor-actions-orchestrator/src/crate_release_runtime_workflow.rs
 crates/velnor-actions-orchestrator/src/crate_release_semver.rs
 crates/velnor-actions-orchestrator/src/crate_release_semver/checker.rs
+crates/velnor-actions-orchestrator/src/crate_release_semver/evidence.rs
+crates/velnor-actions-orchestrator/src/crate_release_semver/metadata.rs
 crates/velnor-actions-orchestrator/src/crate_release_source.rs
 crates/velnor-actions-orchestrator/src/crate_release_source_adapter.rs
 crates/velnor-actions-orchestrator/src/crate_release_source_baseline.rs
@@ -1512,6 +1514,7 @@ crates/velnor-actions-workflow-renderer/src/publish_render.rs
 crates/velnor-actions-workflow-renderer/src/publish_roles.rs
 crates/velnor-actions-workflow-renderer/src/publish_scripts.rs
 crates/velnor-actions-workflow-renderer/src/publish_spec.rs
+crates/velnor-actions-workflow-renderer/src/release_bootstrap_watch.py
 crates/velnor-actions-workflow-renderer/src/release_budget.py
 crates/velnor-actions-workflow-renderer/src/release_budget.rs
 crates/velnor-actions-workflow-renderer/src/release_checkout_gates.rs
@@ -1562,6 +1565,7 @@ crates/velnor-actions-workflow-renderer/src/release_supervisor_exec.py
 crates/velnor-actions-workflow-renderer/src/release_tree.rs
 crates/velnor-actions-workflow-renderer/src/release_upload_operation.py
 crates/velnor-actions-workflow-renderer/src/release_validators.rs
+crates/velnor-actions-workflow-renderer/src/release_watch_admission.py
 crates/velnor-actions-workflow-renderer/src/render.rs
 crates/velnor-actions-workflow-renderer/src/render_action_pins.rs
 crates/velnor-actions-workflow-renderer/src/render_authority_steps.rs
