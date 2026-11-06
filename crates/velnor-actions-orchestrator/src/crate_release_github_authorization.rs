@@ -4,7 +4,7 @@
 use super::{
     GitHubAdmissionRead, GitHubAdmissionRequest, GitHubCandidate, NativeGitHubAdmissionRead,
     OrchestratorError, Value, encode, internal, require, valid_sha, validate_request,
-    verify_environment, verify_github_evidence, verify_run_authority,
+    verify_environment, verify_run_authority,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -37,7 +37,8 @@ pub fn authorize_github_candidate(
     api: &dyn GitHubAdmissionRead,
 ) -> Result<GitHubAuthorized, OrchestratorError> {
     let identity = repository_identity(request, api)?;
-    let fresh = verify_github_evidence(request, api)?;
+    let fresh =
+        super::verify_github_evidence_with_check(request, api, Some(candidate.required_check_id))?;
     require(&fresh == candidate, "candidate_changed")?;
     verify_environment_approval(request, api)?;
     require(

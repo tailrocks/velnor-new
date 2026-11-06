@@ -219,7 +219,9 @@ pub(super) fn check_historical_authority(
         assert_eq!(input.journal.write_calls.get(), writes);
         assert_eq!(input.github.base.writes.get(), 0);
     } else {
+        input.github.defect.set(10);
         record_admitted_start(input)?;
+        input.github.defect.set(0);
     }
     Ok(())
 }

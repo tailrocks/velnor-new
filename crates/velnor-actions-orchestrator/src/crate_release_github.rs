@@ -143,23 +143,22 @@ pub fn verify_github_evidence(
     request: &GitHubAdmissionRequest,
     api: &dyn GitHubAdmissionRead,
 ) -> Result<GitHubCandidate, OrchestratorError> {
+    verify_github_evidence_with_check(request, api, None)
+}
+
+fn verify_github_evidence_with_check(
+    request: &GitHubAdmissionRequest,
+    api: &dyn GitHubAdmissionRead,
+    recorded_check: Option<u64>,
+) -> Result<GitHubCandidate, OrchestratorError> {
     validate_request(request)?;
     let prefix = format!("repos/{}", request.repository);
     verify_run_authority(request, api, &prefix)?;
     verify_environment(request, api, &prefix)?;
-    let required_check_id = required_check(
-        api,
-        &prefix,
-        &request.source_sha,
-        &request.required_workflow_path,
-    )?;
+    let required_check_id =
+        checks::release_required_check(api, request, &request.source_sha, recorded_check)?;
     if request.workflow_sha != request.source_sha {
-        required_check(
-            api,
-            &prefix,
-            &request.workflow_sha,
-            &request.required_workflow_path,
-        )?;
+        checks::release_required_check(api, request, &request.workflow_sha, None)?;
     }
     let release_pr = if request.event == "push" {
         require(
@@ -179,6 +178,19 @@ pub fn verify_github_evidence(
         required_check_id,
         release_pr,
     })
+}
+
+pub(crate) fn verify_recorded_github_evidence(
+    candidate: &GitHubCandidate,
+    api: &dyn GitHubAdmissionRead,
+) -> Result<GitHubCandidate, OrchestratorError> {
+    let fresh = verify_github_evidence_with_check(
+        &candidate.request,
+        api,
+        Some(candidate.required_check_id),
+    )?;
+    require(&fresh == candidate, "candidate_changed")?;
+    Ok(fresh)
 }
 
 pub(crate) fn verify_predecessor_authority(
@@ -244,10 +256,10 @@ pub(crate) fn verify_predecessor_authority(
             && run["head_repository"]["full_name"].as_str() == Some(identity.repository.as_str()),
         "previous_run",
     )?;
-    let candidate = verify_github_evidence(&request, api)?;
+    let mut candidate = verify_github_evidence(&request, api)?;
+    candidate.required_check_id = receipt.required_check_id;
     require(
-        candidate.required_check_id == receipt.required_check_id
-            && receipt.trusted_reviewer_id == intent.trusted_reviewer_id,
+        receipt.trusted_reviewer_id == intent.trusted_reviewer_id,
         "previous_admission",
     )?;
     authorize_github_candidate(&request, &candidate, api)?;

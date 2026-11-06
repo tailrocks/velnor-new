@@ -174,6 +174,7 @@ pub(super) fn make_fixture(
         sha,
         policy_sha: request.workflow_sha.clone(),
         approved: Cell::new(false),
+        required_rerun: Cell::new(0),
         revoke_on_tag_read: Cell::new(false),
         tag_exists: Cell::new(false),
         tag_wrong: Cell::new(false),

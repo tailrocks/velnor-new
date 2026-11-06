@@ -5,7 +5,7 @@ use super::{
     CrateRegistryRead, CrateReleaseAction, CrateReleaseObservation, GitHubAdmissionRead,
     JournalIdentity, JournalIo, JournalMutation, JournalMutationKind, JournalMutationPhase,
     JournalStage, OrchestratorError, authorize_github_candidate, inspect_journal, invalid,
-    observe_crate_release, verify_binding, verify_observed_packages,
+    observe_admitted_crate_release, verify_binding, verify_observed_packages,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -64,12 +64,13 @@ pub(crate) fn observe_prior_recovery<
             github: input.github,
         }),
     )?;
-    let current = observe_crate_release(
+    let current = observe_admitted_crate_release(
         input.intent,
         input.request,
         input.github,
         input.registry,
         crate::CrateSource::new(input.source, input.git, input.source_execution),
+        &input.admission.github,
     )?;
     verify_observed_packages(&current, input.admission)?;
     let mut results = Vec::new();
@@ -98,12 +99,13 @@ pub(crate) fn observe_prior_recovery<
             });
         }
     }
-    if observe_crate_release(
+    if observe_admitted_crate_release(
         input.intent,
         input.request,
         input.github,
         input.registry,
         crate::CrateSource::new(input.source, input.git, input.source_execution),
+        &input.admission.github,
     )? != current
         || crate::crate_release_journal::inspect_prior_chain_with(
             input.journal,

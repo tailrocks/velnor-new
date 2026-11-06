@@ -5,7 +5,7 @@ use super::{
     CrateRegistryRead, CrateReleaseAction, CrateReleaseAdmissionReceipt, CrateReleaseObservation,
     GitHubAdmissionRead, JournalIo, JournalMutationKind, JournalMutationPhase, OrchestratorError,
     ReconciledCandidate, RecoveryState, UploadAttempt, UploadPermit, derive_reconciled_candidate,
-    invalid, metadata_action_matches, observe_crate_release, observe_prior_recovery,
+    invalid, metadata_action_matches, observe_admitted_crate_release, observe_prior_recovery,
     record_verified_mutation, repair_verified_metadata, verify_and_record_upload_intent,
     verify_observed_packages_after_recorded_upload,
 };
@@ -89,12 +89,13 @@ where
     G: GitHubAdmissionRead + super::super::CrateReleaseRepairWrite,
     R: CrateRegistryRead,
 {
-    let current = observe_crate_release(
+    let current = observe_admitted_crate_release(
         input.intent,
         input.request,
         input.github,
         input.registry,
         crate::CrateSource::new(input.source, input.git, input.source_execution),
+        &input.admission.github,
     )?;
     verify_observed_packages_after_recorded_upload(
         &CrateReleaseObservation {
@@ -161,12 +162,13 @@ where
         JournalMutationKind::CreateTag,
         JournalMutationKind::CreateRelease,
     ] {
-        let current = observe_crate_release(
+        let current = observe_admitted_crate_release(
             input.intent,
             input.request,
             input.github,
             input.registry,
             crate::CrateSource::new(input.source, input.git, input.source_execution),
+            &input.admission.github,
         )?;
         verify_observed_packages_after_recorded_upload(
             &CrateReleaseObservation {
@@ -255,12 +257,13 @@ pub(super) fn ensure_package_reconciled<
     input: &CrateReleaseObservation<'_, J, G, R>,
     planned: &super::super::CrateReleasePlannedPackage,
 ) -> Result<(), OrchestratorError> {
-    let current = observe_crate_release(
+    let current = observe_admitted_crate_release(
         input.intent,
         input.request,
         input.github,
         input.registry,
         crate::CrateSource::new(input.source, input.git, input.source_execution),
+        &input.admission.github,
     )?;
     verify_observed_packages_after_recorded_upload(input, &current)?;
     if !current.packages.iter().any(|item| {

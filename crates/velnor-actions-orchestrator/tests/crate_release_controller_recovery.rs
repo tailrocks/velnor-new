@@ -53,6 +53,16 @@ pub(super) fn recovery_requires_fresh_human_approval_and_registry_absence()
     assert!(verify(&request).is_err());
     github.owner_match.set(true);
     verify(&request)?;
+    github.required_rerun.set(1);
+    verify(&request)?;
+    assert_eq!(receipt.github.required_check_id, 1);
+    github.required_rerun.set(2);
+    assert!(
+        verify(&request).is_err(),
+        "latest failed CI must block admitted source"
+    );
+    assert_eq!(github.writes.get(), 0);
+    github.required_rerun.set(1);
     registry.absent.set(false);
     assert!(verify(&request).is_err());
     *registry.archive.borrow_mut() = fixture_archive(root)?;
@@ -171,6 +181,22 @@ pub(super) fn receipt_acquire_requires_current_approval_and_matching_evidence()
             .is_err()
     );
     github.approved.set(true);
+    github.required_rerun.set(1);
+    let current = crate::crate_release_github::verify_github_evidence(&request, &github)?;
+    assert_eq!(current.required_check_id, 2);
+    let stage = ToolchainStageRequest {
+        candidate: &current,
+        ..stage
+    };
+    let authenticated =
+        crate::crate_release_tool_artifact::fixture_authenticate_receipt(&stage, &github, &github)?;
+    assert_eq!(authenticated, receipt);
+    github.required_rerun.set(2);
+    assert!(
+        crate::crate_release_tool_artifact::fixture_authenticate_receipt(&stage, &github, &github)
+            .is_err()
+    );
+    github.required_rerun.set(1);
     check_receipt_acquisition(&stage, &github, &registry, &receipt, source.path())
 }
 

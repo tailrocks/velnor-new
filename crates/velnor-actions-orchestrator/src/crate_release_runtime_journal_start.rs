@@ -8,6 +8,7 @@ use super::{
     read_manifest_at_workflow, read_receipt, reconcile_journal_evidence, release_mode,
     required_path, verify_crate_release_admission,
 };
+use crate::crate_release_controller::reprepare_crate_release;
 
 #[derive(Clone, Copy)]
 pub(crate) enum UploadRuntime<'a> {
@@ -179,9 +180,8 @@ pub(super) fn start_journal(input: JournalRuntime<'_>) -> Result<(), Orchestrato
         verify_bootstrap_attestation,
         |generator| {
             let admission = read_receipt(input.receipt_path)?;
-            let mut observed = prepare_crate_release(
-                input.intent,
-                input.request,
+            let mut observed = reprepare_crate_release(
+                &admission,
                 input.github,
                 input.registry,
                 crate::CrateSource::new(input.source, input.git, source_execution),
@@ -283,9 +283,8 @@ pub(super) fn verify_admission_output(
         registry,
         crate::CrateSource::new(source, git, source_execution),
     )?;
-    let fresh = prepare_crate_release(
-        intent,
-        request,
+    let fresh = reprepare_crate_release(
+        &receipt,
         github,
         registry,
         crate::CrateSource::new(source, git, source_execution),

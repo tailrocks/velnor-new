@@ -36,6 +36,53 @@ pub(super) fn observe_crate_release<G: GitHubAdmissionRead, R: CrateRegistryRead
     )
 }
 
+pub(super) fn observe_admitted_crate_release<G: GitHubAdmissionRead, R: CrateRegistryRead>(
+    intent: &CrateReleaseIntent,
+    request: &GitHubAdmissionRequest,
+    github: &G,
+    registry: &R,
+    source_context: crate::CrateSource<'_>,
+    candidate: &GitHubCandidate,
+) -> Result<CrateReleaseAdmissionReceipt, OrchestratorError> {
+    let admitted = crate::crate_release_github::verify_recorded_github_evidence(candidate, github)?;
+    observe_package_state(intent, request, github, registry, source_context, &admitted)
+}
+
+pub(crate) fn reprepare_crate_release<G: GitHubAdmissionRead, R: CrateRegistryRead>(
+    receipt: &CrateReleaseAdmissionReceipt,
+    github: &G,
+    registry: &R,
+    source_context: crate::CrateSource<'_>,
+) -> Result<CrateReleaseAdmissionReceipt, OrchestratorError> {
+    let observed = observe_admitted_crate_release(
+        &receipt.intent,
+        &receipt.github.request,
+        github,
+        registry,
+        source_context,
+        &receipt.github,
+    )?;
+    validate_preparation(observed)
+}
+
+pub(super) fn validate_preparation(
+    observed: CrateReleaseAdmissionReceipt,
+) -> Result<CrateReleaseAdmissionReceipt, OrchestratorError> {
+    let intent = &observed.intent;
+    if intent.journal_predecessor.is_none()
+        && observed.packages.iter().any(|package| {
+            intent
+                .new_crates
+                .as_ref()
+                .is_some_and(|creation| creation.packages.contains_key(&package.source.name))
+                && matches!(package.owners, CrateRegistryOwnership::Existing { .. })
+        })
+    {
+        return Err(internal("crate_release_new_crate_already_exists"));
+    }
+    Ok(observed)
+}
+
 pub(super) fn observe_package_state<G: GitHubAdmissionRead, R: CrateRegistryRead>(
     intent: &CrateReleaseIntent,
     request: &GitHubAdmissionRequest,

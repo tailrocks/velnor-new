@@ -4,7 +4,7 @@
 use super::{
     CrateRegistryRead, CrateReleaseObservation, GitHubAdmissionRead, JournalIo, JournalMutation,
     JournalMutationPhase, JournalOwnerKind, OrchestratorError, authorize_github_candidate, invalid,
-    observe_crate_release, verify_binding, verify_observed_packages_with_history,
+    observe_admitted_crate_release, verify_binding, verify_observed_packages_with_history,
     verify_predecessor,
 };
 
@@ -126,12 +126,13 @@ pub(crate) fn derive_reconciled_candidate<
     {
         return Err(invalid());
     }
-    let current = observe_crate_release(
+    let current = observe_admitted_crate_release(
         input.intent,
         input.request,
         input.github,
         input.registry,
         crate::CrateSource::new(input.source, input.git, input.source_execution),
+        &input.admission.github,
     )?;
     let sequence = u32::try_from(history.len())
         .map_err(|_| invalid())?

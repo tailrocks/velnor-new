@@ -35,9 +35,7 @@ pub(crate) fn record_admitted_start<
         &input.admission.github,
         input.github,
     )?;
-    let observed = crate::crate_release_controller::prepare_crate_release(
-        input.intent,
-        input.request,
+    let observed = crate::crate_release_controller::reprepare_crate_release(input.admission,
         input.github,
         input.registry,
         crate::CrateSource::new(input.source, input.git, input.source_execution),
@@ -60,9 +58,7 @@ pub(crate) fn record_admitted_start<
     if verified_prior_chain(input, &receipt)? != prior_history {
         return Err(internal("crate_release_previous_changed"));
     }
-    if crate::crate_release_controller::prepare_crate_release(
-        input.intent,
-        input.request,
+    if crate::crate_release_controller::reprepare_crate_release(input.admission,
         input.github,
         input.registry,
         crate::CrateSource::new(input.source, input.git, input.source_execution),

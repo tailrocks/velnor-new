@@ -3,7 +3,7 @@
 
 use super::{
     CrateReleaseAction, CrateReleaseAdmissionReceipt, VerifiedReleasePackage,
-    observe_crate_release, observe_package_state,
+    observe_admitted_crate_release, observe_package_state,
 };
 use crate::crate_release_github::{
     GitHubAdmissionRead, GitHubAdmissionRequest, authorize_github_candidate,

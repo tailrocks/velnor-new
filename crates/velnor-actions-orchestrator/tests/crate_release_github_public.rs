@@ -69,7 +69,7 @@ impl GitHubAdmissionRead for Fixture {
             } else {
                 SOURCE
             };
-            json!({"total_count":1,"workflow_runs":[{"check_suite_id":123,"head_sha":source,"path":".github/workflows/ci.yml","status":"completed","conclusion":"success"}]})
+            json!({"total_count":1,"workflow_runs":[{"check_suite_id":123,"head_sha":source,"path":".github/workflows/ci.yml","status":"completed","conclusion":"success","event":"push","head_branch":"main","repository":{"id":101,"full_name":"example/crate","owner":{"id":202,"login":"example"}},"head_repository":{"id":101,"full_name":"example/crate","owner":{"id":202,"login":"example"}}}]})
         } else if route.contains("check-runs?") {
             let source = if route.contains(WORKFLOW) {
                 WORKFLOW
@@ -368,3 +368,6 @@ impl GitHubAdmissionRead for TagFixture {
 
 #[path = "crate_release_github_public/authorization.rs"]
 mod authorization;
+
+#[path = "crate_release_github_public/required_provenance.rs"]
+mod required_provenance;

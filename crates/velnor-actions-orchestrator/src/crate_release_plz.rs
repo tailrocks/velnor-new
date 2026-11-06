@@ -12,7 +12,7 @@ use super::observation::{
     CrateReleaseObservation, UploadAttempt, UploadPermit, verify_binding,
     verify_observed_packages_after_recorded_upload,
 };
-use super::{CrateReleaseAction, observe_crate_release};
+use super::{CrateReleaseAction, observe_admitted_crate_release};
 use crate::crate_release_github::{GitHubAdmissionRead, authorize_github_candidate};
 use crate::crate_release_journal::{
     JournalIo, JournalMutationKind, JournalMutationPhase, JournalStage, inspect_journal,
@@ -240,12 +240,13 @@ pub(super) fn validate_upload_permit<
     {
         return Err(invalid());
     }
-    let current = observe_crate_release(
+    let current = observe_admitted_crate_release(
         input.intent,
         input.request,
         input.github,
         input.registry,
         crate::CrateSource::new(input.source, input.git, input.source_execution),
+        &input.admission.github,
     )?;
     let next_sequence = permit.sequence.checked_add(1).ok_or_else(invalid)?;
     verify_observed_packages_after_recorded_upload(

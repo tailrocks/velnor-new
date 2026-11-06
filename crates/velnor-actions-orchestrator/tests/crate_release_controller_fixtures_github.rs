@@ -126,6 +126,7 @@ pub(super) struct Github {
     pub(super) sha: String,
     pub(super) policy_sha: String,
     pub(super) approved: Cell<bool>,
+    pub(super) required_rerun: Cell<u8>,
     pub(super) revoke_on_tag_read: Cell<bool>,
     pub(super) tag_exists: Cell<bool>,
     pub(super) tag_wrong: Cell<bool>,
@@ -263,9 +264,20 @@ impl GitHubAdmissionRead for Github {
         } else if route.contains("deployment-branch-policies") {
             json!({"total_count":1,"branch_policies":[{"type":"branch","name":"main"}]})
         } else if route.contains("check-runs?") {
-            json!({"total_count":1,"check_runs":[{"id":1,"name":"Required","head_sha":checked_sha,"check_suite":{"id":123},"app":{"id":15368,"slug":"github-actions"},"status":"completed","conclusion":"success","started_at":"2026-11-03T15:40:00Z"}]})
+            let check = json!({"id":1,"name":"Required","head_sha":checked_sha,"check_suite":{"id":123},"app":{"id":15368,"slug":"github-actions"},"status":"completed","conclusion":"success","started_at":"2026-11-03T15:40:00Z"});
+            let mut checks = vec![check.clone()];
+            if self.required_rerun.get() != 0 {
+                let mut rerun = check;
+                rerun["id"] = json!(2);
+                rerun["started_at"] = json!("2026-11-03T15:41:00Z");
+                if self.required_rerun.get() == 2 {
+                    rerun["conclusion"] = json!("failure");
+                }
+                checks.push(rerun);
+            }
+            json!({"total_count":checks.len(),"check_runs":checks})
         } else if route.contains("/actions/runs?") {
-            json!({"total_count":1,"workflow_runs":[{"check_suite_id":123,"head_sha":checked_sha,"path":".github/workflows/ci.yml","status":"completed","conclusion":"success"}]})
+            json!({"total_count":1,"workflow_runs":[{"check_suite_id":123,"head_sha":checked_sha,"path":".github/workflows/ci.yml","status":"completed","conclusion":"success","event":"push","head_branch":"main","repository":{"id":22,"full_name":"example/demo","owner":{"id":77,"login":"example"}},"head_repository":{"id":22,"full_name":"example/demo","owner":{"id":77,"login":"example"}}}]})
         } else if route.ends_with("/git/ref/heads/main") {
             json!({"ref":"refs/heads/main","object":{"type":"commit","sha":sha}})
         } else if route == "users/owner" {

@@ -106,9 +106,8 @@ fn acquire_receipt<
             return Err(internal("crate_release_visibility_timeout"));
         }
     } else {
-        let mut fresh = crate::crate_release_controller::prepare_crate_release(
-            request.intent,
-            request.github,
+        let mut fresh = crate::crate_release_controller::reprepare_crate_release(
+            &receipt,
             github,
             registry,
             crate::CrateSource::new(source, source_context.git, source_execution),
@@ -247,7 +246,7 @@ pub(crate) fn acquire_authenticated_receipt<
         return Err(invalid());
     }
     let bytes = read_receipt_archive(&file)?;
-    let receipt = decode_receipt(&bytes, request.candidate)?;
+    let receipt = decode_receipt(&bytes, request.candidate, github)?;
     if receipt.schema != 1 || receipt.intent != *request.intent {
         return Err(invalid());
     }
@@ -279,17 +278,25 @@ pub(crate) fn fixture_authenticate_receipt<
     acquire_authenticated_receipt(request, github, transport).map(|value| value.receipt)
 }
 
-fn decode_receipt(
+fn decode_receipt<G: crate::crate_release_github::GitHubAdmissionRead>(
     bytes: &[u8],
     candidate: &crate::crate_release_github::GitHubCandidate,
+    github: &G,
 ) -> Result<crate::crate_release_controller::CrateReleaseAdmissionReceipt, OrchestratorError> {
     let invalid = || internal("crate_release_receipt_acquire_invalid");
-    let receipt: crate::crate_release_controller::CrateReleaseAdmissionReceipt =
+    let mut receipt: crate::crate_release_controller::CrateReleaseAdmissionReceipt =
         serde_json::from_slice(bytes).map_err(|_| invalid())?;
-    if serde_json::to_vec(&receipt).map_err(|_| invalid())? != bytes || receipt.github != *candidate
-    {
+    if serde_json::to_vec(&receipt).map_err(|_| invalid())? != bytes {
         return Err(invalid());
     }
+    let recorded =
+        crate::crate_release_github::verify_recorded_github_evidence(&receipt.github, github)?;
+    let mut current = recorded.clone();
+    current.required_check_id = candidate.required_check_id;
+    if current != *candidate {
+        return Err(invalid());
+    }
+    receipt.github = recorded;
     Ok(receipt)
 }
 

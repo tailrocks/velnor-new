@@ -260,16 +260,22 @@ impl GitHubAdmissionRead for HistoricalAuthority<'_> {
             || self.older.as_ref().is_some_and(|sha| route.contains(sha)))
             && route.contains("check-runs?")
         {
-            return Ok(
-                json!({"total_count":1,"check_runs":[{"id":1,"name":"Required","head_sha":check_sha,"check_suite":{"id":123},"app":{"id":15368,"slug":"github-actions"},"status":"completed","conclusion":"success","started_at":"2026-11-03T15:40:00Z"}]}),
-            );
+            let check = json!({"id":1,"name":"Required","head_sha":check_sha,"check_suite":{"id":123},"app":{"id":15368,"slug":"github-actions"},"status":"completed","conclusion":"success","started_at":"2026-11-03T15:40:00Z"});
+            let mut checks = vec![check.clone()];
+            if defect == 10 {
+                let mut rerun = check;
+                rerun["id"] = json!(2);
+                rerun["started_at"] = json!("2026-11-03T15:41:00Z");
+                checks.push(rerun);
+            }
+            return Ok(json!({"total_count":checks.len(),"check_runs":checks}));
         }
         if (route.contains(&self.workflow)
             || self.older.as_ref().is_some_and(|sha| route.contains(sha)))
             && route.contains("/actions/runs?")
         {
             return Ok(
-                json!({"total_count":1,"workflow_runs":[{"check_suite_id":123,"head_sha":check_sha,"path":".github/workflows/ci.yml","status":"completed","conclusion":"success"}]}),
+                json!({"total_count":1,"workflow_runs":[{"check_suite_id":123,"head_sha":check_sha,"path":".github/workflows/ci.yml","status":"completed","conclusion":"success","event":"push","head_branch":"main","repository":{"id":22,"full_name":"example/demo","owner":{"id":77,"login":"example"}},"head_repository":{"id":22,"full_name":"example/demo","owner":{"id":77,"login":"example"}}}]}),
             );
         }
         if route.contains("/commits/") && route.contains("/pulls?") {

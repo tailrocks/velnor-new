@@ -6,9 +6,9 @@ use super::{
     CrateReleaseAdmissionReceipt, CrateReleaseIntent, CrateReleaseSourcePackage, Deserialize,
     GitHubAdmissionRead, GitHubAdmissionRequest, OrchestratorError, Serialize,
     authorize_github_candidate, effective_release_intent, inspect_crate_registry, internal,
-    prepare_crate_release, read_github_tag_evidence, require_reviewer_owner,
-    verify_github_evidence, verify_observed_packages, verify_request_intent, wait_for_release,
-    wait_for_tag, workspace_inventory,
+    read_github_tag_evidence, reprepare_crate_release, require_reviewer_owner,
+    verify_observed_packages, verify_request_intent, wait_for_release, wait_for_tag,
+    workspace_inventory,
 };
 
 pub fn validate_reconciliation_receipt<G: GitHubAdmissionRead, R: CrateRegistryRead>(
@@ -27,7 +27,12 @@ pub fn validate_reconciliation_receipt<G: GitHubAdmissionRead, R: CrateRegistryR
     let invalid = || internal("crate_release_reconciliation_receipt_invalid");
     if receipt.schema != 1
         || &receipt.intent != intent
-        || receipt.github != verify_github_evidence(request, github)?
+        || receipt.github.request != *request
+        || receipt.github
+            != crate::crate_release_github::verify_recorded_github_evidence(
+                &receipt.github,
+                github,
+            )?
     {
         return Err(invalid());
     }
@@ -162,9 +167,8 @@ pub fn verify_crate_release_admission<G: GitHubAdmissionRead, R: CrateRegistryRe
         return Err(internal("crate_release_receipt_mismatch"));
     }
     authorize_github_candidate(request, &receipt.github, github)?;
-    let fresh = prepare_crate_release(
-        intent,
-        request,
+    let fresh = reprepare_crate_release(
+        receipt,
         github,
         registry,
         crate::CrateSource::new(source, git, source_execution),

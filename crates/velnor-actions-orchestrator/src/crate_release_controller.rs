@@ -29,17 +29,6 @@ pub(crate) use observation::{VerifiedMutation, verify_observed_packages};
 mod inventory;
 mod reconcile;
 mod state;
-use crate::crate_release_workspace::CrateSourceExecution;
-pub(crate) use inventory::package_unprivileged;
-use inventory::require_reviewer_owner;
-use inventory::{wait_for_release, wait_for_tag, workspace_inventory};
-pub(crate) use reconcile::same_observed_state;
-pub use reconcile::{
-    CrateReleaseCompletedPackage, reconcile_crate_release, validate_reconciliation_receipt,
-    verify_crate_release_admission, wait_for_reconciliation_visibility,
-};
-use state::{observe_crate_release, observe_package_state};
-
 use crate::crate_release_github::{
     GitHubAdmissionRead, GitHubAdmissionRequest, GitHubCandidate, authorize_github_candidate,
     read_github_tag_evidence, verify_github_evidence,
@@ -48,11 +37,22 @@ use crate::crate_release_registry::{
     CrateRegistryOwner, CrateRegistryOwnership, CrateRegistryPresence, CrateRegistryRead,
     CrateRegistryReconciliation, inspect_crate_registry,
 };
+use crate::crate_release_workspace::CrateSourceExecution;
 use crate::{
     CrateReleaseSourcePackage, OrchestratorError, crate_release_workspace_plan_with_registry,
     internal::internal,
 };
+pub(crate) use inventory::package_unprivileged;
+use inventory::require_reviewer_owner;
+use inventory::{wait_for_release, wait_for_tag, workspace_inventory};
+pub(crate) use reconcile::same_observed_state;
+pub use reconcile::{
+    CrateReleaseCompletedPackage, reconcile_crate_release, validate_reconciliation_receipt,
+    verify_crate_release_admission, wait_for_reconciliation_visibility,
+};
 use serde::{Deserialize, Serialize};
+pub(crate) use state::reprepare_crate_release;
+use state::{observe_admitted_crate_release, observe_crate_release, observe_package_state};
 use std::path::Path;
 use velnor_actions_contract::config::CrateReleaseIntent;
 
@@ -111,18 +111,7 @@ pub fn prepare_crate_release<G: GitHubAdmissionRead, R: CrateRegistryRead>(
         registry,
         crate::CrateSource::new(source, git, source_execution),
     )?;
-    if intent.journal_predecessor.is_none()
-        && observed.packages.iter().any(|package| {
-            intent
-                .new_crates
-                .as_ref()
-                .is_some_and(|creation| creation.packages.contains_key(&package.source.name))
-                && matches!(package.owners, CrateRegistryOwnership::Existing { .. })
-        })
-    {
-        return Err(internal("crate_release_new_crate_already_exists"));
-    }
-    Ok(observed)
+    state::validate_preparation(observed)
 }
 
 #[derive(Debug)]
@@ -168,12 +157,13 @@ pub(super) fn verify_release_package_with<G: GitHubAdmissionRead, R: CrateRegist
         return Err(internal("crate_release_receipt_mismatch"));
     }
     authorize_github_candidate(request, &receipt.github, github)?;
-    let observed = observe_crate_release(
+    let observed = observe_admitted_crate_release(
         intent,
         request,
         github,
         registry,
         crate::CrateSource::new(source, git, source_execution),
+        &receipt.github,
     )?;
     validate(&observed)?;
     let index = observed
@@ -199,12 +189,13 @@ pub(super) fn verify_release_package_with<G: GitHubAdmissionRead, R: CrateRegist
         true,
         git,
     ))?;
-    if observe_crate_release(
+    if observe_admitted_crate_release(
         intent,
         request,
         github,
         registry,
         crate::CrateSource::new(source, git, source_execution),
+        &receipt.github,
     )? != observed
     {
         return Err(internal("crate_release_package_state_changed"));
@@ -338,7 +329,16 @@ pub fn repair_crate_release<
         return Err(internal("crate_release_receipt_mismatch"));
     }
     authorize_github_candidate(request, &receipt.github, github)?;
-    let observe = || observe_crate_release(intent, request, github, registry, source_context);
+    let observe = || {
+        observe_admitted_crate_release(
+            intent,
+            request,
+            github,
+            registry,
+            source_context,
+            &receipt.github,
+        )
+    };
     if !same_observed_state(&observe()?, receipt) {
         return Err(internal("crate_release_repair_state_changed"));
     }
