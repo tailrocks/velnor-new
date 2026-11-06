@@ -171,6 +171,21 @@ fn bootstrap_handover_renders_normal_trusted_publisher() -> Result<(), Box<dyn s
     crate::crate_release_pr_acquisition::verify_reviewed_workflow(files.workflow.bytes.as_bytes(), &intent)?;
     crate::crate_release_pr_acquisition::integration_fixture::exercise(&intent, &files.intent.bytes, &files.workflow.bytes)?;
     assert_reviewed_rendered_workflow(&files.workflow.bytes, &intent)?;
+    let mut mixed_spec = spec.clone();
+    mixed_spec.repository = "OWNER/PROJECT".into();
+    mixed_spec.plan.repository = "OWNER/PROJECT".into();
+    mixed_spec.concurrency = velnor_actions_workflow_renderer::release_spec::lock::stable_lock_group(
+        "crates-io", "OWNER/PROJECT", "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    )?;
+    for job in mixed_spec.jobs.values_mut() {
+        if let Some(condition) = &mut job.condition {
+            *condition = condition.replace("owner/project", "OWNER/PROJECT");
+        }
+    }
+    let mut mixed_intent = intent.clone();
+    mixed_intent.repository = "OWNER/PROJECT".into();
+    let mixed_files = render_release_files(&mixed_spec, &ctx, &config, &mixed_intent)?;
+    crate::crate_release_pr_acquisition::integration_fixture::exercise(&mixed_intent, &mixed_files.intent.bytes, &mixed_files.workflow.bytes)?;
     Ok(())
 }
 

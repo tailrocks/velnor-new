@@ -32,7 +32,7 @@ pub fn validate_reconciliation_receipt<G: GitHubAdmissionRead, R: CrateRegistryR
         return Err(invalid());
     }
     verify_request_intent(intent, request)?;
-    crate::crate_release_github::verify_immutable_tag_rules(&intent.repository, github)?;
+    crate::crate_release_github::verify_immutable_tag_rules(&request.repository, github)?;
     let effective_intent = effective_release_intent(intent, request);
     let inventory = workspace_inventory(
         source,
@@ -51,7 +51,7 @@ pub fn validate_reconciliation_receipt<G: GitHubAdmissionRead, R: CrateRegistryR
         if planned.source != *package || planned.tag != tag {
             return Err(invalid());
         }
-        let observed_tag = read_github_tag_evidence(&intent.repository, &tag, github)?;
+        let observed_tag = read_github_tag_evidence(&request.repository, &tag, github)?;
         if observed_tag
             .as_deref()
             .is_some_and(|sha| sha != request.source_sha)
@@ -200,7 +200,7 @@ pub fn reconcile_crate_release<G: GitHubAdmissionRead, R: CrateRegistryRead>(
     }
     verify_request_intent(intent, request)?;
     authorize_github_candidate(request, &receipt.github, github)?;
-    crate::crate_release_github::verify_immutable_tag_rules(&intent.repository, github)?;
+    crate::crate_release_github::verify_immutable_tag_rules(&request.repository, github)?;
     let effective_intent = effective_release_intent(intent, request);
     let inventory = workspace_inventory(
         source,
@@ -227,7 +227,7 @@ pub fn reconcile_crate_release<G: GitHubAdmissionRead, R: CrateRegistryRead>(
         }
         let tag_sha = wait_for_tag(
             github,
-            &intent.repository,
+            &request.repository,
             &package.tag,
             &request.source_sha,
         )?;
@@ -262,7 +262,7 @@ pub fn reconcile_crate_release<G: GitHubAdmissionRead, R: CrateRegistryRead>(
             &owners,
             &archive,
         )?;
-        let release = wait_for_release(github, &intent.repository, package)?;
+        let release = wait_for_release(github, &request.repository, package)?;
         completed.push(CrateReleaseCompletedPackage {
             source: package.source.clone(),
             tag: package.tag.clone(),

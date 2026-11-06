@@ -265,7 +265,10 @@ fn verify_receipt_intent(
         || crate::crate_release_journal::release_base_intent_sha256(intent)?
             != receipt.base_intent_sha256
         || predecessor != receipt.predecessor
-        || intent.repository != receipt.identity.repository
+        || !crate::release_identity::same_repository(
+            &intent.repository,
+            &receipt.identity.repository,
+        )
     {
         return Err(invalid());
     }

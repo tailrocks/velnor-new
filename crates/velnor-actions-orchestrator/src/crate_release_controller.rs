@@ -282,7 +282,7 @@ fn verify_request_intent(
         None
     };
     if (intent.new_crates.is_some() && request.event != "workflow_dispatch")
-        || request.repository != intent.repository
+        || !crate::release_identity::same_repository(&request.repository, &intent.repository)
         || request.default_branch != intent.default_branch
         || request.environment != intent.environment
         || request.workflow_path != ".github/workflows/release.yml"
@@ -347,7 +347,7 @@ pub fn repair_crate_release<
     match &package.action {
         CrateReleaseAction::RepairTag { registry: expected } => {
             if let Err(error) =
-                github.create_tag(&intent.repository, &package.tag, &request.source_sha)
+                github.create_tag(&request.repository, &package.tag, &request.source_sha)
             {
                 observe()?;
                 return Err(error);
@@ -368,7 +368,7 @@ pub fn repair_crate_release<
         _ => return Err(internal("crate_release_repair_action_invalid")),
     }
     if let Err(error) = github.create_release(
-        &intent.repository,
+        &request.repository,
         &package.tag,
         &request.source_sha,
         &package.source.version,

@@ -16,7 +16,7 @@ pub(crate) fn request_from_environment(
     let git_ref = required("GITHUB_REF")?;
     let workflow_ref = required("GITHUB_WORKFLOW_REF")?;
     let workflow_commit = required("GITHUB_WORKFLOW_SHA")?;
-    if repository != intent.repository
+    if !crate::release_identity::same_repository(&repository, &intent.repository)
         || git_ref != format!("refs/heads/{}", intent.default_branch)
         || workflow_ref != format!("{repository}/.github/workflows/release.yml@{git_ref}")
         || workflow_commit != workflow_sha

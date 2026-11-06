@@ -63,15 +63,16 @@ fn prepare_pr_inner() -> Result<(), &'static str> {
     let run_attempt = required("GITHUB_RUN_ATTEMPT")?
         .parse::<u32>()
         .map_err(|_| invalid())?;
+    let repository = required("GITHUB_REPOSITORY")?;
     if required("GITHUB_EVENT_NAME")? != "push"
-        || required("GITHUB_REPOSITORY")? != intent.repository
+        || !crate::release_identity::same_repository(&repository, &intent.repository)
         || required("GITHUB_REF")? != format!("refs/heads/{}", intent.default_branch)
         || run_attempt != 1
     {
         return Err(invalid());
     }
     let binding = PreparationBinding {
-        repository: intent.repository.clone(),
+        repository,
         workflow_sha: source_sha.clone(),
         source_sha,
         run_id,

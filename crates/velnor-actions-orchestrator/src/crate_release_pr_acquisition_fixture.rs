@@ -130,6 +130,7 @@ fn fixture(
     intent_text: &str,
     workflow: &str,
 ) -> Result<Fixture, Box<dyn std::error::Error>> {
+    let api_repository = intent.repository.to_ascii_lowercase();
     let temp = tempfile::tempdir()?;
     let repo = temp.path().join("repo");
     std::fs::create_dir_all(repo.join(".github/workflows"))?;
@@ -159,7 +160,7 @@ fn fixture(
     let sha = git(&repo, &["rev-parse", "HEAD"])?;
     let root = git(&repo, &["rev-parse", "HEAD^{tree}"])?;
     let binding = crate::crate_release_pr_artifact::PreparationBinding {
-        repository: intent.repository.clone(),
+        repository: api_repository.clone(),
         workflow_sha: sha.clone(),
         source_sha: sha.clone(),
         run_id: 42,
@@ -180,7 +181,7 @@ fn fixture(
     git(&repo, &["add", "Cargo.toml"])?;
     let expected_tree = git(&repo, &["write-tree"])?;
     git(&repo, &["reset", "--hard", "HEAD"])?;
-    let routes = fixture_routes(intent, &repo, &sha, &root, metadata)?;
+    let routes = fixture_routes(intent, &api_repository, &repo, &sha, &root, metadata)?;
     Ok(Fixture {
         temp,
         sha,
@@ -233,6 +234,7 @@ fn produce_artifact(
 
 fn fixture_routes(
     intent: &velnor_actions_contract::config::CrateReleaseIntent,
+    api_repository: &str,
     repo: &Path,
     sha: &str,
     root: &str,
@@ -240,10 +242,10 @@ fn fixture_routes(
 ) -> Result<BTreeMap<String, Value>, Box<dyn std::error::Error>> {
     let gh = git(repo, &["rev-parse", "HEAD:.github"])?;
     let workflows = git(repo, &["rev-parse", "HEAD:.github/workflows"])?;
-    let prefix = format!("/repos/{}", intent.repository);
+    let prefix = format!("/repos/{api_repository}");
     let mut routes = BTreeMap::new();
-    routes.insert(prefix.clone(), serde_json::json!({"id":7,"full_name":intent.repository,"default_branch":intent.default_branch}));
-    routes.insert(format!("{prefix}/actions/runs/42/attempts/1"), serde_json::json!({"id":42,"run_attempt":1,"path":".github/workflows/release.yml","event":"push","status":"in_progress","head_sha":sha,"head_branch":intent.default_branch,"repository":{"id":7,"full_name":intent.repository},"head_repository":{"id":7,"full_name":intent.repository}}));
+    routes.insert(prefix.clone(), serde_json::json!({"id":7,"full_name":api_repository,"default_branch":intent.default_branch}));
+    routes.insert(format!("{prefix}/actions/runs/42/attempts/1"), serde_json::json!({"id":42,"run_attempt":1,"path":".github/workflows/release.yml","event":"push","status":"in_progress","head_sha":sha,"head_branch":intent.default_branch,"repository":{"id":7,"full_name":api_repository},"head_repository":{"id":7,"full_name":api_repository}}));
     routes.insert(format!("{prefix}/actions/runs/42/attempts/1/jobs?per_page=100"), serde_json::json!({"total_count":1,"jobs":[{"id":5,"name":"Release preparation","run_id":42,"head_sha":sha,"status":"completed","conclusion":"success"}]}));
     routes.insert(format!("{prefix}/git/ref/heads/{}", intent.default_branch), serde_json::json!({"ref":format!("refs/heads/{}",intent.default_branch),"object":{"type":"commit","sha":sha}}));
     routes.insert(
@@ -288,10 +290,11 @@ pub(crate) fn exercise(
         content,
         routes,
     } = fixture(intent, intent_text, workflow)?;
-    let prefix = format!("/repos/{}", intent.repository);
+    let api_repository = intent.repository.to_ascii_lowercase();
+    let prefix = format!("/repos/{api_repository}");
     let routes = Arc::new(Mutex::new(routes));
     let expectation = WriterExpectation {
-        repo: intent.repository.clone(),
+        repo: api_repository.clone(),
         base: intent.default_branch.clone(),
         source: sha.clone(),
         root: expected_tree.clone(),
@@ -308,7 +311,7 @@ pub(crate) fn exercise(
     let runner_temp = temp.path().canonicalize()?;
     let request = AcquisitionRequest {
         binding: RunBinding {
-            repository: &intent.repository,
+            repository: &api_repository,
             branch: &intent.default_branch,
             sha: &sha,
             run_id: 42,

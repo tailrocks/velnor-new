@@ -2,11 +2,104 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{
-    Cell, OrchestratorError, RefCell, RefCreatedHook, fixture_archive, fixture_journal_plan,
-    fixture_no_baseline, make_fixture, prepare_crate_release, reject_observed_approval_revocation,
-    reject_tampered_source, reject_wrong_authentication, test_git, velnor_actions_orchestrator,
-    verify_metadata_observations, verify_upload_result,
+    Cell, Github, OrchestratorError, RefCell, RefCreatedHook, fixture_archive,
+    fixture_journal_plan, fixture_no_baseline, make_fixture, prepare_crate_release,
+    reconcile_crate_release, reject_observed_approval_revocation, reject_tampered_source,
+    reject_wrong_authentication, test_git, velnor_actions_orchestrator,
+    verify_crate_release_admission, verify_metadata_observations, verify_upload_result,
 };
+
+struct CaseAware<'a> {
+    github: &'a Github,
+    wrong_id: Option<&'static str>,
+}
+impl crate::crate_release_github::GitHubAdmissionRead for CaseAware<'_> {
+    fn get(&self, route: &str) -> Result<serde_json::Value, crate::OrchestratorError> {
+        let route = route.replacen("repos/EXAMPLE/DEMO", "repos/example/demo", 1);
+        let mut value = self.github.get(&route)?;
+        if route == "repos/example/demo/actions/runs/12" {
+            if self.wrong_id == Some("repository") {
+                value["head_repository"]["id"] = serde_json::json!(999);
+            } else if self.wrong_id == Some("owner") {
+                value["head_repository"]["owner"]["id"] = serde_json::json!(999);
+            }
+        }
+        Ok(value)
+    }
+    fn get_optional(
+        &self,
+        route: &str,
+    ) -> Result<Option<serde_json::Value>, crate::OrchestratorError> {
+        self.github
+            .get_optional(&route.replacen("repos/EXAMPLE/DEMO", "repos/example/demo", 1))
+    }
+}
+
+#[test]
+pub(super) fn release_accepts_repository_case_without_accepting_other_repositories()
+-> Result<(), Box<dyn std::error::Error>> {
+    let temp = tempfile::tempdir()?;
+    let root = temp.path();
+    let (mut intent, request, github, registry) = make_fixture(root)?;
+    intent.repository = "EXAMPLE/DEMO".into();
+    let github = CaseAware {
+        github: &github,
+        wrong_id: None,
+    };
+    let receipt = prepare_crate_release(&intent, &request, &github, &registry, root)?;
+    github.github.approved.set(true);
+    verify_crate_release_admission(
+        &receipt,
+        &intent,
+        &request,
+        &github,
+        &registry,
+        crate::CrateSource::new(root, test_git(), &crate::UnprivilegedSourceExecution),
+    )?;
+    for wrong_id in ["repository", "owner"] {
+        let bad = CaseAware {
+            github: github.github,
+            wrong_id: Some(wrong_id),
+        };
+        assert!(
+            verify_crate_release_admission(
+                &receipt,
+                &intent,
+                &request,
+                &bad,
+                &registry,
+                crate::CrateSource::new(root, test_git(), &crate::UnprivilegedSourceExecution),
+            )
+            .is_err()
+        );
+    }
+    for wrong in [
+        "other/demo",
+        "example/other",
+        "example//demo",
+        "example/demo.",
+    ] {
+        let mut changed = intent.clone();
+        changed.repository = wrong.into();
+        assert!(prepare_crate_release(&changed, &request, &github, &registry, root).is_err());
+    }
+    registry.absent.set(false);
+    *registry.archive.borrow_mut() = fixture_archive(root)?;
+    github.github.tag_exists.set(true);
+    let completed = reconcile_crate_release(
+        &receipt,
+        &intent,
+        &request,
+        &github,
+        &registry,
+        crate::CrateSource::new(root, test_git(), &crate::UnprivilegedSourceExecution),
+    )?;
+    assert_eq!(
+        completed[0].release_url,
+        "https://github.com/example/demo/releases/tag/demo-v0.1.1"
+    );
+    Ok(())
+}
 
 #[test]
 pub(super) fn github_release_evidence_requires_a_positive_numeric_id()

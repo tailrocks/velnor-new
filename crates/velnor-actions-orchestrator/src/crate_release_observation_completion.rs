@@ -265,14 +265,14 @@ impl FrozenCompletion {
                 intent.trusted_reviewer_id,
             )?;
             if crate::crate_release_github::read_github_tag_evidence(
-                &intent.repository,
+                &self.receipt.identity.repository,
                 &package.tag,
                 github,
             )?
             .as_deref()
                 != Some(&package.tag_commit)
                 || crate::crate_release_github::read_github_release_evidence(
-                    &intent.repository,
+                    &self.receipt.identity.repository,
                     &package.tag,
                     &package.source.version,
                     github,
@@ -311,21 +311,20 @@ impl FrozenCompletion {
     ) -> Result<String, OrchestratorError> {
         before_write()?;
         let request = &self.admission.github.request;
-        let intent = &self.admission.intent;
         self.revalidate_history(journal)?;
         crate::crate_release_github::authorize_github_candidate(
             request,
             &self.admission.github,
             github,
         )?;
-        crate::crate_release_github::verify_immutable_tag_rules(&intent.repository, github)?;
+        crate::crate_release_github::verify_immutable_tag_rules(&request.repository, github)?;
         self.verify_packages(github, registry)?;
         crate::crate_release_github::authorize_github_candidate(
             request,
             &self.admission.github,
             github,
         )?;
-        crate::crate_release_github::verify_immutable_tag_rules(&intent.repository, github)?;
+        crate::crate_release_github::verify_immutable_tag_rules(&request.repository, github)?;
         self.revalidate_history(journal)?;
         let completion = crate::crate_release_journal::JournalCompletion {
             packages: super::reconciled_completion_packages(&self.candidate)?,

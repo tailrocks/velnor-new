@@ -58,7 +58,7 @@ pub(crate) fn write_prepared_pr(
 ) -> Result<(), OrchestratorError> {
     let trees = crate::crate_release_pr_tree::GitHubTrees {
         api: github,
-        repository: &preparation.intent.repository,
+        repository: &preparation.artifact.binding.repository,
     };
     let source = &preparation.artifact.binding.source_sha;
     let plan = build_plan(
@@ -80,7 +80,7 @@ fn build_plan<R: crate::crate_release_pr_tree::TreeRead>(
     artifact: &crate::crate_release_pr_artifact::PreparationArtifact,
 ) -> Result<Plan, OrchestratorError> {
     let invalid = || internal("release_pr_plan_invalid");
-    if artifact.binding.repository != intent.repository
+    if !crate::release_identity::same_repository(&artifact.binding.repository, &intent.repository)
         || artifact.binding.source_sha != source_sha
         || artifact.binding.workflow_sha != source_sha
         || artifact.binding.run_attempt != 1
@@ -112,7 +112,7 @@ fn build_plan<R: crate::crate_release_pr_tree::TreeRead>(
     let expected_tree =
         crate::crate_release_pr_tree::overlay_tree(trees, source_tree_sha, &overlay)?;
     let plan = Plan {
-        repository: intent.repository.clone(),
+        repository: artifact.binding.repository.clone(),
         base: intent.default_branch.clone(),
         source_sha: source_sha.to_owned(),
         base_tree: source_tree_sha.to_owned(),

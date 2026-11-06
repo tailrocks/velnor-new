@@ -134,7 +134,10 @@ pub fn stage_unverified_toolchain<
 
 pub(super) fn authority_matches(request: &ToolchainStageRequest<'_>) -> bool {
     request.intent.validate().is_ok()
-        && request.github.repository == request.intent.repository
+        && crate::release_identity::same_repository(
+            &request.github.repository,
+            &request.intent.repository,
+        )
         && request.github.default_branch == request.intent.default_branch
         && request.github.environment == request.intent.environment
         && request.github.required_workflow_path == request.intent.required_workflow_path
@@ -177,9 +180,9 @@ pub(super) fn current_artifact<G: crate::crate_release_github::GitHubAdmissionRe
     receipt: bool,
 ) -> Result<ToolArtifactMetadata, OrchestratorError> {
     let invalid = || internal("crate_release_toolchain_staging_invalid");
-    let prefix = format!("repos/{}", request.intent.repository);
+    let prefix = format!("repos/{}", request.github.repository);
     let repository = github.get(&prefix)?;
-    if repository["full_name"].as_str() != Some(request.intent.repository.as_str()) {
+    if repository["full_name"].as_str() != Some(request.github.repository.as_str()) {
         return Err(invalid());
     }
     let repository_id = repository["id"]

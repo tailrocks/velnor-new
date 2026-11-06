@@ -196,12 +196,12 @@ pub(crate) fn repair_verified_metadata<
     authorize_github_candidate(input.request, &input.admission.github, input.github)?;
     match kind {
         JournalMutationKind::CreateTag => input.github.create_tag(
-            &input.intent.repository,
+            &input.request.repository,
             &selected.tag,
             &input.request.source_sha,
         )?,
         JournalMutationKind::CreateRelease => input.github.create_release(
-            &input.intent.repository,
+            &input.request.repository,
             &selected.tag,
             &input.request.source_sha,
             &selected.source.version,

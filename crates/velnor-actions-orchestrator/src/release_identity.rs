@@ -43,6 +43,16 @@ fn is_owner_repo(path: &str) -> bool {
     !name.contains('/') && is_repo_segment(owner) && is_repo_segment(name)
 }
 
+pub(crate) fn same_repository(left: &str, right: &str) -> bool {
+    let valid = |value: &str| {
+        value.split_once('/').is_some_and(|(owner, name)| {
+            velnor_actions_contract::config::is_valid_github_owner(owner)
+                && velnor_actions_contract::config::is_valid_github_repo_name(name)
+        })
+    };
+    valid(left) && valid(right) && left.eq_ignore_ascii_case(right)
+}
+
 fn is_repo_segment(segment: &str) -> bool {
     !segment.is_empty()
         && segment.len() <= 100

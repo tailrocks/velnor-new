@@ -293,6 +293,13 @@ fn recovery_generation_and_qualification_use_historical_source_not_current_check
     assert_ne!(source_lock, live_lock);
     check_qualification(root, &source_a, &prep, release_config, &derived)?;
     check_authority(&derived.intent, &authority_b, &source_a)?;
+    git(root, &["remote", "set-url", "origin", "https://github.com/EXAMPLE/DEMO.git"])?;
+    let mixed_prep = crate::prepare::prepare_for_candidate(root)?;
+    let mixed_config = release::enabled_release(&mixed_prep)?.ok_or("release missing")?;
+    let mixed = release::derive_release_inputs(&mixed_prep, mixed_config)?;
+    assert_eq!(mixed.intent.repository, "EXAMPLE/DEMO");
+    check_authority(&mixed.intent, &authority_b, &source_a)?;
+    git(root, &["remote", "set-url", "origin", "https://github.com/example/demo.git"])?;
     check_missing_and_creation(&prep, release_config, &source_a)?;
     let mise = crate::pins::resolve_mise_setup(&prep.config, release::RELEASE_HOSTED_RUNNER)?;
     let files = release::release_files_for_config(&prep, &mise, release_config)?;

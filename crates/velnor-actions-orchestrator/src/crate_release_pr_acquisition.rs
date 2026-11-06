@@ -129,7 +129,7 @@ where
         ".github/velnor-release-intent.toml",
     )?;
     let intent = crate::parse_crate_release_intent(&intent_bytes)?;
-    if intent.repository != request.binding.repository
+    if !crate::release_identity::same_repository(&intent.repository, request.binding.repository)
         || intent.default_branch != request.binding.branch
     {
         return Err(invalid());
