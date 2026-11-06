@@ -181,6 +181,7 @@ pub(super) fn check_authentication_denials(
 pub(super) fn check_transient_repository(
     stage: &crate::crate_release_tool_artifact::ToolchainStageRequest<'_>,
     github: &Github,
+    toolchain: bool,
 ) {
     struct TransientRepository<'a> {
         github: &'a Github,
@@ -246,12 +247,18 @@ pub(super) fn check_transient_repository(
         phase: Cell::new(0),
         downloads: Cell::new(0),
     };
-    assert!(
-        crate::crate_release_tool_artifact::fixture_authenticate_receipt(
-            stage, &transient, &transient
+    let result = if toolchain {
+        crate::crate_release_tool_artifact::stage_unverified_toolchain(
+            stage, &transient, &transient,
         )
-        .is_err()
-    );
+        .map(|_| ())
+    } else {
+        crate::crate_release_tool_artifact::fixture_authenticate_receipt(
+            stage, &transient, &transient,
+        )
+        .map(|_| ())
+    };
+    assert!(result.is_err());
     assert_eq!(
         transient.phase.get(),
         4,

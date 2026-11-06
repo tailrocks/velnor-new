@@ -153,7 +153,7 @@ pub(super) fn receipt_acquire_requires_current_approval_and_matching_evidence()
     let authenticated =
         crate::crate_release_tool_artifact::fixture_authenticate_receipt(&stage, &github, &github)?;
     assert_eq!(authenticated, receipt);
-    check_transient_repository(&stage, &github);
+    check_transient_repository(&stage, &github, false);
     check_authentication_denials(&stage, &github, &receipt)?;
     *github.tool_archive.borrow_mut() = receipt_zip(&serde_json::to_vec(&receipt)?)?;
     assert!(
@@ -273,6 +273,7 @@ pub(super) fn toolchain_staging_requires_approved_same_run_artifact()
     assert!(!runner.join("velnor/rustup").exists());
     github.tool_archive.borrow_mut().pop();
     github.mutate_after_download.set(0);
+    check_transient_repository(&stage, &github, true);
     let result = stage_unverified_toolchain(&stage, &github, &github)?;
     assert_eq!(result, runner.join("velnor/rustup"));
     assert_eq!(

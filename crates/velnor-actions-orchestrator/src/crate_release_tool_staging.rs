@@ -24,13 +24,16 @@ pub fn stage_unverified_toolchain<
     {
         return Err(invalid());
     }
-    crate::crate_release_github::authorize_github_candidate(
+    let authority = crate::crate_release_github::authorize_github_candidate(
         request.github,
         request.candidate,
         github,
     )?;
     crate::crate_release_github::verify_immutable_tag_rules(&request.intent.repository, github)?;
     let initial = current_artifact(request, github, false)?;
+    if initial.workflow_run.repository_id != authority.repository_id() {
+        return Err(invalid());
+    }
     let parent = request.runner_temp.join("velnor");
     check_real_directories(&parent)?;
     let scratch = tempfile::Builder::new()
@@ -51,13 +54,13 @@ pub fn stage_unverified_toolchain<
             deadline: request.deadline,
         },
     )?;
-    crate::crate_release_github::authorize_github_candidate(
+    let refreshed = crate::crate_release_github::authorize_github_candidate(
         request.github,
         request.candidate,
         github,
     )?;
     crate::crate_release_github::verify_immutable_tag_rules(&request.intent.repository, github)?;
-    if current_artifact(request, github, false)? != initial {
+    if refreshed != authority || current_artifact(request, github, false)? != initial {
         return Err(invalid());
     }
     extract_verified_tool_archive_file(
