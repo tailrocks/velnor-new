@@ -131,6 +131,7 @@ fn fixture_parts(group: &str) -> Result<Parts, HelperError> {
 
 fn fixture_plan(parts: &Parts) -> Result<Plan, HelperError> {
     let plan = Plan {
+        lane_inventory: None,
         schema: Plan::SCHEMA,
         run_key: RUN_KEY.to_owned(),
         plan_id: plan_id_for_run(RUN_KEY).map_err(|_| fail("plan_id"))?,
@@ -164,6 +165,7 @@ fn fixture_plan(parts: &Parts) -> Result<Plan, HelperError> {
         },
         task_ids: vec![parts.task_id.clone()],
         jobs: vec![PlanJob {
+            lane: None,
             job_id: parts.group.clone(),
             disposition: JobDisposition::Run,
         }],

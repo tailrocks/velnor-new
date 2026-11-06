@@ -37,7 +37,7 @@ def checked_time(value):
     return datetime.strptime(value, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
 
 
-def annotation(message, source, tagger_date, now):
+def annotation(message, source, tagger_date, now, version):
     if not isinstance(message, str) or len(message.encode()) > 8192:
         raise ValueError("SDK preview annotation size")
     record = json.loads(message, object_pairs_hook=unique_object)
@@ -48,7 +48,7 @@ def annotation(message, source, tagger_date, now):
         raise ValueError("SDK preview annotation shape")
     if (type(record["schema"]) is not int or record["schema"] != 1
             or record["repository"] != REPOSITORY or record["artifact"] != "generator"
-            or record["source_sha"] != source or record["version"] != os.environ["SDK_PREVIEW_VERSION"]):
+            or record["source_sha"] != source or record["version"] != version):
         raise ValueError("SDK preview annotation identity")
     for key in ("producer_run_id", "producer_run_attempt", "payload_artifact_id"):
         positive(record[key])
@@ -86,7 +86,7 @@ def verify_default_ancestry(client, source):
         raise ValueError("SDK preview source outside protected main")
 
 
-def admit_tag(client, source):
+def admit_tag(client, source, version):
     tag = "sdk-preview-" + source
     expected_ref = REPOSITORY + "/" + WORKFLOW + "@refs/tags/" + tag
     if (not re.fullmatch("[0-9a-f]{40}", source)
@@ -117,6 +117,6 @@ def admit_tag(client, source):
             or value.get("object") != {"type": "commit", "sha": source,
                                         "url": "https://api.github.com/repos/" + REPOSITORY + "/git/commits/" + source}):
         raise ValueError("SDK preview tag source")
-    proof = annotation(value.get("message"), source, value.get("tagger", {}).get("date", ""), now)
+    proof = annotation(value.get("message"), source, value.get("tagger", {}).get("date", ""), now, version)
     verify_default_ancestry(client, source)
     return proof, tag_sha, expected_ref

@@ -45,12 +45,16 @@ pub fn resolve_task_execution() -> Result<Vec<u8>, OrchestratorError> {
     let run_key = velnor_actions_contract::resolve_run_key(None)?;
     let execution_digest = required_env(TASK_EXECUTION_DIGEST_ENV, "missing_execution_digest")?;
     let generator_version = required_env(GENERATOR_VERSION_ENV, "missing_generator_version")?;
+    let job_id = env::var("GITHUB_JOB")
+        .ok()
+        .filter(|value| !value.is_empty());
     resolve_task_execution_to(
         &root,
         &runner_temp,
         &run_key,
         &execution_digest,
         &generator_version,
+        job_id.as_deref(),
     )
 }
 
@@ -60,6 +64,7 @@ pub(crate) fn resolve_task_execution_to(
     run_key: &str,
     expected_execution_digest: &str,
     expected_generator_version: &str,
+    job_id: Option<&str>,
 ) -> Result<Vec<u8>, OrchestratorError> {
     if !root.is_absolute() {
         return Err(internal("runner_paths_must_be_absolute"));
@@ -79,7 +84,8 @@ pub(crate) fn resolve_task_execution_to(
     if obligation.decision != ObligationDecision::Execute {
         return Err(internal("task_not_executable_in_plan"));
     }
-    let (entry, plan_task_digest) = crate::task_report::entry_and_digest(&plan, task_id)?;
+    let (entry, plan_task_digest) =
+        crate::task_report::entry_and_digest_for_context(&plan, task_id, job_id)?;
     if record.task_digest != plan_task_digest
         || entry.task_digest != plan_task_digest
         || record.matrix_id != entry.id

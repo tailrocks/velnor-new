@@ -134,86 +134,6 @@ pub(crate) fn native_execution_receipt(
     })
 }
 
-pub(crate) fn read_proofs(
-    plan: &serde_json::Value,
-    reports_dir: &Path,
-    tasks: &[serde_json::Value],
-    errors: &mut Vec<String>,
-) -> Vec<serde_json::Value> {
-    let Some(entries) = plan
-        .pointer("/matrix/include")
-        .and_then(serde_json::Value::as_array)
-    else {
-        return Vec::new();
-    };
-    let mut proofs = Vec::new();
-    for value in entries {
-        let Ok(entry) = serde_json::from_value::<MatrixEntry>(value.clone()) else {
-            continue;
-        };
-        if !matches!(entry.stack_id.as_str(), "mise" | "native") {
-            continue;
-        }
-        if !tasks.iter().any(|task| {
-            task.get("task_id").and_then(serde_json::Value::as_str) == Some(entry.task_id.as_str())
-                && task.get("status").and_then(serde_json::Value::as_str) == Some("executed")
-        }) {
-            continue;
-        }
-        match read_proof(&entry, reports_dir) {
-            Ok(proof) => proofs.push(proof),
-            Err(error) => errors.push(format!("{error}:{}", entry.matrix_key)),
-        }
-    }
-    proofs
-}
-
-fn read_proof(entry: &MatrixEntry, dir: &Path) -> Result<serde_json::Value, &'static str> {
-    velnor_actions_contract::validate_artifact_id(&entry.artifact_id)
-        .map_err(|_| "bad_check_artifact")?;
-    velnor_actions_contract::validate_matrix_key(&entry.matrix_key)
-        .map_err(|_| "bad_check_matrix")?;
-    let direct = format!(
-        "{}/{}/check-execution.json",
-        entry.artifact_id, entry.matrix_key
-    );
-    let nested = format!(
-        "{}/{}/{}/check-execution.json",
-        entry.artifact_id, entry.artifact_id, entry.matrix_key
-    );
-    let read = |relative: &str| {
-        reject_link_components(dir, relative).map_err(|_| "symlink_check_execution")?;
-        velnor_actions_contract::staged_reads::read_staged_text(
-            &dir.join(relative),
-            MAX_CHECK_EXECUTION_RECEIPT_BYTES as u64,
-        )
-    };
-    let (relative, text) = match read(&direct) {
-        Ok(text) => (direct, text),
-        Err("missing") => (nested.clone(), read(&nested)?),
-        Err(error) => return Err(error),
-    };
-    let execution = parse_strict_json(&text).map_err(|_| "unparsable_check_execution")?;
-    let declaration = if entry.stack_id == "mise" {
-        declaration_for(entry)?
-    } else {
-        None
-    };
-    let evidence = if let Some(declaration) = declaration {
-        let home = Path::new(&relative).parent().ok_or("bad_check_path")?;
-        let path = home.join("evidence").join(&declaration.path);
-        let path = path.to_str().ok_or("bad_check_path")?;
-        reject_link_components(dir, path).map_err(|_| "symlink_check_evidence")?;
-        Some(velnor_actions_contract::staged_reads::read_staged_text(
-            &dir.join(path),
-            crate::safe_read::MAX_REPO_FILE_BYTES,
-        )?)
-    } else {
-        None
-    };
-    Ok(serde_json::json!({"execution": execution, "evidence": evidence}))
-}
-
 fn declaration_for(entry: &MatrixEntry) -> Result<Option<CheckEvidence>, &'static str> {
     serde_json::from_value(
         entry
@@ -225,6 +145,26 @@ fn declaration_for(entry: &MatrixEntry) -> Result<Option<CheckEvidence>, &'stati
     .map_err(|_| "invalid_check_declaration")
 }
 
+fn invalid_unaffected_check(
+    plan: &Plan,
+    tasks: &[TaskReport],
+    ob: &velnor_actions_contract::PlanObligation,
+) -> bool {
+    let mut jobs = plan
+        .jobs
+        .iter()
+        .filter(|job| {
+            job.lane
+                .as_ref()
+                .map_or(job.job_id.as_str(), |lane| lane.logical_job_id.as_str())
+                == ob.job_id
+        })
+        .peekable();
+    tasks.iter().any(|task| task.task_id == ob.task_id)
+        || jobs.peek().is_none()
+        || jobs.any(|job| job.disposition != velnor_actions_contract::JobDisposition::NotAffected)
+}
+
 pub(crate) fn validate_proofs(
     plan: &Plan,
     tasks: &[TaskReport],
@@ -232,8 +172,19 @@ pub(crate) fn validate_proofs(
     native_root: Option<&Path>,
 ) -> bool {
     if plan.obligations.iter().any(|ob| {
-        (ob.task_id.starts_with("stack/mise/") || ob.task_id.starts_with("internal/native-check/"))
-            && ob.decision != velnor_actions_contract::ObligationDecision::Execute
+        if ob.task_id.starts_with("internal/native-check/") {
+            return ob.decision != velnor_actions_contract::ObligationDecision::Execute;
+        }
+        if !ob.task_id.starts_with("stack/mise/") {
+            return false;
+        }
+        match ob.decision {
+            velnor_actions_contract::ObligationDecision::Execute => false,
+            velnor_actions_contract::ObligationDecision::NotAffected => {
+                invalid_unaffected_check(plan, tasks, ob)
+            }
+            velnor_actions_contract::ObligationDecision::ReusedFromTaskCache => true,
+        }
     }) {
         return false;
     }
@@ -378,3 +329,7 @@ fn valid_proof(
 mod native;
 
 use native::{valid_native_check_proof, valid_native_proofs, valid_qualified_proofs};
+
+#[path = "check_gate_download.rs"]
+mod download;
+pub(crate) use download::read_proofs;

@@ -105,7 +105,7 @@ pub(crate) fn guard_script(non_inputs: &NonInputs) -> String {
     )
 }
 
-fn guard_step(non_inputs: &NonInputs) -> Result<Step, RenderError> {
+pub(crate) fn guard_step(non_inputs: &NonInputs) -> Result<Step, RenderError> {
     let mut step = steps::shell_step(
         NON_INPUT_GUARD_STEP,
         vec!["sh".to_owned(), "-c".to_owned(), guard_script(non_inputs)],

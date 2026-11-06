@@ -49,7 +49,7 @@ fn payload(
 fn base_payload(setup: &MiseSetup) -> Result<ToolsCachePayload, Box<dyn Error>> {
     payload(
         setup,
-        "ubuntu-24.04",
+        "ubuntu-26.04",
         "x86_64-unknown-linux-gnu",
         &["gh@2.103.2", "opentofu@1.13.2"],
         None,
@@ -67,7 +67,7 @@ fn check_union_and_determinism(setup: &MiseSetup) -> Result<(), Box<dyn Error>> 
     }
     let shuffled = payload(
         setup,
-        "ubuntu-24.04",
+        "ubuntu-26.04",
         "x86_64-unknown-linux-gnu",
         &["opentofu@1.13.2", "gh@2.103.2", "gh@2.103.2"],
         None,
@@ -109,7 +109,7 @@ fn check_host_distinctions_survive(setup: &MiseSetup) -> Result<(), Box<dyn Erro
     }
     let other_target = payload(
         setup,
-        "ubuntu-24.04",
+        "ubuntu-26.04",
         "aarch64-apple-darwin",
         &["gh@2.103.2", "opentofu@1.13.2"],
         None,
@@ -123,7 +123,7 @@ fn check_host_distinctions_survive(setup: &MiseSetup) -> Result<(), Box<dyn Erro
     }
     let clippy = payload(
         setup,
-        "ubuntu-24.04",
+        "ubuntu-26.04",
         "x86_64-unknown-linux-gnu",
         &["rust@1.99.1"],
         Some("1.99.1"),
@@ -131,7 +131,7 @@ fn check_host_distinctions_survive(setup: &MiseSetup) -> Result<(), Box<dyn Erro
     )?;
     let full = payload(
         setup,
-        "ubuntu-24.04",
+        "ubuntu-26.04",
         "x86_64-unknown-linux-gnu",
         &["rust@1.99.1"],
         Some("1.99.1"),
@@ -171,7 +171,7 @@ fn tools_identity_separates_rust_install_profiles() -> Result<(), Box<dyn Error>
     let digest = |spec: &str| -> Result<String, Box<dyn Error>> {
         Ok(payload(
             &setup,
-            "ubuntu-24.04",
+            "ubuntu-26.04",
             "x86_64-unknown-linux-gnu",
             &[spec],
             Some("1.99.1"),
@@ -200,7 +200,7 @@ fn tools_identity_never_matches_a_pre_x44_rust_cache_entry() -> Result<(), Box<d
     let current = || {
         payload(
             &setup,
-            "ubuntu-24.04",
+            "ubuntu-26.04",
             "x86_64-unknown-linux-gnu",
             &["rust[profile=minimal]@1.99.1"],
             Some("1.99.1"),

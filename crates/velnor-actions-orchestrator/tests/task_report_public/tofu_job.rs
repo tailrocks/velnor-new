@@ -8,12 +8,17 @@ use sha2::{Digest as _, Sha256};
 use velnor_actions_contract::workflow::{
     ExecutionBranch, JobBindingV1, UnitLedgerV1, UnitOutcome, UnitResultV1,
 };
-use velnor_actions_contract::{Digest, ObligationDecision, digest_b3, plan_json_bytes};
+use velnor_actions_contract::{
+    Digest, ObligationDecision, TaskReport, canonical_json_bytes, digest_b3, plan_json_bytes,
+};
 
 use super::TestResult;
 use super::fixture::{RUN_ATTEMPT, RUN_ID, Scenario};
 
-pub(super) fn stage_crate_job_ledger(scenario: &Scenario) -> TestResult<()> {
+pub(super) fn stage_crate_job_ledger(
+    scenario: &Scenario,
+    reports: &[TaskReport],
+) -> TestResult<()> {
     let plan = &scenario.plan;
     let job_key = plan
         .jobs
@@ -34,6 +39,10 @@ pub(super) fn stage_crate_job_ledger(scenario: &Scenario) -> TestResult<()> {
         |unit: &str, part: &str| Digest::parse(&digest_b3(format!("{unit}/{part}").as_bytes()));
     let mut ordered_results = Vec::with_capacity(units.len());
     for unit in &units {
+        let report = reports
+            .iter()
+            .find(|report| report.task_id == *unit)
+            .ok_or_else(|| io::Error::other("tofu task report missing"))?;
         ordered_results.push(UnitResultV1 {
             unit_id: unit.clone(),
             recipe_id: digest(unit, "recipe")?,
@@ -44,7 +53,9 @@ pub(super) fn stage_crate_job_ledger(scenario: &Scenario) -> TestResult<()> {
             exit_code: Some(0),
             started_at: "2026-11-02T00:00:00Z".to_owned(),
             finished_at: "2026-11-02T00:00:01Z".to_owned(),
-            report_digest: digest(unit, "report")?,
+            report_digest: UnitResultV1::report_digest_from_canonical_bytes(&canonical_json_bytes(
+                report,
+            )?),
         });
     }
     let absent = vec![None; units.len()];

@@ -224,6 +224,6 @@ pub(crate) fn check_identity_env_contract(
 #[path = "matrix_step_reports.rs"]
 mod matrix_step_reports;
 pub(crate) use matrix_step_reports::{
-    crate_upload_step, deferred_report_argv, download_plan_step, helper_path_for_version,
-    outcome_path_for_key, report_wrapper_argv, start_path_for_key,
+    crate_upload_step, download_plan_step, helper_path_for_version, outcome_path_for_key,
+    report_wrapper_argv, start_path_for_key,
 };

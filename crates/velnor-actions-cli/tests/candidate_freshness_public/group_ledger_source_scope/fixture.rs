@@ -214,6 +214,7 @@ impl Parts {
             None
         };
         let plan = Plan {
+            lane_inventory: None,
             schema: Plan::SCHEMA,
             run_key: self.run_key.clone(),
             plan_id: plan_id_for_run(&self.run_key)?,
@@ -247,6 +248,7 @@ impl Parts {
             },
             task_ids: vec![self.task_id.clone()],
             jobs: vec![PlanJob {
+                lane: None,
                 job_id: GROUP.to_owned(),
                 disposition: JobDisposition::Run,
             }],

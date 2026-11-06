@@ -11,6 +11,7 @@ pub(super) fn render(
     step: &Step,
     job_env: &BTreeMap<String, String>,
     report_helper_version: &str,
+    controller: &crate::render::ControllerLocator,
 ) -> Result<Yaml, RenderError> {
     let StepKind::NativeCheckExecution {
         check_id,
@@ -42,7 +43,7 @@ pub(super) fn render(
             "native_check_job_token_inheritance_rejected".to_owned(),
         ));
     }
-    let env = BTreeMap::from([
+    let mut env = BTreeMap::from([
         (
             crate::steps::INTERNAL_OP_ENV.to_owned(),
             "execute-native-homebrew-check-v1".to_owned(),
@@ -54,8 +55,32 @@ pub(super) fn render(
         ),
         ("VELNOR_TASK_ID".to_owned(), task_id.clone()),
     ]);
-    let binary = format!("$RUNNER_TEMP/velnor/bin/velnor-actions-{sdk_version}");
-    let mut rendered = shell_step_to_yaml(step, &[binary], &env, job_env, false, None)?;
+    let argv = if let crate::render::ControllerLocator::ProtectedBaseDispatch { preview, .. } =
+        controller
+    {
+        for name in [
+            "ACTIONS_ID_TOKEN_REQUEST_TOKEN",
+            "ACTIONS_ID_TOKEN_REQUEST_URL",
+            "ACTIONS_RUNTIME_TOKEN",
+            "BASH_ENV",
+            "ENV",
+            "GITHUB_TOKEN",
+            "LD_AUDIT",
+            "LD_LIBRARY_PATH",
+            "LD_PRELOAD",
+            "PYTHONHOME",
+            "PYTHONPATH",
+            "PYTHONSTARTUP",
+        ] {
+            env.insert(name.to_owned(), String::new());
+        }
+        crate::preview_setup::loader_command(preview)
+    } else {
+        vec![format!(
+            "$RUNNER_TEMP/velnor/bin/velnor-actions-{sdk_version}"
+        )]
+    };
+    let mut rendered = shell_step_to_yaml(step, &argv, &env, job_env, false, None)?;
     insert_scoped_github_token(&mut rendered)?;
     Ok(rendered)
 }

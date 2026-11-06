@@ -56,8 +56,13 @@ pub(crate) fn recipe_digests(
     producers: &[(String, Job)],
     helper_version: &str,
     generator_version: &str,
+    preview: Option<&velnor_actions_contract::source_preview::SourcePreviewLock>,
 ) -> Result<BTreeMap<String, S256>, OrchestratorError> {
-    let wrapper = declared_task_wrapper_digest(helper_version, generator_version)?;
+    let wrapper = if let Some(preview) = preview {
+        velnor_actions_workflow_renderer::preview_task_wrapper_digest(preview, generator_version)?
+    } else {
+        declared_task_wrapper_digest(helper_version, generator_version)?
+    };
     producers
         .iter()
         .map(|(id, job)| {
@@ -247,7 +252,7 @@ mod tests {
             services: Vec::new(),
             outputs: BTreeMap::new(),
             display_name: id.to_owned(),
-            runs_on: "ubuntu-24.04".to_owned(),
+            runs_on: "ubuntu-26.04".to_owned(),
             check_runner: None,
             timeout_minutes: JobTimeout::new(30)?,
             needs: Vec::new(),
@@ -264,9 +269,9 @@ mod tests {
     #[test]
     fn recipe_moves_with_the_task_wrapper_and_only_with_it() -> Result<(), Box<dyn Error>> {
         let jobs = [producer("state-producer-x", &["cargo", "clippy"])?];
-        let old = recipe_digests(&jobs, HELPER_VERSION, "0.1.73")?;
-        let again = recipe_digests(&jobs, HELPER_VERSION, "0.1.73")?;
-        let new = recipe_digests(&jobs, HELPER_VERSION, "0.1.74")?;
+        let old = recipe_digests(&jobs, HELPER_VERSION, "0.1.73", None)?;
+        let again = recipe_digests(&jobs, HELPER_VERSION, "0.1.73", None)?;
+        let new = recipe_digests(&jobs, HELPER_VERSION, "0.1.74", None)?;
         assert_eq!(old, again, "the recipe is not deterministic");
         assert_ne!(
             old, new,
@@ -285,8 +290,8 @@ mod tests {
             producer("state-producer-x", &["cargo", "clippy"])?,
             producer("state-producer-y", &["cargo", "clippy", "--all-features"])?,
         ];
-        let before = recipe_digests(&before, HELPER_VERSION, "0.1.73")?;
-        let after = recipe_digests(&after, HELPER_VERSION, "0.1.73")?;
+        let before = recipe_digests(&before, HELPER_VERSION, "0.1.73", None)?;
+        let after = recipe_digests(&after, HELPER_VERSION, "0.1.73", None)?;
         assert_eq!(
             before["state-producer-x"], after["state-producer-x"],
             "a lane change in Y moved X"

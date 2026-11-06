@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::state_seal::STATE_PRODUCER_LANE_CONDITION;
-use super::step_identity::{MBX_WORKSPACE_CLEAN_CONDITION, StepId, StepRole, verifier_action_role};
+use super::step_identity::{
+    MBX_WORKSPACE_CLEAN_CONDITION, StepId, StepRole, recognized_action_role,
+};
 use crate::errors::ContractError;
 use serde::{Deserialize, Serialize};
 
@@ -124,7 +126,7 @@ impl Step {
         }
         self.validate_execution_authority(job)?;
         if let StepKind::Action { uses, .. } = &self.kind
-            && let Some(expected) = verifier_action_role(uses)
+            && let Some(expected) = recognized_action_role(uses)
             && self.role != Some(expected)
         {
             return Err(ContractError::identity(

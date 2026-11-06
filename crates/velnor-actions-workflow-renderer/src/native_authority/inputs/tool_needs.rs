@@ -30,6 +30,7 @@ fn validate_configuration(
         }
     }
     for task in input.rust_tasks {
+        task.validate_shard(input)?;
         admit_manifest(&task.manifest, input.cargo_workspaces, false)?;
         {
             let configuration = rust_config

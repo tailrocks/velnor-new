@@ -136,7 +136,7 @@ pub fn rust_spec_version(spec: &str) -> Option<&str> {
 
 pub const RUST_TARGET_TRIPLE: &str = "x86_64-unknown-linux-gnu";
 
-const TOOL_PLATFORMS: [&str; 2] = ["ubuntu-24.04", "ubuntu-26.04"];
+const TOOL_PLATFORMS: [&str; 1] = ["ubuntu-26.04"];
 
 const PLACEHOLDER_DIGEST: &str = "0000000000000000000000000000000000000000000000000000000000000000";
 

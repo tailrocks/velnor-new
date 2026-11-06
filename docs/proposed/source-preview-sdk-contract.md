@@ -40,8 +40,12 @@ attempt, artifact ID, archive digest, and successful immutability precheck time.
 The tag authority verifies the authenticated push actor and rerun actor, the
 annotated tag object, both rulesets, and the complete annotation. The precheck
 must precede tag creation by at most one minute and be no older than 15 minutes
-when tag admission runs. An expired annotation fails closed. Reruns do not
-extend its lifetime or permit moving the tag.
+at the original tag workflow run's GitHub-recorded creation time. This window
+binds the owner precheck to the original tag event, including when execution is
+queued. A retry retains that original timestamp; it cannot refresh the precheck
+or move the tag. Repository administrators remain trusted to preserve immutable
+releases throughout admission and publication; an old precheck does not prove
+the current administration setting.
 
 The tag workflow retrieves the successful main producer artifact by ID.
 The archive must match its authenticated GitHub digest before bounded extraction.
@@ -58,6 +62,16 @@ subjects, certificate and run identities, the tag, draft identity, and exact
 asset hashes. The publisher rechecks source ancestry and the tag before
 publication, then requires an immutable release with the complete asset set.
 
+The source-free publication jobs run in a separately reviewed reusable workflow
+referenced by a full commit SHA. The caller workflow identifies the candidate
+source and tag; the reusable job context identifies the publication authority.
+These identities are distinct. Adoption requires a signature from the protected
+authority pin and independently checks the candidate source identity. Before
+an independent authority has been merged and pinned, tag publication is disabled.
+Protected main review, owner tag approval, and protected environment review remain
+controls on other repository writes; the authority pin governs which signatures
+can authorize adoption.
+
 The workflow token cannot query the administration-only immutability endpoint.
 The trusted owner precheck supplies that authority. Repository administrators
 remain trusted to preserve the setting throughout publication. The workflow's
@@ -67,6 +81,18 @@ final immutable-result check does not independently prove the earlier setting.
 A retry can resume an owned draft only when its existing assets have the exact
 expected names and hashes. Conflicting assets and published releases cannot be
 overwritten or deleted. The channel does not create or move stable version tags.
+
+The draft marker binds the original source and payload artifact IDs and the
+annotated producer proof. The draft job searches the complete bounded release
+listing before creating a release and verifies retained pairs with the pinned
+GitHub CLI. The read-only attestation job does not query unpublished drafts.
+A retry recovers those original artifacts
+and an exact retained receipt and bundle together, and reuses a verified pair
+without signing again. An empty draft without a successful signed pair may use
+the current attestation attempt. A receipt already uploaded to a partial draft
+pins the pair; missing or conflicting evidence fails closed. A published release
+is accepted only after verification of its exact immutable assets and signature.
+
 
 ## Receipt and release assets
 
@@ -80,14 +106,24 @@ The release contains these assets:
 - `SDK_PREVIEW_RECEIPT.json.sigstore.jsonl`
 - `velnor-actions-x86_64-unknown-linux-gnu`
 
-The schema-1 receipt records the repository, package version, source SHA, tag,
-release ID, signer run, CI run, qualification run, and payload identity. The
-payload identity contains its target, name, size, and SHA-256 digest. The receipt
-uses sorted JSON object keys, compact separators, and no final newline.
-The Sigstore bundle binds both the receipt and payload subjects.
+The schema-2 receipt records the repository, package version, source SHA, tag,
+release ID, source admission, draft preparation, signing, CI, qualification,
+producer artifact, candidate artifacts, and payload identity. Each workflow tuple
+contains its path, ref, source SHA, run ID, and exact attempt. Source, draft, and
+signer share the tag run but may have different attempts, ordered from source to
+signer. The producer and candidate records bind the original artifact IDs; the
+producer also binds the archive digest. The payload identity contains its target,
+name, size, and SHA-256 digest. The receipt uses sorted JSON object keys, compact
+separators, and no final newline. The Sigstore bundle binds both the receipt and
+payload subjects.
 
-The lock records the complete receipt identity and the hashes of the receipt and
-bundle. A lock entry cannot supply a different verifier, trusted root, repository,
+The lock records the complete receipt identity, the hashes of the receipt and
+bundle, and the successful publisher's exact attempt and job ID. Publisher
+identity is selected after publication and is excluded from the signed receipt.
+Staging checks successful source, draft, and signer jobs at their exact attempts;
+a failed aggregate tag attempt does not invalidate those successful roles.
+It independently checks the pinned publisher job. CI and qualification still
+require successful aggregate runs. A lock entry cannot supply a different verifier, trusted root, repository,
 workflow, or executable hash policy.
 
 ## Staged approval and activation

@@ -115,7 +115,10 @@ fn lane_workflow_tasks(
     input: &WorkflowBuildInput<'_>,
     acquire: Option<&Step>,
     private: Option<&crate::config::private_wiring::PrivateWiring>,
-) -> Result<Vec<velnor_actions_workflow_renderer::verification_jobs::WorkflowTaskPolicy>, OrchestratorError> {
+) -> Result<
+    Vec<velnor_actions_workflow_renderer::verification_jobs::WorkflowTaskPolicy>,
+    OrchestratorError,
+> {
     let lane = crate::matrix_step::LaneTools::union(
         input.config.workflow.policy,
         input.catalog,
@@ -135,26 +138,33 @@ fn lane_workflow_tasks(
     )
 }
 
-fn prepare_workflow(input: &WorkflowBuildInput<'_>) -> Result<PreparedWorkflow, OrchestratorError> {
-    wire_w1::vet_step_syntax(StepSyntax::JobMatrix)?;
-    wire_w1::vet_step_syntax(StepSyntax::NativeParallelism)?;
-    wire_w1::vet_step_syntax(StepSyntax::CacheMode)?;
-    crate::rust_suites_emit::validate_suites_against_repo(
-        input.root,
-        input.config,
-        input.discovery,
-    )?;
-    let catalog = input.catalog;
+fn controller_acquisition(
+    input: &WorkflowBuildInput<'_>,
+    policy: WorkflowPolicy,
+) -> Result<(String, Option<Step>), OrchestratorError> {
+    if policy == WorkflowPolicy::ConsumerV1
+        && input
+            .published_generator_lock
+            .is_some_and(|lock| lock.source_preview.is_some())
+    {
+        return Err(OrchestratorError::Contract {
+            problem: "consumer_preview_controller_unsupported".to_owned(),
+        });
+    }
     let report_helper_version = input
         .published_generator_lock
         .map_or(input.consumer_release_version, |lock| {
-            lock.generator.version.as_str()
+            if policy == WorkflowPolicy::VelnorRepositoryV1 {
+                lock.source_preview
+                    .as_ref()
+                    .map_or(lock.generator.version.as_str(), |preview| {
+                        preview.receipt.version.as_str()
+                    })
+            } else {
+                lock.generator.version.as_str()
+            }
         })
         .to_owned();
-    let generator_version = env!("CARGO_PKG_VERSION");
-    let policy = input.config.workflow.policy;
-    let verify = crate::verify::verify_kinds(&input.config.workflow.verify.jobs)?;
-    let support = support_workflow(policy, input.discovery, &verify);
     let acquire = match policy {
         WorkflowPolicy::ConsumerV1 => Some(consumer_acquire_step(
             input.label,
@@ -168,13 +178,35 @@ fn prepare_workflow(input: &WorkflowBuildInput<'_>) -> Result<PreparedWorkflow, 
                     .ok_or_else(|| OrchestratorError::Contract {
                         problem: "required_verdict_requires_published_generator_lock".to_owned(),
                     })?;
-            Some(crate::attach::published_lock_acquire_step(
-                lock,
-                input.label,
-                &lock.generator.version,
-            )?)
+            if lock.source_preview.is_some() {
+                Some(velnor_actions_workflow_renderer::steps::protected_preview_acquire_step()?)
+            } else {
+                Some(crate::attach::published_lock_acquire_step(
+                    lock,
+                    input.label,
+                    &lock.generator.version,
+                )?)
+            }
         }
     };
+    Ok((report_helper_version, acquire))
+}
+
+fn prepare_workflow(input: &WorkflowBuildInput<'_>) -> Result<PreparedWorkflow, OrchestratorError> {
+    wire_w1::vet_step_syntax(StepSyntax::JobMatrix)?;
+    wire_w1::vet_step_syntax(StepSyntax::NativeParallelism)?;
+    wire_w1::vet_step_syntax(StepSyntax::CacheMode)?;
+    crate::rust_suites_emit::validate_suites_against_repo(
+        input.root,
+        input.config,
+        input.discovery,
+    )?;
+    let catalog = input.catalog;
+    let policy = input.config.workflow.policy;
+    let (report_helper_version, acquire) = controller_acquisition(input, policy)?;
+    let generator_version = env!("CARGO_PKG_VERSION");
+    let verify = crate::verify::verify_kinds(&input.config.workflow.verify.jobs)?;
+    let support = support_workflow(policy, input.discovery, &verify);
     let private =
         crate::config::private_wiring::PrivateWiring::load(input.root, input.config, catalog)?;
     let workflow_tasks = lane_workflow_tasks(input, acquire.as_ref(), private.as_ref())?;
@@ -227,9 +259,30 @@ fn build_workflow_plan(
     if let Some(private) = prepared.private.as_ref() {
         private.insert_into_job(&mut plan, input.fetch_roots)?;
     }
+    let controller = input
+        .published_generator_lock
+        .filter(|_| prepared.policy == WorkflowPolicy::VelnorRepositoryV1)
+        .and_then(|lock| lock.source_preview.as_ref())
+        .map_or_else(
+            || velnor_actions_workflow_renderer::render::ControllerLocator::PinnedRelease {
+                version: prepared.report_helper_version.clone(),
+                path: format!(
+                    "{}{version}",
+                    velnor_actions_workflow_renderer::steps::STAGED_BINARY_PREFIX,
+                    version = prepared.report_helper_version
+                ),
+            },
+            |preview| {
+                velnor_actions_workflow_renderer::render::ControllerLocator::ProtectedBaseDispatch {
+                    preview: Box::new(preview.clone()),
+                    path: velnor_actions_workflow_renderer::render::PROTECTED_BASE_CONTROLLER_PATH
+                        .to_owned(),
+                }
+            },
+        );
     super::insert_format_report_steps(
         &mut plan,
-        wire_w1::workspace_format_report_steps(input.discovery, &prepared.report_helper_version)?,
+        wire_w1::workspace_format_report_steps(input.discovery, &controller)?,
     );
     plan.timeout_minutes =
         velnor_actions_contract::JobTimeout::new(input.config.workflow.plan_timeout_minutes)
@@ -251,36 +304,6 @@ fn build_workflow_plan(
     Ok(plan)
 }
 
-fn attach_state_roots(
-    input: &WorkflowBuildInput<'_>,
-    prepared: &PreparedWorkflow,
-    jobs: &mut BTreeMap<String, Job>,
-) -> Result<(), OrchestratorError> {
-    let state_roots = crate::state_roots::plans(input.discovery, jobs, &prepared.state_recipes)?;
-    let seal = crate::state_roots::seal_plan(jobs)?;
-    if state_roots.is_empty() && seal.roots.is_empty() {
-        return Ok(());
-    }
-    let tofu_roots = crate::tofu_cache::tofu_cache_roots(input.discovery)?;
-    let plan = jobs
-        .get_mut(PLAN_JOB_ID)
-        .ok_or_else(|| OrchestratorError::Contract {
-            problem: "plan_job_missing".to_owned(),
-        })?;
-    velnor_actions_workflow_renderer::native_job_builders::plan_state_roots(
-        plan,
-        &prepared.helper_catalog,
-        input.fetch_roots,
-        &tofu_roots,
-        &state_roots,
-        &seal,
-    )
-    .map_err(crate::workflow_jobs::map_native_job_builder_error)?;
-    plan.permissions
-        .get_or_insert_with(crate::workflow_jobs::read_actions_permissions);
-    Ok(())
-}
-
 fn build_workflow_jobs(
     input: &WorkflowBuildInput<'_>,
     prepared: &mut PreparedWorkflow,
@@ -297,6 +320,9 @@ fn build_workflow_jobs(
         prepared.acquire.as_ref(),
         &prepared.report_helper_version,
         prepared.generator_version,
+        input
+            .published_generator_lock
+            .and_then(|lock| lock.source_preview.as_ref()),
         prepared.private.as_ref(),
     )?;
     let mut required_ids: Vec<String> = built.jobs.iter().map(|(id, _)| id.clone()).collect();
@@ -339,19 +365,7 @@ fn build_workflow_jobs(
     required_ids.extend(suite_build.required_ids);
     attach_state_roots(input, prepared, &mut jobs)?;
     crate::workflow_task_jobs::insert_jobs(&mut jobs, &prepared.workflow_tasks)?;
-    let (required_catalog, required_acquire) = if prepared.policy == WorkflowPolicy::VelnorRepositoryV1 {
-        let target = velnor_actions_contract::ReleaseTarget::for_runner_label(input.label)
-            .ok_or_else(|| OrchestratorError::Contract {
-                problem: format!("unsupported_target_for_runner:{}", input.label),
-            })?;
-        (
-            velnor_actions_mise::catalog::lock::catalog_for_published_verdict(&ToolCatalog::pinned()),
-            Some(velnor_actions_workflow_renderer::release_helpers::published_verdict_acquire_for_target(target)
-                .map_err(crate::local_release_manifest::map_release_helper_error)?),
-        )
-    } else {
-        (helper_catalog(input, &ToolCatalog::pinned())?, prepared.acquire.take())
-    };
+    let (required_catalog, required_acquire) = required_controller(input, prepared)?;
     insert_gate_jobs(
         &mut jobs,
         input.label,
@@ -367,30 +381,6 @@ fn build_workflow_jobs(
     Ok(jobs)
 }
 
-fn helper_catalog(
-    input: &WorkflowBuildInput<'_>,
-    catalog: &ToolCatalog,
-) -> Result<ToolCatalog, OrchestratorError> {
-    if input.config.workflow.policy != WorkflowPolicy::VelnorRepositoryV1 {
-        return Ok(catalog.clone());
-    }
-    let lock = input
-        .published_generator_lock
-        .ok_or_else(|| OrchestratorError::Contract {
-            problem: "required_verdict_requires_published_generator_lock".to_owned(),
-        })?;
-    let map_err = |error: velnor_actions_mise::catalog::lock::LockError| {
-        OrchestratorError::Contract {
-            problem: error.to_string(),
-        }
-    };
-    match input.approved_release {
-        Some(approved) => velnor_actions_mise::catalog::lock::catalog_for_approved_generator(
-            lock, catalog, &approved,
-        )
-        .map_err(map_err),
-        None => Err(OrchestratorError::Contract {
-            problem: "controller_approvals:missing_approval".to_owned(),
-        }),
-    }
-}
+#[path = "workflow_build_authority.rs"]
+mod authority;
+use authority::{attach_state_roots, helper_catalog, required_controller};

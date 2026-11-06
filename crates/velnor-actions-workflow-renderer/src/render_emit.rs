@@ -64,6 +64,13 @@ pub(crate) fn emit_shared(
         &ctx.generator_version,
         &ctx.tool_pins,
     )?;
+    if let crate::render::ControllerLocator::ProtectedBaseDispatch { preview, .. } = &ctx.controller
+    {
+        shared_files.push(crate::preview_setup::action_file(
+            &ctx.generator_version,
+            preview,
+        )?);
+    }
     if let Some(sealed) = state_seal {
         shared_files.push(emit_state_seal(sealed, ctx)?);
     }

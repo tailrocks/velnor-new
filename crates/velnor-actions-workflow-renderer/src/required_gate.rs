@@ -109,7 +109,7 @@ pub(crate) fn required_gate_job_yaml(runs_on: &str) -> Result<(String, Yaml), Re
 }
 
 fn gate_step() -> Result<velnor_actions_contract::Step, RenderError> {
-    required_gate_job("ubuntu-latest")?
+    required_gate_job("ubuntu-26.04")?
         .steps
         .into_iter()
         .next()

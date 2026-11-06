@@ -270,13 +270,14 @@ fn parse_source_preview(
     section: &str,
 ) -> Result<Option<velnor_actions_contract::source_preview::SourcePreviewLock>, LockError> {
     use velnor_actions_contract::source_preview::{
-        SourcePreviewLock, SourcePreviewPayload, SourcePreviewReceipt, SourcePreviewRun,
+        SourcePreviewCandidate, SourcePreviewLock, SourcePreviewPayload, SourcePreviewProducer,
+        SourcePreviewReceipt, SourcePreviewRun,
     };
     let mut sections = doc.iter().filter(|(name, _)| name == section);
     let Some((_, values)) = sections.next() else {
         return Ok(None);
     };
-    if sections.next().is_some() || values.len() != 27 {
+    if sections.next().is_some() || values.len() != 45 {
         return Err(invalid("invalid_planner_preview_section".to_owned()));
     }
     let number = |key: &str| -> Result<u64, LockError> {
@@ -304,9 +305,22 @@ fn parse_source_preview(
             source_sha: entry(values, "source_sha")?,
             tag: entry(values, "tag")?,
             release_id: number("release_id")?,
+            source: run("source")?,
+            draft: run("draft")?,
             signer: run("signer")?,
             ci: run("ci")?,
             qualification: run("qualification")?,
+            producer: SourcePreviewProducer {
+                producer_run_id: number("producer_run_id")?,
+                producer_run_attempt: u32::try_from(number("producer_run_attempt")?)
+                    .map_err(|_| invalid("invalid_planner_preview_attempt".to_owned()))?,
+                payload_artifact_id: number("producer_payload_artifact_id")?,
+                payload_archive_sha256: entry(values, "producer_payload_archive_sha256")?,
+            },
+            candidate: SourcePreviewCandidate {
+                source_artifact_id: number("candidate_source_artifact_id")?,
+                payload_artifact_id: number("candidate_payload_artifact_id")?,
+            },
             payload: SourcePreviewPayload {
                 target: entry(values, "payload_target")?,
                 name: entry(values, "payload_name")?,
@@ -316,6 +330,9 @@ fn parse_source_preview(
         },
         receipt_sha256: entry(values, "receipt_sha256")?,
         bundle_sha256: entry(values, "bundle_sha256")?,
+        publisher_run_attempt: u32::try_from(number("publisher_run_attempt")?)
+            .map_err(|_| invalid("invalid_planner_preview_attempt".to_owned()))?,
+        publisher_job_id: number("publisher_job_id")?,
     };
     preview
         .validate_shape()

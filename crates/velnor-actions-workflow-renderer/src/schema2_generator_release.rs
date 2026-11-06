@@ -33,7 +33,20 @@ mod workflow_steps;
 pub(super) fn source_preview_jobs(
     pins: &ProductReleasePins,
 ) -> Result<Vec<(String, Yaml)>, RenderError> {
-    source_preview::jobs(pins)
+    let mut jobs = source_preview::producer_jobs(pins)?;
+    if let Some(caller) = source_preview::caller_job()? {
+        jobs.push(caller);
+    }
+    Ok(jobs)
+}
+
+pub(super) fn source_preview_authority(
+    pins: &ProductReleasePins,
+) -> Result<(String, Yaml), RenderError> {
+    Ok((
+        source_preview::AUTHORITY_PATH.to_owned(),
+        source_preview::authority_document(pins)?,
+    ))
 }
 
 pub(super) struct GeneratorRelease {

@@ -88,7 +88,7 @@ assert len(result) == 1
 statement = result[0]["verificationResult"]["statement"]
 assert any(subject["name"] == sidecar.name and subject["digest"] == {"sha256": digest(sidecar)} for subject in statement["subject"])
 certificate = result[0]["verificationResult"]["signature"]["certificate"]
-assert not stage.certificate_matches(certificate, "c622bfb187556afb8d3ff3ca917a719e4bb7f32a", ".github/workflows/product-release-generator.yml", 41979375157, 1)
+assert not stage.certificate_matches(certificate, "c622bfb187556afb8d3ff3ca917a719e4bb7f32a", ".github/workflows/product-release-generator.yml", 41979375157, 1, {"repository": stage.bootstrap.REPOSITORY, "path": stage.AUTHORITY_WORKFLOW, "ref": stage.bootstrap.REPOSITORY + "/" + stage.AUTHORITY_WORKFLOW + "@" + "d" * 40, "sha": "d" * 40})
 with tempfile.TemporaryDirectory() as temp:
     altered = Path(temp) / sidecar.name
     altered.write_bytes(sidecar.read_bytes() + b"x")

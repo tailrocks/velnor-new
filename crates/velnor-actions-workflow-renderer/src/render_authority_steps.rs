@@ -102,6 +102,13 @@ struct CanonicalAuthorityJobs {
 }
 
 impl CanonicalAuthoritySteps {
+    pub(super) fn preview_dispatch_enabled(&self) -> bool {
+        matches!(
+            self.runtime.controller,
+            crate::render::ControllerLocator::ProtectedBaseDispatch { .. }
+        )
+    }
+
     pub(crate) fn required_staged_binary(&self) -> &str {
         self.runtime.required_controller.path()
     }

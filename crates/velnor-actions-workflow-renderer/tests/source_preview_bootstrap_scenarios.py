@@ -15,6 +15,7 @@ from email.message import Message
 
 spec = importlib.util.spec_from_file_location("source_preview_bootstrap", sys.argv[1])
 bootstrap = importlib.util.module_from_spec(spec)
+sys.modules["source_preview_bootstrap"] = bootstrap
 spec.loader.exec_module(bootstrap)
 SOURCE = "a" * 40
 BASE = "b" * 40
@@ -28,12 +29,106 @@ def sha(value):
 
 
 def record(source=SOURCE):
-    value = {"schema": 1, "repository": bootstrap.REPOSITORY, "version": "0.1.75", "source_sha": source, "tag": "sdk-preview-" + source, "release_id": 10, "payload_target": bootstrap.TARGET, "payload_name": "velnor-actions-x86_64-unknown-linux-gnu", "payload_size": len(PAYLOAD), "payload_sha256": sha(PAYLOAD), "bundle_sha256": sha(BUNDLE)}
-    for role, path, run in [("signer", ".github/workflows/product-release-generator.yml", 11), ("ci", ".github/workflows/ci.yml", 12), ("qualification", ".github/workflows/source-qualification.yml", 13)]:
-        value.update({role + "_workflow_path": path, role + "_workflow_ref": f"{bootstrap.REPOSITORY}/{path}@" + ("refs/tags/sdk-preview-" + source if role == "signer" else "refs/heads/main"), role + "_workflow_sha": source, role + "_run_id": run, role + "_run_attempt": 1})
+    value = {"schema": 2, "repository": bootstrap.REPOSITORY, "version": "0.1.75", "source_sha": source, "tag": "sdk-preview-" + source, "release_id": 10, "payload_target": bootstrap.TARGET, "payload_name": "velnor-actions-x86_64-unknown-linux-gnu", "payload_size": len(PAYLOAD), "payload_sha256": sha(PAYLOAD), "bundle_sha256": sha(BUNDLE)}
+    for role, path, run in [("source", ".github/workflows/product-release-generator.yml", 11), ("draft", ".github/workflows/product-release-generator.yml", 11), ("signer", ".github/workflows/product-release-generator.yml", 11), ("ci", ".github/workflows/ci.yml", 12), ("qualification", ".github/workflows/source-qualification.yml", 13)]:
+        value.update({role + "_workflow_path": path, role + "_workflow_ref": f"{bootstrap.REPOSITORY}/{path}@" + ("refs/tags/sdk-preview-" + source if role in ("source", "draft", "signer") else "refs/heads/main"), role + "_workflow_sha": source, role + "_run_id": run, role + "_run_attempt": 1})
+    value.update({"producer_run_id": 20, "producer_run_attempt": 1, "producer_payload_artifact_id": 21, "producer_payload_archive_sha256": "e" * 64, "candidate_source_artifact_id": 22, "candidate_payload_artifact_id": 23, "publisher_run_attempt": 3, "publisher_job_id": 24, "signer_run_attempt": 2})
     receipt = json.dumps(bootstrap.receipt_from_record(value), sort_keys=True, separators=(",", ":")).encode()
     value["receipt_sha256"] = sha(receipt)
     return value, receipt
+
+
+valid_retry, retry_receipt = record()
+bootstrap.validate_preview(valid_retry, HEAD)
+assert json.loads(retry_receipt)["signer"]["run_attempt"] == 2
+assert "publisher_run_attempt" not in json.loads(retry_receipt)
+for field, value in (
+    ("source_run_id", 99), ("source_run_attempt", 2), ("draft_run_attempt", 3),
+    ("publisher_run_attempt", 1), ("publisher_run_attempt", 52),
+    ("publisher_job_id", 0), ("producer_payload_artifact_id", 0),
+    ("candidate_source_artifact_id", 23), ("schema", 1),
+    ("unapproved", True),
+):
+    changed = dict(valid_retry)
+    changed[field] = value
+    try:
+        bootstrap.validate_preview(changed, HEAD)
+    except bootstrap.AdmissionError:
+        pass
+    else:
+        raise AssertionError("accepted invalid retry custody: " + field)
+
+
+stage_spec = importlib.util.spec_from_file_location("source_preview_stage_verify", Path(sys.argv[1]).with_name("source_preview_stage_verify.py"))
+stage = importlib.util.module_from_spec(stage_spec)
+stage_spec.loader.exec_module(stage)
+
+
+authority = {"repository": bootstrap.REPOSITORY, "path": stage.AUTHORITY_WORKFLOW, "sha": "d" * 40, "ref": bootstrap.REPOSITORY + "/" + stage.AUTHORITY_WORKFLOW + "@" + "d" * 40}
+caller_uri = "https://github.com/" + bootstrap.REPOSITORY + "/.github/workflows/product-release-generator.yml@refs/tags/sdk-preview-" + SOURCE
+signer_uri = "https://github.com/" + authority["ref"]
+certificate = {
+    "issuer": "https://token.actions.githubusercontent.com", "subjectAlternativeName": signer_uri,
+    "buildSignerURI": signer_uri, "buildSignerDigest": "d" * 40,
+    "buildConfigURI": caller_uri, "buildConfigDigest": SOURCE,
+    "sourceRepositoryURI": "https://github.com/" + bootstrap.REPOSITORY,
+    "sourceRepositoryIdentifier": str(bootstrap.REPOSITORY_ID),
+    "sourceRepositoryOwnerURI": "https://github.com/tailrocks",
+    "sourceRepositoryOwnerIdentifier": stage.OWNER_ID,
+    "sourceRepositoryDigest": SOURCE, "sourceRepositoryRef": "refs/tags/sdk-preview-" + SOURCE,
+    "buildTrigger": "push", "runnerEnvironment": "github-hosted",
+    "runInvocationURI": "https://github.com/" + bootstrap.REPOSITORY + "/actions/runs/11/attempts/2",
+}
+assert stage.certificate_matches(certificate, SOURCE, ".github/workflows/product-release-generator.yml", 11, 2, authority)
+for field, value in (
+    ("subjectAlternativeName", caller_uri), ("buildSignerURI", caller_uri),
+    ("buildSignerDigest", SOURCE), ("buildConfigDigest", "d" * 40),
+    ("buildConfigURI", signer_uri), ("sourceRepositoryDigest", "d" * 40),
+    ("sourceRepositoryRef", "refs/heads/main"),
+    ("runInvocationURI", "https://github.com/" + bootstrap.REPOSITORY + "/actions/runs/11/attempts/1"),
+):
+    changed = dict(certificate)
+    changed[field] = value
+    assert not stage.certificate_matches(changed, SOURCE, ".github/workflows/product-release-generator.yml", 11, 2, authority), field
+for changed in (dict(authority, ref=bootstrap.REPOSITORY + "/" + stage.AUTHORITY_WORKFLOW + "@refs/heads/main"), dict(authority, path=".github/workflows/candidate.yml"), dict(authority, sha=None)):
+    try:
+        stage.checked_authority(changed)
+    except bootstrap.AdmissionError:
+        pass
+    else:
+        raise AssertionError("accepted mutable or missing publication authority")
+try:
+    stage.staging_authority()
+except bootstrap.AdmissionError:
+    pass
+else:
+    raise AssertionError("bootstrap enabled staging without an independent authority pin")
+
+
+class RoleEvidence:
+    def __init__(self, failed_role=None, wrong_publisher=False):
+        self.failed_role = failed_role
+        self.wrong_publisher = wrong_publisher
+
+    def api(self, path):
+        if "/actions/jobs/" in path:
+            return {"id": 25 if self.wrong_publisher else 24, "run_id": 11, "run_attempt": 3, "head_sha": SOURCE, "name": "Source preview publication / Publish source preview", "status": "completed", "conclusion": "success"}
+        attempt = int(path.split("/attempts/")[1].split("/")[0])
+        if "/jobs?" in path:
+            roles = (("Source preview publication / Admit source preview", 1, 21), ("Source preview publication / Draft source preview", 1, 22), ("Source preview publication / Attest source preview", 2, 23), ("Source preview publication / Publish source preview", 3, 24))
+            jobs = [{"id": job_id, "run_id": 11, "run_attempt": attempt, "name": name, "head_sha": SOURCE, "status": "completed", "conclusion": "failure" if name == self.failed_role else "success"} for name, origin, job_id in roles if origin == attempt]
+            return {"total_count": len(jobs), "jobs": jobs}
+        return {"id": 11, "run_attempt": attempt, "event": "push", "head_sha": SOURCE, "head_branch": "sdk-preview-" + SOURCE, "path": ".github/workflows/product-release-generator.yml", "status": "completed", "conclusion": "failure", "head_repository": {"id": bootstrap.REPOSITORY_ID, "full_name": bootstrap.REPOSITORY}}
+
+
+stage.verify_publication_jobs(RoleEvidence(), valid_retry)
+for failed_role in ("Source preview publication / Admit source preview", "Source preview publication / Draft source preview", "Source preview publication / Attest source preview", "Source preview publication / Publish source preview", None):
+    try:
+        stage.verify_publication_jobs(RoleEvidence(failed_role, wrong_publisher=failed_role is None), valid_retry)
+    except bootstrap.AdmissionError:
+        pass
+    else:
+        raise AssertionError("accepted failed or mismatched publication job: " + str(failed_role))
 
 
 def lock(value, section):
@@ -129,24 +224,27 @@ def scenario(base_section, mutation=None):
         transport.tag_mutation = mutation
         context = {"event": transport.event, "event_name": "pull_request", "repository": bootstrap.REPOSITORY, "candidate": candidate, "ref": "refs/pull/7/merge", "workspace": str(repo), "lock_path": str(dot / "generator.lock"), "runner_temp": str(root)}
         output = root / "velnor" / "bin" / "controller" / "binary"
+        fixed_identity = bootstrap.preview_identity(candidate_value)
+        if mutation == "wrong-fixed":
+            fixed_identity["sha256"] = "f" * 64
         if mutation is None:
-            result = bootstrap.authorize_and_acquire(context, transport)
+            result = bootstrap.authorize_and_acquire(context, transport, fixed_identity)
             assert Path(result) == output and output.read_bytes() == PAYLOAD and os.access(output, os.X_OK)
         else:
             try:
-                bootstrap.authorize_and_acquire(context, transport)
+                bootstrap.authorize_and_acquire(context, transport, fixed_identity)
             except (bootstrap.AdmissionError, OSError):
                 pass
             else:
                 raise AssertionError(f"accepted {mutation}")
             assert not output.exists(), f"{mutation} wrote output"
-            if mutation in ("candidate", "same-source") or base_section is None:
+            if mutation in ("candidate", "same-source", "wrong-fixed") or base_section is None:
                 assert transport.asset_calls == 0, f"{mutation} downloaded assets"
 
 
 for section in ("planner-preview", "planner-preview-staged"):
     scenario(section)
-for mutation in ("candidate", "same-source", "retarget", "payload", "missing-asset", "lightweight-tag", "wrong-tag-name", "wrong-tag-commit", "nested-tag", "moved-tag"):
+for mutation in ("candidate", "same-source", "retarget", "payload", "missing-asset", "lightweight-tag", "wrong-tag-name", "wrong-tag-commit", "nested-tag", "moved-tag", "wrong-fixed"):
     scenario("planner-preview-staged", mutation)
 scenario(None, "absent")
 

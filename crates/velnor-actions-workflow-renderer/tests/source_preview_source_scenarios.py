@@ -18,7 +18,7 @@ import zipfile
 source_path = Path(sys.argv[1])
 spec = importlib.util.spec_from_file_location("source_gate", source_path)
 gate = importlib.util.module_from_spec(spec)
-for sibling in ("artifact", "tag"):
+for sibling in ("artifact", "tag", "authority"):
     path = source_path.with_name("schema2_generator_source_preview_" + sibling + ".py")
     exec(compile(path.read_bytes(), str(path), "exec"), gate.__dict__)
 spec.loader.exec_module(gate)
@@ -153,10 +153,22 @@ def admitted(values, reject=False, moved=False, downloads=0):
 os.environ.update({"GITHUB_SHA": SOURCE, "GITHUB_REPOSITORY": gate.REPOSITORY,
     "GITHUB_EVENT_NAME": "push", "GITHUB_REF": "refs/tags/" + TAG,
     "GITHUB_WORKFLOW_REF": gate.REPOSITORY + "/" + gate.WORKFLOW + "@refs/tags/" + TAG,
-    "GITHUB_WORKFLOW_SHA": SOURCE, "SDK_PREVIEW_VERSION": "0.1.75",
+    "GITHUB_WORKFLOW_SHA": SOURCE, "AUTHORITY_REPOSITORY": gate.REPOSITORY,
+    "AUTHORITY_PATH": ".github/workflows/source-preview-publication.yml", "AUTHORITY_SHA": "d" * 40,
+    "AUTHORITY_REF": gate.REPOSITORY + "/.github/workflows/source-preview-publication.yml@" + "d" * 40,
     "GITHUB_RUN_ID": "30", "GITHUB_RUN_ATTEMPT": "1", "GITHUB_ACTOR_ID": "139017",
     "GITHUB_TRIGGERING_ACTOR": "donbeave"})
 admitted(responses())
+for key, bad in (("AUTHORITY_REPOSITORY", "other/repository"), ("AUTHORITY_PATH", ".github/workflows/other.yml"),
+                 ("AUTHORITY_REF", "tailrocks/velnor-new/.github/workflows/source-preview-publication.yml@main"),
+                 ("AUTHORITY_SHA", "D" * 40), ("AUTHORITY_SHA", "")):
+    original = os.environ[key]
+    os.environ[key] = bad
+    admitted(responses(), reject=True)
+    os.environ[key] = original
+original = os.environ.pop("AUTHORITY_SHA")
+admitted(responses(), reject=True)
+os.environ["AUTHORITY_SHA"] = original
 for key, bad in [("GITHUB_REF", "refs/heads/main"), ("GITHUB_EVENT_NAME", "workflow_dispatch"),
     ("GITHUB_WORKFLOW_SHA", "b" * 40), ("GITHUB_ACTOR_ID", "999"), ("GITHUB_TRIGGERING_ACTOR", "other")]:
     original = os.environ[key]
@@ -197,6 +209,84 @@ os.environ["GITHUB_RUN_ATTEMPT"] = "1"
 values = responses()
 values[PREFIX + "/actions/runs/90/artifacts?per_page=100"]["artifacts"][0]["expired"] = True
 admitted(values, reject=True)
+
+
+publication_spec = importlib.util.spec_from_file_location("source_preview_publication", source_path.with_name("schema2_generator_source_preview_publication.py"))
+publication = importlib.util.module_from_spec(publication_spec)
+publication_spec.loader.exec_module(publication)
+sys.modules["source_preview_publication"] = publication
+
+
+def artifact_zip(name, contents):
+    output = io.BytesIO()
+    with zipfile.ZipFile(output, "w") as archive:
+        entry = zipfile.ZipInfo(name)
+        entry.external_attr = (stat.S_IFREG | 0o400) << 16
+        archive.writestr(entry, contents)
+    return output.getvalue()
+
+
+proof = json.loads(responses()[OBJECT_PATH]["message"])
+producer = {key: proof[key] for key in ("producer_run_id", "producer_run_attempt", "payload_artifact_id", "payload_archive_sha256")}
+source_tuple = {"workflow_path": gate.WORKFLOW, "workflow_ref": gate.REPOSITORY + "/" + gate.WORKFLOW + "@refs/tags/" + TAG, "workflow_sha": SOURCE, "run_id": 30, "run_attempt": 1}
+def run_tuple(identity, path):
+    return {"workflow_path": path, "workflow_ref": gate.REPOSITORY + "/" + path + "@refs/heads/main", "workflow_sha": SOURCE, "run_id": identity, "run_attempt": 2}
+original = {"schema": 2, "repository": gate.REPOSITORY, "version": "0.1.75", "source_sha": SOURCE, "tag": TAG,
+    "source": source_tuple, "producer": producer, "ci": run_tuple(10, CI), "qualification": run_tuple(20, QUAL)}
+candidate = {"source_artifact_id": 801, "payload_artifact_id": 802}
+archives = {801: artifact_zip("source-preview-metadata.json", publication.canonical(original)), 802: artifact_zip(NAME, PAYLOAD)}
+artifacts = {identity: {"id": identity, "name": name, "size_in_bytes": len(archives[identity]), "digest": "sha256:" + hashlib.sha256(archives[identity]).hexdigest(),
+    "expired": False, "workflow_run": {"id": 30, "head_sha": SOURCE}} for identity, name in [(801, "source-preview-source-1"), (802, "source-preview-qualified-payload-1")]}
+
+
+class RecoveryHTTP:
+    release = {"id": 77, "tag_name": TAG, "body": publication.candidate_marker(original, candidate), "draft": True, "prerelease": True}
+    def __init__(self, host, **kwargs):
+        self.host, self.sock, self.path = host, None, None
+    def request(self, method, path, body=None, headers=None):
+        self.path = path
+        if self.host == "api.github.com":
+            assert headers["Authorization"] == "Bearer fixture-token"
+        else:
+            assert "Authorization" not in headers
+    def getresponse(self):
+        if self.host != "api.github.com":
+            return Response(200, archives[int(self.path[1:])])
+        if "/releases/tags/" in self.path:
+            return Response(200, publication.canonical(self.release))
+        if "/actions/artifacts/" in self.path:
+            identity = int(self.path.split("/actions/artifacts/")[1].split("/")[0])
+            if self.path.endswith("/zip"):
+                result = Response(302)
+                result.getheader = lambda name, default=None: "https://productionresultssa32.blob.core.windows.net/" + str(identity)
+                return result
+            return Response(200, publication.canonical(artifacts[identity]))
+        if "/attempts/1/jobs?" in self.path:
+            return Response(200, publication.canonical({"total_count": 1, "jobs": [{"id": 3001, "run_id": 30, "head_sha": SOURCE, "name": "Source preview publication / Admit source preview", "status": "completed", "conclusion": "success"}]}))
+        if "/attempts/1" in self.path:
+            return Response(200, publication.canonical({"id": 30, "run_attempt": 1, "head_sha": SOURCE, "head_branch": TAG, "event": "push", "path": gate.WORKFLOW, "head_repository": {"full_name": gate.REPOSITORY}, "conclusion": "failure"}))
+        raise AssertionError(self.path)
+    def close(self):
+        pass
+
+
+os.environ["GH_TOKEN"] = "fixture-token"
+os.environ["GITHUB_RUN_ATTEMPT"] = "2"
+gate.http.client.HTTPSConnection = RecoveryHTTP
+values = responses()
+values[PREFIX + "/actions/runs/30"]["run_attempt"] = 2
+recovered, selected, recovered_payload = publication.load_candidate(publication.GitHub(), original, json.loads(RecoveryHTTP.release["body"].split(":", 1)[1]))
+assert recovered == original and selected == candidate and recovered_payload == PAYLOAD
+artifacts[801]["expired"] = True
+try:
+    publication.load_candidate(publication.GitHub(), original, json.loads(RecoveryHTTP.release["body"].split(":", 1)[1]))
+except ValueError:
+    pass
+else:
+    raise AssertionError("expired original source artifact was accepted")
+artifacts[801]["expired"] = False
+os.environ["GITHUB_RUN_ATTEMPT"] = "1"
+gate.http.client.HTTPSConnection = HTTPS
 values = responses()
 values[PREFIX + "/actions/runs/30"]["created_at"] = "2026-11-06T00:20:00Z"
 admitted(values, reject=True)

@@ -3,6 +3,8 @@
 
 mod workflow_configuration_fixture;
 
+#[path = "workflow_configuration_public/both_rust_sharding.rs"]
+mod both_rust_sharding;
 #[path = "workflow_configuration_public/branches.rs"]
 mod branches;
 #[path = "workflow_configuration_public/bun_assets_routing.rs"]
@@ -63,6 +65,8 @@ mod feature_toggles;
 mod final_fanin;
 #[path = "workflow_configuration_public/install_profile.rs"]
 mod install_profile;
+#[path = "workflow_configuration_public/lane_inventory_dispatch.rs"]
+mod lane_inventory_dispatch;
 #[path = "workflow_configuration_public/ledger_cli_build_env.rs"]
 mod ledger_cli_build_env;
 #[path = "workflow_configuration_public/ledger_cli_job.rs"]
@@ -253,3 +257,6 @@ mod release_tracked_manifests;
 
 #[path = "workflow_configuration_public/verdict_toolchain.rs"]
 mod verdict_toolchain;
+
+#[path = "workflow_configuration_public/both_shared_producers.rs"]
+mod both_shared_producers;

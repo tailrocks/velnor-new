@@ -18,23 +18,58 @@ pub(super) fn retarget(
     class: LaneClass,
     lane: EmitLane,
     map: &BTreeMap<String, Vec<String>>,
-) -> Job {
+) -> Result<Job, crate::ContractError> {
     let mut next = job.clone();
     if let Some(token) = runs_on {
         token.clone_into(&mut next.runs_on);
-        if next.check_runner.is_some() {
-            next.condition = Some(EPHEMERAL_CHECK_ADMISSION_CONDITION.to_owned());
-        }
     }
-    retarget_check_identity(&mut next, source_id, output_id, lane);
+    if next.check_runner.is_some() {
+        next.condition = retarget_check_condition(
+            job.condition.as_deref(),
+            source_id,
+            output_id,
+            runs_on.is_some(),
+        )?;
+    }
+    retarget_check_identity(&mut next, source_id, output_id, lane)?;
     next.needs = expand_needs(&job.needs, map, class, lane);
-    next
+    Ok(next)
 }
 
-fn retarget_check_identity(job: &mut Job, source_id: &str, output_id: &str, lane: EmitLane) {
+fn retarget_check_condition(
+    original: Option<&str>,
+    source_id: &str,
+    output_id: &str,
+    scale: bool,
+) -> Result<Option<String>, crate::ContractError> {
+    let source_gate = super::super::jobs::not_affected_gate(source_id);
+    let source_both = format!("({source_gate}) && ({EPHEMERAL_CHECK_ADMISSION_CONDITION})");
+    let gate = super::super::jobs::not_affected_gate(output_id);
+    match original {
+        None => Ok(scale.then(|| EPHEMERAL_CHECK_ADMISSION_CONDITION.to_owned())),
+        Some(value) if value == source_gate || value == source_both => Ok(Some(if scale {
+            format!("({gate}) && ({EPHEMERAL_CHECK_ADMISSION_CONDITION})")
+        } else {
+            gate
+        })),
+        Some(value) if value == EPHEMERAL_CHECK_ADMISSION_CONDITION => Ok(Some(value.to_owned())),
+        Some(value) if source_id == output_id && !scale => Ok(Some(value.to_owned())),
+        Some(_) => Err(crate::ContractError::identity(
+            "job.condition",
+            "check_lane_condition_unsupported",
+        )),
+    }
+}
+
+fn retarget_check_identity(
+    job: &mut Job,
+    source_id: &str,
+    output_id: &str,
+    lane: EmitLane,
+) -> Result<(), crate::ContractError> {
     for step in &mut job.steps {
         match &mut step.kind {
-            StepKind::Shell { env, .. } => {
+            StepKind::Shell { env, .. } | StepKind::Internal { env, .. } => {
                 if let Some(job_id) = env.get_mut(NAMED_CHECK_JOB_ID_ENV)
                     && job_id == source_id
                 {
@@ -58,11 +93,29 @@ fn retarget_check_identity(job: &mut Job, source_id: &str, output_id: &str, lane
                     name.push_str(output_id);
                 }
             }
-            StepKind::TaskExecution { .. }
-            | StepKind::NativeCheckExecution { .. }
-            | StepKind::Internal { .. } => {}
+            StepKind::TaskExecution {
+                task_id,
+                matrix_id,
+                matrix_key,
+                ..
+            } => {
+                let variant = match lane {
+                    EmitLane::Single => None,
+                    EmitLane::Hosted => Some(super::LaneVariant::Hosted),
+                    EmitLane::Scale => Some(super::LaneVariant::ScaleSet),
+                };
+                if let Some(variant) = variant {
+                    let (id, key) = super::super::matrix_entry::project_task_matrix_identity(
+                        task_id, matrix_id, matrix_key, variant,
+                    )?;
+                    *matrix_id = id;
+                    *matrix_key = key;
+                }
+            }
+            StepKind::NativeCheckExecution { .. } => {}
         }
     }
+    Ok(())
 }
 
 pub(super) fn expand_needs(

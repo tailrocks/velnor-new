@@ -16,6 +16,16 @@ pub struct PlanJob {
     pub job_id: String,
 
     pub disposition: JobDisposition,
+
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lane: Option<PairedJob>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PairedJob {
+    pub logical_job_id: String,
+    pub lane_variant: super::lanes::LaneVariant,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -53,23 +63,41 @@ pub(crate) fn validate_plan_jobs(plan: &Plan) -> Result<(), ContractError> {
         ));
     }
     check_sorted_by(&plan.jobs, "jobs", |job| job.job_id.as_str())?;
-    let mut jobs: BTreeMap<&str, JobDisposition> = BTreeMap::new();
+    let mut jobs = BTreeMap::new();
+    let mut pairs = BTreeMap::<&str, (Option<&PlanJob>, Option<&PlanJob>)>::new();
     for job in &plan.jobs {
-        if jobs.insert(job.job_id.as_str(), job.disposition).is_some() {
+        if jobs.insert(job.job_id.as_str(), job).is_some() {
             return Err(ContractError::Collision(format!("job {}", job.job_id)));
         }
+        if let Some(lane) = &job.lane {
+            let pair = pairs.entry(lane.logical_job_id.as_str()).or_default();
+            let slot = match lane.lane_variant {
+                super::lanes::LaneVariant::Hosted => &mut pair.0,
+                super::lanes::LaneVariant::ScaleSet => &mut pair.1,
+            };
+            if slot.replace(job).is_some() {
+                return Err(ContractError::identity(
+                    "jobs.lane",
+                    "duplicate_lane_variant",
+                ));
+            }
+        }
     }
+    validate_pairs(&pairs, &jobs)?;
     let mut owning = BTreeSet::new();
     for obligation in &plan.obligations {
-        let Some(disposition) = jobs.get(obligation.job_id.as_str()) else {
-            return Err(ContractError::identity(
-                "obligations.job_id",
-                "unplanned_job",
-            ));
+        let logical = obligation.job_id.as_str();
+        let disposition = if let Some((Some(hosted), _)) = pairs.get(logical) {
+            hosted.disposition
+        } else {
+            jobs.get(logical)
+                .ok_or_else(|| ContractError::identity("obligations.job_id", "unplanned_job"))?
+                .disposition
         };
-        owning.insert(obligation.job_id.as_str());
-        let not_affected = obligation.decision == ObligationDecision::NotAffected;
-        if not_affected != (*disposition == JobDisposition::NotAffected) {
+        owning.insert(logical);
+        if (obligation.decision == ObligationDecision::NotAffected)
+            != (disposition == JobDisposition::NotAffected)
+        {
             return Err(ContractError::identity(
                 "obligations.decision",
                 "disposition_mismatch",
@@ -78,20 +106,65 @@ pub(crate) fn validate_plan_jobs(plan: &Plan) -> Result<(), ContractError> {
     }
     let mut entries = BTreeSet::new();
     for entry in &plan.matrix.include {
-        match jobs.get(entry.job_id.as_str()) {
-            Some(JobDisposition::Run) => {
-                entries.insert(entry.job_id.as_str());
-            }
-            Some(JobDisposition::NotAffected) => {
+        let job = jobs.get(entry.job_id.as_str()).ok_or_else(|| {
+            ContractError::identity("matrix.job_id", format!("unplanned_job:{}", entry.job_id))
+        })?;
+        if job.disposition != JobDisposition::Run {
+            return Err(ContractError::identity(
+                "matrix.job_id",
+                "not_affected_job_entry",
+            ));
+        }
+        let obligation = plan
+            .obligations
+            .iter()
+            .find(|ob| ob.task_id == entry.task_id)
+            .ok_or_else(|| ContractError::identity("matrix.task_id", "missing_obligation"))?;
+        match (&job.lane, entry.lane_variant) {
+            (Some(lane), Some(variant))
+                if lane.lane_variant == variant && lane.logical_job_id == obligation.job_id => {}
+            (None, None) if job.job_id == obligation.job_id => {}
+            _ => {
                 return Err(ContractError::identity(
                     "matrix.job_id",
-                    "not_affected_job_entry",
+                    "lane_ownership_mismatch",
                 ));
             }
-            None => return Err(ContractError::identity("matrix.job_id", "unplanned_job")),
+        }
+        entries.insert(entry.job_id.as_str());
+    }
+    validate_job_work(&jobs, &owning, &entries)?;
+    Ok(())
+}
+
+fn validate_pairs(
+    pairs: &BTreeMap<&str, (Option<&PlanJob>, Option<&PlanJob>)>,
+    jobs: &BTreeMap<&str, &PlanJob>,
+) -> Result<(), ContractError> {
+    for (logical, (hosted, local)) in pairs {
+        let (Some(hosted), Some(local)) = (hosted, local) else {
+            return Err(ContractError::identity("jobs.lane", "incomplete_lane_pair"));
+        };
+        if hosted.disposition != local.disposition || jobs.contains_key(logical) {
+            return Err(ContractError::identity(
+                "jobs.lane",
+                "lane_disposition_mismatch",
+            ));
         }
     }
-    for (job_id, disposition) in &jobs {
+    Ok(())
+}
+
+fn validate_job_work(
+    jobs: &BTreeMap<&str, &PlanJob>,
+    owning: &BTreeSet<&str>,
+    entries: &BTreeSet<&str>,
+) -> Result<(), ContractError> {
+    for (job_id, job) in jobs {
+        let logical = job
+            .lane
+            .as_ref()
+            .map_or(*job_id, |lane| lane.logical_job_id.as_str());
         let ownerless = [
             (IMAGE_JOB_PREFIX, "image_job_owns_work"),
             (BUN_JOB_PREFIX, "bun_job_owns_work"),
@@ -101,18 +174,95 @@ pub(crate) fn validate_plan_jobs(plan: &Plan) -> Result<(), ContractError> {
         .into_iter()
         .find(|(prefix, _)| job_id.starts_with(prefix));
         if let Some((_, code)) = ownerless {
-            if owning.contains(job_id) || entries.contains(job_id) {
+            if owning.contains(logical) || entries.contains(job_id) {
                 return Err(ContractError::identity("jobs", code));
             }
             continue;
         }
-        let owns = match disposition {
+        let owns = match job.disposition {
             JobDisposition::Run => entries.contains(job_id),
-            JobDisposition::NotAffected => owning.contains(job_id),
+            JobDisposition::NotAffected => owning.contains(logical),
         };
         if !owns {
             return Err(ContractError::identity("jobs", "job_without_work"));
         }
     }
     Ok(())
+}
+
+pub(crate) fn validate_lane_inventory(plan: &Plan) -> bool {
+    let expected = plan.lane_inventory.as_ref();
+    let mut required = BTreeMap::new();
+    if let Some(inventory) = expected {
+        for route in &inventory.routes {
+            let mut tasks: Vec<_> = plan
+                .obligations
+                .iter()
+                .filter(|item| item.job_id == route.logical_job_id)
+                .map(|item| item.task_id.clone())
+                .collect();
+            tasks.sort();
+            if tasks != route.task_ids || tasks.is_empty() {
+                return false;
+            }
+            let Some(job) = plan.jobs.iter().find(|job| job.job_id == route.job_id) else {
+                return false;
+            };
+            match (route.variant, &job.lane) {
+                (Some(variant), Some(lane))
+                    if lane.logical_job_id == route.logical_job_id
+                        && lane.lane_variant == variant =>
+                {
+                    if required
+                        .insert(
+                            route.job_id.as_str(),
+                            (route.logical_job_id.as_str(), variant),
+                        )
+                        .is_some()
+                    {
+                        return false;
+                    }
+                }
+                (None, None) if route.job_id == route.logical_job_id => {}
+                _ => return false,
+            }
+            let entries: Vec<_> = plan
+                .matrix
+                .include
+                .iter()
+                .filter(|entry| entry.job_id == route.job_id)
+                .collect();
+            let mut entry_tasks: Vec<_> =
+                entries.iter().map(|entry| entry.task_id.clone()).collect();
+            entry_tasks.sort();
+            if match job.disposition {
+                JobDisposition::Run => entry_tasks != route.task_ids,
+                JobDisposition::NotAffected => !entry_tasks.is_empty(),
+            } {
+                return false;
+            }
+            for entry in entries {
+                if entry.lane_variant != route.variant
+                    || entry.planned_platform.runs_on != route.runner
+                    || route.target.as_deref() != Some(entry.planned_platform.target.as_str())
+                    || !route.task_ids.contains(&entry.task_id)
+                {
+                    return false;
+                }
+            }
+        }
+    }
+    let actual: BTreeMap<_, _> = plan
+        .jobs
+        .iter()
+        .filter_map(|job| {
+            job.lane.as_ref().map(|lane| {
+                (
+                    job.job_id.as_str(),
+                    (lane.logical_job_id.as_str(), lane.lane_variant),
+                )
+            })
+        })
+        .collect();
+    actual == required
 }

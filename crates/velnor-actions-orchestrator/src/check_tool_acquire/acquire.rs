@@ -8,14 +8,14 @@ use velnor_actions_contract::config::{
 };
 use velnor_actions_mise::{CheckDeadline, DiscoveredCheck, QualifiedCheck};
 
+use super::super::TransferLedger;
 use super::super::cache_execution_context;
-use super::{archive, layout, tree};
 use super::observe::{
     check_deadline, compiler_prefix, executable_sha256, observe_executables, run,
     validate_installations,
 };
 use super::shared::{fetch_archives, publish_shared_prefix};
-use super::super::TransferLedger;
+use super::{archive, layout, tree};
 use crate::OrchestratorError;
 use crate::check_evidence::gate::tools::{QualifiedToolReceipt, receipt};
 use crate::internal::internal;
@@ -76,15 +76,14 @@ fn hydrate_tool(
     if shared_home != shared_root.join(&tool.id) {
         return Err(internal("qualified_tool_shared_context"));
     }
-    for directory in ["downloads", "verified", "unpacked", "cargo", "target"] {
-        velnor_actions_contract::exclusive_write::create_dir_no_symlink(home, &tool_home.join(directory))?;
-    }
+    create_tool_directories(home, &tool_home)?;
     let prefix = tool_home.join("prefix");
     let shared_prefix = shared_home.join("prefix");
     let warm = restore_shared_prefix(qualified, &shared_prefix, &prefix, deadline)?;
     if !warm {
-        let (primary, dependencies) =
-            fetch_archives(handle, tool, qualified, &tool_home, deadline, expanded, ledger)?;
+        let (primary, dependencies) = fetch_archives(
+            handle, tool, qualified, &tool_home, deadline, expanded, ledger,
+        )?;
         if source_mode(tool) {
             check_deadline(deadline)?;
             layout::prepare_cargo_source(
@@ -109,11 +108,7 @@ fn hydrate_tool(
             check_deadline(deadline)?;
         }
     }
-    tree::freeze_tree(&prefix, deadline)?;
-    let actual_tree = tree::tree_sha256(&prefix, deadline)?;
-    if actual_tree != qualified.install_tree_sha256 {
-        return Err(internal("qualified_tool_install_tree_sha256"));
-    }
+    let actual_tree = freeze_qualified_tree(&prefix, qualified, deadline)?;
     let proofs = observe_executables(
         tool,
         check,
@@ -140,6 +135,29 @@ fn hydrate_tool(
         )?;
     }
     Ok(proof)
+}
+
+fn create_tool_directories(home: &Path, tool_home: &Path) -> Result<(), OrchestratorError> {
+    for directory in ["downloads", "verified", "unpacked", "cargo", "target"] {
+        velnor_actions_contract::exclusive_write::create_dir_no_symlink(
+            home,
+            &tool_home.join(directory),
+        )?;
+    }
+    Ok(())
+}
+
+fn freeze_qualified_tree(
+    prefix: &Path,
+    qualified: &QualifiedToolPlatform,
+    deadline: CheckDeadline,
+) -> Result<String, OrchestratorError> {
+    tree::freeze_tree(prefix, deadline)?;
+    let actual_tree = tree::tree_sha256(prefix, deadline)?;
+    if actual_tree != qualified.install_tree_sha256 {
+        return Err(internal("qualified_tool_install_tree_sha256"));
+    }
+    Ok(actual_tree)
 }
 
 fn shared_tool_root(home: &Path) -> Result<PathBuf, OrchestratorError> {

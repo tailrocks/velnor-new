@@ -29,9 +29,12 @@ pub(in crate::check_runtime::preparation::container::bundle) fn populate_until(
         } = &entry.kind
         {
             let path = destination.join(&entry.path);
-            velnor_actions_contract::exclusive_write::write_exclusive_until(&path, bytes, "sdk_file", || {
-                super::checkpoint(deadline)
-            })?;
+            velnor_actions_contract::exclusive_write::write_exclusive_until(
+                &path,
+                bytes,
+                "sdk_file",
+                || super::checkpoint(deadline),
+            )?;
             set_mode(&path, readonly_mode(*executable), false)?;
         }
     }

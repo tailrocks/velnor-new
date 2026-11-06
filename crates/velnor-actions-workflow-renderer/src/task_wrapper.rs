@@ -4,11 +4,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_actions_contract::workflow::cache_family::S256;
-use velnor_actions_contract::workflow::state_seal::STATE_PRODUCER_LANE_CONDITION;
 use velnor_actions_contract::{
-    Job, RunsOn, ScaleSetSelector, Step, StepKind, StepRole, TASK_EXECUTION_MANIFEST_PATH,
+    Job, ScaleSetSelector, Step, StepKind, TASK_EXECUTION_MANIFEST_PATH,
     TASK_EXECUTION_MANIFEST_SCHEMA, TaskExecutionManifestEntryV1, TaskExecutionManifestV1,
-    VerificationRunner,
 };
 
 use crate::{
@@ -30,18 +28,24 @@ use self::script::task_script;
 #[path = "task_wrapper_declared.rs"]
 mod declared;
 
+#[path = "task_wrapper_validation.rs"]
+mod validation;
+use validation::{supports_task_runner, validate_task_checkout, validate_task_job_scope};
+
 use self::declared::{declared_task_call, declared_task_file, validate_task_fields};
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 struct Shape {
     helper_version: String,
+    preview_loader: Option<String>,
 }
 
 struct TaskFactorContext<'a> {
     checkout_uses: &'a str,
     report_helper_version: &'a str,
+    controller: &'a crate::render::ControllerLocator,
     workflow_tasks: &'a [crate::verification_jobs::WorkflowTaskPolicy],
-    bun_lane_plan: Option<&'a velnor_actions_contract::BunLanePlan>,
+    lane_plan: Option<&'a velnor_actions_contract::LanePlan>,
     scale_set_selector: Option<&'a ScaleSetSelector>,
 }
 
@@ -58,24 +62,33 @@ struct CollectedTaskExecutions<'a> {
 
 pub(crate) fn factor_obligation_steps(
     jobs: &BTreeMap<String, Job>,
-    checkout_uses: &str,
-    generator_version: &str,
-    report_helper_version: &str,
-    workflow_tasks: &[crate::verification_jobs::WorkflowTaskPolicy],
-    bun_lane_plan: Option<&velnor_actions_contract::BunLanePlan>,
-    scale_set_selector: Option<&ScaleSetSelector>,
+    ctx: &crate::render::RenderContext,
 ) -> Result<(BTreeMap<String, Job>, Vec<RenderedFile>), RenderError> {
     let context = TaskFactorContext {
-        checkout_uses,
-        report_helper_version,
-        workflow_tasks,
-        bun_lane_plan,
-        scale_set_selector,
+        checkout_uses: &ctx.checkout_uses,
+        report_helper_version: ctx.controller.report_helper_version(),
+        controller: &ctx.controller,
+        workflow_tasks: &ctx.workflow_tasks,
+        lane_plan: ctx.lane_plan.as_ref(),
+        scale_set_selector: ctx.scale_set_selector.as_ref(),
     };
     let collected = collect_task_executions(jobs, &context)?;
     let shape_ids = index_shapes(collected.shapes);
-    let factored = replace_task_steps(jobs, &collected.eligible, &shape_ids)?;
-    let files = render_task_files(&shape_ids, collected.manifest_tasks, generator_version)?;
+    let preview = matches!(
+        ctx.controller,
+        crate::render::ControllerLocator::ProtectedBaseDispatch { .. }
+    );
+    let factored = if preview {
+        jobs.clone()
+    } else {
+        replace_task_steps(jobs, &collected.eligible, &shape_ids)?
+    };
+    let files = render_task_files(
+        &shape_ids,
+        collected.manifest_tasks,
+        &ctx.generator_version,
+        !preview,
+    )?;
     Ok((factored, files))
 }
 
@@ -85,9 +98,31 @@ pub fn declared_task_wrapper_digest(
 ) -> Result<S256, RenderError> {
     let shape_ids = index_shapes(BTreeSet::from([Shape {
         helper_version: helper_version.to_owned(),
+        preview_loader: None,
     }]));
-    let files = render_task_files(&shape_ids, BTreeMap::new(), generator_version)?;
+    let files = render_task_files(&shape_ids, BTreeMap::new(), generator_version, true)?;
     let bytes: String = files.into_iter().map(|file| file.bytes).collect();
+    Ok(S256::of(bytes.as_bytes()))
+}
+
+pub fn preview_task_wrapper_digest(
+    preview: &velnor_actions_contract::source_preview::SourcePreviewLock,
+    generator_version: &str,
+) -> Result<S256, RenderError> {
+    let loader = crate::commands::join_validated_argv_for_run(
+        &crate::preview_setup::loader_command(preview),
+    )?;
+    let script = task_script(&preview.receipt.version, Some(&loader));
+    let environment = declared::inline_task_environment(
+        "b3-0000000000000000000000000000000000000000000000000000000000000000",
+        generator_version,
+    )?;
+    let template = Yaml::Map(vec![
+        ("shell".to_owned(), Yaml::str("bash")),
+        ("env".to_owned(), environment),
+        ("run".to_owned(), Yaml::str(script)),
+    ]);
+    let bytes = marker::with_marker(generator_version, &crate::yaml::render_yaml(&template))?;
     Ok(S256::of(bytes.as_bytes()))
 }
 
@@ -104,7 +139,16 @@ fn collect_task_executions<'a>(
             else {
                 continue;
             };
-            match manifest_tasks.entry(prepared.record.task_id.clone()) {
+            let paired = context
+                .lane_plan
+                .and_then(|plan| plan.route_for_output(job_id))
+                .is_some_and(|route| route.variant.is_some());
+            let key = if paired {
+                prepared.record.matrix_id.clone()
+            } else {
+                prepared.record.task_id.clone()
+            };
+            match manifest_tasks.entry(key) {
                 std::collections::btree_map::Entry::Vacant(entry) => {
                     entry.insert(prepared.record.clone());
                 }
@@ -119,6 +163,7 @@ fn collect_task_executions<'a>(
             }
             let shape = Shape {
                 helper_version: prepared.reference.helper_version.clone(),
+                preview_loader: None,
             };
             shapes.insert(shape);
             eligible.insert((job_id.clone(), step_index), prepared.reference);
@@ -146,8 +191,7 @@ fn prepare_task_execution<'a>(
         matrix_id,
         matrix_key,
         report_helper_version: task_helper_version,
-        matrix_max_parallel,
-        toolchain_inputs,
+        ..
     } = &step.kind
     else {
         return Ok(None);
@@ -156,7 +200,7 @@ fn prepare_task_execution<'a>(
         job_id,
         &job.runs_on,
         context.workflow_tasks,
-        context.bun_lane_plan,
+        context.lane_plan,
         context.scale_set_selector,
     ) {
         return Err(RenderError::InvalidWorkflow(format!(
@@ -175,8 +219,47 @@ fn prepare_task_execution<'a>(
         step_index,
         context.checkout_uses,
         context.report_helper_version,
+        context.controller,
     )?;
     validate_task_fields(argv, env, task_id, task_digest, matrix_id, matrix_key)?;
+    let route = context
+        .lane_plan
+        .and_then(|plan| plan.route_for_output(job_id));
+    if !velnor_actions_contract::workflow::matrix_entry::task_matrix_identity_matches(
+        task_id,
+        matrix_id,
+        matrix_key,
+        route.and_then(|route| route.variant),
+    ) {
+        return Err(RenderError::InvalidWorkflow(format!(
+            "declared_task_route_mismatch:{job_id}"
+        )));
+    }
+    let record = task_record(step)?;
+    let reference = TaskExecutionRef {
+        execution_digest: record.execution_digest.clone(),
+        helper_version: task_helper_version,
+    };
+    Ok(Some(PreparedTaskExecution { record, reference }))
+}
+
+fn task_record(step: &Step) -> Result<TaskExecutionManifestEntryV1, RenderError> {
+    let StepKind::TaskExecution {
+        argv,
+        env,
+        task_id,
+        task_digest,
+        matrix_id,
+        matrix_key,
+        report_helper_version: task_helper_version,
+        matrix_max_parallel,
+        toolchain_inputs,
+    } = &step.kind
+    else {
+        return Err(RenderError::InvalidWorkflow(
+            "declared_task_required".to_owned(),
+        ));
+    };
     let mut record = TaskExecutionManifestEntryV1 {
         task_id: task_id.clone(),
         execution_digest: String::new(),
@@ -192,66 +275,33 @@ fn prepare_task_execution<'a>(
     record
         .refresh_execution_digest()
         .map_err(RenderError::Contract)?;
-    let reference = TaskExecutionRef {
-        execution_digest: record.execution_digest.clone(),
-        helper_version: task_helper_version,
-    };
-    Ok(Some(PreparedTaskExecution { record, reference }))
+    Ok(record)
 }
 
-fn validate_task_job_scope(job_id: &str, job: &Job, step: &Step) -> Result<(), RenderError> {
-    if job.check_runner.is_some()
-        || !job
-            .needs
-            .iter()
-            .any(|need| need == crate::render::PLAN_JOB_ID)
-    {
-        return Err(RenderError::InvalidWorkflow(format!(
-            "declared_task_job_scope_mismatch:{job_id}"
-        )));
-    }
-    if step.id.is_some()
-        || step.role.is_some()
-        || step
-            .condition
-            .as_deref()
-            .is_some_and(|condition| condition != STATE_PRODUCER_LANE_CONDITION)
-    {
-        return Err(RenderError::InvalidWorkflow(format!(
-            "declared_task_authority_mismatch:{job_id}"
-        )));
-    }
-    Ok(())
-}
-
-fn validate_task_checkout(
-    job_id: &str,
-    job: &Job,
-    step_index: usize,
-    checkout_uses: &str,
-    report_helper_version: &str,
-) -> Result<(), RenderError> {
-    let checkout_at = job.steps[..step_index].iter().position(|previous| {
-        velnor_actions_contract::workflow::step_identity::is_configured_checkout(
-            previous,
-            checkout_uses,
-        )
-    });
-    let Some(checkout_at) = checkout_at else {
-        return Err(RenderError::InvalidWorkflow(format!(
-            "declared_task_requires_checkout:{job_id}"
-        )));
+pub(crate) fn preview_task_step(
+    step: &Step,
+    ctx: &crate::render::RenderContext,
+) -> Result<Yaml, RenderError> {
+    let crate::render::ControllerLocator::ProtectedBaseDispatch { preview, .. } = &ctx.controller
+    else {
+        return Err(RenderError::InvalidWorkflow(
+            "preview_task_requires_dispatch".to_owned(),
+        ));
     };
-    let staged_binary = format!("{}{report_helper_version}", steps::STAGED_BINARY_PREFIX);
-    let helper_staged = job.steps[checkout_at + 1..step_index]
-        .iter()
-        .any(|previous| helper_staged_by(previous, &staged_binary));
-    if !helper_staged {
-        return Err(RenderError::InvalidWorkflow(format!(
-            "declared_task_requires_staged_helper:{job_id}"
-        )));
-    }
-    Ok(())
+    let record = task_record(step)?;
+    let loader = crate::commands::join_validated_argv_for_run(
+        &crate::preview_setup::loader_command(preview),
+    )?;
+    let shape = Shape {
+        helper_version: record.report_helper_version.clone(),
+        preview_loader: Some(loader),
+    };
+    declared::inline_task_step(
+        step,
+        &shape,
+        &record.execution_digest,
+        &ctx.generator_version,
+    )
 }
 
 fn index_shapes(shapes: BTreeSet<Shape>) -> BTreeMap<Shape, usize> {
@@ -271,6 +321,7 @@ fn replace_task_steps(
     for ((job_id, step_index), task) in eligible {
         let shape = Shape {
             helper_version: task.helper_version.clone(),
+            preview_loader: None,
         };
         let action_id = shape_ids.get(&shape).ok_or_else(|| {
             RenderError::InvalidWorkflow("declared_task_shape_missing".to_owned())
@@ -296,10 +347,13 @@ fn render_task_files(
     shape_ids: &BTreeMap<Shape, usize>,
     manifest_tasks: BTreeMap<String, TaskExecutionManifestEntryV1>,
     generator_version: &str,
+    emit_actions: bool,
 ) -> Result<Vec<RenderedFile>, RenderError> {
     let mut files = Vec::with_capacity(shape_ids.len() + usize::from(!manifest_tasks.is_empty()));
-    for (shape, action_id) in shape_ids {
-        files.push(declared_task_file(*action_id, shape, generator_version)?);
+    if emit_actions {
+        for (shape, action_id) in shape_ids {
+            files.push(declared_task_file(*action_id, shape, generator_version)?);
+        }
     }
     if !manifest_tasks.is_empty() {
         let manifest = TaskExecutionManifestV1 {
@@ -315,52 +369,6 @@ fn render_task_files(
         });
     }
     Ok(files)
-}
-
-fn supports_task_runner(
-    job_id: &str,
-    runs_on: &str,
-    workflow_tasks: &[crate::verification_jobs::WorkflowTaskPolicy],
-    bun_lane_plan: Option<&velnor_actions_contract::BunLanePlan>,
-    scale_set_selector: Option<&ScaleSetSelector>,
-) -> bool {
-    match RunsOn::parse(runs_on) {
-        Ok(RunsOn::Hosted(label)) => {
-            label.starts_with("ubuntu-")
-                && velnor_actions_contract::config::RUNNER_LABEL_CATALOG.contains(&label.as_str())
-        }
-        Ok(RunsOn::ScaleSet(selector)) => {
-            let Some(configured) = scale_set_selector else {
-                return false;
-            };
-            if configured != &selector {
-                return false;
-            }
-            workflow_tasks
-                .iter()
-                .find(|task| task.owns_projected_job_id(job_id, bun_lane_plan))
-                .is_none_or(|task| match task {
-                    crate::verification_jobs::WorkflowTaskPolicy::Verification(policy) => {
-                        policy.task.runner == VerificationRunner::LinuxX64
-                            && policy.runner_label == VerificationRunner::LinuxX64.runs_on()
-                            && policy.scale_set_token.as_deref() == Some(runs_on)
-                    }
-                    crate::verification_jobs::WorkflowTaskPolicy::Bun(_)
-                    | crate::verification_jobs::WorkflowTaskPolicy::BunSuite(_)
-                    | crate::verification_jobs::WorkflowTaskPolicy::BunAssets(_) => true,
-                    _ => false,
-                })
-        }
-        Err(_) => false,
-    }
-}
-
-fn helper_staged_by(step: &Step, staged_binary: &str) -> bool {
-    let StepKind::Shell { run, .. } = &step.kind else {
-        return false;
-    };
-    (crate::closure::is_acquire_step(step) || step.role == Some(StepRole::PreseedStage))
-        && run.iter().any(|argument| argument.contains(staged_binary))
 }
 
 struct TaskExecutionRef<'a> {

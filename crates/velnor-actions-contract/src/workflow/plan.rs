@@ -1,9 +1,11 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use super::lanes::NamedCheckLaneVariant;
+use super::lanes::LaneVariant;
 pub use super::matrix_entry::MatrixEntry;
-pub use super::plan_jobs::{JobDisposition, PlanJob, plan_skips_work, selects_affected_work};
+pub use super::plan_jobs::{
+    JobDisposition, PairedJob, PlanJob, plan_skips_work, selects_affected_work,
+};
 use super::qualification_dispatch::QualificationDispatch;
 use super::trust::Trust;
 use crate::canonical::validate_digest;
@@ -53,6 +55,9 @@ pub struct Plan {
     pub task_ids: Vec<String>,
 
     pub jobs: Vec<PlanJob>,
+
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lane_inventory: Option<super::lanes::LaneInventory>,
 
     #[serde(default)]
     pub warnings: Vec<String>,
@@ -235,6 +240,12 @@ impl Plan {
         }
         validate_plan_edges(&self.edges, &self.task_ids)?;
         super::plan_jobs::validate_plan_jobs(self)?;
+        if !super::plan_jobs::validate_lane_inventory(self) {
+            return Err(ContractError::identity(
+                "lane_inventory",
+                "route_inventory_mismatch",
+            ));
+        }
         Ok(())
     }
 }
@@ -262,8 +273,8 @@ fn validate_named_check_lane_pairs(entries: &[MatrixEntry]) -> Result<(), Contra
                     ));
                 }
                 let bit = match variant {
-                    NamedCheckLaneVariant::Hosted => 1,
-                    NamedCheckLaneVariant::ScaleSet => 2,
+                    LaneVariant::Hosted => 1,
+                    LaneVariant::ScaleSet => 2,
                 };
                 let seen = pairs.entry(task_id).or_default();
                 if *seen & bit != 0 {

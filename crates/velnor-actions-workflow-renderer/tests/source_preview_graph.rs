@@ -10,6 +10,14 @@ fn main_producer_tag_publisher_and_stable_calls_have_separate_authority_graphs()
 -> Result<(), Box<dyn Error>> {
     let files = rendered()?;
     let workflow = find_file(&files, ".github/workflows/product-release-generator.yml")?;
+    let authority = find_file(&files, ".github/workflows/source-preview-publication.yml")?;
+    assert_caller_bootstrap(workflow)?;
+    assert_reusable_authority(workflow, authority)?;
+    Ok(())
+}
+
+fn assert_caller_bootstrap(workflow: &str) -> Result<(), Box<dyn Error>> {
+    assert!(!workflow.contains("  source-preview-publication:"));
     assert!(!workflow.contains("  workflow_dispatch:"));
     assert!(workflow.contains("  push:"));
     assert!(workflow.contains("sdk-preview-*"));
@@ -43,13 +51,23 @@ fn main_producer_tag_publisher_and_stable_calls_have_separate_authority_graphs()
         assert!(preview.contains("runs-on: ubuntu-26.04"), "{id}");
         assert!(!preview.contains("verify-release-caller"), "{id}");
     }
+    assert!(
+        job(workflow, "publish-generator")?
+            .contains("    environment:\n      name: generator-release\n")
+    );
+    Ok(())
+}
+
+fn assert_reusable_authority(workflow: &str, authority: &str) -> Result<(), Box<dyn Error>> {
+    assert!(authority.contains("  workflow_call:"));
     for id in [
         "source-preview-source",
         "source-preview-draft",
         "source-preview-attest",
         "source-preview-publish",
     ] {
-        let tagged = job(workflow, id)?;
+        assert!(job(workflow, id).is_err(), "candidate caller contains {id}");
+        let tagged = job(authority, id)?;
         assert!(tagged.contains("github.event_name == 'push'"), "{id}");
         assert!(
             tagged.contains("startsWith(github.ref, 'refs/tags/sdk-preview-')"),
@@ -58,16 +76,17 @@ fn main_producer_tag_publisher_and_stable_calls_have_separate_authority_graphs()
         assert!(tagged.contains("runs-on: ubuntu-26.04"), "{id}");
         assert!(!tagged.contains("uses: actions/checkout@"), "{id}");
         assert!(!tagged.contains("mbx build"), "{id}");
+        assert!(tagged.contains("${{ job.workflow_repository }}"));
+        assert!(tagged.contains("${{ job.workflow_file_path }}"));
+        assert!(tagged.contains("${{ job.workflow_ref }}"));
+        assert!(tagged.contains("${{ job.workflow_sha }}"));
     }
-    let draft = job(workflow, "source-preview-draft")?;
-    assert!(draft.contains("needs.source-preview-source.outputs.source_artifact_id"));
-    assert!(draft.contains("needs.source-preview-source.outputs.payload_artifact_id"));
     for id in [
         "source-preview-draft",
         "source-preview-attest",
         "source-preview-publish",
     ] {
-        let publication = job(workflow, id)?;
+        let publication = job(authority, id)?;
         assert!(
             publication.contains("    environment:\n      name: generator-source-preview\n"),
             "{id}"
@@ -77,10 +96,35 @@ fn main_producer_tag_publisher_and_stable_calls_have_separate_authority_graphs()
             "{id}"
         );
     }
-    assert!(
-        job(workflow, "publish-generator")?
-            .contains("    environment:\n      name: generator-release\n")
-    );
+    assert_publication_artifacts(authority)?;
+    Ok(())
+}
+
+fn assert_publication_artifacts(authority: &str) -> Result<(), Box<dyn Error>> {
+    let draft = job(authority, "source-preview-draft")?;
+    assert!(draft.contains("needs.source-preview-source.outputs.source_artifact_id"));
+    assert!(draft.contains("needs.source-preview-source.outputs.payload_artifact_id"));
+    let admission = job(authority, "source-preview-source")?;
+    assert!(!admission.contains("SDK_PREVIEW_VERSION"));
+    assert!(admission.contains("source-preview-source-${{ github.run_attempt }}"));
+    assert!(admission.contains("source-preview-qualified-payload-${{ github.run_attempt }}"));
+    assert!(!admission.contains("/releases?per_page="));
+    assert!(draft.contains("/releases?per_page=100&page="));
+    assert!(draft.contains("source-preview-decision-${{ github.run_attempt }}"));
+    assert!(draft.contains("steps.draft.outputs.source_artifact_id"));
+    assert!(draft.contains("steps.draft.outputs.payload_artifact_id"));
+    let attest = job(authority, "source-preview-attest")?;
+    assert!(attest.contains("      contents: read"));
+    assert!(!attest.contains("      contents: write"));
+    assert!(attest.contains("needs.source-preview-draft.outputs.source_artifact_id"));
+    assert!(attest.contains("needs.source-preview-draft.outputs.payload_artifact_id"));
+    assert!(attest.contains("steps.prepare.outputs.sign == 'true'"));
+    assert!(attest.contains("source-preview-signed-${{ github.run_attempt }}"));
+    assert!(attest.contains("SDK_PREVIEW_RECEIPT.json.sigstore.jsonl"));
+    assert!(attest.contains("steps.prepare.outputs.pair_id || steps.upload.outputs.artifact-id"));
+    let publish = job(authority, "source-preview-publish")?;
+    assert!(publish.contains("needs.source-preview-attest.outputs.pair_id"));
+    assert!(publish.contains("needs.source-preview-attest.outputs.pair_origin == 'artifact'"));
     Ok(())
 }
 

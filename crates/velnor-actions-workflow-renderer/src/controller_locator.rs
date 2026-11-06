@@ -7,8 +7,14 @@ pub const PROTECTED_BASE_CONTROLLER_PATH: &str = "$RUNNER_TEMP/velnor/bin/contro
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ControllerLocator {
-    PinnedRelease { version: String, path: String },
-    ProtectedBaseDispatch { version: String, path: String },
+    PinnedRelease {
+        version: String,
+        path: String,
+    },
+    ProtectedBaseDispatch {
+        preview: Box<velnor_actions_contract::source_preview::SourcePreviewLock>,
+        path: String,
+    },
 }
 
 impl ControllerLocator {
@@ -30,9 +36,8 @@ impl ControllerLocator {
     #[must_use]
     pub fn report_helper_version(&self) -> &str {
         match self {
-            Self::PinnedRelease { version, .. } | Self::ProtectedBaseDispatch { version, .. } => {
-                version
-            }
+            Self::PinnedRelease { version, .. } => version,
+            Self::ProtectedBaseDispatch { preview, .. } => &preview.receipt.version,
         }
     }
 
@@ -52,12 +57,8 @@ impl ControllerLocator {
                 }
                 crate::guard::validate_staged_binary(path, version)
             }
-            Self::ProtectedBaseDispatch { version, path } => {
-                let parsed = semver::Version::parse(version)
-                    .map_err(|_| RenderError::BadVersion(version.clone()))?;
-                if !parsed.pre.is_empty() || !parsed.build.is_empty() {
-                    return Err(RenderError::BadVersion(version.clone()));
-                }
+            Self::ProtectedBaseDispatch { preview, path } => {
+                preview.validate_shape().map_err(RenderError::Contract)?;
                 if path != PROTECTED_BASE_CONTROLLER_PATH {
                     return Err(RenderError::InvalidWorkflow(
                         "untrusted_controller_dispatch_path".to_owned(),

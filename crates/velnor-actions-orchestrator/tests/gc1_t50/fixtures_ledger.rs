@@ -84,6 +84,7 @@ pub(super) fn branch_plan(
     disposition: JobDisposition,
 ) -> Result<Plan, Box<dyn Error>> {
     Ok(Plan {
+        lane_inventory: None,
         schema: Plan::SCHEMA,
         run_key: RUN_KEY.to_owned(),
         plan_id: plan_id_for_run(RUN_KEY)?,
@@ -109,6 +110,7 @@ pub(super) fn branch_plan(
         },
         task_ids: vec![task.to_owned()],
         jobs: vec![PlanJob {
+            lane: None,
             job_id: GROUP_ID.to_owned(),
             disposition,
         }],

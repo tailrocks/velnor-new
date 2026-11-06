@@ -104,13 +104,21 @@ def workflow_tuple(record, prefix, path, source, git_ref):
 def validate_preview(record, candidate):
     require(isinstance(record, dict))
     fixed = {"schema", "repository", "version", "source_sha", "tag", "release_id", "payload_target", "payload_name", "payload_size", "payload_sha256", "receipt_sha256", "bundle_sha256"}
-    runs = {f"{prefix}_{suffix}" for prefix in ("signer", "ci", "qualification") for suffix in ("workflow_path", "workflow_ref", "workflow_sha", "run_id", "run_attempt")}
-    require(set(record) == fixed | runs)
+    runs = {f"{prefix}_{suffix}" for prefix in ("source", "draft", "signer", "ci", "qualification") for suffix in ("workflow_path", "workflow_ref", "workflow_sha", "run_id", "run_attempt")}
+    custody = {"producer_run_id", "producer_run_attempt", "producer_payload_artifact_id", "producer_payload_archive_sha256", "candidate_source_artifact_id", "candidate_payload_artifact_id", "publisher_run_attempt", "publisher_job_id"}
+    require(set(record) == fixed | runs | custody)
     source = record["source_sha"]
-    require(type(record["schema"]) is int and record["schema"] == 1 and record["repository"] == REPOSITORY)
+    require(type(record["schema"]) is int and record["schema"] == 2 and record["repository"] == REPOSITORY)
     require(isinstance(record["version"], str) and re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", record["version"]) is not None)
     require(sha40(source) and sha40(candidate) and source != candidate)
     require(record["tag"] == "sdk-preview-" + source and number(record["release_id"]))
+    for role in ("source", "draft"):
+        workflow_tuple(record, role, ".github/workflows/product-release-generator.yml", source, "refs/tags/" + record["tag"])
+        require(record[role + "_run_id"] == record["signer_run_id"])
+    require(all(number(record[key]) for key in ("producer_run_id", "producer_run_attempt", "producer_payload_artifact_id", "candidate_source_artifact_id", "candidate_payload_artifact_id", "publisher_run_attempt", "publisher_job_id")))
+    require(hex64(record["producer_payload_archive_sha256"]))
+    require(record["candidate_source_artifact_id"] != record["candidate_payload_artifact_id"])
+    require(record["source_run_attempt"] <= record["draft_run_attempt"] <= record["signer_run_attempt"] <= record["publisher_run_attempt"] <= 51)
     workflow_tuple(record, "signer", ".github/workflows/product-release-generator.yml", source, "refs/tags/" + record["tag"])
     workflow_tuple(record, "ci", ".github/workflows/ci.yml", source, "refs/heads/main")
     workflow_tuple(record, "qualification", ".github/workflows/source-qualification.yml", source, "refs/heads/main")
@@ -225,9 +233,13 @@ def receipt_from_record(record):
         "source_sha": record["source_sha"],
         "tag": record["tag"],
         "release_id": record["release_id"],
+        "source": run("source"),
+        "draft": run("draft"),
         "signer": run("signer"),
         "ci": run("ci"),
         "qualification": run("qualification"),
+        "producer": {"producer_run_id": record["producer_run_id"], "producer_run_attempt": record["producer_run_attempt"], "payload_artifact_id": record["producer_payload_artifact_id"], "payload_archive_sha256": record["producer_payload_archive_sha256"]},
+        "candidate": {"source_artifact_id": record["candidate_source_artifact_id"], "payload_artifact_id": record["candidate_payload_artifact_id"]},
         "payload": {key: record[f"payload_{key}"] for key in ("target", "name", "size", "sha256")},
     }
 
@@ -301,18 +313,25 @@ def verify_checkout(context):
     require(git.returncode == 0 and git.stdout.decode("ascii").strip() == context["candidate"])
 
 
-def authorize_and_acquire(context, network):
+def preview_identity(preview):
+    return {"channel": "source-preview", "version": preview["version"], "target": TARGET, "sha256": preview["payload_sha256"], "source_sha": preview["source_sha"], "receipt_sha256": preview["receipt_sha256"]}
+
+
+def authorize_and_acquire(context, network, required_identity=None):
     verify_checkout(context)
     preview, base_lock, base = approved_controller(context, network)
     if preview is None:
         tag_sha = None
         identity, stable_url = stable_identity(base_lock)
+        require(required_identity is None)
         payload = network.asset(stable_url, MAX_PAYLOAD)
         require(0 < len(payload) <= MAX_PAYLOAD and hashlib.sha256(payload).hexdigest() == identity["sha256"])
     else:
+        bootstrap_identity = preview_identity(preview)
+        identity = bootstrap_identity
+        require(required_identity is None or required_identity == bootstrap_identity)
         tag_sha = verify_annotated_tag(preview, network)
         _, _, payload = download_verified_release(preview, network)
-        identity = {"channel": "source-preview", "version": preview["version"], "target": TARGET, "sha256": preview["payload_sha256"], "source_sha": preview["source_sha"], "receipt_sha256": preview["receipt_sha256"]}
     require(event_binding(context, network) == base)
     runner_temp = Path(context["runner_temp"])
     require(runner_temp.is_absolute())

@@ -11,11 +11,76 @@ const MAIN_PUSH: &str = "${{ github.event_name == 'push' && github.repository ==
 const TAG_PUSH: &str = "${{ github.event_name == 'push' && github.repository == 'tailrocks/velnor-new' && startsWith(github.ref, 'refs/tags/sdk-preview-') }}";
 const PAYLOAD: &str = "velnor-actions-x86_64-unknown-linux-gnu";
 const METADATA: &str = "${{ runner.temp }}/source-preview-metadata.json";
+pub(super) const AUTHORITY_PATH: &str = ".github/workflows/source-preview-publication.yml";
+const SOURCE_PREVIEW_AUTHORITY_SHA: Option<&str> = None;
 
-pub(super) fn jobs(pins: &ProductReleasePins) -> Result<Vec<(String, Yaml)>, RenderError> {
-    let mut jobs = vec![source_job(), build_job(pins)?, qualify_job(pins)?];
+pub(super) fn producer_jobs(pins: &ProductReleasePins) -> Result<Vec<(String, Yaml)>, RenderError> {
+    Ok(vec![build_job(pins)?, qualify_job(pins)?])
+}
+
+pub(super) fn caller_job() -> Result<Option<(String, Yaml)>, RenderError> {
+    let Some(sha) = SOURCE_PREVIEW_AUTHORITY_SHA else {
+        return Ok(None);
+    };
+    if sha.len() != 40
+        || !sha
+            .bytes()
+            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+    {
+        return Err(RenderError::InvalidWorkflow(
+            "source_preview_authority_pin".to_owned(),
+        ));
+    }
+    Ok(Some((
+        "source-preview-publication".to_owned(),
+        Yaml::Map(vec![
+            ("name".to_owned(), Yaml::str("Source preview publication")),
+            ("if".to_owned(), Yaml::str(TAG_PUSH)),
+            (
+                "uses".to_owned(),
+                Yaml::uses(format!("tailrocks/velnor-new/{AUTHORITY_PATH}@{sha}")),
+            ),
+            (
+                "permissions".to_owned(),
+                steps::perm(&[
+                    ("actions", "write"),
+                    ("artifact-metadata", "write"),
+                    ("attestations", "write"),
+                    ("contents", "write"),
+                    ("id-token", "write"),
+                ]),
+            ),
+        ]),
+    )))
+}
+
+pub(super) fn authority_document(pins: &ProductReleasePins) -> Result<Yaml, RenderError> {
+    let mut jobs = vec![source_job()];
     jobs.extend(super::source_preview_publication::jobs(pins)?);
-    Ok(jobs)
+    Ok(Yaml::Map(vec![
+        (
+            "name".to_owned(),
+            Yaml::str("Source preview publication authority"),
+        ),
+        (
+            "on".to_owned(),
+            Yaml::Map(vec![("workflow_call".to_owned(), Yaml::Map(vec![]))]),
+        ),
+        (
+            "permissions".to_owned(),
+            steps::perm(&[("contents", "read")]),
+        ),
+        ("jobs".to_owned(), Yaml::Map(jobs)),
+    ]))
+}
+
+pub(super) fn authority_env() -> Vec<(&'static str, &'static str)> {
+    vec![
+        ("AUTHORITY_REPOSITORY", "${{ job.workflow_repository }}"),
+        ("AUTHORITY_PATH", "${{ job.workflow_file_path }}"),
+        ("AUTHORITY_REF", "${{ job.workflow_ref }}"),
+        ("AUTHORITY_SHA", "${{ job.workflow_sha }}"),
+    ]
 }
 
 fn fields(
@@ -50,14 +115,14 @@ fn artifact_output() -> (String, Yaml) {
 
 fn source_job() -> (String, Yaml) {
     let script = format!(
-        "{}\n{}\n{}",
+        "{}\n{}\n{}\n{}",
         include_str!("schema2_generator_source_preview_artifact.py"),
         include_str!("schema2_generator_source_preview_tag.py"),
+        include_str!("schema2_generator_source_preview_authority.py"),
         include_str!("schema2_generator_source_preview_source.py")
     );
     let run = format!(
-        "set -eu\nenv -i PATH=/usr/bin:/bin GH_TOKEN=\"$GH_TOKEN\" GITHUB_SHA=\"$GITHUB_SHA\" GITHUB_REPOSITORY=\"$GITHUB_REPOSITORY\" GITHUB_EVENT_NAME=\"$GITHUB_EVENT_NAME\" GITHUB_REF=\"$GITHUB_REF\" GITHUB_WORKFLOW_REF=\"$GITHUB_WORKFLOW_REF\" GITHUB_WORKFLOW_SHA=\"$GITHUB_WORKFLOW_SHA\" GITHUB_ACTOR_ID=\"$GITHUB_ACTOR_ID\" GITHUB_TRIGGERING_ACTOR=\"$GITHUB_TRIGGERING_ACTOR\" GITHUB_RUN_ID=\"$GITHUB_RUN_ID\" GITHUB_RUN_ATTEMPT=\"$GITHUB_RUN_ATTEMPT\" RUNNER_TEMP=\"$RUNNER_TEMP\" GITHUB_OUTPUT=\"$GITHUB_OUTPUT\" SDK_PREVIEW_VERSION='{}' /usr/bin/python3 -I -S - <<'PY'\n{script}\nPY",
-        assets::VERSION,
+        "set -eu\nenv -i PATH=/usr/bin:/bin GH_TOKEN=\"$GH_TOKEN\" GITHUB_SHA=\"$GITHUB_SHA\" GITHUB_REPOSITORY=\"$GITHUB_REPOSITORY\" GITHUB_EVENT_NAME=\"$GITHUB_EVENT_NAME\" GITHUB_REF=\"$GITHUB_REF\" GITHUB_WORKFLOW_REF=\"$GITHUB_WORKFLOW_REF\" GITHUB_WORKFLOW_SHA=\"$GITHUB_WORKFLOW_SHA\" GITHUB_ACTOR_ID=\"$GITHUB_ACTOR_ID\" GITHUB_TRIGGERING_ACTOR=\"$GITHUB_TRIGGERING_ACTOR\" GITHUB_RUN_ID=\"$GITHUB_RUN_ID\" GITHUB_RUN_ATTEMPT=\"$GITHUB_RUN_ATTEMPT\" RUNNER_TEMP=\"$RUNNER_TEMP\" GITHUB_OUTPUT=\"$GITHUB_OUTPUT\" AUTHORITY_REPOSITORY=\"$AUTHORITY_REPOSITORY\" AUTHORITY_PATH=\"$AUTHORITY_PATH\" AUTHORITY_REF=\"$AUTHORITY_REF\" AUTHORITY_SHA=\"$AUTHORITY_SHA\" /usr/bin/python3 -I -S - <<'PY'\n{script}\nPY",
     );
     let mut fields = fields(
         "Admit source preview",
@@ -83,15 +148,19 @@ fn source_job() -> (String, Yaml) {
         "source-preview-source",
         fields,
         vec![
-            steps::bash_step_with_env(
-                "Admit annotated SDK preview tag",
-                &run,
-                vec![("GH_TOKEN", "${{ github.token }}")],
+            steps::bash_step_with_env("Admit annotated SDK preview tag", &run, {
+                let mut env = authority_env();
+                env.push(("GH_TOKEN", "${{ github.token }}"));
+                env
+            }),
+            upload(
+                "upload-source",
+                "source-preview-source-${{ github.run_attempt }}",
+                &[METADATA],
             ),
-            upload("upload-source", "source-preview-source", &[METADATA]),
             upload(
                 "upload-payload",
-                "source-preview-qualified-payload",
+                "source-preview-qualified-payload-${{ github.run_attempt }}",
                 &["${{ runner.temp }}/velnor-actions-x86_64-unknown-linux-gnu"],
             ),
         ],

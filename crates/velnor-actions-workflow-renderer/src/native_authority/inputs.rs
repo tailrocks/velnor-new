@@ -19,6 +19,31 @@ pub struct RustTaskFact {
     pub kind: velnor_actions_rust::TaskKind,
     pub configuration: String,
     pub all_features: bool,
+    pub shard: Option<(u32, u32)>,
+}
+impl RustTaskFact {
+    pub(super) fn validate_shard(
+        &self,
+        input: &NativeAuthorityInput<'_>,
+    ) -> Result<(), NativeAuthorityError> {
+        let configured = input
+            .config
+            .test_sharding
+            .by_manifest
+            .get(&self.manifest)
+            .copied()
+            .unwrap_or(input.config.test_sharding.default_shards);
+        let expected = self.kind == velnor_actions_rust::TaskKind::Nextest
+            && !self.no_targets
+            && configured > 1;
+        match (self.shard, expected) {
+            (None, false) => Ok(()),
+            (Some((index, count)), true) if count == configured && index > 0 && index <= count => {
+                Ok(())
+            }
+            _ => Err(invalid("native_rust_task_shard")),
+        }
+    }
 }
 #[derive(Debug, Clone)]
 pub struct WorkspaceFormatFact {
@@ -92,8 +117,6 @@ pub struct LogicalJobFact {
     pub runs_on: String,
     pub check_runner: Option<CheckRunner>,
     pub needs: Vec<String>,
-    /// Declared job outputs (`jobs.<id>.outputs`), mirrored from the built
-    /// job so the authority projection pins the same data-flow interface.
     pub outputs: std::collections::BTreeMap<String, String>,
     pub source: LogicalJobSource,
 }

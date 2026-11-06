@@ -63,6 +63,13 @@ fn render_workflow_parts(
     ctx: &RenderContext,
 ) -> Result<RenderedWorkflow, RenderError> {
     let mut jobs = merged_jobs(ir, policy, support, ctx)?;
+    execution_boundaries::validate_preview_acquisition(
+        &jobs,
+        policy,
+        &ctx.controller,
+        &ctx.non_inputs,
+        &ctx.checkout_uses,
+    )?;
     closure::insert_plan_closure(&mut jobs, ctx, policy)?;
     closure::insert_request_closure(&mut jobs)?;
     closure::insert_task_closure(&mut jobs)?;
@@ -107,6 +114,13 @@ pub fn finalize_jobs(
     }
     mise.validate()?;
     let mut jobs = merged_jobs(ir, policy, support, ctx)?;
+    execution_boundaries::validate_preview_acquisition(
+        &jobs,
+        policy,
+        &ctx.controller,
+        &ctx.non_inputs,
+        &ctx.checkout_uses,
+    )?;
     for (id, job) in &mut jobs {
         if ctx
             .workflow_tasks
@@ -171,6 +185,13 @@ fn validate_final_jobs(
     phase: ValidationPhase,
     ctx: &RenderContext,
 ) -> Result<(), RenderError> {
+    execution_boundaries::validate_preview_acquisition(
+        jobs,
+        policy,
+        &ctx.controller,
+        &ctx.non_inputs,
+        &ctx.checkout_uses,
+    )?;
     crate::cache_steps::append_workspace_cleanups(jobs)?;
     execution_boundaries::validate_required_verdict(jobs, phase, &ctx.authority_steps)?;
     execution_boundaries::validate_trusted_plan(jobs, policy, phase, &ctx.authority_steps)?;
@@ -207,7 +228,7 @@ fn merged_jobs(
         ir,
         &ctx.runs_on,
         &ctx.workflow_tasks,
-        ctx.bun_lane_plan.as_ref(),
+        ctx.lane_plan.as_ref(),
     )?;
     let mut jobs = ir.jobs.clone();
     match policy {
@@ -232,7 +253,7 @@ fn merged_jobs(
             &jobs,
             &ctx.workflow_tasks,
             &ctx.checkout_uses,
-            ctx.bun_lane_plan.as_ref(),
+            ctx.lane_plan.as_ref(),
         )?;
     workflow_task_ids.extend(ctx.authority_steps.required_workflow_ids(&jobs));
     workflow_task_ids.sort();
@@ -246,7 +267,7 @@ fn merged_jobs(
     support::check_candidate_invariants(&jobs)?;
     support::check_final_gate(&jobs)?;
     crate::required_gate::check_required_gate(&jobs)?;
-    support::check_token_hygiene(&jobs, ctx.controller.require_pinned_version()?)?;
+    support::check_token_hygiene(&jobs, ctx.controller.report_helper_version())?;
     Ok(jobs)
 }
 
@@ -274,15 +295,7 @@ fn render_merged(
     } else {
         jobs.clone()
     };
-    let (jobs, task_files) = crate::task_wrapper::factor_obligation_steps(
-        &jobs,
-        &ctx.checkout_uses,
-        &ctx.generator_version,
-        ctx.controller.require_pinned_version()?,
-        &ctx.workflow_tasks,
-        ctx.bun_lane_plan.as_ref(),
-        ctx.scale_set_selector.as_ref(),
-    )?;
+    let (jobs, task_files) = crate::task_wrapper::factor_obligation_steps(&jobs, ctx)?;
     let mut shared = crate::lane_share::share_lanes(&jobs, ctx)?;
     shared.files.extend(task_files);
     let all_jobs = jobs.clone();
@@ -305,6 +318,12 @@ fn render_merged(
     ) {
         Ok(workflow) => Ok(workflow),
         Err(error) if emit::workflow_file_too_large(&error) => {
+            if matches!(
+                ctx.controller,
+                ControllerLocator::ProtectedBaseDispatch { .. }
+            ) {
+                return Err(error);
+            }
             let extracted =
                 crate::crate_obligations::extract_obligation_composites(&mut shared, ctx)?;
             if extracted == 0 {

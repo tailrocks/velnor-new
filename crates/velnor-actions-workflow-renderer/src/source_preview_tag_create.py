@@ -156,8 +156,7 @@ def create(source, gh, trusted_revision):
         checked = now_utc().strftime("%Y-%m-%dT%H:%M:%SZ")
         record = {"schema": 1, "repository": REPOSITORY, "artifact": "generator", "source_sha": source, "version": version, **proof, "immutability": {"enabled": True, "checked_at": checked}}
         message = canonical(record).decode("utf-8")
-        os.environ["SDK_PREVIEW_VERSION"] = version
-        gate["annotation"](message, source, checked, now_utc())
+        gate["annotation"](message, source, checked, now_utc(), version)
         body = canonical({"tag": tag, "message": message, "object": source, "type": "commit", "tagger": {"name": "Alexey Zhokhov", "email": "alexey@zhokhov.com", "date": checked}})
         created = client.request("POST", "/repos/" + REPOSITORY + "/git/tags", body, allowed=(201,))
         oid = created.get("sha")
@@ -170,7 +169,7 @@ def create(source, gh, trusted_revision):
         require(client.get("/repos/" + REPOSITORY + "/immutable-releases").get("enabled") is True)
         current = now_utc()
         require(0 <= (current - datetime.strptime(checked, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)).total_seconds() <= 60)
-        gate["annotation"](message, source, checked, current)
+        gate["annotation"](message, source, checked, current, version)
         result = client.request("POST", "/repos/" + REPOSITORY + "/git/refs", canonical({"ref": "refs/tags/" + tag, "sha": oid}), allowed=(201,))
         require(result.get("ref") == "refs/tags/" + tag and result.get("object", {}).get("type") == "tag" and result.get("object", {}).get("sha") == oid)
         print(tag)

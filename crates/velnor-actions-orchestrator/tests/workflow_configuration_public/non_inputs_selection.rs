@@ -291,11 +291,14 @@ fn non_inputs_never_hides_another_stacks_claim() -> TestResult {
     let tip = commit(root, "change the Bun member under a Rust non_input")?;
     let run = plan(root, "pull_request", Some(&base), &tip)?;
     let jobs = run.jobs()?;
-    assert_eq!(
-        jobs.get("rust-x").map(String::as_str),
-        Some("not_affected"),
-        "{jobs:?}"
-    );
+    assert!(!jobs.contains_key("rust-x"), "{jobs:?}");
+    for id in ["rust-x__hosted", "rust-x__local"] {
+        assert_eq!(
+            jobs.get(id).map(String::as_str),
+            Some("not_affected"),
+            "{jobs:?}"
+        );
+    }
     for id in ["bun-fixture-ui", "bun-fixture-web"] {
         assert_eq!(
             jobs.get(id).map(String::as_str),

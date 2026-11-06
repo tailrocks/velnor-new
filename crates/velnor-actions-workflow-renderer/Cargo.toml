@@ -82,3 +82,7 @@ path = "tests/source_preview_crypto_public.rs"
 [[test]]
 name = "source_preview_exec_public"
 path = "tests/source_preview_exec_public.rs"
+
+[[test]]
+name = "source_preview_loader_public"
+path = "tests/source_preview_loader_public.rs"

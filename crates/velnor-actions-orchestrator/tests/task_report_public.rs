@@ -311,11 +311,12 @@ fn provider_hit_does_not_reclassify_executed_task() -> TestResult<()> {
         );
     }
     report_files::stage_all(&scenario)?;
-    tofu_job::stage_crate_job_ledger(&scenario)?;
     let lockfile = fs::read(scenario.root().join("infra/.terraform.lock.hcl"))?;
     let cache_key = tofu_job::tofu_provider_key(&lockfile)?;
     report_files::stage_provider_hit(&scenario, &validate_task_id, &cache_key)?;
     let jobs = [(scenario.plan.jobs[0].job_id.as_str(), "success")];
+    let initial = report_files::assemble(&scenario, PROVIDER_HIT_TEST, "provider-reports", &jobs)?;
+    tofu_job::stage_crate_job_ledger(&scenario, &report_files::task_reports(&initial)?)?;
     let request = report_files::assemble(&scenario, PROVIDER_HIT_TEST, "provider-merge", &jobs)?;
     let tasks = report_files::task_reports(&request)?;
     assert_eq!(tasks.len(), 2);

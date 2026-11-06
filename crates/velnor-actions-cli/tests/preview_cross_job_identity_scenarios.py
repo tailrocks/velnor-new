@@ -3,6 +3,7 @@
 
 import hashlib
 import copy
+import fcntl
 import importlib.util
 import json
 import os
@@ -11,6 +12,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import tomllib
 
 root = Path(sys.argv[1]).resolve()
 sdk_path = Path(sys.argv[2]).resolve()
@@ -80,7 +82,7 @@ def git(repo, *args):
     return result.stdout.decode().strip()
 
 
-def selection(repo, temporary, payload, selected_source, receipt_variant=False, stable=False):
+def selection(repo, temporary, payload, selected_source, receipt_variant=False):
     fixture.PAYLOAD = payload
     value, receipt = fixture.record(selected_source)
     value["version"] = expected_version
@@ -89,16 +91,14 @@ def selection(repo, temporary, payload, selected_source, receipt_variant=False, 
     receipt = json.dumps(bootstrap.receipt_from_record(value), sort_keys=True, separators=(",", ":")).encode()
     value["receipt_sha256"] = hashlib.sha256(receipt).hexdigest()
     base_lock = (root / ".velnor/generator.lock").read_bytes()
-    lock = base_lock if stable else base_lock + b"\n" + fixture.lock(value, "planner-preview")
+    lock = base_lock + b"\n" + fixture.lock(value, "planner-preview")
     (repo / ".velnor/generator.lock").write_bytes(lock)
     approved = lock
-    if stable:
-        digest = hashlib.sha256(payload).hexdigest()
-        approved = ('schema = 1\n[generator]\nbinary = "velnor-actions"\nversion = "0.1.75"\ncommit = "' + "e" * 40 + '"\n[[generator.binaries]]\ntarget = "x86_64-unknown-linux-gnu"\nartifact = "https://github.com/' + bootstrap.REPOSITORY + '/releases/download/v0.1.75/velnor-actions-0.1.75-x86_64-unknown-linux-gnu"\nsha256 = "' + digest + '"\n').replace("0.1.75", expected_version).encode()
     network = fixture.FakeGitHub(value, receipt, approved)
     candidate = git(repo, "rev-parse", "HEAD")
     context = {"event": network.event, "event_name": "pull_request", "repository": bootstrap.REPOSITORY, "candidate": candidate, "ref": "refs/pull/7/merge", "workspace": str(repo), "lock_path": str(repo / ".velnor/generator.lock"), "runner_temp": str(temporary)}
-    bootstrap.authorize_and_acquire(context, network)
+    expected = bootstrap.preview_identity(value)
+    bootstrap.authorize_and_acquire(context, network, expected)
     return context, network
 
 
@@ -113,7 +113,7 @@ def launch(context, network, repo, temporary, operation, extra):
             os.dup2(descriptor, 2)
             os.close(descriptor)
             os.chdir(repo)
-            executor.execute_controller(context, network, ["velnor-actions"], environment)
+            executor.execute_controller(context, bootstrap.preview_identity(network.value), ["velnor-actions"], environment)
         except BaseException as error:
             print(str(error), file=sys.stderr)
             os._exit(125)
@@ -121,10 +121,37 @@ def launch(context, network, repo, temporary, operation, extra):
     return os.waitstatus_to_exitcode(status), output.read_text(errors="replace")
 
 
-def prepare(repo, root_temp, label, payload, selected_source="a" * 40, receipt_variant=False, plan_bytes=None, stable=False):
+def launch_wrong_executable_with_good_fd(network, repo, temporary, request):
+    output = temporary / "wrong-executable.output"
+    pid = os.fork()
+    if pid == 0:
+        try:
+            descriptor = os.open(output, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            os.dup2(descriptor, 1)
+            os.dup2(descriptor, 2)
+            os.close(descriptor)
+            fds = []
+            for payload in (sdk, sdk + b"\0"):
+                fd = os.memfd_create("preview-identity-test", os.MFD_ALLOW_SEALING)
+                remaining = memoryview(payload)
+                while remaining:
+                    remaining = remaining[os.write(fd, remaining):]
+                fcntl.fcntl(fd, fcntl.F_ADD_SEALS, fcntl.F_SEAL_WRITE | fcntl.F_SEAL_GROW | fcntl.F_SEAL_SHRINK | fcntl.F_SEAL_SEAL)
+                fds.append(fd)
+            environment = {"PATH": "/usr/bin:/bin", "GITHUB_REPOSITORY": bootstrap.REPOSITORY, "GITHUB_WORKSPACE": str(repo), "RUNNER_TEMP": str(temporary), "GITHUB_RUN_ID": "260001", "GITHUB_RUN_ATTEMPT": "1", "GITHUB_OUTPUT": str(temporary / "github-output"), "VELNOR_INTERNAL_OP": "plan-v1", "VELNOR_REQUEST_FILE": str(request), "VELNOR_SELECTED_PREVIEW_IDENTITY": json.dumps(bootstrap.preview_identity(network.value), sort_keys=True, separators=(",", ":"))}
+            os.chdir(repo)
+            os.execve(f"/proc/self/fd/{fds[1]}", [f"/proc/self/fd/{fds[0]}"], environment)
+        except BaseException as error:
+            print(str(error), file=sys.stderr)
+            os._exit(125)
+    _, status = os.waitpid(pid, 0)
+    return os.waitstatus_to_exitcode(status), output.read_text(errors="replace")
+
+
+def prepare(repo, root_temp, label, payload, selected_source="a" * 40, receipt_variant=False, plan_bytes=None):
     temporary = root_temp / label
     temporary.mkdir()
-    context, network = selection(repo, temporary, payload, selected_source, receipt_variant, stable)
+    context, network = selection(repo, temporary, payload, selected_source, receipt_variant)
     if plan_bytes is not None:
         plan_path = temporary / "velnor" / RUN_KEY / "plan.json"
         plan_path.parent.mkdir(parents=True)
@@ -166,10 +193,35 @@ with tempfile.TemporaryDirectory() as directory:
     request.write_text(json.dumps({"schema": 1, "op": "plan-v1", "run_key": RUN_KEY, "base": base, "head": head, "event": "pull_request", "root": str(repo)}))
     status, log = launch(first, network, repo, plan_temp, "plan-v1", {"VELNOR_REQUEST_FILE": str(request)})
     assert status == 0, "approved preview could not create Plan: " + log
+    policy = (root / ".velnor/version-policy.toml").read_bytes()
+    (repo / ".velnor/version-policy.toml").write_bytes(policy)
+    tools = tomllib.loads(policy.decode())["tools"]
+    status, log = launch(first, network, repo, plan_temp, "repo-policy-v1", {
+        "VELNOR_REPO_POLICY_ACTION": "mise-version",
+        "VELNOR_REPO_POLICY_ROOT": str(repo),
+    })
+    assert status == 0 and log.strip() == tools["mise"], "preview repository-policy operation failed: " + log
+    restricted = executor.restricted_environment({
+        "VELNOR_INTERNAL_OP": "repo-policy-v1",
+        "VELNOR_REPO_POLICY_ACTION": "mise-version",
+        "VELNOR_REPO_POLICY_ROOT": str(repo),
+        "VELNOR_REPO_POLICY_SECRET": "policy-canary",
+        "VELNOR_TOOL_SECRET": "tool-canary",
+        "GH_TOKEN": "credential-canary",
+    }, bootstrap.preview_identity(network.value))
+    assert restricted["VELNOR_REPO_POLICY_ACTION"] == "mise-version"
+    assert restricted["VELNOR_REPO_POLICY_ROOT"] == str(repo)
+    assert all(name not in restricted for name in ("VELNOR_REPO_POLICY_SECRET", "VELNOR_TOOL_SECRET", "GH_TOKEN")), "repository policy received an unrelated secret"
     plan_bytes = (plan_temp / "velnor" / RUN_KEY / "plan.json").read_bytes()
     plan = json.loads(plan_bytes)
     assert plan["generator"]["sha256"] == hashlib.sha256(sdk).hexdigest()
     assert plan["generator"].get("preview") == {"channel": "source-preview", "source_sha": "a" * 40, "receipt_sha256": network.value["receipt_sha256"]}, "approved preview was omitted or changed in Plan"
+    _, attack_network, attack_temp = prepare(repo, temporary, "wrong-executable", sdk)
+    attack_request = attack_temp / "plan-v1-request.json"
+    attack_request.write_text(json.dumps({"schema": 1, "op": "plan-v1", "run_key": RUN_KEY, "base": base, "head": head, "event": "pull_request", "root": str(repo)}))
+    attack_status, attack_log = launch_wrong_executable_with_good_fd(attack_network, repo, attack_temp, attack_request)
+    assert attack_status != 0 and "preview_controller_identity_mismatch" in attack_log, "wrong executable crossed Plan using a good fd and forged argv: " + attack_log
+    assert not (attack_temp / "velnor" / RUN_KEY / "plan.json").exists(), "wrong executable wrote a Plan"
     obligation = next(row for row in plan["obligations"] if row["job_id"] == "check-runtime-fixture")
     task_id = obligation["task_id"]
     for label, payload, selected_source, receipt_variant, match in [("matching", sdk, "a" * 40, False, True), ("different-sdk", sdk + b"\0", "a" * 40, False, False), ("different-source", sdk, "d" * 40, False, False), ("different-receipt", sdk, "a" * 40, True, False)]:
@@ -201,12 +253,33 @@ with tempfile.TemporaryDirectory() as directory:
     no_work_bytes = (no_work_temp / "velnor" / RUN_KEY / "plan.json").read_bytes()
     no_work = json.loads(no_work_bytes)
     assert not no_work["task_ids"] and not no_work["obligations"], "no-work Plan unexpectedly requires work"
-    context, network, stable_plan_temp = prepare(repo, temporary, "stable-plan", sdk, stable=True)
-    request = stable_plan_temp / "plan-v1-request.json"
-    request.write_text(json.dumps({"schema": 1, "op": "plan-v1", "run_key": RUN_KEY, "base": base, "head": head, "event": "pull_request", "root": str(repo)}))
-    status, log = launch(context, network, repo, stable_plan_temp, "plan-v1", {"VELNOR_REQUEST_FILE": str(request)})
-    assert status == 0, "synthetic stable approval could not create Plan: " + log
-    stable_bytes = (stable_plan_temp / "velnor" / RUN_KEY / "plan.json").read_bytes()
-    stable_plan = json.loads(stable_bytes)
-    assert stable_plan["generator"]["sha256"] == hashlib.sha256(sdk).hexdigest() and stable_plan["generator"].get("preview") is None
-    assert not stable_plan["task_ids"] and not stable_plan["obligations"]
+    (repo / ".velnor/config.toml").write_text(CONFIG.split("[[checks]]")[0].replace('[discovery]\nexclude = ["Cargo.toml"]\n', ""))
+    (repo / "Cargo.lock").write_text('version = 4\n\n[[package]]\nname = "preview-identity-fixture"\nversion = "0.1.0"\n')
+    (repo / "mise.toml").write_text('[tools]\nrust = "' + tools["rust"] + '"\nmr-boxington = "' + tools["mr-boxington"] + '"\n"aqua:nextest-rs/nextest/cargo-nextest" = "' + tools["nextest"] + '"\n')
+    git(repo, "add", "Cargo.lock")
+    git(repo, "commit", "-s", "-m", "add fixture lock", "-m", "Co-authored-by: Codex <codex@openai.com>")
+    rust_head = git(repo, "rev-parse", "HEAD")
+    context, network, rust_temp = prepare(repo, temporary, "rust-plan", sdk)
+    generation_env = {**os.environ, "CARGO_NET_OFFLINE": "true", "GIT_TERMINAL_PROMPT": "0"}
+    generation = subprocess.run([str(sdk_path), "generate"], cwd=repo, env=generation_env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+    assert generation.returncode == 0, "fixture could not generate its real Rust manifest: " + generation.stderr.decode(errors="replace")
+    manifest_file = repo / ".github/velnor/task-execution-manifest-v1.json"
+    manifest = json.loads(manifest_file.read_text().split("\n", 1)[1])
+    rust_request = rust_temp / "plan-v1-request.json"
+    rust_request.write_text(json.dumps({"schema": 1, "op": "plan-v1", "run_key": RUN_KEY, "base": head, "head": rust_head, "event": "pull_request", "root": str(repo)}))
+    inherited_tools = {name: os.environ[name] for name in ("CARGO_HOME", "RUSTUP_HOME", "MISE_DATA_DIR", "XDG_DATA_HOME") if name in os.environ}
+    status, log = launch(context, network, repo, rust_temp, "plan-v1", {"VELNOR_REQUEST_FILE": str(rust_request), "PATH": os.environ["PATH"], **inherited_tools})
+    assert status == 0, "approved preview could not create a Rust Plan: " + log
+    rust_plan = json.loads((rust_temp / "velnor" / RUN_KEY / "plan.json").read_bytes())
+    entries = {entry["id"]: entry for entry in rust_plan["matrix"]["include"]}
+    record = next((record for record in manifest["tasks"].values() if record["matrix_id"] in entries and any("VELNOR_TOOL_RUST" in value for value in record["argv"])), None)
+    assert record is not None, "generated manifest has no selected Rust task with a project tool reference"
+    entry = entries[record["matrix_id"]]
+    tool_pins = {"VELNOR_TOOL_RUST": tools["rust"], "VELNOR_TOOL_MR_BOXINGTON": tools["mr-boxington"], "VELNOR_TOOL_NEXTEST": tools["nextest"]}
+    resolver_env = {"VELNOR_TASK_EXECUTION_DIGEST": record["execution_digest"], "VELNOR_GENERATOR_VERSION": manifest["generator_version"], "VELNOR_RUNTIME_RUNNER_TEMP": str(rust_temp), "GITHUB_JOB": entry["job_id"], **tool_pins}
+    status, frame = launch(context, network, repo, rust_temp, "resolve-task-execution-v1", resolver_env)
+    assert status == 0 and frame.startswith("VELNOR-TASK-EXECUTION-V1\0"), "preview could not resolve a real Rust task frame: " + frame
+    assert tools["rust"] in frame and "${VELNOR_TOOL_RUST}" not in frame, "resolved Rust frame did not bind its project pin"
+    restricted = executor.restricted_environment({"VELNOR_INTERNAL_OP": "resolve-task-execution-v1", **tool_pins, "VELNOR_TOOL_SECRET": "tool-canary", "VELNOR_REPO_POLICY_SECRET": "policy-canary", "GH_TOKEN": "credential-canary"}, bootstrap.preview_identity(network.value))
+    assert all(restricted[name] == value for name, value in tool_pins.items()), "resolver lost a declared project tool pin"
+    assert all(name not in restricted for name in ("VELNOR_TOOL_SECRET", "VELNOR_REPO_POLICY_SECRET", "GH_TOKEN")), "resolver received an unrelated secret"

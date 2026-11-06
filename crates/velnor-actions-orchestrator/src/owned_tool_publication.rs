@@ -86,7 +86,7 @@ fn bootstraps() -> Result<Vec<OwnedBuildBootstrap>, OrchestratorError> {
         ),
         (
             SourceBuildBootstrapHost::LinuxArm64,
-            "ubuntu-24.04-arm",
+            "ubuntu-26.04-arm",
             "aarch64-unknown-linux-gnu",
         ),
         (

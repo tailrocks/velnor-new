@@ -4,7 +4,7 @@
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::workflow::lanes::{HOSTED_SUFFIX, SCALE_SUFFIX};
-use velnor_actions_contract::{BunLanePlan, Job, Step, StepKind, StepRole};
+use velnor_actions_contract::{Job, LanePlan, Step, StepKind, StepRole};
 
 use crate::RenderError;
 use crate::render::RenderContext;
@@ -95,16 +95,11 @@ pub(crate) fn share_lanes(
         let Some(hosted) = jobs.get(&hosted_id) else {
             continue;
         };
-        if should_skip_composite(
-            hosted,
-            local,
-            ctx.bun_lane_plan.as_ref(),
-            &hosted_id,
-            &local_id,
-        ) {
+        if should_skip_composite(hosted, local, ctx.lane_plan.as_ref(), &hosted_id, &local_id) {
             continue;
         }
-        let Some(parts) = split_pair(hosted, local, &ctx.checkout_uses) else {
+        let Some(parts) = split_pair(hosted, local, &hosted_id, &local_id, &ctx.checkout_uses)
+        else {
             return Err(RenderError::InvalidWorkflow(format!(
                 "lane_body_differs:{logical}"
             )));
@@ -213,13 +208,16 @@ fn logical_id(hosted_id: &str) -> Option<&str> {
     ok.then_some(logical)
 }
 
-fn is_projected_bun_pair(plan: Option<&BunLanePlan>, hosted_id: &str, local_id: &str) -> bool {
+fn is_projected_bun_pair(plan: Option<&LanePlan>, hosted_id: &str, local_id: &str) -> bool {
     let Some(plan) = plan else {
         return false;
     };
     let Some(logical_id) = plan.logical_id_for_output(hosted_id) else {
         return false;
     };
+    if !logical_id.starts_with(velnor_actions_contract::config::BUN_JOB_PREFIX) {
+        return false;
+    }
     if plan.logical_id_for_output(local_id) != Some(logical_id) {
         return false;
     }
@@ -234,7 +232,7 @@ fn is_projected_bun_pair(plan: Option<&BunLanePlan>, hosted_id: &str, local_id: 
 fn should_skip_composite(
     hosted: &Job,
     local: &Job,
-    plan: Option<&BunLanePlan>,
+    plan: Option<&LanePlan>,
     hosted_id: &str,
     local_id: &str,
 ) -> bool {
@@ -244,9 +242,17 @@ fn should_skip_composite(
         || is_projected_bun_pair(plan, hosted_id, local_id)
 }
 
-fn split_pair(hosted: &Job, local: &Job, checkout_uses: &str) -> Option<SharedLaneParts> {
+fn split_pair(
+    hosted: &Job,
+    local: &Job,
+    hosted_id: &str,
+    local_id: &str,
+    checkout_uses: &str,
+) -> Option<SharedLaneParts> {
     if hosted.timeout_minutes != local.timeout_minutes
-        || !crate::lane_share_sections::same_or_admitted_check_condition(hosted, local)
+        || !crate::lane_share_sections::same_or_admitted_check_condition(
+            hosted, local, hosted_id, local_id,
+        )
         || hosted.permissions != local.permissions
         || hosted.cache_access != local.cache_access
         || hosted.environment != local.environment

@@ -164,10 +164,10 @@ def producer_artifact(client, source, run_id, attempt):
 
 
 def source_version(client, source):
-    cargo = client.get("/repos/" + REPOSITORY + "/contents/Cargo.toml?ref=" + source)
-    if cargo.get("path") != "Cargo.toml" or cargo.get("encoding") != "base64":
+    manifest_blob = client.get("/repos/" + REPOSITORY + "/contents/Cargo.toml?ref=" + source)
+    if manifest_blob.get("path") != "Cargo.toml" or manifest_blob.get("encoding") != "base64":
         raise ValueError("source preview version source")
-    version = tomllib.loads(base64.b64decode(cargo["content"], validate=False).decode())
+    version = tomllib.loads(base64.b64decode(manifest_blob["content"], validate=False).decode())
     version = version["workspace"]["package"]["version"]
     if not isinstance(version, str) or not re.fullmatch(r"(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)", version):
         raise ValueError("SDK preview release version")
@@ -194,20 +194,22 @@ def producer_inputs(client, source):
 
 
 def admit(client):
+    preview_authority()
     source = os.environ["GITHUB_SHA"]
-    proof, tag_sha, expected_ref = admit_tag(client, source)
     version = source_version(client, source)
+    proof, tag_sha, expected_ref = admit_tag(client, source, version)
     if version != proof["version"]:
         raise ValueError("SDK preview tag version mismatch")
     metadata = {
-        "schema": 1, "repository": REPOSITORY, "version": version,
+        "schema": 2, "repository": REPOSITORY, "version": version,
         "source_sha": source, "tag": "sdk-preview-" + source,
-        "signer": {
+        "source": {
             "workflow_path": WORKFLOW, "workflow_ref": expected_ref,
             "workflow_sha": source,
             "run_id": positive(int(os.environ["GITHUB_RUN_ID"])),
             "run_attempt": positive(int(os.environ["GITHUB_RUN_ATTEMPT"])),
         },
+        "producer": {key: proof[key] for key in ("producer_run_id", "producer_run_attempt", "payload_artifact_id", "payload_archive_sha256")},
         **qualification_proofs(client, source),
     }
     artifact = producer_artifact(client, source, proof["producer_run_id"], proof["producer_run_attempt"])
@@ -242,6 +244,6 @@ def deadline_alarm(_number, _frame):
 if __name__ == "__main__":
     try:
         main()
-    except (OSError, ValueError, KeyError, TypeError, http.client.HTTPException):
+    except (OSError, ValueError, KeyError, TypeError, http.client.HTTPException, zipfile.BadZipFile):
         print("source preview admission failed", file=sys.stderr)
         sys.exit(1)

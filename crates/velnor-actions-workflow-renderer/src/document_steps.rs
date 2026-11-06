@@ -85,13 +85,17 @@ fn validate_action_step(
     runs_on: Option<&str>,
 ) -> Result<(), RenderError> {
     crate::action_ref::validate_verifier_call(step, uses, with, env)?;
+    if ["ubuntu-22.04", "ubuntu-24.04"].iter().any(|lane| {
+        crate::cache_p08::runtime_identity_action_uses(lane) == Some(uses)
+            || crate::cache_p08::runtime_prelude_action_uses(lane) == Some(uses)
+    }) {
+        return Err(RenderError::InvalidWorkflow(
+            "tools_cache_identity_unsupported_runner".to_owned(),
+        ));
+    }
     let runtime_identity = step.role == Some(velnor_actions_contract::StepRole::ToolsCacheIdentity)
-        || ["ubuntu-22.04", "ubuntu-24.04", "ubuntu-26.04"]
-            .iter()
-            .any(|lane| {
-                crate::cache_p08::runtime_identity_action_uses(lane) == Some(uses)
-                    || crate::cache_p08::runtime_prelude_action_uses(lane) == Some(uses)
-            });
+        || crate::cache_p08::runtime_identity_action_uses("ubuntu-26.04") == Some(uses)
+        || crate::cache_p08::runtime_prelude_action_uses("ubuntu-26.04") == Some(uses);
     if runtime_identity {
         let Some(lane) = runs_on else {
             return Err(RenderError::InvalidWorkflow(
@@ -241,6 +245,15 @@ pub(crate) fn step_to_yaml(
         StepKind::Internal { .. } => {
             internal_step_to_yaml(job_id, step, ctx, needs_envs, composite, step_context)
         }
+        StepKind::TaskExecution { .. }
+            if !composite
+                && matches!(
+                    ctx.controller,
+                    crate::render::ControllerLocator::ProtectedBaseDispatch { .. }
+                ) =>
+        {
+            crate::task_wrapper::preview_task_step(step, ctx)
+        }
         StepKind::TaskExecution { .. } => Err(RenderError::InvalidWorkflow(
             "unfactored_task_execution".to_owned(),
         )),
@@ -248,6 +261,7 @@ pub(crate) fn step_to_yaml(
             step,
             step_context.job_env,
             step_context.report_helper_version,
+            &ctx.controller,
         ),
     }
 }
@@ -293,26 +307,40 @@ fn internal_step_to_yaml(
         &[]
     };
     crate::step_ids::push_step_id(&mut entries, step);
-    entries.push((
-        "env".to_owned(),
-        internal_env(
-            job_id,
-            op,
-            target,
-            ctx,
-            channel,
-            step_context.job_env,
-            step_env,
-        )?,
-    ));
+    let mut environment = internal_env(
+        job_id,
+        op,
+        target,
+        ctx,
+        channel,
+        step_context.job_env,
+        step_env,
+    )?;
+    if matches!(
+        ctx.controller,
+        crate::render::ControllerLocator::ProtectedBaseDispatch { .. }
+    ) {
+        crate::preview_setup::scrub_loader_env(&mut environment)?;
+    }
+    entries.push(("env".to_owned(), environment));
     push_composite_shell(&mut entries, composite);
     entries.push((
         "run".to_owned(),
-        Yaml::str(commands::quote_run_arg(if job_id == FINAL_JOB_ID {
-            ctx.authority_steps.required_staged_binary()
-        } else {
-            ctx.controller.path()
-        })?),
+        Yaml::str(
+            if let crate::render::ControllerLocator::ProtectedBaseDispatch { preview, .. } =
+                &ctx.controller
+            {
+                commands::join_validated_argv_for_run(&crate::preview_setup::loader_command(
+                    preview,
+                ))?
+            } else {
+                commands::quote_run_arg(if job_id == FINAL_JOB_ID {
+                    ctx.authority_steps.required_staged_binary()
+                } else {
+                    ctx.controller.path()
+                })?
+            },
+        ),
     ));
     Ok(Yaml::Map(entries))
 }

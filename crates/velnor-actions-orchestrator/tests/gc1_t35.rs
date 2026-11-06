@@ -133,6 +133,7 @@ fn plan_with(
     disposition: JobDisposition,
 ) -> Result<Plan, Box<dyn Error>> {
     Ok(Plan {
+        lane_inventory: None,
         schema: Plan::SCHEMA,
         run_key: RUN_KEY.to_owned(),
         plan_id: plan_id_for_run(RUN_KEY)?,
@@ -158,6 +159,7 @@ fn plan_with(
         },
         task_ids: vec![task.to_owned()],
         jobs: vec![PlanJob {
+            lane: None,
             job_id: JOB_ID.to_owned(),
             disposition,
         }],

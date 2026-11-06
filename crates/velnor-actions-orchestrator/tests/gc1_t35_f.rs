@@ -13,6 +13,7 @@ fn check_pr_needs_prepare_blocked() -> Result<(), Box<dyn Error>> {
         "pull_request",
         UnitOutcome::NeedsPrepare,
         None,
+        &report,
     )?;
     let final_report = merge(
         &plan,

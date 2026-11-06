@@ -564,9 +564,13 @@ preview publications remain serialized within their channel. See the
 
 ## SDK preview deployment admission
 
+GitHub's [job context](https://docs.github.com/en/actions/reference/workflows-and-actions/contexts#job-context) identifies the reusable workflow that defines the current job by repository, path, ref, and SHA. Its [context availability table](https://docs.github.com/en/actions/reference/workflows-and-actions/contexts#context-availability) permits these values in step environment expressions. In a reusable workflow the `github` context identifies the caller; the two identities are checked separately. The reusable authority is referenced by a full commit SHA, and the bootstrap emits no tag-publication caller until an independently merged authority is pinned.
+
 GitHub defines protected-branches environment admission for branches. SDK preview
 publication uses the separate `generator-source-preview` environment with a
 selected `sdk-preview-*` tag policy and the owner reviewer. The stable
 `generator-release` environment retains its existing policy. See
 [deployment branches and tags](https://docs.github.com/en/actions/reference/workflows-and-actions/deployments-and-environments#deployment-branches-and-tags)
 and the [tag-specific deployment policy API](https://docs.github.com/en/rest/deployments/branch-policies#create-a-deployment-branch-policy).
+
+GitHub's [release by tag endpoint](https://docs.github.com/en/rest/releases/releases#get-a-release-by-tag-name) returns published releases. Its [release listing endpoint](https://docs.github.com/en/rest/releases/releases#list-releases) includes drafts only for callers with push access. The preview draft job has contents write access and searches a bounded complete release listing before creating a release; the read-only source job does not infer draft absence from a hidden result. Candidate selection and later jobs retain the exact original artifact IDs recorded in the owned draft.

@@ -25,6 +25,18 @@ pub(crate) fn published_lock_acquire_for_runner(
     runner: &velnor_actions_contract::config::CheckRunner,
     version: &str,
 ) -> Result<Step, OrchestratorError> {
+    if let Some(preview) = &lock.source_preview {
+        if version != preview.receipt.version
+            || runner.platform.release_target()
+                != velnor_actions_contract::ReleaseTarget::LinuxX86_64
+        {
+            return Err(OrchestratorError::Contract {
+                problem: "preview_controller_runner_or_version_unsupported".to_owned(),
+            });
+        }
+        return velnor_actions_workflow_renderer::steps::protected_preview_acquire_step()
+            .map_err(OrchestratorError::from);
+    }
     if version != lock.generator.version {
         return Err(OrchestratorError::Contract {
             problem: "published_lock_helper_version_mismatch".to_owned(),

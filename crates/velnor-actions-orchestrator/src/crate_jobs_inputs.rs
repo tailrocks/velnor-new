@@ -18,6 +18,7 @@ pub(crate) struct CrateJobInputs<'a> {
     pub(crate) acquire: Option<&'a Step>,
     pub(crate) max_parallel_jobs: u32,
     pub(crate) timeout: velnor_actions_contract::JobTimeout,
+    pub(crate) preview: Option<&'a velnor_actions_contract::source_preview::SourcePreviewLock>,
     pub(crate) helper_version: &'a str,
     pub(crate) generator_version: &'a str,
     pub(crate) compiled_state: CompiledStateMode,
