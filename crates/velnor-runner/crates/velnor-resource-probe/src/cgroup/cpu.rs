@@ -11,6 +11,7 @@ use std::{
 use crate::{ProbeError, filesystem::parse_u64, record::CpuAncestorLimit, units::digits};
 
 const CGROUP_ROOT: &str = "/sys/fs/cgroup";
+const DEFAULT_ROOT_CPU_PERIOD_MICROS: u64 = 100_000;
 const MAX_CGROUP_DEPTH: usize = 16;
 const MAX_CGROUP_PATH_BYTES: usize = 256;
 const MAX_CPU_ID: u32 = 65_535;
@@ -18,11 +19,11 @@ const MAX_EFFECTIVE_CPUS: usize = 4096;
 const CGROUP_FILE_LIMIT: usize = 4096;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct CpuHierarchy {
-    pub(crate) leaf_cpuset_cpus_count: u32,
-    pub(crate) ancestors: Vec<CpuAncestorLimit>,
-    pub(crate) leaf_quota_micros: Option<u64>,
-    pub(crate) leaf_period_micros: u64,
+pub struct CpuHierarchy {
+    pub leaf_cpuset_cpus_count: u32,
+    pub ancestors: Vec<CpuAncestorLimit>,
+    pub leaf_quota_micros: Option<u64>,
+    pub leaf_period_micros: u64,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -38,13 +39,17 @@ struct CpuLimit {
 }
 
 pub(crate) fn observe_hierarchy(path: &str) -> Result<CpuHierarchy, ProbeError> {
+    observe_hierarchy_in(Path::new(CGROUP_ROOT), path)
+}
+
+pub fn observe_hierarchy_in(cgroup_root: &Path, path: &str) -> Result<CpuHierarchy, ProbeError> {
     let paths = hierarchy_paths(path)?;
     let mut previous_cpus: Option<BTreeSet<u32>> = None;
     let mut cpus_by_path = Vec::with_capacity(paths.len());
     let mut limits_by_path = Vec::with_capacity(paths.len());
 
-    for path in &paths {
-        let directory = cgroup_directory(path)?;
+    for (index, path) in paths.iter().enumerate() {
+        let directory = cgroup_directory_in(cgroup_root, path)?;
         let cpus = parse_cpuset(&read_cgroup_file(&directory, "cpuset.cpus.effective")?)?;
         if previous_cpus
             .as_ref()
@@ -54,7 +59,8 @@ pub(crate) fn observe_hierarchy(path: &str) -> Result<CpuHierarchy, ProbeError> 
         }
         previous_cpus = Some(cpus.clone());
         cpus_by_path.push(cpus);
-        limits_by_path.push(parse_cpu_limit(&read_cgroup_file(&directory, "cpu.max")?)?);
+        let is_root_ancestor = index == 0 && paths.len() > 1;
+        limits_by_path.push(read_cpu_limit(&directory, is_root_ancestor)?);
     }
 
     let leaf_cpus = cpus_by_path
@@ -266,12 +272,34 @@ fn parse_cpu_limit(input: &[u8]) -> Result<CpuLimit, ProbeError> {
     })
 }
 
+fn read_cpu_limit(directory: &Path, is_root_ancestor: bool) -> Result<CpuLimit, ProbeError> {
+    match read_cgroup_file(directory, "cpu.max") {
+        Ok(bytes) => parse_cpu_limit(&bytes),
+        Err(ProbeError::Read("cpu.max", error))
+            if is_root_ancestor && error.kind() == std::io::ErrorKind::NotFound =>
+        {
+            Ok(CpuLimit {
+                quota_micros: None,
+                period_micros: DEFAULT_ROOT_CPU_PERIOD_MICROS,
+            })
+        }
+        Err(error) => Err(error),
+    }
+}
+
 fn cgroup_directory(path: &str) -> Result<PathBuf, ProbeError> {
+    cgroup_directory_in(Path::new(CGROUP_ROOT), path)
+}
+
+fn cgroup_directory_in(cgroup_root: &Path, path: &str) -> Result<PathBuf, ProbeError> {
+    if !cgroup_root.is_absolute() {
+        return Err(ProbeError::Invalid("probe_cgroup_path"));
+    }
     let relative = path
         .strip_prefix('/')
         .ok_or(ProbeError::Invalid("probe_cgroup_path"))?;
-    let directory = Path::new(CGROUP_ROOT).join(relative);
-    if !directory.starts_with(CGROUP_ROOT) {
+    let directory = cgroup_root.join(relative);
+    if !directory.starts_with(cgroup_root) {
         return Err(ProbeError::Invalid("probe_cgroup_path"));
     }
     Ok(directory)
