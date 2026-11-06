@@ -84,7 +84,7 @@ fn hex_sha256(bytes: &[u8]) -> String {
     output
 }
 
-fn sample_connection(
+pub(super) fn sample_connection(
     events: Vec<WorkflowEvent>,
     tag_prefixes: Vec<String>,
 ) -> TestResult<RepositoryConnection> {

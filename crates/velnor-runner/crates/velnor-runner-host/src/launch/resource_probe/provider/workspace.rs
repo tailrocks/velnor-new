@@ -23,6 +23,12 @@ pub(in crate::launch) struct VerifiedWorkspaceCleanup {
 }
 
 impl VerifiedWorkspaceCleanup {
+    pub(in crate::launch) fn for_path(path: &Path) -> Self {
+        Self {
+            workspace_digest: workspace_digest(path),
+        }
+    }
+
     pub(in crate::launch) fn workspace_digest(&self) -> &str {
         &self.workspace_digest
     }

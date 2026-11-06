@@ -59,6 +59,7 @@ impl Journal {
             file: JournalFile::open(path).await?,
         };
         journal.bootstrap().await?;
+        journal.file.reset_after_bootstrap()?;
         Ok(journal)
     }
 

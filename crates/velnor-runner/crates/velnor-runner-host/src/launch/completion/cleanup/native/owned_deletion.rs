@@ -349,6 +349,8 @@ async fn inspect_volume(docker: &Docker, name: &str) -> Result<Option<Volume>, H
     }
 }
 
-pub(super) async fn within<F: std::future::Future>(future: F) -> Result<F::Output, HostError> {
+pub(in crate::launch::completion::cleanup::native) async fn within<F: std::future::Future>(
+    future: F,
+) -> Result<F::Output, HostError> {
     docker_deadline_after(future, REQUEST_TIMEOUT).await
 }

@@ -115,11 +115,7 @@ fn verify_build_metadata(
         .and_then(Value::as_str);
     let context = vcs.get("localdir:context").and_then(Value::as_str);
     let base_locals = HashSet::from(["context", "dockerfile"]);
-    let named_locals = image
-        .allowed_local_names()
-        .iter()
-        .copied()
-        .collect::<HashSet<_>>();
+    let named_locals: HashSet<_> = image.allowed_local_names().iter().copied().collect();
     let valid_locals = (locals.len() == base_locals.len() && local_names == base_locals)
         || (locals.len() == named_locals.len() && local_names == named_locals);
     let actual_vcs_keys = vcs.keys().cloned().collect::<HashSet<_>>();
@@ -129,7 +125,15 @@ fn verify_build_metadata(
         .iter()
         .filter(|(key, _)| key.starts_with("localdir:"))
         .all(|(_, value)| value.as_str().is_some_and(|dir| !dir.is_empty()));
-    if statement.get("_type").and_then(Value::as_str) != Some("https://in-toto.io/Statement/v0.1")
+    let valid_statement_type = matches!(
+        statement.get("_type").and_then(Value::as_str),
+        Some("https://in-toto.io/Statement/v0.1" | "https://in-toto.io/Statement/v1")
+    );
+    let source_url = vcs
+        .get("source")
+        .and_then(Value::as_str)
+        .map(|url| url.strip_suffix(".git").unwrap_or(url));
+    if !valid_statement_type
         || statement.get("predicateType").and_then(Value::as_str) != Some(SLSA_PREDICATE)
         || build.get("buildType").and_then(Value::as_str) != Some(BUILD_KIT_TYPE)
         || config_source.get("path").and_then(Value::as_str) != Some("Dockerfile")
@@ -137,20 +141,78 @@ fn verify_build_metadata(
         || !valid_locals
         || external.len() != 2
         || config_source.len() != 1
-        || request.len() != 2
+        || !valid_request_args(request, &local_names, source_sha)
         || build.len() != 4
         || builder_platform != Some(PLATFORM)
         || context != Some(image.source_context())
         || !valid_vcs_keys
         || !valid_localdirs
         || vcs.get("revision").and_then(Value::as_str) != Some(source_sha)
-        || vcs.get("source").and_then(Value::as_str) != Some(SOURCE_REPOSITORY_URL)
-        || vcs.get("localdir:context").and_then(Value::as_str)
-            != vcs.get("localdir:dockerfile").and_then(Value::as_str)
+        || source_url != Some(SOURCE_REPOSITORY_URL)
+        || context != vcs.get("localdir:dockerfile").and_then(Value::as_str)
     {
         return Err(ProviderFailure::Archive);
     }
     Ok(())
+}
+
+fn valid_request_args(
+    request: &Map<String, Value>,
+    local_names: &HashSet<&str>,
+    source_sha: &str,
+) -> bool {
+    if !request
+        .keys()
+        .all(|key| ["frontend", "locals", "args", "compatibilityVersion"].contains(&key.as_str()))
+        || request
+            .get("compatibilityVersion")
+            .is_some_and(|version| version.as_u64() != Some(30))
+    {
+        return false;
+    }
+    let Some(args_value) = request.get("args") else {
+        return local_names.len() == 2;
+    };
+    let Some(args) = args_value.as_object() else {
+        return false;
+    };
+    if args
+        .get("build-arg:VELNOR_SOURCE_SHA")
+        .and_then(Value::as_str)
+        != Some(source_sha)
+    {
+        return false;
+    }
+    let has_named_contexts = local_names
+        .iter()
+        .filter(|name| !matches!(**name, "context" | "dockerfile"))
+        .all(|name| {
+            args.get(&format!("context:{name}")).and_then(Value::as_str)
+                == Some(format!("local:{name}").as_str())
+        });
+    if !has_named_contexts {
+        return false;
+    }
+    args.iter().all(|(key, value)| match key.as_str() {
+        "build-arg:VELNOR_SOURCE_SHA" => value.as_str() == Some(source_sha),
+        "frontend.caps" => {
+            local_names.len() > 2
+                && value.as_str() == Some("moby.buildkit.frontend.contexts+forward")
+        }
+        _ => {
+            if let Some(name) = key.strip_prefix("context:") {
+                !matches!(name, "context" | "dockerfile")
+                    && local_names.contains(name)
+                    && value.as_str() == Some(format!("local:{name}").as_str())
+            } else if let Some(name) = key.strip_prefix("sharedkey:localdir:") {
+                !matches!(name, "context" | "dockerfile")
+                    && local_names.contains(name)
+                    && value.as_str().is_some_and(|shared| !shared.is_empty())
+            } else {
+                false
+            }
+        }
+    })
 }
 
 fn vcs_keys(names: &HashSet<&str>) -> HashSet<String> {

@@ -211,13 +211,14 @@ async fn reconcile_one(
         failure.report();
     }
 
+    let retry_delay = if failure.stop_requested {
+        0
+    } else {
+        cleanup_retry_delay_seconds(claim.attempt)
+    };
     match context
         .journal
-        .retry_completion_cleanup(
-            launch.intent.id,
-            claim.generation,
-            cleanup_retry_delay_seconds(claim.attempt),
-        )
+        .retry_completion_cleanup(launch.intent.id, claim.generation, retry_delay)
         .await
     {
         Ok(true) if failure.stop_requested => None,

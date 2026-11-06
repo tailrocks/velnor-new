@@ -105,13 +105,22 @@ fn verify_root_ref(
         reference == input.event_ref
     };
     if !expected_workflow_ref
-        || api_reference.is_some_and(|value| value != reference)
+        || api_reference.is_some_and(|value| !api_reference_matches(reference, value))
         || workflow_path != run_path
         || !workflow_path.starts_with(".github/workflows/")
     {
         return Err(HookSourceError::Mismatch);
     }
     Ok(())
+}
+
+fn api_reference_matches(workflow_reference: &str, api_reference: &str) -> bool {
+    if api_reference.starts_with("refs/") {
+        return workflow_reference == api_reference;
+    }
+    workflow_reference
+        .strip_prefix("refs/heads/")
+        .is_some_and(|name| name == api_reference)
 }
 
 fn verify_commits<T>(
