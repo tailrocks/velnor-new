@@ -143,8 +143,28 @@ fn producer(
         ));
     }
     let (steps, public_plan) = producer_steps(spec, id, pair, preview_matrix)?;
-    fields.push(("env".to_owned(), public_plan));
+    fields.push(("env".to_owned(), producer_job_env(spec, public_plan)?));
     Ok(finish(id, fields, steps))
+}
+
+fn producer_job_env(
+    spec: &ConsumerReleaseSpec,
+    mut public_plan: Yaml,
+) -> Result<Yaml, RenderError> {
+    if spec.sdk_source_bootstrap {
+        let Yaml::Map(env) = &mut public_plan else {
+            return Err(RenderError::InvalidWorkflow(
+                "preview_job_env_not_map".to_owned(),
+            ));
+        };
+        env.extend(
+            velnor_actions_contract::JobEnv::RustToolchain
+                .pairs()
+                .into_iter()
+                .map(|(key, value)| (key.to_owned(), Yaml::str(value))),
+        );
+    }
+    Ok(public_plan)
 }
 
 fn producer_steps(

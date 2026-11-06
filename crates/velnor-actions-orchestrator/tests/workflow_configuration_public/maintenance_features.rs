@@ -3,10 +3,8 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
-use std::path::Path;
-use std::{fs, io};
+use std::io;
 
-use tempfile::TempDir;
 use velnor_actions_contract::{Job, REQUIRED_JOB_ID, WorkflowPolicy};
 use velnor_actions_orchestrator::{
     GenerationPreparation, OrchestratorError, prepare, render_staged_tree,
@@ -15,7 +13,6 @@ use velnor_actions_rust::VelnorV1TaskOwner;
 use velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
 
 use super::support::{rendered_job_block, rust_owner_jobs, task_execution_ids};
-use super::workflow_configuration_fixture;
 
 #[test]
 fn prepare_and_render_scope_repository_maintenance_owner_and_feature_union()
@@ -84,65 +81,9 @@ fn assert_owner_feature_success(
     Ok(())
 }
 
-pub(super) fn owner_feature_repo(
-    policy: WorkflowPolicy,
-    tagged: bool,
-    configuration_name: &str,
-    feature: &str,
-) -> Result<TempDir, Box<dyn Error>> {
-    let policy_name = match policy {
-        WorkflowPolicy::ConsumerV1 => "consumer-v1",
-        WorkflowPolicy::VelnorRepositoryV1 => "velnor-repository-v1",
-    };
-    let config = format!(
-        "schema = 1\n[workflow]\nname = \"CI\"\npolicy = \"{policy_name}\"\ndefault_branch = \"testmain\"\n\n[[stacks.rust.configurations]]\nname = \"{configuration_name}\"\nfeatures = [\"{feature}\"]\nall_features = false\ntarget = \"host\"\n"
-    );
-    let repo = workflow_configuration_fixture::make_repo(&config)?;
-    let root = repo.path();
-    if policy == WorkflowPolicy::VelnorRepositoryV1 {
-        workflow_configuration_fixture::git(
-            &[
-                "remote",
-                "add",
-                "origin",
-                "https://github.com/tailrocks/velnor-new.git",
-            ],
-            root,
-        )?;
-        fs::write(
-            root.join(".velnor/generator.lock"),
-            include_str!("../../../../.velnor/generator.lock"),
-        )?;
-        fs::write(
-            root.join(".velnor/controller-approvals.json"),
-            include_str!("../../../../.velnor/controller-approvals.json"),
-        )?;
-        workflow_configuration_fixture::write_root_cargo_lock(root, &["demo", "maintenance"])?;
-    }
-    let mut root_manifest = fs::read_to_string(root.join("Cargo.toml"))?;
-    root_manifest.push_str("\n[workspace]\nmembers = [\"crates/maintenance\"]\nresolver = \"2\"\n");
-    fs::write(root.join("Cargo.toml"), root_manifest)?;
-    write_owner_member(root, tagged)?;
-    workflow_configuration_fixture::write_nextest_task(root)?;
-    workflow_configuration_fixture::write_nextest_task(&root.join("crates/maintenance"))?;
-    Ok(repo)
-}
-
-fn write_owner_member(root: &Path, tagged: bool) -> Result<(), Box<dyn Error>> {
-    let owner_metadata = if tagged {
-        "\n[package.metadata.velnor]\nv1-task-owner = \"repository-maintenance\"\n"
-    } else {
-        ""
-    };
-    let manifest = format!(
-        "[package]\nname = \"maintenance\"\nversion = \"0.1.0\"\nedition = \"2021\"\n{owner_metadata}\n[features]\nmaintenance-only = []\n"
-    );
-    let package_root = root.join("crates/maintenance");
-    fs::create_dir_all(package_root.join("src"))?;
-    fs::write(package_root.join("Cargo.toml"), manifest)?;
-    fs::write(package_root.join("src/lib.rs"), "pub fn maintenance() {}\n")?;
-    Ok(())
-}
+pub(super) use super::maintenance_features_fixture::{
+    owner_feature_repo, rename_root_as_cli, write_sdk_workspace,
+};
 
 fn assert_owner_feature_config(
     prepared: &GenerationPreparation,
@@ -175,7 +116,13 @@ fn assert_owner_workspace(
         .iter()
         .find(|workspace| workspace.record.workspace_root.is_empty())
         .ok_or("root Cargo workspace is missing")?;
-    assert_eq!(workspace.record.packages.len(), 2);
+    let sdk_package_count = if prepared.config.workflow.policy == WorkflowPolicy::VelnorRepositoryV1
+    {
+        2
+    } else {
+        0
+    };
+    assert_eq!(workspace.record.packages.len(), 2 + sdk_package_count);
     assert!(!workspace.record.has_external_dependencies);
     let demo = workspace
         .record
@@ -195,6 +142,25 @@ fn assert_owner_workspace(
     assert_eq!(maintenance.name, "maintenance");
     assert!(maintenance.in_workspace && !maintenance.external);
     assert_eq!(maintenance.v1_task_owner, expected_owner);
+    if prepared.config.workflow.policy == WorkflowPolicy::VelnorRepositoryV1 {
+        for (manifest, name) in [
+            ("crates/velnor-actions-cli/Cargo.toml", "velnor-actions-cli"),
+            (
+                "crates/velnor-archive-guard/Cargo.toml",
+                "velnor-archive-guard",
+            ),
+        ] {
+            let package = workspace
+                .record
+                .packages
+                .iter()
+                .find(|package| package.manifest == manifest)
+                .ok_or("SDK preview package is missing")?;
+            assert_eq!(package.name, name);
+            assert!(package.in_workspace && !package.external);
+            assert_eq!(package.v1_task_owner, VelnorV1TaskOwner::Project);
+        }
+    }
     Ok(())
 }
 
@@ -220,6 +186,11 @@ fn owner_feature_proposal_paths(
                     .ok_or("unexpected maintenance package proposal")?
                     .to_owned(),
             ],
+            "crates/velnor-actions-cli/Cargo.toml" | "crates/velnor-archive-guard/Cargo.toml"
+                if prepared.config.workflow.policy == WorkflowPolicy::VelnorRepositoryV1 =>
+            {
+                vec!["default".to_owned()]
+            }
             other => return Err(format!("unexpected Rust package proposal: {other}").into()),
         };
         assert_eq!(task.identity.features, expected_features, "{manifest}");
@@ -229,14 +200,14 @@ fn owner_feature_proposal_paths(
                 .is_none()
         );
     }
-    let expected_paths = if member_features.is_some() {
-        BTreeSet::from([
-            "Cargo.toml".to_owned(),
-            "crates/maintenance/Cargo.toml".to_owned(),
-        ])
-    } else {
-        BTreeSet::from(["Cargo.toml".to_owned()])
-    };
+    let mut expected_paths = BTreeSet::from(["Cargo.toml".to_owned()]);
+    if member_features.is_some() {
+        expected_paths.insert("crates/maintenance/Cargo.toml".to_owned());
+    }
+    if prepared.config.workflow.policy == WorkflowPolicy::VelnorRepositoryV1 {
+        expected_paths.insert("crates/velnor-actions-cli/Cargo.toml".to_owned());
+        expected_paths.insert("crates/velnor-archive-guard/Cargo.toml".to_owned());
+    }
     assert_eq!(
         paths.values().cloned().collect::<BTreeSet<_>>(),
         expected_paths
@@ -327,11 +298,19 @@ fn assert_emitted_owner_tasks(
         emitted.keys().cloned().collect::<BTreeSet<_>>(),
         proposal_paths.keys().cloned().collect::<BTreeSet<_>>()
     );
-    let expected_manifests = if include_member {
+    let mut expected_manifests = if include_member {
         BTreeSet::from(["Cargo.toml", "crates/maintenance/Cargo.toml"])
     } else {
         BTreeSet::from(["Cargo.toml"])
     };
+    for manifest in [
+        "crates/velnor-actions-cli/Cargo.toml",
+        "crates/velnor-archive-guard/Cargo.toml",
+    ] {
+        if proposal_paths.values().any(|path| path == manifest) {
+            expected_manifests.insert(manifest);
+        }
+    }
     assert_eq!(
         owners_by_manifest.keys().copied().collect::<BTreeSet<_>>(),
         expected_manifests

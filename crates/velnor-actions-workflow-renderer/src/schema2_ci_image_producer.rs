@@ -120,12 +120,12 @@ pub fn sdk_ci_image_steps(
         ambient_shell_step(
             "Build exact-source image maintenance",
             scrubbed_argv(&build),
-            scrub_env(),
+            native_target_env(),
         )?,
         ambient_shell_step(
             "Build locked resource probe",
             scrubbed_argv(&probe),
-            scrub_env(),
+            native_target_env(),
         )?,
         ambient_shell_step(
             "Build and inspect CI image candidates",
@@ -133,7 +133,7 @@ pub fn sdk_ci_image_steps(
                 "bash".to_owned(),
                 "scripts/ci-native-image-candidates.sh".to_owned(),
             ]),
-            scrub_env(),
+            native_target_env(),
         )?,
     ];
     steps.extend(upload_steps()?);
@@ -153,6 +153,15 @@ fn scrubbed_argv(argv: &[String]) -> Vec<String> {
     .collect::<Vec<_>>();
     out.extend_from_slice(argv);
     out
+}
+
+fn native_target_env() -> BTreeMap<String, String> {
+    let mut env = scrub_env();
+    env.insert(
+        "CARGO_TARGET_DIR".to_owned(),
+        "${{ runner.temp }}/velnor-ci-image-target".to_owned(),
+    );
+    env
 }
 
 fn scrub_env() -> BTreeMap<String, String> {

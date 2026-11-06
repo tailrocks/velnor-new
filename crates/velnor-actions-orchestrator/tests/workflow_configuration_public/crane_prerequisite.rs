@@ -11,7 +11,7 @@ use velnor_actions_contract::{
 };
 use velnor_actions_orchestrator::{finalized_jobs, prepare};
 
-use super::maintenance_features::owner_feature_repo;
+use super::maintenance_features::{owner_feature_repo, rename_root_as_cli};
 use super::workflow_configuration_fixture;
 
 const CRANE_SPEC: &str = "crane@0.22.1";
@@ -139,7 +139,7 @@ fn crane_preparation_stays_scoped_to_repository_cli_crate_jobs() -> Result<(), B
         let prepared = prepare(repo.path())?;
         let jobs = finalized_jobs(&prepared)?;
         for (_, job) in branch_jobs(&jobs, &format!("Rust / {package}"))? {
-            assert_crane_prepared(job, false)?;
+            assert_crane_prepared(job, policy == WorkflowPolicy::VelnorRepositoryV1)?;
             assert_image_publication_fixture(job, false)?;
         }
     }
@@ -210,7 +210,7 @@ fn assert_crane_prepared(job: &Job, expected: bool) -> Result<usize, Box<dyn Err
     Ok(index)
 }
 
-fn assert_image_publication_fixture(
+pub(super) fn assert_image_publication_fixture(
     job: &Job,
     expected: bool,
 ) -> Result<Option<usize>, Box<dyn Error>> {
@@ -224,9 +224,20 @@ fn assert_image_publication_fixture(
     let Some((index, step)) = matches.first().copied() else {
         return Ok(None);
     };
+    validate_image_publication_fixture_step(step)?;
+    Ok(Some(index))
+}
+
+pub(super) fn validate_image_publication_fixture_step(
+    step: &velnor_actions_contract::Step,
+) -> Result<(), Box<dyn Error>> {
+    assert_eq!(step.name, IMAGE_FIXTURE_STEP);
     let StepKind::Shell { run, env } = &step.kind else {
         return Err("fixture preparation is not a shell step".into());
     };
+    assert_eq!(run.first().map(String::as_str), Some("bash"));
+    assert_eq!(run.get(1).map(String::as_str), Some("-c"));
+    assert_eq!(run.len(), 3);
     let script = run.join(" ");
     let mise_execs = script
         .match_indices("mise --no-config --no-env --no-hooks exec")
@@ -237,6 +248,9 @@ fn assert_image_publication_fixture(
         2,
         "both fixture commands must use pinned Mise"
     );
+    assert_eq!(script.matches("-- mbx build --locked").count(), 1);
+    assert_eq!(script.matches("-- mbx run --quiet --locked").count(), 1);
+    assert!(!script.contains("cargo build") && !script.contains("cargo run"));
     let build = script
         .find("-- mbx build --locked")
         .ok_or("fixture example build is not pinned through MBX")?;
@@ -258,7 +272,7 @@ fn assert_image_publication_fixture(
     for key in ["GH_HOST", "GH_CONFIG_DIR"] {
         assert_eq!(env.get(key).map(String::as_str), Some(""));
     }
-    Ok(Some(index))
+    Ok(())
 }
 
 pub(super) fn repository_cli_repo(sharded: bool) -> Result<tempfile::TempDir, Box<dyn Error>> {
@@ -282,12 +296,7 @@ pub(super) fn repository_cli_repo(sharded: bool) -> Result<tempfile::TempDir, Bo
 }
 
 fn prebuilt_image_repo() -> Result<tempfile::TempDir, Box<dyn Error>> {
-    let repo = owner_feature_repo(
-        WorkflowPolicy::VelnorRepositoryV1,
-        true,
-        "default",
-        "default",
-    )?;
+    let repo = owner_feature_repo(WorkflowPolicy::ConsumerV1, true, "default", "default")?;
     fs::write(repo.path().join("src/main.rs"), "fn main() {}\n")?;
     fs::write(
         repo.path().join("Cargo.lock"),
@@ -308,6 +317,10 @@ fn prebuilt_image_repo() -> Result<tempfile::TempDir, Box<dyn Error>> {
 }
 
 fn rename_root_package(root: &Path, name: &str) -> Result<(), Box<dyn Error>> {
+    if name == "velnor-actions-cli" && root.join("Cargo.lock").is_file() {
+        rename_root_as_cli(root)?;
+        return Ok(());
+    }
     let manifest = root.join("Cargo.toml");
     let contents = fs::read_to_string(&manifest)?;
     fs::write(

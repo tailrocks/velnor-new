@@ -13,15 +13,15 @@ use super::workflow_configuration_fixture::{git, make_repo};
 
 const WORKFLOWS: [&str; 2] = ["binary-preview.yml", "binary-release.yml"];
 
-const EXCLUDED: [(&str, &str); 4] = [
+const EXCLUDED: [(&str, &str); 5] = [
+    ("binary-preview.yml", "preview-eligibility"),
     ("binary-preview.yml", "preview-payload"),
     ("binary-preview.yml", "preview-assemble"),
     ("binary-release.yml", "stable-payload-000"),
     ("binary-release.yml", "stable-assemble"),
 ];
 
-const FULL_TREE: [(&str, &str); 3] = [
-    ("binary-preview.yml", "preview-eligibility"),
+const FULL_TREE: [(&str, &str); 2] = [
     ("binary-preview.yml", "preview-tap-prepare"),
     ("binary-release.yml", "stable-prepare"),
 ];
@@ -240,6 +240,10 @@ fn release_producer_checkouts_exclude_non_inputs_and_carry_the_guard() -> TestRe
                 .filter(|(_, step)| is_checkout(step))
             {
                 let key = (file.as_str(), job.as_str());
+                if key == ("binary-preview.yml", "preview-eligibility") {
+                    assert!(step.contains("ref: ${{ steps.source-select.outputs.source_sha }}"));
+                    assert!(step.contains("lfs: ${{ steps.source-select.outputs.checkout_lfs }}"));
+                }
                 seen.push((file.clone(), job.clone()));
                 let foreign =
                     step.contains("\n          repository:") || step.contains("\n          path:");

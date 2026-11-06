@@ -235,6 +235,11 @@ fn assert_native_job_shape(files: &[(String, String)]) -> Result<String, Box<dyn
         "Build and inspect CI image candidates",
     ] {
         let body = step_text(job, step)?;
+        assert_eq!(
+            env_values(&body.env, "CARGO_TARGET_DIR"),
+            ["${{ runner.temp }}/velnor-ci-image-target"],
+            "{step} must use the private native image target"
+        );
         assert!(
             body.run
                 .contains("scripts/ci-native-image-credential-exec.sh"),

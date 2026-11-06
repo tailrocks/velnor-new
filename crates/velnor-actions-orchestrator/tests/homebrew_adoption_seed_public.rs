@@ -152,8 +152,8 @@ fn public_seed_manifest_replaces_legacy_consumer_manifest() -> Result<(), Box<dy
 }
 
 #[test]
-fn public_velnor_repository_bootstrap_accepts_only_catalog_mise_lock() -> Result<(), Box<dyn Error>>
-{
+fn public_velnor_repository_bootstrap_accepts_only_approved_bootstrap_mise_lock()
+-> Result<(), Box<dyn Error>> {
     let temp = repository_with_origin(Some("https://github.com/tailrocks/velnor-new.git"))?;
     fs::create_dir_all(temp.path().join(".velnor"))?;
     fs::write(

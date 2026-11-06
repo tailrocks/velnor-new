@@ -319,6 +319,9 @@ install -m 0755 "$source_cli" "$RUNNER_TEMP/velnor/bin/velnor-actions-source"
     {
         *run = crate::toolchain_env::with_credential_unset_script(run);
     }
+    for step in &mut steps {
+        with_producer_homes(step, &spec.producer_cargo_env)?;
+    }
     Ok(steps)
 }
 

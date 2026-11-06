@@ -18,6 +18,8 @@ jobs:
     permissions:
       actions: read
       contents: read
+    env:
+      RUSTUP_AUTO_INSTALL: "0"
     outputs:
       artifact_id: ${{ steps.proof.outputs.artifact-id }}
     steps:

@@ -16,8 +16,7 @@ use super::waste_verifier_oracle::{VerifierScan, verifier_homes};
 use super::workflow_configuration_fixture;
 
 const FRESHNESS_PATH: &str = ".github/workflows/freshness.yml";
-const UNCOVERED_WORKFLOWS: [&str; 6] = [
-    "job-image-candidate.yml",
+const UNCOVERED_WORKFLOWS: [&str; 5] = [
     "product-release-binary.yml",
     "product-release-generator.yml",
     "product-release-images.yml",
@@ -111,6 +110,28 @@ fn every_rust_verifier_reads_the_toolchain_home_its_job_installs_into() -> Resul
             };
             assert!(has(FRESHNESS_PATH, "freshness"), "{:?}", scan.checked);
             assert!(has(CI_PATH, PLAN_JOB_ID), "{:?}", scan.checked);
+            let preview_path = ".github/workflows/binary-preview.yml";
+            let preview = files.get(preview_path).ok_or("preview workflow missing")?;
+            for id in ["preview-eligibility", "preview-payload", "preview-assemble"] {
+                assert!(has(preview_path, id), "{:?}", scan.checked);
+                let job = super::support::rendered_job_block(preview, id)?;
+                let steps = super::waste_verifier_oracle::steps_of(job, id)?;
+                let find = |name: &str| steps.iter().position(|step| step.name.contains(name));
+                let install = find("Install source SDK toolchain").ok_or("SDK install missing")?;
+                let verify = find("Verify Rust channel manifest").ok_or("Rust verifier missing")?;
+                let build = find("Build exact-source SDK for read-only preview production")
+                    .ok_or("SDK build missing")?;
+                assert!(
+                    install < verify && verify < build,
+                    "{id}: incorrect SDK order"
+                );
+                assert!(
+                    steps[install]
+                        .run
+                        .as_deref()
+                        .is_some_and(|run| run.contains("rust"))
+                );
+            }
             assert!(
                 scan.checked
                     .iter()

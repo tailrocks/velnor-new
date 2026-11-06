@@ -209,6 +209,7 @@ fn runner_qualification_signs_only_the_exact_credential_free_runtime_proof()
         .split("steps:")
         .next()
         .ok_or_else(|| fail("missing steps"))?;
+    assert!(permissions.contains("    env:\n      RUSTUP_AUTO_INSTALL: \"0\""));
     assert!(!permissions.contains("id-token"));
     assert!(!permissions.contains("attestations"));
     assert!(!permissions.contains("write"));

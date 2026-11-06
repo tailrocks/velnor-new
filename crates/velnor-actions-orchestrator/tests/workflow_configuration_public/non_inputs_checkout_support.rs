@@ -13,6 +13,7 @@ use velnor_actions_workflow_renderer::non_input_checkout::{
     NON_INPUT_GUARD_STEP, SPARSE_CHECKOUT_KEY,
 };
 
+use super::maintenance_features::write_sdk_workspace;
 use super::one_job_per_crate::mbx_repo_for;
 use super::scoped_workspace::TestResult;
 use super::workflow_configuration_fixture::{self, git};
@@ -47,16 +48,33 @@ pub(super) fn rust_repo(
     let repo = mbx_repo_for(true, policy)?;
     let root = repo.path();
     fs::remove_dir_all(root.join("src"))?;
-    fs::write(
-        root.join("Cargo.toml"),
-        "[workspace]\nmembers = [\"crates/demo\"]\nresolver = \"2\"\n",
-    )?;
+    let members = if policy == WorkflowPolicy::VelnorRepositoryV1 {
+        "[workspace]\nmembers = [\"crates/demo\", \"crates/velnor-actions-cli\", \"crates/velnor-archive-guard\"]\nresolver = \"2\"\n"
+    } else {
+        "[workspace]\nmembers = [\"crates/demo\"]\nresolver = \"2\"\n"
+    };
+    fs::write(root.join("Cargo.toml"), members)?;
     fs::create_dir_all(root.join("crates/demo/src"))?;
     fs::write(
         root.join("crates/demo/Cargo.toml"),
         "[package]\nname = \"demo\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
     )?;
     fs::write(root.join("crates/demo/src/lib.rs"), "pub fn f() {}\n")?;
+    if policy == WorkflowPolicy::VelnorRepositoryV1 {
+        write_sdk_workspace(root, &["demo"])?;
+        workflow_configuration_fixture::git(
+            &[
+                "add",
+                "--",
+                "Cargo.toml",
+                "Cargo.lock",
+                "crates/demo",
+                "crates/velnor-actions-cli",
+                "crates/velnor-archive-guard",
+            ],
+            root,
+        )?;
+    }
     let config_path = repo.path().join(".velnor/config.toml");
     let mut config = fs::read_to_string(&config_path)?;
     config.push_str("\n[stacks.rust]\n");

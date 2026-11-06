@@ -170,6 +170,14 @@ fn qualifier_job(
         ("timeout-minutes", Yaml::Int(90)),
         ("permissions", permissions(false)),
         (
+            "env",
+            map(velnor_actions_contract::JobEnv::RustToolchain
+                .pairs()
+                .into_iter()
+                .map(|(key, value)| (key, string(value)))
+                .collect()),
+        ),
+        (
             "outputs",
             map(vec![(
                 "artifact_id",

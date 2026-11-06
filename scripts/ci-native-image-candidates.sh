@@ -3,7 +3,17 @@
 # SPDX-License-Identifier: Apache-2.0
 
 set -euo pipefail
-: "${GITHUB_WORKSPACE:?}" "${GITHUB_SHA:?}" "${GITHUB_EVENT_NAME:?}" "${RUNNER_TEMP:?}" "${VELNOR_NATIVE_IMAGE_ACTIONS:?}"
+: "${GITHUB_WORKSPACE:?}" "${GITHUB_SHA:?}" "${GITHUB_EVENT_NAME:?}" "${RUNNER_TEMP:?}" "${VELNOR_NATIVE_IMAGE_ACTIONS:?}" "${CARGO_TARGET_DIR:?}"
+if ! [[ "$GITHUB_WORKSPACE" == /* && "$RUNNER_TEMP" == /* && "$CARGO_TARGET_DIR" == "$RUNNER_TEMP/velnor-ci-image-target" && ! -L "$CARGO_TARGET_DIR" ]]; then
+  printf '%s\n' 'invalid private CARGO_TARGET_DIR' >&2
+  exit 1
+fi
+workspace_dir="$(cd -P -- "$GITHUB_WORKSPACE" && pwd -P)"
+temp_dir="$(cd -P -- "$RUNNER_TEMP" && pwd -P)"
+if ! [[ "$temp_dir" != "$workspace_dir" && "$temp_dir" != "$workspace_dir/"* ]]; then
+  printf '%s\n' 'invalid private CARGO_TARGET_DIR' >&2
+  exit 1
+fi
 [[ "$GITHUB_SHA" =~ ^[0-9a-f]{40}$ ]]
 root="$GITHUB_WORKSPACE"
 base="$RUNNER_TEMP/velnor-ci-image-candidates"
@@ -24,8 +34,7 @@ for role in runner dind; do
   if [[ "$role" == runner ]]; then context="$root/images/runner/ubuntu-26.04"; else context="$root/images/dind"; fi
   docker buildx build --platform linux/amd64 --file "$context/Dockerfile" --build-arg "VELNOR_SOURCE_SHA=$GITHUB_SHA" --provenance=false --output "type=oci,dest=$base/images/$role.oci.tar,compression=gzip,force-compression=true" "$context"
 done
-probe_target="${CARGO_TARGET_DIR:-$root/crates/velnor-runner/target}"
-probe_binary="$probe_target/x86_64-unknown-linux-musl/release/velnor-resource-probe"
+probe_binary="$CARGO_TARGET_DIR/x86_64-unknown-linux-musl/release/velnor-resource-probe"
 [[ -f "$probe_binary" && ! -L "$probe_binary" ]]
 file_description="$(file -b "$probe_binary")"
 case "$file_description" in *'ELF 64-bit LSB'*x86-64*static*) ;; *) exit 1 ;; esac
