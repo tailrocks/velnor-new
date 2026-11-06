@@ -71,7 +71,7 @@ fn assert_required_metadata(
         FINAL_JOB_ID,
         required_error,
         "runner",
-        |job| "ubuntu-24.04".clone_into(&mut job.runs_on),
+        |job| "ubuntu-26.04-arm".clone_into(&mut job.runs_on),
     )?;
     assert_job_mutation_rejected(
         preparation,
@@ -124,7 +124,7 @@ fn assert_producer_metadata(
         PLAN_JOB_ID,
         plan_error,
         "runner",
-        |job| "ubuntu-24.04".clone_into(&mut job.runs_on),
+        |job| "ubuntu-26.04-arm".clone_into(&mut job.runs_on),
     )?;
     assert_job_mutation_rejected(
         preparation,
