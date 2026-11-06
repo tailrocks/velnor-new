@@ -41,6 +41,7 @@ pub mod storage_init_contract;
 mod units;
 pub mod worker_binding;
 
+pub use cgroup::{CpuHierarchy, observe_cpu_hierarchy_in};
 pub use error::ProbeError;
 pub use filesystem::InodePolicy;
 pub use record::{CpuAncestorLimit, MAX_OUTPUT_BYTES, ProbeRecord};

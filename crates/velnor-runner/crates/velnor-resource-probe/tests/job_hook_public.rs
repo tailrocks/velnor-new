@@ -9,7 +9,6 @@ use std::sync::{Arc, Barrier};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use velnor_resource_probe::ProbeError;
 use velnor_resource_probe::execution_request::{
     REQUEST_FILE, RequestMetadata, ensure_stable_content, ensure_stable_identity, read_request_file,
 };
@@ -17,6 +16,7 @@ use velnor_resource_probe::job_hook::{
     Challenge, Decision, SourceRequest, canonical_json, sha256, validate_challenge,
     validate_decision,
 };
+use velnor_resource_probe::{CpuAncestorLimit, CpuHierarchy, ProbeError, observe_cpu_hierarchy_in};
 
 type TestResult<T> = Result<T, Box<dyn Error>>;
 
@@ -303,6 +303,84 @@ fn public_inbox_request_poll_returns_none_when_published_after_initial_enoent_an
     assert!(matches!(
         read_request_file(&inbox, uid, gid),
         Err(ProbeError::Invalid("execution_request_file"))
+    ));
+    Ok(())
+}
+
+#[test]
+fn public_observe_cpu_hierarchy_admits_root_without_cpu_max_and_rejects_nonroot_or_leaf_missing_cpu_max()
+-> TestResult<()> {
+    let dir = ScopedTempDir::new("cpu_hierarchy_root_cpu_max")?;
+    let root = dir.path();
+    let slice = root.join("system.slice");
+    let leaf = slice.join("docker-probe.scope");
+    fs::create_dir_all(&leaf)?;
+
+    fs::write(root.join("cpuset.cpus.effective"), "0-3\n")?;
+    fs::write(slice.join("cpuset.cpus.effective"), "0-3\n")?;
+    fs::write(slice.join("cpu.max"), "max 100000\n")?;
+    fs::write(leaf.join("cpuset.cpus.effective"), "0-1\n")?;
+    fs::write(leaf.join("cpu.max"), "25000 100000\n")?;
+
+    let observed = observe_cpu_hierarchy_in(root, "/system.slice/docker-probe.scope")?;
+    assert_eq!(
+        observed,
+        CpuHierarchy {
+            leaf_cpuset_cpus_count: 2,
+            ancestors: vec![
+                CpuAncestorLimit {
+                    path: "/".to_owned(),
+                    cpuset_cpus_count: 4,
+                    cpu_quota_micros: None,
+                    cpu_period_micros: 100_000,
+                },
+                CpuAncestorLimit {
+                    path: "/system.slice".to_owned(),
+                    cpuset_cpus_count: 4,
+                    cpu_quota_micros: None,
+                    cpu_period_micros: 100_000,
+                },
+            ],
+            leaf_quota_micros: Some(25_000),
+            leaf_period_micros: 100_000,
+        }
+    );
+
+    fs::write(root.join("cpu.max"), "50000 100000\n")?;
+    let with_root_limit = observe_cpu_hierarchy_in(root, "/system.slice/docker-probe.scope")?;
+    assert_eq!(
+        with_root_limit.ancestors[0],
+        CpuAncestorLimit {
+            path: "/".to_owned(),
+            cpuset_cpus_count: 4,
+            cpu_quota_micros: Some(50_000),
+            cpu_period_micros: 100_000,
+        }
+    );
+
+    fs::write(root.join("cpu.max"), "invalid\n")?;
+    assert!(matches!(
+        observe_cpu_hierarchy_in(root, "/system.slice/docker-probe.scope"),
+        Err(ProbeError::Invalid("cpu_max_format"))
+    ));
+
+    fs::remove_file(root.join("cpu.max"))?;
+    assert!(matches!(
+        observe_cpu_hierarchy_in(root, "/"),
+        Err(ProbeError::Read("cpu.max", _))
+    ));
+
+    fs::remove_file(slice.join("cpu.max"))?;
+    assert!(matches!(
+        observe_cpu_hierarchy_in(root, "/system.slice/docker-probe.scope"),
+        Err(ProbeError::Read("cpu.max", _))
+    ));
+
+    fs::write(slice.join("cpu.max"), "max 100000\n")?;
+    fs::remove_file(leaf.join("cpu.max"))?;
+    assert!(matches!(
+        observe_cpu_hierarchy_in(root, "/system.slice/docker-probe.scope"),
+        Err(ProbeError::Read("cpu.max", _))
     ));
     Ok(())
 }
