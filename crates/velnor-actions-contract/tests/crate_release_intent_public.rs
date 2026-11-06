@@ -7,6 +7,29 @@ use velnor_actions_contract::config::CrateReleaseIntent;
 fn intent_rejects_unapproved_or_ambiguous_release_inputs() -> Result<(), Box<dyn std::error::Error>>
 {
     let value = serde_json::json!({"schema": 1, "repository": "example/demo-crate", "default_branch": "main", "environment": "release", "required_workflow_path": ".github/workflows/ci.yml", "trusted_reviewer_id": 139_017, "generator_version":"0.1.72","generator_source_sha":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","generator_manifest_sha256":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc","release_plz_version":"0.4.3","runner":"ubuntu-26.04","authentication":"trusted-publishing","rust_version": "1.97.1", "manifest_path": "Cargo.toml", "pr_write_paths": ["Cargo.toml"], "registry": "crates-io", "packages": ["demo-crate"], "publish_features": {"demo-crate":[]}, "tag_template": "{{ package }}-v{{ version }}", "recovery": {"package": "demo-crate", "version": "0.1.1", "source_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}});
+    for template in ["{{package}}-v{{version}}", "{{ package }}-v{{ version }}"] {
+        let mut candidate = value.clone();
+        candidate["tag_template"] = template.into();
+        serde_json::from_value::<CrateReleaseIntent>(candidate)?.validate()?;
+    }
+    for template in [
+        " {{package}}-v{{version}}",
+        "{{package}} -v{{version}}",
+        "{{package}}-v{{version}} ",
+        "{{ pack age }}-v{{version}}",
+        "{{package}}-v{{version}}{{version}}",
+        "{{package}}\t-v{{version}}",
+        "{{package}}-v{{version}}\n",
+    ] {
+        let mut candidate = value.clone();
+        candidate["tag_template"] = template.into();
+        assert!(
+            serde_json::from_value::<CrateReleaseIntent>(candidate)?
+                .validate()
+                .is_err(),
+            "accepted {template:?}"
+        );
+    }
     let intent: CrateReleaseIntent = serde_json::from_value(value.clone())?;
     intent.validate()?;
     let mut hidden = intent.clone();
@@ -337,4 +360,46 @@ fn runner_selection_rejects_old_ubuntu_images() {
     }
     assert!(RunsOn::parse("macos-26").is_ok());
     assert!(RunsOn::parse("scale-set:velnor+ubuntu-26.04-scale-set").is_ok());
+}
+
+#[test]
+fn crate_tag_templates_preserve_only_placeholder_whitespace()
+-> Result<(), Box<dyn std::error::Error>> {
+    use velnor_actions_contract::config::RustReleaseConfig;
+    let base = serde_json::json!({"enabled":true,"registry":"crates-io","packages":["demo"],"required_workflow_path":".github/workflows/ci.yml","trusted_reviewer_id":1});
+    for template in ["{{package}}-v{{version}}", "{{ package }}-v{{ version }}"] {
+        let mut value = base.clone();
+        value["tag_name"] = template.into();
+        serde_json::from_value::<RustReleaseConfig>(value)?.validate("test")?;
+        let concrete = template
+            .replace("{{package}}", "demo")
+            .replace("{{version}}", "1.2.3")
+            .replace("{{ package }}", "demo")
+            .replace("{{ version }}", "1.2.3");
+        assert!(
+            std::process::Command::new("git")
+                .args(["check-ref-format", &format!("refs/tags/{concrete}")])
+                .status()?
+                .success()
+        );
+    }
+    for template in [
+        " {{package}}-v{{version}}",
+        "{{package}} -v{{version}}",
+        "{{package}}-v{{version}} ",
+        "{{ pack age }}-v{{version}}",
+        "{{package}}-v{{version}}{{version}}",
+        "{{package}}\t-v{{version}}",
+        "{{package}}-v{{version}}\n",
+    ] {
+        let mut value = base.clone();
+        value["tag_name"] = template.into();
+        assert!(
+            serde_json::from_value::<RustReleaseConfig>(value)?
+                .validate("test")
+                .is_err(),
+            "accepted {template:?}"
+        );
+    }
+    Ok(())
 }

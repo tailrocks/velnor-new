@@ -296,8 +296,10 @@ pub(super) fn valid_release_workflow_path(path: &str) -> bool {
 }
 
 pub(super) fn supported_crate_tag_template(tag: &str) -> bool {
-    tag.chars()
-        .filter(|c| !c.is_whitespace())
-        .collect::<String>()
-        == "{{package}}-v{{version}}"
+    tag.strip_prefix("{{")
+        .and_then(|value| value.strip_suffix("}}"))
+        .and_then(|value| value.split_once("}}-v{{"))
+        .is_some_and(|(package, version)| {
+            package.trim_matches(' ') == "package" && version.trim_matches(' ') == "version"
+        })
 }

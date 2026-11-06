@@ -65,7 +65,9 @@ pub fn validate_plan_id(id: &str) -> Result<(), RenderError> {
 
 pub fn validate_package_name(name: &str) -> Result<(), RenderError> {
     let mut bytes = name.bytes();
-    let leading = bytes.next().is_some_and(|b| b.is_ascii_alphanumeric());
+    let leading = bytes
+        .next()
+        .is_some_and(|b| b.is_ascii_alphabetic() || b == b'_');
     let rest = bytes.all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'-'));
     if leading && rest && name.len() <= 64 {
         Ok(())

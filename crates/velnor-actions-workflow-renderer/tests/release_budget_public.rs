@@ -38,6 +38,7 @@ fn hosted_supervisor_runs_candidate_scenarios_and_controller_regressions()
     for (file, arguments) in [
         ("release_manager_scenario_controller_test.py", &[][..]),
         ("release_manager_home_access_test.py", &[][..]),
+        ("release_source_names_test.py", &[][..]),
         (
             "release_manager_systemd_test.py",
             &["RealManagerTest.test_reobserved_cgroup_cannot_change_invocation"][..],
@@ -202,4 +203,19 @@ fn generated_shell_arguments_preserve_apostrophes() -> Result<(), Box<dyn std::e
         assert_eq!(output.stdout, value.as_bytes());
     }
     Ok(())
+}
+
+#[test]
+fn package_names_match_cargo_contract() {
+    use velnor_actions_workflow_renderer::release_spec::validate_package_name;
+    for (name, valid) in [
+        ("_codec", true),
+        ("alpha-2", true),
+        ("2codec", false),
+        ("-codec", false),
+        ("", false),
+        ("é", false),
+    ] {
+        assert_eq!(validate_package_name(name).is_ok(), valid, "{name:?}");
+    }
 }
