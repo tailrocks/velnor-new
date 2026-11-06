@@ -78,6 +78,7 @@ limit="${@TIMEOUT_ENV@:-@TIMEOUT@}"
 unit_limit="${@UNIT_TIMEOUT_ENV@:-@UNIT_TIMEOUT@}"
 deadline="${@DEADLINE_ENV@:-@DEADLINE@}"
 shape='^s256-[0-9a-f]{64}-s256-[0-9a-f]{64}-s256-[0-9a-f]{64}$'
+state_prefix='@STATE_PREFIX@'
 export d ref repo signer limit shape unit_limit deadline
 case "${VELNOR_STATE_SELECT_UNIT_COUNT:-}" in @UNIT_COUNT@) ;; *) exit 1 ;; esac
 @RUN_GH@worker='@WORKER@'
@@ -93,7 +94,7 @@ select_all() {
   command -v bash >/dev/null 2>&1 || return 0
   python3 -I -c 'import math, os, pathlib, signal, subprocess, sys, time' >/dev/null 2>&1 || return 0
 @REMOVE_UNIT_ENV@
-  export VELNOR_STATE_SELECT_DEADLINE="$deadline" VELNOR_STATE_UNIT_TIMEOUT="$unit_limit" VELNOR_STATE_PARALLELISM=@PARALLELISM@ VELNOR_STATE_SELECT_DIR="$d" VELNOR_STATE_SELECT_PREFIX='@STATE_PREFIX@' VELNOR_STATE_SELECT_LIST_LIMIT=@SELECT_LIMIT@
+  export VELNOR_STATE_SELECT_DEADLINE="$deadline" VELNOR_STATE_UNIT_TIMEOUT="$unit_limit" VELNOR_STATE_PARALLELISM=@PARALLELISM@ VELNOR_STATE_SELECT_DIR="$d" VELNOR_STATE_SELECT_PREFIX="$state_prefix" VELNOR_STATE_SELECT_LIST_LIMIT=@SELECT_LIMIT@
   exec python3 -I -c 'import os; exec(bytes.fromhex(os.environ.pop("VELNOR_STATE_SELECT_SUPERVISOR_HEX")))'
 }
 emit() {

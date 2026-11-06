@@ -8,12 +8,10 @@ use std::io;
 use velnor_actions_contract::config::{
     CheckExecutor, CheckPlatform, CheckRunner, NativeHomebrewOperation,
 };
-use velnor_actions_contract::workflow::cache_family::{RootSlug, StateUnit};
 use velnor_actions_contract::{
     Concurrency, Job, JobTimeout, Permissions, Step, StepKind, Trigger, VelnorConfig, WorkflowIr,
     WorkflowPolicy,
 };
-use velnor_actions_workflow_renderer::plan_sources::state_select::SealRoot;
 use velnor_actions_workflow_renderer::render::{
     CONCURRENCY_CANCEL, CONCURRENCY_GROUP, CanonicalAuthoritySteps, CanonicalRuntimeInputs,
     EXPECTED_PR_TYPES, RenderContext, render_workflow_ir,
@@ -51,9 +49,9 @@ pub(super) fn native_check_step(check_id: &str, task_id: &str) -> Step {
 fn native_check_job(step: Step) -> Job {
     Job {
         display_name: "Native check".to_owned(),
-        runs_on: "ubuntu-24.04".to_owned(),
+        runs_on: "ubuntu-26.04".to_owned(),
         check_runner: Some(CheckRunner {
-            label: "ubuntu-24.04".to_owned(),
+            label: "ubuntu-26.04".to_owned(),
             platform: CheckPlatform::LinuxX64,
             executor: CheckExecutor::Hosted,
             container: None,
@@ -99,7 +97,7 @@ pub(super) fn context(jobs: &BTreeMap<String, Job>) -> Result<RenderContext, Box
         jobs,
         WorkflowPolicy::ConsumerV1,
         &config,
-        "ubuntu-24.04",
+        "ubuntu-26.04",
         Vec::new(),
         runtime,
     )
@@ -109,7 +107,7 @@ pub(super) fn context(jobs: &BTreeMap<String, Job>) -> Result<RenderContext, Box
         authority_steps,
         generator_version: env!("CARGO_PKG_VERSION").to_owned(),
         report_helper_version: env!("CARGO_PKG_VERSION").to_owned(),
-        runs_on: "ubuntu-24.04".to_owned(),
+        runs_on: "ubuntu-26.04".to_owned(),
         scale_set_selector: None,
         staged_binary: format!("{STAGED_BINARY_PREFIX}{}", env!("CARGO_PKG_VERSION")),
         request_dir: format!("{REQUEST_DIR_PREFIX}request"),

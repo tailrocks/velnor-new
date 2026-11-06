@@ -21,15 +21,26 @@ while [ "$i" -lt "$VELNOR_STATE_SELECT_UNIT_COUNT" ]; do
   case "$record" in *" "*) prefix=${record%% *}; rest=${record#* } ;; *) exit 1 ;; esac
   case "$rest" in *" "*) attested=${rest%% *}; produce=${rest#* } ;; *) exit 1 ;; esac
   case "$produce" in *" "*|"") exit 1 ;; esac
-  case "$prefix" in ""|*[!a-z0-9-]*) exit 1 ;; *-) ;; *) exit 1 ;; esac
-  case "$attested$produce" in *[!a-z0-9_]*) exit 1 ;; esac
-  [ "${#attested}" -gt 20 ] && [ "${#attested}" -le 70 ] || exit 1
-  [ "${#produce}" -gt 18 ] && [ "${#produce}" -le 70 ] || exit 1
-  case "$prefix:$attested:$produce" in
-    *-union-*:state_union_*_attested:state_union_*_produce) ;;
-    *-suite-*:state_suite_*_attested:state_suite_*_produce) ;;
+  case "$prefix" in
+    "$state_prefix"union-*) unit_name=union; root=${prefix#"$state_prefix"union-} ;;
+    "$state_prefix"suite-*) unit_name=suite; root=${prefix#"$state_prefix"suite-} ;;
     *) exit 1 ;;
   esac
+  case "$root" in *-) root=${root%-} ;; *) exit 1 ;; esac
+  case "$root" in
+    ""|[!abcdefghijklmnopqrstuvwxyz0123456789]*|*[!abcdefghijklmnopqrstuvwxyz0123456789-]*) exit 1 ;;
+  esac
+  [ "${#root}" -le 48 ] || exit 1
+  case "-$root-" in *-s256-*) exit 1 ;; esac
+  slug=
+  remaining=$root
+  while [ -n "$remaining" ]; do
+    character=${remaining%"${remaining#?}"}
+    remaining=${remaining#?}
+    case "$character" in -) slug="${slug}_" ;; *) slug="${slug}${character}" ;; esac
+  done
+  [ "$attested" = "state_${unit_name}_${slug}_attested" ] || exit 1
+  [ "$produce" = "state_${unit_name}_${slug}_produce" ] || exit 1
   compat_name="VELNOR_STATE_COMPAT_R$i"
   snapshot_name="VELNOR_STATE_SNAPSHOT_R$i"
   compat=

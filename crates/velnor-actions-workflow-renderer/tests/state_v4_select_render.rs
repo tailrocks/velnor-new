@@ -99,7 +99,7 @@ fn rendered_selector_case(roots: &[SealRoot]) -> Result<String, Box<dyn Error>> 
 fn planned_job(roots: &[SealRoot]) -> Result<velnor_actions_contract::Job, Box<dyn Error>> {
     let catalog = velnor_actions_mise::ToolCatalog::pinned();
     let mut plan = plan_job(
-        "ubuntu-24.04",
+        "ubuntu-26.04",
         None,
         &catalog,
         PlanJobToolNeeds::default(),

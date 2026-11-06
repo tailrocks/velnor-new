@@ -39,7 +39,7 @@ fn selector_keeps_supervisor_in_static_environment_and_loader_in_run() -> Result
     };
     let expected_record = format!(
         "{} {} {}",
-        scope(StateUnit::Union, ROOT)?.prefix(),
+        scope()?.prefix(),
         state_attested_output("union", "root"),
         state_produce_output("union", "root")
     );

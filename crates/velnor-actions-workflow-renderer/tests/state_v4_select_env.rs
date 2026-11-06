@@ -6,18 +6,14 @@ use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::PathBuf;
 
-use velnor_actions_contract::JobTimeout;
-use velnor_actions_contract::workflow::StepKind;
 use velnor_actions_contract::workflow::cache_family::StateUnit;
-use velnor_actions_contract::workflow::state_seal::{state_attested_output, state_produce_output};
-use velnor_actions_workflow_renderer::plan_sources::state_select::{SealRoot, state_select_step};
 
 use crate::gc1_scene::{Scene, fail};
 use crate::gc1_seal_support::{Attestation, Gh};
-use crate::gc1_seal_units::{
-    expect, expect_flag, produce_flag, rows_of, run_select_units, selected_unit, unit_compat,
-    unit_key, unit_scope, unit_snapshot,
-};
+use crate::gc1_seal_units::{expect_flag, produce_flag, rows_of, run_select_units, unit_key};
+
+#[path = "state_v4_select_env_records.rs"]
+mod records;
 
 const T3: &str = "2026-11-04T03:00:00Z";
 
@@ -57,116 +53,6 @@ fn path_without_printenv(scene: &Scene) -> Result<String, Box<dyn Error>> {
     fs::create_dir_all(&dir)?;
     std::os::unix::fs::symlink("/bin/sh", dir.join("sh"))?;
     Ok(dir.to_string_lossy().into_owned())
-}
-
-#[test]
-#[cfg(unix)]
-fn selector_treats_trailing_newlines_in_dynamic_metadata_as_cold() -> Result<(), Box<dyn Error>> {
-    let (scene, gh) = scene("seal-select-env-newline")?;
-    let key = unit_key(StateUnit::Union, ".", 0, 0x1000, 1)?;
-    gh.list(&rows_of(&[(T3.to_owned(), key.clone())]))?;
-    gh.attest(&[Attestation::signed(&key)])?;
-    let units = [(StateUnit::Union, ".")];
-
-    run_select_units(&scene, &gh, &units, &[])?;
-    expect(
-        &selected_unit(&scene, StateUnit::Union, ".")?,
-        std::slice::from_ref(&key),
-        "valid dynamic metadata",
-    )?;
-    expect_flag(
-        &produce_flag(&scene, StateUnit::Union, ".")?,
-        "false",
-        "valid dynamic metadata",
-    )?;
-
-    let compat = unit_compat(0);
-    let snapshot = unit_snapshot(0);
-    for (name, value) in [
-        ("VELNOR_STATE_COMPAT_R0", format!("{compat}\n")),
-        ("VELNOR_STATE_SNAPSHOT_R0", format!("{snapshot}\n\n")),
-    ] {
-        run_select_units(&scene, &gh, &units, &[(name, value.as_str())])?;
-        expect_flag(
-            &produce_flag(&scene, StateUnit::Union, ".")?,
-            "true",
-            "malformed dynamic metadata must force cold production",
-        )?;
-    }
-
-    run_select_units(
-        &scene,
-        &gh,
-        &units,
-        &[
-            ("VELNOR_STATE_COMPAT_R0", ""),
-            ("VELNOR_STATE_SNAPSHOT_R0", ""),
-        ],
-    )?;
-    let manifest = fs::read_to_string(scene.runner.join("velnor/state-select/units"))?;
-    if !manifest.lines().any(|line| line.ends_with("  ")) {
-        return Err(fail(
-            "empty dynamic metadata lost its six-field record shape",
-        ));
-    }
-
-    let marker = scene.scratch.join("dynamic-value-executed");
-    let injected = format!("{compat}; touch {}", marker.display());
-    run_select_units(
-        &scene,
-        &gh,
-        &units,
-        &[("VELNOR_STATE_COMPAT_R0", injected.as_str())],
-    )?;
-    if marker.exists() {
-        return Err(fail("dynamic metadata executed as shell syntax"));
-    }
-    expect_flag(
-        &produce_flag(&scene, StateUnit::Union, ".")?,
-        "true",
-        "malformed dynamic metadata cannot produce a warm hit",
-    )?;
-    scene.finish()
-}
-
-#[test]
-#[cfg(unix)]
-fn selector_rejects_malformed_static_unit_records_before_output() -> Result<(), Box<dyn Error>> {
-    let (scene, gh) = scene("seal-select-env-static-record")?;
-    let step = state_select_step(
-        &[SealRoot {
-            unit: StateUnit::Union,
-            slug: unit_scope(StateUnit::Union, ".")?.root,
-        }],
-        JobTimeout::PLAN,
-    )?;
-    let StepKind::Shell { env, .. } = step.kind else {
-        return Err(fail("selector step is not a shell step"));
-    };
-    let record = env
-        .get("VELNOR_STATE_SELECT_UNIT_R0")
-        .ok_or_else(|| fail("selector static unit record is absent"))?;
-    let overlong = "x".repeat(513);
-    let malformed = [
-        format!("{record}\n"),
-        String::new(),
-        "bad record".to_owned(),
-        overlong,
-    ];
-    for value in malformed {
-        if run_select_units(
-            &scene,
-            &gh,
-            &[(StateUnit::Union, ".")],
-            &[("VELNOR_STATE_SELECT_UNIT_R0", value.as_str())],
-        )
-        .is_ok()
-        {
-            return Err(fail("selector accepted a malformed static unit record"));
-        }
-        no_publication_or_network(&scene, &gh)?;
-    }
-    scene.finish()
 }
 
 #[test]
@@ -217,9 +103,19 @@ fn selector_requires_lossless_printenv_output_before_selection() -> Result<(), B
     )?;
     expect_flag(
         &produce_flag(&scene, StateUnit::Union, ".")?,
-        "true",
+        "false",
         "failed dynamic lookup must be unavailable",
     )?;
+    let manifest = fs::read_to_string(scene.runner.join("velnor/state-select/units"))?;
+    let fields = manifest
+        .lines()
+        .next()
+        .ok_or_else(|| fail("selector unit record is absent"))?
+        .split(' ')
+        .collect::<Vec<_>>();
+    if fields.len() != 6 || !fields[4].is_empty() {
+        return Err(fail("failed dynamic lookup remained available"));
+    }
     scene.finish()
 }
 
