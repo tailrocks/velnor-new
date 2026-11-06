@@ -155,6 +155,7 @@ fn verify_record() -> Result<(), Box<dyn std::error::Error>> {
         ),
     ]);
     check_identity(&bytes, &subjects)?;
+    check_certificate_fields(&bytes, &subjects)?;
     check_tampering(&record, &bundle, &identity, deadline)?;
     Ok(())
 }
@@ -183,6 +184,38 @@ fn check_identity(
     expected = expectation();
     expected.source_ref = "refs/heads/unreviewed";
     assert!(validate_output_with_additional_names(bytes, subjects, &[], &expected).is_err());
+    Ok(())
+}
+
+fn check_certificate_fields(
+    bytes: &[u8],
+    subjects: &BTreeMap<String, String>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let output: Vec<serde_json::Value> = serde_json::from_slice(bytes)?;
+    let [valid] = output.as_slice() else {
+        return Err("expected one verified image attestation".into());
+    };
+    for field in [
+        "issuer", "subjectAlternativeName", "sourceRepositoryURI",
+        "sourceRepositoryOwnerURI", "sourceRepositoryIdentifier", "sourceRepositoryDigest",
+        "sourceRepositoryRef", "buildSignerURI", "buildSignerDigest", "buildConfigURI",
+        "buildConfigDigest", "buildTrigger", "runnerEnvironment",
+    ] {
+        let mut invalid = valid.clone();
+        invalid["verificationResult"]["signature"]["certificate"][field] =
+            format!("invalid-{field}").into();
+        for entries in [
+            vec![invalid.clone()],
+            vec![invalid.clone(), valid.clone()],
+            vec![valid.clone(), invalid],
+        ] {
+            let error = validate_output_with_additional_names(
+                &serde_json::to_vec(&entries)?, subjects, &[], &expectation(),
+            ).expect_err("invalid verified certificate field must be rejected");
+            assert!(error.to_string().contains("package_attestation_identity_mismatch"),
+                "unexpected rejection for {field}: {error}");
+        }
+    }
     Ok(())
 }
 
