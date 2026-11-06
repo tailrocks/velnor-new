@@ -58,8 +58,8 @@ fn release_requires_valid_human_reviews_and_protected_environment() {
     let mut bad = Fixture::valid();
     bad.reviews[0]["submitted_at"] = json!("2026-11-03T15:38:50Z");
     assert!(
-        verify_github_evidence(&request(), &bad).is_ok(),
-        "approval remains eligible in the API merge timestamp second"
+        verify_github_evidence(&request(), &bad).is_err(),
+        "approval in the API merge timestamp second is ambiguous"
     );
 }
 

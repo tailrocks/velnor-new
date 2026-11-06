@@ -36,3 +36,32 @@ fn later_review_decision_supersedes_older_same_second_ambiguity() {
     fixture.reviews = vec![approved, changes, later];
     assert!(verify_github_evidence(&request(), &fixture).is_err());
 }
+
+#[test]
+fn merge_second_review_decisions_are_ambiguous() {
+    let mut fixture = Fixture::valid();
+    let earlier = fixture.reviews[0].clone();
+    let mut decision = earlier.clone();
+    decision["id"] = json!(2);
+    decision["submitted_at"] = json!("2026-11-03T15:38:50Z");
+    for state in ["APPROVED", "CHANGES_REQUESTED", "DISMISSED"] {
+        decision["state"] = json!(state);
+        for reviews in [
+            vec![earlier.clone(), decision.clone()],
+            vec![decision.clone(), earlier.clone()],
+        ] {
+            fixture.reviews = reviews;
+            assert!(
+                verify_github_evidence(&request(), &fixture).is_err(),
+                "{state}"
+            );
+        }
+    }
+    decision["state"] = json!("APPROVED");
+    decision["submitted_at"] = json!("2026-11-03T15:38:49Z");
+    fixture.reviews = vec![decision.clone()];
+    assert!(verify_github_evidence(&request(), &fixture).is_ok());
+    decision["submitted_at"] = json!("2026-11-03T15:38:51Z");
+    fixture.reviews = vec![earlier, decision];
+    assert!(verify_github_evidence(&request(), &fixture).is_ok());
+}

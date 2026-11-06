@@ -138,6 +138,7 @@ fn read_decision(
     if submitted > merged {
         return Ok(None);
     }
+    require(submitted != merged, "review_merge_time_ambiguous")?;
     Ok(Some((
         actor.id,
         ReviewDecision {
