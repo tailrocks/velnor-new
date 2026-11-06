@@ -3,6 +3,7 @@
 # SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 # SPDX-License-Identifier: Apache-2.0
 
+import fcntl
 import os
 import pathlib
 import select
@@ -19,10 +20,10 @@ with tempfile.TemporaryDirectory(prefix="velnor-identity-guard-") as temporary:
     work = pathlib.Path(temporary).resolve()
     tree = work / "tree"
     tree.mkdir()
-    for index in range(1800):
-        name = f"{index:04d}-" + "a" * 80
+    for index in range(8000):
+        name = f"{index:04d}-" + "a" * 100
         (tree / name).write_bytes(b"a")
-        (tree / (name + "-link")).symlink_to("missing-" + "b" * 80)
+        (tree / (name + "-link")).symlink_to("missing-" + "b" * 200)
     for mode in (sys.argv[3],) if len(sys.argv) > 3 else ("tree", "link"):
         for mutate in (False, True):
             directory = work / f"{mode}-{mutate}"
@@ -49,6 +50,8 @@ printf 'IDENTITY PUBLISHED\\n'
 '''
             process = subprocess.Popen(["bash", "-c", script], env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             fd = os.open(fifo, os.O_RDONLY | os.O_NONBLOCK)
+            if hasattr(fcntl, "F_SETPIPE_SZ"):
+                fcntl.fcntl(fd, fcntl.F_SETPIPE_SZ, 4096)
             data = bytearray()
             deadline = time.monotonic() + 60
             replaced = False
@@ -60,6 +63,7 @@ printf 'IDENTITY PUBLISHED\\n'
                         if chunk:
                             data.extend(chunk)
                             if mutate and not replaced:
+                                assert process.poll() is None, mode
                                 os.replace(replacement, guard)
                                 replaced = True
                         elif process.poll() is not None:
@@ -69,7 +73,7 @@ printf 'IDENTITY PUBLISHED\\n'
                 else:
                     raise AssertionError(f"{mode} identity timed out")
                 stdout, stderr = process.communicate(timeout=5)
-                assert len(data) > 65536, (mode, len(data), stderr)
+                assert len(data) > 1024 * 1024, (mode, len(data), stderr)
                 if mutate:
                     assert replaced and process.returncode == 2, (mode, process.returncode, stderr)
                     assert b"trusted qualification archive guard changed" in stderr, stderr
