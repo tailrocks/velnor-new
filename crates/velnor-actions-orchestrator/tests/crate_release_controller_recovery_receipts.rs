@@ -178,70 +178,69 @@ pub(super) fn check_authentication_denials(
     Ok(())
 }
 
+struct TransientRepository<'a> {
+    github: &'a Github,
+    phase: Cell<u8>,
+    downloads: Cell<u32>,
+}
+impl GitHubAdmissionRead for TransientRepository<'_> {
+    fn get(&self, route: &str) -> Result<Value, OrchestratorError> {
+        let mut value = self.github.get(route)?;
+        if route.ends_with("/actions/runs/12/approvals") && self.phase.get() == 0 {
+            self.phase.set(1);
+        } else if route == "repos/example/demo" {
+            match self.phase.get() {
+                1 => self.phase.set(2),
+                2 => {
+                    self.phase.set(3);
+                    value["id"] = json!(23);
+                }
+                _ => {}
+            }
+        } else if self.phase.get() == 3 && route.ends_with("/actions/runs/12") {
+            value["repository"]["id"] = json!(23);
+            value["head_repository"]["id"] = json!(23);
+        } else if self.phase.get() == 3
+            && route.ends_with("/actions/runs/12/artifacts?per_page=100")
+        {
+            value["artifacts"][0]["workflow_run"]["repository_id"] = json!(23);
+            value["artifacts"][0]["workflow_run"]["head_repository_id"] = json!(23);
+        } else if self.phase.get() == 3 && route.ends_with("/actions/artifacts/10") {
+            value["workflow_run"]["repository_id"] = json!(23);
+            value["workflow_run"]["head_repository_id"] = json!(23);
+            self.phase.set(4);
+        }
+        Ok(value)
+    }
+    fn get_optional(&self, route: &str) -> Result<Option<Value>, OrchestratorError> {
+        self.github.get_optional(route)
+    }
+}
+impl crate::crate_release_tool_download::ToolDownloadTransport for TransientRepository<'_> {
+    fn github(
+        &self,
+        repo: &str,
+        id: u64,
+        token: &str,
+        deadline: std::time::Instant,
+    ) -> Result<crate::crate_release_tool_download::ToolDownloadResponse, OrchestratorError> {
+        self.downloads.set(self.downloads.get() + 1);
+        self.github.github(repo, id, token, deadline)
+    }
+    fn storage(
+        &self,
+        url: &str,
+        deadline: std::time::Instant,
+    ) -> Result<crate::crate_release_tool_download::ToolDownloadResponse, OrchestratorError> {
+        self.github.storage(url, deadline)
+    }
+}
+
 pub(super) fn check_transient_repository(
     stage: &crate::crate_release_tool_artifact::ToolchainStageRequest<'_>,
     github: &Github,
     toolchain: bool,
 ) {
-    struct TransientRepository<'a> {
-        github: &'a Github,
-        phase: Cell<u8>,
-        downloads: Cell<u32>,
-    }
-    impl GitHubAdmissionRead for TransientRepository<'_> {
-        fn get(&self, route: &str) -> Result<Value, OrchestratorError> {
-            let mut value = self.github.get(route)?;
-            if route.ends_with("/actions/runs/12/approvals") && self.phase.get() == 0 {
-                self.phase.set(1);
-            } else if route == "repos/example/demo" {
-                match self.phase.get() {
-                    1 => self.phase.set(2),
-                    2 => {
-                        self.phase.set(3);
-                        value["id"] = json!(23);
-                    }
-                    _ => {}
-                }
-            } else if self.phase.get() == 3 && route.ends_with("/actions/runs/12") {
-                value["repository"]["id"] = json!(23);
-                value["head_repository"]["id"] = json!(23);
-            } else if self.phase.get() == 3
-                && route.ends_with("/actions/runs/12/artifacts?per_page=100")
-            {
-                value["artifacts"][0]["workflow_run"]["repository_id"] = json!(23);
-                value["artifacts"][0]["workflow_run"]["head_repository_id"] = json!(23);
-            } else if self.phase.get() == 3 && route.ends_with("/actions/artifacts/10") {
-                value["workflow_run"]["repository_id"] = json!(23);
-                value["workflow_run"]["head_repository_id"] = json!(23);
-                self.phase.set(4);
-            }
-            Ok(value)
-        }
-        fn get_optional(&self, route: &str) -> Result<Option<Value>, OrchestratorError> {
-            self.github.get_optional(route)
-        }
-    }
-    impl crate::crate_release_tool_download::ToolDownloadTransport for TransientRepository<'_> {
-        fn github(
-            &self,
-            repo: &str,
-            id: u64,
-            token: &str,
-            deadline: std::time::Instant,
-        ) -> Result<crate::crate_release_tool_download::ToolDownloadResponse, OrchestratorError>
-        {
-            self.downloads.set(self.downloads.get() + 1);
-            self.github.github(repo, id, token, deadline)
-        }
-        fn storage(
-            &self,
-            url: &str,
-            deadline: std::time::Instant,
-        ) -> Result<crate::crate_release_tool_download::ToolDownloadResponse, OrchestratorError>
-        {
-            self.github.storage(url, deadline)
-        }
-    }
     let transient = TransientRepository {
         github,
         phase: Cell::new(0),
