@@ -114,8 +114,11 @@ pub(crate) fn admitted_production_context(
 fn read_admission(
     temp: &Path,
 ) -> Result<(PackageReleasePolicy, PackageReleasePlan, Admission), OrchestratorError> {
+    let runner_temp = std::path::PathBuf::from(required("RUNNER_TEMP")?);
+    let expected = runner_temp.join("velnor");
+    let canonical_expected = runner_temp.canonicalize().ok().map(|p| p.join("velnor"));
     if !temp.is_absolute()
-        || temp != std::path::PathBuf::from(required("RUNNER_TEMP")?).join("velnor")
+        || (temp != expected && canonical_expected.as_deref() != Some(temp))
     {
         return Err(internal("stable_production_admission_path"));
     }
