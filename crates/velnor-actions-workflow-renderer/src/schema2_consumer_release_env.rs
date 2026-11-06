@@ -111,6 +111,11 @@ fn release_context_bindings(
     Ok(())
 }
 
+pub(in crate::schema2) const STATUS_TOKEN_BINDING: (&str, &str) = (
+    "VELNOR_RELEASE_STATUS_TOKEN",
+    "${{ secrets.RELEASE_STATUS_READ_TOKEN }}",
+);
+
 fn credential_bindings(env: &mut Vec<(String, Yaml)>, op: &str, authenticated: bool) {
     if authenticated {
         push(env, "GH_TOKEN", "${{ github.token }}");
@@ -134,11 +139,7 @@ fn credential_bindings(env: &mut Vec<(String, Yaml)>, op: &str, authenticated: b
             | "merge-homebrew-tap-pr-v1"
             | "select-release-tap-continuation-v1"
     ) {
-        push(
-            env,
-            "VELNOR_RELEASE_STATUS_TOKEN",
-            "${{ secrets.RELEASE_STATUS_READ_TOKEN }}",
-        );
+        push(env, STATUS_TOKEN_BINDING.0, STATUS_TOKEN_BINDING.1);
     }
 }
 fn channel_bindings(
