@@ -229,8 +229,6 @@ fn supervised_maybe_upload(
 fn seed_supervised_journal(
     journal: &super::JournalRegistryFake,
     prior: &crate::crate_release_journal::JournalReceipt,
-    execution: &crate::crate_release_source_view::SupervisedSourceExecution,
-    git: &crate::crate_release_git::ReleaseGit,
 ) -> Result<(), Box<dyn std::error::Error>> {
     crate::crate_release_journal::fixture_storage::seed_started_record(
         journal,
@@ -350,7 +348,7 @@ fn start_supervised_journal(
     input: &FinishFixture<'_>,
     journal: &super::JournalRegistryFake,
 ) -> Result<crate::crate_release_journal::JournalEvidence, Box<dyn std::error::Error>> {
-    seed_supervised_journal(journal, &input.prior, &input.execution, input.git)?;
+    seed_supervised_journal(journal, &input.prior)?;
     let generator = crate::package_release_signer::fixture_attested_generator();
     let start = crate::package_release_signer::AdmittedStart {
         journal,
