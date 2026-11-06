@@ -4,11 +4,12 @@
 use std::error::Error;
 use std::fs::{self, File};
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::{Arc, Barrier};
+use std::thread;
 
 use velnor_resource_probe::ProbeError;
-use velnor_resource_probe::execution_request::{
-    REQUEST_FILE, open_request, read_request_file, read_request_file_with_open,
-};
+use velnor_resource_probe::execution_request::{REQUEST_FILE, read_request_file};
 use velnor_resource_probe::job_hook::{
     Challenge, Decision, SourceRequest, canonical_json, sha256, validate_challenge,
     validate_decision,
@@ -215,6 +216,49 @@ impl Drop for ScopedTempDir {
     }
 }
 
+fn assert_mid_read_swap_rejected(
+    inbox: &File,
+    inbox_path: &std::path::Path,
+    request_path: &std::path::Path,
+    uid: u32,
+    gid: u32,
+) {
+    let stop_swap = Arc::new(AtomicBool::new(false));
+    let swap_inbox = inbox_path.to_path_buf();
+    let swap_req = request_path.to_path_buf();
+    let swap_stop = Arc::clone(&stop_swap);
+    let swapper = thread::spawn(move || {
+        let mut seq = 0_usize;
+        while !swap_stop.load(Ordering::Acquire) {
+            let candidate = swap_inbox.join(format!(".swap.{}.tmp", seq & 1));
+            let body = if seq.is_multiple_of(2) {
+                b"{\"schema_version\":1}\n".as_slice()
+            } else {
+                b"{\"schema_version\":2,\"extra\":true}\n".as_slice()
+            };
+            if fs::write(&candidate, body).is_ok()
+                && fs::set_permissions(&candidate, fs::Permissions::from_mode(0o600)).is_ok()
+            {
+                drop(fs::rename(&candidate, &swap_req));
+            }
+            seq = seq.wrapping_add(1);
+        }
+    });
+    let mut saw_changed = false;
+    for _ in 0..5_000 {
+        if matches!(
+            read_request_file(inbox, uid, gid),
+            Err(ProbeError::Invalid("execution_request_changed"))
+        ) {
+            saw_changed = true;
+            break;
+        }
+    }
+    stop_swap.store(true, Ordering::Release);
+    drop(swapper.join());
+    assert!(saw_changed);
+}
+
 #[test]
 fn public_inbox_request_poll_returns_none_when_published_after_initial_enoent_and_reads_on_next_poll()
 -> TestResult<()> {
@@ -226,46 +270,51 @@ fn public_inbox_request_poll_returns_none_when_published_after_initial_enoent_an
     let meta = inbox.metadata()?;
     let (uid, gid) = (meta.uid(), meta.gid());
 
-    let staged_path = inbox_path.join(".request.tmp");
     let request_path = inbox_path.join(REQUEST_FILE);
     let payload = b"{\"schema_version\":1}\n";
-    fs::write(&staged_path, payload)?;
-    fs::set_permissions(&staged_path, fs::Permissions::from_mode(0o600))?;
-
-    let mut open_calls = 0_usize;
-    let first_poll = read_request_file_with_open(&inbox, uid, gid, |dir| {
-        open_calls += 1;
-        let result = open_request(dir)?;
-        if open_calls == 1 && result.is_none() {
-            fs::rename(&staged_path, &request_path)
-                .map_err(|_| ProbeError::Invalid("test_rename"))?;
+    for round in 0..64_usize {
+        if request_path.exists() {
+            fs::remove_file(&request_path)?;
         }
-        Ok(result)
-    })?;
-    assert_eq!(first_poll, None);
+        let staged_path = inbox_path.join(format!(".request.{round}.tmp"));
+        fs::write(&staged_path, payload)?;
+        fs::set_permissions(&staged_path, fs::Permissions::from_mode(0o600))?;
 
-    let (read_bytes, read_meta) =
-        read_request_file(&inbox, uid, gid)?.ok_or("expected request.json on second poll")?;
-    assert_eq!(read_bytes, payload);
-    assert_eq!(read_meta.size, payload.len() as u64);
+        let barrier = Arc::new(Barrier::new(2));
+        let empty_polls = Arc::new(AtomicUsize::new(0));
+        let poller_inbox = inbox.try_clone()?;
+        let poller_barrier = Arc::clone(&barrier);
+        let poller_polls = Arc::clone(&empty_polls);
 
-    let replacement_path = inbox_path.join(".replacement.tmp");
-    fs::write(&replacement_path, b"{\"schema_version\":2}\n")?;
-    fs::set_permissions(&replacement_path, fs::Permissions::from_mode(0o600))?;
-    let mut second_poll_opens = 0_usize;
-    let mid_read_swap = read_request_file_with_open(&inbox, uid, gid, |dir| {
-        second_poll_opens += 1;
-        if second_poll_opens == 2 {
-            fs::rename(&replacement_path, &request_path)
-                .map_err(|_| ProbeError::Invalid("test_rename"))?;
+        let poller = thread::spawn(move || -> Result<(Vec<u8>, u64), ProbeError> {
+            poller_barrier.wait();
+            loop {
+                match read_request_file(&poller_inbox, uid, gid)? {
+                    None => {
+                        poller_polls.fetch_add(1, Ordering::Release);
+                    }
+                    Some((bytes, read_meta)) => return Ok((bytes, read_meta.size)),
+                }
+            }
+        });
+
+        barrier.wait();
+        while empty_polls.load(Ordering::Acquire) <= round % 4 {
+            thread::yield_now();
         }
-        open_request(dir)
-    });
-    assert!(matches!(
-        mid_read_swap,
-        Err(ProbeError::Invalid("execution_request_changed"))
-    ));
+        fs::rename(&staged_path, &request_path)?;
 
+        let (read_bytes, read_size) = poller
+            .join()
+            .map_err(|_| "poller thread panicked")?
+            .map_err(|err| format!("round {round} failed: {err:?}"))?;
+        assert_eq!(read_bytes, payload);
+        assert_eq!(read_size, payload.len() as u64);
+    }
+
+    assert_mid_read_swap_rejected(&inbox, &inbox_path, &request_path, uid, gid);
+
+    fs::write(&request_path, payload)?;
     fs::set_permissions(&request_path, fs::Permissions::from_mode(0o644))?;
     assert!(matches!(
         read_request_file(&inbox, uid, gid),

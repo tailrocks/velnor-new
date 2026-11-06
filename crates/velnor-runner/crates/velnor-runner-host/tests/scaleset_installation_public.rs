@@ -168,6 +168,7 @@ fn slsa_statement(image: WorkerImage, locals: &[&str], source_sha: &str) -> Valu
             args.insert(format!("context:{name}"), json!(format!("local:{name}")));
         }
         request.insert("args".to_owned(), Value::Object(args));
+        request.insert("compatibilityVersion".to_owned(), json!(30));
     }
     json!({
         "_type": "https://in-toto.io/Statement/v0.1",
@@ -234,18 +235,19 @@ fn public_verify_worker_build_source_accepts_base_and_named_contexts_and_rejects
     missing_localdir
         .pointer_mut("/predicate/runDetails/metadata/buildkit_metadata/vcs")
         .and_then(Value::as_object_mut)
-        .ok_or_else(|| std::io::Error::other("vcs map"))?
+        .ok_or("vcs map")?
         .remove("localdir:job_start_hook");
     let mut unexpected_request_key = runner_named.clone();
-    unexpected_request_key
-        .pointer_mut("/predicate/buildDefinition/externalParameters/request")
-        .and_then(Value::as_object_mut)
-        .ok_or_else(|| std::io::Error::other("request map"))?
-        .insert("unexpected".to_owned(), json!(true));
+    unexpected_request_key["predicate"]["buildDefinition"]["externalParameters"]["request"]["unexpected"] =
+        json!(true);
+    let mut wrong_compat_version = runner_named.clone();
+    wrong_compat_version["predicate"]["buildDefinition"]["externalParameters"]["request"]["compatibilityVersion"] =
+        json!(20);
     for (image, statement, sha) in [
         (WorkerImage::Dind, &dind_with_runner_contexts, SOURCE_SHA),
         (WorkerImage::Runner, &missing_localdir, SOURCE_SHA),
         (WorkerImage::Runner, &unexpected_request_key, SOURCE_SHA),
+        (WorkerImage::Runner, &wrong_compat_version, SOURCE_SHA),
         (WorkerImage::Runner, &runner_named, WRONG_SOURCE_SHA),
     ] {
         assert!(matches!(

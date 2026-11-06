@@ -15,6 +15,9 @@ use super::model::{
 use crate::error::HostError;
 
 const OCI_EMPTY_CONFIG_MEDIA_TYPE: &str = "application/vnd.oci.empty.v1+json";
+const OCI_EMPTY_CONFIG_DIGEST: &str =
+    "sha256:44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a";
+const OCI_EMPTY_CONFIG_SIZE: u64 = 2;
 const DOCKER_ATTESTATION_ARTIFACT_TYPE: &str =
     "application/vnd.docker.attestation.manifest.v1+json";
 
@@ -141,6 +144,8 @@ fn verify_attestation_envelope(
         }
         Some(DOCKER_ATTESTATION_ARTIFACT_TYPE) => {
             if config.media_type != OCI_EMPTY_CONFIG_MEDIA_TYPE
+                || config.digest != OCI_EMPTY_CONFIG_DIGEST
+                || config.size != OCI_EMPTY_CONFIG_SIZE
                 || !config_value
                     .as_object()
                     .is_some_and(serde_json::Map::is_empty)

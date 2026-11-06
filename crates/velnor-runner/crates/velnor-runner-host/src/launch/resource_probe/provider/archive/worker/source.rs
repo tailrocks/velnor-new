@@ -129,9 +129,6 @@ fn verify_build_metadata(
         statement.get("_type").and_then(Value::as_str),
         Some("https://in-toto.io/Statement/v0.1" | "https://in-toto.io/Statement/v1")
     );
-    let valid_request_keys = request
-        .keys()
-        .all(|key| ["frontend", "locals", "args", "compatibilityVersion"].contains(&key.as_str()));
     let source_url = vcs
         .get("source")
         .and_then(Value::as_str)
@@ -144,7 +141,6 @@ fn verify_build_metadata(
         || !valid_locals
         || external.len() != 2
         || config_source.len() != 1
-        || !valid_request_keys
         || !valid_request_args(request, &local_names, source_sha)
         || build.len() != 4
         || builder_platform != Some(PLATFORM)
@@ -165,6 +161,15 @@ fn valid_request_args(
     local_names: &HashSet<&str>,
     source_sha: &str,
 ) -> bool {
+    if !request
+        .keys()
+        .all(|key| ["frontend", "locals", "args", "compatibilityVersion"].contains(&key.as_str()))
+        || request
+            .get("compatibilityVersion")
+            .is_some_and(|version| version.as_u64() != Some(30))
+    {
+        return false;
+    }
     let Some(args_value) = request.get("args") else {
         return local_names.len() == 2;
     };

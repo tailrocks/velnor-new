@@ -305,6 +305,7 @@ async fn run_one_worker_pass(
         state_dir,
     )
     .await?;
+    let mut waited_polls = 0_usize;
     while !stub.dind_stop_entered.load(Ordering::Acquire) {
         let bad_exit_done = {
             let g = stub
@@ -317,6 +318,10 @@ async fn run_one_worker_pass(
         if bad_exit_done {
             tokio::time::sleep(Duration::from_millis(50)).await;
             break;
+        }
+        waited_polls += 1;
+        if waited_polls > 2_000 {
+            return Err("timed out waiting for completion worker pass".into());
         }
         tokio::time::sleep(Duration::from_millis(5)).await;
     }
@@ -344,12 +349,9 @@ pub(super) fn run_runner_log_cleanup_scenario(
         .enable_all()
         .build()?;
     let (first, replay) = runtime.block_on(async {
-        let journal_path = state_dir.join("journal.db");
-        let journal = seed::seed_completed_launch(&journal_path, &connection).await?;
-        let sock = socket_path
-            .to_str()
-            .ok_or_else(|| std::io::Error::other("socket utf8"))?;
-        let docker = connect_unix(sock)?;
+        let journal =
+            seed::seed_completed_launch(&state_dir.join("journal.db"), &connection).await?;
+        let docker = connect_unix(socket_path.to_str().ok_or("socket utf8")?)?;
         let ctx = (&journal, &connection, state_dir.as_path(), &stub);
         let first = run_one_worker_pass(ctx, docker.clone()).await?;
         let replay = if first.is_ok() {
@@ -359,10 +361,7 @@ pub(super) fn run_runner_log_cleanup_scenario(
         };
         Ok::<_, Box<dyn std::error::Error>>((first, replay))
     })?;
-    let guard = stub
-        .state
-        .lock()
-        .map_err(|_| std::io::Error::other("stub state poisoned"))?;
+    let guard = stub.state.lock().map_err(|_| "stub state poisoned")?;
     let (capture_state, runner_logs_projection) = read_diagnostics_files(&state_dir)?;
     Ok(StubObservation {
         first,
@@ -375,11 +374,9 @@ pub(super) fn run_runner_log_cleanup_scenario(
 }
 
 fn read_opt_json(path: &Path) -> TestResult<Option<Value>> {
-    if path.exists() {
-        Ok(Some(serde_json::from_slice(&std::fs::read(path)?)?))
-    } else {
-        Ok(None)
-    }
+    path.exists()
+        .then(|| Ok(serde_json::from_slice(&std::fs::read(path)?)?))
+        .transpose()
 }
 
 fn read_diagnostics_files(state_dir: &Path) -> TestResult<(Option<Value>, Option<Value>)> {

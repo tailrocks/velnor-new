@@ -28,22 +28,10 @@ pub fn read_request_file(
     user_id: u32,
     group_id: u32,
 ) -> Result<Option<(Vec<u8>, RequestMetadata)>, ProbeError> {
-    read_request_file_with_open(inbox, user_id, group_id, open_request)
-}
-
-pub fn read_request_file_with_open<F>(
-    inbox: &File,
-    user_id: u32,
-    group_id: u32,
-    mut open_fn: F,
-) -> Result<Option<(Vec<u8>, RequestMetadata)>, ProbeError>
-where
-    F: FnMut(&File) -> Result<Option<File>, ProbeError>,
-{
-    let Some((bytes, before, after)) = read_once(inbox, user_id, group_id, &mut open_fn)? else {
+    let Some((bytes, before, after)) = read_once(inbox, user_id, group_id)? else {
         return Ok(None);
     };
-    let (confirmed, reopened, final_state) = read_once(inbox, user_id, group_id, &mut open_fn)?
+    let (confirmed, reopened, final_state) = read_once(inbox, user_id, group_id)?
         .ok_or(ProbeError::Invalid("execution_request_changed"))?;
     ensure_stable_identity(before, after, reopened, final_state)?;
     ensure_stable_content(&bytes, &confirmed)?;
@@ -71,16 +59,12 @@ pub(super) fn ensure_stable_content(first: &[u8], second: &[u8]) -> Result<(), P
     }
 }
 
-fn read_once<F>(
+fn read_once(
     inbox: &File,
     user_id: u32,
     group_id: u32,
-    open_fn: &mut F,
-) -> Result<Option<(Vec<u8>, RequestMetadata, RequestMetadata)>, ProbeError>
-where
-    F: FnMut(&File) -> Result<Option<File>, ProbeError>,
-{
-    let Some(file) = open_fn(inbox)? else {
+) -> Result<Option<(Vec<u8>, RequestMetadata, RequestMetadata)>, ProbeError> {
+    let Some(file) = open_request(inbox)? else {
         return Ok(None);
     };
     let before = request_metadata(&file, user_id, group_id)?;
@@ -97,7 +81,7 @@ where
     Ok(Some((bytes, before, after)))
 }
 
-pub fn open_request(inbox: &File) -> Result<Option<File>, ProbeError> {
+fn open_request(inbox: &File) -> Result<Option<File>, ProbeError> {
     match openat(
         inbox,
         REQUEST_FILE,

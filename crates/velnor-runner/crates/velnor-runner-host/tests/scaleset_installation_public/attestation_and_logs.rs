@@ -15,6 +15,8 @@ const LAYER_DIGEST: &str =
     "sha256:4444444444444444444444444444444444444444444444444444444444444444";
 const CONFIG_DIGEST: &str =
     "sha256:5555555555555555555555555555555555555555555555555555555555555555";
+const OCI_EMPTY_CONFIG_DIGEST: &str =
+    "sha256:44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a";
 const ATTESTATION_DIGEST: &str =
     "sha256:6666666666666666666666666666666666666666666666666666666666666666";
 
@@ -75,7 +77,7 @@ fn oci_artifact_attestation_manifest(subject_digest: &str, artifact_type: &str) 
         "artifactType": artifact_type,
         "config": {
             "mediaType": "application/vnd.oci.empty.v1+json",
-            "digest": CONFIG_DIGEST,
+            "digest": OCI_EMPTY_CONFIG_DIGEST,
             "size": 2
         },
         "layers": [{
@@ -135,6 +137,10 @@ fn public_verify_worker_attestation_accepts_legacy_and_oci_artifact_manifests_an
     );
     let (wrong_artifact_manifest, _) =
         oci_artifact_attestation_manifest(MANIFEST_DIGEST, "application/vnd.unknown.manifest+json");
+    let mut wrong_empty_digest_manifest = oci_manifest.clone();
+    wrong_empty_digest_manifest["config"]["digest"] = json!(CONFIG_DIGEST);
+    let mut wrong_empty_size_manifest = oci_manifest.clone();
+    wrong_empty_size_manifest["config"]["size"] = json!(3);
     let non_empty_config = json!({"unexpected": 1});
     let mut injected_arg_statement = statement.clone();
     injected_arg_statement
@@ -151,6 +157,8 @@ fn public_verify_worker_attestation_accepts_legacy_and_oci_artifact_manifests_an
     for (manifest, config, stmt) in [
         (&wrong_subject_manifest, &oci_config, &statement),
         (&wrong_artifact_manifest, &oci_config, &statement),
+        (&wrong_empty_digest_manifest, &oci_config, &statement),
+        (&wrong_empty_size_manifest, &oci_config, &statement),
         (&oci_manifest, &non_empty_config, &statement),
         (&oci_manifest, &oci_config, &injected_arg_statement),
         (&oci_manifest, &oci_config, &injected_root_statement),
