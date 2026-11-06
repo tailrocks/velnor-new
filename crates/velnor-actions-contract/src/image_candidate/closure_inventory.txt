@@ -757,8 +757,8 @@ crates/velnor-actions-orchestrator/src/error.rs
 crates/velnor-actions-orchestrator/src/evidence.rs
 crates/velnor-actions-orchestrator/src/extension_schemas.rs
 crates/velnor-actions-orchestrator/src/fd_tool_extract.rs
-crates/velnor-actions-orchestrator/src/fd_tool_extract_preflight.rs
-crates/velnor-actions-orchestrator/src/fd_tool_extract_tree.rs
+crates/velnor-actions-orchestrator/src/fd_tool_extract/unix/preflight.rs
+crates/velnor-actions-orchestrator/src/fd_tool_extract/unix/tree.rs
 crates/velnor-actions-orchestrator/src/filesystem_owner.rs
 crates/velnor-actions-orchestrator/src/finalized.rs
 crates/velnor-actions-orchestrator/src/freshness_emit.rs
