@@ -13,14 +13,13 @@ use velnor_actions_workflow_renderer::release_jobs::{ReleaseJobSpec, ReleaseRole
 use velnor_actions_workflow_renderer::release_permissions::JobPermissions;
 use velnor_actions_workflow_renderer::release_tree::RELEASE_CONFIG_PATH;
 use velnor_actions_workflow_renderer::{
-    MiseSetup, action_step, ambient_shell_step, mise_setup_step,
-    steps::UPLOAD_ARTIFACT_USES,
+    MiseSetup, action_step, ambient_shell_step, mise_setup_step, steps::UPLOAD_ARTIFACT_USES,
 };
 
 use crate::OrchestratorError;
 use crate::release_checkouts::forge_env;
-use velnor_actions_workflow_renderer::release_checkout_gates::{policy_checkout, source_checkout};
 use crate::utf8::{strings_of, strings_of_env};
+use velnor_actions_workflow_renderer::release_checkout_gates::{policy_checkout, source_checkout};
 
 pub(crate) enum Phase {
     Publish,
@@ -67,10 +66,14 @@ pub(crate) fn assemble_jobs(
 ) -> Result<BTreeMap<String, ReleaseJobSpec>, OrchestratorError> {
     let parts = JobParts {
         policy: policy_checkout(inputs.generator_version)?,
-        source: source_checkout(inputs.generator_version, "${{ steps.release-admission.outputs.source_sha }}")?,
+        source: source_checkout(
+            inputs.generator_version,
+            "${{ steps.release-admission.outputs.source_sha }}",
+        )?,
         setup: mise_setup_step(inputs.mise)?,
-        prepare_rust:
-            velnor_actions_workflow_renderer::release_gates::release_rust_prepare(inputs.catalog)?,
+        prepare_rust: velnor_actions_workflow_renderer::release_gates::release_rust_prepare(
+            inputs.catalog,
+        )?,
         verify_rust: velnor_actions_workflow_renderer::verifier_builders::rust_verifier_shell_step(
             inputs.catalog,
             velnor_actions_workflow_renderer::verifier_builders::ToolchainPhase::Installed,
@@ -85,7 +88,9 @@ pub(crate) fn assemble_jobs(
             inputs.catalog.version(PinnedTool::ReleasePlz),
             inputs.label,
         )?,
-        semver: velnor_actions_workflow_renderer::release_plz_acquire::acquire_semver_step(inputs.label)?,
+        semver: velnor_actions_workflow_renderer::release_plz_acquire::acquire_semver_step(
+            inputs.label,
+        )?,
         label: inputs.label,
         gate: &inputs.gate,
         preparation_gate: &inputs.preparation_gate,
@@ -105,11 +110,17 @@ pub(crate) fn assemble_jobs(
         preparation_job(&parts, inputs.release.release_pr, manifest, inputs.registry)?,
     );
     if inputs.release.release_pr {
-        jobs.insert("release-pr-create".to_owned(), release_pr_create_job(&parts)?);
+        jobs.insert(
+            "release-pr-create".to_owned(),
+            release_pr_create_job(&parts)?,
+        );
     }
     jobs.insert("release-preflight".to_owned(), preflight_job(&parts)?);
     if bootstrap {
-        jobs.insert("release-publish-bootstrap".to_owned(), bootstrap_job(&parts)?);
+        jobs.insert(
+            "release-publish-bootstrap".to_owned(),
+            bootstrap_job(&parts)?,
+        );
     } else {
         jobs.insert("release-publish".to_owned(), publish_job(&parts)?);
     }
@@ -197,23 +208,47 @@ fn preparation_job(
 ) -> Result<ReleaseJobSpec, OrchestratorError> {
     let mut steps = vec![parts.acquire.clone(), parts.policy.clone()];
     steps.extend([
-        parts.setup.clone(), parts.prepare_rust.clone(), parts.verify_rust.clone(),
-        parts.release_plz.clone(), parts.semver.clone(),
+        parts.setup.clone(),
+        parts.prepare_rust.clone(),
+        parts.verify_rust.clone(),
+        parts.release_plz.clone(),
+        parts.semver.clone(),
     ]);
     let mut outputs = BTreeMap::new();
     if create_pr {
-        steps.push(velnor_actions_workflow_renderer::release_gates::release_pr_candidate_step(parts.generator_version, parts.rust_version, parts.label)?);
+        steps.push(
+            velnor_actions_workflow_renderer::release_gates::release_pr_candidate_step(
+                parts.generator_version,
+                parts.rust_version,
+                parts.label,
+            )?,
+        );
         steps.push(parts.verify_rust.clone());
         steps.push(velnor_actions_workflow_renderer::release_gates::release_pr_artifact_step()?);
         outputs = BTreeMap::from([
-            ("artifact_id".to_owned(), "${{ steps.release-pr-artifact.outputs.artifact-id }}".to_owned()),
-            ("artifact_digest".to_owned(), "${{ steps.release-pr-artifact.outputs.artifact-digest }}".to_owned()),
-            ("content_sha256".to_owned(), "${{ steps.release-pr-candidate.outputs.content_sha256 }}".to_owned()),
-            ("changed".to_owned(), "${{ steps.release-pr-candidate.outputs.changed }}".to_owned()),
+            (
+                "artifact_id".to_owned(),
+                "${{ steps.release-pr-artifact.outputs.artifact-id }}".to_owned(),
+            ),
+            (
+                "artifact_digest".to_owned(),
+                "${{ steps.release-pr-artifact.outputs.artifact-digest }}".to_owned(),
+            ),
+            (
+                "content_sha256".to_owned(),
+                "${{ steps.release-pr-candidate.outputs.content_sha256 }}".to_owned(),
+            ),
+            (
+                "changed".to_owned(),
+                "${{ steps.release-pr-candidate.outputs.changed }}".to_owned(),
+            ),
         ]);
     } else {
         let argv = crate_phase_argv(
-            &Phase::DryRun, RELEASE_CONFIG_PATH, manifest, registry,
+            &Phase::DryRun,
+            RELEASE_CONFIG_PATH,
+            manifest,
+            registry,
             velnor_actions_workflow_renderer::release_gates::ReleasePlzAuth::None,
         )?;
         let mut env = parts.tool_env.clone();
@@ -251,7 +286,8 @@ fn release_pr_create_job(parts: &JobParts<'_>) -> Result<ReleaseJobSpec, Orchest
 }
 
 const ELIGIBLE: &str = "steps.release-admission.outputs.eligible == 'true'";
-const RECEIPT_ARTIFACT: &str = "velnor-release-receipt-${{ github.run_id }}-${{ github.run_attempt }}";
+const RECEIPT_ARTIFACT: &str =
+    "velnor-release-receipt-${{ github.run_id }}-${{ github.run_attempt }}";
 const RECEIPT_PATH: &str = "${{ runner.temp }}/velnor-crate-release-receipt.json";
 const RUST_ARTIFACT: &str = "velnor-release-rust-${{ github.run_id }}-${{ github.run_attempt }}";
 const RUST_ARCHIVE: &str = "${{ runner.temp }}/velnor-rust-toolchain.tar.gz";
@@ -259,8 +295,14 @@ const RUST_ARCHIVE: &str = "${{ runner.temp }}/velnor-rust-toolchain.tar.gz";
 fn controller_step(parts: &JobParts<'_>, operation: &str) -> Result<Step, OrchestratorError> {
     let mut env = release_env(parts);
     if operation == "verify-preflight-retention" {
-        env.insert("VELNOR_RECEIPT_ARTIFACT_ID".to_owned(), "${{ steps.release-receipt-upload.outputs.artifact-id }}".to_owned());
-        env.insert("VELNOR_RUST_ARTIFACT_ID".to_owned(), "${{ steps.release-rust-upload.outputs.artifact-id }}".to_owned());
+        env.insert(
+            "VELNOR_RECEIPT_ARTIFACT_ID".to_owned(),
+            "${{ steps.release-receipt-upload.outputs.artifact-id }}".to_owned(),
+        );
+        env.insert(
+            "VELNOR_RUST_ARTIFACT_ID".to_owned(),
+            "${{ steps.release-rust-upload.outputs.artifact-id }}".to_owned(),
+        );
     }
     if operation == "toolchain-acquire" {
         env.insert(
@@ -268,7 +310,10 @@ fn controller_step(parts: &JobParts<'_>, operation: &str) -> Result<Step, Orches
             "${{ needs.release-preflight.outputs.rust_artifact_id }}".to_owned(),
         );
     }
-    if matches!(operation, "receipt-acquire" | "reconciliation-receipt-acquire") {
+    if matches!(
+        operation,
+        "receipt-acquire" | "reconciliation-receipt-acquire"
+    ) {
         env.insert(
             "VELNOR_RECEIPT_ARTIFACT_ID".to_owned(),
             "${{ needs.release-preflight.outputs.receipt_artifact_id }}".to_owned(),
@@ -337,7 +382,7 @@ fn upload_record_step(name: &str, artifact: &str, path: &str) -> Result<Step, Or
 
 #[path = "release_steps_jobs.rs"]
 mod jobs;
-use jobs::{preflight_job, publish_job, bootstrap_job, reconcile_job};
+use jobs::{bootstrap_job, preflight_job, publish_job, reconcile_job};
 
 #[cfg(test)]
 #[path = "release_steps_tests.rs"]

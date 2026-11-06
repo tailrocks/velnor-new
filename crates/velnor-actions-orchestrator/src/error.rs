@@ -35,7 +35,10 @@ pub enum OrchestratorError {
     #[error(
         "cold_registry: {manifest}: dependency not in the local registry (or the dependency does not exist); {remedy}"
     )]
-    ColdRegistry { manifest: String, remedy: WarmRemedy },
+    ColdRegistry {
+        manifest: String,
+        remedy: WarmRemedy,
+    },
     #[error("preparation_incomplete: {manifest}: {problem}")]
     PreparationIncomplete { manifest: String, problem: String },
     #[error("profile: {problem}")]

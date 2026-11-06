@@ -3,8 +3,8 @@
 
 use serde::{Deserialize, Serialize};
 use velnor_actions_contract::cachekey::{
-    FormatInputs, LaneInputs, ToolchainInputs, cache_format_id, lane_id, mbx_qualification_cache_generation,
-    toolchain_id,
+    FormatInputs, LaneInputs, ToolchainInputs, cache_format_id, lane_id,
+    mbx_qualification_cache_generation, toolchain_id,
 };
 use velnor_actions_contract::{
     ContractError, ProposedTask, Stack, component_id_for_unit, digest_b3,

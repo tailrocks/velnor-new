@@ -95,9 +95,12 @@ fn capture_dispatch(
         run_id: run_id.as_deref(),
         run_attempt: run_attempt.as_deref(),
     };
-    let dispatch =
-        velnor_actions_contract::request_event::qualification_dispatch_for_parts(&event_name, &payload, runner)?
-            .ok_or_else(|| internal("homebrew_authority_qualification_event"))?;
+    let dispatch = velnor_actions_contract::request_event::qualification_dispatch_for_parts(
+        &event_name,
+        &payload,
+        runner,
+    )?
+    .ok_or_else(|| internal("homebrew_authority_qualification_event"))?;
     if !dispatch_is_admitted(&dispatch, repository, expected_head, &event_name) {
         return Err(internal("homebrew_authority_qualification_runner_context"));
     }

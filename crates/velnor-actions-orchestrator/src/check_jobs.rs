@@ -111,7 +111,9 @@ fn native_check_job(
         vec![velnor_actions_mise::PinnedTool::Gh],
         false,
     )?;
-    let mut steps = vec![crate::workflow::wire_w1::checkout_step_for(CheckoutHistory::Full)?];
+    let mut steps = vec![crate::workflow::wire_w1::checkout_step_for(
+        CheckoutHistory::Full,
+    )?];
     steps.extend(acquire);
     steps.push(crate::matrix_step::download_plan_step()?);
     steps.push(prepare_gh);
@@ -176,7 +178,10 @@ fn check_job(
     })
 }
 
-fn named_check_condition(job_id: &str, check: &velnor_actions_contract::config::MiseCheck) -> String {
+fn named_check_condition(
+    job_id: &str,
+    check: &velnor_actions_contract::config::MiseCheck,
+) -> String {
     let gate = velnor_actions_workflow_renderer::not_affected_gate(job_id);
     let needs_admission = check.runner.executor == CheckExecutor::EphemeralSelfHosted
         || RunsOn::parse(&check.runner.label).is_ok_and(|selector| selector.is_scale_set());

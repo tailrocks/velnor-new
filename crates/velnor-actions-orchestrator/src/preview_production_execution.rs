@@ -1,7 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_actions_contract::staged_reads::read_staged_bytes_until;
 use super::{
     aggregate::AdmittedLeaves,
     handoff::{self, AssetProof},
@@ -18,6 +17,7 @@ use crate::{
     retrieve_reports::MAX_RETRIEVE_PLAN_BYTES,
 };
 use std::path::Path;
+use velnor_actions_contract::staged_reads::read_staged_bytes_until;
 use velnor_actions_contract::{
     config::RustBinaryReleaseConfig,
     preview_production::{ReleaseProductionRequest, ReleaseProductionStage},

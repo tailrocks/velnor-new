@@ -352,7 +352,11 @@ fn write_file(
     if let Some(parent) = path.parent() {
         velnor_actions_contract::exclusive_write::create_dir_no_symlink(root, parent)?;
     }
-    velnor_actions_contract::exclusive_write::write_exclusive(&path, bytes, "homebrew_adoption_output")?;
+    velnor_actions_contract::exclusive_write::write_exclusive(
+        &path,
+        bytes,
+        "homebrew_adoption_output",
+    )?;
     set_mode(&path, mode)
 }
 

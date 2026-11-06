@@ -179,10 +179,7 @@ fn checkout_proof(
     )
 }
 
-fn merge_checkout_at_depth(
-    fixture: &GitFixture,
-    depth: u32,
-) -> Result<TempDir, Box<dyn Error>> {
+fn merge_checkout_at_depth(fixture: &GitFixture, depth: u32) -> Result<TempDir, Box<dyn Error>> {
     git(
         fixture.root(),
         &["update-ref", "refs/pull/1/merge", &fixture.merge],

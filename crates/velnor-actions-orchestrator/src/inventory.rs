@@ -6,9 +6,7 @@ use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 use velnor_actions_contract::{CandidateOutcome, Stack, StackCandidate};
-use velnor_actions_mise::{
-    MetadataDiscovery, OperatorToolchainGuard, ToolCatalog,
-};
+use velnor_actions_mise::{MetadataDiscovery, OperatorToolchainGuard, ToolCatalog};
 use velnor_actions_rust::{WorkspaceRecord, parse_metadata_json};
 
 use crate::OrchestratorError;
@@ -241,9 +239,7 @@ fn fetch_inventory(
         phases.metadata_run_us += started.elapsed().as_micros();
     }
     let output = output.map_err(|err| match guard {
-        Some(_) => FetchFailure::Fatal(
-            "operator toolchain guard rejected metadata".to_owned(),
-        ),
+        Some(_) => FetchFailure::Fatal("operator toolchain guard rejected metadata".to_owned()),
         None => FetchFailure::Incomplete(err.to_string()),
     })?;
     if !output.success {
@@ -266,9 +262,7 @@ fn fetch_inventory(
         Ok(json) => parse_metadata_json(&json, root, manifest, known)
             .map_err(|err| FetchFailure::Malformed(err.to_string())),
         Err(err) => Err(if guard.is_some() {
-            FetchFailure::Fatal(
-                "operator toolchain guard rejected metadata".to_owned(),
-            )
+            FetchFailure::Fatal("operator toolchain guard rejected metadata".to_owned())
         } else {
             FetchFailure::Incomplete(err.to_string())
         }),

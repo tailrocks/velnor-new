@@ -185,8 +185,15 @@ pub(crate) fn write_plan_files(
     response.validate()?;
     let plan = plan_json_bytes(&response.plan).map_err(internal_contract)?;
     let matrix = matrix_json_bytes(&response.plan.matrix).map_err(internal_contract)?;
-    velnor_actions_contract::exclusive_write::create_dir_no_symlink(artifact_anchor(velnor_dir)?, dir)?;
-    velnor_actions_contract::exclusive_write::write_exclusive(&dir.join(PLAN_JSON_FILENAME), &plan, "plan_artifact")?;
+    velnor_actions_contract::exclusive_write::create_dir_no_symlink(
+        artifact_anchor(velnor_dir)?,
+        dir,
+    )?;
+    velnor_actions_contract::exclusive_write::write_exclusive(
+        &dir.join(PLAN_JSON_FILENAME),
+        &plan,
+        "plan_artifact",
+    )?;
     velnor_actions_contract::exclusive_write::write_exclusive(
         &dir.join(MATRIX_JSON_FILENAME),
         &matrix,
@@ -203,7 +210,10 @@ pub fn publish_final_report(
         serde_json::from_str(response_json).map_err(|_| internal("malformed_response"))?;
     check_schema(report.schema)?;
     let dir = plan_artifact_dir(velnor_dir, &report.run_key)?;
-    velnor_actions_contract::exclusive_write::create_dir_no_symlink(artifact_anchor(velnor_dir)?, &dir)?;
+    velnor_actions_contract::exclusive_write::create_dir_no_symlink(
+        artifact_anchor(velnor_dir)?,
+        &dir,
+    )?;
     let bytes = canonical_json_bytes(&report).map_err(internal_contract)?;
     velnor_actions_contract::exclusive_write::write_exclusive(
         &dir.join(FINAL_JSON_FILENAME),

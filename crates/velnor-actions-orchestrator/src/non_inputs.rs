@@ -148,10 +148,11 @@ impl<'a> Claims<'a> {
                         path: link.link,
                         tree: false,
                     });
-                    linked.extend(link.chain.into_iter().map(|path| LinkedPath {
-                        path,
-                        tree: false,
-                    }));
+                    linked.extend(
+                        link.chain
+                            .into_iter()
+                            .map(|path| LinkedPath { path, tree: false }),
+                    );
                     linked.push(LinkedPath {
                         path: link.target,
                         tree: true,
@@ -207,7 +208,11 @@ impl<'a> Claims<'a> {
             Some(Overlap::DeclaredInput)
         } else if self.read_targets.iter().any(|target| reaches(target, true)) {
             Some(Overlap::ReadTarget)
-        } else if self.linked.iter().any(|link| reaches(&link.path, link.tree)) {
+        } else if self
+            .linked
+            .iter()
+            .any(|link| reaches(&link.path, link.tree))
+        {
             Some(Overlap::Symlink)
         } else if tracked_hit(&|file| {
             selection_broadening(file) == Some(SelectionBroadening::Lockfile)

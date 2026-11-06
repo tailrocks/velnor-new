@@ -32,7 +32,8 @@ const ADMISSION_DIR: &str = "homebrew-admission";
 const RESULT_DIR: &str = "homebrew-result";
 const JSON_LIMIT: u64 = 1024 * 1024;
 const ASSET_LIMIT: u64 = 256 * 1024 * 1024;
-const FILE_LIMIT: usize = 2 * (velnor_actions_contract::package_release::MAX_PACKAGE_RELEASE_PRODUCTS + 1);
+const FILE_LIMIT: usize =
+    2 * (velnor_actions_contract::package_release::MAX_PACKAGE_RELEASE_PRODUCTS + 1);
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]

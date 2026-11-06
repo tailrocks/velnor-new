@@ -39,7 +39,8 @@ pub(super) const BUILDER_RELEASE_ASSET_BUILD_STEPS: &str =
     "workflow_renderer::schema2_generator_release_assets::build_steps";
 pub(super) const BUILDER_NATIVE_IMAGE_PRODUCER: &str =
     "workflow_renderer::schema2_job_image_native";
-pub(super) const BUILDER_PRESEED_LOCAL_BUILD: &str = "workflow_renderer::preseed::PRESEED_BUILD_OUTPUT";
+pub(super) const BUILDER_PRESEED_LOCAL_BUILD: &str =
+    "workflow_renderer::preseed::PRESEED_BUILD_OUTPUT";
 pub(super) const BUILDER_PREVIEW_PRODUCER_TASK: &str = "preview_producer::execute_preview_task";
 
 pub(super) const MBX_CLI_BUILD_ARGV: &[&str] = &[
@@ -153,5 +154,6 @@ pub(super) const INTEL_TARGET_DIR_ROLE: &[&str] = &["target/x86_64-apple-darwin/
 pub(super) const MUSL_TARGET_DIR_ROLE: &[&str] = &["target/x86_64-unknown-linux-musl/release"];
 pub(super) const GNU_TARGET_DIR_ROLE: &[&str] = &["target/x86_64-unknown-linux-gnu/debug"];
 pub(super) const HELPER_BINARY_ROLE: &[&str] = &["target/release/velnor-actions"];
-pub(super) const PREVIEW_OUTPUT_ROLES: &[&str] = &["dist/preview", "dist/preview/package-output.json"];
+pub(super) const PREVIEW_OUTPUT_ROLES: &[&str] =
+    &["dist/preview", "dist/preview/package-output.json"];
 pub(super) const STAGED_IMAGE_BINARY_ROLE: &[&str] = &["VELNOR_NATIVE_IMAGE_ACTIONS"];

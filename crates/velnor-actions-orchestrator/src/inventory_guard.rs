@@ -14,8 +14,8 @@ pub(crate) fn require_metadata_tools(
     } else {
         vec![PinnedTool::Rust]
     };
-    let presence = ToolPresence::new(tools)
-        .map_err(|error| presence_error(error, guard.is_some()))?;
+    let presence =
+        ToolPresence::new(tools).map_err(|error| presence_error(error, guard.is_some()))?;
     presence.run_with_observation(catalog).map_err(|failure| {
         if guard.is_some() {
             OrchestratorError::ToolchainGuard {

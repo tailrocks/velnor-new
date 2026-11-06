@@ -115,7 +115,10 @@ fn lane_workflow_tasks(
     input: &WorkflowBuildInput<'_>,
     acquire: Option<&Step>,
     private: Option<&crate::config::private_wiring::PrivateWiring>,
-) -> Result<Vec<velnor_actions_workflow_renderer::verification_jobs::WorkflowTaskPolicy>, OrchestratorError> {
+) -> Result<
+    Vec<velnor_actions_workflow_renderer::verification_jobs::WorkflowTaskPolicy>,
+    OrchestratorError,
+> {
     let lane = crate::matrix_step::LaneTools::union(
         input.config.workflow.policy,
         input.catalog,
@@ -300,13 +303,9 @@ fn build_workflow_jobs(
         prepared.private.as_ref(),
     )?;
     let mut required_ids: Vec<String> = built.jobs.iter().map(|(id, _)| id.clone()).collect();
-    for (id, job) in built.jobs {
-        jobs.insert(id, job);
-    }
+    jobs.extend(built.jobs);
     prepared.state_recipes = built.state_recipes;
-    for (id, job) in built.producers.into_iter().chain(built.ledger_cli) {
-        jobs.insert(id, job);
-    }
+    jobs.extend(built.producers.into_iter().chain(built.ledger_cli));
     for (id, job) in check_jobs::build_check_jobs(
         prepared.policy,
         input.discovery,
@@ -333,13 +332,13 @@ fn build_workflow_jobs(
         input.discovery,
         &prepared.catalog,
     )?;
-    for (id, job) in suite_build.jobs {
-        jobs.insert(id, job);
-    }
+    jobs.extend(suite_build.jobs);
     required_ids.extend(suite_build.required_ids);
     attach_state_roots(input, prepared, &mut jobs)?;
     crate::workflow_task_jobs::insert_jobs(&mut jobs, &prepared.workflow_tasks)?;
-    let (required_catalog, required_acquire) = if prepared.policy == WorkflowPolicy::VelnorRepositoryV1 {
+    let (required_catalog, required_acquire) = if prepared.policy
+        == WorkflowPolicy::VelnorRepositoryV1
+    {
         let target = velnor_actions_contract::ReleaseTarget::for_runner_label(input.label)
             .ok_or_else(|| OrchestratorError::Contract {
                 problem: format!("unsupported_target_for_runner:{}", input.label),
@@ -350,7 +349,10 @@ fn build_workflow_jobs(
                 .map_err(crate::local_release_manifest::map_release_helper_error)?),
         )
     } else {
-        (helper_catalog(input, &ToolCatalog::pinned())?, prepared.acquire.take())
+        (
+            helper_catalog(input, &ToolCatalog::pinned())?,
+            prepared.acquire.take(),
+        )
     };
     insert_gate_jobs(
         &mut jobs,
@@ -379,11 +381,10 @@ fn helper_catalog(
         .ok_or_else(|| OrchestratorError::Contract {
             problem: "required_verdict_requires_published_generator_lock".to_owned(),
         })?;
-    let map_err = |error: velnor_actions_mise::catalog::lock::LockError| {
-        OrchestratorError::Contract {
+    let map_err =
+        |error: velnor_actions_mise::catalog::lock::LockError| OrchestratorError::Contract {
             problem: error.to_string(),
-        }
-    };
+        };
     match input.approved_release {
         Some(approved) => velnor_actions_mise::catalog::lock::catalog_for_approved_generator(
             lock, catalog, &approved,

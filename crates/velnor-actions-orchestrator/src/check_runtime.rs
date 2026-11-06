@@ -16,9 +16,7 @@ use velnor_actions_contract::{
 use velnor_actions_mise::{CheckDeadline, DiscoveredCheck, discover_checks_until};
 #[path = "check_prepare.rs"]
 pub(crate) mod preparation;
-use preparation::{
-    RestoredGroupContext, prepare_check_with_runtime, resolve_mise_runtime,
-};
+use preparation::{RestoredGroupContext, prepare_check_with_runtime, resolve_mise_runtime};
 use velnor_actions_mise::catalog::lock::ApprovedMiseRuntime;
 #[path = "check_binding.rs"]
 mod check_binding;
@@ -108,15 +106,7 @@ pub(crate) fn execute_check_to(
         runtime: &runtime,
         deadline,
     })?;
-    let outcome = run_check(
-        root,
-        temp,
-        &item,
-        &plan,
-        entry,
-        &runtime,
-        deadline,
-    );
+    let outcome = run_check(root, temp, &item, &plan, entry, &runtime, deadline);
     let (code, receipt) = match &outcome {
         Ok(success) => (0, success.evidence.as_ref()),
         Err(_) => (1, None),
@@ -394,6 +384,10 @@ fn save_evidence(
         .parent()
         .ok_or_else(|| internal("check_evidence_path"))?;
     velnor_actions_contract::exclusive_write::create_dir_no_symlink(temp, parent)?;
-    velnor_actions_contract::exclusive_write::write_exclusive(&artifact, &receipt.bytes, "check_evidence")?;
+    velnor_actions_contract::exclusive_write::write_exclusive(
+        &artifact,
+        &receipt.bytes,
+        "check_evidence",
+    )?;
     Ok(())
 }

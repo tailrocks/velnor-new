@@ -21,8 +21,9 @@ use std::collections::BTreeMap;
 
 use velnor_actions_actionlint::JactionlintConfigInput;
 use velnor_actions_contract::{
-    CheckoutHistory, Concurrency, ExecutionMode, Job, Permissions, ScaleSetSelector, Step, StepKind, Trigger,
-    ValidatorKind, VelnorConfig, VelnorSupportWorkflow, WorkflowIr, WorkflowPolicy,
+    CheckoutHistory, Concurrency, ExecutionMode, Job, Permissions, ScaleSetSelector, Step,
+    StepKind, Trigger, ValidatorKind, VelnorConfig, VelnorSupportWorkflow, WorkflowIr,
+    WorkflowPolicy,
 };
 use velnor_actions_mise::ToolCatalog;
 use velnor_actions_workflow_renderer::render::{

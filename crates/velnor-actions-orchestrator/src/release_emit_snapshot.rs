@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{
-    IntentSettings, check_release_selection, check_recovery_record, common_registry,
+    IntentSettings, check_recovery_record, check_release_selection, common_registry,
     crate_release_intent, plz_config, reviewed_generator_manifest, reviewed_pr_write_paths,
     selection,
 };
@@ -27,14 +27,21 @@ pub(super) fn derive_source_inputs(
 ) -> Result<SourceInputs, OrchestratorError> {
     let selection = selection::select_with_root(root, release, metadata, manifests)?;
     if selection.is_empty() {
-        return Err(OrchestratorError::Contract { problem: "release_nothing_selected".to_owned() });
+        return Err(OrchestratorError::Contract {
+            problem: "release_nothing_selected".to_owned(),
+        });
     }
     check_recovery_record(release, &selection)?;
     check_release_selection(release, &selection)?;
     let registry = common_registry(&selection)?;
     let config = plz_config(release, &selection)?;
     let paths = reviewed_pr_write_paths(root, release, metadata, manifests)?;
-    Ok(SourceInputs { selection, registry, config, paths })
+    Ok(SourceInputs {
+        selection,
+        registry,
+        config,
+        paths,
+    })
 }
 
 pub(crate) fn derive_intent_from_snapshot(

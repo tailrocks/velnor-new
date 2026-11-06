@@ -59,10 +59,7 @@ pub(crate) struct ReadSummary {
     pub(crate) unverified: BTreeSet<(String, UnverifiedKind)>,
 }
 
-pub(crate) fn read_summary(
-    root: &Path,
-    ownership: &Ownership<'_>,
-) -> Result<ReadSummary, String> {
+pub(crate) fn read_summary(root: &Path, ownership: &Ownership<'_>) -> Result<ReadSummary, String> {
     let mut summary = ReadSummary::default();
     for (id, read) in source_reads(root, ownership)? {
         let kind = match read.target {

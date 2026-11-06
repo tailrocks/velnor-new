@@ -268,38 +268,32 @@ fn recovery_generation_and_qualification_use_historical_source_not_current_check
             .pr_write_paths
             .contains(&"common/Cargo.toml".to_owned())
     );
-    let snapshot = derived
-        .source_snapshot
-        .as_ref()
-        .ok_or("source snapshot missing")?;
-    let source_lock = crate::release_identity::workspace_lock(
-        &derived.metadata,
-        snapshot.root(),
-        &release_config.manifest_path,
-        &derived.known,
-        &derived.registry,
-        &derived.repository,
-    )?;
-    let live_metadata = release::release_metadata_json(&prep, &release_config.manifest_path)?;
-    let live_known = release::selection::tracked_manifests(root)?;
-    let live_lock = crate::release_identity::workspace_lock(
-        &live_metadata,
-        root,
-        &release_config.manifest_path,
-        &live_known,
-        &derived.registry,
-        &derived.repository,
-    )?;
-    assert_ne!(source_lock, live_lock);
+    let source_lock = check_historical_workspace_lock(root, &prep, release_config, &derived)?;
     check_qualification(root, &source_a, &prep, release_config, &derived)?;
     check_authority(&derived.intent, &authority_b, &source_a)?;
-    git(root, &["remote", "set-url", "origin", "https://github.com/EXAMPLE/DEMO.git"])?;
+    git(
+        root,
+        &[
+            "remote",
+            "set-url",
+            "origin",
+            "https://github.com/EXAMPLE/DEMO.git",
+        ],
+    )?;
     let mixed_prep = crate::prepare::prepare_for_candidate(root)?;
     let mixed_config = release::enabled_release(&mixed_prep)?.ok_or("release missing")?;
     let mixed = release::derive_release_inputs(&mixed_prep, mixed_config)?;
     assert_eq!(mixed.intent.repository, "EXAMPLE/DEMO");
     check_authority(&mixed.intent, &authority_b, &source_a)?;
-    git(root, &["remote", "set-url", "origin", "https://github.com/example/demo.git"])?;
+    git(
+        root,
+        &[
+            "remote",
+            "set-url",
+            "origin",
+            "https://github.com/example/demo.git",
+        ],
+    )?;
     check_missing_and_creation(&prep, release_config, &source_a)?;
     let mise = crate::pins::resolve_mise_setup(&prep.config, release::RELEASE_HOSTED_RUNNER)?;
     let files = release::release_files_for_config(&prep, &mise, release_config)?;
@@ -366,4 +360,36 @@ fn historical_object_snapshot_rejects_escape_and_ignores_path_git() -> TestResul
     );
     assert!(!temp.path().join("outside").exists());
     Ok(())
+}
+
+fn check_historical_workspace_lock(
+    root: &Path,
+    prep: &release::GenerationPreparation,
+    release_config: &release::RustReleaseConfig,
+    derived: &release::ReleaseIntentInputs,
+) -> TestResult<velnor_actions_workflow_renderer::release_spec::lock::ReleaseConcurrency> {
+    let snapshot = derived
+        .source_snapshot
+        .as_ref()
+        .ok_or("source snapshot missing")?;
+    let source_lock = crate::release_identity::workspace_lock(
+        &derived.metadata,
+        snapshot.root(),
+        &release_config.manifest_path,
+        &derived.known,
+        &derived.registry,
+        &derived.repository,
+    )?;
+    let live_metadata = release::release_metadata_json(prep, &release_config.manifest_path)?;
+    let live_known = release::selection::tracked_manifests(root)?;
+    let live_lock = crate::release_identity::workspace_lock(
+        &live_metadata,
+        root,
+        &release_config.manifest_path,
+        &live_known,
+        &derived.registry,
+        &derived.repository,
+    )?;
+    assert_ne!(source_lock, live_lock);
+    Ok(source_lock)
 }

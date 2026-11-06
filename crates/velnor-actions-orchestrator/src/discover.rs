@@ -96,7 +96,7 @@ pub(crate) fn discover_with_options(
         problem: err.to_string(),
     })?;
     let initial = apply_stack_ignores(projects, &config.stacks.ignore);
-    let inventory_result = crate::inventory::run_inventories_with_options(
+    let ((outcomes, inventories), tofu_units) = crate::inventory::run_inventories_with_options(
         root,
         &candidates,
         index.files(),
@@ -104,15 +104,15 @@ pub(crate) fn discover_with_options(
         phases,
         catalog,
         guard,
-    );
-    let ((outcomes, inventories), tofu_units) = inventory_result?;
+    )?;
     let statuses = check_candidate_outcomes(initial, &outcomes).map_err(|err| {
         OrchestratorError::Detection {
             problem: err.to_string(),
         }
     })?;
     let workspaces = plan_workspaces(root, &index, &statuses, inventories, config)?;
-    let resolves = crate::inventory::qualify_workspaces_with_guard(root, &workspaces, catalog, guard)?;
+    let resolves =
+        crate::inventory::qualify_workspaces_with_guard(root, &workspaces, catalog, guard)?;
     let rules =
         crate::affected_inputs::resolve_input_rules(config.stacks.rust.as_ref(), &workspaces)?;
     let (mut proposals, fallbacks) = derive_all(config, &index, &workspaces, &statuses)?;
@@ -233,12 +233,7 @@ fn plan_workspaces(
         if !keep_roots.contains(&record.workspace_root) {
             continue;
         }
-        let outcome = profile_for_workspace(
-            root,
-            index,
-            &record,
-            config.stacks.rust.as_ref(),
-        )?;
+        let outcome = profile_for_workspace(root, index, &record, config.stacks.rust.as_ref())?;
         planned.push(PlannedWorkspace {
             record,
             profile: outcome.profile,

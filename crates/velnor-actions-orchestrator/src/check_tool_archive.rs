@@ -90,7 +90,10 @@ impl Default for ArchiveBudget {
     }
 }
 
-pub(crate) fn preflight_zip_file(source: &mut File, deadline: CheckDeadline) -> Result<(), OrchestratorError> {
+pub(crate) fn preflight_zip_file(
+    source: &mut File,
+    deadline: CheckDeadline,
+) -> Result<(), OrchestratorError> {
     zip_checks::preflight_zip_entries(source, deadline)
 }
 

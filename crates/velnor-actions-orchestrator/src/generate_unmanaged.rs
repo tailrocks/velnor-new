@@ -11,10 +11,7 @@ use super::preserve::{
 };
 use crate::OrchestratorError;
 
-pub(crate) fn list(
-    root: &Path,
-    github: &GithubConfig,
-) -> Result<Vec<String>, OrchestratorError> {
+pub(crate) fn list(root: &Path, github: &GithubConfig) -> Result<Vec<String>, OrchestratorError> {
     let base = root.join(".github");
     match std::fs::symlink_metadata(&base) {
         Ok(meta) if meta.is_symlink() || !meta.is_dir() => {
@@ -63,11 +60,7 @@ pub fn unmanaged_report(root: &Path) -> Result<UnmanagedReport, OrchestratorErro
     })
 }
 
-fn walk(
-    base: &Path,
-    relative: &Path,
-    found: &mut Vec<PathBuf>,
-) -> Result<bool, OrchestratorError> {
+fn walk(base: &Path, relative: &Path, found: &mut Vec<PathBuf>) -> Result<bool, OrchestratorError> {
     let source = base.join(relative);
     let metadata = std::fs::symlink_metadata(&source).map_err(|error| io(&source, &error))?;
     if !relative.as_os_str().is_empty()

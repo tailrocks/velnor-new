@@ -52,25 +52,43 @@ pub(super) fn unmanaged_notices(
         .collect())
 }
 
-pub(super) fn reject_unmarked_workflows(prep: &GenerationPreparation) -> Result<(), OrchestratorError> {
+pub(super) fn reject_unmarked_workflows(
+    prep: &GenerationPreparation,
+) -> Result<(), OrchestratorError> {
     reject_unmarked_workflows_at(&prep.root.join(".github"))
 }
 
-pub(super) fn reject_unmarked_workflows_at(github: &std::path::Path) -> Result<(), OrchestratorError> {
+pub(super) fn reject_unmarked_workflows_at(
+    github: &std::path::Path,
+) -> Result<(), OrchestratorError> {
     super::reject_symlink(github)?;
     let path = github.join("workflows");
     super::reject_symlink(&path)?;
     let entries = match std::fs::read_dir(&path) {
         Ok(entries) => entries,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
-        Err(error) => return Err(OrchestratorError::io(path.display().to_string(), error.to_string())),
+        Err(error) => {
+            return Err(OrchestratorError::io(
+                path.display().to_string(),
+                error.to_string(),
+            ));
+        }
     };
     for entry in entries {
-        let entry = entry.map_err(|error| OrchestratorError::io(path.display().to_string(), error.to_string()))?;
+        let entry = entry.map_err(|error| {
+            OrchestratorError::io(path.display().to_string(), error.to_string())
+        })?;
         let file = entry.path();
-        let metadata = std::fs::symlink_metadata(&file).map_err(|error| OrchestratorError::io(file.display().to_string(), error.to_string()))?;
-        if !metadata.is_file() || metadata.is_symlink() || !super::preserve::first_line_is_generated_marker(&file)? {
-            return Err(OrchestratorError::Contract { problem: format!("unmanaged_workflow:{}", file.display()) });
+        let metadata = std::fs::symlink_metadata(&file).map_err(|error| {
+            OrchestratorError::io(file.display().to_string(), error.to_string())
+        })?;
+        if !metadata.is_file()
+            || metadata.is_symlink()
+            || !super::preserve::first_line_is_generated_marker(&file)?
+        {
+            return Err(OrchestratorError::Contract {
+                problem: format!("unmanaged_workflow:{}", file.display()),
+            });
         }
     }
     Ok(())

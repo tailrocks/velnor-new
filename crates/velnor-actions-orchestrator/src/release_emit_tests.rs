@@ -100,10 +100,10 @@ fn preview_consumer_intent(root: &std::path::Path) -> Result<String, crate::Orch
     Ok(intent.bytes)
 }
 
-#[path = "release_emit_qualification_tests.rs"]
-mod qualification;
 #[path = "release_emit_historical_tests.rs"]
 mod historical;
+#[path = "release_emit_qualification_tests.rs"]
+mod qualification;
 
 fn write_consumer_intent(
     root: &std::path::Path,
@@ -332,10 +332,14 @@ fn assert_unknown_inputs_rejected(
     selected: &velnor_actions_rust::release_select::ReleaseSelection,
 ) {
     let mut unknown = release.clone();
-    unknown.version_groups.insert("shared".into(), vec!["other".into()]);
+    unknown
+        .version_groups
+        .insert("shared".into(), vec!["other".into()]);
     assert!(super::config::plz_config(&unknown, selected).is_err());
     let mut unknown = release.clone();
-    unknown.publish_features.insert("other".into(), vec!["pty".into()]);
+    unknown
+        .publish_features
+        .insert("other".into(), vec!["pty".into()]);
     assert!(super::config::plz_config(&unknown, selected).is_err());
 }
 

@@ -16,7 +16,11 @@ pub(super) fn check_release_selection(
     if release.registry == velnor_actions_contract::config::ReleaseRegistry::CratesIo
         && selection.packages.len() > velnor_actions_contract::config::MAX_CRATE_RELEASE_PACKAGES
     {
-        return Err(OrchestratorError::config(CONFIG_REL, "stacks.rust.release.packages", "too_many_packages"));
+        return Err(OrchestratorError::config(
+            CONFIG_REL,
+            "stacks.rust.release.packages",
+            "too_many_packages",
+        ));
     }
     if let Some(creation) = &release.new_crates {
         if creation.packages.len() != selection.packages.len() {

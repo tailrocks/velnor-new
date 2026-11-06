@@ -121,24 +121,17 @@ fn derive_plan_inputs(
         return Err(internal("mise_runtime_target_mismatch"));
     }
     let argv = crate::vectors::task_argv(task, toolchain.catalog)?;
-    let toolchain_inputs =
-        super::toolchain_inputs(task, toolchain.catalog, toolchain.runtime)
-            .map_err(internal_contract)?;
+    let toolchain_inputs = super::toolchain_inputs(task, toolchain.catalog, toolchain.runtime)
+        .map_err(internal_contract)?;
     let toolchain_id = toolchain_id(&toolchain_inputs).map_err(internal_contract)?;
     let platform =
         platform_id_for_group(&item.check.runner.label, task).map_err(internal_contract)?;
     let planned_platform = planned_platform_for_check(&item.check.runner.label, task)?;
     let graph =
         canonical_digest(&(&item.check.id, &item.check.directory)).map_err(internal_contract)?;
-    let mut closure = super::resolve_closure_until(
-        root,
-        task,
-        &graph,
-        &toolchain_id,
-        &platform,
-        deadline,
-    )
-    .map_err(internal_contract)?;
+    let mut closure =
+        super::resolve_closure_until(root, task, &graph, &toolchain_id, &platform, deadline)
+            .map_err(internal_contract)?;
     closure.inputs.insert(
         "task_definition".to_owned(),
         velnor_actions_contract::Provenance::Known {
@@ -163,12 +156,9 @@ fn derive_plan_inputs(
         closure_digest: &closure_digest,
     })
     .map_err(internal_contract)?;
-    let task_digest = crate::internal::plan_obligation::task_digest(
-        &task.task_id,
-        &argv,
-        &toolchain_id,
-    )
-    .map_err(internal_contract)?;
+    let task_digest =
+        crate::internal::plan_obligation::task_digest(&task.task_id, &argv, &toolchain_id)
+            .map_err(internal_contract)?;
     Ok(CheckPlanInputs {
         argv,
         task_digest,

@@ -12,9 +12,9 @@ use crate::OrchestratorError;
 use crate::cache_snapshot::{
     MANIFEST_ARCHIVE_MEMBER, PROJECTION_ARCHIVE_PREFIX, PROJECTION_INDEX_ARCHIVE_MEMBER,
     REQUIRED_OUTPUT_INDEX_ARCHIVE_MEMBER, STATE_INDEX_ARCHIVE_MEMBER, SnapshotManifestV1,
-    StateEntryV1, parse_manifest_bytes, parse_projection_index_bytes,
-    parse_required_output_bytes, parse_state_index_bytes, projection_index_digest,
-    required_output_index_digest, state_index_digest,
+    StateEntryV1, parse_manifest_bytes, parse_projection_index_bytes, parse_required_output_bytes,
+    parse_state_index_bytes, projection_index_digest, required_output_index_digest,
+    state_index_digest,
 };
 use crate::internal::internal;
 use crate::source_prep::cache_source_projection::{

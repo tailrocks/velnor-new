@@ -243,7 +243,11 @@ pub(crate) fn write_merge_request_to(
     if let Some(parent) = path.parent() {
         velnor_actions_contract::exclusive_write::create_dir_no_symlink(anchor, parent)?;
     }
-    velnor_actions_contract::exclusive_write::write_exclusive(&path, request.as_bytes(), "request")?;
+    velnor_actions_contract::exclusive_write::write_exclusive(
+        &path,
+        request.as_bytes(),
+        "request",
+    )?;
     Ok(path)
 }
 

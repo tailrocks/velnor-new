@@ -1,15 +1,13 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_actions_contract::exclusive_write::create_dir_no_symlink;
 use super::PreviewProducerProof;
-use crate::{
-    OrchestratorError, internal::internal, prepare::prepare_for_candidate_with_config,
-};
+use crate::{OrchestratorError, internal::internal, prepare::prepare_for_candidate_with_config};
 use std::{
     path::{Path, PathBuf},
     time::{Duration, Instant},
 };
+use velnor_actions_contract::exclusive_write::create_dir_no_symlink;
 use velnor_actions_contract::{
     PackageReleasePlan, PackageReleasePolicy,
     config::{RustBinaryReleaseConfig, RustBinaryReleaseProducer},

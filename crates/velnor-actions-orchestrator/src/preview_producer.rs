@@ -4,7 +4,6 @@
 use crate::OrchestratorError;
 use crate::check_evidence::reject_link_components;
 use crate::check_runtime::preparation::{RestoredGroupContext, prepare_check_with_context};
-use velnor_actions_contract::exclusive_write::create_dir_no_symlink;
 use crate::internal::internal;
 use crate::release_task_identity::ReleaseTaskIdentity;
 use serde::{Deserialize, Serialize};
@@ -14,6 +13,7 @@ use std::fs;
 use std::path::Path;
 use std::time::Instant;
 use velnor_actions_contract::config::RustBinaryReleaseConfig;
+use velnor_actions_contract::exclusive_write::create_dir_no_symlink;
 use velnor_actions_mise::{CheckDeadline, GitRequest, IsolatedCommand, ProcessOutput};
 
 #[path = "preview_producer_inputs.rs"]

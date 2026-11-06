@@ -178,9 +178,12 @@ fn project_executable(
     if bytes.is_empty() || observed != expected {
         return Err(internal("container_cli_sha256"));
     }
-    velnor_actions_contract::exclusive_write::write_exclusive_until(destination, &bytes, "container_cli", || {
-        checkpoint(Some(deadline))
-    })?;
+    velnor_actions_contract::exclusive_write::write_exclusive_until(
+        destination,
+        &bytes,
+        "container_cli",
+        || checkpoint(Some(deadline)),
+    )?;
     let fd = rustix::fs::open(
         destination,
         rustix::fs::OFlags::RDONLY | rustix::fs::OFlags::NOFOLLOW | rustix::fs::OFlags::CLOEXEC,

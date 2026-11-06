@@ -148,7 +148,12 @@ impl StageRoot {
         }
         let stage = Self::validate(identity.clone(), container.clone())?;
         let recovered = stage.retain_spare()?;
-        let mut fresh = Self::validate(identity, container).map_err(|error| OrchestratorError::io(recovered.display().to_string(), format!("prior_staging_tree_retained; stage_validation_failed:{error}")))?;
+        let mut fresh = Self::validate(identity, container).map_err(|error| {
+            OrchestratorError::io(
+                recovered.display().to_string(),
+                format!("prior_staging_tree_retained; stage_validation_failed:{error}"),
+            )
+        })?;
         fresh.recovered = Some(recovered);
         Ok(fresh)
     }
@@ -219,12 +224,25 @@ impl StageRoot {
 
     pub(super) fn retain_spare(&self) -> Result<PathBuf, OrchestratorError> {
         self.validate_container_and_spare(false)?;
-        let held = tempfile::Builder::new().prefix("retained-").tempdir_in(&self.container)
-            .map_err(|error| io(&self.container, &error))?.keep();
+        let held = tempfile::Builder::new()
+            .prefix("retained-")
+            .tempdir_in(&self.container)
+            .map_err(|error| io(&self.container, &error))?
+            .keep();
         let retained = held.join("tree");
         fs::rename(&self.spare, &retained).map_err(|error| io(&self.spare, &error))?;
-        fs::create_dir(&self.spare).map_err(|error| OrchestratorError::io(retained.display().to_string(), format!("retained_tree_requires_spare_recovery:{error}")))?;
-        fs_ops::set_mode(&self.spare, PRIVATE_DIR_MODE).map_err(|error| OrchestratorError::io(retained.display().to_string(), format!("retained_tree_spare_mode_failed:{error}")))?;
+        fs::create_dir(&self.spare).map_err(|error| {
+            OrchestratorError::io(
+                retained.display().to_string(),
+                format!("retained_tree_requires_spare_recovery:{error}"),
+            )
+        })?;
+        fs_ops::set_mode(&self.spare, PRIVATE_DIR_MODE).map_err(|error| {
+            OrchestratorError::io(
+                retained.display().to_string(),
+                format!("retained_tree_spare_mode_failed:{error}"),
+            )
+        })?;
         Ok(retained)
     }
 

@@ -1,7 +1,11 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use super::{JobParts, Step, OrchestratorError, controller_step, conditional, ReleaseJobSpec, receipt_step, action_step, UPLOAD_ARTIFACT_USES, BTreeMap, RUST_ARTIFACT, RUST_ARCHIVE, StepId, StepRole, ReleaseRole, JobTimeout, JobPermissions, upload_record_step};
+use super::{
+    BTreeMap, JobParts, JobPermissions, JobTimeout, OrchestratorError, RUST_ARCHIVE, RUST_ARTIFACT,
+    ReleaseJobSpec, ReleaseRole, Step, StepId, StepRole, UPLOAD_ARTIFACT_USES, action_step,
+    conditional, controller_step, receipt_step, upload_record_step,
+};
 
 fn common_source_steps(
     parts: &JobParts<'_>,
@@ -66,8 +70,14 @@ pub(super) fn preflight_job(parts: &JobParts<'_>) -> Result<ReleaseJobSpec, Orch
         timeout_minutes: JobTimeout::CRATE_RELEASE,
         needs: Vec::new(),
         outputs: BTreeMap::from([
-            ("rust_artifact_id".to_owned(), "${{ steps.release-rust-upload.outputs.artifact-id }}".to_owned()),
-            ("receipt_artifact_id".to_owned(), "${{ steps.release-receipt-upload.outputs.artifact-id }}".to_owned()),
+            (
+                "rust_artifact_id".to_owned(),
+                "${{ steps.release-rust-upload.outputs.artifact-id }}".to_owned(),
+            ),
+            (
+                "receipt_artifact_id".to_owned(),
+                "${{ steps.release-receipt-upload.outputs.artifact-id }}".to_owned(),
+            ),
             (
                 "eligible".to_owned(),
                 "${{ steps.release-admission.outputs.eligible }}".to_owned(),
@@ -84,10 +94,7 @@ pub(super) fn preflight_job(parts: &JobParts<'_>) -> Result<ReleaseJobSpec, Orch
     })
 }
 
-fn publish_steps(
-    parts: &JobParts<'_>,
-    bootstrap: bool,
-) -> Result<Vec<Step>, OrchestratorError> {
+fn publish_steps(parts: &JobParts<'_>, bootstrap: bool) -> Result<Vec<Step>, OrchestratorError> {
     Ok(vec![
         velnor_actions_workflow_renderer::release_budget::capture_step()?,
         velnor_actions_workflow_renderer::release_root_publisher::publisher_step(
@@ -99,9 +106,7 @@ fn publish_steps(
     ])
 }
 
-pub(super) fn publish_job(
-    parts: &JobParts<'_>,
-) -> Result<ReleaseJobSpec, OrchestratorError> {
+pub(super) fn publish_job(parts: &JobParts<'_>) -> Result<ReleaseJobSpec, OrchestratorError> {
     Ok(ReleaseJobSpec {
         role: ReleaseRole::PublishOidc,
         display_name: "Release publish".to_owned(),
@@ -116,9 +121,7 @@ pub(super) fn publish_job(
     })
 }
 
-pub(super) fn bootstrap_job(
-    parts: &JobParts<'_>,
-) -> Result<ReleaseJobSpec, OrchestratorError> {
+pub(super) fn bootstrap_job(parts: &JobParts<'_>) -> Result<ReleaseJobSpec, OrchestratorError> {
     Ok(ReleaseJobSpec {
         role: ReleaseRole::PublishBootstrap,
         display_name: "Release bootstrap publish".to_owned(),
@@ -163,4 +166,3 @@ pub(super) fn reconcile_job(
         steps,
     })
 }
-

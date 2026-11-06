@@ -42,11 +42,7 @@ fn check_group_ledger_bindings(
     signals: &mut Signals,
     miss_reasons: &mut BTreeSet<String>,
 ) {
-    let planned: BTreeSet<&str> = plan
-        .jobs
-        .iter()
-        .map(|job| job.job_id.as_str())
-        .collect();
+    let planned: BTreeSet<&str> = plan.jobs.iter().map(|job| job.job_id.as_str()).collect();
     let mut seen_jobs = BTreeSet::new();
     let mut run_identity = None;
     for ledger in ledgers {
@@ -190,7 +186,11 @@ fn check_group_ledger_coverage(
         }
     }
     let per_group = group_ledger_stats(ledgers);
-    for job in plan.jobs.iter().filter(|job| groups.contains(job.job_id.as_str())) {
+    for job in plan
+        .jobs
+        .iter()
+        .filter(|job| groups.contains(job.job_id.as_str()))
+    {
         let stats = per_group.get(job.job_id.as_str());
         match (job.disposition, stats) {
             (JobDisposition::Run, None) => {
@@ -230,7 +230,8 @@ fn check_unit_claims<'a>(
                 signals.planning_failed = true;
                 miss_reasons.insert("cache_corrupt".to_owned());
             }
-            if obligation.is_some_and(|obligation| obligation.decision != ObligationDecision::Execute)
+            if obligation
+                .is_some_and(|obligation| obligation.decision != ObligationDecision::Execute)
             {
                 signals.planning_failed = true;
                 miss_reasons.insert("gate_mismatch".to_owned());

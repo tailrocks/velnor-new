@@ -144,28 +144,31 @@ fn replace_in_place(
     reject_symlink(&target)?;
     let staging = stage_root::StageRoot::open(root)?;
     let result = (|| -> Result<Vec<String>, OrchestratorError> {
-    let target_identity = staging.validate_target(&target)?;
-    staging.validate_target_directories(&target, target_identity)?;
-    reject_symlink(&target.join("workflows"))?;
-    for rel in check_tree_paths(tree)? {
-        check_no_symlink_or_emitted_leaf(root, &rel)?;
-    }
-    staging.clear_spare_before_staging()?;
-    let staged = match preserve::stage_in_place(&target, staging.spare(), tree) {
-        Ok(path) => path,
-        Err(error) => return Err(staging.abort_before_commit(error)),
-    };
-    if let Err(error) = staging.validate_staged(&target, target_identity, &staged) {
-        return Err(staging.abort_before_commit(error));
-    }
-    publish_in_place(&staging, &target, target_identity, &staged)
+        let target_identity = staging.validate_target(&target)?;
+        staging.validate_target_directories(&target, target_identity)?;
+        reject_symlink(&target.join("workflows"))?;
+        for rel in check_tree_paths(tree)? {
+            check_no_symlink_or_emitted_leaf(root, &rel)?;
+        }
+        staging.clear_spare_before_staging()?;
+        let staged = match preserve::stage_in_place(&target, staging.spare(), tree) {
+            Ok(path) => path,
+            Err(error) => return Err(staging.abort_before_commit(error)),
+        };
+        if let Err(error) = staging.validate_staged(&target, target_identity, &staged) {
+            return Err(staging.abort_before_commit(error));
+        }
+        publish_in_place(&staging, &target, target_identity, &staged)
     })();
     match (result, staging.recovered()) {
         (Ok(mut warnings), Some(path)) => {
             warnings.push(format!("prior_staging_tree_retained:{}", path.display()));
             Ok(warnings)
         }
-        (Err(error), Some(path)) => Err(OrchestratorError::io(path.display().to_string(), format!("generation_failed:{error}; prior_staging_tree_retained"))),
+        (Err(error), Some(path)) => Err(OrchestratorError::io(
+            path.display().to_string(),
+            format!("generation_failed:{error}; prior_staging_tree_retained"),
+        )),
         (result, None) => result,
     }
 }
@@ -208,17 +211,31 @@ fn publish_existing_with(
         )));
     }
     if let Err(cause) = staging.validate_exchanged(retired) {
-        return Err(OrchestratorError::io(staged.display().to_string(), format!("exchange_identity_changed:{cause}; live_tree:{}; retained_tree:{}; stop_writers_and_reconcile", target.display(), staged.display())));
+        return Err(OrchestratorError::io(
+            staged.display().to_string(),
+            format!(
+                "exchange_identity_changed:{cause}; live_tree:{}; retained_tree:{}; stop_writers_and_reconcile",
+                target.display(),
+                staged.display()
+            ),
+        ));
     }
     if let Err(cause) = preflight::reject_unmarked_workflows_at(staged) {
         return Err(OrchestratorError::io(
             staged.display().to_string(),
-            format!("workflow_changed_during_generation:{cause}; live_tree:{}; retained_tree:{}; stop_writers_and_reconcile", target.display(), staged.display()),
+            format!(
+                "workflow_changed_during_generation:{cause}; live_tree:{}; retained_tree:{}; stop_writers_and_reconcile",
+                target.display(),
+                staged.display()
+            ),
         ));
     }
     match staging.retain_spare() {
         Ok(path) => Ok(vec![format!("retired_tree_retained:{}", path.display())]),
-        Err(error) => Err(OrchestratorError::io(staged.display().to_string(), format!("retired_tree_retention_failed:{error}"))),
+        Err(error) => Err(OrchestratorError::io(
+            staged.display().to_string(),
+            format!("retired_tree_retention_failed:{error}"),
+        )),
     }
 }
 

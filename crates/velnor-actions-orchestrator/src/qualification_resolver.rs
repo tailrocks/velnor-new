@@ -98,7 +98,11 @@ fn stage_admission(bytes: &[u8]) -> Result<(), OrchestratorError> {
         .parent()
         .ok_or_else(|| internal("bad_qualification_admission_path"))?;
     velnor_actions_contract::exclusive_write::create_dir_no_symlink(&runner_temp, parent)?;
-    velnor_actions_contract::exclusive_write::write_exclusive(&path, bytes, "qualification_admission")?;
+    velnor_actions_contract::exclusive_write::write_exclusive(
+        &path,
+        bytes,
+        "qualification_admission",
+    )?;
     Ok(())
 }
 

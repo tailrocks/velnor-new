@@ -10,15 +10,13 @@ use flate2::write::GzEncoder;
 use tar::{Builder, EntryType, Header};
 use velnor_actions_contract::canonical_json_bytes;
 
-use super::types::{
-    MAX_ARCHIVE_ENTRIES, MAX_ARCHIVE_ENTRY_BYTES, PackRequest, PackedArchive,
-};
+use super::types::{MAX_ARCHIVE_ENTRIES, MAX_ARCHIVE_ENTRY_BYTES, PackRequest, PackedArchive};
 use crate::OrchestratorError;
 use crate::cache_snapshot::{
-    LaneRoot, MANIFEST_ARCHIVE_MEMBER, PROJECTION_ARCHIVE_PREFIX,
-    PROJECTION_INDEX_ARCHIVE_MEMBER, REQUIRED_OUTPUT_INDEX_ARCHIVE_MEMBER, STATE_ARCHIVE_PREFIX,
-    STATE_INDEX_ARCHIVE_MEMBER, SnapshotPlan, StateEntryV1, archived_projection_records,
-    manifest_canonical_bytes, validate_state_index,
+    LaneRoot, MANIFEST_ARCHIVE_MEMBER, PROJECTION_ARCHIVE_PREFIX, PROJECTION_INDEX_ARCHIVE_MEMBER,
+    REQUIRED_OUTPUT_INDEX_ARCHIVE_MEMBER, STATE_ARCHIVE_PREFIX, STATE_INDEX_ARCHIVE_MEMBER,
+    SnapshotPlan, StateEntryV1, archived_projection_records, manifest_canonical_bytes,
+    validate_state_index,
 };
 use crate::internal::{internal, internal_contract};
 use crate::source_prep::cache_source_projection::{
@@ -359,7 +357,8 @@ mod gc1_t43_json_entry_limit {
         let big = vec![
             0u8;
             usize::try_from(MAX_ARCHIVE_ENTRY_BYTES)
-                .expect("archive ceiling fits the address space") + 1
+                .expect("archive ceiling fits the address space")
+                + 1
         ];
         let error = pack
             .append_json("state-index.json", &big)

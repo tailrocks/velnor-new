@@ -8,7 +8,10 @@ fn release_pr_preparation_separates_source_execution_from_write_authority()
 -> Result<(), Box<dyn std::error::Error>> {
     let (spec, rust) = fixture()?;
     let producer = spec.jobs.get("release-preparation").ok_or("producer")?;
-    let writer = spec.jobs.get("release-pr-create").ok_or("missing create-only writer")?;
+    let writer = spec
+        .jobs
+        .get("release-pr-create")
+        .ok_or("missing create-only writer")?;
     assert_eq!(producer.permissions.contents, PermissionLevel::Read);
     assert_eq!(producer.permissions.pull_requests, PermissionLevel::None);
     assert_eq!(producer.permissions.id_token, PermissionLevel::None);
@@ -20,72 +23,114 @@ fn release_pr_preparation_separates_source_execution_from_write_authority()
     assert!(writer.steps.iter().all(|step| !matches!(
         &step.kind, StepKind::Action { uses, .. } if uses.starts_with("actions/checkout@")
     )));
-    assert!(producer.steps.iter().filter_map(|step| match &step.kind {
-        StepKind::Action { uses, with, .. } if uses.starts_with("actions/checkout@") => Some(with),
-        _ => None,
-    }).all(|with| with.get("persist-credentials").is_some_and(|value| value == "false")));
+    assert!(
+        producer
+            .steps
+            .iter()
+            .filter_map(|step| match &step.kind {
+                StepKind::Action { uses, with, .. } if uses.starts_with("actions/checkout@") =>
+                    Some(with),
+                _ => None,
+            })
+            .all(|with| with
+                .get("persist-credentials")
+                .is_some_and(|value| value == "false"))
+    );
     let ctx = velnor_actions_workflow_renderer::release_tree::ReleaseRenderContext {
         generator_version: env!("CARGO_PKG_VERSION").to_owned(),
         runs_on: "ubuntu-26.04".to_owned(),
     };
-    let workflow = velnor_actions_workflow_renderer::release_tree::render_release_workflow(&spec, &ctx, &rust)?;
+    let workflow = velnor_actions_workflow_renderer::release_tree::render_release_workflow(
+        &spec, &ctx, &rust,
+    )?;
     assert!(workflow.contains("release-pr-create:"));
     assert!(workflow.contains("needs.release-preparation.outputs.artifact_id"));
     Ok(())
 }
 
 #[test]
-fn release_pr_split_rejects_authority_and_artifact_forgery() -> Result<(), Box<dyn std::error::Error>> {
+fn release_pr_split_rejects_authority_and_artifact_forgery()
+-> Result<(), Box<dyn std::error::Error>> {
     let (spec, rust) = fixture()?;
     assert!(valid(&spec, &rust));
     let mut candidate = spec.clone();
-    candidate.jobs.get_mut("release-preparation").ok_or("producer")?.permissions.contents = PermissionLevel::Write;
+    candidate
+        .jobs
+        .get_mut("release-preparation")
+        .ok_or("producer")?
+        .permissions
+        .contents = PermissionLevel::Write;
     assert!(!valid(&candidate, &rust));
     let mut candidate = spec.clone();
-    let producer = candidate.jobs.get_mut("release-preparation").ok_or("producer")?;
-    producer.steps[1] = velnor_actions_workflow_renderer::action_step("Checkout", crate::workflow::CHECKOUT_USES, BTreeMap::from([("persist-credentials".into(), "true".into()), ("fetch-depth".into(), "0".into())]))?;
+    let producer = candidate
+        .jobs
+        .get_mut("release-preparation")
+        .ok_or("producer")?;
+    producer.steps[1] = velnor_actions_workflow_renderer::action_step(
+        "Checkout",
+        crate::workflow::CHECKOUT_USES,
+        BTreeMap::from([
+            ("persist-credentials".into(), "true".into()),
+            ("fetch-depth".into(), "0".into()),
+        ]),
+    )?;
     assert!(!valid(&candidate, &rust));
     let mut candidate = spec.clone();
-    let producer = candidate.jobs.get_mut("release-preparation").ok_or("producer")?;
-    let step = producer.steps.iter_mut().find(|step| step.name == "Prepare release PR candidate").ok_or("candidate")?;
-    let StepKind::Shell { env, .. } = &mut step.kind else { return Err("candidate shell".into()) };
+    let producer = candidate
+        .jobs
+        .get_mut("release-preparation")
+        .ok_or("producer")?;
+    let step = producer
+        .steps
+        .iter_mut()
+        .find(|step| step.name == "Prepare release PR candidate")
+        .ok_or("candidate")?;
+    let StepKind::Shell { env, .. } = &mut step.kind else {
+        return Err("candidate shell".into());
+    };
     env.insert("GIT_TOKEN".into(), "${{ secrets.GITHUB_TOKEN }}".into());
     assert!(!valid(&candidate, &rust));
     let mut candidate = spec.clone();
-    candidate.jobs.get_mut("release-preparation").ok_or("producer")?.outputs.insert("artifact_id".into(), "${{ steps.release-pr-artifact.outputs.artifact-digest }}".into());
+    candidate
+        .jobs
+        .get_mut("release-preparation")
+        .ok_or("producer")?
+        .outputs
+        .insert(
+            "artifact_id".into(),
+            "${{ steps.release-pr-artifact.outputs.artifact-digest }}".into(),
+        );
     assert!(!valid(&candidate, &rust));
     let mut candidate = spec.clone();
-    let producer = candidate.jobs.get_mut("release-preparation").ok_or("producer")?;
+    let producer = candidate
+        .jobs
+        .get_mut("release-preparation")
+        .ok_or("producer")?;
     producer.steps.swap(8, 9);
     assert!(!valid(&candidate, &rust));
-    let mut candidate = spec.clone();
-    candidate.jobs.get_mut("release-pr-create").ok_or("writer")?.condition = None;
-    assert!(!valid(&candidate, &rust));
-    let mut candidate = spec.clone();
-    candidate.jobs.get_mut("release-pr-create").ok_or("writer")?.permissions.id_token = PermissionLevel::Write;
-    assert!(!valid(&candidate, &rust));
-    let mut candidate = spec.clone();
-    let checkout = candidate.jobs.get("release-preparation").ok_or("producer")?.steps[1].clone();
-    candidate.jobs.get_mut("release-pr-create").ok_or("writer")?.steps.push(checkout);
-    assert!(!valid(&candidate, &rust));
-    let mut candidate = spec.clone();
-    let writer = candidate.jobs.get_mut("release-pr-create").ok_or("writer")?;
-    let StepKind::Shell { env, .. } = &mut writer.steps[1].kind else { return Err("writer shell".into()) };
-    env.insert("VELNOR_PR_CONTENT_SHA256".into(), "${{ needs.release-preparation.outputs.artifact_digest }}".into());
-    assert!(!valid(&candidate, &rust));
+    assert_writer_forgery_rejected(&spec, &rust)?;
     Ok(())
 }
 
 #[test]
-fn disabled_release_pr_keeps_readonly_dry_run_without_writer() -> Result<(), Box<dyn std::error::Error>> {
-    for authentication in [ReleaseAuthentication::TrustedPublishing, ReleaseAuthentication::BootstrapToken] {
+fn disabled_release_pr_keeps_readonly_dry_run_without_writer()
+-> Result<(), Box<dyn std::error::Error>> {
+    for authentication in [
+        ReleaseAuthentication::TrustedPublishing,
+        ReleaseAuthentication::BootstrapToken,
+    ] {
         let (spec, rust) = fixture_for_release_pr(authentication, false)?;
         assert!(valid(&spec, &rust));
         assert!(!spec.jobs.contains_key("release-pr-create"));
         let producer = spec.jobs.get("release-preparation").ok_or("producer")?;
         assert_eq!(producer.permissions.contents, PermissionLevel::Read);
         assert!(producer.outputs.is_empty());
-        assert!(producer.steps.iter().any(|step| step.name == "Validate release"));
+        assert!(
+            producer
+                .steps
+                .iter()
+                .any(|step| step.name == "Validate release")
+        );
     }
     Ok(())
 }
@@ -99,9 +144,14 @@ fn rust_artifact_custody_must_precede_publishing() -> Result<(), Box<dyn std::er
     );
     let mut forged = spec.clone();
     let publisher = forged.jobs.get_mut("release-publish").ok_or("publisher")?;
-    let StepKind::Shell { env, .. } = &mut publisher.steps[1].kind else { return Err("publisher shell".into()); };
+    let StepKind::Shell { env, .. } = &mut publisher.steps[1].kind else {
+        return Err("publisher shell".into());
+    };
     env.insert("VELNOR_PREFLIGHT_RUST_ARTIFACT_ID".into(), "forged".into());
-    assert!(!valid(&forged, &rust), "publisher must bind the verified Rust artifact");
+    assert!(
+        !valid(&forged, &rust),
+        "publisher must bind the verified Rust artifact"
+    );
     let mut missing_id = spec.clone();
     missing_id
         .jobs
@@ -138,16 +188,29 @@ fn semver_tool_is_required_before_preparation_and_candidate_receipt()
     for id in ["release-preparation", "release-preflight"] {
         let mut missing = spec.clone();
         let job = missing.jobs.get_mut(id).ok_or("job")?;
-        let index = job.steps.iter().position(|step| step.name == "Acquire cargo-semver-checks").ok_or("semver acquisition")?;
+        let index = job
+            .steps
+            .iter()
+            .position(|step| step.name == "Acquire cargo-semver-checks")
+            .ok_or("semver acquisition")?;
         job.steps.remove(index);
         assert!(!valid(&missing, &rust), "{id} accepted a missing checker");
         let mut changed = spec.clone();
         let job = changed.jobs.get_mut(id).ok_or("job")?;
-        let step = job.steps.iter_mut().find(|step| step.name == "Acquire cargo-semver-checks").ok_or("semver acquisition")?;
+        let step = job
+            .steps
+            .iter_mut()
+            .find(|step| step.name == "Acquire cargo-semver-checks")
+            .ok_or("semver acquisition")?;
         if let velnor_actions_contract::StepKind::Shell { run, .. } = &mut step.kind {
             run[2] = "true".to_owned();
-        } else { return Err("expected shell step".into()); }
-        assert!(!valid(&changed, &rust), "{id} accepted an unverified checker");
+        } else {
+            return Err("expected shell step".into());
+        }
+        assert!(
+            !valid(&changed, &rust),
+            "{id} accepted an unverified checker"
+        );
     }
     Ok(())
 }
@@ -215,53 +278,189 @@ fn consumers_acquire_the_receipt_bound_to_preflight() -> Result<(), Box<dyn std:
             && position("Upload release receipt") < position("Archive release Rust toolchain"),
         "source admission and Rust verification must precede workspace receipt"
     );
-    assert!(position("Release verify-package").is_none(), "preflight must not verify a package before dependency publication");
+    assert!(
+        position("Release verify-package").is_none(),
+        "preflight must not verify a package before dependency publication"
+    );
     assert_eq!(
-        preflight.outputs.get("receipt_artifact_id").map(String::as_str),
+        preflight
+            .outputs
+            .get("receipt_artifact_id")
+            .map(String::as_str),
         Some("${{ steps.release-receipt-upload.outputs.artifact-id }}"),
         "preflight must expose the actual receipt upload ID"
     );
     let publisher = spec.jobs.get("release-publish").ok_or("publisher")?;
-    assert!(publisher.needs.iter().any(|need| need == "release-preflight"));
-    let StepKind::Shell { env, .. } = &publisher.steps[1].kind else { return Err("publisher shell".into()); };
-    assert_eq!(env.get("VELNOR_PREFLIGHT_RECEIPT_ARTIFACT_ID").map(String::as_str), Some("${{ needs.release-preflight.outputs.receipt_artifact_id }}"));
+    assert!(
+        publisher
+            .needs
+            .iter()
+            .any(|need| need == "release-preflight")
+    );
+    let StepKind::Shell { env, .. } = &publisher.steps[1].kind else {
+        return Err("publisher shell".into());
+    };
+    assert_eq!(
+        env.get("VELNOR_PREFLIGHT_RECEIPT_ARTIFACT_ID")
+            .map(String::as_str),
+        Some("${{ needs.release-preflight.outputs.receipt_artifact_id }}")
+    );
     {
         let job = spec.jobs.get("release-reconcile").ok_or("consumer")?;
         assert!(job.needs.iter().any(|need| need == "release-preflight"));
         let operation = "reconciliation-receipt-acquire";
-        let acquire = job.steps.iter().find(|step| step.name == format!("Release {operation}")).ok_or("receipt acquisition")?;
+        let acquire = job
+            .steps
+            .iter()
+            .find(|step| step.name == format!("Release {operation}"))
+            .ok_or("receipt acquisition")?;
         let StepKind::Shell { run, env } = &acquire.kind else {
             return Err("receipt acquisition is not a shell step".into());
         };
         assert_eq!(run.last().map(String::as_str), Some(operation));
-        assert_eq!(env.get("VELNOR_RECEIPT_ARTIFACT_ID").map(String::as_str), Some("${{ needs.release-preflight.outputs.receipt_artifact_id }}"));
-        assert!(!job.steps.iter().any(|step| step.name == "Download release receipt"));
+        assert_eq!(
+            env.get("VELNOR_RECEIPT_ARTIFACT_ID").map(String::as_str),
+            Some("${{ needs.release-preflight.outputs.receipt_artifact_id }}")
+        );
+        assert!(
+            !job.steps
+                .iter()
+                .any(|step| step.name == "Download release receipt")
+        );
     }
     assert!(valid(&spec, &rust));
-    let mut forged_id = spec.clone();
-    let acquire = forged_id.jobs.get_mut("release-publish").ok_or("publisher")?.steps.iter_mut().find(|step| step.name == "Publish approved Rust crate").ok_or("acquire")?;
-    let StepKind::Shell { env, .. } = &mut acquire.kind else { return Err("acquire shell".into()); };
-    env.insert("VELNOR_PREFLIGHT_RECEIPT_ARTIFACT_ID".to_owned(), "${{ inputs.artifact_id }}".to_owned());
-    assert!(!valid(&forged_id, &rust), "receipt artifact must come from this preflight");
-
-    let mut altered_upload = spec.clone();
-    let upload = altered_upload.jobs.get_mut("release-preflight").ok_or("preflight")?.steps.iter_mut().find(|step| step.name == "Upload release receipt").ok_or("upload")?;
-    let StepKind::Action { with, .. } = &mut upload.kind else { return Err("upload action".into()); };
-    with.insert("name".to_owned(), "unbound-receipt".to_owned());
-    assert!(!valid(&altered_upload, &rust), "receipt artifact name must bind run and attempt");
-
-    let mut duplicate = spec.clone();
-    let job = duplicate.jobs.get_mut("release-reconcile").ok_or("reconcile")?;
-    let second = job.steps.iter().find(|step| step.name == "Release reconciliation-receipt-acquire").ok_or("acquire")?.clone();
-    job.steps.push(second);
-    assert!(!valid(&duplicate, &rust), "duplicate receipt acquisition must fail");
-
-    let mut late_upload = spec.clone();
-    let job = late_upload.jobs.get_mut("release-preflight").ok_or("preflight")?;
-    let receipt = job.steps.iter().position(|step| step.name == "Release candidate-receipt").ok_or("receipt")?;
-    let verify = job.steps.iter().position(|step| step.name == "Verify Rust channel manifest").ok_or("verify")?;
-    job.steps.swap(receipt, verify);
-    assert!(!valid(&late_upload, &rust), "receipt must follow verified Rust");
+    assert_consumer_receipt_forgery_rejected(&spec, &rust)?;
     Ok(())
 }
 
+fn assert_writer_forgery_rejected(
+    spec: &ReleaseWorkflowSpec,
+    rust: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let mut candidate = spec.clone();
+    candidate
+        .jobs
+        .get_mut("release-pr-create")
+        .ok_or("writer")?
+        .condition = None;
+    assert!(!valid(&candidate, rust));
+    let mut candidate = spec.clone();
+    candidate
+        .jobs
+        .get_mut("release-pr-create")
+        .ok_or("writer")?
+        .permissions
+        .id_token = PermissionLevel::Write;
+    assert!(!valid(&candidate, rust));
+    let mut candidate = spec.clone();
+    let checkout = candidate
+        .jobs
+        .get("release-preparation")
+        .ok_or("producer")?
+        .steps[1]
+        .clone();
+    candidate
+        .jobs
+        .get_mut("release-pr-create")
+        .ok_or("writer")?
+        .steps
+        .push(checkout);
+    assert!(!valid(&candidate, rust));
+    let mut candidate = spec.clone();
+    let writer = candidate
+        .jobs
+        .get_mut("release-pr-create")
+        .ok_or("writer")?;
+    let StepKind::Shell { env, .. } = &mut writer.steps[1].kind else {
+        return Err("writer shell".into());
+    };
+    env.insert(
+        "VELNOR_PR_CONTENT_SHA256".into(),
+        "${{ needs.release-preparation.outputs.artifact_digest }}".into(),
+    );
+    assert!(!valid(&candidate, rust));
+    Ok(())
+}
+
+fn assert_consumer_receipt_forgery_rejected(
+    spec: &ReleaseWorkflowSpec,
+    rust: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let mut forged_id = spec.clone();
+    let acquire = forged_id
+        .jobs
+        .get_mut("release-publish")
+        .ok_or("publisher")?
+        .steps
+        .iter_mut()
+        .find(|step| step.name == "Publish approved Rust crate")
+        .ok_or("acquire")?;
+    let StepKind::Shell { env, .. } = &mut acquire.kind else {
+        return Err("acquire shell".into());
+    };
+    env.insert(
+        "VELNOR_PREFLIGHT_RECEIPT_ARTIFACT_ID".to_owned(),
+        "${{ inputs.artifact_id }}".to_owned(),
+    );
+    assert!(
+        !valid(&forged_id, rust),
+        "receipt artifact must come from this preflight"
+    );
+
+    let mut altered_upload = spec.clone();
+    let upload = altered_upload
+        .jobs
+        .get_mut("release-preflight")
+        .ok_or("preflight")?
+        .steps
+        .iter_mut()
+        .find(|step| step.name == "Upload release receipt")
+        .ok_or("upload")?;
+    let StepKind::Action { with, .. } = &mut upload.kind else {
+        return Err("upload action".into());
+    };
+    with.insert("name".to_owned(), "unbound-receipt".to_owned());
+    assert!(
+        !valid(&altered_upload, rust),
+        "receipt artifact name must bind run and attempt"
+    );
+
+    let mut duplicate = spec.clone();
+    let job = duplicate
+        .jobs
+        .get_mut("release-reconcile")
+        .ok_or("reconcile")?;
+    let second = job
+        .steps
+        .iter()
+        .find(|step| step.name == "Release reconciliation-receipt-acquire")
+        .ok_or("acquire")?
+        .clone();
+    job.steps.push(second);
+    assert!(
+        !valid(&duplicate, rust),
+        "duplicate receipt acquisition must fail"
+    );
+
+    let mut late_upload = spec.clone();
+    let job = late_upload
+        .jobs
+        .get_mut("release-preflight")
+        .ok_or("preflight")?;
+    let receipt = job
+        .steps
+        .iter()
+        .position(|step| step.name == "Release candidate-receipt")
+        .ok_or("receipt")?;
+    let verify = job
+        .steps
+        .iter()
+        .position(|step| step.name == "Verify Rust channel manifest")
+        .ok_or("verify")?;
+    job.steps.swap(receipt, verify);
+    assert!(
+        !valid(&late_upload, rust),
+        "receipt must follow verified Rust"
+    );
+    Ok(())
+}

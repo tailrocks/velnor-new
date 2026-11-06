@@ -90,6 +90,9 @@ fn first_publication_is_dispatch_only() {
     assert_eq!(creation.dispatch_inputs.len(), 2);
     let recovery = release_triggers("main", &plan);
     assert_eq!(recovery.push_branches, Vec::<String>::new());
-    let ordinary = ReleasePlan { dispatch: false, ..plan };
+    let ordinary = ReleasePlan {
+        dispatch: false,
+        ..plan
+    };
     assert_eq!(release_triggers("main", &ordinary).push_branches, ["main"]);
 }

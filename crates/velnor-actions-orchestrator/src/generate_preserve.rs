@@ -347,17 +347,29 @@ fn io(path: &Path, error: &std::io::Error) -> OrchestratorError {
 #[cfg(test)]
 mod release_cleanup_tests {
     #[test]
-    fn obsolete_publish_config_is_removed_from_generated_preview() -> Result<(), Box<dyn std::error::Error>> {
+    fn obsolete_publish_config_is_removed_from_generated_preview()
+    -> Result<(), Box<dyn std::error::Error>> {
         let source = tempfile::tempdir()?;
         let output = tempfile::tempdir()?;
         let github = source.path().join(".github");
         std::fs::create_dir(&github)?;
         std::fs::write(github.join("release-plz-publish.toml"), "obsolete")?;
         std::fs::write(github.join("manual.txt"), "keep")?;
-        let tree = velnor_actions_workflow_renderer::render::RenderedTree { files: vec![], symlinks: vec![] };
+        let tree = velnor_actions_workflow_renderer::render::RenderedTree {
+            files: vec![],
+            symlinks: vec![],
+        };
         super::write_preview(&github, &output.path().join(".github"), &tree)?;
-        assert!(!output.path().join(".github/release-plz-publish.toml").exists());
-        assert_eq!(std::fs::read_to_string(output.path().join(".github/manual.txt"))?, "keep");
+        assert!(
+            !output
+                .path()
+                .join(".github/release-plz-publish.toml")
+                .exists()
+        );
+        assert_eq!(
+            std::fs::read_to_string(output.path().join(".github/manual.txt"))?,
+            "keep"
+        );
         Ok(())
     }
 }

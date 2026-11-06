@@ -55,7 +55,7 @@ impl StageRoot {
         let spare = container.join(SPARE_DIR);
         match fs::create_dir(&spare) {
             Ok(()) => set_mode(&spare, PRIVATE_DIR_MODE)?,
-            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {},
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
             Err(error) => return Err(io(&spare, &error)),
         }
         let (spare_identity, spare_metadata) = FsIdentity::capture(&spare)?;

@@ -17,7 +17,8 @@ pub(super) fn fixture_checkout(needs_fixture: bool) -> Result<Step, Orchestrator
         };
         with.insert(
             "filter".to_owned(),
-            velnor_actions_contract::workflow::step_identity::FIXTURE_CHECKOUT_BLOB_FILTER.to_owned(),
+            velnor_actions_contract::workflow::step_identity::FIXTURE_CHECKOUT_BLOB_FILTER
+                .to_owned(),
         );
     }
     Ok(checkout)
@@ -28,12 +29,22 @@ pub(super) fn gh_fixture_step(
     model: &CrateJob,
 ) -> Result<Option<Step>, OrchestratorError> {
     if policy == WorkflowPolicy::VelnorRepositoryV1
-        && matches!(model.package_name.as_str(), "velnor-actions-cli" | "velnor-actions-orchestrator")
-        && model.obligations.iter().any(|obligation| obligation.run.iter().any(|arg| arg == "nextest"))
+        && matches!(
+            model.package_name.as_str(),
+            "velnor-actions-cli" | "velnor-actions-orchestrator"
+        )
+        && model
+            .obligations
+            .iter()
+            .any(|obligation| obligation.run.iter().any(|arg| arg == "nextest"))
     {
         return Ok(Some(velnor_actions_workflow_renderer::shell_step(
             "Stage isolated GitHub CLI test tools",
-            vec!["/usr/bin/python3".to_owned(), "-I".to_owned(), "scripts/prepare-gh-fixture-tools.py".to_owned()],
+            vec![
+                "/usr/bin/python3".to_owned(),
+                "-I".to_owned(),
+                "scripts/prepare-gh-fixture-tools.py".to_owned(),
+            ],
             BTreeMap::new(),
         )?));
     }
@@ -49,11 +60,7 @@ pub(super) fn image_publication_fixture_step(
     {
         return Ok(Vec::new());
     }
-    let env = crate::matrix_step::task_step_env(
-        input.catalog,
-        &BTreeMap::new(),
-        true,
-    )?;
+    let env = crate::matrix_step::task_step_env(input.catalog, &BTreeMap::new(), true)?;
     let build = mbx_image_fixture_argv(
         input.catalog,
         &[
@@ -83,11 +90,7 @@ pub(super) fn image_publication_fixture_step(
     );
     let step = velnor_actions_workflow_renderer::shell_step(
         "Prepare image publication fixture",
-        vec![
-            "bash".to_owned(),
-            "-c".to_owned(),
-            script,
-        ],
+        vec!["bash".to_owned(), "-c".to_owned(), script],
         env,
     )?;
     Ok(vec![step])
@@ -97,12 +100,8 @@ fn mbx_image_fixture_argv(
     catalog: &ToolCatalog,
     cargo_args: &[&str],
 ) -> Result<String, OrchestratorError> {
-    let argv = crate::product_release_pins::exec_argv(
-        &[PinnedTool::Rust],
-        "mbx",
-        cargo_args,
-        catalog,
-    )?;
+    let argv =
+        crate::product_release_pins::exec_argv(&[PinnedTool::Rust], "mbx", cargo_args, catalog)?;
     velnor_actions_workflow_renderer::join_argv_for_run(&argv).map_err(OrchestratorError::from)
 }
 

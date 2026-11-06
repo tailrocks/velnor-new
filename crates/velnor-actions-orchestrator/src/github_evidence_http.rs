@@ -13,12 +13,12 @@ use sha2::{Digest, Sha256};
 mod logs;
 pub(crate) use logs::{qualification_artifact_bytes, qualification_job_log};
 
+#[path = "github_evidence_http_attestation.rs"]
+mod attestation;
 #[path = "github_evidence_http_route.rs"]
 mod route;
 #[path = "github_evidence_http_validation.rs"]
 mod validation;
-#[path = "github_evidence_http_attestation.rs"]
-mod attestation;
 pub(crate) use attestation::fetch_attestation_bundle;
 pub(super) use route::EvidenceRoute;
 use validation::{agent_config, hex_digit, hex_lower, is_sha256};
@@ -139,7 +139,8 @@ impl GitHubEvidenceRead for NativeGitHubEvidenceRead {
             return Err(internal("github_evidence_archive_bound"));
         }
         let url = format!(
-            "{}{}", api_origin(),
+            "{}{}",
+            api_origin(),
             EvidenceRoute::ArtifactDownload { artifact_id }.path(repo)
         );
         let response = api_request(&url, token, deadline)?;

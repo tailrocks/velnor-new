@@ -5,8 +5,8 @@ use crate::OrchestratorError;
 use crate::internal::internal;
 use std::path::Path;
 use velnor_actions_contract::config::CheckPlatform;
-use velnor_actions_mise::catalog::lock::ApprovedMiseRuntime;
 use velnor_actions_mise::CheckDeadline;
+use velnor_actions_mise::catalog::lock::ApprovedMiseRuntime;
 
 pub(crate) fn resolve_mise_runtime(
     root: &Path,
@@ -152,8 +152,8 @@ fn read_deadline_checkpoint(deadline: Option<CheckDeadline>) -> Result<(), &'sta
 mod tests {
     use super::project_mise_binary;
     use std::path::Path;
-    use velnor_actions_contract::config::CheckPlatform;
     use velnor_actions_contract::ReleaseTarget;
+    use velnor_actions_contract::config::CheckPlatform;
     use velnor_actions_mise::catalog::lock::ApprovedMiseRuntime;
 
     fn runtime_for(target: ReleaseTarget) -> ApprovedMiseRuntime {
@@ -229,9 +229,7 @@ mod tests {
         std::fs::remove_dir(&dir).expect("temp dir must clean");
     }
 
-    fn fixture_mise_check(
-        platform: CheckPlatform,
-    ) -> velnor_actions_contract::config::MiseCheck {
+    fn fixture_mise_check(platform: CheckPlatform) -> velnor_actions_contract::config::MiseCheck {
         use velnor_actions_contract::config::{CheckExecutor, CheckRunner, MiseCheck};
 
         MiseCheck {

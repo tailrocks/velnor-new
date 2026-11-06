@@ -1,9 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::github_review_feedback::{CapturedFeedback, FeedbackContext};
-use velnor_actions_contract::staged_reads::read_staged_bytes_until;
 use super::super::github::TapMergeGitHub;
+use crate::github_review_feedback::{CapturedFeedback, FeedbackContext};
 use crate::{OrchestratorError, internal::internal};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -13,6 +12,7 @@ use std::{
     path::{Path, PathBuf},
     time::{Duration, Instant},
 };
+use velnor_actions_contract::staged_reads::read_staged_bytes_until;
 use velnor_actions_contract::{
     canonical_json_bytes, digest_b3,
     review_completion::{ReviewCompletionPolicy, parse_review_completion_policy},

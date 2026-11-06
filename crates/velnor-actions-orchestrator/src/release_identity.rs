@@ -110,37 +110,82 @@ pub(crate) fn workspace_lock(
     known_manifests: &BTreeSet<String>,
     registry: &str,
     repository: &str,
-) -> Result<velnor_actions_workflow_renderer::release_spec::lock::ReleaseConcurrency, OrchestratorError> {
+) -> Result<
+    velnor_actions_workflow_renderer::release_spec::lock::ReleaseConcurrency,
+    OrchestratorError,
+> {
     use sha2::{Digest, Sha256};
     let record = velnor_actions_rust::metadata::parse_metadata_json(
-        metadata, root, manifest_hint, known_manifests,
-    ).map_err(|err| OrchestratorError::Contract { problem: err.to_string() })?;
-    let root = root.canonicalize().map_err(|err| OrchestratorError::io(root.display().to_string(), err.to_string()))?;
-    let workspace = root.join(&record.workspace_root).canonicalize()
+        metadata,
+        root,
+        manifest_hint,
+        known_manifests,
+    )
+    .map_err(|err| OrchestratorError::Contract {
+        problem: err.to_string(),
+    })?;
+    let root = root
+        .canonicalize()
+        .map_err(|err| OrchestratorError::io(root.display().to_string(), err.to_string()))?;
+    let workspace = root
+        .join(&record.workspace_root)
+        .canonicalize()
         .map_err(|err| OrchestratorError::io(record.workspace_root.clone(), err.to_string()))?;
-    let relative = workspace.strip_prefix(&root).map_err(|_| OrchestratorError::Contract { problem: "release_workspace_outside_root".to_owned() })?;
-    let manifest = root.join(manifest_hint).canonicalize()
+    let relative = workspace
+        .strip_prefix(&root)
+        .map_err(|_| OrchestratorError::Contract {
+            problem: "release_workspace_outside_root".to_owned(),
+        })?;
+    let manifest = root
+        .join(manifest_hint)
+        .canonicalize()
         .map_err(|err| OrchestratorError::io(manifest_hint, err.to_string()))?;
-    let reported_member = record.packages.iter().filter(|package| package.in_workspace).any(|package| {
-        root.join(&package.manifest).canonicalize().is_ok_and(|path| path == manifest)
-    });
-    let members_within_workspace = record.packages.iter().filter(|package| package.in_workspace).all(|package| {
-        root.join(&package.manifest).canonicalize().is_ok_and(|path| path.starts_with(&workspace))
-    });
-    if !workspace.is_dir() || !manifest.is_file() || !manifest.starts_with(&workspace)
+    let reported_member = record
+        .packages
+        .iter()
+        .filter(|package| package.in_workspace)
+        .any(|package| {
+            root.join(&package.manifest)
+                .canonicalize()
+                .is_ok_and(|path| path == manifest)
+        });
+    let members_within_workspace = record
+        .packages
+        .iter()
+        .filter(|package| package.in_workspace)
+        .all(|package| {
+            root.join(&package.manifest)
+                .canonicalize()
+                .is_ok_and(|path| path.starts_with(&workspace))
+        });
+    if !workspace.is_dir()
+        || !manifest.is_file()
+        || !manifest.starts_with(&workspace)
         || !members_within_workspace
         || (manifest != workspace.join("Cargo.toml") && !reported_member)
     {
-        return Err(OrchestratorError::Contract { problem: "release_workspace_manifest_mismatch".to_owned() });
+        return Err(OrchestratorError::Contract {
+            problem: "release_workspace_manifest_mismatch".to_owned(),
+        });
     }
-    let components = relative.components().map(|part| part.as_os_str().to_str())
-        .collect::<Option<Vec<_>>>().ok_or_else(|| OrchestratorError::Contract { problem: "release_workspace_invalid_path".to_owned() })?;
+    let components = relative
+        .components()
+        .map(|part| part.as_os_str().to_str())
+        .collect::<Option<Vec<_>>>()
+        .ok_or_else(|| OrchestratorError::Contract {
+            problem: "release_workspace_invalid_path".to_owned(),
+        })?;
     let mut digest = String::with_capacity(64);
     for byte in Sha256::digest(components.join("/").as_bytes()) {
         use std::fmt::Write as _;
-        write!(&mut digest, "{byte:02x}").map_err(|_| OrchestratorError::Contract { problem: "release_workspace_digest_encoding".to_owned() })?;
+        write!(&mut digest, "{byte:02x}").map_err(|_| OrchestratorError::Contract {
+            problem: "release_workspace_digest_encoding".to_owned(),
+        })?;
     }
-    velnor_actions_workflow_renderer::release_spec::lock::stable_lock_group(registry, repository, &digest).map_err(Into::into)
+    velnor_actions_workflow_renderer::release_spec::lock::stable_lock_group(
+        registry, repository, &digest,
+    )
+    .map_err(Into::into)
 }
 
 #[cfg(test)]

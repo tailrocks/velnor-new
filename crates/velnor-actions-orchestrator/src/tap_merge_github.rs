@@ -196,7 +196,11 @@ impl crate::github_review_feedback::FeedbackRead for TapMergeGitHub {
         self.get(route)
     }
 
-    fn feedback_graphql(&self, query: crate::github_review_feedback::FeedbackQuery, fields: &[(&str, String)]) -> Result<serde_json::Value, OrchestratorError> {
+    fn feedback_graphql(
+        &self,
+        query: crate::github_review_feedback::FeedbackQuery,
+        fields: &[(&str, String)],
+    ) -> Result<serde_json::Value, OrchestratorError> {
         self.graphql(query.query(), fields)
     }
 }

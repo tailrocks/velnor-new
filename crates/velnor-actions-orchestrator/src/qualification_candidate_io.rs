@@ -84,9 +84,12 @@ pub(super) fn write(
     bytes: &[u8],
     deadline: CheckDeadline,
 ) -> Result<(), OrchestratorError> {
-    velnor_actions_contract::exclusive_write::write_exclusive_until(path, bytes, "qualification_candidate", || {
-        super::checkpoint(deadline)
-    })
+    velnor_actions_contract::exclusive_write::write_exclusive_until(
+        path,
+        bytes,
+        "qualification_candidate",
+        || super::checkpoint(deadline),
+    )
 }
 
 fn io(path: &Path, error: impl std::fmt::Display) -> OrchestratorError {

@@ -6,7 +6,7 @@ use velnor_actions_contract::config::{
     AnsibleStackConfig, BunStackConfig, DbtStackConfig, RustBinaryReleaseConfig, RustReleaseConfig,
 };
 use velnor_actions_contract::{
-    DeclaredCompileDriver, DeclaredTestRunner, CompiledStateMode, RustConfiguration,
+    CompiledStateMode, DeclaredCompileDriver, DeclaredTestRunner, RustConfiguration,
     RustStackConfig, StacksConfig, TofuStackConfig, Utf8RepoRelDir,
 };
 

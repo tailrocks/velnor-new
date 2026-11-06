@@ -88,8 +88,16 @@ impl CrateSuite {
 const NO_SUITE_TOOLS: &[SuiteTool] = &[];
 const OPENTOFU_TOOLS: &[SuiteTool] = &[SuiteTool::OpenTofuExecution];
 const GH_TOOLS: &[SuiteTool] = &[SuiteTool::GhExecution];
-const CLI_TOOLS: &[SuiteTool] = &[SuiteTool::GenerateValidators, SuiteTool::GhExecution, SuiteTool::CraneExecution];
-const ORCHESTRATOR_TOOLS: &[SuiteTool] = &[SuiteTool::GenerateValidators, SuiteTool::BunExecution, SuiteTool::GhExecution];
+const CLI_TOOLS: &[SuiteTool] = &[
+    SuiteTool::GenerateValidators,
+    SuiteTool::GhExecution,
+    SuiteTool::CraneExecution,
+];
+const ORCHESTRATOR_TOOLS: &[SuiteTool] = &[
+    SuiteTool::GenerateValidators,
+    SuiteTool::BunExecution,
+    SuiteTool::GhExecution,
+];
 
 const SUITE_TOOL_OWNERS: [CrateSuite; 14] = [
     CrateSuite {
@@ -202,7 +210,11 @@ impl LaneTools {
         Self(tools)
     }
 
-    pub(crate) fn of_group(policy: WorkflowPolicy, catalog: &ToolCatalog, tasks: &[&ProposedTask]) -> Self {
+    pub(crate) fn of_group(
+        policy: WorkflowPolicy,
+        catalog: &ToolCatalog,
+        tasks: &[&ProposedTask],
+    ) -> Self {
         let suite = tasks
             .first()
             .and_then(|task| suite_for_package(&task.display_name));
@@ -223,10 +235,13 @@ impl LaneTools {
         if policy == WorkflowPolicy::VelnorRepositoryV1 && suite.is_some_and(CrateSuite::owns_bun) {
             tools.insert(PinnedTool::Bun);
         }
-        if policy == WorkflowPolicy::VelnorRepositoryV1 && suite.is_some_and(|suite| suite.owns(SuiteTool::GhExecution)) {
+        if policy == WorkflowPolicy::VelnorRepositoryV1
+            && suite.is_some_and(|suite| suite.owns(SuiteTool::GhExecution))
+        {
             tools.insert(PinnedTool::Gh);
         }
-        if policy == WorkflowPolicy::VelnorRepositoryV1 && suite.is_some_and(CrateSuite::owns_crane) {
+        if policy == WorkflowPolicy::VelnorRepositoryV1 && suite.is_some_and(CrateSuite::owns_crane)
+        {
             tools.insert(PinnedTool::Crane);
         }
         Self(tools)
@@ -263,10 +278,11 @@ pub(crate) fn prepare_crate_tools_step(
     catalog: &ToolCatalog,
     tools: &LaneTools,
 ) -> Result<Step, OrchestratorError> {
-    let prepare = PreparePinnedTools::new(tools.0.iter().copied().collect(), ToolHomes::runner_temp())
-        .map_err(|err| OrchestratorError::Contract {
-            problem: err.to_string(),
-        })?;
+    let prepare =
+        PreparePinnedTools::new(tools.0.iter().copied().collect(), ToolHomes::runner_temp())
+            .map_err(|err| OrchestratorError::Contract {
+                problem: err.to_string(),
+            })?;
     let run = strings_of(prepare.argv(catalog))
         .map_err(|problem| OrchestratorError::Contract { problem })?;
     let env = if tools.installs_rust() {

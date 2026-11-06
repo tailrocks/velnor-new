@@ -23,7 +23,9 @@ pub(crate) fn qualification_job_log(
     }
     let url = format!(
         "{}/repos/{}/{}/actions/jobs/{job_id}/logs",
-        api_origin(), repo.owner, repo.name
+        api_origin(),
+        repo.owner,
+        repo.name
     );
     fetch_job_log(&url, token, deadline, checked_storage_uri)
 }

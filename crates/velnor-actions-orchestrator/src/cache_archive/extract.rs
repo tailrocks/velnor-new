@@ -10,7 +10,9 @@ use flate2::read::GzDecoder;
 use tar::EntryType;
 
 use super::pack::io_error;
-use super::types::{MAX_ARCHIVE_BYTES, MAX_ARCHIVE_ENTRIES, MAX_ARCHIVE_ENTRY_BYTES, MAX_ARCHIVE_TOTAL_BYTES};
+use super::types::{
+    MAX_ARCHIVE_BYTES, MAX_ARCHIVE_ENTRIES, MAX_ARCHIVE_ENTRY_BYTES, MAX_ARCHIVE_TOTAL_BYTES,
+};
 use crate::OrchestratorError;
 use crate::cache_snapshot::{
     MANIFEST_ARCHIVE_MEMBER, PROJECTION_ARCHIVE_PREFIX, PROJECTION_INDEX_ARCHIVE_MEMBER,

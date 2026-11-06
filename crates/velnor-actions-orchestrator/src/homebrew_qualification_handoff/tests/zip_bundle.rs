@@ -48,14 +48,25 @@ fn selected_asset_handoffs_preserve_all_files_at_the_admission_limit() -> TestRe
                 files.insert(format!("{label}/{asset}"), asset.as_bytes().to_vec());
             }
         }
-        admission.files = files.iter().map(|(name, bytes)| (name.clone(), super::super::FileIdentity {
-            size: bytes.len() as u64,
-            sha256: sha256(bytes),
-        })).collect();
+        admission.files = files
+            .iter()
+            .map(|(name, bytes)| {
+                (
+                    name.clone(),
+                    super::super::FileIdentity {
+                        size: bytes.len() as u64,
+                        sha256: sha256(bytes),
+                    },
+                )
+            })
+            .collect();
         let json = encode(&admission)?;
         super::super::validate_admission(&json, &sha256(&json), &context, &catalog)?;
         let raw = super::super::bundle::encode_bundle(&json, files.clone())?;
-        assert_eq!(read_admitted_files(&mut open_bundle(&raw)?, &admission)?, files);
+        assert_eq!(
+            read_admitted_files(&mut open_bundle(&raw)?, &admission)?,
+            files
+        );
         if additional == 62 {
             let mut extra = plan.products[0].clone();
             extra.id = "overflow".to_owned();
@@ -159,7 +170,10 @@ fn raw_bundle_refuses_duplicate_traversal_symlink_and_compressed_entries() -> Te
 #[test]
 fn raw_bundle_limits_directory_count_declared_sizes_and_actual_bytes() -> TestResult {
     let names = (0..132).map(|n| format!("A/file-{n}")).collect::<Vec<_>>();
-    let entries = names.iter().map(|name| (name.as_str(), &b"payload"[..])).collect::<Vec<_>>();
+    let entries = names
+        .iter()
+        .map(|name| (name.as_str(), &b"payload"[..]))
+        .collect::<Vec<_>>();
     assert!(open_bundle(&fixture_bundle(&entries[..131])?).is_ok());
     assert!(open_bundle(&fixture_bundle(&entries)?).is_err());
     let raw = fixture_bundle(&[("A/payload", b"payload")])?;

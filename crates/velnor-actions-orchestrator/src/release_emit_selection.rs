@@ -137,8 +137,8 @@ pub(super) fn release_metadata_json_at(
         problem,
     };
     crate::inventory::require_rust_pin(catalog).map_err(|err| incomplete(err.to_string()))?;
-    let request = MetadataDiscovery::new(root.join(manifest))
-        .map_err(|err| incomplete(err.to_string()))?;
+    let request =
+        MetadataDiscovery::new(root.join(manifest)).map_err(|err| incomplete(err.to_string()))?;
     let command = request
         .command(catalog)
         .map_err(|err| incomplete(err.to_string()))?;

@@ -1,11 +1,14 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use super::{LaneTools, prepare_crate_tools_step};
 use std::collections::BTreeMap;
 use std::ffi::OsString;
-use velnor_actions_contract::{CachePolicy, IdentityInputs, ProposedTask, ResourceClass, ResourceDemand, StepKind, WorkflowPolicy};
+use velnor_actions_contract::{
+    CachePolicy, IdentityInputs, ProposedTask, ResourceClass, ResourceDemand, StepKind,
+    WorkflowPolicy,
+};
 use velnor_actions_mise::ToolCatalog;
-use super::{LaneTools, prepare_crate_tools_step};
 
 fn fixture_task(stack: &str, driver: &str, runner: &str) -> ProposedTask {
     ProposedTask {
@@ -53,7 +56,6 @@ fn fixture_task(stack: &str, driver: &str, runner: &str) -> ProposedTask {
     }
 }
 
-
 #[test]
 fn gh_test_tool_is_provisioned_only_for_velnor() {
     let mut task = fixture_task("rust", "cargo", "cargo_nextest");
@@ -61,10 +63,16 @@ fn gh_test_tool_is_provisioned_only_for_velnor() {
     let has_gh = |policy, task: &ProposedTask| {
         let lane = LaneTools::of_group(policy, &catalog, &[task]);
         let step = prepare_crate_tools_step(&catalog, &lane).expect("render tool installation");
-        let StepKind::Shell { run, .. } = step.kind else { panic!("expected shell step") };
+        let StepKind::Shell { run, .. } = step.kind else {
+            panic!("expected shell step")
+        };
         run.iter().any(|arg| arg.contains("gh@2.103.3"))
     };
-    for package in ["velnor-actions-orchestrator", "velnor-actions-workflow-renderer", "velnor-actions-cli"] {
+    for package in [
+        "velnor-actions-orchestrator",
+        "velnor-actions-workflow-renderer",
+        "velnor-actions-cli",
+    ] {
         task.display_name = package.to_owned();
         assert!(has_gh(WorkflowPolicy::VelnorRepositoryV1, &task));
         assert!(!has_gh(WorkflowPolicy::ConsumerV1, &task));

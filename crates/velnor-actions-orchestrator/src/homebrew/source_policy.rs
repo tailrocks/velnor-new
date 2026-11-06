@@ -12,7 +12,9 @@ use velnor_actions_mise::OperatorToolchainGuard;
 use crate::{
     OrchestratorError,
     internal::internal,
-    prepare::{GenerationPreparation, prepare_for_candidate, prepare_for_candidate_with_operator_guard},
+    prepare::{
+        GenerationPreparation, prepare_for_candidate, prepare_for_candidate_with_operator_guard,
+    },
     safe_read::{MAX_REPO_FILE_BYTES, RepoBytes, read_repo_bytes},
 };
 
@@ -39,7 +41,11 @@ fn export_homebrew_source_policy_inner(
     let prep = prepare_candidate_with_guard(root, guard)?;
     require_enabled_tap(&prep)?;
     let bytes = source_policy_bytes(&prep)?;
-    velnor_actions_contract::exclusive_write::write_exclusive(output, &bytes, "homebrew_source_policy")?;
+    velnor_actions_contract::exclusive_write::write_exclusive(
+        output,
+        &bytes,
+        "homebrew_source_policy",
+    )?;
     Ok(())
 }
 
