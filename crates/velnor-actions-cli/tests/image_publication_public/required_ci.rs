@@ -363,6 +363,10 @@ fn assert_materialized_layout(fixture: &Fixture) -> Result<(), Box<dyn Error>> {
 
 #[test]
 fn publication_requires_protected_default_branch_and_event_ref() -> Result<(), Box<dyn Error>> {
+    let scenario = "required_ci::publication_requires_protected_default_branch_and_event_ref";
+    if !super::begin_isolated(scenario)? {
+        return Ok(());
+    }
     for profile in [FixtureProfile::Job, FixtureProfile::Runner] {
         for value in [None, Some("false")] {
             let fixture = Fixture::new_for(profile)?;
@@ -395,5 +399,6 @@ fn publication_requires_protected_default_branch_and_event_ref() -> Result<(), B
             assert_eq!(fixture.registry_state()?, registry);
         }
     }
+    super::isolated_worker::record_success("image_publication", scenario)?;
     Ok(())
 }
