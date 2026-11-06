@@ -14,6 +14,7 @@ import json
 import os
 from pathlib import Path
 import secrets
+import signal
 import socket
 import select
 import shutil
@@ -66,6 +67,165 @@ class RealManagerTest(unittest.TestCase):
         self.addCleanup(cleanup_orphans, existing)
         self.watch = RootWatch(bus, lifecycle, root / "src")
         self.addCleanup(self.watch.close)
+
+    def test_dependent_cleanup_policy_rejects_effective_overrides(self):
+        end = deadline(60)
+        watch_manager = self.watch.watch.manager
+        watch_path = watch_manager._method(watch_manager.owner, '/org/freedesktop/systemd1',
+            'org.freedesktop.systemd1.Manager', 'GetUnit', [('s', self.watch.unit)], end, 'o')
+        self.assertEqual(watch_manager._get(watch_path, 'org.freedesktop.systemd1.Service',
+                                           'KillSignal', 'i', end), signal.SIGTERM)
+        shared = Path('/run/systemd/system/velnor-release-.service.d')
+        shared.mkdir(mode=0o700)
+        override = shared / 'cleanup-policy.conf'
+        safe = True
+        try:
+            for section, setting, expected_signal, expected_mode, expected_collect in (
+                    ('Service', 'KillSignal=SIGTERM', signal.SIGTERM, 'control-group', 'inactive-or-failed'),
+                    ('Service', 'KillMode=mixed', signal.SIGKILL, 'mixed', 'inactive-or-failed'),
+                    ('Unit', 'CollectMode=inactive', signal.SIGKILL, 'control-group', 'inactive')):
+                override.write_text('[' + section + ']\n' + setting + '\n', encoding='ascii')
+                unit = 'velnor-release-' + secrets.token_hex(16) + '.service'
+                manager = bus.Manager(str(self.helper), 25, self.watch.authority, root_bootstrap=True)
+                observer = bus.Manager(str(self.helper), 25, self.watch.authority, root_bootstrap=True)
+                reader, writer = os.pipe()
+                error_text = None
+                safe = False
+                try:
+                    owner = manager.subscribe(end)
+                    self.assertEqual(observer.subscribe(end), owner)
+                    try:
+                        manager.start(unit, reader, end)
+                    except bus.ManagerError as error:
+                        error_text = str(error)
+                    unit_path = observer._method(owner, '/org/freedesktop/systemd1',
+                        'org.freedesktop.systemd1.Manager', 'GetUnit', [('s', unit)], end, 'o')
+                    effective_signal = observer._get(unit_path, 'org.freedesktop.systemd1.Service', 'KillSignal', 'i', end)
+                    effective_mode = observer._get(unit_path, 'org.freedesktop.systemd1.Service', 'KillMode', 's', end)
+                    effective_collect = observer._get(unit_path, 'org.freedesktop.systemd1.Unit', 'CollectMode', 's', end)
+                    os.close(writer)
+                    writer = None
+                    stop = manager.stop(unit, end)
+                    lifecycle.wait_job(manager, unit, stop, end)
+                    current = lifecycle.state(observer, owner, unit, end)
+                    if (current['active'] not in ('inactive', 'failed') or current['job'] is not None
+                            or current['populated']):
+                        raise RuntimeError('cleanup uncertain')
+                    manager.release(unit, end)
+                    safe = True
+                    subprocess.run(['/usr/bin/systemctl', 'reset-failed', unit], stdout=subprocess.DEVNULL,
+                                   stderr=subprocess.DEVNULL, check=False, timeout=5)
+                    self.assertEqual(error_text, 'unit cleanup policy unverified')
+                    self.assertEqual(effective_signal, expected_signal)
+                    self.assertEqual(effective_mode, expected_mode)
+                    self.assertEqual(effective_collect, expected_collect)
+                finally:
+                    os.close(reader)
+                    if writer is not None:
+                        os.close(writer)
+                    manager.close()
+                    observer.close()
+                    if safe:
+                        override.unlink(missing_ok=True)
+        finally:
+            if safe:
+                shared.rmdir()
+
+    def test_refused_policy_never_delivers_frame_and_watch_drains(self):
+        shared = Path('/run/systemd/system/velnor-release-.service.d')
+        shared.mkdir(mode=0o700)
+        override = shared / 'cleanup-policy.conf'
+        safe = True
+        try:
+            for section, setting, prop, expected, signature in (
+                    ('Service', 'KillSignal=SIGTERM', 'KillSignal', signal.SIGTERM, 'i'),
+                    ('Service', 'KillMode=mixed', 'KillMode', 'mixed', 's'),
+                    ('Unit', 'CollectMode=inactive', 'CollectMode', 'inactive', 's')):
+                override.write_text('[' + section + ']\n' + setting + '\n', encoding='ascii')
+                before = set(Path('/run/systemd/system').glob('velnor-release-*.service.d'))
+                watch = RootWatch(bus, lifecycle, root / 'src')
+                manager = bus.Manager(str(self.helper), 40, watch.authority, root_bootstrap=True)
+                observer = bus.Manager(str(self.helper), 40, watch.authority, root_bootstrap=True)
+                end = deadline(30)
+                marker = self.directory / ('executed-' + secrets.token_hex(8))
+                body = json.dumps({'program': '/usr/bin/python3',
+                    'args': ['-c', f"open({str(marker)!r}, 'w').write('executed')"],
+                    'cwd': str(self.directory), 'env': {'PATH': '/usr/bin:/bin',
+                    'HOME': str(self.directory)}, 'stdin': ''}, separators=(',', ':')).encode()
+                frame = struct.pack('>QQI', end, os.stat('/proc/self/ns/time').st_ino, len(body)) + body
+                safe = False
+                try:
+                    owner = observer.subscribe(end)
+                    with self.assertRaisesRegex(lifecycle.SupervisorError, '^unit cleanup uncertain$'):
+                        lifecycle.supervise(manager, frame, end)
+                    units = set(Path('/run/systemd/system').glob('velnor-release-*.service.d')) - before
+                    units = {path for path in units if path.name != watch.unit + '.d'}
+                    self.assertEqual(len(units), 1)
+                    unit = next(iter(units)).name[:-2]
+                    path = observer._method(owner, '/org/freedesktop/systemd1',
+                        'org.freedesktop.systemd1.Manager', 'GetUnit', [('s', unit)], end, 'o')
+                    interface = 'org.freedesktop.systemd1.' + section
+                    self.assertEqual(observer._get(path, interface, prop, signature, end), expected)
+                    initial = lifecycle.state(observer, owner, unit, end)
+                    self.assertFalse(marker.exists())
+                    watch.close()
+                    while True:
+                        final = lifecycle.state(observer, owner, unit, end)
+                        self.assertEqual(final['invocation'], initial['invocation'])
+                        if (final['active'] in ('inactive', 'failed') and final['job'] is None
+                                and not final['populated']):
+                            break
+                        remaining = end - time.clock_gettime_ns(time.CLOCK_BOOTTIME)
+                        if remaining <= 0:
+                            self.fail('watch did not drain unit before deadline')
+                        time.sleep(min(0.01, remaining / 1_000_000_000))
+                    self.assertFalse(marker.exists())
+                    manager.release(unit, end)
+                    safe = True
+                finally:
+                    manager.close()
+                    observer.close()
+                    if safe:
+                        subprocess.run(['/usr/bin/systemctl', 'reset-failed', unit], stdout=subprocess.DEVNULL,
+                                       stderr=subprocess.DEVNULL, check=False, timeout=5)
+                        override.unlink(missing_ok=True)
+        finally:
+            if safe:
+                shared.rmdir()
+
+    def test_failed_dependent_unit_is_observed_before_release_then_collected(self):
+        unit = 'velnor-release-' + secrets.token_hex(16) + '.service'
+        manager = bus.Manager(str(self.helper), 10, self.watch.authority, root_bootstrap=True)
+        reader, writer = os.pipe()
+        end = deadline(20)
+        try:
+            owner = manager.subscribe(end)
+            lifecycle.wait_job(manager, unit, manager.start(unit, reader, end), end)
+            initial = lifecycle.state(manager, owner, unit, end)
+            self.assertTrue(initial['populated'])
+            lifecycle.wait_job(manager, unit, manager.stop(unit, end), end)
+            stopped = lifecycle.state(manager, owner, unit, end)
+            self.assertEqual(stopped['invocation'], initial['invocation'])
+            self.assertEqual(stopped['active'], 'failed')
+            self.assertEqual(stopped['result'], 'signal')
+            self.assertIsNone(stopped['job'])
+            self.assertFalse(stopped['populated'])
+            manager.release(unit, end)
+            while True:
+                result = subprocess.run(['/usr/bin/systemctl', 'show', unit, '--property=LoadState', '--value'],
+                                        capture_output=True, text=True, check=True, timeout=5)
+                if result.stdout.strip() == 'not-found':
+                    break
+                remaining = end - time.clock_gettime_ns(time.CLOCK_BOOTTIME)
+                if remaining <= 0:
+                    self.fail('failed dependent unit was not collected')
+                time.sleep(min(0.01, remaining / 1_000_000_000))
+        finally:
+            os.close(reader)
+            os.close(writer)
+            manager.close()
+            subprocess.run(['/usr/bin/systemctl', 'reset-failed', unit],
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False, timeout=5)
 
     def test_root_owned_staging_rejects_preexisting_symlink(self):
         unit = "velnor-release-" + secrets.token_hex(16) + ".service"
