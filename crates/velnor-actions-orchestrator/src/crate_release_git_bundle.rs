@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{OrchestratorError, implementation::internal::internal};
+use crate::{OrchestratorError, internal::internal};
 use std::{fs, io::Read as _, path::Path, process::Command, time::Duration};
 use velnor_actions_mise::release_git_pin::{
     GIT_PACKAGE_SHA256, GIT_PACKAGE_URL, VerifiedGit, verify_bundle,
@@ -171,9 +171,9 @@ mod tests {
     }
 
     fn stalled_body_server(
-        listener: std::net::TcpListener,
-        observed: std::sync::mpsc::Sender<()>,
-        release: std::sync::mpsc::Receiver<()>,
+        listener: &std::net::TcpListener,
+        observed: &std::sync::mpsc::Sender<()>,
+        release: &std::sync::mpsc::Receiver<()>,
     ) -> std::io::Result<()> {
         use std::io::{Read as _, Write as _};
         use std::time::{Duration, Instant};
@@ -201,8 +201,12 @@ mod tests {
         observed
             .send(())
             .map_err(|_| std::io::ErrorKind::BrokenPipe)?;
-        let _ = release.recv_timeout(Duration::from_secs(5));
-        Ok(())
+        match release.recv_timeout(Duration::from_secs(5)) {
+            Ok(()) | Err(std::sync::mpsc::RecvTimeoutError::Timeout) => Ok(()),
+            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+                Err(std::io::ErrorKind::BrokenPipe.into())
+            }
+        }
     }
 
     #[test]
@@ -213,7 +217,7 @@ mod tests {
         let url = format!("http://{}/git.deb", listener.local_addr()?);
         let (release, wait) = std::sync::mpsc::channel();
         let (observed, body) = std::sync::mpsc::channel();
-        let server = std::thread::spawn(move || stalled_body_server(listener, observed, wait));
+        let server = std::thread::spawn(move || stalled_body_server(&listener, &observed, &wait));
         let deadline = velnor_actions_mise::CheckDeadline::after(Duration::from_millis(500))?;
         let started = Instant::now();
         let result = super::download_package(&url, deadline);
