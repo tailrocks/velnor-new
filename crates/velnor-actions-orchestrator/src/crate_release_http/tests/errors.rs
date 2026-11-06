@@ -199,12 +199,7 @@ fn deadline_stops_a_stalled_response_body() {
             .expect("headers");
         thread::sleep(Duration::from_secs(3));
     });
-    let client = GitHubAdmissionHttp {
-        token: TOKEN.to_owned(),
-        timeout: Duration::from_secs(2),
-        origin: format!("http://{address}"),
-        responses: std::cell::RefCell::default(),
-    };
+    let client = client_with_timeout(format!("http://{address}"), Duration::from_secs(2));
     assert!(client.get("repos/example/demo-crate").is_err());
     worker.join().expect("server");
 }

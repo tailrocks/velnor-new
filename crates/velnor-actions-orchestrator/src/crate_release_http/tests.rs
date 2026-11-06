@@ -78,10 +78,12 @@ pub(super) fn reply(status: &str, body: &str) -> String {
 }
 
 pub(super) fn client(origin: String) -> GitHubAdmissionHttp {
-    GitHubAdmissionHttp {
-        token: TOKEN.to_owned(),
-        timeout: Duration::from_secs(5),
-        origin,
-        responses: std::cell::RefCell::default(),
-    }
+    client_with_timeout(origin, Duration::from_secs(5))
+}
+
+pub(super) fn client_with_timeout(origin: String, timeout: Duration) -> GitHubAdmissionHttp {
+    crate::api::github_evidence_http::agent().expect("platform trust certificates");
+    let mut client = GitHubAdmissionHttp::new(TOKEN.to_owned(), timeout).expect("HTTP client");
+    client.origin = origin;
+    client
 }

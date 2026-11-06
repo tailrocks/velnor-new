@@ -18,12 +18,7 @@ fn shared_deadline_bounds_stalled_graphql_body() {
             .expect("headers");
         let _held = hold.recv_timeout(Duration::from_secs(12));
     });
-    let client = GitHubAdmissionHttp {
-        token: TOKEN.to_owned(),
-        timeout: Duration::from_secs(10),
-        origin: format!("http://{address}"),
-        responses: std::cell::RefCell::default(),
-    };
+    let client = client_with_timeout(format!("http://{address}"), Duration::from_secs(10));
     let deadline =
         velnor_actions_mise::CheckDeadline::after(Duration::from_secs(1)).expect("deadline");
     let start = Instant::now();
