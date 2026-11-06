@@ -155,9 +155,6 @@ class RealReplyLossTest(unittest.TestCase):
         parent = None
         blocker_started = False
         try:
-            (shared / "wait.conf").write_text("[Unit]\nAfter=" + blocker + "\n", encoding="ascii")
-            start_blocker(blocker, 4)
-            blocker_started = True
             end = time.clock_gettime_ns(time.CLOCK_BOOTTIME) + 15_000_000_000
             observer.subscribe(end)
             wrapper = (
@@ -165,7 +162,7 @@ class RealReplyLossTest(unittest.TestCase):
                 "import release_manager_bus as b,release_manager_lifecycle as l; "
                 "from pathlib import Path;sys.path.insert(0,str(Path(sys.argv[1]).parent/'tests')); "
                 "from release_watch_fixture import RootWatch, snapshot_roots, cleanup_orphans;address=os.environ.pop('DBUS_SYSTEM_BUS_ADDRESS'); "
-                "watch=RootWatch(b,l,Path(sys.argv[1]));os.environ['DBUS_SYSTEM_BUS_ADDRESS']=address; "
+                "watch=RootWatch(b,l,Path(sys.argv[1]));print('watch-ready',flush=True);sys.stdin.readline();os.environ['DBUS_SYSTEM_BUS_ADDRESS']=address; "
                 "l.secrets.token_hex=lambda _:sys.argv[3]; "
                 "m=b.Manager(sys.argv[2],15,watch.authority,transport=lambda x:x._check(x.library.sd_bus_open_system(__import__('ctypes').byref(x.bus))),root_bootstrap=True); "
                 "command=\"import socket,sys;s=socket.socket(socket.AF_UNIX);s.connect(sys.argv[1]);s.send(b'x')\"; "
@@ -174,12 +171,19 @@ class RealReplyLossTest(unittest.TestCase):
                 "d=time.clock_gettime_ns(time.CLOCK_BOOTTIME)+45_000_000_000; "
                 "\ntry: l.supervise(m,struct.pack('>QQI',d,os.stat('/proc/self/ns/time').st_ino,len(p))+p,d)"
                 "\nexcept Exception as e: print(str(e),flush=True)"
-                "\nfinally: m.close(); watch.close(); time.sleep(15)"
+                "\nfinally: m.close(); time.sleep(15); watch.close()"
             )
             environment = {"DBUS_SYSTEM_BUS_ADDRESS": "unix:path=" + str(scratch / "proxy"), "PATH": "/usr/bin:/bin"}
             parent = subprocess.Popen(["/usr/bin/python3", "-I", "-S", "-c", wrapper, str(root / "src"),
-                                       str(helper), ident, str(scratch / "sentinel")], stdin=subprocess.DEVNULL,
+                                       str(helper), ident, str(scratch / "sentinel")], stdin=subprocess.PIPE,
                                       stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=environment)
+            self.assertTrue(select.select([parent.stdout], [], [], 10)[0], "watch was not established")
+            self.assertEqual(parent.stdout.readline(), b"watch-ready\n")
+            (shared / "wait.conf").write_text("[Unit]\nAfter=" + blocker + "\n", encoding="ascii")
+            start_blocker(blocker, 4)
+            blocker_started = True
+            parent.stdin.write(b"start\n")
+            parent.stdin.flush()
             self.assertTrue(proxy.paused.wait(5), "StartTransientUnit never reached the real bus")
             end = time.clock_gettime_ns(time.CLOCK_BOOTTIME) + 3_000_000_000
             while time.clock_gettime_ns(time.CLOCK_BOOTTIME) < end:

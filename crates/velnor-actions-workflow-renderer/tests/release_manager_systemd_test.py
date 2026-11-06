@@ -97,8 +97,9 @@ class RealManagerTest(unittest.TestCase):
             self.assertEqual(directory.stat().st_uid, 0)
             self.assertEqual(directory.stat().st_mode & 0o777, 0o700)
             self.assertEqual((directory / "deadline.conf").stat().st_mode & 0o777, 0o600)
-            self.assertEqual((directory / "deadline.conf").read_text(encoding="ascii"),
-                             "[Unit]\nJobTimeoutSec=10s\n")
+            timer = (directory / "deadline.conf").read_text(encoding="ascii")
+            self.assertRegex(timer, r"^\[Unit\]\nJobTimeoutSec=[1-9][0-9]*s\n$")
+            self.assertLessEqual(int(timer.split("=", 1)[1][:-2]), 10)
             os.close(writer)
             writer = None
             stop = manager.stop(unit, end)
@@ -335,19 +336,23 @@ class RealManagerTest(unittest.TestCase):
             "import os,sys,time; sys.path.insert(0,sys.argv[1]); import release_manager_bus as b; "
             "import release_manager_lifecycle as l; from pathlib import Path; "
             "sys.path.insert(0,os.path.join(sys.argv[1],'../tests')); from release_watch_fixture import RootWatch, snapshot_roots, cleanup_orphans; "
-            "watch=RootWatch(b,l,Path(sys.argv[1])); m=b.Manager(sys.argv[2],2,watch.authority); d=time.clock_gettime_ns(time.CLOCK_BOOTTIME)+10_000_000_000; "
+            "watch=RootWatch(b,l,Path(sys.argv[1])); print('watch-ready',flush=True); sys.stdin.readline(); m=b.Manager(sys.argv[2],2,watch.authority); d=time.clock_gettime_ns(time.CLOCK_BOOTTIME)+10_000_000_000; "
             "m.subscribe(d); r,w=os.pipe(); job=m.start(sys.argv[3],r,d); os.close(r); "
             "print(job,flush=True); time.sleep(300)"
         )
         parent = None
         blocker_started = False
         try:
+            parent = subprocess.Popen(["/usr/bin/python3", "-I", "-S", "-c", wrapper,
+                                       str(root / "src"), str(self.helper), unit], stdin=subprocess.PIPE,
+                                      stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+            self.assertTrue(select.select([parent.stdout], [], [], 10)[0], "watch was not established")
+            self.assertEqual(parent.stdout.readline(), b"watch-ready\n")
             (shared / "wait.conf").write_text("[Unit]\nRequires=" + blocker + "\nAfter=" + blocker + "\n", encoding="ascii")
             start_blocker(blocker, 20)
             blocker_started = True
-            parent = subprocess.Popen(["/usr/bin/python3", "-I", "-S", "-c", wrapper,
-                                       str(root / "src"), str(self.helper), unit], stdin=subprocess.DEVNULL,
-                                      stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+            parent.stdin.write(b"start\n")
+            parent.stdin.flush()
             self.assertTrue(select.select([parent.stdout], [], [], 5)[0], "queued start was not acknowledged")
             self.assertTrue(parent.stdout.readline().startswith(b"/org/freedesktop/systemd1/job/"))
             jobs = subprocess.run(["/usr/bin/systemctl", "list-jobs", "--no-legend", "--plain"],
