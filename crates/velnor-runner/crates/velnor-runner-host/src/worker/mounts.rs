@@ -6,11 +6,14 @@ use std::path::Path;
 
 use bollard::models::{
     HostConfig, HostConfigCgroupnsModeEnum, Mount as DockerMount, MountBindOptions, MountType,
+    MountVolumeOptions,
 };
 
 use super::CreateProjection;
+use super::projection_types::BindMountKind;
 use crate::docker_spec::Mount;
 use crate::error::HostError;
+use velnor_runner_core::runner_work_path;
 
 pub(super) fn host_config(spec: &CreateProjection) -> Result<HostConfig, HostError> {
     let budget = spec.resource_budget;
@@ -38,21 +41,43 @@ pub(super) fn host_config(spec: &CreateProjection) -> Result<HostConfig, HostErr
 }
 
 fn bind_mounts(spec: &CreateProjection) -> Result<Vec<DockerMount>, HostError> {
-    let archive_env = "ACTIONS_RUNNER_ACTION_ARCHIVE_CACHE=/opt/velnor/action-archives";
     let archive_envs = spec
         .env
         .iter()
         .filter(|entry| entry.starts_with("ACTIONS_RUNNER_ACTION_ARCHIVE_CACHE="))
         .count();
-    if spec.bind_mounts.len() > 1 || archive_envs != usize::from(!spec.bind_mounts.is_empty()) {
+    let exact_archive_env = spec
+        .env
+        .iter()
+        .filter(|entry| {
+            entry.as_str() == "ACTIONS_RUNNER_ACTION_ARCHIVE_CACHE=/opt/velnor/action-archives"
+        })
+        .count();
+    let archive_mounts = spec
+        .bind_mounts
+        .iter()
+        .filter(|mount| mount.kind == BindMountKind::ActionArchive)
+        .count();
+    let guest_image_mounts = spec
+        .bind_mounts
+        .iter()
+        .filter(|mount| mount.kind == BindMountKind::GuestImage)
+        .count();
+    if spec.bind_mounts.len() > 2
+        || archive_mounts > 1
+        || guest_image_mounts > 1
+        || archive_envs != archive_mounts
+        || exact_archive_env != archive_envs
+        || spec.env.len() != archive_envs
+    {
         return Err(HostError::ForbiddenMount);
     }
     for mount in &spec.bind_mounts {
-        if mount.target != "/opt/velnor/action-archives"
-            || !Path::new(&mount.source).is_absolute()
-            || !mount.read_only
-            || !spec.env.iter().any(|entry| entry == archive_env)
-        {
+        let valid_target = match mount.kind {
+            BindMountKind::ActionArchive => mount.target == "/opt/velnor/action-archives",
+            BindMountKind::GuestImage => mount.target == "/opt/velnor/guest-image.json",
+        };
+        if !valid_target || !Path::new(&mount.source).is_absolute() || !mount.read_only {
             return Err(HostError::ForbiddenMount);
         }
     }
@@ -86,11 +111,17 @@ fn docker_mounts(mounts: &[Mount]) -> Result<Option<Vec<DockerMount>>, HostError
 
 fn docker_mount(mount: &Mount) -> Result<DockerMount, HostError> {
     let (typ, source) = mount_source(&mount.source)?;
+    let no_copy = mount.target == "/home/runner" || mount.target == runner_work_path();
+    let volume_options = no_copy.then_some(MountVolumeOptions {
+        no_copy: Some(true),
+        ..Default::default()
+    });
     Ok(DockerMount {
         target: Some(mount.target.clone()),
         source: Some(source),
         typ: Some(typ),
         read_only: seed_read_only(&mount.source),
+        volume_options,
         ..Default::default()
     })
 }

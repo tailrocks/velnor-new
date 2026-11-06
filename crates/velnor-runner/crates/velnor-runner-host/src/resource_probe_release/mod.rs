@@ -9,7 +9,7 @@ mod files;
 mod manifest;
 pub(crate) mod runner_manifest;
 mod runner_qualification;
-mod smoke;
+mod schema5;
 
 fn is_exact_semver(version: &str) -> bool {
     let parts: Vec<&str> = version.split('.').collect();
@@ -21,7 +21,7 @@ fn is_exact_semver(version: &str) -> bool {
 }
 
 pub fn validate_smoke(output: &Path, root: &Path) -> Result<(), HostError> {
-    smoke::validate(output, root)
+    schema5::validate(output, root)
 }
 
 pub fn write_manifest(inspect: &Path, archive: &Path, output: &Path) -> Result<(), HostError> {

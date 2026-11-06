@@ -2,28 +2,51 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_runner_github::{
-    AdminConnectionCall, Exchange, RegistrationScope, RegistrationTokenCall, RunnerGroup,
-    ScaleSetByName, ScaleSetCreate, ScaleSetFound, SessionError, SessionRequest, Transport,
-    TransportFail, WireError, admin_connection, create_runner_scale_set, get_runner_scale_set,
-    list_runner_groups, product_create_labels, registration_token,
+    RunnerGroup, ScaleSetByName, ScaleSetFound, get_runner_scale_set, list_runner_groups,
+    workflow_run::{RepositoryTarget, VerifiedRepositoryScope, get_repository_scope},
 };
 
-use crate::error::HostError;
+use crate::config::RepositoryConnection;
+use crate::connect::SetOwnership;
 use crate::https::HttpsTransport;
+use crate::journal::{
+    ConnectionJournal, ExistingScaleSetObservation, Journal, ScaleSetCreateRequest,
+    ScaleSetCreateState,
+};
+use crate::listen::{Link, link_from_admin};
 
-const SET_NAME: &str = "ubuntu-26.04-scale-set";
+mod support;
+
+use support::{
+    create_connection_scale_set, default_group_id, map_host, map_repository, map_session,
+    open_admin, revalidate_repository_scope, selector_valid,
+};
+
 const GITHUB_API: &str = "https://api.github.com";
-const DEFAULT_GROUP: i64 = 1;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EnsuredSet {
     pub id: i64,
 
+    pub ownership: SetOwnership,
+
     pub name: String,
+
+    pub runner_group_id: i64,
 
     pub disable_update: bool,
 
     pub labels: Vec<String>,
+}
+
+pub(crate) struct ConnectionSetup {
+    pub(crate) set: EnsuredSet,
+
+    pub(crate) groups: Vec<RunnerGroup>,
+
+    pub(crate) link: Link,
+
+    pub(crate) scoped: ConnectionJournal,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
@@ -52,159 +75,169 @@ pub enum EnsureError {
     #[error("runner name unchanged")]
     NameSteady,
 
+    #[error("job source is blocked: {reason}")]
+    SourceBlocked { reason: &'static str },
+
+    #[error("admission is closed")]
+    AdmissionClosed,
+
     #[error("unexpected status {status} at {step}")]
     Unexpected { status: u16, step: &'static str },
 }
 
-pub fn ensure_product_scale_set(
+pub(crate) async fn ensure_connection_scale_set(
     pat: &str,
-    owner: &str,
-    repo: &str,
-) -> Result<EnsuredSet, EnsureError> {
-    if pat.is_empty() || owner.is_empty() || repo.is_empty() {
+    binding: &RepositoryConnection,
+    journal: &Journal,
+) -> Result<ConnectionSetup, EnsureError> {
+    let scoped = journal.connection_scope(binding).await.map_err(map_host)?;
+    let (owner, repo) = repository_parts(&binding.repository)?;
+    if pat.is_empty() || !selector_valid(&binding.scale_set) {
         return Err(EnsureError::Rejected);
     }
-    let (mut transport, admin) = open_admin(pat, owner, repo)?;
-    let create_labels = product_create_labels();
-    let expected_labels = create_labels
-        .iter()
-        .map(|label| label.name.clone())
-        .collect::<Vec<_>>();
+    let mut identity_transport = HttpsTransport::new(GITHUB_API).map_err(map_host)?;
+    let scope = get_repository_scope(
+        &mut identity_transport,
+        RepositoryTarget {
+            id: binding.repository_id,
+            owner,
+            name: repo,
+        },
+        pat,
+    )
+    .map_err(map_repository)?;
+    let (mut transport, admin) = open_admin(pat, &scope)?;
+    let groups = list_runner_groups(&mut transport, admin.expose_token())
+        .map_err(|error| map_session(error, &transport))?;
+    let group_id = default_group_id(&groups)?;
+    let request = ScaleSetCreateRequest::new(binding, group_id).map_err(map_host)?;
+    let record = scoped
+        .prepare_scale_set_create(&request)
+        .await
+        .map_err(map_host)?;
     let found = get_runner_scale_set(
         &mut transport,
         &ScaleSetByName {
-            runner_group_id: DEFAULT_GROUP,
-            name: SET_NAME,
-            expected_labels: &expected_labels,
+            runner_group_id: group_id,
+            name: request.selector_name(),
+            expected_labels: request.selector_labels(),
             admin_token: admin.expose_token(),
         },
     )
-    .map_err(|err| map_session(err, &transport))?;
-    let view = match found {
-        ScaleSetFound::Found(view) => view,
-        ScaleSetFound::NotFound => create_runner_scale_set(
-            &mut transport,
-            &ScaleSetCreate {
-                name: SET_NAME,
-                runner_group_id: DEFAULT_GROUP,
-                labels: &create_labels,
-                admin_token: admin.expose_token(),
-            },
-        )
-        .map_err(|err| map_session(err, &transport))?,
+    .map_err(|error| map_session(error, &transport))?;
+
+    let set = match (
+        lookup_action(record.state(), matches!(&found, ScaleSetFound::Found(_))),
+        found,
+    ) {
+        (ScaleSetLookupAction::Create, ScaleSetFound::NotFound) => {
+            create_connection_scale_set(
+                pat,
+                &scope,
+                &mut transport,
+                admin.expose_token(),
+                &scoped,
+                &request,
+                &record,
+            )
+            .await?
+        }
+        (
+            ScaleSetLookupAction::Adopt | ScaleSetLookupAction::Verify,
+            ScaleSetFound::Found(view),
+        ) => {
+            revalidate_repository_scope(pat, &scope)?;
+            let observation = observed_scale_set(&request, view)?;
+            let adopted = scoped
+                .adopt_scale_set(&request, observation)
+                .await
+                .map_err(map_host)?;
+            ensured_from_record(&adopted)?
+        }
+        (_, _) => return Err(EnsureError::Uncertain),
     };
-    Ok(EnsuredSet {
-        id: view.id,
-        name: view.name,
-        disable_update: view.runner_setting.disable_update,
-        labels: view.labels.into_iter().map(|label| label.name).collect(),
+    let link = link_from_admin(transport.inner, admin, binding, &scope)?;
+    Ok(ConnectionSetup {
+        set,
+        groups,
+        link,
+        scoped,
     })
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ScaleSetLookupAction {
+    Adopt,
+    Create,
+    Verify,
+    Hold,
+}
+
+fn lookup_action(state: ScaleSetCreateState, found: bool) -> ScaleSetLookupAction {
+    match (state, found) {
+        (ScaleSetCreateState::Prepared | ScaleSetCreateState::NoEffect, true) => {
+            ScaleSetLookupAction::Adopt
+        }
+        (ScaleSetCreateState::Prepared, false) => ScaleSetLookupAction::Create,
+        (ScaleSetCreateState::Created | ScaleSetCreateState::Adopted, true) => {
+            ScaleSetLookupAction::Verify
+        }
+        _ => ScaleSetLookupAction::Hold,
+    }
+}
+
+fn observed_scale_set(
+    request: &ScaleSetCreateRequest,
+    view: velnor_runner_github::ScaleSetView,
+) -> Result<ExistingScaleSetObservation, EnsureError> {
+    let labels = view
+        .labels
+        .into_iter()
+        .map(|label| label.name)
+        .collect::<Vec<_>>();
+    ExistingScaleSetObservation::verified(
+        request,
+        view.id,
+        &view.name,
+        &labels,
+        view.runner_setting.disable_update,
+    )
+    .map_err(map_host)
+}
+
+fn ensured_from_record(
+    record: &crate::journal::ScaleSetCreateRecord,
+) -> Result<EnsuredSet, EnsureError> {
+    let receipt = record.receipt().ok_or(EnsureError::Uncertain)?;
+    Ok(EnsuredSet {
+        id: receipt.id,
+        ownership: receipt.ownership,
+        name: receipt.name.clone(),
+        runner_group_id: record.request().runner_group_id(),
+        disable_update: receipt.disable_update,
+        labels: receipt.labels.clone(),
+    })
+}
+
+fn repository_parts(repository: &str) -> Result<(&str, &str), EnsureError> {
+    let Some((owner, repo)) = repository.split_once('/') else {
+        return Err(EnsureError::Rejected);
+    };
+    if owner.is_empty() || repo.is_empty() || repo.contains('/') {
+        return Err(EnsureError::Rejected);
+    }
+    Ok((owner, repo))
 }
 
 pub fn product_runner_groups(
     pat: &str,
-    owner: &str,
-    repo: &str,
+    scope: &VerifiedRepositoryScope,
 ) -> Result<Vec<RunnerGroup>, EnsureError> {
-    if pat.is_empty() || owner.is_empty() || repo.is_empty() {
+    if pat.is_empty() {
         return Err(EnsureError::Rejected);
     }
-    let (mut transport, admin) = open_admin(pat, owner, repo)?;
+    revalidate_repository_scope(pat, scope)?;
+    let (mut transport, admin) = open_admin(pat, scope)?;
     list_runner_groups(&mut transport, admin.expose_token())
         .map_err(|err| map_session(err, &transport))
-}
-
-fn open_admin(
-    pat: &str,
-    owner: &str,
-    repo: &str,
-) -> Result<(Recording, velnor_runner_github::AdminConnection), EnsureError> {
-    let mut transport = Recording::new(HttpsTransport::new(GITHUB_API).map_err(map_host)?);
-    let registration = registration_token(
-        &mut transport,
-        &RegistrationTokenCall {
-            scope: RegistrationScope::Repository { owner, repo },
-            pat,
-        },
-    )
-    .map_err(|err| map_session(err, &transport))?;
-    let config_url = format!("https://github.com/{owner}/{repo}");
-    let admin = admin_connection(
-        &mut transport,
-        &AdminConnectionCall {
-            config_url: &config_url,
-            registration_token: registration.expose(),
-        },
-    )
-    .map_err(|err| map_session(err, &transport))?;
-    transport
-        .inner
-        .set_base(admin.expose_url())
-        .map_err(map_host)?;
-    Ok((transport, admin))
-}
-
-fn map_host(error: HostError) -> EnsureError {
-    match error {
-        HostError::Endpoint => EnsureError::Endpoint,
-        _ => EnsureError::Unexpected {
-            status: 0,
-            step: "endpoint",
-        },
-    }
-}
-
-fn map_session(error: SessionError, transport: &Recording) -> EnsureError {
-    match error {
-        SessionError::Uncertain => EnsureError::Uncertain,
-        SessionError::Conflict => EnsureError::Conflict,
-        SessionError::Wire(WireError::RegistrationRejected) => EnsureError::Rejected,
-        SessionError::Wire(WireError::Forbidden) => EnsureError::Forbidden,
-        SessionError::Wire(WireError::Malformed) => EnsureError::Malformed,
-        SessionError::Wire(_) => EnsureError::Unexpected {
-            status: transport.status,
-            step: transport.step,
-        },
-    }
-}
-
-struct Recording {
-    inner: HttpsTransport,
-    status: u16,
-    step: &'static str,
-}
-
-impl Recording {
-    const fn new(inner: HttpsTransport) -> Self {
-        Self {
-            inner,
-            status: 0,
-            step: "registration-token",
-        }
-    }
-}
-
-impl Transport for Recording {
-    fn exchange(&mut self, request: &SessionRequest) -> Result<Exchange, TransportFail> {
-        self.step = step_for(&request.path);
-        let exchange = self.inner.exchange(request)?;
-        self.status = exchange.status;
-        Ok(exchange)
-    }
-}
-
-fn step_for(path: &str) -> &'static str {
-    if path.contains("registration-token") {
-        "registration-token"
-    } else if path.contains("runner-registration") {
-        "runner-registration"
-    } else if path.contains("acquirejobs") {
-        "acquire"
-    } else if path.contains("generatejitconfig") {
-        "jit"
-    } else if path.contains("runnergroups") {
-        "runnergroups"
-    } else {
-        "runnerscalesets"
-    }
 }

@@ -1,116 +1,22 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::cell::Cell;
+
 use velnor_runner_github::{
-    AdminConnection, AdminConnectionCall, Poll, QueueSession, RefreshGate, RegistrationScope,
-    RegistrationTokenCall, SessionError, WireError, admin_connection, create_session,
-    delete_session, poll, registration_token,
+    AdminConnection, Poll, QueueSession, RefreshGate, SessionError, Transport, WireError, poll,
+    workflow_run::VerifiedRepositoryScope,
 };
+
 use zeroize::Zeroize;
 
-use crate::Offer;
-use crate::offer;
-
+use crate::config::RepositoryConnection;
 use crate::error::HostError;
 use crate::https::HttpsTransport;
 use crate::scale_set::EnsureError;
-use crate::scale_set::ensure_product_scale_set;
 
 pub(crate) const OWNER_NAME: &str = "velnor-host";
 pub(crate) const GITHUB_API: &str = "https://api.github.com";
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct SessionCensus {
-    pub set_id: i64,
-
-    pub statistics_present: bool,
-
-    pub available_jobs: i64,
-
-    pub acquired_jobs: i64,
-
-    pub assigned_jobs: i64,
-
-    pub running_jobs: i64,
-
-    pub registered_runners: i64,
-
-    pub busy_runners: i64,
-
-    pub idle_runners: i64,
-}
-
-pub fn session_census(pat: &str, owner: &str, repo: &str) -> Result<SessionCensus, EnsureError> {
-    let set = ensure_product_scale_set(pat, owner, repo)?;
-    let mut link = admin_link(pat, owner, repo)?;
-    let token = Secret::new(link.token());
-    let session = create_session(&mut link.transport, set.id, OWNER_NAME, token.expose())
-        .map_err(|err| annotate(err, "create-session"))?;
-    let census = census_of(set.id, &session);
-    delete_session(
-        &mut link.transport,
-        set.id,
-        &session.session_id,
-        token.expose(),
-    )
-    .map_err(map_listen)?;
-    Ok(census)
-}
-
-fn census_of(set_id: i64, session: &QueueSession) -> SessionCensus {
-    let Some(stats) = session.statistics() else {
-        return SessionCensus {
-            set_id,
-            statistics_present: false,
-            available_jobs: 0,
-            acquired_jobs: 0,
-            assigned_jobs: 0,
-            running_jobs: 0,
-            registered_runners: 0,
-            busy_runners: 0,
-            idle_runners: 0,
-        };
-    };
-    SessionCensus {
-        set_id,
-        statistics_present: true,
-        available_jobs: stats.total_available_jobs,
-        acquired_jobs: stats.total_acquired_jobs,
-        assigned_jobs: stats.total_assigned_jobs,
-        running_jobs: stats.total_running_jobs,
-        registered_runners: stats.total_registered_runners,
-        busy_runners: stats.total_busy_runners,
-        idle_runners: stats.total_idle_runners,
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct SessionProbe {
-    pub set_id: i64,
-
-    pub available: bool,
-}
-
-pub fn probe_once(pat: &str, owner: &str, repo: &str) -> Result<SessionProbe, EnsureError> {
-    let set = ensure_product_scale_set(pat, owner, repo)?;
-    let mut link = admin_link(pat, owner, repo)?;
-    let token = Secret::new(link.token());
-    let session = create_session(&mut link.transport, set.id, OWNER_NAME, token.expose())
-        .map_err(|err| annotate(err, "create-session"))?;
-    let polled = poll_available(&mut link, &session);
-    let closed = delete_session(
-        &mut link.transport,
-        set.id,
-        &session.session_id,
-        token.expose(),
-    );
-    let available = polled?;
-    closed.map_err(map_listen)?;
-    Ok(SessionProbe {
-        set_id: set.id,
-        available,
-    })
-}
 
 #[must_use]
 pub fn queue_path<'a>(base: &str, queue_url: &'a str) -> Option<&'a str> {
@@ -151,10 +57,42 @@ pub(crate) struct Link {
     base: String,
 }
 
+pub(crate) fn link_from_admin(
+    mut transport: HttpsTransport,
+    admin: AdminConnection,
+    binding: &RepositoryConnection,
+    verified_scope: &VerifiedRepositoryScope,
+) -> Result<Link, EnsureError> {
+    let (owner, name) = binding
+        .repository
+        .split_once('/')
+        .ok_or(EnsureError::Rejected)?;
+    if owner.is_empty()
+        || name.is_empty()
+        || verified_scope.id() != binding.repository_id
+        || verified_scope.owner() != owner
+        || verified_scope.name() != name
+    {
+        return Err(EnsureError::Rejected);
+    }
+    let base = admin.expose_url().to_owned();
+    transport.set_base(&base).map_err(map_host)?;
+    Ok(Link {
+        transport,
+        admin,
+        base,
+    })
+}
+
 impl Link {
     #[must_use]
     pub(crate) fn token(&self) -> &str {
         self.admin.expose_token()
+    }
+
+    #[must_use]
+    pub(crate) fn admin_origin(&self) -> &str {
+        self.admin.expose_url()
     }
 
     #[must_use]
@@ -173,60 +111,33 @@ impl Link {
     }
 }
 
-pub(crate) fn admin_link(pat: &str, owner: &str, repo: &str) -> Result<Link, EnsureError> {
-    let mut transport = HttpsTransport::new(GITHUB_API).map_err(map_host)?;
-    let registration = registration_token(
-        &mut transport,
-        &RegistrationTokenCall {
-            scope: RegistrationScope::Repository { owner, repo },
-            pat,
-        },
-    )
-    .map_err(map_listen)?;
-    let config_url = format!("https://github.com/{owner}/{repo}");
-    let admin = admin_connection(
-        &mut transport,
-        &AdminConnectionCall {
-            config_url: &config_url,
-            registration_token: registration.expose(),
-        },
-    )
-    .map_err(map_listen)?;
-    let base = admin.expose_url().to_owned();
-    transport.set_base(&base).map_err(map_host)?;
-    Ok(Link {
-        transport,
-        admin,
-        base,
-    })
-}
-
-fn poll_available(link: &mut Link, session: &QueueSession) -> Result<bool, EnsureError> {
-    let (saved, path) = point_at_queue(link, &session.message_queue_url)?;
-    let advertised = crate::launch::advertise_capacity(crate::launch::job_capacity());
-    let polled = poll_path(link, session, &path, advertised, 0);
-    restore_base(link, saved)?;
-    let polled = polled?;
-    Ok(matches!(offer(&polled), Offer::Acquire { .. }))
-}
-
 pub(crate) fn point_at_queue(
     link: &mut Link,
     url: &str,
 ) -> Result<(Option<String>, String), EnsureError> {
-    if let Some(path) = queue_path(&link.base, url) {
+    let (origin, path) = resolve_queue_route(&link.base, url)?;
+    let Some(origin) = origin else {
+        return Ok((None, path));
+    };
+    let saved = link.base.clone();
+    link.transport.set_base(&origin).map_err(map_host)?;
+    link.base = origin;
+    Ok((Some(saved), path))
+}
+
+pub(crate) fn validate_queue_url(base: &str, url: &str) -> Result<(), EnsureError> {
+    resolve_queue_route(base, url).map(|_| ())
+}
+
+fn resolve_queue_route(base: &str, url: &str) -> Result<(Option<String>, String), EnsureError> {
+    if let Some(path) = queue_path(base, url) {
         return Ok((None, path.to_owned()));
     }
     let absolute = absolute_https(url).ok_or(EnsureError::Unexpected {
         status: 0,
         step: "queue-path",
     })?;
-    let saved = link.base.clone();
-    link.transport
-        .set_base(&absolute.origin)
-        .map_err(map_host)?;
-    link.base = absolute.origin;
-    Ok((Some(saved), absolute.path))
+    Ok((Some(absolute.origin), absolute.path))
 }
 
 pub(crate) fn poll_path(
@@ -235,19 +146,51 @@ pub(crate) fn poll_path(
     path: &str,
     total_capacity: u32,
     cursor: i64,
-) -> Result<Poll, EnsureError> {
-    let gate = RefreshGate::new();
-    let refresh = || Ok::<(), WireError>(());
-    poll(
+) -> Result<PollPathResult, EnsureError> {
+    poll_path_with(
         &mut link.transport,
+        session.token(),
+        path,
+        total_capacity,
+        cursor,
+    )
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum PollPathResult {
+    Response(Poll),
+
+    RefreshRequired,
+}
+
+pub(crate) fn poll_path_with<T: Transport + ?Sized>(
+    transport: &mut T,
+    queue_token: &str,
+    path: &str,
+    total_capacity: u32,
+    cursor: i64,
+) -> Result<PollPathResult, EnsureError> {
+    let gate = RefreshGate::new();
+    let refresh_requested = Cell::new(false);
+    let refresh = || {
+        refresh_requested.set(true);
+        Err(WireError::RefreshExhausted)
+    };
+    match poll(
+        transport,
         path,
         cursor,
         total_capacity,
-        session.token(),
+        queue_token,
         &gate,
         refresh,
-    )
-    .map_err(|err| annotate(err, "poll"))
+    ) {
+        Ok(response) => Ok(PollPathResult::Response(response)),
+        Err(SessionError::Wire(WireError::RefreshExhausted)) if refresh_requested.get() => {
+            Ok(PollPathResult::RefreshRequired)
+        }
+        Err(error) => Err(annotate(error, "poll")),
+    }
 }
 
 pub(crate) fn restore_base(link: &mut Link, saved: Option<String>) -> Result<(), EnsureError> {
@@ -297,7 +240,9 @@ pub(crate) fn annotate(error: SessionError, step: &'static str) -> EnsureError {
 #[must_use]
 pub(crate) fn map_listen(error: SessionError) -> EnsureError {
     match error {
-        SessionError::Uncertain => EnsureError::Uncertain,
+        SessionError::Uncertain | SessionError::Wire(WireError::RefreshExhausted) => {
+            EnsureError::Uncertain
+        }
         SessionError::Conflict => EnsureError::Conflict,
         SessionError::Wire(WireError::RegistrationRejected) => EnsureError::Rejected,
         SessionError::Wire(WireError::Forbidden) => EnsureError::Forbidden,

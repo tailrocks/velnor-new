@@ -2,6 +2,10 @@
 # JIT is not a build ARG, ENV, label, or layer.
 # disableUpdate is a scale-set registration invariant, not an image setting.
 # Do not set RUNNER_ALLOW_RUNASROOT. The runner user is not root.
+FROM scratch AS resource_probe
+FROM scratch AS storage_init
+FROM scratch AS job_start_hook
+FROM scratch AS job_started_hook
 FROM ubuntu:26.04@sha256:42527649dbc4f9197a6073f426f488cbff0e9cc9f2afce32d91c383e4875634a
 
 ARG RUNNER_VERSION=2.338.0
@@ -194,6 +198,16 @@ RUN curl --retry 5 --retry-delay 2 --retry-all-errors -fsSL -o /tmp/node.tar.gz 
     && rm -f /tmp/node.tar.gz \
     && test "$(node --version)" = "v${NODE_VERSION}" \
     && test "$(node -e 'console.log("js-action-ok")')" = js-action-ok
+
+RUN mkdir -p /velnor /opt/runner \
+    && cp -a /home/runner/. /opt/runner/ \
+    && chown -R root:root /opt/runner \
+    && printf '#!/bin/sh\nset -eu\nexec /velnor/job-start-hook "$@"\n' > /usr/local/bin/velnor-job-start-hook.sh \
+    && chmod 0555 /usr/local/bin/velnor-job-start-hook.sh
+COPY --from=resource_probe / /velnor/
+COPY --from=storage_init / /velnor/
+COPY --from=job_start_hook / /velnor/
+COPY --from=job_started_hook / /usr/local/bin/
 
 USER runner
 ARG VELNOR_SOURCE_SHA
