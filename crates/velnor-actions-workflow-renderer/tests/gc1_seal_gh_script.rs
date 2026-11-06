@@ -3,6 +3,7 @@
 
 pub(super) const GH: &str = r#"#!/bin/sh
 d="${FAKE_GH_DIR:?}"
+[ -z "${VELNOR_STATE_SELECT_SUPERVISOR_HEX-}" ] || : > "$d/supervisor-payload-leaked"
 mode=ok
 [ -f "$d/mode" ] && read -r mode < "$d/mode"
 case "$mode" in

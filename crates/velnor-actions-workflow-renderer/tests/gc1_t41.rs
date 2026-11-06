@@ -8,10 +8,12 @@ use std::io;
 use velnor_actions_contract::config::{
     CheckExecutor, CheckPlatform, CheckRunner, NativeHomebrewOperation,
 };
+use velnor_actions_contract::workflow::cache_family::{RootSlug, StateUnit};
 use velnor_actions_contract::{
     Concurrency, Job, JobTimeout, Permissions, Step, StepKind, Trigger, VelnorConfig, WorkflowIr,
     WorkflowPolicy,
 };
+use velnor_actions_workflow_renderer::plan_sources::state_select::{SealRoot, state_select_step};
 use velnor_actions_workflow_renderer::render::{
     CONCURRENCY_CANCEL, CONCURRENCY_GROUP, CanonicalAuthoritySteps, CanonicalRuntimeInputs,
     EXPECTED_PR_TYPES, RenderContext, render_workflow_ir,
@@ -188,6 +190,72 @@ fn action_mbx_step() -> Result<Step, Box<dyn Error>> {
 
 pub(super) fn render(step: Step) -> Result<String, Box<dyn Error>> {
     render_steps(vec![step])
+}
+
+fn emitted_selector_run(workflow: &str) -> Result<String, Box<dyn Error>> {
+    let step_start = workflow
+        .find("name: Select attested state")
+        .ok_or_else(|| fail("rendered workflow lost the selector step"))?;
+    let line = workflow[step_start..]
+        .lines()
+        .find(|line| line.trim_start().starts_with("run: "))
+        .ok_or_else(|| fail("rendered selector lost its run scalar"))?;
+    let value = line
+        .trim_start()
+        .strip_prefix("run: ")
+        .ok_or_else(|| fail("rendered selector run field is malformed"))?;
+    let Some(value) = value.strip_prefix('"') else {
+        return Ok(value.to_owned());
+    };
+    let mut decoded = String::new();
+    let mut chars = value.chars();
+    loop {
+        match chars.next() {
+            Some('"') => return Ok(decoded),
+            Some('\\') => match chars.next() {
+                Some('\\') => decoded.push('\\'),
+                Some('"') => decoded.push('"'),
+                Some('n') => decoded.push('\n'),
+                Some('r') => decoded.push('\r'),
+                Some('t') => decoded.push('\t'),
+                Some(other) => return Err(fail(&format!("unsupported YAML escape:{other}"))),
+                None => return Err(fail("rendered selector has an incomplete escape")),
+            },
+            Some(ch) => decoded.push(ch),
+            None => return Err(fail("rendered selector run scalar is unterminated")),
+        }
+    }
+}
+
+#[test]
+fn rendered_selector_yaml_keeps_the_final_run_within_21000_utf16_units()
+-> Result<(), Box<dyn Error>> {
+    let selector = state_select_step(
+        &[SealRoot {
+            unit: StateUnit::Union,
+            slug: RootSlug::from_root(".")?,
+        }],
+        JobTimeout::PLAN,
+    )?;
+    let StepKind::Shell { run, env } = &selector.kind else {
+        return Err(fail("selector step is not a shell step"));
+    };
+    let payload = env
+        .get("VELNOR_STATE_SELECT_SUPERVISOR_HEX")
+        .ok_or_else(|| fail("selector supervisor environment is absent"))?;
+    let workflow = render(selector)?;
+    let rendered_run = emitted_selector_run(&workflow)?;
+    if rendered_run.encode_utf16().count() > 21_000
+        || rendered_run != velnor_actions_workflow_renderer::join_argv_for_run(run)?
+    {
+        return Err(fail("emitted selector YAML run exceeds its final bound"));
+    }
+    require(
+        &workflow,
+        &format!("VELNOR_STATE_SELECT_SUPERVISOR_HEX: {payload}"),
+        "selector static environment serialization",
+    )?;
+    Ok(())
 }
 
 fn render_steps(steps: Vec<Step>) -> Result<String, Box<dyn Error>> {

@@ -176,7 +176,14 @@ pub(crate) fn run_select_units_with_timeout(
 ) -> Result<String, Box<dyn Error>> {
     let (script, env) = select_script_env(scene, gh, units, extra, timeout)?;
     let pairs: Vec<(&str, &str)> = env.iter().map(|(k, v)| (k.as_str(), v.as_str())).collect();
-    scene.run_runner_script(&script, &pairs)
+    let output = scene.run_runner_script(&script, &pairs)?;
+    if PathBuf::from(gh.dir())
+        .join("supervisor-payload-leaked")
+        .exists()
+    {
+        return Err(fail("the supervisor payload reached a gh child"));
+    }
+    Ok(output)
 }
 
 #[cfg(target_os = "linux")]
@@ -212,7 +219,7 @@ fn select_script_env(
         })
         .collect::<Result<Vec<_>, Box<dyn Error>>>()?;
     let step = state_select_step(&roots, timeout)?;
-    let StepKind::Shell { run, .. } = &step.kind else {
+    let StepKind::Shell { run, env: step_env } = &step.kind else {
         return Err(fail("expected a shell step"));
     };
     let script = velnor_actions_workflow_renderer::join_argv_for_run(run)?;
@@ -226,6 +233,12 @@ fn select_script_env(
         ),
         ("GH_TOKEN".to_owned(), "fixture".to_owned()),
     ];
+    env.extend(
+        step_env
+            .iter()
+            .filter(|(_, value)| !value.contains("${{"))
+            .map(|(key, value)| (key.clone(), value.clone())),
+    );
     for ordinal in 0..units.len() as u64 {
         env.push((
             format!("VELNOR_STATE_COMPAT_R{ordinal}"),

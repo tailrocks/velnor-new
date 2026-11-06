@@ -31,6 +31,9 @@ const TOKEN_EXPR: &str = "${{ github.token }}";
 const STEP_NAME: &str = "Select attested state";
 const OUTPUT_DELIMITER: &str = "VELNOR_STATE_ATTESTED_EOF";
 const CACHE_KEYS_OUTPUTS: &str = "steps.cache-keys.outputs";
+const SUPERVISOR_ENV: &str = "VELNOR_STATE_SELECT_SUPERVISOR_HEX";
+const SUPERVISOR_ENV_LIMIT: usize = 49_152;
+const SELECT_RUN_LIMIT_UTF16_UNITS: usize = 21_000;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SealRoot {
@@ -85,7 +88,7 @@ select_all() {
   command -v bash >/dev/null 2>&1 || return 0
   python3 -I -c 'import math, os, pathlib, signal, subprocess, sys, time' >/dev/null 2>&1 || return 0
   export VELNOR_STATE_SELECT_DEADLINE="$deadline" VELNOR_STATE_UNIT_TIMEOUT="$unit_limit" VELNOR_STATE_PARALLELISM=@PARALLELISM@ VELNOR_STATE_SELECT_DIR="$d" VELNOR_STATE_SELECT_PREFIX='@STATE_PREFIX@' VELNOR_STATE_SELECT_LIST_LIMIT=@SELECT_LIMIT@
-  exec @SUPERVISOR_COMMAND@
+  exec python3 -I -c 'import os; exec(bytes.fromhex(os.environ.pop("VELNOR_STATE_SELECT_SUPERVISOR_HEX")))'
 }
 emit() {
   { printf '%s\n' "$1<<@DELIMITER@"; cat "$d/u-$2/out"; printf '%s\n' @DELIMITER@; } >> "$GITHUB_OUTPUT"
@@ -167,7 +170,6 @@ fn head(outer_bound: u64, bounds: &SelectBounds) -> Result<String, RenderError> 
     Ok(SELECT_HEAD
         .replace("@RUN_GH@", RUN_GH)
         .replace("@WORKER@", &worker(outer_bound)?)
-        .replace("@SUPERVISOR_COMMAND@", &supervisor_command(bounds))
         .replace("@TIMEOUT_ENV@", STATE_SEAL_VERIFY_TIMEOUT_ENV)
         .replace("@TIMEOUT@", &STATE_SEAL_VERIFY_TIMEOUT_SECONDS.to_string())
         .replace("@UNIT_TIMEOUT_ENV@", STATE_SEAL_UNIT_TIMEOUT_ENV)
@@ -181,7 +183,7 @@ fn head(outer_bound: u64, bounds: &SelectBounds) -> Result<String, RenderError> 
         .replace("@SIGNER_PATH@", STATE_SEAL_WORKFLOW_PATH))
 }
 
-fn supervisor_command(bounds: &SelectBounds) -> String {
+fn supervisor_hex(bounds: &SelectBounds) -> Result<String, RenderError> {
     let trusted_deadline_ceiling = 3600_u64.max(bounds.deadline_seconds);
     let source = SUPERVISOR.replace("@MAX_DEADLINE@", &trusted_deadline_ceiling.to_string());
     let mut encoded = String::with_capacity(source.len() * 2);
@@ -189,7 +191,27 @@ fn supervisor_command(bounds: &SelectBounds) -> String {
         encoded.push(char::from_digit(u32::from(byte >> 4), 16).unwrap_or_default());
         encoded.push(char::from_digit(u32::from(byte & 0x0f), 16).unwrap_or_default());
     }
-    format!("python3 -I -c 'exec(bytes.fromhex(\"{encoded}\"))'")
+    if encoded.len() > SUPERVISOR_ENV_LIMIT {
+        return Err(RenderError::InvalidWorkflow(
+            "state_select:supervisor_env_too_large".to_owned(),
+        ));
+    }
+    Ok(encoded)
+}
+
+fn validate_selector_run(step: &Step) -> Result<(), RenderError> {
+    let StepKind::Shell { run, .. } = &step.kind else {
+        return Err(RenderError::InvalidWorkflow(
+            "state_select:shell_step_required".to_owned(),
+        ));
+    };
+    let joined_run = crate::commands::join_validated_argv_for_run(run)?;
+    if joined_run.encode_utf16().count() > SELECT_RUN_LIMIT_UTF16_UNITS {
+        return Err(RenderError::InvalidWorkflow(
+            "state_select:run_too_large:21000_utf16_code_units".to_owned(),
+        ));
+    }
+    Ok(())
 }
 
 pub fn state_select_step(
@@ -218,6 +240,7 @@ pub fn state_select_step(
             bounds.deadline_seconds.to_string(),
         ),
     ]);
+    env.insert(SUPERVISOR_ENV.to_owned(), supervisor_hex(&bounds)?);
     let mut decisions = Vec::with_capacity(roots.len());
     for (ordinal, root) in roots.iter().enumerate() {
         let compat_env = format!("VELNOR_STATE_COMPAT_R{ordinal}");
@@ -262,6 +285,7 @@ pub fn state_select_step(
         ],
         env,
     )?;
+    validate_selector_run(&step)?;
     step.id = Some(StepId::StateSelect);
     step.role = Some(StepRole::StateSelect);
     Ok(step)

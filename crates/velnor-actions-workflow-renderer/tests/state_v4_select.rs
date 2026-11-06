@@ -3,7 +3,11 @@
 
 use std::error::Error;
 
-use velnor_actions_contract::workflow::cache_family::{CacheFamily, outer_entry_bound};
+use velnor_actions_contract::JobTimeout;
+use velnor_actions_contract::workflow::StepKind;
+use velnor_actions_contract::workflow::cache_family::{
+    CacheFamily, RootSlug, StateUnit, outer_entry_bound,
+};
 use velnor_actions_contract::workflow::state_seal::{
     STATE_SEAL_LIST_LIMIT, STATE_SEAL_VERIFY_LIMIT,
 };
@@ -13,11 +17,76 @@ use crate::gc1_seal_support::{
     Attestation, ENTRY_ID, ENTRY_SIZE, Gh, MAIN, PULL, REPO, digest, key, run_select, scope,
     selected,
 };
+use velnor_actions_workflow_renderer::plan_sources::state_select::{SealRoot, state_select_step};
 
 const ROOT: &str = ".";
 const T1: &str = "2026-11-04T01:00:00Z";
 const T2: &str = "2026-11-04T02:00:00Z";
 const T3: &str = "2026-11-04T03:00:00Z";
+
+#[test]
+fn selector_keeps_supervisor_in_static_environment_and_loader_in_run() -> Result<(), Box<dyn Error>>
+{
+    let step = state_select_step(
+        &[SealRoot {
+            unit: StateUnit::Union,
+            slug: RootSlug::from_root(ROOT)?,
+        }],
+        JobTimeout::PLAN,
+    )?;
+    let StepKind::Shell { run, env } = step.kind else {
+        return Err(fail("selector step is not a shell step"));
+    };
+    let payload = env
+        .get("VELNOR_STATE_SELECT_SUPERVISOR_HEX")
+        .ok_or_else(|| fail("selector supervisor environment is absent"))?;
+    if payload.len() > 49_152
+        || payload.is_empty()
+        || payload.len() % 2 != 0
+        || !payload
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+    {
+        return Err(fail(
+            "selector supervisor environment is not bounded lowercase hex",
+        ));
+    }
+    let decoded = payload
+        .as_bytes()
+        .chunks_exact(2)
+        .map(|pair| {
+            let high = (pair[0] as char)
+                .to_digit(16)
+                .ok_or_else(|| fail("bad supervisor hex"))?;
+            let low = (pair[1] as char)
+                .to_digit(16)
+                .ok_or_else(|| fail("bad supervisor hex"))?;
+            Ok((high * 16 + low) as u8)
+        })
+        .collect::<Result<Vec<_>, Box<dyn Error>>>()?;
+    let source = String::from_utf8(decoded)?;
+    let supervisor_file = include_str!("../src/plan_sources/state_select_supervisor.rs");
+    let literal = supervisor_file
+        .split_once("r#\"")
+        .and_then(|(_, tail)| tail.split_once("\"#"))
+        .map(|(source, _)| source)
+        .ok_or_else(|| fail("supervisor source literal is missing"))?;
+    let expected = literal.replace("@MAX_DEADLINE@", "3600");
+    if source != expected {
+        return Err(fail(
+            "selector payload differs from the substituted supervisor source",
+        ));
+    }
+    let script = run.last().ok_or_else(|| fail("selector run is empty"))?;
+    if script.contains(payload)
+        || !script.contains("python3 -I -c 'import os; exec(bytes.fromhex(os.environ.pop")
+    {
+        return Err(fail(
+            "selector run does not load and remove its static payload",
+        ));
+    }
+    Ok(())
+}
 
 fn expect(got: &[String], want: &[&str], label: &str) -> Result<(), Box<dyn Error>> {
     if got == want {
