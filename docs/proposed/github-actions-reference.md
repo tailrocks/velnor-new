@@ -73,6 +73,27 @@ Jackin run `39495895585`, attempt 1, demonstrated executing producer jobs while 
 The official [attempt-specific jobs endpoint](https://docs.github.com/en/rest/actions/workflow-jobs#list-jobs-for-a-workflow-run-attempt) supplies the bounded complete inventory selecting one generated role's positive job ID. The [individual job endpoint](https://docs.github.com/en/rest/actions/workflow-jobs#get-a-job-for-a-workflow-run) refreshes its identity, status and conclusion using existing Actions read permissions. The runner's [GitHubContext export](https://github.com/actions/runner/blob/main/src/Runner.Worker/GitHubContext.cs) exports `GITHUB_JOB`; Velnor maps this machine identifier to the generated display name through a closed mapping checked against actual rendered jobs.
 Native guards authenticate exact source, workflow, run and attempt; aggregate `queued` or `in_progress` requires no conclusion plus the unique expected job executing with no conclusion. Only immutable locators are cached; subsequent guards fetch the individual job again. Historical signed-run evidence remains separate from the current publisher, recovery or tap caller's authority.
 
+### Reusable workflow signer identity (checked 2026-10-28)
+
+The [GitHub CLI attestation verifier](https://cli.github.com/manual/gh_attestation_verify)
+supports a reusable workflow as the signer through `--signer-workflow`. GitHub's
+[OIDC claim reference](https://docs.github.com/en/actions/reference/security/oidc)
+defines `job_workflow_ref` and `job_workflow_sha` for the reusable workflow,
+while `workflow_ref` and `workflow_sha` identify the caller workflow. Fulcio's
+[official identity template](https://github.com/sigstore/fulcio/blob/main/config/identity/config.yaml)
+maps the reusable workflow claims to `buildSignerURI`/`buildSignerDigest`,
+builds the certificate subject alternative name from the reusable workflow ref,
+and maps caller claims to `buildConfigURI`/`buildConfigDigest`. The source
+repository digest and run invocation URI identify the caller run.
+
+The Runner-family publisher checks the Actions run as
+`product-release.yml`, checks the exact repo-qualified referenced-workflow
+path/ref/SHA for `product-release-images.yml`, and verifies attestations with
+that callee as signer. The source selected by the caller can differ from the
+caller's workflow-head SHA, so source identity comes from the closed producer
+record, committed lock, OCI revision and successful same-source CI run rather
+than from the certificate's caller source digest.
+
 ### Step shell resolution and `addPath` (checked 2026-10-22)
 
 [`ScriptHandler.cs`](https://github.com/actions/runner/blob/4c989f2f108bb6798e07ea5935bc8bc4aab7de2f/src/Runner.Worker/Handlers/ScriptHandler.cs) resolves a step's shell with `WhichUtil.Which(command, …, prependPath)`, where `prependPath` holds every `core.addPath`/`GITHUB_PATH` entry ahead of the job `PATH`. In a composite action (`IsActionStep`) even `shell: bash` takes this route. [`WhichUtil.cs`](https://github.com/actions/runner/blob/4c989f2f108bb6798e07ea5935bc8bc4aab7de2f/src/Runner.Sdk/Util/WhichUtil.cs) returns a fully qualified command as given when the file exists and never searches `PATH` for it; a custom shell string is split at its first space and must contain `{0}`. `jdx/mise-action` adds the Mise `bin/` and, by default, `shims/` with `core.addPath`, so after a tools-cache restore a bare shell or helper name can resolve to restored bytes. Velnor's restore checks therefore use `/bin/bash --noprofile --norc -p -e -o pipefail {0}` and reset `PATH` to `/usr/bin:/bin:/usr/sbin:/sbin` first ([hermetic checks](tools-cache-v2.md#the-checks-run-hermetically)).
@@ -568,3 +589,27 @@ It requires matching identity, Boolean private status and private visibility.
 The existing bounded native GitHub transport supplies fixed-origin HTTPS,
 workflow-token authentication and a deadline. Source:
 [Get a repository](https://docs.github.com/en/rest/repos/repos?apiVersion=2026-03-10#get-a-repository).
+
+## Local reusable workflow identity
+
+The GitHub Actions workflow-run response for [run 41979375157](https://github.com/tailrocks/velnor-new/actions/runs/41979375157) records its same-repository reusable `product-release-images.yml` workflow with a `referenced_workflows` path ending in `@c622bfb187556afb8d3ff3ca917a719e4bb7f32a`, matching its resolved `sha`, and `ref` equal to `refs/heads/main`. The caller uses the local `./.github/workflows/...` form. The [workflow-run API](https://docs.github.com/en/rest/actions/workflow-runs#get-a-workflow-run) separately illustrates a SHA-pinned reusable workflow without a `ref` field. These observations identify the referenced workflow; the signed attestation must independently bind the workflow and source digests.
+
+The decoded certificate in the v0.1.74 release attestation for that run identifies the local reusable signer with `@refs/heads/main` and carries its resolved workflow SHA separately. The certificate also records the caller workflow and SHA, event, run ID and attempt. Certificate decoding establishes field representation only; admission must verify the signed attestation and its trusted issuer.
+
+## Commit archive retrieval
+
+GitHub's [repository tarball API](https://docs.github.com/en/rest/repos/contents#download-a-repository-archive-tar) responds with a redirect. On 2026-11-05, the pinned `gh` client followed that redirect for this repository's immutable commit `358e1c6075ceeec94178d94f271a4526ef778da2` and returned a 9.7 MiB gzip tarball with 4,901 entries and 73.9 MB of declared file content; non-executable regular files appeared with tar mode `0664`. GitHub CLI's [redirect discussion](https://github.com/cli/cli/issues/8055) describes that behavior. Publication independently verifies selected archive bytes and executable modes against the authenticated commit tree; the archive response alone is not the source identity. It caps the compressed response at 64 MiB, expanded stream at 256 MiB, each selected file at 16 MiB, and selected content at 128 MiB. The expanded cap exceeds the observed archive by more than three times.
+
+## Attestation history and bundle retrieval
+
+GitHub's [repository attestation endpoint](https://docs.github.com/en/rest/repos/attestations#list-attestations) lists attestations for a `sha256:<digest>` subject and paginates using Link headers, with at most 100 entries per page. The response may include an inline bundle or a signed `bundle_url`; GitHub's [breaking changes](https://docs.github.com/en/enterprise-cloud@latest/rest/about-the-rest-api/breaking-changes) describe removing inline bundles. The pinned [GitHub CLI 2.102.0 client](https://github.com/cli/cli/blob/v2.102.0/pkg/cmd/attestation/api/client.go) fetches URL bundles without GitHub API credentials and decodes raw Snappy data. Its attestation lookup limit is finite and capped at 1,000, so an exact run cannot be selected reliably from a fixed prefix of subject history. The [verification command](https://cli.github.com/manual/gh_attestation_verify) accepts a JSONL bundle file containing multiple attestations.
+
+Velnor enumerates the bounded history to completion, retrieves signed bundles without the GitHub token, verifies a bounded JSONL batch cryptographically, and then enforces the exact source, signer, run and attempt on the selected certificate. Oversized, invalid or incomplete evidence fails closed.
+
+## Image publication inventory and registry errors
+
+GitHub's REST endpoints list [workflow-run artifacts](https://docs.github.com/en/rest/actions/artifacts#list-workflow-run-artifacts), [jobs for a run attempt](https://docs.github.com/en/rest/actions/workflow-jobs#list-jobs-for-a-workflow-run-attempt), and [runs for a workflow](https://docs.github.com/en/rest/actions/workflow-runs#list-workflow-runs-for-a-workflow) with `per_page`, `page`, and `total_count`. The workflow-run endpoint limits a filtered search to 1,000 results; Velnor's CI search uses the `branch`, `event`, and `head_sha` filters. A capped search is not evidence that an omitted run does not exist.
+
+The image publisher requests 100 entries per page and admits at most 20 pages, 2,000 entries, and 16 MiB of cumulative serialized response JSON for an inventory. It requires the same `total_count` on every page, the expected number of entries per page, and unique nonzero IDs. Missing, inconsistent, duplicated, or over-budget evidence fails publication. Each API response is also bounded before JSON parsing.
+
+The [OCI Distribution Specification error table](https://github.com/opencontainers/distribution-spec/blob/main/spec.md#error-codes) distinguishes `NAME_UNKNOWN`, an unknown repository, from `MANIFEST_UNKNOWN`, an unknown manifest. Both represent absence for the authenticated image tag lookup; `UNAUTHORIZED` and `DENIED` do not. The pinned [Crane 0.22.1 error formatter](https://github.com/google/go-containerregistry/blob/v0.22.1/pkg/v1/remote/transport/error.go#L43-L70) prints a single structured error's code and message without its HTTP status. Velnor therefore binds the exact requested reference and manifest URL, accepts only those two absence codes with a bounded single-line message, and rejects other or ambiguous diagnostics. This relies on the registry's OCI error-code semantics; the Crane output does not establish that the response had a particular HTTP status.

@@ -1,7 +1,7 @@
 # Velnor V1 Rust test policy
 
 **Status:** Proposed specification, companion to the [Rust quality
-contract](rust-quality-contract.md) §4. Landed implementation records live in
+contract](ci-maintenance/rust-quality-contract.md) §4. Landed implementation records live in
 `docs/implemented/` and must change in the same implementation pull request.
 
 The words **MUST**, **MUST NOT**, **SHOULD**, and **MAY** are normative.

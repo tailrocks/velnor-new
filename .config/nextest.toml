@@ -32,3 +32,7 @@ success-output = "immediate"
 [[profile.ci.overrides]]
 filter = 'package(velnor-actions-orchestrator) and test(bench_empty_caches_cold_plan)'
 success-output = "immediate"
+
+[[profile.default.overrides]]
+filter = 'package(=velnor-archive-guard) and binary(=golden_collector_public) and (test(=bounded::caps_stdout_after_successful_entry_and_retains_the_prefix) or test(=bounded::times_out_after_guard_mutation_and_cleans_only_its_owned_group) or test(=bounded::retains_stderr_prefix_and_reports_source_mutation_with_output_overflow))'
+threads-required = "num-test-threads"

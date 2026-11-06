@@ -302,7 +302,11 @@ fn check_scrub_coverage(
 }
 
 fn strip_unset_argv(run: &[String]) -> &[String] {
-    &run[crate::toolchain_env::unset_prefix_len(run)..]
+    let prefix_at = usize::from(
+        run.first().is_some_and(|arg| arg == "exec") && run.get(1).is_some_and(|arg| arg == "env"),
+    );
+    let unset_at = prefix_at + crate::toolchain_env::unset_prefix_len(&run[prefix_at..]);
+    &run[unset_at..]
 }
 
 fn strip_unset_prelude(script: &str) -> String {

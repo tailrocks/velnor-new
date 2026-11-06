@@ -5,18 +5,21 @@ use super::{
     MAX_CARGO_MESSAGES_BYTES, MAX_UNTRUSTED_DOCUMENT_BYTES, Path, PathBuf, Value, fs,
     parse_strict_json_bytes, rooted_path,
 };
+use crate::CargoArtifactKind;
 
 pub(crate) fn print_cargo_artifact_executable(
     root: &Path,
     messages_path: &Path,
     manifest_path: &Path,
     target_name: &str,
+    kind: CargoArtifactKind,
 ) -> i32 {
     match cargo_artifact_executable(
         root,
         &rooted_path(root, messages_path),
         &rooted_path(root, manifest_path),
         target_name,
+        kind,
     ) {
         Ok(path) => {
             println!("{}", path.display());
@@ -34,6 +37,7 @@ pub(super) fn cargo_artifact_executable(
     messages_path: &Path,
     manifest_path: &Path,
     target_name: &str,
+    kind: CargoArtifactKind,
 ) -> Result<PathBuf, String> {
     let root = fs::canonicalize(workspace_root)
         .map_err(|error| format!("workspace root does not exist: {error}"))?;
@@ -68,7 +72,11 @@ pub(super) fn cargo_artifact_executable(
             || !target
                 .get("kind")
                 .and_then(Value::as_array)
-                .is_some_and(|kinds| kinds.iter().any(|kind| kind.as_str() == Some("bin")))
+                .is_some_and(|kinds| {
+                    kinds
+                        .iter()
+                        .any(|candidate| candidate.as_str() == Some(kind.as_str()))
+                })
         {
             continue;
         }

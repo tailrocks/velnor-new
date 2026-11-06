@@ -58,7 +58,13 @@ pub(crate) fn verify_published_manifest_attestation(
         source_ref,
         source_token: &source_token,
     };
-    let raw = verify_one_with_bundle(path, Some(bundle_path), &identity, deadline)?;
+    let raw = verify_one_with_bundle(
+        path,
+        bundle_path,
+        &identity,
+        deadline,
+        super::VerificationPolicy::ExactSigner,
+    )?;
     parse_verified_manifest_attestation(
         &raw,
         expectation.repository,

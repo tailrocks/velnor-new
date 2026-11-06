@@ -1,8 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::{BTreeSet, VecDeque};
-
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::path::{Path, PathBuf};
 
 use toml::Value;
@@ -12,8 +11,15 @@ use crate::context::FreshnessContext;
 use crate::patterns;
 
 use super::{
-    DEP_SECTIONS, DeclaredDependency, load_manifest, manifest_label, path_text, read_toml_row,
+    DEP_SECTIONS, DeclaredDependency, MemberOwners, MemberWorkspace, declared_path, load_manifest,
+    manifest_label, path_text, read_toml_row,
 };
+
+struct DependencyScan<'a> {
+    manifest_base: &'a Path,
+    inherited: Option<&'a Value>,
+    inherited_base: &'a Path,
+}
 
 pub(super) fn discover_workspaces(ctx: &mut FreshnessContext) -> Vec<(String, Value)> {
     let mut pending = VecDeque::from([(String::new(), load_manifest(ctx, "Cargo.toml"))]);
@@ -89,6 +95,38 @@ pub(super) fn discover_workspaces(ctx: &mut FreshnessContext) -> Vec<(String, Va
     }
     roots
 }
+
+pub(super) fn all_member_manifests(ctx: &mut FreshnessContext) -> BTreeMap<String, Vec<PathBuf>> {
+    let workspaces = ctx.workspace_roots.clone();
+    workspaces
+        .into_iter()
+        .map(|(relative, document)| {
+            let manifests = member_manifests(ctx, &relative, &document);
+            (relative, manifests)
+        })
+        .collect()
+}
+
+pub(super) fn member_owners(
+    ctx: &FreshnessContext,
+    manifests: &BTreeMap<String, Vec<PathBuf>>,
+) -> MemberOwners {
+    let workspaces = ctx.workspace_roots.clone();
+    let mut owners = MemberOwners::new();
+    for (relative, document) in workspaces {
+        let root = ctx.root.join(&relative);
+        for manifest in manifests.get(&relative).into_iter().flatten() {
+            if let Ok(canonical) = manifest.canonicalize() {
+                owners.entry(canonical).or_default().push(MemberWorkspace {
+                    root: root.clone(),
+                    document: document.clone(),
+                });
+            }
+        }
+    }
+    owners
+}
+
 pub(super) fn member_manifests(
     ctx: &mut FreshnessContext,
     relative: &str,
@@ -150,6 +188,7 @@ pub(super) fn read_member_manifests(
     ctx: &mut FreshnessContext,
     manifests: &[PathBuf],
     inherited: Option<&Value>,
+    inherited_base: &Path,
 ) -> (BTreeSet<String>, Vec<DeclaredDependency>) {
     let mut members = BTreeSet::new();
     let mut declared = Vec::new();
@@ -174,7 +213,12 @@ pub(super) fn read_member_manifests(
             continue;
         };
         members.insert(crate_name.to_owned());
-        walk_dependency_tables(ctx, &document, crate_name, inherited, "", &mut declared);
+        let scan = DependencyScan {
+            manifest_base: manifest.parent().unwrap_or(Path::new(".")),
+            inherited,
+            inherited_base,
+        };
+        walk_dependency_tables(ctx, &document, crate_name, &scan, "", &mut declared);
     }
     (members, declared)
 }
@@ -183,7 +227,7 @@ fn walk_dependency_tables(
     ctx: &mut FreshnessContext,
     node: &Value,
     crate_name: &str,
-    inherited: Option<&Value>,
+    scan: &DependencyScan<'_>,
     prefix: &str,
     output: &mut Vec<DeclaredDependency>,
 ) {
@@ -207,7 +251,7 @@ fn walk_dependency_tables(
                 &format!("{prefix}{section}"),
                 alias,
                 spec,
-                inherited,
+                scan,
             ) {
                 output.push(dependency);
             }
@@ -221,7 +265,7 @@ fn walk_dependency_tables(
             ctx,
             body,
             crate_name,
-            inherited,
+            scan,
             &format!("target.{target}."),
             output,
         );
@@ -234,7 +278,7 @@ fn declared_dependency(
     scope: &str,
     alias: &str,
     spec: &Value,
-    inherited: Option<&Value>,
+    scan: &DependencyScan<'_>,
 ) -> Option<DeclaredDependency> {
     let subject = format!("{crate_name}:{scope}:{alias}");
     if let Some(requirement) = spec.as_str() {
@@ -242,6 +286,7 @@ fn declared_dependency(
             subject,
             name: alias.to_owned(),
             requirement: requirement.to_owned(),
+            path: None,
         });
     }
     let Some(spec) = spec.as_table() else {
@@ -266,14 +311,25 @@ fn declared_dependency(
     }
     let real = spec.get("package").and_then(Value::as_str).unwrap_or(alias);
     if let Some(requirement) = spec.get("version").and_then(Value::as_str) {
+        let Ok(path) = declared_path(ctx, &subject, spec, scan.manifest_base) else {
+            return None;
+        };
         return Some(DeclaredDependency {
             subject,
             name: real.to_owned(),
             requirement: requirement.to_owned(),
+            path,
         });
     }
     if spec.get("workspace").and_then(Value::as_bool) == Some(true) {
-        return inherited_dependency(ctx, &subject, alias, real, inherited);
+        return inherited_dependency(
+            ctx,
+            &subject,
+            alias,
+            real,
+            scan.inherited,
+            scan.inherited_base,
+        );
     }
     if spec.contains_key("path") {
         ctx.pass_row(
@@ -297,9 +353,10 @@ fn inherited_dependency(
     alias: &str,
     real: &str,
     inherited: Option<&Value>,
+    inherited_base: &Path,
 ) -> Option<DeclaredDependency> {
     let dependencies = inherited.and_then(Value::as_table);
-    let spec = dependencies.and_then(|table| table.get(real).or_else(|| table.get(alias)));
+    let spec = dependencies.and_then(|table| table.get(alias));
     let real = spec
         .and_then(Value::as_table)
         .and_then(|table| table.get("package"))
@@ -311,10 +368,19 @@ fn inherited_dependency(
             .and_then(Value::as_str)
     });
     if let Some(requirement) = requirement {
+        let path_spec = spec.and_then(Value::as_table);
+        let path = match path_spec {
+            Some(table) => match declared_path(ctx, subject, table, inherited_base) {
+                Ok(path) => path,
+                Err(_) => return None,
+            },
+            None => None,
+        };
         Some(DeclaredDependency {
             subject: subject.to_owned(),
             name: real.to_owned(),
             requirement: requirement.to_owned(),
+            path,
         })
     } else {
         ctx.fail_row(

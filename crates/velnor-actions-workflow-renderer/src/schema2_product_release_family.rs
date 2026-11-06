@@ -14,14 +14,20 @@ const PUBLISH_TEMPLATE: &str = include_str!("schema2_release_publish.sh");
 const RELEASE_CONFIRMATION_BUDGET_SECONDS: u16 = 120;
 
 pub(super) const PUBLISH_STEP_ID: &str = "publish-family-release";
+pub(super) const ARTIFACT_ID_GUARD_STEP_ID: &str = "validate-producer-artifact-identity";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum StepRole {
     Publish,
+    ArtifactIdentityGuard,
 }
 
 pub(super) fn step_role(id: &str) -> Option<StepRole> {
-    (id == PUBLISH_STEP_ID).then_some(StepRole::Publish)
+    match id {
+        PUBLISH_STEP_ID => Some(StepRole::Publish),
+        ARTIFACT_ID_GUARD_STEP_ID => Some(StepRole::ArtifactIdentityGuard),
+        _ => None,
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

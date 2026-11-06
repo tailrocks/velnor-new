@@ -66,11 +66,18 @@ fn shell_step_with_env_validation(
     validate_env(&env)?;
     crate::toolchain_env::reject_denied_step_keys(&env)?;
     steps::scan_for_private_subcommands(name)?;
-    let run = if commands::is_inline_shell(&argv) {
+    if argv.as_slice() == ["exec"] {
+        return Err(RenderError::BadCommand("exec_missing_command".to_owned()));
+    }
+    let run = if let Some(script_at) = commands::inline_shell_script_at(&argv) {
         let mut scripted = argv;
-        let preluded = crate::toolchain_env::with_credential_unset_script(&scripted[2]);
-        scripted[2] = preluded;
+        let preluded = crate::toolchain_env::with_credential_unset_script(&scripted[script_at]);
+        scripted[script_at] = preluded;
         scripted
+    } else if argv.first().is_some_and(|arg| arg == "exec") {
+        let mut run = vec!["exec".to_owned()];
+        run.extend(crate::toolchain_env::with_env_unset_argv(&argv[1..]));
+        run
     } else {
         let mut run = crate::toolchain_env::with_env_unset_argv(&[]);
         run.extend(argv);

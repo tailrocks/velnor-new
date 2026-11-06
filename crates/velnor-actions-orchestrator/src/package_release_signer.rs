@@ -38,7 +38,8 @@ mod publication;
 #[path = "package_release_signer_receipt.rs"]
 mod receipt;
 pub(crate) use attestation::{
-    SdkManifestAttestationExpectation, verify_published_manifest_attestation,
+    ImageAttestationIdentity, SdkManifestAttestationExpectation,
+    verify_image_file_attestation, verify_published_manifest_attestation,
 };
 
 pub(crate) use publication::verify_attested_signed_package_with_owned_tempdir;

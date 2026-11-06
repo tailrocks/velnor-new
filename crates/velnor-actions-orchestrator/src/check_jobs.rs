@@ -7,8 +7,8 @@ use velnor_actions_contract::config::{
     CheckExecutor, EPHEMERAL_CHECK_ADMISSION_CONDITION, NativeHomebrewCheck,
 };
 use velnor_actions_contract::{
-    CheckoutHistory, Job, JobTimeout, NAMED_CHECK_JOB_ID_ENV, NAMED_CHECK_LANE_VARIANT_ENV, Permissions, Step,
-    WorkflowPolicy,
+    CheckoutHistory, Job, JobTimeout, NAMED_CHECK_JOB_ID_ENV, NAMED_CHECK_LANE_VARIANT_ENV,
+    Permissions, RunsOn, Step, WorkflowPolicy,
 };
 use velnor_actions_mise::{DiscoveredCheck, ToolCatalog};
 use velnor_actions_workflow_renderer::render::PLAN_JOB_ID;
@@ -167,14 +167,24 @@ fn check_job(
         check_runner: Some(check.runner.clone()),
         timeout_minutes: JobTimeout::new(minutes)?,
         needs: vec![PLAN_JOB_ID.to_owned()],
-        condition: (check.runner.executor == CheckExecutor::EphemeralSelfHosted)
-            .then(|| EPHEMERAL_CHECK_ADMISSION_CONDITION.to_owned()),
+        condition: Some(named_check_condition(job_id, check)),
         permissions: Some(Permissions::default()),
         environment: None,
         env: velnor_actions_contract::JobEnv::Unset,
         steps,
         cache_access: velnor_actions_contract::CacheAccess::Read,
     })
+}
+
+fn named_check_condition(job_id: &str, check: &velnor_actions_contract::config::MiseCheck) -> String {
+    let gate = velnor_actions_workflow_renderer::not_affected_gate(job_id);
+    let needs_admission = check.runner.executor == CheckExecutor::EphemeralSelfHosted
+        || RunsOn::parse(&check.runner.label).is_ok_and(|selector| selector.is_scale_set());
+    if needs_admission {
+        format!("({gate}) && ({EPHEMERAL_CHECK_ADMISSION_CONDITION})")
+    } else {
+        gate
+    }
 }
 
 fn published_lock_acquire_for_runner(

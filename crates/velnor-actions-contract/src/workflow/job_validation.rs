@@ -6,6 +6,19 @@ use super::{
     is_safe_display_name, is_valid_environment,
 };
 impl Job {
+    fn preserves_check_admission(&self, id: &str) -> bool {
+        let Some(condition) = self.condition.as_deref() else {
+            return false;
+        };
+        condition == crate::config::EPHEMERAL_CHECK_ADMISSION_CONDITION
+            || condition
+                == format!(
+                    "({}) && ({})",
+                    crate::workflow::not_affected_gate(id),
+                    crate::config::EPHEMERAL_CHECK_ADMISSION_CONDITION
+                )
+    }
+
     fn validate_runner(&self, id: &str) -> Result<(), ContractError> {
         if let Some(runner) = &self.check_runner {
             if !id.starts_with("check-") {
@@ -16,8 +29,7 @@ impl Job {
             }
             runner.validate("workflow", &format!("jobs.{id}.check_runner"))?;
             if runner.executor == crate::config::CheckExecutor::EphemeralSelfHosted
-                && self.condition.as_deref()
-                    != Some(crate::config::EPHEMERAL_CHECK_ADMISSION_CONDITION)
+                && !self.preserves_check_admission(id)
             {
                 return Err(ContractError::identity(
                     "job.condition",
@@ -29,8 +41,7 @@ impl Job {
             if scale_set
                 && (runner.platform != crate::config::CheckPlatform::LinuxX64
                     || runner.executor != crate::config::CheckExecutor::Hosted
-                    || self.condition.as_deref()
-                        != Some(crate::config::EPHEMERAL_CHECK_ADMISSION_CONDITION))
+                    || !self.preserves_check_admission(id))
             {
                 return Err(ContractError::identity(
                     "job.runs_on",

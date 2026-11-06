@@ -57,6 +57,7 @@ enum SuiteTool {
     GenerateValidators,
     OpenTofuExecution,
     BunExecution,
+    CraneExecution,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -74,13 +75,17 @@ impl CrateSuite {
         self.owns(SuiteTool::BunExecution)
     }
 
+    pub(crate) fn owns_crane(self) -> bool {
+        self.owns(SuiteTool::CraneExecution)
+    }
+
     const fn package_name(self) -> &'static str {
         self.name.package_name()
     }
 }
 
 const NO_SUITE_TOOLS: &[SuiteTool] = &[];
-const GENERATE_VALIDATOR_TOOLS: &[SuiteTool] = &[SuiteTool::GenerateValidators];
+const CLI_TOOLS: &[SuiteTool] = &[SuiteTool::GenerateValidators, SuiteTool::CraneExecution];
 const OPENTOFU_TOOLS: &[SuiteTool] = &[SuiteTool::OpenTofuExecution];
 const ORCHESTRATOR_TOOLS: &[SuiteTool] = &[SuiteTool::GenerateValidators, SuiteTool::BunExecution];
 
@@ -91,7 +96,7 @@ const SUITE_TOOL_OWNERS: [CrateSuite; 14] = [
     },
     CrateSuite {
         name: SuiteName::Cli,
-        tools: GENERATE_VALIDATOR_TOOLS,
+        tools: CLI_TOOLS,
     },
     CrateSuite {
         name: SuiteName::Contract,
@@ -215,6 +220,9 @@ impl LaneTools {
         }
         if policy == WorkflowPolicy::VelnorRepositoryV1 && suite.is_some_and(CrateSuite::owns_bun) {
             tools.insert(PinnedTool::Bun);
+        }
+        if policy == WorkflowPolicy::VelnorRepositoryV1 && suite.is_some_and(CrateSuite::owns_crane) {
+            tools.insert(PinnedTool::Crane);
         }
         Self(tools)
     }

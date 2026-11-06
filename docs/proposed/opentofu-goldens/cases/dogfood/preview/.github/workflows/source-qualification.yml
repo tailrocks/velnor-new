@@ -317,6 +317,10 @@ jobs:
         if: always()
         shell: bash
         run: bash scripts/generator-release/source-qualification.sh capture-all-five-external-goldens
+      - name: Author Linux x64 native validator candidates
+        if: success() && github.event_name == 'workflow_dispatch'
+        shell: bash
+        run: bash scripts/generator-release/source-qualification.sh qualify-linux-x64-native-validator-tools
       - name: Repeat check against external oracle
         if: always()
         shell: bash
