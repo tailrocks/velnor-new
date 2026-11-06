@@ -13,7 +13,7 @@ use velnor_actions_contract::workflow::state_seal::STATE_SEAL_SELECT_MAX_PARALLE
 
 use crate::gc1_scene::{Scene, fail};
 use crate::gc1_seal_clock::SupervisorClock;
-use crate::gc1_seal_support::{Attestation, Gh, MAIN};
+use crate::gc1_seal_support::{Attestation, Gh, MAIN, check_selector_markers};
 use crate::gc1_seal_units::{
     at, expect, expect_flag, group_is_live, hang_keys, hung_processes_gone, process_group,
     process_is_reaped, process_is_running, produce_flag, rendezvous, rows_of, selected_unit,
@@ -185,7 +185,9 @@ fn state_v4_select_many_units_reaps_a_hung_verifiers_descendants() -> Result<(),
     }
     clock.advance("unit-timeout", 91)?;
     clock.wait_for_advance("unit-timeout", Duration::from_secs(10))?;
-    if !selector.wait(Duration::from_secs(60))?.success() {
+    let status = selector.wait(Duration::from_secs(60))?;
+    check_selector_markers(&gh)?;
+    if !status.success() {
         return Err(fail("unit expiry failed the selector step"));
     }
 
@@ -251,7 +253,9 @@ fn run_late_status_case(label: &str, advance_seconds: u64) -> Result<(), Box<dyn
     clock.advance(label, advance_seconds)?;
     clock.release_block(label)?;
     clock.wait_for_advance(label, Duration::from_secs(10))?;
-    if !selector.wait(Duration::from_secs(10))?.success() {
+    let status = selector.wait(Duration::from_secs(10))?;
+    check_selector_markers(&gh)?;
+    if !status.success() {
         return Err(fail("unit expiry failed the selector step"));
     }
     expect(

@@ -13,7 +13,7 @@ use velnor_actions_contract::workflow::cache_family::StateUnit;
 use crate::gc1_scene::{Scene, fail};
 #[cfg(target_os = "linux")]
 use crate::gc1_seal_clock::SupervisorClock;
-use crate::gc1_seal_support::{Attestation, Gh, MAIN};
+use crate::gc1_seal_support::{Attestation, Gh, MAIN, check_selector_markers};
 use crate::gc1_seal_units::{
     expect, expect_flag, hang_keys, hung_processes_gone, produce_flag, rendezvous, rows_of,
     selected_unit, spawn_select_units, unit_key,
@@ -230,7 +230,9 @@ fn aggregate_expiry_keeps_only_completed_cleaned_units() -> Result<(), Box<dyn E
     }
     clock.advance("aggregate-expiry", 121)?;
     clock.wait_for_advance("aggregate-expiry", Duration::from_secs(10))?;
-    if !selector.wait(Duration::from_secs(30))?.success() {
+    let status = selector.wait(Duration::from_secs(30))?;
+    check_selector_markers(&gh)?;
+    if !status.success() {
         return Err(fail("aggregate expiry failed the selector step"));
     }
 

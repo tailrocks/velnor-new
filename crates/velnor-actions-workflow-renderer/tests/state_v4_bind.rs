@@ -26,6 +26,7 @@ pub(crate) fn run_bind(scene: &Scene, gh: &Gh, job: &Job, key: &str) -> Result<(
     let dir = gh.dir();
     let env = [
         ("FAKE_GH_DIR", dir.as_str()),
+        ("GH_TOKEN", "fixture"),
         ("GITHUB_REF", MAIN),
         ("VELNOR_STATE_SEAL_KEY", key),
         ("GITHUB_REPOSITORY", REPO),

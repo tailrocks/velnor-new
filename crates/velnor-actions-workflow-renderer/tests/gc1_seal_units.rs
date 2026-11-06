@@ -21,7 +21,10 @@ use velnor_actions_contract::workflow::state_seal::{state_attested_output, state
 use velnor_actions_workflow_renderer::plan_sources::state_select::{SealRoot, state_select_step};
 
 use crate::gc1_scene::{Scene, fail};
-use crate::gc1_seal_support::{Gh, MAIN, OTHER_WORKFLOW_REF, REPO};
+use crate::gc1_seal_support::{
+    Gh, MAIN, OTHER_WORKFLOW_REF, REPO, check_selector_markers, clear_selector_markers,
+    require_selector_token_binding,
+};
 
 type SelectCommand = (String, Vec<(String, String)>);
 
@@ -177,15 +180,7 @@ pub(crate) fn run_select_units_with_timeout(
     let (script, env) = select_script_env(scene, gh, units, extra, timeout)?;
     let pairs: Vec<(&str, &str)> = env.iter().map(|(k, v)| (k.as_str(), v.as_str())).collect();
     let output = scene.run_runner_script(&script, &pairs)?;
-    if PathBuf::from(gh.dir()).join("token-missing").exists() {
-        return Err(fail("gh child did not receive GH_TOKEN"));
-    }
-    if PathBuf::from(gh.dir())
-        .join("supervisor-payload-leaked")
-        .exists()
-    {
-        return Err(fail("selector internal environment reached a gh child"));
-    }
+    check_selector_markers(gh)?;
     Ok(output)
 }
 
@@ -208,6 +203,7 @@ fn select_script_env(
     extra: &[(&str, &str)],
     timeout: JobTimeout,
 ) -> Result<SelectCommand, Box<dyn Error>> {
+    clear_selector_markers(gh)?;
     match std::fs::remove_file(&scene.github_output) {
         Err(error) if error.kind() != std::io::ErrorKind::NotFound => return Err(error.into()),
         _ => {}
@@ -222,6 +218,7 @@ fn select_script_env(
         })
         .collect::<Result<Vec<_>, Box<dyn Error>>>()?;
     let step = state_select_step(&roots, timeout)?;
+    require_selector_token_binding(&step)?;
     let StepKind::Shell { run, env: step_env } = &step.kind else {
         return Err(fail("expected a shell step"));
     };

@@ -27,6 +27,13 @@ pub(crate) const MAIN: &str = "refs/heads/main";
 pub(crate) const PULL: &str = "refs/pull/9/merge";
 pub(crate) const ENTRY_ID: u64 = 7001;
 pub(crate) const ENTRY_SIZE: u64 = 4096;
+const SELECTOR_MARKERS: [(&str, &str); 2] = [
+    ("token-missing", "gh child did not receive GH_TOKEN"),
+    (
+        "supervisor-payload-leaked",
+        "selector internal environment reached a gh child",
+    ),
+];
 
 pub(crate) const SLEEP_SHIM: &str =
     "#!/bin/sh\nprintf '%s\\n' \"$1\" >> \"${FAKE_GH_DIR:?}/sleeps\"\n";
@@ -278,12 +285,47 @@ pub(crate) fn script_and_env_of(step: &Step) -> Result<ShellScriptWithEnv, Box<d
     }
 }
 
+pub(crate) fn require_selector_token_binding(step: &Step) -> Result<(), Box<dyn Error>> {
+    let StepKind::Shell { env, .. } = &step.kind else {
+        return Err(fail("expected a shell step"));
+    };
+    if env.get("GH_TOKEN").map(String::as_str) != Some("${{ github.token }}") {
+        return Err(fail("selector step lost its generated GH_TOKEN binding"));
+    }
+    Ok(())
+}
+
+pub(crate) fn clear_selector_markers(gh: &Gh) -> Result<(), Box<dyn Error>> {
+    for (marker, _) in SELECTOR_MARKERS {
+        match std::fs::remove_file(PathBuf::from(gh.dir()).join(marker)) {
+            Err(error) if error.kind() != std::io::ErrorKind::NotFound => {
+                return Err(error.into());
+            }
+            _ => {}
+        }
+    }
+    Ok(())
+}
+
+pub(crate) fn check_selector_markers(gh: &Gh) -> Result<(), Box<dyn Error>> {
+    for (marker, message) in SELECTOR_MARKERS {
+        match std::fs::symlink_metadata(PathBuf::from(gh.dir()).join(marker)) {
+            Ok(_) => return Err(fail(message)),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => return Err(error.into()),
+        }
+    }
+    Ok(())
+}
+
 pub(crate) fn select_script(root: &str) -> Result<ShellScriptWithEnv, Box<dyn Error>> {
     let root = SealRoot {
         unit: StateUnit::Union,
         slug: RootSlug::from_root(root)?,
     };
-    script_and_env_of(&state_select_step(&[root], JobTimeout::PLAN)?)
+    let step = state_select_step(&[root], JobTimeout::PLAN)?;
+    require_selector_token_binding(&step)?;
+    script_and_env_of(&step)
 }
 
 pub(crate) fn run_select(
@@ -292,6 +334,7 @@ pub(crate) fn run_select(
     root: &str,
     extra: &[(&str, &str)],
 ) -> Result<String, Box<dyn Error>> {
+    clear_selector_markers(gh)?;
     match std::fs::remove_file(&scene.github_output) {
         Err(error) if error.kind() != std::io::ErrorKind::NotFound => return Err(error.into()),
         _ => {}
@@ -318,15 +361,7 @@ pub(crate) fn run_select(
         .map(|(key, value)| (key.as_str(), value.as_str()))
         .collect();
     let output = scene.run_script(&script, &pairs, None)?;
-    if PathBuf::from(gh.dir()).join("token-missing").exists() {
-        return Err(fail("gh child did not receive GH_TOKEN"));
-    }
-    if PathBuf::from(gh.dir())
-        .join("supervisor-payload-leaked")
-        .exists()
-    {
-        return Err(fail("selector internal environment reached a gh child"));
-    }
+    check_selector_markers(gh)?;
     Ok(output)
 }
 

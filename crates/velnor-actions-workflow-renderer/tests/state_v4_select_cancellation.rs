@@ -11,7 +11,7 @@ use std::time::{Duration, Instant};
 use velnor_actions_contract::workflow::cache_family::StateUnit;
 
 use crate::gc1_scene::{Scene, fail};
-use crate::gc1_seal_support::{Attestation, Gh, MAIN};
+use crate::gc1_seal_support::{Attestation, Gh, MAIN, check_selector_markers};
 use crate::gc1_seal_units::{
     group_is_live, hang_keys, hung_processes_gone, process_is_reaped, rendezvous,
     spawn_select_units, unit_key,
@@ -276,7 +276,9 @@ fn run_cancellation_case(
     }
     send_signal(signal, &pid)?;
     fs::write(&signal_ack, "continue\n")?;
-    let actual = selector.wait(Duration::from_secs(10))?.code();
+    let exit_status = selector.wait(Duration::from_secs(10))?;
+    check_selector_markers(&gh)?;
+    let actual = exit_status.code();
     if actual != Some(status) {
         return Err(fail(&format!(
             "{signal} cancellation returned {actual:?}, wanted {status}"
