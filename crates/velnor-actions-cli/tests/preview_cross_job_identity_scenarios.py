@@ -30,7 +30,8 @@ sdk_temporary = None
 if sdk_path.stat().st_size > bootstrap.MAX_PAYLOAD:
     sdk_temporary = tempfile.TemporaryDirectory(prefix="source-preview-sdk-")
     bounded_sdk = Path(sdk_temporary.name) / "velnor-actions"
-    subprocess.run(["/usr/bin/strip", "--strip-debug", "--output=" + str(bounded_sdk), str(sdk_path)], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    stripped = subprocess.run(["/usr/bin/strip", "--strip-debug", "-o", str(bounded_sdk), str(sdk_path)], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+    assert stripped.returncode == 0, "cannot strip genuine SDK debug symbols: " + stripped.stderr.decode(errors="replace")
     bounded_sdk.chmod(0o700)
     sdk_path = bounded_sdk
     version = subprocess.run([str(sdk_path), "--version"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
