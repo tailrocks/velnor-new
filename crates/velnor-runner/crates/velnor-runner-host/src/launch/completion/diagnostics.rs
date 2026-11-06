@@ -107,11 +107,90 @@ pub(in crate::launch) use capture::{
     NativeCaptureRequest, RunnerLogWriteContext, capture_native, delete_after_capture,
     persist_runner_log_projection, persist_runner_log_state,
 };
+pub use runner_log_state::CapturePhase;
 pub(in crate::launch) use runner_log_state::{
-    CaptureBinding, CaptureBindingInput, CapturePhase, CaptureState, binding as runner_log_binding,
+    CaptureBinding, CaptureBindingInput, CaptureState, binding as runner_log_binding,
     read_projection as read_runner_log_projection, read_state as read_runner_log_state,
     recover_terminal_projection as recover_runner_log_projection,
 };
+
+pub fn verify_runner_log_capture_completion(
+    state_dir: &Path,
+    exit_code: i64,
+    archive: Vec<u8>,
+) -> Result<CapturePhase, HostError> {
+    let root = DiagnosticsRoot::open_for_journal(state_dir, "journal-1".to_owned(), "conn-1")?;
+    let runner_id = "1".repeat(64);
+    let dind_id = "2".repeat(64);
+    let exec_id = "3".repeat(64);
+    let binding = runner_log_binding(
+        &root,
+        &CaptureBindingInput {
+            intent_id: 1,
+            reservation_id: 2,
+            operation_id: 3,
+            topology_version: 1,
+            engine_id: "engine-1",
+            docker_root_digest: &"4".repeat(64),
+            runner_container_id: &runner_id,
+            dind_container_id: &dind_id,
+            runner_home_volume: "velnor-home-1",
+        },
+    )?;
+    let inspect = bollard::models::ExecInspectResponse {
+        id: Some(exec_id.clone()),
+        container_id: Some(dind_id),
+        running: Some(false),
+        exit_code: Some(exit_code),
+        ..Default::default()
+    };
+    let checked = validate_runner_log_exec_exit(&exec_id, &inspect, archive)?;
+    let started = Instant::now();
+    let cancelled = AtomicBool::new(false);
+    let prepared = CaptureState::prepared(binding.clone(), 1);
+    runner_log_state::CaptureStateRequest::new(&root, &binding, &prepared, started)?
+        .write_request(&cancelled)?;
+    let create_req = prepared.next_create_request()?;
+    runner_log_state::CaptureStateRequest::new(&root, &binding, &create_req, started)?
+        .write_request(&cancelled)?;
+    let created = create_req.created(exec_id)?;
+    runner_log_state::CaptureStateRequest::new(&root, &binding, &created, started)?
+        .write_request(&cancelled)?;
+    let start_req = created.next_start_request()?;
+    runner_log_state::CaptureStateRequest::new(&root, &binding, &start_req, started)?
+        .write_request(&cancelled)?;
+    let terminal = start_req.terminal(exit_code)?;
+    runner_log_state::CaptureStateRequest::new(&root, &binding, &terminal, started)?
+        .write_request(&cancelled)?;
+    let stage = runner_logs::RunnerLogStageRequest::new(
+        &root,
+        stage::OperationKey {
+            journal_identity: binding.journal_identity.clone(),
+            connection_id: binding.connection_id.clone(),
+            intent_id: binding.intent_id,
+        },
+        terminal.attempt,
+        &binding.runner_container_id,
+        &checked,
+        started,
+    )?;
+    let has_trace = stage.availability() != runner_logs::RunnerLogAvailability::None;
+    let (digest, size) = stage.projection_identity();
+    let pending = terminal.projection_pending(digest, size, has_trace)?;
+    runner_log_state::CaptureStateRequest::new(&root, &binding, &pending, started)?
+        .write_request(&cancelled)?;
+    stage.write_request(&cancelled)?;
+    let projected = pending.projected()?;
+    runner_log_state::CaptureStateRequest::new(&root, &binding, &projected, started)?
+        .write_request(&cancelled)?;
+    super::cleanup::admit_terminal_capture_phase(projected.phase)
+        .map_err(|failure| failure.error)?;
+    let replayed = read_runner_log_state(&root, &binding)?.ok_or(HostError::Ownership)?;
+    read_runner_log_projection(&root, &binding, &replayed)?;
+    super::cleanup::admit_terminal_capture_phase(replayed.phase)
+        .map_err(|failure| failure.error)?;
+    Ok(replayed.phase)
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(in crate::launch) enum RunnerLogAvailability {

@@ -15,20 +15,17 @@ use crate::{
 };
 
 pub(crate) mod identity;
-mod request;
 
 pub use crate::execution_channel_wire::{
     ExecutionChannelContext, ExecutionChannelDirectory, ExecutionChannelObservation,
     ExecutionRequestContext, ExecutionRequestOutcome, ExecutionRequestRecord,
 };
+use crate::execution_request::read_request_file;
 use identity::{mount_namespace_id, read_boot_id};
-use request::read_request_file;
 
 const CONTROL_PATH: &str = "/opt/velnor/source-proof/control";
 const INBOX_PATH: &str = "/opt/velnor/source-proof/inbox";
 const JOB_FACTS_PATH: &str = "/opt/velnor/job-facts";
-pub(super) const REQUEST_FILE: &str = "request.json";
-pub(super) const REQUEST_LIMIT: usize = 16 * 1024;
 const MOUNTINFO_PATH: &str = "/proc/self/mountinfo";
 const MOUNTINFO_LIMIT: usize = 64 * 1024;
 const CONTROL_OWNER: (u32, u32) = (0, 0);

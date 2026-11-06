@@ -84,13 +84,14 @@ async fn resume_capture(
     let mut state =
         current.unwrap_or_else(|| diagnostics::CaptureState::prepared(binding.clone(), 1));
     match state.phase {
-        diagnostics::CapturePhase::Complete => {
-            verify_saved_projection(context, binding, &state, true)?;
+        diagnostics::CapturePhase::Complete | diagnostics::CapturePhase::Unavailable => {
+            verify_saved_projection(
+                context,
+                binding,
+                &state,
+                state.phase == diagnostics::CapturePhase::Complete,
+            )?;
             return Ok(CaptureResume::Done);
-        }
-        diagnostics::CapturePhase::Unavailable => {
-            verify_saved_projection(context, binding, &state, false)?;
-            return Err(Failure::not_proven("runner logs unavailable"));
         }
         diagnostics::CapturePhase::ProjectionPending => {
             return resume_pending_projection(context, launch, claim, budget, binding, state).await;
@@ -138,13 +139,8 @@ async fn resume_pending_projection(
             .projected()
             .map_err(|error| Failure::request("runner log recovery", error))?;
         persist_state(context, launch, claim, budget, binding, &state).await?;
-        return match state.phase {
-            diagnostics::CapturePhase::Complete => Ok(CaptureResume::Done),
-            diagnostics::CapturePhase::Unavailable => {
-                Err(Failure::not_proven("runner logs unavailable"))
-            }
-            _ => Err(Failure::not_proven("runner log recovery state")),
-        };
+        admit_terminal_capture_phase(state.phase)?;
+        return Ok(CaptureResume::Done);
     }
     if context
         .diagnostics
@@ -162,6 +158,19 @@ fn retry_capture(state: &diagnostics::CaptureState) -> Result<diagnostics::Captu
     state
         .retry_after_terminal()
         .map_err(|error| Failure::request("runner log retry", error))
+}
+
+pub(in crate::launch) fn admit_terminal_capture_phase(
+    phase: diagnostics::CapturePhase,
+) -> Result<(), Failure> {
+    if matches!(
+        phase,
+        diagnostics::CapturePhase::Complete | diagnostics::CapturePhase::Unavailable
+    ) {
+        Ok(())
+    } else {
+        Err(Failure::not_proven("runner logs unavailable"))
+    }
 }
 
 async fn capture_attempts(
@@ -202,11 +211,7 @@ async fn capture_attempts(
                 &state,
             )
             .await?;
-            return if state.phase == diagnostics::CapturePhase::Complete {
-                Ok(())
-            } else {
-                Err(Failure::not_proven("runner logs unavailable"))
-            };
+            return admit_terminal_capture_phase(state.phase);
         }
         if terminal.attempt >= MAX_CAPTURE_ATTEMPTS {
             return Err(Failure::not_proven("runner log output unavailable"));

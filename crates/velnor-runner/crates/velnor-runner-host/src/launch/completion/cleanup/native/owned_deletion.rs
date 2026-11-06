@@ -28,6 +28,7 @@ mod runner_logs;
 pub(in crate::launch) use retirement::{
     remove_owned_resources_for_jit_conflict, remove_owned_resources_for_retirement,
 };
+pub(in crate::launch) use runner_logs::admit_terminal_capture_phase;
 
 const REQUEST_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
 

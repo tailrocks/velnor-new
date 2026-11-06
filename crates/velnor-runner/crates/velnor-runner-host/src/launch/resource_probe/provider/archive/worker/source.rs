@@ -129,7 +129,14 @@ fn verify_build_metadata(
         .iter()
         .filter(|(key, _)| key.starts_with("localdir:"))
         .all(|(_, value)| value.as_str().is_some_and(|dir| !dir.is_empty()));
-    if statement.get("_type").and_then(Value::as_str) != Some("https://in-toto.io/Statement/v0.1")
+    let valid_statement_type = matches!(
+        statement.get("_type").and_then(Value::as_str),
+        Some("https://in-toto.io/Statement/v0.1" | "https://in-toto.io/Statement/v1")
+    );
+    let valid_request_keys = request.keys().all(|key| {
+        ["frontend", "locals", "args", "root", "compatibilityVersion"].contains(&key.as_str())
+    });
+    if !valid_statement_type
         || statement.get("predicateType").and_then(Value::as_str) != Some(SLSA_PREDICATE)
         || build.get("buildType").and_then(Value::as_str) != Some(BUILD_KIT_TYPE)
         || config_source.get("path").and_then(Value::as_str) != Some("Dockerfile")
@@ -137,7 +144,7 @@ fn verify_build_metadata(
         || !valid_locals
         || external.len() != 2
         || config_source.len() != 1
-        || request.len() != 2
+        || !valid_request_keys
         || build.len() != 4
         || builder_platform != Some(PLATFORM)
         || context != Some(image.source_context())

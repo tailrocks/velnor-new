@@ -80,10 +80,14 @@ pub(crate) mod verified_images;
 
 pub use bootstrap::{BootstrapContainerRole, runner_pair_environment};
 pub(crate) use completion::CompletionWorker;
+pub use completion::{CapturePhase, verify_runner_log_capture_completion};
 pub use execution_authorization::verify_persisted_execution_source_role;
 pub(crate) use gate::{gate_line, reconcile_gate};
 pub(crate) use resource_probe::prepare_worker_images;
-pub use resource_probe::{WorkerImage, verify_worker_build_source, verify_worker_runtime_config};
+pub use resource_probe::{
+    WorkerImage, verify_worker_attestation_manifest, verify_worker_build_source,
+    verify_worker_runtime_config,
+};
 pub(crate) use verified_images::{VerifiedImageIdentity, VerifiedWorkerImages};
 
 pub(crate) async fn startup_storage_profile(

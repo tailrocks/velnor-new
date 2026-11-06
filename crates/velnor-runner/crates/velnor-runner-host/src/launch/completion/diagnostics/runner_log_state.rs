@@ -38,7 +38,7 @@ pub(in crate::launch) struct CaptureBinding {
 
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
-pub(in crate::launch) enum CapturePhase {
+pub enum CapturePhase {
     Prepared,
     Created,
     StartRequested,
@@ -121,9 +121,9 @@ impl CaptureState {
                 && self.exit_code != Some(0)
             || matches!(self.phase, CapturePhase::ProjectionPending)
                 && self.has_trace == Some(false)
-                && !matches!(self.exit_code, Some(0 | 3))
+                && !matches!(self.exit_code, Some(0 | 3 | 24))
             || matches!(self.phase, CapturePhase::Unavailable)
-                && (self.has_trace != Some(false) || !matches!(self.exit_code, Some(0 | 3)))
+                && (self.has_trace != Some(false) || !matches!(self.exit_code, Some(0 | 3 | 24)))
         {
             return Err(HostError::Ownership);
         }
@@ -212,7 +212,7 @@ impl CaptureState {
     ) -> Result<Self, HostError> {
         if self.phase != CapturePhase::Terminal
             || has_trace && self.exit_code != Some(0)
-            || !has_trace && !matches!(self.exit_code, Some(0 | 3))
+            || !has_trace && !matches!(self.exit_code, Some(0 | 3 | 24))
             || size == 0
             || size > PROJECTION_BYTES
         {

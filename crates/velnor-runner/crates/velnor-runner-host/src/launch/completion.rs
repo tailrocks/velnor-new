@@ -9,6 +9,7 @@ mod reaper;
 pub(in crate::launch) use cleanup::{
     remove_owned_resources_for_jit_conflict, remove_owned_resources_for_retirement,
 };
+pub use diagnostics::{CapturePhase, verify_runner_log_capture_completion};
 
 use reaper::ReapTask;
 

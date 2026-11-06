@@ -2,8 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::error::Error;
+use std::fs::{self, File};
+use std::os::unix::fs::{MetadataExt, PermissionsExt};
 
 use velnor_resource_probe::ProbeError;
+use velnor_resource_probe::execution_request::{
+    REQUEST_FILE, open_request, read_request_file, read_request_file_with_open,
+};
 use velnor_resource_probe::job_hook::{
     Challenge, Decision, SourceRequest, canonical_json, sha256, validate_challenge,
     validate_decision,
@@ -182,4 +187,89 @@ fn public_job_hook_rejects_malformed_challenge_fields() {
         validate_challenge(&uppercase_nonce),
         Err(ProbeError::Invalid("job_hook_challenge"))
     ));
+}
+
+struct ScopedTempDir(std::path::PathBuf);
+
+impl ScopedTempDir {
+    fn new(label: &str) -> std::io::Result<Self> {
+        let path = std::env::temp_dir().join(format!(
+            "velnor-{label}-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_or(0, |d| d.as_nanos())
+        ));
+        fs::create_dir_all(&path)?;
+        Ok(Self(path))
+    }
+
+    fn path(&self) -> &std::path::Path {
+        &self.0
+    }
+}
+
+impl Drop for ScopedTempDir {
+    fn drop(&mut self) {
+        drop(fs::remove_dir_all(&self.0));
+    }
+}
+
+#[test]
+fn public_inbox_request_poll_returns_none_when_published_after_initial_enoent_and_reads_on_next_poll()
+-> TestResult<()> {
+    let temp = ScopedTempDir::new("inbox-request-poll")?;
+    let inbox_path = temp.path().join("inbox");
+    fs::create_dir(&inbox_path)?;
+    fs::set_permissions(&inbox_path, fs::Permissions::from_mode(0o700))?;
+    let inbox = File::open(&inbox_path)?;
+    let meta = inbox.metadata()?;
+    let (uid, gid) = (meta.uid(), meta.gid());
+
+    let staged_path = inbox_path.join(".request.tmp");
+    let request_path = inbox_path.join(REQUEST_FILE);
+    let payload = b"{\"schema_version\":1}\n";
+    fs::write(&staged_path, payload)?;
+    fs::set_permissions(&staged_path, fs::Permissions::from_mode(0o600))?;
+
+    let mut open_calls = 0_usize;
+    let first_poll = read_request_file_with_open(&inbox, uid, gid, |dir| {
+        open_calls += 1;
+        let result = open_request(dir)?;
+        if open_calls == 1 && result.is_none() {
+            fs::rename(&staged_path, &request_path)
+                .map_err(|_| ProbeError::Invalid("test_rename"))?;
+        }
+        Ok(result)
+    })?;
+    assert_eq!(first_poll, None);
+
+    let (read_bytes, read_meta) =
+        read_request_file(&inbox, uid, gid)?.ok_or("expected request.json on second poll")?;
+    assert_eq!(read_bytes, payload);
+    assert_eq!(read_meta.size, payload.len() as u64);
+
+    let replacement_path = inbox_path.join(".replacement.tmp");
+    fs::write(&replacement_path, b"{\"schema_version\":2}\n")?;
+    fs::set_permissions(&replacement_path, fs::Permissions::from_mode(0o600))?;
+    let mut second_poll_opens = 0_usize;
+    let mid_read_swap = read_request_file_with_open(&inbox, uid, gid, |dir| {
+        second_poll_opens += 1;
+        if second_poll_opens == 2 {
+            fs::rename(&replacement_path, &request_path)
+                .map_err(|_| ProbeError::Invalid("test_rename"))?;
+        }
+        open_request(dir)
+    });
+    assert!(matches!(
+        mid_read_swap,
+        Err(ProbeError::Invalid("execution_request_changed"))
+    ));
+
+    fs::set_permissions(&request_path, fs::Permissions::from_mode(0o644))?;
+    assert!(matches!(
+        read_request_file(&inbox, uid, gid),
+        Err(ProbeError::Invalid("execution_request_file"))
+    ));
+    Ok(())
 }

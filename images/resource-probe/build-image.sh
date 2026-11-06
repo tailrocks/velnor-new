@@ -42,7 +42,7 @@ esac
 
 docker build --platform linux/amd64 --network none --build-arg "SOURCE_SHA=$source_sha" --tag "$image" "$context"
 chmod 0755 "$smoke_root"
-docker run --rm --pull=never --platform linux/amd64 --network none --read-only --cap-drop=ALL --security-opt no-new-privileges:true --user 65532:65532 --mount "type=bind,source=$smoke_root,target=/velnor/docker-root,readonly" "$image" > "$smoke_output" 2> "$smoke_error"
+docker run --rm --pull=never --platform linux/amd64 --cgroupns=host --pid=host --network none --read-only --cap-drop=ALL --security-opt no-new-privileges:true --user 65532:65532 --mount "type=bind,source=$smoke_root,target=/velnor/docker-root,readonly" "$image" > "$smoke_output" 2> "$smoke_error"
 test ! -s "$smoke_error"
 "$release_validator" validate-smoke "$smoke_output" "$smoke_root"
 docker image save --platform linux/amd64 --output "$archive" "$image"
@@ -54,7 +54,11 @@ docker image inspect --platform linux/amd64 "$image" > "$inspect_json"
 if docker image inspect --platform linux/amd64 velnor-runner:linux-amd64 >/dev/null 2>&1 \
   && docker image inspect --platform linux/amd64 velnor-dind:linux-amd64 >/dev/null 2>&1; then
   if [[ ! -x "$target_dir/x86_64-unknown-linux-musl/release/velnor-storage-init" || ! -x "$target_dir/x86_64-unknown-linux-musl/release/velnor-job-start-hook" ]]; then
-    cargo build --manifest-path crates/velnor-runner/Cargo.toml --locked --release --target x86_64-unknown-linux-musl -p velnor-resource-probe --bin velnor-storage-init --bin velnor-job-start-hook
+    if [[ -n "${VELNOR_TOOL_RUST-}" ]] && command -v mise >/dev/null 2>&1; then
+      mise --no-config --no-env --no-hooks exec "rust@${VELNOR_TOOL_RUST}" -- cargo build --manifest-path crates/velnor-runner/Cargo.toml --locked --release --target x86_64-unknown-linux-musl -p velnor-resource-probe --bin velnor-storage-init --bin velnor-job-start-hook
+    else
+      cargo build --manifest-path crates/velnor-runner/Cargo.toml --locked --release --target x86_64-unknown-linux-musl -p velnor-resource-probe --bin velnor-storage-init --bin velnor-job-start-hook
+    fi
   fi
   stage_root="$workdir/stages"
   mkdir -m 0755 \
@@ -79,8 +83,9 @@ if docker image inspect --platform linux/amd64 velnor-runner:linux-amd64 >/dev/n
       *) printf 'worker helper is not a static ELF64 x86-64 executable: %s\n' "$helper_desc" >&2; exit 1 ;;
     esac
   done
+  export BUILDX_NO_DEFAULT_OCI_ARTIFACT=1
   docker buildx build \
-    --provenance=mode=max \
+    --provenance=mode=min \
     --platform linux/amd64 \
     --build-arg "VELNOR_SOURCE_SHA=$source_sha" \
     --build-context "resource_probe=$stage_root/resource-probe" \
@@ -91,7 +96,7 @@ if docker image inspect --platform linux/amd64 velnor-runner:linux-amd64 >/dev/n
     --load \
     images/runner/ubuntu-26.04
   docker buildx build \
-    --provenance=mode=max \
+    --provenance=mode=min \
     --platform linux/amd64 \
     --build-arg "VELNOR_SOURCE_SHA=$source_sha" \
     --build-context "resource_probe=$stage_root/resource-probe" \

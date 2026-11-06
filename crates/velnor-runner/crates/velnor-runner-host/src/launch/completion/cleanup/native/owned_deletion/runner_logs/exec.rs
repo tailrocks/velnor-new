@@ -41,7 +41,7 @@ pub(super) async fn capture_attempt(
             let inspected = wait_for_exec(input, budget, &state).await?;
             if let Some(exit_code) = inspected.exit_code {
                 let terminal = save_terminal(input, budget, state, &inspected).await?;
-                if matches!(exit_code, 0 | 3) {
+                if matches!(exit_code, 0 | 3 | 24) {
                     let exec_id = terminal
                         .exec_id
                         .as_deref()

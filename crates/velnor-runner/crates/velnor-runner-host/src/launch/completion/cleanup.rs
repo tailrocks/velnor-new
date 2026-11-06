@@ -9,7 +9,8 @@ mod runner;
 mod service_loop;
 
 pub(in crate::launch) use native::{
-    remove_owned_resources_for_jit_conflict, remove_owned_resources_for_retirement,
+    admit_terminal_capture_phase, remove_owned_resources_for_jit_conflict,
+    remove_owned_resources_for_retirement,
 };
 
 pub(super) use service_loop::run;

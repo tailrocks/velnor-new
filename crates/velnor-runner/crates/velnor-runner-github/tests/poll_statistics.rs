@@ -2,6 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use serde_json::{Value, json};
+use velnor_runner_github::workflow_run::{
+    HookSourceError, RepositoryTarget, UntrustedHookSourceInput, compare_hook_source,
+};
 use velnor_runner_github::{
     CAPACITY_HEADER, Certainty, InnerJob, MAX_POLL_BODY_BYTES, Method, Poll, RefreshGate,
     Statistics, TransportFail, WireError, parse_poll, poll,
@@ -9,7 +12,7 @@ use velnor_runner_github::{
 
 mod common;
 
-use common::{QUEUE, Script, header};
+use common::{QUEUE, Script, exchange, header};
 
 const STATISTICS_ONLY: &str = include_str!("fixtures/scaleset/message_stats_only.json");
 const STATISTICS: &str = r#""statistics":{"totalAcquiredJobs":0,"totalAssignedJobs":2,"totalAvailableJobs":1,"totalBusyRunners":1,"totalIdleRunners":1,"totalRegisteredRunners":2,"totalRunningJobs":1}"#;
@@ -293,4 +296,75 @@ fn full_statistics_value() -> Value {
         "totalBusyRunners": 1,
         "totalIdleRunners": 1,
     })
+}
+
+#[test]
+fn compare_hook_source_matches_unqualified_branch_and_tag_run_paths_and_rejects_mismatched_refs() {
+    let sha = "1".repeat(40);
+    let commit_body =
+        json!({"sha": sha, "message": "c", "tree": {"sha": "2".repeat(40)}, "parents": []})
+            .to_string();
+    let target = RepositoryTarget {
+        id: 1_438_742_200,
+        owner: "donbeave",
+        name: "essential-mise",
+    };
+
+    for (event_ref, run_suffix, should_match) in [
+        ("refs/heads/main", "main", true),
+        ("refs/heads/main", "refs/heads/main", true),
+        ("refs/tags/v1.2.3", "v1.2.3", true),
+        ("refs/heads/main", "other", false),
+        ("refs/heads/main", "refs/tags/main", false),
+    ] {
+        let (event_name, head_branch) = event_ref
+            .strip_prefix("refs/tags/")
+            .map_or(("push", "main"), |tag| ("release", tag));
+        let run_path = format!(".github/workflows/ci.yml@{run_suffix}");
+        let workflow_ref = format!("donbeave/essential-mise/.github/workflows/ci.yml@{event_ref}");
+        let input_bytes = serde_json::to_vec(&json!({
+            "repository_id": 1_438_742_200_i64,
+            "repository": "donbeave/essential-mise",
+            "run_id": 9001_i64,
+            "run_attempt": 1_i64,
+            "event_name": event_name,
+            "event_ref": event_ref,
+            "workflow_ref": workflow_ref,
+            "workflow_sha": sha,
+            "tested_sha": sha,
+            "job_workflow_ref": workflow_ref,
+            "workflow_job_id": "verify__local"
+        }))
+        .expect("input bytes");
+        let input = UntrustedHookSourceInput::decode(&input_bytes).expect("decode hook input");
+        let run_body = json!({
+            "id": 9001,
+            "event": event_name,
+            "path": run_path,
+            "head_branch": head_branch,
+            "head_sha": sha,
+            "workflow_id": 77,
+            "run_attempt": 1,
+            "repository": {
+                "id": 1_438_742_200,
+                "name": "essential-mise",
+                "full_name": "donbeave/essential-mise",
+                "owner": { "login": "donbeave" },
+                "private": true
+            }
+        })
+        .to_string();
+        let mut script = Script::replies(vec![
+            Ok(exchange(200, &run_body)),
+            Ok(exchange(200, &commit_body)),
+            Ok(exchange(200, &commit_body)),
+        ]);
+        let outcome = compare_hook_source(&mut script, &input, target, "token-1");
+        if should_match {
+            let facts = outcome.expect(&run_path);
+            assert_eq!(facts.workflow_source().0, workflow_ref);
+        } else {
+            assert_eq!(outcome, Err(HookSourceError::Mismatch), "{run_path}");
+        }
+    }
 }

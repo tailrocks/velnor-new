@@ -7,33 +7,43 @@ use rustix::fs::{Mode, OFlags, openat};
 
 use crate::ProbeError;
 
-use super::{REQUEST_FILE, REQUEST_LIMIT};
+pub const REQUEST_FILE: &str = "request.json";
+pub const REQUEST_LIMIT: usize = 16 * 1024;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) struct RequestMetadata {
-    pub(super) inode: u64,
-    pub(super) user_id: u32,
-    pub(super) group_id: u32,
-    pub(super) mode: u32,
-    pub(super) size: u64,
-    pub(super) modified_seconds: i64,
-    pub(super) modified_nanoseconds: i64,
-    pub(super) changed_seconds: i64,
-    pub(super) changed_nanoseconds: i64,
+pub struct RequestMetadata {
+    pub inode: u64,
+    pub user_id: u32,
+    pub group_id: u32,
+    pub mode: u32,
+    pub size: u64,
+    pub modified_seconds: i64,
+    pub modified_nanoseconds: i64,
+    pub changed_seconds: i64,
+    pub changed_nanoseconds: i64,
 }
 
-pub(super) fn read_request_file(
+pub fn read_request_file(
     inbox: &File,
     user_id: u32,
     group_id: u32,
 ) -> Result<Option<(Vec<u8>, RequestMetadata)>, ProbeError> {
-    let Some((bytes, before, after)) = read_once(inbox, user_id, group_id)? else {
-        if open_request(inbox)?.is_some() {
-            return Err(ProbeError::Invalid("execution_request_changed"));
-        }
+    read_request_file_with_open(inbox, user_id, group_id, open_request)
+}
+
+pub fn read_request_file_with_open<F>(
+    inbox: &File,
+    user_id: u32,
+    group_id: u32,
+    mut open_fn: F,
+) -> Result<Option<(Vec<u8>, RequestMetadata)>, ProbeError>
+where
+    F: FnMut(&File) -> Result<Option<File>, ProbeError>,
+{
+    let Some((bytes, before, after)) = read_once(inbox, user_id, group_id, &mut open_fn)? else {
         return Ok(None);
     };
-    let (confirmed, reopened, final_state) = read_once(inbox, user_id, group_id)?
+    let (confirmed, reopened, final_state) = read_once(inbox, user_id, group_id, &mut open_fn)?
         .ok_or(ProbeError::Invalid("execution_request_changed"))?;
     ensure_stable_identity(before, after, reopened, final_state)?;
     ensure_stable_content(&bytes, &confirmed)?;
@@ -61,12 +71,16 @@ pub(super) fn ensure_stable_content(first: &[u8], second: &[u8]) -> Result<(), P
     }
 }
 
-fn read_once(
+fn read_once<F>(
     inbox: &File,
     user_id: u32,
     group_id: u32,
-) -> Result<Option<(Vec<u8>, RequestMetadata, RequestMetadata)>, ProbeError> {
-    let Some(file) = open_request(inbox)? else {
+    open_fn: &mut F,
+) -> Result<Option<(Vec<u8>, RequestMetadata, RequestMetadata)>, ProbeError>
+where
+    F: FnMut(&File) -> Result<Option<File>, ProbeError>,
+{
+    let Some(file) = open_fn(inbox)? else {
         return Ok(None);
     };
     let before = request_metadata(&file, user_id, group_id)?;
@@ -83,7 +97,7 @@ fn read_once(
     Ok(Some((bytes, before, after)))
 }
 
-fn open_request(inbox: &File) -> Result<Option<File>, ProbeError> {
+pub fn open_request(inbox: &File) -> Result<Option<File>, ProbeError> {
     match openat(
         inbox,
         REQUEST_FILE,
