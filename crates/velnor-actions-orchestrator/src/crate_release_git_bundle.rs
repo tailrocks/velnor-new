@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{OrchestratorError, implementation::internal::internal};
+use crate::{OrchestratorError, internal::internal};
 use std::{fs, io::Read as _, path::Path, process::Command, time::Duration};
 use velnor_actions_mise::release_git_pin::{
     GIT_PACKAGE_SHA256, GIT_PACKAGE_URL, VerifiedGit, verify_bundle,
