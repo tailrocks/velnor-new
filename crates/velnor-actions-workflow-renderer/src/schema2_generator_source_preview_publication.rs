@@ -35,7 +35,10 @@ fn fields(name: &str, needs: &[&str], permissions: Yaml, output: bool) -> Vec<(S
     fields.push(("if".to_owned(), Yaml::str(TAG_PUSH)));
     fields.push((
         "environment".to_owned(),
-        Yaml::Map(vec![("name".to_owned(), Yaml::str("generator-release"))]),
+        Yaml::Map(vec![(
+            "name".to_owned(),
+            Yaml::str("generator-source-preview"),
+        )]),
     ));
     if output {
         fields.push((

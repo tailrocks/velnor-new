@@ -62,8 +62,25 @@ fn main_producer_tag_publisher_and_stable_calls_have_separate_authority_graphs()
     let draft = job(workflow, "source-preview-draft")?;
     assert!(draft.contains("needs.source-preview-source.outputs.source_artifact_id"));
     assert!(draft.contains("needs.source-preview-source.outputs.payload_artifact_id"));
-    let publish = job(workflow, "source-preview-publish")?;
-    assert!(publish.contains("generator-release"));
+    for id in [
+        "source-preview-draft",
+        "source-preview-attest",
+        "source-preview-publish",
+    ] {
+        let publication = job(workflow, id)?;
+        assert!(
+            publication.contains("    environment:\n      name: generator-source-preview\n"),
+            "{id}"
+        );
+        assert!(
+            !publication.contains("      name: generator-release\n"),
+            "{id}"
+        );
+    }
+    assert!(
+        job(workflow, "publish-generator")?
+            .contains("    environment:\n      name: generator-release\n")
+    );
     Ok(())
 }
 

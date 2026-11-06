@@ -42,7 +42,10 @@ The artifact contains exactly one regular SDK executable. The tag workflow
 retains those same bytes as an immutable artifact in the tag run.
 
 Source-free jobs create a draft, attest the canonical receipt and SDK together,
-and publish through the protected `generator-release` environment. These jobs
+and publish through the protected `generator-source-preview` environment. It
+requires the owner reviewer and admits only tags matching `sdk-preview-*` through
+a tag-specific deployment policy. The stable `generator-release` environment
+retains its separate protection. These jobs
 perform no repository checkout or candidate execution. They verify both signed
 subjects, certificate and run identities, the tag, draft identity, and exact
 asset hashes. The publisher rechecks source ancestry and the tag before

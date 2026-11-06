@@ -561,3 +561,12 @@ GitHub supports `queue: max` with `cancel-in-progress: false`, allowing up to
 pushes, SDK preview tags, and reusable release calls into distinct groups; SDK
 preview publications remain serialized within their channel. See the
 [workflow concurrency reference](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#concurrency).
+
+## SDK preview deployment admission
+
+GitHub defines protected-branches environment admission for branches. SDK preview
+publication uses the separate `generator-source-preview` environment with a
+selected `sdk-preview-*` tag policy and the owner reviewer. The stable
+`generator-release` environment retains its existing policy. See
+[deployment branches and tags](https://docs.github.com/en/actions/reference/workflows-and-actions/deployments-and-environments#deployment-branches-and-tags)
+and the [tag-specific deployment policy API](https://docs.github.com/en/rest/deployments/branch-policies#create-a-deployment-branch-policy).

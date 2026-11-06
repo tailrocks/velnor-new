@@ -1053,7 +1053,7 @@ jobs:
       - source-preview-source
     if: ${{ github.event_name == 'push' && github.repository == 'tailrocks/velnor-new' && startsWith(github.ref, 'refs/tags/sdk-preview-') }}
     environment:
-      name: generator-release
+      name: generator-source-preview
     outputs:
       artifact_id: ${{ steps.upload.outputs.artifact-id }}
     steps:
@@ -1095,7 +1095,7 @@ jobs:
       - source-preview-draft
     if: ${{ github.event_name == 'push' && github.repository == 'tailrocks/velnor-new' && startsWith(github.ref, 'refs/tags/sdk-preview-') }}
     environment:
-      name: generator-release
+      name: generator-source-preview
     outputs:
       artifact_id: ${{ steps.upload.outputs.artifact-id }}
     steps:
@@ -1140,7 +1140,7 @@ jobs:
       - source-preview-attest
     if: ${{ github.event_name == 'push' && github.repository == 'tailrocks/velnor-new' && startsWith(github.ref, 'refs/tags/sdk-preview-') }}
     environment:
-      name: generator-release
+      name: generator-source-preview
     steps:
       - name: Download admitted source metadata
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
