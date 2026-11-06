@@ -7,9 +7,9 @@ use serde_json::Value;
 
 use super::super::types::{Descriptor, OciManifest, Platform};
 use super::ProviderFailure;
-use super::layout::{get_blob, verify_descriptor};
+use super::layout::{get_blob, sha256, verify_descriptor};
 use super::model::{
-    ArchiveFiles, IN_TOTO_MEDIA_TYPE, OCI_CONFIG_MEDIA_TYPE, OCI_MANIFEST_MEDIA_TYPE,
+    ArchiveFiles, Blob, IN_TOTO_MEDIA_TYPE, OCI_CONFIG_MEDIA_TYPE, OCI_MANIFEST_MEDIA_TYPE,
     SLSA_PREDICATE, WorkerImage,
 };
 use crate::error::HostError;
@@ -31,9 +31,9 @@ pub fn verify_worker_attestation_manifest(
     platform_digest: &str,
     platform_size: u64,
     attestation_descriptor_json: &Value,
-    attestation_manifest_json: &Value,
-    config_json: &Value,
-    statement_json: &Value,
+    attestation_manifest_bytes: &[u8],
+    config_bytes: &[u8],
+    statement_bytes: &[u8],
 ) -> Result<(), HostError> {
     let platform_manifest = Descriptor {
         media_type: OCI_MANIFEST_MEDIA_TYPE.to_owned(),
@@ -48,11 +48,23 @@ pub fn verify_worker_attestation_manifest(
     };
     let descriptor: Descriptor = serde_json::from_value(attestation_descriptor_json.clone())
         .map_err(|_| HostError::Docker)?;
-    let manifest: OciManifest =
-        serde_json::from_value(attestation_manifest_json.clone()).map_err(|_| HostError::Docker)?;
-    verify_attestation_envelope(&platform_manifest, &descriptor, &manifest, config_json)
-        .map_err(|_| HostError::Docker)?;
-    super::source::verify_build_source(statement_json, image, source_sha, &platform_manifest)
+    let mut blobs = HashMap::new();
+    for raw in [attestation_manifest_bytes, config_bytes, statement_bytes] {
+        let digest = sha256(raw);
+        blobs.insert(
+            format!("blobs/sha256/{digest}"),
+            Blob {
+                digest,
+                size: raw.len() as u64,
+                metadata: Some(raw.to_vec()),
+            },
+        );
+    }
+    let archive = ArchiveFiles {
+        files: HashMap::new(),
+        blobs,
+    };
+    verify_buildkit_attestation(&archive, image, source_sha, &platform_manifest, &descriptor)
         .map_err(|_| HostError::Docker)
 }
 

@@ -279,7 +279,10 @@ fn public_inbox_request_poll_returns_none_when_published_after_initial_enoent_an
 
         barrier.wait();
         let wait_deadline = Instant::now() + Duration::from_secs(5);
-        while empty_polls.load(Ordering::Acquire) <= round % 4 && Instant::now() < wait_deadline {
+        while empty_polls.load(Ordering::Acquire) <= round % 4 {
+            if Instant::now() >= wait_deadline {
+                return Err("timed out waiting for initial empty poll".into());
+            }
             thread::yield_now();
         }
         fs::rename(&staged_path, &request_path)?;
