@@ -59,7 +59,7 @@
             } else {
                 source
             };
-            serde_json::json!({"total_count":1,"workflow_runs":[{"check_suite_id":123,"head_sha":sha,"path":".github/workflows/ci.yml","status":"completed","conclusion":"success"}]})
+            serde_json::json!({"total_count":1,"workflow_runs":[{"check_suite_id":123,"head_sha":sha,"path":".github/workflows/ci.yml","status":"completed","conclusion":"success","event":"push","head_branch":"main","repository":{"id":22,"full_name":"owner/project","owner":{"id":77,"login":"owner"}},"head_repository":{"id":22,"full_name":"owner/project","owner":{"id":77,"login":"owner"}}}]})
         } else {
             return None;
         };
