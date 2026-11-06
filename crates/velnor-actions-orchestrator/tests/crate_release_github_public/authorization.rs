@@ -25,10 +25,10 @@ fn authorization_binds_repository_and_owner_ids_to_the_run() {
             } else {
                 "other"
             };
-            if let Some((target, pointer, replacement)) = &self.change {
-                if *target == key {
-                    *value.pointer_mut(pointer).expect("field") = replacement.clone();
-                }
+            if let Some((target, pointer, replacement)) = &self.change
+                && *target == key
+            {
+                *value.pointer_mut(pointer).expect("field") = replacement.clone();
             }
             Ok(value)
         }
