@@ -70,6 +70,14 @@ pub(crate) fn is_inline_shell(argv: &[String]) -> bool {
 }
 
 pub(crate) fn inline_shell_script_at(argv: &[String]) -> Option<usize> {
+    if argv.first().is_some_and(|arg| arg == "exec")
+        && argv
+            .get(1)
+            .is_some_and(|arg| matches!(arg.as_str(), "sh" | "bash" | "/bin/sh"))
+        && argv.get(2).is_some_and(|arg| arg == "-c")
+    {
+        return argv.get(1..).is_some_and(is_inline_shell).then_some(3);
+    }
     if is_inline_shell(argv) {
         return Some(2);
     }
@@ -119,7 +127,7 @@ pub fn quote_run_arg(arg: &str) -> Result<String, RenderError> {
             .ok_or_else(|| RenderError::BadCommand("invalid_utf8_boundary".to_owned()))?;
         if ch == '\'' {
             flush_run_literal(&mut literal, &mut out);
-            out.push_str("'\\''");
+            out.push_str("\\'");
         } else {
             literal.push(ch);
         }
@@ -149,6 +157,7 @@ fn has_background_op(arg: &str) -> bool {
     }
     false
 }
+
 fn is_plain_run_token(arg: &str) -> bool {
     !arg.is_empty()
         && arg.bytes().all(|b| {
@@ -231,4 +240,38 @@ fn check_command_line(command: &str) -> Result<(), RenderError> {
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use std::process::Command;
+
+    use super::join_argv_for_run;
+
+    #[test]
+    fn shell_command_forms_preserve_environment_expansion_and_literal_values() {
+        let value = "literal $inner; * ' \" value";
+        for argv in [
+            vec![
+                "sh".to_owned(),
+                "-c".to_owned(),
+                "printf '%s' \"$TOKEN\"".to_owned(),
+            ],
+            vec![
+                "exec".to_owned(),
+                "sh".to_owned(),
+                "-c".to_owned(),
+                "printf '%s' \"$TOKEN\"".to_owned(),
+            ],
+        ] {
+            let run = join_argv_for_run(&argv).expect("the rendered shell command is valid");
+            let output = Command::new("bash")
+                .args(["--noprofile", "--norc", "-e", "-o", "pipefail", "-c", &run])
+                .env("TOKEN", value)
+                .output()
+                .expect("the rendered shell command starts");
+            assert!(output.status.success());
+            assert_eq!(output.stdout, value.as_bytes());
+        }
+    }
 }

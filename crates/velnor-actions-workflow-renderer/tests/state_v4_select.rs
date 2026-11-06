@@ -3,9 +3,13 @@
 
 use std::error::Error;
 
-use velnor_actions_contract::workflow::cache_family::{CacheFamily, outer_entry_bound};
+use velnor_actions_contract::JobTimeout;
+use velnor_actions_contract::workflow::StepKind;
+use velnor_actions_contract::workflow::cache_family::{
+    CacheFamily, RootSlug, StateUnit, outer_entry_bound,
+};
 use velnor_actions_contract::workflow::state_seal::{
-    STATE_SEAL_LIST_LIMIT, STATE_SEAL_VERIFY_LIMIT,
+    STATE_SEAL_LIST_LIMIT, STATE_SEAL_VERIFY_LIMIT, state_attested_output, state_produce_output,
 };
 
 use crate::gc1_scene::{Scene, fail};
@@ -13,11 +17,74 @@ use crate::gc1_seal_support::{
     Attestation, ENTRY_ID, ENTRY_SIZE, Gh, MAIN, PULL, REPO, digest, key, run_select, scope,
     selected,
 };
+use velnor_actions_workflow_renderer::plan_sources::state_select::{SealRoot, state_select_step};
+
+mod hex;
 
 const ROOT: &str = ".";
 const T1: &str = "2026-11-04T01:00:00Z";
 const T2: &str = "2026-11-04T02:00:00Z";
 const T3: &str = "2026-11-04T03:00:00Z";
+
+#[test]
+fn selector_keeps_supervisor_in_static_environment_and_loader_in_run() -> Result<(), Box<dyn Error>>
+{
+    let step = state_select_step(
+        &[SealRoot {
+            unit: StateUnit::Union,
+            slug: RootSlug::from_root(ROOT)?,
+        }],
+        JobTimeout::PLAN,
+    )?;
+    let StepKind::Shell { run, env } = step.kind else {
+        return Err(fail("selector step is not a shell step"));
+    };
+    let expected_record = format!(
+        "{} {} {}",
+        scope()?.prefix(),
+        state_attested_output("union", "root"),
+        state_produce_output("union", "root")
+    );
+    if env
+        .get("VELNOR_STATE_SELECT_UNIT_COUNT")
+        .map(String::as_str)
+        != Some("1")
+        || env.get("VELNOR_STATE_SELECT_UNIT_R0").map(String::as_str)
+            != Some(expected_record.as_str())
+    {
+        return Err(fail("selector typed unit manifest differs from its root"));
+    }
+    let payload = env
+        .get("VELNOR_STATE_SELECT_SUPERVISOR_HEX")
+        .ok_or_else(|| fail("selector supervisor environment is absent"))?;
+    let decoded = hex::decode_supervisor_hex(payload)?;
+    let source = String::from_utf8(decoded)?;
+    let supervisor_file = include_str!("../src/plan_sources/state_select_supervisor.rs");
+    let literal = supervisor_file
+        .split_once("r#\"")
+        .and_then(|(_, tail)| tail.split_once("\"#"))
+        .map(|(source, _)| source)
+        .ok_or_else(|| fail("supervisor source literal is missing"))?;
+    let expected = literal.replace("@MAX_DEADLINE@", "3600");
+    if source != expected {
+        return Err(fail(
+            "selector payload differs from the substituted supervisor source",
+        ));
+    }
+    let script = run.last().ok_or_else(|| fail("selector run is empty"))?;
+    if script.contains(payload)
+        || !script.contains("python3 -I -c")
+        || !script.contains(concat!(
+            "os.environ.pop(\"VELNOR_STATE_SELECT_",
+            "SUPERVISOR_HEX\")"
+        ))
+    {
+        return Err(fail(
+            "selector run does not isolate and remove its static payload",
+        ));
+    }
+    Ok(())
+}
 
 fn expect(got: &[String], want: &[&str], label: &str) -> Result<(), Box<dyn Error>> {
     if got == want {

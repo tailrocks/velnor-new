@@ -22,7 +22,7 @@
 - eeed16c78a52ba0d90d8c9354bab464bd40f6f0a12fad7ea048825751e3b1629  ./.github/scripts/velnor-tools-cache-identity.sh
 - 58467ec1e435cb355169d822edba9d926cb4d77bb2ea6d1c2582abc8d41ffd70  ./.github/velnor/task-execution-manifest-v1.json
 - 44fe3daa313de54ba47a295016c449b9c6b566110800cc9353cf12ff54c0648a  ./.github/workflows/cache-prune.yml
-- e5989db16b1ea0492c6bf0f8d3846d61af5bb3a578353728f78edef96cb1595f  ./.github/workflows/ci.yml
+- d1f4a0d27856d0116f4647964423904c646d598f72070bd2766129d5081001fa  ./.github/workflows/ci.yml
 - 97fe3daddf5a4e353958cba33690840c71cbc6a07f472cb907576752a0c5f676  ./.github/workflows/freshness.yml
 - 1eb3d047a9348606e9ce0590e94f831aa6706833ce7cf97ab379609e500b4139  ./.github/workflows/homebrew-adoption.yml
 - f2d4d834dad4666e325a15a8212e216dee8c17a7a86270d4deca88f7ecc26046  ./.github/workflows/job-image-candidate.yml
@@ -32,4 +32,4 @@
 - ca2a68e4fec1634ad7e99a9d22f2b9576e92f75b0d2b75a109f5c482927d97fe  ./.github/workflows/product-release.yml
 - af67fb90468928229a4b2991f001636e9486261dfb28d1824dcad5b4ed4e94d1  ./.github/workflows/qualification.yml
 - 9afb528a534517c5f7748fb90d994f59c792655eb4a22dc96e0c6748d3defdce  ./.github/workflows/source-qualification.yml
-- 78870a654330d20c652be00b5f06b922cf9f76bc9867a099dab6d3880534ecb1  ./.github/workflows/state-seal.yml
+- c437138e5b59485e8721aba9c58962394d3448152e255a882bdcc61db0fb8fe6  ./.github/workflows/state-seal.yml

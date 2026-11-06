@@ -1366,6 +1366,8 @@ crates/velnor-actions-workflow-renderer/src/plan_sources/cache_keys.rs
 crates/velnor-actions-workflow-renderer/src/plan_sources/cargo_fetch.rs
 crates/velnor-actions-workflow-renderer/src/plan_sources/source_cache.rs
 crates/velnor-actions-workflow-renderer/src/plan_sources/state_select.rs
+crates/velnor-actions-workflow-renderer/src/plan_sources/state_select_supervisor.rs
+crates/velnor-actions-workflow-renderer/src/plan_sources/state_select_units.rs
 crates/velnor-actions-workflow-renderer/src/playwright_install_step.rs
 crates/velnor-actions-workflow-renderer/src/preseed.rs
 crates/velnor-actions-workflow-renderer/src/preseed_closure.rs

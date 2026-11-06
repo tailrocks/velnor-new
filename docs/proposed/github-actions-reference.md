@@ -46,6 +46,10 @@ Velnor probes and runs the named task with that `DEVELOPER_DIR` and never change
 
 ## Compatibility Rules and Verification Procedures
 
+### Actions cache timestamps
+
+GitHub's [List GitHub Actions caches endpoint](https://docs.github.com/en/rest/actions/cache#list-github-actions-caches-for-a-repository) returns `created_at` timestamps. Velnor's selector accepts RFC 3339 offsets and fractional seconds at arbitrary precision, normalizes timestamps for chronological ordering, and preserves the original row fields for attestation verification.
+
 ### Performance review sources
 
 The [review gates](../reviews/ci-performance.md) use these primary sources:
