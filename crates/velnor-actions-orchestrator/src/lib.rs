@@ -6,6 +6,8 @@
     missing_docs,
     reason = "documentation comments are intentionally absent from this codebase"
 )]
+#[cfg(test)]
+extern crate self as velnor_actions_orchestrator;
 mod crate_release_inventory_read;
 
 macro_rules! private_mods {
