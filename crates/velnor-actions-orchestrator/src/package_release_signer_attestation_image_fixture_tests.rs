@@ -6,28 +6,99 @@ use super::*;
 const SOURCE: &str = "a3417b150ac2f477498cadc329cdf4e23aa5b54b";
 const WORKFLOW: &str = "https://github.com/tailrocks/velnor-new/.github/workflows/job-image-candidate.yml@refs/heads/main";
 const RECORD: &str = "job-image-candidate.json";
+const TEST: &str = "package_release_signer::attestation::image_fixture_tests::signed_image_record_binds_source_run_and_subjects";
 
 #[test]
 fn signed_image_record_binds_source_run_and_subjects() -> Result<(), Box<dyn std::error::Error>> {
-    if std::env::var_os("VELNOR_IMAGE_ATTESTATION_CHILD").is_none() {
-        let fixtures =
-            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/attestation_fixtures");
-        let output = crate::offline_attestation_test::run(
-            "package_release_signer::attestation::image_fixture_tests::signed_image_record_binds_source_run_and_subjects",
-            "VELNOR_IMAGE_ATTESTATION_CHILD",
-            &fixtures.join("image-job"),
-            &fixtures.join("historical/trusted-root.jsonl"),
-        )?;
-        assert!(
-            output.status.success(),
-            "{} {}",
-            String::from_utf8_lossy(&output.stdout),
-            String::from_utf8_lossy(&output.stderr)
-        );
-        assert!(String::from_utf8_lossy(&output.stdout).contains("running 1 test"));
+    if std::env::var_os("VELNOR_IMAGE_ATTESTATION_CHILD").is_some() {
+        super::image_transport_tests::validate(TEST)?;
+        let error = std::net::UdpSocket::bind("127.0.0.1:0")
+            .expect_err("image attestation child must be network isolated");
+        if error.kind() != std::io::ErrorKind::PermissionDenied {
+            return Err("image attestation child lacks the network-denial boundary".into());
+        }
+        return verify_record();
+    }
+    if std::env::var_os("VELNOR_IMAGE_NONCE_PROBE").is_some() {
+        super::image_transport_tests::validate_probe_context(TEST)?;
+        assert!(super::image_transport_tests::validate(TEST).is_err());
         return Ok(());
     }
-    verify_record()
+    if std::env::var_os("VELNOR_GH_FIXTURE_WORKER").is_none() {
+        return super::image_transport_tests::dispatch(TEST);
+    }
+    super::image_transport_tests::validate(TEST)?;
+    probe_invalid_nonces()?;
+    let fixtures =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/attestation_fixtures");
+    let output = crate::offline_attestation_test::run_validated_worker(
+        TEST,
+        "VELNOR_IMAGE_ATTESTATION_CHILD",
+        &fixtures.join("image-job"),
+        &fixtures.join("historical/trusted-root.jsonl"),
+    )?;
+    assert!(
+        output.status.success(),
+        "{} {}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(String::from_utf8_lossy(&output.stdout).contains("running 1 test"));
+    reject_forged_child(&fixtures)?;
+    super::image_transport_tests::record_success(TEST)?;
+    Ok(())
+}
+
+fn reject_forged_child(fixtures: &std::path::Path) -> Result<(), Box<dyn std::error::Error>> {
+    let mut command = std::process::Command::new("/usr/bin/python3");
+    command
+        .arg(fixtures.join("no_network.py"))
+        .arg(std::env::current_exe()?)
+        .args(["--exact", TEST])
+        .env("VELNOR_IMAGE_ATTESTATION_CHILD", "1")
+        .env("VELNOR_ATTESTATION_TEST_DIR", fixtures.join("image-job"))
+        .env(
+            "VELNOR_TEST_ATTESTATION_ROOT",
+            fixtures.join("historical/trusted-root.jsonl"),
+        )
+        .env("GH_TOKEN", "offline-fixture")
+        .env_remove("VELNOR_GH_FIXTURE_WORKER");
+    let deadline = CheckDeadline::after(std::time::Duration::from_secs(30))?;
+    let (output, _) = velnor_actions_mise::command::run_prepared_quiescent_until(
+        &mut command,
+        16 * 1024,
+        deadline,
+    )?;
+    assert!(!output.success, "forged host child marker was accepted");
+    assert!(String::from_utf8_lossy(&output.stdout).contains("FAILED"));
+    Ok(())
+}
+
+fn probe_invalid_nonces() -> Result<(), Box<dyn std::error::Error>> {
+    let nonce = std::env::var("VELNOR_GH_FIXTURE_NONCE")?;
+    let receipt = std::path::PathBuf::from(format!("/target/receipt-{nonce}"));
+    assert!(!receipt.exists());
+    for value in [None, Some("invalid")] {
+        let mut command = std::process::Command::new(std::env::current_exe()?);
+        command
+            .env("VELNOR_IMAGE_NONCE_PROBE", "1")
+            .args(["--exact", TEST]);
+        if let Some(value) = value {
+            command.env("VELNOR_GH_FIXTURE_NONCE", value);
+        } else {
+            command.env_remove("VELNOR_GH_FIXTURE_NONCE");
+        }
+        let deadline = CheckDeadline::after(std::time::Duration::from_secs(30))?;
+        let (output, _) = velnor_actions_mise::command::run_prepared_quiescent_until(
+            &mut command,
+            16 * 1024,
+            deadline,
+        )?;
+        assert!(output.success, "invalid nonce probe failed");
+        assert!(String::from_utf8_lossy(&output.stdout).contains("1 passed"));
+        assert!(!receipt.exists());
+    }
+    Ok(())
 }
 
 fn expectation() -> AttestationExpectation<'static> {

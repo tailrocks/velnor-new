@@ -12,6 +12,25 @@ pub(crate) fn run(
     fixture: &Path,
     trusted_root: &Path,
 ) -> Result<Output, Box<dyn std::error::Error>> {
+    run_inner(test, marker, fixture, trusted_root, false)
+}
+
+pub(crate) fn run_validated_worker(
+    test: &str,
+    marker: &str,
+    fixture: &Path,
+    trusted_root: &Path,
+) -> Result<Output, Box<dyn std::error::Error>> {
+    run_inner(test, marker, fixture, trusted_root, true)
+}
+
+fn run_inner(
+    test: &str,
+    marker: &str,
+    fixture: &Path,
+    trusted_root: &Path,
+    worker: bool,
+) -> Result<Output, Box<dyn std::error::Error>> {
     let home = tempfile::tempdir()?;
     let mise_data = std::env::var_os("MISE_DATA_DIR")
         .map(std::path::PathBuf::from)
@@ -36,9 +55,24 @@ pub(crate) fn run(
         .env("VELNOR_ATTESTATION_TEST_DIR", fixture)
         .env("VELNOR_TEST_ATTESTATION_ROOT", trusted_root)
         .env("GH_TOKEN", "offline-fixture")
-        .args(["--exact", test])
-        .output()
-        .map_err(Into::into)
+        .args(["--exact", test]);
+    if worker {
+        for name in [
+            "VELNOR_GH_FIXTURE_WORKER",
+            "VELNOR_GH_FIXTURE_TARGET",
+            "VELNOR_GH_FIXTURE_SCENARIO",
+            "VELNOR_GH_FIXTURE_NONCE",
+            "VELNOR_GH_FIXTURE_CACHE_KEY",
+            "VELNOR_GH_FIXTURE_ARCH",
+            "VELNOR_GH_TEST_TLS_ROOT",
+        ] {
+            command.env(
+                name,
+                std::env::var_os(name).ok_or("missing validated worker context")?,
+            );
+        }
+    }
+    command.output().map_err(Into::into)
 }
 
 #[cfg(target_os = "macos")]

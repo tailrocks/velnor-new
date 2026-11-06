@@ -105,6 +105,7 @@ pub(super) fn run_child(
             "VELNOR_GH_FIXTURE_TARGET",
             "VELNOR_GH_FIXTURE_CACHE_KEY",
             "VELNOR_GH_FIXTURE_ARCH",
+            "VELNOR_GH_FIXTURE_NONCE",
         ] {
             command.env(
                 name,

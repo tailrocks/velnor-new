@@ -279,6 +279,7 @@ fn pass_worker_environment(command: &mut Command) -> Result<(), Box<dyn Error>> 
         "VELNOR_GH_FIXTURE_TARGET",
         "VELNOR_GH_FIXTURE_CACHE_KEY",
         "VELNOR_GH_FIXTURE_ARCH",
+        "VELNOR_GH_FIXTURE_NONCE",
         "VELNOR_GH_TEST_TLS_ROOT",
     ] {
         command.env(

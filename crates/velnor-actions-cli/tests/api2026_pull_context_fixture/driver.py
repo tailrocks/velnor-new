@@ -180,7 +180,11 @@ def main():
     if kind not in targets or (kind == "task_report" and test != "shared_job_artifact_is_downloaded_once") or (kind == "preview" and test != "public_preview_selection_uses_sha_media_and_preserves_parent_proofs") or (kind == "cli" and test in ("shared_job_artifact_is_downloaded_once", "public_preview_selection_uses_sha_media_and_preserves_parent_proofs")):
         raise RuntimeError("fixture scenario does not belong to target")
     package, test_target = targets[kind]
-    if kind == "image_attestation" and test != "package_release_signer::attestation::image_transport_tests::real_github_transport_verifies_the_signed_record":
+    image_attestation_tests = {
+        "package_release_signer::attestation::image_transport_tests::real_github_transport_verifies_the_signed_record",
+        "package_release_signer::attestation::image_fixture_tests::signed_image_record_binds_source_run_and_subjects",
+    }
+    if kind == "image_attestation" and test not in image_attestation_tests:
         raise RuntimeError("fixture scenario does not belong to target")
     if not re.fullmatch(r"[a-z_]+(?:::[a-z_]+)*", test):
         raise RuntimeError("invalid isolated fixture scenario")

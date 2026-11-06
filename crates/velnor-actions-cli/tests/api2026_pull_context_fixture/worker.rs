@@ -5,7 +5,17 @@ use sha2::{Digest as _, Sha256};
 use std::error::Error;
 
 pub(crate) fn validate_worker(target: &str, scenario: Option<&str>) -> Result<(), Box<dyn Error>> {
+    let nonce = std::env::var("VELNOR_GH_FIXTURE_NONCE").ok();
+    validate_worker_with_nonce(target, scenario, nonce.as_deref())
+}
+
+pub(crate) fn validate_worker_with_nonce(
+    target: &str,
+    scenario: Option<&str>,
+    nonce: Option<&str>,
+) -> Result<(), Box<dyn Error>> {
     use std::net::ToSocketAddrs as _;
+    validate_nonce(nonce)?;
     let marker = std::env::var("VELNOR_GH_FIXTURE_WORKER")?;
     let name = std::env::var("VELNOR_GH_FIXTURE_SCENARIO")?;
     if marker != "container-v1"
@@ -79,6 +89,16 @@ pub(crate) fn validate_worker(target: &str, scenario: Option<&str>) -> Result<()
 
 pub(crate) fn record_success(target: &str, scenario: &str) -> Result<(), Box<dyn Error>> {
     let nonce = std::env::var("VELNOR_GH_FIXTURE_NONCE")?;
+    validate_nonce(Some(&nonce))?;
+    std::fs::write(
+        format!("/target/receipt-{nonce}"),
+        format!("{nonce}\n{target}\n{scenario}\n"),
+    )?;
+    Ok(())
+}
+
+fn validate_nonce(nonce: Option<&str>) -> Result<(), Box<dyn Error>> {
+    let nonce = nonce.ok_or("missing isolated GitHub fixture nonce")?;
     if nonce.len() != 64
         || !nonce
             .bytes()
@@ -86,10 +106,6 @@ pub(crate) fn record_success(target: &str, scenario: &str) -> Result<(), Box<dyn
     {
         return Err("invalid isolated GitHub fixture receipt".into());
     }
-    std::fs::write(
-        format!("/target/receipt-{nonce}"),
-        format!("{nonce}\n{target}\n{scenario}\n"),
-    )?;
     Ok(())
 }
 

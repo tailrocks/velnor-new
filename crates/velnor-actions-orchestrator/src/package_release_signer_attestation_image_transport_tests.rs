@@ -23,23 +23,7 @@ const WORKFLOW: &str = ".github/workflows/job-image-candidate.yml";
 #[test]
 fn real_github_transport_verifies_the_signed_record() -> Result<(), Box<dyn Error>> {
     if std::env::var_os("VELNOR_GH_FIXTURE_WORKER").is_none() {
-        let source = non_inputs::prepare_source()?;
-        let status = source
-            .command()
-            .args([
-                "image_attestation",
-                TEST,
-                if cfg!(debug_assertions) {
-                    "debug"
-                } else {
-                    "release"
-                },
-            ])
-            .status()?;
-        if !status.success() {
-            return Err(format!("isolated image attestation fixture failed: {status}").into());
-        }
-        return Ok(());
+        return dispatch(TEST);
     }
     worker::validate_worker("image_attestation", Some(TEST))?;
     let fixture = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -87,6 +71,38 @@ fn real_github_transport_verifies_the_signed_record() -> Result<(), Box<dyn Erro
     assert!(verify_image_file_attestation(&record, &identity, &subjects, &[], deadline).is_err());
     worker::record_success("image_attestation", TEST)?;
     Ok(())
+}
+
+pub(super) fn dispatch(scenario: &str) -> Result<(), Box<dyn Error>> {
+    let source = non_inputs::prepare_source()?;
+    let status = source
+        .command()
+        .args([
+            "image_attestation",
+            scenario,
+            if cfg!(debug_assertions) {
+                "debug"
+            } else {
+                "release"
+            },
+        ])
+        .status()?;
+    if !status.success() {
+        return Err(format!("isolated image attestation fixture failed: {status}").into());
+    }
+    Ok(())
+}
+
+pub(super) fn validate(scenario: &str) -> Result<(), Box<dyn Error>> {
+    worker::validate_worker("image_attestation", Some(scenario))
+}
+
+pub(super) fn validate_probe_context(scenario: &str) -> Result<(), Box<dyn Error>> {
+    worker::validate_worker_with_nonce("image_attestation", Some(scenario), Some(&"a".repeat(64)))
+}
+
+pub(super) fn record_success(scenario: &str) -> Result<(), Box<dyn Error>> {
+    worker::record_success("image_attestation", scenario)
 }
 
 struct Server {
