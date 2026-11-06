@@ -412,14 +412,6 @@ fs.writeFileSync(file, content);
 NODE
 }
 
-hash_tree() {
-  run_qualification_candidate "$QUALIFICATION_GUARD_BIN" tree-identity "$1" >"$2" || exit 2
-}
-
-link_identity() {
-  run_qualification_candidate "$QUALIFICATION_GUARD_BIN" link-identity "$1"
-}
-
 build_bin() {
   if [ "$BIN_EXPLICIT" -eq 1 ]; then
     if [ ! -f "$BIN" ] || [ ! -x "$BIN" ]; then

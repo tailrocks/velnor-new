@@ -648,6 +648,14 @@ run_qualification_candidate() {
   return "$status"
 }
 
+hash_tree() {
+  run_qualification_candidate "$QUALIFICATION_GUARD_BIN" tree-identity "$1" >"$2" || exit 2
+}
+
+link_identity() {
+  run_qualification_candidate "$QUALIFICATION_GUARD_BIN" link-identity "$1"
+}
+
 run_qualification_metadata_candidate() {
   local binary="$1"
   shift
