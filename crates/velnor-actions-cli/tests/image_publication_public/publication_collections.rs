@@ -329,12 +329,18 @@ fn public_publication_selects_latest_matching_ci_run_from_later_page() -> Result
 #[test]
 fn public_publication_rejects_saturated_filtered_ci_run_inventory_before_writing()
 -> Result<(), Box<dyn Error>> {
+    let scenario = "publication_collections::public_publication_rejects_saturated_filtered_ci_run_inventory_before_writing";
+    if !super::begin_isolated(scenario)? {
+        return Ok(());
+    }
     let fixture = Fixture::new_for(FixtureProfile::Job)?;
     fixture.update_github_state(|state| {
         state["ci_run_pages"] = json!([{"total_count":1000,"workflow_runs":[]}]);
         Ok(())
     })?;
-    assert_rejected_before_write(&fixture, "image_publication_ci_run_inventory")
+    assert_rejected_before_write(&fixture, "image_publication_ci_run_inventory")?;
+    super::isolated_worker::record_success("image_publication", scenario)?;
+    Ok(())
 }
 
 fn artifact(id: u64) -> Value {

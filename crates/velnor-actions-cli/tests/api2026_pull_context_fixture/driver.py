@@ -197,6 +197,7 @@ def main():
         "source_closure::public_runner_family_rejects_decoy_pins_and_later_tool_replacement",
         "publication_collections::public_publication_rejects_incomplete_and_ambiguous_artifact_pages_before_writing",
         "runner_source::public_runner_family_publication_rejects_producer_head_outside_selected_source",
+        "publication_collections::public_publication_rejects_saturated_filtered_ci_run_inventory_before_writing",
     ):
         raise RuntimeError("fixture scenario does not belong to target")
     if not re.fullmatch(r"[a-z_]+(?:::[a-z_]+)*", test):
