@@ -681,7 +681,7 @@ jobs:
           retention-days: 1
   qualify-homebrew-admit:
     name: qualify-homebrew-admit
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 30
     permissions:
       actions: read
@@ -789,7 +789,7 @@ jobs:
           archive: false
   qualify-homebrew-finalize:
     name: qualify-homebrew-finalize
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 30
     permissions:
       actions: read
@@ -1038,7 +1038,7 @@ jobs:
           path: release-attestations/release-manifest.json.intoto.jsonl
           retention-days: 1
   publish-generator:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 5
     permissions:
       actions: write

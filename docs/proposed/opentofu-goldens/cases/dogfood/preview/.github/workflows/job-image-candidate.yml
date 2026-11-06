@@ -95,7 +95,7 @@ jobs:
           retention-days: 30
   attest-image-candidate:
     name: Attest Linux job image candidate
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 10
     needs:
       - build-image-candidate
@@ -136,7 +136,7 @@ jobs:
           subject-path: "${{ runner.temp }}/privatecandidate/job-image.oci.tar\n${{ runner.temp }}/privatecandidate/job-image-candidate.json\n${{ runner.temp }}/privatecandidate/job-image-native-source-closure.json"
   publish-job-image:
     name: Publish Linux job image
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 5
     if: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' }}
     needs:

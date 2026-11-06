@@ -6,8 +6,8 @@ Detected stacks
   Tofu: not detected (strong evidence; add [stacks.tofu] roots to enable)
     evidence: mise-tool:opentofu
   Mise check maintenance-helpers: test-maintenance-helpers (runner: ubuntu-26.04, target: x86_64-unknown-linux-gnu)
-  Mise check hosted-budget-containment: test-hosted-budget-containment (runner: ubuntu-24.04, target: x86_64-unknown-linux-gnu)
-  Mise check hosted-gh-config-custody: test-hosted-gh-config-custody (runner: ubuntu-24.04, target: x86_64-unknown-linux-gnu)
+  Mise check hosted-budget-containment: test-hosted-budget-containment (runner: ubuntu-26.04, target: x86_64-unknown-linux-gnu)
+  Mise check hosted-gh-config-custody: test-hosted-gh-config-custody (runner: ubuntu-26.04, target: x86_64-unknown-linux-gnu)
   Workspace crates: 20
     - velnor-actions-actionlint (crates/velnor-actions-actionlint/Cargo.toml) [lib; depends on velnor-actions-contract]
     - velnor-actions-ansible (crates/velnor-actions-ansible/Cargo.toml) [lib; depends on velnor-actions-contract]
@@ -50,7 +50,7 @@ Workflow to generate
   .github/dco.yml
   Workflow: CI (velnor-repository-v1)
   Push branch: main
-  Runner: ubuntu-24.04 (config override)
+  Runner: ubuntu-26.04 (config override)
   Jobs:
     - alint (2 steps)
     - cargo-deny (6 steps)
@@ -86,10 +86,10 @@ Workflow to generate
     - state-producer-root (101 steps)
     - state-seal-crates-velnor-runner (8 steps)
     - state-seal-root (8 steps)
-    - tools-producer-7c8ff8be (9 steps)
-    - tools-producer-983846ad (11 steps)
-    - tools-producer-e37def0d (8 steps)
-    - tools-producer-e924b13c (8 steps)
+    - tools-producer-06f9acb0 (8 steps)
+    - tools-producer-4b808b72 (11 steps)
+    - tools-producer-c957c0bd (8 steps)
+    - tools-producer-caf63d48 (9 steps)
     - 18 Rust crate jobs
       Timeout: 15 minutes per crate job
       Obligations: Clippy -> build -> run tests -> doc build -> format check

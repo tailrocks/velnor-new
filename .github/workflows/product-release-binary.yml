@@ -157,7 +157,7 @@ jobs:
           subject-path: "assets/velnor-host\nassets/velnor-runner-attestation-helper\nassets/LICENSE\nassets/NOTICE\nassets/SHA256SUMS"
   publish-binary:
     name: Publish velnor-host
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 5
     permissions:
       actions: read

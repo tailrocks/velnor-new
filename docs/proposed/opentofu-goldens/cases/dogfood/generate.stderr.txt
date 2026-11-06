@@ -10,11 +10,11 @@ Repository: <repo>
 .github/actions/generator-release-qualify-linux/action.yml
 .github/actions/generator-release-qualify-macos-intel/action.yml
 .github/actions/generator-release-qualify-macos/action.yml
-.github/actions/u24/action.yml
+.github/actions/u26/action.yml
 .github/actions/velnor-tool-seed/action.yml
 .github/actions/velnor-tools-cache-restore/action.yml
 .github/actions/velnor-tools-cache-scrub/action.yml
-.github/actions/velnor-tools-prelude-u24/action.yml
+.github/actions/velnor-tools-prelude-u26/action.yml
 .github/actions/velnor-verify-jactionlint/action.yml
 .github/actions/velnor-verify-restored-rust/action.yml
 .github/actions/velnor-verify-rust-manifest/action.yml
