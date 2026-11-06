@@ -1,8 +1,15 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-fn committed_intent(root: &Path, source: &str, recovery: bool) -> Result<String, Box<dyn Error>> {
-    let recovery = recovery.then(|| serde_json::json!({"package":"example","version":"0.1.1","source_sha":source}));
+use super::*;
+
+pub(super) fn committed_intent(
+    root: &Path,
+    source: &str,
+    recovery: bool,
+) -> Result<String, Box<dyn Error>> {
+    let recovery = recovery
+        .then(|| serde_json::json!({"package":"example","version":"0.1.1","source_sha":source}));
     let intent: velnor_actions_contract::config::CrateReleaseIntent = serde_json::from_value(
         serde_json::json!({"schema":1,"repository":"owner/project","default_branch":"main","environment":"release","required_workflow_path":".github/workflows/ci.yml","trusted_reviewer_id":139_017,"rust_version":"1.97.1","generator_version":"0.1.5","generator_source_sha":"f1041f322c54cd7edfdef06afd307799eeaa801a","generator_manifest_sha256":"e38d047150f9e0347ec2160fd65bb7f026842e6f416e456990cf3b7ccd284c52","release_plz_version":"0.4.3","runner":"ubuntu-26.04","authentication":"trusted-publishing","manifest_path":"Cargo.toml","pr_write_paths":["CHANGELOG.md","Cargo.lock","Cargo.toml"],"registry":"crates-io","packages":["example"],"publish_features":{"example":[]},"tag_template":"{{ package }}-v{{ version }}","recovery":recovery}),
     )?;
@@ -30,7 +37,7 @@ fn committed_intent(root: &Path, source: &str, recovery: bool) -> Result<String,
     git(root, &["rev-parse", "HEAD"])
 }
 
-fn git(root: &Path, args: &[&str]) -> Result<String, Box<dyn Error>> {
+pub(super) fn git(root: &Path, args: &[&str]) -> Result<String, Box<dyn Error>> {
     let result = std::process::Command::new("git")
         .current_dir(root)
         .args(args)
@@ -41,11 +48,11 @@ fn git(root: &Path, args: &[&str]) -> Result<String, Box<dyn Error>> {
     Ok(String::from_utf8(result.stdout)?.trim().to_owned())
 }
 
-fn source_require_script() -> Result<String, Box<dyn Error>> {
+pub(super) fn source_require_script() -> Result<String, Box<dyn Error>> {
     generated_script("release-reconcile", "Release source-require")
 }
 
-fn generated_script(job: &str, name: &str) -> Result<String, Box<dyn Error>> {
+pub(super) fn generated_script(job: &str, name: &str) -> Result<String, Box<dyn Error>> {
     let (spec, rust) = crate::release::release_steps::tests::fixture()?;
     let workflow = velnor_actions_workflow_renderer::release_tree::render_release_workflow(
         &spec,
@@ -67,7 +74,7 @@ fn generated_script(job: &str, name: &str) -> Result<String, Box<dyn Error>> {
         .to_owned())
 }
 
-fn serve_admission(
+pub(super) fn serve_admission(
     listener: &std::net::TcpListener,
     done: &AtomicBool,
     policy: &str,
@@ -89,11 +96,11 @@ fn serve_admission(
         stream
             .set_read_timeout(Some(Duration::from_secs(5)))
             .map_err(|e| e.to_string())?;
-        let (line, _) = super::tests::read_test_request(&mut stream)?;
+        let (line, _) = super::super::tests::read_test_request(&mut stream)?;
         let mut value = if line == "GET /repos/owner/project HTTP/1.1" {
             serde_json::json!({"id":22,"full_name":"owner/project","owner":{"id":77,"login":"owner"},"default_branch":"main"})
         } else {
-            super::tests::test_github_admission_response(&line, policy, source)
+            super::super::tests::test_github_admission_response(&line, policy, source)
                 .ok_or_else(|| format!("unexpected request {line}"))?
         };
         if denied && line.starts_with("GET /repos/owner/project/environments/release ") {
@@ -109,7 +116,7 @@ fn serve_admission(
     Ok(())
 }
 
-fn supplied_step(
+pub(super) fn supplied_step(
     root: &Path,
     job: &str,
     operation: &str,
@@ -122,7 +129,7 @@ fn supplied_step(
             return Err("unexpected publisher operation".into());
         }
         let mut command = std::process::Command::new(std::env::current_exe()?);
-        command.args(["--exact", "release::crate_release_runtime::rehearsal::generated_candidate_receipt_rejects_unprotected_environment"]);
+        command.args(["--exact", super::CANDIDATE_CASE]);
         command.env(
             "VELNOR_TEST_COMMAND_ARGS",
             format!("crate-release {operation}"),
@@ -154,5 +161,9 @@ fn supplied_step(
         command.env_remove("ACTIONS_ID_TOKEN_REQUEST_TOKEN");
         command.env_remove("ACTIONS_ID_TOKEN_REQUEST_URL");
     }
-    Ok(command.output()?)
+    let output = command.output()?;
+    if job == "release-publish" {
+        assert!(String::from_utf8_lossy(&output.stdout).contains("running 1 test"));
+    }
+    Ok(output)
 }

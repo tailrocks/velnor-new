@@ -50,10 +50,13 @@ fn source_verification_ignores_hostile_git_environment() -> Result<(), Box<dyn s
         format!("#!/bin/sh\ntouch '{}'\nexit 91\n", sentinel.display()),
     )?;
     fs::set_permissions(&fake, fs::Permissions::from_mode(0o755))?;
-    let status = Command::new(std::env::current_exe()?)
+    let output = Command::new(std::env::current_exe()?)
         .args([
             "--exact",
-            "crate_source_public::source_verification_ignores_hostile_git_environment",
+            crate::libtest_case::name(concat!(
+                module_path!(),
+                "::source_verification_ignores_hostile_git_environment"
+            )),
         ])
         .env("VELNOR_GIT_FIXTURE_ROOT", &root)
         .env("VELNOR_GIT_FIXTURE_SHA", &sha)
@@ -64,8 +67,9 @@ fn source_verification_ignores_hostile_git_environment() -> Result<(), Box<dyn s
         .env("GIT_CONFIG_COUNT", "1")
         .env("GIT_CONFIG_KEY_0", "core.fsmonitor")
         .env("GIT_CONFIG_VALUE_0", &fake)
-        .status()?;
-    assert!(status.success());
+        .output()?;
+    assert!(output.status.success());
+    crate::libtest_case::assert_one_passed(&output);
     assert!(!sentinel.exists());
     Ok(())
 }

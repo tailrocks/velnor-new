@@ -54,6 +54,11 @@ fn checkout_steps_share_one_deadline() -> Result<(), Box<dyn std::error::Error>>
     Ok(())
 }
 
+const STALLED_CASE: &str = crate::libtest_case::name(concat!(
+    module_path!(),
+    "::stalled_git_fetch_is_terminated_before_return"
+));
+
 #[test]
 fn stalled_git_fetch_is_terminated_before_return() -> Result<(), Box<dyn std::error::Error>> {
     use std::net::Shutdown;
@@ -79,10 +84,7 @@ fn stalled_git_fetch_is_terminated_before_return() -> Result<(), Box<dyn std::er
     let listener = TcpListener::bind("127.0.0.1:0")?;
     listener.set_nonblocking(true)?;
     let mut child = Command::new(std::env::current_exe()?)
-        .args([
-            "--exact",
-            "crate_release_checkout::tests::deadline_tests::stalled_git_fetch_is_terminated_before_return",
-        ])
+        .args(["--exact", STALLED_CASE])
         .env(
             "VELNOR_STALLED_FETCH_ORIGIN",
             format!("http://{}", listener.local_addr()?),

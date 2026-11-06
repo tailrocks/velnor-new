@@ -16,7 +16,10 @@ mod non_inputs;
 #[path = "../../velnor-actions-cli/tests/api2026_pull_context_fixture/worker.rs"]
 mod worker;
 
-const TEST: &str = "release::package_release_signer::attestation::image_transport_tests::real_github_transport_verifies_the_signed_record";
+const TEST: &str = crate::libtest_case::name(concat!(
+    module_path!(),
+    "::real_github_transport_verifies_the_signed_record"
+));
 const SOURCE: &str = "a3417b150ac2f477498cadc329cdf4e23aa5b54b";
 const WORKFLOW: &str = ".github/workflows/job-image-candidate.yml";
 

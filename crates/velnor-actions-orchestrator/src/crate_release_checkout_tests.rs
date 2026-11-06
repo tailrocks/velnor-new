@@ -245,11 +245,20 @@ fn hostile_parent() -> Result<(), Box<dyn std::error::Error>> {
         ),
     )?;
     let output = Command::new(std::env::current_exe()?)
-        .args(["--exact", "crate_release_checkout::tests::checkout_fetches_exact_private_source_without_credential_files"])
-        .env("VELNOR_CHECKOUT_TEST_CHILD", "1").env("GIT_CONFIG_GLOBAL", &config)
-        .env("GIT_TRACE", &trace).env("HTTP_PROXY", "http://127.0.0.1:1")
+        .args([
+            "--exact",
+            crate::libtest_case::name(concat!(
+                module_path!(),
+                "::checkout_fetches_exact_private_source_without_credential_files"
+            )),
+        ])
+        .env("VELNOR_CHECKOUT_TEST_CHILD", "1")
+        .env("GIT_CONFIG_GLOBAL", &config)
+        .env("GIT_TRACE", &trace)
+        .env("HTTP_PROXY", "http://127.0.0.1:1")
         .output()?;
     assert!(output.status.success(), "hostile-parent child failed");
+    crate::libtest_case::assert_one_passed(&output);
     assert!(!marker.exists());
     assert!(!trace.exists());
     Ok(())

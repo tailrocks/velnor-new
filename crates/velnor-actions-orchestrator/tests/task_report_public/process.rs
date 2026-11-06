@@ -142,13 +142,22 @@ pub(super) fn run_child(
             }
         }
     };
+    check_child(status, &stdout_path, &stderr_path)?;
+    Ok(())
+}
+
+fn check_child(
+    status: std::process::ExitStatus,
+    stdout_path: &Path,
+    stderr_path: &Path,
+) -> TestResult<()> {
     if !status.success() {
-        return Err(child_error(
-            &format!("child exited {status}"),
-            &stdout_path,
-            &stderr_path,
-        )
-        .into());
+        return Err(
+            child_error(&format!("child exited {status}"), stdout_path, stderr_path).into(),
+        );
+    }
+    if !fs::read_to_string(stdout_path)?.contains("test result: ok. 1 passed; 0 failed;") {
+        return Err(child_error("child did not run one test", stdout_path, stderr_path).into());
     }
     Ok(())
 }

@@ -6,7 +6,10 @@ use super::*;
 const SOURCE: &str = "a3417b150ac2f477498cadc329cdf4e23aa5b54b";
 const WORKFLOW: &str = "https://github.com/tailrocks/velnor-new/.github/workflows/job-image-candidate.yml@refs/heads/main";
 const RECORD: &str = "job-image-candidate.json";
-const TEST: &str = "release::package_release_signer::attestation::image_fixture_tests::signed_image_record_binds_source_run_and_subjects";
+const TEST: &str = crate::libtest_case::name(concat!(
+    module_path!(),
+    "::signed_image_record_binds_source_run_and_subjects"
+));
 
 #[test]
 fn signed_image_record_binds_source_run_and_subjects() -> Result<(), Box<dyn std::error::Error>> {

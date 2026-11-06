@@ -193,17 +193,28 @@ fn check_authority(
         .env("GITHUB_REPOSITORY", "example/demo")
         .env("GITHUB_EVENT_NAME", "workflow_dispatch")
         .env("GITHUB_REF", "refs/heads/main")
-        .env("GITHUB_WORKFLOW_REF", "example/demo/.github/workflows/release.yml@refs/heads/main")
+        .env(
+            "GITHUB_WORKFLOW_REF",
+            "example/demo/.github/workflows/release.yml@refs/heads/main",
+        )
         .env("GITHUB_WORKFLOW_SHA", authority_b)
         .env("GITHUB_RUN_ID", "1")
         .env("GITHUB_RUN_ATTEMPT", "1")
-        .args(["--exact", "release::release_emit::tests::historical::recovery_generation_and_qualification_use_historical_source_not_current_checkout", "--nocapture"])
+        .args([
+            "--exact",
+            crate::libtest_case::name(concat!(
+                module_path!(),
+                "::recovery_generation_and_qualification_use_historical_source_not_current_checkout"
+            )),
+            "--nocapture",
+        ])
         .output()?;
     assert!(
         child.status.success(),
         "{}",
         String::from_utf8_lossy(&child.stderr)
     );
+    crate::libtest_case::assert_one_passed(&child);
     Ok(())
 }
 
@@ -345,13 +356,21 @@ fn historical_object_snapshot_rejects_escape_and_ignores_path_git() -> TestResul
         .env("PATH", &bin)
         .env("VELNOR_TEST_OBJECT_REPO", &root)
         .env("VELNOR_TEST_OBJECT_SHA", &source)
-        .args(["--exact", "release::release_emit::tests::historical::historical_object_snapshot_rejects_escape_and_ignores_path_git", "--nocapture"])
+        .args([
+            "--exact",
+            crate::libtest_case::name(concat!(
+                module_path!(),
+                "::historical_object_snapshot_rejects_escape_and_ignores_path_git"
+            )),
+            "--nocapture",
+        ])
         .output()?;
     assert!(
         child.status.success(),
         "{}",
         String::from_utf8_lossy(&child.stderr)
     );
+    crate::libtest_case::assert_one_passed(&child);
     assert!(!marker.exists());
     symlink("../../outside", root.join("escape"))?;
     let hostile = commit(&root, "escaping link")?;

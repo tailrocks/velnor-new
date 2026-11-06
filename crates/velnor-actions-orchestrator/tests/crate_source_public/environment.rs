@@ -55,17 +55,21 @@ fn metadata_subprocess_drops_ambient_cargo_overrides() -> Result<(), Box<dyn std
     ] {
         fs::set_permissions(path, fs::Permissions::from_mode(0o755))?;
     }
-    let status = std::process::Command::new(std::env::current_exe()?)
+    let output = std::process::Command::new(std::env::current_exe()?)
         .args([
             "--exact",
-            "crate_source_public::approved_source_must_be_exact_clean_repository",
+            &crate::libtest_case::parent_name(
+                module_path!(),
+                "approved_source_must_be_exact_clean_repository",
+            ),
         ])
         .env("PATH", format!("{}:/usr/bin:/bin", fake_mise.display()))
         .env("RUSTUP_HOME", &fake_home)
         .env("RUSTC_WRAPPER", "hostile-sentinel")
         .env("CARGO_BUILD_RUSTC", "hostile-sentinel")
-        .status()?;
-    assert!(status.success());
+        .output()?;
+    assert!(output.status.success());
+    crate::libtest_case::assert_one_passed(&output);
     assert_eq!(fs::read_to_string(marker)?, "reached");
     Ok(())
 }

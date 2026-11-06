@@ -112,14 +112,18 @@ pub(super) fn source_free_github_gate_does_not_execute_cargo()
         return Ok(());
     }
     let temp = tempfile::tempdir()?;
-    let status = Command::new(std::env::current_exe()?)
+    let output = Command::new(std::env::current_exe()?)
         .arg("--exact")
-        .arg("crate_release_controller::tests::source_free_github_gate_does_not_execute_cargo")
+        .arg(crate::libtest_case::name(concat!(
+            module_path!(),
+            "::source_free_github_gate_does_not_execute_cargo"
+        )))
         .env("VELNOR_SOURCE_FREE_GATE", "1")
         .env("RUSTUP_HOME", temp.path().join("missing-rustup"))
         .env("MISE_RUSTUP_HOME", temp.path().join("missing-rustup"))
-        .status()?;
-    assert!(status.success());
+        .output()?;
+    assert!(output.status.success());
+    crate::libtest_case::assert_one_passed(&output);
     Ok(())
 }
 
@@ -237,18 +241,22 @@ pub(super) fn ambient_rust_wrappers_cannot_override_verified_tools()
     let wrapper = temp.path().join("hostile-wrapper");
     fs::write(&wrapper, "#!/bin/sh\nexit 86\n")?;
     fs::set_permissions(&wrapper, fs::Permissions::from_mode(0o755))?;
-    let status = Command::new(std::env::current_exe()?)
+    let output = Command::new(std::env::current_exe()?)
         .args([
             "--exact",
-            "crate_release_controller::tests::recovery_requires_fresh_human_approval_and_registry_absence",
+            crate::libtest_case::name(concat!(
+                module_path!(),
+                "::recovery_requires_fresh_human_approval_and_registry_absence"
+            )),
         ])
         .env("RUSTC_WRAPPER", &wrapper)
         .env("RUSTC_WORKSPACE_WRAPPER", &wrapper)
         .env("RUSTC", &wrapper)
         .env("RUSTDOC", &wrapper)
         .env("CARGO_ENCODED_RUSTFLAGS", "--definitely-invalid")
-        .status()?;
-    assert!(status.success());
+        .output()?;
+    assert!(output.status.success());
+    crate::libtest_case::assert_one_passed(&output);
     Ok(())
 }
 

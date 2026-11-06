@@ -58,16 +58,20 @@ fn native_registry_read_obeys_shared_deadline() -> Result<(), Box<dyn std::error
         let _held = hold.recv_timeout(Duration::from_secs(12));
         Ok(())
     });
-    let status = std::process::Command::new(std::env::current_exe()?)
+    let output = std::process::Command::new(std::env::current_exe()?)
         .args([
             "--exact",
-            "crate_release_registry::index_tests::native_registry_read_obeys_shared_deadline",
+            crate::libtest_case::name(concat!(
+                module_path!(),
+                "::native_registry_read_obeys_shared_deadline"
+            )),
         ])
         .env("VELNOR_TEST_REGISTRY_ORIGIN", origin)
-        .status()?;
+        .output()?;
     let _released = release.send(());
     worker.join().map_err(|_| "server panic")??;
-    assert!(status.success());
+    assert!(output.status.success());
+    crate::libtest_case::assert_one_passed(&output);
     Ok(())
 }
 

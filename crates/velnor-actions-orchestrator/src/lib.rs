@@ -8,6 +8,8 @@
 )]
 #[cfg(test)]
 extern crate self as velnor_actions_orchestrator;
+#[cfg(test)]
+mod libtest_case;
 
 mod api;
 mod bun_assets_handoff;

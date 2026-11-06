@@ -57,12 +57,23 @@ fn run_operation(
     root: &Path,
     interrupted: bool,
 ) -> Result<std::process::ExitStatus, Box<dyn Error>> {
-    Ok(Command::new(std::env::current_exe()?)
-        .args(["--exact", "crate_release_controller::tests::coordinator_rehearsal::controller_rehearsal_and_generated_publisher_shape"])
+    let output = Command::new(std::env::current_exe()?)
+        .args([
+            "--exact",
+            crate::libtest_case::name(concat!(
+                module_path!(),
+                "::controller_rehearsal_and_generated_publisher_shape"
+            )),
+        ])
         .env("VELNOR_COORDINATOR_CHILD", operation)
         .env("VELNOR_REHEARSAL_ROOT", root)
-        .env("VELNOR_REHEARSAL_INTERRUPTED", if interrupted { "1" } else { "0" })
-        .status()?)
+        .env(
+            "VELNOR_REHEARSAL_INTERRUPTED",
+            if interrupted { "1" } else { "0" },
+        )
+        .output()?;
+    assert!(String::from_utf8_lossy(&output.stdout).contains("running 1 test"));
+    Ok(output.status)
 }
 
 fn assert_generated_publisher() -> Result<(), Box<dyn Error>> {

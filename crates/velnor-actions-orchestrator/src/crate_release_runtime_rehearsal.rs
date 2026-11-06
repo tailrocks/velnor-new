@@ -11,6 +11,15 @@ use std::sync::{
 };
 use std::time::{Duration, Instant};
 
+const CANDIDATE_CASE: &str = crate::libtest_case::name(concat!(
+    module_path!(),
+    "::generated_candidate_receipt_rejects_unprotected_environment"
+));
+const SOURCE_CASE: &str = crate::libtest_case::name(concat!(
+    module_path!(),
+    "::generated_source_require_rehearsal"
+));
+
 #[test]
 fn qualified_runtime_rejects_missing_git_without_fallback() -> Result<(), Box<dyn Error>> {
     if std::env::var_os("VELNOR_MISSING_GIT_CHILD").is_some() {
@@ -21,14 +30,18 @@ fn qualified_runtime_rejects_missing_git_without_fallback() -> Result<(), Box<dy
         return Ok(());
     }
     let temp = tempfile::tempdir()?;
-    let status = std::process::Command::new(std::env::current_exe()?)
+    let output = std::process::Command::new(std::env::current_exe()?)
         .arg("--exact")
-        .arg("release::crate_release_runtime::rehearsal::qualified_runtime_rejects_missing_git_without_fallback")
+        .arg(crate::libtest_case::name(concat!(
+            module_path!(),
+            "::qualified_runtime_rejects_missing_git_without_fallback"
+        )))
         .env("VELNOR_MISSING_GIT_CHILD", "1")
         .env("RUNNER_TEMP", temp.path())
         .env("GITHUB_WORKSPACE", temp.path())
-        .status()?;
-    assert!(status.success());
+        .output()?;
+    assert!(output.status.success());
+    crate::libtest_case::assert_one_passed(&output);
     Ok(())
 }
 
@@ -116,7 +129,9 @@ fn rehearse_supplied_candidate() -> Result<(), Box<dyn Error>> {
     let executable = bin.join(format!("velnor-actions-{}", env!("CARGO_PKG_VERSION")));
     std::fs::write(
         &executable,
-        "#!/bin/sh\nexport VELNOR_TEST_COMMAND_ARGS=\"$*\"\nexec \"$VELNOR_TEST_BINARY\" --exact release::crate_release_runtime::rehearsal::generated_candidate_receipt_rejects_unprotected_environment\n",
+        format!(
+            "#!/bin/sh\nexport VELNOR_TEST_COMMAND_ARGS=\"$*\"\nexec \"$VELNOR_TEST_BINARY\" --exact {CANDIDATE_CASE}\n"
+        ),
     )?;
     std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o755))?;
     let output = supplied_step(&root, "release-preflight", "candidate-receipt")?;
@@ -263,11 +278,13 @@ fn rehearse_candidate_denial() -> Result<(), Box<dyn Error>> {
     let executable = bin.join(format!("velnor-actions-{}", env!("CARGO_PKG_VERSION")));
     std::fs::write(
         &executable,
-        "#!/bin/sh\nexport VELNOR_TEST_COMMAND_ARGS=\"$*\"\nexec \"$VELNOR_TEST_BINARY\" --exact release::crate_release_runtime::rehearsal::generated_candidate_receipt_rejects_unprotected_environment\n",
+        format!(
+            "#!/bin/sh\nexport VELNOR_TEST_COMMAND_ARGS=\"$*\"\nexec \"$VELNOR_TEST_BINARY\" --exact {CANDIDATE_CASE}\n"
+        ),
     )?;
     std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o755))?;
     let script = generated_script("release-preflight", "Release candidate-receipt")?;
-    let status = std::process::Command::new("bash")
+    let output = std::process::Command::new("bash")
         .args(["-e", "-c", &script])
         .env("VELNOR_CANDIDATE_CHILD", "1")
         .env("VELNOR_TEST_BINARY", std::env::current_exe()?)
@@ -286,13 +303,14 @@ fn rehearse_candidate_denial() -> Result<(), Box<dyn Error>> {
         .env("GITHUB_RUN_ID", "12")
         .env("GITHUB_RUN_ATTEMPT", "1")
         .env("GIT_TOKEN", "fixture")
-        .status()?;
+        .output()?;
     done.store(true, Ordering::Release);
     server
         .join()
         .map_err(|_| "fake GitHub panicked")?
         .map_err(|e| format!("fake GitHub: {e}"))?;
-    assert!(status.success());
+    assert!(output.status.success());
+    crate::libtest_case::assert_one_passed(&output);
     assert!(!root.join("velnor-crate-release-receipt.json").exists());
     Ok(())
 }
@@ -319,10 +337,12 @@ fn rehearse_source_require(event: &str, denied: bool) -> Result<(), Box<dyn Erro
     let executable = bin.join(format!("velnor-actions-{}", env!("CARGO_PKG_VERSION")));
     std::fs::write(
         &executable,
-        "#!/bin/sh\nexport VELNOR_TEST_COMMAND_ARGS=\"$*\"\nexec \"$VELNOR_TEST_BINARY\" --exact release::crate_release_runtime::rehearsal::generated_source_require_rehearsal\n",
+        format!(
+            "#!/bin/sh\nexport VELNOR_TEST_COMMAND_ARGS=\"$*\"\nexec \"$VELNOR_TEST_BINARY\" --exact {SOURCE_CASE}\n"
+        ),
     )?;
     std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o755))?;
-    let status = std::process::Command::new("bash")
+    let child = std::process::Command::new("bash")
         .args(["-e", "-c", &script])
         .env("VELNOR_SOURCE_CHILD", "1")
         .env("VELNOR_TEST_BINARY", std::env::current_exe()?)
@@ -342,7 +362,7 @@ fn rehearse_source_require(event: &str, denied: bool) -> Result<(), Box<dyn Erro
         .env("GITHUB_RUN_ID", if event == "push" { "13" } else { "12" })
         .env("GITHUB_RUN_ATTEMPT", "1")
         .env("GIT_TOKEN", "fixture")
-        .status()?;
+        .output()?;
     done.store(true, Ordering::Release);
     server
         .join()
@@ -350,11 +370,16 @@ fn rehearse_source_require(event: &str, denied: bool) -> Result<(), Box<dyn Erro
         .map_err(|e| format!("fake GitHub: {e}"))?;
     let actual = std::fs::read_to_string(output)?;
     if denied {
-        assert!(!status.success());
+        assert!(!child.status.success());
+        assert!(
+            String::from_utf8_lossy(&child.stdout)
+                .contains("test result: FAILED. 0 passed; 1 failed;")
+        );
         assert_eq!(actual, "");
         return Ok(());
     }
-    assert!(status.success());
+    assert!(child.status.success());
+    crate::libtest_case::assert_one_passed(&child);
     assert!(actual.contains("eligible=true\n"));
     let expected = if event == "push" {
         sha.as_str()
@@ -365,4 +390,8 @@ fn rehearse_source_require(event: &str, denied: bool) -> Result<(), Box<dyn Erro
     Ok(())
 }
 
-include!("crate_release_runtime_rehearsal_support.rs");
+#[path = "crate_release_runtime_rehearsal/crate_release_runtime_rehearsal_support.rs"]
+mod support;
+use support::{
+    committed_intent, generated_script, serve_admission, source_require_script, supplied_step,
+};

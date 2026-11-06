@@ -193,13 +193,7 @@ mod unix {
         }
         Err(invalid())
     }
-    mod tree {
-        use super::{
-            AtFlags, BTreeMap, BTreeSet, File, Instant, MAX_FILE, Mode, OFlags, OrchestratorError,
-            Read, Write, fs, internal, invalid,
-        };
-        include!("fd_tool_extract_tree.rs");
-    }
+    mod tree;
     use tree::Tree;
     fn extract(
         input: &mut File,
@@ -278,13 +272,7 @@ mod unix {
         Ok(())
     }
 
-    mod preflight {
-        use super::{
-            BTreeSet, BufReader, File, GzDecoder, Instant, MAX_ARCHIVE, MAX_ENTRIES, MAX_FILE,
-            MAX_TOTAL, OrchestratorError, Read, Seek, SeekFrom, invalid, io,
-        };
-        include!("fd_tool_extract_preflight.rs");
-    }
+    mod preflight;
     use preflight::{Timed, finish_gzip, preflight};
     pub(super) fn promote(
         parent: &File,

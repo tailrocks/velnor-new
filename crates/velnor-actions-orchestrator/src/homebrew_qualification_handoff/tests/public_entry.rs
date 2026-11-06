@@ -48,7 +48,10 @@ fn public_homebrew_execution_refuses_unadmitted_bytes_and_credentials_before_hos
         &manifest,
     )?;
     let deadline = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs() + 300;
-    let test_name = "homebrew::qualification::handoff::tests::public_entry::public_homebrew_execution_refuses_unadmitted_bytes_and_credentials_before_host_mutation";
+    let test_name = crate::libtest_case::name(concat!(
+        module_path!(),
+        "::public_homebrew_execution_refuses_unadmitted_bytes_and_credentials_before_host_mutation"
+    ));
     for credential in [
         None,
         Some("GH_TOKEN"),
