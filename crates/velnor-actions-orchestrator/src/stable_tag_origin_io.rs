@@ -14,8 +14,16 @@ pub(super) fn ensure_directory(path: &Path) -> Result<(), OrchestratorError> {
         .create(path)
         .map_err(|_| internal("stable_tag_directory_create"))?;
     let metadata = fs::symlink_metadata(path).map_err(|_| internal("stable_tag_directory"))?;
-    if !metadata.file_type().is_dir() || metadata.permissions().mode() & 0o077 != 0 {
+    if !metadata.file_type().is_dir() {
         return Err(internal("stable_tag_directory_not_private"));
+    }
+    if metadata.permissions().mode() & 0o077 != 0 {
+        fs::set_permissions(path, fs::Permissions::from_mode(0o700))
+            .map_err(|_| internal("stable_tag_directory_not_private"))?;
+        let metadata = fs::symlink_metadata(path).map_err(|_| internal("stable_tag_directory"))?;
+        if !metadata.file_type().is_dir() || metadata.permissions().mode() & 0o077 != 0 {
+            return Err(internal("stable_tag_directory_not_private"));
+        }
     }
     Ok(())
 }
@@ -56,4 +64,26 @@ pub(super) fn write_resolved_plan(bytes: &[u8]) -> Result<(), OrchestratorError>
         return Err(internal("stable_tag_runner_temp"));
     }
     write_private(&temp.join("velnor/package-release-plan.json"), bytes)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ensure_directory_tightens_existing_non_private_directory() {
+        let root = tempfile::tempdir().expect("tempdir");
+        let dir = root.path().join("velnor");
+        fs::DirBuilder::new()
+            .mode(0o755)
+            .create(&dir)
+            .expect("create 0755 dir");
+        fs::set_permissions(&dir, fs::Permissions::from_mode(0o755)).expect("chmod 0755");
+        ensure_directory(&dir).expect("tighten directory to 0700");
+        let mode = fs::symlink_metadata(&dir)
+            .expect("stat dir")
+            .permissions()
+            .mode();
+        assert_eq!(mode & 0o777, 0o700);
+    }
 }
