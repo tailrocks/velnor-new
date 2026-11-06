@@ -38,3 +38,19 @@ route all workload selection through the planner, and prove both relevant execut
 and zero unrelated execution under the [review gates](ci-performance.md).
 Preserve fail-closed selection and the [hard decisions](../hard-decisions.md);
 resolve any required contract amendment explicitly before changing runtime behavior.
+
+## Subsequent audit
+
+At head `d82da760dab88bb36c4407da01f9359a8637bc22`, the
+[CI](https://github.com/tailrocks/velnor-new/actions/runs/42161636994),
+[source qualification](https://github.com/tailrocks/velnor-new/actions/runs/42161637118)
+and [image candidate](https://github.com/tailrocks/velnor-new/actions/runs/42161632042)
+workflows passed. Together they executed 33 jobs for 4,979 summed job seconds
+(82m 59s), over an overlapping cohort lasting 13m 11s. These are job elapsed times,
+not CPU time, billing or proof that all 33 jobs were unnecessary.
+
+The [performance audit tracker](https://github.com/tailrocks/velnor-new/issues/436)
+records the remaining selection, reuse, resource and verification findings with
+their evidence and acceptance criteria. This PR improves review policy; runtime
+findings remain unmet targets. Subsequent changes to the responsible behavior must
+fix its relevant inherited violations in the same PR under the improvement rule.
