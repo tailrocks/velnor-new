@@ -218,6 +218,28 @@ fn release_environment_names_are_valid_github_routes() -> Result<(), Box<dyn std
 }
 
 #[test]
+fn recovery_requires_the_explicit_selected_package() -> Result<(), Box<dyn std::error::Error>> {
+    use velnor_actions_contract::config::RustReleaseConfig;
+    let mut input = serde_json::json!({"enabled":true,"registry":"crates-io","packages":["alpha"],"required_workflow_path":".github/workflows/ci.yml","trusted_reviewer_id":1,"recovery":{"package":"alpha","version":"0.1.1","source_sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}});
+    serde_json::from_value::<RustReleaseConfig>(input.clone())?.validate("test")?;
+    for packages in [
+        serde_json::json!(["alpha", "beta"]),
+        serde_json::json!(["beta"]),
+    ] {
+        input["packages"] = packages;
+        assert!(
+            serde_json::from_value::<RustReleaseConfig>(input.clone())?
+                .validate("test")
+                .is_err()
+        );
+    }
+    input["packages"] = serde_json::json!([]);
+    input["publishable_workspace"] = true.into();
+    serde_json::from_value::<RustReleaseConfig>(input)?.validate("test")?;
+    Ok(())
+}
+
+#[test]
 fn predecessor_accepts_only_first_run_attempt() -> Result<(), Box<dyn std::error::Error>> {
     use velnor_actions_contract::config::RustReleaseConfig;
     let mut input = serde_json::json!({"enabled":true,"registry":"crates-io","packages":["demo"],"required_workflow_path":".github/workflows/ci.yml","trusted_reviewer_id":1,"journal_predecessor":{"run_id":12,"run_attempt":1,"workflow_sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}});

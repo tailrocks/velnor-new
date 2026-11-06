@@ -237,6 +237,15 @@ impl RustReleaseConfig {
         }
         if let Some(recovery) = &self.recovery {
             validate_recovery(file, recovery)?;
+            if !self.publishable_workspace
+                && (self.packages.len() != 1 || self.packages[0] != recovery.package)
+            {
+                return Err(ContractError::config(
+                    file,
+                    "stacks.rust.release.recovery",
+                    "recovery_requires_single_selected_package",
+                ));
+            }
         }
         validate_journal_predecessor(
             file,
