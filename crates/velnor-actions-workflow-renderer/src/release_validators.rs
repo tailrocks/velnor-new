@@ -12,7 +12,12 @@ pub(crate) fn is_clean_text(value: &str, limit: usize) -> bool {
 
 pub fn validate_environment(name: &str) -> Result<(), RenderError> {
     let charset = |b: u8| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'-' | b'/' | b'.');
-    if is_clean_text(name, 128) && name.bytes().all(charset) {
+    if is_clean_text(name, 255)
+        && name.bytes().all(charset)
+        && name
+            .split('/')
+            .all(|segment| !matches!(segment, "" | "." | ".."))
+    {
         Ok(())
     } else {
         Err(RenderError::InvalidWorkflow(format!(

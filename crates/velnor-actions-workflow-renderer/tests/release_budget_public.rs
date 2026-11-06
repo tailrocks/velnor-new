@@ -221,3 +221,36 @@ fn package_names_match_cargo_contract() {
         assert_eq!(validate_package_name(name).is_ok(), valid, "{name:?}");
     }
 }
+
+#[test]
+fn renderer_and_release_contract_accept_the_same_environment_boundaries()
+-> Result<(), Box<dyn std::error::Error>> {
+    use velnor_actions_contract::config::RustReleaseConfig;
+    use velnor_actions_workflow_renderer::release_spec::validate_environment;
+    let base = serde_json::json!({"enabled":true,"registry":"crates-io","packages":["demo"],"required_workflow_path":".github/workflows/ci.yml","trusted_reviewer_id":1});
+    for (name, valid) in [
+        ("a".repeat(128), true),
+        ("a".repeat(129), true),
+        ("a".repeat(255), true),
+        ("a".repeat(256), false),
+        ("prod/./release".into(), false),
+        ("prod//release".into(), false),
+        ("..".into(), false),
+    ] {
+        let mut value = base.clone();
+        value["environment"] = name.clone().into();
+        assert_eq!(
+            serde_json::from_value::<RustReleaseConfig>(value)?
+                .validate("fixture")
+                .is_ok(),
+            valid,
+            "contract {name}"
+        );
+        assert_eq!(
+            validate_environment(&name).is_ok(),
+            valid,
+            "renderer {name}"
+        );
+    }
+    Ok(())
+}
