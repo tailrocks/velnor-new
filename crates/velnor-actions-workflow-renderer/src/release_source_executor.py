@@ -194,6 +194,7 @@ def read_context(descriptor):
     for package in packages:
         if (not isinstance(package, dict) or set(package) != {'name', 'version', 'manifest', 'features', 'upload_config_sha256'}
                 or not isinstance(package['name'], str)
+                or len(package['name']) > 64
                 or not re.fullmatch(r'[A-Za-z_][A-Za-z0-9_-]*', package['name'])
                 or package['name'] in names
                 or (package['version'] is not None and (not isinstance(package['version'], str)
@@ -230,7 +231,8 @@ def read_semver_context(descriptor):
     version = r'[0-9]+\.[0-9]+\.[0-9]+(?:-[A-Za-z0-9.-]+)?(?:\+[A-Za-z0-9.-]+)?'
     if (not isinstance(value, dict) or set(value) != fields
             or not isinstance(value['source_sha'], str) or not re.fullmatch(r'[a-f0-9]{40}', value['source_sha'])
-            or not isinstance(value['package'], str) or not re.fullmatch(r'[A-Za-z_][A-Za-z0-9_-]*', value['package'])
+            or not isinstance(value['package'], str) or len(value['package']) > 64
+            or not re.fullmatch(r'[A-Za-z_][A-Za-z0-9_-]*', value['package'])
             or not isinstance(value['target_version'], str) or not re.fullmatch(version, value['target_version'])
             or not isinstance(value['baseline_version'], str) or not re.fullmatch(version, value['baseline_version'])
             or not isinstance(value['baseline_checksum'], str) or not re.fullmatch(r'[a-f0-9]{64}', value['baseline_checksum'])

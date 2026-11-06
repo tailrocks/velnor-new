@@ -210,7 +210,8 @@ pub(super) fn is_package_name(name: &str) -> bool {
     let Some(first) = bytes.next() else {
         return false;
     };
-    (first.is_ascii_alphabetic() || first == b'_')
+    name.len() <= 64
+        && (first.is_ascii_alphabetic() || first == b'_')
         && bytes.all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_'))
 }
 

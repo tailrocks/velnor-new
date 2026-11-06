@@ -30,6 +30,19 @@ fn intent_rejects_unapproved_or_ambiguous_release_inputs() -> Result<(), Box<dyn
             "accepted {template:?}"
         );
     }
+    for (name, valid) in [("a".repeat(64), true), ("a".repeat(65), false)] {
+        let mut candidate = value.clone();
+        candidate["packages"] = serde_json::json!([name]);
+        candidate["publish_features"] = serde_json::json!({name.clone(): []});
+        candidate["recovery"]["package"] = name.clone().into();
+        assert_eq!(
+            serde_json::from_value::<CrateReleaseIntent>(candidate)?
+                .validate()
+                .is_ok(),
+            valid,
+            "{name}"
+        );
+    }
     let intent: CrateReleaseIntent = serde_json::from_value(value.clone())?;
     intent.validate()?;
     let mut hidden = intent.clone();
@@ -399,6 +412,22 @@ fn crate_tag_templates_preserve_only_placeholder_whitespace()
                 .validate("test")
                 .is_err(),
             "accepted {template:?}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn release_package_names_obey_registry_length_limit() -> Result<(), Box<dyn std::error::Error>> {
+    use velnor_actions_contract::config::RustReleaseConfig;
+    for (name, valid) in [("a".repeat(64), true), ("a".repeat(65), false)] {
+        let value = serde_json::json!({"enabled":true,"registry":"crates-io","packages":[name],"required_workflow_path":".github/workflows/ci.yml","trusted_reviewer_id":1});
+        assert_eq!(
+            serde_json::from_value::<RustReleaseConfig>(value)?
+                .validate("test")
+                .is_ok(),
+            valid,
+            "{name}"
         );
     }
     Ok(())

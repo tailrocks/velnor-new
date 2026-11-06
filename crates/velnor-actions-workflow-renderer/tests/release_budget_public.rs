@@ -208,6 +208,8 @@ fn generated_shell_arguments_preserve_apostrophes() -> Result<(), Box<dyn std::e
 #[test]
 fn package_names_match_cargo_contract() {
     use velnor_actions_workflow_renderer::release_spec::validate_package_name;
+    assert!(validate_package_name(&"a".repeat(64)).is_ok());
+    assert!(validate_package_name(&"a".repeat(65)).is_err());
     for (name, valid) in [
         ("_codec", true),
         ("alpha-2", true),

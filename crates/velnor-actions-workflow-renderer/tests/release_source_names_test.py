@@ -31,7 +31,7 @@ def check(reader, value, valid):
     finally:
         os.close(descriptor)
 
-for name, valid in [('_codec', True), ('alpha-2', True), ('2codec', False), ('-codec', False), ('', False), ('é', False)]:
+for name, valid in [('_codec', True), ('alpha-2', True), ('2codec', False), ('-codec', False), ('', False), ('é', False), ('a' * 64, True), ('a' * 65, False)]:
     source = {'identity': identity, 'source_sha': 'a' * 40, 'rust_version': '1.99.1', 'manifest': 'Cargo.toml', 'authentication': 'trusted-publishing', 'source_files': files, 'packages': [{'name': name, 'version': '1.2.3', 'manifest': 'Cargo.toml', 'features': [], 'upload_config_sha256': 'b' * 64}], 'tools': tools}
     semver = {'source_sha': 'a' * 40, 'package': name, 'target_version': '1.2.3', 'manifest': 'Cargo.toml', 'features': [], 'baseline_version': '1.2.2', 'baseline_checksum': 'b' * 64, 'files': files}
     check(executor.read_context, source, valid)
