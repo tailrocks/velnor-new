@@ -195,7 +195,7 @@ fn verify_missing_promisor_blob(
         .args(["-p", "velnor-runner-host", "--lib"])
         .env("CARGO_TARGET_DIR", target)
         .env("VELNOR_RUNNER_BUILD_SOURCE_SHA", source)
-        .env("VELNOR_RUNNER_BUILD_HELPER_SHA256", "a".repeat(64))
+        .env("VELNOR_RUNNER_BUILD_HELPER_SHA256", "b".repeat(64))
         .env("PATH", path)
         .env("FIXTURE_REMOTE_MARKER", &marker)
         .output()?;
@@ -248,7 +248,7 @@ fn verify_git_exec_path_cannot_replace_child(
         .args(["-p", "velnor-runner-host", "--lib"])
         .env("CARGO_TARGET_DIR", target)
         .env("VELNOR_RUNNER_BUILD_SOURCE_SHA", source)
-        .env("VELNOR_RUNNER_BUILD_HELPER_SHA256", "b".repeat(64))
+        .env("VELNOR_RUNNER_BUILD_HELPER_SHA256", "c".repeat(64))
         .env("GIT_EXEC_PATH", &executable_dir)
         .env("FIXTURE_EXEC_MARKER", &marker)
         .output()?;
