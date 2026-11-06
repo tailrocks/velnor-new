@@ -137,7 +137,7 @@ generator_version = "{generator_version}"
 generator_source_sha = "{generator_source}"
 generator_manifest_sha256 = "{generator_manifest_sha}"
 release_plz_version = "0.4.3"
-runner = "ubuntu-24.04"
+runner = "ubuntu-26.04"
 authentication = "{authentication}"
 manifest_path = "Cargo.toml"
 pr_write_paths = ["CHANGELOG.md", "Cargo.lock", "Cargo.toml"]
@@ -266,7 +266,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             else:
                 status, obj = 404, {"message": "Not Found"}
         elif p == f"/repos/{repository}":
-            obj = {"id": 22, "full_name": repository, "default_branch": "main"}
+            obj = {"id": 22, "full_name": repository, "default_branch": "main", "owner": {"id": 77, "login": repository.split("/", 1)[0]}}
         elif p == f"/repos/{repository}/git/ref/heads/main":
             obj = {
                 "ref": "refs/heads/main",
@@ -291,8 +291,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 "head_branch": "main",
                 "event": "workflow_dispatch",
                 "path": ".github/workflows/release.yml",
-                "repository": {"id": 22, "full_name": repository},
-                "head_repository": {"id": 22, "full_name": repository},
+                "repository": {"id": 22, "full_name": repository, "owner": {"id": 77, "login": repository.split("/", 1)[0]}},
+                "head_repository": {"id": 22, "full_name": repository, "owner": {"id": 77, "login": repository.split("/", 1)[0]}},
             }
         elif "/compare/" in p:
             obj = {"status": "ahead"}

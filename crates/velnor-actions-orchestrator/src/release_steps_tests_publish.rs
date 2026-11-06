@@ -34,7 +34,7 @@ fn publishing_jobs_verify_generator_before_running_it() -> Result<(), Box<dyn st
     for version in ["1..2", "1.2.3-rc.1", "latest"] {
         assert!(velnor_actions_workflow_renderer::release_generator_bootstrap::acquire_step(version, "ubuntu-26.04", &"b".repeat(40), &"c".repeat(64)).is_err());
     }
-    assert!(velnor_actions_workflow_renderer::release_generator_bootstrap::acquire_step("1.2.3", "ubuntu-26.04", &"b".repeat(40), &"c".repeat(64)).is_err());
+    assert!(velnor_actions_workflow_renderer::release_generator_bootstrap::acquire_step("1.2.3", "ubuntu-24.04", &"b".repeat(40), &"c".repeat(64)).is_err());
     for authentication in [ReleaseAuthentication::TrustedPublishing, ReleaseAuthentication::BootstrapToken] {
         let (spec, rust) = fixture_for(authentication)?;
         let workflow = render_release_workflow(&spec, &context, &rust)?;
