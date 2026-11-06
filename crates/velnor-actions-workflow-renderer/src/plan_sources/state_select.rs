@@ -101,7 +101,9 @@ select_all() {
   python3 -I -c 'import math, os, pathlib, signal, subprocess, sys, time' >/dev/null 2>&1 || return 0
 @REMOVE_UNIT_ENV@
   export VELNOR_STATE_SELECT_DEADLINE="$deadline" VELNOR_STATE_UNIT_TIMEOUT="$unit_limit" VELNOR_STATE_PARALLELISM=@PARALLELISM@ VELNOR_STATE_SELECT_DIR="$d" VELNOR_STATE_SELECT_PREFIX="$state_prefix" VELNOR_STATE_SELECT_LIST_LIMIT=@SELECT_LIMIT@
-  exec python3 -I -c 'import os; exec(bytes.fromhex(os.environ.pop("VELNOR_STATE_SELECT_SUPERVISOR_HEX")))'
+  unset i seen line record_name record prefix rest attested produce unit_name root slug remaining character compat_name snapshot_name compat snapshot result extra ordinal state_prefix IFS
+  unset VELNOR_STATE_SELECT_TAG VELNOR_STATE_SELECT_KIND VELNOR_STATE_SELECT_UNIT_PREFIX VELNOR_STATE_SELECT_UNIT
+  exec python3 -I -c 'import os; payload = os.environ.pop("VELNOR_STATE_SELECT_SUPERVISOR_HEX"); [os.environ.pop(k) for k in list(os.environ) if k.startswith(("VELNOR_STATE_SELECT_UNIT_R", "VELNOR_STATE_COMPAT_R", "VELNOR_STATE_SNAPSHOT_R"))]; exec(bytes.fromhex(payload))'
 }
 emit() {
   { printf '%s\n' "$1<<@DELIMITER@"; cat "$d/u-$2/out"; printf '%s\n' @DELIMITER@; } >> "$GITHUB_OUTPUT"

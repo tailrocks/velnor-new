@@ -65,7 +65,7 @@ for i in $ordinals; do
   [ "$ordinal" = "r$i" ] || exit 1
   case "$rest" in *" "*) attested=${rest%% *}; rest=${rest#* } ;; *) exit 1 ;; esac
   case "$rest" in *" "*) produce=${rest%% *}; rest=${rest#* } ;; *) exit 1 ;; esac
-  case "$rest" in "  ") compat=; snapshot= ;; " "*) compat=; snapshot=${rest# } ;; *" "*) compat=${rest%% *}; snapshot=${rest#* } ;; *) exit 1 ;; esac
+  case "$rest" in *" "*) compat=${rest%% *}; snapshot=${rest#* } ;; *) exit 1 ;; esac
   case "$snapshot" in *" "*) exit 1 ;; esac
   emit "$attested" "$ordinal"
   decide "$produce" "$ordinal" "$prefix" "$compat" "$snapshot"

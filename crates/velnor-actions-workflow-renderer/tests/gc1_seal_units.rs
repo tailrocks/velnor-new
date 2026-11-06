@@ -177,6 +177,9 @@ pub(crate) fn run_select_units_with_timeout(
     let (script, env) = select_script_env(scene, gh, units, extra, timeout)?;
     let pairs: Vec<(&str, &str)> = env.iter().map(|(k, v)| (k.as_str(), v.as_str())).collect();
     let output = scene.run_runner_script(&script, &pairs)?;
+    if PathBuf::from(gh.dir()).join("token-missing").exists() {
+        return Err(fail("gh child did not receive GH_TOKEN"));
+    }
     if PathBuf::from(gh.dir())
         .join("supervisor-payload-leaked")
         .exists()

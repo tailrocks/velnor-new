@@ -318,6 +318,9 @@ pub(crate) fn run_select(
         .map(|(key, value)| (key.as_str(), value.as_str()))
         .collect();
     let output = scene.run_script(&script, &pairs, None)?;
+    if PathBuf::from(gh.dir()).join("token-missing").exists() {
+        return Err(fail("gh child did not receive GH_TOKEN"));
+    }
     if PathBuf::from(gh.dir())
         .join("supervisor-payload-leaked")
         .exists()

@@ -103,6 +103,10 @@ fn assert_cold_outputs(
     expected_produce: &str,
     extra: &[(&str, &str)],
 ) -> Result<(), Box<dyn Error>> {
+    match fs::remove_file(&scene.github_output) {
+        Err(error) if error.kind() != std::io::ErrorKind::NotFound => return Err(error.into()),
+        _ => {}
+    }
     run_select_units(scene, gh, &[(StateUnit::Union, ".")], extra)?;
     expect(&selected_unit(scene, StateUnit::Union, ".")?, &[], label)?;
     expect_flag(
@@ -224,6 +228,35 @@ fn selector_colds_when_bash_or_repository_context_is_missing() -> Result<(), Box
         return Err(fail("cold selector lost empty trailing metadata fields"));
     }
 
+    for (label, compat, snapshot) in [
+        (
+            "cold output preserves compat only",
+            expected_compat.as_str(),
+            "",
+        ),
+        (
+            "cold output preserves snapshot only",
+            "",
+            expected_snapshot.as_str(),
+        ),
+    ] {
+        assert_cold_outputs(
+            &scene,
+            &gh,
+            label,
+            "false",
+            &[
+                ("PATH", path.as_str()),
+                ("VELNOR_STATE_COMPAT_R0", compat),
+                ("VELNOR_STATE_SNAPSHOT_R0", snapshot),
+            ],
+        )?;
+        let fields = cold_manifest(&scene)?;
+        if fields.len() != 6 || fields[4] != compat || fields[5] != snapshot {
+            return Err(fail(label));
+        }
+    }
+
     for (label, extra) in [
         ("missing ref", vec![("VELNOR_DEFAULT_REF", "")]),
         ("missing repository", vec![("GITHUB_REPOSITORY", "")]),
@@ -232,6 +265,20 @@ fn selector_colds_when_bash_or_repository_context_is_missing() -> Result<(), Box
     }
     if std::path::Path::new(&gh.dir()).join("activity").exists() {
         return Err(fail("selector called gh during a cold fallback"));
+    }
+    scene.finish()?;
+
+    let (scene, gh) = self::scene("seal-select-env-missing-python")?;
+    let path = scene.restricted_path(&["sh", "bash", "printenv", "cat", "rm", "mkdir", "chmod"])?;
+    assert_cold_outputs(
+        &scene,
+        &gh,
+        "missing python",
+        "true",
+        &[("PATH", path.as_str())],
+    )?;
+    if PathBuf::from(gh.dir()).join("activity").exists() {
+        return Err(fail("selector called gh without python"));
     }
     scene.finish()
 }

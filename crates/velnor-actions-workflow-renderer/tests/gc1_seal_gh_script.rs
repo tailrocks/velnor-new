@@ -3,18 +3,13 @@
 
 pub(super) const GH: &str = r#"#!/bin/sh
 d="${FAKE_GH_DIR:?}"
-[ -z "${VELNOR_STATE_SELECT_SUPERVISOR_HEX-}" ] || : > "$d/supervisor-payload-leaked"
-[ -n "${GH_TOKEN-}" ] || : > "$d/supervisor-payload-leaked"
-i=0
-while [ "$i" -lt 65 ]; do
-  for name in "VELNOR_STATE_SELECT_UNIT_R$i" "VELNOR_STATE_COMPAT_R$i" "VELNOR_STATE_SNAPSHOT_R$i"; do
-    if printenv "$name" >/dev/null 2>&1; then : > "$d/supervisor-payload-leaked"; fi
-  done
-  i=$((i + 1))
-done
-[ -z "${VELNOR_STATE_SELECT_UNIT_COUNT-}" ] || : > "$d/supervisor-payload-leaked"
-for name in ordinals i seen line record_name record prefix rest attested produce unit_name root slug remaining character compat_name snapshot_name compat snapshot result extra ordinal state_prefix IFS VELNOR_STATE_SELECT_TAG VELNOR_STATE_SELECT_KIND VELNOR_STATE_SELECT_UNIT_PREFIX VELNOR_STATE_SELECT_UNIT; do
-  if printenv "$name" >/dev/null 2>&1; then : > "$d/supervisor-payload-leaked"; fi
+[ -n "${GH_TOKEN-}" ] || : > "$d/token-missing"
+env | while IFS= read -r entry; do
+  name=${entry%%=*}
+  case "$name" in
+    VELNOR_STATE_SELECT_SUPERVISOR_HEX|VELNOR_STATE_SELECT_UNIT_COUNT|VELNOR_STATE_SELECT_UNIT_R*|VELNOR_STATE_COMPAT_R*|VELNOR_STATE_SNAPSHOT_R*|ordinals|i|seen|line|record_name|record|prefix|rest|attested|produce|unit_name|root|slug|remaining|character|compat_name|snapshot_name|compat|snapshot|result|extra|ordinal|state_prefix|IFS)
+      if command -p printenv "$name" >/dev/null 2>&1; then : > "$d/supervisor-payload-leaked"; fi ;;
+  esac
 done
 mode=ok
 [ -f "$d/mode" ] && read -r mode < "$d/mode"

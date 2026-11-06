@@ -94,6 +94,9 @@ fn expect_dynamic_cold(
 fn selector_ignores_inherited_ordinals_and_frame_values() -> Result<(), Box<dyn Error>> {
     let (scene, gh) = scene("seal-select-env-inherited-ordinals")?;
     let units = [(StateUnit::Union, "."), (StateUnit::Suite, "a")];
+    let candidate = unit_key(StateUnit::Union, ".", 0, 0x1000, 1)?;
+    gh.list(&rows_of(&[(T3.to_owned(), candidate.clone())]))?;
+    gh.attest(&[Attestation::signed(&candidate)])?;
     run_select_units(
         &scene,
         &gh,
@@ -102,6 +105,30 @@ fn selector_ignores_inherited_ordinals_and_frame_values() -> Result<(), Box<dyn 
             ("ordinals", "1 0 64"),
             ("i", "64"),
             ("state_prefix", "foreign-"),
+            ("seen", "poison"),
+            ("line", "poison"),
+            ("record_name", "poison"),
+            ("record", "poison"),
+            ("prefix", "poison"),
+            ("rest", "poison"),
+            ("attested", "poison"),
+            ("produce", "poison"),
+            ("unit_name", "poison"),
+            ("root", "poison"),
+            ("slug", "poison"),
+            ("remaining", "poison"),
+            ("character", "poison"),
+            ("compat_name", "poison"),
+            ("snapshot_name", "poison"),
+            ("compat", "poison"),
+            ("snapshot", "poison"),
+            ("result", "poison"),
+            ("extra", "poison"),
+            ("ordinal", "poison"),
+            ("VELNOR_STATE_SELECT_UNIT_R65", "poison"),
+            ("VELNOR_STATE_COMPAT_R65", ""),
+            ("VELNOR_STATE_SNAPSHOT_R65", "poison"),
+            ("SPOOF", "value\nrecord=poison"),
             ("VELNOR_STATE_SELECT_TAG", "attested"),
             ("VELNOR_STATE_SELECT_KIND", "foreign"),
             ("VELNOR_STATE_SELECT_UNIT_PREFIX", "foreign-"),
@@ -121,12 +148,21 @@ fn selector_ignores_inherited_ordinals_and_frame_values() -> Result<(), Box<dyn 
         ));
     }
     for (unit, root) in units {
-        if !selected_unit(&scene, unit, root)?.is_empty() {
+        let expected = if unit == StateUnit::Union {
+            vec![candidate.clone()]
+        } else {
+            Vec::new()
+        };
+        if selected_unit(&scene, unit, root)? != expected {
             return Err(fail("inherited ordinals changed selected outputs"));
         }
         expect_flag(
             &produce_flag(&scene, unit, root)?,
-            "true",
+            if unit == StateUnit::Union {
+                "false"
+            } else {
+                "true"
+            },
             "inherited ordinal isolation",
         )?;
     }

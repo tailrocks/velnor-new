@@ -39,7 +39,12 @@ impl Scene {
         let path = self.scratch.join("runner step's script.sh");
         std::fs::write(&path, script)?;
         let path_env = format!("{}:{}", self.bin.display(), std::env::var("PATH")?);
-        let mut command = Command::new("bash");
+        let bash = std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default())
+            .map(|path| path.join("bash"))
+            .find(|path| path.is_file())
+            .ok_or_else(|| fail("cannot find runner bash"))?
+            .canonicalize()?;
+        let mut command = Command::new(bash);
         command
             .args(["--noprofile", "--norc", "-e", "-o", "pipefail"])
             .arg(path)
