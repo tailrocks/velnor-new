@@ -64,6 +64,7 @@ fn derives_reviewable_plan_from_verified_source_tree() -> Result<(), Orchestrato
         tag_template: "{{ crate }}-v{{ version }}".into(),
         recovery: None,
         journal_predecessor: None,
+        continuation_source_sha: None,
     };
     let mut artifact = crate::crate_release_pr_artifact::PreparationArtifact {
         schema: 1,

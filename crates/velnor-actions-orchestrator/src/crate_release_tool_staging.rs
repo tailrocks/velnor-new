@@ -149,24 +149,12 @@ pub(super) fn authority_matches(request: &ToolchainStageRequest<'_>) -> bool {
 
 fn source_matches(request: &ToolchainStageRequest<'_>) -> bool {
     match request.github.event.as_str() {
-        "workflow_dispatch" => request
-            .intent
-            .recovery
-            .as_ref()
-            .map(|recovery| recovery.source_sha.as_str())
-            .or_else(|| {
-                request
-                    .intent
-                    .new_crates
-                    .as_ref()
-                    .map(|creation| creation.source_sha.as_str())
-            })
-            .is_some_and(|source| {
-                request.github.source_sha == source
-                    && request.github.recovery_sha.as_deref() == Some(source)
-            }),
+        "workflow_dispatch" => request.intent.exact_source_sha().is_some_and(|source| {
+            request.github.source_sha == source
+                && request.github.recovery_sha.as_deref() == Some(source)
+        }),
         "push" => {
-            request.intent.new_crates.is_none()
+            request.intent.exact_source_sha().is_none()
                 && request.github.recovery_sha.is_none()
                 && request.github.source_sha == request.github.workflow_sha
         }

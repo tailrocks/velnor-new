@@ -110,6 +110,9 @@ pub struct RustReleaseConfig {
     pub journal_predecessor: Option<CrateReleasePredecessor>,
 
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub continuation_source_sha: Option<String>,
+
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub rehearsal: Option<ReleaseRehearsalConfig>,
 
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
@@ -158,6 +161,7 @@ impl Default for RustReleaseConfig {
             tag_name: default_tag_name(),
             recovery: None,
             journal_predecessor: None,
+            continuation_source_sha: None,
             rehearsal: None,
             version_groups: BTreeMap::new(),
         }
@@ -165,6 +169,19 @@ impl Default for RustReleaseConfig {
 }
 
 impl RustReleaseConfig {
+    #[must_use]
+    pub fn exact_source_sha(&self) -> Option<&str> {
+        self.recovery
+            .as_ref()
+            .map(|item| item.source_sha.as_str())
+            .or_else(|| {
+                self.new_crates
+                    .as_ref()
+                    .map(|item| item.source_sha.as_str())
+            })
+            .or(self.continuation_source_sha.as_deref())
+    }
+
     #[must_use]
     pub fn effective_authentication(&self) -> ReleaseAuthentication {
         self.authentication.unwrap_or_default()
@@ -236,16 +253,32 @@ impl RustReleaseConfig {
             }
         }
         self.validate_recovery_selection(file)?;
-        validate_journal_predecessor(
-            file,
-            self.journal_predecessor.as_ref(),
-            self.recovery.is_some() || self.new_crates.is_some(),
-        )?;
+        self.validate_sources(file)?;
         validate_version_groups(
             file,
             &self.version_groups,
             &self.packages,
             self.publishable_workspace,
+        )?;
+        Ok(())
+    }
+
+    fn validate_sources(&self, file: &str) -> Result<(), ContractError> {
+        validate_journal_predecessor(
+            file,
+            self.journal_predecessor.as_ref(),
+            self.exact_source_sha().is_some(),
+        )?;
+        validate_continuation_source(
+            file,
+            self.continuation_source_sha.as_deref(),
+            self.journal_predecessor.is_some(),
+        )?;
+        validate_exact_source_agreement(
+            file,
+            self.recovery.as_ref().map(|r| r.source_sha.as_str()),
+            self.new_crates.as_ref().map(|r| r.source_sha.as_str()),
+            self.continuation_source_sha.as_deref(),
         )?;
         Ok(())
     }
@@ -347,6 +380,40 @@ pub(crate) fn validate_journal_predecessor(
             file,
             "journal_predecessor",
             "invalid_predecessor",
+        ));
+    }
+    Ok(())
+}
+
+pub(crate) fn validate_continuation_source(
+    file: &str,
+    source: Option<&str>,
+    predecessor: bool,
+) -> Result<(), ContractError> {
+    if source.is_some_and(|value| !predecessor || !super::release_validation::is_full_sha(value)) {
+        return Err(ContractError::config(
+            file,
+            "continuation_source_sha",
+            "invalid_continuation_source",
+        ));
+    }
+    Ok(())
+}
+
+pub(crate) fn validate_exact_source_agreement(
+    file: &str,
+    recovery: Option<&str>,
+    creation: Option<&str>,
+    predecessor: Option<&str>,
+) -> Result<(), ContractError> {
+    let mut sources = [recovery, creation, predecessor].into_iter().flatten();
+    if let Some(first) = sources.next()
+        && sources.any(|source| source != first)
+    {
+        return Err(ContractError::config(
+            file,
+            "journal_predecessor",
+            "source_mismatch",
         ));
     }
     Ok(())

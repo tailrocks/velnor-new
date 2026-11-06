@@ -23,7 +23,8 @@ Reference for the typed config in `velnor-actions-contract`
 | `release_pr` | bool | `true` | Whether release-plz preparation PRs run (crates.io only; `git-tag` releases are prepared by a maintainer's version bump). |
 | `tag_name` | string | `"{{ package }}-v{{ version }}"` | For crates.io, must be `{{ package }}-v{{ version }}` (whitespace-insensitive). Git-tag releases support safe templates containing both variables. |
 | `recovery` | table or absent | absent | Binds an exact package, version, and source for an approved recovery dispatch; push events are rejected. Cannot coexist with `new_crates`. Bootstrap-token authentication requires either `recovery` or `new_crates`. |
-| `journal_predecessor` | table or absent | absent | Binds a reviewed previous run ID, attempt, and workflow SHA for durable release recovery. Requires `recovery` or `new_crates` to bind the exact source; only attempt `1` is accepted. |
+| `journal_predecessor` | table or absent | absent | Binds a reviewed previous run ID, attempt, and workflow SHA for durable release recovery. Requires an exact source through `recovery`, `new_crates`, or `continuation_source_sha`; only attempt `1` is accepted. |
+| `continuation_source_sha` | string or absent | absent | Selects the exact 40-character lowercase source SHA for a predecessor continuation without changing the selected packages. Requires `journal_predecessor`; any other exact-source selection must agree. |
 | `version_groups` | string→string-list map | `{}` | Group names use package-name shape; members must be sorted, unique, listed in `packages`, and in at most one group. Native release-plz computes a group maximum, but inherited workspace versions take precedence; consult the pinned release-plz behavior for the resulting updates. |
 
 For example, to verify `demo-crate` with its `pty` feature during publication:
@@ -39,7 +40,11 @@ Cargo default features remain enabled. The publisher must pass the same reviewed
 
 To resume an interrupted first attempt, review a recovery configuration that
 names its exact run ID, attempt `1`, and workflow SHA in
-`journal_predecessor`, then start a fresh approved dispatch. GitHub workflow
+`journal_predecessor`, then start a fresh approved dispatch. For a partial
+workspace release with the same package selection, set
+`continuation_source_sha` to the original release source. The predecessor
+journal must independently confirm the same source, packages, and versions.
+GitHub workflow
 reruns are not supported by the current approval verification. If a later
 attempt performed an operation, stop and reconcile it separately before
 publishing; do not identify attempt `1` as a substitute for that operation.

@@ -23,16 +23,7 @@ pub(crate) fn request_from_environment(
     {
         return Err(internal("crate_release_workflow_identity"));
     }
-    let approved_source = intent
-        .recovery
-        .as_ref()
-        .map(|item| item.source_sha.as_str())
-        .or_else(|| {
-            intent
-                .new_crates
-                .as_ref()
-                .map(|item| item.source_sha.as_str())
-        });
+    let approved_source = intent.exact_source_sha();
     let recovery_sha = source_for_event(&event, approved_source)?;
     let source_sha = recovery_sha
         .clone()

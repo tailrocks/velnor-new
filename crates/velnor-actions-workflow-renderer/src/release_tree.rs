@@ -277,7 +277,11 @@ fn release_intent_mode_matches(
         &spec.plan.version,
         spec.plan.dispatch,
     ) {
-        (None, None, None, false) => true,
+        (None, None, None, false) => intent.journal_predecessor.is_none(),
+        (None, None, None, true) => {
+            intent.journal_predecessor.is_some()
+                && intent.continuation_source_sha.as_deref() == Some(spec.plan.source_sha.as_str())
+        }
         (Some(recovery), None, Some(version), true) => {
             recovery.source_sha == spec.plan.source_sha
                 && &recovery.version == version

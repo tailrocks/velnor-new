@@ -183,20 +183,11 @@ fn verify_request_intent(
     request: &GitHubAdmissionRequest,
 ) -> Result<(), OrchestratorError> {
     let recovery = if request.event == "workflow_dispatch" {
-        intent
-            .recovery
-            .as_ref()
-            .map(|item| item.source_sha.as_str())
-            .or_else(|| {
-                intent
-                    .new_crates
-                    .as_ref()
-                    .map(|item| item.source_sha.as_str())
-            })
+        intent.exact_source_sha()
     } else {
         None
     };
-    if (intent.new_crates.is_some() && request.event != "workflow_dispatch")
+    if (intent.exact_source_sha().is_some() && request.event != "workflow_dispatch")
         || !release_identity::same_repository(&request.repository, &intent.repository)
         || request.default_branch != intent.default_branch
         || request.environment != intent.environment
