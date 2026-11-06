@@ -322,6 +322,14 @@ pub(super) fn approved_pr(
     let author = pr["user"]["login"]
         .as_str()
         .ok_or_else(|| internal("crate_release_pr_author"))?;
+    let author_id = pr["user"]["id"]
+        .as_u64()
+        .filter(|id| *id > 0)
+        .ok_or_else(|| internal("crate_release_pr_author_id"))?;
+    let author = super::reviews::ReviewAuthor {
+        login: author,
+        id: author_id,
+    };
     let head = pr["head"]["sha"]
         .as_str()
         .ok_or_else(|| internal("crate_release_pr_head"))?;

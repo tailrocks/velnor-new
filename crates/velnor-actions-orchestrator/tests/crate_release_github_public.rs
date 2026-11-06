@@ -12,6 +12,7 @@ const SOURCE: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 const WORKFLOW: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
 
 struct Fixture {
+    author_id: u64,
     check: Value,
     extra_checks: Vec<Value>,
     reviews: Vec<Value>,
@@ -29,6 +30,7 @@ struct Fixture {
 impl Fixture {
     fn valid() -> Self {
         Self {
+            author_id: 54,
             check: json!({"id":1,"name":"Required","head_sha":SOURCE,"check_suite":{"id":123},"app":{"id":15368,"slug":"github-actions"},"status":"completed","conclusion":"success","started_at":"2026-11-03T15:00:00Z"}),
             extra_checks: Vec::new(),
             reviews: vec![
@@ -87,11 +89,15 @@ impl GitHubAdmissionRead for Fixture {
             } else {
                 SOURCE
             };
-            json!([{"number":7,"merged_at":"2026-11-03T15:38:50Z","merge_commit_sha":commit,"user":{"login":"author"},"base":{"ref":"main","repo":{"full_name":"example/crate","id":101,"owner":{"id":202,"login":"example"}}},"head":{"ref":self.release_branch,"sha":WORKFLOW,"repo":{"full_name":"example/crate","id":101,"owner":{"id":202,"login":"example"}}}}])
+            json!([{"number":7,"merged_at":"2026-11-03T15:38:50Z","merge_commit_sha":commit,"user":{"login":"author","id":self.author_id},"base":{"ref":"main","repo":{"full_name":"example/crate","id":101,"owner":{"id":202,"login":"example"}}},"head":{"ref":self.release_branch,"sha":WORKFLOW,"repo":{"full_name":"example/crate","id":101,"owner":{"id":202,"login":"example"}}}}])
         } else if route.ends_with(SOURCE) && route.contains("/git/commits/") {
             json!({"sha":SOURCE,"tree":{"sha":SOURCE}})
         } else if route.ends_with(WORKFLOW) && route.contains("/git/commits/") {
             json!({"sha":WORKFLOW,"tree":{"sha":SOURCE}})
+        } else if route.ends_with("/collaborators/security-bot/permission") {
+            json!({"user":{"id":56,"type":"Bot"},"permission":"write"})
+        } else if route.ends_with("/collaborators/read-only/permission") {
+            json!({"user":{"id":57,"type":"User"},"permission":"read"})
         } else if route.ends_with("/collaborators/reviewer/permission") {
             json!({"user":{"id":55,"type":"User"},"permission":self.reviewer_permission})
         } else if route.contains("/pulls/7/reviews?") {
@@ -249,9 +255,51 @@ fn release_requires_valid_human_reviews_and_protected_environment() {
     let mut bad = Fixture::valid();
     bad.reviews[0]["submitted_at"] = json!("2026-11-03T15:38:50Z");
     assert!(
-        verify_github_evidence(&request(), &bad).is_err(),
-        "approval at merge time is not proven earlier"
+        verify_github_evidence(&request(), &bad).is_ok(),
+        "approval remains eligible in the API merge timestamp second"
     );
+}
+
+#[test]
+fn release_review_decisions_use_authority_and_immutable_actor_identity() {
+    for (login, id, association, kind) in [
+        ("outsider", 58, "NONE", "User"),
+        ("read-only", 57, "MEMBER", "User"),
+        ("outside-bot", 59, "NONE", "Bot"),
+    ] {
+        let mut fixture = Fixture::valid();
+        let mut review = fixture.reviews[0].clone();
+        review["id"] = json!(2);
+        review["user"] = json!({"login":login,"id":id,"type":kind});
+        review["author_association"] = json!(association);
+        review["state"] = json!("CHANGES_REQUESTED");
+        review["submitted_at"] = json!("2026-11-03T15:01:00Z");
+        fixture.reviews.push(review);
+        assert!(
+            verify_github_evidence(&request(), &fixture).is_ok(),
+            "{login}"
+        );
+    }
+    let mut renamed_author = Fixture::valid();
+    renamed_author.author_id = 55;
+    assert!(verify_github_evidence(&request(), &renamed_author).is_err());
+}
+
+#[test]
+fn release_review_cannot_turn_an_authorized_bot_into_a_human() {
+    let mut fixture = Fixture::valid();
+    let mut bot = fixture.reviews[0].clone();
+    bot["id"] = json!(2);
+    bot["user"] = json!({"login":"security-bot","id":56,"type":"Bot"});
+    bot["state"] = json!("CHANGES_REQUESTED");
+    bot["submitted_at"] = json!("2026-11-03T15:01:00Z");
+    let mut impersonation = bot.clone();
+    impersonation["id"] = json!(3);
+    impersonation["user"]["type"] = json!("User");
+    impersonation["state"] = json!("APPROVED");
+    impersonation["submitted_at"] = json!("2026-11-03T15:02:00Z");
+    fixture.reviews.extend([bot, impersonation]);
+    assert!(verify_github_evidence(&request(), &fixture).is_err());
 }
 
 #[test]

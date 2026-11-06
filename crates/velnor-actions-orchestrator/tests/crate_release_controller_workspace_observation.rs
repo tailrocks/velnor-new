@@ -20,7 +20,7 @@ impl GitHubAdmissionRead for WorkspaceGithub {
         }
         if route.contains("/pulls?per_page=100&page=1") {
             return Ok(
-                json!([{"number":17,"merged_at":"2026-11-03T16:00:00Z","merge_commit_sha":sha,"base":{"ref":"main","repo":{"full_name":"example/demo","owner":{"id":77,"login":"example"}}},"head":{"ref":"release-plz-1","repo":{"full_name":"example/demo","owner":{"id":77,"login":"example"}},"sha":sha},"user":{"login":"release-bot"}}]),
+                json!([{"number":17,"merged_at":"2026-11-03T16:00:00Z","merge_commit_sha":sha,"base":{"ref":"main","repo":{"full_name":"example/demo","owner":{"id":77,"login":"example"}}},"head":{"ref":"release-plz-1","repo":{"full_name":"example/demo","owner":{"id":77,"login":"example"}},"sha":sha},"user":{"id":54,"login":"release-bot"}}]),
             );
         }
         if route.contains("/git/commits/") {

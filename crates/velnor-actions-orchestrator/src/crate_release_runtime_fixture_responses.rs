@@ -22,7 +22,7 @@
         } else if line.starts_with("GET /repos/owner/project/actions/runs/13 ") {
             serde_json::json!({"id":13,"run_attempt":1,"head_sha":policy,"head_branch":"main","event":"push","path":".github/workflows/release.yml","repository":{"id":22,"full_name":"owner/project","owner":{"id":77,"login":"owner"}},"head_repository":{"id":22,"full_name":"owner/project","owner":{"id":77,"login":"owner"}}})
         } else if line.contains("/pulls?") {
-            serde_json::json!([{"number":42,"merged_at":"2026-11-03T16:00:00Z","merge_commit_sha":policy,"base":{"ref":"main","repo":{"full_name":"owner/project","owner":{"id":77,"login":"owner"}}},"head":{"ref":"release-plz-fixture","sha":"c".repeat(40),"repo":{"full_name":"owner/project","owner":{"id":77,"login":"owner"}}},"user":{"login":"release-bot"}}])
+            serde_json::json!([{"number":42,"merged_at":"2026-11-03T16:00:00Z","merge_commit_sha":policy,"base":{"ref":"main","repo":{"full_name":"owner/project","owner":{"id":77,"login":"owner"}}},"head":{"ref":"release-plz-fixture","sha":"c".repeat(40),"repo":{"full_name":"owner/project","owner":{"id":77,"login":"owner"}}},"user":{"id":54,"login":"release-bot"}}])
         } else if line.contains("/git/commits/") {
             let sha = if line.contains(policy) {
                 policy

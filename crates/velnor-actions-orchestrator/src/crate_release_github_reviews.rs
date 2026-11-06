@@ -1,127 +1,196 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use super::{BTreeMap, GitHubAdmissionRead, GitHubAdmissionRequest, OrchestratorError, internal};
+use super::{
+    BTreeMap, GitHubAdmissionRead, GitHubAdmissionRequest, OrchestratorError, Value, internal,
+};
+
+#[derive(Clone, Copy, Debug)]
+pub(super) struct ReviewAuthor<'a> {
+    pub(super) login: &'a str,
+    pub(super) id: u64,
+}
 
 struct ReviewDecision {
-    user_id: u64,
     state: String,
     commit: String,
-    association: String,
     submitted: String,
     human: bool,
+}
+
+struct ReviewPermission {
+    human: bool,
+    allowed: bool,
+}
+
+struct ReviewActor<'a> {
+    login: &'a str,
+    id: u64,
+    human: bool,
+    association: &'a str,
+}
+
+impl<'a> ReviewActor<'a> {
+    fn read(review: &'a Value) -> Result<Self, OrchestratorError> {
+        Ok(Self {
+            login: review["user"]["login"]
+                .as_str()
+                .ok_or_else(|| internal("crate_release_review_user"))?,
+            id: review["user"]["id"]
+                .as_u64()
+                .filter(|id| *id > 0)
+                .ok_or_else(|| internal("crate_release_review_user_id"))?,
+            human: match review["user"]["type"].as_str() {
+                Some("User") => true,
+                Some("Bot") => false,
+                _ => return Err(internal("crate_release_review_user_type")),
+            },
+            association: review["author_association"].as_str().unwrap_or_default(),
+        })
+    }
+
+    fn authorized(
+        &self,
+        api: &dyn GitHubAdmissionRead,
+        prefix: &str,
+        author: ReviewAuthor<'_>,
+        permissions: &mut BTreeMap<u64, ReviewPermission>,
+    ) -> Result<bool, OrchestratorError> {
+        if self.id == author.id
+            || self.login.eq_ignore_ascii_case(author.login)
+            || !matches!(self.association, "OWNER" | "MEMBER" | "COLLABORATOR")
+        {
+            return Ok(false);
+        }
+        if let Some(permission) = permissions.get(&self.id) {
+            require(permission.human == self.human, "review_permission_identity")?;
+            return Ok(permission.allowed);
+        }
+        let permission = api.get(&format!(
+            "{prefix}/collaborators/{}/permission",
+            encode(self.login)
+        ))?;
+        require(
+            permission["user"]["id"].as_u64() == Some(self.id)
+                && permission["user"]["type"].as_str()
+                    == Some(if self.human { "User" } else { "Bot" }),
+            "review_permission_identity",
+        )?;
+        let allowed = matches!(permission["permission"].as_str(), Some("write" | "admin"));
+        permissions.insert(
+            self.id,
+            ReviewPermission {
+                human: self.human,
+                allowed,
+            },
+        );
+        Ok(allowed)
+    }
 }
 
 pub(super) fn verify_reviews(
     api: &dyn GitHubAdmissionRead,
     prefix: &str,
     number: u64,
-    author: &str,
+    author: ReviewAuthor<'_>,
     head: &str,
     merged: &str,
 ) -> Result<(), OrchestratorError> {
-    let latest = collect_review_decisions(api, prefix, number, merged)?;
+    let latest = collect_review_decisions(api, prefix, number, author, merged)?;
     require(
         !latest
             .values()
             .any(|decision| decision.state == "CHANGES_REQUESTED"),
         "release_pr_changes_requested",
     )?;
-    for (login, decision) in latest {
-        if !decision.human
-            || login.eq_ignore_ascii_case(author)
-            || decision.state != "APPROVED"
-            || decision.commit != head
-            || !matches!(
-                decision.association.as_str(),
-                "OWNER" | "MEMBER" | "COLLABORATOR"
-            )
-        {
-            continue;
-        }
-        let permission = api.get(&format!(
-            "{prefix}/collaborators/{}/permission",
-            encode(&login)
-        ))?;
-        if permission["user"]["id"].as_u64() == Some(decision.user_id)
-            && permission["user"]["type"].as_str() == Some("User")
-            && matches!(permission["permission"].as_str(), Some("write" | "admin"))
-        {
-            return Ok(());
-        }
+    require(
+        latest.values().any(|decision| {
+            decision.human && decision.state == "APPROVED" && decision.commit == head
+        }),
+        "release_pr_approval",
+    )
+}
+
+fn read_decision(
+    api: &dyn GitHubAdmissionRead,
+    prefix: &str,
+    review: &Value,
+    author: ReviewAuthor<'_>,
+    merged: &str,
+    permissions: &mut BTreeMap<u64, ReviewPermission>,
+) -> Result<Option<(u64, ReviewDecision)>, OrchestratorError> {
+    let state = review["state"].as_str().unwrap_or_default();
+    if state == "PENDING" || state == "COMMENTED" {
+        return Ok(None);
     }
-    Err(internal("crate_release_release_pr_approval"))
+    let actor = ReviewActor::read(review)?;
+    if !actor.authorized(api, prefix, author, permissions)? {
+        return Ok(None);
+    }
+    require(
+        matches!(state, "APPROVED" | "CHANGES_REQUESTED" | "DISMISSED"),
+        "review_state",
+    )?;
+    let submitted = review["submitted_at"]
+        .as_str()
+        .filter(|value| valid_utc(value))
+        .ok_or_else(|| internal("crate_release_review_time"))?;
+    if submitted > merged {
+        return Ok(None);
+    }
+    Ok(Some((
+        actor.id,
+        ReviewDecision {
+            state: state.to_owned(),
+            commit: review["commit_id"].as_str().unwrap_or_default().to_owned(),
+            submitted: submitted.to_owned(),
+            human: actor.human,
+        },
+    )))
 }
 
 fn collect_review_decisions(
     api: &dyn GitHubAdmissionRead,
     prefix: &str,
     number: u64,
+    author: ReviewAuthor<'_>,
     merged: &str,
-) -> Result<BTreeMap<String, ReviewDecision>, OrchestratorError> {
-    let mut latest: BTreeMap<String, ReviewDecision> = BTreeMap::new();
+) -> Result<BTreeMap<u64, ReviewDecision>, OrchestratorError> {
+    let mut latest: BTreeMap<u64, ReviewDecision> = BTreeMap::new();
     let mut ambiguous = std::collections::BTreeSet::new();
     let mut seen_ids = std::collections::BTreeSet::new();
+    let mut permissions = BTreeMap::new();
     for page in 1..=100 {
         let response = api.get(&format!(
             "{prefix}/pulls/{number}/reviews?per_page=100&page={page}"
         ))?;
         let reviews = response
             .as_array()
+            .filter(|items| items.len() <= 100)
             .ok_or_else(|| internal("crate_release_reviews_invalid"))?;
         let count = reviews.len();
         for review in reviews {
-            let Some(login) = review["user"]["login"].as_str() else {
-                return Err(internal("crate_release_review_user"));
-            };
-            let human = match review["user"]["type"].as_str() {
-                Some("User") => true,
-                Some("Bot") => false,
-                _ => return Err(internal("crate_release_review_user_type")),
-            };
-            let user_id = review["user"]["id"]
-                .as_u64()
-                .filter(|value| *value > 0)
-                .ok_or_else(|| internal("crate_release_review_user_id"))?;
-            let association = review["author_association"].as_str().unwrap_or_default();
             let id = review["id"]
                 .as_u64()
+                .filter(|id| *id > 0)
                 .ok_or_else(|| internal("crate_release_review_id"))?;
-            require(id > 0 && seen_ids.insert(id), "review_id_duplicate")?;
-            let state = review["state"].as_str().unwrap_or_default();
-            if state == "PENDING" || state == "COMMENTED" {
+            require(seen_ids.insert(id), "review_id_duplicate")?;
+            let Some((actor, decision)) =
+                read_decision(api, prefix, review, author, merged, &mut permissions)?
+            else {
                 continue;
-            }
-            let submitted = review["submitted_at"]
-                .as_str()
-                .filter(|value| valid_utc(value))
-                .ok_or_else(|| internal("crate_release_review_time"))?;
-            if submitted >= merged {
-                continue;
-            }
-            let commit = review["commit_id"].as_str().unwrap_or_default();
-            let login = login.to_ascii_lowercase();
-            if let Some(previous) = latest.get(&login) {
-                if previous.submitted == submitted {
-                    ambiguous.insert(login.clone());
+            };
+            if let Some(previous) = latest.get(&actor) {
+                if previous.submitted == decision.submitted {
+                    ambiguous.insert(actor);
                     continue;
                 }
-                if previous.submitted.as_str() > submitted {
+                if previous.submitted > decision.submitted {
                     continue;
                 }
             }
-            ambiguous.remove(&login);
-            latest.insert(
-                login,
-                ReviewDecision {
-                    user_id,
-                    state: state.to_owned(),
-                    commit: commit.to_owned(),
-                    association: association.to_owned(),
-                    submitted: submitted.to_owned(),
-                    human,
-                },
-            );
+            ambiguous.remove(&actor);
+            latest.insert(actor, decision);
         }
         if count < 100 {
             break;

@@ -285,7 +285,7 @@ impl GitHubAdmissionRead for HistoricalAuthority<'_> {
         }
         if route.contains("/commits/") && route.contains("/pulls?") {
             return Ok(
-                json!([{"number":7,"merged_at":"2026-11-03T15:38:50Z","merge_commit_sha":source,"user":{"login":"author"},"base":{"ref":"main","repo":{"full_name":"example/demo","owner":{"id":77,"login":"example"}}},"head":{"ref":"release-plz-test","sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","repo":{"full_name":"example/demo","owner":{"id":77,"login":"example"}}}}]),
+                json!([{"number":7,"merged_at":"2026-11-03T15:38:50Z","merge_commit_sha":source,"user":{"login":"author","id":54},"base":{"ref":"main","repo":{"full_name":"example/demo","owner":{"id":77,"login":"example"}}},"head":{"ref":"release-plz-test","sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","repo":{"full_name":"example/demo","owner":{"id":77,"login":"example"}}}}]),
             );
         }
         if route.contains("/git/commits/") {
