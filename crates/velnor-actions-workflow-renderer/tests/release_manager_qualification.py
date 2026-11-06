@@ -2,10 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import importlib.util
-import json
 import os
 from pathlib import Path
-import re
 import stat
 import subprocess
 import sys
@@ -150,36 +148,7 @@ def main():
     if sys.argv[1:] == ["--execute-staged"]:
         execute()
         return
-    if sys.argv[1:]:
-        raise SystemExit("invalid qualification request")
-    release = Path("/etc/os-release").read_text(encoding="utf-8").splitlines()
-    if (sys.platform != "linux" or os.uname().machine != "x86_64"
-            or "ID=ubuntu" not in release or 'VERSION_ID="24.04"' not in release):
-        raise SystemExit("unexpected operating system image")
-    head = os.environ["VELNOR_CHECK_HEAD"]
-    check = os.environ["VELNOR_CHECK_ID"]
-    platform = os.environ["VELNOR_CHECK_PLATFORM"]
-    if not re.fullmatch(r"[0-9a-f]{40}", head) or check != "hosted-publisher-supervisor" or platform != "linux_x64":
-        raise SystemExit("invalid qualification identity")
-    image_os = os.environ.get("ImageOS", "unavailable")
-    image_version = os.environ.get("ImageVersion", "unavailable")
-    if (not re.fullmatch(r"[A-Za-z0-9_.-]{1,128}", image_os)
-            or not re.fullmatch(r"[A-Za-z0-9_.-]{1,128}", image_version)):
-        raise SystemExit("hosted image identity unavailable")
-    systemd = subprocess.run(["/usr/bin/systemctl", "--version"], stdin=subprocess.DEVNULL,
-                             stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=5, check=True).stdout
-    first = systemd.splitlines()[0].decode("ascii")
-    if not re.fullmatch(r"systemd [0-9]+(?: \([A-Za-z0-9_.+~:-]+\))?", first):
-        raise SystemExit("systemd version unavailable")
-    print("supervisor environment image_os=" + image_os + " image_version=" + image_version
-          + " kernel=" + os.uname().release + " " + first, flush=True)
-    subprocess.run(["/usr/bin/sudo", "-n", "/usr/bin/python3", "-I", "-S", "-B", str(Path(__file__).resolve()), "--execute"],
-                   stdin=subprocess.DEVNULL, env={"PATH": "/usr/bin:/bin", "HOME": "/nonexistent", "LANG": "C"},
-                   timeout=240, check=True)
-    evidence = {"schema": 1, "source": "mise-task-v1", "head": head, "check_id": check, "platform": platform,
-                "scenarios": [{"id": name, "executed": True, "status": "passed"} for name in sorted(scenarios)]}
-    with open("hosted-publisher-supervisor-evidence.json", "x", encoding="utf-8") as output:
-        json.dump(evidence, output, separators=(",", ":"))
+    raise SystemExit("invalid qualification request")
 
 
 if __name__ == "__main__":
