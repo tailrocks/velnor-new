@@ -75,3 +75,37 @@ fn generator_release_qualifiers_resolve_and_install_project_bun_before_candidate
     }
     Ok(())
 }
+
+#[test]
+fn generator_release_jobs_have_bounded_qualification_time() -> Result<(), Box<dyn Error>> {
+    let repo = super::workflow_configuration_fixture::make_repo(
+        "schema = 2\n[workflow]\npolicy = \"consumer-v1\"\ndefault_branch = \"testmain\"\n\n[execution]\ndefault_profile = \"hosted\"\nhosted_profile = \"hosted\"\nscale_set_profile = \"local\"\nworkflows = [\"generator_release\"]\n[execution.profiles.hosted]\nkind = \"github-hosted\"\nlabel = \"ubuntu-26.04\"\nplatform = \"linux/amd64\"\n[execution.profiles.local]\nkind = \"github-scale-set\"\nname = \"ubuntu-26.04-scale-set\"\nlabels = [\"velnor\", \"ubuntu-26.04-scale-set\"]\nplatform = \"linux/amd64\"\n",
+    )?;
+    let tree = render_staged_tree(&prepare(repo.path())?)?;
+    let workflow = tree
+        .get(".github/workflows/product-release-generator.yml")
+        .ok_or("generator release workflow is missing")?;
+    for (job, minutes) in [
+        ("qualify-linux", 20),
+        ("qualify-macos", 20),
+        ("qualify-macos-intel", 20),
+        ("build-linux", 10),
+        ("build-macos", 10),
+        ("build-macos-intel", 10),
+        ("qualify-homebrew-macos", 30),
+        ("candidate-manifest", 5),
+        ("attest-manifest", 5),
+        ("publish-generator", 5),
+    ] {
+        let start = workflow
+            .find(&format!("\n  {job}:\n"))
+            .ok_or_else(|| format!("missing job {job}"))?;
+        let body = &workflow[start + 1..];
+        let end = body.find("\n    steps:").unwrap_or(body.len());
+        assert!(
+            body[..end].contains(&format!("\n    timeout-minutes: {minutes}\n")),
+            "incorrect timeout for {job}"
+        );
+    }
+    Ok(())
+}

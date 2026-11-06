@@ -36,7 +36,7 @@ impl JobTimeout {
 
     pub const PRODUCT_COMPILER: Self = Self(10);
 
-    pub const PRODUCT_QUALIFICATION: Self = Self(10);
+    pub const PRODUCT_QUALIFICATION: Self = Self(20);
 
     pub const PRODUCT_IMAGE_BUILD: Self = Self(30);
 
