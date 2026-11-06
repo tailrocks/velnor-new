@@ -317,3 +317,29 @@ fn journal_blob_write_requires_exact_content_identity() {
     );
     worker.join().expect("server");
 }
+
+#[test]
+fn operation_listing_preserves_all_refs_within_the_journal_bound() {
+    for count in [31_u32, 100, 1000] {
+        let refs: Vec<_> = (1..=count)
+            .map(|number| {
+                serde_json::json!({
+                    "ref": format!("refs/tags/velnor-receipt/42/1/operation-{number}"),
+                    "object": {"type":"tag", "sha":"a".repeat(40)}
+                })
+            })
+            .collect();
+        let response = serde_json::to_string(&refs).expect("serialize fixture");
+        let (origin, worker) = server(vec![reply("200 OK", &response)]);
+        let listed = client(origin)
+            .list_journal_operations("example/demo-crate", 42, 1)
+            .expect("complete ref listing");
+        assert_eq!(listed.len(), count as usize);
+        for number in 1..=count {
+            assert!(listed.iter().any(|(name, sha)| name
+                == &format!("refs/tags/velnor-receipt/42/1/operation-{number}")
+                && sha == &"a".repeat(40)));
+        }
+        worker.join().expect("server");
+    }
+}
