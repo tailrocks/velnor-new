@@ -89,6 +89,35 @@ fn rendered_selector_uses_the_largest_public_root_count_within_existing_bounds()
             "selector root boundary did not match an existing limit",
         ));
     }
+    println!(
+        "adaptive selector boundary max_roots={accepted} workflow_bytes={} run_utf16_units={} next_roots={} rejection={first_rejected}",
+        final_case.workflow_bytes,
+        final_case.run.encode_utf16().count(),
+        accepted + 1
+    );
+
+    let fixed_valid = rendered_short_roots(1_000)?;
+    let fixed_valid_run_units = fixed_valid.run.encode_utf16().count();
+    if fixed_valid.workflow_bytes > velnor_actions_workflow_renderer::MAX_WORKFLOW_BYTES
+        || fixed_valid_run_units > 21_000
+    {
+        return Err(fail(&format!(
+            "fixed valid selector fixture exceeds existing bounds: roots=1000 workflow_bytes={} run_utf16_units={fixed_valid_run_units}",
+            fixed_valid.workflow_bytes
+        )));
+    }
+    let fixed_oversized = rendered_short_roots(2_050)
+        .expect_err("the fixed oversized fixture must cross the document boundary");
+    if !fixed_oversized.contains("workflow_too_large:") {
+        return Err(fail(&format!(
+            "fixed oversized selector fixture did not reach the document guard: roots=2050 rejection={fixed_oversized}"
+        )));
+    }
+    println!(
+        "fixed valid selector fixture roots=1000 workflow_bytes={} run_utf16_units={fixed_valid_run_units}",
+        fixed_valid.workflow_bytes
+    );
+    println!("fixed oversized selector fixture roots=2050 rejection={fixed_oversized}");
     Ok(())
 }
 

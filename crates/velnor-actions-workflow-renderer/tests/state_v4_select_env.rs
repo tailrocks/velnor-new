@@ -131,6 +131,14 @@ fn selector_requires_lossless_printenv_output_before_selection() -> Result<(), B
             )?,
         ),
         (
+            "complete failed static printenv",
+            fake_printenv(
+                &scene,
+                "complete-failed-static-printenv",
+                "case \"$1\" in VELNOR_STATE_SELECT_UNIT_R0) command -p printenv \"$1\"; exit 7 ;; *) command -p printenv \"$@\" ;; esac\n",
+            )?,
+        ),
+        (
             "partial failed static printenv",
             fake_printenv(&scene, "partial-printenv", "printf partial; exit 7\n")?,
         ),
@@ -156,13 +164,20 @@ fn selector_requires_lossless_printenv_output_before_selection() -> Result<(), B
         no_publication_or_network(&scene, &gh)?;
     }
 
-    let key = unit_key(StateUnit::Union, ".", 0, 0x1000, 1)?;
+    run_select_units(&scene, &gh, &[(StateUnit::Union, ".")], &[])?;
+    expect_flag(
+        &produce_flag(&scene, StateUnit::Union, ".")?,
+        "true",
+        "successful static lookup remains available",
+    )?;
+
+    let key = unit_key(StateUnit::Union, ".", 0, 0x1001, 1)?;
     gh.list(&rows_of(&[(T3.to_owned(), key.clone())]))?;
     gh.attest(&[Attestation::signed(&key)])?;
     let dynamic_path = fake_printenv(
         &scene,
         "failed-dynamic-printenv",
-        "case \"$1\" in VELNOR_STATE_COMPAT_R0) printf partial; exit 7 ;; *) command -p printenv \"$@\" ;; esac\n",
+        "case \"$1\" in VELNOR_STATE_COMPAT_R0) command -p printenv \"$1\"; exit 7 ;; *) command -p printenv \"$@\" ;; esac\n",
     )?;
     run_select_units(
         &scene,
@@ -185,6 +200,13 @@ fn selector_requires_lossless_printenv_output_before_selection() -> Result<(), B
     if fields.len() != 6 || !fields[4].is_empty() {
         return Err(fail("failed dynamic lookup remained available"));
     }
+
+    run_select_units(&scene, &gh, &[(StateUnit::Union, ".")], &[])?;
+    expect_flag(
+        &produce_flag(&scene, StateUnit::Union, ".")?,
+        "true",
+        "successful dynamic lookup identifies an unmatched snapshot",
+    )?;
     scene.finish()
 }
 
