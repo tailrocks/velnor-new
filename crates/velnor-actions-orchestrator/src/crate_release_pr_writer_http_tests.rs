@@ -52,7 +52,7 @@ fn derives_reviewable_plan_from_verified_source_tree() -> Result<(), Orchestrato
         generator_source_sha: "b".repeat(40),
         generator_manifest_sha256: "c".repeat(64),
         release_plz_version: "0.4.3".into(),
-        runner: "ubuntu-24.04".into(),
+        runner: "ubuntu-26.04".into(),
         authentication: velnor_actions_contract::config::ReleaseAuthentication::TrustedPublishing,
         manifest_path: "Cargo.toml".into(),
         pr_write_paths: vec!["Cargo.toml".into()],

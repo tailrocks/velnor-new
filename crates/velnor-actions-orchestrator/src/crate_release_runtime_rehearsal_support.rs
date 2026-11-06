@@ -4,7 +4,7 @@
 fn committed_intent(root: &Path, source: &str, recovery: bool) -> Result<String, Box<dyn Error>> {
     let recovery = recovery.then(|| serde_json::json!({"package":"example","version":"0.1.1","source_sha":source}));
     let intent: velnor_actions_contract::config::CrateReleaseIntent = serde_json::from_value(
-        serde_json::json!({"schema":1,"repository":"owner/project","default_branch":"main","environment":"release","required_workflow_path":".github/workflows/ci.yml","trusted_reviewer_id":139_017,"rust_version":"1.97.1","generator_version":"0.1.5","generator_source_sha":"f1041f322c54cd7edfdef06afd307799eeaa801a","generator_manifest_sha256":"e38d047150f9e0347ec2160fd65bb7f026842e6f416e456990cf3b7ccd284c52","release_plz_version":"0.4.3","runner":"ubuntu-24.04","authentication":"trusted-publishing","manifest_path":"Cargo.toml","pr_write_paths":["CHANGELOG.md","Cargo.lock","Cargo.toml"],"registry":"crates-io","packages":["example"],"publish_features":{"example":[]},"tag_template":"{{ package }}-v{{ version }}","recovery":recovery}),
+        serde_json::json!({"schema":1,"repository":"owner/project","default_branch":"main","environment":"release","required_workflow_path":".github/workflows/ci.yml","trusted_reviewer_id":139_017,"rust_version":"1.97.1","generator_version":"0.1.5","generator_source_sha":"f1041f322c54cd7edfdef06afd307799eeaa801a","generator_manifest_sha256":"e38d047150f9e0347ec2160fd65bb7f026842e6f416e456990cf3b7ccd284c52","release_plz_version":"0.4.3","runner":"ubuntu-26.04","authentication":"trusted-publishing","manifest_path":"Cargo.toml","pr_write_paths":["CHANGELOG.md","Cargo.lock","Cargo.toml"],"registry":"crates-io","packages":["example"],"publish_features":{"example":[]},"tag_template":"{{ package }}-v{{ version }}","recovery":recovery}),
     )?;
     std::fs::create_dir(root.join(".github"))?;
     std::fs::write(
@@ -51,7 +51,7 @@ fn generated_script(job: &str, name: &str) -> Result<String, Box<dyn Error>> {
         &spec,
         &velnor_actions_workflow_renderer::release_tree::ReleaseRenderContext {
             generator_version: env!("CARGO_PKG_VERSION").into(),
-            runs_on: "ubuntu-24.04".into(),
+            runs_on: "ubuntu-26.04".into(),
         },
         &rust,
     )?;

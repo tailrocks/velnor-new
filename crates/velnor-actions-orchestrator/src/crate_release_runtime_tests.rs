@@ -77,7 +77,7 @@
         let root = temp.path();
         let mut intent: velnor_actions_contract::config::CrateReleaseIntent =
             serde_json::from_value(
-                serde_json::json!({"schema":1,"repository":"example/demo","default_branch":"main","environment":"release","required_workflow_path":".github/workflows/ci.yml","trusted_reviewer_id":139_017,"rust_version":"1.97.1","generator_version":"0.1.5","generator_source_sha":"f1041f322c54cd7edfdef06afd307799eeaa801a","generator_manifest_sha256":"e38d047150f9e0347ec2160fd65bb7f026842e6f416e456990cf3b7ccd284c52","release_plz_version":"0.4.3","runner":"ubuntu-24.04","authentication":"trusted-publishing","manifest_path":"Cargo.toml","pr_write_paths":["CHANGELOG.md","Cargo.lock","Cargo.toml"],"registry":"crates-io","packages":["demo"],"publish_features":{"demo":[]},"tag_template":"{{ package }}-v{{ version }}","recovery":null}),
+                serde_json::json!({"schema":1,"repository":"example/demo","default_branch":"main","environment":"release","required_workflow_path":".github/workflows/ci.yml","trusted_reviewer_id":139_017,"rust_version":"1.97.1","generator_version":"0.1.5","generator_source_sha":"f1041f322c54cd7edfdef06afd307799eeaa801a","generator_manifest_sha256":"e38d047150f9e0347ec2160fd65bb7f026842e6f416e456990cf3b7ccd284c52","release_plz_version":"0.4.3","runner":"ubuntu-26.04","authentication":"trusted-publishing","manifest_path":"Cargo.toml","pr_write_paths":["CHANGELOG.md","Cargo.lock","Cargo.toml"],"registry":"crates-io","packages":["demo"],"publish_features":{"demo":[]},"tag_template":"{{ package }}-v{{ version }}","recovery":null}),
             )?;
         let binary = b"fixture-binary";
         let mut manifest: serde_json::Value = serde_json::from_slice(include_bytes!(
@@ -177,7 +177,7 @@
         let manifest_path = root.join(".velnor/release-manifest.json");
         let make = |version: &str| {
             format!(
-                "schema=1\nrepository='example/demo'\ndefault_branch='main'\nenvironment='release'\nrequired_workflow_path='.github/workflows/ci.yml'\ntrusted_reviewer_id=139017\nrust_version='1.97.1'\ngenerator_version='{version}'\ngenerator_source_sha='f1041f322c54cd7edfdef06afd307799eeaa801a'\ngenerator_manifest_sha256='e38d047150f9e0347ec2160fd65bb7f026842e6f416e456990cf3b7ccd284c52'\nrelease_plz_version='0.4.3'\nrunner='ubuntu-24.04'\nauthentication='trusted-publishing'\nmanifest_path='Cargo.toml'\npr_write_paths=['CHANGELOG.md','Cargo.lock','Cargo.toml']\nregistry='crates-io'\npackages=['demo']\npublish_features={{demo=[]}}\ntag_template='{{{{ package }}}}-v{{{{ version }}}}'\n"
+                "schema=1\nrepository='example/demo'\ndefault_branch='main'\nenvironment='release'\nrequired_workflow_path='.github/workflows/ci.yml'\ntrusted_reviewer_id=139017\nrust_version='1.97.1'\ngenerator_version='{version}'\ngenerator_source_sha='f1041f322c54cd7edfdef06afd307799eeaa801a'\ngenerator_manifest_sha256='e38d047150f9e0347ec2160fd65bb7f026842e6f416e456990cf3b7ccd284c52'\nrelease_plz_version='0.4.3'\nrunner='ubuntu-26.04'\nauthentication='trusted-publishing'\nmanifest_path='Cargo.toml'\npr_write_paths=['CHANGELOG.md','Cargo.lock','Cargo.toml']\nregistry='crates-io'\npackages=['demo']\npublish_features={{demo=[]}}\ntag_template='{{{{ package }}}}-v{{{{ version }}}}'\n"
             )
         };
         fs::write(&path, make("0.1.5"))?;

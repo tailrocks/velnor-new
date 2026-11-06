@@ -6,7 +6,7 @@ use velnor_actions_contract::config::CrateReleaseIntent;
 #[test]
 fn intent_rejects_unapproved_or_ambiguous_release_inputs() -> Result<(), Box<dyn std::error::Error>>
 {
-    let value = serde_json::json!({"schema": 1, "repository": "example/demo-crate", "default_branch": "main", "environment": "release", "required_workflow_path": ".github/workflows/ci.yml", "trusted_reviewer_id": 139_017, "generator_version":"0.1.72","generator_source_sha":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","generator_manifest_sha256":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc","release_plz_version":"0.4.3","runner":"ubuntu-24.04","authentication":"trusted-publishing","rust_version": "1.97.1", "manifest_path": "Cargo.toml", "pr_write_paths": ["Cargo.toml"], "registry": "crates-io", "packages": ["demo-crate"], "publish_features": {"demo-crate":[]}, "tag_template": "{{ package }}-v{{ version }}", "recovery": {"package": "demo-crate", "version": "0.1.1", "source_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}});
+    let value = serde_json::json!({"schema": 1, "repository": "example/demo-crate", "default_branch": "main", "environment": "release", "required_workflow_path": ".github/workflows/ci.yml", "trusted_reviewer_id": 139_017, "generator_version":"0.1.72","generator_source_sha":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","generator_manifest_sha256":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc","release_plz_version":"0.4.3","runner":"ubuntu-26.04","authentication":"trusted-publishing","rust_version": "1.97.1", "manifest_path": "Cargo.toml", "pr_write_paths": ["Cargo.toml"], "registry": "crates-io", "packages": ["demo-crate"], "publish_features": {"demo-crate":[]}, "tag_template": "{{ package }}-v{{ version }}", "recovery": {"package": "demo-crate", "version": "0.1.1", "source_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}});
     let intent: CrateReleaseIntent = serde_json::from_value(value.clone())?;
     intent.validate()?;
     let mut hidden = intent.clone();
@@ -20,6 +20,8 @@ fn intent_rejects_unapproved_or_ambiguous_release_inputs() -> Result<(), Box<dyn
         ("generator_manifest_sha256", serde_json::json!("invalid")),
         ("release_plz_version", serde_json::json!("0.4")),
         ("runner", serde_json::json!("${{ inputs.runner }}")),
+        ("runner", serde_json::json!("ubuntu-24.04")),
+        ("runner", serde_json::json!("ubuntu-latest")),
         ("authentication", serde_json::json!("unknown")),
         ("repository", serde_json::json!("example/demo-crate/other")),
         ("default_branch", serde_json::json!("../main")),
@@ -88,7 +90,7 @@ fn intent_rejects_unapproved_or_ambiguous_release_inputs() -> Result<(), Box<dyn
 #[test]
 fn recovery_accepts_cargo_semver_and_rejects_invalid_versions()
 -> Result<(), Box<dyn std::error::Error>> {
-    let mut value = serde_json::json!({"schema":1,"repository":"example/demo-crate","default_branch":"main","environment":"release","required_workflow_path":".github/workflows/ci.yml","trusted_reviewer_id":139_017,"generator_version":"0.1.72","generator_source_sha":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","generator_manifest_sha256":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc","release_plz_version":"0.4.3","runner":"ubuntu-24.04","authentication":"trusted-publishing","rust_version":"1.97.1","manifest_path":"Cargo.toml","pr_write_paths":["Cargo.toml"],"registry":"crates-io","packages":["demo-crate"],"publish_features":{"demo-crate":[]},"tag_template":"{{ package }}-v{{ version }}","recovery":{"package":"demo-crate","version":"1.2.3-alpha.1+build.5","source_sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}});
+    let mut value = serde_json::json!({"schema":1,"repository":"example/demo-crate","default_branch":"main","environment":"release","required_workflow_path":".github/workflows/ci.yml","trusted_reviewer_id":139_017,"generator_version":"0.1.72","generator_source_sha":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","generator_manifest_sha256":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc","release_plz_version":"0.4.3","runner":"ubuntu-26.04","authentication":"trusted-publishing","rust_version":"1.97.1","manifest_path":"Cargo.toml","pr_write_paths":["Cargo.toml"],"registry":"crates-io","packages":["demo-crate"],"publish_features":{"demo-crate":[]},"tag_template":"{{ package }}-v{{ version }}","recovery":{"package":"demo-crate","version":"1.2.3-alpha.1+build.5","source_sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}});
     serde_json::from_value::<CrateReleaseIntent>(value.clone())?.validate()?;
     let maximum = format!("1.2.3-{}", "a".repeat(144));
     value["recovery"]["version"] = serde_json::json!(maximum);
@@ -313,4 +315,26 @@ fn release_rejects_more_packages_than_intent_supports() -> Result<(), Box<dyn st
             .is_err()
     );
     Ok(())
+}
+
+#[test]
+fn runner_selection_rejects_old_ubuntu_images() {
+    use velnor_actions_contract::config::{RUNNER_LABEL_CATALOG, RunsOn, ScaleSetSelector};
+    for runner in ["ubuntu-26.04", "ubuntu-26.04-arm"] {
+        assert!(RUNNER_LABEL_CATALOG.contains(&runner));
+        assert!(RunsOn::parse(runner).is_ok());
+    }
+    for runner in [
+        "ubuntu-22.04",
+        "ubuntu-24.04",
+        "ubuntu-24.04-arm",
+        "ubuntu-latest",
+        "ubuntu-26.04-fake",
+    ] {
+        assert!(!RUNNER_LABEL_CATALOG.contains(&runner));
+        assert!(RunsOn::parse(runner).is_err());
+        assert!(ScaleSetSelector::try_new(runner, &["velnor".into(), runner.into()]).is_err());
+    }
+    assert!(RunsOn::parse("macos-26").is_ok());
+    assert!(RunsOn::parse("scale-set:velnor+ubuntu-26.04-scale-set").is_ok());
 }

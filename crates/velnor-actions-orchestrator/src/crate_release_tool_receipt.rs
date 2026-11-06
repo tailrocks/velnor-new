@@ -271,7 +271,7 @@ pub(crate) fn fixture_acquire_receipt<
                         crate::crate_release_semver::SemverEvidence::NoBaseline {
                             checker_sha256:
                                 velnor_actions_mise::catalog::qualified_cargo_semver_checks(
-                                    "ubuntu-24.04",
+                                    "ubuntu-26.04",
                                 )
                                 .expect("qualified checker")
                                 .executable_sha256

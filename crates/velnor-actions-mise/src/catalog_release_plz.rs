@@ -44,7 +44,7 @@ pub struct QualifiedCargoSemverChecks {
 
 #[must_use]
 pub fn qualified_cargo_semver_checks(runner: &str) -> Option<QualifiedCargoSemverChecks> {
-    (runner == "ubuntu-24.04").then_some(QualifiedCargoSemverChecks {
+    (runner == "ubuntu-26.04").then_some(QualifiedCargoSemverChecks {
         version: "0.51.0",
         target: "x86_64-unknown-linux-gnu",
         archive_sha256: "cacadafaa5cd27ae6d05a74a103266917ebab4c5e43c898360e177d4fbf06a65",

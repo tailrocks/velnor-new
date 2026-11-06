@@ -40,7 +40,7 @@ fn actual_cargo_workspace_root_controls_rendered_lock() -> Result<(), Box<dyn st
     assert!(!root_lock.cancel_in_progress);
     let (mut spec, rust) = crate::release_steps::tests::fixture()?;
     spec.concurrency = root_lock.clone();
-    let ctx = ReleaseRenderContext { generator_version: env!("CARGO_PKG_VERSION").into(), runs_on: "ubuntu-24.04".into() };
+    let ctx = ReleaseRenderContext { generator_version: env!("CARGO_PKG_VERSION").into(), runs_on: "ubuntu-26.04".into() };
     let workflow = render_release_workflow(&spec, &ctx, &rust)?;
     assert!(workflow.contains(&root_lock.group));
     assert!(workspace_lock("not json", &root, "a/Cargo.toml", &known, "crates-io", "owner/project").is_err());

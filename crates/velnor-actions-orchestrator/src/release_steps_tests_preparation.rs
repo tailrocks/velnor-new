@@ -26,7 +26,7 @@ fn release_pr_preparation_separates_source_execution_from_write_authority()
     }).all(|with| with.get("persist-credentials").is_some_and(|value| value == "false")));
     let ctx = velnor_actions_workflow_renderer::release_tree::ReleaseRenderContext {
         generator_version: env!("CARGO_PKG_VERSION").to_owned(),
-        runs_on: "ubuntu-24.04".to_owned(),
+        runs_on: "ubuntu-26.04".to_owned(),
     };
     let workflow = velnor_actions_workflow_renderer::release_tree::render_release_workflow(&spec, &ctx, &rust)?;
     assert!(workflow.contains("release-pr-create:"));

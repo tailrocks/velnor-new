@@ -263,7 +263,7 @@ pub(super) fn derive_attested_tool_expectations(
     .ok_or_else(|| internal("crate_release_tool_expectations_invalid"))?;
     let rust = velnor_actions_mise::catalog::rust_channel_manifest_sha256(&intent.rust_version)
         .ok_or_else(|| internal("crate_release_tool_expectations_invalid"))?;
-    if intent.runner != "ubuntu-24.04"
+    if intent.runner != "ubuntu-26.04"
         || generator.version != intent.generator_version
         || generator.source_sha != intent.generator_source_sha
     {

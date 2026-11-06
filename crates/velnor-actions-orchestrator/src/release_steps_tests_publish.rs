@@ -7,7 +7,7 @@ use super::*;
 fn release_tool_expectations_require_a_valid_consumer_manifest() -> Result<(), Box<dyn std::error::Error>> {
     let version = env!("CARGO_PKG_VERSION");
     let raw = consumer_manifest(version);
-    let acquire = |json: &str| crate::pins::consumer_acquire_step_with_manifest("ubuntu-24.04", version, Some(json));
+    let acquire = |json: &str| crate::pins::consumer_acquire_step_with_manifest("ubuntu-26.04", version, Some(json));
     assert!(acquire(&raw).is_ok());
     let mut wrong: serde_json::Value = serde_json::from_str(&raw)?;
     wrong["version"] = "9.9.9".into();
@@ -30,9 +30,9 @@ fn publishing_jobs_verify_generator_before_running_it() -> Result<(), Box<dyn st
     use velnor_actions_contract::StepKind;
     use velnor_actions_workflow_renderer::release_jobs::ReleaseRole;
     use velnor_actions_workflow_renderer::release_tree::{render_release_workflow, ReleaseRenderContext};
-    let context = ReleaseRenderContext { generator_version: env!("CARGO_PKG_VERSION").into(), runs_on: "ubuntu-24.04".into() };
+    let context = ReleaseRenderContext { generator_version: env!("CARGO_PKG_VERSION").into(), runs_on: "ubuntu-26.04".into() };
     for version in ["1..2", "1.2.3-rc.1", "latest"] {
-        assert!(velnor_actions_workflow_renderer::release_generator_bootstrap::acquire_step(version, "ubuntu-24.04", &"b".repeat(40), &"c".repeat(64)).is_err());
+        assert!(velnor_actions_workflow_renderer::release_generator_bootstrap::acquire_step(version, "ubuntu-26.04", &"b".repeat(40), &"c".repeat(64)).is_err());
     }
     assert!(velnor_actions_workflow_renderer::release_generator_bootstrap::acquire_step("1.2.3", "ubuntu-26.04", &"b".repeat(40), &"c".repeat(64)).is_err());
     for authentication in [ReleaseAuthentication::TrustedPublishing, ReleaseAuthentication::BootstrapToken] {
@@ -60,7 +60,7 @@ fn rendered_bootstrap_rejects_untrusted_generator_before_staging() -> Result<(),
     use std::process::{Command, Stdio};
     use velnor_actions_workflow_renderer::release_tree::{render_release_workflow, ReleaseRenderContext};
     let (spec, rust) = fixture()?;
-    let context = ReleaseRenderContext { generator_version: env!("CARGO_PKG_VERSION").into(), runs_on: "ubuntu-24.04".into() };
+    let context = ReleaseRenderContext { generator_version: env!("CARGO_PKG_VERSION").into(), runs_on: "ubuntu-26.04".into() };
     let workflow = render_release_workflow(&spec, &context, &rust)?;
     let temp = tempfile::tempdir()?;
     let harness = temp.path().join("bootstrap_harness.py");
@@ -119,11 +119,11 @@ fn workspace_creation_dispatch_binds_source_and_each_package()
         new_crates: Some(creation.clone()), required_workflow_path: ".github/workflows/ci.yml".into(), trusted_reviewer_id: 1, ..RustReleaseConfig::default() };
     let catalog = ToolCatalog::pinned().with_export_rustup_toolchain(false);
     let mise = MiseSetup { uses: format!("jdx/mise-action@{}", velnor_actions_actionlint::actions::MISE_ACTION_SHA), version: MISE_VERSION.to_owned(), sha256: MISE_BINARY_SHA256_LINUX_X64.to_owned() };
-    let acquire = velnor_actions_workflow_renderer::release_generator_bootstrap::acquire_step(env!("CARGO_PKG_VERSION"), "ubuntu-24.04", &"b".repeat(40), &"c".repeat(64))?;
-    spec.jobs = assemble_jobs(&JobInputs { release: &release, gate: publish_gate_condition(&spec.repository, "main", &spec.plan), preparation_gate: "github.repository == 'owner/project' && github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.release-preflight.result == 'success' && needs.release-preflight.outputs.eligible == 'false'".into(), registry: None, label: "ubuntu-24.04", mise: &mise, catalog: &catalog, acquire: &acquire, generator_version: env!("CARGO_PKG_VERSION") })?;
+    let acquire = velnor_actions_workflow_renderer::release_generator_bootstrap::acquire_step(env!("CARGO_PKG_VERSION"), "ubuntu-26.04", &"b".repeat(40), &"c".repeat(64))?;
+    spec.jobs = assemble_jobs(&JobInputs { release: &release, gate: publish_gate_condition(&spec.repository, "main", &spec.plan), preparation_gate: "github.repository == 'owner/project' && github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.release-preflight.result == 'success' && needs.release-preflight.outputs.eligible == 'false'".into(), registry: None, label: "ubuntu-26.04", mise: &mise, catalog: &catalog, acquire: &acquire, generator_version: env!("CARGO_PKG_VERSION") })?;
     let config = ReleasePlzConfig { tag_pattern: "{{ package }}-v{{ version }}".into(), semver_check: true, packages: spec.plan.packages.keys().map(|name| ReleasePlzPackage { version_group: None, name: name.clone(), publish_features: vec![] }).collect() };
-    let intent: CrateReleaseIntent = serde_json::from_value(serde_json::json!({"schema":1,"repository":"owner/project","default_branch":"main","environment":"release","required_workflow_path":".github/workflows/ci.yml","trusted_reviewer_id":1,"rust_version":rust,"generator_version":env!("CARGO_PKG_VERSION"),"generator_source_sha":"b".repeat(40),"generator_manifest_sha256":"c".repeat(64),"release_plz_version":"0.4.3","runner":"ubuntu-24.04","authentication":"bootstrap-token","manifest_path":"Cargo.toml","pr_write_paths":["CHANGELOG.md","Cargo.lock","Cargo.toml"],"registry":"crates-io","packages":["example","second"],"publish_features":{"example":[],"second":[]},"tag_template":"{{ package }}-v{{ version }}","new_crates":creation,"recovery":null}))?;
-    let ctx = ReleaseRenderContext { generator_version: env!("CARGO_PKG_VERSION").into(), runs_on: "ubuntu-24.04".into() };
+    let intent: CrateReleaseIntent = serde_json::from_value(serde_json::json!({"schema":1,"repository":"owner/project","default_branch":"main","environment":"release","required_workflow_path":".github/workflows/ci.yml","trusted_reviewer_id":1,"rust_version":rust,"generator_version":env!("CARGO_PKG_VERSION"),"generator_source_sha":"b".repeat(40),"generator_manifest_sha256":"c".repeat(64),"release_plz_version":"0.4.3","runner":"ubuntu-26.04","authentication":"bootstrap-token","manifest_path":"Cargo.toml","pr_write_paths":["CHANGELOG.md","Cargo.lock","Cargo.toml"],"registry":"crates-io","packages":["example","second"],"publish_features":{"example":[],"second":[]},"tag_template":"{{ package }}-v{{ version }}","new_crates":creation,"recovery":null}))?;
+    let ctx = ReleaseRenderContext { generator_version: env!("CARGO_PKG_VERSION").into(), runs_on: "ubuntu-26.04".into() };
     let files = render_release_files(&spec, &ctx, &config, &intent)?;
     let decoded: CrateReleaseIntent = toml::from_str(&files.intent.bytes)?;
     assert_eq!(decoded, intent);
@@ -168,11 +168,11 @@ fn bootstrap_handover_renders_normal_trusted_publisher() -> Result<(), Box<dyn s
         "required_workflow_path":".github/workflows/ci.yml","trusted_reviewer_id":1,
         "rust_version":rust,"generator_version":env!("CARGO_PKG_VERSION"),
         "generator_source_sha":"b".repeat(40),"generator_manifest_sha256":"c".repeat(64),
-        "release_plz_version":"0.4.3","runner":"ubuntu-24.04","authentication":"trusted-publishing",
+        "release_plz_version":"0.4.3","runner":"ubuntu-26.04","authentication":"trusted-publishing",
         "manifest_path":"Cargo.toml","pr_write_paths":["CHANGELOG.md","Cargo.lock","Cargo.toml"],"registry":"crates-io","packages":["example","second"],
         "publish_features":{"example":[],"second":[]},"tag_template":"{{ package }}-v{{ version }}"
     }))?;
-    let ctx = ReleaseRenderContext { generator_version: env!("CARGO_PKG_VERSION").into(), runs_on:"ubuntu-24.04".into() };
+    let ctx = ReleaseRenderContext { generator_version: env!("CARGO_PKG_VERSION").into(), runs_on:"ubuntu-26.04".into() };
     let files = render_release_files(&spec, &ctx, &config, &intent)?;
     let decoded: CrateReleaseIntent = toml::from_str(&files.intent.bytes)?;
     assert_eq!(decoded, intent);

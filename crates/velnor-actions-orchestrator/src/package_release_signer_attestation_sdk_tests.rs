@@ -179,7 +179,7 @@ fn expected_tool_pins_match_reviewed_intent_and_attested_generator()
         JournalAuthentication, JournalIdentity, JournalReceipt, JournalRegistry, JournalToolPins,
     };
     let intent: velnor_actions_contract::config::CrateReleaseIntent = serde_json::from_value(
-        serde_json::json!({"schema":1,"repository":"example/demo","default_branch":"main","environment":"release","required_workflow_path":".github/workflows/ci.yml","trusted_reviewer_id":139_017,"rust_version":"1.97.1","generator_version":"0.1.5","generator_source_sha":"f1041f322c54cd7edfdef06afd307799eeaa801a","generator_manifest_sha256":"e38d047150f9e0347ec2160fd65bb7f026842e6f416e456990cf3b7ccd284c52","release_plz_version":"0.4.3","runner":"ubuntu-24.04","authentication":"trusted-publishing","manifest_path":"Cargo.toml","pr_write_paths":["CHANGELOG.md","Cargo.lock","Cargo.toml"],"registry":"crates-io","packages":["demo"],"publish_features":{"demo":[]},"tag_template":"{{ package }}-v{{ version }}","recovery":null}),
+        serde_json::json!({"schema":1,"repository":"example/demo","default_branch":"main","environment":"release","required_workflow_path":".github/workflows/ci.yml","trusted_reviewer_id":139_017,"rust_version":"1.97.1","generator_version":"0.1.5","generator_source_sha":"f1041f322c54cd7edfdef06afd307799eeaa801a","generator_manifest_sha256":"e38d047150f9e0347ec2160fd65bb7f026842e6f416e456990cf3b7ccd284c52","release_plz_version":"0.4.3","runner":"ubuntu-26.04","authentication":"trusted-publishing","manifest_path":"Cargo.toml","pr_write_paths":["CHANGELOG.md","Cargo.lock","Cargo.toml"],"registry":"crates-io","packages":["demo"],"publish_features":{"demo":[]},"tag_template":"{{ package }}-v{{ version }}","recovery":null}),
     )?;
     let mut generator = AttestedLinuxGenerator {
         version: "0.1.5".into(),
@@ -188,7 +188,7 @@ fn expected_tool_pins_match_reviewed_intent_and_attested_generator()
         run_id: 37_904_531_694,
         run_attempt: 1,
     };
-    let release_plz = velnor_actions_mise::catalog::qualified_release_plz("0.4.3", "ubuntu-24.04")
+    let release_plz = velnor_actions_mise::catalog::qualified_release_plz("0.4.3", "ubuntu-26.04")
         .ok_or("catalog")?;
     let rust =
         velnor_actions_mise::catalog::rust_channel_manifest_sha256("1.97.1").ok_or("rust")?;

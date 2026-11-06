@@ -271,7 +271,7 @@ mod tests {
             &spec,
             &velnor_actions_workflow_renderer::release_tree::ReleaseRenderContext {
                 generator_version: env!("CARGO_PKG_VERSION").to_owned(),
-                runs_on: "ubuntu-24.04".to_owned(),
+                runs_on: "ubuntu-26.04".to_owned(),
             },
             &rust,
         )?;

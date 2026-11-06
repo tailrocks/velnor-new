@@ -49,7 +49,7 @@ pub(super) fn fixture_semver_map(
     std::collections::BTreeMap<String, crate::crate_release_semver::SemverEvidence>,
     OrchestratorError,
 > {
-    let checker = velnor_actions_mise::catalog::qualified_cargo_semver_checks("ubuntu-24.04")
+    let checker = velnor_actions_mise::catalog::qualified_cargo_semver_checks("ubuntu-26.04")
         .ok_or_else(|| OrchestratorError::Contract {
             problem: "fixture".into(),
         })?;

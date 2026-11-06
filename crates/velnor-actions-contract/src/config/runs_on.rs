@@ -28,13 +28,13 @@ pub struct ScaleSetSelector {
 impl ScaleSetSelector {
     pub fn try_new(name: &str, labels: &[String]) -> Result<Self, ContractError> {
         validate_label(name, "execution.profiles.scale_set.name")?;
-        if name == VELNOR_LABEL || is_hosted_catalog(name) {
+        if name == VELNOR_LABEL || is_hosted_catalog(name) || invalid_ubuntu_scale_label(name) {
             return Err(illegal("execution.profiles.scale_set.name", name));
         }
         let mut seen = Vec::new();
         for label in labels {
             validate_label(label, "execution.profiles.scale_set.labels")?;
-            if is_hosted_catalog(label) {
+            if is_hosted_catalog(label) || invalid_ubuntu_scale_label(label) {
                 return Err(illegal("execution.profiles.scale_set.labels", label));
             }
             if seen.iter().any(|have: &String| have == label) {
@@ -143,6 +143,7 @@ pub fn is_hosted_catalog(label: &str) -> bool {
 #[must_use]
 pub fn is_legacy_hosted_label(label: &str) -> bool {
     !label.is_empty()
+        && (!label.starts_with("ubuntu-") || is_hosted_catalog(label))
         && !label.contains("${{")
         && !label.contains("latest")
         && label
@@ -167,4 +168,8 @@ fn validate_label(label: &str, key: &str) -> Result<(), ContractError> {
 
 fn illegal(key: &str, label: &str) -> ContractError {
     ContractError::config("config.toml", key, format!("illegal_label:{label}"))
+}
+
+fn invalid_ubuntu_scale_label(label: &str) -> bool {
+    label.starts_with("ubuntu-") && label != SCALE_SET_NAME
 }

@@ -68,7 +68,7 @@ fn fixture_for_release_pr(authentication: ReleaseAuthentication, release_pr: boo
         version: MISE_VERSION.to_owned(),
         sha256: MISE_BINARY_SHA256_LINUX_X64.to_owned(),
     };
-    let acquire = velnor_actions_workflow_renderer::release_generator_bootstrap::acquire_step(generator_version, "ubuntu-24.04", &"b".repeat(40), &"c".repeat(64))?;
+    let acquire = velnor_actions_workflow_renderer::release_generator_bootstrap::acquire_step(generator_version, "ubuntu-26.04", &"b".repeat(40), &"c".repeat(64))?;
     let jobs = assemble_jobs(&JobInputs {
         release: &release,
         gate: publish_gate_condition(repository, "main", &plan),
@@ -76,7 +76,7 @@ fn fixture_for_release_pr(authentication: ReleaseAuthentication, release_pr: boo
             "github.repository == '{repository}' && github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.release-preflight.result == 'success' && needs.release-preflight.outputs.eligible == 'false'"
         ),
         registry: None,
-        label: "ubuntu-24.04",
+        label: "ubuntu-26.04",
         mise: &mise,
         catalog: &catalog,
         acquire: &acquire,
@@ -317,7 +317,7 @@ fn exact_source_dispatch_renders_without_push_trigger() -> Result<(), Box<dyn st
     spec.triggers.push_branches.clear();
     let ctx = velnor_actions_workflow_renderer::release_tree::ReleaseRenderContext {
         generator_version: env!("CARGO_PKG_VERSION").into(),
-        runs_on: "ubuntu-24.04".into(),
+        runs_on: "ubuntu-26.04".into(),
     };
     let workflow = velnor_actions_workflow_renderer::release_tree::render_release_workflow(&spec, &ctx, &rust)?;
     let yaml: serde_json::Value = serde_saphyr::from_str(&workflow)?;

@@ -9,10 +9,10 @@ fn crate_release_uses_only_fixed_github_hosted_runner() -> Result<(), Box<dyn st
     let (spec, rust) = fixture()?;
     let ctx = ReleaseRenderContext {
         generator_version: env!("CARGO_PKG_VERSION").to_owned(),
-        runs_on: "ubuntu-24.04".to_owned(),
+        runs_on: "ubuntu-26.04".to_owned(),
     };
     let workflow = render_release_workflow(&spec, &ctx, &rust)?;
-    assert_eq!(workflow.matches("runs-on: ubuntu-24.04").count(), spec.jobs.len());
+    assert_eq!(workflow.matches("runs-on: ubuntu-26.04").count(), spec.jobs.len());
     for alternate in ["ubuntu-26.04", "self-hosted", "${{ inputs.runner }}"] {
         let mut altered = spec.clone();
         for job in altered.jobs.values_mut() {
@@ -33,7 +33,7 @@ fn rendered_workflow_has_one_hosted_environment_publisher() -> Result<(), Box<dy
     let (spec, rust) = fixture()?;
     let context = ReleaseRenderContext {
         generator_version: env!("CARGO_PKG_VERSION").to_owned(),
-        runs_on: "ubuntu-24.04".to_owned(),
+        runs_on: "ubuntu-26.04".to_owned(),
     };
     let workflow = render_release_workflow(&spec, &context, &rust)?;
     assert!(workflow.contains("release-publish:"));
@@ -43,7 +43,7 @@ fn rendered_workflow_has_one_hosted_environment_publisher() -> Result<(), Box<dy
     assert!(workflow.contains("crate-release journal-start"));
     assert!(workflow.contains("crate-release journal-coordinate"));
     let publisher = spec.jobs.get("release-publish").ok_or("publisher")?;
-    assert_eq!(publisher.runs_on, "ubuntu-24.04");
+    assert_eq!(publisher.runs_on, "ubuntu-26.04");
     assert_eq!(publisher.environment.as_deref(), Some("release"));
     assert_eq!(publisher.needs, ["release-preflight"]);
     assert_eq!(publisher.permissions.id_token, PermissionLevel::Write);
@@ -85,7 +85,7 @@ fn rendered_workflow_has_one_hosted_environment_publisher() -> Result<(), Box<dy
 fn rendered_bootstrap_has_only_token_publisher() -> Result<(), Box<dyn std::error::Error>> {
     use velnor_actions_workflow_renderer::release_tree::{render_release_workflow, ReleaseRenderContext};
     let (spec, rust) = fixture_for(ReleaseAuthentication::BootstrapToken)?;
-    let context = ReleaseRenderContext { generator_version: env!("CARGO_PKG_VERSION").into(), runs_on: "ubuntu-24.04".into() };
+    let context = ReleaseRenderContext { generator_version: env!("CARGO_PKG_VERSION").into(), runs_on: "ubuntu-26.04".into() };
     let workflow = render_release_workflow(&spec, &context, &rust)?;
     assert!(workflow.contains("release-publish-bootstrap:"));
     assert!(!workflow.contains("release-publish:"));
@@ -116,9 +116,9 @@ fn rendered_files_reject_divergent_release_intent() -> Result<(), Box<dyn std::e
     use velnor_actions_workflow_renderer::release_config::{ReleasePlzConfig, ReleasePlzPackage};
     use velnor_actions_workflow_renderer::release_tree::{render_release_files, ReleaseRenderContext};
     let (spec, rust) = fixture()?;
-    let ctx = ReleaseRenderContext { generator_version: env!("CARGO_PKG_VERSION").into(), runs_on: "ubuntu-24.04".into() };
+    let ctx = ReleaseRenderContext { generator_version: env!("CARGO_PKG_VERSION").into(), runs_on: "ubuntu-26.04".into() };
     let config = ReleasePlzConfig { tag_pattern: "{{ package }}-v{{ version }}".into(), semver_check: true, packages: vec![ReleasePlzPackage { version_group: None, name: "example".into(), publish_features: vec![] }] };
-    let intent = CrateReleaseIntent { schema: 1, repository: "owner/project".into(), default_branch: "main".into(), environment: "release".into(), required_workflow_path: ".github/workflows/ci.yml".into(), trusted_reviewer_id: 1, rust_version: rust, generator_version: env!("CARGO_PKG_VERSION").into(), generator_source_sha: "b".repeat(40), generator_manifest_sha256: "c".repeat(64), release_plz_version: "0.4.3".into(), runner: "ubuntu-24.04".into(), authentication: velnor_actions_contract::config::ReleaseAuthentication::TrustedPublishing, manifest_path: "Cargo.toml".into(), pr_write_paths: vec!["Cargo.toml".into()], registry: "crates-io".into(), packages: vec!["example".into()], publish_features: BTreeMap::from([("example".into(), vec![])]), version_groups: std::collections::BTreeMap::new(), new_crates: None, tag_template: config.tag_pattern.clone(), journal_predecessor: None, recovery: Some(velnor_actions_contract::config::CrateReleaseRecovery { package: "example".into(), version: "0.1.1".into(), source_sha: "a".repeat(40) }) };
+    let intent = CrateReleaseIntent { schema: 1, repository: "owner/project".into(), default_branch: "main".into(), environment: "release".into(), required_workflow_path: ".github/workflows/ci.yml".into(), trusted_reviewer_id: 1, rust_version: rust, generator_version: env!("CARGO_PKG_VERSION").into(), generator_source_sha: "b".repeat(40), generator_manifest_sha256: "c".repeat(64), release_plz_version: "0.4.3".into(), runner: "ubuntu-26.04".into(), authentication: velnor_actions_contract::config::ReleaseAuthentication::TrustedPublishing, manifest_path: "Cargo.toml".into(), pr_write_paths: vec!["Cargo.toml".into()], registry: "crates-io".into(), packages: vec!["example".into()], publish_features: BTreeMap::from([("example".into(), vec![])]), version_groups: std::collections::BTreeMap::new(), new_crates: None, tag_template: config.tag_pattern.clone(), journal_predecessor: None, recovery: Some(velnor_actions_contract::config::CrateReleaseRecovery { package: "example".into(), version: "0.1.1".into(), source_sha: "a".repeat(40) }) };
     let mut mismatched_group = config.clone();
     mismatched_group.packages[0].version_group = Some("shared".into());
     assert!(render_release_files(&spec, &ctx, &mismatched_group, &intent).is_err());
@@ -196,7 +196,7 @@ fn rendered_files_reject_divergent_release_intent() -> Result<(), Box<dyn std::e
 fn publisher_budget_is_first_and_cannot_be_forged() -> Result<(), Box<dyn std::error::Error>> {
     use velnor_actions_workflow_renderer::release_tree::{render_release_workflow, ReleaseRenderContext};
     let (spec, rust) = fixture()?;
-    let context = ReleaseRenderContext { generator_version: env!("CARGO_PKG_VERSION").into(), runs_on: "ubuntu-24.04".into() };
+    let context = ReleaseRenderContext { generator_version: env!("CARGO_PKG_VERSION").into(), runs_on: "ubuntu-26.04".into() };
     let workflow = render_release_workflow(&spec, &context, &rust)?;
     let publisher = spec.jobs.get("release-publish").ok_or("publisher")?;
     assert_eq!(publisher.steps.first().map(|step| step.name.as_str()), Some("Capture release budget"));

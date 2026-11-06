@@ -76,12 +76,7 @@ impl CrateReleaseIntent {
                 .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
             || !super::is_exact_semver(&self.generator_version)
             || !super::is_exact_semver(&self.release_plz_version)
-            || self.runner.is_empty()
-            || self.runner.len() > 64
-            || !self
-                .runner
-                .bytes()
-                .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || matches!(b, b'-' | b'.'))
+            || self.runner != "ubuntu-26.04"
         {
             return Err(invalid("tool_expectations", "invalid_tool_expectations"));
         }

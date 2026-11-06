@@ -195,7 +195,7 @@ fn valid_semver_evidence(receipt: &JournalReceipt) -> bool {
                     && receipt.authentication == JournalAuthentication::BootstrapToken
                     && matches!(package.owners, JournalOwnership::Existing { .. })
                     && valid_sha256(target_checksum)
-                    && velnor_actions_mise::catalog::qualified_cargo_semver_checks("ubuntu-24.04")
+                    && velnor_actions_mise::catalog::qualified_cargo_semver_checks("ubuntu-26.04")
                         .is_some_and(|tool| checker_sha256 == tool.executable_sha256)
             }
             _ => evidence.valid_for(&package.version),

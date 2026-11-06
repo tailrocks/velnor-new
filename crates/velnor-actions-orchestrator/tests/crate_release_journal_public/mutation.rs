@@ -15,7 +15,7 @@ fn mutation_records_require_a_contiguous_immutable_chain() -> Result<(), Box<dyn
     let mut item = JournalMutation {
         semver_evidence: Some(crate::crate_release_semver::SemverEvidence::NoBaseline {
             checker_sha256: velnor_actions_mise::catalog::qualified_cargo_semver_checks(
-                "ubuntu-24.04",
+                "ubuntu-26.04",
             )
             .expect("qualified checker")
             .executable_sha256
@@ -79,7 +79,7 @@ fn completion_rejects_a_pending_mutation() -> Result<(), Box<dyn std::error::Err
     let mut mutation = JournalMutation {
         semver_evidence: Some(crate::crate_release_semver::SemverEvidence::NoBaseline {
             checker_sha256: velnor_actions_mise::catalog::qualified_cargo_semver_checks(
-                "ubuntu-24.04",
+                "ubuntu-26.04",
             )
             .expect("qualified checker")
             .executable_sha256
@@ -145,7 +145,7 @@ fn mutation_record_retry_reads_back_exact_ambiguous_write() -> Result<(), Box<dy
     let mutation = JournalMutation {
         semver_evidence: Some(crate::crate_release_semver::SemverEvidence::NoBaseline {
             checker_sha256: velnor_actions_mise::catalog::qualified_cargo_semver_checks(
-                "ubuntu-24.04",
+                "ubuntu-26.04",
             )
             .expect("qualified checker")
             .executable_sha256
@@ -186,7 +186,7 @@ fn mutation_results_match_package_operation_and_verified_shape()
     let mut item = JournalMutation {
         semver_evidence: Some(crate::crate_release_semver::SemverEvidence::NoBaseline {
             checker_sha256: velnor_actions_mise::catalog::qualified_cargo_semver_checks(
-                "ubuntu-24.04",
+                "ubuntu-26.04",
             )
             .expect("qualified checker")
             .executable_sha256

@@ -159,7 +159,7 @@ fn rehearse_supplied_candidate() -> Result<(), Box<dyn Error>> {
         Some(crate::crate_release_semver::SemverEvidence::Checked { baseline, baseline_checksum, checker_sha256 })
         if baseline == &std::env::var("VELNOR_NATIVE_EXPECT_BASELINE")?
         && baseline_checksum == &std::env::var("VELNOR_NATIVE_EXPECT_CHECKSUM")?
-        && checker_sha256 == velnor_actions_mise::catalog::qualified_cargo_semver_checks("ubuntu-24.04").ok_or("checker")?.executable_sha256)
+        && checker_sha256 == velnor_actions_mise::catalog::qualified_cargo_semver_checks("ubuntu-26.04").ok_or("checker")?.executable_sha256)
     );
     if verify_supplied_admission(&root)? && std::env::var_os("VELNOR_NATIVE_JOURNAL").is_some() {
         rehearse_journal_start(&root)?;

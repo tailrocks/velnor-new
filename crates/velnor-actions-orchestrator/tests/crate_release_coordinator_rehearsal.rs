@@ -98,7 +98,7 @@ fn rendered_scripts() -> Result<Vec<(String, String)>, Box<dyn Error>> {
         &spec,
         &velnor_actions_workflow_renderer::release_tree::ReleaseRenderContext {
             generator_version: env!("CARGO_PKG_VERSION").into(),
-            runs_on: "ubuntu-24.04".into(),
+            runs_on: "ubuntu-26.04".into(),
         },
         &rust,
     )?;

@@ -96,7 +96,7 @@ impl SemverEvidence {
 
     pub(crate) fn is_final(&self) -> bool {
         let Some(expected) =
-            velnor_actions_mise::catalog::qualified_cargo_semver_checks("ubuntu-24.04")
+            velnor_actions_mise::catalog::qualified_cargo_semver_checks("ubuntu-26.04")
         else {
             return false;
         };
@@ -380,7 +380,7 @@ pub(crate) fn fixture_verified_semver(
         intent_sha256: crate::generator::sha256_hex(&intent),
         evidence: SemverEvidence::NoBaseline {
             checker_sha256: velnor_actions_mise::catalog::qualified_cargo_semver_checks(
-                "ubuntu-24.04",
+                "ubuntu-26.04",
             )
             .ok_or_else(invalid)?
             .executable_sha256

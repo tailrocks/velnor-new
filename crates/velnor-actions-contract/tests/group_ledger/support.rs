@@ -99,7 +99,7 @@ fn fixture_parts(group: &str) -> Result<Parts, HelperError> {
     let task_digest = digest_b3(b"gc1-t54-task-payload");
     let input_digest = digest_b3(b"gc1-t54-input");
     let closure_digest = digest_b3(b"gc1-t54-closure");
-    let planned = PlannedPlatform::new("ubuntu-22.04", "x86_64-unknown-linux-gnu")
+    let planned = PlannedPlatform::new("ubuntu-26.04", "x86_64-unknown-linux-gnu")
         .map_err(|_| fail("planned_platform"))?;
     let execute = ExecuteTaskIds {
         tasks: BTreeMap::from([("group".to_owned(), ExecuteTaskRef::Single(task_id.clone()))]),
@@ -139,7 +139,7 @@ fn fixture_plan(parts: &Parts) -> Result<Plan, HelperError> {
         event: WorkflowEvent::PullRequest,
         qualification: None,
         runner: PlanRunner {
-            label: "ubuntu-22.04".to_owned(),
+            label: "ubuntu-26.04".to_owned(),
             selection: RunnerSelection::LatestDefault,
         },
         trust: trust_for_event(WorkflowEvent::PullRequest),
