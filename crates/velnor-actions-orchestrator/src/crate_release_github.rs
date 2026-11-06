@@ -228,16 +228,7 @@ pub(crate) fn verify_predecessor_authority(
         event: event.to_owned(),
         source_sha: identity.source_sha.clone(),
         recovery_sha: if event == "workflow_dispatch" {
-            intent
-                .recovery
-                .as_ref()
-                .map(|value| value.source_sha.clone())
-                .or_else(|| {
-                    intent
-                        .new_crates
-                        .as_ref()
-                        .map(|value| value.source_sha.clone())
-                })
+            intent.exact_source_sha().map(str::to_owned)
         } else {
             None
         },
