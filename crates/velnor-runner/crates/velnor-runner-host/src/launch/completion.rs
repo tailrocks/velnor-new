@@ -6,10 +6,10 @@ mod diagnostics;
 mod journal_ref;
 mod reaper;
 
+pub use cleanup::remove_completed_runner_container;
 pub(in crate::launch) use cleanup::{
     remove_owned_resources_for_jit_conflict, remove_owned_resources_for_retirement,
 };
-pub use diagnostics::{CapturePhase, verify_runner_log_capture_completion};
 
 use reaper::ReapTask;
 

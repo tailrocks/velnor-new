@@ -5,9 +5,8 @@
 mod owned_deletion;
 
 pub(super) use owned_deletion::{
-    ContainerDeletion, remove_container, remove_network, remove_owned_volumes,
+    ContainerDeletion, remove_container, remove_network, remove_owned_volumes, within,
 };
 pub(in crate::launch) use owned_deletion::{
-    admit_terminal_capture_phase, remove_owned_resources_for_jit_conflict,
-    remove_owned_resources_for_retirement,
+    remove_owned_resources_for_jit_conflict, remove_owned_resources_for_retirement,
 };

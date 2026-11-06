@@ -1,15 +1,14 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::os::unix::fs::PermissionsExt;
+#[path = "runner_log_cleanup.rs"]
+mod runner_log_cleanup;
 
 use serde_json::{Value, json};
 use tar::{Builder, EntryType, Header};
-use velnor_runner_host::{
-    CapturePhase, HostError, WorkerImage, verify_runner_log_capture_completion,
-    verify_worker_attestation_manifest,
-};
+use velnor_runner_host::{HostError, WorkerImage, verify_worker_attestation_manifest};
 
+use self::runner_log_cleanup::run_runner_log_cleanup_scenario;
 use super::{MANIFEST_DIGEST, RUNNER_NAMED_LOCALS, SOURCE_SHA, TestResult, slsa_statement};
 
 const LAYER_DIGEST: &str =
@@ -211,32 +210,40 @@ fn runner_log_tar_with_trace() -> TestResult<Vec<u8>> {
 fn public_runner_log_capture_completes_as_unavailable_when_diag_missing_or_tampered_and_rejects_bad_exits()
 -> TestResult<()> {
     for exit_code in [3_i64, 24_i64] {
-        let temp = tempfile::tempdir()?;
-        let state_dir = temp.path().canonicalize()?;
-        std::fs::set_permissions(&state_dir, std::fs::Permissions::from_mode(0o700))?;
-        let phase = verify_runner_log_capture_completion(&state_dir, exit_code, Vec::new())?;
-        assert_eq!(phase, CapturePhase::Unavailable);
+        let obs = run_runner_log_cleanup_scenario(exit_code, Vec::new())?;
+        obs.first?;
+        obs.replay.ok_or("missing replay")??;
+        assert!(!obs.runner_present);
+        assert_eq!(obs.exec_creates, 1);
+        let state = obs.capture_state.ok_or("missing capture state")?;
+        assert_eq!(state["phase"], json!("unavailable"));
+        assert_eq!(state["exit_code"], json!(exit_code));
+        assert_eq!(state["has_trace"], json!(false));
+        assert!(obs.runner_logs_projection.is_some());
     }
 
-    let complete_temp = tempfile::tempdir()?;
-    let complete_dir = complete_temp.path().canonicalize()?;
-    std::fs::set_permissions(&complete_dir, std::fs::Permissions::from_mode(0o700))?;
-    let complete_phase =
-        verify_runner_log_capture_completion(&complete_dir, 0, runner_log_tar_with_trace()?)?;
-    assert_eq!(complete_phase, CapturePhase::Complete);
+    let complete_obs = run_runner_log_cleanup_scenario(0, runner_log_tar_with_trace()?)?;
+    complete_obs.first?;
+    complete_obs.replay.ok_or("missing replay")??;
+    assert!(!complete_obs.runner_present);
+    assert_eq!(complete_obs.exec_creates, 1);
+    let complete_state = complete_obs.capture_state.ok_or("missing capture state")?;
+    assert_eq!(complete_state["phase"], json!("complete"));
+    assert_eq!(complete_state["exit_code"], json!(0));
+    assert_eq!(complete_state["has_trace"], json!(true));
+    assert!(complete_obs.runner_logs_projection.is_some());
 
-    for (bad_exit, bad_archive) in [
-        (3_i64, b"unexpected".to_vec()),
-        (24_i64, b"unexpected".to_vec()),
-        (1_i64, Vec::new()),
-    ] {
-        let bad_temp = tempfile::tempdir()?;
-        let bad_dir = bad_temp.path().canonicalize()?;
-        std::fs::set_permissions(&bad_dir, std::fs::Permissions::from_mode(0o700))?;
-        assert!(matches!(
-            verify_runner_log_capture_completion(&bad_dir, bad_exit, bad_archive),
-            Err(HostError::Docker)
-        ));
+    for bad_exit in [3_i64, 24_i64] {
+        let bad_obs = run_runner_log_cleanup_scenario(bad_exit, b"unexpected".to_vec())?;
+        assert!(matches!(bad_obs.first, Err(HostError::Docker)));
+        assert!(bad_obs.replay.is_none());
+        assert!(bad_obs.runner_present);
     }
+
+    let exit1_obs = run_runner_log_cleanup_scenario(1, Vec::new())?;
+    assert!(matches!(exit1_obs.first, Err(HostError::Journal)));
+    assert!(exit1_obs.replay.is_none());
+    assert!(exit1_obs.runner_present);
+    assert_eq!(exit1_obs.exec_creates, 3);
     Ok(())
 }

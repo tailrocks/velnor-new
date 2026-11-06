@@ -28,7 +28,6 @@ mod runner_logs;
 pub(in crate::launch) use retirement::{
     remove_owned_resources_for_jit_conflict, remove_owned_resources_for_retirement,
 };
-pub(in crate::launch) use runner_logs::admit_terminal_capture_phase;
 
 const REQUEST_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
 
@@ -350,6 +349,8 @@ async fn inspect_volume(docker: &Docker, name: &str) -> Result<Option<Volume>, H
     }
 }
 
-pub(super) async fn within<F: std::future::Future>(future: F) -> Result<F::Output, HostError> {
+pub(in crate::launch::completion::cleanup::native) async fn within<F: std::future::Future>(
+    future: F,
+) -> Result<F::Output, HostError> {
     docker_deadline_after(future, REQUEST_TIMEOUT).await
 }

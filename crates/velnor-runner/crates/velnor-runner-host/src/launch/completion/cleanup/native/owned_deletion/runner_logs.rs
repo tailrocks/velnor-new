@@ -160,9 +160,7 @@ fn retry_capture(state: &diagnostics::CaptureState) -> Result<diagnostics::Captu
         .map_err(|error| Failure::request("runner log retry", error))
 }
 
-pub(in crate::launch) fn admit_terminal_capture_phase(
-    phase: diagnostics::CapturePhase,
-) -> Result<(), Failure> {
+fn admit_terminal_capture_phase(phase: diagnostics::CapturePhase) -> Result<(), Failure> {
     if matches!(
         phase,
         diagnostics::CapturePhase::Complete | diagnostics::CapturePhase::Unavailable

@@ -120,8 +120,6 @@ fn api_reference_matches(workflow_reference: &str, api_reference: &str) -> bool 
     }
     workflow_reference
         .strip_prefix("refs/heads/")
-        .or_else(|| workflow_reference.strip_prefix("refs/tags/"))
-        .or_else(|| workflow_reference.strip_prefix("refs/"))
         .is_some_and(|name| name == api_reference)
 }
 

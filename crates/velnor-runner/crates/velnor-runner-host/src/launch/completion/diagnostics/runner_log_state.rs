@@ -38,7 +38,7 @@ pub(in crate::launch) struct CaptureBinding {
 
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
-pub enum CapturePhase {
+pub(in crate::launch) enum CapturePhase {
     Prepared,
     Created,
     StartRequested,

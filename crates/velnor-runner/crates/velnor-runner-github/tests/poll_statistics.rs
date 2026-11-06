@@ -299,7 +299,8 @@ fn full_statistics_value() -> Value {
 }
 
 #[test]
-fn compare_hook_source_matches_unqualified_branch_and_tag_run_paths_and_rejects_mismatched_refs() {
+fn compare_hook_source_matches_unqualified_branch_run_paths_and_rejects_ambiguous_or_mismatched_refs()
+ {
     let sha = "1".repeat(40);
     let commit_body =
         json!({"sha": sha, "message": "c", "tree": {"sha": "2".repeat(40)}, "parents": []})
@@ -313,7 +314,8 @@ fn compare_hook_source_matches_unqualified_branch_and_tag_run_paths_and_rejects_
     for (event_ref, run_suffix, should_match) in [
         ("refs/heads/main", "main", true),
         ("refs/heads/main", "refs/heads/main", true),
-        ("refs/tags/v1.2.3", "v1.2.3", true),
+        ("refs/tags/v1.2.3", "refs/tags/v1.2.3", true),
+        ("refs/tags/v1.2.3", "v1.2.3", false),
         ("refs/heads/main", "other", false),
         ("refs/heads/main", "refs/tags/main", false),
     ] {
@@ -322,6 +324,8 @@ fn compare_hook_source_matches_unqualified_branch_and_tag_run_paths_and_rejects_
             .map_or(("push", "main"), |tag| ("release", tag));
         let run_path = format!(".github/workflows/ci.yml@{run_suffix}");
         let workflow_ref = format!("donbeave/essential-mise/.github/workflows/ci.yml@{event_ref}");
+        let job_workflow_ref =
+            "donbeave/essential-mise/.github/workflows/reusable.yml@refs/heads/main";
         let input_bytes = serde_json::to_vec(&json!({
             "repository_id": 1_438_742_200_i64,
             "repository": "donbeave/essential-mise",
@@ -332,7 +336,7 @@ fn compare_hook_source_matches_unqualified_branch_and_tag_run_paths_and_rejects_
             "workflow_ref": workflow_ref,
             "workflow_sha": sha,
             "tested_sha": sha,
-            "job_workflow_ref": workflow_ref,
+            "job_workflow_ref": job_workflow_ref,
             "workflow_job_id": "verify__local"
         }))
         .expect("input bytes");
@@ -345,6 +349,13 @@ fn compare_hook_source_matches_unqualified_branch_and_tag_run_paths_and_rejects_
             "head_sha": sha,
             "workflow_id": 77,
             "run_attempt": 1,
+            "referenced_workflows": [
+                {
+                    "path": "donbeave/essential-mise/.github/workflows/reusable.yml@main",
+                    "sha": sha,
+                    "ref": "refs/heads/main"
+                }
+            ],
             "repository": {
                 "id": 1_438_742_200,
                 "name": "essential-mise",

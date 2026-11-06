@@ -8,9 +8,9 @@ mod runner;
 #[path = "cleanup/service_loop.rs"]
 mod service_loop;
 
+pub use native::remove_completed_runner_container;
 pub(in crate::launch) use native::{
-    admit_terminal_capture_phase, remove_owned_resources_for_jit_conflict,
-    remove_owned_resources_for_retirement,
+    remove_owned_resources_for_jit_conflict, remove_owned_resources_for_retirement,
 };
 
 pub(super) use service_loop::run;

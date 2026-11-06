@@ -174,10 +174,12 @@ fn reference_matches(job_reference: &str, api_reference: &str) -> bool {
     if api_reference.starts_with("refs/") {
         return job_reference == api_reference;
     }
-    if matches!(classify(job_reference), WorkflowRefKind::Commit) {
-        return job_reference == api_reference;
+    if matches!(classify(job_reference), WorkflowRefKind::Branch) {
+        return job_reference
+            .strip_prefix("refs/heads/")
+            .is_some_and(|reference| reference == api_reference);
     }
-    ref_name(job_reference).is_some_and(|reference| reference == api_reference)
+    matches!(classify(job_reference), WorkflowRefKind::Commit) && job_reference == api_reference
 }
 
 fn path_revision_matches(
