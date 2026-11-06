@@ -210,7 +210,7 @@ pub(crate) fn run_check(
         "--default-features".into(),
     ]);
     if !features.is_empty() {
-        args.extend(["--current-features".into(), features.join(",").into()]);
+        args.extend(["--features".into(), features.join(",").into()]);
     }
     let command = PinnedToolExec::new(vec![PinnedTool::Rust], std::ffi::OsStr::new("env"), args)
         .map_err(|_| invalid())?
@@ -288,7 +288,6 @@ pub(crate) fn supervised_projection(
             .map_err(|_| invalid())?;
     if manifest["package"]["name"].as_str() != Some(request.package)
         || manifest["package"]["version"].as_str() != Some(request.baseline_version)
-        || !files.contains_key("Cargo.lock")
     {
         return Err(invalid());
     }

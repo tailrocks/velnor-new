@@ -235,3 +235,51 @@ fn baseline_archive_is_bound_to_registry_identity_and_checksum()
     assert!(download_baseline(&registry, "demo", &previous).is_err());
     Ok(())
 }
+
+#[test]
+fn historical_lockless_archive_remains_bound_to_registry_checksum()
+-> Result<(), Box<dyn std::error::Error>> {
+    let encoder = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+    let mut tar = tar::Builder::new(encoder);
+    let manifest = b"[package]\nname='demo'\nversion='0.1.0'\n";
+    let mut header = tar::Header::new_gnu();
+    header.set_size(manifest.len() as u64);
+    header.set_mode(0o644);
+    header.set_cksum();
+    tar.append_data(&mut header, "demo-0.1.0/Cargo.toml", manifest.as_slice())?;
+    let source = b"pub fn stable_api() {}\n";
+    let mut source_header = tar::Header::new_gnu();
+    source_header.set_size(source.len() as u64);
+    source_header.set_mode(0o644);
+    source_header.set_cksum();
+    tar.append_data(
+        &mut source_header,
+        "demo-0.1.0/src/lib.rs",
+        source.as_slice(),
+    )?;
+    let archive = tar.into_inner()?.finish()?;
+    let checksum = crate::generator::sha256_hex(&archive);
+    let input = super::checker::ProjectionInput {
+        archive: &archive,
+        checksum: &checksum,
+        package: "demo",
+        baseline_version: "0.1.0",
+        source_sha: "0123456789012345678901234567890123456789",
+        target_version: "0.1.1",
+        manifest: "Cargo.toml",
+        features: &[],
+    };
+    let (context, files) = super::checker::supervised_projection(&input)?;
+    assert_eq!(context["baseline_checksum"], checksum);
+    assert_eq!(files["Cargo.toml"].1, manifest);
+    assert_eq!(files["src/lib.rs"].1, source);
+    assert!(!files.contains_key("Cargo.lock"));
+    assert!(
+        super::checker::supervised_projection(&super::checker::ProjectionInput {
+            checksum: &"a".repeat(64),
+            ..input
+        })
+        .is_err()
+    );
+    Ok(())
+}

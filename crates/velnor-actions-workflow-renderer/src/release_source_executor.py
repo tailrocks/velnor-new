@@ -245,7 +245,7 @@ def read_semver_context(descriptor):
         raise SourceExecutorError('invalid semver context')
     files = parse_inventory(value['files'])
     if (any(item.target is not None for item in files)
-            or not {'Cargo.toml', 'Cargo.lock'}.issubset({item.path for item in files})):
+            or 'Cargo.toml' not in {item.path for item in files}):
         raise SourceExecutorError('invalid semver context')
     return SemverBaseline(value['source_sha'], value['package'], value['target_version'], value['manifest'],
                           tuple(value['features']), value['baseline_version'], value['baseline_checksum'], files)
@@ -691,7 +691,7 @@ def _source_operation(manager, lifecycle, root, context, operation, package_inde
         args = ['check-release', '--manifest-path', source + '/' + package.manifest,
                 '--package', package.name, '--baseline-root', baseline_root, '--default-features']
         if package.features:
-            args.extend(['--current-features', ','.join(package.features)])
+            args.extend(['--features', ','.join(package.features)])
         cap = 1024 * 1024
     else:
         package = context.packages[package_index]
