@@ -294,3 +294,29 @@ fn release_producer_checkouts_exclude_non_inputs_and_carry_the_guard() -> TestRe
     }
     Ok(())
 }
+
+#[test]
+fn stable_select_step_carries_release_status_token() -> TestResult {
+    let workflows = release_workflows(None)?;
+    let (_, workflow) = workflows
+        .iter()
+        .find(|(name, _)| name.as_str() == "binary-release.yml")
+        .ok_or("binary-release.yml is missing")?;
+    let (_, steps) = jobs_of(workflow)
+        .into_iter()
+        .find(|(job, _)| job == "stable-eligibility")
+        .ok_or("stable-eligibility is missing")?;
+    let step = steps
+        .iter()
+        .find(|step| step.contains("select-stable-release-source-v1"))
+        .ok_or("stable select step is missing")?;
+    assert!(
+        step.contains("VELNOR_RELEASE_STATUS_TOKEN: ${{ secrets.RELEASE_STATUS_READ_TOKEN }}"),
+        "stable select step lacks the status token binding"
+    );
+    assert!(
+        step.contains("GH_TOKEN: ${{ github.token }}"),
+        "stable select step lost the write token binding"
+    );
+    Ok(())
+}
