@@ -73,8 +73,11 @@ pub(super) fn validate_environment(file: &str, name: &str) -> Result<(), Contrac
     if name != name.trim() {
         return Err(ContractError::config(file, key, "padded_environment"));
     }
-    if !name.bytes().all(is_environment_byte)
-        || name.split('/').any(|seg| seg.is_empty() || seg == "..")
+    if name.len() > 255
+        || !name.bytes().all(is_environment_byte)
+        || name
+            .split('/')
+            .any(|seg| seg.is_empty() || seg == "." || seg == "..")
     {
         return Err(ContractError::config(
             file,

@@ -195,6 +195,29 @@ fn bootstrap_workspace_creation_respects_release_package_limit()
 }
 
 #[test]
+fn release_environment_names_are_valid_github_routes() -> Result<(), Box<dyn std::error::Error>> {
+    use velnor_actions_contract::config::RustReleaseConfig;
+    let mut input = serde_json::json!({"enabled":true,"registry":"crates-io","packages":["demo"],"required_workflow_path":".github/workflows/ci.yml","trusted_reviewer_id":1});
+    for name in [
+        "release".to_owned(),
+        "prod/release".to_owned(),
+        "a".repeat(255),
+    ] {
+        input["environment"] = name.into();
+        serde_json::from_value::<RustReleaseConfig>(input.clone())?.validate("test")?;
+    }
+    for name in [".".to_owned(), "prod/./release".to_owned(), "a".repeat(256)] {
+        input["environment"] = name.into();
+        assert!(
+            serde_json::from_value::<RustReleaseConfig>(input.clone())?
+                .validate("test")
+                .is_err()
+        );
+    }
+    Ok(())
+}
+
+#[test]
 fn predecessor_accepts_only_first_run_attempt() -> Result<(), Box<dyn std::error::Error>> {
     use velnor_actions_contract::config::RustReleaseConfig;
     let mut input = serde_json::json!({"enabled":true,"registry":"crates-io","packages":["demo"],"required_workflow_path":".github/workflows/ci.yml","trusted_reviewer_id":1,"journal_predecessor":{"run_id":12,"run_attempt":1,"workflow_sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}});
