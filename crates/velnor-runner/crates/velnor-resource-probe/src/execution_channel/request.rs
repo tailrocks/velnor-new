@@ -38,7 +38,7 @@ pub fn read_request_file(
     Ok(Some((bytes, final_state)))
 }
 
-pub(super) fn ensure_stable_identity(
+pub fn ensure_stable_identity(
     before: RequestMetadata,
     after: RequestMetadata,
     reopened: RequestMetadata,
@@ -51,7 +51,7 @@ pub(super) fn ensure_stable_identity(
     }
 }
 
-pub(super) fn ensure_stable_content(first: &[u8], second: &[u8]) -> Result<(), ProbeError> {
+pub fn ensure_stable_content(first: &[u8], second: &[u8]) -> Result<(), ProbeError> {
     if first == second {
         Ok(())
     } else {

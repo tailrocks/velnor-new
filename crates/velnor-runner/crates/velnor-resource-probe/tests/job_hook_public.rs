@@ -4,12 +4,15 @@
 use std::error::Error;
 use std::fs::{self, File};
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Barrier};
 use std::thread;
+use std::time::{Duration, Instant};
 
 use velnor_resource_probe::ProbeError;
-use velnor_resource_probe::execution_request::{REQUEST_FILE, read_request_file};
+use velnor_resource_probe::execution_request::{
+    REQUEST_FILE, RequestMetadata, ensure_stable_content, ensure_stable_identity, read_request_file,
+};
 use velnor_resource_probe::job_hook::{
     Challenge, Decision, SourceRequest, canonical_json, sha256, validate_challenge,
     validate_decision,
@@ -216,47 +219,20 @@ impl Drop for ScopedTempDir {
     }
 }
 
-fn assert_mid_read_swap_rejected(
-    inbox: &File,
-    inbox_path: &std::path::Path,
-    request_path: &std::path::Path,
-    uid: u32,
-    gid: u32,
-) {
-    let stop_swap = Arc::new(AtomicBool::new(false));
-    let swap_inbox = inbox_path.to_path_buf();
-    let swap_req = request_path.to_path_buf();
-    let swap_stop = Arc::clone(&stop_swap);
-    let swapper = thread::spawn(move || {
-        let mut seq = 0_usize;
-        while !swap_stop.load(Ordering::Acquire) {
-            let candidate = swap_inbox.join(format!(".swap.{}.tmp", seq & 1));
-            let body = if seq.is_multiple_of(2) {
-                b"{\"schema_version\":1}\n".as_slice()
-            } else {
-                b"{\"schema_version\":2,\"extra\":true}\n".as_slice()
-            };
-            if fs::write(&candidate, body).is_ok()
-                && fs::set_permissions(&candidate, fs::Permissions::from_mode(0o600)).is_ok()
-            {
-                drop(fs::rename(&candidate, &swap_req));
-            }
-            seq = seq.wrapping_add(1);
-        }
-    });
-    let mut saw_changed = false;
-    for _ in 0..5_000 {
-        if matches!(
-            read_request_file(inbox, uid, gid),
-            Err(ProbeError::Invalid("execution_request_changed"))
-        ) {
-            saw_changed = true;
-            break;
-        }
-    }
-    stop_swap.store(true, Ordering::Release);
-    drop(swapper.join());
-    assert!(saw_changed);
+fn assert_mid_read_stability_contracts(meta: RequestMetadata, payload: &[u8]) -> TestResult<()> {
+    ensure_stable_identity(meta, meta, meta, meta)?;
+    ensure_stable_content(payload, payload)?;
+    let mut swapped_inode = meta;
+    swapped_inode.inode = meta.inode.wrapping_add(1);
+    assert!(matches!(
+        ensure_stable_identity(meta, meta, swapped_inode, swapped_inode),
+        Err(ProbeError::Invalid("execution_request_changed"))
+    ));
+    assert!(matches!(
+        ensure_stable_content(payload, b"{\"schema_version\":2}\n"),
+        Err(ProbeError::Invalid("execution_request_changed"))
+    ));
+    Ok(())
 }
 
 #[test]
@@ -272,6 +248,7 @@ fn public_inbox_request_poll_returns_none_when_published_after_initial_enoent_an
 
     let request_path = inbox_path.join(REQUEST_FILE);
     let payload = b"{\"schema_version\":1}\n";
+    let mut observed_meta = None;
     for round in 0..64_usize {
         if request_path.exists() {
             fs::remove_file(&request_path)?;
@@ -286,33 +263,37 @@ fn public_inbox_request_poll_returns_none_when_published_after_initial_enoent_an
         let poller_barrier = Arc::clone(&barrier);
         let poller_polls = Arc::clone(&empty_polls);
 
-        let poller = thread::spawn(move || -> Result<(Vec<u8>, u64), ProbeError> {
+        let poller = thread::spawn(move || -> Result<(Vec<u8>, RequestMetadata), ProbeError> {
             poller_barrier.wait();
+            let deadline = Instant::now() + Duration::from_secs(5);
             loop {
-                match read_request_file(&poller_inbox, uid, gid)? {
-                    None => {
-                        poller_polls.fetch_add(1, Ordering::Release);
-                    }
-                    Some((bytes, read_meta)) => return Ok((bytes, read_meta.size)),
+                if let Some((bytes, read_meta)) = read_request_file(&poller_inbox, uid, gid)? {
+                    return Ok((bytes, read_meta));
+                }
+                poller_polls.fetch_add(1, Ordering::Release);
+                if Instant::now() >= deadline {
+                    return Err(ProbeError::Invalid("test_poll_timeout"));
                 }
             }
         });
 
         barrier.wait();
-        while empty_polls.load(Ordering::Acquire) <= round % 4 {
+        let wait_deadline = Instant::now() + Duration::from_secs(5);
+        while empty_polls.load(Ordering::Acquire) <= round % 4 && Instant::now() < wait_deadline {
             thread::yield_now();
         }
         fs::rename(&staged_path, &request_path)?;
 
-        let (read_bytes, read_size) = poller
+        let (read_bytes, read_meta) = poller
             .join()
             .map_err(|_| "poller thread panicked")?
             .map_err(|err| format!("round {round} failed: {err:?}"))?;
         assert_eq!(read_bytes, payload);
-        assert_eq!(read_size, payload.len() as u64);
+        assert_eq!(read_meta.size, payload.len() as u64);
+        observed_meta = Some(read_meta);
     }
 
-    assert_mid_read_swap_rejected(&inbox, &inbox_path, &request_path, uid, gid);
+    assert_mid_read_stability_contracts(observed_meta.ok_or("missing observed meta")?, payload)?;
 
     fs::write(&request_path, payload)?;
     fs::set_permissions(&request_path, fs::Permissions::from_mode(0o644))?;
