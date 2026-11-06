@@ -14,9 +14,18 @@ use crate::gc1_scene::{Scene, fail};
 use crate::gc1_seal_clock::SupervisorClock;
 use crate::gc1_seal_support::{Attestation, Gh};
 use crate::gc1_seal_units::{
-    expect, expect_flag, process_group, process_is_running, produce_flag, run_select_units,
-    selected_unit, unit_key,
+    expect, expect_flag, produce_flag, run_select_units, selected_unit, unit_key,
 };
+use call_helpers::{
+    assert_listing_group_reaped, await_budget_boundary, clear_readiness_path,
+    spawn_configured_listing_selector, wait_for_live_listing_pid,
+};
+
+#[path = "state_v4_select_call_helpers.rs"]
+mod call_helpers;
+
+#[path = "state_v4_select_pid_publication.rs"]
+mod pid_publication;
 
 #[path = "state_v4_select_aggregate_cleanup.rs"]
 mod aggregate_cleanup;
@@ -51,6 +60,7 @@ impl RunningSelector {
         loop {
             if let Some(status) = self.child.try_wait()? {
                 self.finished = true;
+                eprintln!("X101 selector completion=observe");
                 crate::gc1_seal_support::check_selector_markers_at(&self.gh_dir)?;
                 return Ok(Some(status));
             }
@@ -66,6 +76,7 @@ impl RunningSelector {
         loop {
             if let Some(status) = self.child.try_wait()? {
                 self.finished = true;
+                eprintln!("X101 selector completion=wait");
                 crate::gc1_seal_support::check_selector_markers_at(&self.gh_dir)?;
                 return Ok(status);
             }
@@ -129,6 +140,12 @@ fn run_listing_call_deadline_case(label: &str, advance: u64) -> Result<(), Box<d
         .real_python()
         .to_str()
         .ok_or_else(|| fail("invalid Python path"))?;
+    let gh_dir = PathBuf::from(gh.dir());
+    let ready_path = gh_dir.join(format!("list-ready-{label}"));
+    clear_readiness_path(&ready_path)?;
+    let ready_path_value = ready_path
+        .to_str()
+        .ok_or_else(|| fail("invalid listing readiness path"))?;
     let mut selector = RunningSelector::new(
         crate::gc1_seal_units::spawn_select_units(
             &scene,
@@ -140,17 +157,16 @@ fn run_listing_call_deadline_case(label: &str, advance: u64) -> Result<(), Box<d
                 ("VELNOR_STATE_SELECT_DEADLINE", "30"),
                 ("FAKE_REAL_PYTHON3", real_python),
                 ("FAKE_SUPERVISOR_CLOCK_FREEZE", "1"),
+                ("FAKE_GH_LIST_PID_READY", ready_path_value),
             ],
         )?,
         &gh,
     );
-    let gh_dir = PathBuf::from(gh.dir());
-    wait_until(|| gh_dir.join("list-pid").exists(), Duration::from_secs(10))?;
-    let list_pid: u32 = fs::read_to_string(gh_dir.join("list-pid"))?
-        .trim()
-        .parse()?;
-    let list_group =
-        process_group(list_pid).ok_or_else(|| fail("missing listing process group"))?;
+    let (list_pid, list_group) = wait_for_live_listing_pid(
+        &ready_path,
+        &gh_dir.join("list-pid"),
+        Duration::from_secs(10),
+    )?;
     clock.advance(label, advance)?;
     clock.wait_for_advance(label, Duration::from_secs(10))?;
     let early = selector.observe(Duration::from_secs(3))?;
@@ -179,14 +195,11 @@ fn run_listing_call_deadline_case(label: &str, advance: u64) -> Result<(), Box<d
     if gh_dir.join("verify-pids").exists() {
         return Err(fail("verification started after listing call expiry"));
     }
-    if process_is_running(list_pid)
-        || PathBuf::from(format!("/proc/{list_group}")).exists()
-        || crate::gc1_seal_units::group_is_live(list_group)
-    {
-        return Err(fail(
-            "listing process group remained live after publication",
-        ));
-    }
+    assert_listing_group_reaped(
+        list_pid,
+        list_group,
+        "listing process group remained live after publication",
+    )?;
     scene.finish()
 }
 
@@ -211,28 +224,30 @@ fn run_configured_call_budget_case(
     let gh = Gh::install(&scene)?;
     gh.mode("list-hang")?;
     let clock = SupervisorClock::install(&scene, &gh)?;
-    let real_python = clock
-        .real_python()
-        .to_str()
-        .ok_or_else(|| fail("invalid Python path"))?;
-    let mut extra = vec![
-        ("VELNOR_STATE_UNIT_TIMEOUT", "20"),
-        ("VELNOR_STATE_SELECT_DEADLINE", "600"),
-        ("FAKE_REAL_PYTHON3", real_python),
-        ("FAKE_SUPERVISOR_CLOCK_FREEZE", "1"),
-    ];
-    if let Some(limit) = call_limit {
-        extra.push(("VELNOR_STATE_GH_TIMEOUT", limit));
-    }
-    let mut selector = RunningSelector::new(
-        crate::gc1_seal_units::spawn_select_units(&scene, &gh, &[(StateUnit::Union, ".")], &extra)?,
-        &gh,
-    );
-    let gh_dir = PathBuf::from(gh.dir());
-    wait_until(|| gh_dir.join("list-pid").exists(), Duration::from_secs(10))?;
-    clock.advance(label, before_expiry)?;
-    clock.wait_for_advance(label, Duration::from_secs(10))?;
-    if selector.observe(Duration::ZERO)?.is_some() {
+    let (mut selector, gh_dir, ready_path) =
+        spawn_configured_listing_selector(&scene, &gh, &clock, label, call_limit)?;
+    let (list_pid, list_group) = wait_for_live_listing_pid(
+        &ready_path,
+        &gh_dir.join("list-pid"),
+        Duration::from_secs(10),
+    )?;
+    let (early_status, _releases) =
+        await_budget_boundary(&clock, &mut selector, &gh_dir, label, before_expiry)?;
+    if let Some(status) = early_status {
+        if !status.success() {
+            return Err(fail("configured call expiry failed the selector step"));
+        }
+        expect(
+            &selected_unit(&scene, StateUnit::Union, ".")?,
+            &[],
+            "configured call budget expiry",
+        )?;
+        assert_listing_group_reaped(
+            list_pid,
+            list_group,
+            "listing process group remained live after configured budget",
+        )?;
+        scene.finish()?;
         return Err(fail("configured call budget expired before its boundary"));
     }
     let expiry_label = format!("{label}-expiry");
@@ -255,6 +270,11 @@ fn run_configured_call_budget_case(
         &selected_unit(&scene, StateUnit::Union, ".")?,
         &[],
         "configured call budget expiry",
+    )?;
+    assert_listing_group_reaped(
+        list_pid,
+        list_group,
+        "listing process group remained live after configured budget",
     )?;
     scene.finish()
 }

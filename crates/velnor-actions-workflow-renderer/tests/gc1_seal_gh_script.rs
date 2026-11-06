@@ -23,6 +23,21 @@ tracked=1
 finish() { [ "$tracked" -eq 1 ] || return 0; printf '%s\n' - >> "$d/activity"; tracked=0; }
 trap finish EXIT
 trap 'if [ -n "${FAKE_GH_SIGNAL_MARKER-}" ]; then : > "$FAKE_GH_SIGNAL_MARKER"; fi; if [ -n "${FAKE_GH_SIGNAL_ACK-}" ]; then while [ ! -f "$FAKE_GH_SIGNAL_ACK" ]; do sleep 0.01; done; fi; finish; exit 143' TERM INT HUP
+publish_pid() {
+  publish_destination=$1
+  publish_value=$2
+  publish_temporary="${publish_destination}.tmp.$$"
+  if ! (set -C; : > "$publish_temporary"); then return 1; fi
+  if ! exec 3>>"$publish_temporary"; then rm -f "$publish_temporary"; return 1; fi
+  if [ "${FAKE_GH_LIST_PID_READY-}" = "$publish_destination" ] && [ -n "${FAKE_GH_LIST_PID_OPENED-}" ] && [ -n "${FAKE_GH_LIST_PID_RELEASE-}" ]; then
+    if ! : > "$FAKE_GH_LIST_PID_OPENED"; then exec 3>&-; rm -f "$publish_temporary"; return 1; fi
+    while [ ! -e "$FAKE_GH_LIST_PID_RELEASE" ]; do sleep 0.01; done
+  fi
+  if ! printf '%s\n' "$publish_value" >&3; then exec 3>&-; rm -f "$publish_temporary"; return 1; fi
+  if ! exec 3>&-; then rm -f "$publish_temporary"; return 1; fi
+  if ! mv "$publish_temporary" "$publish_destination"; then rm -f "$publish_temporary"; return 1; fi
+  return 0
+}
 verb="$1 $2"
 shift 2
 case "$verb" in
@@ -38,7 +53,12 @@ case "$verb" in
       : > "${FAKE_GH_LIST_STARTED:?}"
       while [ ! -e "$FAKE_GH_LIST_GATE" ]; do sleep 0.01; done
     fi
-    if [ "$mode" = list-hang ]; then printf '%s\n' "$$" > "$d/list-pid"; sleep 30; exit 0; fi
+    if [ "$mode" = list-hang ]; then
+      publish_pid "$d/list-pid" "$$" || exit 1
+      if [ -n "${FAKE_GH_LIST_PID_READY-}" ]; then publish_pid "$FAKE_GH_LIST_PID_READY" "$$" || exit 1; fi
+      sleep 30
+      exit 0
+    fi
     if [ -f "$d/list-output-override" ]; then cat "$d/list-output-override"; exit 0; fi
     if [ -f "$d/lag" ]; then
       read -r lag < "$d/lag"
@@ -122,9 +142,10 @@ case "$verb" in
         while [ ! -e "$d/publication-observed" ]; do sleep 0.01; done
         : > "$d/post-publication-write"
       ) &
-      printf '%s\n' "$!" > "$d/resistant-child"
-      printf '%s\n' "$$" > "$d/resistant-verifier"
-      wait "$!"
+      resistant_child=$!
+      publish_pid "$d/resistant-child" "$resistant_child" || exit 1
+      publish_pid "$d/resistant-verifier" "$$" || exit 1
+      wait "$resistant_child"
       exit 1
     fi
     if [ -f "$d/hang-keys" ] && grep -qxF "$skey" "$d/hang-keys"; then

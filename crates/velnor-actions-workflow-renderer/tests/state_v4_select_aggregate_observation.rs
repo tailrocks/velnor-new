@@ -25,6 +25,7 @@ fn aggregate_expiry_keeps_only_success_observed_before_expiry() -> Result<(), Bo
 }
 
 fn run_aggregate_status_case(label: &str, advance: u64) -> Result<(), Box<dyn Error>> {
+    eprintln!("X101 case aggregate={label}");
     let scene = Scene::new(
         &format!("seal-select-aggregate-status-{label}"),
         crate::gc1_t53::scripts()?,
