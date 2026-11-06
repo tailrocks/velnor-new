@@ -101,6 +101,9 @@ fn generated_candidate_receipt_rejects_unprotected_environment() -> Result<(), B
     }
     rehearse_candidate_denial()?;
     if std::env::var_os("VELNOR_TEST_NATIVE_REHEARSAL").is_some() {
+        let publisher = generated_script("release-publish", "Publish approved Rust crate")?;
+        assert!(publisher.contains("/usr/bin/sudo"));
+        assert!(publisher.contains("/usr/bin/python3"));
         rehearse_supplied_candidate()?;
     }
     Ok(())
@@ -239,37 +242,6 @@ fn rehearse_journal_coordinate(root: &Path) -> Result<(), Box<dyn Error>> {
         assert!(actual.contains(&error), "{actual}");
     }
     Ok(())
-}
-
-fn supplied_step(
-    root: &Path,
-    job: &str,
-    operation: &str,
-) -> Result<std::process::Output, Box<dyn Error>> {
-    let script = generated_script(job, &format!("Release {operation}"))?;
-    let mut command = std::process::Command::new("bash");
-    command
-        .args(["-e", "-c", &script])
-        .env("VELNOR_NATIVE_RECEIPT_CHILD", "1")
-        .env("VELNOR_NATIVE_OPERATION", operation)
-        .env("VELNOR_TEST_BINARY", std::env::current_exe()?)
-        .env("GITHUB_OUTPUT", root.join("github-output"))
-        .env("RUSTUP_HOME", root.join("velnor/rustup"))
-        .env("MISE_RUSTUP_HOME", root.join("velnor/rustup"))
-        .env("CARGO_HOME", root.join("velnor/cargo"))
-        .env("MISE_CARGO_HOME", root.join("velnor/cargo"))
-        .env("RUSTUP_AUTO_INSTALL", "0");
-    if matches!(operation, "journal-start" | "journal-coordinate") {
-        command.env("HOME", root).env("GH_TOKEN", "fixture");
-    }
-    if operation == "journal-coordinate"
-        && std::env::var_os("VELNOR_NATIVE_NO_TOKEN_ON_RETRY").is_some()
-        && root.join("coordinator.pid").exists()
-    {
-        command.env_remove("ACTIONS_ID_TOKEN_REQUEST_TOKEN");
-        command.env_remove("ACTIONS_ID_TOKEN_REQUEST_URL");
-    }
-    Ok(command.output()?)
 }
 
 fn rehearse_candidate_denial() -> Result<(), Box<dyn Error>> {

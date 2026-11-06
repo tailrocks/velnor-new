@@ -516,12 +516,15 @@ class Handler(http.server.BaseHTTPRequestHandler):
             assert (
                 value["tag_name"] == f"{package}-v{version}"
                 and value["target_commitish"] == source_sha
+                and type(value["prerelease"]) is bool
+                and value["prerelease"] == ("-" in version.split("+", 1)[0])
                 and release is None
             )
             release = {
                 "id": 99,
                 "tag_name": value["tag_name"],
                 "draft": False,
+                "prerelease": value["prerelease"],
                 "html_url": f"https://github.com/{repository}/releases/tag/{package}-v{version}",
             }
             obj = release
