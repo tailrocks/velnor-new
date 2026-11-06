@@ -1,59 +1,35 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use serde::{Deserialize, Serialize};
-
-const MAX_OUTPUT_BYTES: usize = 512;
-const SCHEMA_VERSION: u8 = 1;
-const MAX_PSI_BPS: u64 = 10_000;
-
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
-#[serde(deny_unknown_fields)]
-pub(super) struct ProbeRecord {
-    pub(super) schema_version: u8,
-
-    pub(super) docker_root_free_bytes: u64,
-
-    pub(super) docker_root_total_bytes: u64,
-
-    pub(super) memory_available_bytes: u64,
-
-    pub(super) load_milli: u32,
-
-    pub(super) memory_psi_some_avg10_bps: Option<u64>,
-}
+pub(super) use crate::resource_probe_record::{InodePolicy, MAX_OUTPUT_BYTES, ProbeRecord};
 
 impl ProbeRecord {
     pub(super) fn parse(output: &[u8], memory_total_bytes: u64) -> Option<Self> {
-        if !valid_framing(output) || memory_total_bytes == 0 {
+        if memory_total_bytes == 0 {
             return None;
         }
-        let body = output.get(..output.len().checked_sub(1)?)?;
-        let mut deserializer = serde_json::Deserializer::from_slice(body);
-        let record = Self::deserialize(&mut deserializer).ok()?;
-        deserializer.end().ok()?;
-        (record.valid_values(memory_total_bytes) && canonical_body_matches(&record, body))
-            .then_some(record)
+        let record = Self::parse_schema5(output)?;
+        let (expected_period, expected_quota, _, _, _) = super::projection::resource_limits();
+        (record.docker_root_memory_values_valid(memory_total_bytes)
+            && record.probe_cgroup_cpu_period_micros == u64::try_from(expected_period).ok()?
+            && record.probe_cgroup_cpu_quota_micros == Some(u64::try_from(expected_quota).ok()?))
+        .then_some(record)
     }
 
-    fn valid_values(&self, memory_total_bytes: u64) -> bool {
-        self.schema_version == SCHEMA_VERSION
-            && self.docker_root_total_bytes > 0
-            && self.docker_root_free_bytes <= self.docker_root_total_bytes
-            && self.memory_available_bytes <= memory_total_bytes
-            && self
-                .memory_psi_some_avg10_bps
-                .is_none_or(|value| value <= MAX_PSI_BPS)
+    fn docker_root_memory_values_valid(&self, memory_total_bytes: u64) -> bool {
+        self.memory_available_bytes <= memory_total_bytes
     }
-}
 
-fn canonical_body_matches(record: &ProbeRecord, body: &[u8]) -> bool {
-    serde_json::to_vec(record).is_ok_and(|canonical| canonical == body)
-}
-
-fn valid_framing(output: &[u8]) -> bool {
-    output.len() >= 2
-        && output.len() <= MAX_OUTPUT_BYTES
-        && output.last() == Some(&b'\n')
-        && output[..output.len() - 1].iter().all(|byte| *byte != b'\n')
+    pub(super) fn effective_cpu_millicores(&self, ncpu: u32) -> Option<u64> {
+        if ncpu == 0 || self.probe_cgroup_cpuset_cpus_count == 0 {
+            return None;
+        }
+        let (expected_period, expected_quota, _, _, _) = super::projection::resource_limits();
+        if self.probe_cgroup_cpu_period_micros != u64::try_from(expected_period).ok()?
+            || self.probe_cgroup_cpu_quota_micros != Some(u64::try_from(expected_quota).ok()?)
+        {
+            return None;
+        }
+        self.ancestor_capacity_millicores(ncpu)
+    }
 }

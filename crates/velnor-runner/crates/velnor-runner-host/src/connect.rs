@@ -2,12 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::config::HostConfig;
+use std::cmp::Ordering;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConnectPlan {
     Create,
 
     Idempotent,
+
+    AddConnection,
 
     Rejected,
 }
@@ -28,18 +31,33 @@ pub enum DisconnectEffect {
 
 #[must_use]
 pub fn connect_plan(existing: Option<&HostConfig>, request: &HostConfig) -> ConnectPlan {
+    if request.validate().is_err() || (existing.is_none() && request.connections().is_empty()) {
+        return ConnectPlan::Rejected;
+    }
     let Some(current) = existing else {
         return ConnectPlan::Create;
     };
-    let same = current.github.repository == request.github.repository
-        && current.github.scale_set_name == request.github.scale_set_name
-        && current.docker.platform == request.docker.platform
-        && current.docker.context == request.docker.context
-        && current.docker.endpoint == request.docker.endpoint;
-    if same {
-        ConnectPlan::Idempotent
-    } else {
-        ConnectPlan::Rejected
+    if current.validate().is_err()
+        || current.host != request.host
+        || current.docker != request.docker
+    {
+        return ConnectPlan::Rejected;
+    }
+    let preserved = current
+        .connections()
+        .iter()
+        .all(|stored| request.connection(&stored.connection_id) == Some(stored));
+    if !preserved {
+        return ConnectPlan::Rejected;
+    }
+    match current
+        .connections()
+        .len()
+        .cmp(&request.connections().len())
+    {
+        Ordering::Equal => ConnectPlan::Idempotent,
+        Ordering::Less => ConnectPlan::AddConnection,
+        Ordering::Greater => ConnectPlan::Rejected,
     }
 }
 
