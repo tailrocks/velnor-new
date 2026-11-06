@@ -4,7 +4,7 @@ Refreshes `checked_at` in `.velnor/freshness-inventory.json` after the 2026-11-0
 
 ## Captures
 
-Two independent authenticated captures (`capture-1` and `capture-2`) are recorded under `docs/implemented/ci-maintenance/evidence/freshness-2026-11-06/` and agree in `capture-agreement.json` (`agree: true`).
+Two independent authenticated captures (`capture-1` and `capture-2`) are recorded under `docs/implemented/evidence/freshness-2026-11-06/` and agree in `capture-agreement.json` (`agree: true`).
 
 ## Temporary holds
 
@@ -19,7 +19,7 @@ Four upstream releases were published on `2026-11-05` within the repository 3-da
 
 ## Runner observation
 
-Successful `main` CI run `42182644618` (`Plan` job `127775581179`, source `1168644a27c6a23f78a408c9ae13bd99c04f3ce2`) and the GitHub hosted-runner reference (`runner-doc.html`, SHA-256 `3b68d3e3d160390cc41a24288511f7f44c9a5de3906629f17030e7e0f1959aba`) are recorded under `docs/implemented/ci-maintenance/evidence/freshness-2026-11-06/runner/`:
+Successful `main` CI run `42182644618` (`Plan` job `127775581179`, source `1168644a27c6a23f78a408c9ae13bd99c04f3ce2`) and the GitHub hosted-runner reference (`runner-doc.html`, SHA-256 `3b68d3e3d160390cc41a24288511f7f44c9a5de3906629f17030e7e0f1959aba`) are recorded under `docs/implemented/evidence/freshness-2026-11-06/runner/`:
 
 - image `ubuntu-26.04`, version `20261101.186.1`
 - runner `2.338.2`
