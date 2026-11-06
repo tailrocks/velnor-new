@@ -23,35 +23,41 @@ pub(super) fn retarget(
     if let Some(token) = runs_on {
         token.clone_into(&mut next.runs_on);
     }
-    if next.check_runner.is_some() {
-        next.condition = retarget_check_condition(
-            job.condition.as_deref(),
-            source_id,
-            output_id,
-            runs_on.is_some(),
-        )?;
-    }
+    next.condition = retarget_condition(
+        job.condition.as_deref(),
+        source_id,
+        output_id,
+        runs_on.is_some(),
+        next.check_runner.is_some(),
+    )?;
     retarget_check_identity(&mut next, source_id, output_id, lane)?;
     next.needs = expand_needs(&job.needs, map, class, lane);
     Ok(next)
 }
 
-fn retarget_check_condition(
+fn retarget_condition(
     original: Option<&str>,
     source_id: &str,
     output_id: &str,
     scale: bool,
+    is_check: bool,
 ) -> Result<Option<String>, crate::ContractError> {
     let source_gate = super::super::jobs::not_affected_gate(source_id);
     let source_both = format!("({source_gate}) && ({EPHEMERAL_CHECK_ADMISSION_CONDITION})");
     let gate = super::super::jobs::not_affected_gate(output_id);
     match original {
-        None => Ok(scale.then(|| EPHEMERAL_CHECK_ADMISSION_CONDITION.to_owned())),
-        Some(value) if value == source_gate || value == source_both => Ok(Some(if scale {
+        Some(value) if value == source_gate => Ok(Some(if is_check && scale {
             format!("({gate}) && ({EPHEMERAL_CHECK_ADMISSION_CONDITION})")
         } else {
             gate
         })),
+        Some(value) if value == source_both => Ok(Some(if is_check && !scale {
+            gate
+        } else {
+            format!("({gate}) && ({EPHEMERAL_CHECK_ADMISSION_CONDITION})")
+        })),
+        value if !is_check => Ok(value.map(str::to_owned)),
+        None => Ok(scale.then(|| EPHEMERAL_CHECK_ADMISSION_CONDITION.to_owned())),
         Some(value) if value == EPHEMERAL_CHECK_ADMISSION_CONDITION => Ok(Some(value.to_owned())),
         Some(value) if source_id == output_id && !scale => Ok(Some(value.to_owned())),
         Some(_) => Err(crate::ContractError::identity(

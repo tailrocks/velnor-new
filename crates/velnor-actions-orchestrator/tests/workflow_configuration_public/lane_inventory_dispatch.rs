@@ -60,6 +60,11 @@ fn dispatched_inventory_binds_plan_and_required_without_named_checks() -> Result
         &prepared.config,
         Some(ExecutionMode::ScaleSet),
     )?;
+    let both = expand_workflow_with_lane_plan(
+        &prepared.workflow.ir,
+        &prepared.config,
+        Some(ExecutionMode::Both),
+    )?;
     let hosted_inventory = hosted
         .lane_plan
         .as_ref()
@@ -70,8 +75,14 @@ fn dispatched_inventory_binds_plan_and_required_without_named_checks() -> Result
         .as_ref()
         .ok_or("scale inventory missing")?
         .inventory();
+    let both_inventory = both
+        .lane_plan
+        .as_ref()
+        .ok_or("both inventory missing")?
+        .inventory();
     assert_eq!(hosted_inventory.mode, Some(ExecutionMode::Hosted));
     assert_eq!(scale_inventory.mode, Some(ExecutionMode::ScaleSet));
+    assert_eq!(both_inventory.mode, Some(ExecutionMode::Both));
     assert_ne!(
         serde_json::to_value(&hosted_inventory)?,
         serde_json::to_value(&scale_inventory)?
@@ -87,6 +98,12 @@ fn dispatched_inventory_binds_plan_and_required_without_named_checks() -> Result
         &base,
         &affected,
         &serde_json::to_value(&scale_inventory)?,
+    )?;
+    let both_response = plan(
+        root,
+        &base,
+        &affected,
+        &serde_json::to_value(&both_inventory)?,
     )?;
 
     fs::write(
@@ -116,18 +133,24 @@ fn dispatched_inventory_binds_plan_and_required_without_named_checks() -> Result
     fs::write(root.join("docs/guide.md"), "after\n")?;
     let docs = commit(root, "change docs")?;
 
-    for (expansion, inventory, response, expected_environment) in [
+    for (expansion, inventory, response, mode) in [
         (
             &hosted,
             serde_json::to_value(&hosted_inventory)?,
             &hosted_response,
-            "github-hosted",
+            ExecutionMode::Hosted,
         ),
         (
             &scale,
             serde_json::to_value(&scale_inventory)?,
             &scale_response,
-            "self-hosted",
+            ExecutionMode::ScaleSet,
+        ),
+        (
+            &both,
+            serde_json::to_value(&both_inventory)?,
+            &both_response,
+            ExecutionMode::Both,
         ),
     ] {
         let entries = response["plan"]["matrix"]["include"]
@@ -145,7 +168,17 @@ fn dispatched_inventory_binds_plan_and_required_without_named_checks() -> Result
                 .jobs
                 .get(job_id)
                 .ok_or("matrix job missing from workflow")?;
+            assert!(job.check_runner.is_none());
+            let gate = velnor_actions_contract::workflow::not_affected_gate(job_id);
+            assert_eq!(job.condition.as_deref(), Some(gate.as_str()), "{job_id}");
             assert_eq!(entry["planned_platform"]["runs_on"], job.runs_on);
+            let expected_environment = if mode == ExecutionMode::ScaleSet
+                || (mode == ExecutionMode::Both && job_id.ends_with("__local"))
+            {
+                "self-hosted"
+            } else {
+                "github-hosted"
+            };
             assert_eq!(
                 entry["planned_platform"]["runner_environment"],
                 expected_environment
@@ -156,18 +189,52 @@ fn dispatched_inventory_binds_plan_and_required_without_named_checks() -> Result
             );
         }
         let skipped = plan(root, &affected, &docs, &inventory)?;
+        if mode == ExecutionMode::Both {
+            for id in ["rust-maintenance__hosted", "rust-maintenance__local"] {
+                assert!(
+                    response["plan"]["jobs"]
+                        .as_array()
+                        .ok_or("jobs missing")?
+                        .iter()
+                        .any(|job| job["job_id"] == id && job["disposition"] == "run")
+                );
+                assert!(
+                    skipped["plan"]["jobs"]
+                        .as_array()
+                        .ok_or("jobs missing")?
+                        .iter()
+                        .any(|job| job["job_id"] == id && job["disposition"] == "not_affected")
+                );
+            }
+        }
         let required_ids = &expansion.ir.jobs["required"].needs;
-        let baseline = required(&skipped, required_ids, &inventory)?;
+        let baseline = required(&skipped, required_ids, &inventory, None)?;
         assert!(
             baseline["status"] == "passed" || baseline["status"] == "no_work",
             "{baseline}"
         );
-        let other = if expected_environment == "github-hosted" {
+        let rust_id = skipped["plan"]["jobs"]
+            .as_array()
+            .ok_or("jobs missing")?
+            .iter()
+            .filter_map(|job| job["job_id"].as_str())
+            .find(|id| id.starts_with("rust-"))
+            .ok_or("Rust job missing")?;
+        let mismatch = required(&skipped, required_ids, &inventory, Some(rust_id))?;
+        assert!(
+            mismatch["miss_reasons"]
+                .as_array()
+                .ok_or("miss reasons missing")?
+                .iter()
+                .any(|reason| reason == "gate_mismatch"),
+            "{mismatch}"
+        );
+        let other = if mode == ExecutionMode::Hosted {
             serde_json::to_value(&scale_inventory)?
         } else {
             serde_json::to_value(&hosted_inventory)?
         };
-        let swapped = required(&skipped, required_ids, &other)?;
+        let swapped = required(&skipped, required_ids, &other, None)?;
         assert_ne!(
             swapped["status"], "passed",
             "cross-mode inventory accepted: {swapped}"
@@ -190,6 +257,7 @@ fn required(
     response: &Value,
     required_ids: &[String],
     inventory: &Value,
+    succeeded_job: Option<&str>,
 ) -> Result<Value, Box<dyn Error>> {
     let jobs = response["plan"]["jobs"]
         .as_array()
@@ -201,7 +269,7 @@ fn required(
                 .iter()
                 .find(|job| job["job_id"] == *id)
                 .is_some_and(|job| job["disposition"] == "not_affected");
-            json!({"job_id": id, "conclusion": if skipped { "skipped" } else { "success" }})
+            json!({"job_id": id, "conclusion": if skipped && succeeded_job != Some(id.as_str()) { "skipped" } else { "success" }})
         })
         .collect();
     let request = json!({"schema": 1, "run_key": "r190002-a1", "actual_event": "pull_request", "plan": response["plan"], "matrix": response["matrix"], "matrix_reports": [], "task_reports": [], "required_job_ids": required_ids, "required_jobs": results, "lane_inventory": inventory});
