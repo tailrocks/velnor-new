@@ -239,8 +239,7 @@ pub(super) fn validate_human_environment_settings(
         let kind = rule.get("type").and_then(Value::as_str).ok_or(())?;
         if kind == "required_reviewers" {
             let entries = rule.get("reviewers").and_then(Value::as_array).ok_or(())?;
-            if rule.get("prevent_self_review").and_then(Value::as_bool) != Some(true)
-                || entries.is_empty()
+            if entries.is_empty()
                 || entries
                     .iter()
                     .any(|entry| !valid_environment_reviewer(entry))
@@ -309,4 +308,38 @@ pub(super) fn validate_environment_branch_policy(policies: &Value, branch: &str)
         return Err(());
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::validate_stable_environment_settings;
+    use serde_json::json;
+
+    #[test]
+    fn stable_environment_allows_self_review_disabled() {
+        let settings = json!({
+            "name": "release",
+            "can_admins_bypass": false,
+            "deployment_branch_policy": {
+                "protected_branches": true,
+                "custom_branch_policies": false
+            },
+            "protection_rules": [
+                {
+                    "type": "required_reviewers",
+                    "prevent_self_review": false,
+                    "reviewers": [
+                        {
+                            "type": "User",
+                            "reviewer": { "id": 139_017 }
+                        }
+                    ]
+                },
+                {
+                    "type": "branch_policy"
+                }
+            ]
+        });
+        assert!(validate_stable_environment_settings(&settings, "main").is_ok());
+    }
 }

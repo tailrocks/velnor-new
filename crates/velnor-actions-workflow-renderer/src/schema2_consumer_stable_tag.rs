@@ -123,7 +123,7 @@ fn prepare_plz(stable: &ConsumerStableReleaseSpec) -> Result<Yaml, RenderError> 
     let manifest = crate::commands::quote_run_arg(&stable.manifest_path)?;
     let package = crate::commands::quote_run_arg(&stable.version_package)?;
     let run = format!(
-        "set -euo pipefail\numask 077\n(ulimit -f 8192; {prefix} release-pr -p {package} --config \"$RUNNER_TEMP/velnor/stable-tag/release-plz.toml\" --manifest-path {manifest} -o json > \"$RUNNER_TEMP/velnor/stable-tag/release-plz-output.json\")\n"
+        "set -euo pipefail\numask 077\n{prefix} release-pr -p {package} --config \"$RUNNER_TEMP/velnor/stable-tag/release-plz.toml\" --manifest-path {manifest} -o json > \"$RUNNER_TEMP/velnor/stable-tag/release-plz-output.json\"\n"
     );
     Ok(steps::script(
         "Prepare the version PR with qualified release-plz",
