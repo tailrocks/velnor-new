@@ -120,12 +120,18 @@ fn assert_cold_outputs(
 #[cfg(unix)]
 fn selector_requires_lossless_printenv_output_before_selection() -> Result<(), Box<dyn Error>> {
     let (scene, gh) = scene("seal-select-env-printenv")?;
+    assert_static_printenv_status(&scene, &gh)?;
+    assert_dynamic_printenv_status(&scene, &gh)?;
+    scene.finish()
+}
+
+fn assert_static_printenv_status(scene: &Scene, gh: &Gh) -> Result<(), Box<dyn Error>> {
     let cases = [
-        ("missing printenv", path_without_printenv(&scene)?),
+        ("missing printenv", path_without_printenv(scene)?),
         (
             "missing static record",
             fake_printenv(
-                &scene,
+                scene,
                 "missing-static-printenv",
                 "case \"$1\" in VELNOR_STATE_SELECT_UNIT_R0) exit 1 ;; *) command -p printenv \"$@\" ;; esac\n",
             )?,
@@ -133,19 +139,19 @@ fn selector_requires_lossless_printenv_output_before_selection() -> Result<(), B
         (
             "complete failed static printenv",
             fake_printenv(
-                &scene,
+                scene,
                 "complete-failed-static-printenv",
                 "case \"$1\" in VELNOR_STATE_SELECT_UNIT_R0) command -p printenv \"$1\"; exit 7 ;; *) command -p printenv \"$@\" ;; esac\n",
             )?,
         ),
         (
             "partial failed static printenv",
-            fake_printenv(&scene, "partial-printenv", "printf partial; exit 7\n")?,
+            fake_printenv(scene, "partial-printenv", "printf partial; exit 7\n")?,
         ),
         (
             "successful printenv without line terminator",
             fake_printenv(
-                &scene,
+                scene,
                 "unterminated-printenv",
                 "case \"$1\" in VELNOR_STATE_SELECT_UNIT_R0) printf 'bad' ;; *) command -p printenv \"$@\" ;; esac\n",
             )?,
@@ -153,40 +159,42 @@ fn selector_requires_lossless_printenv_output_before_selection() -> Result<(), B
     ];
     for (label, path) in cases {
         let result = run_select_units(
-            &scene,
-            &gh,
+            scene,
+            gh,
             &[(StateUnit::Union, ".")],
             &[("PATH", path.as_str())],
         );
         if result.is_ok() {
             return Err(fail(&format!("selector accepted {label}")));
         }
-        no_publication_or_network(&scene, &gh)?;
+        no_publication_or_network(scene, gh)?;
     }
 
-    run_select_units(&scene, &gh, &[(StateUnit::Union, ".")], &[])?;
+    run_select_units(scene, gh, &[(StateUnit::Union, ".")], &[])?;
     expect_flag(
-        &produce_flag(&scene, StateUnit::Union, ".")?,
+        &produce_flag(scene, StateUnit::Union, ".")?,
         "true",
         "successful static lookup remains available",
-    )?;
+    )
+}
 
+fn assert_dynamic_printenv_status(scene: &Scene, gh: &Gh) -> Result<(), Box<dyn Error>> {
     let key = unit_key(StateUnit::Union, ".", 0, 0x1001, 1)?;
     gh.list(&rows_of(&[(T3.to_owned(), key.clone())]))?;
     gh.attest(&[Attestation::signed(&key)])?;
     let dynamic_path = fake_printenv(
-        &scene,
+        scene,
         "failed-dynamic-printenv",
         "case \"$1\" in VELNOR_STATE_COMPAT_R0) command -p printenv \"$1\"; exit 7 ;; *) command -p printenv \"$@\" ;; esac\n",
     )?;
     run_select_units(
-        &scene,
-        &gh,
+        scene,
+        gh,
         &[(StateUnit::Union, ".")],
         &[("PATH", dynamic_path.as_str())],
     )?;
     expect_flag(
-        &produce_flag(&scene, StateUnit::Union, ".")?,
+        &produce_flag(scene, StateUnit::Union, ".")?,
         "false",
         "failed dynamic lookup must be unavailable",
     )?;
@@ -201,28 +209,33 @@ fn selector_requires_lossless_printenv_output_before_selection() -> Result<(), B
         return Err(fail("failed dynamic lookup remained available"));
     }
 
-    run_select_units(&scene, &gh, &[(StateUnit::Union, ".")], &[])?;
+    run_select_units(scene, gh, &[(StateUnit::Union, ".")], &[])?;
     expect_flag(
-        &produce_flag(&scene, StateUnit::Union, ".")?,
+        &produce_flag(scene, StateUnit::Union, ".")?,
         "true",
         "successful dynamic lookup identifies an unmatched snapshot",
-    )?;
-    scene.finish()
+    )
 }
 
 #[test]
 #[cfg(unix)]
 fn selector_colds_when_bash_or_repository_context_is_missing() -> Result<(), Box<dyn Error>> {
     let (scene, gh) = scene("seal-select-env-cold-inputs")?;
-    let path = path_with_single_read_without_bash(&scene, &gh)?;
+    assert_cold_repository_context(&scene, &gh)?;
+    scene.finish()?;
+    assert_cold_without_python()
+}
+
+fn assert_cold_repository_context(scene: &Scene, gh: &Gh) -> Result<(), Box<dyn Error>> {
+    let path = path_with_single_read_without_bash(scene, gh)?;
     assert_cold_outputs(
-        &scene,
-        &gh,
+        scene,
+        gh,
         "cold output uses the validated manifest",
         "true",
         &[("PATH", path.as_str())],
     )?;
-    let fields = cold_manifest(&scene)?;
+    let fields = cold_manifest(scene)?;
     let expected_compat = unit_compat(0);
     let expected_snapshot = unit_snapshot(0);
     if fields.len() != 6
@@ -235,8 +248,8 @@ fn selector_colds_when_bash_or_repository_context_is_missing() -> Result<(), Box
     }
 
     assert_cold_outputs(
-        &scene,
-        &gh,
+        scene,
+        gh,
         "cold output preserves empty metadata fields",
         "false",
         &[
@@ -245,7 +258,7 @@ fn selector_colds_when_bash_or_repository_context_is_missing() -> Result<(), Box
             ("VELNOR_STATE_SNAPSHOT_R0", ""),
         ],
     )?;
-    let fields = cold_manifest(&scene)?;
+    let fields = cold_manifest(scene)?;
     if fields.len() != 6 || !fields[4].is_empty() || !fields[5].is_empty() {
         return Err(fail("cold selector lost empty trailing metadata fields"));
     }
@@ -263,8 +276,8 @@ fn selector_colds_when_bash_or_repository_context_is_missing() -> Result<(), Box
         ),
     ] {
         assert_cold_outputs(
-            &scene,
-            &gh,
+            scene,
+            gh,
             label,
             "false",
             &[
@@ -273,7 +286,7 @@ fn selector_colds_when_bash_or_repository_context_is_missing() -> Result<(), Box
                 ("VELNOR_STATE_SNAPSHOT_R0", snapshot),
             ],
         )?;
-        let fields = cold_manifest(&scene)?;
+        let fields = cold_manifest(scene)?;
         if fields.len() != 6 || fields[4] != compat || fields[5] != snapshot {
             return Err(fail(label));
         }
@@ -283,14 +296,16 @@ fn selector_colds_when_bash_or_repository_context_is_missing() -> Result<(), Box
         ("missing ref", vec![("VELNOR_DEFAULT_REF", "")]),
         ("missing repository", vec![("GITHUB_REPOSITORY", "")]),
     ] {
-        assert_cold_outputs(&scene, &gh, label, "true", &extra)?;
+        assert_cold_outputs(scene, gh, label, "true", &extra)?;
     }
     if std::path::Path::new(&gh.dir()).join("activity").exists() {
         return Err(fail("selector called gh during a cold fallback"));
     }
-    scene.finish()?;
+    Ok(())
+}
 
-    let (scene, gh) = self::scene("seal-select-env-missing-python")?;
+fn assert_cold_without_python() -> Result<(), Box<dyn Error>> {
+    let (scene, gh) = scene("seal-select-env-missing-python")?;
     let path = scene.restricted_path(&["sh", "bash", "printenv", "cat", "rm", "mkdir", "chmod"])?;
     assert_cold_outputs(
         &scene,

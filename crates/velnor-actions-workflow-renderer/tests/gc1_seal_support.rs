@@ -258,9 +258,9 @@ pub(crate) fn key(compat: char, snapshot: char, payload: char) -> Result<String,
     ))
 }
 
-pub(crate) fn script_and_env_of(
-    step: &Step,
-) -> Result<(String, Vec<(String, String)>), Box<dyn Error>> {
+pub(crate) type ShellScriptWithEnv = (String, Vec<(String, String)>);
+
+pub(crate) fn script_and_env_of(step: &Step) -> Result<ShellScriptWithEnv, Box<dyn Error>> {
     match &step.kind {
         StepKind::Shell { run, env } => {
             let script = run
@@ -278,7 +278,7 @@ pub(crate) fn script_and_env_of(
     }
 }
 
-pub(crate) fn select_script(root: &str) -> Result<(String, Vec<(String, String)>), Box<dyn Error>> {
+pub(crate) fn select_script(root: &str) -> Result<ShellScriptWithEnv, Box<dyn Error>> {
     let root = SealRoot {
         unit: StateUnit::Union,
         slug: RootSlug::from_root(root)?,

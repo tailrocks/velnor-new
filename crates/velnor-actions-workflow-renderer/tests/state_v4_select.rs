@@ -66,17 +66,20 @@ fn selector_keeps_supervisor_in_static_environment_and_loader_in_run() -> Result
             "selector supervisor environment is not bounded lowercase hex",
         ));
     }
-    let decoded = payload
-        .as_bytes()
-        .chunks_exact(2)
+    let (pairs, remainder) = payload.as_bytes().as_chunks::<2>();
+    if !remainder.is_empty() {
+        return Err(fail("selector supervisor payload has an incomplete byte"));
+    }
+    let decoded = pairs
+        .iter()
         .map(|pair| {
-            let high = (pair[0] as char)
+            let high = char::from(pair[0])
                 .to_digit(16)
                 .ok_or_else(|| fail("bad supervisor hex"))?;
-            let low = (pair[1] as char)
+            let low = char::from(pair[1])
                 .to_digit(16)
                 .ok_or_else(|| fail("bad supervisor hex"))?;
-            Ok((high * 16 + low) as u8)
+            u8::try_from(high * 16 + low).map_err(|_| fail("supervisor byte is out of range"))
         })
         .collect::<Result<Vec<_>, Box<dyn Error>>>()?;
     let source = String::from_utf8(decoded)?;
