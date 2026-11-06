@@ -61,7 +61,7 @@ fn path_without_printenv(scene: &Scene) -> Result<String, Box<dyn Error>> {
 }
 
 fn gh_path(gh: &Gh) -> Result<String, Box<dyn Error>> {
-    Ok(std::path::Path::new(gh.dir())
+    Ok(std::path::Path::new(&gh.dir())
         .parent()
         .ok_or_else(|| fail("fake GH directory has no parent"))?
         .join("bin")
@@ -230,7 +230,7 @@ fn selector_colds_when_bash_or_repository_context_is_missing() -> Result<(), Box
     ] {
         assert_cold_outputs(&scene, &gh, label, "true", &extra)?;
     }
-    if std::path::Path::new(gh.dir()).join("activity").exists() {
+    if std::path::Path::new(&gh.dir()).join("activity").exists() {
         return Err(fail("selector called gh during a cold fallback"));
     }
     scene.finish()
