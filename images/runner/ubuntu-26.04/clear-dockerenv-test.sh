@@ -25,4 +25,13 @@ if [[ -e "$dir/.dockerenv" ]]; then
 fi
 test "$(cat "$dir/keep")" = keep
 bash "$root/clear-dockerenv.sh"
+echo marker >"$dir/.dockerenv"
+printf 'overlay / overlay ro,relatime 0 0\n' >"$dir/mounts-ro"
+sudo() {
+  echo "sudo must not run when rootfs is read-only" >&2
+  exit 1
+}
+export -f sudo
+VELNOR_PROC_MOUNTS="$dir/mounts-ro" bash "$root/clear-dockerenv.sh"
+test -e "$dir/.dockerenv"
 echo "clear-dockerenv ok"

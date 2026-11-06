@@ -35,7 +35,7 @@ pub(crate) enum ProbePhase {
 }
 
 impl ProbePhase {
-    pub(super) fn as_str(self) -> &'static str {
+    pub(crate) fn as_str(self) -> &'static str {
         match self {
             Self::Prepared => "prepared",
             Self::CreateRequested => "create_requested",
@@ -54,7 +54,7 @@ impl ProbePhase {
         }
     }
 
-    pub(super) fn parse(value: &str) -> Result<Self, HostError> {
+    pub(in crate::journal) fn parse(value: &str) -> Result<Self, HostError> {
         match value {
             "prepared" => Ok(Self::Prepared),
             "create_requested" => Ok(Self::CreateRequested),

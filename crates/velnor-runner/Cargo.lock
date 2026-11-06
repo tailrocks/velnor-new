@@ -3842,6 +3842,7 @@ dependencies = [
  "rustix 1.1.5",
  "serde",
  "serde_json",
+ "sha2",
 ]
 
 [[package]]
@@ -3876,6 +3877,7 @@ name = "velnor-runner-cli"
 version = "0.1.0"
 dependencies = [
  "clap",
+ "rustix 1.1.5",
  "security-framework",
  "serde_json",
  "tokio",
@@ -3894,8 +3896,11 @@ dependencies = [
 name = "velnor-runner-github"
 version = "0.1.0"
 dependencies = [
+ "base64 0.23.1",
  "serde",
  "serde_json",
+ "sha1_smol",
+ "sha2",
  "thiserror",
  "velnor-runner-core",
  "zeroize",
@@ -3907,9 +3912,11 @@ version = "0.1.0"
 dependencies = [
  "base64 0.23.1",
  "bollard",
+ "bytes",
  "flate2",
  "futures-util",
  "getrandom 0.4.3",
+ "httpdate",
  "libc",
  "reqwest",
  "rustix 1.1.5",
@@ -3924,6 +3931,7 @@ dependencies = [
  "toml",
  "turso",
  "uuid",
+ "velnor-resource-probe",
  "velnor-runner-core",
  "velnor-runner-github",
  "zeroize",

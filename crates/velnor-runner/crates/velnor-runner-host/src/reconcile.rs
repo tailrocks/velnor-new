@@ -9,15 +9,43 @@ pub enum LaunchPhase {
 
     AcquireRequested,
 
+    AcquireRejected,
+
+    AcquireNoEffect,
+
+    AcquireUncertain,
+
     Acquired,
 
     JitRequested,
+
+    JitBound,
+
+    JitUncertain,
 
     JitReceived,
 
     DockerProvisioning,
 
+    DockerRequested,
+
+    DockerUncertain,
+
+    ProvisioningHeld,
+
+    BootstrapStarted,
+
+    ResourcesBound,
+
+    JobFactsPublished,
+
+    ListenerDelivered,
+
     WorkerReady,
+
+    RunnerStarted,
+
+    RunnerCompleted,
 
     AcknowledgementRequested,
 
@@ -29,11 +57,25 @@ impl LaunchPhase {
         match text {
             "prepared" => Ok(Self::Prepared),
             "acquire_requested" => Ok(Self::AcquireRequested),
+            "acquire_rejected" => Ok(Self::AcquireRejected),
+            "acquire_no_effect" => Ok(Self::AcquireNoEffect),
+            "acquire_uncertain" => Ok(Self::AcquireUncertain),
             "acquired" => Ok(Self::Acquired),
             "jit_requested" => Ok(Self::JitRequested),
+            "jit_bound" => Ok(Self::JitBound),
+            "jit_uncertain" => Ok(Self::JitUncertain),
             "jit_received" => Ok(Self::JitReceived),
             "docker_provisioning" => Ok(Self::DockerProvisioning),
+            "docker_requested" => Ok(Self::DockerRequested),
+            "docker_uncertain" => Ok(Self::DockerUncertain),
+            "provisioning_held" => Ok(Self::ProvisioningHeld),
+            "bootstrap_started" => Ok(Self::BootstrapStarted),
+            "resources_bound" => Ok(Self::ResourcesBound),
+            "job_facts_published" => Ok(Self::JobFactsPublished),
+            "listener_delivered" => Ok(Self::ListenerDelivered),
             "worker_ready" => Ok(Self::WorkerReady),
+            "runner_started" => Ok(Self::RunnerStarted),
+            "runner_completed" => Ok(Self::RunnerCompleted),
             "acknowledgement_requested" => Ok(Self::AcknowledgementRequested),
             "complete" => Ok(Self::Complete),
             _ => Err(crate::HostError::Journal),

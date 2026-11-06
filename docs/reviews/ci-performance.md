@@ -41,7 +41,7 @@ Preserve the [hard decisions](../hard-decisions.md),
 
 - Reject duplicate payload ownership and unbounded key growth; measure restore, validation, extraction, compression and save costs against the work avoided.
 - Admit every cache writer against peak aggregate bytes across consumer caches, families, roots/platforms, concurrent writes and retained generations; enforce adopted ceilings and headroom, and protect active identities during bounded pruning.
-- Verify current [GitHub limits](../proposed/github-actions-reference.md#performance-review-sources-checked-2026-11-06), runner disk/RAM and cache request rates; preserve Velnor's 10 GB quota and stricter admission limits without assuming paid expansion.
+- Verify current [GitHub limits](../proposed/github-actions-reference.md#performance-review-sources), runner disk/RAM and cache request rates; preserve Velnor's 10 GB quota and stricter admission limits without assuming paid expansion.
 - Bound CPU/RAM/process concurrency and aggregate phase deadlines; reject optional discovery that consumes validation's deadline, save-only work in read-only jobs, redundant compression and unused materialization.
 
 ## 4. Preserve trustworthy verification

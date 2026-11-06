@@ -1,6 +1,7 @@
 # Required developer evidence
 
-Authors must include this proof in the PR description or a linked durable record.
+Authors must publish this proof in the PR description, review discussion or a
+linked issue record. Keep change-specific evidence out of repository documentation.
 Reviewers must verify it against the final PR head; assertions and green cache
 steps are insufficient. Apply the [four review gates](ci-performance.md).
 
@@ -25,8 +26,8 @@ steps are insufficient. Apply the [four review gates](ci-performance.md).
 - Reconcile expected, executed and skipped jobs; prove unrelated jobs never executed and required affected work was not skipped. Record every discrepancy and its cause; new, worsened or touched violations block approval, and unrelated inherited gaps remain explicit target failures.
 - Explain every broadening reason and prove both affected and unaffected cases; file extensions or missing input declarations do not establish independence from a changed file.
 
-[PR #529's baseline](pr-529-job-selection.md) records excessive selection and a
-template consumed by a real golden check; both must be accounted for.
+Documentation, instructions and templates can be transitive inputs to generation
+or golden checks. Prove their consumers are unaffected before skipping them.
 
 ## Prove the affected scenarios
 
@@ -56,7 +57,7 @@ without proof.
 
 - Record stored and extracted bytes, restore/verify/import/save time, peak CPU/RAM/disk, key cardinality, writer ownership and retention/pruning for each changed family.
 - Calculate peak aggregate usage including existing consumer caches, platform/root variants, old/new generations and concurrent saves; show admission headroom in bytes, not just nominal quota.
-- Check the [adopted cache budgets](../proposed/cache-decisions.md), [compiled-state admission](../proposed/compiled-state-persistence.md#budget) and [current platform limits](../proposed/github-actions-reference.md#performance-review-sources-checked-2026-11-06); reject cache thrashing, duplicate payloads and capacity increases used to hide waste.
+- Check the [adopted cache budgets](../proposed/cache-decisions.md), [compiled-state admission](../proposed/compiled-state-persistence.md#budget) and [current platform limits](../proposed/github-actions-reference.md#performance-review-sources); reject cache thrashing, duplicate payloads and capacity increases used to hide waste.
 
 ## Verify before approving
 

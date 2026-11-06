@@ -37,3 +37,4 @@ Shared working agreement: keep this section byte-identical across projects. Proj
 ### Review guidelines
 
 - Authors and reviewers, including Codex, must read and enforce [CI performance review](docs/reviews/ci-performance.md) and [required developer evidence](docs/reviews/ci-performance-evidence.md) on every PR. Enforce the target, not today's baseline: improve touched behavior, fix its inherited violations in the same PR, and reject regressions or missing proof. An issue or follow-up promise never substitutes for a required fix.
+- Keep repository documentation evergreen: describe current contracts and procedures, without verification-date logs or specific PR/branch references. Keep change-specific evidence in PR descriptions, review discussions or issues; use git history for chronology.

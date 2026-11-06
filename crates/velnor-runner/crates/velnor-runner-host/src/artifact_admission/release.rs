@@ -7,11 +7,13 @@ use std::path::Path;
 use crate::compile_identity::CompiledReleaseIdentity;
 use crate::error::HostError;
 
-use super::archive::{self, ArchiveIdentity};
+use super::archive;
 use super::checksums::{self, MAX_CHECKSUM_BYTES};
 use super::github::{self, Asset};
 use super::hash::{is_lower_hex, lowercase_hex, sha256};
-use super::manifest::{self, ARCHIVE_ASSET, CHECKSUM_ASSET, MANIFEST_ASSET, ProbeManifest};
+use super::manifest::{
+    self, ARCHIVE_ASSET, CHECKSUM_ASSET, DIND_ASSET, MANIFEST_ASSET, ProbeManifest, RUNNER_ASSET,
+};
 use crate::helper_supervisor::ChecksumTarget;
 
 pub(super) struct VerifiedRelease {
@@ -19,8 +21,11 @@ pub(super) struct VerifiedRelease {
     pub(super) authority_sha: String,
     pub(super) archive_sha: String,
     pub(super) archive: Vec<u8>,
+    pub(super) manifest_bytes: Vec<u8>,
+    pub(super) checksum_bytes: Vec<u8>,
+    pub(super) runner_asset: Asset,
+    pub(super) dind_asset: Asset,
     pub(super) manifest: ProbeManifest,
-    pub(super) archive_identity: ArchiveIdentity,
 }
 
 pub(super) async fn fetch_verified(
@@ -41,6 +46,8 @@ pub(super) async fn fetch_verified(
     let checksum_asset = asset(&assets, CHECKSUM_ASSET)?;
     let manifest_asset = asset(&assets, MANIFEST_ASSET)?;
     let archive_asset = asset(&assets, ARCHIVE_ASSET)?;
+    let runner_asset = asset(&assets, RUNNER_ASSET)?;
+    let dind_asset = asset(&assets, DIND_ASSET)?;
     let checksum_bytes =
         github::download_asset(client, pat, checksum_asset, MAX_CHECKSUM_BYTES).await?;
     validate_asset_bytes(checksum_asset, &checksum_bytes)?;
@@ -76,17 +83,23 @@ pub(super) async fn fetch_verified(
             checksum_asset,
             manifest_asset,
             archive_asset,
+            runner_asset,
+            dind_asset,
         },
     )
     .await?;
-    let archive_identity = archive::validate(&archive_bytes, &probe_manifest)?;
+
+    archive::validate(&archive_bytes, &probe_manifest)?;
     Ok(VerifiedRelease {
         source_sha,
         authority_sha,
         archive_sha,
         archive: archive_bytes,
+        manifest_bytes,
+        checksum_bytes,
+        runner_asset: runner_asset.clone(),
+        dind_asset: dind_asset.clone(),
         manifest: probe_manifest,
-        archive_identity,
     })
 }
 
@@ -99,6 +112,8 @@ struct ProvenanceClaims<'a> {
     checksum_asset: &'a Asset,
     manifest_asset: &'a Asset,
     archive_asset: &'a Asset,
+    runner_asset: &'a Asset,
+    dind_asset: &'a Asset,
 }
 
 async fn verify_provenance(
@@ -144,7 +159,9 @@ async fn verify_provenance(
         )
         .await
         .is_ok();
-        if manifest_valid && archive_valid {
+        let runner_valid = verify_target(&claims, &bundle, RUNNER_ASSET, claims.runner_asset).await;
+        let dind_valid = verify_target(&claims, &bundle, DIND_ASSET, claims.dind_asset).await;
+        if manifest_valid && archive_valid && runner_valid && dind_valid {
             valid = valid.checked_add(1).ok_or(HostError::Identity)?;
         }
     }
@@ -153,6 +170,35 @@ async fn verify_provenance(
     } else {
         Err(HostError::Identity)
     }
+}
+
+async fn verify_target(
+    claims: &ProvenanceClaims<'_>,
+    bundle: &serde_json::Value,
+    target_name: &str,
+    target: &Asset,
+) -> bool {
+    let Some(checksum_digest) = claims.checksum_asset.digest.strip_prefix("sha256:") else {
+        return false;
+    };
+    let Ok(target_digest) = asset_hex(target) else {
+        return false;
+    };
+    crate::helper_supervisor::verify_checksum_target(
+        claims.identity.helper_sha256(),
+        ChecksumTarget {
+            state_directory: claims.state_directory,
+            bundle,
+            checksum_bytes: claims.checksum_bytes,
+            source_sha: claims.source_sha,
+            authority_sha: claims.authority_sha,
+            checksum_digest,
+            target_name,
+            target_digest,
+        },
+    )
+    .await
+    .is_ok()
 }
 
 fn validate_release_checksum_rows(

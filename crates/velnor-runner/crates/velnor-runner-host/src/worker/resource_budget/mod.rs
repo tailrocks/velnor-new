@@ -10,6 +10,36 @@ const NANO_CPUS_PER_CPU: u64 = 1_000_000_000;
 const NANOS_PER_MILLICORE: u64 = NANO_CPUS_PER_CPU / MILLICORES_PER_CPU;
 const DOCKER_MIN_MEMORY_BYTES: u64 = 6_291_456;
 
+pub(crate) const PROBE_CPU_MILLICORES: u64 = 100;
+pub(crate) const PROBE_MEMORY_LIMIT_BYTES: u64 = 128 * 1024 * 1024;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct AdmissionReserve {
+    pub(crate) cpu_millicores: u64,
+    pub(crate) memory_bytes: u64,
+}
+
+impl AdmissionReserve {
+    pub(crate) const OPERATIONAL_CPU_MILLICORES: u64 = 1_000;
+
+    fn new(operational_memory_bytes: u64) -> Result<Self, HostError> {
+        if operational_memory_bytes == 0 {
+            return Err(HostError::Config);
+        }
+        let memory_bytes = PROBE_MEMORY_LIMIT_BYTES
+            .checked_add(operational_memory_bytes)
+            .filter(|value| i64::try_from(*value).is_ok())
+            .ok_or(HostError::Config)?;
+        if PROBE_CPU_MILLICORES > Self::OPERATIONAL_CPU_MILLICORES {
+            return Err(HostError::Config);
+        }
+        Ok(Self {
+            cpu_millicores: Self::OPERATIONAL_CPU_MILLICORES,
+            memory_bytes,
+        })
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct ResourceBudgetConfig {
@@ -20,6 +50,8 @@ pub(crate) struct ResourceBudgetConfig {
     pub(crate) dind_cpu_millicores: u64,
 
     pub(crate) dind_memory_bytes: u64,
+
+    pub(crate) operational_memory_reserve_bytes: u64,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -41,12 +73,14 @@ pub struct ResourceBudget {
     runner: DockerResourceLimits,
     dind: DockerResourceLimits,
     pair: PairResourceBudget,
+    admission_reserve: AdmissionReserve,
 }
 
 impl ResourceBudgetConfig {
     pub(crate) fn validate(self) -> Result<ResourceBudget, HostError> {
         let runner = docker_limits(self.runner_cpu_millicores, self.runner_memory_bytes)?;
         let dind = docker_limits(self.dind_cpu_millicores, self.dind_memory_bytes)?;
+        let admission_reserve = AdmissionReserve::new(self.operational_memory_reserve_bytes)?;
         let pair = PairResourceBudget {
             cpu_millicores: self
                 .runner_cpu_millicores
@@ -58,7 +92,12 @@ impl ResourceBudgetConfig {
                 .ok_or(HostError::Config)?,
         };
         let _ = pair.docker_limits(1)?;
-        Ok(ResourceBudget { runner, dind, pair })
+        Ok(ResourceBudget {
+            runner,
+            dind,
+            pair,
+            admission_reserve,
+        })
     }
 }
 
@@ -76,6 +115,11 @@ impl ResourceBudget {
     #[must_use]
     pub(crate) const fn pair(self) -> PairResourceBudget {
         self.pair
+    }
+
+    #[must_use]
+    pub(crate) const fn admission_reserve(self) -> AdmissionReserve {
+        self.admission_reserve
     }
 }
 

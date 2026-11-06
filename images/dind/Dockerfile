@@ -2,6 +2,7 @@
 # One dockerd per worker. Listens only on unix:///var/run/docker.sock.
 # Do not COPY or mount a host socket. No TCP listener. No prune.
 # This image does not set privileged. The controller supplies runtime privileges.
+FROM scratch AS resource_probe
 FROM ubuntu:26.04@sha256:42527649dbc4f9197a6073f426f488cbff0e9cc9f2afce32d91c383e4875634a
 
 ARG DOCKER_VERSION=29.9.1
@@ -57,7 +58,9 @@ RUN mkdir -p /etc/docker /usr/local/libexec/velnor /usr/share/doc/velnor-dind \
 COPY cgroup-v2-delegation.sh /usr/local/libexec/velnor/cgroup-v2-delegation.sh
 COPY entrypoint.sh /usr/local/bin/velnor-dind-entrypoint
 COPY LICENSE-moby /usr/share/doc/velnor-dind/LICENSE-moby
-RUN chmod 0755 /usr/local/bin/velnor-dind-entrypoint
+RUN chmod 0755 /usr/local/bin/velnor-dind-entrypoint \
+    && mkdir -p /velnor
+COPY --from=resource_probe / /velnor/
 ARG VELNOR_SOURCE_SHA
 LABEL io.velnor.image.kind="dind" org.opencontainers.image.revision="${VELNOR_SOURCE_SHA}"
 ENTRYPOINT ["/usr/local/bin/velnor-dind-entrypoint"]

@@ -12,6 +12,8 @@ pub(super) struct JournalFile {
     path: PathBuf,
     identity: FileIdentity,
     anchor: Arc<File>,
+    database: turso::Database,
+    process_state: Arc<crate::journal_identity::JournalProcessState>,
 }
 
 impl PartialEq for JournalFile {
@@ -33,28 +35,31 @@ impl JournalFile {
             .map_err(|_| HostError::Journal)?;
         let connection = database.connect().map_err(|_| HostError::Journal)?;
         drop(connection);
-        drop(database);
         let canonical = fs::canonicalize(&path).map_err(|_| HostError::Path)?;
         if canonical != path {
             return Err(HostError::Path);
         }
+        let process_state = crate::journal_identity::process_state(&canonical)?;
         let file = Self {
             path: canonical,
             identity,
             anchor,
+            database,
+            process_state,
         };
         file.verify()?;
         Ok(file)
     }
 
-    pub(super) async fn connection(&self) -> Result<turso::Connection, HostError> {
+    pub(super) fn connection(
+        &self,
+    ) -> impl std::future::Future<Output = Result<turso::Connection, HostError>> + '_ {
+        std::future::poll_fn(|_| std::task::Poll::Ready(self.connect_verified()))
+    }
+
+    fn connect_verified(&self) -> Result<turso::Connection, HostError> {
         self.verify()?;
-        let text = self.path.to_str().ok_or(HostError::Path)?;
-        let database = turso::Builder::new_local(text)
-            .build()
-            .await
-            .map_err(|_| HostError::Journal)?;
-        let connection = database.connect().map_err(|_| HostError::Journal)?;
+        let connection = self.database.connect().map_err(|_| HostError::Journal)?;
         self.verify()?;
         Ok(connection)
     }
@@ -71,6 +76,12 @@ impl JournalFile {
             return Err(HostError::Path);
         }
         Ok(())
+    }
+}
+
+impl Drop for JournalFile {
+    fn drop(&mut self) {
+        crate::journal_identity::release_process_state(&self.path, &self.process_state);
     }
 }
 
