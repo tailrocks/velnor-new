@@ -158,6 +158,10 @@ fn public_runner_publication_rejects_dind_kind_archive_before_registry_mutation(
 #[test]
 fn public_runner_family_publication_rejects_producer_head_outside_selected_source()
 -> Result<(), Box<dyn Error>> {
+    let scenario = "runner_source::public_runner_family_publication_rejects_producer_head_outside_selected_source";
+    if !super::begin_isolated(scenario)? {
+        return Ok(());
+    }
     let mut accepted_profiles = Vec::new();
     for profile in [
         support::FixtureProfile::Runner,
@@ -208,6 +212,7 @@ fn public_runner_family_publication_rejects_producer_head_outside_selected_sourc
         accepted_profiles.is_empty(),
         "published a producer/source mismatch for {accepted_profiles:?}"
     );
+    super::isolated_worker::record_success("image_publication", scenario)?;
     Ok(())
 }
 
