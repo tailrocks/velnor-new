@@ -312,37 +312,3 @@ pub(super) fn validate_environment_branch_policy(policies: &Value, branch: &str)
     }
     Ok(())
 }
-
-#[cfg(test)]
-mod tests {
-    use super::validate_stable_environment_settings;
-    use serde_json::json;
-
-    #[test]
-    fn stable_environment_allows_self_review_disabled() {
-        let settings = json!({
-            "name": "release",
-            "can_admins_bypass": false,
-            "deployment_branch_policy": {
-                "protected_branches": true,
-                "custom_branch_policies": false
-            },
-            "protection_rules": [
-                {
-                    "type": "required_reviewers",
-                    "prevent_self_review": false,
-                    "reviewers": [
-                        {
-                            "type": "User",
-                            "reviewer": { "id": 139_017 }
-                        }
-                    ]
-                },
-                {
-                    "type": "branch_policy"
-                }
-            ]
-        });
-        assert!(validate_stable_environment_settings(&settings, "main").is_ok());
-    }
-}

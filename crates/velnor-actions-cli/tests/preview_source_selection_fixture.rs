@@ -19,11 +19,12 @@ pub(crate) const AUTHORITY_SHA: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
 pub(crate) const PROTECTED_SHA: &str = "cccccccccccccccccccccccccccccccccccccccc";
 const WRONG_SHA: &str = "dddddddddddddddddddddddddddddddddddddddd";
 const ROOT_TREE_SHA: &str = "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
-const MANIFEST_BLOB_SHA: &str = "ffffffffffffffffffffffffffffffffffffffff";
+const MANIFEST_BLOB_SHA: &str = "8be92e4be7f922af2ea48734bded9c06748e9da7";
 const MAIN_BLOB_SHA: &str = "0000000000000000000000000000000000000000";
 pub(crate) const CI_RUN_ID: u64 = 100;
 const PREVIEW_RUN_ID: u64 = 200;
 const PREVIEW_WORKFLOW_PATH: &str = ".github/workflows/binary-preview.yml";
+const STABLE_WORKFLOW_PATH: &str = ".github/workflows/binary-release.yml";
 
 pub(crate) type TestResult<T> = Result<T, Box<dyn std::error::Error>>;
 
@@ -52,7 +53,7 @@ struct PreparedFixture {
 pub(crate) fn invoke(scenario: &str) -> TestResult<Invocation> {
     let temp = tempfile::tempdir()?;
     let fixture = prepare_fixture(temp.path(), scenario)?;
-    run_cli(&fixture)
+    run_cli(&fixture, scenario)
 }
 
 fn prepare_fixture(root: &Path, scenario: &str) -> TestResult<PreparedFixture> {
@@ -81,8 +82,16 @@ fn prepare_fixture(root: &Path, scenario: &str) -> TestResult<PreparedFixture> {
     fs::create_dir_all(&home)?;
     fs::create_dir_all(&gh_install)?;
 
-    let policy = seed_policy().canonical_bytes()?;
-    let policy_path = policy_dir.join("preview-source-seed-policy.json");
+    let mut policy_model = seed_policy();
+    let policy_file = if scenario.starts_with("stable-") {
+        policy_model.channel =
+            velnor_actions_contract::package_release::PackageReleaseChannel::Stable;
+        "package-release-policy.json"
+    } else {
+        "preview-source-seed-policy.json"
+    };
+    let policy = policy_model.canonical_bytes()?;
+    let policy_path = policy_dir.join(policy_file);
     fs::write(&policy_path, &policy)?;
     let event_path = root.join("workflow-run-event.json");
     fs::write(&event_path, serde_json::to_vec(&workflow_run_event())?)?;
@@ -202,7 +211,14 @@ fn verify_real_mise(
     Ok(())
 }
 
-fn run_cli(fixture: &PreparedFixture) -> TestResult<Invocation> {
+fn run_cli(fixture: &PreparedFixture, scenario: &str) -> TestResult<Invocation> {
+    let stable = scenario.starts_with("stable-");
+    let sha = if stable { SOURCE_SHA } else { AUTHORITY_SHA };
+    let wf_path = if stable {
+        STABLE_WORKFLOW_PATH
+    } else {
+        PREVIEW_WORKFLOW_PATH
+    };
     let output = Command::new(env!("CARGO_BIN_EXE_velnor-actions"))
         .env_clear()
         .env("PATH", &fixture.path)
@@ -214,25 +230,49 @@ fn run_cli(fixture: &PreparedFixture) -> TestResult<Invocation> {
         .env("MISE_LOCKFILE", "0")
         .env("MISE_AUTO_INSTALL", "false")
         .env("MISE_EXEC_AUTO_INSTALL", "false")
-        .env("VELNOR_INTERNAL_OP", "select-preview-source-v1")
+        .env(
+            "VELNOR_INTERNAL_OP",
+            if stable {
+                "write-stable-tag-intent-v1"
+            } else {
+                "select-preview-source-v1"
+            },
+        )
         .env("RUNNER_TEMP", &fixture.runner_temp)
         .env("VELNOR_REQUEST_FILE", &fixture.policy_path)
         .env("VELNOR_RELEASE_POLICY", &fixture.policy_text)
         .env("VELNOR_RELEASE_STATUS_TOKEN", "fixture-status-read-token")
+        .env("GH_TOKEN", "fixture-write-token")
+        .env("VELNOR_RELEASE_CI_RUN_ID", CI_RUN_ID.to_string())
+        .env("VELNOR_RELEASE_CI_RUN_ATTEMPT", "1")
         .env("GITHUB_REPOSITORY", REPOSITORY)
         .env("GITHUB_REPOSITORY_ID", REPOSITORY_ID.to_string())
-        .env("GITHUB_SHA", AUTHORITY_SHA)
-        .env("GITHUB_WORKFLOW_SHA", AUTHORITY_SHA)
+        .env("GITHUB_SHA", sha)
+        .env("GITHUB_WORKFLOW_SHA", sha)
         .env("GITHUB_REF", "refs/heads/main")
         .env(
             "GITHUB_WORKFLOW_REF",
-            format!("{REPOSITORY}/{PREVIEW_WORKFLOW_PATH}@refs/heads/main"),
+            format!("{REPOSITORY}/{wf_path}@refs/heads/main"),
         )
-        .env("GITHUB_EVENT_NAME", "workflow_run")
+        .env(
+            "GITHUB_EVENT_NAME",
+            if stable {
+                "workflow_dispatch"
+            } else {
+                "workflow_run"
+            },
+        )
         .env("GITHUB_EVENT_PATH", &fixture.event_path)
         .env("GITHUB_RUN_ID", PREVIEW_RUN_ID.to_string())
         .env("GITHUB_RUN_ATTEMPT", "1")
-        .env("GITHUB_JOB", "preview-eligibility")
+        .env(
+            "GITHUB_JOB",
+            if stable {
+                "stable-tag"
+            } else {
+                "preview-eligibility"
+            },
+        )
         .env("GITHUB_OUTPUT", &fixture.github_output)
         .output()?;
     let requests = fs::read_to_string(&fixture.request_log).unwrap_or_default();
@@ -257,21 +297,18 @@ fn find_on_path(program: &str, path: &std::ffi::OsStr) -> Option<PathBuf> {
 const GH_FIXTURE: &str = r#"#!/bin/sh
 set -eu
 printf '%s\n' "$*" >> "$MISE_DATA_DIR/gh-invocations.log"
-if [ "$1" = "--version" ]; then
-  printf '%s\n' 'gh version @GH_VERSION@ (fixture transport)'
-  exit 0
-fi
+if [ "$1" = "--version" ]; then printf '%s\n' 'gh version @GH_VERSION@ (fixture transport)'; exit 0; fi
 [ "$1" = "api" ] || exit 91
 shift
-accept=
-route=
+accept=; route=; tag_msg=
 while [ "$#" -gt 0 ]; do
   if [ "$1" = "-H" ]; then
+    shift; case "$1" in Accept:*) accept=$(printf '%s\n' "$1" | cut -d ' ' -f2-) ;; esac
+  elif [ "$1" = "--method" ] || [ "$1" = "--field" ]; then
     shift
-    case "$1" in
-      Accept:*) accept=$(printf '%s\n' "$1" | cut -d ' ' -f2-) ;;
-    esac
-  else
+  elif [ "$1" = "--raw-field" ]; then
+    shift; case "$1" in message=*) tag_msg=${1#message=} ;; esac
+  elif [ -z "$route" ]; then
     route="$1"
   fi
   shift
@@ -282,60 +319,63 @@ scenario='@SCENARIO@'; source_sha='@SOURCE_SHA@'; authority_sha='@AUTHORITY_SHA@
 wrong_sha='@WRONG_SHA@'; root_tree_sha='@ROOT_TREE_SHA@'; manifest_blob_sha='@MANIFEST_BLOB_SHA@'; main_blob_sha='@MAIN_BLOB_SHA@'
 ci_run='{"id":100,"run_attempt":1,"run_number":100,"workflow_id":10,"name":"CI","path":".github/workflows/ci.yml","head_sha":"'"$source_sha"'","head_branch":"main","event":"push","status":"completed","conclusion":"success","repository":{"id":819273,"full_name":"test-owner/test-tap"},"head_repository":{"id":819273,"full_name":"test-owner/test-tap"}}'
 preview_run='{"id":200,"run_attempt":1,"run_number":200,"workflow_id":20,"name":"Rust binary preview","path":".github/workflows/binary-preview.yml","head_sha":"'"$authority_sha"'","head_branch":"main","event":"workflow_run","status":"in_progress","repository":{"id":819273,"full_name":"test-owner/test-tap"},"head_repository":{"id":819273,"full_name":"test-owner/test-tap"}}'
+stable_run='{"id":200,"run_attempt":1,"run_number":200,"workflow_id":30,"name":"Rust binary release","path":".github/workflows/binary-release.yml","head_sha":"'"$source_sha"'","head_branch":"main","event":"workflow_dispatch","status":"in_progress","repository":{"id":819273,"full_name":"test-owner/test-tap"},"head_repository":{"id":819273,"full_name":"test-owner/test-tap"}}'
 case "$base" in
   repos/test-owner/test-tap) printf '%s\n' '{"id":819273,"full_name":"test-owner/test-tap","default_branch":"main"}' ;;
+  repos/test-owner/test-tap/immutable-releases) printf '%s\n' '{"enabled":true}' ;;
   repos/test-owner/test-tap/rules/branches/main) printf '%s\n' '[{"type":"pull_request","parameters":{"required_approving_review_count":1,"required_review_thread_resolution":true}},{"type":"required_status_checks","parameters":{"required_status_checks":[{"context":"Required"}]}},{"type":"non_fast_forward"},{"type":"deletion"}]' ;;
   repos/test-owner/test-tap/branches/main/protection)
-    printf '%s\n' '{"status":"404","message":"Not Found"}'; printf '%s\n' '(HTTP 404)' >&2; exit 1
-    ;;
+    printf '%s\n' '{"status":"404","message":"Not Found"}'; printf '%s\n' '(HTTP 404)' >&2; exit 1 ;;
+  repos/test-owner/test-tap/git/matching-refs/tags/v0.1.0) printf '%s\n' '[]' ;;
   repos/test-owner/test-tap/environments/preview-publish) printf '%s\n' '{"name":"preview-publish","deployment_branch_policy":{"protected_branches":false,"custom_branch_policies":true},"protection_rules":[{"type":"branch_policy"}]}' ;;
   repos/test-owner/test-tap/environments/preview-publish/deployment-branch-policies*) printf '%s\n' '{"total_count":1,"branch_policies":[{"name":"main"}]}' ;;
-  repos/test-owner/test-tap/branches/main) printf '{"name":"main","protected":true,"commit":{"sha":"%s"}}\n' "$protected_sha" ;;
-  repos/test-owner/test-tap/commits/*)
-    commit_sha=$(printf '%s\n' "$base" | awk -F/ '{print $NF}')
-    reported_sha="$commit_sha"
-    if [ "$scenario" = "wrong-sha" ] && [ "$commit_sha" = "$source_sha" ]; then reported_sha="$wrong_sha"; fi
-    if [ "$accept" = "application/vnd.github.sha" ]; then
-      printf '%s\n' "$reported_sha"
-    elif [ "$scenario" = "large-json" ]; then
-      cat "$MISE_DATA_DIR/oversized-commit.json"
+  repos/test-owner/test-tap/environments/release)
+    if [ "$scenario" = "stable-self-review-disabled" ]; then
+      printf '%s\n' '{"name":"release","can_admins_bypass":false,"deployment_branch_policy":{"protected_branches":true,"custom_branch_policies":false},"protection_rules":[{"type":"required_reviewers","prevent_self_review":false,"reviewers":[{"type":"User","reviewer":{"id":139017}}]},{"type":"branch_policy"}]}'
     else
-      printf '{"sha":"%s"}\n' "$reported_sha"
-    fi
-    ;;
+      printf '%s\n' '{"name":"release","can_admins_bypass":false,"deployment_branch_policy":{"protected_branches":true,"custom_branch_policies":false},"protection_rules":[{"type":"required_reviewers","prevent_self_review":false,"reviewers":[]},{"type":"branch_policy"}]}'
+    fi ;;
+  repos/test-owner/test-tap/branches/main) printf '{"name":"main","protected":true,"commit":{"sha":"%s"}}\n' "$protected_sha" ;;
+  repos/test-owner/test-tap/git/ref/heads/main) printf '{"ref":"refs/heads/main","object":{"type":"commit","sha":"%s"}}\n' "$source_sha" ;;
+  repos/test-owner/test-tap/git/blobs/*) printf '{"sha":"%s","size":68,"encoding":"base64","content":"W3BhY2thZ2VdCm5hbWUgPSAicHJldmlldy1wcm9iZSIKdmVyc2lvbiA9ICIwLjEuMCIKZWRpdGlvbiA9ICIyMDI0Igo="}\n' "$manifest_blob_sha" ;;
+  repos/test-owner/test-tap/git/tags)
+    esc=$(printf '%s' "$tag_msg" | awk '{printf "%s\\n", $0}')
+    printf '{"sha":"1111111111111111111111111111111111111111","tag":"v0.1.0","message":"%s","object":{"type":"commit","sha":"%s"}}\n' "$esc" "$source_sha" ;;
+  repos/test-owner/test-tap/commits/*)
+    commit_sha=$(printf '%s\n' "$base" | awk -F/ '{print $NF}'); reported_sha="$commit_sha"
+    if [ "$scenario" = "wrong-sha" ] && [ "$commit_sha" = "$source_sha" ]; then reported_sha="$wrong_sha"; fi
+    if [ "$accept" = "application/vnd.github.sha" ]; then printf '%s\n' "$reported_sha"
+    elif [ "$scenario" = "large-json" ]; then cat "$MISE_DATA_DIR/oversized-commit.json"
+    else printf '{"sha":"%s"}\n' "$reported_sha"; fi ;;
   repos/test-owner/test-tap/compare/*)
     if [ "$base" = "repos/test-owner/test-tap/compare/$source_sha...$authority_sha" ]; then
       printf '{"base_commit":{"sha":"%s"},"merge_base_commit":{"sha":"%s"},"status":"ahead","ahead_by":1,"total_commits":1}\n' "$source_sha" "$source_sha"
     elif [ "$base" = "repos/test-owner/test-tap/compare/$authority_sha...$protected_sha" ]; then
       printf '{"base_commit":{"sha":"%s"},"merge_base_commit":{"sha":"%s"},"status":"ahead","ahead_by":1,"total_commits":1}\n' "$authority_sha" "$authority_sha"
-    else
-      exit 92
-    fi
-    ;;
+    else exit 92; fi ;;
   repos/test-owner/test-tap/git/commits/*)
     commit_sha=$(printf '%s\n' "$base" | awk -F/ '{print $NF}')
-    if [ "$commit_sha" = "$source_sha" ]; then
-      printf '{"sha":"%s","tree":{"sha":"%s"},"parents":[]}\n' "$source_sha" "$root_tree_sha"
-    elif [ "$commit_sha" = "$authority_sha" ]; then
-      printf '{"sha":"%s","parents":[{"sha":"%s"}]}\n' "$authority_sha" "$source_sha"
-    elif [ "$commit_sha" = "$protected_sha" ]; then
-      printf '{"sha":"%s","parents":[{"sha":"%s"}]}\n' "$protected_sha" "$authority_sha"
-    else
-      exit 93
-    fi
-    ;;
+    if [ "$commit_sha" = "$source_sha" ]; then printf '{"sha":"%s","tree":{"sha":"%s"},"parents":[]}\n' "$source_sha" "$root_tree_sha"
+    elif [ "$commit_sha" = "$authority_sha" ]; then printf '{"sha":"%s","parents":[{"sha":"%s"}]}\n' "$authority_sha" "$source_sha"
+    elif [ "$commit_sha" = "$protected_sha" ]; then printf '{"sha":"%s","parents":[{"sha":"%s"}]}\n' "$protected_sha" "$authority_sha"
+    else exit 93; fi ;;
   repos/test-owner/test-tap/git/trees/*)
-    printf '{"sha":"%s","truncated":false,"tree":[{"path":"Cargo.toml","mode":"100644","type":"blob","sha":"%s"},{"path":"src/main.rs","mode":"100644","type":"blob","sha":"%s"}]}\n' "$root_tree_sha" "$manifest_blob_sha" "$main_blob_sha"
-    ;;
+    printf '{"sha":"%s","truncated":false,"tree":[{"path":"Cargo.toml","mode":"100644","type":"blob","sha":"%s"},{"path":"src/main.rs","mode":"100644","type":"blob","sha":"%s"}]}\n' "$root_tree_sha" "$manifest_blob_sha" "$main_blob_sha" ;;
   repos/test-owner/test-tap/actions/workflows/ci.yml) printf '%s\n' '{"id":10,"name":"CI","path":".github/workflows/ci.yml","state":"active"}' ;;
   repos/test-owner/test-tap/actions/workflows/binary-preview.yml) printf '%s\n' '{"id":20,"name":"Rust binary preview","path":".github/workflows/binary-preview.yml","state":"active"}' ;;
+  repos/test-owner/test-tap/actions/workflows/binary-release.yml) printf '%s\n' '{"id":30,"name":"Rust binary release","path":".github/workflows/binary-release.yml","state":"active"}' ;;
   repos/test-owner/test-tap/actions/runs/100/attempts/1|repos/test-owner/test-tap/actions/runs/100) printf '%s\n' "$ci_run" ;;
   repos/test-owner/test-tap/actions/runs/100/attempts/1/jobs*) printf '{"total_count":1,"jobs":[{"id":101,"run_id":100,"name":"Required","head_sha":"%s","status":"completed","conclusion":"success"}]}\n' "$source_sha" ;;
+  repos/test-owner/test-tap/actions/runs/200/artifacts) printf '%s\n' '{"total_count":0,"artifacts":[]}' ;;
   repos/test-owner/test-tap/actions/workflows/10/runs*) printf '{"workflow_runs":[%s]}\n' "$ci_run" ;;
-  repos/test-owner/test-tap/actions/runs/200/attempts/1|repos/test-owner/test-tap/actions/runs/200) printf '%s\n' "$preview_run" ;;
-  repos/test-owner/test-tap/actions/runs/200/attempts/1/jobs*) printf '{"total_count":1,"jobs":[{"id":201,"run_id":200,"name":"Select authenticated main source for preview","head_sha":"%s","status":"in_progress","started_at":"2026-10-27T00:00:00Z"}]}\n' "$authority_sha" ;;
-  *)
-    printf 'unexpected fixture route: %s\n' "$base" >&2; exit 94
-    ;;
+  repos/test-owner/test-tap/actions/runs/200/attempts/1|repos/test-owner/test-tap/actions/runs/200)
+    if [ "${scenario#stable-}" != "$scenario" ]; then printf '%s\n' "$stable_run"; else printf '%s\n' "$preview_run"; fi ;;
+  repos/test-owner/test-tap/actions/runs/200/attempts/1/jobs*)
+    if [ "${scenario#stable-}" != "$scenario" ]; then
+      printf '{"total_count":1,"jobs":[{"id":201,"run_id":200,"name":"Authorize the permanent stable tag","head_sha":"%s","status":"in_progress","started_at":"2026-10-27T00:00:00Z"}]}\n' "$source_sha"
+    else
+      printf '{"total_count":1,"jobs":[{"id":201,"run_id":200,"name":"Select authenticated main source for preview","head_sha":"%s","status":"in_progress","started_at":"2026-10-27T00:00:00Z"}]}\n' "$authority_sha"
+    fi ;;
+  *) printf 'unexpected fixture route: %s\n' "$base" >&2; exit 94 ;;
 esac
 "#;
