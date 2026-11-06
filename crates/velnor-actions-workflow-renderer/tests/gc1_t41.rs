@@ -242,12 +242,12 @@ fn rendered_selector_yaml_keeps_the_final_run_within_21000_utf16_units()
     };
     let payload = env
         .get("VELNOR_STATE_SELECT_SUPERVISOR_HEX")
-        .ok_or_else(|| fail("selector supervisor environment is absent"))?;
+        .ok_or_else(|| fail("selector supervisor environment is absent"))?
+        .clone();
+    let expected_run = velnor_actions_workflow_renderer::join_argv_for_run(run)?;
     let workflow = render(selector)?;
     let rendered_run = emitted_selector_run(&workflow)?;
-    if rendered_run.encode_utf16().count() > 21_000
-        || rendered_run != velnor_actions_workflow_renderer::join_argv_for_run(run)?
-    {
+    if rendered_run.encode_utf16().count() > 21_000 || rendered_run != expected_run {
         return Err(fail("emitted selector YAML run exceeds its final bound"));
     }
     require(
