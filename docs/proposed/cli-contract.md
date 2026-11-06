@@ -332,17 +332,27 @@ under `.github`. Velnor MUST atomically replace `.github` only after scan, plan,
 render, and validation succeed. Failures in those prepublication steps leave
 the prior tree unchanged.
 
-In-place generation may retain a private self-ignored `.github.velnor-stage/` container
-bound to the canonical worktree root and holding one persistent same-filesystem spare.
-The spare is staging state, not output; Velnor clears children but never removes or recreates either root.
+In-place generation creates a unique private `.github.velnor-stage-<random>` directory
+under the opened repository root for each invocation. The old `.github.velnor-stage`
+name is untrusted legacy state; Velnor never inspects, traverses, overwrites, or removes it.
+Plan and preview create no in-place stage state. In-place staging is removed after
+success where possible; a crashed invocation may leave its unique directory, which
+later runs ignore. The root-local generation lock remains fail-closed after a crash.
 Linux/macOS support atomic exchange; other platforms fail before stage creation.
-Linux requires kernel 5.8+ with reported `STATX_MNT_ID`; Ubuntu 22.04+ needs a compatible kernel.
-Otherwise generation fails before staging. Plan and preview create no stage state; preview bypasses in-place staging gates.
-In-place generation rejects cross-mount `.github`, stage, and every real output directory;
-it rescans before exchange and again before cleanup. Mount topology must stay stable
-during path-based cleanup; privileged concurrent mount changes are outside the guarantee.
-If `.github` exists, its root and real subdirectories must be caller-owned; foreign ownership
-fails before publication. The check uses only read-only effective-UID lookup; process creation/control remains forbidden.
+Linux requires kernel 5.8+ with reported `STATX_MNT_ID`; Ubuntu 22.04+ needs a compatible
+kernel. Otherwise generation fails before staging. Root, source, candidate, publish,
+cleanup, and lock operations are relative to held directory descriptors with no-follow
+and identity checks; the canonical root identity is checked again before publication.
+First publication uses no-replace semantics. Replacing an existing `.github` uses
+atomic exchange and checks the retired tree identities before cleanup. If `.github` exists, its
+root and every real directory below it must be owned by the caller. Privileged
+concurrent mount changes and arbitrary same-UID interference are outside the guarantee.
+Descriptor anchoring protects against replacement of the checkout path while the
+invocation holds its original root descriptor. A check followed by unlink is not
+an atomic inode-conditional removal; replacing an entry inside the still-open
+root between those operations is outside the guarantee.
+Foreign ownership fails before publication. The check uses only read-only effective-UID
+lookup; process creation/control remains forbidden.
 `rust-toolchain.toml`, `mise.toml`, and `mise.lock` remain byte-identical.
 
 `--output-dir PATH` is preview mode. PATH is the exact preview root; Velnor

@@ -1,0 +1,18 @@
+{
+  "alint": {
+    "alint-v0.21.1-aarch64-apple-darwin.tar.gz": "sha256:cdd02200a144aad877a95c5749b120608c87c0c1f4d35729f086374ef1af2039",
+    "alint-v0.21.1-x86_64-unknown-linux-musl.tar.gz": "sha256:6b9c9654dfd6b154037236d75c3504c5bb2290562bb05a324511e11556f22125"
+  },
+  "jactionlint": {
+    "jactionlint_2.5.0_darwin_arm64.tar.gz": "sha256:15b47d53e3b1aafbd674cca0e8fff0d5952f3cf2a7d7501a8f67576ef76397b4",
+    "jactionlint_2.5.0_linux_amd64.tar.gz": "sha256:5ac307b0499bb0eab45ae99c23e8e0790874fbc667c75224410954e0e3c6e0f5"
+  },
+  "opentofu": {
+    "tofu_1.13.9_darwin_arm64.tar.gz": "sha256:496f4c3064b5c3bff79174b3dae4faaf65a66774eb8e2bf074f895412c5f124f",
+    "tofu_1.13.9_linux_amd64.tar.gz": "sha256:b34b327cc1ef07178207b6f2cd1f5276537d3e5b7be316500f6dac50d4c0a857"
+  },
+  "shellcheck": {
+    "shellcheck-v0.11.0.darwin.aarch64.tar.xz": "sha256:56affdd8de5527894dca6dc3d7e0a99a873b0f004d7aabc30ae407d3f48b0a79",
+    "shellcheck-v0.11.0.linux.x86_64.tar.xz": "sha256:8c3be12b05d5c177a04c29e3c78ce89ac86f1595681cab149b65b97c4e227198"
+  }
+}

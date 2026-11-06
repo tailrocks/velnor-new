@@ -57,7 +57,7 @@ pub(crate) fn job_with(
 ) -> Job {
     Job {
         display_name: display.to_owned(),
-        runs_on: "ubuntu-24.04".to_owned(),
+        runs_on: "ubuntu-26.04".to_owned(),
         check_runner: None,
         timeout_minutes: JobTimeout::DEFAULT,
         needs,

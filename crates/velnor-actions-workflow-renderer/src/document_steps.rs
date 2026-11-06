@@ -86,12 +86,10 @@ fn validate_action_step(
 ) -> Result<(), RenderError> {
     crate::action_ref::validate_verifier_call(step, uses, with, env)?;
     let runtime_identity = step.role == Some(velnor_actions_contract::StepRole::ToolsCacheIdentity)
-        || ["ubuntu-22.04", "ubuntu-24.04", "ubuntu-26.04"]
-            .iter()
-            .any(|lane| {
-                crate::cache_p08::runtime_identity_action_uses(lane) == Some(uses)
-                    || crate::cache_p08::runtime_prelude_action_uses(lane) == Some(uses)
-            });
+        || ["ubuntu-26.04"].iter().any(|lane| {
+            crate::cache_p08::runtime_identity_action_uses(lane) == Some(uses)
+                || crate::cache_p08::runtime_prelude_action_uses(lane) == Some(uses)
+        });
     if runtime_identity {
         let Some(lane) = runs_on else {
             return Err(RenderError::InvalidWorkflow(

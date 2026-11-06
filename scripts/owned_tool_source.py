@@ -38,18 +38,19 @@ BUILD = {
 }
 ABI = {"mise": "mise-owned-cargo-wrapper-v1", "mbx": None}
 
-OFFICIAL_MISE_VERSION = "2026.11.1"
-OFFICIAL_MISE_SOURCE_COMMIT = "0fa558048f88cfc1d3e9ad29f52b26a11debb1d9"
-OFFICIAL_MISE_SOURCE_TREE = "865bec85a4afdf369ce9ab731db5c6e38fe64ac9"
-OFFICIAL_MISE_BASE = "https://github.com/jdx/mise/releases/download/v2026.11.1/mise-v2026.11.1-"
+OFFICIAL_MISE_VERSION = '2026.11.3'
+OFFICIAL_MISE_SOURCE_COMMIT = 'e6ae670b979f27d04e6c2ca77a7e88d300ee2add'
+OFFICIAL_MISE_SOURCE_TREE = 'ddcbc2699d55c7e0d8f76a716b4f08ed9e025bb7'
+OFFICIAL_MISE_BASE = 'https://github.com/jdx/mise/releases/download/v2026.11.3/mise-v2026.11.3-'
 OFFICIAL_MISE_PINS = {
-    "linux-x64": ("standalone", "7129dbab31d698f9028db9374f7ba7987232b0426f837dcbce437130a61415f9",
-                  "7129dbab31d698f9028db9374f7ba7987232b0426f837dcbce437130a61415f9"),
-    "linux-arm64.tar.gz": ("tar.gz", "6b54d9223f8bce04f9168ef482d9ee27f219c1ea11f4903569660049e5dec5aa",
-                           "ed5dc8d5d8b334684409ef7abad2ffe5c22cf8e311905ae906c3246cbe2c5442"),
-    "macos-arm64.tar.gz": ("tar.gz", "e1eaf20469e586f65849256a0be6a58dd7a3e93ae8db68bc74dd7af5ca0fe7f6",
-                           "9ca1005930fed90e0f4c30d9b13fe4530fe88d0549a71349716a3aab9051c627"),
+    "linux-x64": ("standalone", "c2f7e814cb39f60b7f67a0ff36cb805e94128bf2dff09d175309d0f095b8cc3b",
+                  "c2f7e814cb39f60b7f67a0ff36cb805e94128bf2dff09d175309d0f095b8cc3b"),
+    "linux-arm64.tar.gz": ("tar.gz", "13547a80d1dc2d5f81bb183023732f4981486e894d060e30993cc4364b4af51d",
+                           "a9a2a66bbbe87ea9cc849e1f006606ae2b34f3d3ba56a54d5cd5d64b6557d164"),
+    "macos-arm64.tar.gz": ("tar.gz", "de9a54330fee4edede51a3cf6196bbf522f01c5e3fd981e0bebea33f561a0431",
+                           "6d39119ab914c54ab865204dee9337c71b83a7ed1e730f663c2fc3453e38fe9c"),
 }
+
 OFFICIAL_MISE_HOSTS = {"x86_64-unknown-linux-gnu": "linux-x64",
                       "aarch64-unknown-linux-gnu": "linux-arm64.tar.gz",
                       "aarch64-apple-darwin": "macos-arm64.tar.gz"}

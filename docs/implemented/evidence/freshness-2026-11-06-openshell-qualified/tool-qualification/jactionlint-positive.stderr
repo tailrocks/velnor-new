@@ -1,0 +1,1 @@
+note: node 20 or later was not found, so it did not check 2 JavaScript scripts. install it, or turn the check off with "rules: {github-script-syntax: off}" in the configuration

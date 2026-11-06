@@ -21,7 +21,7 @@ pub(super) fn task_id() -> Result<String, Box<dyn Error>> {
 
 pub(super) fn planned_platform() -> Result<PlannedPlatform, Box<dyn Error>> {
     Ok(PlannedPlatform::new(
-        "ubuntu-22.04",
+        "ubuntu-26.04",
         "x86_64-unknown-linux-gnu",
     )?)
 }

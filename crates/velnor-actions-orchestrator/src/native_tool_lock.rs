@@ -14,7 +14,7 @@ pub(crate) struct NativeMiseLock {
 impl NativeMiseLock {
     pub(crate) fn has_supported_root_shape(&self) -> bool {
         self.valid_shape
-            && self.lockfile_version == Some(3)
+            && self.lockfile_version == Some(4)
             && self.root_keys.len() == 2
             && self.root_keys.iter().any(|key| key == "lockfile_version")
             && self.root_keys.iter().any(|key| key == "tools")
@@ -56,10 +56,12 @@ pub(crate) struct NativeLockedTool {
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub(crate) struct NativeLockedArtifact {
     pub(crate) checksum: Option<String>,
+    pub(crate) checksum_source: Option<String>,
     pub(crate) url: Option<String>,
     pub(crate) url_api: Option<String>,
     pub(crate) signer: Option<String>,
     pub(crate) provenance: Option<String>,
+    pub(crate) provenance_verified: Option<bool>,
     pub(crate) repository_ids: Option<NativeRepositoryIds>,
     pub(crate) unsupported_fields: Vec<String>,
     pub(crate) valid_shape: bool,
@@ -249,33 +251,14 @@ fn parse_native_locked_artifact(value: &toml::Value) -> NativeLockedArtifact {
             .map(ToOwned::to_owned)
     };
     let mut unsupported_fields = Vec::new();
-    let repository_ids = table.get("repository_ids").and_then(|value| {
-        let Some(ids) = value.as_table() else {
-            unsupported_fields.push("repository_ids.shape".to_owned());
-            return None;
-        };
-        let non_empty = |k: &str| {
-            ids.get(k)
-                .and_then(toml::Value::as_str)
-                .filter(|v| !v.is_empty())
-                .map(ToOwned::to_owned)
-        };
-        let repository = non_empty("repository");
-        let owner = non_empty("owner");
-        if repository.is_none() {
-            unsupported_fields.push("repository_ids.repository".to_owned());
+    let checksum_source =
+        parse_checksum_source(table.get("checksum_source"), &mut unsupported_fields);
+    for key in ["checksum", "url", "url_api", "signer", "provenance"] {
+        if table.get(key).is_some_and(|value| value.as_str().is_none()) {
+            unsupported_fields.push(format!("{key}.shape"));
         }
-        if ids
-            .keys()
-            .any(|key| !matches!(key.as_str(), "repository" | "owner"))
-        {
-            unsupported_fields.push("repository_ids.unknown_field".to_owned());
-        }
-        if ids.get("owner").is_some() && owner.is_none() {
-            unsupported_fields.push("repository_ids.owner".to_owned());
-        }
-        Some(NativeRepositoryIds { repository, owner })
-    });
+    }
+    let repository_ids = parse_repository_ids(table.get("repository_ids"), &mut unsupported_fields);
     if table
         .get("provenance_verified")
         .is_some_and(|v| v.as_bool().is_none())
@@ -289,6 +272,7 @@ fn parse_native_locked_artifact(value: &toml::Value) -> NativeLockedArtifact {
                 !matches!(
                     key.as_str(),
                     "checksum"
+                        | "checksum_source"
                         | "url"
                         | "url_api"
                         | "signer"
@@ -301,12 +285,67 @@ fn parse_native_locked_artifact(value: &toml::Value) -> NativeLockedArtifact {
     );
     NativeLockedArtifact {
         checksum: str_field("checksum"),
+        checksum_source,
         url: str_field("url"),
         url_api: str_field("url_api"),
         signer: str_field("signer"),
         provenance: str_field("provenance"),
+        provenance_verified: table
+            .get("provenance_verified")
+            .and_then(toml::Value::as_bool),
         repository_ids,
         unsupported_fields,
         valid_shape: true,
     }
+}
+
+fn parse_checksum_source(
+    value: Option<&toml::Value>,
+    unsupported_fields: &mut Vec<String>,
+) -> Option<String> {
+    match value {
+        Some(toml::Value::String(value)) => {
+            if value != "mise-versions" {
+                unsupported_fields.push("checksum_source.value".to_owned());
+            }
+            Some(value.clone())
+        }
+        Some(_) => {
+            unsupported_fields.push("checksum_source.shape".to_owned());
+            None
+        }
+        None => None,
+    }
+}
+
+fn parse_repository_ids(
+    value: Option<&toml::Value>,
+    unsupported_fields: &mut Vec<String>,
+) -> Option<NativeRepositoryIds> {
+    let value = value?;
+    let Some(ids) = value.as_table() else {
+        unsupported_fields.push("repository_ids.shape".to_owned());
+        return None;
+    };
+    let non_empty = |key: &str| {
+        ids.get(key)
+            .and_then(toml::Value::as_str)
+            .filter(|value| !value.is_empty())
+            .map(ToOwned::to_owned)
+    };
+    let repository = non_empty("repository");
+    let owner = non_empty("owner");
+    if repository.is_none() {
+        unsupported_fields.push("repository_ids.repository".to_owned());
+    }
+    if ids
+        .keys()
+        .any(|key| !matches!(key.as_str(), "repository" | "owner"))
+    {
+        unsupported_fields.push("repository_ids.unknown_field".to_owned());
+    }
+    if ids.get("owner").is_some() && owner.is_none() {
+        unsupported_fields.push("repository_ids.owner".to_owned());
+    }
+    Some(NativeRepositoryIds { repository, owner })
 }

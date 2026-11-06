@@ -1,0 +1,3600 @@
+manifest-version = "2"
+date = "2026-10-15"
+
+[pkg.cargo]
+version = "0.100.0 (5f94df478 2026-08-27)"
+git_commit_hash = "58cf8f9c35b355199727627d07ae34a4e2846d67"
+
+[pkg.cargo.target.aarch64-apple-darwin]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/cargo-1.99.1-aarch64-apple-darwin.tar.gz"
+hash = "b5cc7634f919949c3e5e131123f813416dc47f6b809a5371d12f1f593595ae13"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/cargo-1.99.1-aarch64-apple-darwin.tar.xz"
+xz_hash = "685e563d94db1f003ffa5f5831439eec02569b9950b69867953c8213269c1eaf"
+
+[pkg.cargo.target.aarch64-pc-windows-gnullvm]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/cargo-1.99.1-aarch64-pc-windows-gnullvm.tar.gz"
+hash = "a678122654b6ca4240997cec6ab6e3c91fa0e79466939c06b079c8a717efc6aa"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/cargo-1.99.1-aarch64-pc-windows-gnullvm.tar.xz"
+xz_hash = "d1f5aeeec44e84ef532dc936c2e8a7f04f2969446d04645809d9b6e21132eb69"
+
+[pkg.cargo.target.aarch64-pc-windows-msvc]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/cargo-1.99.1-aarch64-pc-windows-msvc.tar.gz"
+hash = "921930928e476bb61b4ec2b5e1b16cf09eebcd7e97f9bdeac821239b5ba19d10"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/cargo-1.99.1-aarch64-pc-windows-msvc.tar.xz"
+xz_hash = "28ae5b9b72ae43aa01d2f6c1b285be59f8aef6eafc96f9e16b912c3c1363a638"
+
+[pkg.cargo.target.aarch64-unknown-freebsd]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/cargo-1.99.1-aarch64-unknown-freebsd.tar.gz"
+hash = "c78169a84446aed80eaeabdff88dfa8590044876e73b06d88d238fda16fbe5d1"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/cargo-1.99.1-aarch64-unknown-freebsd.tar.xz"
+xz_hash = "a88fad8ce53191681dcee1aeba28ddb838bf0b9e8550e43f0ee4c9886bc69db7"
+
+[pkg.cargo.target.aarch64-unknown-linux-gnu]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/cargo-1.99.1-aarch64-unknown-linux-gnu.tar.gz"
+hash = "201dbeac1795713b98aeae044e01695e70ae2ea3ded42683ebce5a8a1c90f8a6"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/cargo-1.99.1-aarch64-unknown-linux-gnu.tar.xz"
+xz_hash = "5156832e0c1254e9b49a79edabdc6d4c35f32f8fc1cf3ca700f268ff96087ab0"
+
+[pkg.cargo.target.aarch64-unknown-linux-musl]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/cargo-1.99.1-aarch64-unknown-linux-musl.tar.gz"
+hash = "cd14d5ddfe977c769f0446efb825133e76b611f3af2d2f8ee084ebff5ad4f314"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/cargo-1.99.1-aarch64-unknown-linux-musl.tar.xz"
+xz_hash = "50f323ec9e1e60c41d42ef4dd988cc87d0a79f7b4ea10fd364df177212b89106"
+
+[pkg.cargo.target.aarch64-unknown-linux-ohos]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/cargo-1.99.1-aarch64-unknown-linux-ohos.tar.gz"
+hash = "836658119cf73dc27e948e1a738c9a209ea70cfbf303b110fca68034a0fc71e5"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/cargo-1.99.1-aarch64-unknown-linux-ohos.tar.xz"
+xz_hash = "9fc184a33759c293c3cb4b43f9cf5efc364d9962a3fb685cd3c19cf3baebe988"
+
+[pkg.cargo.target.arm-unknown-linux-gnueabi]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/cargo-1.99.1-arm-unknown-linux-gnueabi.tar.gz"
+hash = "113a5352032795cd32e3581068513eeb5462f440ff5d0c34d26c31d87fc3a333"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/cargo-1.99.1-arm-unknown-linux-gnueabi.tar.xz"
+xz_hash = "483a21715287f62b722b7d2566bbeba37d9a42a97a0d26a603541970369d8b14"
+
+[pkg.cargo.target.arm-unknown-linux-gnueabihf]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/cargo-1.99.1-arm-unknown-linux-gnueabihf.tar.gz"
+hash = "8dded72b70f8d81ff66949ba290826400fef2bc4003c33a8cffc17a365c08f92"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/cargo-1.99.1-arm-unknown-linux-gnueabihf.tar.xz"
+xz_hash = "431be88dd1b2962b38793422b702a8f5df2b85e46ae38471e53e19b0da8185cb"
+
+[pkg.cargo.target.armv7-unknown-linux-gnueabihf]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/cargo-1.99.1-armv7-unknown-linux-gnueabihf.tar.gz"
+hash = "cdaba1279ef4108b057917b7a57b7e6203db11cb0ebf5a978f3aedf6c8a2defc"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/cargo-1.99.1-armv7-unknown-linux-gnueabihf.tar.xz"
+xz_hash = "d2aa766fe9f97af518df2fe28e89a536103ff6cad83f6f3b81253803089cf961"
+
+[pkg.cargo.target.i686-pc-windows-gnu]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/cargo-1.99.1-i686-pc-windows-gnu.tar.gz"
+hash = "83ac8e03ea2b6a78c2c4ec6117c5e6bf6c060c1e1dfeee85ddbee847ba9d358e"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/cargo-1.99.1-i686-pc-windows-gnu.tar.xz"
+xz_hash = "7f7a38cd6ccc7b089c3a8d575a162180ec62bc4f867a3817329c79f42b7a9616"
+
+[pkg.cargo.target.i686-pc-windows-msvc]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/cargo-1.99.1-i686-pc-windows-msvc.tar.gz"
+hash = "1c69eb69168ee5d9a9bcac2ab72133462d55630ecf0d09670f142d8c621e6991"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/cargo-1.99.1-i686-pc-windows-msvc.tar.xz"
+xz_hash = "d2db94eab7d2a622c002889e19d394573af51cde003cc7c75ce8e741dd66fb58"
+
+[pkg.cargo.target.i686-unknown-linux-gnu]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/cargo-1.99.1-i686-unknown-linux-gnu.tar.gz"
+hash = "a2e14e54b779d75824dd42ecb98a6ce6df4ed27a87936130a2e63bd2b55ef8ac"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/cargo-1.99.1-i686-unknown-linux-gnu.tar.xz"
+xz_hash = "df80890e57e5aee20660c784b26ff1b1f97ec04bde43ecf8801704a9c2f017fd"
+
+[pkg.cargo.target.loongarch64-unknown-linux-gnu]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/cargo-1.99.1-loongarch64-unknown-linux-gnu.tar.gz"
+hash = "e0e5088658681038cb418ba74e1e26fe1df388dd853ed324f96bd7793890ea87"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/cargo-1.99.1-loongarch64-unknown-linux-gnu.tar.xz"
+xz_hash = "2b04bbb9f22c945f439341914910e41fd3ef3dbb0a7a5baab8388a0b849d27c8"
+
+[pkg.cargo.target.loongarch64-unknown-linux-musl]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/cargo-1.99.1-loongarch64-unknown-linux-musl.tar.gz"
+hash = "58742b315ad48364f6f3548980ac98266678b23e1741bbad6be0b8944e48bd91"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/cargo-1.99.1-loongarch64-unknown-linux-musl.tar.xz"
+xz_hash = "afcf000801ed9d0529b003487fb1d308f257887f1dc00d62c6cdd51857719f4f"
+
+[pkg.cargo.target.powerpc-unknown-linux-gnu]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/cargo-1.99.1-powerpc-unknown-linux-gnu.tar.gz"
+hash = "0560f078c1bac36812ee6808d1dab82a1dec0ab8e927e60a5b893eaa963d2790"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/cargo-1.99.1-powerpc-unknown-linux-gnu.tar.xz"
+xz_hash = "ef3516dee495257ac1a0a08a0a2fb0f66274dd232c068eb3fe7c0cf624900abf"
+
+[pkg.cargo.target.powerpc64-unknown-linux-gnu]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/cargo-1.99.1-powerpc64-unknown-linux-gnu.tar.gz"
+hash = "bc6aadad4b261eb44ee438c56cd51364a3c7b8cf511bf08f9b1c6d4d1dbe4be0"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/cargo-1.99.1-powerpc64-unknown-linux-gnu.tar.xz"
+xz_hash = "2c3eaa90812089dc977457993859a39d2b5e1629c510f9cea11aecc9496d7139"
+
+[pkg.cargo.target.powerpc64-unknown-linux-musl]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/cargo-1.99.1-powerpc64-unknown-linux-musl.tar.gz"
+hash = "c242e66a3a644b8690dc508efca56d18d2a445a8044b45b198abd1d7ccdceb82"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/cargo-1.99.1-powerpc64-unknown-linux-musl.tar.xz"
+xz_hash = "058608e6298b1f704dc6bc9ef6586df880a226179b173300ee05b0d62755b93e"
+
+[pkg.cargo.target.powerpc64le-unknown-linux-gnu]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/cargo-1.99.1-powerpc64le-unknown-linux-gnu.tar.gz"
+hash = "9facb59d28632d82a38c0295631df974677edf2fe8458459bbcdffee75233cd3"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/cargo-1.99.1-powerpc64le-unknown-linux-gnu.tar.xz"
+xz_hash = "05b6de9164efafec71dd7ee4f35922fa9d0b80520d079850523b5146a750871e"
+
+[pkg.cargo.target.powerpc64le-unknown-linux-musl]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/cargo-1.99.1-powerpc64le-unknown-linux-musl.tar.gz"
+hash = "fedaed4e9d9df1fbbe980895cbe7bb40371800f244fc8d7915215e44d0446b3c"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/cargo-1.99.1-powerpc64le-unknown-linux-musl.tar.xz"
+xz_hash = "9e8e560c68c50816de455ba5bf9c4039bb7125bd49b5a70c52d2f358018e90ce"
+
+[pkg.cargo.target.riscv64gc-unknown-linux-gnu]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/cargo-1.99.1-riscv64gc-unknown-linux-gnu.tar.gz"
+hash = "3dc2e732cc101eec41b387f6d3d205f417edff4e0f3491dd0cd6d627fc346279"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/cargo-1.99.1-riscv64gc-unknown-linux-gnu.tar.xz"
+xz_hash = "b58cfbfbc086e5f26cc3761550d08a96c38a3d4bb891e904ed18bacdc21125e8"
+
+[pkg.cargo.target.riscv64gc-unknown-linux-musl]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/cargo-1.99.1-riscv64gc-unknown-linux-musl.tar.gz"
+hash = "43a95de12a8ba5a97d18ba5c3848acadbbb005b0d69c38a7d76015e7faedcfe8"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/cargo-1.99.1-riscv64gc-unknown-linux-musl.tar.xz"
+xz_hash = "dcbf47802c4d3c747f755352fc076723d40c9303e006ba28a174b29897c0495d"
+
+[pkg.cargo.target.s390x-unknown-linux-gnu]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/cargo-1.99.1-s390x-unknown-linux-gnu.tar.gz"
+hash = "b0e4ddaa93b78d160a7c7ef8c0f6bacd2dcb58ab5f6e6b36f3963cadab6ebdd2"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/cargo-1.99.1-s390x-unknown-linux-gnu.tar.xz"
+xz_hash = "c745ddc4a22f85c950d1a3845217dbeaa1b8957ca6185a860440929c0f68c998"
+
+[pkg.cargo.target.sparcv9-sun-solaris]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/cargo-1.99.1-sparcv9-sun-solaris.tar.gz"
+hash = "6ab1ab29de8c62b70c588ce7f0eb025cf646b8bbf73bb6ffaf51bdfc4a7c5ce6"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/cargo-1.99.1-sparcv9-sun-solaris.tar.xz"
+xz_hash = "e57fe3165064a9b8e5a022d2d51300725b6b87c0a76242d2b2fc3b0ef55a0a72"
+
+[pkg.cargo.target.x86_64-apple-darwin]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/cargo-1.99.1-x86_64-apple-darwin.tar.gz"
+hash = "ed05dab7a703d1b4c6fa5cec8e99272cb1c3902a323986c80e0bc57915c85ddd"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/cargo-1.99.1-x86_64-apple-darwin.tar.xz"
+xz_hash = "6636dabcec164909d1c6eb9e2c596148787c84f7d3a02ff68a141569077f80b5"
+
+[pkg.cargo.target.x86_64-pc-solaris]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/cargo-1.99.1-x86_64-pc-solaris.tar.gz"
+hash = "0b3a45ee2d46dd9887cbfdf556e3272c0a20be5195fdb2ce30067c9a6f4d100e"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/cargo-1.99.1-x86_64-pc-solaris.tar.xz"
+xz_hash = "f9bf94ca465ae4591da28e0610eb083f6f12f788dc4486c4b5ba65b2a5b0ca8c"
+
+[pkg.cargo.target.x86_64-pc-windows-gnu]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/cargo-1.99.1-x86_64-pc-windows-gnu.tar.gz"
+hash = "57e54617be4420dbb967ca8293f5ace7168104ac12efa9dc7c5c3bda112f8b36"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/cargo-1.99.1-x86_64-pc-windows-gnu.tar.xz"
+xz_hash = "e4b9107e9f655d37200c884294e74930829f236a3e81982fc678e9fc56ae9a6b"
+
+[pkg.cargo.target.x86_64-pc-windows-gnullvm]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/cargo-1.99.1-x86_64-pc-windows-gnullvm.tar.gz"
+hash = "b9e869427c81e93d1401e605dbbba109bcbdc83cbc627b49d71ea3b8e2f88c31"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/cargo-1.99.1-x86_64-pc-windows-gnullvm.tar.xz"
+xz_hash = "44753601667a1b201c9e2e4233d8311e2e7d3321273d6041a07e3d4e7966025b"
+
+[pkg.cargo.target.x86_64-pc-windows-msvc]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/cargo-1.99.1-x86_64-pc-windows-msvc.tar.gz"
+hash = "bbf6e9295b69c9de8f2610e3e5bb90217d23826b7f2adac698262663a58ad899"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/cargo-1.99.1-x86_64-pc-windows-msvc.tar.xz"
+xz_hash = "4adb46c3707dee790682f7769d86983841148111695f561c843c33daa2af0c9b"
+
+[pkg.cargo.target.x86_64-unknown-freebsd]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/cargo-1.99.1-x86_64-unknown-freebsd.tar.gz"
+hash = "dd7153396cc31cb500beb53bc6c8e630249404be83ef80fb9fbf71d58320a4c0"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/cargo-1.99.1-x86_64-unknown-freebsd.tar.xz"
+xz_hash = "1df8c9f8ef603bfd6e4e51b9657a6d1d2ce57714253c77a2ed62cf8a017cf144"
+
+[pkg.cargo.target.x86_64-unknown-illumos]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/cargo-1.99.1-x86_64-unknown-illumos.tar.gz"
+hash = "f183099517a412bc59ac2797bf2b3413b25ea6afd790d2559a91ac4a304aa3c6"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/cargo-1.99.1-x86_64-unknown-illumos.tar.xz"
+xz_hash = "0a8f49c871dd0903c14a7a0c18570dc74847e70e2a798dec63a2500051e33dd9"
+
+[pkg.cargo.target.x86_64-unknown-linux-gnu]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/cargo-1.99.1-x86_64-unknown-linux-gnu.tar.gz"
+hash = "47babc028247e26577f8a1bf390b11f447ad9b7ab93f5c9a0dda078935fc149b"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/cargo-1.99.1-x86_64-unknown-linux-gnu.tar.xz"
+xz_hash = "53f3521949404d595efb06a55c12c5658d4ed1c75566f33d3d514eaebe70bd8a"
+
+[pkg.cargo.target.x86_64-unknown-linux-musl]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/cargo-1.99.1-x86_64-unknown-linux-musl.tar.gz"
+hash = "7ca474ad63165c5366ed3847c71aa0cdb60ba597f553bb415cd396c92023c8a5"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/cargo-1.99.1-x86_64-unknown-linux-musl.tar.xz"
+xz_hash = "f70f6f9b251a2d9cbb0f5792c612fde478e06cfa76abb639aceaada2c6453b1f"
+
+[pkg.cargo.target.x86_64-unknown-netbsd]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/cargo-1.99.1-x86_64-unknown-netbsd.tar.gz"
+hash = "67c6906cf1179735a2ff8ce5b9caa29e334d25d23d978cf8b818bbad1cf31683"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/cargo-1.99.1-x86_64-unknown-netbsd.tar.xz"
+xz_hash = "d1f33224de592cb445b3ee06363de5a3743108c6a7e6a1b6c387b1cd2beb0374"
+
+[pkg.clippy-preview]
+version = "0.1.99"
+git_commit_hash = "58cf8f9c35b355199727627d07ae34a4e2846d67"
+
+[pkg.clippy-preview.target.aarch64-apple-darwin]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/clippy-1.99.1-aarch64-apple-darwin.tar.gz"
+hash = "bf568a9d158bdb25fed5b8512475133b77bb856bf62ed7653819c4ec133680cc"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/clippy-1.99.1-aarch64-apple-darwin.tar.xz"
+xz_hash = "c463f31831196702fc544900a0dc4c1837905327507fbec751fe46e59ca098bf"
+
+[pkg.clippy-preview.target.aarch64-pc-windows-gnullvm]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/clippy-1.99.1-aarch64-pc-windows-gnullvm.tar.gz"
+hash = "7825b2e346cd581ca9109ef3fc2b8ad036d93efc75b0ddd633cd7b9e407f17d5"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/clippy-1.99.1-aarch64-pc-windows-gnullvm.tar.xz"
+xz_hash = "fbbc7d9afdcd7a8e4fe571058d0f59c20b0791f20f64dc05f28002555475fc2a"
+
+[pkg.clippy-preview.target.aarch64-pc-windows-msvc]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/clippy-1.99.1-aarch64-pc-windows-msvc.tar.gz"
+hash = "8f820ea9999313657272ab594c37a060eb29397a0ea2126be4fb1f6acd59b16a"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/clippy-1.99.1-aarch64-pc-windows-msvc.tar.xz"
+xz_hash = "6324b172cdda7ca117df406564a6c1f6634f983c06afc71c7a9fd46a4e34bfa8"
+
+[pkg.clippy-preview.target.aarch64-unknown-freebsd]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/clippy-1.99.1-aarch64-unknown-freebsd.tar.gz"
+hash = "524a53bf0791b89009f66bd644518c38c72b471d96d22c5c3d3844c7ccc4903e"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/clippy-1.99.1-aarch64-unknown-freebsd.tar.xz"
+xz_hash = "fd8e734fea1c1455f81987a26c56eb6847e5269c3b59a2a76a50e2e9bc95417d"
+
+[pkg.clippy-preview.target.aarch64-unknown-linux-gnu]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/clippy-1.99.1-aarch64-unknown-linux-gnu.tar.gz"
+hash = "e1082c9d61ce461d2f5cd1878c9efe8c3faf6a5b896e0807481e0301791de848"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/clippy-1.99.1-aarch64-unknown-linux-gnu.tar.xz"
+xz_hash = "3bea76c26dcf30c176c0a8a8cc283eb59fabd754e24a68b4ca0701e5f3245f6b"
+
+[pkg.clippy-preview.target.aarch64-unknown-linux-musl]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/clippy-1.99.1-aarch64-unknown-linux-musl.tar.gz"
+hash = "f9247ddded27ea21a3426ccbf5d9ad9f0d1da73a806449941cdc46f9bf931303"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/clippy-1.99.1-aarch64-unknown-linux-musl.tar.xz"
+xz_hash = "730483feb10f61da8d4c4eace22c27e4e4e9b64d4d9b7b2e7b4eb398afcb4044"
+
+[pkg.clippy-preview.target.aarch64-unknown-linux-ohos]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/clippy-1.99.1-aarch64-unknown-linux-ohos.tar.gz"
+hash = "d23a21d68fd23956ca6cc259c0aa66deb8dc9a972fcfde78531386e5308cc1e4"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/clippy-1.99.1-aarch64-unknown-linux-ohos.tar.xz"
+xz_hash = "0789033e237bd01c706b9a5b99386df284d357764eb47722ecf7a33105a29d5a"
+
+[pkg.clippy-preview.target.arm-unknown-linux-gnueabi]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/clippy-1.99.1-arm-unknown-linux-gnueabi.tar.gz"
+hash = "124ed68488e5c1b2d6772c9714575e035aad1f9257b6c52c7b055d19dc5d7d13"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/clippy-1.99.1-arm-unknown-linux-gnueabi.tar.xz"
+xz_hash = "c234830f57d9e30dc433e38a44b6df909ff11b2d5f8a5474aa67886d98a68749"
+
+[pkg.clippy-preview.target.arm-unknown-linux-gnueabihf]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/clippy-1.99.1-arm-unknown-linux-gnueabihf.tar.gz"
+hash = "bf7b28319b63a6f9dd01626bc7e4f4edaf363bdb02bf9dd8149b87f96d8a4cd4"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/clippy-1.99.1-arm-unknown-linux-gnueabihf.tar.xz"
+xz_hash = "eba914dd7c8becd4c1805f863411735497153e6cb2db3de797a551b2be887d7a"
+
+[pkg.clippy-preview.target.armv7-unknown-linux-gnueabihf]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/clippy-1.99.1-armv7-unknown-linux-gnueabihf.tar.gz"
+hash = "98c643e612c29a62a20bfd564015f8b439348058d53a6407188868896e388801"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/clippy-1.99.1-armv7-unknown-linux-gnueabihf.tar.xz"
+xz_hash = "c71170cd44b8fd997647138cfb98138877d7d53efe76aeffdc05aa9531e8a04c"
+
+[pkg.clippy-preview.target.i686-pc-windows-gnu]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/clippy-1.99.1-i686-pc-windows-gnu.tar.gz"
+hash = "15dd153d175542d28ca10a7ec6e31604d261d9481fbf4013ea3bc64a8cfb24bc"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/clippy-1.99.1-i686-pc-windows-gnu.tar.xz"
+xz_hash = "c837f800fe2425e77d826c12c75dd86cb26d38cae206b13b295a8a70934094f1"
+
+[pkg.clippy-preview.target.i686-pc-windows-msvc]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/clippy-1.99.1-i686-pc-windows-msvc.tar.gz"
+hash = "e30fa0264951aa236a85c9e0b6c69be285efa2e0d65dcc629bedd88e74f39562"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/clippy-1.99.1-i686-pc-windows-msvc.tar.xz"
+xz_hash = "e9bb580b6c1da82bf8e9d7b4dbbf22e389a47af262a39062be0abe70c2fbebe1"
+
+[pkg.clippy-preview.target.i686-unknown-linux-gnu]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/clippy-1.99.1-i686-unknown-linux-gnu.tar.gz"
+hash = "ba178a8bdb871a5d79640ea9f40a7cc929ec1e1382ed6ddb69803bb618ffa879"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/clippy-1.99.1-i686-unknown-linux-gnu.tar.xz"
+xz_hash = "9f9d02d74ce6dcc7748524a13096a3bae4f67a91311742786f80042205734f50"
+
+[pkg.clippy-preview.target.loongarch64-unknown-linux-gnu]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/clippy-1.99.1-loongarch64-unknown-linux-gnu.tar.gz"
+hash = "9a3eb42dd4dc051169678251dc6dddc573e10f8abec7244ac5d70d46d3113c69"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/clippy-1.99.1-loongarch64-unknown-linux-gnu.tar.xz"
+xz_hash = "2b2d645e8b81f513ec7aed8ae3423bca5cad88ad24ecd573796ebcb078d81fc9"
+
+[pkg.clippy-preview.target.loongarch64-unknown-linux-musl]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/clippy-1.99.1-loongarch64-unknown-linux-musl.tar.gz"
+hash = "edfed49882cf34016b6304fa462b624240a389d9afd840fd6130ce8e2615969d"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/clippy-1.99.1-loongarch64-unknown-linux-musl.tar.xz"
+xz_hash = "c84e00f15ecf047f34538d821094a6e8ecc7aa0ef75283c22cb1bb5ec78f7cf9"
+
+[pkg.clippy-preview.target.powerpc-unknown-linux-gnu]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/clippy-1.99.1-powerpc-unknown-linux-gnu.tar.gz"
+hash = "da3a584564267f962cde921daee8cfa6679ffafe8090f314adb108136de01005"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/clippy-1.99.1-powerpc-unknown-linux-gnu.tar.xz"
+xz_hash = "8ba0c3eb2e1f7b2e5b747acc1ce80f5f8cdcf1ff73b51962bbc37e1cd2635224"
+
+[pkg.clippy-preview.target.powerpc64-unknown-linux-gnu]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/clippy-1.99.1-powerpc64-unknown-linux-gnu.tar.gz"
+hash = "2ee5dd90b48ff05bacd39921ea7c06d87e5448f131a48213e6fb70604294ace9"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/clippy-1.99.1-powerpc64-unknown-linux-gnu.tar.xz"
+xz_hash = "098a7141248d377755eef0bc8a07082700b161b01d9a7c4abd97665d5b12029a"
+
+[pkg.clippy-preview.target.powerpc64-unknown-linux-musl]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/clippy-1.99.1-powerpc64-unknown-linux-musl.tar.gz"
+hash = "468ddf44cf25d32263ec28f8a49a91fa240f0a1ee07a26de4e690bd9db0c66f2"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/clippy-1.99.1-powerpc64-unknown-linux-musl.tar.xz"
+xz_hash = "7d823cbcba57452689f39c99c676b4654fae4841d33485588c7d5f720bfe7fcf"
+
+[pkg.clippy-preview.target.powerpc64le-unknown-linux-gnu]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/clippy-1.99.1-powerpc64le-unknown-linux-gnu.tar.gz"
+hash = "9d68de473ae775eecbcc21a054e5334bad89f66eb7575e712a9cbed27b2c72e3"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/clippy-1.99.1-powerpc64le-unknown-linux-gnu.tar.xz"
+xz_hash = "1a66f5cb2d7048e1534c33a16b8413960d48f9bc5a36e5a2dd347f50a1a0aa4e"
+
+[pkg.clippy-preview.target.powerpc64le-unknown-linux-musl]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/clippy-1.99.1-powerpc64le-unknown-linux-musl.tar.gz"
+hash = "eb36f674085ee6202d1fccbfc5f50271f54b7ea3a80994bc9fcee75f0b3ce0ec"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/clippy-1.99.1-powerpc64le-unknown-linux-musl.tar.xz"
+xz_hash = "dbd772006ed1426dfcd030c2ab19a106c38ab5d2e70aa147525366a3766289c7"
+
+[pkg.clippy-preview.target.riscv64gc-unknown-linux-gnu]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/clippy-1.99.1-riscv64gc-unknown-linux-gnu.tar.gz"
+hash = "625b6b820bfbe366b175eade45cd48943590f9ee4a2e72c819bfd7d4fd1fe8b4"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/clippy-1.99.1-riscv64gc-unknown-linux-gnu.tar.xz"
+xz_hash = "de748fbb81e51aecb9f220f14d612c23a779164acdd27ae5095a7d05ccc387b0"
+
+[pkg.clippy-preview.target.riscv64gc-unknown-linux-musl]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/clippy-1.99.1-riscv64gc-unknown-linux-musl.tar.gz"
+hash = "e40a2607242eb7b83d1dfbe533858eb647049b8394ba1ccbc98cb0263b05b862"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/clippy-1.99.1-riscv64gc-unknown-linux-musl.tar.xz"
+xz_hash = "75d2a8d428a9e1afb52bef9601c25bf60a510b5e212001a9277e01f560447f0c"
+
+[pkg.clippy-preview.target.s390x-unknown-linux-gnu]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/clippy-1.99.1-s390x-unknown-linux-gnu.tar.gz"
+hash = "b1e1a77e7049dd7836d2074ca6f6718e03f772fe628771f1b354fe60a7a4d5d3"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/clippy-1.99.1-s390x-unknown-linux-gnu.tar.xz"
+xz_hash = "4731b663e81173790b5a00048c449fb446e321733a0b94053cecf20336b9ced5"
+
+[pkg.clippy-preview.target.sparcv9-sun-solaris]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/clippy-1.99.1-sparcv9-sun-solaris.tar.gz"
+hash = "43a183fd3e1f83c973e3feb828012db92465415793de8ced1396f8a364b10ac3"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/clippy-1.99.1-sparcv9-sun-solaris.tar.xz"
+xz_hash = "bd98d3c7a34045a2aa45625b1c34b04020bbe49739f5fbd2c09a0d1356c52b58"
+
+[pkg.clippy-preview.target.x86_64-apple-darwin]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/clippy-1.99.1-x86_64-apple-darwin.tar.gz"
+hash = "f6ca04dfaf3e10501c4aa9ad2871ef4d54dadd370127ba8f965c922934913683"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/clippy-1.99.1-x86_64-apple-darwin.tar.xz"
+xz_hash = "b5810174b696eaa05dd4ffd5b24c40a33c6d4bccc05fb72264006b7bfefb8c5d"
+
+[pkg.clippy-preview.target.x86_64-pc-solaris]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/clippy-1.99.1-x86_64-pc-solaris.tar.gz"
+hash = "42dc4ab9275c10d62e01d25e506cb371117c63ecc47eb4dd52dda7c04cca2aa9"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/clippy-1.99.1-x86_64-pc-solaris.tar.xz"
+xz_hash = "57e092fade89b146e7b5c5296f68b1dc04462fa557de95ab41e14a1d23b12f64"
+
+[pkg.clippy-preview.target.x86_64-pc-windows-gnu]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/clippy-1.99.1-x86_64-pc-windows-gnu.tar.gz"
+hash = "e06f1f0f66e8fc287f259c5adbc77b06fd0013570c8422270b5c72e7a517caf6"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/clippy-1.99.1-x86_64-pc-windows-gnu.tar.xz"
+xz_hash = "36c0066126ea9462412dd52deac1c603e645812a8b251fb255beec61a31000ef"
+
+[pkg.clippy-preview.target.x86_64-pc-windows-gnullvm]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/clippy-1.99.1-x86_64-pc-windows-gnullvm.tar.gz"
+hash = "5f51a811f1febc4b886bab2d6c87d390646885762e123887e95837de110248a5"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/clippy-1.99.1-x86_64-pc-windows-gnullvm.tar.xz"
+xz_hash = "e3f824eb7e3c05231d3f642892e1a39bc936ed2a347d09f55f4889f0eee84ebd"
+
+[pkg.clippy-preview.target.x86_64-pc-windows-msvc]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/clippy-1.99.1-x86_64-pc-windows-msvc.tar.gz"
+hash = "36b27d3986ad62f7f17199013706ec568fb7349e29ac983f57b6f9af991cdf03"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/clippy-1.99.1-x86_64-pc-windows-msvc.tar.xz"
+xz_hash = "eb20d3f60731450acecd7c6b108bec2eb4abd18321b383e6663a3f072fe9c0b3"
+
+[pkg.clippy-preview.target.x86_64-unknown-freebsd]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/clippy-1.99.1-x86_64-unknown-freebsd.tar.gz"
+hash = "53bc275a6f244961c8f268a5c7eef459db28ff261c462a845d4bcfd93032206f"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/clippy-1.99.1-x86_64-unknown-freebsd.tar.xz"
+xz_hash = "e7b4d981a15ca87c4eabce042b25fda55cd399dc04c8c93ed3bd4aa53029483d"
+
+[pkg.clippy-preview.target.x86_64-unknown-illumos]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/clippy-1.99.1-x86_64-unknown-illumos.tar.gz"
+hash = "e5fbe76936325316f6cb3b8dd7b0c831b8a10851f2d0a110871c05a1597bacfe"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/clippy-1.99.1-x86_64-unknown-illumos.tar.xz"
+xz_hash = "efd8a7b6b58ed6f008db83dd0559132ab6d9f5c7169d053cf3924233316e0c68"
+
+[pkg.clippy-preview.target.x86_64-unknown-linux-gnu]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/clippy-1.99.1-x86_64-unknown-linux-gnu.tar.gz"
+hash = "3c6d008544b6e456cc785c86f8ce3713f0d845b94be3a6c8a34662b8504561b5"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/clippy-1.99.1-x86_64-unknown-linux-gnu.tar.xz"
+xz_hash = "458339712a058e52cc4522ff9ef8b59cd1ea1340312216cd94194c464a3f6dc5"
+
+[pkg.clippy-preview.target.x86_64-unknown-linux-musl]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/clippy-1.99.1-x86_64-unknown-linux-musl.tar.gz"
+hash = "066f7517ab1be90a171e90fd6b731187d957b733f7090793f1f96b9e0a398f94"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/clippy-1.99.1-x86_64-unknown-linux-musl.tar.xz"
+xz_hash = "c7ac49e2690f91d5c8587ffa4bdfdf5867707514a728bbc733c0725dd747ef96"
+
+[pkg.clippy-preview.target.x86_64-unknown-netbsd]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/clippy-1.99.1-x86_64-unknown-netbsd.tar.gz"
+hash = "5ec293071317517ec2ed643b676fb14d95a9c4997372e22e63db3682ed009887"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/clippy-1.99.1-x86_64-unknown-netbsd.tar.xz"
+xz_hash = "6418ed69e02255ef2320ba7c2ca38ba5c55d0a4a481a88dd76497b968ad2d56b"
+
+[pkg.enzyme-preview]
+version = "1.99.1 (58cf8f9c3 2026-10-13)"
+git_commit_hash = "58cf8f9c35b355199727627d07ae34a4e2846d67"
+
+[pkg.enzyme-preview.target.aarch64-apple-darwin]
+available = false
+
+[pkg.enzyme-preview.target.aarch64-pc-windows-gnullvm]
+available = false
+
+[pkg.enzyme-preview.target.aarch64-pc-windows-msvc]
+available = false
+
+[pkg.enzyme-preview.target.aarch64-unknown-freebsd]
+available = false
+
+[pkg.enzyme-preview.target.aarch64-unknown-linux-gnu]
+available = false
+
+[pkg.enzyme-preview.target.aarch64-unknown-linux-musl]
+available = false
+
+[pkg.enzyme-preview.target.aarch64-unknown-linux-ohos]
+available = false
+
+[pkg.enzyme-preview.target.arm-unknown-linux-gnueabi]
+available = false
+
+[pkg.enzyme-preview.target.arm-unknown-linux-gnueabihf]
+available = false
+
+[pkg.enzyme-preview.target.armv7-unknown-linux-gnueabihf]
+available = false
+
+[pkg.enzyme-preview.target.i686-pc-windows-gnu]
+available = false
+
+[pkg.enzyme-preview.target.i686-pc-windows-msvc]
+available = false
+
+[pkg.enzyme-preview.target.i686-unknown-linux-gnu]
+available = false
+
+[pkg.enzyme-preview.target.loongarch64-unknown-linux-gnu]
+available = false
+
+[pkg.enzyme-preview.target.loongarch64-unknown-linux-musl]
+available = false
+
+[pkg.enzyme-preview.target.powerpc-unknown-linux-gnu]
+available = false
+
+[pkg.enzyme-preview.target.powerpc64-unknown-linux-gnu]
+available = false
+
+[pkg.enzyme-preview.target.powerpc64-unknown-linux-musl]
+available = false
+
+[pkg.enzyme-preview.target.powerpc64le-unknown-linux-gnu]
+available = false
+
+[pkg.enzyme-preview.target.powerpc64le-unknown-linux-musl]
+available = false
+
+[pkg.enzyme-preview.target.riscv64gc-unknown-linux-gnu]
+available = false
+
+[pkg.enzyme-preview.target.riscv64gc-unknown-linux-musl]
+available = false
+
+[pkg.enzyme-preview.target.s390x-unknown-linux-gnu]
+available = false
+
+[pkg.enzyme-preview.target.sparcv9-sun-solaris]
+available = false
+
+[pkg.enzyme-preview.target.x86_64-apple-darwin]
+available = false
+
+[pkg.enzyme-preview.target.x86_64-pc-solaris]
+available = false
+
+[pkg.enzyme-preview.target.x86_64-pc-windows-gnu]
+available = false
+
+[pkg.enzyme-preview.target.x86_64-pc-windows-gnullvm]
+available = false
+
+[pkg.enzyme-preview.target.x86_64-pc-windows-msvc]
+available = false
+
+[pkg.enzyme-preview.target.x86_64-unknown-freebsd]
+available = false
+
+[pkg.enzyme-preview.target.x86_64-unknown-illumos]
+available = false
+
+[pkg.enzyme-preview.target.x86_64-unknown-linux-gnu]
+available = false
+
+[pkg.enzyme-preview.target.x86_64-unknown-linux-musl]
+available = false
+
+[pkg.enzyme-preview.target.x86_64-unknown-netbsd]
+available = false
+
+[pkg.gcc-x86_64-unknown-linux-gnu-preview]
+version = ""
+
+[pkg.gcc-x86_64-unknown-linux-gnu-preview.target.aarch64-apple-darwin]
+available = false
+
+[pkg.gcc-x86_64-unknown-linux-gnu-preview.target.aarch64-pc-windows-gnullvm]
+available = false
+
+[pkg.gcc-x86_64-unknown-linux-gnu-preview.target.aarch64-pc-windows-msvc]
+available = false
+
+[pkg.gcc-x86_64-unknown-linux-gnu-preview.target.aarch64-unknown-freebsd]
+available = false
+
+[pkg.gcc-x86_64-unknown-linux-gnu-preview.target.aarch64-unknown-linux-gnu]
+available = false
+
+[pkg.gcc-x86_64-unknown-linux-gnu-preview.target.aarch64-unknown-linux-musl]
+available = false
+
+[pkg.gcc-x86_64-unknown-linux-gnu-preview.target.aarch64-unknown-linux-ohos]
+available = false
+
+[pkg.gcc-x86_64-unknown-linux-gnu-preview.target.arm-unknown-linux-gnueabi]
+available = false
+
+[pkg.gcc-x86_64-unknown-linux-gnu-preview.target.arm-unknown-linux-gnueabihf]
+available = false
+
+[pkg.gcc-x86_64-unknown-linux-gnu-preview.target.armv7-unknown-linux-gnueabihf]
+available = false
+
+[pkg.gcc-x86_64-unknown-linux-gnu-preview.target.i686-pc-windows-gnu]
+available = false
+
+[pkg.gcc-x86_64-unknown-linux-gnu-preview.target.i686-pc-windows-msvc]
+available = false
+
+[pkg.gcc-x86_64-unknown-linux-gnu-preview.target.i686-unknown-linux-gnu]
+available = false
+
+[pkg.gcc-x86_64-unknown-linux-gnu-preview.target.loongarch64-unknown-linux-gnu]
+available = false
+
+[pkg.gcc-x86_64-unknown-linux-gnu-preview.target.loongarch64-unknown-linux-musl]
+available = false
+
+[pkg.gcc-x86_64-unknown-linux-gnu-preview.target.powerpc-unknown-linux-gnu]
+available = false
+
+[pkg.gcc-x86_64-unknown-linux-gnu-preview.target.powerpc64-unknown-linux-gnu]
+available = false
+
+[pkg.gcc-x86_64-unknown-linux-gnu-preview.target.powerpc64-unknown-linux-musl]
+available = false
+
+[pkg.gcc-x86_64-unknown-linux-gnu-preview.target.powerpc64le-unknown-linux-gnu]
+available = false
+
+[pkg.gcc-x86_64-unknown-linux-gnu-preview.target.powerpc64le-unknown-linux-musl]
+available = false
+
+[pkg.gcc-x86_64-unknown-linux-gnu-preview.target.riscv64gc-unknown-linux-gnu]
+available = false
+
+[pkg.gcc-x86_64-unknown-linux-gnu-preview.target.riscv64gc-unknown-linux-musl]
+available = false
+
+[pkg.gcc-x86_64-unknown-linux-gnu-preview.target.s390x-unknown-linux-gnu]
+available = false
+
+[pkg.gcc-x86_64-unknown-linux-gnu-preview.target.sparcv9-sun-solaris]
+available = false
+
+[pkg.gcc-x86_64-unknown-linux-gnu-preview.target.x86_64-apple-darwin]
+available = false
+
+[pkg.gcc-x86_64-unknown-linux-gnu-preview.target.x86_64-pc-solaris]
+available = false
+
+[pkg.gcc-x86_64-unknown-linux-gnu-preview.target.x86_64-pc-windows-gnu]
+available = false
+
+[pkg.gcc-x86_64-unknown-linux-gnu-preview.target.x86_64-pc-windows-gnullvm]
+available = false
+
+[pkg.gcc-x86_64-unknown-linux-gnu-preview.target.x86_64-pc-windows-msvc]
+available = false
+
+[pkg.gcc-x86_64-unknown-linux-gnu-preview.target.x86_64-unknown-freebsd]
+available = false
+
+[pkg.gcc-x86_64-unknown-linux-gnu-preview.target.x86_64-unknown-illumos]
+available = false
+
+[pkg.gcc-x86_64-unknown-linux-gnu-preview.target.x86_64-unknown-linux-gnu]
+available = false
+
+[pkg.gcc-x86_64-unknown-linux-gnu-preview.target.x86_64-unknown-linux-musl]
+available = false
+
+[pkg.gcc-x86_64-unknown-linux-gnu-preview.target.x86_64-unknown-netbsd]
+available = false
+
+[pkg.llvm-bitcode-linker-preview]
+version = "1.99.1 (58cf8f9c3 2026-10-13)"
+git_commit_hash = "58cf8f9c35b355199727627d07ae34a4e2846d67"
+
+[pkg.llvm-bitcode-linker-preview.target.aarch64-apple-darwin]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/llvm-bitcode-linker-1.99.1-aarch64-apple-darwin.tar.gz"
+hash = "3dcb0b50c790cf2d76620f97e6f42b55fba2b16d53c88aa71def11aa3884f5bc"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/llvm-bitcode-linker-1.99.1-aarch64-apple-darwin.tar.xz"
+xz_hash = "b059aac7498fbf08ef9777167b14c891295af605d73f816feafbe78356c09e50"
+
+[pkg.llvm-bitcode-linker-preview.target.aarch64-pc-windows-gnullvm]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/llvm-bitcode-linker-1.99.1-aarch64-pc-windows-gnullvm.tar.gz"
+hash = "3e31f0134605316ca924221bfc933f411a0966f5fcd8bcc37fcfc2a17f511746"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/llvm-bitcode-linker-1.99.1-aarch64-pc-windows-gnullvm.tar.xz"
+xz_hash = "7ea35efb1e7c637117d0e59eedc48d9d73dc367e493ce7c34bdf2f5f56dfb23a"
+
+[pkg.llvm-bitcode-linker-preview.target.aarch64-pc-windows-msvc]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/llvm-bitcode-linker-1.99.1-aarch64-pc-windows-msvc.tar.gz"
+hash = "05404223a1beca2d1308efb13d404bfb50af0aefefbebc5d082e3c1e649d4253"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/llvm-bitcode-linker-1.99.1-aarch64-pc-windows-msvc.tar.xz"
+xz_hash = "8891a8e4d60cfc5358098384ae838afdcfd4a839cb40d70d15d20841d7670a9b"
+
+[pkg.llvm-bitcode-linker-preview.target.aarch64-unknown-freebsd]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/llvm-bitcode-linker-1.99.1-aarch64-unknown-freebsd.tar.gz"
+hash = "e4ed12a26322e0be01cdc898d913ac1259e58606e855a132fb49c86472e32278"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/llvm-bitcode-linker-1.99.1-aarch64-unknown-freebsd.tar.xz"
+xz_hash = "fdf99805adcc5aa58540d67eed9530cbe21ca5a75782f0427b39a785cfa813f1"
+
+[pkg.llvm-bitcode-linker-preview.target.aarch64-unknown-linux-gnu]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/llvm-bitcode-linker-1.99.1-aarch64-unknown-linux-gnu.tar.gz"
+hash = "f6d1fff45776137a46367245b5478acb1525b81c4839e0a13289eb0d61958e2e"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/llvm-bitcode-linker-1.99.1-aarch64-unknown-linux-gnu.tar.xz"
+xz_hash = "04f430f3281326033e0edb16286861cafbef3868afc1398b5cb319baeb7b2f75"
+
+[pkg.llvm-bitcode-linker-preview.target.aarch64-unknown-linux-musl]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/llvm-bitcode-linker-1.99.1-aarch64-unknown-linux-musl.tar.gz"
+hash = "99a2062f56797526abb9665deebe6d1c2b3c5edc16bea759b32fc3a63db587a3"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/llvm-bitcode-linker-1.99.1-aarch64-unknown-linux-musl.tar.xz"
+xz_hash = "57b45ded33d4344153c24e8d3f3fb577f12e668de0da025fda15e1379179c883"
+
+[pkg.llvm-bitcode-linker-preview.target.aarch64-unknown-linux-ohos]
+available = false
+
+[pkg.llvm-bitcode-linker-preview.target.arm-unknown-linux-gnueabi]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/llvm-bitcode-linker-1.99.1-arm-unknown-linux-gnueabi.tar.gz"
+hash = "f2b90ad324152062e3fd2c6d9819ca7df38844404e9eb6a5f2d9e91ba2c6dc88"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/llvm-bitcode-linker-1.99.1-arm-unknown-linux-gnueabi.tar.xz"
+xz_hash = "40ad17a95e6571ece029071123befb41ea108dc6753758bfcf090cdd76311624"
+
+[pkg.llvm-bitcode-linker-preview.target.arm-unknown-linux-gnueabihf]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/llvm-bitcode-linker-1.99.1-arm-unknown-linux-gnueabihf.tar.gz"
+hash = "989f64bccfc8b7fc86c72ea95c497668826030ee6fd1f4c821d2fe215e53521d"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/llvm-bitcode-linker-1.99.1-arm-unknown-linux-gnueabihf.tar.xz"
+xz_hash = "2bcb6e06cdd7911660fe4e941dff06d194eaec200ff0a6937d560965e681939f"
+
+[pkg.llvm-bitcode-linker-preview.target.armv7-unknown-linux-gnueabihf]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/llvm-bitcode-linker-1.99.1-armv7-unknown-linux-gnueabihf.tar.gz"
+hash = "9ea99b50bda4a61f7a7b6c3d79886491d2c924458b7d3b21121480f4672a1822"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/llvm-bitcode-linker-1.99.1-armv7-unknown-linux-gnueabihf.tar.xz"
+xz_hash = "046f7f27c573120835257cae07f535e9213c7989f10d8bda197d514d23c14e48"
+
+[pkg.llvm-bitcode-linker-preview.target.i686-pc-windows-gnu]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/llvm-bitcode-linker-1.99.1-i686-pc-windows-gnu.tar.gz"
+hash = "ad415e0c6f13e89f49f5a9aac88470e14dceb642b7c6f81fb6f9d63902e33f79"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/llvm-bitcode-linker-1.99.1-i686-pc-windows-gnu.tar.xz"
+xz_hash = "2bd4881330ae512411534da83c90744257ec643def0a9a7b38418f0ec4a5963d"
+
+[pkg.llvm-bitcode-linker-preview.target.i686-pc-windows-msvc]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/llvm-bitcode-linker-1.99.1-i686-pc-windows-msvc.tar.gz"
+hash = "2085e72d48c5110efebac2d2afb60887a35654220163502f487eb885b1176b51"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/llvm-bitcode-linker-1.99.1-i686-pc-windows-msvc.tar.xz"
+xz_hash = "66d7a7ec92fe056c04dd0e9d418fe5127f4e034b604be75d0c1400d6cff43e4b"
+
+[pkg.llvm-bitcode-linker-preview.target.i686-unknown-linux-gnu]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/llvm-bitcode-linker-1.99.1-i686-unknown-linux-gnu.tar.gz"
+hash = "f34eee73f4d3c11bf16629854a21e23e888a762759e06953548f71baa790a5ea"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/llvm-bitcode-linker-1.99.1-i686-unknown-linux-gnu.tar.xz"
+xz_hash = "6b9fe9547d462cc96c306431b810491ef8c041a2295cfd371494e8d230520890"
+
+[pkg.llvm-bitcode-linker-preview.target.loongarch64-unknown-linux-gnu]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/llvm-bitcode-linker-1.99.1-loongarch64-unknown-linux-gnu.tar.gz"
+hash = "e75869faa7243198cefac7361cb3c6b6700bc05ee42dac95d5c4f7e3db91b593"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/llvm-bitcode-linker-1.99.1-loongarch64-unknown-linux-gnu.tar.xz"
+xz_hash = "58bec8a15af2ffab81fcb53b453c223b94e6860927bf1e4234e9bd5817ff8a2f"
+
+[pkg.llvm-bitcode-linker-preview.target.loongarch64-unknown-linux-musl]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/llvm-bitcode-linker-1.99.1-loongarch64-unknown-linux-musl.tar.gz"
+hash = "72f0ea5e97e3261f292781e044131970785a4d3c5306f419079ad78615f16cd3"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/llvm-bitcode-linker-1.99.1-loongarch64-unknown-linux-musl.tar.xz"
+xz_hash = "a1388ff455fbac48f516dd49aca9beb83436cb65f760834dbca1e90b5c4f424a"
+
+[pkg.llvm-bitcode-linker-preview.target.powerpc-unknown-linux-gnu]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/llvm-bitcode-linker-1.99.1-powerpc-unknown-linux-gnu.tar.gz"
+hash = "84a5e4dfcb873a838502a237aa94c3d801b94e70446a06b55b86df670ddfef66"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/llvm-bitcode-linker-1.99.1-powerpc-unknown-linux-gnu.tar.xz"
+xz_hash = "3af4db2fb7ef15ab2ecaf1cddb9cacd9fa125194d020ded6fc290fd0a14b536c"
+
+[pkg.llvm-bitcode-linker-preview.target.powerpc64-unknown-linux-gnu]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/llvm-bitcode-linker-1.99.1-powerpc64-unknown-linux-gnu.tar.gz"
+hash = "3891401c6cced9a759718be609344790445a656be6ad63b16aa0da39a894c7f8"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/llvm-bitcode-linker-1.99.1-powerpc64-unknown-linux-gnu.tar.xz"
+xz_hash = "51698a77bfda40f387ae5ef97d2284e5b6502c84dca3c75725ac44f1789e3d65"
+
+[pkg.llvm-bitcode-linker-preview.target.powerpc64-unknown-linux-musl]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/llvm-bitcode-linker-1.99.1-powerpc64-unknown-linux-musl.tar.gz"
+hash = "306f73419f8bed6f94014d0a8296fb727e6ec6d567d0c50b8b8714475bdf508c"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/llvm-bitcode-linker-1.99.1-powerpc64-unknown-linux-musl.tar.xz"
+xz_hash = "09b23a30e7da3671710456f6ebc70184b407ac1eb265ae667b648fa7873faba2"
+
+[pkg.llvm-bitcode-linker-preview.target.powerpc64le-unknown-linux-gnu]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/llvm-bitcode-linker-1.99.1-powerpc64le-unknown-linux-gnu.tar.gz"
+hash = "4d750424a4dba2b6451b5a827719879e6b0e3c947cb6b82f968dbabec0ac8dbf"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/llvm-bitcode-linker-1.99.1-powerpc64le-unknown-linux-gnu.tar.xz"
+xz_hash = "28ca94e3515b7ab47713375ecfafac925c2ba7f03cc950cbeff714a4c73f6178"
+
+[pkg.llvm-bitcode-linker-preview.target.powerpc64le-unknown-linux-musl]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/llvm-bitcode-linker-1.99.1-powerpc64le-unknown-linux-musl.tar.gz"
+hash = "46e462bc053dfedd8c17468c7c1f9bc3431299db3f7bd583cd1368a1983630c1"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/llvm-bitcode-linker-1.99.1-powerpc64le-unknown-linux-musl.tar.xz"
+xz_hash = "7221164609cf330fb6bd6cd69bd8ae013c6c29f1bd4895ecbbee0424a237ca2d"
+
+[pkg.llvm-bitcode-linker-preview.target.riscv64gc-unknown-linux-gnu]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/llvm-bitcode-linker-1.99.1-riscv64gc-unknown-linux-gnu.tar.gz"
+hash = "6d632f0c13e895eff9d8f3ea3cc186af67804dea777d8f28a22be90178e2fa83"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/llvm-bitcode-linker-1.99.1-riscv64gc-unknown-linux-gnu.tar.xz"
+xz_hash = "f8bfb038c4e9bc96f076422aad15cf37804d0c763ccbedcc985590da2f6ec19c"
+
+[pkg.llvm-bitcode-linker-preview.target.riscv64gc-unknown-linux-musl]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/llvm-bitcode-linker-1.99.1-riscv64gc-unknown-linux-musl.tar.gz"
+hash = "0984355a3d6735e5eb5780e29c0280e65b72b0f0c6ec832101eceee4bdade73e"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/llvm-bitcode-linker-1.99.1-riscv64gc-unknown-linux-musl.tar.xz"
+xz_hash = "c682eb6e2b37ba8e479383667333eff751b3c15fd460d69a2de707630b09b72a"
+
+[pkg.llvm-bitcode-linker-preview.target.s390x-unknown-linux-gnu]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/llvm-bitcode-linker-1.99.1-s390x-unknown-linux-gnu.tar.gz"
+hash = "41e75ff2bf69a8abe76349b4a7a84b569b6a9c5f824401be4912193268008942"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/llvm-bitcode-linker-1.99.1-s390x-unknown-linux-gnu.tar.xz"
+xz_hash = "48fa5fc62fff36b65091dfff178a068799db55f8bc5a44f2468ee9a2bba342c1"
+
+[pkg.llvm-bitcode-linker-preview.target.sparcv9-sun-solaris]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/llvm-bitcode-linker-1.99.1-sparcv9-sun-solaris.tar.gz"
+hash = "bb309e153a80c1095e2cbdf55945a45197ad10f83430d1429a6e16daedc95a3a"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/llvm-bitcode-linker-1.99.1-sparcv9-sun-solaris.tar.xz"
+xz_hash = "940ad6cc457de6322249d71216b4bcd7e0e2efe8f05c8dc75322fa9bd1bd4cdd"
+
+[pkg.llvm-bitcode-linker-preview.target.x86_64-apple-darwin]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/llvm-bitcode-linker-1.99.1-x86_64-apple-darwin.tar.gz"
+hash = "c29be8e7be87b143465f0dd40b7be5ea0af88ce4b53b512c72cabea97b6ea507"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/llvm-bitcode-linker-1.99.1-x86_64-apple-darwin.tar.xz"
+xz_hash = "0729fac25a0ff7dc75b7d6d17aaefad220f6185610cec60ef76806677eb65402"
+
+[pkg.llvm-bitcode-linker-preview.target.x86_64-pc-solaris]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/llvm-bitcode-linker-1.99.1-x86_64-pc-solaris.tar.gz"
+hash = "99a508a376a5a2eab79c91b37cb79d5c681a714fc83755a26249e44024ef729b"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/llvm-bitcode-linker-1.99.1-x86_64-pc-solaris.tar.xz"
+xz_hash = "93174b025eb2e9bac77511566cf2732e948a3fd2c828d49b17e76844e80a626f"
+
+[pkg.llvm-bitcode-linker-preview.target.x86_64-pc-windows-gnu]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/llvm-bitcode-linker-1.99.1-x86_64-pc-windows-gnu.tar.gz"
+hash = "f954511154f76ecd80d6009d93c7e5c19d759fc6209725549e559b4937b1b4bf"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/llvm-bitcode-linker-1.99.1-x86_64-pc-windows-gnu.tar.xz"
+xz_hash = "958ddca765b72a02c9a25bcad8b887d2ee6cedcb6c6f84f788f5af64e888582c"
+
+[pkg.llvm-bitcode-linker-preview.target.x86_64-pc-windows-gnullvm]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/llvm-bitcode-linker-1.99.1-x86_64-pc-windows-gnullvm.tar.gz"
+hash = "6675dee81784c7658794c8c237f74b43719d243ee78c82ef9f41c47cfb897bed"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/llvm-bitcode-linker-1.99.1-x86_64-pc-windows-gnullvm.tar.xz"
+xz_hash = "3e2e97687a72634fe1c209f1f3b772b985e818826d3e208c28d2af073090f6c7"
+
+[pkg.llvm-bitcode-linker-preview.target.x86_64-pc-windows-msvc]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/llvm-bitcode-linker-1.99.1-x86_64-pc-windows-msvc.tar.gz"
+hash = "7e5a7ac771046caa5f6d9c916f10adf7a8c22f82a1a2ace30f74b81bda435e53"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/llvm-bitcode-linker-1.99.1-x86_64-pc-windows-msvc.tar.xz"
+xz_hash = "5e8193cb077687a2f820d3dd4961be29df25767709f52047b96903f53f620bcc"
+
+[pkg.llvm-bitcode-linker-preview.target.x86_64-unknown-freebsd]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/llvm-bitcode-linker-1.99.1-x86_64-unknown-freebsd.tar.gz"
+hash = "06df0f6c528a2565a5c2155fa1b05748a7668a15086667a93987b3cf99734d4e"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/llvm-bitcode-linker-1.99.1-x86_64-unknown-freebsd.tar.xz"
+xz_hash = "e921e758fe2c4454b9e94fc73979fb76eb8eb59d1fa99234c9a6060f0e363b0f"
+
+[pkg.llvm-bitcode-linker-preview.target.x86_64-unknown-illumos]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/llvm-bitcode-linker-1.99.1-x86_64-unknown-illumos.tar.gz"
+hash = "2d4bff678ff547ba1899eba991d44d86956e16ae60d6be96217961aaf0dc5daa"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/llvm-bitcode-linker-1.99.1-x86_64-unknown-illumos.tar.xz"
+xz_hash = "7d5ab7ff6132d79f6cf3ca096ecfe06e2593034d37217d748a46d23d7c98a7e3"
+
+[pkg.llvm-bitcode-linker-preview.target.x86_64-unknown-linux-gnu]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/llvm-bitcode-linker-1.99.1-x86_64-unknown-linux-gnu.tar.gz"
+hash = "d3c57aad0ed420ee98ff38aaba8d587eff3c0d9a8681e305b3578785e0c528a8"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/llvm-bitcode-linker-1.99.1-x86_64-unknown-linux-gnu.tar.xz"
+xz_hash = "9c1a5113c4d9bd12af1e5a6ca41d54744c87977d78488973a7aba48685eacd96"
+
+[pkg.llvm-bitcode-linker-preview.target.x86_64-unknown-linux-musl]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/llvm-bitcode-linker-1.99.1-x86_64-unknown-linux-musl.tar.gz"
+hash = "1318aba69e4f21c583b21b5cf499b35bc51e9e0508decc7eafc7168bd33e8d62"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/llvm-bitcode-linker-1.99.1-x86_64-unknown-linux-musl.tar.xz"
+xz_hash = "b1400bed870ec907a2b8b3a71ddc334e2cf1b0ebe794052779dbfca1ebc18798"
+
+[pkg.llvm-bitcode-linker-preview.target.x86_64-unknown-netbsd]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/llvm-bitcode-linker-1.99.1-x86_64-unknown-netbsd.tar.gz"
+hash = "8c606577e3d94bac6303463a37cb11c9c116109e94bd18c8457c16161ffe8de9"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/llvm-bitcode-linker-1.99.1-x86_64-unknown-netbsd.tar.xz"
+xz_hash = "0ab6928256ca19056dd3faffad496f8354f6c58f81d83387c092a3a2b15cb63d"
+
+[pkg.llvm-tools-preview]
+version = "1.99.1 (58cf8f9c3 2026-10-13)"
+git_commit_hash = "58cf8f9c35b355199727627d07ae34a4e2846d67"
+
+[pkg.llvm-tools-preview.target.aarch64-apple-darwin]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/llvm-tools-1.99.1-aarch64-apple-darwin.tar.gz"
+hash = "23fc09dc2f20606e43a263b735149e010751e8d93bf87cd3dcf2a1e43678766f"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/llvm-tools-1.99.1-aarch64-apple-darwin.tar.xz"
+xz_hash = "b348db9d79666aee4b5e2ff4269029fffd16815cbd47f47018cd0b06e4f815f5"
+
+[pkg.llvm-tools-preview.target.aarch64-apple-ios]
+available = false
+
+[pkg.llvm-tools-preview.target.aarch64-apple-ios-macabi]
+available = false
+
+[pkg.llvm-tools-preview.target.aarch64-apple-ios-sim]
+available = false
+
+[pkg.llvm-tools-preview.target.aarch64-apple-tvos]
+available = false
+
+[pkg.llvm-tools-preview.target.aarch64-apple-tvos-sim]
+available = false
+
+[pkg.llvm-tools-preview.target.aarch64-apple-visionos]
+available = false
+
+[pkg.llvm-tools-preview.target.aarch64-apple-visionos-sim]
+available = false
+
+[pkg.llvm-tools-preview.target.aarch64-apple-watchos]
+available = false
+
+[pkg.llvm-tools-preview.target.aarch64-apple-watchos-sim]
+available = false
+
+[pkg.llvm-tools-preview.target.aarch64-linux-android]
+available = false
+
+[pkg.llvm-tools-preview.target.aarch64-pc-windows-gnullvm]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/llvm-tools-1.99.1-aarch64-pc-windows-gnullvm.tar.gz"
+hash = "a721aba55a024b36655e66d210596055a5675c0eecdfba9ea1d7537962368d7c"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/llvm-tools-1.99.1-aarch64-pc-windows-gnullvm.tar.xz"
+xz_hash = "3ff945a6cd2e0cc6c7e2960adb2ffbfebff091437841d0b2bdda0c63dd2a7ce9"
+
+[pkg.llvm-tools-preview.target.aarch64-pc-windows-msvc]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/llvm-tools-1.99.1-aarch64-pc-windows-msvc.tar.gz"
+hash = "6f980e95fa31bcd2aa82fdd76f331eb3509c54bddf4623854e077b3c893f3591"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/llvm-tools-1.99.1-aarch64-pc-windows-msvc.tar.xz"
+xz_hash = "d1b503c317d5cee401a845b402cd65fdbdcce3272a007cb3b25ec4dcdfdd1b27"
+
+[pkg.llvm-tools-preview.target.aarch64-unknown-freebsd]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/llvm-tools-1.99.1-aarch64-unknown-freebsd.tar.gz"
+hash = "fa46a6e2f914d963b3482a491f861ea3ec285f00554a496c75436132a5522249"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/llvm-tools-1.99.1-aarch64-unknown-freebsd.tar.xz"
+xz_hash = "8469b16bd3a16280d8feb5bb7052063875048305ec43188b76f0fb1121af3b33"
+
+[pkg.llvm-tools-preview.target.aarch64-unknown-fuchsia]
+available = false
+
+[pkg.llvm-tools-preview.target.aarch64-unknown-linux-gnu]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/llvm-tools-1.99.1-aarch64-unknown-linux-gnu.tar.gz"
+hash = "d40537887246be208d1a5dbefab1c9659b9a1e56f848283aa80953cce1163aee"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/llvm-tools-1.99.1-aarch64-unknown-linux-gnu.tar.xz"
+xz_hash = "cd1818058908c1c4e99bd2843fe103df255157454e16186ec9cc3b5b5823b39c"
+
+[pkg.llvm-tools-preview.target.aarch64-unknown-linux-musl]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/llvm-tools-1.99.1-aarch64-unknown-linux-musl.tar.gz"
+hash = "5b56bb7f55cf15536ec834f2e735671ed2e4ec3a8d09161570f1eb2d8bdabffe"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/llvm-tools-1.99.1-aarch64-unknown-linux-musl.tar.xz"
+xz_hash = "aa38b41b8a9ab513269a9362f943142060c7ad626822d36a933260ed798c16da"
+
+[pkg.llvm-tools-preview.target.aarch64-unknown-linux-ohos]
+available = false
+
+[pkg.llvm-tools-preview.target.aarch64-unknown-none]
+available = false
+
+[pkg.llvm-tools-preview.target.aarch64-unknown-none-softfloat]
+available = false
+
+[pkg.llvm-tools-preview.target.aarch64-unknown-uefi]
+available = false
+
+[pkg.llvm-tools-preview.target.arm-linux-androideabi]
+available = false
+
+[pkg.llvm-tools-preview.target.arm-unknown-linux-gnueabi]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/llvm-tools-1.99.1-arm-unknown-linux-gnueabi.tar.gz"
+hash = "369388730dd81fb5ed0c5f8bfc5694f9c125c13bb9a2edacee54a5b60be69291"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/llvm-tools-1.99.1-arm-unknown-linux-gnueabi.tar.xz"
+xz_hash = "9353a67faed3c65f679ba5d17b2d947b39d7a5268ee12cc0970488141f621180"
+
+[pkg.llvm-tools-preview.target.arm-unknown-linux-gnueabihf]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/llvm-tools-1.99.1-arm-unknown-linux-gnueabihf.tar.gz"
+hash = "cd64019321935ee13a0b65c7c5f79c91e4a1db7351eade590d3a8d922483bd0f"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/llvm-tools-1.99.1-arm-unknown-linux-gnueabihf.tar.xz"
+xz_hash = "536cc3cb4d8ed899987277257754ca2c4065fa5a6f390ac3cd4b6f6574e2961f"
+
+[pkg.llvm-tools-preview.target.arm-unknown-linux-musleabi]
+available = false
+
+[pkg.llvm-tools-preview.target.arm-unknown-linux-musleabihf]
+available = false
+
+[pkg.llvm-tools-preview.target.arm64ec-pc-windows-msvc]
+available = false
+
+[pkg.llvm-tools-preview.target.armv5te-unknown-linux-gnueabi]
+available = false
+
+[pkg.llvm-tools-preview.target.armv5te-unknown-linux-musleabi]
+available = false
+
+[pkg.llvm-tools-preview.target.armv7-linux-androideabi]
+available = false
+
+[pkg.llvm-tools-preview.target.armv7-unknown-linux-gnueabi]
+available = false
+
+[pkg.llvm-tools-preview.target.armv7-unknown-linux-gnueabihf]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/llvm-tools-1.99.1-armv7-unknown-linux-gnueabihf.tar.gz"
+hash = "1497f78a98c4d7445cd1d44f86a7183cc97d94d8419bef7c43de10a0770ac6fb"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/llvm-tools-1.99.1-armv7-unknown-linux-gnueabihf.tar.xz"
+xz_hash = "1e8c3306627aca687153ecc7c7a243ef55546acee2dc71a3589675d3d58d277c"
+
+[pkg.llvm-tools-preview.target.armv7-unknown-linux-musleabi]
+available = false
+
+[pkg.llvm-tools-preview.target.armv7-unknown-linux-musleabihf]
+available = false
+
+[pkg.llvm-tools-preview.target.armv7-unknown-linux-ohos]
+available = false
+
+[pkg.llvm-tools-preview.target.armv7a-none-eabi]
+available = false
+
+[pkg.llvm-tools-preview.target.armv7a-none-eabihf]
+available = false
+
+[pkg.llvm-tools-preview.target.armv7r-none-eabi]
+available = false
+
+[pkg.llvm-tools-preview.target.armv7r-none-eabihf]
+available = false
+
+[pkg.llvm-tools-preview.target.armv8r-none-eabihf]
+available = false
+
+[pkg.llvm-tools-preview.target.i586-unknown-linux-gnu]
+available = false
+
+[pkg.llvm-tools-preview.target.i586-unknown-linux-musl]
+available = false
+
+[pkg.llvm-tools-preview.target.i686-linux-android]
+available = false
+
+[pkg.llvm-tools-preview.target.i686-pc-windows-gnu]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/llvm-tools-1.99.1-i686-pc-windows-gnu.tar.gz"
+hash = "850a5f77119d80d1f8bfdea9d020775a1ad6898aa85fc32cea70cb745c313940"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/llvm-tools-1.99.1-i686-pc-windows-gnu.tar.xz"
+xz_hash = "46b02c929ef6bd2d8d5610c6cc990ecfc15f256385e0a9e374b3a6023a79036a"
+
+[pkg.llvm-tools-preview.target.i686-pc-windows-gnullvm]
+available = false
+
+[pkg.llvm-tools-preview.target.i686-pc-windows-msvc]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/llvm-tools-1.99.1-i686-pc-windows-msvc.tar.gz"
+hash = "b23597efe01012fbd75f223565e6da9e8216f520528f250f2f5e84f9f6f88d66"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/llvm-tools-1.99.1-i686-pc-windows-msvc.tar.xz"
+xz_hash = "e96fc866494af0d061166d59b5cad0efcea8c3e856010b01f3a61451d8aea4c1"
+
+[pkg.llvm-tools-preview.target.i686-unknown-freebsd]
+available = false
+
+[pkg.llvm-tools-preview.target.i686-unknown-linux-gnu]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/llvm-tools-1.99.1-i686-unknown-linux-gnu.tar.gz"
+hash = "013f83c7b01ae8cdc7e157865ddbc00d8e0349002793e2e8099f0ad1aa1cc14b"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/llvm-tools-1.99.1-i686-unknown-linux-gnu.tar.xz"
+xz_hash = "7eefac3d697a3636405903a2674a5a6f9ec2e327a3d1bbb36b75ba4d29ab93e5"
+
+[pkg.llvm-tools-preview.target.i686-unknown-linux-musl]
+available = false
+
+[pkg.llvm-tools-preview.target.i686-unknown-uefi]
+available = false
+
+[pkg.llvm-tools-preview.target.loongarch32-unknown-none]
+available = false
+
+[pkg.llvm-tools-preview.target.loongarch32-unknown-none-softfloat]
+available = false
+
+[pkg.llvm-tools-preview.target.loongarch64-unknown-linux-gnu]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/llvm-tools-1.99.1-loongarch64-unknown-linux-gnu.tar.gz"
+hash = "e913e35b114aa9d6a3d74e03400d237eb35349af855fca018868ea9a6dd5cb09"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/llvm-tools-1.99.1-loongarch64-unknown-linux-gnu.tar.xz"
+xz_hash = "5016e6f3e8c84c389d50ac349c7984881f4db4fa264de8b0826db60adbc2c0bb"
+
+[pkg.llvm-tools-preview.target.loongarch64-unknown-linux-musl]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/llvm-tools-1.99.1-loongarch64-unknown-linux-musl.tar.gz"
+hash = "71c2b48aa0e42f366187df714beb957e90a07340af0a35fdbc87c0323e4aa12f"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/llvm-tools-1.99.1-loongarch64-unknown-linux-musl.tar.xz"
+xz_hash = "d39b1e2710dd9f72fc22ae8d414f6392f6e8e4bb67e92a742a8e7dbcea2ba474"
+
+[pkg.llvm-tools-preview.target.loongarch64-unknown-none]
+available = false
+
+[pkg.llvm-tools-preview.target.loongarch64-unknown-none-softfloat]
+available = false
+
+[pkg.llvm-tools-preview.target.nvptx64-nvidia-cuda]
+available = false
+
+[pkg.llvm-tools-preview.target.powerpc-unknown-linux-gnu]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/llvm-tools-1.99.1-powerpc-unknown-linux-gnu.tar.gz"
+hash = "c8128272a3081408fedab6ec60258e7a046d1630243c135276d38d06f721f50d"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/llvm-tools-1.99.1-powerpc-unknown-linux-gnu.tar.xz"
+xz_hash = "fab04020cfccf9e7b1fe415654e1d50db89f6866c7e4f1894ec6f50341ef0b09"
+
+[pkg.llvm-tools-preview.target.powerpc64-unknown-linux-gnu]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/llvm-tools-1.99.1-powerpc64-unknown-linux-gnu.tar.gz"
+hash = "ba5d5984d8970462ea2e39ab8a4747ced80e64478c4bba761e591d09036bca5f"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/llvm-tools-1.99.1-powerpc64-unknown-linux-gnu.tar.xz"
+xz_hash = "a077df4b7ffa64e091c7f2fd87eb8e1fb75d7d79ea27e7180ffd7897eb311595"
+
+[pkg.llvm-tools-preview.target.powerpc64-unknown-linux-musl]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/llvm-tools-1.99.1-powerpc64-unknown-linux-musl.tar.gz"
+hash = "b9b4f690d064ec5478c05745d9d3b8f8881bd6647f6a9c7c89f462a3ba5e6bd4"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/llvm-tools-1.99.1-powerpc64-unknown-linux-musl.tar.xz"
+xz_hash = "2d13fe4a34483f60ddfa9c40012662f909f5039e61c9cc958f9065395f9c095d"
+
+[pkg.llvm-tools-preview.target.powerpc64le-unknown-linux-gnu]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/llvm-tools-1.99.1-powerpc64le-unknown-linux-gnu.tar.gz"
+hash = "170c77b0a8bb288e3729e096f5f64d4cfabcc375e7d47be724478f4d62e7fdc4"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/llvm-tools-1.99.1-powerpc64le-unknown-linux-gnu.tar.xz"
+xz_hash = "33cd830241fb90ccc71e1ecf5ba5c55240a44f4e957a730c9a290421841d7224"
+
+[pkg.llvm-tools-preview.target.powerpc64le-unknown-linux-musl]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/llvm-tools-1.99.1-powerpc64le-unknown-linux-musl.tar.gz"
+hash = "15d9886e462ff79e600266de2a6ea5fb605d29e674bc2f162172e0e383d6540c"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/llvm-tools-1.99.1-powerpc64le-unknown-linux-musl.tar.xz"
+xz_hash = "e0f9478acf17d3e9339ffdef489c2737474b19d2d0ea2a26112547aa64efbd8d"
+
+[pkg.llvm-tools-preview.target.riscv32i-unknown-none-elf]
+available = false
+
+[pkg.llvm-tools-preview.target.riscv32im-unknown-none-elf]
+available = false
+
+[pkg.llvm-tools-preview.target.riscv32imac-unknown-none-elf]
+available = false
+
+[pkg.llvm-tools-preview.target.riscv32imafc-unknown-none-elf]
+available = false
+
+[pkg.llvm-tools-preview.target.riscv32imc-unknown-none-elf]
+available = false
+
+[pkg.llvm-tools-preview.target.riscv64a23-unknown-linux-gnu]
+available = false
+
+[pkg.llvm-tools-preview.target.riscv64gc-unknown-linux-gnu]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/llvm-tools-1.99.1-riscv64gc-unknown-linux-gnu.tar.gz"
+hash = "2eb2e948a41215d90034ac7fd4b907b9e6601735afa38b57b8ebf0d0ab1ec415"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/llvm-tools-1.99.1-riscv64gc-unknown-linux-gnu.tar.xz"
+xz_hash = "b0403f2b2e5330f985b97b38874df79878ab92313107192f965e7d4183a5e2d1"
+
+[pkg.llvm-tools-preview.target.riscv64gc-unknown-linux-musl]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/llvm-tools-1.99.1-riscv64gc-unknown-linux-musl.tar.gz"
+hash = "d539522fe47df3d7bce0509fb70e0b1365dbd1b22ac75d7b8ad092a69202a68d"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/llvm-tools-1.99.1-riscv64gc-unknown-linux-musl.tar.xz"
+xz_hash = "31e4ca64c214f3b16aeb1c9d93fa8f22eaf4c07527f6504050c71841d894d2cf"
+
+[pkg.llvm-tools-preview.target.riscv64gc-unknown-none-elf]
+available = false
+
+[pkg.llvm-tools-preview.target.riscv64imac-unknown-none-elf]
+available = false
+
+[pkg.llvm-tools-preview.target.s390x-unknown-linux-gnu]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/llvm-tools-1.99.1-s390x-unknown-linux-gnu.tar.gz"
+hash = "aa2c77386bd1d0950a268ed42aa7c1936aea5dd5b51391cf566dbd56014c6158"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/llvm-tools-1.99.1-s390x-unknown-linux-gnu.tar.xz"
+xz_hash = "110233488b92e2b67bbc31ef84ebe36fb10ee1570f1fe8bd2659cb1cabc0141f"
+
+[pkg.llvm-tools-preview.target.s390x-unknown-none-softfloat]
+available = false
+
+[pkg.llvm-tools-preview.target.sparc64-unknown-linux-gnu]
+available = false
+
+[pkg.llvm-tools-preview.target.sparcv9-sun-solaris]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/llvm-tools-1.99.1-sparcv9-sun-solaris.tar.gz"
+hash = "dd7849ddc0b6110d3bd156df075436d185011386518a803aed3dc76ce5f0a3bb"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/llvm-tools-1.99.1-sparcv9-sun-solaris.tar.xz"
+xz_hash = "0c84b6706543ff13598135f0a2fd0b0109935479c281b748800c3621bfa9328e"
+
+[pkg.llvm-tools-preview.target.thumbv6m-none-eabi]
+available = false
+
+[pkg.llvm-tools-preview.target.thumbv7a-none-eabi]
+available = false
+
+[pkg.llvm-tools-preview.target.thumbv7a-none-eabihf]
+available = false
+
+[pkg.llvm-tools-preview.target.thumbv7em-none-eabi]
+available = false
+
+[pkg.llvm-tools-preview.target.thumbv7em-none-eabihf]
+available = false
+
+[pkg.llvm-tools-preview.target.thumbv7m-none-eabi]
+available = false
+
+[pkg.llvm-tools-preview.target.thumbv7neon-linux-androideabi]
+available = false
+
+[pkg.llvm-tools-preview.target.thumbv7neon-unknown-linux-gnueabihf]
+available = false
+
+[pkg.llvm-tools-preview.target.thumbv7r-none-eabi]
+available = false
+
+[pkg.llvm-tools-preview.target.thumbv7r-none-eabihf]
+available = false
+
+[pkg.llvm-tools-preview.target."thumbv8m.base-none-eabi"]
+available = false
+
+[pkg.llvm-tools-preview.target."thumbv8m.main-none-eabi"]
+available = false
+
+[pkg.llvm-tools-preview.target."thumbv8m.main-none-eabihf"]
+available = false
+
+[pkg.llvm-tools-preview.target.thumbv8r-none-eabihf]
+available = false
+
+[pkg.llvm-tools-preview.target.wasm32-unknown-emscripten]
+available = false
+
+[pkg.llvm-tools-preview.target.wasm32-unknown-unknown]
+available = false
+
+[pkg.llvm-tools-preview.target.wasm32-wasip1]
+available = false
+
+[pkg.llvm-tools-preview.target.wasm32-wasip1-threads]
+available = false
+
+[pkg.llvm-tools-preview.target.wasm32-wasip2]
+available = false
+
+[pkg.llvm-tools-preview.target.wasm32v1-none]
+available = false
+
+[pkg.llvm-tools-preview.target.x86_64-apple-darwin]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/llvm-tools-1.99.1-x86_64-apple-darwin.tar.gz"
+hash = "3a7c9a93ccd1ceb4e1527690be8113b8d57f36b352f9a91d48d39bbb5d8b9938"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/llvm-tools-1.99.1-x86_64-apple-darwin.tar.xz"
+xz_hash = "3112e92b03b1cca4264a30ca602948d31976cd45db7de2bc7900efa25a39a045"
+
+[pkg.llvm-tools-preview.target.x86_64-apple-ios]
+available = false
+
+[pkg.llvm-tools-preview.target.x86_64-apple-ios-macabi]
+available = false
+
+[pkg.llvm-tools-preview.target.x86_64-fortanix-unknown-sgx]
+available = false
+
+[pkg.llvm-tools-preview.target.x86_64-linux-android]
+available = false
+
+[pkg.llvm-tools-preview.target.x86_64-pc-solaris]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/llvm-tools-1.99.1-x86_64-pc-solaris.tar.gz"
+hash = "af9f558e3267ab18ea305404c10fe9d0e0fb7996dfbb003225e68f4bc54d27c5"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/llvm-tools-1.99.1-x86_64-pc-solaris.tar.xz"
+xz_hash = "0cad5349318e0defe8c798a07670390914d08b01cea9150d3f08a1a548386001"
+
+[pkg.llvm-tools-preview.target.x86_64-pc-windows-gnu]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/llvm-tools-1.99.1-x86_64-pc-windows-gnu.tar.gz"
+hash = "6a96a2440c1f6434da82f2bfc0f8ce1bfeac6b2b599d8f7ad7e8989651a15d9e"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/llvm-tools-1.99.1-x86_64-pc-windows-gnu.tar.xz"
+xz_hash = "7cc7089d8e6e8031adc8c9a2251d32c7e70c34e2ed472834b0753fa63ebd91b2"
+
+[pkg.llvm-tools-preview.target.x86_64-pc-windows-gnullvm]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/llvm-tools-1.99.1-x86_64-pc-windows-gnullvm.tar.gz"
+hash = "a26f78ce626f1daeb467f1ab85b8fd2e29ed132b076ea879044b23b183091911"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/llvm-tools-1.99.1-x86_64-pc-windows-gnullvm.tar.xz"
+xz_hash = "e9c09539f040a04fdb2e6f62beecb67527d3df4a15746f5c597abfd51b478dc8"
+
+[pkg.llvm-tools-preview.target.x86_64-pc-windows-msvc]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/llvm-tools-1.99.1-x86_64-pc-windows-msvc.tar.gz"
+hash = "f0f0e8adfb5bbe0e68a2bfc06507c800ed58eeb3e3ca5bd0a4263f7724ffee8a"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/llvm-tools-1.99.1-x86_64-pc-windows-msvc.tar.xz"
+xz_hash = "61b0ce740983240f48ceab73b6a1306a6c25bd7c92dc8135e47e8401b16d9b32"
+
+[pkg.llvm-tools-preview.target.x86_64-unknown-freebsd]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/llvm-tools-1.99.1-x86_64-unknown-freebsd.tar.gz"
+hash = "6f256a0d151edee6181d186befe2e54e9f7181435422fe3a181dd27423bcd8a7"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/llvm-tools-1.99.1-x86_64-unknown-freebsd.tar.xz"
+xz_hash = "1d65f139449a6dd260ff98f684a85ea96700415d1065e998ede18be8835a5db5"
+
+[pkg.llvm-tools-preview.target.x86_64-unknown-fuchsia]
+available = false
+
+[pkg.llvm-tools-preview.target.x86_64-unknown-illumos]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/llvm-tools-1.99.1-x86_64-unknown-illumos.tar.gz"
+hash = "e55a9f000ffbb1956a7f81188918c5b601206f17b112843adec6635cf3ecf577"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/llvm-tools-1.99.1-x86_64-unknown-illumos.tar.xz"
+xz_hash = "55352974288932171bcaa1f985b4d680ad3d1cf3ab42364e0ed818709159fbee"
+
+[pkg.llvm-tools-preview.target.x86_64-unknown-linux-gnu]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/llvm-tools-1.99.1-x86_64-unknown-linux-gnu.tar.gz"
+hash = "097537619049fba76c544c589417bea79d5eee9cc3402a293ac93ebb69dd5b0a"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/llvm-tools-1.99.1-x86_64-unknown-linux-gnu.tar.xz"
+xz_hash = "8429c5117debfb45c22cf2f97712ef00e0e94976c96cf92f661974a458ca7e84"
+
+[pkg.llvm-tools-preview.target.x86_64-unknown-linux-gnuasan]
+available = false
+
+[pkg.llvm-tools-preview.target.x86_64-unknown-linux-gnumsan]
+available = false
+
+[pkg.llvm-tools-preview.target.x86_64-unknown-linux-gnutsan]
+available = false
+
+[pkg.llvm-tools-preview.target.x86_64-unknown-linux-gnux32]
+available = false
+
+[pkg.llvm-tools-preview.target.x86_64-unknown-linux-musl]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/llvm-tools-1.99.1-x86_64-unknown-linux-musl.tar.gz"
+hash = "7bb637b2e928af1fb4068c85c369642f4c6b09dd2bf3f4bf359937994470fdc3"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/llvm-tools-1.99.1-x86_64-unknown-linux-musl.tar.xz"
+xz_hash = "8881115fd0c411e3b109f814c995ad8bbe61b3f6f405629924d5d1e4c96b4912"
+
+[pkg.llvm-tools-preview.target.x86_64-unknown-linux-ohos]
+available = false
+
+[pkg.llvm-tools-preview.target.x86_64-unknown-netbsd]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/llvm-tools-1.99.1-x86_64-unknown-netbsd.tar.gz"
+hash = "3c9d5fcaf56f7829675a61a921a10f0225340bca81f62297da80c2997080d035"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/llvm-tools-1.99.1-x86_64-unknown-netbsd.tar.xz"
+xz_hash = "f135099646aabc6d1ab8e195c9b0dc2d30159deca0939a6e5abe5ee42213d7fb"
+
+[pkg.llvm-tools-preview.target.x86_64-unknown-none]
+available = false
+
+[pkg.llvm-tools-preview.target.x86_64-unknown-redox]
+available = false
+
+[pkg.llvm-tools-preview.target.x86_64-unknown-uefi]
+available = false
+
+[pkg.miri-preview]
+version = ""
+
+[pkg.miri-preview.target.aarch64-apple-darwin]
+available = false
+
+[pkg.miri-preview.target.aarch64-pc-windows-gnullvm]
+available = false
+
+[pkg.miri-preview.target.aarch64-pc-windows-msvc]
+available = false
+
+[pkg.miri-preview.target.aarch64-unknown-freebsd]
+available = false
+
+[pkg.miri-preview.target.aarch64-unknown-linux-gnu]
+available = false
+
+[pkg.miri-preview.target.aarch64-unknown-linux-musl]
+available = false
+
+[pkg.miri-preview.target.aarch64-unknown-linux-ohos]
+available = false
+
+[pkg.miri-preview.target.arm-unknown-linux-gnueabi]
+available = false
+
+[pkg.miri-preview.target.arm-unknown-linux-gnueabihf]
+available = false
+
+[pkg.miri-preview.target.armv7-unknown-linux-gnueabihf]
+available = false
+
+[pkg.miri-preview.target.i686-pc-windows-gnu]
+available = false
+
+[pkg.miri-preview.target.i686-pc-windows-msvc]
+available = false
+
+[pkg.miri-preview.target.i686-unknown-linux-gnu]
+available = false
+
+[pkg.miri-preview.target.loongarch64-unknown-linux-gnu]
+available = false
+
+[pkg.miri-preview.target.loongarch64-unknown-linux-musl]
+available = false
+
+[pkg.miri-preview.target.powerpc-unknown-linux-gnu]
+available = false
+
+[pkg.miri-preview.target.powerpc64-unknown-linux-gnu]
+available = false
+
+[pkg.miri-preview.target.powerpc64-unknown-linux-musl]
+available = false
+
+[pkg.miri-preview.target.powerpc64le-unknown-linux-gnu]
+available = false
+
+[pkg.miri-preview.target.powerpc64le-unknown-linux-musl]
+available = false
+
+[pkg.miri-preview.target.riscv64gc-unknown-linux-gnu]
+available = false
+
+[pkg.miri-preview.target.riscv64gc-unknown-linux-musl]
+available = false
+
+[pkg.miri-preview.target.s390x-unknown-linux-gnu]
+available = false
+
+[pkg.miri-preview.target.sparcv9-sun-solaris]
+available = false
+
+[pkg.miri-preview.target.x86_64-apple-darwin]
+available = false
+
+[pkg.miri-preview.target.x86_64-pc-solaris]
+available = false
+
+[pkg.miri-preview.target.x86_64-pc-windows-gnu]
+available = false
+
+[pkg.miri-preview.target.x86_64-pc-windows-gnullvm]
+available = false
+
+[pkg.miri-preview.target.x86_64-pc-windows-msvc]
+available = false
+
+[pkg.miri-preview.target.x86_64-unknown-freebsd]
+available = false
+
+[pkg.miri-preview.target.x86_64-unknown-illumos]
+available = false
+
+[pkg.miri-preview.target.x86_64-unknown-linux-gnu]
+available = false
+
+[pkg.miri-preview.target.x86_64-unknown-linux-musl]
+available = false
+
+[pkg.miri-preview.target.x86_64-unknown-netbsd]
+available = false
+
+[pkg.offload-preview]
+version = "1.99.1 (58cf8f9c3 2026-10-13)"
+git_commit_hash = "58cf8f9c35b355199727627d07ae34a4e2846d67"
+
+[pkg.offload-preview.target.aarch64-apple-darwin]
+available = false
+
+[pkg.offload-preview.target.aarch64-pc-windows-gnullvm]
+available = false
+
+[pkg.offload-preview.target.aarch64-pc-windows-msvc]
+available = false
+
+[pkg.offload-preview.target.aarch64-unknown-freebsd]
+available = false
+
+[pkg.offload-preview.target.aarch64-unknown-linux-gnu]
+available = false
+
+[pkg.offload-preview.target.aarch64-unknown-linux-musl]
+available = false
+
+[pkg.offload-preview.target.aarch64-unknown-linux-ohos]
+available = false
+
+[pkg.offload-preview.target.arm-unknown-linux-gnueabi]
+available = false
+
+[pkg.offload-preview.target.arm-unknown-linux-gnueabihf]
+available = false
+
+[pkg.offload-preview.target.armv7-unknown-linux-gnueabihf]
+available = false
+
+[pkg.offload-preview.target.i686-pc-windows-gnu]
+available = false
+
+[pkg.offload-preview.target.i686-pc-windows-msvc]
+available = false
+
+[pkg.offload-preview.target.i686-unknown-linux-gnu]
+available = false
+
+[pkg.offload-preview.target.loongarch64-unknown-linux-gnu]
+available = false
+
+[pkg.offload-preview.target.loongarch64-unknown-linux-musl]
+available = false
+
+[pkg.offload-preview.target.powerpc-unknown-linux-gnu]
+available = false
+
+[pkg.offload-preview.target.powerpc64-unknown-linux-gnu]
+available = false
+
+[pkg.offload-preview.target.powerpc64-unknown-linux-musl]
+available = false
+
+[pkg.offload-preview.target.powerpc64le-unknown-linux-gnu]
+available = false
+
+[pkg.offload-preview.target.powerpc64le-unknown-linux-musl]
+available = false
+
+[pkg.offload-preview.target.riscv64gc-unknown-linux-gnu]
+available = false
+
+[pkg.offload-preview.target.riscv64gc-unknown-linux-musl]
+available = false
+
+[pkg.offload-preview.target.s390x-unknown-linux-gnu]
+available = false
+
+[pkg.offload-preview.target.sparcv9-sun-solaris]
+available = false
+
+[pkg.offload-preview.target.x86_64-apple-darwin]
+available = false
+
+[pkg.offload-preview.target.x86_64-pc-solaris]
+available = false
+
+[pkg.offload-preview.target.x86_64-pc-windows-gnu]
+available = false
+
+[pkg.offload-preview.target.x86_64-pc-windows-gnullvm]
+available = false
+
+[pkg.offload-preview.target.x86_64-pc-windows-msvc]
+available = false
+
+[pkg.offload-preview.target.x86_64-unknown-freebsd]
+available = false
+
+[pkg.offload-preview.target.x86_64-unknown-illumos]
+available = false
+
+[pkg.offload-preview.target.x86_64-unknown-linux-gnu]
+available = false
+
+[pkg.offload-preview.target.x86_64-unknown-linux-musl]
+available = false
+
+[pkg.offload-preview.target.x86_64-unknown-netbsd]
+available = false
+
+[pkg.reproducible-artifacts]
+version = "1.99.1 (58cf8f9c3 2026-10-13)"
+git_commit_hash = "58cf8f9c35b355199727627d07ae34a4e2846d67"
+
+[pkg.reproducible-artifacts.target.aarch64-apple-darwin]
+available = false
+
+[pkg.reproducible-artifacts.target.aarch64-pc-windows-gnullvm]
+available = false
+
+[pkg.reproducible-artifacts.target.aarch64-pc-windows-msvc]
+available = false
+
+[pkg.reproducible-artifacts.target.aarch64-unknown-freebsd]
+available = false
+
+[pkg.reproducible-artifacts.target.aarch64-unknown-linux-gnu]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/reproducible-artifacts-1.99.1-aarch64-unknown-linux-gnu.tar.gz"
+hash = "9824929ad66d17cab94c9e125a5d54403317a59d79223bc6c4443436b1cd794a"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/reproducible-artifacts-1.99.1-aarch64-unknown-linux-gnu.tar.xz"
+xz_hash = "14ade880aedc382395981840c3390df2335c33c910b7de799c97483271c1f46f"
+
+[pkg.reproducible-artifacts.target.aarch64-unknown-linux-musl]
+available = false
+
+[pkg.reproducible-artifacts.target.aarch64-unknown-linux-ohos]
+available = false
+
+[pkg.reproducible-artifacts.target.arm-unknown-linux-gnueabi]
+available = false
+
+[pkg.reproducible-artifacts.target.arm-unknown-linux-gnueabihf]
+available = false
+
+[pkg.reproducible-artifacts.target.armv7-unknown-linux-gnueabihf]
+available = false
+
+[pkg.reproducible-artifacts.target.i686-pc-windows-gnu]
+available = false
+
+[pkg.reproducible-artifacts.target.i686-pc-windows-msvc]
+available = false
+
+[pkg.reproducible-artifacts.target.i686-unknown-linux-gnu]
+available = false
+
+[pkg.reproducible-artifacts.target.loongarch64-unknown-linux-gnu]
+available = false
+
+[pkg.reproducible-artifacts.target.loongarch64-unknown-linux-musl]
+available = false
+
+[pkg.reproducible-artifacts.target.powerpc-unknown-linux-gnu]
+available = false
+
+[pkg.reproducible-artifacts.target.powerpc64-unknown-linux-gnu]
+available = false
+
+[pkg.reproducible-artifacts.target.powerpc64-unknown-linux-musl]
+available = false
+
+[pkg.reproducible-artifacts.target.powerpc64le-unknown-linux-gnu]
+available = false
+
+[pkg.reproducible-artifacts.target.powerpc64le-unknown-linux-musl]
+available = false
+
+[pkg.reproducible-artifacts.target.riscv64gc-unknown-linux-gnu]
+available = false
+
+[pkg.reproducible-artifacts.target.riscv64gc-unknown-linux-musl]
+available = false
+
+[pkg.reproducible-artifacts.target.s390x-unknown-linux-gnu]
+available = false
+
+[pkg.reproducible-artifacts.target.sparcv9-sun-solaris]
+available = false
+
+[pkg.reproducible-artifacts.target.x86_64-apple-darwin]
+available = false
+
+[pkg.reproducible-artifacts.target.x86_64-pc-solaris]
+available = false
+
+[pkg.reproducible-artifacts.target.x86_64-pc-windows-gnu]
+available = false
+
+[pkg.reproducible-artifacts.target.x86_64-pc-windows-gnullvm]
+available = false
+
+[pkg.reproducible-artifacts.target.x86_64-pc-windows-msvc]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/reproducible-artifacts-1.99.1-x86_64-pc-windows-msvc.tar.gz"
+hash = "1cf774a9947668c07df47a7490a7137073cd55bb5712976773f0d2fc404cfea1"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/reproducible-artifacts-1.99.1-x86_64-pc-windows-msvc.tar.xz"
+xz_hash = "f567d4a0d326216680ba92a520a36ad806627d3432fbde07b79d67a516e078eb"
+
+[pkg.reproducible-artifacts.target.x86_64-unknown-freebsd]
+available = false
+
+[pkg.reproducible-artifacts.target.x86_64-unknown-illumos]
+available = false
+
+[pkg.reproducible-artifacts.target.x86_64-unknown-linux-gnu]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/reproducible-artifacts-1.99.1-x86_64-unknown-linux-gnu.tar.gz"
+hash = "6a7c817fcb1facdb1219dd0142d3e9238c81bca8d94a8acf4959214adbd49a03"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/reproducible-artifacts-1.99.1-x86_64-unknown-linux-gnu.tar.xz"
+xz_hash = "ada85f8c612803b954d08e1ca9064c20e5fc2b70e8b3f79281f8d1fb62912cec"
+
+[pkg.reproducible-artifacts.target.x86_64-unknown-linux-musl]
+available = false
+
+[pkg.reproducible-artifacts.target.x86_64-unknown-netbsd]
+available = false
+
+[pkg.rust]
+version = "1.99.1 (58cf8f9c3 2026-10-13)"
+git_commit_hash = "58cf8f9c35b355199727627d07ae34a4e2846d67"
+
+[pkg.rust.target.aarch64-apple-darwin]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/rust-1.99.1-aarch64-apple-darwin.tar.gz"
+hash = "b73b6a78c4e7171a8fe1b4bee5342273605c5c9a9a4997554c15bb3ce2753b6a"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/rust-1.99.1-aarch64-apple-darwin.tar.xz"
+xz_hash = "30976378b6aaefd1861ba475905c6ba22a44c981418ce52285006af26337f98c"
+
+[[pkg.rust.target.aarch64-apple-darwin.components]]
+pkg = "rustc"
+target = "aarch64-apple-darwin"
+
+[[pkg.rust.target.aarch64-apple-darwin.components]]
+pkg = "rust-std"
+target = "aarch64-apple-darwin"
+
+[[pkg.rust.target.aarch64-apple-darwin.components]]
+pkg = "cargo"
+target = "aarch64-apple-darwin"
+
+[[pkg.rust.target.aarch64-apple-darwin.components]]
+pkg = "rust-docs"
+target = "aarch64-apple-darwin"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-src"
+target = "*"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rustc-dev"
+target = "aarch64-apple-darwin"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rustc-dev"
+target = "aarch64-pc-windows-gnullvm"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rustc-dev"
+target = "aarch64-pc-windows-msvc"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rustc-dev"
+target = "aarch64-unknown-freebsd"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rustc-dev"
+target = "aarch64-unknown-linux-gnu"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rustc-dev"
+target = "aarch64-unknown-linux-musl"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rustc-dev"
+target = "aarch64-unknown-linux-ohos"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rustc-dev"
+target = "arm-unknown-linux-gnueabi"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rustc-dev"
+target = "arm-unknown-linux-gnueabihf"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rustc-dev"
+target = "armv7-unknown-linux-gnueabihf"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rustc-dev"
+target = "i686-pc-windows-gnu"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rustc-dev"
+target = "i686-pc-windows-msvc"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rustc-dev"
+target = "i686-unknown-linux-gnu"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rustc-dev"
+target = "loongarch64-unknown-linux-gnu"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rustc-dev"
+target = "loongarch64-unknown-linux-musl"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rustc-dev"
+target = "powerpc-unknown-linux-gnu"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rustc-dev"
+target = "powerpc64-unknown-linux-gnu"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rustc-dev"
+target = "powerpc64-unknown-linux-musl"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rustc-dev"
+target = "powerpc64le-unknown-linux-gnu"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rustc-dev"
+target = "powerpc64le-unknown-linux-musl"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rustc-dev"
+target = "riscv64gc-unknown-linux-gnu"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rustc-dev"
+target = "riscv64gc-unknown-linux-musl"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rustc-dev"
+target = "s390x-unknown-linux-gnu"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rustc-dev"
+target = "sparcv9-sun-solaris"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rustc-dev"
+target = "x86_64-apple-darwin"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rustc-dev"
+target = "x86_64-pc-solaris"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rustc-dev"
+target = "x86_64-pc-windows-gnu"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rustc-dev"
+target = "x86_64-pc-windows-gnullvm"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rustc-dev"
+target = "x86_64-pc-windows-msvc"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rustc-dev"
+target = "x86_64-unknown-freebsd"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rustc-dev"
+target = "x86_64-unknown-illumos"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rustc-dev"
+target = "x86_64-unknown-linux-gnu"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rustc-dev"
+target = "x86_64-unknown-linux-musl"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rustc-dev"
+target = "x86_64-unknown-netbsd"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rustc-docs"
+target = "aarch64-apple-darwin"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "aarch64-apple-ios"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "aarch64-apple-ios-macabi"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "aarch64-apple-ios-sim"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "aarch64-apple-tvos"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "aarch64-apple-tvos-sim"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "aarch64-apple-visionos"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "aarch64-apple-visionos-sim"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "aarch64-apple-watchos"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "aarch64-apple-watchos-sim"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "aarch64-linux-android"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "aarch64-pc-windows-gnullvm"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "aarch64-pc-windows-msvc"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "aarch64-unknown-freebsd"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "aarch64-unknown-fuchsia"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "aarch64-unknown-linux-gnu"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "aarch64-unknown-linux-musl"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "aarch64-unknown-linux-ohos"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "aarch64-unknown-none"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "aarch64-unknown-none-softfloat"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "aarch64-unknown-uefi"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "arm-linux-androideabi"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "arm-unknown-linux-gnueabi"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "arm-unknown-linux-gnueabihf"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "arm-unknown-linux-musleabi"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "arm-unknown-linux-musleabihf"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "arm64ec-pc-windows-msvc"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "armv5te-unknown-linux-gnueabi"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "armv5te-unknown-linux-musleabi"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "armv7-linux-androideabi"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "armv7-unknown-linux-gnueabi"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "armv7-unknown-linux-gnueabihf"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "armv7-unknown-linux-musleabi"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "armv7-unknown-linux-musleabihf"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "armv7-unknown-linux-ohos"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "armv7a-none-eabi"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "armv7a-none-eabihf"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "armv7r-none-eabi"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "armv7r-none-eabihf"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "armv8r-none-eabihf"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "i586-unknown-linux-gnu"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "i586-unknown-linux-musl"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "i686-linux-android"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "i686-pc-windows-gnu"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "i686-pc-windows-gnullvm"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "i686-pc-windows-msvc"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "i686-unknown-freebsd"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "i686-unknown-linux-gnu"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "i686-unknown-linux-musl"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "i686-unknown-uefi"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "loongarch32-unknown-none"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "loongarch32-unknown-none-softfloat"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "loongarch64-unknown-linux-gnu"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "loongarch64-unknown-linux-musl"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "loongarch64-unknown-none"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "loongarch64-unknown-none-softfloat"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "nvptx64-nvidia-cuda"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "powerpc-unknown-linux-gnu"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "powerpc64-unknown-linux-gnu"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "powerpc64-unknown-linux-musl"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "powerpc64le-unknown-linux-gnu"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "powerpc64le-unknown-linux-musl"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "riscv32i-unknown-none-elf"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "riscv32im-unknown-none-elf"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "riscv32imac-unknown-none-elf"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "riscv32imafc-unknown-none-elf"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "riscv32imc-unknown-none-elf"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "riscv64a23-unknown-linux-gnu"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "riscv64gc-unknown-linux-gnu"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "riscv64gc-unknown-linux-musl"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "riscv64gc-unknown-none-elf"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "riscv64imac-unknown-none-elf"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "s390x-unknown-linux-gnu"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "s390x-unknown-none-softfloat"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "sparc64-unknown-linux-gnu"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "sparcv9-sun-solaris"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "thumbv6m-none-eabi"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "thumbv7a-none-eabi"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "thumbv7a-none-eabihf"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "thumbv7em-none-eabi"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "thumbv7em-none-eabihf"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "thumbv7m-none-eabi"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "thumbv7neon-linux-androideabi"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "thumbv7neon-unknown-linux-gnueabihf"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "thumbv7r-none-eabi"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "thumbv7r-none-eabihf"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "thumbv8m.base-none-eabi"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "thumbv8m.main-none-eabi"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "thumbv8m.main-none-eabihf"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "thumbv8r-none-eabihf"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "wasm32-unknown-emscripten"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "wasm32-unknown-unknown"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "wasm32-wasip1"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "wasm32-wasip1-threads"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "wasm32-wasip2"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "wasm32v1-none"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "x86_64-apple-darwin"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "x86_64-apple-ios"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "x86_64-apple-ios-macabi"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "x86_64-fortanix-unknown-sgx"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "x86_64-linux-android"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "x86_64-pc-solaris"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "x86_64-pc-windows-gnu"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "x86_64-pc-windows-gnullvm"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "x86_64-pc-windows-msvc"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "x86_64-unknown-freebsd"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "x86_64-unknown-fuchsia"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "x86_64-unknown-illumos"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "x86_64-unknown-linux-gnu"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "x86_64-unknown-linux-gnuasan"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "x86_64-unknown-linux-gnumsan"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "x86_64-unknown-linux-gnutsan"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "x86_64-unknown-linux-gnux32"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "x86_64-unknown-linux-musl"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "x86_64-unknown-linux-ohos"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "x86_64-unknown-netbsd"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "x86_64-unknown-none"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "x86_64-unknown-redox"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-std"
+target = "x86_64-unknown-uefi"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-analysis"
+target = "aarch64-apple-darwin"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-analyzer-preview"
+target = "aarch64-apple-darwin"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "clippy-preview"
+target = "aarch64-apple-darwin"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rustfmt-preview"
+target = "aarch64-apple-darwin"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "llvm-tools-preview"
+target = "aarch64-apple-darwin"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "miri-preview"
+target = "aarch64-apple-darwin"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rust-docs-json-preview"
+target = "aarch64-apple-darwin"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rustc-codegen-cranelift-preview"
+target = "aarch64-apple-darwin"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "llvm-bitcode-linker-preview"
+target = "aarch64-apple-darwin"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "rustc-codegen-gcc-preview"
+target = "aarch64-apple-darwin"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "gcc-x86_64-unknown-linux-gnu-preview"
+target = "aarch64-apple-darwin"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "enzyme-preview"
+target = "aarch64-apple-darwin"
+
+[[pkg.rust.target.aarch64-apple-darwin.extensions]]
+pkg = "offload-preview"
+target = "aarch64-apple-darwin"
+
+[pkg.rust.target.aarch64-pc-windows-gnullvm]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/rust-1.99.1-aarch64-pc-windows-gnullvm.tar.gz"
+hash = "1769c8186e9bec0cad98e550d9b19d03842e2b3b764ce8ea24678fba7c738813"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/rust-1.99.1-aarch64-pc-windows-gnullvm.tar.xz"
+xz_hash = "aa75555a00ee2f973d59b1334e383a44caa251af40e5535ad60b8ed5b523edd3"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.components]]
+pkg = "rustc"
+target = "aarch64-pc-windows-gnullvm"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.components]]
+pkg = "rust-mingw"
+target = "aarch64-pc-windows-gnullvm"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.components]]
+pkg = "rust-std"
+target = "aarch64-pc-windows-gnullvm"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.components]]
+pkg = "cargo"
+target = "aarch64-pc-windows-gnullvm"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.components]]
+pkg = "rust-docs"
+target = "aarch64-pc-windows-gnullvm"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-src"
+target = "*"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rustc-dev"
+target = "aarch64-apple-darwin"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rustc-dev"
+target = "aarch64-pc-windows-gnullvm"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rustc-dev"
+target = "aarch64-pc-windows-msvc"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rustc-dev"
+target = "aarch64-unknown-freebsd"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rustc-dev"
+target = "aarch64-unknown-linux-gnu"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rustc-dev"
+target = "aarch64-unknown-linux-musl"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rustc-dev"
+target = "aarch64-unknown-linux-ohos"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rustc-dev"
+target = "arm-unknown-linux-gnueabi"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rustc-dev"
+target = "arm-unknown-linux-gnueabihf"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rustc-dev"
+target = "armv7-unknown-linux-gnueabihf"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rustc-dev"
+target = "i686-pc-windows-gnu"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rustc-dev"
+target = "i686-pc-windows-msvc"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rustc-dev"
+target = "i686-unknown-linux-gnu"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rustc-dev"
+target = "loongarch64-unknown-linux-gnu"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rustc-dev"
+target = "loongarch64-unknown-linux-musl"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rustc-dev"
+target = "powerpc-unknown-linux-gnu"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rustc-dev"
+target = "powerpc64-unknown-linux-gnu"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rustc-dev"
+target = "powerpc64-unknown-linux-musl"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rustc-dev"
+target = "powerpc64le-unknown-linux-gnu"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rustc-dev"
+target = "powerpc64le-unknown-linux-musl"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rustc-dev"
+target = "riscv64gc-unknown-linux-gnu"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rustc-dev"
+target = "riscv64gc-unknown-linux-musl"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rustc-dev"
+target = "s390x-unknown-linux-gnu"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rustc-dev"
+target = "sparcv9-sun-solaris"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rustc-dev"
+target = "x86_64-apple-darwin"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rustc-dev"
+target = "x86_64-pc-solaris"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rustc-dev"
+target = "x86_64-pc-windows-gnu"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rustc-dev"
+target = "x86_64-pc-windows-gnullvm"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rustc-dev"
+target = "x86_64-pc-windows-msvc"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rustc-dev"
+target = "x86_64-unknown-freebsd"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rustc-dev"
+target = "x86_64-unknown-illumos"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rustc-dev"
+target = "x86_64-unknown-linux-gnu"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rustc-dev"
+target = "x86_64-unknown-linux-musl"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rustc-dev"
+target = "x86_64-unknown-netbsd"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rustc-docs"
+target = "aarch64-pc-windows-gnullvm"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-mingw"
+target = "i686-pc-windows-gnu"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-mingw"
+target = "x86_64-pc-windows-gnu"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-mingw"
+target = "x86_64-pc-windows-gnullvm"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "aarch64-apple-darwin"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "aarch64-apple-ios"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "aarch64-apple-ios-macabi"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "aarch64-apple-ios-sim"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "aarch64-apple-tvos"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "aarch64-apple-tvos-sim"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "aarch64-apple-visionos"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "aarch64-apple-visionos-sim"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "aarch64-apple-watchos"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "aarch64-apple-watchos-sim"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "aarch64-linux-android"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "aarch64-pc-windows-msvc"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "aarch64-unknown-freebsd"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "aarch64-unknown-fuchsia"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "aarch64-unknown-linux-gnu"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "aarch64-unknown-linux-musl"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "aarch64-unknown-linux-ohos"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "aarch64-unknown-none"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "aarch64-unknown-none-softfloat"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "aarch64-unknown-uefi"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "arm-linux-androideabi"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "arm-unknown-linux-gnueabi"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "arm-unknown-linux-gnueabihf"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "arm-unknown-linux-musleabi"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "arm-unknown-linux-musleabihf"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "arm64ec-pc-windows-msvc"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "armv5te-unknown-linux-gnueabi"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "armv5te-unknown-linux-musleabi"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "armv7-linux-androideabi"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "armv7-unknown-linux-gnueabi"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "armv7-unknown-linux-gnueabihf"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "armv7-unknown-linux-musleabi"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "armv7-unknown-linux-musleabihf"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "armv7-unknown-linux-ohos"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "armv7a-none-eabi"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "armv7a-none-eabihf"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "armv7r-none-eabi"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "armv7r-none-eabihf"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "armv8r-none-eabihf"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "i586-unknown-linux-gnu"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "i586-unknown-linux-musl"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "i686-linux-android"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "i686-pc-windows-gnu"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "i686-pc-windows-gnullvm"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "i686-pc-windows-msvc"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "i686-unknown-freebsd"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "i686-unknown-linux-gnu"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "i686-unknown-linux-musl"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "i686-unknown-uefi"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "loongarch32-unknown-none"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "loongarch32-unknown-none-softfloat"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "loongarch64-unknown-linux-gnu"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "loongarch64-unknown-linux-musl"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "loongarch64-unknown-none"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "loongarch64-unknown-none-softfloat"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "nvptx64-nvidia-cuda"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "powerpc-unknown-linux-gnu"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "powerpc64-unknown-linux-gnu"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "powerpc64-unknown-linux-musl"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "powerpc64le-unknown-linux-gnu"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "powerpc64le-unknown-linux-musl"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "riscv32i-unknown-none-elf"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "riscv32im-unknown-none-elf"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "riscv32imac-unknown-none-elf"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "riscv32imafc-unknown-none-elf"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "riscv32imc-unknown-none-elf"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "riscv64a23-unknown-linux-gnu"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "riscv64gc-unknown-linux-gnu"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "riscv64gc-unknown-linux-musl"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "riscv64gc-unknown-none-elf"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "riscv64imac-unknown-none-elf"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "s390x-unknown-linux-gnu"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "s390x-unknown-none-softfloat"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "sparc64-unknown-linux-gnu"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "sparcv9-sun-solaris"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "thumbv6m-none-eabi"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "thumbv7a-none-eabi"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "thumbv7a-none-eabihf"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "thumbv7em-none-eabi"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "thumbv7em-none-eabihf"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "thumbv7m-none-eabi"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "thumbv7neon-linux-androideabi"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "thumbv7neon-unknown-linux-gnueabihf"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "thumbv7r-none-eabi"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "thumbv7r-none-eabihf"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "thumbv8m.base-none-eabi"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "thumbv8m.main-none-eabi"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "thumbv8m.main-none-eabihf"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "thumbv8r-none-eabihf"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "wasm32-unknown-emscripten"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "wasm32-unknown-unknown"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "wasm32-wasip1"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "wasm32-wasip1-threads"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "wasm32-wasip2"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "wasm32v1-none"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "x86_64-apple-darwin"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "x86_64-apple-ios"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "x86_64-apple-ios-macabi"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "x86_64-fortanix-unknown-sgx"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "x86_64-linux-android"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "x86_64-pc-solaris"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "x86_64-pc-windows-gnu"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "x86_64-pc-windows-gnullvm"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "x86_64-pc-windows-msvc"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "x86_64-unknown-freebsd"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "x86_64-unknown-fuchsia"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "x86_64-unknown-illumos"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "x86_64-unknown-linux-gnu"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "x86_64-unknown-linux-gnuasan"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "x86_64-unknown-linux-gnumsan"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "x86_64-unknown-linux-gnutsan"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "x86_64-unknown-linux-gnux32"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "x86_64-unknown-linux-musl"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "x86_64-unknown-linux-ohos"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "x86_64-unknown-netbsd"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "x86_64-unknown-none"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "x86_64-unknown-redox"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-std"
+target = "x86_64-unknown-uefi"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-analysis"
+target = "aarch64-pc-windows-gnullvm"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-analyzer-preview"
+target = "aarch64-pc-windows-gnullvm"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "clippy-preview"
+target = "aarch64-pc-windows-gnullvm"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rustfmt-preview"
+target = "aarch64-pc-windows-gnullvm"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "llvm-tools-preview"
+target = "aarch64-pc-windows-gnullvm"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "miri-preview"
+target = "aarch64-pc-windows-gnullvm"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rust-docs-json-preview"
+target = "aarch64-pc-windows-gnullvm"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rustc-codegen-cranelift-preview"
+target = "aarch64-pc-windows-gnullvm"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "llvm-bitcode-linker-preview"
+target = "aarch64-pc-windows-gnullvm"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "rustc-codegen-gcc-preview"
+target = "aarch64-pc-windows-gnullvm"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "gcc-x86_64-unknown-linux-gnu-preview"
+target = "aarch64-pc-windows-gnullvm"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "enzyme-preview"
+target = "aarch64-pc-windows-gnullvm"
+
+[[pkg.rust.target.aarch64-pc-windows-gnullvm.extensions]]
+pkg = "offload-preview"
+target = "aarch64-pc-windows-gnullvm"
+
+[pkg.rust.target.aarch64-pc-windows-msvc]
+available = true
+url = "https://static.rust-lang.org/dist/2026-10-15/rust-1.99.1-aarch64-pc-windows-msvc.tar.gz"
+hash = "f3905ce702eff09b085fc537667d5c83f727c71d811fa8b1fe44ae2d32653f16"
+xz_url = "https://static.rust-lang.org/dist/2026-10-15/rust-1.99.1-aarch64-pc-windows-msvc.tar.xz"
+xz_hash = "796aef075f91f8cf433df1e30817d7b16e07714dda5b9b6a9e32eddbadff3296"
+
+[[pkg.rust.target.aarch64-pc-windows-msvc.components]]
+pkg = "rustc"
+target = "aarch64-pc-windows-msvc"
+
+[[pkg.rust.target.aarch64-pc-windows-msvc.components]]
+pkg = "rust-std"
+target = "aarch64-pc-windows-msvc"
+
+[[pkg.rust.target.aarch64-pc-windows-msvc.components]]
+pkg = "cargo"
+target = "aarch64-pc-windows-msvc"
+
+[[pkg.rust.target.aarch64-pc-windows-msvc.components]]
+pkg = "rust-docs"
+target = "aarch64-pc-windows-msvc"
+
+[[pkg.rust.target.aarch64-pc-windows-msvc.extensions]]
+pkg = "rust-src"
+target = "*"
+
+[[pkg.rust.target.aarch64-pc-windows-msvc.extensions]]
+pkg = "rustc-dev"
+target = "aarch64-apple-darwin"
+
+[[pkg.rust.target.aarch64-pc-windows-msvc.extensions]]
+pkg = "rustc-dev"
+target = "aarch64-pc-windows-gnullvm"
+
+[[pkg.rust.target.aarch64-pc-windows-msvc.extensions]]
+pkg = "rustc-dev"
+target = "aarch64-pc-windows-msvc"
+
+[[pkg.rust.target.aarch64-pc-windows-msvc.extensions]]
+pkg = "rustc-dev"
+target = "aarch64-unknown-freebsd"
+
+[[pkg.rust.target.aarch64-pc-windows-msvc.extensions]]
+pkg = "rustc-dev"
+target = "aarch64-unknown-linux-gnu"
+
+[[pkg.rust.target.aarch64-pc-windows-msvc.extensions]]
+pkg = "rustc-dev"
+target = "aarch64-unknown-linux-musl"
+
+[[pkg.rust.target.aarch64-pc-windows-msvc.extensions]]
+pkg = "rustc-dev"
+target = "aarch64-unknown-linux-ohos"
+
+[[pkg.rust.target.aarch64-pc-windows-msvc.extensions]]
+pkg = "rustc-dev"
+target = "arm-unknown-linux-gnueabi"
+
+[[pkg.rust.target.aarch64-pc-windows-msvc.extensions]]
+pkg = "rustc-dev"
+target = "arm-unknown-linux-gnueabihf"
+
+[[pkg.rust.target.aarch64-pc-windows-msvc.extensions]]
+pkg = "rustc-dev"
+target = "armv7-unknown-linux-gnueabihf"
+
+[[pkg.rust.target.aarch64-pc-windows-msvc.extensions]]
+pkg = "rustc-dev"
+target = "i686-pc-windows-gnu"
+
+[[pkg.rust.target.aarch64-pc-windows-msvc.extensions]]
+pkg = "rustc-dev"
+target = "i686-pc-windows-msvc"
+
+[[pkg.rust.target.aarch64-pc-windows-msvc.extensions]]
+pkg = "rustc-dev"
+target = "i686-unknown-linux-gnu"
+
+[[pkg.rust.target.aarch64-pc-windows-msvc.extensions]]
+pkg = "rustc-dev"
+target = "loongarch64-unknown-linux-gnu"
+
+[[pkg.rust.target.aarch64-pc-windows-msvc.extensions]]
+pkg = "rustc-dev"
+target = "loongarch64-unknown-linux-musl"
+
+[[pkg.rust.target.aarch64-pc-windows-msvc.extensions]]
+pkg = "rustc-dev"
+target = "powerpc-unknown-linux-gnu"
+
+[[pkg.rust.target.aarch64-pc-windows-msvc.extensions]]
+pkg = "rustc-dev"
+target = "powerpc64-unknown-linux-gnu"
+
+[[pkg.rust.target.aarch64-pc-windows-msvc.extensions]]
+pkg = "rustc-dev"
+target = "powerpc64-unknown-linux-musl"
+
+[[pkg.rust.target.aarch64-pc-windows-msvc.extensions]]
+pkg = "rustc-dev"
+target = "powerpc64le-unknown-linux-gnu"
+
+[[pkg.rust.target.aarch64-pc-windows-msvc.extensions]]
+pkg = "rustc-dev"
+target = "powerpc64le-unknown-linux-musl"
+
+[[pkg.rust.target.aarch64-pc-windows-msvc.extensions]]
+pkg = "rustc-dev"
+target = "riscv64gc-unknown-linux-gnu"
+
+[[pkg.rust.target.aarch64-pc-windows-msvc.extensions]]
+pkg = "rustc-dev"
+target = "riscv64gc-unknown-linux-musl"
+
+[[pkg.rust.target.aarch64-pc-windows-msvc.extensions]]
+pkg = "rustc-dev"
+target = "s390x-unknown-linux-gnu"
+
+[[pkg.rust.target.aarch64-pc-windows-msvc.extensions]]
+pkg = "rustc-dev"
+target = "sparcv9-sun-solaris"
+
+[[pkg.rust.target.aarch64-pc-windows-msvc.extensions]]
+pkg = "rustc-dev"
+target = "x86_64-apple-darwin"
+
+[[pkg.rust.target.aarch64-pc-windows-msvc.extensions]]
+pkg = "rustc-dev"
+target = "x86_64-pc-solaris"
+
+[[pkg.rust.target.aarch64-pc-windows-msvc.extensions]]
+pkg = "rustc-dev"
+target = "x86_64-pc-windows-gnu"
+
+[[pkg.rust.target.aarch64-pc-windows-msvc.extensions]]
+pkg = "rustc-dev"
+target = "x86_64-pc-windows-gnullvm"
+
+[[pkg.rust.target.aarch64-pc-windows-msvc.extensions]]
+pkg = "rustc-dev"
+target = "x86_64-pc-windows-msvc"
+
+[[pkg.rust.target.aarch64-pc-windows-msvc.extensions]]
+pkg = "rustc-dev"
+target = "x86_64-unknown-freebsd"
+
+[[pkg.rust.target.aarch64-pc-windows-msvc.extensions]]
+pkg = "rustc-dev"
+target = "x86_64-unknown-illumos"
+
+[[pkg.rust.target.aarch64-pc-windows-msvc.extensions]]
+pkg = "rustc-dev"
+target = "x86_64-unknown-linux-gnu"
+
+[[pkg.rust.target.aarch64-pc-windows-msvc.extensions]]
+pkg = "rustc-dev"
+target = "x86_64-unknown-linux-musl"
+
+[[pkg.rust.target.aarch64-pc-windows-msvc.extensions]]
+pkg = "rustc-dev"
+target = "x86_64-unknown-netbsd"
+
+[[pkg.rust.target.aarch64-pc-windows-msvc.extensions]]
+pkg = "rustc-docs"
+target = "aarch64-pc-windows-msvc"
+
+[[pkg.rust.target.aarch64-pc-windows-msvc.extensions]]
+pkg = "rust-std"
+target = "aarch64-apple-darwin"
+
+[[pkg.rust.target.aarch64-pc-windows-msvc.extensions]]
+pkg = "rust-std"
+target = "aarch64-apple-ios"
+
+[[pkg.rust.target.aarch64-pc-windows-msvc.extensions]]
+pkg = "rust-std"
+target = "aarch64-apple-ios-macabi"
+
+[[pkg.rust.target.aarch64-pc-windows-msvc.extensions]]
+pkg = "rust-std"
+target = "aarch64-apple-ios-sim"
+
+[[pkg.rust.target.aarch64-pc-windows-msvc.extensions]]
+pkg = "rust-std"
+target = "aarch64-apple-tvos"
+
+[[pkg.rust.target.aarch64-pc-windows-msvc.extensions]]
+pkg = "rust-std"
+target = "aarch64-apple-tvos-sim"
+
+[[pkg.rust.target.aarch64-pc-windows-msvc.extensions]]
+pkg = "rust-std"
+target = "aarch64-apple-visionos"
+
+[[pkg.rust.target.aarch64-pc-windows-msvc.extensions]]
+pkg = "rust-std"
+target = "aarch64-apple-visionos-sim"
+
+[[pkg.rust.target.aarch64-pc-windows-msvc.extensions]]
+pkg = "rust-std"
+target = "aarch64-apple-watchos"
+
+[[pkg.rust.target.aarch64-pc-windows-msvc.extensions]]
+pkg = "rust-std"
+target = "aarch64-apple-watchos-sim"
+
+[[pkg.rust.target.aarch64-pc-windows-msvc.extensions]]
+pkg = "rust-std"
+target = "aarch64-linux-android"
+
+[[pkg.rust.target.aarch64-pc-windows-msvc.extensions]]
+pkg = "rust-std"
+target = "aarch64-pc-windows-gnullvm"
+
+[[pkg.rust.target.aarch64-pc-windows-msvc.extensions]]
+pkg = "rust-std"
+target = "aarch64-unknown-freebsd"
+
+[[pkg.rust.target.aarch64-pc-windows-msvc.extensions]]
+pkg = "rust-std"
+target = "aarch64-unknown-fuchsia"
+
+[[pkg.rust.target.aarch64-pc-windows-msvc.extensions]]
+pkg = "rust-std"
+target = "aarch64-unknown-linux-gnu"
+
+[[pkg.rust.target.aarch64-pc-windows-msvc.extensions]]
+pkg = "rust-std"
+target = "aarch64-unknown-linux-musl"
+
+[[pkg.rust.target.aarch64-pc-windows-msvc.extensions]]
+pkg = "rust-std"
+target = "aarch64-unknown-linux-ohos"
+
+[[pkg.rust.target.aarch64-pc-windows-msvc.extensions]]
+pkg = "rust-std"
+target = "aarch64-unknown-none"
+
+[[pkg.rust.target.aarch64-pc-windows-msvc.extensions]]
+pkg = "rust-std"
+target = "aarch64-unknown-none-softfloat"
+
+[[pkg.rust.target.aarch64-pc-windows-msvc.extensions]]
+pkg = "rust-std"
+target = "aarch64-unknown-uefi"
+
+[[pkg.rust.target.aarch64-pc-windows-msvc.extensions]]
+pkg = "rust-std"
+target = "arm-linux-androideabi"
+
+[[pkg.rust.target.aarch64-pc-windows-msvc.extensions]]
+pkg = "rust-std"
+target = "arm-unknown-linux-gnueabi"
+
+[[pkg.rust.target.aarch64-pc-windows-msvc.extensions]]
+pkg = "rust-std"
+target = "arm-unknown-linux-gnueabihf"
+
+[[pkg.rust.target.aarch64-pc-windows-msvc.extensions]]
+pkg = "rust-std"
+target = "arm-unknown-linux-musleabi"
+
+[[pkg.rust.target.aarch64-pc-windows-msvc.extensions]]
+pkg = "rust-std"
+target = "arm-unknown-linux-musleabihf"
+
+[[pkg.rust.target.aarch64-pc-windows-msvc.extensions]]
+pkg = "rust-std"
+target = "arm64ec-pc-windows-msvc"
+
+[[pkg.rust.target.aarch64-pc-windows-msvc.extensions]]
+pkg = "rust-std"
+target = "armv5te-unknown-linux-gnueabi"
+
+[[pkg.rust.target.aarch64-pc-windows-msvc.extensions]]
+pkg = "rust-std"
+target = "armv5te-unknown-linux-musleabi"
+
+[[pkg.rust.target.aarch64-pc-windows-msvc.extensions]]
+pkg = "rust-std"
+target = "armv7-linux-androideabi"
+
+[[pkg.rust.target.aarch64-pc-windows-msvc.extensions]]
+pkg = "rust-std"
+target = "armv7-unknown-linux-gnueabi"
+
+[[pkg.rust.target.aarch64-pc-windows-msvc.extensions]]
+pkg = "rust-std"
+target = "armv7-unknown-linux-gnueabihf"
+
+[[pkg.rust.target.aarch64-pc-windows-msvc.extensions]]
+pkg = "rust-std"
+target = "armv7-unknown-linux-musleabi"
+
+[[pkg.rust.target.aarch64-pc-windows-msvc.extensions]]
+pkg = "rust-std"
+target = "armv7-unknown-linux-musleabihf"
+
+[[pkg.rust.target.aarch64-pc-windows-msvc.extensions]]
+pkg = "rust-std"
+target = "armv7-unknown-linux-ohos"
+
+[[pkg.rust.target.aarch64-pc-windows-msvc.extensions]]
+pkg = "rust-std"
+target = "armv7a-none-eabi"
+
+[[pkg.rust.target.aarch64-pc-windows-msvc.extensions]]
+pkg = "rust-std"
+target = "armv7a-none-eabihf"
+
+[[pkg.rust.target.aarch64-pc-windows-msvc.extensions]]
+pkg = "rust-std"
+target = "armv7r-none-eabi"
+
+[[pkg.rust.target.aarch64-pc-windows-msvc.extensions]]
+pkg = "rust-std"
+target = "armv7r-none-eabihf"
+
+[[pkg.rust.target.aarch64-pc-windows-msvc.extensions]]
+pkg = "rust-std"
+target = "armv8r-none-eabihf"
+
+[[pkg.rust.target.aarch64-pc-windows-msvc.extensions]]
+pkg = "rust-std"
+target = "i586-unknown-linux-gnu"
+
+[[pkg.rust.target.aarch64-pc-windows-msvc.extensions]]
+pkg = "rust-std"
+target = "i586-unknown-linux-musl"
+
+[[pkg.rust.target.aarch64-pc-windows-msvc.extensions]]
+pkg = "rust-std"
+target = "i686-linux-android"
+
+[[pkg.rust.target.aarch64-pc-windows-msvc.extensions]]
+pkg = "rust-std"
+target = "i686-pc-windows-gnu"
+
+[[pkg.rust.target.aarch64-pc-windows-msvc.extensions]]
+pkg = "rust-std"
+target = "i686-pc-windows-gnullvm"
+
+[[pkg.rust.target.aarch64-pc-windows-msvc.extensions]]
+pkg = "rust-std"
+target = "i686-pc-windows-msvc"
+
+[[pkg.rust.target.aarch64-pc-windows-msvc.extensions]]
+pkg = "rust-std"
+target = "i686-unknown-freebsd"
+
+[[pkg.rust.target.aarch64-pc-windows-msvc.extensions]]
+pkg = "rust-std"
+target = "i686-unknown-linux-gnu"
+
+[[pkg.rust.target.aarch64-pc-windows-msvc.extensions]]
+pkg = "rust-std"
+target = "i686-unknown-linux-musl"
+
+[[pkg.rust.target.aarch64-pc-windows-msvc.extensions]]
+pkg = "rust-std"
+target = "i686-unknown-uefi"
+
+[[pkg.rust.target.aarch64-pc-windows-msvc.extensions]]
+pkg = "rust-std"
+target = "loongarch32-unknown-none"
+
+[[pkg.rust.target.aarch64-pc-windows-msvc.extensions]]
+pkg = "rust-std"
+target = "loongarch32-unknown-none-softfloat"
+
+[[pkg.rust.target.aarch64-pc-windows-msvc.extensions]]
+pkg = "rust-std"
+target = "loongarch64-unknown-linux-gnu"
+
+[[pkg.rust.target.aarch64-pc-windows-msvc.extensions]]
+pkg = "rust-std"
+target = "loongarch64-unknown-linux-musl"
+
+[[pkg.rust.target.aarch64-pc-windows-msvc.extensions]]
+pkg = "rust-std"
+target = "loongarch64-unknown-none"
+
+[[pkg.rust.target.aarch64-pc-windows-msvc.extensions]]
+pkg = "rust-std"
+target = "loongarch64-unknown-none-softfloat"
+
+[[pkg.rust.target.aarch64-pc-windows-msvc.extensions]]
+pkg = "rust-std"
+target = "nvptx64-nvidia-cuda"
+
+[[pkg.rust.target.aarch64-pc-windows-msvc.extensions]]
+pkg = "rust-std"
+target = "powerpc-unknown-linux-gnu"
+
+[[pkg.rust.target.aarch64-pc-windows-msvc.extensions]]
+pkg = "rust-std"
+target = "powerpc64-unknown-linux-gnu"
+
+[[pkg.rust.target.aarch64-pc-windows-msvc.extensions]]
+pkg = "rust-std"
+target = "powerpc64-unknown-linux-musl"
+
+[[pkg.rust.target.aarch64-pc-windows-msvc.extensions]]
+pkg = "rust-std"
+target = "powerpc64le-unknown-linux-gnu"
+
+[[pkg.rust.target.aarch64-pc-windows-msvc.extensions]]
+pkg = "rust-std"
+target = "powerpc64le-unknown-linux-musl"
+
+[[pkg.rust.target.aarch64-pc-windows-msvc.extensions]]
+pkg = "rust-std"
+target = "riscv32i-unknown-none-elf"
+
+[[pkg.rust.target.aarch64-pc-windows-msvc.extensions]]
+pkg = "rust-std"
+target = "riscv32im-unknown-none-elf"
+
+[[pkg.rust.target.aarch64-pc-windows-msvc.extensions]]
+pkg = "rust-std"
+target = "riscv32imac-unknown-none-elf"
+
+[[pkg.rust.target.aarch64-pc-windows-msvc.extensions]]
+pkg = "rust-std"
+target = "riscv32imafc-unknown-none-elf"
+
+[[pkg.rust.target.aarch64-pc-windows-msvc.extensions]]
+pkg = "rust-std"
+target = "riscv32imc-unknown-none-elf"
+
+[[pkg.rust.target.aarch64-pc-windows-msvc.extensions]]
+pkg = "rust-std"
+target = "riscv64a23-unknown-linux-gnu"
+
+[[pkg.rust.target.aarch64-pc-windows-msvc.extensions]]
+pkg = "rust-std"
+target = "riscv64gc-unknown-linux-gnu"
+
+[[pkg.rust.target.aarch64-

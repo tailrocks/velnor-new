@@ -95,7 +95,7 @@ fn manifest() -> ReleaseManifest {
 fn pin() -> Result<BootstrapControllerPin, Box<dyn Error>> {
     Ok(BootstrapControllerPin::from_release_manifest(
         &manifest(),
-        "ubuntu-24.04",
+        "ubuntu-26.04",
         &version(),
     )?)
 }

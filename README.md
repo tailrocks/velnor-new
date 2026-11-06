@@ -34,8 +34,8 @@ with `cargo`/`mbx` absent from `PATH`:
 git clone https://github.com/tailrocks/velnor-new.git
 cd velnor-new && git checkout 34550e8
 mise install
-mise exec -- cargo --version   # cargo 1.98.1
-mise exec -- mbx --version      # mbx 1.21.0
+mise exec -- cargo --version   # cargo 1.99.1
+mise exec -- mbx --version      # mbx 1.29.2
 mise exec -- cargo build --locked -p velnor-actions-cli
 ./target/debug/velnor-actions --help
 ./target/debug/velnor-actions plan
@@ -43,19 +43,11 @@ mise exec -- cargo build --locked -p velnor-actions-cli
 diff -r .github /private/tmp/velnor-preview/.github  # no output: preview matches
 ```
 
-Historical freshness evidence checked on 2026-10-17 records Mise 2026.10.13,
-Rust 1.98.1, Nextest 0.9.148, and release-plz 0.3.172. The workflow
-pins in that evidence were `jdx/mise-action` v5.2.0 and `asamarts/alint` v0.18.4. See
-[`freshness-evidence-2026-10-17.md`](docs/implemented/freshness-evidence-2026-10-17.md).
-The current catalog selects Mise 2026.11.1, ALint 0.21.0, Rust 1.99.1,
+The current catalog selects Mise 2026.11.3, ALint 0.21.1, Rust 1.99.1,
 MBX 1.29.2, GitHub CLI 2.103.3, Nextest 0.9.151, and release-plz 0.4.3.
-The earlier Mise 2026.10.19 qualification record is retained in
-[`mise-2026-10-19-qualification.md`](docs/implemented/mise-2026-10-19-qualification.md).
-The latest source captures and scoped runtime evidence for the refreshed Mise,
-GitHub CLI, and Nextest pins are recorded in
-[`freshness-evidence-2026-10-27.md`](docs/implemented/freshness-evidence-2026-10-27.md).
-The prior source capture from 2026-10-25 remains in
-[`freshness-evidence-2026-10-25.md`](docs/implemented/freshness-evidence-2026-10-25.md).
+The [freshness inventory](.velnor/freshness-inventory.json) records the selected
+versions and qualification state. Follow the
+[update procedure](docs/implemented/update-procedure.md) to refresh them.
 The selected stable compiler and workspace MSRV are both Rust 1.99.1 and
 1.99, respectively. `mise.toml` remains a read-only local developer input.
 The workflow pins `jdx/mise-action` v5.2.6 to reviewed commit

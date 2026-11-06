@@ -14,7 +14,7 @@ use super::rust_suites::{
     RESERVED_SUITE_WORKFLOW_SLUGS, RustSuiteArtifact, RustSuiteConfig, RustSuiteTrigger,
     WorkflowDispatchConfig, WorkflowDispatchInputType,
 };
-use super::workflow::RUNNER_LABEL_CATALOG;
+use super::workflow::is_supported_ordinary_runner_override;
 use rules::{
     is_valid_ascii_ident_with_hyphen, is_valid_dispatch_input_name, is_valid_workflow_slug,
     validate_dispatch_input, validate_suite_artifact, validate_suite_filters_and_dispatch,
@@ -249,7 +249,7 @@ fn validate_suite_scalars(
         ));
     }
     if let Some(label) = &suite.runner_label
-        && !RUNNER_LABEL_CATALOG.contains(&label.as_str())
+        && !is_supported_ordinary_runner_override(label)
     {
         return Err(cfg_err(
             file,

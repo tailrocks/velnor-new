@@ -309,7 +309,8 @@ fn render_mise_config() -> Result<String, RenderError> {
 
 fn render_mise_lock() -> Result<String, RenderError> {
     toml::to_string(&SeedMiseLock {
-        lockfile_version: 3,
+        lockfile_version: 4,
+        tools: BTreeMap::new(),
     })
     .map_err(|_| seed_error("seed_lock_serialization"))
 }
@@ -385,6 +386,7 @@ struct SeedMiseSettings {
 #[derive(Serialize)]
 struct SeedMiseLock {
     lockfile_version: u32,
+    tools: BTreeMap<String, String>,
 }
 
 fn seed_error(problem: &str) -> RenderError {

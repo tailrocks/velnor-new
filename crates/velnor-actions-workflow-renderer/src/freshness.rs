@@ -19,6 +19,10 @@ pub const FRESHNESS_JOB_ID: &str = "freshness";
 pub const FRESHNESS_JOB_NAME: &str = "Freshness";
 pub const FRESHNESS_SCRIPT: &str = "scripts/check-freshness.sh";
 pub const FRESHNESS_PROBE_FLAG: &str = "--check-upstream";
+pub const FRESHNESS_PROBE_LOG_PATH: &str = "$RUNNER_TEMP/velnor/freshness/probe.log";
+pub const FRESHNESS_PROBE_ARTIFACT_PATH: &str = "${{ runner.temp }}/velnor/freshness/probe.log";
+pub const FRESHNESS_PROBE_ARTIFACT_NAME: &str =
+    "velnor-freshness-r${{ github.run_id }}-a${{ github.run_attempt }}";
 pub const FRESHNESS_CONCURRENCY_GROUP: &str = "freshness";
 pub const FRESHNESS_TIMEOUT_MINUTES: u16 = JobTimeout::DEFAULT.minutes();
 
@@ -92,28 +96,15 @@ pub fn render_freshness_workflow(spec: &FreshnessSpec) -> Result<RenderedFile, R
             ("CARGO_HOME".to_owned(), CARGO_HOME_EXPR.to_owned()),
         ]),
     )?;
-    let probe = shell_step(
-        "Check upstream freshness",
-        vec![
-            "mise".to_owned(),
-            "--no-config".to_owned(),
-            "--no-env".to_owned(),
-            "--no-hooks".to_owned(),
-            "exec".to_owned(),
-            format!("rust@{}", spec.rust_version),
-            "--".to_owned(),
-            "bash".to_owned(),
-            FRESHNESS_SCRIPT.to_owned(),
-            FRESHNESS_PROBE_FLAG.to_owned(),
-        ],
-        homes,
-    )?;
+    let probe = freshness_probe_step(spec, homes)?;
+    let upload = freshness_probe_upload_step()?;
     let document = freshness_document(
         spec,
         &checkout,
         &setup_mise,
         &[install_rust, verify_rust],
         &probe,
+        &upload,
     )?;
     let text = crate::render::fallback::render_checked_workflow(
         FRESHNESS_WORKFLOW_PATH,
@@ -127,16 +118,44 @@ pub fn render_freshness_workflow(spec: &FreshnessSpec) -> Result<RenderedFile, R
     })
 }
 
+fn freshness_probe_step(
+    spec: &FreshnessSpec,
+    homes: BTreeMap<String, String>,
+) -> Result<Step, RenderError> {
+    let probe = format!(
+        "mise --no-config --no-env --no-hooks exec rust@{} -- bash {} {}",
+        spec.rust_version, FRESHNESS_SCRIPT, FRESHNESS_PROBE_FLAG
+    );
+    let script = format!(
+        "set -e;probe_log=\"{FRESHNESS_PROBE_LOG_PATH}\";mkdir -p \"$RUNNER_TEMP/velnor/freshness\";probe_status=0;if {probe} >\"$probe_log\" 2>&1;then :;else probe_status=$?;fi;cat \"$probe_log\";exit \"$probe_status\""
+    );
+    shell_step(
+        "Check upstream freshness",
+        vec!["bash".to_owned(), "-c".to_owned(), script],
+        homes,
+    )
+}
+
+fn freshness_probe_upload_step() -> Result<Step, RenderError> {
+    let mut upload =
+        steps::upload_artifact_step(FRESHNESS_PROBE_ARTIFACT_NAME, FRESHNESS_PROBE_ARTIFACT_PATH)?;
+    "Upload freshness probe".clone_into(&mut upload.name);
+    upload.condition = Some("always()".to_owned());
+    Ok(upload)
+}
+
 fn freshness_document(
     spec: &FreshnessSpec,
     checkout: &Step,
     setup_mise: &Step,
     install_rust: &[Step],
     probe: &Step,
+    upload: &Step,
 ) -> Result<Yaml, RenderError> {
     let mut sequence = vec![checkout.clone(), setup_mise.clone()];
     sequence.extend(install_rust.iter().cloned());
     sequence.push(probe.clone());
+    sequence.push(upload.clone());
     velnor_actions_contract::workflow::step_identity::validate_step_sequence(
         &sequence,
         FRESHNESS_JOB_ID,

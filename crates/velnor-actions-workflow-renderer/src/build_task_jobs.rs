@@ -34,10 +34,13 @@ pub struct BuildTaskTool {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BuildTaskArtifact {
     pub checksum: String,
+    pub checksum_source: Option<String>,
     pub url: String,
     pub url_api: Option<String>,
     pub signer: Option<String>,
     pub provenance: Option<String>,
+    pub provenance_verified: Option<bool>,
+    pub repository_ids: Option<BTreeMap<String, String>>,
 }
 
 #[derive(Debug, Clone)]

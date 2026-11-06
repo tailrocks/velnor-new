@@ -14,12 +14,12 @@ const MISE_TIMEOUT_MS = 15000;
 const MISE_OUTPUT_BYTES = 256 * 1024;
 const EXPECTED = {
   jactionlint: {
-    version: "2.4.0",
+    version: "2.5.0",
     backend: "github:jdx/jactionlint",
     installerBackend: "github:jdx/jactionlint",
     urls: {
-      "linux-x64": "https://github.com/jdx/jactionlint/releases/download/v2.4.0/jactionlint_2.4.0_linux_amd64.tar.gz",
-      "macos-arm64": "https://github.com/jdx/jactionlint/releases/download/v2.4.0/jactionlint_2.4.0_darwin_arm64.tar.gz",
+      "linux-x64": "https://github.com/jdx/jactionlint/releases/download/v2.5.0/jactionlint_2.5.0_linux_amd64.tar.gz",
+      "macos-arm64": "https://github.com/jdx/jactionlint/releases/download/v2.5.0/jactionlint_2.5.0_darwin_arm64.tar.gz",
     },
   },
   shellcheck: {

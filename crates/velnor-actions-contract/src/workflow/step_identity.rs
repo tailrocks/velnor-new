@@ -42,11 +42,7 @@ pub const TOOLS_CACHE_PATHS: [&str; 5] = [
     "${{ runner.temp }}/velnor/cargo/bin",
 ];
 
-pub const TOOLS_CACHE_PRELUDE_USES: [&str; 3] = [
-    "./.github/actions/velnor-tools-prelude-u22",
-    "./.github/actions/velnor-tools-prelude-u24",
-    "./.github/actions/velnor-tools-prelude-u26",
-];
+pub const TOOLS_CACHE_PRELUDE_USES: [&str; 1] = ["./.github/actions/velnor-tools-prelude-u26"];
 
 pub const RUST_VERIFIER_USES: [&str; 2] = [
     "./.github/actions/velnor-verify-restored-rust",

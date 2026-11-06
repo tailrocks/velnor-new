@@ -20,11 +20,7 @@ const SEED_STEP: &str = "Copy matching tool seed";
 const IDENTITY_STEP: &str = "V2 identity";
 const IDENTITY_SCRIPT: &str = ".github/scripts/velnor-tools-cache-identity.sh";
 const ZERO_DIGEST: &str = "0000000000000000000000000000000000000000000000000000000000000000";
-const IDENTITY_LANES: [(&str, &str, &str); 3] = [
-    ("u22", "ubuntu-22.04", "ubuntu22"),
-    ("u24", "ubuntu-24.04", "ubuntu24"),
-    ("u26", "ubuntu-26.04", "ubuntu26"),
-];
+const IDENTITY_LANES: [(&str, &str, &str); 1] = [("u26", "ubuntu-26.04", "ubuntu26")];
 
 fn step_was_found(step: &RenderedVerify) -> bool {
     step.shell != RUNNER_DEFAULT_SHELL && !step.run.is_empty()

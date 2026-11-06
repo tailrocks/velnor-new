@@ -7,7 +7,7 @@ use velnor_actions_workflow_renderer::render::RenderedTree;
 
 use crate::OrchestratorError;
 use crate::generate::guards::prepare_preview_dir;
-use crate::generate::{check_tree_paths, leaf_links::is_symlink, preserve, swap_directories};
+use crate::generate::{check_tree_paths, leaf_links::is_symlink, preserve};
 use crate::prepare::GenerationPreparation;
 
 pub(super) fn write_preview(
@@ -42,4 +42,38 @@ fn write_staged_preview(
         .map_err(|err| OrchestratorError::io(canonical.display().to_string(), err.to_string()))?;
     preserve::write_preview(&prep.root.join(".github"), staging.path(), tree)?;
     swap_directories(canonical, &canonical.join(".github"), staging.path())
+}
+
+fn swap_directories(
+    _root: &Path,
+    target: &Path,
+    staged: &Path,
+) -> Result<Vec<String>, OrchestratorError> {
+    let label = target.display().to_string();
+    if !target.exists() {
+        return std::fs::rename(staged, target)
+            .map(|()| Vec::new())
+            .map_err(|error| OrchestratorError::io(label, error.to_string()));
+    }
+    exchange_directories(staged, target)
+        .map_err(|error| OrchestratorError::io(label, error.to_string()))?;
+    let old = staged.display().to_string();
+    match std::fs::remove_dir_all(staged) {
+        Ok(()) => Ok(Vec::new()),
+        Err(error) => Ok(vec![format!("backup_cleanup_failed:{old}:{error}")]),
+    }
+}
+
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+fn exchange_directories(staged: &Path, target: &Path) -> std::io::Result<()> {
+    use rustix::fs::{CWD, RenameFlags, renameat_with};
+    renameat_with(CWD, staged, CWD, target, RenameFlags::EXCHANGE).map_err(std::io::Error::from)
+}
+
+#[cfg(not(any(target_os = "linux", target_os = "macos")))]
+fn exchange_directories(_staged: &Path, _target: &Path) -> std::io::Result<()> {
+    Err(std::io::Error::new(
+        std::io::ErrorKind::Unsupported,
+        "atomic directory exchange is unsupported on this platform",
+    ))
 }

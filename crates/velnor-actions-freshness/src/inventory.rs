@@ -117,8 +117,33 @@ fn load_policy(ctx: &mut FreshnessContext) {
 pub(crate) fn check_pin_consistency(ctx: &mut FreshnessContext) {
     load_policy(ctx);
     check_policy_header(ctx);
+    check_runner_policy(ctx);
     check_local_pins(ctx);
     check_policy_mirror(ctx);
+}
+
+fn check_runner_policy(ctx: &mut FreshnessContext) {
+    let Some(policy) = &ctx.policy else {
+        return;
+    };
+    let result = policy
+        .get("github_runner_images")
+        .and_then(|images| images.get("linux_x64"))
+        .ok_or_else(|| "missing github_runner_images.linux_x64".to_owned())
+        .and_then(|value| {
+            value
+                .clone()
+                .try_into::<velnor_actions_contract::policy::RunnerInventory>()
+                .map_err(|error| format!("invalid runner policy: {error}"))
+        })
+        .and_then(|inventory| {
+            inventory
+                .validate(POLICY_REL)
+                .map_err(|error| error.to_string())
+        });
+    if let Err(error) = result {
+        ctx.fail_row("runner-policy", "github_runner_images.linux_x64", &error);
+    }
 }
 
 pub(crate) const DEFAULT_COOLDOWN_DAYS: i64 = 3;

@@ -55,7 +55,7 @@ fn job_with(
 ) -> Job {
     Job {
         display_name: display.to_owned(),
-        runs_on: "ubuntu-24.04".to_owned(),
+        runs_on: "ubuntu-26.04".to_owned(),
         check_runner: None,
         timeout_minutes: JobTimeout::DEFAULT,
         needs: Vec::new(),
@@ -173,7 +173,7 @@ fn check_writer_queue_shape() -> Result<(), Box<dyn Error>> {
 }
 
 fn check_cleanup_render() -> Result<(), Box<dyn Error>> {
-    let rendered = render_cache_cleanup_yml("ubuntu-24.04", "0.1.55")?;
+    let rendered = render_cache_cleanup_yml("ubuntu-26.04", "0.1.55")?;
     if rendered.path != CACHE_CLEANUP_PATH {
         return Err(fail("cleanup render left its workflow path"));
     }

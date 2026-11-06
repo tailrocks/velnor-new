@@ -29,7 +29,7 @@ pub(super) fn fixture_compatibility() -> Result<CompatibilityV1, ContractError> 
         workspace_id: digest_fill('a')?,
         host_os: "linux".to_owned(),
         host_arch: "x86_64".to_owned(),
-        runner_image_identity: "ubuntu-24.04-20261001".to_owned(),
+        runner_image_identity: "ubuntu-26.04-20261001".to_owned(),
         abi_identity: "gnu-2.39".to_owned(),
         toolchain_identity: "stable-1.99.1".to_owned(),
         compiler_identity: "rustc-1.99.1-x86_64".to_owned(),

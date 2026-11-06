@@ -255,7 +255,7 @@ fn pin_mirror_and_candidate_agree_on_which_policy_files_are_valid() -> TestResul
 }
 
 #[test]
-fn pin_diff_reports_cosign_digest_and_runner_label_changes() -> TestResult {
+fn pin_diff_reports_cosign_digest_and_rejects_forbidden_runner_label() -> TestResult {
     let fixture = Fixture::new()?;
     fixture.commit_all()?;
     let inventory: Value = serde_json::from_slice(&fs::read(fixture.path(INVENTORY))?)?;
@@ -294,27 +294,41 @@ fn pin_diff_reports_cosign_digest_and_runner_label_changes() -> TestResult {
 
     let fixture = Fixture::new()?;
     fixture.commit_all()?;
-    fixture.rewrite(POLICY, |text| text.replacen(", \"ubuntu-22.04\"", "", 1))?;
+    fixture.rewrite(POLICY, |text| {
+        text.replacen(
+            "supported = [\"ubuntu-26.04\"]",
+            "supported = [\"ubuntu-26.04\", \"ubuntu-24.04\"]",
+            1,
+        )
+    })?;
     fixture.edit_inventory(|inventory| {
         if let Some(labels) = inventory["runner"]["supported"].as_array_mut() {
-            labels.retain(|label| label != "ubuntu-22.04");
+            labels.push(Value::String("ubuntu-24.04".to_owned()));
         }
     })?;
     fixture.rewrite(RUNNER_SOURCE, |text| {
-        text.replacen("[&str; 6]", "[&str; 5]", 1)
-            .replacen("    \"ubuntu-22.04\",\n", "", 1)
+        let old = "[&str; 2] = [\"ubuntu-26.04\", \"ubuntu-26.04-arm\"]";
+        assert_eq!(text.matches(old).count(), 1);
+        let changed = text.replacen(
+            old,
+            "[&str; 3] = [\"ubuntu-26.04\", \"ubuntu-26.04-arm\", \"ubuntu-24.04\"]",
+            1,
+        );
+        assert_ne!(changed, text);
+        changed
     })?;
     let labels = fixture.run(Some("HEAD"))?;
-    assert!(labels.success, "consistent label change rejected");
-    for subject in ["policy runner supported", "inventory runner supported"] {
-        let row = labels
-            .row("pin-diff", "info", subject)
-            .ok_or_else(|| io::Error::other(format!("{subject} unreported: {:?}", labels.rows)))?;
-        assert_eq!(
-            row["detail"],
-            "base=ubuntu-26.04,ubuntu-24.04,ubuntu-22.04 head=ubuntu-26.04,ubuntu-24.04"
-        );
-    }
+    assert!(!labels.success, "forbidden runner label accepted");
+    let row = labels
+        .row("runner-policy", "fail", "github_runner_images.linux_x64")
+        .ok_or_else(|| {
+            io::Error::other(format!("runner policy failure missing: {:?}", labels.rows))
+        })?;
+    assert!(
+        row["detail"]
+            .as_str()
+            .is_some_and(|detail| detail.contains("unsupported_label:ubuntu-24.04"))
+    );
     Ok(())
 }
 

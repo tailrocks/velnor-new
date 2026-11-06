@@ -35,8 +35,7 @@ const SCRIPT: &str = concat!(
     "printf 'enabled=false\\nreason=identity_scratch_cleanup_failed\\n' >> \"$GITHUB_OUTPUT\"; exit 1; fi; ",
     "printf 'enabled=false\\nreason=%s\\n' \"$reason\" >> \"$GITHUB_OUTPUT\"; exit 0; }; ",
     "case \"$VELNOR_CACHE_LANE\" in scale-set:*) disable scale_set_image_unqualified ;; esac; ",
-    "case \"$VELNOR_CACHE_LANE\" in ubuntu-22.04) expected_image_os=ubuntu22 ;; ",
-    "ubuntu-24.04) expected_image_os=ubuntu24 ;; ubuntu-26.04) expected_image_os=ubuntu26 ;; ",
+    "case \"$VELNOR_CACHE_LANE\" in ubuntu-26.04) expected_image_os=ubuntu26 ;; ",
     "*) disable lane_image_unqualified ;; esac; expected_arch=X64; ",
     "expected_target=x86_64-unknown-linux-gnu; ",
     "[ -n \"$runner_os\" ] || disable runner_os_missing; ",
@@ -216,8 +215,6 @@ fn identity_env(runs_on: &str) -> BTreeMap<String, String> {
 
 pub(super) fn action_uses(runs_on: &str) -> Option<&'static str> {
     match hosted_image(runs_on)? {
-        "ubuntu22" => Some("./.github/actions/u22"),
-        "ubuntu24" => Some("./.github/actions/u24"),
         "ubuntu26" => Some("./.github/actions/u26"),
         _ => None,
     }
@@ -232,8 +229,6 @@ fn hosted_image(runs_on: &str) -> Option<&'static str> {
         return None;
     };
     match label.as_str() {
-        "ubuntu-22.04" => Some("ubuntu22"),
-        "ubuntu-24.04" => Some("ubuntu24"),
         "ubuntu-26.04" => Some("ubuntu26"),
         _ => None,
     }

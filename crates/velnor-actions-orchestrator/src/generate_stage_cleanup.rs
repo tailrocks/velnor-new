@@ -1,100 +1,97 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::fs::{self, Metadata};
-use std::path::{Path, PathBuf};
+use std::ffi::OsStr;
+use std::path::Path;
 
 use crate::OrchestratorError;
+use crate::generation_filesystem::{FilesystemMetadata, FilesystemObjectType, GenerationDirectory};
 
-const CLEANUP_DIRECTORY_MODE: u32 = 0o700;
+use super::{FsIdentity, RootDirectory};
 
-pub(super) fn clear_children(root: &Path) -> Result<(), OrchestratorError> {
-    let metadata = fs::symlink_metadata(root).map_err(|error| io(root, &error))?;
-    if metadata.file_type().is_symlink() || !metadata.is_dir() {
-        return Err(unsafe_path(root, "cleanup_root_not_directory"));
-    }
-    set_directory_mode(root)?;
-    let mut pending: Vec<(PathBuf, bool)> = children(root)?
-        .into_iter()
-        .map(|path| (path, false))
-        .collect();
-    while let Some((path, visited)) = pending.pop() {
-        clear_entry(&path, visited, &mut pending)?;
-    }
-    Ok(())
-}
+const CLEANUP_MODE: u32 = 0o700;
 
-fn clear_entry(
-    path: &Path,
-    visited: bool,
-    pending: &mut Vec<(PathBuf, bool)>,
+pub(super) fn remove_tree(
+    root: &RootDirectory,
+    parent: &dyn GenerationDirectory,
+    name: &OsStr,
+    expected: FsIdentity,
 ) -> Result<(), OrchestratorError> {
-    let metadata = fs::symlink_metadata(path).map_err(|error| io(path, &error))?;
-    if metadata.file_type().is_symlink() {
-        return remove_link(path, &metadata);
+    let before = parent.stat(name)?;
+    if FsIdentity::from_metadata(&before) != expected
+        || before.object_type != FilesystemObjectType::Directory
+    {
+        return Err(unsafe_path(
+            &parent.path().join(name),
+            "cleanup_root_identity_changed",
+        ));
     }
-    if !metadata.is_dir() {
-        return fs::remove_file(path).map_err(|error| io(path, &error));
+    let directory = parent.open_dir(name)?;
+    let opened = directory.metadata()?;
+    if FsIdentity::from_metadata(&opened) != expected {
+        return Err(unsafe_path(
+            directory.path(),
+            "cleanup_root_identity_changed",
+        ));
     }
-    if visited {
-        return fs::remove_dir(path).map_err(|error| io(path, &error));
+    validate_directory(root, directory.as_ref(), &opened)?;
+    remove_children(root, directory.as_ref())?;
+    let after = parent.stat(name)?;
+    if FsIdentity::from_metadata(&after) != expected {
+        return Err(unsafe_path(
+            &parent.path().join(name),
+            "cleanup_root_identity_changed",
+        ));
     }
-    set_directory_mode(path)?;
-    pending.push((path.to_path_buf(), true));
-    pending.extend(children(path)?.into_iter().map(|child| (child, false)));
+    parent.remove_dir(name)
+}
+
+pub(super) fn remove_children(
+    root: &RootDirectory,
+    directory: &dyn GenerationDirectory,
+) -> Result<(), OrchestratorError> {
+    validate_directory(root, directory, &directory.metadata()?)?;
+    directory.set_mode(CLEANUP_MODE)?;
+    for name in directory.entries()? {
+        let metadata = directory.stat(&name)?;
+        let path = directory.path().join(&name);
+        if metadata.object_type == FilesystemObjectType::Directory {
+            let child = directory.open_dir(&name)?;
+            let opened = child.metadata()?;
+            let expected = FsIdentity::from_metadata(&metadata);
+            if FsIdentity::from_metadata(&opened) != expected {
+                return Err(unsafe_path(&path, "cleanup_entry_identity_changed"));
+            }
+            validate_directory(root, child.as_ref(), &opened)?;
+            remove_children(root, child.as_ref())?;
+            let current = directory.stat(&name)?;
+            if FsIdentity::from_metadata(&current) != expected {
+                return Err(unsafe_path(&path, "cleanup_entry_identity_changed"));
+            }
+            directory.remove_dir(&name)?;
+        } else {
+            let current = directory.stat(&name)?;
+            if FsIdentity::from_metadata(&current) != FsIdentity::from_metadata(&metadata) {
+                return Err(unsafe_path(&path, "cleanup_entry_identity_changed"));
+            }
+            directory.remove_file(&name)?;
+        }
+    }
     Ok(())
 }
 
-fn children(path: &Path) -> Result<Vec<PathBuf>, OrchestratorError> {
-    let entries = fs::read_dir(path).map_err(|error| io(path, &error))?;
-    entries
-        .map(|entry| {
-            entry
-                .map(|entry| entry.path())
-                .map_err(|error| io(path, &error))
-        })
-        .collect()
-}
-
-fn remove_link(path: &Path, metadata: &Metadata) -> Result<(), OrchestratorError> {
-    #[cfg(unix)]
-    {
-        let _ = metadata;
-        fs::remove_file(path).map_err(|error| io(path, &error))
+fn validate_directory(
+    root: &RootDirectory,
+    directory: &dyn GenerationDirectory,
+    metadata: &FilesystemMetadata,
+) -> Result<(), OrchestratorError> {
+    if metadata.object_type != FilesystemObjectType::Directory {
+        return Err(unsafe_path(directory.path(), "cleanup_root_not_directory"));
     }
-    #[cfg(windows)]
-    {
-        use std::os::windows::fs::FileTypeExt;
-        let result = if metadata.file_type().is_symlink_dir() {
-            fs::remove_dir(path)
-        } else {
-            fs::remove_file(path)
-        };
-        result.map_err(|error| io(path, &error))
+    if metadata.owner != root.owner() {
+        return Err(unsafe_path(directory.path(), "foreign_directory_owner"));
     }
-    #[cfg(not(any(unix, windows)))]
-    {
-        let _ = metadata;
-        fs::remove_file(path).map_err(|error| io(path, &error))
-    }
-}
-
-fn set_directory_mode(path: &Path) -> Result<(), OrchestratorError> {
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        fs::set_permissions(path, fs::Permissions::from_mode(CLEANUP_DIRECTORY_MODE))
-            .map_err(|error| io(path, &error))
-    }
-    #[cfg(not(unix))]
-    {
-        let _ = path;
-        Ok(())
-    }
-}
-
-fn io(path: &Path, error: &std::io::Error) -> OrchestratorError {
-    OrchestratorError::io(path.display().to_string(), error.to_string())
+    root.verify_mount(directory.path(), directory)
 }
 
 fn unsafe_path(path: &Path, reason: &str) -> OrchestratorError {

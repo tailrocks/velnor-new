@@ -270,19 +270,26 @@ MUST be visible as a recommendation, not an implicit lock refresh.
 `init` creates only the missing root `.velnor/config.toml` sample defined by
 the CLI contract. `generate` produces product output only under `.github` and
 the orchestrator coordinates its atomic replacement or preview write. For
-in-place generation only, it may retain the private, self-ignored
-`.github.velnor-stage/` runtime container with a root-bound owner record and a
-persistent same-filesystem spare; cleanup removes spare children but keeps the
-container and spare root. This state is not product output. In-place generation
-requires atomic directory exchange and is supported on Linux and macOS; other
-platforms fail before creating staging state. Linux requires kernel 5.8 or
-newer with `STATX_MNT_ID` reported; Ubuntu 22.04 and newer require a compatible
-running kernel, or generation fails closed before staging. `plan` and preview
-generation do not create or modify it. In-place generation checks that the
-repository, `.github`, staging state, and real output directories remain on
-one mount, including same-device mount boundaries, before staging, before exchange, and
-before cleanup. Mount topology must remain stable during the operation because
-cleanup uses path-based removal. The mount identity source and cleanup-failure
+in-place generation only, each invocation creates a unique private
+`.github.velnor-stage-<random>` directory on the repository mount. The old
+`.github.velnor-stage` name is untrusted legacy state and is never inspected,
+traversed, overwritten, or removed. A crashed invocation may leave its unique
+stage directory; later invocations choose a new name and leave it alone. This
+state is not product output. In-place generation requires atomic directory
+exchange and is supported on Linux and macOS; other platforms fail before
+creating staging state. Linux requires kernel 5.8 or newer with
+`STATX_MNT_ID` reported; Ubuntu 22.04 and newer require a compatible running
+kernel, or generation fails closed before staging. `plan` and preview
+generation do not create or modify in-place staging state. Root, source,
+stage, publish, cleanup, and lock operations are relative to held directory
+descriptors with no-follow and identity checks, and the canonical root
+identity is rechecked before publication. First publication uses no-replace
+semantics; existing `.github` replacement uses atomic exchange and removes
+the retired tree after identity checks. Descriptor anchoring protects against
+replacement of the checkout path while the invocation holds its original root
+descriptor. A check followed by unlink is not an atomic inode-conditional
+removal; same-UID replacement of an entry inside the still-open root between
+those operations is outside the guarantee. The mount identity source and cleanup-failure
 behavior are specified in the generated-file contract. If `.github` exists,
 its root and every real directory below it must be owned by the caller, as
 specified in the generated-file contract. Velnor MUST not create

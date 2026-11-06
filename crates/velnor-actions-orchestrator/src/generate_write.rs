@@ -1,8 +1,11 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::ffi::{OsStr, OsString};
 use std::io::Write;
 use std::path::Path;
+
+use crate::generation_filesystem::{FilesystemObjectType, GenerationFileOpen};
 
 use velnor_actions_workflow_renderer::render::RenderedTree;
 
@@ -47,6 +50,108 @@ pub(crate) fn write_tree(github_dir: &Path, tree: &RenderedTree) -> Result<(), O
         create_symlink(&link.target, &dest)?;
     }
     Ok(())
+}
+
+pub(crate) fn write_tree_at(
+    github_dir: &super::fd::Directory,
+    tree: &RenderedTree,
+) -> Result<(), OrchestratorError> {
+    for file in &tree.files {
+        let relative =
+            file.path
+                .strip_prefix(".github/")
+                .ok_or_else(|| OrchestratorError::Contract {
+                    problem: "generated_path_outside_github".to_owned(),
+                })?;
+        let (parent, name) = ensure_parents_at(github_dir, Path::new(relative))?;
+        if parent.stat_opt(&name)?.is_some() {
+            return Err(OrchestratorError::OverwriteRefused {
+                path: parent.child_path(&name).display().to_string(),
+            });
+        }
+        let mut output = parent.open_file(&name, GenerationFileOpen::WriteCreateNew)?;
+        output
+            .write_all(file.bytes.as_bytes())
+            .map_err(|error| crate::generation_filesystem::io(&parent.child_path(&name), &error))?;
+    }
+    for link in &tree.symlinks {
+        let relative =
+            link.path
+                .strip_prefix(".github/")
+                .ok_or_else(|| OrchestratorError::Contract {
+                    problem: "generated_path_outside_github".to_owned(),
+                })?;
+        let (parent, name) = ensure_parents_at(github_dir, Path::new(relative))?;
+        if parent.stat_opt(&name)?.is_some() {
+            return Err(OrchestratorError::OverwriteRefused {
+                path: parent.child_path(&name).display().to_string(),
+            });
+        }
+        parent.symlink(OsStr::new(&link.target), &name)?;
+    }
+    Ok(())
+}
+
+fn ensure_parents_at(
+    root: &super::fd::Directory,
+    relative: &Path,
+) -> Result<(super::fd::Directory, OsString), OrchestratorError> {
+    let components: Vec<_> = relative
+        .components()
+        .map(|component| match component {
+            std::path::Component::Normal(value) => Ok(value.to_os_string()),
+            _ => Err(OrchestratorError::Contract {
+                problem: "generated_path_not_relative".to_owned(),
+            }),
+        })
+        .collect::<Result<_, _>>()?;
+    let (leaf, parents) = components
+        .split_last()
+        .ok_or_else(|| OrchestratorError::Contract {
+            problem: "generated_path_empty".to_owned(),
+        })?;
+    let mut current = root.try_clone()?;
+    for name in parents {
+        match current.stat_opt(name)? {
+            Some(stat) if stat.object_type == FilesystemObjectType::Directory => {
+                let child = current.open_dir(name)?;
+                let opened = child.metadata()?;
+                if (opened.device, opened.inode) != (stat.device, stat.inode) {
+                    return Err(OrchestratorError::UnsafePath {
+                        path: current.child_path(name).display().to_string(),
+                        reason: "directory_identity_changed".to_owned(),
+                    });
+                }
+                current = child;
+            }
+            Some(stat) if stat.object_type == FilesystemObjectType::Symlink => {
+                return Err(OrchestratorError::UnsafePath {
+                    path: current.child_path(name).display().to_string(),
+                    reason: "symlink_refused".to_owned(),
+                });
+            }
+            Some(_) => {
+                return Err(OrchestratorError::OverwriteRefused {
+                    path: current.child_path(name).display().to_string(),
+                });
+            }
+            None => {
+                match current.create_dir_raw(name, 0o777) {
+                    Ok(_) => {}
+                    Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
+                    Err(error) => {
+                        return Err(crate::generation_filesystem::io(
+                            &current.child_path(name),
+                            &error,
+                        ));
+                    }
+                }
+                let child = current.open_dir(name)?;
+                current = child;
+            }
+        }
+    }
+    Ok((current, leaf.clone()))
 }
 
 fn ensure_parent_dirs_safe(github_dir: &Path, dest: &Path) -> Result<(), OrchestratorError> {

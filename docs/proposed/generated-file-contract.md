@@ -247,18 +247,37 @@ or an unvalidated shell fragment.
 ## 3. Replacement and preview
 
 generate MUST render into a staging tree and validate every output before
-publishing. For in-place generation only, the orchestrator may retain the
-private, self-ignored `.github.velnor-stage/` runtime container at the Git root.
+publishing. For in-place generation only, each invocation creates a unique,
+private `.github.velnor-stage-<random>` directory under the opened repository
+root, on the repository mount. Its mode is `0700`; it contains the candidate
+`.github` tree. The old `.github.velnor-stage` name is untrusted legacy state:
+generation MUST NOT inspect, traverse, overwrite, or remove it. A crashed
+invocation can leave its unique directory behind; later invocations use a new
+name and leave unknown state alone. `plan` and preview generation never create
+or modify in-place staging state.
+
 In-place generation requires atomic directory exchange and is supported on
 Linux and macOS; other platforms fail before creating staging state. Linux
 requires kernel 5.8 or newer and `statx` reporting `STATX_MNT_ID`. Ubuntu
 22.04 and newer are supported when the running kernel reports this field;
 older kernels or missing mount identity fail closed before staging. Preview
-generation does not use this restriction.
-It contains a root-bound owner record and one persistent same-filesystem spare
-directory; generation clears spare children but never removes or recreates
-either root. This container is runtime state, not generated output. `plan`
-and preview generation never create or modify it. The orchestrator owns only
+generation does not use this restriction. The orchestrator acquires the
+root-local generation lock through the opened root descriptor. Stage creation,
+source traversal, validation, writes, publication, recursive cleanup, and lock
+removal MUST be relative to held directory descriptors with no-follow and
+identity checks. The canonical root path is checked against the held root
+identity before publication. A first publication MUST use no-replace semantics
+so a newly appeared `.github` is never overwritten. Replacing an existing
+`.github` MUST use atomic exchange; cleanup checks retired-tree identities before
+removal. A prepublication failure preserves the existing
+`.github`; cleanup failure after publication is reported as a warning. A
+crashed generation lock remains fail-closed. Descriptor anchoring protects
+against replacement of the checkout path while the invocation holds its original
+root descriptor. A check followed by unlink is not an atomic inode-conditional
+removal; same-UID replacement of an entry inside the still-open root between
+those operations is outside the guarantee. The design relies on OS directory
+ownership and does not claim isolation from arbitrary same-UID processes. The
+orchestrator owns only
 the declared generated paths,
 the reserved `.github/workflows/**` namespace, and shared action definitions
 whose exact `.github/actions/<logical>/action.yml` path begins with a Velnor

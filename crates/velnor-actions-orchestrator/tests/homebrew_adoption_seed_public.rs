@@ -119,6 +119,17 @@ fn public_seed_manifest_replaces_legacy_consumer_manifest() -> Result<(), Box<dy
         "configured native review completion workflow omitted from seed"
     );
     assert_eq!(rendered.len(), 6);
+    let lock = rendered
+        .iter()
+        .find(|file| file.path == "mise.lock")
+        .ok_or_else(|| io::Error::other("seed omitted its tool lock"))?;
+    let lock: toml::Value = toml::from_str(&lock.bytes)?;
+    assert_eq!(lock["lockfile_version"].as_integer(), Some(4));
+    assert!(
+        lock["tools"]
+            .as_table()
+            .is_some_and(toml::map::Map::is_empty)
+    );
     let caller = rendered
         .iter()
         .find(|file| file.path == ".github/workflows/ci.yml")

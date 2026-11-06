@@ -10,6 +10,9 @@ use crate::verification_jobs::build_task_jobs::{BuildTaskArtifact, BuildTaskPoli
 mod selector;
 use selector::toml_option_string;
 pub(super) use selector::valid_github_matching_regex;
+#[path = "build_task_mise_tools_artifact.rs"]
+mod artifact;
+pub(super) use artifact::validate_artifact;
 
 pub(super) const BOLTFFI_KEY: &str = "github:boltffi/boltffi";
 pub(super) const BOLTFFI_MATCHING_REGEX: &str = r"^boltffi-(darwin-aarch64|darwin-x86_64|linux-aarch64(-musl)?|linux-x86_64(-musl)?|windows-arm64|windows-x86_64)\.(tar\.gz|zip)$";
@@ -88,7 +91,7 @@ pub(super) fn selected_mise_files_for(
         ]);
     }
 
-    let mut lock = Vec::new();
+    let mut lock = vec!["lockfile_version = 4".to_owned(), String::new()];
     for tool in selected_tools {
         let key = toml_string(&tool.key);
         lock.push(format!("[[tools.{key}]]"));
@@ -102,13 +105,7 @@ pub(super) fn selected_mise_files_for(
             }
         }
         if let Some(artifact) = &tool.artifact {
-            lock.push(String::new());
-            lock.push(format!("[tools.{key}.\"platforms.{lock_platform}\"]"));
-            lock.push(format!("checksum = {}", toml_string(&artifact.checksum)));
-            lock.push(format!("url = {}", toml_string(&artifact.url)));
-            append_lock_string(&mut lock, "url_api", artifact.url_api.as_deref());
-            append_lock_string(&mut lock, "signer", artifact.signer.as_deref());
-            append_lock_string(&mut lock, "provenance", artifact.provenance.as_deref());
+            append_artifact_lock(&mut lock, &key, lock_platform, artifact);
         }
         lock.push(String::new());
     }
@@ -122,6 +119,33 @@ fn toml_string(value: &str) -> String {
 fn append_lock_string(lines: &mut Vec<String>, key: &str, value: Option<&str>) {
     if let Some(value) = value {
         lines.push(format!("{key} = {}", toml_string(value)));
+    }
+}
+
+fn append_artifact_lock(
+    lock: &mut Vec<String>,
+    key: &str,
+    lock_platform: &str,
+    artifact: &BuildTaskArtifact,
+) {
+    lock.push(String::new());
+    lock.push(format!("[tools.{key}.\"platforms.{lock_platform}\"]"));
+    lock.push(format!("checksum = {}", toml_string(&artifact.checksum)));
+    append_lock_string(lock, "checksum_source", artifact.checksum_source.as_deref());
+    lock.push(format!("url = {}", toml_string(&artifact.url)));
+    append_lock_string(lock, "url_api", artifact.url_api.as_deref());
+    append_lock_string(lock, "signer", artifact.signer.as_deref());
+    append_lock_string(lock, "provenance", artifact.provenance.as_deref());
+    if let Some(value) = artifact.provenance_verified {
+        lock.push(format!("provenance_verified = {value}"));
+    }
+    if let Some(repository_ids) = &artifact.repository_ids {
+        let fields = repository_ids
+            .iter()
+            .map(|(key, value)| format!("{key} = {}", toml_string(value)))
+            .collect::<Vec<_>>()
+            .join(", ");
+        lock.push(format!("repository_ids = {{ {fields} }}"));
     }
 }
 
@@ -261,36 +285,6 @@ fn validate_tool_backend(
                 tool.key, tool.backend
             )));
         }
-    }
-    Ok(())
-}
-
-pub(super) fn validate_artifact(
-    key: &str,
-    artifact: &BuildTaskArtifact,
-) -> Result<(), RenderError> {
-    let checksum = artifact
-        .checksum
-        .strip_prefix("sha256:")
-        .unwrap_or_default();
-    if !velnor_actions_contract::ids::is_lower_hex_len(checksum, 64)
-        || !locked_github_url(&artifact.url, "https://github.com/")
-        || artifact
-            .url_api
-            .as_deref()
-            .is_some_and(|url| !locked_github_url(url, "https://api.github.com/repos/"))
-        || artifact
-            .signer
-            .as_deref()
-            .is_some_and(|value| !safe_identity(value))
-        || artifact
-            .provenance
-            .as_deref()
-            .is_some_and(|value| !safe_identity(value))
-    {
-        return Err(RenderError::InvalidWorkflow(format!(
-            "build_task_artifact:{key}"
-        )));
     }
     Ok(())
 }

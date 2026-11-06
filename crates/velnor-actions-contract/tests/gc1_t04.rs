@@ -22,7 +22,7 @@ fn fixture_compatibility(family: Gc1Family) -> Result<CompatibilityV1, ContractE
         workspace_id: digest_fill('a')?,
         host_os: "linux".to_owned(),
         host_arch: "x86_64".to_owned(),
-        runner_image_identity: "ubuntu-24.04-20261001".to_owned(),
+        runner_image_identity: "ubuntu-26.04-20261001".to_owned(),
         abi_identity: "gnu-2.39".to_owned(),
         toolchain_identity: "stable-1.99.1".to_owned(),
         compiler_identity: "rustc-1.99.1-x86_64".to_owned(),
@@ -151,7 +151,7 @@ fn gc1_t04_preserves_contract() -> Result<(), Box<dyn Error>> {
 
     let digest = requested.compatibility.digest()?;
     let mut relabeled = requested.compatibility.clone();
-    relabeled.runner_image_identity = "ubuntu-24.04-20261101".to_owned();
+    relabeled.runner_image_identity = "ubuntu-26.04-20261101".to_owned();
     assert_eq!(digest, relabeled.digest()?);
     relabeled.toolchain_identity = "stable-1.99.2".to_owned();
     assert_ne!(digest, relabeled.digest()?);

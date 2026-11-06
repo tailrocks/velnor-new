@@ -83,7 +83,7 @@ shell path as given. So:
   import no exported functions, so a startup hook or an exported function set
   by an earlier step cannot forge a digest tool into the check (see the
   [threat model](#threat-model) for what this does not cover);
-- the tool-seed copy step and the V2 identity steps (`u22`, `u24`, `u26`) run
+- the tool-seed copy step and the V2 identity step (`u26`) run
   their bodies through the same hermetic wrapper as the Rust toolchain check:
   the absolute `-p` shell, an unset of every `BASH_FUNC_*` entry, `env -u
   BASH_ENV -u ENV`, and `PATH=VERIFY_PATH` assigned on that same `env`

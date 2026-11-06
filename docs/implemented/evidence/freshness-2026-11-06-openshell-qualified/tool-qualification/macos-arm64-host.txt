@@ -1,0 +1,4 @@
+Darwin Alexeys-MacBook-Pro-2.local 27.2.0 Darwin Kernel Version 27.2.0: Wed Oct 14 23:47:58 PDT 2026; root:xnu-13432.41.4~25/RELEASE_ARM64_T6050 arm64
+ProductName:		macOS
+ProductVersion:		27.2
+BuildVersion:		26B123

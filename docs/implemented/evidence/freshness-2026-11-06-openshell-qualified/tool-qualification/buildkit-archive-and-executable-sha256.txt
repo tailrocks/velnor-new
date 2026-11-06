@@ -1,0 +1,9 @@
+6b9c9654dfd6b154037236d75c3504c5bb2290562bb05a324511e11556f22125  /proof/input/alint.tar.gz
+5ac307b0499bb0eab45ae99c23e8e0790874fbc667c75224410954e0e3c6e0f5  /proof/input/jactionlint.tar.gz
+8c3be12b05d5c177a04c29e3c78ce89ac86f1595681cab149b65b97c4e227198  /proof/input/shellcheck.tar.xz
+b34b327cc1ef07178207b6f2cd1f5276537d3e5b7be316500f6dac50d4c0a857  /proof/input/tofu.tar.gz
+f2b178cac570e47923da59bd4a12ba376917d4430f171fb872657906be437f6c  /usr/local/bin/jactionlint
+9ce9173bf161f6466ef57dab7edebe8f55089fdf81caa967415323c25d004990  /usr/local/bin/tofu
+1dce4661607c203183f9651568311373df3b10d7af64caba6d419fbc4145a95a  /usr/local/bin/alint
+4da528ddb3a4d1b7b24a59d4e16eb2f5fd960f4bd9a3708a15baddbdf1d5a55b  /usr/local/bin/shellcheck
+dcd392d425bc6408e9c7f5b71aee4dc7d4fa5448df25bc96bb62a793b9a6003d  /usr/local/bin/velnor-actions

@@ -22,22 +22,22 @@ pub(crate) fn check_rejects_bad_descriptor() -> Result<(), Box<dyn Error>> {
         Err(err) => require(&err.to_string(), "bootstrap_runner_target", "target")?,
     }
     let off_version = manifest_for("0.0.0");
-    match BootstrapControllerPin::from_release_manifest(&off_version, "ubuntu-24.04", "0.0.1") {
+    match BootstrapControllerPin::from_release_manifest(&off_version, "ubuntu-26.04", "0.0.1") {
         Ok(_) => return Err(fail("descriptor version drift accepted")),
         Err(err) => require(&err.to_string(), "bootstrap_descriptor_version", "version")?,
     }
-    match BootstrapControllerPin::from_release_manifest(&off_version, "ubuntu-24.04", "0.0.0") {
+    match BootstrapControllerPin::from_release_manifest(&off_version, "ubuntu-26.04", "0.0.0") {
         Ok(_) => return Err(fail("foreign generator release accepted as controller")),
         Err(err) => require(&err.to_string(), "bootstrap_generator_version", "generator")?,
     }
     let mut missing = manifest();
     missing.targets.pop();
-    if BootstrapControllerPin::from_release_manifest(&missing, "ubuntu-24.04", &version()).is_ok() {
+    if BootstrapControllerPin::from_release_manifest(&missing, "ubuntu-26.04", &version()).is_ok() {
         return Err(fail("incomplete release descriptor accepted"));
     }
     let mut tampered = manifest();
     "https://example.com/evil".clone_into(&mut tampered.targets[0].artifact);
-    if BootstrapControllerPin::from_release_manifest(&tampered, "ubuntu-24.04", &version()).is_ok()
+    if BootstrapControllerPin::from_release_manifest(&tampered, "ubuntu-26.04", &version()).is_ok()
     {
         return Err(fail("unapproved controller origin accepted"));
     }

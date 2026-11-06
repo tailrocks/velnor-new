@@ -1,6 +1,7 @@
 .firecrawl/
 /target/
 /.velnor/archive-guard/
+/.github.velnor-stage-*/
 .DS_Store
 __pycache__/
 .cache/

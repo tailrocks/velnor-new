@@ -39,23 +39,7 @@ fn run() -> Result<(), String> {
         return Ok(());
     }
     if mode == "source-fingerprint" {
-        let root = arguments
-            .next()
-            .ok_or_else(|| "archive checkout path is required".to_owned())?;
-        if arguments.next().is_some() {
-            return Err("unexpected archive guard argument".to_owned());
-        }
-        let root = std::path::PathBuf::from(root);
-        let fingerprint = velnor_archive_guard::source_fingerprint(&root)?;
-        if fingerprint.len() != 64
-            || !fingerprint
-                .bytes()
-                .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
-        {
-            return Err("archive source fingerprint is malformed".to_owned());
-        }
-        println!("{fingerprint}");
-        return Ok(());
+        return source_fingerprint_mode(&mut arguments);
     }
     if let Some(result) = qualification_mode(&mode, &mut arguments) {
         return result;
@@ -97,29 +81,52 @@ fn run() -> Result<(), String> {
     owned_archive_guard::validate(io::stdin().lock(), &mode)
 }
 
+fn source_fingerprint_mode(arguments: &mut impl Iterator<Item = OsString>) -> Result<(), String> {
+    let root = arguments
+        .next()
+        .ok_or_else(|| "archive checkout path is required".to_owned())?;
+    if arguments.next().is_some() {
+        return Err("unexpected archive guard argument".to_owned());
+    }
+    let root = std::path::PathBuf::from(root);
+    let fingerprint = velnor_archive_guard::source_fingerprint(&root)?;
+    if fingerprint.len() != 64
+        || !fingerprint
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+    {
+        return Err("archive source fingerprint is malformed".to_owned());
+    }
+    println!("{fingerprint}");
+    Ok(())
+}
+
+fn tree_identity_mode(
+    mode: &str,
+    arguments: &mut impl Iterator<Item = OsString>,
+) -> Result<(), String> {
+    let root = arguments
+        .next()
+        .ok_or_else(|| "tree path is required".to_owned())?;
+    if arguments.next().is_some() {
+        return Err("unexpected archive guard argument".to_owned());
+    }
+    let identity = velnor_archive_guard::golden_collector::tree_identity(
+        std::path::Path::new(&root),
+        mode == "link-identity",
+    )?;
+    io::stdout()
+        .lock()
+        .write_all(&identity)
+        .map_err(|error| error.to_string())
+}
+
 fn qualification_mode(
     mode: &str,
     arguments: &mut impl Iterator<Item = OsString>,
 ) -> Option<Result<(), String>> {
     let result = match mode {
-        "tree-identity" | "link-identity" => {
-            let Some(root) = arguments.next() else {
-                return Some(Err("tree path is required".into()));
-            };
-            if arguments.next().is_some() {
-                return Some(Err("unexpected archive guard argument".into()));
-            }
-            velnor_archive_guard::golden_collector::tree_identity(
-                std::path::Path::new(&root),
-                mode == "link-identity",
-            )
-            .and_then(|identity| {
-                io::stdout()
-                    .lock()
-                    .write_all(&identity)
-                    .map_err(|error| error.to_string())
-            })
-        }
+        "tree-identity" | "link-identity" => tree_identity_mode(mode, arguments),
         "qualification-manifest" => {
             let Some(path) = arguments.next() else {
                 return Some(Err("candidate manifest path is required".into()));

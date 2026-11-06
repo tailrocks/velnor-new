@@ -7,12 +7,12 @@ set -euo pipefail
 
 project_root=$(cd "$(dirname "$0")/.." && pwd -P)
 if [[ -z "${HK_BIN:-}" || "$HK_BIN" != /* || ! -x "$HK_BIN" ]]; then
-  printf '%s\n' 'Set HK_BIN to an installed absolute hk 2.8.0 executable.' >&2
+  printf '%s\n' 'Set HK_BIN to an installed absolute hk 2.11.1 executable.' >&2
   exit 1
 fi
 hk_bin=$HK_BIN
-if [[ "$("$hk_bin" --version)" != 'hk 2.8.0' ]]; then
-  printf '%s\n' 'This test requires hk 2.8.0.' >&2
+if [[ "$("$hk_bin" --version)" != 'hk 2.11.1' ]]; then
+  printf '%s\n' 'This test requires hk 2.11.1.' >&2
   exit 1
 fi
 export CARGO_NET_OFFLINE=true MISE_AUTO_INSTALL=false MISE_EXEC_AUTO_INSTALL=false

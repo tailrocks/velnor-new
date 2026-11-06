@@ -7,8 +7,8 @@ runs:
     - name: Setup Mise
       uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
       with:
-        version: 2026.11.1
-        sha256: 9ca1005930fed90e0f4c30d9b13fe4530fe88d0549a71349716a3aab9051c627
+        version: 2026.11.3
+        sha256: 6d39119ab914c54ab865204dee9337c71b83a7ed1e730f663c2fc3453e38fe9c
         install: "false"
         env: "false"
         cache: "false"

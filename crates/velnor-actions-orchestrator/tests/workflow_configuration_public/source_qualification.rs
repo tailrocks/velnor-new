@@ -178,6 +178,7 @@ fn preview_generation(
         preparation,
         &GenerateOptions {
             output_dir: Some(destination.clone()),
+            ..GenerateOptions::default()
         },
     )?;
     Ok(destination)

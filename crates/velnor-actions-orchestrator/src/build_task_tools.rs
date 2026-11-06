@@ -125,6 +125,7 @@ fn selected_artifact(
             .checksum
             .clone()
             .ok_or_else(|| failure("build_task_tool_artifact"))?,
+        checksum_source: artifact.checksum_source.clone(),
         url: artifact
             .url
             .clone()
@@ -132,6 +133,17 @@ fn selected_artifact(
         url_api: artifact.url_api.clone(),
         signer: artifact.signer.clone(),
         provenance: artifact.provenance.clone(),
+        provenance_verified: artifact.provenance_verified,
+        repository_ids: artifact.repository_ids.as_ref().map(|ids| {
+            let mut result = BTreeMap::new();
+            if let Some(repository) = &ids.repository {
+                result.insert("repository".to_owned(), repository.clone());
+            }
+            if let Some(owner) = &ids.owner {
+                result.insert("owner".to_owned(), owner.clone());
+            }
+            result
+        }),
     }))
 }
 

@@ -8,8 +8,7 @@ use sha2::{Digest, Sha256};
 use velnor_actions_contract::{HOSTED_SUFFIX, REQUIRED_JOB_ID, SCALE_SUFFIX, StepKind};
 use velnor_actions_orchestrator::{finalized_jobs, prepare, render_staged_tree};
 
-#[path = "verification_tools_fixture.rs"]
-mod fixture;
+use super::verification_tools_fixture as fixture;
 
 use super::waste_oracle as oracle;
 
@@ -69,6 +68,7 @@ fn verification_task_preserves_seven_tool_hook_closure_and_required_fan_in()
             .collect();
         let config = emitted_file(&scripts, "mise.toml")?;
         let lock = emitted_file(&scripts, "mise.lock")?;
+        assert_eq!(lock["lockfile_version"].as_integer(), Some(4));
         let tools = config["tools"].as_table().ok_or("missing selected tools")?;
         assert_eq!(tools.len(), fixture::TOOLS.len());
         for (key, version) in fixture::TOOLS {
@@ -78,19 +78,9 @@ fn verification_task_preserves_seven_tool_hook_closure_and_required_fan_in()
             tools[fixture::KINGFISHER]["matching_regex"].as_str(),
             Some(fixture::REGEX)
         );
-        let mut expected: toml::Value = toml::from_str(fixture::LOCK)?;
-        for (_, entries) in expected["tools"]
-            .as_table_mut()
-            .ok_or("missing fixture tools")?
-            .iter_mut()
-        {
-            entries[0]
-                .as_table_mut()
-                .ok_or("missing fixture tool")?
-                .remove("specifiers");
-        }
         assert_eq!(
-            lock["tools"], expected["tools"],
+            lock["tools"],
+            projected_tools(fixture::LOCK, "linux-x64")?,
             "selected lock provenance changed"
         );
         assert_eq!(
@@ -119,6 +109,117 @@ fn verification_task_preserves_seven_tool_hook_closure_and_required_fan_in()
         assert!(script.contains("--skip-tools"));
     }
     assert!(!render_staged_tree(&prepared)?.is_empty());
+    Ok(())
+}
+
+#[test]
+fn build_task_mise_v4_artifact_metadata_survives_selection_and_rendering()
+-> Result<(), Box<dyn Error>> {
+    const NEXT: &str = "aqua:nextest-rs/nextest/cargo-nextest";
+    for provenance_verified in [false, true] {
+        let lock_input = fixture::lock_with_artifact_metadata(
+            NEXT,
+            "macos-arm64",
+            provenance_verified,
+            "nextest-rs",
+        )?;
+        let repo = fixture::build_task_repo_with_lock(&lock_input)?;
+        let prepared = prepare(repo.path())
+            .map_err(|error| format!("v4 BuildTask prepare rejected: {error}"))?;
+        let jobs = finalized_jobs(&prepared)?;
+        let job = jobs
+            .get("task-mise-v4-tools")
+            .ok_or("BuildTask job is missing")?;
+        let scripts = job
+            .steps
+            .iter()
+            .filter_map(|step| match &step.kind {
+                StepKind::Shell { run, .. } => run.last().map(String::as_str),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        let emitted_lock = emitted_file(&scripts, "mise.lock")?;
+        assert_eq!(emitted_lock["lockfile_version"].as_integer(), Some(4));
+        let selected_platform = "platforms.macos-arm64";
+        let mut expected: toml::Value = toml::from_str(&lock_input)?;
+        let expected_tools = expected["tools"]
+            .as_table_mut()
+            .ok_or("missing fixture tools")?;
+        expected_tools.retain(|key, _| key == NEXT || key == "mr-boxington" || key == "rust");
+        for (_, entries) in expected_tools.iter_mut() {
+            for entry in entries.as_array_mut().ok_or("missing tool entries")? {
+                let entry = entry.as_table_mut().ok_or("missing fixture tool")?;
+                entry.remove("specifiers");
+                let other_platforms = entry
+                    .keys()
+                    .filter(|key| key.starts_with("platforms.") && *key != selected_platform)
+                    .cloned()
+                    .collect::<Vec<_>>();
+                for platform in other_platforms {
+                    entry.remove(&platform);
+                }
+            }
+        }
+        assert_eq!(emitted_lock["tools"], expected["tools"]);
+        assert_eq!(
+            emitted_lock["tools"][NEXT][0][selected_platform]["provenance_verified"].as_bool(),
+            Some(provenance_verified)
+        );
+        assert_eq!(
+            emitted_lock["tools"][NEXT][0][selected_platform]["repository_ids"]["owner"].as_str(),
+            Some("nextest-rs")
+        );
+        assert_eq!(
+            emitted_lock["tools"][NEXT][0][selected_platform]["checksum_source"].as_str(),
+            Some("mise-versions")
+        );
+        assert!(!render_staged_tree(&prepared)?.is_empty());
+    }
+    Ok(())
+}
+
+#[test]
+fn verification_task_preserves_optional_v4_artifact_metadata() -> Result<(), Box<dyn Error>> {
+    for provenance_verified in [false, true] {
+        let lock = fixture::lock_with_artifact_metadata(
+            fixture::KINGFISHER,
+            "linux-x64",
+            provenance_verified,
+            "mongodb",
+        )?;
+        let repo = fixture::repo(fixture::REGEX, &lock)?;
+        let prepared = prepare(repo.path())?;
+        let jobs = finalized_jobs(&prepared)?;
+        let expected = projected_tools(&lock, "linux-x64")?;
+        for suffix in [HOSTED_SUFFIX, SCALE_SUFFIX] {
+            let id = format!("task-hook-closure{suffix}");
+            let job = jobs.get(&id).ok_or("VerificationTask job is missing")?;
+            let scripts = job
+                .steps
+                .iter()
+                .filter_map(|step| match &step.kind {
+                    StepKind::Shell { run, .. } => run.last().map(String::as_str),
+                    _ => None,
+                })
+                .collect::<Vec<_>>();
+            let emitted = emitted_file(&scripts, "mise.lock")?;
+            assert_eq!(emitted["tools"], expected, "{id}");
+            assert_eq!(
+                emitted["tools"][fixture::KINGFISHER][0]["platforms.linux-x64"]
+                    ["provenance_verified"]
+                    .as_bool(),
+                Some(provenance_verified),
+                "{id}"
+            );
+            assert_eq!(
+                emitted["tools"][fixture::KINGFISHER][0]["platforms.linux-x64"]
+                    ["repository_ids"]["owner"]
+                    .as_str(),
+                Some("mongodb"),
+                "{id}"
+            );
+        }
+    }
     Ok(())
 }
 
@@ -254,4 +355,28 @@ fn emitted_file(scripts: &[&str], name: &str) -> Result<toml::Value, Box<dyn Err
         }
     }
     Ok(toml::from_str(&lines.join("\n"))?)
+}
+
+fn projected_tools(lock: &str, platform: &str) -> Result<toml::Value, Box<dyn Error>> {
+    let mut expected: toml::Value = toml::from_str(lock)?;
+    for (_, entries) in expected["tools"]
+        .as_table_mut()
+        .ok_or("missing fixture tools")?
+        .iter_mut()
+    {
+        for entry in entries.as_array_mut().ok_or("missing tool entries")? {
+            let entry = entry.as_table_mut().ok_or("missing fixture tool")?;
+            entry.remove("specifiers");
+            let selected_platform = format!("platforms.{platform}");
+            let other_platforms = entry
+                .keys()
+                .filter(|key| key.starts_with("platforms.") && *key != &selected_platform)
+                .cloned()
+                .collect::<Vec<_>>();
+            for other in other_platforms {
+                entry.remove(&other);
+            }
+        }
+    }
+    Ok(expected["tools"].clone())
 }

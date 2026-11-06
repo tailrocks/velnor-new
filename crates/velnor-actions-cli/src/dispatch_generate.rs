@@ -22,7 +22,10 @@ pub(crate) fn run_generate(
     let Some(cwd) = working_dir() else {
         return ExitCode::from(1);
     };
-    let options = GenerateOptions { output_dir };
+    let options = GenerateOptions {
+        output_dir,
+        ..GenerateOptions::default()
+    };
     let root = match resolve_root(&cwd) {
         Ok(root) => root,
         Err(error) => return fail_public(&error),

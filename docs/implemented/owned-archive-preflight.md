@@ -36,6 +36,21 @@ tree, build support, toolchain pins, and optional checkout Cargo/Rust toolchain
 configuration. Source traversal is bounded to 512 entries, 512 files and
 directories, 16 MiB per file, and 32 MiB total.
 
+## Checkout ancestry
+
+The checkout must be a real directory owned by the current user and must not
+be group- or world-writable. The builder checks each ancestor through `/`;
+ancestors must be real directories owned by the current user or root. A
+group- or world-writable ancestor is accepted only when it is root-owned and
+has the sticky bit. Other writable ancestors fail before build inputs are
+consumed. Keep the checkout under an owner-controlled private worktree parent.
+
+On this macOS host, `/tmp` resolves to `/private/tmp`, which is root-owned mode
+`0777` without the sticky bit. The builder therefore rejects checkouts beneath
+`/tmp`; use the repository worktree under `~/Projects/...` instead. The guard
+is intentional: a writable parent can replace checkout entries while the
+builder reads manifests and source files.
+
 `velnor-archive-guard` is a repository security utility, not a ninth V1 stack
 or generator product. It has no local product dependencies and does not
 participate in workflow generation.

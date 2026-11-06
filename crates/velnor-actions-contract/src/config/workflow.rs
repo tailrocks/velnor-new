@@ -17,14 +17,12 @@ use serde::{Deserialize, Serialize};
 
 pub const LATEST_RUNNER_LABEL: &str = "ubuntu-26.04";
 
-pub const RUNNER_LABEL_CATALOG: [&str; 6] = [
-    "ubuntu-22.04",
-    "ubuntu-24.04",
-    "ubuntu-26.04",
-    "ubuntu-22.04-arm",
-    "ubuntu-24.04-arm",
-    "ubuntu-26.04-arm",
-];
+pub const RUNNER_LABEL_CATALOG: [&str; 2] = ["ubuntu-26.04", "ubuntu-26.04-arm"];
+
+pub(crate) fn is_supported_ordinary_runner_override(label: &str) -> bool {
+    RUNNER_LABEL_CATALOG.contains(&label)
+        && crate::targets::ReleaseTarget::for_runner_label(label).is_some()
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -201,7 +199,7 @@ impl WorkflowConfig {
         }
         self.validate_verification_branch(file)?;
         if let Some(label) = &self.runner_label
-            && !RUNNER_LABEL_CATALOG.contains(&label.as_str())
+            && !is_supported_ordinary_runner_override(label)
         {
             return Err(ContractError::config(
                 file,
