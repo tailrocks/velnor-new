@@ -13,7 +13,7 @@ fn crate_release_uses_only_fixed_github_hosted_runner() -> Result<(), Box<dyn st
     };
     let workflow = render_release_workflow(&spec, &ctx, &rust)?;
     assert_eq!(workflow.matches("runs-on: ubuntu-26.04").count(), spec.jobs.len());
-    for alternate in ["ubuntu-26.04", "self-hosted", "${{ inputs.runner }}"] {
+    for alternate in ["ubuntu-24.04", "self-hosted", "${{ inputs.runner }}"] {
         let mut altered = spec.clone();
         for job in altered.jobs.values_mut() {
             job.runs_on = alternate.to_owned();
