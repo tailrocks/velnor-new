@@ -15,7 +15,7 @@ use velnor_actions_contract::workflow::state_seal::{
     STATE_SEAL_VERIFY_TIMEOUT_SECONDS, STATE_SEAL_WORKFLOW_PATH, state_attested_output,
     state_compat_output, state_produce_output,
 };
-use velnor_actions_contract::{JobTimeout, Step, StepId, StepRole};
+use velnor_actions_contract::{JobTimeout, Step, StepId, StepKind, StepRole};
 
 use super::cache_keys::DEFAULT_REF_ENV;
 use crate::RenderError;
