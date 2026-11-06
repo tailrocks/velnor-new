@@ -179,9 +179,6 @@ pub(crate) fn job_section<'a>(
 }
 
 pub(crate) const SOURCE_SHA: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
-pub(crate) const WORKFLOW_REF: &str =
-    "tailrocks/velnor-new/.github/workflows/job-image-candidate.yml@refs/heads/main";
-
 #[test]
 fn runner_qualification_signs_only_the_exact_credential_free_runtime_proof()
 -> Result<(), Box<dyn Error>> {

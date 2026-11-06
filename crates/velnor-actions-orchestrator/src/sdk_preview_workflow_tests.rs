@@ -6,6 +6,7 @@ use std::{collections::BTreeMap, error::Error};
 use velnor_actions_contract::{
     GeneratorLock, NonInputs, ReleaseTarget, WorkflowPolicy, config::VelnorConfig,
 };
+use velnor_actions_mise::ToolCatalog;
 use velnor_actions_workflow_renderer::schema2::{ConsumerReleaseSpec, render_consumer_preview};
 
 fn spec() -> Result<ConsumerReleaseSpec, Box<dyn Error>> {
@@ -75,7 +76,7 @@ platform = "linux/amd64"
         producer_setup_by_target: setups,
         install_gh_argv: vec!["mise".into(), "install".into(), "gh@2.103.3".into()],
         install_rust_argv: vec!["mise".into(), "install".into(), "rust@1.99.1".into()],
-        verify_rust_argv: vec!["rustc".into(), "--version".into()],
+        verify_rust_argv: crate::workflow::verify_rust_argv(&ToolCatalog::pinned()),
         producer_source_prep: vec![],
         producer_cargo_env: BTreeMap::new(),
         gh_argv: vec!["gh".into()],

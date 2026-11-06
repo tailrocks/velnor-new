@@ -92,22 +92,9 @@ fn run_with_deadline(
             descriptors_output,
             deadline,
         ),
-        ImageMaintenanceCommand::RecordRunnerCandidates {
-            root,
-            source_commit,
-            runner_archive,
-            dind_archive,
-            probe_archive,
-            output_directory,
-        } => record_runner_candidates(&RecordRunnerCandidatesRequest {
-            root: root.clone(),
-            source_commit: source_commit.clone(),
-            runner_archive: runner_archive.clone(),
-            dind_archive: dind_archive.clone(),
-            probe_archive: probe_archive.clone(),
-            output_directory: output_directory.clone(),
-            deadline,
-        }),
+        ImageMaintenanceCommand::RecordRunnerCandidates { .. } => {
+            record_candidate_request(command, deadline)
+        }
         ImageMaintenanceCommand::WriteRunnerQualification { .. } => {
             write_qualification_request(command, deadline)
         }
@@ -121,6 +108,32 @@ fn run_with_deadline(
         }),
         ImageMaintenanceCommand::PublishImage { .. } => publish_request(command, deadline),
     }
+}
+
+fn record_candidate_request(
+    command: &ImageMaintenanceCommand,
+    deadline: CheckDeadline,
+) -> Result<(), OrchestratorError> {
+    let ImageMaintenanceCommand::RecordRunnerCandidates {
+        root,
+        source_commit,
+        runner_archive,
+        dind_archive,
+        probe_archive,
+        output_directory,
+    } = command
+    else {
+        unreachable!()
+    };
+    record_runner_candidates(&RecordRunnerCandidatesRequest {
+        root: root.to_owned(),
+        source_commit: source_commit.to_owned(),
+        runner_archive: runner_archive.to_owned(),
+        dind_archive: dind_archive.to_owned(),
+        probe_archive: probe_archive.to_owned(),
+        output_directory: output_directory.to_owned(),
+        deadline,
+    })
 }
 
 fn write_qualification_request(
