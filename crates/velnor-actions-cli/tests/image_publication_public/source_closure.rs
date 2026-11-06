@@ -151,7 +151,8 @@ fn public_runner_family_rejects_unbound_dockerfile_context_sources() -> Result<(
 #[test]
 fn public_runner_family_rejects_decoy_pins_and_later_tool_replacement() -> Result<(), Box<dyn Error>>
 {
-    let scenario = "source_closure::public_runner_family_rejects_decoy_pins_and_later_tool_replacement";
+    let scenario =
+        "source_closure::public_runner_family_rejects_decoy_pins_and_later_tool_replacement";
     if !super::begin_isolated(scenario)? {
         return Ok(());
     }
