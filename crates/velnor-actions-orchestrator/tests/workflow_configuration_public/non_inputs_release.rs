@@ -320,3 +320,25 @@ fn stable_select_step_carries_release_status_token() -> TestResult {
     );
     Ok(())
 }
+
+#[test]
+fn stable_prepare_step_does_not_cap_file_size_during_tool_exec() -> TestResult {
+    let workflows = release_workflows(None)?;
+    let (_, workflow) = workflows
+        .iter()
+        .find(|(name, _)| name.as_str() == "binary-release.yml")
+        .ok_or("binary-release.yml is missing")?;
+    let (_, steps) = jobs_of(workflow)
+        .into_iter()
+        .find(|(job, _)| job == "stable-prepare")
+        .ok_or("stable-prepare is missing")?;
+    let step = steps
+        .iter()
+        .find(|step| step.contains("Prepare the version PR with qualified release-plz"))
+        .ok_or("stable prepare release-plz step is missing")?;
+    assert!(
+        !step.contains("ulimit -f"),
+        "stable prepare step must not set ulimit -f around mise exec"
+    );
+    Ok(())
+}
