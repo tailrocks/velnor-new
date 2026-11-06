@@ -109,10 +109,12 @@ fn check_runtime_condition(
     id: &str,
     index: usize,
     step: &Step,
-    _role: ReleaseRole,
+    role: ReleaseRole,
 ) -> Result<(), RenderError> {
     let expected = match step.name.as_str() {
-        "Setup Mise" | "Prepare pinned tools" | "Verify Rust channel manifest" => None,
+        "Setup Mise" | "Prepare pinned tools" | "Verify Rust channel manifest" => (role
+            == ReleaseRole::Preflight)
+            .then_some("steps.release-admission.outputs.eligible == 'true'"),
         "Reject unsupported release action" => Some(REJECT_MODE_CONDITION),
         "Release journal-start" | "Release journal-coordinate" | "Acquire release-plz" => {
             Some(COORDINATE_CONDITION)

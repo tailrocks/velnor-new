@@ -137,6 +137,9 @@ fn valid(spec: &ReleaseWorkflowSpec, rust: &str) -> bool {
 #[path = "release_steps_tests_preparation.rs"]
 mod preparation;
 
+#[path = "release_steps_tests_eligibility.rs"]
+mod eligibility;
+
 #[path = "release_steps_tests_render.rs"]
 mod render;
 

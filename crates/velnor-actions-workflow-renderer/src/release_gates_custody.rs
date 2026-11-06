@@ -29,11 +29,16 @@ pub(super) fn check_rust_custody(
     catalog: &velnor_actions_mise::ToolCatalog,
 ) -> Result<(), RenderError> {
     use velnor_actions_contract::StepRole;
-    let prepare = release_rust_prepare(catalog)?;
-    let verify = crate::verifier_builders::rust_verifier_shell_step(
+    let mut prepare = release_rust_prepare(catalog)?;
+    let mut verify = crate::verifier_builders::rust_verifier_shell_step(
         catalog,
         crate::verifier_builders::ToolchainPhase::Installed,
     )?;
+    if job.role == ReleaseRole::Preflight {
+        let condition = Some("steps.release-admission.outputs.eligible == 'true'".to_owned());
+        prepare.condition.clone_from(&condition);
+        verify.condition = condition;
+    }
     let prepared: Vec<_> = job
         .steps
         .iter()

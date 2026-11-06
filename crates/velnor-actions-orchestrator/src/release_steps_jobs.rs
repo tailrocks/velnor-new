@@ -23,10 +23,14 @@ fn common_source_steps(
     if require {
         steps.push(controller_step(parts, "toolchain-acquire")?);
     } else {
-        steps.push(parts.setup.clone());
-        steps.push(parts.prepare_rust.clone());
+        steps.push(conditional(parts.setup.clone()));
+        steps.push(conditional(parts.prepare_rust.clone()));
     }
-    steps.push(parts.verify_rust.clone());
+    steps.push(if require {
+        parts.verify_rust.clone()
+    } else {
+        conditional(parts.verify_rust.clone())
+    });
     Ok(steps)
 }
 
