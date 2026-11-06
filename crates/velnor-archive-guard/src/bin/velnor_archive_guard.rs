@@ -7,7 +7,7 @@
 )]
 use std::env;
 use std::ffi::OsString;
-use std::io;
+use std::io::{self, Write};
 use std::process::ExitCode;
 
 use velnor_archive_guard::owned_archive_guard;
@@ -56,6 +56,22 @@ fn run() -> Result<(), String> {
         }
         println!("{fingerprint}");
         return Ok(());
+    }
+    if mode == "tree-identity" || mode == "link-identity" {
+        let root = arguments
+            .next()
+            .ok_or_else(|| "tree path is required".to_owned())?;
+        if arguments.next().is_some() {
+            return Err("unexpected archive guard argument".to_owned());
+        }
+        let identity = velnor_archive_guard::golden_collector::tree_identity(
+            std::path::Path::new(&root),
+            mode == "link-identity",
+        )?;
+        return io::stdout()
+            .lock()
+            .write_all(&identity)
+            .map_err(|error| error.to_string());
     }
     if let Some(result) = qualification_mode(&mode, &mut arguments) {
         return result;
@@ -125,22 +141,6 @@ fn qualification_mode(
                 std::path::Path::new(&manifest),
                 std::path::Path::new(&root),
             )
-        }
-        "qualification-golden-tree" | "qualification-golden-links" => {
-            let Some(root) = arguments.next() else {
-                return Some(Err("golden tree root is required".into()));
-            };
-            if arguments.next().is_some() {
-                return Some(Err("unexpected archive guard argument".into()));
-            }
-            velnor_archive_guard::golden_collector::qualification_tree_identity(
-                std::path::Path::new(&root),
-                mode == "qualification-golden-links",
-            )
-            .and_then(|bytes| {
-                io::Write::write_all(&mut io::stdout().lock(), &bytes)
-                    .map_err(|error| error.to_string())
-            })
         }
         _ => return None,
     };

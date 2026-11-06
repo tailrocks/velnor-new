@@ -6,8 +6,6 @@ use std::fs;
 use std::os::unix::fs::symlink;
 use std::process::Command;
 
-#[path = "golden_identity_public.rs"]
-mod golden_identity_public;
 #[path = "golden_collector_public/bounded.rs"]
 mod bounded;
 #[path = "golden_collector_public/executable_custody.rs"]
@@ -234,3 +232,6 @@ fn admits_both_supported_thin_macho_architectures_and_rejects_unknown_architectu
     );
     Ok(())
 }
+
+#[path = "golden_collector_public/release_tree_identity.rs"]
+mod release_tree_identity;

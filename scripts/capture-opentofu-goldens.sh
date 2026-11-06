@@ -412,19 +412,6 @@ fs.writeFileSync(file, content);
 NODE
 }
 
-# Use the collector's mode, content, and link identity for both oracles.
-hash_tree() {
-  verify_qualification_guard || return 1
-  "$QUALIFICATION_GUARD_BIN" qualification-golden-tree "$1" >"$2" || return 1
-  verify_qualification_guard
-}
-
-link_identity() {
-  verify_qualification_guard || return 1
-  "$QUALIFICATION_GUARD_BIN" qualification-golden-links "$1" || return 1
-  verify_qualification_guard
-}
-
 build_bin() {
   if [ "$BIN_EXPLICIT" -eq 1 ]; then
     if [ ! -f "$BIN" ] || [ ! -x "$BIN" ]; then
