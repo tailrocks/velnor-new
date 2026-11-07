@@ -113,26 +113,18 @@ def verify_programs(helper, claim_helper, unit, program_sha256, claim_sha256):
 def open_dropin(data):
     flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
     parent = os.open('/run/systemd/system', flags)
-    directory = None
+    directory = descriptor = None
     try:
+        info = os.fstat(parent)
+        if info.st_uid != 0 or info.st_mode & 0o022:
+            raise ManagerError('watch staging invalid')
         directory = os.open(data['unit'] + '.d', flags, dir_fd=parent)
-        for descriptor in (parent, directory):
-            info = os.fstat(descriptor)
-            if info.st_uid != 0 or info.st_mode & 0o022:
-                raise ManagerError('watch staging invalid')
-        fd = os.open('deadline.conf', os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC, dir_fd=directory)
-        try:
-            info = os.fstat(fd)
-            expected = ('[Unit]\nJobTimeoutSec=' + str(data['runtime_seconds']) + 's\n').encode('ascii')
-            if (not stat.S_ISREG(info.st_mode) or info.st_uid != 0 or stat.S_IMODE(info.st_mode) != 0o600
-                    or os.read(fd, 1024) != expected):
-                raise ManagerError('watch staging changed')
-        finally:
-            os.close(fd)
-    except BaseException:
-        os.close(parent)
-        raise
+        descriptor = os.open('deadline.conf', os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_NONBLOCK, dir_fd=directory)
+        expected = ('[Unit]\nJobTimeoutSec=' + str(data['runtime_seconds']) + 's\n').encode('ascii')
+        result = parent, data['unit'] + '.d', directory, descriptor, expected
+        parent = directory = descriptor = None
+        return result
     finally:
-        if directory is not None:
-            os.close(directory)
-    return parent, data['unit'] + '.d'
+        for held in (descriptor, directory, parent):
+            if held is not None:
+                os.close(held)

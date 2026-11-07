@@ -100,16 +100,22 @@ class Manager:
         result._watch_data = data
         result._watch_unit = data['unit']
         result._watch_start_allowed = False
-        result.subscribe(deadline)
         try:
-            result.dropin_parent, result.dropin_name = open_dropin(data)
+            result.subscribe(deadline)
+            parent, name, directory, descriptor, payload = open_dropin(data)
+            result.dropin_parent, result.dropin_name = parent, name
+            try:
+                result.generated_deadline = GeneratedDeadline(data['unit'], directory, descriptor, payload)
+            finally:
+                os.close(descriptor)
+                os.close(directory)
+            result._method(result.owner, '/org/freedesktop/systemd1', 'org.freedesktop.systemd1.Manager',
+                           'RefUnit', [('s', data['unit'])], deadline)
+            result.validate_watch(deadline)
+            return result
         except BaseException:
             result.close()
             raise
-        result._method(result.owner, '/org/freedesktop/systemd1', 'org.freedesktop.systemd1.Manager',
-                       'RefUnit', [('s', data['unit'])], deadline)
-        result.validate_watch(deadline)
-        return result
 
     def validate_watch(self, deadline):
         data = read_watch(self.watch)

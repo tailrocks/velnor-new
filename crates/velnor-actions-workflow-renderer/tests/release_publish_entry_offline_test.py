@@ -5,7 +5,6 @@ import os
 from pathlib import Path
 import shutil
 import sys
-import types
 import unittest
 from unittest.mock import patch
 
@@ -28,7 +27,6 @@ class PublisherEntryOfflineTest(unittest.TestCase):
         values['VELNOR_RELEASE_BUDGET'] = values['VELNOR_RELEASE_BUDGET'].rsplit(':', 1)[0] + ':' + str(handoff.deadline)
         values.update(handoff.watch.prepare_exec_environment())
         with patch.dict(os.environ, values, clear=True), \
-                patch.object(os, 'uname', return_value=types.SimpleNamespace(machine='x86_64')), \
                 patch.object(sys, 'argv', arguments):
             with self.assertRaises(Exception) as failure:
                 entry['main']()
