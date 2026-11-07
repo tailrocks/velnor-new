@@ -72,7 +72,7 @@ def wait_bus(container):
     raise TimeoutError('qualification DBus readiness deadline')
 
 
-def container_cases(context):
+def container_cases(context, scenarios=None):
     tag = 'velnor-manager-policy-check:' + secrets.token_hex(16)
     command(['docker', 'build', '--tag', tag, str(context)], 600)
     container = None
@@ -85,6 +85,20 @@ def container_cases(context):
             raise ValueError('qualification container identity')
         container = identity
         wait_bus(container)
+        if scenarios is not None:
+            command(['docker', 'exec', container, '/usr/bin/python3', '-I', '-S', '-B', '-c',
+                     'import os; assert set(os.listdir("/sys/class/net")) == {"lo"}; '
+                     'assert all(os.access(p, os.X_OK) for p in ("/usr/bin/curl", "/usr/bin/cc"))'], 10)
+            command(['docker', 'cp', str(scenarios), container + ':/opt/velnor-scenarios'], 20)
+            tests = '/opt/velnor-scenarios/tests/'
+            command(['docker', 'exec', container, '/usr/bin/env', '-i', 'PATH=/usr/bin:/bin',
+                     'HOME=/nonexistent', 'LANG=C', '/usr/bin/python3', '-I', '-S', '-B',
+                     tests + 'release_manager_qualification.py', '--execute'], 240)
+            result = command(['docker', 'exec', container, '/usr/bin/env', '-i', 'PATH=/usr/bin:/bin',
+                              'HOME=/nonexistent', 'LANG=C', '/usr/bin/python3', '-I', '-S', '-B',
+                              tests + 'release_manager_home_access_test.py'], 300)
+            assert_tests(result, 2)
+            return
         renderer = '/opt/velnor-policy/crates/velnor-actions-workflow-renderer'
         command(['docker', 'exec', container, '/usr/bin/mkdir', '-p', renderer + '/src',
                  renderer + '/tests', '/opt/velnor-policy/scripts'], 10)
@@ -122,7 +136,15 @@ def container_cases(context):
 
 def main():
     require_host()
-    clean_host()
+    scenarios = None
+    if sys.argv[1:]:
+        if len(sys.argv) != 3 or sys.argv[1] != '--release-scenarios':
+            raise ValueError('invalid qualification request')
+        scenarios = Path(sys.argv[2]).resolve(strict=True)
+        if not scenarios.is_dir():
+            raise ValueError('invalid staged scenarios')
+    else:
+        clean_host()
     cache = Path(os.environ.get('RUNNER_TEMP', tempfile.gettempdir())) / 'velnor-manager-package-cache'
     with tempfile.TemporaryDirectory(prefix='velnor-manager-policy-check-') as temporary:
         output = Path(temporary)
@@ -131,7 +153,9 @@ def main():
         context = Path(result.stdout.decode('utf-8').strip())
         if context.parent != output or not context.is_dir():
             raise ValueError('qualification context identity')
-        container_cases(context)
+        container_cases(context, scenarios)
+    if scenarios is not None:
+        return
     evidence = {'schema': 1, 'source': 'mise-task-v1', 'head': os.environ['VELNOR_CHECK_HEAD'],
                 'check_id': os.environ['VELNOR_CHECK_ID'], 'platform': os.environ['VELNOR_CHECK_PLATFORM'],
                 'scenarios': [{'id': name, 'executed': True, 'status': 'passed'} for name in

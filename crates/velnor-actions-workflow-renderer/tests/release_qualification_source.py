@@ -3,6 +3,8 @@
 
 import os
 import stat
+import sys
+from pathlib import Path
 
 
 FILES = {
@@ -11,7 +13,8 @@ FILES = {
             "release_launcher_watch.py", "release_supervisor_claim.py", "release_retained_parent.py",
             "release_source_executor.py", "release_source_channel.py", "release_upload_operation.py",
             "release_forge_broker.py", "release_bootstrap_watch.py", "release_watch_admission.py", "release_manager_policy_host.py",
-            "release_manager_policy_files.py", "release_manager_policy.py", "release_export_contract.py"),
+            "release_manager_policy_files.py", "release_manager_policy.py", "release_export_contract.py",
+            "release_rendered_entry.py"),
     "tests": ("release_qualification_source.py", "release_watch_fixture.py",
               "release_manager_policy_systemd_test.py",
               "release_manager_scenario_controller_test.py", "release_manager_proxy_test.py", "release_manager_qualification.py",
@@ -22,7 +25,7 @@ FILES = {
 }
 
 
-def stage(source, destination):
+def stage(source, destination, rendered_entry=None):
     source_fd = os.open(source, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC)
     try:
         for subdirectory, names in FILES.items():
@@ -32,7 +35,8 @@ def stage(source, destination):
                              dir_fd=source_fd)
             try:
                 for name in names:
-                    descriptor = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_NONBLOCK, dir_fd=parent)
+                    file = rendered_entry if name == "release_rendered_entry.py" and rendered_entry is not None else name
+                    descriptor = os.open(file, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_NONBLOCK, dir_fd=parent)
                     try:
                         metadata = os.fstat(descriptor)
                         if not stat.S_ISREG(metadata.st_mode) or metadata.st_size > 1024 * 1024:
@@ -52,3 +56,9 @@ def stage(source, destination):
                 os.close(parent)
     finally:
         os.close(source_fd)
+
+
+if __name__ == "__main__":
+    if len(sys.argv) != 5 or sys.argv[1] != "--stage":
+        raise SystemExit("invalid qualification staging request")
+    stage(Path(sys.argv[2]), Path(sys.argv[3]), Path(sys.argv[4]))

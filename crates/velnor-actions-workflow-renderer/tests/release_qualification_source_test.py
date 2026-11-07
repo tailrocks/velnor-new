@@ -14,17 +14,20 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from release_qualification_source import FILES, stage
 
 
+rendered_entry = Path(sys.argv.pop())
+
+
 class QualificationSourceTest(unittest.TestCase):
     def test_staged_source_loads_complete_real_qualification(self):
         source = Path(__file__).resolve().parents[1]
         with tempfile.TemporaryDirectory() as directory:
             destination = Path(directory)
-            stage(source, destination)
+            stage(source, destination, rendered_entry)
             for subdirectory, names in FILES.items():
                 self.assertEqual(set(path.name for path in (destination / subdirectory).iterdir()), set(names))
                 for name in names:
                     path = destination / subdirectory / name
-                    self.assertEqual(path.read_bytes(), (source / subdirectory / name).read_bytes())
+                    self.assertEqual(path.read_bytes(), (rendered_entry if name == 'release_rendered_entry.py' else source / subdirectory / name).read_bytes())
                     self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o444)
                     self.assertEqual(path.stat().st_uid, os.geteuid())
             code = """import importlib.util, pathlib, sys
@@ -44,6 +47,21 @@ for module_name, class_name, method in qualification.scenarios.values():
             result = subprocess.run([sys.executable, '-I', '-S', '-B', '-c', code, str(destination)],
                                     capture_output=True, text=True, timeout=30, check=False)
             self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_staging_rejects_invalid_rendered_entry(self):
+        source = Path(__file__).resolve().parents[1]
+        for fault in ('symlink', 'oversized'):
+            with self.subTest(fault=fault), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                candidate = root / 'rendered'
+                if fault == 'symlink':
+                    candidate.symlink_to(rendered_entry)
+                else:
+                    candidate.write_bytes(b'x' * (1024 * 1024 + 1))
+                destination = root / 'staged'
+                destination.mkdir()
+                with self.assertRaises((OSError, SystemExit)):
+                    stage(source, destination, candidate)
 
     def test_staging_rejects_symlink_nonregular_and_oversized_source(self):
         source = Path(__file__).resolve().parents[1]
@@ -66,7 +84,7 @@ for module_name, class_name, method in qualification.scenarios.values():
                 destination = root / 'staged'
                 destination.mkdir()
                 with self.assertRaises((OSError, SystemExit)):
-                    stage(candidate, destination)
+                    stage(candidate, destination, rendered_entry)
 
 
 if __name__ == '__main__':

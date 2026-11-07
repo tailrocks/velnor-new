@@ -47,11 +47,14 @@ class RetainedEntryTest(unittest.TestCase):
             helper.chmod(0o555)
             listener.bind(('127.0.0.1', 0))
             listener.listen(1)
+            listener.settimeout(1)
             output = os.memfd_create('fixture-output', os.MFD_CLOEXEC)
             manager = bus.Manager(str(helper), 20, self.watch.authority, deny_network=True)
             deadline = time.clock_gettime_ns(time.CLOCK_BOOTTIME) + 45_000_000_000
-            code = ('import socket,sys; s=socket.socket(); s.settimeout(1); '
-                    'assert s.connect_ex(("127.0.0.1",int(sys.argv[1]))) != 0; print("isolated")')
+            code = ('import os,socket,sys; assert set(os.listdir("/sys/class/net")) == {"lo"}; '
+                    's=socket.socket(); s.settimeout(1); '
+                    'assert s.connect_ex(("127.0.0.1",int(sys.argv[1]))) != 0; s.close(); '
+                    'print("isolated")')
             payload = json.dumps({'program': '/usr/bin/python3',
                                   'args': ['-I', '-S', '-c', code, str(listener.getsockname()[1])],
                                   'cwd': '/', 'env': {}, 'stdin': ''}).encode()
@@ -60,6 +63,8 @@ class RetainedEntryTest(unittest.TestCase):
                 lifecycle.supervise(manager, frame, deadline, output_fd=output)
                 os.lseek(output, 0, os.SEEK_SET)
                 self.assertEqual(os.read(output, 128), b'isolated\n')
+                with self.assertRaises(TimeoutError):
+                    listener.accept()
                 self.assertIsNone(manager.dropin_name)
             finally:
                 manager.close()

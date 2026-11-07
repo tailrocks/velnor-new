@@ -76,6 +76,7 @@ class RealManagerTest(unittest.TestCase):
             for section, setting in (
                     ('Service', 'KillSignal=SIGTERM'),
                     ('Service', 'KillMode=mixed'),
+                    ('Service', 'PrivateNetwork=yes'),
                     ('Unit', 'CollectMode=inactive')):
                 with self.subTest(setting=setting):
                     policy = '[' + section + ']\n' + setting + '\n'
@@ -106,6 +107,7 @@ class RealManagerTest(unittest.TestCase):
         for section, setting in (
                 ('Service', 'KillSignal=SIGTERM'),
                 ('Service', 'KillMode=mixed'),
+                ('Service', 'PrivateNetwork=yes'),
                 ('Unit', 'CollectMode=inactive')):
             with self.subTest(setting=setting):
                 watch = RootWatch(bus, lifecycle, root / 'src')
@@ -546,6 +548,7 @@ class RealManagerTest(unittest.TestCase):
                 if parent.poll() is None:
                     parent.kill()
                     parent.wait(timeout=3)
+                parent.stdin.close()
                 parent.stdout.close()
             subprocess.run(["/usr/bin/systemctl", "stop", unit, blocker], stdout=subprocess.DEVNULL,
                            stderr=subprocess.DEVNULL, check=False, timeout=10)

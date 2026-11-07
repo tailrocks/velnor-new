@@ -1,13 +1,33 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+fn rendered_entry() -> Result<(tempfile::TempDir, std::path::PathBuf), Box<dyn std::error::Error>> {
+    let directory = tempfile::tempdir()?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt as _;
+        std::fs::set_permissions(directory.path(), std::fs::Permissions::from_mode(0o755))?;
+    }
+    let path = directory.path().join("release_rendered_entry.py");
+    std::fs::write(
+        &path,
+        velnor_actions_workflow_renderer::release_root_publisher::render_entry(1800)?,
+    )?;
+    let mut permissions = std::fs::metadata(&path)?.permissions();
+    permissions.set_readonly(true);
+    std::fs::set_permissions(&path, permissions)?;
+    Ok((directory, path))
+}
+
 #[test]
 fn qualification_staging_preserves_complete_trusted_source()
 -> Result<(), Box<dyn std::error::Error>> {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let (_directory, entry) = rendered_entry()?;
     let status = std::process::Command::new("python3")
         .args(["-I", "-S", "-B"])
         .arg(root.join("tests/release_qualification_source_test.py"))
+        .arg(entry)
         .status()?;
     assert!(status.success());
     Ok(())
@@ -46,17 +66,28 @@ fn hosted_supervisor_runs_candidate_scenarios_and_controller_regressions()
     }
     assert!(release.lines().any(|line| line == "ID=ubuntu"));
     assert!(release.lines().any(|line| line == "VERSION_ID=\"26.04\""));
-    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests");
+    let crate_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let root = crate_root.join("tests");
+    let (directory, entry) = rendered_entry()?;
+    let staged = directory.path().join("staged");
+    std::fs::create_dir(&staged)?;
+    let status = std::process::Command::new("/usr/bin/python3")
+        .args(["-I", "-S", "-B"])
+        .arg(root.join("release_qualification_source.py"))
+        .arg("--stage")
+        .arg(crate_root)
+        .arg(&staged)
+        .arg(entry)
+        .status()?;
+    assert!(status.success(), "qualification source staging failed");
     for (file, arguments) in [
         ("release_bootstrap_watch_systemd_test.py", &[][..]),
         ("release_manager_scenario_controller_test.py", &[][..]),
-        ("release_manager_home_access_test.py", &[][..]),
         ("release_source_names_test.py", &[][..]),
         (
             "release_manager_systemd_test.py",
             &["RealManagerTest.test_reobserved_cgroup_cannot_change_invocation"][..],
         ),
-        ("release_manager_qualification.py", &["--execute"][..]),
     ] {
         let status = std::process::Command::new("/usr/bin/sudo")
             .env_clear()
@@ -75,7 +106,17 @@ fn hosted_supervisor_runs_candidate_scenarios_and_controller_regressions()
                 "-S",
                 "-B",
             ])
-            .arg(root.join(file))
+            .arg(
+                if matches!(
+                    file,
+                    "release_manager_scenario_controller_test.py"
+                        | "release_manager_systemd_test.py"
+                ) {
+                    staged.join("tests").join(file)
+                } else {
+                    root.join(file)
+                },
+            )
             .args(arguments)
             .status()?;
         assert!(
@@ -83,11 +124,18 @@ fn hosted_supervisor_runs_candidate_scenarios_and_controller_regressions()
             "hosted supervisor qualification failed: {file}"
         );
     }
-    hosted_nested_workspace_qualification(&root)?;
-    let workspace = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+    let workspace = crate_root
         .parent()
         .and_then(std::path::Path::parent)
         .ok_or("workspace root")?;
+    let status = std::process::Command::new("python3")
+        .args(["-I", "-S", "-B"])
+        .arg(workspace.join("scripts/qualify-manager-policy.py"))
+        .arg("--release-scenarios")
+        .arg(&staged)
+        .status()?;
+    assert!(status.success(), "hermetic release scenarios failed");
+    hosted_nested_workspace_qualification(&root)?;
     let result = std::process::Command::new("cargo")
         .args([
             "nextest",

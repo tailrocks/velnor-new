@@ -6,7 +6,6 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src'))
 
 import base64
-import hashlib
 import json
 import os
 from pathlib import Path
@@ -23,48 +22,7 @@ from release_watch_fixture import RootWatch, snapshot_roots, cleanup_orphans
 
 
 source_root = Path(__file__).resolve().parents[1] / 'src'
-source = (source_root / 'release_publish_entry.py').read_text()
-bootstrap_sources = (('__VELNOR_EXPORT_VERIFIER_PAYLOAD__', 'release_export_contract.py'),
-                     ('__VELNOR_MANAGER_PAYLOAD__', 'release_manager_bus.py'),
-                     ('__VELNOR_WATCH_ADMISSION_PAYLOAD__', 'release_watch_admission.py'),
-                     ('__VELNOR_MANAGER_POLICY_HOST_PAYLOAD__', 'release_manager_policy_host.py'),
-                     ('__VELNOR_MANAGER_POLICY_FILES_PAYLOAD__', 'release_manager_policy_files.py'),
-                     ('__VELNOR_MANAGER_POLICY_PAYLOAD__', 'release_manager_policy.py'),
-                     ('__VELNOR_LIFECYCLE_PAYLOAD__', 'release_manager_lifecycle.py'),
-                     ('__VELNOR_HELPER_PAYLOAD__', 'release_supervisor_exec.py'),
-                     ('__VELNOR_BOOTSTRAP_PAYLOAD__', 'release_generator_bootstrap.sh'),
-                     ('__VELNOR_WATCH_BOOTSTRAP_PAYLOAD__', 'release_bootstrap_watch.py'),
-                     ('__VELNOR_WATCH_PROGRAM_PAYLOAD__', 'release_launcher_watch.py'),
-                     ('__VELNOR_WATCH_CLAIM_PAYLOAD__', 'release_supervisor_claim.py'))
-for marker, name in bootstrap_sources:
-    source = source.replace(marker, base64.b64encode((source_root / name).read_bytes()).decode())
-source = (source.replace('__VELNOR_JOB_TIMEOUT_SECONDS__', '1800')
-          .replace('__VELNOR_CRATE_RELEASE_WORKFLOW_PATH__', '.github/workflows/crate-release.yml'))
-bundle = {key: base64.b64encode((source_root / name).read_bytes()).decode('ascii')
-          for key, name in (('coordinator', 'release_coordinator_exec.py'),
-                            ('retained', 'release_retained_parent.py'),
-                            ('source', 'release_source_executor.py'),
-                            ('channel', 'release_source_channel.py'),
-                            ('upload', 'release_upload_operation.py'),
-                            ('broker', 'release_forge_broker.py'))}
-keys = ('export_verifier', 'manager', 'watch_admission', 'manager_policy_host',
-        'manager_policy_files', 'manager_policy', 'lifecycle', 'helper', 'bootstrap',
-        'bootstrap_watch', 'watch_program', 'claim')
-constants = ('EXPORT_VERIFIER', 'MANAGER', 'WATCH_ADMISSION', 'MANAGER_POLICY_HOST',
-             'MANAGER_POLICY_FILES', 'MANAGER_POLICY', 'LIFECYCLE', 'HELPER', 'BOOTSTRAP',
-             'WATCH_BOOTSTRAP', 'WATCH_PROGRAM', 'CLAIM')
-contract = {'schema': 1, 'bootstrap': [
-    {'key': key, 'constant': constant, 'marker': marker.removeprefix('__VELNOR_').removesuffix('_PAYLOAD__'),
-     'sha256': hashlib.sha256((source_root / name).read_bytes()).hexdigest()}
-    for key, constant, (marker, name) in zip(keys, constants, bootstrap_sources, strict=True)],
-    'supervisor': {key: hashlib.sha256(base64.b64decode(value)).hexdigest() for key, value in bundle.items()}}
-contract['bootstrap'].insert(1, contract['bootstrap'].pop(8))
-source = source.replace('__VELNOR_EXPORT_CONTRACT_PAYLOAD__',
-                        base64.b64encode(json.dumps(contract, sort_keys=True, separators=(',', ':')).encode()).decode())
-marker = '__VELNOR_SUPERVISOR_PAYLOAD__'
-if source.count(marker) != 1:
-    raise ValueError('invalid supervisor payload marker')
-source = source.replace(marker, base64.b64encode(json.dumps(bundle).encode('utf-8')).decode('ascii'))
+source = (source_root / 'release_rendered_entry.py').read_text()
 entry = {'__name__': 'publisher_entry_fixture'}
 exec(compile(source, 'release_publish_entry.py', 'exec'), entry)
 
