@@ -284,6 +284,9 @@ check_directory "$run_tmp"
 trap cleanup EXIT
 
 offline=()
+if [[ "${CARGO_NET_OFFLINE:-}" == true ]]; then
+  offline=(--offline)
+fi
 if [[ -n "$source_cache" ]]; then
   [[ -n "${RUNNER_TEMP:-}" && "$RUNNER_TEMP" == /* && "$source_cache" == "$RUNNER_TEMP/velnor/cargo" ]] \
     || fail 'source cache must be the qualification-owned Cargo home'

@@ -60,9 +60,9 @@ set -uo pipefail
 evidence="$RUNNER_TEMP/source-qualification-artifacts"
 log="$evidence/logs/archive-guard-build.log"
 receipt="$evidence/archive-guard-identity.txt"
-printf '%s\n' 'bash scripts/build-owned-archive-guard.sh' >"$evidence/logs/archive-guard-build.command"
+printf '%s\n' 'CARGO_NET_OFFLINE=true bash scripts/build-owned-archive-guard.sh --source-cache "$CARGO_HOME"' >"$evidence/logs/archive-guard-build.command"
 set +e
-bash scripts/build-owned-archive-guard.sh >"$log" 2>&1
+CARGO_NET_OFFLINE=true bash scripts/build-owned-archive-guard.sh --source-cache "$CARGO_HOME" >"$log" 2>&1
 command_status=$?
 cat "$log"
 identity_status=0
@@ -149,14 +149,14 @@ set +e
 evidence="$RUNNER_TEMP/source-qualification-artifacts"
 mise --no-config --no-env --no-hooks exec \
   "rust@$VELNOR_RUST_VERSION" "mr-boxington@$VELNOR_MBX_VERSION" -- \
-  mbx build --locked --release --package velnor-actions-cli --bin velnor-actions \
+  mbx build --locked --offline --release --package velnor-actions-cli --bin velnor-actions \
   --example qualification-diagnostics \
   >"$evidence/logs/cli-build.log" 2>&1
 command_status=$?
 if [ "$command_status" -eq 0 ]; then
   mise --no-config --no-env --no-hooks exec \
     "rust@$VELNOR_RUST_VERSION" "mr-boxington@$VELNOR_MBX_VERSION" -- \
-    mbx build --locked --release --package velnor-archive-guard --bin velnor-golden-collector \
+    mbx build --locked --offline --release --package velnor-archive-guard --bin velnor-golden-collector \
     >>"$evidence/logs/cli-build.log" 2>&1
   command_status=$?
 fi
