@@ -40,12 +40,7 @@ pub(super) fn prepare_captured_tap(
         )?),
         None => None,
     };
-    let tree = velnor_actions_mise::read_tap_tree(
-        &captured.checkout,
-        &captured.commit_sha,
-        preparation.deadline,
-    )
-    .map_err(|error| internal(&error.to_string()))?;
+    let tree = captured.tree.clone();
     if tree.len() > super::TREE_LIMIT {
         return Err(internal("tap_tree_too_large"));
     }

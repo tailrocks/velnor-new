@@ -13,6 +13,7 @@ mod metadata_cwd;
 mod permission_retry_darwin;
 mod rust_spec_kind;
 mod source_preview_lock;
+mod tap_capture_public;
 
 #[test]
 fn job_build_command_binds_validated_source_revision() -> Result<(), Box<dyn std::error::Error>> {

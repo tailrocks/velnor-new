@@ -482,6 +482,7 @@ crates/velnor-actions-mise/src/error.rs
 crates/velnor-actions-mise/src/gate6.rs
 crates/velnor-actions-mise/src/git.rs
 crates/velnor-actions-mise/src/git_tap_capture.rs
+crates/velnor-actions-mise/src/git_tap_capture/checkout_modes.rs
 crates/velnor-actions-mise/src/git_tap_capture/homebrew_pinned_source.rs
 crates/velnor-actions-mise/src/image_candidate_command.rs
 crates/velnor-actions-mise/src/lib.rs
