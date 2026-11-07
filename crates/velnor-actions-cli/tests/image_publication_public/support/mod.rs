@@ -30,10 +30,7 @@ pub(crate) use manifest_outcomes::{CapturedOutcome, ReplayMutation};
 pub(crate) use profile::FixtureProfile;
 pub(crate) use promotion::PromotionCase;
 pub(crate) use registry_state::{BlobFault, ExistingTag, MovedTag};
-pub(crate) use rejections::{
-    AttemptArtifactCase, RejectionCase, current_attestation, invalid_invocation_uri,
-    with_invocation, with_uri,
-};
+pub(crate) use rejections::{AttemptArtifactCase, RejectionCase};
 
 const RUN_ATTEMPT: u32 = 1;
 

@@ -159,6 +159,7 @@ fn verify_record() -> Result<(), Box<dyn std::error::Error>> {
     ]);
     check_identity(&bytes, &subjects)?;
     check_certificate_fields(&bytes, &subjects)?;
+    parser_cases::validate(&bytes, &subjects, &expectation())?;
     check_tampering(&record, &bundle, &identity, deadline)?;
     Ok(())
 }
@@ -285,3 +286,6 @@ fn check_tampering(
     );
     Ok(())
 }
+
+#[path = "package_release_signer_attestation_image_parser_cases.rs"]
+mod parser_cases;
