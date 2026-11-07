@@ -4,8 +4,7 @@
 use std::{
     collections::BTreeMap,
     fs,
-    io::Write,
-    os::unix::fs::{MetadataExt, OpenOptionsExt, PermissionsExt},
+    os::unix::fs::{MetadataExt, PermissionsExt},
     path::{Path, PathBuf},
 };
 
@@ -22,23 +21,24 @@ use super::super::validate::{
     BuildxLock, buildx_release_version, read_limited, read_lock, workflow_identity,
 };
 use super::super::{BuildJobCandidateRequest, source};
+use super::candidate_files::{copy_source_file, remove_our_archive_link, write_staged};
 use super::support;
 
-struct CandidateInputs {
-    root: PathBuf,
-    output_parent: PathBuf,
-    plugin: PathBuf,
-    source_inputs: BTreeMap<String, String>,
-    source_ref: String,
-    workflow: velnor_actions_contract::ImageCandidateWorkflow,
-    lock: BuildxLock,
+pub(super) struct CandidateInputs {
+    pub(super) root: PathBuf,
+    pub(super) output_parent: PathBuf,
+    pub(super) plugin: PathBuf,
+    pub(super) source_inputs: BTreeMap<String, String>,
+    pub(super) source_ref: String,
+    pub(super) workflow: velnor_actions_contract::ImageCandidateWorkflow,
+    pub(super) lock: BuildxLock,
 }
 
-struct BuildContext {
-    directory: TempDir,
-    docker_config: PathBuf,
+pub(super) struct BuildContext {
+    pub(super) directory: TempDir,
+    pub(super) docker_config: PathBuf,
     plugin: PathBuf,
-    archive: PathBuf,
+    pub(super) archive: PathBuf,
 }
 
 pub(super) fn build_job_candidate(
@@ -49,7 +49,7 @@ pub(super) fn build_job_candidate(
         .remaining()
         .map_err(|_| internal("image_candidate_deadline"))?;
     let inputs = prepare_inputs(request)?;
-    let context = prepare_context(&inputs)?;
+    let context = prepare_context(&inputs, CandidatePayload::Production)?;
     let builder = run_build(
         &context,
         &inputs.lock,
@@ -60,7 +60,7 @@ pub(super) fn build_job_candidate(
     publish_candidate(&context, request, &record)
 }
 
-fn prepare_inputs(
+pub(super) fn prepare_inputs(
     request: &BuildJobCandidateRequest,
 ) -> Result<CandidateInputs, OrchestratorError> {
     let root = source::checked_root(&request.root)?;
@@ -101,7 +101,19 @@ fn prepare_inputs(
     })
 }
 
-fn prepare_context(inputs: &CandidateInputs) -> Result<BuildContext, OrchestratorError> {
+#[derive(Clone, Copy)]
+pub(super) enum CandidatePayload<'a> {
+    Production,
+    Qualification {
+        binary: &'a Path,
+        binary_sha256: &'a str,
+    },
+}
+
+pub(super) fn prepare_context(
+    inputs: &CandidateInputs,
+    payload: CandidatePayload<'_>,
+) -> Result<BuildContext, OrchestratorError> {
     let directory = Builder::new()
         .prefix(".velnor-job-image-candidate-")
         .permissions(fs::Permissions::from_mode(0o700))
@@ -112,9 +124,31 @@ fn prepare_context(inputs: &CandidateInputs) -> Result<BuildContext, Orchestrato
                 error.to_string(),
             )
         })?;
-    let dockerfile = inputs.root.join("images/job/ubuntu-26.04/Dockerfile");
-    let expected = source::hash_source_file(&inputs.root, "images/job/ubuntu-26.04/Dockerfile")?;
+    let dockerfile_path = match &payload {
+        CandidatePayload::Production => "images/job/ubuntu-26.04/Dockerfile",
+        CandidatePayload::Qualification { .. } => {
+            "crates/velnor-actions-cli/tests/fixtures/native-image-qualification/Dockerfile"
+        }
+    };
+    let dockerfile = inputs.root.join(dockerfile_path);
+    let expected = source::hash_source_file(&inputs.root, dockerfile_path)?;
     copy_source_file(&dockerfile, &directory.path().join("Dockerfile"), &expected)?;
+    if let CandidatePayload::Qualification {
+        binary,
+        binary_sha256,
+    } = payload
+    {
+        if support::hash_regular(binary, support::MAX_BUILDX_BYTES)? != binary_sha256 {
+            return Err(internal("native_qualification_binary_changed"));
+        }
+        let output = directory.path().join("fixture");
+        fs::copy(binary, &output).map_err(|error| {
+            OrchestratorError::io(output.display().to_string(), error.to_string())
+        })?;
+        if support::hash_regular(&output, support::MAX_BUILDX_BYTES)? != binary_sha256 {
+            return Err(internal("native_qualification_binary_copy"));
+        }
+    }
     let docker_config = directory.path().join(support::DOCKER_ENV);
     let plugin_directory =
         support::private_subdirectory(directory.path(), "docker-config/cli-plugins")?;
@@ -134,7 +168,7 @@ fn prepare_context(inputs: &CandidateInputs) -> Result<BuildContext, Orchestrato
     })
 }
 
-fn run_build(
+pub(super) fn run_build(
     context: &BuildContext,
     lock: &BuildxLock,
     source_commit: &str,
@@ -226,8 +260,16 @@ fn publish_candidate(
 ) -> Result<(), OrchestratorError> {
     let bytes = serialize_image_candidate_record(record)
         .map_err(|_| internal("image_candidate_record_invalid"))?;
+    publish_bytes(context, request, &bytes)
+}
+
+pub(super) fn publish_bytes(
+    context: &BuildContext,
+    request: &BuildJobCandidateRequest,
+    bytes: &[u8],
+) -> Result<(), OrchestratorError> {
     let staged_record = context.directory.path().join("candidate.json");
-    write_staged(&staged_record, &bytes)?;
+    write_staged(&staged_record, bytes)?;
     fs::hard_link(&context.archive, &request.archive_path).map_err(|error| {
         OrchestratorError::io(
             request.archive_path.display().to_string(),
@@ -316,53 +358,4 @@ fn validate_outputs(
         return Err(internal("image_candidate_output_exclusive"));
     }
     Ok(parent.to_path_buf())
-}
-
-fn copy_source_file(
-    source_path: &Path,
-    destination: &Path,
-    expected_sha: &str,
-) -> Result<(), OrchestratorError> {
-    let hash_from = |path: &Path| {
-        source::hash_source_file(
-            path.parent()
-                .ok_or_else(|| internal("image_candidate_copy_path"))?,
-            path.file_name()
-                .and_then(std::ffi::OsStr::to_str)
-                .ok_or_else(|| internal("image_candidate_copy_path"))?,
-        )
-    };
-    if hash_from(source_path)? != expected_sha {
-        return Err(internal("image_candidate_copy_source_changed"));
-    }
-    fs::copy(source_path, destination).map_err(|error| {
-        OrchestratorError::io(destination.display().to_string(), error.to_string())
-    })?;
-    if hash_from(destination)? != expected_sha {
-        return Err(internal("image_candidate_copy_changed"));
-    }
-    Ok(())
-}
-
-fn write_staged(path: &Path, bytes: &[u8]) -> Result<(), OrchestratorError> {
-    let mut file = fs::OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .mode(0o600)
-        .open(path)
-        .map_err(|error| OrchestratorError::io(path.display().to_string(), error.to_string()))?;
-    file.write_all(bytes)
-        .and_then(|()| file.sync_all())
-        .map_err(|error| OrchestratorError::io(path.display().to_string(), error.to_string()))
-}
-
-fn remove_our_archive_link(stage: &Path, output: &Path) {
-    let stage_metadata = fs::metadata(stage).ok();
-    let output_metadata = fs::symlink_metadata(output).ok();
-    if stage_metadata
-        .zip(output_metadata)
-        .is_some_and(|(left, right)| left.dev() == right.dev() && left.ino() == right.ino())
-    {
-        drop(fs::remove_file(output));
-    }
 }

@@ -32,6 +32,11 @@ path = "tests/native_image_candidate_inventory_public.rs"
 required-features = ["generator"]
 
 [[test]]
+name = "native_image_qualification_public"
+path = "tests/native_image_qualification_public.rs"
+required-features = ["generator"]
+
+[[test]]
 name = "ledger_helper_public"
 path = "tests/ledger_helper_public.rs"
 

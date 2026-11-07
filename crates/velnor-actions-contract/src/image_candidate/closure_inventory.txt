@@ -84,6 +84,10 @@ crates/velnor-actions-cli/src/dispatch_unmanaged.rs
 crates/velnor-actions-cli/src/entry.rs
 crates/velnor-actions-cli/src/ledger_helper.rs
 crates/velnor-actions-cli/src/main.rs
+crates/velnor-actions-cli/tests/fixtures/native-image-qualification/Cargo.lock
+crates/velnor-actions-cli/tests/fixtures/native-image-qualification/Cargo.toml
+crates/velnor-actions-cli/tests/fixtures/native-image-qualification/Dockerfile
+crates/velnor-actions-cli/tests/fixtures/native-image-qualification/src/main.rs
 crates/velnor-actions-contract/Cargo.toml
 crates/velnor-actions-contract/src/archive.rs
 crates/velnor-actions-contract/src/cachekey.rs
@@ -224,6 +228,7 @@ crates/velnor-actions-contract/src/image_candidate/closure_inventory.txt
 crates/velnor-actions-contract/src/image_candidate/closure_supplemental.txt
 crates/velnor-actions-contract/src/image_candidate/native_task.rs
 crates/velnor-actions-contract/src/image_candidate/operation.rs
+crates/velnor-actions-contract/src/image_candidate/qualification.rs
 crates/velnor-actions-contract/src/image_candidate/record.rs
 crates/velnor-actions-contract/src/image_candidate/runner_publication.rs
 crates/velnor-actions-contract/src/image_candidate/runner_publication_context.rs
@@ -751,7 +756,9 @@ crates/velnor-actions-orchestrator/src/image_build_tasks.rs
 crates/velnor-actions-orchestrator/src/image_maintenance.rs
 crates/velnor-actions-orchestrator/src/image_maintenance/build.rs
 crates/velnor-actions-orchestrator/src/image_maintenance/build_candidate.rs
+crates/velnor-actions-orchestrator/src/image_maintenance/build_candidate_files.rs
 crates/velnor-actions-orchestrator/src/image_maintenance/build_install.rs
+crates/velnor-actions-orchestrator/src/image_maintenance/build_qualification.rs
 crates/velnor-actions-orchestrator/src/image_maintenance/build_support.rs
 crates/velnor-actions-orchestrator/src/image_maintenance/promotion.rs
 crates/velnor-actions-orchestrator/src/image_maintenance/publication.rs
@@ -771,6 +778,7 @@ crates/velnor-actions-orchestrator/src/image_maintenance/publication_github/read
 crates/velnor-actions-orchestrator/src/image_maintenance/publication_github/snapshot.rs
 crates/velnor-actions-orchestrator/src/image_maintenance/publication_github_models.rs
 crates/velnor-actions-orchestrator/src/image_maintenance/publication_qualification.rs
+crates/velnor-actions-orchestrator/src/image_maintenance/qualification_runner.rs
 crates/velnor-actions-orchestrator/src/image_maintenance/runner_admission.rs
 crates/velnor-actions-orchestrator/src/image_maintenance/runner_profiles.rs
 crates/velnor-actions-orchestrator/src/image_maintenance/source.rs
@@ -1628,9 +1636,11 @@ mise.toml
 rust-toolchain.toml
 scripts/archive-guard-build-namespace.sh
 scripts/archive-guard-inputs.txt
+scripts/bootstrap-owned-tool-builder.py
 scripts/build-owned-archive-guard.sh
 scripts/check-owned-archive-guard-sources.sh
 scripts/generator-release/create-release-manifest.sh
 scripts/generator-release/preflight-release-tag.sh
 scripts/native-image-candidate-inventory.py
+scripts/owned_tool_source.py
 scripts/upgrades/bump-gradle-catalog.py

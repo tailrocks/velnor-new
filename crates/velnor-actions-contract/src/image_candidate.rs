@@ -6,7 +6,10 @@ mod task;
 pub use task::*;
 #[path = "image_candidate/operation.rs"]
 mod operation;
-pub use operation::{JobImageCandidateInputs, job_image_candidate_source_script};
+pub use operation::{
+    CandidateSourceTarget, JobImageCandidateInputs, NativeExecutionPurpose,
+    job_image_candidate_source_script, native_execution_environment_script,
+};
 pub(crate) use operation::{
     is_job_image_candidate_identity, validate_job_image_candidate_operation,
 };
@@ -18,6 +21,9 @@ pub use native_task::NativeTaskKind;
 mod image_candidate_closure;
 #[path = "image_candidate/record.rs"]
 mod image_candidate_record;
+#[path = "image_candidate/qualification.rs"]
+mod qualification;
+pub use qualification::*;
 #[path = "image_candidate/runner_publication.rs"]
 mod runner_publication;
 #[path = "image_candidate/runner_publication_context.rs"]

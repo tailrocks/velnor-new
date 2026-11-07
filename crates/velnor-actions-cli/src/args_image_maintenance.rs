@@ -23,6 +23,15 @@ pub(crate) enum ImageMaintenanceCommand {
         #[arg(long)]
         source_closure_path: PathBuf,
     },
+    /// Verify source identity for the nonpublication native fixture.
+    CheckQualificationSource {
+        #[arg(long)]
+        root: PathBuf,
+        #[arg(long)]
+        source_commit: String,
+        #[arg(long)]
+        source_closure_path: PathBuf,
+    },
     /// Build and validate an isolated OCI candidate with immutable source evidence.
     BuildJobCandidate {
         #[arg(long)]
@@ -35,6 +44,31 @@ pub(crate) enum ImageMaintenanceCommand {
         archive_path: PathBuf,
         #[arg(long)]
         record_path: PathBuf,
+        #[arg(long)]
+        source_closure_path: PathBuf,
+    },
+    /// Prepare and run the fixed nonpublication native image fixture.
+    RunNativeQualification {
+        #[arg(long)]
+        root: PathBuf,
+        #[arg(long)]
+        runner_temp: PathBuf,
+    },
+    /// Reverify the private native qualification toolchain.
+    VerifyNativeQualification {
+        #[arg(long)]
+        root: PathBuf,
+        #[arg(long)]
+        runner_temp: PathBuf,
+    },
+    /// Qualify the fixed nonpublication native image fixture.
+    QualifyNativeImage {
+        #[arg(long)]
+        root: PathBuf,
+        #[arg(long)]
+        source_commit: String,
+        #[arg(long)]
+        runner_temp: PathBuf,
         #[arg(long)]
         source_closure_path: PathBuf,
     },

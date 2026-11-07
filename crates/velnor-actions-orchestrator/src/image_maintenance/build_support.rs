@@ -75,7 +75,10 @@ pub(in crate::image_maintenance) fn private_subdirectory(
     Ok(path)
 }
 
-pub(super) fn hash_regular(path: &Path, limit: u64) -> Result<String, OrchestratorError> {
+pub(in crate::image_maintenance) fn hash_regular(
+    path: &Path,
+    limit: u64,
+) -> Result<String, OrchestratorError> {
     let metadata = fs::symlink_metadata(path)
         .map_err(|error| OrchestratorError::io(path.display().to_string(), error.to_string()))?;
     if !metadata.is_file()

@@ -10,8 +10,10 @@ use crate::OrchestratorError;
 #[path = "image_maintenance/build.rs"]
 mod build;
 #[path = "image_maintenance/source.rs"]
-mod source;
+pub(crate) mod source;
 
+#[path = "image_maintenance/qualification_runner.rs"]
+mod qualification_runner;
 #[path = "image_maintenance/validate.rs"]
 mod validate;
 
@@ -46,6 +48,22 @@ pub struct BuildJobCandidateRequest {
     pub runner_temp: PathBuf,
     pub archive_path: PathBuf,
     pub record_path: PathBuf,
+    pub source_closure_path: PathBuf,
+    pub deadline: CheckDeadline,
+}
+
+#[derive(Debug, Clone)]
+pub struct RunNativeQualificationRequest {
+    pub root: PathBuf,
+    pub runner_temp: PathBuf,
+    pub deadline: CheckDeadline,
+}
+
+#[derive(Debug, Clone)]
+pub struct QualifyNativeImageRequest {
+    pub root: PathBuf,
+    pub source_commit: String,
+    pub runner_temp: PathBuf,
     pub source_closure_path: PathBuf,
     pub deadline: CheckDeadline,
 }
@@ -110,12 +128,36 @@ pub fn install_buildx(request: &InstallBuildxRequest) -> Result<(), Orchestrator
     build::install_buildx(request)
 }
 
+pub fn verify_native_qualification_toolchain(
+    root: &Path,
+    runner_temp: &Path,
+    deadline: CheckDeadline,
+) -> Result<(), OrchestratorError> {
+    qualification_runner::verify_after_source(root, runner_temp, deadline)
+}
+
+pub fn run_native_qualification(
+    request: &RunNativeQualificationRequest,
+) -> Result<(), OrchestratorError> {
+    qualification_runner::run(request)
+}
+
 pub fn check_job_source(request: &CheckJobSourceRequest) -> Result<(), OrchestratorError> {
     source::check_job_source(request)
 }
 
+pub fn check_qualification_source(
+    request: &CheckJobSourceRequest,
+) -> Result<(), OrchestratorError> {
+    source::check_qualification_source(request)
+}
+
 pub fn build_job_candidate(request: &BuildJobCandidateRequest) -> Result<(), OrchestratorError> {
     build::build_job_candidate(request)
+}
+
+pub fn qualify_native_image(request: &QualifyNativeImageRequest) -> Result<(), OrchestratorError> {
+    build::qualify_native_image(request)
 }
 
 pub fn validate_job_candidate(

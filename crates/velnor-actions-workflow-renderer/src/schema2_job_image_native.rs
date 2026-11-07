@@ -25,5 +25,6 @@ pub(crate) fn source_script(build: &[String]) -> Result<String, RenderError> {
     let build = join_argv_for_run(build)?;
     Ok(velnor_actions_contract::job_image_candidate_source_script(
         &build,
+        velnor_actions_contract::CandidateSourceTarget::Checkout,
     ))
 }

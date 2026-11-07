@@ -129,6 +129,82 @@ impl ImageCandidateCommand {
         })
     }
 
+    pub fn qualification_daemon_version(
+        docker_config: &Path,
+    ) -> Result<IsolatedCommand, MiseError> {
+        if !docker_config.is_absolute() {
+            return Err(invalid("native_qualification_docker_config"));
+        }
+        IsolatedCommand::repo_task(
+            DOCKER,
+            vec![
+                "version".into(),
+                "--format".into(),
+                "{{.Server.Version}}".into(),
+            ],
+            &[],
+        )
+        .and_then(|command| {
+            command.with_env(&[("DOCKER_CONFIG".into(), docker_config.as_os_str().to_owned())])
+        })
+    }
+
+    pub fn load_qualification_image(
+        archive: &Path,
+        docker_config: &Path,
+    ) -> Result<IsolatedCommand, MiseError> {
+        if !archive.is_absolute() || !docker_config.is_absolute() {
+            return Err(invalid("native_qualification_load_paths"));
+        }
+        IsolatedCommand::repo_task(
+            DOCKER,
+            vec![
+                "image".into(),
+                "load".into(),
+                "--input".into(),
+                archive.as_os_str().to_owned(),
+            ],
+            &[],
+        )
+        .and_then(|command| {
+            command.with_env(&[("DOCKER_CONFIG".into(), docker_config.as_os_str().to_owned())])
+        })
+    }
+
+    pub fn run_qualification_image(
+        config_digest: &str,
+        docker_config: &Path,
+    ) -> Result<IsolatedCommand, MiseError> {
+        let Some(hash) = config_digest.strip_prefix("sha256:") else {
+            return Err(invalid("native_qualification_image_digest"));
+        };
+        if hash.len() != 64
+            || !hash
+                .bytes()
+                .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+            || !docker_config.is_absolute()
+        {
+            return Err(invalid("native_qualification_image_digest"));
+        }
+        IsolatedCommand::repo_task(
+            DOCKER,
+            vec![
+                "run".into(),
+                "--rm".into(),
+                "--network".into(),
+                "none".into(),
+                "--read-only".into(),
+                "--platform".into(),
+                "linux/amd64".into(),
+                config_digest.into(),
+            ],
+            &[],
+        )
+        .and_then(|command| {
+            command.with_env(&[("DOCKER_CONFIG".into(), docker_config.as_os_str().to_owned())])
+        })
+    }
+
     pub fn run(
         command: &IsolatedCommand,
         deadline: CheckDeadline,

@@ -3,8 +3,12 @@
 
 #[path = "build_candidate.rs"]
 mod candidate;
+#[path = "build_candidate_files.rs"]
+mod candidate_files;
 #[path = "build_install.rs"]
 mod install;
+#[path = "build_qualification.rs"]
+mod qualification;
 #[path = "build_support.rs"]
 pub(super) mod support;
 
@@ -20,4 +24,10 @@ pub(super) fn build_job_candidate(
     request: &BuildJobCandidateRequest,
 ) -> Result<(), OrchestratorError> {
     candidate::build_job_candidate(request)
+}
+
+pub(super) fn qualify_native_image(
+    request: &super::QualifyNativeImageRequest,
+) -> Result<(), OrchestratorError> {
+    qualification::qualify(request)
 }

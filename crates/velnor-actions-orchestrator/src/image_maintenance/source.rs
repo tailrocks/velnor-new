@@ -26,6 +26,25 @@ const MAX_SOURCE_FILE_BYTES: u64 = 16 * 1024 * 1024;
 const GIT_OUTPUT_CAPTURE_LIMIT_BYTES: usize = 8 * 1024 * 1024;
 
 pub(super) fn check_job_source(request: &CheckJobSourceRequest) -> Result<(), OrchestratorError> {
+    check_source(request, SourcePurpose::Production)
+}
+
+pub(super) fn check_qualification_source(
+    request: &CheckJobSourceRequest,
+) -> Result<(), OrchestratorError> {
+    check_source(request, SourcePurpose::Qualification)
+}
+
+#[derive(Clone, Copy)]
+enum SourcePurpose {
+    Production,
+    Qualification,
+}
+
+fn check_source(
+    request: &CheckJobSourceRequest,
+    purpose: SourcePurpose,
+) -> Result<(), OrchestratorError> {
     request
         .deadline
         .remaining()
@@ -38,10 +57,18 @@ pub(super) fn check_job_source(request: &CheckJobSourceRequest) -> Result<(), Or
     )?;
     if head.trim() != request.source_commit
         || env("GITHUB_SHA")? != request.source_commit
-        || env("GITHUB_WORKFLOW_SHA")? != request.source_commit
         || !is_sha1(&request.source_commit)
     {
         return Err(internal("image_candidate_source_identity"));
+    }
+    match purpose {
+        SourcePurpose::Production if env("GITHUB_WORKFLOW_SHA")? != request.source_commit => {
+            return Err(internal("image_candidate_source_identity"));
+        }
+        SourcePurpose::Qualification => {
+            super::validate::qualification_identity(&request.source_commit)?;
+        }
+        SourcePurpose::Production => {}
     }
     if request.source_closure_path.starts_with(&root) {
         return Err(internal("image_candidate_closure_inside_source"));
@@ -231,7 +258,7 @@ fn run_git_until(
     .run_until(GIT_OUTPUT_CAPTURE_LIMIT_BYTES, deadline)
 }
 
-pub(super) fn hash_source_file(root: &Path, relative: &str) -> Result<String, OrchestratorError> {
+pub(crate) fn hash_source_file(root: &Path, relative: &str) -> Result<String, OrchestratorError> {
     if relative.starts_with('/')
         || relative
             .split('/')

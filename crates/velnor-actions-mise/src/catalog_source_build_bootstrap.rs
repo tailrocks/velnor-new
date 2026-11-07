@@ -112,6 +112,36 @@ impl SourceBuildBootstrapAsset {
     }
 }
 
+pub fn native_linux_assets_json() -> Result<String, serde_json::Error> {
+    let assets = [
+        ("mise", SourceBuildBootstrapTool::Mise),
+        ("mbx", SourceBuildBootstrapTool::Mbx),
+    ]
+    .into_iter()
+    .map(|(name, tool)| {
+        let asset = official(tool, SourceBuildBootstrapHost::LinuxAmd64);
+        (
+            name.to_owned(),
+            serde_json::json!({
+                "url": asset.asset_url(),
+                "archive_sha256": asset.archive_sha256(),
+                "binary_sha256": asset.binary_sha256(),
+                "format": match asset.asset_format() {
+                    SourceBuildBootstrapFormat::Binary => "standalone",
+                    SourceBuildBootstrapFormat::TarGzip => "tar.gz",
+                },
+                "binary_member": asset.binary_member(),
+                "version": asset.version(),
+                "source_repository": asset.source_repository(),
+                "source_commit": asset.source_commit(),
+                "source_tree": asset.source_tree(),
+            }),
+        )
+    })
+    .collect::<serde_json::Map<_, _>>();
+    serde_json::to_string(&assets)
+}
+
 #[must_use]
 pub const fn official(
     tool: SourceBuildBootstrapTool,
@@ -169,8 +199,8 @@ const fn mbx(host: SourceBuildBootstrapHost) -> SourceBuildBootstrapAsset {
     let (asset_url, archive_sha256, binary_sha256) = match host {
         SourceBuildBootstrapHost::LinuxAmd64 => (
             "https://github.com/jdx/mr-boxington/releases/download/v1.29.2/mbx-x86_64-unknown-linux-gnu.tar.gz",
-            "73e135d3e9e8b8ddc938b42407179a239917b7f02d3fa5f601f6783e5c0d36d6",
-            "03337a94062a76bf08df445959a3b732416c3931752602edb8f36b12474a9400",
+            velnor_actions_contract::NATIVE_MBX_LINUX_AMD64_ARCHIVE_SHA256,
+            velnor_actions_contract::NATIVE_MBX_LINUX_AMD64_BINARY_SHA256,
         ),
         SourceBuildBootstrapHost::LinuxArm64 => (
             "https://github.com/jdx/mr-boxington/releases/download/v1.29.2/mbx-aarch64-unknown-linux-gnu.tar.gz",

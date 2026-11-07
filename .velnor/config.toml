@@ -45,10 +45,31 @@ non_inputs = [
 [[stacks.rust.inputs]]
 globs = [
   "crates/velnor-actions-*/**",
+  "crates/test_support/**",
   "crates/velnor-archive-guard/**",
   "crates/velnor-runner/Cargo.toml",
   "crates/velnor-runner/crates/*/**",
+  "images/job/**",
+  "images/runner/**",
+  "images/dind/**",
+  "images/resource-probe/**",
   "scripts/native-image-candidate-inventory.py",
+  "scripts/bootstrap-owned-tool-builder.py",
+  "scripts/owned_tool_source.py",
+  ".config/nextest.toml",
+  ".mise-version",
+  ".velnor/config.toml",
+  ".velnor/controller-approvals.json",
+  ".velnor/generator.lock",
+  ".velnor/mise.toml",
+  ".velnor/mise.lock",
+  ".velnor/runner.lock",
+  ".velnor/rust-toolchain.toml",
+  "Cargo.lock",
+  "Cargo.toml",
+  "mise.lock",
+  "mise.toml",
+  "rust-toolchain.toml",
 ]
 packages = ["velnor-actions-cli"]
 complete = true
@@ -114,6 +135,9 @@ complete = true
 [[stacks.rust.inputs]]
 globs = [
   "crates/velnor-actions-orchestrator/**",
+  "crates/test_support/**",
+  "images/dind/**",
+  "images/runner/**",
   ".velnor/qualification/**",
   ".velnor/config.toml",
   ".velnor/controller-approvals.json",
@@ -173,6 +197,7 @@ complete = true
 [[stacks.rust.inputs]]
 globs = [
   "crates/velnor-actions-mise/**",
+  ".velnor/generator.lock",
   "Cargo.toml",
   "Cargo.lock",
   "crates/**/Cargo.toml",

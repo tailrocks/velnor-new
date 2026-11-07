@@ -135,6 +135,24 @@ pub(super) fn workflow_identity()
     Ok((workflow, source_ref))
 }
 
+pub(super) fn qualification_identity(source_commit: &str) -> Result<(), OrchestratorError> {
+    let (workflow, source_ref) = workflow_identity()?;
+    let protected =
+        workflow.event == "pull_request" || source::env("GITHUB_REF_PROTECTED")? == "true";
+    if workflow.repository != "tailrocks/velnor-new"
+        || workflow.repository_id != 1_390_620_900
+        || !velnor_actions_contract::native_image_qualification_identity(
+            &source_ref,
+            source_commit,
+            &workflow,
+        )
+        || !protected
+    {
+        return Err(internal("native_qualification_workflow_identity"));
+    }
+    Ok(())
+}
+
 pub(super) fn buildx_release_version(builder: &str) -> Option<&str> {
     let version = builder.strip_prefix("github.com/docker/buildx v")?;
     let (version, suffix) = version
@@ -165,6 +183,7 @@ fn is_sha256(value: &str) -> bool {
 }
 
 pub(super) struct BuildxLock {
+    pub(super) docker_version: String,
     pub(super) version: String,
     pub(super) url: String,
     pub(super) sha256: String,
@@ -216,11 +235,13 @@ pub(super) fn read_lock(root: &Path) -> Result<BuildxLock, OrchestratorError> {
             .ok_or_else(|| internal("image_candidate_lock_pin"))
     };
     let lock = BuildxLock {
+        docker_version: get("docker_version")?,
         version: get("buildx_version")?,
         url: get("buildx_asset_url")?,
         sha256: get("buildx_sha256")?,
     };
-    if lock.version.is_empty()
+    if !velnor_actions_contract::config::is_exact_semver(&lock.docker_version)
+        || lock.version.is_empty()
         || !lock
             .url
             .starts_with("https://github.com/docker/buildx/releases/download/")

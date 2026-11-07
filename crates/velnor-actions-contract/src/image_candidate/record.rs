@@ -158,7 +158,7 @@ fn validate_source(source: &ImageCandidateSource) -> Result<(), ContractError> {
     Ok(())
 }
 
-fn validate_workflow(workflow: &ImageCandidateWorkflow) -> Result<(), ContractError> {
+pub(super) fn validate_workflow(workflow: &ImageCandidateWorkflow) -> Result<(), ContractError> {
     let mut repository_parts = workflow.repository.split('/');
     let valid_repository = repository_parts.next().is_some_and(is_repository_part)
         && repository_parts.next().is_some_and(is_repository_part)
@@ -183,7 +183,7 @@ fn validate_workflow(workflow: &ImageCandidateWorkflow) -> Result<(), ContractEr
     Ok(())
 }
 
-fn validate_build(build: &ImageCandidateBuild) -> Result<(), ContractError> {
+pub(super) fn validate_build(build: &ImageCandidateBuild) -> Result<(), ContractError> {
     if !is_buildx_identity(&build.builder)
         || build.platform != "linux/amd64"
         || !build.arguments.is_empty()
@@ -197,14 +197,14 @@ fn validate_build(build: &ImageCandidateBuild) -> Result<(), ContractError> {
     Ok(())
 }
 
-fn validate_archive(archive: &ImageCandidateArchive) -> Result<(), ContractError> {
+pub(super) fn validate_archive(archive: &ImageCandidateArchive) -> Result<(), ContractError> {
     if !is_hex(&archive.sha256, 64) || archive.size_bytes == 0 {
         return Err(invalid("archive_identity"));
     }
     Ok(())
 }
 
-fn validate_oci(oci: &ImageCandidateOci) -> Result<(), ContractError> {
+pub(super) fn validate_oci(oci: &ImageCandidateOci) -> Result<(), ContractError> {
     if !is_hex(&oci.archive_index_digest, 64)
         || !is_digest(&oci.platform_manifest_digest)
         || !is_digest(&oci.image_configuration_digest)

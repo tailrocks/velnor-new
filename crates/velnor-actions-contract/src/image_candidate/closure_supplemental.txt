@@ -1,9 +1,15 @@
+.mise-version
 .velnor/runner.lock
+crates/velnor-actions-cli/tests/fixtures/native-image-qualification/Cargo.lock
+crates/velnor-actions-cli/tests/fixtures/native-image-qualification/Cargo.toml
+crates/velnor-actions-cli/tests/fixtures/native-image-qualification/Dockerfile
+crates/velnor-actions-cli/tests/fixtures/native-image-qualification/src/main.rs
 images/job/ubuntu-26.04/Dockerfile
 images/job/ubuntu-26.04/README.md
 images/job/ubuntu-26.04/build-test.sh
 images/job/ubuntu-26.04/candidate/candidate.py
-.mise-version
 mise.lock
 mise.toml
 rust-toolchain.toml
+scripts/bootstrap-owned-tool-builder.py
+scripts/owned_tool_source.py

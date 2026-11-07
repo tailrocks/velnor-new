@@ -17,6 +17,13 @@ pub const JOB_IMAGE_CANDIDATE_RUNNER: &str = "ubuntu-26.04";
 pub const JOB_IMAGE_CANDIDATE_MAX_SCRIPT_BYTES: usize = 32768;
 pub const JOB_IMAGE_CANDIDATE_LOADER: &str = "import os,sys; os.execve('/bin/bash',['/bin/bash','--noprofile','--norc','-p','-e','-o','pipefail','-c',bytes.fromhex(sys.argv[1]).decode('utf-8'),'velnor',*sys.argv[2:]],dict(os.environ))";
 pub const JOB_IMAGE_CANDIDATE_DRIVER: &str = "native-job-image-candidate";
+pub const NATIVE_MISE_LINUX_AMD64_BINARY_SHA256: &str =
+    "7129dbab31d698f9028db9374f7ba7987232b0426f837dcbce437130a61415f9";
+pub const NATIVE_MBX_VERSION: &str = "1.29.2";
+pub const NATIVE_MBX_LINUX_AMD64_ARCHIVE_SHA256: &str =
+    "73e135d3e9e8b8ddc938b42407179a239917b7f02d3fa5f601f6783e5c0d36d6";
+pub const NATIVE_MBX_LINUX_AMD64_BINARY_SHA256: &str =
+    "03337a94062a76bf08df445959a3b732416c3931752602edb8f36b12474a9400";
 pub const JOB_IMAGE_CANDIDATE_OUTPUTS: [&str; 3] = [
     "job-image.oci.tar",
     "job-image-candidate.json",
