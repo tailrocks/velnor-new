@@ -324,7 +324,12 @@ mod authorization;
 
 #[path = "crate_release_github_checks.rs"]
 mod checks;
-use checks::{approved_pr, required_check};
+use checks::required_check;
+#[path = "crate_release_github_pr.rs"]
+mod pr;
+#[path = "crate_release_github_workflow_checks.rs"]
+mod workflow_checks;
+use pr::approved_pr;
 
 #[path = "crate_release_github_reviews.rs"]
 mod reviews;
