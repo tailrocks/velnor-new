@@ -90,9 +90,10 @@ use mixed_workspace::set_workspace_journal_packages;
 
 #[path = "crate_release_controller_historical_fixtures.rs"]
 mod historical_fixtures;
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+use historical_fixtures::assert_two_link_recovery;
 use historical_fixtures::{
-    HistoricalAuthority, assert_two_link_recovery, commit_history_intent, fixture_upload_intention,
-    initialize_history_repo,
+    HistoricalAuthority, commit_history_intent, fixture_upload_intention, initialize_history_repo,
 };
 #[path = "crate_release_controller_historical_authority.rs"]
 mod historical_authority;
