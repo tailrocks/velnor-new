@@ -21,7 +21,7 @@ use velnor_actions_workflow_renderer::steps::{REQUEST_DIR_PREFIX, STAGED_BINARY_
 #[path = "controller_locator_public.rs"]
 mod controller_locator_public;
 
-fn fail(message: &str) -> Box<dyn Error> {
+pub(super) fn fail(message: &str) -> Box<dyn Error> {
     io::Error::other(message).into()
 }
 
@@ -33,7 +33,7 @@ fn require(haystack: &str, needle: &str, label: &str) -> Result<(), Box<dyn Erro
     }
 }
 
-fn native_check_step(check_id: &str, task_id: &str) -> Step {
+pub(super) fn native_check_step(check_id: &str, task_id: &str) -> Step {
     Step {
         name: "Execute native homebrew check".to_owned(),
         id: None,
@@ -85,7 +85,7 @@ fn plan_env() -> BTreeMap<String, String> {
         .collect()
 }
 
-fn context(jobs: &BTreeMap<String, Job>) -> Result<RenderContext, Box<dyn Error>> {
+pub(super) fn context(jobs: &BTreeMap<String, Job>) -> Result<RenderContext, Box<dyn Error>> {
     let config = repository_config()?;
     let runtime = CanonicalRuntimeInputs::new(
         plan_env(),
@@ -132,7 +132,7 @@ fn context(jobs: &BTreeMap<String, Job>) -> Result<RenderContext, Box<dyn Error>
     })
 }
 
-fn workflow(step: Step) -> WorkflowIr {
+pub(super) fn workflow(step: Step) -> WorkflowIr {
     WorkflowIr {
         name: "gc1-t41".to_owned(),
         triggers: Trigger {
@@ -148,6 +148,96 @@ fn workflow(step: Step) -> WorkflowIr {
             cancel_in_progress: CONCURRENCY_CANCEL.to_owned(),
         },
         jobs: BTreeMap::from([("check-brew-install".to_owned(), native_check_job(step))]),
+    }
+}
+
+fn workflow_with_steps(steps: Vec<Step>) -> WorkflowIr {
+    let mut ir = workflow(native_check_step(
+        "brew-install",
+        "internal/native-check/brew-install",
+    ));
+    let mut job = super::gc1_workflow_cases_common::job_with(
+        "Shell steps",
+        velnor_actions_contract::CacheAccess::Read,
+        None,
+        Vec::new(),
+        None,
+    );
+    "ubuntu-26.04".clone_into(&mut job.runs_on);
+    job.steps = steps;
+    ir.jobs.clear();
+    ir.jobs.insert("shells".to_owned(), job);
+    ir
+}
+
+fn action_mbx_step() -> Result<Step, Box<dyn Error>> {
+    let build: Vec<String> = [
+        "mise",
+        "--no-config",
+        "--no-env",
+        "--no-hooks",
+        "exec",
+        "rust@1.91.0",
+        "--",
+        "mbx",
+        "build",
+        "--release",
+        "--locked",
+        "--package",
+        "velnor-actions-cli",
+        "--bin",
+        "velnor-actions",
+    ]
+    .iter()
+    .map(|value| (*value).to_owned())
+    .collect();
+    Ok(velnor_actions_workflow_renderer::preseed::preseed_build_step(&build, &BTreeMap::new())?)
+}
+
+pub(super) fn render(step: Step) -> Result<String, Box<dyn Error>> {
+    render_steps(vec![step])
+}
+
+pub(super) fn emitted_selector_run(workflow: &str) -> Result<String, Box<dyn Error>> {
+    let step_start = workflow
+        .find("name: Select attested state")
+        .ok_or_else(|| fail("rendered workflow lost the selector step"))?;
+    let line = workflow[step_start..]
+        .lines()
+        .find(|line| line.trim_start().starts_with("run: "))
+        .ok_or_else(|| fail("rendered selector lost its run scalar"))?;
+    let value = line
+        .trim_start()
+        .strip_prefix("run: ")
+        .ok_or_else(|| fail("rendered selector run field is malformed"))?;
+    let Some(value) = value.strip_prefix('"') else {
+        return Ok(value.to_owned());
+    };
+    let mut decoded = String::new();
+    let mut chars = value.chars();
+    loop {
+        match chars.next() {
+            Some('"') => return Ok(decoded),
+            Some('\\') => match chars.next() {
+                Some('\\') => decoded.push('\\'),
+                Some('"') => decoded.push('"'),
+                Some('n') => decoded.push('\n'),
+                Some('r') => decoded.push('\r'),
+                Some('t') => decoded.push('\t'),
+                Some(other) => return Err(fail(&format!("unsupported YAML escape:{other}"))),
+                None => return Err(fail("rendered selector has an incomplete escape")),
+            },
+            Some(ch) => decoded.push(ch),
+            None => return Err(fail("rendered selector run scalar is unterminated")),
+        }
+    }
+}
+
+fn render_steps(steps: Vec<Step>) -> Result<String, Box<dyn Error>> {
+    let ir = workflow_with_steps(steps);
+    match render_workflow_ir(&ir, WorkflowPolicy::ConsumerV1, None, &context(&ir.jobs)?) {
+        Ok(yaml) => Ok(yaml),
+        Err(error) => Err(fail(&format!("render rejected:{error}"))),
     }
 }
 
@@ -218,6 +308,43 @@ fn check_identity_empty() -> Result<(), Box<dyn Error>> {
         "invalid_check_id",
         "empty check",
     )?;
+    Ok(())
+}
+
+#[test]
+fn gc1_t41_rejects_truncated_action_mbx_exec_argv() -> Result<(), Box<dyn Error>> {
+    let canonical = action_mbx_step()?;
+    render_steps(vec![canonical.clone()])?;
+
+    let error = velnor_actions_workflow_renderer::steps::shell_step(
+        "Reject bare exec",
+        vec!["exec".to_owned()],
+        BTreeMap::new(),
+    )
+    .expect_err("bare exec must be rejected");
+    require(
+        &error.to_string(),
+        "exec_missing_command",
+        "bare exec rejection",
+    )?;
+
+    for shell in ["sh", "bash", "/bin/sh"] {
+        let mut malformed = canonical.clone();
+        let StepKind::Shell { run, .. } = &mut malformed.kind else {
+            return Err(fail("action-owned MBX build was not a shell step"));
+        };
+        *run = vec!["exec".to_owned(), shell.to_owned(), "-c".to_owned()];
+        let ir = workflow_with_steps(vec![malformed]);
+        let error = render_workflow_ir(&ir, WorkflowPolicy::ConsumerV1, None, &context(&ir.jobs)?)
+            .expect_err("truncated action-owned MBX argv must be rejected");
+        if !error
+            .to_string()
+            .contains("action_owned_mbx_binding:not_inline_shell")
+        {
+            return Err(fail(&format!("unexpected malformed argv error:{error}")));
+        }
+    }
+
     Ok(())
 }
 

@@ -19,13 +19,17 @@ mod gc1_scene_key;
 mod gc1_scene_resolve;
 mod gc1_scene_seal;
 mod gc1_scene_tree;
+#[cfg(target_os = "linux")]
+mod gc1_seal_clock;
 mod gc1_seal_support;
+mod gc1_seal_units;
 mod gc1_t13;
 mod gc1_t14;
 mod gc1_t16;
 mod gc1_t30;
 mod gc1_t31;
 mod gc1_t41;
+mod gc1_t41_exec;
 mod gc1_t42;
 mod gc1_t43;
 mod gc1_t44;
@@ -57,6 +61,24 @@ mod state_v4_producer;
 mod state_v4_restore;
 mod state_v4_seal;
 mod state_v4_select;
+#[cfg(target_os = "linux")]
+mod state_v4_select_aggregate;
+#[cfg(target_os = "linux")]
+mod state_v4_select_bounds;
+#[cfg(target_os = "linux")]
+mod state_v4_select_call_bounds;
+#[cfg(target_os = "linux")]
+mod state_v4_select_cancellation;
+#[cfg(target_os = "linux")]
+mod state_v4_select_default_deadline;
+#[cfg(unix)]
+mod state_v4_select_env;
+#[cfg(target_os = "linux")]
+mod state_v4_select_lifecycle;
+#[cfg(target_os = "linux")]
+mod state_v4_select_protocol;
+mod state_v4_select_render;
+mod state_v4_select_units;
 mod state_v4_snapshot;
 mod state_v4_tip;
 

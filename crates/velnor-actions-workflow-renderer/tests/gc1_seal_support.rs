@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::error::Error;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use velnor_actions_contract::workflow::cache_family::{
     RootSlug, S256, StateScope, StateTrust, StateUnit,
@@ -10,10 +10,14 @@ use velnor_actions_contract::workflow::cache_family::{
 use velnor_actions_contract::workflow::state_seal::{
     STATE_SEAL_PREDICATE_TYPE, state_attested_output,
 };
-use velnor_actions_contract::{Step, StepKind};
+use velnor_actions_contract::{JobTimeout, Step, StepKind};
 use velnor_actions_workflow_renderer::plan_sources::state_select::{SealRoot, state_select_step};
 
 use crate::gc1_scene::{Scene, fail};
+use gh_script::GH;
+
+#[path = "gc1_seal_gh_script.rs"]
+mod gh_script;
 
 pub(crate) const REPO: &str = "tailrocks/velnor-new";
 pub(crate) const SIGNER: &str = "tailrocks/velnor-new/.github/workflows/state-seal.yml";
@@ -23,107 +27,13 @@ pub(crate) const MAIN: &str = "refs/heads/main";
 pub(crate) const PULL: &str = "refs/pull/9/merge";
 pub(crate) const ENTRY_ID: u64 = 7001;
 pub(crate) const ENTRY_SIZE: u64 = 4096;
-
-const GH: &str = r#"#!/bin/sh
-d="${FAKE_GH_DIR:?}"
-mode=ok
-[ -f "$d/mode" ] && read -r mode < "$d/mode"
-case "$mode" in
-  fail) exit 1 ;;
-  hang) sleep 30; exit 0 ;;
-esac
-verb="$1 $2"
-shift 2
-case "$verb" in
-  "cache list")
-    tab=$(printf '\t')
-    key=; ref=; fields=; repo=${GH_REPO-}; sortf=last_accessed_at; order=desc; limit=30
-    while [ $# -gt 0 ]; do
-      case "$1" in --key) key=$2; shift ;; --ref) ref=$2; shift ;; --json) fields=$2; shift ;; --jq) shift ;; -R) repo=$2; shift ;; --sort) sortf=$2; shift ;; --order) order=$2; shift ;; --limit) limit=$2; shift ;; esac
-      shift
-    done
-    [ -n "$repo" ] || exit 1
-    if [ -f "$d/lag" ]; then
-      read -r lag < "$d/lag"
-      if [ "$lag" -gt 0 ]; then printf '%s\n' "$((lag - 1))" > "$d/lag"; exit 0; fi
-    fi
-    if [ "$mode" = garbage ]; then printf '%s\n' '<<<not json>>>' '{"oops"'; exit 0; fi
-    sflag=-r
-    [ "$order" = asc ] && sflag=
-    while IFS="$tab" read -r created lref lkey lid lsize accessed; do
-      [ "$lref" = "$ref" ] || continue
-      case "$lkey" in "$key"*) ;; *) continue ;; esac
-      [ -n "$accessed" ] || accessed=$created
-      case "$sortf" in created_at) sk=$created ;; *) sk=$accessed ;; esac
-      printf '%s\t%s\t%s\t%s\t%s\n' "$sk" "$created" "$lkey" "$lid" "$lsize"
-    done < "$d/list" | LC_ALL=C sort $sflag | head -n "$limit" | while IFS="$tab" read -r sk created lkey lid lsize; do
-      case "$fields" in
-        *createdAt*) printf '%s\t%s\t%s\t%s\n' "$created" "$lkey" "$lid" "$lsize" ;;
-        *) printf '%s\t%s\t%s\n' "$lkey" "$lid" "$lsize" ;;
-      esac
-    done
-    ;;
-  "cache delete")
-    id=; repo=${GH_REPO-}
-    while [ $# -gt 0 ]; do
-      case "$1" in -R) repo=$2; shift ;; *) id=$1 ;; esac
-      shift
-    done
-    [ -n "$repo" ] || exit 1
-    if [ -f "$d/refuse" ] && grep -qx "$id" "$d/refuse"; then exit 1; fi
-    tab=$(printf '\t')
-    awk -F "$tab" -v id="$id" '$4 != id' "$d/list" > "$d/list.next" || :
-    mv "$d/list.next" "$d/list"
-    printf 'delete cache %s\n' "$id" >> "$d/log"
-    ;;
-  "api repos/${GITHUB_REPOSITORY:?}/actions/cache/usage")
-    [ "$mode" = usage_fail ] && exit 1
-    read -r usage < "$d/usage"
-    printf '%s\n' "$usage"
-    ;;
-  "api repos/${GITHUB_REPOSITORY:?}/git/ref/"*)
-    [ "$mode" = tip_fail ] && exit 1
-    read -r tip < "$d/tip" || exit 1
-    printf '%s\n' "$tip"
-    ;;
-  "api -X")
-    [ "$1" = DELETE ] || exit 2
-    case "$2" in "repos/${GITHUB_REPOSITORY:?}/actions/artifacts/"*) ;; *) exit 1 ;; esac
-    id=${2##*/}
-    grep -qx "$id" "$d/artifacts" || exit 1
-    grep -vx "$id" "$d/artifacts" > "$d/artifacts.next" || :
-    mv "$d/artifacts.next" "$d/artifacts"
-    printf 'delete artifact %s\n' "$id" >> "$d/log"
-    ;;
-  "attestation verify")
-    case "$mode" in
-      verify-fail) exit 1 ;;
-      verify-hang) sleep 30; exit 0 ;;
-      verify-garbage) printf '%s\n' '<<<not a verdict>>>' '{"oops"'; exit 3 ;;
-    esac
-    file=$1
-    shift
-    repo=; signer=; sref=; pred=
-    while [ $# -gt 0 ]; do
-      case "$1" in -R) repo=$2; shift ;; --signer-workflow) signer=$2; shift ;; --source-ref) sref=$2; shift ;; --predicate-type) pred=$2; shift ;; esac
-      shift
-    done
-    [ -n "$repo" ] || exit 1
-    sum=$(sha256sum "$file")
-    sum=${sum%% *}
-    while read -r tdigest trepo tsigner tref tpred; do
-      [ "$tdigest" = "$sum" ] || continue
-      [ "$repo" = "$trepo" ] || continue
-      [ -z "$signer" ] || [ "$signer" = "$tsigner" ] || continue
-      [ -z "$sref" ] || [ "$sref" = "$tref" ] || continue
-      [ -z "$pred" ] || [ "$pred" = "$tpred" ] || continue
-      exit 0
-    done < "$d/attest"
-    exit 1
-    ;;
-  *) exit 2 ;;
-esac
-"#;
+const SELECTOR_MARKERS: [(&str, &str); 2] = [
+    ("token-missing", "gh child did not receive GH_TOKEN"),
+    (
+        "supervisor-payload-leaked",
+        "selector internal environment reached a gh child",
+    ),
+];
 
 pub(crate) const SLEEP_SHIM: &str =
     "#!/bin/sh\nprintf '%s\\n' \"$1\" >> \"${FAKE_GH_DIR:?}/sleeps\"\n";
@@ -146,6 +56,10 @@ impl Attestation {
     }
 
     pub(crate) fn bound(key: &str, id: u64, size: u64) -> Self {
+        Self::bound_text(key, &id.to_string(), &size.to_string())
+    }
+
+    pub(crate) fn bound_text(key: &str, id: &str, size: &str) -> Self {
         Self {
             subject: format!("{key} {id} {size}\n"),
             repo: REPO.to_owned(),
@@ -189,6 +103,18 @@ impl Gh {
         Ok(())
     }
 
+    pub(crate) fn relocate(&mut self, destination: &Path) -> Result<(), Box<dyn Error>> {
+        std::fs::rename(&self.dir, destination)?;
+        destination.clone_into(&mut self.dir);
+        Ok(())
+    }
+
+    #[cfg(target_os = "linux")]
+    pub(crate) fn fail_keys(&self, keys: &[&str]) -> Result<(), Box<dyn Error>> {
+        std::fs::write(self.dir.join("fail-keys"), format!("{}\n", keys.join("\n")))?;
+        Ok(())
+    }
+
     pub(crate) fn lag(&self, empty_listings: u32) -> Result<(), Box<dyn Error>> {
         std::fs::write(self.dir.join("lag"), format!("{empty_listings}\n"))?;
         Ok(())
@@ -196,6 +122,27 @@ impl Gh {
 
     pub(crate) fn sleeps(&self) -> usize {
         std::fs::read_to_string(self.dir.join("sleeps")).map_or(0, |text| text.lines().count())
+    }
+
+    pub(crate) fn peak(&self) -> Result<usize, Box<dyn Error>> {
+        let mut active = 0usize;
+        let mut peak = 0usize;
+        for event in std::fs::read_to_string(self.dir.join("activity"))?.lines() {
+            match event {
+                "+" => active += 1,
+                "-" => active = active.saturating_sub(1),
+                _ => return Err(fail("invalid fake GH activity event")),
+            }
+            peak = peak.max(active);
+        }
+        Ok(peak)
+    }
+
+    pub(crate) fn hung_pids(&self) -> Result<Vec<u32>, Box<dyn Error>> {
+        Ok(std::fs::read_to_string(self.dir.join("hung-pids"))?
+            .lines()
+            .map(str::parse)
+            .collect::<Result<_, _>>()?)
     }
 
     pub(crate) fn dir(&self) -> String {
@@ -324,22 +271,80 @@ pub(crate) fn key(compat: char, snapshot: char, payload: char) -> Result<String,
     ))
 }
 
-pub(crate) fn script_of(step: &Step) -> Result<String, Box<dyn Error>> {
+pub(crate) type ShellScriptWithEnv = (String, Vec<(String, String)>);
+
+pub(crate) fn reject_gh_dir_override(extra: &[(&str, &str)]) -> Result<(), Box<dyn Error>> {
+    if extra.iter().any(|(key, _)| *key == "FAKE_GH_DIR") {
+        return Err(fail(
+            "selector fixture cannot override its fake GH directory",
+        ));
+    }
+    Ok(())
+}
+
+pub(crate) fn script_and_env_of(step: &Step) -> Result<ShellScriptWithEnv, Box<dyn Error>> {
     match &step.kind {
-        StepKind::Shell { run, .. } => run
-            .get(2)
-            .cloned()
-            .ok_or_else(|| fail("shell step lost its script")),
+        StepKind::Shell { run, env } => {
+            let script = run
+                .get(3)
+                .cloned()
+                .ok_or_else(|| fail("shell step lost its script"))?;
+            let env = env
+                .iter()
+                .filter(|(_, value)| !value.contains("${{"))
+                .map(|(key, value)| (key.clone(), value.clone()))
+                .collect();
+            Ok((script, env))
+        }
         _ => Err(fail("expected a shell step")),
     }
 }
 
-pub(crate) fn select_script(root: &str) -> Result<String, Box<dyn Error>> {
+pub(crate) fn require_selector_token_binding(step: &Step) -> Result<(), Box<dyn Error>> {
+    let StepKind::Shell { env, .. } = &step.kind else {
+        return Err(fail("expected a shell step"));
+    };
+    if env.get("GH_TOKEN").map(String::as_str) != Some("${{ github.token }}") {
+        return Err(fail("selector step lost its generated GH_TOKEN binding"));
+    }
+    Ok(())
+}
+
+pub(crate) fn clear_selector_markers(gh: &Gh) -> Result<(), Box<dyn Error>> {
+    for (marker, _) in SELECTOR_MARKERS {
+        match std::fs::remove_file(PathBuf::from(gh.dir()).join(marker)) {
+            Err(error) if error.kind() != std::io::ErrorKind::NotFound => {
+                return Err(error.into());
+            }
+            _ => {}
+        }
+    }
+    Ok(())
+}
+
+pub(crate) fn check_selector_markers(gh: &Gh) -> Result<(), Box<dyn Error>> {
+    check_selector_markers_at(Path::new(&gh.dir()))
+}
+
+pub(crate) fn check_selector_markers_at(dir: &Path) -> Result<(), Box<dyn Error>> {
+    for (marker, message) in SELECTOR_MARKERS {
+        match std::fs::symlink_metadata(dir.join(marker)) {
+            Ok(_) => return Err(fail(message)),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => return Err(error.into()),
+        }
+    }
+    Ok(())
+}
+
+pub(crate) fn select_script(root: &str) -> Result<ShellScriptWithEnv, Box<dyn Error>> {
     let root = SealRoot {
         unit: StateUnit::Union,
         slug: RootSlug::from_root(root)?,
     };
-    script_of(&state_select_step(&[root])?)
+    let step = state_select_step(&[root], JobTimeout::PLAN)?;
+    require_selector_token_binding(&step)?;
+    script_and_env_of(&step)
 }
 
 pub(crate) fn run_select(
@@ -348,19 +353,36 @@ pub(crate) fn run_select(
     root: &str,
     extra: &[(&str, &str)],
 ) -> Result<String, Box<dyn Error>> {
+    reject_gh_dir_override(extra)?;
+    clear_selector_markers(gh)?;
     match std::fs::remove_file(&scene.github_output) {
         Err(error) if error.kind() != std::io::ErrorKind::NotFound => return Err(error.into()),
         _ => {}
     }
-    let dir = gh.dir();
+    let (script, step_env) = select_script(root)?;
     let mut env = vec![
-        ("FAKE_GH_DIR", dir.as_str()),
-        ("GITHUB_REPOSITORY", REPO),
-        ("GITHUB_WORKFLOW_REF", OTHER_WORKFLOW_REF),
-        ("GH_TOKEN", "fixture"),
+        ("FAKE_GH_DIR".to_owned(), gh.dir()),
+        ("GITHUB_REPOSITORY".to_owned(), REPO.to_owned()),
+        (
+            "GITHUB_WORKFLOW_REF".to_owned(),
+            OTHER_WORKFLOW_REF.to_owned(),
+        ),
+        ("GH_TOKEN".to_owned(), "fixture".to_owned()),
+        ("VELNOR_DEFAULT_REF".to_owned(), MAIN.to_owned()),
     ];
-    env.extend_from_slice(extra);
-    scene.run_script(&select_script(root)?, &env, None)
+    env.extend(step_env);
+    env.extend(
+        extra
+            .iter()
+            .map(|(key, value)| ((*key).to_owned(), (*value).to_owned())),
+    );
+    let pairs: Vec<(&str, &str)> = env
+        .iter()
+        .map(|(key, value)| (key.as_str(), value.as_str()))
+        .collect();
+    let output = scene.run_script(&script, &pairs, None)?;
+    check_selector_markers(gh)?;
+    Ok(output)
 }
 
 pub(crate) fn selected(scene: &Scene, root: &str) -> Result<Vec<String>, Box<dyn Error>> {
