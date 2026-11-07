@@ -24,7 +24,7 @@ When designing workflows in the Velnor V1 generator or implementing runner infra
 - **Repository**: [actions/scaleset](https://github.com/actions/scaleset)
 - **Role**: Official controller and listener for GitHub Actions Runner Scale Sets.
 - **Reference Areas**:
-  - Scale set message protocol and session acquisition contracts.
+  - Scale set message protocol and session acquisition contracts (`JobMessageBase` in `types.go` deprecates `runnerRequestId` and sets `runnerRequestId: 0` on current `JobAvailable`, `JobAssigned`, `JobStarted`, and `JobCompleted` messages; because a job can be reassigned to a scale set up to three times with a new `scaleSetAssignTime` / `requestAssignedTime`, `velnor-runner-github` derives the positive synthetic `request_id` for `runnerRequestId: 0` from `jobId` plus the non-zero `scaleSetAssignTime` or `requestAssignedTime`).
   - Ephemeral runner lifecycles, graceful teardown, and runner pool auto-scaling contracts.
   - Compatibility with GitHub Enterprise Server and GitHub.com scale set endpoints.
 

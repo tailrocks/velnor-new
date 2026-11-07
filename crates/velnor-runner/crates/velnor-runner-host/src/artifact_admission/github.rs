@@ -25,6 +25,7 @@ const API_VERSION: &str = "2022-11-28";
 const MAX_RELEASE_BYTES: usize = 2 * 1024 * 1024;
 const MAX_ATTESTATION_BYTES: usize = 16 * 1024 * 1024;
 const ASSET_REDIRECT_HOST: &str = "release-assets.githubusercontent.com";
+const ASSET_DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(600);
 const USER_AGENT: &str = "velnor-runner-native-artifact-admission";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -179,7 +180,10 @@ fn hex(bytes: &[u8]) -> String {
 }
 
 fn asset_redirect_request(client: &Client, url: Url) -> reqwest::RequestBuilder {
-    client.get(url).header(ACCEPT, "application/octet-stream")
+    client
+        .get(url)
+        .header(ACCEPT, "application/octet-stream")
+        .timeout(ASSET_DOWNLOAD_TIMEOUT)
 }
 
 pub(super) fn validate_asset_redirect(location: &str) -> Result<Url, HostError> {

@@ -75,7 +75,7 @@ pub(super) fn encode(target: &ChecksumTarget<'_>) -> Result<Vec<u8>, HostError> 
         source: "https://github.com/tailrocks/velnor-new",
         source_digest: target.source_sha,
         source_ref: "refs/heads/main",
-        build_config: "https://github.com/tailrocks/velnor-new/.github/workflows/product-release-images.yml@refs/heads/main",
+        build_config: "https://github.com/tailrocks/velnor-new/.github/workflows/product-release.yml@refs/heads/main",
         build_config_digest: target.authority_sha,
     };
     let request = Request {

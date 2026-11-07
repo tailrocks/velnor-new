@@ -43,7 +43,7 @@ fn batch_observation(batch: &velnor_runner_github::ParsedBatch) -> PollObservati
     let available_events = batch
         .jobs
         .iter()
-        .filter(|job| job.kind == InnerKind::Available)
+        .filter(|job| matches!(job.kind, InnerKind::Available | InnerKind::Assigned))
         .count();
     let Ok(available_events) = u32::try_from(available_events) else {
         return PollObservation::Unavailable;

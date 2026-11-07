@@ -7,7 +7,7 @@ use crate::journal::connection::ConnectionJournal;
 use crate::journal::connection::storage::read_transaction;
 
 use crate::journal::source_authorization::{
-    created_set_matches, encode_source_receipt, validate_stored_source,
+    created_set_matches, encode_source_receipt, stored_source_already_assigned,
 };
 use crate::launch::steps::source::AuthorizedSourceReceipt;
 
@@ -27,6 +27,7 @@ pub(crate) struct AuthorizedOffer {
     binding_digest: String,
     source_digest: String,
     source_json: String,
+    already_assigned: bool,
 }
 
 impl AuthorizedOffer {
@@ -58,6 +59,11 @@ impl AuthorizedOffer {
     #[must_use]
     pub(crate) fn source_json(&self) -> &str {
         &self.source_json
+    }
+
+    #[must_use]
+    pub(crate) const fn already_assigned(&self) -> bool {
+        self.already_assigned
     }
 }
 
@@ -206,7 +212,7 @@ fn parse_offer(
     {
         return Err(HostError::Journal);
     }
-    validate_stored_source(&source_json, repository_id)?;
+    let already_assigned = stored_source_already_assigned(&source_json, repository_id)?;
     Ok(AuthorizedOffer {
         connection_id: connection_id.clone(),
         scale_set_id,
@@ -216,6 +222,7 @@ fn parse_offer(
         binding_digest,
         source_digest,
         source_json,
+        already_assigned,
     })
 }
 

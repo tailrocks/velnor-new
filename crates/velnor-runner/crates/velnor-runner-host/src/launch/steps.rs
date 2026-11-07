@@ -21,6 +21,7 @@ pub(super) use offer_authorization::authorize_offer;
 
 use source_authorization::source_blocked;
 
+pub use scoped::resume_deferred_offer_acquire_with_transport;
 pub(crate) use scoped::{
     AcquiredProvisioning, CheckedAcquiredRecovery, KnownNoAcquire, ScopedProvisioningOutcome,
     acquire_authorized_request, acquire_scoped,

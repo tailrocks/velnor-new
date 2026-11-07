@@ -9,7 +9,10 @@ use serde_json::Value;
 use crate::error::HostError;
 
 use super::super::hash::is_sha256_digest;
-use super::super::manifest::{ARCHIVE_ASSET, CHECKSUM_ASSET, MANIFEST_ASSET, REPOSITORY};
+use super::super::manifest::{
+    ARCHIVE_ASSET, CHECKSUM_ASSET, DIND_ASSET, LICENSE_ASSET, MANIFEST_ASSET, NOTICE_ASSET,
+    REPOSITORY, RUNNER_ASSET,
+};
 use super::Asset;
 
 const PRODUCT_REPOSITORY_ID: u64 = 1_390_620_900;
@@ -72,10 +75,12 @@ pub(super) fn parse_release(
         }
     }
     let expected = BTreeSet::from([
-        "velnor-runner-linux-amd64.tar",
-        "velnor-dind-linux-amd64.tar",
+        RUNNER_ASSET,
+        DIND_ASSET,
         ARCHIVE_ASSET,
         MANIFEST_ASSET,
+        LICENSE_ASSET,
+        NOTICE_ASSET,
         CHECKSUM_ASSET,
     ]);
     if assets.len() != expected.len() || assets.keys().any(|name| !expected.contains(name.as_str()))
@@ -84,8 +89,15 @@ pub(super) fn parse_release(
     }
     let archive = assets.get(ARCHIVE_ASSET).ok_or(HostError::Identity)?;
     let manifest = assets.get(MANIFEST_ASSET).ok_or(HostError::Identity)?;
+    let license = assets.get(LICENSE_ASSET).ok_or(HostError::Identity)?;
+    let notice = assets.get(NOTICE_ASSET).ok_or(HostError::Identity)?;
     let checksum = assets.get(CHECKSUM_ASSET).ok_or(HostError::Identity)?;
-    if archive.size > 16 * 1024 * 1024 || manifest.size > 64 * 1024 || checksum.size > 64 * 1024 {
+    if archive.size > 16 * 1024 * 1024
+        || manifest.size > 64 * 1024
+        || license.size > 64 * 1024
+        || notice.size > 64 * 1024
+        || checksum.size > 64 * 1024
+    {
         return Err(HostError::Frame);
     }
     Ok(assets)
