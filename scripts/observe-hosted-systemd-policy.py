@@ -53,7 +53,60 @@ def process(pid, deadline):
         start = stream.read(4096).rsplit(')', 1)[1].split()[19]
     return {'pid': pid, 'start': start, 'root': identity(base / 'root'),
             'namespaces': {name: identity(base / 'ns' / name) for name in ('pid', 'mnt', 'time')},
-            'executable': digest_file(base / 'exe', 256 * 1024 * 1024, deadline)}
+            'executable_path': os.readlink(base / 'exe'),
+            'executable': digest_file(base / 'exe', 256 * 1024 * 1024, deadline),
+            'executable_mappings': executable_mappings(base, deadline)}
+
+
+
+def executable_mappings(base, deadline):
+    rows = (base / 'maps').read_text().splitlines()
+    if len(rows) > 4096:
+        raise ValueError('process mapping limit')
+    result = {}
+    for row in rows:
+        fields = row.split(None, 5)
+        if len(fields) < 2 or 'x' not in fields[1]:
+            continue
+        name = fields[5] if len(fields) == 6 else ''
+        if name in ('[vdso]', '[vsyscall]'):
+            continue
+        if not name.startswith('/') or name.endswith(' (deleted)'):
+            raise ValueError('unbound executable mapping')
+        value = digest_file(base / 'root' / name.lstrip('/'), 256 * 1024 * 1024, deadline)
+        major, minor = (int(part, 16) for part in fields[3].split(':'))
+        if value['device'] != os.makedev(major, minor) or value['inode'] != int(fields[4]):
+            raise ValueError('mapped executable identity mismatch')
+        result[name] = value
+    return result
+
+
+def global_policy_files(deadline):
+    result = {}
+    for prefix in ('/etc', '/run', '/usr/local/lib', '/usr/lib'):
+        root = Path(prefix) / 'systemd'
+        paths = [root / 'system.conf']
+        directory = root / 'system.conf.d'
+        if directory.exists():
+            paths += [directory, *sorted(directory.iterdir())]
+        for path in paths:
+            if not path.exists() and not path.is_symlink():
+                continue
+            if len(result) >= 4096:
+                raise ValueError('global policy entry limit')
+            info = path.lstat()
+            value = {'uid': info.st_uid, 'mode': stat.S_IMODE(info.st_mode),
+                     'device': info.st_dev, 'inode': info.st_ino}
+            if stat.S_ISLNK(info.st_mode):
+                value.update({'kind': 'symlink', 'target': os.readlink(path)})
+            elif stat.S_ISREG(info.st_mode):
+                value.update({'kind': 'file', **digest_file(path, 1024 * 1024, deadline)})
+            elif stat.S_ISDIR(info.st_mode):
+                value['kind'] = 'directory'
+            else:
+                value['kind'] = 'special'
+            result[str(path)] = value
+    return result
 
 
 def policy_files(roots, unit, deadline):
@@ -125,14 +178,24 @@ def capture():
         if daemon['root'] != controller_root or daemon['namespaces'] != controller_namespaces:
             raise ValueError('manager and controller views differ')
         files = policy_files(roots, unit, deadline)
+        global_files = global_policy_files(deadline)
+        environment = manager._get(path, interface, 'Environment', 'as', deadline)
+        environment_names = sorted(item.split('=', 1)[0] for item in environment)
+        if any(not name or not name.isascii() or not name.replace('_', 'a').isalnum()
+               for name in environment_names):
+            raise ValueError('invalid manager environment name')
         if (manager._owner(deadline) != owner or process(pid, deadline) != daemon
+                or manager._get(path, interface, 'Version', 's', deadline) != version
                 or manager._get(path, interface, 'UnitPath', 'as', deadline) != roots
-                or policy_files(roots, unit, deadline) != files):
+                or policy_files(roots, unit, deadline) != files
+                or global_policy_files(deadline) != global_files
+                or manager._get(path, interface, 'Environment', 'as', deadline) != environment):
             raise ValueError('systemd observation changed')
         return {'schema': 1, 'role': 'observation-only', 'architecture': os.uname().machine,
                 'owner': owner, 'owner_uid': uid, 'daemon': daemon,
                 'controller_root': controller_root, 'controller_namespaces': controller_namespaces,
-                'version': version, 'unit_path': roots, 'policy_files': files}
+                'version': version, 'unit_path': roots, 'policy_files': files,
+                'global_policy_files': global_files, 'manager_environment_names': environment_names}
     finally:
         if manager is not None:
             manager.close()
