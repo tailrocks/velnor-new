@@ -189,12 +189,17 @@ def run_fixed():
         def _property(self, message, name, kind, value):
             if name == "CapabilityBoundingSet":
                 value = 1 << 19
+            if name == "StandardError":
+                for limit in ("LimitFSIZE", "LimitFSIZESoft"):
+                    super()._property(message, limit, "t", 1024 * 1024)
+                return super()._property(message, "StandardErrorFileDescriptor", "h", diagnostics.fileno())
             return super()._property(message, name, kind, value)
 
     inventory = UnitInventory()
     inventory.verify_namespace()
     deadline = time.clock_gettime_ns(time.CLOCK_BOOTTIME) + DEADLINE_SECONDS * 1_000_000_000
-    with RootWatch(manager, lifecycle, source, seconds=DEADLINE_SECONDS + 60) as watch, \
+    with tempfile.TemporaryFile() as diagnostics, \
+            RootWatch(manager, lifecycle, source, seconds=DEADLINE_SECONDS + 60) as watch, \
             tempfile.TemporaryDirectory(prefix="velnor-scenario-controller-", dir="/run") as directory:
         helper = Path(directory) / "helper.py"
         shutil.copyfile(source / "release_supervisor_exec.py", helper)
@@ -221,6 +226,12 @@ def run_fixed():
                     or any(not re.fullmatch(r"[0-9a-f]{32}", value) for value in values)):
                 raise ScenarioError("invalid recorded scenario identities")
             inventory.ids.update(values)
+        except BaseException as error:
+            diagnostics.seek(0)
+            details = diagnostics.read(1024 * 1024)
+            status = "truncated" if len(details) == 1024 * 1024 else "captured"
+            raise ScenarioError("scenario diagnostics " + status + ":\n"
+                                + details.decode("utf-8", errors="replace")) from error
         finally:
             connection.close()
             os.close(ledger)
