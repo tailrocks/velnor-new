@@ -341,6 +341,26 @@ try:
         assert f"refs/tags/velnor-receipt/{13 if new_run else 12}/1/reconciled" in state["refs"]
         if new_run:
             assert "refs/tags/velnor-receipt/12/1/reconciled" not in state["refs"]
+            prior = read_journal_record(info, state, "refs/tags/velnor-receipt/12/1/publication-started")
+            completed = read_journal_record(info, state, "refs/tags/velnor-receipt/13/1/reconciled")
+            current_identity = {"repository": info["repository"], "workflow_sha": continuation["workflow_sha"],
+                                "source_sha": info["source_sha"], "run_id": 13, "run_attempt": 1}
+            prior_identity = {"repository": info["repository"], "workflow_sha": info["workflow_sha"],
+                              "source_sha": info["source_sha"], "run_id": 12, "run_attempt": 1}
+            assert prior["schema"] == completed["schema"] == 1
+            assert prior["stage"] == "started" and prior["identity"] == prior_identity
+            assert completed["stage"] == "completed" and completed["identity"] == current_identity
+            assert completed["receipt"]["identity"] == current_identity
+            assert completed["receipt"]["predecessor"] == prior_identity
+            admission = json.loads((runner / "velnor-crate-release-receipt.json").read_text())
+            intent = json.dumps(admission["intent"], sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
+            assert completed["receipt"]["intent_sha256"] == hashlib.sha256(intent).hexdigest()
+            packages = completed["completion"]["packages"]
+            assert len(packages) == 1
+            result = packages[0]
+            assert result["name"] == info["package"] and result["version"] == info["version"]
+            assert result["registry_checksum"] == result["downloaded_checksum"] == state["published_sha256"]
+            assert result["tag_target"] == info["source_sha"]
         with urllib.request.urlopen(
             "https://fixture.actions.githubusercontent.com/__fixture/state"
         ) as response:
