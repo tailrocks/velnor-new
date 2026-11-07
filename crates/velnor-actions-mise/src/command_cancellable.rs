@@ -344,14 +344,5 @@ impl IsolatedCommand {
 
 #[cfg(unix)]
 fn quiescent_deadlines(deadline: CheckDeadline) -> Result<(CheckDeadline, Instant), MiseError> {
-    let remaining = deadline.remaining()?;
-    let work = remaining
-        .checked_sub(IsolatedCommand::PROCESS_CLEANUP_GRACE)
-        .filter(|duration| !duration.is_zero())
-        .ok_or_else(|| crate::checks::invalid("check_timeout", "insufficient_cleanup_budget"))?;
-    let work_deadline = CheckDeadline::after(work)?;
-    let cleanup_deadline = Instant::now()
-        .checked_add(remaining)
-        .ok_or_else(|| crate::checks::invalid("check_timeout", "deadline_overflow"))?;
-    Ok((work_deadline, cleanup_deadline))
+    deadline.split_cleanup(IsolatedCommand::PROCESS_CLEANUP_GRACE)
 }

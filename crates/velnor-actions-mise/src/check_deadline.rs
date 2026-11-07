@@ -104,6 +104,18 @@ impl CheckDeadline {
         Self::from_start(now(), timeout)
     }
 
+    #[cfg(unix)]
+    pub(crate) fn split_cleanup(self, reserve: Duration) -> Result<(Self, Instant), MiseError> {
+        let deadline = self.effective();
+        deadline.remaining()?;
+        let work = deadline
+            .0
+            .checked_sub(reserve)
+            .filter(|instant| *instant > now())
+            .ok_or_else(|| invalid("check_timeout", "insufficient_cleanup_budget"))?;
+        Ok((Self(work), deadline.0))
+    }
+
     pub fn remaining(self) -> Result<Duration, MiseError> {
         self.effective()
             .0
@@ -112,3 +124,7 @@ impl CheckDeadline {
             .ok_or_else(|| invalid("check_timeout", "deadline_exhausted"))
     }
 }
+
+#[cfg(all(test, unix))]
+#[path = "check_deadline_tests.rs"]
+mod tests;
