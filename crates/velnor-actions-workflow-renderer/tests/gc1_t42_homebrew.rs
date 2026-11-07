@@ -249,6 +249,7 @@ fn check_download_guards(value: &serde_json::Value) -> Result<(), Box<dyn Error>
                         .ok_or("missing artifact guard")?;
                     assert_eq!(previous["name"], "Validate exact artifact ID");
                     assert_eq!(previous["env"]["VELNOR_EVIDENCE_ARTIFACT_ID"], id);
+                    assert_eq!(previous.get("if"), item.get("if"));
                 }
                 check_download_guards(item)?;
             }

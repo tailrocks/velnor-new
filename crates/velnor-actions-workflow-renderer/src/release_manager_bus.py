@@ -5,6 +5,7 @@ import ctypes
 import errno
 import os
 import re
+import signal
 import socket
 import stat
 import struct
@@ -202,7 +203,7 @@ class Manager:
             data = ctypes.c_char_p(value.encode())
             pointer = ctypes.cast(data, ctypes.c_void_p)
         else:
-            data = {"b": ctypes.c_int, "h": ctypes.c_int, "t": ctypes.c_uint64}[kind](value)
+            data = {"b": ctypes.c_int, "h": ctypes.c_int, "i": ctypes.c_int32, "t": ctypes.c_uint64}[kind](value)
             pointer = ctypes.cast(ctypes.byref(data), ctypes.c_void_p)
         self._check(self.library.sd_bus_message_append_basic(message, kind.encode(), pointer))
 
@@ -381,6 +382,9 @@ class Manager:
                 ("StandardError", "s", "null"), ("StandardInputFileDescriptor", "h", reader),
             ):
                 self._property(message, name, kind, value)
+            if self._watch_unit is None:
+                self._property(message, "KillSignal", "i", signal.SIGKILL)
+                self._property(message, "CollectMode", "s", "inactive-or-failed")
             if not self.root_bootstrap:
                 self._property(message, "PrivateTmp", "b", 1)
             if self.deny_network:
@@ -453,6 +457,11 @@ class Manager:
                                       "GetUnit", [("s", unit)], deadline, "o")
         if self._get(unit_path, "org.freedesktop.systemd1.Unit", "JobTimeoutUSec", "t", deadline) != runtime_seconds * 1_000_000:
             raise ManagerError("unit deadline unverified")
+        if self._watch_unit is None and (
+                self._get(unit_path, "org.freedesktop.systemd1.Service", "KillSignal", "i", deadline) != signal.SIGKILL
+                or self._get(unit_path, "org.freedesktop.systemd1.Service", "KillMode", "s", deadline) != "control-group"
+                or self._get(unit_path, "org.freedesktop.systemd1.Unit", "CollectMode", "s", deadline) != "inactive-or-failed"):
+            raise ManagerError("unit cleanup policy unverified")
         if self._watch_unit is None:
             self.validate_watch(deadline)
         else:
