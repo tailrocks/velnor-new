@@ -92,22 +92,19 @@ fn mutate_predecessor(
     );
     match scenario {
         0 => {
-            input
-                .journal
+            journal
                 .refs
                 .borrow_mut()
                 .remove(&format!("{prefix}/publication-started"));
         }
         1 => {
-            input
-                .journal
+            journal
                 .refs
                 .borrow_mut()
                 .insert(format!("{prefix}/operation-1"), "a".repeat(40));
         }
         _ => {
-            input
-                .journal
+            journal
                 .refs
                 .borrow_mut()
                 .insert(format!("{prefix}/reconciled"), "a".repeat(40));
