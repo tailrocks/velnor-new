@@ -110,7 +110,6 @@ where
         input.source,
         input.git,
         Some(&crate::crate_release_journal::PriorTransition {
-            source_execution: input.source_execution,
             request: input.request,
             github: input.github,
         }),
@@ -123,10 +122,11 @@ where
             input.git,
         ) {
             Ok(intent) => intent,
-            Err(_) => input
-                .source_execution
-                .historical_intent_reader()?
-                .verify_prior(previous, input.request, input.github)?,
+            Err(_) => crate::release::crate_release_direct_history::verify_prior(
+                previous,
+                input.request,
+                input.github,
+            )?,
         };
         let bytes = velnor_actions_contract::canonical_json_bytes(&intent)
             .map_err(|_| internal("crate_release_previous_invalid"))?;

@@ -33,9 +33,28 @@ pub(super) fn historical_fixture(
     event: &'static str,
     bad_recovery: u8,
 ) -> Result<HistoricalFixture, Box<dyn std::error::Error>> {
+    historical_fixture_for_generator(event, bad_recovery, None)
+}
+
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+pub(super) fn signed_historical_fixture(
+    event: &'static str,
+    bad_recovery: u8,
+) -> Result<HistoricalFixture, Box<dyn std::error::Error>> {
+    historical_fixture_for_generator(event, bad_recovery, Some("0.1.5"))
+}
+
+fn historical_fixture_for_generator(
+    event: &'static str,
+    bad_recovery: u8,
+    generator: Option<&str>,
+) -> Result<HistoricalFixture, Box<dyn std::error::Error>> {
     let temp = tempfile::tempdir()?;
     let source = temp.path();
     let (mut intent, mut request, mut github, registry) = make_fixture(source)?;
+    if let Some(generator) = generator {
+        intent.generator_version = generator.to_owned();
+    }
     github.approved.set(true);
     let mut previous_intent = intent.clone();
     if bad_recovery == 1 {
@@ -246,7 +265,7 @@ pub(super) fn workflow_lock_uses_event_scoped_recovery_and_committed_policy()
     )?;
     git(policy.path(), &["init", "-q"])?;
     fs::create_dir_all(policy.path().join(".github/workflows"))?;
-    let workflow = policy.path().join(".github/workflows/crate-release.yml");
+    let workflow = policy.path().join(".github/workflows/release.yml");
     fs::write(
         &workflow,
         format!(

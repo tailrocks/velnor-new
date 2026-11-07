@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{
-    BTreeSet, GitHubAdmissionRead, GitHubAdmissionRequest, OrchestratorError, Value, internal,
-    require, required_workflow_suites, valid_sha, valid_utc, verify_reviews,
+    BTreeMap, BTreeSet, GitHubAdmissionRead, GitHubAdmissionRequest, OrchestratorError, Value,
+    internal, require, required_workflow_suites, valid_sha, valid_utc, verify_reviews,
 };
 
 #[derive(Clone)]
@@ -49,6 +49,7 @@ fn checked_required(
     recorded_id: Option<u64>,
 ) -> Result<u64, OrchestratorError> {
     let workflow_suites = required_workflow_suites(api, prefix, source, workflow_path)?;
+    let (latest_suite, latest_job) = latest_required_job(api, prefix, &workflow_suites, branch)?;
     let mut recorded = None;
     let mut latest: Option<CheckDecision> = None;
     let mut seen = 0_u64;
@@ -80,10 +81,18 @@ fn checked_required(
                 .filter(|id| *id > 0)
                 .ok_or_else(|| internal("crate_release_check_id"))?;
             require(seen_ids.insert(check_id), "checks_duplicate")?;
+            if check_id != latest_job && recorded_id != Some(check_id) {
+                continue;
+            }
             let Some(decision) = relevant_check(check, source, check_id, &workflow_suites)? else {
                 continue;
             };
-            remember_decision(&mut latest, &mut recorded, recorded_id, decision)?;
+            if recorded_id == Some(decision.id) {
+                recorded = Some(decision.clone());
+            }
+            if decision.suite == latest_suite && decision.id == latest_job {
+                remember_decision(&mut latest, &mut None, None, decision)?;
+            }
         }
         if seen >= total {
             break;
@@ -104,7 +113,33 @@ fn checked_required(
         "required_failed",
     )?;
     verify_required_workflow(api, prefix, source, workflow_path, latest.suite, branch)?;
-    if let Some(id) = recorded_id {
+    let selected_id = selected_check(
+        api,
+        prefix,
+        source,
+        workflow_path,
+        branch,
+        (recorded_id, recorded),
+        &latest,
+    )?;
+    require(
+        required_workflow_suites(api, prefix, source, workflow_path)? == workflow_suites,
+        "runs_changed",
+    )?;
+    Ok(selected_id)
+}
+
+fn selected_check(
+    api: &dyn GitHubAdmissionRead,
+    prefix: &str,
+    source: &str,
+    workflow_path: &str,
+    branch: Option<&str>,
+    recorded: (Option<u64>, Option<CheckDecision>),
+    latest: &CheckDecision,
+) -> Result<u64, OrchestratorError> {
+    if let Some(id) = recorded.0 {
+        let recorded = recorded.1;
         let recorded = recorded.ok_or_else(|| internal("crate_release_recorded_check_missing"))?;
         require(
             recorded.status == "completed" && recorded.conclusion == "success",
@@ -113,9 +148,117 @@ fn checked_required(
         if recorded.suite != latest.suite {
             verify_required_workflow(api, prefix, source, workflow_path, recorded.suite, branch)?;
         }
-        return Ok(id);
+        Ok(id)
+    } else {
+        Ok(latest.id)
     }
-    Ok(latest.id)
+}
+
+fn latest_required_job(
+    api: &dyn GitHubAdmissionRead,
+    prefix: &str,
+    suites: &BTreeMap<u64, Value>,
+    branch: Option<&str>,
+) -> Result<(u64, u64), OrchestratorError> {
+    let mut latest: Option<(u64, u64, u64, u64, &Value)> = None;
+    for (&suite, run) in suites {
+        if let Some(branch) = branch
+            && (run["event"].as_str() != Some("push")
+                || run["head_branch"].as_str() != Some(branch))
+        {
+            continue;
+        }
+        let number = run["run_number"]
+            .as_u64()
+            .filter(|n| *n > 0)
+            .ok_or_else(|| internal("crate_release_run_number"))?;
+        let attempt = run["run_attempt"]
+            .as_u64()
+            .filter(|n| *n > 0)
+            .ok_or_else(|| internal("crate_release_run_attempt"))?;
+        let run_id = run["id"]
+            .as_u64()
+            .filter(|n| *n > 0)
+            .ok_or_else(|| internal("crate_release_run_id"))?;
+        if let Some((previous, _, _, _, _)) = latest {
+            require(previous != number, "run_order_ambiguous")?;
+            if previous > number {
+                continue;
+            }
+        }
+        latest = Some((number, attempt, run_id, suite, run));
+    }
+    let (_, attempt, run_id, suite, run) =
+        latest.ok_or_else(|| internal("crate_release_required_pending"))?;
+    if run["status"].as_str() != Some("completed") {
+        return Err(internal("crate_release_required_pending"));
+    }
+    require(
+        run["conclusion"].as_str() == Some("success"),
+        "required_failed",
+    )?;
+    Ok((suite, required_job(api, prefix, run_id, attempt)?))
+}
+
+fn required_job(
+    api: &dyn GitHubAdmissionRead,
+    prefix: &str,
+    run_id: u64,
+    attempt: u64,
+) -> Result<u64, OrchestratorError> {
+    let mut required = None;
+    let mut seen = 0_u64;
+    let mut expected = None;
+    for page in 1..=100 {
+        let result = api.get(&format!(
+            "{prefix}/actions/runs/{run_id}/attempts/{attempt}/jobs?per_page=100&page={page}"
+        ))?;
+        let total = result["total_count"]
+            .as_u64()
+            .ok_or_else(|| internal("crate_release_jobs_total"))?;
+        require(total <= 10_000, "jobs_limit")?;
+        if let Some(previous) = expected {
+            require(previous == total, "jobs_changed")?;
+        }
+        expected = Some(total);
+        let jobs = result["jobs"]
+            .as_array()
+            .ok_or_else(|| internal("crate_release_jobs_invalid"))?;
+        seen = seen
+            .checked_add(
+                u64::try_from(jobs.len()).map_err(|_| internal("crate_release_jobs_limit"))?,
+            )
+            .ok_or_else(|| internal("crate_release_jobs_limit"))?;
+        for job in jobs {
+            if job["name"].as_str() != Some("Required") {
+                continue;
+            }
+            let id = job["id"]
+                .as_u64()
+                .filter(|id| *id > 0)
+                .ok_or_else(|| internal("crate_release_job_id"))?;
+            require(
+                required.is_none()
+                    && job["run_id"].as_u64() == Some(run_id)
+                    && job["run_attempt"].as_u64() == Some(attempt)
+                    && job["check_run_url"].as_str()
+                        == Some(&format!("https://api.github.com/{prefix}/check-runs/{id}")),
+                "required_job_identity",
+            )?;
+            require(
+                job["status"].as_str() == Some("completed")
+                    && job["conclusion"].as_str() == Some("success"),
+                "required_failed",
+            )?;
+            required = Some(id);
+        }
+        if seen >= total {
+            break;
+        }
+        require(!jobs.is_empty(), "jobs_pagination")?;
+    }
+    require(expected == Some(seen), "jobs_pagination")?;
+    required.ok_or_else(|| internal("crate_release_required_job_missing"))
 }
 
 fn remember_decision(
@@ -143,7 +286,7 @@ fn relevant_check(
     check: &Value,
     source: &str,
     id: u64,
-    workflow_suites: &BTreeSet<u64>,
+    workflow_suites: &BTreeMap<u64, Value>,
 ) -> Result<Option<CheckDecision>, OrchestratorError> {
     if check["name"].as_str() != Some("Required") {
         return Ok(None);
@@ -152,7 +295,7 @@ fn relevant_check(
         .as_u64()
         .filter(|id| *id > 0)
         .ok_or_else(|| internal("crate_release_check_suite"))?;
-    if !workflow_suites.contains(&suite) {
+    if !workflow_suites.contains_key(&suite) {
         return Ok(None);
     }
     check_decision(check, source, id).map(Some)

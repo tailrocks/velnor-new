@@ -231,12 +231,6 @@ pub use super::image_maintenance::{
 };
 pub use velnor_actions_mise::CheckDeadline;
 
-pub fn render_crate_publisher_entry(
-    timeout_seconds: u32,
-) -> Result<String, super::OrchestratorError> {
-    Ok(velnor_actions_workflow_renderer::release_root_publisher::render_entry(timeout_seconds)?)
-}
-
 pub use crate::release::crate_release_archive::{
     verify_archive_tracked_content, verify_crate_archive,
 };
@@ -246,6 +240,5 @@ pub use crate::release::crate_release_source::{
 };
 pub use crate::release::crate_release_workspace::{
     CratePackageSource, CrateReleaseWorkspacePlan, CrateSemverSource, CrateSource,
-    CrateSourceExecution, HistoricalIntentReader, UnprivilegedSourceExecution,
-    crate_release_workspace_plan_with_registry,
+    CrateSourceExecution, UnprivilegedSourceExecution, crate_release_workspace_plan_with_registry,
 };

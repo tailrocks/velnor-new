@@ -5,7 +5,6 @@ use crate::crate_release_controller::{CrateReleaseObservation, coordinate_releas
 use crate::crate_release_journal::{JournalIdentity, JournalStage, inspect_journal};
 use crate::crate_release_journal_adapter::JournalAdapter;
 
-use super::journal_start::UploadRuntime;
 use super::{
     Duration, JournalRuntime, NativeGitHubAdmissionRead, OrchestratorError, internal,
     read_manifest_at_workflow, read_receipt, required, start_journal_with, thread,
@@ -13,16 +12,7 @@ use super::{
 };
 
 pub(super) fn coordinate_journal(runtime: JournalRuntime<'_>) -> Result<(), OrchestratorError> {
-    #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
-    let execution = match runtime.upload {
-        UploadRuntime::Unprivileged(execution) => execution,
-        #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
-        UploadRuntime::Supervised(_) => {
-            return Err(internal("crate_release_completion_requires_close"));
-        }
-    };
-    #[cfg(not(all(target_os = "linux", target_arch = "x86_64")))]
-    let UploadRuntime::Unprivileged(execution) = runtime.upload;
+    let execution = runtime.upload;
     let frozen = prepare_coordinate_journal(runtime)?;
     let journal = JournalAdapter::new(NativeGitHubAdmissionRead::new(runtime.token.to_owned())?);
     frozen.record_unprivileged(execution, &journal, runtime.github, runtime.registry)?;
@@ -32,7 +22,7 @@ pub(super) fn coordinate_journal(runtime: JournalRuntime<'_>) -> Result<(), Orch
 pub(super) fn prepare_coordinate_journal(
     runtime: JournalRuntime<'_>,
 ) -> Result<crate::crate_release_controller::FrozenCompletion, OrchestratorError> {
-    let source_execution = runtime.upload.source_execution();
+    let source_execution = runtime.upload;
     let identity = JournalIdentity {
         repository: runtime.request.repository.clone(),
         workflow_sha: runtime.request.workflow_sha.clone(),
@@ -76,19 +66,13 @@ pub(super) fn prepare_coordinate_journal(
                 &started.receipt,
                 &generator,
             )?;
-            completion = Some(match runtime.upload {
-                UploadRuntime::Unprivileged(execution) => {
-                    crate::crate_release_controller::FrozenCompletion::prepare_unprivileged(
-                        &input, tools, execution,
-                    )?
-                }
-                #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
-                UploadRuntime::Supervised(execution) => {
-                    crate::crate_release_controller::FrozenCompletion::prepare_supervised(
-                        &input, tools, execution,
-                    )?
-                }
-            });
+            completion = Some(
+                crate::crate_release_controller::FrozenCompletion::prepare_unprivileged(
+                    &input,
+                    tools,
+                    runtime.upload,
+                )?,
+            );
             Ok(())
         },
     )?;
@@ -107,29 +91,13 @@ fn coordinate_operations<
     >,
 ) -> Result<(), OrchestratorError> {
     let runner_temp = runtime.runner_temp;
-    let credential = match runtime.upload {
-        UploadRuntime::Unprivileged(_) => {
-            Some(upload_credentials(runtime.intent.authentication, required))
-        }
-        #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
-        UploadRuntime::Supervised(_) => None,
-    };
+    let credential = upload_credentials(runtime.intent.authentication, required);
     coordinate_release(
         input,
         |package| {
-            match runtime.upload {
-                UploadRuntime::Unprivileged(_) => {
-                    credential
-                        .as_ref()
-                        .ok_or_else(|| internal("crate_release_upload_credential_missing"))?
-                        .as_ref()
-                        .map_err(|_| internal("crate_release_upload_credential_missing"))?;
-                }
-                #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
-                UploadRuntime::Supervised(execution) => {
-                    execution.credential_preflight(runtime.source, runtime.intent, runtime.git)?;
-                }
-            }
+            credential
+                .as_ref()
+                .map_err(|_| internal("crate_release_upload_credential_missing"))?;
             crate::release::crate_release_semver::verify_before_upload(
                 runtime.source,
                 input.admission,
@@ -140,40 +108,20 @@ fn coordinate_operations<
                 input.source_execution,
             )
         },
-        |permit| match runtime.upload {
-            UploadRuntime::Unprivileged(_) => {
-                let credential = credential
-                    .as_ref()
-                    .ok_or_else(|| internal("crate_release_upload_credential_missing"))?
-                    .as_ref()
-                    .map_err(|_| internal("crate_release_upload_credential_missing"))?;
-                invoke_upload(
-                    input,
-                    permit,
-                    runner_temp,
-                    runtime.token,
-                    credential.as_publish_credential(),
-                )
-            }
-            #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
-            UploadRuntime::Supervised(execution) => {
-                crate::crate_release_controller::invoke_supervised_upload(input, permit, execution)
-            }
+        |permit| {
+            let credential = credential
+                .as_ref()
+                .map_err(|_| internal("crate_release_upload_credential_missing"))?;
+            invoke_upload(
+                input,
+                permit,
+                runner_temp,
+                runtime.token,
+                credential.as_publish_credential(),
+            )
         },
         || thread::sleep(coordinator_wait_duration()),
     )?;
-    Ok(())
-}
-
-#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
-pub(super) fn complete_journal(
-    completion: crate::release::crate_release_source_view::ClosedCompletion,
-    token: &str,
-    github: &NativeGitHubAdmissionRead,
-    registry: &super::NativeCrateRegistryRead,
-) -> Result<(), OrchestratorError> {
-    let journal = JournalAdapter::new(NativeGitHubAdmissionRead::new(token.to_owned())?);
-    completion.complete(&journal, github, registry)?;
     Ok(())
 }
 

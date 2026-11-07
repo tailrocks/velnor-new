@@ -95,15 +95,35 @@ fn assert_generated_publisher() -> Result<(), Box<dyn Error>> {
         .map(|step| step["name"].as_str())
         .collect::<Option<Vec<_>>>()
         .ok_or("step name")?;
-    assert_eq!(
-        names,
-        ["Capture release budget", "Publish approved Rust crate"]
+    assert_eq!(names.first(), Some(&"Acquire Velnor"));
+    assert_eq!(names.last(), Some(&"Release journal-coordinate"));
+    let source = names
+        .iter()
+        .position(|name| *name == "Release source-require")
+        .ok_or("source admission")?;
+    let checkout = names
+        .iter()
+        .position(|name| *name == "Checkout exact source")
+        .ok_or("source checkout")?;
+    let receipt = names
+        .iter()
+        .position(|name| *name == "Release receipt-acquire")
+        .ok_or("receipt")?;
+    let start = names
+        .iter()
+        .position(|name| *name == "Release journal-start")
+        .ok_or("journal start")?;
+    let coordinate = names
+        .iter()
+        .position(|name| *name == "Release journal-coordinate")
+        .ok_or("coordinate")?;
+    assert!(source < checkout && checkout < receipt && receipt < start && start < coordinate);
+    assert!(
+        steps[coordinate]["run"]
+            .as_str()
+            .ok_or("coordinate script")?
+            .contains("journal-coordinate")
     );
-    let publisher = steps[1]["run"].as_str().ok_or("publisher script")?;
-    assert!(publisher.contains("/usr/bin/sudo"));
-    assert!(publisher.contains("/usr/bin/python3"));
-    assert!(!publisher.contains("journal-start"));
-    assert!(!publisher.contains("journal-coordinate"));
     Ok(())
 }
 

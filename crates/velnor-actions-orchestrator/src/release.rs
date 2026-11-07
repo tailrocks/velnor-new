@@ -10,8 +10,11 @@ pub(crate) mod crate_release_archive;
 #[path = "crate_release_artifact_pages.rs"]
 pub(crate) mod crate_release_artifact_pages;
 #[cfg(target_os = "linux")]
-#[path = "crate_release_custody.rs"]
-pub(crate) mod crate_release_custody;
+#[path = "crate_release_direct_history.rs"]
+pub(crate) mod crate_release_direct_history;
+#[cfg(not(target_os = "linux"))]
+#[path = "crate_release_direct_history_unavailable.rs"]
+pub(crate) mod crate_release_direct_history;
 #[path = "crate_release_git_bundle.rs"]
 pub(crate) mod crate_release_git_bundle;
 #[cfg(target_os = "linux")]
@@ -21,9 +24,6 @@ pub(crate) mod crate_release_historical_intent;
 pub(crate) mod crate_release_inventory_read;
 #[path = "crate_release_journal_github.rs"]
 pub(crate) mod crate_release_journal_github;
-#[cfg(target_os = "linux")]
-#[path = "crate_release_pinned_download.rs"]
-pub(crate) mod crate_release_pinned_download;
 #[path = "crate_release_pr_acquisition.rs"]
 pub(crate) mod crate_release_pr_acquisition;
 #[path = "crate_release_pr_run.rs"]
@@ -32,9 +32,6 @@ pub(crate) mod crate_release_pr_run;
 pub(crate) mod crate_release_pr_tree;
 #[path = "crate_release_pr_writer.rs"]
 pub(crate) mod crate_release_pr_writer;
-#[cfg(target_os = "linux")]
-#[path = "crate_release_projected_tools.rs"]
-pub(crate) mod crate_release_projected_tools;
 #[path = "crate_release_qualification_deletions.rs"]
 pub(crate) mod crate_release_qualification_deletions;
 #[path = "crate_release_runtime.rs"]
@@ -43,12 +40,6 @@ pub(crate) mod crate_release_runtime;
 pub(crate) mod crate_release_semver;
 #[path = "crate_release_source.rs"]
 pub(crate) mod crate_release_source;
-#[cfg(target_os = "linux")]
-#[path = "crate_release_source_view.rs"]
-pub(crate) mod crate_release_source_view;
-#[cfg(target_os = "linux")]
-#[path = "crate_release_source_wire.rs"]
-pub(crate) mod crate_release_source_wire;
 #[path = "crate_release_workspace.rs"]
 pub(crate) mod crate_release_workspace;
 #[path = "owned_tool_preview.rs"]

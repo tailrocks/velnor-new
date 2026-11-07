@@ -165,7 +165,7 @@ pub(super) fn make_fixture(
         default_branch: "main".into(),
         environment: "release".into(),
         trusted_reviewer_id: 139_017,
-        workflow_path: ".github/workflows/crate-release.yml".into(),
+        workflow_path: ".github/workflows/release.yml".into(),
         required_workflow_path: ".github/workflows/ci.yml".into(),
         workflow_sha: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb".into(),
         run_id: 12,

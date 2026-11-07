@@ -60,7 +60,7 @@ impl GitHubAdmissionRead for Fixture {
         } else if route.ends_with("/actions/runs/12/approvals") {
             json!(self.approvals)
         } else if route.ends_with("/actions/runs/12") {
-            json!({"id":12,"run_attempt":1,"head_sha":self.run_sha,"head_branch":"main","event":self.event,"path":".github/workflows/crate-release.yml","repository":{"full_name":"example/crate","id":101,"owner":{"id":202,"login":"example"}},"head_repository":{"full_name":"example/crate","id":101,"owner":{"id":202,"login":"example"}}})
+            json!({"id":12,"run_attempt":1,"head_sha":self.run_sha,"head_branch":"main","event":self.event,"path":".github/workflows/release.yml","repository":{"full_name":"example/crate","id":101,"owner":{"id":202,"login":"example"}},"head_repository":{"full_name":"example/crate","id":101,"owner":{"id":202,"login":"example"}}})
         } else if route.contains("/compare/") {
             json!({"status":self.compare})
         } else if route.ends_with("/environments/release") {
@@ -126,7 +126,7 @@ fn request() -> GitHubAdmissionRequest {
         default_branch: "main".into(),
         environment: "release".into(),
         trusted_reviewer_id: 99,
-        workflow_path: ".github/workflows/crate-release.yml".into(),
+        workflow_path: ".github/workflows/release.yml".into(),
         required_workflow_path: ".github/workflows/ci.yml".into(),
         workflow_sha: SOURCE.into(),
         run_id: 12,

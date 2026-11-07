@@ -84,6 +84,8 @@ pub(super) fn run_test_transport_child() -> Result<(), Box<dyn std::error::Error
     verify_test_previous_continuation(&github)?;
     verify_test_journal_refs(&journal)?;
     verify_real_journal_continuation(&journal)?;
+    #[cfg(target_os = "linux")]
+    super::continuation::verify_real_direct_history(&github)?;
     Ok(())
 }
 
@@ -117,6 +119,137 @@ fn verify_required_workflow_selection(
             ".github/workflows/ci.yml"
         ),
         Err(crate::OrchestratorError::Internal { problem }) if problem == "crate_release_runs_changed"
+    ));
+    let pending = crate::crate_release_github::verify_required_check(
+        github,
+        "owner/project",
+        &"6".repeat(40),
+        ".github/workflows/ci.yml",
+    );
+    assert!(matches!(pending,
+        Err(crate::OrchestratorError::Internal { problem }) if problem == "crate_release_required_pending"
+    ));
+    let changed_during_origin_check = crate::crate_release_github::verify_required_check(
+        github,
+        "owner/project",
+        &"0".repeat(40),
+        ".github/workflows/ci.yml",
+    );
+    assert!(matches!(changed_during_origin_check,
+        Err(crate::OrchestratorError::Internal { problem }) if problem == "crate_release_runs_changed"
+    ));
+    let rerun_pending = crate::crate_release_github::verify_required_check(
+        github,
+        "owner/project",
+        &"2".repeat(40),
+        ".github/workflows/ci.yml",
+    );
+    assert!(matches!(rerun_pending,
+        Err(crate::OrchestratorError::Internal { problem }) if problem == "crate_release_required_pending"
+    ));
+    let rerun_missing_check = crate::crate_release_github::verify_required_check(
+        github,
+        "owner/project",
+        &"c".repeat(40),
+        ".github/workflows/ci.yml",
+    );
+    assert!(matches!(rerun_missing_check,
+        Err(crate::OrchestratorError::Internal { problem }) if problem == "crate_release_required_pending"
+    ));
+    assert_eq!(
+        crate::crate_release_github::verify_required_check(
+            github,
+            "owner/project",
+            &"1".repeat(40),
+            ".github/workflows/ci.yml",
+        )?,
+        51
+    );
+    verify_required_workflow_retries(github)?;
+    Ok(())
+}
+
+#[cfg(unix)]
+fn verify_required_workflow_retries(
+    github: &crate::crate_release_github::NativeGitHubAdmissionRead,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let waits = std::cell::Cell::new(0);
+    let recovered = super::super::poll_pending_admission(
+        || {
+            crate::crate_release_github::verify_required_check(
+                github,
+                "owner/project",
+                &"5".repeat(40),
+                ".github/workflows/ci.yml",
+            )
+        },
+        || true,
+        || waits.set(waits.get() + 1),
+    )?;
+    assert_eq!(recovered, 33);
+    assert_eq!(waits.get(), 1);
+    for (source_digit, expected_id) in [("4", 41), ("3", 42)] {
+        let waits = std::cell::Cell::new(0);
+        let recovered = super::super::poll_pending_admission(
+            || {
+                crate::crate_release_github::verify_required_check(
+                    github,
+                    "owner/project",
+                    &source_digit.repeat(40),
+                    ".github/workflows/ci.yml",
+                )
+            },
+            || true,
+            || waits.set(waits.get() + 1),
+        )?;
+        assert_eq!(recovered, expected_id);
+        assert_eq!(waits.get(), 1);
+    }
+    let expired = super::super::poll_pending_admission(
+        || {
+            crate::crate_release_github::verify_required_check(
+                github,
+                "owner/project",
+                &"8".repeat(40),
+                ".github/workflows/ci.yml",
+            )
+        },
+        || false,
+        || panic!("expired deadline was retried"),
+    );
+    assert!(matches!(expired,
+        Err(crate::OrchestratorError::Internal { problem }) if problem == "crate_release_runs_changed"
+    ));
+    let deadline_expired = std::cell::Cell::new(false);
+    let expired_during_wait = super::super::poll_pending_admission(
+        || {
+            crate::crate_release_github::verify_required_check(
+                github,
+                "owner/project",
+                &"7".repeat(40),
+                ".github/workflows/ci.yml",
+            )
+        },
+        || !deadline_expired.get(),
+        || deadline_expired.set(true),
+    );
+    assert!(matches!(expired_during_wait,
+        Err(crate::OrchestratorError::Internal { problem }) if problem == "crate_release_runs_changed"
+    ));
+    let invalid = super::super::poll_pending_admission(
+        || {
+            crate::crate_release_github::verify_required_check(
+                github,
+                "owner/project",
+                &"f".repeat(40),
+                ".github/workflows/ci.yml",
+            )
+        },
+        || true,
+        || panic!("failed required check was retried"),
+    );
+    assert!(matches!(invalid,
+        Err(crate::OrchestratorError::Internal { problem }) if problem == "crate_release_required_failed"
     ));
     Ok(())
 }
@@ -171,7 +304,7 @@ fn verify_test_admissions(
         default_branch: "main".into(),
         environment: "release".into(),
         trusted_reviewer_id: 139_017,
-        workflow_path: ".github/workflows/crate-release.yml".into(),
+        workflow_path: ".github/workflows/release.yml".into(),
         required_workflow_path: ".github/workflows/ci.yml".into(),
         workflow_sha: "b".repeat(40),
         run_id: 12,
@@ -191,7 +324,7 @@ fn verify_test_admissions(
     other_source.recovery_sha = Some(other_source.source_sha.clone());
     assert!(matches!(
         crate::crate_release_github::verify_github_evidence(&other_source, github),
-        Err(crate::OrchestratorError::Internal { problem }) if problem == "crate_release_required_workflow_origin"
+        Err(crate::OrchestratorError::Internal { problem }) if problem == "crate_release_required_pending"
     ));
     let normal = crate::crate_release_github::GitHubAdmissionRequest {
         run_id: 13,
@@ -211,7 +344,7 @@ pub(super) fn serve_test_transport(
     done: &std::sync::atomic::AtomicBool,
 ) -> Result<(), String> {
     use std::io::Write as _;
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(180);
     let mut paths = Vec::new();
     let mut state = TestJournalState::default();
     while !done.load(std::sync::atomic::Ordering::Acquire) && std::time::Instant::now() < deadline {
@@ -347,8 +480,13 @@ fn test_service_response(
             ("200 OK", release)
         }
         _ => {
-            if let Some(value) = test_changing_workflow_response(line, previous)
-                .or_else(|| test_github_admission_response(line, &"b".repeat(40), &"a".repeat(40)))
+            if let Some(value) = test_rerun_response(line)
+                .or_else(|| test_pagination_change_response(line, previous))
+                .or_else(|| test_changing_workflow_response(line, previous))
+                .or_else(|| {
+                    let (policy, source) = selected_history(previous);
+                    test_github_admission_response(line, policy, source)
+                })
             {
                 ("200 OK", value)
             } else {
@@ -357,6 +495,139 @@ fn test_service_response(
         }
     };
     Ok((status, value.to_string()))
+}
+
+#[cfg(unix)]
+fn test_rerun_response(line: &str) -> Option<serde_json::Value> {
+    let success_sha = "1".repeat(40);
+    let pending_sha = "2".repeat(40);
+    let missing_sha = "c".repeat(40);
+    let missing =
+        line.contains(&missing_sha) || line.contains("/actions/runs/1153/attempts/2/jobs?");
+    let completed = missing
+        || line.contains(&success_sha)
+        || line.contains("/actions/runs/1151/attempts/2/jobs?");
+    let pending = line.contains(&pending_sha);
+    if !completed && !pending {
+        return None;
+    }
+    let (sha, suite, id) = if missing {
+        (&missing_sha, 153, 1153)
+    } else if completed {
+        (&success_sha, 151, 1151)
+    } else {
+        (&pending_sha, 152, 1152)
+    };
+    if line.contains("/actions/runs?") {
+        return Some(
+            serde_json::json!({"total_count":1,"workflow_runs":[{"id":id,"run_number":suite,"run_attempt":2,"check_suite_id":suite,"head_sha":sha,"path":".github/workflows/ci.yml","status":if completed {"completed"} else {"in_progress"},"conclusion":if completed {Some("success")} else {None}}]}),
+        );
+    }
+    if line.contains("/attempts/2/jobs?") {
+        return Some(
+            serde_json::json!({"total_count":1,"jobs":[{"id":51,"name":"Required","run_id":id,"run_attempt":2,"status":"completed","conclusion":"success","check_run_url":"https://api.github.com/repos/owner/project/check-runs/51"}]}),
+        );
+    }
+    if line.contains("/check-runs?") {
+        let mut checks = vec![
+            serde_json::json!({"id":50,"name":"Required","head_sha":sha,"check_suite":{"id":suite},"app":{"id":15368,"slug":"github-actions"},"status":"completed","conclusion":"success","started_at":"2026-11-03T15:40:00Z"}),
+        ];
+        if completed && !missing {
+            checks.push(serde_json::json!({"id":51,"name":"Required","head_sha":sha,"check_suite":{"id":suite},"app":{"id":15368,"slug":"github-actions"},"status":"completed","conclusion":"success","started_at":"2026-11-03T15:41:00Z"}));
+        }
+        return Some(serde_json::json!({"total_count":checks.len(),"check_runs":checks}));
+    }
+    None
+}
+
+#[cfg(unix)]
+fn test_pagination_change_response(line: &str, previous: &[String]) -> Option<serde_json::Value> {
+    let sha_checks = "4".repeat(40);
+    let sha_jobs = "3".repeat(40);
+    let is_checks =
+        line.contains(&sha_checks) || line.contains("/actions/runs/1144/attempts/1/jobs?");
+    let is_jobs = line.contains(&sha_jobs) || line.contains("/actions/runs/1143/attempts/1/jobs?");
+    if !is_checks && !is_jobs {
+        return None;
+    }
+    let (sha, suite, run_id, check_id) = if is_checks {
+        (&sha_checks, 144, 1144, 41)
+    } else {
+        (&sha_jobs, 143, 1143, 42)
+    };
+    if line.contains("/actions/runs?") {
+        return Some(
+            serde_json::json!({"total_count":1,"workflow_runs":[{"id":run_id,"run_number":suite,"run_attempt":1,"check_suite_id":suite,"head_sha":sha,"path":".github/workflows/ci.yml","status":"completed","conclusion":"success"}]}),
+        );
+    }
+    if line.contains("/attempts/1/jobs?") {
+        let required = serde_json::json!({"id":check_id,"name":"Required","run_id":run_id,"run_attempt":1,"status":"completed","conclusion":"success","check_run_url":format!("https://api.github.com/repos/owner/project/check-runs/{check_id}")});
+        if is_checks {
+            return Some(serde_json::json!({"total_count":1,"jobs":[required]}));
+        }
+        let second = line.contains("page=2");
+        let prior_second = previous.iter().any(|entry| {
+            entry.contains("/actions/runs/1143/attempts/1/jobs?") && entry.contains("page=2")
+        });
+        let mut jobs = vec![];
+        if second {
+            jobs.push(serde_json::json!({"id":9000,"name":"Other"}));
+        } else {
+            jobs.push(required);
+            for id in 1000..1099 {
+                jobs.push(serde_json::json!({"id":id,"name":"Other"}));
+            }
+        }
+        return Some(
+            serde_json::json!({"total_count":if second && !prior_second {102} else {101},"jobs":jobs}),
+        );
+    }
+    if line.contains("/check-runs?") {
+        let required = serde_json::json!({"id":check_id,"name":"Required","head_sha":sha,"check_suite":{"id":suite},"app":{"id":15368,"slug":"github-actions"},"status":"completed","conclusion":"success","started_at":"2026-11-03T15:40:00Z"});
+        if is_jobs {
+            return Some(serde_json::json!({"total_count":1,"check_runs":[required]}));
+        }
+        let second = line.contains("page=2");
+        let prior_second = previous.iter().any(|entry| {
+            entry.contains(&sha_checks)
+                && entry.contains("/check-runs?")
+                && entry.contains("page=2")
+        });
+        let mut checks = vec![];
+        if second {
+            checks.push(serde_json::json!({"id":9000,"name":"Other"}));
+        } else {
+            checks.push(required);
+            for id in 1000..1099 {
+                checks.push(serde_json::json!({"id":id,"name":"Other"}));
+            }
+        }
+        return Some(
+            serde_json::json!({"total_count":if second && !prior_second {102} else {101},"check_runs":checks}),
+        );
+    }
+    None
+}
+
+#[cfg(unix)]
+fn selected_history(previous: &[String]) -> (&str, &str) {
+    previous
+        .iter()
+        .rev()
+        .find_map(|entry| {
+            let values = entry
+                .strip_prefix("GET /repos/owner/project/compare/")?
+                .strip_suffix(" HTTP/1.1")?;
+            let (source, policy) = values.split_once("...")?;
+            (policy.len() == 40
+                && source.len() == 40
+                && source.as_bytes().windows(2).any(|pair| pair[0] != pair[1]))
+            .then_some((policy, source))
+        })
+        .unwrap_or((
+            "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        ))
 }
 
 #[cfg(unix)]

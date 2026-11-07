@@ -17,9 +17,9 @@ pub(super) fn run_response(policy_sha: &str, push: bool, legacy: bool) -> Value 
         "head_branch": "main",
         "event": if push { "push" } else { "workflow_dispatch" },
         "path": if legacy {
-            ".github/workflows/release.yml"
+            ".github/workflows/not-release.yml"
         } else {
-            ".github/workflows/crate-release.yml"
+            ".github/workflows/release.yml"
         },
         "repository": {"id": 22, "full_name": "example/demo", "owner": {"id": 77, "login": "example"}},
         "head_repository": {"id": 22, "full_name": "example/demo", "owner": {"id": 77, "login": "example"}}
@@ -77,7 +77,7 @@ impl GitHubAdmissionRead for WorkspaceGithub {
         let sha = &self.0.sha;
         if route.ends_with("/actions/runs/12") {
             return Ok(
-                json!({"id":12,"run_attempt":1,"head_sha":sha,"head_branch":"main","event":"push","path":".github/workflows/crate-release.yml","repository":{"id":22,"full_name":"example/demo","owner":{"id":77,"login":"example"}},"head_repository":{"id":22,"full_name":"example/demo","owner":{"id":77,"login":"example"}}}),
+                json!({"id":12,"run_attempt":1,"head_sha":sha,"head_branch":"main","event":"push","path":".github/workflows/release.yml","repository":{"id":22,"full_name":"example/demo","owner":{"id":77,"login":"example"}},"head_repository":{"id":22,"full_name":"example/demo","owner":{"id":77,"login":"example"}}}),
             );
         }
         if let Some(response) = push_response(route, sha) {

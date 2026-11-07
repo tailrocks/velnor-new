@@ -59,7 +59,6 @@ pub(crate) fn observe_prior_recovery<
         input.source,
         input.git,
         Some(&crate::crate_release_journal::PriorTransition {
-            source_execution: input.source_execution,
             request: input.request,
             github: input.github,
         }),
@@ -113,7 +112,6 @@ pub(crate) fn observe_prior_recovery<
             input.source,
             input.git,
             Some(&crate::crate_release_journal::PriorTransition {
-                source_execution: input.source_execution,
                 request: input.request,
                 github: input.github,
             }),

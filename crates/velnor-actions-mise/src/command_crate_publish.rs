@@ -37,6 +37,7 @@ const ALLOWED_ENV: &[&str] = &[
     "RUSTDOC",
     "HOME",
     "CARGO_HOME",
+    "CARGO_TARGET_DIR",
     "RUSTUP_HOME",
     "RUSTUP_AUTO_INSTALL",
     "RUNNER_TEMP",
@@ -78,6 +79,48 @@ fn runner_oidc_url(url: &str) -> bool {
         })
 }
 
+fn validate_tool_env(tool_env: &[(OsString, OsString)], cwd: &Path) -> Result<(), MiseError> {
+    let mut names = BTreeSet::new();
+    for (key, value) in tool_env {
+        let key = key.to_str().ok_or_else(invalid)?;
+        if !ALLOWED_ENV.contains(&key) || !names.insert(key) || value.is_empty() {
+            return Err(invalid());
+        }
+        if (key == "GITHUB_API_URL" && value != "https://api.github.com")
+            || (key == "GITHUB_SERVER_URL" && value != "https://github.com")
+        {
+            return Err(invalid());
+        }
+    }
+    let env_path = |name: &str| {
+        tool_env
+            .iter()
+            .find(|(key, _)| key == name)
+            .ok_or_else(invalid)
+            .and_then(|(_, value)| std::fs::canonicalize(value).map_err(|_| invalid()))
+    };
+    let target = env_path("CARGO_TARGET_DIR")?;
+    let home = env_path("HOME")?;
+    let source = std::fs::canonicalize(cwd).map_err(|_| invalid())?;
+    if !target.is_dir() || target.starts_with(&source) || target.parent() != Some(home.as_path()) {
+        return Err(invalid());
+    }
+    for key in [
+        "PATH",
+        "CARGO",
+        "RUSTC",
+        "RUSTDOC",
+        "HOME",
+        "CARGO_HOME",
+        "RUSTUP_HOME",
+    ] {
+        if !names.contains(key) {
+            return Err(invalid());
+        }
+    }
+    Ok(())
+}
+
 impl IsolatedCommand {
     pub fn crate_publish(
         program: &Path,
@@ -101,31 +144,7 @@ impl IsolatedCommand {
         }) {
             return Err(invalid());
         }
-        let mut names = BTreeSet::new();
-        for (key, value) in tool_env {
-            let key = key.to_str().ok_or_else(invalid)?;
-            if !ALLOWED_ENV.contains(&key) || !names.insert(key) || value.is_empty() {
-                return Err(invalid());
-            }
-            if (key == "GITHUB_API_URL" && value != "https://api.github.com")
-                || (key == "GITHUB_SERVER_URL" && value != "https://github.com")
-            {
-                return Err(invalid());
-            }
-        }
-        for key in [
-            "PATH",
-            "CARGO",
-            "RUSTC",
-            "RUSTDOC",
-            "HOME",
-            "CARGO_HOME",
-            "RUSTUP_HOME",
-        ] {
-            if !names.contains(key) {
-                return Err(invalid());
-            }
-        }
+        validate_tool_env(tool_env, cwd)?;
         let source = cwd.canonicalize().map_err(|_| invalid())?;
         if git.exec_path().starts_with(&source) {
             return Err(invalid());

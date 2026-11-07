@@ -40,6 +40,10 @@ mod publication;
 
 #[path = "package_release_signer_receipt.rs"]
 mod receipt;
+#[cfg(all(test, target_os = "linux", target_arch = "x86_64"))]
+pub(crate) use attestation::verified_generator_fixture;
+#[cfg(target_os = "linux")]
+pub(crate) use attestation::verify_historical_tool_expectations;
 pub(crate) use attestation::{
     AdmittedStart, AttestedLinuxGenerator, MeasuredReleaseTools, ValidatedStart,
     measure_release_tools, record_admitted_start, verify_published_linux_binary_attestation,

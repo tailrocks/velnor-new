@@ -256,3 +256,48 @@ fn mergeability_polling_obeys_the_public_operation_deadline() -> Result<(), Box<
     }
     Ok(())
 }
+
+#[cfg(unix)]
+#[test]
+fn release_git_fixture_reaps_timed_out_archive_reader() -> Result<(), Box<dyn Error>> {
+    let temp = tempfile::tempdir()?;
+    let fixture =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/api2026_pull_context_fixture");
+    let probe = r#"
+import os, pathlib, subprocess, sys
+sys.path.insert(0, sys.argv[1])
+import driver
+pid_file = pathlib.Path(sys.argv[2])
+reader = [sys.executable, '-c', 'import os,pathlib,time; pathlib.Path('+repr(str(pid_file))+').write_text(str(os.getpid())); time.sleep(60)']
+extractor = [sys.executable, '-c', 'import sys; sys.stdin.buffer.read()']
+try:
+    driver.extract_git_member(reader, extractor, timeout=1)
+except (RuntimeError, subprocess.TimeoutExpired):
+    pass
+else:
+    raise AssertionError('archive timeout accepted')
+pid = int(pid_file.read_text())
+try:
+    os.kill(pid, 0)
+except ProcessLookupError:
+    pass
+else:
+    raise AssertionError('archive reader was not reaped')
+producer = [sys.executable, '-c', 'import sys; sys.stdout.buffer.write(b"x" * (16 * 1024 * 1024 + 1))']
+copy = [sys.executable, '-c', 'import shutil,sys; shutil.copyfileobj(sys.stdin.buffer, sys.stdout.buffer)']
+try:
+    driver.extract_git_member(producer, copy, timeout=20)
+except RuntimeError as error:
+    if 'exceeded its limit' not in str(error):
+        raise
+else:
+    raise AssertionError('oversized extracted member accepted')
+"#;
+    let status = std::process::Command::new("/usr/bin/python3")
+        .args(["-I", "-c", probe])
+        .arg(fixture)
+        .arg(temp.path().join("reader.pid"))
+        .status()?;
+    assert!(status.success());
+    Ok(())
+}

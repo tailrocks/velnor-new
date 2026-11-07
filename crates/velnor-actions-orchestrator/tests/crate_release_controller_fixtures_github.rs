@@ -277,7 +277,11 @@ impl GitHubAdmissionRead for Github {
         } else if route.contains("check-runs?") {
             super::workspace_observation::check_runs(checked_sha, self.required_rerun.get())
         } else if route.contains("/actions/runs?") {
-            json!({"total_count":1,"workflow_runs":[{"check_suite_id":123,"head_sha":checked_sha,"path":".github/workflows/ci.yml","status":"completed","conclusion":"success","event":"push","head_branch":"main","repository":{"id":22,"full_name":"example/demo","owner":{"id":77,"login":"example"}},"head_repository":{"id":22,"full_name":"example/demo","owner":{"id":77,"login":"example"}}}]})
+            json!({"total_count":1,"workflow_runs":[{"id":123,"run_number":1,"run_attempt":if self.required_rerun.get() == 0 {1} else {2},"check_suite_id":123,"head_sha":checked_sha,"path":".github/workflows/ci.yml","status":"completed","conclusion":"success","event":"push","head_branch":"main","repository":{"id":22,"full_name":"example/demo","owner":{"id":77,"login":"example"}},"head_repository":{"id":22,"full_name":"example/demo","owner":{"id":77,"login":"example"}}}]})
+        } else if route.contains("/actions/runs/123/attempts/") && route.contains("/jobs?") {
+            let attempt = if self.required_rerun.get() == 0 { 1 } else { 2 };
+            let id = attempt;
+            json!({"total_count":1,"jobs":[{"id":id,"name":"Required","run_id":123,"run_attempt":attempt,"status":"completed","conclusion":if self.required_rerun.get() == 2 {"failure"} else {"success"},"check_run_url":format!("https://api.github.com/repos/example/demo/check-runs/{id}")}]})
         } else if route.ends_with("/git/ref/heads/main") {
             json!({"ref":"refs/heads/main","object":{"type":"commit","sha":sha}})
         } else if route == "users/owner" {

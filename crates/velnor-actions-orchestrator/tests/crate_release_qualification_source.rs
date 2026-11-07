@@ -62,7 +62,8 @@ impl Fixture {
         ]);
         for (id, sha) in [(100, "a".repeat(40)), (200, "b".repeat(40))] {
             values.insert(format!("{repo}/commits/{sha}/check-runs?filter=all&per_page=100&page=1"),json!({"total_count":1,"check_runs":[{"id":id,"name":"Required","head_sha":sha,"app":{"id":15368,"slug":"github-actions"},"check_suite":{"id":id},"status":"completed","conclusion":"success","started_at":"2026-11-05T00:00:00Z"}]}));
-            values.insert(format!("{repo}/actions/runs?head_sha={sha}&per_page=100&page=1"),json!({"total_count":1,"workflow_runs":[{"check_suite_id":id,"head_sha":sha,"path":".github/workflows/ci.yml","status":"completed","conclusion":"success"}]}));
+            values.insert(format!("{repo}/actions/runs?head_sha={sha}&per_page=100&page=1"),json!({"total_count":1,"workflow_runs":[{"id":id,"run_number":id,"run_attempt":1,"check_suite_id":id,"head_sha":sha,"path":".github/workflows/ci.yml","status":"completed","conclusion":"success"}]}));
+            values.insert(format!("{repo}/actions/runs/{id}/attempts/1/jobs?per_page=100&page=1"), json!({"total_count":1,"jobs":[{"id":id,"name":"Required","run_id":id,"run_attempt":1,"status":"completed","conclusion":"success","check_run_url":format!("https://api.github.com/{repo}/check-runs/{id}")}]}));
         }
         Self {
             request,

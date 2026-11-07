@@ -14,13 +14,9 @@ pub(crate) struct FrozenCompletion {
     candidate: super::reconcile::ReconciledCandidate,
     admission: super::super::CrateReleaseAdmissionReceipt,
     receipt: JournalReceipt,
-    archives: Vec<Vec<u8>>,
     predecessors: Vec<PriorHistoryEvidence>,
     completed: Option<JournalEvidence>,
     tools: crate::release::package_release_signer::MeasuredReleaseTools,
-    supervised: bool,
-    #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
-    session: Option<crate::release::crate_release_source_view::SourceSessionId>,
 }
 
 impl FrozenCompletion {
@@ -39,30 +35,7 @@ impl FrozenCompletion {
                 ..*input
             },
             tools,
-            false,
         )
-    }
-
-    #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
-    pub(crate) fn prepare_supervised<
-        J: JournalIo + JournalOperationRefs,
-        G: GitHubAdmissionRead,
-        R: CrateRegistryRead,
-    >(
-        input: &CrateReleaseObservation<'_, J, G, R>,
-        tools: crate::release::package_release_signer::MeasuredReleaseTools,
-        execution: &crate::release::crate_release_source_view::SupervisedSourceExecution,
-    ) -> Result<Self, OrchestratorError> {
-        let mut frozen = Self::prepare(
-            &CrateReleaseObservation {
-                source_execution: execution,
-                ..*input
-            },
-            tools,
-            true,
-        )?;
-        frozen.session = Some(execution.session_identity());
-        Ok(frozen)
     }
 
     fn prepare<
@@ -72,7 +45,6 @@ impl FrozenCompletion {
     >(
         input: &CrateReleaseObservation<'_, J, G, R>,
         tools: crate::release::package_release_signer::MeasuredReleaseTools,
-        supervised: bool,
     ) -> Result<Self, OrchestratorError> {
         let candidate = super::derive_reconciled_candidate(input)?;
         let predecessors = crate::crate_release_journal::inspect_prior_chain_with(
@@ -81,14 +53,11 @@ impl FrozenCompletion {
             input.source,
             input.git,
             Some(&crate::crate_release_journal::PriorTransition {
-                source_execution: input.source_execution,
                 request: input.request,
                 github: input.github,
             }),
         )?;
         let target = tempfile::tempdir().map_err(|_| invalid())?;
-        let mut archives = Vec::new();
-        let mut total = 0usize;
         for package in &candidate.packages {
             let archive = input
                 .source_execution
@@ -101,10 +70,6 @@ impl FrozenCompletion {
                     false,
                     input.git,
                 ))?;
-            total = total
-                .checked_add(archive.len())
-                .filter(|total| *total <= 512 * 1024 * 1024)
-                .ok_or_else(invalid)?;
             if crate::release::crate_release_archive::crate_archive_inventory(
                 &archive,
                 &package.source.name,
@@ -123,7 +88,6 @@ impl FrozenCompletion {
             {
                 return Err(invalid());
             }
-            archives.push(archive);
         }
         let (history, completed) = crate::crate_release_journal::inspect_recoverable_history(
             input.journal,
@@ -137,32 +101,13 @@ impl FrozenCompletion {
             candidate,
             admission: input.admission.clone(),
             receipt: input.journal_receipt.clone(),
-            archives,
             predecessors,
             completed,
             tools,
-            supervised,
-            #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
-            session: None,
         };
         frozen.revalidate_history(input.journal)?;
         crate::verify_journal_source(input.source, input.journal_receipt, input.git)?;
         Ok(frozen)
-    }
-
-    #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
-    pub(crate) fn is_bound_to(
-        &self,
-        session: &crate::release::crate_release_source_view::SourceSessionId,
-    ) -> bool {
-        self.session
-            .as_ref()
-            .is_some_and(|frozen| frozen.matches(session))
-    }
-
-    #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
-    pub(crate) fn admission(&self) -> &super::super::CrateReleaseAdmissionReceipt {
-        &self.admission
     }
 
     fn revalidate_history<J: JournalIo + JournalOperationRefs>(
@@ -215,28 +160,7 @@ impl FrozenCompletion {
         github: &G,
         registry: &R,
     ) -> Result<String, OrchestratorError> {
-        if self.supervised {
-            return Err(invalid());
-        }
         self.record(journal, github, registry, || Ok(()))
-    }
-
-    #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
-    pub(crate) fn record_closed<
-        J: JournalIo + JournalOperationRefs,
-        G: GitHubAdmissionRead,
-        R: CrateRegistryRead,
-    >(
-        self,
-        closed: crate::release::crate_release_source_view::ClosedSourceSession,
-        journal: &J,
-        github: &G,
-        registry: &R,
-    ) -> Result<String, OrchestratorError> {
-        if !self.supervised {
-            return Err(invalid());
-        }
-        closed.complete(|closed| self.record(journal, github, registry, || closed.check()))
     }
 
     fn verify_packages<G: GitHubAdmissionRead, R: CrateRegistryRead>(
@@ -245,7 +169,7 @@ impl FrozenCompletion {
         registry: &R,
     ) -> Result<(), OrchestratorError> {
         let intent = &self.admission.intent;
-        for (package, archive) in self.candidate.packages.iter().zip(&self.archives) {
+        for package in &self.candidate.packages {
             let (owners, presence) = crate::crate_release_registry::inspect_crate_registry(
                 registry,
                 &package.source.name,
@@ -280,12 +204,11 @@ impl FrozenCompletion {
                     id: package.release_id,
                     url: package.release_url.clone(),
                 })
-                || crate::crate_release_registry::reconcile_crate_registry(
+                || crate::crate_release_registry::revalidate_crate_registry(
                     registry,
                     &package.source.name,
                     &package.source.version,
-                    &package.registry.owners,
-                    archive,
+                    &package.registry,
                 )? != package.registry
             {
                 return Err(invalid());

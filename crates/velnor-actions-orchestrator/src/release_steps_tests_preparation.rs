@@ -18,7 +18,7 @@ fn rust_artifact_custody_must_precede_publishing() -> Result<(), Box<dyn std::er
     let StepKind::Shell { env, .. } = &mut publisher.steps[1].kind else {
         return Err("publisher shell".into());
     };
-    env.insert("VELNOR_PREFLIGHT_RUST_ARTIFACT_ID".into(), "forged".into());
+    env.insert("VELNOR_RUST_ARTIFACT_ID".into(), "forged".into());
     assert!(
         !valid(&forged, &rust),
         "publisher must bind the verified Rust artifact"
@@ -97,13 +97,13 @@ fn consumer_and_reconciliation_depend_on_verified_preflight()
         .ok_or("publisher")?
         .steps
         .iter_mut()
-        .find(|step| step.name == "Publish approved Rust crate")
+        .find(|step| step.name == "Release toolchain-acquire")
         .ok_or("acquire")?;
     let StepKind::Shell { env, .. } = &mut acquire.kind else {
         return Err("acquire is not a shell step".into());
     };
     env.insert(
-        "VELNOR_PREFLIGHT_RUST_ARTIFACT_ID".to_owned(),
+        "VELNOR_RUST_ARTIFACT_ID".to_owned(),
         "${{ inputs.artifact_id }}".to_owned(),
     );
     assert!(
@@ -168,12 +168,16 @@ fn consumers_acquire_the_receipt_bound_to_preflight() -> Result<(), Box<dyn std:
             .iter()
             .any(|need| need == "release-preflight")
     );
-    let StepKind::Shell { env, .. } = &publisher.steps[1].kind else {
+    let receipt = publisher
+        .steps
+        .iter()
+        .find(|step| step.name == "Release receipt-acquire")
+        .ok_or("receipt acquisition")?;
+    let StepKind::Shell { env, .. } = &receipt.kind else {
         return Err("publisher shell".into());
     };
     assert_eq!(
-        env.get("VELNOR_PREFLIGHT_RECEIPT_ARTIFACT_ID")
-            .map(String::as_str),
+        env.get("VELNOR_RECEIPT_ARTIFACT_ID").map(String::as_str),
         Some("${{ needs.release-preflight.outputs.receipt_artifact_id }}")
     );
     {
@@ -264,13 +268,13 @@ fn assert_consumer_receipt_forgery_rejected(
         .ok_or("publisher")?
         .steps
         .iter_mut()
-        .find(|step| step.name == "Publish approved Rust crate")
+        .find(|step| step.name == "Release receipt-acquire")
         .ok_or("acquire")?;
     let StepKind::Shell { env, .. } = &mut acquire.kind else {
         return Err("acquire shell".into());
     };
     env.insert(
-        "VELNOR_PREFLIGHT_RECEIPT_ARTIFACT_ID".to_owned(),
+        "VELNOR_RECEIPT_ARTIFACT_ID".to_owned(),
         "${{ inputs.artifact_id }}".to_owned(),
     );
     assert!(

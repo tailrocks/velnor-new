@@ -3,11 +3,7 @@
 
 #[path = "crate_release_plz.rs"]
 mod plz;
-#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
-pub(crate) use plz::invoke_supervised_upload;
 pub(crate) use plz::invoke_upload;
-#[cfg(target_os = "linux")]
-pub(crate) use plz::single_package_config;
 #[cfg(test)]
 pub(crate) fn fixture_upload_config(
     intent: &CrateReleaseIntent,
@@ -312,4 +308,4 @@ pub fn repair_crate_release<
 
 #[cfg(test)]
 #[path = "../tests/crate_release_controller_public.rs"]
-mod tests;
+pub(crate) mod tests;

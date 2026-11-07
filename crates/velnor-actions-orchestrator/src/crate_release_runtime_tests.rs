@@ -20,6 +20,14 @@ use transport::{run_test_transport_child, serve_test_transport};
 #[cfg(unix)]
 #[test]
 fn test_only_dispatch_and_loopback_transport() -> Result<(), Box<dyn std::error::Error>> {
+    #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+    if std::env::var_os("VELNOR_TEST_CONTROLLER_SIGNED_CHILD").is_some() {
+        return crate::crate_release_controller::tests::signed_history::run_child();
+    }
+    #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+    if std::env::var_os("VELNOR_TEST_DIRECT_HISTORY_CHILD").is_some() {
+        return continuation::verify_direct_history_child();
+    }
     if std::env::var_os("VELNOR_TEST_TRANSPORT_CHILD").is_some() {
         return run_test_transport_child();
     }
@@ -42,16 +50,13 @@ fn test_only_dispatch_and_loopback_transport() -> Result<(), Box<dyn std::error:
     let steps = workflow["jobs"]["release-publish"]["steps"]
         .as_array()
         .ok_or("publisher steps")?;
-    assert_eq!(
-        steps
-            .iter()
-            .filter_map(|step| step["name"].as_str())
-            .collect::<Vec<_>>(),
-        ["Capture release budget", "Publish approved Rust crate"]
-    );
-    let publisher = steps[1]["run"].as_str().ok_or("publisher script")?;
-    assert!(publisher.contains("/usr/bin/sudo"));
-    assert!(publisher.contains("/usr/bin/python3"));
+    let names = steps
+        .iter()
+        .filter_map(|step| step["name"].as_str())
+        .collect::<Vec<_>>();
+    assert_eq!(names.first(), Some(&"Acquire Velnor"));
+    assert_eq!(names.last(), Some(&"Release journal-coordinate"));
+    assert!(names.contains(&"Release verify-admission"));
     let output = std::process::Command::new(std::env::current_exe()?)
         .args([
             "--exact",
@@ -73,6 +78,30 @@ fn test_only_dispatch_and_loopback_transport() -> Result<(), Box<dyn std::error:
     assert!(
         output.status.success(),
         "fixture child failed: {} {}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    crate::libtest_case::assert_one_passed(&output);
+    Ok(())
+}
+
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+#[test]
+fn direct_history_accepts_reviewed_ubuntu26_tool_update() -> Result<(), Box<dyn std::error::Error>>
+{
+    let output = std::process::Command::new(std::env::current_exe()?)
+        .args([
+            "--exact",
+            crate::libtest_case::name(concat!(
+                module_path!(),
+                "::test_only_dispatch_and_loopback_transport"
+            )),
+        ])
+        .env("VELNOR_TEST_UPDATED_HISTORY", "1")
+        .output()?;
+    assert!(
+        output.status.success(),
+        "{}{}",
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
     );
@@ -254,8 +283,8 @@ fn release_intent_comes_from_the_requested_workflow_commit()
     fs::create_dir(root.join(".github"))?;
     fs::create_dir(root.join(".velnor"))?;
     fs::create_dir(root.join(".github/workflows"))?;
-    let old_workflow = root.join(".github/workflows/release.yml");
-    let workflow = root.join(".github/workflows/crate-release.yml");
+    let old_workflow = root.join(".github/workflows/not-release.yml");
+    let workflow = root.join(".github/workflows/release.yml");
     fs::write(&old_workflow, b"legacy workflow")?;
     let path = root.join(".github/velnor-release-intent.toml");
     let manifest_path = root.join(".velnor/release-manifest.json");

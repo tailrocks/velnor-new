@@ -17,7 +17,7 @@ pub(super) fn observe_journal_operation(
     };
     use crate::crate_release_journal::{JournalIdentity, JournalStage, inspect_journal};
     use crate::crate_release_journal_adapter::JournalAdapter;
-    let source_execution = runtime.upload.source_execution();
+    let source_execution = runtime.upload;
     let JournalRuntime {
         receipt_path,
         intent,

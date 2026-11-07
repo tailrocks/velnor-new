@@ -122,16 +122,6 @@ fn run_plan(guard: Option<&OperatorToolchainGuard>) -> ExitCode {
 }
 
 fn run_crate_release_command(command: &crate::args::CrateReleaseCommand) -> ExitCode {
-    if let crate::args::CrateReleaseCommand::PublisherEntry { timeout_seconds } = command {
-        use std::io::Write as _;
-        return match velnor_actions_orchestrator::render_crate_publisher_entry(*timeout_seconds) {
-            Ok(entry) => match std::io::stdout().lock().write_all(entry.as_bytes()) {
-                Ok(()) => ExitCode::SUCCESS,
-                Err(_) => ExitCode::FAILURE,
-            },
-            Err(error) => fail_public(&error),
-        };
-    }
     let checkout_mode = match command {
         crate::args::CrateReleaseCommand::CheckoutPolicy => Some("policy"),
         crate::args::CrateReleaseCommand::CheckoutSource => Some("source"),
@@ -152,11 +142,9 @@ fn run_crate_release_command(command: &crate::args::CrateReleaseCommand) -> Exit
                 };
     }
     let operation = match command {
-        crate::args::CrateReleaseCommand::PublisherEntry { .. }
-        | crate::args::CrateReleaseCommand::PreparePr
+        crate::args::CrateReleaseCommand::PreparePr
         | crate::args::CrateReleaseCommand::CheckoutPolicy
         | crate::args::CrateReleaseCommand::CheckoutSource => unreachable!(),
-        crate::args::CrateReleaseCommand::PublishSupervise => "publish-supervise",
         crate::args::CrateReleaseCommand::ReleasePrCreate => "release-pr-create",
         crate::args::CrateReleaseCommand::SourceAdmit => "source-admit",
         crate::args::CrateReleaseCommand::CandidateReceipt => "candidate-receipt",

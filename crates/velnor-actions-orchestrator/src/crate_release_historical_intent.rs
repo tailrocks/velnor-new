@@ -6,15 +6,25 @@ use std::path::Path;
 use velnor_actions_contract::config::CrateReleaseIntent;
 use velnor_actions_mise::{CheckDeadline, GitRequest};
 
+pub(crate) trait HistoryWatch {
+    fn check(&self) -> Result<(), ()>;
+}
+pub(crate) struct DirectHistoryWatch;
+impl HistoryWatch for DirectHistoryWatch {
+    fn check(&self) -> Result<(), ()> {
+        CheckDeadline::check_scope().map_err(|_| ())
+    }
+}
+
 fn read_historical_intent(
     root: &Path,
     commit: &str,
     git: &ReleaseGit,
     deadline: CheckDeadline,
-    wire: &crate::release::crate_release_source_wire::SourceWire,
+    wire: &dyn HistoryWatch,
 ) -> Result<CrateReleaseIntent, OrchestratorError> {
     let invalid = || internal("crate_release_historical_intent_invalid");
-    wire.remaining().map_err(|_| invalid())?;
+    wire.check().map_err(|()| invalid())?;
     verify_object_store(root, git, deadline, wire)?;
     let commit_bytes = object(root, "commit", commit, git, deadline, wire, 1_048_576)?;
     let first = commit_bytes
@@ -38,7 +48,7 @@ fn read_historical_intent(
     "ubuntu-26.04".clone_into(&mut validated.runner);
     validated.validate().map_err(|_| invalid())?;
     verify_object_store(root, git, deadline, wire)?;
-    wire.remaining().map_err(|_| invalid())?;
+    wire.check().map_err(|()| invalid())?;
     Ok(original)
 }
 
@@ -48,17 +58,17 @@ fn object(
     id: &str,
     git: &ReleaseGit,
     deadline: CheckDeadline,
-    wire: &crate::release::crate_release_source_wire::SourceWire,
+    wire: &dyn HistoryWatch,
     cap: usize,
 ) -> Result<Vec<u8>, OrchestratorError> {
     let invalid = || internal("crate_release_historical_object_invalid");
-    wire.remaining().map_err(|_| invalid())?;
+    wire.check().map_err(|()| invalid())?;
     let output = GitRequest::object(kind, id)
         .map_err(|_| invalid())?
         .run_release_in_bounded(root, git, cap, deadline.remaining().map_err(|_| invalid())?)
         .map_err(|_| invalid())?;
     deadline.remaining().map_err(|_| invalid())?;
-    wire.remaining().map_err(|_| invalid())?;
+    wire.check().map_err(|()| invalid())?;
     if !output.success
         || crate::crate_release_qualification_snapshot::object::object_sha(kind, &output.stdout)?
             != id
@@ -112,10 +122,10 @@ fn verify_object_store(
     root: &Path,
     git: &ReleaseGit,
     deadline: CheckDeadline,
-    wire: &crate::release::crate_release_source_wire::SourceWire,
+    wire: &dyn HistoryWatch,
 ) -> Result<(), OrchestratorError> {
     let invalid = || internal("crate_release_historical_store_invalid");
-    wire.remaining().map_err(|_| invalid())?;
+    wire.check().map_err(|()| invalid())?;
     for path in [
         ".",
         ".git",
@@ -155,7 +165,7 @@ fn verify_object_store(
     if !config.is_file() || config.file_type().is_symlink() {
         return Err(invalid());
     }
-    wire.remaining().map_err(|_| invalid())?;
+    wire.check().map_err(|()| invalid())?;
     let result = GitRequest::new(
         "config",
         vec![
@@ -173,7 +183,7 @@ fn verify_object_store(
         deadline.remaining().map_err(|_| invalid())?,
     )
     .map_err(|_| invalid())?;
-    wire.remaining().map_err(|_| invalid())?;
+    wire.check().map_err(|()| invalid())?;
     if result.code != Some(1) || !result.stdout.is_empty() {
         return Err(invalid());
     }
@@ -195,7 +205,7 @@ pub(crate) fn verify_runner_transition(
     github: &dyn crate::crate_release_github::GitHubAdmissionRead,
     git: &ReleaseGit,
     deadline: CheckDeadline,
-    wire: &crate::release::crate_release_source_wire::SourceWire,
+    wire: &dyn HistoryWatch,
 ) -> Result<(), OrchestratorError> {
     let TransitionReceipts {
         prior,
@@ -204,21 +214,22 @@ pub(crate) fn verify_runner_transition(
     } = receipts;
     let invalid = || internal("crate_release_historical_transition_invalid");
     current_intent.validate().map_err(|_| invalid())?;
-    if current_intent.runner != "ubuntu-26.04"
-        || current.base_intent_sha256
-            != crate::crate_release_journal::release_base_intent_sha256(current_intent)?
-    {
+    if current_intent.runner != "ubuntu-26.04" {
         return Err(invalid());
     }
     let current_is_live = current.identity.workflow_sha == request.workflow_sha
         && current.identity.run_id == request.run_id
         && current.identity.run_attempt == request.run_attempt;
-    if current_is_live {
+    let adjacent_intent = if current_is_live {
         verify_receipt_intent(current, current_intent)?;
+        current_intent.clone()
     } else {
         let historical_current =
             read_historical_intent(root, &current.identity.workflow_sha, git, deadline, wire)?;
-        if historical_current.runner != "ubuntu-26.04" {
+        if !matches!(
+            historical_current.runner.as_str(),
+            "ubuntu-24.04" | "ubuntu-26.04"
+        ) {
             return Err(invalid());
         }
         verify_receipt_intent(current, &historical_current)?;
@@ -228,22 +239,75 @@ pub(crate) fn verify_runner_transition(
             current,
             &historical_current,
         )?;
-    }
+        verify_historical_tools(&historical_current, current, deadline)?;
+        historical_current
+    };
     let historical =
         read_historical_intent(root, &prior.identity.workflow_sha, git, deadline, wire)?;
-    if historical.runner != "ubuntu-24.04" {
+    if !matches!(historical.runner.as_str(), "ubuntu-24.04" | "ubuntu-26.04") {
         return Err(invalid());
     }
     verify_receipt_intent(prior, &historical)?;
-    let mut normalized = historical.clone();
-    "ubuntu-26.04".clone_into(&mut normalized.runner);
-    if crate::crate_release_journal::release_base_intent_sha256(&normalized)?
-        != current.base_intent_sha256
-    {
+    if normalized_historical_base(&historical, &adjacent_intent)? != current.base_intent_sha256 {
         return Err(invalid());
     }
     crate::crate_release_github::verify_predecessor_authority(github, request, prior, &historical)?;
+    verify_historical_tools(&historical, prior, deadline)?;
     Ok(())
+}
+
+fn verify_historical_tools(
+    intent: &CrateReleaseIntent,
+    receipt: &crate::crate_release_journal::JournalReceipt,
+    deadline: CheckDeadline,
+) -> Result<(), OrchestratorError> {
+    let invalid = || internal("crate_release_historical_tools_invalid");
+    let (manifest, bundle) =
+        crate::release::package_release_publish::read_historical_sdk_attestation_assets(
+            &intent.generator_version,
+            &intent.generator_source_sha,
+            &intent.generator_manifest_sha256,
+            deadline,
+        )?;
+    let dir = tempfile::tempdir().map_err(|_| invalid())?;
+    let manifest_path = dir.path().join("release-manifest.json");
+    let bundle_path = dir.path().join("release-manifest.json.intoto.jsonl");
+    std::fs::write(&manifest_path, manifest).map_err(|_| invalid())?;
+    std::fs::write(&bundle_path, bundle).map_err(|_| invalid())?;
+    crate::release::package_release_signer::verify_historical_tool_expectations(
+        &manifest_path,
+        &bundle_path,
+        intent,
+        receipt,
+        deadline,
+    )
+}
+
+fn normalized_historical_base(
+    historical: &CrateReleaseIntent,
+    current_intent: &CrateReleaseIntent,
+) -> Result<String, OrchestratorError> {
+    let mut normalized = historical.clone();
+    normalized.runner.clone_from(&current_intent.runner);
+    normalized
+        .rust_version
+        .clone_from(&current_intent.rust_version);
+    normalized
+        .generator_version
+        .clone_from(&current_intent.generator_version);
+    normalized
+        .generator_source_sha
+        .clone_from(&current_intent.generator_source_sha);
+    normalized
+        .generator_manifest_sha256
+        .clone_from(&current_intent.generator_manifest_sha256);
+    normalized
+        .release_plz_version
+        .clone_from(&current_intent.release_plz_version);
+    normalized
+        .required_workflow_path
+        .clone_from(&current_intent.required_workflow_path);
+    crate::crate_release_journal::release_base_intent_sha256(&normalized)
 }
 
 fn verify_receipt_intent(
@@ -261,7 +325,11 @@ fn verify_receipt_intent(
             run_attempt: item.run_attempt,
         }
     });
-    if crate::planner::generator::sha256_hex(&bytes) != receipt.intent_sha256
+    if receipt.generator_version != intent.generator_version
+        || receipt.release_plz_version != intent.release_plz_version
+        || receipt.rust_version != intent.rust_version
+        || receipt.trusted_reviewer_id != intent.trusted_reviewer_id
+        || crate::planner::generator::sha256_hex(&bytes) != receipt.intent_sha256
         || crate::crate_release_journal::release_base_intent_sha256(intent)?
             != receipt.base_intent_sha256
         || predecessor != receipt.predecessor
@@ -282,10 +350,99 @@ pub(crate) fn verify_prior_bound(
     github: &dyn crate::crate_release_github::GitHubAdmissionRead,
     git: &ReleaseGit,
     deadline: CheckDeadline,
-    wire: &crate::release::crate_release_source_wire::SourceWire,
+    wire: &dyn HistoryWatch,
 ) -> Result<CrateReleaseIntent, OrchestratorError> {
     let intent = read_historical_intent(root, &prior.identity.workflow_sha, git, deadline, wire)?;
     verify_receipt_intent(prior, &intent)?;
     crate::crate_release_github::verify_predecessor_authority(github, request, prior, &intent)?;
+    verify_historical_tools(&intent, prior, deadline)?;
     Ok(intent)
+}
+
+#[cfg(test)]
+mod direct_tests {
+    use super::*;
+
+    #[test]
+    fn continuation_accepts_reviewed_tool_changes_but_not_release_content()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let current: CrateReleaseIntent = serde_json::from_value(serde_json::json!({
+            "schema":1,"repository":"owner/project","default_branch":"main","environment":"release",
+            "required_workflow_path":".github/workflows/ci.yml","trusted_reviewer_id":139_017,
+            "generator_version":"0.1.72","generator_source_sha":"c".repeat(40),"generator_manifest_sha256":"d".repeat(64),
+            "release_plz_version":"0.4.3","runner":"ubuntu-26.04","authentication":"trusted-publishing",
+            "rust_version":"1.97.1","manifest_path":"Cargo.toml","pr_write_paths":["Cargo.toml"],
+            "registry":"crates-io","packages":["demo"],"publish_features":{"demo":[]},
+            "tag_template":"{{ package }}-v{{ version }}"
+        }))?;
+        let expected = crate::crate_release_journal::release_base_intent_sha256(&current)?;
+        let mut prior = current.clone();
+        prior.generator_version = "0.1.71".into();
+        prior.generator_source_sha = "e".repeat(40);
+        prior.generator_manifest_sha256 = "f".repeat(64);
+        assert_eq!(normalized_historical_base(&prior, &current)?, expected);
+        prior
+            .publish_features
+            .insert("demo".into(), vec!["changed".into()]);
+        assert_ne!(normalized_historical_base(&prior, &current)?, expected);
+        Ok(())
+    }
+
+    #[test]
+    fn direct_reader_hashes_real_git_objects_and_rejects_incomplete_history()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::tempdir()?;
+        let root = temp.path();
+        std::fs::create_dir(root.join(".github"))?;
+        let intent: CrateReleaseIntent = serde_json::from_value(serde_json::json!({
+            "schema":1,"repository":"owner/project","default_branch":"main","environment":"release",
+            "required_workflow_path":".github/workflows/ci.yml","trusted_reviewer_id":139_017,
+            "generator_version":"0.1.72","generator_source_sha":"c".repeat(40),"generator_manifest_sha256":"d".repeat(64),
+            "release_plz_version":"0.4.3","runner":"ubuntu-26.04","authentication":"trusted-publishing",
+            "rust_version":"1.97.1","manifest_path":"Cargo.toml","pr_write_paths":["Cargo.toml"],
+            "registry":"crates-io","packages":["demo"],"publish_features":{"demo":[]},
+            "tag_template":"{{ package }}-v{{ version }}"
+        }))?;
+        intent.validate()?;
+        std::fs::write(
+            root.join(".github/velnor-release-intent.toml"),
+            toml::to_string(&intent)?,
+        )?;
+        for args in [
+            &["init", "-q"][..],
+            &["add", "."][..],
+            &[
+                "-c",
+                "user.name=Fixture",
+                "-c",
+                "user.email=fixture@example.invalid",
+                "commit",
+                "-qm",
+                "policy",
+            ][..],
+        ] {
+            assert!(
+                std::process::Command::new("git")
+                    .current_dir(root)
+                    .args(args)
+                    .status()?
+                    .success()
+            );
+        }
+        let output = std::process::Command::new("git")
+            .current_dir(root)
+            .args(["rev-parse", "HEAD"])
+            .output()?;
+        assert!(output.status.success());
+        let sha = String::from_utf8(output.stdout)?.trim().to_owned();
+        let git = crate::crate_release_git::ReleaseGit::host_fixture();
+        let deadline = CheckDeadline::after(std::time::Duration::from_secs(30))?;
+        assert_eq!(
+            read_historical_intent(root, &sha, &git, deadline, &DirectHistoryWatch)?,
+            intent
+        );
+        std::fs::write(root.join(".git/shallow"), format!("{sha}\n"))?;
+        assert!(read_historical_intent(root, &sha, &git, deadline, &DirectHistoryWatch).is_err());
+        Ok(())
+    }
 }

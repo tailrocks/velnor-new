@@ -92,8 +92,6 @@ pub(super) fn snapshot(
         directory,
         source_sha: sha.to_owned(),
         tree_sha: tree_sha.to_owned(),
-        #[cfg(target_os = "linux")]
-        files: material.files,
         manifests: material.manifests,
         nested_toolchains: material.nested_toolchains,
     })

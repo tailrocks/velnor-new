@@ -389,6 +389,10 @@ pub(crate) mod image_transport_tests;
 pub(crate) use image::{ImageAttestationIdentity, verify_image_file_attestation};
 #[path = "package_release_signer_attestation_subjects.rs"]
 mod subjects;
+#[cfg(all(test, target_os = "linux", target_arch = "x86_64"))]
+pub(crate) use sdk::verified_generator_fixture;
+#[cfg(target_os = "linux")]
+pub(crate) use sdk::verify_historical_tool_expectations;
 pub(crate) use sdk::{
     AdmittedStart, AttestedLinuxGenerator, MeasuredReleaseTools, ValidatedStart,
     measure_release_tools, record_admitted_start, verify_published_linux_binary_attestation,

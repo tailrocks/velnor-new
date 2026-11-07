@@ -38,19 +38,11 @@ pub fn parse_crate_release_intent(bytes: &[u8]) -> Result<CrateReleaseIntent, Or
 
 pub fn run_crate_release(operation: &str) -> Result<(), OrchestratorError> {
     require_authority_implementation()?;
-    #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
-    if operation == "publish-supervise" {
-        return supervised::run();
-    }
     if operation == "release-pr-create" {
         return crate::release::crate_release_pr_run::run_from_environment();
     }
     run_qualified_crate_release(operation)
 }
-
-#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
-#[path = "crate_release_runtime_supervised.rs"]
-mod supervised;
 
 fn run_qualified_crate_release(operation: &str) -> Result<(), OrchestratorError> {
     let workspace = required_path("GITHUB_WORKSPACE")?;
@@ -155,7 +147,7 @@ fn run_qualified_crate_release_with_git(
             source: &source,
             token: &token,
             git,
-            upload: journal_start::UploadRuntime::Unprivileged(source_execution),
+            upload: source_execution,
         },
     )
 }
@@ -164,7 +156,7 @@ fn dispatch_release_operation(
     operation: &str,
     input: JournalRuntime<'_>,
 ) -> Result<(), OrchestratorError> {
-    let source_execution = input.upload.source_execution();
+    let source_execution = input.upload;
     let JournalRuntime {
         receipt_path,
         intent,
@@ -249,13 +241,13 @@ mod journal_observe;
 use journal_observe::{observe_journal_operation, reconcile_receipt, verify_package};
 
 #[path = "crate_release_runtime_admission.rs"]
-mod admission;
+pub(crate) mod admission;
 use admission::{
     acquire_receipt, acquire_toolchain, candidate_receipt, is_full_sha, read_manifest_at_workflow,
 };
 
 #[path = "crate_release_runtime_environment.rs"]
-mod environment;
+pub(crate) mod environment;
 #[cfg(test)]
 pub(crate) use environment::request_from_environment as test_request_from_environment;
 use environment::{

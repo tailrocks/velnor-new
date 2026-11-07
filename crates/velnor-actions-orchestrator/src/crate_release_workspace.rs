@@ -104,26 +104,7 @@ impl<'a> CratePackageSource<'a> {
     }
 }
 
-pub struct HistoricalIntentReader<'a> {
-    #[cfg(target_os = "linux")]
-    pub(crate) execution: &'a crate::release::crate_release_source_view::SupervisedSourceExecution,
-    #[cfg(not(target_os = "linux"))]
-    marker: std::marker::PhantomData<&'a ()>,
-    #[cfg(not(target_os = "linux"))]
-    unavailable: std::convert::Infallible,
-}
-
-impl std::fmt::Debug for HistoricalIntentReader<'_> {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        formatter
-            .debug_struct("HistoricalIntentReader")
-            .finish_non_exhaustive()
-    }
-}
-
 pub trait CrateSourceExecution {
-    fn historical_intent_reader(&self) -> Result<HistoricalIntentReader<'_>, OrchestratorError>;
-
     fn verify_toolchain_separation(
         &self,
         root: &Path,
@@ -147,12 +128,6 @@ pub trait CrateSourceExecution {
 pub struct UnprivilegedSourceExecution;
 
 impl CrateSourceExecution for UnprivilegedSourceExecution {
-    fn historical_intent_reader(&self) -> Result<HistoricalIntentReader<'_>, OrchestratorError> {
-        Err(crate::internal::internal(
-            "crate_release_history_custody_required",
-        ))
-    }
-
     fn verify_toolchain_separation(
         &self,
         root: &Path,
@@ -381,7 +356,3 @@ fn workspace_metadata(
         .stdout_text("cargo")
         .map_err(|_| internal("crate_release_metadata_failed"))
 }
-
-#[cfg(not(target_os = "linux"))]
-#[path = "crate_release_workspace_unavailable.rs"]
-mod unavailable;

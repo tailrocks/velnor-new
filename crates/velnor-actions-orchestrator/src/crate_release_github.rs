@@ -135,8 +135,8 @@ fn required_workflow_suites(
     prefix: &str,
     source: &str,
     workflow_path: &str,
-) -> Result<BTreeSet<u64>, OrchestratorError> {
-    let mut suites = BTreeSet::new();
+) -> Result<BTreeMap<u64, Value>, OrchestratorError> {
+    let mut suites = BTreeMap::new();
     let mut expected = None;
     let mut seen = 0_u64;
     for page in 1..=100 {
@@ -173,7 +173,10 @@ fn required_workflow_suites(
                     .as_u64()
                     .filter(|id| *id > 0)
                     .ok_or_else(|| internal("crate_release_check_suite"))?;
-                require(suites.insert(id), "required_workflow")?;
+                require(
+                    suites.insert(id, run.clone()).is_none(),
+                    "required_workflow",
+                )?;
             }
         }
         if seen >= total {

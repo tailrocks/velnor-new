@@ -114,9 +114,8 @@ fn generated_candidate_receipt_rejects_unprotected_environment() -> Result<(), B
     }
     rehearse_candidate_denial()?;
     if std::env::var_os("VELNOR_TEST_NATIVE_REHEARSAL").is_some() {
-        let publisher = generated_script("release-publish", "Publish approved Rust crate")?;
-        assert!(publisher.contains("/usr/bin/sudo"));
-        assert!(publisher.contains("/usr/bin/python3"));
+        let publisher = generated_script("release-publish", "Release journal-coordinate")?;
+        assert!(publisher.contains("crate-release journal-coordinate"));
         rehearse_supplied_candidate()?;
     }
     Ok(())
@@ -163,22 +162,27 @@ fn rehearse_supplied_candidate() -> Result<(), Box<dyn Error>> {
         receipt.github.request.source_sha,
         std::env::var("VELNOR_NATIVE_EXPECT_SOURCE")?
     );
-    assert_eq!(receipt.packages.len(), 1);
-    assert_eq!(
-        receipt.packages[0].source.name,
-        std::env::var("VELNOR_NATIVE_EXPECT_PACKAGE")?
-    );
-    assert_eq!(
-        receipt.packages[0].source.version,
-        std::env::var("VELNOR_NATIVE_EXPECT_VERSION")?
-    );
-    assert!(
-        matches!(receipt.semver_evidence.get(&receipt.packages[0].source.name),
+    let multi = std::env::var_os("VELNOR_NATIVE_MULTI").is_some();
+    if multi {
+        assert_eq!(receipt.packages.len(), 58);
+    } else {
+        assert_eq!(receipt.packages.len(), 1);
+        assert_eq!(
+            receipt.packages[0].source.name,
+            std::env::var("VELNOR_NATIVE_EXPECT_PACKAGE")?
+        );
+        assert_eq!(
+            receipt.packages[0].source.version,
+            std::env::var("VELNOR_NATIVE_EXPECT_VERSION")?
+        );
+        assert!(
+            matches!(receipt.semver_evidence.get(&receipt.packages[0].source.name),
         Some(crate::release::crate_release_semver::SemverEvidence::Checked { baseline, baseline_checksum, checker_sha256 })
         if baseline == &std::env::var("VELNOR_NATIVE_EXPECT_BASELINE")?
         && baseline_checksum == &std::env::var("VELNOR_NATIVE_EXPECT_CHECKSUM")?
         && checker_sha256 == velnor_actions_mise::catalog::qualified_cargo_semver_checks("ubuntu-26.04").ok_or("checker")?.executable_sha256)
-    );
+        );
+    }
     if verify_supplied_admission(&root)? && std::env::var_os("VELNOR_NATIVE_JOURNAL").is_some() {
         rehearse_journal_start(&root)?;
         if std::env::var_os("VELNOR_NATIVE_COORDINATE").is_some() {
@@ -207,7 +211,11 @@ fn verify_supplied_admission(root: &Path) -> Result<bool, Box<dyn Error>> {
         assert!(output.status.success(), "{actual}");
         assert_eq!(
             std::fs::read_to_string(output_path)?,
-            "release_mode=publish\n"
+            if std::env::var_os("VELNOR_NATIVE_MULTI").is_some() {
+                "release_mode=none\n"
+            } else {
+                "release_mode=publish\n"
+            }
         );
     } else {
         assert!(!output.status.success());
@@ -296,7 +304,7 @@ fn rehearse_candidate_denial() -> Result<(), Box<dyn Error>> {
         .env("GITHUB_WORKFLOW_SHA", &sha)
         .env(
             "GITHUB_WORKFLOW_REF",
-            "owner/project/.github/workflows/crate-release.yml@refs/heads/main",
+            "owner/project/.github/workflows/release.yml@refs/heads/main",
         )
         .env("GITHUB_REF", "refs/heads/main")
         .env("GITHUB_EVENT_NAME", "workflow_dispatch")
@@ -355,7 +363,7 @@ fn rehearse_source_require(event: &str, denied: bool) -> Result<(), Box<dyn Erro
         .env("GITHUB_WORKFLOW_SHA", &sha)
         .env(
             "GITHUB_WORKFLOW_REF",
-            "owner/project/.github/workflows/crate-release.yml@refs/heads/main",
+            "owner/project/.github/workflows/release.yml@refs/heads/main",
         )
         .env("GITHUB_REF", "refs/heads/main")
         .env("GITHUB_EVENT_NAME", event)

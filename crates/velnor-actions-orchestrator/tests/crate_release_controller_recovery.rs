@@ -353,9 +353,3 @@ mod creation_staging;
 #[cfg(unix)]
 #[path = "crate_release_controller_staging_postcheck.rs"]
 mod staging_postcheck;
-
-include!("support/recovery_projected.rs");
-include!("support/recovery_systemd.rs");
-include!("support/recovery_systemd_fixture.rs");
-include!("support/recovery_systemd_scenario.rs");
-include!("support/recovery_systemd_fault.rs");

@@ -143,9 +143,18 @@ pub(super) fn poll_pending_admission<T>(
     loop {
         match observe() {
             Err(OrchestratorError::Internal { problem })
-                if problem == "crate_release_required_pending" && may_retry() =>
+                if matches!(
+                    problem.as_str(),
+                    "crate_release_required_pending"
+                        | "crate_release_runs_changed"
+                        | "crate_release_checks_changed"
+                        | "crate_release_jobs_changed"
+                ) && may_retry() =>
             {
                 wait();
+                if !may_retry() {
+                    return Err(OrchestratorError::Internal { problem });
+                }
             }
             result => return result,
         }

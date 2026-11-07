@@ -874,20 +874,6 @@ platform = "linux_x64"
 executor = "hosted"
 
 [[checks]]
-id = "hosted-budget-containment"
-task = "test-hosted-budget-containment"
-inputs = [".velnor/config.toml", "mise.toml", "crates/velnor-actions-workflow-renderer/tests/release_budget_systemd_fixture.py"]
-tools = []
-timeout_minutes = 5
-[checks.evidence]
-path = "hosted-budget-evidence.json"
-expected_scenarios = ["cancellation", "no-credential-exposure", "orphan", "timeout", "ubuntu-26.04"]
-[checks.runner]
-label = "ubuntu-26.04"
-platform = "linux_x64"
-executor = "hosted"
-
-[[checks]]
 id = "hosted-gh-config-custody"
 task = "test-hosted-gh-config-custody"
 inputs = [".config/nextest.toml", ".velnor/config.toml", "Cargo.lock", "Cargo.toml", "crates/velnor-actions-contract/Cargo.toml", "crates/velnor-actions-mise/Cargo.toml", "crates/velnor-actions-mise/src/catalog.rs", "crates/velnor-actions-workflow-renderer/Cargo.toml", "crates/velnor-actions-workflow-renderer/src/lib.rs", "crates/velnor-actions-workflow-renderer/src/publish_scripts.rs", "crates/velnor-actions-workflow-renderer/src/verified_gh_acquire.py", "crates/velnor-actions-workflow-renderer/src/verified_gh_launcher.py", "crates/velnor-actions-workflow-renderer/src/verified_gh_shell.rs", "crates/velnor-actions-workflow-renderer/tests/hosted_gh_config_custody.py", "crates/velnor-actions-workflow-renderer/tests/verified_gh_procfs_cases.py", "crates/velnor-actions-workflow-renderer/tests/verified_gh_shell_public.rs", "mise.toml", "rust-toolchain.toml"]
@@ -902,14 +888,14 @@ platform = "linux_x64"
 executor = "hosted"
 
 [[checks]]
-id = "hosted-manager-policy"
-task = "qualify-manager-policy"
-inputs = [".velnor/config.toml", "mise.toml", "scripts/qualify-manager-policy.py", "scripts/observe-hosted-systemd-policy.py", "crates/velnor-actions-workflow-renderer/tests/manager_policy_fixture/.dockerignore", "crates/velnor-actions-workflow-renderer/tests/manager_policy_fixture/Dockerfile", "crates/velnor-actions-workflow-renderer/tests/manager_policy_fixture/global-policy.json", "crates/velnor-actions-workflow-renderer/tests/manager_policy_fixture/materials.json", "crates/velnor-actions-workflow-renderer/tests/manager_policy_fixture/prepare.py", "crates/velnor-actions-workflow-renderer/tests/manager_policy_fixture/proof.json", "crates/velnor-actions-workflow-renderer/tests/manager_policy_fixture/verify-files.py", "crates/velnor-actions-workflow-renderer/src/release_manager_bus.py", "crates/velnor-actions-workflow-renderer/src/release_manager_lifecycle.py", "crates/velnor-actions-workflow-renderer/src/release_manager_policy_host.py", "crates/velnor-actions-workflow-renderer/src/release_manager_policy_files.py", "crates/velnor-actions-workflow-renderer/src/release_manager_policy.py", "crates/velnor-actions-workflow-renderer/src/release_watch_admission.py", "crates/velnor-actions-workflow-renderer/src/release_bootstrap_watch.py", "crates/velnor-actions-workflow-renderer/src/release_launcher_watch.py", "crates/velnor-actions-workflow-renderer/src/release_supervisor_claim.py", "crates/velnor-actions-workflow-renderer/src/release_supervisor_exec.py", "crates/velnor-actions-workflow-renderer/tests/release_manager_policy_systemd_test.py", "crates/velnor-actions-workflow-renderer/tests/release_watch_fixture.py"]
-tools = []
-timeout_minutes = 25
+id = "hosted-direct-release"
+task = "test-hosted-direct-release"
+inputs = [".config/nextest.toml", ".velnor/config.toml", "Cargo.lock", "Cargo.toml", "crates/velnor-actions-orchestrator/src/crate_release_direct_history.rs", "crates/velnor-actions-orchestrator/src/crate_release_runtime_tests.rs", "crates/velnor-actions-orchestrator/src/release_steps_jobs.rs", "crates/velnor-actions-workflow-renderer/src/release_gates.rs", "mise.toml", "rust-toolchain.toml", "scripts/check-hosted-direct-release.py"]
+tools = ["cargo-nextest", "rust"]
+timeout_minutes = 15
 [checks.evidence]
-path = "hosted-manager-policy-evidence.json"
-expected_scenarios = ["isolated-manager-policy-negatives", "native-manager-profile"]
+path = "hosted-direct-release-evidence.json"
+expected_scenarios = ["generated-workflow", "interrupted-journal", "oidc-bindings", "source-admission", "ubuntu-26.04"]
 [checks.runner]
 label = "ubuntu-26.04"
 platform = "linux_x64"

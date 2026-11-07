@@ -9,11 +9,13 @@ import pathlib
 import platform
 import re
 import secrets
+import select
 import shutil
 import stat
 import subprocess
 import sys
 import tempfile
+import time
 
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
@@ -133,13 +135,13 @@ def verify_sources(root, snapshot, entries, patterns=()):
     source_snapshot.verify_snapshot(snapshot, entries, read_tracked)
 
 
-def install_tool(source, target, expected):
-    data = read_regular(source)
+def install_tool(source, target, expected, max_size=MAX_FILE):
+    data = read_regular(source, max_size)
     if hashlib.sha256(data).hexdigest() != expected:
         raise RuntimeError("fixture tool does not match its qualified digest")
     target.parent.mkdir(parents=True, exist_ok=True)
     if target.exists():
-        if hashlib.sha256(read_regular(target)).hexdigest() != expected:
+        if hashlib.sha256(read_regular(target, max_size)).hexdigest() != expected:
             raise RuntimeError("fixture tool cache is corrupt")
         return
     fd, name = tempfile.mkstemp(dir=target.parent, prefix=".tool-")
@@ -151,6 +153,74 @@ def install_tool(source, target, expected):
     finally:
         if os.path.exists(name): os.unlink(name)
 
+
+
+def extract_git_member(ar_command, tar_command, timeout=60):
+    deadline = time.monotonic() + timeout
+    source = subprocess.Popen(ar_command, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+    extracted = None
+    try:
+        extracted = subprocess.Popen(tar_command, stdin=source.stdout, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+        source.stdout.close()
+        data = bytearray()
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0 or not select.select([extracted.stdout], [], [], remaining)[0]:
+                raise RuntimeError("release Git package extraction timed out")
+            block = os.read(extracted.stdout.fileno(), min(65536, 16 * 1024 * 1024 + 1 - len(data)))
+            if not block:
+                break
+            data.extend(block)
+            if len(data) > 16 * 1024 * 1024:
+                raise RuntimeError("release Git package extraction exceeded its limit")
+        remaining = max(0, deadline - time.monotonic())
+        if extracted.wait(timeout=remaining) != 0 or source.wait(timeout=max(0, deadline - time.monotonic())) != 0:
+            raise RuntimeError("release Git package extraction failed")
+        return bytes(data)
+    finally:
+        if source.stdout and not source.stdout.closed:
+            source.stdout.close()
+        for process in (extracted, source):
+            if process is not None:
+                if process.stdout and not process.stdout.closed:
+                    process.stdout.close()
+                if process.poll() is None:
+                    process.kill()
+                process.wait()
+
+
+def stage_release_git(source_tools, tools, root):
+    pin_source = read_regular(root / "crates/velnor-actions-mise/src/release_git_pin.rs", 65536).decode()
+    def pin(name):
+        matches = re.findall(r"pub const " + name + r': &str\s*=\s*"([^"\n]+)";', pin_source)
+        if len(matches) != 1:
+            raise RuntimeError("release Git catalog pin is missing or ambiguous")
+        return matches[0]
+    pins = {"pinned-git": pin("GIT_SHA256"), "pinned-git-remote-http": pin("GIT_HTTP_SHA256")}
+    if all((source_tools / name).is_file() for name in pins):
+        for name, expected in pins.items():
+            install_tool(source_tools / name, tools / name, expected)
+        return
+    url, expected_package = pin("GIT_PACKAGE_URL"), pin("GIT_PACKAGE_SHA256")
+    if not url.startswith("https://snapshot.ubuntu.com/"):
+        raise RuntimeError("release Git package URL is not trusted")
+    with tempfile.TemporaryDirectory(prefix="fixture-git-") as directory:
+        package = pathlib.Path(directory) / "git.deb"
+        subprocess.run(
+            ["/usr/bin/curl", "-q", "--proto", "=https", "--max-redirs", "0", "--max-time", "60", "--max-filesize", str(8 * 1024 * 1024), "--fail", "--silent", "--output", str(package), url],
+            check=True, timeout=65, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        )
+        data = read_regular(package, 8 * 1024 * 1024)
+        if hashlib.sha256(data).hexdigest() != expected_package:
+            raise RuntimeError("release Git package digest mismatch")
+        for name, member in (("pinned-git", "./usr/bin/git"), ("pinned-git-remote-http", "./usr/lib/git-core/git-remote-http")):
+            extracted = extract_git_member(
+                ["/usr/bin/ar", "-p", str(package), "data.tar.zst"],
+                ["/usr/bin/tar", "-xOf", "-", member],
+            )
+            candidate = pathlib.Path(directory) / name
+            candidate.write_bytes(extracted)
+            install_tool(candidate, tools / name, pins[name])
 
 
 def docker_base(client, root, target, tools, registry, image_platform):
@@ -182,6 +252,9 @@ def main():
         raise RuntimeError("fixture scenario does not belong to target")
     package, test_target = targets[kind]
     image_attestation_tests = {
+        "release::package_release_signer::attestation::image_transport_tests::same_base_history_rejects_forged_tool",
+        "release::package_release_signer::attestation::image_transport_tests::signed_controller_dispatch_rechecks_historical_authority",
+        "release::package_release_signer::attestation::image_transport_tests::historical_release_assets_use_pinned_github_transport",
         "crate_release_qualification_manifest::tests::authenticates_real_historical_manifest_and_rejects_mutations",
         "release::package_release_signer::attestation::sdk::fixture_tests::verifies_public_manifest_and_linux_binary",
         "release::package_release_signer::attestation::image_transport_tests::real_github_transport_verifies_the_signed_record",
@@ -207,7 +280,11 @@ def main():
         raise RuntimeError("fixture scenario does not belong to target")
     if not re.fullmatch(r"[a-z_]+(?:::[a-z_]+)*", test):
         raise RuntimeError("invalid isolated fixture scenario")
-    machine = platform.machine().lower()
+    signed_history_tests = (
+        "::same_base_history_rejects_forged_tool",
+        "::signed_controller_dispatch_rechecks_historical_authority",
+    )
+    machine = "x86_64" if test.endswith(signed_history_tests) else platform.machine().lower()
     arch = {"arm64":"aarch64", "aarch64":"aarch64", "x86_64":"x86_64", "amd64":"x86_64"}.get(machine)
     if arch is None:
         raise RuntimeError("unsupported isolated fixture host architecture")
@@ -261,6 +338,29 @@ def main():
         gh_version = MANIFEST["gh_version"]
         install_tool(source_tools / f"gh_{gh_platform}", tools / f"mise/installs/gh/{gh_version}/gh_{gh_version}_{gh_platform}/bin/gh", gh_digest)
         install_tool(source_tools / f"cargo-nextest_{gh_platform}", tools / "cargo-nextest", nextest_digest)
+        if test.endswith(signed_history_tests):
+            stage_release_git(source_tools, tools, root)
+        signed_controller = test.endswith("::signed_controller_dispatch_rechecks_historical_authority")
+        if signed_controller:
+            install_tool(source_tools / "release-plz-0.4.3", tools / "signed-controller/release-plz", "678330a1f03330fb375d15be8d6e094d0f65d2b70e2af417c69fcec78fa74466", 128 * 1024 * 1024)
+            install_tool(source_tools / "channel-rust-1.99.1.toml", tools / "signed-controller/channel.toml", "fb152be80975c194aa5fc684b2aec3a6e14e2b855efe2faa4e5f8ae6e590f463", 16 * 1024 * 1024)
+            catalog = read_regular(root / "crates/velnor-actions-mise/src/catalog.rs", 65536).decode()
+            versions = re.findall(r'pub const MISE_VERSION: &str\s*=\s*"([^"\n]+)";', catalog)
+            digests = re.findall(r'pub const MISE_BINARY_SHA256_LINUX_X64: &str\s*=\s*"([0-9a-f]{64})";', catalog)
+            rust_versions = re.findall(r'pub const RUST_VERSION: &str\s*=\s*"([^"\n]+)";', catalog)
+            if (len(versions) != 1 or not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", versions[0])
+                    or len(rust_versions) != 1 or not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", rust_versions[0])
+                    or len(digests) != 1):
+                raise RuntimeError("fixture mise catalog identity is invalid")
+            install_tool(source_tools / "mise_linux_amd64", tools / "bin/mise", digests[0], 192 * 1024 * 1024)
+            rust = tools / "mise/installs/rust" / rust_versions[0]
+            rust.parent.mkdir(parents=True, exist_ok=True)
+            target = f"/usr/local/rustup/toolchains/{rust_versions[0]}-x86_64-unknown-linux-gnu"
+            if rust.is_symlink():
+                if os.readlink(rust) != target:
+                    raise RuntimeError("fixture Rust installation link changed")
+            else:
+                rust.symlink_to(target, target_is_directory=True)
         verify_image(client, docker_env, IMAGE)
         entries = raw_capture.project(validation, snapshot, manifest, patterns)
         verify_sources(root, snapshot, entries, patterns)
@@ -284,7 +384,8 @@ def main():
             release = "--release" if profile == "release" else ""
             selection = "--lib" if test_target is None else f"--test {test_target}"
             fixture_example = f"cargo build --locked --offline -p velnor-actions-cli --features generator --example image-publication-fixture {release};" if kind == "image_publication" else ""
-            build = f'''set -eu; export HOME=/tmp PATH=/tools:/usr/local/cargo/bin:/usr/bin:/bin RUSTUP_TOOLCHAIN=1.99.1-{triple} CARGO_TARGET_DIR=/target CARGO_NET_OFFLINE=true; cargo metadata --locked --offline --all-features --filter-platform {triple} --format-version 1 > /target/fixture-cargo.tmp; {fixture_example} /tools/cargo-nextest nextest list --locked --offline -p {package} {selection} {release} --list-type binaries-only --message-format json > /target/fixture-binaries.tmp; mv /target/fixture-cargo.tmp /target/fixture-cargo.json; mv /target/fixture-binaries.tmp /target/fixture-binaries.json'''
+            build_settings = "CARGO_BUILD_JOBS=1 CARGO_INCREMENTAL=0 CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0" if signed_controller else ""
+            build = f'''set -eu; export HOME=/tmp PATH=/tools:/usr/local/cargo/bin:/usr/bin:/bin RUSTUP_TOOLCHAIN=1.99.1-{triple} CARGO_TARGET_DIR=/target CARGO_NET_OFFLINE=true {build_settings}; cargo metadata --locked --offline --all-features --filter-platform {triple} --format-version 1 > /target/fixture-cargo.tmp; {fixture_example} /tools/cargo-nextest nextest list --locked --offline -p {package} {selection} {release} --list-type binaries-only --message-format json > /target/fixture-binaries.tmp; mv /target/fixture-cargo.tmp /target/fixture-cargo.json; mv /target/fixture-binaries.tmp /target/fixture-binaries.json'''
             command(docker[:-1] + ["--user", f"{os.getuid()}:{os.getgid()}", IMAGE, "sh", "-c", build], env=docker_env)
             verify_sources(root, snapshot, entries, patterns)
             if fingerprint(entries, arch, profile, kind, registry_fingerprint(packages, registry)) != key:
@@ -297,7 +398,8 @@ def main():
         fcntl.flock(lock, fcntl.LOCK_UN)
         nonce = secrets.token_hex(32)
         receipt = target / f"receipt-{nonce}"
-        script = f'''set -eu; mkdir /tmp/fixture-tls /tmp/fixture-home; openssl req -x509 -newkey rsa:2048 -nodes -keyout /tmp/fixture-tls/key.pem -out /tmp/fixture-tls/cert.pem -days 1 -subj /CN=api.github.com -addext subjectAltName=DNS:api.github.com,DNS:tuf-repo.github.com,DNS:tuf-repo-cdn.sigstore.dev >/dev/null 2>&1; cat /tmp/fixture-tls/cert.pem >> /etc/ssl/certs/ca-certificates.crt; chown -R {os.getuid()}:{os.getgid()} /tmp/fixture-tls /tmp/fixture-home; exec setpriv --reuid={os.getuid()} --regid={os.getgid()} --clear-groups /bin/sh -c 'export HOME=/tmp/fixture-home PATH=/tools:/usr/local/cargo/bin:/usr/bin:/bin MISE_DATA_DIR=/tools/mise VELNOR_GH_TEST_TLS_ROOT=/tmp/fixture-tls VELNOR_GH_FIXTURE_WORKER=container-v1 VELNOR_GH_FIXTURE_SCENARIO="$FIXTURE_SCENARIO" VELNOR_GH_FIXTURE_TARGET="$FIXTURE_TARGET" VELNOR_GH_FIXTURE_CACHE_KEY="$FIXTURE_KEY" VELNOR_GH_FIXTURE_ARCH="$FIXTURE_ARCH" VELNOR_GH_FIXTURE_NONCE="$FIXTURE_NONCE"; if [ "$FIXTURE_TARGET" = image_attestation ]; then export GH_TOKEN=fixture_token VELNOR_TEST_ATTESTATION_ROOT=/work/crates/velnor-actions-orchestrator/tests/attestation_fixtures/historical/trusted-root.jsonl; fi; if [ "$FIXTURE_TARGET" = image_publication ]; then export VELNOR_IMAGE_PUBLICATION_FIXTURE="/target/$FIXTURE_PROFILE/examples/image-publication-fixture"; fi; exec /tools/cargo-nextest nextest run --cargo-metadata /target/fixture-cargo.json --binaries-metadata /target/fixture-binaries.json -E "test(=$FIXTURE_SCENARIO)" --no-tests fail' '''
+        fixture_path = "/tools/bin:" if signed_controller else ""
+        script = f'''set -eu; mkdir /tmp/fixture-tls /tmp/fixture-home; openssl req -x509 -newkey rsa:2048 -nodes -keyout /tmp/fixture-tls/key.pem -out /tmp/fixture-tls/cert.pem -days 1 -subj /CN=api.github.com -addext subjectAltName=DNS:api.github.com,DNS:tuf-repo.github.com,DNS:tuf-repo-cdn.sigstore.dev >/dev/null 2>&1; cat /tmp/fixture-tls/cert.pem >> /etc/ssl/certs/ca-certificates.crt; chown -R {os.getuid()}:{os.getgid()} /tmp/fixture-tls /tmp/fixture-home; exec setpriv --reuid={os.getuid()} --regid={os.getgid()} --clear-groups /bin/sh -c 'export HOME=/tmp/fixture-home PATH={fixture_path}/tools:/usr/local/cargo/bin:/usr/bin:/bin MISE_DATA_DIR=/tools/mise VELNOR_GH_TEST_TLS_ROOT=/tmp/fixture-tls VELNOR_GH_FIXTURE_WORKER=container-v1 VELNOR_GH_FIXTURE_SCENARIO="$FIXTURE_SCENARIO" VELNOR_GH_FIXTURE_TARGET="$FIXTURE_TARGET" VELNOR_GH_FIXTURE_CACHE_KEY="$FIXTURE_KEY" VELNOR_GH_FIXTURE_ARCH="$FIXTURE_ARCH" VELNOR_GH_FIXTURE_NONCE="$FIXTURE_NONCE"; if [ "$FIXTURE_TARGET" = image_attestation ]; then export GH_TOKEN=fixture_token VELNOR_TEST_ATTESTATION_ROOT=/work/crates/velnor-actions-orchestrator/tests/attestation_fixtures/historical/trusted-root.jsonl; fi; if [ "$FIXTURE_TARGET" = image_publication ]; then export VELNOR_IMAGE_PUBLICATION_FIXTURE="/target/$FIXTURE_PROFILE/examples/image-publication-fixture"; fi; exec /tools/cargo-nextest nextest run --cargo-metadata /target/fixture-cargo.json --binaries-metadata /target/fixture-binaries.json -E "test(=$FIXTURE_SCENARIO)" --no-tests fail' '''
         env_args = ["-e", f"FIXTURE_SCENARIO={test}", "-e", f"FIXTURE_TARGET={kind}", "-e", f"FIXTURE_KEY={key}", "-e", f"FIXTURE_ARCH={arch}", "-e", f"FIXTURE_NONCE={nonce}", "-e", f"FIXTURE_PROFILE={profile}"]
         try:
             command(docker[:-1] + env_args + [IMAGE, "sh", "-c", script], env=docker_env)

@@ -9,8 +9,6 @@ pub struct SourceSnapshot {
     directory: tempfile::TempDir,
     source_sha: String,
     tree_sha: String,
-    #[cfg(target_os = "linux")]
-    files: Vec<crate::crate_release_journal::JournalFile>,
     manifests: std::collections::BTreeSet<String>,
     nested_toolchains: Vec<String>,
 }
@@ -19,10 +17,6 @@ impl SourceSnapshot {
     #[must_use]
     pub(crate) fn root(&self) -> &Path {
         self.directory.path()
-    }
-    #[cfg(target_os = "linux")]
-    pub(crate) fn files(&self) -> &[crate::crate_release_journal::JournalFile] {
-        &self.files
     }
     #[must_use]
     pub fn source_sha(&self) -> &str {

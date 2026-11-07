@@ -14,25 +14,63 @@ pub(super) fn test_changing_workflow_response(
     line: &str,
     previous: &[String],
 ) -> Option<serde_json::Value> {
-    let sha = "d".repeat(40);
-    if !line.contains(&sha) {
-        return None;
-    }
+    let sha = ["d", "5", "8", "7", "6", "0"]
+        .into_iter()
+        .map(|value| value.repeat(40))
+        .find(|sha| line.contains(sha))?;
+    let count = previous
+        .iter()
+        .filter(|entry| entry.contains(&sha) && entry.contains("/actions/runs?"))
+        .count();
+    let has_new = if sha.starts_with('0') {
+        count >= 2
+    } else {
+        count >= 1 || sha.starts_with('6')
+    };
+    let settled = count >= 2 && sha.starts_with('5');
     if line.contains("/check-runs?") {
-        return Some(
-            serde_json::json!({"total_count":1,"check_runs":[{"id":31,"name":"Required","head_sha":sha,"check_suite":{"id":131},"app":{"id":15368,"slug":"github-actions"},"status":"completed","conclusion":"success","started_at":"2026-11-03T15:40:00Z"}]}),
-        );
+        let mut checks = vec![
+            serde_json::json!({"id":31,"name":"Required","head_sha":sha,"check_suite":{"id":131},"app":{"id":15368,"slug":"github-actions"},"status":if settled {"queued"} else {"completed"},"conclusion":if settled {None} else {Some("success")},"started_at":if settled {None} else {Some("2026-11-03T15:40:00Z")}}),
+        ];
+        if settled {
+            checks.push(serde_json::json!({"id":33,"name":"Required","head_sha":sha,"check_suite":{"id":133},"app":{"id":15368,"slug":"github-actions"},"status":"completed","conclusion":"success","started_at":"2026-11-03T15:41:00Z"}));
+        }
+        return Some(serde_json::json!({"total_count":checks.len(),"check_runs":checks}));
     }
     if line.contains("/actions/runs?") {
         let mut runs = vec![
-            serde_json::json!({"check_suite_id":131,"head_sha":sha,"path":".github/workflows/ci.yml","status":"completed","conclusion":"success"}),
+            serde_json::json!({"id":1131,"run_number":131,"run_attempt":1,"check_suite_id":131,"head_sha":sha,"path":".github/workflows/ci.yml","status":"completed","conclusion":"success"}),
         ];
-        if previous.iter().any(|entry| entry == line) {
-            runs.push(serde_json::json!({"check_suite_id":133,"head_sha":sha,"path":".github/workflows/ci.yml","status":"in_progress","conclusion":null}));
+        if has_new {
+            runs.push(serde_json::json!({"id":1133,"run_number":133,"run_attempt":1,"check_suite_id":133,"head_sha":sha,"path":".github/workflows/ci.yml","status":if settled {"completed"} else {"in_progress"},"conclusion":if settled {Some("success")} else {None}}));
         }
         return Some(serde_json::json!({"total_count":runs.len(),"workflow_runs":runs}));
     }
+
     None
+}
+
+#[cfg(unix)]
+fn prior_run_response(line: &str, policy: &str, source: &str) -> Option<serde_json::Value> {
+    if line.starts_with("GET /repos/owner/project/actions/runs/13/attempts/1 ") {
+        Some(
+            serde_json::json!({"id":13,"run_attempt":1,"status":"completed","head_sha":policy,"head_branch":"main","event":"pull_request","path":".github/workflows/release.yml","repository":{"id":22,"full_name":"owner/project","owner":{"id":77,"login":"owner"}},"head_repository":{"id":22,"full_name":"owner/project","owner":{"id":77,"login":"owner"}}}),
+        )
+    } else if line.starts_with("GET /repos/owner/project/actions/runs/11/approvals ") {
+        Some(
+            serde_json::json!([{"state":"approved","user":{"type":"User","id":139_017},"environments":[{"id":9,"name":"release"}],"comment":format!("I reviewed the complete release policy at {policy} and source {source}, and authorize this source for run 11.")}]),
+        )
+    } else if line.starts_with("GET /repos/owner/project/actions/runs/11/attempts/1 ") {
+        Some(
+            serde_json::json!({"id":11,"run_attempt":1,"status":"completed","head_sha":policy,"head_branch":"main","event":"workflow_dispatch","path":".github/workflows/release.yml","repository":{"id":22,"full_name":"owner/project","owner":{"id":77,"login":"owner"}},"head_repository":{"id":22,"full_name":"owner/project","owner":{"id":77,"login":"owner"}}}),
+        )
+    } else if line.starts_with("GET /repos/owner/project/actions/runs/11 ") {
+        Some(
+            serde_json::json!({"id":11,"run_attempt":1,"head_sha":policy,"head_branch":"main","event":"workflow_dispatch","path":".github/workflows/release.yml","repository":{"id":22,"full_name":"owner/project","owner":{"id":77,"login":"owner"}},"head_repository":{"id":22,"full_name":"owner/project","owner":{"id":77,"login":"owner"}}}),
+        )
+    } else {
+        None
+    }
 }
 
 #[cfg(unix)]
@@ -41,38 +79,17 @@ pub(in super::super) fn test_github_admission_response(
     policy: &str,
     source: &str,
 ) -> Option<serde_json::Value> {
-    let special_sha = ["e", "f", "9"]
-        .into_iter()
-        .map(|value| value.repeat(40))
-        .find(|sha| line.contains(sha));
-    let value = if let Some(sha) = special_sha
-        .as_deref()
-        .filter(|_| line.contains("/check-runs?"))
-    {
-        let failed = sha.starts_with('f');
-        serde_json::json!({"total_count":2,"check_runs":[
-            {"id":31,"name":"Required","head_sha":sha,"check_suite":{"id":131},"app":{"id":15368,"slug":"github-actions"},"status":"completed","conclusion":if failed {"failure"} else {"success"},"started_at":"2026-11-03T15:40:00Z"},
-            {"id":32,"name":"Required","head_sha":sha,"check_suite":{"id":132},"app":{"id":15368,"slug":"github-actions"},"status":"completed","conclusion":"success","started_at":"2026-11-03T15:41:00Z"}
-        ]})
-    } else if let Some(sha) = special_sha
-        .as_deref()
-        .filter(|_| line.contains("/actions/runs?"))
-    {
-        let event = if sha.starts_with('9') {
-            "pull_request"
-        } else {
-            "push"
-        };
-        serde_json::json!({"total_count":2,"workflow_runs":[
-            {"check_suite_id":131,"head_sha":sha,"path":".github/workflows/ci.yml","status":"completed","conclusion":"success","event":event,"head_branch":"main","repository":{"id":22,"full_name":"owner/project","owner":{"id":77,"login":"owner"}},"head_repository":{"id":22,"full_name":"owner/project","owner":{"id":77,"login":"owner"}}},
-            {"check_suite_id":132,"head_sha":sha,"path":".github/workflows/other.yml","status":"completed","conclusion":"success"}
-        ]})
+    if let Some(response) = test_required_jobs_response(line) {
+        return Some(response);
+    }
+    let value = if let Some(value) = test_special_ci_response(line) {
+        value
     } else if line == "GET /repos/owner/project/git/ref/heads/main HTTP/1.1" {
         serde_json::json!({"ref":"refs/heads/main","object":{"type":"commit","sha":policy}})
     } else if line.starts_with("GET /repos/owner/project/actions/runs/13/approvals ") {
         serde_json::json!([{"state":"approved","user":{"type":"User","id":139_017},"environments":[{"id":9,"name":"release"}],"comment":format!("I reviewed the complete release policy at {policy} and source {policy}, and authorize this source for run 13.")}])
     } else if line.starts_with("GET /repos/owner/project/actions/runs/13 ") {
-        serde_json::json!({"id":13,"run_attempt":1,"head_sha":policy,"head_branch":"main","event":"push","path":".github/workflows/crate-release.yml","repository":{"id":22,"full_name":"owner/project","owner":{"id":77,"login":"owner"}},"head_repository":{"id":22,"full_name":"owner/project","owner":{"id":77,"login":"owner"}}})
+        serde_json::json!({"id":13,"run_attempt":1,"head_sha":policy,"head_branch":"main","event":"push","path":".github/workflows/release.yml","repository":{"id":22,"full_name":"owner/project","owner":{"id":77,"login":"owner"}},"head_repository":{"id":22,"full_name":"owner/project","owner":{"id":77,"login":"owner"}}})
     } else if line.contains("/pulls?") {
         serde_json::json!([{"number":42,"merged_at":"2026-11-03T16:00:00Z","merge_commit_sha":policy,"base":{"ref":"main","repo":{"full_name":"owner/project","owner":{"id":77,"login":"owner"}}},"head":{"ref":"release-plz-fixture","sha":"c".repeat(40),"repo":{"full_name":"owner/project","owner":{"id":77,"login":"owner"}}},"user":{"id":54,"login":"release-bot"}}])
     } else if line.contains("/git/commits/") {
@@ -86,12 +103,14 @@ pub(in super::super) fn test_github_admission_response(
         serde_json::json!([{"id":1,"user":{"id":139_017,"type":"User","login":"owner"},"state":"APPROVED","commit_id":"c".repeat(40),"author_association":"OWNER","submitted_at":"2026-11-03T15:50:00Z"}])
     } else if line.contains("/collaborators/owner/permission") {
         serde_json::json!({"user":{"id":139_017,"type":"User"},"permission":"admin"})
+    } else if let Some(value) = prior_run_response(line, policy, source) {
+        value
     } else if line.starts_with("GET /repos/owner/project/actions/runs/12/approvals ") {
         serde_json::json!([{"state":"approved","user":{"type":"User","id":139_017},"environments":[{"id":9,"name":"release"}],"comment":format!("I reviewed the complete release policy at {policy} and source {source}, and authorize this source for run 12.")}])
     } else if line.starts_with("GET /repos/owner/project/actions/runs/12/attempts/1 ") {
-        serde_json::json!({"id":12,"run_attempt":1,"status":"completed","head_sha":policy,"head_branch":"main","event":"workflow_dispatch","path":".github/workflows/crate-release.yml","repository":{"id":22,"full_name":"owner/project","owner":{"id":77,"login":"owner"}},"head_repository":{"id":22,"full_name":"owner/project","owner":{"id":77,"login":"owner"}}})
+        serde_json::json!({"id":12,"run_attempt":1,"status":"completed","head_sha":policy,"head_branch":"main","event":"workflow_dispatch","path":".github/workflows/release.yml","repository":{"id":22,"full_name":"owner/project","owner":{"id":77,"login":"owner"}},"head_repository":{"id":22,"full_name":"owner/project","owner":{"id":77,"login":"owner"}}})
     } else if line.starts_with("GET /repos/owner/project/actions/runs/12 ") {
-        serde_json::json!({"id":12,"run_attempt":1,"head_sha":policy,"head_branch":"main","event":"workflow_dispatch","path":".github/workflows/crate-release.yml","repository":{"id":22,"full_name":"owner/project","owner":{"id":77,"login":"owner"}},"head_repository":{"id":22,"full_name":"owner/project","owner":{"id":77,"login":"owner"}}})
+        serde_json::json!({"id":12,"run_attempt":1,"head_sha":policy,"head_branch":"main","event":"workflow_dispatch","path":".github/workflows/release.yml","repository":{"id":22,"full_name":"owner/project","owner":{"id":77,"login":"owner"}},"head_repository":{"id":22,"full_name":"owner/project","owner":{"id":77,"login":"owner"}}})
     } else if line.contains("/compare/") {
         serde_json::json!({"status":"ahead"})
     } else if line
@@ -113,11 +132,65 @@ pub(in super::super) fn test_github_admission_response(
         } else {
             source
         };
-        serde_json::json!({"total_count":1,"workflow_runs":[{"check_suite_id":123,"head_sha":sha,"path":".github/workflows/ci.yml","status":"completed","conclusion":"success","event":"push","head_branch":"main","repository":{"id":22,"full_name":"owner/project","owner":{"id":77,"login":"owner"}},"head_repository":{"id":22,"full_name":"owner/project","owner":{"id":77,"login":"owner"}}}]})
+        serde_json::json!({"total_count":1,"workflow_runs":[{"id":1123,"run_number":123,"run_attempt":1,"check_suite_id":123,"head_sha":sha,"path":".github/workflows/ci.yml","status":"completed","conclusion":"success","event":"push","head_branch":"main","repository":{"id":22,"full_name":"owner/project","owner":{"id":77,"login":"owner"}},"head_repository":{"id":22,"full_name":"owner/project","owner":{"id":77,"login":"owner"}}}]})
     } else {
         return None;
     };
     Some(value)
+}
+
+#[cfg(unix)]
+fn test_special_ci_response(line: &str) -> Option<serde_json::Value> {
+    let special_sha = ["e", "f", "9"]
+        .into_iter()
+        .map(|value| value.repeat(40))
+        .find(|sha| line.contains(sha));
+    let value = if let Some(sha) = special_sha
+        .as_deref()
+        .filter(|_| line.contains("/check-runs?"))
+    {
+        let failed = sha.starts_with('f');
+        serde_json::json!({"total_count":2,"check_runs":[
+            {"id":31,"name":"Required","head_sha":sha,"check_suite":{"id":131},"app":{"id":15368,"slug":"github-actions"},"status":"completed","conclusion":if failed {"failure"} else {"success"},"started_at":"2026-11-03T15:40:00Z"},
+            {"id":32,"name":"Required","head_sha":sha,"check_suite":{"id":132},"app":{"id":15368,"slug":"github-actions"},"status":"completed","conclusion":"success","started_at":"2026-11-03T15:41:00Z"}
+        ]})
+    } else {
+        let sha = special_sha
+            .as_deref()
+            .filter(|_| line.contains("/actions/runs?"))?;
+        let event = if sha.starts_with('9') {
+            "pull_request"
+        } else {
+            "push"
+        };
+        serde_json::json!({"total_count":2,"workflow_runs":[
+            {"id":1131,"run_number":131,"run_attempt":1,"check_suite_id":131,"head_sha":sha,"path":".github/workflows/ci.yml","status":"completed","conclusion":"success","event":event,"head_branch":"main","repository":{"id":22,"full_name":"owner/project","owner":{"id":77,"login":"owner"}},"head_repository":{"id":22,"full_name":"owner/project","owner":{"id":77,"login":"owner"}}},
+            {"id":1132,"run_number":132,"run_attempt":1,"check_suite_id":132,"head_sha":sha,"path":".github/workflows/other.yml","status":"completed","conclusion":"success"}
+        ]})
+    };
+    Some(value)
+}
+
+#[cfg(unix)]
+fn test_required_jobs_response(line: &str) -> Option<serde_json::Value> {
+    if let Some((_, tail)) = line.split_once("/actions/runs/")
+        && let Some((run, _)) = tail.split_once("/attempts/1/jobs?")
+    {
+        let run_id: u64 = run.parse().ok()?;
+        let job_id = match run_id {
+            1123 => 1,
+            1131 => 31,
+            1132 => 32,
+            1133 => 33,
+            _ => return None,
+        };
+        return Some(serde_json::json!({"total_count":1,"jobs":[{
+            "id":job_id,"name":"Required","run_id":run_id,"run_attempt":1,
+            "status":"completed","conclusion":"success",
+            "check_run_url":format!("https://api.github.com/repos/owner/project/check-runs/{job_id}")
+        }]}));
+    }
+    None
 }
 
 #[cfg(unix)]

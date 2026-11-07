@@ -82,9 +82,8 @@ fn publishing_jobs_verify_generator_before_running_it() -> Result<(), Box<dyn st
                 )
             })
             .ok_or("publisher")?;
-        assert_eq!(publisher.steps.len(), 2);
-        assert_eq!(publisher.steps[0].name, "Capture release budget");
-        assert_eq!(publisher.steps[1].name, "Publish approved Rust crate");
+        assert_eq!(publisher.steps.len(), 13);
+        assert_eq!(publisher.steps[0].name, "Acquire Velnor");
         let mut tampered = spec.clone();
         let publisher = tampered
             .jobs
@@ -96,7 +95,7 @@ fn publishing_jobs_verify_generator_before_running_it() -> Result<(), Box<dyn st
                 )
             })
             .ok_or("publisher")?;
-        let StepKind::Shell { run, .. } = &mut publisher.steps[1].kind else {
+        let StepKind::Shell { run, .. } = &mut publisher.steps[0].kind else {
             return Err("publisher shell".into());
         };
         let last = run.len() - 1;

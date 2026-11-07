@@ -26,9 +26,33 @@ fn publisher_runs_guarded_durable_coordinator_in_order() -> Result<(), Box<dyn s
                 .iter()
                 .map(|step| step.name.as_str())
                 .collect::<Vec<_>>(),
-            ["Capture release budget", "Publish approved Rust crate"]
+            [
+                "Acquire Velnor",
+                "Checkout",
+                "Release source-require",
+                "Checkout exact source",
+                "Release toolchain-acquire",
+                "Verify Rust channel manifest",
+                "Acquire cargo-semver-checks",
+                "Release receipt-acquire",
+                "Release verify-admission",
+                "Reject unsupported release action",
+                "Acquire release-plz",
+                "Release journal-start",
+                "Release journal-coordinate",
+            ]
         );
-        assert!(valid(&spec, &rust));
+        spec.validate()?;
+        check_release_jobs(
+            &spec,
+            &ReleaseConfigBinding {
+                generator_version: env!("CARGO_PKG_VERSION"),
+                generator_source_sha: &"b".repeat(40),
+                generator_manifest_sha256: &"c".repeat(64),
+                release_plz_version: &spec.release_plz_version,
+                rust_version: &rust,
+            },
+        )?;
         let mut reordered = spec.clone();
         let publisher = reordered
             .jobs
@@ -208,7 +232,7 @@ fn bootstrap_handover_renders_normal_trusted_publisher() -> Result<(), Box<dyn s
 }
 
 #[test]
-fn supervised_publisher_rejects_pin_budget_environment_and_order_tampering()
+fn direct_publisher_rejects_pin_environment_and_order_tampering()
 -> Result<(), Box<dyn std::error::Error>> {
     for auth in [
         ReleaseAuthentication::TrustedPublishing,
@@ -216,14 +240,21 @@ fn supervised_publisher_rejects_pin_budget_environment_and_order_tampering()
     ] {
         let (spec, rust) = fixture_for(auth)?;
         assert!(valid(&spec, &rust));
-        for case in [
-            "source",
-            "manifest",
-            "budget",
-            "extra-env",
-            "secret",
-            "extra-step",
-        ] {
+        for key in ["BASH_ENV", "LD_PRELOAD"] {
+            let mut altered = spec.clone();
+            let job = altered.jobs.values_mut().find(|job| matches!(job.role, velnor_actions_workflow_renderer::release_jobs::ReleaseRole::PublishOidc | velnor_actions_workflow_renderer::release_jobs::ReleaseRole::PublishBootstrap)).ok_or("publisher")?;
+            let step = job
+                .steps
+                .iter_mut()
+                .find(|step| step.name == "Release journal-coordinate")
+                .ok_or("coordinate")?;
+            let StepKind::Shell { env, .. } = &mut step.kind else {
+                return Err("coordinate shell".into());
+            };
+            env.insert(key.into(), "/tmp/untrusted".into());
+            assert!(!valid(&altered, &rust), "accepted injected {key}");
+        }
+        for case in ["source", "manifest", "extra-env", "secret", "extra-step"] {
             let mut altered = spec.clone();
             let job = altered.jobs.values_mut().find(|job| {
                 matches!(job.role, velnor_actions_workflow_renderer::release_jobs::ReleaseRole::PublishOidc
@@ -232,7 +263,7 @@ fn supervised_publisher_rejects_pin_budget_environment_and_order_tampering()
             if case == "extra-step" {
                 job.steps.push(job.steps[0].clone());
             } else {
-                let StepKind::Shell { run, env } = &mut job.steps[1].kind else {
+                let StepKind::Shell { run, env } = &mut job.steps[0].kind else {
                     return Err("publisher shell".into());
                 };
                 match case {
@@ -243,9 +274,6 @@ fn supervised_publisher_rejects_pin_budget_environment_and_order_tampering()
                     "manifest" => {
                         let i = run.len() - 1;
                         run[i] = "e".repeat(64);
-                    }
-                    "budget" => {
-                        env.insert("VELNOR_RELEASE_BUDGET".into(), "forged".into());
                     }
                     "extra-env" => {
                         env.insert("UNEXPECTED".into(), "value".into());

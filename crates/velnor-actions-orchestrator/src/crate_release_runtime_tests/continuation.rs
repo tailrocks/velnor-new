@@ -16,7 +16,7 @@ pub(super) fn verify_test_previous_continuation(
         default_branch: "main".into(),
         environment: "release".into(),
         trusted_reviewer_id: 139_017,
-        workflow_path: ".github/workflows/crate-release.yml".into(),
+        workflow_path: ".github/workflows/release.yml".into(),
         required_workflow_path: ".github/workflows/ci.yml".into(),
         workflow_sha: b.clone(),
         run_id: 12,
@@ -28,7 +28,20 @@ pub(super) fn verify_test_previous_continuation(
     let receipt: crate::crate_release_journal::JournalReceipt = serde_json::from_value(
         serde_json::json!({"identity":{"repository":"owner/project","workflow_sha":b,"source_sha":a,"run_id":12,"run_attempt":1},"predecessor":null,"intent_sha256":"c".repeat(64),"base_intent_sha256":"c".repeat(64),"registry":"crates-io","generator_version":"0.1.72","release_plz_version":"0.4.3","rust_version":"1.97.1","expected_tools":{"generator_sha256":"1".repeat(64),"release_plz_sha256":"2".repeat(64),"rust_manifest_sha256":"3".repeat(64)},"authentication":"trusted-publishing","required_check_id":1,"trusted_reviewer_id":139_017,"workflow_run_url":"https://github.com/owner/project/actions/runs/12","source_files":[],"packages":[],"semver_evidence":{}}),
     )?;
+    #[cfg(not(target_os = "linux"))]
+    verify_unavailable_history(&receipt, &request, github);
     crate::crate_release_github::verify_predecessor_authority(github, &request, &receipt, &intent)?;
+    let mut wrong_workflow = request.clone();
+    wrong_workflow.workflow_path = ".github/workflows/not-release.yml".into();
+    assert!(
+        crate::crate_release_github::verify_predecessor_authority(
+            github,
+            &wrong_workflow,
+            &receipt,
+            &intent
+        )
+        .is_err()
+    );
     let mut recovery = intent.clone();
     recovery.continuation_source_sha = None;
     recovery.recovery = Some(velnor_actions_contract::config::CrateReleaseRecovery {
@@ -61,6 +74,27 @@ pub(super) fn verify_test_previous_continuation(
         .is_err()
     );
     Ok(())
+}
+
+#[cfg(all(unix, not(target_os = "linux")))]
+fn verify_unavailable_history(
+    receipt: &crate::crate_release_journal::JournalReceipt,
+    request: &crate::crate_release_github::GitHubAdmissionRequest,
+    github: &crate::crate_release_github::NativeGitHubAdmissionRead,
+) {
+    for result in [
+        crate::release::crate_release_direct_history::verify_prior(receipt, request, github)
+            .map(|_| ()),
+        crate::release::crate_release_direct_history::verify_transition(
+            receipt, receipt, request, github,
+        ),
+    ] {
+        assert!(matches!(
+            result,
+            Err(crate::OrchestratorError::Internal { problem })
+                if problem == "crate_release_history_custody_required"
+        ));
+    }
 }
 
 #[cfg(unix)]
@@ -172,3 +206,178 @@ fn initialize_journal_source(root: &std::path::Path) -> Result<String, Box<dyn s
     let source = String::from_utf8(output.stdout)?.trim().to_owned();
     Ok(source)
 }
+
+#[cfg(target_os = "linux")]
+pub(super) fn verify_real_direct_history(
+    github: &crate::crate_release_github::NativeGitHubAdmissionRead,
+) -> Result<(), Box<dyn std::error::Error>> {
+    verify_real_direct_history_transition(
+        github,
+        std::env::var_os("VELNOR_TEST_UPDATED_HISTORY").is_none(),
+    )
+}
+
+#[cfg(target_os = "linux")]
+fn verify_real_direct_history_transition(
+    github: &crate::crate_release_github::NativeGitHubAdmissionRead,
+    old_runner: bool,
+) -> Result<(), Box<dyn std::error::Error>> {
+    use crate::crate_release_github::GitHubAdmissionRead as _;
+    let temp = tempfile::tempdir()?;
+    let root = temp.path();
+    let source = initialize_journal_source(root)?;
+    let mut intent = direct_history_fixture_intent(&source)?;
+    intent.validate()?;
+    std::fs::create_dir(root.join(".github"))?;
+    let mut historical = intent.clone();
+    if std::env::var_os("VELNOR_TEST_SAME_BASE_SIGNED").is_some() {
+        // Both runs retain the same signed generator/tool policy.
+    } else if old_runner {
+        historical.runner = "ubuntu-24.04".into();
+    } else {
+        historical.generator_version = "0.1.71".into();
+        historical.generator_source_sha = "e".repeat(40);
+        historical.generator_manifest_sha256 = "f".repeat(64);
+    }
+    let old_policy = write_policy_commit(root, &historical, "old release policy")?;
+    intent.journal_predecessor = Some(velnor_actions_contract::config::CrateReleasePredecessor {
+        run_id: 11,
+        run_attempt: 1,
+        workflow_sha: old_policy.clone(),
+    });
+    intent.validate()?;
+    let policy = write_policy_commit(root, &intent, "release policy")?;
+    github.get(&format!("repos/owner/project/compare/{source}...{policy}"))?;
+    let request = crate::crate_release_github::GitHubAdmissionRequest {
+        repository: "owner/project".into(),
+        default_branch: "main".into(),
+        environment: "release".into(),
+        trusted_reviewer_id: 139_017,
+        workflow_path: ".github/workflows/release.yml".into(),
+        required_workflow_path: ".github/workflows/ci.yml".into(),
+        workflow_sha: policy.clone(),
+        run_id: 12,
+        run_attempt: 1,
+        event: "workflow_dispatch".into(),
+        source_sha: source.clone(),
+        recovery_sha: Some(source.clone()),
+    };
+    let receipt = direct_fixture_receipt(&request, &old_policy, &intent)?;
+    let git = crate::crate_release_git::ReleaseGit::host_fixture();
+    let deadline = velnor_actions_mise::CheckDeadline::after(std::time::Duration::from_secs(30))?;
+    let watch = crate::release::crate_release_historical_intent::DirectHistoryWatch;
+    assert_eq!(
+        crate::release::crate_release_historical_intent::verify_prior_bound(
+            root, &receipt, &request, github, &git, deadline, &watch
+        )?,
+        intent
+    );
+    let mut forged = receipt.clone();
+    forged.intent_sha256 = "0".repeat(64);
+    assert!(
+        crate::release::crate_release_historical_intent::verify_prior_bound(
+            root, &forged, &request, github, &git, deadline, &watch
+        )
+        .is_err()
+    );
+    #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+    {
+        let mut prior = receipt.clone();
+        prior.identity.workflow_sha.clone_from(&old_policy);
+        prior.identity.run_id = 11;
+        prior.predecessor = None;
+        prior.workflow_run_url = "https://github.com/owner/project/actions/runs/11".into();
+        prior
+            .generator_version
+            .clone_from(&historical.generator_version);
+        prior.intent_sha256 = crate::planner::generator::sha256_hex(
+            &velnor_actions_contract::canonical_json_bytes(&historical)?,
+        );
+        prior.base_intent_sha256 =
+            crate::crate_release_journal::release_base_intent_sha256(&historical)?;
+        direct_adapter::exercise(root, &policy, &source, &request, &receipt, &prior)?;
+    }
+    Ok(())
+}
+
+#[cfg(target_os = "linux")]
+fn direct_history_fixture_intent(
+    source: &str,
+) -> Result<velnor_actions_contract::config::CrateReleaseIntent, Box<dyn std::error::Error>> {
+    let signed = std::env::var_os("VELNOR_TEST_SAME_BASE_SIGNED").is_some();
+    Ok(serde_json::from_value(serde_json::json!({
+        "schema":1,"repository":"owner/project","default_branch":"main","environment":"release",
+        "required_workflow_path":".github/workflows/ci.yml","trusted_reviewer_id":139_017,
+        "generator_version":if signed { "0.1.5" } else { "0.1.72" },"generator_source_sha":if signed { "f1041f322c54cd7edfdef06afd307799eeaa801a".into() } else { "c".repeat(40) },"generator_manifest_sha256":if signed { "e38d047150f9e0347ec2160fd65bb7f026842e6f416e456990cf3b7ccd284c52".into() } else { "d".repeat(64) },
+        "release_plz_version":"0.4.3","runner":"ubuntu-26.04","authentication":"trusted-publishing",
+        "rust_version":"1.97.1","manifest_path":"Cargo.toml","pr_write_paths":["Cargo.toml"],
+        "registry":"crates-io","packages":["demo"],"publish_features":{"demo":[]},
+        "tag_template":"{{ package }}-v{{ version }}",
+        "recovery":{"package":"demo","version":"0.1.1","source_sha":source}
+    }))?)
+}
+
+#[cfg(target_os = "linux")]
+fn direct_fixture_receipt(
+    request: &crate::crate_release_github::GitHubAdmissionRequest,
+    old_policy: &str,
+    intent: &velnor_actions_contract::config::CrateReleaseIntent,
+) -> Result<crate::crate_release_journal::JournalReceipt, Box<dyn std::error::Error>> {
+    let digest = crate::planner::generator::sha256_hex(
+        &velnor_actions_contract::canonical_json_bytes(intent)?,
+    );
+    let base = crate::crate_release_journal::release_base_intent_sha256(intent)?;
+    Ok(serde_json::from_value(serde_json::json!({
+        "identity":{"repository":"owner/project","workflow_sha":request.workflow_sha,"source_sha":request.source_sha,"run_id":12,"run_attempt":1},
+        "predecessor":{"repository":"owner/project","workflow_sha":old_policy,"source_sha":request.source_sha,"run_id":11,"run_attempt":1},
+        "intent_sha256":digest,"base_intent_sha256":base,"registry":"crates-io",
+        "generator_version":intent.generator_version,"release_plz_version":"0.4.3","rust_version":"1.97.1",
+        "expected_tools":{"generator_sha256":"040c647a575684b84f28588862bad78876faf0224d8e5538c7a680d7d528f6b3","release_plz_sha256":velnor_actions_mise::catalog::qualified_release_plz("0.4.3", "ubuntu-26.04").ok_or("release-plz pin")?.executable_sha256,"rust_manifest_sha256":velnor_actions_mise::catalog::rust_channel_manifest_sha256("1.97.1").ok_or("rust pin")?},
+        "authentication":"trusted-publishing","required_check_id":1,"trusted_reviewer_id":139_017,
+        "workflow_run_url":"https://github.com/owner/project/actions/runs/12","source_files":[],"packages":[],"semver_evidence":{}
+    }))?)
+}
+
+#[cfg(target_os = "linux")]
+fn write_policy_commit(
+    root: &std::path::Path,
+    intent: &velnor_actions_contract::config::CrateReleaseIntent,
+    message: &str,
+) -> Result<String, Box<dyn std::error::Error>> {
+    std::fs::write(
+        root.join(".github/velnor-release-intent.toml"),
+        toml::to_string(intent)?,
+    )?;
+    for args in [
+        &["add", "."][..],
+        &[
+            "-c",
+            "user.name=Fixture",
+            "-c",
+            "user.email=fixture@example.invalid",
+            "commit",
+            "-qm",
+            message,
+        ][..],
+    ] {
+        assert!(
+            std::process::Command::new("git")
+                .current_dir(root)
+                .args(args)
+                .status()?
+                .success()
+        );
+    }
+    let output = std::process::Command::new("git")
+        .current_dir(root)
+        .args(["rev-parse", "HEAD"])
+        .output()?;
+    assert!(output.status.success());
+    Ok(String::from_utf8(output.stdout)?.trim().to_owned())
+}
+
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+#[path = "direct_history_adapter.rs"]
+mod direct_adapter;
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+pub(super) use direct_adapter::verify_direct_history_child;

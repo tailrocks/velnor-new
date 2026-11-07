@@ -53,6 +53,13 @@ pub(super) fn source_require_script() -> Result<String, Box<dyn Error>> {
 }
 
 pub(super) fn generated_script(job: &str, name: &str) -> Result<String, Box<dyn Error>> {
+    Ok(generated_step(job, name)?["run"]
+        .as_str()
+        .ok_or("generated shell step")?
+        .to_owned())
+}
+
+fn generated_step(job: &str, name: &str) -> Result<serde_json::Value, Box<dyn Error>> {
     let (spec, rust) = crate::release::release_steps::tests::fixture()?;
     let workflow = velnor_actions_workflow_renderer::release_tree::render_release_workflow(
         &spec,
@@ -69,9 +76,8 @@ pub(super) fn generated_script(job: &str, name: &str) -> Result<String, Box<dyn 
     Ok(steps
         .iter()
         .find(|step| step["name"].as_str() == Some(name))
-        .and_then(|step| step["run"].as_str())
-        .ok_or("source-require step")?
-        .to_owned())
+        .ok_or("generated step")?
+        .clone())
 }
 
 pub(super) fn serve_admission(
@@ -121,26 +127,18 @@ pub(super) fn supplied_step(
     job: &str,
     operation: &str,
 ) -> Result<std::process::Output, Box<dyn Error>> {
-    let mut command = if job == "release-publish" {
-        if !matches!(
+    if job == "release-publish"
+        && !matches!(
             operation,
             "verify-admission" | "journal-start" | "journal-coordinate"
-        ) {
-            return Err("unexpected publisher operation".into());
-        }
-        let mut command = std::process::Command::new(std::env::current_exe()?);
-        command.args(["--exact", super::CANDIDATE_CASE]);
-        command.env(
-            "VELNOR_TEST_COMMAND_ARGS",
-            format!("crate-release {operation}"),
-        );
-        command
-    } else {
-        let script = generated_script(job, &format!("Release {operation}"))?;
-        let mut command = std::process::Command::new("bash");
-        command.args(["-e", "-c", &script]);
-        command
-    };
+        )
+    {
+        return Err("unexpected publisher operation".into());
+    }
+    let step = generated_step(job, &format!("Release {operation}"))?;
+    let script = step["run"].as_str().ok_or("generated shell step")?;
+    let mut command = std::process::Command::new("bash");
+    command.args(["-e", "-c", script]);
     command
         .env("VELNOR_NATIVE_RECEIPT_CHILD", "1")
         .env("VELNOR_NATIVE_OPERATION", operation)
@@ -152,7 +150,12 @@ pub(super) fn supplied_step(
         .env("MISE_CARGO_HOME", root.join("velnor/cargo"))
         .env("RUSTUP_AUTO_INSTALL", "0");
     if matches!(operation, "journal-start" | "journal-coordinate") {
-        command.env("HOME", root).env("GH_TOKEN", "fixture");
+        command.env("HOME", root);
+    }
+    if step["env"]["GH_TOKEN"].as_str() == Some("${{ secrets.GITHUB_TOKEN }}") {
+        command.env("GH_TOKEN", std::env::var("GIT_TOKEN")?);
+    } else {
+        command.env_remove("GH_TOKEN");
     }
     if operation == "journal-coordinate"
         && std::env::var_os("VELNOR_NATIVE_NO_TOKEN_ON_RETRY").is_some()

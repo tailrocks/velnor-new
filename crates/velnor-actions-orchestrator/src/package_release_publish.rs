@@ -95,6 +95,8 @@ pub(crate) use preview_artifacts::{
 
 #[path = "package_release_publish_public_read.rs"]
 mod public_read;
+#[cfg(any(target_os = "linux", test))]
+pub(crate) use public_read::read_historical_sdk_attestation_assets;
 pub(crate) use public_read::{
     PublicPullRequestSnapshot, PublicReleaseAsset, PublicReleaseSnapshot,
     parse_public_pull_request_response, read_public_branch_tip,

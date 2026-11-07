@@ -229,6 +229,12 @@ Rules:
   exchange with no redundant auth action. Validation and release-PR jobs
   receive no publish credential; the bootstrap job receives only the required
   bootstrap secret.
+- The publisher runs the admitted Cargo source and its dependencies with the
+  job's publishing authority. Review and exact-source admission therefore
+  apply to that code and its dependency inputs. GitHub-hosted jobs use fresh
+  virtual machines; reconciliation runs in a separate bounded job and checks
+  the registry, downloaded crate, and tag independently. An upload with an
+  unknown outcome remains pending until registry state is observed.
 - Keep Cargo verification enabled (`--no-verify`/`allow-dirty` are never a
   speed workaround). Do not execute untrusted build products, project hooks,
   ad hoc shell fragments, or PR cache contents in a privileged job; note

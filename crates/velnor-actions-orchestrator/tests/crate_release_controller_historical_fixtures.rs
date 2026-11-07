@@ -228,6 +228,38 @@ impl CrateReleaseRepairWrite for HistoricalAuthority<'_> {
     }
 }
 
+impl HistoricalAuthority<'_> {
+    fn historical_pr_response(
+        &self,
+        route: &str,
+        source: &str,
+        defect: u8,
+    ) -> Result<Value, OrchestratorError> {
+        if route.contains("/commits/") && route.contains("/pulls?") {
+            return Ok(
+                json!([{"number":7,"merged_at":"2026-11-03T15:38:50Z","merge_commit_sha":source,"user":{"login":"author","id":54},"base":{"ref":"main","repo":{"full_name":"example/demo","owner":{"id":77,"login":"example"}}},"head":{"ref":"release-plz-test","sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","repo":{"full_name":"example/demo","owner":{"id":77,"login":"example"}}}}]),
+            );
+        }
+        if route.contains("/git/commits/") {
+            let sha = route.rsplit('/').next().unwrap_or_default();
+            return Ok(
+                json!({"sha":sha,"tree":{"sha":"cccccccccccccccccccccccccccccccccccccccc"}}),
+            );
+        }
+        if route.contains("/pulls/7/reviews?") {
+            return Ok(if defect == 9 {
+                json!([])
+            } else {
+                json!([{"id":1,"user":{"login":"reviewer","id":55,"type":"User"},"author_association":"MEMBER","state":"APPROVED","commit_id":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","submitted_at":"2026-11-03T15:00:00Z"}])
+            });
+        }
+        if route.ends_with("/collaborators/reviewer/permission") {
+            return Ok(json!({"user":{"id":55,"type":"User"},"permission":"write"}));
+        }
+        self.base.get(route)
+    }
+}
+
 impl GitHubAdmissionRead for HistoricalAuthority<'_> {
     fn get(&self, route: &str) -> Result<Value, OrchestratorError> {
         let defect = self.defect.get();
@@ -244,7 +276,7 @@ impl GitHubAdmissionRead for HistoricalAuthority<'_> {
             .as_ref()
             .filter(|sha| route.contains(sha.as_str()))
             .unwrap_or(&self.workflow);
-        let run = || json!({"id":if defect == 1 { 99 } else { run_id },"run_attempt":if defect == 2 { 2 } else { 1 },"status":"completed","head_sha":if defect == 3 { "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee" } else { workflow },"head_branch":"main","event":if defect == 4 { "schedule" } else { self.event },"path":if defect == 5 { ".github/workflows/other.yml" } else { ".github/workflows/crate-release.yml" },"repository":{"id":if defect == 6 { 99 } else { 22 },"full_name":"example/demo","owner":{"id":77,"login":"example"}},"head_repository":{"id":22,"full_name":"example/demo","owner":{"id":77,"login":"example"}}});
+        let run = || json!({"id":if defect == 1 { 99 } else { run_id },"run_attempt":if defect == 2 { 2 } else { 1 },"status":"completed","head_sha":if defect == 3 { "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee" } else { workflow },"head_branch":"main","event":if defect == 4 { "schedule" } else { self.event },"path":if defect == 5 { ".github/workflows/other.yml" } else { ".github/workflows/release.yml" },"repository":{"id":if defect == 6 { 99 } else { 22 },"full_name":"example/demo","owner":{"id":77,"login":"example"}},"head_repository":{"id":22,"full_name":"example/demo","owner":{"id":77,"login":"example"}}});
         if route.ends_with("/actions/runs/11/attempts/1")
             || route.ends_with("/actions/runs/11")
             || route.ends_with("/actions/runs/10/attempts/1")
@@ -280,31 +312,16 @@ impl GitHubAdmissionRead for HistoricalAuthority<'_> {
             && route.contains("/actions/runs?")
         {
             return Ok(
-                json!({"total_count":1,"workflow_runs":[{"check_suite_id":123,"head_sha":check_sha,"path":".github/workflows/ci.yml","status":"completed","conclusion":"success","event":"push","head_branch":"main","repository":{"id":22,"full_name":"example/demo","owner":{"id":77,"login":"example"}},"head_repository":{"id":22,"full_name":"example/demo","owner":{"id":77,"login":"example"}}}]}),
+                json!({"total_count":1,"workflow_runs":[{"id":123,"run_number":1,"run_attempt":if defect == 10 {2} else {1},"check_suite_id":123,"head_sha":check_sha,"path":".github/workflows/ci.yml","status":"completed","conclusion":"success","event":"push","head_branch":"main","repository":{"id":22,"full_name":"example/demo","owner":{"id":77,"login":"example"}},"head_repository":{"id":22,"full_name":"example/demo","owner":{"id":77,"login":"example"}}}]}),
             );
         }
-        if route.contains("/commits/") && route.contains("/pulls?") {
+        if route.contains("/actions/runs/123/attempts/") && route.contains("/jobs?") {
+            let attempt = if route.contains("/attempts/2/") { 2 } else { 1 };
             return Ok(
-                json!([{"number":7,"merged_at":"2026-11-03T15:38:50Z","merge_commit_sha":source,"user":{"login":"author","id":54},"base":{"ref":"main","repo":{"full_name":"example/demo","owner":{"id":77,"login":"example"}}},"head":{"ref":"release-plz-test","sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","repo":{"full_name":"example/demo","owner":{"id":77,"login":"example"}}}}]),
+                json!({"total_count":1,"jobs":[{"id":attempt,"name":"Required","run_id":123,"run_attempt":attempt,"status":"completed","conclusion":"success","check_run_url":format!("https://api.github.com/repos/example/demo/check-runs/{attempt}")}]}),
             );
         }
-        if route.contains("/git/commits/") {
-            let sha = route.rsplit('/').next().unwrap_or_default();
-            return Ok(
-                json!({"sha":sha,"tree":{"sha":"cccccccccccccccccccccccccccccccccccccccc"}}),
-            );
-        }
-        if route.contains("/pulls/7/reviews?") {
-            return Ok(if defect == 9 {
-                json!([])
-            } else {
-                json!([{"id":1,"user":{"login":"reviewer","id":55,"type":"User"},"author_association":"MEMBER","state":"APPROVED","commit_id":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","submitted_at":"2026-11-03T15:00:00Z"}])
-            });
-        }
-        if route.ends_with("/collaborators/reviewer/permission") {
-            return Ok(json!({"user":{"id":55,"type":"User"},"permission":"write"}));
-        }
-        self.base.get(route)
+        self.historical_pr_response(route, source, defect)
     }
     fn get_optional(&self, route: &str) -> Result<Option<Value>, OrchestratorError> {
         self.base.get_optional(route)

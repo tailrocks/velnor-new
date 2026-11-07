@@ -8,6 +8,9 @@ import pathlib
 import ssl
 import subprocess
 import sys
+import urllib.error
+import urllib.parse
+import urllib.request
 
 base = pathlib.Path(sys.argv[1]).resolve()
 source_sha = sys.argv[2]
@@ -55,7 +58,7 @@ openssl(
     "/CN=fixture.actions.githubusercontent.com",
 )
 (base / "ext").write_text(
-    "basicConstraints=critical,CA:FALSE\nsubjectAltName=DNS:api.github.com,DNS:github.com,DNS:fixture.actions.githubusercontent.com,DNS:crates.io\nkeyUsage=digitalSignature,keyEncipherment\nextendedKeyUsage=serverAuth\n"
+    "basicConstraints=critical,CA:FALSE\nsubjectAltName=DNS:api.github.com,DNS:github.com,DNS:fixture.actions.githubusercontent.com,DNS:crates.io,DNS:index.crates.io\nkeyUsage=digitalSignature,keyEncipherment\nextendedKeyUsage=serverAuth\n"
 )
 openssl(
     "x509",
@@ -109,6 +112,26 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.wfile.write(data)
 
     def do_GET(self):
+        if self.headers.get("host") == "index.crates.io" and os.environ.get("VELNOR_FIXTURE_REAL_CARGO"):
+            origin = os.environ["VELNOR_FIXTURE_CARGO_API_ORIGIN"]
+            parsed = urllib.parse.urlsplit(origin)
+            if (parsed.scheme != "http" or parsed.hostname != "127.0.0.1"
+                    or parsed.port is None or parsed.path or parsed.query or parsed.fragment):
+                raise ValueError("fixture registry origin must be loopback")
+            if self.path == "/config.json":
+                return self.reply(200, {"api": origin, "dl": origin + "/crates"})
+            try:
+                with urllib.request.urlopen(origin + self.path, timeout=5) as response:
+                    data = response.read(1024 * 1024 + 1)
+                if len(data) > 1024 * 1024:
+                    return self.reply(413, {"error": "index too large"})
+                self.send_response(200)
+                self.send_header("Content-Length", str(len(data) + 1))
+                self.end_headers()
+                self.wfile.write(data + b"\n")
+                return
+            except urllib.error.HTTPError as error:
+                return self.reply(error.code, {"error": "not found"})
         if self.path == "/__fixture/state":
             return self.reply(200, counts)
         if self.path.startswith("/oidc"):

@@ -68,11 +68,18 @@ def assert_pending_upload(info, state, runner):
 
 
 mode = sys.argv[1] if len(sys.argv) > 1 else "success"
+multi = mode == "coordinate-multi"
 env = os.environ.copy()
 coordinate = mode.startswith("coordinate")
+real_cargo = mode == "coordinate-real-cargo-crash"
+if real_cargo:
+    env["VELNOR_FIXTURE_REAL_CARGO"] = "1"
+    if (len(pathlib.Path("/proc/net/route").read_text().splitlines()) != 1
+            or {name for _, name in socket.if_nameindex()} != {"lo"}):
+        raise RuntimeError("real Cargo rehearsal requires a network-isolated namespace")
 journal = coordinate or mode in ("journal", "journal-bad-bundle")
 if coordinate:
-    for host in ("api.github.com", "github.com", "crates.io", "fixture.actions.githubusercontent.com"):
+    for host in ("api.github.com", "github.com", "crates.io", "index.crates.io", "fixture.actions.githubusercontent.com") if real_cargo else ("api.github.com", "github.com", "crates.io", "fixture.actions.githubusercontent.com"):
         addresses = {item[4][0] for item in socket.getaddrinfo(host, 443, type=socket.SOCK_STREAM)}
         if addresses != {"127.0.0.1"}:
             raise RuntimeError(f"{host} must resolve only to the local fixture")
@@ -87,7 +94,7 @@ if journal:
     )
     runner = pathlib.Path("/runner") / mode
     bootstrap = runner / "velnor/bootstrap"
-    bootstrap.mkdir(parents=True)
+    bootstrap.mkdir(parents=True, exist_ok=multi)
     for name in (
         "release-manifest.json",
         "release-manifest.json.intoto.jsonl",
@@ -96,8 +103,8 @@ if journal:
     ):
         shutil.copyfile(pathlib.Path("/assets") / name, bootstrap / name)
     gh_dir = runner / ".local/share/mise/installs/gh/2.103.3"
-    gh_dir.mkdir(parents=True)
-    shutil.copytree("/assets/gh_2.103.3_linux_amd64", gh_dir / "gh_2.103.3_linux_amd64")
+    gh_dir.mkdir(parents=True, exist_ok=multi)
+    shutil.copytree("/assets/gh_2.103.3_linux_amd64", gh_dir / "gh_2.103.3_linux_amd64", dirs_exist_ok=multi)
     if mode == "journal-bad-bundle":
         bundle_path = bootstrap / "release-manifest.json.intoto.jsonl"
         bundle = json.loads(bundle_path.read_text())
@@ -111,12 +118,12 @@ if journal:
         env["VELNOR_TEST_FAST_POLL"] = "1"
         env["VELNOR_NATIVE_COORDINATE_ERROR"] = (
             ""
-            if mode in ("coordinate", "coordinate-crash", "coordinate-crash-no-credentials")
+            if mode in ("coordinate", "coordinate-crash", "coordinate-crash-no-credentials", "coordinate-real-cargo-crash", "coordinate-multi")
             else "crate_release_upload_credential_missing"
             if mode in ("coordinate-missing-oidc", "coordinate-missing-bootstrap")
             else "crate_registry_version_not_visible"
         )
-        if mode in ("coordinate-crash", "coordinate-crash-no-credentials"):
+        if mode in ("coordinate-crash", "coordinate-crash-no-credentials", "coordinate-real-cargo-crash"):
             env["VELNOR_NATIVE_COORDINATE_CRASH"] = "1"
             env["VELNOR_NATIVE_PID_FILE"] = str(runner / "coordinator.pid")
             env["VELNOR_FIXTURE_CRASH_PID_PATH"] = env["VELNOR_NATIVE_PID_FILE"]
@@ -131,16 +138,16 @@ if journal:
             env.pop("CARGO_REGISTRY_TOKEN", None)
             env["VELNOR_NATIVE_POISON_CHECKER"] = "1"
         release_plz = runner / "velnor-release-plz"
-        release_plz.mkdir()
+        release_plz.mkdir(exist_ok=multi)
         shutil.copy("/assets/release-plz", release_plz / "release-plz")
         rust_manifest = runner / "velnor/rust-manifest"
-        rust_manifest.mkdir()
+        rust_manifest.mkdir(exist_ok=multi)
         shutil.copy("/assets/channel.toml", rust_manifest / "channel.toml")
         if mode == "coordinate-corrupt-git":
             git = runner / "velnor/git-bundle/git"
             with git.open("ab") as handle:
                 handle.write(b"corrupted fixture")
-if mode != "success":
+if mode != "success" and not multi:
     env["VELNOR_FIXTURE_FAILURE"] = "oidc" if mode == "coordinate-oidc-denied" else mode
 fixture_env = env.copy()
 fixture_env.pop("CARGO_TARGET_DIR", None)
@@ -156,7 +163,20 @@ try:
         raise RuntimeError("fixture did not start")
     info = json.loads(line)
     tls_server = None
+    registry_server = None
+    if multi:
+        registry_server = subprocess.Popen(
+            ["python3", "/fixture/multi_registry.py", env["VELNOR_FIXTURE_FINAL_MULTI_MANIFEST"]],
+            stdout=subprocess.PIPE, text=True,
+        )
+        registry_line = registry_server.stdout.readline()
+        if not registry_line:
+            raise RuntimeError("multi registry did not start")
+        env["VELNOR_FIXTURE_REGISTRY_ORIGIN"] = json.loads(registry_line)["origin"]
+        env["VELNOR_NATIVE_MULTI"] = "1"
     if coordinate:
+        if real_cargo:
+            env["VELNOR_FIXTURE_CARGO_API_ORIGIN"] = info["origin"]
         tls_server = subprocess.Popen(
             [
                 "python3",
@@ -170,49 +190,50 @@ try:
         )
         if tls_server.stdout.readline().strip() != "https fixture ready":
             raise RuntimeError("HTTPS fixture did not start")
-        cargo = (
-            runner
-            / "velnor/rustup/toolchains/1.97.1-x86_64-unknown-linux-gnu/bin/cargo"
-        )
-        real_cargo = cargo.with_name("cargo-real")
-        cargo.rename(real_cargo)
-        target = runner / "fixture-package"
-        info_marker = runner / "release-plz-info-called"
-        upload = info["origin"] + "/__fixture/upload"
-        info_reply = (
-            '  info) test "$(/usr/bin/readlink /proc/$PPID/exe)" = '
-            + shlex.quote(str(runner / "velnor-release-plz/release-plz"))
-            + ' || exit 76; : > '
-            + shlex.quote(str(info_marker))
-            + f'; echo "{info["package"]} {info["version"]}"; exit 0 ;;\n'
-            if mode == "coordinate-skip"
-            else '  info) printf "error: could not find package\\n" >&2; exit 101 ;;\n'
-        )
-        publish_upload = (
-            ":"
-            if mode == "coordinate-skip"
-            else "/usr/bin/curl -fsS --data-binary @"
-            + shlex.quote(str(target / "package" / f"{info['package']}-{info['version']}.crate"))
-            + " "
-            + shlex.quote(upload)
-            + " >/dev/null"
-        )
-        cargo.write_text(
-            "#!/bin/sh\n"
-            'case "$1" in\n'
-            + info_reply
-            + '  publish) shift; test "${CARGO_REGISTRY_TOKEN:-}" = fixture-scoped || exit 74; '
-            + "CARGO_TARGET_DIR="
-            + shlex.quote(str(target))
-            + " "
-            + shlex.quote(str(real_cargo))
-            + ' package --offline "$@" >&2 || exit 73; '
-            + publish_upload
-            + f' || exit 75; printf "    Uploading fixture\\n    Published {info["package"]} v{info["version"]} at fixture\\n" >&2; exit 0 ;;\n'
-            "  *) exec " + shlex.quote(str(real_cargo)) + ' "$@" ;;\n'
-            "esac\n"
-        )
-        cargo.chmod(0o755)
+        if not real_cargo:
+            cargo = (
+                runner
+                / "velnor/rustup/toolchains/1.97.1-x86_64-unknown-linux-gnu/bin/cargo"
+            )
+            cargo_real_path = cargo.with_name("cargo-real")
+            cargo.rename(cargo_real_path)
+            target = runner / "fixture-package"
+            info_marker = runner / "release-plz-info-called"
+            upload = info["origin"] + "/__fixture/upload"
+            info_reply = (
+                '  info) test "$(/usr/bin/readlink /proc/$PPID/exe)" = '
+                + shlex.quote(str(runner / "velnor-release-plz/release-plz"))
+                + ' || exit 76; : > '
+                + shlex.quote(str(info_marker))
+                + f'; echo "{info["package"]} {info["version"]}"; exit 0 ;;\n'
+                if mode == "coordinate-skip"
+                else '  info) printf "error: could not find package\\n" >&2; exit 101 ;;\n'
+            )
+            publish_upload = (
+                ":"
+                if mode == "coordinate-skip"
+                else "/usr/bin/curl -fsS --data-binary @"
+                + shlex.quote(str(target / "package" / f"{info['package']}-{info['version']}.crate"))
+                + " "
+                + shlex.quote(upload)
+                + " >/dev/null"
+            )
+            cargo.write_text(
+                "#!/bin/sh\n"
+                'case "$1" in\n'
+                + info_reply
+                + '  publish) shift; test "${CARGO_REGISTRY_TOKEN:-}" = fixture-scoped || exit 74; '
+                + "CARGO_TARGET_DIR="
+                + shlex.quote(str(target))
+                + " "
+                + shlex.quote(str(cargo_real_path))
+                + ' package --offline "$@" >&2 || exit 73; '
+                + publish_upload
+                + f' || exit 75; printf "    Uploading fixture\\n    Published {info["package"]} v{info["version"]} at fixture\\n" >&2; exit 0 ;;\n'
+                "  *) exec " + shlex.quote(str(cargo_real_path)) + ' "$@" ;;\n'
+                "esac\n"
+            )
+            cargo.chmod(0o755)
     env.update(
         {
             "VELNOR_TEST_NATIVE_REHEARSAL": "1",
@@ -234,14 +255,14 @@ try:
             "VELNOR_NATIVE_EXPECT_BASELINE": info["baseline_version"],
             "VELNOR_NATIVE_EXPECT_CHECKSUM": info["baseline_checksum"],
             "VELNOR_TEST_GITHUB_ORIGIN": info["origin"],
-            "VELNOR_TEST_REGISTRY_ORIGIN": info["origin"],
+            "VELNOR_TEST_REGISTRY_ORIGIN": env.get("VELNOR_FIXTURE_REGISTRY_ORIGIN", info["origin"]),
             "GITHUB_WORKSPACE": info["workspace"],
             "GITHUB_REPOSITORY": info["repository"],
             "GITHUB_SHA": info["workflow_sha"],
             "GITHUB_WORKFLOW_SHA": info["workflow_sha"],
             "GITHUB_WORKFLOW_REF": info["repository"] + "/.github/workflows/release.yml@refs/heads/main",
             "GITHUB_REF": "refs/heads/main",
-            "GITHUB_EVENT_NAME": "workflow_dispatch",
+            "GITHUB_EVENT_NAME": "push" if multi else "workflow_dispatch",
             "GITHUB_RUN_ID": "12",
             "GITHUB_RUN_ATTEMPT": "1",
             "GIT_TOKEN": "fixture",
@@ -270,8 +291,27 @@ try:
     )
     with urllib.request.urlopen(info["origin"] + "/__fixture/state") as response:
         state = json.load(response)
-    if mode in ("coordinate", "coordinate-crash", "coordinate-crash-no-credentials"):
+    if multi:
+        assert state["uploads"] == 0
+        assert "refs/tags/velnor-receipt/12/1/reconciled" in state["refs"]
+    elif mode in ("coordinate", "coordinate-crash", "coordinate-crash-no-credentials", "coordinate-real-cargo-crash"):
         assert state["uploads"] == 1
+        if real_cargo:
+            assert state["upload_attempts"] == 1
+            accepted = (pathlib.Path("/workspace") / ("final-" + mode) / "fixture-upload.crate").read_bytes()
+            assert hashlib.sha256(accepted).hexdigest() == state["published_sha256"]
+            cargo = runner / "velnor/rustup/toolchains/1.97.1-x86_64-unknown-linux-gnu/bin/cargo"
+            package_env = {
+                "PATH": str(cargo.parent) + ":/usr/bin:/bin",
+                "HOME": str(runner),
+                "CARGO_HOME": str(runner / "velnor/cargo"),
+                "CARGO_TARGET_DIR": str(runner / "fixture-package"),
+            }
+            subprocess.run(
+                [str(cargo), "package", "--offline", "--no-verify", "--allow-dirty"],
+                cwd=pathlib.Path("/workspace") / ("final-" + mode) / "release-source",
+                env=package_env, check=True, timeout=120,
+            )
         packed = read_bounded(runner / "fixture-package/package" / f"{info['package']}-{info['version']}.crate", 100 * 1024 * 1024)
         assert state["published_sha256"] == hashlib.sha256(packed).hexdigest()
         assert state["release"]["tag_name"] == f"{info['package']}-v{info['version']}"
@@ -324,6 +364,9 @@ try:
     else:
         assert state["mutations"] == 0
 finally:
+    if "registry_server" in locals() and registry_server:
+        registry_server.terminate()
+        registry_server.wait(timeout=5)
     if "tls_server" in locals() and tls_server:
         tls_server.terminate()
         tls_server.wait(timeout=5)

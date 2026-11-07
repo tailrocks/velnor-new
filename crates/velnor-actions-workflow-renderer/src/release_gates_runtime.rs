@@ -37,6 +37,21 @@ fn runtime_step_names(role: ReleaseRole) -> &'static [&'static str] {
             "Upload release Rust toolchain",
             "Release verify-preflight-retention",
         ],
+        ReleaseRole::PublishOidc | ReleaseRole::PublishBootstrap => &[
+            "Acquire Velnor",
+            "Checkout",
+            "Release source-require",
+            "Checkout exact source",
+            "Release toolchain-acquire",
+            "Verify Rust channel manifest",
+            "Acquire cargo-semver-checks",
+            "Release receipt-acquire",
+            "Release verify-admission",
+            "Reject unsupported release action",
+            "Acquire release-plz",
+            "Release journal-start",
+            "Release journal-coordinate",
+        ],
         ReleaseRole::Reconcile => &[
             "Acquire Velnor",
             "Checkout",
@@ -48,10 +63,7 @@ fn runtime_step_names(role: ReleaseRole) -> &'static [&'static str] {
             "Release reconcile",
             "Upload reconciliation record",
         ],
-        ReleaseRole::Preparation
-        | ReleaseRole::PrCreate
-        | ReleaseRole::PublishOidc
-        | ReleaseRole::PublishBootstrap => &[],
+        ReleaseRole::Preparation | ReleaseRole::PrCreate => &[],
     }
 }
 

@@ -6,9 +6,8 @@ Detected stacks
   Tofu: not detected (strong evidence; add [stacks.tofu] roots to enable)
     evidence: mise-tool:opentofu
   Mise check maintenance-helpers: test-maintenance-helpers (runner: ubuntu-26.04, target: x86_64-unknown-linux-gnu)
-  Mise check hosted-budget-containment: test-hosted-budget-containment (runner: ubuntu-26.04, target: x86_64-unknown-linux-gnu)
   Mise check hosted-gh-config-custody: test-hosted-gh-config-custody (runner: ubuntu-26.04, target: x86_64-unknown-linux-gnu)
-  Mise check hosted-manager-policy: qualify-manager-policy (runner: ubuntu-26.04, target: x86_64-unknown-linux-gnu)
+  Mise check hosted-direct-release: test-hosted-direct-release (runner: ubuntu-26.04, target: x86_64-unknown-linux-gnu)
   Workspace crates: 20
     - velnor-actions-actionlint (crates/velnor-actions-actionlint/Cargo.toml) [lib; depends on velnor-actions-contract]
     - velnor-actions-ansible (crates/velnor-actions-ansible/Cargo.toml) [lib; depends on velnor-actions-contract]
@@ -56,9 +55,8 @@ Workflow to generate
     - alint (2 steps)
     - cargo-deny (6 steps)
     - cargo-machete (7 steps)
-    - check-hosted-budget-containment (7 steps)
+    - check-hosted-direct-release (7 steps)
     - check-hosted-gh-config-custody (7 steps)
-    - check-hosted-manager-policy (7 steps)
     - check-maintenance-helpers (7 steps)
     - jactionlint (7 steps)
     - ledger-cli (17 steps)

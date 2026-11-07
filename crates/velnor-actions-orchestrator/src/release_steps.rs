@@ -56,14 +56,24 @@ struct JobParts<'a> {
     environment: &'a str,
     acquire: Step,
     generator_version: &'a str,
-    generator_source_sha: &'a str,
-    generator_manifest_sha256: &'a str,
     rust_version: &'a str,
 }
 
 pub(crate) fn assemble_jobs(
     inputs: &JobInputs<'_>,
 ) -> Result<BTreeMap<String, ReleaseJobSpec>, OrchestratorError> {
+    if *inputs.acquire
+        != velnor_actions_workflow_renderer::release_generator_bootstrap::acquire_step(
+            inputs.generator_version,
+            inputs.label,
+            inputs.generator_source_sha,
+            inputs.generator_manifest_sha256,
+        )?
+    {
+        return Err(OrchestratorError::Contract {
+            problem: "release_generator_acquire_mismatch".to_owned(),
+        });
+    }
     let parts = JobParts {
         policy: policy_checkout(inputs.generator_version)?,
         source: source_checkout(
@@ -97,8 +107,6 @@ pub(crate) fn assemble_jobs(
         environment: &inputs.release.environment,
         acquire: inputs.acquire.clone(),
         generator_version: inputs.generator_version,
-        generator_source_sha: inputs.generator_source_sha,
-        generator_manifest_sha256: inputs.generator_manifest_sha256,
         rust_version: inputs.catalog.version(PinnedTool::Rust),
     };
     let bootstrap =

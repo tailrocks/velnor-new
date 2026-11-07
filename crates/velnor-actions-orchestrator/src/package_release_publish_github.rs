@@ -137,9 +137,17 @@ impl GitHubApi {
     }
 
     pub(super) fn download_asset(&self, id: u64) -> Result<Vec<u8>, OrchestratorError> {
+        self.download_asset_bounded(id, ASSET_LIMIT)
+    }
+
+    pub(super) fn download_asset_bounded(
+        &self,
+        id: u64,
+        limit: usize,
+    ) -> Result<Vec<u8>, OrchestratorError> {
         self.request_accept(
             vec![OsString::from(self.route(&format!("releases/assets/{id}")))],
-            ASSET_LIMIT,
+            limit.min(ASSET_LIMIT),
             "application/octet-stream",
         )
     }

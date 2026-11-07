@@ -63,6 +63,7 @@ pub(crate) fn invoke_upload<
         .map_err(|_| invalid())?;
     let cargo_home = private.path().join("cargo");
     std::fs::create_dir(&cargo_home).map_err(|_| invalid())?;
+    let cargo_target = create_private_target(private.path())?;
     #[cfg(all(test, unix))]
     if let Some(snapshot) = std::env::var_os("VELNOR_NATIVE_REGISTRY_SNAPSHOT") {
         crate::release::crate_release_semver::test_registry::copy_snapshot(
@@ -88,6 +89,7 @@ pub(crate) fn invoke_upload<
         ("RUSTDOC", rustdoc.display().to_string()),
         ("HOME", private.path().display().to_string()),
         ("CARGO_HOME", cargo_home.display().to_string()),
+        ("CARGO_TARGET_DIR", cargo_target.display().to_string()),
         ("RUSTUP_HOME", rustup_home.display().to_string()),
         ("RUSTUP_AUTO_INSTALL", "0".to_owned()),
         ("RUNNER_TEMP", runner_temp.display().to_string()),
@@ -116,31 +118,10 @@ pub(crate) fn invoke_upload<
     Ok(attempt)
 }
 
-#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
-pub(crate) fn invoke_supervised_upload<
-    J: JournalIo + crate::crate_release_journal::JournalOperationRefs,
-    G: GitHubAdmissionRead,
-    R: CrateRegistryRead,
->(
-    input: &CrateReleaseObservation<'_, J, G, R>,
-    permit: UploadPermit,
-    execution: &crate::release::crate_release_source_view::SupervisedSourceExecution,
-) -> Result<UploadAttempt, OrchestratorError> {
-    let qualified = validate_upload_permit(input, &permit)?;
-    let package = permit.package;
-    let version = permit.version;
-    execution.upload(
-        &crate::release::crate_release_source_view::SupervisedUpload {
-            root: input.source,
-            intent: input.intent,
-            git: input.git,
-            package: &package,
-            version: &version,
-            sequence: permit.sequence,
-            release_plz_sha256: qualified.executable_sha256,
-        },
-    )?;
-    Ok(UploadAttempt::ExitedSuccess)
+fn create_private_target(home: &Path) -> Result<std::path::PathBuf, OrchestratorError> {
+    let target = home.join("target");
+    std::fs::create_dir(&target).map_err(|_| internal("crate_release_upload_unverified"))?;
+    Ok(target)
 }
 
 fn upload_rust_tools(

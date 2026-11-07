@@ -22,7 +22,6 @@ pub struct PriorHistoryEvidence {
 }
 
 pub(crate) struct PriorTransition<'a> {
-    pub(crate) source_execution: &'a dyn crate::CrateSourceExecution,
     pub(crate) request: &'a crate::crate_release_github::GitHubAdmissionRequest,
     pub(crate) github: &'a dyn crate::crate_release_github::GitHubAdmissionRead,
 }
@@ -33,9 +32,12 @@ impl PriorTransition<'_> {
         prior: &JournalReceipt,
         current: &JournalReceipt,
     ) -> Result<(), OrchestratorError> {
-        self.source_execution
-            .historical_intent_reader()?
-            .verify_transition(prior, current, self.request, self.github)
+        crate::release::crate_release_direct_history::verify_transition(
+            prior,
+            current,
+            self.request,
+            self.github,
+        )
     }
 }
 
@@ -207,8 +209,10 @@ pub(super) fn inspect_prior_incomplete_inner<I: JournalIo>(
     {
         return Err(invalid());
     }
-    if prior.receipt.base_intent_sha256 != current.base_intent_sha256 {
-        edge.ok_or_else(invalid)?.verify(&prior.receipt, current)?;
+    if let Some(edge) = edge {
+        edge.verify(&prior.receipt, current)?;
+    } else if prior.receipt.base_intent_sha256 != current.base_intent_sha256 {
+        return Err(invalid());
     }
     Ok(prior)
 }

@@ -146,7 +146,7 @@ fn assert_committed_workflow_lock(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let temp = tempfile::tempdir()?;
     std::fs::create_dir_all(temp.path().join(".github/workflows"))?;
-    let path = temp.path().join(".github/workflows/crate-release.yml");
+    let path = temp.path().join(".github/workflows/release.yml");
     std::fs::write(&path, workflow)?;
     for args in [
         vec!["init", "-q"],

@@ -201,6 +201,40 @@ pub fn reconcile_crate_registry<R: CrateRegistryRead>(
     expected_owners: &[CrateRegistryOwner],
     expected_archive: &[u8],
 ) -> Result<CrateRegistryReconciliation, OrchestratorError> {
+    reconcile_registry_archive(
+        reader,
+        name,
+        version,
+        expected_owners,
+        Some(expected_archive),
+        None,
+    )
+}
+
+pub(crate) fn revalidate_crate_registry<R: CrateRegistryRead>(
+    reader: &R,
+    name: &str,
+    version: &str,
+    expected: &CrateRegistryReconciliation,
+) -> Result<CrateRegistryReconciliation, OrchestratorError> {
+    reconcile_registry_archive(
+        reader,
+        name,
+        version,
+        &expected.owners,
+        None,
+        Some(expected),
+    )
+}
+
+fn reconcile_registry_archive<R: CrateRegistryRead>(
+    reader: &R,
+    name: &str,
+    version: &str,
+    expected_owners: &[CrateRegistryOwner],
+    expected_archive: Option<&[u8]>,
+    frozen: Option<&CrateRegistryReconciliation>,
+) -> Result<CrateRegistryReconciliation, OrchestratorError> {
     validate_name_version(name, version)?;
     if expected_owners.is_empty() || read_owners(reader, name)? != expected_owners {
         return Err(internal("crate_registry_owners_mismatch"));
@@ -221,11 +255,18 @@ pub fn reconcile_crate_registry<R: CrateRegistryRead>(
     {
         return Err(internal("crate_registry_identity_invalid"));
     }
-    let expected_features = crate::release::crate_release_archive::crate_archive_features(
-        expected_archive,
-        name,
-        version,
-    )?;
+    let expected_features = if let Some(expected_archive) = expected_archive {
+        crate::release::crate_release_archive::crate_archive_features(
+            expected_archive,
+            name,
+            version,
+        )?
+    } else {
+        frozen
+            .ok_or_else(|| internal("crate_registry_checksum_missing"))?
+            .features
+            .clone()
+    };
     let mut actual_features: std::collections::BTreeMap<String, Vec<String>> =
         serde_json::from_value(item["features"].clone())
             .map_err(|_| internal("crate_registry_features_invalid"))?;
@@ -245,7 +286,17 @@ pub fn reconcile_crate_registry<R: CrateRegistryRead>(
     if archive.status != 200 {
         return Err(internal("crate_registry_archive_unavailable"));
     }
-    verify_crate_archive(expected_archive, &archive.body, name, version, checksum)?;
+    if let Some(expected_archive) = expected_archive {
+        verify_crate_archive(expected_archive, &archive.body, name, version, checksum)?;
+    } else {
+        let frozen = frozen.ok_or_else(|| internal("crate_registry_checksum_missing"))?;
+        if checksum != frozen.checksum
+            || checksum != frozen.downloaded_checksum
+            || crate::planner::generator::sha256_hex(&archive.body) != checksum
+        {
+            return Err(internal("crate_registry_checksum_mismatch"));
+        }
+    }
     Ok(CrateRegistryReconciliation {
         checksum: checksum.to_owned(),
         downloaded_checksum: crate::planner::generator::sha256_hex(&archive.body),
@@ -375,3 +426,7 @@ pub fn wait_for_crate_version<R: CrateRegistryRead>(
 #[cfg(test)]
 #[path = "crate_release_registry_tests.rs"]
 mod index_tests;
+
+#[cfg(test)]
+#[path = "crate_release_registry_revalidation_http_tests.rs"]
+mod revalidation_http_tests;

@@ -89,7 +89,12 @@ impl GitHubAdmissionRead for Fixture {
         }
         if route == format!("{repo}/actions/runs?head_sha={HEAD}&per_page=100&page=1") {
             return Ok(
-                json!({"total_count":1,"workflow_runs":[{"check_suite_id":100,"head_sha":HEAD,"path":".github/workflows/ci.yml","status":"completed","conclusion":"success"}]}),
+                json!({"total_count":1,"workflow_runs":[{"id":100,"run_number":1,"run_attempt":1,"check_suite_id":100,"head_sha":HEAD,"path":".github/workflows/ci.yml","status":"completed","conclusion":"success"}]}),
+            );
+        }
+        if route == format!("{repo}/actions/runs/100/attempts/1/jobs?per_page=100&page=1") {
+            return Ok(
+                json!({"total_count":1,"jobs":[{"id":100,"name":"Required","run_id":100,"run_attempt":1,"status":"completed","conclusion":"success","check_run_url":"https://api.github.com/repos/acme/example/check-runs/100"}]}),
             );
         }
         Err(internal("fixture_route"))

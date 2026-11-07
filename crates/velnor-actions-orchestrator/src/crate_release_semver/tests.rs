@@ -181,31 +181,6 @@ fn baseline_archive_is_bound_to_registry_identity_and_checksum()
     };
     let (bytes, observed) = download_baseline(&registry, "demo", &previous)?;
     assert_eq!(observed, checksum);
-    let input = super::checker::ProjectionInput {
-        archive: &bytes,
-        checksum: &observed,
-        package: "demo",
-        baseline_version: "0.1.0",
-        source_sha: "0123456789012345678901234567890123456789",
-        target_version: "0.1.1",
-        manifest: "Cargo.toml",
-        features: &[],
-    };
-    let (projection, files) = super::checker::supervised_projection(&input)?;
-    assert_eq!(files["Cargo.toml"].1, manifest);
-    assert_eq!(files["Cargo.lock"].1, lock);
-    assert_eq!(projection["baseline_checksum"], observed);
-    let bad_checksum = super::checker::ProjectionInput {
-        checksum: &"a".repeat(64),
-        ..input
-    };
-    assert!(super::checker::supervised_projection(&bad_checksum).is_err());
-    let bad_version = super::checker::ProjectionInput {
-        baseline_version: "0.1.1",
-        ..input
-    };
-    assert!(super::checker::supervised_projection(&bad_version).is_err());
-
     let temp = tempfile::tempdir()?;
     extract_baseline(&bytes, "demo", "0.1.0", temp.path())?;
     assert_eq!(std::fs::read(temp.path().join("Cargo.toml"))?, manifest);
@@ -237,8 +212,8 @@ fn baseline_archive_is_bound_to_registry_identity_and_checksum()
 }
 
 #[test]
-fn historical_lockless_archive_remains_bound_to_registry_checksum()
--> Result<(), Box<dyn std::error::Error>> {
+fn historical_lockless_archive_remains_usable_as_baseline() -> Result<(), Box<dyn std::error::Error>>
+{
     let encoder = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
     let mut tar = tar::Builder::new(encoder);
     let manifest = b"[package]\nname='demo'\nversion='0.1.0'\n";
@@ -258,28 +233,10 @@ fn historical_lockless_archive_remains_bound_to_registry_checksum()
         source.as_slice(),
     )?;
     let archive = tar.into_inner()?.finish()?;
-    let checksum = crate::planner::generator::sha256_hex(&archive);
-    let input = super::checker::ProjectionInput {
-        archive: &archive,
-        checksum: &checksum,
-        package: "demo",
-        baseline_version: "0.1.0",
-        source_sha: "0123456789012345678901234567890123456789",
-        target_version: "0.1.1",
-        manifest: "Cargo.toml",
-        features: &[],
-    };
-    let (context, files) = super::checker::supervised_projection(&input)?;
-    assert_eq!(context["baseline_checksum"], checksum);
-    assert_eq!(files["Cargo.toml"].1, manifest);
-    assert_eq!(files["src/lib.rs"].1, source);
-    assert!(!files.contains_key("Cargo.lock"));
-    assert!(
-        super::checker::supervised_projection(&super::checker::ProjectionInput {
-            checksum: &"a".repeat(64),
-            ..input
-        })
-        .is_err()
-    );
+    let target = tempfile::tempdir()?;
+    extract_baseline(&archive, "demo", "0.1.0", target.path())?;
+    assert_eq!(std::fs::read(target.path().join("Cargo.toml"))?, manifest);
+    assert_eq!(std::fs::read(target.path().join("src/lib.rs"))?, source);
+    assert!(!target.path().join("Cargo.lock").exists());
     Ok(())
 }

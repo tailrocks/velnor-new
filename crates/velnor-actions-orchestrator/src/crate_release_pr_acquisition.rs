@@ -327,7 +327,7 @@ mod tests {
             attempt: 1,
         };
         let repository = json!({"id":7,"full_name":"example/demo","default_branch":"main"});
-        let run = json!({"id":42,"run_attempt":1,"path":".github/workflows/crate-release.yml","event":"push","status":"in_progress","head_sha":sha,"head_branch":"main","repository":{"id":7,"full_name":"example/demo"},"head_repository":{"id":7,"full_name":"example/demo"}});
+        let run = json!({"id":42,"run_attempt":1,"path":".github/workflows/release.yml","event":"push","status":"in_progress","head_sha":sha,"head_branch":"main","repository":{"id":7,"full_name":"example/demo"},"head_repository":{"id":7,"full_name":"example/demo"}});
         let jobs = json!({"total_count":1,"jobs":[{"id":5,"name":"Release preparation","run_id":42,"run_attempt":1,"head_sha":sha,"status":"completed","conclusion":"success"}]});
         let reference = json!({"ref":"refs/heads/main","object":{"type":"commit","sha":sha}});
         assert_eq!(

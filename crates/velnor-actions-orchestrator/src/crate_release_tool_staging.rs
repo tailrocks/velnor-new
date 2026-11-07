@@ -13,8 +13,6 @@ pub struct StagedToolchain {
     intent: velnor_actions_contract::config::CrateReleaseIntent,
     authorization: crate::crate_release_github::GitHubAuthorized,
     artifact: ToolArtifactMetadata,
-    #[cfg(target_os = "linux")]
-    deadline: std::time::Instant,
 }
 
 impl StagedToolchain {
@@ -36,11 +34,6 @@ impl StagedToolchain {
     #[must_use]
     pub fn artifact(&self) -> &ToolArtifactMetadata {
         &self.artifact
-    }
-
-    #[cfg(target_os = "linux")]
-    pub(crate) fn deadline(&self) -> std::time::Instant {
-        self.deadline
     }
 }
 
@@ -127,8 +120,6 @@ pub fn stage_unverified_toolchain<
         intent: request.intent.clone(),
         authorization,
         artifact: initial,
-        #[cfg(target_os = "linux")]
-        deadline: request.deadline,
     })
 }
 

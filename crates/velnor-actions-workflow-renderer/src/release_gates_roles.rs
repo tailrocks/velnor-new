@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use super::{GIT_TOKEN_REF, is_forge_binding};
 use super::{
     ReleaseConfigBinding, ReleaseJobSpec, RenderError, Step, StepKind, check_checkout_shape,
     check_runtime_steps, forbid_inputs_interpolation, forbid_registry_token,
@@ -103,4 +104,97 @@ pub(super) fn check_preflight(
     forbid_inputs_interpolation(id, &job.steps)?;
     check_checkout_shape(id, &job.steps, job.role, sha, version)?;
     check_runtime_steps(id, job, version, None)
+}
+
+pub(super) fn check_publish(
+    id: &str,
+    job: &ReleaseJobSpec,
+    sha: &str,
+    binding: &ReleaseConfigBinding<'_>,
+) -> Result<(), RenderError> {
+    if job.timeout_minutes != velnor_actions_contract::JobTimeout::CRATE_RELEASE
+        || job.steps.first()
+            != Some(&crate::release_generator_bootstrap::acquire_step(
+                binding.generator_version,
+                &job.runs_on,
+                binding.generator_source_sha,
+                binding.generator_manifest_sha256,
+            )?)
+    {
+        return Err(RenderError::InvalidWorkflow(format!(
+            "release_publisher_identity:{id}"
+        )));
+    }
+    forbid_inputs_interpolation(id, &job.steps)?;
+    check_checkout_shape(id, &job.steps, job.role, sha, binding.generator_version)?;
+    check_runtime_steps(
+        id,
+        job,
+        binding.generator_version,
+        Some(binding.release_plz_version),
+    )?;
+    for step in &job.steps {
+        if let StepKind::Shell { run, .. } = &step.kind
+            && run.iter().any(|arg| {
+                ["allow-dirty", "allow_dirty", "no-verify", "no_verify"]
+                    .iter()
+                    .any(|token| arg.contains(token))
+            })
+        {
+            return Err(RenderError::InvalidWorkflow(format!("verify_bypass:{id}")));
+        }
+    }
+    if job.role == super::ReleaseRole::PublishOidc {
+        forbid_unexpected_secrets(id, &job.steps)?;
+        return forbid_registry_token(id, &job.steps);
+    }
+    check_bootstrap_bindings(id, job)
+}
+
+fn check_bootstrap_bindings(id: &str, job: &ReleaseJobSpec) -> Result<(), RenderError> {
+    let mut bindings = 0;
+    for step in &job.steps {
+        match &step.kind {
+            StepKind::Shell { run, env } => {
+                if run.iter().any(|arg| arg.contains("secrets.")) {
+                    return Err(RenderError::InvalidWorkflow(format!("secret_in_argv:{id}")));
+                }
+                for (key, value) in env {
+                    if !value.contains("secrets.")
+                        || is_forge_binding(key, value)
+                        || (matches!(
+                            step.name.as_str(),
+                            "Release journal-start" | "Release journal-coordinate"
+                        ) && key == "GH_TOKEN"
+                            && value == GIT_TOKEN_REF)
+                    {
+                        continue;
+                    }
+                    if step.name != "Release journal-coordinate"
+                        || key != "CARGO_REGISTRY_TOKEN"
+                        || value != "${{ secrets.CARGO_REGISTRY_TOKEN }}"
+                    {
+                        return Err(RenderError::InvalidWorkflow(format!(
+                            "bootstrap_token_binding:{id}"
+                        )));
+                    }
+                    bindings += 1;
+                }
+            }
+            StepKind::Action { with, .. }
+                if with.values().any(|value| value.contains("secrets.")) =>
+            {
+                return Err(RenderError::InvalidWorkflow(format!(
+                    "secret_in_action_input:{id}"
+                )));
+            }
+            _ => {}
+        }
+    }
+    if bindings != 1 {
+        return Err(RenderError::InvalidWorkflow(format!(
+            "bootstrap_token_binding:{id}"
+        )));
+    }
+    Ok(())
 }

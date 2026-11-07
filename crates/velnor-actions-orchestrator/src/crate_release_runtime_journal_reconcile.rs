@@ -13,7 +13,7 @@ pub(super) fn reconcile_journal_evidence(
     use crate::crate_release_controller::{CrateReleaseObservation, derive_reconciled_candidate};
     use crate::crate_release_journal::{JournalIdentity, JournalStage, inspect_journal};
     use crate::crate_release_journal_adapter::JournalAdapter;
-    let source_execution = input.upload.source_execution();
+    let source_execution = input.upload;
     let JournalRuntime {
         receipt_path,
         intent,
@@ -66,7 +66,7 @@ pub(super) fn inspect_prior_journal(input: JournalRuntime<'_>) -> Result<(), Orc
     use crate::crate_release_controller::{CrateReleaseObservation, observe_prior_recovery};
     use crate::crate_release_journal::{JournalIdentity, JournalStage, inspect_journal};
     use crate::crate_release_journal_adapter::JournalAdapter;
-    let source_execution = input.upload.source_execution();
+    let source_execution = input.upload;
     let JournalRuntime {
         receipt_path,
         intent,

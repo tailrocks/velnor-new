@@ -9,7 +9,7 @@
     missing_docs,
     reason = "documentation comments are intentionally absent from this codebase"
 )]
-pub const CRATE_RELEASE_WORKFLOW_PATH: &str = ".github/workflows/crate-release.yml";
+pub const CRATE_RELEASE_WORKFLOW_PATH: &str = ".github/workflows/release.yml";
 
 pub mod archive;
 pub mod cachekey;

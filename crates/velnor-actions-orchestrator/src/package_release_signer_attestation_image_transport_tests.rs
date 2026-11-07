@@ -22,6 +22,135 @@ const TEST: &str = crate::libtest_case::name(concat!(
 ));
 const SOURCE: &str = "a3417b150ac2f477498cadc329cdf4e23aa5b54b";
 const WORKFLOW: &str = ".github/workflows/job-image-candidate.yml";
+const HISTORICAL_TEST: &str = crate::libtest_case::name(concat!(
+    module_path!(),
+    "::historical_release_assets_use_pinned_github_transport"
+));
+
+#[test]
+fn same_base_history_rejects_forged_tool() -> Result<(), Box<dyn Error>> {
+    const SCENARIO: &str = crate::libtest_case::name(concat!(
+        module_path!(),
+        "::same_base_history_rejects_forged_tool"
+    ));
+    if std::env::var_os("VELNOR_GH_FIXTURE_WORKER").is_none() {
+        return dispatch(SCENARIO);
+    }
+    worker::validate_worker("image_attestation", Some(SCENARIO))?;
+    let fixture =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/attestation_fixtures");
+    let state = tempfile::tempdir()?;
+    let _server = Server::start_with(
+        state.path(),
+        &fixture,
+        include_str!("../tests/attestation_fixtures/historical-assets-transport.py"),
+    )?;
+    for forged in [false, true] {
+        let mut command = Command::new(std::env::current_exe()?);
+        command
+            .args([
+                "--exact",
+                "release::crate_release_runtime::tests::test_only_dispatch_and_loopback_transport",
+            ])
+            .env("VELNOR_TEST_SAME_BASE_SIGNED", "1")
+            .env("VELNOR_TEST_PINNED_GIT", "/tools/pinned-git")
+            .env(
+                "VELNOR_TEST_PINNED_GIT_HTTP",
+                "/tools/pinned-git-remote-http",
+            );
+        if forged {
+            command.env("VELNOR_TEST_FORGED_TOOL", "1");
+        }
+        let output = command.output()?;
+        assert!(
+            output.status.success(),
+            "{}{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        crate::libtest_case::assert_one_passed(&output);
+    }
+    worker::record_success("image_attestation", SCENARIO)?;
+    Ok(())
+}
+
+#[test]
+fn signed_controller_dispatch_rechecks_historical_authority() -> Result<(), Box<dyn Error>> {
+    const SCENARIO: &str = crate::libtest_case::name(concat!(
+        module_path!(),
+        "::signed_controller_dispatch_rechecks_historical_authority"
+    ));
+    if std::env::var_os("VELNOR_GH_FIXTURE_WORKER").is_none() {
+        return dispatch(SCENARIO);
+    }
+    worker::validate_worker("image_attestation", Some(SCENARIO))?;
+    let fixture =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/attestation_fixtures");
+    let state = tempfile::tempdir()?;
+    let _server = Server::start_with(
+        state.path(),
+        &fixture,
+        include_str!("../tests/attestation_fixtures/historical-assets-transport.py"),
+    )?;
+    let output = Command::new(std::env::current_exe()?)
+        .args([
+            "--exact",
+            "release::crate_release_runtime::tests::test_only_dispatch_and_loopback_transport",
+        ])
+        .env("VELNOR_TEST_SAME_BASE_SIGNED", "1")
+        .env("VELNOR_TEST_CONTROLLER_SCENARIO", "1")
+        .env("VELNOR_TEST_PINNED_GIT", "/tools/pinned-git")
+        .env(
+            "VELNOR_TEST_PINNED_GIT_HTTP",
+            "/tools/pinned-git-remote-http",
+        )
+        .output()?;
+    assert!(
+        output.status.success(),
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    crate::libtest_case::assert_one_passed(&output);
+    worker::record_success("image_attestation", SCENARIO)?;
+    Ok(())
+}
+
+#[test]
+fn historical_release_assets_use_pinned_github_transport() -> Result<(), Box<dyn Error>> {
+    if std::env::var_os("VELNOR_GH_FIXTURE_WORKER").is_none() {
+        return dispatch(HISTORICAL_TEST);
+    }
+    worker::validate_worker("image_attestation", Some(HISTORICAL_TEST))?;
+    let fixture =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/attestation_fixtures");
+    let state = tempfile::tempdir()?;
+    let _server = Server::start_with(
+        state.path(),
+        &fixture,
+        include_str!("../tests/attestation_fixtures/historical-assets-transport.py"),
+    )?;
+    let run = || {
+        crate::release::package_release_publish::read_historical_sdk_attestation_assets(
+            "0.1.5",
+            "f1041f322c54cd7edfdef06afd307799eeaa801a",
+            "e38d047150f9e0347ec2160fd65bb7f026842e6f416e456990cf3b7ccd284c52",
+            CheckDeadline::after(Duration::from_secs(90)).expect("deadline"),
+        )
+    };
+    let result = run()?;
+    assert_eq!(result.0, fs::read(fixture.join("release-manifest.json"))?);
+    assert_eq!(
+        result.1,
+        fs::read(fixture.join("release-manifest.json.intoto.jsonl"))?
+    );
+    for mode in ["missing", "duplicate", "digest", "size", "moved-tag"] {
+        fs::write(state.path().join("mode"), mode)?;
+        assert!(run().is_err(), "{mode} accepted");
+    }
+    worker::record_success("image_attestation", HISTORICAL_TEST)?;
+    Ok(())
+}
 
 #[test]
 fn real_github_transport_verifies_the_signed_record() -> Result<(), Box<dyn Error>> {
@@ -115,6 +244,18 @@ struct Server {
 
 impl Server {
     fn start(state: &std::path::Path, bundle: &std::path::Path) -> Result<Self, Box<dyn Error>> {
+        Self::start_with(
+            state,
+            bundle,
+            include_str!("../tests/attestation_fixtures/image-job/transport.py"),
+        )
+    }
+
+    fn start_with(
+        state: &std::path::Path,
+        bundle: &std::path::Path,
+        script_source: &str,
+    ) -> Result<Self, Box<dyn Error>> {
         let tls = std::env::var_os("VELNOR_GH_TEST_TLS_ROOT").ok_or("missing TLS fixture")?;
         let lock = fs::OpenOptions::new()
             .create(true)
@@ -123,10 +264,7 @@ impl Server {
             .open("/tmp/velnor-gh-fixture.lock")?;
         lock.lock()?;
         let script = state.join("transport.py");
-        fs::write(
-            &script,
-            include_str!("../tests/attestation_fixtures/image-job/transport.py"),
-        )?;
+        fs::write(&script, script_source)?;
         let mut child = Command::new("/usr/bin/python3")
             .args([
                 script.as_os_str(),

@@ -100,6 +100,12 @@ pub(crate) use start::{
     AdmittedStart, MeasuredReleaseTools, ValidatedStart, measure_release_tools,
     record_admitted_start,
 };
+
+#[cfg(any(target_os = "linux", test))]
+#[path = "package_release_signer_attestation_sdk_historical.rs"]
+mod historical;
+#[cfg(any(target_os = "linux", test))]
+pub(crate) use historical::verify_historical_tool_expectations;
 #[cfg(test)]
 use start::{derive_attested_tool_expectations, match_attested_tool_expectations};
 
@@ -223,3 +229,5 @@ mod subject_tests;
 #[cfg(test)]
 #[path = "package_release_signer_attestation_fixture_tests.rs"]
 mod fixture_tests;
+#[cfg(all(test, target_os = "linux", target_arch = "x86_64"))]
+pub(crate) use fixture_tests::verified_generator_fixture;

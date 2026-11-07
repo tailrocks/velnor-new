@@ -146,18 +146,109 @@ fn run_update_with_poisoned_environment() -> Result<(), Box<dyn std::error::Erro
 }
 
 fn tool_env() -> Vec<(OsString, OsString)> {
-    [
+    let target = std::fs::canonicalize("/tmp").expect("fixture target");
+    let home = target.parent().expect("fixture target parent");
+    let mut env: Vec<(OsString, OsString)> = [
         ("PATH", "/usr/bin:/bin"),
         ("CARGO", "/bin/true"),
         ("RUSTC", "/bin/true"),
         ("RUSTDOC", "/bin/true"),
-        ("HOME", "/tmp"),
         ("CARGO_HOME", "/tmp"),
         ("RUSTUP_HOME", "/tmp"),
     ]
     .into_iter()
     .map(|(k, v)| (k.into(), v.into()))
-    .collect()
+    .collect();
+    env.push(("HOME".into(), home.as_os_str().into()));
+    env.push(("CARGO_TARGET_DIR".into(), target.into_os_string()));
+    env
+}
+
+#[test]
+fn crate_publish_target_must_stay_outside_source() -> Result<(), Box<dyn std::error::Error>> {
+    let (_git_dir, git) = fixture_git()?;
+    let source = tempfile::tempdir()?;
+    let target = tempfile::tempdir()?;
+    let mut env = tool_env();
+    env.iter_mut()
+        .find(|(key, _)| key == "HOME")
+        .ok_or("missing home")?
+        .1 = target
+        .path()
+        .canonicalize()?
+        .parent()
+        .ok_or("target parent")?
+        .as_os_str()
+        .into();
+    env.iter_mut()
+        .find(|(key, _)| key == "CARGO_TARGET_DIR")
+        .ok_or("missing target")?
+        .1 = target.path().as_os_str().into();
+    let command = IsolatedCommand::crate_publish(
+        Path::new("/bin/sh"),
+        vec![
+            "-c".into(),
+            "printf fixture > \"$CARGO_TARGET_DIR/output\"".into(),
+        ],
+        source.path(),
+        &env,
+        "fixture_git_987",
+        CratePublishCredential::Bootstrap {
+            cargo_token: "fixture_cargo_654",
+        },
+        &git,
+    )?;
+    assert!(command.run_bounded(1024, Duration::from_secs(5))?.success);
+    assert_eq!(std::fs::read(target.path().join("output"))?, b"fixture");
+    assert!(!source.path().join("output").exists());
+    assert_target_rejections(source.path(), target.path(), &env, &git)?;
+    Ok(())
+}
+
+fn assert_target_rejections(
+    source: &Path,
+    target: &Path,
+    env: &[(OsString, OsString)],
+    git: &crate::release_git_pin::VerifiedGit,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let rejected = |env: &[(OsString, OsString)]| {
+        IsolatedCommand::crate_publish(
+            Path::new("/bin/sh"),
+            vec!["-c".into(), "true".into()],
+            source,
+            env,
+            "fixture_git_987",
+            CratePublishCredential::Bootstrap {
+                cargo_token: "fixture_cargo_654",
+            },
+            git,
+        )
+        .is_err()
+    };
+    let mut missing = env.to_vec();
+    missing.retain(|(key, _)| key != "CARGO_TARGET_DIR");
+    assert!(rejected(&missing));
+    let inside = source.join("target");
+    std::fs::create_dir(&inside)?;
+    let mut changed = env.to_vec();
+    changed
+        .iter_mut()
+        .find(|(key, _)| key == "CARGO_TARGET_DIR")
+        .ok_or("missing target")?
+        .1 = inside.as_os_str().into();
+    assert!(rejected(&changed));
+    #[cfg(unix)]
+    {
+        let link = target.join("inside-link");
+        std::os::unix::fs::symlink(&inside, &link)?;
+        changed
+            .iter_mut()
+            .find(|(key, _)| key == "CARGO_TARGET_DIR")
+            .ok_or("missing target")?
+            .1 = link.into_os_string();
+        assert!(rejected(&changed));
+    }
+    Ok(())
 }
 
 #[test]

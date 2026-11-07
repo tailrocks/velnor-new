@@ -268,7 +268,7 @@ fn release_workflow_identity_is_checked_for_push_and_dispatch()
         github.legacy_workflow.set(true);
         assert!(prepare_crate_release(&intent, &request, &github, &registry, root).is_err());
         github.legacy_workflow.set(false);
-        request.workflow_path = ".github/workflows/release.yml".into();
+        request.workflow_path = ".github/workflows/not-release.yml".into();
         assert!(prepare_crate_release(&intent, &request, &github, &registry, root).is_err());
     }
     Ok(())

@@ -215,13 +215,14 @@ fn add_reviewed_repositories(
         } else {
             vec![r.head_sha.clone()]
         };
+        values.insert(format!("{p}/actions/runs/100/attempts/1/jobs?per_page=100&page=1"), json!({"total_count":1,"jobs":[{"id":100,"name":"Required","run_id":100,"run_attempt":1,"status":"completed","conclusion":"success","check_run_url":format!("https://api.github.com/{p}/check-runs/100")}]}));
         for sha in shas {
             let check = json!({"id":100,"name":"Required","head_sha":sha,"app":{"id":15368,"slug":"github-actions"},"check_suite":{"id":100},"status":"completed","conclusion":"success","started_at":"2026-11-05T00:00:00Z"});
             values.insert(
                 format!("{p}/commits/{sha}/check-runs?filter=all&per_page=100&page=1"),
                 json!({"total_count":1,"check_runs":[check]}),
             );
-            values.insert(format!("{p}/actions/runs?head_sha={sha}&per_page=100&page=1"),json!({"total_count":1,"workflow_runs":[{"check_suite_id":100,"head_sha":sha,"path":".github/workflows/ci.yml","status":"completed","conclusion":"success"}]}));
+            values.insert(format!("{p}/actions/runs?head_sha={sha}&per_page=100&page=1"),json!({"total_count":1,"workflow_runs":[{"id":100,"run_number":1,"run_attempt":1,"check_suite_id":100,"head_sha":sha,"path":".github/workflows/ci.yml","status":"completed","conclusion":"success"}]}));
         }
     }
 }

@@ -122,25 +122,6 @@ pub fn check_release_jobs(
             }
             acquire = Some(step);
         }
-        if matches!(
-            job.role,
-            ReleaseRole::PublishOidc | ReleaseRole::PublishBootstrap
-        ) {
-            let expected = crate::release_root_publisher::publisher_step(
-                job.role == ReleaseRole::PublishBootstrap,
-                binding.generator_version,
-                binding.generator_source_sha,
-                binding.generator_manifest_sha256,
-            )?;
-            if job.timeout_minutes != velnor_actions_contract::JobTimeout::CRATE_RELEASE
-                || job.steps != [crate::release_budget::capture_step()?, expected]
-            {
-                return Err(RenderError::InvalidWorkflow(format!(
-                    "release_publisher_step:{id}"
-                )));
-            }
-            continue;
-        }
         if job.role == ReleaseRole::PrCreate {
             check_pr_writer(id, job, binding.generator_version)?;
             continue;
@@ -153,11 +134,12 @@ pub fn check_release_jobs(
             ReleaseRole::Preparation => {
                 check_preparation(id, job, &spec.plan.source_sha, binding)?;
             }
-            ReleaseRole::PrCreate | ReleaseRole::PublishOidc | ReleaseRole::PublishBootstrap => {
-                unreachable!()
-            }
+            ReleaseRole::PrCreate => unreachable!(),
             ReleaseRole::Preflight => {
                 check_preflight(id, job, ADMITTED_SOURCE, binding.generator_version)?;
+            }
+            ReleaseRole::PublishOidc | ReleaseRole::PublishBootstrap => {
+                roles::check_publish(id, job, ADMITTED_SOURCE, binding)?;
             }
             ReleaseRole::Reconcile => {
                 check_reconcile(id, job, ADMITTED_SOURCE, binding.generator_version)?;

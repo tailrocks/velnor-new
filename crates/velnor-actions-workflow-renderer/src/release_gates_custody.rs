@@ -198,16 +198,6 @@ fn check_release_tool_environment(
             && let StepKind::Shell { run, env } = &step.kind
         {
             let mut expected = expected_env.clone();
-            if matches!(
-                job.role,
-                ReleaseRole::PublishOidc | ReleaseRole::PublishBootstrap
-            ) && step.name.starts_with("Release ")
-            {
-                expected.insert(
-                    "VELNOR_RELEASE_BUDGET".to_owned(),
-                    "${{ steps.release-budget.outputs.budget }}".to_owned(),
-                );
-            }
             add_retention_env(&step.name, &mut expected);
             if step.name == "Release toolchain-acquire" {
                 expected.insert(

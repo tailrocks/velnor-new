@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::*;
+use velnor_actions_workflow_renderer::release_jobs::ReleaseRole;
 
 #[test]
 fn preparation_waits_for_negative_trusted_release_admission()
@@ -36,7 +37,6 @@ fn preparation_waits_for_negative_trusted_release_admission()
 
 #[test]
 fn crate_release_checkouts_use_attested_file_free_git() -> Result<(), Box<dyn std::error::Error>> {
-    use velnor_actions_workflow_renderer::release_jobs::ReleaseRole;
     for authentication in [
         ReleaseAuthentication::TrustedPublishing,
         ReleaseAuthentication::BootstrapToken,
@@ -49,14 +49,6 @@ fn crate_release_checkouts_use_attested_file_free_git() -> Result<(), Box<dyn st
                 .values()
                 .filter(|job| job.role != ReleaseRole::PrCreate)
             {
-                if matches!(
-                    job.role,
-                    ReleaseRole::PublishOidc | ReleaseRole::PublishBootstrap
-                ) {
-                    assert_eq!(job.steps.len(), 2);
-                    assert!(!job.steps.iter().any(|step| step.name.contains("Checkout")));
-                    continue;
-                }
                 let offset = 0;
                 assert_eq!(job.steps[offset].name, "Acquire Velnor");
                 assert_eq!(job.steps[offset + 1].name, "Checkout");

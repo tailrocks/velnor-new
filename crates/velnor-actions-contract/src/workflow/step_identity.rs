@@ -160,7 +160,6 @@ impl StepRole {
 
     pub(crate) const fn required_id(self) -> Option<StepId> {
         match self {
-            Self::ReleaseBudget => Some(StepId::ReleaseBudget),
             Self::ReleaseAdmission => Some(StepId::ReleaseAdmission),
             Self::ReleaseVerification => Some(StepId::ReleaseVerification),
             Self::ReleaseRustUpload => Some(StepId::ReleaseRustUpload),
@@ -195,7 +194,6 @@ impl StepRole {
 
     pub(crate) const fn for_id(id: StepId) -> Self {
         match id {
-            StepId::ReleaseBudget => Self::ReleaseBudget,
             StepId::ReleaseAdmission => Self::ReleaseAdmission,
             StepId::ReleaseVerification => Self::ReleaseVerification,
             StepId::ReleaseRustUpload => Self::ReleaseRustUpload,

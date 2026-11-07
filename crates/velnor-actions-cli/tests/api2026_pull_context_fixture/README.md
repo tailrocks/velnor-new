@@ -7,6 +7,12 @@ Linux executables pinned in `tools.json`, and an offline Cargo registry. CI prep
 `gh_linux_amd64` or `gh_linux_arm64` and `cargo-nextest_linux_amd64` or
 `cargo-nextest_linux_arm64` executables. Missing inputs fail the tests.
 
+The same-base release-history test runs in a Linux x86-64 container because the
+release Git bundle is pinned for that architecture. On ARM hosts, provision the
+qualified `gh_linux_amd64` and `cargo-nextest_linux_amd64` files too, and enable
+x86-64 container emulation. The fixture downloads and verifies the pinned Git
+package when the two Git executables are not already staged.
+
 For a local macOS ARM host, create a private directory and download the Linux
 ARM64 archives for the `gh_version` and `nextest_version` in `tools.json` from
 [GitHub CLI releases](https://github.com/cli/cli/releases) and

@@ -210,11 +210,6 @@ pub(crate) enum ConfigCommand {
 
 #[derive(Debug, Subcommand)]
 pub(crate) enum CrateReleaseCommand {
-    PublisherEntry {
-        #[arg(long)]
-        timeout_seconds: u32,
-    },
-    PublishSupervise,
     CheckoutPolicy,
     CheckoutSource,
     PreparePr,

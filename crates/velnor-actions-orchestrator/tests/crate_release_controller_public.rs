@@ -99,6 +99,9 @@ use historical_fixtures::{
 mod historical_authority;
 #[path = "crate_release_controller_new_crate_ownership.rs"]
 mod new_crate_ownership;
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+#[path = "crate_release_controller_signed_history.rs"]
+pub(crate) mod signed_history;
 use new_crate_ownership::journal_existing_owners;
 #[path = "crate_release_controller_creation_recovery.rs"]
 mod creation_recovery;

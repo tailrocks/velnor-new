@@ -195,7 +195,7 @@ fn check_authority(
         .env("GITHUB_REF", "refs/heads/main")
         .env(
             "GITHUB_WORKFLOW_REF",
-            "example/demo/.github/workflows/crate-release.yml@refs/heads/main",
+            "example/demo/.github/workflows/release.yml@refs/heads/main",
         )
         .env("GITHUB_WORKFLOW_SHA", authority_b)
         .env("GITHUB_RUN_ID", "1")
@@ -312,7 +312,7 @@ fn recovery_generation_and_qualification_use_historical_source_not_current_check
     let files = release::release_files_for_config(&prep, &mise, release_config)?;
     let workflow = files
         .iter()
-        .find(|file| file.path == ".github/workflows/crate-release.yml")
+        .find(|file| file.path == ".github/workflows/release.yml")
         .ok_or("workflow missing")?;
     assert!(workflow.bytes.contains(&source_a));
     assert!(workflow.bytes.contains(&source_lock.group));

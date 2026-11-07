@@ -4,8 +4,9 @@
 use super::{
     BTreeMap, JobParts, JobPermissions, JobTimeout, OrchestratorError, RUST_ARCHIVE, RUST_ARTIFACT,
     ReleaseJobSpec, ReleaseRole, Step, StepId, StepRole, UPLOAD_ARTIFACT_USES, action_step,
-    conditional, controller_step, receipt_step, upload_record_step,
+    ambient_shell_step, conditional, controller_step, receipt_step, upload_record_step,
 };
+use velnor_actions_contract::StepKind;
 
 fn common_source_steps(
     parts: &JobParts<'_>,
@@ -95,15 +96,37 @@ pub(super) fn preflight_job(parts: &JobParts<'_>) -> Result<ReleaseJobSpec, Orch
 }
 
 fn publish_steps(parts: &JobParts<'_>, bootstrap: bool) -> Result<Vec<Step>, OrchestratorError> {
-    Ok(vec![
-        velnor_actions_workflow_renderer::release_budget::capture_step()?,
-        velnor_actions_workflow_renderer::release_root_publisher::publisher_step(
-            bootstrap,
-            parts.generator_version,
-            parts.generator_source_sha,
-            parts.generator_manifest_sha256,
-        )?,
-    ])
+    let mut steps = common_source_steps(parts, true)?;
+    steps.push(conditional(parts.semver.clone()));
+    steps.push(controller_step(parts, "receipt-acquire")?);
+    steps.push(controller_step(parts, "verify-admission")?);
+    let coordinate = velnor_actions_workflow_renderer::release_gates::COORDINATE_CONDITION;
+    let mut reject = ambient_shell_step(
+        "Reject unsupported release action",
+        vec!["false".into()],
+        BTreeMap::new(),
+    )?;
+    reject.condition =
+        Some(velnor_actions_workflow_renderer::release_gates::REJECT_MODE_CONDITION.into());
+    steps.push(reject);
+    let mut release_plz = parts.release_plz.clone();
+    release_plz.condition = Some(coordinate.into());
+    steps.push(release_plz);
+    for operation in ["journal-start", "journal-coordinate"] {
+        let mut step = controller_step(parts, operation)?;
+        step.condition = Some(coordinate.into());
+        if let StepKind::Shell { env, .. } = &mut step.kind {
+            env.insert("GH_TOKEN".into(), "${{ secrets.GITHUB_TOKEN }}".into());
+            if bootstrap && operation == "journal-coordinate" {
+                env.insert(
+                    "CARGO_REGISTRY_TOKEN".into(),
+                    "${{ secrets.CARGO_REGISTRY_TOKEN }}".into(),
+                );
+            }
+        }
+        steps.push(step);
+    }
+    Ok(steps)
 }
 
 pub(super) fn publish_job(parts: &JobParts<'_>) -> Result<ReleaseJobSpec, OrchestratorError> {

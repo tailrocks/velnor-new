@@ -47,7 +47,7 @@ fn rendered_workflow_has_one_hosted_environment_publisher() -> Result<(), Box<dy
     assert!(!workflow.contains("release-publish-bootstrap:"));
     assert!(!workflow.contains("secrets.CARGO_REGISTRY_TOKEN"));
     assert!(!workflow.contains("release-plz release"));
-    assert!(workflow.contains("Publish approved Rust crate"));
+    assert!(workflow.contains("Release journal-coordinate"));
     let publisher = spec.jobs.get("release-publish").ok_or("publisher")?;
     assert_eq!(publisher.runs_on, "ubuntu-26.04");
     assert_eq!(publisher.environment.as_deref(), Some("release"));
@@ -58,15 +58,12 @@ fn rendered_workflow_has_one_hosted_environment_publisher() -> Result<(), Box<dy
         publisher.condition.as_deref(),
         Some(publish_gate_condition("owner/project", "main", &spec.plan).as_str())
     );
+    assert_eq!(publisher.steps[0].name, "Acquire Velnor");
     assert_eq!(
-        publisher
-            .steps
-            .iter()
-            .map(|step| step.name.as_str())
-            .collect::<Vec<_>>(),
-        ["Capture release budget", "Publish approved Rust crate"]
+        publisher.steps.last().map(|step| step.name.as_str()),
+        Some("Release journal-coordinate")
     );
-    assert!(publisher.steps[1].condition.is_none());
+    assert!(publisher.steps[0].condition.is_none());
     assert!(workflow.contains("id-token: write"));
     assert!(
         workflow.contains("needs: release-preflight") || workflow.contains("- release-preflight")
@@ -90,7 +87,7 @@ fn rendered_bootstrap_has_only_token_publisher() -> Result<(), Box<dyn std::erro
     assert!(!workflow.contains("release-publish:"));
     assert!(workflow.contains("secrets.CARGO_REGISTRY_TOKEN"));
     assert!(!workflow.contains("release-plz release"));
-    assert!(workflow.contains("Publish approved Rust crate"));
+    assert!(workflow.contains("Release journal-coordinate"));
     let publisher = spec
         .jobs
         .get("release-publish-bootstrap")
@@ -110,7 +107,7 @@ fn rendered_bootstrap_has_only_token_publisher() -> Result<(), Box<dyn std::erro
                     .any(|value| value.contains("secrets.CARGO_REGISTRY_TOKEN"))
             {
                 assert_eq!(id, "release-publish-bootstrap");
-                assert_eq!(step.name, "Publish approved Rust crate");
+                assert_eq!(step.name, "Release journal-coordinate");
             }
         }
     }
