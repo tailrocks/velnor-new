@@ -68,8 +68,7 @@ pub(super) fn observe(request: SelfStorageRequest) -> Result<SelfStorageObservat
 }
 
 fn source_revision() -> Result<String, ProbeError> {
-    let value = option_env!("VELNOR_SOURCE_REVISION")
-        .or(option_env!("VELNOR_SOURCE_SHA"))
+    let value = option_env!("VELNOR_SOURCE_SHA")
         .ok_or(ProbeError::Invalid("helper_source_revision_missing"))?;
     if value.len() != 40
         || !value

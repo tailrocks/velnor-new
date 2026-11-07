@@ -31,15 +31,6 @@ readonly inspect_json="$workdir/loaded-inspect.json"
 mkdir -m 0755 "$context" "$smoke_root"
 trap 'rm -rf "$workdir"' EXIT
 
-if [[ -n "${VELNOR_TOOL_RUST-}" ]] && command -v mise >/dev/null 2>&1; then
-  VELNOR_SOURCE_REVISION="$source_sha" VELNOR_SOURCE_SHA="$source_sha" \
-    mise --no-config --no-env --no-hooks exec "rust@${VELNOR_TOOL_RUST}" -- \
-    cargo build --manifest-path crates/velnor-runner/Cargo.toml --locked --release --target x86_64-unknown-linux-musl -p velnor-resource-probe --bin velnor-resource-probe --bin velnor-storage-init --bin velnor-job-start-hook
-else
-  VELNOR_SOURCE_REVISION="$source_sha" VELNOR_SOURCE_SHA="$source_sha" \
-    cargo build --manifest-path crates/velnor-runner/Cargo.toml --locked --release --target x86_64-unknown-linux-musl -p velnor-resource-probe --bin velnor-resource-probe --bin velnor-storage-init --bin velnor-job-start-hook
-fi
-
 cp "$target_dir/x86_64-unknown-linux-musl/release/velnor-resource-probe" "$context/resource-probe"
 cp images/resource-probe/Dockerfile "$context/Dockerfile"
 chmod 0555 "$context/resource-probe"
@@ -62,6 +53,13 @@ docker image inspect --platform linux/amd64 "$image" > "$inspect_json"
 
 if docker image inspect --platform linux/amd64 velnor-runner:linux-amd64 >/dev/null 2>&1 \
   && docker image inspect --platform linux/amd64 velnor-dind:linux-amd64 >/dev/null 2>&1; then
+  if [[ ! -x "$target_dir/x86_64-unknown-linux-musl/release/velnor-storage-init" || ! -x "$target_dir/x86_64-unknown-linux-musl/release/velnor-job-start-hook" ]]; then
+    if [[ -n "${VELNOR_TOOL_RUST-}" ]] && command -v mise >/dev/null 2>&1; then
+      mise --no-config --no-env --no-hooks exec "rust@${VELNOR_TOOL_RUST}" -- cargo build --manifest-path crates/velnor-runner/Cargo.toml --locked --release --target x86_64-unknown-linux-musl -p velnor-resource-probe --bin velnor-storage-init --bin velnor-job-start-hook
+    else
+      cargo build --manifest-path crates/velnor-runner/Cargo.toml --locked --release --target x86_64-unknown-linux-musl -p velnor-resource-probe --bin velnor-storage-init --bin velnor-job-start-hook
+    fi
+  fi
   stage_root="$workdir/stages"
   mkdir -m 0755 \
     "$stage_root" \

@@ -94,7 +94,7 @@ fn build_inbox_binding(
         true,
         fs,
     );
-    inbox_dir.mount_source = mount_source.to_owned();
+    mount_source.clone_into(&mut inbox_dir.mount_source);
     inbox_dir.mount_device_major = 0;
     inbox_dir.mount_device_minor = 38;
     inbox_dir.statx_device_major = 0;
