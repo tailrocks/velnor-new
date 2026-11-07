@@ -195,7 +195,7 @@ fn host_matches(projection: &ProbeProjection, response: &ContainerInspectRespons
         && actual.cgroupns_mode == Some(HostConfigCgroupnsModeEnum::HOST)
         && actual.pid_mode.as_deref() == Some("host")
         && actual.cap_drop.as_deref() == Some(["ALL".to_owned()].as_slice())
-        && actual.cap_add.as_ref().is_none_or(Vec::is_empty)
+        && cap_add_matches(projection.purpose, actual.cap_add.as_deref())
         && security_opt_matches(actual.security_opt.as_deref())
         && actual.devices.as_ref().is_none_or(Vec::is_empty)
         && actual.device_requests.as_ref().is_none_or(Vec::is_empty)
@@ -241,6 +241,25 @@ fn expected_bind(mount: &bollard::models::Mount, source: &str, target: &str) -> 
 
 fn no_resource_limit(value: Option<i64>) -> bool {
     value.is_none_or(|value| value == 0)
+}
+
+fn cap_add_matches(
+    purpose: crate::journal::ResourceProbePurpose,
+    cap_add: Option<&[String]>,
+) -> bool {
+    match purpose {
+        crate::journal::ResourceProbePurpose::Capacity => cap_add.is_none_or(<[String]>::is_empty),
+        crate::journal::ResourceProbePurpose::OwnedCgroups
+        | crate::journal::ResourceProbePurpose::CleanupObserver => match cap_add {
+            Some([first, second]) => {
+                let first = first.strip_prefix("CAP_").unwrap_or(first);
+                let second = second.strip_prefix("CAP_").unwrap_or(second);
+                (first == "DAC_READ_SEARCH" && second == "SYS_PTRACE")
+                    || (first == "SYS_PTRACE" && second == "DAC_READ_SEARCH")
+            }
+            _ => false,
+        },
+    }
 }
 
 fn security_opt_matches(security_opt: Option<&[String]>) -> bool {

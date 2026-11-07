@@ -45,7 +45,7 @@ pub(super) fn config(
     );
     ContainerCreateBody {
         image: Some(image.runtime_id.clone()),
-        user: Some(PROBE_USER.to_owned()),
+        user: Some(purpose_config.user.to_owned()),
         env: None,
         entrypoint: None,
         working_dir: None,
@@ -57,7 +57,7 @@ pub(super) fn config(
         attach_stderr: Some(false),
         tty: Some(false),
         network_disabled: Some(true),
-        host_config: Some(host_config(root)),
+        host_config: Some(host_config(root, purpose_config.cap_add)),
         cmd: purpose_config.cmd,
         ..Default::default()
     }
@@ -66,6 +66,8 @@ pub(super) fn config(
 struct PurposeConfig<'a> {
     purpose_label: Option<&'static str>,
     request_sha256: Option<&'a str>,
+    user: &'static str,
+    cap_add: Option<Vec<String>>,
     attach_stdin: bool,
     open_stdin: bool,
     stdin_once: bool,
@@ -74,18 +76,28 @@ struct PurposeConfig<'a> {
 
 impl<'a> PurposeConfig<'a> {
     fn for_purpose(purpose: ResourceProbePurpose, request_sha256: &'a str) -> Self {
-        let (purpose_label, accepts_input, mode) = match purpose {
-            ResourceProbePurpose::Capacity => (None, false, None),
-            ResourceProbePurpose::OwnedCgroups => {
-                (Some("owned-cgroups"), true, Some("owned_container_cgroup"))
-            }
-            ResourceProbePurpose::CleanupObserver => {
-                (Some("cleanup-observer"), true, Some("cleanup_observer"))
-            }
+        let (purpose_label, accepts_input, mode, user, cap_add) = match purpose {
+            ResourceProbePurpose::Capacity => (None, false, None, PROBE_USER, None),
+            ResourceProbePurpose::OwnedCgroups => (
+                Some("owned-cgroups"),
+                true,
+                Some("owned_container_cgroup"),
+                "0:0",
+                Some(vec!["DAC_READ_SEARCH".to_owned(), "SYS_PTRACE".to_owned()]),
+            ),
+            ResourceProbePurpose::CleanupObserver => (
+                Some("cleanup-observer"),
+                true,
+                Some("cleanup_observer"),
+                "0:0",
+                Some(vec!["DAC_READ_SEARCH".to_owned(), "SYS_PTRACE".to_owned()]),
+            ),
         };
         Self {
             purpose_label,
             request_sha256: purpose_label.map(|_| request_sha256),
+            user,
+            cap_add,
             attach_stdin: accepts_input,
             open_stdin: accepts_input,
             stdin_once: accepts_input,
@@ -94,9 +106,10 @@ impl<'a> PurposeConfig<'a> {
     }
 }
 
-fn host_config(root: &DockerRoot) -> HostConfig {
+fn host_config(root: &DockerRoot, cap_add: Option<Vec<String>>) -> HostConfig {
     HostConfig {
         auto_remove: Some(false),
+        cap_add,
         cap_drop: Some(vec!["ALL".to_owned()]),
         cgroupns_mode: Some(HostConfigCgroupnsModeEnum::HOST),
         cpu_period: Some(PROBE_CPU_PERIOD),
