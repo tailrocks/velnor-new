@@ -45,13 +45,19 @@ fn bootstrap_creation_cannot_include_undeclared_packages() -> Result<(), Box<dyn
 #[test]
 fn release_rejects_more_packages_than_intent_supports() -> Result<(), Box<dyn std::error::Error>> {
     use velnor_actions_contract::config::RustReleaseConfig;
-    let packages: Vec<String> = (0..65).map(|n| format!("package-{n:02}")).collect();
-    let input = serde_json::json!({"enabled":true,"registry":"crates-io","packages":packages,"required_workflow_path":".github/workflows/ci.yml","trusted_reviewer_id":1});
-    assert!(
-        serde_json::from_value::<RustReleaseConfig>(input)?
-            .validate("test")
-            .is_err()
-    );
+    for registry in ["crates-io", "git-tag"] {
+        for (count, accepted) in [(64, true), (65, false)] {
+            let packages: Vec<String> = (0..count).map(|n| format!("package-{n:02}")).collect();
+            let input = serde_json::json!({"enabled":true,"registry":registry,"packages":packages,"required_workflow_path":".github/workflows/ci.yml","trusted_reviewer_id":1});
+            assert_eq!(
+                serde_json::from_value::<RustReleaseConfig>(input)?
+                    .validate("test")
+                    .is_ok(),
+                accepted,
+                "registry={registry}, count={count}"
+            );
+        }
+    }
     Ok(())
 }
 
@@ -116,6 +122,7 @@ fn crate_tag_templates_preserve_only_placeholder_whitespace()
             "accepted {template:?}"
         );
     }
+    assert_git_tag_ref_templates()?;
     Ok(())
 }
 
@@ -147,6 +154,55 @@ fn version_group_keys_are_not_limited_as_crate_names() -> Result<(), Box<dyn std
     value["version_groups"][&group] = serde_json::json!(["a".repeat(65)]);
     assert!(
         serde_json::from_value::<RustReleaseConfig>(value)?
+            .validate("test")
+            .is_err()
+    );
+    Ok(())
+}
+
+fn assert_git_tag_ref_templates() -> Result<(), Box<dyn std::error::Error>> {
+    use velnor_actions_contract::config::RustReleaseConfig;
+    let base = serde_json::json!({"enabled":true,"registry":"git-tag","packages":["demo"]});
+    for (template, accepted) in [
+        ("{{ package }}-v{{ version }}", true),
+        ("release/{{package}}-v{{version}}", true),
+        (" {{package}}-v{{version}}", false),
+        ("{{package}} -v{{version}}", false),
+        ("{{package}}-v{{version}} ", false),
+        ("{{package}}-v{{version}}.", false),
+        ("{{package}}-v{{version}}.lock", false),
+        ("release//{{package}}-v{{version}}", false),
+        ("release/.hidden/{{package}}-v{{version}}", false),
+    ] {
+        let mut input = base.clone();
+        input["tag_name"] = template.into();
+        assert_eq!(
+            serde_json::from_value::<RustReleaseConfig>(input)?
+                .validate("test")
+                .is_ok(),
+            accepted,
+            "{template}"
+        );
+        for version in ["1.2.3", "1.2.3-rc.1", "1.2.3+build.7"] {
+            let concrete = template
+                .replace("{{package}}", "demo")
+                .replace("{{ package }}", "demo")
+                .replace("{{version}}", version)
+                .replace("{{ version }}", version);
+            assert_eq!(
+                std::process::Command::new("git")
+                    .args(["check-ref-format", &format!("refs/tags/{concrete}")])
+                    .status()?
+                    .success(),
+                accepted,
+                "{concrete}"
+            );
+        }
+    }
+    let mut unknown = base;
+    unknown["tag_name"] = "{{package}}-v{{version}}-{{unknown}}".into();
+    assert!(
+        serde_json::from_value::<RustReleaseConfig>(unknown)?
             .validate("test")
             .is_err()
     );

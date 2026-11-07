@@ -97,6 +97,9 @@ pub(super) fn validate_tag_name(file: &str, tag: &str) -> Result<(), ContractErr
             format!("bad_charset:{tag}"),
         ));
     }
+    if !valid_tag_reference_template(tag) {
+        return Err(ContractError::config(file, key, "invalid_git_reference"));
+    }
     if is_stable_tag_name(tag) {
         return Ok(());
     }
@@ -111,6 +114,27 @@ pub(super) fn validate_tag_name(file: &str, tag: &str) -> Result<(), ContractErr
         return Err(ContractError::config(file, key, "missing_version_var"));
     }
     Ok(())
+}
+
+fn valid_tag_reference_template(mut template: &str) -> bool {
+    let mut rendered = String::from("refs/tags/");
+    while let Some((literal, remainder)) = template.split_once("{{") {
+        rendered.push_str(literal);
+        let Some((variable, tail)) = remainder.split_once("}}") else {
+            return false;
+        };
+        rendered.push_str(match variable.trim_matches(' ') {
+            "package" => "package",
+            "version" => "1.2.3",
+            _ => return false,
+        });
+        template = tail;
+    }
+    if template.contains(['{', '}']) {
+        return false;
+    }
+    rendered.push_str(template);
+    crate::vcs::is_valid_git_ref_name(&rendered)
 }
 
 pub(super) fn is_stable_tag_name(tag: &str) -> bool {

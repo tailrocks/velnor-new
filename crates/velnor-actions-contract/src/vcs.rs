@@ -36,7 +36,7 @@ impl VcsInputs {
     }
 }
 
-fn is_valid_git_ref_name(value: &str) -> bool {
+pub(crate) fn is_valid_git_ref_name(value: &str) -> bool {
     let bytes = value.as_bytes();
     if value.is_empty() || value == "@" || !value.contains('/') {
         return false;

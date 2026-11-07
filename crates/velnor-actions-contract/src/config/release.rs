@@ -196,9 +196,7 @@ impl RustReleaseConfig {
             self.enabled,
             self.publishable_workspace,
         )?;
-        if self.registry == ReleaseRegistry::CratesIo
-            && self.packages.len() > MAX_CRATE_RELEASE_PACKAGES
-        {
+        if self.packages.len() > MAX_CRATE_RELEASE_PACKAGES {
             return Err(ContractError::config(
                 file,
                 "stacks.rust.release.packages",
