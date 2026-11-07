@@ -207,15 +207,37 @@ fn verify_signed_generator_fixture() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+fn seed_pending_upload(
+    journal: &crate::crate_release_journal_adapter::JournalAdapter<
+        crate::crate_release_github::NativeGitHubAdmissionRead,
+    >,
+    prior: &JournalReceipt,
+) -> Result<(), Box<dyn std::error::Error>> {
+    use crate::crate_release_journal::{
+        JournalIntendedMutation, JournalMutationKind, fixture_storage::seed_started_record,
+    };
+    seed_started_record(journal, &prior.identity, prior)?;
+    crate::crate_release_journal::record_journal_intent(
+        journal,
+        &prior.identity,
+        prior,
+        &JournalIntendedMutation {
+            sequence: 1,
+            package: "demo".into(),
+            version: "0.1.1".into(),
+            kind: JournalMutationKind::Upload,
+            semver_evidence: prior.semver_evidence.get("demo").cloned(),
+        },
+    )?;
+    Ok(())
+}
+
 fn exercise_interrupted_journal(
     prior: &JournalReceipt,
     current: &JournalReceipt,
     request: &GitHubAdmissionRequest,
     github: &crate::crate_release_github::NativeGitHubAdmissionRead,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    use crate::crate_release_journal::{
-        JournalIntendedMutation, JournalMutationKind, fixture_storage::seed_started_record,
-    };
     let root = std::path::PathBuf::from(std::env::var("GITHUB_WORKSPACE")?).join("release-source");
     let bundle = std::path::PathBuf::from(std::env::var("RUNNER_TEMP")?).join("velnor/git-bundle");
     let git = crate::crate_release_git::ReleaseGit::new(
@@ -240,19 +262,7 @@ fn exercise_interrupted_journal(
     let journal = crate::crate_release_journal_adapter::JournalAdapter::new(
         crate::crate_release_github::NativeGitHubAdmissionRead::new("fixture".into())?,
     );
-    seed_started_record(&journal, &prior.identity, &prior)?;
-    crate::crate_release_journal::record_journal_intent(
-        &journal,
-        &prior.identity,
-        &prior,
-        &JournalIntendedMutation {
-            sequence: 1,
-            package: "demo".into(),
-            version: "0.1.1".into(),
-            kind: JournalMutationKind::Upload,
-            semver_evidence: prior.semver_evidence.get("demo").cloned(),
-        },
-    )?;
+    seed_pending_upload(&journal, &prior)?;
     let edge = crate::crate_release_journal::PriorTransition { request, github };
     let result = crate::crate_release_journal::inspect_prior_chain_with(
         &journal,
