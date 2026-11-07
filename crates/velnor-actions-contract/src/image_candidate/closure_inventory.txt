@@ -1534,12 +1534,14 @@ crates/velnor-actions-workflow-renderer/src/publish_render.rs
 crates/velnor-actions-workflow-renderer/src/publish_roles.rs
 crates/velnor-actions-workflow-renderer/src/publish_scripts.rs
 crates/velnor-actions-workflow-renderer/src/publish_spec.rs
+crates/velnor-actions-workflow-renderer/src/release_bootstrap_payload.py
 crates/velnor-actions-workflow-renderer/src/release_bootstrap_watch.py
 crates/velnor-actions-workflow-renderer/src/release_budget.py
 crates/velnor-actions-workflow-renderer/src/release_budget.rs
 crates/velnor-actions-workflow-renderer/src/release_checkout_gates.rs
 crates/velnor-actions-workflow-renderer/src/release_config.rs
 crates/velnor-actions-workflow-renderer/src/release_coordinator_exec.py
+crates/velnor-actions-workflow-renderer/src/release_export_contract.py
 crates/velnor-actions-workflow-renderer/src/release_forge_broker.py
 crates/velnor-actions-workflow-renderer/src/release_gates.rs
 crates/velnor-actions-workflow-renderer/src/release_gates_custody.rs
@@ -1556,8 +1558,12 @@ crates/velnor-actions-workflow-renderer/src/release_launcher_watch.py
 crates/velnor-actions-workflow-renderer/src/release_lock.rs
 crates/velnor-actions-workflow-renderer/src/release_manager_bus.py
 crates/velnor-actions-workflow-renderer/src/release_manager_lifecycle.py
+crates/velnor-actions-workflow-renderer/src/release_manager_policy.py
+crates/velnor-actions-workflow-renderer/src/release_manager_policy_files.py
+crates/velnor-actions-workflow-renderer/src/release_manager_policy_host.py
 crates/velnor-actions-workflow-renderer/src/release_permissions.rs
 crates/velnor-actions-workflow-renderer/src/release_plz_acquire.rs
+crates/velnor-actions-workflow-renderer/src/release_privileged_modules.rs
 crates/velnor-actions-workflow-renderer/src/release_publish_entry.py
 crates/velnor-actions-workflow-renderer/src/release_publish_first_stage.py
 crates/velnor-actions-workflow-renderer/src/release_rehearsal.rs
