@@ -1575,6 +1575,7 @@ crates/velnor-actions-workflow-renderer/src/release_rehearsal_witness.sh
 crates/velnor-actions-workflow-renderer/src/release_spec.rs
 crates/velnor-actions-workflow-renderer/src/release_tree.rs
 crates/velnor-actions-workflow-renderer/src/release_tree_paths.rs
+crates/velnor-actions-workflow-renderer/src/release_tree_validation.rs
 crates/velnor-actions-workflow-renderer/src/release_validators.rs
 crates/velnor-actions-workflow-renderer/src/render.rs
 crates/velnor-actions-workflow-renderer/src/render_action_pins.rs

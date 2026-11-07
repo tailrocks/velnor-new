@@ -98,3 +98,19 @@ pub(crate) fn git_tag_release(
     }
     Ok(enabled_release(prep)?.filter(|release| release.registry == ReleaseRegistry::GitTag))
 }
+pub(super) fn release_qualification(
+    intent: &velnor_actions_contract::config::CrateReleaseIntent,
+) -> Option<velnor_actions_workflow_renderer::crate_oidc_qualification::OidcQualificationSpec> {
+    intent.oidc_qualification.then(|| {
+        velnor_actions_workflow_renderer::crate_oidc_qualification::OidcQualificationSpec {
+            repository: intent.repository.clone(),
+            default_branch: intent.default_branch.clone(),
+            environment: intent.environment.clone(),
+            required_workflow_path: intent.required_workflow_path.clone(),
+            trusted_reviewer_id: intent.trusted_reviewer_id,
+            generator_version: intent.generator_version.clone(),
+            generator_source_sha: intent.generator_source_sha.clone(),
+            generator_manifest_sha256: intent.generator_manifest_sha256.clone(),
+        }
+    })
+}

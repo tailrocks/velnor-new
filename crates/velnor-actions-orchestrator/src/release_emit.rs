@@ -21,7 +21,7 @@ use crate::release::release_steps::{JobInputs, assemble_jobs};
 #[path = "release_emit_config.rs"]
 pub(super) mod config;
 pub(crate) use config::{enabled_release, git_tag_release};
-use config::{plz_config, release_render_context};
+use config::{plz_config, release_qualification, release_render_context};
 
 #[path = "release_emit_plan.rs"]
 mod plan;
@@ -124,18 +124,7 @@ fn release_files_for_config(
         bootstrap_environment: release.environment.clone(),
         journal_predecessor: release.journal_predecessor.clone(),
         new_crates: release.new_crates.clone(),
-        qualification: intent.oidc_qualification.then(|| {
-            velnor_actions_workflow_renderer::crate_oidc_qualification::OidcQualificationSpec {
-                repository: intent.repository.clone(),
-                default_branch: intent.default_branch.clone(),
-                environment: intent.environment.clone(),
-                required_workflow_path: intent.required_workflow_path.clone(),
-                trusted_reviewer_id: intent.trusted_reviewer_id,
-                generator_version: intent.generator_version.clone(),
-                generator_source_sha: intent.generator_source_sha.clone(),
-                generator_manifest_sha256: intent.generator_manifest_sha256.clone(),
-            }
-        }),
+        qualification: release_qualification(&intent),
         release_plz_version: catalog
             .version(velnor_actions_mise::PinnedTool::ReleasePlz)
             .to_owned(),
