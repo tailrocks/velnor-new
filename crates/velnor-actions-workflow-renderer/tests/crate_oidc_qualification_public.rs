@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeMap;
+
 use velnor_actions_workflow_renderer::crate_oidc_qualification::OidcQualificationSpec;
 use velnor_actions_workflow_renderer::yaml::{Yaml, render_yaml};
 
@@ -39,7 +41,7 @@ fn intent() -> velnor_actions_contract::config::CrateReleaseIntent {
         registry: "crates-io".into(),
         packages: vec!["example".into()],
         publish_features: [("example".into(), vec![])].into(),
-        version_groups: Default::default(),
+        version_groups: BTreeMap::default(),
         new_crates: None,
         tag_template: "{{ package }}-v{{ version }}".into(),
         recovery: None,
@@ -48,15 +50,15 @@ fn intent() -> velnor_actions_contract::config::CrateReleaseIntent {
     }
 }
 
-fn field<'a>(value: &'a Yaml, key: &str) -> &'a Yaml {
+fn field<'a>(value: &'a Yaml, key: &str) -> Result<&'a Yaml, &'static str> {
     let Yaml::Map(fields) = value else {
-        panic!("expected map")
+        return Err("expected map");
     };
-    &fields
+    fields
         .iter()
         .find(|(name, _)| name == key)
-        .expect("field")
-        .1
+        .map(|(_, value)| value)
+        .ok_or("missing field")
 }
 
 #[test]
@@ -71,9 +73,9 @@ fn fixed_probe_runs_only_after_admission_in_protected_job() -> Result<(), Box<dy
     assert!(!text.contains("actions/checkout"));
     assert!(!text.contains("release-plz"));
     assert!(!text.contains("contents: write"));
-    assert_eq!(field(&job, "environment"), &Yaml::str("release"));
-    let Yaml::Seq(steps) = field(&job, "steps") else {
-        panic!("expected steps")
+    assert_eq!(field(&job, "environment")?, &Yaml::str("release"));
+    let Yaml::Seq(steps) = field(&job, "steps")? else {
+        return Err("expected steps".into());
     };
     assert_eq!(steps.len(), 3);
     let admission = render_yaml(&steps[1]);
@@ -156,7 +158,7 @@ fn rejects_every_structural_mutation_of_qualification_jobs()
         repository: "owner/project".into(),
         source_sha: "a".repeat(40),
         registry: "crates-io".into(),
-        packages: Default::default(),
+        packages: BTreeMap::default(),
         version: Some("0.1.1".into()),
         dispatch: true,
         qualification_dispatch:
@@ -189,7 +191,7 @@ fn rejects_dispatch_with_mismatched_release_inputs() -> Result<(), Box<dyn std::
         repository: "owner/project".into(),
         source_sha: "a".repeat(40),
         registry: "crates-io".into(),
-        packages: Default::default(),
+        packages: BTreeMap::default(),
         version: Some("0.1.1".into()),
         dispatch: true,
         qualification_dispatch:

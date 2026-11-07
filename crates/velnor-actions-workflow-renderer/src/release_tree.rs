@@ -284,6 +284,41 @@ pub fn render_release_files(
     config: &ReleasePlzConfig,
     intent: &velnor_actions_contract::config::CrateReleaseIntent,
 ) -> Result<ReleaseFiles, RenderError> {
+    validate_release_intent(spec, ctx, config, intent)?;
+    let workflow = render_release_workflow(spec, ctx, &intent.rust_version)?;
+    let normal = render_release_plz_config(config, &ctx.generator_version)?;
+    let intent_text = toml::to_string_pretty(intent)
+        .map_err(|err| RenderError::InvalidWorkflow(format!("intent_toml:{err}")))?;
+    let intent_text = marker::with_marker(&ctx.generator_version, &intent_text)?;
+    if intent_text.len() > velnor_actions_contract::config::MAX_CRATE_RELEASE_INTENT_BYTES {
+        return Err(RenderError::InvalidWorkflow(
+            "release_intent_too_large".to_owned(),
+        ));
+    }
+    let files = ReleaseFiles {
+        workflow: RenderedFile {
+            path: CRATE_RELEASE_WORKFLOW_PATH.to_owned(),
+            bytes: workflow,
+        },
+        config: RenderedFile {
+            path: RELEASE_CONFIG_PATH.to_owned(),
+            bytes: normal,
+        },
+        intent: RenderedFile {
+            path: RELEASE_INTENT_PATH.to_owned(),
+            bytes: intent_text,
+        },
+    };
+    check_release_paths(&files)?;
+    Ok(files)
+}
+
+fn validate_release_intent(
+    spec: &ReleaseWorkflowSpec,
+    ctx: &ReleaseRenderContext,
+    config: &ReleasePlzConfig,
+    intent: &velnor_actions_contract::config::CrateReleaseIntent,
+) -> Result<(), RenderError> {
     intent.validate().map_err(RenderError::Contract)?;
     if intent.oidc_qualification != spec.qualification.is_some()
         || intent.oidc_qualification
@@ -339,32 +374,7 @@ pub fn render_release_files(
             "release_intent_mismatch".to_owned(),
         ));
     }
-    let workflow = render_release_workflow(spec, ctx, &intent.rust_version)?;
-    let normal = render_release_plz_config(config, &ctx.generator_version)?;
-    let intent_text = toml::to_string_pretty(intent)
-        .map_err(|err| RenderError::InvalidWorkflow(format!("intent_toml:{err}")))?;
-    let intent_text = marker::with_marker(&ctx.generator_version, &intent_text)?;
-    if intent_text.len() > velnor_actions_contract::config::MAX_CRATE_RELEASE_INTENT_BYTES {
-        return Err(RenderError::InvalidWorkflow(
-            "release_intent_too_large".to_owned(),
-        ));
-    }
-    let files = ReleaseFiles {
-        workflow: RenderedFile {
-            path: CRATE_RELEASE_WORKFLOW_PATH.to_owned(),
-            bytes: workflow,
-        },
-        config: RenderedFile {
-            path: RELEASE_CONFIG_PATH.to_owned(),
-            bytes: normal,
-        },
-        intent: RenderedFile {
-            path: RELEASE_INTENT_PATH.to_owned(),
-            bytes: intent_text,
-        },
-    };
-    check_release_paths(&files)?;
-    Ok(files)
+    Ok(())
 }
 
 fn release_features_match(

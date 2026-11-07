@@ -57,7 +57,9 @@ impl OidcQualificationSpec {
         let valid_workflow = workflow.is_some_and(|name| {
             !name.is_empty()
                 && !name.contains('/')
-                && (name.ends_with(".yml") || name.ends_with(".yaml"))
+                && name
+                    .rsplit_once('.')
+                    .is_some_and(|(_, ext)| matches!(ext, "yml" | "yaml"))
                 && name
                     .bytes()
                     .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'-' | b'.'))
