@@ -1420,6 +1420,7 @@ crates/velnor-actions-workflow-renderer/src/commands_scan.rs
 crates/velnor-actions-workflow-renderer/src/composite.rs
 crates/velnor-actions-workflow-renderer/src/controller_locator.rs
 crates/velnor-actions-workflow-renderer/src/crate_obligations.rs
+crates/velnor-actions-workflow-renderer/src/crate_oidc_admission.py
 crates/velnor-actions-workflow-renderer/src/crate_oidc_probe.py
 crates/velnor-actions-workflow-renderer/src/crate_oidc_probe_launcher.sh
 crates/velnor-actions-workflow-renderer/src/crate_oidc_qualification.rs
