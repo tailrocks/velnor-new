@@ -162,9 +162,11 @@ fn bootstrap_rotation_accepts_only_matching_lock_without_changing_runtime_output
 
 #[test]
 fn staged_runtime_rotation_is_inert_in_rendered_output() -> Result<(), Box<dyn Error>> {
-    let staged = BASE_APPROVALS.replace(
-        "\"staged\": null",
-        &format!("\"staged\": {}", super::STAGED_ENTRY),
+    let staged = super::staged_fixture_approvals()?;
+    assert_eq!(
+        serde_json::from_str::<Value>(&staged)?["staged"],
+        serde_json::from_str::<Value>(super::STAGED_ENTRY)?,
+        "staged runtime fixture must contain the requested candidate"
     );
     let ci = rendered_ci(&staged, BASE_LOCK)?;
     assert_runtime_identities(&ci, "2026.10.19", CURRENT_RUNTIME_SHA256)?;
