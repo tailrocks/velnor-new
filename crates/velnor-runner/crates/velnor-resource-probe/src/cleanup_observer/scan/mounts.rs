@@ -33,11 +33,13 @@ fn read_proc_mountinfo(
     name: &'static str,
     issues: &mut Vec<String>,
 ) -> Option<Vec<u8>> {
-    if let Ok(value) = super::helpers::read_bounded(path, PROC_FILE_LIMIT, name) {
-        Some(value)
-    } else {
-        add_issue(issues, "mountinfo_unreadable");
-        None
+    match super::helpers::read_bounded(path, PROC_FILE_LIMIT, name) {
+        Ok(value) => Some(value),
+        Err(error) if super::helpers::vanished(&error) => None,
+        Err(_) => {
+            add_issue(issues, "mountinfo_unreadable");
+            None
+        }
     }
 }
 
@@ -54,13 +56,17 @@ pub(super) fn check_owned_mounts(
         return;
     };
     let root_path = format!("/proc/{pid}/task/{tid}/root");
-    let Ok(root) = open(
+    let root = match open(
         &root_path,
         OFlags::PATH | OFlags::DIRECTORY | OFlags::CLOEXEC,
         Mode::empty(),
-    ) else {
-        add_issue(issues, "volume_root_unreadable");
-        return;
+    ) {
+        Ok(root) => root,
+        Err(rustix::io::Errno::NOENT | rustix::io::Errno::SRCH) => return,
+        Err(_) => {
+            add_issue(issues, "volume_root_unreadable");
+            return;
+        }
     };
     let Ok(root_identity) = root_stat(&root) else {
         add_issue(issues, "volume_root_identity_unreadable");
@@ -111,23 +117,38 @@ fn open_mount_target(
     root: &rustix::fd::OwnedFd,
     target: &str,
 ) -> Result<([u32; 2], u64), MountObservationError> {
-    if target == "/" || !target.starts_with('/') || target.contains("//") {
+    if !target.starts_with('/') || target.contains("//") {
         return Err(MountObservationError);
     }
+    if target == "/" {
+        let path = format!("/proc/{pid}/task/{tid}/root");
+        let live_root = open(
+            path,
+            OFlags::PATH | OFlags::DIRECTORY | OFlags::CLOEXEC,
+            Mode::empty(),
+        )
+        .map_err(|_| MountObservationError)?;
+        let before = root_stat(root)?;
+        let after = root_stat(&live_root)?;
+        if before != after {
+            return Err(MountObservationError);
+        }
+        return Ok(before);
+    }
+    let components = target.split('/').skip(1).collect::<Vec<_>>();
     let mut current = None;
-    for component in target.split('/').skip(1) {
-        if component.is_empty() || matches!(component, "." | "..") {
+    for (index, component) in components.iter().enumerate() {
+        if component.is_empty() || matches!(*component, "." | "..") {
             return Err(MountObservationError);
         }
         let parent = current.as_ref().unwrap_or(root);
+        let flags = if index + 1 == components.len() {
+            OFlags::PATH | OFlags::NOFOLLOW | OFlags::CLOEXEC
+        } else {
+            OFlags::PATH | OFlags::DIRECTORY | OFlags::NOFOLLOW | OFlags::CLOEXEC
+        };
         current = Some(
-            openat(
-                parent,
-                component,
-                OFlags::PATH | OFlags::DIRECTORY | OFlags::NOFOLLOW | OFlags::CLOEXEC,
-                Mode::empty(),
-            )
-            .map_err(|_| MountObservationError)?,
+            openat(parent, *component, flags, Mode::empty()).map_err(|_| MountObservationError)?,
         );
     }
     let path = format!("/proc/{pid}/task/{tid}/root");

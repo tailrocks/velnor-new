@@ -204,7 +204,8 @@ pub(super) fn volume_identity(
         || job_facts.parent_mount_id() != metadata.mount_id()
         || job_facts.device() != metadata.device()
         || root.statx_inode() != job_facts.inode()
-        || root.device() != metadata.device()
+        || (root.fs_type_magic() != super::super::super::capacity::BTRFS_MAGIC
+            && root.device() != metadata.device())
         || root.statx_device() != metadata.device()
     {
         return Err(HostError::Identity);

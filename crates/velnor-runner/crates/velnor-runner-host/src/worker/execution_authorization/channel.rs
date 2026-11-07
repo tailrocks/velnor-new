@@ -154,8 +154,8 @@ impl VerifiedProofChannelBinding {
             && self.observation.control == self.control_directory
             && !self.observation.control.mount_source.is_empty()
             && !self.observation.control.filesystem_type_name.is_empty()
-            && self.observation.inbox.mount_source == "tmpfs"
-            && self.observation.inbox.filesystem_type_name == "tmpfs"
+            && !self.observation.inbox.mount_source.is_empty()
+            && !self.observation.inbox.filesystem_type_name.is_empty()
             && !self.observation.job_facts.mount_source.is_empty()
             && !self.observation.job_facts.filesystem_type_name.is_empty()
             && self.observation.job_facts.read_only

@@ -102,12 +102,6 @@ fn same_filesystem(left: &MeasuredAttachment, right: &MeasuredAttachment) -> boo
         && left.binding.statx_device_minor == right.binding.statx_device_minor
         && left.binding.fs_type_magic == right.binding.fs_type_magic
         && left.binding.filesystem_id == right.binding.filesystem_id
-        && left.total_bytes == right.total_bytes
-        && left.free_bytes == right.free_bytes
-        && left.available_bytes == right.available_bytes
-        && left.inode_total == right.inode_total
-        && left.inode_free == right.inode_free
-        && left.inode_available == right.inode_available
         && left.inode_policy == right.inode_policy
         && left.filesystem_type_name == right.filesystem_type_name
 }

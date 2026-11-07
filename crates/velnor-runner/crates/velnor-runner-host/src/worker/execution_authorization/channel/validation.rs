@@ -36,7 +36,6 @@ pub(in crate::worker::execution_authorization) fn valid_control_mount(
 pub(in crate::worker::execution_authorization) fn valid_inbox_mount(
     mount: &ProofChannelMount,
 ) -> bool {
-    const TMPFS_MAGIC: u64 = 0x0102_1994;
     mount.target == INBOX_TARGET
         && mount.subpath == INBOX_SUBPATH
         && mount.mount_id > 0
@@ -47,7 +46,6 @@ pub(in crate::worker::execution_authorization) fn valid_inbox_mount(
         && mount.owner_uid == RUNNER_UID
         && mount.owner_gid == RUNNER_UID
         && mount.mode == INBOX_MODE
-        && mount.fs_type_magic == TMPFS_MAGIC
         && !mount.read_only
         && mount.no_copy
         && same_device_or_btrfs(mount)

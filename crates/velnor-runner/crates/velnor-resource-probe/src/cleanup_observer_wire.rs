@@ -39,7 +39,7 @@ pub fn validate_binding(binding: &CleanupObserverBinding) -> Result<(), &'static
     if root.target != "/velnor/docker-root"
         || root.mount_id == 0
         || root.mount_id != root.statx_mount_id
-        || root.mount_device != root.statx_device
+        || (root.filesystem_type_magic != 0x9123_683e && root.mount_device != root.statx_device)
         || root.filesystem_id == 0
         || !root.read_only
     {
@@ -204,6 +204,7 @@ pub fn docker_root_matches(
         && expected.target == observed.target
         && expected.mount_root == observed.mount_root
         && expected.mount_device == observed.mount_device
+        && expected.statx_device == observed.statx_device
         && expected.filesystem_type_magic == observed.filesystem_type_magic
         && expected.filesystem_id == observed.filesystem_id
         && expected.read_only == observed.read_only
@@ -212,7 +213,7 @@ pub fn docker_root_matches(
 fn valid_local_docker_root(root: &CleanupDockerRootIdentity) -> bool {
     root.mount_id != 0
         && root.mount_id == root.statx_mount_id
-        && root.mount_device == root.statx_device
+        && (root.filesystem_type_magic == 0x9123_683e || root.mount_device == root.statx_device)
         && root.filesystem_id != 0
 }
 
