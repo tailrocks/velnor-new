@@ -78,7 +78,7 @@ def container_cases(context, scenarios=None):
     container = None
     try:
         started = command(['docker', 'run', '--detach', '--privileged', '--cgroupns', 'private',
-                           '--network', 'none', '--tmpfs', '/run', '--tmpfs', '/run/lock',
+                           '--network', 'none', '--tmpfs', '/run:rw,nosuid,nodev,exec', '--tmpfs', '/run/lock',
                            '--tmpfs', '/tmp', tag], 30)
         identity = started.stdout.decode('ascii').strip()
         if not re.fullmatch('[0-9a-f]{64}', identity):
