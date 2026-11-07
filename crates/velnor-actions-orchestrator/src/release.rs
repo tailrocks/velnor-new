@@ -9,15 +9,10 @@ pub(crate) mod binary_release_emit;
 pub(crate) mod crate_release_archive;
 #[path = "crate_release_artifact_pages.rs"]
 pub(crate) mod crate_release_artifact_pages;
-#[cfg(target_os = "linux")]
 #[path = "crate_release_direct_history.rs"]
-pub(crate) mod crate_release_direct_history;
-#[cfg(not(target_os = "linux"))]
-#[path = "crate_release_direct_history_unavailable.rs"]
 pub(crate) mod crate_release_direct_history;
 #[path = "crate_release_git_bundle.rs"]
 pub(crate) mod crate_release_git_bundle;
-#[cfg(target_os = "linux")]
 #[path = "crate_release_historical_intent.rs"]
 pub(crate) mod crate_release_historical_intent;
 #[path = "crate_release_inventory_read.rs"]

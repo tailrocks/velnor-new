@@ -42,7 +42,6 @@ mod publication;
 mod receipt;
 #[cfg(all(test, target_os = "linux", target_arch = "x86_64"))]
 pub(crate) use attestation::verified_generator_fixture;
-#[cfg(target_os = "linux")]
 pub(crate) use attestation::verify_historical_tool_expectations;
 pub(crate) use attestation::{
     AdmittedStart, AttestedLinuxGenerator, MeasuredReleaseTools, ValidatedStart,

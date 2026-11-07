@@ -40,3 +40,34 @@ fn job_build_command_binds_validated_source_revision() -> Result<(), Box<dyn std
     );
     Ok(())
 }
+
+#[test]
+fn effective_deadline_retains_parent_after_scope_exit() -> Result<(), Box<dyn std::error::Error>> {
+    use std::{
+        cell::Cell,
+        rc::Rc,
+        time::{Duration, Instant},
+    };
+    use velnor_actions_mise::CheckDeadline;
+    let anchor = Instant::now();
+    let clock = Rc::new(Cell::new(anchor));
+    let observed = Rc::clone(&clock);
+    CheckDeadline::with_clock(
+        move || observed.get(),
+        || {
+            let parent = CheckDeadline::from_start(anchor, Duration::from_secs(10))?;
+            let unbounded = CheckDeadline::after(Duration::from_secs(600))?;
+            let retained = parent.scope(|| {
+                CheckDeadline::after(Duration::from_secs(600)).map(CheckDeadline::effective)
+            })??;
+            assert!(retained.remaining().is_ok());
+            clock.set(anchor + Duration::from_secs(11));
+            assert!(
+                retained.remaining().is_err(),
+                "captured deadline extended after parent scope exited"
+            );
+            assert!(unbounded.remaining().is_ok());
+            Ok(())
+        },
+    )
+}

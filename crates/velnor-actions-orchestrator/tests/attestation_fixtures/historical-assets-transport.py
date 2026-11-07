@@ -12,6 +12,8 @@ import urllib.parse
 state, tls, fixture = map(pathlib.Path, sys.argv[1:])
 manifest = (fixture / "release-manifest.json").read_bytes()
 bundle = (fixture / "release-manifest.json.intoto.jsonl").read_bytes()
+historical_manifest = (fixture / "historical/release-manifest.json").read_bytes()
+historical_bundle = (fixture / "historical/release-manifest.json.intoto.jsonl").read_bytes()
 source = "f1041f322c54cd7edfdef06afd307799eeaa801a"
 base = "/repos/tailrocks/velnor-new"
 last_mode = None
@@ -34,8 +36,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if self.path != "/graphql":
             self.send_error(404)
             return
-        self.rfile.read(int(self.headers.get("Content-Length", "0")))
-        self.respond({"data": {"repository": {"release": {"databaseId": 7, "isDraft": False}}}})
+        request = json.loads(self.rfile.read(int(self.headers.get("Content-Length", "0"))))
+        tag = request.get("variables", {}).get("tagName")
+        identity = {"v0.1.5": 7, "v0.1.73": 8}.get(tag)
+        release = {"databaseId": identity, "isDraft": False} if identity else None
+        self.respond({"data": {"repository": {"release": release}}})
 
     def do_GET(self):
         global last_mode, tag_reads
@@ -48,10 +53,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self.respond({"id": 1390620900, "full_name": "tailrocks/velnor-new", "default_branch": "main"})
         if path == base + "/releases/7":
             return self.respond({"id": 7, "tag_name": "v0.1.5", "draft": False, "prerelease": False, "immutable": True, "assets": []})
+        if path == base + "/releases/8":
+            return self.respond({"id": 8, "tag_name": "v0.1.73", "draft": False, "prerelease": False, "immutable": True, "assets": []})
         if path == base + "/git/matching-refs/tags/v0.1.5":
             tag_reads += 1
             sha = "d" * 40 if mode == "moved-tag" and tag_reads > 1 else source
             return self.respond([{"ref": "refs/tags/v0.1.5", "object": {"type": "commit", "sha": sha}}])
+        if path == base + "/git/matching-refs/tags/v0.1.73":
+            return self.respond([{"ref": "refs/tags/v0.1.73", "object": {"type": "commit", "sha": "82ad7e9f788718855469444a3a02ea79ba0fe087"}}])
         if path == base + "/releases/7/assets":
             def asset(identity, name, data):
                 size = 2 * 1024 * 1024 if mode == "size" and identity == 11 else len(data)
@@ -61,8 +70,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if mode == "missing": assets.pop()
             if mode == "duplicate": assets.append(asset(13, "release-manifest.json", manifest))
             return self.respond(assets)
+        if path == base + "/releases/8/assets":
+            return self.respond([{"id": identity, "name": name, "size": len(data), "state": "uploaded", "digest": "sha256:" + hashlib.sha256(data).hexdigest()} for identity, name, data in [(21, "release-manifest.json", historical_manifest), (22, "release-manifest.json.intoto.jsonl", historical_bundle)]])
         if path == base + "/releases/assets/11": return self.respond(manifest, binary=True)
         if path == base + "/releases/assets/12": return self.respond(bundle, binary=True)
+        if path == base + "/releases/assets/21": return self.respond(historical_manifest, binary=True)
+        if path == base + "/releases/assets/22": return self.respond(historical_bundle, binary=True)
         self.send_error(404)
 
 

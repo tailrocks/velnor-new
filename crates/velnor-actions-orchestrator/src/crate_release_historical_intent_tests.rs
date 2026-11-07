@@ -77,11 +77,8 @@ fn direct_reader_hashes_real_git_objects_and_rejects_incomplete_history()
     let sha = String::from_utf8(output.stdout)?.trim().to_owned();
     let git = crate::crate_release_git::ReleaseGit::host_fixture();
     let deadline = CheckDeadline::after(std::time::Duration::from_secs(30))?;
-    assert_eq!(
-        read_historical_intent(root, &sha, &git, deadline, &DirectHistoryWatch)?,
-        intent
-    );
+    assert_eq!(read_historical_intent(root, &sha, &git, deadline)?, intent);
     std::fs::write(root.join(".git/shallow"), format!("{sha}\n"))?;
-    assert!(read_historical_intent(root, &sha, &git, deadline, &DirectHistoryWatch).is_err());
+    assert!(read_historical_intent(root, &sha, &git, deadline).is_err());
     Ok(())
 }

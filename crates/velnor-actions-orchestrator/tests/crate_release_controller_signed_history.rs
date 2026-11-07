@@ -165,9 +165,13 @@ pub(crate) fn run_child() -> Result<(), Box<dyn Error>> {
     };
     let admission = super::prepare_crate_release(&intent, &request, &auth, &registry, &source)?;
     let (generator_dir, generator) = verified_generator()?;
+    let runner = std::path::PathBuf::from(std::env::var("RUNNER_TEMP")?);
+    let git = crate::crate_release_git::ReleaseGit::new(
+        velnor_actions_mise::release_git_pin::verify_bundle(&runner.join("velnor/git-bundle"))?,
+    );
     let input = AdmittedStart {
         source_execution: &crate::UnprivilegedSourceExecution,
-        git: super::test_git(),
+        git: &git,
         journal: &journal,
         github: &auth,
         registry: &registry,

@@ -1,14 +1,16 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+use super::JournalRegistryFake;
+
 use super::{
     Cell, Command, CrateReleaseIntent, GitHubAdmissionRequest, Github, HistoricalAuthority,
-    JournalRegistryFake, Registry, fixture_journal_plan, fixture_no_baseline, fs, git,
-    make_fixture, prepare_crate_release, test_git,
+    Registry, fixture_journal_plan, fs, git, make_fixture, prepare_crate_release, test_git,
 };
 
 #[test]
-pub(super) fn previous_push_or_dispatch_requires_original_historical_authority()
+pub(super) fn historical_github_authority_requires_original_push_or_dispatch_evidence()
 -> Result<(), Box<dyn std::error::Error>> {
     for event in ["push", "workflow_dispatch"] {
         exercise_historical_authority(event, 0)?;
@@ -133,72 +135,72 @@ pub(super) fn exercise_historical_authority(
     event: &'static str,
     bad_recovery: u8,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    use crate::crate_release_journal::{
-        JournalIntendedMutation, JournalMutationKind, fixture_storage::seed_started_record,
-        record_journal_intent,
-    };
-    use crate::release::package_release_signer::{AdmittedStart, fixture_attested_generator};
-    let HistoricalFixture {
-        temp,
-        workflow,
-        mut intent,
-        request,
-        github,
-        registry,
-        previous_intent,
-        prior_sha,
-    } = historical_fixture(event, bad_recovery)?;
-    let source = temp.path();
-    let observed = prepare_crate_release(&intent, &request, &github, &registry, source)?;
-    let (_, mut prior) = fixture_journal_plan(source, &previous_intent, &request, &observed)?;
-    prior.identity.run_id = 11;
-    prior.identity.workflow_sha.clone_from(&prior_sha);
-    prior.workflow_run_url = "https://github.com/example/demo/actions/runs/11".into();
-    let journal = JournalRegistryFake::default();
-    seed_started_record(&journal, &prior.identity, &prior)?;
-    record_journal_intent(
-        &journal,
-        &prior.identity,
-        &prior,
-        &JournalIntendedMutation {
-            semver_evidence: Some(fixture_no_baseline()),
-            sequence: 1,
-            package: "demo".into(),
-            version: "0.1.1".into(),
-            kind: JournalMutationKind::Upload,
-        },
+    let fixture = historical_fixture(event, bad_recovery)?;
+    let observed = prepare_crate_release(
+        &fixture.intent,
+        &fixture.request,
+        &fixture.github,
+        &fixture.registry,
+        fixture.temp.path(),
     )?;
-    intent.journal_predecessor = Some(velnor_actions_contract::config::CrateReleasePredecessor {
-        run_id: 11,
-        run_attempt: 1,
-        workflow_sha: prior_sha.clone(),
-    });
-    let admission = prepare_crate_release(&intent, &request, &github, &registry, source)?;
+    let (_, mut prior) = fixture_journal_plan(
+        fixture.temp.path(),
+        &fixture.previous_intent,
+        &fixture.request,
+        &observed,
+    )?;
+    prior.identity.run_id = 11;
+    prior.identity.workflow_sha.clone_from(&fixture.prior_sha);
+    prior.workflow_run_url = "https://github.com/example/demo/actions/runs/11".into();
+    let deadline = velnor_actions_mise::CheckDeadline::after(std::time::Duration::from_secs(30))?;
+    let previous = crate::release::crate_release_historical_intent::read_historical_intent(
+        fixture.workflow.path(),
+        &fixture.prior_sha,
+        test_git(),
+        deadline,
+    )?;
+    assert_eq!(previous, fixture.previous_intent);
     let auth = HistoricalAuthority {
-        base: &github,
-        workflow: prior_sha,
+        base: &fixture.github,
+        workflow: fixture.prior_sha.clone(),
         older: None,
         event,
         defect: Cell::new(0),
     };
-    let generator = fixture_attested_generator();
-    let input = AdmittedStart {
-        source_execution: &crate::UnprivilegedSourceExecution,
-        git: test_git(),
-        journal: &journal,
-        github: &auth,
-        registry: &registry,
-        intent: &intent,
-        request: &request,
-        admission: &admission,
-        source,
-        workflow_root: workflow.path(),
-        generator: &generator,
+    let verify = || {
+        crate::crate_release_github::verify_predecessor_authority(
+            &auth,
+            &fixture.request,
+            &prior,
+            &previous,
+        )
     };
-    check_historical_authority(&input, event, bad_recovery)?;
+    for defect in 1..=if event == "push" { 9 } else { 8 } {
+        auth.defect.set(defect);
+        assert!(
+            verify().is_err(),
+            "accepted {event} historical defect {defect}"
+        );
+        assert_eq!(fixture.github.writes.get(), 0);
+    }
+    auth.defect.set(0);
+    if bad_recovery != 0 {
+        assert!(
+            verify().is_err(),
+            "accepted unapproved historical recovery source"
+        );
+        assert_eq!(fixture.github.writes.get(), 0);
+    } else {
+        verify()?;
+        auth.defect.set(10);
+        verify()?;
+        auth.defect.set(0);
+        assert_eq!(fixture.github.writes.get(), 0);
+    }
     Ok(())
 }
 
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
 pub(super) fn check_historical_authority(
     input: &crate::release::package_release_signer::AdmittedStart<
         '_,

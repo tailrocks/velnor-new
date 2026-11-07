@@ -6,15 +6,14 @@ use super::{
     invalid,
 };
 use crate::crate_release_journal::{
-    JournalEvidence, JournalIdentity, JournalOperationRefs, JournalReceipt, JournalStage,
-    PriorHistoryEvidence,
+    JournalEvidence, JournalOperationRefs, JournalReceipt, PriorHistorySnapshot,
 };
 
 pub(crate) struct FrozenCompletion {
     candidate: super::reconcile::ReconciledCandidate,
     admission: super::super::CrateReleaseAdmissionReceipt,
     receipt: JournalReceipt,
-    predecessors: Vec<PriorHistoryEvidence>,
+    predecessors: PriorHistorySnapshot,
     completed: Option<JournalEvidence>,
     tools: crate::release::package_release_signer::MeasuredReleaseTools,
 }
@@ -47,16 +46,11 @@ impl FrozenCompletion {
         tools: crate::release::package_release_signer::MeasuredReleaseTools,
     ) -> Result<Self, OrchestratorError> {
         let candidate = super::derive_reconciled_candidate(input)?;
-        let predecessors = crate::crate_release_journal::inspect_prior_chain_with(
-            input.journal,
-            input.journal_receipt,
-            input.source,
-            input.git,
-            Some(&crate::crate_release_journal::PriorTransition {
-                request: input.request,
-                github: input.github,
-            }),
-        )?;
+        let deadline =
+            velnor_actions_mise::CheckDeadline::after(std::time::Duration::from_secs(600))
+                .map_err(|_| invalid())?
+                .effective();
+        let predecessors = snapshot_predecessors(input, deadline)?;
         let target = tempfile::tempdir().map_err(|_| invalid())?;
         for package in &candidate.packages {
             let archive = input
@@ -122,31 +116,7 @@ impl FrozenCompletion {
         {
             return Err(invalid());
         }
-        let mut next = self.receipt.predecessor.as_ref();
-        for prior in &self.predecessors {
-            let identity: &JournalIdentity = &prior.start.receipt.identity;
-            if next != Some(identity)
-                || crate::crate_release_journal::inspect_journal(
-                    journal,
-                    identity,
-                    JournalStage::Started,
-                )?
-                .as_ref()
-                    != Some(&prior.start)
-                || crate::crate_release_journal::inspect_recoverable_history(
-                    journal,
-                    identity,
-                    &prior.start.receipt,
-                )? != (prior.mutations.clone(), None)
-            {
-                return Err(invalid());
-            }
-            next = prior.start.receipt.predecessor.as_ref();
-        }
-        if next.is_some() {
-            return Err(invalid());
-        }
-        Ok(())
+        self.predecessors.revalidate(journal, &self.receipt)
     }
 
     pub(crate) fn record_unprivileged<
@@ -281,4 +251,44 @@ impl<'a> ValidatedCompletion<'a> {
     ) {
         (self.receipt, self.completion, self.before_write)
     }
+}
+
+fn snapshot_predecessors<
+    J: JournalIo + JournalOperationRefs,
+    G: GitHubAdmissionRead,
+    R: CrateRegistryRead,
+>(
+    input: &CrateReleaseObservation<'_, J, G, R>,
+    deadline: velnor_actions_mise::CheckDeadline,
+) -> Result<crate::crate_release_journal::PriorHistorySnapshot, OrchestratorError> {
+    let context = input
+        .journal_receipt
+        .predecessor
+        .as_ref()
+        .map(|_| {
+            crate::release::crate_release_direct_history::HistoryContext::admitted(
+                input.source,
+                input.intent,
+                input.request,
+                input.git,
+                input.journal_receipt,
+                deadline,
+            )
+        })
+        .transpose()?;
+    let edge = context
+        .as_ref()
+        .map(|context| crate::crate_release_journal::PriorTransition {
+            context,
+            github: input.github,
+        });
+    crate::crate_release_journal::walk_prior_history_until(
+        input.journal,
+        input.journal_receipt,
+        input.source,
+        input.git,
+        edge.as_ref(),
+        deadline,
+        |_| Ok(()),
+    )
 }

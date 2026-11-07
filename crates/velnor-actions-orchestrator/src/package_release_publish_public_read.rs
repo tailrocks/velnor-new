@@ -278,7 +278,6 @@ pub(crate) fn read_public_release_snapshot(
 
 #[path = "package_release_publish_public_assets.rs"]
 mod assets;
-#[cfg(any(target_os = "linux", test))]
 pub(crate) use assets::read_historical_sdk_attestation_assets;
 use assets::{download_release_assets, verify_public_release_unchanged};
 

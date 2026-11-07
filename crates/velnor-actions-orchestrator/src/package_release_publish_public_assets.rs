@@ -6,7 +6,6 @@ use super::{
     ReleaseResponse, asset_tuples, asset_tuples_from_downloads, github, internal,
 };
 
-#[cfg(any(target_os = "linux", test))]
 pub(crate) fn read_historical_sdk_attestation_assets(
     version: &str,
     source_sha: &str,

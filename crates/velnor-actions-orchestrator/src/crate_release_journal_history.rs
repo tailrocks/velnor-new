@@ -22,7 +22,7 @@ pub struct PriorHistoryEvidence {
 }
 
 pub(crate) struct PriorTransition<'a> {
-    pub(crate) request: &'a crate::crate_release_github::GitHubAdmissionRequest,
+    pub(crate) context: &'a crate::release::crate_release_direct_history::HistoryContext<'a>,
     pub(crate) github: &'a dyn crate::crate_release_github::GitHubAdmissionRead,
 }
 
@@ -32,12 +32,7 @@ impl PriorTransition<'_> {
         prior: &JournalReceipt,
         current: &JournalReceipt,
     ) -> Result<(), OrchestratorError> {
-        crate::release::crate_release_direct_history::verify_transition(
-            prior,
-            current,
-            self.request,
-            self.github,
-        )
+        self.context.verify_transition(prior, current, self.github)
     }
 }
 
@@ -102,18 +97,20 @@ pub fn inspect_prior_history<I: JournalIo + JournalOperationRefs>(
     source: &std::path::Path,
     git: &crate::crate_release_git::ReleaseGit,
 ) -> Result<PriorHistoryEvidence, OrchestratorError> {
-    inspect_prior_history_with(io, previous, current, source, git, None)
+    validate_prior_link(previous, current)?;
+    crate::verify_journal_source(source, current, git)?;
+    let evidence = read_prior_history_data(io, previous, current, None)?;
+    crate::verify_journal_source(source, current, git)?;
+    Ok(evidence)
 }
 
-fn inspect_prior_history_with<I: JournalIo + JournalOperationRefs>(
+fn read_prior_history_data<I: JournalIo + JournalOperationRefs>(
     io: &I,
     previous: &JournalIdentity,
     current: &JournalReceipt,
-    source: &std::path::Path,
-    git: &crate::crate_release_git::ReleaseGit,
     edge: Option<&PriorTransition<'_>>,
 ) -> Result<PriorHistoryEvidence, OrchestratorError> {
-    let start = inspect_prior_incomplete_inner(io, previous, current, source, true, git, edge)?;
+    let start = read_prior_incomplete_data(io, previous, current, true, edge)?;
     let listed = operation_sequences(io, previous)?;
     let mut mutations = Vec::with_capacity(listed.len());
     for (sequence, sha) in &listed {
@@ -126,7 +123,7 @@ fn inspect_prior_history_with<I: JournalIo + JournalOperationRefs>(
         mutations.push(record.mutation);
     }
     if operation_sequences(io, previous)? != listed
-        || inspect_prior_incomplete_inner(io, previous, current, source, true, git, edge)? != start
+        || read_prior_incomplete_data(io, previous, current, true, edge)? != start
     {
         return Err(invalid());
     }
@@ -177,18 +174,17 @@ pub fn inspect_prior_incomplete_evidence<I: JournalIo>(
     source: &std::path::Path,
     git: &crate::crate_release_git::ReleaseGit,
 ) -> Result<JournalEvidence, OrchestratorError> {
-    inspect_prior_incomplete_inner(io, previous, current, source, false, git, None)
+    validate_prior_link(previous, current)?;
+    crate::verify_journal_source(source, current, git)?;
+    let evidence = read_prior_incomplete_data(io, previous, current, false, None)?;
+    crate::verify_journal_source(source, current, git)?;
+    Ok(evidence)
 }
 
-pub(super) fn inspect_prior_incomplete_inner<I: JournalIo>(
-    io: &I,
+fn validate_prior_link(
     previous: &JournalIdentity,
     current: &JournalReceipt,
-    source: &std::path::Path,
-    allow_creation_transition: bool,
-    git: &crate::crate_release_git::ReleaseGit,
-    edge: Option<&PriorTransition<'_>>,
-) -> Result<JournalEvidence, OrchestratorError> {
+) -> Result<(), OrchestratorError> {
     validate_identity(&current.identity)?;
     if !valid_receipt(current, &current.identity)
         || current.predecessor.as_ref() != Some(previous)
@@ -199,7 +195,17 @@ pub(super) fn inspect_prior_incomplete_inner<I: JournalIo>(
     {
         return Err(invalid());
     }
-    crate::verify_journal_source(source, current, git)?;
+    Ok(())
+}
+
+fn read_prior_incomplete_data<I: JournalIo>(
+    io: &I,
+    previous: &JournalIdentity,
+    current: &JournalReceipt,
+    allow_creation_transition: bool,
+    edge: Option<&PriorTransition<'_>>,
+) -> Result<JournalEvidence, OrchestratorError> {
+    validate_prior_link(previous, current)?;
     let prior = inspect_journal(io, previous, JournalStage::Started)?.ok_or_else(invalid)?;
     if inspect_journal(io, previous, JournalStage::Completed)?.is_some()
         || prior.receipt.registry != current.registry
@@ -318,27 +324,50 @@ pub(crate) fn inspect_prior_chain<I: JournalIo + JournalOperationRefs>(
     source: &std::path::Path,
     git: &crate::crate_release_git::ReleaseGit,
 ) -> Result<Vec<PriorHistoryEvidence>, OrchestratorError> {
-    inspect_prior_chain_with(io, current, source, git, None)
+    let deadline = velnor_actions_mise::CheckDeadline::after(std::time::Duration::from_secs(600))
+        .map_err(|_| invalid())?
+        .effective();
+    let mut chain = Vec::new();
+    walk_prior_history_until(io, current, source, git, None, deadline, |prior| {
+        chain.push(prior);
+        Ok(())
+    })?;
+    Ok(chain)
 }
 
-pub(crate) fn inspect_prior_chain_with<I: JournalIo + JournalOperationRefs>(
+pub(crate) fn walk_prior_history_until<I: JournalIo + JournalOperationRefs>(
     io: &I,
     current: &JournalReceipt,
     source: &std::path::Path,
     git: &crate::crate_release_git::ReleaseGit,
     edge: Option<&PriorTransition<'_>>,
-) -> Result<Vec<PriorHistoryEvidence>, OrchestratorError> {
-    let mut chain = Vec::new();
-    let mut cursor = current.clone();
-    let mut seen = std::collections::BTreeSet::new();
-    seen.insert((cursor.identity.run_id, cursor.identity.run_attempt));
-    while let Some(previous) = cursor.predecessor.clone() {
-        if chain.len() == 32 || !seen.insert((previous.run_id, previous.run_attempt)) {
-            return Err(invalid());
-        }
-        let evidence = inspect_prior_history_with(io, &previous, &cursor, source, git, edge)?;
-        cursor = evidence.start.receipt.clone();
-        chain.push(evidence);
-    }
-    Ok(chain)
+    deadline: velnor_actions_mise::CheckDeadline,
+    mut visit: impl FnMut(PriorHistoryEvidence) -> Result<(), OrchestratorError>,
+) -> Result<super::PriorHistorySnapshot, OrchestratorError> {
+    let deadline = deadline.effective();
+    deadline
+        .scope(|| {
+            crate::verify_journal_source(source, current, git)?;
+            let mut snapshot = super::PriorHistorySnapshot::new(deadline)?;
+            let mut cursor = current.clone();
+            while let Some(previous) = cursor.predecessor.clone() {
+                deadline.remaining().map_err(|_| invalid())?;
+                if (previous.run_id, previous.run_attempt)
+                    == (current.identity.run_id, current.identity.run_attempt)
+                    || snapshot.contains(&previous)?
+                {
+                    return Err(invalid());
+                }
+                let evidence = read_prior_history_data(io, &previous, &cursor, edge)?;
+                deadline.remaining().map_err(|_| invalid())?;
+                cursor = evidence.start.receipt.clone();
+                snapshot.pin(io, &evidence)?;
+                visit(evidence)?;
+                deadline.remaining().map_err(|_| invalid())?;
+            }
+            crate::verify_journal_source(source, current, git)?;
+            deadline.remaining().map_err(|_| invalid())?;
+            Ok(snapshot)
+        })
+        .map_err(|_| invalid())?
 }

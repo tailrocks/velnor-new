@@ -107,7 +107,29 @@ fn verify_bundled_files(root: &Path) -> Result<(), Box<dyn Error>> {
             return Err("captured fixture code differs from compiled harness".into());
         }
     }
+    for (name, expected) in bound_staging_inputs() {
+        if std::fs::read(root.join(name))? != expected {
+            return Err("captured fixture staging differs from compiled harness".into());
+        }
+    }
     Ok(())
+}
+
+fn bound_staging_inputs() -> [(&'static str, &'static [u8]); 3] {
+    [
+        (
+            "scripts/prepare-gh-fixture-tools.py",
+            &include_bytes!("../../../../scripts/prepare-gh-fixture-tools.py")[..],
+        ),
+        (
+            "crates/velnor-actions-mise/src/catalog.rs",
+            &include_bytes!("../../../../crates/velnor-actions-mise/src/catalog.rs")[..],
+        ),
+        (
+            "crates/velnor-actions-mise/src/release_git_pin.rs",
+            &include_bytes!("../../../../crates/velnor-actions-mise/src/release_git_pin.rs")[..],
+        ),
+    ]
 }
 
 fn read_manifest(path: &Path) -> Result<String, Box<dyn Error>> {
@@ -157,7 +179,7 @@ pub(super) fn reviewed_non_inputs_from(root: &Path) -> Result<String, Box<dyn Er
 
 #[cfg(test)]
 mod tests {
-    use super::{bundled_files, verify_bundled_files};
+    use super::{bound_staging_inputs, bundled_files, verify_bundled_files};
 
     #[test]
     fn captured_harness_must_match_compiled_bytes() -> Result<(), Box<dyn std::error::Error>> {
@@ -169,7 +191,18 @@ mod tests {
         for (name, bytes) in bundled_files() {
             std::fs::write(directory.join(name), bytes)?;
         }
+        for (name, expected) in bound_staging_inputs() {
+            let path = root.path().join(name);
+            std::fs::create_dir_all(path.parent().ok_or("staging parent")?)?;
+            std::fs::write(&path, expected)?;
+        }
         verify_bundled_files(root.path())?;
+        for (name, expected) in bound_staging_inputs() {
+            let path = root.path().join(name);
+            std::fs::write(&path, b"changed after compilation")?;
+            assert!(verify_bundled_files(root.path()).is_err());
+            std::fs::write(&path, expected)?;
+        }
         std::fs::write(directory.join("driver.py"), b"changed after compilation")?;
         assert!(verify_bundled_files(root.path()).is_err());
         Ok(())

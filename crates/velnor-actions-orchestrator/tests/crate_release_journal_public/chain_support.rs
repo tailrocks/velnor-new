@@ -53,6 +53,9 @@ pub(super) fn verify_chain_and_rerun(
     current: &JournalReceipt,
     root: &std::path::Path,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    verify_long_retry_history(plan, root)?;
+    verify_history_source_change(plan, root)?;
+    verify_history_snapshot(plan, root)?;
     let chained_journal = Registry::default();
     let mut older = plan.clone();
     older.identity.run_id -= 1;
@@ -246,4 +249,136 @@ pub(super) fn verify_prior_operation_chain(
     assert_eq!(history.mutations.len(), 2);
     assert_eq!(history.mutations[1], mutation);
     Ok(())
+}
+
+fn verify_long_retry_history(
+    plan: &JournalReceipt,
+    root: &std::path::Path,
+) -> Result<(), Box<dyn std::error::Error>> {
+    for count in [33_u64, 64, 96] {
+        let journal = Registry::default();
+        let mut cursor = plan.clone();
+        cursor.predecessor = None;
+        for offset in 0..count {
+            cursor.identity.run_id = 100 + offset;
+            cursor.workflow_run_url = format!(
+                "https://github.com/{}/actions/runs/{}",
+                cursor.identity.repository, cursor.identity.run_id
+            );
+            seed_started_record(&journal, &cursor.identity, &cursor)?;
+            cursor.predecessor = Some(cursor.identity.clone());
+        }
+        cursor.identity.run_id += 1;
+        cursor.workflow_run_url = format!(
+            "https://github.com/{}/actions/runs/{}",
+            cursor.identity.repository, cursor.identity.run_id
+        );
+        let chain = super::super::inspect_prior_chain(&journal, &cursor, root, test_git())?;
+        assert_eq!(u64::try_from(chain.len())?, count);
+        assert!(chain.iter().all(|prior| prior.mutations.is_empty()));
+        assert_eq!(
+            chain
+                .first()
+                .ok_or("missing first prior history")?
+                .start
+                .receipt
+                .identity
+                .run_id,
+            99 + count
+        );
+        assert_eq!(
+            chain
+                .last()
+                .ok_or("missing last prior history")?
+                .start
+                .receipt
+                .identity
+                .run_id,
+            100
+        );
+    }
+    Ok(())
+}
+
+fn verify_history_source_change(
+    plan: &JournalReceipt,
+    root: &std::path::Path,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let journal = Registry::default();
+    seed_started_record(&journal, &plan.identity, plan)?;
+    let mut current = plan.clone();
+    current.identity.run_id += 1;
+    current.predecessor = Some(plan.identity.clone());
+    current.workflow_run_url = format!(
+        "https://github.com/{}/actions/runs/{}",
+        current.identity.repository, current.identity.run_id
+    );
+    let path = root.join("AGENTS.md");
+    let original = std::fs::read(&path)?;
+    *journal.change_source_after_list.borrow_mut() = Some(path.clone());
+    let result = super::super::inspect_prior_chain(&journal, &current, root, test_git());
+    std::fs::write(path, original)?;
+    assert!(
+        matches!(&result, Err(OrchestratorError::Internal { problem }) if problem == "crate_release_source_content_mismatch"),
+        "source-change error: {:?}",
+        result.as_ref().err()
+    );
+    assert_eq!(
+        super::super::inspect_prior_chain(&journal, &current, root, test_git())?.len(),
+        1
+    );
+    assert_eq!(journal.refs.borrow().len(), 1);
+    Ok(())
+}
+
+fn verify_history_snapshot(
+    plan: &JournalReceipt,
+    root: &std::path::Path,
+) -> Result<(), Box<dyn std::error::Error>> {
+    use std::{
+        rc::Rc,
+        time::{Duration, Instant},
+    };
+    use velnor_actions_mise::CheckDeadline;
+    let journal = Registry::default();
+    seed_started_record(&journal, &plan.identity, plan)?;
+    let mut current = plan.clone();
+    current.identity.run_id += 1;
+    current.predecessor = Some(plan.identity.clone());
+    current.workflow_run_url = format!(
+        "https://github.com/{}/actions/runs/{}",
+        current.identity.repository, current.identity.run_id
+    );
+    let now = Rc::new(Cell::new(Instant::now()));
+    let clock = now.clone();
+    CheckDeadline::with_clock(
+        move || clock.get(),
+        || -> Result<(), Box<dyn std::error::Error>> {
+            let deadline = CheckDeadline::after(Duration::from_secs(30))?;
+            let snapshot = super::super::walk_prior_history_until(
+                &journal,
+                &current,
+                root,
+                test_git(),
+                None,
+                deadline,
+                |_| Ok(()),
+            )?;
+            snapshot.revalidate(&journal, &current)?;
+            let refs = journal.refs.borrow().clone();
+            let reference = format!(
+                "refs/tags/velnor-receipt/{}/{}/publication-started",
+                plan.identity.run_id, plan.identity.run_attempt
+            );
+            journal.refs.borrow_mut().insert(reference, "a".repeat(40));
+            assert!(snapshot.revalidate(&journal, &current).is_err());
+            *journal.refs.borrow_mut() = refs;
+            snapshot.revalidate(&journal, &current)?;
+            now.set(now.get() + Duration::from_secs(31));
+            assert!(snapshot.revalidate(&journal, &current).is_err());
+            assert!(snapshot.matches(&snapshot).is_err());
+            assert_eq!(journal.refs.borrow().len(), 1);
+            Ok(())
+        },
+    )
 }

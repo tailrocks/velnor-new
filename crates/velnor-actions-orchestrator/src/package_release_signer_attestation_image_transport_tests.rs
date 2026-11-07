@@ -45,30 +45,37 @@ fn same_base_history_rejects_forged_tool() -> Result<(), Box<dyn Error>> {
         &fixture,
         include_str!("../tests/attestation_fixtures/historical-assets-transport.py"),
     )?;
-    for forged in [false, true] {
-        let mut command = Command::new(std::env::current_exe()?);
-        command
-            .args([
-                "--exact",
-                "release::crate_release_runtime::tests::test_only_dispatch_and_loopback_transport",
-            ])
-            .env("VELNOR_TEST_SAME_BASE_SIGNED", "1")
-            .env("VELNOR_TEST_PINNED_GIT", "/tools/pinned-git")
-            .env(
-                "VELNOR_TEST_PINNED_GIT_HTTP",
-                "/tools/pinned-git-remote-http",
+    for updated in [false, true] {
+        for forged in [false, true] {
+            let mut command = Command::new(std::env::current_exe()?);
+            command
+                .args([
+                    "--exact",
+                    "release::crate_release_runtime::tests::test_only_dispatch_and_loopback_transport",
+                ])
+                .env_remove("VELNOR_TEST_UPDATED_HISTORY")
+                .env_remove("VELNOR_TEST_FORGED_TOOL")
+                .env("VELNOR_TEST_SAME_BASE_SIGNED", "1")
+                .env("VELNOR_TEST_PINNED_GIT", "/tools/pinned-git")
+                .env(
+                    "VELNOR_TEST_PINNED_GIT_HTTP",
+                    "/tools/pinned-git-remote-http",
+                );
+            if forged {
+                command.env("VELNOR_TEST_FORGED_TOOL", "1");
+            }
+            if updated {
+                command.env("VELNOR_TEST_UPDATED_HISTORY", "1");
+            }
+            let output = command.output()?;
+            assert!(
+                output.status.success(),
+                "{}{}",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
             );
-        if forged {
-            command.env("VELNOR_TEST_FORGED_TOOL", "1");
+            crate::libtest_case::assert_one_passed(&output);
         }
-        let output = command.output()?;
-        assert!(
-            output.status.success(),
-            "{}{}",
-            String::from_utf8_lossy(&output.stdout),
-            String::from_utf8_lossy(&output.stderr)
-        );
-        crate::libtest_case::assert_one_passed(&output);
     }
     worker::record_success("image_attestation", SCENARIO)?;
     Ok(())

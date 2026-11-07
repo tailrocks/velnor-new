@@ -683,6 +683,7 @@ crates/velnor-actions-orchestrator/src/crate_release_journal.rs
 crates/velnor-actions-orchestrator/src/crate_release_journal_adapter.rs
 crates/velnor-actions-orchestrator/src/crate_release_journal_github.rs
 crates/velnor-actions-orchestrator/src/crate_release_journal_history.rs
+crates/velnor-actions-orchestrator/src/crate_release_journal_history_snapshot.rs
 crates/velnor-actions-orchestrator/src/crate_release_journal_mutation.rs
 crates/velnor-actions-orchestrator/src/crate_release_journal_records.rs
 crates/velnor-actions-orchestrator/src/crate_release_journal_schema.rs

@@ -3,13 +3,11 @@
 
 use super::{Github, JournalRegistryFake, Registry, fixture_journal_plan, test_git};
 use crate::crate_release_controller::{CrateReleaseObservation, FrozenCompletion};
-use crate::crate_release_journal::{
-    JournalStage, fixture_storage::seed_started_record, inspect_journal,
-};
+use crate::crate_release_journal::{JournalStage, inspect_journal};
 
 #[test]
-fn completion_rejects_predecessor_drift_after_source_freeze()
--> Result<(), Box<dyn std::error::Error>> {
+fn predecessor_history_requires_qualified_source_context() -> Result<(), Box<dyn std::error::Error>>
+{
     let temp = tempfile::tempdir()?;
     let source = temp.path();
     let (intent, request, github, registry) = super::make_fixture(source)?;
@@ -19,123 +17,26 @@ fn completion_rejects_predecessor_drift_after_source_freeze()
     registry.absent.set(false);
     *registry.archive.borrow_mut() = super::fixture_archive(source)?;
     let admission = super::prepare_crate_release(&intent, &request, &github, &registry, source)?;
-    let (identity, receipt) = fixture_journal_plan(source, &intent, &request, &admission)?;
-    let journal = JournalRegistryFake::default();
-    seed_started_record(&journal, &identity, &receipt)?;
-    let input = CrateReleaseObservation {
-        source_execution: &crate::UnprivilegedSourceExecution,
-        journal: &journal,
-        identity: &identity,
-        journal_receipt: &receipt,
-        admission: &admission,
-        intent: &intent,
-        request: &request,
-        github: &github,
-        registry: &registry,
+    let (_, mut receipt) = fixture_journal_plan(source, &intent, &request, &admission)?;
+    let mut prior = receipt.identity.clone();
+    prior.run_id -= 1;
+    receipt.predecessor = Some(prior);
+    let deadline = velnor_actions_mise::CheckDeadline::after(std::time::Duration::from_secs(30))?;
+    let result = crate::release::crate_release_direct_history::HistoryContext::admitted(
         source,
-        git: test_git(),
-        sequence: 1,
-    };
-    reject_prior_history_drift(&input)
-}
-
-pub(super) fn reject_prior_history_drift(
-    input: &CrateReleaseObservation<'_, JournalRegistryFake, Github, Registry>,
-) -> Result<(), Box<dyn std::error::Error>> {
-    let journal = JournalRegistryFake::default();
-    let mut prior = input.journal_receipt.clone();
-    prior.identity.run_id -= 1;
-    prior.workflow_run_url = format!(
-        "https://github.com/{}/actions/runs/{}",
-        prior.identity.repository, prior.identity.run_id
+        &intent,
+        &request,
+        test_git(),
+        &receipt,
+        deadline,
     );
-    seed_started_record(&journal, &prior.identity, &prior)?;
-    let mut intent = input.intent.clone();
-    intent.journal_predecessor = Some(velnor_actions_contract::config::CrateReleasePredecessor {
-        run_id: prior.identity.run_id,
-        run_attempt: prior.identity.run_attempt,
-        workflow_sha: prior.identity.workflow_sha.clone(),
-    });
-    let mut admission = input.admission.clone();
-    admission.intent = intent.clone();
-    let (identity, mut receipt) =
-        fixture_journal_plan(input.source, &intent, input.request, &admission)?;
-    receipt.predecessor = Some(prior.identity.clone());
-    seed_started_record(&journal, &identity, &receipt)?;
-    let observation = CrateReleaseObservation {
-        journal: &journal,
-        identity: &identity,
-        journal_receipt: &receipt,
-        admission: &admission,
-        intent: &intent,
-        ..*input
-    };
-    let original_refs = journal.refs.borrow().clone();
-    FrozenCompletion::prepare_unprivileged(
-        &observation,
-        crate::release::package_release_signer::fixture_measured_tools(
-            receipt.expected_tools.clone(),
-        ),
-        &crate::UnprivilegedSourceExecution,
-    )?
-    .record_unprivileged(
-        &crate::UnprivilegedSourceExecution,
-        &journal,
-        input.github,
-        input.registry,
-    )?;
-    assert!(inspect_journal(&journal, &identity, JournalStage::Completed)?.is_some());
-    *journal.refs.borrow_mut() = original_refs;
-    for scenario in 0..3 {
-        let frozen = FrozenCompletion::prepare_unprivileged(
-            &observation,
-            crate::release::package_release_signer::fixture_measured_tools(
-                receipt.expected_tools.clone(),
-            ),
-            &crate::UnprivilegedSourceExecution,
-        )?;
-        let refs = journal.refs.borrow().clone();
-        let before = journal.write_calls.get();
-        let prefix = format!(
-            "refs/tags/velnor-receipt/{}/{}",
-            prior.identity.run_id, prior.identity.run_attempt
-        );
-        alter_prior_history(&journal, &prefix, scenario);
-        let result = frozen.record_unprivileged(
-            &crate::UnprivilegedSourceExecution,
-            &journal,
-            input.github,
-            input.registry,
-        );
-        *journal.refs.borrow_mut() = refs;
-        assert!(result.is_err(), "post-freeze predecessor drift {scenario}");
-        assert_eq!(journal.write_calls.get(), before);
-        assert!(inspect_journal(&journal, &identity, JournalStage::Completed)?.is_none());
-    }
+    assert!(matches!(
+        result,
+        Err(crate::OrchestratorError::Internal { problem })
+            if problem == "crate_release_history_custody_required"
+    ));
+    assert_eq!(github.writes.get(), 0);
     Ok(())
-}
-
-fn alter_prior_history(journal: &JournalRegistryFake, prefix: &str, scenario: u8) {
-    match scenario {
-        0 => {
-            journal
-                .refs
-                .borrow_mut()
-                .remove(&format!("{prefix}/publication-started"));
-        }
-        1 => {
-            journal
-                .refs
-                .borrow_mut()
-                .insert(format!("{prefix}/operation-1"), "a".repeat(40));
-        }
-        _ => {
-            journal
-                .refs
-                .borrow_mut()
-                .insert(format!("{prefix}/reconciled"), "a".repeat(40));
-        }
-    }
 }
 
 pub(super) fn reject_post_freeze_drift(

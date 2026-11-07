@@ -5,95 +5,110 @@ use crate::crate_release_github::{GitHubAdmissionRead, GitHubAdmissionRequest};
 use crate::crate_release_journal::JournalReceipt;
 use crate::{OrchestratorError, internal::internal};
 use velnor_actions_contract::config::CrateReleaseIntent;
-use velnor_actions_mise::CheckDeadline;
+use velnor_actions_mise::{CheckDeadline, release_git_pin::ReleaseGitExecutable as _};
 
-fn with_context<T>(
-    request: &GitHubAdmissionRequest,
-    operation: impl FnOnce(
-        &std::path::Path,
-        &CrateReleaseIntent,
-        &crate::crate_release_git::ReleaseGit,
-        CheckDeadline,
-    ) -> Result<T, OrchestratorError>,
-) -> Result<T, OrchestratorError> {
-    let invalid = || internal("crate_release_history_custody_required");
-    let workspace =
-        std::path::PathBuf::from(std::env::var("GITHUB_WORKSPACE").map_err(|_| invalid())?);
-    let temp = std::path::PathBuf::from(std::env::var("RUNNER_TEMP").map_err(|_| invalid())?);
-    let git = crate::crate_release_git::ReleaseGit::new(
-        velnor_actions_mise::release_git_pin::verify_bundle(&temp.join("velnor/git-bundle"))
-            .map_err(|_| invalid())?,
-    );
-    let deadline =
-        CheckDeadline::after(std::time::Duration::from_secs(600)).map_err(|_| invalid())?;
-    deadline
-        .scope(|| {
-            let intent = crate::release::crate_release_runtime::admission::read_intent_at_workflow(
-                &workspace,
-                &request.workflow_sha,
-                &git,
-            )?;
-            if crate::release::crate_release_runtime::environment::request_from_environment(
-                &intent,
-                &request.workflow_sha,
-            )? != *request
-            {
-                return Err(invalid());
-            }
-            let source = workspace.join("release-source");
-            crate::release::crate_release_source::verify_crate_release_source(
-                &source,
-                &request.source_sha,
-                &git,
-            )?;
-            let result = operation(&source, &intent, &git, deadline)?;
-            crate::release::crate_release_source::verify_crate_release_source(
-                &source,
-                &request.source_sha,
-                &git,
-            )?;
-            Ok(result)
+pub(crate) struct HistoryContext<'a> {
+    source: &'a std::path::Path,
+    intent: &'a CrateReleaseIntent,
+    request: &'a GitHubAdmissionRequest,
+    git: &'a crate::crate_release_git::ReleaseGit,
+    deadline: CheckDeadline,
+}
+
+impl<'a> HistoryContext<'a> {
+    pub(crate) fn admitted(
+        source: &'a std::path::Path,
+        intent: &'a CrateReleaseIntent,
+        request: &'a GitHubAdmissionRequest,
+        git: &'a crate::crate_release_git::ReleaseGit,
+        receipt: &JournalReceipt,
+        deadline: CheckDeadline,
+    ) -> Result<Self, OrchestratorError> {
+        let invalid = || internal("crate_release_history_custody_required");
+        let deadline = deadline.effective();
+        deadline.remaining().map_err(|_| invalid())?;
+        if git.verified().is_none()
+            || receipt.identity.repository != request.repository
+            || receipt.identity.workflow_sha != request.workflow_sha
+            || receipt.identity.source_sha != request.source_sha
+            || receipt.identity.run_id != request.run_id
+            || receipt.identity.run_attempt != request.run_attempt
+        {
+            return Err(invalid());
+        }
+        crate::crate_release_controller::verify_request_intent(intent, request)?;
+        let bytes = velnor_actions_contract::canonical_json_bytes(intent).map_err(|_| invalid())?;
+        if crate::planner::generator::sha256_hex(&bytes) != receipt.intent_sha256
+            || crate::crate_release_journal::release_base_intent_sha256(intent)?
+                != receipt.base_intent_sha256
+        {
+            return Err(invalid());
+        }
+        deadline
+            .scope(|| {
+                git.revalidate().map_err(|_| invalid())?;
+                crate::verify_journal_source(source, receipt, git)?;
+                let actual = super::crate_release_historical_intent::read_historical_intent(
+                    source,
+                    &request.workflow_sha,
+                    git,
+                    deadline,
+                )?;
+                if actual != *intent {
+                    return Err(invalid());
+                }
+                crate::verify_journal_source(source, receipt, git)
+            })
+            .map_err(|_| invalid())??;
+        Ok(Self {
+            source,
+            intent,
+            request,
+            git,
+            deadline,
         })
-        .map_err(|_| invalid())?
-}
+    }
 
-pub(crate) fn verify_prior(
-    prior: &JournalReceipt,
-    request: &GitHubAdmissionRequest,
-    github: &dyn GitHubAdmissionRead,
-) -> Result<CrateReleaseIntent, OrchestratorError> {
-    with_context(request, |root, _, git, deadline| {
-        crate::release::crate_release_historical_intent::verify_prior_bound(
-            root,
-            prior,
-            request,
-            github,
-            git,
-            deadline,
-            &crate::release::crate_release_historical_intent::DirectHistoryWatch,
-        )
-    })
-}
+    pub(crate) fn verify_prior(
+        &self,
+        prior: &JournalReceipt,
+        github: &dyn GitHubAdmissionRead,
+    ) -> Result<CrateReleaseIntent, OrchestratorError> {
+        self.deadline
+            .scope(|| {
+                super::crate_release_historical_intent::verify_prior_bound(
+                    self.source,
+                    prior,
+                    self.request,
+                    github,
+                    self.git,
+                    self.deadline,
+                )
+            })
+            .map_err(|_| internal("crate_release_history_custody_required"))?
+    }
 
-pub(crate) fn verify_transition(
-    prior: &JournalReceipt,
-    current: &JournalReceipt,
-    request: &GitHubAdmissionRequest,
-    github: &dyn GitHubAdmissionRead,
-) -> Result<(), OrchestratorError> {
-    with_context(request, |root, intent, git, deadline| {
-        crate::release::crate_release_historical_intent::verify_runner_transition(
-            root,
-            crate::release::crate_release_historical_intent::TransitionReceipts {
-                prior,
-                current,
-                current_intent: intent,
-            },
-            request,
-            github,
-            git,
-            deadline,
-            &crate::release::crate_release_historical_intent::DirectHistoryWatch,
-        )
-    })
+    pub(crate) fn verify_transition(
+        &self,
+        prior: &JournalReceipt,
+        current: &JournalReceipt,
+        github: &dyn GitHubAdmissionRead,
+    ) -> Result<(), OrchestratorError> {
+        self.deadline
+            .scope(|| {
+                super::crate_release_historical_intent::verify_runner_transition(
+                    self.source,
+                    super::crate_release_historical_intent::TransitionReceipts {
+                        prior,
+                        current,
+                        current_intent: self.intent,
+                    },
+                    self.request,
+                    github,
+                    self.git,
+                    self.deadline,
+                )
+            })
+            .map_err(|_| internal("crate_release_history_custody_required"))?
+    }
 }

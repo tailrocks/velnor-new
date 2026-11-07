@@ -101,10 +101,8 @@ pub(crate) use start::{
     record_admitted_start,
 };
 
-#[cfg(any(target_os = "linux", test))]
 #[path = "package_release_signer_attestation_sdk_historical.rs"]
 mod historical;
-#[cfg(any(target_os = "linux", test))]
 pub(crate) use historical::verify_historical_tool_expectations;
 #[cfg(test)]
 use start::{derive_attested_tool_expectations, match_attested_tool_expectations};

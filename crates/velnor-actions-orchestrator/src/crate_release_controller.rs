@@ -174,7 +174,7 @@ fn verify_release_ownership<R: CrateRegistryRead>(
     Ok(())
 }
 
-fn verify_request_intent(
+pub(crate) fn verify_request_intent(
     intent: &CrateReleaseIntent,
     request: &GitHubAdmissionRequest,
 ) -> Result<(), OrchestratorError> {

@@ -36,6 +36,7 @@ struct Registry {
     access_checks: Cell<usize>,
     reject_access: Option<()>,
     inject_after_list: Cell<bool>,
+    change_source_after_list: RefCell<Option<std::path::PathBuf>>,
     move_on_second_list: Cell<u8>,
 }
 
@@ -70,6 +71,9 @@ impl JournalOperationRefs for Registry {
             self.refs
                 .borrow_mut()
                 .insert(format!("{prefix}1"), "a".repeat(40));
+        }
+        if let Some(path) = self.change_source_after_list.borrow_mut().take() {
+            std::fs::write(path, "changed during journal read").map_err(|_| err())?;
         }
         Ok(listed)
     }

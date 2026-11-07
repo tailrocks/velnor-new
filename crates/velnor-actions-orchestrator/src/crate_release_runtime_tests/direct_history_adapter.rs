@@ -96,11 +96,23 @@ pub(in super::super) fn verify_direct_history_child() -> Result<(), Box<dyn std:
     }
     let request: GitHubAdmissionRequest =
         serde_json::from_str(&std::env::var("VELNOR_TEST_DIRECT_REQUEST")?)?;
-    let receipt: JournalReceipt =
+    let mut receipt: JournalReceipt =
         serde_json::from_str(&std::env::var("VELNOR_TEST_DIRECT_RECEIPT")?)?;
     let github = crate::crate_release_github::NativeGitHubAdmissionRead::new("fixture".into())?;
-    let previous =
-        crate::release::crate_release_direct_history::verify_prior(&receipt, &request, &github)?;
+    let (root, git, files) = history_source_context(&request)?;
+    receipt.source_files = files;
+    let deadline =
+        velnor_actions_mise::CheckDeadline::after(std::time::Duration::from_secs(600))?.effective();
+    let intent = crate::release::crate_release_historical_intent::read_historical_intent(
+        &root,
+        &request.workflow_sha,
+        &git,
+        deadline,
+    )?;
+    let context = crate::release::crate_release_direct_history::HistoryContext::admitted(
+        &root, &intent, &request, &git, &receipt, deadline,
+    )?;
+    let previous = context.verify_prior(&receipt, &github)?;
     assert_eq!(
         previous.exact_source_sha(),
         Some(request.source_sha.as_str())
@@ -110,9 +122,7 @@ pub(in super::super) fn verify_direct_history_child() -> Result<(), Box<dyn std:
         "repos/owner/project/compare/{}...{}",
         request.source_sha, prior.identity.workflow_sha
     ))?;
-    crate::release::crate_release_direct_history::verify_transition(
-        &prior, &receipt, &request, &github,
-    )?;
+    context.verify_transition(&prior, &receipt, &github)?;
     exercise_interrupted_journal(&prior, &receipt, &request, &github)?;
     if std::env::var_os("VELNOR_TEST_CONTROLLER_SCENARIO").is_some()
         && std::env::var_os("VELNOR_TEST_SAME_BASE_SIGNED").is_some()
@@ -120,19 +130,18 @@ pub(in super::super) fn verify_direct_history_child() -> Result<(), Box<dyn std:
     {
         crate::crate_release_controller::tests::signed_history::exercise()?;
     }
-    verify_forged_transitions(&prior, &receipt, &request, &github);
+    verify_forged_transitions(&prior, &receipt, &request, &github, &context);
     let mut invalid = receipt.clone();
     invalid.intent_sha256 = "0".repeat(64);
-    assert!(
-        crate::release::crate_release_direct_history::verify_prior(&invalid, &request, &github)
-            .is_err()
-    );
+    assert!(context.verify_prior(&invalid, &github).is_err());
     let manifest = std::path::PathBuf::from(std::env::var("GITHUB_WORKSPACE")?)
         .join("release-source/Cargo.toml");
     std::fs::write(manifest, "[package]\nname='tampered'\nversion='0.1.1'\n")?;
     assert!(
-        crate::release::crate_release_direct_history::verify_prior(&receipt, &request, &github)
-            .is_err(),
+        crate::release::crate_release_direct_history::HistoryContext::admitted(
+            &root, &intent, &request, &git, &receipt, deadline,
+        )
+        .is_err(),
         "changed source must invalidate history"
     );
     Ok(())
@@ -143,29 +152,22 @@ fn verify_forged_transitions(
     receipt: &JournalReceipt,
     request: &GitHubAdmissionRequest,
     github: &crate::crate_release_github::NativeGitHubAdmissionRead,
+    context: &crate::release::crate_release_direct_history::HistoryContext<'_>,
 ) {
     let mut forged_prior = prior.clone();
     forged_prior.intent_sha256 = "0".repeat(64);
     assert!(
-        crate::release::crate_release_direct_history::verify_transition(
-            &forged_prior,
-            receipt,
-            request,
-            github
-        )
-        .is_err()
+        context
+            .verify_transition(&forged_prior, receipt, github)
+            .is_err()
     );
     let mut wrong_origin = prior.clone();
     wrong_origin.identity.run_id = 13;
     wrong_origin.workflow_run_url = "https://github.com/owner/project/actions/runs/13".into();
     assert!(
-        crate::release::crate_release_direct_history::verify_transition(
-            &wrong_origin,
-            receipt,
-            request,
-            github
-        )
-        .is_err(),
+        context
+            .verify_transition(&wrong_origin, receipt, github)
+            .is_err(),
         "a different run origin must fail"
     );
     let mut wrong_runner = prior.clone();
@@ -174,13 +176,9 @@ fn verify_forged_transitions(
         .workflow_sha
         .clone_from(&request.workflow_sha);
     assert!(
-        crate::release::crate_release_direct_history::verify_transition(
-            &wrong_runner,
-            receipt,
-            request,
-            github
-        )
-        .is_err(),
+        context
+            .verify_transition(&wrong_runner, receipt, github)
+            .is_err(),
         "the historical runner transition must match"
     );
 }
@@ -260,6 +258,7 @@ fn verify_changed_predecessor(
     root: &Path,
     git: &crate::crate_release_git::ReleaseGit,
     edge: &crate::crate_release_journal::PriorTransition<'_>,
+    deadline: velnor_actions_mise::CheckDeadline,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let completion_ref = format!(
         "refs/tags/velnor-receipt/{}/{}/reconciled",
@@ -286,12 +285,14 @@ fn verify_changed_predecessor(
         .create_ref("owner/project", &format!("refs/tags/{name}"), &tag_sha)
         .map_err(|error| format!("create drift ref: {error}"))?;
     assert!(
-        crate::crate_release_journal::inspect_prior_chain_with(
+        crate::crate_release_journal::walk_prior_history_until(
             journal,
             current,
             root,
             git,
             Some(edge),
+            deadline,
+            |_| Ok(()),
         )
         .is_err(),
         "a valid signed predecessor with changed operation history must be rejected"
@@ -330,13 +331,33 @@ fn exercise_interrupted_journal(
         crate::crate_release_github::NativeGitHubAdmissionRead::new("fixture".into())?,
     );
     seed_pending_upload(&journal, &prior)?;
-    let edge = crate::crate_release_journal::PriorTransition { request, github };
-    let result = crate::crate_release_journal::inspect_prior_chain_with(
+    let deadline =
+        velnor_actions_mise::CheckDeadline::after(std::time::Duration::from_secs(600))?.effective();
+    let intent = crate::release::crate_release_historical_intent::read_historical_intent(
+        &root,
+        &request.workflow_sha,
+        &git,
+        deadline,
+    )?;
+    let context = crate::release::crate_release_direct_history::HistoryContext::admitted(
+        &root, &intent, request, &git, &current, deadline,
+    )?;
+    let edge = crate::crate_release_journal::PriorTransition {
+        context: &context,
+        github,
+    };
+    let mut chain = Vec::new();
+    let result = crate::crate_release_journal::walk_prior_history_until(
         &journal,
         &current,
         &root,
         &git,
         Some(&edge),
+        deadline,
+        |evidence| {
+            chain.push(evidence.clone());
+            Ok(())
+        },
     );
     if forged_tool {
         assert!(
@@ -345,13 +366,13 @@ fn exercise_interrupted_journal(
         );
         return Ok(());
     }
-    let chain = result?;
+    let _snapshot = result?;
     assert_eq!(chain.len(), 1);
     assert_eq!(
         chain[0].mutations.len(),
         1,
         "pending upload must remain visible to recovery"
     );
-    verify_changed_predecessor(&journal, &prior, &current, &root, &git, &edge)?;
+    verify_changed_predecessor(&journal, &prior, &current, &root, &git, &edge, deadline)?;
     Ok(())
 }

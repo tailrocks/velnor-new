@@ -163,6 +163,9 @@ struct MutationRecord {
 
 #[path = "crate_release_journal_history.rs"]
 mod history;
+#[path = "crate_release_journal_history_snapshot.rs"]
+mod history_snapshot;
+pub(crate) use history_snapshot::PriorHistorySnapshot;
 #[path = "crate_release_journal_mutation.rs"]
 mod mutation;
 #[path = "crate_release_journal_records.rs"]
@@ -174,7 +177,7 @@ pub use history::{
     inspect_prior_incomplete_evidence,
 };
 pub(crate) use history::{
-    PriorTransition, inspect_current_history, inspect_prior_chain_with, inspect_recoverable_history,
+    PriorTransition, inspect_current_history, inspect_recoverable_history, walk_prior_history_until,
 };
 #[cfg(test)]
 use mutation::record_journal_mutation;

@@ -64,7 +64,7 @@ impl CheckDeadline {
     }
 
     #[must_use]
-    pub(crate) fn effective(self) -> Self {
+    pub fn effective(self) -> Self {
         OPERATION_DEADLINE
             .get()
             .map_or(self, |parent| Self(self.0.min(parent.0)))

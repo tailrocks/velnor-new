@@ -62,7 +62,24 @@ pub(crate) fn record_admitted_start<
     crate::crate_release_controller::verify_observed_packages(&observed, input.admission)?;
     crate::release::crate_release_semver::verify_observed_evidence(input.admission, &observed)?;
     let receipt = derive_start_receipt(input, &observed)?;
-    let prior_history = verified_prior_chain(input, &receipt)?;
+    let deadline = velnor_actions_mise::CheckDeadline::after(std::time::Duration::from_secs(600))
+        .map_err(|_| internal("crate_release_history_deadline"))?
+        .effective();
+    let context = receipt
+        .predecessor
+        .as_ref()
+        .map(|_| {
+            crate::release::crate_release_direct_history::HistoryContext::admitted(
+                input.source,
+                input.intent,
+                input.request,
+                input.git,
+                &receipt,
+                deadline,
+            )
+        })
+        .transpose()?;
+    let prior_history = verified_prior_chain(input, &receipt, context.as_ref(), deadline)?;
     crate::crate_release_github::authorize_github_candidate(
         input.request,
         &input.admission.github,
@@ -76,7 +93,9 @@ pub(crate) fn record_admitted_start<
             git: input.git,
         },
     )?;
-    if verified_prior_chain(input, &receipt)? != prior_history {
+    if !verified_prior_chain(input, &receipt, context.as_ref(), deadline)?
+        .matches(&prior_history)?
+    {
         return Err(internal("crate_release_previous_changed"));
     }
     if crate::crate_release_controller::reprepare_crate_release(
@@ -99,61 +118,66 @@ pub(crate) fn record_admitted_start<
 fn verified_prior_chain<J, G, R>(
     input: &AdmittedStart<'_, J, G, R>,
     receipt: &crate::crate_release_journal::JournalReceipt,
-) -> Result<Vec<crate::crate_release_journal::PriorHistoryEvidence>, OrchestratorError>
+    context: Option<&crate::release::crate_release_direct_history::HistoryContext<'_>>,
+    deadline: velnor_actions_mise::CheckDeadline,
+) -> Result<crate::crate_release_journal::PriorHistorySnapshot, OrchestratorError>
 where
     J: crate::crate_release_journal::JournalIo + crate::crate_release_journal::JournalOperationRefs,
     G: crate::crate_release_github::GitHubAdmissionRead,
 {
-    let chain = crate::crate_release_journal::inspect_prior_chain_with(
+    if receipt.predecessor.is_some() != context.is_some() {
+        return Err(internal("crate_release_history_custody_required"));
+    }
+    let edge = context.map(|context| crate::crate_release_journal::PriorTransition {
+        context,
+        github: input.github,
+    });
+    crate::crate_release_journal::walk_prior_history_until(
         input.journal,
         receipt,
         input.source,
         input.git,
-        Some(&crate::crate_release_journal::PriorTransition {
-            request: input.request,
-            github: input.github,
-        }),
-    )?;
-    for prior in &chain {
-        let previous = &prior.start.receipt;
-        let intent = match crate::release::crate_release_runtime::read_intent_at_workflow(
-            input.workflow_root,
-            &previous.identity.workflow_sha,
-            input.git,
-        ) {
-            Ok(intent) => intent,
-            Err(_) => crate::release::crate_release_direct_history::verify_prior(
-                previous,
-                input.request,
-                input.github,
-            )?,
-        };
-        let bytes = velnor_actions_contract::canonical_json_bytes(&intent)
-            .map_err(|_| internal("crate_release_previous_invalid"))?;
-        let expected_predecessor = intent.journal_predecessor.as_ref().map(|item| {
-            crate::crate_release_journal::JournalIdentity {
-                repository: previous.identity.repository.clone(),
-                source_sha: previous.identity.source_sha.clone(),
-                workflow_sha: item.workflow_sha.clone(),
-                run_id: item.run_id,
-                run_attempt: item.run_attempt,
+        edge.as_ref(),
+        deadline,
+        |prior| {
+            let previous = &prior.start.receipt;
+            let intent = match crate::release::crate_release_runtime::read_intent_at_workflow(
+                input.workflow_root,
+                &previous.identity.workflow_sha,
+                input.git,
+            ) {
+                Ok(intent) => intent,
+                Err(_) => context
+                    .ok_or_else(|| internal("crate_release_history_custody_required"))?
+                    .verify_prior(previous, input.github)?,
+            };
+            let bytes = velnor_actions_contract::canonical_json_bytes(&intent)
+                .map_err(|_| internal("crate_release_previous_invalid"))?;
+            let expected_predecessor = intent.journal_predecessor.as_ref().map(|item| {
+                crate::crate_release_journal::JournalIdentity {
+                    repository: previous.identity.repository.clone(),
+                    source_sha: previous.identity.source_sha.clone(),
+                    workflow_sha: item.workflow_sha.clone(),
+                    run_id: item.run_id,
+                    run_attempt: item.run_attempt,
+                }
+            });
+            if crate::planner::generator::sha256_hex(&bytes) != previous.intent_sha256
+                || crate::crate_release_journal::release_base_intent_sha256(&intent)?
+                    != previous.base_intent_sha256
+                || expected_predecessor != previous.predecessor
+            {
+                return Err(internal("crate_release_previous_invalid"));
             }
-        });
-        if crate::planner::generator::sha256_hex(&bytes) != previous.intent_sha256
-            || crate::crate_release_journal::release_base_intent_sha256(&intent)?
-                != previous.base_intent_sha256
-            || expected_predecessor != previous.predecessor
-        {
-            return Err(internal("crate_release_previous_invalid"));
-        }
-        crate::crate_release_github::verify_predecessor_authority(
-            input.github,
-            input.request,
-            previous,
-            &intent,
-        )?;
-    }
-    Ok(chain)
+            crate::crate_release_github::verify_predecessor_authority(
+                input.github,
+                input.request,
+                previous,
+                &intent,
+            )?;
+            Ok(())
+        },
+    )
 }
 
 fn derive_start_receipt<

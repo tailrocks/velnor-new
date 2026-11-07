@@ -53,15 +53,33 @@ pub(crate) fn observe_prior_recovery<
     if input.journal_receipt.predecessor.as_ref() != Some(previous) {
         return Err(invalid());
     }
-    let history = crate::crate_release_journal::inspect_prior_chain_with(
+    let deadline = velnor_actions_mise::CheckDeadline::after(std::time::Duration::from_secs(600))
+        .map_err(|_| invalid())?
+        .effective();
+    let context = crate::release::crate_release_direct_history::HistoryContext::admitted(
+        input.source,
+        input.intent,
+        input.request,
+        input.git,
+        input.journal_receipt,
+        deadline,
+    )?;
+    let edge = crate::crate_release_journal::PriorTransition {
+        context: &context,
+        github: input.github,
+    };
+    let mut pending = Vec::new();
+    let history = crate::crate_release_journal::walk_prior_history_until(
         input.journal,
         input.journal_receipt,
         input.source,
         input.git,
-        Some(&crate::crate_release_journal::PriorTransition {
-            request: input.request,
-            github: input.github,
-        }),
+        Some(&edge),
+        deadline,
+        |prior| {
+            collect_intentions(&mut pending, &prior);
+            Ok(())
+        },
     )?;
     let current = observe_admitted_crate_release(
         input.intent,
@@ -72,32 +90,10 @@ pub(crate) fn observe_prior_recovery<
         &input.admission.github,
     )?;
     verify_observed_packages(&current, input.admission)?;
-    let mut results = Vec::new();
-    for prior in &history {
-        for (index, operation) in prior.mutations.iter().enumerate() {
-            if !matches!(operation.phase, JournalMutationPhase::Intended) {
-                continue;
-            }
-            let package = current
-                .packages
-                .iter()
-                .find(|package| {
-                    package.source.name == operation.package
-                        && package.source.version == operation.version
-                })
-                .ok_or_else(invalid)?;
-            let state = recovery_state(operation.kind, &package.action);
-            results.push(RecoveryOperationObservation {
-                prior_identity: prior.start.receipt.identity.clone(),
-                sequence: operation.sequence,
-                package: operation.package.clone(),
-                version: operation.version.clone(),
-                kind: operation.kind,
-                prior_record: prior_record_state(prior.mutations.get(index + 1)),
-                state,
-            });
-        }
-    }
+    let results = pending
+        .into_iter()
+        .map(|item| item.observe(&current))
+        .collect::<Result<Vec<_>, _>>()?;
     if observe_admitted_crate_release(
         input.intent,
         input.request,
@@ -106,21 +102,72 @@ pub(crate) fn observe_prior_recovery<
         crate::CrateSource::new(input.source, input.git, input.source_execution),
         &input.admission.github,
     )? != current
-        || crate::crate_release_journal::inspect_prior_chain_with(
+        || !crate::crate_release_journal::walk_prior_history_until(
             input.journal,
             input.journal_receipt,
             input.source,
             input.git,
-            Some(&crate::crate_release_journal::PriorTransition {
-                request: input.request,
-                github: input.github,
-            }),
-        )? != history
+            Some(&edge),
+            deadline,
+            |_| Ok(()),
+        )?
+        .matches(&history)?
     {
         return Err(invalid());
     }
     authorize_github_candidate(input.request, &input.admission.github, input.github)?;
     Ok(results)
+}
+
+struct HistoricalIntention {
+    identity: JournalIdentity,
+    sequence: u32,
+    package: String,
+    version: String,
+    kind: JournalMutationKind,
+    prior_record: PriorRecordState,
+}
+
+fn collect_intentions(
+    pending: &mut Vec<HistoricalIntention>,
+    prior: &crate::crate_release_journal::PriorHistoryEvidence,
+) {
+    for (index, operation) in prior.mutations.iter().enumerate() {
+        if matches!(operation.phase, JournalMutationPhase::Intended) {
+            pending.push(HistoricalIntention {
+                identity: prior.start.receipt.identity.clone(),
+                sequence: operation.sequence,
+                package: operation.package.clone(),
+                version: operation.version.clone(),
+                kind: operation.kind,
+                prior_record: prior_record_state(prior.mutations.get(index + 1)),
+            });
+        }
+    }
+}
+
+impl HistoricalIntention {
+    fn observe(
+        self,
+        current: &super::super::CrateReleaseAdmissionReceipt,
+    ) -> Result<RecoveryOperationObservation, OrchestratorError> {
+        let package = current
+            .packages
+            .iter()
+            .find(|package| {
+                package.source.name == self.package && package.source.version == self.version
+            })
+            .ok_or_else(invalid)?;
+        Ok(RecoveryOperationObservation {
+            prior_identity: self.identity,
+            sequence: self.sequence,
+            package: self.package,
+            version: self.version,
+            kind: self.kind,
+            prior_record: self.prior_record,
+            state: recovery_state(self.kind, &package.action),
+        })
+    }
 }
 
 pub(super) fn prior_record_state(next: Option<&JournalMutation>) -> PriorRecordState {

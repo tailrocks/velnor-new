@@ -233,7 +233,12 @@ pub(super) fn fixture_archive(root: &Path) -> Result<Vec<u8>, Box<dyn std::error
         ])
         .output()?;
     if !which.status.success() {
-        return Err("cannot resolve pinned cargo".into());
+        let stderr = String::from_utf8_lossy(&which.stderr[..which.stderr.len().min(4096)]);
+        return Err(format!(
+            "cannot resolve pinned cargo: {}; stderr: {stderr}",
+            which.status
+        )
+        .into());
     }
     let cargo = String::from_utf8(which.stdout)?.trim().to_owned();
     let package = Command::new("mise")

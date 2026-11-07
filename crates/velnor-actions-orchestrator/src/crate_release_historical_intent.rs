@@ -6,38 +6,27 @@ use std::path::Path;
 use velnor_actions_contract::config::CrateReleaseIntent;
 use velnor_actions_mise::{CheckDeadline, GitRequest};
 
-pub(crate) trait HistoryWatch {
-    fn check(&self) -> Result<(), ()>;
-}
-pub(crate) struct DirectHistoryWatch;
-impl HistoryWatch for DirectHistoryWatch {
-    fn check(&self) -> Result<(), ()> {
-        CheckDeadline::check_scope().map_err(|_| ())
-    }
-}
-
-fn read_historical_intent(
+pub(crate) fn read_historical_intent(
     root: &Path,
     commit: &str,
     git: &ReleaseGit,
     deadline: CheckDeadline,
-    wire: &dyn HistoryWatch,
 ) -> Result<CrateReleaseIntent, OrchestratorError> {
     let invalid = || internal("crate_release_historical_intent_invalid");
-    wire.check().map_err(|()| invalid())?;
-    verify_object_store(root, git, deadline, wire)?;
-    let commit_bytes = object(root, "commit", commit, git, deadline, wire, 1_048_576)?;
+    deadline.remaining().map_err(|_| invalid())?;
+    verify_object_store(root, git, deadline)?;
+    let commit_bytes = object(root, "commit", commit, git, deadline, 1_048_576)?;
     let first = commit_bytes
         .split(|byte| *byte == b'\n')
         .next()
         .ok_or_else(invalid)?;
     let tree = std::str::from_utf8(first.strip_prefix(b"tree ").ok_or_else(invalid)?)
         .map_err(|_| invalid())?;
-    let root_tree = object(root, "tree", tree, git, deadline, wire, 16_777_216)?;
+    let root_tree = object(root, "tree", tree, git, deadline, 16_777_216)?;
     let github = tree_entry(&root_tree, ".github", "40000")?;
-    let github_tree = object(root, "tree", &github, git, deadline, wire, 16_777_216)?;
+    let github_tree = object(root, "tree", &github, git, deadline, 16_777_216)?;
     let intent = tree_entry(&github_tree, "velnor-release-intent.toml", "100644")?;
-    let bytes = object(root, "blob", &intent, git, deadline, wire, 1_048_576)?;
+    let bytes = object(root, "blob", &intent, git, deadline, 1_048_576)?;
     let original: CrateReleaseIntent =
         toml::from_str(std::str::from_utf8(&bytes).map_err(|_| invalid())?)
             .map_err(|_| invalid())?;
@@ -47,8 +36,8 @@ fn read_historical_intent(
     let mut validated = original.clone();
     "ubuntu-26.04".clone_into(&mut validated.runner);
     validated.validate().map_err(|_| invalid())?;
-    verify_object_store(root, git, deadline, wire)?;
-    wire.check().map_err(|()| invalid())?;
+    verify_object_store(root, git, deadline)?;
+    deadline.remaining().map_err(|_| invalid())?;
     Ok(original)
 }
 
@@ -58,17 +47,15 @@ fn object(
     id: &str,
     git: &ReleaseGit,
     deadline: CheckDeadline,
-    wire: &dyn HistoryWatch,
     cap: usize,
 ) -> Result<Vec<u8>, OrchestratorError> {
     let invalid = || internal("crate_release_historical_object_invalid");
-    wire.check().map_err(|()| invalid())?;
+    deadline.remaining().map_err(|_| invalid())?;
     let output = GitRequest::object(kind, id)
         .map_err(|_| invalid())?
         .run_release_in_bounded(root, git, cap, deadline.remaining().map_err(|_| invalid())?)
         .map_err(|_| invalid())?;
     deadline.remaining().map_err(|_| invalid())?;
-    wire.check().map_err(|()| invalid())?;
     if !output.success
         || crate::crate_release_qualification_snapshot::object::object_sha(kind, &output.stdout)?
             != id
@@ -122,10 +109,9 @@ fn verify_object_store(
     root: &Path,
     git: &ReleaseGit,
     deadline: CheckDeadline,
-    wire: &dyn HistoryWatch,
 ) -> Result<(), OrchestratorError> {
     let invalid = || internal("crate_release_historical_store_invalid");
-    wire.check().map_err(|()| invalid())?;
+    deadline.remaining().map_err(|_| invalid())?;
     for path in [
         ".",
         ".git",
@@ -165,7 +151,7 @@ fn verify_object_store(
     if !config.is_file() || config.file_type().is_symlink() {
         return Err(invalid());
     }
-    wire.check().map_err(|()| invalid())?;
+    deadline.remaining().map_err(|_| invalid())?;
     let result = GitRequest::new(
         "config",
         vec![
@@ -183,7 +169,7 @@ fn verify_object_store(
         deadline.remaining().map_err(|_| invalid())?,
     )
     .map_err(|_| invalid())?;
-    wire.check().map_err(|()| invalid())?;
+    deadline.remaining().map_err(|_| invalid())?;
     if result.code != Some(1) || !result.stdout.is_empty() {
         return Err(invalid());
     }
@@ -205,7 +191,6 @@ pub(crate) fn verify_runner_transition(
     github: &dyn crate::crate_release_github::GitHubAdmissionRead,
     git: &ReleaseGit,
     deadline: CheckDeadline,
-    wire: &dyn HistoryWatch,
 ) -> Result<(), OrchestratorError> {
     let TransitionReceipts {
         prior,
@@ -225,7 +210,7 @@ pub(crate) fn verify_runner_transition(
         current_intent.clone()
     } else {
         let historical_current =
-            read_historical_intent(root, &current.identity.workflow_sha, git, deadline, wire)?;
+            read_historical_intent(root, &current.identity.workflow_sha, git, deadline)?;
         if !matches!(
             historical_current.runner.as_str(),
             "ubuntu-24.04" | "ubuntu-26.04"
@@ -242,8 +227,7 @@ pub(crate) fn verify_runner_transition(
         verify_historical_tools(&historical_current, current, deadline)?;
         historical_current
     };
-    let historical =
-        read_historical_intent(root, &prior.identity.workflow_sha, git, deadline, wire)?;
+    let historical = read_historical_intent(root, &prior.identity.workflow_sha, git, deadline)?;
     if !matches!(historical.runner.as_str(), "ubuntu-24.04" | "ubuntu-26.04") {
         return Err(invalid());
     }
@@ -350,9 +334,8 @@ pub(crate) fn verify_prior_bound(
     github: &dyn crate::crate_release_github::GitHubAdmissionRead,
     git: &ReleaseGit,
     deadline: CheckDeadline,
-    wire: &dyn HistoryWatch,
 ) -> Result<CrateReleaseIntent, OrchestratorError> {
-    let intent = read_historical_intent(root, &prior.identity.workflow_sha, git, deadline, wire)?;
+    let intent = read_historical_intent(root, &prior.identity.workflow_sha, git, deadline)?;
     verify_receipt_intent(prior, &intent)?;
     crate::crate_release_github::verify_predecessor_authority(github, request, prior, &intent)?;
     verify_historical_tools(&intent, prior, deadline)?;

@@ -31,6 +31,12 @@ fn test_only_dispatch_and_loopback_transport() -> Result<(), Box<dyn std::error:
     if std::env::var_os("VELNOR_TEST_TRANSPORT_CHILD").is_some() {
         return run_test_transport_child();
     }
+    #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+    if std::env::var_os("VELNOR_TEST_SAME_BASE_SIGNED").is_none() {
+        return crate::release::package_release_signer::image_transport_tests::dispatch(
+            "release::package_release_signer::attestation::image_transport_tests::same_base_history_rejects_forged_tool",
+        );
+    }
     let listener = std::net::TcpListener::bind("127.0.0.1:0")?;
     listener.set_nonblocking(true)?;
     let origin = format!("http://{}", listener.local_addr()?);
@@ -335,53 +341,8 @@ fn release_intent_comes_from_the_requested_workflow_commit()
     assert!(read_intent_at_workflow(root, &"0".repeat(40), &test_git()).is_err());
     Ok(())
 }
-use super::{OrchestratorError, poll_pending_admission};
-use std::cell::Cell;
-
-#[test]
-fn retries_only_explicitly_pending_required_checks() {
-    let calls = Cell::new(0);
-    let waits = Cell::new(0);
-    let result = poll_pending_admission(
-        || {
-            calls.set(calls.get() + 1);
-            if calls.get() < 3 {
-                Err(OrchestratorError::Internal {
-                    problem: "crate_release_required_pending".into(),
-                })
-            } else {
-                Ok(7)
-            }
-        },
-        || true,
-        || waits.set(waits.get() + 1),
-    );
-    assert_eq!(result.expect("success"), 7);
-    assert_eq!(waits.get(), 2);
-    let calls = Cell::new(0);
-    let result: Result<(), _> = poll_pending_admission(
-        || {
-            calls.set(calls.get() + 1);
-            Err(OrchestratorError::Internal {
-                problem: "crate_release_check_app".into(),
-            })
-        },
-        || true,
-        || panic!("permanent error was retried"),
-    );
-    assert!(result.is_err());
-    assert_eq!(calls.get(), 1);
-    let result: Result<(), _> = poll_pending_admission(
-        || {
-            Err(OrchestratorError::Internal {
-                problem: "crate_release_required_pending".into(),
-            })
-        },
-        || false,
-        || panic!("expired deadline was retried"),
-    );
-    assert!(result.is_err());
-}
+#[path = "crate_release_runtime_tests/polling.rs"]
+mod polling;
 
 #[test]
 fn native_fixture_evidence_binds_observed_inputs() -> Result<(), Box<dyn std::error::Error>> {
