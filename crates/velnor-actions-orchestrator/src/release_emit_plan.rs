@@ -115,30 +115,32 @@ pub(super) fn release_plan(
         packages,
         version: version.map(str::to_owned),
         dispatch,
+        qualification_dispatch:
+            velnor_actions_workflow_renderer::release_spec::QualificationDispatch::Disabled,
     }
 }
 
 pub(super) fn release_triggers(branch: &str, plan: &ReleasePlan) -> ReleaseTriggers {
-    if !plan.dispatch {
-        return ReleaseTriggers {
-            push_branches: vec![branch.to_owned()],
-            dispatch_inputs: Vec::new(),
-        };
-    }
-    let mut dispatch_inputs = vec![
-        DispatchInput {
-            name: "plan".to_owned(),
-            description: "Approved release plan".to_owned(),
-            required: true,
-            default: Some(plan.plan_id.clone()),
-        },
-        DispatchInput {
-            name: "source_sha".to_owned(),
-            description: "Approved source SHA".to_owned(),
-            required: true,
-            default: Some(plan.source_sha.clone()),
-        },
-    ];
+    let qualification = plan.qualification_dispatch
+        == velnor_actions_workflow_renderer::release_spec::QualificationDispatch::Enabled;
+    let mut dispatch_inputs = if plan.dispatch {
+        vec![
+            DispatchInput {
+                name: "plan".to_owned(),
+                description: "Approved release plan".to_owned(),
+                required: true,
+                default: Some(plan.plan_id.clone()),
+            },
+            DispatchInput {
+                name: "source_sha".to_owned(),
+                description: "Approved source SHA".to_owned(),
+                required: true,
+                default: Some(plan.source_sha.clone()),
+            },
+        ]
+    } else {
+        Vec::new()
+    };
     if let Some(version) = &plan.version {
         dispatch_inputs.push(DispatchInput {
             name: "version".to_owned(),
@@ -147,8 +149,20 @@ pub(super) fn release_triggers(branch: &str, plan: &ReleasePlan) -> ReleaseTrigg
             default: Some(version.clone()),
         });
     }
+    if qualification {
+        dispatch_inputs.push(DispatchInput {
+            name: "mode".to_owned(),
+            description: "Release or OIDC qualification".to_owned(),
+            required: true,
+            default: Some("release".to_owned()),
+        });
+    }
     ReleaseTriggers {
-        push_branches: Vec::new(),
+        push_branches: if plan.dispatch {
+            Vec::new()
+        } else {
+            vec![branch.to_owned()]
+        },
         dispatch_inputs,
     }
 }

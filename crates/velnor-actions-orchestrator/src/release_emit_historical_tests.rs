@@ -185,6 +185,20 @@ fn check_authority(
 ) -> TestResult<()> {
     let intent_file = tempfile::NamedTempFile::new()?;
     fs::write(intent_file.path(), toml::to_string(intent)?)?;
+    let event_file = tempfile::NamedTempFile::new()?;
+    let mut inputs = serde_json::Map::new();
+    inputs.insert("plan".into(), format!("release-{}", &source_a[..12]).into());
+    inputs.insert("source_sha".into(), source_a.into());
+    if let Some(recovery) = &intent.recovery {
+        inputs.insert("version".into(), recovery.version.clone().into());
+    }
+    if intent.oidc_qualification {
+        inputs.insert("mode".into(), "release".into());
+    }
+    fs::write(
+        event_file.path(),
+        serde_json::to_vec(&serde_json::json!({"inputs":inputs}))?,
+    )?;
     let child = Command::new(std::env::current_exe()?)
         .env_clear()
         .env("VELNOR_TEST_HISTORICAL_INTENT", intent_file.path())
@@ -192,6 +206,7 @@ fn check_authority(
         .env("VELNOR_TEST_SOURCE", source_a)
         .env("GITHUB_REPOSITORY", "example/demo")
         .env("GITHUB_EVENT_NAME", "workflow_dispatch")
+        .env("GITHUB_EVENT_PATH", event_file.path())
         .env("GITHUB_REF", "refs/heads/main")
         .env(
             "GITHUB_WORKFLOW_REF",

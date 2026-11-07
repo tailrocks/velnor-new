@@ -190,6 +190,7 @@ pub struct ReleaseWorkflowSpec {
     pub release_plz_version: String,
     pub journal_predecessor: Option<velnor_actions_contract::config::CrateReleasePredecessor>,
     pub new_crates: Option<velnor_actions_contract::config::NewCrateRelease>,
+    pub qualification: Option<crate::crate_oidc_qualification::OidcQualificationSpec>,
 }
 
 impl ReleaseWorkflowSpec {
@@ -200,6 +201,14 @@ impl ReleaseWorkflowSpec {
         scan_for_private_subcommands(&self.name)?;
         validate_repository(&self.repository)?;
         self.plan.validate()?;
+        if self.plan.qualification_dispatch == crate::release_spec::QualificationDispatch::Enabled {
+            return Err(RenderError::InvalidWorkflow(
+                "oidc_qualification_unavailable".to_owned(),
+            ));
+        }
+        if self.qualification.is_some() {
+            return Err(RenderError::InvalidWorkflow("oidc_qualification_unavailable".to_owned()));
+        }
         if self.plan.repository != self.repository {
             return Err(RenderError::InvalidWorkflow(
                 "bootstrap_repository_mismatch".to_owned(),

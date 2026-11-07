@@ -68,6 +68,9 @@ pub struct RustReleaseConfig {
     #[serde(default)]
     pub enabled: bool,
 
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub oidc_qualification: bool,
+
     #[serde(default = "default_manifest_path")]
     pub manifest_path: String,
 
@@ -148,6 +151,7 @@ impl Default for RustReleaseConfig {
     fn default() -> Self {
         Self {
             enabled: false,
+            oidc_qualification: false,
             manifest_path: default_manifest_path(),
             packages: Vec::new(),
             publishable_workspace: false,
@@ -189,6 +193,18 @@ impl RustReleaseConfig {
     }
 
     pub fn validate(&self, file: &str) -> Result<(), ContractError> {
+        if self.oidc_qualification
+            && (!self.enabled
+                || self.registry != ReleaseRegistry::CratesIo
+                || self.effective_authentication() != ReleaseAuthentication::TrustedPublishing
+                || self.new_crates.is_some())
+        {
+            return Err(ContractError::config(
+                file,
+                "oidc_qualification",
+                "trusted_publishing_required",
+            ));
+        }
         validate_manifest_path(file, &self.manifest_path)?;
         validate_packages(
             file,

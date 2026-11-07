@@ -36,6 +36,7 @@ struct Fixture {
 fn intent(sha: &str) -> CrateReleaseIntent {
     CrateReleaseIntent {
         schema: 1,
+        oidc_qualification: false,
         repository: "acme/demo".into(),
         default_branch: "main".into(),
         environment: "release".into(),

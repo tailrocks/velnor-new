@@ -29,6 +29,7 @@ fn rendered_files_reject_divergent_release_intent() -> Result<(), Box<dyn std::e
     };
     let intent = CrateReleaseIntent {
         schema: 1,
+        oidc_qualification: false,
         repository: "owner/project".into(),
         default_branch: "main".into(),
         environment: "release".into(),

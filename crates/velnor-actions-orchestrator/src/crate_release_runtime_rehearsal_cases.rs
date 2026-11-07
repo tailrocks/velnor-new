@@ -3,6 +3,13 @@
 
 use super::*;
 
+fn fixture_event(root: &Path, source: &str) -> Result<std::path::PathBuf, Box<dyn Error>> {
+    let path = root.join("github-event.json");
+    let event = serde_json::json!({"inputs": {"plan": format!("release-{}", &source[..12]), "source_sha": source, "version": "0.1.1"}});
+    std::fs::write(&path, serde_json::to_vec(&event)?)?;
+    Ok(path)
+}
+
 pub(super) fn rehearse_journal_start(root: &Path) -> Result<(), Box<dyn Error>> {
     let output = supplied_step(root, "release-publish", "journal-start")?;
     let actual = String::from_utf8_lossy(&output.stdout).to_string()
@@ -52,6 +59,7 @@ pub(super) fn rehearse_candidate_denial() -> Result<(), Box<dyn Error>> {
     let root = temp.path();
     let source = "a".repeat(40);
     let sha = committed_intent(root, &source, true)?;
+    let github_event = fixture_event(root, &source)?;
     let listener = std::net::TcpListener::bind("127.0.0.1:0")?;
     listener.set_nonblocking(true)?;
     let origin = format!("http://{}", listener.local_addr()?);
@@ -88,6 +96,7 @@ pub(super) fn rehearse_candidate_denial() -> Result<(), Box<dyn Error>> {
         )
         .env("GITHUB_REF", "refs/heads/main")
         .env("GITHUB_EVENT_NAME", "workflow_dispatch")
+        .env("GITHUB_EVENT_PATH", &github_event)
         .env("GITHUB_RUN_ID", "12")
         .env("GITHUB_RUN_ATTEMPT", "1")
         .env("GIT_TOKEN", "fixture")
@@ -108,6 +117,7 @@ pub(super) fn rehearse_source_require(event: &str, denied: bool) -> Result<(), B
     let root = temp.path();
     let source = "a".repeat(40);
     let sha = committed_intent(root, &source, event == "workflow_dispatch")?;
+    let github_event = fixture_event(root, &source)?;
     let listener = std::net::TcpListener::bind("127.0.0.1:0")?;
     listener.set_nonblocking(true)?;
     let origin = format!("http://{}", listener.local_addr()?);
@@ -147,6 +157,7 @@ pub(super) fn rehearse_source_require(event: &str, denied: bool) -> Result<(), B
         )
         .env("GITHUB_REF", "refs/heads/main")
         .env("GITHUB_EVENT_NAME", event)
+        .env("GITHUB_EVENT_PATH", &github_event)
         .env("GITHUB_RUN_ID", if event == "push" { "13" } else { "12" })
         .env("GITHUB_RUN_ATTEMPT", "1")
         .env("GIT_TOKEN", "fixture")

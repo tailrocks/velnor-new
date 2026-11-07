@@ -53,6 +53,8 @@ fn fixture_for_release_pr(
         packages: BTreeMap::from([("example".to_owned(), "0.1.1".to_owned())]),
         version: Some("0.1.1".to_owned()),
         dispatch: true,
+        qualification_dispatch:
+            velnor_actions_workflow_renderer::release_spec::QualificationDispatch::Disabled,
     };
     let release = RustReleaseConfig {
         enabled: true,
@@ -110,6 +112,7 @@ fn fixture_for_release_pr(
             bootstrap_environment: "release".to_owned(),
             journal_predecessor: None,
             new_crates: None,
+            qualification: None,
             release_plz_version: catalog.version(PinnedTool::ReleasePlz).to_owned(),
         },
         catalog.version(PinnedTool::Rust).to_owned(),

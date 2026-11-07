@@ -101,7 +101,8 @@ impl ReleaseTriggers {
             }
         }
         if plan.dispatch {
-            let expected_len = if plan.version.is_some() { 3 } else { 2 };
+            let expected_len = if plan.version.is_some() { 3 } else { 2 }
+                + usize::from(plan.qualification_dispatch == QualificationDispatch::Enabled);
             if self.dispatch_inputs.len() != expected_len {
                 return Err(RenderError::InvalidWorkflow(
                     "unexpected_release_dispatch_input".to_owned(),
@@ -112,10 +113,16 @@ impl ReleaseTriggers {
             if let Some(version) = &plan.version {
                 check_bound_input(&self.dispatch_inputs, "version", version)?;
             }
-        } else if !self.dispatch_inputs.is_empty() || plan.version.is_some() {
+        } else if self.dispatch_inputs.len()
+            != usize::from(plan.qualification_dispatch == QualificationDispatch::Enabled)
+            || plan.version.is_some()
+        {
             return Err(RenderError::InvalidWorkflow(
                 "unexpected_release_dispatch".to_owned(),
             ));
+        }
+        if plan.qualification_dispatch == QualificationDispatch::Enabled {
+            check_bound_input(&self.dispatch_inputs, "mode", "release")?;
         }
         Ok(())
     }
@@ -138,6 +145,12 @@ fn check_bound_input(
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum QualificationDispatch {
+    Disabled,
+    Enabled,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ReleasePlan {
     pub plan_id: String,
@@ -147,6 +160,7 @@ pub struct ReleasePlan {
     pub packages: BTreeMap<String, String>,
     pub version: Option<String>,
     pub dispatch: bool,
+    pub qualification_dispatch: QualificationDispatch,
 }
 
 impl ReleasePlan {
@@ -182,20 +196,47 @@ impl ReleasePlan {
 pub fn publish_gate_condition(repository: &str, branch: &str, plan: &ReleasePlan) -> String {
     let event = format!("github.event_name == 'push' && github.ref == 'refs/heads/{branch}'");
     let event = if plan.dispatch {
-        let mut dispatch = format!(
-            "github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/{branch}' && github.event.inputs.plan == '{}' && github.event.inputs.source_sha == '{}'",
-            plan.plan_id, plan.source_sha
-        );
-        if let Some(version) = &plan.version {
-            dispatch.push_str(" && github.event.inputs.version == '");
-            dispatch.push_str(version);
-            dispatch.push('\'');
-        }
-        dispatch
+        release_dispatch_condition(branch, plan)
     } else {
         event
     };
     format!(
         "github.repository == '{repository}' && ({event}) && needs.release-preflight.outputs.eligible == 'true'"
     )
+}
+
+#[must_use]
+pub fn release_dispatch_condition(branch: &str, plan: &ReleasePlan) -> String {
+    let mut dispatch = format!(
+        "github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/{branch}' && github.event.inputs.plan == '{}' && github.event.inputs.source_sha == '{}'",
+        plan.plan_id, plan.source_sha
+    );
+    if plan.qualification_dispatch == QualificationDispatch::Enabled {
+        dispatch.push_str(" && github.event.inputs.mode == 'release'");
+    }
+    if let Some(version) = &plan.version {
+        dispatch.push_str(" && github.event.inputs.version == '");
+        dispatch.push_str(version);
+        dispatch.push('\'');
+    }
+    dispatch
+}
+
+#[must_use]
+pub fn preflight_gate_condition(
+    repository: &str,
+    branch: &str,
+    plan: &ReleasePlan,
+) -> Option<String> {
+    if plan.qualification_dispatch == QualificationDispatch::Disabled {
+        return None;
+    }
+    let event = if plan.dispatch {
+        release_dispatch_condition(branch, plan)
+    } else {
+        "github.event_name == 'push'".to_owned()
+    };
+    Some(format!(
+        "github.repository == '{repository}' && github.ref == 'refs/heads/{branch}' && {event}"
+    ))
 }

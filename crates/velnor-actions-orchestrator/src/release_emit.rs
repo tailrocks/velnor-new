@@ -83,7 +83,7 @@ fn release_files_for_config(
         .recovery
         .as_ref()
         .map(|record| record.version.as_str());
-    let plan = release_plan(
+    let mut plan = release_plan(
         &selection,
         &repository,
         &source_sha,
@@ -92,6 +92,10 @@ fn release_files_for_config(
         version,
         release.exact_source_sha().is_some(),
     );
+    if intent.oidc_qualification {
+        plan.qualification_dispatch =
+            velnor_actions_workflow_renderer::release_spec::QualificationDispatch::Enabled;
+    }
     let jobs = build_release_jobs(
         prep,
         mise,
@@ -121,6 +125,18 @@ fn release_files_for_config(
         bootstrap_environment: release.environment.clone(),
         journal_predecessor: release.journal_predecessor.clone(),
         new_crates: release.new_crates.clone(),
+        qualification: intent.oidc_qualification.then(|| {
+            velnor_actions_workflow_renderer::crate_oidc_qualification::OidcQualificationSpec {
+                repository: intent.repository.clone(),
+                default_branch: intent.default_branch.clone(),
+                environment: intent.environment.clone(),
+                required_workflow_path: intent.required_workflow_path.clone(),
+                trusted_reviewer_id: intent.trusted_reviewer_id,
+                generator_version: intent.generator_version.clone(),
+                generator_source_sha: intent.generator_source_sha.clone(),
+                generator_manifest_sha256: intent.generator_manifest_sha256.clone(),
+            }
+        }),
         release_plz_version: catalog
             .version(velnor_actions_mise::PinnedTool::ReleasePlz)
             .to_owned(),
@@ -159,7 +175,7 @@ fn build_release_jobs(
         generator.0,
         generator.1,
     )?;
-    assemble_jobs(&JobInputs {
+    let mut jobs = assemble_jobs(&JobInputs {
         release,
         gate,
         preparation_gate,
@@ -171,7 +187,16 @@ fn build_release_jobs(
         generator_version,
         generator_source_sha: generator.0,
         generator_manifest_sha256: generator.1,
-    })
+    })?;
+    if let Some(preflight) = jobs.get_mut("release-preflight") {
+        preflight.condition =
+            velnor_actions_workflow_renderer::release_spec::preflight_gate_condition(
+                repository,
+                &prep.default_branch,
+                plan,
+            );
+    }
+    Ok(jobs)
 }
 
 struct IntentSettings<'a> {
@@ -190,6 +215,7 @@ fn crate_release_intent(
 ) -> CrateReleaseIntent {
     CrateReleaseIntent {
         schema: 1,
+        oidc_qualification: release.oidc_qualification,
         repository: repository.to_owned(),
         default_branch: settings.default_branch.to_owned(),
         environment: release.environment.clone(),

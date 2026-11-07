@@ -42,6 +42,7 @@ fn derives_reviewable_plan_from_verified_source_tree() -> Result<(), Orchestrato
     let source = "a".repeat(40);
     let intent = velnor_actions_contract::config::CrateReleaseIntent {
         schema: 1,
+        oidc_qualification: false,
         repository: "owner/project".into(),
         default_branch: "main".into(),
         environment: "release".into(),

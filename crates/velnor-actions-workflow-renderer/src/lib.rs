@@ -29,6 +29,7 @@ mod commands_env;
 mod commands_scan;
 mod composite;
 mod crate_obligations;
+pub mod crate_oidc_qualification;
 pub mod dco;
 mod dispatch_cache_boundary;
 mod document;

@@ -91,6 +91,18 @@ pub fn render_release_workflow(
     let manifest = env.get("VELNOR_GENERATOR_MANIFEST_SHA256").ok_or_else(|| {
         RenderError::InvalidWorkflow("release_generator_manifest_missing".to_owned())
     })?;
+    if let Some(qualification) = &spec.qualification
+        && (qualification.repository != spec.repository
+            || qualification.default_branch != spec.default_branch
+            || qualification.environment != spec.publish_environment
+            || qualification.generator_version != ctx.generator_version
+            || qualification.generator_source_sha != *source
+            || qualification.generator_manifest_sha256 != *manifest)
+    {
+        return Err(RenderError::InvalidWorkflow(
+            "oidc_qualification_binding".to_owned(),
+        ));
+    }
     let binding = ReleaseConfigBinding {
         generator_version: &ctx.generator_version,
         generator_source_sha: source,
@@ -113,6 +125,21 @@ fn release_document(spec: &ReleaseWorkflowSpec) -> Result<Yaml, RenderError> {
     let mut jobs = Vec::with_capacity(spec.jobs.len());
     for (id, job) in &spec.jobs {
         jobs.push((id.clone(), release_job_to_yaml(job)?));
+    }
+    if let Some(qualification) = &spec.qualification {
+        let job = qualification.job()?;
+        let release_dispatch = spec.plan.dispatch.then_some(&spec.plan);
+        let invalid = qualification.invalid_dispatch_job(release_dispatch)?;
+        qualification.validate_jobs(&job, &invalid, release_dispatch)?;
+        for id in ["oidc_qualification", "reject_invalid_dispatch"] {
+            if spec.jobs.contains_key(id) {
+                return Err(RenderError::InvalidWorkflow(
+                    "oidc_qualification_job_collision".to_owned(),
+                ));
+            }
+        }
+        jobs.push(("oidc_qualification".to_owned(), job));
+        jobs.push(("reject_invalid_dispatch".to_owned(), invalid));
     }
     Ok(Yaml::Map(vec![
         ("name".to_owned(), Yaml::str(spec.name.clone())),
@@ -275,6 +302,18 @@ pub fn render_release_files(
     intent: &velnor_actions_contract::config::CrateReleaseIntent,
 ) -> Result<ReleaseFiles, RenderError> {
     intent.validate().map_err(RenderError::Contract)?;
+    if intent.oidc_qualification != spec.qualification.is_some()
+        || intent.oidc_qualification
+            != (spec.plan.qualification_dispatch
+                == crate::release_spec::QualificationDispatch::Enabled)
+    {
+        return Err(RenderError::InvalidWorkflow(
+            "oidc_qualification_intent_mismatch".to_owned(),
+        ));
+    }
+    if let Some(qualification) = &spec.qualification {
+        qualification.validate_intent(intent)?;
+    }
     let intent_packages: std::collections::BTreeSet<_> = intent.packages.iter().collect();
     let plan_packages: std::collections::BTreeSet<_> = spec.plan.packages.keys().collect();
     let config_packages: std::collections::BTreeSet<_> = config

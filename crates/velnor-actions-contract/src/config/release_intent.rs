@@ -13,6 +13,8 @@ use crate::errors::ContractError;
 #[serde(deny_unknown_fields)]
 pub struct CrateReleaseIntent {
     pub schema: u32,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub oidc_qualification: bool,
     pub repository: String,
     pub default_branch: String,
     pub environment: String,
@@ -69,6 +71,12 @@ impl CrateReleaseIntent {
         let invalid = |key, problem| ContractError::config(file, key, problem);
         if self.schema != 1 {
             return Err(invalid("schema", "unsupported_schema"));
+        }
+        if self.oidc_qualification
+            && (self.authentication != super::ReleaseAuthentication::TrustedPublishing
+                || self.new_crates.is_some())
+        {
+            return Err(invalid("oidc_qualification", "trusted_publishing_required"));
         }
         let mut parts = self.repository.split('/');
         let owner = parts.next().unwrap_or_default();

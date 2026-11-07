@@ -84,6 +84,8 @@ fn first_publication_is_dispatch_only() {
         packages: BTreeMap::new(),
         version: None,
         dispatch: true,
+        qualification_dispatch:
+            velnor_actions_workflow_renderer::release_spec::QualificationDispatch::Disabled,
     };
     let creation = release_triggers("main", &plan);
     assert_eq!(creation.push_branches, Vec::<String>::new());
@@ -95,4 +97,53 @@ fn first_publication_is_dispatch_only() {
         ..plan
     };
     assert_eq!(release_triggers("main", &ordinary).push_branches, ["main"]);
+}
+
+#[test]
+fn qualification_dispatch_requires_explicit_mode_and_cannot_be_rendered_unwired()
+-> Result<(), Box<dyn std::error::Error>> {
+    use velnor_actions_workflow_renderer::release_spec::{
+        QualificationDispatch, preflight_gate_condition, publish_gate_condition,
+    };
+    let (mut spec, _) = crate::release::release_steps::tests::fixture()?;
+    spec.plan.qualification_dispatch = QualificationDispatch::Enabled;
+    let triggers = release_triggers("main", &spec.plan);
+    assert!(triggers.validate(&spec.plan).is_ok());
+    assert!(triggers.dispatch_inputs.iter().any(|input| {
+        input.name == "mode" && input.required && input.default.as_deref() == Some("release")
+    }));
+    let mut missing_mode = triggers.clone();
+    missing_mode
+        .dispatch_inputs
+        .retain(|input| input.name != "mode");
+    assert!(missing_mode.validate(&spec.plan).is_err());
+    let gate =
+        preflight_gate_condition(&spec.repository, "main", &spec.plan).ok_or("preflight gate")?;
+    assert!(gate.contains("github.event.inputs.mode == 'release'"));
+    let publish = publish_gate_condition(&spec.repository, "main", &spec.plan);
+    assert!(publish.contains("github.event.inputs.mode == 'release'"));
+    spec.triggers = triggers;
+    assert!(
+        spec.validate().is_err(),
+        "unwired qualification must fail closed"
+    );
+    spec.plan.qualification_dispatch = QualificationDispatch::Disabled;
+    spec.triggers = release_triggers("main", &spec.plan);
+    spec.qualification = Some(
+        velnor_actions_workflow_renderer::crate_oidc_qualification::OidcQualificationSpec {
+            repository: spec.repository.clone(),
+            default_branch: "main".into(),
+            environment: "release".into(),
+            required_workflow_path: ".github/workflows/ci.yml".into(),
+            trusted_reviewer_id: 1,
+            generator_version: "0.1.78".into(),
+            generator_source_sha: "b".repeat(40),
+            generator_manifest_sha256: "c".repeat(64),
+        },
+    );
+    assert!(
+        spec.validate().is_err(),
+        "unbound qualification must fail closed"
+    );
+    Ok(())
 }

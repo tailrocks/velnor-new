@@ -29,6 +29,14 @@ pub(crate) fn request_from_environment(
     }
     let approved_source = intent.exact_source_sha();
     let recovery_sha = source_for_event(&event, approved_source)?;
+    if let Some(source) = recovery_sha.as_deref() {
+        let event_path = required_path("GITHUB_EVENT_PATH")?;
+        let event_text = crate::safe_read::read_event_file(&event_path, 1_048_576)
+            .map_err(|_| internal("crate_release_dispatch_event_read"))?;
+        let event_value: serde_json::Value = serde_json::from_str(&event_text)
+            .map_err(|_| internal("crate_release_dispatch_event_invalid"))?;
+        validate_dispatch_inputs(intent, source, &event_value)?;
+    }
     let source_sha = recovery_sha
         .clone()
         .unwrap_or_else(|| workflow_sha.to_owned());
@@ -52,6 +60,39 @@ pub(crate) fn request_from_environment(
         source_sha,
         recovery_sha,
     })
+}
+
+fn validate_dispatch_inputs(
+    intent: &CrateReleaseIntent,
+    source: &str,
+    event: &serde_json::Value,
+) -> Result<(), OrchestratorError> {
+    let inputs = event
+        .get("inputs")
+        .and_then(serde_json::Value::as_object)
+        .ok_or_else(|| internal("crate_release_dispatch_inputs"))?;
+    let exact = |name: &str, expected: &str| {
+        inputs.get(name).and_then(serde_json::Value::as_str) == Some(expected)
+    };
+    if source.len() != 40
+        || !source
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+        || !exact(
+            "plan",
+            &crate::release::release_identity::plan_id_for_source(source),
+        )
+        || !exact("source_sha", source)
+        || (intent.oidc_qualification && !exact("mode", "release"))
+        || (!intent.oidc_qualification && inputs.contains_key("mode"))
+        || match &intent.recovery {
+            Some(recovery) => !exact("version", &recovery.version),
+            None => inputs.contains_key("version"),
+        }
+    {
+        return Err(internal("crate_release_dispatch_inputs"));
+    }
+    Ok(())
 }
 
 fn source_for_event(
@@ -198,7 +239,22 @@ pub(crate) fn release_mode(receipt: &CrateReleaseAdmissionReceipt) -> &'static s
 
 #[cfg(test)]
 mod exact_source_tests {
-    use super::source_for_event;
+    use super::{
+        CrateReleaseIntent, request_from_environment, source_for_event, validate_dispatch_inputs,
+    };
+
+    fn recovery_intent(enabled: bool) -> Result<CrateReleaseIntent, Box<dyn std::error::Error>> {
+        Ok(serde_json::from_value(serde_json::json!({
+            "schema":1,"oidc_qualification":enabled,"repository":"owner/project","default_branch":"main","environment":"release",
+            "required_workflow_path":".github/workflows/ci.yml","trusted_reviewer_id":1,
+            "generator_version":"0.1.78","generator_source_sha":"c".repeat(40),"generator_manifest_sha256":"d".repeat(64),
+            "release_plz_version":"0.4.3","runner":"ubuntu-26.04","authentication":"trusted-publishing",
+            "rust_version":"1.99.1","manifest_path":"Cargo.toml","pr_write_paths":["Cargo.toml"],
+            "registry":"crates-io","packages":["demo"],"publish_features":{"demo":[]},
+            "tag_template":"{{ package }}-v{{ version }}",
+            "recovery":{"package":"demo","version":"0.1.1","source_sha":"a".repeat(40)}
+        }))?)
+    }
 
     #[test]
     fn exact_source_requires_dispatch() -> Result<(), Box<dyn std::error::Error>> {
@@ -210,6 +266,112 @@ mod exact_source_tests {
         );
         assert_eq!(source_for_event("push", None)?, None);
         assert!(source_for_event("workflow_dispatch", None).is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn recovery_dispatch_inputs_must_match_approved_intent_exactly()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let source = "a".repeat(40);
+        let intent = recovery_intent(true)?;
+        let valid = serde_json::json!({"inputs":{"mode":"release","plan":"release-aaaaaaaaaaaa","source_sha":source,"version":"0.1.1"}});
+        assert!(validate_dispatch_inputs(&intent, &source, &valid).is_ok());
+        for (field, value) in [
+            ("mode", "RELEASE"),
+            ("plan", "RELEASE-AAAAAAAAAAAA"),
+            ("source_sha", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"),
+            ("version", "0.1.2"),
+            ("version", ""),
+        ] {
+            let mut changed = valid.clone();
+            changed["inputs"][field] = value.into();
+            assert!(
+                validate_dispatch_inputs(&intent, &source, &changed).is_err(),
+                "accepted {field}"
+            );
+        }
+        let mut missing = valid.clone();
+        missing["inputs"]
+            .as_object_mut()
+            .ok_or("inputs")?
+            .remove("mode");
+        assert!(validate_dispatch_inputs(&intent, &source, &missing).is_err());
+        Ok(())
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn runtime_rejects_invalid_dispatch_files_and_disabled_mode()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use std::os::unix::fs::symlink;
+        if let Ok(expected) = std::env::var("VELNOR_DISPATCH_FILE_TEST") {
+            let intent =
+                recovery_intent(std::env::var("VELNOR_DISPATCH_QUALIFICATION")? == "true")?;
+            let admitted = request_from_environment(&intent, &"b".repeat(40)).is_ok();
+            assert_eq!(admitted, expected == "accept");
+            return Ok(());
+        }
+        let temp = tempfile::tempdir()?;
+        let valid = temp.path().join("valid.json");
+        let disabled = temp.path().join("disabled.json");
+        let oversized = temp.path().join("oversized.json");
+        let link = temp.path().join("link.json");
+        let event = serde_json::json!({"inputs":{"mode":"release","plan":"release-aaaaaaaaaaaa","source_sha":"a".repeat(40),"version":"0.1.1"}});
+        std::fs::write(&valid, serde_json::to_vec(&event)?)?;
+        let mut no_mode = event.clone();
+        no_mode["inputs"]
+            .as_object_mut()
+            .ok_or("inputs")?
+            .remove("mode");
+        std::fs::write(&disabled, serde_json::to_vec(&no_mode)?)?;
+        std::fs::write(&oversized, vec![b' '; 1_048_577])?;
+        symlink(&valid, &link)?;
+        for (path, enabled, expected) in [
+            (Some(valid.as_path()), true, "accept"),
+            (None, true, "reject"),
+            (
+                Some(temp.path().join("missing.json").as_path()),
+                true,
+                "reject",
+            ),
+            (Some(oversized.as_path()), true, "reject"),
+            (Some(link.as_path()), true, "reject"),
+            (Some(valid.as_path()), false, "reject"),
+            (Some(disabled.as_path()), false, "accept"),
+        ] {
+            let mut child = std::process::Command::new(std::env::current_exe()?);
+            child
+                .env_clear()
+                .env("VELNOR_DISPATCH_FILE_TEST", expected)
+                .env("VELNOR_DISPATCH_QUALIFICATION", enabled.to_string())
+                .env("GITHUB_REPOSITORY", "owner/project")
+                .env("GITHUB_EVENT_NAME", "workflow_dispatch")
+                .env("GITHUB_REF", "refs/heads/main")
+                .env(
+                    "GITHUB_WORKFLOW_REF",
+                    "owner/project/.github/workflows/release.yml@refs/heads/main",
+                )
+                .env("GITHUB_WORKFLOW_SHA", "b".repeat(40))
+                .env("GITHUB_RUN_ID", "1")
+                .env("GITHUB_RUN_ATTEMPT", "1")
+                .args([
+                    "--exact",
+                    crate::libtest_case::name(concat!(
+                        module_path!(),
+                        "::runtime_rejects_invalid_dispatch_files_and_disabled_mode"
+                    )),
+                ]);
+            if let Some(path) = path {
+                child.env("GITHUB_EVENT_PATH", path);
+            }
+            let output = child.output()?;
+            assert!(
+                output.status.success(),
+                "{}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            crate::libtest_case::assert_one_passed(&output);
+        }
         Ok(())
     }
 }
