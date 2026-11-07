@@ -10,6 +10,7 @@ mod runtime;
 mod validation;
 
 pub(crate) use runtime::{NativeCleanupRuntime, PendingStorageCleanupWitness};
+pub use validation::validate_cleanup_observer_record;
 
 #[expect(
     clippy::struct_excessive_bools,

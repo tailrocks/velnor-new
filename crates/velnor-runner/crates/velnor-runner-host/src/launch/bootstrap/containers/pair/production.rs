@@ -103,7 +103,7 @@ pub(crate) async fn start_bootstrap_pair(
     .await
 }
 
-pub(in crate::launch::bootstrap) fn verify_pre_jit_created(
+pub fn verify_pre_jit_created(
     inspected: &bollard::models::ContainerInspectResponse,
     expected_id: &str,
     expected_name: &str,

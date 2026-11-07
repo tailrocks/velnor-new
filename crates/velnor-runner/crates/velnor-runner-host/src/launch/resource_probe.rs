@@ -51,6 +51,7 @@ pub(in crate::launch) use sample::retained_tmpfs_bytes as retained_tmpfs_memory_
 pub(in crate::launch) use cleanup_observer::{
     CleanupObserverContext, VerifiedCleanupObserverRecord, observe_cleanup_binding,
 };
+pub use cleanup_observer::{cleanup_observer_request_line, parse_cleanup_observer_record};
 
 pub(in crate::launch) use metadata_settlement::settle_storage_metadata_after_cleanup;
 

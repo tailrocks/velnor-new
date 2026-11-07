@@ -111,6 +111,47 @@ impl StorageProvisioningPlan {
     pub(crate) fn roles(&self) -> &[StorageProvisioningRole] {
         &self.roles
     }
+
+    pub(crate) fn from_role_charges(
+        reservation_id: i64,
+        operation_id: i64,
+        engine_id: String,
+        docker_root_digest: String,
+        role_charges: &[(&str, u64, u64)],
+    ) -> Result<Self, HostError> {
+        let mut roles = Vec::with_capacity(role_charges.len());
+        for &(role_name, charge_bytes, charge_inodes) in role_charges {
+            let role = StorageRole::parse(role_name)?;
+            let contract = role.contract().ok_or(HostError::Identity)?;
+            roles.push(StorageProvisioningRole {
+                role,
+                pool_id: "pool-1".to_owned(),
+                medium: contract.medium,
+                filesystem_kind: match contract.medium {
+                    StorageMedium::Tmpfs => StorageFilesystemKind::Tmpfs,
+                    StorageMedium::Disk => StorageFilesystemKind::Btrfs,
+                },
+                inode_policy: StorageInodePolicy::Finite,
+                planned_filesystem_instance_digest: None,
+                charge_bytes,
+                charge_inodes,
+                retained_memory_bytes: match contract.medium {
+                    StorageMedium::Tmpfs => charge_bytes,
+                    StorageMedium::Disk => 0,
+                },
+            });
+        }
+        Ok(Self {
+            reservation_id,
+            operation_id,
+            engine_id,
+            docker_root_digest,
+            profile_generation_id: "g".repeat(64),
+            profile_digest: "p".repeat(64),
+            sample_generation_id: "s".repeat(64),
+            roles,
+        })
+    }
 }
 
 pub(super) async fn load(

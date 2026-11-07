@@ -13,7 +13,11 @@ pub(crate) use adapter::PreparedAcquiredBootstrap;
 pub(crate) use cleanup::{
     NativeCleanupRuntime, PendingStorageCleanupWitness, VerifiedStorageCleanup,
 };
-pub use containers::{BootstrapContainerRole, runner_pair_environment};
+pub use cleanup::validate_cleanup_observer_record;
+pub use containers::{
+    BootstrapContainerRole, PairCreate, build_bootstrap_pair_create_spec, runner_pair_environment,
+    verify_pre_jit_created,
+};
 pub(crate) use containers::{
     BootstrapPairInput, BootstrapStartReceipt, PendingBootstrapPair, StartedBootstrapPair,
     VerifiedBootstrapContainerCreated, VerifiedBootstrapMountHandoff, VerifiedCreatedStorageObject,

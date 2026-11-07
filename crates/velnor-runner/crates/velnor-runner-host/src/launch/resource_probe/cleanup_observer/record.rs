@@ -10,7 +10,7 @@ use crate::error::HostError;
 
 const MAX_RECORD_BYTES: usize = 32 * 1024;
 
-pub(super) fn parse_record(
+pub fn parse_record(
     bytes: &[u8],
     request: &CleanupObserverRequest,
 ) -> Result<CleanupObserverRecord, HostError> {
@@ -57,6 +57,19 @@ fn validate_record(
         .iter()
         .map(|volume| volume.mountpoint.clone())
         .collect::<Vec<_>>();
+    let references_valid = if record.owned_references_absent {
+        record.owned_reference_count == 0
+            && record.absent_volume_mountpoints == expected_volumes
+            && record.absent_tmpfs_devices.as_slice() == request.binding.owned_tmpfs_devices
+            && record.absent_mount_namespaces.as_slice() == expected_namespaces
+            && record.absent_cgroup_paths.as_ref() == Some(&request.binding.cgroup_paths)
+    } else {
+        record.owned_reference_count > 0
+            && record.absent_volume_mountpoints.is_empty()
+            && record.absent_tmpfs_devices.is_empty()
+            && record.absent_mount_namespaces.is_empty()
+            && record.absent_cgroup_paths.is_none()
+    };
     if record.schema_version != 1
         || record.operation_id != request.operation_id
         || record.binding_sha256 != request.binding_sha256
@@ -66,13 +79,8 @@ fn validate_record(
             .as_ref()
             .is_some_and(|guest| docker_root_matches(guest, &request.binding.docker_root))
         || !record.complete
-        || !record.owned_references_absent
-        || record.owned_reference_count != 0
         || !record.issues.is_empty()
-        || record.absent_volume_mountpoints != expected_volumes
-        || record.absent_tmpfs_devices.as_slice() != request.binding.owned_tmpfs_devices
-        || record.absent_mount_namespaces.as_slice() != expected_namespaces
-        || record.absent_cgroup_paths.as_ref() != Some(&request.binding.cgroup_paths)
+        || !references_valid
     {
         return Err(HostError::Identity);
     }

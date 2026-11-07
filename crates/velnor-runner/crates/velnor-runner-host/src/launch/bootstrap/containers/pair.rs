@@ -18,12 +18,13 @@ mod config;
 mod production;
 mod spec;
 
-pub use config::runner_pair_environment;
+pub use config::{build_bootstrap_pair_create_spec, runner_pair_environment};
 pub(super) use config::{create_body, fixed_mounts};
 
 pub(crate) use production::{BootstrapPairInput, start_bootstrap_pair};
-pub(in crate::launch::bootstrap) use production::{create_spec_sha256, verify_pre_jit_created};
-pub(crate) use spec::PairCreate;
+pub(in crate::launch::bootstrap) use production::create_spec_sha256;
+pub use production::verify_pre_jit_created;
+pub use spec::PairCreate;
 pub(crate) use spec::PairSpecContext;
 pub(in crate::launch::bootstrap) use spec::create_spec;
 
