@@ -38,15 +38,7 @@ fn commit_source(
 }
 
 #[test]
-fn oversized_cargo_archive_cannot_receive_upload_intent() -> Result<(), Box<dyn std::error::Error>>
-{
-    use crate::crate_release_controller::{
-        CrateReleaseObservation, verify_and_record_upload_intent,
-    };
-    use crate::crate_release_journal::{
-        fixture_storage::seed_started_record, inspect_journal_mutation,
-    };
-
+fn large_cargo_archive_within_source_limit_is_accepted() -> Result<(), Box<dyn std::error::Error>> {
     let temp = tempfile::tempdir()?;
     let root = temp.path();
     let (mut intent, mut request, mut github, registry) = make_fixture(root)?;
@@ -80,19 +72,25 @@ fn oversized_cargo_archive_cannot_receive_upload_intent() -> Result<(), Box<dyn 
         test_git(),
     )?;
 
-    fs::write(root.join("data/extra"), b"x")?;
+    Ok(())
+}
+
+#[test]
+fn oversized_real_cargo_archive_cannot_receive_upload_intent()
+-> Result<(), Box<dyn std::error::Error>> {
+    use crate::crate_release_controller::{
+        CrateReleaseObservation, verify_and_record_upload_intent,
+    };
+    use crate::crate_release_journal::{
+        fixture_storage::seed_started_record, inspect_journal_mutation,
+    };
+
+    let temp = tempfile::tempdir()?;
+    let root = temp.path();
+    let (mut intent, mut request, mut github, registry) = make_fixture(root)?;
+    github.approved.set(true);
+    fs::File::create(root.join("large-data"))?.set_len(256 * 1024 * 1024)?;
     commit_source(root, &mut intent, &mut request, &mut github)?;
-    let archive = fixture_archive(root)?;
-    assert_eq!(
-        tar::Archive::new(flate2::read::GzDecoder::new(archive.as_slice()))
-            .entries()?
-            .count(),
-        16_385
-    );
-    assert!(
-        crate::release::crate_release_archive::crate_archive_features(&archive, "demo", "0.1.1")
-            .is_err()
-    );
     let admission = prepare_crate_release(&intent, &request, &github, &registry, root)?;
     let (identity, plan) = fixture_journal_plan(root, &intent, &request, &admission)?;
     let journal = JournalRegistryFake::default();
@@ -113,7 +111,43 @@ fn oversized_cargo_archive_cannot_receive_upload_intent() -> Result<(), Box<dyn 
     };
     let evidence =
         crate::release::crate_release_semver::fixture_verified_semver(&admission, "demo")?;
-    assert!(verify_and_record_upload_intent(&obs, "demo", evidence).is_err());
+    assert!(matches!(
+        verify_and_record_upload_intent(&obs, "demo", evidence),
+        Err(crate::OrchestratorError::Internal { problem }) if problem == "crate_archive_gzip_trailing_or_large"
+    ));
     assert!(inspect_journal_mutation(&journal, &identity, 1)?.is_none());
+    Ok(())
+}
+
+#[test]
+fn cargo_archive_entry_limit_accepts_boundary_and_rejects_excess()
+-> Result<(), Box<dyn std::error::Error>> {
+    use flate2::{Compression, write::GzEncoder};
+    use std::io;
+
+    fn archive(count: usize) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+        let encoder = GzEncoder::new(Vec::new(), Compression::fast());
+        let mut tar = tar::Builder::new(encoder);
+        for index in 0..count {
+            let mut header = tar::Header::new_gnu();
+            header.set_size(0);
+            header.set_mode(0o644);
+            header.set_cksum();
+            tar.append_data(&mut header, format!("demo-0.1.1/{index:06}"), io::empty())?;
+        }
+        Ok(tar.into_inner()?.finish()?)
+    }
+
+    let limit = crate::release::crate_release_source::MAX_SOURCE_ENTRIES + 3;
+    let valid = archive(limit)?;
+    assert_eq!(
+        crate::release::crate_release_archive::read_archive(&valid, "demo-0.1.1/")?.len(),
+        limit
+    );
+    let excess = archive(limit + 1)?;
+    assert!(matches!(
+        crate::release::crate_release_archive::read_archive(&excess, "demo-0.1.1/"),
+        Err(crate::OrchestratorError::Internal { problem }) if problem == "crate_archive_entry_type_or_count"
+    ));
     Ok(())
 }
