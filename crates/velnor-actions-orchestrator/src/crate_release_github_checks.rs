@@ -3,7 +3,7 @@
 
 use super::{
     BTreeSet, GitHubAdmissionRead, GitHubAdmissionRequest, OrchestratorError, Value, internal,
-    require, valid_sha, valid_utc, verify_reviews,
+    require, required_workflow_suites, valid_sha, valid_utc, verify_reviews,
 };
 
 #[derive(Clone)]
@@ -48,6 +48,7 @@ fn checked_required(
     branch: Option<&str>,
     recorded_id: Option<u64>,
 ) -> Result<u64, OrchestratorError> {
+    let workflow_suites = required_workflow_suites(api, prefix, source, workflow_path)?;
     let mut recorded = None;
     let mut latest: Option<CheckDecision> = None;
     let mut seen = 0_u64;
@@ -79,25 +80,10 @@ fn checked_required(
                 .filter(|id| *id > 0)
                 .ok_or_else(|| internal("crate_release_check_id"))?;
             require(seen_ids.insert(check_id), "checks_duplicate")?;
-            if check["name"].as_str() != Some("Required") {
+            let Some(decision) = relevant_check(check, source, check_id, &workflow_suites)? else {
                 continue;
-            }
-            let decision = check_decision(check, source, check_id)?;
-            let id = decision.id;
-            let started = decision.started.as_str();
-            if recorded_id == Some(id) {
-                recorded = Some(decision.clone());
-            }
-            if let Some(previous) = &latest {
-                if previous.started == started {
-                    require(previous.id == id, "check_order_ambiguous")?;
-                    continue;
-                }
-                if previous.started.as_str() > started {
-                    continue;
-                }
-            }
-            latest = Some(decision);
+            };
+            remember_decision(&mut latest, &mut recorded, recorded_id, decision)?;
         }
         if seen >= total {
             break;
@@ -105,6 +91,10 @@ fn checked_required(
         require(!checks.is_empty(), "checks_pagination")?;
     }
     require(expected == Some(seen), "checks_pagination")?;
+    require(
+        required_workflow_suites(api, prefix, source, workflow_path)? == workflow_suites,
+        "runs_changed",
+    )?;
     let latest = latest.ok_or_else(|| internal("crate_release_required_pending"))?;
     if latest.status != "completed" {
         return Err(internal("crate_release_required_pending"));
@@ -126,6 +116,46 @@ fn checked_required(
         return Ok(id);
     }
     Ok(latest.id)
+}
+
+fn remember_decision(
+    latest: &mut Option<CheckDecision>,
+    recorded: &mut Option<CheckDecision>,
+    recorded_id: Option<u64>,
+    decision: CheckDecision,
+) -> Result<(), OrchestratorError> {
+    if recorded_id == Some(decision.id) {
+        *recorded = Some(decision.clone());
+    }
+    if let Some(previous) = latest {
+        if previous.started == decision.started {
+            return require(previous.id == decision.id, "check_order_ambiguous");
+        }
+        if previous.started > decision.started {
+            return Ok(());
+        }
+    }
+    *latest = Some(decision);
+    Ok(())
+}
+
+fn relevant_check(
+    check: &Value,
+    source: &str,
+    id: u64,
+    workflow_suites: &BTreeSet<u64>,
+) -> Result<Option<CheckDecision>, OrchestratorError> {
+    if check["name"].as_str() != Some("Required") {
+        return Ok(None);
+    }
+    let suite = check["check_suite"]["id"]
+        .as_u64()
+        .filter(|id| *id > 0)
+        .ok_or_else(|| internal("crate_release_check_suite"))?;
+    if !workflow_suites.contains(&suite) {
+        return Ok(None);
+    }
+    check_decision(check, source, id).map(Some)
 }
 
 fn check_decision(

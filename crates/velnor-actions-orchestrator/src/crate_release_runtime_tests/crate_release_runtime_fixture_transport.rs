@@ -3,8 +3,8 @@
 
 use super::continuation::{verify_real_journal_continuation, verify_test_previous_continuation};
 use super::responses::{
-    TestJournalState, test_github_admission_response, test_journal_response,
-    test_metadata_responses,
+    TestJournalState, test_changing_workflow_response, test_github_admission_response,
+    test_journal_response, test_metadata_responses,
 };
 
 #[cfg(unix)]
@@ -80,9 +80,44 @@ pub(super) fn run_test_transport_child() -> Result<(), Box<dyn std::error::Error
         crate::crate_release_registry::CrateRegistryPresence::Absent
     );
     verify_test_admissions(&github)?;
+    verify_required_workflow_selection(&github)?;
     verify_test_previous_continuation(&github)?;
     verify_test_journal_refs(&journal)?;
     verify_real_journal_continuation(&journal)?;
+    Ok(())
+}
+
+#[cfg(unix)]
+fn verify_required_workflow_selection(
+    github: &crate::crate_release_github::NativeGitHubAdmissionRead,
+) -> Result<(), Box<dyn std::error::Error>> {
+    assert_eq!(
+        crate::crate_release_github::verify_required_check(
+            github,
+            "owner/project",
+            &"e".repeat(40),
+            ".github/workflows/ci.yml"
+        )?,
+        31
+    );
+    assert!(matches!(
+        crate::crate_release_github::verify_required_check(
+            github,
+            "owner/project",
+            &"f".repeat(40),
+            ".github/workflows/ci.yml"
+        ),
+        Err(crate::OrchestratorError::Internal { problem }) if problem == "crate_release_required_failed"
+    ));
+    assert!(matches!(
+        crate::crate_release_github::verify_required_check(
+            github,
+            "owner/project",
+            &"d".repeat(40),
+            ".github/workflows/ci.yml"
+        ),
+        Err(crate::OrchestratorError::Internal { problem }) if problem == "crate_release_runs_changed"
+    ));
     Ok(())
 }
 
@@ -147,6 +182,17 @@ fn verify_test_admissions(
     };
     let candidate = crate::crate_release_github::verify_github_evidence(&request, github)?;
     crate::crate_release_github::authorize_github_candidate(&request, &candidate, github)?;
+    let mut other_source = request.clone();
+    other_source.source_sha = "e".repeat(40);
+    other_source.recovery_sha = Some(other_source.source_sha.clone());
+    let selected = crate::crate_release_github::verify_github_evidence(&other_source, github)?;
+    assert_eq!(selected.required_check_id, 31);
+    other_source.source_sha = "9".repeat(40);
+    other_source.recovery_sha = Some(other_source.source_sha.clone());
+    assert!(matches!(
+        crate::crate_release_github::verify_github_evidence(&other_source, github),
+        Err(crate::OrchestratorError::Internal { problem }) if problem == "crate_release_required_workflow_origin"
+    ));
     let normal = crate::crate_release_github::GitHubAdmissionRequest {
         run_id: 13,
         event: "push".into(),
@@ -301,8 +347,8 @@ fn test_service_response(
             ("200 OK", release)
         }
         _ => {
-            if let Some(value) =
-                test_github_admission_response(line, &"b".repeat(40), &"a".repeat(40))
+            if let Some(value) = test_changing_workflow_response(line, previous)
+                .or_else(|| test_github_admission_response(line, &"b".repeat(40), &"a".repeat(40)))
             {
                 ("200 OK", value)
             } else {

@@ -130,6 +130,61 @@ pub(crate) fn verify_required_check(
     required_check(api, &format!("repos/{repository}"), sha, workflow_path)
 }
 
+fn required_workflow_suites(
+    api: &dyn GitHubAdmissionRead,
+    prefix: &str,
+    source: &str,
+    workflow_path: &str,
+) -> Result<BTreeSet<u64>, OrchestratorError> {
+    let mut suites = BTreeSet::new();
+    let mut expected = None;
+    let mut seen = 0_u64;
+    for page in 1..=100 {
+        let value = api.get(&format!(
+            "{prefix}/actions/runs?head_sha={source}&per_page=100&page={page}"
+        ))?;
+        let total = value["total_count"]
+            .as_u64()
+            .ok_or_else(|| internal("crate_release_runs_total"))?;
+        require(total <= 10_000, "runs_limit")?;
+        if let Some(previous) = expected {
+            require(previous == total, "runs_changed")?;
+        }
+        expected = Some(total);
+        let runs = value["workflow_runs"]
+            .as_array()
+            .ok_or_else(|| internal("crate_release_runs_invalid"))?;
+        seen = seen
+            .checked_add(
+                u64::try_from(runs.len()).map_err(|_| internal("crate_release_runs_limit"))?,
+            )
+            .ok_or_else(|| internal("crate_release_runs_limit"))?;
+        for run in runs {
+            let path = run["path"]
+                .as_str()
+                .filter(|path| !path.is_empty())
+                .ok_or_else(|| internal("crate_release_required_workflow"))?;
+            require(
+                run["head_sha"].as_str() == Some(source),
+                "required_workflow",
+            )?;
+            if path == workflow_path {
+                let id = run["check_suite_id"]
+                    .as_u64()
+                    .filter(|id| *id > 0)
+                    .ok_or_else(|| internal("crate_release_check_suite"))?;
+                require(suites.insert(id), "required_workflow")?;
+            }
+        }
+        if seen >= total {
+            break;
+        }
+        require(!runs.is_empty(), "runs_pagination")?;
+    }
+    require(expected == Some(seen), "runs_pagination")?;
+    Ok(suites)
+}
+
 pub fn verify_github_admission(
     request: &GitHubAdmissionRequest,
     token: String,

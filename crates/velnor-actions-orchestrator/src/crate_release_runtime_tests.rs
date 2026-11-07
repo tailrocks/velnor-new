@@ -70,7 +70,12 @@ fn test_only_dispatch_and_loopback_transport() -> Result<(), Box<dyn std::error:
         .join()
         .map_err(|_| "fixture server panicked")?
         .map_err(|error| format!("fixture server: {error}"))?;
-    assert!(output.status.success());
+    assert!(
+        output.status.success(),
+        "fixture child failed: {} {}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
     crate::libtest_case::assert_one_passed(&output);
     Ok(())
 }
