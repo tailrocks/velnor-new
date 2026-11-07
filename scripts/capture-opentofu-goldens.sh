@@ -3,23 +3,10 @@
 # SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 # SPDX-License-Identifier: Apache-2.0
 
-# T04/T07 supplementary goldens: CLI-level plan/generate bytes for Rust-only
-# fixtures the parity corpus does not cover (nested, mbx-nextest, empty-suite,
-# minimal-cargo CLI surface) plus the producer dogfood repo.
-#
-# The parity suite (impl_cli_parity_golden) remains the primary bracket
-# (plan-v1 response, expected-set, task report); this script pins the
-# user-facing plan text and generated YAML bytes around it.
-#
-# Usage: scripts/capture-opentofu-goldens.sh --archive-guard PATH --archive-guard-sha256 SHA256 [capture|check [CLI_BINARY]]
-#        scripts/capture-opentofu-goldens.sh --archive-guard PATH --archive-guard-sha256 SHA256 check-release CLI_BINARY CANDIDATE_MANIFEST MANIFEST_SHA256
-#   capture  regenerate docs/proposed/opentofu-goldens/ (only at known-good)
-#   check    regenerate to temp and byte-diff (default; never writes goldens)
-#   CLI_BINARY uses that exact executable and skips the default debug build.
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
-GOLDEN_DIR="$ROOT/docs/proposed/opentofu-goldens"
+GOLDEN_DIR="$ROOT/fixtures/opentofu-goldens"
 WORK=""
 QUALIFICATION_BUN_BIN=""
 MODE="check"

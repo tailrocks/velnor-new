@@ -52,6 +52,16 @@ RUNNER_TEST_MEMBER_LIST_LOG="$LOG_DIR/runner-test-member-list.log"
 INTEGRATION_LOG="$LOG_DIR/integration.log"
 echo "verify-local: log directory: $LOG_DIR"
 
+if [ "$(uname -s)" = Darwin ] && [ -z "${VELNOR_GROUP_PROBE_RECEIPT:-}" ]; then
+  PROBE_DIR="$LOG_DIR/group-signal-probe"
+  trap 'rm -rf -- "$PROBE_DIR"' EXIT
+  if ! bash scripts/provision-group-signal-interposer.sh "$PROBE_DIR"; then
+    echo "verify-local: FAIL: could not provision process-group fixture"
+    exit 1
+  fi
+  export VELNOR_GROUP_PROBE_RECEIPT="$PROBE_DIR/group_signal_zero_interpose.json"
+fi
+
 FAILURES=""
 
 fail() {

@@ -24,7 +24,7 @@
   target/debug/velnor-actions` refreshed the five cases. The dogfood preview
   reported `tree identical`. The subsequent `check` passed nested,
   mbx-nextest, empty-suite, minimal-cargo, and dogfood. All entries in
-  `docs/proposed/opentofu-goldens/MANIFEST.sha256` verified.
+  `fixtures/opentofu-goldens/MANIFEST.sha256` verified.
 - CLI parity: `VELNOR_UPDATE_GOLDENS=1 cargo nextest run --locked -p
   velnor-actions-cli --test velnor_cli parity_` captured four cases; the
   default comparison passed all four.

@@ -85,6 +85,12 @@ fn non_input_overlapping_package_dir_is_rejected() -> TestResult {
 fn non_input_overlapping_declared_input_is_rejected() -> TestResult {
     assert_rejected_only_for_overlap(
         "declared_input",
+        "docs/proposed/**",
+        "\n[[stacks.rust.inputs]]\nglobs = [\"docs/proposed/opentofu-goldens/**\"]\npackages = [\"a8\"]\n",
+        |root| put(root, "docs/proposed/opentofu-goldens/case.txt", "oracle\n"),
+    )?;
+    assert_rejected_only_for_overlap(
+        "declared_input",
         "docs/**",
         "\n[[stacks.rust.inputs]]\nglobs = [\"docs/schema/**\"]\npackages = [\"a8\"]\n",
         |root| put(root, "docs/schema/x.sql", "select 1;\n"),

@@ -258,10 +258,8 @@ fn keep_work() -> Result<bool, CollectorError> {
 fn golden_dir(root: &Path) -> Result<PathBuf, CollectorError> {
     let caller = env::current_dir().map_err(CollectorError::operational)?;
     let external = env::var_os("VELNOR_GOLDEN_DIR").is_some();
-    let requested = env::var_os("VELNOR_GOLDEN_DIR").map_or_else(
-        || root.join("docs/proposed/opentofu-goldens"),
-        PathBuf::from,
-    );
+    let requested = env::var_os("VELNOR_GOLDEN_DIR")
+        .map_or_else(|| root.join("fixtures/opentofu-goldens"), PathBuf::from);
     let requested = if requested.is_absolute() {
         requested
     } else {

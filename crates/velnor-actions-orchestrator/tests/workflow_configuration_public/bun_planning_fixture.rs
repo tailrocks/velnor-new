@@ -24,16 +24,37 @@ pub(crate) struct BunPlanningRepo {
 pub(crate) enum ChangedMember {
     Web,
     Ui,
+    Docs,
+    SuiteOnly,
 }
 
 pub(crate) fn make_bun_planning_repo(
     changed: ChangedMember,
 ) -> Result<BunPlanningRepo, Box<dyn Error>> {
+    make_bun_planning_repo_with_scopes(changed, false)
+}
+
+pub(crate) fn make_bun_planning_repo_with_scopes(
+    changed: ChangedMember,
+    private: bool,
+) -> Result<BunPlanningRepo, Box<dyn Error>> {
     let repo = make_bun_repo()?;
     let root = repo.path();
     migrate_config(root, 2, true)?;
-    configure_planning_repo(root)?;
+    configure_planning_repo(root, private)?;
     add_web_workspace_dependency(root)?;
+    if matches!(changed, ChangedMember::SuiteOnly) {
+        let path = root.join(".velnor/config.toml");
+        let config = fs::read_to_string(&path)?;
+        let original = "scripts = [\"typecheck\", \"lint\", \"test\", \"test:browser\"]";
+        if config.matches(original).count() != 1 {
+            return Err("web script configuration changed".into());
+        }
+        fs::write(
+            path,
+            config.replace(original, "scripts = [\"test\", \"test:browser\"]"),
+        )?;
+    }
     git(root, &["branch", "-m", "main"])?;
     git(root, &["add", "-A"])?;
     git(root, &["commit", "-m", "planning fixture base"])?;
@@ -57,7 +78,7 @@ pub(crate) fn make_bun_planning_repo(
     })
 }
 
-fn configure_planning_repo(root: &Path) -> Result<(), Box<dyn Error>> {
+fn configure_planning_repo(root: &Path, private: bool) -> Result<(), Box<dyn Error>> {
     let config_path = root.join(".velnor/config.toml");
     let config = fs::read_to_string(&config_path)?;
     let marker = "default_profile = \"hosted\"";
@@ -81,6 +102,12 @@ asset = "fixture-assets.tar.gz"
 extract_to = "fixture-assets"
 "#,
     );
+    if private {
+        config = config.replace(
+            "[private_sources]",
+            "[private_sources]\nnpm_scopes = [\"@fixture\"]",
+        );
+    }
     fs::write(config_path, config)?;
     fs::write(
         root.join(".velnor/deps.lock"),
@@ -116,9 +143,15 @@ fn add_web_workspace_dependency(root: &Path) -> Result<(), Box<dyn Error>> {
 }
 
 fn change_member(root: &Path, changed: ChangedMember) -> Result<(), Box<dyn Error>> {
+    if matches!(changed, ChangedMember::Docs) {
+        fs::create_dir_all(root.join("docs"))?;
+        fs::write(root.join("docs/guide.md"), "changed documentation\n")?;
+        return Ok(());
+    }
     let relative = match changed {
-        ChangedMember::Web => "apps/web/package.json",
+        ChangedMember::Web | ChangedMember::SuiteOnly => "apps/web/package.json",
         ChangedMember::Ui => "packages/ui/package.json",
+        ChangedMember::Docs => unreachable!(),
     };
     let path = root.join(relative);
     let mut package: Value = serde_json::from_slice(&fs::read(&path)?)?;
