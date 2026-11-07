@@ -145,7 +145,8 @@ def main():
             raise ValueError('root observation required')
         print(json.dumps(capture(), sort_keys=True, separators=(',', ':')))
         return
-    if len(sys.argv) != 1 or os.uname().machine != 'x86_64':
+    diagnostic = sys.argv[1:] == ['--diagnostic-report']
+    if sys.argv[1:] not in ([], ['--diagnostic-report']) or os.uname().machine != 'x86_64':
         raise ValueError('hosted observation requires Linux x86_64')
     release = Path('/etc/os-release').read_text().splitlines()
     if 'ID=ubuntu' not in release or 'VERSION_ID="26.04"' not in release:
@@ -158,6 +159,9 @@ def main():
     report = json.loads(result.stdout)
     if report.get('role') != 'observation-only' or report.get('architecture') != 'x86_64':
         raise ValueError('systemd observation role mismatch')
+    if diagnostic:
+        print(result.stdout.decode(), file=sys.stderr, end='')
+        raise SystemExit('systemd policy observed; admission remains unproven')
     (ROOT / 'hosted-systemd-policy-observation.json').write_bytes(result.stdout)
     print(result.stdout.decode(), end='')
     evidence = {'schema': 1, 'source': 'mise-task-v1', 'head': os.environ['VELNOR_CHECK_HEAD'],
