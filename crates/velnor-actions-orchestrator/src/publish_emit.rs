@@ -166,7 +166,7 @@ fn git_tag_config(
             problem: "release_nothing_selected".to_owned(),
         });
     }
-    let mut config = crate::release::release_emit::plz_config(release, &selection)?;
+    let mut config = crate::release::release_emit::config::plz_config(release, &selection)?;
     config.semver_check = false;
     let bytes = render_git_tag_release_plz_config(&config, env!("CARGO_PKG_VERSION"))?;
     Ok(RenderedFile {

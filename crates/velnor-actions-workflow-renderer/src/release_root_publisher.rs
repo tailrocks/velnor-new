@@ -7,8 +7,11 @@ use sha2::{Digest as _, Sha256};
 use std::{collections::BTreeMap, io::Write as _};
 use velnor_actions_contract::Step;
 
+#[path = "release_privileged_modules.rs"]
+mod privileged_modules;
+
 pub fn render_entry(timeout_seconds: u32) -> Result<String, RenderError> {
-    let bundle = crate::release_privileged_modules::supervisor_bundle();
+    let bundle = privileged_modules::supervisor_bundle();
     let encoded =
         STANDARD
             .encode(serde_json::to_vec(&bundle).map_err(|_| {
@@ -29,7 +32,7 @@ fn render_source(timeout_seconds: u32, encoded: &str) -> Result<String, RenderEr
         ));
     }
     let contract = STANDARD.encode(
-        serde_json::to_vec(&crate::release_privileged_modules::export_contract())
+        serde_json::to_vec(&privileged_modules::export_contract())
             .map_err(|_| RenderError::InvalidWorkflow("publisher_bundle_invalid".to_owned()))?,
     );
     let mut entry = include_str!("release_publish_entry.py")
@@ -39,7 +42,7 @@ fn render_source(timeout_seconds: u32, encoded: &str) -> Result<String, RenderEr
             "__VELNOR_JOB_TIMEOUT_SECONDS__",
             &timeout_seconds.to_string(),
         );
-    for source in crate::release_privileged_modules::bootstrap_sources() {
+    for source in privileged_modules::bootstrap_sources() {
         let marker = format!("__VELNOR_{}_PAYLOAD__", source.marker);
         if entry.matches(&marker).count() != 1 {
             return Err(RenderError::InvalidWorkflow(
@@ -140,10 +143,10 @@ fn publisher_bundle() -> Result<String, RenderError> {
         ),
         (
             "export_contract".to_owned(),
-            crate::release_privileged_modules::export_contract(),
+            privileged_modules::export_contract(),
         ),
     ]);
-    for source in crate::release_privileged_modules::bootstrap_sources() {
+    for source in privileged_modules::bootstrap_sources() {
         if bundle
             .insert(source.key.to_owned(), serde_json::json!(source.source))
             .is_some()
