@@ -307,7 +307,13 @@ fn release_manifest(version: &str, commit: &str, digest: &str) -> String {
     ]
     .map(|target| {
         let triple = target.triple();
-        let sha = if target == ReleaseTarget::LinuxX86_64 {
+        let native_host = match (std::env::consts::OS, std::env::consts::ARCH) {
+            ("linux", "x86_64") => ReleaseTarget::LinuxX86_64,
+            ("macos", "aarch64") => ReleaseTarget::MacosArm64,
+            ("macos", "x86_64") => ReleaseTarget::MacosX86_64,
+            _ => target,
+        };
+        let sha = if target == ReleaseTarget::LinuxX86_64 || target == native_host {
             digest
         } else {
             HOST_SHA

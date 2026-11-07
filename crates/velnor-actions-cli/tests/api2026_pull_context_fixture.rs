@@ -18,8 +18,9 @@ mod provider;
 
 #[derive(Clone, Copy)]
 pub(crate) enum Scenario {
-    #[cfg(not(debug_assertions))]
     ReleaseSentinel,
+    MissingManifest,
+    WrongHost,
     Valid,
     ReversedParents,
     ChangedRef,
@@ -53,10 +54,10 @@ pub(crate) fn run(scenario: Scenario, expected: &str) -> Result<(), Box<dyn Erro
     fs::create_dir_all(&paths.home)?;
     fs::create_dir_all(&paths.runner_temp)?;
     fs::write(paths.runner_temp.join("github-output"), "")?;
-    let cli = Path::new(env!("CARGO_BIN_EXE_velnor-actions"));
-    let (digest, commit) = manifest_identity(cli, scenario)?;
+    let (digest, commit) = selected_manifest_identity(scenario)?;
     let git = git::Fixture::new(&paths);
-    let identities = git.initialize(&digest, &commit)?;
+    let identities = git.initialize(&digest, &commit, matches!(scenario, Scenario::WrongHost))?;
+    remove_missing_manifest(&paths, scenario)?;
     write_event(&paths, &identities)?;
     provider::write(&paths, &identities, scenario)?;
     let output = invoke(&paths, &identities, scenario)?;
@@ -68,10 +69,11 @@ pub(crate) fn run(scenario: Scenario, expected: &str) -> Result<(), Box<dyn Erro
     );
     let requests = match fs::read_to_string(paths.root.join("provider/requests.log")) {
         Ok(requests) => requests,
-        #[cfg(not(debug_assertions))]
         Err(error)
-            if matches!(scenario, Scenario::ReleaseSentinel)
-                && error.kind() == io::ErrorKind::NotFound =>
+            if matches!(
+                scenario,
+                Scenario::ReleaseSentinel | Scenario::MissingManifest
+            ) && error.kind() == io::ErrorKind::NotFound =>
         {
             String::new()
         }
@@ -126,10 +128,25 @@ pub(crate) fn run(scenario: Scenario, expected: &str) -> Result<(), Box<dyn Erro
     Ok(())
 }
 
+fn selected_manifest_identity(scenario: Scenario) -> Result<(String, String), Box<dyn Error>> {
+    let executable = if scenario.is_deadline_child() {
+        std::env::current_exe()?
+    } else {
+        Path::new(env!("CARGO_BIN_EXE_velnor-actions")).to_owned()
+    };
+    manifest_identity(&executable, scenario)
+}
+
+fn remove_missing_manifest(paths: &Paths, scenario: Scenario) -> Result<(), Box<dyn Error>> {
+    if matches!(scenario, Scenario::MissingManifest) {
+        fs::remove_file(paths.repo.join(".velnor/release-manifest.json"))?;
+    }
+    Ok(())
+}
+
 fn manifest_identity(cli: &Path, scenario: Scenario) -> Result<(String, String), Box<dyn Error>> {
     let digest = sha256(&fs::read(cli)?);
     Ok(match scenario {
-        #[cfg(not(debug_assertions))]
         Scenario::ReleaseSentinel => {
             let incorrect = if digest == "1".repeat(64) {
                 "2".repeat(64)
@@ -306,4 +323,36 @@ fn polling_deadline_error(error: &str) -> bool {
         || error.starts_with(
             "internal: package_publish_api_failed: operation=pull_requests category=timeout ",
         )
+}
+
+pub(crate) fn generation_admission(missing: bool) -> Result<(), Box<dyn Error>> {
+    let temp = tempfile::tempdir()?;
+    let paths = Paths::new(&temp);
+    fs::create_dir_all(&paths.repo)?;
+    fs::create_dir_all(&paths.home)?;
+    let cli = Path::new(env!("CARGO_BIN_EXE_velnor-actions"));
+    let (digest, commit) = manifest_identity(cli, Scenario::ReleaseSentinel)?;
+    git::Fixture::new(&paths).initialize(&digest, &commit, false)?;
+    if missing {
+        fs::remove_file(paths.repo.join(".velnor/release-manifest.json"))?;
+    }
+    let destination = paths.root.join("generated");
+    let output = Command::new(cli)
+        .current_dir(&paths.repo)
+        .args(["generate", "--output-dir"])
+        .arg(&destination)
+        .env("HOME", &paths.home)
+        .output()?;
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let expected = if missing {
+        "consumer_requires_release_install"
+    } else {
+        "release_manifest_binary_mismatch"
+    };
+    assert!(
+        !output.status.success() && stderr.contains(expected),
+        "{stderr}"
+    );
+    assert!(!destination.exists());
+    Ok(())
 }
