@@ -206,7 +206,7 @@ fn build_job(pins: &ProductReleasePins) -> Result<(String, Yaml), RenderError> {
 }
 
 fn qualify_job(pins: &ProductReleasePins) -> Result<(String, Yaml), RenderError> {
-    let action_steps = vec![
+    let action_steps = steps::guard_artifact_downloads(vec![
         steps::checkout_step(),
         steps::mise_step(pins.setup_for(ReleaseTarget::LinuxX86_64))?,
         steps::command_step(
@@ -223,7 +223,7 @@ fn qualify_job(pins: &ProductReleasePins) -> Result<(String, Yaml), RenderError>
             "Qualify exact source preview bytes",
             &qualification_script(),
         ),
-    ];
+    ]);
     Ok(finish(
         "source-preview-qualify",
         fields(
