@@ -64,6 +64,24 @@ class GitHubTransport:
                     pass
 
     def __call__(self, route, deadline):
+        items = []
+        for page in range(1, 101):
+            body = self._page(f'{route}?per_page=100&page={page}', deadline)
+            values = json.loads(body.decode('utf-8'), object_pairs_hook=unique_object, parse_constant=invalid_constant)
+            if len(values) > 100:
+                raise ValueError('invalid upstream page size')
+            items.extend(values)
+            result = json.dumps(items, ensure_ascii=True, separators=(',', ':')).encode()
+            if len(result) > MAX_RESPONSE:
+                raise ValueError('upstream response too large')
+            remaining(deadline)
+            if self._cancelled.is_set():
+                raise ValueError('upstream cancelled')
+            if len(values) < 100:
+                return result
+        raise ValueError('upstream pagination limit')
+
+    def _page(self, route, deadline):
         if self._cancelled.is_set():
             raise ValueError('upstream cancelled')
         context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
@@ -91,7 +109,7 @@ class GitHubTransport:
                 'X-GitHub-Api-Version': '2022-11-28',
             })
             response = connection.getresponse()
-            if response.status != 200 or response.headers.get_all('Link'):
+            if response.status != 200:
                 raise ValueError('invalid upstream response')
             if response.headers.get_all('Content-Encoding'):
                 raise ValueError('invalid upstream encoding')
