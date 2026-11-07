@@ -45,8 +45,13 @@ if result.returncode != 0 or len(result.stdout) > 65536:
                     name = event.get('name', '').rsplit('::', 1)[-1]
                     if name in tests:
                         failed.add(name)
+                        output = event.get('stdout', '')
+                        if isinstance(output, str):
+                            print(json.dumps({'failed_test': name, 'output_tail': output[-4096:]}),
+                                  flush=True)
             except (ValueError, TypeError, AttributeError):
                 pass
+    print(json.dumps({'stderr_tail': result.stderr[-4096:].decode(errors='replace')}), flush=True)
     details = ','.join(sorted(failed)) if failed else 'unavailable'
     raise SystemExit(f'direct-release tests failed: status={result.returncode} '
                      f'stdout_bytes={len(result.stdout)} failed_tests={details}')

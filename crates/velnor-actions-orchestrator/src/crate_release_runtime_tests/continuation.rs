@@ -1,6 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+#[cfg(target_os = "linux")]
+use crate::crate_release_github::GitHubAdmissionRead as _;
+
 #[cfg(unix)]
 pub(super) fn verify_test_previous_continuation(
     github: &crate::crate_release_github::NativeGitHubAdmissionRead,
@@ -225,13 +228,10 @@ fn verify_real_direct_history_transition(
     github: &crate::crate_release_github::NativeGitHubAdmissionRead,
     old_runner: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    use crate::crate_release_github::GitHubAdmissionRead as _;
     let temp = tempfile::tempdir()?;
     let root = temp.path();
     let source = initialize_journal_source(root)?;
     let mut intent = direct_history_fixture_intent(&source)?;
-    intent.validate()?;
-    std::fs::create_dir(root.join(".github"))?;
     let mut historical = intent.clone();
     historical.generator_version = "0.1.5".into();
     historical.generator_source_sha = "f1041f322c54cd7edfdef06afd307799eeaa801a".into();
@@ -315,16 +315,20 @@ fn direct_history_fixture_intent(
     source: &str,
 ) -> Result<velnor_actions_contract::config::CrateReleaseIntent, Box<dyn std::error::Error>> {
     let updated = std::env::var_os("VELNOR_TEST_UPDATED_HISTORY").is_some();
-    Ok(serde_json::from_value(serde_json::json!({
-        "schema":1,"repository":"owner/project","default_branch":"main","environment":"release",
-        "required_workflow_path":".github/workflows/ci.yml","trusted_reviewer_id":139_017,
-        "generator_version":if updated { "0.1.73" } else { "0.1.5" },"generator_source_sha":if updated { "82ad7e9f788718855469444a3a02ea79ba0fe087" } else { "f1041f322c54cd7edfdef06afd307799eeaa801a" },"generator_manifest_sha256":if updated { "8e71b846acd375086fcb9693e567985d5a48b902e2e4b84400724ca6daad32d9" } else { "e38d047150f9e0347ec2160fd65bb7f026842e6f416e456990cf3b7ccd284c52" },
-        "release_plz_version":"0.4.3","runner":"ubuntu-26.04","authentication":"trusted-publishing",
-        "rust_version":"1.97.1","manifest_path":"Cargo.toml","pr_write_paths":["Cargo.toml"],
-        "registry":"crates-io","packages":["demo"],"publish_features":{"demo":[]},
-        "tag_template":"{{ package }}-v{{ version }}",
-        "recovery":{"package":"demo","version":"0.1.1","source_sha":source}
-    }))?)
+    let intent: velnor_actions_contract::config::CrateReleaseIntent = serde_json::from_value(
+        serde_json::json!({
+            "schema":1,"repository":"owner/project","default_branch":"main","environment":"release",
+            "required_workflow_path":".github/workflows/ci.yml","trusted_reviewer_id":139_017,
+            "generator_version":if updated { "0.1.73" } else { "0.1.5" },"generator_source_sha":if updated { "82ad7e9f788718855469444a3a02ea79ba0fe087" } else { "f1041f322c54cd7edfdef06afd307799eeaa801a" },"generator_manifest_sha256":if updated { "8e71b846acd375086fcb9693e567985d5a48b902e2e4b84400724ca6daad32d9" } else { "e38d047150f9e0347ec2160fd65bb7f026842e6f416e456990cf3b7ccd284c52" },
+            "release_plz_version":"0.4.3","runner":"ubuntu-26.04","authentication":"trusted-publishing",
+            "rust_version":"1.97.1","manifest_path":"Cargo.toml","pr_write_paths":["Cargo.toml"],
+            "registry":"crates-io","packages":["demo"],"publish_features":{"demo":[]},
+            "tag_template":"{{ package }}-v{{ version }}",
+            "recovery":{"package":"demo","version":"0.1.1","source_sha":source}
+        }),
+    )?;
+    intent.validate()?;
+    Ok(intent)
 }
 
 #[cfg(target_os = "linux")]
@@ -354,6 +358,7 @@ fn write_policy_commit(
     intent: &velnor_actions_contract::config::CrateReleaseIntent,
     message: &str,
 ) -> Result<String, Box<dyn std::error::Error>> {
+    std::fs::create_dir_all(root.join(".github"))?;
     std::fs::write(
         root.join(".github/velnor-release-intent.toml"),
         toml::to_string(intent)?,
