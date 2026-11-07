@@ -214,7 +214,7 @@ fn crate_release_intent(
 ) -> CrateReleaseIntent {
     CrateReleaseIntent {
         schema: 1,
-        oidc_qualification: release.oidc_qualification,
+        oidc_qualification: release.oidc_qualification.is_enabled(),
         repository: repository.to_owned(),
         default_branch: settings.default_branch.to_owned(),
         environment: release.environment.clone(),

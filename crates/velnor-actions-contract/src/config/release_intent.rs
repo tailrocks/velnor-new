@@ -91,18 +91,7 @@ impl CrateReleaseIntent {
             return Err(invalid("registry", "unsupported_registry"));
         }
         validate_environment(file, &self.environment)?;
-        if !is_full_sha(&self.generator_source_sha)
-            || self.generator_manifest_sha256.len() != 64
-            || !self
-                .generator_manifest_sha256
-                .bytes()
-                .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
-            || !super::is_exact_semver(&self.generator_version)
-            || !super::is_exact_semver(&self.release_plz_version)
-            || self.runner != "ubuntu-26.04"
-        {
-            return Err(invalid("tool_expectations", "invalid_tool_expectations"));
-        }
+        self.validate_tool_expectations()?;
         if !super::is_exact_semver(&self.rust_version) {
             return Err(invalid("rust_version", "invalid_rust_version"));
         }
@@ -149,6 +138,22 @@ impl CrateReleaseIntent {
             .map_err(|_| invalid("intent", "invalid_intent_serialization"))?;
         if text.len() > MAX_CRATE_RELEASE_INTENT_BYTES {
             return Err(invalid("intent", "intent_too_large"));
+        }
+        Ok(())
+    }
+    fn validate_tool_expectations(&self) -> Result<(), ContractError> {
+        let invalid = |key, problem| ContractError::config("release_intent", key, problem);
+        if !is_full_sha(&self.generator_source_sha)
+            || self.generator_manifest_sha256.len() != 64
+            || !self
+                .generator_manifest_sha256
+                .bytes()
+                .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+            || !super::is_exact_semver(&self.generator_version)
+            || !super::is_exact_semver(&self.release_plz_version)
+            || self.runner != "ubuntu-26.04"
+        {
+            return Err(invalid("tool_expectations", "invalid_tool_expectations"));
         }
         Ok(())
     }

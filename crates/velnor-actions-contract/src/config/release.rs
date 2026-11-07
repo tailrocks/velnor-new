@@ -62,13 +62,52 @@ pub use rehearsal::{
     ReleaseRehearsalMetadataConfig, ReleaseReviewProof,
 };
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(from = "bool", into = "bool")]
+pub enum OidcQualification {
+    #[default]
+    Disabled,
+    Enabled,
+}
+
+impl OidcQualification {
+    #[must_use]
+    pub const fn is_enabled(self) -> bool {
+        matches!(self, Self::Enabled)
+    }
+}
+
+impl std::ops::Not for &OidcQualification {
+    type Output = bool;
+
+    fn not(self) -> Self::Output {
+        !self.is_enabled()
+    }
+}
+
+impl From<bool> for OidcQualification {
+    fn from(enabled: bool) -> Self {
+        if enabled {
+            Self::Enabled
+        } else {
+            Self::Disabled
+        }
+    }
+}
+
+impl From<OidcQualification> for bool {
+    fn from(value: OidcQualification) -> Self {
+        value.is_enabled()
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct RustReleaseConfig {
     #[serde(default)]
     pub enabled: bool,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
-    pub oidc_qualification: bool,
+    pub oidc_qualification: OidcQualification,
     #[serde(default = "default_manifest_path")]
     pub manifest_path: String,
     #[serde(default)]
@@ -133,7 +172,7 @@ impl Default for RustReleaseConfig {
     fn default() -> Self {
         Self {
             enabled: false,
-            oidc_qualification: false,
+            oidc_qualification: OidcQualification::Disabled,
             manifest_path: default_manifest_path(),
             packages: Vec::new(),
             publishable_workspace: false,
@@ -175,18 +214,7 @@ impl RustReleaseConfig {
     }
 
     pub fn validate(&self, file: &str) -> Result<(), ContractError> {
-        if self.oidc_qualification
-            && (!self.enabled
-                || self.registry != ReleaseRegistry::CratesIo
-                || self.effective_authentication() != ReleaseAuthentication::TrustedPublishing
-                || self.new_crates.is_some())
-        {
-            return Err(ContractError::config(
-                file,
-                "oidc_qualification",
-                "trusted_publishing_required",
-            ));
-        }
+        self.validate_oidc_qualification(file)?;
         validate_manifest_path(file, &self.manifest_path)?;
         validate_packages(
             file,
@@ -257,6 +285,22 @@ impl RustReleaseConfig {
             &self.packages,
             self.publishable_workspace,
         )?;
+        Ok(())
+    }
+
+    fn validate_oidc_qualification(&self, file: &str) -> Result<(), ContractError> {
+        if self.oidc_qualification.is_enabled()
+            && (!self.enabled
+                || self.registry != ReleaseRegistry::CratesIo
+                || self.effective_authentication() != ReleaseAuthentication::TrustedPublishing
+                || self.new_crates.is_some())
+        {
+            return Err(ContractError::config(
+                file,
+                "oidc_qualification",
+                "trusted_publishing_required",
+            ));
+        }
         Ok(())
     }
 
