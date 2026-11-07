@@ -341,53 +341,8 @@ fn release_intent_comes_from_the_requested_workflow_commit()
     assert!(read_intent_at_workflow(root, &"0".repeat(40), &test_git()).is_err());
     Ok(())
 }
-use super::{OrchestratorError, poll_pending_admission};
-use std::cell::Cell;
-
-#[test]
-fn retries_only_explicitly_pending_required_checks() {
-    let calls = Cell::new(0);
-    let waits = Cell::new(0);
-    let result = poll_pending_admission(
-        || {
-            calls.set(calls.get() + 1);
-            if calls.get() < 3 {
-                Err(OrchestratorError::Internal {
-                    problem: "crate_release_required_pending".into(),
-                })
-            } else {
-                Ok(7)
-            }
-        },
-        || true,
-        || waits.set(waits.get() + 1),
-    );
-    assert_eq!(result.expect("success"), 7);
-    assert_eq!(waits.get(), 2);
-    let calls = Cell::new(0);
-    let result: Result<(), _> = poll_pending_admission(
-        || {
-            calls.set(calls.get() + 1);
-            Err(OrchestratorError::Internal {
-                problem: "crate_release_check_app".into(),
-            })
-        },
-        || true,
-        || panic!("permanent error was retried"),
-    );
-    assert!(result.is_err());
-    assert_eq!(calls.get(), 1);
-    let result: Result<(), _> = poll_pending_admission(
-        || {
-            Err(OrchestratorError::Internal {
-                problem: "crate_release_required_pending".into(),
-            })
-        },
-        || false,
-        || panic!("expired deadline was retried"),
-    );
-    assert!(result.is_err());
-}
+#[path = "crate_release_runtime_tests/polling.rs"]
+mod polling;
 
 #[test]
 fn native_fixture_evidence_binds_observed_inputs() -> Result<(), Box<dyn std::error::Error>> {
