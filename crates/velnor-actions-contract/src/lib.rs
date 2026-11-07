@@ -50,6 +50,7 @@ mod release_reexports;
 pub mod request_event;
 pub mod run_key_env;
 pub mod secrets;
+pub mod source_preview;
 pub mod staged_reads;
 pub mod strict_json;
 pub mod targets;

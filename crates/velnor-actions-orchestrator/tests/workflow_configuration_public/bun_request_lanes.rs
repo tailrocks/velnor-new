@@ -10,7 +10,7 @@ use std::process::Command;
 use serde_json::{Value, json};
 use tempfile::TempDir;
 use velnor_actions_contract::{
-    ExecutionMode, NAMED_CHECK_LANES_ENV, StepKind, expand_workflow_with_bun_plan,
+    ExecutionMode, NAMED_CHECK_LANES_ENV, StepKind, expand_workflow_with_lane_plan,
 };
 use velnor_actions_orchestrator::{
     PlanOutputMode, REQUEST_FILE_ENV, migrate_config, plan_internal, plan_outputs, prepare,
@@ -38,7 +38,7 @@ fn public_push_writer_request_reaches_plan_internal_without_lane_field()
     }
     let (repo, head) = make_single_push_repo()?;
     let prepared = prepare(repo.path())?;
-    let expansion = expand_workflow_with_bun_plan(
+    let expansion = expand_workflow_with_lane_plan(
         &prepared.workflow.ir,
         &prepared.config,
         Some(ExecutionMode::Both),

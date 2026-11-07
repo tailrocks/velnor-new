@@ -13,6 +13,7 @@ mod metadata_cwd;
 mod prepared_runner_stdin;
 mod release_runner_catalog;
 mod rust_spec_kind;
+mod source_preview_lock;
 
 #[test]
 fn job_build_command_binds_validated_source_revision() -> Result<(), Box<dyn std::error::Error>> {

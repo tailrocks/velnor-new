@@ -56,8 +56,9 @@ pub const RUST_VERIFIER_USES: [&str; 2] = [
 ];
 
 pub const JACTIONLINT_VERIFIER_USES: &str = "./.github/actions/velnor-verify-jactionlint";
+pub const ACQUIRE_PROTECTED_PREVIEW_OPERATION: &str = "acquire-protected-preview-v1";
 
-pub(super) fn verifier_action_role(uses: &str) -> Option<StepRole> {
+pub(super) fn recognized_action_role(uses: &str) -> Option<StepRole> {
     if RUST_VERIFIER_USES.contains(&uses) {
         Some(StepRole::VerifyRustManifest)
     } else if uses == JACTIONLINT_VERIFIER_USES {
@@ -102,6 +103,8 @@ pub enum StepRole {
 
     PreparePinnedTools,
 
+    PrepareRuntimeTools,
+
     PrepareRustComponents,
 
     VerifyRustManifest,
@@ -131,6 +134,8 @@ pub enum StepRole {
     BuildTaskRun,
 
     AcquireVelnor,
+
+    AcquireProtectedPreview,
 
     PreseedStage,
 

@@ -8,7 +8,7 @@ use super::bun_routing::make_bun_repo;
 use velnor_actions_contract::workflow::ir::WorkflowIr;
 use velnor_actions_contract::{
     ExecutionMode, Job, ScaleSetSelector, StepKind, VelnorSupportWorkflow, WorkflowPolicy,
-    expand_workflow_with_bun_plan,
+    expand_workflow_with_lane_plan,
 };
 use velnor_actions_orchestrator::{migrate_config, prepare};
 use velnor_actions_workflow_renderer::{
@@ -153,10 +153,10 @@ fn render_input(mode: ExecutionMode) -> Result<BunRenderInput, Box<dyn Error>> {
         .ok_or("migrated config has no execution settings")?
         .scale_selector()?;
     let expansion =
-        expand_workflow_with_bun_plan(&prepared.workflow.ir, &prepared.config, Some(mode))?;
+        expand_workflow_with_lane_plan(&prepared.workflow.ir, &prepared.config, Some(mode))?;
     let mut context = prepared.workflow.context.clone();
-    context.bun_lane_plan = expansion.bun_lane_plan;
-    context.scale_set_selector = Some(selector);
+    context.lane_plan = expansion.lane_plan;
+    context.scale_set_selector = (mode != ExecutionMode::Hosted).then_some(selector);
     Ok(BunRenderInput {
         ir: expansion.ir,
         policy: prepared.config.workflow.policy,

@@ -19,12 +19,37 @@ mod candidate_manifest;
 mod jobs;
 #[path = "schema2_generator_release_manifest.rs"]
 mod manifest;
+#[path = "schema2_preview_permissions.rs"]
+mod preview_permissions;
 #[path = "schema2_generator_release_qualification.rs"]
 mod qualification;
 #[path = "schema2_generator_release_source.rs"]
 mod source;
+#[path = "schema2_generator_source_preview.rs"]
+mod source_preview;
+#[path = "schema2_generator_source_preview_publication.rs"]
+mod source_preview_publication;
 #[path = "schema2_generator_release_workflow_steps.rs"]
 mod workflow_steps;
+
+pub(super) fn source_preview_jobs(
+    pins: &ProductReleasePins,
+) -> Result<Vec<(String, Yaml)>, RenderError> {
+    let mut jobs = source_preview::producer_jobs(pins)?;
+    if let Some(caller) = source_preview::caller_job()? {
+        jobs.push(caller);
+    }
+    Ok(jobs)
+}
+
+pub(super) fn source_preview_authority(
+    pins: &ProductReleasePins,
+) -> Result<(String, Yaml), RenderError> {
+    Ok((
+        source_preview::AUTHORITY_PATH.to_owned(),
+        source_preview::authority_document(pins)?,
+    ))
+}
 
 pub(super) struct GeneratorRelease {
     pub workflow: Yaml,

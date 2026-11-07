@@ -556,7 +556,7 @@ inputs = [
   "crates/velnor-actions-contract/src/workflow/job_validation.rs",
   "crates/velnor-actions-contract/src/workflow/jobs.rs",
   "crates/velnor-actions-contract/src/workflow/lanes.rs",
-  "crates/velnor-actions-contract/src/workflow/lanes_bun_plan.rs",
+  "crates/velnor-actions-contract/src/workflow/lanes_plan.rs",
   "crates/velnor-actions-contract/src/workflow/lanes_retarget.rs",
   "crates/velnor-actions-contract/src/workflow/matrix_entry.rs",
   "crates/velnor-actions-contract/src/workflow/mod.rs",

@@ -4,8 +4,8 @@
 use super::{LogicalJobSource, NativeAuthorityError, NativeAuthorityInput, invalid};
 use std::collections::{BTreeMap, BTreeSet};
 use velnor_actions_contract::{
-    Concurrency, ExecutionMode, Job, JobTimeout, Permissions, Trigger, ValidatorKind,
-    VelnorSupportWorkflow, WorkflowIr, WorkflowPolicy,
+    Concurrency, ExecutionMode, Job, JobTimeout, Permissions, Trigger, ValidatorKind, WorkflowIr,
+    WorkflowPolicy,
 };
 
 #[derive(Debug, Clone)]
@@ -28,12 +28,16 @@ type WorkflowOwners = BTreeMap<String, Vec<String>>;
 
 type Variants = Vec<(Option<Job>, Option<Job>)>;
 
+mod binding;
+mod task_bindings;
+
 pub(super) fn build(
     input: &NativeAuthorityInput<'_>,
     authority: &BTreeMap<String, Job>,
     catalog: &velnor_actions_mise::ToolCatalog,
 ) -> Result<(AuthorityBinding, Variants), NativeAuthorityError> {
     let (ir, owners) = metadata_ir(input, authority)?;
+    let task_bindings = task_bindings::rust(input)?;
     let mut variants = Vec::new();
     let mut projections = vec![(
         projection(&ir.jobs, input.config.workflow.policy)?,
@@ -45,10 +49,11 @@ pub(super) fn build(
         Some(ExecutionMode::ScaleSet),
         Some(ExecutionMode::Both),
     ] {
-        let expansion = match velnor_actions_contract::expand_workflow_with_bun_plan(
+        let expansion = match velnor_actions_contract::expand_workflow_with_task_bindings(
             &ir,
             input.config,
             dispatch,
+            &task_bindings,
         ) {
             Ok(expanded) => expanded,
             Err(error) if dispatch.is_none() => return Err(error.into()),
@@ -110,6 +115,19 @@ fn metadata_ir(
         job.check_runner.clone_from(&fact.check_runner);
         job.needs.clone_from(&fact.needs);
         job.outputs.clone_from(&fact.outputs);
+        if let LogicalJobSource::NamedCheck { id } = &fact.source {
+            job.steps.push(named_check_metadata(input, id)?);
+        }
+        if matches!(fact.source, LogicalJobSource::StateProducer { .. }) {
+            job.steps
+                .push(crate::state_seal::producer_steps::state_produced_step()?);
+        }
+        if matches!(fact.source, LogicalJobSource::LedgerCli) {
+            job.steps.push(crate::ledger_cli_build_step(
+                &velnor_actions_mise::ToolCatalog::pinned(),
+                &BTreeMap::new(),
+            )?);
+        }
         if let LogicalJobSource::WorkflowTask { owner }
         | LogicalJobSource::GeneratedWorkflowTask { owner, .. } = &fact.source
         {
@@ -152,142 +170,48 @@ fn metadata_ir(
     ))
 }
 
-impl AuthorityBinding {
-    pub(crate) fn check_mise_setup(
-        &self,
-        id: &str,
-        target: &str,
-    ) -> Result<Option<crate::MiseSetup>, crate::RenderError> {
-        self.check_mise.for_job(id, target)
+fn named_check_metadata(
+    input: &NativeAuthorityInput<'_>,
+    id: &str,
+) -> Result<velnor_actions_contract::Step, NativeAuthorityError> {
+    if input.config.checks.iter().any(|check| check.id == id) {
+        let task_id =
+            velnor_actions_contract::task_id_for_stack("mise", id, "check", "default", None)?;
+        let mut step = crate::steps::internal_step("Execute named check", "execute-check-v1")?;
+        if let velnor_actions_contract::StepKind::Internal { env, .. } = &mut step.kind {
+            env.insert("VELNOR_TASK_ID".to_owned(), task_id);
+        }
+        return Ok(step);
     }
-
-    pub(crate) fn validate(
-        &self,
-        jobs: &BTreeMap<String, Job>,
-        policy: WorkflowPolicy,
-        support: Option<&VelnorSupportWorkflow>,
-        context: &crate::render::RenderContext,
-    ) -> Result<Vec<usize>, crate::RenderError> {
-        let fail = || crate::RenderError::InvalidWorkflow("native_authority_graph".to_owned());
-        if policy != self.policy
-            || support.map_or(&[][..], |support| support.validators.as_slice()) != self.validators
-        {
-            return Err(fail());
-        }
-        let actual = projection(jobs, policy).map_err(|_| fail())?;
-        if context.generator_version != env!("CARGO_PKG_VERSION")
-            || context.runs_on != self.runner
-            || context.tool_pins != self.tool_pins
-            || context.pull_request_cache_policy != self.config.workflow.pull_request_cache_policy
-            || context.mise_quiet != self.config.workflow.mise_quiet
-        {
-            return Err(fail());
-        }
-        let variants = self
-            .variants
-            .iter()
-            .enumerate()
-            .filter_map(|(index, (graph, selector))| {
-                (*graph == actual && *selector == context.scale_set_selector).then_some(index)
-            })
-            .collect::<Vec<_>>();
-        if variants.is_empty() {
-            return Err(fail());
-        }
-        if context.validator_commands != self.commands {
-            return Err(fail());
-        }
-        let commands = context
-            .validator_commands
-            .iter()
-            .map(|command| command.validator)
-            .collect::<BTreeSet<_>>();
-        let expected = self
-            .validators
-            .iter()
-            .copied()
-            .filter(|validator| *validator != ValidatorKind::Alint)
-            .collect::<BTreeSet<_>>();
-        if commands != expected || commands.len() != context.validator_commands.len() {
-            return Err(fail());
-        }
-        if context.workflow_tasks.len() != self.workflow_owners.len() {
-            return Err(fail());
-        }
-        let mut seen = BTreeSet::new();
-        for task in &context.workflow_tasks {
-            if !self.matches_task_config(task) {
-                return Err(fail());
-            }
-            if !seen.insert(task.id()) {
-                return Err(fail());
-            }
-            let Some(expected) = self.workflow_owners.get(task.id()) else {
-                return Err(fail());
-            };
-            let actual = jobs
-                .keys()
-                .filter(|id| task.owns_job_id(id))
-                .map(|id| {
-                    id.strip_suffix(velnor_actions_contract::HOSTED_SUFFIX)
-                        .or_else(|| id.strip_suffix(velnor_actions_contract::SCALE_SUFFIX))
-                        .unwrap_or(id)
-                        .to_owned()
+    let check = input
+        .config
+        .native_checks
+        .iter()
+        .find(|check| check.id == id)
+        .ok_or_else(|| invalid("native_check_job_identity"))?;
+    let task_id = velnor_actions_contract::task_id_for_internal("native-check", id)?;
+    let version = input
+        .published_generator_lock
+        .map_or(env!("CARGO_PKG_VERSION"), |lock| {
+            lock.source_preview
+                .as_ref()
+                .map_or(lock.generator.version.as_str(), |preview| {
+                    preview.receipt.version.as_str()
                 })
-                .collect::<BTreeSet<_>>();
-            if actual != expected.iter().cloned().collect() {
-                return Err(fail());
-            }
-        }
-        Ok(variants)
-    }
-    pub(crate) fn required_workflow_ids(&self, jobs: &BTreeMap<String, Job>) -> Vec<String> {
-        jobs.keys()
-            .filter(|id| {
-                let base = id
-                    .strip_suffix(velnor_actions_contract::HOSTED_SUFFIX)
-                    .or_else(|| id.strip_suffix(velnor_actions_contract::SCALE_SUFFIX))
-                    .unwrap_or(id);
-                self.workflow_required.contains(base)
-            })
-            .cloned()
-            .collect()
-    }
-
-    fn matches_task_config(&self, policy: &crate::verification_jobs::WorkflowTaskPolicy) -> bool {
-        super::task_policies::matches(
-            &self.config,
-            &self.generated,
-            &self.workflow_sources,
-            policy,
-        )
-    }
-
-    pub(crate) fn qualify_direct(
-        jobs: &BTreeMap<String, Job>,
-        policy: WorkflowPolicy,
-        config: &velnor_actions_contract::VelnorConfig,
-        runner: &str,
-        tool_pins: Vec<String>,
-    ) -> Result<Self, crate::RenderError> {
-        let graph = projection(jobs, policy).map_err(|error| {
-            crate::RenderError::InvalidWorkflow(format!("native_authority_graph:{error:?}"))
-        })?;
-        Ok(Self {
-            check_mise: super::check_mise::CheckMiseSetups::default(),
-            policy,
-            variants: vec![(graph, None)],
-            config: config.clone(),
-            runner: runner.to_owned(),
-            tool_pins,
-            validators: Vec::new(),
-            commands: Vec::new(),
-            workflow_owners: BTreeMap::new(),
-            generated: BTreeMap::new(),
-            workflow_required: BTreeSet::new(),
-            workflow_sources: BTreeMap::new(),
-        })
-    }
+        });
+    Ok(velnor_actions_contract::Step {
+        name: "Execute native Homebrew check".to_owned(),
+        id: None,
+        role: None,
+        condition: None,
+        parallel: false,
+        kind: velnor_actions_contract::StepKind::NativeCheckExecution {
+            check_id: id.to_owned(),
+            operation: check.operation,
+            task_id,
+            sdk_version: version.to_owned(),
+        },
+    })
 }
 
 fn projection(

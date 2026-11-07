@@ -10,8 +10,8 @@ use std::path::Path;
 use std::time::{Duration, Instant};
 use velnor_actions_contract::config::MAX_CHECK_EXECUTION_RECEIPT_BYTES;
 use velnor_actions_contract::{
-    MatrixEntry, NAMED_CHECK_JOB_ID_ENV, NAMED_CHECK_LANE_VARIANT_ENV, NamedCheckLane,
-    NamedCheckLaneVariant, ObligationDecision, Plan, canonical_json_bytes,
+    LaneVariant, MatrixEntry, NAMED_CHECK_JOB_ID_ENV, NAMED_CHECK_LANE_VARIANT_ENV, NamedCheckLane,
+    ObligationDecision, Plan, canonical_json_bytes,
 };
 use velnor_actions_mise::{CheckDeadline, DiscoveredCheck, discover_checks_until};
 #[path = "check_prepare.rs"]
@@ -158,6 +158,23 @@ fn bind_check(binding: CheckBinding<'_>) -> Result<(), OrchestratorError> {
         variant: entry.lane_variant,
         job_id: entry.job_id.clone(),
     };
+    let actual = plan
+        .obligations
+        .iter()
+        .find(|ob| ob.task_id == task_id)
+        .ok_or_else(|| internal("check_obligation_missing"))?;
+    let routes: Vec<_> = (entry.lane_variant.is_some()
+        || entry.planned_platform.runs_on != item.check.runner.label)
+        .then(|| velnor_actions_contract::LaneRoute {
+            logical_job_id: actual.job_id.clone(),
+            job_id: entry.job_id.clone(),
+            variant: entry.lane_variant,
+            runner: entry.planned_platform.runs_on.clone(),
+            target: Some(entry.planned_platform.target.clone()),
+            task_ids: vec![entry.task_id.clone()],
+        })
+        .into_iter()
+        .collect();
     let (expected, mut expected_entries) =
         crate::internal_plan::named_checks::plan::derive_lanes_until(
             root,
@@ -165,17 +182,15 @@ fn bind_check(binding: CheckBinding<'_>) -> Result<(), OrchestratorError> {
             &plan.run_key,
             &plan.generator,
             crate::internal_plan::named_checks::plan::RuntimeToolchain { catalog, runtime },
-            &[lane],
+            crate::internal_plan::named_checks::plan::CheckLanes {
+                lanes: &[lane],
+                routes: &routes,
+            },
             Some(deadline),
         )?;
     let expected_entry = expected_entries
         .pop()
         .ok_or_else(|| internal("named_check_lane_missing"))?;
-    let actual = plan
-        .obligations
-        .iter()
-        .find(|ob| ob.task_id == task_id)
-        .ok_or_else(|| internal("check_obligation_missing"))?;
     if actual.decision != ObligationDecision::Execute
         || actual.task_digest != expected.task_digest
         || actual.input_digest != expected.input_digest
@@ -188,11 +203,11 @@ fn bind_check(binding: CheckBinding<'_>) -> Result<(), OrchestratorError> {
     Ok(())
 }
 
-fn parse_lane_variant(value: &str) -> Result<Option<NamedCheckLaneVariant>, OrchestratorError> {
+fn parse_lane_variant(value: &str) -> Result<Option<LaneVariant>, OrchestratorError> {
     match value {
         "single" => Ok(None),
-        "hosted" => Ok(Some(NamedCheckLaneVariant::Hosted)),
-        "scale_set" => Ok(Some(NamedCheckLaneVariant::ScaleSet)),
+        "hosted" => Ok(Some(LaneVariant::Hosted)),
+        "scale_set" => Ok(Some(LaneVariant::ScaleSet)),
         _ => Err(internal("check_lane_variant_invalid")),
     }
 }
@@ -313,62 +328,6 @@ fn run_owned(
     })
 }
 
-fn write_execution_receipt(
-    temp: &Path,
-    plan: &Plan,
-    entry: &MatrixEntry,
-    item: &DiscoveredCheck,
-    outcome: &CheckOutcome,
-) -> Result<(), OrchestratorError> {
-    let mut execution = crate::planner::check_evidence::gate::execution_receipt(
-        plan,
-        entry,
-        &item.check.id,
-        item.check.runner.platform,
-        outcome.evidence.clone(),
-        outcome.system_tools.clone(),
-        outcome.qualified_tools.clone(),
-    );
-    execution.container.clone_from(&outcome.container);
-    let bytes = canonical_json_bytes(&execution).map_err(internal_contract)?;
-    if bytes.len() > MAX_CHECK_EXECUTION_RECEIPT_BYTES {
-        return Err(internal("check_execution_receipt_size_limit"));
-    }
-    let base = temp
-        .join("velnor")
-        .join(&plan.run_key)
-        .join(&entry.matrix_key);
-    velnor_actions_contract::exclusive_write::create_dir_no_symlink(temp, &base)?;
-    velnor_actions_contract::exclusive_write::write_exclusive(
-        &base.join("check-execution.json"),
-        &bytes,
-        "check_execution",
-    )?;
-    Ok(())
-}
-
-fn write_observation_report(
-    temp: &Path,
-    plan: &Plan,
-    entry: &MatrixEntry,
-    observation: &compiler_observation::ObservationReport,
-) -> Result<(), OrchestratorError> {
-    let bytes = observation
-        .to_canonical_json()
-        .map_err(|error| internal(&error.to_string()))?;
-    let base = temp
-        .join("velnor")
-        .join(&plan.run_key)
-        .join(&entry.matrix_key);
-    velnor_actions_contract::exclusive_write::create_dir_no_symlink(temp, &base)?;
-    velnor_actions_contract::exclusive_write::write_exclusive(
-        &base.join("check-observation.json"),
-        &bytes,
-        "check_observation",
-    )?;
-    Ok(())
-}
-
 fn save_evidence(
     temp: &Path,
     plan: &Plan,
@@ -391,3 +350,7 @@ fn save_evidence(
     )?;
     Ok(())
 }
+
+#[path = "check_runtime_output.rs"]
+mod output;
+use output::{write_execution_receipt, write_observation_report};

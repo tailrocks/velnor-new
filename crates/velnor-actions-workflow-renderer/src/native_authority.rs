@@ -80,9 +80,44 @@ pub struct NativeAuthority {
     mise: crate::MiseSetup,
 }
 
+fn reject_unsupported_preview(
+    input: &NativeAuthorityInput<'_>,
+) -> Result<(), NativeAuthorityError> {
+    if input
+        .published_generator_lock
+        .is_none_or(|lock| lock.source_preview.is_none())
+    {
+        return Ok(());
+    }
+    if input
+        .config
+        .stacks
+        .rust
+        .as_ref()
+        .is_some_and(|rust| rust.seed_parallel_targets)
+    {
+        return Err(invalid("preview_parallel_target_seed_unsupported"));
+    }
+    if input.config.stacks.tofu.is_some() || !input.tofu_tasks.is_empty() {
+        return Err(invalid("preview_tofu_unsupported"));
+    }
+    if !input.config.workflow.task_suites.is_empty() {
+        return Err(invalid("preview_task_suites_unsupported"));
+    }
+    Ok(())
+}
+
 impl NativeAuthority {
     pub fn build(input: NativeAuthorityInput<'_>) -> Result<Self, NativeAuthorityError> {
         input.config.validate("config.toml")?;
+        reject_unsupported_preview(&input)?;
+        if input.config.workflow.policy == WorkflowPolicy::ConsumerV1
+            && input
+                .published_generator_lock
+                .is_some_and(|lock| lock.source_preview.is_some())
+        {
+            return Err(invalid("consumer_preview_controller_unsupported"));
+        }
         crate::guard::validate_runs_on(input.runner)?;
         let target = velnor_actions_contract::ReleaseTarget::for_runner_label(input.runner)
             .ok_or_else(|| invalid(format!("unsupported_target_for_runner:{}", input.runner)))?;
@@ -104,7 +139,10 @@ impl NativeAuthority {
         };
         let helper_catalog = plan::helper_catalog(&input, &catalog)?;
         let mise = tools::mise_setup(input.config, target)?;
-        let mut runtime = runtime(&catalog, &version, input.tools.rust.has_compiler())?;
+        let preview = input
+            .published_generator_lock
+            .and_then(|lock| lock.source_preview.as_ref());
+        let mut runtime = runtime(&catalog, &version, input.tools.rust.has_compiler(), preview)?;
         let required_acquire =
             required_acquisition(producer, target, acquire.clone(), &mut runtime)?;
         let mut required = plan::required_job(&input, &required_ids, required_acquire)?;
@@ -165,6 +203,16 @@ impl NativeAuthority {
                 return Err(invalid("controller_approvals:missing_approval"));
             }
         }
+        if let Some(preview) = &lock.source_preview {
+            preview.validate_shape()?;
+            if target != velnor_actions_contract::ReleaseTarget::LinuxX86_64 {
+                return Err(invalid("preview_controller_target_unsupported"));
+            }
+            return Ok((
+                preview.receipt.version.clone(),
+                crate::steps::protected_preview_acquire_step()?,
+            ));
+        }
         let staged = format!(
             "{}{}",
             crate::steps::STAGED_BINARY_PREFIX,
@@ -203,7 +251,8 @@ fn required_acquisition(
     acquire: velnor_actions_contract::Step,
     runtime: &mut crate::render::CanonicalRuntimeInputs,
 ) -> Result<velnor_actions_contract::Step, NativeAuthorityError> {
-    if !producer {
+    if !producer || acquire.role == Some(velnor_actions_contract::StepRole::AcquireProtectedPreview)
+    {
         return Ok(acquire);
     }
     let manifest = velnor_actions_mise::catalog::lock::published_verdict_manifest();
@@ -218,6 +267,7 @@ fn runtime(
     catalog: &ToolCatalog,
     version: &str,
     rust: bool,
+    preview_lock: Option<&velnor_actions_contract::source_preview::SourcePreviewLock>,
 ) -> Result<crate::render::CanonicalRuntimeInputs, NativeAuthorityError> {
     let mut env = velnor_actions_mise::ISOLATION_ENV
         .into_iter()
@@ -235,8 +285,17 @@ fn runtime(
     }
     crate::render::CanonicalRuntimeInputs::new(
         env,
-        version.to_owned(),
-        format!("{}{version}", crate::steps::STAGED_BINARY_PREFIX),
+        if let Some(preview) = preview_lock {
+            crate::render::ControllerLocator::ProtectedBaseDispatch {
+                preview: Box::new(preview.clone()),
+                path: crate::render::PROTECTED_BASE_CONTROLLER_PATH.to_owned(),
+            }
+        } else {
+            crate::render::ControllerLocator::PinnedRelease {
+                version: version.to_owned(),
+                path: format!("{}{version}", crate::steps::STAGED_BINARY_PREFIX),
+            }
+        },
         "${{ runner.temp }}/velnor/request".to_owned(),
         crate::steps::CHECKOUT_USES.to_owned(),
         false,

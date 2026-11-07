@@ -113,6 +113,7 @@ fn check_event_modes() -> Result<(), Box<dyn Error>> {
 
 fn plan_with(dispositions: &[(&str, JobDisposition)]) -> Plan {
     Plan {
+        lane_inventory: None,
         schema: 2,
         run_key: "run".to_owned(),
         plan_id: "plan".to_owned(),
@@ -129,6 +130,7 @@ fn plan_with(dispositions: &[(&str, JobDisposition)]) -> Plan {
             version: "0.1.55".to_owned(),
             target: "x86_64-unknown-linux-gnu".to_owned(),
             sha256: "0".repeat(64),
+            preview: None,
         },
         packages: Vec::new(),
         obligations: vec![PlanObligation {
@@ -147,6 +149,7 @@ fn plan_with(dispositions: &[(&str, JobDisposition)]) -> Plan {
         jobs: dispositions
             .iter()
             .map(|(id, disposition)| PlanJob {
+                lane: None,
                 job_id: (*id).to_owned(),
                 disposition: *disposition,
             })

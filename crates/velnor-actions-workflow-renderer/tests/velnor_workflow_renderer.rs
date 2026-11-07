@@ -59,3 +59,5 @@ mod state_v4_seal;
 mod state_v4_select;
 mod state_v4_snapshot;
 mod state_v4_tip;
+
+mod ubuntu_owned_publication;

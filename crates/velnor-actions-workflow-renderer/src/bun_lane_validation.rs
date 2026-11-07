@@ -3,14 +3,14 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use velnor_actions_contract::{BunLanePlan, Job, config::BUN_JOB_PREFIX};
+use velnor_actions_contract::{Job, LanePlan, config::BUN_JOB_PREFIX};
 
 use crate::{RenderError, verification_jobs::WorkflowTaskPolicy};
 
 pub(crate) fn project_job(
     logical_id: &str,
     canonical_job: &Job,
-    plan: Option<&BunLanePlan>,
+    plan: Option<&LanePlan>,
 ) -> Result<Vec<(String, Job)>, RenderError> {
     match plan {
         Some(plan) => plan
@@ -22,7 +22,7 @@ pub(crate) fn project_job(
 
 pub(crate) fn output_ids(
     logical_id: &str,
-    plan: Option<&BunLanePlan>,
+    plan: Option<&LanePlan>,
 ) -> Result<Vec<String>, RenderError> {
     match plan {
         Some(plan) => plan.output_ids(logical_id).map_err(RenderError::Contract),
@@ -33,7 +33,7 @@ pub(crate) fn output_ids(
 pub(crate) fn validate_output_set(
     jobs: &BTreeMap<String, Job>,
     policies: &[WorkflowTaskPolicy],
-    plan: Option<&BunLanePlan>,
+    plan: Option<&LanePlan>,
 ) -> Result<(), RenderError> {
     let Some(plan) = plan else {
         return Ok(());

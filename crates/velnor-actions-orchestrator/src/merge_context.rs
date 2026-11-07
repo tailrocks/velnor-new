@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 pub struct MergeContext {
     repository_present: bool,
     workspace: Option<PathBuf>,
+    preview_identity: Option<String>,
 }
 
 impl MergeContext {
@@ -15,6 +16,7 @@ impl MergeContext {
         Self {
             repository_present: false,
             workspace: None,
+            preview_identity: None,
         }
     }
 
@@ -23,6 +25,7 @@ impl MergeContext {
         Self {
             repository_present: true,
             workspace,
+            preview_identity: None,
         }
     }
 
@@ -30,7 +33,13 @@ impl MergeContext {
         Self {
             repository_present: std::env::var_os("GITHUB_REPOSITORY").is_some(),
             workspace: std::env::var_os("GITHUB_WORKSPACE").map(PathBuf::from),
+            preview_identity: std::env::var_os("VELNOR_SELECTED_PREVIEW_IDENTITY")
+                .map(|value| value.into_string().unwrap_or_default()),
         }
+    }
+
+    pub(super) fn preview_identity(&self) -> Option<&str> {
+        self.preview_identity.as_deref()
     }
 
     pub(super) const fn repository_present(&self) -> bool {

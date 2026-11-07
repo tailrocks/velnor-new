@@ -17,7 +17,7 @@ use std::os::unix::fs::PermissionsExt;
 use velnor_actions_contract::canonical::{Digest, digest_b3, digest_b3_typed};
 use velnor_actions_contract::workflow::cache_context::JobBindingV1;
 use velnor_actions_contract::workflow::cache_identity::{Gc1Family, GenerationId};
-use velnor_actions_contract::{NamedCheckLane, NamedCheckLaneVariant};
+use velnor_actions_contract::{LaneVariant, NamedCheckLane};
 use velnor_actions_mise::compiler_observer::{
     CompilerCompletion, CompilerEvent, CompilerInvocation, CompilerLedger, DOC_PHASE_COMPILATION,
     DOC_PHASE_DOCTEST_DESCENDANT, DOC_PHASE_FINALIZATION, DOC_PHASE_PROBE, DOC_PHASES,

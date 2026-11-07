@@ -52,6 +52,7 @@ pub(crate) fn dispositions(
         };
         if has_member_job {
             jobs.push(PlanJob {
+                lane: None,
                 job_id: job_id(member),
                 disposition,
             });
@@ -64,12 +65,14 @@ pub(crate) fn dispositions(
             .collect();
         for suite in &suites {
             jobs.push(PlanJob {
+                lane: None,
                 job_id: suite_job_id(member, suite),
                 disposition,
             });
         }
         if has_release_assets && (has_member_job || !suites.is_empty()) {
             jobs.push(PlanJob {
+                lane: None,
                 job_id: format!("{}{BUN_ASSETS_SUFFIX}", job_id(member)),
                 disposition,
             });

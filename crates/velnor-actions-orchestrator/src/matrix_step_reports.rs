@@ -12,18 +12,6 @@ pub(crate) fn report_wrapper_argv(joined: &str, helper: &str) -> Vec<String> {
     velnor_actions_workflow_renderer::plan_report::report_wrapper_argv(joined, helper)
 }
 
-pub(crate) fn deferred_report_argv(
-    outcome_path: &str,
-    helper: &str,
-    start_path: &str,
-) -> Vec<String> {
-    velnor_actions_workflow_renderer::plan_report::deferred_report_argv(
-        outcome_path,
-        helper,
-        start_path,
-    )
-}
-
 pub(crate) fn outcome_path_for_key(matrix_key: &str) -> String {
     velnor_actions_workflow_renderer::plan_report::outcome_path_for_key(matrix_key)
 }

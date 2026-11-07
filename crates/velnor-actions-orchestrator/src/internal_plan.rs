@@ -116,6 +116,16 @@ pub(crate) fn cache_ids_for(
     toolchain: &str,
     catalog: &velnor_actions_mise::ToolCatalog,
 ) -> Result<EntryCacheIds, ContractError> {
+    let platform = identities::platform_id_for_group(label, task)?;
+    cache_ids_for_platform(task, &platform, toolchain, catalog)
+}
+
+pub(crate) fn cache_ids_for_platform(
+    task: &ProposedTask,
+    platform: &str,
+    toolchain: &str,
+    catalog: &velnor_actions_mise::ToolCatalog,
+) -> Result<EntryCacheIds, ContractError> {
     if matches!(
         Stack::require_known(&task.stack_id)?,
         Stack::Mise | Stack::Native
@@ -137,7 +147,7 @@ pub(crate) fn cache_ids_for(
     EntryCacheIds::new(
         &workspace_id,
         &identities::lane_id_for(task, &workspace_id),
-        &identities::platform_id_for_group(label, task)?,
+        platform,
         toolchain,
         &format_id,
     )
@@ -267,5 +277,6 @@ pub(crate) fn default_generator_with_phase_timings(
         target: snapshot::map_release_triple(std::env::consts::ARCH, std::env::consts::OS),
         sha256: crate::planner::generator::current_exe_sha256_with_phase_timings(phases)
             .unwrap_or_else(|| snapshot::UNRESOLVED_GENERATOR_SHA.to_owned()),
+        preview: None,
     }
 }

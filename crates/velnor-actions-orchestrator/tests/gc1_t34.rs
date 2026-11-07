@@ -99,6 +99,7 @@ fn plan_with(
     disposition: JobDisposition,
 ) -> Result<Plan, Box<dyn Error>> {
     Ok(Plan {
+        lane_inventory: None,
         schema: Plan::SCHEMA,
         run_key: RUN_KEY.to_owned(),
         plan_id: plan_id_for_run(RUN_KEY)?,
@@ -115,6 +116,7 @@ fn plan_with(
             version: "0.1.55".to_owned(),
             target: "x86_64-unknown-linux-gnu".to_owned(),
             sha256: "be16944e059d0cd80ac1d91b1000d694603b657387a239f75d4cfc24ca623a9f".to_owned(),
+            preview: None,
         },
         packages: Vec::new(),
         obligations: vec![obligation],
@@ -123,6 +125,7 @@ fn plan_with(
         },
         task_ids: vec![task.to_owned()],
         jobs: vec![PlanJob {
+            lane: None,
             job_id: JOB_ID.to_owned(),
             disposition,
         }],

@@ -1,9 +1,18 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use super::StepRole;
+use super::{StepKind, StepRole};
 
 impl StepRole {
+    pub(super) fn valid_runtime_tools(kind: &StepKind) -> bool {
+        let StepKind::Shell { run, .. } = kind else {
+            return false;
+        };
+        matches!(run.as_slice(), [mise, no_config, no_env, no_hooks, install, tool]
+            if mise == "mise" && no_config == "--no-config" && no_env == "--no-env"
+                && no_hooks == "--no-hooks" && install == "install"
+                && matches!(tool.as_str(), "gh@2.103.2" | "gh@2.103.3"))
+    }
     pub(super) const fn is_shell_only(self) -> bool {
         matches!(
             self,

@@ -565,3 +565,24 @@ The [OCI Distribution Specification error table](https://github.com/opencontaine
 ## Release concurrency queue
 
 GitHub's [workflow concurrency documentation](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency) specifies that the default queue retains only one pending run and replaces it when a later run enters the group. `queue: max` retains up to 100 pending runs; runs beyond that limit can be canceled. Queue order follows the time runs start waiting and is not a guarantee of dispatch or commit order. `queue: max` cannot be combined with `cancel-in-progress: true`.
+
+## Generator publication concurrency
+
+GitHub supports `queue: max` with `cancel-in-progress: false`, allowing up to
+100 pending runs per concurrency group. Generator publication separates main
+pushes, SDK preview tags, and reusable release calls into distinct groups; SDK
+preview publications remain serialized within their channel. See the
+[workflow concurrency reference](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#concurrency).
+
+## SDK preview deployment admission
+
+GitHub's [job context](https://docs.github.com/en/actions/reference/workflows-and-actions/contexts#job-context) identifies the reusable workflow that defines the current job by repository, path, ref, and SHA. Its [context availability table](https://docs.github.com/en/actions/reference/workflows-and-actions/contexts#context-availability) permits these values in step environment expressions. In a reusable workflow the `github` context identifies the caller; the two identities are checked separately. The reusable authority is referenced by a full commit SHA, and the bootstrap emits no tag-publication caller until an independently merged authority is pinned.
+
+GitHub defines protected-branches environment admission for branches. SDK preview
+publication uses the separate `generator-source-preview` environment with a
+selected `sdk-preview-*` tag policy and the owner reviewer. The stable
+`generator-release` environment retains its existing policy. See
+[deployment branches and tags](https://docs.github.com/en/actions/reference/workflows-and-actions/deployments-and-environments#deployment-branches-and-tags)
+and the [tag-specific deployment policy API](https://docs.github.com/en/rest/deployments/branch-policies#create-a-deployment-branch-policy).
+
+GitHub's [release by tag endpoint](https://docs.github.com/en/rest/releases/releases#get-a-release-by-tag-name) returns published releases. Its [release listing endpoint](https://docs.github.com/en/rest/releases/releases#list-releases) includes drafts only for callers with push access. The preview draft job has contents write access and searches a bounded complete release listing before creating a release; the read-only source job does not infer draft absence from a hidden result. Candidate selection and later jobs retain the exact original artifact IDs recorded in the owned draft.

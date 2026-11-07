@@ -192,6 +192,31 @@ fn check_cleanup_render() -> Result<(), Box<dyn Error>> {
     if rendered.bytes.contains("actions/checkout") {
         return Err(fail("cleanup render kept an application checkout"));
     }
+    let scale_set = "scale-set:velnor+my-set";
+    let cleanup = render_cache_cleanup_yml(scale_set, "0.1.55")?;
+    let prune = velnor_actions_workflow_renderer::cache_prune::render_cache_prune_yml(
+        scale_set, "main", "CI", "0.1.55",
+    )?;
+    for workflow in [&cleanup.bytes, &prune.bytes] {
+        for marker in [
+            "runs-on: ubuntu-26.04",
+            "actions: write",
+            "cancel-in-progress: false",
+        ] {
+            if !workflow.contains(marker) {
+                return Err(fail(&format!("scale-set cache fallback lost {marker}")));
+            }
+        }
+    }
+    if !cleanup
+        .bytes
+        .contains("github.event.pull_request.head.repo.fork == false")
+        || !prune
+            .bytes
+            .contains("github.event.workflow_run.event == 'push'")
+    {
+        return Err(fail("scale-set cache fallback lost its event authority"));
+    }
     Ok(())
 }
 

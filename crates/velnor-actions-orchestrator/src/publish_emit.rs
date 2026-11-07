@@ -106,7 +106,7 @@ pub(crate) fn publish_files(
         },
         jobs,
         staged_binary: (!maven_plans.is_empty())
-            .then(|| prep.workflow.context.staged_binary.clone()),
+            .then(|| prep.workflow.context.controller.path().to_owned()),
     };
     let ctx = ReleaseRenderContext {
         generator_version: env!("CARGO_PKG_VERSION").to_owned(),

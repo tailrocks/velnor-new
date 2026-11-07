@@ -66,6 +66,7 @@ mod release;
 mod required_dispositions;
 mod review_completion_workflow_emit;
 mod safe_read;
+mod selected_preview_identity;
 mod state_roots;
 mod tap_history_relevance;
 mod tap_merge;

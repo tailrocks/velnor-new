@@ -149,8 +149,6 @@ pub(crate) fn maybe_task_cache_steps(
     ])
 }
 
-pub(crate) const REPORT_FORMAT_NAME: &str = "Report Format";
-
 pub(crate) fn workspace_format_step(
     discovery: &Discovery,
     catalog: &ToolCatalog,
@@ -173,7 +171,7 @@ pub(crate) fn workspace_format_step(
 
 pub(crate) fn workspace_format_report_steps(
     discovery: &Discovery,
-    helper_version: &str,
+    controller: &velnor_actions_workflow_renderer::render::ControllerLocator,
 ) -> Result<Vec<Step>, OrchestratorError> {
     let Some(fmt) = workspace_fmt_group(discovery) else {
         return Ok(Vec::new());
@@ -181,14 +179,11 @@ pub(crate) fn workspace_format_report_steps(
     let matrix_key = matrix_key_for(fmt)?;
     let outcome = crate::planner::matrix_step::outcome_path_for_key(&matrix_key);
     let start = crate::planner::matrix_step::start_path_for_key(&matrix_key);
-    let helper = crate::planner::matrix_step::helper_path_for_version(helper_version);
-    let report = velnor_actions_workflow_renderer::shell_step(
-        REPORT_FORMAT_NAME,
-        crate::planner::matrix_step::deferred_report_argv(&outcome, &helper, &start),
-        BTreeMap::from([(
-            crate::task_report::TASK_ID_ENV.to_owned(),
-            fmt.task_id.clone(),
-        )]),
+    let report = velnor_actions_workflow_renderer::workspace_format_report_step(
+        controller,
+        &outcome,
+        &start,
+        fmt.task_id.clone(),
     )
     .map_err(OrchestratorError::from)?;
     let upload = crate::planner::matrix_step::crate_upload_step(PLAN_JOB_ID)?;

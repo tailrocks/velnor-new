@@ -3,7 +3,7 @@
 
 use super::ir::WorkflowIr;
 use super::jobs::PLAN_JOB_ID;
-use super::lanes::{Placement, placement_for};
+use super::lanes::{LaneVariant, Placement, placement_for};
 use super::step::StepKind;
 use super::{HOSTED_SUFFIX, SCALE_SUFFIX, lane_class};
 use crate::config::{ExecutionMode, VelnorConfig};
@@ -21,17 +21,9 @@ pub const NAMED_CHECK_LANE_VARIANT_ENV: &str = "VELNOR_CHECK_LANE_VARIANT";
 #[serde(deny_unknown_fields)]
 pub struct NamedCheckLane {
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub variant: Option<NamedCheckLaneVariant>,
+    pub variant: Option<LaneVariant>,
 
     pub job_id: String,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum NamedCheckLaneVariant {
-    Hosted,
-
-    ScaleSet,
 }
 
 pub fn named_check_lanes(
@@ -67,20 +59,55 @@ pub fn named_check_lanes(
                 variant: None,
                 job_id: id.clone(),
             }],
-            Placement::Both => vec![
-                NamedCheckLane {
-                    variant: Some(NamedCheckLaneVariant::Hosted),
-                    job_id: format!("{id}{HOSTED_SUFFIX}"),
-                },
-                NamedCheckLane {
-                    variant: Some(NamedCheckLaneVariant::ScaleSet),
-                    job_id: format!("{id}{SCALE_SUFFIX}"),
-                },
-            ],
+            Placement::Both => {
+                vec![
+                    NamedCheckLane {
+                        variant: Some(LaneVariant::Hosted),
+                        job_id: format!("{id}{HOSTED_SUFFIX}"),
+                    },
+                    NamedCheckLane {
+                        variant: Some(LaneVariant::ScaleSet),
+                        job_id: format!("{id}{SCALE_SUFFIX}"),
+                    },
+                ]
+            }
         };
         result.insert(id.clone(), lanes);
     }
     Ok(result)
+}
+
+pub(super) fn named_check_task_id(job: &super::Job) -> Result<String, ContractError> {
+    let mut task = None;
+    for step in &job.steps {
+        let candidate = match &step.kind {
+            StepKind::NativeCheckExecution { task_id, .. } => Some(task_id.as_str()),
+            StepKind::Internal { operation, env } if operation == "execute-check-v1" => {
+                env.get("VELNOR_TASK_ID").map(String::as_str)
+            }
+            StepKind::Shell { env, .. }
+                if env
+                    .get("VELNOR_INTERNAL_OP")
+                    .is_some_and(|op| op == "execute-check-v1") =>
+            {
+                env.get("VELNOR_TASK_ID").map(String::as_str)
+            }
+            _ => None,
+        };
+        if let Some(candidate) = candidate
+            && task.replace(candidate).is_some()
+        {
+            return Err(ContractError::identity(
+                "workflow.named_check_lanes",
+                "duplicate_check_execution",
+            ));
+        }
+    }
+    let task = task.ok_or_else(|| {
+        ContractError::identity("workflow.named_check_lanes", "missing_check_execution")
+    })?;
+    crate::ids::validate_task_id(task)?;
+    Ok(task.to_owned())
 }
 
 pub(super) fn add_named_check_lanes(

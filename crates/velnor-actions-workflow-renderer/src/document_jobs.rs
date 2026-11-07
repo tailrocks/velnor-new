@@ -38,7 +38,7 @@ pub(super) fn job_to_yaml(
         && ctx
             .workflow_tasks
             .iter()
-            .any(|task| task.owns_projected_job_id(id, ctx.bun_lane_plan.as_ref()))
+            .any(|task| task.owns_projected_job_id(id, ctx.lane_plan.as_ref()))
     {
         crate::toolchain_env::credential_scrub()
     } else {
@@ -87,7 +87,7 @@ pub(super) fn job_to_yaml(
             job_env: &effective_env,
             runs_on: Some(&job.runs_on),
             actions_read: policy.actions_read,
-            report_helper_version: &ctx.report_helper_version,
+            report_helper_version: ctx.controller.report_helper_version(),
         },
     )?;
     crate::cache_save_budget::apply(&mut rendered_steps, job.timeout_minutes.minutes())?;

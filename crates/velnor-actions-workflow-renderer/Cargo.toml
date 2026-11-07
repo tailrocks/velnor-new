@@ -101,3 +101,19 @@ path = "tests/release_budget_public.rs"
 [[test]]
 name = "verified_gh_shell_public"
 path = "tests/verified_gh_shell_public.rs"
+
+[[test]]
+name = "source_preview_bootstrap_public"
+path = "tests/source_preview_bootstrap_public.rs"
+
+[[test]]
+name = "source_preview_crypto_public"
+path = "tests/source_preview_crypto_public.rs"
+
+[[test]]
+name = "source_preview_exec_public"
+path = "tests/source_preview_exec_public.rs"
+
+[[test]]
+name = "source_preview_loader_public"
+path = "tests/source_preview_loader_public.rs"

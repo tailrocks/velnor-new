@@ -44,6 +44,7 @@ fn check_unaffected_skip_passes() -> Result<(), Box<dyn Error>> {
         JobDisposition::NotAffected,
     )?;
     plan.jobs = vec![PlanJob {
+        lane: None,
         job_id: JOB_ID.to_owned(),
         disposition: JobDisposition::NotAffected,
     }];

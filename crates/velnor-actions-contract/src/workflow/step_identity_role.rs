@@ -3,10 +3,10 @@
 
 use super::super::{step_mbx_lifecycle, step_protocol};
 use super::{
-    BUN_REGISTRY_INSTALL_OPERATION, ContractError, GITHUB_EVIDENCE_FETCH_OPERATION,
-    GITHUB_EVIDENCE_IMPORT_OPERATION, PRIVATE_FETCH_OPERATION, PRIVATE_REVOKE_OPERATION,
-    PRIVATE_TOKEN_MINT_ACTION_PREFIX, StepId, StepKind, StepRole, ToolsRestoreForm,
-    action_has_prefix_for_kind, internal_operation, valid_bun_assets_handoff,
+    ACQUIRE_PROTECTED_PREVIEW_OPERATION, BUN_REGISTRY_INSTALL_OPERATION, ContractError,
+    GITHUB_EVIDENCE_FETCH_OPERATION, GITHUB_EVIDENCE_IMPORT_OPERATION, PRIVATE_FETCH_OPERATION,
+    PRIVATE_REVOKE_OPERATION, PRIVATE_TOKEN_MINT_ACTION_PREFIX, StepId, StepKind, StepRole,
+    ToolsRestoreForm, action_has_prefix_for_kind, internal_operation, valid_bun_assets_handoff,
     valid_checkout_payload, valid_jactionlint_verifier_payload, valid_mise_setup,
     valid_rust_verifier_payload, valid_tool_seed_payload, valid_tools_cache_identity,
     valid_tools_cache_scrub,
@@ -26,6 +26,10 @@ impl StepRole {
 
     fn matches_payload(self, kind: &StepKind) -> bool {
         match self {
+            Self::PrepareRuntimeTools => Self::valid_runtime_tools(kind),
+            Self::AcquireProtectedPreview => {
+                matches!(kind, StepKind::Internal { operation, env } if operation == ACQUIRE_PROTECTED_PREVIEW_OPERATION && env.is_empty())
+            }
             Self::Checkout => valid_checkout_payload(kind),
             Self::ToolSeed => valid_tool_seed_payload(kind),
             Self::MiseSetup => valid_mise_setup(kind),

@@ -59,6 +59,7 @@ enum SuiteTool {
     BunExecution,
     GhExecution,
     CraneExecution,
+    GhAttestation,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -80,6 +81,10 @@ impl CrateSuite {
         self.owns(SuiteTool::CraneExecution)
     }
 
+    fn owns_gh_attestation(self) -> bool {
+        self.owns(SuiteTool::GhAttestation)
+    }
+
     const fn package_name(self) -> &'static str {
         self.name.package_name()
     }
@@ -87,7 +92,7 @@ impl CrateSuite {
 
 const NO_SUITE_TOOLS: &[SuiteTool] = &[];
 const OPENTOFU_TOOLS: &[SuiteTool] = &[SuiteTool::OpenTofuExecution];
-const GH_TOOLS: &[SuiteTool] = &[SuiteTool::GhExecution];
+const RENDERER_TOOLS: &[SuiteTool] = &[SuiteTool::GhAttestation];
 const CLI_TOOLS: &[SuiteTool] = &[
     SuiteTool::GenerateValidators,
     SuiteTool::GhExecution,
@@ -142,7 +147,7 @@ const SUITE_TOOL_OWNERS: [CrateSuite; 14] = [
     },
     CrateSuite {
         name: SuiteName::WorkflowRenderer,
-        tools: GH_TOOLS,
+        tools: RENDERER_TOOLS,
     },
     CrateSuite {
         name: SuiteName::Actionlint,
@@ -272,6 +277,22 @@ pub(crate) fn verify_validators_step(catalog: &ToolCatalog, tools: &LaneTools) -
         .0
         .contains(&PinnedTool::Jactionlint)
         .then(|| crate::workflow::verify_jactionlint_step(catalog))
+}
+
+pub(crate) fn prepare_runtime_gh_step(
+    policy: WorkflowPolicy,
+    suite: Option<CrateSuite>,
+    catalog: &ToolCatalog,
+) -> Result<Option<Step>, OrchestratorError> {
+    if policy != WorkflowPolicy::VelnorRepositoryV1
+        || !suite.is_some_and(CrateSuite::owns_gh_attestation)
+    {
+        return Ok(None);
+    }
+    let mut step = prepare_crate_tools_step(catalog, &LaneTools(BTreeSet::from([PinnedTool::Gh])))?;
+    "Prepare pinned attestation verifier".clone_into(&mut step.name);
+    step.role = Some(StepRole::PrepareRuntimeTools);
+    Ok(Some(step))
 }
 
 pub(crate) fn prepare_crate_tools_step(
