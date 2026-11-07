@@ -4,6 +4,7 @@
 import os
 import pathlib
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -17,6 +18,19 @@ def run(args, cwd, env, success=True):
     if (result.returncode == 0) != success:
         raise AssertionError(f"{args}: {result.returncode}\n{result.stdout}\n{result.stderr}")
     return result
+
+def bounded_run(args, cwd, env, success, receipt=None):
+    process = subprocess.Popen(args, cwd=cwd, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, start_new_session=True)
+    try:
+        stdout, stderr = process.communicate(timeout=30)
+    except subprocess.TimeoutExpired:
+        os.killpg(process.pid, signal.SIGKILL)
+        process.communicate()
+        if receipt is not None and (not receipt.is_file() or receipt.read_text() != "substituted"):
+            raise AssertionError("FIFO substitution hook did not fire")
+        raise AssertionError("restored Git FIFO blocked source handoff")
+    if (process.returncode == 0) != success:
+        raise AssertionError(f"Git FIFO handoff returned {process.returncode}\n{stdout}\n{stderr}")
 
 with tempfile.TemporaryDirectory() as temporary:
     base = pathlib.Path(temporary).resolve()
@@ -71,6 +85,34 @@ with tempfile.TemporaryDirectory() as temporary:
     for package in ("plain", "consumer"):
         run([cargo, "build", "--locked", "--offline", "--manifest-path", str(workspace / "Cargo.toml"), "-p", package], workspace, offline)
     assert not marker.exists()
+    race_home = base / "race-home"
+    race_home.mkdir(mode=0o700)
+    shutil.copytree(warm / "git", race_home / "git")
+    race_db = next((race_home / "git/db").iterdir())
+    race_file = next((race_db / "objects/pack").glob("*.pack"))
+    race_receipt = base / "race-receipt"
+    race_script = root / "crates/velnor-actions-workflow-renderer/tests/cargo_git_fifo_race.py"
+    bounded_run([sys.executable, "-I", str(race_script), str(helper.parent / "cargo-git-handoff.py"), str(race_home), str(base), race_file.name, str(race_receipt)], root, env, False, race_receipt)
+    assert race_receipt.read_text() == "substituted" and race_file.is_fifo()
+    assert not marker.exists()
+    fifo_cases = []
+    for kind in ("loose", "pack"):
+        fifo_home = base / f"fifo-{kind}"
+        fifo_home.mkdir(mode=0o700)
+        shutil.copytree(warm / "git", fifo_home / "git")
+        database_copy = next((fifo_home / "git/db").iterdir())
+        inspect = ["/usr/bin/python3", str(helper.parent / "cargo-git-handoff.py"), "inspect", str(fifo_home), str(base), "0", "0"]
+        run(inspect, root, env)
+        if kind == "loose":
+            fifo = database_copy / "objects/ff" / ("f" * 38)
+            fifo.parent.mkdir(exist_ok=True)
+        else:
+            fifo = next((database_copy / "objects/pack").glob("*.pack"))
+            fifo.unlink()
+        os.mkfifo(fifo, 0o600)
+        bounded_run(inspect, root, env, False)
+        assert fifo.is_fifo() and not marker.exists()
+        fifo_cases.append((fifo_home, fifo.relative_to(fifo_home / "git")))
     empty = base / "empty"
     empty.mkdir(mode=0o700)
     run([cargo, "build", "--locked", "--offline", "--manifest-path", str(workspace / "Cargo.toml"), "-p", "plain"], workspace, offline | {"CARGO_HOME": str(empty)}, success=False)
@@ -120,8 +162,18 @@ with tempfile.TemporaryDirectory() as temporary:
     assert (quarantines[0] / "original/db" / database.name / "hooks/post-checkout").is_file()
     assert (quarantines[0] / "original/db" / database.name / "foreign-canary").read_text() == "preserved"
     assert not marker.exists() and canary.read_text() == "untouched"
+    for fifo_home, relative_fifo in fifo_cases:
+        shutil.rmtree(shared / "git")
+        (fifo_home / "git").rename(shared / "git")
+        bounded_run(["bash", str(prefetch), "prefetch-locked-sources-for-qualification-workspaces"], workspace, prefetch_env, True)
+        log = (evidence / "cargo-prefetch.log").read_text()
+        assert "manifest=Cargo.toml mode=network status=0" in log
+        assert "manifest=crates/velnor-runner/Cargo.toml mode=network status=0" in log
+        assert any((item / "original" / relative_fifo).is_fifo() for item in runner_temp.glob("velnor-git-quarantine.*"))
+        assert not marker.exists() and canary.read_text() == "untouched"
     shutil.rmtree(shared / "git/checkouts", ignore_errors=True)
     current_pack = next((shared / "git/db").rglob("*.pack"))
+    current_pack.chmod(0o600)
     current_pack.write_bytes(b"corrupt")
     run(["bash", str(prefetch), "prefetch-locked-sources-for-qualification-workspaces"], workspace, prefetch_env)
     log = (evidence / "cargo-prefetch.log").read_text()

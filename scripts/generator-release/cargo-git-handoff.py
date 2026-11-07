@@ -143,10 +143,13 @@ def names(fd):
 
 def copy_file(parent, name, dest):
     global size_total
-    fd = os.open(name, flags, dir_fd=parent)
+    expected = os.stat(name, dir_fd=parent, follow_symlinks=False)
+    if not stat.S_ISREG(expected.st_mode) or expected.st_nlink != 1:
+        fail()
+    fd = os.open(name, flags | os.O_NONBLOCK, dir_fd=parent)
     try:
         before = os.fstat(fd)
-        if not stat.S_ISREG(before.st_mode) or before.st_nlink != 1:
+        if not stat.S_ISREG(before.st_mode) or before.st_nlink != 1 or (expected.st_dev, expected.st_ino, expected.st_mode) != (before.st_dev, before.st_ino, before.st_mode):
             fail()
         size_total += before.st_size
         if size_total > 536870912:
