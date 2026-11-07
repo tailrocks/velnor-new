@@ -104,12 +104,7 @@ fn verify_runtime(
 > {
     let inspection = velnor_archive_guard::owned_archive_guard::oci_candidate::inspect_oci_candidate_with_config(&context.archive)
         .map_err(|_| internal("native_qualification_oci_invalid"))?;
-    if inspection.configuration.user.as_deref() != Some("65532:65532")
-        || inspection.configuration.entrypoint.as_deref() != Some(&["/fixture".to_owned()][..])
-        || inspection.configuration.cmd.as_deref() != Some(&[][..])
-    {
-        return Err(internal("native_qualification_oci_configuration"));
-    }
+    validate_configuration(&inspection.configuration)?;
     let daemon = ImageCandidateCommand::qualification_daemon_version(&context.docker_config)
         .map_err(|_| internal("native_qualification_daemon_command"))?;
     let actual = ImageCandidateCommand::run(&daemon, deadline)
@@ -143,4 +138,16 @@ fn verify_runtime(
         return Err(internal("native_qualification_output"));
     }
     Ok(inspection.evidence)
+}
+
+fn validate_configuration(
+    configuration: &velnor_archive_guard::owned_archive_guard::oci_candidate::OciImageConfiguration,
+) -> Result<(), OrchestratorError> {
+    if configuration.user.as_deref() != Some("65532:65532")
+        || configuration.entrypoint.as_deref() != Some(&["/fixture".to_owned()][..])
+        || configuration.cmd.as_deref().is_some_and(|cmd| !cmd.is_empty())
+    {
+        return Err(internal("native_qualification_oci_configuration"));
+    }
+    Ok(())
 }

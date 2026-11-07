@@ -188,7 +188,8 @@ fn check_config_blob(
             config["config"]["Entrypoint"],
             serde_json::json!(["/fixture"])
         );
-        assert_eq!(config["config"]["Cmd"], serde_json::json!([]));
+        let cmd = &config["config"]["Cmd"];
+        assert!(cmd.is_null() || cmd.as_array().is_some_and(Vec::is_empty));
         found = true;
     }
     assert!(found);
