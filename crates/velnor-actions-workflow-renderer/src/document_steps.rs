@@ -228,9 +228,9 @@ pub(crate) fn step_to_yaml(
             crate::render::ControllerLocator::ProtectedBaseDispatch { preview, .. } => {
                 crate::preview_setup::acquire_step(preview)
             }
-            _ => Err(RenderError::InvalidWorkflow(
-                "preview_acquisition_without_authority".to_owned(),
-            )),
+            crate::render::ControllerLocator::PinnedRelease { .. } => Err(
+                RenderError::InvalidWorkflow("preview_acquisition_without_authority".to_owned()),
+            ),
         };
     }
     if composite {

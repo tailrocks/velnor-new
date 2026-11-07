@@ -4,7 +4,7 @@
 use serde_json::Value;
 use std::{error::Error, fmt::Write as _, fs, process::Command};
 use velnor_actions_contract::ExecutionMode;
-use velnor_actions_orchestrator::{prepare, render_staged_tree_with};
+use velnor_actions_orchestrator::{GenerateOptions, prepare, render_staged_tree_with};
 use velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
 
 const SOURCE: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
@@ -64,19 +64,7 @@ pub(super) fn assert_preview_render(root: &std::path::Path) -> Result<(), Box<dy
     )?;
     fs::write(&path, lock)?;
     let prepared = prepare(root)?;
-    if prepared.config.checks.iter().any(|check| {
-        check.selection == velnor_actions_contract::config::CheckSelection::DeclaredInputs
-    }) {
-        let output = tempfile::tempdir()?;
-        let destination = output.path().join("preview");
-        velnor_actions_orchestrator::generate(
-            &prepared,
-            &velnor_actions_orchestrator::GenerateOptions {
-                output_dir: Some(destination.clone()),
-            },
-        )?;
-        assert!(destination.join(".github/workflows/ci.yml").is_file());
-    }
+    assert_declared_inputs_generate(&prepared)?;
     let tree = render_staged_tree_with(&prepared, Some(ExecutionMode::Both))?;
     let workflow = tree.get(WORKFLOW_PATH).ok_or("missing preview workflow")?;
     assert!(
@@ -94,6 +82,25 @@ pub(super) fn assert_preview_render(root: &std::path::Path) -> Result<(), Box<dy
     Ok(())
 }
 
+fn assert_declared_inputs_generate(
+    prepared: &velnor_actions_orchestrator::GenerationPreparation,
+) -> Result<(), Box<dyn Error>> {
+    if prepared.config.checks.iter().any(|check| {
+        check.selection == velnor_actions_contract::config::CheckSelection::DeclaredInputs
+    }) {
+        let output = tempfile::tempdir()?;
+        let destination = output.path().join("preview");
+        velnor_actions_orchestrator::generate(
+            prepared,
+            &velnor_actions_orchestrator::GenerateOptions {
+                output_dir: Some(destination.clone()),
+            },
+        )?;
+        assert!(destination.join(".github/workflows/ci.yml").is_file());
+    }
+    Ok(())
+}
+
 fn assert_preview_action_retired(root: &std::path::Path) -> Result<(), Box<dyn Error>> {
     let old = root.join(".github/actions/velnor-preview-setup/action.yml");
     let custom = root.join(".github/actions/custom/action.yml");
@@ -108,7 +115,7 @@ fn assert_preview_action_retired(root: &std::path::Path) -> Result<(), Box<dyn E
     )?;
     fs::write(&custom, b"name: custom\n")?;
     let prepared = prepare(root)?;
-    velnor_actions_orchestrator::generate(&prepared, &Default::default())?;
+    velnor_actions_orchestrator::generate(&prepared, &GenerateOptions::default())?;
     assert!(!old.exists(), "obsolete generated preview action remains");
     assert_eq!(fs::read(&custom)?, b"name: custom\n");
     let workflow = fs::read_to_string(root.join(WORKFLOW_PATH))?;
@@ -118,9 +125,70 @@ fn assert_preview_action_retired(root: &std::path::Path) -> Result<(), Box<dyn E
     fs::create_dir_all(old.parent().ok_or("old action parent")?)?;
     fs::write(&old, b"name: custom preview\n")?;
     let prepared = prepare(root)?;
-    velnor_actions_orchestrator::generate(&prepared, &Default::default())?;
+    velnor_actions_orchestrator::generate(&prepared, &GenerateOptions::default())?;
     assert_eq!(fs::read(&old)?, b"name: custom preview\n");
     assert_eq!(fs::read(&custom)?, b"name: custom\n");
+    Ok(())
+}
+
+fn assert_setup_script(setup: &Value) -> Result<(), Box<dyn Error>> {
+    assert!(setup.get("uses").is_none());
+    let script = setup["run"].as_str().ok_or("missing inline setup")?;
+    assert!(script.len() <= 21_000);
+    let helper_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../velnor-actions-workflow-renderer/src/native_helper");
+    let integrity = Command::new("/usr/bin/python3")
+        .args(["-I", "-c", "import base64,json,pathlib,re,sys,zlib; p=json.loads(zlib.decompress(base64.b64decode(sys.argv[1].split(chr(34))[1]))); d=pathlib.Path(sys.argv[2]); assert p[:3] == [(d/n).read_text() for n in ('source_preview_setup.py','source_preview_bootstrap.py','source_preview_exec.py')]; identity=json.loads(bytes.fromhex(sys.argv[1].split(chr(34))[-2])); assert identity['channel']=='source-preview' and identity['source_sha']==sys.argv[3] and identity['receipt_sha256']==sys.argv[4]", script])
+        .arg(helper_dir)
+        .arg(SOURCE)
+        .arg(RECEIPT)
+        .status()?;
+    assert!(
+        integrity.success(),
+        "inline launcher differs from protected source"
+    );
+    let candidate = tempfile::tempdir()?;
+    let action = candidate
+        .path()
+        .join(".github/actions/velnor-preview-setup");
+    fs::create_dir_all(&action)?;
+    fs::write(
+        action.join("action.yml"),
+        "runs:\n  using: composite\n  steps:\n    - run: touch CANARY\n      shell: bash\n",
+    )?;
+    let temp = tempfile::tempdir()?;
+    let result = Command::new("bash")
+        .arg("-c")
+        .arg(script)
+        .current_dir(candidate.path())
+        .env_clear()
+        .env("RUNNER_TEMP", temp.path())
+        .env("GH_TOKEN", "canary-token")
+        .output()?;
+    assert!(
+        !result.status.success(),
+        "missing GitHub identity must fail"
+    );
+    assert!(!candidate.path().join("CANARY").exists());
+    let (before_last_quote, suffix) = script.rsplit_once('"').ok_or("missing identity")?;
+    let (prefix, _) = before_last_quote
+        .rsplit_once('"')
+        .ok_or("missing identity")?;
+    let malformed = format!("{prefix}\"00\"{suffix}");
+    let temp = tempfile::tempdir()?;
+    let result = Command::new("bash")
+        .arg("-c")
+        .arg(malformed)
+        .current_dir(candidate.path())
+        .env_clear()
+        .env("RUNNER_TEMP", temp.path())
+        .env("GH_TOKEN", "canary-token")
+        .output()?;
+    assert!(
+        !result.status.success(),
+        "malformed protected identity must fail"
+    );
+    assert!(!candidate.path().join("CANARY").exists());
     Ok(())
 }
 
@@ -160,64 +228,7 @@ fn assert_identity_steps(
             .iter()
             .position(|step| step["name"] == "Stage protected preview launcher")
             .ok_or_else(|| format!("{id}: missing protected setup: {steps:?}"))?;
-        let setup = &steps[setup_index];
-        assert!(setup.get("uses").is_none());
-        let script = setup["run"].as_str().ok_or("missing inline setup")?;
-        assert!(script.len() <= 21_000);
-        let helper_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../velnor-actions-workflow-renderer/src/native_helper");
-        let integrity = Command::new("/usr/bin/python3")
-            .args(["-I", "-c", "import base64,json,pathlib,re,sys,zlib; p=json.loads(zlib.decompress(base64.b64decode(sys.argv[1].split(chr(34))[1]))); d=pathlib.Path(sys.argv[2]); assert p[:3] == [(d/n).read_text() for n in ('source_preview_setup.py','source_preview_bootstrap.py','source_preview_exec.py')]; identity=json.loads(bytes.fromhex(sys.argv[1].split(chr(34))[-2])); assert identity['channel']=='source-preview' and identity['source_sha']==sys.argv[3] and identity['receipt_sha256']==sys.argv[4]", script])
-            .arg(helper_dir)
-            .arg(SOURCE)
-            .arg(RECEIPT)
-            .status()?;
-        assert!(
-            integrity.success(),
-            "inline launcher differs from protected source"
-        );
-        let candidate = tempfile::tempdir()?;
-        let action = candidate
-            .path()
-            .join(".github/actions/velnor-preview-setup");
-        fs::create_dir_all(&action)?;
-        fs::write(
-            action.join("action.yml"),
-            "runs:\n  using: composite\n  steps:\n    - run: touch CANARY\n      shell: bash\n",
-        )?;
-        let temp = tempfile::tempdir()?;
-        let result = Command::new("bash")
-            .arg("-c")
-            .arg(script)
-            .current_dir(candidate.path())
-            .env_clear()
-            .env("RUNNER_TEMP", temp.path())
-            .env("GH_TOKEN", "canary-token")
-            .output()?;
-        assert!(
-            !result.status.success(),
-            "missing GitHub identity must fail"
-        );
-        assert!(!candidate.path().join("CANARY").exists());
-        let (before_last_quote, suffix) = script.rsplit_once('"').ok_or("missing identity")?;
-        let (prefix, _) = before_last_quote
-            .rsplit_once('"')
-            .ok_or("missing identity")?;
-        let malformed = format!("{prefix}\"00\"{suffix}");
-        let temp = tempfile::tempdir()?;
-        let result = Command::new("bash")
-            .arg("-c")
-            .arg(malformed)
-            .current_dir(candidate.path())
-            .env_clear()
-            .env("RUNNER_TEMP", temp.path())
-            .env("GH_TOKEN", "canary-token")
-            .output()?;
-        assert!(
-            !result.status.success(),
-            "malformed protected identity must fail"
-        );
-        assert!(!candidate.path().join("CANARY").exists());
+        assert_setup_script(&steps[setup_index])?;
         let identity_index = steps
             .iter()
             .position(|step| {
