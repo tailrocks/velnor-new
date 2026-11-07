@@ -865,7 +865,7 @@ inputs = [
   "scripts/verify-local.sh",
 ]
 tools = ["cargo-nextest", "jactionlint-linux-x64", "rust", "shellcheck-linux-x64"]
-timeout_minutes = 30
+timeout_minutes = 15
 [checks.runner]
 label = "ubuntu-26.04"
 platform = "linux_x64"
