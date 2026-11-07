@@ -15,6 +15,7 @@ struct Fixture {
     author_id: u64,
     check: Value,
     extra_checks: Vec<Value>,
+    extra_runs: Vec<Value>,
     reviews: Vec<Value>,
     env_rules: Vec<Value>,
     run_sha: &'static str,
@@ -33,6 +34,7 @@ impl Fixture {
             author_id: 54,
             check: json!({"id":1,"name":"Required","head_sha":SOURCE,"check_suite":{"id":123},"app":{"id":15368,"slug":"github-actions"},"status":"completed","conclusion":"success","started_at":"2026-11-03T15:00:00Z"}),
             extra_checks: Vec::new(),
+            extra_runs: Vec::new(),
             reviews: vec![
                 json!({"id":1,"user":{"login":"reviewer","id":55,"type":"User"},"author_association":"MEMBER","state":"APPROVED","commit_id":WORKFLOW,"submitted_at":"2026-11-03T15:00:00Z"}),
             ],
@@ -71,7 +73,11 @@ impl GitHubAdmissionRead for Fixture {
             } else {
                 SOURCE
             };
-            json!({"total_count":1,"workflow_runs":[{"check_suite_id":123,"head_sha":source,"path":".github/workflows/ci.yml","status":"completed","conclusion":"success","event":"push","head_branch":"main","repository":{"id":101,"full_name":"example/crate","owner":{"id":202,"login":"example"}},"head_repository":{"id":101,"full_name":"example/crate","owner":{"id":202,"login":"example"}}}]})
+            let mut runs = vec![
+                json!({"check_suite_id":123,"head_sha":source,"path":".github/workflows/ci.yml","status":"completed","conclusion":"success","event":"push","head_branch":"main","repository":{"id":101,"full_name":"example/crate","owner":{"id":202,"login":"example"}},"head_repository":{"id":101,"full_name":"example/crate","owner":{"id":202,"login":"example"}}}),
+            ];
+            runs.extend(self.extra_runs.clone());
+            json!({"total_count":runs.len(),"workflow_runs":runs})
         } else if route.contains("check-runs?") {
             let source = if route.contains(WORKFLOW) {
                 WORKFLOW
@@ -161,6 +167,29 @@ fn release_requires_approved_source_checks_and_protected_environment() {
         verify_github_evidence(&request(), &good).is_ok(),
         "reviewed source should produce a candidate"
     );
+    for (status, conclusion, started) in [
+        ("completed", json!("success"), json!("2026-11-03T15:01:00Z")),
+        ("completed", json!("failure"), json!("2026-11-03T15:01:00Z")),
+        ("queued", Value::Null, Value::Null),
+        ("completed", json!("success"), json!("2026-11-03T15:00:00Z")),
+    ] {
+        let mut unrelated = Fixture::valid();
+        unrelated
+            .extra_runs
+            .push(json!({"check_suite_id":999,"head_sha":SOURCE,
+            "path":".github/workflows/unrelated.yml","status":status,"conclusion":conclusion}));
+        let mut other = unrelated.check.clone();
+        other["id"] = json!(2);
+        other["check_suite"]["id"] = json!(999);
+        other["status"] = json!(status);
+        other["conclusion"] = conclusion;
+        other["started_at"] = started;
+        unrelated.extra_checks.push(other);
+        assert!(
+            verify_github_evidence(&request(), &unrelated).is_ok(),
+            "unrelated Required must not block configured successful workflow: {status}"
+        );
+    }
     let mut bad = Fixture::valid();
     bad.check["conclusion"] = json!("failure");
     assert!(
