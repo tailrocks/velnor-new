@@ -42,6 +42,7 @@ pub(super) fn job(
             &pins.install_qualify_tools_argv,
         )?,
         workflow_steps::verify_rust_step(pins)?,
+        workflow_steps::provision_qualification_cargo_sources(&pins.rust_version),
         workflow_steps::command_step("Verify jactionlint", &pins.verify_lint_argv)?,
     ];
     action_steps.extend(assets::download_build_steps(

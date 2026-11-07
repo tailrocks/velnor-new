@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::error::Error;
+use std::{error::Error, path::Path, process::Command};
 
 use super::{find_file, rendered};
 
@@ -204,6 +204,80 @@ fn preview_qualifier_executes_exact_downloaded_payload_without_publication_autho
     assert!(!qualifier.contains(": write"));
     assert!(!qualifier.contains("id-token:"));
     assert!(!qualifier.contains("check-release"));
+    Ok(())
+}
+
+#[test]
+fn qualification_provisions_both_workspaces_for_offline_metadata() -> Result<(), Box<dyn Error>> {
+    let rustc = Command::new("rustc").arg("--version").output()?;
+    let version_text = String::from_utf8(rustc.stdout)?;
+    let version = version_text
+        .split_whitespace()
+        .nth(1)
+        .ok_or("rustc version absent")?;
+    let mut request = super::request()?;
+    request
+        .product_release
+        .as_mut()
+        .ok_or("missing pins")?
+        .rust_version = version.to_owned();
+    let files = velnor_actions_workflow_renderer::render_schema2_workflows(&request)?;
+    let workflow = find_file(&files, ".github/workflows/product-release-generator.yml")?;
+    let preview = job(workflow, "source-preview-qualify")?;
+    let mut jobs = vec![(preview, "Qualify exact source preview bytes")];
+    let mut scripts = vec![
+        step_script(preview, "Provision Cargo sources for offline qualification")
+            .unwrap_or_default(),
+    ];
+    for target in ["linux", "macos", "macos-intel", "homebrew"] {
+        let action = find_file(
+            &files,
+            &format!(".github/actions/generator-release-qualify-{target}/action.yml"),
+        )?;
+        scripts.push(
+            step_script(action, "Provision Cargo sources for offline qualification")
+                .unwrap_or_default(),
+        );
+        let qualifier = if target == "homebrew" {
+            "Verify candidate release identity without credentials"
+        } else {
+            "Qualify downloaded candidate"
+        };
+        jobs.push((action, qualifier));
+    }
+    let script = scripts.first().ok_or("no qualification")?;
+    let output = Command::new("python3")
+        .arg(
+            Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("tests/source_preview_prefetch_scenarios.py"),
+        )
+        .arg(script)
+        .arg(version)
+        .output()?;
+    assert!(
+        output.status.success(),
+        "qualification cannot use a cold Cargo home: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        scripts.iter().all(|candidate| candidate == script),
+        "qualification jobs provision different Cargo sources"
+    );
+    for (job, qualifier) in jobs {
+        let verify = job
+            .find("- name: Verify Rust channel manifest")
+            .ok_or("missing Rust verification")?;
+        let provision = job
+            .find("- name: Provision Cargo sources for offline qualification")
+            .ok_or("missing Cargo provisioning")?;
+        let qualify = job
+            .find(&format!("- name: {qualifier}"))
+            .ok_or("missing qualification")?;
+        assert!(
+            verify < provision && provision < qualify,
+            "qualification prerequisites out of order"
+        );
+    }
     Ok(())
 }
 
