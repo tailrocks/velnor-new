@@ -18,7 +18,7 @@ pub(super) fn inspect_volume_mounts(
         .as_ref()
         .and_then(|host| host.mounts.as_deref())
         .ok_or(HostError::Ownership)?;
-    if configured != expected {
+    if !configured_mounts_match(configured, expected) {
         return Err(HostError::Ownership);
     }
     let actual = inspected.mounts.as_deref().ok_or(HostError::Ownership)?;
@@ -72,18 +72,35 @@ fn verified_tmpfs_targets<'a>(
     }
     expected_targets.sort_by(|left, right| left.0.cmp(right.0));
     actual_targets.sort();
-    if expected_targets
-        .iter()
-        .map(|(target, _)| target.as_str())
-        .collect::<Vec<_>>()
-        != actual_targets
+    if !actual_targets.is_empty()
+        && expected_targets
             .iter()
-            .map(String::as_str)
+            .map(|(target, _)| target.as_str())
             .collect::<Vec<_>>()
+            != actual_targets
+                .iter()
+                .map(String::as_str)
+                .collect::<Vec<_>>()
     {
         return Err(HostError::Ownership);
     }
     Ok(expected_targets)
+}
+
+fn configured_mounts_match(actual: &[Mount], expected: &[Mount]) -> bool {
+    actual.len() == expected.len()
+        && actual
+            .iter()
+            .zip(expected)
+            .all(|(left, right)| normalize_mount(left) == normalize_mount(right))
+}
+
+fn normalize_mount(mount: &Mount) -> Mount {
+    let mut normalized = mount.clone();
+    if normalized.read_only.is_none() {
+        normalized.read_only = Some(false);
+    }
+    normalized
 }
 
 fn verified_volume_mounts(
