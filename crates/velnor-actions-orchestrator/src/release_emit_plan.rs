@@ -86,13 +86,9 @@ pub(super) fn approved_source(
     root: &std::path::Path,
     release: &RustReleaseConfig,
 ) -> Result<String, OrchestratorError> {
-    if let Some(record) = release.recovery.as_ref() {
-        validate_source_sha(&record.source_sha)?;
-        return Ok(record.source_sha.clone());
-    }
-    if let Some(creation) = &release.new_crates {
-        validate_source_sha(&creation.source_sha)?;
-        return Ok(creation.source_sha.clone());
+    if let Some(source) = release.exact_source_sha() {
+        validate_source_sha(source)?;
+        return Ok(source.to_owned());
     }
     head_sha(root)
 }

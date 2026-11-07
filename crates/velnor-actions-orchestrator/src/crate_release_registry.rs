@@ -1,6 +1,10 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+mod owner;
+pub(crate) use owner::linked_github_reviewer;
+use owner::read_owners;
+
 use crate::{OrchestratorError, internal::internal, verify_crate_archive};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -25,21 +29,37 @@ pub struct NativeCrateRegistryRead;
 impl CrateRegistryRead for NativeCrateRegistryRead {
     fn get(&self, path: &str) -> Result<CrateRegistryResponse, OrchestratorError> {
         use std::io::Read as _;
-        let (origin, remote_path) = if path.starts_with("/api/v1/crates/") {
-            ("https://crates.io", path)
-        } else if path.starts_with("/crates/") {
-            ("https://static.crates.io", path)
-        } else if path.starts_with("/index/") {
-            ("https://index.crates.io", &path[6..])
-        } else {
-            return Err(internal("crate_registry_path_invalid"));
-        };
+        let (origin, remote_path) =
+            if path.starts_with("/api/v1/crates/") || path.starts_with("/api/v1/users/") {
+                ("https://crates.io", path)
+            } else if path.starts_with("/crates/") {
+                ("https://static.crates.io", path)
+            } else if path.starts_with("/index/") {
+                ("https://index.crates.io", &path[6..])
+            } else {
+                return Err(internal("crate_registry_path_invalid"));
+            };
         #[cfg(test)]
         let test_origin =
             crate::crate_release_http::test_loopback_origin("VELNOR_TEST_REGISTRY_ORIGIN")?;
         #[cfg(test)]
         let origin = test_origin.as_deref().unwrap_or(origin);
-        let validated_path = path.replace("%2B", "+");
+        let validated_path = if let Some(user) = path.strip_prefix("/api/v1/users/") {
+            let user = user
+                .strip_suffix("?include=linked_accounts")
+                .ok_or_else(|| internal("crate_registry_path_invalid"))?;
+            if user.is_empty()
+                || user.len() > 64
+                || !user
+                    .bytes()
+                    .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'-'))
+            {
+                return Err(internal("crate_registry_path_invalid"));
+            }
+            format!("/api/v1/users/{user}")
+        } else {
+            path.replace("%2B", "+")
+        };
         if !validated_path
             .bytes()
             .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'/' | b'-' | b'_' | b'.' | b'+'))
@@ -232,46 +252,6 @@ pub fn reconcile_crate_registry<R: CrateRegistryRead>(
         owners: expected_owners.to_vec(),
         features: actual_features,
     })
-}
-
-fn read_owners<R: CrateRegistryRead>(
-    reader: &R,
-    name: &str,
-) -> Result<Vec<CrateRegistryOwner>, OrchestratorError> {
-    let response = reader.get(&format!("/api/v1/crates/{name}/owners"))?;
-    if response.status != 200 {
-        return Err(internal("crate_registry_owners_unavailable"));
-    }
-    let body: Value = serde_json::from_slice(&response.body)
-        .map_err(|_| internal("crate_registry_owners_invalid"))?;
-    let users = body["users"]
-        .as_array()
-        .ok_or_else(|| internal("crate_registry_owners_invalid"))?;
-    let mut owners = Vec::with_capacity(users.len());
-    for user in users {
-        let id = user["id"]
-            .as_u64()
-            .filter(|id| *id != 0)
-            .ok_or_else(|| internal("crate_registry_owner_invalid"))?;
-        let login = user["login"]
-            .as_str()
-            .filter(|s| !s.is_empty())
-            .ok_or_else(|| internal("crate_registry_owner_invalid"))?;
-        let kind = user["kind"]
-            .as_str()
-            .filter(|kind| matches!(*kind, "user" | "team"))
-            .ok_or_else(|| internal("crate_registry_owner_invalid"))?;
-        owners.push(CrateRegistryOwner {
-            id,
-            login: login.to_owned(),
-            kind: kind.to_owned(),
-        });
-    }
-    owners.sort();
-    if owners.is_empty() || owners.windows(2).any(|pair| pair[0] == pair[1]) {
-        return Err(internal("crate_registry_owners_invalid"));
-    }
-    Ok(owners)
 }
 
 fn validate_name_version(name: &str, version: &str) -> Result<(), OrchestratorError> {

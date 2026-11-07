@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::release_validation::{
-    validate_environment, validate_manifest_path, validate_packages, validate_publish_features,
-    validate_recovery, validate_tag_name, validate_version_groups,
+    validate_continuation_source, validate_environment, validate_exact_source_agreement,
+    validate_journal_predecessor, validate_manifest_path, validate_packages,
+    validate_publish_features, validate_recovery, validate_tag_name, validate_version_groups,
 };
 use crate::errors::ContractError;
 use serde::{Deserialize, Serialize};
@@ -110,6 +111,9 @@ pub struct RustReleaseConfig {
     pub journal_predecessor: Option<CrateReleasePredecessor>,
 
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub continuation_source_sha: Option<String>,
+
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub rehearsal: Option<ReleaseRehearsalConfig>,
 
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
@@ -158,6 +162,7 @@ impl Default for RustReleaseConfig {
             tag_name: default_tag_name(),
             recovery: None,
             journal_predecessor: None,
+            continuation_source_sha: None,
             rehearsal: None,
             version_groups: BTreeMap::new(),
         }
@@ -165,6 +170,19 @@ impl Default for RustReleaseConfig {
 }
 
 impl RustReleaseConfig {
+    #[must_use]
+    pub fn exact_source_sha(&self) -> Option<&str> {
+        self.recovery
+            .as_ref()
+            .map(|item| item.source_sha.as_str())
+            .or_else(|| {
+                self.new_crates
+                    .as_ref()
+                    .map(|item| item.source_sha.as_str())
+            })
+            .or(self.continuation_source_sha.as_deref())
+    }
+
     #[must_use]
     pub fn effective_authentication(&self) -> ReleaseAuthentication {
         self.authentication.unwrap_or_default()
@@ -236,16 +254,32 @@ impl RustReleaseConfig {
             }
         }
         self.validate_recovery_selection(file)?;
-        validate_journal_predecessor(
-            file,
-            self.journal_predecessor.as_ref(),
-            self.recovery.is_some() || self.new_crates.is_some(),
-        )?;
+        self.validate_sources(file)?;
         validate_version_groups(
             file,
             &self.version_groups,
             &self.packages,
             self.publishable_workspace,
+        )?;
+        Ok(())
+    }
+
+    fn validate_sources(&self, file: &str) -> Result<(), ContractError> {
+        validate_journal_predecessor(
+            file,
+            self.journal_predecessor.as_ref(),
+            self.exact_source_sha().is_some(),
+        )?;
+        validate_continuation_source(
+            file,
+            self.continuation_source_sha.as_deref(),
+            self.journal_predecessor.is_some(),
+        )?;
+        validate_exact_source_agreement(
+            file,
+            self.recovery.as_ref().map(|r| r.source_sha.as_str()),
+            self.new_crates.as_ref().map(|r| r.source_sha.as_str()),
+            self.continuation_source_sha.as_deref(),
         )?;
         Ok(())
     }
@@ -330,26 +364,6 @@ impl RustReleaseConfig {
         }
         Ok(())
     }
-}
-
-pub(crate) fn validate_journal_predecessor(
-    file: &str,
-    predecessor: Option<&CrateReleasePredecessor>,
-    exact_source: bool,
-) -> Result<(), ContractError> {
-    if predecessor.is_some_and(|prior| {
-        !exact_source
-            || prior.run_id == 0
-            || prior.run_attempt != 1
-            || !super::release_validation::is_full_sha(&prior.workflow_sha)
-    }) {
-        return Err(ContractError::config(
-            file,
-            "journal_predecessor",
-            "invalid_predecessor",
-        ));
-    }
-    Ok(())
 }
 
 pub(super) fn validate_new_crates(

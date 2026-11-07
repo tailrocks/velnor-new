@@ -260,7 +260,7 @@ impl FrozenCompletion {
                 return Err(invalid());
             }
             crate::crate_release_controller::require_reviewer_owner(
-                github,
+                registry,
                 &package.registry.owners,
                 intent.trusted_reviewer_id,
             )?;

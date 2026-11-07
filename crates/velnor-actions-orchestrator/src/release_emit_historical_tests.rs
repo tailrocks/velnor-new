@@ -414,3 +414,6 @@ fn check_historical_workspace_lock(
     assert_ne!(source_lock, live_lock);
     Ok(source_lock)
 }
+
+#[path = "release_emit_continuation_tests.rs"]
+mod continuation;

@@ -27,6 +27,7 @@ pub(crate) use observation::{RecoveryState, UploadAttempt, reconciled_completion
 pub(crate) use observation::{VerifiedMutation, verify_observed_packages};
 
 mod inventory;
+pub(crate) mod preflight;
 mod reconcile;
 mod state;
 use crate::crate_release_github::{
@@ -138,83 +139,6 @@ pub(super) struct PackageVerification<'a, G, R> {
     pub source_execution: &'a dyn CrateSourceExecution,
 }
 
-pub(super) fn verify_release_package_with<G: GitHubAdmissionRead, R: CrateRegistryRead>(
-    input: &PackageVerification<'_, G, R>,
-    validate: impl Fn(&CrateReleaseAdmissionReceipt) -> Result<(), OrchestratorError>,
-) -> Result<VerifiedReleasePackage, OrchestratorError> {
-    let PackageVerification {
-        receipt,
-        intent,
-        request,
-        github,
-        registry,
-        source,
-        git,
-        package,
-        source_execution,
-    } = *input;
-    if receipt.schema != 1 || receipt.intent != *intent || receipt.github.request != *request {
-        return Err(internal("crate_release_receipt_mismatch"));
-    }
-    authorize_github_candidate(request, &receipt.github, github)?;
-    let observed = observe_admitted_crate_release(
-        intent,
-        request,
-        github,
-        registry,
-        crate::CrateSource::new(source, git, source_execution),
-        &receipt.github,
-    )?;
-    validate(&observed)?;
-    let index = observed
-        .packages
-        .iter()
-        .position(|p| p.source.name == package)
-        .ok_or_else(|| internal("crate_release_package_not_selected"))?;
-    if observed.packages[..index]
-        .iter()
-        .any(|p| !matches!(p.action, CrateReleaseAction::Reconciled { .. }))
-        || observed.packages[index].action != CrateReleaseAction::Publish
-    {
-        return Err(internal("crate_release_package_not_ready"));
-    }
-    let target = tempfile::tempdir().map_err(|_| internal("crate_release_package_temp"))?;
-    let effective_intent = effective_release_intent(intent, request);
-    source_execution.package(&crate::CratePackageSource::new(
-        source,
-        &effective_intent,
-        &observed.packages[index].source,
-        target.path(),
-        &request.source_sha,
-        true,
-        git,
-    ))?;
-    if observe_admitted_crate_release(
-        intent,
-        request,
-        github,
-        registry,
-        crate::CrateSource::new(source, git, source_execution),
-        &receipt.github,
-    )? != observed
-    {
-        return Err(internal("crate_release_package_state_changed"));
-    }
-    authorize_github_candidate(request, &receipt.github, github)?;
-    let intent_bytes = velnor_actions_contract::canonical_json_bytes(intent)
-        .map_err(|_| internal("crate_release_intent_invalid"))?;
-    Ok(VerifiedReleasePackage {
-        intent_sha256: crate::planner::generator::sha256_hex(&intent_bytes),
-        repository: request.repository.clone(),
-        workflow_sha: request.workflow_sha.clone(),
-        source_sha: request.source_sha.clone(),
-        run_id: request.run_id,
-        run_attempt: request.run_attempt,
-        package: observed.packages[index].source.name.clone(),
-        version: observed.packages[index].source.version.clone(),
-    })
-}
-
 pub(crate) fn effective_release_intent(
     intent: &CrateReleaseIntent,
     request: &GitHubAdmissionRequest,
@@ -226,16 +150,16 @@ pub(crate) fn effective_release_intent(
     effective
 }
 
-fn verify_release_ownership<G: GitHubAdmissionRead>(
+fn verify_release_ownership<R: CrateRegistryRead>(
     intent: &CrateReleaseIntent,
     request: &GitHubAdmissionRequest,
-    github: &G,
+    registry: &R,
     package: &CrateReleaseSourcePackage,
     owners: &CrateRegistryOwnership,
 ) -> Result<(), OrchestratorError> {
     match owners {
         CrateRegistryOwnership::Existing { owners } => {
-            require_reviewer_owner(github, owners, intent.trusted_reviewer_id)?;
+            require_reviewer_owner(registry, owners, intent.trusted_reviewer_id)?;
         }
         CrateRegistryOwnership::NewCrate => {
             if intent.authentication
@@ -259,20 +183,11 @@ fn verify_request_intent(
     request: &GitHubAdmissionRequest,
 ) -> Result<(), OrchestratorError> {
     let recovery = if request.event == "workflow_dispatch" {
-        intent
-            .recovery
-            .as_ref()
-            .map(|item| item.source_sha.as_str())
-            .or_else(|| {
-                intent
-                    .new_crates
-                    .as_ref()
-                    .map(|item| item.source_sha.as_str())
-            })
+        intent.exact_source_sha()
     } else {
         None
     };
-    if (intent.new_crates.is_some() && request.event != "workflow_dispatch")
+    if (intent.exact_source_sha().is_some() && request.event != "workflow_dispatch")
         || !release_identity::same_repository(&request.repository, &intent.repository)
         || request.default_branch != intent.default_branch
         || request.environment != intent.environment

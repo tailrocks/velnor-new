@@ -50,6 +50,7 @@ fn rendered_files_reject_divergent_release_intent() -> Result<(), Box<dyn std::e
         new_crates: None,
         tag_template: config.tag_pattern.clone(),
         journal_predecessor: None,
+        continuation_source_sha: None,
         recovery: Some(velnor_actions_contract::config::CrateReleaseRecovery {
             package: "example".into(),
             version: "0.1.1".into(),

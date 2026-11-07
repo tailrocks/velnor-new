@@ -32,7 +32,7 @@ pub(super) fn fixture_verify_release_package<G: GitHubAdmissionRead, R: CrateReg
         git,
         package,
     };
-    super::super::verify_release_package_with(&input, |observed| {
+    super::super::preflight::verify_release_package_with(&input, |observed| {
         super::super::verify_observed_packages(observed, receipt)
     })
 }
@@ -130,7 +130,7 @@ pub(super) struct Github {
     pub(super) revoke_on_tag_read: Cell<bool>,
     pub(super) tag_exists: Cell<bool>,
     pub(super) tag_wrong: Cell<bool>,
-    pub(super) owner_match: Cell<bool>,
+    pub(super) owner_match: std::rc::Rc<Cell<bool>>,
     pub(super) release_variant: Cell<u8>,
     pub(super) write_error: Cell<u8>,
     pub(super) writes: Cell<u32>,

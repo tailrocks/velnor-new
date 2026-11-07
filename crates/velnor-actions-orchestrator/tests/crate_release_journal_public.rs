@@ -315,6 +315,8 @@ mod completion;
 mod evidence;
 #[path = "crate_release_journal_public/mutation.rs"]
 mod mutation;
+#[path = "crate_release_journal_public/owner_identity.rs"]
+mod owner_identity;
 #[path = "crate_release_journal_public/ownership_support.rs"]
 mod ownership_support;
 use chain_support::*;

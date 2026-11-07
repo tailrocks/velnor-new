@@ -20,6 +20,7 @@ pub(crate) fn release_base_intent_sha256(
 ) -> Result<String, OrchestratorError> {
     let mut base = intent.clone();
     base.journal_predecessor = None;
+    base.continuation_source_sha = None;
     base.recovery = None;
     let bytes = velnor_actions_contract::canonical_json_bytes(&base).map_err(|_| invalid())?;
     Ok(crate::planner::generator::sha256_hex(&bytes))

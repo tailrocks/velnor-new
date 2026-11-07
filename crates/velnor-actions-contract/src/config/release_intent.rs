@@ -38,6 +38,8 @@ pub struct CrateReleaseIntent {
     pub recovery: Option<CrateReleaseRecovery>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub journal_predecessor: Option<super::CrateReleasePredecessor>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub continuation_source_sha: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -49,6 +51,19 @@ pub struct CrateReleaseRecovery {
 }
 
 impl CrateReleaseIntent {
+    #[must_use]
+    pub fn exact_source_sha(&self) -> Option<&str> {
+        self.recovery
+            .as_ref()
+            .map(|item| item.source_sha.as_str())
+            .or_else(|| {
+                self.new_crates
+                    .as_ref()
+                    .map(|item| item.source_sha.as_str())
+            })
+            .or(self.continuation_source_sha.as_deref())
+    }
+
     pub fn validate(&self) -> Result<(), ContractError> {
         let file = "release_intent";
         let invalid = |key, problem| ContractError::config(file, key, problem);
@@ -92,10 +107,21 @@ impl CrateReleaseIntent {
         validate_manifest_path(file, &self.manifest_path)?;
         validate_pr_write_paths(self)?;
         validate_intent_packages(self)?;
-        super::release::validate_journal_predecessor(
+        super::release_validation::validate_journal_predecessor(
             file,
             self.journal_predecessor.as_ref(),
-            self.recovery.is_some() || self.new_crates.is_some(),
+            self.exact_source_sha().is_some(),
+        )?;
+        super::release_validation::validate_continuation_source(
+            file,
+            self.continuation_source_sha.as_deref(),
+            self.journal_predecessor.is_some(),
+        )?;
+        super::release_validation::validate_exact_source_agreement(
+            file,
+            self.recovery.as_ref().map(|r| r.source_sha.as_str()),
+            self.new_crates.as_ref().map(|r| r.source_sha.as_str()),
+            self.continuation_source_sha.as_deref(),
         )?;
         validate_tag_name(file, &self.tag_template)?;
         if !super::release_validation::supported_crate_tag_template(&self.tag_template) {

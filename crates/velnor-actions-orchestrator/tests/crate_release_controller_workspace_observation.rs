@@ -58,6 +58,9 @@ pub(super) struct WorkspaceRegistry {
 }
 impl CrateRegistryRead for WorkspaceRegistry {
     fn get(&self, path: &str) -> Result<CrateRegistryResponse, OrchestratorError> {
+        if path == "/api/v1/users/owner?include=linked_accounts" {
+            return Ok(CrateRegistryResponse { status: 200, body: br#"{"user":{"id":370532,"login":"owner"},"linked_accounts":[{"provider":"github","account_id":"139017","login":"owner"}]}"#.to_vec() });
+        }
         let name = "velnor_fixture_order_20261104_a";
         if path == format!("/index/ve/ln/{name}") {
             return Ok(if self.index_visible.get() {

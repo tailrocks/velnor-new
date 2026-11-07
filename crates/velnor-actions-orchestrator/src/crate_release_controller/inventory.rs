@@ -142,24 +142,16 @@ pub(super) fn seed_package_fixture(home: &Path) -> Result<bool, OrchestratorErro
     Ok(true)
 }
 
-pub(super) fn require_reviewer_owner<G: GitHubAdmissionRead>(
-    github: &G,
+pub(super) fn require_reviewer_owner<R: CrateRegistryRead>(
+    registry: &R,
     owners: &[CrateRegistryOwner],
     reviewer_id: u64,
 ) -> Result<(), OrchestratorError> {
     for owner in owners {
-        if owner.kind != "user"
-            || !velnor_actions_contract::config::is_valid_github_owner(&owner.login)
-        {
+        if owner.kind != "user" {
             continue;
         }
-        let identity = github.get(&format!("users/{}", owner.login))?;
-        if identity["id"].as_u64() == Some(reviewer_id)
-            && identity["type"].as_str() == Some("User")
-            && identity["login"]
-                .as_str()
-                .is_some_and(|login| login.eq_ignore_ascii_case(&owner.login))
-        {
+        if crate::crate_release_registry::linked_github_reviewer(registry, owner, reviewer_id)? {
             return Ok(());
         }
     }

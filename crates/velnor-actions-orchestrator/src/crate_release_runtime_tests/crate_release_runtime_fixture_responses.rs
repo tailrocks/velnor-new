@@ -36,6 +36,8 @@ pub(in super::super) fn test_github_admission_response(
         serde_json::json!({"user":{"id":139_017,"type":"User"},"permission":"admin"})
     } else if line.starts_with("GET /repos/owner/project/actions/runs/12/approvals ") {
         serde_json::json!([{"state":"approved","user":{"type":"User","id":139_017},"environments":[{"id":9,"name":"release"}],"comment":format!("I reviewed the complete release policy at {policy} and source {source}, and authorize this source for run 12.")}])
+    } else if line.starts_with("GET /repos/owner/project/actions/runs/12/attempts/1 ") {
+        serde_json::json!({"id":12,"run_attempt":1,"status":"completed","head_sha":policy,"head_branch":"main","event":"workflow_dispatch","path":".github/workflows/release.yml","repository":{"id":22,"full_name":"owner/project","owner":{"id":77,"login":"owner"}},"head_repository":{"id":22,"full_name":"owner/project","owner":{"id":77,"login":"owner"}}})
     } else if line.starts_with("GET /repos/owner/project/actions/runs/12 ") {
         serde_json::json!({"id":12,"run_attempt":1,"head_sha":policy,"head_branch":"main","event":"workflow_dispatch","path":".github/workflows/release.yml","repository":{"id":22,"full_name":"owner/project","owner":{"id":77,"login":"owner"}},"head_repository":{"id":22,"full_name":"owner/project","owner":{"id":77,"login":"owner"}}})
     } else if line.contains("/compare/") {

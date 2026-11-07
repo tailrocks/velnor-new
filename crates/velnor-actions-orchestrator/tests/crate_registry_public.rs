@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use serde_json::json;
 use std::collections::BTreeMap;
 use velnor_actions_orchestrator::{
     OrchestratorError,
@@ -15,6 +16,47 @@ impl CrateRegistryRead for Registry {
         let (status, body) = self.0.get(path).cloned().unwrap_or((500, Vec::new()));
         Ok(CrateRegistryResponse { status, body })
     }
+}
+
+#[test]
+fn owner_identity_is_scoped_by_kind_and_numeric_id() -> Result<(), Box<dyn std::error::Error>> {
+    let make = |owners: serde_json::Value| {
+        Registry(BTreeMap::from([
+        ("/api/v1/crates/demo/owners".into(), (200, json!({"users":owners}).to_string().into_bytes())),
+        ("/api/v1/crates/demo".into(), (200, br#"{"crate":{"id":"demo","name":"demo","versions":[1]},"versions":[{"id":1,"crate":"demo","num":"0.1.0","yanked":false}]}"#.to_vec())),
+        ("/api/v1/crates/demo/0.1.1".into(), (404, vec![])),
+    ]))
+    };
+    let user = json!({"id":42,"login":"alice","kind":"user"});
+    let team = json!({"id":42,"login":"github:org:team","kind":"team"});
+    let (ownership, _) =
+        inspect_crate_registry(&make(json!([team.clone(), user.clone()])), "demo", "0.1.1")?;
+    let velnor_actions_orchestrator::crate_release_registry::CrateRegistryOwnership::Existing {
+        owners,
+    } = ownership
+    else {
+        return Err("existing owner expected".into());
+    };
+    assert_eq!(
+        owners
+            .iter()
+            .map(|owner| owner.login.as_str())
+            .collect::<Vec<_>>(),
+        ["alice", "github:org:team"]
+    );
+    let renamed = json!({"id":42,"login":"other","kind":"user"});
+    assert!(inspect_crate_registry(&make(json!([user, renamed, team])), "demo", "0.1.1").is_err());
+    Ok(())
+}
+
+#[test]
+fn preflight_rejects_duplicate_owner_identity_keys() {
+    let registry = Registry(BTreeMap::from([
+        ("/api/v1/crates/demo".into(), (200, br#"{"crate":{"id":"demo","name":"demo","versions":[1]},"versions":[{"id":1,"crate":"demo","num":"0.1.0","yanked":false}]}"#.to_vec())),
+        ("/api/v1/crates/demo/owners".into(), (200, br#"{"users":[{"id":9,"id":42,"login":"owner","kind":"user"}]}"#.to_vec())),
+        ("/api/v1/crates/demo/0.1.1".into(), (404, vec![])),
+    ]));
+    assert!(inspect_crate_registry(&registry, "demo", "0.1.1").is_err());
 }
 
 #[test]

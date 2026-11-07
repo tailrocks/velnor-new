@@ -115,7 +115,7 @@ pub(super) fn verify_package(
         git,
         package: &package,
     };
-    crate::crate_release_controller::verify_release_package_with(&input, |observed| {
+    crate::crate_release_controller::preflight::verify_release_package_with(&input, |observed| {
         crate::crate_release_controller::verify_observed_packages(observed, &receipt)
     })
     .map(|_| ())

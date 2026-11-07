@@ -59,6 +59,7 @@ fn intent(sha: &str) -> CrateReleaseIntent {
         new_crates: None,
         tag_template: "{{ package }}-v{{ version }}".into(),
         journal_predecessor: None,
+        continuation_source_sha: None,
         recovery: Some(CrateReleaseRecovery {
             package: "demo".into(),
             version: "0.1.1".into(),

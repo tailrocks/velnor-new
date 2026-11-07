@@ -47,6 +47,8 @@ use fixtures_registry::{
 };
 #[path = "crate_release_controller_observations_setup.rs"]
 mod observations_setup;
+#[path = "crate_release_controller_owner_identity.rs"]
+mod owner_identity;
 #[path = "crate_release_controller_reconcile_repairs.rs"]
 mod reconcile_repairs;
 #[path = "crate_release_controller_recovery.rs"]
@@ -61,6 +63,8 @@ use observation_validation::{
 #[path = "crate_release_controller_prior_observation.rs"]
 mod prior_observation;
 use prior_observation::verify_reconciled_candidate;
+#[path = "crate_release_controller_archive_preflight.rs"]
+mod archive_preflight;
 #[path = "crate_release_controller_upload_authorization.rs"]
 mod upload_authorization;
 #[path = "crate_release_controller_workspace_observation.rs"]

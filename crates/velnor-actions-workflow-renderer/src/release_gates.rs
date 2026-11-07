@@ -295,3 +295,34 @@ use roles::{check_pr_writer, check_preflight, check_preparation};
 #[path = "release_gates_runtime.rs"]
 mod runtime;
 use runtime::{check_reconcile, check_runtime_steps};
+
+pub(super) fn release_intent_mode_matches(
+    spec: &ReleaseWorkflowSpec,
+    intent: &velnor_actions_contract::config::CrateReleaseIntent,
+) -> bool {
+    match (
+        &intent.recovery,
+        &intent.new_crates,
+        &spec.plan.version,
+        spec.plan.dispatch,
+    ) {
+        (None, None, None, false) => intent.journal_predecessor.is_none(),
+        (None, None, None, true) => {
+            intent.journal_predecessor.is_some()
+                && intent.continuation_source_sha.as_deref() == Some(spec.plan.source_sha.as_str())
+        }
+        (Some(recovery), None, Some(version), true) => {
+            recovery.source_sha == spec.plan.source_sha
+                && &recovery.version == version
+                && spec.plan.packages.get(&recovery.package) == Some(version)
+        }
+        (None, Some(creation), None, true) => {
+            creation.source_sha == spec.plan.source_sha
+                && creation
+                    .packages
+                    .iter()
+                    .all(|(name, version)| spec.plan.packages.get(name) == Some(version))
+        }
+        _ => false,
+    }
+}

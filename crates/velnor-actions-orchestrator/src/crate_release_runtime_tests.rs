@@ -2,6 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #[cfg(unix)]
+#[path = "crate_release_runtime_tests/continuation.rs"]
+mod continuation;
+#[cfg(unix)]
 #[path = "crate_release_runtime_tests/crate_release_runtime_fixture_responses.rs"]
 mod responses;
 #[cfg(unix)]

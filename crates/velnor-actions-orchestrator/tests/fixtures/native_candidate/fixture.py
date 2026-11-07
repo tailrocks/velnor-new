@@ -369,6 +369,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 obj = release
         elif p == "/users/owner":
             obj = {"id": reviewer_id, "login": "owner", "type": "User"}
+        elif p == "/api/v1/users/owner" and urllib.parse.urlsplit(self.path).query == "include=linked_accounts":
+            obj = {"user": {"id": reviewer_id, "login": "owner"}, "linked_accounts": [{"provider": "github", "account_id": str(reviewer_id), "login": "owner"}]}
         elif p.startswith("/api/v1/crates/") and p.removeprefix("/api/v1/crates/") in dependency_snapshots:
             obj = dependency_snapshots[p.removeprefix("/api/v1/crates/")]
         elif p == f"/api/v1/crates/{package}":

@@ -115,7 +115,7 @@ pub(super) fn observe_package_state<G: GitHubAdmissionRead, R: CrateRegistryRead
         let tag = format!("{}-v{}", package.name, package.version);
         let tag_sha = read_github_tag_evidence(&request.repository, &tag, github)?;
         let (owners, presence) = inspect_crate_registry(registry, &package.name, &package.version)?;
-        verify_release_ownership(intent, request, github, &package, &owners)?;
+        verify_release_ownership(intent, request, registry, &package, &owners)?;
         let action = match (presence, tag_sha) {
             (CrateRegistryPresence::Absent, None) => CrateReleaseAction::Publish,
             (CrateRegistryPresence::Absent, Some(_)) => {

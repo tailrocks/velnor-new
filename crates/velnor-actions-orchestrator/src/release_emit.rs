@@ -90,7 +90,7 @@ fn release_files_for_config(
         &plan_id,
         &registry,
         version,
-        release.recovery.is_some() || release.new_crates.is_some(),
+        release.exact_source_sha().is_some(),
     );
     let jobs = build_release_jobs(
         prep,
@@ -225,6 +225,7 @@ fn crate_release_intent(
         new_crates: release.new_crates.clone(),
         tag_template: release.tag_name.clone(),
         journal_predecessor: release.journal_predecessor.clone(),
+        continuation_source_sha: release.continuation_source_sha.clone(),
         recovery: release
             .recovery
             .as_ref()
@@ -259,7 +260,7 @@ fn derive_release_inputs(
     release: &RustReleaseConfig,
 ) -> Result<ReleaseIntentInputs, OrchestratorError> {
     let source_sha = approved_source(&prep.root, release)?;
-    let source_snapshot = if release.recovery.is_some() || release.new_crates.is_some() {
+    let source_snapshot = if release.exact_source_sha().is_some() {
         let git = crate::crate_release_git::ReleaseGit::system().map_err(|_| {
             OrchestratorError::Contract {
                 problem: "release_source_git_unavailable".to_owned(),

@@ -306,5 +306,63 @@ fn predecessor_accepts_only_first_run_attempt() -> Result<(), Box<dyn std::error
     Ok(())
 }
 
+#[test]
+fn same_source_multi_crate_predecessor_is_an_explicit_dispatch_source()
+-> Result<(), Box<dyn std::error::Error>> {
+    use velnor_actions_contract::config::RustReleaseConfig;
+    let prior = serde_json::json!({"run_id":12,"run_attempt":1,"workflow_sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"});
+    let mut config = serde_json::json!({"enabled":true,"registry":"crates-io","packages":["alpha","beta"],"required_workflow_path":".github/workflows/ci.yml","trusted_reviewer_id":1,"journal_predecessor":prior,"continuation_source_sha":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"});
+    serde_json::from_value::<RustReleaseConfig>(config.clone())?.validate("test")?;
+    let mut intent = serde_json::json!({"schema":1,"repository":"example/demo","default_branch":"main","environment":"release","required_workflow_path":".github/workflows/ci.yml","trusted_reviewer_id":1,"generator_version":"0.1.72","generator_source_sha":"cccccccccccccccccccccccccccccccccccccccc","generator_manifest_sha256":"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd","release_plz_version":"0.4.3","runner":"ubuntu-26.04","authentication":"trusted-publishing","rust_version":"1.97.1","manifest_path":"Cargo.toml","pr_write_paths":["Cargo.toml"],"registry":"crates-io","packages":["alpha","beta"],"publish_features":{"alpha":[],"beta":[]},"tag_template":"{{ package }}-v{{ version }}","journal_predecessor":prior,"continuation_source_sha":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"});
+    serde_json::from_value::<CrateReleaseIntent>(intent.clone())?.validate()?;
+    for invalid in [serde_json::json!("bad"), serde_json::Value::Null] {
+        config["continuation_source_sha"] = invalid.clone();
+        intent["continuation_source_sha"] = invalid;
+        assert!(
+            serde_json::from_value::<RustReleaseConfig>(config.clone())
+                .map_or(true, |c| c.validate("test").is_err())
+        );
+        assert!(
+            serde_json::from_value::<CrateReleaseIntent>(intent.clone())
+                .map_or(true, |i| i.validate().is_err())
+        );
+    }
+    config["continuation_source_sha"] =
+        serde_json::json!("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb");
+    let mut mismatched_config = config.clone();
+    mismatched_config["packages"] = serde_json::json!(["alpha"]);
+    mismatched_config["recovery"] = serde_json::json!({"package":"alpha", "version":"0.1.0", "source_sha":"cccccccccccccccccccccccccccccccccccccccc"});
+    assert!(
+        serde_json::from_value::<RustReleaseConfig>(mismatched_config)?
+            .validate("test")
+            .is_err()
+    );
+    config["journal_predecessor"] = serde_json::Value::Null;
+    assert!(
+        serde_json::from_value::<RustReleaseConfig>(config)?
+            .validate("test")
+            .is_err()
+    );
+    let mut historical = intent;
+    historical
+        .as_object_mut()
+        .ok_or("object")?
+        .remove("continuation_source_sha");
+    historical["packages"] = serde_json::json!(["alpha"]);
+    historical["publish_features"] = serde_json::json!({"alpha": []});
+    historical["recovery"] = serde_json::json!({"package":"alpha", "version":"0.1.0", "source_sha":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"});
+    let decoded: CrateReleaseIntent = serde_json::from_value(historical)?;
+    decoded.validate()?;
+    assert!(
+        serde_json::to_value(&decoded)?
+            .get("continuation_source_sha")
+            .is_none()
+    );
+    let mut mismatched = decoded;
+    mismatched.continuation_source_sha = Some("c".repeat(40));
+    assert!(mismatched.validate().is_err());
+    Ok(())
+}
+
 #[path = "crate_release_intent_additional.rs"]
 mod additional;
