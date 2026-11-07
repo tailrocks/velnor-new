@@ -25,10 +25,10 @@ fn public_generation_keeps_plan_bootstrap_and_uses_required_verdict_controller()
     let workflow = fs::read_to_string(paths.repo.join(".github/workflows/ci.yml"))?;
     let plan = workflow_job(&workflow, "plan")?;
     assert!(
-        plan.contains("/v0.1.74/velnor-actions-0.1.74-x86_64-unknown-linux-gnu"),
-        "Plan no longer uses the immutable SDK74 bootstrap"
+        plan.contains("/v0.1.78/velnor-actions-0.1.78-x86_64-unknown-linux-gnu"),
+        "Plan no longer uses the immutable SDK78 bootstrap"
     );
-    assert!(plan.contains("gh@2.103.2"), "Plan helper catalog changed");
+    assert!(plan.contains("gh@2.103.3"), "Plan helper catalog changed");
     assert!(!plan.contains("velnor-actions-0.1.72"));
     let required = workflow_job(&workflow, "required")?;
     assert!(

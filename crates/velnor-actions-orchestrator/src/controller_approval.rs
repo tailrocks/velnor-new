@@ -239,13 +239,13 @@ mod tests {
         );
         let text = std::fs::read_to_string(path).expect("approvals file must exist");
         let approval = ControllerApprovedRelease::from_approvals_text(&text).expect("must parse");
-        assert_eq!(approval.as_authority().manifest.version, "0.1.74");
+        assert_eq!(approval.as_authority().manifest.version, "0.1.78");
     }
 
     #[test]
     fn rotated_text_yields_rotated_manifest_version() {
         let path = format!(
-            "{}/../../.velnor/controller-approvals.json",
+            "{}/../test_support/controller_approval_074.json",
             env!("CARGO_MANIFEST_DIR")
         );
         let text = std::fs::read_to_string(path).expect("approvals file must exist");
@@ -265,7 +265,7 @@ mod tests {
     #[test]
     fn stale_manifest_digest_is_rejected() {
         let path = format!(
-            "{}/../../.velnor/controller-approvals.json",
+            "{}/../test_support/controller_approval_074.json",
             env!("CARGO_MANIFEST_DIR")
         );
         let text = std::fs::read_to_string(path).expect("approvals file must exist");
@@ -284,7 +284,7 @@ mod tests {
     #[test]
     fn non_controller_workflow_is_rejected() {
         let path = format!(
-            "{}/../../.velnor/controller-approvals.json",
+            "{}/../test_support/controller_approval_074.json",
             env!("CARGO_MANIFEST_DIR")
         );
         let text = std::fs::read_to_string(path).expect("approvals file must exist");

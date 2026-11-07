@@ -15,8 +15,8 @@ use velnor_actions_contract::{Plan, ReleaseTarget, plan_json_bytes};
 use velnor_actions_mise::current_mise_binary;
 use velnor_actions_orchestrator::plan_internal;
 
-const APPROVALS: &str = include_str!("../../../.velnor/controller-approvals.json");
-const GENERATOR_LOCK: &str = include_str!("../../../.velnor/generator.lock");
+const APPROVALS: &str = include_str!("../../test_support/controller_approval_074.json");
+const GENERATOR_LOCK: &str = include_str!("../../test_support/generator_074.lock");
 const CHECK_ID: &str = "runtime-fixture";
 const JOB_ID: &str = "check-runtime-fixture";
 const RUN_KEY: &str = "r260001-a1";
@@ -264,6 +264,12 @@ fn compiled_runtime_approvals() -> Result<String, Box<dyn Error>> {
             .iter_mut()
             .find(|entry| entry["target"].as_str() == Some(target.triple()))
             .ok_or_else(|| io::Error::other("runtime target approval missing"))?;
+        assert!(
+            entry["version"] != pin.version
+                || entry["sha256"] != pin.sha256
+                || entry["bytes"] != pin.bytes,
+            "historical fixture must rotate the runtime identity"
+        );
         entry["version"] = Value::String(pin.version.to_owned());
         entry["sha256"] = Value::String(pin.sha256.to_owned());
         entry["bytes"] = Value::from(pin.bytes);
