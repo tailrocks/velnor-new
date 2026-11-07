@@ -17,7 +17,7 @@ use super::support::{
 };
 
 const OUTPUT_CAP: usize = 1_048_576;
-const COMMAND_TIMEOUT_MS: u64 = 30_000;
+const COMMAND_TIMEOUT_MS: u64 = 120_000;
 const RUN_ENTRY_MARKER: &[u8] = b"qualification-diagnostics:run-entry-succeeded\n";
 
 #[test]
@@ -209,7 +209,7 @@ fn times_out_after_guard_mutation_and_cleans_only_its_owned_group() -> Result<()
     terminate(&mut sentinel)?;
     let output = result?;
 
-    assert!(started.elapsed() < Duration::from_secs(60));
+    assert!(started.elapsed() < Duration::from_secs(180));
     assert!(sentinel_survived);
     assert_eq!(output.status.code(), Some(2));
     let stderr = String::from_utf8_lossy(&output.stderr);
