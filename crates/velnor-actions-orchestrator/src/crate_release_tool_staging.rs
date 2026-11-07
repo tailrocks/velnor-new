@@ -142,7 +142,7 @@ pub(super) fn authority_matches(request: &ToolchainStageRequest<'_>) -> bool {
         && request.github.environment == request.intent.environment
         && request.github.required_workflow_path == request.intent.required_workflow_path
         && request.github.trusted_reviewer_id == request.intent.trusted_reviewer_id
-        && request.github.workflow_path == ".github/workflows/release.yml"
+        && request.github.workflow_path == velnor_actions_contract::CRATE_RELEASE_WORKFLOW_PATH
         && request.github.run_attempt == 1
         && source_matches(request)
 }

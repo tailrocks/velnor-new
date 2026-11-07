@@ -72,7 +72,7 @@ pub(in super::super) fn test_github_admission_response(
     } else if line.starts_with("GET /repos/owner/project/actions/runs/13/approvals ") {
         serde_json::json!([{"state":"approved","user":{"type":"User","id":139_017},"environments":[{"id":9,"name":"release"}],"comment":format!("I reviewed the complete release policy at {policy} and source {policy}, and authorize this source for run 13.")}])
     } else if line.starts_with("GET /repos/owner/project/actions/runs/13 ") {
-        serde_json::json!({"id":13,"run_attempt":1,"head_sha":policy,"head_branch":"main","event":"push","path":".github/workflows/release.yml","repository":{"id":22,"full_name":"owner/project","owner":{"id":77,"login":"owner"}},"head_repository":{"id":22,"full_name":"owner/project","owner":{"id":77,"login":"owner"}}})
+        serde_json::json!({"id":13,"run_attempt":1,"head_sha":policy,"head_branch":"main","event":"push","path":".github/workflows/crate-release.yml","repository":{"id":22,"full_name":"owner/project","owner":{"id":77,"login":"owner"}},"head_repository":{"id":22,"full_name":"owner/project","owner":{"id":77,"login":"owner"}}})
     } else if line.contains("/pulls?") {
         serde_json::json!([{"number":42,"merged_at":"2026-11-03T16:00:00Z","merge_commit_sha":policy,"base":{"ref":"main","repo":{"full_name":"owner/project","owner":{"id":77,"login":"owner"}}},"head":{"ref":"release-plz-fixture","sha":"c".repeat(40),"repo":{"full_name":"owner/project","owner":{"id":77,"login":"owner"}}},"user":{"id":54,"login":"release-bot"}}])
     } else if line.contains("/git/commits/") {
@@ -89,9 +89,9 @@ pub(in super::super) fn test_github_admission_response(
     } else if line.starts_with("GET /repos/owner/project/actions/runs/12/approvals ") {
         serde_json::json!([{"state":"approved","user":{"type":"User","id":139_017},"environments":[{"id":9,"name":"release"}],"comment":format!("I reviewed the complete release policy at {policy} and source {source}, and authorize this source for run 12.")}])
     } else if line.starts_with("GET /repos/owner/project/actions/runs/12/attempts/1 ") {
-        serde_json::json!({"id":12,"run_attempt":1,"status":"completed","head_sha":policy,"head_branch":"main","event":"workflow_dispatch","path":".github/workflows/release.yml","repository":{"id":22,"full_name":"owner/project","owner":{"id":77,"login":"owner"}},"head_repository":{"id":22,"full_name":"owner/project","owner":{"id":77,"login":"owner"}}})
+        serde_json::json!({"id":12,"run_attempt":1,"status":"completed","head_sha":policy,"head_branch":"main","event":"workflow_dispatch","path":".github/workflows/crate-release.yml","repository":{"id":22,"full_name":"owner/project","owner":{"id":77,"login":"owner"}},"head_repository":{"id":22,"full_name":"owner/project","owner":{"id":77,"login":"owner"}}})
     } else if line.starts_with("GET /repos/owner/project/actions/runs/12 ") {
-        serde_json::json!({"id":12,"run_attempt":1,"head_sha":policy,"head_branch":"main","event":"workflow_dispatch","path":".github/workflows/release.yml","repository":{"id":22,"full_name":"owner/project","owner":{"id":77,"login":"owner"}},"head_repository":{"id":22,"full_name":"owner/project","owner":{"id":77,"login":"owner"}}})
+        serde_json::json!({"id":12,"run_attempt":1,"head_sha":policy,"head_branch":"main","event":"workflow_dispatch","path":".github/workflows/crate-release.yml","repository":{"id":22,"full_name":"owner/project","owner":{"id":77,"login":"owner"}},"head_repository":{"id":22,"full_name":"owner/project","owner":{"id":77,"login":"owner"}}})
     } else if line.contains("/compare/") {
         serde_json::json!({"status":"ahead"})
     } else if line

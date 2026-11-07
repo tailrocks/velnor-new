@@ -296,7 +296,7 @@ fn rehearse_candidate_denial() -> Result<(), Box<dyn Error>> {
         .env("GITHUB_WORKFLOW_SHA", &sha)
         .env(
             "GITHUB_WORKFLOW_REF",
-            "owner/project/.github/workflows/release.yml@refs/heads/main",
+            "owner/project/.github/workflows/crate-release.yml@refs/heads/main",
         )
         .env("GITHUB_REF", "refs/heads/main")
         .env("GITHUB_EVENT_NAME", "workflow_dispatch")
@@ -355,7 +355,7 @@ fn rehearse_source_require(event: &str, denied: bool) -> Result<(), Box<dyn Erro
         .env("GITHUB_WORKFLOW_SHA", &sha)
         .env(
             "GITHUB_WORKFLOW_REF",
-            "owner/project/.github/workflows/release.yml@refs/heads/main",
+            "owner/project/.github/workflows/crate-release.yml@refs/heads/main",
         )
         .env("GITHUB_REF", "refs/heads/main")
         .env("GITHUB_EVENT_NAME", event)

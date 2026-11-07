@@ -63,7 +63,7 @@ fn same_source_predecessor_renders_workspace_dispatch_from_historical_source() -
     let files = release::release_files_for_config(&prep, &mise, release_config)?;
     let workflow = files
         .iter()
-        .find(|f| f.path == ".github/workflows/release.yml")
+        .find(|f| f.path == ".github/workflows/crate-release.yml")
         .ok_or("workflow missing")?;
     assert!(workflow.bytes.contains("workflow_dispatch"));
     assert!(workflow.bytes.contains(&source));

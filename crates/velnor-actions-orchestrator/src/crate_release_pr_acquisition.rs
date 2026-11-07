@@ -35,7 +35,7 @@ pub(crate) fn verify_run_and_producer(
         || repository["default_branch"].as_str() != Some(binding.branch)
         || run["id"].as_u64() != Some(binding.run_id)
         || run["run_attempt"].as_u64() != Some(u64::from(binding.attempt))
-        || !matches!(run["path"].as_str(), Some(path) if path == ".github/workflows/release.yml" || path == format!(".github/workflows/release.yml@{}", binding.branch))
+        || !matches!(run["path"].as_str(), Some(path) if path == velnor_actions_contract::CRATE_RELEASE_WORKFLOW_PATH || path == format!("{}@{}", velnor_actions_contract::CRATE_RELEASE_WORKFLOW_PATH, binding.branch))
         || run["event"].as_str() != Some("push")
         || run["status"].as_str() != Some("in_progress")
         || run["head_sha"].as_str() != Some(binding.sha)
@@ -140,7 +140,7 @@ where
         github,
         &trees,
         &source_tree,
-        ".github/workflows/release.yml",
+        velnor_actions_contract::CRATE_RELEASE_WORKFLOW_PATH,
     )?;
     verify_reviewed_workflow(&workflow, &intent)?;
     let bytes = download_preparation(request, github, transport, repository_id)?;
@@ -327,7 +327,7 @@ mod tests {
             attempt: 1,
         };
         let repository = json!({"id":7,"full_name":"example/demo","default_branch":"main"});
-        let run = json!({"id":42,"run_attempt":1,"path":".github/workflows/release.yml","event":"push","status":"in_progress","head_sha":sha,"head_branch":"main","repository":{"id":7,"full_name":"example/demo"},"head_repository":{"id":7,"full_name":"example/demo"}});
+        let run = json!({"id":42,"run_attempt":1,"path":".github/workflows/crate-release.yml","event":"push","status":"in_progress","head_sha":sha,"head_branch":"main","repository":{"id":7,"full_name":"example/demo"},"head_repository":{"id":7,"full_name":"example/demo"}});
         let jobs = json!({"total_count":1,"jobs":[{"id":5,"name":"Release preparation","run_id":42,"run_attempt":1,"head_sha":sha,"status":"completed","conclusion":"success"}]});
         let reference = json!({"ref":"refs/heads/main","object":{"type":"commit","sha":sha}});
         assert_eq!(

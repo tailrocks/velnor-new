@@ -12,7 +12,9 @@ from unittest.mock import patch
 
 
 path = Path(__file__).resolve().parents[1] / 'src/release_publish_entry.py'
-source = path.read_text().replace('__VELNOR_JOB_TIMEOUT_SECONDS__', '1800')
+source = (path.read_text()
+          .replace('__VELNOR_JOB_TIMEOUT_SECONDS__', '1800')
+          .replace('__VELNOR_CRATE_RELEASE_WORKFLOW_PATH__', '.github/workflows/crate-release.yml'))
 entry = {'__name__': 'publisher_entry_fixture'}
 exec(compile(source, str(path), 'exec'), entry)
 
@@ -23,7 +25,7 @@ def context(mode):
         'GITHUB_REPOSITORY_OWNER_ID': '8', 'GITHUB_RUN_ID': '9', 'GITHUB_RUN_ATTEMPT': '1',
         'GITHUB_JOB': 'release-publish' if mode == 'trusted-publishing' else 'release-publish-bootstrap',
         'GITHUB_SHA': 'a' * 40, 'GITHUB_REF': 'refs/heads/main', 'GITHUB_EVENT_NAME': 'push',
-        'GITHUB_WORKFLOW_REF': 'example/project/.github/workflows/release.yml@refs/heads/main',
+        'GITHUB_WORKFLOW_REF': 'example/project/.github/workflows/crate-release.yml@refs/heads/main',
         'GITHUB_WORKFLOW_SHA': 'a' * 40, 'GITHUB_SERVER_URL': 'https://github.com',
         'GITHUB_API_URL': 'https://api.github.com', 'RUNNER_ENVIRONMENT': 'github-hosted',
         'RUNNER_OS': 'Linux', 'RUNNER_ARCH': 'X64', 'VELNOR_PREFLIGHT_ELIGIBLE': 'true',
@@ -106,7 +108,7 @@ class PublisherEntryTest(unittest.TestCase):
         for key, value in (
             ('GITHUB_JOB', 'release-publish-bootstrap'), ('GITHUB_RUN_ATTEMPT', '2'),
             ('GITHUB_EVENT_NAME', 'pull_request'), ('GITHUB_REF', 'refs/tags/v1'),
-            ('GITHUB_WORKFLOW_REF', 'attacker/project/.github/workflows/release.yml@refs/heads/main'),
+            ('GITHUB_WORKFLOW_REF', 'attacker/project/.github/workflows/crate-release.yml@refs/heads/main'),
             ('GITHUB_REPOSITORY_ID', '0'), ('VELNOR_PREFLIGHT_SOURCE_SHA', 'nope'),
             ('VELNOR_PREFLIGHT_ELIGIBLE', 'false'), ('VELNOR_PREFLIGHT_RUST_ARTIFACT_ID', '0'),
             ('VELNOR_PREFLIGHT_RUST_ARTIFACT_ID', '10'), ('GITHUB_RUN_ID', '18446744073709551616'),
@@ -133,7 +135,7 @@ class PublisherEntryTest(unittest.TestCase):
         for branch in ('refs/heads/a..b', 'refs/heads/a.lock', 'refs/heads/a//b', 'refs/heads/a b'):
             values = context('trusted-publishing')
             values['GITHUB_REF'] = branch
-            values['GITHUB_WORKFLOW_REF'] = 'example/project/.github/workflows/release.yml@' + branch
+            values['GITHUB_WORKFLOW_REF'] = 'example/project/.github/workflows/crate-release.yml@' + branch
             with self.subTest(branch=branch), patch.dict(os.environ, values, clear=True):
                 with self.assertRaises(ValueError):
                     entry['read_context']('trusted-publishing')

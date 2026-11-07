@@ -9,30 +9,79 @@ use super::{
     test_hex,
 };
 
+pub(super) fn run_response(policy_sha: &str, push: bool, legacy: bool) -> Value {
+    json!({
+        "id": 12,
+        "run_attempt": 1,
+        "head_sha": policy_sha,
+        "head_branch": "main",
+        "event": if push { "push" } else { "workflow_dispatch" },
+        "path": if legacy {
+            ".github/workflows/release.yml"
+        } else {
+            ".github/workflows/crate-release.yml"
+        },
+        "repository": {"id": 22, "full_name": "example/demo", "owner": {"id": 77, "login": "example"}},
+        "head_repository": {"id": 22, "full_name": "example/demo", "owner": {"id": 77, "login": "example"}}
+    })
+}
+
+pub(super) fn check_runs(sha: &str, rerun_mode: u8) -> Value {
+    let check = json!({"id":1,"name":"Required","head_sha":sha,"check_suite":{"id":123},"app":{"id":15368,"slug":"github-actions"},"status":"completed","conclusion":"success","started_at":"2026-11-03T15:40:00Z"});
+    let mut checks = vec![check.clone()];
+    if rerun_mode != 0 {
+        let mut rerun = check;
+        rerun["id"] = json!(2);
+        rerun["started_at"] = json!("2026-11-03T15:41:00Z");
+        if rerun_mode == 2 {
+            rerun["conclusion"] = json!("failure");
+        }
+        checks.push(rerun);
+    }
+    json!({"total_count":checks.len(),"check_runs":checks})
+}
+
+pub(super) fn push_response(route: &str, sha: &str) -> Option<Value> {
+    if route.contains("/pulls?per_page=100&page=1") {
+        return Some(json!([{
+            "number": 17,
+            "merged_at": "2026-11-03T16:00:00Z",
+            "merge_commit_sha": sha,
+            "base": {"ref": "main", "repo": {"full_name": "example/demo", "owner": {"id": 77, "login": "example"}}},
+            "head": {"ref": "release-plz-1", "repo": {"full_name": "example/demo", "owner": {"id": 77, "login": "example"}}, "sha": sha},
+            "user": {"id": 54, "login": "release-bot"}
+        }]));
+    }
+    if route.contains("/git/commits/") {
+        return Some(json!({"sha": sha, "tree": {"sha": "a".repeat(40)}}));
+    }
+    if route.contains("/pulls/17/reviews?") {
+        return Some(json!([{
+            "id": 1,
+            "user": {"id": 139_017, "login": "owner", "type": "User"},
+            "state": "APPROVED",
+            "commit_id": sha,
+            "author_association": "OWNER",
+            "submitted_at": "2026-11-03T15:50:00Z"
+        }]));
+    }
+    if route.ends_with("/collaborators/owner/permission") {
+        return Some(json!({"user": {"id": 139_017, "type": "User"}, "permission": "admin"}));
+    }
+    None
+}
+
 pub(super) struct WorkspaceGithub(pub(super) Github, Cell<bool>);
 impl GitHubAdmissionRead for WorkspaceGithub {
     fn get(&self, route: &str) -> Result<Value, OrchestratorError> {
         let sha = &self.0.sha;
         if route.ends_with("/actions/runs/12") {
             return Ok(
-                json!({"id":12,"run_attempt":1,"head_sha":sha,"head_branch":"main","event":"push","path":".github/workflows/release.yml","repository":{"id":22,"full_name":"example/demo","owner":{"id":77,"login":"example"}},"head_repository":{"id":22,"full_name":"example/demo","owner":{"id":77,"login":"example"}}}),
+                json!({"id":12,"run_attempt":1,"head_sha":sha,"head_branch":"main","event":"push","path":".github/workflows/crate-release.yml","repository":{"id":22,"full_name":"example/demo","owner":{"id":77,"login":"example"}},"head_repository":{"id":22,"full_name":"example/demo","owner":{"id":77,"login":"example"}}}),
             );
         }
-        if route.contains("/pulls?per_page=100&page=1") {
-            return Ok(
-                json!([{"number":17,"merged_at":"2026-11-03T16:00:00Z","merge_commit_sha":sha,"base":{"ref":"main","repo":{"full_name":"example/demo","owner":{"id":77,"login":"example"}}},"head":{"ref":"release-plz-1","repo":{"full_name":"example/demo","owner":{"id":77,"login":"example"}},"sha":sha},"user":{"id":54,"login":"release-bot"}}]),
-            );
-        }
-        if route.contains("/git/commits/") {
-            return Ok(json!({"sha":sha,"tree":{"sha":"a".repeat(40)}}));
-        }
-        if route.contains("/pulls/17/reviews?") {
-            return Ok(
-                json!([{"id":1,"user":{"id":139_017,"login":"owner","type":"User"},"state":"APPROVED","commit_id":sha,"author_association":"OWNER","submitted_at":"2026-11-03T15:50:00Z"}]),
-            );
-        }
-        if route.ends_with("/collaborators/owner/permission") {
-            return Ok(json!({"user":{"id":139_017,"type":"User"},"permission":"admin"}));
+        if let Some(response) = push_response(route, sha) {
+            return Ok(response);
         }
         self.0.get(route)
     }

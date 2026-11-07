@@ -253,6 +253,10 @@ fn release_intent_comes_from_the_requested_workflow_commit()
     git(root, &["config", "commit.gpgsign", "false"])?;
     fs::create_dir(root.join(".github"))?;
     fs::create_dir(root.join(".velnor"))?;
+    fs::create_dir(root.join(".github/workflows"))?;
+    let old_workflow = root.join(".github/workflows/release.yml");
+    let workflow = root.join(".github/workflows/crate-release.yml");
+    fs::write(&old_workflow, b"legacy workflow")?;
     let path = root.join(".github/velnor-release-intent.toml");
     let manifest_path = root.join(".velnor/release-manifest.json");
     let make = |version: &str| {
@@ -265,11 +269,19 @@ fn release_intent_comes_from_the_requested_workflow_commit()
     git(root, &["add", "."])?;
     git(root, &["commit", "-qm", "first"])?;
     let first = git(root, &["rev-parse", "HEAD"])?;
+    fs::remove_file(&old_workflow)?;
+    fs::write(&workflow, b"canonical workflow")?;
     fs::write(&path, make("0.1.6"))?;
     fs::write(&manifest_path, b"second manifest")?;
     git(root, &["add", "."])?;
     git(root, &["commit", "-qm", "second"])?;
     let second = git(root, &["rev-parse", "HEAD"])?;
+    fs::write(&workflow, b"dirty workflow")?;
+    assert!(super::read_workflow_at(root, &first, &test_git()).is_err());
+    assert_eq!(
+        super::read_workflow_at(root, &second, &test_git())?,
+        b"canonical workflow"
+    );
     fs::write(&path, make("0.1.7"))?;
     fs::write(&manifest_path, b"dirty manifest")?;
     assert_eq!(

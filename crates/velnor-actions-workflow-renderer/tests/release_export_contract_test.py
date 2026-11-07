@@ -5,10 +5,16 @@ import ast
 import base64
 import importlib.util
 import json
+import os
 from pathlib import Path
 import sys
 import time
 import unittest
+from unittest.mock import patch
+
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from release_publish_entry_test import context
 
 ROOT = Path(__file__).resolve().parents[1] / 'src'
 spec = importlib.util.spec_from_file_location('first_stage_contract', ROOT / 'release_publish_first_stage.py')
@@ -39,6 +45,25 @@ def deadline():
 class ExportContractTest(unittest.TestCase):
     def test_real_current_entry_matches_complete_closure(self):
         VERIFIER.verify(EXPORTED, ENTRY, 'publish', deadline())
+
+    def test_rendered_and_bootstrap_entries_enforce_workflow_identity(self):
+        rendered = {'__name__': 'rendered_entry'}
+        exec(compile(EXPORTED, '<rendered-entry>', 'exec'), rendered)
+        for entry in (rendered, ENTRY):
+            for mode in ('trusted-publishing', 'bootstrap'):
+                values = context(mode)
+                with self.subTest(entry=entry['__name__'], mode=mode), patch.dict(os.environ, values, clear=True):
+                    self.assertEqual(
+                        entry['read_context'](mode)['GITHUB_WORKFLOW_REF'],
+                        values['GITHUB_WORKFLOW_REF'],
+                    )
+                values['GITHUB_WORKFLOW_REF'] = 'example/project/.github/workflows/release.yml@refs/heads/main'
+                for key in ('CARGO_REGISTRY_TOKEN', 'ACTIONS_ID_TOKEN_REQUEST_TOKEN',
+                            'ACTIONS_ID_TOKEN_REQUEST_URL'):
+                    values.pop(key, None)
+                with self.subTest(entry=entry['__name__'], mode=mode), patch.dict(os.environ, values, clear=True):
+                    with self.assertRaises(ValueError):
+                        entry['read_context'](mode)
 
     def test_each_bootstrap_module_is_bound(self):
         for item in CONTRACT['bootstrap']:
@@ -81,6 +106,6 @@ class ExportContractTest(unittest.TestCase):
 
 if __name__ == '__main__':
     suite = unittest.defaultTestLoader.loadTestsFromTestCase(ExportContractTest)
-    if suite.countTestCases() != 5:
+    if suite.countTestCases() != 6:
         raise SystemExit('export contract cases missing')
     raise SystemExit(not unittest.TextTestRunner().run(suite).wasSuccessful())

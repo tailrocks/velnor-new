@@ -246,7 +246,7 @@ pub(super) fn workflow_lock_uses_event_scoped_recovery_and_committed_policy()
     )?;
     git(policy.path(), &["init", "-q"])?;
     fs::create_dir_all(policy.path().join(".github/workflows"))?;
-    let workflow = policy.path().join(".github/workflows/release.yml");
+    let workflow = policy.path().join(".github/workflows/crate-release.yml");
     fs::write(
         &workflow,
         format!(

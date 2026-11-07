@@ -38,7 +38,11 @@ pub(crate) fn read_workflow_at(
         return Err(internal("crate_release_workflow_sha"));
     }
     let show = GitRequest::show(vec![
-        format!("{workflow_sha}:.github/workflows/release.yml").into(),
+        format!(
+            "{workflow_sha}:{}",
+            velnor_actions_contract::CRATE_RELEASE_WORKFLOW_PATH
+        )
+        .into(),
     ])
     .run_release_in(workspace, git)
     .map_err(|_| internal("crate_release_workflow_read"))?;

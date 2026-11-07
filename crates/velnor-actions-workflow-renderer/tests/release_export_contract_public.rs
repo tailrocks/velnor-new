@@ -54,12 +54,16 @@ fn exported_privileged_closure_rejects_changed_modules_and_outer_entry()
 }
 
 pub(super) fn assert_bootstrap_sources(bundle: &serde_json::Value) {
+    let entry = include_str!("../src/release_publish_entry.py").replace(
+        "__VELNOR_CRATE_RELEASE_WORKFLOW_PATH__",
+        ".github/workflows/crate-release.yml",
+    );
+    assert_eq!(bundle["entry"].as_str(), Some(entry.as_str()));
     for (key, expected) in [
         (
             "stage",
             include_str!("../src/release_publish_first_stage.py"),
         ),
-        ("entry", include_str!("../src/release_publish_entry.py")),
         (
             "bootstrap",
             include_str!("../src/release_generator_bootstrap.sh"),

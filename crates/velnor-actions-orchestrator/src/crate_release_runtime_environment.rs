@@ -18,7 +18,11 @@ pub(crate) fn request_from_environment(
     let workflow_commit = required("GITHUB_WORKFLOW_SHA")?;
     if !crate::release::release_identity::same_repository(&repository, &intent.repository)
         || git_ref != format!("refs/heads/{}", intent.default_branch)
-        || workflow_ref != format!("{repository}/.github/workflows/release.yml@{git_ref}")
+        || workflow_ref
+            != format!(
+                "{repository}/{}@{git_ref}",
+                velnor_actions_contract::CRATE_RELEASE_WORKFLOW_PATH
+            )
         || workflow_commit != workflow_sha
     {
         return Err(internal("crate_release_workflow_identity"));
@@ -38,7 +42,7 @@ pub(crate) fn request_from_environment(
         repository,
         default_branch: intent.default_branch.clone(),
         environment: intent.environment.clone(),
-        workflow_path: ".github/workflows/release.yml".to_owned(),
+        workflow_path: velnor_actions_contract::CRATE_RELEASE_WORKFLOW_PATH.to_owned(),
         required_workflow_path: intent.required_workflow_path.clone(),
         trusted_reviewer_id: intent.trusted_reviewer_id,
         workflow_sha: workflow_sha.to_owned(),

@@ -67,7 +67,10 @@ impl Context {
         if !hex(&sha, 40)
             || required("GITHUB_WORKFLOW_SHA")? != sha
             || required("GITHUB_WORKFLOW_REF")?
-                != format!("{repository}/.github/workflows/release.yml@{reference}")
+                != format!(
+                    "{repository}/{}@{reference}",
+                    velnor_actions_contract::CRATE_RELEASE_WORKFLOW_PATH
+                )
             || !hex(&archive_digest, 64)
             || !hex(&content_digest, 64)
         {
@@ -155,7 +158,7 @@ mod tests {
             ("GITHUB_WORKFLOW_SHA", sha),
             (
                 "GITHUB_WORKFLOW_REF",
-                "owner/project/.github/workflows/release.yml@refs/heads/main".to_owned(),
+                "owner/project/.github/workflows/crate-release.yml@refs/heads/main".to_owned(),
             ),
             ("GITHUB_RUN_ID", "42".to_owned()),
             ("VELNOR_PR_ARTIFACT_ID", "51".to_owned()),
@@ -176,7 +179,7 @@ mod tests {
             ("GITHUB_WORKFLOW_SHA", "b"),
             (
                 "GITHUB_WORKFLOW_REF",
-                "owner/other/.github/workflows/release.yml@refs/heads/main",
+                "owner/other/.github/workflows/crate-release.yml@refs/heads/main",
             ),
             ("GITHUB_REPOSITORY_ID", "0"),
             ("GITHUB_RUN_ID", "0"),

@@ -247,3 +247,28 @@ pub(super) fn reject_invalid_metadata_prerequisites(
             .is_err()
     );
 }
+
+#[test]
+fn release_workflow_identity_is_checked_for_push_and_dispatch()
+-> Result<(), Box<dyn std::error::Error>> {
+    for push in [false, true] {
+        let temp = tempfile::tempdir()?;
+        let root = temp.path();
+        let (mut intent, mut request, mut github, registry) = make_fixture(root)?;
+        github.approved.set(true);
+        if push {
+            intent.recovery = None;
+            request.event = "push".into();
+            request.recovery_sha = None;
+            request.workflow_sha.clone_from(&request.source_sha);
+            github.policy_sha.clone_from(&request.source_sha);
+            github.push_event.set(true);
+        }
+        prepare_crate_release(&intent, &request, &github, &registry, root)?;
+        github.legacy_workflow.set(true);
+        assert!(prepare_crate_release(&intent, &request, &github, &registry, root).is_err());
+        request.workflow_path = ".github/workflows/release.yml".into();
+        assert!(prepare_crate_release(&intent, &request, &github, &registry, root).is_err());
+    }
+    Ok(())
+}

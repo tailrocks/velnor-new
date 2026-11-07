@@ -137,7 +137,7 @@ fn fixture(
     let repo = temp.path().join("repo");
     std::fs::create_dir_all(repo.join(".github/workflows"))?;
     std::fs::write(repo.join(".github/velnor-release-intent.toml"), intent_text)?;
-    std::fs::write(repo.join(".github/workflows/release.yml"), workflow)?;
+    std::fs::write(repo.join(".github/workflows/crate-release.yml"), workflow)?;
     std::fs::write(repo.join(".github/release-plz.toml"), "fixture config")?;
     std::fs::write(
         repo.join("Cargo.toml"),
@@ -247,7 +247,7 @@ fn fixture_routes(
     let prefix = format!("/repos/{api_repository}");
     let mut routes = BTreeMap::new();
     routes.insert(prefix.clone(), serde_json::json!({"id":7,"full_name":api_repository,"default_branch":intent.default_branch}));
-    routes.insert(format!("{prefix}/actions/runs/42/attempts/1"), serde_json::json!({"id":42,"run_attempt":1,"path":".github/workflows/release.yml","event":"push","status":"in_progress","head_sha":sha,"head_branch":intent.default_branch,"repository":{"id":7,"full_name":api_repository},"head_repository":{"id":7,"full_name":api_repository}}));
+    routes.insert(format!("{prefix}/actions/runs/42/attempts/1"), serde_json::json!({"id":42,"run_attempt":1,"path":".github/workflows/crate-release.yml","event":"push","status":"in_progress","head_sha":sha,"head_branch":intent.default_branch,"repository":{"id":7,"full_name":api_repository},"head_repository":{"id":7,"full_name":api_repository}}));
     routes.insert(format!("{prefix}/actions/runs/42/attempts/1/jobs?per_page=100"), serde_json::json!({"total_count":1,"jobs":[{"id":5,"name":"Release preparation","run_id":42,"head_sha":sha,"status":"completed","conclusion":"success"}]}));
     routes.insert(format!("{prefix}/git/ref/heads/{}", intent.default_branch), serde_json::json!({"ref":format!("refs/heads/{}",intent.default_branch),"object":{"type":"commit","sha":sha}}));
     routes.insert(
@@ -262,7 +262,7 @@ fn fixture_routes(
     }
     for path in [
         ".github/velnor-release-intent.toml",
-        ".github/workflows/release.yml",
+        ".github/workflows/crate-release.yml",
     ] {
         let oid = git(repo, &["rev-parse", &format!("HEAD:{path}")])?;
         let bytes = std::fs::read(repo.join(path))?;
@@ -374,7 +374,7 @@ fn runtime_values(request: &AcquisitionRequest<'_>) -> BTreeMap<&'static str, St
         (
             "GITHUB_WORKFLOW_REF",
             format!(
-                "{}/.github/workflows/release.yml@refs/heads/{}",
+                "{}/.github/workflows/crate-release.yml@refs/heads/{}",
                 request.binding.repository, request.binding.branch
             ),
         ),

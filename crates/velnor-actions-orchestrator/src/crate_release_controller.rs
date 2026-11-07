@@ -191,7 +191,7 @@ fn verify_request_intent(
         || !release_identity::same_repository(&request.repository, &intent.repository)
         || request.default_branch != intent.default_branch
         || request.environment != intent.environment
-        || request.workflow_path != ".github/workflows/release.yml"
+        || request.workflow_path != velnor_actions_contract::CRATE_RELEASE_WORKFLOW_PATH
         || request.required_workflow_path != intent.required_workflow_path
         || request.trusted_reviewer_id != intent.trusted_reviewer_id
         || request.recovery_sha.as_deref() != recovery

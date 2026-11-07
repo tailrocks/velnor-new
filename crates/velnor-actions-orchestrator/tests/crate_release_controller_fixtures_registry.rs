@@ -165,7 +165,7 @@ pub(super) fn make_fixture(
         default_branch: "main".into(),
         environment: "release".into(),
         trusted_reviewer_id: 139_017,
-        workflow_path: ".github/workflows/release.yml".into(),
+        workflow_path: ".github/workflows/crate-release.yml".into(),
         required_workflow_path: ".github/workflows/ci.yml".into(),
         workflow_sha: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb".into(),
         run_id: 12,
@@ -174,9 +174,23 @@ pub(super) fn make_fixture(
         source_sha: sha.clone(),
         recovery_sha: Some(sha.clone()),
     };
-    let github = Github {
+    let github = fixture_github(sha, &request.workflow_sha);
+    let registry = Registry {
+        owner_match: github.owner_match.clone(),
+        absent: Cell::new(true),
+        inconsistent: Cell::new(false),
+        archive: RefCell::new(Vec::new()),
+        baseline: RefCell::new(Vec::new()),
+    };
+    Ok((intent, request, github, registry))
+}
+
+fn fixture_github(sha: String, policy_sha: &str) -> Github {
+    Github {
         sha,
-        policy_sha: request.workflow_sha.clone(),
+        policy_sha: policy_sha.to_owned(),
+        legacy_workflow: Cell::new(false),
+        push_event: Cell::new(false),
         approved: Cell::new(false),
         required_rerun: Cell::new(0),
         revoke_on_tag_read: Cell::new(false),
@@ -197,15 +211,7 @@ pub(super) fn make_fixture(
         artifact_receipt: Cell::new(false),
         paginated_artifacts: Cell::new(false),
         before_metadata_write: RefCell::new(None),
-    };
-    let registry = Registry {
-        owner_match: github.owner_match.clone(),
-        absent: Cell::new(true),
-        inconsistent: Cell::new(false),
-        archive: RefCell::new(Vec::new()),
-        baseline: RefCell::new(Vec::new()),
-    };
-    Ok((intent, request, github, registry))
+    }
 }
 
 pub(super) fn fixture_archive(root: &Path) -> Result<Vec<u8>, Box<dyn std::error::Error>> {

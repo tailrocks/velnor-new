@@ -111,6 +111,8 @@ fn rehearsal_github(request: &GitHubAdmissionRequest, metadata_completed: bool) 
     Github {
         sha: request.source_sha.clone(),
         policy_sha: request.workflow_sha.clone(),
+        legacy_workflow: Cell::new(false),
+        push_event: Cell::new(false),
         approved: Cell::new(true),
         required_rerun: Cell::new(0),
         revoke_on_tag_read: Cell::new(false),

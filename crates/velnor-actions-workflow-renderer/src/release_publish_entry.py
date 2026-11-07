@@ -81,7 +81,7 @@ def read_context(mode):
             or result['GITHUB_JOB'] != ('release-publish' if mode == 'trusted-publishing' else 'release-publish-bootstrap')
             or result['GITHUB_RUN_ATTEMPT'] != '1'
             or not valid_branch_ref(result['GITHUB_REF'])
-            or result['GITHUB_WORKFLOW_REF'] != result['GITHUB_REPOSITORY'] + '/.github/workflows/release.yml@' + result['GITHUB_REF']
+            or result['GITHUB_WORKFLOW_REF'] != result['GITHUB_REPOSITORY'] + '/__VELNOR_CRATE_RELEASE_WORKFLOW_PATH__@' + result['GITHUB_REF']
             or result['GITHUB_EVENT_NAME'] not in ('push', 'workflow_dispatch')
             or result['GITHUB_SERVER_URL'] != 'https://github.com'
             or result['GITHUB_API_URL'] != 'https://api.github.com'

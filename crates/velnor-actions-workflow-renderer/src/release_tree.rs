@@ -16,21 +16,21 @@ use crate::{
 pub mod rehearsal;
 
 pub const RELEASE_HOSTED_RUNNER: &str = "ubuntu-26.04";
-pub const RELEASE_WORKFLOW_PATH: &str = ".github/workflows/release.yml";
+use velnor_actions_contract::CRATE_RELEASE_WORKFLOW_PATH;
 pub const RELEASE_INTENT_PATH: &str = ".github/velnor-release-intent.toml";
 pub const RELEASE_CONFIG_PATH: &str = ".github/release-plz.toml";
 pub const RELEASE_SOURCE_DIR: &str = "release-source";
 pub const RELEASE_CURRENT_PATHS: &[&str] = &[
     RELEASE_INTENT_PATH,
     RELEASE_CONFIG_PATH,
-    RELEASE_WORKFLOW_PATH,
+    CRATE_RELEASE_WORKFLOW_PATH,
 ];
 pub const RELEASE_TREE_PATHS: &[&str] = &[
     ".github/release-plz-bootstrap.toml",
     RELEASE_INTENT_PATH,
     ".github/release-plz-publish.toml",
     RELEASE_CONFIG_PATH,
-    RELEASE_WORKFLOW_PATH,
+    CRATE_RELEASE_WORKFLOW_PATH,
 ];
 
 #[must_use]
@@ -101,7 +101,7 @@ pub fn render_release_workflow(
     check_release_jobs(spec, &binding)?;
     let document = release_document(spec)?;
     let text = crate::render::fallback::render_checked_workflow(
-        RELEASE_WORKFLOW_PATH,
+        CRATE_RELEASE_WORKFLOW_PATH,
         &document,
         &ctx.generator_version,
     )?;
@@ -324,7 +324,7 @@ pub fn render_release_files(
     let intent_text = marker::with_marker(&ctx.generator_version, &intent_text)?;
     let files = ReleaseFiles {
         workflow: RenderedFile {
-            path: RELEASE_WORKFLOW_PATH.to_owned(),
+            path: CRATE_RELEASE_WORKFLOW_PATH.to_owned(),
             bytes: workflow,
         },
         config: RenderedFile {
@@ -366,7 +366,7 @@ fn release_pin_matches(
 }
 
 fn check_release_paths(files: &ReleaseFiles) -> Result<(), RenderError> {
-    guard::validate_allowlisted_path(&files.workflow.path, &[RELEASE_WORKFLOW_PATH])?;
+    guard::validate_allowlisted_path(&files.workflow.path, &[CRATE_RELEASE_WORKFLOW_PATH])?;
     guard::validate_allowlisted_path(&files.config.path, &[RELEASE_CONFIG_PATH])?;
     guard::validate_allowlisted_path(&files.intent.path, &[RELEASE_INTENT_PATH])?;
     Ok(())

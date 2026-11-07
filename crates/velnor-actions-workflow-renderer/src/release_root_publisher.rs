@@ -35,7 +35,7 @@ fn render_source(timeout_seconds: u32, encoded: &str) -> Result<String, RenderEr
         serde_json::to_vec(&privileged_modules::export_contract())
             .map_err(|_| RenderError::InvalidWorkflow("publisher_bundle_invalid".to_owned()))?,
     );
-    let mut entry = include_str!("release_publish_entry.py")
+    let mut entry = materialize_entry()
         .replace("__VELNOR_EXPORT_CONTRACT_PAYLOAD__", &contract)
         .replace("__VELNOR_SUPERVISOR_PAYLOAD__", encoded)
         .replace(
@@ -57,6 +57,13 @@ fn render_source(timeout_seconds: u32, encoded: &str) -> Result<String, RenderEr
         ));
     }
     Ok(entry)
+}
+
+fn materialize_entry() -> String {
+    include_str!("release_publish_entry.py").replace(
+        "__VELNOR_CRATE_RELEASE_WORKFLOW_PATH__",
+        velnor_actions_contract::CRATE_RELEASE_WORKFLOW_PATH,
+    )
 }
 
 pub fn publisher_step(
@@ -137,10 +144,7 @@ fn publisher_bundle() -> Result<String, RenderError> {
             "stage".to_owned(),
             serde_json::json!(include_str!("release_publish_first_stage.py")),
         ),
-        (
-            "entry".to_owned(),
-            serde_json::json!(include_str!("release_publish_entry.py")),
-        ),
+        ("entry".to_owned(), serde_json::json!(materialize_entry())),
         (
             "export_contract".to_owned(),
             privileged_modules::export_contract(),

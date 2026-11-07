@@ -125,6 +125,8 @@ pub(super) type RefCreatedHook = Box<dyn Fn(&str)>;
 pub(super) struct Github {
     pub(super) sha: String,
     pub(super) policy_sha: String,
+    pub(super) legacy_workflow: Cell<bool>,
+    pub(super) push_event: Cell<bool>,
     pub(super) approved: Cell<bool>,
     pub(super) required_rerun: Cell<u8>,
     pub(super) revoke_on_tag_read: Cell<bool>,
@@ -210,6 +212,11 @@ impl velnor_actions_orchestrator::crate_release_tool_download::ToolDownloadTrans
 }
 impl GitHubAdmissionRead for Github {
     fn get(&self, route: &str) -> Result<Value, OrchestratorError> {
+        if self.push_event.get()
+            && let Some(response) = super::workspace_observation::push_response(route, &self.sha)
+        {
+            return Ok(response);
+        }
         let sha = &self.sha;
         let policy_sha = &self.policy_sha;
         let checked_sha = if route.contains(policy_sha) {
@@ -256,7 +263,11 @@ impl GitHubAdmissionRead for Github {
                 json!([])
             }
         } else if route.ends_with("/actions/runs/12") {
-            json!({"id":12,"run_attempt":1,"head_sha":policy_sha,"head_branch":"main","event":"workflow_dispatch","path":".github/workflows/release.yml","repository":{"id":22,"full_name":"example/demo","owner":{"id":77,"login":"example"}},"head_repository":{"id":22,"full_name":"example/demo","owner":{"id":77,"login":"example"}}})
+            super::workspace_observation::run_response(
+                policy_sha,
+                self.push_event.get(),
+                self.legacy_workflow.get(),
+            )
         } else if route.contains("/compare/") {
             json!({"status":"ahead"})
         } else if route.ends_with("/environments/release") {
@@ -264,18 +275,7 @@ impl GitHubAdmissionRead for Github {
         } else if route.contains("deployment-branch-policies") {
             json!({"total_count":1,"branch_policies":[{"type":"branch","name":"main"}]})
         } else if route.contains("check-runs?") {
-            let check = json!({"id":1,"name":"Required","head_sha":checked_sha,"check_suite":{"id":123},"app":{"id":15368,"slug":"github-actions"},"status":"completed","conclusion":"success","started_at":"2026-11-03T15:40:00Z"});
-            let mut checks = vec![check.clone()];
-            if self.required_rerun.get() != 0 {
-                let mut rerun = check;
-                rerun["id"] = json!(2);
-                rerun["started_at"] = json!("2026-11-03T15:41:00Z");
-                if self.required_rerun.get() == 2 {
-                    rerun["conclusion"] = json!("failure");
-                }
-                checks.push(rerun);
-            }
-            json!({"total_count":checks.len(),"check_runs":checks})
+            super::workspace_observation::check_runs(checked_sha, self.required_rerun.get())
         } else if route.contains("/actions/runs?") {
             json!({"total_count":1,"workflow_runs":[{"check_suite_id":123,"head_sha":checked_sha,"path":".github/workflows/ci.yml","status":"completed","conclusion":"success","event":"push","head_branch":"main","repository":{"id":22,"full_name":"example/demo","owner":{"id":77,"login":"example"}},"head_repository":{"id":22,"full_name":"example/demo","owner":{"id":77,"login":"example"}}}]})
         } else if route.ends_with("/git/ref/heads/main") {
