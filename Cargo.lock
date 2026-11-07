@@ -1303,7 +1303,6 @@ version = "0.1.78"
 dependencies = [
  "base64",
  "flate2",
- "lzma-rust2",
  "rustix",
  "semver",
  "serde",
