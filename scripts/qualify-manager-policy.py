@@ -7,6 +7,7 @@ from pathlib import Path
 import re
 import secrets
 import subprocess
+import sys
 import tempfile
 import time
 
@@ -48,14 +49,26 @@ def clean_host():
 def wait_bus(container):
     deadline = time.monotonic() + 45
     while time.monotonic() < deadline:
-        result = subprocess.run(['docker', 'exec', container, '/usr/bin/systemctl',
-                                 'is-active', 'dbus.service'], capture_output=True, timeout=5)
-        if result.returncode == 0 and result.stdout == b'active\n':
+        ready = True
+        for unit in ('dbus.service', 'fixture-manager-environment.service'):
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise TimeoutError('qualification readiness deadline')
+            result = subprocess.run(['docker', 'exec', container, '/usr/bin/systemctl',
+                                    'is-active', unit], capture_output=True,
+                                    timeout=min(5, remaining))
+            if result.stdout == b'failed\n':
+                raise ValueError('qualification fixture service failed: ' + unit)
+            ready = ready and result.returncode == 0 and result.stdout == b'active\n'
+        if ready and time.monotonic() < deadline:
             return
-        state = command(['docker', 'inspect', '--format', '{{.State.Running}}', container], 5)
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise TimeoutError('qualification readiness deadline')
+        state = command(['docker', 'inspect', '--format', '{{.State.Running}}', container], min(5, remaining))
         if state.stdout != b'true\n':
             raise ValueError('qualification PID1 exited before DBus readiness')
-        time.sleep(0.2)
+        time.sleep(min(0.2, max(0, deadline - time.monotonic())))
     raise TimeoutError('qualification DBus readiness deadline')
 
 
@@ -72,8 +85,9 @@ def container_cases(context):
             raise ValueError('qualification container identity')
         container = identity
         wait_bus(container)
-        command(['docker', 'exec', container, '/usr/bin/mkdir', '-p', '/opt/velnor-policy/src',
-                 '/opt/velnor-policy/tests'], 10)
+        renderer = '/opt/velnor-policy/crates/velnor-actions-workflow-renderer'
+        command(['docker', 'exec', container, '/usr/bin/mkdir', '-p', renderer + '/src',
+                 renderer + '/tests', '/opt/velnor-policy/scripts'], 10)
         for directory, names in {
                 'src': ('release_manager_bus.py', 'release_manager_lifecycle.py',
                         'release_manager_policy_host.py', 'release_manager_policy_files.py',
@@ -83,9 +97,14 @@ def container_cases(context):
                 'tests': ('release_manager_policy_systemd_test.py', 'release_watch_fixture.py')}.items():
             for name in names:
                 command(['docker', 'cp', str(RENDERER / directory / name),
-                         container + ':/opt/velnor-policy/' + directory + '/' + name], 10)
+                         container + ':' + renderer + '/' + directory + '/' + name], 10)
+        command(['docker', 'cp', str(ROOT / 'scripts/observe-hosted-systemd-policy.py'),
+                 container + ':/opt/velnor-policy/scripts/observe-hosted-systemd-policy.py'], 10)
+        observation = command(['docker', 'exec', container, '/usr/bin/python3', '-I', '-S',
+                               '-B', '/opt/velnor-policy/scripts/observe-hosted-systemd-policy.py', '--capture'], 20)
+        print(observation.stdout.decode('utf-8', errors='strict'), file=sys.stderr, end='')
         result = command(['docker', 'exec', container, '/usr/bin/python3', '-I', '-S', '-B',
-                          '/opt/velnor-policy/tests/release_manager_policy_systemd_test.py',
+                          renderer + '/tests/release_manager_policy_systemd_test.py',
                           '--container'], 240)
         assert_tests(result, 5)
     finally:
