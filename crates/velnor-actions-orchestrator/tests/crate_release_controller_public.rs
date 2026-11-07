@@ -90,9 +90,10 @@ use mixed_workspace::set_workspace_journal_packages;
 
 #[path = "crate_release_controller_historical_fixtures.rs"]
 mod historical_fixtures;
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+use historical_fixtures::assert_two_link_recovery;
 use historical_fixtures::{
-    HistoricalAuthority, assert_two_link_recovery, commit_history_intent, fixture_upload_intention,
-    initialize_history_repo,
+    HistoricalAuthority, commit_history_intent, fixture_upload_intention, initialize_history_repo,
 };
 #[path = "crate_release_controller_historical_authority.rs"]
 mod historical_authority;
@@ -106,9 +107,10 @@ use new_crate_ownership::journal_existing_owners;
 mod creation_recovery;
 #[path = "crate_release_controller_workspace_creation.rs"]
 mod workspace_creation;
+use creation_recovery::{CreationWorkspaceGithub, CreationWorkspaceRegistry};
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
 use creation_recovery::{
-    CreationWorkspaceGithub, CreationWorkspaceRegistry, reject_untrusted_prior_creation,
-    verify_created_crate_recovers_without_reupload,
+    reject_untrusted_prior_creation, verify_created_crate_recovers_without_reupload,
 };
 
 #[path = "crate_release_controller_workspace_publication.rs"]

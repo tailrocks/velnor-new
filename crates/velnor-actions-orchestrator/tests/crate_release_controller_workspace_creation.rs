@@ -5,8 +5,7 @@ use super::{
     Cell, HistoricalAuthority, JournalRegistryFake, NewRegistry, WorkspaceGithub,
     WorkspaceRegistry, commit_history_intent, fixture_archive, fixture_journal_plan,
     fixture_no_baseline, initialize_history_repo, make_fixture, make_workspace_order_fixture,
-    prepare_crate_release, reject_untrusted_prior_creation, set_workspace_journal_packages,
-    test_git, verify_created_crate_recovers_without_reupload,
+    prepare_crate_release, set_workspace_journal_packages, test_git,
 };
 
 #[test]
@@ -198,7 +197,7 @@ pub(super) fn record_first_created_workspace_crate(
 }
 
 #[test]
-pub(super) fn first_crate_prior_upload_recovers_only_with_authenticated_intent_and_owner()
+pub(super) fn first_crate_recovery_rejects_unverified_custody_before_mutation()
 -> Result<(), Box<dyn std::error::Error>> {
     use crate::crate_release_journal::{
         JournalAuthentication, JournalOwnership, fixture_storage::seed_started_record,
@@ -249,20 +248,11 @@ pub(super) fn first_crate_prior_upload_recovers_only_with_authenticated_intent_a
         event: "workflow_dispatch",
         defect: Cell::new(0),
     };
-    let mut admission = prepare_crate_release(&intent, &request, &auth, &registry, root)?;
-    let tools = tempfile::tempdir()?;
-    admission.semver_evidence = crate::release::crate_release_semver::verify_preflight(
+    let admission = creation_recovery_preflight(
         root,
-        &admission,
+        prepare_crate_release(&intent, &request, &auth, &registry, root)?,
         &registry,
-        tools.path(),
-        test_git(),
-        &crate::UnprivilegedSourceExecution,
     )?;
-    assert!(matches!(
-        admission.semver_evidence.get("demo"),
-        Some(crate::release::crate_release_semver::SemverEvidence::MetadataOnly { .. })
-    ));
     let input = AdmittedStart {
         source_execution: &crate::UnprivilegedSourceExecution,
         git: test_git(),
@@ -276,8 +266,34 @@ pub(super) fn first_crate_prior_upload_recovers_only_with_authenticated_intent_a
         workflow_root: workflow.path(),
         generator: &fixture_attested_generator(),
     };
-    reject_untrusted_prior_creation(&input, &prior)?;
-    record_admitted_start(&input)?;
-    verify_created_crate_recovers_without_reupload(&input)?;
+    let before = journal.write_calls.get();
+    let result = record_admitted_start(&input);
+    assert!(
+        matches!(result, Err(crate::OrchestratorError::Internal { problem }) if problem == "crate_release_history_custody_required")
+    );
+    assert_eq!(journal.write_calls.get(), before);
+    assert_eq!(github.writes.get(), 0);
     Ok(())
+}
+
+fn creation_recovery_preflight(
+    root: &std::path::Path,
+    mut admission: crate::crate_release_controller::CrateReleaseAdmissionReceipt,
+    registry: &NewRegistry,
+) -> Result<crate::crate_release_controller::CrateReleaseAdmissionReceipt, Box<dyn std::error::Error>>
+{
+    let tools = tempfile::tempdir()?;
+    admission.semver_evidence = crate::release::crate_release_semver::verify_preflight(
+        root,
+        &admission,
+        registry,
+        tools.path(),
+        test_git(),
+        &crate::UnprivilegedSourceExecution,
+    )?;
+    assert!(matches!(
+        admission.semver_evidence.get("demo"),
+        Some(crate::release::crate_release_semver::SemverEvidence::MetadataOnly { .. })
+    ));
+    Ok(admission)
 }

@@ -3,10 +3,11 @@
 
 use super::{
     Cell, CrateReleaseIntent, CrateReleaseRepairWrite, GitHubAdmissionRead, Github,
-    JournalRegistryFake, OrchestratorError, Path, Registry, Value, fixture_archive,
-    fixture_journal_plan, fixture_no_baseline, fs, git, json, make_fixture, prepare_crate_release,
-    test_git,
+    JournalRegistryFake, OrchestratorError, Path, Value, fixture_journal_plan, fixture_no_baseline,
+    fs, git, json, make_fixture, prepare_crate_release, test_git,
 };
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+use super::{Registry, fixture_archive};
 
 pub(super) fn initialize_history_repo(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
     git(path, &["init", "-q"])?;
@@ -31,6 +32,7 @@ pub(super) fn commit_history_intent(
     git(path, &["rev-parse", "HEAD"])
 }
 
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
 pub(super) fn assert_two_link_recovery(
     input: &crate::release::package_release_signer::AdmittedStart<
         '_,

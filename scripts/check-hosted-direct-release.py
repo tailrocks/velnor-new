@@ -6,6 +6,7 @@ import json
 import os
 import platform
 import subprocess
+import tempfile
 
 with open('/etc/os-release', encoding='utf-8') as release_file:
     release = release_file.read().splitlines()
@@ -28,13 +29,17 @@ for key in list(env):
         env.pop(key)
 for key in ('VELNOR_TEST_PINNED_GIT', 'VELNOR_TEST_PINNED_GIT_HTTP', 'GITHUB_TOKEN',
             'GH_TOKEN', 'CARGO_REGISTRY_TOKEN', 'ACTIONS_ID_TOKEN_REQUEST_TOKEN',
-            'ACTIONS_ID_TOKEN_REQUEST_URL', 'ACTIONS_RUNTIME_TOKEN'):
+            'ACTIONS_ID_TOKEN_REQUEST_URL', 'ACTIONS_RUNTIME_TOKEN', 'VELNOR_GH_FIXTURE_TOOLS'):
     env.pop(key, None)
-result = subprocess.run(
-    ['cargo', 'nextest', 'run', '--locked', '-p', 'velnor-actions-orchestrator', '--lib',
-     '-E', expression, '--message-format', 'libtest-json'],
-    env=env, capture_output=True, timeout=780, check=False,
-)
+if not os.path.isabs(env.get('HOME', '')):
+    raise SystemExit('direct-release qualification requires an absolute private HOME')
+with tempfile.TemporaryDirectory(prefix='hosted-direct-release-', dir=env['HOME']) as runner_temp:
+    env['RUNNER_TEMP'] = runner_temp
+    result = subprocess.run(
+        ['cargo', 'nextest', 'run', '--locked', '-p', 'velnor-actions-orchestrator', '--lib',
+         '-E', expression, '--message-format', 'libtest-json'],
+        env=env, capture_output=True, timeout=780, check=False,
+    )
 if result.returncode != 0 or len(result.stdout) > 65536:
     failed = set()
     if len(result.stdout) <= 65536:

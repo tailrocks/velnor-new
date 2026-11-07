@@ -3,10 +3,9 @@
 
 use super::{
     Cell, FIXTURE_SPARSE_INDEX, HistoricalAuthority, JournalRegistryFake, MixedGithub,
-    MixedRegistry, OrchestratorError, RefCell, SparseFixture, assert_two_link_recovery,
-    commit_history_intent, fixture_archive, fixture_journal_plan, fixture_upload_intention, fs,
-    initialize_history_repo, make_fixture, make_workspace_order_fixture, prepare_crate_release,
-    test_git,
+    MixedRegistry, OrchestratorError, RefCell, SparseFixture, commit_history_intent,
+    fixture_archive, fixture_journal_plan, fixture_upload_intention, initialize_history_repo,
+    make_fixture, make_workspace_order_fixture, prepare_crate_release, test_git,
 };
 
 #[test]
@@ -213,7 +212,7 @@ pub(super) fn serial_coordinator_recovers_pending_visible_tag_without_recreating
 }
 
 #[test]
-pub(super) fn admitted_start_binds_previous_workflow_commit_and_reobserves_prior_upload()
+pub(super) fn admitted_start_rejects_unverified_custody_before_mutation()
 -> Result<(), Box<dyn std::error::Error>> {
     use crate::crate_release_journal::{
         fixture_storage::seed_started_record, record_journal_intent,
@@ -284,11 +283,12 @@ pub(super) fn admitted_start_binds_previous_workflow_commit_and_reobserves_prior
         workflow_root: workflow.path(),
         generator: &generator,
     };
-    fs::write(
-        workflow.path().join(".github/velnor-release-intent.toml"),
-        "untrusted dirty file",
-    )?;
-    record_admitted_start(&input)?;
-    assert_two_link_recovery(&input, &previous)?;
+    let before = journal.write_calls.get();
+    let result = record_admitted_start(&input);
+    assert!(
+        matches!(result, Err(OrchestratorError::Internal { problem }) if problem == "crate_release_history_custody_required")
+    );
+    assert_eq!(journal.write_calls.get(), before);
+    assert_eq!(github.writes.get(), 0);
     Ok(())
 }
