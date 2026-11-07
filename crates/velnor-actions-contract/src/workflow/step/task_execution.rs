@@ -4,8 +4,10 @@
 mod argv;
 mod environment;
 mod identity;
+mod native_job_image;
 mod toolchain;
 
+use crate::canonical::valid_pinned_version;
 use crate::errors::ContractError;
 
 pub(in crate::workflow) struct TaskExecutionValidation<'a> {
@@ -34,7 +36,11 @@ pub(in crate::workflow) fn validate_task_execution(
     input: &TaskExecutionValidation<'_>,
 ) -> Result<(), ContractError> {
     let invocation = argv::validate_invocation(input)?;
-    toolchain::validate_toolchain(input, &invocation)?;
+    if native_job_image::selected(input) {
+        native_job_image::validate(input, &invocation)?;
+    } else {
+        toolchain::validate_toolchain(input, &invocation)?;
+    }
     argv::validate_arguments(input)?;
     identity::validate_task_and_matrix(input)?;
     identity::validate_report_and_matrix_cap(input)?;
@@ -51,16 +57,4 @@ fn pinned_tool_selector(selector: &str) -> Option<(&'static str, &str)> {
         _ => return None,
     };
     Some((canonical_tool, version))
-}
-
-fn valid_pinned_version(version: &str) -> bool {
-    if crate::config::project_tool_refs::is_project_tool_ref(version) {
-        return true;
-    }
-    !version.is_empty()
-        && version.bytes().any(|byte| byte.is_ascii_digit())
-        && version
-            .bytes()
-            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'+' | b'-' | b'_'))
-        && !version.eq_ignore_ascii_case("latest")
 }

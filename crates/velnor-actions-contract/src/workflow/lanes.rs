@@ -252,6 +252,16 @@ fn workflow_task_supports_scale_set(
             check.platform == CheckPlatform::LinuxX64 && check.executor == CheckExecutor::Hosted
         );
     }
+    if job_id == crate::JOB_IMAGE_CANDIDATE_JOB_ID && crate::job_image_candidate_enabled(config) {
+        if job.runs_on != crate::JOB_IMAGE_CANDIDATE_RUNNER {
+            return Err(ContractError::config(
+                "config.toml",
+                "execution.job_image_candidate",
+                "runner_mismatch",
+            ));
+        }
+        return Ok(false);
+    }
     if let Some(checked) = config.check_image_job_runner(job_id, &job.runs_on) {
         return checked.map(|()| false);
     }

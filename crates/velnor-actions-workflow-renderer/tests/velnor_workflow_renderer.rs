@@ -83,3 +83,5 @@ mod state_v4_snapshot;
 mod state_v4_tip;
 
 mod ubuntu_owned_publication;
+
+mod job_image_candidate_execution_public;

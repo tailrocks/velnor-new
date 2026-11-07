@@ -212,7 +212,12 @@ impl TaskIdentity {
             normalize_posix_path(&input.path)?;
             validate_digest(&input.digest)?;
         }
-        if self.argv.iter().any(|arg| arg.starts_with('/')) {
+        let candidate = self.task_id == crate::JOB_IMAGE_CANDIDATE_TASK_ID
+            || self.task_kind == crate::JOB_IMAGE_CANDIDATE_TASK_KIND
+            || self.configuration.task_contract == crate::JOB_IMAGE_CANDIDATE_TASK_SCHEMA;
+        if (candidate || self.argv.iter().any(|arg| arg.starts_with('/')))
+            && !crate::image_candidate::is_job_image_candidate_identity(self)
+        {
             return Err(ContractError::identity("argv", "absolute_path"));
         }
         self.validate_dependencies()?;
@@ -343,4 +348,16 @@ pub(crate) fn sha256_hex(bytes: &[u8]) -> String {
         encoded.push(char::from(HEX[usize::from(byte & 15)]));
     }
     encoded
+}
+
+pub(crate) fn valid_pinned_version(version: &str) -> bool {
+    if crate::config::project_tool_refs::is_project_tool_ref(version) {
+        return true;
+    }
+    !version.is_empty()
+        && version.bytes().any(|byte| byte.is_ascii_digit())
+        && version
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'+' | b'-' | b'_'))
+        && !version.eq_ignore_ascii_case("latest")
 }
