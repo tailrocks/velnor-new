@@ -9,6 +9,8 @@ mod candidate_files;
 mod install;
 #[path = "build_qualification.rs"]
 mod qualification;
+#[path = "qualification_base.rs"]
+mod qualification_base;
 #[path = "build_support.rs"]
 pub(super) mod support;
 

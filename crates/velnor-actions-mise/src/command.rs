@@ -3,6 +3,8 @@
 
 #[path = "command_cancellable.rs"]
 mod cancellable;
+#[path = "command_docker.rs"]
+mod docker;
 pub use cancellable::run_command_bounded;
 #[path = "check_command.rs"]
 mod check;
@@ -56,7 +58,7 @@ pub use crate::compiler_observer::{
     RUSTC_WRAPPER_ENV, RUSTDOC_ENV,
 };
 use std::ffi::{OsStr, OsString};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::Duration;
 

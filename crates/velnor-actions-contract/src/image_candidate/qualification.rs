@@ -10,6 +10,42 @@ use super::image_candidate_record::{
 use crate::ContractError;
 
 pub const IMAGE_QUALIFICATION_SCHEMA: &str = "velnor.native-image-qualification.v1";
+pub const QUALIFICATION_DAEMON_IMAGE: &str =
+    "ubuntu:26.04@sha256:42527649dbc4f9197a6073f426f488cbff0e9cc9f2afce32d91c383e4875634a";
+pub const QUALIFICATION_BASE_DIGEST: &str =
+    "sha256:42527649dbc4f9197a6073f426f488cbff0e9cc9f2afce32d91c383e4875634a";
+pub const QUALIFICATION_DAEMON_SCRIPT: &str = r#"set -eu
+umask 077
+cp /docker.tgz /tmp/docker-private.tgz
+printf '%s  %s\n' "$1" /tmp/docker-private.tgz | sha256sum -c -
+tar -tzf /tmp/docker-private.tgz | LC_ALL=C sort > /tmp/members
+printf '%s\n' docker/ docker/containerd docker/containerd-shim-runc-v2 docker/ctr docker/docker docker/docker-init docker/docker-proxy docker/dockerd docker/runc | LC_ALL=C sort > /tmp/expected
+cmp /tmp/members /tmp/expected
+tar -tvzf /tmp/docker-private.tgz | awk 'substr($1,1,1) == "-" { n++; next } substr($1,1,1) == "d" { d++; next } { exit 1 } END { if (n != 8 || d != 1) exit 1 }'
+mkdir -m 700 /native /run/velnor-q
+for member in containerd containerd-shim-runc-v2 ctr docker docker-init docker-proxy dockerd runc; do
+  tar -xOzf /tmp/docker-private.tgz "docker/$member" > "/native/$member"
+  chmod 0555 "/native/$member"
+done
+export PATH=/native:/usr/bin:/bin
+printf '%s\n' '{"storage-driver":"native","features":{"containerd-snapshotter":true},"iptables":false,"ip6tables":false,"bridge":"none","ip-forward":false,"ip-masq":false}' > /tmp/daemon.json
+dockerd --host=unix:///run/velnor-q/docker.sock --group "$2" --config-file=/tmp/daemon.json </dev/null &
+daemon=$!
+cleanup() { kill -TERM "$daemon" 2>/dev/null || :; wait "$daemon" || :; rm -f /run/velnor-q/docker.sock; }
+trap cleanup EXIT HUP INT TERM
+read -r _ || :
+"#;
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct QualificationDaemonDescriptor {
+    pub container_id: String,
+    pub daemon_id: String,
+    pub container_started_at: String,
+    pub container_pid: u64,
+    pub archive_sha256: String,
+    pub archive_path: String,
+}
 pub const IMAGE_QUALIFICATION_INPUTS: [&str; 4] = [
     "crates/velnor-actions-cli/tests/fixtures/native-image-qualification/Cargo.lock",
     "crates/velnor-actions-cli/tests/fixtures/native-image-qualification/Cargo.toml",

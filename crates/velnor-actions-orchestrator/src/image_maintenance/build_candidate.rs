@@ -41,6 +41,12 @@ pub(super) struct BuildContext {
     pub(super) archive: PathBuf,
 }
 
+#[derive(Clone, Copy)]
+pub(super) enum DockerTarget<'a> {
+    Production,
+    Qualification { container_id: &'a str, base_layout: &'a Path },
+}
+
 pub(super) fn build_job_candidate(
     request: &BuildJobCandidateRequest,
 ) -> Result<(), OrchestratorError> {
@@ -54,6 +60,7 @@ pub(super) fn build_job_candidate(
         &context,
         &inputs.lock,
         &request.source_commit,
+        DockerTarget::Production,
         request.deadline,
     )?;
     let record = build_record(request, inputs, &context.archive, builder)?;
@@ -172,10 +179,12 @@ pub(super) fn run_build(
     context: &BuildContext,
     lock: &BuildxLock,
     source_commit: &str,
+    target: DockerTarget<'_>,
     deadline: CheckDeadline,
 ) -> Result<String, OrchestratorError> {
     let version = ImageCandidateCommand::buildx_version(&context.docker_config)
         .map_err(|_| internal("image_candidate_buildx_version_command"))?;
+    let version = docker_target(version, &target)?;
     let version_text = ImageCandidateCommand::run(&version, deadline)
         .map_err(|_| internal("image_candidate_buildx_version"))?;
     let builder = version_text
@@ -190,21 +199,31 @@ pub(super) fn run_build(
         &context.docker_config,
         &context.plugin,
         &lock.version,
+        &target,
         deadline,
     )?;
-    let command = ImageCandidateCommand::build_oci(
-        context
-            .archive
-            .parent()
-            .ok_or_else(|| internal("image_candidate_context"))?,
-        &context.archive,
-        &context.docker_config,
-        source_commit,
-    )
+    let directory = context.archive.parent().ok_or_else(|| internal("image_candidate_context"))?;
+    let command = match target {
+        DockerTarget::Production => ImageCandidateCommand::build_oci(directory, &context.archive, &context.docker_config, source_commit),
+        DockerTarget::Qualification { base_layout, .. } => ImageCandidateCommand::build_qualification_oci(directory, &context.archive, &context.docker_config, source_commit, base_layout),
+    }
     .map_err(|_| internal("image_candidate_build_command"))?;
+    let command = docker_target(command, &target)?;
     ImageCandidateCommand::run(&command, deadline)
         .map_err(|_| internal("image_candidate_build"))?;
     Ok(builder)
+}
+
+pub(super) fn docker_target(
+    command: velnor_actions_mise::IsolatedCommand,
+    target: &DockerTarget<'_>,
+) -> Result<velnor_actions_mise::IsolatedCommand, OrchestratorError> {
+    match target {
+        DockerTarget::Production => Ok(command),
+        DockerTarget::Qualification { container_id, .. } => command
+            .in_qualification_container(container_id)
+            .map_err(|_| internal("native_qualification_docker_endpoint")),
+    }
 }
 
 fn build_record(
@@ -300,10 +319,12 @@ fn verify_plugin_info(
     config: &Path,
     plugin: &Path,
     version: &str,
+    target: &DockerTarget<'_>,
     deadline: CheckDeadline,
 ) -> Result<(), OrchestratorError> {
     let command = ImageCandidateCommand::buildx_plugin_info(config)
         .map_err(|_| internal("image_candidate_plugin_info_command"))?;
+    let command = docker_target(command, target)?;
     let output = ImageCandidateCommand::run(&command, deadline)
         .map_err(|_| internal("image_candidate_plugin_info"))?;
     let text = output

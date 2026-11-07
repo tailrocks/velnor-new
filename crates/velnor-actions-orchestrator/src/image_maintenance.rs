@@ -14,6 +14,8 @@ pub(crate) mod source;
 
 #[path = "image_maintenance/qualification_runner.rs"]
 mod qualification_runner;
+#[path = "image_maintenance/qualification_service.rs"]
+mod qualification_service;
 #[path = "image_maintenance/validate.rs"]
 mod validate;
 

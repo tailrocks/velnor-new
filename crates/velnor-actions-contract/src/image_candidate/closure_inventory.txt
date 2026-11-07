@@ -470,6 +470,7 @@ crates/velnor-actions-mise/src/command_cancellable.rs
 crates/velnor-actions-mise/src/command_cancellable_bounded.rs
 crates/velnor-actions-mise/src/command_cancellable_helpers.rs
 crates/velnor-actions-mise/src/command_credential.rs
+crates/velnor-actions-mise/src/command_docker.rs
 crates/velnor-actions-mise/src/command_env.rs
 crates/velnor-actions-mise/src/command_git.rs
 crates/velnor-actions-mise/src/command_output.rs
@@ -778,7 +779,9 @@ crates/velnor-actions-orchestrator/src/image_maintenance/publication_github/read
 crates/velnor-actions-orchestrator/src/image_maintenance/publication_github/snapshot.rs
 crates/velnor-actions-orchestrator/src/image_maintenance/publication_github_models.rs
 crates/velnor-actions-orchestrator/src/image_maintenance/publication_qualification.rs
+crates/velnor-actions-orchestrator/src/image_maintenance/qualification_base.rs
 crates/velnor-actions-orchestrator/src/image_maintenance/qualification_runner.rs
+crates/velnor-actions-orchestrator/src/image_maintenance/qualification_service.rs
 crates/velnor-actions-orchestrator/src/image_maintenance/runner_admission.rs
 crates/velnor-actions-orchestrator/src/image_maintenance/runner_profiles.rs
 crates/velnor-actions-orchestrator/src/image_maintenance/source.rs

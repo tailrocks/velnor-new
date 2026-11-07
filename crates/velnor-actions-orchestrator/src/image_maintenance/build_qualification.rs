@@ -31,6 +31,8 @@ pub(super) fn qualify(request: &QualifyNativeImageRequest) -> Result<(), Orchest
         .remaining()
         .map_err(|_| internal("native_qualification_deadline"))?;
     let inputs = candidate::prepare_inputs(&request)?;
+    let container_id = super::super::qualification_service::verify(&inputs.root, &request.runner_temp, request.deadline)?;
+    let base_layout = super::qualification_base::prepare(&request.runner_temp, request.deadline)?;
     let sources = IMAGE_QUALIFICATION_INPUTS
         .into_iter()
         .map(|path| {
@@ -56,10 +58,26 @@ pub(super) fn qualify(request: &QualifyNativeImageRequest) -> Result<(), Orchest
         &context,
         &inputs.lock,
         &request.source_commit,
+        candidate::DockerTarget::Qualification { container_id: &container_id, base_layout: &base_layout },
         request.deadline,
     )?;
-    let graph = verify_runtime(&context, &inputs.lock.docker_version, request.deadline)?;
-    let record = NativeImageQualificationRecord {
+    let graph = verify_runtime(&context, &container_id, &base_layout, &inputs.lock.docker_version, request.deadline)?;
+    super::super::qualification_service::verify(&inputs.root, &request.runner_temp, request.deadline)?;
+    let record = qualification_record(&request, inputs, sources, binary_sha256, builder, graph);
+    let bytes = serialize_native_image_qualification_record(&record)
+        .map_err(|_| internal("native_qualification_record"))?;
+    candidate::publish_bytes(&context, &request, &bytes)
+}
+
+fn qualification_record(
+    request: &BuildJobCandidateRequest,
+    inputs: candidate::CandidateInputs,
+    sources: BTreeMap<String, String>,
+    binary_sha256: String,
+    builder: String,
+    graph: velnor_archive_guard::owned_archive_guard::oci_candidate::OciCandidateEvidence,
+) -> NativeImageQualificationRecord {
+    NativeImageQualificationRecord {
         schema: IMAGE_QUALIFICATION_SCHEMA.to_owned(),
         source_commit: request.source_commit.clone(),
         source_ref: inputs.source_ref,
@@ -88,14 +106,13 @@ pub(super) fn qualify(request: &QualifyNativeImageRequest) -> Result<(), Orchest
             image_configuration_size_bytes: graph.image_configuration_size_bytes,
             layer_digests: graph.layer_digests,
         },
-    };
-    let bytes = serialize_native_image_qualification_record(&record)
-        .map_err(|_| internal("native_qualification_record"))?;
-    candidate::publish_bytes(&context, &request, &bytes)
+    }
 }
 
 fn verify_runtime(
     context: &candidate::BuildContext,
+    container_id: &str,
+    base_layout: &std::path::Path,
     docker_version: &str,
     deadline: velnor_actions_mise::CheckDeadline,
 ) -> Result<
@@ -107,6 +124,8 @@ fn verify_runtime(
     validate_configuration(&inspection.configuration)?;
     let daemon = ImageCandidateCommand::qualification_daemon_version(&context.docker_config)
         .map_err(|_| internal("native_qualification_daemon_command"))?;
+    let target = candidate::DockerTarget::Qualification { container_id, base_layout };
+    let daemon = candidate::docker_target(daemon, &target)?;
     let actual = ImageCandidateCommand::run(&daemon, deadline)
         .map_err(|_| internal("native_qualification_daemon"))?;
     if actual
@@ -120,13 +139,15 @@ fn verify_runtime(
     let load =
         ImageCandidateCommand::load_qualification_image(&context.archive, &context.docker_config)
             .map_err(|_| internal("native_qualification_load_command"))?;
+    let load = candidate::docker_target(load, &target)?;
     ImageCandidateCommand::run(&load, deadline)
         .map_err(|_| internal("native_qualification_load"))?;
     let run = ImageCandidateCommand::run_qualification_image(
-        &inspection.evidence.image_configuration_digest,
+        &inspection.evidence.platform_manifest_digest,
         &context.docker_config,
     )
     .map_err(|_| internal("native_qualification_run_command"))?;
+    let run = candidate::docker_target(run, &target)?;
     let output = ImageCandidateCommand::run(&run, deadline)
         .map_err(|_| internal("native_qualification_run"))?;
     if output

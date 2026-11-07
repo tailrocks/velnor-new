@@ -94,6 +94,32 @@ impl ImageCandidateCommand {
         docker_config: &Path,
         source_commit: &str,
     ) -> Result<IsolatedCommand, MiseError> {
+        Self::build_oci_inner(context, archive, docker_config, source_commit, None)
+    }
+
+    pub fn build_qualification_oci(
+        context: &Path,
+        archive: &Path,
+        docker_config: &Path,
+        source_commit: &str,
+        base_layout: &Path,
+    ) -> Result<IsolatedCommand, MiseError> {
+        Self::build_oci_inner(
+            context,
+            archive,
+            docker_config,
+            source_commit,
+            Some(base_layout),
+        )
+    }
+
+    fn build_oci_inner(
+        context: &Path,
+        archive: &Path,
+        docker_config: &Path,
+        source_commit: &str,
+        base_layout: Option<&Path>,
+    ) -> Result<IsolatedCommand, MiseError> {
         if !context.is_absolute()
             || !archive.is_absolute()
             || !docker_config.is_absolute()
@@ -110,23 +136,82 @@ impl ImageCandidateCommand {
             "type=oci,dest={},compression=gzip,force-compression=true",
             archive.display()
         );
-        let args = vec![
+        let mut args = vec![
             "buildx".into(),
             "build".into(),
             "--platform".into(),
             "linux/amd64".into(),
             "--file".into(),
             context.join("Dockerfile").into_os_string(),
+        ];
+        if let Some(layout) = base_layout {
+            let path = layout
+                .to_str()
+                .filter(|path| layout.is_absolute() && !path.contains(['@', '\n', '\r', '\0']))
+                .ok_or_else(|| invalid("native_qualification_base_path"))?;
+            args.push("--build-context".into());
+            args.push(
+                format!(
+                    "{}=oci-layout://{}@{}",
+                    velnor_actions_contract::QUALIFICATION_DAEMON_IMAGE,
+                    path,
+                    velnor_actions_contract::QUALIFICATION_BASE_DIGEST
+                )
+                .into(),
+            );
+        }
+        args.extend([
             "--build-arg".into(),
             format!("VELNOR_SOURCE_SHA={source_commit}").into(),
             "--provenance=false".into(),
             "--output".into(),
             output.into(),
             context.as_os_str().to_owned(),
-        ];
+        ]);
         IsolatedCommand::repo_task(DOCKER, args, &[]).and_then(|command| {
             command.with_env(&[("DOCKER_CONFIG".into(), docker_config.as_os_str().to_owned())])
         })
+    }
+
+    pub fn qualification_pull_base(config: &Path) -> Result<IsolatedCommand, MiseError> {
+        if !config.is_absolute() {
+            return Err(invalid("native_qualification_docker_config"));
+        }
+        IsolatedCommand::repo_task(
+            DOCKER,
+            vec![
+                "--config".into(),
+                config.as_os_str().to_owned(),
+                "image".into(),
+                "pull".into(),
+                "--platform".into(),
+                "linux/amd64".into(),
+                velnor_actions_contract::QUALIFICATION_DAEMON_IMAGE.into(),
+            ],
+            &[],
+        )
+    }
+
+    pub fn qualification_save_base(
+        archive: &Path,
+        config: &Path,
+    ) -> Result<IsolatedCommand, MiseError> {
+        if !archive.is_absolute() || !config.is_absolute() {
+            return Err(invalid("native_qualification_base_archive"));
+        }
+        IsolatedCommand::repo_task(
+            DOCKER,
+            vec![
+                "--config".into(),
+                config.as_os_str().to_owned(),
+                "image".into(),
+                "save".into(),
+                "--output".into(),
+                archive.as_os_str().to_owned(),
+                velnor_actions_contract::QUALIFICATION_DAEMON_IMAGE.into(),
+            ],
+            &[],
+        )
     }
 
     pub fn qualification_daemon_version(

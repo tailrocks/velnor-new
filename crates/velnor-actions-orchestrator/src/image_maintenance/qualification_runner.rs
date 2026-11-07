@@ -32,6 +32,7 @@ pub(super) fn run(request: &RunNativeQualificationRequest) -> Result<(), Orchest
     }
     validate::qualification_identity(&source_commit)?;
     source::ensure_clean_checkout(&root, request.deadline)?;
+    super::qualification_service::verify(&root, runner_temp, request.deadline)?;
     let config = crate::config::load_config(&root)?;
     let catalog = crate::tool_catalog_resolve::resolve_tool_catalog(&root, &config)?;
     if catalog.version(PinnedTool::MrBoxington) != velnor_actions_contract::NATIVE_MBX_VERSION {
@@ -39,7 +40,9 @@ pub(super) fn run(request: &RunNativeQualificationRequest) -> Result<(), Orchest
     }
     bootstrap(&root, runner_temp, request.deadline)?;
     prepare_rust(runner_temp, &catalog, request.deadline)?;
-    execute(&root, runner_temp, &catalog, request.deadline)
+    execute(&root, runner_temp, &catalog, request.deadline)?;
+    super::qualification_service::verify(&root, runner_temp, request.deadline)?;
+    Ok(())
 }
 
 fn bootstrap(root: &Path, temp: &Path, deadline: CheckDeadline) -> Result<(), OrchestratorError> {
