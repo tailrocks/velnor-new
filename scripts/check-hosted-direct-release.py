@@ -42,7 +42,22 @@ with tempfile.TemporaryDirectory(prefix='hosted-direct-release-', dir=env['HOME'
     )
 if result.returncode != 0 or len(result.stdout) > 65536:
     failed = set()
+    failure_kinds = set()
     if len(result.stdout) <= 65536:
+        markers = {
+            b'set VELNOR_GH_FIXTURE_TOOLS to an absolute directory': 'fixture_tools_missing',
+            b'fixture tool directory is incomplete': 'fixture_tools_incomplete',
+            b'fixture tool staging failed:': 'fixture_tools_staging',
+            b'trusted local Docker client is unavailable': 'docker_client_unavailable',
+            b'fixture Docker daemon must use a local Unix socket': 'docker_socket_invalid',
+            b'fixture Docker image digest mismatch': 'docker_image_mismatch',
+            b'No such image:': 'docker_image_missing',
+            b'fixture source capture failed': 'fixture_capture_failed',
+            b'fixture tracked sources changed': 'fixture_source_changed',
+            b'release Git package extraction failed': 'fixture_git_extraction',
+            b'crate_release_history_custody_required': 'history_custody_required',
+            b'crate_release_missing_GITHUB_EVENT_PATH': 'dispatch_event_missing',
+        }
         for line in result.stdout.splitlines():
             try:
                 event = json.loads(line)
@@ -50,11 +65,13 @@ if result.returncode != 0 or len(result.stdout) > 65536:
                     name = event.get('name', '').rsplit('::', 1)[-1]
                     if name in tests:
                         failed.add(name)
+                        failure_kinds.update(label for marker, label in markers.items() if marker in line)
             except (ValueError, TypeError, AttributeError):
                 pass
     details = ','.join(sorted(failed)) if failed else 'unavailable'
+    kinds = ','.join(sorted(failure_kinds)) if failure_kinds else 'unclassified'
     raise SystemExit(f'direct-release tests failed: status={result.returncode} '
-                     f'stdout_bytes={len(result.stdout)} failed_tests={details}')
+                     f'stdout_bytes={len(result.stdout)} failed_tests={details} failure_hints={kinds}')
 
 def unique(pairs):
     data = {}
