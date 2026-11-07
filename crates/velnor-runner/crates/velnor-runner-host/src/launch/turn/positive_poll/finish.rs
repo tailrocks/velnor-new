@@ -160,7 +160,7 @@ pub(super) async fn settle_known_response(
 }
 
 pub(super) fn contains_available(polled: &Poll) -> bool {
-    matches!(polled, Poll::Batch(batch) if batch.jobs.iter().any(|job| job.kind == InnerKind::Available))
+    matches!(polled, Poll::Batch(batch) if batch.jobs.iter().any(|job| matches!(job.kind, InnerKind::Available | InnerKind::Assigned)))
 }
 
 pub(crate) async fn admit_when_ready<F, Fut>(

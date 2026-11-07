@@ -173,11 +173,107 @@ fn check_group_ledgers_assembled() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+fn stage_lane_report(
+    base: &Path,
+    tree: &StagedTree<'_>,
+    artifact_id: &str,
+    matrix: &Value,
+) -> Result<(), Box<dyn Error>> {
+    fs::write(base.join("plan.json"), serde_json::to_string(tree.plan)?)?;
+    fs::write(
+        base.join("matrix.json"),
+        serde_json::to_string(&tree.plan.matrix)?,
+    )?;
+    let tasks = base
+        .join("reports")
+        .join(artifact_id)
+        .join(&tree.entry.matrix_key)
+        .join("tasks");
+    fs::create_dir_all(&tasks)?;
+    fs::write(
+        tasks
+            .parent()
+            .ok_or_else(|| fail("tasks parent"))?
+            .join("matrix-report.json"),
+        serde_json::to_string(matrix)?,
+    )?;
+    fs::write(
+        tasks.join(format!("{}.json", tree.report_id)),
+        serde_json::to_string(tree.report)?,
+    )?;
+    Ok(())
+}
+
+fn check_dual_lane_staged_reports() -> Result<(), Box<dyn Error>> {
+    let (plan, matrix, report, entry) = check_run_fixture()?;
+    let report_id = staged_report_id(&report)?;
+    let tree = tree_of(&plan, &matrix, &report, &entry, &report_id);
+    let (hosted_art, local_art) = (
+        format!("{}__hosted", entry.artifact_id),
+        format!("{}__local", entry.artifact_id),
+    );
+    let (hosted_job, local_job) = (format!("{JOB_ID}__hosted"), format!("{JOB_ID}__local"));
+
+    let both = tempfile::tempdir()?;
+    stage_lane_report(both.path(), &tree, &hosted_art, &matrix)?;
+    stage_lane_report(both.path(), &tree, &local_art, &matrix)?;
+    let mut request = assembled(both.path())?;
+    if assembly_errors(&request)
+        .iter()
+        .any(|err| err.contains("report") || err.contains("task") || err.contains("mismatch"))
+    {
+        return Err(fail("valid dual-lane staged reports left assembly errors"));
+    }
+    request["required_job_ids"] = json!([hosted_job, local_job]);
+    request["required_jobs"] = json!([
+        {"job_id": hosted_job, "conclusion": "success"},
+        {"job_id": local_job, "conclusion": "success"}
+    ]);
+    request["actual_event"] = json!("pull_request");
+    request["assembly_errors"] = json!([]);
+    let merged: FinalReport = serde_json::from_str(&merge_internal_with_context(
+        &request.to_string(),
+        &MergeContext::detached(),
+    )?)?;
+    if merged.status != FinalStatus::Passed
+        || merged.downloaded_artifact_ids != [entry.artifact_id.clone()]
+    {
+        return Err(fail(
+            "dual-lane staged reports did not preserve Required pass",
+        ));
+    }
+
+    let missing_local = tempfile::tempdir()?;
+    stage_lane_report(missing_local.path(), &tree, &hosted_art, &matrix)?;
+    let missing_req = assembled(missing_local.path())?;
+    if !assembly_errors(&missing_req).contains(&format!("missing_report:{local_art}"))
+        || missing_req["matrix_reports"]
+            .as_array()
+            .is_none_or(|arr| !arr.is_empty())
+    {
+        return Err(fail("missing local lane did not fail closed"));
+    }
+
+    let mut failed_matrix = matrix.clone();
+    failed_matrix["status"] = json!("failed");
+    stage_lane_report(both.path(), &tree, &local_art, &failed_matrix)?;
+    let mismatch_req = assembled(both.path())?;
+    if !assembly_errors(&mismatch_req)
+        .contains(&format!("corrupt_dual_lane_mismatch:{}", entry.artifact_id))
+    {
+        return Err(fail(
+            "mismatched dual-lane status did not record mismatch error",
+        ));
+    }
+    Ok(())
+}
+
 #[test]
 fn gc1_t36_preserves_contract() -> Result<(), Box<dyn Error>> {
     check_transport_preserved()?;
     check_loose_files_ignored()?;
     check_group_ledgers_assembled()?;
+    check_dual_lane_staged_reports()?;
     Ok(())
 }
 

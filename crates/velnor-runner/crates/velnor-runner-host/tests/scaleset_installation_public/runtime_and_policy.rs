@@ -1,6 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+#[path = "offer_and_assigned.rs"]
+mod offer_and_assigned;
+
 use serde::Serialize;
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};

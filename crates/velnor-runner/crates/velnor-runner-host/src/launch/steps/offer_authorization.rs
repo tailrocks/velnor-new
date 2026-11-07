@@ -38,8 +38,11 @@ pub(in crate::launch) async fn authorize_offer_with_transport<T: Transport + ?Si
         .jobs
         .iter()
         .find(|job| {
-            matches!(job.kind, velnor_runner_github::InnerKind::Available)
-                && job.request_id == Some(request_id)
+            matches!(
+                job.kind,
+                velnor_runner_github::InnerKind::Available
+                    | velnor_runner_github::InnerKind::Assigned
+            ) && job.request_id == Some(request_id)
         })
         .map(|job| &job.source)
         .ok_or_else(|| source_blocked(source::SourceBlock::Missing))?;

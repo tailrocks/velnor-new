@@ -34,7 +34,7 @@ fn available_ids(batch: &ParsedBatch) -> Vec<i64> {
     batch
         .jobs
         .iter()
-        .filter(|job| matches!(job.kind, InnerKind::Available))
+        .filter(|job| matches!(job.kind, InnerKind::Available | InnerKind::Assigned))
         .filter_map(|job| job.request_id)
         .collect()
 }

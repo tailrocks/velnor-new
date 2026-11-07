@@ -36,10 +36,10 @@ impl DeferredAuthorizedOffer {
         let envelope_message_id = batch.message_id;
         if request_id <= 0
             || envelope_message_id < 0
-            || !batch
-                .jobs
-                .iter()
-                .any(|job| job.kind == InnerKind::Available && job.request_id == Some(request_id))
+            || !batch.jobs.iter().any(|job| {
+                matches!(job.kind, InnerKind::Available | InnerKind::Assigned)
+                    && job.request_id == Some(request_id)
+            })
             || receipt.connection_id() != &connection.connection_id
             || receipt.connection_id() != scoped.connection_id()
             || receipt.scale_set_id() != set_id
@@ -80,7 +80,8 @@ impl DeferredAuthorizedOffer {
         };
         self.envelope_message_id == batch.message_id
             && batch.jobs.iter().any(|job| {
-                job.kind == InnerKind::Available && job.request_id == Some(self.offer.request_id())
+                matches!(job.kind, InnerKind::Available | InnerKind::Assigned)
+                    && job.request_id == Some(self.offer.request_id())
             })
             && self.offer.connection_id() == scoped.connection_id()
             && self.offer.scale_set_id() == set_id
@@ -165,7 +166,7 @@ fn available_request_ids(polled: &Poll) -> Result<BTreeSet<i64>, EnsureError> {
     for job in batch
         .jobs
         .iter()
-        .filter(|job| job.kind == InnerKind::Available)
+        .filter(|job| matches!(job.kind, InnerKind::Available | InnerKind::Assigned))
     {
         let Some(request_id) = job.request_id.filter(|request_id| *request_id > 0) else {
             return Err(EnsureError::Uncertain);

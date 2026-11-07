@@ -54,6 +54,7 @@ pub(super) async fn run_claimed<T>(
     queue_token: &str,
     scoped: &ConnectionJournal,
     claim: ClaimedAcquire,
+    already_assigned: bool,
 ) -> Result<AcquireDisposition, EnsureError>
 where
     T: Transport + ?Sized,
@@ -74,6 +75,13 @@ where
             != Some(RequestAcquireState::Requested)
     {
         return Err(EnsureError::Uncertain);
+    }
+    if already_assigned {
+        scoped
+            .record_request_acquire(&identity, AssignedAcquireResult::Returned(vec![request_id]))
+            .await
+            .map_err(super::super::map_journal)?;
+        return Ok(AcquireDisposition::Acquired);
     }
     let gate = RefreshGate::new();
     let refresh_requested = Cell::new(false);
@@ -97,10 +105,27 @@ where
     } else {
         classify(&result, request_id)
     };
-    let disposition = match disposition {
+    let disposition = record_acquire_disposition(scoped, &identity, durable, disposition).await?;
+    match disposition {
+        AcquireDisposition::Uncertain if refresh_requested.get() => Err(EnsureError::Uncertain),
+        AcquireDisposition::Uncertain => match result {
+            Err(error) => Err(crate::listen::map_listen(error)),
+            Ok(_) => Err(EnsureError::Uncertain),
+        },
+        known => Ok(known),
+    }
+}
+
+async fn record_acquire_disposition(
+    scoped: &ConnectionJournal,
+    identity: &AssignmentIdentity,
+    durable: AssignedAcquireResult,
+    disposition: AcquireDisposition,
+) -> Result<AcquireDisposition, EnsureError> {
+    Ok(match disposition {
         AcquireDisposition::NoEffect => {
             if scoped
-                .record_request_acquire_and_settle_unused(&identity, durable)
+                .record_request_acquire_and_settle_unused(identity, durable)
                 .await
                 .map_err(super::super::map_journal)?
             {
@@ -111,7 +136,7 @@ where
         }
         AcquireDisposition::Rejected => {
             if scoped
-                .record_request_acquire_and_settle_unused(&identity, durable)
+                .record_request_acquire_and_settle_unused(identity, durable)
                 .await
                 .map_err(super::super::map_journal)?
             {
@@ -122,20 +147,12 @@ where
         }
         _ => {
             scoped
-                .record_request_acquire(&identity, durable)
+                .record_request_acquire(identity, durable)
                 .await
                 .map_err(super::super::map_journal)?;
             disposition
         }
-    };
-    match disposition {
-        AcquireDisposition::Uncertain if refresh_requested.get() => Err(EnsureError::Uncertain),
-        AcquireDisposition::Uncertain => match result {
-            Err(error) => Err(crate::listen::map_listen(error)),
-            Ok(_) => Err(EnsureError::Uncertain),
-        },
-        known => Ok(known),
-    }
+    })
 }
 
 pub(super) fn classify(

@@ -79,16 +79,41 @@ where
             super::source::SourceBlock::ClosedWorldUnproven,
         ));
     }
-    let Some((_batch, request_id)) = assignment(polled)? else {
+    let Some((batch, request_id)) = assignment(polled)? else {
         return Ok(ScopedProvisioningOutcome::NoStart);
     };
-    acquire_authorized_request(lane, ctx, request_id, permit, expected_engine).await
+    let already_assigned = batch.jobs.iter().any(|job| {
+        job.kind == velnor_runner_github::InnerKind::Assigned && job.request_id == Some(request_id)
+    });
+    acquire_authorized_request_inner(
+        lane,
+        ctx,
+        request_id,
+        already_assigned,
+        permit,
+        expected_engine,
+    )
+    .await
 }
 
 pub(crate) async fn acquire_authorized_request<T>(
     lane: &mut T,
     ctx: &Drive,
     request_id: i64,
+    permit: crate::launch::StartPermit,
+    expected_engine: &crate::launch::SelectedEngineContext,
+) -> Result<ScopedProvisioningOutcome, EnsureError>
+where
+    T: Transport + Lane,
+{
+    acquire_authorized_request_inner(lane, ctx, request_id, false, permit, expected_engine).await
+}
+
+async fn acquire_authorized_request_inner<T>(
+    lane: &mut T,
+    ctx: &Drive,
+    request_id: i64,
+    already_assigned: bool,
     permit: crate::launch::StartPermit,
     expected_engine: &crate::launch::SelectedEngineContext,
 ) -> Result<ScopedProvisioningOutcome, EnsureError>
@@ -142,7 +167,8 @@ where
     let runner::ReservationOutcome::AcquireClaimed(physical, claim) = outcome else {
         return Ok(ScopedProvisioningOutcome::NoStart);
     };
-    let disposition = acquire::run_claimed(lane, &ctx.queue_token, scoped, claim).await?;
+    let disposition =
+        acquire::run_claimed(lane, &ctx.queue_token, scoped, claim, already_assigned).await?;
     map_acquire_disposition(disposition, *physical, request)
 }
 

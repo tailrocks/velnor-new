@@ -200,8 +200,16 @@ fn parse_inner(value: &Value) -> Result<InnerJob, WireError> {
         .get("messageType")
         .and_then(Value::as_str)
         .ok_or(WireError::Malformed)?;
-    let request_id = value.get("runnerRequestId").and_then(Value::as_i64);
     let job_id = job_id_of(value);
+    let request_id = match value.get("runnerRequestId").and_then(Value::as_i64) {
+        Some(0) => Some(
+            job_id
+                .as_deref()
+                .map(derive_request_id_from_job_id)
+                .ok_or(WireError::Malformed)?,
+        ),
+        other => other,
+    };
     let labels = label_names(value.get("requestLabels"));
     let fields = object_fields(value);
     let kind = match kind_text {
@@ -246,15 +254,37 @@ fn message_runner_fields(
             runner_name: optional_string(value, "runnerName")?,
             result: None,
         }),
-        InnerKind::Completed => Ok(MessageRunnerFields {
-            runner_id: optional_i64(value, "runnerId")?,
-            runner_name: optional_string(value, "runnerName")?,
-            result: optional_string(value, "result")?,
-        }),
+        InnerKind::Completed => {
+            let runner_id = optional_i64(value, "runnerId")?;
+            let runner_name = optional_string(value, "runnerName")?;
+            let (runner_id, runner_name) = if runner_id == Some(0)
+                && runner_name
+                    .as_deref()
+                    .is_none_or(|name| name.trim().is_empty())
+            {
+                (None, None)
+            } else {
+                (runner_id, runner_name)
+            };
+            Ok(MessageRunnerFields {
+                runner_id,
+                runner_name,
+                result: optional_string(value, "result")?,
+            })
+        }
         InnerKind::Available | InnerKind::Assigned | InnerKind::Unsupported(_) => {
             Ok(MessageRunnerFields::default())
         }
     }
+}
+
+fn derive_request_id_from_job_id(job_id: &str) -> i64 {
+    use sha2::{Digest, Sha256};
+    let digest = Sha256::digest(job_id.as_bytes());
+    let mut bytes = [0_u8; 8];
+    bytes.copy_from_slice(&digest[..8]);
+    let raw = i64::from_be_bytes(bytes) & i64::MAX;
+    if raw == 0 { 1 } else { raw }
 }
 
 #[derive(Default)]

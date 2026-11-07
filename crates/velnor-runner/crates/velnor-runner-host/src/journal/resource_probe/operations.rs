@@ -93,12 +93,25 @@ impl Journal {
     }
 
     pub(crate) async fn active_probe(&self) -> Result<Option<ProbeRow>, HostError> {
+        self.probe_with_active_lease(true).await
+    }
+
+    pub(crate) async fn leased_probe(&self) -> Result<Option<ProbeRow>, HostError> {
+        self.probe_with_active_lease(false).await
+    }
+
+    async fn probe_with_active_lease(
+        &self,
+        exclude_doctor: bool,
+    ) -> Result<Option<ProbeRow>, HostError> {
+        let query = if exclude_doctor {
+            "SELECT p.operation_id, p.instance_id, p.engine_id, p.docker_root_digest, p.source_revision, p.runtime_image_id, p.image_binding_digest, p.operation_name, p.role, p.projection_digest, p.phase, p.container_id, l.state, p.helper_role, p.probe_purpose, p.request_sha256, p.request_context FROM resource_probe_operations AS p JOIN host_operation_leases AS l ON l.singleton = 1 AND l.operation_id = p.operation_id WHERE p.phase NOT IN ('removed', 'aborted') AND l.state != 'released' AND NOT EXISTS (SELECT 1 FROM doctor_probe_requests AS request WHERE request.child_operation_id = p.operation_id) LIMIT 2"
+        } else {
+            "SELECT p.operation_id, p.instance_id, p.engine_id, p.docker_root_digest, p.source_revision, p.runtime_image_id, p.image_binding_digest, p.operation_name, p.role, p.projection_digest, p.phase, p.container_id, l.state, p.helper_role, p.probe_purpose, p.request_sha256, p.request_context FROM resource_probe_operations AS p JOIN host_operation_leases AS l ON l.singleton = 1 AND l.operation_id = p.operation_id WHERE p.phase NOT IN ('removed', 'aborted') AND l.state != 'released' LIMIT 2"
+        };
         read_transaction(self, async |connection| {
             let mut rows = connection
-                .query(
-                    "SELECT p.operation_id, p.instance_id, p.engine_id, p.docker_root_digest, p.source_revision, p.runtime_image_id, p.image_binding_digest, p.operation_name, p.role, p.projection_digest, p.phase, p.container_id, l.state, p.helper_role, p.probe_purpose, p.request_sha256, p.request_context FROM resource_probe_operations AS p JOIN host_operation_leases AS l ON l.singleton = 1 AND l.operation_id = p.operation_id WHERE p.phase NOT IN ('removed', 'aborted') AND l.state != 'released' AND NOT EXISTS (SELECT 1 FROM doctor_probe_requests AS request WHERE request.child_operation_id = p.operation_id) LIMIT 2",
-                    (),
-                )
+                .query(query, ())
                 .await
                 .map_err(|_| HostError::Journal)?;
             let Some(first) = rows.next().await.map_err(|_| HostError::Journal)? else {
@@ -239,7 +252,7 @@ impl Journal {
 
     pub(crate) async fn quarantine_probe(&self, operation_id: &str) -> Result<(), HostError> {
         let row = self
-            .active_probe()
+            .leased_probe()
             .await?
             .filter(|row| row.operation_id == operation_id)
             .ok_or(HostError::Journal)?;

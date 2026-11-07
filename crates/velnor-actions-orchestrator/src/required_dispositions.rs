@@ -39,7 +39,10 @@ pub(crate) fn fold_planned_jobs(
         .map(|job| (job.job_id.as_str(), job.disposition))
         .collect();
     for job in jobs {
-        match dispositions.get(job.job_id.as_str()) {
+        let disposition = dispositions.get(job.job_id.as_str()).or_else(|| {
+            strip_lane_suffix(&job.job_id).and_then(|group_id| dispositions.get(group_id))
+        });
+        match disposition {
             Some(JobDisposition::Run) => fold_run(job.conclusion, signals, miss_reasons),
             Some(JobDisposition::NotAffected) => {
                 fold_not_affected(job.conclusion, signals, miss_reasons);
@@ -47,6 +50,13 @@ pub(crate) fn fold_planned_jobs(
             None => fold_unplanned(job.conclusion, signals),
         }
     }
+}
+
+fn strip_lane_suffix(job_id: &str) -> Option<&str> {
+    job_id
+        .strip_suffix(velnor_actions_contract::workflow::lanes::HOSTED_SUFFIX)
+        .or_else(|| job_id.strip_suffix(velnor_actions_contract::workflow::lanes::SCALE_SUFFIX))
+        .filter(|group_id| !group_id.is_empty())
 }
 
 fn fold_run(conclusion: JobConclusion, signals: &mut Signals, miss_reasons: &mut BTreeSet<String>) {

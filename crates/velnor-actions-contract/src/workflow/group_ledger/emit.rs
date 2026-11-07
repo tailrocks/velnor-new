@@ -251,10 +251,14 @@ fn obligation_digest<'a>(plan: &'a Plan, unit_id: &str) -> Result<&'a str, Helpe
 }
 
 fn split_job_key(job_key: &str) -> Result<(&str, ExecutionBranch), HelperError> {
-    if job_key.is_empty() {
+    let group_key = job_key
+        .strip_suffix(crate::workflow::lanes::HOSTED_SUFFIX)
+        .or_else(|| job_key.strip_suffix(crate::workflow::lanes::SCALE_SUFFIX))
+        .unwrap_or(job_key);
+    if group_key.is_empty() {
         return Err(HelperError::internal("job_key_without_group"));
     }
-    Ok((job_key, ExecutionBranch::Reader))
+    Ok((group_key, ExecutionBranch::Reader))
 }
 
 fn clock_secs() -> Result<u64, HelperError> {

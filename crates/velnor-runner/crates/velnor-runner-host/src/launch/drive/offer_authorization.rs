@@ -178,7 +178,7 @@ pub(crate) async fn authorize_deferred_offers(
     for job in batch
         .jobs
         .iter()
-        .filter(|job| job.kind == InnerKind::Available)
+        .filter(|job| matches!(job.kind, InnerKind::Available | InnerKind::Assigned))
     {
         let Some(request_id) = job.request_id.filter(|request_id| *request_id > 0) else {
             return Err(EnsureError::Uncertain);
