@@ -217,10 +217,20 @@ const STAGED_ENTRY: &str = r#"{
     "state": "staged"
   }"#;
 
+fn staged_fixture_approvals() -> Result<String, Box<dyn Error>> {
+    let mut approvals: serde_json::Value = serde_json::from_str(BASE_APPROVALS)?;
+    approvals["staged"] = serde_json::from_str(STAGED_ENTRY)?;
+    Ok(serde_json::to_string_pretty(&approvals)?)
+}
+
 #[test]
 fn staged_entry_stays_inert() -> Result<(), Box<dyn Error>> {
-    let with_staged =
-        BASE_APPROVALS.replace("\"staged\": null", &format!("\"staged\": {STAGED_ENTRY}"));
+    let with_staged = staged_fixture_approvals()?;
+    assert_eq!(
+        serde_json::from_str::<serde_json::Value>(&with_staged)?["staged"],
+        serde_json::from_str::<serde_json::Value>(STAGED_ENTRY)?,
+        "staged test fixture must contain the requested candidate"
+    );
     let temp = fixture(Some(&with_staged), BASE_LOCK)?;
     prepare(temp.path())
         .map_err(|error| io::Error::other(format!("staged entry must stay inert: {error}")))?;
