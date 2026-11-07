@@ -15,7 +15,7 @@ path = "tests/velnor_mise.rs"
 
 [lib]
 doctest = false
-test = false
+test = true
 
 [lints]
 workspace = true
