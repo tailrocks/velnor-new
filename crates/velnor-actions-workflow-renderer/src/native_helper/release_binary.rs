@@ -49,10 +49,15 @@ pub(super) fn verify_binary_matches_consumer_manifest(
     manifest: &ReleaseManifest,
     exe_sha256: &str,
 ) -> Result<(), ReleaseHelperError> {
+    let host = match (std::env::consts::OS, std::env::consts::ARCH) {
+        ("linux", "x86_64") => "x86_64-unknown-linux-gnu",
+        ("macos", "aarch64") => "aarch64-apple-darwin",
+        ("macos", "x86_64") => "x86_64-apple-darwin",
+        _ => return Err(local_problem("unsupported_consumer_host")),
+    };
     if manifest
-        .targets
-        .iter()
-        .any(|record| record.sha256 == exe_sha256)
+        .record_for_target(host)
+        .is_some_and(|record| record.sha256 == exe_sha256)
     {
         Ok(())
     } else {
@@ -66,9 +71,6 @@ pub(super) fn verify_binary_matches_consumer_manifest(
 pub(super) fn verify_current_exe_matches_consumer_manifest(
     manifest: &ReleaseManifest,
 ) -> Result<(), ReleaseHelperError> {
-    if cfg!(debug_assertions) {
-        return Ok(());
-    }
     let exe_path = std::env::current_exe().map_err(|error| {
         local_problem(&format!(
             "current_executable_path_unavailable:{:?}",
