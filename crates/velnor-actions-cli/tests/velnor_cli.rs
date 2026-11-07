@@ -23,3 +23,5 @@ mod native_required_order;
 mod native_validator_lock;
 #[path = "velnor_cli/operator_toolchain_guard.rs"]
 mod operator_toolchain_guard;
+#[path = "velnor_cli/source_qualification_checkout.rs"]
+mod source_qualification_checkout;

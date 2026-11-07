@@ -316,6 +316,15 @@ if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
     echo 'FATAL: pull_request event lacks exact head/base commit SHAs' >&2
     exit 1
   fi
+  merge_parents="$(GIT_OPTIONAL_LOCKS=0 git cat-file -p HEAD | awk '
+    /^$/ { exit }
+    $1 == "parent" { parents = parents (parents ? " " : "") $2 }
+    END { print parents }
+  ')"
+  if [ "$merge_parents" != "$PR_BASE_SHA $PR_HEAD_SHA" ]; then
+    echo 'FATAL: pull request merge parents do not match the event base and head; trigger a new pull request event for the current merge' >&2
+    exit 1
+  fi
   for rev in 'HEAD^1' 'HEAD^2' "${PR_HEAD_SHA}^{commit}" "${PR_BASE_SHA}^{commit}"; do
     if ! GIT_OPTIONAL_LOCKS=0 git cat-file -e "$rev" 2>/dev/null; then
       GIT_OPTIONAL_LOCKS=0 git fetch --no-tags --depth=2 origin "$GITHUB_SHA"
