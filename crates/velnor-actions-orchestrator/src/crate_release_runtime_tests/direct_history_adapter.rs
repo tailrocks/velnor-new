@@ -232,18 +232,32 @@ fn seed_pending_upload(
     Ok(())
 }
 
-fn exercise_interrupted_journal(
-    prior: &JournalReceipt,
-    current: &JournalReceipt,
+fn history_source_context(
     request: &GitHubAdmissionRequest,
-    github: &crate::crate_release_github::NativeGitHubAdmissionRead,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<
+    (
+        std::path::PathBuf,
+        crate::crate_release_git::ReleaseGit,
+        Vec<crate::crate_release_journal::JournalFile>,
+    ),
+    Box<dyn std::error::Error>,
+> {
     let root = std::path::PathBuf::from(std::env::var("GITHUB_WORKSPACE")?).join("release-source");
     let bundle = std::path::PathBuf::from(std::env::var("RUNNER_TEMP")?).join("velnor/git-bundle");
     let git = crate::crate_release_git::ReleaseGit::new(
         velnor_actions_mise::release_git_pin::verify_bundle(&bundle)?,
     );
     let files = crate::journal_source_inventory(&root, &request.source_sha, &git)?;
+    Ok((root, git, files))
+}
+
+fn exercise_interrupted_journal(
+    prior: &JournalReceipt,
+    current: &JournalReceipt,
+    request: &GitHubAdmissionRequest,
+    github: &crate::crate_release_github::NativeGitHubAdmissionRead,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let (root, git, files) = history_source_context(request)?;
     let package = serde_json::json!({"name":"demo","version":"0.1.1","manifest":"Cargo.toml","tag":"demo-v0.1.1","owners":{"kind":"existing","owners":[{"id":1,"login":"owner","kind":"user"}]}});
     let semver = serde_json::json!({"demo":{"status":"no-baseline","checker_sha256":"bc9eb06ce04e97d6160c875ffdee1f6e56793e423dea025f344826be03e66829"}});
     let enrich = |receipt: &JournalReceipt| -> Result<JournalReceipt, Box<dyn std::error::Error>> {
