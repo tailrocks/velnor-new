@@ -159,6 +159,41 @@ def stage_historical_rust_manifest(root, destination):
                       16 * 1024 * 1024)
 
 
+RECOVERY_RELEASE_ASSETS = {
+    "release-manifest.json": "8e71b846acd375086fcb9693e567985d5a48b902e2e4b84400724ca6daad32d9",
+    "release-manifest.json.intoto.jsonl": "07acdc1fc01187e96d5545f7756cb769f3763ae2371f0a2785100545eac03f56",
+    "velnor-actions-0.1.73-x86_64-unknown-linux-gnu": "e1b5224cedc462623de15056e75e76499245cb035bc70d20a2ca1a478bb68cd5",
+    "velnor-actions-0.1.73-x86_64-unknown-linux-gnu.intoto.jsonl": "59292fc54dce584314f2664b6e9ac6d225f7f33c270c4688ed1f949a3f48ae4c",
+}
+RECOVERY_TRUSTED_ROOT_SHA256 = "65ca537f6ed8a47fd0e560c421baa1f6c1efb8b25fc200d8c5c02c0e92eb2b9c"
+
+
+def stage_recovery_release_assets(root, destination, assets, trusted_root_digest):
+    output = destination / "recovery-assets"
+    if output.exists() or output.is_symlink():
+        raise ValueError("recovery asset destination already exists")
+    fixture = root / "crates/velnor-actions-orchestrator/tests/attestation_fixtures/historical/trusted-root.jsonl"
+    with tempfile.TemporaryDirectory(dir=destination, prefix=".recovery-assets-") as directory:
+        stage = pathlib.Path(directory)
+        copy_verified(fixture, stage / "trusted-root.jsonl", trusted_root_digest, 4 * 1024 * 1024)
+        for name, digest in assets.items():
+            if (not isinstance(name, str) or name in (".", "..")
+                    or re.fullmatch(r'[A-Za-z0-9._-]+', name) is None
+                    or not isinstance(digest, str) or re.fullmatch(r'[0-9a-f]{64}', digest) is None):
+                raise ValueError("recovery asset identity is invalid")
+            download("https://github.com/tailrocks/velnor-new/releases/download/v0.1.73/" + name,
+                     stage / name, 128 * 1024 * 1024, digest)
+        try:
+            output.mkdir(mode=0o700)
+        except FileExistsError as error:
+            raise ValueError("recovery asset destination already exists") from error
+        try:
+            os.rename(stage, output / "verified")
+        except BaseException:
+            shutil.rmtree(output)
+            raise
+
+
 def main():
     if sys.argv[1:] not in ([], ["--with-image-tuf"], ["--with-signed-controller"], ["--with-recovery-fixture"]):
         raise ValueError("unsupported fixture staging arguments")
@@ -214,6 +249,8 @@ def main():
         stage_signed_controller(root, destination, env)
         if with_recovery_fixture:
             stage_historical_rust_manifest(root, destination)
+            stage_recovery_release_assets(root, destination, RECOVERY_RELEASE_ASSETS,
+                                          RECOVERY_TRUSTED_ROOT_SHA256)
     if with_image_tuf:
         subprocess.run([sys.executable, str(root / "scripts/prepare-image-attestation-tuf.py"), "--gh", str(staged_gh), "--cache-root", str(destination / "image-attestation-tuf")], check=True, timeout=900)
     image = manifest["image"]

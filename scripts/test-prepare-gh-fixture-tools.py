@@ -172,6 +172,102 @@ def verify_historical_rust_manifest_staging():
                 raise AssertionError("invalid historical Rust catalog accepted")
 
 
+def verify_recovery_release_asset_staging():
+    script = pathlib.Path(__file__).with_name("prepare-gh-fixture-tools.py")
+    spec = importlib.util.spec_from_file_location("recovery_asset_staging", script)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    assert module.RECOVERY_RELEASE_ASSETS == {
+        "release-manifest.json": "8e71b846acd375086fcb9693e567985d5a48b902e2e4b84400724ca6daad32d9",
+        "release-manifest.json.intoto.jsonl": "07acdc1fc01187e96d5545f7756cb769f3763ae2371f0a2785100545eac03f56",
+        "velnor-actions-0.1.73-x86_64-unknown-linux-gnu": "e1b5224cedc462623de15056e75e76499245cb035bc70d20a2ca1a478bb68cd5",
+        "velnor-actions-0.1.73-x86_64-unknown-linux-gnu.intoto.jsonl": "59292fc54dce584314f2664b6e9ac6d225f7f33c270c4688ed1f949a3f48ae4c",
+    }
+    actual_root = script.parents[1] / "crates/velnor-actions-orchestrator/tests/attestation_fixtures/historical/trusted-root.jsonl"
+    assert hashlib.sha256(actual_root.read_bytes()).hexdigest() == module.RECOVERY_TRUSTED_ROOT_SHA256
+    payloads = {"manifest": b"fixture manifest", "bundle": b"fixture bundle"}
+    identities = {name: hashlib.sha256(data).hexdigest() for name, data in payloads.items()}
+    class Response:
+        status = 200
+        def __init__(self, url, data): self.url, self.stream = url, io.BytesIO(data)
+        def __enter__(self): return self
+        def __exit__(self, *_): return False
+        def read(self, amount): return self.stream.read(amount)
+    class Opener:
+        def open(self, request, **_):
+            return Response(request.full_url, payloads[request.full_url.rsplit("/", 1)[1]])
+    with tempfile.TemporaryDirectory() as work:
+        root = pathlib.Path(work)
+        trust = root / "crates/velnor-actions-orchestrator/tests/attestation_fixtures/historical/trusted-root.jsonl"
+        trust.parent.mkdir(parents=True)
+        trust.write_bytes(b"fixture root")
+        root_digest = hashlib.sha256(trust.read_bytes()).hexdigest()
+        destination = root / "stage"
+        destination.mkdir()
+        with mock.patch.object(module.ssl, "create_default_context", return_value=object()), \
+             mock.patch.object(module.urllib.request, "HTTPSHandler", return_value=object()), \
+             mock.patch.object(module.urllib.request, "build_opener", return_value=Opener()):
+            module.stage_recovery_release_assets(root, destination, identities, root_digest)
+            output = destination / "recovery-assets"
+            assert (output / "verified/trusted-root.jsonl").read_bytes() == b"fixture root"
+            assert all((output / "verified" / name).read_bytes() == data for name, data in payloads.items())
+            try:
+                module.stage_recovery_release_assets(root, destination, identities, root_digest)
+            except ValueError as error:
+                assert "already exists" in str(error)
+            else:
+                raise AssertionError("existing asset directory overwritten")
+            shutil.rmtree(output)
+            output.symlink_to(root / "outside")
+            try:
+                module.stage_recovery_release_assets(root, destination, identities, root_digest)
+            except ValueError as error:
+                assert "already exists" in str(error)
+            else:
+                raise AssertionError("symlink asset destination accepted")
+            output.unlink()
+            mkdir = pathlib.Path.mkdir
+            def racing_mkdir(path, *args, **kwargs):
+                if path == output:
+                    mkdir(path)
+                return mkdir(path, *args, **kwargs)
+            with mock.patch.object(pathlib.Path, "mkdir", racing_mkdir):
+                try:
+                    module.stage_recovery_release_assets(root, destination, identities, root_digest)
+                except ValueError as error:
+                    assert "already exists" in str(error)
+                else:
+                    raise AssertionError("concurrent asset destination overwritten")
+            assert output.is_dir() and not list(output.iterdir())
+            output.rmdir()
+            with mock.patch.object(module.os, "rename", side_effect=OSError("interrupted")):
+                try:
+                    module.stage_recovery_release_assets(root, destination, identities, root_digest)
+                except OSError as error:
+                    assert "interrupted" in str(error)
+                else:
+                    raise AssertionError("interrupted asset staging reported success")
+            assert not output.exists() and not list(destination.iterdir())
+            bad = dict(identities, bundle="0" * 64)
+            try:
+                module.stage_recovery_release_assets(root, destination, bad, root_digest)
+            except ValueError as error:
+                assert "digest mismatch" in str(error)
+            else:
+                raise AssertionError("tampered release asset accepted")
+            assert not output.exists()
+            assert not list(destination.iterdir())
+            try:
+                module.stage_recovery_release_assets(root, destination, identities, "0" * 64)
+            except ValueError as error:
+                assert "digest mismatch" in str(error)
+            else:
+                raise AssertionError("tampered trusted root accepted")
+            assert not output.exists()
+            assert not list(destination.iterdir())
+
+
 def main():
     with tempfile.TemporaryDirectory() as work:
         root = pathlib.Path(work)
@@ -243,6 +339,7 @@ def main():
 
 
 if __name__ == "__main__":
+    verify_recovery_release_asset_staging()
     verify_historical_rust_manifest_staging()
     verify_download_and_archive_guards()
     verify_git_staging_uses_bound_catalog()
