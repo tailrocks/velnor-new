@@ -112,7 +112,9 @@ class TransportTest(unittest.TestCase):
                       [response([1] * 100), response([], headers=[('Content-Encoding', 'gzip')])],
                       [response([1] * 100), Response(b'[\"secret-token\"]')],
                       [Response(b'[]', length=3)],
-                      [Response(b'["secret-token"]')]):
+                      [Response(b'["secret-token"]')],
+                      [Response(br'["secret\u002dtoken"]')],
+                      [Response(b'[{"id":1,"id":2}]')]):
             with self.subTest(pages=len(pages)), self.assertRaises(ValueError):
                 self.fetch(pages)
 

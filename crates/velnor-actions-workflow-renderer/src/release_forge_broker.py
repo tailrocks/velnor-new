@@ -74,6 +74,8 @@ class GitHubTransport:
             result = json.dumps(items, ensure_ascii=True, separators=(',', ':')).encode()
             if len(result) > MAX_RESPONSE:
                 raise ValueError('upstream response too large')
+            if self._token.encode() in result:
+                raise ValueError('credential in upstream response')
             remaining(deadline)
             if self._cancelled.is_set():
                 raise ValueError('upstream cancelled')
