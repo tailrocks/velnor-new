@@ -287,7 +287,7 @@ fn verify_changed_predecessor(
         .map_err(|error| format!("create drift ref: {error}"))?;
     assert!(
         crate::crate_release_journal::inspect_prior_chain_with(
-            &journal,
+            journal,
             current,
             root,
             git,
