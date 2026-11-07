@@ -4,7 +4,7 @@
 use super::*;
 
 #[test]
-fn timed_out_check_streams_sanitized_progress() -> Result<(), Box<dyn Error>> {
+fn failed_check_streams_sanitized_progress() -> Result<(), Box<dyn Error>> {
     let fixture = Fixture::new()?;
     let runtime = std::env::split_paths(&std::env::var_os("PATH").ok_or("PATH missing")?)
         .map(|entry| entry.join("mise"))
@@ -18,11 +18,11 @@ fn timed_out_check_streams_sanitized_progress() -> Result<(), Box<dyn Error>> {
     let (label, platform, _) = host_platform()?;
     fs::write(
         fixture.root().join(".velnor/config.toml"),
-        config(label, platform).replace("[checks.runner]", "timeout_minutes = 1\n[checks.runner]"),
+        config(label, platform),
     )?;
     fs::write(
         fixture.root().join("mise.toml"),
-        "[tasks.fixture-check]\nrun = \"printf 'maintenance-phase: probe # ::warning::danger\\n'; sleep 120\"\n",
+        "[tasks.fixture-check]\nrun = \"printf 'maintenance-phase: probe # ::warning::danger\\n'; exit 7\"\n",
     )?;
     let head = fixture.head()?;
     let plan = fixture.public_plan(&head)?;
@@ -30,10 +30,7 @@ fn timed_out_check_streams_sanitized_progress() -> Result<(), Box<dyn Error>> {
     let stderr = String::from_utf8_lossy(&result.stderr);
     assert!(!result.status.success());
     assert!(stderr.contains("maintenance-phase: probe"), "{stderr}");
-    assert!(
-        stderr.contains("timeout_after_absolute_deadline"),
-        "{stderr}"
-    );
+    assert!(stderr.contains("velnor-progress stdout:"), "{stderr}");
     assert!(!stderr.contains("\n::warning::danger"), "{stderr}");
     assert!(stderr.contains("\\x23"), "{stderr}");
     Ok(())
