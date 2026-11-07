@@ -240,3 +240,34 @@ fn published_crate_matches_expected_files_and_registry_checksum()
     assert!(verify_crate_archive(&expected, &invalid, "demo", "0.1.1", &invalid_checksum).is_err());
     Ok(())
 }
+
+#[test]
+fn admitted_source_entry_count_includes_cargo_generated_files()
+-> Result<(), Box<dyn std::error::Error>> {
+    for count in [16_385, 100_003] {
+        let bytes = archive_with_entries(count)?;
+        verify_crate_archive(&bytes, &bytes, "demo", "0.1.1", &hex_digest(&bytes))?;
+    }
+    let bytes = archive_with_entries(100_004)?;
+    let error = verify_crate_archive(&bytes, &bytes, "demo", "0.1.1", &hex_digest(&bytes))
+        .expect_err("archive beyond admitted source plus Cargo metadata was accepted");
+    assert!(
+        error
+            .to_string()
+            .contains("crate_archive_entry_type_or_count")
+    );
+    Ok(())
+}
+
+fn archive_with_entries(count: usize) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    let encoder = GzEncoder::new(Vec::new(), Compression::fast());
+    let mut builder = tar::Builder::new(encoder);
+    for index in 0..count {
+        let mut header = tar::Header::new_gnu();
+        header.set_size(0);
+        header.set_mode(0o644);
+        header.set_cksum();
+        builder.append_data(&mut header, format!("demo-0.1.1/entries/{index}"), &[][..])?;
+    }
+    Ok(builder.into_inner()?.finish()?)
+}

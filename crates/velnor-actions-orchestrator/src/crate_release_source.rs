@@ -6,6 +6,8 @@ use crate::{OrchestratorError, internal::internal};
 use std::{fs, path::Path};
 use velnor_actions_mise::GitRequest;
 
+pub(crate) const MAX_SOURCE_ENTRIES: usize = 100_000;
+
 pub fn verify_journal_source(
     root: &Path,
     receipt: &crate::crate_release_journal::JournalReceipt,
@@ -25,7 +27,7 @@ pub fn journal_source_inventory(
     use crate::crate_release_journal::{JournalFile, JournalFileKind};
     verify_crate_release_source(root, expected_sha, git)?;
     let entries = source_tree_entries(root, git)?;
-    if entries.is_empty() || entries.len() > 100_000 {
+    if entries.is_empty() || entries.len() > MAX_SOURCE_ENTRIES {
         return Err(internal("crate_release_journal_inventory_invalid"));
     }
     let anchor = crate::release::crate_release_inventory_read::open_root(root)?;

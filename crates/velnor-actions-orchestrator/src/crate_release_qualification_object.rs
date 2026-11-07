@@ -13,7 +13,7 @@ use velnor_actions_mise::GitRequest;
 
 const MAX_OBJECT: usize = 256 * 1024 * 1024;
 const MAX_TOTAL: usize = 2 * 1024 * 1024 * 1024;
-const MAX_ENTRIES: usize = 100_000;
+const MAX_ENTRIES: usize = crate::release::crate_release_source::MAX_SOURCE_ENTRIES;
 const MAX_DEPTH: usize = 128;
 
 pub(super) fn snapshot(

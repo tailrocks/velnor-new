@@ -10,7 +10,9 @@ use std::{
 
 const MAX_ARCHIVE: usize = 64 * 1024 * 1024;
 const MAX_UNPACKED: u64 = 256 * 1024 * 1024;
-const MAX_ENTRIES: usize = 16_384;
+const MAX_CARGO_GENERATED_ENTRIES: usize = 3;
+const MAX_ENTRIES: usize =
+    crate::release::crate_release_source::MAX_SOURCE_ENTRIES + MAX_CARGO_GENERATED_ENTRIES;
 
 pub(crate) type ArchiveFiles = BTreeMap<String, (u32, Vec<u8>)>;
 

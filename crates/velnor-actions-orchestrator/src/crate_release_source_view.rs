@@ -152,7 +152,7 @@ fn freeze_checkout(root: &Path, deadline: CheckDeadline) -> Result<(), Orchestra
             let metadata = std::fs::symlink_metadata(&path).map_err(|_| invalid())?;
             entries = entries
                 .checked_add(1)
-                .filter(|count| *count <= 100_000)
+                .filter(|count| *count <= crate::release::crate_release_source::MAX_SOURCE_ENTRIES)
                 .ok_or_else(invalid)?;
             if metadata.uid() != 0
                 || metadata.dev() != initial.dev()

@@ -318,7 +318,7 @@ fn valid_result(
 
 pub(super) fn valid_files(files: &[JournalFile]) -> bool {
     !files.is_empty()
-        && files.len() <= 100_000
+        && files.len() <= crate::release::crate_release_source::MAX_SOURCE_ENTRIES
         && unique(files.iter().map(|file| file.path.as_str()))
         && files
             .iter()
