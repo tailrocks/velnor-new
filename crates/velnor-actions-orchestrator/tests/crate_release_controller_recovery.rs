@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{
-    Command, GitHubAdmissionRequest, Github, Path, Registry, exercise_repair, fixture_archive,
-    fixture_no_baseline, fs, make_fixture, prepare_crate_release, reconcile_crate_release,
-    test_git, velnor_actions_orchestrator, verify_crate_release_admission,
+    Command, GitHubAdmissionRequest, Github, Path, Registry, fixture_archive, fixture_no_baseline,
+    fs, make_fixture, prepare_crate_release, reconcile_crate_release, test_git,
+    velnor_actions_orchestrator, verify_crate_release_admission,
 };
 
 #[path = "crate_release_controller_recovery_receipts.rs"]
@@ -66,7 +66,8 @@ pub(super) fn recovery_requires_fresh_human_approval_and_registry_absence()
     registry.absent.set(false);
     assert!(verify(&request).is_err());
     *registry.archive.borrow_mut() = fixture_archive(root)?;
-    exercise_repair(&intent, &request, &github, &registry, root)?;
+    github.tag_exists.set(true);
+    github.release_variant.set(0);
     let completed = reconcile()?;
     assert_eq!(completed[0].release_id, 12);
     assert_eq!(

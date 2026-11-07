@@ -282,3 +282,84 @@ fn exact_start_retry_reads_existing_record_without_writes() -> Result<(), Box<dy
     assert_eq!(remote.refs.borrow().len(), 1);
     Ok(())
 }
+
+#[test]
+fn completion_accepts_the_last_observation_at_sequence_limit()
+-> Result<(), Box<dyn std::error::Error>> {
+    use velnor_actions_orchestrator::crate_release_journal::{
+        JournalMutation, JournalMutationKind, JournalMutationPhase, JournalMutationResult,
+    };
+    let remote = Registry::default();
+    let plan = receipt("0.1.1");
+    record_journal(&remote, &identity(), JournalStage::Started, &plan, None)?;
+    for sequence in 1..=999 {
+        let phase = if sequence % 2 == 1 {
+            JournalMutationPhase::Intended
+        } else {
+            JournalMutationPhase::Observed {
+                result: JournalMutationResult::Tag {
+                    name: plan.packages[0].tag.clone(),
+                    target_sha: identity().source_sha,
+                },
+            }
+        };
+        let item = JournalMutation {
+            sequence,
+            package: plan.packages[0].name.clone(),
+            version: plan.packages[0].version.clone(),
+            kind: JournalMutationKind::CreateTag,
+            semver_evidence: None,
+            phase,
+        };
+        crate::crate_release_journal::fixture_storage::seed_mutation_record(
+            &remote,
+            &identity(),
+            &plan,
+            &item,
+        )?;
+    }
+    assert_eq!(
+        crate::crate_release_journal::inspect_recoverable_history(&remote, &identity(), &plan)?
+            .0
+            .len(),
+        999
+    );
+    assert!(
+        record_journal(
+            &remote,
+            &identity(),
+            JournalStage::Completed,
+            &plan,
+            Some(&completion("0.1.1"))
+        )
+        .is_err()
+    );
+    let last = JournalMutation {
+        sequence: 1000,
+        package: plan.packages[0].name.clone(),
+        version: plan.packages[0].version.clone(),
+        kind: JournalMutationKind::CreateTag,
+        semver_evidence: None,
+        phase: JournalMutationPhase::Observed {
+            result: JournalMutationResult::Tag {
+                name: plan.packages[0].tag.clone(),
+                target_sha: identity().source_sha,
+            },
+        },
+    };
+    crate::crate_release_journal::fixture_storage::seed_mutation_record(
+        &remote,
+        &identity(),
+        &plan,
+        &last,
+    )?;
+    record_journal(
+        &remote,
+        &identity(),
+        JournalStage::Completed,
+        &plan,
+        Some(&completion("0.1.1")),
+    )?;
+    assert!(inspect_journal(&remote, &identity(), JournalStage::Completed)?.is_some());
+    Ok(())
+}

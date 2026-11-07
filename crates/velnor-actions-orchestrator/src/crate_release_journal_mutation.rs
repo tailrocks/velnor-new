@@ -175,7 +175,13 @@ pub(super) fn ensure_no_pending_mutation<I: JournalIo>(
         }
         previous = Some(record.mutation);
     }
-    Err(invalid())
+    match previous {
+        Some(JournalMutation {
+            phase: JournalMutationPhase::Observed { .. },
+            ..
+        }) => Ok(()),
+        _ => Err(invalid()),
+    }
 }
 
 pub(crate) fn valid_journal_phase(phase: &str) -> bool {

@@ -29,6 +29,10 @@ pub(crate) fn release_base_intent_sha256(
 const MAX_RECORD_BYTES: usize = 32 * 1024 * 1024;
 const TAG_MESSAGE: &str = "velnor-release-receipt-v1";
 
+#[path = "crate_release_journal_capacity.rs"]
+mod capacity;
+pub(crate) use capacity::{CapacityReservation, verify_sequence_capacity};
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct JournalIdentity {
@@ -159,6 +163,39 @@ struct MutationRecord {
     identity: JournalIdentity,
     receipt: JournalReceipt,
     mutation: JournalMutation,
+}
+
+#[cfg(test)]
+pub(crate) fn fixture_mutation_record_bytes(
+    receipt: &JournalReceipt,
+    mutation: JournalMutation,
+) -> Result<Vec<u8>, OrchestratorError> {
+    velnor_actions_contract::canonical_json_bytes(&MutationRecord {
+        schema: 1,
+        identity: receipt.identity.clone(),
+        receipt: receipt.clone(),
+        mutation,
+    })
+    .map_err(|_| invalid())
+}
+
+#[cfg(test)]
+pub(crate) fn fixture_stage_record_bytes(
+    receipt: &JournalReceipt,
+    completion: Option<JournalCompletion>,
+) -> Result<Vec<u8>, OrchestratorError> {
+    velnor_actions_contract::canonical_json_bytes(&JournalRecord {
+        schema: 1,
+        identity: receipt.identity.clone(),
+        stage: if completion.is_some() {
+            JournalStage::Completed
+        } else {
+            JournalStage::Started
+        },
+        receipt: receipt.clone(),
+        completion,
+    })
+    .map_err(|_| invalid())
 }
 
 #[path = "crate_release_journal_history.rs"]

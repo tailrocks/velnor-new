@@ -166,7 +166,13 @@ pub(super) fn supplied_step(
     }
     let output = command.output()?;
     if job == "release-publish" {
-        assert!(String::from_utf8_lossy(&output.stdout).contains("running 1 test"));
+        assert!(
+            String::from_utf8_lossy(&output.stdout).contains("running 1 test"),
+            "status: {}\nstdout: {}\nstderr: {}",
+            output.status,
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
     }
     Ok(output)
 }

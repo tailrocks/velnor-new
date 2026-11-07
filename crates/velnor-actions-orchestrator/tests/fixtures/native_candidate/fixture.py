@@ -43,10 +43,40 @@ required_workflow = ".github/workflows/ci.yml"
 multi_manifest = os.environ.get("VELNOR_FIXTURE_MULTI_MANIFEST")
 multi_entries = json.loads(pathlib.Path(multi_manifest).read_text())["archives"] if multi_manifest else []
 multi_names = {entry["name"] for entry in multi_entries}
+deferred = os.environ.get("VELNOR_FIXTURE_FAILURE") == "coordinate-evidence-deferred"
+deferred_a = "example-evidence-a"
+deferred_b = "example-evidence-b"
+deferred_baselines = {}
 supplied = os.environ.get("VELNOR_FIXTURE_SUPPLIED_INTENT")
 supplied_intent = None
 dependency_snapshots = {}
-if multi_entries:
+alternate_baseline = None
+if deferred:
+    package = deferred_b
+    for name in (deferred_a, deferred_b):
+        baseline = root / ("baseline-" + name)
+        baseline.mkdir()
+        write(baseline / "Cargo.toml", f'[package]\nname="{name}"\nversion="0.1.0"\nedition="2021"\nlicense="MIT"\ndescription="evidence fixture"\n')
+        write(baseline / "src/lib.rs", "pub fn example() -> u32 { 1 }\n")
+        run("cargo", "generate-lockfile", "--offline", cwd=baseline)
+        run("cargo", "package", "--offline", "--no-verify", "--allow-dirty", cwd=baseline)
+        data = (baseline / f"target/package/{name}-0.1.0.crate").read_bytes()
+        deferred_baselines[name] = (data, hashlib.sha256(data).hexdigest())
+    archive, checksum = deferred_baselines[deferred_b]
+    source.mkdir()
+    write(source / ".gitignore", "/target/\n")
+    write(source / "Cargo.toml", '[workspace]\nmembers=["a","b"]\nresolver="2"\n')
+    for directory, name in (("a", deferred_a), ("b", deferred_b)):
+        dependency = f'[dependencies]\n{deferred_a}={{path="../a",version="=0.1.1"}}\n' if directory == "b" else ""
+        write(source / directory / "Cargo.toml", f'[package]\nname="{name}"\nversion="0.1.1"\nedition="2021"\nlicense="MIT"\ndescription="evidence fixture"\n{dependency}')
+        write(source / directory / "src/lib.rs", "pub fn example() -> u32 { 1 }\n")
+    run("cargo", "generate-lockfile", "--offline", cwd=source)
+    run("git", "init", "-q", cwd=source)
+    run("git", "remote", "add", "origin", "https://github.com/" + repository, cwd=source)
+    run("git", "add", ".", cwd=source)
+    run("git", "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "-c", "commit.gpgsign=false", "commit", "-qm", "workspace source", cwd=source)
+    source_sha = run("git", "rev-parse", "HEAD", cwd=source)
+elif multi_entries:
     original = pathlib.Path(os.environ["VELNOR_FIXTURE_MULTI_SOURCE"]).resolve(strict=True)
     package = multi_entries[0]["name"]
     version = "0.1.0"
@@ -95,12 +125,31 @@ elif supplied:
 else:
     source.mkdir()
     manifest = '[package]\nname = "example"\nversion = "{}"\nedition = "2021"\nlicense = "MIT"\ndescription = "Generic release rehearsal"\nrepository = "https://github.com/owner/project"\n'
-    write(source / "Cargo.toml", manifest.format("0.1.0"))
+    if os.environ.get("VELNOR_FIXTURE_FAILURE") == "coordinate-evidence-drift":
+        baseline_version = "0.0.1"
+    write(source / "Cargo.toml", manifest.format(baseline_version))
     write(source / "src/lib.rs", "pub fn example() -> u32 { 1 }\n")
     run("cargo", "generate-lockfile", "--offline", cwd=source)
     run("cargo", "package", "--offline", "--no-verify", "--allow-dirty", cwd=source)
-    archive = (source / "target/package/example-0.1.0.crate").read_bytes()
+    archive = (source / f"target/package/example-{baseline_version}.crate").read_bytes()
     checksum = hashlib.sha256(archive).hexdigest()
+    failure = os.environ.get("VELNOR_FIXTURE_FAILURE")
+    if failure in ("coordinate-evidence-drift", "coordinate-evidence-checksum-drift"):
+        alternate_version = "0.1.0" if failure == "coordinate-evidence-drift" else baseline_version
+        write(source / "Cargo.toml", manifest.format(alternate_version))
+        if failure == "coordinate-evidence-checksum-drift":
+            write(source / "src/lib.rs", "pub fn example() -> u32 { 2 }\n")
+        run("cargo", "generate-lockfile", "--offline", cwd=source)
+        run("cargo", "package", "--offline", "--no-verify", "--allow-dirty", cwd=source)
+        alternate_archive = (source / f"target/package/example-{alternate_version}.crate").read_bytes()
+        alternate_baseline = {
+            "version": alternate_version,
+            "archive": alternate_archive,
+            "checksum": hashlib.sha256(alternate_archive).hexdigest(),
+            "id": 102 if alternate_version != baseline_version else 100,
+        }
+        assert alternate_baseline["checksum"] != checksum
+        write(source / "src/lib.rs", "pub fn example() -> u32 { 1 }\n")
     if os.environ.get("VELNOR_FIXTURE_FAILURE") == "checksum":
         checksum = "0" * 64
     write(source / "Cargo.toml", manifest.format("0.1.1"))
@@ -146,7 +195,7 @@ default_branch = "main"
 environment = "release"
 required_workflow_path = ".github/workflows/ci.yml"
 trusted_reviewer_id = 139017
-rust_version = "1.97.1"
+rust_version = "1.99.1"
 generator_version = "{generator_version}"
 generator_source_sha = "{generator_source}"
 generator_manifest_sha256 = "{generator_manifest_sha}"
@@ -165,7 +214,11 @@ package = "example"
 version = "0.1.1"
 source_sha = "{source_sha}"
 '''
-if multi_entries:
+if deferred:
+    intent = re.sub(r'^packages = .*$', 'packages = ' + json.dumps([deferred_a, deferred_b]), intent, flags=re.MULTILINE)
+    intent = re.sub(r'^pr_write_paths = .*$', 'pr_write_paths = ' + json.dumps(sorted(["Cargo.lock", "Cargo.toml", "CHANGELOG.md", "a/Cargo.toml", "b/Cargo.toml"])), intent, flags=re.MULTILINE)
+    intent = intent.split("[publish_features]", 1)[0] + f'[publish_features]\n{deferred_a} = []\n{deferred_b} = []\n'
+elif multi_entries:
     names = sorted(multi_names)
     intent = re.sub(r'^packages = .*$', 'packages = ' + json.dumps(names), intent, flags=re.MULTILINE)
     paths = ["Cargo.lock", "Cargo.toml", "CHANGELOG.md"]
@@ -212,6 +265,21 @@ run(
 )
 policy = run("git", "rev-parse", "HEAD", cwd=root)
 prior_policy = policy
+if deferred:
+    shutil.copytree(root / ".github", source / ".github", dirs_exist_ok=True)
+    if assets:
+        shutil.copytree(root / ".velnor", source / ".velnor", dirs_exist_ok=True)
+    run("git", "add", ".github", cwd=source)
+    if assets:
+        run("git", "add", ".velnor/release-manifest.json", cwd=source)
+    run("git", "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "-c", "commit.gpgsign=false", "commit", "-qm", "release intent", cwd=source)
+    source_sha = run("git", "rev-parse", "HEAD", cwd=source)
+    policy = prior_policy = source_sha
+    run("git", "fetch", "--quiet", "--no-tags", str(source), source_sha, cwd=root)
+    run("git", "update-ref", "HEAD", source_sha, cwd=root)
+    run("cargo", "package", "--offline", "--locked", "--no-verify", "--target-dir", str(root / "fixture-target"), "--package", deferred_a, cwd=source)
+    deferred_a_archive = (root / f"fixture-target/package/{deferred_a}-0.1.1.crate").read_bytes()
+    deferred_a_checksum = hashlib.sha256(deferred_a_archive).hexdigest()
 if multi_entries:
     shutil.copytree(root / ".github", source / ".github", dirs_exist_ok=True)
     if assets:
@@ -254,6 +322,16 @@ uploads = 0
 upload_attempts = 0
 
 
+def active_alternate():
+    marker = os.environ.get("VELNOR_NATIVE_PID_FILE")
+    return alternate_baseline if alternate_baseline and marker and pathlib.Path(marker).is_file() else None
+
+
+def deferred_a_visible():
+    marker = os.environ.get("VELNOR_NATIVE_PID_FILE")
+    return deferred and marker and pathlib.Path(marker).is_file()
+
+
 def git_hash(kind, data):
     return hashlib.sha1(f"{kind} {len(data)}\0".encode() + data).hexdigest()
 
@@ -285,6 +363,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 if published
                 else None,
                 "release": release,
+                "releases": releases,
+                "baseline_switched": active_alternate() is not None,
             }
         elif p.startswith(f"/repos/{repository}/git/matching-refs/tags/"):
             prefix = "refs/tags/" + urllib.parse.unquote(
@@ -350,22 +430,22 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 "run_attempt": 1,
                 "head_sha": policy if requested_run == 13 else prior_policy,
                 "head_branch": "main",
-                "event": "push" if multi_names else "workflow_dispatch",
+                "event": "push" if multi_names or deferred else "workflow_dispatch",
                 "path": ".github/workflows/release.yml",
                 "repository": {"id": 22, "full_name": repository, "owner": {"id": 77, "login": repository.split("/", 1)[0]}},
                 "head_repository": {"id": 22, "full_name": repository, "owner": {"id": 77, "login": repository.split("/", 1)[0]}},
             }
-        elif multi_names and "/commits/" in p and "/pulls?" in p:
+        elif (multi_names or deferred) and "/commits/" in p and "/pulls?" in p:
             obj = [{"number": 17, "merged_at": "2026-11-03T16:00:00Z", "merge_commit_sha": source_sha,
                     "base": {"ref": "main", "repo": {"full_name": repository, "owner": {"id": 77, "login": repository.split("/", 1)[0]}}},
                     "head": {"ref": "release-plz-1", "sha": source_sha, "repo": {"full_name": repository, "owner": {"id": 77, "login": repository.split("/", 1)[0]}}},
                     "user": {"id": 54, "login": "release-bot"}}]
-        elif multi_names and "/pulls/17/reviews?" in p:
+        elif (multi_names or deferred) and "/pulls/17/reviews?" in p:
             obj = [{"id": 1, "user": {"id": reviewer_id, "login": "owner", "type": "User"}, "state": "APPROVED",
                     "commit_id": source_sha, "author_association": "OWNER", "submitted_at": "2026-11-03T15:50:00Z"}]
-        elif multi_names and "/git/commits/" in p:
+        elif (multi_names or deferred) and "/git/commits/" in p:
             obj = {"sha": p.rsplit("/", 1)[-1], "tree": {"sha": "a" * 40}}
-        elif multi_names and p.endswith("/collaborators/owner/permission"):
+        elif (multi_names or deferred) and p.endswith("/collaborators/owner/permission"):
             obj = {"user": {"id": reviewer_id, "type": "User"}, "permission": "admin"}
         elif "/compare/" in p:
             obj = {"status": "ahead"}
@@ -451,7 +531,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 status, obj = 404, {"message": "Not Found"}
         elif p.startswith(f"/repos/{repository}/releases/tags/"):
             requested_tag = urllib.parse.unquote(p.rsplit("/", 1)[-1])
-            found = releases.get(requested_tag) if multi_names else release
+            found = releases.get(requested_tag) if multi_names or deferred else release
             if found is None:
                 status, obj = 404, {"message": "Not Found"}
             else:
@@ -460,6 +540,41 @@ class Handler(http.server.BaseHTTPRequestHandler):
             obj = {"id": reviewer_id, "login": "owner", "type": "User"}
         elif p == "/api/v1/users/owner?include=linked_accounts":
             obj = {"user": {"id": reviewer_id, "login": "owner"}, "linked_accounts": [{"provider": "github", "account_id": str(reviewer_id), "login": "owner"}]}
+        elif deferred and p == f"/api/v1/crates/{deferred_a}":
+            entries = [{"id": 100, "crate": deferred_a, "num": "0.1.0", "yanked": False}]
+            if deferred_a_visible():
+                entries.append({"id": 101, "crate": deferred_a, "num": "0.1.1", "yanked": False})
+            obj = {"crate": {"id": deferred_a, "name": deferred_a, "versions": [item["id"] for item in entries]}, "versions": entries}
+        elif deferred and p == f"/api/v1/crates/{deferred_a}/owners":
+            obj = {"users": [{"id": reviewer_id, "login": "owner", "kind": "user"}]}
+        elif deferred and p == f"/api/v1/crates/{deferred_a}/0.1.0":
+            obj = {"version": {"id": 100, "crate": deferred_a, "num": "0.1.0", "yanked": False, "checksum": deferred_baselines[deferred_a][1]}}
+        elif deferred and p == f"/api/v1/crates/{deferred_a}/0.1.1":
+            if deferred_a_visible():
+                obj = {"version": {"id": 101, "crate": deferred_a, "num": "0.1.1", "yanked": False, "checksum": deferred_a_checksum, "features": {}}}
+            else:
+                status, obj = 404, {"errors": []}
+        elif deferred and p in (f"/crates/{deferred_a}/{deferred_a}-0.1.0.crate", f"/crates/{deferred_a}/{deferred_a}-0.1.1.crate", f"/crates/{deferred_a}/0.1.0/download", f"/crates/{deferred_a}/0.1.1/download"):
+            data = deferred_baselines[deferred_a][0] if p.endswith(("-0.1.0.crate", "/0.1.0/download")) else deferred_a_archive if deferred_a_visible() else None
+            if data is None:
+                self.send_error(404)
+                return
+            self.send_response(200)
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+            return
+        elif deferred and p in (index_path(deferred_a), index_path(deferred_a.replace("-", "_"))):
+            entries = [{"name": deferred_a, "vers": "0.1.0", "deps": [], "features": {}, "cksum": deferred_baselines[deferred_a][1], "yanked": False}]
+            if deferred_a_visible():
+                entries.append({"name": deferred_a, "vers": "0.1.1", "deps": [], "features": {}, "cksum": deferred_a_checksum, "yanked": False})
+            data = "\n".join(json.dumps(entry) for entry in entries).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+            return
         elif p.startswith("/api/v1/crates/") and p.removeprefix("/api/v1/crates/") in dependency_snapshots:
             obj = dependency_snapshots[p.removeprefix("/api/v1/crates/")]
         elif p == f"/api/v1/crates/{package}":
@@ -469,6 +584,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     {"id": 100, "crate": package, "num": baseline_version, "yanked": False}
                 ],
             }
+            alternate = active_alternate()
+            if alternate and alternate["version"] != baseline_version:
+                obj["crate"]["versions"].append(alternate["id"])
+                obj["versions"].append({"id": alternate["id"], "crate": package, "num": alternate["version"], "yanked": False})
             if published:
                 obj["crate"]["versions"].append(101)
                 obj["versions"].append(
@@ -476,14 +595,16 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 )
         elif p == f"/api/v1/crates/{package}/owners":
             obj = {"users": [{"id": reviewer_id, "login": "owner", "kind": "user"}]}
-        elif p == f"/api/v1/crates/{package}/{baseline_version}":
+        elif p == f"/api/v1/crates/{package}/{baseline_version}" or (active_alternate() and p == f"/api/v1/crates/{package}/{active_alternate()['version']}"):
+            alternate = active_alternate()
+            selected = alternate if alternate and p.endswith("/" + alternate["version"]) else {"id": 100, "version": baseline_version, "checksum": checksum}
             obj = {
                 "version": {
-                    "id": 100,
+                    "id": selected["id"],
                     "crate": package,
-                    "num": baseline_version,
+                    "num": selected["version"],
                     "yanked": False,
-                    "checksum": checksum,
+                    "checksum": selected["checksum"],
                 }
             }
         elif p == f"/api/v1/crates/{package}/{version}":
@@ -500,11 +621,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 }
             else:
                 status, obj = 404, {"errors": []}
-        elif p == f"/crates/{package}/{package}-{baseline_version}.crate":
+        elif p == f"/crates/{package}/{package}-{baseline_version}.crate" or (active_alternate() and p == f"/crates/{package}/{package}-{active_alternate()['version']}.crate"):
+            alternate = active_alternate()
+            selected_archive = alternate["archive"] if alternate and p.endswith(f"-{alternate['version']}.crate") else archive
             self.send_response(200)
-            self.send_header("Content-Length", str(len(archive)))
+            self.send_header("Content-Length", str(len(selected_archive)))
             self.end_headers()
-            self.wfile.write(archive)
+            self.wfile.write(selected_archive)
             return
         elif p == f"/crates/{package}/{package}-{version}.crate" and published:
             self.send_response(200)
@@ -512,7 +635,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(published)
             return
-        elif p == index_path(package) and published:
+        elif p in (index_path(package), index_path(package.replace("-", "_"))) and published:
             obj = {
                 "name": package,
                 "vers": version,
@@ -521,7 +644,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 "cksum": hashlib.sha256(published).hexdigest(),
                 "yanked": False,
             }
-        elif p == index_path(package) and os.environ.get("VELNOR_FIXTURE_REAL_CARGO"):
+        elif p in (index_path(package), index_path(package.replace("-", "_"))) and os.environ.get("VELNOR_FIXTURE_REAL_CARGO"):
             status, obj = 404, {"errors": []}
         else:
             status, obj = 500, {"unexpected": p}
@@ -571,7 +694,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             published_features = tomllib.loads(manifest.decode()).get("features", {})
             assert (
                 archive_file.extractfile(f"{package}-{version}/src/lib.rs").read()
-                == (source / "src/lib.rs").read_bytes()
+                == (source / ("b" if deferred else "") / "src/lib.rs").read_bytes()
             )
         if os.environ.get("VELNOR_FIXTURE_REAL_CARGO"):
             temporary = root / "fixture-upload.crate.tmp"
@@ -664,6 +787,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 is_journal and sha in tags and name == "refs/tags/" + tags[sha]["tag"]
             ) or (name == f"refs/tags/{package}-v{version}" and sha == source_sha) or (
                 name in {f"refs/tags/{item}-v0.1.0" for item in multi_names} and sha == source_sha
+            ) or (
+                deferred and name == f"refs/tags/{deferred_a}-v0.1.1" and sha == source_sha
             )
             if name in refs:
                 status, obj = 422, {}
@@ -675,6 +800,18 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 }
         elif self.path == f"/repos/{repository}/releases":
             tag_name = value["tag_name"]
+            if deferred and tag_name in {f"{deferred_a}-v0.1.1", f"{deferred_b}-v0.1.1"}:
+                assert value["target_commitish"] == source_sha and value["prerelease"] is False
+                assert tag_name not in releases
+                releases[tag_name] = {"id": len(releases) + 100, "tag_name": tag_name, "draft": False,
+                                      "prerelease": False, "html_url": f"https://github.com/{repository}/releases/tag/{tag_name}"}
+                data = json.dumps(releases[tag_name]).encode()
+                self.send_response(201)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(data)))
+                self.end_headers()
+                self.wfile.write(data)
+                return
             if multi_names and tag_name in {f"{item}-v0.1.0" for item in multi_names}:
                 assert value["target_commitish"] == source_sha and value["prerelease"] is False
                 assert tag_name not in releases
@@ -725,6 +862,12 @@ info = {
     "version": version,
     "baseline_version": baseline_version,
     "baseline_checksum": checksum,
+    "alternate_baseline_version": alternate_baseline["version"] if alternate_baseline else None,
+    "alternate_baseline_checksum": alternate_baseline["checksum"] if alternate_baseline else None,
+    "deferred_a": deferred_a if deferred else None,
+    "deferred_b": deferred_b if deferred else None,
+    "deferred_a_checksum": deferred_a_checksum if deferred else None,
+    "deferred_a_baseline_checksum": deferred_baselines[deferred_a][1] if deferred else None,
 }
 print(json.dumps(info), flush=True)
 server.serve_forever()

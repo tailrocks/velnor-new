@@ -189,6 +189,20 @@ pub fn crate_release_workspace_plan_with_registry<
     let canonical = root
         .canonicalize()
         .map_err(|_| internal("crate_release_source_root_invalid"))?;
+    verify_no_ambient_cargo_config(&canonical)?;
+    let manifests = tracked_manifests(&canonical, git)?;
+    if !manifests.contains(&intent.manifest_path) {
+        return Err(internal("crate_release_manifest_untracked"));
+    }
+    let metadata = source_execution.metadata(&canonical, intent, git)?;
+    verify_crate_release_source(&canonical, sha, git)?;
+    workspace_plan_from_metadata(&canonical, sha, intent, registry, &manifests, &metadata)
+}
+
+pub(crate) fn verify_no_ambient_cargo_config(root: &Path) -> Result<(), OrchestratorError> {
+    let canonical = root
+        .canonicalize()
+        .map_err(|_| internal("crate_release_source_root_invalid"))?;
     for ancestor in canonical.ancestors().skip(1) {
         for name in ["config", "config.toml"] {
             match std::fs::symlink_metadata(ancestor.join(".cargo").join(name)) {
@@ -197,13 +211,7 @@ pub fn crate_release_workspace_plan_with_registry<
             }
         }
     }
-    let manifests = tracked_manifests(&canonical, git)?;
-    if !manifests.contains(&intent.manifest_path) {
-        return Err(internal("crate_release_manifest_untracked"));
-    }
-    let metadata = source_execution.metadata(&canonical, intent, git)?;
-    verify_crate_release_source(&canonical, sha, git)?;
-    workspace_plan_from_metadata(&canonical, sha, intent, registry, &manifests, &metadata)
+    Ok(())
 }
 
 fn workspace_plan_from_metadata<R: crate::crate_release_registry::CrateRegistryRead>(

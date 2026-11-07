@@ -683,6 +683,10 @@ crates/velnor-actions-orchestrator/src/crate_release_http/validation.rs
 crates/velnor-actions-orchestrator/src/crate_release_inventory_read.rs
 crates/velnor-actions-orchestrator/src/crate_release_journal.rs
 crates/velnor-actions-orchestrator/src/crate_release_journal_adapter.rs
+crates/velnor-actions-orchestrator/src/crate_release_journal_capacity.rs
+crates/velnor-actions-orchestrator/src/crate_release_journal_capacity_features.rs
+crates/velnor-actions-orchestrator/src/crate_release_journal_capacity_records.rs
+crates/velnor-actions-orchestrator/src/crate_release_journal_capacity_source.rs
 crates/velnor-actions-orchestrator/src/crate_release_journal_github.rs
 crates/velnor-actions-orchestrator/src/crate_release_journal_history.rs
 crates/velnor-actions-orchestrator/src/crate_release_journal_history_snapshot.rs

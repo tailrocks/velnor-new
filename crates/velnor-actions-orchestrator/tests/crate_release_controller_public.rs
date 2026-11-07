@@ -23,7 +23,7 @@ use velnor_actions_orchestrator::{
     crate_release_controller::{
         CrateReleaseAction, CrateReleaseRepairWrite,
         prepare_crate_release as raw_prepare_crate_release, reconcile_crate_release,
-        repair_crate_release, verify_crate_release_admission,
+        verify_crate_release_admission,
     },
     crate_release_github::{GitHubAdmissionRead, GitHubAdmissionRequest},
     crate_release_registry::{CrateRegistryRead, CrateRegistryResponse},
@@ -41,9 +41,7 @@ use fixtures_github::{
 };
 #[path = "crate_release_controller_fixtures_registry.rs"]
 mod fixtures_registry;
-use fixtures_registry::{
-    NewRegistry, Registry, exercise_repair, fixture_archive, git, make_fixture,
-};
+use fixtures_registry::{NewRegistry, Registry, fixture_archive, git, make_fixture};
 #[path = "crate_release_controller_observations_setup.rs"]
 mod observations_setup;
 #[path = "crate_release_controller_owner_identity.rs"]
@@ -118,3 +116,7 @@ mod workspace_publication;
 
 #[path = "crate_release_controller_frozen_completion.rs"]
 mod frozen_completion;
+
+#[cfg(unix)]
+#[path = "crate_release_controller_capacity.rs"]
+mod capacity;

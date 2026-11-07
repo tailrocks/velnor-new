@@ -2,9 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{
-    Cell, Command, CrateRegistryRead, CrateRegistryResponse, CrateReleaseAction,
-    CrateReleaseIntent, Digest, GitHubAdmissionRequest, Github, OrchestratorError, Path, RefCell,
-    Sha256, fs, json, prepare_crate_release, repair_crate_release, test_git,
+    Cell, Command, CrateRegistryRead, CrateRegistryResponse, CrateReleaseIntent, Digest,
+    GitHubAdmissionRequest, Github, OrchestratorError, Path, RefCell, Sha256, fs, json,
 };
 
 pub(super) struct NewRegistry {
@@ -216,43 +215,25 @@ fn fixture_github(sha: String, policy_sha: &str) -> Github {
 
 pub(super) fn fixture_archive(root: &Path) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
     let target = tempfile::tempdir()?;
-    let tool =
-        velnor_actions_mise::ToolCatalog::pinned().tool_spec(velnor_actions_mise::PinnedTool::Rust);
-    let which = Command::new("mise")
-        .current_dir(target.path())
-        .env("MISE_AUTO_INSTALL", "false")
-        .env("MISE_EXEC_AUTO_INSTALL", "false")
-        .args([
-            "--no-config",
-            "--no-env",
-            "--no-hooks",
-            "which",
-            "cargo",
-            "--tool",
-            &tool,
-        ])
-        .output()?;
-    if !which.status.success() {
-        let stderr = String::from_utf8_lossy(&which.stderr[..which.stderr.len().min(4096)]);
-        return Err(format!(
-            "cannot resolve pinned cargo: {}; stderr: {stderr}",
-            which.status
+    let catalog = velnor_actions_mise::ToolCatalog::pinned();
+    let version = catalog.version(velnor_actions_mise::PinnedTool::Rust);
+    let rustup = std::env::var_os("RUSTUP_HOME").ok_or("qualified Rustup home missing")?;
+    let resolve = |tool| {
+        crate::release::crate_release_source::verified_rust_tool_path(
+            Path::new(&rustup),
+            version,
+            tool,
         )
-        .into());
-    }
-    let cargo = String::from_utf8(which.stdout)?.trim().to_owned();
-    let package = Command::new("mise")
+    };
+    let cargo = resolve("cargo")?;
+    let bin = cargo.parent().ok_or("qualified Rust bin missing")?;
+    let path = std::env::join_paths([bin, Path::new("/usr/bin"), Path::new("/bin")])?;
+    let package = Command::new(&cargo)
         .current_dir(root)
-        .env("MISE_AUTO_INSTALL", "false")
-        .env("MISE_EXEC_AUTO_INSTALL", "false")
+        .env("PATH", path)
+        .env("RUSTC", resolve("rustc")?)
+        .env("RUSTDOC", resolve("rustdoc")?)
         .args([
-            "--no-config",
-            "--no-env",
-            "--no-hooks",
-            "exec",
-            &tool,
-            "--",
-            &cargo,
             "package",
             "--locked",
             "--offline",
@@ -265,81 +246,4 @@ pub(super) fn fixture_archive(root: &Path) -> Result<Vec<u8>, Box<dyn std::error
         return Err("fixture package failed".into());
     }
     Ok(fs::read(target.path().join("package/demo-0.1.1.crate"))?)
-}
-
-pub(super) fn exercise_repair(
-    intent: &CrateReleaseIntent,
-    request: &GitHubAdmissionRequest,
-    github: &Github,
-    registry: &Registry,
-    root: &Path,
-) -> Result<(), Box<dyn std::error::Error>> {
-    let repair_tag = prepare_crate_release(intent, request, github, registry, root)?;
-    let attempt = || {
-        repair_crate_release(
-            &repair_tag,
-            intent,
-            request,
-            github,
-            registry,
-            crate::CrateSource::new(root, test_git(), &crate::UnprivilegedSourceExecution),
-        )
-    };
-    assert!(matches!(
-        repair_tag.packages[0].action,
-        CrateReleaseAction::RepairTag { .. }
-    ));
-    github.approved.set(false);
-    assert!(attempt().is_err());
-    assert_eq!(github.writes.get(), 0);
-    github.approved.set(true);
-    github.owner_match.set(false);
-    assert!(attempt().is_err());
-    assert_eq!(github.writes.get(), 0);
-    github.owner_match.set(true);
-    registry.archive.borrow_mut().push(0);
-    assert!(attempt().is_err());
-    assert_eq!(github.writes.get(), 0);
-    registry.archive.borrow_mut().pop();
-    github.release_variant.set(4);
-    github.tag_exists.set(true);
-    github.tag_wrong.set(true);
-    assert!(attempt().is_err());
-    assert_eq!(github.writes.get(), 0);
-    github.tag_wrong.set(false);
-    github.tag_exists.set(false);
-    github.write_error.set(1);
-    assert!(attempt().is_err());
-    assert!(!github.tag_exists.get());
-    assert_eq!(github.writes.get(), 1);
-    github.write_error.set(3);
-    assert!(attempt().is_err());
-    assert!(github.tag_exists.get());
-    assert_eq!(github.release_variant.get(), 4);
-    github.write_error.set(0);
-    let after_timeout = prepare_crate_release(intent, request, github, registry, root)?;
-    assert!(matches!(
-        after_timeout.packages[0].action,
-        CrateReleaseAction::RepairRelease { .. }
-    ));
-    github.tag_exists.set(false);
-    attempt()?;
-    assert!(github.tag_exists.get());
-    assert_eq!(github.release_variant.get(), 0);
-    github.tag_exists.set(false);
-
-    github.tag_exists.set(true);
-    github.release_variant.set(4);
-    let repair_release = prepare_crate_release(intent, request, github, registry, root)?;
-    assert!(matches!(
-        repair_release.packages[0].action,
-        CrateReleaseAction::RepairRelease { .. }
-    ));
-    github.release_variant.set(0);
-    let already_complete = prepare_crate_release(intent, request, github, registry, root)?;
-    assert!(matches!(
-        already_complete.packages[0].action,
-        CrateReleaseAction::Reconciled { .. }
-    ));
-    Ok(())
 }

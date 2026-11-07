@@ -4,6 +4,17 @@
 use super::{Ordering, SemverEvidence};
 
 impl SemverEvidence {
+    pub(crate) fn matches_revalidated(&self, fresh: &Self) -> bool {
+        self == fresh
+            || matches!(
+                (self, fresh),
+                (
+                    Self::Deferred { .. },
+                    Self::Checked { .. } | Self::NoBaseline { .. } | Self::MetadataOnly { .. }
+                )
+            )
+    }
+
     pub(crate) fn valid_for(&self, version: &str) -> bool {
         if !self.is_final() {
             return false;

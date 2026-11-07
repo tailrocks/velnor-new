@@ -73,6 +73,11 @@ env = os.environ.copy()
 coordinate = mode.startswith("coordinate")
 new_run = mode == "coordinate-real-cargo-new-run"
 real_cargo = mode == "coordinate-real-cargo-crash" or new_run
+evidence_drift = mode in ("coordinate-evidence-drift", "coordinate-evidence-checksum-drift")
+evidence_matching = mode == "coordinate-evidence-matching"
+evidence_deferred = mode == "coordinate-evidence-deferred"
+tamper_cargo = mode == "coordinate-cargo-tamper"
+real_cargo = real_cargo or evidence_drift or evidence_matching or evidence_deferred or tamper_cargo
 if real_cargo:
     env["VELNOR_FIXTURE_REAL_CARGO"] = "1"
     if (len(pathlib.Path("/proc/net/route").read_text().splitlines()) != 1
@@ -119,7 +124,11 @@ if journal:
         env["VELNOR_TEST_FAST_POLL"] = "1"
         env["VELNOR_NATIVE_COORDINATE_ERROR"] = (
             ""
-            if mode in ("coordinate", "coordinate-crash", "coordinate-crash-no-credentials", "coordinate-real-cargo-crash", "coordinate-real-cargo-new-run", "coordinate-multi")
+            if mode in ("coordinate", "coordinate-crash", "coordinate-crash-no-credentials", "coordinate-real-cargo-crash", "coordinate-real-cargo-new-run", "coordinate-multi") or evidence_matching or evidence_deferred
+            else "crate_release_toolchain_invalid"
+            if tamper_cargo
+            else "crate_release_semver_evidence_changed"
+            if evidence_drift
             else "crate_release_upload_credential_missing"
             if mode in ("coordinate-missing-oidc", "coordinate-missing-bootstrap")
             else "crate_registry_version_not_visible"
@@ -128,6 +137,12 @@ if journal:
             env["VELNOR_NATIVE_COORDINATE_CRASH"] = "1"
             env["VELNOR_NATIVE_PID_FILE"] = str(runner / "coordinator.pid")
             env["VELNOR_FIXTURE_CRASH_PID_PATH"] = env["VELNOR_NATIVE_PID_FILE"]
+        if evidence_drift or evidence_deferred or tamper_cargo:
+            env["VELNOR_NATIVE_PID_FILE"] = str(runner / "coordinator.pid")
+        if tamper_cargo:
+            env["VELNOR_NATIVE_TAMPER_CARGO"] = "1"
+        if evidence_deferred:
+            env["VELNOR_NATIVE_DEFERRED"] = "1"
         if new_run:
             env["VELNOR_NATIVE_NEW_RUN_PHASE1"] = "1"
         if mode == "coordinate-crash-no-credentials":
@@ -165,6 +180,10 @@ try:
     if not line:
         raise RuntimeError("fixture did not start")
     info = json.loads(line)
+    if evidence_deferred:
+        env["VELNOR_NATIVE_DEFERRED_FIRST"] = info["deferred_a"]
+        env["VELNOR_NATIVE_DEFERRED_SECOND"] = info["deferred_b"]
+        env["VELNOR_NATIVE_DEFERRED_FIRST_CHECKSUM"] = info["deferred_a_baseline_checksum"]
     tls_server = None
     registry_server = None
     if multi:
@@ -196,7 +215,7 @@ try:
         if not real_cargo:
             cargo = (
                 runner
-                / "velnor/rustup/toolchains/1.97.1-x86_64-unknown-linux-gnu/bin/cargo"
+                / "velnor/rustup/toolchains/1.99.1-x86_64-unknown-linux-gnu/bin/cargo"
             )
             cargo_real_path = cargo.with_name("cargo-real")
             cargo.rename(cargo_real_path)
@@ -265,13 +284,17 @@ try:
             "GITHUB_WORKFLOW_SHA": info["workflow_sha"],
             "GITHUB_WORKFLOW_REF": info["repository"] + "/.github/workflows/release.yml@refs/heads/main",
             "GITHUB_REF": "refs/heads/main",
-            "GITHUB_EVENT_NAME": "push" if multi else "workflow_dispatch",
+            "GITHUB_EVENT_NAME": "push" if multi or evidence_deferred else "workflow_dispatch",
             "GITHUB_RUN_ID": "12",
             "GITHUB_RUN_ATTEMPT": "1",
             "GIT_TOKEN": "fixture",
             "RUNNER_TEMP": "/runner/" + mode,
         }
     )
+    if not (multi or evidence_deferred):
+        event = pathlib.Path(env["RUNNER_TEMP"]) / "github-event.json"
+        event.write_text(json.dumps({"inputs": {"plan": "release-" + info["source_sha"][:12], "source_sha": info["source_sha"], "version": info["version"]}}))
+        env["GITHUB_EVENT_PATH"] = str(event)
     if mode == "verify-source":
         env["VELNOR_NATIVE_MUTATE_AFTER_RECEIPT"] = "1"
     subprocess.run(
@@ -316,13 +339,32 @@ try:
     if multi:
         assert state["uploads"] == 0
         assert "refs/tags/velnor-receipt/12/1/reconciled" in state["refs"]
-    elif mode in ("coordinate", "coordinate-crash", "coordinate-crash-no-credentials", "coordinate-real-cargo-crash", "coordinate-real-cargo-new-run"):
+    elif evidence_deferred:
+        assert state["uploads"] == state["upload_attempts"] == 1
+        assert f"refs/tags/{info['deferred_a']}-v0.1.1" in state["refs"]
+        assert f"refs/tags/{info['deferred_b']}-v0.1.1" in state["refs"]
+        assert "refs/tags/velnor-receipt/12/1/reconciled" in state["refs"]
+        started = read_journal_record(info, state, "refs/tags/velnor-receipt/12/1/publication-started")
+        assert started["receipt"]["semver_evidence"][info["deferred_b"]]["status"] == "deferred"
+        operations = [record for record in state["records"] if record.get("mutation") is not None]
+        first_metadata = [record for record in operations if record["mutation"]["package"] == info["deferred_a"] and record["mutation"]["phase"]["phase"] == "observed"]
+        second_intents = [record for record in operations if record["mutation"]["package"] == info["deferred_b"] and record["mutation"]["kind"] == "upload" and record["mutation"]["phase"]["phase"] == "intended"]
+        assert {record["mutation"]["kind"] for record in first_metadata} == {"create-tag", "create-release"}
+        assert len(second_intents) == 1
+        assert second_intents[0]["mutation"]["semver_evidence"]["status"] == "checked"
+        assert second_intents[0]["mutation"]["semver_evidence"]["baseline"] == info["baseline_version"]
+        assert second_intents[0]["mutation"]["semver_evidence"]["baseline_checksum"] == info["baseline_checksum"]
+        assert all(record["mutation"]["sequence"] < second_intents[0]["mutation"]["sequence"] for record in first_metadata)
+        with urllib.request.urlopen("https://fixture.actions.githubusercontent.com/__fixture/state") as response:
+            counts = json.load(response)
+        assert counts["oidc"] == counts["exchange"] == 1
+    elif mode in ("coordinate", "coordinate-crash", "coordinate-crash-no-credentials", "coordinate-real-cargo-crash", "coordinate-real-cargo-new-run") or evidence_matching:
         assert state["uploads"] == 1
         if real_cargo:
             assert state["upload_attempts"] == 1
             accepted = (pathlib.Path("/workspace") / ("final-" + mode) / "fixture-upload.crate").read_bytes()
             assert hashlib.sha256(accepted).hexdigest() == state["published_sha256"]
-            cargo = runner / "velnor/rustup/toolchains/1.97.1-x86_64-unknown-linux-gnu/bin/cargo"
+            cargo = runner / "velnor/rustup/toolchains/1.99.1-x86_64-unknown-linux-gnu/bin/cargo"
             package_env = {
                 "PATH": str(cargo.parent) + ":/usr/bin:/bin",
                 "HOME": str(runner),
@@ -339,6 +381,13 @@ try:
         assert state["release"]["tag_name"] == f"{info['package']}-v{info['version']}"
         assert state["refs"][f"refs/tags/{info['package']}-v{info['version']}"] == info["source_sha"]
         assert f"refs/tags/velnor-receipt/{13 if new_run else 12}/1/reconciled" in state["refs"]
+        if evidence_matching:
+            assert_pending_upload(info, state, runner)
+            intent = read_journal_record(info, state, "refs/tags/velnor-receipt/12/1/operation-1")
+            evidence = intent["mutation"]["semver_evidence"]
+            assert evidence["status"] == "checked"
+            assert evidence["baseline"] == info["baseline_version"]
+            assert evidence["baseline_checksum"] == info["baseline_checksum"]
         if new_run:
             assert "refs/tags/velnor-receipt/12/1/reconciled" not in state["refs"]
             prior = read_journal_record(info, state, "refs/tags/velnor-receipt/12/1/publication-started")
@@ -374,6 +423,31 @@ try:
                 if not supplied_intent:
                     raise ValueError("fixture evidence requires a supplied intent")
                 write_evidence(destination, runner, pathlib.Path("/src"), supplied_intent, info, state, counts, packed)
+    elif tamper_cargo:
+        assert state["uploads"] == state["upload_attempts"] == 0
+        assert state["mutations"] == 3
+        assert list(state["refs"]) == ["refs/tags/velnor-receipt/12/1/publication-started"]
+        with urllib.request.urlopen("https://fixture.actions.githubusercontent.com/__fixture/state") as response:
+            counts = json.load(response)
+        assert counts["oidc"] == counts["exchange"] == 0
+    elif evidence_drift:
+        assert state["baseline_switched"]
+        assert state["uploads"] == state["upload_attempts"] == 0
+        assert state["mutations"] == 3
+        assert list(state["refs"]) == ["refs/tags/velnor-receipt/12/1/publication-started"]
+        started = read_journal_record(info, state, "refs/tags/velnor-receipt/12/1/publication-started")
+        evidence = started["receipt"]["semver_evidence"][info["package"]]
+        assert evidence["status"] == "checked"
+        assert evidence["baseline"] == info["baseline_version"]
+        assert evidence["baseline_checksum"] == info["baseline_checksum"]
+        assert info["alternate_baseline_checksum"] != info["baseline_checksum"]
+        if mode == "coordinate-evidence-drift":
+            assert info["alternate_baseline_version"] != info["baseline_version"]
+        else:
+            assert info["alternate_baseline_version"] == info["baseline_version"]
+        with urllib.request.urlopen("https://fixture.actions.githubusercontent.com/__fixture/state") as response:
+            counts = json.load(response)
+        assert counts["oidc"] == counts["exchange"] == 0
     elif mode == "coordinate-corrupt-git":
         assert state["uploads"] == 0
         assert state["mutations"] == 0

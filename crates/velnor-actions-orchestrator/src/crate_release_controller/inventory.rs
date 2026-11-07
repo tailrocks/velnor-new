@@ -132,6 +132,208 @@ pub(crate) fn package_unprivileged(
     }
 }
 
+pub(crate) fn list_package_unprivileged(
+    request: &crate::CratePackageSource<'_>,
+    deadline: velnor_actions_mise::CheckDeadline,
+    home: &Path,
+    prime_index: bool,
+) -> Result<Vec<String>, OrchestratorError> {
+    use std::ffi::OsString;
+    let invalid = || internal("crate_release_package_list_invalid");
+    let cargo_home = home.join("cargo-home");
+    #[cfg(test)]
+    if prime_index {
+        tests::configure_test_registry(&cargo_home)?;
+        #[cfg(unix)]
+        let _ = seed_package_fixture(&cargo_home)?;
+    }
+    let mut args = vec![
+        OsString::from("-i"),
+        format!("HOME={}", home.display()).into(),
+        format!("CARGO_HOME={}", cargo_home.display()).into(),
+    ];
+    args.extend(crate::release::crate_release_source::source_compiler_env(
+        &request.intent.rust_version,
+        request.git,
+    )?);
+    args.push(
+        crate::release::crate_release_source::source_cargo_path(
+            &request.intent.rust_version,
+            home,
+        )?
+        .into_os_string(),
+    );
+    let catalog =
+        crate::release::crate_release_source::source_tool_catalog(&request.intent.rust_version)
+            .map_err(|_| invalid())?;
+    args.extend([
+        OsString::from("package"),
+        "--list".into(),
+        "--locked".into(),
+        "--offline".into(),
+        "--manifest-path".into(),
+        request
+            .source
+            .join(&request.intent.manifest_path)
+            .into_os_string(),
+        "--package".into(),
+        request.package.name.clone().into(),
+        "--target-dir".into(),
+        request.target.as_os_str().to_owned(),
+    ]);
+    let features = request
+        .intent
+        .publish_features
+        .get(&request.package.name)
+        .ok_or_else(invalid)?;
+    if !features.is_empty() {
+        args.extend(["--features".into(), features.join(",").into()]);
+    }
+    if prime_index {
+        verify_capacity_rust(&request.intent.rust_version, &cargo_home, deadline)?;
+        let online = args
+            .iter()
+            .filter(|arg| *arg != "--offline")
+            .cloned()
+            .collect();
+        run_package_list_command(request, &catalog, online, deadline)?;
+        verify_capacity_rust(&request.intent.rust_version, &cargo_home, deadline)?;
+    }
+    verify_capacity_rust(&request.intent.rust_version, &cargo_home, deadline)?;
+    let output = run_package_list_command(request, &catalog, args, deadline)?;
+    verify_capacity_rust(&request.intent.rust_version, &cargo_home, deadline)?;
+    let mut paths = std::collections::BTreeSet::new();
+    for path in output.split_terminator('\n') {
+        if path.is_empty() || path.chars().any(char::is_control) || !paths.insert(path.to_owned()) {
+            return Err(invalid());
+        }
+    }
+    if paths.is_empty() || !output.ends_with('\n') {
+        return Err(invalid());
+    }
+    Ok(paths.into_iter().collect())
+}
+
+pub(crate) fn verify_capacity_rust(
+    rust: &str,
+    cargo_home: &Path,
+    deadline: velnor_actions_mise::CheckDeadline,
+) -> Result<(), OrchestratorError> {
+    use std::ffi::OsString;
+    let invalid = || internal("crate_release_toolchain_invalid");
+    let runner = tempfile::tempdir().map_err(|_| invalid())?;
+    let rustup = std::env::var_os("RUSTUP_HOME").ok_or_else(invalid)?;
+    let cargo = crate::release::crate_release_source::source_cargo_path(rust, runner.path())?;
+    let manifest = cargo
+        .parent()
+        .and_then(Path::parent)
+        .ok_or_else(invalid)?
+        .join("lib/rustlib/multirust-channel-manifest.toml");
+    let cache = runner.path().join("velnor/rust-verified");
+    std::fs::create_dir_all(&cache).map_err(|_| invalid())?;
+    if manifest.is_file() {
+        std::fs::copy(manifest, cache.join(format!("channel-rust-{rust}.toml")))
+            .map_err(|_| invalid())?;
+    }
+    let catalog =
+        crate::release::crate_release_source::source_tool_catalog(rust).map_err(|_| invalid())?;
+    let verifier = if cfg!(all(target_os = "linux", target_arch = "x86_64"))
+        && velnor_actions_workflow_renderer::verifier_builders::RUST_TREE_DIGESTS
+            .iter()
+            .any(|pin| pin.version() == rust && pin.target() == "x86_64-unknown-linux-gnu")
+    {
+        crate::workflow::verify_rust_owned_argv(
+            &catalog,
+            crate::workflow::ToolchainPhase::Installed,
+        )
+    } else {
+        crate::workflow::verify_rust_argv(&catalog)
+    };
+    let archive_cache = cargo_home
+        .parent()
+        .ok_or_else(invalid)?
+        .join("rust-archives");
+    std::fs::create_dir_all(&archive_cache).map_err(|_| invalid())?;
+    let mut rustup_env = OsString::from("RUSTUP_HOME=");
+    rustup_env.push(rustup);
+    let mut args = vec![
+        OsString::from("-i"),
+        format!("HOME={}", runner.path().display()).into(),
+        format!("RUNNER_TEMP={}", runner.path().display()).into(),
+        rustup_env,
+        format!("CARGO_HOME={}", cargo_home.display()).into(),
+        format!("VELNOR_RUST_ARCHIVE_CACHE={}", archive_cache.display()).into(),
+        OsString::from("/bin/sh"),
+    ];
+    args.extend(verifier.into_iter().skip(1).map(OsString::from));
+    let command = velnor_actions_mise::IsolatedCommand::repo_task("/usr/bin/env", args, &[])
+        .map_err(|_| invalid())?;
+    #[cfg(unix)]
+    let output = command
+        .run_quiescent_until(1024 * 1024, deadline)
+        .map_err(|_| {
+            #[cfg(test)]
+            eprintln!("capacity verifier failure category: execution");
+            invalid()
+        })?
+        .0;
+    #[cfg(not(unix))]
+    let output = command
+        .run_until(1024 * 1024, deadline)
+        .map_err(|_| invalid())?;
+    if !output.success {
+        #[cfg(test)]
+        report_verifier_failure(&output.stderr);
+        return Err(invalid());
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+fn report_verifier_failure(stderr: &[u8]) {
+    let text = String::from_utf8_lossy(stderr);
+    let category = [
+        "rust_component_tarball_digest_mismatch",
+        "rust_channel_manifest_digest_mismatch",
+        "rust_component_not_in_manifest",
+        "rust_toolchain_bytes_mismatch",
+        "rust_component_archive_invalid",
+        "curl: (",
+    ]
+    .into_iter()
+    .find(|candidate| text.contains(candidate))
+    .unwrap_or("other");
+    eprintln!("capacity verifier failure category: {category}");
+}
+
+fn run_package_list_command(
+    request: &crate::CratePackageSource<'_>,
+    catalog: &velnor_actions_mise::ToolCatalog,
+    args: Vec<std::ffi::OsString>,
+    deadline: velnor_actions_mise::CheckDeadline,
+) -> Result<String, OrchestratorError> {
+    use velnor_actions_mise::{PinnedTool, PinnedToolExec};
+    let invalid = || internal("crate_release_package_list_invalid");
+    let command = PinnedToolExec::new(vec![PinnedTool::Rust], std::ffi::OsStr::new("env"), args)
+        .map_err(|_| invalid())?
+        .command(catalog)
+        .map_err(|_| invalid())?
+        .with_cwd(request.source.to_path_buf());
+    #[cfg(unix)]
+    let result = command
+        .run_quiescent_until(32 * 1024 * 1024, deadline)
+        .map_err(|_| invalid())?
+        .0;
+    #[cfg(not(unix))]
+    let result = command
+        .run_until(32 * 1024 * 1024, deadline)
+        .map_err(|_| invalid())?;
+    if !result.success {
+        return Err(invalid());
+    }
+    result.stdout_text("cargo").map_err(|_| invalid())
+}
+
 #[cfg(all(test, unix))]
 pub(super) fn seed_package_fixture(home: &Path) -> Result<bool, OrchestratorError> {
     let Some(snapshot) = std::env::var_os("VELNOR_NATIVE_REGISTRY_SNAPSHOT") else {

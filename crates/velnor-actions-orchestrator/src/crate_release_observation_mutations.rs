@@ -20,6 +20,29 @@ pub(crate) fn verify_and_record_upload_intent<
     package: &str,
     semver: crate::release::crate_release_semver::VerifiedSemver,
 ) -> Result<UploadPermit, OrchestratorError> {
+    verify_binding(input)?;
+    super::verify_standalone_sequence_room(input)?;
+    let capacity = crate::crate_release_journal::CapacityReservation::prepare(
+        input.journal_receipt,
+        input.admission,
+        input.intent,
+        input.request,
+        input.source,
+        input.git,
+    )?;
+    verify_and_record_upload_intent_with_capacity(input, package, semver, &capacity)
+}
+
+pub(super) fn verify_and_record_upload_intent_with_capacity<
+    J: JournalIo + crate::crate_release_journal::JournalOperationRefs,
+    G: GitHubAdmissionRead,
+    R: CrateRegistryRead,
+>(
+    input: &CrateReleaseObservation<'_, J, G, R>,
+    package: &str,
+    semver: crate::release::crate_release_semver::VerifiedSemver,
+    capacity: &crate::crate_release_journal::CapacityReservation,
+) -> Result<UploadPermit, OrchestratorError> {
     let verification = super::super::PackageVerification {
         source_execution: input.source_execution,
         receipt: input.admission,
@@ -31,10 +54,12 @@ pub(crate) fn verify_and_record_upload_intent<
         git: input.git,
         package,
     };
-    let proof = super::super::preflight::verify_release_package_with(&verification, |observed| {
-        verify_observed_packages_after_recorded_upload(input, observed)
-    })?;
-    record_admitted_upload_intent(input, proof, semver)
+    let proof = super::super::preflight::verify_release_package_with_capacity(
+        &verification,
+        Some(capacity),
+        |observed| verify_observed_packages_after_recorded_upload(input, observed),
+    )?;
+    record_admitted_upload_intent_with_capacity(input, proof, semver, Some(capacity))
 }
 
 pub(super) fn bind_semver(
@@ -64,6 +89,7 @@ pub(super) fn observe_input_state<J, G: GitHubAdmissionRead, R: CrateRegistryRea
     )
 }
 
+#[cfg(test)]
 pub(crate) fn record_admitted_upload_intent<
     J: JournalIo + crate::crate_release_journal::JournalOperationRefs,
     G: GitHubAdmissionRead,
@@ -73,19 +99,34 @@ pub(crate) fn record_admitted_upload_intent<
     verified: VerifiedReleasePackage,
     semver: crate::release::crate_release_semver::VerifiedSemver,
 ) -> Result<UploadPermit, OrchestratorError> {
+    record_admitted_upload_intent_with_capacity(input, verified, semver, None)
+}
+
+fn record_admitted_upload_intent_with_capacity<
+    J: JournalIo + crate::crate_release_journal::JournalOperationRefs,
+    G: GitHubAdmissionRead,
+    R: CrateRegistryRead,
+>(
+    input: &CrateReleaseObservation<'_, J, G, R>,
+    verified: VerifiedReleasePackage,
+    semver: crate::release::crate_release_semver::VerifiedSemver,
+    capacity: Option<&crate::crate_release_journal::CapacityReservation>,
+) -> Result<UploadPermit, OrchestratorError> {
     verify_binding(input)?;
     let intent_bytes =
         velnor_actions_contract::canonical_json_bytes(input.intent).map_err(|_| invalid())?;
     let semver_evidence = bind_semver(semver, &verified, input.request, &intent_bytes)?;
-    if verified.intent_sha256 != crate::planner::generator::sha256_hex(&intent_bytes)
-        || verified.repository != input.request.repository
-        || verified.workflow_sha != input.request.workflow_sha
-        || verified.source_sha != input.request.source_sha
-        || verified.run_id != input.request.run_id
-        || verified.run_attempt != input.request.run_attempt
+    if !input
+        .journal_receipt
+        .semver_evidence
+        .get(&verified.package)
+        .is_some_and(|admitted| admitted.matches_revalidated(&semver_evidence))
     {
-        return Err(invalid());
+        return Err(crate::internal::internal(
+            "crate_release_semver_evidence_changed",
+        ));
     }
+    super::super::preflight::verify_package_binding(&verified, input.request, &intent_bytes)?;
     authorize_github_candidate(input.request, &input.admission.github, input.github)?;
     let started = inspect_journal(input.journal, input.identity, JournalStage::Started)?
         .ok_or_else(invalid)?;
@@ -113,6 +154,16 @@ pub(crate) fn record_admitted_upload_intent<
         return Err(invalid());
     }
     authorize_github_candidate(input.request, &input.admission.github, input.github)?;
+    if let Some(capacity) = capacity {
+        capacity.verify_mutation(&JournalMutation {
+            sequence: input.sequence,
+            package: verified.package.clone(),
+            version: verified.version.clone(),
+            kind: JournalMutationKind::Upload,
+            semver_evidence: Some(semver_evidence.clone()),
+            phase: JournalMutationPhase::Intended,
+        })?;
+    }
     let intention_ref = record_journal_intent(
         input.journal,
         input.identity,
@@ -148,6 +199,29 @@ pub(crate) fn repair_verified_metadata<
     package: &str,
     kind: JournalMutationKind,
 ) -> Result<(), OrchestratorError> {
+    verify_binding(input)?;
+    super::verify_standalone_sequence_room(input)?;
+    let capacity = crate::crate_release_journal::CapacityReservation::prepare(
+        input.journal_receipt,
+        input.admission,
+        input.intent,
+        input.request,
+        input.source,
+        input.git,
+    )?;
+    repair_verified_metadata_with_capacity(input, package, kind, &capacity)
+}
+
+pub(super) fn repair_verified_metadata_with_capacity<
+    J: JournalIo + crate::crate_release_journal::JournalOperationRefs,
+    G: GitHubAdmissionRead + super::super::CrateReleaseRepairWrite,
+    R: CrateRegistryRead,
+>(
+    input: &CrateReleaseObservation<'_, J, G, R>,
+    package: &str,
+    kind: JournalMutationKind,
+    capacity: &crate::crate_release_journal::CapacityReservation,
+) -> Result<(), OrchestratorError> {
     let sequence = input
         .sequence
         .checked_add(1)
@@ -178,6 +252,14 @@ pub(crate) fn repair_verified_metadata<
         return Err(invalid());
     }
     authorize_github_candidate(input.request, &input.admission.github, input.github)?;
+    capacity.verify_mutation(&JournalMutation {
+        sequence: input.sequence,
+        package: selected.source.name.clone(),
+        version: selected.source.version.clone(),
+        kind,
+        semver_evidence: None,
+        phase: JournalMutationPhase::Intended,
+    })?;
     record_journal_intent(
         input.journal,
         input.identity,
@@ -208,7 +290,10 @@ pub(crate) fn repair_verified_metadata<
         )?,
         JournalMutationKind::Upload => return Err(invalid()),
     }
-    record_verified_mutation(&CrateReleaseObservation { sequence, ..*input })?;
+    record_verified_mutation_with_capacity(
+        &CrateReleaseObservation { sequence, ..*input },
+        capacity,
+    )?;
     Ok(())
 }
 
@@ -234,6 +319,27 @@ pub(crate) fn record_verified_mutation<
     R: CrateRegistryRead,
 >(
     input: &CrateReleaseObservation<'_, J, G, R>,
+) -> Result<String, OrchestratorError> {
+    verify_binding(input)?;
+    super::verify_standalone_sequence_room(input)?;
+    let capacity = crate::crate_release_journal::CapacityReservation::prepare(
+        input.journal_receipt,
+        input.admission,
+        input.intent,
+        input.request,
+        input.source,
+        input.git,
+    )?;
+    record_verified_mutation_with_capacity(input, &capacity)
+}
+
+pub(super) fn record_verified_mutation_with_capacity<
+    J: JournalIo + crate::crate_release_journal::JournalOperationRefs,
+    G: GitHubAdmissionRead,
+    R: CrateRegistryRead,
+>(
+    input: &CrateReleaseObservation<'_, J, G, R>,
+    capacity: &crate::crate_release_journal::CapacityReservation,
 ) -> Result<String, OrchestratorError> {
     verify_binding(input)?;
     authorize_github_candidate(input.request, &input.admission.github, input.github)?;
@@ -275,6 +381,7 @@ pub(crate) fn record_verified_mutation<
         semver_evidence: None,
         phase: JournalMutationPhase::Observed { result },
     };
+    capacity.verify_mutation(&mutation)?;
     record_verified_observation(
         input.journal,
         input.identity,

@@ -106,6 +106,7 @@ fn read_regular(
     let mut count = 0_u64;
     let mut buffer = [0_u8; 16 * 1024];
     loop {
+        velnor_actions_mise::CheckDeadline::check_scope().map_err(|_| invalid())?;
         let n = file.read(&mut buffer).map_err(|_| invalid())?;
         if n == 0 {
             break;
