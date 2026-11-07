@@ -282,7 +282,10 @@ fn mise_step(pins: &ProductReleasePins) -> Result<Yaml, RenderError> {
 
 fn phase_step(name: &str, phase: &str, always: bool, env: Vec<(String, Yaml)>) -> Yaml {
     let mut fields = vec![("name".to_owned(), Yaml::str(name))];
-    if phase == "qualify-linux-x64-native-validator-tools" {
+    if matches!(
+        phase,
+        "qualify-linux-x64-native-validator-tools" | "observe-hosted-docker-identity"
+    ) {
         fields.push((
             "if".to_owned(),
             Yaml::str("success() && github.event_name == 'workflow_dispatch'"),

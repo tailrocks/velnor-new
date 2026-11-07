@@ -30,6 +30,14 @@ def verify_download_and_archive_guards():
         pass
     else:
         raise AssertionError("untrusted redirect accepted")
+    try:
+        request = module.urllib.request.Request("https://static.rust-lang.org/dist/tool")
+        module.FixtureRedirect("static.rust-lang.org").redirect_request(
+            request, None, 302, "", {}, "https://github.com/tool")
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("Rust component redirect crossed trusted host")
     class Response:
         status = 200
         url = "https://github.com/tool"
@@ -268,6 +276,102 @@ def verify_recovery_release_asset_staging():
             assert not list(destination.iterdir())
 
 
+def verify_historical_rust_component_staging():
+    script = pathlib.Path(__file__).with_name("prepare-gh-fixture-tools.py")
+    spec = importlib.util.spec_from_file_location("rust_component_staging", script)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    payloads = {name: ("fixture " + name).encode() for name in ("cargo", "rustc", "rust-std")}
+    target = "x86_64-unknown-linux-gnu"
+    def manifest(values):
+        return "".join(f'[pkg.{name}.target.{target}]\navailable = true\nxz_url = "https://static.rust-lang.org/dist/2026-07-16/{name}-1.97.1-{target}.tar.xz"\nxz_hash = "{hashlib.sha256(data).hexdigest()}"\n' for name, data in values.items())
+    class Response:
+        status = 200
+        def __init__(self, url, data): self.url, self.stream = url, io.BytesIO(data)
+        def __enter__(self): return self
+        def __exit__(self, *_): return False
+        def read(self, amount): return self.stream.read(amount)
+    class Opener:
+        def open(self, request, **_):
+            name = request.full_url.rsplit("/", 1)[1].split("-1.97.1-", 1)[0]
+            return Response(request.full_url, payloads[name])
+    with tempfile.TemporaryDirectory() as work:
+        root = pathlib.Path(work)
+        catalog = root / "crates/velnor-actions-contract/src/config/rust_channel_manifests.rs"
+        catalog.parent.mkdir(parents=True)
+        destination = root / "stage"
+        destination.mkdir()
+        channel = destination / "channel-rust-1.97.1.toml"
+        def set_manifest(content):
+            raw = content.encode()
+            channel.write_bytes(raw)
+            catalog.write_text(f'("1.97.1", "{hashlib.sha256(raw).hexdigest()}", "2026-07-16")')
+        set_manifest(manifest(payloads))
+        with mock.patch.object(module.ssl, "create_default_context", return_value=object()), \
+             mock.patch.object(module.urllib.request, "HTTPSHandler", return_value=object()), \
+             mock.patch.object(module.urllib.request, "build_opener", return_value=Opener()):
+            module.stage_historical_rust_components(root, destination)
+            output = destination / "recovery-rust-components"
+            assert all((output / "verified" / (name + ".tar.xz")).read_bytes() == data for name, data in payloads.items())
+            try:
+                module.stage_historical_rust_components(root, destination)
+            except ValueError as error:
+                assert "already exists" in str(error)
+            else:
+                raise AssertionError("existing Rust component destination overwritten")
+            shutil.rmtree(output)
+            bad_manifest = manifest(payloads).replace("https://static.rust-lang.org/", "https://attacker.invalid/", 1)
+            set_manifest(bad_manifest)
+            try:
+                module.stage_historical_rust_components(root, destination)
+            except ValueError as error:
+                assert "identity is invalid" in str(error)
+            else:
+                raise AssertionError("untrusted Rust component URL accepted")
+            assert not output.exists()
+            set_manifest(manifest(payloads))
+            channel.write_bytes(b"changed manifest")
+            try:
+                module.stage_historical_rust_components(root, destination)
+            except ValueError as error:
+                assert "manifest digest mismatch" in str(error)
+            else:
+                raise AssertionError("tampered Rust channel accepted")
+            set_manifest(manifest(payloads))
+            output.symlink_to(root / "outside")
+            try:
+                module.stage_historical_rust_components(root, destination)
+            except ValueError as error:
+                assert "already exists" in str(error)
+            else:
+                raise AssertionError("Rust component symlink accepted")
+            output.unlink()
+            payloads["rustc"] = b"tampered"
+            try:
+                module.stage_historical_rust_components(root, destination)
+            except ValueError as error:
+                assert "digest mismatch" in str(error)
+            else:
+                raise AssertionError("tampered Rust component accepted")
+            assert not output.exists()
+            assert sorted(path.name for path in destination.iterdir()) == [channel.name]
+            set_manifest(manifest({"cargo": payloads["cargo"]}))
+            try:
+                module.stage_historical_rust_components(root, destination)
+            except KeyError:
+                pass
+            else:
+                raise AssertionError("missing Rust component accepted")
+            set_manifest(manifest(payloads) + manifest({"cargo": payloads["cargo"]}))
+            try:
+                module.stage_historical_rust_components(root, destination)
+            except ValueError:
+                pass
+            else:
+                raise AssertionError("duplicate Rust channel table accepted")
+
+
 def main():
     with tempfile.TemporaryDirectory() as work:
         root = pathlib.Path(work)
@@ -339,6 +443,7 @@ def main():
 
 
 if __name__ == "__main__":
+    verify_historical_rust_component_staging()
     verify_recovery_release_asset_staging()
     verify_historical_rust_manifest_staging()
     verify_download_and_archive_guards()

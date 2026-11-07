@@ -166,6 +166,17 @@ fn assert_manual_native_validator_step(rendered: &str) -> Result<(), Box<dyn Err
     assert!(manual_qualification.contains(
         "run: bash scripts/generator-release/source-qualification.sh qualify-linux-x64-native-validator-tools"
     ));
+    let probe = rendered
+        .find("- name: Observe hosted Docker identity")
+        .ok_or("manual Docker observation was not rendered")?;
+    let end = rendered[probe + 1..]
+        .find("\n      - name:")
+        .map_or(rendered.len(), |offset| probe + 1 + offset);
+    let manual_probe = &rendered[probe..end];
+    assert!(manual_probe.contains("if: success() && github.event_name == 'workflow_dispatch'"));
+    assert!(manual_probe.contains(
+        "run: bash scripts/generator-release/source-qualification.sh observe-hosted-docker-identity"
+    ));
     Ok(())
 }
 
