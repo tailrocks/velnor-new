@@ -8,3 +8,4 @@ mod group_ledger;
 mod mbx_generation;
 mod runner_image_publication;
 mod ubuntu_runner_public;
+mod workflow_task_namespace;
