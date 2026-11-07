@@ -3,11 +3,13 @@
 
 use super::{
     Cell, CrateRegistryRead, CrateRegistryResponse, CrateReleaseRepairWrite, GitHubAdmissionRead,
-    Github, HistoricalAuthority, JournalRegistryFake, MixedGithub, MixedRegistry, NewRegistry,
-    OrchestratorError, Value, fixture_archive, fixture_journal_plan, fixture_no_baseline, json,
-    make_fixture, prepare_crate_release, test_git,
+    Github, JournalRegistryFake, MixedGithub, MixedRegistry, NewRegistry, OrchestratorError, Value,
+    fixture_archive, fixture_journal_plan, json, make_fixture, prepare_crate_release, test_git,
 };
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+use super::{HistoricalAuthority, fixture_no_baseline};
 
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
 pub(super) fn verify_created_crate_recovers_without_reupload(
     input: &crate::release::package_release_signer::AdmittedStart<
         '_,
@@ -71,6 +73,7 @@ pub(super) fn verify_created_crate_recovers_without_reupload(
     Ok(())
 }
 
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
 pub(super) fn reject_untrusted_prior_creation(
     input: &crate::release::package_release_signer::AdmittedStart<
         '_,
