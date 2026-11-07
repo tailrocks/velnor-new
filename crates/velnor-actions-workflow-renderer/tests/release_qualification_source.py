@@ -16,7 +16,7 @@ FILES = {
             "release_manager_policy_files.py", "release_manager_policy.py", "release_export_contract.py",
             "release_rendered_entry.py"),
     "tests": ("release_qualification_source.py", "release_watch_fixture.py",
-              "release_manager_policy_systemd_test.py",
+              "release_manager_policy_systemd_test.py", "release_manager_home_access_test.py",
               "release_manager_scenario_controller_test.py", "release_manager_proxy_test.py", "release_manager_qualification.py",
               "release_manager_scenario_controller.py", "release_manager_systemd_test.py",
               "release_publish_entry_offline_test.py", "release_publish_entry_systemd_test.py",
