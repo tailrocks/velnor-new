@@ -77,7 +77,7 @@ fn available_entries(batch: &velnor_runner_github::ParsedBatch) -> Option<Availa
     let mut entries: Vec<AvailableEntry> = Vec::new();
     let mut request_ids = Vec::new();
     for job in &batch.jobs {
-        if job.kind != InnerKind::Available {
+        if !matches!(job.kind, InnerKind::Available | InnerKind::Assigned) {
             continue;
         }
         let request_id = job.request_id.filter(|id| *id > 0)?;

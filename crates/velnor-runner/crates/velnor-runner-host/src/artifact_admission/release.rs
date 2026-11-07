@@ -205,12 +205,7 @@ fn validate_release_checksum_rows(
     assets: &std::collections::BTreeMap<String, Asset>,
     checksums: &std::collections::BTreeMap<String, String>,
 ) -> Result<(), HostError> {
-    for name in [
-        "velnor-runner-linux-amd64.tar",
-        "velnor-dind-linux-amd64.tar",
-        ARCHIVE_ASSET,
-        MANIFEST_ASSET,
-    ] {
+    for name in checksums::EXPECTED_ASSETS {
         let asset = assets.get(name).ok_or(HostError::Identity)?;
         if asset_hex(asset)? != checksums::asset_digest(checksums, name)? {
             return Err(HostError::Identity);

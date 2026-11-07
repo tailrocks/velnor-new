@@ -42,6 +42,8 @@ pub(in crate::journal::execution_authorization) struct RequestSource {
     pub(in crate::journal::execution_authorization) workflow: RequestWorkflow,
     pub(in crate::journal::execution_authorization) workflow_source_sha: Option<String>,
     pub(in crate::journal::execution_authorization) run_attempt: i64,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub(in crate::journal::execution_authorization) already_assigned: bool,
 }
 
 #[derive(Deserialize, Serialize)]

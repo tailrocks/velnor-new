@@ -6,14 +6,18 @@ use std::collections::BTreeMap;
 use crate::error::HostError;
 
 use super::hash::is_lower_hex;
-use super::manifest::{ARCHIVE_ASSET, MANIFEST_ASSET};
+use super::manifest::{
+    ARCHIVE_ASSET, DIND_ASSET, LICENSE_ASSET, MANIFEST_ASSET, NOTICE_ASSET, RUNNER_ASSET,
+};
 
 pub(super) const MAX_CHECKSUM_BYTES: usize = 64 * 1024;
-const EXPECTED_ASSETS: [&str; 4] = [
-    "velnor-runner-linux-amd64.tar",
-    "velnor-dind-linux-amd64.tar",
+pub(super) const EXPECTED_ASSETS: [&str; 6] = [
+    RUNNER_ASSET,
+    DIND_ASSET,
     ARCHIVE_ASSET,
     MANIFEST_ASSET,
+    LICENSE_ASSET,
+    NOTICE_ASSET,
 ];
 
 pub(super) fn parse(bytes: &[u8]) -> Result<BTreeMap<String, String>, HostError> {

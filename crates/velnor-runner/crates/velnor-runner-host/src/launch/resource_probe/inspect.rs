@@ -196,7 +196,7 @@ fn host_matches(projection: &ProbeProjection, response: &ContainerInspectRespons
         && actual.pid_mode.as_deref() == Some("host")
         && actual.cap_drop.as_deref() == Some(["ALL".to_owned()].as_slice())
         && actual.cap_add.as_ref().is_none_or(Vec::is_empty)
-        && actual.security_opt.as_deref() == Some(["no-new-privileges:true".to_owned()].as_slice())
+        && security_opt_matches(actual.security_opt.as_deref())
         && actual.devices.as_ref().is_none_or(Vec::is_empty)
         && actual.device_requests.as_ref().is_none_or(Vec::is_empty)
         && actual.binds.as_ref().is_none_or(Vec::is_empty)
@@ -241,6 +241,17 @@ fn expected_bind(mount: &bollard::models::Mount, source: &str, target: &str) -> 
 
 fn no_resource_limit(value: Option<i64>) -> bool {
     value.is_none_or(|value| value == 0)
+}
+
+fn security_opt_matches(security_opt: Option<&[String]>) -> bool {
+    match security_opt {
+        Some([only]) => only == "no-new-privileges:true",
+        Some([first, second]) => {
+            (first == "no-new-privileges:true" && second == "label=disable")
+                || (first == "label=disable" && second == "no-new-privileges:true")
+        }
+        _ => false,
+    }
 }
 
 fn mounts_match(projection: &ProbeProjection, response: &ContainerInspectResponse) -> bool {

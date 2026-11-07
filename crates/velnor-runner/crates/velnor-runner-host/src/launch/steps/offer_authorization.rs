@@ -34,15 +34,15 @@ pub(in crate::launch) async fn authorize_offer_with_transport<T: Transport + ?Si
             Err(source_blocked(source::SourceBlock::ClosedWorldUnproven))
         };
     };
-    let source = batch
+    let job = batch
         .jobs
         .iter()
         .find(|job| {
-            matches!(job.kind, velnor_runner_github::InnerKind::Available)
-                && job.request_id == Some(request_id)
+            crate::assign::is_active_offer_job(batch, job) && job.request_id == Some(request_id)
         })
-        .map(|job| &job.source)
         .ok_or_else(|| source_blocked(source::SourceBlock::Missing))?;
+    let already_assigned = job.kind == velnor_runner_github::InnerKind::Assigned;
+    let source = &job.source;
     if source.complete().is_none() {
         return Err(source_blocked(source::SourceBlock::Missing));
     }
@@ -60,7 +60,8 @@ pub(in crate::launch) async fn authorize_offer_with_transport<T: Transport + ?Si
         token,
         transport,
     )
-    .map_err(source_blocked)?;
+    .map_err(source_blocked)?
+    .with_already_assigned(already_assigned);
     let identity = scoped
         .assignment_identity(AssignmentKey::AssignedRequest { request_id })
         .await
