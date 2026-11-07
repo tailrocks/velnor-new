@@ -34,14 +34,14 @@ pub fn velnor_bunfig(
     if let Some(install) = install {
         lines.extend(install_lines(install)?);
     }
-    if with_token {
-        for scope in scopes {
-            if !is_scope(scope) {
-                return Err(BunError::new("bunfig_scope", scope));
-            }
-            lines.push(String::new());
-            lines.push(format!("[install.scopes.\"{scope}\"]"));
-            lines.push(format!("url = \"{NPM_REGISTRY_URL}\""));
+    for scope in scopes {
+        if !is_scope(scope) {
+            return Err(BunError::new("bunfig_scope", scope));
+        }
+        lines.push(String::new());
+        lines.push(format!("[install.scopes.\"{scope}\"]"));
+        lines.push(format!("url = \"{NPM_REGISTRY_URL}\""));
+        if with_token {
             lines.push(format!("token = \"${NPM_TOKEN_ENV}\""));
         }
     }

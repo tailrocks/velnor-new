@@ -15,6 +15,8 @@ mod bun_assets_routing_support;
 mod bun_dispositions;
 #[path = "workflow_configuration_public/bun_expansion.rs"]
 mod bun_expansion;
+#[path = "workflow_configuration_public/bun_lifecycle_scope.rs"]
+mod bun_lifecycle_scope;
 #[path = "workflow_configuration_public/bun_malformed.rs"]
 mod bun_malformed;
 #[path = "workflow_configuration_public/bun_planning.rs"]
@@ -260,3 +262,6 @@ mod verdict_toolchain;
 
 #[path = "workflow_configuration_public/both_shared_producers.rs"]
 mod both_shared_producers;
+
+#[path = "workflow_configuration_public/oracle_input_selection.rs"]
+mod oracle_input_selection;

@@ -107,7 +107,7 @@ be green.
 - for each `[private_sources] npm_scopes` entry it adds
   `[install.scopes."@scope"]` with `url = "https://npm.pkg.github.com/"` and
   `token = "$VELNOR_NPM_READ_TOKEN"`. The lifecycle phase uses a second file
-  without the scope section.
+  with the same scope sections and `url` but no `token`.
 
 ## Generated job
 
@@ -168,7 +168,7 @@ and the job holds `packages: read`:
    `bunfig_registry_override` on a registry, scope, token or certificate, writes
    `$RUNNER_TEMP/velnor/bun/registry.toml` (each scope mapped to
    `https://npm.pkg.github.com/` with `token = "$VELNOR_NPM_READ_TOKEN"`) and
-   `lifecycle.toml` (the same without the scopes), then starts
+   `lifecycle.toml` (the same scope tables and `url` without the `token`), then starts
    `mise exec bun@<pin> -- bun install --frozen-lockfile --ignore-scripts
    --cwd=<root> --config=<registry.toml>` under the private-fetch policy: a
    cleared environment, `PATH`/`HOME`/`TMPDIR`, the Mise isolation keys,
@@ -180,10 +180,12 @@ and the job holds `packages: read`:
    the `trustedDependencies` lifecycle scripts. Measured with Bun 1.4.2: a
    plain `bun install` over an existing `node_modules` is a no-op and runs no
    scripts, while the same install after removing `node_modules` completes from the
-   warm cache with the network unreachable and runs them. Whether Bun refetches
-   scoped package metadata in this phase against the real registry is a
-   qualification item; the fallback is for the registry operation to pre-fetch
-   the scoped tarballs itself.
+   warm cache with the network unreachable and runs them. `lifecycle.toml` keeps
+   every scope's `url` so Bun resolves scoped packages under the cache entry name
+   the registry phase wrote (`@scope/name@version@@npm.pkg.github.com@@@1`);
+   without the `url` Bun looks them up as `name@version@@@1`, misses the cache and
+   downloads the lockfile URL without a token (HTTP 401). The
+   `bun_lifecycle_scope` tests pin both renderings.
 
 The org admin must grant "Manage Actions access" read on each npm package to the
 consuming repository after its first publish; there is no API for it.
@@ -235,8 +237,8 @@ hash-pinned lock. Decisions:
 
 - Never `playwright install --with-deps` and never repository-resolved code
   (`node_modules`) with `sudo`. The `ubuntu-26.04` hosted image carries
-  Chromium's system libraries but not WebKit's or Firefox's
-  (tailrocks/velnor-new#352). A job whose browsers include `webkit` or
+  Chromium's system libraries but not WebKit's or Firefox's.
+  A job whose browsers include `webkit` or
   `firefox` carries `VELNOR_PLAYWRIGHT_SYSTEM_DEPS=<sorted browsers>` on its
   install step; before the archives, the operation downloads the
   `playwright-core` tarball of the locked version from the npm registry,
@@ -252,8 +254,6 @@ hash-pinned lock. Decisions:
   pinned by the step's archives fails
   (`playwright_system_deps_unpinned:<browser>`), a tampered tarball never runs
   (`playwright_core_integrity_mismatch`), and Chromium-only jobs are unchanged.
-  Coordinator decision, 2026-10-23, under the owner's autonomy rule (the
-  issue's option 1 through Playwright's own mechanism); owner may revisit.
 - `velnor-actions playwright lock` (operator-run, like `deps lock`) writes
   `.velnor/playwright.lock` for the union of each member's `browsers` and the
   `browsers` of every suite it declares (a suites-only member is locked too). For each Playwright version it downloads the
@@ -313,12 +313,6 @@ Declared suites (separate jobs for groups of a member's scripts, optionally a
 Playwright project and shard matrix) are specified in
 [Bun browser suites](bun-browser-suites.md).
 
-## Suites and Playwright sharding
-
-Declared suites (separate jobs for groups of a member's scripts, optionally a
-Playwright project and shard matrix) are specified in
-[Bun browser suites](bun-browser-suites.md).
-
 ## Remaining work
 
 - Members of an npm publication that depend on private npm scopes (the
@@ -347,5 +341,3 @@ Playwright project and shard matrix) are specified in
   resolution and install fixtures with real zip and tar.gz archives
   (`playwright_lock_tests.rs`, `playwright_install_tests.rs` in the
   orchestrator), job shape and failures (`impl_bun.rs`, `impl_renderer_bun.rs`).
-  A real-network run of `playwright lock` and the install against Playwright
-  1.64.1 (Chromium, 3 archives) was checked by hand on macOS.
