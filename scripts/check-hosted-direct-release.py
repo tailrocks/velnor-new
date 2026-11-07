@@ -36,7 +36,20 @@ result = subprocess.run(
     env=env, capture_output=True, timeout=780, check=False,
 )
 if result.returncode != 0 or len(result.stdout) > 65536:
-    raise SystemExit(f'direct-release tests failed: status={result.returncode} stdout_bytes={len(result.stdout)}')
+    failed = set()
+    if len(result.stdout) <= 65536:
+        for line in result.stdout.splitlines():
+            try:
+                event = json.loads(line)
+                if event.get('type') == 'test' and event.get('event') == 'failed':
+                    name = event.get('name', '').rsplit('::', 1)[-1]
+                    if name in tests:
+                        failed.add(name)
+            except (ValueError, TypeError, AttributeError):
+                pass
+    details = ','.join(sorted(failed)) if failed else 'unavailable'
+    raise SystemExit(f'direct-release tests failed: status={result.returncode} '
+                     f'stdout_bytes={len(result.stdout)} failed_tests={details}')
 
 def unique(pairs):
     data = {}
