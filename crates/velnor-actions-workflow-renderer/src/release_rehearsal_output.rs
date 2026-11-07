@@ -4,6 +4,22 @@
 use super::{map, step};
 use crate::yaml::Yaml;
 
+#[derive(Clone, Copy)]
+pub(super) enum OutputLocation {
+    Produced,
+    Transferred,
+}
+
+pub(super) fn validation_script(location: OutputLocation) -> String {
+    let relative = match location {
+        OutputLocation::Produced => "rehearsal-output.tar",
+        OutputLocation::Transferred => "output/rehearsal-output.tar",
+    };
+    format!(
+        "set -euo pipefail\np=\"$RUNNER_TEMP/{relative}\"\ntest ! -L \"$p\"\ntest -f \"$p\"\ntest -s \"$p\"\ntest \"$(wc -c < \"$p\")\" -le 104857600\n"
+    )
+}
+
 pub(super) fn append_output_witness_steps(steps: &mut Vec<Yaml>) {
     steps.push(map(vec![
         (
@@ -18,7 +34,11 @@ pub(super) fn append_output_witness_steps(steps: &mut Vec<Yaml>) {
             ]),
         ),
     ]));
-    steps.push(step("Validate transferred rehearsal output", "set -euo pipefail\np=\"$RUNNER_TEMP/output/rehearsal-output.tar\"\ntest ! -L \"$p\" && test -f \"$p\"\ntest \"$(wc -c < \"$p\")\" -le 104857600\n", map(vec![])));
+    steps.push(step(
+        "Validate transferred rehearsal output",
+        &validation_script(OutputLocation::Transferred),
+        map(vec![]),
+    ));
     steps.push(map(vec![
         ("id", Yaml::str("output_upload")),
         (

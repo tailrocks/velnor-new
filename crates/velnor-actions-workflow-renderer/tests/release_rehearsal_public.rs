@@ -215,31 +215,60 @@ fn output_validation_rejects_symlink_and_oversized_file() -> Result<(), Box<dyn 
     rehearsal.output_bundle = true;
     let rendered = rehearsal::render(&rehearsal, "0.1.73")?;
     let workflow: serde_json::Value = serde_saphyr::from_str(&rendered.bytes)?;
-    let steps = workflow["jobs"]["execute"]["steps"]
-        .as_array()
-        .ok_or("missing steps")?;
-    let script = steps
-        .iter()
-        .find(|step| step["name"] == "Validate untrusted rehearsal output")
-        .and_then(|step| step["run"].as_str())
-        .ok_or("missing validator")?;
-    let temp = tempfile::tempdir()?;
-    let output = temp.path().join("rehearsal-output.tar");
-    let run = || {
-        std::process::Command::new("bash")
-            .arg("-c")
-            .arg(script)
-            .env("RUNNER_TEMP", temp.path())
-            .status()
-    };
-    std::fs::write(&output, b"bundle")?;
-    assert!(run()?.success());
-    std::fs::remove_file(&output)?;
-    symlink("elsewhere", &output)?;
-    assert!(!run()?.success());
-    std::fs::remove_file(&output)?;
-    std::fs::File::create(&output)?.set_len(100 * 1024 * 1024 + 1)?;
-    assert!(!run()?.success());
+    for (job, name, relative) in [
+        (
+            "execute",
+            "Validate untrusted rehearsal output",
+            "rehearsal-output.tar",
+        ),
+        (
+            "witness",
+            "Validate transferred rehearsal output",
+            "output/rehearsal-output.tar",
+        ),
+    ] {
+        let steps = workflow["jobs"][job]["steps"]
+            .as_array()
+            .ok_or("missing steps")?;
+        let script = steps
+            .iter()
+            .find(|step| step["name"] == name)
+            .and_then(|step| step["run"].as_str())
+            .ok_or("missing validator")?;
+        let temp = tempfile::tempdir()?;
+        let output = temp.path().join(relative);
+        std::fs::create_dir_all(output.parent().ok_or("output parent")?)?;
+        let run = || {
+            std::process::Command::new("bash")
+                .arg("-c")
+                .arg(script)
+                .env("RUNNER_TEMP", temp.path())
+                .status()
+        };
+        assert!(!run()?.success(), "{job}: missing");
+        std::fs::write(&output, b"")?;
+        assert!(!run()?.success(), "{job}: empty");
+        std::fs::write(&output, b"bundle")?;
+        assert!(run()?.success());
+        std::fs::write(&output, b"x")?;
+        assert!(run()?.success(), "{job}: one byte");
+        std::fs::remove_file(&output)?;
+        symlink("elsewhere", &output)?;
+        assert!(!run()?.success());
+        std::fs::remove_file(&output)?;
+        let target = temp.path().join("nonempty");
+        std::fs::write(&target, b"bundle")?;
+        symlink(&target, &output)?;
+        assert!(!run()?.success(), "{job}: regular-file symlink");
+        std::fs::remove_file(&output)?;
+        std::fs::File::create(&output)?.set_len(100 * 1024 * 1024)?;
+        assert!(run()?.success(), "{job}: exact limit");
+        std::fs::File::create(&output)?.set_len(100 * 1024 * 1024 + 1)?;
+        assert!(!run()?.success());
+        std::fs::remove_file(&output)?;
+        std::fs::create_dir(&output)?;
+        assert!(!run()?.success(), "{job}: directory");
+    }
     Ok(())
 }
 

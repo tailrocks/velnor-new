@@ -117,7 +117,9 @@ pub fn verify_environment_approval(
             approval["environments"].as_array().is_some_and(|envs| {
                 envs.iter().any(|env| {
                     env["id"].as_u64() == Some(id)
-                        && env["name"].as_str() == Some(request.environment.as_str())
+                        && env["name"]
+                            .as_str()
+                            .is_some_and(|name| name.eq_ignore_ascii_case(&request.environment))
                 })
             })
         })

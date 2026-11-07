@@ -228,7 +228,11 @@ fn execute_job(config: &ReleaseRehearsalConfig) -> Yaml {
         ),
     ];
     if config.output_bundle {
-        steps.push(step("Validate untrusted rehearsal output", "set -euo pipefail\np=\"$RUNNER_TEMP/rehearsal-output.tar\"\ntest ! -L \"$p\" && test -f \"$p\"\ntest \"$(wc -c < \"$p\")\" -le 104857600\n", map(vec![])));
+        steps.push(step(
+            "Validate untrusted rehearsal output",
+            &output::validation_script(output::OutputLocation::Produced),
+            map(vec![]),
+        ));
         steps.push(map(vec![
             (
                 "uses",

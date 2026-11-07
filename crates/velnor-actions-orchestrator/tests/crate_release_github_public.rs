@@ -323,3 +323,6 @@ mod review_ties;
 
 #[path = "crate_release_github_public/reviews.rs"]
 mod reviews;
+
+#[path = "crate_release_github_public/environment_names.rs"]
+mod environment_names;

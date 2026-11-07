@@ -83,7 +83,9 @@ pub(super) fn verify_environment(
         encode(&request.environment)
     ))?;
     require(
-        env["name"].as_str() == Some(request.environment.as_str()),
+        env["name"]
+            .as_str()
+            .is_some_and(|name| name.eq_ignore_ascii_case(&request.environment)),
         "environment",
     )?;
     let id = env["id"]
