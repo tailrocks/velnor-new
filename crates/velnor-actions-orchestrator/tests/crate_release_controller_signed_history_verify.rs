@@ -66,33 +66,7 @@ pub(super) fn verify_frozen_predecessor_drift(
         let frozen = freeze()?;
         let refs = input.journal.refs.borrow().clone();
         let writes = input.journal.write_calls.get();
-        let prefix = format!(
-            "refs/tags/velnor-receipt/{}/{}",
-            prior.identity.run_id, prior.identity.run_attempt
-        );
-        match scenario {
-            0 => {
-                input
-                    .journal
-                    .refs
-                    .borrow_mut()
-                    .remove(&format!("{prefix}/publication-started"));
-            }
-            1 => {
-                input
-                    .journal
-                    .refs
-                    .borrow_mut()
-                    .insert(format!("{prefix}/operation-1"), "a".repeat(40));
-            }
-            _ => {
-                input
-                    .journal
-                    .refs
-                    .borrow_mut()
-                    .insert(format!("{prefix}/reconciled"), "a".repeat(40));
-            }
-        }
+        mutate_predecessor(input.journal, prior, scenario);
         let result = frozen.record_unprivileged(
             &crate::UnprivilegedSourceExecution,
             input.journal,
@@ -105,6 +79,40 @@ pub(super) fn verify_frozen_predecessor_drift(
         assert!(inspect_journal(input.journal, &identity, JournalStage::Completed)?.is_none());
     }
     Ok(())
+}
+
+fn mutate_predecessor(
+    journal: &super::super::JournalRegistryFake,
+    prior: &crate::crate_release_journal::JournalReceipt,
+    scenario: u8,
+) {
+    let prefix = format!(
+        "refs/tags/velnor-receipt/{}/{}",
+        prior.identity.run_id, prior.identity.run_attempt
+    );
+    match scenario {
+        0 => {
+            input
+                .journal
+                .refs
+                .borrow_mut()
+                .remove(&format!("{prefix}/publication-started"));
+        }
+        1 => {
+            input
+                .journal
+                .refs
+                .borrow_mut()
+                .insert(format!("{prefix}/operation-1"), "a".repeat(40));
+        }
+        _ => {
+            input
+                .journal
+                .refs
+                .borrow_mut()
+                .insert(format!("{prefix}/reconciled"), "a".repeat(40));
+        }
+    }
 }
 
 pub(super) fn verify_real_tool_measurement(
