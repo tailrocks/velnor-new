@@ -268,6 +268,16 @@ fn verify_attestation(
     token: &str,
     deadline: CheckDeadline,
 ) -> Result<(), OrchestratorError> {
+    #[cfg(test)]
+    if TEST_PROMOTION_VERIFICATIONS.with(|slot| {
+        let Some(count) = slot.get() else {
+            return false;
+        };
+        slot.set(Some(count + 1));
+        true
+    }) {
+        return Ok(());
+    }
     let args = [
         "attestation",
         "verify",
@@ -299,4 +309,19 @@ fn verify_attestation(
         return Err(internal("image_promotion_attestation"));
     }
     Ok(())
+}
+
+#[cfg(test)]
+thread_local! {
+    static TEST_PROMOTION_VERIFICATIONS: std::cell::Cell<Option<u8>> = const { std::cell::Cell::new(None) };
+}
+
+#[cfg(test)]
+pub(super) fn enable_test_promotion_verifier() {
+    TEST_PROMOTION_VERIFICATIONS.with(|slot| assert!(slot.replace(Some(0)).is_none()));
+}
+
+#[cfg(test)]
+pub(super) fn assert_test_promotion_verifier_used() {
+    TEST_PROMOTION_VERIFICATIONS.with(|slot| assert!(matches!(slot.replace(None), Some(1..=2))));
 }

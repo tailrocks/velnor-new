@@ -45,33 +45,38 @@ const EXPECTED_RUNNER_INPUTS: [&str; 34] = [
 ];
 
 #[test]
-fn public_runner_family_accepts_the_independent_complete_input_inventory()
+fn boundary_runner_family_accepts_the_independent_complete_input_inventory()
 -> Result<(), Box<dyn Error>> {
-    let expected = EXPECTED_RUNNER_INPUTS
-        .into_iter()
-        .map(str::to_owned)
-        .collect::<BTreeSet<_>>();
-    for profile in runner_profiles() {
-        let fixture = Fixture::new_for(profile)?;
-        let record: Value = serde_json::from_slice(&fs::read(&fixture.record)?)?;
-        let actual = record["source"]["inputs"]
-            .as_object()
-            .ok_or("publication record has no source input map")?
-            .keys()
-            .cloned()
-            .collect::<BTreeSet<_>>();
-        assert_eq!(actual, expected, "{} source inventory", profile.name());
-        let output = fixture.invoke()?;
-        assert!(
-            output.status.success(),
-            "{} publication failed: {}",
-            profile.name(),
-            String::from_utf8_lossy(&output.stderr)
-        );
-        assert!(fixture.last_fixture_error()?.is_none());
-        assert_eq!(fixture.registry_digest()?, Some(fixture.expected_digest));
-    }
-    Ok(())
+    super::run_isolated(
+        "source_closure::boundary_runner_family_accepts_the_independent_complete_input_inventory",
+        || {
+            let expected = EXPECTED_RUNNER_INPUTS
+                .into_iter()
+                .map(str::to_owned)
+                .collect::<BTreeSet<_>>();
+            for profile in runner_profiles() {
+                let fixture = Fixture::new_for(profile)?;
+                let record: Value = serde_json::from_slice(&fs::read(&fixture.record)?)?;
+                let actual = record["source"]["inputs"]
+                    .as_object()
+                    .ok_or("publication record has no source input map")?
+                    .keys()
+                    .cloned()
+                    .collect::<BTreeSet<_>>();
+                assert_eq!(actual, expected, "{} source inventory", profile.name());
+                let output = fixture.invoke_publication_boundary()?;
+                assert!(
+                    output.status.success(),
+                    "{} publication failed: {}",
+                    profile.name(),
+                    String::from_utf8_lossy(&output.stderr)
+                );
+                assert!(fixture.last_fixture_error()?.is_none());
+                assert_eq!(fixture.registry_digest()?, Some(fixture.expected_digest));
+            }
+            Ok(())
+        },
+    )
 }
 
 #[test]
@@ -295,19 +300,25 @@ fn source_bytes(path: &str) -> Result<Vec<u8>, Box<dyn Error>> {
 }
 
 #[test]
-fn job_publication_rejects_wrong_attested_source_closure_digest() -> Result<(), Box<dyn Error>> {
-    let fixture = Fixture::new()?;
-    let before = fixture.preseed_registry_state()?;
-    fixture.corrupt_job_closure_attestation()?;
-    let output = fixture.invoke()?;
-    assert!(!output.status.success());
-    assert!(
-        String::from_utf8_lossy(&output.stderr)
-            .contains("package_attestation_subject_inventory_mismatch"),
-        "unexpected rejection: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    assert!(!fixture.receipt.exists());
-    assert_eq!(fixture.registry_state()?, before);
-    Ok(())
+fn boundary_job_publication_rejects_wrong_attested_source_closure_digest()
+-> Result<(), Box<dyn Error>> {
+    super::run_isolated(
+        "source_closure::boundary_job_publication_rejects_wrong_attested_source_closure_digest",
+        || {
+            let fixture = Fixture::new()?;
+            let before = fixture.preseed_registry_state()?;
+            fixture.corrupt_job_closure_attestation()?;
+            let output = fixture.invoke_publication_boundary()?;
+            assert!(!output.status.success());
+            assert!(
+                String::from_utf8_lossy(&output.stderr)
+                    .contains("package_attestation_subject_inventory_mismatch"),
+                "unexpected rejection: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            assert!(!fixture.receipt.exists());
+            assert_eq!(fixture.registry_state()?, before);
+            Ok(())
+        },
+    )
 }

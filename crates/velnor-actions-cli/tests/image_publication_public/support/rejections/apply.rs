@@ -26,6 +26,7 @@ impl Fixture {
             })?,
             RejectionCase::WrongSelectedSource => self.update_record(|record| {
                 record["source"]["commit"] = json!("c".repeat(40));
+                record["workflow"]["authority_commit"] = json!("c".repeat(40));
             })?,
             RejectionCase::WrongCallerWorkflow => self.update_state(|state| {
                 state["producer"]["path"] = json!(".github/workflows/untrusted.yml");
@@ -119,14 +120,9 @@ impl Fixture {
             RejectionCase::WrongQualifierSignerSha => self.update_state(|state| {
                 state["qualifier"]["referenced_workflows"][0]["sha"] = json!("c".repeat(40));
             })?,
-            RejectionCase::WrongQualifierAttempt => {
-                self.update_qualification_proof(|proof| {
-                    proof["qualifier_run_attempt"] = json!(2);
-                })?;
-                self.update_state(|state| {
-                    state["qualifier"]["run_attempt"] = json!(2);
-                })?;
-            }
+            RejectionCase::WrongQualifierAttempt => self.update_state(|state| {
+                state["qualifier_response_run_attempt"] = json!(2);
+            })?,
             RejectionCase::WrongQualifierJobId => {
                 self.update_qualification_proof(|proof| {
                     proof["qualifier_job_id"] = json!(761_999_999_u64);

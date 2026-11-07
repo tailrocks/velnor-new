@@ -13,6 +13,15 @@ the producer emits the closed records below and OCI-layout archives from the
 same image builds. Do not add a rebuild or a Docker-save conversion in the
 privileged publisher.
 
+The runner publication boundary tests inject verified attestation reports into
+test-only code. They do not prove a successful public CLI publication with a
+real signature. Add that end-to-end test using an actual signed qualification
+proof and its exact producer artifact when this producer and signer exist.
+Job-image boundary tests use the same test-only injection and also need a
+separate successful public CLI test with a real signed candidate.
+Promotion boundary tests likewise inject verifier success; their positive cases
+do not establish that a real signature was verified.
+
 ## Image family
 
 | Component | Repository | Platform |

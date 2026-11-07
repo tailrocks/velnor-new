@@ -8,40 +8,45 @@ use serde_json::{Value, json};
 use super::support::{Fixture, FixtureProfile};
 
 #[test]
-fn public_publication_selects_the_attempt_artifact_from_later_pages() -> Result<(), Box<dyn Error>>
+fn boundary_publication_selects_the_attempt_artifact_from_later_pages() -> Result<(), Box<dyn Error>>
 {
-    let fixture = Fixture::new_for(FixtureProfile::Runner)?;
-    let state = fixture.read_github_state()?;
-    let artifact = state["artifacts"][0].clone();
-    let first = (0..100)
-        .map(|offset| {
-            let mut filler = artifact.clone();
-            filler["id"] = json!(900_000 + offset);
-            filler["name"] = json!(format!("unrelated-{offset}"));
-            filler
-        })
-        .collect::<Vec<_>>();
-    fixture.update_github_state(|state| {
-        state["artifact_pages"] = json!([
-            {"total_count":101,"artifacts":first},
-            {"total_count":101,"artifacts":[artifact.clone()]}
-        ]);
-        Ok(())
-    })?;
-    let output = fixture.invoke()?;
-    assert!(
-        output.status.success(),
-        "later artifact page failed: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    let receipt: Value = super::support::read_receipt(&fixture.receipt)?;
-    assert_eq!(receipt["artifact_id"], fixture.artifact_id);
-    assert_eq!(
-        fixture.registry_digest()?,
-        Some(fixture.expected_digest.clone())
-    );
-    assert!(fixture.last_fixture_error()?.is_none());
-    Ok(())
+    super::run_isolated(
+        "publication_collections::boundary_publication_selects_the_attempt_artifact_from_later_pages",
+        || {
+            let fixture = Fixture::new_for(FixtureProfile::Runner)?;
+            let state = fixture.read_github_state()?;
+            let artifact = state["artifacts"][0].clone();
+            let first = (0..100)
+                .map(|offset| {
+                    let mut filler = artifact.clone();
+                    filler["id"] = json!(900_000 + offset);
+                    filler["name"] = json!(format!("unrelated-{offset}"));
+                    filler
+                })
+                .collect::<Vec<_>>();
+            fixture.update_github_state(|state| {
+                state["artifact_pages"] = json!([
+                    {"total_count":101,"artifacts":first},
+                    {"total_count":101,"artifacts":[artifact.clone()]}
+                ]);
+                Ok(())
+            })?;
+            let output = fixture.invoke_publication_boundary()?;
+            assert!(
+                output.status.success(),
+                "later artifact page failed: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            let receipt: Value = super::support::read_receipt(&fixture.receipt)?;
+            assert_eq!(receipt["artifact_id"], fixture.artifact_id);
+            assert_eq!(
+                fixture.registry_digest()?,
+                Some(fixture.expected_digest.clone())
+            );
+            assert!(fixture.last_fixture_error()?.is_none());
+            Ok(())
+        },
+    )
 }
 
 #[test]
@@ -121,27 +126,32 @@ fn public_publication_rejects_incomplete_and_ambiguous_artifact_pages_before_wri
 }
 
 #[test]
-fn public_publication_reads_later_attestor_job_pages_and_rejects_duplicate_ids()
+fn boundary_publication_reads_later_attestor_job_pages_and_rejects_duplicate_ids()
 -> Result<(), Box<dyn Error>> {
-    for (profile, key, expected_name, error) in [
-        (
-            FixtureProfile::Runner,
-            "qualifier_job_pages",
-            "qualify-images",
-            "image_qualification_proof_job",
-        ),
-        (
-            FixtureProfile::Job,
-            "attestor_job_pages",
-            "Attest Linux job image candidate",
-            "image_job_attestation_job",
-        ),
-    ] {
-        reject_duplicate_attestor_names(profile, key, error)?;
-        publish_with_later_attestor_job(profile, key, expected_name)?;
-        reject_duplicate_attestor_ids(profile, key)?;
-    }
-    Ok(())
+    super::run_isolated(
+        "publication_collections::boundary_publication_reads_later_attestor_job_pages_and_rejects_duplicate_ids",
+        || {
+            for (profile, key, expected_name, error) in [
+                (
+                    FixtureProfile::Runner,
+                    "qualifier_job_pages",
+                    "qualify-images",
+                    "image_qualification_proof_job",
+                ),
+                (
+                    FixtureProfile::Job,
+                    "attestor_job_pages",
+                    "Attest Linux job image candidate",
+                    "image_job_attestation_job",
+                ),
+            ] {
+                reject_duplicate_attestor_names(profile, key, error)?;
+                publish_with_later_attestor_job(profile, key, expected_name)?;
+                reject_duplicate_attestor_ids(profile, key)?;
+            }
+            Ok(())
+        },
+    )
 }
 
 fn reject_duplicate_attestor_names(
@@ -220,7 +230,7 @@ fn publish_with_later_attestor_job(
         ]);
         Ok(())
     })?;
-    let output = duplicate_id.invoke()?;
+    let output = duplicate_id.invoke_publication_boundary()?;
     assert!(
         output.status.success(),
         "{expected_name} on page 2 failed: {}",
@@ -278,52 +288,57 @@ fn reject_duplicate_attestor_ids(profile: FixtureProfile, key: &str) -> Result<(
 }
 
 #[test]
-fn public_publication_selects_latest_matching_ci_run_from_later_page() -> Result<(), Box<dyn Error>>
-{
-    let fixture = Fixture::new_for(FixtureProfile::Job)?;
-    let state = fixture.read_github_state()?;
-    let base = state["ci_run"].clone();
-    let first = (1..=100)
-        .map(|run_number| {
-            let mut run = base.clone();
-            run["id"] = json!(1_200_000 + run_number);
-            run["run_number"] = json!(run_number);
-            run
-        })
-        .collect::<Vec<_>>();
-    let mut latest = base;
-    latest["id"] = json!(fixture.producer_run_id);
-    latest["run_number"] = json!(101);
-    let all = first
-        .iter()
-        .cloned()
-        .chain(std::iter::once(latest.clone()))
-        .collect::<Vec<_>>();
-    fixture.update_github_state(|state| {
-        state["ci_runs"] = json!(all);
-        state["ci_run_pages"] = json!([
-            {"total_count":101,"workflow_runs":first},
-            {"total_count":101,"workflow_runs":[latest.clone()]}
-        ]);
-        for job in state["ci_jobs"].as_array_mut().ok_or("missing CI jobs")? {
-            job["run_id"] = latest["id"].clone();
-        }
-        Ok(())
-    })?;
-    let output = fixture.invoke()?;
-    assert!(
-        output.status.success(),
-        "later CI run page failed: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    let receipt: Value = super::support::read_receipt(&fixture.receipt)?;
-    assert_eq!(receipt["ci_run_id"], latest["id"]);
-    assert_eq!(
-        fixture.registry_digest()?,
-        Some(fixture.expected_digest.clone())
-    );
-    assert!(fixture.last_fixture_error()?.is_none());
-    Ok(())
+fn boundary_publication_selects_latest_matching_ci_run_from_later_page()
+-> Result<(), Box<dyn Error>> {
+    super::run_isolated(
+        "publication_collections::boundary_publication_selects_latest_matching_ci_run_from_later_page",
+        || {
+            let fixture = Fixture::new_for(FixtureProfile::Job)?;
+            let state = fixture.read_github_state()?;
+            let base = state["ci_run"].clone();
+            let first = (1..=100)
+                .map(|run_number| {
+                    let mut run = base.clone();
+                    run["id"] = json!(1_200_000 + run_number);
+                    run["run_number"] = json!(run_number);
+                    run
+                })
+                .collect::<Vec<_>>();
+            let mut latest = base;
+            latest["id"] = json!(fixture.producer_run_id);
+            latest["run_number"] = json!(101);
+            let all = first
+                .iter()
+                .cloned()
+                .chain(std::iter::once(latest.clone()))
+                .collect::<Vec<_>>();
+            fixture.update_github_state(|state| {
+                state["ci_runs"] = json!(all);
+                state["ci_run_pages"] = json!([
+                    {"total_count":101,"workflow_runs":first},
+                    {"total_count":101,"workflow_runs":[latest.clone()]}
+                ]);
+                for job in state["ci_jobs"].as_array_mut().ok_or("missing CI jobs")? {
+                    job["run_id"] = latest["id"].clone();
+                }
+                Ok(())
+            })?;
+            let output = fixture.invoke_publication_boundary()?;
+            assert!(
+                output.status.success(),
+                "later CI run page failed: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            let receipt: Value = super::support::read_receipt(&fixture.receipt)?;
+            assert_eq!(receipt["ci_run_id"], latest["id"]);
+            assert_eq!(
+                fixture.registry_digest()?,
+                Some(fixture.expected_digest.clone())
+            );
+            assert!(fixture.last_fixture_error()?.is_none());
+            Ok(())
+        },
+    )
 }
 
 #[test]

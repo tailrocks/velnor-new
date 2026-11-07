@@ -202,39 +202,50 @@ fn attestation_pages(
     if let Some(pages) = state.get("signed_attestation_pages") {
         return Ok(pages.clone());
     }
-    let qualification = state
-        .get("qualification_attestation")
-        .and_then(serde_json::Value::as_array)
-        .filter(|entries| {
-            entries.first().is_some_and(|entry| {
-                entry["verificationResult"]["statement"]["subject"]
-                    .as_array()
-                    .is_some_and(|subjects| {
-                        subjects
-                            .iter()
-                            .any(|subject| subject["digest"]["sha256"] == digest)
-                    })
-            })
-        });
+    let qualification = state.get("qualification_attestation").filter(|report| {
+        report
+            .as_array()
+            .and_then(|entries| entries.first())
+            .is_some_and(|entry| report_contains_digest(entry, digest))
+    });
     if qualification.is_none()
         && let Some(pages) = state.get("attestation_pages")
     {
         return Ok(pages.clone());
     }
     let response = qualification
-        .cloned()
-        .map(serde_json::Value::Array)
-        .or_else(|| state.get("attestation").cloned())
-        .ok_or("fixture attestation output is missing")?;
+        .or_else(|| {
+            state
+                .get("attestation")
+                .filter(|report| report_contains_digest(report, digest))
+        })
+        .ok_or("unattested subject")?;
     let outputs = response
         .as_array()
         .cloned()
-        .unwrap_or_else(|| vec![response]);
+        .unwrap_or_else(|| vec![response.clone()]);
     let attestations = outputs
         .into_iter()
         .map(|output| serde_json::json!({"bundle":{"fixtureOutput":[output]}}))
         .collect::<Vec<_>>();
     Ok(serde_json::json!([{"attestations":attestations}]))
+}
+
+fn report_contains_digest(report: &serde_json::Value, digest: &str) -> bool {
+    let entry_contains_digest = |entry: &serde_json::Value| {
+        entry["verificationResult"]["statement"]["subject"]
+            .as_array()
+            .is_some_and(|subjects| {
+                subjects
+                    .iter()
+                    .any(|subject| subject["digest"]["sha256"] == digest)
+            })
+    };
+    match report {
+        serde_json::Value::Array(entries) => entries.iter().any(entry_contains_digest),
+        serde_json::Value::Object(_) => entry_contains_digest(report),
+        _ => false,
+    }
 }
 
 fn api_run_data(
@@ -370,7 +381,11 @@ fn identified_run_data(
     if path.ends_with(&format!(
         "actions/runs/{qualifier_id}/attempts/{qualifier_attempt}"
     )) {
-        return Ok(Some(qualifier.clone()));
+        let mut response = qualifier.clone();
+        if let Some(attempt) = state.get("qualifier_response_run_attempt") {
+            response["run_attempt"] = attempt.clone();
+        }
+        return Ok(Some(response));
     }
     if path.ends_with(&format!(
         "actions/runs/{qualifier_id}/attempts/{qualifier_attempt}/jobs"

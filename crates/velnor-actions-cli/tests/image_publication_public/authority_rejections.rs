@@ -65,13 +65,27 @@ fn reject_authority_case(case: support::RejectionCase) -> Result<(), Box<dyn Err
     let archive_before = fs::read(&fixture.archive)?;
     let record_before = fs::read(&fixture.record)?;
     let registry_before = fixture.preseed_registry_state()?;
-    let output = fixture.invoke()?;
+    let output = if matches!(
+        case,
+        support::RejectionCase::WrongProofSigner
+            | support::RejectionCase::MissingAttestationSubject
+    ) {
+        fixture.invoke_publication_boundary()?
+    } else {
+        fixture.invoke()?
+    };
     let fixture_error = fixture.last_fixture_error()?;
     assert!(
         !output.status.success(),
         "accepted authority rejection {case:?}"
     );
-    assert_producer_job_rejection(case, &output.stderr);
+    if let Some(expected) = expected_diagnostic(case) {
+        let diagnostic = String::from_utf8_lossy(&output.stderr);
+        assert!(
+            diagnostic.contains(expected),
+            "expected {expected} for {case:?}: {diagnostic}"
+        );
+    }
     assert!(!fixture.receipt.exists(), "receipt for {case:?}");
     assert_eq!(
         fixture.registry_state()?,
@@ -120,25 +134,45 @@ fn assert_fixture_result(case: support::RejectionCase, error: Option<&str>) {
     }
 }
 
-fn assert_producer_job_rejection(case: support::RejectionCase, stderr: &[u8]) {
-    if case == support::RejectionCase::WrongRunnerJobCallerPrefix {
-        let output = String::from_utf8_lossy(stderr);
-        assert!(
-            output.contains("image_attestor_run_identity"),
-            "wrong qualifier run rejection for {case:?}: {output}"
-        );
-        return;
-    }
-    if matches!(
-        case,
-        support::RejectionCase::BareRunnerJobName
-            | support::RejectionCase::DuplicateRunnerJobName
-            | support::RejectionCase::FailedRunnerJob
-    ) {
-        let output = String::from_utf8_lossy(stderr);
-        assert!(
-            output.contains("image_qualification_proof_job"),
-            "wrong producer job rejection for {case:?}: {output}"
-        );
-    }
+fn expected_diagnostic(case: support::RejectionCase) -> Option<&'static str> {
+    use support::RejectionCase as C;
+    Some(match case {
+        C::WrongRepository => "image_publication_repository_authority",
+        C::WrongSelectedSource => "image_publication_record_request_mismatch",
+        C::WrongCallerWorkflow
+        | C::WrongRunAttempt
+        | C::WrongProducerEvent
+        | C::WrongProducerRef
+        | C::WrongProducerHead => "image_publication_producer_run_identity",
+        C::WrongArtifact => "image_publication_artifact_identity",
+        C::FailedLatestCi | C::StaleLatestCi => "image_publication_ci_latest_not_success",
+        C::WrongAttestationDigest | C::WrongProofSubjectDigest => return None,
+        C::MissingAttestationSubject => "package_attestation_subject_inventory_mismatch",
+        C::WrongRunnerLock => "runner_image_publication_lock_source_digest",
+        C::ArchiveSubstitution => "image_publication_archive_attested_bytes",
+        C::FailedQualification
+        | C::WrongRunnerJobCallerPrefix
+        | C::WrongQualifierSource
+        | C::WrongQualifierRef
+        | C::WrongQualifierWorkflow
+        | C::WrongQualifierAttempt => "image_attestor_run_identity",
+        C::WrongReusableWorkflow
+        | C::WrongQualifierSignerPath
+        | C::WrongQualifierSignerRef
+        | C::WrongQualifierSignerSha => "image_qualification_signer_workflow",
+        C::BareRunnerJobName
+        | C::DuplicateRunnerJobName
+        | C::FailedRunnerJob
+        | C::WrongQualifierJobId
+        | C::FailedQualifierJob => "image_qualification_proof_job",
+        C::WrongProofSigner => "package_attestation_identity_mismatch",
+        C::WrongProofSource | C::WrongProofLock => "image_qualification_proof_identity",
+        C::WrongProofRef => "image_qualification_proof_invalid",
+        C::WrongProofArchiveDigest
+        | C::WrongProofArchiveSize
+        | C::WrongProofOciIndex
+        | C::WrongProofPlatform
+        | C::WrongProofConfiguration
+        | C::WrongProofLayer => "image_qualification_proof_candidate",
+    })
 }

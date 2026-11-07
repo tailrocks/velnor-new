@@ -8,18 +8,23 @@ use sha2::{Digest, Sha256};
 use super::support;
 
 #[test]
-fn public_runner_family_publication_authenticates_selected_source_and_verifies_registry_state()
+fn runner_family_boundary_authenticates_selected_source_and_verifies_registry_state()
 -> Result<(), Box<dyn Error>> {
-    for profile in [
-        support::FixtureProfile::Runner,
-        support::FixtureProfile::Dind,
-        support::FixtureProfile::ResourceProbe,
-    ] {
-        let fixture = support::Fixture::new_for(profile)?;
-        verify_qualification_fixture(&fixture, profile)?;
-        verify_publication(&fixture, profile)?;
-    }
-    Ok(())
+    super::run_isolated(
+        "runner_source::runner_family_boundary_authenticates_selected_source_and_verifies_registry_state",
+        || {
+            for profile in [
+                support::FixtureProfile::Runner,
+                support::FixtureProfile::Dind,
+                support::FixtureProfile::ResourceProbe,
+            ] {
+                let fixture = support::Fixture::new_for(profile)?;
+                verify_qualification_fixture(&fixture, profile)?;
+                verify_publication(&fixture, profile)?;
+            }
+            Ok(())
+        },
+    )
 }
 
 fn verify_qualification_fixture(
@@ -81,7 +86,7 @@ fn verify_publication(
 ) -> Result<(), Box<dyn Error>> {
     let archive_before = fs::read(&fixture.archive)?;
     let record_before = fs::read(&fixture.record)?;
-    let output = fixture.invoke()?;
+    let output = fixture.invoke_publication_boundary()?;
     let fixture_error = fixture.last_fixture_error()?;
     assert!(
         output.status.success(),
@@ -120,39 +125,47 @@ fn verify_publication(
 }
 
 #[test]
-fn public_runner_publication_rejects_dind_kind_archive_before_registry_mutation()
--> Result<(), Box<dyn Error>> {
-    let fixture = support::Fixture::new_for_image_kind(support::FixtureProfile::Runner, "dind")?;
-    let archive_before = fs::read(&fixture.archive)?;
-    let record_before = fs::read(&fixture.record)?;
-    let registry_before = fixture.preseed_registry_state()?;
-    let foreign = fixture.scratch.join("foreign.keep");
-    fs::write(&foreign, b"preserve")?;
+fn runner_boundary_rejects_dind_kind_archive_before_registry_mutation() -> Result<(), Box<dyn Error>>
+{
+    super::run_isolated(
+        "runner_source::runner_boundary_rejects_dind_kind_archive_before_registry_mutation",
+        || {
+            let fixture =
+                support::Fixture::new_for_image_kind(support::FixtureProfile::Runner, "dind")?;
+            let archive_before = fs::read(&fixture.archive)?;
+            let record_before = fs::read(&fixture.record)?;
+            let registry_before = fixture.preseed_registry_state()?;
+            let foreign = fixture.scratch.join("foreign.keep");
+            fs::write(&foreign, b"preserve")?;
 
-    let output = fixture.invoke()?;
-    assert!(fixture.last_fixture_error()?.is_none());
-    if output.status.success() {
-        let receipt: serde_json::Value = super::support::read_receipt(&fixture.receipt)?;
-        assert_eq!(receipt["profile"], "runner");
-        assert_eq!(receipt["source_commit"], fixture.source);
-        assert_eq!(
-            fixture.registry_digest()?,
-            Some(fixture.expected_digest.clone())
-        );
-        return Err("published a Runner record with a same-source DinD-kind archive".into());
-    }
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(
-        stderr.contains("image_publication_image_kind"),
-        "wrong-kind archive rejection: {stderr}"
-    );
-    assert!(!fixture.receipt.exists());
-    assert_eq!(fixture.registry_state()?, registry_before);
-    assert_eq!(fs::read(&fixture.archive)?, archive_before);
-    assert_eq!(fs::read(&fixture.record)?, record_before);
-    assert_eq!(fs::read(&foreign)?, b"preserve");
-    assert_eq!(fs::read_dir(&fixture.scratch)?.count(), 1);
-    Ok(())
+            let output = fixture.invoke_publication_boundary()?;
+            assert!(fixture.last_fixture_error()?.is_none());
+            if output.status.success() {
+                let receipt: serde_json::Value = super::support::read_receipt(&fixture.receipt)?;
+                assert_eq!(receipt["profile"], "runner");
+                assert_eq!(receipt["source_commit"], fixture.source);
+                assert_eq!(
+                    fixture.registry_digest()?,
+                    Some(fixture.expected_digest.clone())
+                );
+                return Err(
+                    "published a Runner record with a same-source DinD-kind archive".into(),
+                );
+            }
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            assert!(
+                stderr.contains("image_publication_image_kind"),
+                "wrong-kind archive rejection: {stderr}"
+            );
+            assert!(!fixture.receipt.exists());
+            assert_eq!(fixture.registry_state()?, registry_before);
+            assert_eq!(fs::read(&fixture.archive)?, archive_before);
+            assert_eq!(fs::read(&fixture.record)?, record_before);
+            assert_eq!(fs::read(&foreign)?, b"preserve");
+            assert_eq!(fs::read_dir(&fixture.scratch)?.count(), 1);
+            Ok(())
+        },
+    )
 }
 
 #[test]

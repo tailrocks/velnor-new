@@ -234,6 +234,42 @@ fn validate_artifact(
         deadline,
     )?;
     let expected = artifact_name(request.profile, request.producer_run_attempt);
+    let artifact = select_artifact(&artifacts, &expected)?;
+    validate_selected_artifact(
+        artifact,
+        request.profile,
+        request.artifact_id,
+        &candidate.source_commit,
+        run,
+    )
+}
+
+fn validate_selected_artifact(
+    artifact: &Artifact,
+    profile: ImagePublicationProfile,
+    expected_id: u64,
+    candidate_source: &str,
+    run: &Run,
+) -> Result<(), OrchestratorError> {
+    if artifact.id != expected_id
+        || artifact.expired
+        || artifact.size_in_bytes == 0
+        || artifact.workflow_run.id != run.id
+        || artifact.workflow_run.head_sha != run.head_sha
+        || artifact.workflow_run.head_branch != "main"
+        || (profile == ImagePublicationProfile::Job
+            && (artifact.workflow_run.head_sha != candidate_source
+                || artifact.name != format!("velnor-job-image-candidate-{}", run.attempt)))
+    {
+        return Err(internal("image_publication_artifact_identity"));
+    }
+    Ok(())
+}
+
+fn select_artifact<'a>(
+    artifacts: &'a [Artifact],
+    expected: &str,
+) -> Result<&'a Artifact, OrchestratorError> {
     let matches = artifacts
         .iter()
         .filter(|artifact| artifact.name == expected)
@@ -241,20 +277,7 @@ fn validate_artifact(
     if matches.len() != 1 {
         return Err(internal("image_publication_artifact_count"));
     }
-    let artifact = matches[0];
-    if artifact.id != request.artifact_id
-        || artifact.expired
-        || artifact.size_in_bytes == 0
-        || artifact.workflow_run.id != run.id
-        || artifact.workflow_run.head_sha != run.head_sha
-        || artifact.workflow_run.head_branch != "main"
-        || (request.profile == ImagePublicationProfile::Job
-            && (artifact.workflow_run.head_sha != candidate.source_commit
-                || artifact.name != format!("velnor-job-image-candidate-{}", run.attempt)))
-    {
-        return Err(internal("image_publication_artifact_identity"));
-    }
-    Ok(())
+    Ok(matches[0])
 }
 
 fn artifact_name(profile: ImagePublicationProfile, attempt: u32) -> String {
@@ -303,4 +326,74 @@ fn is_sha1(value: &str) -> bool {
         && value
             .bytes()
             .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+}
+
+#[cfg(test)]
+mod artifact_selection_tests {
+    use super::{
+        Artifact, ImagePublicationProfile, Run, artifact_name, select_artifact,
+        validate_selected_artifact,
+    };
+
+    fn artifact(id: u64, name: &str) -> Artifact {
+        serde_json::from_value(serde_json::json!({
+            "id": id,
+            "name": name,
+            "expired": false,
+            "size_in_bytes": 1,
+            "workflow_run": {"id": 42, "head_sha": "a", "head_branch": "main"}
+        }))
+        .expect("valid artifact fixture")
+    }
+
+    #[test]
+    fn runner_inventory_selects_only_the_requested_attempt() {
+        let expected = artifact_name(ImagePublicationProfile::Runner, 2);
+        let old = artifact(1, "image-assets-1");
+        let current = artifact(2, "image-assets-2");
+        assert_eq!(
+            select_artifact(&[old, current], &expected)
+                .expect("current artifact")
+                .id,
+            2
+        );
+        assert!(select_artifact(&[artifact(1, "image-assets-1")], &expected).is_err());
+        assert!(select_artifact(&[artifact(2, "image-assets")], &expected).is_err());
+        assert!(
+            select_artifact(
+                &[artifact(2, "image-assets-2"), artifact(3, "image-assets-2")],
+                &expected
+            )
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn selected_runner_artifact_must_match_the_approved_run_and_identity() {
+        let run: Run = serde_json::from_value(serde_json::json!({
+            "id": 42, "run_attempt": 2, "event": "push", "path": ".github/workflows/ci.yml",
+            "head_branch": "main", "head_sha": "a", "head_repository": null,
+            "status": "completed", "conclusion": "success"
+        }))
+        .expect("valid run fixture");
+        let valid = serde_json::json!({"id": 2, "name": "image-assets-2", "expired": false,
+            "size_in_bytes": 1, "workflow_run": {"id": 42, "head_sha": "a", "head_branch": "main"}});
+        let check = |value| {
+            let artifact: Artifact = serde_json::from_value(value).expect("valid artifact fixture");
+            validate_selected_artifact(&artifact, ImagePublicationProfile::Runner, 2, "a", &run)
+        };
+        assert!(check(valid.clone()).is_ok());
+        for (path, value) in [
+            ("/id", serde_json::json!(1)),
+            ("/expired", serde_json::json!(true)),
+            ("/size_in_bytes", serde_json::json!(0)),
+            ("/workflow_run/id", serde_json::json!(41)),
+            ("/workflow_run/head_sha", serde_json::json!("b")),
+            ("/workflow_run/head_branch", serde_json::json!("other")),
+        ] {
+            let mut invalid = valid.clone();
+            *invalid.pointer_mut(path).expect("fixture field") = value;
+            assert!(check(invalid).is_err(), "accepted mutation at {path}");
+        }
+    }
 }
