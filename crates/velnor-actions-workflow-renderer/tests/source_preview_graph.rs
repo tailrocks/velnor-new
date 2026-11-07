@@ -195,6 +195,11 @@ fn preview_qualifier_executes_exact_downloaded_payload_without_publication_autho
     assert!(qualifier.contains("needs.source-preview-build.outputs.artifact_id"));
     assert!(qualifier.contains("source-preview/velnor-actions-x86_64-unknown-linux-gnu"));
     assert!(qualifier.contains("capture-opentofu-goldens.sh"));
+    assert!(qualifier.contains("Restore Cargo sources"));
+    assert!(qualifier.contains("actions/cache/restore@"));
+    assert!(!qualifier.contains("actions/cache/save@"));
+    assert!(qualifier.contains("runner.temp }}/velnor/cargo/registry/index"));
+    assert!(qualifier.contains("runner.temp }}/velnor/cargo/registry/cache"));
     let script = step_script(qualifier, "Qualify exact source preview bytes")?;
     assert!(script.contains(
         "check \"$GITHUB_WORKSPACE/source-preview/velnor-actions-x86_64-unknown-linux-gnu\""
@@ -204,6 +209,21 @@ fn preview_qualifier_executes_exact_downloaded_payload_without_publication_autho
     assert!(!qualifier.contains(": write"));
     assert!(!qualifier.contains("id-token:"));
     assert!(!qualifier.contains("check-release"));
+    let ordered = [
+        "test \"$(git rev-parse HEAD)\" = \"$GITHUB_SHA\"",
+        "CARGO_HOME=",
+        "export CARGO_HOME",
+        "prefetch-locked-sources-for-qualification-workspaces",
+        "cargo metadata --locked --offline --all-features",
+        "build-owned-archive-guard.sh --source-cache",
+        "--version",
+        "capture-opentofu-goldens.sh",
+    ];
+    let positions = ordered
+        .iter()
+        .map(|needle| script.find(needle).ok_or("missing qualification step"))
+        .collect::<Result<Vec<_>, _>>()?;
+    assert!(positions.windows(2).all(|pair| pair[0] < pair[1]));
     Ok(())
 }
 
