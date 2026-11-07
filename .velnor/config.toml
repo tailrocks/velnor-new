@@ -890,7 +890,7 @@ executor = "hosted"
 [[checks]]
 id = "hosted-direct-release"
 task = "test-hosted-direct-release"
-inputs = [".config/nextest.toml", ".velnor/config.toml", "Cargo.lock", "Cargo.toml", "crates/velnor-actions-orchestrator/src/crate_release_direct_history.rs", "crates/velnor-actions-orchestrator/src/crate_release_runtime_tests.rs", "crates/velnor-actions-orchestrator/src/release_steps_jobs.rs", "crates/velnor-actions-workflow-renderer/src/release_gates.rs", "mise.toml", "rust-toolchain.toml", "scripts/check-hosted-direct-release.py"]
+inputs = [".config/nextest.toml", ".velnor/config.toml", "Cargo.lock", "Cargo.toml", "crates/velnor-runner/Cargo.lock", "crates/velnor-runner/Cargo.toml", "crates/velnor-runner/crates/velnor-resource-probe/Cargo.toml", "crates/velnor-runner/crates/velnor-runner-attestation/Cargo.toml", "crates/velnor-runner/crates/velnor-runner-cli/Cargo.toml", "crates/velnor-runner/crates/velnor-runner-core/Cargo.toml", "crates/velnor-runner/crates/velnor-runner-github/Cargo.toml", "crates/velnor-runner/crates/velnor-runner-host/Cargo.toml", "crates/velnor-actions-orchestrator/src/crate_release_direct_history.rs", "crates/velnor-actions-orchestrator/src/crate_release_runtime_tests.rs", "crates/velnor-actions-orchestrator/src/release_steps_jobs.rs", "crates/velnor-actions-workflow-renderer/src/release_gates.rs", "mise.toml", "rust-toolchain.toml", "scripts/check-hosted-direct-release.py"]
 tools = ["cargo-nextest", "rust"]
 timeout_minutes = 15
 [checks.evidence]

@@ -312,13 +312,13 @@ fn rejects_qualification_intent_mismatches() -> Result<(), Box<dyn std::error::E
 fn inline_qualification_behavior_suite_runs_under_nextest() -> Result<(), Box<dyn std::error::Error>>
 {
     let tests = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests");
-    let driver = r#"
+    let driver = r"
 import sys, unittest
 suite = unittest.defaultTestLoader.discover(sys.argv[1], pattern='oidc_inline_fixture.py')
 if suite.countTestCases() == 0:
     raise SystemExit('OIDC qualification suite is empty')
 raise SystemExit(not unittest.TextTestRunner().run(suite).wasSuccessful())
-"#;
+";
     let result = std::process::Command::new("python3")
         .args(["-B", "-c", driver])
         .arg(tests)

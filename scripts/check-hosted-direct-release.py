@@ -7,6 +7,7 @@ import os
 import platform
 import subprocess
 import tempfile
+import time
 from collections import Counter
 
 with open('/etc/os-release', encoding='utf-8') as release_file:
@@ -26,20 +27,40 @@ tests = {
 expression = ' | '.join('test(' + name + ')' for name in sorted(tests))
 env = dict(os.environ, NEXTEST_EXPERIMENTAL_LIBTEST_JSON='1')
 for key in list(env):
-    if key.startswith('VELNOR_TEST_'):
+    if (key.startswith('VELNOR_TEST_')
+            or (key.startswith('CARGO_REGISTRIES_') and key.endswith('_TOKEN'))):
         env.pop(key)
 for key in ('VELNOR_TEST_PINNED_GIT', 'VELNOR_TEST_PINNED_GIT_HTTP', 'GITHUB_TOKEN',
             'GH_TOKEN', 'CARGO_REGISTRY_TOKEN', 'ACTIONS_ID_TOKEN_REQUEST_TOKEN',
-            'ACTIONS_ID_TOKEN_REQUEST_URL', 'ACTIONS_RUNTIME_TOKEN', 'VELNOR_GH_FIXTURE_TOOLS'):
+            'ACTIONS_ID_TOKEN_REQUEST_URL', 'ACTIONS_RUNTIME_TOKEN', 'VELNOR_GH_FIXTURE_TOOLS',
+            'MISE_GITHUB_TOKEN', 'GIT_TOKEN', 'GH_HOST', 'GH_CONFIG_DIR', 'NODE_AUTH_TOKEN', 'NPM_TOKEN'):
     env.pop(key, None)
 if not os.path.isabs(env.get('HOME', '')):
     raise SystemExit('direct-release qualification requires an absolute private HOME')
 with tempfile.TemporaryDirectory(prefix='hosted-direct-release-', dir=env['HOME']) as runner_temp:
     env['RUNNER_TEMP'] = runner_temp
+    deadline = time.monotonic() + 780
+    for manifest in ('Cargo.toml', 'crates/velnor-runner/Cargo.toml'):
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise SystemExit('direct-release qualification deadline exceeded during source preparation')
+        try:
+            fetched = subprocess.run(
+                ['cargo', 'fetch', '--locked', '--manifest-path', manifest],
+                env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                timeout=remaining, check=False,
+            )
+        except subprocess.TimeoutExpired as error:
+            raise SystemExit('direct-release qualification deadline exceeded during source preparation') from error
+        if fetched.returncode != 0:
+            raise SystemExit(f'direct-release source preparation failed: {manifest}')
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        raise SystemExit('direct-release qualification deadline exceeded before tests')
     result = subprocess.run(
         ['cargo', 'nextest', 'run', '--locked', '-p', 'velnor-actions-orchestrator', '--lib',
          '-E', expression, '--message-format', 'libtest-json'],
-        env=env, capture_output=True, timeout=780, check=False,
+        env=env, capture_output=True, timeout=remaining, check=False,
     )
 if result.returncode != 0 or len(result.stdout) > 65536:
     failed = set()
@@ -58,6 +79,28 @@ if result.returncode != 0 or len(result.stdout) > 65536:
             b'fixture capture verification failed:': 'fixture_capture_verify',
             b'fixture bundled inputs failed:': 'fixture_bundle_verify',
             b'fixture reviewed exclusions failed:': 'fixture_exclusion_verify',
+            b'root_discovery:': 'prepare_root',
+            b'not_work_tree:': 'prepare_worktree',
+            b'config_missing:': 'prepare_config_missing',
+            b'default_branch:': 'prepare_default_branch',
+            b'identity_rejected:': 'prepare_identity',
+            b'discovery:': 'prepare_discovery',
+            b'detection:': 'prepare_detection',
+            b'inventory:': 'prepare_inventory',
+            b'cold_registry:': 'prepare_registry',
+            b'preparation_incomplete:': 'prepare_incomplete',
+            b'profile:': 'prepare_profile',
+            b'contract:': 'prepare_contract',
+            b'render:': 'prepare_render',
+            b'jactionlint:': 'prepare_workflow_lint',
+            b'unsafe_path:': 'prepare_unsafe_path',
+            b'internal:': 'prepare_internal',
+            b'validation:': 'prepare_validation',
+            b'io:': 'prepare_io',
+            b'cancelled:': 'prepare_cancelled',
+            b'unsupported:': 'prepare_unsupported',
+            b'missing_tool_pin:': 'prepare_missing_tool_pin',
+            b'unknown_config_field:': 'prepare_unknown_config_field',
             b'isolated image attestation fixture failed:': 'fixture_worker_exit',
             b'panicked at': 'fixture_panic',
             b'isolated GitHub fixture:': 'fixture_driver_error',
