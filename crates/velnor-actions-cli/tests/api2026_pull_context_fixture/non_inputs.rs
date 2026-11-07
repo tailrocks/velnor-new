@@ -68,12 +68,18 @@ pub(super) fn prepare_source() -> Result<PreparedSource, Box<dyn Error>> {
     if !result.success {
         return Err("fixture source capture failed".into());
     }
-    let text = read_manifest(&manifest)?;
-    capture_verify::verify_capture(&validation, &text)?;
-    verify_bundled_files(&validation)?;
-    let patterns = reviewed_non_inputs_from(&validation)?;
-    capture_verify::verify_capture(&validation, &text)?;
-    verify_bundled_files(&validation)?;
+    let text = read_manifest(&manifest)
+        .map_err(|error| format!("fixture manifest read failed: {error}"))?;
+    capture_verify::verify_capture(&validation, &text)
+        .map_err(|error| format!("fixture capture verification failed: {error}"))?;
+    verify_bundled_files(&validation)
+        .map_err(|error| format!("fixture bundled inputs failed: {error}"))?;
+    let patterns = reviewed_non_inputs_from(&validation)
+        .map_err(|error| format!("fixture reviewed exclusions failed: {error}"))?;
+    capture_verify::verify_capture(&validation, &text)
+        .map_err(|error| format!("fixture capture verification failed: {error}"))?;
+    verify_bundled_files(&validation)
+        .map_err(|error| format!("fixture bundled inputs failed: {error}"))?;
     if read_manifest(&manifest)? != text {
         return Err("fixture capture manifest changed".into());
     }

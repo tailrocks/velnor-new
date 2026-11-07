@@ -69,7 +69,7 @@ fn fixed_probe_runs_only_after_admission_in_protected_job() -> Result<(), Box<dy
     assert!(text.contains("github.event.inputs.mode == 'oidc-qualification'"));
     assert!(text.contains("github.event_name == 'workflow_dispatch'"));
     assert!(text.contains("refs/heads/main"));
-    assert!(text.contains("oidc-qualification-admit"));
+    assert!(!text.contains("oidc-qualification-admit"));
     assert!(!text.contains("actions/checkout"));
     assert!(!text.contains("release-plz"));
     assert!(!text.contains("contents: write"));
@@ -77,13 +77,67 @@ fn fixed_probe_runs_only_after_admission_in_protected_job() -> Result<(), Box<dy
     let Yaml::Seq(steps) = field(&job, "steps")? else {
         return Err("expected steps".into());
     };
-    assert_eq!(steps.len(), 3);
-    let admission = render_yaml(&steps[1]);
-    let probe = render_yaml(&steps[2]);
-    assert!(admission.contains("ACTIONS_ID_TOKEN_REQUEST_TOKEN"));
-    assert!(admission.contains("oidc-qualification-admit"));
+    assert_eq!(steps.len(), 1);
+    let probe = render_yaml(&steps[0]);
     assert!(probe.contains("/usr/bin/python3 -I -S -"));
     assert!(probe.contains("SSLKEYLOGFILE"));
+    assert!(probe.contains("sys.exit(qualification_main())"));
+    assert!(!probe.contains("sys.exit(main())"));
+    assert!(!probe.contains("velnor-actions-"));
+    let Yaml::Str(command) = field(&steps[0], "run")? else {
+        return Err("expected shell command".into());
+    };
+    let result = std::process::Command::new("/bin/bash")
+        .args([
+            "--noprofile",
+            "--norc",
+            "-p",
+            "-e",
+            "-o",
+            "pipefail",
+            "-c",
+            command,
+        ])
+        .env_clear()
+        .output()?;
+    assert!(!result.status.success());
+    assert_eq!(
+        String::from_utf8(result.stderr)?.trim(),
+        "OIDC qualification failed"
+    );
+    let fixture = r#"
+import os, pathlib, ssl, sys, urllib.request
+from unittest.mock import patch
+sys.path.insert(0, sys.argv[1])
+import oidc_inline_fixture as f
+command = sys.argv[2]
+marker = "VELNOR_OIDC_PROBE_PY"
+assert command.count(marker) == 2
+script = command.split("<<'" + marker + "'\n", 1)[1].rsplit("\n" + marker, 1)[0]
+assert '${{' not in script
+remote = f.Remote()
+with patch.dict(os.environ, f.context(), clear=True), \
+     patch.object(ssl, 'create_default_context', return_value=object()), \
+     patch.object(urllib.request, 'build_opener', return_value=remote):
+    try:
+        exec(compile(script, '<rendered-qualification>', 'exec'), {'__name__': '__main__'})
+    except SystemExit as result:
+        assert result.code == 0
+    else:
+        raise AssertionError('rendered entrypoint did not exit')
+assert [method for method, host, _ in remote.calls if host == 'crates.io'] == ['POST', 'DELETE']
+"#;
+    let tests = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests");
+    let result = std::process::Command::new("python3")
+        .args(["-c", fixture])
+        .arg(tests)
+        .arg(command)
+        .output()?;
+    assert!(
+        result.status.success(),
+        "{}",
+        String::from_utf8_lossy(&result.stderr)
+    );
     Ok(())
 }
 
@@ -251,5 +305,29 @@ fn rejects_qualification_intent_mismatches() -> Result<(), Box<dyn std::error::E
     let mut changed = original;
     changed.authentication = velnor_actions_contract::config::ReleaseAuthentication::BootstrapToken;
     assert!(spec.validate_intent(&changed).is_err());
+    Ok(())
+}
+
+#[test]
+fn inline_qualification_behavior_suite_runs_under_nextest() -> Result<(), Box<dyn std::error::Error>>
+{
+    let tests = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests");
+    let driver = r#"
+import sys, unittest
+suite = unittest.defaultTestLoader.discover(sys.argv[1], pattern='oidc_inline_fixture.py')
+if suite.countTestCases() == 0:
+    raise SystemExit('OIDC qualification suite is empty')
+raise SystemExit(not unittest.TextTestRunner().run(suite).wasSuccessful())
+"#;
+    let result = std::process::Command::new("python3")
+        .args(["-B", "-c", driver])
+        .arg(tests)
+        .output()?;
+    assert!(
+        result.status.success(),
+        "{}{}",
+        String::from_utf8_lossy(&result.stdout),
+        String::from_utf8_lossy(&result.stderr)
+    );
     Ok(())
 }

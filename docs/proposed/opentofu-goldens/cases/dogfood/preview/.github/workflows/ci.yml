@@ -161,6 +161,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           fetch-depth: "0"
+          filter: blob:limit=18446744073709551615
           persist-credentials: "false"
           sparse-checkout: "/*\n!/docs/implemented/ci-maintenance/**\n!/docs/proposed/ci-maintenance/**"
           sparse-checkout-cone-mode: "false"

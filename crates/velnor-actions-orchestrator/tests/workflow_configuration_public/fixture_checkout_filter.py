@@ -108,9 +108,39 @@ def main():
                     git(root, 'clone', '-q', '--no-local', str(checkout), str(root / 'child'), lazy=False)
                     assert (root / 'child/excluded/target').read_text() == 'hidden'
             assert server.authenticated > 0
-        finally:
             server.shutdown()
             thread.join()
+            server.server_close()
+            capture = (pathlib.Path(__file__).resolve().parents[3] / 'velnor-actions-cli/tests'
+                       / 'api2026_pull_context_fixture/raw_capture.py')
+            for name, expected in [('full-blobs', True), ('missing-blobs', False)]:
+                checkout = root / name
+                git(checkout, 'remote', 'set-url', 'origin', 'git@github.com:fixture/project.git')
+                destination = root / ('capture-' + name)
+                destination.mkdir()
+                result = subprocess.run(['/usr/bin/python3', '-I', '-S', '-B', str(capture),
+                                         str(checkout), str(destination), str(root / (name + '.json'))],
+                                        stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=30)
+                assert (result.returncode == 0) == expected, result.stderr.decode()
+                if expected:
+                    assert (destination / 'excluded/target').read_text() == 'hidden'
+                else:
+                    assert b'indexed fixture blob missing' in result.stderr
+            # An object whose content does not match the index OID must fail closed.
+            checkout = root / 'missing-blobs'
+            object_path = checkout / '.git/objects' / oid[:2] / oid[2:]
+            object_path.parent.mkdir(parents=True, exist_ok=True)
+            object_path.write_bytes(b'not a valid git object')
+            destination = root / 'capture-corrupt'
+            destination.mkdir()
+            result = subprocess.run(['/usr/bin/python3', '-I', '-S', '-B', str(capture),
+                                     str(checkout), str(destination), str(root / 'corrupt.json')],
+                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=30)
+            assert result.returncode != 0
+        finally:
+            if thread.is_alive():
+                server.shutdown()
+                thread.join()
             server.server_close()
 
 

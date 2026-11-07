@@ -1,10 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
-
 use crate::{
-    RenderError, ambient_shell_step, release_generator_bootstrap,
+    RenderError, release_generator_bootstrap,
     release_spec::{validate_environment, validate_repository},
     yaml::Yaml,
 };
@@ -83,16 +81,6 @@ impl OidcQualificationSpec {
 
     pub fn job(&self) -> Result<Yaml, RenderError> {
         self.validate()?;
-        let mut acquire =
-            crate::steps_plain::plain_step_to_yaml(&release_generator_bootstrap::acquire_step(
-                &self.generator_version,
-                crate::release_tree::RELEASE_HOSTED_RUNNER,
-                &self.generator_source_sha,
-                &self.generator_manifest_sha256,
-            )?)?;
-        secure_acquire(&mut acquire)?;
-        let admission = self.admission_step()?;
-        let probe = probe_step();
         Ok(Yaml::Map(vec![
             ("name".into(), Yaml::str("OIDC qualification")),
             (
@@ -118,106 +106,62 @@ impl OidcQualificationSpec {
                     self.repository, self.default_branch
                 )),
             ),
-            ("steps".into(), Yaml::Seq(vec![acquire, admission, probe])),
+            ("steps".into(), Yaml::Seq(vec![self.probe_step()?])),
         ]))
     }
 
-    fn admission_step(&self) -> Result<Yaml, RenderError> {
-        let mut env = BTreeMap::from([
+    fn probe_step(&self) -> Result<Yaml, RenderError> {
+        let launcher = include_str!("crate_oidc_probe_launcher.sh");
+        let probe = include_str!("crate_oidc_probe.py");
+        let probe = probe
+            .strip_suffix("if __name__ == \"__main__\":\n    sys.exit(main())\n")
+            .ok_or_else(|| RenderError::InvalidWorkflow("oidc_qualification_probe".to_owned()))?;
+        let admission = include_str!("crate_oidc_admission.py");
+        let command = launcher.replace(
+            "exec /usr/bin/python3 -I -S -",
+            &format!("exec /usr/bin/python3 -I -S - <<'VELNOR_OIDC_PROBE_PY'\n{probe}\n{admission}\nsys.exit(qualification_main())\nVELNOR_OIDC_PROBE_PY"),
+        );
+        Ok(Yaml::Map(vec![
             (
-                "GIT_TOKEN".to_owned(),
-                crate::release_gates::GIT_TOKEN_REF.to_owned(),
+                "name".into(),
+                Yaml::str("Verify admission and qualify OIDC"),
             ),
             (
-                "VELNOR_QUALIFICATION_DEFAULT_BRANCH".to_owned(),
-                self.default_branch.clone(),
+                "shell".into(),
+                Yaml::str("/bin/bash --noprofile --norc -p -e -o pipefail {0}"),
             ),
             (
-                "VELNOR_QUALIFICATION_ENVIRONMENT".to_owned(),
-                self.environment.clone(),
+                "env".into(),
+                Yaml::Map(vec![
+                    (
+                        "GIT_TOKEN".into(),
+                        Yaml::str(crate::release_gates::GIT_TOKEN_REF),
+                    ),
+                    (
+                        "VELNOR_QUALIFICATION_DEFAULT_BRANCH".into(),
+                        Yaml::str(self.default_branch.clone()),
+                    ),
+                    (
+                        "VELNOR_QUALIFICATION_ENVIRONMENT".into(),
+                        Yaml::str(self.environment.clone()),
+                    ),
+                    (
+                        "VELNOR_QUALIFICATION_REQUIRED_WORKFLOW".into(),
+                        Yaml::str(self.required_workflow_path.clone()),
+                    ),
+                    (
+                        "VELNOR_QUALIFICATION_REVIEWER_ID".into(),
+                        Yaml::str(self.trusted_reviewer_id.to_string()),
+                    ),
+                    (
+                        "VELNOR_QUALIFICATION_MODE".into(),
+                        Yaml::str("${{ github.event.inputs.mode }}"),
+                    ),
+                ]),
             ),
-            (
-                "VELNOR_QUALIFICATION_REQUIRED_WORKFLOW".to_owned(),
-                self.required_workflow_path.clone(),
-            ),
-            (
-                "VELNOR_QUALIFICATION_REVIEWER_ID".to_owned(),
-                self.trusted_reviewer_id.to_string(),
-            ),
-        ]);
-        let step = ambient_shell_step(
-            "Verify OIDC qualification admission",
-            vec![
-                format!(
-                    "$RUNNER_TEMP/velnor/bin/velnor-actions-{}",
-                    self.generator_version
-                ),
-                "crate-release".into(),
-                "oidc-qualification-admit".into(),
-            ],
-            std::mem::take(&mut env),
-        )?;
-        let mut rendered = crate::steps_plain::plain_step_to_yaml(&step)?;
-        let Yaml::Map(fields) = &mut rendered else {
-            return Err(RenderError::InvalidWorkflow(
-                "oidc_qualification_step".to_owned(),
-            ));
-        };
-        let Some((_, Yaml::Map(values))) = fields.iter_mut().find(|(key, _)| key == "env") else {
-            return Err(RenderError::InvalidWorkflow(
-                "oidc_qualification_step".to_owned(),
-            ));
-        };
-        values.push((
-            "VELNOR_QUALIFICATION_MODE".to_owned(),
-            Yaml::str("${{ github.event.inputs.mode }}"),
-        ));
-        secure_acquire(&mut rendered)?;
-        Ok(rendered)
+            ("run".into(), Yaml::str(command)),
+        ]))
     }
-}
-
-fn secure_acquire(step: &mut Yaml) -> Result<(), RenderError> {
-    let Yaml::Map(fields) = step else {
-        return Err(RenderError::InvalidWorkflow(
-            "oidc_qualification_step".to_owned(),
-        ));
-    };
-    let Some((_, Yaml::Str(run))) = fields.iter_mut().find(|(key, _)| key == "run") else {
-        return Err(RenderError::InvalidWorkflow(
-            "oidc_qualification_step".to_owned(),
-        ));
-    };
-    *run = format!(
-        "unset BASH_ENV ENV SSLKEYLOGFILE PYTHONHOME PYTHONPATH ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL; {run}"
-    );
-    fields.push((
-        "shell".into(),
-        Yaml::str("/bin/bash --noprofile --norc -p -e -o pipefail {0}"),
-    ));
-    Ok(())
-}
-
-fn probe_step() -> Yaml {
-    let launcher = include_str!("crate_oidc_probe_launcher.sh");
-    let probe = include_str!("crate_oidc_probe.py");
-    let command = launcher.replace(
-        "exec /usr/bin/python3 -I -S -",
-        &format!(
-            "exec /usr/bin/python3 -I -S - <<'VELNOR_OIDC_PROBE_PY'\n{probe}\nVELNOR_OIDC_PROBE_PY"
-        ),
-    );
-    Yaml::Map(vec![
-        (
-            "name".into(),
-            Yaml::str("Exchange and revoke qualification credential"),
-        ),
-        (
-            "shell".into(),
-            Yaml::str("/bin/bash --noprofile --norc -p -e -o pipefail {0}"),
-        ),
-        ("run".into(), Yaml::str(command)),
-    ])
 }
 
 impl OidcQualificationSpec {

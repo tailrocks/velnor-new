@@ -81,8 +81,41 @@ fn finalized_sparse_owners_keep_guard_and_qualified_filter() -> Result<(), Box<d
         root.join("mise.lock"),
         include_str!("../../../../mise.lock"),
     )?;
+    let config_path = root.join(".velnor/config.toml");
+    let config = std::fs::read_to_string(&config_path)?;
+    std::fs::write(
+        &config_path,
+        format!(
+            "{config}\n[[checks]]\nid = \"with-blob-closure\"\ntask = \"fixture-check\"\ninputs = [\"crates/demo/Cargo.toml\"]\ntools = []\n[checks.runner]\nlabel = \"ubuntu-26.04\"\nplatform = \"linux_x64\"\nexecutor = \"hosted\"\n"
+        ),
+    )?;
     let jobs = finalized_jobs(&prepare(root)?)?;
     let mut owners = 0;
+    let mut named = 0;
+    for job in jobs.values().filter(|job| {
+        job.display_name.contains("with-blob-closure") || job.display_name.contains("unit")
+    }) {
+        let StepKind::Action { with, env, .. } = &job.steps[0].kind else {
+            return Err("named check checkout missing".into());
+        };
+        assert_eq!(
+            with.get("filter").map(String::as_str),
+            Some(FIXTURE_CHECKOUT_BLOB_FILTER)
+        );
+        assert_eq!(
+            with.get("sparse-checkout").map(String::as_str),
+            Some("/*\n!/docs/**")
+        );
+        assert_eq!(
+            with.get("persist-credentials").map(String::as_str),
+            Some("false")
+        );
+        assert!(env.is_empty());
+        assert_eq!(with.get("fetch-depth").map(String::as_str), Some("0"));
+        assert_eq!(job.steps[1].name, NON_INPUT_GUARD_STEP);
+        named += 1;
+    }
+    assert_eq!(named, 2);
     for job in jobs.values() {
         let owns = job
             .steps
