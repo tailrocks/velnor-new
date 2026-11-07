@@ -16,6 +16,9 @@ mod execute;
 #[path = "cleanup_observer/record.rs"]
 mod record;
 
+pub use execute::request_line as cleanup_observer_request_line;
+pub use record::parse_record as parse_cleanup_observer_record;
+
 use super::lifecycle::{Deadline, bind_info, info, same_guest};
 use super::provider::ReleaseImageProvider;
 use super::{ReleaseReadSecret, recover};

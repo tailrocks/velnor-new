@@ -114,6 +114,14 @@ async fn start_and_send(
     let request = projection.request.as_ref().ok_or(HostError::Identity)?;
     let mut request_line = request.encode()?;
     request_line.push(b'\n');
+    let acknowledgement = serde_json::to_vec(
+        &velnor_resource_probe::worker_binding::AcknowledgeRequest {
+            operation_id: projection.operation_id.clone(),
+        },
+    )
+    .map_err(|_| HostError::Frame)?;
+    request_line.extend_from_slice(&acknowledgement);
+    request_line.push(b'\n');
     bounded(deadline, attached.input.write_all(&request_line))
         .await?
         .map_err(|_| HostError::Docker)?;

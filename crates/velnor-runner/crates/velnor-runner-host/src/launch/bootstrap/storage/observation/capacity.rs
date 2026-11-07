@@ -17,7 +17,7 @@ use crate::{
 use sha2::{Digest, Sha256};
 use velnor_resource_probe::{
     InodePolicy,
-    worker_binding::{OwnedCgroupObservation, SelfStorageObservation},
+    worker_binding::{OwnedCgroupObservation, SelfStorageObservation, WorkerRole},
 };
 
 pub(super) fn observed_roles(
@@ -150,29 +150,63 @@ pub(super) fn usage_credit(
 
 pub(super) fn observed_cgroup(
     observation: &SelfStorageObservation,
+    owned: &OwnedCgroupObservation,
     role: BootstrapContainerRole,
     container_id: &str,
 ) -> Result<ObservedContainerCgroup, HostError> {
+    let worker_role = match role {
+        BootstrapContainerRole::Runner => WorkerRole::Runner,
+        BootstrapContainerRole::Dind => WorkerRole::Dind,
+    };
+    let mut matches = owned
+        .containers
+        .iter()
+        .filter(|row| row.role == worker_role && row.container_id == container_id);
+    let owned_container = matches.next().ok_or(HostError::Identity)?;
+    if matches.next().is_some() {
+        return Err(HostError::Identity);
+    }
     let limits = &observation.self_leaf_limits;
+    let memory_max_bytes = limits.memory_max_bytes.or_else(|| {
+        owned_container
+            .hierarchy
+            .iter()
+            .rev()
+            .find_map(|node| node.memory_max_bytes)
+    });
+    let cpu_quota_micros = limits.cpu_quota_micros.or_else(|| {
+        owned_container
+            .hierarchy
+            .iter()
+            .rev()
+            .find_map(|node| node.cpu_quota_micros)
+    });
+    let pids_max = limits.pids_max.or_else(|| {
+        owned_container
+            .hierarchy
+            .iter()
+            .rev()
+            .find_map(|node| node.pids_max)
+    });
     if observation.container_id != container_id
         || limits.cgroup_path.is_empty()
-        || limits.memory_max_bytes.is_none_or(|value| value == 0)
-        || limits.cpu_quota_micros.is_none_or(|value| value == 0)
+        || owned_container.init.cgroup_path.is_empty()
+        || memory_max_bytes.is_none_or(|value| value == 0 || value < limits.memory_current_bytes)
+        || cpu_quota_micros.is_none_or(|value| value == 0)
         || limits.cpu_period_micros == 0
-        || limits.pids_max.is_none_or(|value| value == 0)
-        || limits.pids_current > limits.pids_max.unwrap_or_default()
+        || pids_max.is_none_or(|value| value == 0 || limits.pids_current > value)
     {
         return Err(HostError::Identity);
     }
     Ok(ObservedContainerCgroup {
         role,
         container_id: container_id.to_owned(),
-        path: limits.cgroup_path.clone(),
-        memory_max_bytes: limits.memory_max_bytes,
+        path: owned_container.init.cgroup_path.clone(),
+        memory_max_bytes,
         memory_current_bytes: limits.memory_current_bytes,
-        cpu_quota_micros: limits.cpu_quota_micros,
+        cpu_quota_micros,
         cpu_period_micros: limits.cpu_period_micros,
-        pids_max: limits.pids_max,
+        pids_max,
     })
 }
 

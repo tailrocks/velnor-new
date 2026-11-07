@@ -341,6 +341,7 @@ fn validate_attachment(
         .iter()
         .find(|role| role.role == item.role)
         .ok_or(HostError::Journal)?;
+    let is_root = matches!(item.role, StorageRole::RunnerRoot | StorageRole::DindRoot);
     let device_matches = item.fs_type_magic == BTRFS_SUPER_MAGIC
         || (item.device_major, item.device_minor)
             == (item.statx_device_major, item.statx_device_minor);
@@ -355,8 +356,9 @@ fn validate_attachment(
         || item.filesystem_id == 0
         || !device_matches
         || !valid_digest(&item.filesystem_instance_digest)
-        || (item.role != StorageRole::EngineMetadata || item.observer == StorageObserver::Probe)
-            && item.filesystem_instance_digest != observed_role.filesystem_instance_digest
+        || (!is_root
+            && (item.role != StorageRole::EngineMetadata || item.observer == StorageObserver::Probe)
+            && item.filesystem_instance_digest != observed_role.filesystem_instance_digest)
     {
         return Err(HostError::Journal);
     }

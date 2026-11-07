@@ -75,10 +75,12 @@ pub use journal::pr_source_transition::{
 pub use journal::{IntentState, Journal, Outcome};
 pub use keychain::{import_secret, load_secret, read_secret};
 pub use launch::{
-    BootstrapContainerRole, CompletionWorker, WorkerImage,
+    BootstrapContainerRole, CompletionWorker, PairCreate, WorkerImage,
+    build_bootstrap_pair_create_spec, cleanup_observer_request_line, parse_cleanup_observer_record,
     resume_deferred_offer_acquire_with_transport, runner_pair_environment,
-    verify_persisted_execution_source_role, verify_worker_attestation_manifest,
-    verify_worker_build_source, verify_worker_runtime_config,
+    validate_cleanup_observer_record, verify_persisted_execution_source_role,
+    verify_pre_jit_created, verify_worker_attestation_manifest, verify_worker_build_source,
+    verify_worker_runtime_config,
 };
 pub use launch_blocking::ListenFault;
 pub use listen::queue_path;

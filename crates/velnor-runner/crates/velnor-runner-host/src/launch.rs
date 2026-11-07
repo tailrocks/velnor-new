@@ -78,14 +78,17 @@ mod trace;
 mod turn;
 pub(crate) mod verified_images;
 
-pub use bootstrap::{BootstrapContainerRole, runner_pair_environment};
+pub use bootstrap::{
+    BootstrapContainerRole, PairCreate, build_bootstrap_pair_create_spec, runner_pair_environment,
+    validate_cleanup_observer_record, verify_pre_jit_created,
+};
 pub use completion::CompletionWorker;
 pub use execution_authorization::verify_persisted_execution_source_role;
 pub(crate) use gate::{gate_line, reconcile_gate};
 pub(crate) use resource_probe::prepare_worker_images;
 pub use resource_probe::{
-    WorkerImage, verify_worker_attestation_manifest, verify_worker_build_source,
-    verify_worker_runtime_config,
+    WorkerImage, cleanup_observer_request_line, parse_cleanup_observer_record,
+    verify_worker_attestation_manifest, verify_worker_build_source, verify_worker_runtime_config,
 };
 pub use steps::resume_deferred_offer_acquire_with_transport;
 pub(crate) use verified_images::{VerifiedImageIdentity, VerifiedWorkerImages};

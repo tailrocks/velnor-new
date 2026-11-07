@@ -25,7 +25,7 @@ pub(super) async fn run(
     }
     let request: CleanupObserverRequest =
         serde_json::from_str(request_json).map_err(|_| HostError::Frame)?;
-    let request_line = request_line(request_json)?;
+    let request_line = request_line(request_json, &request.operation_id)?;
     let result = execute(
         docker,
         journal,
@@ -182,11 +182,19 @@ fn same_projection(row: &ProbeRow, projection: &ProbeProjection) -> bool {
         && row.docker_root_digest == projection.root.digest()
 }
 
-fn request_line(request_json: &str) -> Result<Vec<u8>, HostError> {
+pub fn request_line(request_json: &str, operation_id: &str) -> Result<Vec<u8>, HostError> {
     let mut line = request_json.as_bytes().to_vec();
     line.push(b'\n');
     if line.len() > 32 * 1024 {
         return Err(HostError::Frame);
     }
+    let acknowledgement = serde_json::to_vec(
+        &velnor_resource_probe::worker_binding::AcknowledgeRequest {
+            operation_id: operation_id.to_owned(),
+        },
+    )
+    .map_err(|_| HostError::Frame)?;
+    line.extend_from_slice(&acknowledgement);
+    line.push(b'\n');
     Ok(line)
 }

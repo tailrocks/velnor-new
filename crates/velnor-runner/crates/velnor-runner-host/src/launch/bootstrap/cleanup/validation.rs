@@ -39,7 +39,7 @@ pub(super) fn validate_observations(
     {
         return Err(HostError::Ownership);
     }
-    validate_record(
+    validate_cleanup_observer_record(
         record,
         binding,
         observer.operation_id(),
@@ -47,7 +47,7 @@ pub(super) fn validate_observations(
     )
 }
 
-fn validate_record(
+pub fn validate_cleanup_observer_record(
     record: &CleanupObserverRecord,
     binding: &CleanupObserverBinding,
     operation_id: &str,
@@ -67,6 +67,19 @@ fn validate_record(
             },
         )
         .collect::<Vec<_>>();
+    let references_valid = if record.owned_references_absent {
+        record.owned_reference_count == 0
+            && record.absent_volume_mountpoints == volumes
+            && record.absent_tmpfs_devices.as_slice() == binding.owned_tmpfs_devices.as_slice()
+            && record.absent_mount_namespaces == namespaces
+            && record.absent_cgroup_paths.as_ref() == Some(&binding.cgroup_paths)
+    } else {
+        record.owned_reference_count > 0
+            && record.absent_volume_mountpoints.is_empty()
+            && record.absent_tmpfs_devices.is_empty()
+            && record.absent_mount_namespaces.is_empty()
+            && record.absent_cgroup_paths.is_none()
+    };
     if record.schema_version != 1
         || record.operation_id != operation_id
         || record.binding_sha256 != binding_sha256
@@ -78,13 +91,8 @@ fn validate_record(
             )
         })
         || !record.complete
-        || !record.owned_references_absent
         || !record.issues.is_empty()
-        || record.owned_reference_count != 0
-        || record.absent_volume_mountpoints != volumes
-        || record.absent_tmpfs_devices.as_slice() != binding.owned_tmpfs_devices.as_slice()
-        || record.absent_mount_namespaces != namespaces
-        || record.absent_cgroup_paths.as_ref() != Some(&binding.cgroup_paths)
+        || !references_valid
     {
         return Err(HostError::Ownership);
     }

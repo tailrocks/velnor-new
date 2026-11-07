@@ -83,7 +83,9 @@ pub(in crate::launch::bootstrap::containers) fn tmpfs_options(
     if bytes == 0 || inodes == 0 {
         return Err(HostError::Identity);
     }
-    Ok(format!("rw,nosuid,nodev,size={bytes},nr_inodes={inodes}"))
+    Ok(format!(
+        "rw,exec,nosuid,nodev,size={bytes},nr_inodes={inodes}"
+    ))
 }
 
 pub(in crate::launch::bootstrap::containers) fn limits_for(
@@ -206,6 +208,46 @@ pub fn runner_pair_environment(role: BootstrapContainerRole) -> Option<Vec<Strin
     })
 }
 
+pub fn build_bootstrap_pair_create_spec(
+    role: BootstrapContainerRole,
+    nonce: &str,
+    connection_id: &str,
+    image: &str,
+    network_mode: &str,
+    budget: crate::worker::ResourceBudget,
+    role_charges: &[(&str, u64, u64)],
+) -> Result<PairCreate, HostError> {
+    let names = WorkerIdentityNames::from_nonce(nonce)?;
+    let container_name = match role {
+        BootstrapContainerRole::Runner => {
+            names.container_name(crate::worker::WorkerContainerRole::Runner)
+        }
+        BootstrapContainerRole::Dind => {
+            names.container_name(crate::worker::WorkerContainerRole::Dind)
+        }
+    };
+    let plan = StorageProvisioningPlan::from_role_charges(
+        1,
+        2,
+        "engine-1".to_owned(),
+        "b".repeat(64),
+        role_charges,
+    )?;
+    let context = PairSpecContext {
+        plan: &plan,
+        names: &names,
+        connection_id,
+        budget,
+    };
+    create_body(
+        container_name,
+        image.to_owned(),
+        role,
+        network_mode.to_owned(),
+        &context,
+    )
+}
+
 pub(in crate::launch::bootstrap::containers) fn create_body(
     name: String,
     image: String,
@@ -301,6 +343,33 @@ fn container_labels(
     ])
 }
 
+fn container_memory_limit(
+    plan: &StorageProvisioningPlan,
+    role: BootstrapContainerRole,
+    base_memory_bytes: i64,
+) -> Result<i64, HostError> {
+    let roles: &[StorageRole] = match role {
+        BootstrapContainerRole::Runner => &[
+            StorageRole::RunnerHome,
+            StorageRole::RunnerWork,
+            StorageRole::RunnerTmp,
+            StorageRole::RunnerShm,
+            StorageRole::SharedRun,
+        ],
+        BootstrapContainerRole::Dind => &[
+            StorageRole::DindData,
+            StorageRole::DindTmp,
+            StorageRole::DindShm,
+        ],
+    };
+    let mut total = u64::try_from(base_memory_bytes).map_err(|_| HostError::Identity)?;
+    for storage_role in roles {
+        let (bytes, _) = plan_charge(plan, *storage_role)?;
+        total = total.checked_add(bytes).ok_or(HostError::Identity)?;
+    }
+    i64::try_from(total).map_err(|_| HostError::Identity)
+}
+
 fn host_config(
     plan: &StorageProvisioningPlan,
     names: &WorkerIdentityNames,
@@ -312,6 +381,7 @@ fn host_config(
         BootstrapContainerRole::Runner => budget.runner(),
         BootstrapContainerRole::Dind => budget.dind(),
     };
+    let memory = container_memory_limit(plan, role, limits.memory_bytes)?;
     let (pids, privileged) = limits_for(role);
     Ok(HostConfig {
         mounts: Some(fixed_mounts(names, role)?),
@@ -326,8 +396,8 @@ fn host_config(
         security_opt: (role == BootstrapContainerRole::Runner)
             .then(|| vec![crate::worker::seccomp::runner_security_opt()]),
         nano_cpus: Some(limits.nano_cpus),
-        memory: Some(limits.memory_bytes),
-        memory_swap: Some(limits.memory_bytes),
+        memory: Some(memory),
+        memory_swap: Some(memory),
         pids_limit: Some(pids),
         log_config: Some(HostConfigLogConfig {
             typ: Some("json-file".to_owned()),

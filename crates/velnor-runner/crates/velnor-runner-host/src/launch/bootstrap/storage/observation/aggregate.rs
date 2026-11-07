@@ -288,11 +288,13 @@ fn assemble_binding<P: ImageProvider>(
     let cgroups = vec![
         observed_cgroup(
             workers.runner.observation(),
+            owned.observation(),
             BootstrapContainerRole::Runner,
             run.started.runner_container_id(),
         )?,
         observed_cgroup(
             workers.dind.observation(),
+            owned.observation(),
             BootstrapContainerRole::Dind,
             run.started.dind_container_id(),
         )?,
