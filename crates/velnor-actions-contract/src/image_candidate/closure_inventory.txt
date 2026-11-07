@@ -468,6 +468,7 @@ crates/velnor-actions-mise/src/command_cancellable_bounded.rs
 crates/velnor-actions-mise/src/command_cancellable_helpers.rs
 crates/velnor-actions-mise/src/command_context.rs
 crates/velnor-actions-mise/src/command_crate_publish.rs
+crates/velnor-actions-mise/src/command_crate_publish_tests.rs
 crates/velnor-actions-mise/src/command_crate_tests.rs
 crates/velnor-actions-mise/src/command_crate_update.rs
 crates/velnor-actions-mise/src/command_credential.rs
@@ -665,8 +666,10 @@ crates/velnor-actions-orchestrator/src/crate_release_github_authority.rs
 crates/velnor-actions-orchestrator/src/crate_release_github_authorization.rs
 crates/velnor-actions-orchestrator/src/crate_release_github_checks.rs
 crates/velnor-actions-orchestrator/src/crate_release_github_native.rs
+crates/velnor-actions-orchestrator/src/crate_release_github_pr.rs
 crates/velnor-actions-orchestrator/src/crate_release_github_reviews.rs
 crates/velnor-actions-orchestrator/src/crate_release_github_tags.rs
+crates/velnor-actions-orchestrator/src/crate_release_github_workflow_checks.rs
 crates/velnor-actions-orchestrator/src/crate_release_historical_intent.rs
 crates/velnor-actions-orchestrator/src/crate_release_http.rs
 crates/velnor-actions-orchestrator/src/crate_release_http/graphql.rs
@@ -718,6 +721,7 @@ crates/velnor-actions-orchestrator/src/crate_release_qualification_witness.rs
 crates/velnor-actions-orchestrator/src/crate_release_qualification_workflow.rs
 crates/velnor-actions-orchestrator/src/crate_release_registry.rs
 crates/velnor-actions-orchestrator/src/crate_release_registry/owner.rs
+crates/velnor-actions-orchestrator/src/crate_release_registry_wait.rs
 crates/velnor-actions-orchestrator/src/crate_release_runtime.rs
 crates/velnor-actions-orchestrator/src/crate_release_runtime_admission.rs
 crates/velnor-actions-orchestrator/src/crate_release_runtime_environment.rs
@@ -995,6 +999,7 @@ crates/velnor-actions-orchestrator/src/package_release_publish_merge_group.rs
 crates/velnor-actions-orchestrator/src/package_release_publish_merge_group_pull.rs
 crates/velnor-actions-orchestrator/src/package_release_publish_preflight.rs
 crates/velnor-actions-orchestrator/src/package_release_publish_preflight_validation.rs
+crates/velnor-actions-orchestrator/src/package_release_publish_public_assets.rs
 crates/velnor-actions-orchestrator/src/package_release_publish_public_read.rs
 crates/velnor-actions-orchestrator/src/package_release_publish_public_recovery.rs
 crates/velnor-actions-orchestrator/src/package_release_publish_public_repository.rs
@@ -1024,6 +1029,7 @@ crates/velnor-actions-orchestrator/src/package_release_signer_attestation.rs
 crates/velnor-actions-orchestrator/src/package_release_signer_attestation_digest.rs
 crates/velnor-actions-orchestrator/src/package_release_signer_attestation_fetch.rs
 crates/velnor-actions-orchestrator/src/package_release_signer_attestation_image.rs
+crates/velnor-actions-orchestrator/src/package_release_signer_attestation_invocation.rs
 crates/velnor-actions-orchestrator/src/package_release_signer_attestation_output.rs
 crates/velnor-actions-orchestrator/src/package_release_signer_attestation_sdk.rs
 crates/velnor-actions-orchestrator/src/package_release_signer_attestation_sdk_historical.rs
