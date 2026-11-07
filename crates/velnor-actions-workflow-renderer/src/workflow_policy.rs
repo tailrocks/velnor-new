@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_actions_contract::{BunLanePlan, Concurrency, Trigger, WorkflowIr};
+use velnor_actions_contract::{Concurrency, LanePlan, Trigger, WorkflowIr};
 
 use crate::{
     CONCURRENCY_CANCEL, CONCURRENCY_GROUP, EXPECTED_PR_TYPES, RenderError,
@@ -42,7 +42,7 @@ pub(crate) fn check_single_label(
     ir: &WorkflowIr,
     label: &str,
     workflow_tasks: &[WorkflowTaskPolicy],
-    bun_lane_plan: Option<&BunLanePlan>,
+    lane_plan: Option<&LanePlan>,
 ) -> Result<(), RenderError> {
     for (id, job) in &ir.jobs {
         if let Some(runner) = &job.check_runner {
@@ -51,10 +51,14 @@ pub(crate) fn check_single_label(
             let valid_placement = if scale_set {
                 runner.platform == velnor_actions_contract::CheckPlatform::LinuxX64
                     && runner.executor == velnor_actions_contract::CheckExecutor::Hosted
-                    && job.condition.as_deref()
-                        == Some(
-                            velnor_actions_contract::config::EPHEMERAL_CHECK_ADMISSION_CONDITION,
-                        )
+                    && job.condition.as_deref().is_some_and(|condition| {
+                        condition == velnor_actions_contract::config::EPHEMERAL_CHECK_ADMISSION_CONDITION
+                            || condition == format!(
+                                "({}) && ({})",
+                                velnor_actions_contract::workflow::not_affected_gate(id),
+                                velnor_actions_contract::config::EPHEMERAL_CHECK_ADMISSION_CONDITION,
+                            )
+                    })
             } else {
                 runner.label == job.runs_on
             };
@@ -66,8 +70,8 @@ pub(crate) fn check_single_label(
         } else {
             let task_label = workflow_tasks
                 .iter()
-                .find(|task| task.owns_projected_job_id(id, bun_lane_plan))
-                .and_then(|task| task.runner_label_for_projected_job(id, bun_lane_plan));
+                .find(|task| task.owns_projected_job_id(id, lane_plan))
+                .and_then(|task| task.runner_label_for_projected_job(id, lane_plan));
             let suite_runner_ok = id.starts_with("suite-")
                 && velnor_actions_contract::RunsOn::parse(&job.runs_on).is_ok();
             if job.runs_on != label

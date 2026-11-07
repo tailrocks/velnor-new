@@ -20,5 +20,6 @@ pub(crate) use observation::{
 };
 pub use write::{REPORT_OP, write_task_report};
 pub(crate) use write::{
-    TASK_ID_ENV, entry_and_digest, entry_and_digest_for_job, load_plan, terminal_task_report,
+    TASK_ID_ENV, entry_and_digest, entry_and_digest_for_context, entry_and_digest_for_job,
+    load_plan, terminal_task_report,
 };

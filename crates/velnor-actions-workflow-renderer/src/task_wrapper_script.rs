@@ -7,18 +7,18 @@ use velnor_actions_contract::{
     TASK_EXECUTION_FRAME_MAGIC,
 };
 
-pub(super) fn task_script(helper_version: &str) -> String {
+pub(super) fn task_script(helper_version: &str, preview_loader: Option<&str>) -> String {
     let mut script = String::new();
-    append_setup(&mut script, helper_version);
-    append_frame_header(&mut script, helper_version);
+    append_setup(&mut script, helper_version, preview_loader);
+    append_frame_header(&mut script, helper_version, preview_loader.is_some());
     append_frame_counts(&mut script);
     append_argv_checks(&mut script);
     append_env_checks(&mut script);
-    append_task_run(&mut script);
+    append_task_run(&mut script, preview_loader.is_some());
     replace_frame_limits(&script)
 }
 
-fn append_setup(script: &mut String, helper_version: &str) {
+fn append_setup(script: &mut String, helper_version: &str, preview_loader: Option<&str>) {
     script.push_str("unset ");
     script.push_str(&toolchain_env::CREDENTIAL_UNSET_VARS.join(" "));
     script.push_str(" VELNOR_TASK_ID");
@@ -28,17 +28,27 @@ set -euo pipefail
 fail_frame() { printf '%s\n' 'invalid declared-task execution frame' >&2; exit 125; }
 frame_file=$(mktemp "${TMPDIR:-/tmp}/velnor-task-frame.XXXXXXXX")
 trap 'rm -f "$frame_file"' EXIT
-helper="$RUNNER_TEMP/velnor/bin/velnor-actions-"#,
+"#,
     );
-    script.push_str(helper_version);
-    script.push_str("\"\n");
+    if let Some(loader) = preview_loader {
+        script.push_str("helper() { ");
+        script.push_str(loader);
+        script.push_str("; }\n");
+    } else {
+        script.push_str("helper=\"$RUNNER_TEMP/velnor/bin/velnor-actions-");
+        script.push_str(helper_version);
+        script.push_str("\"\n");
+    }
 }
 
-fn append_frame_header(script: &mut String, helper_version: &str) {
+fn append_frame_header(script: &mut String, helper_version: &str, preview: bool) {
+    if preview {
+        script.push_str("\nif ! VELNOR_INTERNAL_OP=resolve-task-execution-v1 helper > \"$frame_file\"; then fail_frame; fi\n");
+    } else {
+        script.push_str("\nif ! env VELNOR_INTERNAL_OP=resolve-task-execution-v1 \"$helper\" > \"$frame_file\"; then fail_frame; fi\n");
+    }
     script.push_str(
-        r#"
-if ! env VELNOR_INTERNAL_OP=resolve-task-execution-v1 "$helper" > "$frame_file"; then fail_frame; fi
-frame_bytes=$(wc -c < "$frame_file")
+        r#"frame_bytes=$(wc -c < "$frame_file")
 frame_bytes=${frame_bytes//[[:space:]]/}
 { [[ "$frame_bytes" =~ ^[0-9]{1,7}$ ]] && (( frame_bytes <= @MAX_FRAME_BYTES@ )); } || fail_frame
 last_byte=$(tail -c 1 "$frame_file" | od -An -t x1)
@@ -54,7 +64,8 @@ while IFS= read -r -d '' field; do frame+=("$field"); done < "$frame_file"
 [[ "${frame[3]}" =~ ^b3-[0-9a-f]{64}$ ]] || fail_frame
 [[ "${frame[4]}" =~ ^stack:[a-z0-9._-]+\|task:(stack|internal)/[a-z0-9._/-]+$ ]] || fail_frame
 [[ "${frame[5]}" =~ ^m-[0-9a-f]{16}$ ]] || fail_frame
-[[ "${frame[4]#*|task:}" == "${frame[1]}" ]] || fail_frame
+matrix_task=${frame[4]#*|task:}
+[[ "$matrix_task" == "${frame[1]}" || "$matrix_task" == "${frame[1]}/lane-hosted" || "$matrix_task" == "${frame[1]}/lane-scale-set" ]] || fail_frame
 [[ "${frame[6]}" == "#,
     );
     script.push('"');
@@ -174,14 +185,21 @@ export VELNOR_MATRIX_KEY="${frame[5]}"
     );
 }
 
-fn append_task_run(script: &mut String) {
+fn append_task_run(script: &mut String, preview: bool) {
     script.push_str(
         r#"set +e
 started_ms=$(date +%s%3N)
 env -- "${task_env[@]}" "${argv[@]}"
 task_code=$?
-VELNOR_EXIT_CODE="$task_code" VELNOR_START_MS="$started_ms" VELNOR_INTERNAL_OP=write-task-report-v1 "$helper"
-report_code=$?
+"#,
+    );
+    if preview {
+        script.push_str("VELNOR_EXIT_CODE=\"$task_code\" VELNOR_START_MS=\"$started_ms\" VELNOR_INTERNAL_OP=write-task-report-v1 helper\n");
+    } else {
+        script.push_str("VELNOR_EXIT_CODE=\"$task_code\" VELNOR_START_MS=\"$started_ms\" VELNOR_INTERNAL_OP=write-task-report-v1 \"$helper\"\n");
+    }
+    script.push_str(
+        r#"report_code=$?
 if [ "$task_code" -ne 0 ]; then exit "$task_code"; fi
 exit "$report_code"
 "#,

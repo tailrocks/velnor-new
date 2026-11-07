@@ -7,3 +7,4 @@ mod gc1_t23;
 mod group_ledger;
 mod mbx_generation;
 mod runner_image_publication;
+mod ubuntu_runner_public;

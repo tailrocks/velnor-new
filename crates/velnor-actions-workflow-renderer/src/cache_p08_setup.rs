@@ -114,7 +114,13 @@ fn insert_tools_prelude(
     }
     let prelude = payload.runtime_prelude_step()?;
     let restore = payload.restore_step()?;
-    let after_setup = setup_index + 1;
+    let after_setup = job
+        .steps
+        .iter()
+        .position(|step| {
+            step.role == Some(velnor_actions_contract::StepRole::AcquireProtectedPreview)
+        })
+        .map_or(setup_index + 1, |index| (setup_index + 1).max(index + 1));
     job.steps
         .splice(after_setup..after_setup, [prelude, restore]);
     Ok(())

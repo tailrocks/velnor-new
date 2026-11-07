@@ -89,6 +89,9 @@ pub(crate) fn infer_steps_tools<'a>(steps: impl IntoIterator<Item = &'a Step>) -
     let mut specs = std::collections::BTreeSet::new();
     let mut installed = std::collections::BTreeSet::new();
     for step in steps {
+        if step.role == Some(velnor_actions_contract::StepRole::PrepareRuntimeTools) {
+            continue;
+        }
         let StepKind::Shell { run, .. } = &step.kind else {
             continue;
         };

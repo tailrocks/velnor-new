@@ -29,7 +29,7 @@ fn payload() -> Result<ToolsCachePayload, Box<dyn Error>> {
     };
     let specs = ["gh@2.103.2".to_owned(), "opentofu@1.13.2".to_owned()];
     Ok(ToolsCachePayload::new(ToolsCacheInputs {
-        runs_on: "ubuntu-24.04",
+        runs_on: "ubuntu-26.04",
         target: "x86_64-unknown-linux-gnu",
         mise_setup: &setup,
         tool_specs: &specs,

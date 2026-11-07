@@ -278,7 +278,7 @@ pub(crate) fn validate_bun_member_job(
     jobs: &BTreeMap<String, Job>,
     policy: &BunMemberPolicy,
     checkout_uses: &str,
-    plan: Option<&velnor_actions_contract::BunLanePlan>,
+    plan: Option<&velnor_actions_contract::LanePlan>,
 ) -> Result<Vec<String>, RenderError> {
     let projected = crate::verification_jobs::bun_lane_validation::project_job(
         &policy.id,

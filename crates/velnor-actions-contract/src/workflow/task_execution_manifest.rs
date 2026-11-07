@@ -79,11 +79,25 @@ impl TaskExecutionManifestV1 {
                 "too_many_records",
             ));
         }
-        for (task_id, record) in &self.tasks {
-            if task_id != &record.task_id {
+        let mut matrices = std::collections::BTreeSet::new();
+        let mut matrix_keys = std::collections::BTreeSet::new();
+        for (key, record) in &self.tasks {
+            if key != &record.task_id && key != &record.matrix_id {
                 return Err(ContractError::identity(
                     "task_execution_manifest.tasks",
                     "task_key_mismatch",
+                ));
+            }
+            if !matrices.insert(&record.matrix_id) {
+                return Err(ContractError::identity(
+                    "task_execution_manifest.tasks",
+                    "duplicate_matrix_id",
+                ));
+            }
+            if !matrix_keys.insert(&record.matrix_key) {
+                return Err(ContractError::identity(
+                    "task_execution_manifest.tasks",
+                    "duplicate_matrix_key",
                 ));
             }
             record.validate()?;

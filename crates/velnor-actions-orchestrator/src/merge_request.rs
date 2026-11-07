@@ -26,14 +26,29 @@ pub fn assemble_merge_request(run_key: &str, run_dir: &Path) -> Result<String, O
         .filter(|value| !value.is_empty())
         .as_deref()
         .and_then(event_payload_from);
-    assemble_with_needs(
+    let assembled = assemble_with_needs(
         run_key,
         run_dir,
         needs.as_deref(),
         expected.as_deref(),
         event_name.as_deref(),
         event_payload.as_deref(),
-    )
+    )?;
+    let Ok(routes) = std::env::var(velnor_actions_contract::LANE_INVENTORY_ENV) else {
+        return Ok(assembled);
+    };
+    let value = parse_strict_json(&routes).map_err(internal_contract)?;
+    let parsed: velnor_actions_contract::LaneInventory =
+        serde_json::from_value(value).map_err(|_| internal("malformed_lane_inventory"))?;
+    let mut request = parse_strict_json(&assembled).map_err(internal_contract)?;
+    let object = request
+        .as_object_mut()
+        .ok_or_else(|| internal("invalid_merge_request"))?;
+    object.insert(
+        "lane_inventory".to_owned(),
+        serde_json::to_value(parsed).map_err(|_| internal("malformed_lane_inventory"))?,
+    );
+    canonical_json_str(&request).map_err(internal_contract)
 }
 
 fn event_payload_from(value: &std::ffi::OsStr) -> Option<String> {
@@ -243,7 +258,11 @@ pub(crate) fn write_merge_request_to(
     if let Some(parent) = path.parent() {
         velnor_actions_contract::exclusive_write::create_dir_no_symlink(anchor, parent)?;
     }
-    velnor_actions_contract::exclusive_write::write_exclusive(&path, request.as_bytes(), "request")?;
+    velnor_actions_contract::exclusive_write::write_exclusive(
+        &path,
+        request.as_bytes(),
+        "request",
+    )?;
     Ok(path)
 }
 

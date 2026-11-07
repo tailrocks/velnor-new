@@ -172,8 +172,8 @@ fn assert_generator_versions(preparation: &GenerationPreparation, helper_version
         env!("CARGO_PKG_VERSION")
     );
     assert_eq!(
-        preparation.workflow.context.report_helper_version,
-        helper_version
+        preparation.workflow.context.controller.pinned_version(),
+        Some(helper_version)
     );
 }
 

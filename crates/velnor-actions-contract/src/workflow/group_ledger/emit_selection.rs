@@ -51,9 +51,17 @@ pub(super) fn build_ordered_results(
         }
         let tasks_dir = run_dir.join(&entry.matrix_key).join("tasks");
         for unit_id in units {
-            let task = manifest.tasks.get(&unit_id).ok_or_else(|| {
+            let mut matching = manifest.tasks.values().filter(|task| {
+                task.task_id == unit_id
+                    && task.matrix_id == entry.id
+                    && task.matrix_key == entry.matrix_key
+            });
+            let task = matching.next().ok_or_else(|| {
                 HelperError::internal(&format!("task_without_manifest_entry:{unit_id}"))
             })?;
+            if matching.next().is_some() {
+                return Err(HelperError::internal("ambiguous_manifest_entry"));
+            }
             let digest = obligation_digest(plan, &unit_id)?;
             let report_id = task_report_id_for_task(run_key, &entry.matrix_key, digest)
                 .map_err(HelperError::from)?;

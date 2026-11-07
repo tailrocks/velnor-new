@@ -57,6 +57,8 @@ pub(crate) struct MergeRequest {
     pub(crate) required_job_ids: Vec<String>,
     pub(crate) required_jobs: Vec<RequiredJobResult>,
     #[serde(default)]
+    pub(crate) lane_inventory: Option<velnor_actions_contract::LaneInventory>,
+    #[serde(default)]
     pub(crate) group_ledgers: Vec<serde_json::Value>,
     #[serde(default)]
     pub(crate) assembly_errors: Vec<String>,
@@ -100,6 +102,7 @@ pub fn merge_internal_with_context(
         }
         return encode_report(&diagnostic_without_plan(&request, tokens)?);
     };
+    crate::selected_preview_identity::check(&plan.generator, context.preview_identity())?;
     let final_report = build_final(&request, plan, context)?;
     final_report.validate().map_err(internal_contract)?;
     encode_report(&final_report)
@@ -131,6 +134,12 @@ fn evidence_failure(request: &MergeRequest) -> Option<String> {
         return Some("cache_corrupt".to_owned());
     }
     if let Some(plan) = request.plan.as_ref() {
+        if !crate::required_dispositions::expected_lane_routes(
+            plan,
+            request.lane_inventory.as_ref(),
+        ) {
+            return Some("trust_scope_mismatch".to_owned());
+        }
         if plan.validate().is_err() {
             return Some("cache_corrupt".to_owned());
         }

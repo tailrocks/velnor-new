@@ -73,17 +73,35 @@ pub(super) fn build(
             })
             .collect::<Result<BTreeMap<_, _>, NativeAuthorityError>>()?;
         let format = crate::plan_format::outcome_format_step(argv, &key, &env)?;
-        let helper = crate::plan_report::helper_path_for_version(version);
-        let report = crate::shell_step(
-            "Report Format",
-            crate::plan_report::deferred_report_argv(&outcome, &helper, &start),
-            BTreeMap::from([(crate::plan_report::TASK_ID_ENV.to_owned(), task.task_id)]),
-        )?;
+        let controller = input
+            .published_generator_lock
+            .and_then(|lock| lock.source_preview.as_ref())
+            .map_or_else(
+                || crate::render::ControllerLocator::PinnedRelease {
+                    version: version.to_owned(),
+                    path: format!("{}{version}", crate::steps::STAGED_BINARY_PREFIX),
+                },
+                |preview| crate::render::ControllerLocator::ProtectedBaseDispatch {
+                    preview: Box::new(preview.clone()),
+                    path: crate::render::PROTECTED_BASE_CONTROLLER_PATH.to_owned(),
+                },
+            );
+        let report = format_report_step(&controller, &outcome, &start, task.task_id)?;
         let upload = crate::crate_job_report_upload_step(crate::render::PLAN_JOB_ID)?;
         let at = job.steps.iter().position(|step| matches!(&step.kind, StepKind::Internal { operation, .. } if operation == crate::steps::PLAN_OPERATION)).ok_or_else(|| invalid("trusted_plan_operation_count"))? + 1;
         job.steps.splice(at..at, [format, report, upload]);
     }
     Ok(job)
+}
+
+fn format_report_step(
+    controller: &crate::render::ControllerLocator,
+    outcome: &str,
+    start: &str,
+    task_id: String,
+) -> Result<Step, NativeAuthorityError> {
+    crate::plan_report::workspace_format_report_step(controller, outcome, start, task_id)
+        .map_err(NativeAuthorityError::from)
 }
 
 pub(super) fn format_task(
@@ -162,6 +180,9 @@ pub(super) fn required_job(
 ) -> Result<Job, NativeAuthorityError> {
     let catalog = if input.config.workflow.policy
         == velnor_actions_contract::WorkflowPolicy::VelnorRepositoryV1
+        && input
+            .published_generator_lock
+            .is_none_or(|lock| lock.source_preview.is_none())
     {
         velnor_actions_mise::catalog::lock::catalog_for_published_verdict(&ToolCatalog::pinned())
     } else {

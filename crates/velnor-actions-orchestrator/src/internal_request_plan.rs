@@ -10,9 +10,9 @@ use velnor_actions_contract::{
     NamedCheckLane, QualificationDispatch, WorkflowEvent, parse_strict_json,
 };
 
-use velnor_actions_contract::resolve_run_key;
 use crate::OrchestratorError;
 use crate::internal::{PLAN_OP, check_schema, internal, internal_contract};
+use velnor_actions_contract::resolve_run_key;
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -33,6 +33,8 @@ pub(crate) struct PlanRequest {
     pub(crate) repository: Option<String>,
     #[serde(default)]
     pub(crate) named_check_lanes: Option<BTreeMap<String, Vec<NamedCheckLane>>>,
+    #[serde(default)]
+    pub(crate) lane_inventory: Option<velnor_actions_contract::LaneInventory>,
 }
 
 pub(crate) fn checked_plan_request(

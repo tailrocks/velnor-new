@@ -17,14 +17,7 @@ use serde::{Deserialize, Serialize};
 
 pub const LATEST_RUNNER_LABEL: &str = "ubuntu-26.04";
 
-pub const RUNNER_LABEL_CATALOG: [&str; 6] = [
-    "ubuntu-22.04",
-    "ubuntu-24.04",
-    "ubuntu-26.04",
-    "ubuntu-22.04-arm",
-    "ubuntu-24.04-arm",
-    "ubuntu-26.04-arm",
-];
+pub const RUNNER_LABEL_CATALOG: [&str; 2] = ["ubuntu-26.04", "ubuntu-26.04-arm"];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]

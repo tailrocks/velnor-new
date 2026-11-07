@@ -118,8 +118,9 @@ pub use images::{
     ImageDockerfile, ImagePlatform, ImagePrebuilt, validate_images,
 };
 pub use mise::{
-    CheckEvidence, CheckExecutor, CheckPlatform, CheckRunner, CheckSystemTool, CheckSystemToolKind,
-    MiseCheck, is_valid_check_system_build, is_valid_check_system_version, is_valid_mise_task_name,
+    CheckEvidence, CheckExecutor, CheckPlatform, CheckRunner, CheckSelection, CheckSystemTool,
+    CheckSystemToolKind, MiseCheck, is_valid_check_system_build, is_valid_check_system_version,
+    is_valid_mise_task_name,
 };
 pub use mise_task_suites::{
     MiseTaskSuite, MiseTaskSuiteEvent, mise_task_suite_artifact_name,

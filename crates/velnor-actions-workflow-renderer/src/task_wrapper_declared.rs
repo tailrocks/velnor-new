@@ -153,7 +153,7 @@ pub(super) fn declared_task_document(
         MBX_TARGET_VIEWS_DISABLED.to_owned(),
     );
     crate::commands::validate_composite_env(&env)?;
-    let script = task_script(&shape.helper_version);
+    let script = task_script(&shape.helper_version, shape.preview_loader.as_deref());
     let step = Yaml::Map(vec![
         (
             "name".to_owned(),
@@ -171,6 +171,58 @@ pub(super) fn declared_task_document(
         inputs,
         vec![step],
     )
+}
+
+pub(super) fn inline_task_step(
+    original: &Step,
+    shape: &Shape,
+    execution_digest: &str,
+    generator_version: &str,
+) -> Result<Yaml, RenderError> {
+    let environment = inline_task_environment(execution_digest, generator_version)?;
+    let mut entries = vec![("name".to_owned(), Yaml::str(original.name.clone()))];
+    crate::step_ids::push_step_id(&mut entries, original);
+    if let Some(condition) = &original.condition {
+        steps::scan_for_private_subcommands(condition)?;
+        entries.push(("if".to_owned(), Yaml::str(condition.clone())));
+    }
+    entries.push(("shell".to_owned(), Yaml::str("bash")));
+    entries.push(("env".to_owned(), environment));
+    entries.push((
+        "run".to_owned(),
+        Yaml::str(task_script(
+            &shape.helper_version,
+            shape.preview_loader.as_deref(),
+        )),
+    ));
+    Ok(Yaml::Map(entries))
+}
+
+pub(super) fn inline_task_environment(
+    execution_digest: &str,
+    generator_version: &str,
+) -> Result<Yaml, RenderError> {
+    let mut env = toolchain_env::credential_scrub();
+    env.insert(
+        TASK_EXECUTION_DIGEST_ENV.to_owned(),
+        execution_digest.to_owned(),
+    );
+    env.insert(
+        GENERATOR_VERSION_ENV.to_owned(),
+        generator_version.to_owned(),
+    );
+    env.insert(
+        RUNTIME_RUNNER_TEMP_ENV.to_owned(),
+        RUNNER_TEMP_EXPRESSION.to_owned(),
+    );
+    env.insert(
+        MBX_TARGET_VIEWS_ENV.to_owned(),
+        MBX_TARGET_VIEWS_DISABLED.to_owned(),
+    );
+    crate::commands::validate_composite_env(&env)?;
+    let mut environment = crate::document_steps::string_map_yaml(&env);
+    crate::preview_setup::scrub_loader_env(&mut environment)?;
+    Ok(environment)
 }
 
 fn input_definition(name: String) -> (String, Yaml) {

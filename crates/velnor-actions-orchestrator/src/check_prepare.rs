@@ -36,8 +36,8 @@ use std::ops::Deref;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use velnor_actions_contract::digest_b3;
-use velnor_actions_mise::checks::SystemToolProof;
 use velnor_actions_mise::catalog::lock::ApprovedMiseRuntime;
+use velnor_actions_mise::checks::SystemToolProof;
 use velnor_actions_mise::{CheckDeadline, DiscoveredCheck, QualifiedCheck};
 
 #[path = "check_tool_acquire.rs"]
@@ -366,8 +366,7 @@ fn materialize(
         "check_config",
         || checkpoint(deadline),
     )?;
-    let (qualified_tools, transfers) =
-        acquisition::acquire(&qualified, check, home, deadline)?;
+    let (qualified_tools, transfers) = acquisition::acquire(&qualified, check, home, deadline)?;
     Ok(PreparedParts {
         qualified,
         container,

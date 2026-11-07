@@ -51,7 +51,9 @@ pub(super) fn render(
         let composed_family_jobs = if family == Family::Generator {
             let generated = super::generator_release::generator_release(request)?;
             actions.extend(generated.actions);
-            generator::compose_jobs(generated.workflow)?
+            let mut jobs = generator::compose_jobs(generated.workflow)?;
+            jobs.extend(super::generator_release::source_preview_jobs(pins)?);
+            jobs
         } else {
             let family_document = family_jobs::family_document(family, request)?;
             family_jobs::take_jobs(family_document)?
@@ -63,6 +65,9 @@ pub(super) fn render(
             family.workflow_path().to_owned(),
             workflows::family_document_for_call(family, composed_family_jobs),
         ));
+        if family == Family::Generator {
+            family_workflows.push(super::generator_release::source_preview_authority(pins)?);
+        }
         jobs.push(workflows::reusable_workflow_call(family));
     }
     let workflow = workflows::document(jobs);

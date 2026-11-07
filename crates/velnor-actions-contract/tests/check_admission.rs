@@ -15,7 +15,7 @@ use velnor_actions_contract::workflow::{
 fn workflow(condition: &str, runs_on: &str, runner: CheckRunner) -> WorkflowIr {
     let plan = Job {
         display_name: "Plan".to_owned(),
-        runs_on: "ubuntu-24.04".to_owned(),
+        runs_on: "ubuntu-26.04".to_owned(),
         check_runner: None,
         timeout_minutes: JobTimeout::DEFAULT,
         needs: Vec::new(),
@@ -80,7 +80,7 @@ fn step() -> Step {
 
 fn scale_set_runner() -> CheckRunner {
     CheckRunner {
-        label: "ubuntu-24.04".to_owned(),
+        label: "ubuntu-26.04".to_owned(),
         platform: CheckPlatform::LinuxX64,
         executor: CheckExecutor::Hosted,
         container: None,

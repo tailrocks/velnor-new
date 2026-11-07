@@ -154,7 +154,14 @@ pub(crate) fn check_internal_staged(
 ) -> Result<(), RenderError> {
     let mut staged = false;
     for step in &job.steps {
-        if is_acquire_step(step) {
+        if step.role == Some(StepRole::AcquireProtectedPreview) {
+            if *step != steps::protected_preview_acquire_step()? {
+                return Err(RenderError::InvalidWorkflow(format!(
+                    "preview_acquire_malformed:{job_id}"
+                )));
+            }
+            staged = true;
+        } else if is_acquire_step(step) {
             check_acquire_shape(job_id, step)?;
             staged = true;
         } else if step.role == Some(StepRole::PreseedStage) {
@@ -305,7 +312,11 @@ pub(crate) fn insert_plan_closure(
             .iter()
             .any(|step| step.role == Some(StepRole::CheckGenerated))
     {
-        let check = freshness_step(&ctx.staged_binary, FRESHNESS_OUTDIR, &ctx.plan_consumer_env)?;
+        let check = freshness_step(
+            ctx.controller.path(),
+            FRESHNESS_OUTDIR,
+            &ctx.plan_consumer_env,
+        )?;
         plan.steps.insert(at, check);
     }
     let Some(at) = plan.steps.iter().position(|step| {

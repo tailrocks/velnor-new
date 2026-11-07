@@ -182,11 +182,13 @@ fn make_plan(specs: &[(&str, &str)], run_key: &str) -> TestResult<Plan> {
     let jobs = job_ids
         .into_iter()
         .map(|job_id| PlanJob {
+            lane: None,
             job_id: job_id.to_owned(),
             disposition: JobDisposition::Run,
         })
         .collect();
     let plan = Plan {
+        lane_inventory: None,
         schema: Plan::SCHEMA,
         run_key: run_key.to_owned(),
         plan_id: plan_id_for_run(run_key)?,
@@ -203,6 +205,7 @@ fn make_plan(specs: &[(&str, &str)], run_key: &str) -> TestResult<Plan> {
             version: "0.1.55".to_owned(),
             target: "x86_64-unknown-linux-gnu".to_owned(),
             sha256: "a".repeat(64),
+            preview: None,
         },
         packages: Vec::new(),
         obligations,
@@ -239,6 +242,7 @@ fn make_tofu_plan(run_key: &str) -> TestResult<Plan> {
         task_ids,
     } = tofu_plan_tasks(&proposals, run_key, &job_id, &platform)?;
     let plan = Plan {
+        lane_inventory: None,
         schema: Plan::SCHEMA,
         run_key: run_key.to_owned(),
         plan_id: plan_id_for_run(run_key)?,
@@ -255,12 +259,14 @@ fn make_tofu_plan(run_key: &str) -> TestResult<Plan> {
             version: "0.1.55".to_owned(),
             target: "x86_64-unknown-linux-gnu".to_owned(),
             sha256: "a".repeat(64),
+            preview: None,
         },
         packages: Vec::new(),
         obligations,
         matrix: PlanMatrix { include: entries },
         task_ids,
         jobs: vec![PlanJob {
+            lane: None,
             job_id: job_id.clone(),
             disposition: JobDisposition::Run,
         }],

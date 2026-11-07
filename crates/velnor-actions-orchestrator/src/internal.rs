@@ -78,6 +78,8 @@ fn plan_internal_inner(
     };
     validate_qualification_request(&request, &prep.default_branch)?;
     let named_check_lanes = named_lanes::resolve(&prep, request.named_check_lanes.take())?;
+    let lane_inventory =
+        named_lanes::resolve_routes(&prep, request.lane_inventory.as_ref(), &named_check_lanes)?;
     let catalog = &prep.catalog;
     let mut warnings = Vec::new();
     warnings.extend(crate::evidence::workspace_drift_warnings(
@@ -107,6 +109,7 @@ fn plan_internal_inner(
         prep.runner_selection,
         catalog,
         &named_check_lanes,
+        lane_inventory.as_ref(),
         warnings,
         timings.as_deref_mut(),
     )?;
@@ -219,9 +222,11 @@ fn build_plan(
     selection: RunnerSelection,
     catalog: &ToolCatalog,
     named_check_lanes: &BTreeMap<String, Vec<NamedCheckLane>>,
+    lane_inventory: Option<&velnor_actions_contract::LaneInventory>,
     warnings: Vec<String>,
     mut timings: Option<&mut phase_timing::PlanPhaseTimings>,
 ) -> Result<Plan, OrchestratorError> {
+    let lane_routes = lane_inventory.map_or(&[][..], |inventory| inventory.routes.as_slice());
     let mut obligations = Vec::with_capacity(universe.len());
     let mut entries = Vec::with_capacity(universe.len());
     let mut task_ids = Vec::with_capacity(universe.len());
@@ -234,7 +239,8 @@ fn build_plan(
         clippy::needless_option_as_deref,
         reason = "the original Option must remain available after this call"
     )]
-    let generator = default_generator_with_phase_timings(timings.as_deref_mut());
+    let mut generator = default_generator_with_phase_timings(timings.as_deref_mut());
+    crate::selected_preview_identity::bind_ambient(&mut generator)?;
     let snapshot = ExecutionSnapshot::build(discovery);
     let job_owners = crate::crate_job_ids::JobOwners::new(&discovery.proposals)?;
     let mut reads = velnor_actions_tofu::FileCache::new();
@@ -258,6 +264,7 @@ fn build_plan(
                 snapshot: &snapshot,
                 root,
                 named_check_lanes,
+                lane_routes,
             },
             &mut reads,
         )?;
@@ -268,15 +275,14 @@ fn build_plan(
     }
     obligations.sort_by(|left, right| left.task_id.cmp(&right.task_id));
     entries.sort_by(|left, right| left.id.cmp(&right.id));
-    task_ids.sort();
-    let edges = plan_task_graph(universe, &lanes, &digests).map_err(internal_contract)?;
-    let (_, duplicates) = dedupe_sorted(&task_ids);
-    if let Some(dup) = duplicates.first() {
-        return Err(internal(&format!("duplicate_task_id:{dup}")));
-    }
+    let edges = finish_task_graph(universe, &lanes, &digests, &mut task_ids)?;
     let needs = crate::plan_dispositions::job_needs(universe, &job_owners)?;
-    let jobs =
-        crate::plan_dispositions::finalize_dispositions(&mut obligations, &mut entries, &needs);
+    let jobs = crate::plan_dispositions::finalize_dispositions(
+        &mut obligations,
+        &mut entries,
+        &needs,
+        lane_routes,
+    );
     let selected_ids = executing_units(universe, &obligations);
     Ok(Plan {
         schema: Plan::SCHEMA,
@@ -286,10 +292,7 @@ fn build_plan(
         head: request.head.clone(),
         event: request.event,
         qualification: request.qualification.clone(),
-        runner: PlanRunner {
-            label: label.to_owned(),
-            selection,
-        },
+        runner: plan_runner(label, selection),
         trust: velnor_actions_contract::trust_for_event(request.event),
         generator,
         packages: plan_packages(discovery, &selected_ids),
@@ -297,9 +300,32 @@ fn build_plan(
         matrix: PlanMatrix { include: entries },
         task_ids,
         jobs,
+        lane_inventory: lane_inventory.cloned(),
         warnings,
         edges,
     })
+}
+
+fn plan_runner(label: &str, selection: RunnerSelection) -> PlanRunner {
+    PlanRunner {
+        label: label.to_owned(),
+        selection,
+    }
+}
+
+fn finish_task_graph(
+    universe: &[&ProposedTask],
+    lanes: &BTreeMap<String, u32>,
+    digests: &BTreeMap<String, String>,
+    task_ids: &mut [String],
+) -> Result<Vec<velnor_actions_contract::TaskEdge>, OrchestratorError> {
+    task_ids.sort();
+    let edges = plan_task_graph(universe, lanes, digests).map_err(internal_contract)?;
+    let (_, duplicates) = dedupe_sorted(task_ids);
+    if let Some(dup) = duplicates.first() {
+        return Err(internal(&format!("duplicate_task_id:{dup}")));
+    }
+    Ok(edges)
 }
 
 fn executing_units<'a>(

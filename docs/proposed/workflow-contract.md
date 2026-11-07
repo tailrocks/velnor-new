@@ -335,6 +335,10 @@ obligation. Its `execute_task_ids` contains only work to run; `test_run` lists s
 `clippy_all_features` opt-in emits `--all-features`. Cross-package integration tasks need explicit entries, and empty test targets
 remain visible in the plan.
 
+Both runner mode rejects Rust verification tasks with more than one test shard. Hosted-only and
+ScaleSet-only execution continue to support configured sharding. Paired shard proofs require
+matrix-bound evidence before Both mode can admit them.
+
 The plan file written by `plan` MUST be `$RUNNER_TEMP/velnor/<run-key>/plan.json` and contain the same
 `matrix.include` array sent through `GITHUB_OUTPUT`. Its schema-2 shape is defined by the
 [architecture contract](architecture.md); obligation and job-disposition fields follow

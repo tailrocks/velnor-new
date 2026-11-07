@@ -58,7 +58,9 @@ pub(crate) fn unit_result(
     task: &str,
     outcome: UnitOutcome,
     exit_code: Option<i32>,
+    report: &Value,
 ) -> Result<UnitResultV1, Box<dyn Error>> {
+    let report: velnor_actions_contract::TaskReport = serde_json::from_value(report.clone())?;
     Ok(UnitResultV1 {
         unit_id: task.to_owned(),
         recipe_id: digest(b"gc1-t35-recipe")?,
@@ -69,7 +71,9 @@ pub(crate) fn unit_result(
         exit_code,
         started_at: "2026-10-26T00:00:00Z".to_owned(),
         finished_at: "2026-10-26T00:00:01Z".to_owned(),
-        report_digest: digest(b"gc1-t35-report")?,
+        report_digest: UnitResultV1::report_digest_from_canonical_bytes(
+            &velnor_actions_contract::canonical_json_bytes(&report)?,
+        ),
     })
 }
 
@@ -80,6 +84,7 @@ pub(crate) fn group_ledger_value(
     event: &str,
     outcome: UnitOutcome,
     exit_code: Option<i32>,
+    report: &Value,
 ) -> Result<Value, Box<dyn Error>> {
     Ok(serde_json::to_value(UnitLedgerV1 {
         schema: 1,
@@ -87,13 +92,13 @@ pub(crate) fn group_ledger_value(
         group_digest: digest(b"gc1-t35-group")?,
         execution_branch: ExecutionBranch::Reader,
         selected_unit_ids: vec![task.to_owned()],
-        ordered_results: vec![unit_result(task, outcome, exit_code)?],
+        ordered_results: vec![unit_result(task, outcome, exit_code, report)?],
         observation_digest: digest(b"gc1-t35-observation")?,
         source_binding_digest: digest(b"gc1-t35-source-binding")?,
     })?)
 }
 
-pub(crate) fn valid_ledger(task: &str) -> Result<Value, Box<dyn Error>> {
+pub(crate) fn valid_ledger(task: &str, report: &Value) -> Result<Value, Box<dyn Error>> {
     group_ledger_value(
         task,
         JOB_ID,
@@ -101,5 +106,6 @@ pub(crate) fn valid_ledger(task: &str) -> Result<Value, Box<dyn Error>> {
         "pull_request",
         UnitOutcome::Executed,
         Some(0),
+        report,
     )
 }

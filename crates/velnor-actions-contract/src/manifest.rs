@@ -48,6 +48,12 @@ pub struct GeneratorLock {
     pub mise_bootstrap: MiseBootstrap,
 
     pub actions: Vec<ActionPin>,
+
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_preview: Option<crate::source_preview::SourcePreviewLock>,
+
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub staged_source_preview: Option<crate::source_preview::SourcePreviewLock>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -217,6 +223,12 @@ impl GeneratorLock {
 
     pub fn validate(&self, file: &str) -> Result<(), ContractError> {
         check_schema(self.schema)?;
+        if let Some(preview) = &self.source_preview {
+            preview.validate_shape()?;
+        }
+        if let Some(preview) = &self.staged_source_preview {
+            preview.validate_shape()?;
+        }
         if self.generator.binary.trim().is_empty() {
             return Err(ContractError::config(
                 file,
