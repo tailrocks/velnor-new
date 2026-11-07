@@ -33,7 +33,7 @@
 - d4b0115b66bd6b7c988b058307cb6f31a77dc1a5f461d75ac1d4ef5f50b964cd  ./dogfood/preview/.github/workflows/ci.yml
 - 97fe3daddf5a4e353958cba33690840c71cbc6a07f472cb907576752a0c5f676  ./dogfood/preview/.github/workflows/freshness.yml
 - 1eb3d047a9348606e9ce0590e94f831aa6706833ce7cf97ab379609e500b4139  ./dogfood/preview/.github/workflows/homebrew-adoption.yml
-- 21cfcddc34acef8b0030014aa67e0e27d147e5f13ba105783a0f94d71df89907  ./dogfood/preview/.github/workflows/job-image-candidate.yml
+- 6f8bbf8fcce11748f79180b7afe2500f03581e7aa8d90a80ece19edc142a89d9  ./dogfood/preview/.github/workflows/job-image-candidate.yml
 - d4204b98945abca72254174bdfdd06b9048393e54b96e8ea6c83b156ae3a8b55  ./dogfood/preview/.github/workflows/product-release-binary.yml
 - 143ccc111491302996fda538909a581ab7d2ddd9e9fd9cb738707fec671de590  ./dogfood/preview/.github/workflows/product-release-generator.yml
 - 6c2ec0a89af0720e5d9ac1f1101aefee71f744525d84c0a370166d293ba7c512  ./dogfood/preview/.github/workflows/product-release-images.yml
@@ -42,7 +42,7 @@
 - caca11263383c8af762b4f7b9428a0eaad85a46a32fb64e2fe1b2ead288af574  ./dogfood/preview/.github/workflows/source-preview-publication.yml
 - 9afb528a534517c5f7748fb90d994f59c792655eb4a22dc96e0c6748d3defdce  ./dogfood/preview/.github/workflows/source-qualification.yml
 - 9a38eceeec6ba0c58f436595baa3a3b1220a78521c76283e3540d1ad3d00abb8  ./dogfood/preview/.github/workflows/state-seal.yml
-- 706c2ba9c541ba0c5321e622c7f20ce8fc87e618996c7c01f6be0f7305a40394  ./dogfood/tree.sha256
+- 16b4adbb6a1563b35211b6ef0f2005a2f89073f4dc6bfbe16fab5a001c350ddf  ./dogfood/tree.sha256
 - 9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  ./empty-suite/generate.exit
 - 7125dcf5a8d89819a0501cff72fe43cc145b74f36bcc6d7502f172343780ea23  ./empty-suite/generate.stderr.txt
 - e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./empty-suite/generate.stdout.txt

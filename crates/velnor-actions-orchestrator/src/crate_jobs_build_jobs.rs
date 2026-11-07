@@ -6,7 +6,9 @@ use std::collections::BTreeMap;
 use velnor_actions_contract::workflow::crate_job::{
     CrateGroupPlan, group_timeout_for, validate_group_needs,
 };
-use velnor_actions_contract::{CrateJob, JobTimeout, RustCrateConfig, Step, StepKind};
+use velnor_actions_contract::{
+    CrateJob, JobTimeout, ProposedTask, RustCrateConfig, Stack, Step, StepKind,
+};
 
 use super::is_rust;
 use crate::OrchestratorError;
@@ -63,4 +65,13 @@ pub(super) fn cap_cargo_jobs(step: &mut Step, build_jobs: u32) {
     if let StepKind::TaskExecution { env, .. } = &mut step.kind {
         env.insert(CARGO_BUILD_JOBS_ENV.to_owned(), build_jobs.to_string());
     }
+}
+
+pub(crate) fn is_runnable(task: &ProposedTask) -> bool {
+    !task.no_targets
+        && !task.identity.unit_id.is_empty()
+        && !matches!(
+            Stack::from_id(&task.stack_id),
+            Some(Stack::Mise | Stack::Native)
+        )
 }

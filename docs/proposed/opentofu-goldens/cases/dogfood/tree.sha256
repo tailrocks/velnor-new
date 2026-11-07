@@ -25,7 +25,7 @@
 - d4b0115b66bd6b7c988b058307cb6f31a77dc1a5f461d75ac1d4ef5f50b964cd  ./.github/workflows/ci.yml
 - 97fe3daddf5a4e353958cba33690840c71cbc6a07f472cb907576752a0c5f676  ./.github/workflows/freshness.yml
 - 1eb3d047a9348606e9ce0590e94f831aa6706833ce7cf97ab379609e500b4139  ./.github/workflows/homebrew-adoption.yml
-- 21cfcddc34acef8b0030014aa67e0e27d147e5f13ba105783a0f94d71df89907  ./.github/workflows/job-image-candidate.yml
+- 6f8bbf8fcce11748f79180b7afe2500f03581e7aa8d90a80ece19edc142a89d9  ./.github/workflows/job-image-candidate.yml
 - d4204b98945abca72254174bdfdd06b9048393e54b96e8ea6c83b156ae3a8b55  ./.github/workflows/product-release-binary.yml
 - 143ccc111491302996fda538909a581ab7d2ddd9e9fd9cb738707fec671de590  ./.github/workflows/product-release-generator.yml
 - 6c2ec0a89af0720e5d9ac1f1101aefee71f744525d84c0a370166d293ba7c512  ./.github/workflows/product-release-images.yml

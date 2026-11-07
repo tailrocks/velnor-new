@@ -339,6 +339,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     {
                         "check_suite_id": 123,
                         "head_sha": sha,
+                        "event": "push",
+                        "head_branch": "main",
+                        "repository": {"id": 22, "full_name": repository, "owner": {"id": 77, "login": repository.split("/", 1)[0]}},
+                        "head_repository": {"id": 22, "full_name": repository, "owner": {"id": 77, "login": repository.split("/", 1)[0]}},
                         "path": required_workflow,
                         "status": "completed",
                         "conclusion": "success",
@@ -369,7 +373,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 obj = release
         elif p == "/users/owner":
             obj = {"id": reviewer_id, "login": "owner", "type": "User"}
-        elif p == "/api/v1/users/owner" and urllib.parse.urlsplit(self.path).query == "include=linked_accounts":
+        elif p == "/api/v1/users/owner?include=linked_accounts":
             obj = {"user": {"id": reviewer_id, "login": "owner"}, "linked_accounts": [{"provider": "github", "account_id": str(reviewer_id), "login": "owner"}]}
         elif p.startswith("/api/v1/crates/") and p.removeprefix("/api/v1/crates/") in dependency_snapshots:
             obj = dependency_snapshots[p.removeprefix("/api/v1/crates/")]

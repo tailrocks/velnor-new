@@ -6,8 +6,8 @@ use std::collections::BTreeMap;
 use velnor_actions_contract::workflow::cache_family::S256;
 use velnor_actions_contract::workflow::ledger_cli::{LEDGER_CLI_JOB_ID, LedgerCliSource};
 use velnor_actions_contract::{
-    CacheAccess, CompiledStateMode, CrateJob, Job, JobTimeout, ProposedTask, Stack, Step,
-    VelnorConfig, WorkflowPolicy, crate_display_name, tofu_display_name,
+    CacheAccess, CompiledStateMode, CrateJob, Job, JobTimeout, ProposedTask, Step, VelnorConfig,
+    WorkflowPolicy, crate_display_name, tofu_display_name,
 };
 use velnor_actions_mise::{TaskCacheMode, ToolCatalog};
 use velnor_actions_workflow_renderer::steps::CompileDriver as RenderDriver;
@@ -50,6 +50,7 @@ mod obligations;
 use job_steps::{image_publication_fixture_step, obligation_steps};
 use obligations::obligations_for;
 
+pub(crate) use build_jobs::is_runnable;
 pub(crate) use stage::{is_mbx, is_nextest, is_opentofu, is_rust};
 
 pub(crate) struct CrateBuild {
@@ -249,15 +250,6 @@ fn build_group_job(
         driver,
         producer,
     })
-}
-
-pub(crate) fn is_runnable(task: &ProposedTask) -> bool {
-    !task.no_targets
-        && !task.identity.unit_id.is_empty()
-        && !matches!(
-            Stack::from_id(&task.stack_id),
-            Some(Stack::Mise | Stack::Native)
-        )
 }
 
 fn rust_source_steps(

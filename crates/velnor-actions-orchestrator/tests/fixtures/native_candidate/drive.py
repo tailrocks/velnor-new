@@ -1,22 +1,81 @@
 # SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 # SPDX-License-Identifier: Apache-2.0
 
+import base64
 import hashlib
 import json
 import os
 import pathlib
 import shlex
 import shutil
+import socket
 import subprocess
 import sys
 import urllib.request
 
 from evidence import read_bounded, write_evidence
 
+
+def read_journal_record(info, state, reference):
+    tag_sha = state["refs"][reference]
+    root = info["origin"] + "/repos/" + info["repository"] + "/git/"
+    with urllib.request.urlopen(root + "tags/" + tag_sha) as response:
+        tag = json.load(response)
+    tag_name = reference.removeprefix("refs/tags/")
+    assert tag["sha"] == tag_sha
+    assert tag["tag"] == tag_name
+    assert tag["message"] == "velnor-release-receipt-v1"
+    assert tag["object"]["type"] == "blob"
+    blob_sha = tag["object"]["sha"]
+    raw_tag = (
+        f"object {blob_sha}\ntype blob\ntag {tag_name}\n"
+        "tagger Velnor Release <release@velnor.invalid> 0 +0000\n\n"
+        "velnor-release-receipt-v1"
+    ).encode()
+    assert hashlib.sha1(f"tag {len(raw_tag)}\0".encode() + raw_tag).hexdigest() == tag_sha
+    with urllib.request.urlopen(root + "blobs/" + blob_sha) as response:
+        blob = json.load(response)
+    assert blob["sha"] == blob_sha and blob["encoding"] == "base64"
+    raw = base64.b64decode(blob["content"], validate=True)
+    assert len(raw) == blob["size"]
+    assert hashlib.sha1(f"blob {len(raw)}\0".encode() + raw).hexdigest() == blob_sha
+    return json.loads(raw)
+
+
+def assert_pending_upload(info, state, runner):
+    prefix = "refs/tags/velnor-receipt/12/1/"
+    started = read_journal_record(info, state, prefix + "publication-started")
+    pending = read_journal_record(info, state, prefix + "operation-1")
+    identity = {
+        "repository": info["repository"],
+        "workflow_sha": info["workflow_sha"],
+        "source_sha": info["source_sha"],
+        "run_id": 12,
+        "run_attempt": 1,
+    }
+    assert started["schema"] == pending["schema"] == 1
+    assert started["identity"] == pending["identity"] == identity
+    assert started["stage"] == "started" and started["completion"] is None
+    assert pending["receipt"] == started["receipt"]
+    mutation = pending["mutation"]
+    assert mutation["sequence"] == 1 and mutation["kind"] == "upload"
+    assert mutation["package"] == info["package"] and mutation["version"] == info["version"]
+    assert mutation["phase"] == {"phase": "intended"}
+    assert mutation["semver_evidence"] is not None
+    admission = json.loads((runner / "velnor-crate-release-receipt.json").read_text())
+    intent = json.dumps(admission["intent"], sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
+    assert hashlib.sha256(intent).hexdigest() == pending["receipt"]["intent_sha256"]
+
+
 mode = sys.argv[1] if len(sys.argv) > 1 else "success"
 env = os.environ.copy()
 coordinate = mode.startswith("coordinate")
 journal = coordinate or mode in ("journal", "journal-bad-bundle")
+if coordinate:
+    for host in ("api.github.com", "github.com", "crates.io", "fixture.actions.githubusercontent.com"):
+        addresses = {item[4][0] for item in socket.getaddrinfo(host, 443, type=socket.SOCK_STREAM)}
+        if addresses != {"127.0.0.1"}:
+            raise RuntimeError(f"{host} must resolve only to the local fixture")
 if journal:
     env["VELNOR_FIXTURE_OFFICIAL_ASSETS"] = "/assets"
     env["VELNOR_NATIVE_JOURNAL"] = "1"
@@ -118,9 +177,14 @@ try:
         real_cargo = cargo.with_name("cargo-real")
         cargo.rename(real_cargo)
         target = runner / "fixture-package"
+        info_marker = runner / "release-plz-info-called"
         upload = info["origin"] + "/__fixture/upload"
         info_reply = (
-            f'  info) echo "{info["package"]} {info["version"]}"; exit 0 ;;\n'
+            '  info) test "$(/usr/bin/readlink /proc/$PPID/exe)" = '
+            + shlex.quote(str(runner / "velnor-release-plz/release-plz"))
+            + ' || exit 76; : > '
+            + shlex.quote(str(info_marker))
+            + f'; echo "{info["package"]} {info["version"]}"; exit 0 ;;\n'
             if mode == "coordinate-skip"
             else '  info) printf "error: could not find package\\n" >&2; exit 101 ;;\n'
         )
@@ -236,6 +300,9 @@ try:
         assert f"refs/tags/{info['package']}-v{info['version']}" not in state["refs"]
         assert "refs/tags/velnor-receipt/12/1/publication-started" in state["refs"]
         assert "refs/tags/velnor-receipt/12/1/reconciled" not in state["refs"]
+        if mode == "coordinate-skip":
+            assert info_marker.is_file()
+            assert_pending_upload(info, state, runner)
         if mode in ("coordinate-missing-oidc", "coordinate-missing-bootstrap"):
             assert not any("/operation-" in ref for ref in state["refs"])
         with urllib.request.urlopen(
