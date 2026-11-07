@@ -53,14 +53,13 @@ pub const RUST_VERIFIER_USES: [&str; 2] = [
 ];
 
 pub const JACTIONLINT_VERIFIER_USES: &str = "./.github/actions/velnor-verify-jactionlint";
+pub const ACQUIRE_PROTECTED_PREVIEW_OPERATION: &str = "acquire-protected-preview-v1";
 
 pub(super) fn recognized_action_role(uses: &str) -> Option<StepRole> {
     if RUST_VERIFIER_USES.contains(&uses) {
         Some(StepRole::VerifyRustManifest)
     } else if uses == JACTIONLINT_VERIFIER_USES {
         Some(StepRole::VerifyJactionlint)
-    } else if uses == "./.github/actions/velnor-preview-setup" {
-        Some(StepRole::AcquireProtectedPreview)
     } else {
         None
     }
@@ -101,9 +100,8 @@ impl StepRole {
             Self::MiseSetup => valid_mise_setup(kind),
             Self::PrepareRuntimeTools => Self::valid_runtime_tools(kind),
             Self::AcquireProtectedPreview => matches!(kind,
-                StepKind::Action { uses, with, env }
-                    if uses == "./.github/actions/velnor-preview-setup"
-                        && with.is_empty() && env.is_empty()),
+                StepKind::Internal { operation, env }
+                    if operation == ACQUIRE_PROTECTED_PREVIEW_OPERATION && env.is_empty()),
             Self::TofuProviderUse => super::step_protocol::valid_provider_use(kind),
             Self::PlanProducer => internal_operation(kind, "plan-v1"),
             Self::FetchReports => internal_operation(kind, "fetch-reports-v1"),

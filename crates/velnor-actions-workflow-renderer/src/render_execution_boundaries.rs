@@ -44,21 +44,16 @@ pub(super) fn validate_preview_acquisition(
     for (id, job) in jobs {
         let mut acquired = false;
         for (index, step) in job.steps.iter().enumerate() {
-            if approved && let StepKind::Internal { operation, .. } = &step.kind {
+            if approved
+                && step.role != Some(StepRole::AcquireProtectedPreview)
+                && let StepKind::Internal { operation, .. } = &step.kind
+            {
                 let (operation, _) = steps::split_internal_operation(operation)?;
                 if !supported_preview_operation(operation) {
                     return Err(RenderError::InvalidWorkflow(format!(
                         "preview_operation_unsupported:{id}:{operation}"
                     )));
                 }
-            }
-            if matches!(&step.kind, StepKind::Action { uses, .. }
-                if uses == "./.github/actions/velnor-preview-setup")
-                && step.role != Some(StepRole::AcquireProtectedPreview)
-            {
-                return Err(RenderError::InvalidWorkflow(format!(
-                    "untyped_preview_acquisition:{id}"
-                )));
             }
             if step.role == Some(StepRole::AcquireProtectedPreview) {
                 if acquired
@@ -337,10 +332,6 @@ fn trusted_plan_step(step: &Step, request: &str) -> bool {
     match &step.kind {
         StepKind::Action { uses, with, .. } => match step.role {
             Some(StepRole::Checkout) => uses == steps::CHECKOUT_USES,
-            Some(StepRole::AcquireProtectedPreview) => {
-                crate::steps::protected_preview_acquire_step()
-                    .is_ok_and(|approved| approved == *step)
-            }
             Some(StepRole::MiseSetup) => {
                 uses == &format!(
                     "jdx/mise-action@{}",
@@ -371,7 +362,8 @@ fn trusted_plan_step(step: &Step, request: &str) -> bool {
             )
         ),
         StepKind::Internal { operation, .. } => {
-            operation == request
+            crate::steps::protected_preview_acquire_step().is_ok_and(|approved| approved == *step)
+                || operation == request
                 || operation == steps::PLAN_OPERATION
                 || operation == steps::RESOLVE_QUALIFICATION_OPERATION
         }

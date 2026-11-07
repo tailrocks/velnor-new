@@ -61,13 +61,17 @@ pub const DOWNLOAD_ARTIFACT_USES: &str = DOWNLOAD_ARTIFACT_ACTION_USES;
 pub const ACQUIRE_NAME: &str = "Acquire Velnor";
 
 pub fn protected_preview_acquire_step() -> Result<Step, RenderError> {
-    let mut step = action_step(
-        "Prepare protected preview controller",
-        "./.github/actions/velnor-preview-setup",
-        BTreeMap::new(),
-    )?;
-    step.role = Some(StepRole::AcquireProtectedPreview);
-    Ok(step)
+    Ok(Step {
+        parallel: false,
+        name: "Prepare protected preview controller".to_owned(),
+        id: None,
+        role: Some(StepRole::AcquireProtectedPreview),
+        condition: None,
+        kind: StepKind::Internal {
+            operation: velnor_actions_contract::workflow::step_identity::ACQUIRE_PROTECTED_PREVIEW_OPERATION.to_owned(),
+            env: BTreeMap::new(),
+        },
+    })
 }
 
 pub const ACQUIRE_TIMEOUT_MINUTES: i64 =

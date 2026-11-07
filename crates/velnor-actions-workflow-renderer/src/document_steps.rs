@@ -191,6 +191,11 @@ pub(crate) fn non_internal_step_to_yaml(
 ) -> Result<Yaml, RenderError> {
     steps::scan_for_private_subcommands(&step.name)?;
     crate::parallel_steps::reject_parallel(step, job_id)?;
+    if step.role == Some(velnor_actions_contract::StepRole::AcquireProtectedPreview) {
+        return Err(RenderError::InvalidWorkflow(
+            "preview_acquisition_without_authority".to_owned(),
+        ));
+    }
     match &step.kind {
         StepKind::Action { uses, with, env } => {
             action_step_to_yaml(job_id, step, uses, with, env, job_env, Some(runs_on))
@@ -213,6 +218,21 @@ pub(crate) fn step_to_yaml(
     step_context: &crate::document_lanes::JobStepContext<'_>,
 ) -> Result<Yaml, RenderError> {
     steps::scan_for_private_subcommands(&step.name)?;
+    if step.role == Some(velnor_actions_contract::StepRole::AcquireProtectedPreview) {
+        if composite || step != &crate::steps::protected_preview_acquire_step()? {
+            return Err(RenderError::InvalidWorkflow(
+                "unapproved_preview_acquisition".to_owned(),
+            ));
+        }
+        return match &ctx.controller {
+            crate::render::ControllerLocator::ProtectedBaseDispatch { preview, .. } => {
+                crate::preview_setup::acquire_step(preview)
+            }
+            _ => Err(RenderError::InvalidWorkflow(
+                "preview_acquisition_without_authority".to_owned(),
+            )),
+        };
+    }
     if composite {
         if matches!(
             step.role,

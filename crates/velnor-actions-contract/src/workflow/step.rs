@@ -125,6 +125,14 @@ impl Step {
             ));
         }
         self.validate_execution_authority(job)?;
+        if matches!(&self.kind, StepKind::Internal { operation, .. } if operation == super::step_identity::ACQUIRE_PROTECTED_PREVIEW_OPERATION)
+            && self.role != Some(StepRole::AcquireProtectedPreview)
+        {
+            return Err(ContractError::identity(
+                "step.role",
+                format!("preview_acquire_role_missing:{job}"),
+            ));
+        }
         if let StepKind::Action { uses, .. } = &self.kind
             && let Some(expected) = recognized_action_role(uses)
             && self.role != Some(expected)

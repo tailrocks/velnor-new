@@ -236,6 +236,49 @@ pub(crate) fn resolve_project_tool_refs(
     }))
 }
 
+#[cfg(test)]
+mod tests {
+    use super::resolve_project_tool_refs;
+    use std::collections::BTreeMap;
+
+    #[test]
+    fn project_tool_refs_resolve_non_rust_pins_and_reject_missing_or_invalid_versions() {
+        let versions = BTreeMap::from([
+            ("VELNOR_TOOL_JAVA", "21.0.1"),
+            ("VELNOR_TOOL_DBT_FUSION", "2.0.9"),
+            ("VELNOR_TOOL_PYTHON", "3.13.1"),
+            ("VELNOR_TOOL_UV", "0.5.0"),
+        ]);
+        let argv = [
+            "gradle -Dorg.gradle.java.version=${VELNOR_TOOL_JAVA}",
+            "dbt-fusion --version ${VELNOR_TOOL_DBT_FUSION}",
+            "python --version ${VELNOR_TOOL_PYTHON}",
+            "uv --version ${VELNOR_TOOL_UV}",
+        ];
+        let resolved = argv
+            .iter()
+            .map(|arg| resolve_project_tool_refs(arg, |name| versions.get(name).map(ToString::to_string)))
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
+        assert_eq!(
+            resolved,
+            [
+                "gradle -Dorg.gradle.java.version=21.0.1",
+                "dbt-fusion --version 2.0.9",
+                "python --version 3.13.1",
+                "uv --version 0.5.0",
+            ]
+        );
+        for name in versions.keys() {
+            assert!(resolve_project_tool_refs(&format!("${{{name}}}"), |_| None).is_err());
+            assert!(resolve_project_tool_refs(&format!("${{{name}}}"), |_| {
+                Some("not-an-exact-version".to_owned())
+            })
+            .is_err());
+        }
+    }
+}
+
 fn read_manifest(
     root: &Path,
     expected_generator_version: &str,

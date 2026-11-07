@@ -15,7 +15,6 @@ pub(crate) const DECLARED_TASK_ACTION_PREFIX: &str = "./.github/actions/declared
 
 pub fn validate_uses(uses: &str) -> Result<(), RenderError> {
     if RUST_VERIFIER_USES.contains(&uses)
-        || uses == "./.github/actions/velnor-preview-setup"
         || uses == JACTIONLINT_VERIFIER_USES
         || matches!(
             uses,

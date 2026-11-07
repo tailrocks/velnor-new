@@ -42,13 +42,9 @@ pub(super) fn caller_job() -> Result<Option<(String, Yaml)>, RenderError> {
             ),
             (
                 "permissions".to_owned(),
-                steps::perm(&[
-                    ("actions", "write"),
-                    ("artifact-metadata", "write"),
-                    ("attestations", "write"),
-                    ("contents", "write"),
-                    ("id-token", "write"),
-                ]),
+                steps::perm(super::preview_permissions::preview_permissions(
+                    super::preview_permissions::PreviewPermissionRole::Caller,
+                )),
             ),
         ]),
     )))

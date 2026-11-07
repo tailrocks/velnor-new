@@ -14,10 +14,6 @@ pub(super) fn required_verdict_step(step: &Step) -> bool {
                         .iter()
                         .all(|key| with.get(*key).is_some_and(|value| value == "false"))
             }
-            Some(StepRole::AcquireProtectedPreview) => {
-                crate::steps::protected_preview_acquire_step()
-                    .is_ok_and(|approved| approved == *step)
-            }
             Some(StepRole::DownloadPlan | StepRole::AttestationDownload) => {
                 uses == crate::steps::DOWNLOAD_ARTIFACT_USES
             }
@@ -31,7 +27,8 @@ pub(super) fn required_verdict_step(step: &Step) -> bool {
             )
         }
         StepKind::Internal { operation, .. } => {
-            operation == steps::MERGE_OPERATION
+            crate::steps::protected_preview_acquire_step().is_ok_and(|approved| approved == *step)
+                || operation == steps::MERGE_OPERATION
                 || operation == steps::FETCH_OPERATION
                 || step == &crate::steps_internal::group_ledger_steps::assemble_group_ledgers_step()
                 || operation

@@ -13,6 +13,8 @@ import sys
 import tempfile
 
 root = Path(sys.argv[1])
+project_tool_keys = json.loads(sys.argv[2])
+assert len(project_tool_keys) == 14 and len(set(project_tool_keys)) == 14
 sys.path.insert(0, str(root / "src/native_helper"))
 spec = importlib.util.spec_from_file_location("preview_fixture", root / "tests/source_preview_bootstrap_scenarios.py")
 fixture = importlib.util.module_from_spec(spec)
@@ -127,6 +129,10 @@ def environment_case(operation, expected_token, extra_arg=False):
         bootstrap.authorize_and_acquire(context, network)
         expected = bootstrap.preview_identity(value)
         environment = {"PATH": "/usr/bin:/bin", "VELNOR_INTERNAL_OP": operation, "GH_TOKEN": "read-token-canary", "GITHUB_TOKEN": "github-secret-canary", "ACTIONS_RUNTIME_TOKEN": "runtime-secret-canary", "ACTIONS_ID_TOKEN_REQUEST_TOKEN": "oidc-secret-canary", "LD_PRELOAD": "loader-canary", "PYTHONPATH": "python-canary", "HTTPS_PROXY": "proxy-canary", "BASH_ENV": "shell-canary", "MISE_GITHUB_TOKEN": "mise-secret-canary", "CARGO_BUILD_RUSTC_WRAPPER": "wrapper-canary", "VELNOR_FORGED": "parameter-canary", "VELNOR_SELECTED_PREVIEW_IDENTITY": "forged"}
+        if operation == "resolve-task-execution-v1":
+            environment.update({key: "canonical-tool-version" for key in project_tool_keys})
+            environment["VELNOR_TOOL_SECRET"] = "tool-secret-canary"
+            environment["VELNOR_REPO_POLICY_SECRET"] = "policy-secret-canary"
         if operation == "unknown-op" or extra_arg:
             read_end, write_end = os.pipe()
             child = os.fork()
@@ -169,10 +175,17 @@ def environment_case(operation, expected_token, extra_arg=False):
         assert b"read-token-canary" in output if expected_token else b"read-token-canary" not in output
         for forbidden in (b"github-secret-canary", b"runtime-secret-canary", b"oidc-secret-canary", b"loader-canary", b"python-canary", b"proxy-canary", b"shell-canary", b"mise-secret-canary", b"wrapper-canary", b"parameter-canary", b"forged"):
             assert forbidden not in output, "credential or untrusted runtime configuration reached SDK"
+        if operation == "resolve-task-execution-v1":
+            actual_environment = json.loads(output)
+            for key in project_tool_keys:
+                assert actual_environment.get(key) == "canonical-tool-version", "canonical project tool input was dropped: " + key
+            for forbidden in ("GH_TOKEN", "VELNOR_TOOL_SECRET", "VELNOR_REPO_POLICY_SECRET"):
+                assert forbidden not in actual_environment, "unrelated secret reached the task resolver: " + forbidden
         assert b"VELNOR_SELECTED_PREVIEW_IDENTITY" in output
 
 
 environment_case("write-task-report-v1", False)
 environment_case("fetch-reports-v1", True)
+environment_case("resolve-task-execution-v1", False)
 environment_case("unknown-op", False)
 environment_case("fetch-reports-v1", False, extra_arg=True)

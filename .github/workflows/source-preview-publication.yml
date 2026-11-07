@@ -114,7 +114,7 @@ jobs:
     runs-on: ubuntu-26.04
     timeout-minutes: 10
     permissions:
-      actions: write
+      actions: read
       artifact-metadata: write
       attestations: write
       contents: read
@@ -209,7 +209,7 @@ jobs:
     runs-on: ubuntu-26.04
     timeout-minutes: 10
     permissions:
-      actions: write
+      actions: read
       contents: write
     needs:
       - source-preview-source

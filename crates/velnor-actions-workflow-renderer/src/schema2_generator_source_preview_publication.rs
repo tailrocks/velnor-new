@@ -151,7 +151,9 @@ fn attest(pins: &ProductReleasePins) -> Result<(String, Yaml), RenderError> {
     let mut job = fields(
         "Attest source preview",
         &["source-preview-source", "source-preview-draft"],
-        steps::attest_permissions(),
+        steps::perm(super::preview_permissions::preview_permissions(
+            super::preview_permissions::PreviewPermissionRole::Attest,
+        )),
     );
     job.push(("outputs".to_owned(), attest_outputs()));
     let sign = "${{ steps.prepare.outputs.sign == 'true' }}";
@@ -227,7 +229,9 @@ fn publish(pins: &ProductReleasePins) -> Result<(String, Yaml), RenderError> {
             "source-preview-draft",
             "source-preview-attest",
         ],
-        steps::publish_permissions(),
+        steps::perm(super::preview_permissions::preview_permissions(
+            super::preview_permissions::PreviewPermissionRole::Publish,
+        )),
     );
     let mut variables = env();
     variables.extend([

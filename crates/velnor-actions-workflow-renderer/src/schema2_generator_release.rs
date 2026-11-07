@@ -19,6 +19,8 @@ mod candidate_manifest;
 mod jobs;
 #[path = "schema2_generator_release_manifest.rs"]
 mod manifest;
+#[path = "schema2_preview_permissions.rs"]
+mod preview_permissions;
 #[path = "schema2_generator_release_qualification.rs"]
 mod qualification;
 #[path = "schema2_generator_release_source.rs"]

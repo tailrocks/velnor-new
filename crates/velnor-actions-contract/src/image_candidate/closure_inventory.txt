@@ -1471,6 +1471,7 @@ crates/velnor-actions-workflow-renderer/src/schema2_generator_source_preview_art
 crates/velnor-actions-workflow-renderer/src/schema2_generator_source_preview_authority.py
 crates/velnor-actions-workflow-renderer/src/schema2_generator_source_preview_publication.py
 crates/velnor-actions-workflow-renderer/src/schema2_generator_source_preview_publication.rs
+crates/velnor-actions-workflow-renderer/src/schema2_preview_permissions.rs
 crates/velnor-actions-workflow-renderer/src/schema2_generator_source_preview_source.py
 crates/velnor-actions-workflow-renderer/src/schema2_generator_source_preview_tag.py
 crates/velnor-actions-workflow-renderer/src/schema2_generator_source_qualification.rs

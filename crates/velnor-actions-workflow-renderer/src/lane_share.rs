@@ -236,10 +236,11 @@ fn should_skip_composite(
     hosted_id: &str,
     local_id: &str,
 ) -> bool {
-    [hosted, local]
-        .iter()
-        .any(|job| job.steps.iter().any(|step| step.parallel))
-        || is_projected_bun_pair(plan, hosted_id, local_id)
+    [hosted, local].iter().any(|job| {
+        job.steps
+            .iter()
+            .any(|step| step.parallel || step.role == Some(StepRole::AcquireProtectedPreview))
+    }) || is_projected_bun_pair(plan, hosted_id, local_id)
 }
 
 fn split_pair(

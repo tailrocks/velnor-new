@@ -5,6 +5,38 @@ use std::error::Error;
 
 use super::{find_file, rendered};
 
+#[path = "../src/schema2_preview_permissions.rs"]
+mod preview_permissions;
+
+#[test]
+fn preview_caller_delegates_only_required_permissions() {
+    use preview_permissions::{PreviewPermissionRole, preview_permissions};
+    assert_eq!(
+        preview_permissions(PreviewPermissionRole::Caller),
+        &[
+            ("actions", "read"),
+            ("artifact-metadata", "write"),
+            ("attestations", "write"),
+            ("contents", "write"),
+            ("id-token", "write"),
+        ]
+    );
+    assert_eq!(
+        preview_permissions(PreviewPermissionRole::Attest),
+        &[
+            ("actions", "read"),
+            ("artifact-metadata", "write"),
+            ("attestations", "write"),
+            ("contents", "read"),
+            ("id-token", "write"),
+        ]
+    );
+    assert_eq!(
+        preview_permissions(PreviewPermissionRole::Publish),
+        &[("actions", "read"), ("contents", "write"),]
+    );
+}
+
 #[test]
 fn main_producer_tag_publisher_and_stable_calls_have_separate_authority_graphs()
 -> Result<(), Box<dyn Error>> {
@@ -60,6 +92,32 @@ fn assert_caller_bootstrap(workflow: &str) -> Result<(), Box<dyn Error>> {
 
 fn assert_reusable_authority(workflow: &str, authority: &str) -> Result<(), Box<dyn Error>> {
     assert!(authority.contains("  workflow_call:"));
+    for (id, permissions) in [
+        (
+            "source-preview-source",
+            "      contents: read\n      actions: read\n",
+        ),
+        (
+            "source-preview-draft",
+            "      actions: read\n      contents: write\n",
+        ),
+        (
+            "source-preview-attest",
+            "      actions: read\n      artifact-metadata: write\n      attestations: write\n      contents: read\n      id-token: write\n",
+        ),
+        (
+            "source-preview-publish",
+            "      actions: read\n      contents: write\n",
+        ),
+    ] {
+        let expected = format!("    permissions:\n{permissions}");
+        assert!(job(authority, id)?.contains(&expected), "{id}");
+    }
+    assert!(job(workflow, "attest-linux")?.contains("    permissions:\n      actions: write\n"));
+    assert!(
+        job(workflow, "publish-generator")?
+            .contains("    permissions:\n      actions: write\n      contents: write\n")
+    );
     for id in [
         "source-preview-source",
         "source-preview-draft",

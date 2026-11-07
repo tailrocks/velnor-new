@@ -196,15 +196,41 @@ fn consumer_authority_rejects_unapproved_dispatch_controller() -> Result<(), Box
 }
 
 #[test]
-fn preview_setup_action_requires_its_typed_role() -> Result<(), Box<dyn Error>> {
+fn protected_preview_acquisition_requires_closed_internal_identity() -> Result<(), Box<dyn Error>> {
     let step = velnor_actions_workflow_renderer::steps::protected_preview_acquire_step()?;
     let approved = workflow(step.clone());
     approved.validate()?;
-    let mut untyped = step;
+    let mut untyped = step.clone();
     untyped.role = None;
     assert!(
         workflow(untyped).validate().is_err(),
-        "untyped preview setup action was accepted"
+        "untyped preview acquisition was accepted"
     );
+    let mut wrong_operation = step.clone();
+    if let velnor_actions_contract::StepKind::Internal { operation, .. } = &mut wrong_operation.kind
+    {
+        *operation = "plan-v1".to_owned();
+    } else {
+        return Err("preview acquisition is not internal".into());
+    }
+    assert!(workflow(wrong_operation).validate().is_err());
+    let mut injected_env = step;
+    if let velnor_actions_contract::StepKind::Internal { env, .. } = &mut injected_env.kind {
+        env.insert("GH_TOKEN".to_owned(), "candidate".to_owned());
+    }
+    assert!(workflow(injected_env).validate().is_err());
+    assert!(
+        velnor_actions_workflow_renderer::steps::internal_step(
+            "Raw acquisition",
+            velnor_actions_contract::workflow::step_identity::ACQUIRE_PROTECTED_PREVIEW_OPERATION
+        )
+        .is_err()
+    );
+    for operation in ["plan-v1", "merge-v1"] {
+        assert!(
+            velnor_actions_workflow_renderer::steps::internal_step("Normal operation", operation)
+                .is_ok()
+        );
+    }
     Ok(())
 }

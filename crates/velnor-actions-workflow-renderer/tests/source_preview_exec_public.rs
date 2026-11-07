@@ -12,6 +12,12 @@ fn sealed_controller_executes_approved_bytes_after_path_replacement() -> Result<
     let output = Command::new("python3")
         .arg(root.join("tests/source_preview_exec_scenarios.py"))
         .arg(root)
+        .arg(serde_json::to_string(
+            &velnor_actions_contract::config::project_tool_resolver::PROJECT_TOOL_KEYS
+                .iter()
+                .map(|(name, _)| *name)
+                .collect::<Vec<_>>(),
+        )?)
         .output()?;
     assert!(
         output.status.success(),
